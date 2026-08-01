@@ -715,6 +715,10 @@ func (s *SubscriptionService) GetByID(ctx context.Context, id int64) (*UserSubsc
 	return s.userSubRepo.GetByID(ctx, id)
 }
 
+func (s *SubscriptionService) GetByIDForSettlement(ctx context.Context, id int64) (*UserSubscription, error) {
+	return s.userSubRepo.GetByIDIncludeDeleted(ctx, id)
+}
+
 // GetActiveSubscription 获取用户对特定分组的有效订阅
 // 使用 L1 缓存 + singleflight 加速中间件热路径。
 // 返回缓存对象的浅拷贝，调用方可安全修改字段而不会污染缓存或触发 data race。

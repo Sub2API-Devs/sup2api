@@ -25,6 +25,7 @@ import (
 	dbgroup "github.com/Wei-Shaw/sub2api/ent/group"
 	dbpredicate "github.com/Wei-Shaw/sub2api/ent/predicate"
 	dbproxy "github.com/Wei-Shaw/sub2api/ent/proxy"
+	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -227,6 +228,25 @@ func (r *accountRepository) GetByID(ctx context.Context, id int64) (*service.Acc
 	}
 
 	accounts, err := r.accountsToService(ctx, []*dbent.Account{m})
+	if err != nil {
+		return nil, err
+	}
+	if len(accounts) == 0 {
+		return nil, service.ErrAccountNotFound
+	}
+	return &accounts[0], nil
+}
+
+// GetByIDForSettlement includes soft-deleted account tombstones. Credentials
+// are not sent to the data plane or logs; the returned billing fields are used
+// only to finish a request admitted before the administrative deletion.
+func (r *accountRepository) GetByIDForSettlement(ctx context.Context, id int64) (*service.Account, error) {
+	queryCtx := mixins.SkipSoftDelete(ctx)
+	m, err := r.client.Account.Query().Where(dbaccount.IDEQ(id)).Only(queryCtx)
+	if err != nil {
+		return nil, translatePersistenceError(err, service.ErrAccountNotFound, nil)
+	}
+	accounts, err := r.accountsToService(queryCtx, []*dbent.Account{m})
 	if err != nil {
 		return nil, err
 	}
@@ -3255,6 +3275,7 @@ func accountEntityToService(m *dbent.Account) *service.Account {
 		AutoPauseOnExpired:      m.AutoPauseOnExpired,
 		CreatedAt:               m.CreatedAt,
 		UpdatedAt:               m.UpdatedAt,
+		DeletedAt:               m.DeletedAt,
 		Schedulable:             m.Schedulable,
 		RateLimitedAt:           m.RateLimitedAt,
 		RateLimitResetAt:        m.RateLimitResetAt,

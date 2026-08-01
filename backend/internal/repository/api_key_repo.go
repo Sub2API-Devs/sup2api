@@ -75,9 +75,35 @@ func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) erro
 func (r *apiKeyRepository) GetByID(ctx context.Context, id int64) (*service.APIKey, error) {
 	m, err := r.activeQuery().
 		Where(apikey.IDEQ(id)).
-		WithUser().
+		WithUser(func(q *dbent.UserQuery) {
+			q.WithAllowedGroups(func(gq *dbent.GroupQuery) {
+				gq.Select(group.FieldID)
+			})
+		}).
 		WithGroup().
 		Only(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return nil, service.ErrAPIKeyNotFound
+		}
+		return nil, err
+	}
+	return apiKeyEntityToService(m), nil
+}
+
+// GetByIDForSettlement includes soft-deleted API keys so requests admitted
+// before deletion can still produce their authoritative financial record.
+func (r *apiKeyRepository) GetByIDForSettlement(ctx context.Context, id int64) (*service.APIKey, error) {
+	queryCtx := mixins.SkipSoftDelete(ctx)
+	m, err := r.client.APIKey.Query().
+		Where(apikey.IDEQ(id)).
+		WithUser(func(q *dbent.UserQuery) {
+			q.WithAllowedGroups(func(gq *dbent.GroupQuery) {
+				gq.Select(group.FieldID)
+			})
+		}).
+		WithGroup().
+		Only(queryCtx)
 	if err != nil {
 		if dbent.IsNotFound(err) {
 			return nil, service.ErrAPIKeyNotFound
@@ -863,6 +889,7 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		LastUsedAt:    m.LastUsedAt,
 		CreatedAt:     m.CreatedAt,
 		UpdatedAt:     m.UpdatedAt,
+		DeletedAt:     m.DeletedAt,
 		GroupID:       m.GroupID,
 		Quota:         m.Quota,
 		QuotaUsed:     m.QuotaUsed,

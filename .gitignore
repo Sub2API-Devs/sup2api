@@ -143,3 +143,5 @@ docs/*
 frontend/coverage/
 aicodex
 output/
+# Locally generated private control-plane PKI.
+deploy/data-plane-certs/

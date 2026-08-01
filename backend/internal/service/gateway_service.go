@@ -1151,8 +1151,8 @@ func (s *GatewayService) GetAccessToken(ctx context.Context, account *Account) (
 }
 
 func (s *GatewayService) getOAuthToken(ctx context.Context, account *Account) (string, string, error) {
-	// 对于 Anthropic OAuth 账号，使用 ClaudeTokenProvider 获取缓存的 token
-	if account.Platform == PlatformAnthropic && account.Type == AccountTypeOAuth && s.claudeTokenProvider != nil {
+	// Anthropic OAuth 与 setup-token 都使用控制面的统一刷新、分布式锁和 token 缓存。
+	if account.Platform == PlatformAnthropic && account.IsOAuth() && s.claudeTokenProvider != nil {
 		accessToken, err := s.claudeTokenProvider.GetAccessToken(ctx, account)
 		if err != nil {
 			return "", "", err

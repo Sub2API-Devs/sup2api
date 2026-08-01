@@ -1,0 +1,269 @@
+syntax = "proto3";
+
+package sup2api.gateway.control.v1;
+
+option go_package = "github.com/Sub2API-Devs/sup2api/ai-gateway/gen/control/v1;controlv1";
+
+// DataPlaneControl is the private contract between the Caddy data plane and
+// the existing Sup2API control plane. Request and response bodies never cross
+// this boundary; only admission metadata, execution plans, and usage facts do.
+service DataPlaneControl {
+  rpc ResolveAPIKey(ResolveAPIKeyRequest) returns (ResolveAPIKeyResponse);
+  rpc RenewAuthGrant(RenewAuthGrantRequest) returns (ResolveAPIKeyResponse);
+  rpc OpenRequest(OpenRequestRequest) returns (OpenRequestResponse);
+  rpc SignBedrockRequest(SignBedrockRequestRequest) returns (SignBedrockRequestResponse);
+  rpc RenewLease(RenewLeaseRequest) returns (RenewLeaseResponse);
+  rpc AbortRequest(AbortRequestRequest) returns (AbortRequestResponse);
+  rpc SettleRequest(SettleRequestRequest) returns (SettleRequestResponse);
+  rpc WatchInvalidations(WatchInvalidationsRequest) returns (stream InvalidationEvent);
+}
+
+message ResolveAPIKeyRequest {
+  string request_id = 1;
+  string data_plane_id = 2;
+  string api_key = 3;
+}
+
+// RenewAuthGrant rotates a still-valid signed grant without resending the
+// plaintext API key. Long-lived WebSocket sessions call it before expiry; the
+// control plane revalidates current API-key, user, group, and IP policy state.
+message RenewAuthGrantRequest {
+  string request_id = 1;
+  string data_plane_id = 2;
+  string grant_token = 3;
+}
+
+message ResolveAPIKeyResponse {
+  Decision decision = 1;
+  Denial denial = 2;
+  AuthGrant grant = 3;
+}
+
+// AuthGrant is a short-lived control-plane assertion cached by the data plane.
+// grant_token is opaque and must be validated again by OpenRequest.
+message AuthGrant {
+  string grant_token = 1;
+  string credential_digest = 2;
+  int64 api_key_id = 3;
+  int64 user_id = 4;
+  int64 group_id = 5;
+  int64 expires_at_unix_ms = 6;
+  int64 api_key_expires_at_unix_ms = 7;
+  repeated string ip_whitelist = 8;
+  repeated string ip_blacklist = 9;
+  string policy_version = 10;
+}
+
+enum Protocol {
+  PROTOCOL_UNSPECIFIED = 0;
+  PROTOCOL_OPENAI = 1;
+  PROTOCOL_ANTHROPIC = 2;
+  PROTOCOL_GEMINI = 3;
+}
+
+enum Decision {
+  DECISION_UNSPECIFIED = 0;
+  DECISION_ALLOW = 1;
+  DECISION_DENY = 2;
+}
+
+message OpenRequestRequest {
+  string request_id = 1;
+  string data_plane_id = 2;
+  reserved 3;
+  reserved "api_key";
+  string client_ip = 4;
+  string user_agent = 5;
+  string method = 6;
+  string path = 7;
+  Protocol protocol = 8;
+  string requested_model = 9;
+  bool stream = 10;
+  string session_hash = 11;
+  string body_digest = 12;
+  string auth_grant_token = 13;
+  int64 api_key_id = 14;
+  int64 user_id = 15;
+  int64 group_id = 16;
+  int64 max_output_tokens = 17;
+  int64 request_content_length = 18;
+  // The control plane needs the requested Anthropic beta capabilities to
+  // apply account policy before selecting a provider protocol plugin.
+  string anthropic_beta = 19;
+  // Anthropic OAuth routing is allowed only when the data plane observed a
+  // structurally valid Claude Code metadata.user_id or the official billing
+  // attribution block. Request bodies never cross this RPC boundary.
+  string anthropic_metadata_user_id = 20;
+  bool anthropic_billing_attribution = 21;
+}
+
+message OpenRequestResponse {
+  Decision decision = 1;
+  Denial denial = 2;
+  RequestLease lease = 3;
+  ExecutionPlan plan = 4;
+}
+
+message Denial {
+  int32 http_status = 1;
+  string error_code = 2;
+  string message = 3;
+  int32 retry_after_seconds = 4;
+}
+
+message RequestLease {
+  string lease_id = 1;
+  int64 expires_at_unix_ms = 2;
+  int64 api_key_id = 3;
+  int64 user_id = 4;
+  int64 group_id = 5;
+  int64 account_id = 6;
+  string pricing_version = 7;
+  string policy_version = 8;
+  string billing_reservation_id = 9;
+  int64 reserved_amount_microusd = 10;
+  string billing_mode = 11;
+}
+
+message ExecutionPlan {
+  string upstream_url = 1;
+  string upstream_method = 2;
+  string upstream_host = 3;
+  map<string, string> upstream_headers = 4;
+  string mapped_model = 5;
+  string transport_profile = 6;
+  string proxy_profile = 7;
+  int32 max_attempts = 8;
+  // proxy_url is a short-lived execution credential delivered only over the
+  // private control channel. The data plane never persists it in settlement WAL.
+  string proxy_url = 9;
+  // protocol_profile selects a Caddy module under sup2api.protocols. The
+  // default is passthrough; provider-specific request/response transformations
+  // must use an explicit profile and fail closed when it is unavailable.
+  string protocol_profile = 10;
+  // Short-lived provider execution options. These travel only over the private
+  // control channel and, like upstream credentials, must never be logged or
+  // persisted in the data-plane settlement WAL.
+  map<string, string> protocol_options = 11;
+  TLSFingerprintProfile tls_fingerprint = 12;
+}
+
+// SignBedrockRequest signs only a payload digest and the authority-owned
+// execution target. The Bedrock request body and AWS credentials never cross
+// the control-plane boundary.
+message SignBedrockRequestRequest {
+  string data_plane_id = 1;
+  string request_id = 2;
+  string lease_id = 3;
+  string method = 4;
+  string upstream_url = 5;
+  string payload_sha256 = 6;
+  map<string, string> headers = 7;
+}
+
+message SignBedrockRequestResponse {
+  Decision decision = 1;
+  Denial denial = 2;
+  map<string, string> signed_headers = 3;
+}
+
+// TLSFingerprintProfile is an immutable, short-lived execution snapshot. The
+// control plane resolves database profile IDs before issuing the plan, keeping
+// the data plane free of database access and configuration races.
+message TLSFingerprintProfile {
+  string profile_key = 1;
+  bool enable_grease = 2;
+  repeated uint32 cipher_suites = 3;
+  repeated uint32 curves = 4;
+  repeated uint32 point_formats = 5;
+  repeated uint32 signature_algorithms = 6;
+  repeated string alpn_protocols = 7;
+  repeated uint32 supported_versions = 8;
+  repeated uint32 key_share_groups = 9;
+  repeated uint32 psk_modes = 10;
+  repeated uint32 extensions = 11;
+}
+
+message RenewLeaseRequest {
+  string data_plane_id = 1;
+  string request_id = 2;
+  string lease_id = 3;
+}
+
+message RenewLeaseResponse {
+  bool renewed = 1;
+  int64 expires_at_unix_ms = 2;
+}
+
+message AbortRequestRequest {
+  string data_plane_id = 1;
+  string request_id = 2;
+  string lease_id = 3;
+  string reason = 4;
+}
+
+message AbortRequestResponse {
+  bool released = 1;
+}
+
+message SettleRequestRequest {
+  string data_plane_id = 1;
+  string request_id = 2;
+  string lease_id = 3;
+  int64 account_id = 4;
+  string requested_model = 5;
+  string mapped_model = 6;
+  string pricing_version = 7;
+  Usage usage = 8;
+  UpstreamResult upstream = 9;
+  int64 started_at_unix_ms = 10;
+  int64 first_byte_at_unix_ms = 11;
+  int64 finished_at_unix_ms = 12;
+  bool client_cancelled = 13;
+}
+
+message Usage {
+  int64 input_tokens = 1;
+  int64 output_tokens = 2;
+  int64 cache_read_tokens = 3;
+  int64 cache_creation_tokens = 4;
+  int64 reasoning_tokens = 5;
+  int64 response_bytes = 6;
+}
+
+message UpstreamResult {
+  int32 status_code = 1;
+  string error_code = 2;
+  string rate_limit_reset = 3;
+  int32 attempts = 4;
+}
+
+message SettleRequestResponse {
+  bool accepted = 1;
+  bool duplicate = 2;
+}
+
+message WatchInvalidationsRequest {
+  string data_plane_id = 1;
+  int64 after_sequence = 2;
+}
+
+enum InvalidationKind {
+  INVALIDATION_KIND_UNSPECIFIED = 0;
+  INVALIDATION_KIND_API_KEY = 1;
+  INVALIDATION_KIND_USER = 2;
+  INVALIDATION_KIND_GROUP = 3;
+  INVALIDATION_KIND_ACCOUNT = 4;
+  INVALIDATION_KIND_POLICY = 5;
+  INVALIDATION_KIND_FULL_RESYNC = 6;
+}
+
+message InvalidationEvent {
+  int64 sequence = 1;
+  InvalidationKind kind = 2;
+  // API_KEY subjects are SHA-256 credential digests; USER/GROUP subjects are
+  // decimal IDs. POLICY and FULL_RESYNC ignore subject.
+  string subject = 3;
+  string version = 4;
+  int64 occurred_at_unix_ms = 5;
+}
