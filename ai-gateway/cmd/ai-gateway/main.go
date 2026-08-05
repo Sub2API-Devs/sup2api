@@ -1,16 +1,20 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/bootstrap"
 	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/config"
+	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/workersetup"
 	"github.com/caddyserver/caddy/v2"
+	"github.com/google/uuid"
 
 	_ "github.com/Sub2API-Devs/sup2api/ai-gateway/internal/caddymodules/admission"
 	_ "github.com/Sub2API-Devs/sup2api/ai-gateway/internal/caddymodules/auth"
@@ -33,6 +37,7 @@ import (
 	_ "github.com/Sub2API-Devs/sup2api/ai-gateway/internal/caddymodules/transports/fingerprint"
 	_ "github.com/Sub2API-Devs/sup2api/ai-gateway/internal/caddymodules/transports/proxy"
 	_ "github.com/Sub2API-Devs/sup2api/ai-gateway/internal/caddymodules/transports/standard"
+	_ "github.com/Sub2API-Devs/sup2api/ai-gateway/internal/caddymodules/workermanagement"
 	_ "github.com/caddyserver/caddy/v2/modules/caddyhttp"
 )
 
@@ -43,7 +48,35 @@ func main() {
 }
 
 func run() error {
-	cfg, err := config.FromEnv()
+	runCtx, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stopSignals()
+	configPath := strings.TrimSpace(os.Getenv("AI_GATEWAY_WORKER_CONFIG_PATH"))
+	if configPath == "" {
+		configPath = "./data/worker-config.json"
+	}
+	instanceID := uuid.NewString()
+	workerConfig, err := workersetup.Load(configPath)
+	if err != nil {
+		return err
+	}
+	if workerConfig == nil {
+		listenAddress := strings.TrimSpace(os.Getenv("AI_GATEWAY_LISTEN"))
+		if listenAddress == "" {
+			listenAddress = ":9999"
+		}
+		version := strings.TrimSpace(os.Getenv("AI_GATEWAY_VERSION"))
+		if version == "" {
+			version = "dev"
+		}
+		workerConfig, err = workersetup.Bootstrap(runCtx, listenAddress, configPath, instanceID, version)
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+	}
+	cfg, err := config.FromEnvWithWorker(workerConfig, instanceID)
 	if err != nil {
 		return fmt.Errorf("load configuration: %w", err)
 	}
@@ -56,10 +89,7 @@ func run() error {
 	}
 
 	log.Printf("Sup2API AI data plane started on %s (node=%s)", cfg.ListenAddress, cfg.NodeID)
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-	signal.Stop(quit)
+	<-runCtx.Done()
 
 	if err := caddy.Stop(); err != nil && !errors.Is(err, os.ErrClosed) {
 		return fmt.Errorf("stop Caddy data plane: %w", err)

@@ -1,8 +1,12 @@
 package config
 
 import (
+	"encoding/base64"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/workersetup"
 )
 
 func TestFromEnvDefaultsToUnixControlPlaneAndPort9999(t *testing.T) {
@@ -21,6 +25,12 @@ func TestFromEnvDefaultsToUnixControlPlaneAndPort9999(t *testing.T) {
 		"AI_GATEWAY_AUTH_CACHE_TTL",
 		"AI_GATEWAY_AUTH_CACHE_SIZE",
 		"AI_GATEWAY_CONTROL_PLANE_CA_FILE",
+		"AI_GATEWAY_WORKER_ID",
+		"AI_GATEWAY_INSTANCE_ID",
+		"AI_GATEWAY_MANAGEMENT_KEY",
+		"AI_GATEWAY_VAULT_KEY",
+		"AI_GATEWAY_REDIS_URL",
+		"AI_GATEWAY_WORKER_LOG_MAX_LEN",
 	} {
 		t.Setenv(key, "")
 	}
@@ -46,11 +56,39 @@ func TestFromEnvDefaultsToUnixControlPlaneAndPort9999(t *testing.T) {
 	}
 }
 
+func TestFromEnvWithWorkerUsesUIProvisionedConfigurationWithoutRedis(t *testing.T) {
+	t.Setenv("AI_GATEWAY_WORKER_ID", "legacy-env-worker")
+	t.Setenv("AI_GATEWAY_MANAGEMENT_KEY", strings.Repeat("e", 32))
+	t.Setenv("AI_GATEWAY_VAULT_KEY", "legacy-env-vault")
+	t.Setenv("AI_GATEWAY_CONTROL_PLANE", "legacy-control:1")
+	t.Setenv("AI_GATEWAY_CONTROL_PLANE_INSECURE", "not-a-bool")
+	t.Setenv("AI_GATEWAY_REDIS_URL", "redis://should-never-be-read:6379/0")
+	worker := &workersetup.Config{
+		WorkerID: "gateway-ui-01", ManagementKey: strings.Repeat("m", 32),
+		VaultKey:           base64.StdEncoding.EncodeToString(make([]byte, 32)),
+		ControlPlaneTarget: "sub2api:9090", ControlPlaneInsecure: true,
+	}
+	cfg, err := FromEnvWithWorker(worker, "instance-ui")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.NodeID != worker.WorkerID || cfg.WorkerManagementKey != worker.ManagementKey || cfg.ControlPlaneTarget != worker.ControlPlaneTarget || cfg.WorkerInstanceID != "instance-ui" {
+		t.Fatalf("UI Worker configuration was not applied: %+v", cfg)
+	}
+	worker.VaultKey = "bad"
+	if _, err := FromEnvWithWorker(worker, "instance-ui"); err == nil || !strings.Contains(err.Error(), "vault_key") {
+		t.Fatalf("expected invalid UI vault key to fail, got %v", err)
+	}
+}
+
 func TestFromEnvRequiresCAForSecureTCP(t *testing.T) {
-	t.Setenv("AI_GATEWAY_CONTROL_PLANE", "dns:///control.internal:9443")
-	t.Setenv("AI_GATEWAY_CONTROL_PLANE_INSECURE", "false")
 	t.Setenv("AI_GATEWAY_CONTROL_PLANE_CA_FILE", "")
-	if _, err := FromEnv(); err == nil {
+	worker := &workersetup.Config{
+		WorkerID: "gateway-ui-tls", ManagementKey: strings.Repeat("m", 32),
+		VaultKey:           base64.StdEncoding.EncodeToString(make([]byte, 32)),
+		ControlPlaneTarget: "dns:///control.internal:9443", ControlPlaneInsecure: false,
+	}
+	if _, err := FromEnvWithWorker(worker, "instance-ui"); err == nil {
 		t.Fatal("expected missing CA error")
 	}
 }

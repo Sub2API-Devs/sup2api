@@ -36,10 +36,9 @@ services:
       - sup2api_gateway_data:/var/lib/ai-gateway/data
     environment:
       - AI_GATEWAY_LISTEN=:9999
-      - AI_GATEWAY_NODE_ID=${AI_GATEWAY_NODE_ID:-sup2api-gateway-dev}
+      - AI_GATEWAY_WORKER_CONFIG_PATH=/var/lib/ai-gateway/data/worker-config.json
+      - AI_GATEWAY_WORKER_VAULT_PATH=/var/lib/ai-gateway/data/worker-vault.db
       - AI_GATEWAY_LEASE_RENEW_INTERVAL=${AI_GATEWAY_LEASE_RENEW_INTERVAL:-30s}
-      - AI_GATEWAY_CONTROL_PLANE=sub2api:9090
-      - AI_GATEWAY_CONTROL_PLANE_INSECURE=true
       - AI_GATEWAY_STARTUP_REQUIRED=true
       - AI_GATEWAY_SETTLEMENT_WAL_PATH=/var/lib/ai-gateway/data/settlements
       - AI_GATEWAY_SETTLEMENT_WAL_MAX_BYTES=${AI_GATEWAY_SETTLEMENT_WAL_MAX_BYTES:-1073741824}
@@ -50,7 +49,7 @@ services:
     networks:
       - sub2api-network
     healthcheck:
-      test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://localhost:9999/readyz"]
+      test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://localhost:9999/healthz"]
       interval: 10s
       timeout: 5s
       retries: 6

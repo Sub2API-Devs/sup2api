@@ -26,6 +26,7 @@ var ProviderSet = wire.NewSet(
 	NewLeaseStore,
 	NewAdmissionController,
 	NewSettlementController,
+	NewWorkerLogBridge,
 	NewRPCService,
 	NewServer,
 )

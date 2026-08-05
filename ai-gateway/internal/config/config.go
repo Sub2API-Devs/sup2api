@@ -6,6 +6,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/workersetup"
+	"github.com/google/uuid"
 )
 
 const (
@@ -13,6 +16,7 @@ const (
 	defaultControlPlaneTarget = "unix:///tmp/sup2api-control.sock"
 	defaultSettlementWALPath  = "./data/settlements"
 	defaultSettlementWALBytes = int64(1 << 30)
+	defaultWorkerVaultPath    = "./data/worker-vault.db"
 )
 
 // Config contains process-level bootstrap settings. Request routing and
@@ -31,6 +35,12 @@ type Config struct {
 	SettlementWALMaxBytes int64
 	AuthCacheTTL          time.Duration
 	AuthCacheSize         int
+	WorkerID              string
+	WorkerInstanceID      string
+	WorkerManagementKey   string
+	WorkerVaultPath       string
+	WorkerVaultKey        string
+	WorkerVersion         string
 
 	TLSCAFile     string
 	TLSCertFile   string
@@ -43,8 +53,9 @@ func FromEnv() (Config, error) {
 	hostname, _ := os.Hostname()
 	cfg := Config{
 		ListenAddress:         envOrDefault("AI_GATEWAY_LISTEN", defaultListenAddress),
-		NodeID:                envOrDefault("AI_GATEWAY_NODE_ID", hostname),
-		ControlPlaneTarget:    envOrDefault("AI_GATEWAY_CONTROL_PLANE", defaultControlPlaneTarget),
+		NodeID:                hostname,
+		ControlPlaneTarget:    defaultControlPlaneTarget,
+		ControlPlaneInsecure:  true,
 		StartupRequired:       true,
 		DialTimeout:           5 * time.Second,
 		RequestTimeout:        2 * time.Second,
@@ -54,19 +65,18 @@ func FromEnv() (Config, error) {
 		SettlementWALMaxBytes: defaultSettlementWALBytes,
 		AuthCacheTTL:          60 * time.Second,
 		AuthCacheSize:         65536,
+		WorkerID:              "",
+		WorkerInstanceID:      uuid.NewString(),
+		WorkerManagementKey:   "",
+		WorkerVaultPath:       envOrDefault("AI_GATEWAY_WORKER_VAULT_PATH", defaultWorkerVaultPath),
+		WorkerVaultKey:        "",
+		WorkerVersion:         envOrDefault("AI_GATEWAY_VERSION", "dev"),
 		TLSCAFile:             strings.TrimSpace(os.Getenv("AI_GATEWAY_CONTROL_PLANE_CA_FILE")),
 		TLSCertFile:           strings.TrimSpace(os.Getenv("AI_GATEWAY_CONTROL_PLANE_CERT_FILE")),
 		TLSKeyFile:            strings.TrimSpace(os.Getenv("AI_GATEWAY_CONTROL_PLANE_KEY_FILE")),
 		TLSServerName:         strings.TrimSpace(os.Getenv("AI_GATEWAY_CONTROL_PLANE_SERVER_NAME")),
 	}
-
-	isUnix := strings.HasPrefix(cfg.ControlPlaneTarget, "unix:")
-	cfg.ControlPlaneInsecure = isUnix
-
 	var err error
-	if cfg.ControlPlaneInsecure, err = envBool("AI_GATEWAY_CONTROL_PLANE_INSECURE", cfg.ControlPlaneInsecure); err != nil {
-		return Config{}, err
-	}
 	if cfg.StartupRequired, err = envBool("AI_GATEWAY_STARTUP_REQUIRED", cfg.StartupRequired); err != nil {
 		return Config{}, err
 	}
@@ -98,6 +108,33 @@ func FromEnv() (Config, error) {
 	return cfg, nil
 }
 
+// FromEnvWithWorker overlays the UI-provisioned Worker configuration on
+// process-level transport and timeout settings. Long-lived Worker identity,
+// secrets, and control-plane routing never need container environment values.
+func FromEnvWithWorker(worker *workersetup.Config, instanceID string) (Config, error) {
+	if worker == nil {
+		return Config{}, fmt.Errorf("UI-provisioned Worker configuration is required")
+	}
+	if err := worker.Validate(); err != nil {
+		return Config{}, err
+	}
+	cfg, err := FromEnv()
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.NodeID = worker.WorkerID
+	cfg.WorkerID = worker.WorkerID
+	cfg.WorkerInstanceID = strings.TrimSpace(instanceID)
+	cfg.WorkerManagementKey = worker.ManagementKey
+	cfg.WorkerVaultKey = worker.VaultKey
+	cfg.ControlPlaneTarget = worker.ControlPlaneTarget
+	cfg.ControlPlaneInsecure = worker.ControlPlaneInsecure
+	if err := cfg.Validate(); err != nil {
+		return Config{}, err
+	}
+	return cfg, nil
+}
+
 func (c Config) Validate() error {
 	if strings.TrimSpace(c.ListenAddress) == "" {
 		return fmt.Errorf("AI_GATEWAY_LISTEN must not be empty")
@@ -117,6 +154,20 @@ func (c Config) Validate() error {
 	if c.AuthCacheTTL <= 0 || c.AuthCacheSize <= 0 {
 		return fmt.Errorf("AI_GATEWAY_AUTH_CACHE_TTL and AI_GATEWAY_AUTH_CACHE_SIZE must be positive")
 	}
+	if c.WorkerManagementKey != "" {
+		if len(c.WorkerManagementKey) < 32 {
+			return fmt.Errorf("AI_GATEWAY_MANAGEMENT_KEY must contain at least 32 characters")
+		}
+		if strings.TrimSpace(c.WorkerID) == "" || strings.TrimSpace(c.WorkerInstanceID) == "" {
+			return fmt.Errorf("AI_GATEWAY_WORKER_ID and AI_GATEWAY_INSTANCE_ID must not be empty")
+		}
+		if strings.TrimSpace(c.WorkerVaultPath) == "" {
+			return fmt.Errorf("AI_GATEWAY_WORKER_VAULT_PATH must not be empty")
+		}
+		if _, err := DecodeWorkerVaultKey(c.WorkerVaultKey); err != nil {
+			return fmt.Errorf("AI_GATEWAY_VAULT_KEY: %w", err)
+		}
+	}
 	if !c.ControlPlaneInsecure {
 		if c.TLSCAFile == "" {
 			return fmt.Errorf("AI_GATEWAY_CONTROL_PLANE_CA_FILE is required for secure control-plane transport")
@@ -126,6 +177,13 @@ func (c Config) Validate() error {
 		}
 	}
 	return nil
+}
+
+// DecodeWorkerVaultKey accepts a 32-byte key encoded as standard/raw Base64
+// or hexadecimal. It deliberately does not derive encryption material from
+// the management Bearer secret so both secrets can be rotated independently.
+func DecodeWorkerVaultKey(raw string) ([]byte, error) {
+	return workersetup.DecodeVaultKey(raw)
 }
 
 func envOrDefault(key, fallback string) string {

@@ -58,6 +58,7 @@ import (
 	_ "github.com/Sub2API-Devs/sup2api/ai-gateway/internal/caddymodules/transports/fingerprint"
 	_ "github.com/Sub2API-Devs/sup2api/ai-gateway/internal/caddymodules/transports/proxy"
 	_ "github.com/Sub2API-Devs/sup2api/ai-gateway/internal/caddymodules/transports/standard"
+	_ "github.com/Sub2API-Devs/sup2api/ai-gateway/internal/caddymodules/workermanagement"
 	_ "github.com/caddyserver/caddy/v2/modules/caddyhttp"
 )
 
@@ -166,6 +167,123 @@ func (s *controlServer) SettleRequest(_ context.Context, request *controlv1.Sett
 func (s *controlServer) WatchInvalidations(_ *controlv1.WatchInvalidationsRequest, stream grpc.ServerStreamingServer[controlv1.InvalidationEvent]) error {
 	<-stream.Context().Done()
 	return nil
+}
+
+func TestCaddyWorkerManagementAndSettlementIdentityEndToEnd(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/v1/models":
+			if request.Header.Get("Authorization") != "Bearer sk-worker-local" {
+				http.Error(w, "wrong Worker-local API key", http.StatusUnauthorized)
+				return
+			}
+			_, _ = io.WriteString(w, `{"data":[]}`)
+		case "/responses":
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = io.WriteString(w, "data: {\"type\":\"response.completed\",\"usage\":{\"input_tokens\":2,\"output_tokens\":3}}\n\n")
+		default:
+			http.NotFound(w, request)
+		}
+	}))
+	defer upstream.Close()
+
+	controlListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	control := &controlServer{upstreamURL: upstream.URL, opened: make(chan *controlv1.OpenRequestRequest, 1), settled: make(chan *controlv1.SettleRequestRequest, 2)}
+	grpcServer := grpc.NewServer()
+	controlv1.RegisterDataPlaneControlServer(grpcServer, control)
+	go func() { _ = grpcServer.Serve(controlListener) }()
+	defer grpcServer.Stop()
+
+	managementKey := strings.Repeat("management-", 4)
+	gatewayAddress := unusedTCPAddress(t)
+	document, err := bootstrap.CaddyConfig(config.Config{
+		ListenAddress: gatewayAddress, NodeID: "data-plane-worker-e2e",
+		ControlPlaneTarget: controlListener.Addr().String(), ControlPlaneInsecure: true, StartupRequired: true,
+		DialTimeout: 3 * time.Second, RequestTimeout: 2 * time.Second, GracePeriod: time.Second,
+		SettlementWALPath: filepath.Join(t.TempDir(), "settlements"), SettlementWALMaxBytes: 1 << 20,
+		AuthCacheTTL: time.Minute, AuthCacheSize: 100,
+		WorkerID: "worker-e2e", WorkerInstanceID: "instance-e2e", WorkerManagementKey: managementKey,
+		WorkerVaultPath: filepath.Join(t.TempDir(), "worker-vault.db"),
+		WorkerVaultKey:  base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{7}, 32)),
+		WorkerVersion:   "e2e",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := caddy.Load(document, true); err != nil {
+		t.Fatalf("load Worker-enabled Caddy: %v", err)
+	}
+	defer func() { _ = caddy.Stop() }()
+
+	requestJSON := func(method, path, body string, authorized bool) (*http.Response, []byte) {
+		t.Helper()
+		request, err := http.NewRequest(method, "http://"+gatewayAddress+path, strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Content-Type", "application/json")
+		if authorized {
+			request.Header.Set("Authorization", "Bearer "+managementKey)
+		}
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, _ := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		return response, raw
+	}
+	if response, _ := requestJSON(http.MethodGet, "/worker/v1/identity", "", false); response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("management endpoint accepted a missing key: %d", response.StatusCode)
+	}
+	response, raw := requestJSON(http.MethodGet, "/worker/v1/identity", "", true)
+	if response.StatusCode != http.StatusOK || !bytes.Contains(raw, []byte(`"worker_id":"worker-e2e"`)) {
+		t.Fatalf("unexpected Worker identity: status=%d body=%s", response.StatusCode, raw)
+	}
+	createBody, _ := json.Marshal(map[string]any{"name": "local-key", "api_key": "sk-worker-local", "base_url": upstream.URL})
+	response, raw = requestJSON(http.MethodPost, "/worker/v1/accounts/openai/api-key", string(createBody), true)
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("create Worker account: status=%d body=%s", response.StatusCode, raw)
+	}
+	if bytes.Contains(raw, []byte("sk-worker-local")) {
+		t.Fatalf("Worker management response exposed the API key: %s", raw)
+	}
+	var created struct {
+		Account struct {
+			ID string `json:"id"`
+		} `json:"account"`
+	}
+	if err := json.Unmarshal(raw, &created); err != nil || created.Account.ID == "" {
+		t.Fatalf("decode Worker account: %v body=%s", err, raw)
+	}
+	response, raw = requestJSON(http.MethodPost, "/worker/v1/accounts/"+created.Account.ID+"/test", `{}`, true)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("test Worker account: status=%d body=%s", response.StatusCode, raw)
+	}
+
+	aiRequest, _ := http.NewRequest(http.MethodPost, "http://"+gatewayAddress+"/v1/responses", strings.NewReader(`{"model":"gpt-client","stream":true,"input":"hello"}`))
+	aiRequest.Header.Set("Authorization", "Bearer client-key")
+	aiResponse, err := http.DefaultClient.Do(aiRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.Copy(io.Discard, aiResponse.Body)
+	_ = aiResponse.Body.Close()
+	if aiResponse.StatusCode != http.StatusOK {
+		t.Fatalf("AI request failed: %d", aiResponse.StatusCode)
+	}
+
+	select {
+	case settled := <-control.settled:
+		if settled.GetDataPlaneId() != "data-plane-worker-e2e" || settled.GetDataPlaneInstanceId() != "instance-e2e" {
+			t.Fatalf("settlement lost Worker identity: %+v", settled)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("settlement RPC was not observed")
+	}
 }
 
 func TestCaddyDataPlaneOpenProxyAndSettle(t *testing.T) {

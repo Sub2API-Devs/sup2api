@@ -36,8 +36,36 @@ small:
   are deleted only after the control plane acknowledges them.
   Deferred finalization also covers ReverseProxy's streaming-abort panic path,
   so disconnects and lease revocations cannot bypass the WAL.
-- The existing application remains the authority for API keys, billing,
-  scheduling, account credentials, and token refresh.
+- The existing application remains the authority for client API keys,
+  billing, scheduling, and centrally managed provider accounts. Separately,
+  the versioned Worker management API owns Worker-local OpenAI accounts and
+  performs their OAuth exchange and refresh inside this container.
+
+## Worker management
+
+New containers start in an unclaimed bootstrap state. They generate a one-time
+pairing code, store it with mode `0600`, and print it to the container log. An
+administrator enters the Worker URL and pairing code in the Sup2API UI; the UI
+generates the stable Worker ID, management key, and Vault key and sends them,
+together with the private gRPC target, through `POST /worker/v1/claim`.
+The Worker persists this configuration with mode `0600`, destroys the pairing
+code, and starts Caddy in the same process. Browsers never call the Worker
+directly and long-lived Worker secrets are not container environment variables.
+
+- OpenAI API keys, OAuth access tokens, and refresh tokens are encrypted with
+  AES-256-GCM in a mode-0600 BoltDB vault on the mounted data volume.
+- The Vault key is a separate 32-byte Base64/hex value and is not derived from
+  the management Bearer secret. The mode-0600 Worker configuration and data
+  volume must be protected because they contain both long-lived keys.
+- PKCE state and verifier values live only in this process for 30 minutes.
+  Code exchange, refresh, and account probes originate from this Worker.
+- The Worker has no Redis client, URL, password, Stream name, or Consumer Group.
+  It sends durable settlement facts over private gRPC. Sup2API publishes the
+  corresponding event to a Worker-specific Redis Stream and acknowledges the
+  RPC only after that succeeds, giving at-least-once delivery from the WAL.
+- `/worker/v1/identity` reports stable Worker identity, the current process
+  instance ID, and protocol capabilities. Redis topology remains control-plane
+  owned.
 
 ## Development
 
@@ -59,14 +87,13 @@ Probe the process separately from its control-plane dependency:
 - `GET /readyz` returns 200 only while the private control-plane connection is
   ready and the local billing WAL can safely admit new requests.
 
-The process is configured with environment variables:
+Only process/bootstrap paths and transport mechanics use environment variables.
+Worker identity, long-lived keys, and the gRPC target come from the
+UI-provisioned Worker configuration file.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `AI_GATEWAY_LISTEN` | `:9999` | Public Caddy listener |
-| `AI_GATEWAY_NODE_ID` | hostname | Stable data-plane identity |
-| `AI_GATEWAY_CONTROL_PLANE` | `unix:///tmp/sup2api-control.sock` | Private gRPC target |
-| `AI_GATEWAY_CONTROL_PLANE_INSECURE` | `true` for Unix sockets | Permit plaintext transport |
 | `AI_GATEWAY_STARTUP_REQUIRED` | `true` | Fail startup if the control plane is unavailable |
 | `AI_GATEWAY_DIAL_TIMEOUT` | `5s` | Initial gRPC dial timeout |
 | `AI_GATEWAY_REQUEST_TIMEOUT` | `2s` | Admission/settlement RPC timeout |
@@ -76,6 +103,9 @@ The process is configured with environment variables:
 | `AI_GATEWAY_SETTLEMENT_WAL_MAX_BYTES` | `1073741824` | Fail-closed WAL capacity limit |
 | `AI_GATEWAY_AUTH_CACHE_TTL` | `60s` | Maximum local AuthGrant lifetime |
 | `AI_GATEWAY_AUTH_CACHE_SIZE` | `65536` | Maximum local AuthGrant entries |
+| `AI_GATEWAY_WORKER_CONFIG_PATH` | `./data/worker-config.json` | Mode-0600 UI-provisioned Worker configuration |
+| `AI_GATEWAY_WORKER_VAULT_PATH` | `./data/worker-vault.db` | Encrypted Worker-local account vault |
+| `AI_GATEWAY_VERSION` | `dev` | Version reported by the Worker identity endpoint |
 
 Execution-plan extension namespaces:
 
@@ -97,8 +127,9 @@ Authority matrix:
 | Usage observation | Extracts cumulative JSON/SSE/WS counters without buffering streams | Treats submitted counters as raw facts tied to the admitted lease |
 | Final price and deduction | Never calculates or persists financial values | Calculates authoritative cost and commits DB-backed idempotent billing and usage logs |
 | Failed settlement retry | Fsyncs facts to a mode-0600 local WAL, including stream-abort paths | Uses transactional `(request_id, api_key_id)` dedup; Redis acknowledgement accelerates replay |
+| Worker consumption-log delivery | Replays settlement facts over private gRPC; has no Redis dependency | Resolves the registered Worker, publishes to its isolated Redis Stream, then acknowledges gRPC |
 
-Account routing and provider configuration are not cached in the data plane:
+Central account routing and provider configuration are not cached in the data plane:
 every admitted request receives a fresh authoritative execution-plan snapshot.
 Consequently account/config changes do not create a second local source of
 truth; the invalidation stream is needed only for cached AuthGrants.
@@ -193,6 +224,11 @@ fsyncs a client-cancelled settlement, and keeps the downstream session usable.
 Overlapping `response.create` events are rejected without cancelling the active
 turn. This gives API-key, Codex OAuth, and Grok plans the same authority and
 billing boundary without sending request bodies through gRPC.
+Worker-local accounts currently form the private Worker management and
+credential-lifecycle boundary (create/list/refresh/test/delete). The existing
+central scheduler remains the routing authority for admitted public AI
+requests; a future execution-plan revision can reference a Worker-local
+account ID without moving its refresh credential back to the control plane.
 Other provider flows stay on the existing in-process path until
 their dedicated transforms are complete; admission never silently bypasses
 provider requirements.

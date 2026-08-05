@@ -32,6 +32,7 @@ type RPCService struct {
 	leases        *LeaseStore
 	admission     *AdmissionController
 	settlement    *SettlementController
+	workerLogs    *WorkerLogBridge
 }
 
 func (s *RPCService) WatchInvalidations(request *controlv1.WatchInvalidationsRequest, stream controlv1.DataPlaneControl_WatchInvalidationsServer) error {
@@ -55,15 +56,24 @@ func (s *RPCService) WatchInvalidations(request *controlv1.WatchInvalidationsReq
 	}
 }
 
-func NewRPCService(apiKeys *service.APIKeyService, signer *GrantSigner, leases *LeaseStore, admission *AdmissionController, settlement *SettlementController) *RPCService {
-	return &RPCService{apiKeys: apiKeys, signer: signer, leases: leases, admission: admission, settlement: settlement, now: time.Now}
+func NewRPCService(apiKeys *service.APIKeyService, signer *GrantSigner, leases *LeaseStore, admission *AdmissionController, settlement *SettlementController, workerLogs *WorkerLogBridge) *RPCService {
+	return &RPCService{apiKeys: apiKeys, signer: signer, leases: leases, admission: admission, settlement: settlement, workerLogs: workerLogs, now: time.Now}
 }
 
 func (s *RPCService) SettleRequest(ctx context.Context, request *controlv1.SettleRequestRequest) (*controlv1.SettleRequestResponse, error) {
 	if s == nil || s.settlement == nil {
 		return nil, status.Error(codes.Unavailable, "settlement authority is unavailable")
 	}
-	return s.settlement.Settle(ctx, request)
+	response, err := s.settlement.Settle(ctx, request)
+	if err != nil || response == nil || (!response.GetAccepted() && !response.GetDuplicate()) {
+		return response, err
+	}
+	if s.workerLogs != nil {
+		if err := s.workerLogs.Publish(ctx, request); err != nil {
+			return nil, status.Error(codes.Unavailable, "Worker consumption log MQ is unavailable")
+		}
+	}
+	return response, nil
 }
 
 func newRPCService(apiKeys apiKeyResolver, signer *GrantSigner) *RPCService {

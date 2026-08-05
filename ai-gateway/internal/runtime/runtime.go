@@ -16,6 +16,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/controlplane"
 	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/requeststate"
 	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/settlementwal"
+	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/workermanagement"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )
@@ -40,6 +41,12 @@ type Config struct {
 	TLSCertFile           string
 	TLSKeyFile            string
 	TLSServerName         string
+	WorkerID              string
+	WorkerInstanceID      string
+	WorkerManagementKey   string
+	WorkerVaultPath       string
+	WorkerVaultKey        []byte
+	WorkerVersion         string
 }
 
 // Runtime owns process-level data-plane resources shared by Caddy HTTP
@@ -62,6 +69,7 @@ type Runtime struct {
 	stopOnce       sync.Once
 	cancel         context.CancelFunc
 	wg             sync.WaitGroup
+	worker         *workermanagement.Manager
 }
 
 func New(cfg Config, logger *zap.Logger) (*Runtime, error) {
@@ -97,6 +105,17 @@ func New(cfg Config, logger *zap.Logger) (*Runtime, error) {
 		wal:            wal,
 		settlementWake: make(chan struct{}, 1),
 		stop:           make(chan struct{}),
+	}
+	if cfg.WorkerManagementKey != "" {
+		manager, managerErr := workermanagement.New(workermanagement.Config{
+			WorkerID: cfg.WorkerID, InstanceID: cfg.WorkerInstanceID,
+			ManagementKey: cfg.WorkerManagementKey, Version: cfg.WorkerVersion,
+			VaultPath: cfg.WorkerVaultPath, VaultKey: cfg.WorkerVaultKey,
+		})
+		if managerErr != nil {
+			return nil, fmt.Errorf("create worker manager: %w", managerErr)
+		}
+		runtime.worker = manager
 	}
 	runtime.billingHealthy.Store(wal.Bytes() < wal.MaxBytes())
 	return runtime, nil
@@ -158,10 +177,21 @@ func (r *Runtime) Stop() error {
 
 	r.clientMu.Lock()
 	defer r.clientMu.Unlock()
+	var result error
 	if r.client != nil {
-		return r.client.Close()
+		result = errors.Join(result, r.client.Close())
 	}
-	return nil
+	if r.worker != nil {
+		result = errors.Join(result, r.worker.Close())
+	}
+	return result
+}
+
+func (r *Runtime) WorkerManager() *workermanagement.Manager {
+	if r == nil {
+		return nil
+	}
+	return r.worker
 }
 
 // ResolveAPIKey uses a bounded local AuthGrant cache and falls back to the
@@ -307,6 +337,7 @@ func (r *Runtime) SubmitSettlement(req *controlv1.SettleRequestRequest) error {
 		return fmt.Errorf("clone settlement request")
 	}
 	request.DataPlaneId = r.cfg.NodeID
+	request.DataPlaneInstanceId = r.cfg.WorkerInstanceID
 	if err := r.wal.Put(request); err != nil {
 		r.billingHealthy.Store(false)
 		return fmt.Errorf("%w: %v", ErrBillingWALUnavailable, err)

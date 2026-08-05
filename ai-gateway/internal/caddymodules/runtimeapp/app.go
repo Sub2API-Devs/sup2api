@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/config"
 	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/runtime"
 	"github.com/caddyserver/caddy/v2"
 )
@@ -30,6 +31,12 @@ type App struct {
 	TLSCertFile           string         `json:"tls_cert_file,omitempty"`
 	TLSKeyFile            string         `json:"tls_key_file,omitempty"`
 	TLSServerName         string         `json:"tls_server_name,omitempty"`
+	WorkerID              string         `json:"worker_id,omitempty"`
+	WorkerInstanceID      string         `json:"worker_instance_id,omitempty"`
+	WorkerManagementKey   string         `json:"worker_management_key,omitempty"`
+	WorkerVaultPath       string         `json:"worker_vault_path,omitempty"`
+	WorkerVaultKey        string         `json:"worker_vault_key,omitempty"`
+	WorkerVersion         string         `json:"worker_version,omitempty"`
 
 	runtime *runtime.Runtime
 }
@@ -61,6 +68,14 @@ func (a *App) Provision(ctx caddy.Context) error {
 		a.AuthCacheSize = 65536
 	}
 
+	var workerVaultKey []byte
+	if a.WorkerManagementKey != "" {
+		var err error
+		workerVaultKey, err = config.DecodeWorkerVaultKey(a.WorkerVaultKey)
+		if err != nil {
+			return fmt.Errorf("decode worker vault key: %w", err)
+		}
+	}
 	runtime, err := runtime.New(runtime.Config{
 		NodeID:                a.NodeID,
 		ControlPlaneTarget:    a.ControlPlaneTarget,
@@ -76,6 +91,12 @@ func (a *App) Provision(ctx caddy.Context) error {
 		TLSCertFile:           a.TLSCertFile,
 		TLSKeyFile:            a.TLSKeyFile,
 		TLSServerName:         a.TLSServerName,
+		WorkerID:              a.WorkerID,
+		WorkerInstanceID:      a.WorkerInstanceID,
+		WorkerManagementKey:   a.WorkerManagementKey,
+		WorkerVaultPath:       a.WorkerVaultPath,
+		WorkerVaultKey:        workerVaultKey,
+		WorkerVersion:         a.WorkerVersion,
 	}, ctx.Logger())
 	if err != nil {
 		return fmt.Errorf("provision Sup2API runtime: %w", err)

@@ -1592,22 +1592,23 @@ func (x *AbortRequestResponse) GetReleased() bool {
 }
 
 type SettleRequestRequest struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	DataPlaneId       string                 `protobuf:"bytes,1,opt,name=data_plane_id,json=dataPlaneId,proto3" json:"data_plane_id,omitempty"`
-	RequestId         string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	LeaseId           string                 `protobuf:"bytes,3,opt,name=lease_id,json=leaseId,proto3" json:"lease_id,omitempty"`
-	AccountId         int64                  `protobuf:"varint,4,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
-	RequestedModel    string                 `protobuf:"bytes,5,opt,name=requested_model,json=requestedModel,proto3" json:"requested_model,omitempty"`
-	MappedModel       string                 `protobuf:"bytes,6,opt,name=mapped_model,json=mappedModel,proto3" json:"mapped_model,omitempty"`
-	PricingVersion    string                 `protobuf:"bytes,7,opt,name=pricing_version,json=pricingVersion,proto3" json:"pricing_version,omitempty"`
-	Usage             *Usage                 `protobuf:"bytes,8,opt,name=usage,proto3" json:"usage,omitempty"`
-	Upstream          *UpstreamResult        `protobuf:"bytes,9,opt,name=upstream,proto3" json:"upstream,omitempty"`
-	StartedAtUnixMs   int64                  `protobuf:"varint,10,opt,name=started_at_unix_ms,json=startedAtUnixMs,proto3" json:"started_at_unix_ms,omitempty"`
-	FirstByteAtUnixMs int64                  `protobuf:"varint,11,opt,name=first_byte_at_unix_ms,json=firstByteAtUnixMs,proto3" json:"first_byte_at_unix_ms,omitempty"`
-	FinishedAtUnixMs  int64                  `protobuf:"varint,12,opt,name=finished_at_unix_ms,json=finishedAtUnixMs,proto3" json:"finished_at_unix_ms,omitempty"`
-	ClientCancelled   bool                   `protobuf:"varint,13,opt,name=client_cancelled,json=clientCancelled,proto3" json:"client_cancelled,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	DataPlaneId         string                 `protobuf:"bytes,1,opt,name=data_plane_id,json=dataPlaneId,proto3" json:"data_plane_id,omitempty"`
+	RequestId           string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	LeaseId             string                 `protobuf:"bytes,3,opt,name=lease_id,json=leaseId,proto3" json:"lease_id,omitempty"`
+	AccountId           int64                  `protobuf:"varint,4,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	RequestedModel      string                 `protobuf:"bytes,5,opt,name=requested_model,json=requestedModel,proto3" json:"requested_model,omitempty"`
+	MappedModel         string                 `protobuf:"bytes,6,opt,name=mapped_model,json=mappedModel,proto3" json:"mapped_model,omitempty"`
+	PricingVersion      string                 `protobuf:"bytes,7,opt,name=pricing_version,json=pricingVersion,proto3" json:"pricing_version,omitempty"`
+	Usage               *Usage                 `protobuf:"bytes,8,opt,name=usage,proto3" json:"usage,omitempty"`
+	Upstream            *UpstreamResult        `protobuf:"bytes,9,opt,name=upstream,proto3" json:"upstream,omitempty"`
+	StartedAtUnixMs     int64                  `protobuf:"varint,10,opt,name=started_at_unix_ms,json=startedAtUnixMs,proto3" json:"started_at_unix_ms,omitempty"`
+	FirstByteAtUnixMs   int64                  `protobuf:"varint,11,opt,name=first_byte_at_unix_ms,json=firstByteAtUnixMs,proto3" json:"first_byte_at_unix_ms,omitempty"`
+	FinishedAtUnixMs    int64                  `protobuf:"varint,12,opt,name=finished_at_unix_ms,json=finishedAtUnixMs,proto3" json:"finished_at_unix_ms,omitempty"`
+	ClientCancelled     bool                   `protobuf:"varint,13,opt,name=client_cancelled,json=clientCancelled,proto3" json:"client_cancelled,omitempty"`
+	DataPlaneInstanceId string                 `protobuf:"bytes,14,opt,name=data_plane_instance_id,json=dataPlaneInstanceId,proto3" json:"data_plane_instance_id,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *SettleRequestRequest) Reset() {
@@ -1729,6 +1730,13 @@ func (x *SettleRequestRequest) GetClientCancelled() bool {
 		return x.ClientCancelled
 	}
 	return false
+}
+
+func (x *SettleRequestRequest) GetDataPlaneInstanceId() string {
+	if x != nil {
+		return x.DataPlaneInstanceId
+	}
+	return ""
 }
 
 type Usage struct {
@@ -2222,7 +2230,7 @@ const file_api_control_v1_control_proto_rawDesc = "" +
 	"\blease_id\x18\x03 \x01(\tR\aleaseId\x12\x16\n" +
 	"\x06reason\x18\x04 \x01(\tR\x06reason\"2\n" +
 	"\x14AbortRequestResponse\x12\x1a\n" +
-	"\breleased\x18\x01 \x01(\bR\breleased\"\xc2\x04\n" +
+	"\breleased\x18\x01 \x01(\bR\breleased\"\xf7\x04\n" +
 	"\x14SettleRequestRequest\x12\"\n" +
 	"\rdata_plane_id\x18\x01 \x01(\tR\vdataPlaneId\x12\x1d\n" +
 	"\n" +
@@ -2239,7 +2247,8 @@ const file_api_control_v1_control_proto_rawDesc = "" +
 	" \x01(\x03R\x0fstartedAtUnixMs\x120\n" +
 	"\x15first_byte_at_unix_ms\x18\v \x01(\x03R\x11firstByteAtUnixMs\x12-\n" +
 	"\x13finished_at_unix_ms\x18\f \x01(\x03R\x10finishedAtUnixMs\x12)\n" +
-	"\x10client_cancelled\x18\r \x01(\bR\x0fclientCancelled\"\x81\x02\n" +
+	"\x10client_cancelled\x18\r \x01(\bR\x0fclientCancelled\x123\n" +
+	"\x16data_plane_instance_id\x18\x0e \x01(\tR\x13dataPlaneInstanceId\"\x81\x02\n" +
 	"\x05Usage\x12!\n" +
 	"\finput_tokens\x18\x01 \x01(\x03R\vinputTokens\x12#\n" +
 	"\routput_tokens\x18\x02 \x01(\x03R\foutputTokens\x12*\n" +

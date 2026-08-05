@@ -220,6 +220,7 @@ message SettleRequestRequest {
   int64 first_byte_at_unix_ms = 11;
   int64 finished_at_unix_ms = 12;
   bool client_cancelled = 13;
+  string data_plane_instance_id = 14;
 }
 
 message Usage {

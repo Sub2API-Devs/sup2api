@@ -37,6 +37,12 @@ func CaddyConfig(cfg config.Config) ([]byte, error) {
 				"tls_cert_file":            cfg.TLSCertFile,
 				"tls_key_file":             cfg.TLSKeyFile,
 				"tls_server_name":          cfg.TLSServerName,
+				"worker_id":                cfg.WorkerID,
+				"worker_instance_id":       cfg.WorkerInstanceID,
+				"worker_management_key":    cfg.WorkerManagementKey,
+				"worker_vault_path":        cfg.WorkerVaultPath,
+				"worker_vault_key":         cfg.WorkerVaultKey,
+				"worker_version":           cfg.WorkerVersion,
 			},
 			"http": map[string]any{
 				"grace_period": cfg.GracePeriod.String(),
@@ -46,7 +52,7 @@ func CaddyConfig(cfg config.Config) ([]byte, error) {
 						"max_header_bytes":    64 * 1024,
 						"read_header_timeout": "10s",
 						"idle_timeout":        "2m",
-						"routes": []any{
+						"routes": append(workerManagementRoutes(cfg), []any{
 							map[string]any{
 								"match": []any{map[string]any{"path": []string{"/healthz"}}},
 								"handle": []any{map[string]any{
@@ -129,7 +135,7 @@ func CaddyConfig(cfg config.Config) ([]byte, error) {
 									"body": `{"error":{"type":"not_found","message":"Route is not served by the AI data plane"}}`,
 								}},
 							},
-						},
+						}...),
 					},
 				},
 			},
@@ -141,6 +147,17 @@ func CaddyConfig(cfg config.Config) ([]byte, error) {
 		return nil, fmt.Errorf("marshal Caddy config: %w", err)
 	}
 	return encoded, nil
+}
+
+func workerManagementRoutes(cfg config.Config) []any {
+	if cfg.WorkerManagementKey == "" {
+		return nil
+	}
+	return []any{map[string]any{
+		"match":    []any{map[string]any{"path": []string{"/worker/v1/*"}}},
+		"handle":   []any{map[string]any{"handler": "sup2api_worker_management"}},
+		"terminal": true,
+	}}
 }
 
 func aiDataPlanePaths() []string {
