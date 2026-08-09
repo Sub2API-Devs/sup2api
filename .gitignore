@@ -146,3 +146,6 @@ aicodex
 output/
 # Locally generated private control-plane PKI.
 deploy/data-plane-certs/
+
+# Vitest / Vite cache at repo root
+.vite/

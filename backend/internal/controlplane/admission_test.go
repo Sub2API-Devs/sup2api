@@ -8,6 +8,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	controlv1 "github.com/Wei-Shaw/sub2api/internal/controlplane/controlv1"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
@@ -501,7 +502,7 @@ func TestOpenAICodexOAuthExecutionPlanUsesShortLivedBearerAndPlugin(t *testing.T
 	if plan.GetUpstreamHeaders()["chatgpt-account-id"] != "chatgpt-account" || plan.GetUpstreamHeaders()["x-openai-fedramp"] != "true" {
 		t.Fatalf("account headers = %+v", plan.GetUpstreamHeaders())
 	}
-	if !strings.HasPrefix(plan.GetUpstreamHeaders()["User-Agent"], "codex_cli_rs/") || plan.GetUpstreamHeaders()["originator"] != "codex_cli_rs" {
+	if !strings.HasPrefix(plan.GetUpstreamHeaders()["User-Agent"], openai.CodexDefaultOriginator+"/") || plan.GetUpstreamHeaders()["originator"] != openai.CodexDefaultOriginator {
 		t.Fatalf("Codex identity = %+v", plan.GetUpstreamHeaders())
 	}
 	if plan.GetMappedModel() != "gpt-5.4" || plan.GetProtocolOptions()["device_id"] != "device-123" {
