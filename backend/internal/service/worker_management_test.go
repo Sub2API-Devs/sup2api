@@ -22,12 +22,29 @@ func (workerTestEncryptor) Decrypt(value string) (string, error) {
 	return strings.TrimPrefix(value, "cipher:"), nil
 }
 
+type countingWorkerEncryptor struct {
+	mu      sync.Mutex
+	encrypt int
+}
+
+func (e *countingWorkerEncryptor) Encrypt(value string) (string, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.encrypt++
+	return "cipher:" + value, nil
+}
+
+func (*countingWorkerEncryptor) Decrypt(value string) (string, error) {
+	return strings.TrimPrefix(value, "cipher:"), nil
+}
+
 type workerTestRepository struct {
-	mu       sync.Mutex
-	nextID   int64
-	workers  map[int64]*Worker
-	accounts []WorkerAccount
-	logs     []WorkerLog
+	mu           sync.Mutex
+	nextID       int64
+	workers      map[int64]*Worker
+	accounts     []WorkerAccount
+	logs         []WorkerLog
+	heartbeatErr error
 }
 
 func newWorkerTestRepository() *workerTestRepository {
@@ -79,11 +96,82 @@ func (r *workerTestRepository) DeleteWorker(_ context.Context, id int64) error {
 	delete(r.workers, id)
 	return nil
 }
-func (r *workerTestRepository) UpdateWorkerObservation(_ context.Context, id int64, identity WorkerIdentity, status string, lastError *string) error {
+func (r *workerTestRepository) UpdateWorker(_ context.Context, worker *Worker, updateEnabled bool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	clone := *worker
+	if current := r.workers[worker.ID]; current != nil && !updateEnabled {
+		clone.Enabled = current.Enabled
+		clone.Status = current.Status
+	}
+	r.workers[worker.ID] = &clone
+	return nil
+}
+func (r *workerTestRepository) SetWorkerEnabled(_ context.Context, id int64, enabled bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	worker := r.workers[id]
-	worker.Status, worker.InstanceID, worker.LastError = status, identity.InstanceID, lastError
+	if worker == nil {
+		return ErrWorkerNotFound
+	}
+	worker.Enabled = enabled
+	if enabled {
+		if worker.Status == "disabled" {
+			worker.Status = "unknown"
+		}
+	} else {
+		worker.Status = "disabled"
+	}
+	return nil
+}
+func (r *workerTestRepository) ListWorkersDueHeartbeat(_ context.Context, now time.Time, limit int) ([]Worker, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	items := make([]Worker, 0)
+	for _, worker := range r.workers {
+		if !worker.Enabled {
+			continue
+		}
+		if worker.LastHeartbeatAt != nil && worker.LastHeartbeatAt.Add(time.Duration(worker.HeartbeatIntervalSeconds)*time.Second).After(now) {
+			continue
+		}
+		items = append(items, *worker)
+		if len(items) == limit {
+			break
+		}
+	}
+	return items, nil
+}
+func (r *workerTestRepository) UpdateWorkerHeartbeat(_ context.Context, id int64, observation WorkerHeartbeatObservation) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.heartbeatErr != nil {
+		return r.heartbeatErr
+	}
+	worker := r.workers[id]
+	if worker == nil {
+		return errors.New("worker not found")
+	}
+	now := time.Now().UTC()
+	worker.LastHeartbeatAt = &now
+	worker.LastHeartbeatLatencyMS = observation.LatencyMS
+	worker.LastError = observation.LastError
+	if observation.Reachable {
+		worker.ConsecutiveFailures = 0
+		worker.LastSeenAt = &now
+	} else {
+		worker.ConsecutiveFailures++
+	}
+	if worker.Enabled {
+		worker.Status = observation.Status
+	} else {
+		worker.Status = "disabled"
+	}
+	if observation.Identity.InstanceID != "" {
+		worker.InstanceID = observation.Identity.InstanceID
+		worker.ProtocolVersion = observation.Identity.ProtocolVersion
+		worker.Version = observation.Identity.Version
+	}
 	return nil
 }
 func (r *workerTestRepository) UpsertWorkerAccount(_ context.Context, account *WorkerAccount) error {
@@ -248,6 +336,227 @@ func TestWorkerServiceRegistersAndOperatesOnSelectedRemoteWorker(t *testing.T) {
 		if value != "Bearer "+managementKey {
 			t.Fatalf("management key was not forwarded as Bearer: %q", value)
 		}
+	}
+}
+
+func TestWorkerServiceUpdatesLifecycleAndMaintainsHeartbeat(t *testing.T) {
+	managementKey := strings.Repeat("h", 32)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") != "Bearer "+managementKey {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch request.URL.Path {
+		case "/worker/v1/identity":
+			_, _ = w.Write([]byte(`{"protocol_version":"aicodex.proxy-worker/v1","worker_id":"worker-heartbeat","instance_id":"instance-heartbeat","version":"2.0.0"}`))
+		case "/worker/v1/ready":
+			_, _ = w.Write([]byte(`{"ready":true}`))
+		default:
+			http.NotFound(w, request)
+		}
+	}))
+	defer server.Close()
+
+	repo := newWorkerTestRepository()
+	manager := NewWorkerService(repo, workerTestEncryptor{}, NewWorkerRemoteClient())
+	worker, err := manager.Create(context.Background(), CreateWorkerInput{Name: "Heartbeat", BaseURL: server.URL, ManagementKey: managementKey})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := manager.Update(context.Background(), worker.ID, UpdateWorkerInput{
+		Name: "Heartbeat Updated", BaseURL: server.URL,
+		HeartbeatIntervalSeconds: 30, HeartbeatTimeoutSeconds: 3,
+	})
+	if err != nil || updated.Name != "Heartbeat Updated" || updated.HeartbeatIntervalSeconds != 30 || updated.HeartbeatTimeoutSeconds != 3 {
+		t.Fatalf("updated Worker=%+v err=%v", updated, err)
+	}
+	if _, err := manager.Update(context.Background(), worker.ID, UpdateWorkerInput{
+		Name: "Must Not Persist", BaseURL: server.URL, ManagementKey: strings.Repeat("x", 32),
+		HeartbeatIntervalSeconds: 30, HeartbeatTimeoutSeconds: 3,
+	}); err == nil {
+		t.Fatal("invalid replacement credential must be rejected")
+	}
+	unchanged, _ := repo.GetWorker(context.Background(), worker.ID)
+	if unchanged.Name != "Heartbeat Updated" {
+		t.Fatalf("failed credential validation mutated Worker: %+v", unchanged)
+	}
+	disabled, err := manager.SetEnabled(context.Background(), worker.ID, false)
+	if err != nil || disabled.Enabled || disabled.Status != "disabled" {
+		t.Fatalf("disabled Worker=%+v err=%v", disabled, err)
+	}
+	due, err := repo.ListWorkersDueHeartbeat(context.Background(), time.Now().Add(time.Hour), 10)
+	if err != nil || len(due) != 0 {
+		t.Fatalf("disabled Worker entered heartbeat queue: %+v err=%v", due, err)
+	}
+	if _, err := manager.SetEnabled(context.Background(), worker.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := manager.TestConnection(context.Background(), worker.ID); err != nil {
+		t.Fatal(err)
+	}
+	heartbeat, _ := repo.GetWorker(context.Background(), worker.ID)
+	if heartbeat.Status != "ready" || heartbeat.LastHeartbeatAt == nil || heartbeat.LastSeenAt == nil || heartbeat.ConsecutiveFailures != 0 {
+		t.Fatalf("heartbeat observation was not maintained: %+v", heartbeat)
+	}
+}
+
+func TestWorkerServiceUpdatePreservesUnchangedManagementKeyCiphertext(t *testing.T) {
+	managementKey := strings.Repeat("k", 32)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"protocol_version":"aicodex.proxy-worker/v1","worker_id":"worker-key","instance_id":"instance-key","version":"1"}`))
+	}))
+	defer server.Close()
+
+	repo := newWorkerTestRepository()
+	encryptor := &countingWorkerEncryptor{}
+	manager := NewWorkerService(repo, encryptor, NewWorkerRemoteClient())
+	worker, err := manager.Create(context.Background(), CreateWorkerInput{Name: "Key", BaseURL: server.URL, ManagementKey: managementKey})
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalCiphertext := worker.ManagementKeyCipher
+	updated, err := manager.Update(context.Background(), worker.ID, UpdateWorkerInput{
+		Name: "Renamed", BaseURL: server.URL, HeartbeatIntervalSeconds: 20, HeartbeatTimeoutSeconds: 4,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ManagementKeyCipher != originalCiphertext {
+		t.Fatalf("unchanged management key ciphertext changed: before=%q after=%q", originalCiphertext, updated.ManagementKeyCipher)
+	}
+	encryptor.mu.Lock()
+	encryptCalls := encryptor.encrypt
+	encryptor.mu.Unlock()
+	if encryptCalls != 1 {
+		t.Fatalf("unchanged management key was re-encrypted %d times", encryptCalls)
+	}
+}
+
+func TestWorkerServiceProbeReportsHeartbeatPersistenceFailure(t *testing.T) {
+	managementKey := strings.Repeat("p", 32)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch request.URL.Path {
+		case "/worker/v1/identity":
+			_, _ = w.Write([]byte(`{"protocol_version":"aicodex.proxy-worker/v1","worker_id":"worker-persist","instance_id":"instance-persist","version":"1"}`))
+		case "/worker/v1/ready":
+			_, _ = w.Write([]byte(`{"ready":true}`))
+		default:
+			http.NotFound(w, request)
+		}
+	}))
+	defer server.Close()
+
+	repo := newWorkerTestRepository()
+	repo.workers[1] = &Worker{ID: 1, BaseURL: server.URL, RemoteWorkerID: "worker-persist", ManagementKeyCipher: "cipher:" + managementKey, Enabled: true, HeartbeatTimeoutSeconds: 2}
+	repo.heartbeatErr = errors.New("database unavailable")
+	manager := NewWorkerService(repo, workerTestEncryptor{}, NewWorkerRemoteClient())
+	identity, ready, err := manager.TestConnection(context.Background(), 1)
+	if identity == nil || ready["ready"] != true {
+		t.Fatalf("remote probe result should remain available: identity=%+v ready=%v", identity, ready)
+	}
+	if err == nil || !strings.Contains(err.Error(), "persist worker heartbeat") {
+		t.Fatalf("heartbeat persistence failure was hidden: %v", err)
+	}
+}
+
+func TestWorkerServiceSharedProbeOutlivesCanceledCaller(t *testing.T) {
+	managementKey := strings.Repeat("s", 32)
+	identityStarted := make(chan struct{})
+	releaseIdentity := make(chan struct{})
+	var identityCalls int
+	var callsMu sync.Mutex
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch request.URL.Path {
+		case "/worker/v1/identity":
+			callsMu.Lock()
+			identityCalls++
+			if identityCalls == 1 {
+				close(identityStarted)
+			}
+			callsMu.Unlock()
+			<-releaseIdentity
+			_, _ = w.Write([]byte(`{"protocol_version":"aicodex.proxy-worker/v1","worker_id":"worker-shared","instance_id":"instance-shared","version":"1"}`))
+		case "/worker/v1/ready":
+			_, _ = w.Write([]byte(`{"ready":true}`))
+		default:
+			http.NotFound(w, request)
+		}
+	}))
+	defer server.Close()
+
+	repo := newWorkerTestRepository()
+	repo.workers[1] = &Worker{ID: 1, BaseURL: server.URL, RemoteWorkerID: "worker-shared", ManagementKeyCipher: "cipher:" + managementKey, Enabled: true, HeartbeatTimeoutSeconds: 2}
+	manager := NewWorkerService(repo, workerTestEncryptor{}, NewWorkerRemoteClient())
+	firstCtx, cancelFirst := context.WithCancel(context.Background())
+	firstDone := make(chan error, 1)
+	go func() {
+		_, _, err := manager.TestConnection(firstCtx, 1)
+		firstDone <- err
+	}()
+	<-identityStarted
+	secondDone := make(chan error, 1)
+	go func() {
+		_, _, err := manager.TestConnection(context.Background(), 1)
+		secondDone <- err
+	}()
+	time.Sleep(20 * time.Millisecond)
+	cancelFirst()
+	if err := <-firstDone; !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled caller returned %v", err)
+	}
+	close(releaseIdentity)
+	if err := <-secondDone; err != nil {
+		t.Fatalf("shared probe was canceled with its first caller: %v", err)
+	}
+	callsMu.Lock()
+	gotIdentityCalls := identityCalls
+	callsMu.Unlock()
+	if gotIdentityCalls != 1 {
+		t.Fatalf("concurrent callers started %d identity probes, want 1", gotIdentityCalls)
+	}
+}
+
+func TestWorkerServiceStopHeartbeatCancelsAndWaitsForInflightProbe(t *testing.T) {
+	requestStarted := make(chan struct{})
+	requestCanceled := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+		close(requestStarted)
+		<-request.Context().Done()
+		close(requestCanceled)
+	}))
+	defer server.Close()
+
+	repo := newWorkerTestRepository()
+	repo.workers[1] = &Worker{
+		ID: 1, BaseURL: server.URL, RemoteWorkerID: "worker-stop", ManagementKeyCipher: "cipher:" + strings.Repeat("z", 32),
+		Enabled: true, HeartbeatIntervalSeconds: 15, HeartbeatTimeoutSeconds: 30,
+	}
+	manager := NewWorkerService(repo, workerTestEncryptor{}, NewWorkerRemoteClient())
+	manager.StartHeartbeat(context.Background())
+	select {
+	case <-requestStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("heartbeat probe did not start")
+	}
+
+	stopped := make(chan struct{})
+	go func() {
+		manager.StopHeartbeat()
+		close(stopped)
+	}()
+	select {
+	case <-requestCanceled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("StopHeartbeat did not cancel the in-flight HTTP probe")
+	}
+	select {
+	case <-stopped:
+	case <-time.After(2 * time.Second):
+		t.Fatal("StopHeartbeat returned before the in-flight probe unwound")
 	}
 }
 

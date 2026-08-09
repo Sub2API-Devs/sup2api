@@ -12,6 +12,33 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
+func TestAuthPolicyVersionIgnoresOperationalTimestamps(t *testing.T) {
+	now := time.Now().UTC()
+	groupID := int64(7)
+	apiKey := &service.APIKey{
+		ID: 1, GroupID: &groupID, Status: service.StatusActive, UpdatedAt: now,
+		User:  &service.User{ID: 2, Status: service.StatusActive, Role: service.RoleUser, UpdatedAt: now, AllowedGroups: []int64{7}},
+		Group: &service.Group{ID: 7, Status: service.StatusActive, SubscriptionType: service.SubscriptionTypeStandard, UpdatedAt: now},
+	}
+	before := authPolicyVersion(apiKey)
+	apiKey.UpdatedAt = now.Add(time.Minute)
+	apiKey.User.UpdatedAt = now.Add(2 * time.Minute)
+	apiKey.Group.UpdatedAt = now.Add(3 * time.Minute)
+	if after := authPolicyVersion(apiKey); after != before {
+		t.Fatalf("operational timestamp changed policy version: before=%s after=%s", before, after)
+	}
+	apiKey.Status = service.StatusDisabled
+	if after := authPolicyVersion(apiKey); after == before {
+		t.Fatal("authorization status change must change policy version")
+	}
+	apiKey.Status = service.StatusActive
+	expiresAt := now.Add(time.Hour)
+	apiKey.ExpiresAt = &expiresAt
+	if after := authPolicyVersion(apiKey); after == before {
+		t.Fatal("API key expiration change must change policy version")
+	}
+}
+
 type resolverStub struct {
 	key *service.APIKey
 	err error

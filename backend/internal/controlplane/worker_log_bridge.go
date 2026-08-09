@@ -9,7 +9,6 @@ import (
 	"time"
 
 	controlv1 "github.com/Wei-Shaw/sub2api/internal/controlplane/controlv1"
-	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -19,11 +18,11 @@ const workerLogStreamMaxLen = int64(200000)
 // data plane sends durable settlement facts over gRPC and never receives
 // Redis topology or credentials.
 type WorkerLogBridge struct {
-	repo  service.WorkerRepository
+	repo  WorkerAdmissionRepository
 	redis *redis.Client
 }
 
-func NewWorkerLogBridge(repo service.WorkerRepository, redisClient *redis.Client) *WorkerLogBridge {
+func NewWorkerLogBridge(repo WorkerAdmissionRepository, redisClient *redis.Client) *WorkerLogBridge {
 	return &WorkerLogBridge{repo: repo, redis: redisClient}
 }
 

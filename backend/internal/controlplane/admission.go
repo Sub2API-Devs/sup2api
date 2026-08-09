@@ -41,7 +41,12 @@ type AdmissionController struct {
 	costs             *service.BillingService
 	leases            *LeaseStore
 	signer            *GrantSigner
+	workers           WorkerAdmissionRepository
 	now               func() time.Time
+}
+
+type WorkerAdmissionRepository interface {
+	GetWorkerByRemoteID(context.Context, string) (*service.Worker, error)
 }
 
 func NewAdmissionController(
@@ -58,11 +63,12 @@ func NewAdmissionController(
 	costs *service.BillingService,
 	leases *LeaseStore,
 	signer *GrantSigner,
+	workers WorkerAdmissionRepository,
 ) *AdmissionController {
 	return &AdmissionController{
 		cfg: cfg, apiKeys: apiKeys, billing: billing, subscriptions: subscriptions,
 		concurrency: concurrency, gateway: gateway, openAI: openAI, geminiTokens: geminiTokens, claudeTokens: claudeTokens, antigravityTokens: antigravityTokens, costs: costs,
-		leases: leases, signer: signer, now: time.Now,
+		leases: leases, signer: signer, workers: workers, now: time.Now,
 	}
 }
 
@@ -76,6 +82,18 @@ func (a *AdmissionController) Open(ctx context.Context, request *controlv1.OpenR
 	claims, err := a.signer.Verify(request.GetAuthGrantToken())
 	if err != nil || claims.APIKeyID != request.GetApiKeyId() || claims.UserID != request.GetUserId() || claims.GroupID != request.GetGroupId() {
 		return openDenied(http.StatusUnauthorized, "INVALID_AUTH_GRANT", "Invalid authorization grant"), nil
+	}
+	if a.workers != nil {
+		worker, workerErr := a.workers.GetWorkerByRemoteID(ctx, strings.TrimSpace(request.GetDataPlaneId()))
+		if workerErr != nil {
+			return openDenied(http.StatusServiceUnavailable, "WORKER_AUTHORITY_UNAVAILABLE", "Worker authority is unavailable"), nil
+		}
+		if worker == nil {
+			return openDenied(http.StatusForbidden, "WORKER_NOT_REGISTERED", "Worker is not registered"), nil
+		}
+		if !worker.Enabled {
+			return openDenied(http.StatusForbidden, "WORKER_DISABLED", "Worker is disabled"), nil
+		}
 	}
 	if _, _, existingErr := a.leases.LoadActiveByRequest(ctx, request.GetRequestId()); existingErr == nil {
 		// Returning an active execution plan twice would allow two upstream

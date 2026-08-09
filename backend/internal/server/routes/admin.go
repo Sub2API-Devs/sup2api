@@ -130,6 +130,8 @@ func registerWorkerRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		workers.GET("", h.Admin.Worker.List)
 		workers.POST("", h.Admin.Worker.Create)
 		workers.GET("/:id", h.Admin.Worker.Get)
+		workers.PUT("/:id", h.Admin.Worker.Update)
+		workers.PATCH("/:id/enabled", h.Admin.Worker.SetEnabled)
 		workers.DELETE("/:id", h.Admin.Worker.Delete)
 		workers.POST("/:id/test", h.Admin.Worker.TestConnection)
 		workers.GET("/:id/accounts", h.Admin.Worker.ListAccounts)

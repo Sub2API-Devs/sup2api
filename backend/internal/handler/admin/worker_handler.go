@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -57,13 +58,61 @@ func (h *WorkerHandler) Get(c *gin.Context) {
 	workerHandlerOK(c, http.StatusOK, worker)
 }
 
+func (h *WorkerHandler) Update(c *gin.Context) {
+	id, ok := workerHandlerID(c, "id")
+	if !ok {
+		return
+	}
+	var input service.UpdateWorkerInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		workerHandlerError(c, http.StatusBadRequest, "invalid_request", err)
+		return
+	}
+	worker, err := h.service.Update(c.Request.Context(), id, input)
+	if err != nil {
+		if errors.Is(err, service.ErrWorkerNotFound) {
+			workerHandlerError(c, http.StatusNotFound, "worker_not_found", err)
+			return
+		}
+		workerHandlerError(c, http.StatusUnprocessableEntity, "worker_update_failed", err)
+		return
+	}
+	workerHandlerOK(c, http.StatusOK, worker)
+}
+
+func (h *WorkerHandler) SetEnabled(c *gin.Context) {
+	id, ok := workerHandlerID(c, "id")
+	if !ok {
+		return
+	}
+	var input service.SetWorkerEnabledInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		workerHandlerError(c, http.StatusBadRequest, "invalid_request", err)
+		return
+	}
+	worker, err := h.service.SetEnabled(c.Request.Context(), id, input.Enabled)
+	if err != nil {
+		if errors.Is(err, service.ErrWorkerNotFound) {
+			workerHandlerError(c, http.StatusNotFound, "worker_not_found", err)
+			return
+		}
+		workerHandlerError(c, http.StatusInternalServerError, "worker_enable_failed", err)
+		return
+	}
+	workerHandlerOK(c, http.StatusOK, worker)
+}
+
 func (h *WorkerHandler) Delete(c *gin.Context) {
 	id, ok := workerHandlerID(c, "id")
 	if !ok {
 		return
 	}
 	if err := h.service.Delete(c.Request.Context(), id); err != nil {
-		workerHandlerError(c, http.StatusNotFound, "worker_delete_failed", err)
+		if errors.Is(err, service.ErrWorkerNotFound) {
+			workerHandlerError(c, http.StatusNotFound, "worker_not_found", err)
+			return
+		}
+		workerHandlerError(c, http.StatusInternalServerError, "worker_delete_failed", err)
 		return
 	}
 	workerHandlerOK(c, http.StatusOK, gin.H{"deleted": true})
@@ -76,6 +125,10 @@ func (h *WorkerHandler) TestConnection(c *gin.Context) {
 	}
 	identity, ready, err := h.service.TestConnection(c.Request.Context(), id)
 	if err != nil {
+		if errors.Is(err, service.ErrWorkerNotFound) {
+			workerHandlerError(c, http.StatusNotFound, "worker_not_found", err)
+			return
+		}
 		workerHandlerError(c, http.StatusBadGateway, "worker_connection_failed", err)
 		return
 	}
@@ -89,6 +142,10 @@ func (h *WorkerHandler) ListAccounts(c *gin.Context) {
 	}
 	accounts, err := h.service.ListAccounts(c.Request.Context(), workerID)
 	if err != nil {
+		if errors.Is(err, service.ErrWorkerNotFound) {
+			workerHandlerError(c, http.StatusNotFound, "worker_not_found", err)
+			return
+		}
 		workerHandlerError(c, http.StatusBadGateway, "worker_accounts_failed", err)
 		return
 	}
@@ -107,6 +164,10 @@ func (h *WorkerHandler) CreateAPIKeyAccount(c *gin.Context) {
 	}
 	account, err := h.service.CreateAPIKeyAccount(c.Request.Context(), workerID, input)
 	if err != nil {
+		if errors.Is(err, service.ErrWorkerNotFound) {
+			workerHandlerError(c, http.StatusNotFound, "worker_not_found", err)
+			return
+		}
 		workerHandlerError(c, http.StatusBadGateway, "worker_account_create_failed", err)
 		return
 	}
@@ -127,6 +188,10 @@ func (h *WorkerHandler) StartOAuth(c *gin.Context) {
 	}
 	result, err := h.service.StartOAuth(c.Request.Context(), workerID, input)
 	if err != nil {
+		if errors.Is(err, service.ErrWorkerNotFound) {
+			workerHandlerError(c, http.StatusNotFound, "worker_not_found", err)
+			return
+		}
 		workerHandlerError(c, http.StatusBadGateway, "worker_oauth_start_failed", err)
 		return
 	}
@@ -145,6 +210,10 @@ func (h *WorkerHandler) CompleteOAuth(c *gin.Context) {
 	}
 	account, err := h.service.CompleteOAuth(c.Request.Context(), workerID, input)
 	if err != nil {
+		if errors.Is(err, service.ErrWorkerNotFound) {
+			workerHandlerError(c, http.StatusNotFound, "worker_not_found", err)
+			return
+		}
 		workerHandlerError(c, http.StatusBadGateway, "worker_oauth_complete_failed", err)
 		return
 	}
@@ -158,6 +227,10 @@ func (h *WorkerHandler) RefreshAccount(c *gin.Context) {
 	}
 	result, err := h.service.RefreshAccount(c.Request.Context(), workerID, c.Param("account_id"))
 	if err != nil {
+		if errors.Is(err, service.ErrWorkerNotFound) {
+			workerHandlerError(c, http.StatusNotFound, "worker_not_found", err)
+			return
+		}
 		workerHandlerError(c, http.StatusBadGateway, "worker_account_refresh_failed", err)
 		return
 	}
@@ -178,6 +251,10 @@ func (h *WorkerHandler) TestAccount(c *gin.Context) {
 	}
 	result, err := h.service.TestAccount(c.Request.Context(), workerID, c.Param("account_id"), input)
 	if err != nil {
+		if errors.Is(err, service.ErrWorkerNotFound) {
+			workerHandlerError(c, http.StatusNotFound, "worker_not_found", err)
+			return
+		}
 		workerHandlerError(c, http.StatusBadGateway, "worker_account_test_failed", err)
 		return
 	}
@@ -190,6 +267,10 @@ func (h *WorkerHandler) DeleteAccount(c *gin.Context) {
 		return
 	}
 	if err := h.service.DeleteAccount(c.Request.Context(), workerID, c.Param("account_id")); err != nil {
+		if errors.Is(err, service.ErrWorkerNotFound) {
+			workerHandlerError(c, http.StatusNotFound, "worker_not_found", err)
+			return
+		}
 		workerHandlerError(c, http.StatusBadGateway, "worker_account_delete_failed", err)
 		return
 	}

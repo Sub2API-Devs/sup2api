@@ -9,8 +9,16 @@ export interface Worker {
   protocol_version: string
   version: string
   status: string
+  enabled: boolean
   log_stream_key: string
   last_seen_at?: string
+  last_heartbeat_at?: string
+  last_heartbeat_latency_ms: number
+  consecutive_failures: number
+  heartbeat_interval_seconds: number
+  heartbeat_timeout_seconds: number
+  account_count: number
+  log_count: number
   last_error?: string
   created_at: string
   updated_at: string
@@ -65,10 +73,32 @@ export interface CreateWorkerInput {
   vault_key?: string
   control_plane_target?: string
   control_plane_insecure: boolean
+  enabled: boolean
+  heartbeat_interval_seconds: number
+  heartbeat_timeout_seconds: number
 }
 
 export async function create(input: CreateWorkerInput): Promise<Worker> {
   const { data } = await apiClient.post<Worker>('/admin/workers', input)
+  return data
+}
+
+export interface UpdateWorkerInput {
+  name: string
+  base_url: string
+  management_key?: string
+  enabled: boolean
+  heartbeat_interval_seconds: number
+  heartbeat_timeout_seconds: number
+}
+
+export async function update(id: number, input: UpdateWorkerInput): Promise<Worker> {
+  const { data } = await apiClient.put<Worker>(`/admin/workers/${id}`, input)
+  return data
+}
+
+export async function setEnabled(id: number, enabled: boolean): Promise<Worker> {
+  const { data } = await apiClient.patch<Worker>(`/admin/workers/${id}/enabled`, { enabled })
   return data
 }
 
@@ -131,6 +161,8 @@ export async function listLogs(id: number, limit = 50, beforeId?: number): Promi
 export default {
   list,
   create,
+  update,
+  setEnabled,
   remove,
   testConnection,
   listAccounts,

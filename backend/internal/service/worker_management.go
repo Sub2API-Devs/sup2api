@@ -3,35 +3,57 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
-const workerProtocolVersion = "aicodex.proxy-worker/v1"
+const (
+	workerProtocolVersion      = "aicodex.proxy-worker/v1"
+	defaultHeartbeatInterval   = 15
+	defaultHeartbeatTimeout    = 5
+	heartbeatSchedulerInterval = time.Second
+	heartbeatBatchSize         = 64
+	heartbeatParallelism       = 8
+)
+
+var ErrWorkerNotFound = errors.New("worker not found")
 
 type Worker struct {
-	ID                  int64      `json:"id"`
-	Name                string     `json:"name"`
-	BaseURL             string     `json:"base_url"`
-	RemoteWorkerID      string     `json:"remote_worker_id"`
-	InstanceID          string     `json:"instance_id"`
-	ProtocolVersion     string     `json:"protocol_version"`
-	Version             string     `json:"version"`
-	Status              string     `json:"status"`
-	LogStreamKey        string     `json:"log_stream_key"`
-	LastSeenAt          *time.Time `json:"last_seen_at,omitempty"`
-	LastError           *string    `json:"last_error,omitempty"`
-	CreatedAt           time.Time  `json:"created_at"`
-	UpdatedAt           time.Time  `json:"updated_at"`
-	ManagementKeyCipher string     `json:"-"`
+	ID                       int64      `json:"id"`
+	Name                     string     `json:"name"`
+	BaseURL                  string     `json:"base_url"`
+	RemoteWorkerID           string     `json:"remote_worker_id"`
+	InstanceID               string     `json:"instance_id"`
+	ProtocolVersion          string     `json:"protocol_version"`
+	Version                  string     `json:"version"`
+	Status                   string     `json:"status"`
+	Enabled                  bool       `json:"enabled"`
+	LogStreamKey             string     `json:"log_stream_key"`
+	LastSeenAt               *time.Time `json:"last_seen_at,omitempty"`
+	LastHeartbeatAt          *time.Time `json:"last_heartbeat_at,omitempty"`
+	LastHeartbeatLatencyMS   int64      `json:"last_heartbeat_latency_ms"`
+	ConsecutiveFailures      int        `json:"consecutive_failures"`
+	HeartbeatIntervalSeconds int        `json:"heartbeat_interval_seconds"`
+	HeartbeatTimeoutSeconds  int        `json:"heartbeat_timeout_seconds"`
+	AccountCount             int64      `json:"account_count"`
+	LogCount                 int64      `json:"log_count"`
+	LastError                *string    `json:"last_error,omitempty"`
+	CreatedAt                time.Time  `json:"created_at"`
+	UpdatedAt                time.Time  `json:"updated_at"`
+	ManagementKeyCipher      string     `json:"-"`
 }
 
 type WorkerAccount struct {
@@ -73,14 +95,38 @@ type WorkerIdentity struct {
 }
 
 type CreateWorkerInput struct {
-	Name                 string `json:"name"`
-	BaseURL              string `json:"base_url"`
-	PairingToken         string `json:"pairing_token,omitempty"`
-	RemoteWorkerID       string `json:"worker_id,omitempty"`
-	ManagementKey        string `json:"management_key"`
-	VaultKey             string `json:"vault_key,omitempty"`
-	ControlPlaneTarget   string `json:"control_plane_target,omitempty"`
-	ControlPlaneInsecure bool   `json:"control_plane_insecure"`
+	Name                     string `json:"name"`
+	BaseURL                  string `json:"base_url"`
+	PairingToken             string `json:"pairing_token,omitempty"`
+	RemoteWorkerID           string `json:"worker_id,omitempty"`
+	ManagementKey            string `json:"management_key"`
+	VaultKey                 string `json:"vault_key,omitempty"`
+	ControlPlaneTarget       string `json:"control_plane_target,omitempty"`
+	ControlPlaneInsecure     bool   `json:"control_plane_insecure"`
+	Enabled                  *bool  `json:"enabled,omitempty"`
+	HeartbeatIntervalSeconds int    `json:"heartbeat_interval_seconds,omitempty"`
+	HeartbeatTimeoutSeconds  int    `json:"heartbeat_timeout_seconds,omitempty"`
+}
+
+type UpdateWorkerInput struct {
+	Name                     string `json:"name"`
+	BaseURL                  string `json:"base_url"`
+	ManagementKey            string `json:"management_key,omitempty"`
+	Enabled                  *bool  `json:"enabled,omitempty"`
+	HeartbeatIntervalSeconds int    `json:"heartbeat_interval_seconds"`
+	HeartbeatTimeoutSeconds  int    `json:"heartbeat_timeout_seconds"`
+}
+
+type SetWorkerEnabledInput struct {
+	Enabled bool `json:"enabled"`
+}
+
+type WorkerHeartbeatObservation struct {
+	Identity  WorkerIdentity
+	Status    string
+	LastError *string
+	Reachable bool
+	LatencyMS int64
 }
 
 type WorkerAccountCreateInput struct {
@@ -109,7 +155,10 @@ type WorkerRepository interface {
 	GetWorker(context.Context, int64) (*Worker, error)
 	GetWorkerByRemoteID(context.Context, string) (*Worker, error)
 	DeleteWorker(context.Context, int64) error
-	UpdateWorkerObservation(context.Context, int64, WorkerIdentity, string, *string) error
+	UpdateWorker(context.Context, *Worker, bool) error
+	SetWorkerEnabled(context.Context, int64, bool) error
+	ListWorkersDueHeartbeat(context.Context, time.Time, int) ([]Worker, error)
+	UpdateWorkerHeartbeat(context.Context, int64, WorkerHeartbeatObservation) error
 	UpsertWorkerAccount(context.Context, *WorkerAccount) error
 	DeleteWorkerAccount(context.Context, int64, string) error
 	DeleteWorkerAccountsExcept(context.Context, int64, []string) error
@@ -119,9 +168,13 @@ type WorkerRepository interface {
 }
 
 type WorkerService struct {
-	repo      WorkerRepository
-	encryptor SecretEncryptor
-	remote    *WorkerRemoteClient
+	repo            WorkerRepository
+	encryptor       SecretEncryptor
+	remote          *WorkerRemoteClient
+	probeGroup      singleflight.Group
+	heartbeatMu     sync.Mutex
+	heartbeatCancel context.CancelFunc
+	heartbeatWG     sync.WaitGroup
 }
 
 func NewWorkerService(repo WorkerRepository, encryptor SecretEncryptor, remote *WorkerRemoteClient) *WorkerService {
@@ -143,6 +196,14 @@ func (s *WorkerService) Create(ctx context.Context, input CreateWorkerInput) (*W
 	key := strings.TrimSpace(input.ManagementKey)
 	if len(key) < 32 {
 		return nil, errors.New("management key must contain at least 32 characters")
+	}
+	heartbeatInterval, heartbeatTimeout, err := normalizeWorkerHeartbeat(input.HeartbeatIntervalSeconds, input.HeartbeatTimeoutSeconds)
+	if err != nil {
+		return nil, err
+	}
+	enabled := true
+	if input.Enabled != nil {
+		enabled = *input.Enabled
 	}
 	var identity *WorkerIdentity
 	if strings.TrimSpace(input.PairingToken) != "" {
@@ -195,7 +256,11 @@ func (s *WorkerService) Create(ctx context.Context, input CreateWorkerInput) (*W
 		Name: name, BaseURL: baseURL, ManagementKeyCipher: ciphertext,
 		RemoteWorkerID: identity.WorkerID, InstanceID: identity.InstanceID,
 		ProtocolVersion: identity.ProtocolVersion, Version: identity.Version,
-		Status: "connected", LogStreamKey: logStreamKey, LastSeenAt: &now,
+		Status: "connected", Enabled: enabled, LogStreamKey: logStreamKey, LastSeenAt: &now,
+		HeartbeatIntervalSeconds: heartbeatInterval, HeartbeatTimeoutSeconds: heartbeatTimeout,
+	}
+	if !enabled {
+		worker.Status = "disabled"
 	}
 	if err := s.repo.CreateWorker(ctx, worker); err != nil {
 		// Claim already succeeded on the Worker. Surface a precise uniqueness
@@ -229,32 +294,255 @@ func (s *WorkerService) Delete(ctx context.Context, id int64) error {
 	return s.repo.DeleteWorker(ctx, id)
 }
 
+func (s *WorkerService) Update(ctx context.Context, id int64, input UpdateWorkerInput) (*Worker, error) {
+	if s == nil || s.repo == nil || s.encryptor == nil || s.remote == nil {
+		return nil, errors.New("worker management is not configured")
+	}
+	worker, err := s.repo.GetWorker(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if worker == nil {
+		return nil, ErrWorkerNotFound
+	}
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return nil, errors.New("worker name is required")
+	}
+	baseURL, err := normalizeWorkerBaseURL(input.BaseURL)
+	if err != nil {
+		return nil, err
+	}
+	interval, timeout, err := normalizeWorkerHeartbeat(input.HeartbeatIntervalSeconds, input.HeartbeatTimeoutSeconds)
+	if err != nil {
+		return nil, err
+	}
+	managementKey := strings.TrimSpace(input.ManagementKey)
+	if managementKey == "" {
+		managementKey, err = s.encryptor.Decrypt(worker.ManagementKeyCipher)
+		if err != nil {
+			return nil, fmt.Errorf("decrypt management key: %w", err)
+		}
+	} else if len(managementKey) < 32 {
+		return nil, errors.New("management key must contain at least 32 characters")
+	}
+	credentialsChanged := baseURL != worker.BaseURL || strings.TrimSpace(input.ManagementKey) != ""
+	if credentialsChanged {
+		identity, probeErr := s.remote.Identity(ctx, baseURL, managementKey)
+		if probeErr != nil {
+			return nil, fmt.Errorf("verify updated worker connection: %w", probeErr)
+		}
+		if err := validateWorkerIdentity(identity, worker.RemoteWorkerID); err != nil {
+			return nil, err
+		}
+	}
+	ciphertext := worker.ManagementKeyCipher
+	if strings.TrimSpace(input.ManagementKey) != "" {
+		ciphertext, err = s.encryptor.Encrypt(managementKey)
+		if err != nil {
+			return nil, fmt.Errorf("encrypt management key: %w", err)
+		}
+	}
+	worker.Name = name
+	worker.BaseURL = baseURL
+	worker.ManagementKeyCipher = ciphertext
+	worker.HeartbeatIntervalSeconds = interval
+	worker.HeartbeatTimeoutSeconds = timeout
+	if input.Enabled != nil {
+		worker.Enabled = *input.Enabled
+	}
+	if worker.Enabled {
+		if worker.Status == "disabled" {
+			worker.Status = "unknown"
+		}
+	} else {
+		worker.Status = "disabled"
+	}
+	if err := s.repo.UpdateWorker(ctx, worker, input.Enabled != nil); err != nil {
+		return nil, err
+	}
+	return s.repo.GetWorker(ctx, id)
+}
+
+func (s *WorkerService) SetEnabled(ctx context.Context, id int64, enabled bool) (*Worker, error) {
+	worker, err := s.repo.GetWorker(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if worker == nil {
+		return nil, ErrWorkerNotFound
+	}
+	if err := s.repo.SetWorkerEnabled(ctx, id, enabled); err != nil {
+		return nil, err
+	}
+	return s.repo.GetWorker(ctx, id)
+}
+
 func (s *WorkerService) TestConnection(ctx context.Context, id int64) (*WorkerIdentity, map[string]any, error) {
 	worker, key, err := s.workerCredential(ctx, id)
 	if err != nil {
 		return nil, nil, err
 	}
-	identity, err := s.remote.Identity(ctx, worker.BaseURL, key)
+	return s.probeWorker(ctx, worker, key)
+}
+
+func (s *WorkerService) StartHeartbeat(parent context.Context) {
+	if s == nil || s.repo == nil || s.remote == nil || s.encryptor == nil {
+		return
+	}
+	s.heartbeatMu.Lock()
+	defer s.heartbeatMu.Unlock()
+	if s.heartbeatCancel != nil {
+		return
+	}
+	ctx, cancel := context.WithCancel(parent)
+	s.heartbeatCancel = cancel
+	s.heartbeatWG.Add(1)
+	go func() {
+		defer s.heartbeatWG.Done()
+		s.runHeartbeatBatch(ctx)
+		ticker := time.NewTicker(heartbeatSchedulerInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.runHeartbeatBatch(ctx)
+			}
+		}
+	}()
+}
+
+func (s *WorkerService) StopHeartbeat() {
+	if s == nil {
+		return
+	}
+	s.heartbeatMu.Lock()
+	cancel := s.heartbeatCancel
+	s.heartbeatCancel = nil
+	s.heartbeatMu.Unlock()
+	if cancel != nil {
+		cancel()
+		s.heartbeatWG.Wait()
+	}
+}
+
+func (s *WorkerService) runHeartbeatBatch(ctx context.Context) {
+	workers, err := s.repo.ListWorkersDueHeartbeat(ctx, time.Now().UTC(), heartbeatBatchSize)
 	if err != nil {
-		message := err.Error()
-		_ = s.repo.UpdateWorkerObservation(ctx, id, WorkerIdentity{}, "unreachable", &message)
+		slog.Warn("worker_heartbeat_list_failed", "error", err)
+		return
+	}
+	if len(workers) == 0 {
+		return
+	}
+	sem := make(chan struct{}, heartbeatParallelism)
+	var wg sync.WaitGroup
+	for index := range workers {
+		worker := workers[index]
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			select {
+			case sem <- struct{}{}:
+				defer func() { <-sem }()
+			case <-ctx.Done():
+				return
+			}
+			key, keyErr := s.encryptor.Decrypt(worker.ManagementKeyCipher)
+			if keyErr != nil {
+				message := fmt.Sprintf("decrypt management key: %v", keyErr)
+				if persistErr := s.repo.UpdateWorkerHeartbeat(ctx, worker.ID, WorkerHeartbeatObservation{Status: "unreachable", LastError: &message}); persistErr != nil {
+					slog.Warn("worker_heartbeat_persist_failed", "worker_id", worker.ID, "error", persistErr)
+				}
+				return
+			}
+			// Wait for the shared operation to finish after cancellation. Its HTTP
+			// context is rooted in the heartbeat lifecycle, so StopHeartbeat both
+			// cancels the request and waits for the probe goroutine to unwind.
+			_, _, _ = s.probeWorkerWithParent(context.Background(), ctx, &worker, key)
+		}()
+	}
+	wg.Wait()
+}
+
+func (s *WorkerService) probeWorker(ctx context.Context, worker *Worker, key string) (*WorkerIdentity, map[string]any, error) {
+	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
-	if err := validateWorkerIdentity(identity, worker.RemoteWorkerID); err != nil {
-		message := err.Error()
-		_ = s.repo.UpdateWorkerObservation(ctx, id, WorkerIdentity{}, "identity_mismatch", &message)
-		return nil, nil, err
+	return s.probeWorkerWithParent(ctx, context.WithoutCancel(ctx), worker, key)
+}
+
+func (s *WorkerService) probeWorkerWithParent(waitCtx, probeParent context.Context, worker *Worker, key string) (*WorkerIdentity, map[string]any, error) {
+	// Waiting and execution have separate parents: request callers can stop
+	// waiting without canceling a shared probe, while the heartbeat lifecycle
+	// can cancel its actual HTTP work during service shutdown.
+	probeTimeout := time.Duration(worker.HeartbeatTimeoutSeconds) * time.Second
+	if probeTimeout <= 0 {
+		probeTimeout = defaultHeartbeatTimeout * time.Second
 	}
-	ready, readyErr := s.remote.Ready(ctx, worker.BaseURL, key)
-	status := "ready"
-	var lastError *string
-	if readyErr != nil {
-		status = "unready"
-		message := readyErr.Error()
-		lastError = &message
+	credentialHash := sha256.Sum256([]byte(key))
+	probeKey := fmt.Sprintf("%d:%s:%x", worker.ID, worker.BaseURL, credentialHash)
+	resultChannel := s.probeGroup.DoChan(probeKey, func() (any, error) {
+		probeCtx, cancelProbe := context.WithTimeout(probeParent, probeTimeout)
+		defer cancelProbe()
+		started := time.Now()
+		identity, identityErr := s.remote.Identity(probeCtx, worker.BaseURL, key)
+		latency := time.Since(started).Milliseconds()
+		if identityErr != nil {
+			message := identityErr.Error()
+			persistErr := s.repo.UpdateWorkerHeartbeat(probeCtx, worker.ID, WorkerHeartbeatObservation{Status: "unreachable", LastError: &message, LatencyMS: latency})
+			if persistErr != nil {
+				slog.Warn("worker_heartbeat_persist_failed", "worker_id", worker.ID, "error", persistErr)
+				return nil, errors.Join(identityErr, fmt.Errorf("persist worker heartbeat: %w", persistErr))
+			}
+			return nil, identityErr
+		}
+		if validateErr := validateWorkerIdentity(identity, worker.RemoteWorkerID); validateErr != nil {
+			message := validateErr.Error()
+			persistErr := s.repo.UpdateWorkerHeartbeat(probeCtx, worker.ID, WorkerHeartbeatObservation{Identity: *identity, Status: "identity_mismatch", LastError: &message, Reachable: true, LatencyMS: latency})
+			if persistErr != nil {
+				slog.Warn("worker_heartbeat_persist_failed", "worker_id", worker.ID, "error", persistErr)
+				return nil, errors.Join(validateErr, fmt.Errorf("persist worker heartbeat: %w", persistErr))
+			}
+			return nil, validateErr
+		}
+		ready, readyErr := s.remote.Ready(probeCtx, worker.BaseURL, key)
+		latency = time.Since(started).Milliseconds()
+		observation := WorkerHeartbeatObservation{Identity: *identity, Status: "ready", Reachable: true, LatencyMS: latency}
+		if readyErr != nil {
+			message := readyErr.Error()
+			observation.Status = "unready"
+			observation.LastError = &message
+		}
+		persistErr := s.repo.UpdateWorkerHeartbeat(probeCtx, worker.ID, observation)
+		if persistErr != nil {
+			slog.Warn("worker_heartbeat_persist_failed", "worker_id", worker.ID, "error", persistErr)
+			persistErr = fmt.Errorf("persist worker heartbeat: %w", persistErr)
+		}
+		return &workerProbeResult{identity: identity, ready: ready, err: errors.Join(readyErr, persistErr)}, nil
+	})
+	var result singleflight.Result
+	select {
+	case <-waitCtx.Done():
+		return nil, nil, waitCtx.Err()
+	case result = <-resultChannel:
 	}
-	_ = s.repo.UpdateWorkerObservation(ctx, id, *identity, status, lastError)
-	return identity, ready, readyErr
+	if result.Err != nil {
+		return nil, nil, result.Err
+	}
+	probeResult, _ := result.Val.(*workerProbeResult)
+	if probeResult == nil {
+		return nil, nil, errors.New("worker heartbeat probe returned no result")
+	}
+	return probeResult.identity, probeResult.ready, probeResult.err
+}
+
+type workerProbeResult struct {
+	identity *WorkerIdentity
+	ready    map[string]any
+	err      error
 }
 
 func (s *WorkerService) CreateAPIKeyAccount(ctx context.Context, workerID int64, input WorkerAccountCreateInput) (*WorkerAccount, error) {
@@ -387,7 +675,7 @@ func (s *WorkerService) workerCredential(ctx context.Context, id int64) (*Worker
 		return nil, "", err
 	}
 	if worker == nil {
-		return nil, "", errors.New("worker not found")
+		return nil, "", ErrWorkerNotFound
 	}
 	key, err := s.encryptor.Decrypt(worker.ManagementKeyCipher)
 	if err != nil {
@@ -522,6 +810,22 @@ func normalizeWorkerBaseURL(raw string) (string, error) {
 	}
 	u.Path = strings.TrimRight(u.Path, "/")
 	return strings.TrimRight(u.String(), "/"), nil
+}
+
+func normalizeWorkerHeartbeat(interval, timeout int) (int, int, error) {
+	if interval == 0 {
+		interval = defaultHeartbeatInterval
+	}
+	if timeout == 0 {
+		timeout = defaultHeartbeatTimeout
+	}
+	if interval < 5 || interval > 3600 {
+		return 0, 0, errors.New("heartbeat interval must be between 5 and 3600 seconds")
+	}
+	if timeout < 1 || timeout > 30 {
+		return 0, 0, errors.New("heartbeat timeout must be between 1 and 30 seconds")
+	}
+	return interval, timeout, nil
 }
 
 func workerLogStreamKey(workerID string) string {

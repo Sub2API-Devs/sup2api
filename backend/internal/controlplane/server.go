@@ -23,6 +23,7 @@ import (
 
 var ProviderSet = wire.NewSet(
 	ProvideGrantSigner,
+	ProvideWorkerAdmissionRepository,
 	NewLeaseStore,
 	NewAdmissionController,
 	NewSettlementController,
@@ -30,6 +31,10 @@ var ProviderSet = wire.NewSet(
 	NewRPCService,
 	NewServer,
 )
+
+func ProvideWorkerAdmissionRepository(repo service.WorkerRepository) WorkerAdmissionRepository {
+	return repo
+}
 
 type Server struct {
 	cfg     config.DataPlaneControlConfig

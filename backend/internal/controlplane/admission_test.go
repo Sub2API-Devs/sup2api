@@ -13,6 +13,38 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+type workerAdmissionStub struct {
+	worker *service.Worker
+	err    error
+}
+
+func (s workerAdmissionStub) GetWorkerByRemoteID(context.Context, string) (*service.Worker, error) {
+	return s.worker, s.err
+}
+
+func TestAdmissionRejectsDisabledWorkerBeforeScheduling(t *testing.T) {
+	signer, err := NewGrantSigner(strings.Repeat("w", 32), time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, _, err := signer.Issue(GrantClaims{CredentialDigest: "digest", APIKeyID: 7, UserID: 8, GroupID: 9})
+	if err != nil {
+		t.Fatal(err)
+	}
+	controller := &AdmissionController{
+		apiKeys: &service.APIKeyService{}, billing: &service.BillingCacheService{}, concurrency: &service.ConcurrencyService{},
+		costs: &service.BillingService{}, leases: &LeaseStore{}, signer: signer, now: time.Now,
+		workers: workerAdmissionStub{worker: &service.Worker{RemoteWorkerID: "worker-disabled", Enabled: false}},
+	}
+	response, err := controller.Open(context.Background(), &controlv1.OpenRequestRequest{
+		RequestId: "request-disabled", DataPlaneId: "worker-disabled", AuthGrantToken: token,
+		ApiKeyId: 7, UserId: 8, GroupId: 9,
+	})
+	if err != nil || response.GetDecision() != controlv1.Decision_DECISION_DENY || response.GetDenial().GetHttpStatus() != 403 || response.GetDenial().GetErrorCode() != "WORKER_DISABLED" {
+		t.Fatalf("disabled Worker admission response=%+v err=%v", response, err)
+	}
+}
+
 func TestAdmissionRejectsDuplicateActiveRequestIDBeforeUpstreamExecution(t *testing.T) {
 	mini := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mini.Addr()})

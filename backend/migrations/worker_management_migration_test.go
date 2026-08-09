@@ -21,3 +21,15 @@ func TestMigration194CreatesWorkerScopedManagementAndLogTables(t *testing.T) {
 	require.Contains(t, sql, "UNIQUE (worker_id, event_id)")
 	require.Contains(t, sql, "idx_worker_logs_worker_id")
 }
+
+func TestMigration195AddsWorkerLifecycleAndHeartbeatFields(t *testing.T) {
+	content, err := FS.ReadFile("195_worker_lifecycle.sql")
+	require.NoError(t, err)
+	sql := string(content)
+	require.Contains(t, sql, "enabled BOOLEAN NOT NULL DEFAULT TRUE")
+	require.Contains(t, sql, "heartbeat_interval_seconds")
+	require.Contains(t, sql, "heartbeat_timeout_seconds")
+	require.Contains(t, sql, "last_heartbeat_at")
+	require.Contains(t, sql, "consecutive_failures")
+	require.Contains(t, sql, "idx_workers_heartbeat_due")
+}

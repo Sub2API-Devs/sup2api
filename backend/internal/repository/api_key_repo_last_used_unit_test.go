@@ -188,7 +188,7 @@ func TestAPIKeyRepository_UpdateLastUsed(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, after.LastUsedAt)
 	require.WithinDuration(t, target, *after.LastUsedAt, time.Second)
-	require.WithinDuration(t, target, after.UpdatedAt, time.Second)
+	require.Equal(t, before.UpdatedAt, after.UpdatedAt, "last_used_at telemetry must not change the authorization policy version")
 }
 
 func TestAPIKeyRepository_UpdateLastUsedDeletedKey(t *testing.T) {

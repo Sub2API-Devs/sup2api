@@ -271,7 +271,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	auditLogHandler := admin.NewAuditLogHandler(auditLogService, totpService)
 	workerRepository := repository.NewWorkerRepository(db)
 	workerRemoteClient := service.NewWorkerRemoteClient()
-	workerService := service.NewWorkerService(workerRepository, secretEncryptor, workerRemoteClient)
+	workerService := service.ProvideWorkerService(workerRepository, secretEncryptor, workerRemoteClient)
 	workerHandler := admin.NewWorkerHandler(workerService)
 	upstreamBillingProbeService := service.ProvideUpstreamBillingProbeService(accountRepository, accountTestService, settingService, leaderLockCache, db)
 	ollamaCloudUsageService := service.ProvideOllamaCloudUsageService(accountRepository, httpUpstream, settingService, secretEncryptor, configConfig, leaderLockCache, db)
@@ -324,9 +324,10 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 		return nil, err
 	}
 	leaseStore := controlplane.NewLeaseStore(configConfig, redisClient, concurrencyCache)
-	admissionController := controlplane.NewAdmissionController(configConfig, apiKeyService, billingCacheService, subscriptionService, concurrencyService, gatewayService, openAIGatewayService, geminiTokenProvider, claudeTokenProvider, antigravityTokenProvider, billingService, leaseStore, grantSigner)
+	workerAdmissionRepository := controlplane.ProvideWorkerAdmissionRepository(workerRepository)
+	admissionController := controlplane.NewAdmissionController(configConfig, apiKeyService, billingCacheService, subscriptionService, concurrencyService, gatewayService, openAIGatewayService, geminiTokenProvider, claudeTokenProvider, antigravityTokenProvider, billingService, leaseStore, grantSigner, workerAdmissionRepository)
 	settlementController := controlplane.NewSettlementController(redisClient, apiKeyService, accountRepository, subscriptionService, gatewayService, openAIGatewayService, leaseStore)
-	workerLogBridge := controlplane.NewWorkerLogBridge(workerRepository, redisClient)
+	workerLogBridge := controlplane.NewWorkerLogBridge(workerAdmissionRepository, redisClient)
 	rpcService := controlplane.NewRPCService(apiKeyService, grantSigner, leaseStore, admissionController, settlementController, workerLogBridge)
 	controlplaneServer, err := controlplane.NewServer(configConfig, rpcService, apiKeyCache)
 	if err != nil {
@@ -346,7 +347,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	paymentOrderExpiryService := service.ProvidePaymentOrderExpiryService(paymentService, leaderLockCache, db)
 	channelMonitorRunner := service.ProvideChannelMonitorRunner(channelMonitorService, settingService)
 	userPlatformQuotaUsageFlusher := service.ProvideUserPlatformQuotaUsageFlusher(configConfig, billingCache, serviceUserPlatformQuotaRepository, timingWheelService)
-	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, opsSystemLogSink, opsService, opsIngressRejectAggregator, apiKeyService, authCacheInvalidationWorker, schedulerSnapshotService, tokenRefreshService, accountExpiryService, proxyExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, batchImageCleanupService, batchImageWorkerRuntime, pricingService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, grokOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService, paymentOrderExpiryService, channelMonitorRunner, userPlatformQuotaUsageFlusher, upstreamBillingProbeService, ollamaCloudUsageService, auditLogService, promptService, workerLogConsumer)
+	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, opsSystemLogSink, opsService, opsIngressRejectAggregator, apiKeyService, authCacheInvalidationWorker, schedulerSnapshotService, tokenRefreshService, accountExpiryService, proxyExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, batchImageCleanupService, batchImageWorkerRuntime, pricingService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, grokOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService, paymentOrderExpiryService, channelMonitorRunner, userPlatformQuotaUsageFlusher, upstreamBillingProbeService, ollamaCloudUsageService, auditLogService, promptService, workerLogConsumer, workerService)
 	application := &Application{
 		Server:           httpServer,
 		DataPlaneControl: controlplaneServer,
@@ -419,6 +420,7 @@ func provideCleanup(
 	auditLog *service.AuditLogService,
 	promptAudit *securityaudit.PromptService,
 	workerLogConsumer *service.WorkerLogConsumer,
+	workerService *service.WorkerService,
 ) func() {
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -430,6 +432,12 @@ func provideCleanup(
 		}
 
 		parallelSteps := []cleanupStep{
+			{"WorkerHeartbeat", func() error {
+				if workerService != nil {
+					workerService.StopHeartbeat()
+				}
+				return nil
+			}},
 			{"WorkerLogConsumer", func() error {
 				if workerLogConsumer != nil {
 					workerLogConsumer.Close(3 * time.Second)

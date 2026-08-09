@@ -270,21 +270,30 @@ func authPolicyVersion(apiKey *service.APIKey) string {
 	parts := []string{
 		strconv.FormatInt(apiKey.ID, 10),
 		apiKey.Status,
-		apiKey.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		strconv.FormatInt(groupIDOf(apiKey), 10),
+		timePolicyVersion(apiKey.ExpiresAt),
 		strings.Join(apiKey.IPWhitelist, ","),
 		strings.Join(apiKey.IPBlacklist, ","),
 	}
 	if apiKey.User != nil {
-		parts = append(parts, strconv.FormatInt(apiKey.User.ID, 10), apiKey.User.Status, apiKey.User.UpdatedAt.UTC().Format(time.RFC3339Nano))
+		parts = append(parts, strconv.FormatInt(apiKey.User.ID, 10), apiKey.User.Status, apiKey.User.Role)
 		for _, groupID := range allowedGroups {
 			parts = append(parts, strconv.FormatInt(groupID, 10))
 		}
 	}
 	if apiKey.Group != nil {
-		parts = append(parts, strconv.FormatInt(apiKey.Group.ID, 10), apiKey.Group.Status, apiKey.Group.UpdatedAt.UTC().Format(time.RFC3339Nano))
+		parts = append(parts, strconv.FormatInt(apiKey.Group.ID, 10), apiKey.Group.Status,
+			strconv.FormatBool(apiKey.Group.IsExclusive), apiKey.Group.SubscriptionType)
 	}
 	digest := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
 	return hex.EncodeToString(digest[:])
+}
+
+func timePolicyVersion(value *time.Time) string {
+	if value == nil {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339Nano)
 }
 
 func denied(status int, code, message string) *controlv1.ResolveAPIKeyResponse {

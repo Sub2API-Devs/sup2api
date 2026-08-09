@@ -808,11 +808,18 @@ func (r *apiKeyRepository) IncrementQuotaUsedAndGetState(ctx context.Context, id
 }
 
 func (r *apiKeyRepository) UpdateLastUsed(ctx context.Context, id int64, usedAt time.Time) error {
-	affected, err := r.client.APIKey.Update().
-		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
-		SetLastUsedAt(usedAt).
-		SetUpdatedAt(usedAt).
-		Save(ctx)
+	// last_used_at is operational telemetry, not an authorization-policy
+	// mutation. Updating through Ent would apply TimeMixin.UpdateDefault and
+	// change updated_at, invalidating the grant that just completed the request
+	// and causing the next request to fail with STALE_AUTH_GRANT.
+	result, err := r.sql.ExecContext(ctx, `
+		UPDATE api_keys
+		SET last_used_at = $1
+		WHERE id = $2 AND deleted_at IS NULL`, usedAt, id)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
 	if err != nil {
 		return err
 	}

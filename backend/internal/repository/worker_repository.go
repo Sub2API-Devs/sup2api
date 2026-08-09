@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
@@ -26,12 +27,14 @@ func (r *workerRepository) CreateWorker(ctx context.Context, worker *service.Wor
 	return r.db.QueryRowContext(ctx, `
 INSERT INTO workers (
   name, base_url, management_key_encrypted, remote_worker_id, instance_id,
-  protocol_version, version, status, log_stream_key, last_seen_at, last_error
-) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+  protocol_version, version, status, enabled, log_stream_key, last_seen_at, last_error,
+  heartbeat_interval_seconds, heartbeat_timeout_seconds
+) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
 RETURNING id, created_at, updated_at`,
 		worker.Name, worker.BaseURL, worker.ManagementKeyCipher, worker.RemoteWorkerID,
 		worker.InstanceID, worker.ProtocolVersion, worker.Version, worker.Status,
-		worker.LogStreamKey, worker.LastSeenAt, worker.LastError,
+		worker.Enabled, worker.LogStreamKey, worker.LastSeenAt, worker.LastError,
+		worker.HeartbeatIntervalSeconds, worker.HeartbeatTimeoutSeconds,
 	).Scan(&worker.ID, &worker.CreatedAt, &worker.UpdatedAt)
 }
 
@@ -53,7 +56,7 @@ func (r *workerRepository) ListWorkers(ctx context.Context) ([]service.Worker, e
 }
 
 func (r *workerRepository) GetWorker(ctx context.Context, id int64) (*service.Worker, error) {
-	worker, err := scanWorker(r.db.QueryRowContext(ctx, workerSelect+` WHERE id=$1`, id))
+	worker, err := scanWorker(r.db.QueryRowContext(ctx, workerSelect+` WHERE w.id=$1`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -61,7 +64,7 @@ func (r *workerRepository) GetWorker(ctx context.Context, id int64) (*service.Wo
 }
 
 func (r *workerRepository) GetWorkerByRemoteID(ctx context.Context, remoteID string) (*service.Worker, error) {
-	worker, err := scanWorker(r.db.QueryRowContext(ctx, workerSelect+` WHERE remote_worker_id=$1`, remoteID))
+	worker, err := scanWorker(r.db.QueryRowContext(ctx, workerSelect+` WHERE w.remote_worker_id=$1`, remoteID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -75,20 +78,85 @@ func (r *workerRepository) DeleteWorker(ctx context.Context, id int64) error {
 	}
 	rows, err := result.RowsAffected()
 	if err == nil && rows == 0 {
-		return errors.New("worker not found")
+		return service.ErrWorkerNotFound
 	}
 	return err
 }
 
-func (r *workerRepository) UpdateWorkerObservation(ctx context.Context, id int64, identity service.WorkerIdentity, status string, lastError *string) error {
-	_, err := r.db.ExecContext(ctx, `
+func (r *workerRepository) UpdateWorker(ctx context.Context, worker *service.Worker, updateEnabled bool) error {
+	if worker == nil {
+		return errors.New("nil worker")
+	}
+	result, err := r.db.ExecContext(ctx, `
+UPDATE workers SET
+  name=$2, base_url=$3, management_key_encrypted=$4,
+  enabled=CASE WHEN $8 THEN $5 ELSE enabled END,
+  heartbeat_interval_seconds=$6, heartbeat_timeout_seconds=$7,
+  status=CASE
+    WHEN NOT $8 THEN status
+    WHEN NOT $5 THEN 'disabled'
+    WHEN enabled THEN status
+    ELSE 'unknown'
+  END,
+  last_error=CASE WHEN $8 AND $5 AND NOT enabled THEN NULL ELSE last_error END,
+  updated_at=NOW()
+WHERE id=$1`, worker.ID, worker.Name, worker.BaseURL, worker.ManagementKeyCipher,
+		worker.Enabled, worker.HeartbeatIntervalSeconds, worker.HeartbeatTimeoutSeconds, updateEnabled)
+	return workerMutationResult(result, err)
+}
+
+func (r *workerRepository) SetWorkerEnabled(ctx context.Context, id int64, enabled bool) error {
+	result, err := r.db.ExecContext(ctx, `
+UPDATE workers SET
+  enabled=$2,
+  status=CASE WHEN NOT $2 THEN 'disabled' WHEN enabled THEN status ELSE 'unknown' END,
+  last_error=CASE WHEN $2 AND NOT enabled THEN NULL ELSE last_error END,
+  updated_at=NOW()
+WHERE id=$1`, id, enabled)
+	return workerMutationResult(result, err)
+}
+
+func (r *workerRepository) ListWorkersDueHeartbeat(ctx context.Context, now time.Time, limit int) ([]service.Worker, error) {
+	if limit <= 0 {
+		limit = 64
+	}
+	rows, err := r.db.QueryContext(ctx, workerSelect+`
+ WHERE w.enabled=TRUE
+   AND (w.last_heartbeat_at IS NULL OR w.last_heartbeat_at + (w.heartbeat_interval_seconds * INTERVAL '1 second') <= $1)
+ ORDER BY w.last_heartbeat_at NULLS FIRST, w.id
+ LIMIT $2`, now, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	workers := make([]service.Worker, 0)
+	for rows.Next() {
+		worker, scanErr := scanWorker(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		workers = append(workers, *worker)
+	}
+	return workers, rows.Err()
+}
+
+func (r *workerRepository) UpdateWorkerHeartbeat(ctx context.Context, id int64, observation service.WorkerHeartbeatObservation) error {
+	result, err := r.db.ExecContext(ctx, `
 UPDATE workers SET
   instance_id=CASE WHEN $2='' THEN instance_id ELSE $2 END,
   protocol_version=CASE WHEN $3='' THEN protocol_version ELSE $3 END,
   version=CASE WHEN $4='' THEN version ELSE $4 END,
-  status=$5, last_seen_at=NOW(), last_error=$6, updated_at=NOW()
-WHERE id=$1`, id, identity.InstanceID, identity.ProtocolVersion, identity.Version, status, lastError)
-	return err
+  status=CASE WHEN enabled THEN $5 ELSE 'disabled' END,
+  last_heartbeat_at=NOW(),
+  last_heartbeat_latency_ms=$6,
+  consecutive_failures=CASE WHEN $7 THEN 0 ELSE consecutive_failures + 1 END,
+  last_seen_at=CASE WHEN $7 THEN NOW() ELSE last_seen_at END,
+  last_error=$8,
+  updated_at=NOW()
+WHERE id=$1`, id, observation.Identity.InstanceID, observation.Identity.ProtocolVersion,
+		observation.Identity.Version, observation.Status, observation.LatencyMS,
+		observation.Reachable, observation.LastError)
+	return workerMutationResult(result, err)
 }
 
 func (r *workerRepository) UpsertWorkerAccount(ctx context.Context, account *service.WorkerAccount) error {
@@ -219,10 +287,14 @@ FROM worker_logs WHERE worker_id=$1`
 }
 
 const workerSelect = `
-SELECT id, name, base_url, management_key_encrypted, remote_worker_id, instance_id,
-       protocol_version, version, status, log_stream_key, last_seen_at, last_error,
-       created_at, updated_at
-FROM workers`
+SELECT w.id, w.name, w.base_url, w.management_key_encrypted, w.remote_worker_id, w.instance_id,
+       w.protocol_version, w.version, w.status, w.enabled, w.log_stream_key, w.last_seen_at,
+       w.last_heartbeat_at, w.last_heartbeat_latency_ms, w.consecutive_failures,
+       w.heartbeat_interval_seconds, w.heartbeat_timeout_seconds,
+       (SELECT COUNT(*) FROM worker_accounts wa WHERE wa.worker_id=w.id) AS account_count,
+       (SELECT COUNT(*) FROM worker_logs wl WHERE wl.worker_id=w.id) AS log_count,
+       w.last_error, w.created_at, w.updated_at
+FROM workers w`
 
 type workerRowScanner interface {
 	Scan(...any) error
@@ -231,10 +303,14 @@ type workerRowScanner interface {
 func scanWorker(row workerRowScanner) (*service.Worker, error) {
 	var worker service.Worker
 	var lastSeen sql.NullTime
+	var lastHeartbeat sql.NullTime
 	var lastError sql.NullString
 	err := row.Scan(&worker.ID, &worker.Name, &worker.BaseURL, &worker.ManagementKeyCipher,
 		&worker.RemoteWorkerID, &worker.InstanceID, &worker.ProtocolVersion, &worker.Version,
-		&worker.Status, &worker.LogStreamKey, &lastSeen, &lastError,
+		&worker.Status, &worker.Enabled, &worker.LogStreamKey, &lastSeen, &lastHeartbeat,
+		&worker.LastHeartbeatLatencyMS, &worker.ConsecutiveFailures,
+		&worker.HeartbeatIntervalSeconds, &worker.HeartbeatTimeoutSeconds,
+		&worker.AccountCount, &worker.LogCount, &lastError,
 		&worker.CreatedAt, &worker.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -243,9 +319,27 @@ func scanWorker(row workerRowScanner) (*service.Worker, error) {
 		value := lastSeen.Time
 		worker.LastSeenAt = &value
 	}
+	if lastHeartbeat.Valid {
+		value := lastHeartbeat.Time
+		worker.LastHeartbeatAt = &value
+	}
 	if lastError.Valid {
 		value := lastError.String
 		worker.LastError = &value
 	}
 	return &worker, nil
+}
+
+func workerMutationResult(result sql.Result, err error) error {
+	if err != nil {
+		return err
+	}
+	rows, rowsErr := result.RowsAffected()
+	if rowsErr != nil {
+		return rowsErr
+	}
+	if rows == 0 {
+		return service.ErrWorkerNotFound
+	}
+	return nil
 }
