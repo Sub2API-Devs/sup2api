@@ -29,6 +29,7 @@ var ProviderSet = wire.NewSet(
 	NewSettlementController,
 	NewWorkerLogBridge,
 	NewRPCService,
+	NewUsageQueue,
 	NewServer,
 )
 
@@ -40,11 +41,13 @@ type Server struct {
 	cfg     config.DataPlaneControlConfig
 	service *RPCService
 	hub     *InvalidationHub
+	usage   *UsageQueue
 
 	mu       sync.Mutex
 	grpc     *grpc.Server
 	listener net.Listener
 	cancel   context.CancelFunc
+	started  bool
 }
 
 func ProvideGrantSigner(cfg *config.Config) (*GrantSigner, error) {
@@ -54,7 +57,7 @@ func ProvideGrantSigner(cfg *config.Config) (*GrantSigner, error) {
 	return NewGrantSigner(cfg.DataPlaneControl.GrantSecret, time.Duration(cfg.DataPlaneControl.GrantTTLSeconds)*time.Second)
 }
 
-func NewServer(cfg *config.Config, rpc *RPCService, cache service.APIKeyCache) (*Server, error) {
+func NewServer(cfg *config.Config, rpc *RPCService, cache service.APIKeyCache, usage *UsageQueue) (*Server, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("data-plane control config is required")
 	}
@@ -62,27 +65,46 @@ func NewServer(cfg *config.Config, rpc *RPCService, cache service.APIKeyCache) (
 	if rpc != nil {
 		rpc.invalidations = hub
 	}
-	return &Server{cfg: cfg.DataPlaneControl, service: rpc, hub: hub}, nil
+	return &Server{cfg: cfg.DataPlaneControl, service: rpc, hub: hub, usage: usage}, nil
 }
 
 func (s *Server) Enabled() bool { return s != nil && s.cfg.Enabled }
 
 func (s *Server) Start(parent context.Context) error {
-	if !s.Enabled() {
+	if s == nil || (!s.Enabled() && (s.usage == nil || !s.usage.Enabled())) {
 		return nil
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.grpc != nil {
+	if s.started {
+		return nil
+	}
+	if s.usage != nil {
+		if err := s.usage.Start(parent); err != nil {
+			return err
+		}
+	}
+	if !s.Enabled() {
+		s.started = true
 		return nil
 	}
 	listener, err := listenControl(s.cfg)
 	if err != nil {
+		if s.usage != nil {
+			stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = s.usage.Stop(stopCtx)
+			stopCancel()
+		}
 		return err
 	}
 	options, err := grpcServerOptions(s.cfg)
 	if err != nil {
 		_ = listener.Close()
+		if s.usage != nil {
+			stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = s.usage.Stop(stopCtx)
+			stopCancel()
+		}
 		return err
 	}
 	server := grpc.NewServer(options...)
@@ -91,6 +113,7 @@ func (s *Server) Start(parent context.Context) error {
 	s.grpc = server
 	s.listener = listener
 	s.cancel = cancel
+	s.started = true
 	s.hub.Start(ctx)
 	if s.service != nil && s.service.leases != nil {
 		s.service.leases.Start(ctx)
@@ -114,17 +137,28 @@ func (s *Server) Stop(ctx context.Context) error {
 	s.grpc = nil
 	s.listener = nil
 	s.cancel = nil
+	started := s.started
+	s.started = false
 	s.mu.Unlock()
-	if server == nil {
+	if !started {
 		return nil
 	}
 	if cancel != nil {
 		cancel()
 	}
+	var result error
+	if s.usage != nil {
+		if err := s.usage.Stop(ctx); err != nil {
+			result = errors.Join(result, fmt.Errorf("stop NATS usage consumer: %w", err))
+		}
+	}
 	if s.service != nil && s.service.leases != nil {
 		s.service.leases.Stop()
 	}
 	s.hub.Stop()
+	if server == nil {
+		return result
+	}
 	done := make(chan struct{})
 	go func() {
 		server.GracefulStop()
@@ -141,10 +175,10 @@ func (s *Server) Stop(ctx context.Context) error {
 	}
 	if s.cfg.Network == "unix" {
 		if err := os.Remove(s.cfg.Address); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("remove data-plane control socket: %w", err)
+			result = errors.Join(result, fmt.Errorf("remove data-plane control socket: %w", err))
 		}
 	}
-	return nil
+	return result
 }
 
 func listenControl(cfg config.DataPlaneControlConfig) (net.Listener, error) {

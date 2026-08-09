@@ -22,7 +22,7 @@ func TestServerCreatesPermissionedUnixSocketAndStopsCleanly(t *testing.T) {
 	rpc := newRPCService(nil, signer)
 	server, err := NewServer(&config.Config{DataPlaneControl: config.DataPlaneControlConfig{
 		Enabled: true, Network: "unix", Address: path,
-	}}, rpc, nil)
+	}}, rpc, nil, nil)
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
 	}

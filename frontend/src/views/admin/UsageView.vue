@@ -1,7 +1,16 @@
 <template>
   <AppLayout>
     <div class="space-y-6">
-      <UsageStatsCards :stats="usageStats" />
+      <div v-if="workerScoped" class="card flex flex-wrap items-center justify-between gap-3 border-primary-200 bg-primary-50/60 px-5 py-4 dark:border-primary-900/50 dark:bg-primary-950/20">
+        <div>
+          <p class="font-medium text-gray-900 dark:text-white">{{ t('admin.workers.workerUsageTitle', { name: workerName }) }}</p>
+          <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">{{ t('admin.workers.workerUsageHint') }}</p>
+        </div>
+        <button type="button" class="btn btn-secondary" @click="router.push({ name: 'AdminWorkers' })">
+          {{ t('admin.workers.backToWorkers') }}
+        </button>
+      </div>
+      <UsageStatsCards v-if="!workerScoped" :stats="usageStats" />
       <!-- Charts Section -->
       <div class="space-y-4">
         <div class="card p-4">
@@ -14,7 +23,7 @@
                 @change="onDateRangeChange"
               />
             </div>
-            <div class="ml-auto flex items-center gap-2">
+            <div v-if="!workerScoped" class="ml-auto flex items-center gap-2">
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.granularity') }}:</span>
               <div class="w-28">
                 <Select v-model="granularity" :options="granularityOptions" @change="loadChartData" />
@@ -22,7 +31,7 @@
             </div>
           </div>
         </div>
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div v-if="!workerScoped" class="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <ModelDistributionChart
             v-model:source="modelDistributionSource"
             v-model:metric="modelDistributionMetric"
@@ -46,7 +55,7 @@
             :filters="breakdownFilters"
           />
         </div>
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div v-if="!workerScoped" class="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <EndpointDistributionChart
             v-model:source="endpointDistributionSource"
             v-model:metric="endpointDistributionMetric"
@@ -83,7 +92,7 @@
           </button>
         </div>
 
-        <UsageFilters v-model="filters" ref="usageFiltersRef" flat :mode="activeTab" class="border-b border-gray-100 dark:border-dark-700/50" :start-date="startDate" :end-date="endDate" :exporting="exporting" :model-options="modelNameOptions" @change="applyFilters" @refresh="refreshData" @reset="resetFilters" @cleanup="openCleanupDialog" @export="exportToExcel">
+        <UsageFilters v-model="filters" ref="usageFiltersRef" flat :mode="activeTab" class="border-b border-gray-100 dark:border-dark-700/50" :start-date="startDate" :end-date="endDate" :exporting="exporting" :allow-cleanup="!workerScoped" :model-options="modelNameOptions" @change="applyFilters" @refresh="refreshData" @reset="resetFilters" @cleanup="openCleanupDialog" @export="exportToExcel">
           <template #after-reset>
             <div v-if="activeTab !== 'ranking'" class="relative" ref="columnDropdownRef">
               <button
@@ -185,7 +194,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { saveAs } from 'file-saver'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'; import { adminAPI } from '@/api/admin'; import { adminUsageAPI } from '@/api/admin/usage'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { formatReasoningEffort } from '@/utils/format'
@@ -211,6 +220,7 @@ type DistributionMetric = 'tokens' | 'actual_cost'
 type EndpointSource = 'inbound' | 'upstream' | 'path'
 type ModelDistributionSource = 'requested' | 'upstream' | 'mapping'
 const route = useRoute()
+const router = useRouter()
 const usageStats = ref<AdminUsageStatsResponse | null>(null); const usageLogs = ref<AdminUsageLog[]>([]); const loading = ref(false); const exporting = ref(false)
 const trendData = ref<TrendDataPoint[]>([]); const requestedModelStats = ref<ModelStat[]>([]); const upstreamModelStats = ref<ModelStat[]>([]); const mappingModelStats = ref<ModelStat[]>([]); const groupStats = ref<GroupStat[]>([]); const chartsLoading = ref(false); const modelStatsLoading = ref(false); const granularity = ref<'day' | 'hour'>('hour')
 const modelDistributionMetric = ref<DistributionMetric>('tokens')
@@ -249,7 +259,10 @@ const breakdownFilters = computed(() => {
 })
 
 const modelNameOptions = computed(() =>
-  Array.from(new Set(requestedModelStats.value.map((m) => m.model).filter(Boolean))).sort()
+  Array.from(new Set([
+    ...requestedModelStats.value.map((m) => m.model),
+    ...usageLogs.value.map((log) => log.model),
+  ].filter(Boolean))).sort()
 )
 
 const handleUserClick = async (userId: number) => {
@@ -314,10 +327,14 @@ const getNumericQueryValue = (value: string | null | Array<string | null> | unde
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
+const workerScoped = computed(() => (filters.value.worker_id ?? 0) > 0)
+const workerName = computed(() => getSingleQueryValue(route.query.worker_name) || `#${filters.value.worker_id ?? ''}`)
+
 const applyRouteQueryFilters = () => {
   const queryStartDate = getSingleQueryValue(route.query.start_date)
   const queryEndDate = getSingleQueryValue(route.query.end_date)
   const queryUserId = getNumericQueryValue(route.query.user_id)
+  const queryWorkerId = getNumericQueryValue(route.query.worker_id)
 
   if (queryStartDate) {
     startDate.value = queryStartDate
@@ -329,6 +346,7 @@ const applyRouteQueryFilters = () => {
   filters.value = {
     ...filters.value,
     user_id: queryUserId,
+    worker_id: queryWorkerId,
     start_date: startDate.value,
     end_date: endDate.value
   }
@@ -514,9 +532,11 @@ const applyFilters = () => {
   pagination.page = 1
   invalidateModelStatsCache()
   loadLogs()
-  loadStats()
-  loadModelStats(modelDistributionSource.value, true)
-  loadChartData()
+  if (!workerScoped.value) {
+    loadStats()
+    loadModelStats(modelDistributionSource.value, true)
+    loadChartData()
+  }
   errPage.value = 1
   if (activeTab.value === 'errors') {
     loadAdminErrors()
@@ -527,9 +547,11 @@ const applyFilters = () => {
 const refreshData = () => {
   invalidateModelStatsCache()
   loadLogs()
-  loadStats(true)
-  loadModelStats(modelDistributionSource.value, true)
-  loadChartData()
+  if (!workerScoped.value) {
+    loadStats(true)
+    loadModelStats(modelDistributionSource.value, true)
+    loadChartData()
+  }
   if (activeTab.value === 'errors') loadAdminErrors()
   if (rankingMounted.value) rankingRef.value?.reload()
 }
@@ -537,7 +559,7 @@ const resetFilters = () => {
   const range = getLast24HoursRangeDates()
   startDate.value = range.start
   endDate.value = range.end
-  filters.value = { start_date: startDate.value, end_date: endDate.value, request_type: undefined, billing_type: null, billing_mode: undefined }
+  filters.value = { worker_id: filters.value.worker_id, start_date: startDate.value, end_date: endDate.value, request_type: undefined, billing_type: null, billing_mode: undefined }
   granularity.value = getGranularityForRange(startDate.value, endDate.value)
   applyFilters()
 }
@@ -761,11 +783,15 @@ const loadSavedColumns = () => {
 // Detail tabs
 type DetailTab = 'usage' | 'errors' | 'ranking'
 const activeTab = ref<DetailTab>('usage')
-const detailTabs = computed(() => [
-  { key: 'usage' as const, label: t('usage.tabs.usage'), icon: 'document' as const },
-  { key: 'errors' as const, label: t('usage.tabs.errors'), icon: 'exclamationTriangle' as const },
-  { key: 'ranking' as const, label: t('usage.tabs.ranking'), icon: 'chart' as const },
-])
+const detailTabs = computed(() => {
+  const usage = { key: 'usage' as const, label: t('usage.tabs.usage'), icon: 'document' as const }
+  if (workerScoped.value) return [usage]
+  return [
+    usage,
+    { key: 'errors' as const, label: t('usage.tabs.errors'), icon: 'exclamationTriangle' as const },
+    { key: 'ranking' as const, label: t('usage.tabs.ranking'), icon: 'chart' as const },
+  ]
+})
 const usageFiltersRef = ref<InstanceType<typeof UsageFilters> | null>(null)
 const rankingMounted = ref(false)
 const rankingRef = ref<InstanceType<typeof UserTokenRanking> | null>(null)
@@ -844,11 +870,13 @@ onMounted(() => {
   applyRouteQueryFilters()
   void loadRouteUserFilterLabel()
   loadLogs()
-  loadStats()
-  loadModelStats(modelDistributionSource.value, true)
-  window.setTimeout(() => {
-    void loadChartData()
-  }, 120)
+  if (!workerScoped.value) {
+    loadStats()
+    loadModelStats(modelDistributionSource.value, true)
+    window.setTimeout(() => {
+      void loadChartData()
+    }, 120)
+  }
   loadSavedColumns()
   loadSavedErrColumns()
   document.addEventListener('click', handleColumnClickOutside)
@@ -856,7 +884,7 @@ onMounted(() => {
 onUnmounted(() => { abortController?.abort(); exportAbortController?.abort(); document.removeEventListener('click', handleColumnClickOutside) })
 
 watch(modelDistributionSource, (source) => {
-  void loadModelStats(source)
+  if (!workerScoped.value) void loadModelStats(source)
 })
 
 defineExpose({ requestedModelStats, refreshData })

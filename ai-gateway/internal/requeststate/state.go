@@ -3,6 +3,7 @@ package requeststate
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +27,12 @@ type State struct {
 	ModelValueEnd   int64
 	ModelInPath     bool
 	Stream          bool
+	// ServiceTier and ReasoningEffort are the sanitized request metadata used
+	// by the control plane's canonical usage record. OpenAIWSMode distinguishes
+	// Responses WebSocket turns from ordinary HTTP streaming requests.
+	ServiceTier     string
+	ReasoningEffort string
+	OpenAIWSMode    bool
 	Auth            *AuthGrant
 	Admission       *controlv1.OpenRequestResponse
 	StartedAt       time.Time
@@ -200,10 +207,46 @@ type Snapshot struct {
 // Usage is deliberately independent from generated protobuf messages, which
 // contain internal synchronization state and must never be copied by value.
 type Usage struct {
-	InputTokens         int64
-	OutputTokens        int64
-	CacheReadTokens     int64
-	CacheCreationTokens int64
-	ReasoningTokens     int64
-	ResponseBytes       int64
+	InputTokens           int64
+	OutputTokens          int64
+	CacheReadTokens       int64
+	CacheCreationTokens   int64
+	CacheCreation5mTokens int64
+	CacheCreation1hTokens int64
+	ReasoningTokens       int64
+	ResponseBytes         int64
+}
+
+// NormalizeServiceTier keeps only values supported by the canonical usage
+// schema. The public "fast" alias is recorded as its upstream value.
+func NormalizeServiceTier(value string) string {
+	switch value = strings.ToLower(strings.TrimSpace(value)); value {
+	case "fast":
+		return "priority"
+	case "priority", "flex", "auto", "default", "scale":
+		return value
+	default:
+		return ""
+	}
+}
+
+// NormalizeReasoningEffort canonicalizes the bounded values displayed by the
+// main server's usage table.
+func NormalizeReasoningEffort(value string) string {
+	switch value = strings.ToLower(strings.TrimSpace(value)); value {
+	case "x-high", "x_high":
+		return "xhigh"
+	case "none", "minimal", "low", "medium", "high", "xhigh", "max":
+		return value
+	default:
+		return ""
+	}
+}
+
+func (s *State) SetUsageRecordMetadata(serviceTier, reasoningEffort string) {
+	if s == nil {
+		return
+	}
+	s.ServiceTier = NormalizeServiceTier(serviceTier)
+	s.ReasoningEffort = NormalizeReasoningEffort(reasoningEffort)
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	controlv1 "github.com/Sub2API-Devs/sup2api/ai-gateway/gen/control/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestStorePersistsRecoversAndDeletesSettlement(t *testing.T) {
@@ -34,12 +35,21 @@ func TestStorePersistsRecoversAndDeletesSettlement(t *testing.T) {
 	if len(records) != 1 || records[0].Request.GetLeaseId() != "lease-1" {
 		t.Fatalf("records = %+v", records)
 	}
-	info, err := os.Stat(filepath.Join(dir, records[0].Name))
+	info, err := os.Stat(filepath.Join(dir, databaseName))
 	if err != nil {
 		t.Fatalf("stat record: %v", err)
 	}
 	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("record permissions = %o", info.Mode().Perm())
+	}
+	for _, suffix := range []string{"-wal", "-shm"} {
+		info, err := os.Stat(filepath.Join(dir, databaseName) + suffix)
+		if err != nil {
+			t.Fatalf("stat SQLite sidecar %s: %v", suffix, err)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Fatalf("SQLite sidecar %s permissions = %o", suffix, info.Mode().Perm())
+		}
 	}
 	if err := reopened.Delete(records[0]); err != nil {
 		t.Fatalf("Delete: %v", err)
@@ -75,15 +85,39 @@ func TestStoreRejectsConflictingFactsForSameRequestID(t *testing.T) {
 
 func TestStoreRejectsCorruptedRecord(t *testing.T) {
 	dir := t.TempDir()
-	name := recordName("request-1")
-	if err := os.WriteFile(filepath.Join(dir, name), []byte("not-protobuf"), 0o600); err != nil {
-		t.Fatalf("write corrupt record: %v", err)
-	}
 	store, err := Open(dir, 1<<20)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
+	name := recordName("request-1")
+	if _, err := store.db.Exec(`INSERT INTO settlements(name, request_id, payload, payload_bytes) VALUES (?, ?, ?, ?)`, name, "request-1", []byte("not-protobuf"), 12); err != nil {
+		t.Fatalf("write corrupt record: %v", err)
+	}
 	if _, err := store.List(); err == nil {
 		t.Fatal("expected corrupt record error")
+	}
+}
+
+func TestStoreMigratesLegacyProtobufFilesIntoSQLite(t *testing.T) {
+	dir := t.TempDir()
+	request := &controlv1.SettleRequestRequest{RequestId: "legacy-request", LeaseId: "legacy-lease"}
+	payload, err := proto.MarshalOptions{Deterministic: true}.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyPath := filepath.Join(dir, recordName(request.GetRequestId()))
+	if err := os.WriteFile(legacyPath, payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(dir, 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	records, err := store.List()
+	if err != nil || len(records) != 1 || records[0].Request.GetLeaseId() != "legacy-lease" {
+		t.Fatalf("records=%+v err=%v", records, err)
+	}
+	if _, err := os.Stat(legacyPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("legacy file was not removed: %v", err)
 	}
 }

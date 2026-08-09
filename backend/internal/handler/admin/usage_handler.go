@@ -72,7 +72,7 @@ func (h *UsageHandler) List(c *gin.Context) {
 	}
 
 	// Parse filters
-	var userID, apiKeyID, accountID, groupID int64
+	var userID, apiKeyID, accountID, groupID, workerID int64
 	if userIDStr := c.Query("user_id"); userIDStr != "" {
 		id, err := strconv.ParseInt(userIDStr, 10, 64)
 		if err != nil {
@@ -107,6 +107,15 @@ func (h *UsageHandler) List(c *gin.Context) {
 			return
 		}
 		groupID = id
+	}
+
+	if workerIDStr := c.Query("worker_id"); workerIDStr != "" {
+		id, err := strconv.ParseInt(workerIDStr, 10, 64)
+		if err != nil || id <= 0 {
+			response.BadRequest(c, "Invalid worker_id")
+			return
+		}
+		workerID = id
 	}
 
 	model := c.Query("model")
@@ -177,6 +186,7 @@ func (h *UsageHandler) List(c *gin.Context) {
 		APIKeyID:          apiKeyID,
 		AccountID:         accountID,
 		GroupID:           groupID,
+		WorkerID:          workerID,
 		RequestID:         requestID,
 		Model:             model,
 		ModelFilterSource: usagestats.ModelSourceRequested,

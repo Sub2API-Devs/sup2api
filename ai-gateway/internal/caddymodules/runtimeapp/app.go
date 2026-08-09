@@ -25,6 +25,8 @@ type App struct {
 	RequestTimeout        caddy.Duration `json:"request_timeout,omitempty"`
 	SettlementWALPath     string         `json:"settlement_wal_path,omitempty"`
 	SettlementWALMaxBytes int64          `json:"settlement_wal_max_bytes,omitempty"`
+	NATSURL               string         `json:"nats_url,omitempty"`
+	NATSSubject           string         `json:"nats_subject,omitempty"`
 	AuthCacheTTL          caddy.Duration `json:"auth_cache_ttl,omitempty"`
 	AuthCacheSize         int            `json:"auth_cache_size,omitempty"`
 	TLSCAFile             string         `json:"tls_ca_file,omitempty"`
@@ -85,6 +87,8 @@ func (a *App) Provision(ctx caddy.Context) error {
 		RequestTimeout:        time.Duration(a.RequestTimeout),
 		SettlementWALPath:     a.SettlementWALPath,
 		SettlementWALMaxBytes: a.SettlementWALMaxBytes,
+		NATSURL:               a.NATSURL,
+		NATSSubject:           a.NATSSubject,
 		AuthCacheTTL:          time.Duration(a.AuthCacheTTL),
 		AuthCacheSize:         a.AuthCacheSize,
 		TLSCAFile:             a.TLSCAFile,

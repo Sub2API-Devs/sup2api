@@ -98,17 +98,22 @@ func (h *Handler) finalize(r *http.Request, observer *responseObserver, state *r
 		MappedModel:    plan.GetMappedModel(),
 		PricingVersion: lease.GetPricingVersion(),
 		Usage: &controlv1.Usage{
-			InputTokens:         snapshot.Usage.InputTokens,
-			OutputTokens:        snapshot.Usage.OutputTokens,
-			CacheReadTokens:     snapshot.Usage.CacheReadTokens,
-			CacheCreationTokens: snapshot.Usage.CacheCreationTokens,
-			ReasoningTokens:     snapshot.Usage.ReasoningTokens,
-			ResponseBytes:       snapshot.Usage.ResponseBytes,
+			InputTokens:            snapshot.Usage.InputTokens,
+			OutputTokens:           snapshot.Usage.OutputTokens,
+			CacheReadTokens:        snapshot.Usage.CacheReadTokens,
+			CacheCreationTokens:    snapshot.Usage.CacheCreationTokens,
+			CacheCreation_5MTokens: snapshot.Usage.CacheCreation5mTokens,
+			CacheCreation_1HTokens: snapshot.Usage.CacheCreation1hTokens,
+			ReasoningTokens:        snapshot.Usage.ReasoningTokens,
+			ResponseBytes:          snapshot.Usage.ResponseBytes,
 		},
 		Upstream:         &controlv1.UpstreamResult{StatusCode: int32(snapshot.StatusCode), ErrorCode: snapshot.ErrorCode, Attempts: snapshot.Attempts},
 		StartedAtUnixMs:  state.StartedAt.UnixMilli(),
 		FinishedAtUnixMs: snapshot.FinishedAt.UnixMilli(),
 		ClientCancelled:  requeststate.ClientCancelled(r.Context()),
+		ServiceTier:      requeststate.NormalizeServiceTier(state.ServiceTier),
+		ReasoningEffort:  requeststate.NormalizeReasoningEffort(state.ReasoningEffort),
+		OpenaiWsMode:     state.OpenAIWSMode,
 	}
 	if !snapshot.FirstByteAt.IsZero() {
 		request.FirstByteAtUnixMs = snapshot.FirstByteAt.UnixMilli()

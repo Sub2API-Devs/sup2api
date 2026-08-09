@@ -24,6 +24,7 @@ type OpenAIRecordUsageInput struct {
 	APIKey               *APIKey
 	User                 *User
 	Account              *Account
+	DataPlaneID          string // Worker/data plane that executed the request; empty for main-server requests.
 	Subscription         *UserSubscription
 	InboundEndpoint      string
 	UpstreamEndpoint     string
@@ -276,6 +277,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		UserID:              user.ID,
 		APIKeyID:            apiKey.ID,
 		AccountID:           account.ID,
+		DataPlaneID:         strings.TrimSpace(input.DataPlaneID),
 		RequestID:           requestID,
 		Model:               result.Model,
 		RequestedModel:      requestedModel,

@@ -72,6 +72,8 @@ func (*Transformer) TransformRequest(request *http.Request, plan *controlv1.Exec
 	if err != nil {
 		return err
 	}
+	serviceTier, reasoningEffort := usageRecordMetadata(transformed)
+	state.SetUsageRecordMetadata(serviceTier, reasoningEffort)
 	request.Body = io.NopCloser(bytes.NewReader(transformed))
 	request.ContentLength = int64(len(transformed))
 	request.GetBody = nil
@@ -98,6 +100,30 @@ func (*Transformer) TransformRequest(request *http.Request, plan *controlv1.Exec
 		request.Header.Del("conversation_id")
 	}
 	return nil
+}
+
+// usageRecordMetadata reads the effective values after Codex request policy
+// and compatibility rewrites, so settlement records what was sent upstream.
+func usageRecordMetadata(body []byte) (serviceTier, reasoningEffort string) {
+	var value struct {
+		ServiceTier          string `json:"service_tier"`
+		ReasoningEffort      string `json:"reasoning_effort"`
+		ReasoningEffortCamel string `json:"reasoningEffort"`
+		Reasoning            struct {
+			Effort string `json:"effort"`
+		} `json:"reasoning"`
+	}
+	if json.Unmarshal(body, &value) != nil {
+		return "", ""
+	}
+	reasoningEffort = value.ReasoningEffort
+	if reasoningEffort == "" {
+		reasoningEffort = value.ReasoningEffortCamel
+	}
+	if value.Reasoning.Effort != "" {
+		reasoningEffort = value.Reasoning.Effort
+	}
+	return value.ServiceTier, reasoningEffort
 }
 
 func (*Transformer) TransformResponse(*http.Response, *controlv1.ExecutionPlan, *requeststate.State) error {

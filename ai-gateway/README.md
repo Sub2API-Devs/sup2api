@@ -32,8 +32,8 @@ small:
   CONNECT, and SOCKS5 egress without persisting proxy credentials in the WAL.
 - `sup2api_settlement` observes the streamed response and submits raw usage
   facts for authoritative pricing and persistence. Settlement facts are
-  fsynced to a bounded local WAL before the request lifecycle is released and
-  are deleted only after the control plane acknowledges them.
+  committed to a bounded local SQLite outbox before the request lifecycle is
+  released and are deleted only after NATS JetStream acknowledges persistence.
   Deferred finalization also covers ReverseProxy's streaming-abort panic path,
   so disconnects and lease revocations cannot bypass the WAL.
 - The existing application remains the authority for client API keys,
@@ -53,16 +53,17 @@ code, and starts Caddy in the same process. Browsers never call the Worker
 directly and long-lived Worker secrets are not container environment variables.
 
 - OpenAI API keys, OAuth access tokens, and refresh tokens are encrypted with
-  AES-256-GCM in a mode-0600 BoltDB vault on the mounted data volume.
+  AES-256-GCM in a mode-0600 SQLite vault on the mounted data volume. Existing
+  BoltDB vaults are migrated automatically and retained as encrypted backups.
 - The Vault key is a separate 32-byte Base64/hex value and is not derived from
   the management Bearer secret. The mode-0600 Worker configuration and data
   volume must be protected because they contain both long-lived keys.
 - PKCE state and verifier values live only in this process for 30 minutes.
   Code exchange, refresh, and account probes originate from this Worker.
 - The Worker has no Redis client, URL, password, Stream name, or Consumer Group.
-  It sends durable settlement facts over private gRPC. Sup2API publishes the
-  corresponding event to a Worker-specific Redis Stream and acknowledges the
-  RPC only after that succeeds, giving at-least-once delivery from the WAL.
+  It publishes protobuf settlement facts to NATS JetStream. Sup2API consumes
+  them with a durable pull consumer and acknowledges only after authoritative
+  settlement succeeds, giving at-least-once delivery from the SQLite outbox.
 - `/worker/v1/identity` reports stable Worker identity, the current process
   instance ID, and protocol capabilities. Redis topology remains control-plane
   owned.
@@ -96,11 +97,13 @@ UI-provisioned Worker configuration file.
 | `AI_GATEWAY_LISTEN` | `:9999` | Public Caddy listener |
 | `AI_GATEWAY_STARTUP_REQUIRED` | `true` | Fail startup if the control plane is unavailable |
 | `AI_GATEWAY_DIAL_TIMEOUT` | `5s` | Initial gRPC dial timeout |
-| `AI_GATEWAY_REQUEST_TIMEOUT` | `2s` | Admission/settlement RPC timeout |
+| `AI_GATEWAY_REQUEST_TIMEOUT` | `2s` | Admission RPC and NATS publish timeout |
 | `AI_GATEWAY_GRACE_PERIOD` | `10s` | Caddy graceful shutdown bound |
 | `AI_GATEWAY_LEASE_RENEW_INTERVAL` | `30s` | Retry interval while an acknowledged admission lease remains valid |
-| `AI_GATEWAY_SETTLEMENT_WAL_PATH` | `./data/settlements` | Durable settlement WAL directory |
-| `AI_GATEWAY_SETTLEMENT_WAL_MAX_BYTES` | `1073741824` | Fail-closed WAL capacity limit |
+| `AI_GATEWAY_SETTLEMENT_WAL_PATH` | `./data/settlements` | Durable SQLite settlement outbox directory |
+| `AI_GATEWAY_SETTLEMENT_WAL_MAX_BYTES` | `1073741824` | Fail-closed SQLite outbox payload limit |
+| `AI_GATEWAY_NATS_URL` | empty | NATS URL; configured deployments use JetStream instead of direct settlement RPC |
+| `AI_GATEWAY_NATS_SUBJECT` | `sup2api.usage.settlements.v1` | JetStream settlement subject |
 | `AI_GATEWAY_AUTH_CACHE_TTL` | `60s` | Maximum local AuthGrant lifetime |
 | `AI_GATEWAY_AUTH_CACHE_SIZE` | `65536` | Maximum local AuthGrant entries |
 | `AI_GATEWAY_WORKER_CONFIG_PATH` | `./data/worker-config.json` | Mode-0600 UI-provisioned Worker configuration |
@@ -126,8 +129,8 @@ Authority matrix:
 | Lease lifecycle | Renews while streaming; cancels upstream on rejection or expiry | Owns lease identity, expiry, reservation, and distributed concurrency |
 | Usage observation | Extracts cumulative JSON/SSE/WS counters without buffering streams | Treats submitted counters as raw facts tied to the admitted lease |
 | Final price and deduction | Never calculates or persists financial values | Calculates authoritative cost and commits DB-backed idempotent billing and usage logs |
-| Failed settlement retry | Fsyncs facts to a mode-0600 local WAL, including stream-abort paths | Uses transactional `(request_id, api_key_id)` dedup; Redis acknowledgement accelerates replay |
-| Worker consumption-log delivery | Replays settlement facts over private gRPC; has no Redis dependency | Resolves the registered Worker, publishes to its isolated Redis Stream, then acknowledges gRPC |
+| Failed settlement retry | Commits facts to a mode-0600 SQLite outbox, including stream-abort paths | Uses transactional `(request_id, api_key_id)` dedup and JetStream redelivery |
+| Worker usage delivery | Publishes SQLite outbox records to NATS JetStream; has no Redis dependency | Durable-subscribes, settles, writes `usage_logs`, then ACKs NATS |
 
 Central account routing and provider configuration are not cached in the data plane:
 every admitted request receives a fresh authoritative execution-plan snapshot.
@@ -142,7 +145,7 @@ socket security relies on filesystem ownership and permissions.
 This directory is an independent Go module so Caddy's dependency graph does
 not force version upgrades into the existing backend. The backend now exposes
 the private control-plane RPC server for key resolution, admission, leases,
-invalidation, and authoritative settlement. Standard API-key accounts and
+and invalidation; authoritative settlement arrives through NATS. Standard API-key accounts and
 explicit HTTP/SOCKS proxy profiles use the direct data path. Gemini and
 Anthropic Vertex service-account flows keep private-key exchange in the control
 plane and send only short-lived bearer tokens to the data plane. The Anthropic
@@ -220,7 +223,7 @@ change retires the old connection. Native mode is currently enabled only for
 the tested `passthrough` and `openai_codex` frame contracts; other profiles fail
 closed. `response.cancel` interrupts the active HTTP or native upstream context,
 rejects a mismatched response ID, preserves partial usage and response bytes,
-fsyncs a client-cancelled settlement, and keeps the downstream session usable.
+commits a client-cancelled settlement to SQLite, and keeps the downstream session usable.
 Overlapping `response.create` events are rejected without cancelling the active
 turn. This gives API-key, Codex OAuth, and Grok plans the same authority and
 billing boundary without sending request bodies through gRPC.

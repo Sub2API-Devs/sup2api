@@ -1620,6 +1620,7 @@ export interface UsageLogAccountSummary {
 }
 
 export interface AdminUsageLog extends UsageLog {
+  data_plane_id?: string
   upstream_model?: string | null
   model_mapping_chain?: string | null
 

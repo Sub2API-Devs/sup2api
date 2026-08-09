@@ -106,6 +106,21 @@ func TestManagerKeepsOAuthExchangeAndRefreshInsideWorker(t *testing.T) {
 	}
 }
 
+func TestManagerStatusReportsConfiguredLogTransport(t *testing.T) {
+	manager, err := New(Config{
+		WorkerID: "worker-nats", InstanceID: "instance-nats", ManagementKey: strings.Repeat("m", 32),
+		LogTransport: "nats_jetstream", VaultPath: filepath.Join(t.TempDir(), "vault.db"), VaultKey: bytes.Repeat([]byte{7}, 32),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	if got := manager.Status(context.Background())["log_transport"]; got != "nats_jetstream" {
+		t.Fatalf("log_transport = %v", got)
+	}
+}
+
 func TestParseOAuthCallbackRejectsMismatchedStateAtManagerBoundary(t *testing.T) {
 	manager, err := New(Config{
 		WorkerID: "w", InstanceID: "i", ManagementKey: strings.Repeat("x", 32),

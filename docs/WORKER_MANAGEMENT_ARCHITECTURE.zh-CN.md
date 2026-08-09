@@ -5,13 +5,14 @@
 `sup2api` 是唯一控制面，`ai-gateway` 是以独立容器运行的 Caddy Worker。标准边界如下：
 
 - 管理操作：`sup2api -> Worker HTTP/JSON /worker/v1/*`。
-- AI 请求控制与结算：`Worker -> sup2api 私有 gRPC`。
-- 消费日志：`Worker settlement WAL -> 私有 gRPC -> sup2api -> Redis Stream -> WorkerLogConsumer -> DB/UI`。
+- AI 请求准入、租约与失效通知：`Worker <-> sup2api 私有 gRPC`。
+- 使用记录：`Worker observer -> SQLite outbox -> NATS JetStream -> sup2api durable consumer -> RecordUsage -> usage_logs -> 统一 UI`。
+- `worker_logs`/Redis Stream 仅保留为兼容性 Worker 遥测副本，不是使用记录和计费的权威数据源。
 - Worker 不连接 Redis，不持有 Redis URL、账号、密码、Stream Key 或 Consumer Group。
 - Worker ID、管理密钥、Vault 密钥、控制面地址由 Worker 管理 UI 首次下发，不作为容器环境变量注入。
 - 容器生命周期仍由 Docker/Kubernetes 管理；`sup2api` 不挂载 Docker Socket。
 
-管理面选择 HTTP/JSON，是为了跨容器、跨语言、便于版本化；请求准入、租约和结算继续使用私有 gRPC，是为了保持强类型、低开销及明确的失败语义。
+管理面选择 HTTP/JSON，是为了跨容器、跨语言、便于版本化；请求准入和租约继续使用私有 gRPC。使用记录使用 NATS JetStream 解耦 Worker 与主服务器，并由 Worker SQLite outbox 和 JetStream durable consumer 共同保证至少一次投递。
 
 ## 2. 组件与信任边界
 
@@ -21,18 +22,20 @@ flowchart LR
     CP -->|"一次性 Claim / 长期 Bearer 管理"| WM["Worker 管理 API"]
     Client["AI 客户端"] --> Caddy["ai-gateway / Caddy"]
     WM --> Vault[("本地 AES-GCM Vault")]
-    Caddy --> WAL[("mode-0600 Settlement WAL")]
-    WAL -->|"SettleRequest gRPC"| CP
-    CP -->|"XADD，按 Worker 分流"| Redis[("Redis Streams")]
-    Redis --> Consumer["WorkerLogConsumer"]
-    Consumer --> DB[("sup2api DB")]
-    DB --> UI
+    Caddy --> WAL[("mode-0600 SQLite outbox")]
+    WAL -->|"JetStream publish"| NATS[("NATS JetStream")]
+    NATS -->|"durable pull consumer"| CP
+    CP -->|"RecordUsage"| UsageDB[("usage_logs")]
+    UsageDB --> UI["统一使用记录 UI"]
+    CP -.->|"兼容性遥测 XADD"| Redis[("Redis Streams")]
+    Redis -.-> Consumer["WorkerLogConsumer"]
+    Consumer -.-> LegacyDB[("worker_logs")]
 ```
 
 必须遵守的边界：
 
 1. 浏览器只访问 `sup2api`，不直接调用 Worker，也不持有长期管理密钥。
-2. Worker 只访问私有 gRPC 控制面和上游 AI 服务，不访问 Redis 或主数据库。
+2. Worker 只访问私有 gRPC 控制面、NATS 和上游 AI 服务，不访问 Redis 或主数据库。
 3. `sup2api` 只调用固定 Worker 路径，禁止把管理 API 做成任意 URL 转发器。
 4. Worker 返回账号摘要，绝不返回 API Key、access token、refresh token 或 Vault key。
 5. 生产环境应通过容器网络、防火墙、HTTPS/mTLS 隔离 `/worker/v1/*` 和 gRPC 端口。
@@ -88,7 +91,7 @@ Claim 请求包含：
 ```text
 /var/lib/ai-gateway/data/worker-config.json  mode 0600
 /var/lib/ai-gateway/data/worker-vault.db
-/var/lib/ai-gateway/data/settlements/
+/var/lib/ai-gateway/data/settlements/settlements.sqlite3
 ```
 
 `worker-config.json` 包含 Management Key 和 Vault Key，其保密性依赖宿主数据卷权限。更高安全等级应使用加密磁盘、Kubernetes Secret/KMS 包装或后续引入设备密钥封装，不能把该文件放入镜像或提交到 Git。
@@ -107,7 +110,7 @@ Claim 请求包含：
 状态转换：
 
 ```text
-unclaimed --claim--> starting --gRPC/Vault ready--> ready
+unclaimed --claim--> starting --gRPC/NATS/Vault ready--> ready
                                 \--> unready
 ready/unready --探测失败--> unreachable
 ```
@@ -129,8 +132,8 @@ Content-Type: application/json
 |---|---|
 | `GET /worker/v1/identity` | 身份和 capability 协商 |
 | `GET /worker/v1/live` | Worker 进程存活 |
-| `GET /worker/v1/ready` | Caddy、gRPC 控制面和 Vault 就绪 |
-| `GET /worker/v1/status` | 运行状态，日志传输标记为 `control_plane_grpc` |
+| `GET /worker/v1/ready` | Caddy、gRPC 控制面、NATS 发布链路和 Vault 就绪 |
+| `GET /worker/v1/status` | 运行状态；NATS 部署标记为 `nats_jetstream`，未配置 NATS 时标记兼容回退 `control_plane_grpc` |
 | `GET /worker/v1/accounts` | 本地账号摘要 |
 | `POST /worker/v1/accounts/openai/api-key` | 创建本地 API Key 账号 |
 | `POST /worker/v1/accounts/openai/oauth/start` | 创建本地 PKCE 会话 |
@@ -147,19 +150,31 @@ Content-Type: application/json
 - v1 只增加可选字段或 capability；破坏性变化发布 `/worker/v2`。
 - 错误采用稳定 `code` 和诊断 `message`，调用方不能依赖 message 文本。
 
-## 6. Redis 隔离与日志可靠性
+## 6. 使用记录可靠性与 Redis 隔离
 
 ### 6.1 唯一合法链路
 
 ```text
 AI request finished
-  -> Worker fsync settlement WAL
-  -> Worker SettleRequest(private gRPC)
+  -> Worker SQLite 事务写入 settlement outbox
+  -> Worker 发布 protobuf settlement 到 NATS JetStream
+  -> JetStream 返回持久化 ACK
+  -> Worker 删除 SQLite outbox 记录
+  -> sup2api durable consumer 接收消息
   -> sup2api authoritative settlement/dedup
+  -> sup2api RecordUsage 原子完成计费并写入 usage_logs
+  -> sup2api ACK；失败则 NAK 延迟重投
+```
+
+上述链路是主服务器和所有 Worker 共用的权威“使用记录”链路。`usage_logs.data_plane_id` 标识实际执行请求的 Worker；主服务器本地执行时该字段为空。用户、API Key、账号、分组、费用、端点等控制面数据由 `sup2api` 统一补齐，Worker 只报告请求和上游响应事实。
+
+兼容性 Worker 遥测链路为：
+
+```text
+sup2api authoritative settlement/dedup
   -> sup2api 根据 data_plane_id 查询已注册 Worker
   -> sup2api XADD 到该 Worker 独立 Redis Stream
-  -> gRPC success
-  -> Worker 删除 WAL
+  -> WorkerLogConsumer -> worker_logs
 ```
 
 主进程拥有全部 MQ topology。默认 Stream 命名为：
@@ -174,7 +189,7 @@ Consumer Group：
 sub2api-worker-logs-v1
 ```
 
-Worker 不计算、不接收也不报告 Stream Key。主进程从数据库解析 `data_plane_id` 对应的 Worker；未注册的普通数据面保持兼容，不产生 Worker Stream 日志。
+Worker 不计算、不接收也不报告 Stream Key。主进程从数据库解析 `data_plane_id` 对应的 Worker；未注册的普通数据面保持兼容，不产生 Worker Stream 遥测。`worker_logs` 不得用于计费、统一使用记录列表或 Worker 使用次数统计。
 
 ### 6.2 消息与隔离
 
@@ -195,9 +210,10 @@ Stream 消息至少包含：
 
 ### 6.3 故障语义
 
-- Redis `XADD` 失败时，gRPC 返回 `Unavailable`，Worker 不删除 WAL并重试。
-- 结算已完成但 XADD 失败时，重试会进入结算 duplicate 路径并再次尝试 XADD，不会重复扣费。
-- XADD 成功但 gRPC 响应丢失时可能重复发布；数据库唯一键 `(worker_id, event_id)` 保证幂等。
+- NATS 发布失败时，Worker 保留 SQLite outbox 记录并重试。
+- JetStream 已持久化但发布 ACK 丢失时，Worker 会用同一消息 ID 重发，由 JetStream 去重窗口消除短期重复。
+- 主服务器处理成功但消费 ACK 丢失时，消息会再次投递；权威结算使用 `(request_id, api_key_id)` 幂等声明，不会重复扣费。
+- 兼容性 Worker 遥测 XADD 失败时，主消费者 NAK；重投会进入 settlement duplicate 路径并再次尝试 XADD。
 - Consumer 只有数据库写入成功才 `XACK`，重启后用 `XAUTOCLAIM` 接管 pending 消息。
 - 因此端到端语义为 at-least-once，财务结算和日志持久化分别有幂等保护。
 
@@ -218,6 +234,8 @@ services:
       AI_GATEWAY_WORKER_CONFIG_PATH: /var/lib/ai-gateway/data/worker-config.json
       AI_GATEWAY_WORKER_VAULT_PATH: /var/lib/ai-gateway/data/worker-vault.db
       AI_GATEWAY_SETTLEMENT_WAL_PATH: /var/lib/ai-gateway/data/settlements
+      AI_GATEWAY_NATS_URL: nats://sub2api:${NATS_PASSWORD}@nats:4222
+      AI_GATEWAY_NATS_SUBJECT: sup2api.usage.settlements.v1
 ```
 
 明确禁止向 Worker 注入：
@@ -243,8 +261,9 @@ mTLS 部署目前仍通过只读 Secret 文件挂载 CA/客户端证书，并由
 | OpenAI 真实凭据 | Worker Vault | 仅账号摘要索引 |
 | OAuth PKCE 临时状态 | Worker 内存 | 仅中转 session ID |
 | 准入、租约、计费 | `sup2api` | 权威记录 |
-| Settlement WAL | Worker 数据卷 | 不保存 WAL 文件 |
-| Redis topology 和消费日志 | `sup2api` | Stream 配置、按 Worker 外键的查询副本 |
+| Settlement SQLite outbox | Worker 数据卷 | 不保存 Worker outbox 文件 |
+| 统一使用记录 | `sup2api` | `usage_logs` 权威记录，Worker 由 `data_plane_id` 标识 |
+| Redis topology 和 Worker 遥测 | `sup2api` | Stream 配置、兼容性的 `worker_logs` 查询副本 |
 | 容器生命周期 | Docker/Kubernetes | 不持有运行时控制权 |
 
 删除 `/admin/workers/{id}` 只表示解除注册，不停止容器、不删除 Worker Vault。远程重置或销毁必须设计单独的高风险端点和审计流程。

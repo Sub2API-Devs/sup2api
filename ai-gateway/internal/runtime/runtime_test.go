@@ -16,6 +16,17 @@ type fakeControlClient struct {
 	settled      chan *controlv1.SettleRequestRequest
 }
 
+type fakeSettlementPublisher struct {
+	published chan *controlv1.SettleRequestRequest
+}
+
+func (f *fakeSettlementPublisher) Publish(_ context.Context, request *controlv1.SettleRequestRequest) error {
+	f.published <- request
+	return nil
+}
+
+func (*fakeSettlementPublisher) Close() error { return nil }
+
 func (*fakeControlClient) Ready() bool { return true }
 
 func (f *fakeControlClient) ResolveAPIKey(_ context.Context, request *controlv1.ResolveAPIKeyRequest) (*controlv1.ResolveAPIKeyResponse, error) {
@@ -119,6 +130,33 @@ func TestSettlementWALReplaysAfterRuntimeRestart(t *testing.T) {
 	}
 	if records, err := afterRestart.wal.List(); err != nil || len(records) != 0 {
 		t.Fatalf("WAL after replay records=%d err=%v", len(records), err)
+	}
+}
+
+func TestSettlementUsesNATSQueuePublisherWhenConfigured(t *testing.T) {
+	client := &fakeControlClient{settled: make(chan *controlv1.SettleRequestRequest, 1)}
+	runtime, err := NewWithClient(testConfig(t, 1<<20), nil, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publisher := &fakeSettlementPublisher{published: make(chan *controlv1.SettleRequestRequest, 1)}
+	runtime.settlements = publisher
+	if err := runtime.SubmitSettlement(&controlv1.SettleRequestRequest{RequestId: "request-nats", LeaseId: "lease-nats"}); err != nil {
+		t.Fatal(err)
+	}
+	runtime.drainSettlements()
+	select {
+	case delivered := <-publisher.published:
+		if delivered.GetRequestId() != "request-nats" || delivered.GetDataPlaneId() != "node-1" {
+			t.Fatalf("published settlement = %+v", delivered)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("settlement was not published to NATS")
+	}
+	select {
+	case <-client.settled:
+		t.Fatal("NATS settlement also used the direct gRPC path")
+	default:
 	}
 }
 

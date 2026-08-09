@@ -1607,6 +1607,9 @@ type SettleRequestRequest struct {
 	FinishedAtUnixMs    int64                  `protobuf:"varint,12,opt,name=finished_at_unix_ms,json=finishedAtUnixMs,proto3" json:"finished_at_unix_ms,omitempty"`
 	ClientCancelled     bool                   `protobuf:"varint,13,opt,name=client_cancelled,json=clientCancelled,proto3" json:"client_cancelled,omitempty"`
 	DataPlaneInstanceId string                 `protobuf:"bytes,14,opt,name=data_plane_instance_id,json=dataPlaneInstanceId,proto3" json:"data_plane_instance_id,omitempty"`
+	ServiceTier         string                 `protobuf:"bytes,15,opt,name=service_tier,json=serviceTier,proto3" json:"service_tier,omitempty"`
+	ReasoningEffort     string                 `protobuf:"bytes,16,opt,name=reasoning_effort,json=reasoningEffort,proto3" json:"reasoning_effort,omitempty"`
+	OpenaiWsMode        bool                   `protobuf:"varint,17,opt,name=openai_ws_mode,json=openaiWsMode,proto3" json:"openai_ws_mode,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -1739,16 +1742,39 @@ func (x *SettleRequestRequest) GetDataPlaneInstanceId() string {
 	return ""
 }
 
+func (x *SettleRequestRequest) GetServiceTier() string {
+	if x != nil {
+		return x.ServiceTier
+	}
+	return ""
+}
+
+func (x *SettleRequestRequest) GetReasoningEffort() string {
+	if x != nil {
+		return x.ReasoningEffort
+	}
+	return ""
+}
+
+func (x *SettleRequestRequest) GetOpenaiWsMode() bool {
+	if x != nil {
+		return x.OpenaiWsMode
+	}
+	return false
+}
+
 type Usage struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	InputTokens         int64                  `protobuf:"varint,1,opt,name=input_tokens,json=inputTokens,proto3" json:"input_tokens,omitempty"`
-	OutputTokens        int64                  `protobuf:"varint,2,opt,name=output_tokens,json=outputTokens,proto3" json:"output_tokens,omitempty"`
-	CacheReadTokens     int64                  `protobuf:"varint,3,opt,name=cache_read_tokens,json=cacheReadTokens,proto3" json:"cache_read_tokens,omitempty"`
-	CacheCreationTokens int64                  `protobuf:"varint,4,opt,name=cache_creation_tokens,json=cacheCreationTokens,proto3" json:"cache_creation_tokens,omitempty"`
-	ReasoningTokens     int64                  `protobuf:"varint,5,opt,name=reasoning_tokens,json=reasoningTokens,proto3" json:"reasoning_tokens,omitempty"`
-	ResponseBytes       int64                  `protobuf:"varint,6,opt,name=response_bytes,json=responseBytes,proto3" json:"response_bytes,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	InputTokens            int64                  `protobuf:"varint,1,opt,name=input_tokens,json=inputTokens,proto3" json:"input_tokens,omitempty"`
+	OutputTokens           int64                  `protobuf:"varint,2,opt,name=output_tokens,json=outputTokens,proto3" json:"output_tokens,omitempty"`
+	CacheReadTokens        int64                  `protobuf:"varint,3,opt,name=cache_read_tokens,json=cacheReadTokens,proto3" json:"cache_read_tokens,omitempty"`
+	CacheCreationTokens    int64                  `protobuf:"varint,4,opt,name=cache_creation_tokens,json=cacheCreationTokens,proto3" json:"cache_creation_tokens,omitempty"`
+	ReasoningTokens        int64                  `protobuf:"varint,5,opt,name=reasoning_tokens,json=reasoningTokens,proto3" json:"reasoning_tokens,omitempty"`
+	ResponseBytes          int64                  `protobuf:"varint,6,opt,name=response_bytes,json=responseBytes,proto3" json:"response_bytes,omitempty"`
+	CacheCreation_5MTokens int64                  `protobuf:"varint,7,opt,name=cache_creation_5m_tokens,json=cacheCreation5mTokens,proto3" json:"cache_creation_5m_tokens,omitempty"`
+	CacheCreation_1HTokens int64                  `protobuf:"varint,8,opt,name=cache_creation_1h_tokens,json=cacheCreation1hTokens,proto3" json:"cache_creation_1h_tokens,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *Usage) Reset() {
@@ -1819,6 +1845,20 @@ func (x *Usage) GetReasoningTokens() int64 {
 func (x *Usage) GetResponseBytes() int64 {
 	if x != nil {
 		return x.ResponseBytes
+	}
+	return 0
+}
+
+func (x *Usage) GetCacheCreation_5MTokens() int64 {
+	if x != nil {
+		return x.CacheCreation_5MTokens
+	}
+	return 0
+}
+
+func (x *Usage) GetCacheCreation_1HTokens() int64 {
+	if x != nil {
+		return x.CacheCreation_1HTokens
 	}
 	return 0
 }
@@ -2230,7 +2270,7 @@ const file_api_control_v1_control_proto_rawDesc = "" +
 	"\blease_id\x18\x03 \x01(\tR\aleaseId\x12\x16\n" +
 	"\x06reason\x18\x04 \x01(\tR\x06reason\"2\n" +
 	"\x14AbortRequestResponse\x12\x1a\n" +
-	"\breleased\x18\x01 \x01(\bR\breleased\"\xf7\x04\n" +
+	"\breleased\x18\x01 \x01(\bR\breleased\"\xeb\x05\n" +
 	"\x14SettleRequestRequest\x12\"\n" +
 	"\rdata_plane_id\x18\x01 \x01(\tR\vdataPlaneId\x12\x1d\n" +
 	"\n" +
@@ -2248,14 +2288,19 @@ const file_api_control_v1_control_proto_rawDesc = "" +
 	"\x15first_byte_at_unix_ms\x18\v \x01(\x03R\x11firstByteAtUnixMs\x12-\n" +
 	"\x13finished_at_unix_ms\x18\f \x01(\x03R\x10finishedAtUnixMs\x12)\n" +
 	"\x10client_cancelled\x18\r \x01(\bR\x0fclientCancelled\x123\n" +
-	"\x16data_plane_instance_id\x18\x0e \x01(\tR\x13dataPlaneInstanceId\"\x81\x02\n" +
+	"\x16data_plane_instance_id\x18\x0e \x01(\tR\x13dataPlaneInstanceId\x12!\n" +
+	"\fservice_tier\x18\x0f \x01(\tR\vserviceTier\x12)\n" +
+	"\x10reasoning_effort\x18\x10 \x01(\tR\x0freasoningEffort\x12$\n" +
+	"\x0eopenai_ws_mode\x18\x11 \x01(\bR\fopenaiWsMode\"\xf3\x02\n" +
 	"\x05Usage\x12!\n" +
 	"\finput_tokens\x18\x01 \x01(\x03R\vinputTokens\x12#\n" +
 	"\routput_tokens\x18\x02 \x01(\x03R\foutputTokens\x12*\n" +
 	"\x11cache_read_tokens\x18\x03 \x01(\x03R\x0fcacheReadTokens\x122\n" +
 	"\x15cache_creation_tokens\x18\x04 \x01(\x03R\x13cacheCreationTokens\x12)\n" +
 	"\x10reasoning_tokens\x18\x05 \x01(\x03R\x0freasoningTokens\x12%\n" +
-	"\x0eresponse_bytes\x18\x06 \x01(\x03R\rresponseBytes\"\x96\x01\n" +
+	"\x0eresponse_bytes\x18\x06 \x01(\x03R\rresponseBytes\x127\n" +
+	"\x18cache_creation_5m_tokens\x18\a \x01(\x03R\x15cacheCreation5mTokens\x127\n" +
+	"\x18cache_creation_1h_tokens\x18\b \x01(\x03R\x15cacheCreation1hTokens\"\x96\x01\n" +
 	"\x0eUpstreamResult\x12\x1f\n" +
 	"\vstatus_code\x18\x01 \x01(\x05R\n" +
 	"statusCode\x12\x1d\n" +

@@ -397,6 +397,8 @@ type turnPayload struct {
 	raw             []byte
 	model           string
 	maxOutputTokens int64
+	serviceTier     string
+	reasoningEffort string
 }
 
 func parseTurn(frame []byte, fallbackModel string) (turnPayload, error) {
@@ -426,11 +428,24 @@ func parseTurn(frame []byte, fallbackModel string) (turnPayload, error) {
 	if number, ok := root["max_output_tokens"].(json.Number); ok {
 		maxTokens, _ = number.Int64()
 	}
+	serviceTier := strings.TrimSpace(stringValue(root["service_tier"]))
+	reasoningEffort := strings.TrimSpace(stringValue(root["reasoning_effort"]))
+	if reasoningEffort == "" {
+		reasoningEffort = strings.TrimSpace(stringValue(root["reasoningEffort"]))
+	}
+	if reasoning, ok := root["reasoning"].(map[string]any); ok {
+		if effort := strings.TrimSpace(stringValue(reasoning["effort"])); effort != "" {
+			reasoningEffort = effort
+		}
+	}
 	normalized, err := json.Marshal(root)
 	if err != nil {
 		return turnPayload{}, err
 	}
-	return turnPayload{raw: normalized, model: model, maxOutputTokens: maxTokens}, nil
+	return turnPayload{
+		raw: normalized, model: model, maxOutputTokens: maxTokens,
+		serviceTier: serviceTier, reasoningEffort: reasoningEffort,
+	}, nil
 }
 
 func stringValue(value any) string {

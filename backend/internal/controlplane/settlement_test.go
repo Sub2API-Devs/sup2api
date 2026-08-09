@@ -43,10 +43,23 @@ func TestSettlementUsageRejectsNegativeDataPlaneFacts(t *testing.T) {
 	}
 	for _, usage := range []*controlv1.Usage{
 		{InputTokens: -1}, {OutputTokens: -1}, {CacheReadTokens: -1},
-		{CacheCreationTokens: -1}, {ReasoningTokens: -1}, {ResponseBytes: -1},
+		{CacheCreationTokens: -1}, {CacheCreation_5MTokens: -1}, {CacheCreation_1HTokens: -1},
+		{ReasoningTokens: -1}, {ResponseBytes: -1},
 	} {
 		if validSettlementUsage(usage) {
 			t.Fatalf("negative usage was accepted: %+v", usage)
 		}
+	}
+}
+
+func TestSettlementUsageMetadataNormalization(t *testing.T) {
+	if got := settlementServiceTierPtr(" FAST "); got == nil || *got != "priority" {
+		t.Fatalf("service tier = %#v", got)
+	}
+	if got := settlementReasoningEffortPtr("x_high"); got == nil || *got != "xhigh" {
+		t.Fatalf("reasoning effort = %#v", got)
+	}
+	if settlementServiceTierPtr("turbo") != nil || settlementReasoningEffortPtr("extreme") != nil {
+		t.Fatal("unsupported usage metadata was accepted")
 	}
 }

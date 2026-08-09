@@ -124,6 +124,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyht
 	state.ModelValueEnd = metadata.ModelValueEnd
 	state.ModelInPath = metadata.ModelInPath
 	state.Stream = metadata.Stream
+	state.SetUsageRecordMetadata(metadata.ServiceTier, metadata.ReasoningEffort)
 	state.Admission = response
 	return next.ServeHTTP(w, r)
 }
@@ -140,6 +141,8 @@ type requestMetadata struct {
 	ModelInPath                 bool
 	AnthropicMetadataUserID     string
 	AnthropicBillingAttribution bool
+	ServiceTier                 string
+	ReasoningEffort             string
 }
 
 func readRequestMetadata(r *http.Request) requestMetadata {
@@ -204,6 +207,7 @@ func decodeTopLevelMetadata(decoder *json.Decoder) requestMetadata {
 		return requestMetadata{}
 	}
 	var metadata requestMetadata
+	nestedReasoningEffort := false
 	for decoder.More() {
 		keyToken, err := decoder.Token()
 		if err != nil {
@@ -215,6 +219,21 @@ func decodeTopLevelMetadata(decoder *json.Decoder) requestMetadata {
 			_ = decoder.Decode(&metadata.Model)
 		case "stream":
 			_ = decoder.Decode(&metadata.Stream)
+		case "service_tier":
+			_ = decoder.Decode(&metadata.ServiceTier)
+		case "reasoning_effort", "reasoningEffort":
+			var effort string
+			if err := decoder.Decode(&effort); err == nil && !nestedReasoningEffort {
+				metadata.ReasoningEffort = effort
+			}
+		case "reasoning":
+			var value struct {
+				Effort string `json:"effort"`
+			}
+			if err := decoder.Decode(&value); err == nil && strings.TrimSpace(value.Effort) != "" {
+				metadata.ReasoningEffort = value.Effort
+				nestedReasoningEffort = true
+			}
 		case "max_tokens", "max_output_tokens", "max_completion_tokens":
 			var number json.Number
 			if err := decoder.Decode(&number); err == nil {

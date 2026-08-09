@@ -208,7 +208,7 @@ func (h *bootstrapHandler) claim(w http.ResponseWriter, r *http.Request) {
 		"protocol_version": ProtocolVersion, "kind": "ai-gateway-caddy",
 		"worker_id": request.Config.WorkerID, "instance_id": h.instanceID,
 		"generation": 1, "config_revision": 1, "version": h.version,
-		"capabilities": []string{"openai_api_key", "openai_oauth_pkce", "oauth_refresh", "account_test", "grpc_settlement_logs"},
+		"capabilities": []string{"openai_api_key", "openai_oauth_pkce", "oauth_refresh", "account_test", "grpc_settlement_logs", "canonical_usage_records", "nats_jetstream_usage", "sqlite_usage_outbox"},
 		"caddy":        map[string]any{"enabled": false, "starting": true},
 	})
 	h.claimed <- &request.Config

@@ -73,6 +73,18 @@ func TestLoadDataPlaneControlDefaultsAndSecureEnablement(t *testing.T) {
 	})
 }
 
+func TestLoadUsageQueueFromEnvironment(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("USAGE_QUEUE_ENABLED", "true")
+	t.Setenv("USAGE_QUEUE_URL", "nats://app:secret@nats:4222")
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.True(t, cfg.UsageQueue.Enabled)
+	require.Equal(t, "nats://app:secret@nats:4222", cfg.UsageQueue.URL)
+	require.Equal(t, "SUP2API_USAGE", cfg.UsageQueue.Stream)
+	require.Equal(t, "sup2api.usage.settlements.v1", cfg.UsageQueue.Subject)
+}
+
 func TestLoadRedisUsernameFromEnvironment(t *testing.T) {
 	resetViperWithJWTSecret(t)
 	t.Setenv("REDIS_USERNAME", "app-user")

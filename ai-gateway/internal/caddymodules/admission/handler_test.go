@@ -26,7 +26,7 @@ func (f *fakeAdmissionRuntime) OpenRequest(_ context.Context, request *controlv1
 }
 
 func TestHandlerAdmitsAndPreservesRequestBody(t *testing.T) {
-	body := `{"model":"gpt-5.4","stream":true,"max_output_tokens":2048,"input":"hello"}`
+	body := `{"model":"gpt-5.4","stream":true,"max_output_tokens":2048,"service_tier":"fast","reasoning_effort":"low","reasoning":{"effort":"HIGH"},"input":"hello"}`
 	runtime := &fakeAdmissionRuntime{
 		response: &controlv1.OpenRequestResponse{
 			Decision: controlv1.Decision_DECISION_ALLOW,
@@ -75,6 +75,9 @@ func TestHandlerAdmitsAndPreservesRequestBody(t *testing.T) {
 		t.Fatalf("anthropic beta metadata = %q", runtime.request.GetAnthropicBeta())
 	}
 	state, _ := requeststate.FromContext(request.Context())
+	if state.ServiceTier != "priority" || state.ReasoningEffort != "high" {
+		t.Fatalf("usage metadata tier=%q effort=%q", state.ServiceTier, state.ReasoningEffort)
+	}
 	if got := body[state.ModelValueStart:state.ModelValueEnd]; got != `"gpt-5.4"` {
 		t.Fatalf("model range = %q (%d:%d)", got, state.ModelValueStart, state.ModelValueEnd)
 	}
@@ -128,5 +131,17 @@ func TestReadRequestMetadataExtractsAnthropicOAuthSignals(t *testing.T) {
 	preserved, err := io.ReadAll(request.Body)
 	if err != nil || string(preserved) != body {
 		t.Fatalf("body was not preserved: %q err=%v", preserved, err)
+	}
+}
+
+func TestReadRequestMetadataPrefersNestedReasoningEffortRegardlessOfFieldOrder(t *testing.T) {
+	for _, body := range []string{
+		`{"reasoning":{"effort":"high"},"reasoning_effort":"low"}`,
+		`{"reasoning_effort":"low","reasoning":{"effort":"high"}}`,
+	} {
+		request := httptest.NewRequest(http.MethodPost, "http://gateway.test/v1/responses", strings.NewReader(body))
+		if got := readRequestMetadata(request).ReasoningEffort; got != "high" {
+			t.Fatalf("reasoning effort = %q for %s", got, body)
+		}
 	}
 }

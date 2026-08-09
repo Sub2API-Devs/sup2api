@@ -292,7 +292,7 @@ SELECT w.id, w.name, w.base_url, w.management_key_encrypted, w.remote_worker_id,
        w.last_heartbeat_at, w.last_heartbeat_latency_ms, w.consecutive_failures,
        w.heartbeat_interval_seconds, w.heartbeat_timeout_seconds,
        (SELECT COUNT(*) FROM worker_accounts wa WHERE wa.worker_id=w.id) AS account_count,
-       (SELECT COUNT(*) FROM worker_logs wl WHERE wl.worker_id=w.id) AS log_count,
+       (SELECT COUNT(*) FROM usage_logs ul WHERE ul.data_plane_id=w.remote_worker_id) AS log_count,
        w.last_error, w.created_at, w.updated_at
 FROM workers w`
 

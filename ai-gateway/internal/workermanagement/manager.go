@@ -36,6 +36,7 @@ type Config struct {
 	InstanceID    string
 	ManagementKey string
 	Version       string
+	LogTransport  string
 	VaultPath     string
 	VaultKey      []byte
 	AuthorizeURL  string
@@ -92,6 +93,7 @@ func New(cfg Config) (*Manager, error) {
 	cfg.WorkerID = strings.TrimSpace(cfg.WorkerID)
 	cfg.InstanceID = strings.TrimSpace(cfg.InstanceID)
 	cfg.ManagementKey = strings.TrimSpace(cfg.ManagementKey)
+	cfg.LogTransport = strings.TrimSpace(cfg.LogTransport)
 	if cfg.WorkerID == "" || cfg.InstanceID == "" {
 		return nil, errors.New("worker and instance IDs are required")
 	}
@@ -109,6 +111,9 @@ func New(cfg Config) (*Manager, error) {
 	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
+	}
+	if cfg.LogTransport == "" {
+		cfg.LogTransport = "control_plane_grpc"
 	}
 	vault, err := workervault.Open(cfg.VaultPath, cfg.VaultKey)
 	if err != nil {
@@ -144,7 +149,7 @@ func (m *Manager) Status(_ context.Context) map[string]any {
 	status := map[string]any{
 		"worker_id": m.WorkerID(), "instance_id": m.InstanceID(),
 		"vault_ready": accountErr == nil, "account_count": len(accounts),
-		"log_transport": "control_plane_grpc",
+		"log_transport": m.cfg.LogTransport,
 	}
 	if accountErr != nil {
 		status["vault_error"] = accountErr.Error()

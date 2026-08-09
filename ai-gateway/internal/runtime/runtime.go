@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/authcache"
 	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/controlplane"
 	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/requeststate"
+	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/settlementqueue"
 	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/settlementwal"
 	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/workermanagement"
 	"go.uber.org/zap"
@@ -35,6 +37,8 @@ type Config struct {
 	RequestTimeout        time.Duration
 	SettlementWALPath     string
 	SettlementWALMaxBytes int64
+	NATSURL               string
+	NATSSubject           string
 	AuthCacheTTL          time.Duration
 	AuthCacheSize         int
 	TLSCAFile             string
@@ -63,6 +67,7 @@ type Runtime struct {
 	sequence atomic.Int64
 
 	wal            *settlementwal.Store
+	settlements    settlementqueue.Publisher
 	billingHealthy atomic.Bool
 	settlementWake chan struct{}
 	stop           chan struct{}
@@ -107,12 +112,18 @@ func New(cfg Config, logger *zap.Logger) (*Runtime, error) {
 		stop:           make(chan struct{}),
 	}
 	if cfg.WorkerManagementKey != "" {
+		logTransport := "control_plane_grpc"
+		if strings.TrimSpace(cfg.NATSURL) != "" {
+			logTransport = "nats_jetstream"
+		}
 		manager, managerErr := workermanagement.New(workermanagement.Config{
 			WorkerID: cfg.WorkerID, InstanceID: cfg.WorkerInstanceID,
 			ManagementKey: cfg.WorkerManagementKey, Version: cfg.WorkerVersion,
-			VaultPath: cfg.WorkerVaultPath, VaultKey: cfg.WorkerVaultKey,
+			LogTransport: logTransport,
+			VaultPath:    cfg.WorkerVaultPath, VaultKey: cfg.WorkerVaultKey,
 		})
 		if managerErr != nil {
+			_ = wal.Close()
 			return nil, fmt.Errorf("create worker manager: %w", managerErr)
 		}
 		runtime.worker = manager
@@ -135,6 +146,13 @@ func NewWithClient(cfg Config, logger *zap.Logger, client controlplane.Client) (
 }
 
 func (r *Runtime) Start(ctx context.Context) error {
+	if r.cfg.NATSURL != "" {
+		publisher, err := settlementqueue.New(r.cfg.NATSURL, r.cfg.NATSSubject, r.cfg.DialTimeout)
+		if err != nil {
+			return err
+		}
+		r.settlements = publisher
+	}
 	dialCtx, cancel := context.WithTimeout(ctx, r.cfg.DialTimeout)
 	defer cancel()
 
@@ -149,6 +167,10 @@ func (r *Runtime) Start(ctx context.Context) error {
 		ServerName:   r.cfg.TLSServerName,
 	})
 	if err != nil {
+		if r.settlements != nil {
+			_ = r.settlements.Close()
+			r.settlements = nil
+		}
 		return err
 	}
 
@@ -183,6 +205,13 @@ func (r *Runtime) Stop() error {
 	}
 	if r.worker != nil {
 		result = errors.Join(result, r.worker.Close())
+	}
+	if r.settlements != nil {
+		result = errors.Join(result, r.settlements.Close())
+		r.settlements = nil
+	}
+	if r.wal != nil {
+		result = errors.Join(result, r.wal.Close())
 	}
 	return result
 }
@@ -388,20 +417,11 @@ func (r *Runtime) drainSettlements() {
 	}
 	deleted := false
 	for _, record := range records {
-		client, clientErr := r.activeClient()
-		if clientErr != nil {
-			r.logger.Warn("settlement retained while control plane is unavailable", zap.Error(clientErr))
-			return
-		}
 		ctx, cancel := context.WithTimeout(context.Background(), r.cfg.RequestTimeout)
-		response, settleErr := client.SettleRequest(ctx, record.Request)
+		settleErr := r.deliverSettlement(ctx, record.Request)
 		cancel()
 		if settleErr != nil {
-			r.logger.Error("settlement RPC failed; WAL record retained", zap.String("request_id", record.Request.GetRequestId()), zap.Error(settleErr))
-			continue
-		}
-		if response == nil || (!response.GetAccepted() && !response.GetDuplicate()) {
-			r.logger.Error("settlement was not acknowledged; WAL record retained", zap.String("request_id", record.Request.GetRequestId()))
+			r.logger.Error("settlement delivery failed; WAL record retained", zap.String("request_id", record.Request.GetRequestId()), zap.Error(settleErr))
 			continue
 		}
 		if deleteErr := r.wal.Delete(record); deleteErr != nil {
@@ -414,6 +434,24 @@ func (r *Runtime) drainSettlements() {
 	if deleted {
 		r.billingHealthy.Store(r.wal.Bytes() < r.wal.MaxBytes())
 	}
+}
+
+func (r *Runtime) deliverSettlement(ctx context.Context, request *controlv1.SettleRequestRequest) error {
+	if r.settlements != nil {
+		return r.settlements.Publish(ctx, request)
+	}
+	client, err := r.activeClient()
+	if err != nil {
+		return err
+	}
+	response, err := client.SettleRequest(ctx, request)
+	if err != nil {
+		return err
+	}
+	if response == nil || (!response.GetAccepted() && !response.GetDuplicate()) {
+		return fmt.Errorf("settlement was not acknowledged")
+	}
+	return nil
 }
 
 func (r *Runtime) runInvalidationWorker(ctx context.Context) {

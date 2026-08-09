@@ -45,8 +45,8 @@ func (noopNativeTransformer) TransformResponse(*http.Response, *controlv1.Execut
 }
 
 func TestParseTurnDefaultsTypeAndReusesSessionModel(t *testing.T) {
-	first, err := parseTurn([]byte(`{"model":"gpt-client","max_output_tokens":123,"input":"hello"}`), "")
-	if err != nil || first.model != "gpt-client" || first.maxOutputTokens != 123 {
+	first, err := parseTurn([]byte(`{"model":"gpt-client","max_output_tokens":123,"service_tier":"fast","reasoning_effort":"low","reasoning":{"effort":"high"},"input":"hello"}`), "")
+	if err != nil || first.model != "gpt-client" || first.maxOutputTokens != 123 || first.serviceTier != "fast" || first.reasoningEffort != "high" {
 		t.Fatalf("first=%+v err=%v", first, err)
 	}
 	second, err := parseTurn([]byte(`{"type":"response.create","input":"continue"}`), first.model)

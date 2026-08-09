@@ -21,3 +21,13 @@ func TestObserverExtractsNestedJSONProviderVariants(t *testing.T) {
 		t.Fatalf("usage = %+v", usage)
 	}
 }
+
+func TestObserverExtractsCacheCreationTTLBreakdown(t *testing.T) {
+	observer := New("text/event-stream")
+	observer.Write([]byte("data: {\"usage\":{\"cache_creation_input_tokens\":20,\"cache_creation\":{\"ephemeral_5m_input_tokens\":12,\"ephemeral_1h_input_tokens\":8}}}\n\n"))
+	observer.Write([]byte("data: {\"usage\":{\"cache_creation_5m_input_tokens\":14,\"cache_creation_1h_input_tokens\":9}}\n\n"))
+	usage := observer.Finalize()
+	if usage.CacheCreationTokens != 20 || usage.CacheCreation5mTokens != 14 || usage.CacheCreation1hTokens != 9 {
+		t.Fatalf("usage = %+v", usage)
+	}
+}

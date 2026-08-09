@@ -221,6 +221,9 @@ message SettleRequestRequest {
   int64 finished_at_unix_ms = 12;
   bool client_cancelled = 13;
   string data_plane_instance_id = 14;
+  string service_tier = 15;
+  string reasoning_effort = 16;
+  bool openai_ws_mode = 17;
 }
 
 message Usage {
@@ -230,6 +233,8 @@ message Usage {
   int64 cache_creation_tokens = 4;
   int64 reasoning_tokens = 5;
   int64 response_bytes = 6;
+  int64 cache_creation_5m_tokens = 7;
+  int64 cache_creation_1h_tokens = 8;
 }
 
 message UpstreamResult {

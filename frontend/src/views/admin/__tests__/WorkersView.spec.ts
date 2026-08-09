@@ -4,18 +4,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import WorkersView from '@/views/admin/WorkersView.vue'
 
-const { list, update, setEnabled, listAccounts, listLogs, showSuccess, showError } = vi.hoisted(() => ({
-  list: vi.fn(), update: vi.fn(), setEnabled: vi.fn(), listAccounts: vi.fn(), listLogs: vi.fn(),
+const { list, update, setEnabled, listAccounts, push, showSuccess, showError } = vi.hoisted(() => ({
+  list: vi.fn(), update: vi.fn(), setEnabled: vi.fn(), listAccounts: vi.fn(), push: vi.fn(),
   showSuccess: vi.fn(), showError: vi.fn()
 }))
 
 vi.mock('@/api/admin', () => ({
   adminAPI: { workers: {
-    list, update, setEnabled, listAccounts, listLogs,
+    list, update, setEnabled, listAccounts,
     create: vi.fn(), remove: vi.fn(), testConnection: vi.fn(), createAPIKeyAccount: vi.fn(),
     startOAuth: vi.fn(), completeOAuth: vi.fn(), refreshAccount: vi.fn(), testAccount: vi.fn(), deleteAccount: vi.fn()
   }}
 }))
+vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showSuccess, showError, showWarning: vi.fn() }) }))
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
@@ -52,20 +53,19 @@ describe('WorkersView operations table', () => {
     update.mockReset().mockImplementation(async (_id, input) => ({ ...worker, ...input }))
     setEnabled.mockReset().mockImplementation(async (_id, enabled) => ({ ...worker, enabled, status: enabled ? 'unknown' : 'disabled' }))
     listAccounts.mockReset().mockResolvedValue([])
-    listLogs.mockReset().mockResolvedValue([])
+    push.mockReset().mockResolvedValue(undefined)
     showSuccess.mockReset(); showError.mockReset()
   })
   afterEach(() => vi.useRealTimers())
 
-  it('filters rows and opens the selected Worker consumption logs', async () => {
+  it('filters rows and opens the selected Worker usage records', async () => {
     const wrapper = mountView(); await flushPromises()
     expect(wrapper.text()).toContain('Local Gateway')
     await wrapper.get('input[placeholder="admin.workers.searchPlaceholder"]').setValue('missing')
     expect(wrapper.text()).not.toContain('Local Gateway')
     await wrapper.get('input[placeholder="admin.workers.searchPlaceholder"]').setValue('gateway-local')
-    await wrapper.get('[data-testid="worker-logs"]').trigger('click'); await flushPromises()
-    expect(listAccounts).toHaveBeenCalledWith(1)
-    expect(listLogs).toHaveBeenCalledWith(1, 50, undefined)
+    await wrapper.get('[data-testid="worker-usage"]').trigger('click'); await flushPromises()
+    expect(push).toHaveBeenCalledWith({ name: 'AdminUsage', query: { worker_id: '1', worker_name: 'Local Gateway' } })
   })
 
   it('updates the enabled gate and submits a complete edit payload', async () => {
@@ -101,25 +101,21 @@ describe('WorkersView operations table', () => {
     const workerB = { ...worker, id: 2, name: 'Gateway B', remote_worker_id: 'gateway-b' }
     list.mockResolvedValueOnce([{ ...worker }, workerB])
     const pendingAccounts = new Map<number, (value: unknown[]) => void>()
-    const pendingLogs = new Map<number, (value: unknown[]) => void>()
     listAccounts.mockImplementation((id: number) => new Promise((resolve) => pendingAccounts.set(id, resolve)))
-    listLogs.mockImplementation((id: number) => new Promise((resolve) => pendingLogs.set(id, resolve)))
     const wrapper = mountView(); await flushPromises()
 
-    const logButtons = wrapper.findAll('[data-testid="worker-logs"]')
-    await logButtons[0].trigger('click')
-    await logButtons[1].trigger('click')
-    pendingAccounts.get(2)?.([])
-    pendingLogs.get(2)?.([{ id: 22, worker_id: 2, event_id: 'b', event_type: 'consume', instance_id: '', request_id: 'request-b', channel_id: 1, model_name: 'model-b', worker_created_at: 0, payload: {}, consumed_at: '2026-08-09T10:00:00Z' }])
+    const accountButtons = wrapper.findAll('[data-testid="worker-accounts"]')
+    await accountButtons[0].trigger('click')
+    await accountButtons[1].trigger('click')
+    pendingAccounts.get(2)?.([{ id: 22, worker_id: 2, remote_account_id: 'account-b', name: 'Account B', kind: 'openai_api_key', status: 'active', metadata: {}, created_at: '', updated_at: '' }])
     await flushPromises()
     expect(wrapper.text()).toContain('Gateway B')
-    expect(wrapper.text()).toContain('request-b')
+    expect(wrapper.text()).toContain('Account B')
 
-    pendingAccounts.get(1)?.([])
-    pendingLogs.get(1)?.([{ id: 11, worker_id: 1, event_id: 'a', event_type: 'consume', instance_id: '', request_id: 'stale-request-a', channel_id: 1, model_name: 'model-a', worker_created_at: 0, payload: {}, consumed_at: '2026-08-09T10:00:00Z' }])
+    pendingAccounts.get(1)?.([{ id: 11, worker_id: 1, remote_account_id: 'stale', name: 'Stale Account', kind: 'openai_api_key', status: 'active', metadata: {}, created_at: '', updated_at: '' }])
     await flushPromises()
-    expect(wrapper.text()).toContain('request-b')
-    expect(wrapper.text()).not.toContain('stale-request-a')
+    expect(wrapper.text()).toContain('Account B')
+    expect(wrapper.text()).not.toContain('Stale Account')
   })
 
   it('refreshes heartbeat state automatically every ten seconds', async () => {

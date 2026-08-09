@@ -97,11 +97,11 @@
                 </td>
                 <td>
                   <div class="flex flex-col items-start gap-1">
-                    <button class="whitespace-nowrap rounded-md bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100 dark:bg-primary-950/30 dark:text-primary-300" @click="openWorkerDetail(worker, 'accounts')">
+                    <button class="whitespace-nowrap rounded-md bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100 dark:bg-primary-950/30 dark:text-primary-300" data-testid="worker-accounts" @click="openWorkerDetail(worker)">
                       {{ t('admin.workers.accounts') }} {{ worker.account_count ?? 0 }}
                     </button>
-                    <button class="whitespace-nowrap rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200 dark:bg-dark-700 dark:text-gray-200" data-testid="worker-logs" @click="openWorkerDetail(worker, 'logs')">
-                      {{ t('admin.workers.consumeLogs') }} {{ worker.log_count ?? 0 }}
+                    <button class="whitespace-nowrap rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200 dark:bg-dark-700 dark:text-gray-200" data-testid="worker-usage" @click="openWorkerUsage(worker)">
+                      {{ t('admin.workers.usageRecords') }} {{ worker.log_count ?? 0 }}
                     </button>
                   </div>
                 </td>
@@ -109,7 +109,7 @@
                   <div class="flex justify-end gap-1">
                     <button class="worker-action" :title="t('common.edit')" data-testid="edit-worker" @click="openEditWorkerDialog(worker)"><Icon name="edit" size="sm" /></button>
                     <button class="worker-action" :title="t('admin.workers.testConnection')" :disabled="isBusy(`worker-test-${worker.id}`)" @click="testWorker(worker)"><Icon name="play" size="sm" /></button>
-                    <button class="worker-action" :title="t('admin.workers.consumeLogs')" @click="openWorkerDetail(worker, 'logs')"><Icon name="document" size="sm" /></button>
+                    <button class="worker-action" :title="t('admin.workers.usageRecords')" @click="openWorkerUsage(worker)"><Icon name="document" size="sm" /></button>
                     <button class="worker-action text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30" :title="t('common.delete')" @click="workerPendingDelete = worker"><Icon name="trash" size="sm" /></button>
                   </div>
                 </td>
@@ -190,12 +190,9 @@
             <div class="flex items-center gap-2"><span class="font-medium text-gray-900 dark:text-white">{{ selectedWorker.name }}</span><span :class="['badge', workerStatusClass(selectedWorker)]">{{ workerStatusLabel(selectedWorker) }}</span></div>
             <div class="mt-1 font-mono text-xs text-gray-400">{{ selectedWorker.remote_worker_id }} · {{ selectedWorker.base_url }}</div>
           </div>
-          <div class="flex rounded-lg bg-white p-1 shadow-sm dark:bg-dark-900">
-            <button v-for="tab in tabs" :key="tab.value" class="rounded-md px-4 py-2 text-sm font-medium" :class="activeTab === tab.value ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/40 dark:text-primary-300' : 'text-gray-500'" @click="activeTab = tab.value">{{ tab.label }}</button>
-          </div>
         </div>
 
-        <div v-if="activeTab === 'accounts'">
+        <div>
           <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
             <p class="text-sm text-gray-500">{{ t('admin.workers.accountsHint') }}</p>
             <div class="flex gap-2"><button class="btn btn-secondary" @click="loadAccounts"><Icon name="refresh" size="sm" /></button><button class="btn btn-secondary" @click="openOAuthDialog">{{ t('admin.workers.addOAuth') }}</button><button class="btn btn-primary" @click="openAPIKeyDialog">{{ t('admin.workers.addApiKey') }}</button></div>
@@ -209,14 +206,6 @@
           </div>
         </div>
 
-        <div v-else>
-          <div class="mb-4 flex items-center justify-between"><p class="text-sm text-gray-500">{{ t('admin.workers.logsHint') }}</p><button class="btn btn-secondary" @click="loadLogs(false)"><Icon name="refresh" size="sm" class="mr-2" />{{ t('common.refresh') }}</button></div>
-          <div class="overflow-x-auto rounded-xl border border-gray-200 dark:border-dark-700"><table class="w-full min-w-[840px] text-left text-sm"><thead class="bg-gray-50 dark:bg-dark-800"><tr><th>{{ t('admin.workers.time') }}</th><th>{{ t('admin.workers.requestId') }}</th><th>{{ t('admin.workers.model') }}</th><th>{{ t('admin.workers.channel') }}</th><th>{{ t('admin.workers.tokens') }}</th><th>{{ t('admin.workers.latency') }}</th></tr></thead><tbody>
-            <tr v-if="detailLoading && logs.length === 0"><td colspan="6" class="py-12 text-center"><LoadingSpinner /></td></tr><tr v-else-if="logs.length === 0"><td colspan="6" class="py-12 text-center text-gray-500">{{ t('admin.workers.noLogs') }}</td></tr>
-            <tr v-for="entry in logs" v-else :key="entry.id"><td class="whitespace-nowrap">{{ logTime(entry) }}</td><td class="max-w-[200px] truncate font-mono text-xs">{{ entry.request_id || '-' }}</td><td>{{ entry.model_name || '-' }}</td><td>{{ entry.channel_id || '-' }}</td><td>{{ payloadNumber(entry, 'total_tokens') }}</td><td>{{ payloadNumber(entry, 'use_time', 's') }}</td></tr>
-          </tbody></table></div>
-          <div v-if="logs.length >= logPageSize" class="mt-4 text-center"><button class="btn btn-secondary" @click="loadLogs(true)">{{ t('admin.workers.loadMore') }}</button></div>
-        </div>
       </div>
     </BaseDialog>
 
@@ -239,7 +228,8 @@
 <script setup lang="ts">
 import { computed, defineComponent, h, onMounted, onUnmounted, reactive, ref, type PropType } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { adminAPI, type Worker, type WorkerAccount, type WorkerAccountInput, type WorkerLog } from '@/api/admin'
+import { useRouter } from 'vue-router'
+import { adminAPI, type Worker, type WorkerAccount, type WorkerAccountInput } from '@/api/admin'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -252,12 +242,11 @@ import { formatDateTime } from '@/utils/format'
 import { sanitizeUrl } from '@/utils/url'
 
 const { t } = useI18n()
+const router = useRouter()
 const appStore = useAppStore()
 const workers = ref<Worker[]>([])
 const accounts = ref<WorkerAccount[]>([])
-const logs = ref<WorkerLog[]>([])
 const selectedWorker = ref<Worker | null>(null)
-const activeTab = ref<'accounts' | 'logs'>('accounts')
 const loading = ref(false)
 const detailLoading = ref(false)
 const busyAction = ref('')
@@ -271,7 +260,6 @@ const showAPIKeyDialog = ref(false)
 const showOAuthDialog = ref(false)
 const workerPendingDelete = ref<Worker | null>(null)
 const accountPendingDelete = ref<{ workerId: number; account: WorkerAccount } | null>(null)
-const logPageSize = 50
 let refreshTimer: ReturnType<typeof setInterval> | undefined
 let workersRequestSequence = 0
 let detailPendingRequests = 0
@@ -293,8 +281,7 @@ const filteredWorkers = computed(() => workers.value.filter((worker) => {
 }))
 const healthyCount = computed(() => workers.value.filter(isWorkerHealthy).length)
 const workerDialogTitle = computed(() => workerDialogMode.value === 'create' ? t('admin.workers.addWorker') : t('admin.workers.editWorker'))
-const detailTitle = computed(() => `${selectedWorker.value?.name || ''} · ${activeTab.value === 'logs' ? t('admin.workers.consumeLogs') : t('admin.workers.accounts')}`)
-const tabs = computed(() => [{ value: 'accounts' as const, label: `${t('admin.workers.accounts')} (${accounts.value.length})` }, { value: 'logs' as const, label: `${t('admin.workers.consumeLogs')} (${logs.value.length})` }])
+const detailTitle = computed(() => `${selectedWorker.value?.name || ''} · ${t('admin.workers.accounts')}`)
 const oauthAuthorizeUrl = computed(() => oauthSession.value ? sanitizeUrl(oauthSession.value.authorize_url) : '')
 
 const AccountFields = defineComponent({
@@ -322,12 +309,12 @@ async function setWorkerEnabled(worker: Worker, enabled: boolean) { if (isBusy(`
 async function testWorker(worker: Worker) { busyAction.value = `worker-test-${worker.id}`; try { await adminAPI.workers.testConnection(worker.id); await loadWorkers(); appStore.showSuccess(t('admin.workers.connectionHealthy')) } catch (error) { await loadWorkers(); appStore.showError(errorMessage(error, t('admin.workers.connectionFailed'))) } finally { busyAction.value = '' } }
 async function deleteWorker() { const worker = workerPendingDelete.value; if (!worker) return; busyAction.value = 'worker-delete'; try { await adminAPI.workers.remove(worker.id); workerPendingDelete.value = null; await loadWorkers(); appStore.showSuccess(t('admin.workers.workerDeleted')) } catch (error) { appStore.showError(errorMessage(error, t('admin.workers.deleteFailed'))) } finally { busyAction.value = '' } }
 
-function closeDetailDialog() { showDetailDialog.value = false; showAPIKeyDialog.value = false; closeOAuthDialog(); selectedWorker.value = null; accounts.value = []; logs.value = [] }
+function closeDetailDialog() { showDetailDialog.value = false; showAPIKeyDialog.value = false; closeOAuthDialog(); selectedWorker.value = null; accounts.value = [] }
 function beginDetailRequest() { detailPendingRequests += 1; detailLoading.value = true }
 function finishDetailRequest() { detailPendingRequests = Math.max(0, detailPendingRequests - 1); detailLoading.value = detailPendingRequests > 0 }
-async function openWorkerDetail(worker: Worker, tab: 'accounts' | 'logs') { selectedWorker.value = worker; activeTab.value = tab; accounts.value = []; logs.value = []; showDetailDialog.value = true; await Promise.all([loadAccounts(), loadLogs(false)]) }
+async function openWorkerDetail(worker: Worker) { selectedWorker.value = worker; accounts.value = []; showDetailDialog.value = true; await loadAccounts() }
+function openWorkerUsage(worker: Worker) { void router.push({ name: 'AdminUsage', query: { worker_id: String(worker.id), worker_name: worker.name } }) }
 async function loadAccounts() { const workerId = selectedWorker.value?.id; if (!workerId) return; beginDetailRequest(); try { const nextAccounts = await adminAPI.workers.listAccounts(workerId); if (selectedWorker.value?.id === workerId) accounts.value = nextAccounts } catch (error) { if (selectedWorker.value?.id === workerId) appStore.showError(errorMessage(error, t('admin.workers.accountsLoadFailed'))) } finally { finishDetailRequest() } }
-async function loadLogs(append: boolean) { const workerId = selectedWorker.value?.id; if (!workerId) return; const beforeId = append ? logs.value.at(-1)?.id : undefined; beginDetailRequest(); try { const page = await adminAPI.workers.listLogs(workerId, logPageSize, beforeId); if (selectedWorker.value?.id === workerId) logs.value = append ? [...logs.value, ...page] : page } catch (error) { if (selectedWorker.value?.id === workerId) appStore.showError(errorMessage(error, t('admin.workers.logsLoadFailed'))) } finally { finishDetailRequest() } }
 function openAPIKeyDialog() { showAPIKeyDialog.value = selectedWorker.value !== null }
 async function createAPIKeyAccount() { const workerId = selectedWorker.value?.id; if (!workerId) return; busyAction.value = 'account-create'; try { await adminAPI.workers.createAPIKeyAccount(workerId, { ...accountForm }); showAPIKeyDialog.value = false; Object.assign(accountForm, { ...emptyAccountForm(), api_key: '' }); await loadAccounts(); await loadWorkers(); appStore.showSuccess(t('admin.workers.accountCreated')) } catch (error) { appStore.showError(errorMessage(error, t('admin.workers.accountCreateFailed'))) } finally { busyAction.value = '' } }
 function openOAuthDialog() { if (!selectedWorker.value) return; oauthSession.value = null; oauthCallbackInput.value = ''; Object.assign(oauthAccountForm, emptyAccountForm()); showOAuthDialog.value = true }
@@ -338,8 +325,6 @@ async function refreshAccount(account: WorkerAccount) { const workerId = selecte
 async function testAccount(account: WorkerAccount) { const workerId = selectedWorker.value?.id; if (!workerId) return; try { const model = metadataText(account, 'test_model') || metadataText(account, 'models').split(',')[0]?.trim(); await adminAPI.workers.testAccount(workerId, account.remote_account_id, { model: model || undefined }); appStore.showSuccess(t('admin.workers.accountHealthy')) } catch (error) { appStore.showError(errorMessage(error, t('admin.workers.accountTestFailed'))) } }
 async function deleteAccount() { const pending = accountPendingDelete.value; if (!pending) return; try { await adminAPI.workers.deleteAccount(pending.workerId, pending.account.remote_account_id); accountPendingDelete.value = null; await loadAccounts(); await loadWorkers(); appStore.showSuccess(t('admin.workers.accountDeleted')) } catch (error) { appStore.showError(errorMessage(error, t('admin.workers.accountDeleteFailed'))) } }
 function metadataText(account: WorkerAccount, key: string) { const value = account.metadata?.[key]; return value == null ? '' : String(value) }
-function logTime(entry: WorkerLog) { return entry.worker_created_at > 0 ? formatDateTime(new Date(entry.worker_created_at * 1000)) : formatDateTime(entry.consumed_at) }
-function payloadNumber(entry: WorkerLog, key: string, suffix = '') { const value = entry.payload?.[key]; return value == null || value === '' ? '-' : `${value}${suffix}` }
 
 onMounted(async () => { await loadWorkers(true); refreshTimer = setInterval(() => loadWorkers(false), 10_000) })
 onUnmounted(() => { if (refreshTimer) clearInterval(refreshTimer) })

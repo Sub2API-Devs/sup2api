@@ -63,8 +63,9 @@ func (h *Handler) executeTurn(ctx context.Context, connection *websocket.Conn, i
 	}
 	turnState := &requeststate.State{
 		RequestID: turnID, ClientIP: connectionState.ClientIP, RequestedModel: payload.model,
-		Stream: true, Auth: grant.Clone(), Admission: response, StartedAt: time.Now(),
+		Stream: true, OpenAIWSMode: true, Auth: grant.Clone(), Admission: response, StartedAt: time.Now(),
 	}
+	turnState.SetUsageRecordMetadata(payload.serviceTier, payload.reasoningEffort)
 	turnCtx, cancel := context.WithCancelCause(ctx)
 	renewDone := make(chan struct{})
 	go h.renewTurn(turnCtx, cancel, renewDone, turnState)
@@ -180,10 +181,13 @@ func (h *Handler) finishTurn(ctx context.Context, state *requeststate.State, tur
 		Usage: &controlv1.Usage{
 			InputTokens: snapshot.Usage.InputTokens, OutputTokens: snapshot.Usage.OutputTokens,
 			CacheReadTokens: snapshot.Usage.CacheReadTokens, CacheCreationTokens: snapshot.Usage.CacheCreationTokens,
+			CacheCreation_5MTokens: snapshot.Usage.CacheCreation5mTokens, CacheCreation_1HTokens: snapshot.Usage.CacheCreation1hTokens,
 			ReasoningTokens: snapshot.Usage.ReasoningTokens, ResponseBytes: snapshot.Usage.ResponseBytes,
 		},
 		Upstream:        &controlv1.UpstreamResult{StatusCode: int32(snapshot.StatusCode), ErrorCode: snapshot.ErrorCode, Attempts: snapshot.Attempts},
 		StartedAtUnixMs: state.StartedAt.UnixMilli(), FinishedAtUnixMs: snapshot.FinishedAt.UnixMilli(), ClientCancelled: ctx.Err() != nil,
+		ServiceTier: requeststate.NormalizeServiceTier(state.ServiceTier), ReasoningEffort: requeststate.NormalizeReasoningEffort(state.ReasoningEffort),
+		OpenaiWsMode: state.OpenAIWSMode,
 	}
 	if !snapshot.FirstByteAt.IsZero() {
 		request.FirstByteAtUnixMs = snapshot.FirstByteAt.UnixMilli()

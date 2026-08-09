@@ -329,7 +329,8 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	settlementController := controlplane.NewSettlementController(redisClient, apiKeyService, accountRepository, subscriptionService, gatewayService, openAIGatewayService, leaseStore)
 	workerLogBridge := controlplane.NewWorkerLogBridge(workerAdmissionRepository, redisClient)
 	rpcService := controlplane.NewRPCService(apiKeyService, grantSigner, leaseStore, admissionController, settlementController, workerLogBridge)
-	controlplaneServer, err := controlplane.NewServer(configConfig, rpcService, apiKeyCache)
+	usageQueue := controlplane.NewUsageQueue(configConfig, rpcService)
+	controlplaneServer, err := controlplane.NewServer(configConfig, rpcService, apiKeyCache, usageQueue)
 	if err != nil {
 		return nil, err
 	}

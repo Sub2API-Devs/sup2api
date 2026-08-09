@@ -119,12 +119,16 @@ func (s *SettlementController) Settle(ctx context.Context, request *controlv1.Se
 				RequestID: record.RequestID, Model: record.RequestedModel, UpstreamModel: record.MappedModel,
 				UpstreamEndpoint: upstreamEndpoint(record), Stream: record.Stream, Duration: duration,
 				FirstTokenMs: firstTokenMS, ClientDisconnect: request.GetClientCancelled(),
+				ServiceTier:     settlementServiceTierPtr(request.GetServiceTier()),
+				ReasoningEffort: settlementReasoningEffortPtr(request.GetReasoningEffort()),
+				OpenAIWSMode:    request.GetOpenaiWsMode(),
 				Usage: service.OpenAIUsage{
 					InputTokens: boundedInt(usage.GetInputTokens()), OutputTokens: boundedInt(usage.GetOutputTokens()),
 					CacheReadInputTokens: boundedInt(usage.GetCacheReadTokens()), CacheCreationInputTokens: boundedInt(usage.GetCacheCreationTokens()),
 				},
 			},
 			APIKey: apiKey, User: apiKey.User, Account: account, Subscription: subscription,
+			DataPlaneID:     request.GetDataPlaneId(),
 			InboundEndpoint: record.Path, UpstreamEndpoint: upstreamEndpoint(record),
 			UserAgent: record.UserAgent, IPAddress: record.ClientIP, APIKeyService: s.apiKeys,
 			QuotaPlatform: platform, AllowDeletedSubjects: true,
@@ -138,12 +142,15 @@ func (s *SettlementController) Settle(ctx context.Context, request *controlv1.Se
 				RequestID: record.RequestID, Model: record.RequestedModel, UpstreamModel: record.MappedModel,
 				Stream: record.Stream, Duration: duration, FirstTokenMs: firstTokenMS,
 				ClientDisconnect: request.GetClientCancelled(),
+				ReasoningEffort:  settlementReasoningEffortPtr(request.GetReasoningEffort()),
 				Usage: service.ClaudeUsage{
 					InputTokens: boundedInt(usage.GetInputTokens()), OutputTokens: boundedInt(usage.GetOutputTokens()),
 					CacheReadInputTokens: boundedInt(usage.GetCacheReadTokens()), CacheCreationInputTokens: boundedInt(usage.GetCacheCreationTokens()),
+					CacheCreation5mTokens: boundedInt(usage.GetCacheCreation_5MTokens()), CacheCreation1hTokens: boundedInt(usage.GetCacheCreation_1HTokens()),
 				},
 			},
 			APIKey: apiKey, User: apiKey.User, Account: account, Subscription: subscription,
+			DataPlaneID:     request.GetDataPlaneId(),
 			InboundEndpoint: record.Path, UpstreamEndpoint: upstreamEndpoint(record),
 			UserAgent: record.UserAgent, IPAddress: record.ClientIP, APIKeyService: s.apiKeys,
 			QuotaPlatform: platform, AllowDeletedSubjects: true,
@@ -170,7 +177,30 @@ func (s *SettlementController) Settle(ctx context.Context, request *controlv1.Se
 func validSettlementUsage(usage *controlv1.Usage) bool {
 	return usage != nil && usage.GetInputTokens() >= 0 && usage.GetOutputTokens() >= 0 &&
 		usage.GetCacheReadTokens() >= 0 && usage.GetCacheCreationTokens() >= 0 &&
+		usage.GetCacheCreation_5MTokens() >= 0 && usage.GetCacheCreation_1HTokens() >= 0 &&
 		usage.GetReasoningTokens() >= 0 && usage.GetResponseBytes() >= 0
+}
+
+func settlementServiceTierPtr(value string) *string {
+	switch value = strings.ToLower(strings.TrimSpace(value)); value {
+	case "fast":
+		value = "priority"
+	case "priority", "flex", "auto", "default", "scale":
+	default:
+		return nil
+	}
+	return &value
+}
+
+func settlementReasoningEffortPtr(value string) *string {
+	switch value = strings.ToLower(strings.TrimSpace(value)); value {
+	case "x-high", "x_high":
+		value = "xhigh"
+	case "none", "minimal", "low", "medium", "high", "xhigh", "max":
+	default:
+		return nil
+	}
+	return &value
 }
 
 func validateSettlementOwnership(record *LeaseRecord, request *controlv1.SettleRequestRequest) error {

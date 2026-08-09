@@ -31,6 +31,7 @@ func TestHandlerSubmitsSettlementAfterStream(t *testing.T) {
 	runtime := new(fakeSettlementRuntime)
 	handler := &Handler{runtime: runtime}
 	state := admittedState()
+	state.SetUsageRecordMetadata("fast", "x-high")
 	state.MarkUpstreamStarted()
 	request := httptest.NewRequest(http.MethodPost, "http://gateway.test/v1/responses", nil)
 	request = request.WithContext(requeststate.WithContext(request.Context(), state))
@@ -40,7 +41,7 @@ func TestHandlerSubmitsSettlementAfterStream(t *testing.T) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("data: {\"usage\":{\"input_tokens\":11,\"output_to"))
-		_, _ = w.Write([]byte("kens\":7}}\n\ndata: [DONE]\n\n"))
+		_, _ = w.Write([]byte("kens\":7,\"cache_creation_input_tokens\":9,\"cache_creation\":{\"ephemeral_5m_input_tokens\":6,\"ephemeral_1h_input_tokens\":3}}}\n\ndata: [DONE]\n\n"))
 		return nil
 	})
 	if err := handler.ServeHTTP(response, request, next); err != nil {
@@ -54,6 +55,12 @@ func TestHandlerSubmitsSettlementAfterStream(t *testing.T) {
 	}
 	if runtime.settled.GetUsage().GetInputTokens() != 11 || runtime.settled.GetUsage().GetOutputTokens() != 7 {
 		t.Fatalf("unexpected observed usage: %+v", runtime.settled.GetUsage())
+	}
+	if runtime.settled.GetServiceTier() != "priority" || runtime.settled.GetReasoningEffort() != "xhigh" || runtime.settled.GetOpenaiWsMode() {
+		t.Fatalf("unexpected usage metadata: %+v", runtime.settled)
+	}
+	if runtime.settled.GetUsage().GetCacheCreation_5MTokens() != 6 || runtime.settled.GetUsage().GetCacheCreation_1HTokens() != 3 {
+		t.Fatalf("unexpected cache TTL usage: %+v", runtime.settled.GetUsage())
 	}
 	if runtime.aborted != nil {
 		t.Fatal("started upstream must not be aborted")

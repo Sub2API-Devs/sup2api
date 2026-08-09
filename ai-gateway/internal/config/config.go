@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -16,6 +17,7 @@ const (
 	defaultControlPlaneTarget = "unix:///tmp/sup2api-control.sock"
 	defaultSettlementWALPath  = "./data/settlements"
 	defaultSettlementWALBytes = int64(1 << 30)
+	defaultSettlementSubject  = "sup2api.usage.settlements.v1"
 	defaultWorkerVaultPath    = "./data/worker-vault.db"
 )
 
@@ -33,6 +35,8 @@ type Config struct {
 	LeaseRenewInterval    time.Duration
 	SettlementWALPath     string
 	SettlementWALMaxBytes int64
+	NATSURL               string
+	NATSSubject           string
 	AuthCacheTTL          time.Duration
 	AuthCacheSize         int
 	WorkerID              string
@@ -63,6 +67,8 @@ func FromEnv() (Config, error) {
 		LeaseRenewInterval:    30 * time.Second,
 		SettlementWALPath:     envOrDefault("AI_GATEWAY_SETTLEMENT_WAL_PATH", defaultSettlementWALPath),
 		SettlementWALMaxBytes: defaultSettlementWALBytes,
+		NATSURL:               strings.TrimSpace(os.Getenv("AI_GATEWAY_NATS_URL")),
+		NATSSubject:           envOrDefault("AI_GATEWAY_NATS_SUBJECT", defaultSettlementSubject),
 		AuthCacheTTL:          60 * time.Second,
 		AuthCacheSize:         65536,
 		WorkerID:              "",
@@ -150,6 +156,20 @@ func (c Config) Validate() error {
 	}
 	if strings.TrimSpace(c.SettlementWALPath) == "" || c.SettlementWALMaxBytes <= 0 {
 		return fmt.Errorf("AI_GATEWAY_SETTLEMENT_WAL_PATH must not be empty and AI_GATEWAY_SETTLEMENT_WAL_MAX_BYTES must be positive")
+	}
+	if strings.TrimSpace(c.NATSURL) != "" {
+		parsed, err := url.Parse(c.NATSURL)
+		if err != nil || parsed.Host == "" {
+			return fmt.Errorf("AI_GATEWAY_NATS_URL must be a valid NATS URL")
+		}
+		switch strings.ToLower(parsed.Scheme) {
+		case "nats", "tls", "ws", "wss":
+		default:
+			return fmt.Errorf("AI_GATEWAY_NATS_URL must use nats, tls, ws, or wss")
+		}
+		if strings.TrimSpace(c.NATSSubject) == "" || strings.ContainsAny(c.NATSSubject, " *>\t\r\n") {
+			return fmt.Errorf("AI_GATEWAY_NATS_SUBJECT must be a concrete subject when AI_GATEWAY_NATS_URL is configured")
+		}
 	}
 	if c.AuthCacheTTL <= 0 || c.AuthCacheSize <= 0 {
 		return fmt.Errorf("AI_GATEWAY_AUTH_CACHE_TTL and AI_GATEWAY_AUTH_CACHE_SIZE must be positive")

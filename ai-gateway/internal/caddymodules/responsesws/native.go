@@ -188,6 +188,12 @@ func mergeUsage(target *requeststate.Usage, update requeststate.Usage) {
 	if update.CacheCreationTokens > target.CacheCreationTokens {
 		target.CacheCreationTokens = update.CacheCreationTokens
 	}
+	if update.CacheCreation5mTokens > target.CacheCreation5mTokens {
+		target.CacheCreation5mTokens = update.CacheCreation5mTokens
+	}
+	if update.CacheCreation1hTokens > target.CacheCreation1hTokens {
+		target.CacheCreation1hTokens = update.CacheCreation1hTokens
+	}
 	if update.ReasoningTokens > target.ReasoningTokens {
 		target.ReasoningTokens = update.ReasoningTokens
 	}

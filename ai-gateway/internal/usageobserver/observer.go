@@ -137,6 +137,10 @@ func applyCounter(key string, value int64, usage *requeststate.Usage) {
 		usage.CacheReadTokens = max(usage.CacheReadTokens, value)
 	case "cache_creation_input_tokens":
 		usage.CacheCreationTokens = max(usage.CacheCreationTokens, value)
+	case "ephemeral_5m_input_tokens", "cache_creation_5m_input_tokens":
+		usage.CacheCreation5mTokens = max(usage.CacheCreation5mTokens, value)
+	case "ephemeral_1h_input_tokens", "cache_creation_1h_input_tokens":
+		usage.CacheCreation1hTokens = max(usage.CacheCreation1hTokens, value)
 	case "reasoning_tokens", "thoughtsTokenCount":
 		usage.ReasoningTokens = max(usage.ReasoningTokens, value)
 	}

@@ -41,6 +41,7 @@ type RecordUsageInput struct {
 	APIKey               *APIKey
 	User                 *User
 	Account              *Account
+	DataPlaneID          string             // 执行请求的 Worker/data plane；主服务器直连请求为空
 	Subscription         *UserSubscription  // 可选：订阅信息
 	PricingAt            time.Time          // token 售价固定时刻；零值保持既有的记录时刻语义
 	InboundEndpoint      string             // 入站端点（客户端请求路径）
@@ -582,6 +583,7 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		APIKey:               input.APIKey,
 		User:                 input.User,
 		Account:              input.Account,
+		DataPlaneID:          input.DataPlaneID,
 		Subscription:         input.Subscription,
 		PricingAt:            input.PricingAt,
 		InboundEndpoint:      input.InboundEndpoint,
@@ -652,6 +654,7 @@ type recordUsageCoreInput struct {
 	APIKey               *APIKey
 	User                 *User
 	Account              *Account
+	DataPlaneID          string
 	Subscription         *UserSubscription
 	PricingAt            time.Time
 	InboundEndpoint      string
@@ -1008,6 +1011,7 @@ func (s *GatewayService) buildRecordUsageLog(
 		UserID:                user.ID,
 		APIKeyID:              apiKey.ID,
 		AccountID:             account.ID,
+		DataPlaneID:           strings.TrimSpace(input.DataPlaneID),
 		RequestID:             requestID,
 		Model:                 result.Model,
 		RequestedModel:        requestedModel,

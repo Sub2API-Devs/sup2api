@@ -1,26 +1,29 @@
-// Package settlementwal persists settlement facts until the authoritative
-// control plane acknowledges them. Each request is an independently fsynced
-// protobuf file so process crashes cannot turn completed requests into lost
-// billing events.
+// Package settlementwal persists settlement facts in SQLite until NATS
+// JetStream acknowledges durable publication. SQLite provides a transactional,
+// crash-safe outbox that is replayed when the Worker restarts.
 package settlementwal
 
 import (
 	"bytes"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 
 	controlv1 "github.com/Sub2API-Devs/sup2api/ai-gateway/gen/control/v1"
 	"google.golang.org/protobuf/proto"
+	_ "modernc.org/sqlite"
 )
 
-const recordSuffix = ".settlement.pb"
+const (
+	recordSuffix = ".settlement.pb"
+	databaseName = "settlements.sqlite3"
+)
 
 var (
 	ErrFull     = errors.New("settlement WAL is full")
@@ -33,6 +36,7 @@ type Record struct {
 }
 
 type Store struct {
+	db       *sql.DB
 	dir      string
 	maxBytes int64
 
@@ -41,7 +45,8 @@ type Store struct {
 }
 
 func Open(dir string, maxBytes int64) (*Store, error) {
-	if strings.TrimSpace(dir) == "" {
+	dir = strings.TrimSpace(dir)
+	if dir == "" {
 		return nil, fmt.Errorf("settlement WAL path is required")
 	}
 	if maxBytes <= 0 {
@@ -54,126 +59,133 @@ func Open(dir string, maxBytes int64) (*Store, error) {
 		return nil, fmt.Errorf("secure settlement WAL directory: %w", err)
 	}
 
-	store := &Store{dir: dir, maxBytes: maxBytes}
-	entries, err := os.ReadDir(dir)
+	path := filepath.Join(dir, databaseName)
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
-		return nil, fmt.Errorf("scan settlement WAL: %w", err)
+		return nil, fmt.Errorf("open settlement SQLite outbox: %w", err)
 	}
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), recordSuffix) {
-			continue
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	store := &Store{db: db, dir: dir, maxBytes: maxBytes}
+	if err := store.initialize(); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		if err := os.Chmod(path+suffix, 0o600); err != nil && !errors.Is(err, os.ErrNotExist) {
+			_ = db.Close()
+			return nil, fmt.Errorf("secure settlement SQLite outbox: %w", err)
 		}
-		info, statErr := entry.Info()
-		if statErr != nil {
-			return nil, fmt.Errorf("stat settlement WAL record %q: %w", entry.Name(), statErr)
-		}
-		store.bytes += info.Size()
+	}
+	if err := store.migrateLegacyFiles(); err != nil {
+		_ = db.Close()
+		return nil, err
 	}
 	return store, nil
 }
 
-// Put durably records a settlement before returning. Repeated writes for the
-// same request ID are idempotent and never replace the original facts.
+func (s *Store) initialize() error {
+	for _, statement := range []string{
+		`PRAGMA journal_mode = WAL`,
+		`PRAGMA synchronous = FULL`,
+		`PRAGMA busy_timeout = 5000`,
+		`CREATE TABLE IF NOT EXISTS settlements (
+			name TEXT PRIMARY KEY,
+			request_id TEXT NOT NULL UNIQUE,
+			payload BLOB NOT NULL,
+			payload_bytes INTEGER NOT NULL CHECK (payload_bytes >= 0),
+			created_at INTEGER NOT NULL DEFAULT (unixepoch('subsec') * 1000)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_settlements_created_at ON settlements(created_at, name)`,
+	} {
+		if _, err := s.db.Exec(statement); err != nil {
+			return fmt.Errorf("initialize settlement SQLite outbox: %w", err)
+		}
+	}
+	if err := s.db.QueryRow(`SELECT COALESCE(SUM(payload_bytes), 0) FROM settlements`).Scan(&s.bytes); err != nil {
+		return fmt.Errorf("measure settlement SQLite outbox: %w", err)
+	}
+	return nil
+}
+
+// Put transactionally records a settlement before returning. Repeated writes
+// for the same request ID are idempotent and never replace original facts.
 func (s *Store) Put(request *controlv1.SettleRequestRequest) error {
-	if s == nil {
+	if s == nil || s.db == nil {
 		return fmt.Errorf("settlement WAL is unavailable")
 	}
-	if request == nil || strings.TrimSpace(request.GetRequestId()) == "" {
+	requestID := strings.TrimSpace(request.GetRequestId())
+	if request == nil || requestID == "" {
 		return fmt.Errorf("settlement request ID is required")
 	}
 	payload, err := proto.MarshalOptions{Deterministic: true}.Marshal(request)
 	if err != nil {
 		return fmt.Errorf("marshal settlement: %w", err)
 	}
-	name := recordName(request.GetRequestId())
+	name := recordName(requestID)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	path := filepath.Join(s.dir, name)
-	if existing, err := os.ReadFile(path); err == nil {
+	var existing []byte
+	err = s.db.QueryRow(`SELECT payload FROM settlements WHERE request_id = ?`, requestID).Scan(&existing)
+	if err == nil {
 		if bytes.Equal(existing, payload) {
 			return nil
 		}
 		return ErrConflict
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("inspect settlement WAL record: %w", err)
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("inspect settlement SQLite record: %w", err)
 	}
 	if int64(len(payload)) > s.maxBytes-s.bytes {
 		return ErrFull
 	}
-
-	temporary, err := os.CreateTemp(s.dir, ".settlement-*")
-	if err != nil {
-		return fmt.Errorf("create temporary settlement WAL record: %w", err)
+	if _, err := s.db.Exec(
+		`INSERT INTO settlements(name, request_id, payload, payload_bytes) VALUES (?, ?, ?, ?)`,
+		name, requestID, payload, len(payload),
+	); err != nil {
+		return fmt.Errorf("insert settlement SQLite record: %w", err)
 	}
-	temporaryPath := temporary.Name()
-	removeTemporary := true
-	defer func() {
-		_ = temporary.Close()
-		if removeTemporary {
-			_ = os.Remove(temporaryPath)
-		}
-	}()
-	if err := temporary.Chmod(0o600); err != nil {
-		return fmt.Errorf("secure settlement WAL record: %w", err)
-	}
-	if _, err := temporary.Write(payload); err != nil {
-		return fmt.Errorf("write settlement WAL record: %w", err)
-	}
-	if err := temporary.Sync(); err != nil {
-		return fmt.Errorf("sync settlement WAL record: %w", err)
-	}
-	if err := temporary.Close(); err != nil {
-		return fmt.Errorf("close settlement WAL record: %w", err)
-	}
-	if err := os.Rename(temporaryPath, path); err != nil {
-		return fmt.Errorf("publish settlement WAL record: %w", err)
-	}
-	removeTemporary = false
 	s.bytes += int64(len(payload))
-	if err := syncDirectory(s.dir); err != nil {
-		return fmt.Errorf("sync settlement WAL directory: %w", err)
-	}
 	return nil
 }
 
 func (s *Store) List() ([]Record, error) {
-	if s == nil {
+	if s == nil || s.db == nil {
 		return nil, fmt.Errorf("settlement WAL is unavailable")
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	entries, err := os.ReadDir(s.dir)
+	rows, err := s.db.Query(`SELECT name, payload FROM settlements ORDER BY created_at, name`)
 	if err != nil {
-		return nil, fmt.Errorf("scan settlement WAL: %w", err)
+		return nil, fmt.Errorf("scan settlement SQLite outbox: %w", err)
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
-	records := make([]Record, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), recordSuffix) {
-			continue
-		}
-		payload, readErr := os.ReadFile(filepath.Join(s.dir, entry.Name()))
-		if readErr != nil {
-			return nil, fmt.Errorf("read settlement WAL record %q: %w", entry.Name(), readErr)
+	defer rows.Close()
+	var records []Record
+	for rows.Next() {
+		var name string
+		var payload []byte
+		if err := rows.Scan(&name, &payload); err != nil {
+			return nil, fmt.Errorf("read settlement SQLite record: %w", err)
 		}
 		request := new(controlv1.SettleRequestRequest)
-		if unmarshalErr := proto.Unmarshal(payload, request); unmarshalErr != nil {
-			return nil, fmt.Errorf("decode settlement WAL record %q: %w", entry.Name(), unmarshalErr)
+		if err := proto.Unmarshal(payload, request); err != nil {
+			return nil, fmt.Errorf("decode settlement SQLite record %q: %w", name, err)
 		}
-		if request.GetRequestId() == "" || recordName(request.GetRequestId()) != entry.Name() {
-			return nil, fmt.Errorf("settlement WAL record %q has an invalid request ID", entry.Name())
+		if request.GetRequestId() == "" || recordName(request.GetRequestId()) != name {
+			return nil, fmt.Errorf("settlement SQLite record %q has an invalid request ID", name)
 		}
-		records = append(records, Record{Name: entry.Name(), Request: request})
+		records = append(records, Record{Name: name, Request: request})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate settlement SQLite records: %w", err)
 	}
 	return records, nil
 }
 
-// Delete removes only an already acknowledged record and persists the
-// directory update. It is safe when overlapping Caddy runtimes already
-// removed the same record.
+// Delete removes only a record already acknowledged by JetStream.
 func (s *Store) Delete(record Record) error {
-	if s == nil {
+	if s == nil || s.db == nil {
 		return fmt.Errorf("settlement WAL is unavailable")
 	}
 	if !validRecordName(record.Name) {
@@ -181,23 +193,51 @@ func (s *Store) Delete(record Record) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	path := filepath.Join(s.dir, record.Name)
-	info, err := os.Stat(path)
-	if errors.Is(err, os.ErrNotExist) {
+	var size int64
+	err := s.db.QueryRow(`SELECT payload_bytes FROM settlements WHERE name = ?`, record.Name).Scan(&size)
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("stat settlement WAL record: %w", err)
+		return fmt.Errorf("inspect settlement SQLite record: %w", err)
 	}
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("delete settlement WAL record: %w", err)
+	if _, err := s.db.Exec(`DELETE FROM settlements WHERE name = ?`, record.Name); err != nil {
+		return fmt.Errorf("delete settlement SQLite record: %w", err)
 	}
-	if err := syncDirectory(s.dir); err != nil {
-		return fmt.Errorf("sync settlement WAL directory: %w", err)
-	}
-	s.bytes -= info.Size()
+	s.bytes -= size
 	if s.bytes < 0 {
 		s.bytes = 0
+	}
+	return nil
+}
+
+func (s *Store) migrateLegacyFiles() error {
+	entries, err := os.ReadDir(s.dir)
+	if err != nil {
+		return fmt.Errorf("scan legacy settlement WAL: %w", err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), recordSuffix) {
+			continue
+		}
+		path := filepath.Join(s.dir, entry.Name())
+		payload, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read legacy settlement WAL record %q: %w", entry.Name(), err)
+		}
+		request := new(controlv1.SettleRequestRequest)
+		if err := proto.Unmarshal(payload, request); err != nil {
+			return fmt.Errorf("decode legacy settlement WAL record %q: %w", entry.Name(), err)
+		}
+		if recordName(request.GetRequestId()) != entry.Name() {
+			return fmt.Errorf("legacy settlement WAL record %q has an invalid request ID", entry.Name())
+		}
+		if err := s.Put(request); err != nil {
+			return fmt.Errorf("migrate legacy settlement WAL record %q: %w", entry.Name(), err)
+		}
+		if err := os.Remove(path); err != nil {
+			return fmt.Errorf("remove migrated settlement WAL record %q: %w", entry.Name(), err)
+		}
 	}
 	return nil
 }
@@ -218,6 +258,16 @@ func (s *Store) MaxBytes() int64 {
 	return s.maxBytes
 }
 
+func (s *Store) Close() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, _ = s.db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
+	return s.db.Close()
+}
+
 func recordName(requestID string) string {
 	digest := sha256.Sum256([]byte(requestID))
 	return hex.EncodeToString(digest[:]) + recordSuffix
@@ -233,13 +283,4 @@ func validRecordName(name string) bool {
 	}
 	_, err := hex.DecodeString(digest)
 	return err == nil
-}
-
-func syncDirectory(dir string) error {
-	handle, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer handle.Close()
-	return handle.Sync()
 }

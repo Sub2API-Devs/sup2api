@@ -64,6 +64,7 @@ const DefaultUpstreamResponseReadMaxBytes int64 = 128 * 1024 * 1024
 type Config struct {
 	Server                  ServerConfig                  `mapstructure:"server"`
 	DataPlaneControl        DataPlaneControlConfig        `mapstructure:"data_plane_control"`
+	UsageQueue              UsageQueueConfig              `mapstructure:"usage_queue"`
 	Log                     LogConfig                     `mapstructure:"log"`
 	CORS                    CORSConfig                    `mapstructure:"cors"`
 	Security                SecurityConfig                `mapstructure:"security"`
@@ -692,6 +693,21 @@ type DataPlaneControlTLSConfig struct {
 	CAFile   string `mapstructure:"ca_file"`
 	CertFile string `mapstructure:"cert_file"`
 	KeyFile  string `mapstructure:"key_file"`
+}
+
+// UsageQueueConfig configures the durable NATS JetStream transport used by
+// ai-gateway Workers to deliver canonical usage settlements.
+type UsageQueueConfig struct {
+	Enabled           bool   `mapstructure:"enabled"`
+	URL               string `mapstructure:"url"`
+	Stream            string `mapstructure:"stream"`
+	Subject           string `mapstructure:"subject"`
+	Durable           string `mapstructure:"durable"`
+	MaxAgeHours       int    `mapstructure:"max_age_hours"`
+	MaxBytes          int64  `mapstructure:"max_bytes"`
+	AckWaitSeconds    int    `mapstructure:"ack_wait_seconds"`
+	RetryDelaySeconds int    `mapstructure:"retry_delay_seconds"`
+	Consumers         int    `mapstructure:"consumers"`
 }
 
 // H2CConfig HTTP/2 Cleartext 配置
@@ -1734,6 +1750,10 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	cfg.DataPlaneControl.TLS.CAFile = strings.TrimSpace(cfg.DataPlaneControl.TLS.CAFile)
 	cfg.DataPlaneControl.TLS.CertFile = strings.TrimSpace(cfg.DataPlaneControl.TLS.CertFile)
 	cfg.DataPlaneControl.TLS.KeyFile = strings.TrimSpace(cfg.DataPlaneControl.TLS.KeyFile)
+	cfg.UsageQueue.URL = strings.TrimSpace(cfg.UsageQueue.URL)
+	cfg.UsageQueue.Stream = strings.TrimSpace(cfg.UsageQueue.Stream)
+	cfg.UsageQueue.Subject = strings.TrimSpace(cfg.UsageQueue.Subject)
+	cfg.UsageQueue.Durable = strings.TrimSpace(cfg.UsageQueue.Durable)
 	cfg.JWT.Secret = strings.TrimSpace(cfg.JWT.Secret)
 	cfg.LinuxDo.ClientID = strings.TrimSpace(cfg.LinuxDo.ClientID)
 	cfg.LinuxDo.ClientSecret = strings.TrimSpace(cfg.LinuxDo.ClientSecret)
@@ -1905,6 +1925,16 @@ func setDefaults() {
 	viper.SetDefault("data_plane_control.tls.ca_file", "")
 	viper.SetDefault("data_plane_control.tls.cert_file", "")
 	viper.SetDefault("data_plane_control.tls.key_file", "")
+	viper.SetDefault("usage_queue.enabled", false)
+	viper.SetDefault("usage_queue.url", "nats://127.0.0.1:4222")
+	viper.SetDefault("usage_queue.stream", "SUP2API_USAGE")
+	viper.SetDefault("usage_queue.subject", "sup2api.usage.settlements.v1")
+	viper.SetDefault("usage_queue.durable", "sup2api-usage-settlement-v1")
+	viper.SetDefault("usage_queue.max_age_hours", 24)
+	viper.SetDefault("usage_queue.max_bytes", int64(1<<30))
+	viper.SetDefault("usage_queue.ack_wait_seconds", 60)
+	viper.SetDefault("usage_queue.retry_delay_seconds", 5)
+	viper.SetDefault("usage_queue.consumers", 8)
 
 	// Log
 	viper.SetDefault("log.level", "info")
@@ -2574,6 +2604,32 @@ func (c *Config) Validate() error {
 			if c.DataPlaneControl.TLS.CAFile == "" || c.DataPlaneControl.TLS.CertFile == "" || c.DataPlaneControl.TLS.KeyFile == "" {
 				return fmt.Errorf("data_plane_control.tls ca_file, cert_file, and key_file are required for secure TCP")
 			}
+		}
+	}
+	if c.UsageQueue.Enabled {
+		parsed, err := url.Parse(c.UsageQueue.URL)
+		if err != nil || parsed.Host == "" {
+			return fmt.Errorf("usage_queue.url must be a valid NATS URL when enabled")
+		}
+		switch strings.ToLower(parsed.Scheme) {
+		case "nats", "tls", "ws", "wss":
+		default:
+			return fmt.Errorf("usage_queue.url must use nats, tls, ws, or wss")
+		}
+		if !validNATSName(c.UsageQueue.Stream) || !validNATSName(c.UsageQueue.Durable) {
+			return fmt.Errorf("usage_queue.stream and usage_queue.durable contain invalid characters")
+		}
+		if c.UsageQueue.Subject == "" || strings.ContainsAny(c.UsageQueue.Subject, " *>") {
+			return fmt.Errorf("usage_queue.subject must be a concrete NATS subject")
+		}
+		if c.UsageQueue.MaxAgeHours < 1 || c.UsageQueue.MaxAgeHours > 168 || c.UsageQueue.MaxBytes < 1<<20 {
+			return fmt.Errorf("usage_queue retention limits are invalid")
+		}
+		if c.UsageQueue.AckWaitSeconds < 5 || c.UsageQueue.AckWaitSeconds > 600 || c.UsageQueue.RetryDelaySeconds < 1 || c.UsageQueue.RetryDelaySeconds > 300 {
+			return fmt.Errorf("usage_queue acknowledgement timing is invalid")
+		}
+		if c.UsageQueue.Consumers < 1 || c.UsageQueue.Consumers > 128 {
+			return fmt.Errorf("usage_queue.consumers must be between 1 and 128")
 		}
 	}
 	if c.APIKeyAuth.InvalidAbuse.Enabled {
@@ -3566,6 +3622,10 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("dingtalk_connect: %w", err)
 	}
 	return nil
+}
+
+func validNATSName(value string) bool {
+	return value != "" && !strings.ContainsAny(value, " .*>/\\\t\r\n")
 }
 
 func normalizeStringSlice(values []string) []string {

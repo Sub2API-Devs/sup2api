@@ -81,6 +81,9 @@ func TestTransformRequestAppliesCodexContractAndSecurityBoundary(t *testing.T) {
 	if got["service_tier"] != "priority" {
 		t.Fatalf("service_tier = %#v", got["service_tier"])
 	}
+	if state.ServiceTier != "priority" || state.ReasoningEffort != "none" {
+		t.Fatalf("usage metadata tier=%q effort=%q", state.ServiceTier, state.ReasoningEffort)
+	}
 	tools := got["tools"].([]any)
 	tool := tools[0].(map[string]any)
 	if tool["name"] != "lookup" {
@@ -122,6 +125,9 @@ func TestTransformRequestCompactUsesUnarySchema(t *testing.T) {
 	}
 	if got["reasoning"].(map[string]any)["effort"] != "xhigh" {
 		t.Fatalf("compact reasoning = %+v", got["reasoning"])
+	}
+	if state.ServiceTier != "" || state.ReasoningEffort != "xhigh" {
+		t.Fatalf("compact usage metadata tier=%q effort=%q", state.ServiceTier, state.ReasoningEffort)
 	}
 	if request.Header.Get("session_id") == "" {
 		t.Fatal("compact request did not receive an isolated session")

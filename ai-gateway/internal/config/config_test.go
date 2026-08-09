@@ -22,6 +22,8 @@ func TestFromEnvDefaultsToUnixControlPlaneAndPort9999(t *testing.T) {
 		"AI_GATEWAY_LEASE_RENEW_INTERVAL",
 		"AI_GATEWAY_SETTLEMENT_WAL_PATH",
 		"AI_GATEWAY_SETTLEMENT_WAL_MAX_BYTES",
+		"AI_GATEWAY_NATS_URL",
+		"AI_GATEWAY_NATS_SUBJECT",
 		"AI_GATEWAY_AUTH_CACHE_TTL",
 		"AI_GATEWAY_AUTH_CACHE_SIZE",
 		"AI_GATEWAY_CONTROL_PLANE_CA_FILE",
@@ -53,6 +55,28 @@ func TestFromEnvDefaultsToUnixControlPlaneAndPort9999(t *testing.T) {
 	}
 	if cfg.SettlementWALPath != "./data/settlements" || cfg.SettlementWALMaxBytes != 1<<30 {
 		t.Fatalf("settlement WAL defaults = %q, %d", cfg.SettlementWALPath, cfg.SettlementWALMaxBytes)
+	}
+	if cfg.NATSURL != "" || cfg.NATSSubject != "sup2api.usage.settlements.v1" {
+		t.Fatalf("NATS defaults URL=%q subject=%q", cfg.NATSURL, cfg.NATSSubject)
+	}
+}
+
+func TestFromEnvLoadsNATSUsageQueue(t *testing.T) {
+	t.Setenv("AI_GATEWAY_NATS_URL", "nats://worker:secret@nats:4222")
+	t.Setenv("AI_GATEWAY_NATS_SUBJECT", "custom.usage.v1")
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.NATSURL != "nats://worker:secret@nats:4222" || cfg.NATSSubject != "custom.usage.v1" {
+		t.Fatalf("NATS config URL=%q subject=%q", cfg.NATSURL, cfg.NATSSubject)
+	}
+}
+
+func TestFromEnvRejectsInvalidNATSUsageQueueURL(t *testing.T) {
+	t.Setenv("AI_GATEWAY_NATS_URL", "https://nats:4222")
+	if _, err := FromEnv(); err == nil || !strings.Contains(err.Error(), "must use nats") {
+		t.Fatalf("expected invalid NATS URL error, got %v", err)
 	}
 }
 
