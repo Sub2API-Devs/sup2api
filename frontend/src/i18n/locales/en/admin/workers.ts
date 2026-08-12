@@ -119,6 +119,34 @@ export default {
     oauthCompleteFailed: 'Failed to complete OAuth',
     refreshFailed: 'Failed to refresh OAuth credential',
     accountTestFailed: 'Account test failed',
-    accountDeleteFailed: 'Failed to delete Worker account'
+    accountDeleteFailed: 'Failed to delete Worker account',
+    natsSecurity: {
+      action: 'NATS Security',
+      title: 'Worker NATS Security',
+      description: 'Configure nsc-issued NKey/JWT identities used by Workers to publish durable usage settlements.',
+      back: 'Back to Worker Management',
+      ready: 'Ready to issue Worker identities',
+      incomplete: 'Configuration incomplete',
+      trustTitle: 'Trust chain',
+      trustHint: 'Operator and Account identities are generated offline by nsc. Private Operator keys never enter the application.',
+      operator: 'Operator',
+      account: 'Worker Account',
+      controlCredentials: 'Control-plane credentials',
+      controlCredentialsHint: 'JWT credentials mounted as a read-only Compose secret.',
+      configured: 'Configured',
+      missing: 'Missing',
+      workerTitle: 'Worker issuance policy',
+      workerHint: 'Every claimed Worker receives a unique NKey and a least-privilege user JWT signed by the Worker Account.',
+      workerUrl: 'Worker NATS URL',
+      workerUrlHint: 'TLS or WSS endpoint exposed through Caddy and reachable from every Worker.',
+      ttl: 'Credential lifetime (days)',
+      ttlHint: 'Use 0 for credentials without an expiry.',
+      subject: 'Settlement subject',
+      workerPermission: 'Issued permissions',
+      saveHint: 'The next Worker claim uses this policy. Existing Worker credentials are never displayed by the control plane.',
+      saved: 'Worker NATS security configuration saved',
+      loadFailed: 'Failed to load Worker NATS security configuration',
+      saveFailed: 'Failed to save Worker NATS security configuration'
+    }
   }
 }

@@ -26,16 +26,18 @@ type JetStreamPublisher struct {
 	subject    string
 }
 
-func New(url, subject string, timeout time.Duration) (*JetStreamPublisher, error) {
+func New(url, subject, credentials string, timeout time.Duration) (*JetStreamPublisher, error) {
 	url = strings.TrimSpace(url)
 	subject = strings.TrimSpace(subject)
-	if url == "" || subject == "" {
-		return nil, fmt.Errorf("NATS URL and settlement subject are required")
+	credentials = strings.TrimSpace(credentials)
+	if url == "" || subject == "" || credentials == "" {
+		return nil, fmt.Errorf("NATS URL, settlement subject, and JWT credentials are required")
 	}
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
 	connection, err := nats.Connect(url,
+		nats.UserCredentialBytes([]byte(credentials)),
 		nats.Name("sup2api-ai-gateway-usage-publisher"),
 		nats.Timeout(timeout),
 		nats.MaxReconnects(-1),

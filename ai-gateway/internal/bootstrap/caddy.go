@@ -33,6 +33,7 @@ func CaddyConfig(cfg config.Config) ([]byte, error) {
 				"settlement_wal_max_bytes": cfg.SettlementWALMaxBytes,
 				"nats_url":                 cfg.NATSURL,
 				"nats_subject":             cfg.NATSSubject,
+				"nats_credentials":         cfg.NATSCredentials,
 				"auth_cache_ttl":           cfg.AuthCacheTTL.String(),
 				"auth_cache_size":          cfg.AuthCacheSize,
 				"tls_ca_file":              cfg.TLSCAFile,

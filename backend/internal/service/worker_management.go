@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	workerProtocolVersion      = "aicodex.proxy-worker/v1"
+	workerProtocolVersion      = "aicodex.proxy-worker/v2"
 	defaultHeartbeatInterval   = 15
 	defaultHeartbeatTimeout    = 5
 	heartbeatSchedulerInterval = time.Second
@@ -171,6 +171,8 @@ type WorkerService struct {
 	repo            WorkerRepository
 	encryptor       SecretEncryptor
 	remote          *WorkerRemoteClient
+	settings        SettingRepository
+	natsIssuer      *WorkerNATSIssuer
 	probeGroup      singleflight.Group
 	heartbeatMu     sync.Mutex
 	heartbeatCancel context.CancelFunc
@@ -179,6 +181,14 @@ type WorkerService struct {
 
 func NewWorkerService(repo WorkerRepository, encryptor SecretEncryptor, remote *WorkerRemoteClient) *WorkerService {
 	return &WorkerService{repo: repo, encryptor: encryptor, remote: remote}
+}
+
+func (s *WorkerService) ConfigureNATSSecurity(settings SettingRepository, issuer *WorkerNATSIssuer) {
+	if s == nil {
+		return
+	}
+	s.settings = settings
+	s.natsIssuer = issuer
 }
 
 func (s *WorkerService) Create(ctx context.Context, input CreateWorkerInput) (*Worker, error) {
@@ -229,10 +239,22 @@ func (s *WorkerService) Create(ctx context.Context, input CreateWorkerInput) (*W
 		if existing != nil {
 			return nil, fmt.Errorf("worker_id %q is already registered", remoteWorkerID)
 		}
+		natsConfig, natsConfigErr := s.GetNATSSecurityConfig(ctx)
+		if natsConfigErr != nil {
+			return nil, fmt.Errorf("load Worker NATS security configuration: %w", natsConfigErr)
+		}
+		if !natsConfig.Ready {
+			return nil, errors.New("Worker NATS NKey/JWT security configuration is incomplete")
+		}
+		natsCredentials, _, issueErr := s.natsIssuer.Issue(remoteWorkerID, natsConfig.Subject, natsConfig.CredentialTTLDays)
+		if issueErr != nil {
+			return nil, fmt.Errorf("issue Worker NATS credentials: %w", issueErr)
+		}
 		identity, err = s.remote.Claim(ctx, baseURL, WorkerClaimInput{
 			PairingToken: strings.TrimSpace(input.PairingToken), WorkerID: remoteWorkerID,
 			ManagementKey: key, VaultKey: strings.TrimSpace(input.VaultKey),
 			ControlPlaneTarget: strings.TrimSpace(input.ControlPlaneTarget), ControlPlaneInsecure: input.ControlPlaneInsecure,
+			NATSURL: natsConfig.WorkerURL, NATSSubject: natsConfig.Subject, NATSCredentials: natsCredentials,
 		})
 	} else {
 		identity, err = s.remote.Identity(ctx, baseURL, key)
@@ -280,6 +302,9 @@ type WorkerClaimInput struct {
 	VaultKey             string `json:"vault_key"`
 	ControlPlaneTarget   string `json:"control_plane_target"`
 	ControlPlaneInsecure bool   `json:"control_plane_insecure"`
+	NATSURL              string `json:"nats_url"`
+	NATSSubject          string `json:"nats_subject"`
+	NATSCredentials      string `json:"nats_credentials"`
 }
 
 func (s *WorkerService) List(ctx context.Context) ([]Worker, error) {

@@ -37,6 +37,7 @@ type Config struct {
 	SettlementWALMaxBytes int64
 	NATSURL               string
 	NATSSubject           string
+	NATSCredentials       string
 	AuthCacheTTL          time.Duration
 	AuthCacheSize         int
 	WorkerID              string
@@ -67,8 +68,9 @@ func FromEnv() (Config, error) {
 		LeaseRenewInterval:    30 * time.Second,
 		SettlementWALPath:     envOrDefault("AI_GATEWAY_SETTLEMENT_WAL_PATH", defaultSettlementWALPath),
 		SettlementWALMaxBytes: defaultSettlementWALBytes,
-		NATSURL:               strings.TrimSpace(os.Getenv("AI_GATEWAY_NATS_URL")),
-		NATSSubject:           envOrDefault("AI_GATEWAY_NATS_SUBJECT", defaultSettlementSubject),
+		NATSURL:               "",
+		NATSSubject:           defaultSettlementSubject,
+		NATSCredentials:       "",
 		AuthCacheTTL:          60 * time.Second,
 		AuthCacheSize:         65536,
 		WorkerID:              "",
@@ -135,6 +137,9 @@ func FromEnvWithWorker(worker *workersetup.Config, instanceID string) (Config, e
 	cfg.WorkerVaultKey = worker.VaultKey
 	cfg.ControlPlaneTarget = worker.ControlPlaneTarget
 	cfg.ControlPlaneInsecure = worker.ControlPlaneInsecure
+	cfg.NATSURL = worker.NATSURL
+	cfg.NATSSubject = worker.NATSSubject
+	cfg.NATSCredentials = worker.NATSCredentials
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
 	}
@@ -160,15 +165,21 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.NATSURL) != "" {
 		parsed, err := url.Parse(c.NATSURL)
 		if err != nil || parsed.Host == "" {
-			return fmt.Errorf("AI_GATEWAY_NATS_URL must be a valid NATS URL")
+			return fmt.Errorf("worker nats_url must be a valid NATS URL")
+		}
+		if parsed.User != nil {
+			return fmt.Errorf("worker nats_url must not contain credentials")
 		}
 		switch strings.ToLower(parsed.Scheme) {
-		case "nats", "tls", "ws", "wss":
+		case "tls", "wss":
 		default:
-			return fmt.Errorf("AI_GATEWAY_NATS_URL must use nats, tls, ws, or wss")
+			return fmt.Errorf("worker nats_url must use tls or wss")
 		}
 		if strings.TrimSpace(c.NATSSubject) == "" || strings.ContainsAny(c.NATSSubject, " *>\t\r\n") {
-			return fmt.Errorf("AI_GATEWAY_NATS_SUBJECT must be a concrete subject when AI_GATEWAY_NATS_URL is configured")
+			return fmt.Errorf("worker nats_subject must be a concrete subject when nats_url is configured")
+		}
+		if strings.TrimSpace(c.NATSCredentials) == "" {
+			return fmt.Errorf("UI-provisioned NATS JWT credentials are required")
 		}
 	}
 	if c.AuthCacheTTL <= 0 || c.AuthCacheSize <= 0 {

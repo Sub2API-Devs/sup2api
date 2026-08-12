@@ -278,7 +278,11 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	auditLogHandler := admin.NewAuditLogHandler(auditLogService, totpService)
 	workerRepository := repository.NewWorkerRepository(db)
 	workerRemoteClient := service.NewWorkerRemoteClient()
-	workerService := service.ProvideWorkerService(workerRepository, secretEncryptor, workerRemoteClient)
+	workerNATSIssuer, err := service.NewWorkerNATSIssuer(configConfig)
+	if err != nil {
+		return nil, err
+	}
+	workerService := service.ProvideWorkerService(workerRepository, secretEncryptor, workerRemoteClient, settingRepository, workerNATSIssuer)
 	workerHandler := admin.NewWorkerHandler(workerService)
 	upstreamBillingProbeService := service.ProvideUpstreamBillingProbeService(accountRepository, accountTestService, settingService, leaderLockCache, db)
 	ollamaCloudUsageService := service.ProvideOllamaCloudUsageService(accountRepository, httpUpstream, settingService, secretEncryptor, configConfig, leaderLockCache, db)

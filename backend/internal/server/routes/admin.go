@@ -131,6 +131,8 @@ func registerWorkerRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	{
 		workers.GET("", h.Admin.Worker.List)
 		workers.POST("", h.Admin.Worker.Create)
+		workers.GET("/nats-security", h.Admin.Worker.GetNATSSecurity)
+		workers.PUT("/nats-security", h.Admin.Worker.UpdateNATSSecurity)
 		workers.GET("/:id", h.Admin.Worker.Get)
 		workers.PUT("/:id", h.Admin.Worker.Update)
 		workers.PATCH("/:id/enabled", h.Admin.Worker.SetEnabled)

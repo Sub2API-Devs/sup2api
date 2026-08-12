@@ -34,19 +34,21 @@ func (f *fakeUsageSettlementHandler) SettleRequest(_ context.Context, request *c
 
 func TestUsageQueueJetStreamIntegration(t *testing.T) {
 	url := os.Getenv("NATS_TEST_URL")
-	if url == "" {
-		t.Skip("NATS_TEST_URL is not configured")
+	controlCredentials := os.Getenv("NATS_TEST_CONTROL_CREDS")
+	workerCredentials := os.Getenv("NATS_TEST_WORKER_CREDS")
+	if url == "" || controlCredentials == "" || workerCredentials == "" {
+		t.Skip("NATS_TEST_URL, NATS_TEST_CONTROL_CREDS, and NATS_TEST_WORKER_CREDS are not configured")
 	}
 	suffix := time.Now().UnixNano()
 	stream := fmt.Sprintf("TEST_USAGE_%d", suffix)
-	subject := fmt.Sprintf("test.usage.%d", suffix)
+	subject := "sup2api.usage.settlements.v1"
 	durable := fmt.Sprintf("test-usage-%d", suffix)
 	handler := &fakeUsageSettlementHandler{
 		response: &controlv1.SettleRequestResponse{Accepted: true},
 		received: make(chan *controlv1.SettleRequestRequest, 1),
 	}
 	queue := &UsageQueue{cfg: config.UsageQueueConfig{
-		Enabled: true, URL: url, Stream: stream, Subject: subject, Durable: durable,
+		Enabled: true, URL: url, CredentialsFile: controlCredentials, Stream: stream, Subject: subject, Durable: durable,
 		MaxAgeHours: 1, MaxBytes: 1 << 20, AckWaitSeconds: 10, RetryDelaySeconds: 1, Consumers: 1,
 	}, handler: handler}
 	if err := queue.Start(context.Background()); err != nil {
@@ -57,7 +59,7 @@ func TestUsageQueueJetStreamIntegration(t *testing.T) {
 		defer cancel()
 		_ = queue.Stop(ctx)
 	})
-	connection, err := nats.Connect(url)
+	connection, err := nats.Connect(url, nats.UserCredentials(workerCredentials))
 	if err != nil {
 		t.Fatal(err)
 	}

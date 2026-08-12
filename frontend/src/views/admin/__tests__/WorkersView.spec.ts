@@ -25,7 +25,7 @@ vi.mock('vue-i18n', async () => {
 
 const worker = {
   id: 1, name: 'Local Gateway', base_url: 'http://gateway:9999', remote_worker_id: 'gateway-local',
-  instance_id: 'instance-1', protocol_version: 'aicodex.proxy-worker/v1', version: '1.0.0',
+  instance_id: 'instance-1', protocol_version: 'aicodex.proxy-worker/v2', version: '1.0.0',
   status: 'ready', enabled: true, log_stream_key: 'logs', last_seen_at: '2026-08-09T10:00:00Z',
   last_heartbeat_at: '2026-08-09T10:00:00Z', last_heartbeat_latency_ms: 12, consecutive_failures: 0,
   heartbeat_interval_seconds: 15, heartbeat_timeout_seconds: 5, account_count: 2, log_count: 3,

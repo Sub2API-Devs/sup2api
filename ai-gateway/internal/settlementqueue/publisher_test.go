@@ -15,13 +15,19 @@ import (
 
 func TestPublisherJetStreamIntegration(t *testing.T) {
 	url := os.Getenv("NATS_TEST_URL")
-	if url == "" {
-		t.Skip("NATS_TEST_URL is not configured")
+	controlCredentialsPath := os.Getenv("NATS_TEST_CONTROL_CREDS")
+	workerCredentialsPath := os.Getenv("NATS_TEST_WORKER_CREDS")
+	if url == "" || controlCredentialsPath == "" || workerCredentialsPath == "" {
+		t.Skip("NATS_TEST_URL, NATS_TEST_CONTROL_CREDS, and NATS_TEST_WORKER_CREDS are not configured")
+	}
+	credentials, err := os.ReadFile(workerCredentialsPath)
+	if err != nil {
+		t.Fatal(err)
 	}
 	suffix := time.Now().UnixNano()
 	streamName := fmt.Sprintf("TEST_PUBLISHER_%d", suffix)
-	subject := fmt.Sprintf("test.publisher.%d", suffix)
-	connection, err := nats.Connect(url)
+	subject := "sup2api.usage.settlements.v1"
+	connection, err := nats.Connect(url, nats.UserCredentials(controlCredentialsPath))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,12 +38,12 @@ func TestPublisherJetStreamIntegration(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	stream, err := js.CreateStream(ctx, jetstream.StreamConfig{Name: streamName, Subjects: []string{subject}, Storage: jetstream.FileStorage})
+	stream, err := js.CreateStream(ctx, jetstream.StreamConfig{Name: streamName, Subjects: []string{subject}, Storage: jetstream.FileStorage, MaxBytes: 1 << 20})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = js.DeleteStream(ctx, streamName) }()
-	publisher, err := New(url, subject, time.Second)
+	publisher, err := New(url, subject, string(credentials), time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}

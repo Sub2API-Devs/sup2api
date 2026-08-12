@@ -135,6 +135,29 @@ func (h *WorkerHandler) TestConnection(c *gin.Context) {
 	workerHandlerOK(c, http.StatusOK, gin.H{"identity": identity, "ready": ready})
 }
 
+func (h *WorkerHandler) GetNATSSecurity(c *gin.Context) {
+	result, err := h.service.GetNATSSecurityConfig(c.Request.Context())
+	if err != nil {
+		workerHandlerError(c, http.StatusInternalServerError, "worker_nats_security_read_failed", err)
+		return
+	}
+	workerHandlerOK(c, http.StatusOK, result)
+}
+
+func (h *WorkerHandler) UpdateNATSSecurity(c *gin.Context) {
+	var input service.UpdateWorkerNATSSecurityInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		workerHandlerError(c, http.StatusBadRequest, "invalid_request", err)
+		return
+	}
+	result, err := h.service.UpdateNATSSecurityConfig(c.Request.Context(), input)
+	if err != nil {
+		workerHandlerError(c, http.StatusUnprocessableEntity, "worker_nats_security_update_failed", err)
+		return
+	}
+	workerHandlerOK(c, http.StatusOK, result)
+}
+
 func (h *WorkerHandler) ListAccounts(c *gin.Context) {
 	workerID, ok := workerHandlerID(c, "id")
 	if !ok {

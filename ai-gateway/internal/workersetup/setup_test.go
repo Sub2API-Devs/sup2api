@@ -4,13 +4,30 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/nats-io/nkeys"
 )
+
+func setupTestCredentials(t *testing.T) string {
+	t.Helper()
+	pair, err := nkeys.CreateUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pair.Wipe()
+	seed, err := pair.Seed()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fmt.Sprintf("-----BEGIN NATS USER JWT-----\ntest.jwt.value\n------END NATS USER JWT------\n\n-----BEGIN USER NKEY SEED-----\n%s\n------END USER NKEY SEED------\n", seed)
+}
 
 func TestBootstrapClaimPersistsOnlyUIProvisionedConfiguration(t *testing.T) {
 	dir := t.TempDir()
@@ -30,6 +47,8 @@ func TestBootstrapClaimPersistsOnlyUIProvisionedConfiguration(t *testing.T) {
 			WorkerID: "worker-ui", ManagementKey: strings.Repeat("m", 32),
 			VaultKey:           base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{4}, 32)),
 			ControlPlaneTarget: "sub2api:9090", ControlPlaneInsecure: true,
+			NATSURL: "tls://nats.example.com:443", NATSSubject: "sup2api.usage.settlements.v1",
+			NATSCredentials: setupTestCredentials(t),
 		},
 	}
 	raw, _ := json.Marshal(claim)

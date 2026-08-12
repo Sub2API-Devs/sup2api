@@ -8,6 +8,10 @@
             <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">{{ t('admin.workers.description') }}</p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
+            <button class="btn btn-secondary" data-testid="nats-security" @click="router.push({ name: 'AdminWorkerNATSSecurity' })">
+              <Icon name="key" size="sm" class="mr-2" />
+              {{ t('admin.workers.natsSecurity.action') }}
+            </button>
             <span class="inline-flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">
               <span class="h-2 w-2 animate-pulse rounded-full bg-emerald-500"></span>
               {{ t('admin.workers.autoHeartbeatRefresh') }}

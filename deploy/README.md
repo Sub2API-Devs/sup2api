@@ -16,8 +16,12 @@ This directory contains files for deploying Sub2API on Linux servers and Apple-s
 |------|-------------|
 | `docker-compose.yml` | Docker Compose configuration (named volumes) |
 | `docker-compose.local.yml` | Docker Compose configuration (local directories, easy migration) |
+| `docker-compose.ai-gateway.yml` | Overlay for starting the standalone AI Gateway from a locally built image |
 | `docker-compose.gateway.dev.yml` | Development overlay for the standalone Sup2API Caddy data plane on port 9999 |
 | `docker-compose.gateway.mtls.yml` | Production-oriented Caddy data-plane overlay with mutual TLS control RPC |
+| `build_ai_gateway.sh` | Builds the standalone AI Gateway Docker image |
+| `nats-server.conf` | Tuned single-node NATS JetStream configuration for AI Gateway settlements |
+| `setup_nats_nsc.sh` | Initializes the NATS Operator/Account trust root and JWT credentials with `nsc` |
 | `generate-data-plane-certs.sh` | Generates a private CA and separate server/client mTLS certificates |
 | `docker-deploy.sh` | **One-click Docker deployment script (recommended)** |
 | `apple-container.sh` | Native Apple `container` lifecycle script |
@@ -69,7 +73,8 @@ chmod +x docker-deploy.sh
 
 **What the script does:**
 - Downloads `docker-compose.local.yml` and `.env.example`
-- Automatically generates secure secrets (JWT_SECRET, TOTP_ENCRYPTION_KEY, POSTGRES_PASSWORD, NATS_PASSWORD)
+- Automatically generates secure secrets (`JWT_SECRET`, `TOTP_ENCRYPTION_KEY`, `POSTGRES_PASSWORD`)
+- Initializes NATS NKey/JWT authentication with `nsc`; no shared NATS password is created
 - Creates `.env` file with generated secrets
 - Creates necessary data directories (data/, postgres_data/, redis_data/, nats_data/)
 - **Displays generated credentials** (POSTGRES_PASSWORD, JWT_SECRET, etc.)
@@ -256,7 +261,55 @@ application process. The Sup2API application remains the authoritative control
 plane for authentication, admission, account scheduling, billing, and final
 usage persistence; the Caddy process performs direct upstream proxying.
 
-Generate a dedicated AuthGrant signing secret and start the development stack:
+Build the AI Gateway image and start it together with the standard Compose
+stack. Before starting, set `DATA_PLANE_CONTROL_GRANT_SECRET` in `.env` to a
+dedicated value generated with `openssl rand -hex 32` (do not reuse
+`JWT_SECRET`):
+
+```bash
+go install github.com/nats-io/nsc/v2@v2.15.0
+./setup_nats_nsc.sh
+./build_ai_gateway.sh
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.ai-gateway.yml \
+  up -d
+```
+
+The image defaults to `sup2api/ai-gateway:local`. Pass another tag as the first
+argument to the build script and set `AI_GATEWAY_IMAGE` to the same value when
+starting Compose. This overlay binds the gateway to `127.0.0.1:9999` by default;
+set `BIND_HOST` or `AI_GATEWAY_PORT` in `.env` when a different listener is
+required.
+
+The base `docker-compose.yml` does not start NATS. The AI Gateway overlay adds
+a single-node NATS JetStream server and enables the control-plane usage queue.
+NATS trusts an Operator and Workers Account generated offline by `nsc`. The
+control plane authenticates with a mounted JWT Credentials file and signs a
+unique publish-only User JWT for every Worker during the one-time claim. Set
+the Caddy TLS/WSS endpoint on **Worker Management → NATS Security** before
+claiming the first Worker. Operator seeds never enter NATS or the application;
+the Account seed is mounted only into the control plane through the generated
+issuer profile.
+The overlay publishes the raw NATS upstream only on `127.0.0.1:4222` for a
+host Caddy Layer 4 TLS proxy; it is not exposed on public interfaces. Use a
+Caddy build with the Layer 4 app for raw NATS/TCP, or enable NATS WebSocket and
+proxy WSS when using an HTTP-only Caddy build.
+Its file-backed data is stored in the `nats_data` volume, the monitoring endpoint
+is available only inside the Compose network, and the health check verifies
+that JetStream is enabled. The defaults raise the file-descriptor and
+connection ceilings, cap per-client pending memory, and reserve bounded memory
+and disk for JetStream. Tune `NATS_MAX_CONNECTIONS`, `NATS_MAX_PENDING`,
+`NATS_JETSTREAM_MAX_MEMORY_STORE`, `NATS_JETSTREAM_MAX_FILE_STORE`, and
+`NATS_JETSTREAM_SYNC_INTERVAL` in `.env` for the host capacity and durability
+requirements.
+
+Back up `nats-auth/nsc-store` and `nats-auth/issuer-profile.json` in a protected
+secret store. They are intentionally ignored by Git. Losing both prevents new
+Worker credential issuance and identity rotation.
+
+Alternatively, build both the application and gateway from source with the
+development stack:
 
 ```bash
 openssl rand -hex 32

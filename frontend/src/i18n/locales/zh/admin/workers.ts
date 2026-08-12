@@ -119,6 +119,34 @@ export default {
     oauthCompleteFailed: '完成 OAuth 失败',
     refreshFailed: '刷新 OAuth 凭据失败',
     accountTestFailed: '账号测试失败',
-    accountDeleteFailed: '删除 Worker 账号失败'
+    accountDeleteFailed: '删除 Worker 账号失败',
+    natsSecurity: {
+      action: 'NATS 安全配置',
+      title: 'Worker NATS 安全配置',
+      description: '配置由 nsc 签发的 NKey/JWT 身份，供 Worker 安全投递持久化使用记录。',
+      back: '返回 Worker 管理',
+      ready: '可以签发 Worker 身份',
+      incomplete: '配置尚未完成',
+      trustTitle: '信任链',
+      trustHint: 'Operator 与 Account 身份由 nsc 离线生成，Operator 私钥不会进入应用进程。',
+      operator: 'Operator',
+      account: 'Worker Account',
+      controlCredentials: '控制面凭据',
+      controlCredentialsHint: '通过只读 Compose Secret 挂载的 JWT Credentials。',
+      configured: '已配置',
+      missing: '缺失',
+      workerTitle: 'Worker 签发策略',
+      workerHint: '每个新认领的 Worker 都会获得独立 NKey，以及由 Worker Account 签名的最小权限用户 JWT。',
+      workerUrl: 'Worker NATS 地址',
+      workerUrlHint: '填写经 Caddy 暴露、所有 Worker 均可访问的 TLS 或 WSS 地址。',
+      ttl: '凭据有效期（天）',
+      ttlHint: '填写 0 表示凭据不过期。',
+      subject: '结算 Subject',
+      workerPermission: '签发权限',
+      saveHint: '后续 Worker 认领会使用此策略；控制面不会再次展示已下发的 Worker 私钥。',
+      saved: 'Worker NATS 安全配置已保存',
+      loadFailed: '加载 Worker NATS 安全配置失败',
+      saveFailed: '保存 Worker NATS 安全配置失败'
+    }
   }
 }

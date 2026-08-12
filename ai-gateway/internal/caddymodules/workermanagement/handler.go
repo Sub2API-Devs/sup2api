@@ -60,7 +60,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request, _ caddyhttp.
 			"protocol_version": managerpkg.ProtocolVersion, "kind": "ai-gateway-caddy",
 			"worker_id": h.manager.WorkerID(), "instance_id": h.manager.InstanceID(),
 			"generation": 1, "config_revision": 1, "version": h.manager.Version(),
-			"capabilities": []string{"openai_api_key", "openai_oauth_pkce", "oauth_refresh", "account_test", "grpc_settlement_logs", "canonical_usage_records", "nats_jetstream_usage", "sqlite_usage_outbox"},
+			"capabilities": []string{"openai_api_key", "openai_oauth_pkce", "oauth_refresh", "account_test", "grpc_settlement_logs", "canonical_usage_records", "nats_jetstream_usage", "nats_nkey_jwt", "sqlite_usage_outbox"},
 			"caddy":        map[string]any{"enabled": true},
 		})
 	case r.Method == http.MethodGet && path == "/worker/v1/live":

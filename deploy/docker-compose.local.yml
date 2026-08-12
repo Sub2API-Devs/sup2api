@@ -85,7 +85,10 @@ services:
 
       # Worker Usage Queue (NATS JetStream)
       - USAGE_QUEUE_ENABLED=true
-      - USAGE_QUEUE_URL=nats://${NATS_USER:-sub2api}:${NATS_PASSWORD:?NATS_PASSWORD is required}@nats:4222
+      - USAGE_QUEUE_URL=nats://nats:4222
+      - USAGE_QUEUE_CREDENTIALS_FILE=/run/secrets/nats_control_credentials
+      - USAGE_QUEUE_ISSUER_PROFILE_FILE=/run/secrets/nats_issuer_profile
+      - USAGE_QUEUE_WORKER_URL=${NATS_WORKER_URL:-}
       - USAGE_QUEUE_STREAM=${NATS_USAGE_STREAM:-SUP2API_USAGE}
       - USAGE_QUEUE_SUBJECT=${NATS_USAGE_SUBJECT:-sup2api.usage.settlements.v1}
       - USAGE_QUEUE_DURABLE=${NATS_USAGE_DURABLE:-sup2api-usage-settlement-v1}
@@ -193,6 +196,9 @@ services:
         condition: service_healthy
       nats:
         condition: service_healthy
+    secrets:
+      - nats_control_credentials
+      - nats_issuer_profile
     networks:
       - sub2api-network
     healthcheck:
@@ -275,13 +281,22 @@ services:
     image: nats:2.11-alpine
     container_name: sub2api-nats
     restart: unless-stopped
-    command: ["-js", "-sd", "/data", "-m", "8222", "--user", "${NATS_USER:-sub2api}", "--pass", "${NATS_PASSWORD:?NATS_PASSWORD is required}"]
+    command: ["--config", "/etc/nats/nats-server.conf"]
+    environment:
+      - NATS_MAX_CONNECTIONS=${NATS_MAX_CONNECTIONS:-10000}
+      - NATS_MAX_PAYLOAD=${NATS_MAX_PAYLOAD:-8MB}
+      - NATS_MAX_PENDING=${NATS_MAX_PENDING:-64MB}
+      - NATS_JETSTREAM_MAX_MEMORY_STORE=${NATS_JETSTREAM_MAX_MEMORY_STORE:-512MB}
+      - NATS_JETSTREAM_MAX_FILE_STORE=${NATS_JETSTREAM_MAX_FILE_STORE:-10GB}
+      - NATS_JETSTREAM_SYNC_INTERVAL=${NATS_JETSTREAM_SYNC_INTERVAL:-30s}
     volumes:
       - ./nats_data:/data:Z
+      - ./nats-server.conf:/etc/nats/nats-server.conf:ro
+      - ${NATS_SERVER_AUTH_CONFIG:-./nats-auth/nats-server-auth.conf}:/etc/nats/nats-server-auth.conf:ro
     networks:
       - sub2api-network
     healthcheck:
-      test: ["CMD", "wget", "-q", "-T", "2", "-O", "/dev/null", "http://127.0.0.1:8222/healthz"]
+      test: ["CMD", "wget", "-q", "-T", "2", "-O", "/dev/null", "http://127.0.0.1:8222/healthz?js-enabled-only=true"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -293,3 +308,9 @@ services:
 networks:
   sub2api-network:
     driver: bridge
+
+secrets:
+  nats_control_credentials:
+    file: ${NATS_CONTROL_CREDENTIALS_FILE:-./nats-auth/control.creds}
+  nats_issuer_profile:
+    file: ${NATS_ISSUER_PROFILE_FILE:-./nats-auth/issuer-profile.json}

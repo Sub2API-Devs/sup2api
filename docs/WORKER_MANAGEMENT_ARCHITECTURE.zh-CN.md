@@ -234,8 +234,8 @@ services:
       AI_GATEWAY_WORKER_CONFIG_PATH: /var/lib/ai-gateway/data/worker-config.json
       AI_GATEWAY_WORKER_VAULT_PATH: /var/lib/ai-gateway/data/worker-vault.db
       AI_GATEWAY_SETTLEMENT_WAL_PATH: /var/lib/ai-gateway/data/settlements
-      AI_GATEWAY_NATS_URL: nats://sub2api:${NATS_PASSWORD}@nats:4222
-      AI_GATEWAY_NATS_SUBJECT: sup2api.usage.settlements.v1
+      # NATS URL、subject 与每个 Worker 独立的 NKey/JWT credentials
+      # 由 Worker 管理页面在一次性认领时写入 0600 配置文件，不通过环境变量下发。
 ```
 
 明确禁止向 Worker 注入：

@@ -12,15 +12,18 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nats-io/nkeys"
 )
 
-const ProtocolVersion = "aicodex.proxy-worker/v1"
+const ProtocolVersion = "aicodex.proxy-worker/v2"
 
 var workerIDPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
 
@@ -30,6 +33,9 @@ type Config struct {
 	VaultKey             string `json:"vault_key"`
 	ControlPlaneTarget   string `json:"control_plane_target"`
 	ControlPlaneInsecure bool   `json:"control_plane_insecure"`
+	NATSURL              string `json:"nats_url"`
+	NATSSubject          string `json:"nats_subject"`
+	NATSCredentials      string `json:"nats_credentials"`
 }
 
 type ClaimRequest struct {
@@ -68,6 +74,33 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.ControlPlaneTarget) == "" {
 		return errors.New("control_plane_target is required")
 	}
+	parsed, err := url.Parse(strings.TrimSpace(c.NATSURL))
+	if err != nil || parsed.Host == "" {
+		return errors.New("nats_url must be a valid URL")
+	}
+	if parsed.User != nil {
+		return errors.New("nats_url must not contain credentials")
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "tls", "wss":
+	default:
+		return errors.New("nats_url must use tls or wss")
+	}
+	if subject := strings.TrimSpace(c.NATSSubject); subject == "" || strings.ContainsAny(subject, " *>\t\r\n") {
+		return errors.New("nats_subject must be a concrete NATS subject")
+	}
+	credentials := []byte(strings.TrimSpace(c.NATSCredentials))
+	if len(credentials) == 0 {
+		return errors.New("nats_credentials are required")
+	}
+	if _, err := nkeys.ParseDecoratedJWT(credentials); err != nil {
+		return fmt.Errorf("nats_credentials JWT: %w", err)
+	}
+	keyPair, err := nkeys.ParseDecoratedUserNKey(credentials)
+	if err != nil {
+		return fmt.Errorf("nats_credentials NKey: %w", err)
+	}
+	keyPair.Wipe()
 	return nil
 }
 
@@ -191,6 +224,9 @@ func (h *bootstrapHandler) claim(w http.ResponseWriter, r *http.Request) {
 	request.Config.ManagementKey = strings.TrimSpace(request.Config.ManagementKey)
 	request.Config.VaultKey = strings.TrimSpace(request.Config.VaultKey)
 	request.Config.ControlPlaneTarget = strings.TrimSpace(request.Config.ControlPlaneTarget)
+	request.Config.NATSURL = strings.TrimSpace(request.Config.NATSURL)
+	request.Config.NATSSubject = strings.TrimSpace(request.Config.NATSSubject)
+	request.Config.NATSCredentials = strings.TrimSpace(request.Config.NATSCredentials)
 	if err := request.Config.Validate(); err != nil {
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		_ = json.NewEncoder(w).Encode(map[string]string{"code": "invalid_worker_config", "message": err.Error()})
@@ -208,7 +244,7 @@ func (h *bootstrapHandler) claim(w http.ResponseWriter, r *http.Request) {
 		"protocol_version": ProtocolVersion, "kind": "ai-gateway-caddy",
 		"worker_id": request.Config.WorkerID, "instance_id": h.instanceID,
 		"generation": 1, "config_revision": 1, "version": h.version,
-		"capabilities": []string{"openai_api_key", "openai_oauth_pkce", "oauth_refresh", "account_test", "grpc_settlement_logs", "canonical_usage_records", "nats_jetstream_usage", "sqlite_usage_outbox"},
+		"capabilities": []string{"openai_api_key", "openai_oauth_pkce", "oauth_refresh", "account_test", "grpc_settlement_logs", "canonical_usage_records", "nats_jetstream_usage", "nats_nkey_jwt", "sqlite_usage_outbox"},
 		"caddy":        map[string]any{"enabled": false, "starting": true},
 	})
 	h.claimed <- &request.Config

@@ -21,6 +21,8 @@ func TestRegisterWorkerRoutesExposesCompleteAdminContract(t *testing.T) {
 	for _, expected := range []string{
 		"GET /api/v1/admin/workers",
 		"POST /api/v1/admin/workers",
+		"GET /api/v1/admin/workers/nats-security",
+		"PUT /api/v1/admin/workers/nats-security",
 		"GET /api/v1/admin/workers/:id",
 		"PUT /api/v1/admin/workers/:id",
 		"PATCH /api/v1/admin/workers/:id/enabled",

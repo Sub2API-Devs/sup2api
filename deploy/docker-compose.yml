@@ -81,18 +81,6 @@ services:
       - REDIS_ENABLE_TLS=${REDIS_ENABLE_TLS:-false}
 
       # =======================================================================
-      # Worker Usage Queue (NATS JetStream)
-      # =======================================================================
-      - USAGE_QUEUE_ENABLED=true
-      - USAGE_QUEUE_URL=nats://${NATS_USER:-sub2api}:${NATS_PASSWORD:?NATS_PASSWORD is required}@nats:4222
-      - USAGE_QUEUE_STREAM=${NATS_USAGE_STREAM:-SUP2API_USAGE}
-      - USAGE_QUEUE_SUBJECT=${NATS_USAGE_SUBJECT:-sup2api.usage.settlements.v1}
-      - USAGE_QUEUE_DURABLE=${NATS_USAGE_DURABLE:-sup2api-usage-settlement-v1}
-      - USAGE_QUEUE_MAX_AGE_HOURS=${NATS_USAGE_MAX_AGE_HOURS:-24}
-      - USAGE_QUEUE_MAX_BYTES=${NATS_USAGE_MAX_BYTES:-1073741824}
-      - USAGE_QUEUE_CONSUMERS=${NATS_USAGE_CONSUMERS:-8}
-
-      # =======================================================================
       # Admin Account (auto-created on first run)
       # =======================================================================
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@sub2api.local}
@@ -191,8 +179,6 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      nats:
         condition: service_healthy
     networks:
       - sub2api-network
@@ -298,33 +284,6 @@ services:
     # 注意：不暴露端口到宿主机，应用通过内部网络连接
     # 如需调试，可临时添加：ports: ["127.0.0.1:6379:6379"]
 
-  # ===========================================================================
-  # NATS JetStream - durable Worker usage settlement queue
-  # ===========================================================================
-  nats:
-    image: nats:2.11-alpine
-    container_name: sub2api-nats
-    restart: unless-stopped
-    command:
-      - "-js"
-      - "-sd"
-      - "/data"
-      - "-m"
-      - "8222"
-      - "--user"
-      - "${NATS_USER:-sub2api}"
-      - "--pass"
-      - "${NATS_PASSWORD:?NATS_PASSWORD is required}"
-    volumes:
-      - nats_data:/data
-    networks:
-      - sub2api-network
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-T", "2", "-O", "/dev/null", "http://127.0.0.1:8222/healthz"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
 # =============================================================================
 # Volumes
 # =============================================================================
@@ -334,8 +293,6 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
-    driver: local
-  nats_data:
     driver: local
 
 # =============================================================================

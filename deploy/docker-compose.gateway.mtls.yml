@@ -48,8 +48,6 @@ services:
       - AI_GATEWAY_STARTUP_REQUIRED=true
       - AI_GATEWAY_SETTLEMENT_WAL_PATH=/var/lib/ai-gateway/data/settlements
       - AI_GATEWAY_SETTLEMENT_WAL_MAX_BYTES=${AI_GATEWAY_SETTLEMENT_WAL_MAX_BYTES:-1073741824}
-      - AI_GATEWAY_NATS_URL=nats://${NATS_USER:-sub2api}:${NATS_PASSWORD:?NATS_PASSWORD is required}@nats:4222
-      - AI_GATEWAY_NATS_SUBJECT=${NATS_USAGE_SUBJECT:-sup2api.usage.settlements.v1}
       - TZ=${TZ:-Asia/Shanghai}
     secrets:
       - sup2api_data_plane_ca

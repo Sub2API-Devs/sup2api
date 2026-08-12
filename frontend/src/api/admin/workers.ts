@@ -50,6 +50,20 @@ export interface WorkerLog {
   consumed_at: string
 }
 
+export interface WorkerNATSSecurityConfig {
+  authentication_mode: 'nkey_jwt_nsc' | string
+  ready: boolean
+  worker_url: string
+  subject: string
+  credential_ttl_days: number
+  operator_id: string
+  operator_name: string
+  account_id: string
+  account_name: string
+  issuer_configured: boolean
+  control_credentials_configured: boolean
+}
+
 export interface WorkerAccountInput {
   name: string
   api_key?: string
@@ -111,6 +125,19 @@ export async function testConnection(id: number): Promise<Record<string, unknown
   return data
 }
 
+export async function getNATSSecurity(): Promise<WorkerNATSSecurityConfig> {
+  const { data } = await apiClient.get<WorkerNATSSecurityConfig>('/admin/workers/nats-security')
+  return data
+}
+
+export async function updateNATSSecurity(input: {
+  worker_url: string
+  credential_ttl_days: number
+}): Promise<WorkerNATSSecurityConfig> {
+  const { data } = await apiClient.put<WorkerNATSSecurityConfig>('/admin/workers/nats-security', input)
+  return data
+}
+
 export async function listAccounts(id: number): Promise<WorkerAccount[]> {
   const { data } = await apiClient.get<WorkerAccount[]>(`/admin/workers/${id}/accounts`)
   return data
@@ -165,6 +192,8 @@ export default {
   setEnabled,
   remove,
   testConnection,
+  getNATSSecurity,
+  updateNATSSecurity,
   listAccounts,
   createAPIKeyAccount,
   startOAuth,

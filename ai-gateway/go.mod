@@ -6,6 +6,7 @@ require (
 	github.com/caddyserver/caddy/v2 v2.11.3
 	github.com/coder/websocket v1.8.14
 	github.com/nats-io/nats.go v1.45.0
+	github.com/nats-io/nkeys v0.4.11
 	go.uber.org/zap v1.28.0
 	google.golang.org/grpc v1.81.0
 	google.golang.org/protobuf v1.36.11
@@ -15,7 +16,6 @@ require (
 require (
 	github.com/andybalholm/brotli v1.0.6 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.41.5 // indirect
-	github.com/nats-io/nkeys v0.4.11 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect

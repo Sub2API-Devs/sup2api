@@ -27,6 +27,7 @@ type App struct {
 	SettlementWALMaxBytes int64          `json:"settlement_wal_max_bytes,omitempty"`
 	NATSURL               string         `json:"nats_url,omitempty"`
 	NATSSubject           string         `json:"nats_subject,omitempty"`
+	NATSCredentials       string         `json:"nats_credentials,omitempty"`
 	AuthCacheTTL          caddy.Duration `json:"auth_cache_ttl,omitempty"`
 	AuthCacheSize         int            `json:"auth_cache_size,omitempty"`
 	TLSCAFile             string         `json:"tls_ca_file,omitempty"`
@@ -89,6 +90,7 @@ func (a *App) Provision(ctx caddy.Context) error {
 		SettlementWALMaxBytes: a.SettlementWALMaxBytes,
 		NATSURL:               a.NATSURL,
 		NATSSubject:           a.NATSSubject,
+		NATSCredentials:       a.NATSCredentials,
 		AuthCacheTTL:          time.Duration(a.AuthCacheTTL),
 		AuthCacheSize:         a.AuthCacheSize,
 		TLSCAFile:             a.TLSCAFile,

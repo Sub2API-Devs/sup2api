@@ -3,8 +3,9 @@
 # Sub2API Docker Deployment Preparation Script
 # =============================================================================
 # This script prepares deployment files for Sub2API:
-#   - Downloads docker-compose.local.yml and .env.example
-#   - Generates secure secrets (JWT_SECRET, TOTP_ENCRYPTION_KEY, POSTGRES_PASSWORD, NATS_PASSWORD)
+#   - Downloads Docker, NATS, and environment configuration
+#   - Generates secure secrets (JWT_SECRET, TOTP_ENCRYPTION_KEY, POSTGRES_PASSWORD)
+#   - Initializes the NATS Operator/Account trust root with nsc
 #   - Creates necessary data directories
 #
 # After running this script, you can start services with:
@@ -63,6 +64,11 @@ main() {
         print_error "openssl is not installed. Please install openssl first."
         exit 1
     fi
+    if ! command_exists nsc; then
+        print_error "nsc is not installed. Install it first with:"
+        echo "  go install github.com/nats-io/nsc/v2@v2.15.0"
+        exit 1
+    fi
 
     # Check if deployment already exists
     if [ -f "docker-compose.yml" ] && [ -f ".env" ]; then
@@ -96,6 +102,17 @@ main() {
     fi
     print_success "Downloaded .env.example"
 
+    for file in nats-server.conf setup_nats_nsc.sh; do
+        print_info "Downloading ${file}..."
+        if command_exists curl; then
+            curl -sSL "${GITHUB_RAW_URL}/${file}" -o "${file}"
+        else
+            wget -q "${GITHUB_RAW_URL}/${file}" -O "${file}"
+        fi
+    done
+    chmod +x setup_nats_nsc.sh
+    print_success "Downloaded NATS NKey/JWT bootstrap files"
+
     # Generate .env file with auto-generated secrets
     print_info "Generating secure secrets..."
     echo ""
@@ -104,7 +121,6 @@ main() {
     JWT_SECRET=$(generate_secret)
     TOTP_ENCRYPTION_KEY=$(generate_secret)
     POSTGRES_PASSWORD=$(generate_secret)
-    NATS_PASSWORD=$(generate_secret)
 
     # Create .env from .env.example
     cp .env.example .env
@@ -115,19 +131,25 @@ main() {
         sed -i "s/^JWT_SECRET=.*/JWT_SECRET=${JWT_SECRET}/" .env
         sed -i "s/^TOTP_ENCRYPTION_KEY=.*/TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY}/" .env
         sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=${POSTGRES_PASSWORD}/" .env
-        sed -i "s/^NATS_PASSWORD=.*/NATS_PASSWORD=${NATS_PASSWORD}/" .env
     else
         # BSD sed (macOS)
         sed -i '' "s/^JWT_SECRET=.*/JWT_SECRET=${JWT_SECRET}/" .env
         sed -i '' "s/^TOTP_ENCRYPTION_KEY=.*/TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY}/" .env
         sed -i '' "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=${POSTGRES_PASSWORD}/" .env
-        sed -i '' "s/^NATS_PASSWORD=.*/NATS_PASSWORD=${NATS_PASSWORD}/" .env
     fi
 
     # Create data directories
     print_info "Creating data directories..."
     mkdir -p data postgres_data redis_data nats_data
     print_success "Created data directories"
+
+    print_info "Initializing NATS NKey/JWT trust root..."
+    if [ -f nats-auth/nats-server-auth.conf ] && [ -f nats-auth/control.creds ] && [ -f nats-auth/issuer-profile.json ]; then
+        print_warning "Existing NATS trust root preserved"
+    else
+        ./setup_nats_nsc.sh
+        print_success "Initialized NATS Operator, Account, and control-plane credentials"
+    fi
 
     # Set secure permissions for .env file (readable/writable only by owner)
     chmod 600 .env
@@ -142,7 +164,6 @@ main() {
     echo "  POSTGRES_PASSWORD:     ${POSTGRES_PASSWORD}"
     echo "  JWT_SECRET:            ${JWT_SECRET}"
     echo "  TOTP_ENCRYPTION_KEY:   ${TOTP_ENCRYPTION_KEY}"
-    echo "  NATS_PASSWORD:         ${NATS_PASSWORD}"
     echo ""
     print_warning "These credentials have been saved to .env file."
     print_warning "Please keep them secure and do not share publicly!"
@@ -155,6 +176,7 @@ main() {
     echo "  postgres_data/            - PostgreSQL data"
     echo "  redis_data/               - Redis data"
     echo "  nats_data/                - NATS JetStream data"
+    echo "  nats-auth/                - NATS nsc store and credentials (back up securely)"
     echo ""
     echo "Next steps:"
     echo "  1. (Optional) Edit .env to customize configuration"

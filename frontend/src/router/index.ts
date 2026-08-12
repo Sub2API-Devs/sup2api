@@ -561,6 +561,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/workers/nats-security',
+    name: 'AdminWorkerNATSSecurity',
+    component: () => import('@/views/admin/WorkerNATSSecurityView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Worker NATS Security',
+      titleKey: 'admin.workers.natsSecurity.title',
+      descriptionKey: 'admin.workers.natsSecurity.description'
+    }
+  },
+  {
     path: '/admin/redeem',
     name: 'AdminRedeem',
     component: () => import('@/views/admin/RedeemView.vue'),

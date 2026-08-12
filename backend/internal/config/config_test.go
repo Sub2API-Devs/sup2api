@@ -76,11 +76,14 @@ func TestLoadDataPlaneControlDefaultsAndSecureEnablement(t *testing.T) {
 func TestLoadUsageQueueFromEnvironment(t *testing.T) {
 	resetViperWithJWTSecret(t)
 	t.Setenv("USAGE_QUEUE_ENABLED", "true")
-	t.Setenv("USAGE_QUEUE_URL", "nats://app:secret@nats:4222")
+	t.Setenv("USAGE_QUEUE_URL", "nats://nats:4222")
+	t.Setenv("USAGE_QUEUE_CREDENTIALS_FILE", "/run/secrets/control.creds")
+	t.Setenv("USAGE_QUEUE_ISSUER_PROFILE_FILE", "/run/secrets/issuer-profile.json")
 	cfg, err := Load()
 	require.NoError(t, err)
 	require.True(t, cfg.UsageQueue.Enabled)
-	require.Equal(t, "nats://app:secret@nats:4222", cfg.UsageQueue.URL)
+	require.Equal(t, "nats://nats:4222", cfg.UsageQueue.URL)
+	require.Equal(t, "/run/secrets/control.creds", cfg.UsageQueue.CredentialsFile)
 	require.Equal(t, "SUP2API_USAGE", cfg.UsageQueue.Stream)
 	require.Equal(t, "sup2api.usage.settlements.v1", cfg.UsageQueue.Subject)
 }

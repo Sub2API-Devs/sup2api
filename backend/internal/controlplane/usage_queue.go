@@ -55,6 +55,7 @@ func (q *UsageQueue) Start(ctx context.Context) error {
 		return nil
 	}
 	connection, err := nats.Connect(q.cfg.URL,
+		nats.UserCredentials(q.cfg.CredentialsFile),
 		nats.Name("sup2api-usage-settlement-consumer"),
 		nats.Timeout(5*time.Second),
 		nats.MaxReconnects(-1),

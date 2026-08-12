@@ -52,6 +52,9 @@ func (b *lockedBuffer) String() string {
 }
 
 func TestTwoUIClaimedWorkerProcessesKeepAccountsAndSettlementIdentityIsolated(t *testing.T) {
+	if strings.TrimSpace(os.Getenv("NATS_TEST_URL")) == "" || strings.TrimSpace(os.Getenv("NATS_TEST_CREDS")) == "" {
+		t.Skip("NATS_TEST_URL and NATS_TEST_CREDS are required for the JWT-authenticated multi-Worker integration test")
+	}
 	moduleRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
@@ -198,6 +201,10 @@ func startUnclaimedWorkerProcess(t *testing.T, binary, workerID, managementKey s
 
 func claimWorkerFromUI(t *testing.T, worker *workerProcess, controlAddress string) {
 	t.Helper()
+	credentials, err := os.ReadFile(os.Getenv("NATS_TEST_CREDS"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		response, err := http.Get("http://" + worker.address + "/worker/v1/bootstrap")
@@ -221,6 +228,8 @@ func claimWorkerFromUI(t *testing.T, worker *workerProcess, controlAddress strin
 		"pairing_token": strings.TrimSpace(string(pairingToken)), "worker_id": worker.workerID,
 		"management_key": worker.management, "vault_key": worker.vaultKey,
 		"control_plane_target": controlAddress, "control_plane_insecure": true,
+		"nats_url": os.Getenv("NATS_TEST_URL"), "nats_subject": "sup2api.usage.settlements.v1",
+		"nats_credentials": string(credentials),
 	})
 	request, _ := http.NewRequest(http.MethodPost, "http://"+worker.address+"/worker/v1/claim", bytes.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")

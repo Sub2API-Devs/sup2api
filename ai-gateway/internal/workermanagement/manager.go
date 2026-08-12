@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	ProtocolVersion   = "aicodex.proxy-worker/v1"
+	ProtocolVersion   = "aicodex.proxy-worker/v2"
 	openAIClientID    = "app_EMoamEEZ73f0CkXaXp7hrann"
 	defaultAuthorize  = "https://auth.openai.com/oauth/authorize"
 	defaultToken      = "https://auth.openai.com/oauth/token"

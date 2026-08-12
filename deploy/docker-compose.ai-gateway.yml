@@ -1,0 +1,121 @@
+# Sup2API AI Gateway overlay using the image built by build_ai_gateway.sh.
+#
+# Usage:
+#   ./setup_nats_nsc.sh
+#   ./build_ai_gateway.sh
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.ai-gateway.yml \
+#     up -d
+#
+# The control-plane RPC uses plaintext only inside the private Compose network.
+# Use docker-compose.gateway.mtls.yml when the RPC crosses a trusted network
+# boundary or requires production mutual TLS.
+
+services:
+  sub2api:
+    environment:
+      - USAGE_QUEUE_ENABLED=true
+      - USAGE_QUEUE_URL=nats://nats:4222
+      - USAGE_QUEUE_CREDENTIALS_FILE=/run/secrets/nats_control_credentials
+      - USAGE_QUEUE_ISSUER_PROFILE_FILE=/run/secrets/nats_issuer_profile
+      - USAGE_QUEUE_WORKER_URL=${NATS_WORKER_URL:-}
+      - USAGE_QUEUE_STREAM=${NATS_USAGE_STREAM:-SUP2API_USAGE}
+      - USAGE_QUEUE_SUBJECT=${NATS_USAGE_SUBJECT:-sup2api.usage.settlements.v1}
+      - USAGE_QUEUE_DURABLE=${NATS_USAGE_DURABLE:-sup2api-usage-settlement-v1}
+      - USAGE_QUEUE_MAX_AGE_HOURS=${NATS_USAGE_MAX_AGE_HOURS:-24}
+      - USAGE_QUEUE_MAX_BYTES=${NATS_USAGE_MAX_BYTES:-1073741824}
+      - USAGE_QUEUE_CONSUMERS=${NATS_USAGE_CONSUMERS:-8}
+      - DATA_PLANE_CONTROL_ENABLED=true
+      - DATA_PLANE_CONTROL_NETWORK=tcp
+      - DATA_PLANE_CONTROL_ADDRESS=0.0.0.0:9090
+      - DATA_PLANE_CONTROL_INSECURE=true
+      - DATA_PLANE_CONTROL_GRANT_SECRET=${DATA_PLANE_CONTROL_GRANT_SECRET:?DATA_PLANE_CONTROL_GRANT_SECRET is required}
+      - DATA_PLANE_CONTROL_GRANT_TTL_SECONDS=${DATA_PLANE_CONTROL_GRANT_TTL_SECONDS:-60}
+      - DATA_PLANE_CONTROL_LEASE_TTL_SECONDS=${DATA_PLANE_CONTROL_LEASE_TTL_SECONDS:-60}
+    depends_on:
+      nats:
+        condition: service_healthy
+    secrets:
+      - nats_control_credentials
+      - nats_issuer_profile
+
+  sup2api-gateway:
+    image: ${AI_GATEWAY_IMAGE:-sup2api/ai-gateway:local}
+    container_name: sup2api-gateway
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "${BIND_HOST:-127.0.0.1}:${AI_GATEWAY_PORT:-9999}:9999"
+    volumes:
+      - sup2api_gateway_data:/var/lib/ai-gateway/data
+    environment:
+      - AI_GATEWAY_LISTEN=:9999
+      - AI_GATEWAY_WORKER_CONFIG_PATH=/var/lib/ai-gateway/data/worker-config.json
+      - AI_GATEWAY_WORKER_VAULT_PATH=/var/lib/ai-gateway/data/worker-vault.db
+      - AI_GATEWAY_LEASE_RENEW_INTERVAL=${AI_GATEWAY_LEASE_RENEW_INTERVAL:-30s}
+      - AI_GATEWAY_STARTUP_REQUIRED=true
+      - AI_GATEWAY_SETTLEMENT_WAL_PATH=/var/lib/ai-gateway/data/settlements
+      - AI_GATEWAY_SETTLEMENT_WAL_MAX_BYTES=${AI_GATEWAY_SETTLEMENT_WAL_MAX_BYTES:-1073741824}
+      - TZ=${TZ:-Asia/Shanghai}
+    depends_on:
+      sub2api:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    networks:
+      - sub2api-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://localhost:9999/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  # JetStream durably buffers usage settlements between the gateway and the
+  # control plane. When this overlay is combined with the base Compose file,
+  # these settings enhance the existing `nats` service instead of creating a
+  # second server.
+  nats:
+    image: nats:2.11-alpine
+    container_name: sub2api-nats
+    restart: unless-stopped
+    command: ["--config", "/etc/nats/nats-server.conf"]
+    ports:
+      # Loopback-only upstream for the host Caddy Layer 4 TLS proxy.
+      - "${NATS_BIND_HOST:-127.0.0.1}:${NATS_PORT:-4222}:4222"
+    environment:
+      - NATS_MAX_CONNECTIONS=${NATS_MAX_CONNECTIONS:-10000}
+      - NATS_MAX_PAYLOAD=${NATS_MAX_PAYLOAD:-8MB}
+      - NATS_MAX_PENDING=${NATS_MAX_PENDING:-64MB}
+      - NATS_JETSTREAM_MAX_MEMORY_STORE=${NATS_JETSTREAM_MAX_MEMORY_STORE:-512MB}
+      - NATS_JETSTREAM_MAX_FILE_STORE=${NATS_JETSTREAM_MAX_FILE_STORE:-10GB}
+      - NATS_JETSTREAM_SYNC_INTERVAL=${NATS_JETSTREAM_SYNC_INTERVAL:-30s}
+    volumes:
+      - nats_data:/data
+      - ./nats-server.conf:/etc/nats/nats-server.conf:ro
+      - ${NATS_SERVER_AUTH_CONFIG:-./nats-auth/nats-server-auth.conf}:/etc/nats/nats-server-auth.conf:ro
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
+    stop_grace_period: 30s
+    networks:
+      - sub2api-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "2", "-O", "/dev/null", "http://127.0.0.1:8222/healthz?js-enabled-only=true"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  sup2api_gateway_data:
+  nats_data:
+
+secrets:
+  nats_control_credentials:
+    file: ${NATS_CONTROL_CREDENTIALS_FILE:-./nats-auth/control.creds}
+  nats_issuer_profile:
+    file: ${NATS_ISSUER_PROFILE_FILE:-./nats-auth/issuer-profile.json}

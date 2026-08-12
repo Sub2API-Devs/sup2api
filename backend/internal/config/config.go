@@ -700,6 +700,9 @@ type DataPlaneControlTLSConfig struct {
 type UsageQueueConfig struct {
 	Enabled           bool   `mapstructure:"enabled"`
 	URL               string `mapstructure:"url"`
+	CredentialsFile   string `mapstructure:"credentials_file"`
+	WorkerURL         string `mapstructure:"worker_url"`
+	IssuerProfileFile string `mapstructure:"issuer_profile_file"`
 	Stream            string `mapstructure:"stream"`
 	Subject           string `mapstructure:"subject"`
 	Durable           string `mapstructure:"durable"`
@@ -1979,6 +1982,9 @@ func setDefaults() {
 	viper.SetDefault("data_plane_control.tls.key_file", "")
 	viper.SetDefault("usage_queue.enabled", false)
 	viper.SetDefault("usage_queue.url", "nats://127.0.0.1:4222")
+	viper.SetDefault("usage_queue.credentials_file", "")
+	viper.SetDefault("usage_queue.worker_url", "")
+	viper.SetDefault("usage_queue.issuer_profile_file", "")
 	viper.SetDefault("usage_queue.stream", "SUP2API_USAGE")
 	viper.SetDefault("usage_queue.subject", "sup2api.usage.settlements.v1")
 	viper.SetDefault("usage_queue.durable", "sup2api-usage-settlement-v1")
@@ -2678,6 +2684,15 @@ func (c *Config) Validate() error {
 		case "nats", "tls", "ws", "wss":
 		default:
 			return fmt.Errorf("usage_queue.url must use nats, tls, ws, or wss")
+		}
+		if parsed.User != nil {
+			return fmt.Errorf("usage_queue.url must not contain credentials; configure credentials_file")
+		}
+		if strings.TrimSpace(c.UsageQueue.CredentialsFile) == "" {
+			return fmt.Errorf("usage_queue.credentials_file is required when enabled")
+		}
+		if strings.TrimSpace(c.UsageQueue.IssuerProfileFile) == "" {
+			return fmt.Errorf("usage_queue.issuer_profile_file is required when enabled")
 		}
 		if !validNATSName(c.UsageQueue.Stream) || !validNATSName(c.UsageQueue.Durable) {
 			return fmt.Errorf("usage_queue.stream and usage_queue.durable contain invalid characters")

@@ -89,7 +89,7 @@ Probe the process separately from its control-plane dependency:
   ready and the local billing WAL can safely admit new requests.
 
 Only process/bootstrap paths and transport mechanics use environment variables.
-Worker identity, long-lived keys, and the gRPC target come from the
+Worker identity, long-lived keys, the gRPC target, and NATS JWT Credentials come from the
 UI-provisioned Worker configuration file.
 
 | Variable | Default | Purpose |
@@ -102,13 +102,17 @@ UI-provisioned Worker configuration file.
 | `AI_GATEWAY_LEASE_RENEW_INTERVAL` | `30s` | Retry interval while an acknowledged admission lease remains valid |
 | `AI_GATEWAY_SETTLEMENT_WAL_PATH` | `./data/settlements` | Durable SQLite settlement outbox directory |
 | `AI_GATEWAY_SETTLEMENT_WAL_MAX_BYTES` | `1073741824` | Fail-closed SQLite outbox payload limit |
-| `AI_GATEWAY_NATS_URL` | empty | NATS URL; configured deployments use JetStream instead of direct settlement RPC |
-| `AI_GATEWAY_NATS_SUBJECT` | `sup2api.usage.settlements.v1` | JetStream settlement subject |
 | `AI_GATEWAY_AUTH_CACHE_TTL` | `60s` | Maximum local AuthGrant lifetime |
 | `AI_GATEWAY_AUTH_CACHE_SIZE` | `65536` | Maximum local AuthGrant entries |
 | `AI_GATEWAY_WORKER_CONFIG_PATH` | `./data/worker-config.json` | Mode-0600 UI-provisioned Worker configuration |
 | `AI_GATEWAY_WORKER_VAULT_PATH` | `./data/worker-vault.db` | Encrypted Worker-local account vault |
 | `AI_GATEWAY_VERSION` | `dev` | Version reported by the Worker identity endpoint |
+
+NATS authentication is provisioned by the Worker management UI during claim.
+Each Worker receives a unique NKey seed and Account-signed User JWT with only
+`publish <settlement-subject>` and `subscribe _INBOX.>` permissions. The
+credential is persisted inside the mode-0600 Worker configuration and never
+placed in a container environment variable or connection URL.
 
 Execution-plan extension namespaces:
 

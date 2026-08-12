@@ -2,12 +2,28 @@ package config
 
 import (
 	"encoding/base64"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/workersetup"
+	"github.com/nats-io/nkeys"
 )
+
+func testWorkerCredentials(t *testing.T) string {
+	t.Helper()
+	pair, err := nkeys.CreateUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pair.Wipe()
+	seed, err := pair.Seed()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fmt.Sprintf("-----BEGIN NATS USER JWT-----\ntest.jwt.value\n------END NATS USER JWT------\n\n-----BEGIN USER NKEY SEED-----\n%s\n------END USER NKEY SEED------\n", seed)
+}
 
 func TestFromEnvDefaultsToUnixControlPlaneAndPort9999(t *testing.T) {
 	for _, key := range []string{
@@ -61,22 +77,15 @@ func TestFromEnvDefaultsToUnixControlPlaneAndPort9999(t *testing.T) {
 	}
 }
 
-func TestFromEnvLoadsNATSUsageQueue(t *testing.T) {
+func TestFromEnvDoesNotLoadLongLivedNATSIdentity(t *testing.T) {
 	t.Setenv("AI_GATEWAY_NATS_URL", "nats://worker:secret@nats:4222")
 	t.Setenv("AI_GATEWAY_NATS_SUBJECT", "custom.usage.v1")
 	cfg, err := FromEnv()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.NATSURL != "nats://worker:secret@nats:4222" || cfg.NATSSubject != "custom.usage.v1" {
+	if cfg.NATSURL != "" || cfg.NATSSubject != "sup2api.usage.settlements.v1" {
 		t.Fatalf("NATS config URL=%q subject=%q", cfg.NATSURL, cfg.NATSSubject)
-	}
-}
-
-func TestFromEnvRejectsInvalidNATSUsageQueueURL(t *testing.T) {
-	t.Setenv("AI_GATEWAY_NATS_URL", "https://nats:4222")
-	if _, err := FromEnv(); err == nil || !strings.Contains(err.Error(), "must use nats") {
-		t.Fatalf("expected invalid NATS URL error, got %v", err)
 	}
 }
 
@@ -91,6 +100,8 @@ func TestFromEnvWithWorkerUsesUIProvisionedConfigurationWithoutRedis(t *testing.
 		WorkerID: "gateway-ui-01", ManagementKey: strings.Repeat("m", 32),
 		VaultKey:           base64.StdEncoding.EncodeToString(make([]byte, 32)),
 		ControlPlaneTarget: "sub2api:9090", ControlPlaneInsecure: true,
+		NATSURL: "tls://nats.example.com:443", NATSSubject: "sup2api.usage.settlements.v1",
+		NATSCredentials: testWorkerCredentials(t),
 	}
 	cfg, err := FromEnvWithWorker(worker, "instance-ui")
 	if err != nil {
@@ -111,6 +122,8 @@ func TestFromEnvRequiresCAForSecureTCP(t *testing.T) {
 		WorkerID: "gateway-ui-tls", ManagementKey: strings.Repeat("m", 32),
 		VaultKey:           base64.StdEncoding.EncodeToString(make([]byte, 32)),
 		ControlPlaneTarget: "dns:///control.internal:9443", ControlPlaneInsecure: false,
+		NATSURL: "tls://nats.example.com:443", NATSSubject: "sup2api.usage.settlements.v1",
+		NATSCredentials: testWorkerCredentials(t),
 	}
 	if _, err := FromEnvWithWorker(worker, "instance-ui"); err == nil {
 		t.Fatal("expected missing CA error")

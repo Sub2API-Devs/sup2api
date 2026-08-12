@@ -260,7 +260,7 @@ func TestWorkerServiceRegistersAndOperatesOnSelectedRemoteWorker(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch request.URL.Path {
 		case "/worker/v1/identity":
-			_, _ = w.Write([]byte(`{"success":true,"protocol_version":"aicodex.proxy-worker/v1","kind":"ai-gateway-caddy","worker_id":"worker-a","instance_id":"instance-a","version":"1.2.3"}`))
+			_, _ = w.Write([]byte(`{"success":true,"protocol_version":"aicodex.proxy-worker/v2","kind":"ai-gateway-caddy","worker_id":"worker-a","instance_id":"instance-a","version":"1.2.3"}`))
 		case "/worker/v1/ready":
 			_, _ = w.Write([]byte(`{"success":true,"ready":true}`))
 		case "/worker/v1/accounts/openai/api-key":
@@ -349,7 +349,7 @@ func TestWorkerServiceUpdatesLifecycleAndMaintainsHeartbeat(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch request.URL.Path {
 		case "/worker/v1/identity":
-			_, _ = w.Write([]byte(`{"protocol_version":"aicodex.proxy-worker/v1","worker_id":"worker-heartbeat","instance_id":"instance-heartbeat","version":"2.0.0"}`))
+			_, _ = w.Write([]byte(`{"protocol_version":"aicodex.proxy-worker/v2","worker_id":"worker-heartbeat","instance_id":"instance-heartbeat","version":"2.0.0"}`))
 		case "/worker/v1/ready":
 			_, _ = w.Write([]byte(`{"ready":true}`))
 		default:
@@ -405,7 +405,7 @@ func TestWorkerServiceUpdatePreservesUnchangedManagementKeyCiphertext(t *testing
 	managementKey := strings.Repeat("k", 32)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"protocol_version":"aicodex.proxy-worker/v1","worker_id":"worker-key","instance_id":"instance-key","version":"1"}`))
+		_, _ = w.Write([]byte(`{"protocol_version":"aicodex.proxy-worker/v2","worker_id":"worker-key","instance_id":"instance-key","version":"1"}`))
 	}))
 	defer server.Close()
 
@@ -440,7 +440,7 @@ func TestWorkerServiceProbeReportsHeartbeatPersistenceFailure(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch request.URL.Path {
 		case "/worker/v1/identity":
-			_, _ = w.Write([]byte(`{"protocol_version":"aicodex.proxy-worker/v1","worker_id":"worker-persist","instance_id":"instance-persist","version":"1"}`))
+			_, _ = w.Write([]byte(`{"protocol_version":"aicodex.proxy-worker/v2","worker_id":"worker-persist","instance_id":"instance-persist","version":"1"}`))
 		case "/worker/v1/ready":
 			_, _ = w.Write([]byte(`{"ready":true}`))
 		default:
@@ -479,7 +479,7 @@ func TestWorkerServiceSharedProbeOutlivesCanceledCaller(t *testing.T) {
 			}
 			callsMu.Unlock()
 			<-releaseIdentity
-			_, _ = w.Write([]byte(`{"protocol_version":"aicodex.proxy-worker/v1","worker_id":"worker-shared","instance_id":"instance-shared","version":"1"}`))
+			_, _ = w.Write([]byte(`{"protocol_version":"aicodex.proxy-worker/v2","worker_id":"worker-shared","instance_id":"instance-shared","version":"1"}`))
 		case "/worker/v1/ready":
 			_, _ = w.Write([]byte(`{"ready":true}`))
 		default:
@@ -578,7 +578,7 @@ func TestWorkerServiceAlwaysRoutesAccountOperationsToSelectedWorker(t *testing.T
 			w.Header().Set("Content-Type", "application/json")
 			switch request.URL.Path {
 			case "/worker/v1/identity":
-				_, _ = w.Write([]byte(`{"protocol_version":"aicodex.proxy-worker/v1","worker_id":"` + workerID + `","instance_id":"instance-` + workerID + `","version":"test"}`))
+				_, _ = w.Write([]byte(`{"protocol_version":"aicodex.proxy-worker/v2","worker_id":"` + workerID + `","instance_id":"instance-` + workerID + `","version":"test"}`))
 			case "/worker/v1/ready":
 				_, _ = w.Write([]byte(`{"ready":true,"checks":{"caddy_runtime":"ok","database":"ok","consume_log_mq":"ok"}}`))
 			case "/worker/v1/accounts/openai/api-key":

@@ -866,14 +866,16 @@ var ProviderSet = wire.NewSet(
 	NewChannelMonitorRequestTemplateService,
 	ProvideUserPlatformQuotaUsageFlusher,
 	NewWorkerRemoteClient,
+	NewWorkerNATSIssuer,
 	ProvideWorkerService,
 	NewWorkerLogConsumer,
 )
 
 // ProvideWorkerService creates the Worker manager and starts its lifecycle
 // heartbeat loop. The matching stop hook lives in cmd/server provideCleanup.
-func ProvideWorkerService(repo WorkerRepository, encryptor SecretEncryptor, remote *WorkerRemoteClient) *WorkerService {
+func ProvideWorkerService(repo WorkerRepository, encryptor SecretEncryptor, remote *WorkerRemoteClient, settingRepo SettingRepository, issuer *WorkerNATSIssuer) *WorkerService {
 	service := NewWorkerService(repo, encryptor, remote)
+	service.ConfigureNATSSecurity(settingRepo, issuer)
 	service.StartHeartbeat(context.Background())
 	return service
 }

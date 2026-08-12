@@ -39,6 +39,7 @@ type Config struct {
 	SettlementWALMaxBytes int64
 	NATSURL               string
 	NATSSubject           string
+	NATSCredentials       string
 	AuthCacheTTL          time.Duration
 	AuthCacheSize         int
 	TLSCAFile             string
@@ -147,7 +148,7 @@ func NewWithClient(cfg Config, logger *zap.Logger, client controlplane.Client) (
 
 func (r *Runtime) Start(ctx context.Context) error {
 	if r.cfg.NATSURL != "" {
-		publisher, err := settlementqueue.New(r.cfg.NATSURL, r.cfg.NATSSubject, r.cfg.DialTimeout)
+		publisher, err := settlementqueue.New(r.cfg.NATSURL, r.cfg.NATSSubject, r.cfg.NATSCredentials, r.cfg.DialTimeout)
 		if err != nil {
 			return err
 		}
