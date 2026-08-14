@@ -85,6 +85,52 @@ func (c *openAIWSPolicyEnforcingFrameConn) Close() error {
 	return c.inner.Close()
 }
 
+type openAIWSCodexFingerprintFrameConn struct {
+	inner         openaiwsv2.FrameConn
+	account       *Account
+	clientHeaders http.Header
+	handshakeIDs  *codexFingerprintIDs
+	firstCreate   atomic.Bool
+}
+
+var _ openaiwsv2.FrameConn = (*openAIWSCodexFingerprintFrameConn)(nil)
+
+func (c *openAIWSCodexFingerprintFrameConn) ReadFrame(ctx context.Context) (coderws.MessageType, []byte, error) {
+	if c == nil || c.inner == nil {
+		return coderws.MessageText, nil, errOpenAIWSConnClosed
+	}
+	return c.inner.ReadFrame(ctx)
+}
+
+func (c *openAIWSCodexFingerprintFrameConn) WriteFrame(ctx context.Context, msgType coderws.MessageType, payload []byte) error {
+	if c == nil || c.inner == nil {
+		return errOpenAIWSConnClosed
+	}
+	if msgType == coderws.MessageText || msgType == coderws.MessageBinary {
+		ids := c.idsForCreateFrame(payload)
+		payload = applyCodexFingerprintToWSCreateFrameWithIDs(c.account, c.clientHeaders, payload, ids)
+	}
+	return c.inner.WriteFrame(ctx, msgType, payload)
+}
+
+func (c *openAIWSCodexFingerprintFrameConn) Close() error {
+	if c == nil || c.inner == nil {
+		return nil
+	}
+	return c.inner.Close()
+}
+
+func (c *openAIWSCodexFingerprintFrameConn) idsForCreateFrame(payload []byte) *codexFingerprintIDs {
+	if c == nil || c.handshakeIDs == nil || !isOpenAIWSResponseCreateFrame(payload) {
+		return nil
+	}
+	if c.firstCreate.CompareAndSwap(false, true) {
+		c.handshakeIDs.connectionPinned = true
+		return c.handshakeIDs
+	}
+	return nextCodexFingerprintTurnOnPinnedConnection(c.handshakeIDs)
+}
+
 // openAIWSPassthroughPolicyModelForFrame returns the upstream-perspective
 // model name that should be passed to evaluateOpenAIFastPolicy for a single
 // passthrough WS frame. Mirrors the HTTP-side normalization
@@ -816,6 +862,17 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	if buildHdrErr != nil {
 		return fmt.Errorf("build ws headers: %w", buildHdrErr)
 	}
+	var clientHeaders http.Header
+	if c != nil && c.Request != nil {
+		clientHeaders = c.Request.Header
+	}
+	var handshakeFingerprintIDs *codexFingerprintIDs
+	if account.IsOpenAIOAuth() {
+		handshakeFingerprintIDs = resolveCodexFingerprintIDsFromClient(account, clientHeaders, nil, firstClientMessage)
+		if handshakeFingerprintIDs != nil {
+			applyCodexFingerprintHeaders(headers, handshakeFingerprintIDs)
+		}
+	}
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {
 		proxyURL = account.Proxy.URL()
@@ -884,7 +941,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	if !ok {
 		return errors.New("openai ws passthrough upstream connection does not support frame relay")
 	}
-	relayUpstreamFrameConn := &openAIWSPassthroughFirstOutputFrameConn{
+	var relayUpstreamFrameConn openaiwsv2.FrameConn = &openAIWSPassthroughFirstOutputFrameConn{
 		inner:             upstreamFrameConn,
 		activeReadTimeout: s.openAIWSPassthroughIdleTimeout(),
 		deadlineChanged:   make(chan struct{}, 1),
@@ -911,6 +968,14 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				reasoningEffort: reasoningEffort,
 			}
 		},
+	}
+	if account.IsOpenAIOAuth() {
+		relayUpstreamFrameConn = &openAIWSCodexFingerprintFrameConn{
+			inner:         relayUpstreamFrameConn,
+			account:       account,
+			clientHeaders: clientHeaders,
+			handshakeIDs:  handshakeFingerprintIDs,
+		}
 	}
 
 	completedTurns := atomic.Int32{}

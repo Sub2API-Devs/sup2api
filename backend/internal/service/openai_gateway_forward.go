@@ -421,15 +421,11 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			if c != nil && c.Request != nil {
 				clientHeaders = c.Request.Header
 			}
-			fpIDs := resolveCodexFingerprintIDsFromRequest(account, clientHeaders)
-			if fpIDs != nil {
+			if fpIDs := resolveCodexFingerprintIDsFromClient(account, clientHeaders, decoded, nil); fpIDs != nil {
 				if applyCodexFingerprintClientMetadata(decoded, fpIDs) {
 					markDecodedModified()
 				}
-			}
-			// 将 fpIDs 存入 gin context，供 buildUpstreamRequest 中头改写使用
-			if c != nil && fpIDs != nil {
-				c.Set("codex_fingerprint_ids", fpIDs)
+				storeCodexFingerprintIDs(c, fpIDs)
 			}
 		}
 		if codexResult.NormalizedModel != "" {
@@ -1138,11 +1134,9 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 	}
 
 	// 指纹收敛：使用 Forward() 中预计算的收敛 ID 改写出站头，与请求体使用同一份 IDs。
-	if account.Type == AccountTypeOAuth && c != nil {
-		if fpIDs, ok := c.Get("codex_fingerprint_ids"); ok {
-			if ids, ok := fpIDs.(*codexFingerprintIDs); ok {
-				applyCodexFingerprintHeaders(req.Header, ids)
-			}
+	if account.Type == AccountTypeOAuth {
+		if ids := loadCodexFingerprintIDs(c); ids != nil {
+			applyCodexFingerprintHeaders(req.Header, ids)
 		}
 	}
 

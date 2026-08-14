@@ -2979,8 +2979,8 @@ const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF
 const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
 const codexCLIOnlyEnabled = ref(false)
 const codexCLIOnlyAppServerEnabled = ref(false)
-type CodexFingerprintMode = 'off' | 'device' | 'session' | 'full'
-const codexFingerprintMode = ref<CodexFingerprintMode>('session')
+type CodexFingerprintMode = 'off' | 'device' | 'session' | 'thread_pool' | 'full'
+const codexFingerprintMode = ref<CodexFingerprintMode>('thread_pool')
 type CodexImageToolMode = 'inherit' | 'enabled' | 'disabled' | 'block'
 const codexImageToolMode = ref<CodexImageToolMode>('inherit')
 type AnthropicAPIKeyAuthScheme = 'x_api_key' | 'authorization_bearer'
@@ -3013,10 +3013,10 @@ const editWeeklyResetDay = ref<number | null>(null)
 const editWeeklyResetHour = ref<number | null>(null)
 const editResetTimezone = ref<string | null>(null)
 const codexFingerprintModeOptions = computed(() => [
-  { value: 'off' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintOff') },
-  { value: 'device' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintDevice') },
-  { value: 'session' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintSession') },
+  { value: 'thread_pool' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintThreadPool') },
   { value: 'full' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintFull') },
+  { value: 'device' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintDevice') },
+  { value: 'off' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintOff') },
 ])
 
 const openAIWSModeOptions = computed(() => [
@@ -3440,7 +3440,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
   codexCLIOnlyEnabled.value = false
   codexCLIOnlyAppServerEnabled.value = false
-  codexFingerprintMode.value = 'session'
+  codexFingerprintMode.value = 'thread_pool'
   codexImageToolMode.value = 'inherit'
   anthropicPassthroughEnabled.value = false
   anthropicAPIKeyAuthScheme.value = 'x_api_key'
@@ -3494,9 +3494,13 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     }
     if (newAccount.type === 'oauth') {
       const fpMode = extra?.codex_fingerprint_mode as string | undefined
-      codexFingerprintMode.value = (['off', 'device', 'session', 'full'].includes(fpMode || '')
-        ? fpMode as CodexFingerprintMode
-        : 'session')
+      if (fpMode === 'session' || fpMode === 'thread_pool' || !fpMode) {
+        codexFingerprintMode.value = 'thread_pool'
+      } else if (['off', 'device', 'full'].includes(fpMode)) {
+        codexFingerprintMode.value = fpMode as CodexFingerprintMode
+      } else {
+        codexFingerprintMode.value = 'thread_pool'
+      }
     }
     const credentials = newAccount.credentials as Record<string, unknown> | undefined
     const compactMappings = credentials?.compact_model_mapping as Record<string, string> | undefined
@@ -4843,9 +4847,9 @@ const handleSubmit = async () => {
         }
       }
 
-      // 指纹收敛模式：默认 session，不写入；非默认值显式写入（包括 off）
+      // 指纹收敛模式：默认 thread_pool，不写入；非默认值显式写入（包括 off）
       if (props.account.type === 'oauth') {
-        if (codexFingerprintMode.value !== 'session') {
+        if (codexFingerprintMode.value !== 'thread_pool') {
           newExtra.codex_fingerprint_mode = codexFingerprintMode.value
         } else {
           delete newExtra.codex_fingerprint_mode

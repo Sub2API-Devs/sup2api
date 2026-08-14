@@ -1533,14 +1533,14 @@ const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OF
 const upstreamBillingAutoProbeMode = ref<'enabled' | 'disabled'>('enabled')
 const codexCLIOnlyEnabled = ref(false)
 const codexCLIOnlyAppServerEnabled = ref(false)
-type CodexFingerprintMode = 'off' | 'device' | 'session' | 'full'
+type CodexFingerprintMode = 'off' | 'device' | 'session' | 'thread_pool' | 'full'
 const enableCodexFingerprintMode = ref(false)
-const codexFingerprintMode = ref<CodexFingerprintMode>('session')
+const codexFingerprintMode = ref<CodexFingerprintMode>('thread_pool')
 const codexFingerprintModeOptions = computed(() => [
-  { value: 'off' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintOff') },
-  { value: 'device' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintDevice') },
-  { value: 'session' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintSession') },
+  { value: 'thread_pool' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintThreadPool') },
   { value: 'full' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintFull') },
+  { value: 'device' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintDevice') },
+  { value: 'off' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintOff') },
 ])
 const openAICompactMode = ref<OpenAICompactMode>('auto')
 const openAICompactModelMappings = ref<ModelMapping[]>([])
@@ -1829,11 +1829,9 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
 
   if (enableCodexFingerprintMode.value) {
     const extra = ensureExtra()
-    if (codexFingerprintMode.value !== 'session') {
-      extra.codex_fingerprint_mode = codexFingerprintMode.value
-    } else {
-      delete extra.codex_fingerprint_mode
-    }
+    // JSONB merge 无法删除 key：默认 thread_pool 写空串，后端读取时回退为 thread_pool。
+    extra.codex_fingerprint_mode =
+      codexFingerprintMode.value === 'thread_pool' ? '' : codexFingerprintMode.value
   }
 
   if (enableOpenAICompactMode.value) {
@@ -2082,7 +2080,7 @@ watch(
       enableCodexCLIOnly.value = false
       enableCodexCLIOnlyAppServer.value = false
       enableCodexFingerprintMode.value = false
-      codexFingerprintMode.value = 'session'
+      codexFingerprintMode.value = 'thread_pool'
       enableOpenAICompactMode.value = false
       enableOpenAICompactModelMapping.value = false
       enableRpmLimit.value = false

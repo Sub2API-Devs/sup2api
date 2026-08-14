@@ -3854,13 +3854,13 @@ const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF
 const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
 const codexCLIOnlyEnabled = ref(false)
 const codexCLIOnlyAppServerEnabled = ref(false)
-type CodexFingerprintMode = 'off' | 'device' | 'session' | 'full'
-const codexFingerprintMode = ref<CodexFingerprintMode>('session')
+type CodexFingerprintMode = 'off' | 'device' | 'session' | 'thread_pool' | 'full'
+const codexFingerprintMode = ref<CodexFingerprintMode>('thread_pool')
 const codexFingerprintModeOptions = computed(() => [
-  { value: 'off' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintOff') },
-  { value: 'device' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintDevice') },
-  { value: 'session' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintSession') },
+  { value: 'thread_pool' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintThreadPool') },
   { value: 'full' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintFull') },
+  { value: 'device' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintDevice') },
+  { value: 'off' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintOff') },
 ])
 type AnthropicAPIKeyAuthScheme = 'x_api_key' | 'authorization_bearer'
 const anthropicPassthroughEnabled = ref(false)
@@ -4741,7 +4741,7 @@ const resetForm = () => {
   openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
   codexCLIOnlyEnabled.value = false
   codexCLIOnlyAppServerEnabled.value = false
-  codexFingerprintMode.value = 'session'
+  codexFingerprintMode.value = 'thread_pool'
   anthropicPassthroughEnabled.value = false
   anthropicAPIKeyAuthScheme.value = 'x_api_key'
   webSearchEmulationMode.value = 'default'
@@ -4840,7 +4840,7 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
   } else {
     delete extra.codex_cli_only_allow_app_server
   }
-  if (codexFingerprintMode.value !== 'session') {
+  if (codexFingerprintMode.value !== 'thread_pool') {
     extra.codex_fingerprint_mode = codexFingerprintMode.value
   } else {
     delete extra.codex_fingerprint_mode

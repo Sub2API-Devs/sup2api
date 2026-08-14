@@ -190,6 +190,18 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	if c != nil {
 		c.Set("openai_passthrough", true)
 	}
+	if account.IsOpenAIOAuth() && !isOpenAIResponsesCompactPath(c) {
+		var clientHeaders http.Header
+		if c != nil && c.Request != nil {
+			clientHeaders = c.Request.Header
+		}
+		if fpIDs := resolveCodexFingerprintIDsFromClient(account, clientHeaders, nil, body); fpIDs != nil {
+			if rewritten, changed := applyCodexFingerprintToBodyBytes(body, fpIDs); changed {
+				body = rewritten
+			}
+			storeCodexFingerprintIDs(c, fpIDs)
+		}
+	}
 
 	agentTaskRecoveryTried := false
 	var resp *http.Response
@@ -431,6 +443,9 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 		}
 		if clientConversationID != "" {
 			req.Header.Set("conversation_id", isolateOpenAISessionID(apiKeyID, clientConversationID))
+		}
+		if ids := loadCodexFingerprintIDs(c); ids != nil {
+			applyCodexFingerprintHeaders(req.Header, ids)
 		}
 	} else if isOpenAIResponsesCompactPath(c) {
 		// 透传白名单会放行客户端的 Accept: text/event-stream；compact 上游是
