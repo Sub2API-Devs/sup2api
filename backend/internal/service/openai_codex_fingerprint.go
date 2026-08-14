@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 // codexFingerprintMode 控制 OAuth 账号出站请求的设备指纹收敛强度。
@@ -852,18 +853,27 @@ func rewriteClientMetadataEmbeddedTurnMetadata(clientMetadata map[string]any, fi
 }
 
 // applyCodexFingerprintToBodyBytes 在仅持有原始 JSON body 的路径（如透传）上改写 client_metadata。
+// 只用 sjson 回写 client_metadata，避免全量 Unmarshal/Marshal 改掉 input 里的大整数和字段顺序。
 func applyCodexFingerprintToBodyBytes(body []byte, ids *codexFingerprintIDs) ([]byte, bool) {
-	if ids == nil || len(body) == 0 {
+	if ids == nil || len(body) == 0 || !gjson.ParseBytes(body).IsObject() {
 		return body, false
 	}
-	var reqBody map[string]any
-	if err := json.Unmarshal(body, &reqBody); err != nil {
+	holder := map[string]any{}
+	if raw := gjson.GetBytes(body, "client_metadata"); raw.Exists() && raw.IsObject() {
+		var existing map[string]any
+		if err := json.Unmarshal([]byte(raw.Raw), &existing); err != nil {
+			return body, false
+		}
+		holder["client_metadata"] = existing
+	}
+	if !applyCodexFingerprintClientMetadata(holder, ids) {
 		return body, false
 	}
-	if !applyCodexFingerprintClientMetadata(reqBody, ids) {
+	metaJSON, err := json.Marshal(holder["client_metadata"])
+	if err != nil {
 		return body, false
 	}
-	rewritten, err := json.Marshal(reqBody)
+	rewritten, err := sjson.SetRawBytes(body, "client_metadata", metaJSON)
 	if err != nil {
 		return body, false
 	}

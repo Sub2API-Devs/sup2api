@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
 
 func newTestOAuthAccount(id int64, extra map[string]any) *Account {
@@ -1019,6 +1020,111 @@ func TestCodexFingerprintWindowStoreIsSharedAcrossLocalStates(t *testing.T) {
 type memCodexFingerprintWindowStore struct {
 	mu sync.Mutex
 	n  map[string]int64
+}
+
+func TestApplyCodexFingerprintToBodyBytes_PreservesUnrelatedFieldsAndIntegers(t *testing.T) {
+	account := newTestOAuthAccount(1, map[string]any{codexFingerprintModeExtraKey: "thread_pool"})
+	ids := resolveCodexFingerprintIDsFromRequest(account, nil)
+	require.NotNil(t, ids)
+
+	// 2^53+1 无法用 float64 精确表示；全量 json.Unmarshal/Marshal 会改掉这个字面量。
+	const oversizedInt = "9007199254740993"
+	body := []byte(`{"model":"gpt-5.1","max_output_tokens":` + oversizedInt + `,"prompt_cache_key":"pcache-keep","input":[{"type":"message","role":"user","seq":` + oversizedInt + `,"content":"keep <tag>"}],"client_metadata":{"x-codex-installation-id":"old-install"}}`)
+
+	rewritten, changed := applyCodexFingerprintToBodyBytes(body, ids)
+	require.True(t, changed)
+	assert.Equal(t, "gpt-5.1", gjson.GetBytes(rewritten, "model").String())
+	assert.Equal(t, "pcache-keep", gjson.GetBytes(rewritten, "prompt_cache_key").String())
+	assert.Equal(t, oversizedInt, gjson.GetBytes(rewritten, "max_output_tokens").Raw)
+	assert.Equal(t, oversizedInt, gjson.GetBytes(rewritten, "input.0.seq").Raw)
+	assert.Equal(t, "keep <tag>", gjson.GetBytes(rewritten, "input.0.content").String())
+	assert.Equal(t, ids.installationID, gjson.GetBytes(rewritten, "client_metadata.x-codex-installation-id").String())
+	assert.Equal(t, ids.threadID, gjson.GetBytes(rewritten, "client_metadata.thread_id").String())
+}
+
+func TestApplyCodexFingerprintToBodyBytes_RejectsNonObject(t *testing.T) {
+	account := newTestOAuthAccount(1, nil)
+	ids := resolveCodexFingerprintIDsFromRequest(account, nil)
+	require.NotNil(t, ids)
+
+	raw := []byte(`["not-an-object"]`)
+	rewritten, changed := applyCodexFingerprintToBodyBytes(raw, ids)
+	assert.False(t, changed)
+	assert.Equal(t, raw, rewritten)
+}
+
+func TestResolveCodexFingerprintIDs_ShadowUsesOwnAccountID(t *testing.T) {
+	parentID := int64(10)
+	parent := newTestOAuthAccount(parentID, nil)
+	shadow := newTestOAuthAccount(99, nil)
+	shadow.ParentAccountID = &parentID
+	require.True(t, shadow.IsShadow())
+	require.True(t, shadow.IsOpenAIOAuth())
+
+	parentIDs := resolveCodexFingerprintIDsFromRequest(parent, nil)
+	shadowIDs := resolveCodexFingerprintIDsFromRequest(shadow, nil)
+	require.NotNil(t, parentIDs)
+	require.NotNil(t, shadowIDs)
+	assert.NotEqual(t, parentIDs.installationID, shadowIDs.installationID, "当前实现按影子自身 ID 派生，不复用母账号")
+	assert.NotEqual(t, parentIDs.sessionID, shadowIDs.sessionID)
+	assert.NotEqual(t, parentIDs.threadID, shadowIDs.threadID)
+	assert.Equal(t, resolveConvergedInstallationID(shadow), shadowIDs.installationID)
+}
+
+func TestBuildOpenAIWSHeaders_CtxPoolDoesNotApplyCodexFingerprint(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := &OpenAIGatewayService{}
+	account := newTestOAuthAccount(42, map[string]any{codexFingerprintModeExtraKey: "thread_pool"})
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodGet, "/v1/responses", nil)
+	c.Request.Header.Set("x-codex-installation-id", "client-install-keep")
+	c.Request.Header.Set("x-codex-window-id", "client-window-keep")
+	c.Request.Header.Set("session_id", "client-session-keep")
+	c.Request.Header.Set("conversation_id", "client-conv-keep")
+
+	headers, _, err := svc.buildOpenAIWSHeaders(
+		context.Background(),
+		c,
+		account,
+		"token",
+		OpenAIWSProtocolDecision{Transport: OpenAIUpstreamTransportResponsesWebsocketV2},
+		true,
+		"",
+		"",
+		"pcache",
+		"gpt-5.1",
+		"",
+	)
+	require.NoError(t, err)
+
+	assert.Equal(t, "client-install-keep", headers.Get("x-codex-installation-id"), "ctx_pool/dedicated 握手不得改写客户端 installation")
+	assert.Equal(t, "client-window-keep", headers.Get("x-codex-window-id"))
+	assert.Equal(t, isolateOpenAISessionID(0, "client-session-keep"), headers.Get("session_id"))
+	assert.Equal(t, isolateOpenAISessionID(0, "client-conv-keep"), headers.Get("conversation_id"))
+
+	converged := resolveCodexFingerprintIDsFromRequest(account, c.Request.Header)
+	require.NotNil(t, converged)
+	assert.NotEqual(t, converged.installationID, headers.Get("x-codex-installation-id"))
+	assert.NotEqual(t, converged.sessionID, headers.Get("session_id"))
+	assert.NotEqual(t, converged.threadID, headers.Get("conversation_id"))
+}
+
+func TestApplyCodexFingerprintHeaders_OverwritesClientInstallation(t *testing.T) {
+	account := newTestOAuthAccount(42, map[string]any{codexFingerprintModeExtraKey: "thread_pool"})
+	clientHeaders := http.Header{}
+	clientHeaders.Set("session-id", "client-session-keep")
+	ids := resolveCodexFingerprintIDsFromRequest(account, clientHeaders)
+	require.NotNil(t, ids)
+
+	h := http.Header{}
+	h.Set("x-codex-installation-id", "client-install-keep")
+	h.Set("session_id", "client-session-keep")
+	applyCodexFingerprintHeaders(h, ids)
+	assert.Equal(t, ids.installationID, h.Get("x-codex-installation-id"))
+	assert.Equal(t, ids.sessionID, h.Get("session_id"))
+	assert.Equal(t, ids.threadID, h.Get("conversation_id"))
 }
 
 func (s *memCodexFingerprintWindowStore) NextCodexFingerprintWindowIndex(_ context.Context, accountID int64, threadID string) (int, error) {
