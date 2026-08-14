@@ -286,3 +286,27 @@ func (c *gatewayCache) MarkLiveCallClosed(ctx context.Context, callHash string, 
 	result, err := markLiveCallClosedScript.Run(ctx, c.rdb, []string{liveCallKey(callHash)}, int64(ttl.Seconds())).Int()
 	return result == 1, err
 }
+
+var _ service.CodexFingerprintWindowStore = (*gatewayCache)(nil)
+
+func (c *gatewayCache) NextCodexFingerprintWindowIndex(ctx context.Context, accountID int64, threadID string) (int, error) {
+	if c == nil || c.rdb == nil || accountID <= 0 || strings.TrimSpace(threadID) == "" {
+		return 0, errors.New("invalid codex fingerprint window counter args")
+	}
+	key := service.CodexFingerprintWindowCacheKey(accountID, threadID)
+	pipe := c.rdb.TxPipeline()
+	incrCmd := pipe.Incr(ctx, key)
+	pipe.Expire(ctx, key, service.CodexFingerprintWindowIdleTTL(accountID))
+	if _, err := pipe.Exec(ctx); err != nil {
+		return 0, err
+	}
+	n := incrCmd.Val()
+	if n < 1 {
+		n = 1
+	}
+	stride := int64(service.CodexFingerprintWindowTurnStride())
+	if stride < 1 {
+		stride = 1
+	}
+	return int((n - 1) / stride), nil
+}

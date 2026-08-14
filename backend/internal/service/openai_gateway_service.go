@@ -538,6 +538,11 @@ func NewOpenAIGatewayService(
 	if openAITokenProvider != nil {
 		openAITokenProvider.SetAccountRuntimeBlocker(svc)
 	}
+	var windowStore CodexFingerprintWindowStore
+	if store, ok := cache.(CodexFingerprintWindowStore); ok {
+		windowStore = store
+	}
+	configureCodexFingerprintWindowStore(windowStore)
 	svc.logOpenAIWSModeBootstrap()
 	return svc
 }
