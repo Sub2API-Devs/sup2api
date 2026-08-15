@@ -98,6 +98,42 @@ func TestBootstrapClaimPersistsOnlyUIProvisionedConfiguration(t *testing.T) {
 	}
 }
 
+func TestResolvePairingTokenPrefersEnvironment(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "worker-config.json.pairing")
+	if err := os.WriteFile(path, []byte("file-token\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AI_GATEWAY_PAIRING_TOKEN", "env-token-from-dotenv")
+	token, fromEnv, err := resolvePairingToken(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !fromEnv || token != "env-token-from-dotenv" {
+		t.Fatalf("env token not used: fromEnv=%v token=%q", fromEnv, token)
+	}
+	stored, err := os.ReadFile(path)
+	if err != nil || strings.TrimSpace(string(stored)) != "env-token-from-dotenv" {
+		t.Fatalf("pairing file not synced from env: %q %v", stored, err)
+	}
+}
+
+func TestResolvePairingTokenFallsBackToFileWhenEnvEmpty(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "worker-config.json.pairing")
+	if err := os.WriteFile(path, []byte("file-token\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AI_GATEWAY_PAIRING_TOKEN", "")
+	token, fromEnv, err := resolvePairingToken(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fromEnv || token != "file-token" {
+		t.Fatalf("file token not used: fromEnv=%v token=%q", fromEnv, token)
+	}
+}
+
 func TestBootstrapStatusExposesNoPairingSecret(t *testing.T) {
 	handler := &bootstrapHandler{pairingToken: "secret-pair", instanceID: "instance-a", claimed: make(chan *Config, 1)}
 	request := httptest.NewRequest(http.MethodGet, "/worker/v1/bootstrap", nil)

@@ -43,11 +43,13 @@ small:
 
 ## Worker management
 
-New containers start in an unclaimed bootstrap state. They generate a one-time
-pairing code, store it with mode `0600`, and print it to the container log. An
-administrator enters the Worker URL and pairing code in the Sup2API UI; the UI
-generates the stable Worker ID, management key, and Vault key and sends them,
-together with the private gRPC target, through `POST /worker/v1/claim`.
+New containers start in an unclaimed bootstrap state. The one-time pairing
+code comes from `AI_GATEWAY_PAIRING_TOKEN` when that variable is set; otherwise
+the process still generates one, stores it with mode `0600`, and prints it to
+the container log. An administrator enters the Worker URL and pairing code in
+the Sup2API UI; the UI generates the stable Worker ID, management key, and
+Vault key and sends them, together with the private gRPC target, through
+`POST /worker/v1/claim`.
 The Worker persists this configuration with mode `0600`, destroys the pairing
 code, and starts Caddy in the same process. Browsers never call the Worker
 directly and long-lived Worker secrets are not container environment variables.

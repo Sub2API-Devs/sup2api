@@ -2,8 +2,13 @@
 
 ARG GOLANG_IMAGE=golang:1.26.1-alpine
 ARG ALPINE_IMAGE=alpine:3.23
+ARG GOPROXY=https://goproxy.cn,direct
+ARG GOSUMDB=sum.golang.google.cn
 
 FROM ${GOLANG_IMAGE} AS builder
+ARG GOPROXY
+ARG GOSUMDB
+ENV GOPROXY=${GOPROXY} GOSUMDB=${GOSUMDB}
 WORKDIR /src
 RUN apk add --no-cache ca-certificates git
 COPY go.mod go.sum ./

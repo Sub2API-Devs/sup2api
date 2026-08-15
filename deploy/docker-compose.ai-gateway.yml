@@ -52,6 +52,7 @@ services:
       - sup2api_gateway_data:/var/lib/ai-gateway/data
     environment:
       - AI_GATEWAY_LISTEN=:9999
+      - AI_GATEWAY_PAIRING_TOKEN=${AI_GATEWAY_PAIRING_TOKEN:-}
       - AI_GATEWAY_WORKER_CONFIG_PATH=/var/lib/ai-gateway/data/worker-config.json
       - AI_GATEWAY_WORKER_VAULT_PATH=/var/lib/ai-gateway/data/worker-vault.db
       - AI_GATEWAY_LEASE_RENEW_INTERVAL=${AI_GATEWAY_LEASE_RENEW_INTERVAL:-30s}

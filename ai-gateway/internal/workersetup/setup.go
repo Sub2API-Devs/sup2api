@@ -24,6 +24,7 @@ import (
 )
 
 const ProtocolVersion = "aicodex.proxy-worker/v2"
+const pairingTokenEnv = "AI_GATEWAY_PAIRING_TOKEN"
 
 var workerIDPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
 
@@ -129,11 +130,15 @@ func Bootstrap(ctx context.Context, listenAddress, configPath, instanceID, versi
 		return nil, fmt.Errorf("create Worker data directory: %w", err)
 	}
 	pairingPath := configPath + ".pairing"
-	pairingToken, err := loadOrCreatePairingToken(pairingPath)
+	pairingToken, fromEnv, err := resolvePairingToken(pairingPath)
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("AI Gateway Worker is unclaimed; enter pairing token %s in the Sup2API Worker UI", pairingToken)
+	if fromEnv {
+		log.Printf("AI Gateway Worker is unclaimed; claim it in the Sup2API Worker UI with AI_GATEWAY_PAIRING_TOKEN")
+	} else {
+		log.Printf("AI Gateway Worker is unclaimed; enter pairing token %s in the Sup2API Worker UI", pairingToken)
+	}
 
 	claimed := make(chan *Config, 1)
 	serveErr := make(chan error, 1)
@@ -248,6 +253,19 @@ func (h *bootstrapHandler) claim(w http.ResponseWriter, r *http.Request) {
 		"caddy":        map[string]any{"enabled": false, "starting": true},
 	})
 	h.claimed <- &request.Config
+}
+
+// resolvePairingToken prefers the operator-set environment token so Compose
+// deployments can put the claim secret in .env instead of scraping container logs.
+func resolvePairingToken(path string) (token string, fromEnv bool, err error) {
+	if token = strings.TrimSpace(os.Getenv(pairingTokenEnv)); token != "" {
+		if err = atomicWrite(path, []byte(token+"\n")); err != nil {
+			return "", true, fmt.Errorf("persist Worker pairing token: %w", err)
+		}
+		return token, true, nil
+	}
+	token, err = loadOrCreatePairingToken(path)
+	return token, false, err
 }
 
 func loadOrCreatePairingToken(path string) (string, error) {

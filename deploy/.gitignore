@@ -8,6 +8,7 @@ postgres_data/
 redis_data/
 nats_data/
 nats-auth/
+nats-auth.bak*/
 
 # Environment configuration (contains sensitive information)
 .env
