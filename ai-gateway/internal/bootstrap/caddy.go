@@ -45,6 +45,7 @@ func CaddyConfig(cfg config.Config) ([]byte, error) {
 				"worker_management_key":    cfg.WorkerManagementKey,
 				"worker_vault_path":        cfg.WorkerVaultPath,
 				"worker_vault_key":         cfg.WorkerVaultKey,
+				"worker_config_path":       cfg.WorkerConfigPath,
 				"worker_version":           cfg.WorkerVersion,
 			},
 			"http": map[string]any{

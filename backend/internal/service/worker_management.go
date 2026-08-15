@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -99,10 +100,11 @@ type CreateWorkerInput struct {
 	BaseURL                  string `json:"base_url"`
 	PairingToken             string `json:"pairing_token,omitempty"`
 	RemoteWorkerID           string `json:"worker_id,omitempty"`
-	ManagementKey            string `json:"management_key"`
+	ManagementKey            string `json:"management_key,omitempty"`
 	VaultKey                 string `json:"vault_key,omitempty"`
 	ControlPlaneTarget       string `json:"control_plane_target,omitempty"`
 	ControlPlaneInsecure     bool   `json:"control_plane_insecure"`
+	NATSURL                  string `json:"nats_url,omitempty"`
 	Enabled                  *bool  `json:"enabled,omitempty"`
 	HeartbeatIntervalSeconds int    `json:"heartbeat_interval_seconds,omitempty"`
 	HeartbeatTimeoutSeconds  int    `json:"heartbeat_timeout_seconds,omitempty"`
@@ -112,9 +114,28 @@ type UpdateWorkerInput struct {
 	Name                     string `json:"name"`
 	BaseURL                  string `json:"base_url"`
 	ManagementKey            string `json:"management_key,omitempty"`
+	VaultKey                 string `json:"vault_key,omitempty"`
+	ControlPlaneTarget       string `json:"control_plane_target,omitempty"`
+	ControlPlaneInsecure     *bool  `json:"control_plane_insecure,omitempty"`
+	NATSURL                  string `json:"nats_url,omitempty"`
 	Enabled                  *bool  `json:"enabled,omitempty"`
 	HeartbeatIntervalSeconds int    `json:"heartbeat_interval_seconds"`
 	HeartbeatTimeoutSeconds  int    `json:"heartbeat_timeout_seconds"`
+}
+
+type WorkerRuntimeConfig struct {
+	WorkerID             string `json:"worker_id"`
+	ControlPlaneTarget   string `json:"control_plane_target"`
+	ControlPlaneInsecure bool   `json:"control_plane_insecure"`
+	NATSURL              string `json:"nats_url"`
+}
+
+type workerConfigUpdate struct {
+	ManagementKey        string `json:"management_key,omitempty"`
+	VaultKey             string `json:"vault_key,omitempty"`
+	ControlPlaneTarget   string `json:"control_plane_target,omitempty"`
+	ControlPlaneInsecure *bool  `json:"control_plane_insecure,omitempty"`
+	NATSURL              string `json:"nats_url,omitempty"`
 }
 
 type SetWorkerEnabledInput struct {
@@ -203,10 +224,6 @@ func (s *WorkerService) Create(ctx context.Context, input CreateWorkerInput) (*W
 	if err != nil {
 		return nil, err
 	}
-	key := strings.TrimSpace(input.ManagementKey)
-	if len(key) < 32 {
-		return nil, errors.New("management key must contain at least 32 characters")
-	}
 	heartbeatInterval, heartbeatTimeout, err := normalizeWorkerHeartbeat(input.HeartbeatIntervalSeconds, input.HeartbeatTimeoutSeconds)
 	if err != nil {
 		return nil, err
@@ -216,7 +233,11 @@ func (s *WorkerService) Create(ctx context.Context, input CreateWorkerInput) (*W
 		enabled = *input.Enabled
 	}
 	var identity *WorkerIdentity
-	if strings.TrimSpace(input.PairingToken) != "" {
+	var key string
+	if pairingToken := strings.TrimSpace(input.PairingToken); pairingToken != "" {
+		if len(pairingToken) < 48 {
+			return nil, errors.New("pairing token must contain at least 48 characters")
+		}
 		remoteWorkerID := strings.TrimSpace(input.RemoteWorkerID)
 		if remoteWorkerID == "" {
 			return nil, errors.New("worker_id is required when claiming an unclaimed Worker")
@@ -224,11 +245,12 @@ func (s *WorkerService) Create(ctx context.Context, input CreateWorkerInput) (*W
 		if len(remoteWorkerID) > 128 {
 			return nil, errors.New("worker_id exceeds the supported field size")
 		}
-		if strings.TrimSpace(input.VaultKey) == "" {
-			return nil, errors.New("vault_key is required when claiming an unclaimed Worker")
-		}
 		if strings.TrimSpace(input.ControlPlaneTarget) == "" {
 			return nil, errors.New("control_plane_target is required when claiming an unclaimed Worker")
+		}
+		workerNATSURL, urlErr := validateWorkerNATSURL(input.NATSURL)
+		if urlErr != nil {
+			return nil, urlErr
 		}
 		// Reject before the one-time claim so a duplicate Worker ID cannot
 		// burn the pairing token and leave the container claimed-but-unregistered.
@@ -250,13 +272,20 @@ func (s *WorkerService) Create(ctx context.Context, input CreateWorkerInput) (*W
 		if issueErr != nil {
 			return nil, fmt.Errorf("issue Worker NATS credentials: %w", issueErr)
 		}
+		key = resolveControlPlaneManagementKey(input.ManagementKey)
+		if len(key) < 32 {
+			return nil, errors.New("AI_GATEWAY_MANAGEMENT_KEY must contain at least 32 characters in the control-plane environment")
+		}
 		identity, err = s.remote.Claim(ctx, baseURL, WorkerClaimInput{
-			PairingToken: strings.TrimSpace(input.PairingToken), WorkerID: remoteWorkerID,
-			ManagementKey: key, VaultKey: strings.TrimSpace(input.VaultKey),
+			PairingToken: pairingToken, WorkerID: remoteWorkerID,
 			ControlPlaneTarget: strings.TrimSpace(input.ControlPlaneTarget), ControlPlaneInsecure: input.ControlPlaneInsecure,
-			NATSURL: natsConfig.WorkerURL, NATSSubject: natsConfig.Subject, NATSCredentials: natsCredentials,
+			NATSURL: workerNATSURL, NATSSubject: natsConfig.Subject, NATSCredentials: natsCredentials,
 		})
 	} else {
+		key = resolveControlPlaneManagementKey(input.ManagementKey)
+		if len(key) < 32 {
+			return nil, errors.New("AI_GATEWAY_MANAGEMENT_KEY must contain at least 32 characters in the control-plane environment")
+		}
 		identity, err = s.remote.Identity(ctx, baseURL, key)
 	}
 	if err != nil {
@@ -298,8 +327,6 @@ func (s *WorkerService) Create(ctx context.Context, input CreateWorkerInput) (*W
 type WorkerClaimInput struct {
 	PairingToken         string `json:"pairing_token"`
 	WorkerID             string `json:"worker_id"`
-	ManagementKey        string `json:"management_key"`
-	VaultKey             string `json:"vault_key"`
 	ControlPlaneTarget   string `json:"control_plane_target"`
 	ControlPlaneInsecure bool   `json:"control_plane_insecure"`
 	NATSURL              string `json:"nats_url"`
@@ -317,6 +344,21 @@ func (s *WorkerService) Get(ctx context.Context, id int64) (*Worker, error) {
 
 func (s *WorkerService) Delete(ctx context.Context, id int64) error {
 	return s.repo.DeleteWorker(ctx, id)
+}
+
+func (s *WorkerService) GetRuntimeConfig(ctx context.Context, id int64) (*WorkerRuntimeConfig, error) {
+	worker, key, err := s.workerCredential(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	var cfg WorkerRuntimeConfig
+	if err := s.remote.Get(ctx, worker.BaseURL, key, "/worker/v1/config", &cfg); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(cfg.WorkerID) == "" {
+		cfg.WorkerID = worker.RemoteWorkerID
+	}
+	return &cfg, nil
 }
 
 func (s *WorkerService) Update(ctx context.Context, id int64, input UpdateWorkerInput) (*Worker, error) {
@@ -342,16 +384,43 @@ func (s *WorkerService) Update(ctx context.Context, id int64, input UpdateWorker
 	if err != nil {
 		return nil, err
 	}
-	managementKey := strings.TrimSpace(input.ManagementKey)
-	if managementKey == "" {
-		managementKey, err = s.encryptor.Decrypt(worker.ManagementKeyCipher)
-		if err != nil {
-			return nil, fmt.Errorf("decrypt management key: %w", err)
-		}
-	} else if len(managementKey) < 32 {
+	currentKey, err := s.encryptor.Decrypt(worker.ManagementKeyCipher)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt management key: %w", err)
+	}
+	managementKey := currentKey
+	replacementKey := strings.TrimSpace(input.ManagementKey)
+	if replacementKey != "" && len(replacementKey) < 32 {
 		return nil, errors.New("management key must contain at least 32 characters")
 	}
-	credentialsChanged := baseURL != worker.BaseURL || strings.TrimSpace(input.ManagementKey) != ""
+	push := workerConfigUpdate{
+		VaultKey:             strings.TrimSpace(input.VaultKey),
+		ControlPlaneTarget:   strings.TrimSpace(input.ControlPlaneTarget),
+		ControlPlaneInsecure: input.ControlPlaneInsecure,
+	}
+	if strings.TrimSpace(input.NATSURL) != "" {
+		workerNATSURL, urlErr := validateWorkerNATSURL(input.NATSURL)
+		if urlErr != nil {
+			return nil, urlErr
+		}
+		push.NATSURL = workerNATSURL
+	}
+	needsPush := push.VaultKey != "" || push.ControlPlaneTarget != "" || push.ControlPlaneInsecure != nil || push.NATSURL != ""
+	if replacementKey != "" {
+		if identity, probeErr := s.remote.Identity(ctx, baseURL, replacementKey); probeErr == nil && validateWorkerIdentity(identity, worker.RemoteWorkerID) == nil {
+			managementKey = replacementKey
+		} else {
+			push.ManagementKey = replacementKey
+			needsPush = true
+			managementKey = replacementKey
+		}
+	}
+	if needsPush {
+		if err := s.remote.Put(ctx, baseURL, currentKey, "/worker/v1/config", push, nil); err != nil {
+			return nil, fmt.Errorf("update worker configuration: %w", err)
+		}
+	}
+	credentialsChanged := baseURL != worker.BaseURL || replacementKey != ""
 	if credentialsChanged {
 		identity, probeErr := s.remote.Identity(ctx, baseURL, managementKey)
 		if probeErr != nil {
@@ -362,7 +431,7 @@ func (s *WorkerService) Update(ctx context.Context, id int64, input UpdateWorker
 		}
 	}
 	ciphertext := worker.ManagementKeyCipher
-	if strings.TrimSpace(input.ManagementKey) != "" {
+	if replacementKey != "" {
 		ciphertext, err = s.encryptor.Encrypt(managementKey)
 		if err != nil {
 			return nil, fmt.Errorf("encrypt management key: %w", err)
@@ -769,6 +838,10 @@ func (c *WorkerRemoteClient) Post(ctx context.Context, baseURL, key, path string
 	return c.do(ctx, http.MethodPost, baseURL, key, path, body, out)
 }
 
+func (c *WorkerRemoteClient) Put(ctx context.Context, baseURL, key, path string, body any, out any) error {
+	return c.do(ctx, http.MethodPut, baseURL, key, path, body, out)
+}
+
 func (c *WorkerRemoteClient) Delete(ctx context.Context, baseURL, key, path string, out any) error {
 	return c.do(ctx, http.MethodDelete, baseURL, key, path, nil, out)
 }
@@ -851,6 +924,13 @@ func normalizeWorkerHeartbeat(interval, timeout int) (int, int, error) {
 		return 0, 0, errors.New("heartbeat timeout must be between 1 and 30 seconds")
 	}
 	return interval, timeout, nil
+}
+
+func resolveControlPlaneManagementKey(explicit string) string {
+	if key := strings.TrimSpace(explicit); key != "" {
+		return key
+	}
+	return strings.TrimSpace(os.Getenv("AI_GATEWAY_MANAGEMENT_KEY"))
 }
 
 func workerLogStreamKey(workerID string) string {

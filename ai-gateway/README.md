@@ -46,13 +46,16 @@ small:
 New containers start in an unclaimed bootstrap state. The one-time pairing
 code comes from `AI_GATEWAY_PAIRING_TOKEN` when that variable is set; otherwise
 the process still generates one, stores it with mode `0600`, and prints it to
-the container log. An administrator enters the Worker URL and pairing code in
-the Sup2API UI; the UI generates the stable Worker ID, management key, and
-Vault key and sends them, together with the private gRPC target, through
-`POST /worker/v1/claim`.
+the container log. The Worker also requires `AI_GATEWAY_MANAGEMENT_KEY` and
+`AI_GATEWAY_VAULT_KEY` in its own environment. The control plane loads the
+same management key from its own `AI_GATEWAY_MANAGEMENT_KEY`. An administrator
+enters the Worker URL, pairing code, Worker ID, and private gRPC target in the
+Sup2API UI; the UI does not accept the two long-lived keys. `POST /worker/v1/claim`
+merges the Worker environment secrets with the UI-provisioned routing fields.
 The Worker persists this configuration with mode `0600`, destroys the pairing
 code, and starts Caddy in the same process. Browsers never call the Worker
-directly and long-lived Worker secrets are not container environment variables.
+directly. Claim responses do not return secrets; the Vault key never leaves
+the Worker.
 
 - OpenAI API keys, OAuth access tokens, and refresh tokens are encrypted with
   AES-256-GCM in a mode-0600 SQLite vault on the mounted data volume. Existing
@@ -90,9 +93,10 @@ Probe the process separately from its control-plane dependency:
 - `GET /readyz` returns 200 only while the private control-plane connection is
   ready and the local billing WAL can safely admit new requests.
 
-Only process/bootstrap paths and transport mechanics use environment variables.
-Worker identity, long-lived keys, the gRPC target, and NATS JWT Credentials come from the
-UI-provisioned Worker configuration file.
+Process/bootstrap paths, the pairing token, and the two Worker secrets use
+environment variables. After a successful claim, Worker identity, those
+secrets, the gRPC target, and NATS JWT Credentials live in the mode-0600
+Worker configuration file.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -108,6 +112,9 @@ UI-provisioned Worker configuration file.
 | `AI_GATEWAY_AUTH_CACHE_SIZE` | `65536` | Maximum local AuthGrant entries |
 | `AI_GATEWAY_WORKER_CONFIG_PATH` | `./data/worker-config.json` | Mode-0600 UI-provisioned Worker configuration |
 | `AI_GATEWAY_WORKER_VAULT_PATH` | `./data/worker-vault.db` | Encrypted Worker-local account vault |
+| `AI_GATEWAY_PAIRING_TOKEN` | generated | One-time claim token; prefer setting this in `.env` |
+| `AI_GATEWAY_MANAGEMENT_KEY` | required before claim | Long-lived Bearer secret; at least 32 characters |
+| `AI_GATEWAY_VAULT_KEY` | required before claim | 32-byte Base64 or hex key for the local account vault |
 | `AI_GATEWAY_VERSION` | `dev` | Version reported by the Worker identity endpoint |
 
 NATS authentication is provisioned by the Worker management UI during claim.

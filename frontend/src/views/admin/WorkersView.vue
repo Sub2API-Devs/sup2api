@@ -135,38 +135,30 @@
           <input v-model.trim="workerForm.base_url" class="input font-mono" required placeholder="http://ai-gateway:9999" />
           <p class="mt-1 text-xs text-gray-500">{{ t('admin.workers.baseUrlHint') }}</p>
         </div>
-        <template v-if="workerDialogMode === 'create'">
-          <div>
-            <label class="input-label">{{ t('admin.workers.pairingToken') }}</label>
-            <input v-model.trim="workerForm.pairing_token" type="password" class="input font-mono" required autocomplete="one-time-code" />
-            <p class="mt-1 text-xs text-gray-500">{{ t('admin.workers.pairingTokenHint') }}</p>
-          </div>
-          <div>
-            <label class="input-label">{{ t('admin.workers.workerId') }}</label>
-            <input v-model.trim="workerForm.worker_id" class="input font-mono" required />
-          </div>
-        </template>
-        <div>
-          <label class="input-label">{{ t('admin.workers.managementKey') }}</label>
-          <input v-model="workerForm.management_key" type="password" class="input font-mono" :required="workerDialogMode === 'create'" autocomplete="new-password" :placeholder="workerDialogMode === 'edit' ? t('admin.workers.keepSecretPlaceholder') : ''" />
-          <p class="mt-1 text-xs text-gray-500">{{ t('admin.workers.managementKeyHint') }}</p>
-        </div>
         <div v-if="workerDialogMode === 'create'">
-          <label class="input-label">{{ t('admin.workers.vaultKey') }}</label>
-          <input v-model="workerForm.vault_key" type="password" class="input font-mono" required autocomplete="new-password" />
-          <p class="mt-1 text-xs text-gray-500">{{ t('admin.workers.vaultKeyHint') }}</p>
+          <label class="input-label">{{ t('admin.workers.pairingToken') }}</label>
+          <input v-model.trim="workerForm.pairing_token" type="password" class="input font-mono" required minlength="48" autocomplete="one-time-code" />
+          <p class="mt-1 text-xs text-gray-500">{{ t('admin.workers.pairingTokenHint') }}</p>
         </div>
-        <template v-if="workerDialogMode === 'create'">
-          <div>
-            <label class="input-label">{{ t('admin.workers.controlPlaneTarget') }}</label>
-            <input v-model.trim="workerForm.control_plane_target" class="input font-mono" required placeholder="sub2api:9090" />
-            <p class="mt-1 text-xs text-gray-500">{{ t('admin.workers.controlPlaneTargetHint') }}</p>
-          </div>
-          <label class="mt-6 flex items-center gap-3 text-sm text-gray-700 dark:text-gray-200">
-            <Toggle v-model="workerForm.control_plane_insecure" />
-            <span>{{ t('admin.workers.controlPlaneInsecure') }}</span>
-          </label>
-        </template>
+        <div>
+          <label class="input-label">{{ t('admin.workers.workerId') }}</label>
+          <input v-model.trim="workerForm.worker_id" class="input font-mono" required :readonly="workerDialogMode === 'edit'" />
+          <p v-if="workerDialogMode === 'edit'" class="mt-1 text-xs text-gray-500">{{ t('admin.workers.workerIdReadOnlyHint') }}</p>
+        </div>
+        <div>
+          <label class="input-label">{{ t('admin.workers.natsUrl') }}</label>
+          <input v-model.trim="workerForm.nats_url" class="input font-mono" :required="workerDialogMode === 'create'" placeholder="nats://nats:4222" />
+          <p class="mt-1 text-xs text-gray-500">{{ t('admin.workers.natsUrlHint') }}</p>
+        </div>
+        <div>
+          <label class="input-label">{{ t('admin.workers.controlPlaneTarget') }}</label>
+          <input v-model.trim="workerForm.control_plane_target" class="input font-mono" :required="workerDialogMode === 'create'" placeholder="sub2api:9090" />
+          <p class="mt-1 text-xs text-gray-500">{{ t('admin.workers.controlPlaneTargetHint') }}</p>
+        </div>
+        <label class="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-200 md:col-span-2">
+          <Toggle v-model="workerForm.control_plane_insecure" />
+          <span>{{ t('admin.workers.controlPlaneInsecure') }}</span>
+        </label>
         <div>
           <label class="input-label">{{ t('admin.workers.heartbeatInterval') }}</label>
           <input v-model.number="workerForm.heartbeat_interval_seconds" type="number" min="5" max="3600" class="input" required />
@@ -183,7 +175,7 @@
       </form>
       <template #footer>
         <button class="btn btn-secondary" @click="showWorkerDialog = false">{{ t('common.cancel') }}</button>
-        <button form="worker-form" class="btn btn-primary" :disabled="isBusy('worker-save')">{{ workerDialogMode === 'create' ? t('common.create') : t('common.save') }}</button>
+        <button form="worker-form" class="btn btn-primary" :disabled="isBusy('worker-save') || (workerDialogMode === 'edit' && !workerConfigSettled)">{{ workerDialogMode === 'create' ? t('common.create') : t('common.save') }}</button>
       </template>
     </BaseDialog>
 
@@ -259,6 +251,8 @@ const statusFilter = ref('all')
 const showWorkerDialog = ref(false)
 const workerDialogMode = ref<'create' | 'edit'>('create')
 const editingWorkerId = ref<number | null>(null)
+const workerConfigLoaded = ref(false)
+const workerConfigSettled = ref(true)
 const showDetailDialog = ref(false)
 const showAPIKeyDialog = ref(false)
 const showOAuthDialog = ref(false)
@@ -269,7 +263,7 @@ let workersRequestSequence = 0
 let detailPendingRequests = 0
 
 const emptyAccountForm = (): WorkerAccountInput => ({ name: '', base_url: '', models: '', group: 'default', test_model: '' })
-const emptyWorkerForm = () => ({ name: '', base_url: '', pairing_token: '', worker_id: '', management_key: '', vault_key: '', control_plane_target: 'sub2api:9090', control_plane_insecure: true, enabled: true, heartbeat_interval_seconds: 15, heartbeat_timeout_seconds: 5 })
+const emptyWorkerForm = () => ({ name: '', base_url: '', pairing_token: '', worker_id: '', nats_url: '', control_plane_target: 'sub2api:9090', control_plane_insecure: true, enabled: true, heartbeat_interval_seconds: 15, heartbeat_timeout_seconds: 5 })
 const workerForm = reactive(emptyWorkerForm())
 const accountForm = reactive<WorkerAccountInput>({ ...emptyAccountForm(), api_key: '' })
 const oauthAccountForm = reactive<WorkerAccountInput>(emptyAccountForm())
@@ -298,7 +292,6 @@ const AccountFields = defineComponent({
 
 function isBusy(action: string) { return busyAction.value === action }
 function errorMessage(error: unknown, fallback: string) { return (error as { message?: string })?.message || fallback }
-function randomBase64(byteLength: number) { const bytes = crypto.getRandomValues(new Uint8Array(byteLength)); return btoa(String.fromCharCode(...bytes)) }
 function isWorkerHealthy(worker: Worker) { return worker.enabled && ['ready', 'connected'].includes(worker.status) }
 function workerStatusClass(worker: Worker) { if (!worker.enabled) return 'badge-gray'; if (isWorkerHealthy(worker)) return 'badge-success'; if (worker.status === 'unready') return 'badge-warning'; return 'badge-danger' }
 function heartbeatDotClass(worker: Worker) { if (!worker.enabled) return 'bg-gray-300'; if (isWorkerHealthy(worker)) return 'bg-emerald-500'; if (worker.status === 'unready') return 'bg-amber-500'; return 'bg-red-500' }
@@ -306,9 +299,81 @@ function workerStatusLabel(worker: Worker) { return !worker.enabled ? t('admin.w
 function formatRelative(value: string) { const seconds = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 1000)); if (seconds < 10) return t('admin.workers.justNow'); if (seconds < 60) return t('admin.workers.secondsAgo', { seconds }); const minutes = Math.floor(seconds / 60); if (minutes < 60) return t('admin.workers.minutesAgo', { minutes }); return formatDateTime(value) }
 
 async function loadWorkers(showSpinner = false) { const requestSequence = ++workersRequestSequence; if (showSpinner || workers.value.length === 0) loading.value = true; try { const nextWorkers = await adminAPI.workers.list(); if (requestSequence !== workersRequestSequence) return; workers.value = nextWorkers; if (selectedWorker.value) { selectedWorker.value = workers.value.find((item) => item.id === selectedWorker.value?.id) || null; if (!selectedWorker.value) closeDetailDialog() } } catch (error) { if (requestSequence === workersRequestSequence) appStore.showError(errorMessage(error, t('admin.workers.loadFailed'))) } finally { if (requestSequence === workersRequestSequence) loading.value = false } }
-function openCreateWorkerDialog() { workerDialogMode.value = 'create'; editingWorkerId.value = null; Object.assign(workerForm, emptyWorkerForm(), { worker_id: `gateway-${Array.from(crypto.getRandomValues(new Uint8Array(6)), (value) => value.toString(16).padStart(2, '0')).join('')}`, management_key: randomBase64(32), vault_key: randomBase64(32) }); showWorkerDialog.value = true }
-function openEditWorkerDialog(worker: Worker) { workerDialogMode.value = 'edit'; editingWorkerId.value = worker.id; Object.assign(workerForm, emptyWorkerForm(), { name: worker.name, base_url: worker.base_url, management_key: '', enabled: worker.enabled, heartbeat_interval_seconds: worker.heartbeat_interval_seconds || 15, heartbeat_timeout_seconds: worker.heartbeat_timeout_seconds || 5 }); showWorkerDialog.value = true }
-async function saveWorker() { busyAction.value = 'worker-save'; try { if (workerDialogMode.value === 'create') await adminAPI.workers.create({ ...workerForm }); else if (editingWorkerId.value) await adminAPI.workers.update(editingWorkerId.value, { name: workerForm.name, base_url: workerForm.base_url, management_key: workerForm.management_key || undefined, enabled: workerForm.enabled, heartbeat_interval_seconds: workerForm.heartbeat_interval_seconds, heartbeat_timeout_seconds: workerForm.heartbeat_timeout_seconds }); showWorkerDialog.value = false; await loadWorkers(); appStore.showSuccess(t(workerDialogMode.value === 'create' ? 'admin.workers.workerCreated' : 'admin.workers.workerUpdated')) } catch (error) { appStore.showError(errorMessage(error, t(workerDialogMode.value === 'create' ? 'admin.workers.createFailed' : 'admin.workers.updateFailed'))) } finally { busyAction.value = '' } }
+async function openCreateWorkerDialog() {
+  workerDialogMode.value = 'create'
+  editingWorkerId.value = null
+  workerConfigLoaded.value = false
+  workerConfigSettled.value = true
+  let natsURL = ''
+  try {
+    const nats = await adminAPI.workers.getNATSSecurity()
+    natsURL = nats.worker_url || ''
+  } catch {
+    natsURL = ''
+  }
+  Object.assign(workerForm, emptyWorkerForm(), {
+    worker_id: `gateway-${Array.from(crypto.getRandomValues(new Uint8Array(6)), (value) => value.toString(16).padStart(2, '0')).join('')}`,
+    nats_url: natsURL,
+  })
+  showWorkerDialog.value = true
+}
+async function openEditWorkerDialog(worker: Worker) {
+  workerDialogMode.value = 'edit'
+  editingWorkerId.value = worker.id
+  workerConfigLoaded.value = false
+  workerConfigSettled.value = false
+  Object.assign(workerForm, emptyWorkerForm(), {
+    name: worker.name,
+    base_url: worker.base_url,
+    worker_id: worker.remote_worker_id,
+    nats_url: '',
+    control_plane_target: '',
+    enabled: worker.enabled,
+    heartbeat_interval_seconds: worker.heartbeat_interval_seconds || 15,
+    heartbeat_timeout_seconds: worker.heartbeat_timeout_seconds || 5,
+  })
+  showWorkerDialog.value = true
+  try {
+    const cfg = await adminAPI.workers.getConfig(worker.id)
+    workerForm.worker_id = cfg.worker_id || worker.remote_worker_id
+    workerForm.nats_url = cfg.nats_url || ''
+    workerForm.control_plane_target = cfg.control_plane_target || ''
+    workerForm.control_plane_insecure = cfg.control_plane_insecure
+    workerConfigLoaded.value = true
+  } catch {
+    workerConfigLoaded.value = false
+  } finally {
+    workerConfigSettled.value = true
+  }
+}
+async function saveWorker() {
+  busyAction.value = 'worker-save'
+  try {
+    if (workerDialogMode.value === 'create') {
+      await adminAPI.workers.create({ ...workerForm })
+    } else if (editingWorkerId.value) {
+      await adminAPI.workers.update(editingWorkerId.value, {
+        name: workerForm.name,
+        base_url: workerForm.base_url,
+        ...(workerConfigLoaded.value ? {
+          nats_url: workerForm.nats_url || undefined,
+          control_plane_target: workerForm.control_plane_target || undefined,
+          control_plane_insecure: workerForm.control_plane_insecure,
+        } : {}),
+        enabled: workerForm.enabled,
+        heartbeat_interval_seconds: workerForm.heartbeat_interval_seconds,
+        heartbeat_timeout_seconds: workerForm.heartbeat_timeout_seconds,
+      })
+    }
+    showWorkerDialog.value = false
+    await loadWorkers()
+    appStore.showSuccess(t(workerDialogMode.value === 'create' ? 'admin.workers.workerCreated' : 'admin.workers.workerUpdated'))
+  } catch (error) {
+    appStore.showError(errorMessage(error, t(workerDialogMode.value === 'create' ? 'admin.workers.createFailed' : 'admin.workers.updateFailed')))
+  } finally {
+    busyAction.value = ''
+  }
+}
 async function setWorkerEnabled(worker: Worker, enabled: boolean) { if (isBusy(`worker-enable-${worker.id}`)) return; busyAction.value = `worker-enable-${worker.id}`; const previous = { enabled: worker.enabled, status: worker.status, last_error: worker.last_error }; worker.enabled = enabled; worker.status = enabled ? 'unknown' : 'disabled'; try { const updated = await adminAPI.workers.setEnabled(worker.id, enabled); Object.assign(worker, updated); appStore.showSuccess(t(enabled ? 'admin.workers.workerEnabled' : 'admin.workers.workerDisabled')) } catch (error) { Object.assign(worker, previous); appStore.showError(errorMessage(error, t('admin.workers.enableFailed'))) } finally { busyAction.value = '' } }
 async function testWorker(worker: Worker) { busyAction.value = `worker-test-${worker.id}`; try { await adminAPI.workers.testConnection(worker.id); await loadWorkers(); appStore.showSuccess(t('admin.workers.connectionHealthy')) } catch (error) { await loadWorkers(); appStore.showError(errorMessage(error, t('admin.workers.connectionFailed'))) } finally { busyAction.value = '' } }
 async function deleteWorker() { const worker = workerPendingDelete.value; if (!worker) return; busyAction.value = 'worker-delete'; try { await adminAPI.workers.remove(worker.id); workerPendingDelete.value = null; await loadWorkers(); appStore.showSuccess(t('admin.workers.workerDeleted')) } catch (error) { appStore.showError(errorMessage(error, t('admin.workers.deleteFailed'))) } finally { busyAction.value = '' } }

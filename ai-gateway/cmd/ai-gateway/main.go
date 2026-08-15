@@ -80,6 +80,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("load configuration: %w", err)
 	}
+	cfg.WorkerConfigPath = configPath
 	caddyJSON, err := bootstrap.CaddyConfig(cfg)
 	if err != nil {
 		return err

@@ -39,6 +39,7 @@ type App struct {
 	WorkerManagementKey   string         `json:"worker_management_key,omitempty"`
 	WorkerVaultPath       string         `json:"worker_vault_path,omitempty"`
 	WorkerVaultKey        string         `json:"worker_vault_key,omitempty"`
+	WorkerConfigPath      string         `json:"worker_config_path,omitempty"`
 	WorkerVersion         string         `json:"worker_version,omitempty"`
 
 	runtime *runtime.Runtime
@@ -102,6 +103,8 @@ func (a *App) Provision(ctx caddy.Context) error {
 		WorkerManagementKey:   a.WorkerManagementKey,
 		WorkerVaultPath:       a.WorkerVaultPath,
 		WorkerVaultKey:        workerVaultKey,
+		WorkerVaultKeyRaw:     a.WorkerVaultKey,
+		WorkerConfigPath:      a.WorkerConfigPath,
 		WorkerVersion:         a.WorkerVersion,
 	}, ctx.Logger())
 	if err != nil {

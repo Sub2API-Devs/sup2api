@@ -215,9 +215,9 @@ func validateWorkerNATSURL(raw string) (string, error) {
 		return "", errors.New("Worker NATS URL must not contain credentials")
 	}
 	switch strings.ToLower(parsed.Scheme) {
-	case "tls", "wss":
+	case "nats", "tls", "wss":
 	default:
-		return "", errors.New("Worker NATS URL must use tls or wss")
+		return "", errors.New("Worker NATS URL must use nats, tls or wss")
 	}
 	return parsed.String(), nil
 }
@@ -246,11 +246,10 @@ func (s *WorkerService) GetNATSSecurityConfig(ctx context.Context) (*WorkerNATSS
 		}
 		ttlDays = workerNATSTTLDays(values[workerNATSTTLSettingKey])
 	}
-	_, urlErr := validateWorkerNATSURL(workerURL)
 	issuerConfigured := s.natsIssuer.enabled && s.natsIssuer.accountID != ""
 	return &WorkerNATSSecurityConfig{
 		AuthenticationMode: workerNATSAuthenticationMode,
-		Ready:              issuerConfigured && s.natsIssuer.controlCredentialsConfigured && urlErr == nil,
+		Ready:              issuerConfigured && s.natsIssuer.controlCredentialsConfigured,
 		WorkerURL:          workerURL, Subject: s.natsIssuer.subject, CredentialTTLDays: ttlDays,
 		OperatorID: s.natsIssuer.operatorID, OperatorName: s.natsIssuer.operatorName,
 		AccountID: s.natsIssuer.accountID, AccountName: s.natsIssuer.accountName,
@@ -263,9 +262,13 @@ func (s *WorkerService) UpdateNATSSecurityConfig(ctx context.Context, input Upda
 	if s == nil || s.settings == nil || s.natsIssuer == nil || !s.natsIssuer.enabled {
 		return nil, errors.New("NATS NKey/JWT security is not configured")
 	}
-	workerURL, err := validateWorkerNATSURL(input.WorkerURL)
-	if err != nil {
-		return nil, err
+	workerURL := strings.TrimSpace(input.WorkerURL)
+	if workerURL != "" {
+		validated, err := validateWorkerNATSURL(workerURL)
+		if err != nil {
+			return nil, err
+		}
+		workerURL = validated
 	}
 	if input.CredentialTTLDays < 0 || input.CredentialTTLDays > maximumWorkerNATSTTLDays {
 		return nil, fmt.Errorf("NATS credential TTL must be between 0 and %d days", maximumWorkerNATSTTLDays)

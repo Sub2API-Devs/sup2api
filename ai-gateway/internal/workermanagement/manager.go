@@ -129,10 +129,38 @@ func (m *Manager) Close() error {
 	return m.vault.Close()
 }
 
-func (m *Manager) WorkerID() string      { return m.cfg.WorkerID }
-func (m *Manager) InstanceID() string    { return m.cfg.InstanceID }
-func (m *Manager) Version() string       { return m.cfg.Version }
-func (m *Manager) ManagementKey() string { return m.cfg.ManagementKey }
+func (m *Manager) WorkerID() string   { return m.cfg.WorkerID }
+func (m *Manager) InstanceID() string { return m.cfg.InstanceID }
+func (m *Manager) Version() string    { return m.cfg.Version }
+func (m *Manager) ManagementKey() string {
+	if m == nil {
+		return ""
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.cfg.ManagementKey
+}
+
+func (m *Manager) SetManagementKey(key string) error {
+	if m == nil {
+		return errors.New("worker manager is unavailable")
+	}
+	key = strings.TrimSpace(key)
+	if len(key) < 32 {
+		return errors.New("worker management key must contain at least 32 characters")
+	}
+	m.mu.Lock()
+	m.cfg.ManagementKey = key
+	m.mu.Unlock()
+	return nil
+}
+
+func (m *Manager) RekeyVault(key []byte) error {
+	if m == nil || m.vault == nil {
+		return errors.New("worker manager is unavailable")
+	}
+	return m.vault.Rekey(key)
+}
 
 func (m *Manager) Ready(_ context.Context) error {
 	if m == nil || m.vault == nil {

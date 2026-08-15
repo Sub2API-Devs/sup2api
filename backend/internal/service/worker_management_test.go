@@ -434,6 +434,50 @@ func TestWorkerServiceUpdatePreservesUnchangedManagementKeyCiphertext(t *testing
 	}
 }
 
+func TestWorkerServiceUpdatePushesCreateTimeOptionsToWorker(t *testing.T) {
+	managementKey := strings.Repeat("k", 32)
+	var putBody workerConfigUpdate
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/worker/v1/identity":
+			_, _ = w.Write([]byte(`{"protocol_version":"aicodex.proxy-worker/v2","worker_id":"worker-config","instance_id":"instance-config","version":"1"}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/worker/v1/config":
+			_, _ = w.Write([]byte(`{"worker_id":"worker-config","control_plane_target":"sub2api:9090","control_plane_insecure":true,"nats_url":"nats://nats:4222"}`))
+		case request.Method == http.MethodPut && request.URL.Path == "/worker/v1/config":
+			if err := json.NewDecoder(request.Body).Decode(&putBody); err != nil {
+				t.Errorf("decode config update: %v", err)
+			}
+			_, _ = w.Write([]byte(`{"worker_id":"worker-config","control_plane_target":"sup2api:9443","control_plane_insecure":false,"nats_url":"tls://nats.example.com:443"}`))
+		default:
+			http.NotFound(w, request)
+		}
+	}))
+	defer server.Close()
+
+	repo := newWorkerTestRepository()
+	manager := NewWorkerService(repo, workerTestEncryptor{}, NewWorkerRemoteClient())
+	worker, err := manager.Create(context.Background(), CreateWorkerInput{Name: "Config", BaseURL: server.URL, ManagementKey: managementKey})
+	if err != nil {
+		t.Fatal(err)
+	}
+	insecure := false
+	if _, err := manager.Update(context.Background(), worker.ID, UpdateWorkerInput{
+		Name: "Config", BaseURL: server.URL, VaultKey: strings.Repeat("v", 32),
+		ControlPlaneTarget: "sup2api:9443", ControlPlaneInsecure: &insecure,
+		NATSURL: "tls://nats.example.com:443", HeartbeatIntervalSeconds: 15, HeartbeatTimeoutSeconds: 5,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if putBody.VaultKey != strings.Repeat("v", 32) || putBody.ControlPlaneTarget != "sup2api:9443" || putBody.ControlPlaneInsecure == nil || *putBody.ControlPlaneInsecure || putBody.NATSURL != "tls://nats.example.com:443" {
+		t.Fatalf("worker config update = %+v", putBody)
+	}
+	cfg, err := manager.GetRuntimeConfig(context.Background(), worker.ID)
+	if err != nil || cfg.NATSURL != "nats://nats:4222" || cfg.ControlPlaneTarget != "sub2api:9090" {
+		t.Fatalf("runtime config = %+v err=%v", cfg, err)
+	}
+}
+
 func TestWorkerServiceProbeReportsHeartbeatPersistenceFailure(t *testing.T) {
 	managementKey := strings.Repeat("p", 32)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
@@ -756,5 +800,52 @@ func TestWorkerLogConsumerRejectsMismatchedWorkerIdentity(t *testing.T) {
 	})
 	if !errors.Is(err, errWorkerLogIdentityMismatch) || len(repo.logs) != 0 {
 		t.Fatalf("mismatched Worker log must not be persisted: err=%v logs=%+v", err, repo.logs)
+	}
+}
+
+func TestCreateUsesControlPlaneEnvironmentManagementKey(t *testing.T) {
+	var authorization []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		authorization = append(authorization, request.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":true,"protocol_version":"aicodex.proxy-worker/v2","kind":"ai-gateway-caddy","worker_id":"worker-env","instance_id":"instance-env","version":"1.0.0"}`))
+	}))
+	defer server.Close()
+
+	managementKey := strings.Repeat("e", 32)
+	t.Setenv("AI_GATEWAY_MANAGEMENT_KEY", managementKey)
+	manager := NewWorkerService(newWorkerTestRepository(), workerTestEncryptor{}, NewWorkerRemoteClient())
+	worker, err := manager.Create(context.Background(), CreateWorkerInput{Name: "Env Key", BaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if worker.ManagementKeyCipher != "cipher:"+managementKey {
+		t.Fatalf("control-plane env management key was not stored: %+v", worker)
+	}
+	if len(authorization) == 0 || authorization[0] != "Bearer "+managementKey {
+		t.Fatalf("worker probe did not use control-plane env key: %v", authorization)
+	}
+}
+
+func TestCreateRejectsShortPairingToken(t *testing.T) {
+	manager := NewWorkerService(newWorkerTestRepository(), workerTestEncryptor{}, NewWorkerRemoteClient())
+	_, err := manager.Create(context.Background(), CreateWorkerInput{
+		Name: "Short Pairing", BaseURL: "http://gateway.example",
+		PairingToken: "too-short", RemoteWorkerID: "worker-short", ControlPlaneTarget: "sub2api:9090",
+	})
+	if err == nil || !strings.Contains(err.Error(), "at least 48") {
+		t.Fatalf("expected short pairing token error, got %v", err)
+	}
+}
+
+func TestCreateRejectsMissingPerWorkerNATSURL(t *testing.T) {
+	manager := NewWorkerService(newWorkerTestRepository(), workerTestEncryptor{}, NewWorkerRemoteClient())
+	_, err := manager.Create(context.Background(), CreateWorkerInput{
+		Name: "Missing NATS", BaseURL: "http://gateway.example",
+		PairingToken: strings.Repeat("p", 48), RemoteWorkerID: "worker-nats",
+		ControlPlaneTarget: "sub2api:9090",
+	})
+	if err == nil || !strings.Contains(err.Error(), "Worker NATS URL") {
+		t.Fatalf("expected per-worker NATS URL error, got %v", err)
 	}
 }

@@ -83,10 +83,9 @@ export interface CreateWorkerInput {
   base_url: string
   pairing_token?: string
   worker_id?: string
-  management_key: string
-  vault_key?: string
   control_plane_target?: string
   control_plane_insecure: boolean
+  nats_url?: string
   enabled: boolean
   heartbeat_interval_seconds: number
   heartbeat_timeout_seconds: number
@@ -97,13 +96,27 @@ export async function create(input: CreateWorkerInput): Promise<Worker> {
   return data
 }
 
+export interface WorkerRuntimeConfig {
+  worker_id: string
+  control_plane_target: string
+  control_plane_insecure: boolean
+  nats_url: string
+}
+
 export interface UpdateWorkerInput {
   name: string
   base_url: string
-  management_key?: string
+  control_plane_target?: string
+  control_plane_insecure?: boolean
+  nats_url?: string
   enabled: boolean
   heartbeat_interval_seconds: number
   heartbeat_timeout_seconds: number
+}
+
+export async function getConfig(id: number): Promise<WorkerRuntimeConfig> {
+  const { data } = await apiClient.get<WorkerRuntimeConfig>(`/admin/workers/${id}/config`)
+  return data
 }
 
 export async function update(id: number, input: UpdateWorkerInput): Promise<Worker> {
@@ -188,6 +201,7 @@ export async function listLogs(id: number, limit = 50, beforeId?: number): Promi
 export default {
   list,
   create,
+  getConfig,
   update,
   setEnabled,
   remove,

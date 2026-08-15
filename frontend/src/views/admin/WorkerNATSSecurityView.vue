@@ -54,7 +54,7 @@
           <div class="grid gap-5 md:grid-cols-[minmax(0,1fr)_220px]">
             <div>
               <label class="input-label" for="worker-nats-url">{{ t('admin.workers.natsSecurity.workerUrl') }}</label>
-              <input id="worker-nats-url" v-model.trim="draft.worker_url" class="input font-mono" required placeholder="tls://nats.example.com:443" autocomplete="off" />
+              <input id="worker-nats-url" v-model.trim="draft.worker_url" class="input font-mono" placeholder="tls://nats.example.com:443" autocomplete="off" />
               <p class="mt-1.5 text-xs text-gray-500 dark:text-dark-400">{{ t('admin.workers.natsSecurity.workerUrlHint') }}</p>
             </div>
             <div>

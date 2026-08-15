@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -19,6 +20,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/settlementqueue"
 	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/settlementwal"
 	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/workermanagement"
+	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/workersetup"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )
@@ -51,6 +53,8 @@ type Config struct {
 	WorkerManagementKey   string
 	WorkerVaultPath       string
 	WorkerVaultKey        []byte
+	WorkerVaultKeyRaw     string
+	WorkerConfigPath      string
 	WorkerVersion         string
 }
 
@@ -68,6 +72,7 @@ type Runtime struct {
 	sequence atomic.Int64
 
 	wal            *settlementwal.Store
+	settlementMu   sync.RWMutex
 	settlements    settlementqueue.Publisher
 	billingHealthy atomic.Bool
 	settlementWake chan struct{}
@@ -76,6 +81,9 @@ type Runtime struct {
 	cancel         context.CancelFunc
 	wg             sync.WaitGroup
 	worker         *workermanagement.Manager
+	setupMu        sync.Mutex
+	setupPath      string
+	setup          workersetup.Config
 }
 
 func New(cfg Config, logger *zap.Logger) (*Runtime, error) {
@@ -111,6 +119,8 @@ func New(cfg Config, logger *zap.Logger) (*Runtime, error) {
 		wal:            wal,
 		settlementWake: make(chan struct{}, 1),
 		stop:           make(chan struct{}),
+		setupPath:      strings.TrimSpace(cfg.WorkerConfigPath),
+		setup:          setupFromRuntimeConfig(cfg),
 	}
 	if cfg.WorkerManagementKey != "" {
 		logTransport := "control_plane_grpc"
@@ -146,13 +156,170 @@ func NewWithClient(cfg Config, logger *zap.Logger, client controlplane.Client) (
 	return runtime, nil
 }
 
+func (r *Runtime) PublicWorkerSetup() workersetup.PublicConfig {
+	if r == nil {
+		return workersetup.PublicConfig{}
+	}
+	r.setupMu.Lock()
+	defer r.setupMu.Unlock()
+	return r.setup.Public()
+}
+
+func (r *Runtime) ApplyWorkerSetup(ctx context.Context, update workersetup.UpdateRequest) (workersetup.PublicConfig, error) {
+	if r == nil {
+		return workersetup.PublicConfig{}, errors.New("data-plane runtime is not ready")
+	}
+	if strings.TrimSpace(r.setupPath) == "" {
+		return workersetup.PublicConfig{}, errors.New("worker configuration path is not configured")
+	}
+	r.setupMu.Lock()
+	defer r.setupMu.Unlock()
+	previous := r.setup
+	next, err := previous.Apply(update)
+	if err != nil {
+		return workersetup.PublicConfig{}, err
+	}
+	if err := workersetup.Persist(r.setupPath, &next); err != nil {
+		return workersetup.PublicConfig{}, fmt.Errorf("persist Worker configuration: %w", err)
+	}
+	if applyErr := r.applyWorkerSetupLocked(ctx, previous, next); applyErr != nil {
+		if rollbackErr := workersetup.Persist(r.setupPath, &previous); rollbackErr != nil {
+			return workersetup.PublicConfig{}, fmt.Errorf("apply Worker configuration: %v; rollback persist failed: %w", applyErr, rollbackErr)
+		}
+		return workersetup.PublicConfig{}, applyErr
+	}
+	r.setup = next
+	r.cfg.WorkerManagementKey = next.ManagementKey
+	r.cfg.WorkerVaultKeyRaw = next.VaultKey
+	r.cfg.ControlPlaneTarget = next.ControlPlaneTarget
+	r.cfg.ControlPlaneInsecure = next.ControlPlaneInsecure
+	r.cfg.NATSURL = next.NATSURL
+	r.cfg.NATSSubject = next.NATSSubject
+	r.cfg.NATSCredentials = next.NATSCredentials
+	return next.Public(), nil
+}
+
+func (r *Runtime) applyWorkerSetupLocked(ctx context.Context, previous, next workersetup.Config) error {
+	if next.ManagementKey != previous.ManagementKey {
+		if err := r.worker.SetManagementKey(next.ManagementKey); err != nil {
+			return err
+		}
+	}
+	if next.VaultKey != previous.VaultKey {
+		if r.worker == nil {
+			return errors.New("worker manager is unavailable")
+		}
+		key, err := workersetup.DecodeVaultKey(next.VaultKey)
+		if err != nil {
+			_ = r.worker.SetManagementKey(previous.ManagementKey)
+			return err
+		}
+		if err := r.worker.RekeyVault(key); err != nil {
+			_ = r.worker.SetManagementKey(previous.ManagementKey)
+			return err
+		}
+		r.cfg.WorkerVaultKey = key
+	}
+	if next.ControlPlaneTarget != previous.ControlPlaneTarget || next.ControlPlaneInsecure != previous.ControlPlaneInsecure {
+		if err := r.replaceControlPlane(ctx, next.ControlPlaneTarget, next.ControlPlaneInsecure); err != nil {
+			r.rollbackWorkerSecrets(previous)
+			return err
+		}
+	}
+	if next.NATSURL != previous.NATSURL || next.NATSSubject != previous.NATSSubject || next.NATSCredentials != previous.NATSCredentials {
+		if err := r.replaceNATS(next.NATSURL, next.NATSSubject, next.NATSCredentials); err != nil {
+			if next.ControlPlaneTarget != previous.ControlPlaneTarget || next.ControlPlaneInsecure != previous.ControlPlaneInsecure {
+				_ = r.replaceControlPlane(ctx, previous.ControlPlaneTarget, previous.ControlPlaneInsecure)
+			}
+			r.rollbackWorkerSecrets(previous)
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *Runtime) rollbackWorkerSecrets(previous workersetup.Config) {
+	if r.worker == nil {
+		return
+	}
+	_ = r.worker.SetManagementKey(previous.ManagementKey)
+	if key, err := workersetup.DecodeVaultKey(previous.VaultKey); err == nil {
+		_ = r.worker.RekeyVault(key)
+		r.cfg.WorkerVaultKey = key
+	}
+}
+
+func (r *Runtime) replaceControlPlane(ctx context.Context, target string, insecure bool) error {
+	dialCtx, cancel := context.WithTimeout(ctx, r.cfg.DialTimeout)
+	defer cancel()
+	client, err := controlplane.Dial(dialCtx, controlplane.DialConfig{
+		Target:       target,
+		Insecure:     insecure,
+		DialTimeout:  r.cfg.DialTimeout,
+		WaitForReady: false,
+		CAFile:       r.cfg.TLSCAFile,
+		CertFile:     r.cfg.TLSCertFile,
+		KeyFile:      r.cfg.TLSKeyFile,
+		ServerName:   r.cfg.TLSServerName,
+	})
+	if err != nil {
+		return fmt.Errorf("reconnect control plane: %w", err)
+	}
+	r.clientMu.Lock()
+	previous := r.client
+	r.client = client
+	r.clientMu.Unlock()
+	if previous != nil {
+		_ = previous.Close()
+	}
+	return nil
+}
+
+func (r *Runtime) replaceNATS(natsURL, subject, credentials string) error {
+	var publisher settlementqueue.Publisher
+	if strings.TrimSpace(natsURL) != "" {
+		next, err := settlementqueue.New(natsURL, subject, credentials, r.cfg.DialTimeout)
+		if err != nil {
+			return fmt.Errorf("reconnect NATS: %w", err)
+		}
+		publisher = next
+	}
+	r.settlementMu.Lock()
+	previous := r.settlements
+	r.settlements = publisher
+	r.settlementMu.Unlock()
+	if previous != nil {
+		_ = previous.Close()
+	}
+	return nil
+}
+
+func setupFromRuntimeConfig(cfg Config) workersetup.Config {
+	vaultKey := strings.TrimSpace(cfg.WorkerVaultKeyRaw)
+	if vaultKey == "" && len(cfg.WorkerVaultKey) == 32 {
+		vaultKey = base64.StdEncoding.EncodeToString(cfg.WorkerVaultKey)
+	}
+	return workersetup.Config{
+		WorkerID:             cfg.WorkerID,
+		ManagementKey:        cfg.WorkerManagementKey,
+		VaultKey:             vaultKey,
+		ControlPlaneTarget:   cfg.ControlPlaneTarget,
+		ControlPlaneInsecure: cfg.ControlPlaneInsecure,
+		NATSURL:              cfg.NATSURL,
+		NATSSubject:          cfg.NATSSubject,
+		NATSCredentials:      cfg.NATSCredentials,
+	}
+}
+
 func (r *Runtime) Start(ctx context.Context) error {
 	if r.cfg.NATSURL != "" {
 		publisher, err := settlementqueue.New(r.cfg.NATSURL, r.cfg.NATSSubject, r.cfg.NATSCredentials, r.cfg.DialTimeout)
 		if err != nil {
 			return err
 		}
+		r.settlementMu.Lock()
 		r.settlements = publisher
+		r.settlementMu.Unlock()
 	}
 	dialCtx, cancel := context.WithTimeout(ctx, r.cfg.DialTimeout)
 	defer cancel()
@@ -168,10 +335,12 @@ func (r *Runtime) Start(ctx context.Context) error {
 		ServerName:   r.cfg.TLSServerName,
 	})
 	if err != nil {
+		r.settlementMu.Lock()
 		if r.settlements != nil {
 			_ = r.settlements.Close()
 			r.settlements = nil
 		}
+		r.settlementMu.Unlock()
 		return err
 	}
 
@@ -207,10 +376,12 @@ func (r *Runtime) Stop() error {
 	if r.worker != nil {
 		result = errors.Join(result, r.worker.Close())
 	}
+	r.settlementMu.Lock()
 	if r.settlements != nil {
 		result = errors.Join(result, r.settlements.Close())
 		r.settlements = nil
 	}
+	r.settlementMu.Unlock()
 	if r.wal != nil {
 		result = errors.Join(result, r.wal.Close())
 	}
@@ -438,8 +609,11 @@ func (r *Runtime) drainSettlements() {
 }
 
 func (r *Runtime) deliverSettlement(ctx context.Context, request *controlv1.SettleRequestRequest) error {
-	if r.settlements != nil {
-		return r.settlements.Publish(ctx, request)
+	r.settlementMu.RLock()
+	publisher := r.settlements
+	r.settlementMu.RUnlock()
+	if publisher != nil {
+		return publisher.Publish(ctx, request)
 	}
 	client, err := r.activeClient()
 	if err != nil {

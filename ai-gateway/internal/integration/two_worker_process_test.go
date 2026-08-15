@@ -176,6 +176,7 @@ func startUnclaimedWorkerProcess(t *testing.T, binary, workerID, managementKey s
 	address := unusedTCPAddress(t)
 	dataDir := t.TempDir()
 	configPath := filepath.Join(dataDir, "worker-config.json")
+	vaultKey := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte(workerID)[0:1], 32))
 	logs := new(lockedBuffer)
 	cmd := exec.Command(binary)
 	cmd.Stdout, cmd.Stderr = logs, logs
@@ -184,6 +185,8 @@ func startUnclaimedWorkerProcess(t *testing.T, binary, workerID, managementKey s
 		"AI_GATEWAY_WORKER_CONFIG_PATH="+configPath,
 		"AI_GATEWAY_SETTLEMENT_WAL_PATH="+filepath.Join(dataDir, "settlements"),
 		"AI_GATEWAY_WORKER_VAULT_PATH="+filepath.Join(dataDir, "worker-vault.db"),
+		"AI_GATEWAY_MANAGEMENT_KEY="+managementKey,
+		"AI_GATEWAY_VAULT_KEY="+vaultKey,
 		"XDG_DATA_HOME="+filepath.Join(dataDir, "caddy"),
 		"XDG_CONFIG_HOME="+filepath.Join(dataDir, "config"),
 	)
@@ -193,9 +196,8 @@ func startUnclaimedWorkerProcess(t *testing.T, binary, workerID, managementKey s
 	wait := make(chan error, 1)
 	go func() { wait <- cmd.Wait() }()
 	return &workerProcess{
-		workerID: workerID, management: managementKey,
-		vaultKey: base64.StdEncoding.EncodeToString(bytes.Repeat([]byte(workerID)[0:1], 32)),
-		address:  address, configPath: configPath, cmd: cmd, logs: logs, wait: wait,
+		workerID: workerID, management: managementKey, vaultKey: vaultKey,
+		address: address, configPath: configPath, cmd: cmd, logs: logs, wait: wait,
 	}
 }
 
@@ -226,7 +228,6 @@ func claimWorkerFromUI(t *testing.T, worker *workerProcess, controlAddress strin
 	}
 	body, _ := json.Marshal(map[string]any{
 		"pairing_token": strings.TrimSpace(string(pairingToken)), "worker_id": worker.workerID,
-		"management_key": worker.management, "vault_key": worker.vaultKey,
 		"control_plane_target": controlAddress, "control_plane_insecure": true,
 		"nats_url": os.Getenv("NATS_TEST_URL"), "nats_subject": "sup2api.usage.settlements.v1",
 		"nats_credentials": string(credentials),

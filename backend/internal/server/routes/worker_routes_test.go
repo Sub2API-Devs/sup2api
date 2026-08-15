@@ -24,6 +24,7 @@ func TestRegisterWorkerRoutesExposesCompleteAdminContract(t *testing.T) {
 		"GET /api/v1/admin/workers/nats-security",
 		"PUT /api/v1/admin/workers/nats-security",
 		"GET /api/v1/admin/workers/:id",
+		"GET /api/v1/admin/workers/:id/config",
 		"PUT /api/v1/admin/workers/:id",
 		"PATCH /api/v1/admin/workers/:id/enabled",
 		"DELETE /api/v1/admin/workers/:id",

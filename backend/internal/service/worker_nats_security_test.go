@@ -122,12 +122,59 @@ func TestWorkerNATSIssuerNATSIntegration(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestValidateWorkerNATSURLRequiresTLSOrWSS(t *testing.T) {
-	for _, valid := range []string{"tls://nats.example.com:443", "wss://nats.example.com/ws"} {
+func TestGetNATSSecurityConfigReadyWithoutGlobalWorkerURL(t *testing.T) {
+	operatorPair, err := nkeys.CreateOperator()
+	require.NoError(t, err)
+	defer operatorPair.Wipe()
+	operatorID, err := operatorPair.PublicKey()
+	require.NoError(t, err)
+	accountPair, err := nkeys.CreateAccount()
+	require.NoError(t, err)
+	defer accountPair.Wipe()
+	accountID, err := accountPair.PublicKey()
+	require.NoError(t, err)
+	accountSeed, err := accountPair.Seed()
+	require.NoError(t, err)
+	dir := t.TempDir()
+	profilePath := filepath.Join(dir, "issuer-profile.json")
+	profile, err := json.Marshal(nscIssuerProfile{
+		Operator: &nscProfileDetails{Name: "Sup2API", Key: operatorID},
+		Account:  &nscProfileDetails{Name: "Workers", Key: accountID, Seed: string(accountSeed)},
+	})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(profilePath, profile, 0o600))
+	credentialsPath := filepath.Join(dir, "control.creds")
+	controlPair, err := nkeys.CreateUser()
+	require.NoError(t, err)
+	defer controlPair.Wipe()
+	controlID, err := controlPair.PublicKey()
+	require.NoError(t, err)
+	controlClaims := jwt.NewUserClaims(controlID)
+	controlToken, err := controlClaims.Encode(accountPair)
+	require.NoError(t, err)
+	controlSeed, err := controlPair.Seed()
+	require.NoError(t, err)
+	controlCredentials, err := jwt.FormatUserConfig(controlToken, controlSeed)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(credentialsPath, controlCredentials, 0o600))
+
+	issuer, err := NewWorkerNATSIssuer(&config.Config{UsageQueue: config.UsageQueueConfig{
+		Enabled: true, URL: "nats://nats:4222", Subject: "sup2api.usage.settlements.v1",
+		CredentialsFile: credentialsPath, IssuerProfileFile: profilePath,
+	}})
+	require.NoError(t, err)
+	cfg, err := (&WorkerService{natsIssuer: issuer}).GetNATSSecurityConfig(context.Background())
+	require.NoError(t, err)
+	require.True(t, cfg.Ready)
+	require.Empty(t, cfg.WorkerURL)
+}
+
+func TestValidateWorkerNATSURLRequiresNATSOrTLSOrWSS(t *testing.T) {
+	for _, valid := range []string{"nats://nats:4222", "tls://nats.example.com:443", "wss://nats.example.com/ws"} {
 		_, err := validateWorkerNATSURL(valid)
 		require.NoError(t, err)
 	}
-	for _, invalid := range []string{"nats://nats:4222", "tls://user:pass@nats.example.com:443", "https://nats.example.com"} {
+	for _, invalid := range []string{"tls://user:pass@nats.example.com:443", "https://nats.example.com"} {
 		_, err := validateWorkerNATSURL(invalid)
 		require.Error(t, err)
 	}

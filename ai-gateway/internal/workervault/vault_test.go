@@ -142,3 +142,38 @@ func TestVaultFailsClosedWithWrongKey(t *testing.T) {
 		t.Fatal("expected opening the vault with the wrong key to fail closed")
 	}
 }
+
+func TestVaultRekeyPreservesAccountsAndRejectsOldKey(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "worker-vault.db")
+	oldKey := bytes.Repeat([]byte{0x11}, 32)
+	newKey := bytes.Repeat([]byte{0x22}, 32)
+	vault, err := Open(path, oldKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	account := &Account{
+		ID: "account-rekey", Name: "rekey", Kind: "openai_api_key", Status: "active",
+		APIKey: "sk-rekey-secret", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+	if err := vault.Put(account); err != nil {
+		t.Fatal(err)
+	}
+	if err := vault.Rekey(newKey); err != nil {
+		t.Fatal(err)
+	}
+	if err := vault.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(path, oldKey); err == nil {
+		t.Fatal("old vault key still opened the rekeyed vault")
+	}
+	reopened, err := Open(path, newKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	loaded, err := reopened.Get(account.ID)
+	if err != nil || loaded.APIKey != account.APIKey {
+		t.Fatalf("rekeyed vault lost account: %+v %v", loaded, err)
+	}
+}

@@ -58,6 +58,23 @@ func (h *WorkerHandler) Get(c *gin.Context) {
 	workerHandlerOK(c, http.StatusOK, worker)
 }
 
+func (h *WorkerHandler) GetConfig(c *gin.Context) {
+	id, ok := workerHandlerID(c, "id")
+	if !ok {
+		return
+	}
+	cfg, err := h.service.GetRuntimeConfig(c.Request.Context(), id)
+	if err != nil {
+		if errors.Is(err, service.ErrWorkerNotFound) {
+			workerHandlerError(c, http.StatusNotFound, "worker_not_found", err)
+			return
+		}
+		workerHandlerError(c, http.StatusBadGateway, "worker_config_failed", err)
+		return
+	}
+	workerHandlerOK(c, http.StatusOK, cfg)
+}
+
 func (h *WorkerHandler) Update(c *gin.Context) {
 	id, ok := workerHandlerID(c, "id")
 	if !ok {

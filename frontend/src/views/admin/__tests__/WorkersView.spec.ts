@@ -4,15 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import WorkersView from '@/views/admin/WorkersView.vue'
 
-const { list, update, setEnabled, listAccounts, push, showSuccess, showError } = vi.hoisted(() => ({
-  list: vi.fn(), update: vi.fn(), setEnabled: vi.fn(), listAccounts: vi.fn(), push: vi.fn(),
+const { list, update, setEnabled, listAccounts, getConfig, push, showSuccess, showError } = vi.hoisted(() => ({
+  list: vi.fn(), update: vi.fn(), setEnabled: vi.fn(), listAccounts: vi.fn(), getConfig: vi.fn(), push: vi.fn(),
   showSuccess: vi.fn(), showError: vi.fn()
 }))
 
 vi.mock('@/api/admin', () => ({
   adminAPI: { workers: {
-    list, update, setEnabled, listAccounts,
-    create: vi.fn(), remove: vi.fn(), testConnection: vi.fn(), createAPIKeyAccount: vi.fn(),
+    list, update, setEnabled, listAccounts, getConfig,
+    create: vi.fn(), remove: vi.fn(), testConnection: vi.fn(), getNATSSecurity: vi.fn().mockResolvedValue({ worker_url: '' }), createAPIKeyAccount: vi.fn(),
     startOAuth: vi.fn(), completeOAuth: vi.fn(), refreshAccount: vi.fn(), testAccount: vi.fn(), deleteAccount: vi.fn()
   }}
 }))
@@ -53,6 +53,10 @@ describe('WorkersView operations table', () => {
     update.mockReset().mockImplementation(async (_id, input) => ({ ...worker, ...input }))
     setEnabled.mockReset().mockImplementation(async (_id, enabled) => ({ ...worker, enabled, status: enabled ? 'unknown' : 'disabled' }))
     listAccounts.mockReset().mockResolvedValue([])
+    getConfig.mockReset().mockResolvedValue({
+      worker_id: 'gateway-local', nats_url: 'nats://nats:4222',
+      control_plane_target: 'sub2api:9090', control_plane_insecure: true,
+    })
     push.mockReset().mockResolvedValue(undefined)
     showSuccess.mockReset(); showError.mockReset()
   })
@@ -74,14 +78,35 @@ describe('WorkersView operations table', () => {
     expect(setEnabled).toHaveBeenCalledWith(1, false)
 
     await wrapper.get('[data-testid="edit-worker"]').trigger('click')
+    await flushPromises()
     const form = wrapper.get('#worker-form')
     const inputs = form.findAll('input')
     await inputs[0].setValue('Renamed Worker')
     await form.trigger('submit'); await flushPromises()
+    expect(getConfig).toHaveBeenCalledWith(1)
+    expect(form.text()).toContain('admin.workers.natsUrl')
+    expect(form.text()).not.toContain('admin.workers.managementKey')
+    expect(form.text()).not.toContain('admin.workers.vaultKey')
+    expect(form.text()).toContain('admin.workers.controlPlaneTarget')
     expect(update).toHaveBeenCalledWith(1, expect.objectContaining({
       name: 'Renamed Worker', base_url: 'http://gateway:9999', enabled: false,
+      nats_url: 'nats://nats:4222', control_plane_target: 'sub2api:9090', control_plane_insecure: true,
       heartbeat_interval_seconds: 15, heartbeat_timeout_seconds: 5
     }))
+  })
+
+  it('does not push default runtime fields when Worker config cannot be loaded', async () => {
+    getConfig.mockRejectedValueOnce(new Error('worker unreachable'))
+    const wrapper = mountView(); await flushPromises()
+    await wrapper.get('[data-testid="edit-worker"]').trigger('click')
+    await flushPromises()
+    const form = wrapper.get('#worker-form')
+    await form.findAll('input')[0].setValue('Renamed Worker')
+    await form.trigger('submit'); await flushPromises()
+    expect(update).toHaveBeenCalledWith(1, {
+      name: 'Renamed Worker', base_url: 'http://gateway:9999', enabled: true,
+      heartbeat_interval_seconds: 15, heartbeat_timeout_seconds: 5
+    })
   })
 
   it('rolls back both the switch and status when the enabled update fails', async () => {

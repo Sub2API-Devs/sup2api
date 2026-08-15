@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
@@ -83,6 +84,7 @@ func (a Account) Summary() Summary {
 }
 
 type Vault struct {
+	mu   sync.RWMutex
 	db   *sql.DB
 	aead cipher.AEAD
 }
@@ -250,6 +252,8 @@ func (v *Vault) Close() error {
 	if v == nil || v.db == nil {
 		return nil
 	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	_, _ = v.db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
 	return v.db.Close()
 }
@@ -258,6 +262,8 @@ func (v *Vault) Ping() error {
 	if v == nil || v.db == nil {
 		return errors.New("worker vault is closed")
 	}
+	v.mu.RLock()
+	defer v.mu.RUnlock()
 	var one int
 	return v.db.QueryRow(`SELECT 1`).Scan(&one)
 }
@@ -266,6 +272,8 @@ func (v *Vault) Put(account *Account) error {
 	if account == nil || account.ID == "" {
 		return errors.New("worker account id is required")
 	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	raw, err := json.Marshal(account)
 	if err != nil {
 		return err
@@ -279,6 +287,8 @@ func (v *Vault) Put(account *Account) error {
 }
 
 func (v *Vault) Get(id string) (*Account, error) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
 	var sealed []byte
 	err := v.db.QueryRow(`SELECT sealed FROM worker_accounts WHERE id = ?`, id).Scan(&sealed)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -291,6 +301,12 @@ func (v *Vault) Get(id string) (*Account, error) {
 }
 
 func (v *Vault) List() ([]Account, error) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	return v.listLocked()
+}
+
+func (v *Vault) listLocked() ([]Account, error) {
 	rows, err := v.db.Query(`SELECT id, sealed FROM worker_accounts`)
 	if err != nil {
 		return nil, err
@@ -313,7 +329,74 @@ func (v *Vault) List() ([]Account, error) {
 	return accounts, rows.Err()
 }
 
+func (v *Vault) Rekey(newKey []byte) error {
+	if v == nil || v.db == nil {
+		return errors.New("worker vault is closed")
+	}
+	if len(newKey) != 32 {
+		return errors.New("worker vault key must contain exactly 32 bytes")
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	accounts, err := v.listLocked()
+	if err != nil {
+		return err
+	}
+	block, err := aes.NewCipher(newKey)
+	if err != nil {
+		return err
+	}
+	next, err := cipher.NewGCM(block)
+	if err != nil {
+		return err
+	}
+	previous := v.aead
+	v.aead = next
+	sealedCheck, err := v.seal(string(keyCheckName), []byte(keyCheckPlaintext))
+	if err != nil {
+		v.aead = previous
+		return err
+	}
+	sealedAccounts := make([][]byte, 0, len(accounts))
+	for _, account := range accounts {
+		raw, marshalErr := json.Marshal(account)
+		if marshalErr != nil {
+			v.aead = previous
+			return marshalErr
+		}
+		sealed, sealErr := v.seal(account.ID, raw)
+		if sealErr != nil {
+			v.aead = previous
+			return sealErr
+		}
+		sealedAccounts = append(sealedAccounts, sealed)
+	}
+	tx, err := v.db.Begin()
+	if err != nil {
+		v.aead = previous
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`UPDATE vault_metadata SET value = ? WHERE key = ?`, sealedCheck, string(keyCheckName)); err != nil {
+		v.aead = previous
+		return err
+	}
+	for index, account := range accounts {
+		if _, err := tx.Exec(`UPDATE worker_accounts SET sealed = ? WHERE id = ?`, sealedAccounts[index], account.ID); err != nil {
+			v.aead = previous
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		v.aead = previous
+		return err
+	}
+	return nil
+}
+
 func (v *Vault) Delete(id string) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	result, err := v.db.Exec(`DELETE FROM worker_accounts WHERE id = ?`, id)
 	if err != nil {
 		return err

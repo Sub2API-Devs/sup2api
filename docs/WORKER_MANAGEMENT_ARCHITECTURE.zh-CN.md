@@ -9,7 +9,7 @@
 - 使用记录：`Worker observer -> SQLite outbox -> NATS JetStream -> sup2api durable consumer -> RecordUsage -> usage_logs -> 统一 UI`。
 - `worker_logs`/Redis Stream 仅保留为兼容性 Worker 遥测副本，不是使用记录和计费的权威数据源。
 - Worker 不连接 Redis，不持有 Redis URL、账号、密码、Stream Key 或 Consumer Group。
-- Worker ID、管理密钥、Vault 密钥、控制面地址由 Worker 管理 UI 首次下发，不作为容器环境变量注入。
+- Worker ID 和控制面地址由 Worker 管理 UI 首次下发；管理密钥和 Vault 密钥由 Worker `.env` 配置，认领时写入本地配置，不在管理页填写。
 - 容器生命周期仍由 Docker/Kubernetes 管理；`sup2api` 不挂载 Docker Socket。
 
 管理面选择 HTTP/JSON，是为了跨容器、跨语言、便于版本化；请求准入和租约继续使用私有 gRPC。使用记录使用 NATS JetStream 解耦 Worker 与主服务器，并由 Worker SQLite outbox 和 JetStream durable consumer 共同保证至少一次投递。
@@ -63,14 +63,16 @@ sequenceDiagram
     participant UI as Sup2API UI/API
     W->>W: 生成并保存一次性配对码
     W-->>A: 容器日志显示配对码
+    A->>A: 在控制面 .env 与 Worker .env 写入同一把 Management Key
+    A->>W: 在 Worker .env 配置 Vault Key
     A->>UI: 填 Worker URL 与配对码
-    UI->>UI: 生成 Worker ID、Management Key、Vault Key
+    UI->>UI: 生成 Worker ID
     A->>UI: 填私有 gRPC 地址与 insecure 选项
     UI->>W: POST /worker/v1/claim
-    W->>W: 校验配对码并原子写入 mode-0600 配置
+    W->>W: 校验配对码，合并 Worker .env 密钥并原子写入 mode-0600 配置
     W->>W: 删除配对码，切换启动 Caddy
     W-->>UI: Worker identity
-    UI->>UI: 加密保存 Management Key 和 Worker 注册记录
+    UI->>UI: 从控制面 .env 读取 Management Key 并加密保存注册记录
 ```
 
 Claim 请求包含：
@@ -79,12 +81,12 @@ Claim 请求包含：
 {
   "pairing_token": "one-time-code",
   "worker_id": "gateway-sh-01",
-  "management_key": "at-least-32-characters",
-  "vault_key": "base64-or-hex-encoded-32-bytes",
   "control_plane_target": "sub2api:9090",
   "control_plane_insecure": true
 }
 ```
+
+管理密钥由控制面和 Worker 各自从 `.env` 的 `AI_GATEWAY_MANAGEMENT_KEY` 加载，认领请求和响应都不携带该密钥。Vault 密钥只存在于 Worker 的 `AI_GATEWAY_VAULT_KEY`，不回传。
 
 成功后一次性配对码立即删除且不可再次 Claim。长期配置写入 Worker 数据卷：
 
@@ -231,6 +233,9 @@ services:
       - ai_gateway_data:/var/lib/ai-gateway/data
     environment:
       AI_GATEWAY_LISTEN: :9999
+      AI_GATEWAY_PAIRING_TOKEN: ${AI_GATEWAY_PAIRING_TOKEN}
+      AI_GATEWAY_MANAGEMENT_KEY: ${AI_GATEWAY_MANAGEMENT_KEY}
+      AI_GATEWAY_VAULT_KEY: ${AI_GATEWAY_VAULT_KEY}
       AI_GATEWAY_WORKER_CONFIG_PATH: /var/lib/ai-gateway/data/worker-config.json
       AI_GATEWAY_WORKER_VAULT_PATH: /var/lib/ai-gateway/data/worker-vault.db
       AI_GATEWAY_SETTLEMENT_WAL_PATH: /var/lib/ai-gateway/data/settlements
@@ -242,13 +247,11 @@ services:
 
 ```text
 AI_GATEWAY_WORKER_ID
-AI_GATEWAY_MANAGEMENT_KEY
-AI_GATEWAY_VAULT_KEY
 AI_GATEWAY_REDIS_URL
 AI_GATEWAY_CONTROL_PLANE
 ```
 
-其中 Worker ID、两个密钥和控制面地址全部从 UI Claim 下发；Redis URL 在 Worker 配置模型中根本不存在。`GET /healthz` 在 Bootstrap 和 Caddy 两种状态都可用，因此容器健康检查不需要管理密钥。
+其中 Worker ID 和控制面地址从 UI Claim 下发；管理密钥和 Vault 密钥由 Worker `.env` 提供。Redis URL 在 Worker 配置模型中根本不存在。`GET /healthz` 在 Bootstrap 和 Caddy 两种状态都可用，因此容器健康检查不需要管理密钥。
 
 mTLS 部署目前仍通过只读 Secret 文件挂载 CA/客户端证书，并由传输层环境变量指定文件路径；这些不是 Redis 配置。若要求所有跨主机 TLS 材料也由 UI 管理，下一版本需要设计证书签发、轮换和吊销协议，不能简单把 PEM 文本复用到当前 Claim 字段。
 
@@ -257,7 +260,8 @@ mTLS 部署目前仍通过只读 Secret 文件挂载 CA/客户端证书，并由
 | 数据 | 权威方 | `sup2api` 保存内容 |
 |---|---|---|
 | Worker 长期身份和期望连接 | `sup2api` UI/DB | 注册记录、加密后的 Management Key |
-| Management/Vault Key | UI 首次生成 | Management Key 加密保存；Vault Key 不回传 |
+| Management Key | 控制面与 Worker 各自的 `.env` | 控制面从本进程环境读取后加密保存；认领不回传 |
+| Vault Key | Worker `.env` | 不回传 |
 | OpenAI 真实凭据 | Worker Vault | 仅账号摘要索引 |
 | OAuth PKCE 临时状态 | Worker 内存 | 仅中转 session ID |
 | 准入、租约、计费 | `sup2api` | 权威记录 |

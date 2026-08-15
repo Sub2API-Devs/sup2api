@@ -25,6 +25,11 @@ import (
 
 const ProtocolVersion = "aicodex.proxy-worker/v2"
 const pairingTokenEnv = "AI_GATEWAY_PAIRING_TOKEN"
+const managementKeyEnv = "AI_GATEWAY_MANAGEMENT_KEY"
+const vaultKeyEnv = "AI_GATEWAY_VAULT_KEY"
+const minPairingTokenLength = 48
+const pairingTokenRandomBytes = 36 // base64.RawURLEncoding → 48 characters
+const minManagementKeyLength = 32
 
 var workerIDPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
 
@@ -66,7 +71,7 @@ func (c Config) Validate() error {
 	if !workerIDPattern.MatchString(strings.TrimSpace(c.WorkerID)) {
 		return errors.New("worker_id must contain 1-128 letters, numbers, dots, underscores, colons or hyphens")
 	}
-	if len(strings.TrimSpace(c.ManagementKey)) < 32 {
+	if len(strings.TrimSpace(c.ManagementKey)) < minManagementKeyLength {
 		return errors.New("management_key must contain at least 32 characters")
 	}
 	if _, err := DecodeVaultKey(c.VaultKey); err != nil {
@@ -83,9 +88,9 @@ func (c Config) Validate() error {
 		return errors.New("nats_url must not contain credentials")
 	}
 	switch strings.ToLower(parsed.Scheme) {
-	case "tls", "wss":
+	case "nats", "tls", "wss":
 	default:
-		return errors.New("nats_url must use tls or wss")
+		return errors.New("nats_url must use nats, tls or wss")
 	}
 	if subject := strings.TrimSpace(c.NATSSubject); subject == "" || strings.ContainsAny(subject, " *>\t\r\n") {
 		return errors.New("nats_subject must be a concrete NATS subject")
@@ -129,6 +134,10 @@ func Bootstrap(ctx context.Context, listenAddress, configPath, instanceID, versi
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o700); err != nil {
 		return nil, fmt.Errorf("create Worker data directory: %w", err)
 	}
+	managementKey, vaultKey, err := loadOperatorSecrets()
+	if err != nil {
+		return nil, err
+	}
 	pairingPath := configPath + ".pairing"
 	pairingToken, fromEnv, err := resolvePairingToken(pairingPath)
 	if err != nil {
@@ -139,11 +148,13 @@ func Bootstrap(ctx context.Context, listenAddress, configPath, instanceID, versi
 	} else {
 		log.Printf("AI Gateway Worker is unclaimed; enter pairing token %s in the Sup2API Worker UI", pairingToken)
 	}
+	log.Printf("AI Gateway Worker loaded %s and %s from the container environment", managementKeyEnv, vaultKeyEnv)
 
 	claimed := make(chan *Config, 1)
 	serveErr := make(chan error, 1)
 	handler := &bootstrapHandler{
-		pairingToken: pairingToken, configPath: configPath, pairingPath: pairingPath,
+		pairingToken: pairingToken, managementKey: managementKey, vaultKey: vaultKey,
+		configPath: configPath, pairingPath: pairingPath,
 		instanceID: instanceID, version: version, claimed: claimed,
 	}
 	server := &http.Server{Addr: listenAddress, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
@@ -174,14 +185,16 @@ func Bootstrap(ctx context.Context, listenAddress, configPath, instanceID, versi
 }
 
 type bootstrapHandler struct {
-	pairingToken string
-	configPath   string
-	pairingPath  string
-	instanceID   string
-	version      string
-	claimed      chan<- *Config
-	mu           sync.Mutex
-	done         bool
+	pairingToken  string
+	managementKey string
+	vaultKey      string
+	configPath    string
+	pairingPath   string
+	instanceID    string
+	version       string
+	claimed       chan<- *Config
+	mu            sync.Mutex
+	done          bool
 }
 
 func (h *bootstrapHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -226,8 +239,8 @@ func (h *bootstrapHandler) claim(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	request.Config.WorkerID = strings.TrimSpace(request.Config.WorkerID)
-	request.Config.ManagementKey = strings.TrimSpace(request.Config.ManagementKey)
-	request.Config.VaultKey = strings.TrimSpace(request.Config.VaultKey)
+	request.Config.ManagementKey = strings.TrimSpace(h.managementKey)
+	request.Config.VaultKey = strings.TrimSpace(h.vaultKey)
 	request.Config.ControlPlaneTarget = strings.TrimSpace(request.Config.ControlPlaneTarget)
 	request.Config.NATSURL = strings.TrimSpace(request.Config.NATSURL)
 	request.Config.NATSSubject = strings.TrimSpace(request.Config.NATSSubject)
@@ -255,10 +268,25 @@ func (h *bootstrapHandler) claim(w http.ResponseWriter, r *http.Request) {
 	h.claimed <- &request.Config
 }
 
+func loadOperatorSecrets() (managementKey, vaultKey string, err error) {
+	managementKey = strings.TrimSpace(os.Getenv(managementKeyEnv))
+	if len(managementKey) < minManagementKeyLength {
+		return "", "", fmt.Errorf("%s must contain at least %d characters", managementKeyEnv, minManagementKeyLength)
+	}
+	vaultKey = strings.TrimSpace(os.Getenv(vaultKeyEnv))
+	if _, err := DecodeVaultKey(vaultKey); err != nil {
+		return "", "", fmt.Errorf("%s: %w", vaultKeyEnv, err)
+	}
+	return managementKey, vaultKey, nil
+}
+
 // resolvePairingToken prefers the operator-set environment token so Compose
 // deployments can put the claim secret in .env instead of scraping container logs.
 func resolvePairingToken(path string) (token string, fromEnv bool, err error) {
 	if token = strings.TrimSpace(os.Getenv(pairingTokenEnv)); token != "" {
+		if err = validatePairingToken(token); err != nil {
+			return "", true, fmt.Errorf("%s: %w", pairingTokenEnv, err)
+		}
 		if err = atomicWrite(path, []byte(token+"\n")); err != nil {
 			return "", true, fmt.Errorf("persist Worker pairing token: %w", err)
 		}
@@ -268,27 +296,91 @@ func resolvePairingToken(path string) (token string, fromEnv bool, err error) {
 	return token, false, err
 }
 
+func validatePairingToken(token string) error {
+	if token == "" {
+		return errors.New("must not be empty")
+	}
+	if len(token) < minPairingTokenLength {
+		return fmt.Errorf("must contain at least %d characters", minPairingTokenLength)
+	}
+	return nil
+}
+
 func loadOrCreatePairingToken(path string) (string, error) {
 	raw, err := os.ReadFile(path)
 	if err == nil {
 		token := strings.TrimSpace(string(raw))
-		if token == "" {
-			return "", errors.New("stored Worker pairing token is empty")
+		if err := validatePairingToken(token); err != nil {
+			return "", fmt.Errorf("stored Worker pairing token: %w", err)
 		}
 		return token, nil
 	}
 	if !errors.Is(err, os.ErrNotExist) {
 		return "", fmt.Errorf("read Worker pairing token: %w", err)
 	}
-	random := make([]byte, 24)
+	random := make([]byte, pairingTokenRandomBytes)
 	if _, err := rand.Read(random); err != nil {
 		return "", err
 	}
 	token := base64.RawURLEncoding.EncodeToString(random)
+	if err := validatePairingToken(token); err != nil {
+		return "", fmt.Errorf("generated Worker pairing token: %w", err)
+	}
 	if err := atomicWrite(path, []byte(token+"\n")); err != nil {
 		return "", fmt.Errorf("persist Worker pairing token: %w", err)
 	}
 	return token, nil
+}
+
+type PublicConfig struct {
+	WorkerID             string `json:"worker_id"`
+	ControlPlaneTarget   string `json:"control_plane_target"`
+	ControlPlaneInsecure bool   `json:"control_plane_insecure"`
+	NATSURL              string `json:"nats_url"`
+}
+
+type UpdateRequest struct {
+	ManagementKey        string `json:"management_key,omitempty"`
+	VaultKey             string `json:"vault_key,omitempty"`
+	ControlPlaneTarget   string `json:"control_plane_target,omitempty"`
+	ControlPlaneInsecure *bool  `json:"control_plane_insecure,omitempty"`
+	NATSURL              string `json:"nats_url,omitempty"`
+}
+
+func (c Config) Public() PublicConfig {
+	return PublicConfig{
+		WorkerID:             c.WorkerID,
+		ControlPlaneTarget:   c.ControlPlaneTarget,
+		ControlPlaneInsecure: c.ControlPlaneInsecure,
+		NATSURL:              c.NATSURL,
+	}
+}
+
+func (c Config) Apply(update UpdateRequest) (Config, error) {
+	next := c
+	if value := strings.TrimSpace(update.ManagementKey); value != "" {
+		next.ManagementKey = value
+	}
+	if value := strings.TrimSpace(update.VaultKey); value != "" {
+		next.VaultKey = value
+	}
+	if value := strings.TrimSpace(update.ControlPlaneTarget); value != "" {
+		next.ControlPlaneTarget = value
+	}
+	if update.ControlPlaneInsecure != nil {
+		next.ControlPlaneInsecure = *update.ControlPlaneInsecure
+	}
+	if value := strings.TrimSpace(update.NATSURL); value != "" {
+		next.NATSURL = value
+	}
+	if err := next.Validate(); err != nil {
+		return Config{}, err
+	}
+	return next, nil
+}
+
+func Persist(path string, cfg *Config) error {
+	return persistConfig(path, cfg)
 }
 
 func persistConfig(path string, cfg *Config) error {

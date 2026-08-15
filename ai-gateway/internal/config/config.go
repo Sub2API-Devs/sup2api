@@ -45,6 +45,7 @@ type Config struct {
 	WorkerManagementKey   string
 	WorkerVaultPath       string
 	WorkerVaultKey        string
+	WorkerConfigPath      string
 	WorkerVersion         string
 
 	TLSCAFile     string
@@ -116,9 +117,9 @@ func FromEnv() (Config, error) {
 	return cfg, nil
 }
 
-// FromEnvWithWorker overlays the UI-provisioned Worker configuration on
-// process-level transport and timeout settings. Long-lived Worker identity,
-// secrets, and control-plane routing never need container environment values.
+// FromEnvWithWorker overlays the claimed Worker configuration on process-level
+// transport and timeout settings. After claim, identity, secrets, and
+// control-plane routing come from the persisted Worker configuration file.
 func FromEnvWithWorker(worker *workersetup.Config, instanceID string) (Config, error) {
 	if worker == nil {
 		return Config{}, fmt.Errorf("UI-provisioned Worker configuration is required")
@@ -171,9 +172,9 @@ func (c Config) Validate() error {
 			return fmt.Errorf("worker nats_url must not contain credentials")
 		}
 		switch strings.ToLower(parsed.Scheme) {
-		case "tls", "wss":
+		case "nats", "tls", "wss":
 		default:
-			return fmt.Errorf("worker nats_url must use tls or wss")
+			return fmt.Errorf("worker nats_url must use nats, tls or wss")
 		}
 		if strings.TrimSpace(c.NATSSubject) == "" || strings.ContainsAny(c.NATSSubject, " *>\t\r\n") {
 			return fmt.Errorf("worker nats_subject must be a concrete subject when nats_url is configured")

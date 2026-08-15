@@ -13,6 +13,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/runtime"
 	managerpkg "github.com/Sub2API-Devs/sup2api/ai-gateway/internal/workermanagement"
+	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/workersetup"
 	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/workervault"
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
@@ -80,6 +81,27 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request, _ caddyhttp.
 		body := h.manager.Status(r.Context())
 		body["control_plane_ready"] = h.runtime != nil && h.runtime.Ready()
 		writeJSON(w, http.StatusOK, body)
+	case r.Method == http.MethodGet && path == "/worker/v1/config":
+		if h.runtime == nil {
+			writeError(w, http.StatusNotFound, "worker_config_unavailable", "Worker configuration is unavailable")
+			return nil
+		}
+		writeJSON(w, http.StatusOK, h.runtime.PublicWorkerSetup())
+	case r.Method == http.MethodPut && path == "/worker/v1/config":
+		if h.runtime == nil {
+			writeError(w, http.StatusNotFound, "worker_config_unavailable", "Worker configuration is unavailable")
+			return nil
+		}
+		var input workersetup.UpdateRequest
+		if !decodeJSON(w, r, &input) {
+			return nil
+		}
+		public, err := h.runtime.ApplyWorkerSetup(r.Context(), input)
+		if err != nil {
+			writeError(w, http.StatusUnprocessableEntity, "invalid_worker_config", err.Error())
+			return nil
+		}
+		writeJSON(w, http.StatusOK, public)
 	case r.Method == http.MethodGet && path == "/worker/v1/accounts":
 		accounts, err := h.manager.ListAccounts()
 		if err != nil {
