@@ -128,6 +128,99 @@ func TestUsageBillingRepositoryApply_DeduplicatesSubscriptionBilling(t *testing.
 	require.InDelta(t, 2.5, dailyUsage, 0.000001)
 }
 
+func TestUsageBillingRepositoryApply_AllowsSettlementAgainstSoftDeletedSubjects(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("usage-billing-deleted-user-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Balance:      100,
+	})
+	group := mustCreateGroup(t, client, &service.Group{
+		Name:             "usage-billing-deleted-group-" + uuid.NewString(),
+		Platform:         service.PlatformAnthropic,
+		SubscriptionType: service.SubscriptionTypeSubscription,
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID:  user.ID,
+		GroupID: &group.ID,
+		Key:     "sk-usage-billing-deleted-" + uuid.NewString(),
+		Name:    "billing-deleted",
+		Quota:   1,
+	})
+	account := mustCreateAccount(t, client, &service.Account{
+		Name: "usage-billing-deleted-account-" + uuid.NewString(),
+		Type: service.AccountTypeAPIKey,
+		Extra: map[string]any{
+			"quota_limit": 1.0,
+		},
+	})
+	subscription := mustCreateSubscription(t, client, &service.UserSubscription{
+		UserID:  user.ID,
+		GroupID: group.ID,
+	})
+
+	deletedAt := time.Now().UTC()
+	for _, subject := range []struct {
+		statement string
+		id        int64
+	}{
+		{"UPDATE api_keys SET deleted_at = $1 WHERE id = $2", apiKey.ID},
+		{"UPDATE accounts SET deleted_at = $1 WHERE id = $2", account.ID},
+		{"UPDATE users SET deleted_at = $1 WHERE id = $2", user.ID},
+		{"UPDATE user_subscriptions SET deleted_at = $1 WHERE id = $2", subscription.ID},
+		{"UPDATE groups SET deleted_at = $1 WHERE id = $2", group.ID},
+	} {
+		_, err := integrationDB.ExecContext(ctx, subject.statement, deletedAt, subject.id)
+		require.NoError(t, err)
+	}
+
+	command := &service.UsageBillingCommand{
+		RequestID:           uuid.NewString(),
+		APIKeyID:            apiKey.ID,
+		UserID:              user.ID,
+		AccountID:           account.ID,
+		AccountType:         service.AccountTypeAPIKey,
+		SubscriptionID:      &subscription.ID,
+		SubscriptionCost:    2.5,
+		BalanceCost:         1.25,
+		APIKeyQuotaCost:     1.25,
+		APIKeyRateLimitCost: 1.25,
+		AccountQuotaCost:    1.25,
+	}
+
+	_, err := repo.Apply(ctx, command)
+	require.ErrorIs(t, err, service.ErrSubscriptionNotFound)
+
+	command.RequestID = uuid.NewString()
+	command.AllowDeletedSubjects = true
+	result, err := repo.Apply(ctx, command)
+	require.NoError(t, err)
+	require.True(t, result.Applied)
+
+	var balance float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance FROM users WHERE id = $1", user.ID).Scan(&balance))
+	require.InDelta(t, 98.75, balance, 0.000001)
+
+	var quotaUsed, usage5h, accountQuotaUsed, subscriptionUsage float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT quota_used, usage_5h FROM api_keys WHERE id = $1", apiKey.ID).Scan(&quotaUsed, &usage5h))
+	require.InDelta(t, 1.25, quotaUsed, 0.000001)
+	require.InDelta(t, 1.25, usage5h, 0.000001)
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COALESCE((extra->>'quota_used')::numeric, 0) FROM accounts WHERE id = $1", account.ID).Scan(&accountQuotaUsed))
+	require.InDelta(t, 1.25, accountQuotaUsed, 0.000001)
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT daily_usage_usd FROM user_subscriptions WHERE id = $1", subscription.ID).Scan(&subscriptionUsage))
+	require.InDelta(t, 2.5, subscriptionUsage, 0.000001)
+
+	var outboxCount int
+	require.NoError(t, integrationDB.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM scheduler_outbox WHERE event_type = $1 AND account_id = $2",
+		service.SchedulerOutboxEventAccountChanged, account.ID,
+	).Scan(&outboxCount))
+	require.Zero(t, outboxCount, "deleted accounts must not emit scheduler refresh events")
+}
+
 func TestUsageBillingRepositoryApply_RequestFingerprintConflict(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)

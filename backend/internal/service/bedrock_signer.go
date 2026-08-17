@@ -58,7 +58,14 @@ func NewBedrockSignerFromAccount(account *Account) (*BedrockSigner, error) {
 // 当前实现中 buildUpstreamRequestBedrock 仅设置了 Content-Type 和 Accept，因此是安全的。
 func (s *BedrockSigner) SignRequest(ctx context.Context, req *http.Request, body []byte) error {
 	payloadHash := sha256Hash(body)
-	return s.signer.SignHTTP(ctx, s.credentials, req, payloadHash, "bedrock", s.region, time.Now())
+	return s.SignRequestHash(ctx, req, payloadHash, time.Now())
+}
+
+// SignRequestHash signs a request whose payload remains in the data plane.
+// payloadHash must be the lowercase SHA-256 hex digest of the exact bytes that
+// will be sent upstream.
+func (s *BedrockSigner) SignRequestHash(ctx context.Context, req *http.Request, payloadHash string, signingTime time.Time) error {
+	return s.signer.SignHTTP(ctx, s.credentials, req, payloadHash, "bedrock", s.region, signingTime)
 }
 
 func sha256Hash(data []byte) string {

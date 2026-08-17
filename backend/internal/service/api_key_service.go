@@ -700,6 +700,24 @@ func (s *APIKeyService) GetByID(ctx context.Context, id int64) (*APIKey, error) 
 	return apiKey, nil
 }
 
+// GetByIDForSettlement loads an API-key tombstone when supported by the
+// repository. Ordinary authentication and administration queries remain
+// soft-delete filtered.
+func (s *APIKeyService) GetByIDForSettlement(ctx context.Context, id int64) (*APIKey, error) {
+	loader, ok := s.apiKeyRepo.(interface {
+		GetByIDForSettlement(context.Context, int64) (*APIKey, error)
+	})
+	if !ok {
+		return s.GetByID(ctx, id)
+	}
+	apiKey, err := loader.GetByIDForSettlement(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("get settlement api key: %w", err)
+	}
+	s.compileAPIKeyIPRules(apiKey)
+	return apiKey, nil
+}
+
 // GetByKey 根据Key字符串获取API Key（用于认证）
 func (s *APIKeyService) GetByKey(ctx context.Context, key string) (*APIKey, error) {
 	if len(key) == 0 || len(key) > MaxAPIKeyCredentialBytes {

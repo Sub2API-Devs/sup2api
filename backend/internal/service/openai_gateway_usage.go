@@ -20,19 +20,21 @@ import (
 
 // OpenAIRecordUsageInput input for recording usage
 type OpenAIRecordUsageInput struct {
-	Result             *OpenAIForwardResult
-	APIKey             *APIKey
-	User               *User
-	Account            *Account
-	Subscription       *UserSubscription
-	InboundEndpoint    string
-	UpstreamEndpoint   string
-	UserAgent          string // 请求的 User-Agent
-	IPAddress          string // 请求的客户端 IP 地址
-	SessionID          string // 客户端显式会话标识（session_id / X-Session-Id 等请求头），仅用于用量行会话关联
-	RequestPayloadHash string
-	APIKeyService      APIKeyQuotaUpdater
-	QuotaPlatform      string // user×platform quota platform resolved by the handler before async billing.
+	Result               *OpenAIForwardResult
+	APIKey               *APIKey
+	User                 *User
+	Account              *Account
+	DataPlaneID          string // Worker/data plane that executed the request; empty for main-server requests.
+	Subscription         *UserSubscription
+	InboundEndpoint      string
+	UpstreamEndpoint     string
+	UserAgent            string // 请求的 User-Agent
+	IPAddress            string // 请求的客户端 IP 地址
+	SessionID            string // 客户端显式会话标识（session_id / X-Session-Id 等请求头），仅用于用量行会话关联
+	RequestPayloadHash   string
+	AllowDeletedSubjects bool // 仅供持久化数据面结算：允许对 admission 后被软删除的计费主体完成扣费
+	APIKeyService        APIKeyQuotaUpdater
+	QuotaPlatform        string // user×platform quota platform resolved by the handler before async billing.
 	// PricingAt 是请求级定价时刻（请求开始捕获，与利润门的 D 同源）：高峰因子
 	// 按该时刻计算，保证同一请求从准入到扣费不中途变价。零值回退记录时刻
 	//（既有行为），供未装配的路径（图片/异步/cyber 等）沿用。
@@ -40,6 +42,13 @@ type OpenAIRecordUsageInput struct {
 	// CyberBlocked 为 true 时把该用量行标记为 cyber（request_type=cyber），计费逻辑不变。
 	CyberBlocked bool
 	ChannelUsageFields
+}
+
+// SupportsDurableIdempotentBilling has the same financial boundary as the
+// generic gateway path: production settlement requires the transactional
+// usage_billing_dedup repository; simple mode performs no balance deduction.
+func (s *OpenAIGatewayService) SupportsDurableIdempotentBilling() bool {
+	return s != nil && ((s.cfg != nil && s.cfg.RunMode == config.RunModeSimple) || s.usageBillingRepo != nil)
 }
 
 // CyberPolicyUsageInput 是 cyber 拒绝、未走正常 RecordUsage 的请求记录用量的入参。
@@ -320,6 +329,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		UserID:                user.ID,
 		APIKeyID:              apiKey.ID,
 		AccountID:             account.ID,
+		DataPlaneID:           strings.TrimSpace(input.DataPlaneID),
 		RequestID:             requestID,
 		Model:                 result.Model,
 		RequestedModel:        requestedModel,
@@ -445,6 +455,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 			Account:               account,
 			Subscription:          subscription,
 			RequestPayloadHash:    resolveUsageBillingPayloadFingerprint(ctx, input.RequestPayloadHash),
+			AllowDeletedSubjects:  input.AllowDeletedSubjects,
 			IsSubscriptionBill:    isSubscriptionBilling,
 			AccountRateMultiplier: accountRateMultiplier,
 			APIKeyService:         input.APIKeyService,

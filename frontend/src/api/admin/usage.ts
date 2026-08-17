@@ -82,6 +82,7 @@ export interface CreateUsageCleanupTaskRequest {
 
 export interface AdminUsageQueryParams extends UsageQueryParams {
   user_id?: number
+  worker_id?: number
   exact_total?: boolean
   billing_mode?: string
   upstream_model_mismatch?: boolean

@@ -177,6 +177,7 @@ export default {
     subscriptions: '订阅管理',
     accounts: '账号管理',
     proxies: 'IP管理',
+    workers: 'Worker 管理',
     redeemCodes: '兑换码',
     ops: '运维监控',
     promoCodes: '优惠码',

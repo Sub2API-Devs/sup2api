@@ -104,7 +104,9 @@ vi.mock('vue-i18n', async () => {
   return {
     ...actual,
     useI18n: () => ({
-      t: (key: string) => messages[key] ?? key,
+      t: (key: string, params?: Record<string, unknown>) => key === 'admin.workers.workerUsageTitle'
+        ? `${params?.name ?? ''} · Usage Records`
+        : messages[key] ?? key,
     }),
   }
 })
@@ -112,7 +114,8 @@ vi.mock('vue-i18n', async () => {
 vi.mock('vue-router', () => ({
   useRoute: () => ({
     query: routeQuery
-  })
+  }),
+  useRouter: () => ({ push: vi.fn() }),
 }))
 
 const AppLayoutStub = { template: '<div><slot /></div>' }
@@ -209,6 +212,20 @@ describe('admin UsageView route filters', () => {
     expect(getById).toHaveBeenCalledWith(42, true)
     expect(list).toHaveBeenCalledWith(expect.objectContaining({ user_id: 42 }), expect.anything())
     expect(wrapper.find('[data-test="user-filter-label"]').text()).toBe('route-user@test.com')
+  })
+
+  it('uses the canonical usage table scoped to the routed Worker', async () => {
+    routeQuery.worker_id = '7'
+    routeQuery.worker_name = 'Gateway 7'
+
+    const wrapper = mountRouteFilteredUsageView()
+    await flushPromises()
+
+    expect(list).toHaveBeenCalledWith(expect.objectContaining({ worker_id: 7 }), expect.anything())
+    expect(getStats).not.toHaveBeenCalled()
+    expect(getModelStats).not.toHaveBeenCalled()
+    expect(getSnapshotV2).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('Gateway 7')
   })
 
   it('does not apply a stale routed user label after user_id changes', async () => {

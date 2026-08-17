@@ -570,6 +570,10 @@ func (s *APIKeyRepoSuite) TestDeleteWithAudit_TombstonesWithoutRetainingCredenti
 
 	_, err := s.repo.GetByID(s.ctx, key.ID)
 	s.Require().Error(err)
+	settlementKey, err := s.repo.GetByIDForSettlement(s.ctx, key.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(key.ID, settlementKey.ID)
+	s.Require().NotEqual("sk-del-audit-1", settlementKey.Key)
 
 	var tombstone string
 	var deletedAt time.Time

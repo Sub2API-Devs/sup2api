@@ -37,11 +37,12 @@ type UsageBillingCommand struct {
 	ImageCount          int
 	MediaType           string
 
-	BalanceCost         float64
-	SubscriptionCost    float64
-	APIKeyQuotaCost     float64
-	APIKeyRateLimitCost float64
-	AccountQuotaCost    float64
+	BalanceCost          float64
+	SubscriptionCost     float64
+	APIKeyQuotaCost      float64
+	APIKeyRateLimitCost  float64
+	AccountQuotaCost     float64
+	AllowDeletedSubjects bool
 }
 
 func (c *UsageBillingCommand) Normalize() {
@@ -107,7 +108,7 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		return ""
 	}
 	raw := fmt.Sprintf(
-		"%d|%d|%d|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d|%s|%d|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f",
+		"%d|%d|%d|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d|%s|%d|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f|%t",
 		c.UserID,
 		c.AccountID,
 		c.APIKeyID,
@@ -128,6 +129,7 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		c.APIKeyQuotaCost,
 		c.APIKeyRateLimitCost,
 		c.AccountQuotaCost,
+		c.AllowDeletedSubjects,
 	)
 	if payloadHash := strings.TrimSpace(c.RequestPayloadHash); payloadHash != "" {
 		raw += "|" + payloadHash

@@ -18,8 +18,9 @@ import (
 )
 
 func (s *OpenAIGatewayService) validateUpstreamBaseURL(raw string) (string, error) {
-	if s.cfg != nil && !s.cfg.Security.URLAllowlist.Enabled {
-		normalized, err := urlvalidator.ValidateURLFormat(raw, s.cfg.Security.URLAllowlist.AllowInsecureHTTP)
+	if s.cfg == nil || !s.cfg.Security.URLAllowlist.Enabled {
+		allowInsecureHTTP := s.cfg != nil && s.cfg.Security.URLAllowlist.AllowInsecureHTTP
+		normalized, err := urlvalidator.ValidateURLFormat(raw, allowInsecureHTTP)
 		if err != nil {
 			return "", fmt.Errorf("invalid base_url: %w", err)
 		}
@@ -276,7 +277,9 @@ func isOpenAIEncryptedReasoningInputItem(item any) bool {
 	return has
 }
 
-func IsOpenAIResponsesCompactPathForTest(c *gin.Context) bool {
+// IsOpenAIResponsesCompactPath reports whether the request targets the legacy
+// /responses/compact endpoint, including its forwardable subpaths.
+func IsOpenAIResponsesCompactPath(c *gin.Context) bool {
 	return isOpenAIResponsesCompactPath(c)
 }
 

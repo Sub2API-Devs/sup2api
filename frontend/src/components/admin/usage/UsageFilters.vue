@@ -180,7 +180,7 @@
         </button>
         <slot name="after-reset" />
         <template v-if="mode === 'usage'">
-          <button type="button" @click="$emit('cleanup')" class="btn btn-danger">
+          <button v-if="allowCleanup" type="button" @click="$emit('cleanup')" class="btn btn-danger">
             {{ t('admin.usage.cleanup.button') }}
           </button>
           <button type="button" @click="$emit('export')" :disabled="exporting" class="btn btn-primary">
@@ -208,6 +208,7 @@ interface Props {
   startDate: string
   endDate: string
   showActions?: boolean
+  allowCleanup?: boolean
   modelOptions?: string[]
   /**
    * errors 模式:隐藏用量专属字段/按钮,显示错误类型+状态码(错误请求 tab 用)
@@ -220,6 +221,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   showActions: true,
+  allowCleanup: true,
   mode: 'usage',
   flat: false
 })

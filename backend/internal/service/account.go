@@ -43,6 +43,7 @@ type Account struct {
 	AutoPauseOnExpired bool
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
+	DeletedAt          *time.Time
 
 	Schedulable bool
 

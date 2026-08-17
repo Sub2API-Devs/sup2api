@@ -371,7 +371,7 @@ func TestClaudeTokenProvider_WrongPlatform(t *testing.T) {
 
 	token, err := provider.GetAccessToken(context.Background(), account)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "not an anthropic oauth or service account")
+	require.Contains(t, err.Error(), "not an anthropic oauth, setup-token, or service account")
 	require.Empty(t, token)
 }
 
@@ -385,7 +385,7 @@ func TestClaudeTokenProvider_WrongAccountType(t *testing.T) {
 
 	token, err := provider.GetAccessToken(context.Background(), account)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "not an anthropic oauth or service account")
+	require.Contains(t, err.Error(), "not an anthropic oauth, setup-token, or service account")
 	require.Empty(t, token)
 }
 
@@ -395,12 +395,15 @@ func TestClaudeTokenProvider_SetupTokenType(t *testing.T) {
 		ID:       106,
 		Platform: PlatformAnthropic,
 		Type:     AccountTypeSetupToken,
+		Credentials: map[string]any{
+			"access_token": "setup-access-token",
+			"expires_at":   time.Now().Add(time.Hour).Format(time.RFC3339),
+		},
 	}
 
 	token, err := provider.GetAccessToken(context.Background(), account)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "not an anthropic oauth or service account")
-	require.Empty(t, token)
+	require.NoError(t, err)
+	require.Equal(t, "setup-access-token", token)
 }
 
 func TestClaudeTokenProvider_NilCache(t *testing.T) {

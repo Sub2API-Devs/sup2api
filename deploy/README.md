@@ -16,6 +16,9 @@ This directory contains files for deploying Sub2API on Linux servers and Apple-s
 |------|-------------|
 | `docker-compose.yml` | Docker Compose configuration (named volumes) |
 | `docker-compose.local.yml` | Docker Compose configuration (local directories, easy migration) |
+| `docker-compose.gateway.dev.yml` | Development overlay for the standalone Sup2API Caddy data plane on port 9999 |
+| `docker-compose.gateway.mtls.yml` | Production-oriented Caddy data-plane overlay with mutual TLS control RPC |
+| `generate-data-plane-certs.sh` | Generates a private CA and separate server/client mTLS certificates |
 | `docker-deploy.sh` | **One-click Docker deployment script (recommended)** |
 | `apple-container.sh` | Native Apple `container` lifecycle script |
 | `APPLE_CONTAINER.md` | Apple `container` deployment and operations guide |
@@ -66,9 +69,9 @@ chmod +x docker-deploy.sh
 
 **What the script does:**
 - Downloads `docker-compose.local.yml` and `.env.example`
-- Automatically generates secure secrets (JWT_SECRET, TOTP_ENCRYPTION_KEY, POSTGRES_PASSWORD)
+- Automatically generates secure secrets (JWT_SECRET, TOTP_ENCRYPTION_KEY, POSTGRES_PASSWORD, NATS_PASSWORD)
 - Creates `.env` file with generated secrets
-- Creates necessary data directories (data/, postgres_data/, redis_data/)
+- Creates necessary data directories (data/, postgres_data/, redis_data/, nats_data/)
 - **Displays generated credentials** (POSTGRES_PASSWORD, JWT_SECRET, etc.)
 
 **After running the script:**
@@ -245,6 +248,55 @@ docker compose down -v
 | `GEMINI_QUOTA_POLICY` | No | *(empty)* | JSON overrides for Gemini local quota simulation (Code Assist only). |
 
 See `.env.example` for all available options.
+
+### Standalone Caddy data plane (development)
+
+The optional data plane keeps AI request and response bodies out of the main
+application process. The Sup2API application remains the authoritative control
+plane for authentication, admission, account scheduling, billing, and final
+usage persistence; the Caddy process performs direct upstream proxying.
+
+Generate a dedicated AuthGrant signing secret and start the development stack:
+
+```bash
+openssl rand -hex 32
+# Put the result in .env as DATA_PLANE_CONTROL_GRANT_SECRET.
+
+docker compose \
+  -f docker-compose.dev.yml \
+  -f docker-compose.gateway.dev.yml \
+  up --build
+```
+
+- Admin UI and the existing application remain on `http://localhost:8080`.
+- Supported AI API routes use `http://localhost:9999`.
+- `/healthz` checks the Caddy process; `/readyz` also requires a healthy
+  control-plane connection and writable settlement WAL.
+- `AI_GATEWAY_LEASE_RENEW_INTERVAL` defaults to `30s`. Keep it at or below half of
+  `DATA_PLANE_CONTROL_LEASE_TTL_SECONDS`; explicit renewal rejection or expiry
+  cancels the upstream stream fail-closed.
+- Port `9090` is private to the Compose network and is never published.
+
+This overlay uses plaintext gRPC only for isolated local development. For
+production, use a Unix socket shared by processes running as the same OS user,
+or configure TCP mutual TLS with separate server and client certificates.
+
+For a two-container mTLS deployment, generate the local PKI and use the mTLS
+overlay instead:
+
+```bash
+./generate-data-plane-certs.sh
+docker compose \
+  -f docker-compose.dev.yml \
+  -f docker-compose.gateway.mtls.yml \
+  up --build
+```
+
+The overlay uses Compose secrets for the CA, server keypair, and client
+keypair. The backend requires and verifies the client certificate; the Caddy
+data plane verifies the server name `sup2api-control`. The gRPC listener is not
+published to the host. Replace the generated development CA with your managed
+internal PKI and certificate rotation process for long-lived production use.
 
 > **Note:** The `docker-deploy.sh` script automatically generates `JWT_SECRET`, `TOTP_ENCRYPTION_KEY`, and `POSTGRES_PASSWORD` for you.
 

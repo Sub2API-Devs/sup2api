@@ -1,0 +1,85 @@
+# Sup2API Caddy data-plane mTLS overlay.
+# Combine this with a base Compose file whose `sub2api` image/build includes the
+# data_plane_control server introduced with the standalone gateway.
+#
+#   ./generate-data-plane-certs.sh
+#   docker compose -f docker-compose.dev.yml -f docker-compose.gateway.mtls.yml up --build
+
+services:
+  sub2api:
+    environment:
+      - DATA_PLANE_CONTROL_ENABLED=true
+      - DATA_PLANE_CONTROL_NETWORK=tcp
+      - DATA_PLANE_CONTROL_ADDRESS=0.0.0.0:9090
+      - DATA_PLANE_CONTROL_INSECURE=false
+      - DATA_PLANE_CONTROL_GRANT_SECRET=${DATA_PLANE_CONTROL_GRANT_SECRET:?DATA_PLANE_CONTROL_GRANT_SECRET is required}
+      - DATA_PLANE_CONTROL_GRANT_TTL_SECONDS=${DATA_PLANE_CONTROL_GRANT_TTL_SECONDS:-60}
+      - DATA_PLANE_CONTROL_LEASE_TTL_SECONDS=${DATA_PLANE_CONTROL_LEASE_TTL_SECONDS:-60}
+      - DATA_PLANE_CONTROL_TLS_CA_FILE=/run/secrets/sup2api_data_plane_ca
+      - DATA_PLANE_CONTROL_TLS_CERT_FILE=/run/secrets/sup2api_control_server_cert
+      - DATA_PLANE_CONTROL_TLS_KEY_FILE=/run/secrets/sup2api_control_server_key
+    secrets:
+      - sup2api_data_plane_ca
+      - sup2api_control_server_cert
+      - sup2api_control_server_key
+
+  sup2api-gateway:
+    build:
+      context: ../ai-gateway
+      dockerfile: Dockerfile
+    image: sup2api/ai-gateway:local
+    container_name: sup2api-gateway
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "${BIND_HOST:-0.0.0.0}:${AI_GATEWAY_PORT:-9999}:9999"
+    volumes:
+      - sup2api_gateway_data:/var/lib/ai-gateway/data
+    environment:
+      - AI_GATEWAY_LISTEN=:9999
+      - AI_GATEWAY_WORKER_CONFIG_PATH=/var/lib/ai-gateway/data/worker-config.json
+      - AI_GATEWAY_WORKER_VAULT_PATH=/var/lib/ai-gateway/data/worker-vault.db
+      - AI_GATEWAY_LEASE_RENEW_INTERVAL=${AI_GATEWAY_LEASE_RENEW_INTERVAL:-30s}
+      - AI_GATEWAY_CONTROL_PLANE_CA_FILE=/run/secrets/sup2api_data_plane_ca
+      - AI_GATEWAY_CONTROL_PLANE_CERT_FILE=/run/secrets/sup2api_data_plane_client_cert
+      - AI_GATEWAY_CONTROL_PLANE_KEY_FILE=/run/secrets/sup2api_data_plane_client_key
+      - AI_GATEWAY_CONTROL_PLANE_SERVER_NAME=sup2api-control
+      - AI_GATEWAY_STARTUP_REQUIRED=true
+      - AI_GATEWAY_SETTLEMENT_WAL_PATH=/var/lib/ai-gateway/data/settlements
+      - AI_GATEWAY_SETTLEMENT_WAL_MAX_BYTES=${AI_GATEWAY_SETTLEMENT_WAL_MAX_BYTES:-1073741824}
+      - AI_GATEWAY_NATS_URL=nats://${NATS_USER:-sub2api}:${NATS_PASSWORD:?NATS_PASSWORD is required}@nats:4222
+      - AI_GATEWAY_NATS_SUBJECT=${NATS_USAGE_SUBJECT:-sup2api.usage.settlements.v1}
+      - TZ=${TZ:-Asia/Shanghai}
+    secrets:
+      - sup2api_data_plane_ca
+      - sup2api_data_plane_client_cert
+      - sup2api_data_plane_client_key
+    depends_on:
+      sub2api:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    networks:
+      - sub2api-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://localhost:9999/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+volumes:
+  sup2api_gateway_data:
+
+secrets:
+  sup2api_data_plane_ca:
+    file: ${DATA_PLANE_CERT_DIR:-./data-plane-certs}/ca.crt
+  sup2api_control_server_cert:
+    file: ${DATA_PLANE_CERT_DIR:-./data-plane-certs}/server.crt
+  sup2api_control_server_key:
+    file: ${DATA_PLANE_CERT_DIR:-./data-plane-certs}/server.key
+  sup2api_data_plane_client_cert:
+    file: ${DATA_PLANE_CERT_DIR:-./data-plane-certs}/client.crt
+  sup2api_data_plane_client_key:
+    file: ${DATA_PLANE_CERT_DIR:-./data-plane-certs}/client.key

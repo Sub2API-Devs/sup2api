@@ -560,6 +560,10 @@ type UsageLog struct {
 type AdminUsageLog struct {
 	UsageLog
 
+	// DataPlaneID identifies the Worker/data plane that executed this request.
+	// Empty means the main server handled the request directly.
+	DataPlaneID string `json:"data_plane_id"`
+
 	// UpstreamModel is the actual model sent to the upstream provider after mapping.
 	// Omitted when no mapping was applied (requested model was used as-is).
 	UpstreamModel *string `json:"upstream_model,omitempty"`

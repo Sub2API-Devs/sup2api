@@ -83,6 +83,14 @@ services:
       - REDIS_MIN_IDLE_CONNS=${REDIS_MIN_IDLE_CONNS:-10}
       - REDIS_ENABLE_TLS=${REDIS_ENABLE_TLS:-false}
 
+      # Worker Usage Queue (NATS JetStream)
+      - USAGE_QUEUE_ENABLED=true
+      - USAGE_QUEUE_URL=nats://${NATS_USER:-sub2api}:${NATS_PASSWORD:?NATS_PASSWORD is required}@nats:4222
+      - USAGE_QUEUE_STREAM=${NATS_USAGE_STREAM:-SUP2API_USAGE}
+      - USAGE_QUEUE_SUBJECT=${NATS_USAGE_SUBJECT:-sup2api.usage.settlements.v1}
+      - USAGE_QUEUE_DURABLE=${NATS_USAGE_DURABLE:-sup2api-usage-settlement-v1}
+      - USAGE_QUEUE_CONSUMERS=${NATS_USAGE_CONSUMERS:-8}
+
       # =======================================================================
       # Admin Account (auto-created on first run)
       # =======================================================================
@@ -183,6 +191,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      nats:
+        condition: service_healthy
     networks:
       - sub2api-network
     healthcheck:
@@ -256,6 +266,22 @@ services:
       - sub2api-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  nats:
+    image: nats:2.11-alpine
+    container_name: sub2api-nats
+    restart: unless-stopped
+    command: ["-js", "-sd", "/data", "-m", "8222", "--user", "${NATS_USER:-sub2api}", "--pass", "${NATS_PASSWORD:?NATS_PASSWORD is required}"]
+    volumes:
+      - ./nats_data:/data:Z
+    networks:
+      - sub2api-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "2", "-O", "/dev/null", "http://127.0.0.1:8222/healthz"]
       interval: 10s
       timeout: 5s
       retries: 5

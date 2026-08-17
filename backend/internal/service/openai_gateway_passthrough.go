@@ -190,6 +190,18 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	if c != nil {
 		c.Set("openai_passthrough", true)
 	}
+	if account.IsOpenAIOAuth() && !isOpenAIResponsesCompactPath(c) {
+		var clientHeaders http.Header
+		if c != nil && c.Request != nil {
+			clientHeaders = c.Request.Header
+		}
+		if fpIDs := resolveCodexFingerprintIDsFromClient(account, clientHeaders, nil, body); fpIDs != nil {
+			if rewritten, changed := applyCodexFingerprintToBodyBytes(body, fpIDs); changed {
+				body = rewritten
+			}
+			storeCodexFingerprintIDs(c, fpIDs)
+		}
+	}
 
 	agentTaskRecoveryTried := false
 	var resp *http.Response
@@ -238,6 +250,13 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	defer func() { _ = resp.Body.Close() }()
 
 	serviceTier := extractOpenAIServiceTierFromBody(body)
+
+	// x-codex-turn-state 溯源：下游回传由 writeOpenAIPassthroughResponseHeaders
+	// 在各 handler 的写头点强制放行，铸造账号在此统一记录，供出站守卫剥离
+	// failover 换号后的跨账号回带（openai_codex_turn_state.go）。
+	if extractOpenAICodexTurnState(resp.Header) != "" {
+		s.noteOpenAICodexTurnStateProvenance(c, account)
+	}
 
 	var usage *OpenAIUsage
 	var firstTokenMs *int
@@ -376,6 +395,10 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 		}
 	}
 
+	// 客户端回带的 x-codex-turn-state 若已知由其他账号铸造（failover 换号），
+	// 剥离后再出站（openai_codex_turn_state.go）。
+	s.guardOpenAICodexTurnStateEcho(c, account, req.Header)
+
 	// 覆盖入站鉴权残留，并注入上游认证
 	req.Header.Del("authorization")
 	req.Header.Del("x-api-key")
@@ -432,6 +455,9 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 		if clientConversationID != "" {
 			req.Header.Set("conversation_id", isolateOpenAISessionID(apiKeyID, clientConversationID))
 		}
+		if ids := loadCodexFingerprintIDs(c); ids != nil {
+			applyCodexFingerprintHeaders(req.Header, ids)
+		}
 	} else if isOpenAIResponsesCompactPath(c) {
 		// 透传白名单会放行客户端的 Accept: text/event-stream；compact 上游是
 		// unary JSON 协议，API-key 账号同样强制 Accept，避免上游按 SSE 返回
@@ -459,6 +485,9 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 
 	// 账号级请求头覆写（仅 openai api_key 账号启用时生效；OAuth 路径 no-op）
 	account.ApplyHeaderOverrides(req.Header)
+	// x-codex-beta-features：按真实 Codex 的会话级行为补注（在账号级覆写之后，
+	// 保证不被覆盖丢失）。
+	applyOpenAICodexBetaFeatures(c, account, req.Header)
 	setOpenAICodexRoutingHintFromBody(req.Header, account, body)
 	logOpenAIRoutingDiagnosticsFromBody(ctx, account, "http_passthrough", req.Header, body, "not_applicable")
 
@@ -1649,5 +1678,14 @@ func writeOpenAIPassthroughResponseHeaders(dst http.Header, src http.Header, fil
 		for _, v := range vals {
 			dst.Add(key, v)
 		}
+	}
+
+	// x-codex-turn-state：Codex 回合状态头，客户端会在同回合后续请求回带。
+	// 与上面的用量头不同，这里在上游缺失时也主动清除——failover 换号后残留
+	// 上一账号的 blob 会构成跨账号矛盾（openai_codex_turn_state.go）。
+	turnStateKey := http.CanonicalHeaderKey(openAICodexTurnStateHeader)
+	dst.Del(turnStateKey)
+	for _, v := range getCaseInsensitiveValues(src, openAICodexTurnStateHeader) {
+		dst.Add(turnStateKey, v)
 	}
 }

@@ -28,6 +28,13 @@ func TestUsageLogFromService_IncludesOpenAIWSMode(t *testing.T) {
 	require.False(t, UsageLogFromServiceAdmin(httpLog).OpenAIWSMode)
 }
 
+func TestUsageLogFromServiceAdminIncludesDataPlaneID(t *testing.T) {
+	t.Parallel()
+
+	log := &service.UsageLog{DataPlaneID: "gateway-worker-1"}
+	require.Equal(t, "gateway-worker-1", UsageLogFromServiceAdmin(log).DataPlaneID)
+}
+
 func TestUsageLogFromService_PrefersRequestTypeForLegacyFields(t *testing.T) {
 	t.Parallel()
 

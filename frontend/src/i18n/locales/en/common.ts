@@ -177,6 +177,7 @@ export default {
     subscriptions: 'Subscriptions',
     accounts: 'Accounts',
     proxies: 'Proxies',
+    workers: 'Workers',
     redeemCodes: 'Redeem Codes',
     ops: 'Ops',
     promoCodes: 'Promo Codes',

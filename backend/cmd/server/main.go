@@ -1,6 +1,6 @@
 package main
 
-//go:generate go run github.com/google/wire/cmd/wire
+//go:generate go run -mod=mod github.com/google/wire/cmd/wire
 
 import (
 	"context"
@@ -162,6 +162,14 @@ func runMainServer() {
 			log.Printf("Prompt Audit started in degraded state: %v", err)
 		}
 	}
+	if app.DataPlaneControl != nil {
+		if err := app.DataPlaneControl.Start(context.Background()); err != nil {
+			log.Fatalf("Failed to start Sup2API data-plane control server: %v", err)
+		}
+		if app.DataPlaneControl.Enabled() {
+			log.Printf("Sup2API data-plane control server started")
+		}
+	}
 
 	// 启动服务器
 	go func() {
@@ -181,6 +189,11 @@ func runMainServer() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if app.DataPlaneControl != nil {
+		if err := app.DataPlaneControl.Stop(ctx); err != nil {
+			log.Printf("Data-plane control server shutdown failed: %v", err)
+		}
+	}
 
 	if err := app.Server.Shutdown(ctx); err != nil {
 		log.Printf("Server forced to shutdown: %v", err)

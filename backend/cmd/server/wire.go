@@ -12,6 +12,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/controlplane"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
@@ -25,9 +26,10 @@ import (
 )
 
 type Application struct {
-	Server      *http.Server
-	PromptAudit *securityaudit.PromptService
-	Cleanup     func()
+	Server           *http.Server
+	DataPlaneControl *controlplane.Server
+	PromptAudit      *securityaudit.PromptService
+	Cleanup          func()
 }
 
 func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
@@ -45,6 +47,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 
 		// Server layer ProviderSet
 		server.ProviderSet,
+		controlplane.ProviderSet,
 
 		// Privacy client factory for OpenAI training opt-out
 		providePrivacyClientFactory,
@@ -56,7 +59,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 		provideCleanup,
 
 		// Application struct
-		wire.Struct(new(Application), "Server", "PromptAudit", "Cleanup"),
+		wire.Struct(new(Application), "Server", "DataPlaneControl", "PromptAudit", "Cleanup"),
 	)
 	return nil, nil
 }
@@ -116,6 +119,8 @@ func provideCleanup(
 	ollamaCloudUsage *service.OllamaCloudUsageService,
 	auditLog *service.AuditLogService,
 	promptAudit *securityaudit.PromptService,
+	workerLogConsumer *service.WorkerLogConsumer,
+	workerService *service.WorkerService,
 ) func() {
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -128,6 +133,18 @@ func provideCleanup(
 
 		// 应用层清理步骤可并行执行，基础设施资源（Redis/Ent）最后按顺序关闭。
 		parallelSteps := []cleanupStep{
+			{"WorkerHeartbeat", func() error {
+				if workerService != nil {
+					workerService.StopHeartbeat()
+				}
+				return nil
+			}},
+			{"WorkerLogConsumer", func() error {
+				if workerLogConsumer != nil {
+					workerLogConsumer.Close(3 * time.Second)
+				}
+				return nil
+			}},
 			{"OpsIngressRejectAggregator", func() error {
 				if opsIngressReject != nil {
 					opsIngressReject.Stop()

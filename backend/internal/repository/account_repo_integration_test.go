@@ -266,6 +266,9 @@ func (s *AccountRepoSuite) TestDelete() {
 
 	_, err = s.repo.GetByID(s.ctx, account.ID)
 	s.Require().Error(err, "expected error after delete")
+	settlementAccount, err := s.repo.GetByIDForSettlement(s.ctx, account.ID)
+	s.Require().NoError(err, "settlement must load the soft-deleted account tombstone")
+	s.Require().Equal(account.ID, settlementAccount.ID)
 }
 
 func (s *AccountRepoSuite) TestDelete_RemovesSchedulerAccountSnapshot() {

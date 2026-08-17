@@ -77,9 +77,35 @@ func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) erro
 func (r *apiKeyRepository) GetByID(ctx context.Context, id int64) (*service.APIKey, error) {
 	m, err := r.activeQuery().
 		Where(apikey.IDEQ(id)).
-		WithUser().
+		WithUser(func(q *dbent.UserQuery) {
+			q.WithAllowedGroups(func(gq *dbent.GroupQuery) {
+				gq.Select(group.FieldID)
+			})
+		}).
 		WithGroup().
 		Only(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return nil, service.ErrAPIKeyNotFound
+		}
+		return nil, err
+	}
+	return apiKeyEntityToService(m), nil
+}
+
+// GetByIDForSettlement includes soft-deleted API keys so requests admitted
+// before deletion can still produce their authoritative financial record.
+func (r *apiKeyRepository) GetByIDForSettlement(ctx context.Context, id int64) (*service.APIKey, error) {
+	queryCtx := mixins.SkipSoftDelete(ctx)
+	m, err := r.client.APIKey.Query().
+		Where(apikey.IDEQ(id)).
+		WithUser(func(q *dbent.UserQuery) {
+			q.WithAllowedGroups(func(gq *dbent.GroupQuery) {
+				gq.Select(group.FieldID)
+			})
+		}).
+		WithGroup().
+		Only(queryCtx)
 	if err != nil {
 		if dbent.IsNotFound(err) {
 			return nil, service.ErrAPIKeyNotFound
@@ -791,11 +817,18 @@ func (r *apiKeyRepository) IncrementQuotaUsedAndGetState(ctx context.Context, id
 }
 
 func (r *apiKeyRepository) UpdateLastUsed(ctx context.Context, id int64, usedAt time.Time) error {
-	affected, err := r.client.APIKey.Update().
-		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
-		SetLastUsedAt(usedAt).
-		SetUpdatedAt(usedAt).
-		Save(ctx)
+	// last_used_at is operational telemetry, not an authorization-policy
+	// mutation. Updating through Ent would apply TimeMixin.UpdateDefault and
+	// change updated_at, invalidating the grant that just completed the request
+	// and causing the next request to fail with STALE_AUTH_GRANT.
+	result, err := r.sql.ExecContext(ctx, `
+		UPDATE api_keys
+		SET last_used_at = $1
+		WHERE id = $2 AND deleted_at IS NULL`, usedAt, id)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
 	if err != nil {
 		return err
 	}
@@ -878,6 +911,7 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		LastUsedAt:    m.LastUsedAt,
 		CreatedAt:     m.CreatedAt,
 		UpdatedAt:     m.UpdatedAt,
+		DeletedAt:     m.DeletedAt,
 		GroupID:       m.GroupID,
 		Quota:         m.Quota,
 		QuotaUsed:     m.QuotaUsed,

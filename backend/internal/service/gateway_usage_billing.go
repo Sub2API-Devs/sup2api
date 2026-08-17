@@ -37,21 +37,23 @@ func (s *GatewayService) ResolveUserGroupRateMultiplier(ctx context.Context, use
 // RecordUsageInput 记录使用量的输入参数。
 // 异步 worker 只接收计费所需快照，不能持有 ParsedRequest/RequestBodyRef 这类大请求体引用。
 type RecordUsageInput struct {
-	Result             *ForwardResult
-	APIKey             *APIKey
-	User               *User
-	Account            *Account
-	Subscription       *UserSubscription  // 可选：订阅信息
-	PricingAt          time.Time          // token 售价固定时刻；零值保持既有的记录时刻语义
-	InboundEndpoint    string             // 入站端点（客户端请求路径）
-	UpstreamEndpoint   string             // 上游端点（标准化后的上游路径）
-	UserAgent          string             // 请求的 User-Agent
-	IPAddress          string             // 请求的客户端 IP 地址
-	SessionID          string             // 客户端显式会话标识（session_id / X-Session-Id 等请求头），仅用于用量行会话关联
-	RequestPayloadHash string             // 请求体语义哈希，用于降低 request_id 误复用时的静默误去重风险
-	ForceCacheBilling  bool               // 强制缓存计费：将 input_tokens 转为 cache_read 计费（用于粘性会话切换）
-	APIKeyService      APIKeyQuotaUpdater // 可选：用于更新API Key配额
-	QuotaPlatform      string             // user×platform 配额计量平台：handler 在请求 ctx 内经 QuotaPlatform() 算定后传入（后扣运行在 worker 池 background ctx 上，取不到 ForcePlatform）
+	Result               *ForwardResult
+	APIKey               *APIKey
+	User                 *User
+	Account              *Account
+	DataPlaneID          string             // 执行请求的 Worker/data plane；主服务器直连请求为空
+	Subscription         *UserSubscription  // 可选：订阅信息
+	PricingAt            time.Time          // token 售价固定时刻；零值保持既有的记录时刻语义
+	InboundEndpoint      string             // 入站端点（客户端请求路径）
+	UpstreamEndpoint     string             // 上游端点（标准化后的上游路径）
+	UserAgent            string             // 请求的 User-Agent
+	IPAddress            string             // 请求的客户端 IP 地址
+	SessionID            string             // 客户端显式会话标识（session_id / X-Session-Id 等请求头），仅用于用量行会话关联
+	RequestPayloadHash   string             // 请求体语义哈希，用于降低 request_id 误复用时的静默误去重风险
+	AllowDeletedSubjects bool               // 仅供持久化数据面结算：允许对 admission 后被软删除的计费主体完成扣费
+	ForceCacheBilling    bool               // 强制缓存计费：将 input_tokens 转为 cache_read 计费（用于粘性会话切换）
+	APIKeyService        APIKeyQuotaUpdater // 可选：用于更新API Key配额
+	QuotaPlatform        string             // user×platform 配额计量平台：handler 在请求 ctx 内经 QuotaPlatform() 算定后传入（后扣运行在 worker 池 background ctx 上，取不到 ForcePlatform）
 
 	ChannelUsageFields // 渠道映射信息（由 handler 在 Forward 前解析）
 }
@@ -78,6 +80,7 @@ type postUsageBillingParams struct {
 	Account               *Account
 	Subscription          *UserSubscription
 	RequestPayloadHash    string
+	AllowDeletedSubjects  bool
 	IsSubscriptionBill    bool
 	AccountRateMultiplier float64
 	APIKeyService         APIKeyQuotaUpdater
@@ -286,6 +289,8 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 		AccountID:          p.Account.ID,
 		AccountType:        p.Account.Type,
 		RequestPayloadHash: strings.TrimSpace(p.RequestPayloadHash),
+		AllowDeletedSubjects: p.AllowDeletedSubjects || p.APIKey.DeletedAt != nil || p.User.DeletedAt != nil || p.Account.DeletedAt != nil ||
+			(p.Subscription != nil && p.Subscription.DeletedAt != nil),
 	}
 	if usageLog != nil {
 		cmd.Model = usageLog.Model
@@ -564,6 +569,15 @@ func (s *GatewayService) billingDeps() *billingDeps {
 	}
 }
 
+// SupportsDurableIdempotentBilling reports whether RecordUsage can anchor its
+// request ID claim in the same database transaction as quota/balance changes.
+// The data-plane settlement controller must fail closed when this is false;
+// its Redis acknowledgement is only a replay accelerator, not the financial
+// idempotency boundary.
+func (s *GatewayService) SupportsDurableIdempotentBilling() bool {
+	return s != nil && ((s.cfg != nil && s.cfg.RunMode == config.RunModeSimple) || s.usageBillingRepo != nil)
+}
+
 func writeUsageLogBestEffort(ctx context.Context, repo UsageLogRepository, usageLog *UsageLog, logKey string) {
 	if repo == nil || usageLog == nil {
 		return
@@ -606,22 +620,24 @@ type recordUsageOpts struct {
 // RecordUsage 记录使用量并扣费（或更新订阅用量）
 func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInput) error {
 	return s.recordUsageCore(ctx, &recordUsageCoreInput{
-		Result:             input.Result,
-		APIKey:             input.APIKey,
-		User:               input.User,
-		Account:            input.Account,
-		Subscription:       input.Subscription,
-		PricingAt:          input.PricingAt,
-		InboundEndpoint:    input.InboundEndpoint,
-		UpstreamEndpoint:   input.UpstreamEndpoint,
-		UserAgent:          input.UserAgent,
-		IPAddress:          input.IPAddress,
-		SessionID:          input.SessionID,
-		RequestPayloadHash: input.RequestPayloadHash,
-		ForceCacheBilling:  input.ForceCacheBilling,
-		APIKeyService:      input.APIKeyService,
-		QuotaPlatform:      input.QuotaPlatform,
-		ChannelUsageFields: input.ChannelUsageFields,
+		Result:               input.Result,
+		APIKey:               input.APIKey,
+		User:                 input.User,
+		Account:              input.Account,
+		DataPlaneID:          input.DataPlaneID,
+		Subscription:         input.Subscription,
+		PricingAt:            input.PricingAt,
+		InboundEndpoint:      input.InboundEndpoint,
+		UpstreamEndpoint:     input.UpstreamEndpoint,
+		UserAgent:            input.UserAgent,
+		IPAddress:            input.IPAddress,
+		SessionID:            input.SessionID,
+		RequestPayloadHash:   input.RequestPayloadHash,
+		AllowDeletedSubjects: input.AllowDeletedSubjects,
+		ForceCacheBilling:    input.ForceCacheBilling,
+		APIKeyService:        input.APIKeyService,
+		QuotaPlatform:        input.QuotaPlatform,
+		ChannelUsageFields:   input.ChannelUsageFields,
 	}, &recordUsageOpts{})
 }
 
@@ -675,21 +691,23 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 
 // recordUsageCoreInput 是 recordUsageCore 的公共输入字段，从两种输入结构体中提取。
 type recordUsageCoreInput struct {
-	Result             *ForwardResult
-	APIKey             *APIKey
-	User               *User
-	Account            *Account
-	Subscription       *UserSubscription
-	PricingAt          time.Time
-	InboundEndpoint    string
-	UpstreamEndpoint   string
-	UserAgent          string
-	IPAddress          string
-	SessionID          string
-	RequestPayloadHash string
-	ForceCacheBilling  bool
-	APIKeyService      APIKeyQuotaUpdater
-	QuotaPlatform      string
+	Result               *ForwardResult
+	APIKey               *APIKey
+	User                 *User
+	Account              *Account
+	DataPlaneID          string
+	Subscription         *UserSubscription
+	PricingAt            time.Time
+	InboundEndpoint      string
+	UpstreamEndpoint     string
+	UserAgent            string
+	IPAddress            string
+	SessionID            string
+	RequestPayloadHash   string
+	AllowDeletedSubjects bool
+	ForceCacheBilling    bool
+	APIKeyService        APIKeyQuotaUpdater
+	QuotaPlatform        string
 	ChannelUsageFields
 }
 
@@ -915,6 +933,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		Account:               account,
 		Subscription:          subscription,
 		RequestPayloadHash:    resolveUsageBillingPayloadFingerprint(ctx, input.RequestPayloadHash),
+		AllowDeletedSubjects:  input.AllowDeletedSubjects,
 		IsSubscriptionBill:    isSubscriptionBilling,
 		AccountRateMultiplier: accountRateMultiplier,
 		APIKeyService:         input.APIKeyService,
@@ -1210,6 +1229,7 @@ func (s *GatewayService) buildRecordUsageLog(
 		UserID:                user.ID,
 		APIKeyID:              apiKey.ID,
 		AccountID:             account.ID,
+		DataPlaneID:           strings.TrimSpace(input.DataPlaneID),
 		RequestID:             requestID,
 		Model:                 result.Model,
 		RequestedModel:        requestedModel,

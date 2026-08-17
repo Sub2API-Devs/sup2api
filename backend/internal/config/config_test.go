@@ -40,6 +40,51 @@ func TestLoadServerTimingConfig(t *testing.T) {
 	})
 }
 
+func TestLoadDataPlaneControlDefaultsAndSecureEnablement(t *testing.T) {
+	t.Run("disabled defaults", func(t *testing.T) {
+		resetViperWithJWTSecret(t)
+		cfg, err := Load()
+		require.NoError(t, err)
+		require.False(t, cfg.DataPlaneControl.Enabled)
+		require.Equal(t, "unix", cfg.DataPlaneControl.Network)
+		require.Equal(t, "/tmp/sup2api-control.sock", cfg.DataPlaneControl.Address)
+		require.Equal(t, 60, cfg.DataPlaneControl.GrantTTLSeconds)
+	})
+
+	t.Run("enabled Unix socket", func(t *testing.T) {
+		resetViperWithJWTSecret(t)
+		t.Setenv("DATA_PLANE_CONTROL_ENABLED", "true")
+		t.Setenv("DATA_PLANE_CONTROL_GRANT_SECRET", strings.Repeat("g", 32))
+		cfg, err := Load()
+		require.NoError(t, err)
+		require.True(t, cfg.DataPlaneControl.Enabled)
+		require.Equal(t, strings.Repeat("g", 32), cfg.DataPlaneControl.GrantSecret)
+	})
+
+	t.Run("secure TCP requires mTLS files", func(t *testing.T) {
+		resetViperWithJWTSecret(t)
+		cfg, err := Load()
+		require.NoError(t, err)
+		cfg.DataPlaneControl = DataPlaneControlConfig{
+			Enabled: true, Network: "tcp", Address: "127.0.0.1:9443",
+			GrantSecret: strings.Repeat("g", 32), GrantTTLSeconds: 60, LeaseTTLSeconds: 60,
+		}
+		require.ErrorContains(t, cfg.Validate(), "required for secure TCP")
+	})
+}
+
+func TestLoadUsageQueueFromEnvironment(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("USAGE_QUEUE_ENABLED", "true")
+	t.Setenv("USAGE_QUEUE_URL", "nats://app:secret@nats:4222")
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.True(t, cfg.UsageQueue.Enabled)
+	require.Equal(t, "nats://app:secret@nats:4222", cfg.UsageQueue.URL)
+	require.Equal(t, "SUP2API_USAGE", cfg.UsageQueue.Stream)
+	require.Equal(t, "sup2api.usage.settlements.v1", cfg.UsageQueue.Subject)
+}
+
 func TestLoadRedisUsernameFromEnvironment(t *testing.T) {
 	resetViperWithJWTSecret(t)
 	t.Setenv("REDIS_USERNAME", "app-user")

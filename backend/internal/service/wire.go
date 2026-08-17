@@ -869,7 +869,18 @@ var ProviderSet = wire.NewSet(
 	ProvideChannelMonitorV2Aggregator,
 	NewChannelMonitorRequestTemplateService,
 	ProvideUserPlatformQuotaUsageFlusher,
+	NewWorkerRemoteClient,
+	ProvideWorkerService,
+	NewWorkerLogConsumer,
 )
+
+// ProvideWorkerService creates the Worker manager and starts its lifecycle
+// heartbeat loop. The matching stop hook lives in cmd/server provideCleanup.
+func ProvideWorkerService(repo WorkerRepository, encryptor SecretEncryptor, remote *WorkerRemoteClient) *WorkerService {
+	service := NewWorkerService(repo, encryptor, remote)
+	service.StartHeartbeat(context.Background())
+	return service
+}
 
 // ProvideUserPlatformQuotaUsageFlusher 创建并启动 UserPlatformQuotaUsageFlusher。
 func ProvideUserPlatformQuotaUsageFlusher(cfg *config.Config, cache BillingCache, quotaRepo UserPlatformQuotaRepository, tw *TimingWheelService) *UserPlatformQuotaUsageFlusher {

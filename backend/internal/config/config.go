@@ -63,6 +63,8 @@ const DefaultUpstreamResponseReadMaxBytes int64 = 128 * 1024 * 1024
 
 type Config struct {
 	Server                  ServerConfig                  `mapstructure:"server"`
+	DataPlaneControl        DataPlaneControlConfig        `mapstructure:"data_plane_control"`
+	UsageQueue              UsageQueueConfig              `mapstructure:"usage_queue"`
 	Log                     LogConfig                     `mapstructure:"log"`
 	CORS                    CORSConfig                    `mapstructure:"cors"`
 	Security                SecurityConfig                `mapstructure:"security"`
@@ -670,6 +672,42 @@ type ServerConfig struct {
 	TrustedProxiesConfigured bool      `mapstructure:"-" json:"-" yaml:"-"`   // 是否显式配置了可信代理列表
 	MaxRequestBodySize       int64     `mapstructure:"max_request_body_size"` // 全局最大请求体限制
 	H2C                      H2CConfig `mapstructure:"h2c"`                   // HTTP/2 Cleartext 配置
+}
+
+// DataPlaneControlConfig configures the private gRPC authority used by the
+// standalone Sup2API Caddy data plane. Unix sockets are protected by
+// filesystem permissions; TCP listeners require mTLS unless explicitly
+// marked insecure for isolated development environments.
+type DataPlaneControlConfig struct {
+	Enabled         bool                      `mapstructure:"enabled"`
+	Network         string                    `mapstructure:"network"`
+	Address         string                    `mapstructure:"address"`
+	Insecure        bool                      `mapstructure:"insecure"`
+	GrantSecret     string                    `mapstructure:"grant_secret"`
+	GrantTTLSeconds int                       `mapstructure:"grant_ttl_seconds"`
+	LeaseTTLSeconds int                       `mapstructure:"lease_ttl_seconds"`
+	TLS             DataPlaneControlTLSConfig `mapstructure:"tls"`
+}
+
+type DataPlaneControlTLSConfig struct {
+	CAFile   string `mapstructure:"ca_file"`
+	CertFile string `mapstructure:"cert_file"`
+	KeyFile  string `mapstructure:"key_file"`
+}
+
+// UsageQueueConfig configures the durable NATS JetStream transport used by
+// ai-gateway Workers to deliver canonical usage settlements.
+type UsageQueueConfig struct {
+	Enabled           bool   `mapstructure:"enabled"`
+	URL               string `mapstructure:"url"`
+	Stream            string `mapstructure:"stream"`
+	Subject           string `mapstructure:"subject"`
+	Durable           string `mapstructure:"durable"`
+	MaxAgeHours       int    `mapstructure:"max_age_hours"`
+	MaxBytes          int64  `mapstructure:"max_bytes"`
+	AckWaitSeconds    int    `mapstructure:"ack_wait_seconds"`
+	RetryDelaySeconds int    `mapstructure:"retry_delay_seconds"`
+	Consumers         int    `mapstructure:"consumers"`
 }
 
 // H2CConfig HTTP/2 Cleartext 配置
@@ -1751,6 +1789,16 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 		cfg.Server.Mode = "debug"
 	}
 	cfg.Server.FrontendURL = strings.TrimSpace(cfg.Server.FrontendURL)
+	cfg.DataPlaneControl.Network = strings.ToLower(strings.TrimSpace(cfg.DataPlaneControl.Network))
+	cfg.DataPlaneControl.Address = strings.TrimSpace(cfg.DataPlaneControl.Address)
+	cfg.DataPlaneControl.GrantSecret = strings.TrimSpace(cfg.DataPlaneControl.GrantSecret)
+	cfg.DataPlaneControl.TLS.CAFile = strings.TrimSpace(cfg.DataPlaneControl.TLS.CAFile)
+	cfg.DataPlaneControl.TLS.CertFile = strings.TrimSpace(cfg.DataPlaneControl.TLS.CertFile)
+	cfg.DataPlaneControl.TLS.KeyFile = strings.TrimSpace(cfg.DataPlaneControl.TLS.KeyFile)
+	cfg.UsageQueue.URL = strings.TrimSpace(cfg.UsageQueue.URL)
+	cfg.UsageQueue.Stream = strings.TrimSpace(cfg.UsageQueue.Stream)
+	cfg.UsageQueue.Subject = strings.TrimSpace(cfg.UsageQueue.Subject)
+	cfg.UsageQueue.Durable = strings.TrimSpace(cfg.UsageQueue.Durable)
 	cfg.JWT.Secret = strings.TrimSpace(cfg.JWT.Secret)
 	cfg.LinuxDo.ClientID = strings.TrimSpace(cfg.LinuxDo.ClientID)
 	cfg.LinuxDo.ClientSecret = strings.TrimSpace(cfg.LinuxDo.ClientSecret)
@@ -1916,6 +1964,29 @@ func setDefaults() {
 	viper.SetDefault("server.h2c.max_read_frame_size", 1<<20)              // 1MB（够用）
 	viper.SetDefault("server.h2c.max_upload_buffer_per_connection", 2<<20) // 2MB
 	viper.SetDefault("server.h2c.max_upload_buffer_per_stream", 512<<10)   // 512KB
+
+	// Private Caddy data-plane control service. It is opt-in until the
+	// standalone data plane is deployed alongside the backend.
+	viper.SetDefault("data_plane_control.enabled", false)
+	viper.SetDefault("data_plane_control.network", "unix")
+	viper.SetDefault("data_plane_control.address", "/tmp/sup2api-control.sock")
+	viper.SetDefault("data_plane_control.insecure", false)
+	viper.SetDefault("data_plane_control.grant_secret", "")
+	viper.SetDefault("data_plane_control.grant_ttl_seconds", 60)
+	viper.SetDefault("data_plane_control.lease_ttl_seconds", 60)
+	viper.SetDefault("data_plane_control.tls.ca_file", "")
+	viper.SetDefault("data_plane_control.tls.cert_file", "")
+	viper.SetDefault("data_plane_control.tls.key_file", "")
+	viper.SetDefault("usage_queue.enabled", false)
+	viper.SetDefault("usage_queue.url", "nats://127.0.0.1:4222")
+	viper.SetDefault("usage_queue.stream", "SUP2API_USAGE")
+	viper.SetDefault("usage_queue.subject", "sup2api.usage.settlements.v1")
+	viper.SetDefault("usage_queue.durable", "sup2api-usage-settlement-v1")
+	viper.SetDefault("usage_queue.max_age_hours", 24)
+	viper.SetDefault("usage_queue.max_bytes", int64(1<<30))
+	viper.SetDefault("usage_queue.ack_wait_seconds", 60)
+	viper.SetDefault("usage_queue.retry_delay_seconds", 5)
+	viper.SetDefault("usage_queue.consumers", 8)
 
 	// Log
 	viper.SetDefault("log.level", "info")
@@ -2572,6 +2643,56 @@ func (c *Config) Validate() error {
 		}
 		if c.Server.H2C.MaxUploadBufferPerStream <= 0 {
 			return fmt.Errorf("server.h2c.max_upload_buffer_per_stream must be positive")
+		}
+	}
+	if c.DataPlaneControl.Enabled {
+		switch c.DataPlaneControl.Network {
+		case "unix", "tcp":
+		default:
+			return fmt.Errorf("data_plane_control.network must be unix or tcp")
+		}
+		if c.DataPlaneControl.Address == "" {
+			return fmt.Errorf("data_plane_control.address is required when enabled")
+		}
+		if len([]byte(c.DataPlaneControl.GrantSecret)) < 32 {
+			return fmt.Errorf("data_plane_control.grant_secret must be at least 32 bytes when enabled")
+		}
+		if c.DataPlaneControl.GrantTTLSeconds < 5 || c.DataPlaneControl.GrantTTLSeconds > 300 {
+			return fmt.Errorf("data_plane_control.grant_ttl_seconds must be between 5 and 300")
+		}
+		if c.DataPlaneControl.LeaseTTLSeconds < 15 || c.DataPlaneControl.LeaseTTLSeconds > 60 {
+			return fmt.Errorf("data_plane_control.lease_ttl_seconds must be between 15 and 60")
+		}
+		if c.DataPlaneControl.Network == "tcp" && !c.DataPlaneControl.Insecure {
+			if c.DataPlaneControl.TLS.CAFile == "" || c.DataPlaneControl.TLS.CertFile == "" || c.DataPlaneControl.TLS.KeyFile == "" {
+				return fmt.Errorf("data_plane_control.tls ca_file, cert_file, and key_file are required for secure TCP")
+			}
+		}
+	}
+	if c.UsageQueue.Enabled {
+		parsed, err := url.Parse(c.UsageQueue.URL)
+		if err != nil || parsed.Host == "" {
+			return fmt.Errorf("usage_queue.url must be a valid NATS URL when enabled")
+		}
+		switch strings.ToLower(parsed.Scheme) {
+		case "nats", "tls", "ws", "wss":
+		default:
+			return fmt.Errorf("usage_queue.url must use nats, tls, ws, or wss")
+		}
+		if !validNATSName(c.UsageQueue.Stream) || !validNATSName(c.UsageQueue.Durable) {
+			return fmt.Errorf("usage_queue.stream and usage_queue.durable contain invalid characters")
+		}
+		if c.UsageQueue.Subject == "" || strings.ContainsAny(c.UsageQueue.Subject, " *>") {
+			return fmt.Errorf("usage_queue.subject must be a concrete NATS subject")
+		}
+		if c.UsageQueue.MaxAgeHours < 1 || c.UsageQueue.MaxAgeHours > 168 || c.UsageQueue.MaxBytes < 1<<20 {
+			return fmt.Errorf("usage_queue retention limits are invalid")
+		}
+		if c.UsageQueue.AckWaitSeconds < 5 || c.UsageQueue.AckWaitSeconds > 600 || c.UsageQueue.RetryDelaySeconds < 1 || c.UsageQueue.RetryDelaySeconds > 300 {
+			return fmt.Errorf("usage_queue acknowledgement timing is invalid")
+		}
+		if c.UsageQueue.Consumers < 1 || c.UsageQueue.Consumers > 128 {
+			return fmt.Errorf("usage_queue.consumers must be between 1 and 128")
 		}
 	}
 	if c.APIKeyAuth.InvalidAbuse.Enabled {
@@ -3578,6 +3699,10 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("dingtalk_connect: %w", err)
 	}
 	return nil
+}
+
+func validNATSName(value string) bool {
+	return value != "" && !strings.ContainsAny(value, " .*>/\\\t\r\n")
 }
 
 func normalizeStringSlice(values []string) []string {
