@@ -193,6 +193,14 @@ func (h *WorkerHandler) ListAccounts(c *gin.Context) {
 }
 
 func (h *WorkerHandler) CreateAPIKeyAccount(c *gin.Context) {
+	h.createWorkerAccount(c, true)
+}
+
+func (h *WorkerHandler) CreateAccount(c *gin.Context) {
+	h.createWorkerAccount(c, false)
+}
+
+func (h *WorkerHandler) createWorkerAccount(c *gin.Context, openaiAPIKey bool) {
 	workerID, ok := workerHandlerID(c, "id")
 	if !ok {
 		return
@@ -202,7 +210,15 @@ func (h *WorkerHandler) CreateAPIKeyAccount(c *gin.Context) {
 		workerHandlerError(c, http.StatusBadRequest, "invalid_request", err)
 		return
 	}
-	account, err := h.service.CreateAPIKeyAccount(c.Request.Context(), workerID, input)
+	var (
+		account *service.WorkerAccount
+		err     error
+	)
+	if openaiAPIKey {
+		account, err = h.service.CreateAPIKeyAccount(c.Request.Context(), workerID, input)
+	} else {
+		account, err = h.service.CreateAccount(c.Request.Context(), workerID, input)
+	}
 	if err != nil {
 		if errors.Is(err, service.ErrWorkerNotFound) {
 			workerHandlerError(c, http.StatusNotFound, "worker_not_found", err)
@@ -312,6 +328,100 @@ func (h *WorkerHandler) DeleteAccount(c *gin.Context) {
 			return
 		}
 		workerHandlerError(c, http.StatusBadGateway, "worker_account_delete_failed", err)
+		return
+	}
+	workerHandlerOK(c, http.StatusOK, gin.H{"deleted": true})
+}
+
+func (h *WorkerHandler) ListProxies(c *gin.Context) {
+	workerID, ok := workerHandlerID(c, "id")
+	if !ok {
+		return
+	}
+	proxies, err := h.service.ListProxies(c.Request.Context(), workerID)
+	if err != nil {
+		if errors.Is(err, service.ErrWorkerNotFound) {
+			workerHandlerError(c, http.StatusNotFound, "worker_not_found", err)
+			return
+		}
+		workerHandlerError(c, http.StatusBadGateway, "worker_proxies_failed", err)
+		return
+	}
+	workerHandlerOK(c, http.StatusOK, proxies)
+}
+
+func (h *WorkerHandler) CreateProxy(c *gin.Context) {
+	workerID, ok := workerHandlerID(c, "id")
+	if !ok {
+		return
+	}
+	var input service.WorkerProxyInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		workerHandlerError(c, http.StatusBadRequest, "invalid_request", err)
+		return
+	}
+	proxy, err := h.service.CreateProxy(c.Request.Context(), workerID, input)
+	if err != nil {
+		if errors.Is(err, service.ErrWorkerNotFound) {
+			workerHandlerError(c, http.StatusNotFound, "worker_not_found", err)
+			return
+		}
+		workerHandlerError(c, http.StatusBadGateway, "worker_proxy_create_failed", err)
+		return
+	}
+	workerHandlerOK(c, http.StatusCreated, proxy)
+}
+
+func (h *WorkerHandler) UpdateProxy(c *gin.Context) {
+	workerID, ok := workerHandlerID(c, "id")
+	if !ok {
+		return
+	}
+	var input service.WorkerProxyInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		workerHandlerError(c, http.StatusBadRequest, "invalid_request", err)
+		return
+	}
+	proxy, err := h.service.UpdateProxy(c.Request.Context(), workerID, c.Param("proxy_id"), input)
+	if err != nil {
+		if errors.Is(err, service.ErrWorkerNotFound) {
+			workerHandlerError(c, http.StatusNotFound, "worker_not_found", err)
+			return
+		}
+		workerHandlerError(c, http.StatusBadGateway, "worker_proxy_update_failed", err)
+		return
+	}
+	workerHandlerOK(c, http.StatusOK, proxy)
+}
+
+func (h *WorkerHandler) TestProxy(c *gin.Context) {
+	workerID, ok := workerHandlerID(c, "id")
+	if !ok {
+		return
+	}
+	result, err := h.service.TestProxy(c.Request.Context(), workerID, c.Param("proxy_id"))
+	if err != nil {
+		if errors.Is(err, service.ErrWorkerNotFound) {
+			workerHandlerError(c, http.StatusNotFound, "worker_not_found", err)
+			return
+		}
+		workerHandlerError(c, http.StatusBadGateway, "worker_proxy_test_failed", err)
+		return
+	}
+	workerHandlerOK(c, http.StatusOK, result)
+}
+
+func (h *WorkerHandler) DeleteProxy(c *gin.Context) {
+	workerID, ok := workerHandlerID(c, "id")
+	if !ok {
+		return
+	}
+	if err := h.service.DeleteProxy(c.Request.Context(), workerID, c.Param("proxy_id")); err != nil {
+		if errors.Is(err, service.ErrWorkerNotFound) {
+			workerHandlerError(c, http.StatusNotFound, "worker_not_found", err)
+			return
+		}
+		workerHandlerError(c, http.StatusBadGateway, "worker_proxy_delete_failed", err)
 		return
 	}
 	workerHandlerOK(c, http.StatusOK, gin.H{"deleted": true})

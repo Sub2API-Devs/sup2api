@@ -18,6 +18,7 @@ export interface Worker {
   heartbeat_interval_seconds: number
   heartbeat_timeout_seconds: number
   account_count: number
+  proxy_count: number
   log_count: number
   last_error?: string
   created_at: string
@@ -66,11 +67,35 @@ export interface WorkerNATSSecurityConfig {
 
 export interface WorkerAccountInput {
   name: string
+  kind?: string
   api_key?: string
   base_url?: string
   models?: string
   group?: string
   test_model?: string
+}
+
+export interface WorkerProxy {
+  id: number
+  worker_id: number
+  remote_proxy_id: string
+  name: string
+  protocol: string
+  host: string
+  port: number
+  status: string
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export interface WorkerProxyInput {
+  name: string
+  protocol: string
+  host: string
+  port: number
+  username?: string
+  password?: string
 }
 
 export async function list(): Promise<Worker[]> {
@@ -133,8 +158,32 @@ export async function remove(id: number): Promise<void> {
   await apiClient.delete(`/admin/workers/${id}`)
 }
 
-export async function testConnection(id: number): Promise<Record<string, unknown>> {
-  const { data } = await apiClient.post<Record<string, unknown>>(`/admin/workers/${id}/test`)
+export interface WorkerIdentity {
+  protocol_version: string
+  kind?: string
+  worker_id: string
+  instance_id: string
+  generation?: number
+  config_revision?: number
+  version: string
+  capabilities?: string[]
+  caddy?: Record<string, unknown>
+}
+
+export interface WorkerTestConnectionResult {
+  identity: WorkerIdentity
+  ready: Record<string, unknown>
+}
+
+export async function testConnection(
+  id: number,
+  options?: { signal?: AbortSignal }
+): Promise<WorkerTestConnectionResult> {
+  const { data } = await apiClient.post<WorkerTestConnectionResult>(
+    `/admin/workers/${id}/test`,
+    undefined,
+    { signal: options?.signal, timeout: 45_000 }
+  )
   return data
 }
 
@@ -158,6 +207,14 @@ export async function listAccounts(id: number): Promise<WorkerAccount[]> {
 
 export async function createAPIKeyAccount(id: number, input: WorkerAccountInput): Promise<WorkerAccount> {
   const { data } = await apiClient.post<WorkerAccount>(`/admin/workers/${id}/accounts/openai/api-key`, input)
+  return data
+}
+
+export async function createAccount(id: number, input: WorkerAccountInput): Promise<WorkerAccount> {
+  const path = !input.kind || input.kind === 'openai_api_key'
+    ? `/admin/workers/${id}/accounts/openai/api-key`
+    : `/admin/workers/${id}/accounts`
+  const { data } = await apiClient.post<WorkerAccount>(path, input)
   return data
 }
 
@@ -191,6 +248,35 @@ export async function deleteAccount(workerId: number, accountId: string): Promis
   await apiClient.delete(`/admin/workers/${workerId}/accounts/${encodeURIComponent(accountId)}`)
 }
 
+export async function listProxies(id: number): Promise<WorkerProxy[]> {
+  const { data } = await apiClient.get<WorkerProxy[]>(`/admin/workers/${id}/proxies`)
+  return data
+}
+
+export async function createProxy(id: number, input: WorkerProxyInput): Promise<WorkerProxy> {
+  const { data } = await apiClient.post<WorkerProxy>(`/admin/workers/${id}/proxies`, input)
+  return data
+}
+
+export async function updateProxy(workerId: number, proxyId: string, input: WorkerProxyInput): Promise<WorkerProxy> {
+  const { data } = await apiClient.put<WorkerProxy>(
+    `/admin/workers/${workerId}/proxies/${encodeURIComponent(proxyId)}`,
+    input
+  )
+  return data
+}
+
+export async function testProxy(workerId: number, proxyId: string): Promise<Record<string, unknown>> {
+  const { data } = await apiClient.post<Record<string, unknown>>(
+    `/admin/workers/${workerId}/proxies/${encodeURIComponent(proxyId)}/test`
+  )
+  return data
+}
+
+export async function deleteProxy(workerId: number, proxyId: string): Promise<void> {
+  await apiClient.delete(`/admin/workers/${workerId}/proxies/${encodeURIComponent(proxyId)}`)
+}
+
 export async function listLogs(id: number, limit = 50, beforeId?: number): Promise<WorkerLog[]> {
   const { data } = await apiClient.get<WorkerLog[]>(`/admin/workers/${id}/logs`, {
     params: { limit, before_id: beforeId }
@@ -210,10 +296,16 @@ export default {
   updateNATSSecurity,
   listAccounts,
   createAPIKeyAccount,
+  createAccount,
   startOAuth,
   completeOAuth,
   refreshAccount,
   testAccount,
   deleteAccount,
+  listProxies,
+  createProxy,
+  updateProxy,
+  testProxy,
+  deleteProxy,
   listLogs
 }

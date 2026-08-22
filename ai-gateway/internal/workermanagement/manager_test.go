@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -103,6 +105,148 @@ func TestManagerKeepsOAuthExchangeAndRefreshInsideWorker(t *testing.T) {
 	accounts, err := manager.ListAccounts()
 	if err != nil || len(accounts) != 2 {
 		t.Fatalf("unexpected Worker-local accounts: %+v, %v", accounts, err)
+	}
+}
+
+func TestManagerStoresAPIKeyAccountsAndIPProxiesWithoutExposingSecrets(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	go func() {
+		for {
+			conn, acceptErr := listener.Accept()
+			if acceptErr != nil {
+				return
+			}
+			_ = conn.Close()
+		}
+	}()
+	host, portRaw, err := net.SplitHostPort(listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	port, _ := strconv.Atoi(portRaw)
+
+	manager, err := New(Config{
+		WorkerID: "worker-proxy", InstanceID: "instance-proxy", ManagementKey: strings.Repeat("m", 32),
+		VaultPath: filepath.Join(t.TempDir(), "vault.db"), VaultKey: bytes.Repeat([]byte{9}, 32),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	account, err := manager.CreateAccount(AccountInput{
+		Name: "anthropic", Kind: "anthropic_api_key", APIKey: "sk-ant-secret",
+		BaseURL: "https://api.anthropic.com",
+	})
+	if err != nil || account.Kind != "anthropic_api_key" {
+		t.Fatalf("create generic account: %+v %v", account, err)
+	}
+	encodedAccount, _ := json.Marshal(account)
+	if bytes.Contains(encodedAccount, []byte("sk-ant-secret")) {
+		t.Fatalf("account summary leaked API key: %s", encodedAccount)
+	}
+
+	proxy, err := manager.CreateProxy(ProxyInput{
+		Name: "edge", Protocol: "http", Host: host, Port: port, Username: "user", Password: "proxy-secret",
+	})
+	if err != nil || proxy.Host != host || !proxy.HasAuth {
+		t.Fatalf("create proxy: %+v %v", proxy, err)
+	}
+	encodedProxy, _ := json.Marshal(proxy)
+	if bytes.Contains(encodedProxy, []byte("proxy-secret")) {
+		t.Fatalf("proxy summary leaked password: %s", encodedProxy)
+	}
+	if _, err := manager.TestProxy(context.Background(), proxy.ID); err != nil {
+		t.Fatal(err)
+	}
+	proxies, err := manager.ListProxies()
+	if err != nil || len(proxies) != 1 {
+		t.Fatalf("list proxies: %+v %v", proxies, err)
+	}
+	if err := manager.DeleteProxy(proxy.ID); err != nil {
+		t.Fatal(err)
+	}
+	if remaining, err := manager.ListProxies(); err != nil || len(remaining) != 0 {
+		t.Fatalf("delete proxy left leftovers: %+v %v", remaining, err)
+	}
+}
+
+func TestNormalizeProxyHostRejectsEmbeddedPortsAndNormalizesIPv6(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{name: "hostname", input: "proxy.internal", want: "proxy.internal"},
+		{name: "ipv4", input: "127.0.0.1", want: "127.0.0.1"},
+		{name: "ipv6", input: "2001:db8::1", want: "2001:db8::1"},
+		{name: "bracketed ipv6", input: "[2001:db8::1]", want: "2001:db8::1"},
+		{name: "embedded port", input: "proxy.internal:8080", wantErr: true},
+		{name: "control character", input: "proxy.internal\nother", wantErr: true},
+		{name: "invalid brackets", input: "[proxy.internal]", wantErr: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := normalizeProxyHost(test.input)
+			if test.wantErr {
+				if err == nil {
+					t.Fatalf("normalizeProxyHost(%q) = %q, want error", test.input, got)
+				}
+				return
+			}
+			if err != nil || got != test.want {
+				t.Fatalf("normalizeProxyHost(%q) = %q, %v; want %q", test.input, got, err, test.want)
+			}
+		})
+	}
+}
+
+func TestManagerTestsNonOpenAIAccountsWithKindSpecificAuth(t *testing.T) {
+	var seen []string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.URL.Path+" "+r.Header.Get("x-api-key")+r.Header.Get("x-goog-api-key"))
+		switch {
+		case r.URL.Path == "/v1/models" && r.Header.Get("x-api-key") == "sk-ant-secret":
+			_, _ = w.Write([]byte(`{"data":[]}`))
+		case r.URL.Path == "/v1beta/models" && r.Header.Get("x-goog-api-key") == "gemini-secret":
+			_, _ = w.Write([]byte(`{"models":[]}`))
+		default:
+			http.Error(w, "unexpected probe", http.StatusUnauthorized)
+		}
+	}))
+	defer upstream.Close()
+
+	manager, err := New(Config{
+		WorkerID: "worker-kinds", InstanceID: "instance-kinds", ManagementKey: strings.Repeat("m", 32),
+		VaultPath: filepath.Join(t.TempDir(), "vault.db"), VaultKey: bytes.Repeat([]byte{4}, 32),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	anthropic, err := manager.CreateAccount(AccountInput{
+		Name: "anthropic", Kind: "anthropic_api_key", APIKey: "sk-ant-secret", BaseURL: upstream.URL,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.TestAccount(context.Background(), anthropic.ID, TestInput{}); err != nil {
+		t.Fatalf("anthropic test: %v seen=%v", err, seen)
+	}
+	gemini, err := manager.CreateAccount(AccountInput{
+		Name: "gemini", Kind: "gemini_api_key", APIKey: "gemini-secret", BaseURL: upstream.URL,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.TestAccount(context.Background(), gemini.ID, TestInput{}); err != nil {
+		t.Fatalf("gemini test: %v seen=%v", err, seen)
 	}
 }
 

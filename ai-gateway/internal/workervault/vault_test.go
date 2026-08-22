@@ -143,6 +143,53 @@ func TestVaultFailsClosedWithWrongKey(t *testing.T) {
 	}
 }
 
+func TestVaultEncryptsProxySecretsAndPreservesSummaries(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "worker-vault.db")
+	key := bytes.Repeat([]byte{0x31}, 32)
+	vault, err := Open(path, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxy := &Proxy{
+		ID: "proxy-a", Name: "edge", Protocol: "socks5", Host: "127.0.0.1", Port: 1080,
+		Username: "user", Password: "proxy-secret-value", Status: "active",
+		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+	if err := vault.PutProxy(proxy); err != nil {
+		t.Fatal(err)
+	}
+	if err := vault.Close(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(raw, []byte(proxy.Password)) {
+		t.Fatal("vault file contains plaintext proxy password")
+	}
+	reopened, err := Open(path, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	loaded, err := reopened.GetProxy(proxy.ID)
+	if err != nil || loaded.Password != proxy.Password {
+		t.Fatalf("reopened vault lost proxy: %+v %v", loaded, err)
+	}
+	summary := loaded.Summary()
+	if !summary.HasAuth || summary.Username != proxy.Username {
+		t.Fatalf("unexpected proxy summary: %+v", summary)
+	}
+	encoded, err := json.Marshal(summary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(encoded, []byte(proxy.Password)) {
+		t.Fatalf("proxy summary leaked a password: %s", encoded)
+	}
+}
+
 func TestVaultRekeyPreservesAccountsAndRejectsOldKey(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "worker-vault.db")
 	oldKey := bytes.Repeat([]byte{0x11}, 32)
@@ -156,6 +203,13 @@ func TestVaultRekeyPreservesAccountsAndRejectsOldKey(t *testing.T) {
 		APIKey: "sk-rekey-secret", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 	}
 	if err := vault.Put(account); err != nil {
+		t.Fatal(err)
+	}
+	proxy := &Proxy{
+		ID: "proxy-rekey", Name: "rekey-proxy", Protocol: "http", Host: "10.0.0.1", Port: 8080,
+		Password: "proxy-rekey-secret", Status: "active", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+	if err := vault.PutProxy(proxy); err != nil {
 		t.Fatal(err)
 	}
 	if err := vault.Rekey(newKey); err != nil {
@@ -175,5 +229,9 @@ func TestVaultRekeyPreservesAccountsAndRejectsOldKey(t *testing.T) {
 	loaded, err := reopened.Get(account.ID)
 	if err != nil || loaded.APIKey != account.APIKey {
 		t.Fatalf("rekeyed vault lost account: %+v %v", loaded, err)
+	}
+	loadedProxy, err := reopened.GetProxy(proxy.ID)
+	if err != nil || loadedProxy.Password != proxy.Password {
+		t.Fatalf("rekeyed vault lost proxy: %+v %v", loadedProxy, err)
 	}
 }

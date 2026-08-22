@@ -10,11 +10,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/Sub2API-Devs/sup2api/ai-gateway/internal/workervault"
 	"github.com/google/uuid"
@@ -54,11 +57,21 @@ type Manager struct {
 
 type AccountInput struct {
 	Name      string `json:"name"`
+	Kind      string `json:"kind,omitempty"`
 	APIKey    string `json:"api_key,omitempty"`
 	BaseURL   string `json:"base_url,omitempty"`
 	Models    string `json:"models,omitempty"`
 	Group     string `json:"group,omitempty"`
 	TestModel string `json:"test_model,omitempty"`
+}
+
+type ProxyInput struct {
+	Name     string `json:"name"`
+	Protocol string `json:"protocol"`
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	Username string `json:"username,omitempty"`
+	Password string `json:"password,omitempty"`
 }
 
 type TestInput struct {
@@ -174,13 +187,16 @@ func (m *Manager) Ready(_ context.Context) error {
 
 func (m *Manager) Status(_ context.Context) map[string]any {
 	accounts, accountErr := m.ListAccounts()
+	proxies, proxyErr := m.ListProxies()
 	status := map[string]any{
 		"worker_id": m.WorkerID(), "instance_id": m.InstanceID(),
-		"vault_ready": accountErr == nil, "account_count": len(accounts),
-		"log_transport": m.cfg.LogTransport,
+		"vault_ready": accountErr == nil && proxyErr == nil, "account_count": len(accounts),
+		"proxy_count": len(proxies), "log_transport": m.cfg.LogTransport,
 	}
 	if accountErr != nil {
 		status["vault_error"] = accountErr.Error()
+	} else if proxyErr != nil {
+		status["vault_error"] = proxyErr.Error()
 	}
 	return status
 }
@@ -198,21 +214,36 @@ func (m *Manager) ListAccounts() ([]workervault.Summary, error) {
 }
 
 func (m *Manager) CreateAPIKeyAccount(input AccountInput) (*workervault.Summary, error) {
+	if strings.TrimSpace(input.Kind) == "" {
+		input.Kind = "openai_api_key"
+	}
+	return m.CreateAccount(input)
+}
+
+func (m *Manager) CreateAccount(input AccountInput) (*workervault.Summary, error) {
 	if err := validateAccountInput(input); err != nil {
 		return nil, err
+	}
+	kind, err := normalizeAccountKind(input.Kind)
+	if err != nil {
+		return nil, err
+	}
+	if kind == "openai_oauth" {
+		return nil, errors.New("OpenAI OAuth accounts must be created through the Worker OAuth endpoints")
 	}
 	name := strings.TrimSpace(input.Name)
 	key := strings.TrimSpace(input.APIKey)
 	if name == "" || key == "" {
 		return nil, errors.New("account name and API key are required")
 	}
-	baseURL, err := normalizeBaseURL(input.BaseURL, defaultAPIBaseURL)
+	fallback := defaultBaseURLForKind(kind)
+	baseURL, err := normalizeBaseURL(input.BaseURL, fallback)
 	if err != nil {
 		return nil, err
 	}
 	now := m.cfg.Now().UTC()
 	account := &workervault.Account{
-		ID: uuid.NewString(), Name: name, Kind: "openai_api_key", Status: "active",
+		ID: uuid.NewString(), Name: name, Kind: kind, Status: "active",
 		BaseURL: baseURL, Models: strings.TrimSpace(input.Models), Group: strings.TrimSpace(input.Group),
 		TestModel: strings.TrimSpace(input.TestModel), APIKey: key, CreatedAt: now, UpdatedAt: now,
 	}
@@ -221,6 +252,81 @@ func (m *Manager) CreateAPIKeyAccount(input AccountInput) (*workervault.Summary,
 	}
 	summary := account.Summary()
 	return &summary, nil
+}
+
+func (m *Manager) ListProxies() ([]workervault.ProxySummary, error) {
+	proxies, err := m.vault.ListProxies()
+	if err != nil {
+		return nil, err
+	}
+	result := make([]workervault.ProxySummary, 0, len(proxies))
+	for _, proxy := range proxies {
+		result = append(result, proxy.Summary())
+	}
+	return result, nil
+}
+
+func (m *Manager) CreateProxy(input ProxyInput) (*workervault.ProxySummary, error) {
+	proxy, err := buildWorkerProxy(input, uuid.NewString(), m.cfg.Now().UTC(), nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := m.vault.PutProxy(proxy); err != nil {
+		return nil, err
+	}
+	summary := proxy.Summary()
+	return &summary, nil
+}
+
+func (m *Manager) UpdateProxy(id string, input ProxyInput) (*workervault.ProxySummary, error) {
+	existing, err := m.vault.GetProxy(strings.TrimSpace(id))
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(input.Password) == "" {
+		input.Password = existing.Password
+	}
+	proxy, err := buildWorkerProxy(input, existing.ID, existing.CreatedAt, existing)
+	if err != nil {
+		return nil, err
+	}
+	proxy.UpdatedAt = m.cfg.Now().UTC()
+	if err := m.vault.PutProxy(proxy); err != nil {
+		return nil, err
+	}
+	summary := proxy.Summary()
+	return &summary, nil
+}
+
+func (m *Manager) TestProxy(ctx context.Context, id string) (map[string]any, error) {
+	proxy, err := m.vault.GetProxy(strings.TrimSpace(id))
+	if err != nil {
+		return nil, err
+	}
+	started := m.cfg.Now()
+	dialer := net.Dialer{Timeout: 8 * time.Second}
+	conn, dialErr := dialer.DialContext(ctx, "tcp", net.JoinHostPort(proxy.Host, strconv.Itoa(proxy.Port)))
+	proxy.LastTestAt = m.cfg.Now().Unix()
+	proxy.UpdatedAt = m.cfg.Now().UTC()
+	if dialErr != nil {
+		proxy.Status = "error"
+		proxy.LastTestStatus = 0
+		proxy.LastError = "proxy TCP probe failed"
+		_ = m.vault.PutProxy(proxy)
+		return nil, errors.New("proxy connection test failed")
+	}
+	_ = conn.Close()
+	proxy.Status = "active"
+	proxy.LastTestStatus = 1
+	proxy.LastError = ""
+	if err := m.vault.PutProxy(proxy); err != nil {
+		return nil, err
+	}
+	return map[string]any{"ok": true, "latency_ms": time.Since(started).Milliseconds(), "proxy": proxy.Summary()}, nil
+}
+
+func (m *Manager) DeleteProxy(id string) error {
+	return m.vault.DeleteProxy(strings.TrimSpace(id))
 }
 
 func (m *Manager) StartOAuth(input AccountInput) (map[string]any, error) {
@@ -372,24 +478,10 @@ func (m *Manager) TestAccount(ctx context.Context, id string, _ TestInput) (map[
 		return nil, err
 	}
 	started := m.cfg.Now()
-	target := strings.TrimRight(account.BaseURL, "/") + "/models"
-	if account.Kind == "openai_api_key" && !strings.HasSuffix(strings.TrimRight(account.BaseURL, "/"), "/v1") {
-		target = strings.TrimRight(account.BaseURL, "/") + "/v1/models"
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	req, err := accountTestRequest(ctx, account)
 	if err != nil {
 		return nil, err
 	}
-	token := account.APIKey
-	if account.Kind == "openai_oauth" {
-		token = account.AccessToken
-		if account.ChatGPTAccountID != "" {
-			req.Header.Set("ChatGPT-Account-ID", account.ChatGPTAccountID)
-		}
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "codex-cli/0.91.0")
 	resp, requestErr := m.cfg.HTTPClient.Do(req)
 	status := 0
 	if resp != nil {
@@ -402,13 +494,13 @@ func (m *Manager) TestAccount(ctx context.Context, id string, _ TestInput) (map[
 	account.UpdatedAt = m.cfg.Now().UTC()
 	if requestErr != nil {
 		account.Status = "error"
-		account.LastError = requestErr.Error()
+		account.LastError = "account connection test failed"
 		_ = m.vault.Put(account)
-		return nil, fmt.Errorf("OpenAI connection test failed: %w", requestErr)
+		return nil, errors.New(account.LastError)
 	}
 	if status < 200 || status >= 300 {
 		account.Status = "error"
-		account.LastError = fmt.Sprintf("OpenAI returned HTTP %d", status)
+		account.LastError = fmt.Sprintf("upstream returned HTTP %d", status)
 		_ = m.vault.Put(account)
 		return nil, errors.New(account.LastError)
 	}
@@ -487,10 +579,152 @@ func validateAccountInput(input AccountInput) error {
 	if name == "" || len(name) > 255 {
 		return errors.New("account name must contain between 1 and 255 characters")
 	}
-	if len(input.APIKey) > 64<<10 || len(input.Models) > 8<<10 || len(input.Group) > 255 || len(input.TestModel) > 255 {
+	if len(input.APIKey) > 64<<10 || len(input.Models) > 8<<10 || len(input.Group) > 255 || len(input.TestModel) > 255 || len(input.Kind) > 64 {
 		return errors.New("Worker account metadata exceeds the supported size")
 	}
 	return nil
+}
+
+var allowedAccountKinds = map[string]string{
+	"openai_api_key":      defaultAPIBaseURL,
+	"anthropic_api_key":   "https://api.anthropic.com",
+	"gemini_api_key":      "https://generativelanguage.googleapis.com",
+	"grok_api_key":        "https://api.x.ai/v1",
+	"antigravity_api_key": "https://api.anthropic.com",
+	"kimi_api_key":        "https://api.moonshot.cn/v1",
+	"zhipu_api_key":       "https://open.bigmodel.cn/api/paas/v4",
+	"deepseek_api_key":    "https://api.deepseek.com/v1",
+}
+
+func normalizeAccountKind(raw string) (string, error) {
+	kind := strings.ToLower(strings.TrimSpace(raw))
+	if kind == "" {
+		kind = "openai_api_key"
+	}
+	if kind == "openai_oauth" {
+		return kind, nil
+	}
+	if _, ok := allowedAccountKinds[kind]; !ok {
+		return "", fmt.Errorf("unsupported Worker account kind %q", kind)
+	}
+	return kind, nil
+}
+
+func defaultBaseURLForKind(kind string) string {
+	if base, ok := allowedAccountKinds[kind]; ok && base != "" {
+		return base
+	}
+	return defaultAPIBaseURL
+}
+
+func accountTestRequest(ctx context.Context, account *workervault.Account) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, accountModelsURL(account.Kind, account.BaseURL), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "codex-cli/0.91.0")
+	switch account.Kind {
+	case "anthropic_api_key", "antigravity_api_key":
+		req.Header.Set("x-api-key", account.APIKey)
+		req.Header.Set("anthropic-version", "2023-06-01")
+	case "gemini_api_key":
+		req.Header.Set("x-goog-api-key", account.APIKey)
+	case "openai_oauth":
+		req.Header.Set("Authorization", "Bearer "+account.AccessToken)
+		if account.ChatGPTAccountID != "" {
+			req.Header.Set("ChatGPT-Account-ID", account.ChatGPTAccountID)
+		}
+	default:
+		req.Header.Set("Authorization", "Bearer "+account.APIKey)
+	}
+	return req, nil
+}
+
+func accountModelsURL(kind, baseURL string) string {
+	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if strings.HasSuffix(base, "/models") {
+		return base
+	}
+	if kind == "openai_oauth" {
+		return base + "/models"
+	}
+	if kind == "gemini_api_key" {
+		if strings.HasSuffix(base, "/v1beta") {
+			return base + "/models"
+		}
+		return base + "/v1beta/models"
+	}
+	for _, suffix := range []string{"/v1", "/v1beta", "/v3", "/v4", "/paas/v4"} {
+		if strings.HasSuffix(base, suffix) {
+			return base + "/models"
+		}
+	}
+	return base + "/v1/models"
+}
+
+func buildWorkerProxy(input ProxyInput, id string, createdAt time.Time, existing *workervault.Proxy) (*workervault.Proxy, error) {
+	name := strings.TrimSpace(input.Name)
+	if name == "" || len(name) > 255 {
+		return nil, errors.New("proxy name must contain between 1 and 255 characters")
+	}
+	protocol := strings.ToLower(strings.TrimSpace(input.Protocol))
+	switch protocol {
+	case "http", "https", "socks5", "socks5h":
+	default:
+		return nil, errors.New("proxy protocol must be http, https, socks5 or socks5h")
+	}
+	host, err := normalizeProxyHost(input.Host)
+	if err != nil {
+		return nil, err
+	}
+	if input.Port < 1 || input.Port > 65535 {
+		return nil, errors.New("proxy port must be between 1 and 65535")
+	}
+	if len(input.Username) > 255 || len(input.Password) > 255 {
+		return nil, errors.New("proxy credentials exceed the supported size")
+	}
+	now := createdAt
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	proxy := &workervault.Proxy{
+		ID: id, Name: name, Protocol: protocol, Host: host, Port: input.Port,
+		Username: strings.TrimSpace(input.Username), Password: input.Password,
+		Status: "active", CreatedAt: now, UpdatedAt: now,
+	}
+	if existing != nil {
+		proxy.LastTestAt = existing.LastTestAt
+		proxy.LastTestStatus = existing.LastTestStatus
+		proxy.LastError = existing.LastError
+		proxy.Status = existing.Status
+	}
+	return proxy, nil
+}
+
+func normalizeProxyHost(raw string) (string, error) {
+	host := strings.TrimSpace(raw)
+	if host == "" || len(host) > 255 || strings.ContainsAny(host, "/?#@\\") ||
+		strings.IndexFunc(host, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) >= 0 {
+		return "", errors.New("proxy host is required and must contain only a hostname or IP address")
+	}
+	if strings.HasPrefix(host, "[") || strings.HasSuffix(host, "]") {
+		if !strings.HasPrefix(host, "[") || !strings.HasSuffix(host, "]") {
+			return "", errors.New("proxy host contains invalid IPv6 brackets")
+		}
+		host = strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
+		if ip := net.ParseIP(host); ip == nil || !strings.Contains(host, ":") {
+			return "", errors.New("proxy host contains invalid IPv6 brackets")
+		}
+		return host, nil
+	}
+	if net.ParseIP(host) != nil {
+		return host, nil
+	}
+	if strings.Contains(host, ":") {
+		return "", errors.New("proxy host must not include a port")
+	}
+	return host, nil
 }
 
 func parseOAuthCallback(raw string) (string, string, error) {

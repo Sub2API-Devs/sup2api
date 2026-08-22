@@ -121,4 +121,14 @@ export type { ErrorPassthroughRule, CreateRuleRequest, UpdateRuleRequest } from 
 export type { BackupAgentHealth, DataManagementConfig } from './dataManagement'
 export type { TLSFingerprintProfile, CreateProfileRequest, UpdateProfileRequest } from './tlsFingerprintProfile'
 export type { ContentModerationConfig, ContentModerationLog, ModerationMode } from './riskControl'
-export type { Worker, WorkerAccount, WorkerLog, WorkerAccountInput, WorkerNATSSecurityConfig } from './workers'
+export type {
+  Worker,
+  WorkerAccount,
+  WorkerProxy,
+  WorkerProxyInput,
+  WorkerLog,
+  WorkerAccountInput,
+  WorkerNATSSecurityConfig,
+  WorkerIdentity,
+  WorkerTestConnectionResult
+} from './workers'

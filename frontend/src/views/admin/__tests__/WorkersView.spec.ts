@@ -4,16 +4,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import WorkersView from '@/views/admin/WorkersView.vue'
 
-const { list, update, setEnabled, listAccounts, getConfig, push, showSuccess, showError } = vi.hoisted(() => ({
-  list: vi.fn(), update: vi.fn(), setEnabled: vi.fn(), listAccounts: vi.fn(), getConfig: vi.fn(), push: vi.fn(),
-  showSuccess: vi.fn(), showError: vi.fn()
+const { list, update, setEnabled, listAccounts, listProxies, createAccount, createProxy, getConfig, testConnection, push, showSuccess, showError } = vi.hoisted(() => ({
+  list: vi.fn(), update: vi.fn(), setEnabled: vi.fn(), listAccounts: vi.fn(), listProxies: vi.fn(), createAccount: vi.fn(), createProxy: vi.fn(), getConfig: vi.fn(), testConnection: vi.fn(),
+  push: vi.fn(), showSuccess: vi.fn(), showError: vi.fn()
 }))
 
 vi.mock('@/api/admin', () => ({
   adminAPI: { workers: {
-    list, update, setEnabled, listAccounts, getConfig,
-    create: vi.fn(), remove: vi.fn(), testConnection: vi.fn(), getNATSSecurity: vi.fn().mockResolvedValue({ worker_url: '' }), createAPIKeyAccount: vi.fn(),
-    startOAuth: vi.fn(), completeOAuth: vi.fn(), refreshAccount: vi.fn(), testAccount: vi.fn(), deleteAccount: vi.fn()
+    list, update, setEnabled, listAccounts, listProxies, createAccount, createProxy, getConfig, testConnection,
+    create: vi.fn(), remove: vi.fn(), getNATSSecurity: vi.fn().mockResolvedValue({ worker_url: '' }), createAPIKeyAccount: vi.fn(),
+    startOAuth: vi.fn(), completeOAuth: vi.fn(), refreshAccount: vi.fn(), testAccount: vi.fn(), deleteAccount: vi.fn(),
+    testProxy: vi.fn(), deleteProxy: vi.fn()
   }}
 }))
 vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
@@ -28,7 +29,7 @@ const worker = {
   instance_id: 'instance-1', protocol_version: 'aicodex.proxy-worker/v2', version: '1.0.0',
   status: 'ready', enabled: true, log_stream_key: 'logs', last_seen_at: '2026-08-09T10:00:00Z',
   last_heartbeat_at: '2026-08-09T10:00:00Z', last_heartbeat_latency_ms: 12, consecutive_failures: 0,
-  heartbeat_interval_seconds: 15, heartbeat_timeout_seconds: 5, account_count: 2, log_count: 3,
+  heartbeat_interval_seconds: 15, heartbeat_timeout_seconds: 5, account_count: 2, proxy_count: 1, log_count: 3,
   created_at: '2026-08-09T10:00:00Z', updated_at: '2026-08-09T10:00:00Z'
 }
 
@@ -39,11 +40,16 @@ const ToggleStub = defineComponent({
   props: { modelValue: Boolean }, emits: ['update:modelValue'],
   template: '<button class="toggle" @click="$emit(\'update:modelValue\', !modelValue)">{{ modelValue }}</button>'
 })
+const WorkerTestModalStub = defineComponent({
+  props: { show: Boolean, worker: Object },
+  template: '<div v-if="show" data-testid="worker-test-modal">{{ worker?.name }}</div>'
+})
 
 function mountView() {
   return mount(WorkersView, { global: { stubs: {
     AppLayout: AppLayoutStub, TablePageLayout: TablePageLayoutStub, BaseDialog: BaseDialogStub,
-    ConfirmDialog: true, LoadingSpinner: true, Toggle: ToggleStub, Icon: true
+    ConfirmDialog: true, LoadingSpinner: true, Toggle: ToggleStub, Icon: true,
+    WorkerTestModal: WorkerTestModalStub
   } } })
 }
 
@@ -53,10 +59,14 @@ describe('WorkersView operations table', () => {
     update.mockReset().mockImplementation(async (_id, input) => ({ ...worker, ...input }))
     setEnabled.mockReset().mockImplementation(async (_id, enabled) => ({ ...worker, enabled, status: enabled ? 'unknown' : 'disabled' }))
     listAccounts.mockReset().mockResolvedValue([])
+    listProxies.mockReset().mockResolvedValue([])
+    createAccount.mockReset().mockResolvedValue({})
+    createProxy.mockReset().mockResolvedValue({})
     getConfig.mockReset().mockResolvedValue({
       worker_id: 'gateway-local', nats_url: 'nats://nats:4222',
       control_plane_target: 'sub2api:9090', control_plane_insecure: true,
     })
+    testConnection.mockReset()
     push.mockReset().mockResolvedValue(undefined)
     showSuccess.mockReset(); showError.mockReset()
   })
@@ -141,6 +151,27 @@ describe('WorkersView operations table', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('Account B')
     expect(wrapper.text()).not.toContain('Stale Account')
+  })
+
+  it('opens the Worker proxy list from the resources column', async () => {
+    listProxies.mockResolvedValueOnce([{
+      id: 9, worker_id: 1, remote_proxy_id: 'proxy-1', name: 'HK HTTP',
+      protocol: 'http', host: '127.0.0.1', port: 8080, status: 'active', metadata: {}, created_at: '', updated_at: ''
+    }])
+    const wrapper = mountView(); await flushPromises()
+    expect(wrapper.text()).toContain('admin.workers.proxies')
+    await wrapper.get('[data-testid="worker-proxies"]').trigger('click')
+    await flushPromises()
+    expect(listProxies).toHaveBeenCalledWith(1)
+    expect(wrapper.text()).toContain('HK HTTP')
+    expect(wrapper.text()).toContain('127.0.0.1:8080')
+  })
+
+  it('opens the connection test modal instead of probing immediately', async () => {
+    const wrapper = mountView(); await flushPromises()
+    await wrapper.get('[data-testid="test-worker"]').trigger('click')
+    expect(wrapper.get('[data-testid="worker-test-modal"]').text()).toContain('Local Gateway')
+    expect(testConnection).not.toHaveBeenCalled()
   })
 
   it('refreshes heartbeat state automatically every ten seconds', async () => {

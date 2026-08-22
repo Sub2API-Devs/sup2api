@@ -30,12 +30,18 @@ func TestRegisterWorkerRoutesExposesCompleteAdminContract(t *testing.T) {
 		"DELETE /api/v1/admin/workers/:id",
 		"POST /api/v1/admin/workers/:id/test",
 		"GET /api/v1/admin/workers/:id/accounts",
+		"POST /api/v1/admin/workers/:id/accounts",
 		"POST /api/v1/admin/workers/:id/accounts/openai/api-key",
 		"POST /api/v1/admin/workers/:id/accounts/openai/oauth/start",
 		"POST /api/v1/admin/workers/:id/accounts/openai/oauth/complete",
 		"POST /api/v1/admin/workers/:id/accounts/:account_id/refresh",
 		"POST /api/v1/admin/workers/:id/accounts/:account_id/test",
 		"DELETE /api/v1/admin/workers/:id/accounts/:account_id",
+		"GET /api/v1/admin/workers/:id/proxies",
+		"POST /api/v1/admin/workers/:id/proxies",
+		"PUT /api/v1/admin/workers/:id/proxies/:proxy_id",
+		"POST /api/v1/admin/workers/:id/proxies/:proxy_id/test",
+		"DELETE /api/v1/admin/workers/:id/proxies/:proxy_id",
 		"GET /api/v1/admin/workers/:id/logs",
 	} {
 		_, ok := routes[expected]

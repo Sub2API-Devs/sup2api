@@ -50,6 +50,7 @@ type Worker struct {
 	HeartbeatIntervalSeconds int        `json:"heartbeat_interval_seconds"`
 	HeartbeatTimeoutSeconds  int        `json:"heartbeat_timeout_seconds"`
 	AccountCount             int64      `json:"account_count"`
+	ProxyCount               int64      `json:"proxy_count"`
 	LogCount                 int64      `json:"log_count"`
 	LastError                *string    `json:"last_error,omitempty"`
 	CreatedAt                time.Time  `json:"created_at"`
@@ -67,6 +68,20 @@ type WorkerAccount struct {
 	Metadata        map[string]any `json:"metadata"`
 	CreatedAt       time.Time      `json:"created_at"`
 	UpdatedAt       time.Time      `json:"updated_at"`
+}
+
+type WorkerProxy struct {
+	ID            int64          `json:"id"`
+	WorkerID      int64          `json:"worker_id"`
+	RemoteProxyID string         `json:"remote_proxy_id"`
+	Name          string         `json:"name"`
+	Protocol      string         `json:"protocol"`
+	Host          string         `json:"host"`
+	Port          int            `json:"port"`
+	Status        string         `json:"status"`
+	Metadata      map[string]any `json:"metadata"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
 }
 
 type WorkerLog struct {
@@ -152,11 +167,21 @@ type WorkerHeartbeatObservation struct {
 
 type WorkerAccountCreateInput struct {
 	Name      string `json:"name"`
+	Kind      string `json:"kind,omitempty"`
 	APIKey    string `json:"api_key,omitempty"`
 	BaseURL   string `json:"base_url,omitempty"`
 	Models    string `json:"models,omitempty"`
 	Group     string `json:"group,omitempty"`
 	TestModel string `json:"test_model,omitempty"`
+}
+
+type WorkerProxyInput struct {
+	Name     string `json:"name"`
+	Protocol string `json:"protocol"`
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	Username string `json:"username,omitempty"`
+	Password string `json:"password,omitempty"`
 }
 
 type WorkerOAuthCompleteInput struct {
@@ -184,6 +209,10 @@ type WorkerRepository interface {
 	DeleteWorkerAccount(context.Context, int64, string) error
 	DeleteWorkerAccountsExcept(context.Context, int64, []string) error
 	ListWorkerAccounts(context.Context, int64) ([]WorkerAccount, error)
+	UpsertWorkerProxy(context.Context, *WorkerProxy) error
+	DeleteWorkerProxy(context.Context, int64, string) error
+	DeleteWorkerProxiesExcept(context.Context, int64, []string) error
+	ListWorkerProxies(context.Context, int64) ([]WorkerProxy, error)
 	InsertWorkerLog(context.Context, *WorkerLog) error
 	ListWorkerLogs(context.Context, int64, int, int64) ([]WorkerLog, error)
 }
@@ -640,6 +669,7 @@ type workerProbeResult struct {
 }
 
 func (s *WorkerService) CreateAPIKeyAccount(ctx context.Context, workerID int64, input WorkerAccountCreateInput) (*WorkerAccount, error) {
+	input.Kind = "openai_api_key"
 	worker, key, err := s.workerCredential(ctx, workerID)
 	if err != nil {
 		return nil, err
@@ -648,6 +678,24 @@ func (s *WorkerService) CreateAPIKeyAccount(ctx context.Context, workerID int64,
 		Account map[string]any `json:"account"`
 	}
 	if err := s.remote.Post(ctx, worker.BaseURL, key, "/worker/v1/accounts/openai/api-key", input, &response); err != nil {
+		return nil, err
+	}
+	return s.persistRemoteAccount(ctx, workerID, response.Account)
+}
+
+func (s *WorkerService) CreateAccount(ctx context.Context, workerID int64, input WorkerAccountCreateInput) (*WorkerAccount, error) {
+	worker, key, err := s.workerCredential(ctx, workerID)
+	if err != nil {
+		return nil, err
+	}
+	var response struct {
+		Account map[string]any `json:"account"`
+	}
+	path := "/worker/v1/accounts"
+	if strings.TrimSpace(input.Kind) == "" || strings.TrimSpace(input.Kind) == "openai_api_key" {
+		path = "/worker/v1/accounts/openai/api-key"
+	}
+	if err := s.remote.Post(ctx, worker.BaseURL, key, path, input, &response); err != nil {
 		return nil, err
 	}
 	return s.persistRemoteAccount(ctx, workerID, response.Account)
@@ -756,6 +804,90 @@ func (s *WorkerService) ListAccounts(ctx context.Context, workerID int64) ([]Wor
 	return s.repo.ListWorkerAccounts(ctx, workerID)
 }
 
+func (s *WorkerService) ListProxies(ctx context.Context, workerID int64) ([]WorkerProxy, error) {
+	worker, key, err := s.workerCredential(ctx, workerID)
+	if err != nil {
+		return nil, err
+	}
+	var response struct {
+		Proxies []map[string]any `json:"proxies"`
+	}
+	if err := s.remote.Get(ctx, worker.BaseURL, key, "/worker/v1/proxies", &response); err != nil {
+		return nil, err
+	}
+	seen := make([]string, 0, len(response.Proxies))
+	for _, remote := range response.Proxies {
+		proxy, err := s.persistRemoteProxy(ctx, workerID, remote)
+		if err != nil {
+			return nil, err
+		}
+		seen = append(seen, proxy.RemoteProxyID)
+	}
+	if err := s.repo.DeleteWorkerProxiesExcept(ctx, workerID, seen); err != nil {
+		return nil, err
+	}
+	return s.repo.ListWorkerProxies(ctx, workerID)
+}
+
+func (s *WorkerService) CreateProxy(ctx context.Context, workerID int64, input WorkerProxyInput) (*WorkerProxy, error) {
+	worker, key, err := s.workerCredential(ctx, workerID)
+	if err != nil {
+		return nil, err
+	}
+	var response struct {
+		Proxy map[string]any `json:"proxy"`
+	}
+	if err := s.remote.Post(ctx, worker.BaseURL, key, "/worker/v1/proxies", input, &response); err != nil {
+		return nil, err
+	}
+	return s.persistRemoteProxy(ctx, workerID, response.Proxy)
+}
+
+func (s *WorkerService) UpdateProxy(ctx context.Context, workerID int64, remoteProxyID string, input WorkerProxyInput) (*WorkerProxy, error) {
+	worker, key, err := s.workerCredential(ctx, workerID)
+	if err != nil {
+		return nil, err
+	}
+	var response struct {
+		Proxy map[string]any `json:"proxy"`
+	}
+	path := "/worker/v1/proxies/" + url.PathEscape(remoteProxyID)
+	if err := s.remote.Put(ctx, worker.BaseURL, key, path, input, &response); err != nil {
+		return nil, err
+	}
+	return s.persistRemoteProxy(ctx, workerID, response.Proxy)
+}
+
+func (s *WorkerService) TestProxy(ctx context.Context, workerID int64, remoteProxyID string) (map[string]any, error) {
+	worker, key, err := s.workerCredential(ctx, workerID)
+	if err != nil {
+		return nil, err
+	}
+	var response map[string]any
+	path := "/worker/v1/proxies/" + url.PathEscape(remoteProxyID) + "/test"
+	if err := s.remote.Post(ctx, worker.BaseURL, key, path, map[string]any{}, &response); err != nil {
+		return nil, err
+	}
+	if remote, ok := response["proxy"].(map[string]any); ok {
+		if _, err := s.persistRemoteProxy(ctx, workerID, remote); err != nil {
+			return nil, err
+		}
+	}
+	return response, nil
+}
+
+func (s *WorkerService) DeleteProxy(ctx context.Context, workerID int64, remoteProxyID string) error {
+	worker, key, err := s.workerCredential(ctx, workerID)
+	if err != nil {
+		return err
+	}
+	path := "/worker/v1/proxies/" + url.PathEscape(remoteProxyID)
+	if err := s.remote.Delete(ctx, worker.BaseURL, key, path, nil); err != nil {
+		return err
+	}
+	return s.repo.DeleteWorkerProxy(ctx, workerID, remoteProxyID)
+}
+
 func (s *WorkerService) ListLogs(ctx context.Context, workerID int64, limit int, beforeID int64) ([]WorkerLog, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
@@ -785,14 +917,68 @@ func (s *WorkerService) persistRemoteAccount(ctx context.Context, workerID int64
 	}
 	account := &WorkerAccount{
 		WorkerID: workerID, RemoteAccountID: id,
-		Name:   anyString(remote["name"]),
-		Kind:   anyString(remote["kind"]),
-		Status: anyString(remote["status"]), Metadata: remote,
+		Name:     anyString(remote["name"]),
+		Kind:     anyString(remote["kind"]),
+		Status:   anyString(remote["status"]),
+		Metadata: sanitizedWorkerMetadata(remote),
 	}
 	if err := s.repo.UpsertWorkerAccount(ctx, account); err != nil {
 		return nil, err
 	}
 	return account, nil
+}
+
+func (s *WorkerService) persistRemoteProxy(ctx context.Context, workerID int64, remote map[string]any) (*WorkerProxy, error) {
+	id := anyString(remote["id"])
+	if id == "" {
+		return nil, errors.New("worker returned an invalid proxy id")
+	}
+	proxy := &WorkerProxy{
+		WorkerID: workerID, RemoteProxyID: id,
+		Name:     anyString(remote["name"]),
+		Protocol: anyString(remote["protocol"]),
+		Host:     anyString(remote["host"]),
+		Port:     int(int64FromAny(remote["port"])),
+		Status:   anyString(remote["status"]),
+		Metadata: sanitizedWorkerMetadata(remote),
+	}
+	if err := s.repo.UpsertWorkerProxy(ctx, proxy); err != nil {
+		return nil, err
+	}
+	return proxy, nil
+}
+
+var workerSecretMetadataKeys = map[string]struct{}{
+	"api_key": {}, "access_token": {}, "refresh_token": {}, "id_token": {},
+	"password": {}, "client_secret": {}, "private_key": {}, "authorization": {},
+	"secret": {}, "token": {}, "service_account_json": {},
+}
+
+func sanitizedWorkerMetadata(remote map[string]any) map[string]any {
+	metadata, _ := sanitizeWorkerMetadataValue(remote).(map[string]any)
+	return metadata
+}
+
+func sanitizeWorkerMetadataValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		result := make(map[string]any, len(typed))
+		for key, nested := range typed {
+			if _, secret := workerSecretMetadataKeys[strings.ToLower(strings.TrimSpace(key))]; secret {
+				continue
+			}
+			result[key] = sanitizeWorkerMetadataValue(nested)
+		}
+		return result
+	case []any:
+		result := make([]any, len(typed))
+		for index, nested := range typed {
+			result[index] = sanitizeWorkerMetadataValue(nested)
+		}
+		return result
+	default:
+		return value
+	}
 }
 
 type WorkerRemoteClient struct {

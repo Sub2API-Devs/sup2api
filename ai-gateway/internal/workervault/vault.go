@@ -20,10 +20,11 @@ import (
 )
 
 var (
-	accountsBucket = []byte("accounts-v1")
-	metadataBucket = []byte("metadata-v1")
-	keyCheckName   = []byte("key-check")
-	ErrNotFound    = errors.New("worker account not found")
+	accountsBucket   = []byte("accounts-v1")
+	metadataBucket   = []byte("metadata-v1")
+	keyCheckName     = []byte("key-check")
+	ErrNotFound      = errors.New("worker account not found")
+	ErrProxyNotFound = errors.New("worker proxy not found")
 )
 
 const keyCheckPlaintext = "sup2api-worker-vault-key-v1"
@@ -80,6 +81,49 @@ func (a Account) Summary() Summary {
 		ChatGPTAccountID: a.ChatGPTAccountID, ExpiresAt: a.ExpiresAt,
 		LastTestAt: a.LastTestAt, LastTestStatus: a.LastTestStatus, LastError: a.LastError,
 		CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
+	}
+}
+
+// Proxy is the Worker-local source of truth for IP proxies. Callers must expose
+// ProxySummary, never Proxy, across the management boundary.
+type Proxy struct {
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	Protocol       string    `json:"protocol"`
+	Host           string    `json:"host"`
+	Port           int       `json:"port"`
+	Username       string    `json:"username,omitempty"`
+	Password       string    `json:"password,omitempty"`
+	Status         string    `json:"status"`
+	LastTestAt     int64     `json:"last_test_at,omitempty"`
+	LastTestStatus int       `json:"last_test_status,omitempty"`
+	LastError      string    `json:"last_error,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+type ProxySummary struct {
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	Protocol       string    `json:"protocol"`
+	Host           string    `json:"host"`
+	Port           int       `json:"port"`
+	Username       string    `json:"username,omitempty"`
+	HasAuth        bool      `json:"has_auth"`
+	Status         string    `json:"status"`
+	LastTestAt     int64     `json:"last_test_at,omitempty"`
+	LastTestStatus int       `json:"last_test_status,omitempty"`
+	LastError      string    `json:"last_error,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+func (p Proxy) Summary() ProxySummary {
+	return ProxySummary{
+		ID: p.ID, Name: p.Name, Protocol: p.Protocol, Host: p.Host, Port: p.Port,
+		Username: p.Username, HasAuth: strings.TrimSpace(p.Username) != "" || strings.TrimSpace(p.Password) != "",
+		Status: p.Status, LastTestAt: p.LastTestAt, LastTestStatus: p.LastTestStatus, LastError: p.LastError,
+		CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
 	}
 }
 
@@ -210,6 +254,7 @@ func (v *Vault) initialize(legacy *legacyVault) error {
 		`PRAGMA journal_mode = WAL`, `PRAGMA synchronous = FULL`, `PRAGMA busy_timeout = 5000`,
 		`CREATE TABLE IF NOT EXISTS vault_metadata (key TEXT PRIMARY KEY, value BLOB NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS worker_accounts (id TEXT PRIMARY KEY, sealed BLOB NOT NULL)`,
+		`CREATE TABLE IF NOT EXISTS worker_proxies (id TEXT PRIMARY KEY, sealed BLOB NOT NULL)`,
 	} {
 		if _, err := v.db.Exec(statement); err != nil {
 			return err
@@ -342,6 +387,10 @@ func (v *Vault) Rekey(newKey []byte) error {
 	if err != nil {
 		return err
 	}
+	proxies, err := v.listProxiesLocked()
+	if err != nil {
+		return err
+	}
 	block, err := aes.NewCipher(newKey)
 	if err != nil {
 		return err
@@ -371,6 +420,20 @@ func (v *Vault) Rekey(newKey []byte) error {
 		}
 		sealedAccounts = append(sealedAccounts, sealed)
 	}
+	sealedProxies := make([][]byte, 0, len(proxies))
+	for _, proxy := range proxies {
+		raw, marshalErr := json.Marshal(proxy)
+		if marshalErr != nil {
+			v.aead = previous
+			return marshalErr
+		}
+		sealed, sealErr := v.seal(proxy.ID, raw)
+		if sealErr != nil {
+			v.aead = previous
+			return sealErr
+		}
+		sealedProxies = append(sealedProxies, sealed)
+	}
 	tx, err := v.db.Begin()
 	if err != nil {
 		v.aead = previous
@@ -387,6 +450,12 @@ func (v *Vault) Rekey(newKey []byte) error {
 			return err
 		}
 	}
+	for index, proxy := range proxies {
+		if _, err := tx.Exec(`UPDATE worker_proxies SET sealed = ? WHERE id = ?`, sealedProxies[index], proxy.ID); err != nil {
+			v.aead = previous
+			return err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		v.aead = previous
 		return err
@@ -395,9 +464,78 @@ func (v *Vault) Rekey(newKey []byte) error {
 }
 
 func (v *Vault) Delete(id string) error {
+	return v.deleteRecord(`DELETE FROM worker_accounts WHERE id = ?`, id, ErrNotFound)
+}
+
+func (v *Vault) PutProxy(proxy *Proxy) error {
+	if proxy == nil || proxy.ID == "" {
+		return errors.New("worker proxy id is required")
+	}
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	result, err := v.db.Exec(`DELETE FROM worker_accounts WHERE id = ?`, id)
+	raw, err := json.Marshal(proxy)
+	if err != nil {
+		return err
+	}
+	sealed, err := v.seal(proxy.ID, raw)
+	if err != nil {
+		return err
+	}
+	_, err = v.db.Exec(`INSERT INTO worker_proxies(id, sealed) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET sealed = excluded.sealed`, proxy.ID, sealed)
+	return err
+}
+
+func (v *Vault) GetProxy(id string) (*Proxy, error) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	var sealed []byte
+	err := v.db.QueryRow(`SELECT sealed FROM worker_proxies WHERE id = ?`, id).Scan(&sealed)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrProxyNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return v.openProxy(id, sealed)
+}
+
+func (v *Vault) ListProxies() ([]Proxy, error) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	return v.listProxiesLocked()
+}
+
+func (v *Vault) listProxiesLocked() ([]Proxy, error) {
+	rows, err := v.db.Query(`SELECT id, sealed FROM worker_proxies`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	proxies := make([]Proxy, 0)
+	for rows.Next() {
+		var id string
+		var sealed []byte
+		if err := rows.Scan(&id, &sealed); err != nil {
+			return nil, err
+		}
+		proxy, err := v.openProxy(id, sealed)
+		if err != nil {
+			return nil, err
+		}
+		proxies = append(proxies, *proxy)
+	}
+	slices.SortFunc(proxies, func(a, b Proxy) int { return b.CreatedAt.Compare(a.CreatedAt) })
+	return proxies, rows.Err()
+}
+
+func (v *Vault) DeleteProxy(id string) error {
+	return v.deleteRecord(`DELETE FROM worker_proxies WHERE id = ?`, id, ErrProxyNotFound)
+}
+
+func (v *Vault) deleteRecord(query, id string, missing error) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	result, err := v.db.Exec(query, id)
 	if err != nil {
 		return err
 	}
@@ -406,7 +544,7 @@ func (v *Vault) Delete(id string) error {
 		return err
 	}
 	if deleted == 0 {
-		return ErrNotFound
+		return missing
 	}
 	return nil
 }
@@ -435,6 +573,21 @@ func (v *Vault) open(id string, sealed []byte) (*Account, error) {
 		return nil, errors.New("worker vault record identity mismatch")
 	}
 	return &account, nil
+}
+
+func (v *Vault) openProxy(id string, sealed []byte) (*Proxy, error) {
+	plaintext, err := v.unseal(id, sealed)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt worker proxy %q: %w", id, err)
+	}
+	var proxy Proxy
+	if err := json.Unmarshal(plaintext, &proxy); err != nil {
+		return nil, fmt.Errorf("decode worker proxy %q: %w", id, err)
+	}
+	if proxy.ID != id {
+		return nil, errors.New("worker vault record identity mismatch")
+	}
+	return &proxy, nil
 }
 
 func (v *Vault) unseal(id string, sealed []byte) ([]byte, error) {

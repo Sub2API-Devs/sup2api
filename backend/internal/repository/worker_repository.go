@@ -206,15 +206,67 @@ func (r *workerRepository) DeleteWorkerAccount(ctx context.Context, workerID int
 }
 
 func (r *workerRepository) DeleteWorkerAccountsExcept(ctx context.Context, workerID int64, keepRemoteIDs []string) error {
+	return r.deleteWorkerChildrenExcept(ctx, "worker_accounts", "remote_account_id", workerID, keepRemoteIDs)
+}
+
+func (r *workerRepository) UpsertWorkerProxy(ctx context.Context, proxy *service.WorkerProxy) error {
+	if proxy == nil {
+		return errors.New("nil worker proxy")
+	}
+	metadata, err := json.Marshal(proxy.Metadata)
+	if err != nil {
+		return err
+	}
+	return r.db.QueryRowContext(ctx, `
+INSERT INTO worker_proxies (worker_id, remote_proxy_id, name, protocol, host, port, status, metadata)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
+ON CONFLICT (worker_id, remote_proxy_id) DO UPDATE SET
+  name=EXCLUDED.name, protocol=EXCLUDED.protocol, host=EXCLUDED.host, port=EXCLUDED.port,
+  status=EXCLUDED.status, metadata=EXCLUDED.metadata, updated_at=NOW()
+RETURNING id, created_at, updated_at`, proxy.WorkerID, proxy.RemoteProxyID,
+		proxy.Name, proxy.Protocol, proxy.Host, proxy.Port, proxy.Status, string(metadata),
+	).Scan(&proxy.ID, &proxy.CreatedAt, &proxy.UpdatedAt)
+}
+
+func (r *workerRepository) ListWorkerProxies(ctx context.Context, workerID int64) ([]service.WorkerProxy, error) {
+	rows, err := r.db.QueryContext(ctx, `
+SELECT id, worker_id, remote_proxy_id, name, protocol, host, port, status, metadata, created_at, updated_at
+FROM worker_proxies WHERE worker_id=$1 ORDER BY id DESC`, workerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]service.WorkerProxy, 0)
+	for rows.Next() {
+		var item service.WorkerProxy
+		var metadata []byte
+		if err := rows.Scan(&item.ID, &item.WorkerID, &item.RemoteProxyID, &item.Name,
+			&item.Protocol, &item.Host, &item.Port, &item.Status, &metadata, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			return nil, err
+		}
+		_ = json.Unmarshal(metadata, &item.Metadata)
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (r *workerRepository) DeleteWorkerProxy(ctx context.Context, workerID int64, remoteProxyID string) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM worker_proxies WHERE worker_id=$1 AND remote_proxy_id=$2`, workerID, remoteProxyID)
+	return err
+}
+
+func (r *workerRepository) DeleteWorkerProxiesExcept(ctx context.Context, workerID int64, keepRemoteIDs []string) error {
+	return r.deleteWorkerChildrenExcept(ctx, "worker_proxies", "remote_proxy_id", workerID, keepRemoteIDs)
+}
+
+func (r *workerRepository) deleteWorkerChildrenExcept(ctx context.Context, table, remoteColumn string, workerID int64, keepRemoteIDs []string) error {
 	if r == nil || r.db == nil {
 		return errors.New("worker repository is unavailable")
 	}
 	if len(keepRemoteIDs) == 0 {
-		_, err := r.db.ExecContext(ctx, `DELETE FROM worker_accounts WHERE worker_id=$1`, workerID)
+		_, err := r.db.ExecContext(ctx, fmt.Sprintf(`DELETE FROM %s WHERE worker_id=$1`, table), workerID)
 		return err
 	}
-	// Build a parameterized NOT IN list so a remote account list sync cannot
-	// leave deleted Worker-local accounts visible in the control-plane index.
 	args := make([]any, 0, len(keepRemoteIDs)+1)
 	args = append(args, workerID)
 	placeholders := make([]string, 0, len(keepRemoteIDs))
@@ -223,8 +275,8 @@ func (r *workerRepository) DeleteWorkerAccountsExcept(ctx context.Context, worke
 		placeholders = append(placeholders, fmt.Sprintf("$%d", len(args)))
 	}
 	query := fmt.Sprintf(
-		`DELETE FROM worker_accounts WHERE worker_id=$1 AND remote_account_id NOT IN (%s)`,
-		strings.Join(placeholders, ","),
+		`DELETE FROM %s WHERE worker_id=$1 AND %s NOT IN (%s)`,
+		table, remoteColumn, strings.Join(placeholders, ","),
 	)
 	_, err := r.db.ExecContext(ctx, query, args...)
 	return err
@@ -292,6 +344,7 @@ SELECT w.id, w.name, w.base_url, w.management_key_encrypted, w.remote_worker_id,
        w.last_heartbeat_at, w.last_heartbeat_latency_ms, w.consecutive_failures,
        w.heartbeat_interval_seconds, w.heartbeat_timeout_seconds,
        (SELECT COUNT(*) FROM worker_accounts wa WHERE wa.worker_id=w.id) AS account_count,
+       (SELECT COUNT(*) FROM worker_proxies wp WHERE wp.worker_id=w.id) AS proxy_count,
        (SELECT COUNT(*) FROM usage_logs ul WHERE ul.data_plane_id=w.remote_worker_id) AS log_count,
        w.last_error, w.created_at, w.updated_at
 FROM workers w`
@@ -310,7 +363,7 @@ func scanWorker(row workerRowScanner) (*service.Worker, error) {
 		&worker.Status, &worker.Enabled, &worker.LogStreamKey, &lastSeen, &lastHeartbeat,
 		&worker.LastHeartbeatLatencyMS, &worker.ConsecutiveFailures,
 		&worker.HeartbeatIntervalSeconds, &worker.HeartbeatTimeoutSeconds,
-		&worker.AccountCount, &worker.LogCount, &lastError,
+		&worker.AccountCount, &worker.ProxyCount, &worker.LogCount, &lastError,
 		&worker.CreatedAt, &worker.UpdatedAt)
 	if err != nil {
 		return nil, err

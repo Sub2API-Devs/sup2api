@@ -61,7 +61,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request, _ caddyhttp.
 			"protocol_version": managerpkg.ProtocolVersion, "kind": "ai-gateway-caddy",
 			"worker_id": h.manager.WorkerID(), "instance_id": h.manager.InstanceID(),
 			"generation": 1, "config_revision": 1, "version": h.manager.Version(),
-			"capabilities": []string{"openai_api_key", "openai_oauth_pkce", "oauth_refresh", "account_test", "grpc_settlement_logs", "canonical_usage_records", "nats_jetstream_usage", "nats_nkey_jwt", "sqlite_usage_outbox"},
+			"capabilities": []string{"openai_api_key", "openai_oauth_pkce", "oauth_refresh", "account_test", "account_api_key", "ip_proxy", "grpc_settlement_logs", "canonical_usage_records", "nats_jetstream_usage", "nats_nkey_jwt", "sqlite_usage_outbox"},
 			"caddy":        map[string]any{"enabled": true},
 		})
 	case r.Method == http.MethodGet && path == "/worker/v1/live":
@@ -109,17 +109,47 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request, _ caddyhttp.
 			return nil
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"accounts": accounts})
+	case r.Method == http.MethodPost && path == "/worker/v1/accounts":
+		var input managerpkg.AccountInput
+		if !decodeJSON(w, r, &input) {
+			return nil
+		}
+		account, err := h.manager.CreateAccount(input)
+		if err != nil {
+			writeManagerError(w, err)
+			return nil
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{"account": account})
 	case r.Method == http.MethodPost && path == "/worker/v1/accounts/openai/api-key":
 		var input managerpkg.AccountInput
 		if !decodeJSON(w, r, &input) {
 			return nil
 		}
+		input.Kind = "openai_api_key"
 		account, err := h.manager.CreateAPIKeyAccount(input)
 		if err != nil {
 			writeManagerError(w, err)
 			return nil
 		}
 		writeJSON(w, http.StatusCreated, map[string]any{"account": account})
+	case r.Method == http.MethodGet && path == "/worker/v1/proxies":
+		proxies, err := h.manager.ListProxies()
+		if err != nil {
+			writeManagerError(w, err)
+			return nil
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"proxies": proxies})
+	case r.Method == http.MethodPost && path == "/worker/v1/proxies":
+		var input managerpkg.ProxyInput
+		if !decodeJSON(w, r, &input) {
+			return nil
+		}
+		proxy, err := h.manager.CreateProxy(input)
+		if err != nil {
+			writeManagerError(w, err)
+			return nil
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{"proxy": proxy})
 	case r.Method == http.MethodPost && path == "/worker/v1/accounts/openai/oauth/start":
 		var input managerpkg.AccountInput
 		if !decodeJSON(w, r, &input) {
@@ -143,9 +173,55 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request, _ caddyhttp.
 		}
 		writeJSON(w, http.StatusCreated, map[string]any{"account": account})
 	default:
+		if strings.HasPrefix(path, "/worker/v1/proxies/") {
+			h.serveProxyAction(w, r, path)
+			return nil
+		}
 		h.serveAccountAction(w, r, path)
 	}
 	return nil
+}
+
+func (h *Handler) serveProxyAction(w http.ResponseWriter, r *http.Request, path string) {
+	prefix := "/worker/v1/proxies/"
+	remainder := strings.TrimPrefix(path, prefix)
+	parts := strings.Split(remainder, "/")
+	id, err := url.PathUnescape(parts[0])
+	if err != nil || strings.TrimSpace(id) == "" {
+		writeError(w, http.StatusBadRequest, "invalid_proxy_id", "Invalid Worker proxy ID")
+		return
+	}
+	if r.Method == http.MethodDelete && len(parts) == 1 {
+		if err := h.manager.DeleteProxy(id); err != nil {
+			writeManagerError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"deleted": true})
+		return
+	}
+	if r.Method == http.MethodPut && len(parts) == 1 {
+		var input managerpkg.ProxyInput
+		if !decodeJSON(w, r, &input) {
+			return
+		}
+		proxy, err := h.manager.UpdateProxy(id, input)
+		if err != nil {
+			writeManagerError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"proxy": proxy})
+		return
+	}
+	if r.Method != http.MethodPost || len(parts) != 2 || parts[1] != "test" {
+		writeError(w, http.StatusNotFound, "not_found", "Worker proxy route was not found")
+		return
+	}
+	result, err := h.manager.TestProxy(r.Context(), id)
+	if err != nil {
+		writeManagerError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *Handler) serveAccountAction(w http.ResponseWriter, r *http.Request, path string) {
@@ -226,6 +302,8 @@ func writeManagerError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, workervault.ErrNotFound):
 		status, code = http.StatusNotFound, "account_not_found"
+	case errors.Is(err, workervault.ErrProxyNotFound):
+		status, code = http.StatusNotFound, "proxy_not_found"
 	case strings.Contains(err.Error(), "OAuth request") || strings.Contains(err.Error(), "OAuth rejected") || strings.Contains(err.Error(), "connection test") || strings.Contains(err.Error(), "returned HTTP"):
 		status, code = http.StatusBadGateway, "upstream_failed"
 	case strings.Contains(err.Error(), "session") && strings.Contains(err.Error(), "expired"):

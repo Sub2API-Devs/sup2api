@@ -143,12 +143,18 @@ func registerWorkerRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		workers.DELETE("/:id", h.Admin.Worker.Delete)
 		workers.POST("/:id/test", h.Admin.Worker.TestConnection)
 		workers.GET("/:id/accounts", h.Admin.Worker.ListAccounts)
+		workers.POST("/:id/accounts", h.Admin.Worker.CreateAccount)
 		workers.POST("/:id/accounts/openai/api-key", h.Admin.Worker.CreateAPIKeyAccount)
 		workers.POST("/:id/accounts/openai/oauth/start", h.Admin.Worker.StartOAuth)
 		workers.POST("/:id/accounts/openai/oauth/complete", h.Admin.Worker.CompleteOAuth)
 		workers.POST("/:id/accounts/:account_id/refresh", h.Admin.Worker.RefreshAccount)
 		workers.POST("/:id/accounts/:account_id/test", h.Admin.Worker.TestAccount)
 		workers.DELETE("/:id/accounts/:account_id", h.Admin.Worker.DeleteAccount)
+		workers.GET("/:id/proxies", h.Admin.Worker.ListProxies)
+		workers.POST("/:id/proxies", h.Admin.Worker.CreateProxy)
+		workers.PUT("/:id/proxies/:proxy_id", h.Admin.Worker.UpdateProxy)
+		workers.POST("/:id/proxies/:proxy_id/test", h.Admin.Worker.TestProxy)
+		workers.DELETE("/:id/proxies/:proxy_id", h.Admin.Worker.DeleteProxy)
 		workers.GET("/:id/logs", h.Admin.Worker.ListLogs)
 	}
 }

@@ -37,7 +37,7 @@ flowchart LR
 1. 浏览器只访问 `sup2api`，不直接调用 Worker，也不持有长期管理密钥。
 2. Worker 只访问私有 gRPC 控制面、NATS 和上游 AI 服务，不访问 Redis 或主数据库。
 3. `sup2api` 只调用固定 Worker 路径，禁止把管理 API 做成任意 URL 转发器。
-4. Worker 返回账号摘要，绝不返回 API Key、access token、refresh token 或 Vault key。
+4. Worker 返回账号和代理摘要，绝不返回 API Key、access token、refresh token、代理密码或 Vault key。
 5. 生产环境应通过容器网络、防火墙、HTTPS/mTLS 隔离 `/worker/v1/*` 和 gRPC 端口。
 
 ## 3. 容器首次配对
@@ -137,12 +137,22 @@ Content-Type: application/json
 | `GET /worker/v1/ready` | Caddy、gRPC 控制面、NATS 发布链路和 Vault 就绪 |
 | `GET /worker/v1/status` | 运行状态；NATS 部署标记为 `nats_jetstream`，未配置 NATS 时标记兼容回退 `control_plane_grpc` |
 | `GET /worker/v1/accounts` | 本地账号摘要 |
-| `POST /worker/v1/accounts/openai/api-key` | 创建本地 API Key 账号 |
+| `POST /worker/v1/accounts` | 创建本地 API Key 账号（通用 kind） |
+| `POST /worker/v1/accounts/openai/api-key` | 创建本地 OpenAI API Key 账号 |
 | `POST /worker/v1/accounts/openai/oauth/start` | 创建本地 PKCE 会话 |
 | `POST /worker/v1/accounts/openai/oauth/complete` | 在 Worker 内换取并保存 token |
 | `POST /worker/v1/accounts/{id}/refresh` | 在目标 Worker 刷新 OAuth |
 | `POST /worker/v1/accounts/{id}/test` | 在目标 Worker 测试账号 |
 | `DELETE /worker/v1/accounts/{id}` | 删除本地账号和凭据 |
+| `GET /worker/v1/proxies` | 本地 IP 代理摘要（不含密码） |
+| `POST /worker/v1/proxies` | 在 Worker Vault 中创建 IP 代理 |
+| `PUT /worker/v1/proxies/{id}` | 更新本地 IP 代理 |
+| `POST /worker/v1/proxies/{id}/test` | TCP 探测 `host:port` |
+| `DELETE /worker/v1/proxies/{id}` | 删除本地 IP 代理 |
+
+账号 `kind` 支持：`openai_api_key`、`openai_oauth`、`anthropic_api_key`、`gemini_api_key`、`grok_api_key`、`antigravity_api_key`、`kimi_api_key`、`zhipu_api_key`、`deepseek_api_key`。OAuth 仅 OpenAI，且必须走 OAuth 端点。
+
+身份协商 capability 包含 `account_api_key` 与 `ip_proxy`。控制面只索引摘要表 `worker_accounts` / `worker_proxies`，不保存 API Key 或代理密码。从账号/代理创建页选择 Worker 时，资源只写入该 Worker。
 
 传输标准：
 
@@ -262,7 +272,8 @@ mTLS 部署目前仍通过只读 Secret 文件挂载 CA/客户端证书，并由
 | Worker 长期身份和期望连接 | `sup2api` UI/DB | 注册记录、加密后的 Management Key |
 | Management Key | 控制面与 Worker 各自的 `.env` | 控制面从本进程环境读取后加密保存；认领不回传 |
 | Vault Key | Worker `.env` | 不回传 |
-| OpenAI 真实凭据 | Worker Vault | 仅账号摘要索引 |
+| 上游账号真实凭据 | Worker Vault | 仅账号摘要索引（`worker_accounts`） |
+| IP 代理密码 | Worker Vault | 仅代理摘要索引（`worker_proxies`，含协议/地址/是否有认证） |
 | OAuth PKCE 临时状态 | Worker 内存 | 仅中转 session ID |
 | 准入、租约、计费 | `sup2api` | 权威记录 |
 | Settlement SQLite outbox | Worker 数据卷 | 不保存 Worker outbox 文件 |
@@ -274,7 +285,7 @@ mTLS 部署目前仍通过只读 Secret 文件挂载 CA/客户端证书，并由
 
 ## 9. 当前范围和后续演进
 
-当前 Worker-local OpenAI 账号可以创建、OAuth、刷新、测试和删除，但中央请求调度仍使用现有中央账号。若要让 Worker-local 账号承载公共流量，ExecutionPlan 必须增加 remote account reference，并明确账号租约、并发和故障迁移语义，不能仅靠管理 API 自动接入 scheduler。
+当前 Worker-local 账号（多平台 API Key + OpenAI OAuth）和 IP 代理可以在目标 Worker 上创建、列表、测试和删除；OAuth 刷新仍仅适用于 OpenAI。中央请求调度仍使用现有中央账号与中央代理。若要让 Worker-local 资源承载公共流量，ExecutionPlan 必须增加 remote account / remote proxy reference，并明确租约、并发和故障迁移语义，不能仅靠管理 API 自动接入 scheduler。
 
 建议后续顺序：
 

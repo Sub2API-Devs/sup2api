@@ -326,6 +326,16 @@
                 <span class="text-xs">{{ t('admin.proxies.qualityCheck') }}</span>
               </button>
               <button
+                type="button"
+                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-primary-900/20 dark:hover:text-primary-400"
+                :title="t('admin.proxies.addToWorker')"
+                data-testid="proxy-add-to-worker"
+                @click="openAssignWorkerDialog(row)"
+              >
+                <Icon name="server" size="sm" />
+                <span class="text-xs">{{ t('admin.proxies.addToWorker') }}</span>
+              </button>
+              <button
                 @click="handleEdit(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
               >
@@ -492,6 +502,7 @@
             </button>
           </div>
         </div>
+        <WorkerTargetSelect v-model="createForm.worker_id" hint-key="admin.proxies.addToWorkerHint" />
         <div>
           <label class="input-label">{{ t('admin.proxies.expiresAt') }}</label>
           <div class="mb-2 flex flex-wrap gap-2">
@@ -960,6 +971,16 @@
         </div>
       </template>
     </BaseDialog>
+
+    <BaseDialog :show="assignWorkerProxy !== null" :title="t('admin.proxies.addToWorker')" @close="assignWorkerProxy = null">
+      <WorkerTargetSelect v-model="assignWorkerId" hint-key="admin.proxies.addToWorkerHint" />
+      <template #footer>
+        <button class="btn btn-secondary" type="button" @click="assignWorkerProxy = null">{{ t('common.cancel') }}</button>
+        <button class="btn btn-primary" type="button" :disabled="!assignWorkerId || assigningWorker" @click="assignExistingProxyToWorker">
+          {{ t('admin.proxies.addToWorker') }}
+        </button>
+      </template>
+    </BaseDialog>
   </AppLayout>
 </template>
 
@@ -980,6 +1001,7 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import ImportDataModal from '@/components/admin/proxy/ImportDataModal.vue'
 import Select from '@/components/common/Select.vue'
 import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
+import WorkerTargetSelect from '@/components/admin/worker/WorkerTargetSelect.vue'
 import Icon from '@/components/icons/Icon.vue'
 import PlatformTypeBadge from '@/components/common/PlatformTypeBadge.vue'
 import { useClipboard } from '@/composables/useClipboard'
@@ -992,6 +1014,11 @@ import { proxyExpiryBadgeClass, proxyExpiryLabelKey } from '@/utils/proxyExpiry'
 const { t } = useI18n()
 const appStore = useAppStore()
 const { copyToClipboard } = useClipboard()
+
+function proxyApiError(error: unknown, fallback: string) {
+  const err = error as { message?: string; response?: { data?: { message?: string; detail?: string } } }
+  return err?.response?.data?.message || err?.response?.data?.detail || err?.message || fallback
+}
 
 const columns = computed<Column[]>(() => [
   { key: 'select', label: '', sortable: false },
@@ -1132,7 +1159,11 @@ const createForm = reactive({
   fallback_mode: 'none' as 'none' | 'proxy' | 'direct',
   backup_proxy_id: null as number | null,
   expiry_warn_days: 7 as number,
+  worker_id: null as number | null,
 })
+const assignWorkerProxy = ref<Proxy | null>(null)
+const assignWorkerId = ref<number | null>(null)
+const assigningWorker = ref(false)
 
 const editForm = reactive({
   name: '',
@@ -1261,6 +1292,7 @@ const closeCreateModal = () => {
   createForm.fallback_mode = 'none'
   createForm.backup_proxy_id = null
   createForm.expiry_warn_days = 7
+  createForm.worker_id = null
   createPasswordVisible.value = false
   batchInput.value = ''
   batchParseResult.total = 0
@@ -1344,6 +1376,34 @@ const handleBatchCreate = async () => {
 
   submitting.value = true
   try {
+    if (createForm.worker_id) {
+      let created = 0
+      let failed = 0
+      let lastError: unknown
+      for (const item of batchParseResult.proxies) {
+        try {
+          await adminAPI.workers.createProxy(createForm.worker_id, {
+            name: `${item.host}:${item.port}`,
+            protocol: item.protocol,
+            host: item.host,
+            port: item.port,
+            username: item.username || undefined,
+            password: item.password || undefined,
+          })
+          created += 1
+        } catch (error) {
+          failed += 1
+          lastError = error
+        }
+      }
+      if (created > 0) {
+        appStore.showSuccess(t('admin.proxies.batchImportSuccess', { created, skipped: failed }))
+        closeCreateModal()
+        return
+      }
+      appStore.showError(proxyApiError(lastError, t('admin.proxies.failedToImport')))
+      return
+    }
     const result = await adminAPI.proxies.batchCreate(batchParseResult.proxies)
     const created = result.created || 0
     const skipped = result.skipped || 0
@@ -1379,6 +1439,19 @@ const handleCreateProxy = async () => {
   }
   submitting.value = true
   try {
+    if (createForm.worker_id) {
+      await adminAPI.workers.createProxy(createForm.worker_id, {
+        name: createForm.name.trim(),
+        protocol: createForm.protocol,
+        host: createForm.host.trim(),
+        port: createForm.port,
+        username: createForm.username.trim() || undefined,
+        password: createForm.password.trim() || undefined,
+      })
+      appStore.showSuccess(t('admin.proxies.addedToWorker'))
+      closeCreateModal()
+      return
+    }
     await adminAPI.proxies.create({
       name: createForm.name.trim(),
       protocol: createForm.protocol,
@@ -1395,10 +1468,38 @@ const handleCreateProxy = async () => {
     closeCreateModal()
     loadProxies()
   } catch (error: any) {
-    appStore.showError(error.response?.data?.detail || t('admin.proxies.failedToCreate'))
+    appStore.showError(proxyApiError(error, t('admin.proxies.failedToCreate')))
     console.error('Error creating proxy:', error)
   } finally {
     submitting.value = false
+  }
+}
+
+function openAssignWorkerDialog(proxy: Proxy) {
+  assignWorkerProxy.value = proxy
+  assignWorkerId.value = null
+}
+
+async function assignExistingProxyToWorker() {
+  const proxy = assignWorkerProxy.value
+  const workerId = assignWorkerId.value
+  if (!proxy || !workerId) return
+  assigningWorker.value = true
+  try {
+    await adminAPI.workers.createProxy(workerId, {
+      name: proxy.name,
+      protocol: proxy.protocol,
+      host: proxy.host,
+      port: proxy.port,
+      username: proxy.username || undefined,
+      password: proxy.password || undefined,
+    })
+    assignWorkerProxy.value = null
+    appStore.showSuccess(t('admin.proxies.addedToWorker'))
+  } catch (error: any) {
+    appStore.showError(proxyApiError(error, t('admin.proxies.addToWorkerFailed')))
+  } finally {
+    assigningWorker.value = false
   }
 }
 

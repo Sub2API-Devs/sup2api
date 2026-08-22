@@ -2877,6 +2877,8 @@
         <ProxySelector v-model="form.proxy_id" :proxies="proxies" />
       </div>
 
+      <WorkerTargetSelect v-model="form.worker_id" hint-key="admin.accounts.addToWorkerHint" />
+
       <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div>
           <label class="input-label">{{ t('admin.accounts.concurrency') }}</label>
@@ -3752,6 +3754,7 @@ import Select from '@/components/common/Select.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ProxySelector from '@/components/common/ProxySelector.vue'
+import WorkerTargetSelect from '@/components/admin/worker/WorkerTargetSelect.vue'
 import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
@@ -4455,6 +4458,7 @@ const form = reactive({
   type: 'oauth' as AccountType, // Will be 'oauth', 'setup-token', or 'apikey'
   credentials: {} as Record<string, unknown>,
   proxy_id: null as number | null,
+  worker_id: null as number | null,
   concurrency: 10,
   load_factor: null as number | null,
   priority: 1,
@@ -4967,6 +4971,9 @@ const ensureAntigravityMixedChannelConfirmed = async (onConfirm: () => Promise<v
 }
 
 const submitCreateAccount = async (payload: CreateAccountRequest) => {
+  if (await createAccountOnWorker(payload)) {
+    return
+  }
   submitting.value = true
   try {
     const account = await adminAPI.accounts.create(withAntigravityConfirmFlag(payload))
@@ -5009,6 +5016,7 @@ const resetForm = () => {
   form.type = 'oauth'
   form.credentials = {}
   form.proxy_id = null
+  form.worker_id = null
   form.concurrency = 10
   form.load_factor = null
   form.priority = 1
@@ -5317,7 +5325,69 @@ const handleVertexServiceAccountDrop = async (event: DragEvent) => {
   applyVertexServiceAccountJson(await file.text())
 }
 
+const workerAccountKind = (platform: string, type: string) => {
+  if (type !== 'apikey' && type !== 'upstream') return ''
+  switch (platform) {
+    case 'openai':
+      return 'openai_api_key'
+    case 'anthropic':
+      return 'anthropic_api_key'
+    case 'gemini':
+      return 'gemini_api_key'
+    case 'grok':
+      return 'grok_api_key'
+    case 'antigravity':
+      return 'antigravity_api_key'
+    case 'kimi':
+      return 'kimi_api_key'
+    case 'zhipu':
+      return 'zhipu_api_key'
+    case 'deepseek':
+      return 'deepseek_api_key'
+    default:
+      return ''
+  }
+}
+
+const createAccountOnWorker = async (payload: CreateAccountRequest) => {
+  const workerId = form.worker_id
+  if (!workerId) return false
+  const kind = workerAccountKind(payload.platform, payload.type)
+  if (!kind) {
+    appStore.showError(t('admin.accounts.workerAccountUnsupported'))
+    return true
+  }
+  const credentials = (payload.credentials || {}) as Record<string, unknown>
+  const apiKey = String(credentials.api_key || credentials.access_token || '').trim()
+  if (!apiKey) {
+    appStore.showError(t('admin.accounts.workerAccountKeyRequired'))
+    return true
+  }
+  submitting.value = true
+  try {
+    await adminAPI.workers.createAccount(workerId, {
+      name: payload.name,
+      kind,
+      api_key: apiKey,
+      base_url: typeof credentials.base_url === 'string' ? credentials.base_url : undefined,
+      models: allowedModels.value.length ? allowedModels.value.join(',') : undefined,
+    })
+    appStore.showSuccess(t('admin.accounts.accountCreatedOnWorker'))
+    emit('created')
+    handleClose()
+  } catch (error: any) {
+    appStore.showError(error.message || error.response?.data?.message || error.response?.data?.detail || t('admin.accounts.failedToCreate'))
+  } finally {
+    submitting.value = false
+  }
+  return true
+}
+
 const handleSubmit = async () => {
+  if (form.worker_id && isOAuthFlow.value) {
+    appStore.showError(t('admin.accounts.workerOAuthUnsupported'))
+    return
+  }
   // For OAuth-based type, handle OAuth flow (goes to step 2)
   if (isOAuthFlow.value) {
     if (!isGrokSSOInputMethod.value && !form.name.trim()) {

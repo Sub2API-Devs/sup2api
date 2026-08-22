@@ -33,3 +33,13 @@ func TestMigration195AddsWorkerLifecycleAndHeartbeatFields(t *testing.T) {
 	require.Contains(t, sql, "consecutive_failures")
 	require.Contains(t, sql, "idx_workers_heartbeat_due")
 }
+
+func TestMigration229CreatesWorkerProxyIndex(t *testing.T) {
+	content, err := FS.ReadFile("229_worker_proxies.sql")
+	require.NoError(t, err)
+	sql := string(content)
+	require.Contains(t, sql, "CREATE TABLE IF NOT EXISTS worker_proxies")
+	require.Contains(t, sql, "worker_id BIGINT NOT NULL REFERENCES workers(id) ON DELETE CASCADE")
+	require.Contains(t, sql, "UNIQUE (worker_id, remote_proxy_id)")
+	require.Contains(t, sql, "idx_worker_proxies_worker")
+}

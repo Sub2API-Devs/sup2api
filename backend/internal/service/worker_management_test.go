@@ -43,6 +43,7 @@ type workerTestRepository struct {
 	nextID       int64
 	workers      map[int64]*Worker
 	accounts     []WorkerAccount
+	proxies      []WorkerProxy
 	logs         []WorkerLog
 	heartbeatErr error
 }
@@ -232,6 +233,63 @@ func (r *workerTestRepository) DeleteWorkerAccount(_ context.Context, workerID i
 	r.accounts = filtered
 	return nil
 }
+func (r *workerTestRepository) UpsertWorkerProxy(_ context.Context, proxy *WorkerProxy) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i := range r.proxies {
+		if r.proxies[i].WorkerID == proxy.WorkerID && r.proxies[i].RemoteProxyID == proxy.RemoteProxyID {
+			proxy.ID = r.proxies[i].ID
+			r.proxies[i] = *proxy
+			return nil
+		}
+	}
+	proxy.ID = int64(len(r.proxies) + 1)
+	r.proxies = append(r.proxies, *proxy)
+	return nil
+}
+func (r *workerTestRepository) ListWorkerProxies(_ context.Context, workerID int64) ([]WorkerProxy, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	items := make([]WorkerProxy, 0)
+	for _, proxy := range r.proxies {
+		if proxy.WorkerID == workerID {
+			items = append(items, proxy)
+		}
+	}
+	return items, nil
+}
+func (r *workerTestRepository) DeleteWorkerProxy(_ context.Context, workerID int64, remoteProxyID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	filtered := r.proxies[:0]
+	for _, proxy := range r.proxies {
+		if proxy.WorkerID != workerID || proxy.RemoteProxyID != remoteProxyID {
+			filtered = append(filtered, proxy)
+		}
+	}
+	r.proxies = filtered
+	return nil
+}
+func (r *workerTestRepository) DeleteWorkerProxiesExcept(_ context.Context, workerID int64, keepRemoteIDs []string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	keep := make(map[string]struct{}, len(keepRemoteIDs))
+	for _, id := range keepRemoteIDs {
+		keep[id] = struct{}{}
+	}
+	filtered := r.proxies[:0]
+	for _, proxy := range r.proxies {
+		if proxy.WorkerID != workerID {
+			filtered = append(filtered, proxy)
+			continue
+		}
+		if _, ok := keep[proxy.RemoteProxyID]; ok {
+			filtered = append(filtered, proxy)
+		}
+	}
+	r.proxies = filtered
+	return nil
+}
 func (r *workerTestRepository) InsertWorkerLog(_ context.Context, entry *WorkerLog) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -266,6 +324,10 @@ func TestWorkerServiceRegistersAndOperatesOnSelectedRemoteWorker(t *testing.T) {
 		case "/worker/v1/accounts/openai/api-key":
 			_, _ = w.Write([]byte(`{"success":true,"account":{"id":42,"name":"remote-key","kind":"openai_api_key","status":1}}`))
 		case "/worker/v1/accounts":
+			if request.Method == http.MethodPost {
+				_, _ = w.Write([]byte(`{"success":true,"account":{"id":99,"name":"anthropic","kind":"anthropic_api_key","status":"active","api_key":"sk-ant-secret","access_token":"should-not-persist"}}`))
+				return
+			}
 			_, _ = w.Write([]byte(`{"success":true,"accounts":[{"id":42,"name":"remote-key","kind":"openai_api_key","status":1},{"id":84,"name":"existing-oauth","kind":"openai_oauth","status":1,"models":"gpt-5.4"}]}`))
 		case "/worker/v1/accounts/42/refresh":
 			_, _ = w.Write([]byte(`{"success":true,"data":{"refreshed":true}}`))
@@ -275,6 +337,20 @@ func TestWorkerServiceRegistersAndOperatesOnSelectedRemoteWorker(t *testing.T) {
 				return
 			}
 			_, _ = w.Write([]byte(`{"success":true,"deleted":true}`))
+		case "/worker/v1/proxies":
+			if request.Method == http.MethodPost {
+				_, _ = w.Write([]byte(`{"proxy":{"id":"proxy-1","name":"edge","protocol":"http","host":"127.0.0.1","port":8080,"status":"active","has_auth":true,"password":"secret","username":"user"}}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"proxies":[{"id":"proxy-1","name":"edge","protocol":"http","host":"127.0.0.1","port":8080,"status":"active"}]}`))
+		case "/worker/v1/proxies/proxy-1":
+			if request.Method == http.MethodDelete {
+				_, _ = w.Write([]byte(`{"deleted":true}`))
+				return
+			}
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		case "/worker/v1/proxies/proxy-1/test":
+			_, _ = w.Write([]byte(`{"ok":true,"latency_ms":12,"proxy":{"id":"proxy-1","name":"edge","protocol":"http","host":"127.0.0.1","port":8080,"status":"active"}}`))
 		default:
 			http.NotFound(w, request)
 		}
@@ -331,6 +407,40 @@ func TestWorkerServiceRegistersAndOperatesOnSelectedRemoteWorker(t *testing.T) {
 	}
 	if len(repo.accounts) != 1 || repo.accounts[0].RemoteAccountID != "84" {
 		t.Fatalf("local account index delete failed: %+v", repo.accounts)
+	}
+	generic, err := manager.CreateAccount(context.Background(), worker.ID, WorkerAccountCreateInput{
+		Name: "anthropic", Kind: "anthropic_api_key", APIKey: "sk-ant-secret",
+	})
+	if err != nil || generic.RemoteAccountID != "99" {
+		t.Fatalf("generic worker account: %+v %v", generic, err)
+	}
+	if generic.Metadata["api_key"] != nil || generic.Metadata["access_token"] != nil {
+		t.Fatalf("control plane persisted account secrets: %+v", generic.Metadata)
+	}
+	proxy, err := manager.CreateProxy(context.Background(), worker.ID, WorkerProxyInput{
+		Name: "edge", Protocol: "http", Host: "127.0.0.1", Port: 8080, Password: "secret",
+	})
+	if err != nil || proxy.RemoteProxyID != "proxy-1" {
+		t.Fatalf("create worker proxy: %+v %v", proxy, err)
+	}
+	if proxy.Metadata["password"] != nil {
+		t.Fatalf("control plane persisted proxy password: %+v", proxy.Metadata)
+	}
+	if anyString(proxy.Metadata["username"]) != "user" {
+		t.Fatalf("control plane dropped proxy username: %+v", proxy.Metadata)
+	}
+	if _, err := manager.TestProxy(context.Background(), worker.ID, "proxy-1"); err != nil {
+		t.Fatal(err)
+	}
+	proxies, err := manager.ListProxies(context.Background(), worker.ID)
+	if err != nil || len(proxies) != 1 {
+		t.Fatalf("list worker proxies: %+v %v", proxies, err)
+	}
+	if err := manager.DeleteProxy(context.Background(), worker.ID, "proxy-1"); err != nil {
+		t.Fatal(err)
+	}
+	if len(repo.proxies) != 0 {
+		t.Fatalf("local proxy index delete failed: %+v", repo.proxies)
 	}
 	for _, value := range authorization {
 		if value != "Bearer "+managementKey {
@@ -847,5 +957,27 @@ func TestCreateRejectsMissingPerWorkerNATSURL(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "Worker NATS URL") {
 		t.Fatalf("expected per-worker NATS URL error, got %v", err)
+	}
+}
+
+func TestSanitizedWorkerMetadataRemovesNestedSecrets(t *testing.T) {
+	metadata := sanitizedWorkerMetadata(map[string]any{
+		"name": "edge",
+		"nested": map[string]any{
+			"token": "nested-token",
+			"safe":  "value",
+		},
+		"items": []any{
+			map[string]any{"password": "nested-password", "host": "proxy.internal"},
+		},
+	})
+
+	nested := metadata["nested"].(map[string]any)
+	if _, exists := nested["token"]; exists || nested["safe"] != "value" {
+		t.Fatalf("nested metadata was not sanitized: %+v", metadata)
+	}
+	item := metadata["items"].([]any)[0].(map[string]any)
+	if _, exists := item["password"]; exists || item["host"] != "proxy.internal" {
+		t.Fatalf("array metadata was not sanitized: %+v", metadata)
 	}
 }
