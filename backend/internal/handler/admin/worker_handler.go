@@ -293,6 +293,28 @@ func (h *WorkerHandler) RefreshAccount(c *gin.Context) {
 	workerHandlerOK(c, http.StatusOK, result)
 }
 
+func (h *WorkerHandler) UpdateAccount(c *gin.Context) {
+	workerID, ok := workerHandlerID(c, "id")
+	if !ok {
+		return
+	}
+	var input service.WorkerAccountCreateInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		workerHandlerError(c, http.StatusBadRequest, "invalid_request", err)
+		return
+	}
+	account, err := h.service.UpdateAccount(c.Request.Context(), workerID, c.Param("account_id"), input)
+	if err != nil {
+		if errors.Is(err, service.ErrWorkerNotFound) {
+			workerHandlerError(c, http.StatusNotFound, "worker_not_found", err)
+			return
+		}
+		workerHandlerError(c, http.StatusBadGateway, "worker_account_update_failed", err)
+		return
+	}
+	workerHandlerOK(c, http.StatusOK, account)
+}
+
 func (h *WorkerHandler) TestAccount(c *gin.Context) {
 	workerID, ok := workerHandlerID(c, "id")
 	if !ok {

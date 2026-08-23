@@ -3878,7 +3878,7 @@ interface Props {
 const props = defineProps<Props>()
 const emit = defineEmits<{
   close: []
-  created: []
+  created: [result?: { workerId?: number }]
 }>()
 
 const appStore = useAppStore()
@@ -5373,7 +5373,7 @@ const createAccountOnWorker = async (payload: CreateAccountRequest) => {
       models: allowedModels.value.length ? allowedModels.value.join(',') : undefined,
     })
     appStore.showSuccess(t('admin.accounts.accountCreatedOnWorker'))
-    emit('created')
+    emit('created', { workerId })
     handleClose()
   } catch (error: any) {
     appStore.showError(error.message || error.response?.data?.message || error.response?.data?.detail || t('admin.accounts.failedToCreate'))

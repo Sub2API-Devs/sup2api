@@ -147,6 +147,7 @@ func registerWorkerRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		workers.POST("/:id/accounts/openai/api-key", h.Admin.Worker.CreateAPIKeyAccount)
 		workers.POST("/:id/accounts/openai/oauth/start", h.Admin.Worker.StartOAuth)
 		workers.POST("/:id/accounts/openai/oauth/complete", h.Admin.Worker.CompleteOAuth)
+		workers.PUT("/:id/accounts/:account_id", h.Admin.Worker.UpdateAccount)
 		workers.POST("/:id/accounts/:account_id/refresh", h.Admin.Worker.RefreshAccount)
 		workers.POST("/:id/accounts/:account_id/test", h.Admin.Worker.TestAccount)
 		workers.DELETE("/:id/accounts/:account_id", h.Admin.Worker.DeleteAccount)

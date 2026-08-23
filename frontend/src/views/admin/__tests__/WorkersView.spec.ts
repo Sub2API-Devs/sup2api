@@ -132,25 +132,15 @@ describe('WorkersView operations table', () => {
     expect(wrapper.text()).not.toContain('admin.workers.status.disabled')
   })
 
-  it('does not let a slower previous Worker detail request replace the current Worker', async () => {
-    const workerB = { ...worker, id: 2, name: 'Gateway B', remote_worker_id: 'gateway-b' }
-    list.mockResolvedValueOnce([{ ...worker }, workerB])
-    const pendingAccounts = new Map<number, (value: unknown[]) => void>()
-    listAccounts.mockImplementation((id: number) => new Promise((resolve) => pendingAccounts.set(id, resolve)))
+  it('keeps Worker accounts in Account Management and preselects the Worker', async () => {
     const wrapper = mountView(); await flushPromises()
-
-    const accountButtons = wrapper.findAll('[data-testid="worker-accounts"]')
-    await accountButtons[0].trigger('click')
-    await accountButtons[1].trigger('click')
-    pendingAccounts.get(2)?.([{ id: 22, worker_id: 2, remote_account_id: 'account-b', name: 'Account B', kind: 'openai_api_key', status: 'active', metadata: {}, created_at: '', updated_at: '' }])
+    await wrapper.get('[data-testid="manage-worker-accounts"]').trigger('click')
     await flushPromises()
-    expect(wrapper.text()).toContain('Gateway B')
-    expect(wrapper.text()).toContain('Account B')
-
-    pendingAccounts.get(1)?.([{ id: 11, worker_id: 1, remote_account_id: 'stale', name: 'Stale Account', kind: 'openai_api_key', status: 'active', metadata: {}, created_at: '', updated_at: '' }])
-    await flushPromises()
-    expect(wrapper.text()).toContain('Account B')
-    expect(wrapper.text()).not.toContain('Stale Account')
+    expect(push).toHaveBeenCalledWith({
+      name: 'AdminAccounts',
+      query: { account_scope: 'worker', worker_id: '1' }
+    })
+    expect(listAccounts).not.toHaveBeenCalled()
   })
 
   it('opens the Worker proxy list from the resources column', async () => {

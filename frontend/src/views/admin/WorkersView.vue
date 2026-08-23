@@ -101,7 +101,7 @@
                 </td>
                 <td>
                   <div class="flex flex-col items-start gap-1">
-                    <button class="whitespace-nowrap rounded-md bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100 dark:bg-primary-950/30 dark:text-primary-300" data-testid="worker-accounts" @click="openWorkerDetail(worker, 'accounts')">
+                    <button class="whitespace-nowrap rounded-md bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100 dark:bg-primary-950/30 dark:text-primary-300" data-testid="worker-accounts" @click="openWorkerAccounts(worker)">
                       {{ t('admin.workers.accounts') }} {{ worker.account_count ?? 0 }}
                     </button>
                     <button class="whitespace-nowrap rounded-md bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 dark:bg-sky-950/30 dark:text-sky-300" data-testid="worker-proxies" @click="openWorkerDetail(worker, 'proxies')">
@@ -114,6 +114,7 @@
                 </td>
                 <td class="text-right">
                   <div class="flex justify-end gap-1">
+                    <button class="worker-action text-primary-600 hover:bg-primary-50 hover:text-primary-700 dark:text-primary-400 dark:hover:bg-primary-950/30" :title="t('admin.workers.manageAccountsInAccountPage')" data-testid="manage-worker-accounts" @click="openWorkerAccounts(worker)"><Icon name="users" size="sm" /></button>
                     <button class="worker-action" :title="t('common.edit')" data-testid="edit-worker" @click="openEditWorkerDialog(worker)"><Icon name="edit" size="sm" /></button>
                     <button class="worker-action" :title="t('admin.workers.testConnection')" data-testid="test-worker" @click="openTestModal(worker)"><Icon name="play" size="sm" /></button>
                     <button class="worker-action" :title="t('admin.workers.usageRecords')" @click="openWorkerUsage(worker)"><Icon name="document" size="sm" /></button>
@@ -192,7 +193,7 @@
         </div>
 
         <div class="flex gap-2 border-b border-gray-200 dark:border-dark-700">
-          <button type="button" class="-mb-px border-b-2 px-3 py-2 text-sm font-medium" :class="detailTab === 'accounts' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500'" data-testid="worker-detail-accounts" @click="selectDetailTab('accounts')">{{ t('admin.workers.accounts') }}</button>
+          <button type="button" class="-mb-px border-b-2 border-transparent px-3 py-2 text-sm font-medium text-gray-500 hover:text-primary-600" data-testid="worker-detail-accounts" @click="openWorkerAccounts(selectedWorker)">{{ t('admin.workers.manageAccountsInAccountPage') }}</button>
           <button type="button" class="-mb-px border-b-2 px-3 py-2 text-sm font-medium" :class="detailTab === 'proxies' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500'" data-testid="worker-detail-proxies" @click="selectDetailTab('proxies')">{{ t('admin.workers.proxies') }}</button>
         </div>
 
@@ -462,6 +463,7 @@ async function selectDetailTab(tab: 'accounts' | 'proxies') {
   if (tab === 'accounts' && accounts.value.length === 0) await loadAccounts()
 }
 function openWorkerUsage(worker: Worker) { void router.push({ name: 'AdminUsage', query: { worker_id: String(worker.id), worker_name: worker.name } }) }
+function openWorkerAccounts(worker: Worker) { void router.push({ name: 'AdminAccounts', query: { account_scope: 'worker', worker_id: String(worker.id) } }) }
 async function loadAccounts() { const workerId = selectedWorker.value?.id; if (!workerId) return; beginDetailRequest(); try { const nextAccounts = await adminAPI.workers.listAccounts(workerId); if (selectedWorker.value?.id === workerId) accounts.value = nextAccounts } catch (error) { if (selectedWorker.value?.id === workerId) appStore.showError(errorMessage(error, t('admin.workers.accountsLoadFailed'))) } finally { finishDetailRequest() } }
 async function loadProxies() { const workerId = selectedWorker.value?.id; if (!workerId) return; beginDetailRequest(); try { const nextProxies = await adminAPI.workers.listProxies(workerId); if (selectedWorker.value?.id === workerId) proxies.value = nextProxies } catch (error) { if (selectedWorker.value?.id === workerId) appStore.showError(errorMessage(error, t('admin.workers.proxiesLoadFailed'))) } finally { finishDetailRequest() } }
 function openAPIKeyDialog() { showAPIKeyDialog.value = selectedWorker.value !== null }

@@ -108,6 +108,43 @@ func TestManagerKeepsOAuthExchangeAndRefreshInsideWorker(t *testing.T) {
 	}
 }
 
+func TestManagerUpdatesAccountMetadataWithoutReplacingCredentials(t *testing.T) {
+	manager, err := New(Config{
+		WorkerID: "worker-edit", InstanceID: "instance-edit", ManagementKey: strings.Repeat("m", 32),
+		VaultPath: filepath.Join(t.TempDir(), "vault.db"), VaultKey: bytes.Repeat([]byte{8}, 32),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	created, err := manager.CreateAPIKeyAccount(AccountInput{
+		Name: "before", APIKey: "sk-worker-secret", Models: "gpt-old", Group: "old",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := manager.UpdateAccount(created.ID, AccountInput{
+		Name: "after", Kind: "openai_api_key", Models: "gpt-new", Group: "new", TestModel: "gpt-test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Name != "after" || updated.Models != "gpt-new" || updated.Group != "new" || updated.TestModel != "gpt-test" {
+		t.Fatalf("unexpected updated account: %+v", updated)
+	}
+	stored, err := manager.vault.Get(created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.APIKey != "sk-worker-secret" {
+		t.Fatal("metadata update replaced the Worker-local credential")
+	}
+	if _, err := manager.UpdateAccount(created.ID, AccountInput{Name: "bad", Kind: "anthropic_api_key"}); err == nil {
+		t.Fatal("expected account kind changes to be rejected")
+	}
+}
+
 func TestManagerStoresAPIKeyAccountsAndIPProxiesWithoutExposingSecrets(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -247,6 +284,79 @@ func TestManagerTestsNonOpenAIAccountsWithKindSpecificAuth(t *testing.T) {
 	}
 	if _, err := manager.TestAccount(context.Background(), gemini.ID, TestInput{}); err != nil {
 		t.Fatalf("gemini test: %v seen=%v", err, seen)
+	}
+}
+
+func TestManagerTestsTheSelectedModelInsteadOfOnlyListingModels(t *testing.T) {
+	var seenPath string
+	var seenModel string
+	var seenMaxTokens int
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seenPath = r.URL.Path
+		if r.Method != http.MethodPost || r.Header.Get("Authorization") != "Bearer sk-worker-secret" {
+			http.Error(w, "unexpected request", http.StatusUnauthorized)
+			return
+		}
+		var payload struct {
+			Model     string `json:"model"`
+			MaxTokens int    `json:"max_tokens"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, "invalid payload", http.StatusBadRequest)
+			return
+		}
+		seenModel = payload.Model
+		seenMaxTokens = payload.MaxTokens
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []any{map[string]any{"message": map[string]any{"content": "hello from Worker"}}},
+		})
+	}))
+	defer upstream.Close()
+
+	manager, err := New(Config{
+		WorkerID: "worker-model", InstanceID: "instance-model", ManagementKey: strings.Repeat("m", 32),
+		VaultPath: filepath.Join(t.TempDir(), "vault.db"), VaultKey: bytes.Repeat([]byte{6}, 32),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	account, err := manager.CreateAPIKeyAccount(AccountInput{
+		Name: "model-test", APIKey: "sk-worker-secret", BaseURL: upstream.URL, Models: "gpt-5.4,gpt-5.6",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := manager.TestAccount(context.Background(), account.ID, TestInput{Model: "gpt-5.6"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if seenPath != "/v1/chat/completions" || seenModel != "gpt-5.6" || seenMaxTokens != 256 || result["model"] != "gpt-5.6" || result["response_text"] != "hello from Worker" {
+		t.Fatalf("selected model test mismatch: path=%q model=%q max_tokens=%d result=%+v", seenPath, seenModel, seenMaxTokens, result)
+	}
+}
+
+func TestAccountTestResponseTextSupportsProviderResponseShapes(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "openai chat", raw: `{"choices":[{"message":{"content":"hello"}}]}`, want: "hello"},
+		{name: "openai reasoning fallback", raw: `{"choices":[{"message":{"content":null,"reasoning":"thinking text"}}]}`, want: "thinking text"},
+		{name: "openai responses", raw: `{"output":[{"content":[{"type":"output_text","text":"response text"}]}]}`, want: "response text"},
+		{name: "anthropic", raw: `{"content":[{"type":"text","text":"claude text"}]}`, want: "claude text"},
+		{name: "gemini", raw: `{"candidates":[{"content":{"parts":[{"text":"gemini text"}]}}]}`, want: "gemini text"},
+		{name: "nonstandard json", raw: `{"result":"ok"}`, want: `{"result":"ok"}`},
+		{name: "plain text", raw: "plain upstream body", want: "plain upstream body"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := accountTestResponseText([]byte(test.raw)); got != test.want {
+				t.Fatalf("accountTestResponseText() = %q, want %q", got, test.want)
+			}
+		})
 	}
 }
 

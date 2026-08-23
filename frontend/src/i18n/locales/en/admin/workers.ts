@@ -1,7 +1,7 @@
 export default {
   workers: {
     title: 'Worker Management',
-    description: 'Register and manage standalone AI Gateway containers, their accounts, and usage records',
+    description: 'Register and monitor standalone AI Gateway containers; manage all accounts from Account Management',
     addWorker: 'Add Worker',
     editWorker: 'Edit Worker',
     searchPlaceholder: 'Search name, Worker ID, URL, or instance ID…',
@@ -83,6 +83,7 @@ export default {
     probingReady: 'Probing heartbeat /worker/v1/ready …',
     heartbeatReady: 'Heartbeat ready',
     accounts: 'Accounts',
+    manageAccountsInAccountPage: 'Manage accounts on this Worker',
     proxies: 'IP Proxies',
     accountsHint: 'Credentials stay on this Worker; refresh and tests execute inside that container.',
     proxiesHint: 'Proxy passwords stay on this Worker; the list only shows address summaries.',

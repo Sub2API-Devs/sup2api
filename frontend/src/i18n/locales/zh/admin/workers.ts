@@ -1,7 +1,7 @@
 export default {
   workers: {
     title: 'Worker 管理',
-    description: '注册并管理独立运行的 AI Gateway 容器、容器内账号及使用记录',
+    description: '注册并监控独立运行的 AI Gateway 容器；账号统一在账号管理中维护',
     addWorker: '添加 Worker',
     editWorker: '编辑 Worker',
     searchPlaceholder: '搜索名称、Worker ID、地址或实例 ID…',
@@ -83,6 +83,7 @@ export default {
     probingReady: '正在探测心跳 /worker/v1/ready …',
     heartbeatReady: '心跳就绪',
     accounts: '账号',
+    manageAccountsInAccountPage: '管理该 Worker 的账号',
     proxies: 'IP 代理',
     accountsHint: '账号凭据只保存在当前 Worker；刷新和测试也在该容器内执行。',
     proxiesHint: '代理密码只保存在当前 Worker；列表只显示地址摘要。',

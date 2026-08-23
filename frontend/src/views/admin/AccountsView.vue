@@ -2,7 +2,36 @@
   <AppLayout>
     <TablePageLayout>
       <template #filters>
-        <div class="flex flex-wrap-reverse items-start justify-between gap-3">
+        <div class="mb-4 flex flex-wrap items-end gap-1 border-b border-gray-200 dark:border-dark-700">
+          <div class="flex items-end gap-1" role="tablist" :aria-label="t('admin.accounts.accountLocation')">
+            <button
+              type="button"
+              role="tab"
+              :aria-selected="accountScope === 'main'"
+              :class="accountScopeTabClass('main')"
+              data-testid="main-account-scope"
+              @click="setAccountScope('main')"
+            >
+              <Icon name="server" size="sm" />
+              {{ t('admin.accounts.mainServerAccounts') }}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              :aria-selected="accountScope === 'worker'"
+              :class="accountScopeTabClass('worker')"
+              data-testid="worker-account-scope"
+              @click="setAccountScope('worker')"
+            >
+              <Icon name="server" size="sm" />
+              {{ t('admin.accounts.workerAccounts') }}
+              <span v-if="workerAccounts.length" class="rounded-full bg-primary-50 px-2 py-0.5 text-[11px] font-semibold text-primary-700 dark:bg-primary-950/40 dark:text-primary-300">
+                {{ workerAccounts.length }}
+              </span>
+            </button>
+          </div>
+        </div>
+        <div v-if="accountScope === 'main'" class="flex flex-wrap-reverse items-start justify-between gap-3">
           <AccountTableFilters
             v-model:searchQuery="params.search"
             :filters="params"
@@ -161,8 +190,46 @@
             </template>
           </AccountTableActions>
         </div>
+        <div v-else class="flex flex-wrap-reverse items-start justify-between gap-3">
+          <div class="flex flex-1 flex-wrap items-center gap-3">
+            <div class="relative w-full sm:w-64">
+              <Icon name="search" size="sm" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input v-model.trim="workerAccountSearch" class="input pl-10" :placeholder="t('admin.accounts.searchWorkerAccounts')" />
+            </div>
+            <select v-model="workerAccountStatusFilter" class="input w-auto min-w-[150px]">
+              <option value="">{{ t('admin.accounts.allStatus') }}</option>
+              <option value="active">{{ t('admin.accounts.status.active') }}</option>
+              <option value="error">{{ t('admin.accounts.status.error') }}</option>
+              <option value="inactive">{{ t('admin.accounts.status.inactive') }}</option>
+            </select>
+            <div
+              class="flex w-full min-w-0 items-center gap-2 sm:w-auto"
+              data-testid="worker-filter-toolbar-item"
+            >
+              <Icon name="filter" size="sm" class="shrink-0 text-gray-400" />
+              <select
+                v-model="workerAccountFilter"
+                class="input h-10 min-w-0 flex-1 py-1.5 text-sm sm:w-auto sm:min-w-[260px] sm:flex-none"
+                data-testid="worker-account-filter"
+                :aria-label="t('admin.accounts.workerFilter')"
+                :title="t('admin.accounts.workerFilter')"
+              >
+                <option value="">{{ t('admin.accounts.allWorkersCount', { count: workers.length }) }}</option>
+                <option v-for="worker in workers" :key="worker.id" :value="String(worker.id)">
+                  {{ worker.name }} · {{ worker.remote_worker_id }} · {{ t('admin.accounts.workerAccountCount', { count: worker.account_count ?? 0 }) }}
+                </option>
+              </select>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <button class="btn btn-secondary" :disabled="workerAccountsLoading" :title="t('common.refresh')" @click="loadWorkerAccounts">
+              <Icon name="refresh" size="sm" :class="workerAccountsLoading ? 'animate-spin' : ''" />
+            </button>
+            <button class="btn btn-primary" @click="showCreate = true">{{ t('admin.accounts.createAccount') }}</button>
+          </div>
+        </div>
         <div
-          v-if="hasPendingListSync"
+          v-if="accountScope === 'main' && hasPendingListSync"
           class="mt-2 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/40 dark:bg-amber-900/20 dark:text-amber-200"
         >
           <span>{{ t('admin.accounts.listPendingSyncHint') }}</span>
@@ -175,6 +242,7 @@
         </div>
       </template>
       <template #table>
+        <template v-if="accountScope === 'main'">
         <AccountBulkActionsBar
           :selected-ids="selIds"
           :total-results="pagination.total"
@@ -447,13 +515,132 @@
           </template>
         </DataTable>
         </div>
+        </template>
+        <div v-else class="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div v-if="workerAccountLoadErrors.length" class="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800 dark:border-amber-800/50 dark:bg-amber-950/20 dark:text-amber-200">
+            {{ t('admin.accounts.workerPartialLoadFailed', { count: workerAccountLoadErrors.length }) }}
+          </div>
+          <DataTable
+            :columns="workerAccountColumns"
+            :data="filteredWorkerAccounts"
+            :loading="workerAccountsLoading"
+            row-key="management_key"
+            default-sort-key="name"
+            default-sort-order="asc"
+          >
+            <template #empty>
+              <div class="flex flex-col items-center py-4">
+                <span class="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary-50 text-primary-600 dark:bg-primary-950/30 dark:text-primary-300">
+                  <Icon name="server" size="lg" />
+                </span>
+                <p class="text-base font-medium text-gray-900 dark:text-white">{{ t('admin.accounts.noWorkerAccounts') }}</p>
+                <p class="mt-1 max-w-md text-sm text-gray-500 dark:text-dark-400">{{ t('admin.accounts.noWorkerAccountsHint') }}</p>
+              </div>
+            </template>
+            <template #cell-name="{ row }">
+              <div class="min-w-[180px]">
+                <div class="font-medium text-gray-900 dark:text-white">{{ row.name || `#${row.remote_account_id}` }}</div>
+                <div v-if="workerAccountMetadata(row, 'email')" class="mt-0.5 max-w-[220px] truncate text-xs text-gray-500 dark:text-gray-400">
+                  {{ workerAccountMetadata(row, 'email') }}
+                </div>
+                <div class="mt-1 max-w-[220px] truncate font-mono text-xs text-gray-400" :title="row.remote_account_id">{{ row.remote_account_id }}</div>
+                <div
+                  class="mt-2 inline-flex max-w-[220px] items-center gap-1.5 rounded-md bg-primary-50 px-2 py-1 text-xs font-medium text-primary-700 dark:bg-primary-950/30 dark:text-primary-300"
+                  :title="`${row.worker.name} · ${row.worker.remote_worker_id}`"
+                  data-testid="account-worker-badge"
+                >
+                  <Icon name="server" size="xs" class="shrink-0" />
+                  <span class="shrink-0">{{ t('admin.accounts.workerLabel') }}</span>
+                  <span class="truncate">{{ row.worker.name }}</span>
+                </div>
+              </div>
+            </template>
+            <template #cell-platform_type="{ row }">
+              <PlatformTypeBadge :platform="workerAccountPlatform(row.kind)" :type="workerAccountType(row.kind)" />
+            </template>
+            <template #cell-capacity="{ row }">
+              <div class="flex min-w-[110px] flex-col gap-1">
+                <span class="inline-flex w-fit items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 dark:bg-dark-700 dark:text-gray-300">
+                  <Icon name="grid" size="xs" />
+                  {{ t('admin.accounts.workerCapacityManaged') }}
+                </span>
+                <span class="max-w-[180px] truncate text-xs text-gray-400" :title="workerAccountMetadata(row, 'models')">
+                  {{ workerAccountMetadata(row, 'models') || t('admin.accounts.allModels') }}
+                </span>
+              </div>
+            </template>
+            <template #cell-status="{ row }">
+              <span :class="['badge', workerAccountStatusClass(row.status)]">{{ workerAccountStatusLabel(row.status) }}</span>
+            </template>
+            <template #cell-schedulable="{ row }">
+              <span
+                role="switch"
+                :aria-checked="workerAccountSchedulable(row)"
+                :title="t('admin.accounts.workerSchedulingHint')"
+                :class="['relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent', workerAccountSchedulable(row) ? 'bg-primary-500' : 'bg-gray-200 dark:bg-dark-600']"
+              >
+                <span class="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow ring-0 transition" :class="workerAccountSchedulable(row) ? 'translate-x-4' : 'translate-x-0'" />
+              </span>
+            </template>
+            <template #cell-groups="{ row }">
+              <span v-if="workerAccountMetadata(row, 'group')" class="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">
+                {{ workerAccountMetadata(row, 'group') }}
+              </span>
+              <span v-else class="text-sm text-gray-400">{{ t('admin.accounts.ungroupedGroup') }}</span>
+            </template>
+            <template #cell-usage="{ row }">
+              <div class="flex min-w-[150px] flex-col gap-1">
+                <span class="text-xs text-gray-400">{{ t('admin.accounts.workerUsageUnavailable') }}</span>
+                <span v-if="workerAccountLastTestAt(row)" class="text-xs text-gray-500 dark:text-gray-300">
+                  {{ t('admin.accounts.lastTest') }} {{ formatRelativeTime(workerAccountLastTestAt(row)) }}
+                </span>
+              </div>
+            </template>
+            <template #cell-last_used_at="{ row }">
+              <span v-if="workerAccountLastTestAt(row)" class="text-sm text-gray-500 dark:text-dark-400">{{ formatRelativeTime(workerAccountLastTestAt(row)) }}</span>
+              <span v-else class="text-sm text-gray-400">-</span>
+            </template>
+            <template #cell-expires_at="{ row }">
+              <div class="flex flex-col items-start gap-1">
+                <span class="text-sm text-gray-500 dark:text-dark-400">{{ formatExpiresAt(workerAccountExpiresAt(row)) }}</span>
+                <span v-if="isExpired(workerAccountExpiresAt(row))" class="inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                  {{ t('admin.accounts.expired') }}
+                </span>
+              </div>
+            </template>
+            <template #cell-actions="{ row }">
+              <div class="flex items-center gap-1">
+                <button class="worker-account-action" :title="t('common.edit')" data-testid="edit-worker-account" @click="openWorkerAccountEdit(row)">
+                  <Icon name="edit" size="sm" />
+                  <span>{{ t('common.edit') }}</span>
+                </button>
+                <button class="worker-account-action text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/20" :title="t('common.delete')" @click="workerAccountPendingDelete = row">
+                  <Icon name="trash" size="sm" />
+                  <span>{{ t('common.delete') }}</span>
+                </button>
+                <button class="worker-account-action" :title="t('common.more')" data-testid="worker-account-more" @click="openWorkerAccountMenu(row, $event)">
+                  <Icon name="more" size="sm" />
+                  <span>{{ t('common.more') }}</span>
+                </button>
+              </div>
+            </template>
+          </DataTable>
+        </div>
       </template>
-      <template #pagination><Pagination v-if="pagination.total > 0" :page="pagination.page" :total="pagination.total" :page-size="pagination.page_size" @update:page="handlePageChange" @update:pageSize="handlePageSizeChange" /></template>
+      <template #pagination><Pagination v-if="accountScope === 'main' && pagination.total > 0" :page="pagination.page" :total="pagination.total" :page-size="pagination.page_size" @update:page="handlePageChange" @update:pageSize="handlePageSizeChange" /></template>
     </TablePageLayout>
-    <CreateAccountModal :show="showCreate" :proxies="proxies" :groups="groups" @close="showCreate = false" @created="reload" />
+    <CreateAccountModal :show="showCreate" :proxies="proxies" :groups="groups" @close="showCreate = false" @created="handleAccountCreated" />
     <EditAccountModal :show="showEdit" :account="edAcc" :proxies="proxies" :groups="groups" @close="showEdit = false" @updated="handleAccountUpdated" />
     <ReAuthAccountModal :show="showReAuth" :account="reAuthAcc" @close="closeReAuthModal" @reauthorized="handleAccountUpdated" />
     <AccountTestModal :show="showTest" :account="testingAcc" @close="closeTestModal" />
+    <WorkerAccountTestModal
+      :show="workerAccountPendingTest !== null"
+      :account="workerAccountPendingTest"
+      :worker="workerAccountPendingTest?.worker || null"
+      :kind-label="workerAccountKindLabel(workerAccountPendingTest?.kind || '')"
+      @close="workerAccountPendingTest = null"
+      @tested="loadWorkerAccounts"
+    />
     <AccountStatsModal :show="showStats" :account="statsAcc" @close="closeStatsModal" />
     <ScheduledTestsPanel :show="showSchedulePanel" :account-id="scheduleAcc?.id ?? null" :model-options="scheduleModelOptions" @close="closeSchedulePanel" />
     <AccountActionMenu :show="menu.show" :account="menu.acc" :position="menu.pos" @close="menu.show = false" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @duplicate="handleDuplicateAccount" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" @set-privacy="handleSetPrivacy" @create-spark-shadow="handleCreateSparkShadow" />
@@ -472,6 +659,59 @@
     />
     <TempUnschedStatusModal :show="showTempUnsched" :account="tempUnschedAcc" @close="showTempUnsched = false" @reset="handleTempUnschedReset" />
     <ConfirmDialog :show="showDeleteDialog" :title="t('admin.accounts.deleteAccount')" :message="t('admin.accounts.deleteConfirm', { name: deletingAcc?.name })" :confirm-text="t('common.delete')" :cancel-text="t('common.cancel')" :danger="true" @confirm="confirmDelete" @cancel="showDeleteDialog = false" />
+    <ConfirmDialog :show="workerAccountPendingDelete !== null" :title="t('admin.accounts.deleteWorkerAccount')" :message="t('admin.accounts.deleteWorkerAccountConfirm', { name: workerAccountPendingDelete?.name || workerAccountPendingDelete?.remote_account_id || '' })" :confirm-text="t('common.delete')" :cancel-text="t('common.cancel')" :danger="true" @confirm="deleteWorkerAccount" @cancel="workerAccountPendingDelete = null" />
+    <BaseDialog :show="workerAccountPendingEdit !== null" :title="t('admin.accounts.editWorkerAccount')" width="wide" @close="closeWorkerAccountEdit">
+      <form id="worker-account-edit-form" class="grid gap-5 md:grid-cols-2" @submit.prevent="saveWorkerAccountEdit">
+        <div>
+          <label class="input-label">{{ t('admin.accounts.columns.name') }}</label>
+          <input v-model.trim="workerAccountEditForm.name" class="input" required maxlength="255" data-testid="worker-account-edit-name" />
+        </div>
+        <div>
+          <label class="input-label">{{ t('admin.accounts.columns.platformType') }}</label>
+          <input :value="workerAccountKindLabel(workerAccountPendingEdit?.kind || '')" class="input" disabled />
+        </div>
+        <div class="md:col-span-2">
+          <label class="input-label">{{ t('admin.accounts.baseUrl') }}</label>
+          <input v-model.trim="workerAccountEditForm.base_url" class="input font-mono" placeholder="https://api.openai.com" />
+        </div>
+        <div>
+          <label class="input-label">{{ t('admin.accounts.columns.models') }}</label>
+          <input v-model.trim="workerAccountEditForm.models" class="input" :placeholder="t('admin.accounts.allModels')" />
+        </div>
+        <div>
+          <label class="input-label">{{ t('admin.accounts.columns.groups') }}</label>
+          <input v-model.trim="workerAccountEditForm.group" class="input" />
+        </div>
+        <div class="md:col-span-2">
+          <label class="input-label">{{ t('admin.accounts.workerTestModel') }}</label>
+          <input v-model.trim="workerAccountEditForm.test_model" class="input" />
+          <p class="mt-1 text-xs text-gray-500">{{ t('admin.accounts.workerEditCredentialHint') }}</p>
+        </div>
+      </form>
+      <template #footer>
+        <button class="btn btn-secondary" @click="closeWorkerAccountEdit">{{ t('common.cancel') }}</button>
+        <button form="worker-account-edit-form" class="btn btn-primary" :disabled="workerAccountBusy === 'edit'" data-testid="save-worker-account">{{ t('common.save') }}</button>
+      </template>
+    </BaseDialog>
+    <Teleport to="body">
+      <div v-if="workerAccountMenu.show && workerAccountMenu.account">
+        <div class="fixed inset-0 z-[9998]" @click="closeWorkerAccountMenu"></div>
+        <div
+          class="fixed z-[9999] w-52 overflow-hidden rounded-xl bg-white py-1 shadow-lg ring-1 ring-black/5 dark:bg-dark-800"
+          :style="workerAccountMenuStyle"
+          data-testid="worker-account-action-menu"
+        >
+          <button class="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-700" @click="runWorkerAccountTestFromMenu">
+            <Icon name="play" size="sm" class="text-green-500" :stroke-width="2" />
+            {{ t('admin.accounts.testConnection') }}
+          </button>
+          <button v-if="workerAccountMenu.account.kind === 'openai_oauth'" class="flex w-full items-center gap-2 px-4 py-2 text-sm text-purple-600 hover:bg-gray-100 dark:hover:bg-dark-700" @click="runWorkerAccountRefreshFromMenu">
+            <Icon name="refresh" size="sm" />
+            {{ t('admin.accounts.refreshToken') }}
+          </button>
+        </div>
+      </div>
+    </Teleport>
     <ConfirmDialog :show="showCreateShadowDialog" :title="t('admin.accounts.createSparkShadow')" :message="t('admin.accounts.createSparkShadowConfirm', { name: creatingShadowAcc?.name })" @confirm="confirmCreateSparkShadow" @cancel="showCreateShadowDialog = false" />
     <ConfirmDialog :show="showExportDataDialog" :title="t('admin.accounts.dataExport')" :message="t('admin.accounts.dataExportConfirmMessage')" :confirm-text="t('admin.accounts.dataExportConfirm')" :cancel-text="t('common.cancel')" @confirm="handleExportData" @cancel="showExportDataDialog = false">
       <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
@@ -486,9 +726,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, toRaw, watch } from 'vue'
+import { ref, reactive, computed, inject, onMounted, onUnmounted, toRaw, watch } from 'vue'
 import { useIntervalFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
+import { routeLocationKey, routerKey, type RouteLocationNormalizedLoaded, type Router } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { adminAPI } from '@/api/admin'
@@ -500,6 +741,7 @@ import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
 import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
@@ -511,6 +753,7 @@ import AccountActionMenu from '@/components/admin/account/AccountActionMenu.vue'
 import ImportDataModal from '@/components/admin/account/ImportDataModal.vue'
 import ReAuthAccountModal from '@/components/admin/account/ReAuthAccountModal.vue'
 import AccountTestModal from '@/components/admin/account/AccountTestModal.vue'
+import WorkerAccountTestModal from '@/components/admin/account/WorkerAccountTestModal.vue'
 import AccountStatsModal from '@/components/admin/account/AccountStatsModal.vue'
 import ScheduledTestsPanel from '@/components/admin/account/ScheduledTestsPanel.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
@@ -533,10 +776,84 @@ import { sanitizeUrl } from '@/utils/url'
 import { getFloatingPanelPosition } from '@/utils/floatingPanel'
 import { formatMultiplier } from '@/utils/formatters'
 import type { Account, AccountPlatform, AccountSchedulerGroupScore, AccountType, AccountUsageInfo, Proxy as AccountProxy, AdminGroup, WindowStats, ClaudeModel, UpstreamBillingProbeSnapshot } from '@/types'
+import type { Worker, WorkerAccount } from '@/api/admin'
 
 const { t } = useI18n()
 const appStore = useAppStore()
 const authStore = useAuthStore()
+const route = inject(routeLocationKey, { query: {} } as RouteLocationNormalizedLoaded)
+const router = inject(routerKey, { replace: async () => undefined } as unknown as Router)
+
+type AccountScope = 'main' | 'worker'
+type ManagedWorkerAccount = WorkerAccount & {
+  worker: Worker
+  management_key: string
+}
+
+const routeWorkerID = () => {
+  const value = Array.isArray(route.query.worker_id) ? route.query.worker_id[0] : route.query.worker_id
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+}
+
+const accountScope = ref<AccountScope>(route.query.account_scope === 'worker' ? 'worker' : 'main')
+const workers = ref<Worker[]>([])
+const workerAccounts = ref<ManagedWorkerAccount[]>([])
+const workerAccountsLoading = ref(false)
+const workerAccountLoadErrors = ref<number[]>([])
+const workerAccountSearch = ref('')
+const workerAccountFilter = ref(routeWorkerID() ? String(routeWorkerID()) : '')
+const workerAccountStatusFilter = ref('')
+const workerAccountBusy = ref('')
+const workerAccountPendingDelete = ref<ManagedWorkerAccount | null>(null)
+const workerAccountPendingEdit = ref<ManagedWorkerAccount | null>(null)
+const workerAccountPendingTest = ref<ManagedWorkerAccount | null>(null)
+const workerAccountEditForm = reactive({ name: '', base_url: '', models: '', group: '', test_model: '' })
+const workerAccountMenu = reactive<{
+  show: boolean
+  account: ManagedWorkerAccount | null
+  position: { top: number | null; bottom: number | null; left: number; width: number }
+}>({ show: false, account: null, position: { top: null, bottom: null, left: 0, width: 208 } })
+let workerAccountLoadSequence = 0
+
+const workerAccountColumns = computed(() => [
+  { key: 'name', label: t('admin.accounts.columns.name'), sortable: true },
+  { key: 'platform_type', label: t('admin.accounts.columns.platformType'), sortable: false },
+  { key: 'capacity', label: t('admin.accounts.columns.capacity'), sortable: false },
+  { key: 'status', label: t('admin.accounts.columns.status'), sortable: true },
+  { key: 'schedulable', label: t('admin.accounts.columns.schedulable'), sortable: false },
+  { key: 'groups', label: t('admin.accounts.columns.groups'), sortable: false },
+  { key: 'usage', label: t('admin.accounts.columns.usageWindows'), sortable: false },
+  { key: 'last_used_at', label: t('admin.accounts.columns.lastUsed'), sortable: true },
+  { key: 'expires_at', label: t('admin.accounts.columns.expiresAt'), sortable: true },
+  { key: 'actions', label: t('admin.accounts.columns.actions'), sortable: false, align: 'right' as const }
+])
+
+const workerAccountMenuStyle = computed(() => ({
+  top: workerAccountMenu.position.top == null ? 'auto' : `${workerAccountMenu.position.top}px`,
+  bottom: workerAccountMenu.position.bottom == null ? 'auto' : `${workerAccountMenu.position.bottom}px`,
+  left: `${workerAccountMenu.position.left}px`,
+  width: `${workerAccountMenu.position.width}px`
+}))
+
+const filteredWorkerAccounts = computed(() => {
+  const query = workerAccountSearch.value.trim().toLowerCase()
+  return workerAccounts.value.filter((account) => {
+    const matchesWorker = !workerAccountFilter.value || account.worker_id === Number(workerAccountFilter.value)
+    const matchesStatus = !workerAccountStatusFilter.value || account.status.toLowerCase() === workerAccountStatusFilter.value
+    const searchable = [
+      account.name,
+      account.remote_account_id,
+      account.kind,
+      account.status,
+      account.worker.name,
+      account.worker.remote_worker_id,
+      workerAccountMetadata(account, 'models'),
+      workerAccountMetadata(account, 'group')
+    ].join(' ').toLowerCase()
+    return matchesWorker && matchesStatus && (!query || searchable.includes(query))
+  })
+})
 
 const proxies = ref<AccountProxy[]>([])
 const groups = ref<AdminGroup[]>([])
@@ -2438,6 +2755,239 @@ const handleClickOutside = (event: MouseEvent) => {
   }
 }
 
+function accountScopeTabClass(scope: AccountScope) {
+  return [
+    '-mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
+    accountScope.value === scope
+      ? 'border-primary-500 text-primary-700 dark:text-primary-300'
+      : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800 dark:text-dark-400 dark:hover:border-dark-500 dark:hover:text-gray-200'
+  ]
+}
+
+async function setAccountScope(scope: AccountScope) {
+  accountScope.value = scope
+  const query = { ...route.query }
+  if (scope === 'worker') {
+    query.account_scope = 'worker'
+    if (workerAccountFilter.value) query.worker_id = workerAccountFilter.value
+    else delete query.worker_id
+  }
+  else {
+    delete query.account_scope
+    delete query.worker_id
+  }
+  await router.replace({ query })
+  if (scope === 'worker' && workerAccounts.value.length === 0) await loadWorkerAccounts()
+}
+
+function workerAccountMetadata(account: WorkerAccount, key: string): string {
+  const value = account.metadata?.[key]
+  return value == null ? '' : String(value)
+}
+
+function workerAccountKindLabel(kind: string): string {
+  const key = `admin.workers.accountKind.${kind}`
+  const label = t(key)
+  return label === key ? kind.replace(/_/g, ' ') : label
+}
+
+function workerAccountPlatform(kind: string): AccountPlatform {
+  const platform = kind.split('_')[0]
+  const supported: AccountPlatform[] = ['anthropic', 'openai', 'gemini', 'antigravity', 'grok', 'kimi', 'zhipu', 'deepseek']
+  return supported.includes(platform as AccountPlatform) ? platform as AccountPlatform : 'openai'
+}
+
+function workerAccountType(kind: string): AccountType {
+  return kind.endsWith('_oauth') ? 'oauth' : 'apikey'
+}
+
+function workerAccountMetadataNumber(account: WorkerAccount, key: string): number | null {
+  const value = account.metadata?.[key]
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return null
+}
+
+function workerAccountLastTestAt(account: WorkerAccount): Date | null {
+  const value = workerAccountMetadataNumber(account, 'last_test_at')
+  return value && value > 0 ? new Date(value * 1000) : null
+}
+
+function workerAccountExpiresAt(account: WorkerAccount): number | null {
+  const value = workerAccountMetadataNumber(account, 'expires_at')
+  return value && value > 0 ? value : null
+}
+
+function workerAccountSchedulable(account: ManagedWorkerAccount): boolean {
+  return account.worker.enabled && ['active', 'ready', 'connected', 'ok'].includes(account.status.toLowerCase())
+}
+
+function workerAccountStatusClass(status: string): string {
+  const normalized = status.toLowerCase()
+  if (['active', 'ready', 'connected', 'ok'].includes(normalized)) return 'badge-success'
+  if (['error', 'failed', 'invalid'].includes(normalized)) return 'badge-danger'
+  if (['pending', 'refreshing', 'testing'].includes(normalized)) return 'badge-warning'
+  return 'badge-gray'
+}
+
+function workerAccountStatusLabel(status: string): string {
+  const key = `admin.accounts.status.${status}`
+  const label = t(key)
+  return label === key ? status : label
+}
+
+async function loadWorkerAccounts() {
+  const sequence = ++workerAccountLoadSequence
+  workerAccountsLoading.value = true
+  workerAccountLoadErrors.value = []
+  try {
+    const nextWorkers = await adminAPI.workers.list()
+    if (sequence !== workerAccountLoadSequence) return
+    workers.value = nextWorkers
+    const results = await Promise.allSettled(nextWorkers.map((worker) => adminAPI.workers.listAccounts(worker.id)))
+    if (sequence !== workerAccountLoadSequence) return
+    const nextAccounts: ManagedWorkerAccount[] = []
+    const failures: number[] = []
+    results.forEach((result, index) => {
+      const worker = nextWorkers[index]
+      if (result.status === 'rejected') {
+        failures.push(worker.id)
+        return
+      }
+      result.value.forEach((account) => nextAccounts.push({
+        ...account,
+        worker,
+        management_key: `${worker.id}:${account.remote_account_id}`
+      }))
+    })
+    workerAccounts.value = nextAccounts
+    workerAccountLoadErrors.value = failures
+  } catch (error) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.accounts.workerAccountsLoadFailed')))
+  } finally {
+    if (sequence === workerAccountLoadSequence) workerAccountsLoading.value = false
+  }
+}
+
+async function handleAccountCreated(result?: { workerId?: number }) {
+  if (!result?.workerId) {
+    await reload()
+    return
+  }
+  workerAccountFilter.value = String(result.workerId)
+  await setAccountScope('worker')
+  await loadWorkerAccounts()
+}
+
+function openWorkerAccountEdit(account: ManagedWorkerAccount) {
+  workerAccountPendingEdit.value = account
+  Object.assign(workerAccountEditForm, {
+    name: account.name,
+    base_url: workerAccountMetadata(account, 'base_url'),
+    models: workerAccountMetadata(account, 'models'),
+    group: workerAccountMetadata(account, 'group'),
+    test_model: workerAccountMetadata(account, 'test_model')
+  })
+}
+
+function closeWorkerAccountEdit() {
+  if (workerAccountBusy.value === 'edit') return
+  workerAccountPendingEdit.value = null
+}
+
+async function saveWorkerAccountEdit() {
+  const account = workerAccountPendingEdit.value
+  if (!account || workerAccountBusy.value) return
+  workerAccountBusy.value = 'edit'
+  try {
+    await adminAPI.workers.updateAccount(account.worker_id, account.remote_account_id, {
+      name: workerAccountEditForm.name,
+      kind: account.kind,
+      base_url: workerAccountEditForm.base_url || undefined,
+      models: workerAccountEditForm.models || undefined,
+      group: workerAccountEditForm.group || undefined,
+      test_model: workerAccountEditForm.test_model || undefined
+    })
+    workerAccountPendingEdit.value = null
+    appStore.showSuccess(t('admin.accounts.workerAccountUpdated'))
+    await loadWorkerAccounts()
+  } catch (error) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.accounts.workerAccountUpdateFailed')))
+  } finally {
+    workerAccountBusy.value = ''
+  }
+}
+
+function openWorkerAccountMenu(account: ManagedWorkerAccount, event: MouseEvent) {
+  const target = event.currentTarget as HTMLElement | null
+  if (!target) return
+  const position = getFloatingPanelPosition(
+    target.getBoundingClientRect(),
+    document.documentElement.clientWidth || window.innerWidth,
+    window.innerHeight,
+    { maxWidth: 208, minComfortableHeight: 120 }
+  )
+  workerAccountMenu.account = account
+  Object.assign(workerAccountMenu.position, position)
+  workerAccountMenu.show = true
+}
+
+function closeWorkerAccountMenu() {
+  workerAccountMenu.show = false
+  workerAccountMenu.account = null
+}
+
+function runWorkerAccountTestFromMenu() {
+  const account = workerAccountMenu.account
+  closeWorkerAccountMenu()
+  if (account) workerAccountPendingTest.value = account
+}
+
+async function runWorkerAccountRefreshFromMenu() {
+  const account = workerAccountMenu.account
+  closeWorkerAccountMenu()
+  if (account) await refreshWorkerAccount(account)
+}
+
+async function refreshWorkerAccount(account: ManagedWorkerAccount) {
+  const action = `${account.management_key}:refresh`
+  if (workerAccountBusy.value) return
+  workerAccountBusy.value = action
+  try {
+    await adminAPI.workers.refreshAccount(account.worker_id, account.remote_account_id)
+    appStore.showSuccess(t('admin.accounts.workerCredentialRefreshed'))
+    await loadWorkerAccounts()
+  } catch (error) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.accounts.workerCredentialRefreshFailed')))
+  } finally {
+    workerAccountBusy.value = ''
+  }
+}
+
+async function deleteWorkerAccount() {
+  const account = workerAccountPendingDelete.value
+  if (!account) return
+  try {
+    await adminAPI.workers.deleteAccount(account.worker_id, account.remote_account_id)
+    workerAccountPendingDelete.value = null
+    appStore.showSuccess(t('admin.accounts.workerAccountDeleted'))
+    await loadWorkerAccounts()
+  } catch (error) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.accounts.workerAccountDeleteFailed')))
+  }
+}
+
+watch(workerAccountFilter, (value) => {
+  if (accountScope.value !== 'worker') return
+  const query: Record<string, any> = { ...route.query, account_scope: 'worker' }
+  if (value) query.worker_id = value
+  else delete query.worker_id
+  void router.replace({ query })
+})
+
 onMounted(async () => {
   if (typeof window !== 'undefined') {
     desktopViewportMediaQuery = window.matchMedia(desktopViewportQuery)
@@ -2453,6 +3003,7 @@ onMounted(async () => {
   }
 
   load()
+  if (accountScope.value === 'worker') void loadWorkerAccounts()
   loadUpstreamBillingProbeGlobalState()
   const [proxiesResult, groupsResult] = await Promise.allSettled([
     adminAPI.proxies.getAll(),
@@ -2508,5 +3059,9 @@ onUnmounted(() => {
 
 .account-tools-menu-icon {
   @apply inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md;
+}
+
+.worker-account-action {
+  @apply inline-flex min-w-[3.25rem] flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-dark-400 dark:hover:bg-dark-700 dark:hover:text-primary-300;
 }
 </style>

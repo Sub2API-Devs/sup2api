@@ -245,6 +245,19 @@ func (h *Handler) serveAccountAction(w http.ResponseWriter, r *http.Request, pat
 		writeJSON(w, http.StatusOK, map[string]any{"deleted": true})
 		return
 	}
+	if r.Method == http.MethodPut && len(parts) == 1 {
+		var input managerpkg.AccountInput
+		if !decodeJSON(w, r, &input) {
+			return
+		}
+		account, err := h.manager.UpdateAccount(id, input)
+		if err != nil {
+			writeManagerError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"account": account})
+		return
+	}
 	if r.Method != http.MethodPost || len(parts) != 2 {
 		writeError(w, http.StatusNotFound, "not_found", "Worker account route was not found")
 		return

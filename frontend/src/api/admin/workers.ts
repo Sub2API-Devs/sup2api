@@ -218,6 +218,14 @@ export async function createAccount(id: number, input: WorkerAccountInput): Prom
   return data
 }
 
+export async function updateAccount(workerId: number, accountId: string, input: WorkerAccountInput): Promise<WorkerAccount> {
+  const { data } = await apiClient.put<WorkerAccount>(
+    `/admin/workers/${workerId}/accounts/${encodeURIComponent(accountId)}`,
+    input
+  )
+  return data
+}
+
 export async function startOAuth(id: number, input: WorkerAccountInput): Promise<{ session_id: string; authorize_url: string; expires_in: number }> {
   const { data } = await apiClient.post<{ session_id: string; authorize_url: string; expires_in: number }>(
     `/admin/workers/${id}/accounts/openai/oauth/start`, input
@@ -237,9 +245,16 @@ export async function refreshAccount(workerId: number, accountId: string): Promi
   return data
 }
 
-export async function testAccount(workerId: number, accountId: string, input: { model?: string; endpoint_type?: string; stream?: boolean } = {}): Promise<Record<string, unknown>> {
+export async function testAccount(
+  workerId: number,
+  accountId: string,
+  input: { model?: string; endpoint_type?: string; stream?: boolean } = {},
+  options?: { signal?: AbortSignal }
+): Promise<Record<string, unknown>> {
   const { data } = await apiClient.post<Record<string, unknown>>(
-    `/admin/workers/${workerId}/accounts/${encodeURIComponent(accountId)}/test`, input
+    `/admin/workers/${workerId}/accounts/${encodeURIComponent(accountId)}/test`,
+    input,
+    { signal: options?.signal, timeout: 45_000 }
   )
   return data
 }
@@ -297,6 +312,7 @@ export default {
   listAccounts,
   createAPIKeyAccount,
   createAccount,
+  updateAccount,
   startOAuth,
   completeOAuth,
   refreshAccount,

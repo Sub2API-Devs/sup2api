@@ -701,6 +701,21 @@ func (s *WorkerService) CreateAccount(ctx context.Context, workerID int64, input
 	return s.persistRemoteAccount(ctx, workerID, response.Account)
 }
 
+func (s *WorkerService) UpdateAccount(ctx context.Context, workerID int64, remoteAccountID string, input WorkerAccountCreateInput) (*WorkerAccount, error) {
+	worker, key, err := s.workerCredential(ctx, workerID)
+	if err != nil {
+		return nil, err
+	}
+	var response struct {
+		Account map[string]any `json:"account"`
+	}
+	path := "/worker/v1/accounts/" + url.PathEscape(remoteAccountID)
+	if err := s.remote.Put(ctx, worker.BaseURL, key, path, input, &response); err != nil {
+		return nil, err
+	}
+	return s.persistRemoteAccount(ctx, workerID, response.Account)
+}
+
 func (s *WorkerService) StartOAuth(ctx context.Context, workerID int64, input WorkerAccountCreateInput) (map[string]any, error) {
 	worker, key, err := s.workerCredential(ctx, workerID)
 	if err != nil {

@@ -1,6 +1,7 @@
 package workermanagement
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -254,6 +255,43 @@ func (m *Manager) CreateAccount(input AccountInput) (*workervault.Summary, error
 	return &summary, nil
 }
 
+func (m *Manager) UpdateAccount(id string, input AccountInput) (*workervault.Summary, error) {
+	existing, err := m.vault.Get(strings.TrimSpace(id))
+	if err != nil {
+		return nil, err
+	}
+	if err := validateAccountInput(input); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(input.Kind) != "" {
+		kind, kindErr := normalizeAccountKind(input.Kind)
+		if kindErr != nil {
+			return nil, kindErr
+		}
+		if kind != existing.Kind {
+			return nil, errors.New("Worker account kind cannot be changed")
+		}
+	}
+	baseURL := existing.BaseURL
+	if strings.TrimSpace(input.BaseURL) != "" {
+		baseURL, err = normalizeBaseURL(input.BaseURL, defaultBaseURLForKind(existing.Kind))
+		if err != nil {
+			return nil, err
+		}
+	}
+	existing.Name = strings.TrimSpace(input.Name)
+	existing.BaseURL = baseURL
+	existing.Models = strings.TrimSpace(input.Models)
+	existing.Group = strings.TrimSpace(input.Group)
+	existing.TestModel = strings.TrimSpace(input.TestModel)
+	existing.UpdatedAt = m.cfg.Now().UTC()
+	if err := m.vault.Put(existing); err != nil {
+		return nil, err
+	}
+	summary := existing.Summary()
+	return &summary, nil
+}
+
 func (m *Manager) ListProxies() ([]workervault.ProxySummary, error) {
 	proxies, err := m.vault.ListProxies()
 	if err != nil {
@@ -472,22 +510,30 @@ func (m *Manager) Refresh(ctx context.Context, id string) (*workervault.Summary,
 	return &summary, nil
 }
 
-func (m *Manager) TestAccount(ctx context.Context, id string, _ TestInput) (map[string]any, error) {
+func (m *Manager) TestAccount(ctx context.Context, id string, input TestInput) (map[string]any, error) {
 	account, err := m.vault.Get(strings.TrimSpace(id))
 	if err != nil {
 		return nil, err
 	}
 	started := m.cfg.Now()
-	req, err := accountTestRequest(ctx, account)
+	model, err := resolveAccountTestModel(account, input.Model)
+	if err != nil {
+		return nil, err
+	}
+	req, err := accountTestRequest(ctx, account, model)
 	if err != nil {
 		return nil, err
 	}
 	resp, requestErr := m.cfg.HTTPClient.Do(req)
 	status := 0
+	var responseBody []byte
 	if resp != nil {
 		status = resp.StatusCode
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
+		responseBody, err = io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 		_ = resp.Body.Close()
+		if err != nil && requestErr == nil {
+			requestErr = fmt.Errorf("read upstream test response: %w", err)
+		}
 	}
 	account.LastTestAt = m.cfg.Now().Unix()
 	account.LastTestStatus = status
@@ -509,7 +555,14 @@ func (m *Manager) TestAccount(ctx context.Context, id string, _ TestInput) (map[
 	if err := m.vault.Put(account); err != nil {
 		return nil, err
 	}
-	return map[string]any{"ok": true, "status_code": status, "latency_ms": time.Since(started).Milliseconds(), "account": account.Summary()}, nil
+	result := map[string]any{"ok": true, "status_code": status, "latency_ms": time.Since(started).Milliseconds(), "account": account.Summary()}
+	if model != "" {
+		result["model"] = model
+	}
+	if responseText := accountTestResponseText(responseBody); responseText != "" {
+		result["response_text"] = responseText
+	}
+	return result, nil
 }
 
 func (m *Manager) DeleteAccount(id string) error {
@@ -617,13 +670,68 @@ func defaultBaseURLForKind(kind string) string {
 	return defaultAPIBaseURL
 }
 
-func accountTestRequest(ctx context.Context, account *workervault.Account) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, accountModelsURL(account.Kind, account.BaseURL), nil)
+func resolveAccountTestModel(account *workervault.Account, requested string) (string, error) {
+	model := strings.TrimSpace(requested)
+	if model == "" {
+		model = strings.TrimSpace(account.TestModel)
+	}
+	if model == "" {
+		model = strings.TrimSpace(strings.Split(account.Models, ",")[0])
+	}
+	if len(model) > 255 || strings.ContainsAny(model, "\r\n\x00") {
+		return "", errors.New("test model is invalid")
+	}
+	return model, nil
+}
+
+func accountTestRequest(ctx context.Context, account *workervault.Account, model string) (*http.Request, error) {
+	method := http.MethodGet
+	requestURL := accountModelsURL(account.Kind, account.BaseURL)
+	var body io.Reader
+	if model != "" {
+		method = http.MethodPost
+		var payload any
+		switch account.Kind {
+		case "anthropic_api_key", "antigravity_api_key":
+			requestURL = accountAPIURL(account.BaseURL, "/messages", "v1")
+			payload = map[string]any{
+				"model": model, "max_tokens": 256,
+				"messages": []map[string]any{{"role": "user", "content": "hi"}},
+			}
+		case "gemini_api_key":
+			requestURL = accountGeminiGenerateURL(account.BaseURL, model)
+			payload = map[string]any{
+				"contents":         []map[string]any{{"parts": []map[string]string{{"text": "hi"}}}},
+				"generationConfig": map[string]any{"maxOutputTokens": 256},
+			}
+		case "openai_oauth":
+			requestURL = accountAPIURL(account.BaseURL, "/responses", "")
+			payload = map[string]any{
+				"model": model, "input": "hi", "stream": false, "store": false,
+				"max_output_tokens": 256,
+			}
+		default:
+			requestURL = accountAPIURL(account.BaseURL, "/chat/completions", "v1")
+			payload = map[string]any{
+				"model": model, "max_tokens": 256, "stream": false,
+				"messages": []map[string]any{{"role": "user", "content": "hi"}},
+			}
+		}
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			return nil, err
+		}
+		body = bytes.NewReader(encoded)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, requestURL, body)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "codex-cli/0.91.0")
+	if method == http.MethodPost {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	switch account.Kind {
 	case "anthropic_api_key", "antigravity_api_key":
 		req.Header.Set("x-api-key", account.APIKey)
@@ -639,6 +747,110 @@ func accountTestRequest(ctx context.Context, account *workervault.Account) (*htt
 		req.Header.Set("Authorization", "Bearer "+account.APIKey)
 	}
 	return req, nil
+}
+
+func accountAPIURL(baseURL, endpoint, defaultVersion string) string {
+	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if strings.HasSuffix(base, endpoint) {
+		return base
+	}
+	for _, suffix := range []string{"/v1", "/v1beta", "/v3", "/v4", "/paas/v4", "/codex"} {
+		if strings.HasSuffix(base, suffix) {
+			return base + endpoint
+		}
+	}
+	if defaultVersion != "" {
+		return base + "/" + defaultVersion + endpoint
+	}
+	return base + endpoint
+}
+
+func accountGeminiGenerateURL(baseURL, model string) string {
+	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if !strings.HasSuffix(base, "/v1beta") {
+		base += "/v1beta"
+	}
+	return base + "/models/" + url.PathEscape(model) + ":generateContent"
+}
+
+func accountTestResponseText(raw []byte) string {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" {
+		return ""
+	}
+	var payload any
+	if json.Unmarshal(raw, &payload) == nil {
+		paths := [][]any{
+			{"choices", 0, "message", "content"},
+			{"choices", 0, "message", "reasoning"},
+			{"choices", 0, "text"},
+			{"output_text"},
+			{"output", 0, "content", 0, "text"},
+			{"content", 0, "text"},
+			{"candidates", 0, "content", "parts", 0, "text"},
+		}
+		for _, path := range paths {
+			if text := accountTestJSONText(jsonPathValue(payload, path...)); text != "" {
+				return truncateAccountTestResponse(text)
+			}
+		}
+		if compact, err := json.Marshal(payload); err == nil {
+			trimmed = string(compact)
+		}
+	}
+	return truncateAccountTestResponse(trimmed)
+}
+
+func jsonPathValue(value any, path ...any) any {
+	current := value
+	for _, segment := range path {
+		switch key := segment.(type) {
+		case string:
+			object, ok := current.(map[string]any)
+			if !ok {
+				return nil
+			}
+			current = object[key]
+		case int:
+			items, ok := current.([]any)
+			if !ok || key < 0 || key >= len(items) {
+				return nil
+			}
+			current = items[key]
+		default:
+			return nil
+		}
+	}
+	return current
+}
+
+func accountTestJSONText(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case []any:
+		parts := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if text := accountTestJSONText(item); text != "" {
+				parts = append(parts, text)
+			}
+		}
+		return strings.Join(parts, "\n")
+	case map[string]any:
+		if text, ok := typed["text"]; ok {
+			return accountTestJSONText(text)
+		}
+	}
+	return ""
+}
+
+func truncateAccountTestResponse(value string) string {
+	const maxRunes = 8192
+	runes := []rune(strings.TrimSpace(value))
+	if len(runes) <= maxRunes {
+		return string(runes)
+	}
+	return string(runes[:maxRunes]) + "…"
 }
 
 func accountModelsURL(kind, baseURL string) string {
