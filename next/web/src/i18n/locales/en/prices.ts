@@ -1,26 +1,29 @@
 export default {
   title: 'Model prices',
-  description: 'Billing expressions per model. Admin prices take precedence over plugin defaults.',
+  description: 'Billing expressions per model. Prices are maintained by admins: entered manually or imported from a sync source.',
   scopeNote: 'Prices are set globally per model, whatever endpoint or account type serves the request. The expression gives the base price; the amount charged = base price × group rate multiplier.',
   new: 'New price',
   newTitle: 'New price',
   editTitle: 'Edit price · {name}',
   editTitleShort: 'Edit price',
-  pluginDefaultReadonly: 'Default price provided by plugin {plugin}. It is read-only; override it to create an admin price.',
   source: {
-    admin: 'Admin',
-    plugin_default: 'Plugin default'
+    manual: 'Manual',
+    sync: 'Synced'
   },
-  override: 'Override',
-  overridden: 'Admin copy created',
-  overrideNote: '"Override" copies a plugin default price into an admin price; plugin upgrades never change admin prices.',
+  sourceSync: 'Synced · {name}',
+  fromSource: 'Source: {name}',
+  clearSourceFilter: 'Clear source filter',
+  syncPrices: 'Sync prices',
+  viewSources: 'Sync sources',
+  syncedNotice: 'Synced from {source} at {time}. Editing the price turns it into a manual price, and later syncs no longer overwrite it (unless you tick it in the sync preview).',
+  syncedNoticeDeleted: 'a deleted sync source',
   basic: 'Basic',
   model: 'Model',
   modelHint: 'Complete model id, e.g. claude-sonnet-4-5 (wildcards are not allowed; aliases and dated ids are priced separately)',
   modelInvalid: 'Use a complete model id: letters, digits and . _ : / @ + - only, no wildcards or spaces',
   modeCol: 'Mode',
   summaryCol: 'Summary',
-  searchPlaceholder: 'Model, note, plugin…',
+  searchPlaceholder: 'Model, note…',
   exprHash: 'Expression hash',
   viewHistory: 'View expression',
   billingMode: 'Billing mode',
@@ -138,5 +141,119 @@ export default {
     tz: 'time zone',
     hour: '{h}:00',
     multiplier: 'multiplier'
+  },
+  def: {
+    perRequest: '{price} / request',
+    perMillion: '/M',
+    otherwise: 'otherwise',
+    rules: '+ {n} markup rule(s)'
+  },
+  sources: {
+    title: 'Price sync sources',
+    description: 'Import prices from public price catalogs or an upstream sup2api instance. Syncs are started by an admin: preview the differences, tick the models to import, then apply.',
+    back: 'Back to prices',
+    create: 'New source',
+    editTitle: 'Edit source · {name}',
+    kindCol: 'Type',
+    url: 'URL',
+    lastSynced: 'Last synced',
+    lastError: 'Error',
+    priceCount: 'Prices',
+    never: 'never',
+    preview: 'Preview sync',
+    empty: 'No sync sources yet.',
+    kind: {
+      litellm: 'LiteLLM',
+      models_dev: 'models.dev',
+      sup2api: 'Upstream sup2api'
+    },
+    kindHint: {
+      litellm: 'The public price table maintained by LiteLLM (model_prices_and_context_window.json), covering the major vendors.',
+      models_dev: 'The public model and price catalog of models.dev, organized by vendor.',
+      sup2api: 'An upstream sup2api instance: reads upstream prices with the API key the upstream issued to us.'
+    },
+    urlHint: {
+      litellm: 'The default URL was filled in when you picked the type; usually no change is needed.',
+      models_dev: 'The default URL was filled in when you picked the type; usually no change is needed.',
+      sup2api: 'Upstream address, e.g. https://up.example.com'
+    },
+    urlInvalid: 'Enter a URL starting with http:// or https://',
+    apiKey: 'API key',
+    apiKeyHint: 'The key the upstream issued to us (sk-s2a-...)',
+    apiKeyRequired: 'An upstream sup2api source needs an API key',
+    apiKeyStored: 'saved (hidden)',
+    apiKeyKeep: 'A key is saved; leave empty to keep it.',
+    apiKeyClear: 'Clear the saved key',
+    hasKey: 'key set',
+    providers: 'Vendors',
+    providersHint: {
+      litellm: 'LiteLLM litellm_provider values such as anthropic, openai, gemini; only models of these vendors are imported. Press Enter to add.',
+      models_dev: 'models.dev vendor ids such as anthropic, openai, google; only models of these vendors are imported. Press Enter to add.'
+    },
+    providersPlaceholder: 'Type a vendor and press Enter',
+    applyMultiplier: 'Apply the upstream group rate',
+    applyMultiplierHint: 'Multiplies prices by the rate of the group the upstream key belongs to, i.e. imports what we actually pay upstream.',
+    multiplierOn: 'with group rate',
+    multiplierOff: 'base prices',
+    deleteConfirm: 'Delete the sync source "{name}"? The {n} price(s) imported from it are kept but no longer linked to this source.',
+    viewPrices: 'View these prices'
+  },
+  sync: {
+    title: 'Sync preview · {name}',
+    fetching: 'Fetching prices from {name} and comparing…',
+    fetchFailed: 'Fetch failed',
+    retry: 'Retry',
+    refetch: 'Fetch again',
+    fetchedAt: 'Fetched at {time}, {total} model(s)',
+    stats: {
+      create: 'New',
+      update: 'Update',
+      manual: 'Differs from manual',
+      unchanged: 'Unchanged',
+      skipped: 'Skipped'
+    },
+    skippedHint: 'Entries of the source that cannot be turned into a price (e.g. no token prices)',
+    tabs: {
+      pending: 'With differences',
+      create: 'New',
+      update: 'Update',
+      manual: 'Differs from manual',
+      unchanged: 'Unchanged'
+    },
+    action: {
+      create: 'New',
+      update: 'Update',
+      manual: 'Differs from manual',
+      unchanged: 'Unchanged'
+    },
+    searchPlaceholder: 'Search models…',
+    selectAll: 'Select all ({n})',
+    selectNone: 'Select none',
+    selectScope: 'applies to the current filter only',
+    selected: '{n} model(s) selected',
+    selectedManual: '{n} of them overwrite manual prices',
+    incoming: 'New price',
+    current: 'Current price',
+    noCurrent: 'none locally',
+    manualWarn: 'overwrites a manual price',
+    unchangedHint: 'Same price, nothing to import',
+    currentSync: 'synced',
+    currentManual: 'manual',
+    currentDisabled: 'disabled',
+    empty: 'No models match.',
+    apply: 'Apply selected ({n})',
+    applyConfirmTitle: 'Confirm import',
+    applyConfirm: 'Import the prices of {n} model(s)?',
+    applyConfirmManual: 'Import the prices of {n} model(s)? {m} manual price(s) will be overwritten with synced prices.',
+    resultTitle: 'Sync result',
+    result: {
+      created: 'Created',
+      updated: 'Updated',
+      unchanged: 'Unchanged',
+      skipped: 'Skipped'
+    },
+    skippedList: 'Skipped models',
+    reason: 'Reason',
+    viewPrices: 'View prices'
   }
 }

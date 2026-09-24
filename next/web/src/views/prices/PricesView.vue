@@ -1,22 +1,43 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
 import { SBadge, SButton, SPageHeader, SPagination, SSelect, SSwitch, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
 import type { Price } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
-import { formatMoney } from '@/utils/format'
+import { formatDateTime, formatMoney } from '@/utils/format'
 import { summarize, type PriceSummary } from './priceExpr'
 
 const { t } = useI18n()
+const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const canManage = computed(() => auth.has('price:manage'))
 
-const { items, loading, page, pageSize, total, filters, reload } = useList<Price>('/prices', { mode: '', q: '' })
+function queryStr(k: string): string {
+  const v = route.query[k]
+  return typeof v === 'string' ? v : ''
+}
+const querySource = () => (/^\d+$/.test(queryStr('sync_source_id')) ? queryStr('sync_source_id') : '')
+
+// ?source= and ?sync_source_id= come from the sync sources page ("view these prices").
+const { items, loading, page, pageSize, total, filters, reload } = useList<Price>('/prices', {
+  mode: '',
+  source: ['manual', 'sync'].includes(queryStr('source')) ? queryStr('source') : '',
+  sync_source_id: querySource(),
+  q: ''
+})
+
+watch(
+  () => route.query.sync_source_id,
+  () => {
+    const s = querySource()
+    if (s !== filters.sync_source_id) filters.sync_source_id = s
+  }
+)
 
 const modeOptions = computed(() => [
   { value: '', label: t('common.all') },
@@ -25,21 +46,43 @@ const modeOptions = computed(() => [
   { value: 'expression', label: t('prices.mode.expression') }
 ])
 
+const sourceOptions = computed(() => [
+  { value: '', label: t('common.all') },
+  { value: 'manual', label: t('prices.source.manual') },
+  { value: 'sync', label: t('prices.source.sync') }
+])
+
 // Client-side filter as a fallback in case the server ignores a query parameter.
 const rows = computed(() =>
   items.value.filter((p) => {
     if (filters.mode && p.mode !== filters.mode) return false
+    if (filters.source && p.source !== filters.source) return false
+    if (filters.sync_source_id && String(p.sync_source_id ?? '') !== String(filters.sync_source_id)) return false
     const q = String(filters.q || '').trim().toLowerCase()
-    if (q && !`${p.model} ${p.note || ''} ${p.plugin_key || ''}`.toLowerCase().includes(q)) return false
+    if (q && !`${p.model} ${p.note || ''}`.toLowerCase().includes(q)) return false
     return true
   })
 )
+
+/** Name of the source filtered by ?sync_source_id=, taken from the loaded rows. */
+const filteredSourceName = computed(() => {
+  if (!filters.sync_source_id) return ''
+  const hit = items.value.find((p) => String(p.sync_source_id) === String(filters.sync_source_id) && p.sync_source_name)
+  return hit?.sync_source_name || `#${filters.sync_source_id}`
+})
+
+function clearSourceFilter() {
+  filters.sync_source_id = ''
+  const q = { ...route.query }
+  delete q.sync_source_id
+  router.replace({ query: q })
+}
 
 const columns = computed<TableColumn[]>(() => [
   { key: 'model', label: t('prices.model') },
   { key: 'mode', label: t('prices.modeCol'), width: '100px' },
   { key: 'summary', label: t('prices.summaryCol') },
-  { key: 'source', label: t('common.source'), width: '150px' },
+  { key: 'source', label: t('common.source'), width: '170px' },
   { key: 'enabled', label: t('common.enabled'), width: '90px' },
   { key: 'actions', label: t('common.actions'), align: 'right', width: '150px' }
 ])
@@ -47,7 +90,7 @@ const columns = computed<TableColumn[]>(() => [
 function summaryOf(p: Price): PriceSummary {
   const s = summarize(p.mode, p.config, p.expression)
   // Prefer the server analysis (tiers/rules) for expressions the parser cannot map.
-  const an = (p as Price & { analysis?: { tiers?: unknown; rules?: unknown } }).analysis
+  const an = p.analysis as { tiers?: unknown; rules?: unknown } | undefined
   if (s.kind === 'custom' && an && (an.tiers !== undefined || an.rules !== undefined)) {
     const count = (x: unknown) => (Array.isArray(x) ? x.length : typeof x === 'number' ? x : 0)
     const names = Array.isArray(an.tiers) ? an.tiers.map((x: any) => (typeof x === 'string' ? x : x?.name)).filter(Boolean) : []
@@ -62,6 +105,11 @@ function price(v: number | null) {
 
 function modeTone(m: string) {
   return m === 'expression' ? 'purple' : m === 'per_token' ? 'primary' : 'gray'
+}
+
+function sourceLabel(p: Price): string {
+  if (p.source === 'sync') return p.sync_source_name ? t('prices.sourceSync', { name: p.sync_source_name }) : t('prices.source.sync')
+  return t('prices.source.manual')
 }
 
 const toggling = ref(new Set<number>())
@@ -82,17 +130,6 @@ async function toggle(p: Price, v: boolean) {
   }
 }
 
-async function override(p: Price) {
-  try {
-    const r = await api.post<Price>(`/prices/${p.id}/override`)
-    toast(t('prices.overridden'), 'success')
-    if (r?.id) router.push(`/prices/${r.id}`)
-    else reload()
-  } catch (e) {
-    notifyError(e)
-  }
-}
-
 async function remove(p: Price) {
   const ok = await confirm({ message: t('common.confirmDelete', { name: p.model }), danger: true })
   if (!ok) return
@@ -110,6 +147,8 @@ async function remove(p: Price) {
   <div>
     <SPageHeader :title="t('prices.title')" :description="t('prices.description')">
       <template #actions>
+        <SButton v-if="canManage" data-testid="price-sync" @click="router.push('/prices/sources')">{{ t('prices.syncPrices') }}</SButton>
+        <SButton v-else variant="ghost" data-testid="price-sources" @click="router.push('/prices/sources')">{{ t('prices.viewSources') }}</SButton>
         <SButton v-if="canManage" variant="primary" @click="router.push('/prices/new')">+ {{ t('prices.new') }}</SButton>
       </template>
       <template #filters>
@@ -117,9 +156,19 @@ async function remove(p: Price) {
           <label class="input-label">{{ t('prices.modeCol') }}</label>
           <SSelect v-model="filters.mode" :options="modeOptions" />
         </div>
+        <div class="w-36" data-testid="price-source-filter">
+          <label class="input-label">{{ t('common.source') }}</label>
+          <SSelect v-model="filters.source" :options="sourceOptions" />
+        </div>
         <div class="w-64">
           <label class="input-label">{{ t('common.search') }}</label>
           <input v-model="filters.q" class="input" :placeholder="t('prices.searchPlaceholder')" />
+        </div>
+        <div v-if="filters.sync_source_id" class="pb-1.5" data-testid="price-source-chip">
+          <span class="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-1 text-xs text-sky-700 dark:bg-sky-900/20 dark:text-sky-300">
+            {{ t('prices.fromSource', { name: filteredSourceName }) }}
+            <button class="ml-0.5 font-semibold" :title="t('prices.clearSourceFilter')" :aria-label="t('prices.clearSourceFilter')" @click="clearSourceFilter">×</button>
+          </span>
         </div>
       </template>
     </SPageHeader>
@@ -152,21 +201,16 @@ async function remove(p: Price) {
           </template>
         </template>
         <template #cell-source="{ row }">
-          <SBadge :tone="row.source === 'admin' ? 'primary' : 'purple'">
-            {{ row.source === 'admin' ? t('prices.source.admin') : t('prices.source.plugin_default') }}
-          </SBadge>
-          <span v-if="row.plugin_key" class="muted ml-1 text-xs">{{ row.plugin_key }}</span>
+          <span :title="row.source === 'sync' && row.synced_at ? formatDateTime(row.synced_at) : undefined" data-testid="price-source">
+            <SBadge :tone="row.source === 'sync' ? 'info' : 'primary'">{{ sourceLabel(row) }}</SBadge>
+          </span>
         </template>
         <template #cell-enabled="{ row }">
           <SSwitch :model-value="row.enabled" :disabled="!canManage || toggling.has(row.id)" @update:model-value="toggle(row, $event)" />
         </template>
         <template #cell-actions="{ row }">
           <div class="flex justify-end gap-1">
-            <template v-if="row.source === 'plugin_default'">
-              <SButton v-if="canManage" size="sm" variant="ghost" @click="override(row)">{{ t('prices.override') }}</SButton>
-              <SButton size="sm" variant="ghost" @click="router.push(`/prices/${row.id}`)">{{ t('common.view') }}</SButton>
-            </template>
-            <template v-else-if="canManage">
+            <template v-if="canManage">
               <SButton size="sm" variant="ghost" @click="router.push(`/prices/${row.id}`)">{{ t('common.edit') }}</SButton>
               <SButton size="sm" variant="ghost" class="!text-red-600" @click="remove(row)">{{ t('common.delete') }}</SButton>
             </template>
@@ -176,6 +220,5 @@ async function remove(p: Price) {
       </STable>
     </div>
     <SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" />
-    <p class="muted mt-2 text-xs">{{ t('prices.overrideNote') }}</p>
   </div>
 </template>

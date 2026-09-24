@@ -45,7 +45,6 @@ const priceId = computed(() => {
 
 const loading = ref(false)
 const saving = ref(false)
-const overriding = ref(false)
 const price = ref<Price | null>(null)
 const form = reactive({ model: '', note: '', enabled: true })
 const mode = ref<PriceMode>('per_token')
@@ -58,8 +57,16 @@ const notVisual = ref(false)
 const errors = ref<Record<string, string>>({})
 const historyOpen = ref(false)
 
-const readonly = computed(() => !auth.has('price:manage') || price.value?.source === 'plugin_default')
-const isPluginDefault = computed(() => price.value?.source === 'plugin_default')
+const readonly = computed(() => !auth.has('price:manage'))
+const isSynced = computed(() => price.value?.source === 'sync')
+const syncedNotice = computed(() => {
+  const p = price.value
+  if (!p || p.source !== 'sync') return ''
+  return t('prices.syncedNotice', {
+    source: p.sync_source_name || t('prices.syncedNoticeDeleted'),
+    time: p.synced_at ? formatDateTime(p.synced_at) : '—'
+  })
+})
 
 // ------------------------------------------------------------------ load
 
@@ -295,20 +302,6 @@ async function save() {
   }
 }
 
-async function override() {
-  if (!price.value) return
-  overriding.value = true
-  try {
-    const r = await api.post<Price>(`/prices/${price.value.id}/override`)
-    toast(t('prices.overridden'), 'success')
-    if (r?.id) router.push(`/prices/${r.id}`)
-  } catch (e) {
-    notifyError(e)
-  } finally {
-    overriding.value = false
-  }
-}
-
 // Declared last: load() -> resetForm() touches the validation state above.
 watch(priceId, load, { immediate: true })
 
@@ -321,27 +314,32 @@ const title = computed(() => {
 
 <template>
   <div class="space-y-5">
-    <SPageHeader :title="title" :description="isPluginDefault ? t('prices.pluginDefaultReadonly', { plugin: price?.plugin_key || '—' }) : undefined">
+    <SPageHeader :title="title">
       <template #before>
         <button class="btn btn-ghost btn-sm !px-1.5" :title="t('common.back')" @click="router.push('/prices')">
           <SIcon name="arrow-left" class="h-4 w-4" />
         </button>
       </template>
       <template #title-extra>
-        <SBadge v-if="price" :tone="price.source === 'admin' ? 'primary' : 'purple'">
-          {{ price.source === 'admin' ? t('prices.source.admin') : t('prices.source.plugin_default') }}
+        <SBadge v-if="price" :tone="isSynced ? 'info' : 'primary'" data-testid="price-edit-source">
+          {{ isSynced && price.sync_source_name ? t('prices.sourceSync', { name: price.sync_source_name }) : t(`prices.source.${isSynced ? 'sync' : 'manual'}`) }}
         </SBadge>
       </template>
       <template #actions>
-        <SButton v-if="isPluginDefault && auth.has('price:manage')" variant="primary" :loading="overriding" @click="override">
-          {{ t('prices.override') }}
-        </SButton>
         <template v-if="!readonly">
           <SButton @click="router.push('/prices')">{{ t('common.cancel') }}</SButton>
           <SButton variant="primary" :loading="saving" @click="save">{{ t('common.save') }}</SButton>
         </template>
       </template>
     </SPageHeader>
+
+    <p
+      v-if="syncedNotice && !loading"
+      class="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-800 dark:bg-sky-900/20 dark:text-sky-200"
+      data-testid="price-synced-notice"
+    >
+      {{ syncedNotice }}
+    </p>
 
     <div v-if="loading" class="py-16 text-center"><SSpinner size="lg" /></div>
     <template v-else>

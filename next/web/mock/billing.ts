@@ -1,4 +1,4 @@
-// Mock handlers: prices, usage, ledger, billing/sticky settings, sticky rules.
+// Mock handlers: prices, price sync sources, usage, ledger, billing/sticky settings, sticky rules.
 // (POST /users/:id/balance/adjust and GET /me/balance live in resources.ts / core.ts.)
 import { createHash } from 'node:crypto'
 import { fail, nextId, noContent, now, on, paginate, type MockRequest } from './router'
@@ -178,10 +178,13 @@ interface MockPrice {
   expression: string
   expr_version: number
   expr_hash: string
-  source: 'plugin_default' | 'admin'
-  plugin_key: string | null
+  /** manual: entered by an admin; sync: imported from a price source. */
+  source: 'manual' | 'sync'
+  sync_source_id: number | null
+  synced_at: string | null
   enabled: boolean
   note: string
+  updated_by: number | null
   updated_at: string
 }
 
@@ -193,17 +196,122 @@ function remember(expression: string) {
   return h
 }
 
-function mkPrice(p: Omit<MockPrice, 'expr_hash' | 'expr_version' | 'updated_at' | 'expression'> & { expression?: string }): MockPrice {
+type PriceSeed = Omit<MockPrice, 'expr_hash' | 'expr_version' | 'updated_at' | 'expression' | 'sync_source_id' | 'synced_at' | 'updated_by'> & {
+  expression?: string
+  sync_source_id?: number | null
+}
+
+function mkPrice(p: PriceSeed): MockPrice {
   const expression = p.mode === 'expression' && p.expression ? p.expression : genExpr(p.mode, p.config)
-  return { ...p, expression, expr_version: 1, expr_hash: remember(expression), updated_at: now(-86400) }
+  const synced = p.source === 'sync'
+  return {
+    ...p,
+    expression,
+    expr_version: 1,
+    expr_hash: remember(expression),
+    sync_source_id: synced ? p.sync_source_id ?? null : null,
+    synced_at: synced ? now(-2 * 86400) : null,
+    updated_by: 1,
+    updated_at: now(-86400)
+  }
+}
+
+// ------------------------------------------------------------------ price sync catalogs (mock upstream data)
+
+type Family = 'anthropic' | 'openai' | 'google' | 'mistral' | 'deepseek' | 'xai'
+interface CatalogEntry {
+  model: string
+  family: Family
+  mode: PriceMode
+  config: Record<string, any>
+}
+
+const round = (n: number) => Number(n.toPrecision(4))
+
+const KNOWN: CatalogEntry[] = [
+  {
+    model: 'claude-sonnet-4-5',
+    family: 'anthropic',
+    mode: 'expression',
+    config: {
+      tiers: [
+        { name: 'standard', max_len: 200000, p: 3, c: 15, cr: 0.3, cc: 3.75, cc1h: 6 },
+        { name: 'long_context', max_len: null, p: 6, c: 22.5, cr: 0.6, cc: 7.5, cc1h: 12 }
+      ]
+    }
+  },
+  { model: 'claude-haiku-4-5', family: 'anthropic', mode: 'per_token', config: { p: 1, c: 5, cr: 0.1, cc: 1.25, cc1h: 2 } },
+  { model: 'claude-opus-4-1', family: 'anthropic', mode: 'per_token', config: { p: 15, c: 75, cr: 1.5, cc: 18.75, cc1h: 30 } },
+  { model: 'gpt-4o', family: 'openai', mode: 'per_token', config: { p: 2.5, c: 10, cr: 1.25 } },
+  { model: 'gpt-4o-mini', family: 'openai', mode: 'per_token', config: { p: 0.15, c: 0.6, cr: 0.075 } },
+  { model: 'gpt-5', family: 'openai', mode: 'per_token', config: { p: 1.25, c: 10, cr: 0.125 } },
+  { model: 'gemini-2.5-flash', family: 'google', mode: 'per_token', config: { p: 0.3, c: 2.5, cr: 0.075 } },
+  {
+    model: 'gemini-2.5-pro',
+    family: 'google',
+    mode: 'expression',
+    config: {
+      tiers: [
+        { name: 'standard', max_len: 200000, p: 1.25, c: 10, cr: 0.31 },
+        { name: 'long_context', max_len: null, p: 2.5, c: 15, cr: 0.625 }
+      ]
+    }
+  },
+  { model: 'mistral-large-latest', family: 'mistral', mode: 'per_token', config: { p: 2, c: 6 } },
+  { model: 'deepseek-chat', family: 'deepseek', mode: 'per_token', config: { p: 0.27, c: 1.1, cr: 0.07 } },
+  { model: 'grok-4', family: 'xai', mode: 'per_token', config: { p: 3, c: 15, cr: 0.75 } }
+]
+
+const PREFIX: Record<Family, string> = { anthropic: 'claude-legacy', openai: 'gpt-variant', google: 'gemini-exp', mistral: 'mistral', deepseek: 'deepseek', xai: 'grok' }
+const SUFFIX = ['preview', 'latest', '2024-08-06', 'mini', 'turbo', 'instruct']
+const FAMILIES = Object.keys(PREFIX) as Family[]
+
+/** Deterministic synthetic models of a family (to exercise large previews). */
+function synthetic(family: Family, count: number): CatalogEntry[] {
+  const out: CatalogEntry[] = []
+  for (let i = 1; i <= count; i++) {
+    const r = (k: number) => rnd(FAMILIES.indexOf(family) * 10007 + i * 31 + k)
+    const p = round(0.05 + r(1) * 10)
+    const cfg: Record<string, number> = { p, c: round(p * (3 + Math.floor(r(2) * 3))) }
+    if (r(3) > 0.4) cfg.cr = round(p / 10)
+    out.push({ model: `${PREFIX[family]}-${String(i).padStart(4, '0')}-${SUFFIX[i % SUFFIX.length]}`, family, mode: 'per_token', config: cfg })
+  }
+  return out
+}
+
+/** Vendor id of a family in each catalog (LiteLLM calls Google "gemini"). */
+const vendorOf = (kind: 'litellm' | 'models_dev', f: Family) => (kind === 'litellm' && f === 'google' ? 'gemini' : f)
+
+const CATALOG = {
+  litellm: [...KNOWN, ...FAMILIES.flatMap((f) => synthetic(f, 800))],
+  models_dev: [
+    // models.dev lists the newer GPT-4o price than the one we synced from LiteLLM.
+    ...KNOWN.map((e) => (e.model === 'gpt-4o' ? { ...e, config: { p: 2.5, c: 10, cr: 1.25, cc: 0 } } : e)),
+    ...FAMILIES.flatMap((f) => synthetic(f, 12))
+  ],
+  // What the upstream sup2api instance exposes to our key (base prices; its group rate is 1.5).
+  sup2api: KNOWN.filter((e) => e.family === 'anthropic' || e.family === 'openai')
+}
+const UPSTREAM_GROUP_RATE = 1.5
+const SKIPPED = { litellm: 37, models_dev: 4, sup2api: 0 }
+
+function scaleConfig(cfg: Record<string, any>, m: number): Record<string, any> {
+  const scale = (o: Record<string, any>) =>
+    Object.fromEntries(Object.entries(o).map(([k, v]) => [k, (TOKEN_VARS as readonly string[]).includes(k) || k === 'flat' ? round(Number(v) * m) : v]))
+  if (Array.isArray(cfg.tiers)) return { ...cfg, tiers: cfg.tiers.map(scale) }
+  return scale(cfg)
 }
 
 const SONNET_DEFAULT =
   'len <= 200000 ? tier("standard", p*3 + c*15 + cr*0.3 + cc*3.75 + cc1h*6) : tier("long_context", p*6 + c*22.5 + cr*0.6 + cc*7.5 + cc1h*12)'
 
+const litellmSynth = CATALOG.litellm.filter((e) => e.model.startsWith('claude-legacy-'))
+
 const prices: MockPrice[] = [
-  mkPrice({ id: 1, model: 'claude-sonnet-4-5', mode: 'expression', config: {}, expression: SONNET_DEFAULT, source: 'plugin_default', plugin_key: 'anthropic', enabled: true, note: '' }),
-  mkPrice({ id: 2, model: 'claude-haiku-4-5', mode: 'per_token', config: { p: 1, c: 5, cr: 0.1, cc: 1.25, cc1h: 2 }, source: 'plugin_default', plugin_key: 'anthropic', enabled: true, note: '' }),
+  // Manual, identical to the synced definition -> "unchanged" in previews.
+  mkPrice({ id: 1, model: 'claude-sonnet-4-5', mode: 'expression', config: {}, expression: SONNET_DEFAULT, source: 'manual', enabled: true, note: '' }),
+  // Synced from LiteLLM and still current -> "unchanged".
+  mkPrice({ id: 2, model: 'claude-haiku-4-5', mode: 'per_token', config: { p: 1, c: 5, cr: 0.1, cc: 1.25, cc1h: 2 }, source: 'sync', sync_source_id: 1, enabled: true, note: '' }),
   mkPrice({
     id: 3,
     model: 'claude-sonnet-x',
@@ -215,26 +323,35 @@ const prices: MockPrice[] = [
       ],
       rules: [{ kind: 'header', name: 'anthropic-beta', op: 'contains', value: 'fast-mode', multiplier: 2 }]
     },
-    source: 'admin',
-    plugin_key: null,
+    source: 'manual',
     enabled: true,
     note: 'fast mode costs double'
   }),
-  mkPrice({ id: 4, model: 'web-search', mode: 'per_request', config: { price: 0.01 }, source: 'admin', plugin_key: null, enabled: true, note: '' }),
+  mkPrice({ id: 4, model: 'web-search', mode: 'per_request', config: { price: 0.01 }, source: 'manual', enabled: true, note: '' }),
+  // Manual and different from every source -> "manual" (unticked by default).
   mkPrice({
     id: 5,
     model: 'claude-opus-4-1',
     mode: 'expression',
     config: {},
     expression: 'tier("base", flat(0.01) + p*15 + c*75) * (hour("Asia/Shanghai") < 8 ? 0.8 : 1)',
-    source: 'admin',
-    plugin_key: null,
+    source: 'manual',
     enabled: false,
     note: 'night discount'
   }),
-  // Default prices of the built-in openai / gemini plugins (CONTRACTS §14.1).
-  mkPrice({ id: 6, model: 'gpt-4o', mode: 'per_token', config: { p: 2.5, c: 10, cr: 1.25, cc: 0, cc1h: 0 }, source: 'plugin_default', plugin_key: 'openai', enabled: true, note: '' }),
-  mkPrice({ id: 7, model: 'gemini-2.5-flash', mode: 'per_token', config: { p: 0.3, c: 2.5, cr: 0.075, cc: 0, cc1h: 0 }, source: 'plugin_default', plugin_key: 'gemini', enabled: true, note: '' })
+  // Synced from LiteLLM, source price changed since -> "update".
+  mkPrice({ id: 6, model: 'gpt-4o', mode: 'per_token', config: { p: 5, c: 15, cr: 2.5 }, source: 'sync', sync_source_id: 1, enabled: true, note: '' }),
+  // Synced from models.dev and current.
+  mkPrice({ id: 7, model: 'gemini-2.5-flash', mode: 'per_token', config: { p: 0.3, c: 2.5, cr: 0.075 }, source: 'sync', sync_source_id: 2, enabled: true, note: '' }),
+  mkPrice({ id: 8, model: 'gpt-4o-mini', mode: 'per_token', config: { p: 0.3, c: 1.2 }, source: 'sync', sync_source_id: 1, enabled: true, note: '' }),
+  // A few synthetic LiteLLM models: current, outdated, and manually edited.
+  ...litellmSynth.slice(0, 6).map((e, i) => mkPrice({ id: 20 + i, model: e.model, mode: e.mode, config: e.config, source: 'sync', sync_source_id: 1, enabled: true, note: '' })),
+  ...litellmSynth
+    .slice(6, 10)
+    .map((e, i) => mkPrice({ id: 30 + i, model: e.model, mode: e.mode, config: scaleConfig(e.config, 0.8), source: 'sync', sync_source_id: 1, enabled: true, note: '' })),
+  ...litellmSynth
+    .slice(10, 13)
+    .map((e, i) => mkPrice({ id: 40 + i, model: e.model, mode: e.mode, config: scaleConfig(e.config, 1.2), source: 'manual', enabled: true, note: 'negotiated' }))
 ]
 
 function exprOf(body: any): { mode: PriceMode; config: Record<string, any>; expression: string } {
@@ -287,16 +404,30 @@ function validate(body: any) {
 }
 
 function priceFilter(q: Record<string, string>) {
-  return prices.filter((p) => {
-    if (q.mode && p.mode !== q.mode) return false
-    if (q.q && !`${p.model} ${p.note} ${p.plugin_key || ''}`.toLowerCase().includes(q.q.toLowerCase())) return false
-    return true
-  })
+  return prices
+    .filter((p) => {
+      if (q.mode && p.mode !== q.mode) return false
+      if (q.source && p.source !== q.source) return false
+      if (q.sync_source_id && String(p.sync_source_id ?? '') !== q.sync_source_id) return false
+      if (q.enabled && (q.enabled === 'true' || q.enabled === '1') !== p.enabled) return false
+      if (q.q && !`${p.model} ${p.note}`.toLowerCase().includes(q.q.toLowerCase())) return false
+      return true
+    })
+    .sort((a, b) => a.model.localeCompare(b.model) || a.id - b.id)
+}
+
+/** API shape of a price: adds the name of its sync source. */
+function priceView(p: MockPrice) {
+  const src = p.sync_source_id ? sources.find((s) => s.id === p.sync_source_id) : undefined
+  return { ...p, sync_source_name: src ? src.name : null }
 }
 
 const findPrice = (req: MockRequest) => prices.find((p) => p.id === Number(req.params.id))
 
-on('GET', '/prices', (req) => paginate(priceFilter(req.query), req.query))
+on('GET', '/prices', (req) => {
+  const r = paginate(priceFilter(req.query), req.query)
+  return { ...r, data: r.data.map(priceView) }
+})
 on('POST', '/prices/validate', (req) => {
   const v = validate(req.body)
   return { ok: v.ok, expression: v.expression, expr_hash: v.expr_hash, errors: v.errors, warnings: v.warnings, samples: v.samples, cost_per_million_input: v.cost_per_million_input }
@@ -339,7 +470,10 @@ on('POST', '/prices/preview', (req) => {
 
 on('GET', '/prices/history/:hash', (req) => history.get(req.params.hash) || fail(404, 'not_found', 'no such expression'))
 
-on('GET', '/prices/:id', (req) => findPrice(req) || fail(404, 'not_found', 'price not found'))
+on('GET', '/prices/:id', (req) => {
+  const p = findPrice(req)
+  return p ? { ...priceView(p), analysis: { params: [], headers: [], metrics: [] } } : fail(404, 'not_found', 'price not found')
+})
 
 function checkSave(body: any) {
   const v = validate(body)
@@ -350,17 +484,18 @@ function checkSave(body: any) {
   return v
 }
 
+const modelInvalid = () => fail(400, 'invalid_argument', 'invalid', { fields: [{ field: 'model', code: 'invalid', message: 'a complete model id (no wildcards)' }] })
+const modelTaken = () => fail(409, 'conflict', 'a price for this model already exists')
+
 on('POST', '/prices', (req) => {
   const b = req.body || {}
   if (!b.model) return fail(400, 'invalid_argument', 'invalid', { fields: [{ field: 'model', code: 'required', message: 'Model is required' }] })
-  if (!MODEL_ID.test(b.model)) return fail(400, 'invalid_argument', 'invalid', { fields: [{ field: 'model', code: 'invalid', message: 'a complete model id (no wildcards)' }] })
+  if (!MODEL_ID.test(b.model)) return modelInvalid()
   if ('platform' in b) return fail(400, 'invalid_argument', 'unknown field "platform"')
   const v = checkSave(b)
   if ('__status' in v) return v
-  // One admin price per model pattern (prices are global, CONTRACTS §12).
-  if (prices.some((p) => p.source === 'admin' && p.model === b.model)) {
-    return fail(409, 'conflict', 'an admin price for this model already exists')
-  }
+  // One price per model (prices are global and keyed by complete model ids).
+  if (prices.some((p) => p.model === b.model)) return modelTaken()
   const p: MockPrice = {
     id: nextId(),
     model: b.model,
@@ -369,14 +504,16 @@ on('POST', '/prices', (req) => {
     expression: v.expression,
     expr_version: 1,
     expr_hash: remember(v.expression),
-    source: 'admin',
-    plugin_key: null,
+    source: 'manual',
+    sync_source_id: null,
+    synced_at: null,
     enabled: b.enabled !== false,
     note: b.note || '',
+    updated_by: 1,
     updated_at: now()
   }
   prices.push(p)
-  return p
+  return { __status: 201, body: { data: priceView(p) } }
 })
 
 on('PATCH', '/prices/:id', (req) => {
@@ -384,15 +521,22 @@ on('PATCH', '/prices/:id', (req) => {
   if (!p) return fail(404, 'not_found', 'price not found')
   const b = req.body || {}
   const keys = Object.keys(b).filter((k) => k !== 'confirm')
-  if (p.source === 'plugin_default' && keys.some((k) => k !== 'enabled')) return fail(409, 'conflict', 'plugin default prices can only be enabled/disabled; override it instead')
-  if (b.model !== undefined && !MODEL_ID.test(b.model)) return fail(400, 'invalid_argument', 'invalid', { fields: [{ field: 'model', code: 'invalid', message: 'a complete model id (no wildcards)' }] })
-  if (keys.length === 1 && keys[0] === 'enabled') {
-    p.enabled = !!b.enabled
+  if (b.model !== undefined && !MODEL_ID.test(b.model)) return modelInvalid()
+  if (b.model !== undefined && b.model !== p.model && prices.some((x) => x.model === b.model)) return modelTaken()
+  if (keys.every((k) => k === 'enabled' || k === 'note')) {
+    if (b.enabled !== undefined) p.enabled = !!b.enabled
+    if (b.note !== undefined) p.note = String(b.note)
     p.updated_at = now()
-    return p
+    return priceView(p)
   }
   const v = checkSave({ ...p, ...b })
   if ('__status' in v) return v
+  // Editing the definition of a synced price turns it into a manual price.
+  const defChanged =
+    (b.model !== undefined && b.model !== p.model) ||
+    v.mode !== p.mode ||
+    v.expression !== p.expression ||
+    (b.config !== undefined && JSON.stringify(b.config) !== JSON.stringify(p.config))
   Object.assign(p, {
     model: b.model ?? p.model,
     mode: v.mode,
@@ -401,27 +545,305 @@ on('PATCH', '/prices/:id', (req) => {
     expr_hash: remember(v.expression),
     enabled: b.enabled ?? p.enabled,
     note: b.note ?? p.note,
+    updated_by: 1,
     updated_at: now()
   })
-  return p
+  if (defChanged && p.source === 'sync') Object.assign(p, { source: 'manual', sync_source_id: null })
+  return priceView(p)
 })
 
 on('DELETE', '/prices/:id', (req) => {
   const i = prices.findIndex((p) => p.id === Number(req.params.id))
   if (i < 0) return fail(404, 'not_found', 'price not found')
-  if (prices[i].source === 'plugin_default') return fail(409, 'conflict', 'plugin default prices cannot be deleted')
   prices.splice(i, 1)
   return noContent()
 })
 
-on('POST', '/prices/:id/override', (req) => {
-  const p = findPrice(req)
-  if (!p) return fail(404, 'not_found', 'price not found')
-  const existing = prices.find((x) => x.source === 'admin' && x.model === p.model)
-  if (existing) return existing
-  const copy: MockPrice = { ...p, id: nextId(), source: 'admin', plugin_key: null, note: `override of ${p.plugin_key} default`, updated_at: now() }
-  prices.push(copy)
-  return copy
+// ------------------------------------------------------------------ price sync sources
+
+type SourceKind = 'litellm' | 'models_dev' | 'sup2api'
+const SOURCE_KINDS: SourceKind[] = ['litellm', 'models_dev', 'sup2api']
+const DEFAULT_URL: Record<SourceKind, string> = {
+  litellm: 'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json',
+  models_dev: 'https://models.dev/api.json',
+  sup2api: ''
+}
+const DEFAULT_PROVIDERS: Record<'litellm' | 'models_dev', string[]> = {
+  litellm: ['anthropic', 'openai', 'gemini'],
+  models_dev: ['anthropic', 'openai', 'google']
+}
+
+interface MockSource {
+  id: number
+  name: string
+  kind: SourceKind
+  url: string
+  api_key: string
+  options: Record<string, any>
+  enabled: boolean
+  last_synced_at: string | null
+  last_error: string
+  created_at: string
+  updated_at: string
+}
+
+const sources: MockSource[] = [
+  {
+    id: 1,
+    name: 'LiteLLM',
+    kind: 'litellm',
+    url: DEFAULT_URL.litellm,
+    api_key: '',
+    options: { providers: [...DEFAULT_PROVIDERS.litellm] },
+    enabled: true,
+    last_synced_at: now(-2 * 86400),
+    last_error: '',
+    created_at: now(-30 * 86400),
+    updated_at: now(-2 * 86400)
+  },
+  {
+    id: 2,
+    name: 'models.dev',
+    kind: 'models_dev',
+    url: DEFAULT_URL.models_dev,
+    api_key: '',
+    options: { providers: [...DEFAULT_PROVIDERS.models_dev] },
+    enabled: true,
+    last_synced_at: now(-5 * 86400),
+    last_error: '',
+    created_at: now(-30 * 86400),
+    updated_at: now(-5 * 86400)
+  },
+  {
+    id: 3,
+    name: '上游 A',
+    kind: 'sup2api',
+    url: 'https://up.example.com',
+    api_key: 'sk-s2a-mock-upstream',
+    options: { apply_multiplier: true },
+    enabled: true,
+    last_synced_at: null,
+    last_error: '',
+    created_at: now(-3 * 86400),
+    updated_at: now(-3 * 86400)
+  },
+  {
+    id: 4,
+    name: '上游 B（离线）',
+    kind: 'sup2api',
+    url: 'https://down.example.com',
+    api_key: 'sk-s2a-mock-down',
+    options: { apply_multiplier: false },
+    enabled: false,
+    last_synced_at: null,
+    last_error: 'GET https://down.example.com/api/v1/me/prices: dial tcp: connection refused',
+    created_at: now(-3 * 86400),
+    updated_at: now(-3 * 86400)
+  }
+]
+
+function sourceView(s: MockSource) {
+  const { api_key, ...rest } = s
+  return { ...rest, has_api_key: !!api_key, price_count: prices.filter((p) => p.sync_source_id === s.id).length }
+}
+
+const findSource = (req: MockRequest) => sources.find((s) => s.id === Number(req.params.id))
+
+const fieldFail = (fields: Array<{ field: string; code: string; message: string }>) => fail(400, 'invalid_argument', 'invalid', { fields })
+
+function isHttpUrl(v: unknown): boolean {
+  try {
+    const u = new URL(String(v))
+    return (u.protocol === 'http:' || u.protocol === 'https:') && !!u.host
+  } catch {
+    return false
+  }
+}
+
+/** Validates and normalizes options for a kind; returns the options or a field error list. */
+function sourceOptions(kind: SourceKind, raw: any): Record<string, any> | Array<{ field: string; code: string; message: string }> {
+  if (kind === 'sup2api') {
+    if (raw?.apply_multiplier !== undefined && typeof raw.apply_multiplier !== 'boolean') {
+      return [{ field: 'options.apply_multiplier', code: 'invalid', message: 'must be a boolean' }]
+    }
+    return { apply_multiplier: raw?.apply_multiplier !== false }
+  }
+  if (raw?.providers === undefined) return { providers: [...DEFAULT_PROVIDERS[kind]] }
+  if (!Array.isArray(raw.providers) || raw.providers.some((x: unknown) => typeof x !== 'string' || !/^[a-z0-9_.-]{1,64}$/i.test(x))) {
+    return [{ field: 'options.providers', code: 'invalid', message: 'providers must be a list of vendor ids' }]
+  }
+  return { providers: [...new Set(raw.providers as string[])] }
+}
+
+on('GET', '/price-sources', () => sources.map(sourceView))
+
+on('POST', '/price-sources', (req) => {
+  const b = req.body || {}
+  const errs: Array<{ field: string; code: string; message: string }> = []
+  const name = String(b.name ?? '').trim()
+  if (!name) errs.push({ field: 'name', code: 'required', message: 'Name is required' })
+  if (!SOURCE_KINDS.includes(b.kind)) errs.push({ field: 'kind', code: 'enum', message: 'kind must be litellm, models_dev or sup2api' })
+  const kind = b.kind as SourceKind
+  const url = String(b.url ?? (SOURCE_KINDS.includes(kind) ? DEFAULT_URL[kind] : '')).trim()
+  if (!url) errs.push({ field: 'url', code: 'required', message: 'URL is required' })
+  else if (!isHttpUrl(url)) errs.push({ field: 'url', code: 'invalid', message: 'must be an http(s) URL' })
+  if (kind === 'sup2api' && !String(b.api_key ?? '').trim()) errs.push({ field: 'api_key', code: 'required', message: 'An upstream sup2api source needs an API key' })
+  const opts = SOURCE_KINDS.includes(kind) ? sourceOptions(kind, b.options) : {}
+  if (Array.isArray(opts)) errs.push(...opts)
+  if (errs.length) return fieldFail(errs)
+  if (sources.some((s) => s.name === name)) return fail(409, 'conflict', 'a price source with this name already exists')
+  const s: MockSource = {
+    id: nextId(),
+    name,
+    kind,
+    url,
+    api_key: String(b.api_key ?? '').trim(),
+    options: opts as Record<string, any>,
+    enabled: b.enabled !== false,
+    last_synced_at: null,
+    last_error: '',
+    created_at: now(),
+    updated_at: now()
+  }
+  sources.push(s)
+  return { __status: 201, body: { data: sourceView(s) } }
+})
+
+on('PATCH', '/price-sources/:id', (req) => {
+  const s = findSource(req)
+  if (!s) return fail(404, 'not_found', 'price source not found')
+  const b = req.body || {}
+  const errs: Array<{ field: string; code: string; message: string }> = []
+  const kind: SourceKind = b.kind !== undefined ? b.kind : s.kind
+  if (!SOURCE_KINDS.includes(kind)) errs.push({ field: 'kind', code: 'enum', message: 'kind must be litellm, models_dev or sup2api' })
+  const name = b.name !== undefined ? String(b.name).trim() : s.name
+  if (!name) errs.push({ field: 'name', code: 'required', message: 'Name is required' })
+  const url = b.url !== undefined ? String(b.url).trim() : s.url
+  if (!url) errs.push({ field: 'url', code: 'required', message: 'URL is required' })
+  else if (!isHttpUrl(url)) errs.push({ field: 'url', code: 'invalid', message: 'must be an http(s) URL' })
+  // api_key: omitted / null = keep, "" = clear, other = replace.
+  const apiKey = b.api_key === undefined || b.api_key === null ? s.api_key : String(b.api_key).trim()
+  if (kind === 'sup2api' && !apiKey) errs.push({ field: 'api_key', code: 'required', message: 'An upstream sup2api source needs an API key' })
+  const opts = SOURCE_KINDS.includes(kind) ? (b.options !== undefined || kind !== s.kind ? sourceOptions(kind, b.options) : s.options) : {}
+  if (Array.isArray(opts)) errs.push(...opts)
+  if (errs.length) return fieldFail(errs)
+  if (sources.some((x) => x.id !== s.id && x.name === name)) return fail(409, 'conflict', 'a price source with this name already exists')
+  Object.assign(s, { name, kind, url, api_key: apiKey, options: opts, enabled: b.enabled !== undefined ? !!b.enabled : s.enabled, updated_at: now() })
+  return sourceView(s)
+})
+
+on('DELETE', '/price-sources/:id', (req) => {
+  const i = sources.findIndex((s) => s.id === Number(req.params.id))
+  if (i < 0) return fail(404, 'not_found', 'price source not found')
+  const id = sources[i].id
+  // Imported prices are kept; they just lose the link to the source.
+  for (const p of prices) if (p.sync_source_id === id) p.sync_source_id = null
+  sources.splice(i, 1)
+  return noContent()
+})
+
+/** "Fetches" a source: the mock catalog filtered by vendors, or an error message. */
+function fetchCatalog(s: MockSource): { entries: CatalogEntry[] } | { error: string } {
+  if (/down|fail/i.test(s.url)) return { error: `GET ${s.url.replace(/\/$/, '')}${s.kind === 'sup2api' ? '/api/v1/me/prices' : ''}: dial tcp: connection refused` }
+  if (s.kind === 'sup2api') {
+    if (!s.api_key) return { error: 'upstream rejected the API key (401 unauthenticated)' }
+    const m = s.options?.apply_multiplier === false ? 1 : UPSTREAM_GROUP_RATE
+    return { entries: CATALOG.sup2api.map((e) => ({ ...e, config: m === 1 ? e.config : scaleConfig(e.config, m) })) }
+  }
+  const kind = s.kind
+  const want = new Set<string>(Array.isArray(s.options?.providers) ? s.options.providers : DEFAULT_PROVIDERS[kind])
+  return { entries: CATALOG[kind].filter((e) => want.has(vendorOf(kind, e.family))) }
+}
+
+function incomingOf(e: CatalogEntry) {
+  return { mode: e.mode, config: e.config, expression: genExpr(e.mode, e.config) }
+}
+
+function syncAction(e: CatalogEntry): { action: 'create' | 'update' | 'manual' | 'unchanged'; current: MockPrice | undefined } {
+  const current = prices.find((p) => p.model === e.model)
+  if (!current) return { action: 'create', current }
+  const inc = incomingOf(e)
+  if (current.mode === inc.mode && current.expression.trim() === inc.expression.trim()) return { action: 'unchanged', current }
+  return { action: current.source === 'sync' ? 'update' : 'manual', current }
+}
+
+on('POST', '/price-sources/:id/preview', (req) => {
+  const s = findSource(req)
+  if (!s) return fail(404, 'not_found', 'price source not found')
+  const r = fetchCatalog(s)
+  if ('error' in r) {
+    s.last_error = r.error
+    return fail(503, 'unavailable', `cannot fetch prices from ${s.name}: ${r.error}`)
+  }
+  s.last_error = ''
+  const items = r.entries
+    .map((e) => {
+      const { action, current } = syncAction(e)
+      return {
+        model: e.model,
+        action,
+        incoming: incomingOf(e),
+        current: current
+          ? { id: current.id, mode: current.mode, config: current.config, expression: current.expression, source: current.source, sync_source_id: current.sync_source_id, enabled: current.enabled }
+          : null
+      }
+    })
+    .sort((a, b) => a.model.localeCompare(b.model))
+  return { source_id: s.id, fetched_at: now(), total: items.length, skipped: SKIPPED[s.kind], items }
+})
+
+on('POST', '/price-sources/:id/apply', (req) => {
+  const s = findSource(req)
+  if (!s) return fail(404, 'not_found', 'price source not found')
+  const models = req.body?.models
+  if (!Array.isArray(models) || models.some((m: unknown) => typeof m !== 'string')) {
+    return fieldFail([{ field: 'models', code: 'invalid', message: 'models must be a list of model ids' }])
+  }
+  const r = fetchCatalog(s)
+  if ('error' in r) {
+    s.last_error = r.error
+    return fail(503, 'unavailable', `cannot fetch prices from ${s.name}: ${r.error}`)
+  }
+  const byModel = new Map(r.entries.map((e) => [e.model, e]))
+  const out = { created: 0, updated: 0, unchanged: 0, skipped: [] as Array<{ model: string; reason: string }> }
+  for (const model of new Set<string>(models)) {
+    const e = byModel.get(model)
+    if (!e) {
+      out.skipped.push({ model, reason: 'not offered by the source' })
+      continue
+    }
+    if (!MODEL_ID.test(model)) {
+      out.skipped.push({ model, reason: 'not a complete model id' })
+      continue
+    }
+    const inc = incomingOf(e)
+    const { action, current } = syncAction(e)
+    if (action === 'unchanged') {
+      out.unchanged++
+      continue
+    }
+    const fields = {
+      mode: inc.mode,
+      config: inc.config,
+      expression: inc.expression,
+      expr_hash: remember(inc.expression),
+      source: 'sync' as const,
+      sync_source_id: s.id,
+      synced_at: now(),
+      updated_by: 1,
+      updated_at: now()
+    }
+    if (current) {
+      Object.assign(current, fields, { expr_version: current.expr_version })
+      out.updated++
+    } else {
+      prices.push({ id: nextId(), model, expr_version: 1, enabled: true, note: '', ...fields })
+      out.created++
+    }
+  }
+  s.last_synced_at = now()
+  s.last_error = ''
+  return out
 })
 
 // ------------------------------------------------------------------ usage
@@ -459,12 +881,8 @@ function rnd(seed: number) {
 }
 
 function priceFor(model: string) {
-  const match = (id: string) => model === id // prices are keyed by complete model ids
-  return (
-    prices.find((p) => p.source === 'admin' && p.enabled && match(p.model)) ||
-    prices.find((p) => p.source === 'plugin_default' && p.enabled && match(p.model)) ||
-    null
-  )
+  // One price per complete model id (no wildcards).
+  return prices.find((p) => p.enabled && p.model === model) || null
 }
 
 const usageRows: any[] = []
@@ -570,7 +988,7 @@ for (let i = 0; i < 90; i++) {
     hook_decisions,
     created_at: at.toISOString(),
     _detail: billing.detail,
-    _price: billing.status === 'billed' && price ? { id: price.id, model: price.model, source: price.source, plugin_key: price.plugin_key } : null
+    _price: billing.status === 'billed' && price ? { id: price.id, model: price.model, source: price.source } : null
   }
   usageRows.push(row)
 }
