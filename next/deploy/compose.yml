@@ -43,6 +43,8 @@ x-node: &node
     SUB2API_DEV_MARKET_URL: http://caddy:3120/market/index.json
     # Test only: accounts point at http://mock-upstream:8080.
     SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM: "true"
+    # Caddy runs on the project network: trust its X-Forwarded-For.
+    SUB2API_TRUSTED_PROXIES: 172.16.0.0/12,10.0.0.0/8,192.168.0.0/16
 
 services:
   pg:
