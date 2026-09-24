@@ -214,7 +214,7 @@
 - 插件设置：GET `/plugins/:key/settings` → `{schema, ui_schema, values}`；PUT 请求体 `{values:{...}}`
 - `/ui/plugins` 每项另含 `host_ui_compat`
 
-`review` 结构：`{plugin_key, version, name, publisher, trust, signature_status, host_compat_ok, capabilities[], gateway_endpoints[], platform:{id, protocols}, account_types:[{id, label, protocols, form_mode}], hooks[], jobs[], events[], routes[], menus[], user_permissions[], database:{schema, migrations[]}, resources, external_services[], host_permissions:[{id, risk, scope, reason, optional, requires:"plugin:grant:high|critical"}], diff?:{added[], widened[], removed[]}}`。
+`review` 结构：`{plugin_key, version, name, publisher, trust, signature_status, host_compat_ok, capabilities[], gateway_endpoints:[{id, platform, method, path, protocol, billing}], platforms:[{id, label, endpoints:[{method, path, protocol, billing}], sticky_rules}], account_types:[{id, label, platforms, form_mode}], hooks[], jobs[], events[], routes[], menus[], user_permissions[], database:{schema, migrations[]}, resources, external_services[], host_permissions:[{id, risk, scope, reason, optional, requires:"plugin:grant:high|critical"}], diff?:{added[], widened[], removed[]}}`。
 
 ### 5.8 插件自己的接口与静态资源（C）
 
