@@ -4,7 +4,9 @@ use (
 	./deploy/mock-upstream
 	./e2e
 	./plugins/anthropic
+	./plugins/gemini
 	./plugins/guard
+	./plugins/openai
 	./plugins/relay
 	./sdk
 	./server
