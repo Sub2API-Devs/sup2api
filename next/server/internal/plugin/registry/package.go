@@ -201,7 +201,7 @@ func TrustVerifier(trust *pluginpkg.TrustStore, q store.Querier, lim pluginpkg.L
 		if p.Manifest.Key != key || p.Manifest.Version != version {
 			return fmt.Errorf("package manifest identifies %s@%s", p.Manifest.Key, p.Manifest.Version)
 		}
-		_, err = trust.Verify(ctx, q, p)
+		_, err = trust.VerifyInstalled(ctx, q, p)
 		return err
 	}
 }

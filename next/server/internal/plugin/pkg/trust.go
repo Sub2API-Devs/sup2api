@@ -87,6 +87,19 @@ func revokedError(msg string) error {
 // inside the upload transaction: packages signed by an official root key
 // auto-register their publisher (trust official) and key.
 func (t *TrustStore) Verify(ctx context.Context, q store.Querier, p *Package) (*Verification, error) {
+	return t.verify(ctx, q, p, true)
+}
+
+// VerifyInstalled re-checks an already installed package when a node loads
+// it: the signature must still verify and neither the publisher nor the key
+// may be revoked, but the key's validity window is not checked again (the
+// key was valid when the package was uploaded; expiry must not stop plugins
+// that are already installed).
+func (t *TrustStore) VerifyInstalled(ctx context.Context, q store.Querier, p *Package) (*Verification, error) {
+	return t.verify(ctx, q, p, false)
+}
+
+func (t *TrustStore) verify(ctx context.Context, q store.Querier, p *Package, checkValidity bool) (*Verification, error) {
 	sig := p.Signature
 	if sig == nil {
 		if !t.allowUnsigned {
@@ -134,10 +147,10 @@ func (t *TrustStore) Verify(ctx context.Context, q store.Querier, p *Package) (*
 		return nil, revokedError(fmt.Sprintf("signing key %q has been revoked", sig.KeyID))
 	}
 	now := t.now()
-	if notBefore != nil && now.Before(*notBefore) {
+	if checkValidity && notBefore != nil && now.Before(*notBefore) {
 		return nil, sigError(fmt.Sprintf("signing key %q is not valid yet", sig.KeyID))
 	}
-	if notAfter != nil && now.After(*notAfter) {
+	if checkValidity && notAfter != nil && now.After(*notAfter) {
 		return nil, sigError(fmt.Sprintf("signing key %q has expired", sig.KeyID))
 	}
 	pub, err := pkgsig.ParsePublicKey(pubB64)
