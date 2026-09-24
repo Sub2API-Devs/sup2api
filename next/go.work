@@ -3,6 +3,9 @@ go 1.27
 use (
 	./deploy/mock-upstream
 	./e2e
+	./plugins/anthropic
+	./plugins/guard
 	./sdk
 	./server
+	./tools/sub2api-plugin
 )
