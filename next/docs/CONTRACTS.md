@@ -720,7 +720,7 @@ POST `/accounts/:id/test`（`account:test`）：
 | 11 | `/me/api-keys` 不含 `user_email`；普通用户没有修改自己 Key 的接口 | **以代码为准**：用户只能删除后重建（Key 绑定的分组不应由用户随意切换，名称和过期时间也不是必要功能）。以后需要再加 `PATCH /me/api-keys/:id`。§5.3 已改 |
 | 12 | §14 部分条目当时尚未实现 | 已于第四轮实现，见 §14 |
 
-## 16. 模型价格只用完整模型 ID（2026-09-25）
+## 16. 模型价格只用完整模型 ID（2026-09-25；"插件默认价格"部分已被 §17 取代）
 
 本节优先于前文中关于价格"模式""通配符"的描述。
 
@@ -736,3 +736,50 @@ POST `/accounts/:id/test`（`account:test`）：
   - `core.PriceRule.Pattern` 改为 `Model`。
 - **迁移 0007**：删除已有的通配符价格行。插件默认价格在下次安装、升级或启用时按新的 manifest 重新写入；管理员的通配符价格需要按模型 ID 重新录入。
 - 分组 `model_allowlist`、粘性规则和钩子的 `match.models` 不受影响，仍然支持通配符。
+
+## 17. 模型价格归核心所有、由管理员配置；价格同步源（2026-09-25）
+
+本节优先于前文（§12 计费、§16）中所有关于"插件默认价格"的描述。
+
+- **插件不再提供价格**：
+  - manifest 删除 `pricing`，声明了会校验失败（`pricing` / `unsupported`）；
+  - 删除 `core.PriceCatalog`，`DefaultsApplier` 不再同步价格；
+  - 审查结构删除 `pricing_entries`；
+  - 内置插件 anthropic、openai、gemini 升到 0.1.2，不再带价格。
+- **价格**：
+  - 每个完整模型 ID 只能有一条价格（§16 的格式规则不变）；
+  - `source` 为 `manual`（管理员录入）或 `sync`（从同步源导入），另有 `sync_source_id`、`sync_source_name`、`synced_at`，删除 `plugin_key`；
+  - `/prices` 的筛选参数改为 `mode`、`source`、`sync_source_id`、`enabled`、`q`；
+  - `POST /prices/:id/override` 已删除；同一模型重复录入返回 409；
+  - 修改同步价格的 model、mode、config 或 expression 后，它会变成 `manual`，`sync_source_id` 清空；只改 enabled 或 note 时保持 `sync`；
+  - 使用记录详情的 `price` 为 `{id, model, source}`。
+- **匹配**：按完整模型 ID 精确匹配，只看启用的价格。找不到价格时按 `/settings/billing` 的 `missing_price_policy` 处理。
+- **迁移 0008**：
+  - 删除插件默认价格，原来的管理员价格改为 `manual`；
+  - 加唯一索引 `model_prices_model_uq`，以及约束 `source IN ('manual','sync')`；
+  - 新建表 `price_sync_sources`，并预置两条同步源：LiteLLM、models.dev。
+
+### 17.1 价格同步源
+
+`PriceSource`：`{id, name, kind, url, has_api_key, options, enabled, last_synced_at, last_error, price_count, created_at, updated_at}`。
+
+| kind | 数据 | options | 说明 |
+|---|---|---|---|
+| `litellm` | LiteLLM `model_prices_and_context_window.json` | `{providers}`，默认 `["anthropic","openai","gemini"]`（`litellm_provider`） | 只取 chat、completion、responses、embedding 模式；`<provider>/` 前缀会去掉；超过 200K 上下文的价格生成两档表达式；有 1 小时缓存写入价 |
+| `models_dev` | models.dev `api.json` | `{providers}`，默认 `["anthropic","openai","google"]` | 按 `cost.tiers`（context 类型）分档；**没有 1 小时缓存写入价** |
+| `sup2api` | 上游 sup2api 的 `GET /api/v1/key/prices` | `{apply_multiplier}`，默认 true | 必须填 `api_key`（上游的 `sk-s2a-` Key，用 AES-GCM 加密保存）。apply_multiplier 为 true 时，价格乘以上游 Key 所在分组的倍率，也就是按实际付给上游的价格导入 |
+
+- 单位：LiteLLM 是美元/token，导入时换算成美元/百万 token；models.dev 本身就是美元/百万 token。
+- 不合法的模型 ID 会跳过，并计入 `skipped`。
+
+| 方法 路径 | 权限 | 说明 |
+|---|---|---|
+| GET `/price-sources` | `price:read` | 不分页 |
+| POST `/price-sources` | `price:manage` | `{name, kind, url, api_key?, options?, enabled?}` → 201；名称重复返回 409 |
+| PATCH `/price-sources/:id` | `price:manage` | 字段都可选；`api_key` 省略或 null 不改，`""` 清除 |
+| DELETE `/price-sources/:id` | `price:manage` | 204；已导入的价格保留，`sync_source_id` 置空 |
+| POST `/price-sources/:id/preview` | `price:manage` | 拉取后与本地对比，返回 `{source_id, fetched_at, total, skipped, items:[{model, action, incoming:{model, mode, config, expression}, current}]}`。action：`create` 本地没有；`update` 本地是同步来的价格且不同；`manual` 本地是手动价格且不同；`unchanged` 相同。拉取失败返回 503 `unavailable`，并写入 `last_error` |
+| POST `/price-sources/:id/apply` | `price:manage` | `{models:[...]}` → `{created, updated, unchanged, skipped:[{model, reason}]}`。服务端重新拉取，只导入列出的模型（选中的手动价格也会被覆盖），导入后都是 `source=sync`；记审计 `price.sync` |
+| GET `/key/prices` | API Key（`Authorization: Bearer` 或 `x-api-key`） | 供下游 sup2api 同步用：`{prices:[{model, mode, config, expression}], rate_multiplier, group:{id, name}}`，只含启用的价格，以及该 Key 所在分组白名单允许的模型 |
+
+同步只能由管理员手动触发（先预览再应用），没有定时自动覆盖。

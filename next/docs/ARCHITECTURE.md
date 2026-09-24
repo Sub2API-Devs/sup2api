@@ -419,7 +419,6 @@ guard-0.1.0.s2plugin
   ],
 
   "platform": { /* 平台插件才有，见 15.1 */ },
-  "pricing": [ /* 默认模型价格，见 7.3 */ ],
 
   "hooks": [ {
     "point": "gateway.request",
@@ -950,7 +949,7 @@ CREATE TABLE balance_ledger (
 
 - **价格只按模型全局设置**：同一个模型不论由哪个平台的端点、哪种账号类型提供服务，都用同一个价格；价格表不区分平台
 - 价格表达式算出的是**基础价格**，之后只能通过倍率调整（本期为分组倍率）
-- 价格按**完整模型 ID** 设置、精确匹配，**不支持通配符**（2026-09-25 决定）：别名和带日期的 ID 是不同的模型，需要分别定价。插件可以提供默认价格；管理员价格始终优先；同一模型有多个插件默认价格时以最早安装的插件为准
+- 价格按**完整模型 ID** 设置、精确匹配，**不支持通配符**（2026-09-25 决定）：别名和带日期的 ID 是不同的模型，需要分别定价。**价格归核心所有，只能由管理员配置**，插件不提供价格；管理员可以手动录入，也可以从价格同步源（LiteLLM、models.dev 等公开价格库，或上游 sup2api）预览后选择导入，见 CONTRACTS §17
 
 #### 表达式语言（v1）
 
@@ -1002,14 +1001,15 @@ CREATE TABLE model_prices (
   expression    text         NOT NULL,        -- 由 config 生成，或直接编写；计费以它为准
   expr_version  int          NOT NULL DEFAULT 1,
   expr_hash     varchar(64)  NOT NULL,
-  source        varchar(20)  NOT NULL,        -- plugin_default / admin
-  plugin_key    varchar(100),
+  source        varchar(20)  NOT NULL,        -- manual（管理员录入）/ sync（从同步源导入）
+  sync_source_id bigint REFERENCES price_sync_sources(id) ON DELETE SET NULL,
+  synced_at     timestamptz,
   enabled       boolean      NOT NULL DEFAULT true,
   note          text,
   updated_by    bigint,
   updated_at    timestamptz  NOT NULL DEFAULT now()
 );
--- 管理员价格每个 model 一条；插件默认价格每个 (plugin_key, model) 一条（部分唯一索引）
+-- 每个 model 一条（唯一索引）；同步源见 price_sync_sources（CONTRACTS §17）
 
 -- 每一版表达式都按 hash 保存，使用记录通过 expr_hash 追溯当时的计算方式
 CREATE TABLE model_price_history (
@@ -1022,7 +1022,7 @@ CREATE TABLE model_price_history (
 
 #### 匹配与计算
 
-- 匹配：按完整模型 ID 精确匹配；管理员价格优先于插件默认价格，多个插件默认价格取最早安装的插件
+- 匹配：按完整模型 ID 精确匹配（每个模型只有一条价格）
 - 费用 = 表达式结果 × 分组倍率
 - 找不到价格：默认拒绝请求（返回 403 `model_price_not_configured`），可配置为免费放行
 - 编译结果按 `expr_hash` 缓存；价格变更通过 `config:changed` 广播，各节点立即生效
@@ -1038,19 +1038,14 @@ CREATE TABLE model_price_history (
 
 使用记录保存 `price_id`、`expr_hash`、`billing_mode`、`matched_tier`，以及 `billing_detail`（各变量取值、分项费用、加价规则命中情况）。配合 `model_price_history`，任何一笔扣费都能还原当时的计算过程。
 
-#### 插件提供默认价格
+#### 价格同步
 
-```jsonc
-// manifest.json
-"pricing": [
-  { "model": "claude-sonnet-4-5", "mode": "expression",
-    "expression": "len <= 200000 ? tier(\"standard\", p*3 + c*15 + cr*0.3 + cc*3.75 + cc1h*6) : tier(\"long_context\", p*6 + c*22.5 + cr*0.6 + cc*7.5 + cc1h*12)" },
-  { "model": "claude-haiku-4-5", "mode": "per_token",
-    "config": { "p": 1, "c": 5, "cr": 0.1, "cc": 1.25, "cc1h": 2 } }
-]
-```
+价格不来自插件。管理员可以配置价格同步源：
 
-安装和升级时写入（`source=plugin_default`），卸载时删除；管理员覆盖的价格（`source=admin`）不受插件升级和卸载影响。
+- LiteLLM、models.dev 公开价格库；
+- 上游 sup2api，用上游发的 API Key 读取 `GET /api/v1/key/prices`，可以按上游分组倍率换算。
+
+同步时先预览差异（新增、更新、与手动价格不同、未变化），勾选后导入，导入的价格记为 `source=sync`。同步价格被修改后变成 `manual`，之后同步不会自动覆盖。详见 CONTRACTS §17。
 
 ### 7.4 计费流程
 
@@ -1431,7 +1426,6 @@ anthropic 平台及其端点、用量规则、默认粘性规则由**核心内�
 | 账号类型 | `apikey`：支持平台 `anthropic`；字段 `api_key`（敏感）、`base_url`（默认 `https://api.anthropic.com`）、`model_mapping` |
 | 构造请求 | 按 `meta.protocol` 选上游路径：`base_url + /v1/messages` 或 `/v1/messages/count_tokens`；请求头 `x-api-key`、`anthropic-version`（透传，默认 `2023-06-01`）、`anthropic-beta`（透传）；命中模型映射时修改 `model` |
 | 错误分类 | 400 直接返回；401/403 切换并禁用账号；429 切换并冷却到 `retry-after`（默认 60 秒）；529 切换并冷却 30 秒；5xx 切换并冷却 10 秒 |
-| 默认价格 | manifest `pricing` 提供主流模型的默认价格（价格按模型全局设置，以官方公布为准） |
 | 模型目录 | 自己的 schema `plg_anthropic.model_catalog` + 迁移 `0001_init.sql`；接口 `GET /models`；声明式表格页面；用户权限 `model_catalog:read` |
 | 升级演示 | 测试用 `0.2.0` 增加 `0002_add_family.sql`（加字段并回填），验证升级迁移和旧数据迁移 |
 | 权限 | `platform.register`、`accounts.credentials`（`{"types":"own"}`）、`db.schema`、`kv`、`routes.admin`、`ui.menu` |
@@ -1723,16 +1717,16 @@ flowchart LR
 **列表**
 
 ```
-模型价格                        平台 [全部 ▾]  方式 [全部 ▾]  搜索 [________]   [ + 新增价格 ]
+模型价格                   来源 [全部 ▾]  方式 [全部 ▾]  搜索 [________]   [ 同步价格 ] [ + 新增价格 ]
 ┌──────────┬──────────────────┬────────┬───────────────────────────────────────┬────────────┬──────┐
-│ 平台     │ 模型             │ 方式   │ 摘要                                  │ 来源       │ 操作 │
+│ 模型              │ 方式   │ 摘要                                  │ 来源             │ 操作 │
 ├──────────┼──────────────────┼────────┼───────────────────────────────────────┼────────────┼──────┤
-│ anthropic│ claude-sonnet-4-5│ 表达式 │ 2 档：≤200K / >200K · 缓存单独计价     │ 插件默认   │ 覆盖 │
-│ anthropic│ claude-haiku-4-5 │ 按token│ 输入 $1 · 输出 $5 · 缓存读 $0.1 /百万  │ 插件默认   │ 覆盖 │
-│ anthropic│ claude-sonnet-x  │ 表达式 │ 2 档 · 1 条加价规则（fast-mode ×2）    │ 管理员     │ 编辑 │
-│ *        │ web-search       │ 按次   │ $0.01 / 次                             │ 管理员     │ 编辑 │
+│ claude-sonnet-4-5 │ 表达式 │ 2 档：≤200K / >200K · 缓存单独计价     │ 同步 · LiteLLM   │ 编辑 │
+│ claude-haiku-4-5  │ 按token│ 输入 $1 · 输出 $5 · 缓存读 $0.1 /百万  │ 同步 · LiteLLM   │ 编辑 │
+│ claude-sonnet-x   │ 表达式 │ 2 档 · 1 条加价规则（fast-mode ×2）    │ 手动             │ 编辑 │
+│ web-search        │ 按次   │ $0.01 / 次                             │ 手动             │ 编辑 │
 └──────────┴──────────────────┴────────┴───────────────────────────────────────┴────────────┴──────┘
-"覆盖"会复制插件默认价格为一条管理员价格；插件升级不会改动管理员价格
+修改同步来的价格后它变为手动价格；"同步价格"进入同步源页面预览并选择导入
 ```
 
 **编辑：按 token**
