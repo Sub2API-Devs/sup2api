@@ -19,7 +19,7 @@
 
 **分支**：开发分支 `feat/next-platform`（本地），每个 agent 在独立 worktree 的 `next/<代号>` 分支上开发，完成后由主控 `git merge --no-ff` 合并。
 **备份**：tag `legacy/v0.2.8`、分支 `legacy/main`（均已推送）。
-**远程推送**：`feat/next-platform` 已推送到 origin（截至 `5830fad79`）。本机访问 GitHub 时好时坏，推送失败就稍后重试。
+**远程推送**：origin 上的 `feat/next-platform` 截至 `e96962948`；之后的本地提交（`e6f7e4483` 图标修复、PROGRESS 收尾）因本机连不上 GitHub 尚未推送，网络恢复后执行 `git push origin feat/next-platform`。
 
 ---
 
