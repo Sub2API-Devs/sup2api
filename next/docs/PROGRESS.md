@@ -207,7 +207,7 @@ go test -count=1 -timeout 50m -v ./...
 
 | 代号 | 目录 | 分支 | 状态 |
 |---|---|---|---|
-| c-plugin-types | `plugin/registry`、`pkg`、`install`、`api`、`grpcruntime`、`rollout`、`routes` | next/c-plugin-types | ⏳ |
+| c-plugin-types | `plugin/registry`、`pkg`、`install`、`api`、`grpcruntime`、`rollout`、`routes` | next/c-plugin-types | ✅ `cfc97cd0d`，合并 `ad7cafbd6` |
 | a-account-billing | `account`、`billing`、`usage`、`event` | next/a-account-billing | ⏳ |
 | g-gateway-types | `gateway`（含 `gateway/convert` 转换器框架） | next/g-gateway-types | ⏳ |
 | f-web-types | `web/` | next/f-web-types | ⏳ |
