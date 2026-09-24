@@ -26,10 +26,14 @@ export default {
   cols: {
     input: '输入',
     output: '输出',
-    cost: '费用'
+    cost: '费用',
+    accountType: '账号类型',
+    upstreamProtocol: '上游协议'
   },
   cacheTitle: '缓存读 {r} · 缓存写 {w}',
   cached: '缓存',
+  converted: '已转换',
+  convertedFrom: '由端点协议 {protocol} 转换',
   free: '免费',
   stream: '流',
   blocked: '拦截',

@@ -10,7 +10,7 @@ import { errorMessage, notifyError } from '@/utils/errors'
 import { formatBytes } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import { dropReview, getReview } from './reviewCache'
-import { RISK_ORDER, asArray, display, hpKey, pick, riskOf, type Risk } from './pluginUtil'
+import { RISK_ORDER, accountTypesOf, asArray, display, hpKey, pick, riskOf, type Risk } from './pluginUtil'
 import PluginAvatar from './parts/PluginAvatar.vue'
 import RiskDot from './parts/RiskDot.vue'
 import ScopeChips from './parts/ScopeChips.vue'
@@ -181,6 +181,7 @@ const resourceItems = computed(() => {
 })
 
 const capabilityIds = computed(() => asArray(review.value?.capabilities).map((c) => (typeof c === 'string' ? c : String((c as any)?.id ?? display(c)))))
+const reviewAccountTypes = computed(() => accountTypesOf(review.value))
 
 const hasProvides = computed(() => {
   const r = review.value
@@ -188,6 +189,7 @@ const hasProvides = computed(() => {
   return (
     asArray(r.gateway_endpoints).length > 0 ||
     !!r.platform ||
+    reviewAccountTypes.value.length > 0 ||
     asArray(r.hooks).length > 0 ||
     asArray(r.events).length > 0 ||
     asArray(r.jobs).length > 0 ||
@@ -403,11 +405,20 @@ onMounted(load)
               <div v-if="review.platform.protocols?.length">
                 <span class="muted">{{ t('plugins.consent.protocols') }}{{ colon }}</span>{{ review.platform.protocols.join(', ') }}
               </div>
-              <div v-if="review.platform.account_types?.length">
-                <span class="muted">{{ t('plugins.consent.accountTypes') }}{{ colon }}</span>
-                {{ review.platform.account_types.map((a) => lt(a.label) || a.type || a.id).join(', ') }}
-              </div>
             </div>
+          </li>
+
+          <li v-if="reviewAccountTypes.length">
+            <div class="font-medium">{{ t('plugins.consent.accountTypes') }}</div>
+            <ul class="mt-1 space-y-1 pl-4">
+              <li v-for="a in reviewAccountTypes" :key="a.id" class="text-xs" data-testid="review-account-type">
+                <span class="font-medium">{{ lt(a.label) || a.id }}</span>
+                <span class="muted font-mono"> ({{ a.id }})</span>
+                <span v-if="a.protocols.length">
+                  <span class="muted"> — {{ t('plugins.consent.nativeProtocols') }}{{ colon }}</span><span class="font-mono">{{ a.protocols.join(', ') }}</span>
+                </span>
+              </li>
+            </ul>
           </li>
 
           <li v-if="review.hooks?.length">

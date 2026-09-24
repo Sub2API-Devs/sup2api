@@ -1,6 +1,7 @@
 export default {
   title: 'Model prices',
-  description: 'Billing expressions per platform and model. Admin prices take precedence over plugin defaults.',
+  description: 'Billing expressions per model. Admin prices take precedence over plugin defaults.',
+  scopeNote: 'Prices are set globally per model, whatever endpoint or account type serves the request. The expression gives the base price; the amount charged = base price × group rate multiplier.',
   new: 'New price',
   newTitle: 'New price',
   editTitle: 'Edit price · {name}',
@@ -14,7 +15,6 @@ export default {
   overridden: 'Admin copy created',
   overrideNote: '"Override" copies a plugin default price into an admin price; plugin upgrades never change admin prices.',
   basic: 'Basic',
-  platformHint: '"*" matches every platform',
   modelPattern: 'Model',
   modelPatternHint: 'Exact name or wildcard, e.g. claude-sonnet-*',
   modeCol: 'Mode',

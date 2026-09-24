@@ -69,7 +69,7 @@ watch(
       formLoading.value = true
       try {
         const f = await api.get<{ schema: Record<string, any>; ui_schema?: Record<string, any> }>(
-          `/account-types/${encodeURIComponent(at.platform)}/${encodeURIComponent(at.type)}/form`
+          `/account-types/${encodeURIComponent(at.plugin_key)}/${encodeURIComponent(at.type)}/form`
         )
         schema.value = f.schema
         uiSchema.value = f.ui_schema || null
@@ -139,7 +139,8 @@ async function save() {
     if (editing.value) {
       saved = await api.patch<Account>(`/accounts/${props.account!.id}`, body)
     } else {
-      body.platform = props.accountType!.platform
+      // The account type is (plugin_key, type); accounts have no platform.
+      body.plugin_key = props.accountType!.plugin_key
       body.type = props.accountType!.type
       saved = await api.post<Account>('/accounts', body)
     }
@@ -198,7 +199,7 @@ async function save() {
     <section class="border-t border-gray-100 pt-5 dark:border-dark-700">
       <div class="mb-3 flex items-center justify-between">
         <h4 class="section-title !mb-0">{{ t('accounts.credentials') }}</h4>
-        <span v-if="accountType" class="badge badge-purple">{{ lt(accountType.plugin_name) || accountType.plugin_key }}</span>
+        <span v-if="accountType" class="badge badge-purple">{{ lt(accountType.plugin_name) || accountType.plugin_key }} · {{ lt(accountType.label) || accountType.type }}</span>
       </div>
 
       <p v-if="account?.orphaned || !accountType" class="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">

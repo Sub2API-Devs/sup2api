@@ -3,8 +3,10 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SBadge, STable, type TableColumn } from '@sub2api/ui'
 import { formatMoney, formatNumber, formatTime } from '@/utils/format'
+import { useAuthStore } from '@/stores/auth'
+import { useAccountTypes } from '@/views/accounts/accountTypes'
 import UsageDetail from './UsageDetail.vue'
-import { billingTone, blockingHook, isBlocked, type UsageRow } from './usage'
+import { billingTone, blockingHook, isBlocked, isConverted, type UsageRow } from './usage'
 
 // Usage records table shared by the admin and "my usage" pages.
 const props = withDefaults(
@@ -19,6 +21,10 @@ const props = withDefaults(
   { showUser: true, showAccount: true }
 )
 const { t } = useI18n()
+const auth = useAuthStore()
+const accountTypes = useAccountTypes()
+// Labels need account:read; without it the raw type id is shown.
+if (auth.has('account:read')) accountTypes.load()
 
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [{ key: 'created_at', label: t('common.time'), width: '110px' }]
@@ -26,6 +32,8 @@ const columns = computed<TableColumn[]>(() => {
   cols.push({ key: 'group', label: t('common.group') })
   if (props.showAccount) cols.push({ key: 'account', label: t('common.account') })
   cols.push(
+    { key: 'account_type', label: t('usage.cols.accountType') },
+    { key: 'upstream_protocol', label: t('usage.cols.upstreamProtocol') },
     { key: 'model', label: t('common.model') },
     { key: 'input_tokens', label: t('usage.cols.input'), align: 'right' },
     { key: 'output_tokens', label: t('usage.cols.output'), align: 'right' },
@@ -53,6 +61,20 @@ function noUsage(u: UsageRow) {
     </template>
     <template #cell-account="{ row }">
       <span class="text-sm">{{ row.account_name || (row.account_id ? '#' + row.account_id : '—') }}</span>
+    </template>
+    <template #cell-account_type="{ row }">
+      <template v-if="row.account_type">
+        <span class="block whitespace-nowrap text-sm">{{ accountTypes.typeLabel(row.plugin_key, row.account_type) }}</span>
+        <span class="muted block text-[11px]">{{ accountTypes.pluginName(row.plugin_key) }}</span>
+      </template>
+      <span v-else class="muted">—</span>
+    </template>
+    <template #cell-upstream_protocol="{ row }">
+      <template v-if="row.upstream_protocol || row.protocol">
+        <span class="font-mono text-xs">{{ row.upstream_protocol || row.protocol }}</span>
+        <SBadge v-if="isConverted(row)" tone="warning" class="ml-1" :title="t('usage.convertedFrom', { protocol: row.protocol })">{{ t('usage.converted') }}</SBadge>
+      </template>
+      <span v-else class="muted">—</span>
     </template>
     <template #cell-model="{ row }">
       <span class="font-mono text-xs">{{ row.model || '—' }}</span>

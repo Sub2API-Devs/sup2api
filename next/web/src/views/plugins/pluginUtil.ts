@@ -130,6 +130,27 @@ export function display(v: unknown): string {
   return String(v)
 }
 
+export interface AccountTypeSummary {
+  id: string
+  label: LText | undefined
+  protocols: string[]
+}
+
+/**
+ * Account types declared by a plugin: top-level `account_types` of a review
+ * or manifest summary (CONTRACTS §12). Protocols may be ids or manifest
+ * objects ({protocol, requestFields, ...}).
+ */
+export function accountTypesOf(o: unknown): AccountTypeSummary[] {
+  return asArray<Record<string, any>>(pick(o, 'account_types', 'accountTypes')).map((a) => ({
+    id: String(pick(a, 'id', 'type') ?? ''),
+    label: pick<LText>(a, 'label'),
+    protocols: asArray(pick(a, 'protocols'))
+      .map((p) => (typeof p === 'string' ? p : String(pick(p, 'protocol', 'id') ?? '')))
+      .filter(Boolean)
+  }))
+}
+
 /** First letter used as avatar when the plugin has no icon. */
 export function initialOf(name: string, key: string): string {
   const s = (name || key || '?').trim()

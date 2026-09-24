@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
 import { SBadge, SButton, SPageHeader, SPagination, SSelect, SSwitch, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
-import type { AccountType, Price } from '@/api/types'
+import type { Price } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
@@ -16,24 +16,8 @@ const router = useRouter()
 const auth = useAuthStore()
 const canManage = computed(() => auth.has('price:manage'))
 
-const { items, loading, page, pageSize, total, filters, reload } = useList<Price>('/prices', { platform: '', mode: '', q: '' })
+const { items, loading, page, pageSize, total, filters, reload } = useList<Price>('/prices', { mode: '', q: '' })
 
-const platforms = ref<string[]>([])
-onMounted(async () => {
-  if (!auth.has('account:read')) return
-  try {
-    const types = await api.get<AccountType[]>('/account-types')
-    platforms.value = [...new Set((Array.isArray(types) ? types : []).map((x) => x.platform).filter(Boolean))]
-  } catch {
-    /* optional */
-  }
-})
-
-const platformOptions = computed(() => [
-  { value: '', label: t('common.all') },
-  { value: '*', label: '*' },
-  ...[...new Set([...platforms.value, ...items.value.map((p) => p.platform)])].filter((p) => p && p !== '*').map((p) => ({ value: p, label: p }))
-])
 const modeOptions = computed(() => [
   { value: '', label: t('common.all') },
   { value: 'per_request', label: t('prices.mode.per_request') },
@@ -44,16 +28,14 @@ const modeOptions = computed(() => [
 // Client-side filter as a fallback in case the server ignores a query parameter.
 const rows = computed(() =>
   items.value.filter((p) => {
-    if (filters.platform && p.platform !== filters.platform) return false
     if (filters.mode && p.mode !== filters.mode) return false
     const q = String(filters.q || '').trim().toLowerCase()
-    if (q && !`${p.platform} ${p.model_pattern} ${p.note || ''} ${p.plugin_key || ''}`.toLowerCase().includes(q)) return false
+    if (q && !`${p.model_pattern} ${p.note || ''} ${p.plugin_key || ''}`.toLowerCase().includes(q)) return false
     return true
   })
 )
 
 const columns = computed<TableColumn[]>(() => [
-  { key: 'platform', label: t('common.platform'), width: '120px' },
   { key: 'model_pattern', label: t('prices.modelPattern') },
   { key: 'mode', label: t('prices.modeCol'), width: '100px' },
   { key: 'summary', label: t('prices.summaryCol') },
@@ -112,7 +94,7 @@ async function override(p: Price) {
 }
 
 async function remove(p: Price) {
-  const ok = await confirm({ message: t('common.confirmDelete', { name: `${p.platform} / ${p.model_pattern}` }), danger: true })
+  const ok = await confirm({ message: t('common.confirmDelete', { name: p.model_pattern }), danger: true })
   if (!ok) return
   try {
     await api.del(`/prices/${p.id}`)
@@ -132,10 +114,6 @@ async function remove(p: Price) {
       </template>
       <template #filters>
         <div class="w-40">
-          <label class="input-label">{{ t('common.platform') }}</label>
-          <SSelect v-model="filters.platform" :options="platformOptions" />
-        </div>
-        <div class="w-40">
           <label class="input-label">{{ t('prices.modeCol') }}</label>
           <SSelect v-model="filters.mode" :options="modeOptions" />
         </div>
@@ -146,11 +124,11 @@ async function remove(p: Price) {
       </template>
     </SPageHeader>
 
+    <p class="mb-3 rounded-lg bg-primary-50 px-3 py-2 text-sm text-primary-800 dark:bg-primary-900/20 dark:text-primary-200" data-testid="price-scope-note">
+      {{ t('prices.scopeNote') }}
+    </p>
     <div class="card overflow-hidden">
       <STable :columns="columns" :rows="rows" :loading="loading">
-        <template #cell-platform="{ row }">
-          <span class="font-mono text-xs">{{ row.platform }}</span>
-        </template>
         <template #cell-model_pattern="{ row }">
           <RouterLink :to="`/prices/${row.id}`" class="link font-mono text-sm">{{ row.model_pattern }}</RouterLink>
           <p v-if="row.note" class="muted truncate text-xs">{{ row.note }}</p>

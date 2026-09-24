@@ -1,52 +1,63 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { SSpinner } from '@sub2api/ui'
+import { SEmpty, SSpinner } from '@sub2api/ui'
 import type { AccountType } from '@/api/types'
 import { lt } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import PluginAvatar from '@/views/plugins/parts/PluginAvatar.vue'
+import TrustBadge from '@/views/plugins/parts/TrustBadge.vue'
+import AccountTypeEndpoints from './AccountTypeEndpoints.vue'
 import { useAccountTypes } from './accountTypes'
 
-// Step 1 of "new account": one card per account type declared by enabled
-// platform plugins (wireframe A.3).
+// Step 1 of "new account" (wireframe A.3): account types of all enabled
+// plugins, grouped by plugin, with the endpoints each type can serve.
 const emit = defineEmits<{ (e: 'pick', t: AccountType): void }>()
 const { t } = useI18n()
 const auth = useAuthStore()
-const { types, loaded, load } = useAccountTypes()
+const { grouped, loaded, load } = useAccountTypes()
 load(true)
-
-function initial(at: AccountType) {
-  return (lt(at.plugin_name) || at.plugin_key || '?').slice(0, 1).toUpperCase()
-}
 </script>
 
 <template>
   <div>
     <div v-if="!loaded" class="flex justify-center py-10"><SSpinner /></div>
-    <div v-else class="grid gap-3 sm:grid-cols-2">
-      <button
-        v-for="at in types"
-        :key="`${at.platform}/${at.type}`"
-        type="button"
-        class="card flex items-start gap-3 p-4 text-left transition hover:border-primary-300 hover:shadow-card-hover dark:hover:border-primary-700"
-        @click="emit('pick', at)"
-      >
-        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-100 text-base font-bold text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">
-          {{ initial(at) }}
-        </span>
-        <span class="min-w-0">
-          <span class="block font-medium text-gray-900 dark:text-white">{{ lt(at.plugin_name) || at.plugin_key }}</span>
-          <span class="block text-sm text-gray-700 dark:text-gray-300">{{ lt(at.label) || at.type }}</span>
-          <span v-if="at.description" class="mt-1 block text-xs text-gray-500 dark:text-dark-400">{{ lt(at.description) }}</span>
-          <span class="mt-1 block text-xs text-gray-400">{{ at.plugin_key }}{{ at.plugin_version ? ` v${at.plugin_version}` : '' }} · {{ at.form.mode }}</span>
-        </span>
-      </button>
-      <div class="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 p-4 text-center text-sm text-gray-400 dark:border-dark-700">
-        <span class="text-lg">?</span>
-        <span>{{ t('accounts.otherPlatforms') }}</span>
-      </div>
+    <SEmpty v-else-if="!grouped.length" :text="t('accounts.noTypes')" />
+    <div v-else class="space-y-5">
+      <section v-for="g in grouped" :key="g.plugin_key">
+        <header class="mb-2 flex flex-wrap items-center gap-2">
+          <PluginAvatar :name="lt(g.plugin_name) || g.plugin_key" :plugin-key="g.plugin_key" size="sm" />
+          <span class="font-medium text-gray-900 dark:text-white">{{ lt(g.plugin_name) || g.plugin_key }}</span>
+          <span class="muted font-mono text-xs">{{ g.plugin_key }}{{ g.plugin_version ? ` v${g.plugin_version}` : '' }}</span>
+          <TrustBadge v-if="g.trust" :trust="g.trust" />
+        </header>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <button
+            v-for="at in g.types"
+            :key="`${at.plugin_key}/${at.type}`"
+            type="button"
+            class="card flex flex-col items-stretch gap-2 p-4 text-left transition hover:border-primary-300 hover:shadow-card-hover dark:hover:border-primary-700"
+            :data-type="`${at.plugin_key}/${at.type}`"
+            @click="emit('pick', at)"
+          >
+            <span>
+              <span class="font-medium text-gray-900 dark:text-white">{{ lt(at.label) || at.type }}</span>
+              <span class="muted ml-2 font-mono text-xs">{{ at.type }}</span>
+            </span>
+            <span v-if="at.description" class="block text-xs text-gray-500 dark:text-dark-400">{{ lt(at.description) }}</span>
+            <span v-if="at.protocols.length" class="flex flex-wrap items-center gap-1 text-xs">
+              <span class="muted">{{ t('accounts.protocols') }}:</span>
+              <code v-for="p in at.protocols" :key="p" class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[11px] dark:bg-dark-700">{{ p }}</code>
+            </span>
+            <span class="block border-t border-gray-100 pt-2 dark:border-dark-700">
+              <span class="muted mb-1 block text-xs">{{ t('accounts.servesEndpoints') }}</span>
+              <AccountTypeEndpoints :endpoints="at.endpoints" compact />
+            </span>
+          </button>
+        </div>
+      </section>
     </div>
     <p class="mt-4 text-sm text-gray-500 dark:text-dark-400">
-      {{ t('accounts.noPlatformHint') }}
+      {{ t('accounts.noTypeHint') }}
       <RouterLink v-if="auth.has('plugin:market:read')" to="/market" class="link">{{ t('accounts.goMarket') }}</RouterLink>
     </p>
   </div>

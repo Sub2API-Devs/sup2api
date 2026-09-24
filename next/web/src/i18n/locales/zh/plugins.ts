@@ -84,7 +84,7 @@ export default {
     routes_webhook: 'Webhook 接口',
     gateway_hook: '网关钩子',
     gateway_endpoint: '网关端点',
-    platform_register: '注册平台',
+    platform_register: '注册平台或账号类型',
     scheduler_affinity: '调度亲和',
     users_read: '读取用户',
     accounts_credentials: '账号凭证',
@@ -97,7 +97,7 @@ export default {
 
   hpWarn: {
     ui_native: '插件代码将以你的登录身份在控制台中运行。',
-    accounts_credentials: '插件可以读取上游账号的密钥（API Key、Token）。',
+    accounts_credentials: '插件可以读取其自己声明的账号类型下上游账号的密钥（API Key、Token）。',
     ledger_credit: '插件可以给用户增加余额。',
     ledger_debit: '插件可以扣减用户余额。',
     users_write: '插件可以创建和修改用户。',
@@ -171,6 +171,7 @@ export default {
     platform: '平台',
     protocols: '协议',
     accountTypes: '账号类型',
+    nativeProtocols: '原生支持的协议',
     hooks: '网关钩子',
     models: '模型',
     groups: '分组',

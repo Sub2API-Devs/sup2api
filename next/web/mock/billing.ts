@@ -169,7 +169,6 @@ function tryEvaluate(expression: string, input: EvalInput) {
 
 interface MockPrice {
   id: number
-  platform: string
   model_pattern: string
   mode: PriceMode
   config: Record<string, any>
@@ -200,11 +199,10 @@ const SONNET_DEFAULT =
   'len <= 200000 ? tier("standard", p*3 + c*15 + cr*0.3 + cc*3.75 + cc1h*6) : tier("long_context", p*6 + c*22.5 + cr*0.6 + cc*7.5 + cc1h*12)'
 
 const prices: MockPrice[] = [
-  mkPrice({ id: 1, platform: 'anthropic', model_pattern: 'claude-sonnet-*', mode: 'expression', config: {}, expression: SONNET_DEFAULT, source: 'plugin_default', plugin_key: 'anthropic', enabled: true, note: '' }),
-  mkPrice({ id: 2, platform: 'anthropic', model_pattern: 'claude-haiku-*', mode: 'per_token', config: { p: 1, c: 5, cr: 0.1, cc: 1.25, cc1h: 2 }, source: 'plugin_default', plugin_key: 'anthropic', enabled: true, note: '' }),
+  mkPrice({ id: 1, model_pattern: 'claude-sonnet-*', mode: 'expression', config: {}, expression: SONNET_DEFAULT, source: 'plugin_default', plugin_key: 'anthropic', enabled: true, note: '' }),
+  mkPrice({ id: 2, model_pattern: 'claude-haiku-*', mode: 'per_token', config: { p: 1, c: 5, cr: 0.1, cc: 1.25, cc1h: 2 }, source: 'plugin_default', plugin_key: 'anthropic', enabled: true, note: '' }),
   mkPrice({
     id: 3,
-    platform: 'anthropic',
     model_pattern: 'claude-sonnet-x',
     mode: 'expression',
     config: {
@@ -219,10 +217,9 @@ const prices: MockPrice[] = [
     enabled: true,
     note: 'fast mode costs double'
   }),
-  mkPrice({ id: 4, platform: '*', model_pattern: 'web-search', mode: 'per_request', config: { price: 0.01 }, source: 'admin', plugin_key: null, enabled: true, note: '' }),
+  mkPrice({ id: 4, model_pattern: 'web-search', mode: 'per_request', config: { price: 0.01 }, source: 'admin', plugin_key: null, enabled: true, note: '' }),
   mkPrice({
     id: 5,
-    platform: 'anthropic',
     model_pattern: 'claude-opus-*',
     mode: 'expression',
     config: {},
@@ -285,9 +282,8 @@ function validate(body: any) {
 
 function priceFilter(q: Record<string, string>) {
   return prices.filter((p) => {
-    if (q.platform && p.platform !== q.platform) return false
     if (q.mode && p.mode !== q.mode) return false
-    if (q.q && !`${p.platform} ${p.model_pattern} ${p.note}`.toLowerCase().includes(q.q.toLowerCase())) return false
+    if (q.q && !`${p.model_pattern} ${p.note} ${p.plugin_key || ''}`.toLowerCase().includes(q.q.toLowerCase())) return false
     return true
   })
 }
@@ -351,14 +347,15 @@ function checkSave(body: any) {
 on('POST', '/prices', (req) => {
   const b = req.body || {}
   if (!b.model_pattern) return fail(400, 'invalid_argument', 'invalid', { fields: [{ field: 'model_pattern', code: 'required', message: 'Model is required' }] })
+  if ('platform' in b) return fail(400, 'invalid_argument', 'unknown field "platform"')
   const v = checkSave(b)
   if ('__status' in v) return v
-  if (prices.some((p) => p.source === 'admin' && p.platform === (b.platform || '*') && p.model_pattern === b.model_pattern)) {
-    return fail(409, 'conflict', 'an admin price for this platform/model already exists')
+  // One admin price per model pattern (prices are global, CONTRACTS §12).
+  if (prices.some((p) => p.source === 'admin' && p.model_pattern === b.model_pattern)) {
+    return fail(409, 'conflict', 'an admin price for this model already exists')
   }
   const p: MockPrice = {
     id: nextId(),
-    platform: b.platform || '*',
     model_pattern: b.model_pattern,
     mode: v.mode,
     config: v.config,
@@ -389,7 +386,6 @@ on('PATCH', '/prices/:id', (req) => {
   const v = checkSave({ ...p, ...b })
   if ('__status' in v) return v
   Object.assign(p, {
-    platform: b.platform ?? p.platform,
     model_pattern: b.model_pattern ?? p.model_pattern,
     mode: v.mode,
     config: v.config,
@@ -413,7 +409,7 @@ on('DELETE', '/prices/:id', (req) => {
 on('POST', '/prices/:id/override', (req) => {
   const p = findPrice(req)
   if (!p) return fail(404, 'not_found', 'price not found')
-  const existing = prices.find((x) => x.source === 'admin' && x.platform === p.platform && x.model_pattern === p.model_pattern)
+  const existing = prices.find((x) => x.source === 'admin' && x.model_pattern === p.model_pattern)
   if (existing) return existing
   const copy: MockPrice = { ...p, id: nextId(), source: 'admin', plugin_key: null, note: `override of ${p.plugin_key} default`, updated_at: now() }
   prices.push(copy)
@@ -431,9 +427,12 @@ const GROUPS = [
   { id: 1, name: 'default', rate: 1 },
   { id: 2, name: 'vip', rate: 1.5 }
 ]
+// Same accounts as mock/accounts.ts; relay-gpt is served through the
+// anthropic.messages -> openai.chat converter.
 const ACCOUNTS = [
-  { id: 1, name: 'claude-main' },
-  { id: 2, name: 'claude-backup' }
+  { id: 12, name: 'claude-main', plugin_key: 'anthropic', type: 'apikey', upstream: 'anthropic.messages' },
+  { id: 13, name: 'claude-bak', plugin_key: 'anthropic', type: 'apikey', upstream: 'anthropic.messages' },
+  { id: 16, name: 'relay-gpt', plugin_key: 'openai_relay', type: 'chat_key', upstream: 'openai.chat' }
 ]
 const MODELS = ['claude-sonnet-x', 'claude-sonnet-4-5', 'claude-haiku-4-5']
 
@@ -514,9 +513,12 @@ for (let i = 0; i < 90; i++) {
     group_name: group.name,
     account_id: blocked ? null : account.id,
     account_name: blocked ? null : account.name,
-    plugin_key: 'anthropic',
+    // plugin_key/account_type: the account type; platform/protocol: the client endpoint.
+    plugin_key: blocked ? '' : account.plugin_key,
+    account_type: blocked ? '' : account.type,
     platform: 'anthropic',
     protocol: 'anthropic.messages',
+    upstream_protocol: blocked ? '' : account.upstream,
     endpoint: '/v1/messages',
     model,
     upstream_model: model,
@@ -544,7 +546,7 @@ for (let i = 0; i < 90; i++) {
     hook_decisions,
     created_at: at.toISOString(),
     _detail: billing.detail,
-    _price: billing.status === 'billed' && price ? { id: price.id, platform: price.platform, model_pattern: price.model_pattern, source: price.source, plugin_key: price.plugin_key } : null
+    _price: billing.status === 'billed' && price ? { id: price.id, model_pattern: price.model_pattern, source: price.source, plugin_key: price.plugin_key } : null
   }
   usageRows.push(row)
 }

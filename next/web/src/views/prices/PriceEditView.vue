@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { ApiError, api } from '@sub2api/host'
 import { SBadge, SButton, SCard, SField, SIcon, SPageHeader, SSpinner, SSwitch, confirm, toast } from '@sub2api/ui'
-import type { AccountType, Price, PriceValidateResult } from '@/api/types'
+import type { Price, PriceValidateResult } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
 import { formatDateTime, formatMoney } from '@/utils/format'
@@ -47,7 +47,7 @@ const loading = ref(false)
 const saving = ref(false)
 const overriding = ref(false)
 const price = ref<Price | null>(null)
-const form = reactive({ platform: '*', model_pattern: '', note: '', enabled: true })
+const form = reactive({ model_pattern: '', note: '', enabled: true })
 const mode = ref<PriceMode>('per_token')
 const perRequest = ref<number | ''>(0.01)
 const perToken = reactive<TokenPrices>({ p: 3, c: 15, cr: 0.3, cc: 3.75, cc1h: 6 })
@@ -57,7 +57,6 @@ const sourceText = ref('')
 const notVisual = ref(false)
 const errors = ref<Record<string, string>>({})
 const historyOpen = ref(false)
-const platforms = ref<string[]>(['*'])
 
 const readonly = computed(() => !auth.has('price:manage') || price.value?.source === 'plugin_default')
 const isPluginDefault = computed(() => price.value?.source === 'plugin_default')
@@ -66,7 +65,7 @@ const isPluginDefault = computed(() => price.value?.source === 'plugin_default')
 
 function resetForm() {
   price.value = null
-  Object.assign(form, { platform: '*', model_pattern: '', note: '', enabled: true })
+  Object.assign(form, { model_pattern: '', note: '', enabled: true })
   mode.value = 'per_token'
   perRequest.value = 0.01
   Object.assign(perToken, { p: 3, c: 15, cr: 0.3, cc: 3.75, cc1h: 6 })
@@ -81,7 +80,7 @@ function resetForm() {
 
 function applyPrice(p: Price) {
   price.value = p
-  Object.assign(form, { platform: p.platform, model_pattern: p.model_pattern, note: p.note || '', enabled: p.enabled })
+  Object.assign(form, { model_pattern: p.model_pattern, note: p.note || '', enabled: p.enabled })
   mode.value = p.mode
   sourceText.value = p.expression || ''
   notVisual.value = false
@@ -116,18 +115,6 @@ async function load() {
     loading.value = false
   }
 }
-
-onMounted(async () => {
-  if (!auth.has('account:read')) return
-  try {
-    const types = await api.get<AccountType[]>('/account-types')
-    const set = new Set<string>(['*'])
-    for (const x of Array.isArray(types) ? types : []) if (x.platform) set.add(x.platform)
-    platforms.value = [...set]
-  } catch {
-    /* suggestions are optional */
-  }
-})
 
 // ------------------------------------------------------------------ derived payload
 
@@ -291,7 +278,6 @@ async function save() {
   saving.value = true
   try {
     await submit({
-      platform: form.platform.trim() || '*',
       model_pattern: form.model_pattern.trim(),
       mode: payload.value.mode,
       config: payload.value.config,
@@ -324,7 +310,7 @@ watch(priceId, load, { immediate: true })
 const title = computed(() => {
   if (!priceId.value) return t('prices.newTitle')
   const p = price.value
-  return p ? t('prices.editTitle', { name: `${p.platform} / ${p.model_pattern}` }) : t('prices.editTitleShort')
+  return p ? t('prices.editTitle', { name: p.model_pattern }) : t('prices.editTitleShort')
 })
 </script>
 
@@ -356,13 +342,8 @@ const title = computed(() => {
     <template v-else>
       <!-- basic -->
       <SCard :title="t('prices.basic')">
+        <p class="mb-4 rounded-lg bg-primary-50 px-3 py-2 text-sm text-primary-800 dark:bg-primary-900/20 dark:text-primary-200">{{ t('prices.scopeNote') }}</p>
         <div class="grid gap-4 md:grid-cols-2">
-          <SField :label="t('common.platform')" :hint="t('prices.platformHint')" :error="errors.platform" required>
-            <input v-model.trim="form.platform" class="input font-mono" list="price-platforms" :disabled="readonly" />
-            <datalist id="price-platforms">
-              <option v-for="p in platforms" :key="p" :value="p" />
-            </datalist>
-          </SField>
           <SField :label="t('prices.modelPattern')" :hint="t('prices.modelPatternHint')" :error="errors.model_pattern" required>
             <input v-model.trim="form.model_pattern" class="input font-mono" placeholder="claude-sonnet-*" :disabled="readonly" />
           </SField>
