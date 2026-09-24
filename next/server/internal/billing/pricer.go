@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/billing/expr"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
@@ -199,8 +200,9 @@ func (s *Service) Inputs(rule *core.PriceRule) (bodyPaths []string, headerNames 
 	return p.Params(), p.Headers()
 }
 
-// factsFor returns the u() keys declared by any enabled plugin (platform
-// usage rules and account type protocol overrides), since a price applies to
+// factsFor returns the u() keys declared anywhere in the generation: usage
+// rules of every platform (built-in and plugin) and of their endpoints, and
+// the per-platform usage overrides of account types, since a price applies to
 // a model whichever platform or account type serves it. It returns nil when
 // they cannot be determined (no registry or generation).
 func (s *Service) factsFor() map[string]bool {
@@ -216,21 +218,24 @@ func (s *Service) factsFor() map[string]bool {
 
 func declaredFacts(gen core.Generation) map[string]bool {
 	facts := map[string]bool{}
-	for _, pl := range gen.Plugins() {
-		if pl.Manifest != nil && pl.Manifest.Platform != nil {
-			if b, ok := gen.Platform(pl.Manifest.Platform.ID); ok {
-				for k := range b.Platform.Usage.Facts {
-					facts[k] = true
-				}
-			}
+	add := func(u *manifest.UsageRules) {
+		if u == nil {
+			return
+		}
+		for k := range u.Facts {
+			facts[k] = true
+		}
+	}
+	for _, b := range gen.Platforms() {
+		add(&b.Platform.Usage)
+		for _, e := range b.Platform.Endpoints {
+			add(e.Usage)
 		}
 	}
 	for _, b := range gen.AccountTypes() {
-		for _, p := range b.Type.Protocols {
-			if p.Usage != nil {
-				for k := range p.Usage.Facts {
-					facts[k] = true
-				}
+		for _, p := range b.Type.Platforms {
+			for _, u := range p.Usage {
+				add(&u)
 			}
 		}
 	}

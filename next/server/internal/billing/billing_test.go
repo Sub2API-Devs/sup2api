@@ -224,34 +224,36 @@ func TestPricePrecedence(t *testing.T) {
 // fakeGen implements the parts of core.Generation used by declaredFacts.
 type fakeGen struct {
 	core.Generation
-	plugins []core.PluginInfo
-	plats   map[string]core.PlatformBinding
-	types   []core.AccountTypeBinding
+	plats []core.PlatformBinding
+	types []core.AccountTypeBinding
 }
 
-func (g *fakeGen) Plugins() []core.PluginInfo              { return g.plugins }
+func (g *fakeGen) Platforms() []core.PlatformBinding       { return g.plats }
 func (g *fakeGen) AccountTypes() []core.AccountTypeBinding { return g.types }
-func (g *fakeGen) Platform(id string) (core.PlatformBinding, bool) {
-	b, ok := g.plats[id]
-	return b, ok
-}
 
 func TestDeclaredFacts(t *testing.T) {
+	facts := func(keys ...string) manifest.UsageRules {
+		m := map[string]manifest.UsageFact{}
+		for _, k := range keys {
+			m[k] = manifest.UsageFact{Type: "number"}
+		}
+		return manifest.UsageRules{Facts: m}
+	}
+	epUsage := facts("frames")
 	g := &fakeGen{
-		plugins: []core.PluginInfo{
-			{Key: "img", Manifest: &manifest.Manifest{Platform: &manifest.Platform{ID: "img"}}},
-			{Key: "relay", Manifest: &manifest.Manifest{}},
+		plats: []core.PlatformBinding{
+			{Builtin: true, Platform: manifest.Platform{ID: "anthropic", Usage: facts("web_search")}},
+			{Plugin: core.PluginInfo{Key: "img"}, Platform: manifest.Platform{ID: "img", Usage: facts("images"),
+				Endpoints: []manifest.Endpoint{{Protocol: "img.gen"}, {Protocol: "img.video", Usage: &epUsage}}}},
 		},
-		plats: map[string]core.PlatformBinding{"img": {Platform: manifest.Platform{ID: "img",
-			Usage: manifest.UsageRules{Facts: map[string]manifest.UsageFact{"images": {Type: "number"}}}}}},
-		types: []core.AccountTypeBinding{{Type: manifest.AccountType{ID: "k", Protocols: []manifest.AccountProtocol{
-			{Protocol: "a"},
-			{Protocol: "b", Usage: &manifest.UsageRules{Facts: map[string]manifest.UsageFact{"seconds": {Type: "number"}}}},
+		types: []core.AccountTypeBinding{{Type: manifest.AccountType{ID: "k", Platforms: []manifest.AccountPlatform{
+			{Platform: "anthropic"},
+			{Platform: "img", Usage: map[string]manifest.UsageRules{"img.gen": facts("seconds"), "img.video": facts("images")}},
 		}}}},
 	}
-	facts := declaredFacts(g)
-	if len(facts) != 2 || !facts["images"] || !facts["seconds"] {
-		t.Fatalf("facts %v", facts)
+	got := declaredFacts(g)
+	if len(got) != 4 || !got["images"] || !got["seconds"] || !got["web_search"] || !got["frames"] {
+		t.Fatalf("facts %v", got)
 	}
 }
 

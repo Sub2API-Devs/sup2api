@@ -14,8 +14,8 @@ var DefaultBigCostUSD = decimal.NewFromInt(10)
 
 // ValidateOptions tune Validate.
 type ValidateOptions struct {
-	// Facts are the u() keys declared by the enabled plugins (platform usage
-	// rules and account type protocols); nil skips the check.
+	// Facts are the u() keys declared in the generation (usage rules of
+	// platforms, endpoints and account type platforms); nil skips the check.
 	Facts map[string]bool
 	// BigCostUSD is the warning threshold; zero means DefaultBigCostUSD.
 	BigCostUSD decimal.Decimal
