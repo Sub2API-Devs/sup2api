@@ -31,15 +31,17 @@ type attemptResult struct {
 
 // dispatch schedules accounts and forwards the request, failing over up to
 // max_attempts times. Once bytes reached the client it never fails over.
-func (c *call) dispatch(ctx context.Context, platforms []core.PlatformBinding) {
-	ids := make([]string, 0, len(platforms))
-	for _, pb := range platforms {
-		ids = append(ids, pb.Platform.ID)
-	}
-	cands, err := c.g.d.Accounts.Candidates(ctx, c.principal.Group.ID, ids)
+func (c *call) dispatch(ctx context.Context) {
+	all, err := c.g.d.Accounts.Candidates(ctx, c.principal.Group.ID, c.routeKeys)
 	if err != nil {
 		c.fail(fromCore(core.ErrUnavailable.WithCause(err), errTypeInternal))
 		return
+	}
+	cands := make([]core.AccountRef, 0, len(all))
+	for i := range all {
+		if c.route(&all[i]) != nil {
+			cands = append(cands, all[i])
+		}
 	}
 	c.sticky = c.resolveSticky(ctx)
 	excluded := map[int64]bool{}
@@ -92,9 +94,11 @@ func (c *call) dispatch(ctx context.Context, platforms []core.PlatformBinding) {
 			}
 		}
 	}
-	if last == nil || (last.RecordType != errTypeUpstream && last.Status != http.StatusTooManyRequests) {
-		// Only upstream answers are worth relaying; plugin or account
-		// problems surface as "no available account".
+	if last == nil || (last.RecordType != errTypeUpstream && last.RecordType != errTypeInvalidRequest &&
+		last.Status != http.StatusTooManyRequests) {
+		// Only upstream answers (and requests no upstream protocol can
+		// express) are worth relaying; plugin or account problems surface
+		// as "no available account".
 		last = fromCore(core.ErrNoAvailableAccount, errTypeNoAccount)
 	}
 	if lastAccount != 0 && c.rec.AccountID == nil {
@@ -120,21 +124,25 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 				}
 			}
 			if bound != nil {
-				if release, ok := c.acquireAccount(ctx, bound); ok {
-					s.hit = true
-					return bound, release, false
+				// An unusable type (request not convertible) keeps the binding.
+				if c.usable(bound) {
+					if release, ok := c.acquireAccount(ctx, bound); ok {
+						s.hit = true
+						return bound, release, false
+					}
 				}
 			} else if cooling, err := c.g.d.Accounts.IsCoolingDown(ctx, s.bound); err == nil && !cooling {
-				// Not in the group's schedulable set and not merely cooling
-				// down: disabled, deleted, unschedulable or moved.
+				// Not in the group's schedulable set for this request and
+				// not merely cooling down: disabled, deleted, unschedulable,
+				// moved, or of a type that cannot serve this endpoint.
 				c.dropBinding(ctx, s)
 			}
 		}
 	}
 	var pool []core.AccountRef
-	for _, a := range cands {
-		if !excluded[a.ID] {
-			pool = append(pool, a)
+	for i := range cands {
+		if !excluded[cands[i].ID] && c.usable(&cands[i]) {
+			pool = append(pool, cands[i])
 		}
 	}
 	if len(pool) == 0 {
@@ -182,36 +190,42 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	if err != nil {
 		return unavailable("load account", err)
 	}
-	pb, ok := c.gen.Platform(acc.Platform)
-	if !ok || pb.Client == nil {
-		return unavailable("platform not enabled", errors.New(acc.Platform))
+	rt := c.route(ref)
+	if rt == nil || rt.binding.Client == nil {
+		return unavailable("account type not enabled", errors.New(ref.PluginKey+"/"+ref.Type))
 	}
 	id := acc.ID
 	c.rec.AccountID = &id
-	c.rec.Platform = acc.Platform
-	c.rec.PluginKey, c.rec.PluginVersion = pb.Plugin.Key, pb.Plugin.Version
-	c.rec.UsageSemantics = pb.Platform.Usage.Semantics
+	c.rec.PluginKey, c.rec.PluginVersion = rt.binding.Plugin.Key, rt.binding.Plugin.Version
+	c.rec.AccountType = rt.binding.Type.ID
+	c.rec.UpstreamProtocol = rt.upstream
+	c.rec.UsageSemantics = rt.usage.Semantics
 	if c.rec.UsageSemantics == "" {
 		c.rec.UsageSemantics = "exclusive"
 	}
-	if c.prices != nil {
-		c.rec.Price = c.prices[acc.Platform]
-		c.capturePriceInputs(c.rec.Price)
-	}
-	pacct := &pluginv1.Account{Id: acc.ID, Name: acc.Name, Platform: acc.Platform, Type: acc.Type,
+	pacct := &pluginv1.Account{Id: acc.ID, Name: acc.Name, Platform: c.platform, Type: rt.binding.Type.ID,
 		CredentialsJson: string(acc.Credentials), SettingsJson: string(acc.Settings)}
 
-	// Build the upstream request (platform plugin).
+	// Convert the request body to the upstream protocol when needed.
+	upBody, err := rt.upstreamBody(c.body)
+	if err != nil {
+		slog.InfoContext(ctx, "gateway: request conversion failed", "from", c.ep.Protocol, "to", rt.upstream, "err", err)
+		return attemptResult{kind: attemptFailover, err: &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code,
+			Message: "request cannot be converted to " + rt.upstream + ": " + err.Error(), RecordType: errTypeInvalidRequest}}
+	}
+
+	// Build the upstream request (plugin declaring the account type).
 	fields := map[string]string{}
-	for _, p := range pb.Platform.RequestFields {
-		if r := getJSON(c.body, p); r != "" {
+	for _, p := range rt.requestFields {
+		if r := getJSON(upBody, p); r != "" {
 			fields[p] = r
 		}
 	}
+	meta := c.metaFor(rt)
 	bctx, cancel := context.WithTimeout(ctx, c.gw.platformTimeout())
-	built, err := pb.Client.BuildUpstreamRequest(bctx, &pluginv1.BuildUpstreamRequestRequest{
-		Meta: c.meta(), Account: pacct, Fields: fields,
-		InboundHeaders: c.passHeaders(pb.Platform.PassHeaders), Attempt: int32(n),
+	built, err := rt.binding.Client.BuildUpstreamRequest(bctx, &pluginv1.BuildUpstreamRequestRequest{
+		Meta: meta, Account: pacct, Fields: fields,
+		InboundHeaders: c.passHeaders(rt.passHeaders), Attempt: int32(n),
 	})
 	cancel()
 	if ctx.Err() != nil {
@@ -228,10 +242,10 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	}
 	target, err := c.g.checkUpstreamURL(ctx, built.GetUrl())
 	if err != nil {
-		slog.WarnContext(ctx, "gateway: upstream url rejected", "plugin", pb.Plugin.Key, "account", acc.ID, "err", err)
+		slog.WarnContext(ctx, "gateway: upstream url rejected", "plugin", rt.binding.Plugin.Key, "account", acc.ID, "err", err)
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrUnavailable.WithMessage("upstream address rejected"), errTypeInternal)}
 	}
-	body, err := applyPatches(c.body, built.GetPatches())
+	body, err := applyPatches(upBody, built.GetPatches())
 	if err != nil {
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
 	}
@@ -283,20 +297,20 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 		if headerTimedOut {
 			msg = "timeout waiting for upstream response headers"
 		}
-		return c.classify(ctx, pb, pacct, 0, nil, nil, msg)
+		return c.classify(ctx, rt, pacct, 0, nil, nil, msg)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		raw, _ := readPrefix(resp.Body, maxErrorBody)
 		ct := resp.Header.Get("Content-Type")
-		res := c.classify(ctx, pb, pacct, resp.StatusCode, resp.Header, raw, "")
+		res := c.classify(ctx, rt, pacct, resp.StatusCode, resp.Header, raw, "")
 		if res.err != nil && res.err.Raw != nil {
 			res.err.ContentType = ct
 		}
 		return res
 	}
-	return c.forward(ctx, pb, resp)
+	return c.forward(ctx, rt, resp)
 }
 
 func canceledErr() *gwError {
@@ -309,9 +323,10 @@ const (
 	defaultCooldown = 60 * time.Second
 )
 
-// classify asks the platform plugin what an upstream failure means, applies
-// the account effect and decides between failover and returning the error.
-func (c *call) classify(ctx context.Context, pb core.PlatformBinding, acct *pluginv1.Account,
+// classify asks the account type's plugin what an upstream failure means,
+// applies the account effect and decides between failover and returning the
+// error.
+func (c *call) classify(ctx context.Context, rt *typeRoute, acct *pluginv1.Account,
 	status int, header http.Header, body []byte, transportErr string) attemptResult {
 	headers := map[string]string{}
 	for k, v := range header {
@@ -324,12 +339,12 @@ func (c *call) classify(ctx context.Context, pb core.PlatformBinding, acct *plug
 		prefix = prefix[:classifyPrefix]
 	}
 	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), c.gw.platformTimeout())
-	cls, err := pb.Client.ClassifyError(cctx, &pluginv1.ClassifyErrorRequest{
-		Meta: c.meta(), Account: acct, Status: int32(status), Headers: headers, BodyPrefix: prefix, TransportError: transportErr,
+	cls, err := rt.binding.Client.ClassifyError(cctx, &pluginv1.ClassifyErrorRequest{
+		Meta: c.metaFor(rt), Account: acct, Status: int32(status), Headers: headers, BodyPrefix: prefix, TransportError: transportErr,
 	})
 	cancel()
 	if err != nil || cls == nil {
-		slog.WarnContext(ctx, "gateway: classify error failed, using defaults", "plugin", pb.Plugin.Key, "err", err)
+		slog.WarnContext(ctx, "gateway: classify error failed, using defaults", "plugin", rt.binding.Plugin.Key, "err", err)
 		cls = defaultClassification(status)
 	}
 
@@ -360,7 +375,11 @@ func (c *call) classify(ctx context.Context, pb core.PlatformBinding, acct *plug
 	}
 	e := &gwError{Status: clientStatus, Type: cls.GetClientErrorType(), Message: cls.GetClientMessage(),
 		RecordType: errTypeUpstream, Code: "upstream_error"}
-	if e.Type == "" && e.Message == "" && len(body) > 0 {
+	if rt.conv != nil {
+		// The upstream speaks another protocol: its error body and error
+		// types do not fit the endpoint's errorFormat, which always wins.
+		e.Type = ""
+	} else if e.Type == "" && e.Message == "" && len(body) > 0 {
 		e.Raw = body
 	}
 	if e.Message == "" {

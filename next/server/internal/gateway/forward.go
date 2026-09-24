@@ -15,6 +15,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert"
 )
 
 const (
@@ -24,18 +25,30 @@ const (
 
 var errLineTooLong = errors.New("sse line too long")
 
+// convertError is a failure converting the upstream response to the client
+// protocol.
+type convertError struct{ err error }
+
+func (e *convertError) Error() string { return "response conversion failed: " + e.err.Error() }
+func (e *convertError) Unwrap() error { return e.err }
+
 // forward relays a successful upstream response. From here on bytes reach
-// the client, so the attempt is final whatever happens.
-func (c *call) forward(ctx context.Context, pb core.PlatformBinding, resp *http.Response) attemptResult {
-	u := newUsageAcc(pb.Platform.Usage)
+// the client, so the attempt is final whatever happens. On a converting
+// route the response is converted to the endpoint protocol; usage is always
+// read from the upstream response with the upstream protocol's rules.
+func (c *call) forward(ctx context.Context, rt *typeRoute, resp *http.Response) attemptResult {
+	u := newUsageAcc(rt.usage)
 	c.rec.StatusCode = resp.StatusCode
 	c.rec.Success = true
 	c.rec.ErrorType = ""
 	c.rec.ErrorMessage = ""
 	var err error
-	if isSSE(resp.Header.Get("Content-Type")) {
-		err = c.forwardSSE(ctx, resp, u)
-	} else {
+	switch {
+	case isSSE(resp.Header.Get("Content-Type")):
+		err = c.forwardSSE(ctx, resp, u, rt.conv)
+	case rt.conv != nil:
+		err = c.forwardJSONConverted(resp, u, rt.conv)
+	default:
 		err = c.forwardJSON(resp, u)
 	}
 	c.rec.Tokens = u.tokens()
@@ -45,21 +58,35 @@ func (c *call) forward(ctx context.Context, pb core.PlatformBinding, resp *http.
 	if c.rec.UpstreamModel == "" && u.model != "" && u.model != c.model {
 		c.rec.UpstreamModel = u.model
 	}
-	if err != nil {
-		c.rec.Success = false
-		if ctx.Err() != nil || errors.Is(err, errClientGone) {
-			c.rec.ErrorType = errTypeClientCanceled
-			c.rec.StatusCode = statusClientClosed
-			c.rec.ErrorMessage = "client canceled"
-		} else {
+	var cerr *convertError
+	switch {
+	case err == nil:
+		if u.streamError != "" {
+			c.rec.Success = false
 			c.rec.ErrorType = errTypeUpstream
-			c.rec.ErrorMessage = truncateUTF8("upstream stream interrupted: "+err.Error(), 1000)
-			slog.WarnContext(ctx, "gateway: upstream response interrupted", "request_id", c.rid, "err", err)
+			c.rec.ErrorMessage = truncateUTF8(u.streamError, 1000)
 		}
-	} else if u.streamError != "" {
+	case errors.As(err, &cerr):
 		c.rec.Success = false
 		c.rec.ErrorType = errTypeUpstream
-		c.rec.ErrorMessage = truncateUTF8(u.streamError, 1000)
+		c.rec.ErrorMessage = truncateUTF8(err.Error(), 1000)
+		slog.WarnContext(ctx, "gateway: response conversion failed", "request_id", c.rid,
+			"from", rt.upstream, "to", c.ep.Protocol, "err", cerr.err)
+		if !c.c.Writer.Written() {
+			c.rec.StatusCode = http.StatusBadGateway
+			writeError(c.c, c.format, &gwError{Status: http.StatusBadGateway, Code: "upstream_error",
+				Message: "upstream response could not be converted"})
+		}
+	case ctx.Err() != nil || errors.Is(err, errClientGone):
+		c.rec.Success = false
+		c.rec.ErrorType = errTypeClientCanceled
+		c.rec.StatusCode = statusClientClosed
+		c.rec.ErrorMessage = "client canceled"
+	default:
+		c.rec.Success = false
+		c.rec.ErrorType = errTypeUpstream
+		c.rec.ErrorMessage = truncateUTF8("upstream stream interrupted: "+err.Error(), 1000)
+		slog.WarnContext(ctx, "gateway: upstream response interrupted", "request_id", c.rid, "err", err)
 	}
 	return attemptResult{kind: attemptDone}
 }
@@ -112,10 +139,38 @@ func (c *call) forwardJSON(resp *http.Response, u *usageAcc) error {
 	return nil
 }
 
-// forwardSSE relays the event stream line by line, flushing at every event
-// boundary and whenever the upstream has nothing buffered, and extracts usage
-// from the events on the way.
-func (c *call) forwardSSE(ctx context.Context, resp *http.Response, u *usageAcc) error {
+// forwardJSONConverted reads the whole upstream response, extracts usage
+// from it (upstream rules) and writes the converted body. Nothing is written
+// when reading or converting fails.
+func (c *call) forwardJSONConverted(resp *http.Response, u *usageAcc, conv convert.Converter) error {
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxUsageJSONBuf+1))
+	if err != nil {
+		return err
+	}
+	if len(raw) > maxUsageJSONBuf {
+		return &convertError{err: errors.New("upstream response too large")}
+	}
+	u.applyJSON(raw)
+	out, err := conv.Response(raw)
+	if err != nil {
+		return &convertError{err: err}
+	}
+	w := c.c.Writer
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	if _, err := w.Write(out); err != nil {
+		return errClientGone
+	}
+	w.Flush()
+	return nil
+}
+
+// forwardSSE relays the event stream, flushing at every event boundary and
+// whenever the upstream has nothing buffered, and extracts usage from the
+// upstream events on the way. Without a converter lines pass through
+// verbatim; with one each upstream event goes through the stream converter
+// and its output events are written instead.
+func (c *call) forwardSSE(ctx context.Context, resp *http.Response, u *usageAcc, conv convert.Converter) error {
 	w := c.c.Writer
 	h := w.Header()
 	h.Set("Content-Type", "text/event-stream")
@@ -124,29 +179,61 @@ func (c *call) forwardSSE(ctx context.Context, resp *http.Response, u *usageAcc)
 	w.WriteHeader(resp.StatusCode)
 	w.Flush()
 
+	var sc convert.StreamConverter
+	if conv != nil {
+		sc = conv.NewStream()
+	}
+	var out []byte
+	emit := func(evs []convert.Event, err error) error {
+		if err != nil {
+			return &convertError{err: err}
+		}
+		out = out[:0]
+		for _, ev := range evs {
+			out = convert.AppendSSE(out, ev)
+		}
+		if len(out) == 0 {
+			return nil
+		}
+		if _, werr := w.Write(out); werr != nil {
+			return errClientGone
+		}
+		w.Flush()
+		return nil
+	}
+
 	br := bufio.NewReaderSize(resp.Body, 64<<10)
 	var event string
 	var data []byte
-	dispatch := func() {
+	dispatch := func() error {
 		if event == "" && len(data) == 0 {
-			return
+			return nil
 		}
 		if c.rec.FirstTokenMs == 0 && len(data) > 0 {
 			c.rec.FirstTokenMs = max(1, int(c.g.now().Sub(c.start)/time.Millisecond))
 		}
 		u.applySSE(event, data)
+		var err error
+		if sc != nil {
+			err = emit(sc.Event(convert.Event{Name: event, Data: data}))
+		}
 		event, data = "", data[:0]
+		return err
 	}
 	for {
 		line, rerr := readLine(br, maxSSELine)
 		if len(line) > 0 {
-			if _, werr := w.Write(line); werr != nil {
-				return errClientGone
+			if sc == nil {
+				if _, werr := w.Write(line); werr != nil {
+					return errClientGone
+				}
 			}
 			t := bytes.TrimRight(line, "\r\n")
 			switch {
 			case len(t) == 0:
-				dispatch()
+				if err := dispatch(); err != nil {
+					return err
+				}
 			case bytes.HasPrefix(t, []byte("event:")):
 				event = strings.TrimSpace(string(t[len("event:"):]))
 			case bytes.HasPrefix(t, []byte("data:")):
@@ -159,13 +246,19 @@ func (c *call) forwardSSE(ctx context.Context, resp *http.Response, u *usageAcc)
 				}
 				data = append(data, d...)
 			}
-			if len(t) == 0 || br.Buffered() == 0 {
+			if sc == nil && (len(t) == 0 || br.Buffered() == 0) {
 				w.Flush()
 			}
 		}
 		if rerr != nil {
-			dispatch()
+			derr := dispatch()
+			if sc != nil && derr == nil {
+				derr = emit(sc.Flush())
+			}
 			w.Flush()
+			if derr != nil {
+				return derr
+			}
 			if rerr == io.EOF {
 				return nil
 			}

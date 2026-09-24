@@ -25,9 +25,12 @@ type call struct {
 	gen    core.Generation
 	ep     manifest.Endpoint
 	plugin core.PluginInfo // plugin declaring the endpoint
-	format string
-	rid    string
-	start  time.Time
+	// platform is the platform id of the endpoint's plugin ("" when it
+	// declares none).
+	platform string
+	format   string
+	rid      string
+	start    time.Time
 
 	gw        GatewaySettings
 	stickyCfg StickySettings
@@ -39,8 +42,12 @@ type call struct {
 
 	promptCache map[int]string
 
-	// billing
-	prices map[string]*core.PriceRule // platform id -> rule (nil = free policy)
+	// scheduling: account types able to serve the endpoint protocol
+	routes    map[core.AccountTypeKey]*typeRoute
+	routeKeys []core.AccountTypeKey
+
+	// billing: the model's global price (nil = free policy or free endpoint)
+	price *core.PriceRule
 
 	sticky *stickySession
 	rec    *core.UsageRecord
@@ -59,6 +66,9 @@ func (g *Gateway) serve(c *gin.Context, gen core.Generation, b core.EndpointBind
 	cl := &call{
 		g: g, c: c, gen: gen, ep: b.Endpoint, plugin: b.Plugin, format: b.Endpoint.ErrorFormat,
 		rid: rid, start: g.now(),
+	}
+	if pl := endpointPlatform(b.Plugin); pl != nil {
+		cl.platform = pl.ID
 	}
 	cl.gw, cl.stickyCfg = g.settings.get(ctx)
 	if clientRID != "" {
@@ -108,9 +118,13 @@ func (c *call) run(ctx context.Context) {
 		return
 	}
 
-	// 4. Billing gate.
-	platforms, e := c.prepareBilling(ctx)
-	if e != nil {
+	// 4. Account types serving the protocol, billing gate.
+	c.planRoutes()
+	if len(c.routeKeys) == 0 {
+		c.fail(fromCore(core.ErrNoAvailableAccount.WithMessage("no enabled account type serves this endpoint"), errTypeNoAccount))
+		return
+	}
+	if e := c.prepareBilling(ctx); e != nil {
 		c.fail(e)
 		return
 	}
@@ -128,7 +142,7 @@ func (c *call) run(ctx context.Context) {
 	defer release()
 
 	// 6. Schedule, forward, fail over.
-	c.dispatch(ctx, platforms)
+	c.dispatch(ctx)
 }
 
 // apiKey reads the key from the endpoint's auth headers or query parameter.
@@ -168,6 +182,7 @@ func (c *call) newRecord() *core.UsageRecord {
 		GroupID:        p.Group.ID,
 		PluginKey:      c.plugin.Key,
 		PluginVersion:  c.plugin.Version,
+		Platform:       c.platform,
 		Protocol:       c.ep.Protocol,
 		Endpoint:       c.ep.Path,
 		RateMultiplier: p.Group.RateMultiplier,
@@ -227,46 +242,33 @@ func (c *call) checkModel() *gwError {
 	return nil
 }
 
-// prepareBilling resolves prices per candidate platform, captures price
-// inputs and checks the balance. It returns the platforms usable for this
-// request (those with a price, or all under the free policy).
-func (c *call) prepareBilling(ctx context.Context) ([]core.PlatformBinding, *gwError) {
-	all := c.gen.PlatformsForProtocol(c.ep.Protocol)
-	if len(all) == 0 {
-		return nil, fromCore(core.ErrNoAvailableAccount.WithMessage("no enabled platform serves this endpoint"), errTypeNoAccount)
-	}
+// prepareBilling resolves the model's global price (ARCHITECTURE 7.3),
+// captures the price inputs and checks the balance. Free endpoints skip it.
+func (c *call) prepareBilling(ctx context.Context) *gwError {
 	if strings.EqualFold(c.ep.Billing, "free") {
-		return all, nil
+		return nil
 	}
-	c.prices = map[string]*core.PriceRule{}
-	var usable []core.PlatformBinding
-	var lastErr error
-	for _, pb := range all {
-		rule, err := c.g.d.Pricer.Resolve(ctx, pb.Platform.ID, c.model)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		c.prices[pb.Platform.ID] = rule
-		usable = append(usable, pb)
-	}
-	if len(usable) == 0 {
-		e := core.AsError(lastErr)
+	rule, err := c.g.d.Pricer.Resolve(ctx, c.model)
+	if err != nil {
+		e := core.AsError(err)
 		rt := errTypePriceNotConfigured
 		if e.Code != core.ErrPriceNotConfigured.Code {
 			rt = errTypeInternal
 		}
-		return nil, fromCore(e, rt)
+		return fromCore(e, rt)
 	}
+	c.price = rule
+	c.rec.Price = rule
+	c.capturePriceInputs(rule)
 	if err := c.g.d.Balance.CheckBalance(ctx, c.principal.UserID); err != nil {
 		e := core.AsError(err)
 		rt := errTypeInsufficientBalance
 		if e.Code != core.ErrInsufficientBalance.Code {
 			rt = errTypeInternal
 		}
-		return nil, fromCore(e, rt)
+		return fromCore(e, rt)
 	}
-	return usable, nil
+	return nil
 }
 
 // capturePriceInputs records the param()/header() values the price
@@ -294,13 +296,24 @@ func (c *call) capturePriceInputs(rule *core.PriceRule) {
 	}
 }
 
+// meta describes the request to plugins. Protocol is the endpoint protocol;
+// attempts on a converting route override it with the upstream protocol
+// (metaFor).
 func (c *call) meta() *pluginv1.RequestMeta {
 	m := &pluginv1.RequestMeta{
-		RequestId: c.rid, Protocol: c.ep.Protocol, Model: c.model, Stream: c.stream, ClientIp: c.c.ClientIP(),
+		RequestId: c.rid, Protocol: c.ep.Protocol, ClientProtocol: c.ep.Protocol,
+		Model: c.model, Stream: c.stream, ClientIp: c.c.ClientIP(),
 	}
 	if p := c.principal; p != nil {
 		m.UserId, m.ApiKeyId, m.GroupId = p.UserID, p.KeyID, p.Group.ID
 	}
+	return m
+}
+
+// metaFor is meta for an upstream attempt on rt.
+func (c *call) metaFor(rt *typeRoute) *pluginv1.RequestMeta {
+	m := c.meta()
+	m.Protocol = rt.upstream
 	return m
 }
 
