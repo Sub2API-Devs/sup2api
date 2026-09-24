@@ -3,8 +3,12 @@
 // /ui/plugins and /p/<key>/... live in pluginui.ts; publishers are not here.
 import { fail, needStepUp, noContent, now, on, paginate } from './router'
 import { pluginPlatforms } from './platforms'
+import { uninstallPluginAccounts } from './accounts'
 
 type Any = Record<string, any>
+
+/** Version of the mock core, reported as host_version by GET /market/plugins. */
+export const HOST_VERSION = '0.1.5'
 
 interface MockPlugin {
   key: string
@@ -12,6 +16,8 @@ interface MockPlugin {
   description: Any
   status: string
   status_reason: string
+  /** Ships with the image: disable-only (CONTRACTS §5.7, §14.1). */
+  builtin?: boolean
   active_version: string | null
   desired_version: string | null
   publisher: string
@@ -47,7 +53,7 @@ function guardManifest(version: string): Any {
     publisher: 'sub2api',
     description: { en: 'Inspects gateway requests and blocks the ones matching rules.', zh: '检查网关请求，拦截命中规则的请求。' },
     hostCompat: '>=0.1.0 <0.2.0',
-    capabilities: [{ id: 'gateway.hook.v1' }, { id: 'app.events.v1' }, { id: 'app.jobs.v1' }, { id: 'http.routes.v1' }],
+    capabilities: [{ id: 'gateway.hook.v1' }, { id: 'app.events.v1' }, { id: 'app.jobs.v1' }, { id: 'http.routes.v1' }, { id: 'app.broadcast.v1' }],
     ui: {
       menus: [{ id: 'guard', section: 'plugins', label: { en: 'Guard', zh: '请求守卫' }, page: 'dashboard' }],
       pages: { dashboard: { type: 'native', component: 'GuardDashboard' }, rules: { type: 'table' } },
@@ -113,6 +119,7 @@ plugins.set('guard', {
     grant('jobs'),
     grant('routes.admin'),
     grant('ui.native'),
+    grant('broadcast'),
     grant('net', { domains: ['hooks.example.com'] })
   ],
   manifest: guardManifest('0.1.0'),
@@ -141,8 +148,52 @@ plugins.set('anthropic', {
   ],
   grants: [grant('kv'), grant('platform.register'), grant('accounts.credentials', { types: 'own' }), grant('net')],
   manifest: anthropicManifest('0.1.0'),
-  settings: null
+  settings: null,
+  builtin: true
 })
+
+// Built-in openai / gemini plugins (CONTRACTS §14.1): one account type each
+// for the built-in platform of the same name.
+function builtinAdapterManifest(key: 'openai' | 'gemini', version: string): Any {
+  const label = key === 'openai' ? 'OpenAI' : 'Gemini'
+  return {
+    key,
+    version,
+    publisher: 'sub2api',
+    description: {
+      en: `${label} account type: API keys (the ${key} platform is built into the core).`,
+      zh: `${label} 账号类型：API Key（${key} 平台由核心内置）。`
+    },
+    hostCompat: '>=0.1.0 <0.2.0',
+    capabilities: [{ id: 'platform.adapter.v1' }],
+    platforms: [],
+    account_types: [{ id: 'apikey', label: { en: 'API key', zh: 'API Key' }, form_mode: 'schema', platforms: [key] }],
+    gateway_endpoints: [],
+    resources: { memoryMB: 128, cpu: 0.5, maxProcs: 128, maxOpenFiles: 1024 }
+  }
+}
+
+for (const key of ['openai', 'gemini'] as const) {
+  const m = builtinAdapterManifest(key, '0.1.0')
+  plugins.set(key, {
+    key,
+    name: { en: key === 'openai' ? 'OpenAI' : 'Gemini', zh: key === 'openai' ? 'OpenAI' : 'Gemini' },
+    description: m.description,
+    status: 'enabled',
+    status_reason: '',
+    builtin: true,
+    active_version: '0.1.0',
+    desired_version: '0.1.0',
+    publisher: 'sub2api',
+    trust: 'official',
+    egress_policy: 'allow_all',
+    resources: { memory_mb: 128, cpu: 0.5, max_threads: 128, max_open_files: 1024 },
+    versions: [{ version: '0.1.0', consent_status: 'approved' }],
+    grants: [grant('kv'), grant('platform.register'), grant('accounts.credentials', { types: 'own' }), grant('net')],
+    manifest: m,
+    settings: null
+  })
+}
 
 plugins.set('foo_platform', {
   key: 'foo_platform',
@@ -255,7 +306,7 @@ function guardReview(version: string, diff?: Any): Any {
     signature_status: 'valid',
     host_compat_ok: true,
     host_compat: '>=0.1.0 <0.2.0',
-    capabilities: [{ id: 'gateway.hook.v1' }, { id: 'app.events.v1' }, { id: 'app.jobs.v1' }, { id: 'http.routes.v1' }],
+    capabilities: [{ id: 'gateway.hook.v1' }, { id: 'app.events.v1' }, { id: 'app.jobs.v1' }, { id: 'http.routes.v1' }, { id: 'app.broadcast.v1' }],
     gateway_endpoints: [],
     platforms: [],
     account_types: [],
@@ -291,6 +342,7 @@ function guardReview(version: string, diff?: Any): Any {
     external_services: ['hooks.example.com'],
     host_permissions: [
       { id: 'kv', risk: 'low' },
+      { id: 'broadcast', risk: 'low', reason: { en: 'Reload rules on every node right after they change', zh: '规则修改后通知各节点立即重载' } },
       { id: 'db.schema', risk: 'high', reason: { en: 'Store rules and statistics', zh: '保存拦截规则和统计' }, requires: 'plugin:grant:high' },
       {
         id: 'gateway.hook',
@@ -422,7 +474,9 @@ const market: Record<number, Any[]> = {
       categories: ['platform'],
       versions: [
         { version: '0.1.0', host_compat: '>=0.1.0 <0.2.0', size: 9_830_400 },
-        { version: '0.2.0', host_compat: '>=0.1.0 <0.2.0', size: 10_223_616 }
+        { version: '0.2.0', host_compat: '>=0.1.0 <0.2.0', size: 10_223_616 },
+        // needs a newer core than HOST_VERSION
+        { version: '0.3.0', host_compat: '>=0.2.0 <0.3.0', size: 10_485_760 }
       ]
     },
     {
@@ -437,11 +491,20 @@ const market: Record<number, Any[]> = {
     {
       key: 'openai',
       name: { en: 'OpenAI', zh: 'OpenAI' },
-      description: { en: 'OpenAI-compatible platform adapter.', zh: 'OpenAI 兼容平台适配。' },
+      description: { en: 'OpenAI API keys for the built-in openai platform.', zh: '内置 openai 平台的 OpenAI API Key。' },
       publisher: 'sub2api',
       trust: 'official',
       categories: ['platform'],
       versions: [{ version: '0.1.0', host_compat: '>=0.1.0 <0.2.0', size: 8_912_896 }]
+    },
+    {
+      key: 'gemini',
+      name: { en: 'Gemini', zh: 'Gemini' },
+      description: { en: 'Google AI Studio API keys for the built-in gemini platform.', zh: '内置 gemini 平台的 Google AI Studio API Key。' },
+      publisher: 'sub2api',
+      trust: 'official',
+      categories: ['platform'],
+      versions: [{ version: '0.1.0', host_compat: '>=0.1.0 <0.2.0', size: 8_650_752 }]
     }
   ],
   2: [
@@ -597,6 +660,7 @@ function summary(p: MockPlugin): Any {
     description: p.description,
     status: p.status,
     status_reason: p.status_reason,
+    builtin: !!p.builtin,
     active_version: p.active_version,
     desired_version: p.desired_version,
     publisher: p.publisher,
@@ -702,10 +766,14 @@ on('DELETE', '/plugins/:key', (req) => {
   if (s) return s
   const p = find(req.params.key)
   if (!p) return notFound(req.params.key)
+  if (p.builtin) return fail(403, 'permission_denied', 'built-in plugins cannot be uninstalled', { reason: 'builtin' })
   if (p.status === 'enabled') return fail(409, 'conflict', 'disable the plugin before uninstalling it')
   plugins.delete(p.key)
   rollouts.delete(p.key)
-  return noContent()
+  // CONTRACTS §14.3: accounts are kept (orphaned) unless purge_accounts=true.
+  const purgeAccounts = req.query.purge_accounts === 'true'
+  const deleted = uninstallPluginAccounts(p.key, purgeAccounts)
+  return purgeAccounts ? { accounts_deleted: deleted } : noContent()
 })
 
 on('GET', '/plugins/:key/versions/:version/review', (req) => {
@@ -837,24 +905,67 @@ on('PUT', '/plugins/:key/egress-policy', (req) => {
 on('GET', '/plugins/:key/egress', (req) => {
   const p = find(req.params.key)
   if (!p) return notFound(req.params.key)
-  const hosts = p.key === 'guard' ? [['hooks.example.com', 443, 'ok'], ['evil.example.net', 443, 'denied']] : [['api.anthropic.com', 443, 'ok'], ['console.anthropic.com', 443, 'ok']]
+  const hosts: Array<[string, number, string]> =
+    p.key === 'guard'
+      ? [['hooks.example.com', 443, 'ok'], ['evil.example.net', 443, 'denied'], ['telemetry.new-vendor.io', 443, 'ok']]
+      : [['api.anthropic.com', 443, 'ok'], ['console.anthropic.com', 443, 'ok'], ['statsig.anthropic.com', 443, 'ok']]
   const items: Any[] = []
   for (let i = 0; i < 40; i++) {
-    const [host, port, result] = hosts[i % 7 === 0 ? 1 : 0]
+    const [host, port, result] = hosts[i % 7 === 0 ? 1 : i % 11 === 3 ? 2 : 0]
+    // The two newest connections are still open (CONTRACTS §14.2: logged when opened).
+    const open = i < 2
     items.push({
       id: 9000 + i,
       node_id: NODES[i % 2],
+      network: 'tcp',
       host,
       port,
-      started_at: now(-i * 600),
-      duration_ms: 80 + ((i * 37) % 400),
-      bytes_in: 2048 + i * 13,
-      bytes_out: 900 + i * 7,
-      result: i === 5 ? 'error' : result
+      started_at: now(-i * 600 - 5),
+      duration_ms: open ? 0 : 80 + ((i * 37) % 400),
+      bytes_in: open ? 0 : 2048 + i * 13,
+      bytes_out: open ? 0 : 900 + i * 7,
+      result: open ? 'open' : i === 5 ? 'error' : result,
+      error: i === 5 ? 'dial tcp: i/o timeout' : '',
+      closed_at: open ? null : now(-i * 600)
     })
   }
   const from = req.query.from ? new Date(req.query.from).getTime() : 0
-  return { items: items.filter((x) => new Date(x.started_at).getTime() >= from) }
+  const inRange = items.filter((x) => new Date(x.started_at).getTime() >= from)
+  const summary = new Map<string, Any>()
+  for (const l of inRange) {
+    const k = `${l.host}:${l.port}`
+    const s = summary.get(k) || { host: l.host, port: l.port, count: 0, ok: 0, denied: 0, errors: 0, open: 0, bytes_in: 0, bytes_out: 0, last_at: l.started_at }
+    s.count++
+    if (l.result === 'ok') s.ok++
+    else if (l.result === 'denied') s.denied++
+    else if (l.result === 'open') s.open++
+    else s.errors++
+    s.bytes_in += l.bytes_in
+    s.bytes_out += l.bytes_out
+    if (l.started_at > s.last_at) s.last_at = l.started_at
+    summary.set(k, s)
+  }
+  // Every host ever seen (not limited to the range); `new` = first seen within 24h.
+  const firstSeen: Record<string, number> = {
+    'hooks.example.com': 86400 * 30,
+    'evil.example.net': 86400 * 12,
+    'telemetry.new-vendor.io': 3 * 3600,
+    'api.anthropic.com': 86400 * 60,
+    'console.anthropic.com': 86400 * 60,
+    'statsig.anthropic.com': 40 * 60
+  }
+  const domains = hosts.map(([host]) => {
+    const own = items.filter((x) => x.host === host)
+    const age = firstSeen[host] ?? 86400
+    return {
+      host,
+      first_seen_at: now(-age),
+      last_seen_at: own[0]?.started_at ?? now(-age),
+      connections: own.length + Math.floor(age / 3600),
+      new: age < 86400
+    }
+  })
+  return { from: req.query.from ?? null, to: req.query.to ?? null, summary: [...summary.values()].sort((a, b) => b.count - a.count), domains, items: inRange }
 })
 
 on('GET', '/plugins/:key/jobs', (req) => {
@@ -878,6 +989,43 @@ on('GET', '/market/sources', () => sources)
 
 on('GET', '/market/plugins', (req) => {
   const id = Number(req.query.source_id || 1)
-  const list = (market[id] || []).map((m) => ({ ...m, latest_version: m.versions[m.versions.length - 1]?.version }))
-  return paginate(list, req.query)
+  const list = (market[id] || []).map((m) => ({
+    ...m,
+    installed_version: plugins.get(m.key)?.active_version ?? undefined,
+    latest_version: m.versions[m.versions.length - 1]?.version,
+    versions: m.versions.map((v: Any) => ({ ...v, compatible: satisfies(HOST_VERSION, v.host_compat) }))
+  }))
+  // host_version sits next to data and page (CONTRACTS §14.3).
+  return { ...paginate(list, req.query), host_version: HOST_VERSION }
 })
+
+/** Minimal semver range check: space-separated >=, >, <=, <, = comparators. */
+function satisfies(version: string, range: string | undefined): boolean {
+  if (!range) return true
+  const cmp = (a: string, b: string) => {
+    const pa = a.split('.').map(Number)
+    const pb = b.split('.').map(Number)
+    for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0)
+    return 0
+  }
+  return range
+    .trim()
+    .split(/\s+/)
+    .every((c) => {
+      const m = /^(>=|<=|>|<|=)?v?(\d+(?:\.\d+){0,2})$/.exec(c)
+      if (!m) return true
+      const d = cmp(version, m[2])
+      switch (m[1]) {
+        case '>=':
+          return d >= 0
+        case '>':
+          return d > 0
+        case '<=':
+          return d <= 0
+        case '<':
+          return d < 0
+        default:
+          return d === 0
+      }
+    })
+}

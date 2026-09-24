@@ -148,6 +148,17 @@ export interface Platform {
   account_types: Array<{ plugin_key: string; type: string; label: LText }>
 }
 
+/**
+ * A platform as listed by GET /me/platforms (CONTRACTS §14.1): every platform
+ * available now, without account types; any logged-in user may read it.
+ */
+export interface MyPlatform {
+  id: string
+  label: LText
+  builtin: boolean
+  endpoints: PlatformEndpoint[]
+}
+
 export interface Proxy {
   id: number
   name: string
@@ -300,6 +311,8 @@ export interface LedgerEntry {
 export interface UsageLog {
   id: number
   request_id: string
+  /** Client's X-Request-Id (truncated to 128 characters), empty when absent (CONTRACTS §14.4). */
+  client_request_id?: string | null
   user_id: number
   user_email?: string // assumed
   api_key_id: number
@@ -360,6 +373,23 @@ export interface BillingSettings {
   missing_price_policy: 'reject' | 'free'
   min_balance: Money
   big_cost_warning_usd: Money
+}
+
+/** GET/PUT /settings/gateway (CONTRACTS §8, §14.4). */
+export interface GatewaySettings {
+  /** Attempts per request incl. failover, 1–10 (default 3). */
+  max_attempts: number
+  /** Timeout of platform calls on the request hot path, 100–30000 ms (default 2000). */
+  platform_call_timeout_ms: number
+  /** Default hook timeout when the manifest sets none, 50–2000 ms (default 300). */
+  default_hook_timeout_ms: number
+}
+
+/** Validation ranges of GatewaySettings, mirrored from the server. */
+export const GATEWAY_SETTINGS_RANGES: Record<keyof GatewaySettings, [number, number]> = {
+  max_attempts: [1, 10],
+  platform_call_timeout_ms: [100, 30000],
+  default_hook_timeout_ms: [50, 2000]
 }
 
 // ------------------------------------------------------------------ sticky
@@ -540,8 +570,74 @@ export interface MarketPlugin {
   description?: LText
   publisher: string
   trust?: Trust
-  versions: Array<{ version: string; url?: string; sha256?: string; size?: number; host_compat?: string }>
+  versions: MarketVersion[]
   installed_version?: string | null // assumed
   latest_version?: string // assumed
   categories?: string[] // assumed
+}
+
+/** A version of a market plugin (CONTRACTS §11.1, §14.3). */
+export interface MarketVersion {
+  version: string
+  url?: string
+  sha256?: string
+  size?: number
+  host_compat?: string
+  /** host_compat satisfied by the running core version; absent on old servers. */
+  compatible?: boolean
+}
+
+// ------------------------------------------------------------------ plugin egress (CONTRACTS §14.2)
+
+/** Egress logs aggregated per destination (GET /plugins/:key/egress `summary`). */
+export interface EgressSummaryRow {
+  host: string
+  port?: number | null
+  count: number
+  ok?: number
+  denied?: number
+  errors?: number
+  bytes_in: number
+  bytes_out: number
+  last_at?: string | null
+}
+
+/** A host the plugin ever connected to (`domains`). */
+export interface EgressDomain {
+  host: string
+  first_seen_at: string
+  last_seen_at: string
+  connections: number
+  /** First seen within the last 24 hours. */
+  new: boolean
+}
+
+/** One egress connection; result is "open" while the connection is alive. */
+export interface EgressLogRow {
+  id?: number
+  node_id?: string
+  network?: string
+  host: string
+  port?: number
+  started_at?: string
+  duration_ms?: number | null
+  bytes_in?: number | null
+  bytes_out?: number | null
+  result?: 'open' | 'ok' | 'denied' | 'error' | string
+  error?: string
+  closed_at?: string | null
+}
+
+export interface EgressReport {
+  from?: string
+  to?: string
+  summary?: EgressSummaryRow[]
+  domains?: EgressDomain[]
+  items?: EgressLogRow[]
+}
+
+/** Response of DELETE /plugins/:key (CONTRACTS §14.3); 204 on older servers. */
+export interface UninstallResult {
+  /** Accounts soft-deleted with purge_accounts=true. */
+  accounts_deleted?: number
 }

@@ -8,7 +8,9 @@ export default {
   },
   filters: {
     userId: '用户 ID',
-    accountId: '账号 ID'
+    accountId: '账号 ID',
+    clientRequestId: '客户端请求 ID',
+    clientRequestIdPlaceholder: '精确匹配 X-Request-Id'
   },
   success: {
     ok: '成功',
@@ -28,8 +30,10 @@ export default {
     output: '输出',
     cost: '费用',
     accountType: '账号类型',
-    upstreamProtocol: '上游协议'
+    upstreamProtocol: '上游协议',
+    clientRequestId: '客户端请求 ID'
   },
+  filterByClientRequestId: '{id}（点击按此 ID 筛选）',
   cacheTitle: '缓存读 {r} · 缓存写 {w}',
   cached: '缓存',
   converted: '已转换',
@@ -59,6 +63,8 @@ export default {
   request: {
     title: '请求',
     id: '请求 ID',
+    clientId: '客户端请求 ID',
+    clientIdNone: '客户端没有发送 X-Request-Id',
     endpoint: '端点',
     upstreamModel: '上游模型',
     apiKey: 'API Key',

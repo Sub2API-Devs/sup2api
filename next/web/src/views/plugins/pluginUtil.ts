@@ -11,6 +11,7 @@ export const HOST_PERMISSION_RISK: Record<string, Risk> = {
   kv: 'low',
   config: 'low',
   log: 'low',
+  broadcast: 'low',
   'routes.admin': 'medium',
   'routes.user': 'medium',
   events: 'medium',

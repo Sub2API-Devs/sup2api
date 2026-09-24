@@ -1,9 +1,26 @@
 export default {
   title: '系统设置',
-  description: '全局的计费与调度设置。',
+  description: '全局的计费、网关与调度设置。',
   tabs: {
     billing: '计费',
+    gateway: '网关',
     sticky: '粘性会话'
+  },
+  gateway: {
+    title: '网关',
+    subtitle: '网关请求的失败切换与超时。修改后各节点对新请求生效。',
+    fields: {
+      max_attempts: '最大尝试次数',
+      platform_call_timeout_ms: '平台调用超时',
+      default_hook_timeout_ms: '钩子默认超时'
+    },
+    hints: {
+      max_attempts: '每个请求最多尝试的账号数（含首次，用于失败切换）。',
+      platform_call_timeout_ms: '请求路径上调用插件平台接口（构造上游请求、解析用量）的超时。',
+      default_hook_timeout_ms: 'manifest 未设置超时的钩子使用此值。'
+    },
+    range: '范围 {min}–{max}。',
+    notInteger: '请输入整数'
   },
   billing: {
     title: '计费',

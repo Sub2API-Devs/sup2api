@@ -228,7 +228,10 @@ const prices: MockPrice[] = [
     plugin_key: null,
     enabled: false,
     note: 'night discount'
-  })
+  }),
+  // Default prices of the built-in openai / gemini plugins (CONTRACTS §14.1).
+  mkPrice({ id: 6, model_pattern: 'gpt-4o*', mode: 'per_token', config: { p: 2.5, c: 10, cr: 1.25, cc: 0, cc1h: 0 }, source: 'plugin_default', plugin_key: 'openai', enabled: true, note: '' }),
+  mkPrice({ id: 7, model_pattern: 'gemini-2.5-flash*', mode: 'per_token', config: { p: 0.3, c: 2.5, cr: 0.075, cc: 0, cc1h: 0 }, source: 'plugin_default', plugin_key: 'gemini', enabled: true, note: '' })
 ]
 
 function exprOf(body: any): { mode: PriceMode; config: Record<string, any>; expression: string } {
@@ -427,15 +430,23 @@ const GROUPS = [
   { id: 1, name: 'default', rate: 1 },
   { id: 2, name: 'vip', rate: 1.5 }
 ]
-// Same accounts as mock/accounts.ts (all support the anthropic platform).
-// Some requests hit the openai chat endpoint and are converted to
-// anthropic.messages for the upstream.
+// Same accounts as mock/accounts.ts. Anthropic-platform accounts sometimes
+// serve the openai chat endpoint through conversion to anthropic.messages;
+// the built-in openai / gemini accounts serve their own platforms.
 const ACCOUNTS = [
   { id: 12, name: 'claude-main', plugin_key: 'anthropic', type: 'apikey', upstream: 'anthropic.messages' },
   { id: 13, name: 'claude-bak', plugin_key: 'anthropic', type: 'apikey', upstream: 'anthropic.messages' },
-  { id: 16, name: 'relay-1', plugin_key: 'relay', type: 'relay_key', upstream: 'anthropic.messages' }
+  { id: 16, name: 'relay-1', plugin_key: 'relay', type: 'relay_key', upstream: 'anthropic.messages' },
+  { id: 19, name: 'openai-main', plugin_key: 'openai', type: 'apikey', upstream: 'openai.chat' },
+  { id: 20, name: 'gemini-main', plugin_key: 'gemini', type: 'apikey', upstream: 'gemini.generate' }
 ]
 const MODELS = ['claude-sonnet-x', 'claude-sonnet-4-5', 'claude-haiku-4-5']
+const OWN_MODELS: Record<string, string[]> = { openai: ['gpt-4o', 'gpt-4o-mini'], gemini: ['gemini-2.5-flash'] }
+/** Client endpoint per upstream protocol of the native accounts. */
+const NATIVE_ENDPOINT: Record<string, { platform: string; protocol: string; endpoint: string }> = {
+  'openai.chat': { platform: 'openai', protocol: 'openai.chat', endpoint: '/v1/chat/completions' },
+  'gemini.generate': { platform: 'gemini', protocol: 'gemini.generate', endpoint: '/v1beta/models/gemini-2.5-flash:generateContent' }
+}
 
 function rnd(seed: number) {
   const x = Math.sin(seed) * 10000
@@ -459,7 +470,8 @@ for (let i = 0; i < 90; i++) {
   const user = USERS[Math.floor(r(1) * USERS.length)]
   const group = GROUPS[Math.floor(r(2) * GROUPS.length)]
   const account = ACCOUNTS[Math.floor(r(3) * ACCOUNTS.length)]
-  const model = MODELS[Math.floor(r(4) * MODELS.length)]
+  const own = OWN_MODELS[account.plugin_key]
+  const model = own ? own[Math.floor(r(4) * own.length)] : MODELS[Math.floor(r(4) * MODELS.length)]
   const at = new Date(Date.now() - Math.floor(r(5) * 7 * 86400000))
   const blocked = r(6) < 0.06
   const failed = !blocked && r(7) < 0.08
@@ -473,6 +485,9 @@ for (let i = 0; i < 90; i++) {
   const viaOpenAI = account.plugin_key === 'anthropic' && rnd(i * 13 + 99) < 0.2
   const price = priceFor(model)
   const requestId = 'req_' + hashOf('u' + i).slice(0, 16)
+  // Client X-Request-Id (CONTRACTS §14.4): most SDK calls send one.
+  const clientRequestId = r(20) < 0.7 ? `cli-${hashOf('c' + i).slice(0, 8)}-${hashOf('d' + i).slice(0, 4)}` : ''
+  const native = NATIVE_ENDPOINT[account.upstream]
   const hook_decisions = [
     { plugin_key: 'guard', hook_id: 'content-filter', decision: blocked ? 'deny' : 'allow', latency_ms: 3 + Math.floor(r(15) * 20), note: blocked ? 'matched rule "no-secrets"' : undefined }
   ]
@@ -508,6 +523,7 @@ for (let i = 0; i < 90; i++) {
   const row: any = {
     id: 5000 + i,
     request_id: requestId,
+    client_request_id: clientRequestId,
     user_id: user.id,
     user_email: user.email,
     api_key_id: user.id * 10,
@@ -519,10 +535,10 @@ for (let i = 0; i < 90; i++) {
     // plugin_key/account_type: the account type; platform/protocol: the client endpoint.
     plugin_key: blocked ? '' : account.plugin_key,
     account_type: blocked ? '' : account.type,
-    platform: viaOpenAI ? 'openai' : 'anthropic',
-    protocol: viaOpenAI ? 'openai.chat' : 'anthropic.messages',
+    platform: native?.platform ?? (viaOpenAI ? 'openai' : 'anthropic'),
+    protocol: native?.protocol ?? (viaOpenAI ? 'openai.chat' : 'anthropic.messages'),
     upstream_protocol: blocked ? '' : account.upstream,
-    endpoint: viaOpenAI ? '/v1/chat/completions' : '/v1/messages',
+    endpoint: native?.endpoint ?? (viaOpenAI ? '/v1/chat/completions' : '/v1/messages'),
     model,
     upstream_model: model,
     stream: r(16) < 0.7,
@@ -611,6 +627,7 @@ function usageFilter(rows: any[], q: Record<string, string>) {
     if (q.user_id && String(u.user_id) !== q.user_id) return false
     if (q.group_id && String(u.group_id) !== q.group_id) return false
     if (q.account_id && String(u.account_id) !== q.account_id) return false
+    if (q.client_request_id && u.client_request_id !== q.client_request_id) return false
     if (q.model) {
       const pat = q.model
       if (pat.endsWith('*') ? !u.model.startsWith(pat.slice(0, -1)) : !u.model.includes(pat)) return false
@@ -690,6 +707,28 @@ on('PUT', '/settings/sticky', (req) => {
   const b = req.body || {}
   Object.assign(stickySettings, { enabled: !!b.enabled, default_ttl_seconds: Number(b.default_ttl_seconds) || 3600, keep_on_account_disabled: !!b.keep_on_account_disabled })
   return stickySettings
+})
+
+// Gateway settings (CONTRACTS §8, §14.4): ranges 1–10, 100–30000, 50–2000.
+const gatewaySettings = { max_attempts: 3, platform_call_timeout_ms: 2000, default_hook_timeout_ms: 300 }
+const GATEWAY_RANGES: Record<keyof typeof gatewaySettings, [number, number]> = {
+  max_attempts: [1, 10],
+  platform_call_timeout_ms: [100, 30000],
+  default_hook_timeout_ms: [50, 2000]
+}
+on('GET', '/settings/gateway', () => gatewaySettings)
+on('PUT', '/settings/gateway', (req) => {
+  const b = req.body || {}
+  const fields: Array<{ field: string; code: string; message: string }> = []
+  for (const [k, [min, max]] of Object.entries(GATEWAY_RANGES)) {
+    const v = b[k]
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max) {
+      fields.push({ field: k, code: 'out_of_range', message: `${k} must be an integer between ${min} and ${max}` })
+    }
+  }
+  if (fields.length) return fail(400, 'invalid_argument', 'invalid gateway settings', { fields })
+  Object.assign(gatewaySettings, { max_attempts: b.max_attempts, platform_call_timeout_ms: b.platform_call_timeout_ms, default_hook_timeout_ms: b.default_hook_timeout_ms })
+  return gatewaySettings
 })
 
 // ------------------------------------------------------------------ sticky rules

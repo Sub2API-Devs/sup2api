@@ -5,7 +5,10 @@ export default {
     email: 'Email',
     password: 'Password',
     submit: 'Sign in',
-    failed: 'Sign-in failed'
+    failed: 'Sign-in failed',
+    rateLimited: 'Too many attempts. Please try again in {n} seconds.',
+    rateLimitedNoTime: 'Too many attempts. Please try again later.',
+    sessionExpired: 'Your session has expired. Please sign in again.'
   },
   stepUp: {
     title: 'Confirm your password',

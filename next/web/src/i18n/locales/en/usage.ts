@@ -8,7 +8,9 @@ export default {
   },
   filters: {
     userId: 'User ID',
-    accountId: 'Account ID'
+    accountId: 'Account ID',
+    clientRequestId: 'Client request ID',
+    clientRequestIdPlaceholder: 'Exact X-Request-Id'
   },
   success: {
     ok: 'Succeeded',
@@ -28,8 +30,10 @@ export default {
     output: 'Output',
     cost: 'Cost',
     accountType: 'Account type',
-    upstreamProtocol: 'Upstream protocol'
+    upstreamProtocol: 'Upstream protocol',
+    clientRequestId: 'Client request ID'
   },
+  filterByClientRequestId: '{id} (click to filter by this ID)',
   cacheTitle: 'cache read {r} · cache write {w}',
   cached: 'cached',
   converted: 'converted',
@@ -59,6 +63,8 @@ export default {
   request: {
     title: 'Request',
     id: 'Request ID',
+    clientId: 'Client request ID',
+    clientIdNone: 'The client sent no X-Request-Id',
     endpoint: 'Endpoint',
     upstreamModel: 'Upstream model',
     apiKey: 'API key',

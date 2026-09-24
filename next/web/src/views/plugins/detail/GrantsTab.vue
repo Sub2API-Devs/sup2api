@@ -77,6 +77,7 @@ onMounted(load)
       <template #cell-permission="{ row }">
         <div class="font-medium">{{ hpLabel(row.permission) }}</div>
         <div class="font-mono text-xs muted">{{ row.permission }}</div>
+        <div v-if="te(`plugins.hpDesc.${hpKey(row.permission)}`)" class="mt-0.5 max-w-xs text-xs muted">{{ t(`plugins.hpDesc.${hpKey(row.permission)}`) }}</div>
       </template>
       <template #cell-risk="{ row }">
         <RiskDot :risk="riskOf(row.permission)" label />

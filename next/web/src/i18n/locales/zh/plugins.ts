@@ -71,6 +71,7 @@ export default {
     kv: 'KV 存储',
     config: '读取配置',
     log: '日志',
+    broadcast: '集群广播',
     routes_admin: '管理接口',
     routes_user: '用户接口',
     events: '订阅事件',
@@ -93,6 +94,10 @@ export default {
     ui_native: '原生界面',
     users_write: '修改用户',
     db_core_views: '核心数据视图'
+  },
+
+  hpDesc: {
+    broadcast: '向其他节点上的本插件实例广播消息（例如规则修改后让各节点立即重载）。'
   },
 
   hpWarn: {
@@ -147,7 +152,13 @@ export default {
     pickHint: '选择版本。下载后会校验 sha256 和签名，然后进入授权确认。',
     latest: '最新',
     continue: '下载并审查',
-    downloaded: '{name} v{version} 已下载，请确认授权。'
+    downloaded: '{name} v{version} 已下载，请确认授权。',
+    hostVersion: '当前核心版本 v{version}',
+    compatible: '兼容当前核心版本',
+    incompatible: '不兼容当前核心版本',
+    incompatibleReason: '该版本要求核心版本 {range}，当前核心为 v{version}，无法安装。',
+    noCompatible: '没有兼容当前核心版本（v{version}）的版本，无法安装。',
+    newerIncompatible: '新版本 v{version} 不兼容当前核心版本，需先升级核心。'
   },
 
   consent: {
@@ -222,7 +233,8 @@ export default {
     effective: '生效上限',
     overridden: '已调整',
     invalid: '请输入非负数',
-    saved: '资源限制已保存，插件进程下次启动时生效。',
+    saved: '资源限制已保存，已通知各节点按新限制重启插件实例。',
+    restartHint: '保存后各节点会用新限制逐个重启该插件实例（先启动新实例再排空旧实例）。',
     hint: '留空表示使用 manifest 中的申请值；不能超过全局上限。'
   },
 
@@ -334,16 +346,32 @@ export default {
     last1h: '最近 1 小时',
     last24h: '最近 24 小时',
     notAllowlisted: '不在白名单',
-    noReadPermission: '需要 plugin:egress:read 权限才能查看外部访问记录。'
+    noReadPermission: '需要 plugin:egress:read 权限才能查看外部访问记录。',
+    domains: '访问过的域名',
+    domainsHint: '插件连接过的全部外部主机。24 小时内首次出现的主机标记为新域名。',
+    domain: '域名',
+    firstSeen: '首次出现',
+    newDomain: '新域名',
+    newDomainCount: '24 小时内新增 {n} 个',
+    resultLabels: {
+      open: '连接中',
+      ok: '成功',
+      denied: '已拒绝',
+      error: '错误'
+    }
   },
 
   uninstall: {
     action: '卸载',
     title: '卸载 {name}',
     body: '卸载会删除插件包、插件注册的权限及其授权、事件游标、任务记录和默认价格。',
-    purge: '同时删除插件数据（schema {schema}）和该插件的账号',
+    purge: '同时删除插件数据（schema {schema}）',
     purgeHint: '不勾选时数据会保留，重新安装后可以继续使用。',
-    purgeWarn: '插件数据和账号将被永久删除。',
+    purgeWarn: '插件数据将被永久删除。',
+    purgeAccounts: '同时删除该插件账号类型下的所有账号',
+    purgeAccountsHint: '默认保留这些账号，成为孤立账号：不再参与调度但仍可查看；重新安装插件后恢复服务。',
+    purgeAccountsWarn: '这些账号将被删除，重新安装插件后也不会恢复。',
+    accountsDeleted: '已删除 {n} 个账号。',
     typeKey: '输入插件标识 "{key}" 以确认',
     confirm: '卸载',
     done: '已卸载 {name}'

@@ -29,14 +29,90 @@ export const me = {
   superuser: true
 }
 
-const tokens = () => ({ access_token: 'mock-access-' + Date.now(), refresh_token: 'mock-refresh', expires_in: 7200, user: me })
+// Sessions (CONTRACTS §14.2). Refresh tokens belong to a family created at
+// login and rotate on every refresh; presenting a rotated (or revoked) token
+// again revokes the whole family. Access tokens carry their family, so a
+// revoked family also fails with 401 on the next request.
+interface Family {
+  current: string
+  revoked: boolean
+  seq: number
+}
+const families = new Map<string, Family>()
+let familySeq = 0
+
+function issue(fam: string) {
+  const f = families.get(fam)!
+  f.seq++
+  f.current = `mock-refresh-${fam}-${f.seq}`
+  return { access_token: `mock-access-${fam}-${f.seq}-${Date.now()}`, refresh_token: f.current, expires_in: 7200, user: me }
+}
+
+function newFamily() {
+  const fam = `f${++familySeq}`
+  families.set(fam, { current: '', revoked: false, seq: 0 })
+  return issue(fam)
+}
+
+/**
+ * Checks the bearer token of a console request: "mock-access-<family>-..."
+ * tokens are rejected once their family is revoked; tokens of an unknown
+ * family (issued before a mock restart) stay valid; "expired" always fails.
+ */
+export function accessTokenValid(auth: string | undefined): boolean {
+  if (!auth) return true
+  const tok = auth.replace(/^Bearer\s+/i, '')
+  if (tok === 'expired') return false
+  const m = /^mock-access-(f\d+)-/.exec(tok)
+  if (!m) return true
+  const f = families.get(m[1])
+  return !f || !f.revoked
+}
+
+// Login rate limit (CONTRACTS §14.2, shortened for the mock): 5 failures for
+// an email lock it for 30 seconds -> 429 rate_limited + retry_after_seconds.
+const LOGIN_MAX_FAILURES = 5
+const LOGIN_LOCK_SECONDS = 30
+const loginFailures = new Map<string, { count: number; lockedUntil: number }>()
 
 on('POST', '/auth/login', (req) => {
-  if (!req.body?.email || req.body?.password !== 'admin') return fail(401, 'unauthenticated', 'invalid email or password (mock password: admin)')
-  return tokens()
+  const email = String(req.body?.email || '').toLowerCase()
+  const st = loginFailures.get(email)
+  if (st && st.lockedUntil > Date.now()) {
+    const retry = Math.ceil((st.lockedUntil - Date.now()) / 1000)
+    return fail(429, 'rate_limited', 'too many failed sign-in attempts', { retry_after_seconds: retry })
+  }
+  if (!email || req.body?.password !== 'admin') {
+    const s = st && st.lockedUntil <= Date.now() && st.count >= LOGIN_MAX_FAILURES ? { count: 0, lockedUntil: 0 } : st || { count: 0, lockedUntil: 0 }
+    s.count++
+    if (s.count >= LOGIN_MAX_FAILURES) s.lockedUntil = Date.now() + LOGIN_LOCK_SECONDS * 1000
+    loginFailures.set(email, s)
+    return fail(401, 'unauthenticated', 'invalid email or password (mock password: admin)')
+  }
+  loginFailures.delete(email)
+  return newFamily()
 })
-on('POST', '/auth/refresh', () => tokens())
-on('POST', '/auth/logout', () => ({}))
+on('POST', '/auth/refresh', (req) => {
+  const tok = String(req.body?.refresh_token || '')
+  // Legacy tokens from before this mock version: start a new family.
+  if (tok === 'mock-refresh') return newFamily()
+  const m = /^mock-refresh-(f\d+)-\d+$/.exec(tok)
+  const f = m ? families.get(m[1]) : undefined
+  if (!f) return fail(401, 'unauthenticated', 'invalid refresh token')
+  if (f.revoked) return fail(401, 'unauthenticated', 'refresh token revoked')
+  if (f.current !== tok) {
+    // Reuse of a rotated token: revoke the whole login.
+    f.revoked = true
+    return fail(401, 'unauthenticated', 'refresh token reuse detected; session revoked')
+  }
+  return issue(m![1])
+})
+on('POST', '/auth/logout', (req) => {
+  const m = /^mock-refresh-(f\d+)-\d+$/.exec(String(req.body?.refresh_token || ''))
+  const f = m ? families.get(m[1]) : undefined
+  if (f) f.revoked = true
+  return {}
+})
 on('POST', '/auth/step-up', (req) =>
   req.body?.password === 'admin' ? { step_up_token: 'mock-stepup', expires_in: 300 } : fail(401, 'unauthenticated', 'wrong password')
 )

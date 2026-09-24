@@ -549,6 +549,7 @@ onMounted(load)
                 <SBadge v-if="row.diffTag === 'added'" tone="danger">{{ t('plugins.consent.diffAdded') }}</SBadge>
                 <SBadge v-if="row.diffTag === 'widened'" tone="warning">{{ t('plugins.consent.diffWidened') }}</SBadge>
               </div>
+              <p v-if="te(`plugins.hpDesc.${hpKey(row.id)}`)" class="mt-0.5 text-xs muted" :data-hp-desc="row.id">{{ t(`plugins.hpDesc.${hpKey(row.id)}`) }}</p>
               <p v-if="row.reason" class="mt-0.5 text-sm text-gray-600 dark:text-gray-300">{{ lt(row.reason) }}</p>
               <p v-if="row.risk === 'critical'" class="mt-0.5 text-xs text-red-600 dark:text-red-400">
                 {{ te(`plugins.hpWarn.${hpKey(row.id)}`) ? t(`plugins.hpWarn.${hpKey(row.id)}`) : t('plugins.consent.criticalWarn') }}

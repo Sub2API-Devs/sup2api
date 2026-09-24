@@ -2,9 +2,9 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { api } from '@sub2api/host'
+import { api, requestRaw } from '@sub2api/host'
 import { SBadge, SButton, SCard, SEmpty, SIcon, SModal, SPageHeader, SSelect, SSpinner, toast } from '@sub2api/ui'
-import type { MarketPlugin, MarketSource, PluginReview, PluginSummary } from '@/api/types'
+import type { MarketPlugin, MarketSource, MarketVersion, PluginReview, PluginSummary } from '@/api/types'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
 import { formatBytes } from '@/utils/format'
@@ -21,6 +21,8 @@ const auth = useAuthStore()
 const sources = ref<MarketSource[]>([])
 const sourceId = ref<number | null>(null)
 const items = ref<MarketPlugin[]>([])
+/** Version of the running core (top-level host_version of GET /market/plugins). */
+const hostVersion = ref('')
 const installed = ref<Record<string, PluginSummary>>({})
 const q = ref('')
 const loading = ref(false)
@@ -37,6 +39,27 @@ function latestOf(m: MarketPlugin): string {
   return [...(m.versions || [])].sort((a, b) => compareVersions(b.version, a.version))[0]?.version || ''
 }
 
+// Compatibility with the running core (CONTRACTS §14.3). `compatible` is
+// absent on servers that do not report it: such versions are not blocked.
+function incompatible(v: MarketVersion | undefined | null): boolean {
+  return v?.compatible === false
+}
+
+function versionOf(m: MarketPlugin, version: string): MarketVersion | undefined {
+  return (m.versions || []).find((v) => v.version === version)
+}
+
+/** Newest version installable on this core ('' when none is). */
+function latestCompatibleOf(m: MarketPlugin): string {
+  return [...(m.versions || [])].filter((v) => !incompatible(v)).sort((a, b) => compareVersions(b.version, a.version))[0]?.version || ''
+}
+
+/** Why a version cannot be installed, or '' when it can. */
+function incompatibleReason(v: MarketVersion): string {
+  if (!incompatible(v)) return ''
+  return t('plugins.market.incompatibleReason', { range: v.host_compat || '—', version: hostVersion.value || '?' })
+}
+
 function installedOf(m: MarketPlugin): string {
   const p = installed.value[m.key]
   return p?.active_version || p?.desired_version || m.installed_version || ''
@@ -46,7 +69,14 @@ function stateOf(m: MarketPlugin): 'install' | 'upgrade' | 'installed' {
   const iv = installedOf(m)
   if (!iv && !installed.value[m.key]) return 'install'
   if (!iv) return 'installed'
-  return compareVersions(latestOf(m), iv) > 0 ? 'upgrade' : 'installed'
+  // Only offer upgrades this core can run.
+  const target = m.versions?.length ? latestCompatibleOf(m) : latestOf(m)
+  return target && compareVersions(target, iv) > 0 ? 'upgrade' : 'installed'
+}
+
+/** True when the listing has versions but none is compatible with this core. */
+function noCompatible(m: MarketPlugin): boolean {
+  return (m.versions?.length || 0) > 0 && !latestCompatibleOf(m)
 }
 
 const rows = computed(() => {
@@ -94,8 +124,11 @@ async function loadPlugins() {
   }
   loading.value = true
   try {
-    const r = await api.list<MarketPlugin>('/market/plugins', { source_id: sourceId.value, page_size: 200 })
-    items.value = r.items
+    // Raw envelope: host_version sits next to data (or inside it on some servers).
+    const json = await requestRaw('GET', '/market/plugins', { query: { source_id: sourceId.value, page_size: 200 } })
+    const data = json?.data
+    items.value = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : Array.isArray(data?.plugins) ? data.plugins : []
+    hostVersion.value = String(json?.host_version ?? data?.host_version ?? '')
   } catch (e) {
     items.value = []
     notifyError(e)
@@ -106,12 +139,20 @@ async function loadPlugins() {
 
 function openPicker(m: MarketPlugin) {
   picker.value = m
-  pickVersion.value = latestOf(m)
+  const latest = latestOf(m)
+  pickVersion.value = incompatible(versionOf(m, latest)) ? latestCompatibleOf(m) : latest
 }
+
+/** The picked version cannot be installed (already installed or incompatible). */
+const pickBlocked = computed(() => {
+  const m = picker.value
+  if (!m || !pickVersion.value) return true
+  return pickVersion.value === installedOf(m) || incompatible(versionOf(m, pickVersion.value))
+})
 
 async function install() {
   const m = picker.value
-  if (!m || !pickVersion.value || sourceId.value === null) return
+  if (!m || !pickVersion.value || sourceId.value === null || pickBlocked.value) return
   installing.value = true
   try {
     const r = await api.post<PluginReview>('/plugins/install-from-market', { source_id: sourceId.value, key: m.key, version: pickVersion.value })
@@ -152,6 +193,9 @@ onMounted(async () => {
           <label class="input-label">{{ t('common.search') }}</label>
           <input v-model="q" class="input" :placeholder="t('plugins.market.searchPlaceholder')" />
         </div>
+        <div v-if="hostVersion" class="self-end pb-2 text-xs muted" data-testid="market-host-version">
+          {{ t('plugins.market.hostVersion', { version: hostVersion }) }}
+        </div>
       </template>
     </SPageHeader>
 
@@ -173,6 +217,14 @@ onMounted(async () => {
             <span class="font-semibold text-gray-900 dark:text-white">{{ lt(m.name) || m.key }}</span>
             <span class="font-mono text-xs muted">{{ m.key }}</span>
             <span v-if="latestOf(m)" class="font-mono text-sm">v{{ latestOf(m) }}</span>
+            <SBadge
+              v-if="incompatible(versionOf(m, latestOf(m)))"
+              tone="danger"
+              :title="incompatibleReason(versionOf(m, latestOf(m))!)"
+              data-testid="market-incompatible"
+            >
+              {{ t('plugins.market.incompatible') }}
+            </SBadge>
             <TrustBadge :trust="m.trust" />
             <SBadge v-for="c in m.categories || []" :key="c" tone="gray">{{ c }}</SBadge>
           </div>
@@ -184,6 +236,12 @@ onMounted(async () => {
               <RouterLink v-if="installed[m.key]" :to="`/plugins/${encodeURIComponent(m.key)}`" class="link ml-1">{{ t('common.detail') }}</RouterLink>
             </template>
           </p>
+          <p v-if="noCompatible(m)" class="mt-1 flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
+            <SIcon name="warning" class="h-3.5 w-3.5" />{{ t('plugins.market.noCompatible', { version: hostVersion || '?' }) }}
+          </p>
+          <p v-else-if="stateOf(m) !== 'install' && latestCompatibleOf(m) && latestCompatibleOf(m) !== latestOf(m)" class="mt-1 text-xs muted">
+            {{ t('plugins.market.newerIncompatible', { version: latestOf(m) }) }}
+          </p>
         </div>
         <div class="flex shrink-0 items-center gap-2">
           <template v-if="stateOf(m) === 'installed'">
@@ -192,7 +250,14 @@ onMounted(async () => {
               {{ t('plugins.market.versions') }}
             </SButton>
           </template>
-          <SButton v-else-if="auth.has('plugin:install')" :variant="stateOf(m) === 'upgrade' ? 'warning' : 'primary'" size="sm" @click="openPicker(m)">
+          <SButton
+            v-else-if="auth.has('plugin:install')"
+            :variant="stateOf(m) === 'upgrade' ? 'warning' : 'primary'"
+            size="sm"
+            :disabled="noCompatible(m)"
+            :title="noCompatible(m) ? t('plugins.market.noCompatible', { version: hostVersion || '?' }) : undefined"
+            @click="openPicker(m)"
+          >
             <SIcon :name="stateOf(m) === 'upgrade' ? 'upload' : 'download'" class="h-4 w-4" />
             {{ stateOf(m) === 'upgrade' ? t('plugins.market.upgrade') : t('plugins.market.install') }}
           </SButton>
@@ -207,26 +272,35 @@ onMounted(async () => {
           <label
             v-for="v in pickerVersions"
             :key="v.version"
-            class="flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm"
+            class="flex items-center gap-3 rounded-lg border p-3 text-sm"
             :class="[
               pickVersion === v.version ? 'border-primary-400 bg-primary-50 dark:bg-primary-950/30' : 'border-gray-200 dark:border-dark-700',
-              v.version === installedOf(picker) ? 'opacity-60' : ''
+              v.version === installedOf(picker) || incompatible(v) ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
             ]"
+            :data-version="v.version"
           >
-            <input v-model="pickVersion" type="radio" :value="v.version" :disabled="v.version === installedOf(picker)" />
-            <span class="font-mono font-medium">v{{ v.version }}</span>
-            <SBadge v-if="v.version === latestOf(picker)" tone="primary">{{ t('plugins.market.latest') }}</SBadge>
-            <SBadge v-if="v.version === installedOf(picker)" tone="success">{{ t('plugins.market.installed') }}</SBadge>
-            <span class="ml-auto text-right text-xs muted">
+            <input v-model="pickVersion" type="radio" :value="v.version" :disabled="v.version === installedOf(picker) || incompatible(v)" />
+            <span class="min-w-0">
+              <span class="flex flex-wrap items-center gap-1.5">
+                <span class="font-mono font-medium">v{{ v.version }}</span>
+                <SBadge v-if="v.version === latestOf(picker)" tone="primary">{{ t('plugins.market.latest') }}</SBadge>
+                <SBadge v-if="v.version === installedOf(picker)" tone="success">{{ t('plugins.market.installed') }}</SBadge>
+                <SBadge v-if="v.compatible === true" tone="success" data-testid="version-compatible">{{ t('plugins.market.compatible') }}</SBadge>
+                <SBadge v-else-if="incompatible(v)" tone="danger" data-testid="version-incompatible">{{ t('plugins.market.incompatible') }}</SBadge>
+              </span>
+              <span v-if="incompatible(v)" class="mt-0.5 block text-xs text-red-600 dark:text-red-400">{{ incompatibleReason(v) }}</span>
+            </span>
+            <span class="ml-auto shrink-0 text-right text-xs muted">
               <span v-if="v.host_compat">{{ t('plugins.consent.hostCompat') }} <code class="font-mono">{{ v.host_compat }}</code></span>
               <span v-if="v.size" class="ml-2">{{ formatBytes(v.size) }}</span>
             </span>
           </label>
         </div>
+        <p v-if="hostVersion" class="mt-3 text-xs muted">{{ t('plugins.market.hostVersion', { version: hostVersion }) }}</p>
       </template>
       <template #footer>
         <SButton @click="picker = null">{{ t('common.cancel') }}</SButton>
-        <SButton variant="primary" :loading="installing" :disabled="!pickVersion || (picker ? pickVersion === installedOf(picker) : true)" @click="install">
+        <SButton variant="primary" :loading="installing" :disabled="pickBlocked" @click="install">
           <SIcon name="shield" class="h-4 w-4" />{{ t('plugins.market.continue') }}
         </SButton>
       </template>

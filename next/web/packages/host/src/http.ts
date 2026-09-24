@@ -34,10 +34,22 @@ export class ApiError extends Error {
     this.details = body.details || {}
     const fields: Record<string, string> = {}
     for (const f of body.details?.fields || []) {
-      if (f && f.field) fields[f.field] = f.message || f.code || 'invalid'
+      if (f && f.field) fields[f.field] = localizedText(f.message) || f.code || 'invalid'
     }
     this.fields = fields
   }
+}
+
+/** Field messages may be plain strings or {en, zh} objects (e.g. price expressions). */
+function localizedText(v: unknown): string {
+  if (typeof v === 'string') return v
+  if (v && typeof v === 'object') {
+    const m = v as Record<string, unknown>
+    const loc = config.locale?.() || 'en'
+    const s = m[loc] ?? m.en ?? Object.values(m)[0]
+    return typeof s === 'string' ? s : ''
+  }
+  return ''
 }
 
 export function isApiError(e: unknown): e is ApiError {
@@ -135,10 +147,17 @@ if (typeof window !== 'undefined') {
 
 // ------------------------------------------------------------------ config
 
+/**
+ * Why the session ended: "expired" when a signed-in session could not be
+ * renewed (refresh token expired, revoked or reused), "unauthenticated" when
+ * there was no session.
+ */
+export type UnauthenticatedReason = 'expired' | 'unauthenticated'
+
 export interface HttpConfig {
   baseURL: string
   /** Called when the session is gone (refresh failed). */
-  onUnauthenticated?: () => void
+  onUnauthenticated?: (reason: UnauthenticatedReason) => void
   /**
    * Asks the user to confirm their password and returns a step-up token
    * (already obtained from POST /auth/step-up), or null when cancelled.
@@ -154,7 +173,7 @@ export function configureHttp(c: Partial<HttpConfig>) {
 }
 
 let stepUpToken: { token: string; until: number } | null = null
-let refreshing: Promise<boolean> | null = null
+let refreshing: Promise<RefreshOutcome> | null = null
 let stepUpPending: Promise<{ token: string; expiresIn: number } | null> | null = null
 
 function buildURL(path: string, query?: Query): string {
@@ -173,28 +192,121 @@ function buildURL(path: string, query?: Query): string {
   return url
 }
 
-async function refreshSession(): Promise<boolean> {
-  const s = session.get()
-  if (!s?.refresh_token) return false
-  if (!refreshing) {
-    refreshing = (async () => {
-      try {
-        const res = await fetch(buildURL('/auth/refresh'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh_token: s.refresh_token })
-        })
-        if (!res.ok) return false
-        const json = await res.json()
-        if (!json?.data?.access_token) return false
-        session.fromTokenResponse(json.data)
-        return true
-      } catch {
-        return false
-      } finally {
-        setTimeout(() => (refreshing = null), 0)
+// ------------------------------------------------------------------ token refresh
+//
+// The server rotates refresh tokens and treats a rotated token presented again
+// as theft: it revokes the whole login (CONTRACTS §14.2). So a refresh token
+// must be sent at most once, even with several tabs or parallel 401s:
+//   - in a tab, concurrent callers share one in-flight refresh;
+//   - across tabs, refreshes are serialized by a Web Lock (localStorage lock
+//     as fallback) and, once holding the lock, a tab first re-reads the
+//     session: when another tab already refreshed, it adopts that session
+//     instead of presenting the (now rotated) token again;
+//   - a request that failed with an access token that is no longer current
+//     (someone refreshed meanwhile) is simply retried.
+
+/** ok: session renewed; invalid: refresh token rejected; error: network / server error. */
+type RefreshOutcome = 'ok' | 'invalid' | 'error'
+
+const REFRESH_LOCK = 's2a.refresh'
+const STORAGE_LOCK_KEY = 's2a.refresh.lock'
+const STORAGE_LOCK_TTL_MS = 10_000
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+/** Re-reads the session written by other tabs (the storage event may not have fired yet). */
+function syncSession(): Session | null {
+  if (typeof localStorage === 'undefined') return current
+  let raw: string | null
+  try {
+    raw = localStorage.getItem(SESSION_KEY)
+  } catch {
+    return current // storage unavailable: keep the in-memory session
+  }
+  const stored = raw ? readSession() : null
+  if (stored?.access_token !== current?.access_token) {
+    current = stored
+    listeners.forEach((fn) => fn(current))
+  }
+  return current
+}
+
+/** Best-effort cross-tab mutex in localStorage (browsers without Web Locks, e.g. plain http). */
+async function withStorageLock<T>(fn: () => Promise<T>): Promise<T> {
+  const me = Math.random().toString(36).slice(2) + Date.now().toString(36)
+  const owner = () => {
+    try {
+      return (JSON.parse(localStorage.getItem(STORAGE_LOCK_KEY) || 'null') as { owner: string; until: number } | null) || null
+    } catch {
+      return null
+    }
+  }
+  const deadline = Date.now() + STORAGE_LOCK_TTL_MS
+  try {
+    while (Date.now() < deadline) {
+      const held = owner()
+      if (!held || held.until < Date.now()) {
+        localStorage.setItem(STORAGE_LOCK_KEY, JSON.stringify({ owner: me, until: Date.now() + STORAGE_LOCK_TTL_MS }))
+        await sleep(25) // let a concurrent writer win or lose
+        if (owner()?.owner === me) break
       }
-    })()
+      await sleep(80)
+    }
+  } catch {
+    /* storage unavailable: run unlocked */
+  }
+  try {
+    return await fn()
+  } finally {
+    try {
+      if (owner()?.owner === me) localStorage.removeItem(STORAGE_LOCK_KEY)
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+function withRefreshLock<T>(fn: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator !== 'undefined' ? (navigator as Navigator & { locks?: LockManager }).locks : undefined
+  if (locks?.request) return locks.request(REFRESH_LOCK, { mode: 'exclusive' }, fn) as Promise<T>
+  if (typeof localStorage !== 'undefined') return withStorageLock(fn)
+  return fn()
+}
+
+async function doRefresh(stale: string | undefined): Promise<RefreshOutcome> {
+  // Another tab may have refreshed while this one waited for the lock.
+  const s = syncSession()
+  if (!s?.refresh_token) return 'invalid'
+  if (stale && s.access_token !== stale) return 'ok'
+  try {
+    const res = await fetch(buildURL('/auth/refresh'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ refresh_token: s.refresh_token })
+    })
+    if (res.status === 400 || res.status === 401 || res.status === 403) return 'invalid'
+    if (!res.ok) return 'error'
+    const json = await safeJSON(res)
+    if (!json?.data?.access_token) return 'error'
+    session.fromTokenResponse(json.data)
+    return 'ok'
+  } catch {
+    return 'error'
+  }
+}
+
+/**
+ * Renews the session after a 401. `stale` is the access token the failed
+ * request carried; when the session already holds a different one, the
+ * request is just retried.
+ */
+function refreshSession(stale: string | undefined): Promise<RefreshOutcome> {
+  const s = session.get()
+  if (s && stale && s.access_token !== stale) return Promise.resolve('ok')
+  if (!refreshing) {
+    refreshing = withRefreshLock(() => doRefresh(stale)).finally(() => {
+      refreshing = null
+    })
   }
   return refreshing
 }
@@ -213,6 +325,8 @@ async function obtainStepUp(): Promise<string | null> {
 
 /** Low-level request returning the parsed JSON envelope (or null for 204). */
 export async function requestRaw(method: string, path: string, opts: RequestOptions = {}): Promise<any> {
+  /** Access token carried by the last attempt. */
+  let sentToken: string | undefined
   const doFetch = async (): Promise<Response> => {
     const headers: Record<string, string> = { Accept: 'application/json', ...(opts.headers || {}) }
     const isForm = typeof FormData !== 'undefined' && opts.body instanceof FormData
@@ -225,7 +339,8 @@ export async function requestRaw(method: string, path: string, opts: RequestOpti
       }
     }
     const s = session.get()
-    if (!opts.anonymous && s?.access_token) headers['Authorization'] = 'Bearer ' + s.access_token
+    sentToken = !opts.anonymous ? s?.access_token : undefined
+    if (sentToken) headers['Authorization'] = 'Bearer ' + sentToken
     if (stepUpToken && stepUpToken.until > Date.now() && !headers['X-Step-Up-Token']) {
       headers['X-Step-Up-Token'] = stepUpToken.token
     }
@@ -237,12 +352,14 @@ export async function requestRaw(method: string, path: string, opts: RequestOpti
   let res = await doFetch()
 
   if (res.status === 401 && !opts.anonymous) {
-    if (await refreshSession()) {
-      res = await doFetch()
-    }
-    if (res.status === 401) {
+    const hadSession = !!session.get()
+    const outcome: RefreshOutcome = hadSession ? await refreshSession(sentToken) : 'invalid'
+    if (outcome === 'ok') res = await doFetch()
+    // A network / server error while refreshing keeps the session: the next
+    // request tries again instead of signing the user out.
+    if (res.status === 401 && outcome !== 'error') {
       session.clear()
-      config.onUnauthenticated?.()
+      config.onUnauthenticated?.(hadSession ? 'expired' : 'unauthenticated')
     }
   }
 

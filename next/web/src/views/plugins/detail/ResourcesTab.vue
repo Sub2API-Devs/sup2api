@@ -102,9 +102,10 @@ async function save() {
         </tr>
       </tbody>
     </table>
-    <div v-if="canManage" class="mt-4 flex gap-2">
+    <div v-if="canManage" class="mt-4 flex flex-wrap items-center gap-2">
       <SButton variant="primary" :loading="saving" @click="save">{{ t('common.save') }}</SButton>
       <SButton :disabled="saving" @click="reset">{{ t('common.reset') }}</SButton>
+      <span class="text-xs muted">{{ t('plugins.resources.restartHint') }}</span>
     </div>
   </SCard>
 </template>
