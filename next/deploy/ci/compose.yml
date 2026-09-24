@@ -1,0 +1,25 @@
+# Go test runner on the test server. Joins the testdb network so tests reach
+# PostgreSQL/Redis by service name. Usage (on ovh, from the synced repo root):
+#   docker compose -f next/deploy/ci/compose.yml run --rm gotest go test ./internal/plugin/sandbox/...
+name: sub2api-next-ci
+services:
+  gotest:
+    image: golang:1.27
+    working_dir: /src/next/server
+    volumes:
+      - ../../..:/src
+      - gomod:/go/pkg/mod
+      - gocache:/root/.cache/go-build
+    environment:
+      TEST_DATABASE_URL: postgres://postgres:sub2api@pg:5432/postgres?sslmode=disable
+      TEST_REDIS_URL: redis://redis:6379/0
+      GOFLAGS: -buildvcs=false
+    mem_limit: 8g
+    networks: [testdb]
+networks:
+  testdb:
+    external: true
+    name: sub2api-next-testdb_default
+volumes:
+  gomod: {}
+  gocache: {}
