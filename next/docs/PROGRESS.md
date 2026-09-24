@@ -2,7 +2,7 @@
 
 > 用途：记录派发给开发 agent 的任务、交付结果、待办事项与环境信息，保证上下文压缩或换人接手后能完整恢复现场。
 > **每次合并分支、派发新任务、做出决策后都要更新本文件。**
-> 最后更新：2026-09-24，11 个 agent 全部交付并合并；主控已完成 `internal/app` 组装，正在 ovh 上部署并跑验收。
+> 最后更新：2026-09-24，11 个 agent 全部合并，`internal/app` 组装完成，ovh 上 17 条验收全部通过（部署提交 `e6f7e4483`）。
 
 相关文档：[ARCHITECTURE.md](ARCHITECTURE.md)（设计）· [CONTRACTS.md](CONTRACTS.md)（开发契约）
 
@@ -15,7 +15,7 @@
 | 0 | 备份、架构文档、契约（proto、manifest、核心表、core 接口、基础设施骨架） | ✅ 完成 |
 | 1 | 9 个 agent 并行开发各模块 | ✅ 全部合并 |
 | 2 | 网关（G）、事件投递与任务（H） | ✅ 全部合并 |
-| 3 | 主控组装 `internal/app`、在 ovh 上用 compose 部署、跑 17 条验收测试 | ⏳ 组装完成（本机冒烟通过），部署与 e2e 进行中 |
+| 3 | 主控组装 `internal/app`、在 ovh 上用 compose 部署、跑 17 条验收测试 | ✅ 17/17 通过 |
 
 **分支**：开发分支 `feat/next-platform`（本地），每个 agent 在独立 worktree 的 `next/<代号>` 分支上开发，完成后由主控 `git merge --no-ff` 合并。
 **备份**：tag `legacy/v0.2.8`、分支 `legacy/main`（均已推送）。
@@ -41,7 +41,7 @@
 | g-gateway（阶段 2） | `server/internal/gateway`（含粘性会话） | next/g-gateway | ✅ 已合并 | 6a1e91436 | da90fc0ec |
 | h-events-jobs（阶段 2） | `event/delivery`、`job` | next/h-events-jobs | ✅ 已合并 | 04a6c87fb | c8caaca75 |
 
-主控自己的提交：`6de334386` 架构文档 · `5a3f05dc9` 阶段 0 契约 · `d2d44ad1b` 迁移测试 · `6e3d0fadc` 插件协议/签名/加密 · `8586025b6` 发布/schema/默认值接口与格式 · `7e8518afc` compose 测试规则 · `c3a19b057` Ledger.ApplyTx、0002 迁移、gofmt · `b84f458e9` 阶段 2 接口 · `7227ff4d5` 阶段 1 契约变更并入 CONTRACTS · `222d4b194` 前端 SPA 处理（CSP nonce）与 plugin-exec · `e7a64d627` 测试模板库 · `d87ae94d7` 插件迁移改用插件角色登录执行（修复 RESET ROLE 提权） · `8944ebb86` 移除误提交的 mock-upstream 二进制 · `d09008a43` `internal/app` 组装 · `a69f68f55` 挂载网关、插件详情接 JobTrigger/HookStatsSource。
+主控自己的提交：`6de334386` 架构文档 · `5a3f05dc9` 阶段 0 契约 · `d2d44ad1b` 迁移测试 · `6e3d0fadc` 插件协议/签名/加密 · `8586025b6` 发布/schema/默认值接口与格式 · `7e8518afc` compose 测试规则 · `c3a19b057` Ledger.ApplyTx、0002 迁移、gofmt · `b84f458e9` 阶段 2 接口 · `7227ff4d5` 阶段 1 契约变更并入 CONTRACTS · `222d4b194` 前端 SPA 处理（CSP nonce）与 plugin-exec · `e7a64d627` 测试模板库 · `d87ae94d7` 插件迁移改用插件角色登录执行（修复 RESET ROLE 提权） · `8944ebb86` 移除误提交的 mock-upstream 二进制 · `d09008a43` `internal/app` 组装 · `a69f68f55` 挂载网关、插件详情接 JobTrigger/HookStatsSource · `896ea01a5`、`5bc00f3df`、`e6f7e4483` e2e 修复（见第 8 节）· `e96962948` 第二批契约并入。
 
 ### 已发给 agent 的补充约定（均已落实）
 - **g-gateway**：`cache_creation_tokens` 是总量（含 1 小时），填 `UsageTokens` 时 `CacheCreation = 总量 − cache_creation_1h_tokens`；钩子 `prompt_text` 传纯文本；请求 ID 必须服务端生成（任务说明里已写）；已安装未启用插件的端点返回 503。
@@ -120,7 +120,8 @@ HTTP 挂载：`/healthz`（节点自我隔离时 503）→ `httpapi.NewRouter` �
 **本机（Windows）**
 - Go 1.27（mise，`GOBIN=/d/mise/installs/go/1.27.0/bin`，内有 buf、protoc-gen-go、protoc-gen-go-grpc）；Node 24、npm 11；无 Docker、PG、Redis、WSL
 - Go 依赖代理：命令内临时设置 `GOPROXY=https://goproxy.cn,direct`（与仓库 Dockerfile 一致）
-- 常驻 SSH 隧道（后台任务）：`ssh -N -L 45432:127.0.0.1:45432 -L 36379:127.0.0.1:36379 ovh`
+- 常驻 SSH 隧道（后台任务）：`ssh -N -o ServerAliveInterval=15 -L 45432:127.0.0.1:45432 -L 36379:127.0.0.1:36379 -L 3120:127.0.0.1:3120 ovh`（测试库、Redis、Caddy 控制台；网络抖动会断，断了重建）
+- 浏览器实测控制台：`.claude/launch.json` 里的 `sub2api-next-ovh` 是本机 Node 反向代理（5174 → 3120）
 - 测试环境变量：`TEST_DATABASE_URL=postgres://postgres:sub2api@127.0.0.1:45432/postgres?sslmode=disable`、`TEST_REDIS_URL=redis://127.0.0.1:36379/0`
 - proto 生成：`cd next/sdk && buf generate`
 
@@ -175,9 +176,11 @@ go test -count=1 -timeout 50m -v ./...
 | 3 | `896ea01a5` | 7/17 通过（AC01–03、14–16） | 其余都卡在 e2e 以数字发 `rate_multiplier`（契约为十进制字符串） |
 | 4 | `896ea01a5` | 13/17 通过 | AC08：预览不按结算方式归一化 → 服务端改为同一 `expr.Normalize`；列表不含 `price_id` → e2e 取详情；表达式未给缓存定价时缓存按输入价计（B 的实现，文档 §7.3 已统一）。AC10：其他节点规则 5 秒内刷新 → e2e 等一个周期；熔断按单节点连续 10 次失败 → e2e 循环到熔断打开。AC11：guard 按分钟桶统计 → e2e 用整分钟窗口；游标字段 `cursor.last_event_id`。AC13：设置接口体为 `{values:{...}}`；出口日志在连接关闭时写入（keep-alive 最长 90 秒） |
 | 5 | `5bc00f3df` | AC08/10/13 单独通过（AC08 仅剩价格历史比较：历史存规范形式 `v1:...`，e2e 改为按哈希和去前缀比较） | |
-| 6 | `5bc00f3df` | 全量（含 `E2E_LONG=1`）进行中 | |
+| 6 | `5bc00f3df` | 全量（含 `E2E_LONG=1`）：AC01–09 通过；AC10 起本机 SSH 隧道断开（网络问题）导致后续全失败 | 重建隧道（PG、Redis、3120 合为一个后台任务） |
+| 7 | `5bc00f3df` | 重跑 AC10–17：AC12、AC17 失败 | AC12：任务接口返回 `{jobs, recent_runs}`，e2e 按数组读 → 改读 `recent_runs`；AC17：计时包含 ssh 执行 docker kill 的耗时 → 改为 kill 返回后计时 |
+| 8 | `5bc00f3df` | AC12、AC17 通过 → **17 条验收全部通过** | 另在浏览器实测控制台（经本机 Node 反向代理）：登录、概览、guard 原生插槽卡片、插件详情正常；修复插件文字图标 `text:X` 显示为破图（`e6f7e4483`） |
 
 **后续**
-1. e2e 全部通过后：处理第 4 节待写入的契约变更。
-2. 第 5 节未做项按优先级排期（登录限速、卸载清账号、SSRF 拨号钩子）。
+1. 第 4 节"仍待办"：`ClientRequestID`、`/settings/gateway` 归属、F 列出的"仍缺"接口说明。
+2. 第 5 节未做项按优先级排期：登录限速与 refresh token 重放检测（#4）、卸载插件清账号（#6）、SSRF 拨号钩子（#12）、新外部域名告警（#3）、出口日志长连接（#14）。
 3. 每个里程碑后推送 `feat/next-platform`（网络不稳时重试）。
