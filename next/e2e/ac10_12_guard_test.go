@@ -49,12 +49,26 @@ func TestAC10_GuardBlocksAndFailsOpen(t *testing.T) {
 	// Kill guard on both nodes repeatedly while sending forbidden prompts:
 	// failure=open lets them through (never 5xx), and the breaker opens.
 	e.RequireDocker()
+	// The breaker opens after 10 consecutive failures of the hook on one node
+	// (ARCHITECTURE 6.3), so keep going until it does rather than stopping
+	// after a fixed number of requests.
+	breakerOpen := func() (bool, string) {
+		d, _ := e.Plugin(admin, "guard")
+		stats := d.Get("hooks")
+		for _, h := range stats.Array() {
+			if h.Get("stats.breaker_open").Bool() || h.Get("breaker_open").Bool() {
+				return true, stats.Raw
+			}
+		}
+		return false, stats.Raw
+	}
 	var passed, blocked, other atomic.Int64
-	deadline := time.Now().Add(20 * time.Second)
-	for time.Now().Before(deadline) {
+	opened, lastStats := false, ""
+	deadline := time.Now().Add(60 * time.Second)
+	for !opened && time.Now().Before(deadline) {
 		e.KillPluginProcesses(1, "guard")
 		e.KillPluginProcesses(2, "guard")
-		for i := 0; i < 5; i++ {
+		for i := 0; i < 30; i++ {
 			g := e.Messages(tn.APIKey, MessagesBody(tn.Model, "still "+e.ForbiddenWord(), false), nil)
 			switch g.Status {
 			case 200:
@@ -66,26 +80,13 @@ func TestAC10_GuardBlocksAndFailsOpen(t *testing.T) {
 				t.Errorf("unexpected HTTP %d while guard is down: %s", g.Status, g.Body)
 			}
 		}
-		if passed.Load() >= 10 {
-			break
-		}
+		opened, lastStats = breakerOpen()
 	}
 	if passed.Load() == 0 {
 		t.Fatalf("no request failed open (blocked=%d other=%d)", blocked.Load(), other.Load())
 	}
-	d, _ := e.Plugin(admin, "guard")
-	stats := d.Get("hooks")
-	if !stats.Exists() {
-		stats = d.Get("hook_stats")
-	}
-	opened := false
-	for _, h := range stats.Array() {
-		if h.Get("breaker_open").Bool() || h.Get("breaker").String() == "open" || h.Get("breaker_trips").Int() > 0 {
-			opened = true
-		}
-	}
 	if !opened {
-		t.Fatalf("breaker never opened; hook stats: %s", stats.Raw)
+		t.Fatalf("breaker never opened; hook stats: %s", lastStats)
 	}
 
 	// Recovery: guard restarts (backoff) and blocks again.
@@ -106,7 +107,11 @@ func TestAC11_GuardEventStatsMatchUsage(t *testing.T) {
 	e.EnsurePlugin(admin, "guard", "")
 	e.SetGuardRules(admin)
 
-	from := time.Now().Add(-time.Second)
+	// guard aggregates by minute and counts buckets in [from, to), so both
+	// sides use minute-aligned windows (earlier tests' traffic in the same
+	// minute is counted by both).
+	from := time.Now().UTC().Truncate(time.Minute)
+	nextMinute := func() time.Time { return time.Now().UTC().Add(time.Minute).Truncate(time.Minute) }
 	send := func(n int) {
 		for i := 0; i < n; i++ {
 			g := e.MustMessages(tn.APIKey, MessagesBody(tn.Model, fmt.Sprintf("count %d", i), i%2 == 0), nil)
@@ -124,7 +129,7 @@ func TestAC11_GuardEventStatsMatchUsage(t *testing.T) {
 	}
 
 	send(6)
-	to := time.Now().Add(time.Second)
+	to := nextMinute()
 	Eventually(t, 60*time.Second, 2*time.Second, "guard stats catch up", func() bool {
 		return statsFor(to) == countUsage(to)
 	})
@@ -134,12 +139,12 @@ func TestAC11_GuardEventStatsMatchUsage(t *testing.T) {
 	e.Disable(admin, "guard")
 	send(4)
 	e.Enable(admin, "guard")
-	to = time.Now().Add(time.Second)
+	to = nextMinute()
 	Eventually(t, 60*time.Second, 2*time.Second, "guard stats after re-enable", func() bool {
 		return statsFor(to) == countUsage(to)
 	})
 	after := admin.OK(t, http.MethodGet, "/plugins/guard/events", nil)
-	if after.Get("cursor").Int() <= cur.Get("cursor").Int() && after.Get("last_event_id").Int() <= cur.Get("last_event_id").Int() {
+	if after.Get("cursor.last_event_id").Int() <= cur.Get("cursor.last_event_id").Int() {
 		t.Fatalf("cursor did not advance: before %s after %s", cur.Raw, after.Raw)
 	}
 	if n := len(after.Get("deadletters").Array()); n != 0 {

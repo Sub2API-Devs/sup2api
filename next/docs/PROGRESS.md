@@ -19,7 +19,7 @@
 
 **分支**：开发分支 `feat/next-platform`（本地），每个 agent 在独立 worktree 的 `next/<代号>` 分支上开发，完成后由主控 `git merge --no-ff` 合并。
 **备份**：tag `legacy/v0.2.8`、分支 `legacy/main`（均已推送）。
-**远程推送**：`feat/next-platform` 最近确认推送到 origin 的是 `7227ff4d5`，之后的提交待推送。本机访问 GitHub 时好时坏，推送失败就稍后重试。
+**远程推送**：`feat/next-platform` 已推送到 origin（截至 `5830fad79`）。本机访问 GitHub 时好时坏，推送失败就稍后重试。
 
 ---
 
@@ -171,4 +171,4 @@ go test -count=1 -timeout 50m -v ./...
 **后续**
 1. e2e 全部通过后：处理第 4 节待写入的契约变更。
 2. 第 5 节未做项按优先级排期（登录限速、卸载清账号、SSRF 拨号钩子）。
-3. 网络恢复后推送 `feat/next-platform`（`a95216e34` 之后的提交还未确认推送成功）。
+3. 每个里程碑后推送 `feat/next-platform`（网络不稳时重试）。

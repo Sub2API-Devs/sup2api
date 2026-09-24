@@ -11,7 +11,7 @@ import (
 //   PUT /api/v1/p/guard/rules  {"rules":[{"name","kind":"keyword|regex","pattern","enabled"}]}
 //       replaces the whole rule set; ids are int64 and omitted for new rules
 //   GET /api/v1/p/guard/stats?from=&to=  {"data":{"requests_total","blocked_total","top_rules",...}}
-//   PUT /api/v1/plugins/guard/settings {"webhook_url","record_snippets"}
+//   PUT /api/v1/plugins/guard/settings {"values":{"webhook_url","record_snippets"}}
 //   test build 0.1.1-test (not in index.json; market/test/guard-0.1.1-test.s2plugin):
 //   POST /debug/dial {"address"} -> {"ok":false,"error"}; POST /debug/alloc?mb=N[&free=1]
 
@@ -39,6 +39,8 @@ func (e *Env) SetGuardRules(admin *Session, rules ...GuardRule) {
 	if r.Status != 200 && r.Status != 204 {
 		e.T.Fatalf("guard rules: %s", r)
 	}
+	// The receiving node reloads at once; the others refresh every 5 s.
+	time.Sleep(6 * time.Second)
 }
 
 // GuardStats returns guard's statistics for [from, to].
@@ -51,7 +53,9 @@ func (e *Env) GuardStats(admin *Session, from, to time.Time) gjson.Result {
 // SetGuardSettings stores guard's settings form.
 func (e *Env) SetGuardSettings(admin *Session, webhookURL string) {
 	e.T.Helper()
-	admin.OK(e.T, http.MethodPut, "/plugins/guard/settings", map[string]any{"webhook_url": webhookURL, "record_snippets": false})
+	admin.OK(e.T, http.MethodPut, "/plugins/guard/settings", map[string]any{
+		"values": map[string]any{"webhook_url": webhookURL, "record_snippets": false},
+	})
 }
 
 // ForbiddenWord returns the keyword blocked by the e2e guard rule.

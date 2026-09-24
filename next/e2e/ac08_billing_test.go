@@ -54,8 +54,10 @@ func TestAC08_BillingModes(t *testing.T) {
 			headers: map[string]string{"anthropic-beta": "e2e-surcharge"},
 			tier:    "standard",
 			rules:   []bool{true},
+			// The expression prices no cache category, so cache tokens are billed
+			// as input (ARCHITECTURE 7.3: p = full context minus priced categories).
 			want: new(big.Rat).Mul(ExpectedTokenCost(map[string]float64{"p": 3, "c": 15},
-				MockInputTokens, MockOutputTokens, 0, 0, 0, 1), big.NewRat(2, 1)),
+				MockInputTokens+MockCacheReadTokens+MockCacheCreationTokens, MockOutputTokens, 0, 0, 0, 1), big.NewRat(2, 1)),
 		},
 		{
 			name:  "expression long_context tier without surcharge",

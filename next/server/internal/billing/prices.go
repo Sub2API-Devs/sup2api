@@ -505,8 +505,10 @@ type PreviewRequest struct {
 	GroupID    *int64            `json:"group_id"`
 }
 
-// PreviewUsage holds expression variables directly (already normalized);
-// len defaults to p + cr + cc + cc1h.
+// PreviewUsage holds token counts in the exclusive form (p excludes cache).
+// They are normalized like settlement (expr.Normalize): cache categories the
+// expression does not price are billed as input. len defaults to
+// p + cr + cc + cc1h.
 type PreviewUsage struct {
 	P    float64  `json:"p"`
 	C    float64  `json:"c"`
@@ -563,7 +565,9 @@ func (s *Service) previewPrice(c *gin.Context) {
 		return
 	}
 	u := in.Usage
-	vars := expr.Vars{P: u.P, C: u.C, CR: u.CR, CC: u.CC, CC1h: u.CC1h, Len: u.P + u.CR + u.CC + u.CC1h}
+	vars := expr.Normalize(expr.SemanticsExclusive, expr.Tokens{
+		Input: int64(u.P), Output: int64(u.C), CacheRead: int64(u.CR), CacheCreation: int64(u.CC), CacheCreation1h: int64(u.CC1h),
+	}, prog.Uses)
 	if u.Len != nil {
 		vars.Len = *u.Len
 	}

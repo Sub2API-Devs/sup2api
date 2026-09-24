@@ -35,9 +35,10 @@ func TestAC13_EgressLogAndStrictNetwork(t *testing.T) {
 		}
 		return false
 	})
-	// ... and is listed on the "external access" page.
+	// ... and is listed on the "external access" page. Rows are written when
+	// the tunnelled connection closes; HTTP keep-alive holds it up to 90 s.
 	host := strings.TrimPrefix(strings.Split(strings.TrimPrefix(e.MockInternalURL, "http://"), ":")[0], "https://")
-	Eventually(t, 30*time.Second, 2*time.Second, "egress log for "+host, func() bool {
+	Eventually(t, 120*time.Second, 3*time.Second, "egress log for "+host, func() bool {
 		d := admin.OK(t, http.MethodGet, "/plugins/guard/egress", nil,
 			Query("from", since.UTC().Format(time.RFC3339), "to", time.Now().Add(time.Minute).UTC().Format(time.RFC3339)))
 		return strings.Contains(d.Raw, host)

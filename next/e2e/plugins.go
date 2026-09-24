@@ -146,6 +146,9 @@ func PluginNodeStates(d gjson.Result) map[string]string {
 	for _, n := range nodes.Array() {
 		id := n.Get("node_id").String()
 		st := n.Get("state").String()
+		if s := n.Get("state"); s.IsObject() {
+			st = s.Get("state").String()
+		}
 		if st == "" {
 			st = n.Get("status").String()
 		}

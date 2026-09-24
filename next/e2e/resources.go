@@ -3,6 +3,7 @@ package e2e
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/tidwall/gjson"
@@ -41,10 +42,15 @@ func (e *Env) CreateUser(admin *Session, u UserSpec) *Session {
 	if u.MaxConcurrency == 0 {
 		u.MaxConcurrency = 10
 	}
+	// Assigning a non-default role at creation needs role:manage + step-up.
+	var opts []ReqOpt
+	if len(u.Roles) != 1 || u.Roles[0] != "user" {
+		opts = append(opts, admin.StepUp(e.T))
+	}
 	d := admin.OK(e.T, http.MethodPost, "/users", map[string]any{
 		"email": u.Email, "display_name": u.DisplayName, "password": u.Password,
 		"role_keys": u.Roles, "max_concurrency": u.MaxConcurrency,
-	})
+	}, opts...)
 	id := d.Get("id").Int()
 	if id == 0 {
 		e.T.Fatalf("POST /users returned no id: %s", d.Raw)
@@ -96,7 +102,7 @@ func (e *Env) CreateGroup(admin *Session, name, visibility string, rate float64,
 	}
 	d := admin.OK(e.T, http.MethodPost, "/groups", map[string]any{
 		"name": name, "description": "e2e", "visibility": visibility,
-		"rate_multiplier": rate, "model_allowlist": allow,
+		"rate_multiplier": strconv.FormatFloat(rate, 'f', -1, 64), "model_allowlist": allow,
 	})
 	id := d.Get("id").Int()
 	if id == 0 {
@@ -208,7 +214,8 @@ func (e *Env) UsageByRequest(admin *Session, userID int64, requestID string) gjs
 		}
 		switch r.Get("billing_status").String() {
 		case "billed", "free", "failed":
-			rec = r
+			// The list omits price trace fields (price_id, expr_hash, billing_detail).
+			rec = admin.OK(e.T, http.MethodGet, fmt.Sprintf("/usage/%d", r.Get("id").Int()), nil)
 			return true
 		}
 		return false
