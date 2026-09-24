@@ -265,51 +265,6 @@ func TestStickySettingsAPI(t *testing.T) {
 	}
 }
 
-func TestKnownEndpointIndexFromDB(t *testing.T) {
-	e := newDBEnv(t)
-	ctx := context.Background()
-	if _, err := e.db.Pool.Exec(ctx, `
-		INSERT INTO plugin_versions (plugin_key, version, manifest, manifest_hash, package_sha256, package, package_size, signature_status, consent_status)
-		VALUES ('anthropic', '0.1.0', $1, 'h', 's', '\x00', 1, 'valid', 'approved')`, []byte(testManifestJSON)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := e.db.Pool.Exec(ctx, `UPDATE plugins SET status = 'disabled', active_version = '0.1.0' WHERE key = 'anthropic'`); err != nil {
-		t.Fatal(err)
-	}
-	if err := e.gw.refreshKnown(ctx); err != nil {
-		t.Fatal(err)
-	}
-	k := e.gw.known.Load().match("POST", "/v1/messages/count_tokens")
-	if k == nil || k.pluginKey != "anthropic" || k.errorFormat != FormatAnthropic {
-		t.Fatalf("known endpoint: %+v", k)
-	}
-	if e.gw.known.Load().match("POST", "/v1/chat/completions") != nil {
-		t.Fatal("unknown path matched")
-	}
-	// Served through the middleware as 503 in the endpoint's format.
-	engine := gin.New()
-	engine.Use(e.gw.Middleware())
-	engine.NoRoute(func(c *gin.Context) { c.Status(404) })
-	w := httptest.NewRecorder()
-	engine.ServeHTTP(w, httptest.NewRequest("POST", "/v1/messages", strings.NewReader("{}")))
-	b := gjson.Parse(w.Body.String())
-	if w.Code != 503 || b.Get("type").String() != "error" || b.Get("error.code").String() != "plugin_unavailable" {
-		t.Fatalf("503: %d %s", w.Code, w.Body.String())
-	}
-	// Uninstalled plugin: 404 again after refresh.
-	if _, err := e.db.Pool.Exec(ctx, `DELETE FROM plugins WHERE key = 'anthropic'`); err != nil {
-		t.Fatal(err)
-	}
-	if err := e.gw.refreshKnown(ctx); err != nil {
-		t.Fatal(err)
-	}
-	w = httptest.NewRecorder()
-	engine.ServeHTTP(w, httptest.NewRequest("POST", "/v1/messages", strings.NewReader("{}")))
-	if w.Code != 404 {
-		t.Fatalf("after uninstall: %d", w.Code)
-	}
-}
-
 // End to end with DB-backed rules: the default rule synced from the
 // manifest drives scheduling.
 func TestStickyRulesFromDBDriveScheduling(t *testing.T) {

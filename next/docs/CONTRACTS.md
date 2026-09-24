@@ -340,7 +340,7 @@ Anthropic 的 `cache_creation_input_tokens` 是总量（含 1 小时缓存）。
 ### 11.6 网关请求 ID 与插件端点状态（G）
 
 - 请求 ID 一律服务端生成（客户端的 `X-Request-Id` 只记录，不作计费幂等键）
-- 已安装但未启用的插件，其声明的网关端点返回 503 `plugin_unavailable`
+- 插件未启用（已禁用或未安装）时，它声明的网关端点不存在，请求返回 404；`plugin_unavailable` 只用于插件已启用但进程暂时不可用（按失败切换处理）
 - 错误格式：`plain` 即核心 REST 格式 `{"error":{code,message}}`；`anthropic` 格式在 `error` 中额外带 `code`（如钩子拒绝时的 `guard_blocked`）
 - 所有尝试都失败时：最后一次是上游错误则返回该错误（按 ClassifyError 的状态码与类型）；是插件或账号问题返回 503 `no_available_account`；有账号但并发槽位全满返回 429
 - `usage_logs.error_type` 取值另含 `model_not_allowed`、`price_not_configured`、`rate_limited`、`invalid_request`、`plugin_unavailable`、`blocked_by_hook`

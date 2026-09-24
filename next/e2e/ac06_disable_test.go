@@ -9,7 +9,7 @@ import (
 )
 
 // AC 6: disabling a plugin keeps its accounts, greys out its permissions and
-// makes forwarding return 503; re-enabling restores it. anthropic is built
+// makes its endpoints disappear (404); re-enabling restores it. anthropic is built
 // in, so uninstalling it is refused.
 func TestAC06_DisableEnableUninstall(t *testing.T) {
 	e := Setup(t)
@@ -56,8 +56,8 @@ func TestAC06_DisableEnableUninstall(t *testing.T) {
 	})
 	for i := 0; i < 4; i++ {
 		g := e.Messages(tn.APIKey, MessagesBody(tn.Model, "while disabled", false), nil)
-		if g.Status != 503 {
-			t.Fatalf("gateway while disabled: HTTP %d %s (want 503)", g.Status, g.Body)
+		if g.Status != 404 {
+			t.Fatalf("gateway while disabled: HTTP %d %s (want 404)", g.Status, g.Body)
 		}
 	}
 	// Account types disappear from the registry.

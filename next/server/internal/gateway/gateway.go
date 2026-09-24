@@ -23,7 +23,7 @@ import (
 )
 
 // Deps are the gateway's collaborators. DB and Redis may be nil in unit
-// tests: sticky sessions, hook breaker/stats and the known-endpoint index
+// tests: sticky sessions and hook breaker/stats
 // then degrade to no-ops.
 type Deps struct {
 	DB       *store.DB
@@ -46,7 +46,6 @@ type Gateway struct {
 	d Deps
 
 	table atomic.Pointer[routeTable]
-	known atomic.Pointer[knownIndex]
 
 	settings *settingsCache
 	rules    *ruleCache
@@ -55,11 +54,10 @@ type Gateway struct {
 	allowPrivate bool
 
 	// Overridable in tests.
-	now          func() time.Time
-	lookupIP     func(ctx context.Context, host string) ([]net.IP, error)
-	headerWait   func(stream bool) time.Duration
-	shuffle      func(n int, swap func(i, j int))
-	knownRefresh chan struct{}
+	now        func() time.Time
+	lookupIP   func(ctx context.Context, host string) ([]net.IP, error)
+	headerWait func(stream bool) time.Duration
+	shuffle    func(n int, swap func(i, j int))
 
 	stop    chan struct{}
 	wg      sync.WaitGroup
@@ -73,17 +71,16 @@ var (
 )
 
 // New builds the gateway, subscribes to registry and bus notifications and
-// starts its background loops (hook stats flush, known-endpoint refresh).
+// starts its background loop (hook stats flush).
 // Call Close on shutdown.
 func New(d Deps) *Gateway {
 	g := &Gateway{
-		d:            d,
-		now:          time.Now,
-		lookupIP:     defaultLookupIP,
-		headerWait:   defaultHeaderWait,
-		shuffle:      rand.Shuffle,
-		knownRefresh: make(chan struct{}, 1),
-		stop:         make(chan struct{}),
+		d:          d,
+		now:        time.Now,
+		lookupIP:   defaultLookupIP,
+		headerWait: defaultHeaderWait,
+		shuffle:    rand.Shuffle,
+		stop:       make(chan struct{}),
 	}
 	if d.Config != nil {
 		g.allowPrivate = d.Config.AllowPrivateUpstream
@@ -91,28 +88,22 @@ func New(d Deps) *Gateway {
 	g.settings = newSettingsCache(d.DB)
 	g.rules = newRuleCache(d.DB)
 	g.hooks = newHookRuntime(d.Redis)
-	g.known.Store(&knownIndex{})
 
 	var gen core.Generation
 	if d.Registry != nil {
 		gen = d.Registry.Current()
 		g.cancels = append(g.cancels, d.Registry.OnChange(func(gen core.Generation) {
 			g.table.Store(buildRouteTable(gen))
-			g.requestKnownRefresh()
 		}))
 	}
 	g.table.Store(buildRouteTable(gen))
 
 	if d.Bus != nil {
 		g.cancels = append(g.cancels,
-			d.Bus.Subscribe(core.ChannelPluginEvents, func([]byte) { g.requestKnownRefresh() }),
 			d.Bus.Subscribe(core.ChannelConfigChanged, func(payload []byte) { g.onConfigChanged(payload) }),
 		)
 	}
-	g.requestKnownRefresh()
-
-	g.wg.Add(2)
-	go g.knownLoop()
+	g.wg.Add(1)
 	go g.statsLoop()
 	return g
 }
@@ -133,9 +124,9 @@ func (g *Gateway) Close() {
 	})
 }
 
-// Middleware dispatches requests matching an active plugin endpoint to the
-// pipeline and answers 503 plugin_unavailable for endpoints of installed but
-// inactive plugins. Anything else falls through to the next handler. Mount it
+// Middleware dispatches requests matching an endpoint of an enabled plugin
+// to the pipeline. Anything else (including endpoints of disabled or
+// uninstalled plugins) falls through to the next handler, i.e. 404. Mount it
 // with engine.Use before the core routes, or in engine.NoRoute.
 func (g *Gateway) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -143,11 +134,6 @@ func (g *Gateway) Middleware() gin.HandlerFunc {
 		t := g.table.Load()
 		if rt := t.match(method, path); rt != nil {
 			g.serve(c, t.gen, rt.binding)
-			c.Abort()
-			return
-		}
-		if k := g.known.Load().match(method, path); k != nil {
-			writeError(c, k.errorFormat, errPluginUnavailable(k.pluginKey))
 			c.Abort()
 			return
 		}
@@ -175,32 +161,6 @@ func (g *Gateway) changed(ctx context.Context, key string) {
 	payload, _ := json.Marshal(map[string]string{"key": key})
 	if err := g.d.Bus.Publish(context.WithoutCancel(ctx), core.ChannelConfigChanged, payload); err != nil {
 		slog.WarnContext(ctx, "gateway: publish config:changed", "err", err)
-	}
-}
-
-func (g *Gateway) requestKnownRefresh() {
-	select {
-	case g.knownRefresh <- struct{}{}:
-	default:
-	}
-}
-
-func (g *Gateway) knownLoop() {
-	defer g.wg.Done()
-	tick := time.NewTicker(time.Minute)
-	defer tick.Stop()
-	for {
-		select {
-		case <-g.stop:
-			return
-		case <-g.knownRefresh:
-		case <-tick.C:
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		if err := g.refreshKnown(ctx); err != nil {
-			slog.Warn("gateway: refresh known endpoints", "err", err)
-		}
-		cancel()
 	}
 }
 

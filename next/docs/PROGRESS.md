@@ -44,7 +44,7 @@
 主控自己的提交：`6de334386` 架构文档 · `5a3f05dc9` 阶段 0 契约 · `d2d44ad1b` 迁移测试 · `6e3d0fadc` 插件协议/签名/加密 · `8586025b6` 发布/schema/默认值接口与格式 · `7e8518afc` compose 测试规则 · `c3a19b057` Ledger.ApplyTx、0002 迁移、gofmt · `b84f458e9` 阶段 2 接口 · `7227ff4d5` 阶段 1 契约变更并入 CONTRACTS · `222d4b194` 前端 SPA 处理（CSP nonce）与 plugin-exec · `e7a64d627` 测试模板库 · `d87ae94d7` 插件迁移改用插件角色登录执行（修复 RESET ROLE 提权） · `8944ebb86` 移除误提交的 mock-upstream 二进制 · `d09008a43` `internal/app` 组装 · `a69f68f55` 挂载网关、插件详情接 JobTrigger/HookStatsSource · `896ea01a5`、`5bc00f3df`、`e6f7e4483` e2e 修复（见第 8 节）· `e96962948` 第二批契约并入。
 
 ### 已发给 agent 的补充约定（均已落实）
-- **g-gateway**：`cache_creation_tokens` 是总量（含 1 小时），填 `UsageTokens` 时 `CacheCreation = 总量 − cache_creation_1h_tokens`；钩子 `prompt_text` 传纯文本；请求 ID 必须服务端生成（任务说明里已写）；已安装未启用插件的端点返回 503。
+- **g-gateway**：`cache_creation_tokens` 是总量（含 1 小时），填 `UsageTokens` 时 `CacheCreation = 总量 − cache_creation_1h_tokens`；钩子 `prompt_text` 传纯文本；请求 ID 必须服务端生成（任务说明里已写）；已安装未启用插件的端点返回 503（2026-09-24 用户改为 404：未启用即端点不存在）。
 - **c2-runtime**：Windows 开发模式二进制为 `plugin.exe`；`SkipHostEnv=true`；`config_enc` AAD 为 `"plugin-config:"+key`；配置变更广播 `{"type":"config","plugin_key":k}`；Drop（purge）要显式删除迁移记录（0002 去掉了级联）；平台插件处理自己平台账号时必须携带解密凭证；可用 E 的 `build-demo.sh` 产出真实插件包测试。
 
 ---

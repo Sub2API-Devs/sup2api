@@ -55,14 +55,6 @@ func fromCore(e *core.Error, recordType string) *gwError {
 	return &gwError{Status: e.Status, Code: e.Code, Message: e.Message, RecordType: recordType}
 }
 
-func errPluginUnavailable(pluginKey string) *gwError {
-	e := fromCore(core.ErrPluginUnavailable, errTypePluginUnavailable)
-	if pluginKey != "" {
-		e.Message = "plugin " + pluginKey + " is not enabled"
-	}
-	return e
-}
-
 // writeError renders err in the endpoint's error format.
 func writeError(c *gin.Context, format string, err *gwError) {
 	status := err.Status

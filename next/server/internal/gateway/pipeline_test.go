@@ -12,7 +12,6 @@ import (
 	"github.com/tidwall/gjson"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
-	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
@@ -484,13 +483,10 @@ func TestRouteFallthroughAndGenerationSwitch(t *testing.T) {
 	if resp.StatusCode != 404 {
 		t.Fatalf("unknown path: %d", resp.StatusCode)
 	}
-	// Disable the plugin: the endpoint leaves the table; the known index
-	// (installed plugins) turns it into 503 plugin_unavailable.
+	// Disable the plugin: its endpoint no longer exists, so 404.
 	e.reg.set(&fakeGen{num: 2})
-	e.gw.known.Store(buildKnownIndex(map[string][]manifest.Endpoint{"anthropic": e.man.Gateway.Endpoints}))
-	r := e.messages(body(testModel, false))
-	if r.status != 503 || r.json().Get("type").String() != "error" || r.json().Get("error.code").String() != "plugin_unavailable" {
-		t.Fatalf("inactive plugin endpoint: %d %s", r.status, r.body)
+	if r := e.messages(body(testModel, false)); r.status != 404 {
+		t.Fatalf("disabled plugin endpoint: %d %s", r.status, r.body)
 	}
 	e.noRecord()
 	// Re-enable.
