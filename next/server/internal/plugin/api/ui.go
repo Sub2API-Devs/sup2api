@@ -1,6 +1,7 @@
 package api
 
 import (
+	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -104,7 +105,7 @@ func (a *API) marketSources(c *gin.Context) {
 
 func (a *API) marketPlugins(c *gin.Context) {
 	if a.d.Market == nil {
-		httpapi.OK(c, []any{})
+		marketList(c, []any{}, a.hostVersion())
 		return
 	}
 	var sourceID int64
@@ -122,7 +123,21 @@ func (a *API) marketPlugins(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	httpapi.OK(c, list)
+	marketList(c, list, a.hostVersion())
+}
+
+func (a *API) hostVersion() string {
+	if a.d.Install == nil {
+		return ""
+	}
+	return a.d.Install.HostVersion()
+}
+
+// marketList renders the market listing. data stays the plugin array (as
+// before); host_version is a top-level sibling so existing clients keep
+// working: {"data": [...], "host_version": "0.2.0"}.
+func marketList(c *gin.Context, list any, hostVersion string) {
+	c.JSON(http.StatusOK, gin.H{"data": list, "host_version": hostVersion})
 }
 
 // ---------------------------------------------------------------- publishers

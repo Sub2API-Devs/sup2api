@@ -58,14 +58,17 @@ func TestEnsureBuiltinInstallsEnablesAndBlocksUninstall(t *testing.T) {
 	}
 
 	// Uninstall is refused, disabled or not; a disabled one stays disabled.
-	if err := e.svc.Uninstall(ctx, "guard", true, e.admin); core.AsError(err).Code != core.ErrPermissionDenied.Code {
+	if _, err := e.svc.Uninstall(ctx, "guard", UninstallOptions{Purge: true, PurgeAccounts: true}, e.admin); core.AsError(err).Code != core.ErrPermissionDenied.Code {
 		t.Fatalf("uninstall enabled builtin: %v", err)
 	}
 	if _, err := e.rollout.Disable(ctx, "guard", e.admin, "test"); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.svc.Uninstall(ctx, "guard", false, e.admin); core.AsError(err).Code != core.ErrPermissionDenied.Code {
+	if _, err := e.svc.Uninstall(ctx, "guard", UninstallOptions{}, e.admin); core.AsError(err).Code != core.ErrPermissionDenied.Code {
 		t.Fatalf("uninstall disabled builtin: %v", err)
+	}
+	if len(e.accounts.purged) != 0 {
+		t.Fatalf("builtin accounts purged: %v", e.accounts.purged)
 	}
 	if err := e.svc.EnsureBuiltin(ctx, dir, log); err != nil {
 		t.Fatal(err)

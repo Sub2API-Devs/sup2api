@@ -16,47 +16,66 @@ func running(status string) bool {
 	return status == StatusEnabled || status == StatusEnabling || status == StatusUpgrading
 }
 
+// UninstallOptions select what uninstall removes besides the plugin row.
+type UninstallOptions struct {
+	// Purge drops the plugin's database schema.
+	Purge bool
+	// PurgeAccounts deletes the accounts of the plugin's account types
+	// through Deps.Accounts; otherwise they are kept and show up orphaned.
+	PurgeAccounts bool
+}
+
+// UninstallResult reports what uninstall removed.
+type UninstallResult struct {
+	AccountsDeleted int `json:"accounts_deleted"`
+}
+
 // Uninstall disables the plugin if needed, optionally drops its schema, and
 // deletes the plugin row (cascading grants, versions, cursors, job runs,
 // rollouts, plugin-default prices and sticky rules). Accounts are kept and
-// show up as orphaned.
-func (s *Service) Uninstall(ctx context.Context, key string, purge bool, actorID int64) error {
+// show up as orphaned unless opt.PurgeAccounts is set.
+func (s *Service) Uninstall(ctx context.Context, key string, opt UninstallOptions, actorID int64) (UninstallResult, error) {
+	var res UninstallResult
 	status, err := s.pluginStatus(ctx, key)
 	if err != nil {
-		return err
+		return res, err
 	}
 	if builtin, err := IsBuiltin(ctx, s.d.DB.Pool, key); err != nil {
-		return err
+		return res, err
 	} else if builtin {
-		return ErrBuiltin
+		return res, ErrBuiltin
+	}
+	if opt.PurgeAccounts && s.d.Accounts == nil {
+		return res, core.ErrUnavailable.WithMessage("account purging is unavailable on this node")
 	}
 	if open, err := s.openRollout(ctx, key); err != nil {
-		return err
+		return res, err
 	} else if open {
-		return core.ErrConflict.WithMessage("a rollout is in progress; cancel it or wait until it finishes")
+		return res, core.ErrConflict.WithMessage("a rollout is in progress; cancel it or wait until it finishes")
 	}
 	if running(status) {
 		if s.d.Rollout == nil {
-			return core.ErrUnavailable.WithMessage("rollout controller unavailable")
+			return res, core.ErrUnavailable.WithMessage("rollout controller unavailable")
 		}
 		ro, err := s.d.Rollout.Disable(ctx, key, actorID, "uninstall")
 		if err != nil {
-			return err
+			return res, err
 		}
 		if status, err = s.pluginStatus(ctx, key); err != nil {
-			return err
+			return res, err
 		}
 		if running(status) {
 			details := map[string]any{"status": status}
 			if ro != nil {
 				details["rollout_id"] = ro.ID
 			}
-			return core.ErrConflict.WithMessage("the plugin is being disabled; retry uninstall once it is disabled").WithDetails(details)
+			return res, core.ErrConflict.WithMessage("the plugin is being disabled; retry uninstall once it is disabled").WithDetails(details)
 		}
 	}
+	purge := opt.Purge
 	if purge && s.d.Schemas != nil {
 		if err := s.d.Schemas.Drop(ctx, key); err != nil {
-			return fmt.Errorf("drop plugin schema: %w", err)
+			return res, fmt.Errorf("drop plugin schema: %w", err)
 		}
 	}
 	err = s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
@@ -81,13 +100,29 @@ func (s *Service) Uninstall(ctx context.Context, key string, purge bool, actorID
 		} else if tag.RowsAffected() == 0 {
 			return ErrBuiltin
 		}
-		return Audit(ctx, tx, actorID, "plugin.uninstall", "plugin", key, map[string]any{"purge": purge, "previous_status": st})
+		return Audit(ctx, tx, actorID, "plugin.uninstall", "plugin", key, map[string]any{
+			"purge": purge, "purge_accounts": opt.PurgeAccounts, "previous_status": st})
 	})
 	if err != nil {
-		return err
+		return res, err
 	}
 	s.Notify(ctx, key)
-	return nil
+	if !opt.PurgeAccounts {
+		return res, nil
+	}
+	// The plugin row is gone; accounts carry plugin_key without a foreign
+	// key, so the account module can still find and delete them.
+	n, err := s.d.Accounts.PurgePluginAccounts(ctx, key)
+	if aerr := Audit(ctx, s.d.DB.Pool, actorID, "plugin.accounts.purge", "plugin", key, map[string]any{
+		"accounts_deleted": n, "ok": err == nil}); aerr != nil {
+		slog.WarnContext(ctx, "audit account purge", "plugin", key, "err", aerr)
+	}
+	res.AccountsDeleted = n
+	if err != nil {
+		return res, core.ErrInternal.WithMessage("the plugin was uninstalled but deleting its accounts failed; delete them from the accounts page").
+			WithDetails(map[string]any{"uninstalled": true, "accounts_deleted": n}).WithCause(err)
+	}
+	return res, nil
 }
 
 func (s *Service) pluginStatus(ctx context.Context, key string) (string, error) {

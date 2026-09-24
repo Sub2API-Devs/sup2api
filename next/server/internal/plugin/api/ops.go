@@ -439,13 +439,52 @@ func (a *API) putResources(c *gin.Context) {
 		return
 	}
 	a.audit(c, "plugin.resources.update", key, in)
-	install.Notify(c.Request.Context(), a.d.Bus, key)
+	// Nodes restart their instances of the plugin one by one with the new
+	// limits (new instance first, then the old one drains).
+	notified := install.NotifyResources(c.Request.Context(), a.d.Bus, key)
 	ri, err := a.resourcesInfo(c.Request.Context(), key, m)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	httpapi.OK(c, ri)
+	st, _ := a.pluginStatusValue(c.Request.Context(), key)
+	httpapi.OK(c, ResourcesUpdate{ResourcesInfo: ri, RestartNotified: notified, Message: resourcesMessage(notified, st)})
+}
+
+// ResourcesUpdate is the PUT /plugins/:key/resources response: the
+// resulting limits plus a note on how they take effect.
+type ResourcesUpdate struct {
+	ResourcesInfo
+	// RestartNotified is true when the nodes were told to restart the
+	// plugin's instances with the new limits.
+	RestartNotified bool               `json:"restart_notified"`
+	Message         core.LocalizedText `json:"message"`
+}
+
+func resourcesMessage(notified bool, status string) core.LocalizedText {
+	switch {
+	case !notified:
+		return core.LocalizedText{
+			"en": "Resource limits saved. They take effect the next time the plugin instances restart.",
+			"zh": "资源限制已保存，将在插件实例下次重启时生效。",
+		}
+	case status == install.StatusEnabled || status == install.StatusEnabling || status == install.StatusUpgrading:
+		return core.LocalizedText{
+			"en": "Resource limits saved. Every node has been notified to restart the plugin instances with the new limits.",
+			"zh": "资源限制已保存，已通知各节点按新限制重启插件实例。",
+		}
+	default:
+		return core.LocalizedText{
+			"en": "Resource limits saved. They apply when the plugin is enabled.",
+			"zh": "资源限制已保存，将在启用插件时生效。",
+		}
+	}
+}
+
+func (a *API) pluginStatusValue(ctx context.Context, key string) (string, error) {
+	var st string
+	err := a.d.DB.Pool.QueryRow(ctx, `SELECT status FROM plugins WHERE key = $1`, key).Scan(&st)
+	return st, err
 }
 
 func (a *API) putEgressPolicy(c *gin.Context) {
@@ -483,6 +522,7 @@ type EgressSummary struct {
 	Port     int       `json:"port"`
 	Count    int64     `json:"count"`
 	OK       int64     `json:"ok"`
+	Open     int64     `json:"open"` // connections still open
 	Denied   int64     `json:"denied"`
 	Errors   int64     `json:"errors"`
 	BytesIn  int64     `json:"bytes_in"`
@@ -490,19 +530,36 @@ type EgressSummary struct {
 	LastAt   time.Time `json:"last_at"`
 }
 
-// EgressLog is one plugin_egress_logs row.
+// EgressDomain is one plugin_egress_domains row: every host the plugin has
+// connected to through the egress tunnel.
+type EgressDomain struct {
+	Host        string    `json:"host"`
+	FirstSeenAt time.Time `json:"first_seen_at"`
+	LastSeenAt  time.Time `json:"last_seen_at"`
+	Connections int64     `json:"connections"`
+	// New is true when the host was first seen within the last 24 hours.
+	New bool `json:"new"`
+}
+
+// maxEgressDomains bounds the domains list of GET /plugins/:key/egress.
+const maxEgressDomains = 500
+
+// EgressLog is one plugin_egress_logs row. Rows are written when the
+// connection opens (result "open", closed_at null) and completed when it
+// closes.
 type EgressLog struct {
-	ID         int64     `json:"id"`
-	NodeID     string    `json:"node_id"`
-	Network    string    `json:"network"`
-	Host       string    `json:"host"`
-	Port       int       `json:"port"`
-	StartedAt  time.Time `json:"started_at"`
-	DurationMs int       `json:"duration_ms"`
-	BytesIn    int64     `json:"bytes_in"`
-	BytesOut   int64     `json:"bytes_out"`
-	Result     string    `json:"result"`
-	Error      string    `json:"error"`
+	ID         int64      `json:"id"`
+	NodeID     string     `json:"node_id"`
+	Network    string     `json:"network"`
+	Host       string     `json:"host"`
+	Port       int        `json:"port"`
+	StartedAt  time.Time  `json:"started_at"`
+	ClosedAt   *time.Time `json:"closed_at"`
+	DurationMs int        `json:"duration_ms"`
+	BytesIn    int64      `json:"bytes_in"`
+	BytesOut   int64      `json:"bytes_out"`
+	Result     string     `json:"result"`
+	Error      string     `json:"error"`
 }
 
 func parseTime(c *gin.Context, name string, def time.Time) (time.Time, bool) {
@@ -535,8 +592,9 @@ func (a *API) egress(c *gin.Context) {
 	rc := c.Request.Context()
 	rows, err := a.d.DB.Pool.Query(rc, `
 		SELECT host, port, count(*),
-		       count(*) FILTER (WHERE result = 'ok'), count(*) FILTER (WHERE result = 'denied'),
-		       count(*) FILTER (WHERE result NOT IN ('ok', 'denied')),
+		       count(*) FILTER (WHERE result = 'ok'), count(*) FILTER (WHERE result = 'open'),
+		       count(*) FILTER (WHERE result = 'denied'),
+		       count(*) FILTER (WHERE result NOT IN ('ok', 'open', 'denied')),
 		       COALESCE(sum(bytes_in), 0), COALESCE(sum(bytes_out), 0), max(started_at)
 		FROM plugin_egress_logs
 		WHERE plugin_key = $1 AND started_at >= $2 AND started_at < $3
@@ -548,7 +606,7 @@ func (a *API) egress(c *gin.Context) {
 	summary := []EgressSummary{}
 	for rows.Next() {
 		var s EgressSummary
-		if err := rows.Scan(&s.Host, &s.Port, &s.Count, &s.OK, &s.Denied, &s.Errors, &s.BytesIn, &s.BytesOut, &s.LastAt); err != nil {
+		if err := rows.Scan(&s.Host, &s.Port, &s.Count, &s.OK, &s.Open, &s.Denied, &s.Errors, &s.BytesIn, &s.BytesOut, &s.LastAt); err != nil {
 			rows.Close()
 			httpapi.Fail(c, err)
 			return
@@ -556,6 +614,15 @@ func (a *API) egress(c *gin.Context) {
 		summary = append(summary, s)
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	domains, err := a.egressDomains(rc, key)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
 	page, size := httpapi.Pagination(c)
 	var total int64
 	if err := a.d.DB.Pool.QueryRow(rc, `SELECT count(*) FROM plugin_egress_logs
@@ -564,7 +631,7 @@ func (a *API) egress(c *gin.Context) {
 		return
 	}
 	rows, err = a.d.DB.Pool.Query(rc, `
-		SELECT id, node_id, network, host, port, started_at, duration_ms, bytes_in, bytes_out, result, error
+		SELECT id, node_id, network, host, port, started_at, closed_at, duration_ms, bytes_in, bytes_out, result, error
 		FROM plugin_egress_logs WHERE plugin_key = $1 AND started_at >= $2 AND started_at < $3
 		ORDER BY started_at DESC, id DESC LIMIT $4 OFFSET $5`, key, from, to, size, (page-1)*size)
 	if err != nil {
@@ -575,12 +642,38 @@ func (a *API) egress(c *gin.Context) {
 	items := []EgressLog{}
 	for rows.Next() {
 		var l EgressLog
-		if err := rows.Scan(&l.ID, &l.NodeID, &l.Network, &l.Host, &l.Port, &l.StartedAt, &l.DurationMs, &l.BytesIn, &l.BytesOut, &l.Result, &l.Error); err != nil {
+		if err := rows.Scan(&l.ID, &l.NodeID, &l.Network, &l.Host, &l.Port, &l.StartedAt, &l.ClosedAt, &l.DurationMs, &l.BytesIn, &l.BytesOut, &l.Result, &l.Error); err != nil {
 			httpapi.Fail(c, err)
 			return
 		}
 		items = append(items, l)
 	}
-	httpapi.OK(c, gin.H{"from": from, "to": to, "summary": summary, "items": items,
+	if err := rows.Err(); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.OK(c, gin.H{"from": from, "to": to, "summary": summary, "domains": domains, "items": items,
 		"page": httpapi.Page{Page: page, PageSize: size, Total: total}})
+}
+
+// egressDomains lists every host the plugin has reached (not limited to the
+// from/to window), most recently used first.
+func (a *API) egressDomains(ctx context.Context, key string) ([]EgressDomain, error) {
+	rows, err := a.d.DB.Pool.Query(ctx, `
+		SELECT host, first_seen_at, last_seen_at, connections, first_seen_at > now() - interval '24 hours'
+		FROM plugin_egress_domains WHERE plugin_key = $1
+		ORDER BY last_seen_at DESC, host LIMIT $2`, key, maxEgressDomains)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []EgressDomain{}
+	for rows.Next() {
+		var d EgressDomain
+		if err := rows.Scan(&d.Host, &d.FirstSeenAt, &d.LastSeenAt, &d.Connections, &d.New); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
 }

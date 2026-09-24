@@ -108,3 +108,35 @@ func TestMarket(t *testing.T) {
 		t.Fatal("modified index accepted")
 	}
 }
+
+// compatible follows install-time validation: pre-release suffixes of the
+// host version are ignored, empty or malformed ranges are incompatible.
+func TestCompatible(t *testing.T) {
+	cases := []struct {
+		compat, host string
+		want         bool
+	}{
+		{">=0.1.0 <0.2.0", "0.1.0", true},
+		{">=0.1.0 <0.2.0", "0.1.5-dev", true},
+		{">=0.1.0", "0.1.0-dev", true},
+		{">=0.2.0", "0.1.9", false},
+		{">=0.2.0", "0.2.0-rc.1", true},
+		{"^0.1", "0.1.3+build.7", true},
+		{"<0.1.0", "0.1.0-dev", false},
+		{"", "0.1.0", false},
+		{"not a range", "0.1.0", false},
+		{">=0.1.0", "dev", false},
+	}
+	for _, tc := range cases {
+		if got := Compatible(tc.compat, tc.host); got != tc.want {
+			t.Errorf("Compatible(%q, %q) = %v, want %v", tc.compat, tc.host, got, tc.want)
+		}
+		// Must agree with manifest validation whenever the range is set.
+		if tc.compat != "" {
+			ok, err := pkg.HostCompatible(tc.compat, tc.host)
+			if (err == nil && ok) != tc.want {
+				t.Errorf("pkg.HostCompatible(%q, %q) disagrees", tc.compat, tc.host)
+			}
+		}
+	}
+}

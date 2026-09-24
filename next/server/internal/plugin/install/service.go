@@ -46,7 +46,7 @@ const (
 	PermGrantCritical = "plugin:grant:critical"
 )
 
-// Deps are the collaborators of Service. Bus and Schemas may be nil.
+// Deps are the collaborators of Service. Bus, Schemas and Accounts may be nil.
 type Deps struct {
 	DB          *store.DB
 	Trust       *pkg.TrustStore
@@ -56,6 +56,9 @@ type Deps struct {
 	Rollout     core.RolloutController
 	Schemas     core.PluginSchemaManager
 	Bus         core.Bus
+	// Accounts deletes a plugin's accounts on uninstall with
+	// purge_accounts=true; nil makes such requests fail with unavailable.
+	Accounts core.PluginAccountPurger
 }
 
 // Options are host facts.
@@ -195,11 +198,25 @@ func (s *Service) Notify(ctx context.Context, key string) {
 
 // Notify publishes {"type":"config","plugin_key":key} on plugin:events.
 func Notify(ctx context.Context, bus core.Bus, key string) {
+	publish(ctx, bus, "config", key)
+}
+
+// NotifyResources publishes {"type":"resources","plugin_key":key} on
+// plugin:events after resource limits change; every node restarts its
+// instances of the plugin with the new limits (CONTRACTS §14.3). Returns
+// false when there is no bus or publishing failed.
+func NotifyResources(ctx context.Context, bus core.Bus, key string) bool {
+	return publish(ctx, bus, "resources", key)
+}
+
+func publish(ctx context.Context, bus core.Bus, typ, key string) bool {
 	if bus == nil {
-		return
+		return false
 	}
-	b, _ := json.Marshal(map[string]string{"type": "config", "plugin_key": key})
+	b, _ := json.Marshal(map[string]string{"type": typ, "plugin_key": key})
 	if err := bus.Publish(ctx, core.ChannelPluginEvents, b); err != nil {
-		slog.WarnContext(ctx, "publish plugin config event", "plugin", key, "err", err)
+		slog.WarnContext(ctx, "publish plugin event", "type", typ, "plugin", key, "err", err)
+		return false
 	}
+	return true
 }
