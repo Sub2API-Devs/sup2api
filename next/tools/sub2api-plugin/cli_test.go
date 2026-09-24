@@ -231,7 +231,8 @@ func TestPackChecks(t *testing.T) {
 }
 
 // Account types are top-level (ARCHITECTURE 6.6): their form files are
-// packed, and they need protocols and the platform adapter capability.
+// packed, and they need platforms, the platform adapter capability and the
+// platform.register / accounts.credentials host permissions.
 func TestPackAccountTypes(t *testing.T) {
 	const m = `{
   "apiVersion": 1, "key": "relayx", "name": {"en": "Relay"}, "version": "0.1.0",
@@ -239,7 +240,8 @@ func TestPackAccountTypes(t *testing.T) {
   "hostCompat": ">=0.1.0 <0.2.0", "capabilities": [{"id": "platform.adapter.v1"}],
   "accountTypes": [{"id": "relay_key", "label": {"en": "Relay key"},
     "form": {"mode": "schema", "schema": "forms/k.schema.json", "uiSchema": "forms/k.ui.json"},
-    "sensitiveFields": ["api_key"], "protocols": [{"protocol": "anthropic.messages"}]}]
+    "sensitiveFields": ["api_key"], "platforms": [{"platform": "anthropic", "passHeaders": ["anthropic-version"]}]}],
+  "hostPermissions": [{"id": "platform.register"}, {"id": "accounts.credentials", "scope": {"types": "own"}}]
 }`
 	dir := t.TempDir()
 	out := t.TempDir()
@@ -260,18 +262,109 @@ func TestPackAccountTypes(t *testing.T) {
 		t.Fatalf("form not packed: %v", keysOf(files))
 	}
 
-	writeFile(t, filepath.Join(dir, "manifest.json"), strings.Replace(m, `[{"protocol": "anthropic.messages"}]`, `[]`, 1))
-	if msg := runFail(t, "pack", "--dir", dir, "--out-dir", out); !strings.Contains(msg, "no protocols") {
+	writeFile(t, filepath.Join(dir, "manifest.json"), strings.Replace(m, `[{"platform": "anthropic", "passHeaders": ["anthropic-version"]}]`, `[]`, 1))
+	if msg := runFail(t, "pack", "--dir", dir, "--out-dir", out); !strings.Contains(msg, "no platforms") {
+		t.Fatalf("msg = %s", msg)
+	}
+	writeFile(t, filepath.Join(dir, "manifest.json"), strings.Replace(m, `"passHeaders"`, `"usage": {"openai.chat": {"semantics": "inclusive"}}, "passHeaders"`, 1))
+	if msg := runFail(t, "pack", "--dir", dir, "--out-dir", out); !strings.Contains(msg, "does not belong to the platform") {
 		t.Fatalf("msg = %s", msg)
 	}
 	writeFile(t, filepath.Join(dir, "manifest.json"), strings.Replace(m, `"platform.adapter.v1"`, `"http.routes.v1"`, 1))
 	if msg := runFail(t, "pack", "--dir", dir, "--out-dir", out); !strings.Contains(msg, "platform.adapter.v1") {
 		t.Fatalf("msg = %s", msg)
 	}
-	// The pre-6.6 layout (account types inside platform) is rejected.
-	writeFile(t, filepath.Join(dir, "manifest.json"), strings.Replace(m, `"accountTypes": [`, `"platform": {"id": "x", "protocols": [], "accountTypes": []}, "x": [`, 1))
-	if msg := runFail(t, "pack", "--dir", dir, "--out-dir", out); !strings.Contains(msg, "unknown field") {
+	writeFile(t, filepath.Join(dir, "manifest.json"), strings.Replace(m, `{"types": "own"}`, `{"types": "all"}`, 1))
+	if msg := runFail(t, "pack", "--dir", dir, "--out-dir", out); !strings.Contains(msg, "accounts.credentials") {
 		t.Fatalf("msg = %s", msg)
+	}
+	// The pre-6.6 layouts (protocols on account types, top-level gateway and
+	// platform) are rejected.
+	for _, old := range []string{
+		strings.Replace(m, `"platforms": [{"platform"`, `"protocols": [{"protocol"`, 1),
+		strings.Replace(m, `"accountTypes": [`, `"gateway": {"endpoints": []}, "x": [`, 1),
+		strings.Replace(m, `"accountTypes": [`, `"platform": {"id": "x", "protocols": []}, "x": [`, 1),
+	} {
+		writeFile(t, filepath.Join(dir, "manifest.json"), old)
+		if msg := runFail(t, "pack", "--dir", dir, "--out-dir", out); !strings.Contains(msg, "unknown field") {
+			t.Fatalf("msg = %s", msg)
+		}
+	}
+}
+
+// Plugin platforms declare their endpoints (ARCHITECTURE 6.6, CONTRACTS 13).
+func TestPackPlatforms(t *testing.T) {
+	const m = `{
+  "apiVersion": 1, "key": "videox", "name": {"en": "Video"}, "version": "0.1.0",
+  "publisher": "tester", "runtime": "grpc", "entry": {"grpc": {"binaries": "runtimes/{os}-{arch}/plugin"}},
+  "hostCompat": ">=0.1.0 <0.2.0", "capabilities": [{"id": "platform.adapter.v1"}],
+  "platforms": [{"id": "myvideo", "label": {"en": "My video"},
+    "endpoints": [
+      {"id": "gen", "method": "POST", "path": "/v1/video/generations", "protocol": "myvideo.gen", "kind": "proxy",
+       "auth": {"headers": ["authorization"]}, "request": {"modelPath": "model"}, "response": {"nonStream": "json"},
+       "errorFormat": "plain", "billing": "usage"},
+      {"id": "run", "method": "POST", "path": "/v1/video/models/:model:run", "protocol": "myvideo.run", "kind": "proxy",
+       "auth": {"headers": ["authorization"], "query": "key"}, "request": {"modelParam": "model"}, "response": {"nonStream": "json"},
+       "errorFormat": "plain", "billing": "usage"}
+    ],
+    "usage": {"semantics": "inclusive", "json": {"map": {"input_tokens": "usage.input"}}}}],
+  "accountTypes": [{"id": "vkey", "label": {"en": "Key"}, "form": {"mode": "schema"},
+    "platforms": [{"platform": "myvideo", "usage": {"myvideo.gen": {"semantics": "inclusive"}}}]}],
+  "hostPermissions": [{"id": "gateway.endpoint"}, {"id": "platform.register"}, {"id": "accounts.credentials", "scope": {"types": "own"}}]
+}`
+	dir := t.TempDir()
+	out := t.TempDir()
+	writeFile(t, filepath.Join(dir, "runtimes", "linux-amd64", "plugin"), "ELF-amd64")
+	writeFile(t, filepath.Join(dir, "manifest.json"), m)
+	runOK(t, "pack", "--dir", dir, "--out-dir", out)
+
+	cases := []struct{ old, new, want string }{
+		{`"id": "myvideo"`, `"id": "openai"`, "built into the core"},
+		{`{"id": "gateway.endpoint"}, `, ``, "gateway.endpoint"},
+		{`"protocol": "myvideo.gen"`, `"protocol": "video.gen"`, `must be "myvideo.<name>"`},
+		{`"/v1/video/generations"`, `"/api/v1/video"`, "core route /api"},
+		{`"/v1/video/models/:model:run"`, `"/v1/video/models/x:run"`, "modelParam"},
+		{`"/v1/video/generations"`, `"/v1/video/models/:id"`, "conflicts with platform myvideo endpoint"},
+		{`"/v1/video/generations"`, `"/v1/video/models/gemini:run"`, "conflicts"},
+		{`"errorFormat": "plain", "billing": "usage"}`, `"errorFormat": "xml", "billing": "usage"}`, "errorFormat"},
+		{`"myvideo.gen": {`, `"myvideo.other": {`, "not a protocol of the platform"},
+		{`"semantics": "inclusive", "json"`, `"json"`, "usage.semantics is required"},
+	}
+	for _, tc := range cases {
+		bad := strings.Replace(m, tc.old, tc.new, 1)
+		if bad == m {
+			t.Fatalf("case %q does not change the manifest", tc.old)
+		}
+		writeFile(t, filepath.Join(dir, "manifest.json"), bad)
+		if msg := runFail(t, "pack", "--dir", dir, "--out-dir", out); !strings.Contains(msg, tc.want) {
+			t.Errorf("%s -> %s: msg = %s, want %q", tc.old, tc.new, msg, tc.want)
+		}
+	}
+}
+
+func TestPathsOverlap(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want bool
+	}{
+		{"/v1/messages", "/v1/messages", true},
+		{"/v1/messages", "/v1/messages/count_tokens", false},
+		{"/v1/:x", "/v1/messages", true},
+		{"/v1beta/models/:model:generateContent", "/v1beta/models/:model:streamGenerateContent", false},
+		{"/v1beta/models/:model:generateContent", "/v1beta/models/:m", true},
+		{"/v1beta/models/:model:generateContent", "/v1beta/models/gemini:generateContent", true},
+		{"/v1beta/models/:model:generateContent", "/v1beta/models/:generateContent", true}, // plain param
+		{"/v1beta/models/:model:generateContent", "/v1beta/models/:generateContent:x", false},
+		{"/v1beta/models/:a:x.y", "/v1beta/models/:b:y", false},
+		{"/v1beta/models/:a:run", "/v1beta/models/:b:run", true},
+	}
+	for _, tc := range cases {
+		if got := pathsOverlap(tc.a, tc.b); got != tc.want {
+			t.Errorf("pathsOverlap(%s, %s) = %v", tc.a, tc.b, got)
+		}
+		if got := pathsOverlap(tc.b, tc.a); got != tc.want {
+			t.Errorf("pathsOverlap(%s, %s) = %v", tc.b, tc.a, got)
+		}
 	}
 }
 

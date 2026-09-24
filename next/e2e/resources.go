@@ -210,6 +210,59 @@ func AccountTypeEndpoint(at gjson.Result, method, path string) (gjson.Result, bo
 	return gjson.Result{}, false
 }
 
+// ------------------------------------------------------------------ platforms
+
+// Built-in platforms of the core (ARCHITECTURE 6.6, CONTRACTS 13).
+var BuiltinPlatforms = []string{"anthropic", "openai", "gemini"}
+
+// PlatformIDs reads a "platforms" field: [id] on groups and API keys,
+// [{id, ...}] on account types and in /platforms.
+func PlatformIDs(v gjson.Result) []string {
+	var out []string
+	for _, p := range v.Array() {
+		if p.IsObject() {
+			out = append(out, p.Get("id").String())
+		} else {
+			out = append(out, p.String())
+		}
+	}
+	return out
+}
+
+// Platforms returns GET /platforms (built-in and enabled plugin platforms).
+func (e *Env) Platforms(s *Session) []gjson.Result {
+	e.T.Helper()
+	return s.OK(e.T, http.MethodGet, "/platforms", nil).Array()
+}
+
+// PlatformAccountType returns the account type (pluginKey, typ) listed by a
+// GET /platforms item.
+func PlatformAccountType(p gjson.Result, pluginKey, typ string) (gjson.Result, bool) {
+	return FindAccountType(p.Get("account_types").Array(), pluginKey, typ)
+}
+
+// GroupPlatforms returns the "platforms" of GET /groups/:id: the platforms
+// the account types of the group's accounts support.
+func (e *Env) GroupPlatforms(admin *Session, groupID int64) []string {
+	e.T.Helper()
+	g := admin.OK(e.T, http.MethodGet, fmt.Sprintf("/groups/%d", groupID), nil)
+	if !g.Get("platforms").IsArray() {
+		e.T.Fatalf("GET /groups/%d has no platforms array: %s", groupID, g.Raw)
+	}
+	return PlatformIDs(g.Get("platforms"))
+}
+
+// APIKeyPlatforms returns the "platforms" of the user's key keyID in
+// GET /me/api-keys (same as its group's).
+func (e *Env) APIKeyPlatforms(u *Session, keyID int64) []string {
+	e.T.Helper()
+	k, ok := Find(u.ListAll(e.T, "/me/api-keys"), "id", keyID)
+	if !ok || !k.Get("platforms").IsArray() {
+		e.T.Fatalf("GET /me/api-keys: key %d missing or without platforms: %s", keyID, k.Raw)
+	}
+	return PlatformIDs(k.Get("platforms"))
+}
+
 // ------------------------------------------------------------------ billing
 
 // CreatePrice creates an admin price with POST /prices and returns its row.

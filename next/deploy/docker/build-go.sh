@@ -100,6 +100,9 @@ ls -l "$OUT/market"
 
 # Built-in plugins (installed and enabled by the core at startup, cannot be
 # uninstalled): the package matching plugins/<name>/manifest.json's version.
+# The anthropic/openai/gemini platforms and their endpoints are built into the
+# core itself; the anthropic plugin only adds the Anthropic API key account
+# type (plus default prices and the model catalog).
 BUILTIN_PLUGINS=${BUILTIN_PLUGINS:-anthropic}
 mkdir -p "$OUT/builtin"
 cp "$KEYS/$KEY_ID.pub" "$OUT/builtin/trust.pub"

@@ -1,4 +1,6 @@
-// Command anthropic is the sub2api-next Anthropic platform plugin.
+// Command anthropic is the sub2api-next Anthropic plugin: the Anthropic API
+// key account type for the built-in anthropic platform, default model prices
+// and a model catalog.
 package main
 
 import (

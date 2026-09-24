@@ -8,17 +8,18 @@ import (
 	"time"
 )
 
-// AC 18: platform, account types and endpoints are many-to-many
-// (ARCHITECTURE 6.6). The market plugin relay declares only an account type
-// (relay_key) natively speaking anthropic.messages / anthropic.count_tokens;
-// its accounts share a group with anthropic/apikey accounts and together
-// serve /v1/messages of the built-in anthropic plugin, including failover
-// across account types. Usage records carry the account type's plugin and
-// type; prices are global per model. Disabling relay leaves only the
-// anthropic accounts; re-enabling restores the mix.
+// AC 18: account types declare the platforms they serve (ARCHITECTURE 6.6,
+// CONTRACTS 13). The market plugin relay declares only an account type
+// (relay_key) serving the core's built-in anthropic platform; its accounts
+// share a group with anthropic/apikey accounts (the built-in anthropic
+// plugin's type, same platform) and together serve /v1/messages, including
+// failover across account types. The group, and the API key bound to it,
+// serve the anthropic platform. Usage records carry the account type's
+// plugin and type; prices are global per model. Disabling relay leaves only
+// the anthropic accounts; re-enabling restores the mix.
 func TestAC18_MixedAccountTypesServeOneEndpoint(t *testing.T) {
 	e := Setup(t)
-	e.Pending("round 2 (account types x endpoints): c-plugin-types registry, a-account-billing accounts/usage, g-gateway-types scheduling, relay in the market")
+	e.Pending("round 3 (built-in platforms): c3-registry (account types by platform), a3-accounts (account-types/groups/api-keys platforms), g3-platforms-gateway (built-in endpoints, /platforms), relay in the market")
 	admin := e.Admin()
 	m := e.Mock()
 
@@ -33,13 +34,24 @@ func TestAC18_MixedAccountTypesServeOneEndpoint(t *testing.T) {
 	if d.Get("builtin").Bool() {
 		t.Fatalf("relay must be a market plugin, not built in: %s", d.Raw)
 	}
+	// Review: no platform of its own, one account type serving anthropic.
+	rev := admin.OK(t, http.MethodGet, "/plugins/"+RelayPlugin+"/versions/"+d.Get("active_version").String()+"/review", nil)
+	if len(rev.Get("platforms").Array()) != 0 || len(rev.Get("gateway_endpoints").Array()) != 0 {
+		t.Fatalf("relay review: no platforms or endpoints expected: %s", rev.Raw)
+	}
+	if rat, ok := Find(rev.Get("account_types").Array(), "id", RelayKey); !ok || !slices.Equal(PlatformIDs(rat.Get("platforms")), []string{"anthropic"}) {
+		t.Fatalf("relay review account types: %s", rev.Get("account_types").Raw)
+	}
 
-	// The registry offers relay/relay_key with the anthropic endpoints it
-	// serves natively, and its plugin-provided form.
+	// The registry offers relay/relay_key serving the built-in anthropic
+	// platform, hence its endpoints (natively), and its plugin-provided form.
 	types := admin.OK(t, http.MethodGet, "/account-types", nil).Array()
 	rt, ok := FindAccountType(types, RelayPlugin, RelayKey)
 	if !ok {
 		t.Fatalf("relay/relay_key not offered: %v", types)
+	}
+	if p, ok := Find(rt.Get("platforms").Array(), "id", "anthropic"); !ok || !p.Get("builtin").Bool() || !p.Get("available").Bool() || len(rt.Get("platforms").Array()) != 1 {
+		t.Fatalf("relay_key platforms: %s", rt.Get("platforms").Raw)
 	}
 	for _, path := range []string{"/v1/messages", "/v1/messages/count_tokens"} {
 		ep, ok := AccountTypeEndpoint(rt, http.MethodPost, path)
@@ -82,6 +94,27 @@ func TestAC18_MixedAccountTypesServeOneEndpoint(t *testing.T) {
 		if !ok || a.Get("plugin_key").String() != want.plugin || a.Get("type").String() != want.t {
 			t.Fatalf("group accounts: account %d (%s/%s) missing or wrong: %v", want.id, want.plugin, want.t, accts)
 		}
+	}
+	// Both types serve the anthropic platform: so do the group and its key,
+	// and /platforms lists both types under anthropic.
+	if ids := e.GroupPlatforms(admin, tn.GroupID); !slices.Equal(ids, []string{"anthropic"}) {
+		t.Fatalf("group platforms = %v, want [anthropic]", ids)
+	}
+	if ids := e.APIKeyPlatforms(tn.User, tn.KeyID); !slices.Equal(ids, []string{"anthropic"}) {
+		t.Fatalf("api key platforms = %v, want [anthropic]", ids)
+	}
+	anthropicTypes := func() (anth, relay bool) {
+		t.Helper()
+		p, ok := Find(e.Platforms(admin), "id", "anthropic")
+		if !ok || !p.Get("builtin").Bool() {
+			t.Fatalf("/platforms lacks the built-in anthropic platform: %s", p.Raw)
+		}
+		_, anth = PlatformAccountType(p, AnthropicPlugin, AnthropicAPIKey)
+		_, relay = PlatformAccountType(p, RelayPlugin, RelayKey)
+		return anth, relay
+	}
+	if a, r := anthropicTypes(); !a || !r {
+		t.Fatalf("/platforms anthropic account types: anthropic/apikey %v, relay/relay_key %v", a, r)
 	}
 
 	// ours keeps the mock requests of this tenant's two accounts on path.
@@ -190,6 +223,13 @@ func TestAC18_MixedAccountTypesServeOneEndpoint(t *testing.T) {
 	}
 	if a := admin.OK(t, http.MethodGet, fmt.Sprintf("/accounts/%d", relayID), nil); a.Get("id").Int() != relayID {
 		t.Fatalf("relay account gone after disable: %s", a.Raw)
+	}
+	if a, r := anthropicTypes(); !a || r {
+		t.Fatalf("/platforms anthropic account types with relay disabled: anthropic/apikey %v, relay/relay_key %v", a, r)
+	}
+	// The anthropic account still serves the platform.
+	if ids := e.GroupPlatforms(admin, tn.GroupID); !slices.Equal(ids, []string{"anthropic"}) {
+		t.Fatalf("group platforms with relay disabled = %v, want [anthropic]", ids)
 	}
 	mark = m.Mark(t)
 	for i := 0; i < 3; i++ {

@@ -1,6 +1,8 @@
-// Package anthropic implements the Anthropic platform plugin: credential
-// validation, upstream request construction, error classification and the
-// model catalog admin route.
+// Package anthropic implements the Anthropic plugin: the apikey account type
+// for the built-in anthropic platform (credential validation, upstream
+// request construction, error classification) and the model catalog admin
+// route. The anthropic platform and its endpoints are built into the core
+// (server/internal/platforms); this plugin declares none.
 package anthropic
 
 import (
@@ -20,15 +22,18 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 )
 
-// Protocol ids declared in manifest.json: the endpoints of the platform and
-// the native protocols of the apikey account type (accountTypes[].protocols).
+// PlatformID is the built-in platform the apikey account type serves
+// (manifest accountTypes[].platforms).
+const PlatformID = "anthropic"
+
+// Protocol ids of the built-in anthropic platform's endpoints.
 const (
 	ProtocolMessages    = "anthropic.messages"
 	ProtocolCountTokens = "anthropic.count_tokens"
 )
 
-// Protocols lists the upstream protocols BuildUpstreamRequest supports, in
-// manifest order.
+// Protocols lists the upstream protocols BuildUpstreamRequest supports: the
+// protocols of the anthropic platform, in its endpoint order.
 var Protocols = []string{ProtocolMessages, ProtocolCountTokens}
 
 const (
@@ -43,9 +48,9 @@ const (
 	DefaultTestModel = "claude-haiku-4-5"
 )
 
-// forwardHeaders are client headers (lower-case, from manifest
-// platform.passHeaders, the default the apikey account type inherits for
-// both protocols) copied verbatim to the upstream request.
+// forwardHeaders are client headers (lower-case, from the built-in anthropic
+// platform's passHeaders, which the apikey account type does not override)
+// copied verbatim to the upstream request.
 var forwardHeaders = []string{
 	"anthropic-beta",
 	"anthropic-dangerous-direct-browser-access",
@@ -61,6 +66,10 @@ var forwardHeaders = []string{
 	"x-stainless-runtime-version",
 	"x-stainless-timeout",
 }
+
+// ForwardHeaders returns the client headers copied to the upstream request
+// (besides anthropic-version, which has a default).
+func ForwardHeaders() []string { return append([]string(nil), forwardHeaders...) }
 
 // Plugin is the anthropic plugin. It implements pluginsdk.Platform,
 // pluginsdk.HTTP and pluginsdk.Initializer.

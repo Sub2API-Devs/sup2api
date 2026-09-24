@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"net/http"
-	"strings"
 	"testing"
 )
 
@@ -38,23 +37,35 @@ func TestAC03_InstallAnthropicFromMarket(t *testing.T) {
 	if rev.Get("trust").String() != "official" || rev.Get("signature_status").String() != "valid" {
 		t.Fatalf("review trust: %s", rev.Raw)
 	}
-	if rev.Get("platform.id").String() != "anthropic" || rev.Get("database.schema").String() != "plg_anthropic" {
-		t.Fatalf("review platform/database: %s", rev.Raw)
+	if rev.Get("database.schema").String() != "plg_anthropic" {
+		t.Fatalf("review database: %s", rev.Raw)
 	}
-	// Account types are top-level in the review (CONTRACTS 12).
+	// The anthropic platform and its endpoints are built into the core
+	// (CONTRACTS 13): the plugin declares no platform and no endpoint.
+	if n := len(rev.Get("platforms").Array()); n != 0 || rev.Get("platform").Exists() {
+		t.Fatalf("review: anthropic must declare no platforms: %s", rev.Raw)
+	}
+	if n := len(rev.Get("gateway_endpoints").Array()); n != 0 {
+		t.Fatalf("review: anthropic must declare no gateway endpoints: %s", rev.Get("gateway_endpoints").Raw)
+	}
+	// Account types are top-level in the review and list the platforms they
+	// serve.
 	rat, ok := Find(rev.Get("account_types").Array(), "id", AnthropicAPIKey)
 	if !ok {
 		t.Fatalf("review lacks account type apikey: %s", rev.Get("account_types").Raw)
 	}
-	if protos := rat.Get("protocols").String(); !strings.Contains(protos, "anthropic.messages") || !strings.Contains(protos, "anthropic.count_tokens") {
-		t.Fatalf("review account type protocols: %s", rat.Raw)
+	if ids := PlatformIDs(rat.Get("platforms")); len(ids) != 1 || ids[0] != "anthropic" || rat.Get("form_mode").String() != "schema" {
+		t.Fatalf("review account type apikey: %s", rat.Raw)
 	}
-	if rev.Get("platform.account_types").Exists() {
-		t.Fatalf("review still nests account types under platform: %s", rev.Get("platform").Raw)
+	if rat.Get("protocols").Exists() {
+		t.Fatalf("review account type still lists protocols: %s", rat.Raw)
 	}
 	grants := admin.OK(t, http.MethodGet, "/plugins/anthropic/grants", nil).Array()
 	if g, ok := Find(grants, "permission", "accounts.credentials"); !ok || g.Get("status").String() != "granted" {
 		t.Fatalf("grant accounts.credentials: %v", grants)
+	}
+	if _, ok := Find(grants, "permission", "gateway.endpoint"); ok {
+		t.Fatalf("anthropic no longer asks for gateway.endpoint: %v", grants)
 	}
 
 	// Built-in: uninstall is refused, the plugin stays.
@@ -87,13 +98,23 @@ func TestAC03_InstallAnthropicFromMarket(t *testing.T) {
 		}
 	})
 
-	// Account type is offered by the registry with the endpoints it serves.
+	// Account type is offered by the registry with the platform it serves
+	// (built in) and that platform's endpoints.
 	types := admin.OK(t, http.MethodGet, "/account-types", nil).Array()
 	at, ok := FindAccountType(types, AnthropicPlugin, AnthropicAPIKey)
 	if !ok {
 		t.Fatalf("account types: %v", types)
 	}
-	if ep, ok := AccountTypeEndpoint(at, http.MethodPost, "/v1/messages"); !ok || !ep.Get("native").Bool() || ep.Get("protocol").String() != "anthropic.messages" {
-		t.Fatalf("anthropic/apikey endpoints: %s", at.Get("endpoints").Raw)
+	if p, ok := Find(at.Get("platforms").Array(), "id", "anthropic"); !ok || !p.Get("builtin").Bool() || !p.Get("available").Bool() {
+		t.Fatalf("anthropic/apikey platforms: %s", at.Get("platforms").Raw)
+	}
+	if at.Get("protocols").Exists() {
+		t.Fatalf("anthropic/apikey still lists protocols: %s", at.Raw)
+	}
+	for path, proto := range map[string]string{"/v1/messages": "anthropic.messages", "/v1/messages/count_tokens": "anthropic.count_tokens"} {
+		ep, ok := AccountTypeEndpoint(at, http.MethodPost, path)
+		if !ok || !ep.Get("native").Bool() || ep.Get("protocol").String() != proto || ep.Get("platform").String() != "anthropic" {
+			t.Fatalf("anthropic/apikey endpoint %s: %s", path, at.Get("endpoints").Raw)
+		}
 	}
 }

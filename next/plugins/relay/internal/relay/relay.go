@@ -1,8 +1,9 @@
 // Package relay implements the "Claude relay" demo plugin: it declares one
 // account type (relay_key) whose upstream is an Anthropic-compatible relay
-// and serves the anthropic.messages / anthropic.count_tokens endpoints of
-// whichever plugin declares them (ARCHITECTURE 6.6). It declares no platform,
-// no gateway endpoint and no price.
+// and that serves the core's built-in anthropic platform (manifest
+// accountTypes[0].platforms, ARCHITECTURE 6.6), i.e. the anthropic.messages
+// and anthropic.count_tokens endpoints. It declares no platform, no gateway
+// endpoint and no price.
 package relay
 
 import (
@@ -22,8 +23,11 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 )
 
-// Protocols the relay_key account type speaks natively (manifest.json
-// accountTypes[0].protocols, in order).
+// PlatformID is the built-in platform the relay_key account type serves.
+const PlatformID = "anthropic"
+
+// Protocols of the built-in anthropic platform, which relay_key speaks
+// natively upstream.
 const (
 	ProtocolMessages    = "anthropic.messages"
 	ProtocolCountTokens = "anthropic.count_tokens"
@@ -41,8 +45,9 @@ const (
 	DefaultTestModel = "claude-haiku-4-5"
 )
 
-// PassHeaders are the client headers the relay_key protocols ask the host
-// for (manifest accountTypes[0].protocols[].passHeaders) and forward.
+// PassHeaders are the client headers relay_key asks the host for (manifest
+// accountTypes[0].platforms[0].passHeaders, overriding the anthropic
+// platform default) and forwards.
 var PassHeaders = []string{"anthropic-version", "anthropic-beta"}
 
 // Plugin is the relay plugin. It implements pluginsdk.Platform.

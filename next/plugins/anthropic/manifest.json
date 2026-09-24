@@ -3,8 +3,8 @@
   "key": "anthropic",
   "name": { "en": "Anthropic", "zh": "Anthropic" },
   "description": {
-    "en": "Anthropic Claude platform: /v1/messages gateway endpoints, API key accounts, default model prices and a model catalog. Default prices are examples; Anthropic's official pricing prevails.",
-    "zh": "Anthropic Claude 平台：/v1/messages 网关端点、API Key 账号、默认模型价格和模型目录。默认价格仅为示例，以 Anthropic 官方公布价格为准。"
+    "en": "Anthropic API key account type, default model prices and a model catalog. The anthropic platform and its endpoints are built into the core. Default prices are examples; Anthropic's official pricing prevails.",
+    "zh": "Anthropic API Key 账号类型、默认价格与模型目录（anthropic 平台及其端点由核心内置）。默认价格仅为示例，以 Anthropic 官方公布价格为准。"
   },
   "version": "0.1.0",
   "publisher": "sub2api",
@@ -17,101 +17,6 @@
     { "id": "platform.adapter.v1" },
     { "id": "http.routes.v1" }
   ],
-
-  "gateway": {
-    "endpoints": [
-      {
-        "id": "messages",
-        "method": "POST",
-        "path": "/v1/messages",
-        "protocol": "anthropic.messages",
-        "kind": "proxy",
-        "auth": { "headers": ["x-api-key", "authorization"] },
-        "request": {
-          "modelPath": "model",
-          "streamPath": "stream",
-          "promptTextPaths": ["system", "messages.#.content"]
-        },
-        "response": { "stream": "sse", "nonStream": "json" },
-        "errorFormat": "anthropic",
-        "billing": "usage"
-      },
-      {
-        "id": "count_tokens",
-        "method": "POST",
-        "path": "/v1/messages/count_tokens",
-        "protocol": "anthropic.count_tokens",
-        "kind": "proxy",
-        "auth": { "headers": ["x-api-key", "authorization"] },
-        "request": { "modelPath": "model" },
-        "response": { "nonStream": "json" },
-        "errorFormat": "anthropic",
-        "billing": "free"
-      }
-    ]
-  },
-
-  "platform": {
-    "id": "anthropic",
-    "label": { "en": "Anthropic", "zh": "Anthropic" },
-    "protocols": ["anthropic.messages", "anthropic.count_tokens"],
-    "requestFields": ["model"],
-    "passHeaders": [
-      "anthropic-version",
-      "anthropic-beta",
-      "anthropic-dangerous-direct-browser-access",
-      "user-agent",
-      "x-app",
-      "x-stainless-arch",
-      "x-stainless-helper-method",
-      "x-stainless-lang",
-      "x-stainless-os",
-      "x-stainless-package-version",
-      "x-stainless-retry-count",
-      "x-stainless-runtime",
-      "x-stainless-runtime-version",
-      "x-stainless-timeout"
-    ],
-    "usage": {
-      "semantics": "exclusive",
-      "sse": [
-        {
-          "event": "message_start",
-          "map": {
-            "model": "message.model",
-            "input_tokens": "message.usage.input_tokens",
-            "cache_read_tokens": "message.usage.cache_read_input_tokens",
-            "cache_creation_tokens": "message.usage.cache_creation_input_tokens",
-            "cache_creation_1h_tokens": "message.usage.cache_creation.ephemeral_1h_input_tokens"
-          }
-        },
-        {
-          "event": "message_delta",
-          "map": { "output_tokens": "usage.output_tokens" }
-        }
-      ],
-      "json": {
-        "map": {
-          "model": "model",
-          "input_tokens": "usage.input_tokens",
-          "output_tokens": "usage.output_tokens",
-          "cache_read_tokens": "usage.cache_read_input_tokens",
-          "cache_creation_tokens": "usage.cache_creation_input_tokens",
-          "cache_creation_1h_tokens": "usage.cache_creation.ephemeral_1h_input_tokens"
-        }
-      }
-    },
-    "stickyRules": [
-      {
-        "name": "claude-code-session",
-        "match": { "protocols": ["anthropic.messages"], "models": ["claude-*"] },
-        "keySources": [ { "type": "body", "path": "metadata.user_id" } ],
-        "ttlSeconds": 3600,
-        "keyIncludes": ["group", "model", "rule"],
-        "onFailure": "failover"
-      }
-    ]
-  },
 
   "accountTypes": [
     {
@@ -128,9 +33,8 @@
       },
       "sensitiveFields": ["api_key"],
       "settingsFields": ["base_url", "model_mapping"],
-      "protocols": [
-        { "protocol": "anthropic.messages" },
-        { "protocol": "anthropic.count_tokens" }
+      "platforms": [
+        { "platform": "anthropic" }
       ]
     }
   ],
@@ -205,10 +109,8 @@
   "resources": { "memoryMB": 64, "cpu": 0.25, "maxThreads": 64, "maxOpenFiles": 256 },
 
   "hostPermissions": [
-    { "id": "gateway.endpoint",
-      "reason": { "en": "Serve POST /v1/messages and POST /v1/messages/count_tokens", "zh": "提供 POST /v1/messages 与 POST /v1/messages/count_tokens 网关端点" } },
     { "id": "platform.register",
-      "reason": { "en": "Register the Anthropic platform and its API key account type", "zh": "注册 Anthropic 平台及其 API Key 账号类型" } },
+      "reason": { "en": "Register the Anthropic API key account type for the built-in anthropic platform", "zh": "为内置 anthropic 平台注册 Anthropic API Key 账号类型" } },
     { "id": "accounts.credentials", "scope": { "types": "own" },
       "reason": { "en": "Read the API key of accounts of its own account type (Anthropic API Key) to call the upstream API", "zh": "读取本插件账号类型（Anthropic API Key）账号的 API Key 以调用上游接口" } },
     { "id": "db.schema",
