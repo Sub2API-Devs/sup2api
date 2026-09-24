@@ -209,7 +209,7 @@ go test -count=1 -timeout 50m -v ./...
 |---|---|---|---|
 | c-plugin-types | `plugin/registry`、`pkg`、`install`、`api`、`grpcruntime`、`rollout`、`routes` | next/c-plugin-types | ✅ `cfc97cd0d`，合并 `ad7cafbd6` |
 | a-account-billing | `account`、`billing`、`usage`、`event` | next/a-account-billing | ⏳ |
-| g-gateway-types | `gateway`（含 `gateway/convert` 转换器框架） | next/g-gateway-types | ⏳ |
+| g-gateway-types | `gateway`（含 `gateway/convert` 转换器框架） | next/g-gateway-types | ✅ `e58dc14c8`，合并 `dc12b4a45` |
 | f-web-types | `web/` | next/f-web-types | ⏳ |
 | e-plugins-types | `sdk/pluginsdk`、`plugins/*`（含新插件 relay）、`tools/sub2api-plugin`、`e2e`（新增 AC18）、`build-go.sh` | next/e-plugins-types | ⏳ |
 

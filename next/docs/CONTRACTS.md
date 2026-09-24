@@ -389,4 +389,8 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 | 使用记录 | 列表与详情新增 `account_type`、`upstream_protocol` |
 | 事件 `account.*` | payload `{account_id, plugin_key, type, name}`（`status_changed` 另含 `status, reason, cooldown_until?`），去掉 `platform` |
 
+**转换失败**：请求无法转换时返回 400 `invalid_argument`（记录类型 `invalid_request`，同类型其他账号跳过、不计失败切换次数）；上游响应无法转换且尚未写出内容时返回 502 `upstream_error`，上游已产生的用量照常计费。没有任何账号类型能服务该端点时返回 503 `no_available_account`。
+
+**组装**：同一个 `convert.Registry`（`convert.Default()`）交给 gateway（`Deps.Converters`）和 account（`Deps.Converters`）。
+
 **插件未启用**：端点不存在，返回 404（见 §11.6）。
