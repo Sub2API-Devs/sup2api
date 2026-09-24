@@ -7,19 +7,26 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-// Mock usage defaults (deploy/mock-upstream DefaultUsage).
+// Mock usage defaults (deploy/mock-upstream DefaultUsage). OpenAI and Gemini
+// responses report the same numbers inclusively: prompt tokens =
+// MockInputTokens of which MockCacheReadTokens are cached; Gemini adds
+// thoughtsTokenCount = MockThoughtsTokens next to candidatesTokenCount =
+// MockOutputTokens.
 const (
 	MockInputTokens         = 120
 	MockOutputTokens        = 42
 	MockCacheReadTokens     = 50
 	MockCacheCreationTokens = 30
+	MockThoughtsTokens      = 30
 )
 
 // MockRequest is one request recorded by mock-upstream.
 type MockRequest struct {
 	ID             int64
 	Path           string
+	Query          string
 	XAPIKey        string
+	APIKey         string // upstream key from x-api-key, Bearer, x-goog-api-key or ?key=
 	Model          string
 	Stream         bool
 	MetadataUserID string
@@ -56,7 +63,8 @@ func (m *Mock) Since(t testing.TB, id int64) []MockRequest {
 	var out []MockRequest
 	for _, x := range r.JSON().Get("data").Array() {
 		out = append(out, MockRequest{
-			ID: x.Get("id").Int(), Path: x.Get("path").String(), XAPIKey: x.Get("x_api_key").String(),
+			ID: x.Get("id").Int(), Path: x.Get("path").String(), Query: x.Get("query").String(),
+			XAPIKey: x.Get("x_api_key").String(), APIKey: x.Get("api_key").String(),
 			Model: x.Get("model").String(), Stream: x.Get("stream").Bool(),
 			MetadataUserID: x.Get("metadata_user_id").String(), Status: int(x.Get("status").Int()),
 			Headers: x.Get("headers"), Body: x.Get("body").String(),
@@ -94,12 +102,21 @@ func (m *Mock) ClearRule(t testing.TB, apiKey string) {
 	m.c.Do(t, http.MethodDelete, "/__control", nil, opts...)
 }
 
-// KeysUsed returns the x-api-key values of requests to path.
+// Key is the upstream API key of the request, whichever header carried it
+// (x_api_key for mocks predating the api_key field).
+func (r MockRequest) Key() string {
+	if r.APIKey != "" {
+		return r.APIKey
+	}
+	return r.XAPIKey
+}
+
+// KeysUsed returns the upstream API keys of requests to path ("" = any).
 func KeysUsed(reqs []MockRequest, path string) []string {
 	var out []string
 	for _, r := range reqs {
 		if path == "" || r.Path == path {
-			out = append(out, r.XAPIKey)
+			out = append(out, r.Key())
 		}
 	}
 	return out

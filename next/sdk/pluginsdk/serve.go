@@ -139,8 +139,9 @@ func Register(s grpc.ServiceRegistrar, p any, dial HostDialer, opts ...Option) e
 	}
 	jr, hasJobs := p.(JobRunner)
 	eh, hasEvents := p.(EventHandler)
-	if hasJobs || hasEvents {
-		pluginv1.RegisterAppServiceServer(s, appServer{jobs: jr, events: eh})
+	bh, hasBroadcast := p.(BroadcastHandler)
+	if hasJobs || hasEvents || hasBroadcast {
+		pluginv1.RegisterAppServiceServer(s, appServer{jobs: jr, events: eh, broadcast: bh})
 	}
 	if v, ok := p.(HTTP); ok {
 		pluginv1.RegisterHTTPServiceServer(s, httpServer{impl: v})
@@ -176,6 +177,9 @@ func Capabilities(p any) []string {
 	}
 	if _, ok := p.(EventHandler); ok {
 		caps = append(caps, manifest.CapAppEvents)
+	}
+	if _, ok := p.(BroadcastHandler); ok {
+		caps = append(caps, manifest.CapAppBroadcast)
 	}
 	if _, ok := p.(HTTP); ok {
 		caps = append(caps, manifest.CapHTTPRoutes)
@@ -221,6 +225,9 @@ func newRuntime(p any, o options, dial HostDialer) (*runtime, error) {
 		declared = map[string]bool{}
 		for _, c := range m.Capabilities {
 			declared[c.ID] = true
+		}
+		if err := checkBroadcastManifest(p, &m, declared); err != nil {
+			return nil, err
 		}
 	}
 	if o.key != "" {
@@ -379,8 +386,16 @@ func (s hookServer) OnGatewayRequest(ctx context.Context, in *pluginv1.GatewayRe
 
 type appServer struct {
 	pluginv1.UnimplementedAppServiceServer
-	jobs   JobRunner
-	events EventHandler
+	jobs      JobRunner
+	events    EventHandler
+	broadcast BroadcastHandler
+}
+
+func (s appServer) OnBroadcast(ctx context.Context, in *pluginv1.OnBroadcastRequest) (*pluginv1.OnBroadcastResponse, error) {
+	if s.broadcast == nil {
+		return nil, status.Error(codes.Unimplemented, "plugin does not handle broadcasts")
+	}
+	return s.broadcast.OnBroadcast(ctx, in)
 }
 
 func (s appServer) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*pluginv1.RunJobResponse, error) {

@@ -1,0 +1,62 @@
+{
+  "apiVersion": 1,
+  "key": "gemini",
+  "name": { "en": "Gemini", "zh": "Gemini" },
+  "description": {
+    "en": "Gemini API key account type and default model prices. The gemini platform and its endpoints (/v1beta/models/{model}:generateContent, :streamGenerateContent, :countTokens) are built into the core. Default prices are examples (text, paid tier); Google's official pricing prevails.",
+    "zh": "Gemini API Key 账号类型与默认价格（gemini 平台及其端点 /v1beta/models/{model}:generateContent、:streamGenerateContent、:countTokens 由核心内置）。默认价格仅为示例（文本、付费层级），以 Google 官方公布价格为准。"
+  },
+  "version": "0.1.0",
+  "publisher": "sub2api",
+  "icon": "text:G",
+  "runtime": "grpc",
+  "entry": { "grpc": { "binaries": "runtimes/{os}-{arch}/plugin" } },
+  "hostCompat": ">=0.1.0 <0.2.0",
+
+  "capabilities": [
+    { "id": "platform.adapter.v1" }
+  ],
+
+  "accountTypes": [
+    {
+      "id": "apikey",
+      "label": { "en": "API Key", "zh": "API Key" },
+      "description": {
+        "en": "A Google AI Studio (Gemini API) key, or a key for a Gemini-compatible endpoint (set Base URL).",
+        "zh": "Google AI Studio（Gemini API）的 Key，或 Gemini 兼容端点的 Key（需填写 Base URL）。"
+      },
+      "form": {
+        "mode": "schema",
+        "schema": "forms/apikey.schema.json",
+        "uiSchema": "forms/apikey.ui.json"
+      },
+      "sensitiveFields": ["api_key"],
+      "settingsFields": ["base_url", "model_mapping"],
+      "platforms": [
+        { "platform": "gemini" }
+      ]
+    }
+  ],
+
+  "pricing": [
+    { "model": "gemini-3-pro*", "mode": "expression",
+      "expression": "len <= 200000 ? tier(\"standard\", p*2 + c*12 + cr*0.2) : tier(\"long_context\", p*4 + c*18 + cr*0.4)" },
+    { "model": "gemini-2.5-pro*", "mode": "expression",
+      "expression": "len <= 200000 ? tier(\"standard\", p*1.25 + c*10 + cr*0.125) : tier(\"long_context\", p*2.5 + c*15 + cr*0.25)" },
+    { "model": "gemini-2.5-flash-lite*", "mode": "per_token", "config": { "p": 0.1, "c": 0.4, "cr": 0.01 } },
+    { "model": "gemini-2.5-flash*", "mode": "per_token", "config": { "p": 0.3, "c": 2.5, "cr": 0.03 } },
+    { "model": "gemini-2.0-flash-lite*", "mode": "per_token", "config": { "p": 0.075, "c": 0.3 } },
+    { "model": "gemini-2.0-flash*", "mode": "per_token", "config": { "p": 0.1, "c": 0.4, "cr": 0.025 } }
+  ],
+
+  "resources": { "memoryMB": 32, "cpu": 0.1, "maxThreads": 32, "maxOpenFiles": 64 },
+
+  "hostPermissions": [
+    { "id": "platform.register",
+      "reason": { "en": "Register the Gemini API key account type for the built-in gemini platform", "zh": "为内置 gemini 平台注册 Gemini API Key 账号类型" } },
+    { "id": "accounts.credentials", "scope": { "types": "own" },
+      "reason": { "en": "Read the API key of accounts of its own account type (Gemini API Key) to call the upstream API", "zh": "读取本插件账号类型（Gemini API Key）账号的 API Key 以调用上游接口" } }
+  ],
+
+  "externalServices": ["generativelanguage.googleapis.com"]
+}

@@ -188,6 +188,16 @@ func (h *Harness) Do(method, routePath string, query map[string]string, body any
 	return resp
 }
 
+// Deliver hands a broadcast to the plugin (AppService.OnBroadcast), as the
+// host does for a message published on another node. Pair it with
+// FakeHost.OnPublish to connect two harnesses.
+func (h *Harness) Deliver(topic string, payload []byte, sourceNodeID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err := h.App.OnBroadcast(ctx, &pluginv1.OnBroadcastRequest{Topic: topic, Payload: payload, SourceNodeId: sourceNodeID})
+	return err
+}
+
 func dialBuf(l *bufconn.Listener) (*grpc.ClientConn, error) {
 	return grpc.NewClient("passthrough:///bufnet",
 		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return l.DialContext(ctx) }),

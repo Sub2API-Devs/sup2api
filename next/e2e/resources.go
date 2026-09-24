@@ -132,17 +132,22 @@ const (
 	AnthropicAPIKey = "apikey" // declared by the built-in anthropic plugin
 	RelayPlugin     = "relay"
 	RelayKey        = "relay_key" // declared by the market plugin relay
+	// Built-in plugins with an "apikey" account type for the built-in
+	// openai and gemini platforms (CONTRACTS 14.1); same credential fields.
+	OpenAIPlugin = "openai"
+	GeminiPlugin = "gemini"
+	APIKeyType   = "apikey"
 )
 
 // AccountSpec describes an account pointing at the mock. The default type
-// is anthropic/apikey; relay/relay_key takes the same credentials (api_key,
-// base_url, model_mapping).
+// is anthropic/apikey; relay/relay_key, openai/apikey and gemini/apikey take
+// the same credentials (api_key, base_url, model_mapping).
 type AccountSpec struct {
 	Name           string
 	PluginKey      string // default AnthropicPlugin
 	Type           string // default AnthropicAPIKey
 	GroupIDs       []int64
-	APIKey         string // upstream key; the mock records it as x-api-key
+	APIKey         string // upstream key; the mock records it as api_key
 	BaseURL        string // default: mock-upstream
 	Priority       int
 	MaxConcurrency int

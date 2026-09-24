@@ -54,7 +54,8 @@ manifest_version() {
 
 if [ -f tools/sub2api-plugin/scripts/build-demo.sh ]; then
   # Owned by the SDK team: builds, packs and signs every demo package
-  # (anthropic 0.1.0/0.2.0, guard 0.1.0, relay 0.1.0, guard test build) and
+  # (anthropic 0.1.0/0.2.0, guard 0.1.0, relay 0.1.0, openai 0.1.0,
+  # gemini 0.1.0, guard test build) and
   # writes the index. Only BUILTIN_PLUGINS below are built in; relay is a
   # market plugin.
   echo "==> tools/sub2api-plugin/scripts/build-demo.sh"
@@ -101,9 +102,10 @@ ls -l "$OUT/market"
 # Built-in plugins (installed and enabled by the core at startup, cannot be
 # uninstalled): the package matching plugins/<name>/manifest.json's version.
 # The anthropic/openai/gemini platforms and their endpoints are built into the
-# core itself; the anthropic plugin only adds the Anthropic API key account
-# type (plus default prices and the model catalog).
-BUILTIN_PLUGINS=${BUILTIN_PLUGINS:-anthropic}
+# core itself; the anthropic, openai and gemini plugins only add the API key
+# account types of their platform (plus default prices; anthropic also a model
+# catalog).
+BUILTIN_PLUGINS=${BUILTIN_PLUGINS:-anthropic openai gemini}
 mkdir -p "$OUT/builtin"
 cp "$KEYS/$KEY_ID.pub" "$OUT/builtin/trust.pub"
 printf '%s\n' "$KEY_ID" > "$OUT/builtin/trust.keyid"

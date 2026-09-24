@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# Mock Anthropic upstream for the test environment (see main.go).
+# Mock Anthropic / OpenAI / Gemini upstream for the test environment (see main.go).
 ARG GO_IMAGE=golang:1.27-trixie
 FROM ${GO_IMAGE} AS build
 WORKDIR /src

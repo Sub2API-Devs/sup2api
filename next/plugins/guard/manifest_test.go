@@ -5,10 +5,24 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
+	"github.com/Sub2API-Devs/sup2api/next/plugins/guard/internal/guard"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/pluginsdktest"
 )
+
+// TestManifestServes starts the plugin with its embedded manifest: the SDK
+// checks the declared capabilities (app.broadcast.v1 needs OnBroadcast and
+// the host permission "broadcast") and reports them.
+func TestManifestServes(t *testing.T) {
+	h := pluginsdktest.Start(t, guard.New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithManifest(manifestJSON)}})
+	if !slices.Contains(h.Info.GetCapabilities(), manifest.CapAppBroadcast) {
+		t.Fatalf("capabilities = %v", h.Info.GetCapabilities())
+	}
+}
 
 // TestManifest checks manifest.json against the SDK types (no unknown
 // fields) and its internal consistency.
@@ -38,10 +52,17 @@ func TestManifest(t *testing.T) {
 		}
 		granted[hp.ID] = true
 	}
-	for _, need := range []string{"gateway.hook", "events", "jobs", "db.schema", "routes.admin", "ui.native", "ui.menu"} {
+	for _, need := range []string{"gateway.hook", "events", "jobs", "db.schema", "routes.admin", "ui.native", "ui.menu", "broadcast"} {
 		if !granted[need] {
 			t.Errorf("missing host permission %s", need)
 		}
+	}
+	hasBroadcast := false
+	for _, c := range m.Capabilities {
+		hasBroadcast = hasBroadcast || c.ID == manifest.CapAppBroadcast
+	}
+	if !hasBroadcast {
+		t.Error("guard must declare capability app.broadcast.v1 (rules.changed)")
 	}
 	for _, p := range []string{m.UI.Settings.Schema, m.UI.Settings.UISchema} {
 		b, err := os.ReadFile(filepath.FromSlash(p))

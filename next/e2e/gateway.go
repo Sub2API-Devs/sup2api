@@ -72,6 +72,43 @@ func WithSession(body map[string]any, session string) map[string]any {
 	return body
 }
 
+// ChatBody builds an OpenAI chat completions request body.
+func ChatBody(model, prompt string, stream bool) map[string]any {
+	return map[string]any{
+		"model":    model,
+		"stream":   stream,
+		"messages": []any{map[string]any{"role": "user", "content": prompt}},
+	}
+}
+
+// GeminiBody builds a Gemini generateContent request body.
+func GeminiBody(prompt string) map[string]any {
+	return map[string]any{"contents": []any{map[string]any{"role": "user", "parts": []any{map[string]any{"text": prompt}}}}}
+}
+
+// OpenAI calls an openai platform endpoint (path) through the load
+// balancer with the API key as Authorization: Bearer.
+func (e *Env) OpenAI(apiKey, path string, body any) *GatewayResult {
+	e.T.Helper()
+	return e.Gateway(e.T, e.BaseURL, path, "", body, map[string]string{"Authorization": "Bearer " + apiKey})
+}
+
+// Gemini calls /v1beta/models/{model}:{action}[?query] through the load
+// balancer with the API key in x-goog-api-key (apiKey "" = pass it in
+// query as key=).
+func (e *Env) Gemini(apiKey, model, action, query string, body any) *GatewayResult {
+	e.T.Helper()
+	path := "/v1beta/models/" + model + ":" + action
+	if query != "" {
+		path += "?" + query
+	}
+	var h map[string]string
+	if apiKey != "" {
+		h = map[string]string{"x-goog-api-key": apiKey}
+	}
+	return e.Gateway(e.T, e.BaseURL, path, "", body, h)
+}
+
 // Gateway calls base+path with the API key in x-api-key. headers are extra
 // request headers. The request id is taken from the X-Request-Id response
 // header (the gateway assigns it).

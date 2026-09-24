@@ -18,6 +18,7 @@
     { "id": "gateway.hook.v1" },
     { "id": "app.events.v1" },
     { "id": "app.jobs.v1" },
+    { "id": "app.broadcast.v1" },
     { "id": "http.routes.v1" }
   ],
 
@@ -100,6 +101,8 @@
       "reason": { "en": "Count requests per group and model", "zh": "按分组和模型统计请求量" } },
     { "id": "jobs",
       "reason": { "en": "Roll up and clean up statistics", "zh": "汇总和清理统计数据" } },
+    { "id": "broadcast",
+      "reason": { "en": "Tell the other nodes to reload the rules at once after they change", "zh": "规则修改后通知其他节点立即重新加载" } },
     { "id": "routes.admin",
       "reason": { "en": "Rule management and statistics APIs", "zh": "规则管理与统计接口" } },
     { "id": "ui.menu",

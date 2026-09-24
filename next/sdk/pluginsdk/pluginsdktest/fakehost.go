@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -44,12 +45,24 @@ type FakeHost struct {
 	Authz func(userID int64, permission string) bool
 	// DialFunc is used by EgressService.Dial (default net.Dialer).
 	DialFunc func(ctx context.Context, network, address string) (net.Conn, error)
+	// OnPublish, when set, is called (outside the lock) for every accepted
+	// Publish, e.g. to relay it to another Harness with Harness.Deliver and
+	// simulate a second node. PublishErr, when set, fails every Publish.
+	OnPublish  func(PublishedMessage)
+	PublishErr error
 
-	logs     []LogEntry
-	kv       map[string]kvItem
-	ledger   []LedgerEntry
-	ledgerBy map[string]LedgerEntry
-	dials    []string
+	logs      []LogEntry
+	kv        map[string]kvItem
+	ledger    []LedgerEntry
+	ledgerBy  map[string]LedgerEntry
+	dials     []string
+	published []PublishedMessage
+}
+
+// PublishedMessage is one broadcast received through HostService.Publish.
+type PublishedMessage struct {
+	Topic   string
+	Payload []byte
 }
 
 type kvItem struct {
@@ -82,6 +95,39 @@ func (f *FakeHost) Dials() []string {
 	defer f.mu.Unlock()
 	return append([]string(nil), f.dials...)
 }
+
+// Published returns the broadcasts received through Publish.
+func (f *FakeHost) Published() []PublishedMessage {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]PublishedMessage(nil), f.published...)
+}
+
+// Publish records the broadcast (the real host relays it to the other
+// nodes). It enforces the same topic and size limits as the host.
+func (f *FakeHost) Publish(_ context.Context, in *pluginv1.PublishRequest) (*pluginv1.PublishResponse, error) {
+	if !topicRe.MatchString(in.GetTopic()) {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid topic %q", in.GetTopic())
+	}
+	if len(in.GetPayload()) > 64<<10 {
+		return nil, status.Error(codes.InvalidArgument, "payload too large")
+	}
+	msg := PublishedMessage{Topic: in.GetTopic(), Payload: append([]byte(nil), in.GetPayload()...)}
+	f.mu.Lock()
+	if err := f.PublishErr; err != nil {
+		f.mu.Unlock()
+		return nil, err
+	}
+	f.published = append(f.published, msg)
+	hook := f.OnPublish
+	f.mu.Unlock()
+	if hook != nil {
+		hook(msg)
+	}
+	return &pluginv1.PublishResponse{}, nil
+}
+
+var topicRe = regexp.MustCompile(`^[a-z0-9_.-]{1,64}$`)
 
 // SetDSN sets the value returned by GetDSN.
 func (f *FakeHost) SetDSN(dsn, schema string) {

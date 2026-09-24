@@ -57,6 +57,14 @@ type Host interface {
 	LedgerCredit(ctx context.Context, ch LedgerChange) (*LedgerResult, error)
 	LedgerDebit(ctx context.Context, ch LedgerChange) (*LedgerResult, error)
 
+	// Publish sends payload (<= 64 KiB) under topic (^[a-z0-9_.-]{1,64}$)
+	// to this plugin's instances on every other live node, which receive
+	// it through BroadcastHandler.OnBroadcast (grant "broadcast"). BEST
+	// EFFORT: no acknowledgement, ordering or replay; the publishing node
+	// does not receive its own message. A nil error only means the host
+	// accepted the message. See BroadcastMux.
+	Publish(ctx context.Context, topic string, payload []byte) error
+
 	// Client exposes the raw HostService client.
 	Client() pluginv1.HostServiceClient
 	// Egress exposes the raw EgressService client.
@@ -217,6 +225,10 @@ func (h *host) LedgerCredit(ctx context.Context, ch LedgerChange) (*LedgerResult
 
 func (h *host) LedgerDebit(ctx context.Context, ch LedgerChange) (*LedgerResult, error) {
 	return ledgerResult(h.client.LedgerDebit(ctx, ledgerReq(ch)))
+}
+
+func (h *host) Publish(ctx context.Context, topic string, payload []byte) error {
+	return publish(ctx, h.client, topic, payload)
 }
 
 func ledgerReq(ch LedgerChange) *pluginv1.LedgerChangeRequest {
