@@ -354,6 +354,11 @@ func (s *Service) DeleteUser(ctx context.Context, actorID, id int64) error {
 		if err := revokeAllRefreshTokens(ctx, tx, id); err != nil {
 			return err
 		}
+		// The user's API keys go with the user: authentication already
+		// rejects them, and left behind they would block deleting their group.
+		if _, err := tx.Exec(ctx, `UPDATE api_keys SET deleted_at = now() WHERE user_id = $1 AND deleted_at IS NULL`, id); err != nil {
+			return err
+		}
 		return s.emit(ctx, tx, "user.updated", id, email, "deleted")
 	})
 	if err != nil {
