@@ -189,3 +189,28 @@ go test -count=1 -timeout 50m -v ./...
 1. 第 4 节"仍待办"：`ClientRequestID`、`/settings/gateway` 归属、F 列出的"仍缺"接口说明。
 2. 第 5 节未做项按优先级排期：登录限速与 refresh token 重放检测（#4）、卸载插件清账号（#6）、SSRF 拨号钩子（#12）、新外部域名告警（#3）、出口日志长连接（#14）。
 3. 每个里程碑后推送 `feat/next-platform`（网络不稳时重试）。
+
+---
+
+## 9. 第二轮：账号类型与端点多对多、全局定价（2026-09-24 起）
+
+**用户决定**
+- 插件未启用时端点不存在，返回 404（已完成：`0398c0bc3`）
+- 平台、账号类型、端点多对多：任何插件都能声明账号类型，账号类型声明上游原生支持的协议；同一分组可混放多种类型账号共同服务一个端点
+- 协议转换：核心内置转换器，能转换就自动转换，否则只调度原生支持的账号（本轮做框架，具体协议对等有对应上游时再补）
+- 计费：价格只按模型全局设置，为基础价格，只用倍率调整
+- 本轮不启动测试数据库，直接在 sup2api 上验证；sup2api 可清空重建
+
+**主控已完成**：设计 ARCHITECTURE §6.6、§7.3"定价范围"；契约 CONTRACTS §12；manifest / proto / core / 迁移 0005（提交 `10a112551`、`929e0ee3f`）
+
+**派发的 agent（基于 `929e0ee3f`，各自 worktree）**
+
+| 代号 | 目录 | 分支 | 状态 |
+|---|---|---|---|
+| c-plugin-types | `plugin/registry`、`pkg`、`install`、`api`、`grpcruntime`、`rollout`、`routes` | next/c-plugin-types | ⏳ |
+| a-account-billing | `account`、`billing`、`usage`、`event` | next/a-account-billing | ⏳ |
+| g-gateway-types | `gateway`（含 `gateway/convert` 转换器框架） | next/g-gateway-types | ⏳ |
+| f-web-types | `web/` | next/f-web-types | ⏳ |
+| e-plugins-types | `sdk/pluginsdk`、`plugins/*`（含新插件 relay）、`tools/sub2api-plugin`、`e2e`（新增 AC18）、`build-go.sh` | next/e-plugins-types | ⏳ |
+
+**合并后主控要做**：`internal/app` 组装（gateway 的 ProtocolConverters 交给 account）；清空 sup2api 数据卷重新部署；在 sup2api 上验证混合账号类型服务 `/v1/messages`；更新本节。
