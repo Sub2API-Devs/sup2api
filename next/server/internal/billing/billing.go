@@ -30,7 +30,7 @@ type Service struct {
 
 	mu       sync.Mutex
 	prices   *priceSnapshot
-	resolved map[string]resolved // platform + "\x00" + model
+	resolved map[string]resolved // model
 	settings *settingsSnapshot
 
 	unsubscribe func()

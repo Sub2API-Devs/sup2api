@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -24,7 +25,6 @@ type row struct {
 	ID             int64
 	Name           string
 	PluginKey      string
-	Platform       string
 	Type           string
 	CredEnc        []byte
 	Settings       []byte
@@ -39,13 +39,13 @@ type row struct {
 	UpdatedAt      time.Time
 }
 
-const selectRow = `SELECT a.id, a.name, a.plugin_key, a.platform, a.type, a.credentials_enc, a.settings, a.proxy_id,
+const selectRow = `SELECT a.id, a.name, a.plugin_key, a.type, a.credentials_enc, a.settings, a.proxy_id,
 	a.status, a.status_reason, a.schedulable, a.priority, a.max_concurrency, a.last_used_at, a.created_at, a.updated_at
 	FROM accounts a`
 
 func scanRow(r pgx.Row) (*row, error) {
 	var a row
-	err := r.Scan(&a.ID, &a.Name, &a.PluginKey, &a.Platform, &a.Type, &a.CredEnc, &a.Settings, &a.ProxyID,
+	err := r.Scan(&a.ID, &a.Name, &a.PluginKey, &a.Type, &a.CredEnc, &a.Settings, &a.ProxyID,
 		&a.Status, &a.StatusReason, &a.Schedulable, &a.Priority, &a.MaxConcurrency, &a.LastUsedAt, &a.CreatedAt, &a.UpdatedAt)
 	return &a, err
 }
@@ -74,24 +74,28 @@ type GroupRef struct {
 
 // View is the API representation of an account.
 type View struct {
-	ID             int64           `json:"id"`
-	Name           string          `json:"name"`
-	PluginKey      string          `json:"plugin_key"`
-	Platform       string          `json:"platform"`
-	Type           string          `json:"type"`
-	GroupIDs       []int64         `json:"group_ids"`
-	Groups         []GroupRef      `json:"groups"`
-	ProxyID        *int64          `json:"proxy_id"`
-	Status         string          `json:"status"`
-	StatusReason   string          `json:"status_reason"`
-	Schedulable    bool            `json:"schedulable"`
-	Priority       int             `json:"priority"`
-	MaxConcurrency int             `json:"max_concurrency"`
-	InUse          int             `json:"in_use"`
-	CooldownUntil  *time.Time      `json:"cooldown_until"`
-	CooldownReason string          `json:"cooldown_reason,omitempty"`
-	Orphaned       bool            `json:"orphaned"`
-	Settings       json.RawMessage `json:"settings"`
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	PluginKey string `json:"plugin_key"`
+	Type      string `json:"type"`
+	// TypeLabel is the account type label; null when the type is no longer
+	// registered (plugin disabled or uninstalled).
+	TypeLabel      manifest.LocalizedText `json:"type_label"`
+	GroupIDs       []int64                `json:"group_ids"`
+	Groups         []GroupRef             `json:"groups"`
+	ProxyID        *int64                 `json:"proxy_id"`
+	Status         string                 `json:"status"`
+	StatusReason   string                 `json:"status_reason"`
+	Schedulable    bool                   `json:"schedulable"`
+	Priority       int                    `json:"priority"`
+	MaxConcurrency int                    `json:"max_concurrency"`
+	InUse          int                    `json:"in_use"`
+	CooldownUntil  *time.Time             `json:"cooldown_until"`
+	CooldownReason string                 `json:"cooldown_reason,omitempty"`
+	// Orphaned is true when the plugin declaring the account type is not
+	// enabled (disabled or uninstalled).
+	Orphaned bool            `json:"orphaned"`
+	Settings json.RawMessage `json:"settings"`
 	// Credentials (settings + secret fields, sensitive ones masked) is only
 	// present on single-account responses.
 	Credentials json.RawMessage `json:"credentials,omitempty"`
@@ -111,7 +115,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 			st = json.RawMessage("{}")
 		}
 		v := &View{
-			ID: a.ID, Name: a.Name, PluginKey: a.PluginKey, Platform: a.Platform, Type: a.Type,
+			ID: a.ID, Name: a.Name, PluginKey: a.PluginKey, Type: a.Type, TypeLabel: s.typeLabel(a.PluginKey, a.Type),
 			GroupIDs: []int64{}, Groups: []GroupRef{}, ProxyID: a.ProxyID, Status: a.Status,
 			StatusReason: a.StatusReason, Schedulable: a.Schedulable, Priority: a.Priority,
 			MaxConcurrency: a.MaxConcurrency, Orphaned: !s.pluginActive(a.PluginKey), Settings: st,
@@ -177,11 +181,11 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 
 // credentialView returns the merged credentials with sensitive values masked.
 func (s *Service) credentialView(a *row) (json.RawMessage, error) {
-	plain, err := s.decrypt(a.Platform, a.CredEnc)
+	plain, err := s.decrypt(a.PluginKey, a.CredEnc)
 	if err != nil {
 		return nil, fmt.Errorf("decrypt account %d: %w", a.ID, err)
 	}
-	bt, ok := s.accountType(a.Platform, a.Type)
+	bt, ok := s.accountType(a.PluginKey, a.Type)
 	if !ok {
 		sec, err := parseObject(plain)
 		if err != nil {
@@ -226,11 +230,11 @@ func (s *Service) list(c *gin.Context) {
 		args = append(args, v)
 		where += " AND " + strings.ReplaceAll(cond, "?", "$"+strconv.Itoa(len(args)))
 	}
-	if v := c.Query("platform"); v != "" {
-		add("a.platform = ?", v)
-	}
 	if v := c.Query("plugin_key"); v != "" {
 		add("a.plugin_key = ?", v)
+	}
+	if v := c.Query("type"); v != "" {
+		add("a.type = ?", v)
 	}
 	if v := c.Query("status"); v != "" {
 		add("a.status = ?", v)
@@ -305,7 +309,7 @@ func (n *nullable[T]) UnmarshalJSON(b []byte) error {
 
 type input struct {
 	Name           *string         `json:"name"`
-	Platform       string          `json:"platform"`
+	PluginKey      string          `json:"plugin_key"`
 	Type           string          `json:"type"`
 	GroupIDs       *[]int64        `json:"group_ids"`
 	ProxyID        nullable[int64] `json:"proxy_id"`
@@ -330,8 +334,8 @@ func (in *input) validate(ctx context.Context, create bool) []core.FieldError {
 	} else if create {
 		add("name", "required", "name is required", "名称必填")
 	}
-	if create && (in.Platform == "" || in.Type == "") {
-		add("type", "required", "platform and type are required", "平台和类型必填")
+	if create && (in.PluginKey == "" || in.Type == "") {
+		add("type", "required", "plugin_key and type are required", "账号类型（plugin_key 和 type）必填")
 	}
 	if in.Priority != nil && (*in.Priority < 0 || *in.Priority > 1000000) {
 		add("priority", "invalid", "priority must be 0-1000000", "优先级必须为 0-1000000")
@@ -397,12 +401,15 @@ func setGroups(ctx context.Context, tx pgx.Tx, id int64, groupIDs []int64) error
 	return err
 }
 
-func basicPayload(id int64, pluginKey, platform, typ, name string) map[string]any {
-	return map[string]any{"account_id": id, "plugin_key": pluginKey, "platform": platform, "type": typ, "name": name}
+// basicPayload is the payload of account.created/updated/deleted (CONTRACTS §12).
+func basicPayload(id int64, pluginKey, typ, name string) map[string]any {
+	return map[string]any{"account_id": id, "plugin_key": pluginKey, "type": typ, "name": name}
 }
 
-func statusPayload(id int64, platform, status, reason string, until *time.Time) map[string]any {
-	p := map[string]any{"account_id": id, "platform": platform, "status": status, "reason": reason}
+// statusPayload is the payload of account.status_changed.
+func statusPayload(id int64, pluginKey, typ, name, status, reason string, until *time.Time) map[string]any {
+	p := basicPayload(id, pluginKey, typ, name)
+	p["status"], p["reason"] = status, reason
 	if until != nil {
 		p["cooldown_until"] = until.UTC().Format(time.RFC3339)
 	}
@@ -419,7 +426,7 @@ func (s *Service) create(c *gin.Context) {
 		httpapi.Fail(c, core.InvalidFields(fe...))
 		return
 	}
-	bt, ok := s.accountType(in.Platform, in.Type)
+	bt, ok := s.accountType(in.PluginKey, in.Type)
 	if !ok {
 		httpapi.Fail(c, core.InvalidFields(core.FieldError{Field: "type", Code: "unknown",
 			Message: t(ctx, "unknown account type (is its plugin enabled?)", "未知的账号类型（插件是否已启用？）")}))
@@ -458,10 +465,10 @@ func (s *Service) create(c *gin.Context) {
 	uid, _ := core.UserID(ctx)
 	var id int64
 	err = s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
-		if err := tx.QueryRow(ctx, `INSERT INTO accounts (name, plugin_key, platform, type, credentials_enc, settings,
+		if err := tx.QueryRow(ctx, `INSERT INTO accounts (name, plugin_key, type, credentials_enc, settings,
 			proxy_id, status, schedulable, priority, max_concurrency, created_by)
-			VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, NULLIF($12::bigint, 0)) RETURNING id`,
-			*in.Name, bt.Plugin.Key, bt.Platform, bt.Type.ID, p.enc, string(p.settings),
+			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, NULLIF($11::bigint, 0)) RETURNING id`,
+			*in.Name, bt.Plugin.Key, bt.Type.ID, p.enc, string(p.settings),
 			proxyID, status, sched, prio, maxc, uid).Scan(&id); err != nil {
 			return err
 		}
@@ -469,7 +476,7 @@ func (s *Service) create(c *gin.Context) {
 			return err
 		}
 		return s.d.Events.Emit(ctx, tx, core.Event{Type: core.EventAccountCreated,
-			Payload: basicPayload(id, bt.Plugin.Key, bt.Platform, bt.Type.ID, *in.Name)})
+			Payload: basicPayload(id, bt.Plugin.Key, bt.Type.ID, *in.Name)})
 	})
 	if err != nil {
 		httpapi.Fail(c, err)
@@ -518,14 +525,14 @@ func (s *Service) update(c *gin.Context) {
 	// Validate credentials (may call the plugin) before opening the transaction.
 	var p *prepared
 	if creds := strings.TrimSpace(string(in.Credentials)); creds != "" && creds != "null" {
-		bt, ok := s.accountType(cur.Platform, cur.Type)
+		bt, ok := s.accountType(cur.PluginKey, cur.Type)
 		if !ok {
 			httpapi.Fail(c, core.ErrPluginUnavailable.WithMessage(t(ctx,
 				"the plugin providing this account type is not enabled; credentials cannot be changed",
 				"提供该账号类型的插件未启用，无法修改凭证")))
 			return
 		}
-		plain, err := s.decrypt(cur.Platform, cur.CredEnc)
+		plain, err := s.decrypt(cur.PluginKey, cur.CredEnc)
 		if err != nil {
 			httpapi.Fail(c, err)
 			return
@@ -590,10 +597,10 @@ func (s *Service) update(c *gin.Context) {
 			name = *in.Name
 		}
 		evs := []core.Event{{Type: core.EventAccountUpdated,
-			Payload: basicPayload(id, locked.PluginKey, locked.Platform, locked.Type, name)}}
+			Payload: basicPayload(id, locked.PluginKey, locked.Type, name)}}
 		if statusChanged {
 			evs = append(evs, core.Event{Type: core.EventAccountStatusChanged,
-				Payload: statusPayload(id, locked.Platform, *in.Status, *reason, nil)})
+				Payload: statusPayload(id, locked.PluginKey, locked.Type, name, *in.Status, *reason, nil)})
 		}
 		return s.d.Events.Emit(ctx, tx, evs...)
 	})
@@ -617,9 +624,9 @@ func (s *Service) delete(c *gin.Context) {
 		return
 	}
 	err := s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
-		var pk, platform, typ, name string
+		var pk, typ, name string
 		err := tx.QueryRow(ctx, `UPDATE accounts SET deleted_at = now(), updated_at = now()
-			WHERE id = $1 AND deleted_at IS NULL RETURNING plugin_key, platform, type, name`, id).Scan(&pk, &platform, &typ, &name)
+			WHERE id = $1 AND deleted_at IS NULL RETURNING plugin_key, type, name`, id).Scan(&pk, &typ, &name)
 		if store.IsNoRows(err) {
 			return notFound(ctx)
 		}
@@ -629,7 +636,7 @@ func (s *Service) delete(c *gin.Context) {
 		if _, err := tx.Exec(ctx, `DELETE FROM account_groups WHERE account_id = $1`, id); err != nil {
 			return err
 		}
-		return s.d.Events.Emit(ctx, tx, core.Event{Type: core.EventAccountDeleted, Payload: basicPayload(id, pk, platform, typ, name)})
+		return s.d.Events.Emit(ctx, tx, core.Event{Type: core.EventAccountDeleted, Payload: basicPayload(id, pk, typ, name)})
 	})
 	if err != nil {
 		httpapi.Fail(c, err)
@@ -655,7 +662,7 @@ func (s *Service) reveal(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	plain, err := s.decrypt(a.Platform, a.CredEnc)
+	plain, err := s.decrypt(a.PluginKey, a.CredEnc)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return

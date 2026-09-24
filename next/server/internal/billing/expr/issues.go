@@ -39,7 +39,7 @@ var messages = map[string][2]string{
 	CodeNegativeMultiplier: {"Rule multiplier must not be negative", "加价倍数不能为负数"},
 	CodeRuntime:            {"Expression failed at runtime", "表达式执行出错"},
 	CodeBadResult:          {"Expression result must be a finite, non-negative number", "表达式结果必须是有限的非负数"},
-	CodeUnknownFact:        {"u() reads a usage key the platform plugin does not declare", "u() 读取的计量值没有被平台插件声明"},
+	CodeUnknownFact:        {"u() reads a usage key no enabled plugin declares", "u() 读取的计量值没有被任何已启用插件声明"},
 	CodeSmoke:              {"Smoke test failed", "冒烟测试失败"},
 	CodeBigCost:            {"Cost per million input tokens exceeds the warning threshold; please confirm", "按 100 万输入 token 计算的单次费用超过阈值，请确认"},
 	CodeDuplicateTier:      {"Tier name is used more than once; the breakdown shows the first one", "档位名称重复，明细只显示第一个"},

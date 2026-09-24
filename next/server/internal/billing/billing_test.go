@@ -3,6 +3,8 @@ package billing
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sort"
 	"testing"
 	"time"
 
@@ -35,10 +37,10 @@ func TestGlobMatch(t *testing.T) {
 	}
 }
 
-func syncDefaults(t *testing.T, e *env, plugin, platform string, entries []manifest.PricingEntry) error {
+func syncDefaults(t *testing.T, e *env, plugin string, entries []manifest.PricingEntry) error {
 	t.Helper()
 	return e.db.Tx(context.Background(), func(tx pgx.Tx) error {
-		return e.svc.SyncPluginDefaults(context.Background(), tx, plugin, platform, entries)
+		return e.svc.SyncPluginDefaults(context.Background(), tx, plugin, entries)
 	})
 }
 
@@ -46,60 +48,82 @@ func TestSyncPluginDefaultsAndResolve(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
 	e.plugin("anthropic")
+	e.plugin("relay")
+	// anthropic was installed first: its defaults win over relay's.
+	e.exec(`UPDATE plugins SET installed_at = now() - interval '1 day' WHERE key = 'anthropic'`)
 	entries := []manifest.PricingEntry{
 		{Model: "claude-sonnet-*", Mode: "expression", Expression: `len <= 200000 ? tier("standard", p*3 + c*15) : tier("long_context", p*6 + c*22.5)`},
 		{Model: "claude-haiku-*", Mode: "per_token", Config: map[string]any{"p": 1, "c": 5, "cr": 0.1, "cc": 1.25, "cc1h": 2}},
 		{Model: "claude-sonnet-4-5", Mode: "per_token", Config: map[string]any{"p": 3, "c": 15}},
-		{Model: "web-search", Platform: "*", Mode: "per_request", Config: map[string]any{"price": 0.01}},
+		{Model: "web-search", Mode: "per_request", Config: map[string]any{"price": 0.01}},
 	}
-	if err := syncDefaults(t, e, "anthropic", "anthropic", entries); err != nil {
+	if err := syncDefaults(t, e, "anthropic", entries); err != nil {
+		t.Fatal(err)
+	}
+	// relay declares the same pattern (allowed: one default per plugin and
+	// pattern), a more specific one, and a model anthropic does not price.
+	relay := []manifest.PricingEntry{
+		{Model: "claude-haiku-*", Mode: "per_token", Config: map[string]any{"p": 7}},
+		{Model: "claude-haiku-4-5", Mode: "per_token", Config: map[string]any{"p": 8}},
+		{Model: "gpt-4o", Mode: "per_token", Config: map[string]any{"p": 2.5, "c": 10}},
+	}
+	if err := syncDefaults(t, e, "relay", relay); err != nil {
 		t.Fatal(err)
 	}
 	var n int
 	_ = e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM model_price_history`).Scan(&n)
-	if n != 4 {
+	if n != 7 {
 		t.Fatalf("history rows = %d", n)
 	}
 
-	resolve := func(platform, model string) *core.PriceRule {
+	resolve := func(model string) *core.PriceRule {
 		t.Helper()
-		r, err := e.svc.Resolve(ctx, platform, model)
+		r, err := e.svc.Resolve(ctx, model)
 		if err != nil {
-			t.Fatalf("resolve %s/%s: %v", platform, model, err)
+			t.Fatalf("resolve %s: %v", model, err)
 		}
 		return r
 	}
-	if r := resolve("anthropic", "claude-sonnet-4-5"); r.Pattern != "claude-sonnet-4-5" {
+	if r := resolve("claude-sonnet-4-5"); r.Pattern != "claude-sonnet-4-5" {
 		t.Fatalf("exact should beat glob, got %s", r.Pattern)
 	}
-	if r := resolve("anthropic", "claude-sonnet-4"); r.Pattern != "claude-sonnet-*" || r.Mode != "expression" {
+	if r := resolve("claude-sonnet-4"); r.Pattern != "claude-sonnet-*" || r.Mode != "expression" {
 		t.Fatalf("got %+v", r)
 	}
-	if r := resolve("anthropic", "claude-haiku-4-5"); r.Expression != `tier("base", p*1 + c*5 + cr*0.1 + cc*1.25 + cc1h*2)` {
+	// The earliest installed plugin wins even though relay has an exact match.
+	if r := resolve("claude-haiku-4-5"); r.Expression != `tier("base", p*1 + c*5 + cr*0.1 + cc*1.25 + cc1h*2)` {
 		t.Fatalf("haiku expression %q", r.Expression)
 	}
-	if r := resolve("openai", "web-search"); r.Platform != "*" {
+	if r := resolve("gpt-4o"); r.Expression != `tier("base", p*2.5 + c*10)` {
+		t.Fatalf("relay-only model: %+v", r)
+	}
+	if r := resolve("web-search"); r.Mode != "per_request" {
 		t.Fatalf("got %+v", r)
 	}
-	_, err := e.svc.Resolve(ctx, "anthropic", "gpt-4o")
+	_, err := e.svc.Resolve(ctx, "gemini-2.5-pro")
 	if ce := core.AsError(err); ce.Code != "model_price_not_configured" {
 		t.Fatalf("missing price err = %v", err)
 	}
 
 	// Admin price beats plugin defaults even when it is a shorter glob; the
 	// longer admin glob wins among admin prices; bus invalidates the cache.
-	e.exec(`INSERT INTO model_prices (platform, model_pattern, mode, expression, expr_hash, source)
-		VALUES ('anthropic', 'claude-*', 'per_token', 'tier("base", p*9)', 'h1', 'admin'),
-		       ('*', 'claude-sonnet-*', 'per_token', 'tier("base", p*8)', 'h2', 'admin')`)
-	if r := resolve("anthropic", "claude-sonnet-4-5"); r.Pattern != "claude-sonnet-4-5" {
+	e.exec(`INSERT INTO model_prices (model_pattern, mode, expression, expr_hash, source)
+		VALUES ('claude-*', 'per_token', 'tier("base", p*9)', 'h1', 'admin'),
+		       ('claude-sonnet-*', 'per_token', 'tier("base", p*8)', 'h2', 'admin')`)
+	if r := resolve("claude-sonnet-4-5"); r.Pattern != "claude-sonnet-4-5" {
 		t.Fatal("cache should still serve the old answer before invalidation")
 	}
 	_ = e.bus.Publish(ctx, core.ChannelConfigChanged, []byte(`{"key":"prices"}`))
-	if r := resolve("anthropic", "claude-sonnet-4-5"); r.Pattern != "claude-*" {
-		t.Fatalf("admin concrete platform should win, got %s/%s", r.Platform, r.Pattern)
+	if r := resolve("claude-sonnet-4-5"); r.Pattern != "claude-sonnet-*" || r.Expression != `tier("base", p*8)` {
+		t.Fatalf("longer admin glob should win, got %+v", r)
 	}
-	if r := resolve("openai", "claude-sonnet-4-5"); r.Pattern != "claude-sonnet-*" || r.Platform != "*" {
-		t.Fatalf("got %s/%s", r.Platform, r.Pattern)
+	if r := resolve("claude-haiku-4-5"); r.Pattern != "claude-*" {
+		t.Fatalf("admin should beat plugin defaults, got %s", r.Pattern)
+	}
+	// An admin pattern is unique.
+	if _, err := e.db.Pool.Exec(ctx, `INSERT INTO model_prices (model_pattern, mode, expression, expr_hash, source)
+		VALUES ('claude-*', 'per_token', 'tier("base", p)', 'h3', 'admin')`); err == nil {
+		t.Fatal("duplicate admin pattern accepted")
 	}
 	bodies, headers := e.svc.Inputs(&core.PriceRule{Expression: `tier("b", p) ||| param("service_tier") == "x" ? 2 : 1 ||| has(header("Anthropic-Beta"), "f") ? 2 : 1`})
 	if len(bodies) != 1 || bodies[0] != "service_tier" || len(headers) != 1 || headers[0] != "anthropic-beta" {
@@ -107,42 +131,124 @@ func TestSyncPluginDefaultsAndResolve(t *testing.T) {
 	}
 
 	// Disabled rows keep their flag across re-sync; stale defaults are
-	// removed; admin rows survive.
-	e.exec(`UPDATE model_prices SET enabled = false WHERE model_pattern = 'claude-haiku-*'`)
-	if err := syncDefaults(t, e, "anthropic", "anthropic", entries[1:2]); err != nil {
+	// removed; admin rows and other plugins' defaults survive.
+	e.exec(`UPDATE model_prices SET enabled = false WHERE model_pattern = 'claude-haiku-*' AND plugin_key = 'anthropic'`)
+	if err := syncDefaults(t, e, "anthropic", entries[1:2]); err != nil {
 		t.Fatal(err)
 	}
-	rows, _ := e.db.Pool.Query(ctx, `SELECT model_pattern, source, enabled FROM model_prices ORDER BY model_pattern, source`)
+	rows, _ := e.db.Pool.Query(ctx, `SELECT model_pattern, source, COALESCE(plugin_key, ''), enabled FROM model_prices
+		ORDER BY model_pattern, source, plugin_key NULLS FIRST`)
 	var got []string
 	for rows.Next() {
-		var p, s string
+		var p, s, k string
 		var en bool
-		_ = rows.Scan(&p, &s, &en)
-		got = append(got, p+"/"+s+"/"+map[bool]string{true: "on", false: "off"}[en])
+		_ = rows.Scan(&p, &s, &k, &en)
+		got = append(got, p+"/"+s+"/"+k+"/"+map[bool]string{true: "on", false: "off"}[en])
 	}
-	want := []string{"claude-*/admin/on", "claude-haiku-*/plugin_default/off", "claude-sonnet-*/admin/on"}
-	if len(got) != len(want) {
-		t.Fatalf("rows %v", got)
+	want := []string{"claude-*/admin//on", "claude-haiku-*/plugin_default/anthropic/off", "claude-haiku-*/plugin_default/relay/on",
+		"claude-haiku-4-5/plugin_default/relay/on", "claude-sonnet-*/admin//on", "gpt-4o/plugin_default/relay/on"}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("rows\n got %v\nwant %v", got, want)
 	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("rows %v", got)
-		}
+	// A plugin without prices loses all its defaults.
+	if err := syncDefaults(t, e, "relay", nil); err != nil {
+		t.Fatal(err)
+	}
+	_ = e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM model_prices WHERE plugin_key = 'relay'`).Scan(&n)
+	if n != 0 {
+		t.Fatalf("relay defaults left: %d", n)
 	}
 
 	// Invalid entries fail the sync.
-	if err := syncDefaults(t, e, "anthropic", "anthropic", []manifest.PricingEntry{{Model: "x", Mode: "expression", Expression: "p +"}}); err == nil {
+	if err := syncDefaults(t, e, "anthropic", []manifest.PricingEntry{{Model: "x", Mode: "expression", Expression: "p +"}}); err == nil {
 		t.Fatal("invalid expression accepted")
 	}
-	if err := syncDefaults(t, e, "anthropic", "anthropic", []manifest.PricingEntry{{Model: "x", Mode: "per_token", Config: map[string]any{"p": -1}}}); err == nil {
+	if err := syncDefaults(t, e, "anthropic", []manifest.PricingEntry{{Model: "x", Mode: "per_token", Config: map[string]any{"p": -1}}}); err == nil {
 		t.Fatal("negative price accepted")
 	}
 
 	// Free policy.
 	e.exec(`INSERT INTO settings (key, value) VALUES ('billing', '{"missing_price_policy":"free"}')`)
 	e.svc.invalidate()
-	if r, err := e.svc.Resolve(ctx, "anthropic", "gpt-4o"); r != nil || err != nil {
+	if r, err := e.svc.Resolve(ctx, "gemini-2.5-pro"); r != nil || err != nil {
 		t.Fatalf("free policy: %v %v", r, err)
+	}
+}
+
+// TestPricePrecedence checks the ordering of price entries without a
+// database (ARCHITECTURE 7.3).
+func TestPricePrecedence(t *testing.T) {
+	day := func(d int) *time.Time {
+		v := time.Date(2026, 9, d, 0, 0, 0, 0, time.UTC)
+		return &v
+	}
+	entry := func(id int64, source, plugin string, installed *time.Time, pattern string) priceEntry {
+		return priceEntry{rule: core.PriceRule{ID: id, Pattern: pattern}, source: source, glob: isGlob(pattern),
+			pluginKey: plugin, installedAt: installed}
+	}
+	snap := &priceSnapshot{entries: []priceEntry{
+		entry(1, SourcePluginDefault, "late", day(20), "claude-sonnet-4-5"),
+		entry(2, SourcePluginDefault, "early", day(1), "claude-*"),
+		entry(3, SourcePluginDefault, "early", day(1), "claude-sonnet-*"),
+		entry(4, SourceAdmin, "", nil, "gpt-*"),
+		entry(5, SourceAdmin, "", nil, "gpt-4o"),
+		entry(6, SourcePluginDefault, "gone", nil, "gemini-*"),
+		entry(7, SourcePluginDefault, "late", day(20), "gemini-2.5-*"),
+		entry(8, SourcePluginDefault, "b-same-day", day(5), "o3"),
+		entry(9, SourcePluginDefault, "a-same-day", day(5), "o3"),
+	}}
+	sort.Slice(snap.entries, func(i, j int) bool { return less(snap.entries[i], snap.entries[j]) })
+	cases := map[string]int64{
+		"claude-sonnet-4-5": 3, // earliest plugin, its most specific glob
+		"claude-haiku-4":    2,
+		"gpt-4o":            5, // admin exact before admin glob
+		"gpt-4.1":           4,
+		"gemini-2.5-pro":    7, // plugin with an install time before a plugin without one
+		"gemini-1.5":        6,
+		"o3":                9, // same install time: plugin key order
+	}
+	for model, want := range cases {
+		r := snap.match(model)
+		if r == nil || r.ID != want {
+			t.Errorf("match(%s) = %+v, want id %d", model, r, want)
+		}
+	}
+	if r := snap.match("llama"); r != nil {
+		t.Errorf("unexpected match %+v", r)
+	}
+}
+
+// fakeGen implements the parts of core.Generation used by declaredFacts.
+type fakeGen struct {
+	core.Generation
+	plugins []core.PluginInfo
+	plats   map[string]core.PlatformBinding
+	types   []core.AccountTypeBinding
+}
+
+func (g *fakeGen) Plugins() []core.PluginInfo              { return g.plugins }
+func (g *fakeGen) AccountTypes() []core.AccountTypeBinding { return g.types }
+func (g *fakeGen) Platform(id string) (core.PlatformBinding, bool) {
+	b, ok := g.plats[id]
+	return b, ok
+}
+
+func TestDeclaredFacts(t *testing.T) {
+	g := &fakeGen{
+		plugins: []core.PluginInfo{
+			{Key: "img", Manifest: &manifest.Manifest{Platform: &manifest.Platform{ID: "img"}}},
+			{Key: "relay", Manifest: &manifest.Manifest{}},
+		},
+		plats: map[string]core.PlatformBinding{"img": {Platform: manifest.Platform{ID: "img",
+			Usage: manifest.UsageRules{Facts: map[string]manifest.UsageFact{"images": {Type: "number"}}}}}},
+		types: []core.AccountTypeBinding{{Type: manifest.AccountType{ID: "k", Protocols: []manifest.AccountProtocol{
+			{Protocol: "a"},
+			{Protocol: "b", Usage: &manifest.UsageRules{Facts: map[string]manifest.UsageFact{"seconds": {Type: "number"}}}},
+		}}}},
+	}
+	facts := declaredFacts(g)
+	if len(facts) != 2 || !facts["images"] || !facts["seconds"] {
+		t.Fatalf("facts %v", facts)
 	}
 }
 

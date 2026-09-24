@@ -319,9 +319,9 @@ func (s *Service) insert(ctx context.Context, batch []*core.UsageRecord) ([]*cor
 					error_message, attempts, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
 					cache_creation_1h_tokens, metrics, sticky_rule, sticky_hit, hook_decisions, rate_multiplier,
 					price_id, expr_hash, billing_mode, billing_detail, billing_status, latency_ms, first_token_ms,
-					client_ip, user_agent, node_id, created_at)
+					client_ip, user_agent, node_id, created_at, account_type, upstream_protocol)
 				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,
-					$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39)
+					$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41)
 				ON CONFLICT (request_id) DO NOTHING
 				RETURNING id`,
 				trunc(rec.RequestID, 64), rec.UserID, rec.APIKeyID, rec.GroupID, rec.AccountID,
@@ -331,7 +331,8 @@ func (s *Service) insert(ctx context.Context, batch []*core.UsageRecord) ([]*cor
 				t.Input, t.Output, t.CacheRead, t.CacheCreation, t.CacheCreation1h,
 				jsonOr(rec.Metrics, "{}"), trunc(rec.StickyRule, 100), rec.StickyHit, jsonOr(rec.HookDecisions, "[]"),
 				rate, priceID, exprHash, mode, detail, status, rec.LatencyMs, rec.FirstTokenMs,
-				trunc(rec.ClientIP, 64), trunc(rec.UserAgent, 500), trunc(rec.NodeID, 100), created)
+				trunc(rec.ClientIP, 64), trunc(rec.UserAgent, 500), trunc(rec.NodeID, 100), created,
+				trunc(rec.AccountType, 50), trunc(rec.UpstreamProtocol, 100))
 		}
 		br := tx.SendBatch(ctx, b)
 		var free []core.Event
@@ -363,23 +364,27 @@ func (s *Service) insert(ctx context.Context, batch []*core.UsageRecord) ([]*cor
 
 // pending is everything needed to settle one usage row.
 type pending struct {
-	RequestID  string
-	UserID     int64
-	APIKeyID   int64
-	GroupID    int64
-	AccountID  *int64
-	PluginKey  string
-	Platform   string
-	Protocol   string
-	Model      string
-	Success    bool
-	StatusCode int
-	ErrorType  string
-	Tokens     core.UsageTokens
-	Metrics    map[string]any
-	LatencyMs  int
-	CreatedAt  time.Time
-	Rate       decimal.Decimal
+	RequestID string
+	UserID    int64
+	APIKeyID  int64
+	GroupID   int64
+	AccountID *int64
+	PluginKey string
+	Platform  string
+	Protocol  string
+	// AccountType and UpstreamProtocol are the account type (declared by
+	// PluginKey) and the protocol sent upstream (ARCHITECTURE 6.6).
+	AccountType      string
+	UpstreamProtocol string
+	Model            string
+	Success          bool
+	StatusCode       int
+	ErrorType        string
+	Tokens           core.UsageTokens
+	Metrics          map[string]any
+	LatencyMs        int
+	CreatedAt        time.Time
+	Rate             decimal.Decimal
 
 	PriceID    int64
 	Mode       string
@@ -392,6 +397,7 @@ func fromRecord(rec *core.UsageRecord) *pending {
 	p := &pending{
 		RequestID: trunc(rec.RequestID, 64), UserID: rec.UserID, APIKeyID: rec.APIKeyID, GroupID: rec.GroupID,
 		AccountID: rec.AccountID, PluginKey: rec.PluginKey, Platform: rec.Platform, Protocol: rec.Protocol,
+		AccountType: trunc(rec.AccountType, 50), UpstreamProtocol: trunc(rec.UpstreamProtocol, 100),
 		Model: rec.Model, Success: rec.Success, StatusCode: rec.StatusCode, ErrorType: rec.ErrorType,
 		Tokens: rec.Tokens, Metrics: rec.Metrics, LatencyMs: rec.LatencyMs, CreatedAt: rec.CreatedAt,
 		Rate:   rec.RateMultiplier,
@@ -524,6 +530,7 @@ func recordedEvent(p *pending, total decimal.Decimal, status string) core.Event 
 	return core.Event{Type: core.EventUsageRecorded, Payload: map[string]any{
 		"request_id": p.RequestID, "user_id": p.UserID, "api_key_id": p.APIKeyID, "group_id": p.GroupID,
 		"account_id": p.AccountID, "plugin_key": p.PluginKey, "platform": p.Platform, "protocol": p.Protocol,
+		"account_type": p.AccountType, "upstream_protocol": p.UpstreamProtocol,
 		"model": p.Model, "success": p.Success, "status_code": p.StatusCode, "error_type": p.ErrorType,
 		"input_tokens": t.Input, "output_tokens": t.Output, "cache_read_tokens": t.CacheRead,
 		"cache_creation_tokens": t.CacheCreation, "cache_creation_1h_tokens": t.CacheCreation1h,
@@ -556,7 +563,8 @@ func (s *Service) retryLoop(ctx context.Context) {
 func (s *Service) RetryPending(ctx context.Context) (int, error) {
 	rows, err := s.db.Pool.Query(ctx, `
 		SELECT u.request_id, u.user_id, u.api_key_id, u.group_id, u.account_id, u.plugin_key, u.platform,
-		       u.protocol, u.model, u.success, u.status_code, u.error_type, u.input_tokens, u.output_tokens,
+		       u.protocol, u.account_type, u.upstream_protocol, u.model, u.success, u.status_code, u.error_type,
+		       u.input_tokens, u.output_tokens,
 		       u.cache_read_tokens, u.cache_creation_tokens, u.cache_creation_1h_tokens, u.metrics, u.latency_ms,
 		       u.created_at, u.rate_multiplier, COALESCE(u.price_id, 0), u.billing_mode, u.billing_detail,
 		       COALESCE(h.expression, mp.expression, '')
@@ -575,7 +583,8 @@ func (s *Service) RetryPending(ctx context.Context) (int, error) {
 		p := &pending{}
 		var metrics, detail []byte
 		if err := rows.Scan(&p.RequestID, &p.UserID, &p.APIKeyID, &p.GroupID, &p.AccountID, &p.PluginKey, &p.Platform,
-			&p.Protocol, &p.Model, &p.Success, &p.StatusCode, &p.ErrorType, &p.Tokens.Input, &p.Tokens.Output,
+			&p.Protocol, &p.AccountType, &p.UpstreamProtocol, &p.Model, &p.Success, &p.StatusCode, &p.ErrorType,
+			&p.Tokens.Input, &p.Tokens.Output,
 			&p.Tokens.CacheRead, &p.Tokens.CacheCreation, &p.Tokens.CacheCreation1h, &metrics, &p.LatencyMs,
 			&p.CreatedAt, &p.Rate, &p.PriceID, &p.Mode, &detail, &p.Expression); err != nil {
 			rows.Close()

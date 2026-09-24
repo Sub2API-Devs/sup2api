@@ -30,6 +30,8 @@ type Record struct {
 	PluginKey             string          `json:"plugin_key"`
 	Platform              string          `json:"platform"`
 	Protocol              string          `json:"protocol"`
+	AccountType           string          `json:"account_type"`
+	UpstreamProtocol      string          `json:"upstream_protocol"`
 	Endpoint              string          `json:"endpoint"`
 	Model                 string          `json:"model"`
 	UpstreamModel         string          `json:"upstream_model"`
@@ -57,7 +59,6 @@ type Record struct {
 // PriceRef identifies the price rule used for a record.
 type PriceRef struct {
 	ID           int64   `json:"id"`
-	Platform     string  `json:"platform"`
 	ModelPattern string  `json:"model_pattern"`
 	Source       string  `json:"source"`
 	PluginKey    *string `json:"plugin_key"`
@@ -91,7 +92,8 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 
 const recordColumns = `u.id, u.request_id, u.created_at, u.user_id, COALESCE(us.email, ''), u.api_key_id,
 	COALESCE(k.name, ''), u.group_id, COALESCE(g.name, ''), u.account_id, COALESCE(a.name, ''), u.plugin_key,
-	u.platform, u.protocol, u.endpoint, u.model, u.upstream_model, u.stream, u.status_code, u.success,
+	u.platform, u.protocol, u.account_type, u.upstream_protocol, u.endpoint, u.model, u.upstream_model, u.stream,
+	u.status_code, u.success,
 	u.error_type, u.error_message, u.attempts, u.input_tokens, u.output_tokens, u.cache_read_tokens,
 	u.cache_creation_tokens, u.cache_creation_1h_tokens, u.total_cost, u.rate_multiplier, u.billing_status,
 	u.billing_mode, u.matched_tier, u.latency_ms, u.first_token_ms, u.sticky_hit`
@@ -105,15 +107,18 @@ const recordJoins = ` FROM usage_logs u
 func (r *Record) scanTargets() []any {
 	return []any{&r.ID, &r.RequestID, &r.CreatedAt, &r.UserID, &r.UserEmail, &r.APIKeyID, &r.APIKeyName,
 		&r.GroupID, &r.GroupName, &r.AccountID, &r.AccountName, &r.PluginKey, &r.Platform, &r.Protocol,
+		&r.AccountType, &r.UpstreamProtocol,
 		&r.Endpoint, &r.Model, &r.UpstreamModel, &r.Stream, &r.StatusCode, &r.Success, &r.ErrorType,
 		&r.ErrorMessage, &r.Attempts, &r.InputTokens, &r.OutputTokens, &r.CacheReadTokens,
 		&r.CacheCreationTokens, &r.CacheCreation1hTokens, &r.TotalCost, &r.RateMultiplier, &r.BillingStatus,
 		&r.BillingMode, &r.MatchedTier, &r.LatencyMs, &r.FirstTokenMs, &r.StickyHit}
 }
 
-// hideUpstream removes upstream account details from self-service views.
+// hideUpstream removes upstream account details (account, account type and
+// upstream protocol) from self-service views.
 func (r *Record) hideUpstream() {
 	r.AccountID, r.AccountName = nil, ""
+	r.AccountType, r.UpstreamProtocol = "", ""
 }
 
 type filter struct {
@@ -155,6 +160,11 @@ func parseFilter(c *gin.Context, self *int64) (*filter, error) {
 	for _, x := range []struct{ q, col string }{{"model", "u.model"}, {"platform", "u.platform"}, {"billing_status", "u.billing_status"}, {"request_id", "u.request_id"}} {
 		if v := c.Query(x.q); v != "" {
 			f.add(x.col+" = ?", v)
+		}
+	}
+	if self == nil {
+		if v := c.Query("account_type"); v != "" {
+			f.add("u.account_type = ?", v)
 		}
 	}
 	if v := c.Query("success"); v != "" {
@@ -252,8 +262,8 @@ func (s *Service) detail(c *gin.Context, self *int64) {
 	}
 	if d.PriceID != nil {
 		var p PriceRef
-		err := s.db.Pool.QueryRow(ctx, `SELECT id, platform, model_pattern, source, plugin_key FROM model_prices WHERE id = $1`, *d.PriceID).
-			Scan(&p.ID, &p.Platform, &p.ModelPattern, &p.Source, &p.PluginKey)
+		err := s.db.Pool.QueryRow(ctx, `SELECT id, model_pattern, source, plugin_key FROM model_prices WHERE id = $1`, *d.PriceID).
+			Scan(&p.ID, &p.ModelPattern, &p.Source, &p.PluginKey)
 		if err == nil {
 			d.Price = &p
 		}

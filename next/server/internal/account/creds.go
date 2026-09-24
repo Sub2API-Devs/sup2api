@@ -24,7 +24,10 @@ import (
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
 
-func aad(platform string) []byte { return []byte("account:" + platform) }
+// aad binds encrypted credentials to the plugin declaring the account type.
+// (Before account types were decoupled from platforms it was the platform
+// id; the built-in anthropic plugin uses the same string for both.)
+func aad(pluginKey string) []byte { return []byte("account:" + pluginKey) }
 
 type fields = map[string]json.RawMessage
 
@@ -248,8 +251,8 @@ func (s *Service) prepare(ctx context.Context, bt core.AccountTypeBinding, raw j
 	}
 	sec, st := split(all, bt.Type.SettingsFields)
 	secJSON, stJSON := mustJSON(sec), mustJSON(st)
-	if bt.Validator != nil {
-		resp, err := bt.Validator.ValidateCredentials(ctx, &pluginv1.ValidateCredentialsRequest{
+	if bt.Client != nil {
+		resp, err := bt.Client.ValidateCredentials(ctx, &pluginv1.ValidateCredentialsRequest{
 			AccountType:     bt.Type.ID,
 			CredentialsJson: string(secJSON),
 			SettingsJson:    string(stJSON),
@@ -284,7 +287,7 @@ func (s *Service) prepare(ctx context.Context, bt core.AccountTypeBinding, raw j
 			secJSON, stJSON = mustJSON(sec), mustJSON(st)
 		}
 	}
-	enc, err := s.d.Cipher.Encrypt(secJSON, aad(bt.Platform))
+	enc, err := s.d.Cipher.Encrypt(secJSON, aad(bt.Plugin.Key))
 	if err != nil {
 		return nil, err
 	}
@@ -292,6 +295,6 @@ func (s *Service) prepare(ctx context.Context, bt core.AccountTypeBinding, raw j
 }
 
 // decrypt returns the plaintext secret part of an account.
-func (s *Service) decrypt(platform string, enc []byte) ([]byte, error) {
-	return s.d.Cipher.Decrypt(enc, aad(platform))
+func (s *Service) decrypt(pluginKey string, enc []byte) ([]byte, error) {
+	return s.d.Cipher.Decrypt(enc, aad(pluginKey))
 }

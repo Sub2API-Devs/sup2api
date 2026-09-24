@@ -14,17 +14,17 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
-// Candidates returns active, schedulable accounts of the group whose platform
-// is in platforms (all platforms when empty), in priority order, excluding
+// Candidates returns active, schedulable accounts of the group whose account
+// type is in types (all types when empty), in priority order, excluding
 // accounts that are cooling down.
-func (s *Service) Candidates(ctx context.Context, groupID int64, platforms []string) ([]core.AccountRef, error) {
+func (s *Service) Candidates(ctx context.Context, groupID int64, types []core.AccountTypeKey) ([]core.AccountRef, error) {
 	refs, err := s.groupSnapshot(ctx, groupID)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]core.AccountRef, 0, len(refs))
 	for _, r := range refs {
-		if len(platforms) == 0 || slices.Contains(platforms, r.Platform) {
+		if len(types) == 0 || slices.Contains(types, core.AccountTypeKey{PluginKey: r.PluginKey, Type: r.Type}) {
 			out = append(out, r)
 		}
 	}
@@ -61,7 +61,7 @@ func (s *Service) groupSnapshot(ctx context.Context, groupID int64) ([]core.Acco
 		return snap.refs, nil
 	}
 	v, err, _ := s.sf.Do("g:"+itoa(groupID), func() (any, error) {
-		rows, err := s.d.DB.Pool.Query(ctx, `SELECT a.id, a.name, a.plugin_key, a.platform, a.type, a.priority,
+		rows, err := s.d.DB.Pool.Query(ctx, `SELECT a.id, a.name, a.plugin_key, a.type, a.priority,
 				a.max_concurrency, a.proxy_id
 			FROM accounts a JOIN account_groups ag ON ag.account_id = a.id
 			WHERE ag.group_id = $1 AND a.deleted_at IS NULL AND a.status = 'active' AND a.schedulable
@@ -71,7 +71,7 @@ func (s *Service) groupSnapshot(ctx context.Context, groupID int64) ([]core.Acco
 		}
 		refs, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (core.AccountRef, error) {
 			var a core.AccountRef
-			err := r.Scan(&a.ID, &a.Name, &a.PluginKey, &a.Platform, &a.Type, &a.Priority, &a.MaxConcurrency, &a.ProxyID)
+			err := r.Scan(&a.ID, &a.Name, &a.PluginKey, &a.Type, &a.Priority, &a.MaxConcurrency, &a.ProxyID)
 			return a, err
 		})
 		if err != nil {
@@ -105,7 +105,7 @@ func (s *Service) Load(ctx context.Context, id int64) (*core.Account, error) {
 	if err != nil {
 		return nil, err
 	}
-	plain, err := s.decrypt(a.Platform, a.CredEnc)
+	plain, err := s.decrypt(a.PluginKey, a.CredEnc)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func (s *Service) Load(ctx context.Context, id int64) (*core.Account, error) {
 		settings = []byte("{}")
 	}
 	acc := core.Account{
-		AccountRef: core.AccountRef{ID: a.ID, Name: a.Name, PluginKey: a.PluginKey, Platform: a.Platform, Type: a.Type,
+		AccountRef: core.AccountRef{ID: a.ID, Name: a.Name, PluginKey: a.PluginKey, Type: a.Type,
 			Priority: a.Priority, MaxConcurrency: a.MaxConcurrency, ProxyID: a.ProxyID},
 		Status:      a.Status,
 		Credentials: json.RawMessage(plain),
@@ -161,8 +161,9 @@ func (s *Service) SetCooldown(ctx context.Context, id int64, until time.Time, re
 	if prev > 0 {
 		return nil // extending an existing cooldown
 	}
-	var platform string
-	if err := s.d.DB.Pool.QueryRow(ctx, `SELECT platform FROM accounts WHERE id = $1`, id).Scan(&platform); err != nil {
+	var pluginKey, typ, name string
+	if err := s.d.DB.Pool.QueryRow(ctx, `SELECT plugin_key, type, name FROM accounts WHERE id = $1`, id).
+		Scan(&pluginKey, &typ, &name); err != nil {
 		if store.IsNoRows(err) {
 			return nil
 		}
@@ -170,7 +171,7 @@ func (s *Service) SetCooldown(ctx context.Context, id int64, until time.Time, re
 	}
 	return s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
 		return s.d.Events.Emit(ctx, tx, core.Event{Type: core.EventAccountStatusChanged,
-			Payload: statusPayload(id, platform, "cooldown", reason, &until)})
+			Payload: statusPayload(id, pluginKey, typ, name, "cooldown", reason, &until)})
 	})
 }
 
@@ -179,9 +180,10 @@ func (s *Service) SetCooldown(ctx context.Context, id int64, until time.Time, re
 func (s *Service) Disable(ctx context.Context, id int64, reason string) error {
 	changed := false
 	err := s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
-		var platform string
+		var pluginKey, typ, name string
 		err := tx.QueryRow(ctx, `UPDATE accounts SET status = 'disabled', status_reason = $2, updated_at = clock_timestamp()
-			WHERE id = $1 AND deleted_at IS NULL AND status <> 'disabled' RETURNING platform`, id, reason).Scan(&platform)
+			WHERE id = $1 AND deleted_at IS NULL AND status <> 'disabled' RETURNING plugin_key, type, name`, id, reason).
+			Scan(&pluginKey, &typ, &name)
 		if store.IsNoRows(err) {
 			return nil
 		}
@@ -190,7 +192,7 @@ func (s *Service) Disable(ctx context.Context, id int64, reason string) error {
 		}
 		changed = true
 		return s.d.Events.Emit(ctx, tx, core.Event{Type: core.EventAccountStatusChanged,
-			Payload: statusPayload(id, platform, "disabled", reason, nil)})
+			Payload: statusPayload(id, pluginKey, typ, name, "disabled", reason, nil)})
 	})
 	if err != nil {
 		return err
