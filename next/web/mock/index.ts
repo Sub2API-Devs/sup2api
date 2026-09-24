@@ -6,7 +6,9 @@
 import type { Plugin } from 'vite'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { routes, type MockRequest } from './router'
+import { pluginAsset } from './pluginui'
 import './core'
+import './accounts'
 import './resources'
 import './billing'
 import './plugins'
@@ -40,6 +42,13 @@ export function mockApi(): Plugin {
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url || '/', 'http://localhost')
+        if (url.pathname.startsWith('/plugin-ui/')) {
+          const asset = pluginAsset(url.pathname)
+          if (!asset) return send(res, 404, { error: { code: 'not_found', message: 'asset not found' } })
+          res.statusCode = 200
+          res.setHeader('Content-Type', asset.type)
+          return res.end(asset.body)
+        }
         if (!url.pathname.startsWith('/api/v1/')) return next()
         const path = url.pathname.slice('/api/v1'.length)
         const method = (req.method || 'GET').toUpperCase()

@@ -21,19 +21,29 @@ const entryName = (spec: string) => 'shared/' + spec.replace(/^@/, '').replace(/
 const NONCE = '__CSP_NONCE__'
 
 function importMap(): Plugin {
+  let isDev = false
   return {
     name: 'sub2api:import-map',
-    apply: 'build',
+    configResolved(c) {
+      isDev = c.command === 'serve'
+    },
     transformIndexHtml: {
       order: 'post',
       handler(html, ctx) {
-        const bundle = ctx.bundle || {}
         const imports: Record<string, string> = {}
-        for (const spec of Object.keys(SHARED)) {
-          const name = entryName(spec)
-          const chunk = Object.values(bundle).find((c: any) => c.type === 'chunk' && c.isEntry && c.name === name) as any
-          if (!chunk) throw new Error(`import map: missing shared entry ${name}`)
-          imports[spec] = '/' + chunk.fileName
+        if (isDev) {
+          // Dev: map to the source modules; they re-export the very same
+          // pre-bundled dependency URLs the console imports, so plugin UIs
+          // loaded in dev share the console singletons too.
+          for (const [spec, file] of Object.entries(SHARED)) imports[spec] = '/' + file
+        } else {
+          const bundle = ctx.bundle || {}
+          for (const spec of Object.keys(SHARED)) {
+            const name = entryName(spec)
+            const chunk = Object.values(bundle).find((c: any) => c.type === 'chunk' && c.isEntry && c.name === name) as any
+            if (!chunk) throw new Error(`import map: missing shared entry ${name}`)
+            imports[spec] = '/' + chunk.fileName
+          }
         }
         const json = JSON.stringify({ imports }, null, 2)
         return {

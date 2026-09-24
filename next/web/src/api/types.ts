@@ -35,6 +35,7 @@ export interface MenuItem {
 
 export interface MenuSection {
   section: string | Record<string, string>
+  label?: string | Record<string, string>
   items: MenuItem[]
 }
 
@@ -60,8 +61,9 @@ export interface Role {
   description?: LText
   builtin: boolean
   superuser: boolean
-  permission_keys?: string[] // assumed
-  member_count?: number // assumed
+  permission_keys?: string[]
+  user_count?: number
+  member_count?: number // deprecated alias
 }
 
 export interface PermissionItem {

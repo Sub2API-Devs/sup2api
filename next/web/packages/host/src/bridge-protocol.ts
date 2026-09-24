@@ -22,7 +22,13 @@
 //       method "getValue"  -> result: current value
 //       method "setValue"  params {value}
 //       method "validate"  -> result: {ok: boolean, errors?: {field: message}}
+//       method "setErrors" params {errors: {field: message}}  (server-side field errors)
 //   {s2a:1, kind:"response", id, result?, error?: {code, message}}
+
+// Native account-form components (manifest form.mode = "native") receive props
+// {modelValue, mode: "create"|"edit", account?, errors} and emit
+// "update:modelValue"; they may expose validate(): boolean | Promise<boolean>.
+// account.detail.tabs / account.form.widgets slot components receive {account}.
 
 export const BRIDGE_TAG = 1 as const
 
