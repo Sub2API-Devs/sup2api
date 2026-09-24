@@ -221,7 +221,7 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		DB: db, Install: inst, Market: mkt, Rollout: ctl, Nodes: cl.Registry, Registry: reg,
 		Authz: az, Cipher: cipher, Bus: cl.Bus, Jobs: jobs, HookStats: gw, Plugins: cfg.Plugins,
 	}).RegisterRoutes(r)
-	pr := routes.New(reg, idm, az, idm)
+	pr := routes.New(reg, idm, az, idm, routes.WithHealth(cl.Registry))
 	pr.RegisterRoutes(r)
 	pr.RegisterAssets(engine)
 	gw.RegisterRoutes(r)
