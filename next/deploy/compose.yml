@@ -103,7 +103,7 @@ services:
     image: sub2api-next:test
     pull_policy: never
     restart: "no"
-    mem_limit: 64m
+    mem_limit: 256m
     user: "0:0"
     entrypoint: ["sh", "-c", "rm -rf /market/* && cp -a /opt/sub2api/market/. /market/ && chmod -R a+rX /market && ls -l /market"]
     volumes:
