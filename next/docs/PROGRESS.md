@@ -265,7 +265,7 @@ go test -count=1 -timeout 50m -v ./...
 | 代号 | 目录 | 任务 | 状态 |
 |---|---|---|---|
 | a4-identity-accounts | `iam`、`account`、`proxy`、`usage` | 登录限速、refresh 重放检测、`/me/platforms`、PluginAccountPurger、直连拨号 SSRF 校验、client_request_id | ⏳ |
-| g4-gateway | `gateway`、`platforms` | 用量求和、gemini 思考 token 计入输出、ClientRequestID、`/settings/gateway`、网关自我隔离 | ⏳ |
+| g4-gateway | `gateway`、`platforms` | 用量求和、gemini 思考 token 计入输出、ClientRequestID、`/settings/gateway`、网关自我隔离 | ✅ `ac29f9dbb`，已合并 |
 | c4-lifecycle | `plugin/install`、`market`、`api`、`routes`、`pkg` | 卸载清账号、市场兼容性、出口域名接口、资源限制广播、插件接口自我隔离、broadcast 校验 | ⏳ |
 | d4-runtime | `plugin/grpcruntime`、`rollout`、`registry`、`egress`、`sandbox` | 插件集群广播、资源限制即时重启、旧版本缓存清理、节点重新验签、新域名记录与告警、出口长连接 | ⏳ |
 | e4-plugins | `sdk/pluginsdk`、`plugins/*`（新增 openai、gemini）、`tools`、`e2e`（AC20）、`mock-upstream`、`build-go.sh` | 两个内置账号类型插件、SDK 广播、guard 规则即时生效、mock 上游支持 openai/gemini | ⏳ |
