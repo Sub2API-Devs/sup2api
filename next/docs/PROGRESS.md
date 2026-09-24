@@ -317,3 +317,31 @@ go test -count=1 -timeout 50m -v ./...
 - **sup2api**：没有清库，直接升级。三个内置插件自动升到 0.1.1，共 66 条价格，没有通配符；接口对 `claude-*`、`gpt-4?`、`gpt 4o` 返回 400 `model invalid`；数据库 CHECK 约束也会拒绝通配符。
 
 **注意**：别名更新到新快照时，新的带日期 ID 需要补价格，否则按"找不到价格"的策略处理（默认拒绝）。
+
+---
+
+## 13. 模型价格归核心、管理员配置，价格同步源（2026-09-25，用户要求）
+
+**决定**：模型价格与插件无关，只能由管理员在核心中配置。可以从权威价格库（LiteLLM、models.dev）或上游 sup2api 同步，先预览再选择导入（CONTRACTS §17，取代 §16 中"插件默认价格"的部分）。
+
+**改动**：
+- **后端（主控，`d6f96f368`）**：
+  - 迁移 0008：新建表 `price_sync_sources`，预置 LiteLLM、models.dev 两条源；`model_prices` 删除 `plugin_key`，`source` 只有 manual/sync，每个模型唯一。
+  - 新文件 `billing/sync.go`：三种源的解析，preview 和 apply 接口，以及供下游同步的 `GET /key/prices`（用 API Key 鉴权，只返回分组白名单允许的模型，并附带分组倍率）。上游 Key 用 AES-GCM 加密保存。
+  - 删除 `core.PriceCatalog` 和 `/prices/:id/override`；manifest 删除 `pricing`（声明了会报 `unsupported`），打包工具同步。
+  - 内置插件 anthropic、openai、gemini 升到 0.1.2，不再带价格。
+- **前端（f5-web，`d8f57aa50`，合并 `f949b5ffc`）**：
+  - 价格列表按来源筛选，页头有"同步价格"入口；同步价格的编辑页显示提示。
+  - 新增同步源页 `/prices/sources`（增删改查），以及同步预览页 `/prices/sources/:id/sync`：统计、按 action 分标签、勾选规则、分页，能流畅处理约 2400 条。
+  - mock 同步修改。
+- **测试**：server 全部测试（含数据库）在临时测试容器中通过，跑完已清理；插件、sdk、tools 通过；web 构建通过，f5 用 mock 自测 47 项通过。
+
+**sup2api 实际操作**：
+- 部署后迁移清掉了插件带来的价格。
+- 从 LiteLLM 导入 177 条（含 1 小时缓存写入价、200K 以上的第二档）；从 models.dev 只导入它独有的 13 条，共 190 条。
+- models.dev 另有 31 条"更新"没有应用：它缺 1 小时缓存写入价，应用会覆盖 LiteLLM 更完整的价格。
+- 用户的 Key `sk-s2a-c2oH7…`（admin，分组 123，anthropic 账号 codingplus）调用 claude-opus-5-5：
+  - 余额为 0 时返回 402，主控给 admin 加了 $10 测试余额；
+  - 流式和非流式都返回 200；
+  - 计费与 LiteLLM 价格一致（输入 $4、输出 $20、缓存读 $0.2、缓存写 $5 每百万 token）。
+  - 上游是会注入约 1.8 万 token Claude Code 系统提示词的中转。
