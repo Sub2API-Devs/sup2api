@@ -69,7 +69,6 @@ type fakeGen struct {
 	plugins []core.PluginInfo
 	types   []core.AccountTypeBinding
 	plats   []core.PlatformBinding
-	eps     []core.EndpointBinding
 }
 
 func (g *fakeGen) Number() uint64             { return 1 }
@@ -82,12 +81,30 @@ func (g *fakeGen) Plugin(key string) (core.PluginInfo, bool) {
 	}
 	return core.PluginInfo{}, false
 }
-func (g *fakeGen) Endpoints() []core.EndpointBinding                  { return g.eps }
-func (g *fakeGen) PlatformsForProtocol(string) []core.PlatformBinding { return g.plats }
+func (g *fakeGen) Endpoints() []core.EndpointBinding {
+	var out []core.EndpointBinding
+	for _, p := range g.plats {
+		for _, e := range p.Platform.Endpoints {
+			out = append(out, core.EndpointBinding{Plugin: p.Plugin, Platform: p.Platform.ID, Endpoint: e})
+		}
+	}
+	return out
+}
+func (g *fakeGen) Platforms() []core.PlatformBinding { return g.plats }
 func (g *fakeGen) Platform(id string) (core.PlatformBinding, bool) {
 	for _, p := range g.plats {
 		if p.Platform.ID == id {
 			return p, true
+		}
+	}
+	return core.PlatformBinding{}, false
+}
+func (g *fakeGen) PlatformForProtocol(protocol string) (core.PlatformBinding, bool) {
+	for _, p := range g.plats {
+		for _, e := range p.Platform.Endpoints {
+			if e.Protocol == protocol {
+				return p, true
+			}
 		}
 	}
 	return core.PlatformBinding{}, false
@@ -101,10 +118,10 @@ func (g *fakeGen) AccountType(pluginKey, typ string) (core.AccountTypeBinding, b
 	}
 	return core.AccountTypeBinding{}, false
 }
-func (g *fakeGen) AccountTypesForProtocol(protocol string) []core.AccountTypeBinding {
+func (g *fakeGen) AccountTypesForPlatform(platformID string) []core.AccountTypeBinding {
 	var out []core.AccountTypeBinding
 	for _, t := range g.types {
-		if _, ok := t.Protocol(protocol); ok {
+		if _, ok := t.Supports(platformID); ok {
 			out = append(out, t)
 		}
 	}
@@ -219,53 +236,69 @@ type noStepUp struct{}
 
 func (noStepUp) VerifyStepUp(context.Context, int64, string) error { return nil }
 
-// fakeConverters converts openai.chat requests to anthropic.messages.
+// fakeConverters converts openai.chat requests to anthropic.messages, and
+// (unused, the platform is unavailable) openai.embeddings to ghost.embed.
 type fakeConverters struct{}
 
 func (fakeConverters) CanConvert(client, upstream string) bool {
-	return client == "openai.chat" && upstream == "anthropic.messages"
+	return client == "openai.chat" && upstream == "anthropic.messages" ||
+		client == "openai.embeddings" && upstream == "ghost.embed"
 }
 
-// testGen is a generation with two plugins declaring account types that both
-// serve anthropic.messages, and an openai plugin with an endpoint only
-// reachable through conversion.
+func ep(method, path, protocol, billing string) manifest.Endpoint {
+	return manifest.Endpoint{Method: method, Path: path, Protocol: protocol, Billing: billing}
+}
+
+// testGen is a generation with the built-in anthropic and openai platforms, a
+// plugin platform "aivideo", and account types: anthropic/apikey (anthropic),
+// relay/relay_key (anthropic and the unavailable plugin platform "ghost") and
+// video/vkey (aivideo). openai endpoints are only reachable through conversion.
 func testGen(plat core.PlatformPlugin) *fakeGen {
 	anthropic := core.PluginInfo{Key: "anthropic", Version: "0.1.0", AssetBase: "/plugin-ui/anthropic/0.1.0-abc",
-		Trust: "official", Manifest: &manifest.Manifest{Name: manifest.LocalizedText{"en": "Anthropic"},
-			Platform: &manifest.Platform{ID: "anthropic"}}}
+		Trust: "official", Manifest: &manifest.Manifest{Name: manifest.LocalizedText{"en": "Anthropic"}}}
 	relay := core.PluginInfo{Key: "relay", Version: "1.0.0", AssetBase: "/plugin-ui/relay/1.0.0-def", Trust: "community",
 		Manifest: &manifest.Manifest{Name: manifest.LocalizedText{"en": "Relay"}}}
-	openai := core.PluginInfo{Key: "openai", Version: "0.1.0", Trust: "official",
-		Manifest: &manifest.Manifest{Name: manifest.LocalizedText{"en": "OpenAI"}, Platform: &manifest.Platform{ID: "openai"}}}
+	video := core.PluginInfo{Key: "video", Version: "0.2.0", Trust: "community",
+		Manifest: &manifest.Manifest{Name: manifest.LocalizedText{"en": "Video"}}}
 	return &fakeGen{
-		plugins: []core.PluginInfo{anthropic, relay, openai},
+		plugins: []core.PluginInfo{anthropic, relay, video},
 		types: []core.AccountTypeBinding{{
 			Plugin: anthropic,
 			Type: manifest.AccountType{ID: "apikey", Label: manifest.LocalizedText{"en": "API Key", "zh": "API Key"},
 				Form: manifest.Form{Mode: "schema", Schema: "forms/apikey.json"}, SensitiveFields: []string{"api_key"},
 				SettingsFields: []string{"base_url"},
-				Protocols:      []manifest.AccountProtocol{{Protocol: "anthropic.messages"}, {Protocol: "anthropic.count_tokens"}}},
+				Platforms:      []manifest.AccountPlatform{{Platform: "anthropic"}}},
 			FormSchema: json.RawMessage(formSchema), FormUI: json.RawMessage(`{"api_key":{"ui:widget":"password"}}`),
 			Client: plat,
 		}, {
 			Plugin: relay,
 			Type: manifest.AccountType{ID: "relay_key", Label: manifest.LocalizedText{"en": "Relay key"},
 				Form: manifest.Form{Mode: "schema"}, SensitiveFields: []string{"api_key"},
-				Protocols: []manifest.AccountProtocol{{Protocol: "anthropic.messages"}}},
+				Platforms: []manifest.AccountPlatform{{Platform: "anthropic"}, {Platform: "ghost"}}},
+			FormSchema: json.RawMessage(formSchema),
+			Client:     plat,
+		}, {
+			Plugin: video,
+			Type: manifest.AccountType{ID: "vkey", Label: manifest.LocalizedText{"en": "Video key"},
+				Form: manifest.Form{Mode: "schema"}, Platforms: []manifest.AccountPlatform{{Platform: "aivideo"}}},
 			FormSchema: json.RawMessage(formSchema),
 			Client:     plat,
 		}},
-		plats: []core.PlatformBinding{{Plugin: anthropic, Platform: manifest.Platform{ID: "anthropic"}, Client: plat}},
-		eps: []core.EndpointBinding{
-			{Plugin: anthropic, Endpoint: manifest.Endpoint{Method: "POST", Path: "/v1/messages", Protocol: "anthropic.messages"}},
-			{Plugin: anthropic, Endpoint: manifest.Endpoint{Method: "POST", Path: "/v1/messages/count_tokens", Protocol: "anthropic.count_tokens"}},
-			{Plugin: openai, Endpoint: manifest.Endpoint{Method: "POST", Path: "/v1/chat/completions", Protocol: "openai.chat"}},
-			{Plugin: openai, Endpoint: manifest.Endpoint{Method: "POST", Path: "/v1/embeddings", Protocol: "openai.embeddings"}},
+		// Plugin platform first: /platforms must still list built-ins first.
+		plats: []core.PlatformBinding{
+			{Plugin: video, Platform: manifest.Platform{ID: "aivideo", Label: manifest.LocalizedText{"en": "AI Video"},
+				Endpoints: []manifest.Endpoint{ep("POST", "/v1/video/generations", "aivideo.gen", "usage")}}},
+			{Builtin: true, Platform: manifest.Platform{ID: "openai", Label: manifest.LocalizedText{"en": "OpenAI"},
+				Endpoints: []manifest.Endpoint{ep("POST", "/v1/chat/completions", "openai.chat", "usage"),
+					ep("POST", "/v1/embeddings", "openai.embeddings", "usage")}}},
+			{Builtin: true, Platform: manifest.Platform{ID: "anthropic", Label: manifest.LocalizedText{"en": "Anthropic"},
+				Endpoints: []manifest.Endpoint{ep("POST", "/v1/messages", "anthropic.messages", "usage"),
+					ep("POST", "/v1/messages/count_tokens", "anthropic.count_tokens", "free")}}},
 		},
 	}
 }
 
-// endpointList renders endpoints as "METHOD path native|converted".
+// endpointList renders endpoints as "METHOD path platform native|converted".
 func endpointList(eps []EndpointView) string {
 	var s []string
 	for _, e := range eps {
@@ -278,31 +311,128 @@ func endpointList(eps []EndpointView) string {
 	return strings.Join(s, "; ")
 }
 
+// platformList renders type platforms as "id:label:builtin:available".
+func platformList(ps []TypePlatformView) string {
+	var s []string
+	for _, p := range ps {
+		s = append(s, fmt.Sprintf("%s:%s:%v:%v", p.ID, p.Label["en"], p.Builtin, p.Available))
+	}
+	return strings.Join(s, "; ")
+}
+
 func TestTypeViewEndpoints(t *testing.T) {
 	g := testGen(&fakePlatform{})
-	v := typeView(g.types[0], g.eps, fakeConverters{})
+	v := typeView(g, g.types[0], fakeConverters{})
 	if v.PluginKey != "anthropic" || v.Type != "apikey" || v.Trust != "official" || v.PluginName["en"] != "Anthropic" ||
-		fmt.Sprint(v.Protocols) != "[anthropic.messages anthropic.count_tokens]" || v.AssetBase == "" {
+		v.AssetBase == "" {
 		t.Fatalf("view: %+v", v)
+	}
+	if got := platformList(v.Platforms); got != "anthropic:Anthropic:true:true" {
+		t.Fatalf("platforms: %s", got)
 	}
 	want := "POST /v1/messages anthropic native; POST /v1/messages/count_tokens anthropic native; " +
 		"POST /v1/chat/completions openai converted"
 	if got := endpointList(v.Endpoints); got != want {
 		t.Fatalf("endpoints:\n got %s\nwant %s", got, want)
 	}
-	// Without converters only native endpoints are listed.
-	v = typeView(g.types[1], g.eps, nil)
-	if got := endpointList(v.Endpoints); got != "POST /v1/messages anthropic native" {
+	// Without converters only the endpoints of supported platforms are
+	// listed; an unavailable platform has no label and serves nothing (even
+	// when a converter targets it).
+	v = typeView(g, g.types[1], nil)
+	if got := endpointList(v.Endpoints); got != "POST /v1/messages anthropic native; POST /v1/messages/count_tokens anthropic native" {
 		t.Fatalf("relay endpoints: %s", got)
+	}
+	if got := platformList(v.Platforms); got != "anthropic:Anthropic:true:true; ghost::false:false" {
+		t.Fatalf("relay platforms: %s", got)
+	}
+	if v.Platforms[1].Label != nil {
+		t.Fatalf("unavailable platform label: %v", v.Platforms[1].Label)
 	}
 	if v.PluginName["en"] != "Relay" || len(v.SensitiveFields) != 1 {
 		t.Fatalf("relay view: %+v", v)
 	}
+	v = typeView(g, g.types[1], fakeConverters{})
+	if got := endpointList(v.Endpoints); got != "POST /v1/messages anthropic native; POST /v1/messages/count_tokens anthropic native; "+
+		"POST /v1/chat/completions openai converted" {
+		t.Fatalf("relay endpoints with converters: %s", got)
+	}
+	// A plugin platform.
+	v = typeView(g, g.types[2], fakeConverters{})
+	if got := endpointList(v.Endpoints); got != "POST /v1/video/generations aivideo native" {
+		t.Fatalf("video endpoints: %s", got)
+	}
+	if got := platformList(v.Platforms); got != "aivideo:AI Video:false:true" {
+		t.Fatalf("video platforms: %s", got)
+	}
 	// No manifest name: falls back to the key; nil slices become [].
 	b := core.AccountTypeBinding{Plugin: core.PluginInfo{Key: "x"}, Type: manifest.AccountType{ID: "t"}}
-	v = typeView(b, g.eps, fakeConverters{})
-	if v.PluginName["en"] != "x" || v.SensitiveFields == nil || v.Protocols == nil || v.Endpoints == nil || len(v.Endpoints) != 0 {
+	v = typeView(g, b, fakeConverters{})
+	if v.PluginName["en"] != "x" || v.SensitiveFields == nil || v.Platforms == nil || v.Endpoints == nil || len(v.Endpoints) != 0 {
 		t.Fatalf("empty view: %+v", v)
+	}
+	raw, _ := json.Marshal(typeView(g, g.types[1], nil))
+	if gjson.GetBytes(raw, "protocols").Exists() || gjson.GetBytes(raw, "platforms.1.label").Raw != "null" ||
+		gjson.GetBytes(raw, "platforms.0.label.en").String() != "Anthropic" || gjson.GetBytes(raw, "endpoints.0.platform").String() != "anthropic" {
+		t.Fatalf("json: %s", raw)
+	}
+}
+
+func TestPlatformViews(t *testing.T) {
+	g := testGen(&fakePlatform{})
+	vs := platformViews(g)
+	var got []string
+	for _, v := range vs {
+		var types, eps []string
+		for _, at := range v.AccountTypes {
+			types = append(types, at.PluginKey+"/"+at.Type+"="+at.Label["en"])
+		}
+		for _, e := range v.Endpoints {
+			eps = append(eps, e.Method+" "+e.Path+" "+e.Protocol+" "+e.Billing)
+		}
+		pk := "-"
+		if v.PluginKey != nil {
+			pk = *v.PluginKey
+		}
+		got = append(got, fmt.Sprintf("%s(%s,%v,%s) [%s] [%s]", v.ID, v.Label["en"], v.Builtin, pk,
+			strings.Join(eps, ", "), strings.Join(types, ", ")))
+	}
+	want := []string{
+		"anthropic(Anthropic,true,-) [POST /v1/messages anthropic.messages usage, POST /v1/messages/count_tokens anthropic.count_tokens free] " +
+			"[anthropic/apikey=API Key, relay/relay_key=Relay key]",
+		"openai(OpenAI,true,-) [POST /v1/chat/completions openai.chat usage, POST /v1/embeddings openai.embeddings usage] []",
+		"aivideo(AI Video,false,video) [POST /v1/video/generations aivideo.gen usage] [video/vkey=Video key]",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("platforms:\n got %s\nwant %s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	raw, _ := json.Marshal(vs)
+	if gjson.GetBytes(raw, "0.plugin_key").Raw != "null" || gjson.GetBytes(raw, "2.plugin_key").String() != "video" ||
+		gjson.GetBytes(raw, "1.account_types").Raw != "[]" {
+		t.Fatalf("json: %s", raw)
+	}
+	if out := platformViews(nil); out == nil || len(out) != 0 {
+		t.Fatalf("nil generation: %v", out)
+	}
+	if out := platformViews(&fakeGen{}); out == nil || len(out) != 0 {
+		t.Fatalf("empty generation: %v", out)
+	}
+}
+
+func TestPlatformsRoute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	reg := &fakeRegistry{}
+	reg.set(testGen(&fakePlatform{}))
+	s := New(Deps{Registry: reg, Converters: fakeConverters{}})
+	engine := gin.New()
+	s.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, allowAll{}, noStepUp{}))
+	for path, n := range map[string]int{"/api/v1/platforms": 3, "/api/v1/account-types": 3} {
+		req := httptest.NewRequest("GET", path, nil)
+		req.Header.Set("Authorization", "Bearer u1")
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, req)
+		if w.Code != 200 || len(gjson.Get(w.Body.String(), "data").Array()) != n {
+			t.Fatalf("%s: %d %s", path, w.Code, w.Body.String())
+		}
 	}
 }
 
@@ -470,9 +600,10 @@ func TestAccountTypes(t *testing.T) {
 	}
 	list := out["data"].([]any)
 	ty := list[0].(map[string]any)
-	if len(list) != 2 || ty["plugin_key"] != "anthropic" || ty["type"] != "apikey" || ty["form"].(map[string]any)["mode"] != "schema" ||
+	if len(list) != 3 || ty["plugin_key"] != "anthropic" || ty["type"] != "apikey" || ty["form"].(map[string]any)["mode"] != "schema" ||
 		ty["plugin_name"].(map[string]any)["en"] != "Anthropic" || ty["sensitive_fields"].([]any)[0] != "api_key" ||
-		ty["trust"] != "official" || len(ty["protocols"].([]any)) != 2 || ty["platform"] != nil {
+		ty["trust"] != "official" || ty["protocols"] != nil || ty["platform"] != nil ||
+		ty["platforms"].([]any)[0].(map[string]any)["id"] != "anthropic" {
 		t.Fatalf("type view: %v", ty)
 	}
 	eps := ty["endpoints"].([]any)
