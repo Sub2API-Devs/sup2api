@@ -19,7 +19,7 @@
 
 **分支**：开发分支 `feat/next-platform`（本地），每个 agent 在独立 worktree 的 `next/<代号>` 分支上开发，完成后由主控 `git merge --no-ff` 合并。
 **备份**：tag `legacy/v0.2.8`、分支 `legacy/main`（均已推送）。
-**远程推送**：`feat/next-platform` 已推送到 origin（截至 `a95216e34`）。本机访问 GitHub 时好时坏，推送失败就稍后重试。
+**远程推送**：`feat/next-platform` 最近确认推送到 origin 的是 `7227ff4d5`，之后的提交待推送。本机访问 GitHub 时好时坏，推送失败就稍后重试。
 
 ---
 
@@ -152,10 +152,23 @@ HTTP 挂载：`/healthz`（节点自我隔离时 503）→ `httpapi.NewRouter` �
 
 ---
 
-## 8. 接下来
+## 8. 接下来 / e2e 记录
 
-1. 等 C2、F、G、H 交付，逐个合并（注意 `go.mod` / `go.work` 冲突：保留两边依赖后 `GOWORK=off go mod tidy`）。
-2. 把第 4 节的契约变更写入 CONTRACTS.md。
-3. 主控组装 `internal/app` 与 `main.go`（第 3 节）。
-4. `sync.sh --up` 部署到 ovh，设置 `E2E_RUN_PENDING=1` 跑 e2e，逐条修复 17 条验收标准。
-5. 网络恢复后推送 `feat/next-platform`。
+**e2e 运行方式**（本机，经 `127.0.0.1:3120` 隧道到 ovh Caddy）：
+```bash
+cd next/e2e
+export E2E_ADMIN_EMAIL=$(ssh ovh "grep ^SUB2API_BOOTSTRAP_ADMIN_EMAIL= ~/sub2api-next-test/.env | cut -d= -f2-")
+export E2E_ADMIN_PASSWORD=$(ssh ovh "grep ^SUB2API_BOOTSTRAP_ADMIN_PASSWORD= ~/sub2api-next-test/.env | cut -d= -f2-")
+export E2E_DOCKER_HOST=ovh E2E_RUN_PENDING=1
+go test -count=1 -timeout 50m -v ./...
+```
+
+| 轮次 | 部署提交 | 结果 | 根因与修复 |
+|---|---|---|---|
+| 1 | `a69f68f55` | 19 个用例全失败 | 多数是 `WaitPlugin` 等不到节点 `state=active` 连带超时：C2 上报的节点 JSON 没有契约里的 `state` 字段 → 补派生 `state`；`/healthz` 返回 `"OK"` → 改 `"ok"`；e2e 建角色没带 step-up、review 账号类型键是 `id`；派生 guard 包沿用原二进制导致 GetInfo key 不符 → e2e 用 `-X buildKey` 重编；升级不增权限也要求确认 → C1 自动沿用授权（`896ea01a5`） |
+| 2 | `896ea01a5` | 进行中 | |
+
+**后续**
+1. e2e 全部通过后：处理第 4 节待写入的契约变更。
+2. 第 5 节未做项按优先级排期（登录限速、卸载清账号、SSRF 拨号钩子）。
+3. 网络恢复后推送 `feat/next-platform`（`a95216e34` 之后的提交还未确认推送成功）。
