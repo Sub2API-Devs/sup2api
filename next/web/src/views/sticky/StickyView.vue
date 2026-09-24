@@ -82,7 +82,8 @@ function actions(r: Row): MenuAction[] {
   return [
     { key: 'edit', label: t('common.edit') },
     { key: 'copy', label: t('sticky.copyAsAdmin'), hidden: admin },
-    { key: 'flush', label: t('sticky.flush') },
+    // Without "rule" in key_includes the bindings are shared; the server refuses to flush them.
+    { key: 'flush', label: t('sticky.flush'), hidden: !(r.key_includes || []).includes('rule') },
     { key: 'delete', label: t('common.delete'), danger: true, hidden: !admin }
   ]
 }

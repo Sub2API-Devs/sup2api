@@ -31,7 +31,7 @@ type PluginSummary struct {
 	Trust           string             `json:"trust"`
 	SignatureStatus string             `json:"signature_status"`
 	PendingVersions []string           `json:"pending_versions"`
-	Nodes           NodeSummary        `json:"nodes"`
+	Nodes           NodeSummary        `json:"node_summary"`
 	EgressPolicy    string             `json:"egress_policy"`
 	InstalledAt     time.Time          `json:"installed_at"`
 	UpdatedAt       time.Time          `json:"updated_at"`
@@ -141,7 +141,7 @@ type PluginDetail struct {
 }
 
 // MarshalJSON flattens the summary and renders node_states as "nodes"
-// (per-node list) with the summary under "node_summary".
+// (per-node list); the summary stays under "node_summary" as in the list.
 func (d PluginDetail) MarshalJSON() ([]byte, error) {
 	type alias PluginDetail
 	b, err := json.Marshal(alias(d))
@@ -152,7 +152,6 @@ func (d PluginDetail) MarshalJSON() ([]byte, error) {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return nil, err
 	}
-	m["node_summary"] = m["nodes"]
 	m["nodes"] = m["node_states"]
 	delete(m, "node_states")
 	return json.Marshal(m)

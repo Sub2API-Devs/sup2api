@@ -816,5 +816,6 @@ on('DELETE', '/sticky-rules/:id', (req) => {
 on('POST', '/sticky-rules/:id/flush', (req) => {
   const r = stickyRules.find((x) => x.id === Number(req.params.id))
   if (!r) return fail(404, 'not_found', 'rule not found')
+  if (!(r.key_includes || []).includes('rule')) return fail(409, 'conflict', 'bindings are shared with other rules and cannot be flushed on their own')
   return { deleted: Math.floor(Math.random() * 40) }
 })

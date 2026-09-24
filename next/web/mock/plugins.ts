@@ -665,7 +665,10 @@ function summary(p: MockPlugin): Any {
     desired_version: p.desired_version,
     publisher: p.publisher,
     trust: p.trust,
-    nodes: running ? NODES.map((n) => ({ node_id: n, state: 'running' })) : []
+    node_summary: {
+      total: NODES.length,
+      states: running ? { active: NODES.length } : { stopped: NODES.length }
+    }
   }
 }
 

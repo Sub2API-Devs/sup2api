@@ -57,20 +57,12 @@ async function load() {
   }
 }
 
-/** Node summary: {state: count} or [{node_id, state}] -> [{state, count}]. */
+/** node_summary {total, states:{state: n}} -> [{state, count}]. */
 function nodeSummary(p: PluginSummary): Array<{ state: string; count: number }> {
-  const n = p.nodes
-  if (!n) return []
-  const counts: Record<string, number> = {}
-  if (Array.isArray(n)) {
-    for (const x of n) {
-      const s = typeof x === 'object' && x ? String((x as any).state ?? 'unknown') : String(x)
-      counts[s] = (counts[s] || 0) + 1
-    }
-  } else if (typeof n === 'object') {
-    for (const [k, v] of Object.entries(n)) counts[k] = Number(v) || 0
-  }
-  return Object.entries(counts).map(([state, count]) => ({ state, count }))
+  const states = p.node_summary?.states || {}
+  return Object.entries(states)
+    .map(([state, count]) => ({ state, count: Number(count) || 0 }))
+    .filter((x) => x.count > 0)
 }
 
 function nodeTone(s: string): Tone {

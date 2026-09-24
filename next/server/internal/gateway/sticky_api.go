@@ -414,6 +414,16 @@ func (g *Gateway) flushRuleHandler(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
+	// Without "rule" in key_includes the bindings are keyed sticky:_:… and
+	// shared with every other such rule; they cannot be told apart.
+	if !r.includes("rule") {
+		msg := "this rule's bindings are shared with other rules (key_includes has no \"rule\") and cannot be flushed on their own; they expire with their TTL"
+		if core.Locale(ctx) == "zh" {
+			msg = "该规则的 key_includes 不含 rule，绑定与其他同类规则共用，无法单独清除；绑定会在 TTL 到期后失效"
+		}
+		httpapi.Fail(c, core.ErrConflict.WithMessage(msg))
+		return
+	}
 	n, err := g.flushBindings(ctx, r.Name)
 	if err != nil {
 		httpapi.Fail(c, core.ErrUnavailable.WithCause(err))

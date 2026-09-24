@@ -212,6 +212,19 @@ func TestStickyRulesAPIAndPluginDefaults(t *testing.T) {
 	if code != 200 || res.Get("data.deleted").Int() != 2 || !e.mr.Exists("sticky:second:3:m:cc") || e.mr.Exists("sticky:claude-code-session:3:m:aa") {
 		t.Fatalf("flush: %d %s keys=%v", code, res.Raw, e.mr.Keys())
 	}
+	// A rule whose key has no "rule" segment shares bindings: flush is refused.
+	code, res = e.api("POST", "/sticky-rules", map[string]any{"name": "shared-bindings",
+		"key_sources": []any{map[string]any{"type": "user"}}, "key_includes": []string{"group", "model"}})
+	if code != 201 {
+		t.Fatalf("create shared rule: %d %s", code, res.Raw)
+	}
+	sharedID := res.Get("data.id").Int()
+	if code, res = e.api("POST", "/sticky-rules/"+itoa(sharedID)+"/flush", nil); code != 409 {
+		t.Fatalf("flush shared: %d %s", code, res.Raw)
+	}
+	if code, _ := e.api("DELETE", "/sticky-rules/"+itoa(sharedID), nil); code != 204 {
+		t.Fatalf("delete shared: %d", code)
+	}
 
 	// Delete the admin rule; stats survive because the default still uses the name.
 	if code, _ := e.api("DELETE", "/sticky-rules/"+itoa(adminID), nil); code != 204 {

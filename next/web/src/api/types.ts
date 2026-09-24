@@ -440,7 +440,8 @@ export interface PluginSummary {
   desired_version?: string | null
   publisher?: string
   trust?: Trust
-  nodes?: Record<string, number> | Array<{ node_id: string; state: string }> // summary, shape assumed
+  /** Live nodes of the cluster; nodes that did not report the plugin count as `absent`. */
+  node_summary?: { total: number; states: Record<string, number> }
   description?: LText
 }
 

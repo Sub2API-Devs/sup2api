@@ -251,6 +251,10 @@ func TestAPIFlow(t *testing.T) {
 	if item["current_version"] != "0.1.0" || item["signature_status"] != "valid" {
 		t.Fatalf("item = %v", item)
 	}
+	// The list and the detail both carry the summary as node_summary.
+	if _, ok := item["node_summary"].(map[string]any); !ok || item["nodes"] != nil {
+		t.Fatalf("list node summary = %v, nodes = %v", item["node_summary"], item["nodes"])
+	}
 
 	if code, out = h.do("POST", "/plugins/guard/enable", "admin", nil); code != 200 || data(out)["id"] != float64(7) {
 		t.Fatalf("enable = %d %v", code, out)
