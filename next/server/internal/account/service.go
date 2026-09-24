@@ -88,6 +88,7 @@ func New(d Deps) *Service {
 // RegisterRoutes mounts the account and account type endpoints.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("GET", "/platforms", "account:read", s.listPlatforms)
+	r.Authed("GET", "/me/platforms", s.listMyPlatforms)
 	r.Perm("GET", "/account-types", "account:read", s.listTypes)
 	r.Perm("GET", "/account-types/:plugin_key/:type/form", "account:read", s.typeForm)
 	r.Perm("GET", "/accounts", "account:read", s.list)

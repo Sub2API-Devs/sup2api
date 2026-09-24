@@ -338,6 +338,7 @@ func TestUsageAPI(t *testing.T) {
 	acc := int64(42)
 	mine := f.record("req-mine", true)
 	mine.AccountID = &acc
+	mine.ClientRequestID = "cli-req-1"
 	// Served through protocol conversion: client endpoint openai.chat, upstream
 	// anthropic.messages.
 	mine.Platform, mine.Protocol, mine.AccountType = "openai", "openai.chat", "relay_key"
@@ -360,6 +361,14 @@ func TestUsageAPI(t *testing.T) {
 	}
 	if n := len(f.get(f.user, "/usage?account_type=relay_key", 200)["data"].([]any)); n != 1 {
 		t.Fatalf("account_type filter: %d", n)
+	}
+	byCRID := f.get(f.user, "/usage?client_request_id=cli-req-1", 200)["data"].([]any)
+	if len(byCRID) != 1 || byCRID[0].(map[string]any)["request_id"] != "req-mine" ||
+		byCRID[0].(map[string]any)["client_request_id"] != "cli-req-1" {
+		t.Fatalf("client_request_id filter: %v", byCRID)
+	}
+	if n := len(f.get(f.user, "/me/usage?client_request_id=cli-req-1", 200)["data"].([]any)); n != 1 {
+		t.Fatalf("self client_request_id filter: %d", n)
 	}
 	if n := len(f.get(f.user, "/usage?success=true&user_id="+strconv.FormatInt(f.user, 10), 200)["data"].([]any)); n != 2 {
 		t.Fatalf("success filter: %d", n)
@@ -384,6 +393,9 @@ func TestUsageAPI(t *testing.T) {
 	md := f.get(f.user, "/me/usage/"+strconv.FormatInt(id, 10), 200)["data"].(map[string]any)
 	if md["account_id"] != nil || md["account_type"] != "" || md["upstream_protocol"] != "" {
 		t.Fatalf("self detail leaks account: %v", md)
+	}
+	if md["client_request_id"] != "cli-req-1" || d["client_request_id"] != "cli-req-1" {
+		t.Fatalf("client_request_id: self %v admin %v", md["client_request_id"], d["client_request_id"])
 	}
 	f.get(f.user, "/me/usage/"+strconv.FormatInt(otherID, 10), 404)
 	f.get(f.user, "/usage/999999", 404)

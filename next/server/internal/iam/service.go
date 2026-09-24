@@ -53,6 +53,8 @@ type Service struct {
 	authz  *authz.Service
 	cost   int
 
+	limiter *loginLimiter
+
 	dummyHash []byte
 
 	mu     sync.Mutex
@@ -75,7 +77,8 @@ func New(d Deps) *Service {
 	if d.BcryptCost == 0 {
 		d.BcryptCost = bcrypt.DefaultCost
 	}
-	s := &Service{db: d.DB, rdb: d.Redis, cfg: d.Config, events: d.Events, authz: d.Authz, cost: d.BcryptCost, status: map[int64]statusEntry{}}
+	s := &Service{db: d.DB, rdb: d.Redis, cfg: d.Config, events: d.Events, authz: d.Authz, cost: d.BcryptCost, status: map[int64]statusEntry{},
+		limiter: newLoginLimiter(d.Redis)}
 	s.dummyHash, _ = bcrypt.GenerateFromPassword([]byte("dummy-password-for-timing"), s.cost)
 	if d.Authz != nil {
 		// Status changes (disable/delete) bump the authz version.

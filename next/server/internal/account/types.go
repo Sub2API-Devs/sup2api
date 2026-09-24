@@ -251,6 +251,31 @@ func (s *Service) listPlatforms(c *gin.Context) {
 	httpapi.OK(c, platformViews(s.gen()))
 }
 
+// MyPlatformView is one entry of GET /me/platforms (CONTRACTS §14.1): a
+// platform available now, without account types or plugin details, so any
+// signed-in user can preview the endpoints a key will reach.
+type MyPlatformView struct {
+	ID        string                 `json:"id"`
+	Label     manifest.LocalizedText `json:"label"`
+	Builtin   bool                   `json:"builtin"`
+	Endpoints []PlatformEndpointView `json:"endpoints"`
+}
+
+// myPlatformViews lists the platforms of the generation in the order of
+// platformViews (built-in first, then by id).
+func myPlatformViews(g core.Generation) []MyPlatformView {
+	all := platformViews(g)
+	out := make([]MyPlatformView, 0, len(all))
+	for _, v := range all {
+		out = append(out, MyPlatformView{ID: v.ID, Label: v.Label, Builtin: v.Builtin, Endpoints: v.Endpoints})
+	}
+	return out
+}
+
+func (s *Service) listMyPlatforms(c *gin.Context) {
+	httpapi.OK(c, myPlatformViews(s.gen()))
+}
+
 func rawOrNull(b json.RawMessage) json.RawMessage {
 	if len(bytes.TrimSpace(b)) == 0 {
 		return json.RawMessage("null")

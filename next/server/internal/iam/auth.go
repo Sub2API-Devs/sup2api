@@ -2,7 +2,11 @@ package iam
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"log/slog"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,7 +32,12 @@ var (
 )
 
 // Login checks the password and issues tokens. Disabled users are rejected.
-func (s *Service) Login(ctx context.Context, email, password string) (*TokenPair, error) {
+// ip is the client address used by the failed-login rate limit (CONTRACTS
+// §14.2); while email+IP or IP is locked out the password is not checked.
+func (s *Service) Login(ctx context.Context, email, password, ip string) (*TokenPair, error) {
+	if wait := s.limiter.check(ctx, email, ip); wait > 0 {
+		return nil, rateLimitedError(ctx, wait)
+	}
 	var id int64
 	var hash, status string
 	err := s.db.Pool.QueryRow(ctx, `SELECT id, password_hash, status FROM users WHERE lower(email) = lower($1) AND deleted_at IS NULL`,
@@ -36,14 +45,17 @@ func (s *Service) Login(ctx context.Context, email, password string) (*TokenPair
 	if store.IsNoRows(err) {
 		// Burn comparable time so response timing does not reveal accounts.
 		_ = bcrypt.CompareHashAndPassword(s.dummyHash, []byte(password))
+		s.limiter.fail(ctx, email, ip)
 		return nil, errBadCredentials
 	}
 	if err != nil {
 		return nil, err
 	}
 	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil {
+		s.limiter.fail(ctx, email, ip)
 		return nil, errBadCredentials
 	}
+	s.limiter.reset(ctx, email, ip)
 	if status != StatusActive {
 		return nil, errUserDisabled
 	}
@@ -52,13 +64,24 @@ func (s *Service) Login(ctx context.Context, email, password string) (*TokenPair
 		if _, err := tx.Exec(ctx, `UPDATE users SET last_login_at = now() WHERE id = $1`, id); err != nil {
 			return err
 		}
-		pair, err = s.issueTokens(ctx, tx, id)
+		pair, err = s.issueTokens(ctx, tx, id, "")
 		return err
 	})
 	return pair, err
 }
 
-func (s *Service) issueTokens(ctx context.Context, tx pgx.Tx, userID int64) (*TokenPair, error) {
+// newFamilyID returns a random refresh token family id.
+func newFamilyID() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b[:]), nil
+}
+
+// issueTokens issues an access token and a refresh token in familyID (a new
+// family when empty, i.e. on login).
+func (s *Service) issueTokens(ctx context.Context, tx pgx.Tx, userID int64, familyID string) (*TokenPair, error) {
 	access, err := s.issueAccessToken(userID)
 	if err != nil {
 		return nil, err
@@ -67,8 +90,13 @@ func (s *Service) issueTokens(ctx context.Context, tx pgx.Tx, userID int64) (*To
 	if err != nil {
 		return nil, err
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)`,
-		userID, hashToken(refresh), time.Now().Add(s.cfg.RefreshTokenTTL)); err != nil {
+	if familyID == "" {
+		if familyID, err = newFamilyID(); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO refresh_tokens (user_id, token_hash, expires_at, family_id) VALUES ($1, $2, $3, $4)`,
+		userID, hashToken(refresh), time.Now().Add(s.cfg.RefreshTokenTTL), familyID); err != nil {
 		return nil, err
 	}
 	u, err := s.getUser(ctx, tx, userID)
@@ -79,23 +107,75 @@ func (s *Service) issueTokens(ctx context.Context, tx pgx.Tx, userID int64) (*To
 	return &TokenPair{AccessToken: access, RefreshToken: refresh, ExpiresIn: int64(s.cfg.AccessTokenTTL / time.Second), User: u}, nil
 }
 
-// Refresh rotates a refresh token: the presented one is revoked and a new
-// pair is issued.
+// refreshVerdict is the outcome of presenting a stored refresh token.
+type refreshVerdict int
+
+const (
+	refreshValid    refreshVerdict = iota
+	refreshExpired                 // past expires_at, never used: plain 401
+	refreshReplayed                // already rotated or revoked: revoke the family
+)
+
+// classifyRefresh decides what presenting a stored refresh token means. A
+// token that was rotated (replaced_at) or revoked (revoked_at) must never be
+// presented again; seeing it means it leaked, so the whole family is revoked
+// even when the token has expired since.
+func classifyRefresh(revokedAt, replacedAt *time.Time, expiresAt, now time.Time) refreshVerdict {
+	if revokedAt != nil || replacedAt != nil {
+		return refreshReplayed
+	}
+	if !expiresAt.After(now) {
+		return refreshExpired
+	}
+	return refreshValid
+}
+
+// Refresh rotates a refresh token: the presented one is marked revoked and
+// replaced, and a new pair is issued in the same family. Presenting a token
+// that was already rotated or revoked revokes every token of its family
+// (CONTRACTS §14.2) and fails with 401.
 func (s *Service) Refresh(ctx context.Context, refreshToken string) (*TokenPair, error) {
 	if refreshToken == "" {
 		return nil, errBadRefresh
 	}
 	var pair *TokenPair
+	var replayUser int64
+	var replayFamily string
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
-		var uid int64
-		err := tx.QueryRow(ctx, `
-UPDATE refresh_tokens SET revoked_at = now()
-WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()
-RETURNING user_id`, hashToken(refreshToken)).Scan(&uid)
+		var id, uid int64
+		var family string
+		var revokedAt, replacedAt *time.Time
+		var expiresAt time.Time
+		err := tx.QueryRow(ctx, `SELECT id, user_id, family_id, revoked_at, replaced_at, expires_at
+			FROM refresh_tokens WHERE token_hash = $1 FOR UPDATE`, hashToken(refreshToken)).
+			Scan(&id, &uid, &family, &revokedAt, &replacedAt, &expiresAt)
 		if store.IsNoRows(err) {
 			return errBadRefresh
 		}
 		if err != nil {
+			return err
+		}
+		switch classifyRefresh(revokedAt, replacedAt, expiresAt, time.Now()) {
+		case refreshReplayed:
+			// Commit the family revocation; the 401 is returned after the tx.
+			// A row without a family (never written by this code) only
+			// revokes itself.
+			if family == "" {
+				family = "token:" + strconv.FormatInt(id, 10)
+				_, err = tx.Exec(ctx, `UPDATE refresh_tokens SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL`, id)
+			} else {
+				_, err = tx.Exec(ctx, `UPDATE refresh_tokens SET revoked_at = now()
+					WHERE family_id = $1 AND revoked_at IS NULL`, family)
+			}
+			if err != nil {
+				return err
+			}
+			replayUser, replayFamily = uid, family
+			return nil
+		case refreshExpired:
+			return errBadRefresh
+		}
+		if _, err := tx.Exec(ctx, `UPDATE refresh_tokens SET revoked_at = now(), replaced_at = now() WHERE id = $1`, id); err != nil {
 			return err
 		}
 		var status string
@@ -109,14 +189,22 @@ RETURNING user_id`, hashToken(refreshToken)).Scan(&uid)
 		if status != StatusActive {
 			return errUserDisabled
 		}
-		pair, err = s.issueTokens(ctx, tx, uid)
+		pair, err = s.issueTokens(ctx, tx, uid, family)
 		return err
 	})
-	return pair, err
+	if err != nil {
+		return nil, err
+	}
+	if replayFamily != "" {
+		slog.WarnContext(ctx, "iam: refresh token reuse detected, token family revoked",
+			"user_id", replayUser, "family_id", replayFamily)
+		return nil, errBadRefresh
+	}
+	return pair, nil
 }
 
-// Logout revokes refreshToken if it belongs to userID; an empty token
-// revokes every refresh token of the user.
+// Logout revokes refreshToken (only that token, not its family) if it
+// belongs to userID; an empty token revokes every refresh token of the user.
 func (s *Service) Logout(ctx context.Context, userID int64, refreshToken string) error {
 	if refreshToken == "" {
 		return revokeAllRefreshTokens(ctx, s.db.Pool, userID)
