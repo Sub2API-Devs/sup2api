@@ -3,7 +3,12 @@ package e2e
 import (
 	"fmt"
 	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
+	"testing"
 )
 
 // RegisterPublisher creates a publisher with trust level (verified|community)
@@ -74,7 +79,37 @@ func (e *Env) DerivedGuardPackage(pluginKey string, key *SigningKey, keepNative 
 			}
 		}
 	}
+	// The host checks GetInfo against the package, so the binaries must
+	// report the new key: rebuild them with the SDK build-time key.
+	for p := range pkg {
+		if rest, ok := strings.CutPrefix(p, "runtimes/"); ok {
+			osArch, _, _ := strings.Cut(rest, "/")
+			goos, goarch, _ := strings.Cut(osArch, "-")
+			pkg[p] = buildGuardBinary(e.T, goos, goarch, pluginKey, fmt.Sprint(m["version"]))
+		}
+	}
 	pkg.SetManifest(e.T, m)
 	pkg.Sign(e.T, key)
 	return pkg
+}
+
+// buildGuardBinary compiles plugins/guard with an overridden plugin key.
+func buildGuardBinary(t testing.TB, goos, goarch, key, version string) []byte {
+	t.Helper()
+	_, self, _, _ := runtime.Caller(0)
+	dir := filepath.Join(filepath.Dir(self), "..", "plugins", "guard")
+	out := filepath.Join(t.TempDir(), "plugin")
+	sdk := "github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
+	cmd := exec.Command("go", "build", "-trimpath", "-o", out,
+		"-ldflags", fmt.Sprintf("-s -w -X %s.buildKey=%s -X %s.buildVersion=%s", sdk, key, sdk, version), ".")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0")
+	if b, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("build guard for %s: %v\n%s", key, err, b)
+	}
+	b, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
 }

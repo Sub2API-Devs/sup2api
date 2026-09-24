@@ -281,6 +281,21 @@ func (c *Controller) reconcileKey(ctx context.Context, s *slot, p *pluginRow) No
 			}
 		}
 	}
+	switch {
+	case st.Rollout != "":
+		st.State = st.Rollout
+	case serving == "":
+		st.State = "stopped"
+	default:
+		state, msg := entryState(serving)
+		if state == NodeReady {
+			state = NodeActive
+		}
+		st.State = state
+		if st.Error == "" {
+			st.Error = msg
+		}
+	}
 	s.mu.Unlock()
 
 	for _, inst := range running {

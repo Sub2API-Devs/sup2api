@@ -23,7 +23,8 @@ type UploadOptions struct {
 
 // Upload validates a package, stores it and returns the review. New plugins
 // start in awaiting_consent; new versions of existing plugins wait for
-// consent without touching the running version.
+// consent without touching the running version, unless they request no new
+// or wider host permissions, in which case consent is carried over.
 func (s *Service) Upload(ctx context.Context, data []byte, actorID int64, opt UploadOptions) (*Review, error) {
 	p, err := pkg.Open(data, s.Limits())
 	if err != nil {
@@ -145,6 +146,15 @@ func (s *Service) Upload(ctx context.Context, data []byte, actorID int64, opt Up
 	r.ConsentStatus = consent
 	r.PackageSHA256, r.PackageSize, r.UploadedAt = p.SHA256, int64(len(p.Raw)), uploadedAt
 	r.UpgradeFrom = upgradeOf
+	// An upgrade that neither adds nor widens host permissions needs no new
+	// consent (ARCHITECTURE §5.5): every grant is carried over automatically.
+	if upgradeOf != "" && consent == ConsentAwaiting && r.Diff != nil &&
+		len(r.Diff.Added) == 0 && len(r.Diff.Widened) == 0 {
+		if _, err := s.Consent(ctx, m.Key, m.Version, ConsentRequest{}, actorID); err != nil {
+			return nil, fmt.Errorf("carry over consent: %w", err)
+		}
+		r.ConsentStatus = ConsentApproved
+	}
 	return r, nil
 }
 

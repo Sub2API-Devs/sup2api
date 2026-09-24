@@ -80,6 +80,10 @@ const (
 // NodePluginState is the JSON document each node reports per plugin through
 // core.NodeRegistry.ReportPlugin.
 type NodePluginState struct {
+	// State summarizes this node for the console (CONTRACTS §5.7): the
+	// rollout state while a rollout is open, else the serving instance as
+	// active | pending | failed, or "stopped" when nothing is served.
+	State     string          `json:"state"`
 	Serving   string          `json:"serving,omitempty"`
 	Standby   string          `json:"standby,omitempty"`
 	RolloutID int64           `json:"rollout_id,omitempty"`

@@ -191,11 +191,11 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
 	engine.GET("/healthz", func(c *gin.Context) {
-		status := http.StatusOK
+		status, text := http.StatusOK, "ok"
 		if !cl.Registry.Healthy() {
-			status = http.StatusServiceUnavailable
+			status, text = http.StatusServiceUnavailable, "unavailable"
 		}
-		c.JSON(status, gin.H{"status": http.StatusText(status), "version": version, "node": cfg.NodeID, "boot_id": cl.Registry.BootID()})
+		c.JSON(status, gin.H{"status": text, "version": version, "node": cfg.NodeID, "boot_id": cl.Registry.BootID()})
 	})
 	r := httpapi.NewRouter(engine, idm, az, idm)
 	idm.RegisterRoutes(r)
@@ -226,7 +226,7 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: engine, ReadHeaderTimeout: 10 * time.Second}
 	errc := make(chan error, 1)
 	go func() {
-		log.Info("listening", "addr", cfg.HTTPAddr, "node", cfg.NodeID, "boot_id", cl.Registry.BootID(), "version", version)
+		log.Info("listening", "addr", cfg.HTTPAddr, "boot_id", cl.Registry.BootID(), "version", version)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errc <- err
 		}

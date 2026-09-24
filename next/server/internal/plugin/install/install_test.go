@@ -313,6 +313,25 @@ func TestInstallConsentUpgradeUninstall(t *testing.T) {
 	if consent != ConsentApproved {
 		t.Fatalf("consent = %s", consent)
 	}
+	// A further version whose host permissions are all already granted is
+	// approved on upload (net was denied above, so it is dropped here).
+	cp := *up
+	same := &cp
+	same.Version = "0.2.1"
+	same.HostPermissions = nil
+	for _, hp := range up.HostPermissions {
+		if hp.ID != "net" {
+			same.HostPermissions = append(same.HostPermissions, hp)
+		}
+	}
+	same.ExternalServices = nil
+	r3, err := e.svc.Upload(ctx, pkgtest.Build(same, e.root), e.admin, UploadOptions{})
+	if err != nil {
+		t.Fatalf("upload same-permission version: %v", err)
+	}
+	if r3.ConsentStatus != ConsentApproved || len(r3.Diff.Added)+len(r3.Diff.Widened) != 0 {
+		t.Fatalf("same-permission upgrade review = %+v diff=%+v", r3.ConsentStatus, r3.Diff)
+	}
 	// Removed grant stays until activation; ApplyDefaults prunes it.
 	g, _ := LoadGrants(ctx, e.db.Pool, "guard")
 	if _, ok := g["jobs"]; !ok {

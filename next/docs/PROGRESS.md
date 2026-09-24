@@ -2,7 +2,7 @@
 
 > 用途：记录派发给开发 agent 的任务、交付结果、待办事项与环境信息，保证上下文压缩或换人接手后能完整恢复现场。
 > **每次合并分支、派发新任务、做出决策后都要更新本文件。**
-> 最后更新：2026-09-24，阶段 1 已合并 7/9，阶段 2 进行中。
+> 最后更新：2026-09-24，11 个 agent 全部交付并合并；主控已完成 `internal/app` 组装，正在 ovh 上部署并跑验收。
 
 相关文档：[ARCHITECTURE.md](ARCHITECTURE.md)（设计）· [CONTRACTS.md](CONTRACTS.md)（开发契约）
 
@@ -13,9 +13,9 @@
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | 0 | 备份、架构文档、契约（proto、manifest、核心表、core 接口、基础设施骨架） | ✅ 完成 |
-| 1 | 9 个 agent 并行开发各模块 | ⏳ 7 个已合并；C2、F 进行中 |
-| 2 | 网关（G）、事件投递与任务（H） | ⏳ 进行中 |
-| 3 | 主控组装 `internal/app`、在 ovh 上用 compose 部署、跑 17 条验收测试 | 未开始 |
+| 1 | 9 个 agent 并行开发各模块 | ✅ 全部合并 |
+| 2 | 网关（G）、事件投递与任务（H） | ✅ 全部合并 |
+| 3 | 主控组装 `internal/app`、在 ovh 上用 compose 部署、跑 17 条验收测试 | ⏳ 组装完成（本机冒烟通过），部署与 e2e 进行中 |
 
 **分支**：开发分支 `feat/next-platform`（本地），每个 agent 在独立 worktree 的 `next/<代号>` 分支上开发，完成后由主控 `git merge --no-ff` 合并。
 **备份**：tag `legacy/v0.2.8`、分支 `legacy/main`（均已推送）。
@@ -33,78 +33,60 @@
 | a2-resources | `apikey`、`group`、`proxy`、`account` | next/a2-resources | ✅ 已合并 | 02312e823、e2dfca146、1b1ec5cf5、db777e933 | b1f39bfae |
 | b-billing | `billing`（含 `expr`）、`usage`、`event` | next/b-billing | ✅ 已合并 | 6221b7db8 | 3041351c8 |
 | c1-lifecycle | `plugin/pkg`、`install`、`market`、`api` | next/c1-lifecycle | ✅ 已合并 | 172997d83 | 60937afd0 |
-| c2-runtime | `plugin/registry`、`grpcruntime`、`rollout`、`dbschema`、`routes` | next/c2-runtime | ⏳ 进行中（wip：fcb2609df、a88145fe8） | | |
+| c2-runtime | `plugin/registry`、`grpcruntime`、`rollout`、`dbschema`、`routes` | next/c2-runtime | ✅ 已合并 | 21067e642 | 53ac81a60 |
 | d-sandbox | `cluster`、`plugin/sandbox`、`plugin/egress`、`sdk/pluginsdk/egress` | next/d-sandbox | ✅ 已合并 | 009b0ed9f | f85721f9f |
 | e-sdk-plugins | `sdk/pluginsdk`、`plugins/anthropic`、`plugins/guard`（Go）、`tools/sub2api-plugin` | next/e-sdk-plugins | ✅ 已合并 | 237873003 | 22b4387d6 |
-| f-frontend | `web/`、`plugins/guard/ui/native` | next/f-frontend | ⏳ 进行中（已有 2c8cfe488、3fdab6209；另派生子 agent 做计费页面） | | |
+| f-frontend | `web/`、`plugins/guard/ui/native` | next/f-frontend | ✅ 已合并（含 3 个子 agent） | 2c8cfe488、3fdab6209、a4af8d707 | 3bbdc760e |
 | qa-deploy | `Dockerfile`、`deploy/`、`e2e/` | next/qa-deploy | ✅ 已合并 | 7d7ea1c15、ce5111dc5 | e55c32a85 |
-| g-gateway（阶段 2） | `server/internal/gateway`（含粘性会话） | next/g-gateway | ⏳ 进行中 | | |
-| h-events-jobs（阶段 2） | `event/delivery`、`job` | next/h-events-jobs | ⏳ 进行中 | | |
+| g-gateway（阶段 2） | `server/internal/gateway`（含粘性会话） | next/g-gateway | ✅ 已合并 | 6a1e91436 | da90fc0ec |
+| h-events-jobs（阶段 2） | `event/delivery`、`job` | next/h-events-jobs | ✅ 已合并 | 04a6c87fb | c8caaca75 |
 
-主控自己的提交：`6de334386` 架构文档 · `5a3f05dc9` 阶段 0 契约 · `d2d44ad1b` 迁移测试 · `6e3d0fadc` 插件协议/签名/加密 · `8586025b6` 发布/schema/默认值接口与格式 · `7e8518afc` compose 测试规则 · `c3a19b057` Ledger.ApplyTx、0002 迁移、gofmt · `b84f458e9` 阶段 2 接口。
+主控自己的提交：`6de334386` 架构文档 · `5a3f05dc9` 阶段 0 契约 · `d2d44ad1b` 迁移测试 · `6e3d0fadc` 插件协议/签名/加密 · `8586025b6` 发布/schema/默认值接口与格式 · `7e8518afc` compose 测试规则 · `c3a19b057` Ledger.ApplyTx、0002 迁移、gofmt · `b84f458e9` 阶段 2 接口 · `7227ff4d5` 阶段 1 契约变更并入 CONTRACTS · `222d4b194` 前端 SPA 处理（CSP nonce）与 plugin-exec · `e7a64d627` 测试模板库 · `d87ae94d7` 插件迁移改用插件角色登录执行（修复 RESET ROLE 提权） · `8944ebb86` 移除误提交的 mock-upstream 二进制 · `d09008a43` `internal/app` 组装 · `a69f68f55` 挂载网关、插件详情接 JobTrigger/HookStatsSource。
 
-### 已发给运行中 agent 的补充约定
+### 已发给 agent 的补充约定（均已落实）
 - **g-gateway**：`cache_creation_tokens` 是总量（含 1 小时），填 `UsageTokens` 时 `CacheCreation = 总量 − cache_creation_1h_tokens`；钩子 `prompt_text` 传纯文本；请求 ID 必须服务端生成（任务说明里已写）；已安装未启用插件的端点返回 503。
 - **c2-runtime**：Windows 开发模式二进制为 `plugin.exe`；`SkipHostEnv=true`；`config_enc` AAD 为 `"plugin-config:"+key`；配置变更广播 `{"type":"config","plugin_key":k}`；Drop（purge）要显式删除迁移记录（0002 去掉了级联）；平台插件处理自己平台账号时必须携带解密凭证；可用 E 的 `build-demo.sh` 产出真实插件包测试。
 
 ---
 
-## 3. 各模块对外接口（主控组装 `internal/app` 用）
+## 3. 组装（`server/internal/app/app.go`）
 
-```go
-// cluster (D)
-rdb, _ := cluster.OpenRedis(ctx, cfg.RedisURL)
-cl := cluster.New(rdb, db.Pool, cluster.Options{NodeID, Addr, HostVersion, Logger}) // cl.Start(ctx) 先心跳再回收死节点槽位; Close()
-// cl.Registry=core.NodeRegistry  cl.Locker=core.Locker  cl.Bus=core.Bus  cl.Slots=core.Slots
-launcher := sandbox.NewLauncher(sandbox.LauncherOptions{})            // core.PluginLauncher
-egressP := egress.New(db, egress.Options{NodeID, AlwaysAllow: []string{"<PG host:port>"}}) // core.EgressProvider; Close()
-// main.go: runPluginExec = sandbox.RunExec
+所有模块已在 `app.Run` 中组装，启动顺序：PG + 核心迁移 → Redis → cluster（心跳）→ event/registry/packages → billing、usage → authz.Start → iam.Bootstrap → group/apikey/proxy/account → egress（`AlwaysAllow` 含 PG 地址）、launcher、dbschema、grpcruntime → gateway → DefaultsApplier(authz, billing, gateway) → rollout.Start → install、market.SeedSources → job、delivery → HTTP。关闭按相反顺序（先 `srv.Shutdown`）。
 
-// event / billing / usage (B)
-events := event.NewPublisher(db)                                      // core.EventPublisher
-bill := billing.New(db, rdb, bus, events, registry)                   // Pricer, PriceCatalog, BalanceGate, Ledger; Close()
-settler := usage.New(db, bill, events, usage.Options{})               // core.Settler; Start(ctx)/Stop(ctx)
+HTTP 挂载：`/healthz`（节点自我隔离时 503）→ `httpapi.NewRouter` → 各模块 `RegisterRoutes` → `routes.RegisterAssets(engine)`（`/plugin-ui`）→ `engine.NoRoute(gw.Middleware(), webui.Serve)`：先按插件声明分发网关端点，未命中再走控制台 SPA 回退（`/api/`、`/plugin-ui/` 前缀返回 JSON 404；index.html 每次替换 `__CSP_NONCE__` 并发 CSP 头）。
 
-// authz / iam (A1)
-az := authz.New(authz.Deps{DB, Bus, Plugins: registry})               // Authorizer + PermissionCatalog; az.Start(ctx) 必须在 iam.Bootstrap 之前
-idm := iam.New(iam.Deps{DB, Redis: rdb, Config: cfg, Events: events, Authz: az}) // TokenVerifier + StepUpVerifier; idm.Bootstrap(ctx)
-r := httpapi.NewRouter(engine, idm, az, idm)
-
-// A2
-grp := group.New(db, rdb, bus)
-keys := apikey.New(db, rdb, az)                                       // core.APIKeyAuthenticator; go keys.Run(ctx)
-prx := proxy.New(db, cipher, bus, proxy.Options{})                    // core.ProxyDirectory; go prx.Run(ctx)
-acc := account.New(account.Deps{DB, Redis, Cipher, Registry, Proxies: prx, Events, Slots, Bus, AllowPrivateUpstream}) // core.AccountDirectory; go acc.Run(ctx)
-
-// C1
-trust, _ := pkg.NewTrustStore(cfg.Plugins.OfficialRootKeys, cfg.Plugins.AllowUnsigned)
-defaults := install.NewDefaultsApplier(az, bill, stickyCatalog /*G*/)  // core.PluginDefaultsApplier -> 交给 C2
-inst := install.New(install.Deps{DB, Trust, Authz: az, Permissions: az, Defaults: defaults, Rollout /*C2*/, Schemas /*C2*/, Bus},
-                    install.Options{HostVersion: Version, Plugins: cfg.Plugins})
-mkt := market.New(db, inst, nil, cfg.Plugins.MaxPackageBytes); mkt.SeedSources(ctx, cfg.Plugins.MarketSourcesJSON)
-api.New(api.Deps{DB, Install: inst, Market: mkt, Rollout, Nodes: cl.Registry, Registry, Authz: az, Cipher, Bus, Jobs /*H*/, Plugins: cfg.Plugins}).RegisterRoutes(r)
-
-// 每个模块 .RegisterRoutes(r)；C2/G/H 的构造函数待其交付后补充
-```
-
-还需主控做的组装事项：`main.go` 嵌入 `server/web`（前端 SPA 与 NoRoute 回退）；挂载网关中间件（G）与插件路由（C2）；import map / CSP nonce 注入（等 F 报告）。
+`main.go`：`plugin-exec` 子命令 → `sandbox.RunExec`；JSON 日志；`app.Run`。
 
 ---
 
 ## 4. 待写入 CONTRACTS.md 的变更
 
-> 2026-09-24：A1、A2、B、C1、D、E、QA 的变更**已写入 CONTRACTS.md**（§5.1–5.7、§6、§7、§11.3–11.6）。下表保留作来源记录；未落地的只剩：`PricingEntry.note`、`gateway.endpoint`/`platform.register` 的 scope 格式、`EgressLogReader`（不做）、卸载清账号（见第 5 节 #6）。C2、F、G、H 交付后在此追加。
+> A1、A2、B、C1、D、E、QA 的变更已于 `7227ff4d5` 写入 CONTRACTS。以下是 C2、G、H、F 交付后新提出、**尚未写入**的：
 
-| 来源 | 变更 |
-|---|---|
-| A1 | `/me/menus` 分区带 `label{en,zh}`，分区 key `overview/gateway/finance/system/me/plugins`；`POST /auth/logout` 请求体 `{refresh_token?}` 可选；补 `GET /roles/:id`、`GET /users?role=`；`POST /users` 指定非默认角色需 `role:manage` + step-up；§7 删除 `authz:version`（以 PG `authz_meta` 为准）；只有超级管理员能授予/修改超级管理员 |
-| A2 | `config:changed` payload `{"type":"proxy","id":N}`；`account.status_changed` 的 status 增加 `cooldown`；补 `GET /users/:id/groups`、`GET /groups/:id`、`GET /proxies/:id`；`/account-types` 增加 `plugin_version`、`asset_base`；平台插件默认拿到自己平台账号的解密凭证 |
-| B | `core.Ledger.ApplyTx`（✅ 已加）；新增 `GET /me/usage/:id`；价格接口可选 `platform`、返回 `analysis`；preview 接受 `metrics`，返回 `base_cost/rate_multiplier/expression/expr_hash`；`usage.recorded` 增加 `cache_creation_1h_tokens`；调整余额接口支持 `Idempotency-Key`；校验错误格式 `{code, message:{en,zh}, detail}`；usage semantics 与捕获的参数存在 `billing_detail.inputs`（以后可改为独立列） |
-| C1 | 新增 `GET /plugins/:key/versions/:version/review`；`config_enc` AAD；配置广播格式；主机版本传 `main.Version`（预发布后缀忽略）；节点状态 JSON 的 `state` 字段；市场源 url 可指向 `index.json` 或以 `/` 结尾的目录 |
-| C1 待接 | `core.JobTrigger`（H 实现，✅ 接口已加）；`core.HookStatsSource`（G 实现，✅ 接口已加，C1 的 `api` 需改为使用它）；卸载时清除账号需要 A2 提供接口（未做） |
-| D | 建议新增 `EgressLogReader` 接口（C1 目前直接查表，可不做）；`LaunchSpec.CPU` → `GOMAXPROCS=ceil(CPU)`；`MaxThreads` 只告警；槽位回收要求单实例 Redis 且节点 NTP 同步 |
-| E | sdk 依赖 pgx；`go.work` 新增 3 个模块（✅ 已合并）；Windows 二进制 `plugin.exe`；缓存 token 口径（见第 2 节）；建议 `PricingEntry` 增加 `note`；`gateway.endpoint`、`platform.register` 的 scope 格式待定义 |
-| QA | 网关请求 ID 必须服务端生成（已要求 G）；插件禁用后其端点返回 503（已要求 G）；市场地址是内网 `http://caddy:3120/market/index.json`，C1 下载时若有 SSRF 限制需在测试环境放行 |
+| 来源 | 变更 | 处理意见 |
+|---|---|---|
+| C2 | Redis `plugin:ledger:{key}:{credit\|debit}:{yyyymmdd}`（每日累计，TTL 48h） | 写入 §7 |
+| C2 | `plugin:events` 广播 `{"type":"rollout"\|"config","plugin_key","rollout_id"}`；`ReportPlugin` JSON = `rollout.NodePluginState`（serving、standby、rollout_id、rollout 状态、instances） | 写入 §7 |
+| C2 | Disable 立即提交；Enable 优先 `active_version` 否则最新已批准版本；plugins 行删除后各节点一次对账内停实例 | 写入 §5.7 |
+| C2 | MigrateData 可能因协调者接管重复执行，插件必须幂等 | 写入 SDK 文档 |
+| C2 | 超时：控制台平台调用 10s、热路径 2s、Scheduler 200ms、钩子最多 2s | 写入 §11 |
+| C2 | ~~`SET LOCAL ROLE` 迁移可被 `RESET ROLE` 绕过~~ | ✅ 主控已修（`d87ae94d7`，0003 迁移 + 插件角色登录执行） |
+| G | `UsageRecord.ClientRequestID` + `usage_logs.client_request_id` 列 | 待做（core + 0004 迁移 + B） |
+| G | Redis `hook:stats:{plugin}:{hook}`（HASH）、`hook:statidx:{plugin}`（SET），TTL 7d；`hook:breaker` 值为熔断截止毫秒，TTL 30s | 写入 §7 |
+| G | `usage_logs.error_type` 新增 `model_not_allowed`、`price_not_configured`、`rate_limited`、`invalid_request`、`plugin_unavailable` | 写入 §6 / 表注释 |
+| G | `PlatformBinding` 缺凭证授权标记，网关总是给平台插件传解密凭证 | 符合"平台插件默认拿自己平台账号凭证"，保持 |
+| G | `/settings/gateway` GET/PUT 无归属 | 待定：建议 G 在 gateway 包补 |
+| G | `plain` 错误格式即核心 REST 格式；anthropic 格式 `error.code` 可带 `guard_blocked` | 写入 §3 |
+| G | `HookBinding` 加 `ID`（现在未写 id 时用 manifest 下标） | 可选；C1 详情已按同规则匹配 |
+| G | SSRF：共享代理客户端无法拨号时校验，防不住 DNS rebinding | 待 D 提供拨号钩子 |
+| G | `sticky_rules UNIQUE(name, source)` 使两个插件不能声明同名默认规则 | 保持（后来者跳过并记日志） |
+| H | `core.Locker` 增加续租（`Extend`） | 可选 |
+| H | core 定义"有新事件"频道 `events:appended`，B 的 Publisher 提交后发布 | 可选（现最多延迟 1s） |
+| H | job cron 默认 UTC（支持 `CRON_TZ=`）、`@every` 对齐周期；`OnEvents` 确认 id 不超过游标算失败 | 写入 §11 |
+| H | `plugin_job_runs.triggered_by`；`core.JobTrigger.NextRun` | 可选 |
+| F | 已实现但未写入：`/ui/plugins` 的 `host_ui_compat`；插件设置 `{schema, ui_schema, values}`；价格保存 `confirm` 与 `details.confirmation_required`；角色 `permission_keys`、`user_count` | 写入 §5 |
+| F | 仍缺：`POST /me/api-keys`、`PATCH /api-keys/:id` 字段；列表筛选参数；`/nodes` 响应结构；代理密码 `"******"` 不修改；`/sticky-rules/stats` 对应键与 flush 返回；发布记录 `migrations[]`；核心版本与资源上限查询接口 | 按后端现状补写；核心版本可放 `/healthz` 或 `/me` |
+| F | 插件包 `i18n/*.json` 未自动加载（原生插件需 `host.addMessages`） | 后续 |
 
 ---
 
@@ -112,16 +94,19 @@ api.New(api.Deps{DB, Install: inst, Market: mkt, Rollout, Nodes: cl.Registry, Re
 
 | # | 问题 | 负责 | 状态 |
 |---|---|---|---|
-| 1 | 客户端 `X-Request-Id` 不能用作计费幂等键 | G | 已在任务中要求 |
-| 2 | `main.go` 未嵌入前端，控制台页面出不来 | 主控 | 组装时处理 |
+| 1 | 客户端 `X-Request-Id` 不能用作计费幂等键 | G | ✅ 服务端生成 |
+| 2 | `main.go` 未嵌入前端 | 主控 | ✅ `webui` 包 |
 | 3 | 插件出现新外部域名时告警 | D | 未做 |
 | 4 | 登录限速、refresh token 重放检测 | A1 | 未做 |
-| 5 | 测试建库慢（经隧道每个测试约 10 秒），建议 testutil 用模板库 | 主控 | 待优化 |
+| 5 | 测试建库慢 | 主控 | ✅ 模板库（瓶颈主要在经隧道的查询延迟，约 290ms/次） |
 | 6 | 卸载插件时清除其账号 | A2 + C1 | 未做 |
-| 7 | 钩子统计接到 C1 详情页 | G + 主控 | 等 G |
-| 8 | guard 包缺原生界面 | F | F 交付后 QA 构建会自动带上 |
-| 9 | `api_keys.group_id` 外键无级联（删分组时 A2 先物理删除已软删除的 Key） | — | 保持现状 |
-| 10 | 本机 `python` 是 Windows 应用商店占位程序，不能用来改文件 | — | 用编辑工具代替 |
+| 7 | 钩子统计接到 C1 详情页 | 主控 | ✅ |
+| 8 | guard 包缺原生界面 | F | ✅ Docker 构建时 build-ui.sh 产出 |
+| 9 | `api_keys.group_id` 外键无级联 | — | 保持现状 |
+| 10 | 本机 `python` 是应用商店占位程序 | — | 用编辑工具或 perl |
+| 11 | C2：旧版本缓存目录不清理、`Packages` 持有文件句柄；`/api/v1/p` 未接节点自我隔离；资源限制改动下次重启生效；节点只校验 sha256 不重复验签 | C2 | 后续 |
+| 12 | SSRF DNS rebinding（见第 4 节 G） | D + G | 后续 |
+| 13 | 市场页无法判断兼容性（没有接口暴露核心版本） | 主控 | 后续 |
 
 ---
 

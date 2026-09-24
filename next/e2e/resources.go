@@ -65,7 +65,7 @@ func (e *Env) CreateRole(admin *Session, key, name string, perms []string) int64
 		"key":         key,
 		"name":        map[string]string{"en": name, "zh": name},
 		"description": map[string]string{"en": "created by e2e"},
-	})
+	}, admin.StepUp(e.T))
 	id := d.Get("id").Int()
 	if id == 0 {
 		e.T.Fatalf("POST /roles returned no id: %s", d.Raw)
