@@ -197,7 +197,7 @@ func TestStickyKeySources(t *testing.T) {
 	mk := func(src ...manifest.StickyKeySource) *stickyRule {
 		return &stickyRule{Name: "r", PluginKey: "anthropic", KeySources: src}
 	}
-	c := &call{g: e.gw, gen: e.gen, ep: e.man.Gateway.Endpoints[0], model: testModel}
+	c := &call{g: e.gw, gen: e.gen, ep: endpointOf(t, builtinPlatform(t, "anthropic"), "anthropic.messages"), model: testModel}
 	c.principal = e.auth.keys[testKey]
 	c.body = []byte(`{"model":"m","metadata":{"user_id":"user_x_session_abc","conv":"42"},"n":5}`)
 	// A gin context is needed for headers.
@@ -246,14 +246,19 @@ func TestStickyRuleMatching(t *testing.T) {
 		r.matches("anthropic.messages", "claude-x", "curl/8") {
 		t.Fatal("should not match")
 	}
-	// Admin rule shadows the plugin default with the same name; disabled rules are dropped.
+	// Same-name shadowing: admin over built-in over plugin default;
+	// disabled rules are dropped.
 	list := activeRules([]*stickyRule{
 		{Name: "a", Source: sourcePluginDefault, Enabled: true},
 		{Name: "a", Source: sourceAdmin, Enabled: true},
 		{Name: "b", Source: sourceAdmin, Enabled: false},
 		{Name: "c", Source: sourceAdmin, Enabled: true, ValueRegex: "("},
+		{Name: "d", Source: sourcePluginDefault, Enabled: true},
+		{Name: "d", Source: sourceBuiltin, Enabled: true},
+		{Name: "e", Source: sourceBuiltin, Enabled: false},
+		{Name: "e", Source: sourcePluginDefault, Enabled: true},
 	})
-	if len(list) != 1 || list[0].Source != sourceAdmin {
+	if len(list) != 2 || list[0].Source != sourceAdmin || list[1].Name != "d" || list[1].Source != sourceBuiltin {
 		t.Fatalf("active rules %+v", list)
 	}
 }

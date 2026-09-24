@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -26,49 +27,19 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/platforms"
 )
 
 func init() { gin.SetMode(gin.TestMode) }
 
 // ---------------------------------------------------------------- test manifest
 
+// testManifestJSON is the anthropic plugin: it declares the "apikey" account
+// type serving the built-in anthropic platform.
 const testManifestJSON = `{
   "apiVersion": 1, "key": "anthropic", "version": "0.1.0", "publisher": "sub2api", "runtime": "grpc",
-  "gateway": { "endpoints": [
-    { "id": "messages", "method": "POST", "path": "/v1/messages", "protocol": "anthropic.messages", "kind": "proxy",
-      "auth": { "headers": ["x-api-key", "authorization"] },
-      "request": { "modelPath": "model", "streamPath": "stream", "promptTextPaths": ["system", "messages.#.content"] },
-      "response": { "stream": "sse", "nonStream": "json" }, "errorFormat": "anthropic", "billing": "usage" },
-    { "id": "count_tokens", "method": "POST", "path": "/v1/messages/count_tokens", "protocol": "anthropic.count_tokens",
-      "kind": "proxy", "auth": { "headers": ["x-api-key", "authorization"] }, "request": { "modelPath": "model" },
-      "response": { "nonStream": "json" }, "errorFormat": "anthropic", "billing": "free" }
-  ] },
-  "platform": {
-    "id": "anthropic", "protocols": ["anthropic.messages", "anthropic.count_tokens"],
-    "requestFields": ["model"], "passHeaders": ["anthropic-version", "anthropic-beta", "user-agent"],
-    "usage": {
-      "semantics": "exclusive",
-      "sse": [
-        { "event": "message_start", "map": {
-            "model": "message.model", "input_tokens": "message.usage.input_tokens",
-            "cache_read_tokens": "message.usage.cache_read_input_tokens",
-            "cache_creation_tokens": "message.usage.cache_creation_input_tokens",
-            "cache_creation_1h_tokens": "message.usage.cache_creation.ephemeral_1h_input_tokens" } },
-        { "event": "message_delta", "map": { "output_tokens": "usage.output_tokens" } }
-      ],
-      "json": { "map": {
-          "model": "model", "input_tokens": "usage.input_tokens", "output_tokens": "usage.output_tokens",
-          "cache_read_tokens": "usage.cache_read_input_tokens",
-          "cache_creation_tokens": "usage.cache_creation_input_tokens",
-          "cache_creation_1h_tokens": "usage.cache_creation.ephemeral_1h_input_tokens" } }
-    },
-    "stickyRules": [ { "name": "claude-code-session",
-      "match": { "protocols": ["anthropic.messages"], "models": ["claude-*"] },
-      "keySources": [ { "type": "body", "path": "metadata.user_id" } ],
-      "ttlSeconds": 3600, "keyIncludes": ["group", "model", "rule"], "onFailure": "failover" } ]
-  },
   "accountTypes": [ { "id": "apikey", "label": { "en": "API key" }, "form": { "mode": "schema" },
-    "protocols": [ { "protocol": "anthropic.messages" }, { "protocol": "anthropic.count_tokens" } ] } ]
+    "platforms": [ { "platform": "anthropic" } ] } ]
 }`
 
 func testManifest(t testing.TB) *manifest.Manifest {
@@ -78,6 +49,30 @@ func testManifest(t testing.TB) *manifest.Manifest {
 		t.Fatal(err)
 	}
 	return &m
+}
+
+// builtinPlatform returns the built-in platform id.
+func builtinPlatform(t testing.TB, id string) manifest.Platform {
+	t.Helper()
+	for _, p := range platforms.Builtin() {
+		if p.ID == id {
+			return p
+		}
+	}
+	t.Fatalf("no built-in platform %s", id)
+	return manifest.Platform{}
+}
+
+// endpointOf returns the endpoint of platform p speaking protocol.
+func endpointOf(t testing.TB, p manifest.Platform, protocol string) manifest.Endpoint {
+	t.Helper()
+	for _, e := range p.Endpoints {
+		if e.Protocol == protocol {
+			return e
+		}
+	}
+	t.Fatalf("platform %s has no %s endpoint", p.ID, protocol)
+	return manifest.Endpoint{}
 }
 
 // ---------------------------------------------------------------- registry fakes
@@ -92,6 +87,50 @@ type fakeGen struct {
 	scheds       map[string]core.SchedulerPlugin
 }
 
+// newFakeGen returns a generation with the built-in platforms and their
+// endpoints (as the registry provides them).
+func newFakeGen() *fakeGen {
+	g := &fakeGen{num: 1, scheds: map[string]core.SchedulerPlugin{}}
+	for _, p := range platforms.Builtin() {
+		g.addPlatform(core.PluginInfo{}, p)
+	}
+	return g
+}
+
+// addPlatform adds a platform with its endpoints (Plugin zero = built-in).
+func (g *fakeGen) addPlatform(info core.PluginInfo, p manifest.Platform) {
+	g.platforms = append(g.platforms, core.PlatformBinding{Plugin: info, Builtin: info.Key == "", Platform: p})
+	for _, e := range p.Endpoints {
+		g.endpoints = append(g.endpoints, core.EndpointBinding{Plugin: info, Platform: p.ID, Endpoint: e})
+	}
+}
+
+// withoutPlugin returns a copy of g as if the plugin were disabled.
+func (g *fakeGen) withoutPlugin(key string) *fakeGen {
+	n := &fakeGen{num: g.num + 1, hooks: g.hooks, scheds: g.scheds}
+	for _, p := range g.plugins {
+		if p.Key != key {
+			n.plugins = append(n.plugins, p)
+		}
+	}
+	for _, e := range g.endpoints {
+		if e.Plugin.Key != key {
+			n.endpoints = append(n.endpoints, e)
+		}
+	}
+	for _, p := range g.platforms {
+		if p.Plugin.Key != key {
+			n.platforms = append(n.platforms, p)
+		}
+	}
+	for _, b := range g.accountTypes {
+		if b.Plugin.Key != key {
+			n.accountTypes = append(n.accountTypes, b)
+		}
+	}
+	return n
+}
+
 func (g *fakeGen) Number() uint64             { return g.num }
 func (g *fakeGen) Plugins() []core.PluginInfo { return g.plugins }
 func (g *fakeGen) Plugin(key string) (core.PluginInfo, bool) {
@@ -103,20 +142,18 @@ func (g *fakeGen) Plugin(key string) (core.PluginInfo, bool) {
 	return core.PluginInfo{}, false
 }
 func (g *fakeGen) Endpoints() []core.EndpointBinding { return g.endpoints }
-func (g *fakeGen) PlatformsForProtocol(protocol string) []core.PlatformBinding {
-	var out []core.PlatformBinding
-	for _, p := range g.platforms {
-		for _, pr := range p.Platform.Protocols {
-			if pr == protocol {
-				out = append(out, p)
-			}
-		}
-	}
-	return out
-}
+func (g *fakeGen) Platforms() []core.PlatformBinding { return g.platforms }
 func (g *fakeGen) Platform(id string) (core.PlatformBinding, bool) {
 	for _, p := range g.platforms {
 		if p.Platform.ID == id {
+			return p, true
+		}
+	}
+	return core.PlatformBinding{}, false
+}
+func (g *fakeGen) PlatformForProtocol(protocol string) (core.PlatformBinding, bool) {
+	for _, p := range g.platforms {
+		if slices.Contains(p.Platform.Protocols(), protocol) {
 			return p, true
 		}
 	}
@@ -131,10 +168,10 @@ func (g *fakeGen) AccountType(pluginKey, typeID string) (core.AccountTypeBinding
 	}
 	return core.AccountTypeBinding{}, false
 }
-func (g *fakeGen) AccountTypesForProtocol(protocol string) []core.AccountTypeBinding {
+func (g *fakeGen) AccountTypesForPlatform(platformID string) []core.AccountTypeBinding {
 	var out []core.AccountTypeBinding
 	for _, b := range g.accountTypes {
-		if _, ok := b.Protocol(protocol); ok {
+		if _, ok := b.Supports(platformID); ok {
 			out = append(out, b)
 		}
 	}
@@ -196,6 +233,8 @@ type fakePlatform struct {
 	builds    []*pluginv1.BuildUpstreamRequestRequest
 	classify  []*pluginv1.ClassifyErrorRequest
 	urlFor    func(acct *pluginv1.Account) string
+	// route overrides the upstream URL from the whole request.
+	route func(in *pluginv1.BuildUpstreamRequestRequest) string
 }
 
 func (p *fakePlatform) ValidateCredentials(context.Context, *pluginv1.ValidateCredentialsRequest) (*pluginv1.ValidateCredentialsResponse, error) {
@@ -205,7 +244,7 @@ func (p *fakePlatform) ValidateCredentials(context.Context, *pluginv1.ValidateCr
 func (p *fakePlatform) BuildUpstreamRequest(ctx context.Context, in *pluginv1.BuildUpstreamRequestRequest) (*pluginv1.BuildUpstreamRequestResponse, error) {
 	p.mu.Lock()
 	p.builds = append(p.builds, in)
-	hook, base, urlFor, patches := p.buildHook, p.base, p.urlFor, p.patches
+	hook, base, urlFor, patches, route := p.buildHook, p.base, p.urlFor, p.patches, p.route
 	p.mu.Unlock()
 	if hook != nil {
 		if err := hook(ctx, in); err != nil {
@@ -219,6 +258,9 @@ func (p *fakePlatform) BuildUpstreamRequest(ctx context.Context, in *pluginv1.Bu
 	}
 	if urlFor != nil {
 		u = urlFor(in.GetAccount())
+	}
+	if route != nil {
+		u = route(in)
 	}
 	h := map[string]string{"x-api-key": key, "content-type": "application/json"}
 	for k, v := range in.GetInboundHeaders() {
@@ -659,11 +701,8 @@ func newEnv(t *testing.T, opts ...envOpt) *env {
 
 	info := core.PluginInfo{Key: "anthropic", Version: "0.1.0", Manifest: e.man}
 	e.plat = &fakePlatform{base: e.up.srv.URL}
-	e.gen = &fakeGen{num: 1, plugins: []core.PluginInfo{info}, scheds: map[string]core.SchedulerPlugin{}}
-	for _, ep := range e.man.Gateway.Endpoints {
-		e.gen.endpoints = append(e.gen.endpoints, core.EndpointBinding{Plugin: info, Endpoint: ep})
-	}
-	e.gen.platforms = []core.PlatformBinding{{Plugin: info, Platform: *e.man.Platform, Client: e.plat}}
+	e.gen = newFakeGen()
+	e.gen.plugins = []core.PluginInfo{info}
 	e.gen.accountTypes = []core.AccountTypeBinding{{Plugin: info, Type: e.man.AccountTypes[0], Client: e.plat}}
 	e.reg = &fakeRegistry{cur: e.gen}
 	e.conv = convert.NewRegistry()
@@ -708,10 +747,11 @@ func (e *env) setSettings(gw GatewaySettings, st StickySettings) {
 	e.gw.settings.mu.Unlock()
 }
 
-// enableSticky turns sticky sessions on with the manifest's default rule.
+// enableSticky turns sticky sessions on with the built-in anthropic default
+// rule.
 func (e *env) enableSticky(onFailure string) {
-	r := e.man.Platform.StickyRules[0]
-	rule := &stickyRule{ID: 1, Name: r.Name, Source: sourcePluginDefault, PluginKey: "anthropic", Enabled: true,
+	r := builtinPlatform(e.t, "anthropic").StickyRules[0]
+	rule := &stickyRule{ID: 1, Name: r.Name, Source: sourceBuiltin, Enabled: true,
 		Priority: 100, Match: r.Match, KeySources: r.KeySources, TTLSeconds: r.TTLSeconds, KeyIncludes: r.KeyIncludes,
 		OnFailure: onFailure}
 	e.gw.rules.mu.Lock()

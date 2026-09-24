@@ -15,6 +15,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/platforms"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -309,11 +310,12 @@ func (g *Gateway) updateRuleHandler(c *gin.Context) {
 		return
 	}
 	if r.Source != sourceAdmin && in.definitionChanged() {
-		// Plugin defaults are rewritten on upgrade; only the switches an
-		// administrator owns survive. Overrides are admin rules of the same name.
-		msg := "plugin default rules only accept enabled and priority; create an admin rule with the same name to override it"
+		// Plugin and built-in defaults are rewritten on upgrade; only the
+		// switches an administrator owns survive. Overrides are admin rules
+		// of the same name.
+		msg := "default rules (plugin or built-in) only accept enabled and priority; create an admin rule with the same name to override it"
 		if core.Locale(ctx) == "zh" {
-			msg = "插件默认规则只能修改启用状态和优先级；如需覆盖，请新建同名的管理员规则"
+			msg = "默认规则（插件或内置）只能修改启用状态和优先级；如需覆盖，请新建同名的管理员规则"
 		}
 		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage(msg))
 		return
@@ -366,9 +368,9 @@ func (g *Gateway) deleteRuleHandler(c *gin.Context) {
 		return
 	}
 	if r.Source != sourceAdmin {
-		msg := "plugin default rules cannot be deleted; disable them instead"
+		msg := "default rules (plugin or built-in) cannot be deleted; disable them instead"
 		if core.Locale(ctx) == "zh" {
-			msg = "插件默认规则不能删除，可以停用"
+			msg = "默认规则（插件或内置）不能删除，可以停用"
 		}
 		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage(msg))
 		return
@@ -543,13 +545,52 @@ func (g *Gateway) putStickySettingsHandler(c *gin.Context) {
 	httpapi.OK(c, cur)
 }
 
-// ---------------------------------------------------------------- plugin defaults
+// ---------------------------------------------------------------- default rules
 
 // SyncPluginDefaults implements core.StickyRuleCatalog: it replaces the
-// plugin's source=plugin_default rules inside the install/upgrade
-// transaction. Admin rules are untouched; the enabled flag and priority an
-// administrator set on an existing default rule are kept.
+// plugin's source=plugin_default rules (the stickyRules of every platform the
+// plugin declares, concatenated by the caller) inside the install/upgrade
+// transaction. Admin and built-in rules are untouched; the enabled flag and
+// priority an administrator set on an existing default rule are kept.
 func (g *Gateway) SyncPluginDefaults(ctx context.Context, tx pgx.Tx, pluginKey string, rules []manifest.StickyRule) error {
+	if pluginKey == "" {
+		return errors.New("sync plugin sticky rules: empty plugin key")
+	}
+	if err := syncDefaultRules(ctx, tx, sourcePluginDefault, &pluginKey, rules); err != nil {
+		return err
+	}
+	// Invalidate now and again after the caller commits.
+	g.rules.invalidate()
+	cctx := context.WithoutCancel(ctx)
+	time.AfterFunc(time.Second, func() { g.changed(cctx, "sticky_rules") })
+	return nil
+}
+
+// SyncBuiltinDefaults writes the default sticky rules of the built-in
+// platforms (source=builtin, no plugin key) with the same semantics as
+// plugin defaults: definitions follow the code, administrators only switch
+// them on or off and reorder them. Called when the gateway starts.
+func (g *Gateway) SyncBuiltinDefaults(ctx context.Context) error {
+	if g.d.DB == nil {
+		return nil
+	}
+	var rules []manifest.StickyRule
+	for _, p := range platforms.Builtin() {
+		rules = append(rules, p.StickyRules...)
+	}
+	if err := g.d.DB.Tx(ctx, func(tx pgx.Tx) error {
+		return syncDefaultRules(ctx, tx, sourceBuiltin, nil, rules)
+	}); err != nil {
+		return err
+	}
+	g.changed(ctx, "sticky_rules")
+	return nil
+}
+
+// syncDefaultRules upserts rules as defaults of (source, pluginKey) and
+// deletes that owner's defaults no longer listed. A name the same source
+// already uses for another owner is skipped.
+func syncDefaultRules(ctx context.Context, tx pgx.Tx, source string, pluginKey *string, rules []manifest.StickyRule) error {
 	names := make([]string, 0, len(rules))
 	for i, r := range rules {
 		name := strings.TrimSpace(r.Name)
@@ -567,30 +608,29 @@ func (g *Gateway) SyncPluginDefaults(ctx context.Context, tx pgx.Tx, pluginKey s
 		tag, err := tx.Exec(ctx, `
 			INSERT INTO sticky_rules (name, source, plugin_key, enabled, priority, match, key_sources, value_regex,
 				ttl_seconds, key_includes, on_failure, updated_at)
-			VALUES ($1, 'plugin_default', $2, true, $3, $4, $5, $6, $7, $8, $9, now())
+			VALUES ($1, $2, $3, true, $4, $5, $6, $7, $8, $9, $10, now())
 			ON CONFLICT (name, source) DO UPDATE SET match = EXCLUDED.match, key_sources = EXCLUDED.key_sources,
 				value_regex = EXCLUDED.value_regex, ttl_seconds = EXCLUDED.ttl_seconds,
 				key_includes = EXCLUDED.key_includes, on_failure = EXCLUDED.on_failure, updated_at = now()
-			WHERE sticky_rules.plugin_key = EXCLUDED.plugin_key`,
-			name, pluginKey, 100+i, mustJSON(r.Match), mustJSON(r.KeySources), r.ValueRegex, max(r.TTLSeconds, 0),
+			WHERE sticky_rules.plugin_key IS NOT DISTINCT FROM EXCLUDED.plugin_key`,
+			name, source, pluginKey, 100+i, mustJSON(r.Match), mustJSON(r.KeySources), r.ValueRegex, max(r.TTLSeconds, 0),
 			mustJSON(includes), onFailure)
 		if err != nil {
 			return err
 		}
 		if tag.RowsAffected() == 0 {
-			slog.WarnContext(ctx, "gateway: sticky rule name owned by another plugin, skipped", "plugin", pluginKey, "rule", name)
+			owner := ""
+			if pluginKey != nil {
+				owner = *pluginKey
+			}
+			slog.WarnContext(ctx, "gateway: sticky rule name owned by another plugin, skipped",
+				"source", source, "plugin", owner, "rule", name)
 			continue
 		}
 		names = append(names, name)
 	}
-	if _, err := tx.Exec(ctx, `
-		DELETE FROM sticky_rules WHERE source = 'plugin_default' AND plugin_key = $1 AND NOT (name = ANY($2))`,
-		pluginKey, names); err != nil {
-		return err
-	}
-	// Invalidate now and again after the caller commits.
-	g.rules.invalidate()
-	cctx := context.WithoutCancel(ctx)
-	time.AfterFunc(time.Second, func() { g.changed(cctx, "sticky_rules") })
-	return nil
+	_, err := tx.Exec(ctx, `
+		DELETE FROM sticky_rules WHERE source = $1 AND plugin_key IS NOT DISTINCT FROM $2 AND NOT (name = ANY($3))`,
+		source, pluginKey, names)
+	return err
 }

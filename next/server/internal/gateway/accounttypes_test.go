@@ -21,9 +21,10 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert"
 )
 
-// addAccountType registers a plugin declaring one account type.
-func (e *env) addAccountType(pluginKey, typeID string, client core.PlatformPlugin, protocols ...manifest.AccountProtocol) core.PluginInfo {
-	t := manifest.AccountType{ID: typeID, Label: manifest.LocalizedText{"en": typeID}, Protocols: protocols}
+// addAccountType registers a plugin declaring one account type serving the
+// given platforms.
+func (e *env) addAccountType(pluginKey, typeID string, client core.PlatformPlugin, platforms ...manifest.AccountPlatform) core.PluginInfo {
+	t := manifest.AccountType{ID: typeID, Label: manifest.LocalizedText{"en": typeID}, Platforms: platforms}
 	info := core.PluginInfo{Key: pluginKey, Version: "1.2.3",
 		Manifest: &manifest.Manifest{Key: pluginKey, AccountTypes: []manifest.AccountType{t}}}
 	e.gen.plugins = append(e.gen.plugins, info)
@@ -41,7 +42,7 @@ func TestMixedAccountTypesServeOneEndpoint(t *testing.T) {
 	e := newEnv(t)
 	relay := &fakePlatform{base: e.up.srv.URL}
 	e.addAccountType("relay", "relay_key", relay,
-		manifest.AccountProtocol{Protocol: "anthropic.messages", PassHeaders: []string{"x-relay-hint"}})
+		manifest.AccountPlatform{Platform: "anthropic", PassHeaders: []string{"x-relay-hint"}})
 	e.accounts.addTyped(testGroup, 4, 0, "relay-4", "relay", "relay_key")
 
 	// Priority: the relay account (priority 0) goes first.
@@ -100,7 +101,7 @@ func TestMixedAccountTypesServeOneEndpoint(t *testing.T) {
 func TestUnsupportedAccountTypeNotScheduled(t *testing.T) {
 	e := newEnv(t)
 	other := &fakePlatform{base: e.up.srv.URL}
-	e.addAccountType("gem", "gem_key", other, manifest.AccountProtocol{Protocol: "gemini.generate"})
+	e.addAccountType("gem", "gem_key", other, manifest.AccountPlatform{Platform: "gemini"})
 	e.accounts.addTyped(testGroup, 5, 0, "gem-5", "gem", "gem_key")
 
 	if r := e.messages(body(testModel, false)); r.status != 200 || strings.Join(e.up.keys(), ",") != "acc-1" {
@@ -134,47 +135,73 @@ func TestUnsupportedAccountTypeNotScheduled(t *testing.T) {
 }
 
 func TestPlanRoutes(t *testing.T) {
-	m := testManifest(t)
-	info := core.PluginInfo{Key: "anthropic", Manifest: m}
+	anth := builtinPlatform(t, "anthropic")
 	cl := &fakePlatform{}
-	usage := &manifest.UsageRules{Semantics: "inclusive"}
-	mk := func(key, id string, client core.PlatformPlugin, ps ...manifest.AccountProtocol) core.AccountTypeBinding {
-		return core.AccountTypeBinding{Plugin: core.PluginInfo{Key: key}, Type: manifest.AccountType{ID: id, Protocols: ps}, Client: client}
+	acctUsage := manifest.UsageRules{Semantics: "account"}
+	epUsage := &manifest.UsageRules{Semantics: "endpoint"}
+	// Plugin platform "x": x.up (endpoint usage override) and x.plain.
+	xp := manifest.Platform{ID: "x", RequestFields: []string{"xf"}, PassHeaders: []string{"x-h"},
+		Usage: manifest.UsageRules{Semantics: "platform"},
+		Endpoints: []manifest.Endpoint{
+			{ID: "plain", Method: "POST", Path: "/x/plain", Protocol: "x.plain"},
+			{ID: "up", Method: "POST", Path: "/x/up", Protocol: "x.up", Usage: epUsage},
+		}}
+	mk := func(key, id string, client core.PlatformPlugin, ps ...manifest.AccountPlatform) core.AccountTypeBinding {
+		return core.AccountTypeBinding{Plugin: core.PluginInfo{Key: key}, Type: manifest.AccountType{ID: id, Platforms: ps}, Client: client}
 	}
-	gen := &fakeGen{
-		platforms: []core.PlatformBinding{{Plugin: info, Platform: *m.Platform}},
-		accountTypes: []core.AccountTypeBinding{
-			mk("a", "native", cl, manifest.AccountProtocol{Protocol: "anthropic.messages"}),
-			mk("b", "conv", cl, manifest.AccountProtocol{Protocol: "x.other"},
-				manifest.AccountProtocol{Protocol: "x.up", RequestFields: []string{"q"}, Usage: usage}),
-			mk("c", "both", cl, manifest.AccountProtocol{Protocol: "x.up"}, manifest.AccountProtocol{Protocol: "anthropic.messages"}),
-			mk("d", "none", cl, manifest.AccountProtocol{Protocol: "x.other"}),
-			mk("e", "noclient", nil, manifest.AccountProtocol{Protocol: "anthropic.messages"}),
-		},
+	gen := newFakeGen()
+	gen.addPlatform(core.PluginInfo{Key: "xplug"}, xp)
+	gen.accountTypes = []core.AccountTypeBinding{
+		mk("a", "native", cl, manifest.AccountPlatform{Platform: "anthropic"}),
+		mk("b", "conv", cl, manifest.AccountPlatform{Platform: "gemini"},
+			manifest.AccountPlatform{Platform: "x", RequestFields: []string{"q"}}),
+		mk("c", "both", cl, manifest.AccountPlatform{Platform: "x"}, manifest.AccountPlatform{Platform: "anthropic",
+			PassHeaders: []string{"h1"}, Usage: map[string]manifest.UsageRules{"anthropic.messages": acctUsage}}),
+		mk("d", "none", cl, manifest.AccountPlatform{Platform: "openai"}),
+		mk("e", "noclient", nil, manifest.AccountPlatform{Platform: "anthropic"}),
+		mk("f", "gone", cl, manifest.AccountPlatform{Platform: "disabled_plugin_platform"}),
+		mk("g", "convacct", cl, manifest.AccountPlatform{Platform: "x",
+			Usage: map[string]manifest.UsageRules{"x.up": acctUsage}}),
 	}
 	g := &Gateway{conv: convert.NewRegistry(&fakeConv{from: "anthropic.messages", to: "x.up"})}
-	c := &call{g: g, gen: gen, ep: m.Gateway.Endpoints[0], plugin: info}
+	c := &call{g: g, gen: gen, ep: endpointOf(t, anth, "anthropic.messages"), platform: "anthropic", pf: anth}
 	c.planRoutes()
-	if len(c.routeKeys) != 3 {
+	if len(c.routeKeys) != 4 {
 		t.Fatalf("routes %v", c.routeKeys)
 	}
 	a := c.routes[core.AccountTypeKey{PluginKey: "a", Type: "native"}]
-	if a == nil || a.conv != nil || a.upstream != "anthropic.messages" || !slices.Equal(a.requestFields, []string{"model"}) ||
-		a.usage.Semantics != "exclusive" || len(a.passHeaders) != 3 {
+	if a == nil || a.conv != nil || a.upstream != "anthropic.messages" || a.platform != "anthropic" ||
+		!slices.Equal(a.requestFields, []string{"model"}) || a.usage.Semantics != "exclusive" ||
+		!slices.Equal(a.passHeaders, anth.PassHeaders) {
 		t.Fatalf("native route %+v", a)
 	}
 	b := c.routes[core.AccountTypeKey{PluginKey: "b", Type: "conv"}]
-	if b == nil || b.conv == nil || b.upstream != "x.up" || !slices.Equal(b.requestFields, []string{"q"}) ||
-		b.usage.Semantics != "inclusive" || len(b.passHeaders) != 0 {
+	if b == nil || b.conv == nil || b.upstream != "x.up" || b.platform != "x" || !slices.Equal(b.requestFields, []string{"q"}) ||
+		b.usage.Semantics != "endpoint" || !slices.Equal(b.passHeaders, []string{"x-h"}) {
 		t.Fatalf("converting route %+v", b)
 	}
 	both := c.routes[core.AccountTypeKey{PluginKey: "c", Type: "both"}]
-	if both == nil || both.conv != nil || both.upstream != "anthropic.messages" {
+	if both == nil || both.conv != nil || both.upstream != "anthropic.messages" || both.usage.Semantics != "account" ||
+		!slices.Equal(both.passHeaders, []string{"h1"}) {
 		t.Fatalf("native must win over conversion: %+v", both)
 	}
+	ca := c.routes[core.AccountTypeKey{PluginKey: "g", Type: "convacct"}]
+	if ca == nil || ca.conv == nil || ca.usage.Semantics != "account" || !slices.Equal(ca.requestFields, []string{"xf"}) {
+		t.Fatalf("converting route with account usage %+v", ca)
+	}
 	// Native types are listed first.
-	if c.routeKeys[len(c.routeKeys)-1] != (core.AccountTypeKey{PluginKey: "b", Type: "conv"}) {
+	if c.routeKeys[0] != (core.AccountTypeKey{PluginKey: "a", Type: "native"}) ||
+		c.routeKeys[1] != (core.AccountTypeKey{PluginKey: "c", Type: "both"}) {
 		t.Fatalf("order %v", c.routeKeys)
+	}
+
+	// An endpoint-level usage override applies to native routes too.
+	ep := endpointOf(t, anth, "anthropic.messages")
+	ep.Usage = epUsage
+	c = &call{g: g, gen: gen, ep: ep, platform: "anthropic", pf: anth}
+	c.planRoutes()
+	if r := c.routes[core.AccountTypeKey{PluginKey: "a", Type: "native"}]; r.usage.Semantics != "endpoint" {
+		t.Fatalf("endpoint usage %+v", r.usage)
 	}
 }
 
@@ -300,8 +327,9 @@ var qUsage = &manifest.UsageRules{
 		"model": "q_model", "input_tokens": "q_usage.in", "output_tokens": "q_usage.out"}}},
 }
 
-// convEnv adds a "qplug" account type speaking q (priority 0, account 6)
-// and a converter anthropic.messages -> q.
+// convEnv adds a "qplug" plugin declaring platform "q" (protocol q.chat) and
+// an account type serving it (priority 0, account 6), and a converter
+// anthropic.messages -> q.chat.
 func convEnv(t *testing.T, conv *fakeConv) (*env, *qUpstream, *fakePlatform) {
 	q := newQUpstream(t)
 	qp := &fakePlatform{urlFor: func(*pluginv1.Account) string { return q.srv.URL + "/q" }}
@@ -313,8 +341,11 @@ func convEnv(t *testing.T, conv *fakeConv) (*env, *qUpstream, *fakePlatform) {
 		if err := e.conv.Register(conv); err != nil {
 			t.Fatal(err)
 		}
-		e.addAccountType("qplug", "q_key", qp,
-			manifest.AccountProtocol{Protocol: "q.chat", RequestFields: []string{"q_model"}, Usage: qUsage})
+		info := e.addAccountType("qplug", "q_key", qp, manifest.AccountPlatform{Platform: "q", RequestFields: []string{"q_model"}})
+		e.gen.addPlatform(info, manifest.Platform{ID: "q", Usage: *qUsage, Endpoints: []manifest.Endpoint{{
+			ID: "chat", Method: "POST", Path: "/q/chat", Protocol: "q.chat", Kind: "proxy",
+			Auth: manifest.EndpointAuth{Headers: []string{"x-api-key"}}, Request: manifest.EndpointRequest{ModelPath: "q_model"},
+			ErrorFormat: "plain", Billing: "usage"}}})
 		e.accounts.addTyped(testGroup, 6, 0, "q-6", "qplug", "q_key")
 	})
 	return e, q, qp
@@ -457,38 +488,50 @@ func TestConvertResponseFailure(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------- endpoint without platform
+// ---------------------------------------------------------------- plugin platforms
 
-func TestEndpointPluginWithoutPlatform(t *testing.T) {
+// A plugin platform's endpoints exist while the plugin is enabled and 404
+// once it is disabled; the built-in endpoints stay.
+func TestPluginPlatformEndpoints(t *testing.T) {
 	e := newEnv(t)
-	ep := manifest.Endpoint{ID: "bare", Method: "POST", Path: "/bare/messages", Protocol: "bare.messages", Kind: "proxy",
+	anth := builtinPlatform(t, "anthropic")
+	ep := manifest.Endpoint{ID: "gen", Method: "POST", Path: "/v1/video/generations", Protocol: "myvideo.gen", Kind: "proxy",
 		Auth: manifest.EndpointAuth{Headers: []string{"x-api-key"}}, Request: manifest.EndpointRequest{ModelPath: "model", StreamPath: "stream"},
 		ErrorFormat: "plain", Billing: "usage"}
-	info := core.PluginInfo{Key: "bare", Version: "0.0.1", Manifest: &manifest.Manifest{Key: "bare",
-		Gateway: &manifest.Gateway{Endpoints: []manifest.Endpoint{ep}}}}
-	e.gen.plugins = append(e.gen.plugins, info)
-	e.gen.endpoints = append(e.gen.endpoints, core.EndpointBinding{Plugin: info, Endpoint: ep})
-	e.gw.table.Store(buildRouteTable(e.gen))
+	vp := &fakePlatform{base: e.up.srv.URL}
+	info := e.addAccountType("video", "video_key", vp, manifest.AccountPlatform{Platform: "myvideo", RequestFields: []string{"model"}})
+	e.gen.addPlatform(info, manifest.Platform{ID: "myvideo", Usage: anth.Usage, Endpoints: []manifest.Endpoint{ep}})
+	e.accounts.addTyped(testGroup, 8, 0, "video-8", "video", "video_key")
+	e.reg.set(e.gen)
 
-	bp := &fakePlatform{base: e.up.srv.URL}
-	usage := testManifest(t).Platform.Usage
-	e.addAccountType("barekeys", "bare_key", bp,
-		manifest.AccountProtocol{Protocol: "bare.messages", RequestFields: []string{"model"}, Usage: &usage})
-	e.accounts.addTyped(testGroup, 8, 0, "bare-8", "barekeys", "bare_key")
-
-	r := e.do("/bare/messages", body(testModel, false), nil)
-	if r.status != 200 || strings.Join(e.up.keys(), ",") != "bare-8" {
-		t.Fatalf("bare endpoint: %d %v %s", r.status, e.up.keys(), r.body)
+	r := e.do("/v1/video/generations", body(testModel, false), nil)
+	if r.status != 200 || strings.Join(e.up.keys(), ",") != "video-8" {
+		t.Fatalf("plugin endpoint: %d %v %s", r.status, e.up.keys(), r.body)
 	}
-	if b := bp.builds[0]; b.GetAccount().GetPlatform() != "" || b.GetMeta().GetProtocol() != "bare.messages" {
+	if b := vp.builds[0]; b.GetAccount().GetPlatform() != "myvideo" || b.GetMeta().GetProtocol() != "myvideo.gen" {
 		t.Fatalf("build %+v", b)
 	}
 	rec := e.record()
-	if rec.Platform != "" || rec.Protocol != "bare.messages" || rec.PluginKey != "barekeys" || rec.AccountType != "bare_key" ||
-		rec.Tokens.Output != upOutput || !rec.Billable {
+	if rec.Platform != "myvideo" || rec.Protocol != "myvideo.gen" || rec.PluginKey != "video" || rec.AccountType != "video_key" ||
+		rec.Tokens.Output != upOutput || !rec.Billable || rec.Endpoint != "/v1/video/generations" {
 		t.Fatalf("record %+v", rec)
 	}
 	if hasKey(e.accounts.lastTypes, "anthropic", "apikey") {
-		t.Fatalf("anthropic type offered for bare.messages: %v", e.accounts.lastTypes)
+		t.Fatalf("anthropic type offered for myvideo: %v", e.accounts.lastTypes)
+	}
+
+	// Disable the plugin: its endpoint is gone (core 404, nothing recorded),
+	// the built-in anthropic endpoint still serves.
+	e.reg.set(e.gen.withoutPlugin("video"))
+	r = e.do("/v1/video/generations", body(testModel, false), nil)
+	if r.status != 404 || r.json().Get("error").String() != "core 404" {
+		t.Fatalf("disabled plugin endpoint: %d %s", r.status, r.body)
+	}
+	e.noRecord()
+	if r := e.messages(body(testModel, false)); r.status != 200 {
+		t.Fatalf("builtin endpoint after disable: %d %s", r.status, r.body)
+	}
+	if rec := e.record(); rec.Platform != "anthropic" || rec.PluginKey != "anthropic" {
+		t.Fatalf("record %+v", rec)
 	}
 }

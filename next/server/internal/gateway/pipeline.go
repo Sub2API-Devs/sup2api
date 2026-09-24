@@ -24,13 +24,16 @@ type call struct {
 	c      *gin.Context
 	gen    core.Generation
 	ep     manifest.Endpoint
-	plugin core.PluginInfo // plugin declaring the endpoint
-	// platform is the platform id of the endpoint's plugin ("" when it
-	// declares none).
+	plugin core.PluginInfo // plugin declaring the endpoint's platform (zero for built-in platforms)
+	// platform is the id of the platform owning the endpoint; pf is its
+	// definition (zero when the generation no longer lists it).
 	platform string
-	format   string
-	rid      string
-	start    time.Time
+	pf       manifest.Platform
+	// params are the path parameters of the matched endpoint pattern.
+	params map[string]string
+	format string
+	rid    string
+	start  time.Time
 
 	gw        GatewaySettings
 	stickyCfg StickySettings
@@ -54,7 +57,7 @@ type call struct {
 }
 
 // serve runs the proxy pipeline (ARCHITECTURE 6.1) for one request.
-func (g *Gateway) serve(c *gin.Context, gen core.Generation, b core.EndpointBinding) {
+func (g *Gateway) serve(c *gin.Context, gen core.Generation, b core.EndpointBinding, params map[string]string) {
 	// The request id is always generated here: it is the usage_logs key and
 	// the ledger idempotency key, so a client-chosen id could dodge billing.
 	rid := httpapi.NewRequestID()
@@ -64,11 +67,11 @@ func (g *Gateway) serve(c *gin.Context, gen core.Generation, b core.EndpointBind
 	c.Request = c.Request.WithContext(ctx)
 
 	cl := &call{
-		g: g, c: c, gen: gen, ep: b.Endpoint, plugin: b.Plugin, format: b.Endpoint.ErrorFormat,
-		rid: rid, start: g.now(),
+		g: g, c: c, gen: gen, ep: b.Endpoint, plugin: b.Plugin, platform: b.Platform, params: params,
+		format: b.Endpoint.ErrorFormat, rid: rid, start: g.now(),
 	}
-	if pl := endpointPlatform(b.Plugin); pl != nil {
-		cl.platform = pl.ID
+	if pb, ok := gen.Platform(b.Platform); ok {
+		cl.pf = pb.Platform
 	}
 	cl.gw, cl.stickyCfg = g.settings.get(ctx)
 	if clientRID != "" {
@@ -223,16 +226,26 @@ func (c *call) readBody() *gwError {
 }
 
 // checkModel (re)reads model and stream and applies the group allowlist.
+// The model comes from the path parameter request.modelParam when declared
+// (e.g. Gemini's /v1beta/models/:model:generateContent), else from the body
+// at request.modelPath. request.stream marks endpoints that always stream.
 func (c *call) checkModel() *gwError {
-	if mp := c.ep.Request.ModelPath; mp != "" {
-		c.model = gjson.GetBytes(c.body, mp).String()
-		if c.model == "" {
-			return &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code,
-				Message: "model is required", RecordType: errTypeInvalidRequest}
-		}
+	req := c.ep.Request
+	switch {
+	case req.ModelParam != "":
+		c.model = strings.TrimSpace(c.params[req.ModelParam])
+	case req.ModelPath != "":
+		c.model = gjson.GetBytes(c.body, req.ModelPath).String()
 	}
-	if sp := c.ep.Request.StreamPath; sp != "" {
-		c.stream = gjson.GetBytes(c.body, sp).Bool()
+	if (req.ModelParam != "" || req.ModelPath != "") && c.model == "" {
+		return &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code,
+			Message: "model is required", RecordType: errTypeInvalidRequest}
+	}
+	switch {
+	case req.Stream:
+		c.stream = true
+	case req.StreamPath != "":
+		c.stream = gjson.GetBytes(c.body, req.StreamPath).Bool()
 	}
 	c.rec.Model = c.model
 	c.rec.Stream = c.stream

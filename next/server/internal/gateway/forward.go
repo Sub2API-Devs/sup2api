@@ -169,12 +169,19 @@ func (c *call) forwardJSONConverted(resp *http.Response, u *usageAcc, conv conve
 // whenever the upstream has nothing buffered, and extracts usage from the
 // upstream events on the way. Without a converter lines pass through
 // verbatim; with one each upstream event goes through the stream converter
-// and its output events are written instead.
+// and its output events are written instead. When the client asked for a
+// JSON array stream (jsonArrayStream) the event data are written as the
+// elements of one JSON array instead of SSE.
 func (c *call) forwardSSE(ctx context.Context, resp *http.Response, u *usageAcc, conv convert.Converter) error {
+	arr := c.jsonArrayStream()
 	w := c.c.Writer
 	h := w.Header()
-	h.Set("Content-Type", "text/event-stream")
-	h.Set("Cache-Control", "no-cache")
+	if arr {
+		h.Set("Content-Type", "application/json; charset=utf-8")
+	} else {
+		h.Set("Content-Type", "text/event-stream")
+		h.Set("Cache-Control", "no-cache")
+	}
 	h.Set("X-Accel-Buffering", "no")
 	w.WriteHeader(resp.StatusCode)
 	w.Flush()
@@ -183,14 +190,30 @@ func (c *call) forwardSSE(ctx context.Context, resp *http.Response, u *usageAcc,
 	if conv != nil {
 		sc = conv.NewStream()
 	}
+	passthrough := sc == nil && !arr
 	var out []byte
+	elements := 0
 	emit := func(evs []convert.Event, err error) error {
 		if err != nil {
 			return &convertError{err: err}
 		}
 		out = out[:0]
 		for _, ev := range evs {
-			out = convert.AppendSSE(out, ev)
+			if !arr {
+				out = convert.AppendSSE(out, ev)
+				continue
+			}
+			d := bytes.TrimSpace(ev.Data)
+			if len(d) == 0 || string(d) == "[DONE]" {
+				continue
+			}
+			if elements == 0 {
+				out = append(out, '[')
+			} else {
+				out = append(out, ",\r\n"...)
+			}
+			elements++
+			out = append(out, d...)
 		}
 		if len(out) == 0 {
 			return nil
@@ -199,6 +222,19 @@ func (c *call) forwardSSE(ctx context.Context, resp *http.Response, u *usageAcc,
 			return errClientGone
 		}
 		w.Flush()
+		return nil
+	}
+	closeArray := func() error {
+		if !arr {
+			return nil
+		}
+		end := "]"
+		if elements == 0 {
+			end = "[]"
+		}
+		if _, werr := w.Write([]byte(end)); werr != nil {
+			return errClientGone
+		}
 		return nil
 	}
 
@@ -214,8 +250,11 @@ func (c *call) forwardSSE(ctx context.Context, resp *http.Response, u *usageAcc,
 		}
 		u.applySSE(event, data)
 		var err error
-		if sc != nil {
+		switch {
+		case sc != nil:
 			err = emit(sc.Event(convert.Event{Name: event, Data: data}))
+		case arr:
+			err = emit([]convert.Event{{Name: event, Data: data}}, nil)
 		}
 		event, data = "", data[:0]
 		return err
@@ -223,7 +262,7 @@ func (c *call) forwardSSE(ctx context.Context, resp *http.Response, u *usageAcc,
 	for {
 		line, rerr := readLine(br, maxSSELine)
 		if len(line) > 0 {
-			if sc == nil {
+			if passthrough {
 				if _, werr := w.Write(line); werr != nil {
 					return errClientGone
 				}
@@ -246,7 +285,7 @@ func (c *call) forwardSSE(ctx context.Context, resp *http.Response, u *usageAcc,
 				}
 				data = append(data, d...)
 			}
-			if sc == nil && (len(t) == 0 || br.Buffered() == 0) {
+			if passthrough && (len(t) == 0 || br.Buffered() == 0) {
 				w.Flush()
 			}
 		}
@@ -254,6 +293,11 @@ func (c *call) forwardSSE(ctx context.Context, resp *http.Response, u *usageAcc,
 			derr := dispatch()
 			if sc != nil && derr == nil {
 				derr = emit(sc.Flush())
+			}
+			if derr == nil && rerr == io.EOF {
+				// An interrupted stream leaves the array open, so the
+				// client notices the truncation.
+				derr = closeArray()
 			}
 			w.Flush()
 			if derr != nil {
@@ -269,6 +313,16 @@ func (c *call) forwardSSE(ctx context.Context, resp *http.Response, u *usageAcc,
 		}
 	}
 }
+
+// jsonArrayStream reports whether the client of a streaming Gemini endpoint
+// expects Google's default stream framing (one JSON array whose elements
+// arrive progressively) rather than SSE (?alt=sse). Upstream events are
+// re-framed accordingly.
+func (c *call) jsonArrayStream() bool {
+	return c.ep.Protocol == protocolGeminiStream && !strings.EqualFold(c.c.Query("alt"), "sse")
+}
+
+const protocolGeminiStream = manifest.PlatformGemini + ".stream_generate"
 
 // readLine returns the next line including its '\n' (the last line may lack
 // it). The slice is only valid until the next read.
@@ -355,10 +409,25 @@ func (u *usageAcc) applyFacts(doc []byte) {
 	}
 }
 
+// applyJSON applies the JSON rules to a response body. A top-level array
+// (Gemini's JSON array stream) applies them to each element in order.
 func (u *usageAcc) applyJSON(body []byte) {
 	if len(body) == 0 || !gjson.ValidBytes(body) {
 		return
 	}
+	if r := gjson.ParseBytes(body); r.IsArray() {
+		r.ForEach(func(_, v gjson.Result) bool {
+			if v.IsObject() {
+				u.applyJSONDoc([]byte(v.Raw))
+			}
+			return true
+		})
+		return
+	}
+	u.applyJSONDoc(body)
+}
+
+func (u *usageAcc) applyJSONDoc(body []byte) {
 	if m := u.rules.JSON; m != nil {
 		for field, path := range m.Map {
 			u.set(field, gjson.GetBytes(body, path))
@@ -375,8 +444,13 @@ func (u *usageAcc) applySSE(event string, data []byte) {
 	if name == "" {
 		name = gjson.GetBytes(data, "type").String()
 	}
-	if name == "error" {
+	// Anthropic/Responses name error events; OpenAI chat and Gemini send an
+	// unnamed {"error": {...}} chunk.
+	if name == "error" || (name == "" && gjson.GetBytes(data, "error").IsObject()) {
 		msg := gjson.GetBytes(data, "error.message").String()
+		if msg == "" {
+			msg = gjson.GetBytes(data, "message").String()
+		}
 		if msg == "" {
 			msg = string(data)
 		}
