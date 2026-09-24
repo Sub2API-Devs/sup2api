@@ -100,9 +100,9 @@ func newFixture(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.price = &core.PriceRule{Platform: "anthropic", Pattern: "claude-sonnet-*", Mode: "expression", Expression: a6Expr, ExprVersion: 1, ExprHash: prog.Hash()}
-	err = db.Pool.QueryRow(ctx, `INSERT INTO model_prices (platform, model_pattern, mode, expression, expr_hash, source)
-		VALUES ('anthropic', 'claude-sonnet-*', 'expression', $1, $2, 'admin') RETURNING id`, a6Expr, prog.Hash()).Scan(&f.price.ID)
+	f.price = &core.PriceRule{Pattern: "claude-sonnet-*", Mode: "expression", Expression: a6Expr, ExprVersion: 1, ExprHash: prog.Hash()}
+	err = db.Pool.QueryRow(ctx, `INSERT INTO model_prices (model_pattern, mode, expression, expr_hash, source)
+		VALUES ('claude-sonnet-*', 'expression', $1, $2, 'admin') RETURNING id`, a6Expr, prog.Hash()).Scan(&f.price.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ var bj10 = time.Date(2026, 9, 24, 2, 0, 0, 0, time.UTC)
 func (f *fixture) record(id string, billable bool) *core.UsageRecord {
 	rec := &core.UsageRecord{
 		RequestID: id, UserID: f.user, APIKeyID: 1, GroupID: f.group, PluginKey: "anthropic", Platform: "anthropic",
-		Protocol: "anthropic.messages", Endpoint: "/v1/messages", Model: "claude-sonnet-x", StatusCode: 200,
+		Protocol: "anthropic.messages", AccountType: "apikey", UpstreamProtocol: "anthropic.messages", Endpoint: "/v1/messages", Model: "claude-sonnet-x", StatusCode: 200,
 		Success: true, Attempts: 1, UsageSemantics: "exclusive",
 		Tokens:         core.UsageTokens{Input: 100000, Output: 2000, CacheRead: 80000},
 		Billable:       billable,
@@ -155,6 +155,17 @@ func (f *fixture) balance() decimal.Decimal {
 	var d decimal.Decimal
 	_ = f.db.Pool.QueryRow(context.Background(), `SELECT balance FROM user_balances WHERE user_id = $1`, f.user).Scan(&d)
 	return d
+}
+
+func TestRecordedEventPayload(t *testing.T) {
+	rec := &core.UsageRecord{RequestID: "r", PluginKey: "relay", Platform: "openai", Protocol: "openai.chat",
+		AccountType: "relay_key", UpstreamProtocol: "anthropic.messages", Model: "m", CreatedAt: time.Unix(0, 0)}
+	ev := recordedEvent(fromRecord(rec), decimal.NewFromInt(1), StatusBilled)
+	p := ev.Payload.(map[string]any)
+	if ev.Type != core.EventUsageRecorded || p["account_type"] != "relay_key" || p["upstream_protocol"] != "anthropic.messages" ||
+		p["platform"] != "openai" || p["protocol"] != "openai.chat" || p["plugin_key"] != "relay" {
+		t.Fatalf("payload: %v", p)
+	}
 }
 
 func TestSettleFlow(t *testing.T) {
@@ -203,9 +214,16 @@ func TestSettleFlow(t *testing.T) {
 	if n := f.scalar(`SELECT count(*) FROM events WHERE type = 'usage.recorded'`); n != "4" {
 		t.Fatalf("usage.recorded events = %s", n)
 	}
-	ev := f.scalar(`SELECT payload->>'total_cost' || ' ' || (payload->>'billing_status') FROM events WHERE type = 'usage.recorded' AND payload->>'request_id' = 'req-1'`)
-	if ev != "0.708 billed" {
+	ev := f.scalar(`SELECT payload->>'total_cost' || ' ' || (payload->>'billing_status') || ' ' || (payload->>'account_type') ||
+		' ' || (payload->>'upstream_protocol') FROM events WHERE type = 'usage.recorded' AND payload->>'request_id' = 'req-1'`)
+	if ev != "0.708 billed apikey anthropic.messages" {
 		t.Fatalf("event: %s", ev)
+	}
+	if s := f.scalar(`SELECT account_type || ' ' || upstream_protocol FROM usage_logs WHERE request_id = 'req-free'`); s != "apikey anthropic.messages" {
+		t.Fatalf("usage row: %s", s)
+	}
+	if ev := f.scalar(`SELECT payload->>'account_type' FROM events WHERE type = 'usage.recorded' AND payload->>'request_id' = 'req-free'`); ev != "apikey" {
+		t.Fatalf("free event: %s", ev)
 	}
 	var detail BillingDetail
 	raw := f.scalar(`SELECT billing_detail::text FROM usage_logs WHERE request_id = 'req-1'`)
@@ -320,6 +338,9 @@ func TestUsageAPI(t *testing.T) {
 	acc := int64(42)
 	mine := f.record("req-mine", true)
 	mine.AccountID = &acc
+	// Served through protocol conversion: client endpoint openai.chat, upstream
+	// anthropic.messages.
+	mine.Platform, mine.Protocol, mine.AccountType = "openai", "openai.chat", "relay_key"
 	f.svc.process(ctx, []*core.UsageRecord{mine, other, f.record("req-mine-2", true)})
 
 	list := f.get(f.user, "/me/usage", 200)
@@ -328,12 +349,17 @@ func TestUsageAPI(t *testing.T) {
 		t.Fatalf("me/usage: %v", list)
 	}
 	first := items[0].(map[string]any)
-	if first["account_id"] != nil || first["user_email"] != "u@example.com" || first["group_name"] != "default" || first["total_cost"] != "0.708" {
+	if first["account_id"] != nil || first["user_email"] != "u@example.com" || first["group_name"] != "default" || first["total_cost"] != "0.708" ||
+		first["account_type"] != "" || first["upstream_protocol"] != "" {
 		t.Fatalf("row: %v", first)
 	}
 	all := f.get(f.user, "/usage?model=claude-haiku-4", 200)["data"].([]any)
-	if len(all) != 1 || all[0].(map[string]any)["request_id"] != "req-other" {
+	if len(all) != 1 || all[0].(map[string]any)["request_id"] != "req-other" ||
+		all[0].(map[string]any)["account_type"] != "apikey" || all[0].(map[string]any)["upstream_protocol"] != "anthropic.messages" {
 		t.Fatalf("usage filter: %v", all)
+	}
+	if n := len(f.get(f.user, "/usage?account_type=relay_key", 200)["data"].([]any)); n != 1 {
+		t.Fatalf("account_type filter: %d", n)
 	}
 	if n := len(f.get(f.user, "/usage?success=true&user_id="+strconv.FormatInt(f.user, 10), 200)["data"].([]any)); n != 2 {
 		t.Fatalf("success filter: %d", n)
@@ -348,11 +374,15 @@ func TestUsageAPI(t *testing.T) {
 	_ = f.db.Pool.QueryRow(ctx, `SELECT id FROM usage_logs WHERE request_id = 'req-other'`).Scan(&otherID)
 	d := f.get(f.user, "/usage/"+strconv.FormatInt(id, 10), 200)["data"].(map[string]any)
 	if d["ledger_id"] == nil || d["price"].(map[string]any)["model_pattern"] != "claude-sonnet-*" || d["account_id"].(float64) != 42 ||
-		d["billing_detail"].(map[string]any)["tier"] != "standard" || len(d["hook_decisions"].([]any)) != 1 {
+		d["billing_detail"].(map[string]any)["tier"] != "standard" || len(d["hook_decisions"].([]any)) != 1 ||
+		d["protocol"] != "openai.chat" || d["upstream_protocol"] != "anthropic.messages" || d["account_type"] != "relay_key" {
 		t.Fatalf("detail: %v", d)
 	}
+	if _, has := d["price"].(map[string]any)["platform"]; has {
+		t.Fatalf("price ref has platform: %v", d["price"])
+	}
 	md := f.get(f.user, "/me/usage/"+strconv.FormatInt(id, 10), 200)["data"].(map[string]any)
-	if md["account_id"] != nil {
+	if md["account_id"] != nil || md["account_type"] != "" || md["upstream_protocol"] != "" {
 		t.Fatalf("self detail leaks account: %v", md)
 	}
 	f.get(f.user, "/me/usage/"+strconv.FormatInt(otherID, 10), 404)
