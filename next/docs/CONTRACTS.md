@@ -10,17 +10,19 @@
 
 | 路径 | 负责人 | 说明 |
 |---|---|---|
-| `sdk/proto`、`sdk/gen`、`sdk/manifest` | 主控 | gRPC 契约、manifest 类型 |
-| `server/internal/core`、`config`、`store`、`httpapi`、`testutil`、`migrations`、`cmd/sub2api/main.go`、`internal/app` | 主控 | 共享基础、组装 |
-| `server/internal/iam`、`authz`、`apikey`、`group`、`proxy`、`account` | A core-data | |
-| `server/internal/billing`（含 `billing/expr`）、`usage`、`event`（写入端 Emit） | B billing | |
-| `server/internal/plugin`（除 `sandbox`、`egress`）、`plugin/grpcruntime`、`plugin/market` | C plugin-runtime | |
+| `sdk/proto`、`sdk/gen`、`sdk/manifest`、`sdk/protocol`（go-plugin 握手）、`sdk/pkgsig`（包签名格式） | 主控 | 契约 |
+| `server/internal/core`、`config`、`store`、`httpapi`、`testutil`、`migrations`、`secret`（AES-GCM）、`deps`、`cmd/sub2api/main.go`、`internal/app` | 主控 | 共享基础、组装 |
+| `server/internal/iam`、`authz`（含 `/me/menus`） | A1 identity | 用户、登录、JWT、step-up、RBAC、权限目录 |
+| `server/internal/apikey`、`group`、`proxy`、`account` | A2 resources | API Key、分组、代理、账号、账号类型接口 |
+| `server/internal/billing`（含 `billing/expr`）、`usage`、`event`（Emit 写入端） | B billing | |
+| `server/internal/plugin/pkg`（解包、manifest 校验、签名与信任）、`plugin/install`（上传、审查、授权确认、卸载）、`plugin/market`、`plugin/api`（`/plugins`、`/publishers`、`/market`、`/nodes`、`/ui/plugins` 接口） | C1 plugin-lifecycle | |
+| `server/internal/plugin/registry`（generation）、`plugin/grpcruntime`（进程、能力适配、HostService）、`plugin/rollout`（两阶段发布、对账）、`plugin/dbschema`（插件 schema、角色、迁移、DSN）、`plugin/routes`（`/api/v1/p/:key/*`、`/plugin-ui`） | C2 plugin-runtime | |
 | `server/internal/cluster`、`plugin/sandbox`、`plugin/egress`、`sdk/pluginsdk/egress` | D sandbox-network | |
 | `sdk/pluginsdk`（除 `egress`）、`plugins/anthropic`、`plugins/guard`（Go 部分）、`tools/sub2api-plugin` | E sdk-plugins | |
 | `web/`、`plugins/guard/ui/native` | F frontend | |
-| `server/internal/gateway` | G gateway（阶段 2） | |
+| `server/internal/gateway`（含粘性会话、`/sticky-rules` 接口） | G gateway（阶段 2） | |
 | `server/internal/event/delivery`、`server/internal/job` | H events-jobs（阶段 2） | |
-| `deploy/`、`e2e/` | QA | |
+| `deploy/`、`e2e/`、`Dockerfile` | QA | |
 
 每个模块对外只暴露：构造函数、实现 `core` 接口的类型、`RegisterRoutes(r *httpapi.Router)`。**模块之间只通过 `core` 里的接口依赖，不 import 别人的包**（`core`、`store`、`httpapi`、`config`、`testutil` 除外）。组装由主控在 `internal/app` 完成。
 
