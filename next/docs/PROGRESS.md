@@ -2,7 +2,7 @@
 
 > 用途：记录派发给开发 agent 的任务、交付结果、待办事项与环境信息，保证上下文压缩或换人接手后能完整恢复现场。
 > **每次合并分支、派发新任务、做出决策后都要更新本文件。**
-> 最后更新：2026-09-24，11 个 agent 全部合并，`internal/app` 组装完成，ovh 上 17 条验收全部通过（部署提交 `e6f7e4483`）。
+> 最后更新：2026-09-25，第四轮 7 个 agent 全部合并，sup2api 清库重建后第四轮验证全部通过（部署 `549710fa6`）；依赖数据库的单测待补跑（见 §11）。
 
 相关文档：[ARCHITECTURE.md](ARCHITECTURE.md)（设计）· [CONTRACTS.md](CONTRACTS.md)（开发契约）
 
@@ -110,11 +110,11 @@ HTTP 挂载：`/healthz`（节点自我隔离时 503）→ `httpapi.NewRouter` �
 | 12 | SSRF DNS rebinding（见第 4 节 G） | D + G | 后续 |
 | 13 | 市场页无法判断兼容性（没有接口暴露核心版本） | 主控 | 后续 |
 | 14 | 出口日志只在连接关闭时写入，长连接（keep-alive、数据库）在关闭前不出现在"外部访问"页 | D | 后续：考虑连接建立时写一行 `open` 记录或定期落盘 |
-| 15 | guard 规则改动在其他节点最多延迟 5 秒生效（插件内轮询）；插件没有广播通道 | E / 核心 | 后续：可给 SDK 提供集群广播能力 |
+| 15 | guard 规则改动在其他节点最多延迟 5 秒生效（插件内轮询）；插件没有广播通道 | E / 核心 | ✅ 第四轮：插件集群广播 `app.broadcast.v1`，guard 改规则后广播 `rules.changed`，5 秒轮询保留兜底 |
 | 16 | 钩子熔断按节点计数（每节点连续 10 次失败），集群内各节点独立熔断 | G | 符合 §6.3，保持 |
-| 17 | OpenAI chat 流式：客户端未带 `stream_options.include_usage=true` 时上游不返回用量，会按零用量计费；将来的 openai 账号类型插件应在 BuildUpstreamRequest 中强制打开（或定为核心行为） | 插件 / 主控 | 待有 openai 账号类型时处理 |
-| 18 | Gemini 思考 token：`candidatesTokenCount` 不含 `thoughtsTokenCount`，默认按 token 定价会少计；目前暴露为计量值 `u("thoughts_tokens")`；需要用量映射支持多路径求和或新增输出附加字段 | G | 待定 |
-| 19 | Gemini 流式：插件拿不到客户端 query，应始终向上游请求 `?alt=sse`，网关按客户端要求（带不带 `alt=sse`）重新组装 | 插件 | 待有 gemini 账号类型时处理 |
+| 17 | OpenAI chat 流式：客户端未带 `stream_options.include_usage=true` 时上游不返回用量，会按零用量计费；将来的 openai 账号类型插件应在 BuildUpstreamRequest 中强制打开（或定为核心行为） | 插件 / 主控 | ✅ 第四轮：openai 插件对流式 chat 强制 `include_usage=true`，网关忽略无用量的块 |
+| 18 | Gemini 思考 token：`candidatesTokenCount` 不含 `thoughtsTokenCount`，默认按 token 定价会少计；目前暴露为计量值 `u("thoughts_tokens")`；需要用量映射支持多路径求和或新增输出附加字段 | G | ✅ 第四轮：用量映射支持 `a+b` 求和，gemini `output_tokens` = candidates + thoughts |
+| 19 | Gemini 流式：插件拿不到客户端 query，应始终向上游请求 `?alt=sse`，网关按客户端要求（带不带 `alt=sse`）重新组装 | 插件 | ✅ 第四轮：gemini 插件始终请求 `alt=sse`，网关在客户端未带时重组为 JSON 数组 |
 
 ---
 
@@ -269,7 +269,26 @@ go test -count=1 -timeout 50m -v ./...
 | c4-lifecycle | `plugin/install`、`market`、`api`、`routes`、`pkg` | 卸载清账号、市场兼容性、出口域名接口、资源限制广播、插件接口自我隔离、broadcast 校验 | ✅ `44c41864b`，已合并；routes 健康检查已组装，install.Accounts 已组装 |
 | d4-runtime | `plugin/grpcruntime`、`rollout`、`registry`、`egress`、`sandbox` | 插件集群广播、资源限制即时重启、旧版本缓存清理、节点重新验签、新域名记录与告警、出口长连接 | ✅ `6f1423e52`，合并 `1ffa5dd89`；主控 `aecc4a114` 节点验签改用 VerifyInstalled（已装插件不因签名密钥过期而停），`99614fdd6` 组装验签器、egress Events、runtime Bus |
 | e4-plugins | `sdk/pluginsdk`、`plugins/*`（新增 openai、gemini）、`tools`、`e2e`（AC20）、`mock-upstream`、`build-go.sh` | 两个内置账号类型插件、SDK 广播、guard 规则即时生效、mock 上游支持 openai/gemini | ✅ `44f88c1bf`、`0f643d3ab`、`eb7d39024`、`4e0a067ae`，合并 `164f4ece9`；内置插件改为 `anthropic openai gemini` |
-| f4-web | `web/` | 对应的控制台改动 | ⏳ |
+| f4-web | `web/` | 对应的控制台改动 | ✅ `332ee0de1`、`b923baefc`，合并 `73676fa1b`；含代理密码按 §15.4、refresh 单飞（同标签页共用、跨标签页 Web Locks） |
 | docs4-contracts | CONTRACTS §15 | 按代码现状补齐前端提出的缺失接口说明 | ✅ `754cb51f8`，合并 `04b649149`；§15.10 列出 11 处与前文不一致待裁定；发现代理密码掩码问题已转 f4 |
 
 **合并后主控要做**：`internal/app` 组装（proxy AllowPrivate、install Accounts、routes/gateway 健康检查、registry 验签、egress 事件发布等）；清空 sup2api 重建并验证 openai/gemini（上游用 httpbin 回显或真实 Key，由用户提供）；更新本节。
+
+**sup2api 验证（2026-09-25，清库重建后部署 `549710fa6`）**：两个脚本在 ovh 上对 127.0.0.1:3130 运行，上游用 httpbin 回显，测试数据用后清理，全部通过：
+- 内置插件：anthropic、openai、gemini 均为内置并已启用；openai、gemini 平台分别由各自的 apikey 类型服务；卸载内置插件返回 403。
+- 登录限速：同一邮箱加 IP 失败 5 次后返回 429，带 `retry_after_seconds=900`。
+- refresh 重放检测：轮换返回 200；重放旧 token 返回 401，同一家族的新 token 也随之失效。
+- 分组、`/me/platforms`、Key 的平台列表都正确。
+- 网关转发：
+  - openai chat 以 `Authorization: Bearer` 转到 `/v1/chat/completions`；
+  - gemini 以 `x-goog-api-key` 转到 `/v1beta/models/…:generateContent`；
+  - 只有 openai 加 gemini 账号的 Key 调 `/v1/messages` 返回 503 `no_available_account`（端点存在但没有账号类型能服务，§12）。
+- `X-Request-Id` 记录为 `client_request_id`，可以按它筛选。
+- 市场：返回 `host_version`，每个版本都带 `compatible`。
+- `/settings/gateway`：读取正常；非法值返回字段错误；可以保存。
+- 卸载 relay 时带 `purge_accounts=true` 返回 `accounts_deleted=1`。
+- guard（从市场安装）：申请 broadcast 权限；经隧道连接插件库后出现在出口域名 `pg` 中，长连接显示为 `open`，并产生 `plugin.egress_new_domain` 事件。
+- 说明：平台适配插件只负责组装请求，由核心发送，所以上游域名不算插件出口，openai 的出口域名为空是正确的。
+- 顺带修复 `549710fa6`：卸载插件时清除它的 `plugin_egress_domains`（该表没有外键），重装后再次连接同一域名会重新告警。
+
+**未完成**：第四轮各 agent 以及主控本地都没有 `TEST_DATABASE_URL`（测试 PG 已按用户要求停掉），所有依赖数据库的单测都被跳过了，没有实际运行。需要用户同意临时启动测试 PG 后补跑。sup2api 的 PG 不能拿来跑测试：dbschema 测试会创建和删除与线上插件同名的 `plugin_<key>` 角色。
