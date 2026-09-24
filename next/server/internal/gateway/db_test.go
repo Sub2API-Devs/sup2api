@@ -270,6 +270,30 @@ func TestStickySettingsAPI(t *testing.T) {
 	}
 }
 
+func TestGatewaySettingsAPIDB(t *testing.T) {
+	e := newDBEnv(t)
+	code, res := e.api("GET", "/settings/gateway", nil)
+	if code != 200 || res.Get("data.max_attempts").Int() != 3 || res.Get("data.platform_call_timeout_ms").Int() != 2000 {
+		t.Fatalf("defaults: %d %s", code, res.Raw)
+	}
+	if code, res := e.api("PUT", "/settings/gateway", map[string]any{"max_attempts": 11}); code != 400 ||
+		res.Get("error.details.fields.0.field").String() != "max_attempts" {
+		t.Fatalf("invalid: %d %s", code, res.Raw)
+	}
+	code, res = e.api("PUT", "/settings/gateway", map[string]any{"max_attempts": 4, "platform_call_timeout_ms": 5000})
+	if code != 200 || res.Get("data.max_attempts").Int() != 4 || res.Get("data.default_hook_timeout_ms").Int() != 300 {
+		t.Fatalf("put: %d %s", code, res.Raw)
+	}
+	gw, _ := e.gw.settings.get(context.Background())
+	if gw.MaxAttempts != 4 || gw.PlatformCallTimeoutMs != 5000 {
+		t.Fatalf("settings cache not refreshed: %+v", gw)
+	}
+	var by *int64
+	if err := e.db.Pool.QueryRow(context.Background(), `SELECT updated_by FROM settings WHERE key = 'gateway'`).Scan(&by); err != nil || by == nil || *by != e.uid {
+		t.Fatalf("updated_by %v %v", by, err)
+	}
+}
+
 // End to end with DB-backed rules: the default rule synced from the
 // manifest drives scheduling.
 func TestStickyRulesFromDBDriveScheduling(t *testing.T) {

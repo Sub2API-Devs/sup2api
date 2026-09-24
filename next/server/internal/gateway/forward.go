@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -404,9 +405,38 @@ func (u *usageAcc) setMetric(key string, r gjson.Result, typ string) {
 func (u *usageAcc) applyFacts(doc []byte) {
 	for key, f := range u.rules.Facts {
 		if f.Path != "" {
-			u.setMetric(key, gjson.GetBytes(doc, f.Path), f.Type)
+			u.setMetric(key, usagePath(doc, f.Path), f.Type)
 		}
 	}
+}
+
+// usagePath evaluates a usage map value: a gjson path, or "a+b+..." summing
+// several numeric paths. Missing (or null) terms count as 0; when every term
+// is missing the result does not exist, i.e. the value was not provided.
+func usagePath(doc []byte, spec string) gjson.Result {
+	if !strings.Contains(spec, "+") {
+		return gjson.GetBytes(doc, spec)
+	}
+	var (
+		sum   float64
+		found bool
+	)
+	for _, p := range strings.Split(spec, "+") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		r := gjson.GetBytes(doc, p)
+		if !r.Exists() || r.Type == gjson.Null {
+			continue
+		}
+		found = true
+		sum += r.Float()
+	}
+	if !found {
+		return gjson.Result{}
+	}
+	return gjson.Result{Type: gjson.Number, Num: sum, Raw: strconv.FormatFloat(sum, 'f', -1, 64)}
 }
 
 // applyJSON applies the JSON rules to a response body. A top-level array
@@ -430,7 +460,7 @@ func (u *usageAcc) applyJSON(body []byte) {
 func (u *usageAcc) applyJSONDoc(body []byte) {
 	if m := u.rules.JSON; m != nil {
 		for field, path := range m.Map {
-			u.set(field, gjson.GetBytes(body, path))
+			u.set(field, usagePath(body, path))
 		}
 	}
 	u.applyFacts(body)
@@ -461,7 +491,7 @@ func (u *usageAcc) applySSE(event string, data []byte) {
 			continue
 		}
 		for field, path := range rule.Map {
-			u.set(field, gjson.GetBytes(data, path))
+			u.set(field, usagePath(data, path))
 		}
 	}
 	u.applyFacts(data)

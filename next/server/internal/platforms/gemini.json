@@ -91,7 +91,7 @@
         "map": {
           "model": "modelVersion",
           "input_tokens": "usageMetadata.promptTokenCount",
-          "output_tokens": "usageMetadata.candidatesTokenCount",
+          "output_tokens": "usageMetadata.candidatesTokenCount+usageMetadata.thoughtsTokenCount",
           "cache_read_tokens": "usageMetadata.cachedContentTokenCount"
         }
       }
@@ -100,7 +100,7 @@
       "map": {
         "model": "modelVersion",
         "input_tokens": "usageMetadata.promptTokenCount",
-        "output_tokens": "usageMetadata.candidatesTokenCount",
+        "output_tokens": "usageMetadata.candidatesTokenCount+usageMetadata.thoughtsTokenCount",
         "cache_read_tokens": "usageMetadata.cachedContentTokenCount"
       }
     },
@@ -110,8 +110,8 @@
         "unit": "tokens",
         "path": "usageMetadata.thoughtsTokenCount",
         "description": {
-          "en": "Thinking tokens (billed as output by Google, not included in output_tokens)",
-          "zh": "思考 token（Google 按输出计费，不含在 output_tokens 中）"
+          "en": "Thinking tokens (billed as output by Google; already counted in output_tokens)",
+          "zh": "思考 token（Google 按输出计费，已计入 output_tokens）"
         }
       }
     }

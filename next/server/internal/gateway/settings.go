@@ -37,27 +37,39 @@ func defaultGatewaySettings() GatewaySettings {
 	return GatewaySettings{MaxAttempts: 3, PlatformCallTimeoutMs: 2000, DefaultHookTimeoutMs: 300}
 }
 
+// Accepted ranges of the gateway settings (CONTRACTS §14.4).
+const (
+	minMaxAttempts           = 1
+	maxMaxAttempts           = 10
+	minPlatformCallTimeoutMs = 100
+	maxPlatformCallTimeoutMs = 30000
+	minDefaultHookTimeoutMs  = 50
+	maxDefaultHookTimeoutMs  = int(maxHookTimeout / time.Millisecond)
+)
+
 func defaultStickySettings() StickySettings {
 	return StickySettings{Enabled: true, DefaultTTLSeconds: 3600}
 }
 
+// normalized fills unset (<= 0) fields with the defaults and clamps the
+// others into the accepted ranges, so a stored row written before the
+// validation existed still yields usable values.
 func (s GatewaySettings) normalized() GatewaySettings {
 	d := defaultGatewaySettings()
-	if s.MaxAttempts <= 0 {
-		s.MaxAttempts = d.MaxAttempts
+	clamp := func(v, def, lo, hi int) int {
+		switch {
+		case v <= 0:
+			return def
+		case v < lo:
+			return lo
+		case v > hi:
+			return hi
+		}
+		return v
 	}
-	if s.MaxAttempts > 10 {
-		s.MaxAttempts = 10
-	}
-	if s.PlatformCallTimeoutMs <= 0 {
-		s.PlatformCallTimeoutMs = d.PlatformCallTimeoutMs
-	}
-	if s.DefaultHookTimeoutMs <= 0 {
-		s.DefaultHookTimeoutMs = d.DefaultHookTimeoutMs
-	}
-	if s.DefaultHookTimeoutMs > int(maxHookTimeout/time.Millisecond) {
-		s.DefaultHookTimeoutMs = int(maxHookTimeout / time.Millisecond)
-	}
+	s.MaxAttempts = clamp(s.MaxAttempts, d.MaxAttempts, minMaxAttempts, maxMaxAttempts)
+	s.PlatformCallTimeoutMs = clamp(s.PlatformCallTimeoutMs, d.PlatformCallTimeoutMs, minPlatformCallTimeoutMs, maxPlatformCallTimeoutMs)
+	s.DefaultHookTimeoutMs = clamp(s.DefaultHookTimeoutMs, d.DefaultHookTimeoutMs, minDefaultHookTimeoutMs, maxDefaultHookTimeoutMs)
 	return s
 }
 

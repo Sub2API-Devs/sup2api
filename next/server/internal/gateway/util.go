@@ -117,6 +117,24 @@ func truncateUTF8(s string, n int) string {
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
 
+// maxClientRequestID bounds usage_logs.client_request_id (varchar(128)).
+const maxClientRequestID = 128
+
+// clientRequestID normalizes the client's X-Request-Id for the usage record:
+// trimmed, invalid UTF-8 dropped (PostgreSQL rejects it) and cut to
+// maxClientRequestID characters.
+func clientRequestID(s string) string {
+	s = strings.ToValidUTF8(strings.TrimSpace(s), "")
+	n := 0
+	for i := range s {
+		if n == maxClientRequestID {
+			return s[:i]
+		}
+		n++
+	}
+	return s
+}
+
 // headerLower normalizes a header name for map keys.
 func headerLower(name string) string { return strings.ToLower(strings.TrimSpace(name)) }
 
