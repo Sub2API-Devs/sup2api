@@ -67,6 +67,7 @@ const (
 	CapHTTPRoutes        = "http.routes.v1"
 	CapMigrationData     = "migration.data.v1"
 	CapSchedulerAffinity = "scheduler.affinity.v1"
+	CapAppBroadcast      = "app.broadcast.v1"
 )
 
 type Capability struct {
@@ -201,13 +202,15 @@ type UsageRules struct {
 	Facts map[string]UsageFact `json:"facts,omitempty"`
 }
 
+// Usage map values are gjson paths; "a+b" sums several numeric paths
+// (missing ones count as 0), e.g. output tokens plus thinking tokens.
 type SSEUsageMap struct {
 	Event string            `json:"event"` // SSE event name, "" = any
-	Map   map[string]string `json:"map"`   // usage field -> gjson path in data
+	Map   map[string]string `json:"map"`   // usage field -> gjson path(s) in data
 }
 
 type UsageMap struct {
-	Map map[string]string `json:"map"`
+	Map map[string]string `json:"map"` // usage field -> gjson path(s), "+" sums
 }
 
 // Standard usage field names produced by UsageRules maps.
@@ -390,6 +393,7 @@ var HostPermissionRisk = map[string]string{
 	"kv":                   RiskLow,
 	"config":               RiskLow,
 	"log":                  RiskLow,
+	"broadcast":            RiskLow,
 	"routes.admin":         RiskMedium,
 	"routes.user":          RiskMedium,
 	"events":               RiskMedium,

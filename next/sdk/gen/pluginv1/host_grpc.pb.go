@@ -28,6 +28,7 @@ const (
 	HostService_AuthzCheck_FullMethodName   = "/sub2api.plugin.v1.HostService/AuthzCheck"
 	HostService_LedgerCredit_FullMethodName = "/sub2api.plugin.v1.HostService/LedgerCredit"
 	HostService_LedgerDebit_FullMethodName  = "/sub2api.plugin.v1.HostService/LedgerDebit"
+	HostService_Publish_FullMethodName      = "/sub2api.plugin.v1.HostService/Publish"
 )
 
 // HostServiceClient is the client API for HostService service.
@@ -55,6 +56,10 @@ type HostServiceClient interface {
 	// (maxPerTx, maxPerDay), idempotent on idempotency_key.
 	LedgerCredit(ctx context.Context, in *LedgerChangeRequest, opts ...grpc.CallOption) (*LedgerChangeResponse, error)
 	LedgerDebit(ctx context.Context, in *LedgerChangeRequest, opts ...grpc.CallOption) (*LedgerChangeResponse, error)
+	// broadcast (grant "broadcast"): deliver a small message to this plugin's
+	// instances on every other live node (AppService.OnBroadcast), best
+	// effort, e.g. "rules changed, reload". Payload at most 64 KiB.
+	Publish(ctx context.Context, in *PublishRequest, opts ...grpc.CallOption) (*PublishResponse, error)
 }
 
 type hostServiceClient struct {
@@ -155,6 +160,16 @@ func (c *hostServiceClient) LedgerDebit(ctx context.Context, in *LedgerChangeReq
 	return out, nil
 }
 
+func (c *hostServiceClient) Publish(ctx context.Context, in *PublishRequest, opts ...grpc.CallOption) (*PublishResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishResponse)
+	err := c.cc.Invoke(ctx, HostService_Publish_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // HostServiceServer is the server API for HostService service.
 // All implementations must embed UnimplementedHostServiceServer
 // for forward compatibility.
@@ -180,6 +195,10 @@ type HostServiceServer interface {
 	// (maxPerTx, maxPerDay), idempotent on idempotency_key.
 	LedgerCredit(context.Context, *LedgerChangeRequest) (*LedgerChangeResponse, error)
 	LedgerDebit(context.Context, *LedgerChangeRequest) (*LedgerChangeResponse, error)
+	// broadcast (grant "broadcast"): deliver a small message to this plugin's
+	// instances on every other live node (AppService.OnBroadcast), best
+	// effort, e.g. "rules changed, reload". Payload at most 64 KiB.
+	Publish(context.Context, *PublishRequest) (*PublishResponse, error)
 	mustEmbedUnimplementedHostServiceServer()
 }
 
@@ -216,6 +235,9 @@ func (UnimplementedHostServiceServer) LedgerCredit(context.Context, *LedgerChang
 }
 func (UnimplementedHostServiceServer) LedgerDebit(context.Context, *LedgerChangeRequest) (*LedgerChangeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method LedgerDebit not implemented")
+}
+func (UnimplementedHostServiceServer) Publish(context.Context, *PublishRequest) (*PublishResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Publish not implemented")
 }
 func (UnimplementedHostServiceServer) mustEmbedUnimplementedHostServiceServer() {}
 func (UnimplementedHostServiceServer) testEmbeddedByValue()                     {}
@@ -400,6 +422,24 @@ func _HostService_LedgerDebit_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HostService_Publish_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).Publish(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostService_Publish_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).Publish(ctx, req.(*PublishRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // HostService_ServiceDesc is the grpc.ServiceDesc for HostService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -442,6 +482,10 @@ var HostService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "LedgerDebit",
 			Handler:    _HostService_LedgerDebit_Handler,
+		},
+		{
+			MethodName: "Publish",
+			Handler:    _HostService_Publish_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

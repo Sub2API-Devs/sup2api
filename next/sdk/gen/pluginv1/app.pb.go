@@ -21,6 +21,102 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type OnBroadcastRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Topic         string                 `protobuf:"bytes,1,opt,name=topic,proto3" json:"topic,omitempty"`
+	Payload       []byte                 `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
+	SourceNodeId  string                 `protobuf:"bytes,3,opt,name=source_node_id,json=sourceNodeId,proto3" json:"source_node_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OnBroadcastRequest) Reset() {
+	*x = OnBroadcastRequest{}
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OnBroadcastRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OnBroadcastRequest) ProtoMessage() {}
+
+func (x *OnBroadcastRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OnBroadcastRequest.ProtoReflect.Descriptor instead.
+func (*OnBroadcastRequest) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *OnBroadcastRequest) GetTopic() string {
+	if x != nil {
+		return x.Topic
+	}
+	return ""
+}
+
+func (x *OnBroadcastRequest) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *OnBroadcastRequest) GetSourceNodeId() string {
+	if x != nil {
+		return x.SourceNodeId
+	}
+	return ""
+}
+
+type OnBroadcastResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OnBroadcastResponse) Reset() {
+	*x = OnBroadcastResponse{}
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OnBroadcastResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OnBroadcastResponse) ProtoMessage() {}
+
+func (x *OnBroadcastResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OnBroadcastResponse.ProtoReflect.Descriptor instead.
+func (*OnBroadcastResponse) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{1}
+}
+
 type RunJobRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	JobId           string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
@@ -32,7 +128,7 @@ type RunJobRequest struct {
 
 func (x *RunJobRequest) Reset() {
 	*x = RunJobRequest{}
-	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[0]
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -44,7 +140,7 @@ func (x *RunJobRequest) String() string {
 func (*RunJobRequest) ProtoMessage() {}
 
 func (x *RunJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[0]
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57,7 +153,7 @@ func (x *RunJobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunJobRequest.ProtoReflect.Descriptor instead.
 func (*RunJobRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{0}
+	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *RunJobRequest) GetJobId() string {
@@ -90,7 +186,7 @@ type RunJobResponse struct {
 
 func (x *RunJobResponse) Reset() {
 	*x = RunJobResponse{}
-	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[1]
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -102,7 +198,7 @@ func (x *RunJobResponse) String() string {
 func (*RunJobResponse) ProtoMessage() {}
 
 func (x *RunJobResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[1]
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -115,7 +211,7 @@ func (x *RunJobResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunJobResponse.ProtoReflect.Descriptor instead.
 func (*RunJobResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{1}
+	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *RunJobResponse) GetMessage() string {
@@ -137,7 +233,7 @@ type Event struct {
 
 func (x *Event) Reset() {
 	*x = Event{}
-	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[2]
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -149,7 +245,7 @@ func (x *Event) String() string {
 func (*Event) ProtoMessage() {}
 
 func (x *Event) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[2]
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -162,7 +258,7 @@ func (x *Event) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Event.ProtoReflect.Descriptor instead.
 func (*Event) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{2}
+	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Event) GetId() int64 {
@@ -202,7 +298,7 @@ type OnEventsRequest struct {
 
 func (x *OnEventsRequest) Reset() {
 	*x = OnEventsRequest{}
-	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[3]
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -214,7 +310,7 @@ func (x *OnEventsRequest) String() string {
 func (*OnEventsRequest) ProtoMessage() {}
 
 func (x *OnEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[3]
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -227,7 +323,7 @@ func (x *OnEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnEventsRequest.ProtoReflect.Descriptor instead.
 func (*OnEventsRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{3}
+	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *OnEventsRequest) GetEvents() []*Event {
@@ -248,7 +344,7 @@ type OnEventsResponse struct {
 
 func (x *OnEventsResponse) Reset() {
 	*x = OnEventsResponse{}
-	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[4]
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -260,7 +356,7 @@ func (x *OnEventsResponse) String() string {
 func (*OnEventsResponse) ProtoMessage() {}
 
 func (x *OnEventsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[4]
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -273,7 +369,7 @@ func (x *OnEventsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnEventsResponse.ProtoReflect.Descriptor instead.
 func (*OnEventsResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{4}
+	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *OnEventsResponse) GetAckedThroughId() int64 {
@@ -292,7 +388,7 @@ type HeaderValues struct {
 
 func (x *HeaderValues) Reset() {
 	*x = HeaderValues{}
-	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[5]
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -304,7 +400,7 @@ func (x *HeaderValues) String() string {
 func (*HeaderValues) ProtoMessage() {}
 
 func (x *HeaderValues) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[5]
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -317,7 +413,7 @@ func (x *HeaderValues) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeaderValues.ProtoReflect.Descriptor instead.
 func (*HeaderValues) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{5}
+	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *HeaderValues) GetValues() []string {
@@ -343,7 +439,7 @@ type HTTPRequest struct {
 
 func (x *HTTPRequest) Reset() {
 	*x = HTTPRequest{}
-	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[6]
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -355,7 +451,7 @@ func (x *HTTPRequest) String() string {
 func (*HTTPRequest) ProtoMessage() {}
 
 func (x *HTTPRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[6]
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -368,7 +464,7 @@ func (x *HTTPRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HTTPRequest.ProtoReflect.Descriptor instead.
 func (*HTTPRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{6}
+	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *HTTPRequest) GetCaller() *Caller {
@@ -438,7 +534,7 @@ type HTTPResponse struct {
 
 func (x *HTTPResponse) Reset() {
 	*x = HTTPResponse{}
-	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[7]
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -450,7 +546,7 @@ func (x *HTTPResponse) String() string {
 func (*HTTPResponse) ProtoMessage() {}
 
 func (x *HTTPResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[7]
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -463,7 +559,7 @@ func (x *HTTPResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HTTPResponse.ProtoReflect.Descriptor instead.
 func (*HTTPResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{7}
+	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *HTTPResponse) GetStatus() int32 {
@@ -497,7 +593,7 @@ type MigrateDataRequest struct {
 
 func (x *MigrateDataRequest) Reset() {
 	*x = MigrateDataRequest{}
-	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[8]
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -509,7 +605,7 @@ func (x *MigrateDataRequest) String() string {
 func (*MigrateDataRequest) ProtoMessage() {}
 
 func (x *MigrateDataRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[8]
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -522,7 +618,7 @@ func (x *MigrateDataRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MigrateDataRequest.ProtoReflect.Descriptor instead.
 func (*MigrateDataRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{8}
+	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *MigrateDataRequest) GetFromVersion() string {
@@ -548,7 +644,7 @@ type MigrateDataResponse struct {
 
 func (x *MigrateDataResponse) Reset() {
 	*x = MigrateDataResponse{}
-	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[9]
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -560,7 +656,7 @@ func (x *MigrateDataResponse) String() string {
 func (*MigrateDataResponse) ProtoMessage() {}
 
 func (x *MigrateDataResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[9]
+	mi := &file_sub2api_plugin_v1_app_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -573,7 +669,7 @@ func (x *MigrateDataResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MigrateDataResponse.ProtoReflect.Descriptor instead.
 func (*MigrateDataResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{9}
+	return file_sub2api_plugin_v1_app_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *MigrateDataResponse) GetMessage() string {
@@ -588,6 +684,11 @@ var File_sub2api_plugin_v1_app_proto protoreflect.FileDescriptor
 const file_sub2api_plugin_v1_app_proto_rawDesc = "" +
 	"\n" +
 	"\x1bsub2api/plugin/v1/app.proto\x12\x11sub2api.plugin.v1\x1a\x1esub2api/plugin/v1/common.proto\"j\n" +
+	"\x12OnBroadcastRequest\x12\x14\n" +
+	"\x05topic\x18\x01 \x01(\tR\x05topic\x12\x18\n" +
+	"\apayload\x18\x02 \x01(\fR\apayload\x12$\n" +
+	"\x0esource_node_id\x18\x03 \x01(\tR\fsourceNodeId\"\x15\n" +
+	"\x13OnBroadcastResponse\"j\n" +
 	"\rRunJobRequest\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12*\n" +
 	"\x11scheduled_at_unix\x18\x02 \x01(\x03R\x0fscheduledAtUnix\x12\x16\n" +
@@ -638,11 +739,12 @@ const file_sub2api_plugin_v1_app_proto_rawDesc = "" +
 	"\n" +
 	"to_version\x18\x02 \x01(\tR\ttoVersion\"/\n" +
 	"\x13MigrateDataResponse\x12\x18\n" +
-	"\amessage\x18\x01 \x01(\tR\amessage2\xb0\x01\n" +
+	"\amessage\x18\x01 \x01(\tR\amessage2\x8e\x02\n" +
 	"\n" +
 	"AppService\x12M\n" +
 	"\x06RunJob\x12 .sub2api.plugin.v1.RunJobRequest\x1a!.sub2api.plugin.v1.RunJobResponse\x12S\n" +
-	"\bOnEvents\x12\".sub2api.plugin.v1.OnEventsRequest\x1a#.sub2api.plugin.v1.OnEventsResponse2\\\n" +
+	"\bOnEvents\x12\".sub2api.plugin.v1.OnEventsRequest\x1a#.sub2api.plugin.v1.OnEventsResponse\x12\\\n" +
+	"\vOnBroadcast\x12%.sub2api.plugin.v1.OnBroadcastRequest\x1a&.sub2api.plugin.v1.OnBroadcastResponse2\\\n" +
 	"\vHTTPService\x12M\n" +
 	"\n" +
 	"HandleHTTP\x12\x1e.sub2api.plugin.v1.HTTPRequest\x1a\x1f.sub2api.plugin.v1.HTTPResponse2p\n" +
@@ -661,44 +763,48 @@ func file_sub2api_plugin_v1_app_proto_rawDescGZIP() []byte {
 	return file_sub2api_plugin_v1_app_proto_rawDescData
 }
 
-var file_sub2api_plugin_v1_app_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_sub2api_plugin_v1_app_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_sub2api_plugin_v1_app_proto_goTypes = []any{
-	(*RunJobRequest)(nil),       // 0: sub2api.plugin.v1.RunJobRequest
-	(*RunJobResponse)(nil),      // 1: sub2api.plugin.v1.RunJobResponse
-	(*Event)(nil),               // 2: sub2api.plugin.v1.Event
-	(*OnEventsRequest)(nil),     // 3: sub2api.plugin.v1.OnEventsRequest
-	(*OnEventsResponse)(nil),    // 4: sub2api.plugin.v1.OnEventsResponse
-	(*HeaderValues)(nil),        // 5: sub2api.plugin.v1.HeaderValues
-	(*HTTPRequest)(nil),         // 6: sub2api.plugin.v1.HTTPRequest
-	(*HTTPResponse)(nil),        // 7: sub2api.plugin.v1.HTTPResponse
-	(*MigrateDataRequest)(nil),  // 8: sub2api.plugin.v1.MigrateDataRequest
-	(*MigrateDataResponse)(nil), // 9: sub2api.plugin.v1.MigrateDataResponse
-	nil,                         // 10: sub2api.plugin.v1.HTTPRequest.PathParamsEntry
-	nil,                         // 11: sub2api.plugin.v1.HTTPRequest.QueryEntry
-	nil,                         // 12: sub2api.plugin.v1.HTTPRequest.HeadersEntry
-	nil,                         // 13: sub2api.plugin.v1.HTTPResponse.HeadersEntry
-	(*Caller)(nil),              // 14: sub2api.plugin.v1.Caller
+	(*OnBroadcastRequest)(nil),  // 0: sub2api.plugin.v1.OnBroadcastRequest
+	(*OnBroadcastResponse)(nil), // 1: sub2api.plugin.v1.OnBroadcastResponse
+	(*RunJobRequest)(nil),       // 2: sub2api.plugin.v1.RunJobRequest
+	(*RunJobResponse)(nil),      // 3: sub2api.plugin.v1.RunJobResponse
+	(*Event)(nil),               // 4: sub2api.plugin.v1.Event
+	(*OnEventsRequest)(nil),     // 5: sub2api.plugin.v1.OnEventsRequest
+	(*OnEventsResponse)(nil),    // 6: sub2api.plugin.v1.OnEventsResponse
+	(*HeaderValues)(nil),        // 7: sub2api.plugin.v1.HeaderValues
+	(*HTTPRequest)(nil),         // 8: sub2api.plugin.v1.HTTPRequest
+	(*HTTPResponse)(nil),        // 9: sub2api.plugin.v1.HTTPResponse
+	(*MigrateDataRequest)(nil),  // 10: sub2api.plugin.v1.MigrateDataRequest
+	(*MigrateDataResponse)(nil), // 11: sub2api.plugin.v1.MigrateDataResponse
+	nil,                         // 12: sub2api.plugin.v1.HTTPRequest.PathParamsEntry
+	nil,                         // 13: sub2api.plugin.v1.HTTPRequest.QueryEntry
+	nil,                         // 14: sub2api.plugin.v1.HTTPRequest.HeadersEntry
+	nil,                         // 15: sub2api.plugin.v1.HTTPResponse.HeadersEntry
+	(*Caller)(nil),              // 16: sub2api.plugin.v1.Caller
 }
 var file_sub2api_plugin_v1_app_proto_depIdxs = []int32{
-	2,  // 0: sub2api.plugin.v1.OnEventsRequest.events:type_name -> sub2api.plugin.v1.Event
-	14, // 1: sub2api.plugin.v1.HTTPRequest.caller:type_name -> sub2api.plugin.v1.Caller
-	10, // 2: sub2api.plugin.v1.HTTPRequest.path_params:type_name -> sub2api.plugin.v1.HTTPRequest.PathParamsEntry
-	11, // 3: sub2api.plugin.v1.HTTPRequest.query:type_name -> sub2api.plugin.v1.HTTPRequest.QueryEntry
-	12, // 4: sub2api.plugin.v1.HTTPRequest.headers:type_name -> sub2api.plugin.v1.HTTPRequest.HeadersEntry
-	13, // 5: sub2api.plugin.v1.HTTPResponse.headers:type_name -> sub2api.plugin.v1.HTTPResponse.HeadersEntry
-	5,  // 6: sub2api.plugin.v1.HTTPRequest.QueryEntry.value:type_name -> sub2api.plugin.v1.HeaderValues
-	5,  // 7: sub2api.plugin.v1.HTTPRequest.HeadersEntry.value:type_name -> sub2api.plugin.v1.HeaderValues
-	5,  // 8: sub2api.plugin.v1.HTTPResponse.HeadersEntry.value:type_name -> sub2api.plugin.v1.HeaderValues
-	0,  // 9: sub2api.plugin.v1.AppService.RunJob:input_type -> sub2api.plugin.v1.RunJobRequest
-	3,  // 10: sub2api.plugin.v1.AppService.OnEvents:input_type -> sub2api.plugin.v1.OnEventsRequest
-	6,  // 11: sub2api.plugin.v1.HTTPService.HandleHTTP:input_type -> sub2api.plugin.v1.HTTPRequest
-	8,  // 12: sub2api.plugin.v1.MigrationService.MigrateData:input_type -> sub2api.plugin.v1.MigrateDataRequest
-	1,  // 13: sub2api.plugin.v1.AppService.RunJob:output_type -> sub2api.plugin.v1.RunJobResponse
-	4,  // 14: sub2api.plugin.v1.AppService.OnEvents:output_type -> sub2api.plugin.v1.OnEventsResponse
-	7,  // 15: sub2api.plugin.v1.HTTPService.HandleHTTP:output_type -> sub2api.plugin.v1.HTTPResponse
-	9,  // 16: sub2api.plugin.v1.MigrationService.MigrateData:output_type -> sub2api.plugin.v1.MigrateDataResponse
-	13, // [13:17] is the sub-list for method output_type
-	9,  // [9:13] is the sub-list for method input_type
+	4,  // 0: sub2api.plugin.v1.OnEventsRequest.events:type_name -> sub2api.plugin.v1.Event
+	16, // 1: sub2api.plugin.v1.HTTPRequest.caller:type_name -> sub2api.plugin.v1.Caller
+	12, // 2: sub2api.plugin.v1.HTTPRequest.path_params:type_name -> sub2api.plugin.v1.HTTPRequest.PathParamsEntry
+	13, // 3: sub2api.plugin.v1.HTTPRequest.query:type_name -> sub2api.plugin.v1.HTTPRequest.QueryEntry
+	14, // 4: sub2api.plugin.v1.HTTPRequest.headers:type_name -> sub2api.plugin.v1.HTTPRequest.HeadersEntry
+	15, // 5: sub2api.plugin.v1.HTTPResponse.headers:type_name -> sub2api.plugin.v1.HTTPResponse.HeadersEntry
+	7,  // 6: sub2api.plugin.v1.HTTPRequest.QueryEntry.value:type_name -> sub2api.plugin.v1.HeaderValues
+	7,  // 7: sub2api.plugin.v1.HTTPRequest.HeadersEntry.value:type_name -> sub2api.plugin.v1.HeaderValues
+	7,  // 8: sub2api.plugin.v1.HTTPResponse.HeadersEntry.value:type_name -> sub2api.plugin.v1.HeaderValues
+	2,  // 9: sub2api.plugin.v1.AppService.RunJob:input_type -> sub2api.plugin.v1.RunJobRequest
+	5,  // 10: sub2api.plugin.v1.AppService.OnEvents:input_type -> sub2api.plugin.v1.OnEventsRequest
+	0,  // 11: sub2api.plugin.v1.AppService.OnBroadcast:input_type -> sub2api.plugin.v1.OnBroadcastRequest
+	8,  // 12: sub2api.plugin.v1.HTTPService.HandleHTTP:input_type -> sub2api.plugin.v1.HTTPRequest
+	10, // 13: sub2api.plugin.v1.MigrationService.MigrateData:input_type -> sub2api.plugin.v1.MigrateDataRequest
+	3,  // 14: sub2api.plugin.v1.AppService.RunJob:output_type -> sub2api.plugin.v1.RunJobResponse
+	6,  // 15: sub2api.plugin.v1.AppService.OnEvents:output_type -> sub2api.plugin.v1.OnEventsResponse
+	1,  // 16: sub2api.plugin.v1.AppService.OnBroadcast:output_type -> sub2api.plugin.v1.OnBroadcastResponse
+	9,  // 17: sub2api.plugin.v1.HTTPService.HandleHTTP:output_type -> sub2api.plugin.v1.HTTPResponse
+	11, // 18: sub2api.plugin.v1.MigrationService.MigrateData:output_type -> sub2api.plugin.v1.MigrateDataResponse
+	14, // [14:19] is the sub-list for method output_type
+	9,  // [9:14] is the sub-list for method input_type
 	9,  // [9:9] is the sub-list for extension type_name
 	9,  // [9:9] is the sub-list for extension extendee
 	0,  // [0:9] is the sub-list for field type_name
@@ -716,7 +822,7 @@ func file_sub2api_plugin_v1_app_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sub2api_plugin_v1_app_proto_rawDesc), len(file_sub2api_plugin_v1_app_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   3,
 		},

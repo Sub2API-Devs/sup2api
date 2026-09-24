@@ -6,15 +6,26 @@ import "sub2api/plugin/v1/common.proto";
 
 option go_package = "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1";
 
-// AppService covers background jobs ("app.jobs.v1") and event subscriptions
-// ("app.events.v1").
+// AppService covers background jobs ("app.jobs.v1"), event subscriptions
+// ("app.events.v1") and cluster broadcasts ("app.broadcast.v1").
 service AppService {
   // Called on exactly one node per scheduled slot.
   rpc RunJob(RunJobRequest) returns (RunJobResponse);
   // At-least-once, in event id order, batched. Plugins must be idempotent
   // on Event.id.
   rpc OnEvents(OnEventsRequest) returns (OnEventsResponse);
+  // A message published by an instance of this plugin on another node
+  // (HostService.Publish). Best effort, no ordering guarantee.
+  rpc OnBroadcast(OnBroadcastRequest) returns (OnBroadcastResponse);
 }
+
+message OnBroadcastRequest {
+  string topic = 1;
+  bytes payload = 2;
+  string source_node_id = 3;
+}
+
+message OnBroadcastResponse {}
 
 message RunJobRequest {
   string job_id = 1;

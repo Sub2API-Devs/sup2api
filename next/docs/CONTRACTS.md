@@ -419,3 +419,39 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 | GET `/me/api-keys`、`/api-keys` | 每项新增 `platforms:[id]`（同其分组） |
 | 插件 `review` | `platforms:[{id, label, endpoints:[{method, path, protocol, billing}]}]`，`account_types:[{id, label, platforms:[id], form_mode}]`；`gateway_endpoints` 由平台端点推出 |
 | 使用记录 | 不变（`platform` = 端点所属平台） |
+
+## 14. 第四轮：OpenAI/Gemini 账号接入、安全加固、插件运行时完善、接口收尾（2026-09-25）
+
+本节优先于前文中冲突的描述。
+
+### 14.1 OpenAI / Gemini 账号接入
+
+- 新增**内置插件** `openai`（账号类型 `apikey` → 平台 `openai`）和 `gemini`（账号类型 `apikey` → 平台 `gemini`），与 anthropic 一样随镜像提供、只能禁用不能卸载（`build-go.sh` 的 `BUILTIN_PLUGINS="anthropic openai gemini"`）。字段：`api_key`（敏感）、`base_url`（默认 `https://api.openai.com` / `https://generativelanguage.googleapis.com`）、`model_mapping`；提供主流模型默认价格。
+- openai 插件：`openai.chat` 流式请求强制 patch `stream_options.include_usage=true`，保证上游返回用量。
+- gemini 插件：流式请求（`gemini.stream_generate`）上游一律带 `?alt=sse`（网关按客户端是否带 `alt=sse` 重新组装）；模型取 `meta.model`，上游路径 `/v1beta/models/{model}:{action}`，Key 放 `x-goog-api-key`。
+- 用量映射值支持 `a+b` 求和（缺失按 0）；`gemini.json` 的 `output_tokens` = `candidatesTokenCount + thoughtsTokenCount`。
+- 新接口 `GET /me/platforms`（登录即可）：`[{id, label, builtin, endpoints:[{method, path, protocol, billing}]}]`，当前可用的全部平台（不含账号类型），用于普通用户创建 Key 时预览端点。
+
+### 14.2 安全加固
+
+- **登录限速**：同一邮箱在同一 IP 15 分钟内失败 5 次、或同一 IP 15 分钟内失败 20 次后，登录返回 429 `rate_limited`，`details.retry_after_seconds`；成功登录清除该邮箱+IP 的计数。Redis key `login:fail:e:{sha256(email|ip)}`、`login:fail:ip:{ip}`（带 TTL）。
+- **refresh token 重放检测**：refresh token 属于一个家族（`refresh_tokens.family_id`，登录时新建）；轮换时旧 token 标记 `replaced_at`；再次出示已轮换或已吊销的 token 时吊销整个家族并返回 401。
+- **SSRF 拨号时校验**：`proxy` 模块给**直连**（不经代理）的上游 HTTP 客户端设置拨号检查，拒绝回环、私有、链路本地、未指定地址，防 DNS 重绑定；`SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM=true` 时放行（`proxy.Options.AllowPrivate`）。经代理的连接不检查（由代理解析）。
+- **插件新外部域名告警**：出口隧道每次连接 upsert `plugin_egress_domains`；首次出现的 host 记 WARN 日志并写事件 `plugin.egress_new_domain`。`GET /plugins/:key/egress` 增加 `domains:[{host, first_seen_at, last_seen_at, connections, new}]`（`new` = 24 小时内首次出现）。
+- **出口日志长连接**：连接建立时即写一行（`result='open'`），关闭时更新 `result/duration_ms/bytes/closed_at`，控制台立即可见。
+
+### 14.3 插件运行时完善
+
+- **卸载清除账号**：`DELETE /plugins/:key?purge=&purge_accounts=true` 时调用 `core.PluginAccountPurger.PurgePluginAccounts`（账号模块实现，软删除该插件所有账号类型的账号并发事件）；默认保留（孤立账号）。
+- **旧版本缓存清理**：节点上不再被 active/desired/standby 引用的插件版本，实例排空后删除其解包目录并关闭包文件句柄。
+- **节点重新验签**：节点解包前除 sha256 外再用信任库验证包签名（官方根密钥 + publisher_keys），失败则拒绝加载并在节点状态中报告。
+- **资源限制即时生效**：`PUT /plugins/:key/resources` 后广播 `{"type":"resources","plugin_key"}`，各节点用新限制逐个重启该插件实例（先启动新实例再排空旧实例）。
+- **插件接口节点自我隔离**：节点 `Healthy()` 为 false 时 `/api/v1/p/:key/*` 与网关端点返回 503 `unavailable`。
+- **市场兼容性**：`GET /market/plugins` 每个版本增加 `compatible`（按核心版本判断 `host_compat`）；响应顶层 `host_version`。
+- **插件集群广播**：能力 `app.broadcast.v1` + 宿主权限 `broadcast`（低风险）。`HostService.Publish(topic, payload)` 经 Redis 频道 `plugin:broadcast:{plugin_key}` 发出，其他节点把消息交给本地该插件实例的 `AppService.OnBroadcast`（跳过来源节点）。guard 规则修改后广播 `rules.changed`，其他节点立即重载。
+
+### 14.4 接口收尾
+
+- **客户端请求 ID**：网关把客户端 `X-Request-Id`（截断到 128 字符）写入 `UsageRecord.ClientRequestID`；`usage_logs.client_request_id`；管理员使用记录列表/详情返回 `client_request_id`，支持 `?client_request_id=` 精确筛选。
+- **`GET/PUT /settings/gateway`**（`settings:read` / `settings:manage`，网关负责）：`{max_attempts, platform_call_timeout_ms, default_hook_timeout_ms}`，校验范围 1–10、100–30000、50–2000。
+- 前端此前提出的缺失接口说明见 §15（按后端现状整理）。

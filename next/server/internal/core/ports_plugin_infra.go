@@ -117,3 +117,10 @@ type EgressPolicy struct {
 type EgressProvider interface {
 	ServerFor(pluginKey string, policy func() EgressPolicy) pluginv1.EgressServiceServer
 }
+
+// PluginAccountPurger (owner: account) deletes the accounts of a plugin's
+// account types; called by uninstall when the operator asks to remove them.
+// Returns the number of accounts deleted.
+type PluginAccountPurger interface {
+	PurgePluginAccounts(ctx context.Context, pluginKey string) (int, error)
+}

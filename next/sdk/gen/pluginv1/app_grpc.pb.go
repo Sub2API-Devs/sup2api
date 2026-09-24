@@ -19,22 +19,26 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AppService_RunJob_FullMethodName   = "/sub2api.plugin.v1.AppService/RunJob"
-	AppService_OnEvents_FullMethodName = "/sub2api.plugin.v1.AppService/OnEvents"
+	AppService_RunJob_FullMethodName      = "/sub2api.plugin.v1.AppService/RunJob"
+	AppService_OnEvents_FullMethodName    = "/sub2api.plugin.v1.AppService/OnEvents"
+	AppService_OnBroadcast_FullMethodName = "/sub2api.plugin.v1.AppService/OnBroadcast"
 )
 
 // AppServiceClient is the client API for AppService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// AppService covers background jobs ("app.jobs.v1") and event subscriptions
-// ("app.events.v1").
+// AppService covers background jobs ("app.jobs.v1"), event subscriptions
+// ("app.events.v1") and cluster broadcasts ("app.broadcast.v1").
 type AppServiceClient interface {
 	// Called on exactly one node per scheduled slot.
 	RunJob(ctx context.Context, in *RunJobRequest, opts ...grpc.CallOption) (*RunJobResponse, error)
 	// At-least-once, in event id order, batched. Plugins must be idempotent
 	// on Event.id.
 	OnEvents(ctx context.Context, in *OnEventsRequest, opts ...grpc.CallOption) (*OnEventsResponse, error)
+	// A message published by an instance of this plugin on another node
+	// (HostService.Publish). Best effort, no ordering guarantee.
+	OnBroadcast(ctx context.Context, in *OnBroadcastRequest, opts ...grpc.CallOption) (*OnBroadcastResponse, error)
 }
 
 type appServiceClient struct {
@@ -65,18 +69,31 @@ func (c *appServiceClient) OnEvents(ctx context.Context, in *OnEventsRequest, op
 	return out, nil
 }
 
+func (c *appServiceClient) OnBroadcast(ctx context.Context, in *OnBroadcastRequest, opts ...grpc.CallOption) (*OnBroadcastResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OnBroadcastResponse)
+	err := c.cc.Invoke(ctx, AppService_OnBroadcast_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AppServiceServer is the server API for AppService service.
 // All implementations must embed UnimplementedAppServiceServer
 // for forward compatibility.
 //
-// AppService covers background jobs ("app.jobs.v1") and event subscriptions
-// ("app.events.v1").
+// AppService covers background jobs ("app.jobs.v1"), event subscriptions
+// ("app.events.v1") and cluster broadcasts ("app.broadcast.v1").
 type AppServiceServer interface {
 	// Called on exactly one node per scheduled slot.
 	RunJob(context.Context, *RunJobRequest) (*RunJobResponse, error)
 	// At-least-once, in event id order, batched. Plugins must be idempotent
 	// on Event.id.
 	OnEvents(context.Context, *OnEventsRequest) (*OnEventsResponse, error)
+	// A message published by an instance of this plugin on another node
+	// (HostService.Publish). Best effort, no ordering guarantee.
+	OnBroadcast(context.Context, *OnBroadcastRequest) (*OnBroadcastResponse, error)
 	mustEmbedUnimplementedAppServiceServer()
 }
 
@@ -92,6 +109,9 @@ func (UnimplementedAppServiceServer) RunJob(context.Context, *RunJobRequest) (*R
 }
 func (UnimplementedAppServiceServer) OnEvents(context.Context, *OnEventsRequest) (*OnEventsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method OnEvents not implemented")
+}
+func (UnimplementedAppServiceServer) OnBroadcast(context.Context, *OnBroadcastRequest) (*OnBroadcastResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method OnBroadcast not implemented")
 }
 func (UnimplementedAppServiceServer) mustEmbedUnimplementedAppServiceServer() {}
 func (UnimplementedAppServiceServer) testEmbeddedByValue()                    {}
@@ -150,6 +170,24 @@ func _AppService_OnEvents_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AppService_OnBroadcast_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OnBroadcastRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AppServiceServer).OnBroadcast(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AppService_OnBroadcast_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AppServiceServer).OnBroadcast(ctx, req.(*OnBroadcastRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AppService_ServiceDesc is the grpc.ServiceDesc for AppService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -164,6 +202,10 @@ var AppService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "OnEvents",
 			Handler:    _AppService_OnEvents_Handler,
+		},
+		{
+			MethodName: "OnBroadcast",
+			Handler:    _AppService_OnBroadcast_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

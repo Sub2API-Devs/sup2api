@@ -149,6 +149,9 @@ const (
 	EventBalanceChanged       = "balance.changed"
 	EventPluginEnabled        = "plugin.enabled"
 	EventPluginDisabled       = "plugin.disabled"
+	// EventPluginEgressNewDomain: a plugin connected to a host it never used
+	// before (payload {plugin_key, host, port, node_id, first_seen_at}).
+	EventPluginEgressNewDomain = "plugin.egress_new_domain"
 )
 
 type Event struct {

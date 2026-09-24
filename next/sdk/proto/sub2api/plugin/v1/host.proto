@@ -29,7 +29,19 @@ service HostService {
   // (maxPerTx, maxPerDay), idempotent on idempotency_key.
   rpc LedgerCredit(LedgerChangeRequest) returns (LedgerChangeResponse);
   rpc LedgerDebit(LedgerChangeRequest) returns (LedgerChangeResponse);
+
+  // broadcast (grant "broadcast"): deliver a small message to this plugin's
+  // instances on every other live node (AppService.OnBroadcast), best
+  // effort, e.g. "rules changed, reload". Payload at most 64 KiB.
+  rpc Publish(PublishRequest) returns (PublishResponse);
 }
+
+message PublishRequest {
+  string topic = 1;                    // ^[a-z0-9_.-]{1,64}$
+  bytes payload = 2;
+}
+
+message PublishResponse {}
 
 message LogRequest {
   enum Level {
