@@ -54,7 +54,9 @@ manifest_version() {
 
 if [ -f tools/sub2api-plugin/scripts/build-demo.sh ]; then
   # Owned by the SDK team: builds, packs and signs every demo package
-  # (anthropic 0.1.0/0.2.0, guard 0.1.0, guard test build) and writes the index.
+  # (anthropic 0.1.0/0.2.0, guard 0.1.0, relay 0.1.0, guard test build) and
+  # writes the index. Only BUILTIN_PLUGINS below are built in; relay is a
+  # market plugin.
   echo "==> tools/sub2api-plugin/scripts/build-demo.sh"
   sh tools/sub2api-plugin/scripts/build-demo.sh "$OUT/market" "$KEYS" "$KEY_ID"
 else

@@ -10,7 +10,9 @@
 #
 # Output:
 #   <outdir>/anthropic-0.1.0.s2plugin, anthropic-0.2.0.s2plugin (upgrade test),
-#   <outdir>/guard-0.1.0.s2plugin, index.json, index.json.sig
+#   <outdir>/guard-0.1.0.s2plugin,
+#   <outdir>/relay-0.1.0.s2plugin  (account type only: Claude relay key),
+#   <outdir>/index.json, index.json.sig
 #   <outdir>/test/guard-0.1.1-test.s2plugin   (guardtest build, not indexed)
 #
 # Environment:
@@ -22,7 +24,7 @@
 set -eu
 
 if [ $# -lt 3 ]; then
-  sed -n '2,24p' "$0"
+  sed -n '2,23p' "$0"
   exit 2
 fi
 
@@ -84,6 +86,7 @@ package() {
 package anthropic anthropic-base "$OUT"
 package anthropic anthropic-v020 "$OUT" testdata/v0.2.0
 package guard guard-base "$OUT"
+package relay relay-base "$OUT"
 package guard guard-test "$OUT/test" testdata/guardtest guardtest
 
 "$BIN" index --dir "$OUT" --key "$KEY"
