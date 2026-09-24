@@ -37,7 +37,7 @@ func (s *Service) Upload(ctx context.Context, data []byte, actorID int64, opt Up
 	if opt.ExpectVersion != "" && m.Version != opt.ExpectVersion {
 		return nil, core.ErrInvalidArgument.WithMessage(fmt.Sprintf("package version %q does not match %q", m.Version, opt.ExpectVersion))
 	}
-	others, err := s.otherEndpoints(ctx, m.Key)
+	otherPlatforms, otherEndpoints, err := s.otherPlatforms(ctx, m.Key)
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +47,8 @@ func (s *Service) Upload(ctx context.Context, data []byte, actorID int64, opt Up
 		GOOS:           s.opt.GOOS,
 		GOARCH:         s.opt.GOARCH,
 		MaxMemoryMB:    s.opt.Plugins.MaxMemoryMB,
-		OtherEndpoints: others,
+		OtherEndpoints: otherEndpoints,
+		OtherPlatforms: otherPlatforms,
 	}); err != nil {
 		return nil, err
 	}
@@ -158,33 +159,35 @@ func (s *Service) Upload(ctx context.Context, data []byte, actorID int64, opt Up
 	return r, nil
 }
 
-// otherEndpoints lists gateway endpoints claimed by every non-rejected
-// version of other plugins.
-func (s *Service) otherEndpoints(ctx context.Context, key string) ([]pkg.EndpointOwner, error) {
+// otherPlatforms lists the platforms and gateway endpoints declared by every
+// non-rejected version of other plugins.
+func (s *Service) otherPlatforms(ctx context.Context, key string) ([]pkg.PlatformOwner, []pkg.EndpointOwner, error) {
 	rows, err := s.d.DB.Pool.Query(ctx, `
-		SELECT plugin_key, manifest->'gateway'
+		SELECT plugin_key, manifest->'platforms'
 		FROM plugin_versions
-		WHERE plugin_key <> $1 AND consent_status <> 'rejected' AND manifest ? 'gateway'`, key)
+		WHERE plugin_key <> $1 AND consent_status <> 'rejected' AND jsonb_typeof(manifest->'platforms') = 'array'
+		ORDER BY plugin_key, version`, key)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer rows.Close()
-	var out []pkg.EndpointOwner
+	var ms []*manifest.Manifest
 	for rows.Next() {
-		var k string
+		m := &manifest.Manifest{}
 		var raw []byte
-		if err := rows.Scan(&k, &raw); err != nil {
-			return nil, err
+		if err := rows.Scan(&m.Key, &raw); err != nil {
+			return nil, nil, err
 		}
-		var g manifest.Gateway
-		if json.Unmarshal(raw, &g) != nil {
+		if json.Unmarshal(raw, &m.Platforms) != nil {
 			continue
 		}
-		for _, e := range g.Endpoints {
-			out = append(out, pkg.EndpointOwner{PluginKey: k, Method: e.Method, Path: e.Path})
-		}
+		ms = append(ms, m)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	pfs, eps := pkg.OthersFromManifests(ms)
+	return pfs, eps, nil
 }
 
 func sameID(a, b *int64) bool {

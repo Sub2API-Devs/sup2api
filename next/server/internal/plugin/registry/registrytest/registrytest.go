@@ -80,14 +80,14 @@ func Manifest(key, version string) *manifest.Manifest {
 		Capabilities: []manifest.Capability{
 			{ID: manifest.CapPlatformAdapter}, {ID: manifest.CapHTTPRoutes}, {ID: manifest.CapGatewayHook}, {ID: manifest.CapMigrationData},
 		},
-		Platform: &manifest.Platform{
+		Platforms: []manifest.Platform{{
 			ID:        "p_" + key,
-			Protocols: []string{"test.proto"},
-		},
+			Endpoints: []manifest.Endpoint{TestEndpoint(key)},
+		}},
 		AccountTypes: []manifest.AccountType{{
 			ID: "apikey", Label: manifest.LocalizedText{"en": "API key", "zh": "API 密钥"},
 			Form:      manifest.Form{Mode: "schema", Schema: "forms/apikey.schema.json", UISchema: "forms/apikey.ui.json"},
-			Protocols: []manifest.AccountProtocol{{Protocol: "test.proto"}},
+			Platforms: []manifest.AccountPlatform{{Platform: "p_" + key}},
 		}},
 		Hooks:           []manifest.Hook{{Point: "gateway.request", Order: 10, Needs: []string{"model", "prompt_text"}, TimeoutMs: 500}},
 		Database:        &manifest.Database{Schema: "plg_" + key, Migrations: "migrations/"},
@@ -102,6 +102,17 @@ func Manifest(key, version string) *manifest.Manifest {
 	}
 }
 
+// TestEndpoint is the endpoint of the test platform "p_<key>": POST
+// /p_<key>/v1/test, protocol "p_<key>.test" (unique per plugin key).
+func TestEndpoint(key string) manifest.Endpoint {
+	return manifest.Endpoint{
+		ID: "test", Method: "POST", Path: "/p_" + key + "/v1/test", Protocol: "p_" + key + ".test", Kind: "proxy",
+		Auth:     manifest.EndpointAuth{Headers: []string{"authorization"}},
+		Request:  manifest.EndpointRequest{ModelPath: "model"},
+		Response: manifest.EndpointResp{NonStream: "json"}, ErrorFormat: "plain", Billing: "usage",
+	}
+}
+
 // DefaultGrants approves everything the test manifest asks for.
 func DefaultGrants() map[string]string {
 	return map[string]string{
@@ -112,6 +123,8 @@ func DefaultGrants() map[string]string {
 		"routes.webhook":       `{}`,
 		"routes.public":        `{}`,
 		"accounts.credentials": `{"types":"own"}`,
+		"gateway.endpoint":     `{}`,
+		"platform.register":    `{}`,
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/platforms"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry/registrytest"
 )
@@ -133,8 +134,11 @@ func TestGenerationBuildAndSwitch(t *testing.T) {
 	}
 
 	// Platforms and account types with forms read from the package.
-	if ps := g.PlatformsForProtocol("test.proto"); len(ps) != 2 {
-		t.Fatalf("platforms for protocol = %d", len(ps))
+	for _, key := range []string{"alpha", "beta"} {
+		pb, ok := g.PlatformForProtocol("p_" + key + ".test")
+		if !ok || pb.Builtin || pb.Plugin.Key != key || pb.Platform.ID != "p_"+key {
+			t.Fatalf("platform for protocol of %s = %+v %v", key, pb, ok)
+		}
 	}
 	at, ok := g.AccountType("alpha", "apikey")
 	if !ok || len(at.FormSchema) == 0 || len(at.FormUI) == 0 || at.Client == nil || at.Key() != (core.AccountTypeKey{PluginKey: "alpha", Type: "apikey"}) {
@@ -170,32 +174,30 @@ func TestGenerationBuildAndSwitch(t *testing.T) {
 }
 
 // Account types are declared at the top level by any plugin and served by
-// the declaring plugin; the protocol index lists native types only.
+// the declaring plugin; the platform index lists the types declaring it.
 func TestAccountTypesManyToMany(t *testing.T) {
 	platform := registrytest.Manifest("anth", "1.0.0")
 	platform.AccountTypes = append(platform.AccountTypes, manifest.AccountType{
 		ID: "oauth", Label: manifest.LocalizedText{"en": "OAuth"}, Form: manifest.Form{Mode: "native", Component: "X"},
-		Protocols: []manifest.AccountProtocol{{Protocol: "test.proto"}, {Protocol: "test.count"}},
+		Platforms: []manifest.AccountPlatform{{Platform: "p_anth"}, {Platform: manifest.PlatformAnthropic}},
 	})
 	// A relay plugin declaring only account types (no platform, no endpoints).
 	relay := registrytest.Manifest("relay", "1.0.0")
-	relay.Platform = nil
+	relay.Platforms = nil
 	relay.AccountTypes = []manifest.AccountType{
 		{ID: "zkey", Label: manifest.LocalizedText{"en": "Z"}, Form: manifest.Form{Mode: "native", Component: "Z"},
-			Protocols: []manifest.AccountProtocol{{Protocol: "test.proto"}}},
+			Platforms: []manifest.AccountPlatform{{Platform: "p_anth"}, {Platform: "p_anth"}}},
 		{ID: "akey", Label: manifest.LocalizedText{"en": "A"}, Form: manifest.Form{Mode: "native", Component: "A"},
-			Protocols: []manifest.AccountProtocol{{Protocol: "other.proto"}}},
+			Platforms: []manifest.AccountPlatform{{Platform: manifest.PlatformAnthropic}}},
 	}
 	// Without platform.adapter.v1 the account types are not registered.
 	noAdapter := registrytest.Manifest("noadapter", "1.0.0")
-	noAdapter.Platform = nil
 
 	reg := registry.New()
 	creds := registry.Grants{"accounts.credentials": []byte(`{"types":"own"}`)}
 	// Without the accounts.credentials grant the account types are not
 	// registered either (the plugin would never receive credentials).
 	noGrant := registrytest.Manifest("nogrant", "1.0.0")
-	noGrant.Platform = nil
 	g := reg.Publish([]registry.Extension{
 		ext{pkg: load(t, relay), grants: creds}, ext{pkg: load(t, noAdapter), noPlatform: true, grants: creds},
 		ext{pkg: load(t, platform), grants: creds}, ext{pkg: load(t, noGrant)},
@@ -223,22 +225,169 @@ func TestAccountTypesManyToMany(t *testing.T) {
 	if _, ok := g.Platform("p_relay"); ok {
 		t.Fatal("relay declares no platform")
 	}
+	// Platforms of plugins whose account types are not registered still
+	// exist (a platform needs no adapter).
+	if _, ok := g.Platform("p_noadapter"); !ok {
+		t.Fatal("p_noadapter must exist")
+	}
 
-	var native []string
-	for _, b := range g.AccountTypesForProtocol("test.proto") {
-		native = append(native, b.Plugin.Key+"/"+b.Type.ID)
+	typesFor := func(platformID string) string {
+		var out []string
+		for _, b := range g.AccountTypesForPlatform(platformID) {
+			out = append(out, b.Plugin.Key+"/"+b.Type.ID)
+		}
+		return strings.Join(out, " ")
 	}
-	if want := "anth/apikey anth/oauth relay/zkey"; strings.Join(native, " ") != want {
-		t.Fatalf("test.proto types = %v, want %s", native, want)
+	if got, want := typesFor("p_anth"), "anth/apikey anth/oauth relay/zkey"; got != want {
+		t.Fatalf("p_anth types = %v, want %s", got, want)
 	}
-	count := g.AccountTypesForProtocol("test.count")
-	if len(count) != 1 || count[0].Type.ID != "oauth" {
-		t.Fatalf("test.count types = %+v", count)
+	// Account types supporting the built-in anthropic platform.
+	if got, want := typesFor(manifest.PlatformAnthropic), "anth/oauth relay/akey"; got != want {
+		t.Fatalf("anthropic types = %v, want %s", got, want)
 	}
-	if p, ok := count[0].Protocol("test.count"); !ok || p.Protocol != "test.count" {
-		t.Fatal("binding protocol lookup")
+	oauth := g.AccountTypesForPlatform(manifest.PlatformAnthropic)[0]
+	if p, ok := oauth.Supports(manifest.PlatformAnthropic); !ok || p.Platform != manifest.PlatformAnthropic {
+		t.Fatal("binding platform lookup")
 	}
-	if bs := g.AccountTypesForProtocol("nope"); len(bs) != 0 {
-		t.Fatalf("unknown protocol = %+v", bs)
+	if _, ok := oauth.Supports("p_relay"); ok {
+		t.Fatal("oauth does not support p_relay")
+	}
+	if got := typesFor("nope"); got != "" {
+		t.Fatalf("unknown platform = %v", got)
+	}
+}
+
+// Built-in platforms exist in every generation, even the initial one; plugin
+// platforms and their endpoints exist only while the plugin is enabled.
+func TestBuiltinAndPluginPlatforms(t *testing.T) {
+	builtin := platforms.Builtin()
+	if len(builtin) == 0 {
+		t.Fatal("no built-in platforms")
+	}
+	var builtinEndpoints int
+	for _, p := range builtin {
+		builtinEndpoints += len(p.Endpoints)
+	}
+	check := func(g core.Generation, plugins ...string) {
+		t.Helper()
+		ps := g.Platforms()
+		if len(ps) != len(builtin)+len(plugins) {
+			t.Fatalf("platforms = %d, want %d", len(ps), len(builtin)+len(plugins))
+		}
+		for i, bp := range builtin {
+			b, ok := g.Platform(bp.ID)
+			if !ok || !b.Builtin || b.Plugin.Key != "" || ps[i].Platform.ID != bp.ID {
+				t.Fatalf("built-in %s = %+v %v", bp.ID, b, ok)
+			}
+			for _, proto := range bp.Protocols() {
+				if pb, ok := g.PlatformForProtocol(proto); !ok || pb.Platform.ID != bp.ID {
+					t.Fatalf("protocol %s -> %+v %v", proto, pb, ok)
+				}
+			}
+		}
+		eps := g.Endpoints()
+		if len(eps) != builtinEndpoints+len(plugins) {
+			t.Fatalf("endpoints = %d, want %d", len(eps), builtinEndpoints+len(plugins))
+		}
+		for _, eb := range eps[:builtinEndpoints] {
+			if eb.Plugin.Key != "" || !platforms.IsBuiltin(eb.Platform) {
+				t.Fatalf("built-in endpoint = %+v", eb)
+			}
+		}
+		for i, key := range plugins {
+			eb := eps[builtinEndpoints+i]
+			if eb.Plugin.Key != key || eb.Platform != "p_"+key || eb.Endpoint.Path != "/p_"+key+"/v1/test" {
+				t.Fatalf("plugin endpoint = %+v", eb)
+			}
+			pb, ok := g.Platform("p_" + key)
+			if !ok || pb.Builtin || pb.Plugin.Key != key {
+				t.Fatalf("platform p_%s = %+v %v", key, pb, ok)
+			}
+		}
+	}
+
+	reg := registry.New()
+	check(reg.Current())
+	if _, ok := reg.Current().Platform(manifest.PlatformAnthropic); !ok {
+		t.Fatal("anthropic must be built in")
+	}
+
+	a := ext{pkg: load(t, registrytest.Manifest("alpha", "1.0.0")), grants: registry.Grants{}}
+	b := ext{pkg: load(t, registrytest.Manifest("beta", "1.0.0")), grants: registry.Grants{}}
+	check(reg.Publish([]registry.Extension{b, a}), "alpha", "beta")
+	// Disabling beta removes its platform and endpoint.
+	g := reg.Publish([]registry.Extension{a})
+	check(g, "alpha")
+	if _, ok := g.Platform("p_beta"); ok {
+		t.Fatal("p_beta must be gone")
+	}
+	if _, ok := g.PlatformForProtocol("p_beta.test"); ok {
+		t.Fatal("p_beta.test must be gone")
+	}
+	check(reg.Publish(nil))
+}
+
+// Conflicting plugin platforms are skipped as a whole (install-time
+// validation normally rejects them first).
+func TestPlatformConflictsSkipped(t *testing.T) {
+	// Same id as a built-in platform.
+	builtinID := registrytest.Manifest("aaa", "1.0.0")
+	builtinID.Platforms[0].ID = manifest.PlatformAnthropic
+	// Endpoint overlapping a built-in endpoint.
+	overlap := registrytest.Manifest("bbb", "1.0.0")
+	ep := platforms.Builtin()[0].Endpoints[0]
+	overlap.Platforms[0].Endpoints[0].Method = ep.Method
+	overlap.Platforms[0].Endpoints[0].Path = "/" + strings.Split(strings.TrimPrefix(ep.Path, "/"), "/")[0] + "/*rest"
+	// Same id as the platform of an earlier plugin (by key): ccc wins.
+	first := registrytest.Manifest("ccc", "1.0.0")
+	dupID := registrytest.Manifest("ddd", "1.0.0")
+	dupID.Platforms[0].ID = "p_ccc"
+	dupID.Platforms[0].Endpoints[0].Path = "/p_ddd/other"
+	// Endpoint overlapping an earlier plugin's endpoint (parameter segment).
+	dupPath := registrytest.Manifest("eee", "1.0.0")
+	dupPath.Platforms[0].Endpoints[0].Path = "/p_ccc/:ver/test"
+	// Two endpoints of one platform overlapping each other.
+	selfOverlap := registrytest.Manifest("fff", "1.0.0")
+	e2 := registrytest.TestEndpoint("fff")
+	e2.ID, e2.Path, e2.Protocol = "t2", "/p_fff/v1/:x", "p_fff.t2"
+	selfOverlap.Platforms[0].Endpoints = append(selfOverlap.Platforms[0].Endpoints, e2)
+	// A second platform of a plugin can still register when the first one
+	// is skipped.
+	partial := registrytest.Manifest("ggg", "1.0.0")
+	partial.Platforms = append([]manifest.Platform{{ID: "p_ccc", Endpoints: []manifest.Endpoint{e2}}}, partial.Platforms...)
+
+	var exts []registry.Extension
+	for _, m := range []*manifest.Manifest{builtinID, overlap, first, dupID, dupPath, selfOverlap, partial} {
+		exts = append(exts, ext{pkg: load(t, m), grants: registry.Grants{}})
+	}
+	g := registry.New().Publish(exts)
+
+	anth, ok := g.Platform(manifest.PlatformAnthropic)
+	if !ok || !anth.Builtin {
+		t.Fatalf("anthropic = %+v", anth)
+	}
+	for _, id := range []string{"p_bbb", "p_ddd", "p_eee", "p_fff"} {
+		if _, ok := g.Platform(id); ok {
+			t.Fatalf("%s must be skipped", id)
+		}
+	}
+	if pb, ok := g.Platform("p_ccc"); !ok || pb.Plugin.Key != "ccc" {
+		t.Fatalf("p_ccc = %+v %v", pb, ok)
+	}
+	if pb, ok := g.Platform("p_ggg"); !ok || pb.Plugin.Key != "ggg" {
+		t.Fatalf("p_ggg = %+v %v", pb, ok)
+	}
+	var plugins []string
+	for _, eb := range g.Endpoints() {
+		if eb.Plugin.Key != "" {
+			plugins = append(plugins, eb.Plugin.Key+":"+eb.Platform)
+		}
+	}
+	if got, want := strings.Join(plugins, " "), "ccc:p_ccc ggg:p_ggg"; got != want {
+		t.Fatalf("plugin endpoints = %s, want %s", got, want)
+	}
+	// Skipped platforms do not affect the rest of the plugin.
+	if len(g.Plugins()) != 7 {
+		t.Fatalf("plugins = %d", len(g.Plugins()))
 	}
 }

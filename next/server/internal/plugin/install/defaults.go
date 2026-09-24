@@ -35,10 +35,7 @@ func (a *DefaultsApplier) ApplyDefaults(ctx context.Context, tx pgx.Tx, m *manif
 			return fmt.Errorf("sync plugin permissions: %w", err)
 		}
 	}
-	var sticky []manifest.StickyRule
-	if m.Platform != nil {
-		sticky = m.Platform.StickyRules
-	}
+	sticky := StickyDefaults(m)
 	if a.prices != nil {
 		if err := a.prices.SyncPluginDefaults(ctx, tx, m.Key, m.Pricing); err != nil {
 			return fmt.Errorf("sync plugin prices: %w", err)
@@ -58,6 +55,16 @@ func (a *DefaultsApplier) ApplyDefaults(ctx context.Context, tx pgx.Tx, m *manif
 		return fmt.Errorf("prune grants: %w", err)
 	}
 	return nil
+}
+
+// StickyDefaults returns the default sticky rules of every platform the
+// plugin declares, in declaration order.
+func StickyDefaults(m *manifest.Manifest) []manifest.StickyRule {
+	var out []manifest.StickyRule
+	for _, p := range m.Platforms {
+		out = append(out, p.StickyRules...)
+	}
+	return out
 }
 
 // PermissionKey returns the RBAC key of a plugin-local permission.

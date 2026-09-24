@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"mime"
 	"path"
 	"sort"
@@ -17,6 +18,8 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/platforms"
+	pluginpkg "github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg"
 )
 
 // Extension is one running plugin version that contributes to a generation.
@@ -134,11 +137,12 @@ type generation struct {
 	byKey     map[string]core.PluginInfo
 	packages  map[string]*Package
 	endpoints []core.EndpointBinding
-	platforms map[string]core.PlatformBinding
-	byProto   map[string][]core.PlatformBinding
+	platforms []core.PlatformBinding // built-in (by id), then plugin platforms
+	platByID  map[string]core.PlatformBinding
+	byProto   map[string]core.PlatformBinding
 	accTypes  []core.AccountTypeBinding // sorted by plugin key, type id
 	atByKey   map[core.AccountTypeKey]core.AccountTypeBinding
-	atByProto map[string][]core.AccountTypeBinding // native protocol -> types, same order
+	atByPlat  map[string][]core.AccountTypeBinding // platform id -> types, same order
 	hooks     map[string][]core.HookBinding
 	scheds    map[string]core.SchedulerPlugin
 	routes    map[string][]core.RouteBinding
@@ -155,18 +159,72 @@ type asset struct {
 // maxCachedAsset bounds the size of a single cached asset.
 const maxCachedAsset = 4 << 20
 
+// addPlatform registers a platform and its endpoints unless its id, one of
+// its protocols or one of its endpoints is already taken (install-time
+// validation rejects these; this is the fallback for packages installed
+// concurrently or before the check existed). Returns the reason on refusal.
+func (g *generation) addPlatform(b core.PlatformBinding) string {
+	p := b.Platform
+	if p.ID == "" {
+		return "empty platform id"
+	}
+	if other, taken := g.platByID[p.ID]; taken {
+		return fmt.Sprintf("platform id %q is already registered by %s", p.ID, platformOwner(other))
+	}
+	protos := map[string]bool{}
+	for i, e := range p.Endpoints {
+		if other, taken := g.byProto[e.Protocol]; taken {
+			return fmt.Sprintf("protocol %q is already registered by %s", e.Protocol, platformOwner(other))
+		}
+		protos[e.Protocol] = true
+		for _, eb := range g.endpoints {
+			if pluginpkg.EndpointsConflict(eb.Endpoint, e) {
+				return fmt.Sprintf("endpoint %s %s conflicts with %s %s of platform %q",
+					e.Method, e.Path, eb.Endpoint.Method, eb.Endpoint.Path, eb.Platform)
+			}
+		}
+		for _, o := range p.Endpoints[:i] {
+			if pluginpkg.EndpointsConflict(o, e) {
+				return fmt.Sprintf("endpoint %s %s conflicts with %s %s of the same platform", e.Method, e.Path, o.Method, o.Path)
+			}
+		}
+	}
+	g.platforms = append(g.platforms, b)
+	g.platByID[p.ID] = b
+	for proto := range protos {
+		g.byProto[proto] = b
+	}
+	for _, e := range p.Endpoints {
+		g.endpoints = append(g.endpoints, core.EndpointBinding{Plugin: b.Plugin, Platform: p.ID, Endpoint: e})
+	}
+	return ""
+}
+
+func platformOwner(b core.PlatformBinding) string {
+	if b.Builtin {
+		return "the core (built-in)"
+	}
+	return fmt.Sprintf("plugin %q", b.Plugin.Key)
+}
+
 func build(number uint64, exts []Extension) *generation {
 	g := &generation{
-		number:    number,
-		byKey:     map[string]core.PluginInfo{},
-		packages:  map[string]*Package{},
-		platforms: map[string]core.PlatformBinding{},
-		byProto:   map[string][]core.PlatformBinding{},
-		atByKey:   map[core.AccountTypeKey]core.AccountTypeBinding{},
-		atByProto: map[string][]core.AccountTypeBinding{},
-		hooks:     map[string][]core.HookBinding{},
-		scheds:    map[string]core.SchedulerPlugin{},
-		routes:    map[string][]core.RouteBinding{},
+		number:   number,
+		byKey:    map[string]core.PluginInfo{},
+		packages: map[string]*Package{},
+		platByID: map[string]core.PlatformBinding{},
+		byProto:  map[string]core.PlatformBinding{},
+		atByKey:  map[core.AccountTypeKey]core.AccountTypeBinding{},
+		atByPlat: map[string][]core.AccountTypeBinding{},
+		hooks:    map[string][]core.HookBinding{},
+		scheds:   map[string]core.SchedulerPlugin{},
+		routes:   map[string][]core.RouteBinding{},
+	}
+	// Built-in platforms always exist (ARCHITECTURE 6.6).
+	for _, p := range platforms.Builtin() {
+		if reason := g.addPlatform(core.PlatformBinding{Builtin: true, Platform: p}); reason != "" {
+			slog.Error("plugin registry: built-in platform skipped", "platform", p.ID, "reason", reason)
+		}
 	}
 	sorted := append([]Extension(nil), exts...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Package().Key < sorted[j].Package().Key })
@@ -182,21 +240,16 @@ func build(number uint64, exts []Extension) *generation {
 		g.byKey[pkg.Key] = info
 		g.packages[pkg.Key] = pkg
 
-		if m.Gateway != nil {
-			for _, ep := range m.Gateway.Endpoints {
-				g.endpoints = append(g.endpoints, core.EndpointBinding{Plugin: info, Endpoint: ep})
+		// Plugin platforms: ids are unique across built-in and plugin
+		// platforms and endpoints never overlap; a conflicting platform is
+		// skipped as a whole (first plugin by key wins).
+		for _, p := range m.Platforms {
+			if reason := g.addPlatform(core.PlatformBinding{Plugin: info, Platform: p}); reason != "" {
+				slog.Warn("plugin registry: platform skipped", "plugin", pkg.Key, "version", pkg.Version,
+					"platform", p.ID, "reason", reason)
 			}
 		}
 		pf := ext.Platform()
-		if pf != nil && m.Platform != nil {
-			b := core.PlatformBinding{Plugin: info, Platform: *m.Platform, Client: pf}
-			if _, taken := g.platforms[m.Platform.ID]; !taken {
-				g.platforms[m.Platform.ID] = b
-				for _, proto := range m.Platform.Protocols {
-					g.byProto[proto] = append(g.byProto[proto], b)
-				}
-			}
-		}
 		// Account types are served by the declaring plugin, which must
 		// implement platform.adapter.v1 (ARCHITECTURE 6.6) and hold the
 		// accounts.credentials grant: without it the plugin never receives
@@ -286,12 +339,12 @@ func build(number uint64, exts []Extension) *generation {
 	})
 	for _, atb := range g.accTypes {
 		seen := map[string]bool{}
-		for _, ap := range atb.Type.Protocols {
-			if ap.Protocol == "" || seen[ap.Protocol] {
+		for _, ap := range atb.Type.Platforms {
+			if ap.Platform == "" || seen[ap.Platform] {
 				continue
 			}
-			seen[ap.Protocol] = true
-			g.atByProto[ap.Protocol] = append(g.atByProto[ap.Protocol], atb)
+			seen[ap.Platform] = true
+			g.atByPlat[ap.Platform] = append(g.atByPlat[ap.Platform], atb)
 		}
 	}
 	return g
@@ -309,12 +362,15 @@ func (g *generation) Plugin(key string) (core.PluginInfo, bool) {
 	return p, ok
 }
 
-func (g *generation) PlatformsForProtocol(protocol string) []core.PlatformBinding {
-	return g.byProto[protocol]
-}
+func (g *generation) Platforms() []core.PlatformBinding { return g.platforms }
 
 func (g *generation) Platform(platformID string) (core.PlatformBinding, bool) {
-	b, ok := g.platforms[platformID]
+	b, ok := g.platByID[platformID]
+	return b, ok
+}
+
+func (g *generation) PlatformForProtocol(protocol string) (core.PlatformBinding, bool) {
+	b, ok := g.byProto[protocol]
 	return b, ok
 }
 
@@ -323,8 +379,11 @@ func (g *generation) AccountType(pluginKey, typeID string) (core.AccountTypeBind
 	return b, ok
 }
 
-func (g *generation) AccountTypesForProtocol(protocol string) []core.AccountTypeBinding {
-	return g.atByProto[protocol]
+// AccountTypesForPlatform lists the registered account types declaring
+// platformID (whether or not the platform currently exists), sorted by
+// plugin key and type id.
+func (g *generation) AccountTypesForPlatform(platformID string) []core.AccountTypeBinding {
+	return g.atByPlat[platformID]
 }
 
 func (g *generation) Hooks(point string) []core.HookBinding { return g.hooks[point] }

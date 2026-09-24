@@ -109,14 +109,17 @@ func (g gen) Plugin(k string) (core.PluginInfo, bool) {
 	}
 	return core.PluginInfo{}, false
 }
-func (gen) Endpoints() []core.EndpointBinding                  { return nil }
-func (gen) PlatformsForProtocol(string) []core.PlatformBinding { return nil }
-func (gen) Platform(string) (core.PlatformBinding, bool)       { return core.PlatformBinding{}, false }
-func (gen) AccountTypes() []core.AccountTypeBinding            { return nil }
+func (gen) Endpoints() []core.EndpointBinding            { return nil }
+func (gen) Platforms() []core.PlatformBinding            { return nil }
+func (gen) Platform(string) (core.PlatformBinding, bool) { return core.PlatformBinding{}, false }
+func (gen) PlatformForProtocol(string) (core.PlatformBinding, bool) {
+	return core.PlatformBinding{}, false
+}
+func (gen) AccountTypes() []core.AccountTypeBinding { return nil }
 func (gen) AccountType(string, string) (core.AccountTypeBinding, bool) {
 	return core.AccountTypeBinding{}, false
 }
-func (gen) AccountTypesForProtocol(string) []core.AccountTypeBinding { return nil }
+func (gen) AccountTypesForPlatform(string) []core.AccountTypeBinding { return nil }
 func (gen) Hooks(string) []core.HookBinding                          { return nil }
 func (gen) Scheduler(string) (core.SchedulerPlugin, bool)            { return nil, false }
 func (gen) Routes(string) []core.RouteBinding                        { return nil }

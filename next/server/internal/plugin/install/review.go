@@ -31,7 +31,7 @@ type Review struct {
 	UpgradeFrom      string              `json:"upgrade_from,omitempty"`
 	Capabilities     []string            `json:"capabilities"`
 	GatewayEndpoints []ReviewEndpoint    `json:"gateway_endpoints"`
-	Platform         *ReviewPlatform     `json:"platform"`
+	Platforms        []ReviewPlatform    `json:"platforms"`
 	AccountTypes     []ReviewAccountType `json:"account_types"`
 	Hooks            []ReviewHook        `json:"hooks"`
 	Jobs             []ReviewJob         `json:"jobs"`
@@ -49,18 +49,22 @@ type Review struct {
 	UploadedAt       time.Time           `json:"uploaded_at"`
 }
 
+// ReviewEndpoint is a gateway endpoint of a declared platform. In
+// Review.GatewayEndpoints it carries id and platform as well.
 type ReviewEndpoint struct {
-	ID       string `json:"id"`
+	ID       string `json:"id,omitempty"`
+	Platform string `json:"platform,omitempty"`
 	Method   string `json:"method"`
 	Path     string `json:"path"`
 	Protocol string `json:"protocol"`
 	Billing  string `json:"billing"`
 }
 
+// ReviewPlatform is a platform declared by the plugin (CONTRACTS §13).
 type ReviewPlatform struct {
 	ID          string             `json:"id"`
 	Label       core.LocalizedText `json:"label,omitempty"`
-	Protocols   []string           `json:"protocols"`
+	Endpoints   []ReviewEndpoint   `json:"endpoints"`
 	StickyRules []string           `json:"sticky_rules"`
 }
 
@@ -68,7 +72,7 @@ type ReviewPlatform struct {
 type ReviewAccountType struct {
 	ID        string             `json:"id"`
 	Label     core.LocalizedText `json:"label"`
-	Protocols []string           `json:"protocols"`
+	Platforms []string           `json:"platforms"`
 	FormMode  string             `json:"form_mode"`
 }
 
@@ -236,6 +240,7 @@ func buildReview(m *manifest.Manifest, files map[string][]byte, ver *pkg.Verific
 		HostCompat:       m.HostCompat,
 		Capabilities:     []string{},
 		GatewayEndpoints: []ReviewEndpoint{},
+		Platforms:        []ReviewPlatform{},
 		AccountTypes:     []ReviewAccountType{},
 		Hooks:            []ReviewHook{},
 		Jobs:             []ReviewJob{},
@@ -252,28 +257,28 @@ func buildReview(m *manifest.Manifest, files map[string][]byte, ver *pkg.Verific
 	for _, c := range m.Capabilities {
 		r.Capabilities = append(r.Capabilities, c.ID)
 	}
-	if m.Gateway != nil {
-		for _, e := range m.Gateway.Endpoints {
+	for _, p := range m.Platforms {
+		rp := ReviewPlatform{ID: p.ID, Label: core.LocalizedText(p.Label), Endpoints: []ReviewEndpoint{}, StickyRules: []string{}}
+		for _, e := range p.Endpoints {
 			billing := e.Billing
 			if billing == "" {
 				billing = "usage"
 			}
-			r.GatewayEndpoints = append(r.GatewayEndpoints, ReviewEndpoint{ID: e.ID, Method: e.Method, Path: e.Path, Protocol: e.Protocol, Billing: billing})
+			rp.Endpoints = append(rp.Endpoints, ReviewEndpoint{Method: e.Method, Path: e.Path, Protocol: e.Protocol, Billing: billing})
+			r.GatewayEndpoints = append(r.GatewayEndpoints, ReviewEndpoint{ID: e.ID, Platform: p.ID, Method: e.Method, Path: e.Path,
+				Protocol: e.Protocol, Billing: billing})
 		}
-	}
-	if p := m.Platform; p != nil {
-		rp := &ReviewPlatform{ID: p.ID, Label: core.LocalizedText(p.Label), Protocols: p.Protocols, StickyRules: []string{}}
 		for _, sr := range p.StickyRules {
 			rp.StickyRules = append(rp.StickyRules, sr.Name)
 		}
-		r.Platform = rp
+		r.Platforms = append(r.Platforms, rp)
 	}
 	for _, at := range m.AccountTypes {
-		protos := make([]string, 0, len(at.Protocols))
-		for _, ap := range at.Protocols {
-			protos = append(protos, ap.Protocol)
+		pfs := make([]string, 0, len(at.Platforms))
+		for _, ap := range at.Platforms {
+			pfs = append(pfs, ap.Platform)
 		}
-		r.AccountTypes = append(r.AccountTypes, ReviewAccountType{ID: at.ID, Label: core.LocalizedText(at.Label), Protocols: protos, FormMode: at.Form.Mode})
+		r.AccountTypes = append(r.AccountTypes, ReviewAccountType{ID: at.ID, Label: core.LocalizedText(at.Label), Platforms: pfs, FormMode: at.Form.Mode})
 	}
 	for _, h := range m.Hooks {
 		failure := h.Failure
