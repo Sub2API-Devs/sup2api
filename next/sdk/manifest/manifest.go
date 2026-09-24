@@ -26,8 +26,7 @@ type Manifest struct {
 
 	Capabilities []Capability `json:"capabilities"`
 
-	Gateway      *Gateway       `json:"gateway,omitempty"`
-	Platform     *Platform      `json:"platform,omitempty"`
+	Platforms    []Platform     `json:"platforms,omitempty"` // new platforms with their endpoints
 	AccountTypes []AccountType  `json:"accountTypes,omitempty"`
 	Pricing      []PricingEntry `json:"pricing,omitempty"`
 	Hooks        []Hook         `json:"hooks,omitempty"`
@@ -74,24 +73,62 @@ type Capability struct {
 	ID string `json:"id"`
 }
 
-// ---------------------------------------------------------------- gateway
+// ---------------------------------------------------------------- platforms and endpoints
 
-// Gateway declares client-facing gateway endpoints.
-type Gateway struct {
-	Endpoints []Endpoint `json:"endpoints"`
+// Built-in platform ids provided by the core (ARCHITECTURE 6.6). Plugins
+// cannot declare platforms with these ids.
+const (
+	PlatformAnthropic = "anthropic"
+	PlatformOpenAI    = "openai"
+	PlatformGemini    = "gemini"
+)
+
+// Platform groups client-facing gateway endpoints. The core defines the
+// built-in platforms; a plugin may declare new ones (unique id, endpoints
+// must not conflict with any other platform). Account types serve platforms.
+type Platform struct {
+	ID        string        `json:"id"` // ^[a-z][a-z0-9_]{1,29}$
+	Label     LocalizedText `json:"label,omitempty"`
+	Endpoints []Endpoint    `json:"endpoints"`
+	// Defaults for every endpoint of the platform; an endpoint (Usage) or an
+	// account type (AccountPlatform) may override them.
+	// Request body paths sent to BuildUpstreamRequest (never the whole body).
+	RequestFields []string `json:"requestFields,omitempty"`
+	// Client headers the host forwards to BuildUpstreamRequest (lower-case).
+	PassHeaders []string     `json:"passHeaders,omitempty"`
+	Usage       UsageRules   `json:"usage"`
+	StickyRules []StickyRule `json:"stickyRules,omitempty"`
+}
+
+// Protocols returns the distinct protocols of the platform's endpoints.
+func (p *Platform) Protocols() []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, e := range p.Endpoints {
+		if !seen[e.Protocol] {
+			seen[e.Protocol] = true
+			out = append(out, e.Protocol)
+		}
+	}
+	return out
 }
 
 type Endpoint struct {
-	ID          string          `json:"id"`
-	Method      string          `json:"method"`   // GET/POST/PUT/PATCH/DELETE
-	Path        string          `json:"path"`     // gin syntax, e.g. "/v1/messages"
-	Protocol    string          `json:"protocol"` // e.g. "anthropic.messages"
-	Kind        string          `json:"kind"`     // "proxy" ("custom" reserved)
+	ID     string `json:"id"`
+	Method string `json:"method"` // GET/POST/PUT/PATCH/DELETE
+	// Path in gin-like syntax: "/v1/messages", "/v1beta/models/:model:generateContent"
+	// (a segment may be ":param" or ":param:suffix" for a literal suffix).
+	Path string `json:"path"`
+	// Protocol id, "<platform id>.<name>", e.g. "anthropic.messages".
+	Protocol    string          `json:"protocol"`
+	Kind        string          `json:"kind"` // "proxy" ("custom" reserved)
 	Auth        EndpointAuth    `json:"auth"`
 	Request     EndpointRequest `json:"request"`
 	Response    EndpointResp    `json:"response"`
 	ErrorFormat string          `json:"errorFormat"` // anthropic | openai | gemini | plain
 	Billing     string          `json:"billing"`     // usage | free
+	// Usage overrides the platform usage rules for this endpoint.
+	Usage *UsageRules `json:"usage,omitempty"`
 }
 
 type EndpointAuth struct {
@@ -103,8 +140,12 @@ type EndpointAuth struct {
 }
 
 type EndpointRequest struct {
-	ModelPath       string   `json:"modelPath"`
-	StreamPath      string   `json:"streamPath,omitempty"`
+	ModelPath string `json:"modelPath,omitempty"` // gjson path in the body
+	// ModelParam reads the model from a path parameter instead (e.g. "model").
+	ModelParam string `json:"modelParam,omitempty"`
+	StreamPath string `json:"streamPath,omitempty"`
+	// Stream marks endpoints that always stream (e.g. streamGenerateContent).
+	Stream          bool     `json:"stream,omitempty"`
 	PromptTextPaths []string `json:"promptTextPaths,omitempty"`
 	MaxBodyBytes    int64    `json:"maxBodyBytes,omitempty"` // 0 = host default
 }
@@ -114,27 +155,11 @@ type EndpointResp struct {
 	NonStream string `json:"nonStream"`        // "json"
 }
 
-// ---------------------------------------------------------------- platform
-
-type Platform struct {
-	ID        string        `json:"id"`
-	Label     LocalizedText `json:"label,omitempty"`
-	Protocols []string      `json:"protocols"`
-	// Defaults for account types serving these protocols; an account type may
-	// override them per protocol (AccountProtocol).
-	// Request body paths sent to BuildUpstreamRequest (never the whole body).
-	RequestFields []string `json:"requestFields,omitempty"`
-	// Client headers the host forwards to BuildUpstreamRequest (lower-case).
-	PassHeaders []string     `json:"passHeaders,omitempty"`
-	Usage       UsageRules   `json:"usage"`
-	StickyRules []StickyRule `json:"stickyRules,omitempty"`
-}
-
 // AccountType is a kind of upstream credential. Any plugin may declare
 // account types (ARCHITECTURE 6.6); the declaring plugin builds upstream
 // requests and classifies errors for accounts of this type. An account type
-// serves every gateway endpoint whose protocol it lists natively in
-// Protocols, or that the core can convert to one of them.
+// serves the endpoints of the platforms it lists (built-in or declared by a
+// plugin), plus endpoints the core can convert to one of those protocols.
 type AccountType struct {
 	ID              string        `json:"id"`
 	Label           LocalizedText `json:"label"`
@@ -143,16 +168,17 @@ type AccountType struct {
 	SensitiveFields []string      `json:"sensitiveFields,omitempty"`
 	// Top-level credential keys stored as plain settings (not encrypted).
 	SettingsFields []string          `json:"settingsFields,omitempty"`
-	Protocols      []AccountProtocol `json:"protocols"`
+	Platforms      []AccountPlatform `json:"platforms"`
 }
 
-// AccountProtocol is one protocol the upstream of an account type speaks
-// natively. Empty fields fall back to the platform declaring the protocol.
-type AccountProtocol struct {
-	Protocol      string      `json:"protocol"`
-	RequestFields []string    `json:"requestFields,omitempty"`
-	PassHeaders   []string    `json:"passHeaders,omitempty"`
-	Usage         *UsageRules `json:"usage,omitempty"`
+// AccountPlatform is one platform an account type serves. Empty fields fall
+// back to the platform (and endpoint) defaults.
+type AccountPlatform struct {
+	Platform      string   `json:"platform"`
+	RequestFields []string `json:"requestFields,omitempty"`
+	PassHeaders   []string `json:"passHeaders,omitempty"`
+	// Usage overrides the usage rules per protocol of the platform.
+	Usage map[string]UsageRules `json:"usage,omitempty"`
 }
 
 // Form describes a console form contributed by a plugin.

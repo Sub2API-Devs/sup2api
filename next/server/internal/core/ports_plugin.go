@@ -51,15 +51,20 @@ type PluginInfo struct {
 	AssetBase string
 }
 
+// EndpointBinding is one gateway endpoint of an available platform. Plugin
+// is the declaring plugin (zero for built-in platforms).
 type EndpointBinding struct {
 	Plugin   PluginInfo
+	Platform string // platform id
 	Endpoint manifest.Endpoint
 }
 
+// PlatformBinding is a built-in platform (Builtin, zero Plugin) or one
+// declared by an enabled plugin (ARCHITECTURE 6.6).
 type PlatformBinding struct {
 	Plugin   PluginInfo
+	Builtin  bool
 	Platform manifest.Platform
-	Client   PlatformPlugin
 }
 
 // AccountTypeKey identifies an account type: the declaring plugin and the
@@ -85,14 +90,14 @@ func (b AccountTypeBinding) Key() AccountTypeKey {
 	return AccountTypeKey{PluginKey: b.Plugin.Key, Type: b.Type.ID}
 }
 
-// Protocol returns the native protocol entry for protocol, if any.
-func (b AccountTypeBinding) Protocol(protocol string) (manifest.AccountProtocol, bool) {
-	for _, p := range b.Type.Protocols {
-		if p.Protocol == protocol {
+// Supports returns the account type's entry for platform, if it serves it.
+func (b AccountTypeBinding) Supports(platformID string) (manifest.AccountPlatform, bool) {
+	for _, p := range b.Type.Platforms {
+		if p.Platform == platformID {
 			return p, true
 		}
 	}
-	return manifest.AccountProtocol{}, false
+	return manifest.AccountPlatform{}, false
 }
 
 type HookBinding struct {
@@ -127,15 +132,17 @@ type Generation interface {
 	Plugins() []PluginInfo
 	Plugin(key string) (PluginInfo, bool)
 	Endpoints() []EndpointBinding
-	// PlatformsForProtocol lists enabled platforms claiming the protocol
-	// (their defaults: request fields, pass headers, usage, sticky rules).
-	PlatformsForProtocol(protocol string) []PlatformBinding
+	// Platforms lists the built-in platforms and those of enabled plugins.
+	Platforms() []PlatformBinding
 	Platform(platformID string) (PlatformBinding, bool)
+	// PlatformForProtocol returns the platform owning an endpoint protocol
+	// (protocols are "<platform id>.<name>", unique across platforms).
+	PlatformForProtocol(protocol string) (PlatformBinding, bool)
 	AccountTypes() []AccountTypeBinding
 	AccountType(pluginKey, typeID string) (AccountTypeBinding, bool)
-	// AccountTypesForProtocol lists account types that natively serve the
-	// protocol (conversion is decided by the gateway).
-	AccountTypesForProtocol(protocol string) []AccountTypeBinding
+	// AccountTypesForPlatform lists account types serving the platform
+	// natively (conversion is decided by the gateway).
+	AccountTypesForPlatform(platformID string) []AccountTypeBinding
 	Hooks(point string) []HookBinding // sorted by order
 	Scheduler(pluginKey string) (SchedulerPlugin, bool)
 	Routes(pluginKey string) []RouteBinding

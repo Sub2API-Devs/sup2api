@@ -1,0 +1,133 @@
+{
+  "id": "anthropic",
+  "label": {
+    "en": "Anthropic",
+    "zh": "Anthropic"
+  },
+  "endpoints": [
+    {
+      "id": "messages",
+      "method": "POST",
+      "path": "/v1/messages",
+      "protocol": "anthropic.messages",
+      "kind": "proxy",
+      "auth": {
+        "headers": [
+          "x-api-key",
+          "authorization"
+        ]
+      },
+      "request": {
+        "modelPath": "model",
+        "streamPath": "stream",
+        "promptTextPaths": [
+          "system",
+          "messages.#.content"
+        ]
+      },
+      "response": {
+        "stream": "sse",
+        "nonStream": "json"
+      },
+      "errorFormat": "anthropic",
+      "billing": "usage"
+    },
+    {
+      "id": "count_tokens",
+      "method": "POST",
+      "path": "/v1/messages/count_tokens",
+      "protocol": "anthropic.count_tokens",
+      "kind": "proxy",
+      "auth": {
+        "headers": [
+          "x-api-key",
+          "authorization"
+        ]
+      },
+      "request": {
+        "modelPath": "model"
+      },
+      "response": {
+        "nonStream": "json"
+      },
+      "errorFormat": "anthropic",
+      "billing": "free"
+    }
+  ],
+  "requestFields": [
+    "model"
+  ],
+  "passHeaders": [
+    "anthropic-version",
+    "anthropic-beta",
+    "anthropic-dangerous-direct-browser-access",
+    "user-agent",
+    "x-app",
+    "x-stainless-arch",
+    "x-stainless-helper-method",
+    "x-stainless-lang",
+    "x-stainless-os",
+    "x-stainless-package-version",
+    "x-stainless-retry-count",
+    "x-stainless-runtime",
+    "x-stainless-runtime-version",
+    "x-stainless-timeout"
+  ],
+  "usage": {
+    "semantics": "exclusive",
+    "sse": [
+      {
+        "event": "message_start",
+        "map": {
+          "model": "message.model",
+          "input_tokens": "message.usage.input_tokens",
+          "cache_read_tokens": "message.usage.cache_read_input_tokens",
+          "cache_creation_tokens": "message.usage.cache_creation_input_tokens",
+          "cache_creation_1h_tokens": "message.usage.cache_creation.ephemeral_1h_input_tokens"
+        }
+      },
+      {
+        "event": "message_delta",
+        "map": {
+          "output_tokens": "usage.output_tokens"
+        }
+      }
+    ],
+    "json": {
+      "map": {
+        "model": "model",
+        "input_tokens": "usage.input_tokens",
+        "output_tokens": "usage.output_tokens",
+        "cache_read_tokens": "usage.cache_read_input_tokens",
+        "cache_creation_tokens": "usage.cache_creation_input_tokens",
+        "cache_creation_1h_tokens": "usage.cache_creation.ephemeral_1h_input_tokens"
+      }
+    }
+  },
+  "stickyRules": [
+    {
+      "name": "claude-code-session",
+      "match": {
+        "protocols": [
+          "anthropic.messages"
+        ],
+        "models": [
+          "claude-*"
+        ]
+      },
+      "keySources": [
+        {
+          "type": "body",
+          "path": "metadata.user_id"
+        }
+      ],
+      "ttlSeconds": 3600,
+      "keyIncludes": [
+        "group",
+        "model",
+        "rule"
+      ],
+      "onFailure": "failover"
+    }
+  ]
+}

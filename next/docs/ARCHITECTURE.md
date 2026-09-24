@@ -744,9 +744,9 @@ sequenceDiagram
 | 熔断 | 同一钩子连续失败 10 次后熔断 30 秒，熔断期间直接按 `failure` 处理，不调用插件 |
 | 观测 | 每个钩子的调用次数、拒绝次数、超时次数、耗时，显示在插件详情页 |
 
-### 6.4 网关端点由插件声明
+### 6.4 网关端点由平台声明
 
-核心不写死任何网关端点和协议。插件在 manifest 的 `gateway.endpoints` 里声明端点，核心的流水线按声明执行：
+端点属于平台：核心内置 anthropic、openai、gemini 三个平台的端点，插件可以在 manifest 的 `platforms[].endpoints` 里为自己的新平台声明端点（见 6.6），核心流水线按声明执行。端点字段如下（以 anthropic 为例）：
 
 ```jsonc
 "gateway": {
@@ -772,8 +772,8 @@ sequenceDiagram
 | 项目 | 设计 |
 |---|---|
 | 路由 | 每个 generation 构建一个内层路由表，挂在核心路由之后；插件启用、禁用、升级时随 generation 原子切换（参考 new-api 的 `plugin-router.go`） |
-| 冲突检查 | 安装和启用时检查：不能占用核心路由（`/api`、`/plugin-ui`、`/health` 等）；两个插件不能声明相同的 method + path |
-| 协议归属 | 协议由声明端点的插件定义；任何插件的账号类型都可以通过 `accountTypes[].protocols` 声明自己的上游原生支持哪些协议，从而为这些端点提供服务（见 6.6） |
+| 冲突检查 | 安装和启用时检查：不能占用核心路由（`/api`、`/plugin-ui`、`/health` 等）；插件平台的 id 不能与内置平台或其他插件的平台重复，端点不能与任何其他平台的端点冲突 |
+| 协议归属 | 协议由平台的端点定义；账号类型通过 `accountTypes[].platforms` 声明支持哪些平台，从而为这些平台的端点提供服务（见 6.6） |
 | 协议转换 | 核心内置转换器（`gateway/convert`）；端点协议和账号上游协议不同时，核心有对应转换器就自动转换，没有就只调度原生支持该协议的账号（见 6.6） |
 | 以后的扩展 | `kind: "custom"`：由插件的 HTTPService 处理，但复用核心的 API Key 鉴权和计费（用于异步任务类接口） |
 
@@ -822,64 +822,72 @@ sequenceDiagram
 - 使用记录中记录本次请求是否命中粘性绑定（`sticky_rule`、`sticky_hit`）
 - 规则存在 `sticky_rules` 表：`source=plugin_default` 由插件安装和升级时写入、卸载时删除；`source=admin` 由管理员维护，插件变更不影响
 
-### 6.6 平台、账号类型与端点（多对多）
+### 6.6 平台、账号类型、账号、分组与端点
 
-> 2026-09-24 决定。取代"账号属于某个平台、由平台插件转发"的一对一模型。
+> 2026-09-25 决定（取代 2026-09-24 的"账号类型直接声明协议"版本）。
 
-**三个概念**
+**关系**
 
-| 概念 | 由谁声明 | 作用 |
+```mermaid
+flowchart LR
+  ep["端点<br/>POST /v1/messages"] -->|属于| pf["平台<br/>anthropic"]
+  at1["账号类型<br/>anthropic 插件 · apikey"] -->|声明支持| pf
+  at2["账号类型<br/>relay 插件 · relay_key"] -->|声明支持| pf
+  a1["账号 A"] -->|属于| at1
+  a2["账号 B"] -->|属于| at2
+  g["分组"] -->|包含| a1 & a2
+  k["API Key"] -->|只绑定一个| g
+```
+
+| 概念 | 由谁声明 | 规则 |
 |---|---|---|
-| 平台 | 插件 manifest 的 `platform`（如 anthropic） | 一组面向客户端的端点（`gateway.endpoints`，如 `/v1/messages`）及其协议、错误格式、默认粘性规则、默认用量规则 |
-| 协议 | 端点的 `protocol`（如 `anthropic.messages`） | 请求和响应的格式；调度按协议匹配账号 |
-| 账号类型 | 任何插件 manifest 的 `accountTypes[]` | 一种凭证（API Key、OAuth、中转 Key……）及其录入表单；声明上游**原生支持的协议** `protocols`，由声明它的插件负责构造上游请求、分类错误 |
+| 平台 | **核心内置**：`anthropic`、`openai`、`gemini`；插件可以声明新平台 | 平台声明自己的端点（method + path + 协议 + 错误格式 + 用量规则等）。插件不能声明与内置平台或其他插件同 id 的平台；**不同平台的端点不能冲突**（安装时检查，含路径参数的重叠） |
+| 端点 | 平台 | 每个端点只属于一个平台；内置平台的端点始终存在，插件平台的端点在插件启用时存在、禁用后 404 |
+| 账号类型 | 插件 | 声明支持哪些平台（内置平台或插件平台，可多个）；不同账号类型可以支持同一个平台；声明它的插件负责构造上游请求、分类错误 |
+| 账号 | 管理员 | 属于一个账号类型 |
+| 分组 | 管理员 | 一组账号（可混放不同类型），一起提供服务 |
+| API Key | 用户 | **只绑定一个分组** |
 
-- 一个账号类型可以支持多个协议，因此可以同时为多个端点提供服务
-- 一个端点可以由多个插件的多种账号类型提供服务；同一个分组里可以混放不同类型的账号，一起参与 `/v1/messages` 的调度
-- 账号类型与平台解耦：插件可以只声明账号类型（比如一个"Claude 中转"插件），不声明平台和端点
+**请求如何调度**
+
+1. 按请求路径匹配端点 → 得到平台 P 和协议
+2. API Key → 分组 G
+3. 候选账号 = G 中账号类型**支持平台 P** 的账号；此外，账号类型支持的其他平台里若有协议能由核心转换器从本端点协议转换过去，这些账号也是候选（原生优先）
+4. 没有候选账号 → 503 `no_available_account`；有则按优先级、粘性会话、并发、失败切换调度
+5. 选中账号后由其账号类型所属插件构造上游请求；需转换时由核心转换请求和响应
+
+**内置平台**（定义在核心 `server/internal/platforms`，不再由插件声明）
+
+| 平台 | 端点 | 协议 | 错误格式 | 用量口径 |
+|---|---|---|---|---|
+| anthropic | `POST /v1/messages` · `POST /v1/messages/count_tokens`（不计费） | `anthropic.messages` · `anthropic.count_tokens` | anthropic | exclusive |
+| openai | `POST /v1/chat/completions` · `POST /v1/responses` · `POST /v1/embeddings` | `openai.chat` · `openai.responses` · `openai.embeddings` | openai | inclusive |
+| gemini | `POST /v1beta/models/{model}:generateContent` · `POST /v1beta/models/{model}:streamGenerateContent` · `POST /v1beta/models/{model}:countTokens`（不计费） | `gemini.generate` · `gemini.stream_generate` · `gemini.count_tokens` | gemini | inclusive |
+
+内置平台同时提供：API Key 读取方式（anthropic：`x-api-key`/`Authorization`；openai：`Authorization: Bearer`；gemini：`x-goog-api-key` 或 `?key=`）、模型与流式标志的位置（gemini 的模型在路径里，流式由端点决定）、转发给插件的请求字段和请求头、用量提取规则、默认粘性规则（`source=builtin`）。
 
 **manifest**
 
 ```jsonc
+"platforms": [ {                       // 可选：插件自己的新平台（不能与内置或其他插件重名）
+  "id": "myvideo", "label": {...},
+  "endpoints": [ { "id": "gen", "method": "POST", "path": "/v1/video/generations",
+                   "protocol": "myvideo.gen", "auth": {...}, "request": {...}, "response": {...},
+                   "errorFormat": "plain", "billing": "usage", "usage": {...} } ],
+  "requestFields": [...], "passHeaders": [...], "usage": {...}, "stickyRules": [...]
+} ],
 "accountTypes": [ {
-  "id": "relay_key",
-  "label": { "en": "Relay key", "zh": "中转 Key" },
-  "form": { "mode": "schema", "schema": "forms/relay.schema.json" },
-  "sensitiveFields": ["api_key"],
-  "protocols": [                         // 上游原生支持的协议
-    { "protocol": "anthropic.messages",
-      "requestFields": ["model"],        // 可选，默认取端点所属平台的设置
-      "passHeaders": ["anthropic-beta"], // 可选
-      "usage": { ... } },                // 可选：上游用量格式和平台默认不同时覆盖
-    { "protocol": "anthropic.count_tokens" }
-  ]
+  "id": "relay_key", "label": {...}, "form": {...}, "sensitiveFields": ["api_key"],
+  "platforms": [ { "platform": "anthropic",           // 内置或插件平台
+                   "requestFields": [...], "passHeaders": [...],   // 可选覆盖
+                   "usage": { "<protocol>": {...} } } ]            // 可选：按协议覆盖用量规则
 } ]
 ```
 
-`platform` 里不再包含 `accountTypes`。账号类型的唯一标识是 `(plugin_key, type)`。
+顶层 `gateway` 与 `platform` 字段删除（端点归属平台）。
 
-**调度（端点协议为 P）**
+**计费**：价格只按模型全局设置（7.3）。**凭证授权**：`accounts.credentials`（`{"types":"own"}`）授权后，插件的账号类型才注册。**控制台**：账号类型显示支持的平台和可服务的端点；分组可放任意类型账号，并显示分组能服务哪些平台（由其账号类型推出）；API Key 显示所属分组能访问的平台和端点。
 
-1. 候选账号类型 = 所有已启用插件中，`protocols` 含 P 的账号类型（**原生**），加上 `protocols` 含 Q 且核心有 `P→Q` 转换器的账号类型（**需转换**）
-2. 候选账号 = 分组内、属于候选账号类型、可调度、未冷却的账号；优先级、粘性会话、并发槽位、失败切换规则不变
-3. 对选中的账号：
-   - 原生：请求体原样交给**账号类型所属插件**的 `BuildUpstreamRequest`（`meta.protocol = P`），响应原样返回
-   - 需转换：核心先把请求体 `P→Q`，再调用插件（`meta.protocol = Q`），上游响应（含流式）由核心 `Q→P` 转回客户端格式
-   - 同一账号类型既原生支持 P 又能转换时，按原生处理
-4. 错误分类由账号类型所属插件负责；返回给客户端的错误格式始终是端点的 `errorFormat`
-5. 用量提取：账号类型为该协议声明了 `usage` 就用它，否则用声明该协议端点的平台的 `usage`
-
-**协议转换器**
-
-- 核心内置 Go 实现，接口 `Converter{From, To; Request(body); Response(stream) }`，按 `(P, Q)` 注册；流式转换逐个 SSE 事件处理，不经过插件
-- 本期实现转换器框架和调度逻辑；具体的协议对（如 `anthropic.messages ↔ openai.chat`）在出现对应上游的账号类型时补充
-- 转换后的用量按上游协议 Q 的规则提取，计费不受影响
-
-**计费**：见 7.3 "定价范围"——价格只按模型全局设置，与平台、账号类型无关。
-
-**凭证授权**：`accounts.credentials` 的范围从"本平台账号"改为"本插件声明的账号类型的账号"（`scope: {"types": "own"}`）。插件只能拿到自己账号类型的凭证。
-
-**控制台**：新建账号时先选账号类型（显示所属插件和支持的端点），再填插件提供的表单；分组可以选择任意类型的账号；账号列表显示"类型（插件）"和"可服务的端点"。
 
 ---
 
