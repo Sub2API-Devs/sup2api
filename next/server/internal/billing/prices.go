@@ -507,7 +507,7 @@ type PreviewRequest struct {
 
 // PreviewUsage holds token counts in the exclusive form (p excludes cache).
 // They are normalized like settlement (expr.Normalize): cache categories the
-// expression does not price are billed as input. len defaults to
+// expression does not price are not billed. len defaults to
 // p + cr + cc + cc1h.
 type PreviewUsage struct {
 	P    float64  `json:"p"`

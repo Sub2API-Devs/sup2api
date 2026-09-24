@@ -151,7 +151,7 @@ HTTP 挂载：`/healthz`（节点自我隔离时 503）→ `httpapi.NewRouter` �
 | 资源限制 | 不用 cgroup；oom_score_adj + nice + GOMEMLIMIT + 内存看门狗 + rlimit |
 | 网络 | 默认不限制只记录；Linux 严格模式用 seccomp 保证插件所有连接走 gRPC 出口隧道；UDP 默认禁止，DNS 由核心代解析 |
 | 权限 | 用户/角色/权限 RBAC；插件可注册用户权限（禁用保留、卸载销毁）；插件申请宿主能力需管理员分级确认 |
-| 计费 | 按次/按 token/表达式三种方式统一为表达式；参考 new-api 设计但不复制代码（new-api 为 AGPL，本项目 LGPL）；只支持管理员调整余额 |
+| 计费 | 按次/按 token/表达式三种方式统一为表达式；参考 new-api 设计但不复制代码（new-api 为 AGPL，本项目 LGPL）；只支持管理员调整余额；表达式没写的缓存类别（`cr`/`cc`/`cc1h`）不收费，`p` 始终是不含缓存的纯输入（2026-09-24 用户决定） |
 | 粘性会话 | 核心负责调度，平台插件提供默认规则，管理员可覆盖，复杂取值可由插件扩展点计算 |
 | 网关端点 | 由插件在 manifest 中声明，核心按声明执行通用流水线 |
 | 测试与部署 | 所有测试组件只用 docker compose；ovh 独立目录部署，对外只绑定 127.0.0.1 |
@@ -174,7 +174,7 @@ go test -count=1 -timeout 50m -v ./...
 | 1 | `a69f68f55` | 19 个用例全失败 | 多数是 `WaitPlugin` 等不到节点 `state=active` 连带超时：C2 上报的节点 JSON 没有契约里的 `state` 字段 → 补派生 `state`；`/healthz` 返回 `"OK"` → 改 `"ok"`；e2e 建角色没带 step-up、review 账号类型键是 `id`；派生 guard 包沿用原二进制导致 GetInfo key 不符 → e2e 用 `-X buildKey` 重编；升级不增权限也要求确认 → C1 自动沿用授权（`896ea01a5`） |
 | 2 | `896ea01a5` | 中止 | e2e 把节点 `state` 当字符串读（实际是上报对象，取 `state.state`）；建带角色的用户要 step-up |
 | 3 | `896ea01a5` | 7/17 通过（AC01–03、14–16） | 其余都卡在 e2e 以数字发 `rate_multiplier`（契约为十进制字符串） |
-| 4 | `896ea01a5` | 13/17 通过 | AC08：预览不按结算方式归一化 → 服务端改为同一 `expr.Normalize`；列表不含 `price_id` → e2e 取详情；表达式未给缓存定价时缓存按输入价计（B 的实现，文档 §7.3 已统一）。AC10：其他节点规则 5 秒内刷新 → e2e 等一个周期；熔断按单节点连续 10 次失败 → e2e 循环到熔断打开。AC11：guard 按分钟桶统计 → e2e 用整分钟窗口；游标字段 `cursor.last_event_id`。AC13：设置接口体为 `{values:{...}}`；出口日志在连接关闭时写入（keep-alive 最长 90 秒） |
+| 4 | `896ea01a5` | 13/17 通过 | AC08：预览不按结算方式归一化 → 服务端改为同一 `expr.Normalize`；列表不含 `price_id` → e2e 取详情；表达式未给缓存定价时缓存按输入价计（后按用户决定改为不收费，见第 7 节）。AC10：其他节点规则 5 秒内刷新 → e2e 等一个周期；熔断按单节点连续 10 次失败 → e2e 循环到熔断打开。AC11：guard 按分钟桶统计 → e2e 用整分钟窗口；游标字段 `cursor.last_event_id`。AC13：设置接口体为 `{values:{...}}`；出口日志在连接关闭时写入（keep-alive 最长 90 秒） |
 | 5 | `5bc00f3df` | AC08/10/13 单独通过（AC08 仅剩价格历史比较：历史存规范形式 `v1:...`，e2e 改为按哈希和去前缀比较） | |
 | 6 | `5bc00f3df` | 全量（含 `E2E_LONG=1`）：AC01–09 通过；AC10 起本机 SSH 隧道断开（网络问题）导致后续全失败 | 重建隧道（PG、Redis、3120 合为一个后台任务） |
 | 7 | `5bc00f3df` | 重跑 AC10–17：AC12、AC17 失败 | AC12：任务接口返回 `{jobs, recent_runs}`，e2e 按数组读 → 改读 `recent_runs`；AC17：计时包含 ssh 执行 docker kill 的耗时 → 改为 kill 返回后计时 |

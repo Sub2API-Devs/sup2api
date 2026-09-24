@@ -48,8 +48,8 @@ export default {
     cc1h: '缓存写 1 小时',
     flat: '固定费'
   },
-  unsetPlaceholder: '按输入计',
-  cacheUnsetHint: '缓存价格留空表示这部分 token 按输入价格计费；填 0 表示免费。',
+  unsetPlaceholder: '不收费',
+  cacheUnsetHint: '缓存价格留空表示这部分 token 不收费。',
   notVisual: '该表达式无法用可视化方式表示，只能在源码模式编辑。',
   sourceHint: '加价规则用三个竖线追加，形如 条件 ? 1.5 : 1',
   generated: '生成的表达式（只读）',

@@ -917,7 +917,7 @@ tier("base", p*5 + c*25) ||| param("service_tier") == "priority" ? 1.5 : 1 ||| h
 | `exclusive` | Anthropic：`input_tokens` 不含缓存 | 输入 + 缓存读 + 缓存写 |
 | `inclusive` | OpenAI 风格：`prompt_tokens` 包含缓存 | `prompt_tokens` |
 
-两种口径下 `p` 的算法相同：`p = len − 表达式单独计价的缓存类别`。表达式用到 `cr`、`cc`、`cc1h` 的类别按各自价格计费；没用到的留在 `p` 里按输入价计费，不会漏计。只给 `cc` 定价时，1 小时缓存写也按 `cc` 计。因此 Anthropic 的表达式只写 `p*3 + c*15` 时，缓存 token 会按输入价收费；要按缓存价收费，需在表达式里写出 `cr`、`cc`。
+两种口径下 `p` 都是不含任何缓存的纯输入 token（inclusive 口径由核心从 `prompt_tokens` 中扣除全部缓存）。缓存 token 只有在表达式写了对应变量（`cr`、`cc`、`cc1h`）时才计费，没写的不收费。只给 `cc` 定价时，1 小时缓存写也按 `cc` 计。因此表达式只写 `p*3 + c*15` 时，缓存 token 不收费；要收缓存费，需在表达式里写出 `cr`、`cc`（价格编辑器的"按 token"模式会自动写入）。
 
 #### 存储
 

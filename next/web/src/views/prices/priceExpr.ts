@@ -7,7 +7,7 @@ export type PriceMode = 'per_request' | 'per_token' | 'expression'
 export const TOKEN_VARS = ['p', 'c', 'cr', 'cc', 'cc1h'] as const
 export type TokenVar = (typeof TOKEN_VARS)[number]
 
-/** USD per 1M tokens; null = not priced (term omitted; cache tokens then bill as input). */
+/** USD per 1M tokens; null = not priced (term omitted; those cache tokens are not billed). */
 export type TokenPrices = Record<TokenVar, number | null>
 
 export const CACHE_VARS: readonly TokenVar[] = ['cr', 'cc', 'cc1h']
@@ -104,8 +104,8 @@ function tokenTerms(tp: TokenPrices): string[] {
   for (const k of TOKEN_VARS) {
     if (!isSet(tp[k])) continue
     const v = num(tp[k])
-    // An explicit cache price of 0 means "free" and must stay in the
-    // expression (so those tokens are not billed as input); p/c zeros are noise.
+    // An explicit cache price of 0 (free) is kept so the expression shows it;
+    // p/c zeros are noise.
     if (v === 0 && !CACHE_VARS.includes(k)) continue
     terms.push(`${k}*${fmt(v)}`)
   }

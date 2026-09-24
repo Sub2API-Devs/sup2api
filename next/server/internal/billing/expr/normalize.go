@@ -19,19 +19,24 @@ type Tokens struct {
 // Normalize maps raw tokens to expression variables (ARCHITECTURE 7.3):
 //
 //   - len is the full context: input + cache (exclusive) or input (inclusive)
-//   - every cache category the expression prices separately (cr, cc, cc1h)
-//     gets its own count; categories it does not price are billed as input,
-//     so they stay in p. A 1-hour cache write falls back to cc when only cc
-//     is priced.
-//   - p is len minus the separately priced categories, never negative.
+//   - p is the input without any cache tokens, never negative
+//   - every cache category the expression prices (cr, cc, cc1h) gets its own
+//     count; categories it does not price are not billed. A 1-hour cache
+//     write falls back to cc when only cc is priced.
 //
 // usedVars is typically Program.Uses.
 func Normalize(semantics string, t Tokens, uses func(string) bool) Vars {
+	cache := float64(t.CacheRead + t.CacheCreation + t.CacheCreation1h)
 	total := float64(t.Input)
+	p := total - cache
 	if semantics != SemanticsInclusive {
-		total += float64(t.CacheRead + t.CacheCreation + t.CacheCreation1h)
+		total += cache
+		p = float64(t.Input)
 	}
-	v := Vars{C: float64(t.Output), Len: total}
+	if p < 0 {
+		p = 0
+	}
+	v := Vars{P: p, C: float64(t.Output), Len: total}
 	if uses("cr") {
 		v.CR = float64(t.CacheRead)
 	}
@@ -43,10 +48,6 @@ func Normalize(semantics string, t Tokens, uses func(string) bool) Vars {
 		}
 	case uses("cc"):
 		v.CC = float64(t.CacheCreation + t.CacheCreation1h)
-	}
-	v.P = total - v.CR - v.CC - v.CC1h
-	if v.P < 0 {
-		v.P = 0
 	}
 	return v
 }

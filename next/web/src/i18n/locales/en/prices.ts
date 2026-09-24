@@ -48,8 +48,8 @@ export default {
     cc1h: 'Cache write 1h',
     flat: 'Flat fee'
   },
-  unsetPlaceholder: 'as input',
-  cacheUnsetHint: 'Leave a cache price empty to bill those tokens at the input price; 0 makes them free.',
+  unsetPlaceholder: 'free',
+  cacheUnsetHint: 'Cache tokens without a price are not billed.',
   notVisual: 'This expression cannot be represented visually; edit it in source mode.',
   sourceHint: 'Rules are appended with three vertical bars, e.g. COND ? 1.5 : 1',
   generated: 'Generated expression (read-only)',

@@ -44,8 +44,8 @@ func (n *Num) UnmarshalJSON(b []byte) error {
 }
 
 // TokenPrices are USD per million tokens. p and c are always emitted; a
-// cache price that is absent (nil) is not emitted, so those tokens are billed
-// as input. An explicit 0 prices them as free.
+// cache price that is absent (nil) is not emitted, so those tokens are not
+// billed (same as an explicit 0).
 type TokenPrices struct {
 	P    *Num `json:"p,omitempty"`
 	C    *Num `json:"c,omitempty"`
