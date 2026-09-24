@@ -131,6 +131,9 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		DB: db, Redis: rdb, Cipher: cipher, Registry: reg, Proxies: prx, Events: events,
 		Slots: cl.Slots, Bus: cl.Bus, AllowPrivateUpstream: cfg.AllowPrivateUpstream, Converters: converters,
 	})
+	// Price sync sources (upstream API keys encrypted) and GET /key/prices for
+	// downstream sup2api instances (CONTRACTS §17).
+	bill.SetSyncDeps(billing.SyncDeps{Cipher: cipher, Keys: keys})
 	go keys.Run(ctx)
 	go prx.Run(ctx)
 	go acc.Run(ctx)
@@ -163,7 +166,7 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	})
 	onClose(func(context.Context) { gw.Close() })
 
-	defaults := install.NewDefaultsApplier(az, bill, gw)
+	defaults := install.NewDefaultsApplier(az, gw)
 	ctl, err := rollout.New(rollout.Options{
 		DB: db, Node: cl.Registry, Bus: cl.Bus, Packages: pkgs, Registry: reg,
 		Runtime: rollout.FromGRPC(rt), Schemas: schemas, Defaults: defaults, Perms: az, Events: events, Logger: log,

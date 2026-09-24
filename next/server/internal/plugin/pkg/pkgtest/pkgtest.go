@@ -141,7 +141,6 @@ func Platform(key, version, publisher string) *manifest.Manifest {
 			SensitiveFields: []string{"api_key"},
 			Platforms:       []manifest.AccountPlatform{{Platform: key}},
 		}},
-		Pricing: []manifest.PricingEntry{{Model: "video-gen-1", Mode: "per_request", Config: map[string]any{"price": 1}}},
 		HostPermissions: []manifest.HostPermission{
 			{ID: "gateway.endpoint"},
 			{ID: "platform.register"},
@@ -170,7 +169,6 @@ func Anthropic(key, version, publisher string) *manifest.Manifest {
 			SensitiveFields: []string{"api_key"},
 			Platforms:       []manifest.AccountPlatform{{Platform: manifest.PlatformAnthropic}},
 		}},
-		Pricing: []manifest.PricingEntry{{Model: "claude-sonnet-4-5", Mode: "per_token", Config: map[string]any{"p": 3, "c": 15}}},
 		HostPermissions: []manifest.HostPermission{
 			{ID: "platform.register"},
 			{ID: "accounts.credentials", Scope: map[string]any{"types": "own"}},

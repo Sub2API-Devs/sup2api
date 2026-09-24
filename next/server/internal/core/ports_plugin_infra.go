@@ -13,12 +13,8 @@ import (
 // ============================================================ plugin defaults sinks
 // Called by the plugin runtime (C1) inside the install/upgrade transaction.
 // Rows with source=plugin_default are replaced; admin rows are untouched.
+// Model prices are not plugin defaults: administrators set them (CONTRACTS §17).
 // Uninstall relies on ON DELETE CASCADE from plugins(key).
-
-// PriceCatalog is implemented by billing (B).
-type PriceCatalog interface {
-	SyncPluginDefaults(ctx context.Context, tx pgx.Tx, pluginKey string, entries []manifest.PricingEntry) error
-}
 
 // StickyRuleCatalog is implemented by the gateway (G).
 type StickyRuleCatalog interface {
@@ -63,7 +59,7 @@ type PluginSchemaManager interface {
 }
 
 // PluginDefaultsApplier (C1) writes version-scoped defaults (user
-// permissions, default prices, sticky rules) for a manifest. C1 calls it on
+// permissions, sticky rules) for a manifest. C1 calls it on
 // first install; C2 calls it when an upgrade activates.
 type PluginDefaultsApplier interface {
 	ApplyDefaults(ctx context.Context, tx pgx.Tx, m *manifest.Manifest, grantNewPermissionsToRoleKeys []string) error

@@ -1,4 +1,4 @@
-// Package billing implements model prices (core.Pricer, core.PriceCatalog),
+// Package billing implements model prices (core.Pricer, price sync sources),
 // the balance ledger (core.Ledger), the pre-request balance check
 // (core.BalanceGate) and their console APIs (CONTRACTS §5.5).
 package billing
@@ -18,7 +18,7 @@ import (
 )
 
 // Service is the billing module. It implements core.Pricer,
-// core.PriceCatalog, core.BalanceGate and core.Ledger.
+// core.BalanceGate and core.Ledger.
 type Service struct {
 	db       *store.DB
 	rdb      redis.UniversalClient
@@ -33,14 +33,15 @@ type Service struct {
 	resolved map[string]resolved // model
 	settings *settingsSnapshot
 
+	sync SyncDeps
+
 	unsubscribe func()
 }
 
 var (
-	_ core.Pricer       = (*Service)(nil)
-	_ core.PriceCatalog = (*Service)(nil)
-	_ core.BalanceGate  = (*Service)(nil)
-	_ core.Ledger       = (*Service)(nil)
+	_ core.Pricer      = (*Service)(nil)
+	_ core.BalanceGate = (*Service)(nil)
+	_ core.Ledger      = (*Service)(nil)
 )
 
 // New builds the billing service. bus and registry may be nil: without a
@@ -101,6 +102,7 @@ func (s *Service) changedAfterCommit(ctx context.Context, key string) {
 // RegisterRoutes mounts the billing console API.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	s.registerPriceRoutes(r)
+	s.registerSyncRoutes(r)
 	s.registerBalanceRoutes(r)
 	s.registerSettingsRoutes(r)
 }

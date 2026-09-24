@@ -28,8 +28,8 @@ func TestManifest(t *testing.T) {
 	if m.Name["en"] == "" || m.Name["zh"] == "" || m.Description["en"] == "" || m.Description["zh"] == "" {
 		t.Fatal("name and description need en and zh")
 	}
-	if len(m.Platforms) != 0 || len(m.Pricing) != 0 || m.Database != nil {
-		t.Fatal("relay declares only an account type: no platforms, pricing or database")
+	if len(m.Platforms) != 0 || m.Database != nil {
+		t.Fatal("relay declares only an account type: no platforms or database")
 	}
 	if len(m.Capabilities) != 1 || m.Capabilities[0].ID != manifest.CapPlatformAdapter {
 		t.Fatalf("capabilities = %v", m.Capabilities)

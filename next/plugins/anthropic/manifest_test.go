@@ -22,7 +22,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "anthropic" || m.Version != "0.1.1" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "anthropic" || m.Version != "0.1.2" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("key/version = %s %s", m.Key, m.Version)
 	}
 	if m.Database == nil || m.Database.Schema != "plg_"+m.Key {
@@ -104,16 +104,6 @@ func TestManifest(t *testing.T) {
 	if _, err := os.Stat(filepath.FromSlash(strings.TrimSuffix(m.Database.Migrations, "/"))); err != nil {
 		t.Fatalf("migrations dir: %v", err)
 	}
-	priced := map[string]bool{}
-	for _, pe := range m.Pricing {
-		if !manifest.ValidModelID(pe.Model) || priced[pe.Model] {
-			t.Errorf("pricing %s: not a complete model id or priced twice", pe.Model)
-		}
-		priced[pe.Model] = true
-		if pe.Mode == "per_token" && len(pe.Config) == 0 || pe.Mode == "expression" && pe.Expression == "" {
-			t.Errorf("pricing %s incomplete", pe.Model)
-		}
-	}
 	var patch map[string]any
 	raw := mustJSONFile(t, "testdata/v0.2.0/manifest.patch.json")
 	_ = json.Unmarshal(raw, &patch)
@@ -131,10 +121,8 @@ func TestManifest(t *testing.T) {
 			t.Fatal("0.2.0 patch sets accountTypes[].protocols; account types declare platforms")
 		}
 	}
-	for _, pe := range asSlice(patch["pricing"]) {
-		if e, ok := pe.(map[string]any); ok && e["platform"] != nil {
-			t.Fatal("0.2.0 patch sets pricing[].platform; prices are global per model")
-		}
+	if patch["pricing"] != nil {
+		t.Fatal("0.2.0 patch declares model prices; administrators set prices in the core (CONTRACTS §17)")
 	}
 }
 

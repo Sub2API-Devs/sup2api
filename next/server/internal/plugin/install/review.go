@@ -42,7 +42,6 @@ type Review struct {
 	UserPermissions  []ReviewUserPerm    `json:"user_permissions"`
 	Database         *ReviewDatabase     `json:"database"`
 	Resources        ReviewResources     `json:"resources"`
-	PricingEntries   int                 `json:"pricing_entries"`
 	ExternalServices []string            `json:"external_services"`
 	HostPermissions  []ReviewHostPerm    `json:"host_permissions"`
 	Diff             *ReviewDiff         `json:"diff,omitempty"`
@@ -249,7 +248,6 @@ func buildReview(m *manifest.Manifest, files map[string][]byte, ver *pkg.Verific
 		Menus:            []ReviewMenu{},
 		Slots:            []ReviewSlot{},
 		UserPermissions:  []ReviewUserPerm{},
-		PricingEntries:   len(m.Pricing),
 		ExternalServices: append([]string{}, m.ExternalServices...),
 		HostPermissions:  []ReviewHostPerm{},
 	}

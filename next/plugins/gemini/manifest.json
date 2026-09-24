@@ -3,10 +3,10 @@
   "key": "gemini",
   "name": { "en": "Gemini", "zh": "Gemini" },
   "description": {
-    "en": "Gemini API key account type and default model prices. The gemini platform and its endpoints (/v1beta/models/{model}:generateContent, :streamGenerateContent, :countTokens) are built into the core. Default prices are examples (text, paid tier); Google's official pricing prevails.",
-    "zh": "Gemini API Key 账号类型与默认价格（gemini 平台及其端点 /v1beta/models/{model}:generateContent、:streamGenerateContent、:countTokens 由核心内置）。默认价格仅为示例（文本、付费层级），以 Google 官方公布价格为准。"
+    "en": "Gemini API key account type. The gemini platform and its endpoints (/v1beta/models/{model}:generateContent, :streamGenerateContent, :countTokens) are built into the core; model prices are set by administrators in the core.",
+    "zh": "Gemini API Key 账号类型（gemini 平台及其端点 /v1beta/models/{model}:generateContent、:streamGenerateContent、:countTokens 由核心内置；模型价格由管理员在核心中配置）。"
   },
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "sub2api",
   "icon": "text:G",
   "runtime": "grpc",
@@ -36,19 +36,6 @@
         { "platform": "gemini" }
       ]
     }
-  ],
-
-  "pricing": [
-    { "model": "gemini-3.1-pro-preview", "mode": "expression",
-      "expression": "len <= 200000 ? tier(\"standard\", p*2 + c*12 + cr*0.2) : tier(\"long_context\", p*4 + c*18 + cr*0.4)" },
-    { "model": "gemini-2.5-pro", "mode": "expression",
-      "expression": "len <= 200000 ? tier(\"standard\", p*1.25 + c*10 + cr*0.125) : tier(\"long_context\", p*2.5 + c*15 + cr*0.25)" },
-    { "model": "gemini-2.5-flash", "mode": "per_token", "config": { "p": 0.3, "c": 2.5, "cr": 0.03 } },
-    { "model": "gemini-2.5-flash-lite", "mode": "per_token", "config": { "p": 0.1, "c": 0.4, "cr": 0.01 } },
-    { "model": "gemini-2.0-flash", "mode": "per_token", "config": { "p": 0.1, "c": 0.4, "cr": 0.025 } },
-    { "model": "gemini-2.0-flash-001", "mode": "per_token", "config": { "p": 0.1, "c": 0.4, "cr": 0.025 } },
-    { "model": "gemini-2.0-flash-lite", "mode": "per_token", "config": { "p": 0.075, "c": 0.3 } },
-    { "model": "gemini-2.0-flash-lite-001", "mode": "per_token", "config": { "p": 0.075, "c": 0.3 } }
   ],
 
   "resources": { "memoryMB": 32, "cpu": 0.1, "maxThreads": 32, "maxOpenFiles": 64 },

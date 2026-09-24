@@ -3,22 +3,20 @@ package billing
 import (
 	"context"
 	"testing"
-
-	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 )
 
-var anthropicDefaults = []manifest.PricingEntry{
-	{Model: "claude-sonnet-4-5", Mode: "expression", Expression: `len <= 200000 ? tier("standard", p*3 + c*15 + cr*0.3 + cc*3.75 + cc1h*6) : tier("long_context", p*6 + c*22.5 + cr*0.6 + cc*7.5 + cc1h*12)`},
-	{Model: "claude-haiku-4-5", Mode: "per_token", Config: map[string]any{"p": 1, "c": 5, "cr": 0.1, "cc": 1.25, "cc1h": 2}},
+// seedPrices inserts two manual prices (the old anthropic defaults).
+func seedPrices(e *env, admin int64) {
+	e.mustCall(admin, 201, "POST", "/prices", map[string]any{"model": "claude-sonnet-4-5", "mode": "expression",
+		"expression": `len <= 200000 ? tier("standard", p*3 + c*15 + cr*0.3 + cc*3.75 + cc1h*6) : tier("long_context", p*6 + c*22.5 + cr*0.6 + cc*7.5 + cc1h*12)`})
+	e.mustCall(admin, 201, "POST", "/prices", map[string]any{"model": "claude-haiku-4-5", "mode": "per_token",
+		"config": map[string]any{"p": 1, "c": 5, "cr": 0.1, "cc": 1.25, "cc1h": 2}})
 }
 
 func TestPriceAPI(t *testing.T) {
 	e := newEnv(t)
 	admin := e.user("admin@example.com")
-	e.plugin("anthropic")
-	if err := syncDefaultsCtx(e, "anthropic"); err != nil {
-		t.Fatal(err)
-	}
+	seedPrices(e, admin)
 
 	// validate: generated expression and analysis; config errors are reported, not failed.
 	out := data(e.mustCall(admin, 200, "POST", "/prices/validate", map[string]any{
@@ -51,7 +49,7 @@ func TestPriceAPI(t *testing.T) {
 		"model": "claude-sonnet-x", "mode": "expression", "config": visual,
 	}))
 	id := int64(created["id"].(float64))
-	if _, has := created["platform"]; created["source"] != "admin" || created["expr_hash"] == "" || has ||
+	if _, has := created["platform"]; created["source"] != "manual" || created["expr_hash"] == "" || has ||
 		!contains(str(created["expression"]), `tier("standard"`) {
 		t.Fatalf("created %v", created)
 	}
@@ -118,52 +116,33 @@ func TestPriceAPI(t *testing.T) {
 	e.mustCall(admin, 404, "POST", "/prices/preview", map[string]any{"price_id": 999999})
 
 	// list with filters and analysis.
-	list := e.mustCall(admin, 200, "GET", "/prices?source=plugin_default&plugin_key=anthropic", nil)
+	list := e.mustCall(admin, 200, "GET", "/prices?source=manual&q=claude", nil)
 	items := list["data"].([]any)
-	if len(items) != 2 || list["page"].(map[string]any)["total"].(float64) != 2 {
+	if len(items) != 3 || list["page"].(map[string]any)["total"].(float64) != 3 {
 		t.Fatalf("list: %v", list)
 	}
 	first := items[0].(map[string]any)
-	if first["analysis"] == nil {
-		t.Fatalf("analysis missing: %v", first)
+	if first["analysis"] == nil || first["sync_source_id"] != nil {
+		t.Fatalf("list item: %v", first)
 	}
 	list = e.mustCall(admin, 200, "GET", "/prices?q=sonnet", nil)
 	if len(list["data"].([]any)) != 2 {
 		t.Fatalf("search: %v", list)
 	}
 
-	// plugin defaults: read-only except enabled; override creates admin copy.
-	var defID int64
-	_ = e.db.Pool.QueryRow(context.Background(), `SELECT id FROM model_prices WHERE source = 'plugin_default' AND model = 'claude-haiku-4-5'`).Scan(&defID)
-	path := "/prices/" + itoa(defID)
-	_, resp = e.call(admin, "PATCH", path, map[string]any{"note": "x"})
-	if errCode(resp) != "conflict" {
-		t.Fatalf("patch default: %v", resp)
+	// A synced price that is edited becomes manual; enabling alone keeps it synced.
+	var srcID, haikuID int64
+	_ = e.db.Pool.QueryRow(context.Background(), `SELECT id FROM price_sync_sources WHERE kind = 'litellm'`).Scan(&srcID)
+	_ = e.db.Pool.QueryRow(context.Background(), `UPDATE model_prices SET source = 'sync', sync_source_id = $1, synced_at = now()
+		WHERE model = 'claude-haiku-4-5' RETURNING id`, srcID).Scan(&haikuID)
+	path := "/prices/" + itoa(haikuID)
+	if upd := data(e.mustCall(admin, 200, "PATCH", path, map[string]any{"enabled": false})); upd["enabled"] != false ||
+		upd["source"] != "sync" || upd["sync_source_name"] != "LiteLLM" {
+		t.Fatalf("disable synced: %v", upd)
 	}
-	if upd := data(e.mustCall(admin, 200, "PATCH", path, map[string]any{"enabled": false})); upd["enabled"] != false {
-		t.Fatalf("disable default: %v", upd)
-	}
-	_, resp = e.call(admin, "DELETE", path, nil)
-	if errCode(resp) != "conflict" {
-		t.Fatalf("delete default: %v", resp)
-	}
-	ov := data(e.mustCall(admin, 201, "POST", path+"/override", nil))
-	if ov["source"] != "admin" || ov["model"] != "claude-haiku-4-5" || ov["expression"] == "" {
-		t.Fatalf("override: %v", ov)
-	}
-	_, resp = e.call(admin, "POST", path+"/override", nil)
-	if errCode(resp) != "conflict" {
-		t.Fatalf("second override: %v", resp)
-	}
-	ovPath := "/prices/" + str(int64(ov["id"].(float64)))
-	_, resp = e.call(admin, "POST", ovPath+"/override", nil)
-	if errCode(resp) != "conflict" {
-		t.Fatalf("override admin: %v", resp)
-	}
-
-	// patch admin price: switch to per_token, pricing is regenerated.
-	upd := data(e.mustCall(admin, 200, "PATCH", ovPath, map[string]any{"mode": "per_token", "config": map[string]any{"p": 2, "c": 4}, "note": "cheaper"}))
-	if upd["expression"] != `tier("base", p*2 + c*4)` || upd["note"] != "cheaper" || upd["expr_hash"] == ov["expr_hash"] {
+	e.mustCall(admin, 200, "PATCH", path, map[string]any{"enabled": true})
+	upd := data(e.mustCall(admin, 200, "PATCH", path, map[string]any{"mode": "per_token", "config": map[string]any{"p": 2, "c": 4}, "note": "cheaper"}))
+	if upd["expression"] != `tier("base", p*2 + c*4)` || upd["note"] != "cheaper" || upd["source"] != "manual" || upd["sync_source_id"] != nil {
 		t.Fatalf("patch: %v", upd)
 	}
 	// Resolution sees the change immediately (local invalidation + bus).
@@ -174,13 +153,9 @@ func TestPriceAPI(t *testing.T) {
 	if len(e.bus.sent) == 0 {
 		t.Fatal("config:changed not published")
 	}
-	e.mustCall(admin, 200, "GET", ovPath, nil)
-	e.mustCall(admin, 204, "DELETE", ovPath, nil)
-	e.mustCall(admin, 404, "GET", ovPath, nil)
-}
-
-func syncDefaultsCtx(e *env, plugin string) error {
-	return syncDefaults(e.t, e, plugin, anthropicDefaults)
+	e.mustCall(admin, 200, "GET", path, nil)
+	e.mustCall(admin, 204, "DELETE", path, nil)
+	e.mustCall(admin, 404, "GET", path, nil)
 }
 
 func TestBalanceAndSettingsAPI(t *testing.T) {

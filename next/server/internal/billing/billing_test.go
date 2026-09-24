@@ -3,191 +3,61 @@ package billing
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
-func syncDefaults(t *testing.T, e *env, plugin string, entries []manifest.PricingEntry) error {
-	t.Helper()
-	return e.db.Tx(context.Background(), func(tx pgx.Tx) error {
-		return e.svc.SyncPluginDefaults(context.Background(), tx, plugin, entries)
-	})
-}
-
-func TestSyncPluginDefaultsAndResolve(t *testing.T) {
+func TestResolveExactModel(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
-	e.plugin("anthropic")
-	e.plugin("relay")
-	// anthropic was installed first: its defaults win over relay's.
-	e.exec(`UPDATE plugins SET installed_at = now() - interval '1 day' WHERE key = 'anthropic'`)
-	entries := []manifest.PricingEntry{
-		{Model: "claude-sonnet-4-5", Mode: "expression", Expression: `len <= 200000 ? tier("standard", p*3 + c*15) : tier("long_context", p*6 + c*22.5)`},
-		{Model: "claude-haiku-4-5", Mode: "per_token", Config: map[string]any{"p": 1, "c": 5, "cr": 0.1, "cc": 1.25, "cc1h": 2}},
-		{Model: "claude-haiku-4-5-20251001", Mode: "per_token", Config: map[string]any{"p": 1, "c": 5}},
-		{Model: "web-search", Mode: "per_request", Config: map[string]any{"price": 0.01}},
+	e.exec(`INSERT INTO model_prices (model, mode, expression, expr_hash, source)
+		VALUES ('claude-sonnet-4-5', 'per_token', 'tier("base", p*3 + c*15)', 'h1', 'manual'),
+		       ('web-search', 'per_request', 'tier("base", flat(0.01))', 'h2', 'manual'),
+		       ('gpt-4o', 'per_token', 'tier("base", p*2.5)', 'h3', 'manual')`)
+	e.exec(`UPDATE model_prices SET enabled = false WHERE model = 'gpt-4o'`)
+	e.svc.invalidate()
+	if r, err := e.svc.Resolve(ctx, "claude-sonnet-4-5"); err != nil || r.Model != "claude-sonnet-4-5" || r.Mode != "per_token" {
+		t.Fatalf("resolve: %+v %v", r, err)
 	}
-	if err := syncDefaults(t, e, "anthropic", entries); err != nil {
-		t.Fatal(err)
-	}
-	// relay prices a model anthropic also prices (allowed: one default per
-	// plugin and model) and one anthropic does not.
-	relay := []manifest.PricingEntry{
-		{Model: "claude-haiku-4-5", Mode: "per_token", Config: map[string]any{"p": 7}},
-		{Model: "gpt-4o", Mode: "per_token", Config: map[string]any{"p": 2.5, "c": 10}},
-	}
-	if err := syncDefaults(t, e, "relay", relay); err != nil {
-		t.Fatal(err)
-	}
-	var n int
-	_ = e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM model_price_history`).Scan(&n)
-	if n != 6 {
-		t.Fatalf("history rows = %d", n)
-	}
-
-	resolve := func(model string) *core.PriceRule {
-		t.Helper()
-		r, err := e.svc.Resolve(ctx, model)
-		if err != nil {
-			t.Fatalf("resolve %s: %v", model, err)
-		}
-		return r
-	}
-	if r := resolve("claude-sonnet-4-5"); r.Model != "claude-sonnet-4-5" || r.Mode != "expression" {
-		t.Fatalf("got %+v", r)
-	}
-	// The same model priced by two plugins: the earliest installed wins.
-	if r := resolve("claude-haiku-4-5"); r.Expression != `tier("base", p*1 + c*5 + cr*0.1 + cc*1.25 + cc1h*2)` {
-		t.Fatalf("haiku expression %q", r.Expression)
-	}
-	if r := resolve("gpt-4o"); r.Expression != `tier("base", p*2.5 + c*10)` {
-		t.Fatalf("relay-only model: %+v", r)
-	}
-	if r := resolve("web-search"); r.Mode != "per_request" {
-		t.Fatalf("got %+v", r)
-	}
-	// Exact match only: a dated id or a prefix is a different model.
-	for _, m := range []string{"claude-sonnet-4-5-20250929", "claude-sonnet", "gemini-2.5-pro"} {
+	// Exact match only; a disabled price counts as missing.
+	for _, m := range []string{"claude-sonnet-4-5-20250929", "claude-sonnet", "gpt-4o"} {
 		if _, err := e.svc.Resolve(ctx, m); core.AsError(err).Code != "model_price_not_configured" {
 			t.Fatalf("resolve %s: err = %v", m, err)
 		}
 	}
-
-	// An admin price beats plugin defaults; the bus invalidates the cache.
-	e.exec(`INSERT INTO model_prices (model, mode, expression, expr_hash, source)
-		VALUES ('claude-haiku-4-5', 'per_token', 'tier("base", p*9)', 'h1', 'admin')`)
-	if r := resolve("claude-haiku-4-5"); r.Expression == `tier("base", p*9)` {
+	// One price per model; wildcards and unknown sources are rejected by the database.
+	for _, sql := range []string{
+		`INSERT INTO model_prices (model, mode, expression, expr_hash, source) VALUES ('web-search', 'per_token', 'tier("base", p)', 'h4', 'sync')`,
+		`INSERT INTO model_prices (model, mode, expression, expr_hash, source) VALUES ('claude-*', 'per_token', 'tier("base", p)', 'h4', 'manual')`,
+		`INSERT INTO model_prices (model, mode, expression, expr_hash, source) VALUES ('m1', 'per_token', 'tier("base", p)', 'h4', 'plugin_default')`,
+	} {
+		if _, err := e.db.Pool.Exec(ctx, sql); err == nil {
+			t.Fatalf("accepted: %s", sql)
+		}
+	}
+	// The bus invalidates the cache.
+	e.exec(`UPDATE model_prices SET expression = 'tier("base", p*9)' WHERE model = 'claude-sonnet-4-5'`)
+	if r, _ := e.svc.Resolve(ctx, "claude-sonnet-4-5"); r.Expression == `tier("base", p*9)` {
 		t.Fatal("cache should still serve the old answer before invalidation")
 	}
 	_ = e.bus.Publish(ctx, core.ChannelConfigChanged, []byte(`{"key":"prices"}`))
-	if r := resolve("claude-haiku-4-5"); r.Expression != `tier("base", p*9)` {
-		t.Fatalf("admin should beat plugin defaults, got %+v", r)
-	}
-	// An admin price is unique per model, and the database rejects wildcards.
-	if _, err := e.db.Pool.Exec(ctx, `INSERT INTO model_prices (model, mode, expression, expr_hash, source)
-		VALUES ('claude-haiku-4-5', 'per_token', 'tier("base", p)', 'h3', 'admin')`); err == nil {
-		t.Fatal("duplicate admin price accepted")
-	}
-	if _, err := e.db.Pool.Exec(ctx, `INSERT INTO model_prices (model, mode, expression, expr_hash, source)
-		VALUES ('claude-*', 'per_token', 'tier("base", p)', 'h4', 'admin')`); err == nil {
-		t.Fatal("wildcard model accepted by the database")
+	if r, _ := e.svc.Resolve(ctx, "claude-sonnet-4-5"); r.Expression != `tier("base", p*9)` {
+		t.Fatalf("after invalidation: %+v", r)
 	}
 	bodies, headers := e.svc.Inputs(&core.PriceRule{Expression: `tier("b", p) ||| param("service_tier") == "x" ? 2 : 1 ||| has(header("Anthropic-Beta"), "f") ? 2 : 1`})
 	if len(bodies) != 1 || bodies[0] != "service_tier" || len(headers) != 1 || headers[0] != "anthropic-beta" {
 		t.Fatalf("inputs %v %v", bodies, headers)
 	}
-
-	// Disabled rows keep their flag across re-sync; stale defaults are
-	// removed; admin rows and other plugins' defaults survive.
-	e.exec(`UPDATE model_prices SET enabled = false WHERE model = 'claude-haiku-4-5' AND plugin_key = 'anthropic'`)
-	if err := syncDefaults(t, e, "anthropic", entries[1:2]); err != nil {
-		t.Fatal(err)
-	}
-	rows, _ := e.db.Pool.Query(ctx, `SELECT model, source, COALESCE(plugin_key, ''), enabled FROM model_prices
-		ORDER BY model, source, plugin_key NULLS FIRST`)
-	var got []string
-	for rows.Next() {
-		var p, s, k string
-		var en bool
-		_ = rows.Scan(&p, &s, &k, &en)
-		got = append(got, p+"/"+s+"/"+k+"/"+map[bool]string{true: "on", false: "off"}[en])
-	}
-	want := []string{"claude-haiku-4-5/admin//on", "claude-haiku-4-5/plugin_default/anthropic/off",
-		"claude-haiku-4-5/plugin_default/relay/on", "gpt-4o/plugin_default/relay/on"}
-	if fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Fatalf("rows\n got %v\nwant %v", got, want)
-	}
-	// A plugin without prices loses all its defaults.
-	if err := syncDefaults(t, e, "relay", nil); err != nil {
-		t.Fatal(err)
-	}
-	_ = e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM model_prices WHERE plugin_key = 'relay'`).Scan(&n)
-	if n != 0 {
-		t.Fatalf("relay defaults left: %d", n)
-	}
-
-	// Invalid entries fail the sync.
-	if err := syncDefaults(t, e, "anthropic", []manifest.PricingEntry{{Model: "x", Mode: "expression", Expression: "p +"}}); err == nil {
-		t.Fatal("invalid expression accepted")
-	}
-	if err := syncDefaults(t, e, "anthropic", []manifest.PricingEntry{{Model: "x", Mode: "per_token", Config: map[string]any{"p": -1}}}); err == nil {
-		t.Fatal("negative price accepted")
-	}
-	if err := syncDefaults(t, e, "anthropic", []manifest.PricingEntry{{Model: "claude-*", Mode: "per_token", Config: map[string]any{"p": 1}}}); err == nil {
-		t.Fatal("wildcard model accepted")
-	}
-
 	// Free policy.
 	e.exec(`INSERT INTO settings (key, value) VALUES ('billing', '{"missing_price_policy":"free"}')`)
 	e.svc.invalidate()
 	if r, err := e.svc.Resolve(ctx, "gemini-2.5-pro"); r != nil || err != nil {
 		t.Fatalf("free policy: %v %v", r, err)
-	}
-}
-
-// TestPricePrecedence checks the ordering of price entries without a
-// database (ARCHITECTURE 7.3).
-func TestPricePrecedence(t *testing.T) {
-	day := func(d int) *time.Time {
-		v := time.Date(2026, 9, d, 0, 0, 0, 0, time.UTC)
-		return &v
-	}
-	entry := func(id int64, source, plugin string, installed *time.Time, model string) priceEntry {
-		return priceEntry{rule: core.PriceRule{ID: id, Model: model}, source: source, pluginKey: plugin, installedAt: installed}
-	}
-	snap := newSnapshot(time.Now(), []priceEntry{
-		entry(1, SourcePluginDefault, "late", day(20), "claude-sonnet-4-5"),
-		entry(2, SourcePluginDefault, "early", day(1), "claude-sonnet-4-5"),
-		entry(3, SourceAdmin, "", nil, "gpt-4o"),
-		entry(4, SourcePluginDefault, "early", day(1), "gpt-4o"),
-		entry(5, SourcePluginDefault, "gone", nil, "gemini-2.5-pro"),
-		entry(6, SourcePluginDefault, "late", day(20), "gemini-2.5-pro"),
-		entry(7, SourcePluginDefault, "b-same-day", day(5), "o3"),
-		entry(8, SourcePluginDefault, "a-same-day", day(5), "o3"),
-	})
-	cases := map[string]int64{
-		"claude-sonnet-4-5": 2, // earliest installed plugin
-		"gpt-4o":            3, // admin before plugin defaults
-		"gemini-2.5-pro":    6, // a plugin that is gone comes last
-		"o3":                8, // same install time: plugin key order
-	}
-	for model, want := range cases {
-		r := snap.match(model)
-		if r == nil || r.ID != want {
-			t.Errorf("match(%s) = %+v, want id %d", model, r, want)
-		}
-	}
-	for _, m := range []string{"llama", "claude-sonnet-4", "gpt-4o-mini"} {
-		if r := snap.match(m); r != nil {
-			t.Errorf("match(%s) = %+v, want none", m, r)
-		}
 	}
 }
 

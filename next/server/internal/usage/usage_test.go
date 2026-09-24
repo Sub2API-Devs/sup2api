@@ -102,7 +102,7 @@ func newFixture(t *testing.T) *fixture {
 	}
 	f.price = &core.PriceRule{Model: "claude-sonnet-4-5", Mode: "expression", Expression: a6Expr, ExprVersion: 1, ExprHash: prog.Hash()}
 	err = db.Pool.QueryRow(ctx, `INSERT INTO model_prices (model, mode, expression, expr_hash, source)
-		VALUES ('claude-sonnet-4-5', 'expression', $1, $2, 'admin') RETURNING id`, a6Expr, prog.Hash()).Scan(&f.price.ID)
+		VALUES ('claude-sonnet-4-5', 'expression', $1, $2, 'manual') RETURNING id`, a6Expr, prog.Hash()).Scan(&f.price.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -15,18 +15,17 @@ import (
 // with it before the install service exists.
 type DefaultsApplier struct {
 	perms  core.PermissionCatalog
-	prices core.PriceCatalog
 	sticky core.StickyRuleCatalog
 }
 
 var _ core.PluginDefaultsApplier = (*DefaultsApplier)(nil)
 
 // NewDefaultsApplier wires the catalogs. A nil catalog is skipped.
-func NewDefaultsApplier(perms core.PermissionCatalog, prices core.PriceCatalog, sticky core.StickyRuleCatalog) *DefaultsApplier {
-	return &DefaultsApplier{perms: perms, prices: prices, sticky: sticky}
+func NewDefaultsApplier(perms core.PermissionCatalog, sticky core.StickyRuleCatalog) *DefaultsApplier {
+	return &DefaultsApplier{perms: perms, sticky: sticky}
 }
 
-// ApplyDefaults syncs user permissions, default prices and default sticky
+// ApplyDefaults syncs user permissions and default sticky
 // rules for m, and drops host permission grants the manifest no longer
 // requests. It runs inside the caller's transaction.
 func (a *DefaultsApplier) ApplyDefaults(ctx context.Context, tx pgx.Tx, m *manifest.Manifest, grantNewPermissionsToRoleKeys []string) error {
@@ -36,11 +35,6 @@ func (a *DefaultsApplier) ApplyDefaults(ctx context.Context, tx pgx.Tx, m *manif
 		}
 	}
 	sticky := StickyDefaults(m)
-	if a.prices != nil {
-		if err := a.prices.SyncPluginDefaults(ctx, tx, m.Key, m.Pricing); err != nil {
-			return fmt.Errorf("sync plugin prices: %w", err)
-		}
-	}
 	if a.sticky != nil {
 		if err := a.sticky.SyncPluginDefaults(ctx, tx, m.Key, sticky); err != nil {
 			return fmt.Errorf("sync plugin sticky rules: %w", err)

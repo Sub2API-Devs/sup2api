@@ -3,6 +3,7 @@ package billing
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -19,31 +20,36 @@ import (
 )
 
 // Price is the API view of a model_prices row. Prices are global per model
-// (ARCHITECTURE 7.3).
+// (ARCHITECTURE 7.3) and set by administrators only: typed in (manual) or
+// imported from a price sync source (sync).
 type Price struct {
-	ID          int64           `json:"id"`
-	Model       string          `json:"model"`
-	Mode        string          `json:"mode"`
-	Config      json.RawMessage `json:"config"`
-	Expression  string          `json:"expression"`
-	ExprVersion int             `json:"expr_version"`
-	ExprHash    string          `json:"expr_hash"`
-	Source      string          `json:"source"`
-	PluginKey   *string         `json:"plugin_key"`
-	Enabled     bool            `json:"enabled"`
-	Note        string          `json:"note"`
-	UpdatedBy   *int64          `json:"updated_by"`
-	UpdatedAt   time.Time       `json:"updated_at"`
-	Analysis    *expr.Analysis  `json:"analysis,omitempty"`
+	ID             int64           `json:"id"`
+	Model          string          `json:"model"`
+	Mode           string          `json:"mode"`
+	Config         json.RawMessage `json:"config"`
+	Expression     string          `json:"expression"`
+	ExprVersion    int             `json:"expr_version"`
+	ExprHash       string          `json:"expr_hash"`
+	Source         string          `json:"source"`
+	SyncSourceID   *int64          `json:"sync_source_id"`
+	SyncSourceName *string         `json:"sync_source_name"`
+	SyncedAt       *time.Time      `json:"synced_at"`
+	Enabled        bool            `json:"enabled"`
+	Note           string          `json:"note"`
+	UpdatedBy      *int64          `json:"updated_by"`
+	UpdatedAt      time.Time       `json:"updated_at"`
+	Analysis       *expr.Analysis  `json:"analysis,omitempty"`
 }
 
-const priceColumns = `id, model, mode, config, expression, expr_version, expr_hash,
-	source, plugin_key, enabled, note, updated_by, updated_at`
+const priceColumns = `mp.id, mp.model, mp.mode, mp.config, mp.expression, mp.expr_version, mp.expr_hash,
+	mp.source, mp.sync_source_id, ps.name, mp.synced_at, mp.enabled, mp.note, mp.updated_by, mp.updated_at`
+
+const priceFrom = ` FROM model_prices mp LEFT JOIN price_sync_sources ps ON ps.id = mp.sync_source_id`
 
 func scanPrice(row pgx.Row) (*Price, error) {
 	p := &Price{}
 	err := row.Scan(&p.ID, &p.Model, &p.Mode, &p.Config, &p.Expression, &p.ExprVersion,
-		&p.ExprHash, &p.Source, &p.PluginKey, &p.Enabled, &p.Note, &p.UpdatedBy, &p.UpdatedAt)
+		&p.ExprHash, &p.Source, &p.SyncSourceID, &p.SyncSourceName, &p.SyncedAt, &p.Enabled, &p.Note, &p.UpdatedBy, &p.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -54,9 +60,9 @@ func scanPrice(row pgx.Row) (*Price, error) {
 }
 
 func (s *Service) getPrice(ctx context.Context, q store.Querier, id int64, lock bool) (*Price, error) {
-	sql := `SELECT ` + priceColumns + ` FROM model_prices WHERE id = $1`
+	sql := `SELECT ` + priceColumns + priceFrom + ` WHERE mp.id = $1`
 	if lock {
-		sql += ` FOR UPDATE`
+		sql += ` FOR UPDATE OF mp`
 	}
 	p, err := scanPrice(q.QueryRow(ctx, sql, id))
 	if store.IsNoRows(err) {
@@ -74,10 +80,9 @@ func (s *Service) registerPriceRoutes(r *httpapi.Router) {
 	r.Perm("GET", "/prices/:id", "price:read", s.showPrice)
 	r.Perm("PATCH", "/prices/:id", "price:manage", s.updatePrice)
 	r.Perm("DELETE", "/prices/:id", "price:manage", s.deletePrice)
-	r.Perm("POST", "/prices/:id/override", "price:manage", s.overridePrice)
 }
 
-// GET /prices?mode=&source=&plugin_key=&enabled=&q=
+// GET /prices?mode=&source=&sync_source_id=&enabled=&q=
 func (s *Service) listPrices(c *gin.Context) {
 	ctx := c.Request.Context()
 	page, size := httpapi.Pagination(c)
@@ -88,32 +93,37 @@ func (s *Service) listPrices(c *gin.Context) {
 		where = append(where, strings.ReplaceAll(cond, "?", "$"+strconv.Itoa(len(args))))
 	}
 	if v := c.Query("mode"); v != "" {
-		add("mode = ?", v)
+		add("mp.mode = ?", v)
 	}
 	if v := c.Query("source"); v != "" {
-		add("source = ?", v)
+		add("mp.source = ?", v)
 	}
-	if v := c.Query("plugin_key"); v != "" {
-		add("plugin_key = ?", v)
+	if v := c.Query("sync_source_id"); v != "" {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			httpapi.Fail(c, core.InvalidFields(core.FieldError{Field: "sync_source_id", Code: "invalid", Message: "must be an integer"}))
+			return
+		}
+		add("mp.sync_source_id = ?", id)
 	}
 	if v := c.Query("enabled"); v != "" {
-		add("enabled = ?", v == "true" || v == "1")
+		add("mp.enabled = ?", v == "true" || v == "1")
 	}
 	if v := strings.TrimSpace(c.Query("q")); v != "" {
-		add("(model ILIKE ? OR note ILIKE ?)", "%"+escapeLike(v)+"%")
+		add("(mp.model ILIKE ? OR mp.note ILIKE ?)", "%"+escapeLike(v)+"%")
 	}
 	cond := ""
 	if len(where) > 0 {
 		cond = " WHERE " + strings.Join(where, " AND ")
 	}
 	var total int64
-	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM model_prices`+cond, args...).Scan(&total); err != nil {
+	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*)`+priceFrom+cond, args...).Scan(&total); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
 	args = append(args, size, (page-1)*size)
-	rows, err := s.db.Pool.Query(ctx, `SELECT `+priceColumns+` FROM model_prices`+cond+
-		` ORDER BY model, source, plugin_key NULLS FIRST, id LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
+	rows, err := s.db.Pool.Query(ctx, `SELECT `+priceColumns+priceFrom+cond+
+		` ORDER BY mp.model, mp.id LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -251,21 +261,24 @@ func (s *Service) createPrice(c *gin.Context) {
 	uid, _ := core.UserID(ctx)
 	var p *Price
 	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
-		row := tx.QueryRow(ctx, `
+		var id int64
+		if err := tx.QueryRow(ctx, `
 			INSERT INTO model_prices (model, mode, config, expression, expr_version, expr_hash,
 				source, enabled, note, updated_by)
-			VALUES ($1, $2, $3, $4, $5, $6, 'admin', $7, $8, $9)
-			RETURNING `+priceColumns,
+			VALUES ($1, $2, $3, $4, $5, $6, 'manual', $7, $8, $9)
+			RETURNING id`,
 			model, ck.mode, ck.config, ck.src, ck.prog.Version(), ck.prog.Hash(),
-			enabled, deref(in.Note), nullID(uid))
+			enabled, deref(in.Note), nullID(uid)).Scan(&id); err != nil {
+			return err
+		}
 		var err error
-		if p, err = scanPrice(row); err != nil {
+		if p, err = s.getPrice(ctx, tx, id, false); err != nil {
 			return err
 		}
 		return recordHistory(ctx, tx, ck.prog)
 	})
 	if store.IsUniqueViolation(err, "") {
-		httpapi.Fail(c, core.ErrConflict.WithMessage("an admin price for this model already exists"))
+		httpapi.Fail(c, errPriceExists)
 		return
 	}
 	if err != nil {
@@ -292,12 +305,6 @@ func (s *Service) updatePrice(c *gin.Context) {
 		cur, err := s.getPrice(ctx, tx, id, true)
 		if err != nil {
 			return err
-		}
-		if cur.Source == SourcePluginDefault {
-			// Plugin defaults are owned by the plugin; only enabled may change.
-			if in.Model != nil || in.Mode != nil || in.Config != nil || in.Expression != nil || in.Note != nil {
-				return core.ErrConflict.WithMessage("plugin default prices are read-only; use override to create an admin price")
-			}
 		}
 		model, mode := cur.Model, cur.Mode
 		if in.Model != nil {
@@ -337,16 +344,25 @@ func (s *Service) updatePrice(c *gin.Context) {
 		if in.Note != nil {
 			note = *in.Note
 		}
-		row := tx.QueryRow(ctx, `
+		// Editing a synced price makes it manual: later syncs only replace
+		// it when an administrator selects it in the preview.
+		source, syncID := cur.Source, cur.SyncSourceID
+		if pricing || in.Model != nil {
+			source, syncID = SourceManual, nil
+		}
+		if _, err := tx.Exec(ctx, `
 			UPDATE model_prices SET model = $2, mode = $3, config = $4, expression = $5,
-				expr_version = $6, expr_hash = $7, enabled = $8, note = $9, updated_by = $10, updated_at = now()
-			WHERE id = $1 RETURNING `+priceColumns,
-			id, model, mode, config, src, version, hash, enabled, note, nullID(uid))
-		out, err = scanPrice(row)
+				expr_version = $6, expr_hash = $7, enabled = $8, note = $9, updated_by = $10,
+				source = $11, sync_source_id = $12, updated_at = now()
+			WHERE id = $1`,
+			id, model, mode, config, src, version, hash, enabled, note, nullID(uid), source, syncID); err != nil {
+			return err
+		}
+		out, err = s.getPrice(ctx, tx, id, false)
 		return err
 	})
 	if store.IsUniqueViolation(err, "") {
-		httpapi.Fail(c, core.ErrConflict.WithMessage("an admin price for this model already exists"))
+		httpapi.Fail(c, errPriceExists)
 		return
 	}
 	if err != nil {
@@ -363,13 +379,8 @@ func (s *Service) deletePrice(c *gin.Context) {
 	if !ok {
 		return
 	}
-	p, err := s.getPrice(ctx, s.db.Pool, id, false)
-	if err != nil {
+	if _, err := s.getPrice(ctx, s.db.Pool, id, false); err != nil {
 		httpapi.Fail(c, err)
-		return
-	}
-	if p.Source == SourcePluginDefault {
-		httpapi.Fail(c, core.ErrConflict.WithMessage("plugin default prices are removed with the plugin; disable it instead"))
 		return
 	}
 	if _, err := s.db.Pool.Exec(ctx, `DELETE FROM model_prices WHERE id = $1`, id); err != nil {
@@ -380,48 +391,7 @@ func (s *Service) deletePrice(c *gin.Context) {
 	httpapi.NoContent(c)
 }
 
-// POST /prices/:id/override copies a plugin default into an admin price.
-func (s *Service) overridePrice(c *gin.Context) {
-	ctx := c.Request.Context()
-	id, ok := httpapi.PathID(c, "id")
-	if !ok {
-		return
-	}
-	uid, _ := core.UserID(ctx)
-	var out *Price
-	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
-		src, err := s.getPrice(ctx, tx, id, false)
-		if err != nil {
-			return err
-		}
-		if src.Source != SourcePluginDefault {
-			return core.ErrConflict.WithMessage("only plugin default prices can be overridden")
-		}
-		note := "override of plugin default"
-		if src.PluginKey != nil {
-			note += " (" + *src.PluginKey + ")"
-		}
-		row := tx.QueryRow(ctx, `
-			INSERT INTO model_prices (model, mode, config, expression, expr_version, expr_hash,
-				source, enabled, note, updated_by)
-			VALUES ($1, $2, $3, $4, $5, $6, 'admin', true, $7, $8)
-			RETURNING `+priceColumns,
-			src.Model, src.Mode, src.Config, src.Expression, src.ExprVersion, src.ExprHash,
-			note, nullID(uid))
-		out, err = scanPrice(row)
-		return err
-	})
-	if store.IsUniqueViolation(err, "") {
-		httpapi.Fail(c, core.ErrConflict.WithMessage("an admin price for this model already exists"))
-		return
-	}
-	if err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
-	s.changed(ctx, "prices")
-	httpapi.Created(c, out)
-}
+var errPriceExists = core.ErrConflict.WithMessage("a price for this model already exists")
 
 func (s *Service) priceHistory(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -611,4 +581,26 @@ func deref[T any](p *T) T {
 		return zero
 	}
 	return *p
+}
+
+// expressionFor returns the expression stored for a price: generated from
+// the visual config, or the hand-written expression in expression mode.
+func expressionFor(mode string, config json.RawMessage, expression string) (string, error) {
+	switch mode {
+	case expr.ModePerRequest, expr.ModePerToken:
+		return expr.Generate(mode, config)
+	case expr.ModeExpression:
+		if expression != "" {
+			return expression, nil
+		}
+		return expr.Generate(mode, config)
+	}
+	return "", fmt.Errorf("unknown mode %q", mode)
+}
+
+func recordHistory(ctx context.Context, q store.Querier, p *expr.Program) error {
+	_, err := q.Exec(ctx, `
+		INSERT INTO model_price_history (expr_hash, expression, expr_version) VALUES ($1, $2, $3)
+		ON CONFLICT (expr_hash) DO NOTHING`, p.Hash(), p.Expression(), p.Version())
+	return err
 }

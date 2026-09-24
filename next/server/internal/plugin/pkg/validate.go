@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -585,26 +586,12 @@ func (v *validator) form(field string, f manifest.Form, settings bool) {
 }
 
 func (v *validator) pricing() {
-	seen := map[string]bool{}
-	for i, p := range v.m.Pricing {
-		f := fmt.Sprintf("pricing[%d]", i)
-		switch {
-		case p.Model == "":
-			v.add(f+".model", "required", "model is required")
-		case !manifest.ValidModelID(p.Model):
-			v.add(f+".model", "invalid", "model must be a complete model id (letters, digits, . _ : / @ + -; no wildcards)")
-		case seen[p.Model]:
-			v.add(f+".model", "duplicate", "model %q is priced twice", p.Model)
-		}
-		seen[p.Model] = true
-		switch p.Mode {
-		case "per_request", "per_token":
-		case "expression":
-			if strings.TrimSpace(p.Expression) == "" {
-				v.add(f+".expression", "required", "expression is required")
-			}
-		default:
-			v.add(f+".mode", "invalid", "mode must be per_request, per_token or expression")
+	// Model prices are set by administrators in the core (CONTRACTS §17);
+	// a manifest that still declares them is rejected rather than ignored.
+	var raw map[string]json.RawMessage
+	if json.Unmarshal(v.files["manifest.json"], &raw) == nil {
+		if _, ok := raw["pricing"]; ok {
+			v.add("pricing", "unsupported", "plugins cannot declare model prices; administrators set prices in the core")
 		}
 	}
 }

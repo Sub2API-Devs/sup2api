@@ -23,7 +23,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "gemini" || m.Version != "0.1.1" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "gemini" || m.Version != "0.1.2" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("key/version/publisher = %s %s %s", m.Key, m.Version, m.Publisher)
 	}
 	if m.Name["en"] == "" || m.Name["zh"] == "" || m.Description["en"] == "" || m.Description["zh"] == "" {
@@ -89,33 +89,6 @@ func TestManifest(t *testing.T) {
 	}
 	if c, ok := perms["accounts.credentials"]; !ok || c.Scope["types"] != "own" || len(c.Scope) != 1 {
 		t.Errorf("accounts.credentials scope = %v, want {\"types\":\"own\"}", c.Scope)
-	}
-	seen := map[string]bool{}
-	for _, pe := range m.Pricing {
-		if seen[pe.Model] {
-			t.Errorf("duplicate pricing %s", pe.Model)
-		}
-		seen[pe.Model] = true
-		if !manifest.ValidModelID(pe.Model) {
-			t.Errorf("pricing %s: not a complete model id (no wildcards)", pe.Model)
-		}
-		switch pe.Mode {
-		case "per_token":
-			if pe.Config["p"] == nil || pe.Config["c"] == nil {
-				t.Errorf("pricing %s incomplete", pe.Model)
-			}
-		case "expression":
-			if pe.Expression == "" {
-				t.Errorf("pricing %s: empty expression", pe.Model)
-			}
-		default:
-			t.Errorf("pricing %s: mode %q", pe.Model, pe.Mode)
-		}
-	}
-	for _, model := range []string{"gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"} {
-		if !seen[model] {
-			t.Errorf("no default price for %s", model)
-		}
 	}
 }
 

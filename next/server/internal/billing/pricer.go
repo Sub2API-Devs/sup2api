@@ -2,7 +2,6 @@ package billing
 
 import (
 	"context"
-	"sort"
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
@@ -10,50 +9,21 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
-// Price sources.
+// Price sources: administrators type prices in (manual) or import them from
+// a price sync source (sync). Plugins never provide prices.
 const (
-	SourceAdmin         = "admin"
-	SourcePluginDefault = "plugin_default"
+	SourceManual = "manual"
+	SourceSync   = "sync"
 )
-
-type priceEntry struct {
-	rule   core.PriceRule
-	source string
-	// Plugin defaults only: the declaring plugin and when it was installed
-	// (nil when the plugin row is gone).
-	pluginKey   string
-	installedAt *time.Time
-}
 
 type priceSnapshot struct {
 	at      time.Time
-	byModel map[string]core.PriceRule // the winning entry per model id
+	byModel map[string]core.PriceRule // one price per complete model id
 }
 
 type resolved struct {
 	at   time.Time
 	rule *core.PriceRule // nil = no match
-}
-
-// less orders entries of one model by precedence (ARCHITECTURE 7.3): the
-// admin price first, then plugin defaults by install time (earliest first).
-// Prices are keyed by complete model id; there are no wildcards.
-func less(a, b priceEntry) bool {
-	if (a.source == SourceAdmin) != (b.source == SourceAdmin) {
-		return a.source == SourceAdmin
-	}
-	if a.source != SourceAdmin && a.pluginKey != b.pluginKey {
-		switch {
-		case a.installedAt == nil && b.installedAt != nil:
-			return false
-		case a.installedAt != nil && b.installedAt == nil:
-			return true
-		case a.installedAt != nil && !a.installedAt.Equal(*b.installedAt):
-			return a.installedAt.Before(*b.installedAt)
-		}
-		return a.pluginKey < b.pluginKey
-	}
-	return a.rule.ID < b.rule.ID
 }
 
 func (s *Service) snapshot(ctx context.Context) (*priceSnapshot, error) {
@@ -64,45 +34,27 @@ func (s *Service) snapshot(ctx context.Context) (*priceSnapshot, error) {
 		return snap, nil
 	}
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT mp.id, mp.model, mp.mode, mp.expression, mp.expr_version, mp.expr_hash, mp.source,
-			COALESCE(mp.plugin_key, ''), p.installed_at
-		FROM model_prices mp LEFT JOIN plugins p ON p.key = mp.plugin_key
-		WHERE mp.enabled`)
+		SELECT id, model, mode, expression, expr_version, expr_hash FROM model_prices WHERE enabled`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var entries []priceEntry
+	snap = &priceSnapshot{at: time.Now(), byModel: map[string]core.PriceRule{}}
 	for rows.Next() {
-		var e priceEntry
-		r := &e.rule
-		if err := rows.Scan(&r.ID, &r.Model, &r.Mode, &r.Expression, &r.ExprVersion, &r.ExprHash, &e.source,
-			&e.pluginKey, &e.installedAt); err != nil {
+		var r core.PriceRule
+		if err := rows.Scan(&r.ID, &r.Model, &r.Mode, &r.Expression, &r.ExprVersion, &r.ExprHash); err != nil {
 			return nil, err
 		}
-		entries = append(entries, e)
+		snap.byModel[r.Model] = r
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	snap = newSnapshot(time.Now(), entries)
 	s.mu.Lock()
 	s.prices = snap
 	s.resolved = map[string]resolved{}
 	s.mu.Unlock()
 	return snap, nil
-}
-
-// newSnapshot keeps the highest-precedence entry of every model id.
-func newSnapshot(at time.Time, entries []priceEntry) *priceSnapshot {
-	sort.Slice(entries, func(i, j int) bool { return less(entries[i], entries[j]) })
-	snap := &priceSnapshot{at: at, byModel: map[string]core.PriceRule{}}
-	for _, e := range entries {
-		if _, ok := snap.byModel[e.rule.Model]; !ok {
-			snap.byModel[e.rule.Model] = e.rule
-		}
-	}
-	return snap
 }
 
 // match returns the price of the exact model id or nil.

@@ -200,7 +200,7 @@ func newHarness(t *testing.T) (*harness, pkgtest.Key) {
 	}
 	cfg := config.PluginConfig{MaxPackageBytes: 10 << 20, MaxMemoryMB: 1024}
 	svc := install.New(install.Deps{DB: db, Trust: ts, Authz: authz{}, Permissions: noopPerms{},
-		Defaults: install.NewDefaultsApplier(noopPerms{}, nil, nil), Rollout: rollout{db}},
+		Defaults: install.NewDefaultsApplier(noopPerms{}, nil), Rollout: rollout{db}},
 		install.Options{HostVersion: "0.1.0", Plugins: cfg})
 	cipher, _ := secret.New(bytes.Repeat([]byte{7}, 32))
 	m := pkgtest.Guard("guard", "0.1.0", "sub2api")

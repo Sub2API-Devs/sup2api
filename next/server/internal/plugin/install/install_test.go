@@ -57,13 +57,6 @@ func (f *fakePerms) DeletePlugin(_ context.Context, _ pgx.Tx, key string) error 
 	return nil
 }
 
-type fakePrices struct{ calls int }
-
-func (f *fakePrices) SyncPluginDefaults(context.Context, pgx.Tx, string, []manifest.PricingEntry) error {
-	f.calls++
-	return nil
-}
-
 type fakeSticky struct{ calls int }
 
 func (f *fakeSticky) SyncPluginDefaults(context.Context, pgx.Tx, string, []manifest.StickyRule) error {
@@ -116,7 +109,6 @@ type env struct {
 	db       *store.DB
 	svc      *Service
 	perms    *fakePerms
-	prices   *fakePrices
 	sticky   *fakeSticky
 	rollout  *fakeRollout
 	schemas  *fakeSchemas
@@ -131,7 +123,7 @@ func newEnv(t *testing.T) *env {
 	t.Helper()
 	db := testutil.DB(t)
 	ctx := context.Background()
-	e := &env{db: db, perms: &fakePerms{}, prices: &fakePrices{}, sticky: &fakeSticky{}, schemas: &fakeSchemas{},
+	e := &env{db: db, perms: &fakePerms{}, sticky: &fakeSticky{}, schemas: &fakeSchemas{},
 		accounts: &fakeAccounts{}, root: pkgtest.NewKey("root-1")}
 	e.rollout = &fakeRollout{db: db}
 	for _, email := range []string{"admin@x", "ops@x"} {
@@ -155,7 +147,7 @@ func newEnv(t *testing.T) *env {
 	}
 	e.svc = New(Deps{
 		DB: db, Trust: ts, Authz: e.authz, Permissions: e.perms,
-		Defaults: NewDefaultsApplier(e.perms, e.prices, e.sticky),
+		Defaults: NewDefaultsApplier(e.perms, e.sticky),
 		Rollout:  e.rollout, Schemas: e.schemas, Accounts: e.accounts,
 	}, Options{HostVersion: "0.1.0", Plugins: config.PluginConfig{MaxPackageBytes: 10 << 20, MaxMemoryMB: 1024}})
 	return e
@@ -252,8 +244,8 @@ func TestInstallConsentUpgradeUninstall(t *testing.T) {
 		t.Fatalf("result = %+v", res)
 	}
 	if len(e.perms.syncs) != 1 || len(e.perms.syncs[0].defs) != 3 || e.perms.syncs[0].roles[0] != "admin" ||
-		e.perms.syncs[0].defs[0].Key != "plugin.guard:rules:read" || e.prices.calls != 1 || e.sticky.calls != 1 {
-		t.Fatalf("defaults not applied: %+v prices=%d sticky=%d", e.perms.syncs, e.prices.calls, e.sticky.calls)
+		e.perms.syncs[0].defs[0].Key != "plugin.guard:rules:read" || e.sticky.calls != 1 {
+		t.Fatalf("defaults not applied: %+v sticky=%d", e.perms.syncs, e.sticky.calls)
 	}
 	var status string
 	_ = e.db.Pool.QueryRow(ctx, `SELECT status FROM plugins WHERE key = 'guard'`).Scan(&status)
@@ -353,7 +345,7 @@ func TestInstallConsentUpgradeUninstall(t *testing.T) {
 		t.Fatal("jobs grant removed before activation")
 	}
 	if err := e.db.Tx(ctx, func(tx pgx.Tx) error {
-		return NewDefaultsApplier(nil, nil, nil).ApplyDefaults(ctx, tx, up, nil)
+		return NewDefaultsApplier(nil, nil).ApplyDefaults(ctx, tx, up, nil)
 	}); err != nil {
 		t.Fatal(err)
 	}

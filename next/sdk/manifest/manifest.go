@@ -28,7 +28,6 @@ type Manifest struct {
 
 	Platforms    []Platform     `json:"platforms,omitempty"` // new platforms with their endpoints
 	AccountTypes []AccountType  `json:"accountTypes,omitempty"`
-	Pricing      []PricingEntry `json:"pricing,omitempty"`
 	Hooks        []Hook         `json:"hooks,omitempty"`
 	Events       *Events        `json:"events,omitempty"`
 	Jobs         []Job          `json:"jobs,omitempty"`
@@ -252,17 +251,6 @@ type StickyKeySource struct {
 	Path  string   `json:"path,omitempty"`
 	Name  string   `json:"name,omitempty"`
 	Needs []string `json:"needs,omitempty"` // type=plugin: body paths sent to ResolveAffinityKey
-}
-
-// ---------------------------------------------------------------- pricing
-
-// PricingEntry is a default model price. Prices are global per model
-// (ARCHITECTURE 7.3): they do not depend on platform or account type.
-type PricingEntry struct {
-	Model      string         `json:"model"` // complete model id, no wildcards (ValidModelID)
-	Mode       string         `json:"mode"`  // per_request | per_token | expression
-	Config     map[string]any `json:"config,omitempty"`
-	Expression string         `json:"expression,omitempty"`
 }
 
 // ---------------------------------------------------------------- hooks, events, jobs

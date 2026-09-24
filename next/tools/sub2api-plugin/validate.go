@@ -171,17 +171,6 @@ func validateManifest(m *manifest.Manifest) []string {
 			}
 		}
 	}
-	// Default prices are keyed by complete model ids: no wildcards.
-	priced := map[string]bool{}
-	for i, p := range m.Pricing {
-		switch {
-		case !manifest.ValidModelID(p.Model):
-			bad("pricing[%d]: model %q must be a complete model id (letters, digits, . _ : / @ + -; no wildcards)", i, p.Model)
-		case priced[p.Model]:
-			bad("pricing[%d]: model %q is priced twice", i, p.Model)
-		}
-		priced[p.Model] = true
-	}
 	return invalid
 }
 
