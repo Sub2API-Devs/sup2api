@@ -42,6 +42,7 @@ type Service struct {
 	db    *store.DB
 	rdb   redis.UniversalClient // optional cache
 	authz core.Authorizer
+	reg   core.PluginRegistry // optional: platforms are [] without it
 
 	mu      sync.Mutex
 	touched map[int64]time.Time
@@ -49,10 +50,10 @@ type Service struct {
 
 var _ core.APIKeyAuthenticator = (*Service)(nil)
 
-// New builds the service. rdb may be nil (no cache). Call Run to persist
-// last_used_at in the background.
-func New(db *store.DB, rdb redis.UniversalClient, authz core.Authorizer) *Service {
-	return &Service{db: db, rdb: rdb, authz: authz, touched: map[int64]time.Time{}}
+// New builds the service. rdb may be nil (no cache); reg may be nil (keys
+// then list no platforms). Call Run to persist last_used_at in the background.
+func New(db *store.DB, rdb redis.UniversalClient, authz core.Authorizer, reg core.PluginRegistry) *Service {
+	return &Service{db: db, rdb: rdb, authz: authz, reg: reg, touched: map[int64]time.Time{}}
 }
 
 // RegisterRoutes mounts the API key endpoints.
@@ -277,13 +278,15 @@ func (s *Service) dropCache(ctx context.Context, hash string) {
 
 // APIKey is the API view of an api_keys row.
 type APIKey struct {
-	ID         int64      `json:"id"`
-	UserID     int64      `json:"user_id"`
-	UserEmail  string     `json:"user_email,omitempty"`
-	Name       string     `json:"name"`
-	KeyPrefix  string     `json:"key_prefix"`
-	GroupID    int64      `json:"group_id"`
-	GroupName  string     `json:"group_name"`
+	ID        int64  `json:"id"`
+	UserID    int64  `json:"user_id"`
+	UserEmail string `json:"user_email,omitempty"`
+	Name      string `json:"name"`
+	KeyPrefix string `json:"key_prefix"`
+	GroupID   int64  `json:"group_id"`
+	GroupName string `json:"group_name"`
+	// Platforms the key can reach: those of its group (CONTRACTS §13).
+	Platforms  []string   `json:"platforms"`
 	Status     string     `json:"status"`
 	ExpiresAt  *time.Time `json:"expires_at"`
 	LastUsedAt *time.Time `json:"last_used_at"`
@@ -347,6 +350,11 @@ func (s *Service) query(c *gin.Context, where string, args []any, hideEmail bool
 		httpapi.Fail(c, err)
 		return
 	}
+	rows.Close()
+	if err := s.fillPlatforms(ctx, items); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
 	httpapi.List(c, items, httpapi.Page{Page: page, PageSize: size, Total: total})
 }
 
@@ -391,7 +399,13 @@ func (s *Service) loadKey(ctx context.Context, id int64) (*APIKey, error) {
 	if store.IsNoRows(err) {
 		return nil, notFound(ctx)
 	}
-	return k, err
+	if err != nil {
+		return nil, err
+	}
+	if err := s.fillPlatforms(ctx, []*APIKey{k}); err != nil {
+		return nil, err
+	}
+	return k, nil
 }
 
 // groupAvailable reports whether group is active and usable by user.
