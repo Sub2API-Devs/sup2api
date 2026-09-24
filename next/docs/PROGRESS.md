@@ -251,3 +251,25 @@ go test -count=1 -timeout 50m -v ./...
 **sup2api 验证（部署 `298041c`，数据清空重建）**：三个内置平台及端点都在 `/platforms`；anthropic 插件只声明 apikey 账号类型（→ anthropic 平台）；市场安装 relay，relay_key → anthropic；空分组 platforms=[]，放入两种类型账号后分组与 API Key 的 platforms=[anthropic]；16 次 `/v1/messages` 两种账号各服务 8 次；同一 Key 调 openai 端点 → 503 openai 格式，调 gemini 端点 → 503 gemini 格式，未知路径 → 404；禁用内置 anthropic 插件后 anthropic 平台仍在、只由 relay 账号服务，重新启用后恢复；内置粘性规则 `claude-code-session`、`openai-prompt-cache-key`（source=builtin）已同步。验证数据已删除。
 
 **合并后主控要做**：`internal/app` 组装（group/apikey 可能新增 registry 依赖）；清空 sup2api 重建并验证；更新本节。（全部完成：f3-web 合并后部署 `3eec84b`，浏览器实测平台页、分组"可服务的平台"正常，菜单含"平台"）
+
+---
+
+## 11. 第四轮：OpenAI/Gemini 账号接入、安全加固、插件运行时完善、接口收尾（2026-09-25 起）
+
+**用户选择**：四批全做（OpenAI/Gemini 账号接入、安全加固、插件运行时完善、契约与接口收尾）。
+
+**主控已完成（`fada0e988`）**：proto `HostService.Publish`、`AppService.OnBroadcast`；manifest 能力 `app.broadcast.v1`、权限 `broadcast`、用量映射 `a+b` 求和；core `UsageRecord.ClientRequestID`、`PluginAccountPurger`、事件 `plugin.egress_new_domain`；迁移 0006（client_request_id、plugin_egress_domains、egress 日志 closed_at、refresh token 家族）；CONTRACTS §14。决定：openai、gemini 两个账号类型插件与 anthropic 一样作为内置插件。
+
+**派发的 agent（基于 `fada0e988`）**
+
+| 代号 | 目录 | 任务 | 状态 |
+|---|---|---|---|
+| a4-identity-accounts | `iam`、`account`、`proxy`、`usage` | 登录限速、refresh 重放检测、`/me/platforms`、PluginAccountPurger、直连拨号 SSRF 校验、client_request_id | ⏳ |
+| g4-gateway | `gateway`、`platforms` | 用量求和、gemini 思考 token 计入输出、ClientRequestID、`/settings/gateway`、网关自我隔离 | ⏳ |
+| c4-lifecycle | `plugin/install`、`market`、`api`、`routes`、`pkg` | 卸载清账号、市场兼容性、出口域名接口、资源限制广播、插件接口自我隔离、broadcast 校验 | ⏳ |
+| d4-runtime | `plugin/grpcruntime`、`rollout`、`registry`、`egress`、`sandbox` | 插件集群广播、资源限制即时重启、旧版本缓存清理、节点重新验签、新域名记录与告警、出口长连接 | ⏳ |
+| e4-plugins | `sdk/pluginsdk`、`plugins/*`（新增 openai、gemini）、`tools`、`e2e`（AC20）、`mock-upstream`、`build-go.sh` | 两个内置账号类型插件、SDK 广播、guard 规则即时生效、mock 上游支持 openai/gemini | ⏳ |
+| f4-web | `web/` | 对应的控制台改动 | ⏳ |
+| docs4-contracts | CONTRACTS §15 | 按代码现状补齐前端提出的缺失接口说明 | ⏳ |
+
+**合并后主控要做**：`internal/app` 组装（proxy AllowPrivate、install Accounts、routes/gateway 健康检查、registry 验签、egress 事件发布等）；清空 sup2api 重建并验证 openai/gemini（上游用 httpbin 回显或真实 Key，由用户提供）；更新本节。
