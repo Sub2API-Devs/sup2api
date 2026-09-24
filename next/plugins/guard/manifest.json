@@ -1,0 +1,116 @@
+{
+  "apiVersion": 1,
+  "key": "guard",
+  "name": { "en": "Guard", "zh": "请求守卫" },
+  "description": {
+    "en": "Blocks gateway requests whose prompt matches keyword or regex rules, counts traffic from usage events, and shows a dashboard.",
+    "zh": "按关键词或正则规则拦截网关请求，基于用量事件统计流量，并提供统计大盘。"
+  },
+  "version": "0.1.0",
+  "publisher": "sub2api",
+  "icon": "text:G",
+  "runtime": "grpc",
+  "entry": { "grpc": { "binaries": "runtimes/{os}-{arch}/plugin" } },
+  "hostCompat": ">=0.1.0 <0.2.0",
+  "hostUICompat": "^1.0",
+
+  "capabilities": [
+    { "id": "gateway.hook.v1" },
+    { "id": "app.events.v1" },
+    { "id": "app.jobs.v1" },
+    { "id": "http.routes.v1" }
+  ],
+
+  "hooks": [
+    {
+      "id": "prompt-rules",
+      "point": "gateway.request",
+      "order": 100,
+      "match": { "protocols": ["anthropic.messages"], "models": ["*"], "groups": ["*"] },
+      "needs": ["model", "prompt_text"],
+      "maxPromptBytes": 32768,
+      "timeoutMs": 300,
+      "failure": "open"
+    }
+  ],
+
+  "events": { "subscribe": ["usage.recorded"], "batchSize": 100 },
+
+  "jobs": [
+    { "id": "rollup", "schedule": "@every 5m", "timeoutSec": 60 },
+    { "id": "cleanup", "schedule": "0 3 * * *", "timeoutSec": 300 }
+  ],
+
+  "database": { "schema": "plg_guard", "migrations": "migrations/" },
+
+  "userPermissions": [
+    { "key": "rules:read", "label": { "en": "View guard rules", "zh": "查看拦截规则" } },
+    { "key": "rules:manage", "label": { "en": "Manage guard rules", "zh": "管理拦截规则" } },
+    { "key": "stats:read", "label": { "en": "View guard statistics", "zh": "查看拦截统计" } }
+  ],
+
+  "routes": [
+    { "method": "GET", "path": "/rules", "scope": "admin", "permission": "rules:read" },
+    { "method": "PUT", "path": "/rules", "scope": "admin", "permission": "rules:manage" },
+    { "method": "GET", "path": "/stats", "scope": "admin", "permission": "stats:read" }
+  ],
+
+  "ui": {
+    "menus": [
+      {
+        "id": "guard",
+        "section": "plugins",
+        "label": { "en": "Guard", "zh": "请求守卫" },
+        "icon": "shield",
+        "page": "dashboard",
+        "permission": "stats:read",
+        "order": 200
+      }
+    ],
+    "pages": {
+      "dashboard": {
+        "type": "native",
+        "title": { "en": "Guard", "zh": "请求守卫" },
+        "component": "GuardDashboard"
+      }
+    },
+    "slots": [
+      { "slot": "dashboard.widgets", "component": "BlockedTodayCard", "permission": "stats:read" }
+    ],
+    "native": { "entry": "ui/native/entry.js" },
+    "settings": {
+      "mode": "schema",
+      "schema": "forms/settings.schema.json",
+      "uiSchema": "forms/settings.ui.json"
+    }
+  },
+
+  "resources": { "memoryMB": 128, "cpu": 0.25, "maxThreads": 64, "maxOpenFiles": 256 },
+
+  "hostPermissions": [
+    { "id": "kv",
+      "reason": { "en": "Cache small runtime state", "zh": "缓存少量运行时状态" } },
+    { "id": "db.schema",
+      "reason": { "en": "Store rules and statistics", "zh": "保存拦截规则和统计" } },
+    { "id": "gateway.hook",
+      "scope": { "points": ["gateway.request"], "fields": ["model", "prompt_text"] },
+      "reason": { "en": "Inspect request prompts", "zh": "检查请求内容" } },
+    { "id": "events",
+      "scope": { "subscribe": ["usage.recorded"] },
+      "reason": { "en": "Count requests per group and model", "zh": "按分组和模型统计请求量" } },
+    { "id": "jobs",
+      "reason": { "en": "Roll up and clean up statistics", "zh": "汇总和清理统计数据" } },
+    { "id": "routes.admin",
+      "reason": { "en": "Rule management and statistics APIs", "zh": "规则管理与统计接口" } },
+    { "id": "ui.menu",
+      "reason": { "en": "Add the \"Guard\" menu", "zh": "添加\"请求守卫\"菜单" } },
+    { "id": "ui.native",
+      "reason": { "en": "Provide the statistics dashboard and the home page card", "zh": "提供统计大盘和首页卡片" } },
+    { "id": "net",
+      "scope": { "domains": ["hooks.example.com"] },
+      "optional": true,
+      "reason": { "en": "Send webhook alerts when a rule matches (enforced when the egress policy is an allowlist)", "zh": "命中规则时发送告警（出口策略为白名单时生效）" } }
+  ],
+
+  "externalServices": ["hooks.example.com"]
+}

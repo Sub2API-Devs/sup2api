@@ -1,0 +1,4 @@
+# Build outputs of `sub2api-plugin build` / `pack` (never commit packages).
+*/runtimes/
+*.s2plugin
+*/ui/native/dist/

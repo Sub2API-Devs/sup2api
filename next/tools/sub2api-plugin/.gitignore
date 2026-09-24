@@ -1,0 +1,11 @@
+# Local outputs: demo packages, signing keys, the built binary.
+/out/
+/sub2api-plugin
+/sub2api-plugin.exe
+*.s2plugin
+*.key
+index.json
+index.json.sig
+
+# The repository root ignores "scripts"; keep this tool's scripts.
+!/scripts/

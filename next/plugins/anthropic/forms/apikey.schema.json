@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "title": "Anthropic API key",
+  "required": ["api_key"],
+  "additionalProperties": false,
+  "properties": {
+    "api_key": {
+      "type": "string",
+      "title": "API key",
+      "minLength": 8,
+      "maxLength": 512,
+      "pattern": "^[!-~]+$"
+    },
+    "base_url": {
+      "type": "string",
+      "title": "Base URL",
+      "default": "https://api.anthropic.com",
+      "pattern": "^https?://[^\\s?#]+$"
+    },
+    "model_mapping": {
+      "type": "object",
+      "title": "Model mapping",
+      "additionalProperties": { "type": "string", "minLength": 1 },
+      "default": {}
+    }
+  }
+}
