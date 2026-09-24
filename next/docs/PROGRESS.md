@@ -215,4 +215,6 @@ go test -count=1 -timeout 50m -v ./...
 
 **主控整合（已做）**：`app` 组装共享转换器注册表；账号类型需要 `accounts.credentials` 授权才注册（未授权插件的账号不参与调度）；价格优先级改为"模式越具体越优先，同样具体再按安装先后"（billing agent 原实现是安装先后优先）。
 
+**sup2api 验证（2026-09-25，数据已清空重建，部署 `6c6b69b`）**：迁移 0001–0005 在新库上执行成功；内置 anthropic 自动启用；从市场安装并启用 relay；两种账号类型的 `/account-types` 都显示原生服务 `POST /v1/messages`、`/v1/messages/count_tokens`；同一分组放 anthropic apikey 与 relay relay_key 各一个账号（上游为 httpbin 回显、假 Key），16 次请求分别由两个账号服务（7 / 9）；使用记录的 `plugin_key`、`account_type`、`upstream_protocol` 正确；禁用 relay 后只调度 anthropic 账号、relay 账号保留。验证数据已删除，relay 保持启用。验证中发现并修复：删除用户不删除其 API Key（导致分组无法删除）。部署时修复：market-init 内存 64M 不够，改 256M。
+
 **合并后主控要做**：`internal/app` 组装（gateway 的 ProtocolConverters 交给 account）；清空 sup2api 数据卷重新部署；在 sup2api 上验证混合账号类型服务 `/v1/messages`；更新本节。
