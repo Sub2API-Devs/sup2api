@@ -19,6 +19,7 @@ export default {
     users: '用户',
     roles: '角色与权限',
     apiKeysAll: '全部 API Key',
+    platforms: '平台',
     plugins: '插件',
     market: '插件市场',
     publishers: '发布者',

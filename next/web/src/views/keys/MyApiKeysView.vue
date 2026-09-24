@@ -7,11 +7,17 @@ import type { ApiKey, Group } from '@/api/types'
 import { fromLocalInput, statusTone } from '@/api/admin'
 import { useList } from '@/composables/useList'
 import { fetchMyGroups } from '@/composables/lookups'
+import { usePlatforms } from '@/composables/platforms'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import { copyText, formatDateTime, formatRelative } from '@/utils/format'
+import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
+import PlatformEndpointsPreview from '@/views/platforms/PlatformEndpointsPreview.vue'
+import KeyGroupCell from './KeyGroupCell.vue'
 
 const { t } = useI18n()
 const list = useList<ApiKey>('/me/api-keys')
+const platforms = usePlatforms()
+platforms.load()
 
 const groups = ref<Group[]>([])
 async function loadGroups() {
@@ -25,6 +31,11 @@ loadGroups()
 
 function groupName(k: ApiKey) {
   return k.group_name || groups.value.find((g) => g.id === k.group_id)?.name || `#${k.group_id}`
+}
+
+/** Platforms of the key: reported on the key, else those of its group. */
+function keyPlatforms(k: ApiKey): string[] | undefined {
+  return k.platforms ?? groups.value.find((g) => g.id === k.group_id)?.platforms
 }
 
 const columns = computed<TableColumn[]>(() => [
@@ -58,7 +69,12 @@ const createOpen = ref(false)
 const creating = ref(false)
 const errors = ref<Record<string, string>>({})
 const form = reactive({ name: '', group_id: null as number | null, expires_at: '' })
-const groupOptions = computed(() => groups.value.map((g) => ({ value: g.id, label: g.name })))
+const groupOptions = computed(() =>
+  groups.value.map((g) => ({
+    value: g.id,
+    label: g.platforms?.length ? `${g.name} · ${g.platforms.map((p) => platforms.label(p)).join(', ')}` : g.name
+  }))
+)
 const selectedGroup = computed(() => groups.value.find((g) => g.id === form.group_id) || null)
 
 function openCreate() {
@@ -138,7 +154,7 @@ async function remove(k: ApiKey) {
       <template #cell-key_prefix="{ row }">
         <code class="font-mono text-xs">{{ row.key_prefix }}…</code>
       </template>
-      <template #cell-group="{ row }">{{ groupName(row) }}</template>
+      <template #cell-group="{ row }"><KeyGroupCell :name="groupName(row)" :platforms="keyPlatforms(row)" /></template>
       <template #cell-status="{ row }">
         <SBadge :tone="statusOf(row) === 'expired' ? 'warning' : statusTone(row.status)" dot>{{ statusLabel(statusOf(row)) }}</SBadge>
       </template>
@@ -176,6 +192,17 @@ async function remove(k: ApiKey) {
             {{ selectedGroup.model_allowlist?.length ? selectedGroup.model_allowlist.join(', ') : t('common.unlimited') }}
           </div>
           <div v-if="selectedGroup.description" class="mt-0.5">{{ selectedGroup.description }}</div>
+          <template v-if="selectedGroup.platforms">
+            <div class="mt-2 flex flex-wrap items-center gap-1" data-testid="create-key-platforms">
+              <span>{{ t('platforms.keyPlatforms') }}:</span>
+              <PlatformBadges v-if="selectedGroup.platforms.length" :ids="selectedGroup.platforms" />
+              <span v-else class="text-amber-600 dark:text-amber-400">{{ t('platforms.keyNoPlatforms') }}</span>
+            </div>
+            <div v-if="selectedGroup.platforms.length" class="mt-2">
+              <div class="mb-1">{{ t('platforms.keyEndpoints') }}:</div>
+              <PlatformEndpointsPreview :ids="selectedGroup.platforms" :max="3" />
+            </div>
+          </template>
         </div>
         <SField :label="t('apikeys.expiresAt')" :hint="t('apikeys.expiresHint')" :error="errors.expires_at">
           <input v-model="form.expires_at" type="datetime-local" class="input" />

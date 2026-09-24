@@ -1,6 +1,6 @@
 export default {
   title: 'Groups',
-  description: 'Groups bind accounts, API keys and users; they decide the rate multiplier and allowed models.',
+  description: 'A group is a set of accounts (any types mixed) serving together; each API key is bound to one group. The group decides the rate multiplier, allowed models and — through its accounts — the platforms it serves.',
   create: 'New group',
   editTitle: 'Edit group {name}',
   visibility: 'Visibility',

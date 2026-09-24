@@ -427,12 +427,13 @@ const GROUPS = [
   { id: 1, name: 'default', rate: 1 },
   { id: 2, name: 'vip', rate: 1.5 }
 ]
-// Same accounts as mock/accounts.ts; relay-gpt is served through the
-// anthropic.messages -> openai.chat converter.
+// Same accounts as mock/accounts.ts (all support the anthropic platform).
+// Some requests hit the openai chat endpoint and are converted to
+// anthropic.messages for the upstream.
 const ACCOUNTS = [
   { id: 12, name: 'claude-main', plugin_key: 'anthropic', type: 'apikey', upstream: 'anthropic.messages' },
   { id: 13, name: 'claude-bak', plugin_key: 'anthropic', type: 'apikey', upstream: 'anthropic.messages' },
-  { id: 16, name: 'relay-gpt', plugin_key: 'openai_relay', type: 'chat_key', upstream: 'openai.chat' }
+  { id: 16, name: 'relay-1', plugin_key: 'relay', type: 'relay_key', upstream: 'anthropic.messages' }
 ]
 const MODELS = ['claude-sonnet-x', 'claude-sonnet-4-5', 'claude-haiku-4-5']
 
@@ -468,6 +469,8 @@ for (let i = 0; i < 90; i++) {
   const cr = success && r(10) < 0.6 ? Math.floor(r(11) * 60000) : 0
   const cc = success && r(12) < 0.3 ? Math.floor(r(13) * 5000) : 0
   const fast = r(14) < 0.2
+  // Client used the openai chat endpoint; anthropic-platform accounts serve it via conversion.
+  const viaOpenAI = account.plugin_key === 'anthropic' && rnd(i * 13 + 99) < 0.2
   const price = priceFor(model)
   const requestId = 'req_' + hashOf('u' + i).slice(0, 16)
   const hook_decisions = [
@@ -516,10 +519,10 @@ for (let i = 0; i < 90; i++) {
     // plugin_key/account_type: the account type; platform/protocol: the client endpoint.
     plugin_key: blocked ? '' : account.plugin_key,
     account_type: blocked ? '' : account.type,
-    platform: 'anthropic',
-    protocol: 'anthropic.messages',
+    platform: viaOpenAI ? 'openai' : 'anthropic',
+    protocol: viaOpenAI ? 'openai.chat' : 'anthropic.messages',
     upstream_protocol: blocked ? '' : account.upstream,
-    endpoint: '/v1/messages',
+    endpoint: viaOpenAI ? '/v1/chat/completions' : '/v1/messages',
     model,
     upstream_model: model,
     stream: r(16) < 0.7,

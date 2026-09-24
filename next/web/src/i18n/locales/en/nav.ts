@@ -19,6 +19,7 @@ export default {
     users: 'Users',
     roles: 'Roles & permissions',
     apiKeysAll: 'All API keys',
+    platforms: 'Platforms',
     plugins: 'Plugins',
     market: 'Plugin market',
     publishers: 'Publishers',

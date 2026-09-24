@@ -133,21 +133,42 @@ export function display(v: unknown): string {
 export interface AccountTypeSummary {
   id: string
   label: LText | undefined
-  protocols: string[]
+  /** Supported platform ids (built-in, this plugin's or other plugins'). */
+  platforms: string[]
 }
 
 /**
  * Account types declared by a plugin: top-level `account_types` of a review
- * or manifest summary (CONTRACTS §12). Protocols may be ids or manifest
- * objects ({protocol, requestFields, ...}).
+ * or manifest summary (CONTRACTS §13). Platforms may be ids or manifest
+ * objects ({platform, requestFields, ...}).
  */
 export function accountTypesOf(o: unknown): AccountTypeSummary[] {
   return asArray<Record<string, any>>(pick(o, 'account_types', 'accountTypes')).map((a) => ({
     id: String(pick(a, 'id', 'type') ?? ''),
     label: pick<LText>(a, 'label'),
-    protocols: asArray(pick(a, 'protocols'))
-      .map((p) => (typeof p === 'string' ? p : String(pick(p, 'protocol', 'id') ?? '')))
+    platforms: asArray(pick(a, 'platforms'))
+      .map((p) => (typeof p === 'string' ? p : String(pick(p, 'platform', 'id') ?? '')))
       .filter(Boolean)
+  }))
+}
+
+export interface PlatformSummary {
+  id: string
+  label: LText | undefined
+  endpoints: Array<{ method: string; path: string; protocol: string; billing: string }>
+}
+
+/** New platforms declared by a plugin (review or manifest `platforms`), with their endpoints. */
+export function platformsOf(o: unknown): PlatformSummary[] {
+  return asArray<Record<string, any>>(pick(o, 'platforms')).map((p) => ({
+    id: String(pick(p, 'id') ?? ''),
+    label: pick<LText>(p, 'label'),
+    endpoints: asArray<Record<string, any>>(pick(p, 'endpoints')).map((e) => ({
+      method: String(pick(e, 'method') ?? ''),
+      path: String(pick(e, 'path') ?? ''),
+      protocol: String(pick(e, 'protocol') ?? ''),
+      billing: String(pick(e, 'billing') ?? 'usage')
+    }))
   }))
 }
 

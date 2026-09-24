@@ -24,6 +24,7 @@ const children: RouteRecordRaw[] = [
   { path: 'groups', component: () => import('@/views/groups/GroupsView.vue'), meta: { perm: 'group:read', title: 'nav.items.groups' } },
   { path: 'proxies', component: () => import('@/views/proxies/ProxiesView.vue'), meta: { perm: 'proxy:read', title: 'nav.items.proxies' } },
   { path: 'accounts', component: () => import('@/views/accounts/AccountsView.vue'), meta: { perm: 'account:read', title: 'nav.items.accounts' } },
+  { path: 'platforms', component: () => import('@/views/platforms/PlatformsView.vue'), meta: { perm: 'account:read', title: 'nav.items.platforms' } },
 
   { path: 'prices', component: () => import('@/views/prices/PricesView.vue'), meta: { perm: 'price:read', title: 'nav.items.prices' } },
   { path: 'prices/new', component: () => import('@/views/prices/PriceEditView.vue'), meta: { perm: 'price:manage', title: 'nav.items.prices' } },

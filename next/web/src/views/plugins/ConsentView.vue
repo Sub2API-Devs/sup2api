@@ -10,8 +10,9 @@ import { errorMessage, notifyError } from '@/utils/errors'
 import { formatBytes } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import { dropReview, getReview } from './reviewCache'
-import { RISK_ORDER, accountTypesOf, asArray, display, hpKey, pick, riskOf, type Risk } from './pluginUtil'
+import { RISK_ORDER, accountTypesOf, asArray, display, hpKey, pick, platformsOf, riskOf, type Risk } from './pluginUtil'
 import PluginAvatar from './parts/PluginAvatar.vue'
+import PluginGatewayDecl from './parts/PluginGatewayDecl.vue'
 import RiskDot from './parts/RiskDot.vue'
 import ScopeChips from './parts/ScopeChips.vue'
 import TrustBadge from './parts/TrustBadge.vue'
@@ -182,13 +183,14 @@ const resourceItems = computed(() => {
 
 const capabilityIds = computed(() => asArray(review.value?.capabilities).map((c) => (typeof c === 'string' ? c : String((c as any)?.id ?? display(c)))))
 const reviewAccountTypes = computed(() => accountTypesOf(review.value))
+const reviewPlatforms = computed(() => platformsOf(review.value))
 
 const hasProvides = computed(() => {
   const r = review.value
   if (!r) return false
   return (
     asArray(r.gateway_endpoints).length > 0 ||
-    !!r.platform ||
+    reviewPlatforms.value.length > 0 ||
     reviewAccountTypes.value.length > 0 ||
     asArray(r.hooks).length > 0 ||
     asArray(r.events).length > 0 ||
@@ -392,33 +394,24 @@ onMounted(load)
       <!-- what the plugin provides -->
       <SCard v-if="hasProvides" :title="t('plugins.consent.provides')" class="mt-4">
         <ul class="space-y-4 text-sm">
-          <li v-if="review.gateway_endpoints?.length">
+          <li v-if="reviewPlatforms.length">
+            <div class="font-medium">{{ t('plugins.consent.platforms') }}</div>
+            <div class="mt-1 pl-4">
+              <PluginGatewayDecl :platforms="reviewPlatforms" :account-types="[]" section="platforms" />
+            </div>
+          </li>
+          <li v-else-if="review.gateway_endpoints?.length">
             <div class="font-medium">{{ t('plugins.consent.gatewayEndpoints') }}</div>
             <ul class="mt-1 space-y-0.5 pl-4">
               <li v-for="(e, i) in review.gateway_endpoints" :key="i" class="font-mono text-xs">{{ endpointText(e) }}</li>
             </ul>
           </li>
 
-          <li v-if="review.platform">
-            <div class="font-medium">{{ t('plugins.consent.platform') }}{{ colon }}<span class="font-mono">{{ review.platform.id }}</span></div>
-            <div class="mt-1 pl-4 text-xs">
-              <div v-if="review.platform.protocols?.length">
-                <span class="muted">{{ t('plugins.consent.protocols') }}{{ colon }}</span>{{ review.platform.protocols.join(', ') }}
-              </div>
-            </div>
-          </li>
-
           <li v-if="reviewAccountTypes.length">
             <div class="font-medium">{{ t('plugins.consent.accountTypes') }}</div>
-            <ul class="mt-1 space-y-1 pl-4">
-              <li v-for="a in reviewAccountTypes" :key="a.id" class="text-xs" data-testid="review-account-type">
-                <span class="font-medium">{{ lt(a.label) || a.id }}</span>
-                <span class="muted font-mono"> ({{ a.id }})</span>
-                <span v-if="a.protocols.length">
-                  <span class="muted"> — {{ t('plugins.consent.nativeProtocols') }}{{ colon }}</span><span class="font-mono">{{ a.protocols.join(', ') }}</span>
-                </span>
-              </li>
-            </ul>
+            <div class="mt-1 pl-4" data-testid="review-account-types">
+              <PluginGatewayDecl :platforms="reviewPlatforms" :account-types="reviewAccountTypes" section="account_types" />
+            </div>
           </li>
 
           <li v-if="review.hooks?.length">

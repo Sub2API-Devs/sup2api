@@ -4,7 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { SBadge, SCard } from '@sub2api/ui'
 import { lt } from '@/i18n'
 import { formatNumber } from '@/utils/format'
-import { accountTypesOf, asArray, display, pick, type PluginDetail } from '../pluginUtil'
+import { accountTypesOf, asArray, display, pick, platformsOf, type PluginDetail } from '../pluginUtil'
+import PluginGatewayDecl from '../parts/PluginGatewayDecl.vue'
 import StatusBadge from '../parts/StatusBadge.vue'
 import TrustBadge from '../parts/TrustBadge.vue'
 
@@ -18,8 +19,9 @@ const description = computed(() => lt(pick(m.value, 'description')))
 const capabilities = computed(() =>
   asArray(pick(m.value, 'capabilities')).map((c) => (typeof c === 'string' ? c : String((c as any)?.id ?? display(c))))
 )
-const platform = computed<Record<string, any> | null>(() => pick(m.value, 'platform') || null)
-const endpoints = computed(() => asArray<Record<string, any>>(pick(m.value, 'gateway_endpoints', 'gatewayEndpoints', 'endpoints') ?? pick(platform.value, 'endpoints')))
+// New platforms declared by the plugin (CONTRACTS §13); endpoints belong to them.
+const platforms = computed(() => platformsOf(m.value))
+const endpoints = computed(() => asArray<Record<string, any>>(pick(m.value, 'gateway_endpoints', 'gatewayEndpoints')))
 const menus = computed(() => asArray<Record<string, any>>(pick(ui.value, 'menus') ?? pick(m.value, 'menus')))
 const pages = computed(() => {
   const p = pick<Record<string, any>>(ui.value, 'pages') ?? pick(m.value, 'pages')
@@ -27,8 +29,7 @@ const pages = computed(() => {
   return Array.isArray(p) ? p.map((x: any) => ({ id: String(x.id ?? ''), type: String(x.type ?? '') })) : Object.entries(p).map(([id, v]) => ({ id, type: String((v as any)?.type ?? '') }))
 })
 const slots = computed(() => asArray<Record<string, any>>(pick(ui.value, 'slots') ?? pick(m.value, 'slots')))
-const protocols = computed(() => asArray<string>(pick(platform.value, 'protocols')))
-// Account types are top level (any plugin can declare them), not part of the platform.
+// Account types are top level (any plugin can declare them); each lists its platforms.
 const accountTypes = computed(() => accountTypesOf(m.value))
 
 const nodeStates = computed(() => {
@@ -81,27 +82,17 @@ function endpointText(e: Record<string, any>): string {
             <SBadge v-for="c in capabilities" :key="c">{{ c }}</SBadge>
           </dd>
         </template>
-        <template v-if="platform">
-          <dt>{{ t('plugins.consent.platform') }}</dt>
-          <dd>
-            <span class="font-mono">{{ platform.id }}</span>
-            <span v-if="protocols.length" class="ml-2 text-xs muted">{{ protocols.join(', ') }}</span>
-          </dd>
+        <template v-if="platforms.length">
+          <dt>{{ t('plugins.consent.platforms') }}</dt>
+          <dd><PluginGatewayDecl :platforms="platforms" :account-types="[]" section="platforms" /></dd>
         </template>
         <template v-if="accountTypes.length">
           <dt>{{ t('plugins.consent.accountTypes') }}</dt>
-          <dd class="space-y-1">
-            <div v-for="a in accountTypes" :key="a.id" class="flex flex-wrap items-center gap-1.5 text-xs" data-testid="detail-account-type">
-              <SBadge tone="primary">{{ lt(a.label) || a.id }}</SBadge>
-              <span class="muted font-mono">{{ a.id }}</span>
-              <template v-if="a.protocols.length">
-                <span class="muted">· {{ t('plugins.consent.nativeProtocols') }}:</span>
-                <code v-for="p in a.protocols" :key="p" class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[11px] dark:bg-dark-700">{{ p }}</code>
-              </template>
-            </div>
+          <dd data-testid="detail-account-types">
+            <PluginGatewayDecl :platforms="platforms" :account-types="accountTypes" section="account_types" />
           </dd>
         </template>
-        <template v-if="endpoints.length">
+        <template v-if="!platforms.length && endpoints.length">
           <dt>{{ t('plugins.consent.gatewayEndpoints') }}</dt>
           <dd>
             <div v-for="(e, i) in endpoints" :key="i" class="font-mono text-xs">{{ endpointText(e) }}</div>

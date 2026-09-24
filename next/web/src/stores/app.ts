@@ -52,6 +52,7 @@ const CORE_MENU: Array<{ key: string; items: Array<NavItem & { perm?: string | s
       { id: 'users', labelKey: 'nav.items.users', icon: 'user', path: '/users', perm: 'user:read' },
       { id: 'roles', labelKey: 'nav.items.roles', icon: 'role', path: '/roles', perm: 'role:read' },
       { id: 'api-keys', labelKey: 'nav.items.apiKeysAll', icon: 'key', path: '/api-keys', perm: 'apikey:all:read' },
+      { id: 'platforms', labelKey: 'nav.items.platforms', icon: 'globe', path: '/platforms', perm: 'account:read' },
       { id: 'plugins', labelKey: 'nav.items.plugins', icon: 'plugin', path: '/plugins', perm: 'plugin:read' },
       { id: 'market', labelKey: 'nav.items.market', icon: 'market', path: '/market', perm: 'plugin:market:read' },
       { id: 'publishers', labelKey: 'nav.items.publishers', icon: 'publisher', path: '/publishers', perm: 'publisher:read' },
@@ -97,7 +98,7 @@ export const useAppStore = defineStore('app', () => {
     const plugins = usePluginStore()
     try {
       const data = await api.get<MenuSection[]>('/me/menus')
-      menus.value = (data || []).map(normalizeSection).filter((s) => s.items.length > 0)
+      menus.value = ensureClientItems((data || []).map(normalizeSection), (p) => auth.has(p)).filter((s) => s.items.length > 0)
     } catch {
       // Fallback: core menu filtered by permissions + plugin menus.
       const sections: NavSection[] = CORE_MENU.map((s) => ({
@@ -119,6 +120,31 @@ export const useAppStore = defineStore('app', () => {
 
   return { theme, sidebarCollapsed, mobileNavOpen, menus, menusLoaded, toggleTheme, loadMenus }
 })
+
+/**
+ * Core pages newer than the server menu: added client-side (per permission)
+ * when GET /me/menus does not list them yet.
+ */
+const CLIENT_ITEMS: Array<{ section: string; before?: string; item: NavItem & { perm: string } }> = [
+  { section: 'system', before: '/plugins', item: { id: 'platforms', labelKey: 'nav.items.platforms', icon: 'globe', path: '/platforms', perm: 'account:read' } }
+]
+
+function ensureClientItems(sections: NavSection[], has: (perm: string) => boolean): NavSection[] {
+  for (const { section, before, item } of CLIENT_ITEMS) {
+    if (!has(item.perm)) continue
+    if (sections.some((s) => s.items.some((i) => i.path === item.path))) continue
+    const { perm: _p, ...nav } = item
+    let s = sections.find((x) => x.key === section)
+    if (!s) {
+      s = { key: section, items: [] }
+      const at = sections.findIndex((x) => x.key === 'me' || x.key === 'plugins')
+      sections.splice(at < 0 ? sections.length : at, 0, s)
+    }
+    const idx = before ? s.items.findIndex((i) => i.path === before) : -1
+    s.items.splice(idx < 0 ? s.items.length : idx, 0, nav)
+  }
+  return sections
+}
 
 function normalizeSection(s: MenuSection): NavSection {
   const raw = s.section
