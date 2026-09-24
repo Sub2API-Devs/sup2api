@@ -46,7 +46,7 @@
 | | 账号 | 通用账号表；录入时先选择插件定义的账号类型，再由插件提供录入界面；凭证加密存储 |
 | | 计费与余额 | 独立的模型价格页面，支持按次、按 token、按表达式三种计费方式（表达式可以按上下文长度分档、给缓存单独定价、按请求头/参数/时段加价），插件提供默认价格，管理员可覆盖；价格试算；用户余额、余额流水（账本）、请求前余额检查、请求后结算、管理员调整余额 |
 | | 使用记录 | 每次请求记录用户、Key、分组、账号、模型、token 数、费用、耗时、状态 |
-| 网关 | 转发 | 网关端点由插件声明（本期 anthropic 插件声明 `POST /v1/messages`），核心按声明执行通用流水线；流式和非流式；分组内选账号、账号和用户并发控制、失败切换、账号冷却 |
+| 网关 | 转发 | 端点属于平台：核心内置 anthropic、openai、gemini 平台及端点，插件可声明新平台；核心按声明执行通用流水线；流式和非流式；分组内选账号（按账号类型支持的平台）、账号和用户并发控制、失败切换、账号冷却 |
 | | 粘性会话 | 核心提供调度引擎（规则匹配、会话 key、Redis 绑定、成功后切换、失败策略、命中统计）；平台插件提供默认规则，管理员可覆盖和新增；复杂取值可由插件实现扩展点 |
 | | 网关钩子 | 插件可以在请求进入调度之前检查、修改或拒绝请求（用于审核、拦截），支持按协议/模型/分组匹配、超时、失败策略、熔断 |
 | 插件体系 | 运行时 | gRPC 独立进程；上传、授权确认、安装、启用、禁用、升级、卸载；多节点"先准备、再激活"发布 |
@@ -55,7 +55,7 @@
 | | 资源限制 | 每个插件的内存、CPU、文件数限制：GOMEMLIMIT + 内存看门狗 + oom_score_adj + nice + rlimit，都不需要特权（cgroup 预留） |
 | | 签名与市场 | Ed25519 发布者签名、信任级别、发布者密钥管理与吊销；从插件市场索引（签名的静态 JSON）浏览、安装、检查更新 |
 | | 前端扩展 | schema 表单、沙箱 iframe、**原生微前端**（受信插件把 Vue 组件挂进控制台） |
-| 演示插件 | anthropic | 平台适配 + 默认价格 + 模型目录 |
+| 演示插件 | anthropic | API Key 账号类型 + 默认价格 + 模型目录（内置插件）；另有市场插件 relay（中转 Key 账号类型） |
 | | guard | 网关钩子（关键词拦截）+ 事件订阅 + 后台任务 + 出口访问 + 原生界面 + 资源限制 |
 | 部署 | docker compose | PostgreSQL、Redis、2 个节点、Caddy 负载均衡 |
 
@@ -211,10 +211,10 @@ flowchart LR
 | `plugin` | 插件包、签名与信任、manifest、授权确认、迁移、注册表、发布、Runtime 抽象、市场索引 | 核心 |
 | `plugin/grpcruntime` | go-plugin 进程管理、HostService、EgressService | 核心 |
 | `plugin/sandbox` | 启动器：seccomp、rlimit、oom_score_adj、nice；内存看门狗 | 核心 |
-| anthropic 插件 | 网关端点与协议格式、平台适配（账号类型与表单、构造请求、错误分类、用量规则）、粘性会话默认规则、默认价格、模型目录 | **插件** |
+| anthropic 插件 | `apikey` 账号类型（支持内置平台 anthropic）：构造请求、错误分类；默认价格、模型目录 | **插件** |
 | guard 插件 | 请求钩子（关键词拦截）、事件订阅（统计）、后台任务（汇总与清理）、对外告警、原生界面 | **插件** |
 
-**划分原则**：核心负责"数据、钱、安全、调度"，插件负责"某个平台怎么对接"以及"额外的业务逻辑"。核心代码里**不出现任何具体平台或插件的名字**。插件**永远不能直接改余额**，只能调用受限的账本接口。
+**划分原则**：核心负责"数据、钱、安全、调度"，以及内置平台（anthropic、openai、gemini）的端点定义——它们是数据文件（`server/internal/platforms/*.json`），流水线代码本身不针对任何平台写死逻辑；插件负责"某种账号怎么对接上游"以及"额外的业务逻辑"。插件**永远不能直接改余额**，只能调用受限的账本接口。
 
 ---
 
@@ -749,12 +749,12 @@ sequenceDiagram
 端点属于平台：核心内置 anthropic、openai、gemini 三个平台的端点，插件可以在 manifest 的 `platforms[].endpoints` 里为自己的新平台声明端点（见 6.6），核心流水线按声明执行。端点字段如下（以 anthropic 为例）：
 
 ```jsonc
-"gateway": {
+{ "id": "anthropic",                          // 平台（内置平台在 server/internal/platforms/*.json）
   "endpoints": [ {
     "id": "messages",
     "method": "POST",
     "path": "/v1/messages",
-    "protocol": "anthropic.messages",       // 协议 id，平台的 platform.protocols 用它来承接
+    "protocol": "anthropic.messages",       // 协议 id："<平台 id>.<名称>"，全局唯一
     "kind": "proxy",                         // 本期只有 proxy：鉴权 → 钩子 → 调度 → 转发 → 计费
     "auth": { "headers": ["x-api-key", "authorization"] },  // 从哪些请求头读 API Key
     "request": {
@@ -1424,21 +1424,21 @@ sequenceDiagram
 
 ## 15. 两个演示插件
 
-### 15.1 anthropic（平台插件）
+### 15.1 anthropic（账号类型插件，内置）
+
+anthropic 平台及其端点、用量规则、默认粘性规则由**核心内置**（`server/internal/platforms/anthropic.json`，见 6.6）；插件本身随镜像内置、只能禁用不能卸载。
 
 | 能力 | 内容 |
 |---|---|
-| 平台 | `anthropic`，承接协议 `anthropic.messages` |
-| 网关端点 | 声明 `POST /v1/messages`（协议 `anthropic.messages`，按用量计费）和 `POST /v1/messages/count_tokens`（不计费） |
-| 粘性规则 | 默认规则 `claude-code-session`：取 `metadata.user_id`，TTL 1 小时 |
-| 账号类型 | `apikey`：`api_key`（敏感）、`base_url`（默认 `https://api.anthropic.com`）、`model_mapping` |
-| 构造请求 | `base_url + /v1/messages`；请求头 `x-api-key`、`anthropic-version`（透传，默认 `2023-06-01`）、`anthropic-beta`（透传）；命中模型映射时修改 `model` |
-| 用量规则 | `semantics=exclusive`。SSE：`message_start` 取 `message.usage` 中的输入、缓存读、缓存写（含 `cache_creation.ephemeral_1h_input_tokens`）和 `message.model`，`message_delta` 取 `usage.output_tokens`；JSON：`usage.*` |
+| 账号类型 | `apikey`：支持平台 `anthropic`；字段 `api_key`（敏感）、`base_url`（默认 `https://api.anthropic.com`）、`model_mapping` |
+| 构造请求 | 按 `meta.protocol` 选上游路径：`base_url + /v1/messages` 或 `/v1/messages/count_tokens`；请求头 `x-api-key`、`anthropic-version`（透传，默认 `2023-06-01`）、`anthropic-beta`（透传）；命中模型映射时修改 `model` |
 | 错误分类 | 400 直接返回；401/403 切换并禁用账号；429 切换并冷却到 `retry-after`（默认 60 秒）；529 切换并冷却 30 秒；5xx 切换并冷却 10 秒 |
-| 默认价格 | manifest `pricing` 提供主流模型的默认价格：有长上下文档位的模型用两档表达式，其余用按 token 方式（价格以官方公布为准） |
+| 默认价格 | manifest `pricing` 提供主流模型的默认价格（价格按模型全局设置，以官方公布为准） |
 | 模型目录 | 自己的 schema `plg_anthropic.model_catalog` + 迁移 `0001_init.sql`；接口 `GET /models`；声明式表格页面；用户权限 `model_catalog:read` |
 | 升级演示 | 测试用 `0.2.0` 增加 `0002_add_family.sql`（加字段并回填），验证升级迁移和旧数据迁移 |
-| 权限 | `accounts.credentials`（本平台）、`db.schema`、`kv`、`routes.admin` |
+| 权限 | `platform.register`、`accounts.credentials`（`{"types":"own"}`）、`db.schema`、`kv`、`routes.admin`、`ui.menu` |
+
+另有市场插件 **relay（Claude 中转）**：只声明账号类型 `relay_key`（支持平台 `anthropic`，按平台覆盖 requestFields/passHeaders），演示多个插件的账号类型在同一分组中共同服务 `/v1/messages`。
 
 ### 15.2 guard（钩子与应用插件）
 
