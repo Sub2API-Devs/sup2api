@@ -17,7 +17,7 @@ import (
 
 // PriceCatalog is implemented by billing (B).
 type PriceCatalog interface {
-	SyncPluginDefaults(ctx context.Context, tx pgx.Tx, pluginKey, platform string, entries []manifest.PricingEntry) error
+	SyncPluginDefaults(ctx context.Context, tx pgx.Tx, pluginKey string, entries []manifest.PricingEntry) error
 }
 
 // StickyRuleCatalog is implemented by the gateway (G).

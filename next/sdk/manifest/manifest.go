@@ -26,13 +26,14 @@ type Manifest struct {
 
 	Capabilities []Capability `json:"capabilities"`
 
-	Gateway  *Gateway       `json:"gateway,omitempty"`
-	Platform *Platform      `json:"platform,omitempty"`
-	Pricing  []PricingEntry `json:"pricing,omitempty"`
-	Hooks    []Hook         `json:"hooks,omitempty"`
-	Events   *Events        `json:"events,omitempty"`
-	Jobs     []Job          `json:"jobs,omitempty"`
-	Database *Database      `json:"database,omitempty"`
+	Gateway      *Gateway       `json:"gateway,omitempty"`
+	Platform     *Platform      `json:"platform,omitempty"`
+	AccountTypes []AccountType  `json:"accountTypes,omitempty"`
+	Pricing      []PricingEntry `json:"pricing,omitempty"`
+	Hooks        []Hook         `json:"hooks,omitempty"`
+	Events       *Events        `json:"events,omitempty"`
+	Jobs         []Job          `json:"jobs,omitempty"`
+	Database     *Database      `json:"database,omitempty"`
 
 	UserPermissions []UserPermission `json:"userPermissions,omitempty"`
 	Routes          []Route          `json:"routes,omitempty"`
@@ -116,10 +117,11 @@ type EndpointResp struct {
 // ---------------------------------------------------------------- platform
 
 type Platform struct {
-	ID           string        `json:"id"`
-	Label        LocalizedText `json:"label,omitempty"`
-	Protocols    []string      `json:"protocols"`
-	AccountTypes []AccountType `json:"accountTypes"`
+	ID        string        `json:"id"`
+	Label     LocalizedText `json:"label,omitempty"`
+	Protocols []string      `json:"protocols"`
+	// Defaults for account types serving these protocols; an account type may
+	// override them per protocol (AccountProtocol).
 	// Request body paths sent to BuildUpstreamRequest (never the whole body).
 	RequestFields []string `json:"requestFields,omitempty"`
 	// Client headers the host forwards to BuildUpstreamRequest (lower-case).
@@ -128,6 +130,11 @@ type Platform struct {
 	StickyRules []StickyRule `json:"stickyRules,omitempty"`
 }
 
+// AccountType is a kind of upstream credential. Any plugin may declare
+// account types (ARCHITECTURE 6.6); the declaring plugin builds upstream
+// requests and classifies errors for accounts of this type. An account type
+// serves every gateway endpoint whose protocol it lists natively in
+// Protocols, or that the core can convert to one of them.
 type AccountType struct {
 	ID              string        `json:"id"`
 	Label           LocalizedText `json:"label"`
@@ -135,7 +142,17 @@ type AccountType struct {
 	Form            Form          `json:"form"`
 	SensitiveFields []string      `json:"sensitiveFields,omitempty"`
 	// Top-level credential keys stored as plain settings (not encrypted).
-	SettingsFields []string `json:"settingsFields,omitempty"`
+	SettingsFields []string          `json:"settingsFields,omitempty"`
+	Protocols      []AccountProtocol `json:"protocols"`
+}
+
+// AccountProtocol is one protocol the upstream of an account type speaks
+// natively. Empty fields fall back to the platform declaring the protocol.
+type AccountProtocol struct {
+	Protocol      string      `json:"protocol"`
+	RequestFields []string    `json:"requestFields,omitempty"`
+	PassHeaders   []string    `json:"passHeaders,omitempty"`
+	Usage         *UsageRules `json:"usage,omitempty"`
 }
 
 // Form describes a console form contributed by a plugin.
@@ -210,10 +227,11 @@ type StickyKeySource struct {
 
 // ---------------------------------------------------------------- pricing
 
+// PricingEntry is a default model price. Prices are global per model
+// (ARCHITECTURE 7.3): they do not depend on platform or account type.
 type PricingEntry struct {
 	Model      string         `json:"model"` // exact or glob
-	Platform   string         `json:"platform,omitempty"`
-	Mode       string         `json:"mode"` // per_request | per_token | expression
+	Mode       string         `json:"mode"`  // per_request | per_token | expression
 	Config     map[string]any `json:"config,omitempty"`
 	Expression string         `json:"expression,omitempty"`
 }

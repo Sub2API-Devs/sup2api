@@ -357,3 +357,36 @@ Anthropic 的 `cache_creation_input_tokens` 是总量（含 1 小时缓存）。
 ### 11.4 测试用 mock 上游（QA 实现）
 
 compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/messages/count_tokens`：流式与非流式都返回带 usage 的响应；请求头 `x-mock-status: 429|401|529|500` 时返回对应错误（429 带 `retry-after: 2`）；`x-mock-delay-ms` 控制延迟。测试环境设置 `SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM=true`，账号 `base_url` 指向 `http://mock-upstream:8080`。
+
+## 12. 账号类型与端点多对多、全局定价（2026-09-24，ARCHITECTURE 6.6 / 7.3）
+
+本节优先于前文中与之冲突的描述。
+
+**manifest**：`accountTypes` 移到顶层（任何插件都可声明），每个账号类型有 `protocols: [{protocol, requestFields?, passHeaders?, usage?}]`，列出上游原生支持的协议；`platform` 不再含 `accountTypes`；`pricing[]` 不再有 `platform`。声明账号类型需要 capability `platform.adapter.v1` 和宿主权限 `platform.register`。
+
+**core**：`AccountTypeKey{PluginKey, Type}`；`AccountTypeBinding{Plugin, Type, FormSchema, FormUI, Client}`（`Client` 为声明插件）；`Generation.AccountType(pluginKey, typeID)`、`AccountTypesForProtocol(protocol)`；`AccountRef` 去掉 `Platform`；`AccountDirectory.Candidates(ctx, groupID, []AccountTypeKey)`；`Pricer.Resolve(ctx, model)`；`PriceCatalog.SyncPluginDefaults(ctx, tx, pluginKey, entries)`；`UsageRecord` 新增 `AccountType`、`UpstreamProtocol`，`Platform`/`Protocol` 为客户端端点的平台和协议，`PluginKey` 为账号类型所属插件。
+
+**proto**：`RequestMeta.protocol` = 发给上游的协议；新增 `RequestMeta.client_protocol` = 客户端端点协议；`Account.platform` = 客户端端点所属平台，`Account.type` = 账号类型 id。
+
+**数据库（0005）**：`accounts.platform` 删除（账号类型 = `plugin_key` + `type`）；`model_prices.platform` 删除，唯一约束改为：管理员价格每个 `model_pattern` 一条，插件默认价格每个 `(plugin_key, model_pattern)` 一条；`usage_logs` 新增 `account_type`、`upstream_protocol`。
+
+**调度**：端点协议 P → 候选账号类型 = 原生支持 P 的，加上支持 Q 且核心有 `P→Q` 转换器的（原生优先）→ 分组内这些类型的账号。请求由账号类型所属插件构造；需转换时核心转换请求体和响应（含 SSE）。用量规则：账号类型为该协议声明的 `usage`，否则取声明该协议端点的平台的 `usage`；`requestFields`、`passHeaders` 同理。错误格式始终是端点的 `errorFormat`。
+
+**计费**：`Resolve(model)` 只按模型匹配：管理员价格优先，其次插件默认价格（多个插件都提供时取最早安装的插件）；表达式结果为基础价格 × 分组倍率。
+
+**凭证授权**：`accounts.credentials` 的范围为 `{"types": "own"}`：插件只能拿到自己声明的账号类型的账号凭证。
+
+**REST 变更**
+
+| 接口 | 变更 |
+|---|---|
+| GET `/account-types` | 每项 `{plugin_key, plugin_name, plugin_version, asset_base, trust, type, label, description, form, sensitive_fields, protocols:[protocol], endpoints:[{method, path, protocol, platform, native}]}`；`endpoints` 为该类型当前可服务的已启用端点（`native=false` 表示经核心转换） |
+| GET `/account-types/:plugin_key/:type/form` | 取代 `/:platform/:type/form` |
+| GET `/accounts` | 筛选参数 `?plugin_key=&type=&group_id=&status=&q=`（去掉 `platform`）；每项返回 `plugin_key`、`type`、`type_label`，不再有 `platform` |
+| POST `/accounts` | `{name, plugin_key, type, group_ids[], proxy_id, priority, max_concurrency, schedulable, credentials}` |
+| GET/POST `/prices`、preview、validate | 去掉 `platform`（请求与响应） |
+| 插件 `review` | 顶层 `account_types:[{id, label, protocols[]}]`；`platform` 不再含 `account_types` |
+| 使用记录 | 列表与详情新增 `account_type`、`upstream_protocol` |
+| 事件 `account.*` | payload `{account_id, plugin_key, type, name}`（`status_changed` 另含 `status, reason, cooldown_until?`），去掉 `platform` |
+
+**插件未启用**：端点不存在，返回 404（见 §11.6）。

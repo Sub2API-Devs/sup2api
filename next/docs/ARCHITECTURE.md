@@ -371,7 +371,7 @@ erDiagram
 
 | 字段 | 说明 |
 |---|---|
-| `plugin_key` / `platform` / `type` | 合法取值来自插件注册表，**不在 SQL 里写死** |
+| `plugin_key` / `type` | 账号类型（`(plugin_key, type)` 唯一标识），合法取值来自插件注册表，**不在 SQL 里写死**；账号能服务哪些端点由账号类型声明的协议决定（6.6） |
 | `credentials_enc` | 凭证整体 AES-256-GCM 加密（主密钥 `MASTER_KEY`）；插件声明的敏感字段接口中永远脱敏 |
 | `settings` | 非敏感配置（base_url、模型映射等），明文 JSONB |
 | `proxy_id` / `status` / `schedulable` / `priority` / `max_concurrency` | 代理、状态、是否参与调度、优先级（越小越优先）、最大并发 |
@@ -773,8 +773,8 @@ sequenceDiagram
 |---|---|
 | 路由 | 每个 generation 构建一个内层路由表，挂在核心路由之后；插件启用、禁用、升级时随 generation 原子切换（参考 new-api 的 `plugin-router.go`） |
 | 冲突检查 | 安装和启用时检查：不能占用核心路由（`/api`、`/plugin-ui`、`/health` 等）；两个插件不能声明相同的 method + path |
-| 协议归属 | 协议由声明端点的插件定义；其他平台插件可以通过 `platform.protocols` 承接同一个协议（比如以后的"Anthropic 兼容"平台） |
-| 协议转换 | 本期不做：平台必须原生支持端点的协议。以后以核心内置的 Go 转换器提供（`protocol.converter`） |
+| 协议归属 | 协议由声明端点的插件定义；任何插件的账号类型都可以通过 `accountTypes[].protocols` 声明自己的上游原生支持哪些协议，从而为这些端点提供服务（见 6.6） |
+| 协议转换 | 核心内置转换器（`gateway/convert`）；端点协议和账号上游协议不同时，核心有对应转换器就自动转换，没有就只调度原生支持该协议的账号（见 6.6） |
 | 以后的扩展 | `kind: "custom"`：由插件的 HTTPService 处理，但复用核心的 API Key 鉴权和计费（用于异步任务类接口） |
 
 ### 6.5 粘性会话
@@ -821,6 +821,65 @@ sequenceDiagram
 - 全局开关、默认 TTL、每条规则的命中率统计（Redis 计数），在控制台"粘性会话"页查看和管理，支持按规则清空绑定
 - 使用记录中记录本次请求是否命中粘性绑定（`sticky_rule`、`sticky_hit`）
 - 规则存在 `sticky_rules` 表：`source=plugin_default` 由插件安装和升级时写入、卸载时删除；`source=admin` 由管理员维护，插件变更不影响
+
+### 6.6 平台、账号类型与端点（多对多）
+
+> 2026-09-24 决定。取代"账号属于某个平台、由平台插件转发"的一对一模型。
+
+**三个概念**
+
+| 概念 | 由谁声明 | 作用 |
+|---|---|---|
+| 平台 | 插件 manifest 的 `platform`（如 anthropic） | 一组面向客户端的端点（`gateway.endpoints`，如 `/v1/messages`）及其协议、错误格式、默认粘性规则、默认用量规则 |
+| 协议 | 端点的 `protocol`（如 `anthropic.messages`） | 请求和响应的格式；调度按协议匹配账号 |
+| 账号类型 | 任何插件 manifest 的 `accountTypes[]` | 一种凭证（API Key、OAuth、中转 Key……）及其录入表单；声明上游**原生支持的协议** `protocols`，由声明它的插件负责构造上游请求、分类错误 |
+
+- 一个账号类型可以支持多个协议，因此可以同时为多个端点提供服务
+- 一个端点可以由多个插件的多种账号类型提供服务；同一个分组里可以混放不同类型的账号，一起参与 `/v1/messages` 的调度
+- 账号类型与平台解耦：插件可以只声明账号类型（比如一个"Claude 中转"插件），不声明平台和端点
+
+**manifest**
+
+```jsonc
+"accountTypes": [ {
+  "id": "relay_key",
+  "label": { "en": "Relay key", "zh": "中转 Key" },
+  "form": { "mode": "schema", "schema": "forms/relay.schema.json" },
+  "sensitiveFields": ["api_key"],
+  "protocols": [                         // 上游原生支持的协议
+    { "protocol": "anthropic.messages",
+      "requestFields": ["model"],        // 可选，默认取端点所属平台的设置
+      "passHeaders": ["anthropic-beta"], // 可选
+      "usage": { ... } },                // 可选：上游用量格式和平台默认不同时覆盖
+    { "protocol": "anthropic.count_tokens" }
+  ]
+} ]
+```
+
+`platform` 里不再包含 `accountTypes`。账号类型的唯一标识是 `(plugin_key, type)`。
+
+**调度（端点协议为 P）**
+
+1. 候选账号类型 = 所有已启用插件中，`protocols` 含 P 的账号类型（**原生**），加上 `protocols` 含 Q 且核心有 `P→Q` 转换器的账号类型（**需转换**）
+2. 候选账号 = 分组内、属于候选账号类型、可调度、未冷却的账号；优先级、粘性会话、并发槽位、失败切换规则不变
+3. 对选中的账号：
+   - 原生：请求体原样交给**账号类型所属插件**的 `BuildUpstreamRequest`（`meta.protocol = P`），响应原样返回
+   - 需转换：核心先把请求体 `P→Q`，再调用插件（`meta.protocol = Q`），上游响应（含流式）由核心 `Q→P` 转回客户端格式
+   - 同一账号类型既原生支持 P 又能转换时，按原生处理
+4. 错误分类由账号类型所属插件负责；返回给客户端的错误格式始终是端点的 `errorFormat`
+5. 用量提取：账号类型为该协议声明了 `usage` 就用它，否则用声明该协议端点的平台的 `usage`
+
+**协议转换器**
+
+- 核心内置 Go 实现，接口 `Converter{From, To; Request(body); Response(stream) }`，按 `(P, Q)` 注册；流式转换逐个 SSE 事件处理，不经过插件
+- 本期实现转换器框架和调度逻辑；具体的协议对（如 `anthropic.messages ↔ openai.chat`）在出现对应上游的账号类型时补充
+- 转换后的用量按上游协议 Q 的规则提取，计费不受影响
+
+**计费**：见 7.3 "定价范围"——价格只按模型全局设置，与平台、账号类型无关。
+
+**凭证授权**：`accounts.credentials` 的范围从"本平台账号"改为"本插件声明的账号类型的账号"（`scope: {"types": "own"}`）。插件只能拿到自己账号类型的凭证。
+
+**控制台**：新建账号时先选账号类型（显示所属插件和支持的端点），再填插件提供的表单；分组可以选择任意类型的账号；账号列表显示"类型（插件）"和"可服务的端点"。
 
 ---
 
@@ -879,6 +938,12 @@ CREATE TABLE balance_ledger (
 | **表达式** | 按上下文长度分档、按请求参数加价、时段折扣、固定费 + token 费 | 可视化阶梯编辑器，或直接编写表达式 | 任意合法表达式 |
 
 三种方式最终都保存为一条表达式，**计费只以表达式为准**；"按次"和"按 token"只是表达式的可视化编辑方式。
+
+#### 定价范围（2026-09-24 决定）
+
+- **价格只按模型全局设置**：同一个模型不论由哪个平台的端点、哪种账号类型提供服务，都用同一个价格；价格表不区分平台
+- 价格表达式算出的是**基础价格**，之后只能通过倍率调整（本期为分组倍率）
+- 插件可以提供默认价格；同一模型有多个插件默认价格时，以最早安装的插件为准，管理员价格始终优先
 
 #### 表达式语言（v1）
 

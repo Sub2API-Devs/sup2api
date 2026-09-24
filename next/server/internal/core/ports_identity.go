@@ -100,8 +100,7 @@ type APIKeyAuthenticator interface {
 type AccountRef struct {
 	ID             int64
 	Name           string
-	PluginKey      string
-	Platform       string
+	PluginKey      string // declaring plugin of the account type
 	Type           string
 	Priority       int
 	MaxConcurrency int
@@ -120,8 +119,8 @@ type Account struct {
 // from a per-node snapshot invalidated by account:changed.
 type AccountDirectory interface {
 	// Candidates returns active, schedulable accounts of the group whose
-	// platform is in platforms, excluding cooling-down ones.
-	Candidates(ctx context.Context, groupID int64, platforms []string) ([]AccountRef, error)
+	// account type is in types, excluding cooling-down ones.
+	Candidates(ctx context.Context, groupID int64, types []AccountTypeKey) ([]AccountRef, error)
 	// Load returns one account with decrypted credentials.
 	Load(ctx context.Context, id int64) (*Account, error)
 	IsCoolingDown(ctx context.Context, id int64) (bool, error)

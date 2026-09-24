@@ -62,13 +62,37 @@ type PlatformBinding struct {
 	Client   PlatformPlugin
 }
 
+// AccountTypeKey identifies an account type: the declaring plugin and the
+// type id (ARCHITECTURE 6.6).
+type AccountTypeKey struct {
+	PluginKey string
+	Type      string
+}
+
+// AccountTypeBinding is one account type of an enabled plugin. Client is the
+// declaring plugin: it validates credentials, builds upstream requests and
+// classifies errors for accounts of this type.
 type AccountTypeBinding struct {
 	Plugin     PluginInfo
-	Platform   string
 	Type       manifest.AccountType
 	FormSchema json.RawMessage // resolved from the package when form.mode=schema
 	FormUI     json.RawMessage
-	Validator  PlatformPlugin
+	Client     PlatformPlugin
+}
+
+// Key returns the account type key.
+func (b AccountTypeBinding) Key() AccountTypeKey {
+	return AccountTypeKey{PluginKey: b.Plugin.Key, Type: b.Type.ID}
+}
+
+// Protocol returns the native protocol entry for protocol, if any.
+func (b AccountTypeBinding) Protocol(protocol string) (manifest.AccountProtocol, bool) {
+	for _, p := range b.Type.Protocols {
+		if p.Protocol == protocol {
+			return p, true
+		}
+	}
+	return manifest.AccountProtocol{}, false
 }
 
 type HookBinding struct {
@@ -103,11 +127,15 @@ type Generation interface {
 	Plugins() []PluginInfo
 	Plugin(key string) (PluginInfo, bool)
 	Endpoints() []EndpointBinding
-	// PlatformsForProtocol lists enabled platforms claiming the protocol.
+	// PlatformsForProtocol lists enabled platforms claiming the protocol
+	// (their defaults: request fields, pass headers, usage, sticky rules).
 	PlatformsForProtocol(protocol string) []PlatformBinding
 	Platform(platformID string) (PlatformBinding, bool)
 	AccountTypes() []AccountTypeBinding
-	AccountType(platform, accountType string) (AccountTypeBinding, bool)
+	AccountType(pluginKey, typeID string) (AccountTypeBinding, bool)
+	// AccountTypesForProtocol lists account types that natively serve the
+	// protocol (conversion is decided by the gateway).
+	AccountTypesForProtocol(protocol string) []AccountTypeBinding
 	Hooks(point string) []HookBinding // sorted by order
 	Scheduler(pluginKey string) (SchedulerPlugin, bool)
 	Routes(pluginKey string) []RouteBinding

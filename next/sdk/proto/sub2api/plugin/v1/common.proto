@@ -29,10 +29,10 @@ message BodyPatch {
 message Account {
   int64 id = 1;
   string name = 2;
-  string platform = 3;
-  string type = 4;
+  string platform = 3;         // platform of the client endpoint serving this request
+  string type = 4;             // account type id, declared by the called plugin
   // Decrypted credentials, only present when the plugin holds the
-  // accounts.credentials grant for this platform.
+  // accounts.credentials grant (its own account types).
   string credentials_json = 5;
   // Non-sensitive settings (base_url, model_mapping ...).
   string settings_json = 6;
@@ -49,13 +49,17 @@ message Caller {
 // RequestMeta describes one gateway request.
 message RequestMeta {
   string request_id = 1;
-  string protocol = 2;       // e.g. "anthropic.messages"
+  // Protocol the upstream request must speak, e.g. "anthropic.messages".
+  // Differs from client_protocol when the core converts the request.
+  string protocol = 2;
   string model = 3;
   bool stream = 4;
   int64 user_id = 5;
   int64 api_key_id = 6;
   int64 group_id = 7;
   string client_ip = 8;
+  // Protocol of the client-facing endpoint (ARCHITECTURE 6.6).
+  string client_protocol = 9;
 }
 
 // FieldError reports a validation problem on one input field.

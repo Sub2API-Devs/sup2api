@@ -244,7 +244,8 @@ type BuildUpstreamRequestRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Meta    *RequestMeta           `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
 	Account *Account               `protobuf:"bytes,2,opt,name=account,proto3" json:"account,omitempty"`
-	// Values of manifest.platform.requestFields, JSON-encoded, keyed by path.
+	// Values of the request fields (account type protocol override, else the
+	// platform default), JSON-encoded, keyed by path.
 	Fields map[string]string `protobuf:"bytes,3,rep,name=fields,proto3" json:"fields,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// Client headers from the host allow-list (lower-cased names).
 	InboundHeaders map[string]string `protobuf:"bytes,4,rep,name=inbound_headers,json=inboundHeaders,proto3" json:"inbound_headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`

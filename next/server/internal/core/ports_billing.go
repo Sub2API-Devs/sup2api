@@ -11,10 +11,10 @@ import (
 
 // ============================================================ billing (owner: B billing)
 
-// PriceRule is a resolved model_prices row.
+// PriceRule is a resolved model_prices row. Prices are global per model
+// (ARCHITECTURE 7.3): the base price, adjusted only by multipliers.
 type PriceRule struct {
 	ID          int64
-	Platform    string
 	Pattern     string
 	Mode        string // per_request | per_token | expression
 	Expression  string
@@ -28,7 +28,7 @@ type PriceRule struct {
 type Pricer interface {
 	// Resolve returns ErrPriceNotConfigured when nothing matches and the
 	// missing-price policy is "reject"; (nil, nil) when policy is "free".
-	Resolve(ctx context.Context, platform, model string) (*PriceRule, error)
+	Resolve(ctx context.Context, model string) (*PriceRule, error)
 	Inputs(rule *PriceRule) (bodyPaths []string, headerNames []string)
 }
 
@@ -81,41 +81,45 @@ type UsageTokens struct {
 // submitted to the Settler, which persists usage_logs, bills and emits
 // usage.recorded asynchronously.
 type UsageRecord struct {
-	RequestID      string
-	UserID         int64
-	APIKeyID       int64
-	GroupID        int64
-	AccountID      *int64
-	PluginKey      string
-	PluginVersion  string
-	Platform       string
-	Protocol       string
-	Endpoint       string
-	Model          string
-	UpstreamModel  string
-	Stream         bool
-	StatusCode     int
-	Success        bool
-	ErrorType      string // see usage_logs.error_type
-	ErrorMessage   string
-	Attempts       int
-	UsageSemantics string // exclusive | inclusive
-	Tokens         UsageTokens
-	Metrics        map[string]any // plugin usage facts for u("key")
-	StickyRule     string
-	StickyHit      bool
-	HookDecisions  []HookDecision
-	Billable       bool              // false for endpoint billing=free or zero usage
-	Price          *PriceRule        // nil when not billable or free policy
-	PriceParams    map[string]string // body path -> raw JSON value captured at request time
-	PriceHeaders   map[string]string // lower-case header -> value captured at request time
-	RateMultiplier decimal.Decimal
-	LatencyMs      int
-	FirstTokenMs   int
-	ClientIP       string
-	UserAgent      string
-	NodeID         string
-	CreatedAt      time.Time // request start; time functions evaluate against it
+	RequestID     string
+	UserID        int64
+	APIKeyID      int64
+	GroupID       int64
+	AccountID     *int64
+	PluginKey     string
+	PluginVersion string
+	Platform      string // platform of the client endpoint
+	Protocol      string // protocol of the client endpoint
+	AccountType   string // type id of the account (declared by PluginKey)
+	// UpstreamProtocol is the protocol sent upstream; differs from Protocol
+	// when the core converted the request (ARCHITECTURE 6.6).
+	UpstreamProtocol string
+	Endpoint         string
+	Model            string
+	UpstreamModel    string
+	Stream           bool
+	StatusCode       int
+	Success          bool
+	ErrorType        string // see usage_logs.error_type
+	ErrorMessage     string
+	Attempts         int
+	UsageSemantics   string // exclusive | inclusive
+	Tokens           UsageTokens
+	Metrics          map[string]any // plugin usage facts for u("key")
+	StickyRule       string
+	StickyHit        bool
+	HookDecisions    []HookDecision
+	Billable         bool              // false for endpoint billing=free or zero usage
+	Price            *PriceRule        // nil when not billable or free policy
+	PriceParams      map[string]string // body path -> raw JSON value captured at request time
+	PriceHeaders     map[string]string // lower-case header -> value captured at request time
+	RateMultiplier   decimal.Decimal
+	LatencyMs        int
+	FirstTokenMs     int
+	ClientIP         string
+	UserAgent        string
+	NodeID           string
+	CreatedAt        time.Time // request start; time functions evaluate against it
 }
 
 type HookDecision struct {

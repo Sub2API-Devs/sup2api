@@ -138,10 +138,10 @@ type Account struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	Id       int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	Name     string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Platform string                 `protobuf:"bytes,3,opt,name=platform,proto3" json:"platform,omitempty"`
-	Type     string                 `protobuf:"bytes,4,opt,name=type,proto3" json:"type,omitempty"`
+	Platform string                 `protobuf:"bytes,3,opt,name=platform,proto3" json:"platform,omitempty"` // platform of the client endpoint serving this request
+	Type     string                 `protobuf:"bytes,4,opt,name=type,proto3" json:"type,omitempty"`         // account type id, declared by the called plugin
 	// Decrypted credentials, only present when the plugin holds the
-	// accounts.credentials grant for this platform.
+	// accounts.credentials grant (its own account types).
 	CredentialsJson string `protobuf:"bytes,5,opt,name=credentials_json,json=credentialsJson,proto3" json:"credentials_json,omitempty"`
 	// Non-sensitive settings (base_url, model_mapping ...).
 	SettingsJson  string `protobuf:"bytes,6,opt,name=settings_json,json=settingsJson,proto3" json:"settings_json,omitempty"`
@@ -292,17 +292,21 @@ func (x *Caller) GetLocale() string {
 
 // RequestMeta describes one gateway request.
 type RequestMeta struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	Protocol      string                 `protobuf:"bytes,2,opt,name=protocol,proto3" json:"protocol,omitempty"` // e.g. "anthropic.messages"
-	Model         string                 `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
-	Stream        bool                   `protobuf:"varint,4,opt,name=stream,proto3" json:"stream,omitempty"`
-	UserId        int64                  `protobuf:"varint,5,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	ApiKeyId      int64                  `protobuf:"varint,6,opt,name=api_key_id,json=apiKeyId,proto3" json:"api_key_id,omitempty"`
-	GroupId       int64                  `protobuf:"varint,7,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
-	ClientIp      string                 `protobuf:"bytes,8,opt,name=client_ip,json=clientIp,proto3" json:"client_ip,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	RequestId string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	// Protocol the upstream request must speak, e.g. "anthropic.messages".
+	// Differs from client_protocol when the core converts the request.
+	Protocol string `protobuf:"bytes,2,opt,name=protocol,proto3" json:"protocol,omitempty"`
+	Model    string `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
+	Stream   bool   `protobuf:"varint,4,opt,name=stream,proto3" json:"stream,omitempty"`
+	UserId   int64  `protobuf:"varint,5,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	ApiKeyId int64  `protobuf:"varint,6,opt,name=api_key_id,json=apiKeyId,proto3" json:"api_key_id,omitempty"`
+	GroupId  int64  `protobuf:"varint,7,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	ClientIp string `protobuf:"bytes,8,opt,name=client_ip,json=clientIp,proto3" json:"client_ip,omitempty"`
+	// Protocol of the client-facing endpoint (ARCHITECTURE 6.6).
+	ClientProtocol string `protobuf:"bytes,9,opt,name=client_protocol,json=clientProtocol,proto3" json:"client_protocol,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *RequestMeta) Reset() {
@@ -387,6 +391,13 @@ func (x *RequestMeta) GetGroupId() int64 {
 func (x *RequestMeta) GetClientIp() string {
 	if x != nil {
 		return x.ClientIp
+	}
+	return ""
+}
+
+func (x *RequestMeta) GetClientProtocol() string {
+	if x != nil {
+		return x.ClientProtocol
 	}
 	return ""
 }
@@ -479,7 +490,7 @@ const file_sub2api_plugin_v1_common_proto_rawDesc = "" +
 	"\n" +
 	"request_id\x18\x02 \x01(\tR\trequestId\x12\x1b\n" +
 	"\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x16\n" +
-	"\x06locale\x18\x04 \x01(\tR\x06locale\"\xe5\x01\n" +
+	"\x06locale\x18\x04 \x01(\tR\x06locale\"\x8e\x02\n" +
 	"\vRequestMeta\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x1a\n" +
@@ -490,7 +501,8 @@ const file_sub2api_plugin_v1_common_proto_rawDesc = "" +
 	"\n" +
 	"api_key_id\x18\x06 \x01(\x03R\bapiKeyId\x12\x19\n" +
 	"\bgroup_id\x18\a \x01(\x03R\agroupId\x12\x1b\n" +
-	"\tclient_ip\x18\b \x01(\tR\bclientIp\"P\n" +
+	"\tclient_ip\x18\b \x01(\tR\bclientIp\x12'\n" +
+	"\x0fclient_protocol\x18\t \x01(\tR\x0eclientProtocol\"P\n" +
 	"\n" +
 	"FieldError\x12\x14\n" +
 	"\x05field\x18\x01 \x01(\tR\x05field\x12\x12\n" +
