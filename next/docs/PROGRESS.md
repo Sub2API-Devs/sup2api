@@ -127,6 +127,8 @@ HTTP 挂载：`/healthz`（节点自我隔离时 503）→ `httpapi.NewRouter` �
 
 **测试服务器 ovh**（`ssh ovh`，15.204.107.38，Debian 13，Docker 29 + Compose v5；机器上有大量其他服务，**只许动 `~/sub2api-next-test/` 与 `sub2api-next-*` 项目**，所有组件只用 docker compose）
 
+> **2026-09-24 起 ovh 上只运行 `sup2api` 一个服务（用户要求不要启动多个服务）**。`sub2api-next-test`（3120）与 `sub2api-next-testdb`（45432/36379）已 `docker compose down`（数据卷保留）。需要跑 e2e 或数据库单测时先征得用户同意再临时启动，用完即停。
+
 | compose 项目 | 目录 | 内容 | 端口（仅本机回环） |
 |---|---|---|---|
 | sub2api-next-testdb | `~/sub2api-next-test/testdb` | postgres:16（密码 sub2api）、redis:7 | 127.0.0.1:45432、127.0.0.1:36379 |
