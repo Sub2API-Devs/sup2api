@@ -364,7 +364,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 
 **manifest**：`accountTypes` 移到顶层（任何插件都可声明），每个账号类型有 `protocols: [{protocol, requestFields?, passHeaders?, usage?}]`，列出上游原生支持的协议；`platform` 不再含 `accountTypes`；`pricing[]` 不再有 `platform`。声明账号类型需要 capability `platform.adapter.v1` 和宿主权限 `platform.register`。
 
-**core**：`AccountTypeKey{PluginKey, Type}`；`AccountTypeBinding{Plugin, Type, FormSchema, FormUI, Client}`（`Client` 为声明插件）；`Generation.AccountType(pluginKey, typeID)`、`AccountTypesForProtocol(protocol)`；`AccountRef` 去掉 `Platform`；`AccountDirectory.Candidates(ctx, groupID, []AccountTypeKey)`；`Pricer.Resolve(ctx, model)`；`PriceCatalog.SyncPluginDefaults(ctx, tx, pluginKey, entries)`；`UsageRecord` 新增 `AccountType`、`UpstreamProtocol`，`Platform`/`Protocol` 为客户端端点的平台和协议，`PluginKey` 为账号类型所属插件。
+**core**：`AccountTypeKey{PluginKey, Type}`；`ProtocolConverters.CanConvert(clientProtocol, upstreamProtocol)`（网关实现，账号模块用来列出经转换可服务的端点）；`AccountTypeBinding{Plugin, Type, FormSchema, FormUI, Client}`（`Client` 为声明插件）；`Generation.AccountType(pluginKey, typeID)`、`AccountTypesForProtocol(protocol)`；`AccountRef` 去掉 `Platform`；`AccountDirectory.Candidates(ctx, groupID, []AccountTypeKey)`；`Pricer.Resolve(ctx, model)`；`PriceCatalog.SyncPluginDefaults(ctx, tx, pluginKey, entries)`；`UsageRecord` 新增 `AccountType`、`UpstreamProtocol`，`Platform`/`Protocol` 为客户端端点的平台和协议，`PluginKey` 为账号类型所属插件。
 
 **proto**：`RequestMeta.protocol` = 发给上游的协议；新增 `RequestMeta.client_protocol` = 客户端端点协议；`Account.platform` = 客户端端点所属平台，`Account.type` = 账号类型 id。
 

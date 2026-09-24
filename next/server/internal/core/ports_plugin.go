@@ -151,3 +151,10 @@ type PluginRegistry interface {
 	// OnChange is invoked (synchronously, in order) after each switch.
 	OnChange(fn func(Generation)) (cancel func())
 }
+
+// ProtocolConverters (owner: gateway) reports which protocol pairs the core
+// can convert (ARCHITECTURE 6.6): a client endpoint speaking clientProtocol
+// can be served by an account type whose upstream speaks upstreamProtocol.
+type ProtocolConverters interface {
+	CanConvert(clientProtocol, upstreamProtocol string) bool
+}
