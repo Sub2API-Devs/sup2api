@@ -26,20 +26,6 @@ type TestResult struct {
 	Message   string `json:"message"`
 }
 
-func (s *Service) platformClient(platform, typ string) (core.PlatformPlugin, bool) {
-	g := s.gen()
-	if g == nil {
-		return nil, false
-	}
-	if pb, ok := g.Platform(platform); ok && pb.Client != nil {
-		return pb.Client, true
-	}
-	if bt, ok := g.AccountType(platform, typ); ok && bt.Validator != nil {
-		return bt.Validator, true
-	}
-	return nil, false
-}
-
 func (s *Service) test(c *gin.Context) {
 	ctx := c.Request.Context()
 	id, ok := httpapi.PathID(c, "id")
@@ -60,21 +46,23 @@ func (s *Service) test(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	client, ok := s.platformClient(a.Platform, a.Type)
-	if !ok {
+	bt, ok := s.accountType(a.PluginKey, a.Type)
+	if !ok || bt.Client == nil {
 		httpapi.Fail(c, core.ErrPluginUnavailable.WithMessage(t(ctx,
-			"the plugin providing this platform is not enabled", "提供该平台的插件未启用")))
+			"the plugin providing this account type is not enabled", "提供该账号类型的插件未启用")))
 		return
 	}
-	plain, err := s.decrypt(a.Platform, a.CredEnc)
+	plain, err := s.decrypt(a.PluginKey, a.CredEnc)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
 	ctx, cancel := context.WithTimeout(ctx, testTimeout)
 	defer cancel()
-	req, err := client.BuildTestRequest(ctx, &pluginv1.BuildTestRequestRequest{
-		Account: &pluginv1.Account{Id: a.ID, Name: a.Name, Platform: a.Platform, Type: a.Type,
+	// A test request is not served by a client endpoint, so Account.platform
+	// is empty; the declaring plugin builds a request for the account type.
+	req, err := bt.Client.BuildTestRequest(ctx, &pluginv1.BuildTestRequestRequest{
+		Account: &pluginv1.Account{Id: a.ID, Name: a.Name, Type: a.Type,
 			CredentialsJson: string(plain), SettingsJson: string(a.Settings)},
 		Model: in.Model,
 	})

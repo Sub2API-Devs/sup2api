@@ -1,5 +1,5 @@
-// Package account implements upstream accounts: account types contributed by
-// platform plugins, account CRUD with encrypted credentials, the console
+// Package account implements upstream accounts: account types declared by
+// plugins (identified by plugin key + type id), account CRUD with encrypted credentials, the console
 // "test account" action, and the gateway's core.AccountDirectory.
 package account
 
@@ -29,6 +29,9 @@ type Deps struct {
 	Events   core.EventPublisher
 	Slots    core.Slots // optional: in_use column is 0 without it
 	Bus      core.Bus   // optional: single node without it
+	// Converters reports the protocol pairs the gateway can convert; optional
+	// (nil: account types only list the endpoints they serve natively).
+	Converters core.ProtocolConverters
 	// AllowPrivateUpstream disables the private-address guard of the test
 	// action (config SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM).
 	AllowPrivateUpstream bool
@@ -85,7 +88,7 @@ func New(d Deps) *Service {
 // RegisterRoutes mounts the account and account type endpoints.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("GET", "/account-types", "account:read", s.listTypes)
-	r.Perm("GET", "/account-types/:platform/:type/form", "account:read", s.typeForm)
+	r.Perm("GET", "/account-types/:plugin_key/:type/form", "account:read", s.typeForm)
 	r.Perm("GET", "/accounts", "account:read", s.list)
 	r.Perm("POST", "/accounts", "account:create", s.create)
 	r.Perm("GET", "/accounts/:id", "account:read", s.get)
@@ -149,12 +152,12 @@ func (s *Service) gen() core.Generation {
 	return s.d.Registry.Current()
 }
 
-func (s *Service) accountType(platform, typ string) (core.AccountTypeBinding, bool) {
+func (s *Service) accountType(pluginKey, typ string) (core.AccountTypeBinding, bool) {
 	g := s.gen()
 	if g == nil {
 		return core.AccountTypeBinding{}, false
 	}
-	return g.AccountType(platform, typ)
+	return g.AccountType(pluginKey, typ)
 }
 
 func (s *Service) pluginActive(key string) bool {
