@@ -3,7 +3,8 @@
 One sub2api-next node with its own PostgreSQL 16, Redis 7 and the signed plugin
 market bundled in the image, all started by docker compose (project `sup2api`).
 PostgreSQL, Redis and the market are reachable only inside the project network;
-the service is published on `127.0.0.1:3130` for a reverse proxy.
+the service is published on `127.0.0.1:3130` by default; set
+`SUP2API_BIND=0.0.0.0` in `.env` to expose it on all interfaces.
 
 | Path on the server | What |
 |---|---|
