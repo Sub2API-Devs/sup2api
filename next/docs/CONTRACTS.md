@@ -161,6 +161,11 @@
 
 价格表达式校验失败时 `details.fields[].message` 为 `{en, zh}`；表达式错误额外带 `detail`（位置信息）。结算时捕获的参数、请求头和 usage 口径存在 `usage_logs.billing_detail.inputs`。
 
+- `/prices/preview` 的 `usage` 是按 exclusive 口径填写的 token 数（`p` 不含缓存），服务端按结算同样的规则归一化（ARCHITECTURE §7.3），所以试算结果与实际扣费一致
+- 保存价格时，若表达式触发大额费用警告（`big_cost_warning_usd`），返回 400 `invalid_argument` 且 `details.confirmation_required=true`（附 `warnings`），前端二次确认后带 `confirm:true` 重新提交
+- 列表接口 `/usage` 不含价格追溯字段；`price_id`、`expr_hash`、`billing_detail` 只在 `GET /usage/:id`、`/me/usage/:id` 返回
+- 价格历史 `/prices/history/:expr_hash` 的 `expression` 为规范形式 `v1:<body>`；`/prices/:id` 保留录入时的文本，两者 `expr_hash` 相同
+
 ### 5.6 粘性会话（G 实现调度；规则 CRUD 由 G 负责）
 
 | 方法 路径 | 权限 |
@@ -203,6 +208,10 @@
 - `/nodes` 与插件详情中每个节点的插件状态字段为 `state`（`pending|ready|active|failed`）
 - 市场源 `url` 可以指向 `index.json`，也可以是以 `/` 结尾的目录（自动补 `index.json`）
 - 插件详情中的钩子统计来自 `core.HookStatsSource`（G），手动执行任务通过 `core.JobTrigger`（H）
+- 发布行为（C2）：Disable 立即提交，返回时状态已是 `disabled`；Enable 优先启用 `active_version`，否则取最新的已批准版本；`plugins` 行删除后，各节点在一次对账内停止实例
+- 升级包的宿主权限没有新增或扩大时，上传即沿用原授权（版本直接为 `approved`）；否则进入 `awaiting_consent`，旧版本继续运行
+- 插件设置：GET `/plugins/:key/settings` → `{schema, ui_schema, values}`；PUT 请求体 `{values:{...}}`
+- `/ui/plugins` 每项另含 `host_ui_compat`
 
 `review` 结构：`{plugin_key, version, name, publisher, trust, signature_status, host_compat_ok, capabilities[], gateway_endpoints[], platform:{id, protocols, account_types[]}, hooks[], jobs[], events[], routes[], menus[], user_permissions[], database:{schema, migrations[]}, resources, external_services[], host_permissions:[{id, risk, scope, reason, optional, requires:"plugin:grant:high|critical"}], diff?:{added[], widened[], removed[]}}`。
 
@@ -243,9 +252,14 @@
 | `sticky:{rule}:{group}:{model}:{hash}` | STRING account_id，TTL | G |
 | `sticky:stats:{rule}` | HASH hits/misses/rebinds | G |
 | `plugin:kv:{plugin_key}:{ns}:{key}` | STRING | C |
-| `hook:breaker:{plugin}:{hook}` | STRING | G |
+| `hook:breaker:{plugin}:{hook}` | STRING 熔断截止毫秒时间戳，TTL 30s | G |
+| `hook:stats:{plugin}:{hook}` | HASH 调用/拒绝/超时/错误计数与延迟桶，TTL 7d | G |
+| `hook:statidx:{plugin}` | SET 该插件出现过的钩子 id，TTL 7d | G |
+| `plugin:ledger:{key}:{credit\|debit}:{yyyymmdd}` | STRING 插件当日入账/扣款累计，TTL 48h | C2 |
 
-广播频道：`plugin:events`、`authz:changed`、`account:changed`、`config:changed`（`core/ports_cluster.go`）。权限版本以 PG `authz_meta` 为准，Redis 不存。`config:changed` payload：代理 `{"type":"proxy","id":N}`，插件配置 `{"type":"config","plugin_key":k}`。
+广播频道：`plugin:events`、`authz:changed`、`account:changed`、`config:changed`（`core/ports_cluster.go`）。权限版本以 PG `authz_meta` 为准，Redis 不存。`config:changed` payload：代理 `{"type":"proxy","id":N}`，插件配置 `{"type":"config","plugin_key":k}`。`plugin:events` payload：`{"type":"rollout"|"config","plugin_key","rollout_id"?}`。
+
+节点插件状态（`node:plugins:{boot_id}` 每个插件一个 JSON，C2 写、C1 与控制台读）：`{state, serving, standby?, rollout_id?, rollout?, error?, instances:[{version, state, error?, restarts}]}`。`state` 汇总本节点：有进行中的发布时等于 `rollout`（`pending|ready|active|failed`），否则按在服务的实例为 `active|pending|failed`，没有在服务的版本为 `stopped`。
 
 槽位回收（D）要求 Redis 为单实例（非 Cluster），且各节点时钟经 NTP 同步。
 
@@ -326,7 +340,18 @@ Anthropic 的 `cache_creation_input_tokens` 是总量（含 1 小时缓存）。
 
 - 请求 ID 一律服务端生成（客户端的 `X-Request-Id` 只记录，不作计费幂等键）
 - 已安装但未启用的插件，其声明的网关端点返回 503 `plugin_unavailable`
+- 错误格式：`plain` 即核心 REST 格式 `{"error":{code,message}}`；`anthropic` 格式在 `error` 中额外带 `code`（如钩子拒绝时的 `guard_blocked`）
+- 所有尝试都失败时：最后一次是上游错误则返回该错误（按 ClassifyError 的状态码与类型）；是插件或账号问题返回 503 `no_available_account`；有账号但并发槽位全满返回 429
+- `usage_logs.error_type` 取值另含 `model_not_allowed`、`price_not_configured`、`rate_limited`、`invalid_request`、`plugin_unavailable`、`blocked_by_hook`
+- 钩子熔断按节点计数：同一钩子在本节点连续失败 10 次后熔断 30 秒
 - 测试环境的市场地址为内网 `http://caddy:3120/market/index.json`（市场客户端目前不过滤内网地址；市场源只有 `publisher:manage` 能配置）
+
+### 11.7 插件调用超时（C2）与任务、事件（H）
+
+- 超时：控制台路径的平台调用（ValidateCredentials、BuildTestRequest）10 秒，请求热路径 2 秒，调度扩展点 200 毫秒，钩子按 manifest 且最多 2 秒
+- 数据迁移 `MigrateData` 在协调者被接管后可能重复执行，插件必须保证幂等
+- 任务 cron 默认按 UTC 计算（可用 `CRON_TZ=` 前缀指定时区）；`@every` 的触发时间对齐到周期整数倍，各节点一致；每个触发时间点全集群只执行一次
+- 事件投递至少一次：`OnEvents` 返回的确认 id 没有超过游标时按失败处理（退避，连续 10 次失败的批次进入死信）；新订阅从当前最大事件开始，不回放历史
 
 ### 11.4 测试用 mock 上游（QA 实现）
 

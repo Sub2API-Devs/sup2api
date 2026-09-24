@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -147,7 +148,9 @@ func TestAC08_BillingModes(t *testing.T) {
 	for model, id := range prices {
 		p := admin.OK(t, http.MethodGet, fmt.Sprintf("/prices/%d", id), nil)
 		h := admin.OK(t, http.MethodGet, "/prices/history/"+p.Get("expr_hash").String(), nil)
-		if h.Get("expression").String() != p.Get("expression").String() {
+		// History stores the canonical "v1:<body>" form; prices keep the text as entered.
+		canon := func(s string) string { return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(s), "v1:")) }
+		if h.Get("expr_hash").String() != p.Get("expr_hash").String() || canon(h.Get("expression").String()) != canon(p.Get("expression").String()) {
 			t.Fatalf("history for %s: %s", model, h.Raw)
 		}
 	}
