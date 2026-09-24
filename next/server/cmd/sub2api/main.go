@@ -15,6 +15,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/migrations"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/sandbox"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -69,8 +70,5 @@ func main() {
 	_ = srv.Shutdown(shutdownCtx)
 }
 
-// runPluginExec is replaced by the sandbox launcher implementation (owner: D).
-var runPluginExec = func(args []string) int {
-	slog.Error("plugin-exec not implemented")
-	return 1
-}
+// runPluginExec is the sandbox launcher child (see plugin/sandbox).
+var runPluginExec = sandbox.RunExec
