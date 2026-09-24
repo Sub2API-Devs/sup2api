@@ -2,6 +2,7 @@
 // publishers. (Accounts and account types live in their own mock module.)
 import { fail, needStepUp, nextId, noContent, now, on, paginate, type MockRequest } from './router'
 import { ALL_PERMISSIONS } from './core'
+import { groupAccountCount, groupPlatforms } from './accounts'
 
 type L = { en: string; zh: string }
 const L = (en: string, zh: string): L => ({ en, zh })
@@ -176,11 +177,14 @@ interface MockGroup {
 const groups: MockGroup[] = [
   { id: 1, name: 'default', description: 'Default group for everyone', status: 'active', rate_multiplier: '1', visibility: 'public', model_allowlist: [], account_count: 8, created_at: now(-86400 * 60) },
   { id: 2, name: 'vip', description: 'Discounted Claude access', status: 'active', rate_multiplier: '0.8', visibility: 'restricted', model_allowlist: ['claude-*'], account_count: 3, created_at: now(-86400 * 30) },
-  { id: 3, name: 'haiku-only', description: 'Cheap models for batch jobs', status: 'disabled', rate_multiplier: '0.5', visibility: 'restricted', model_allowlist: ['claude-3-5-haiku*', 'claude-haiku-4*'], account_count: 1, created_at: now(-86400 * 5) }
+  { id: 3, name: 'haiku-only', description: 'Cheap models for batch jobs', status: 'disabled', rate_multiplier: '0.5', visibility: 'restricted', model_allowlist: ['claude-3-5-haiku*', 'claude-haiku-4*'], account_count: 1, created_at: now(-86400 * 5) },
+  { id: 4, name: 'gemini-trial', description: 'Planned Gemini access (no accounts yet)', status: 'active', rate_multiplier: '1', visibility: 'public', model_allowlist: ['gemini-*'], account_count: 0, created_at: now(-86400 * 1) }
 ]
 
+// account_count and platforms come from the accounts mock (CONTRACTS §13);
+// the key count uses the server spelling api_key_count.
 function groupOut(g: MockGroup) {
-  return { ...g, key_count: keys.filter((k) => k.group_id === g.id).length }
+  return { ...g, account_count: groupAccountCount(g.id), platforms: groupPlatforms(g.id), api_key_count: keys.filter((k) => k.group_id === g.id).length }
 }
 
 function validateGroup(b: any) {
@@ -358,7 +362,7 @@ const keys: MockKey[] = [
 ]
 
 function keyOut(k: MockKey) {
-  return { ...k, user_email: users.find((u) => u.id === k.user_id)?.email, group_name: groups.find((g) => g.id === k.group_id)?.name }
+  return { ...k, user_email: users.find((u) => u.id === k.user_id)?.email, group_name: groups.find((g) => g.id === k.group_id)?.name, platforms: groupPlatforms(k.group_id) }
 }
 
 function randomToken(n: number) {

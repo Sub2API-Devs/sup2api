@@ -2,6 +2,7 @@
 // grants, settings, resources, egress, jobs, events) and the plugin market.
 // /ui/plugins and /p/<key>/... live in pluginui.ts; publishers are not here.
 import { fail, needStepUp, noContent, now, on, paginate } from './router'
+import { pluginPlatforms } from './platforms'
 
 type Any = Record<string, any>
 
@@ -61,22 +62,14 @@ function anthropicManifest(version: string): Any {
     key: 'anthropic',
     version,
     publisher: 'sub2api',
-    description: { en: 'Anthropic platform: Claude API keys and OAuth accounts.', zh: 'Anthropic 平台：Claude API Key 与 OAuth 账号。' },
+    description: { en: 'Anthropic account types: Claude API keys (the anthropic platform is built into the core).', zh: 'Anthropic 账号类型：Claude API Key（anthropic 平台由核心内置）。' },
     hostCompat: '>=0.1.0 <0.2.0',
-    capabilities: [{ id: 'gateway.platform.v1' }, { id: 'platform.adapter.v1' }],
-    platform: {
-      id: 'anthropic',
-      protocols: ['anthropic.messages', 'anthropic.count_tokens']
-    },
-    // Top level since CONTRACTS §12: any plugin can declare account types.
-    account_types: [
-      { id: 'apikey', label: { en: 'API key', zh: 'API Key' }, form_mode: 'schema', protocols: ['anthropic.messages', 'anthropic.count_tokens'] },
-      { id: 'oauth', label: { en: 'Claude OAuth', zh: 'Claude OAuth' }, form_mode: 'schema', protocols: ['anthropic.messages'] }
-    ],
-    gateway_endpoints: [
-      { method: 'POST', path: '/v1/messages', protocol: 'anthropic.messages' },
-      { method: 'POST', path: '/v1/messages/count_tokens', protocol: 'anthropic.count_tokens' }
-    ],
+    capabilities: [{ id: 'platform.adapter.v1' }],
+    // CONTRACTS §13: no platform of its own; its account type supports the
+    // built-in anthropic platform.
+    platforms: [],
+    account_types: [{ id: 'apikey', label: { en: 'API key', zh: 'API Key' }, form_mode: 'schema', platforms: ['anthropic'] }],
+    gateway_endpoints: [],
     resources: { memoryMB: 256, cpu: 0.5, maxProcs: 128, maxOpenFiles: 1024 }
   }
 }
@@ -146,7 +139,7 @@ plugins.set('anthropic', {
     { version: '0.1.0', consent_status: 'approved' },
     { version: '0.2.0', consent_status: 'pending' }
   ],
-  grants: [grant('kv'), grant('platform.register', { platform: 'anthropic' }), grant('gateway.endpoint'), grant('accounts.credentials', { types: 'own' }), grant('net')],
+  grants: [grant('kv'), grant('platform.register'), grant('accounts.credentials', { types: 'own' }), grant('net')],
   manifest: anthropicManifest('0.1.0'),
   settings: null
 })
@@ -169,12 +162,12 @@ plugins.set('foo_platform', {
   settings: null
 })
 
-// Declares only an account type (no platform, no endpoints): its accounts
-// serve /v1/messages through the core anthropic.messages -> openai.chat converter.
-plugins.set('openai_relay', {
-  key: 'openai_relay',
-  name: { en: 'OpenAI-compatible relay', zh: 'OpenAI 兼容中转' },
-  description: { en: 'Relay keys speaking the OpenAI chat protocol.', zh: '使用 OpenAI chat 协议的中转 Key。' },
+// Declares only an account type (no platform of its own): relay_key supports
+// the built-in anthropic platform.
+plugins.set('relay', {
+  key: 'relay',
+  name: { en: 'Relay', zh: '中转' },
+  description: { en: 'Keys of Anthropic-compatible relays.', zh: 'Anthropic 兼容中转站的 Key。' },
   status: 'enabled',
   status_reason: '',
   active_version: '0.3.0',
@@ -186,16 +179,67 @@ plugins.set('openai_relay', {
   versions: [{ version: '0.3.0', consent_status: 'approved' }],
   grants: [grant('kv', null, '0.3.0'), grant('platform.register', null, '0.3.0'), grant('accounts.credentials', { types: 'own' }, '0.3.0'), grant('net', null, '0.3.0')],
   manifest: {
-    key: 'openai_relay',
+    key: 'relay',
     version: '0.3.0',
     publisher: 'relay-labs',
-    description: { en: 'Relay keys speaking the OpenAI chat protocol.', zh: '使用 OpenAI chat 协议的中转 Key。' },
+    description: { en: 'Keys of Anthropic-compatible relays.', zh: 'Anthropic 兼容中转站的 Key。' },
     hostCompat: '>=0.1.0',
     capabilities: [{ id: 'platform.adapter.v1' }],
-    platform: null,
+    platforms: [],
     gateway_endpoints: [],
-    account_types: [{ id: 'chat_key', label: { en: 'Chat Completions key', zh: 'Chat Completions Key' }, form_mode: 'schema', protocols: ['openai.chat'] }]
+    account_types: [{ id: 'relay_key', label: { en: 'Relay key', zh: '中转 Key' }, form_mode: 'schema', platforms: ['anthropic'] }]
   },
+  settings: null
+})
+
+// Declares a new platform (myvideo) with its endpoints and an account type for it.
+function videogenManifest(version: string): Any {
+  return {
+    key: 'videogen',
+    version,
+    publisher: 'video-labs',
+    description: { en: 'Adds the myvideo platform (video generation endpoints) and its account type.', zh: '新增 myvideo 平台（视频生成端点）及其账号类型。' },
+    hostCompat: '>=0.1.0',
+    capabilities: [{ id: 'gateway.platform.v1' }, { id: 'platform.adapter.v1' }],
+    platforms: [
+      {
+        id: 'myvideo',
+        label: { en: 'MyVideo', zh: 'MyVideo 视频' },
+        endpoints: [
+          { method: 'POST', path: '/v1/video/generations', protocol: 'myvideo.generate', billing: 'usage' },
+          { method: 'GET', path: '/v1/video/generations/:id', protocol: 'myvideo.status', billing: 'free' }
+        ]
+      }
+    ],
+    gateway_endpoints: [
+      { method: 'POST', path: '/v1/video/generations', protocol: 'myvideo.generate' },
+      { method: 'GET', path: '/v1/video/generations/:id', protocol: 'myvideo.status' }
+    ],
+    account_types: [{ id: 'video_key', label: { en: 'MyVideo key', zh: 'MyVideo Key' }, form_mode: 'schema', platforms: ['myvideo'] }]
+  }
+}
+
+plugins.set('videogen', {
+  key: 'videogen',
+  name: { en: 'Video generation', zh: '视频生成' },
+  description: videogenManifest('0.2.0').description,
+  status: 'enabled',
+  status_reason: '',
+  active_version: '0.2.0',
+  desired_version: '0.2.0',
+  publisher: 'video-labs',
+  trust: 'verified',
+  egress_policy: 'allow_all',
+  resources: { memory_mb: 128, cpu: 0.25 },
+  versions: [{ version: '0.2.0', consent_status: 'approved' }],
+  grants: [
+    grant('kv', null, '0.2.0'),
+    grant('platform.register', null, '0.2.0'),
+    grant('gateway.endpoint', null, '0.2.0'),
+    grant('accounts.credentials', { types: 'own' }, '0.2.0'),
+    grant('net', null, '0.2.0')
+  ],
+  manifest: videogenManifest('0.2.0'),
   settings: null
 })
 
@@ -213,7 +257,7 @@ function guardReview(version: string, diff?: Any): Any {
     host_compat: '>=0.1.0 <0.2.0',
     capabilities: [{ id: 'gateway.hook.v1' }, { id: 'app.events.v1' }, { id: 'app.jobs.v1' }, { id: 'http.routes.v1' }],
     gateway_endpoints: [],
-    platform: null,
+    platforms: [],
     account_types: [],
     hooks: [
       {
@@ -282,9 +326,9 @@ function anthropicReview(version: string): Any {
     signature_status: 'valid',
     host_compat_ok: true,
     host_compat: '>=0.1.0 <0.2.0',
-    capabilities: [{ id: 'gateway.platform.v1' }, { id: 'platform.adapter.v1' }],
+    capabilities: [{ id: 'platform.adapter.v1' }],
     gateway_endpoints: anthropicManifest(version).gateway_endpoints,
-    platform: anthropicManifest(version).platform,
+    platforms: anthropicManifest(version).platforms,
     account_types: anthropicManifest(version).account_types,
     hooks: [],
     jobs: [{ id: 'refresh_oauth', schedule: '@every 10m' }],
@@ -297,8 +341,7 @@ function anthropicReview(version: string): Any {
     external_services: ['api.anthropic.com', 'console.anthropic.com'],
     host_permissions: [
       { id: 'kv', risk: 'low' },
-      { id: 'platform.register', risk: 'high', scope: { platform: 'anthropic' }, requires: 'plugin:grant:high' },
-      { id: 'gateway.endpoint', risk: 'high', requires: 'plugin:grant:high' },
+      { id: 'platform.register', risk: 'high', requires: 'plugin:grant:high' },
       { id: 'accounts.credentials', risk: 'critical', scope: { types: 'own' }, reason: { en: 'Call the upstream API with account keys', zh: '使用账号密钥调用上游接口' }, requires: 'plugin:grant:critical' },
       { id: 'db.schema', risk: 'high', requires: 'plugin:grant:high' },
       { id: 'jobs', risk: 'medium' },
@@ -310,6 +353,8 @@ function anthropicReview(version: string): Any {
 }
 
 function genericReview(key: string, version: string, name: Any, publisher: string, trust: string): Any {
+  // foo_platform declares the "foo" platform; other generic plugins use their key.
+  const pid = key === 'foo_platform' ? 'foo' : key
   return {
     plugin_key: key,
     version,
@@ -320,11 +365,20 @@ function genericReview(key: string, version: string, name: Any, publisher: strin
     host_compat_ok: key !== 'legacy_tool',
     host_compat: key === 'legacy_tool' ? '>=0.0.1 <0.1.0' : '>=0.1.0',
     capabilities: [{ id: 'gateway.platform.v1' }, { id: 'platform.adapter.v1' }],
-    gateway_endpoints: [{ method: 'POST', path: '/v1/foo/chat', protocol: 'foo.chat' }],
-    platform: { id: key, protocols: ['foo.chat'] },
+    gateway_endpoints: [{ method: 'POST', path: `/v1/${pid}/chat`, protocol: `${pid}.chat` }],
+    platforms: [
+      {
+        id: pid,
+        label: name,
+        endpoints: [
+          { method: 'POST', path: `/v1/${pid}/chat`, protocol: `${pid}.chat`, billing: 'usage' },
+          { method: 'POST', path: `/v1/${pid}/tokens`, protocol: `${pid}.tokens`, billing: 'free' }
+        ]
+      }
+    ],
     account_types: [
-      // manifest-shaped protocols are accepted too
-      { id: 'apikey', label: { en: 'API key', zh: 'API Key' }, form_mode: 'schema', protocols: [{ protocol: 'foo.chat', requestFields: ['model'] }, 'openai.chat'] }
+      // manifest-shaped platform entries are accepted too
+      { id: 'apikey', label: { en: 'API key', zh: 'API Key' }, form_mode: 'schema', platforms: [{ platform: pid, requestFields: ['model'] }, 'openai'] }
     ],
     hooks: [],
     jobs: [],
@@ -338,9 +392,9 @@ function genericReview(key: string, version: string, name: Any, publisher: strin
     host_permissions: [
       { id: 'kv', risk: 'low' },
       { id: 'log', risk: 'low' },
-      { id: 'platform.register', risk: 'high', scope: { platform: key }, requires: 'plugin:grant:high' },
+      { id: 'platform.register', risk: 'high', requires: 'plugin:grant:high' },
       { id: 'gateway.endpoint', risk: 'high', requires: 'plugin:grant:high' },
-      { id: 'accounts.read', risk: 'medium' },
+      { id: 'accounts.credentials', risk: 'critical', scope: { types: 'own' }, requires: 'plugin:grant:critical' },
       { id: 'net', risk: 'high', scope: { domains: ['api.foo.dev'] }, optional: true, requires: 'plugin:grant:high' }
     ]
   }
@@ -498,6 +552,8 @@ function rolloutView(r: MockRollout): Any {
       p.desired_version = p.active_version
     }
     if (phase === 'failed') p.status_reason = error
+    // Plugin platforms exist only while their plugin is enabled.
+    for (const pp of pluginPlatforms) if (pp.plugin_key === p.key) pp.enabled = p.status === 'enabled'
   }
   return {
     id: r.id,

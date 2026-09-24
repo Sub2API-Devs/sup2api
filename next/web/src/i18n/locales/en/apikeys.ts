@@ -1,6 +1,6 @@
 export default {
   myTitle: 'API keys',
-  myDescription: 'Keys for calling the gateway. Each key belongs to one group, which decides models and rate multiplier.',
+  myDescription: 'Keys for calling the gateway. Each key is bound to exactly one group, which decides the platforms (endpoints) it can access, the models and the rate multiplier.',
   allTitle: 'All API keys',
   allDescription: 'API keys of every user.',
   create: 'New API key',

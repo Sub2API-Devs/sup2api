@@ -10,6 +10,7 @@ import { useGroupsLookup } from '@/composables/lookups'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
 import { formatDateTime, formatRelative } from '@/utils/format'
+import KeyGroupCell from './KeyGroupCell.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -20,6 +21,11 @@ const groups = auth.has('group:read') ? useGroupsLookup().groups : ref<Group[]>(
 
 function groupName(k: ApiKey) {
   return k.group_name || groups.value.find((g) => g.id === k.group_id)?.name || `#${k.group_id}`
+}
+
+/** Platforms of the key: reported on the key, else those of its group. */
+function keyPlatforms(k: ApiKey): string[] | undefined {
+  return k.platforms ?? groups.value.find((g) => g.id === k.group_id)?.platforms
 }
 
 const columns = computed<TableColumn[]>(() => {
@@ -98,7 +104,7 @@ async function onAction(k: ApiKey, action: string) {
       <template #cell-key_prefix="{ row }">
         <code class="font-mono text-xs">{{ row.key_prefix }}…</code>
       </template>
-      <template #cell-group="{ row }">{{ groupName(row) }}</template>
+      <template #cell-group="{ row }"><KeyGroupCell :name="groupName(row)" :platforms="keyPlatforms(row)" /></template>
       <template #cell-status="{ row }">
         <SBadge :tone="statusTone(row.status)" dot>{{ statusLabel(row.status) }}</SBadge>
       </template>

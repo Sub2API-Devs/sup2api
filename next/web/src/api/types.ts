@@ -97,6 +97,8 @@ export interface ApiKey {
   last_used_at?: string | null
   created_at: string
   key?: string // plaintext, only in the create response
+  /** Platforms reachable with this key (same as its group's). */
+  platforms?: string[]
 }
 
 export interface Group {
@@ -109,7 +111,41 @@ export interface Group {
   model_allowlist: string[]
   account_count?: number // assumed
   key_count?: number // assumed
+  api_key_count?: number // server spelling of key_count
+  /**
+   * Platforms served by the group: supported by the account types of its
+   * accounts (sorted ids). API keys bound to the group can call their endpoints.
+   */
+  platforms?: string[]
   created_at?: string
+}
+
+// ------------------------------------------------------------------ platforms (CONTRACTS §13)
+
+/** A gateway endpoint declared by a platform. */
+export interface PlatformEndpoint {
+  method: string
+  /** Path pattern; segments may be ":param" or ":param:suffix". */
+  path: string
+  protocol: string
+  /** usage: billed by usage; free: not billed (e.g. count_tokens). */
+  billing: 'usage' | 'free' | string
+}
+
+/**
+ * A platform: built into the core (anthropic, openai, gemini) or declared by
+ * an enabled plugin. Endpoints belong to exactly one platform.
+ */
+export interface Platform {
+  id: string
+  label: LText
+  builtin: boolean
+  /** Declaring plugin (plugin platforms only). */
+  plugin_key?: string | null
+  plugin_name?: LText // assumed, not in the contract
+  endpoints: PlatformEndpoint[]
+  /** Registered account types that declare support for the platform. */
+  account_types: Array<{ plugin_key: string; type: string; label: LText }>
 }
 
 export interface Proxy {
@@ -139,7 +175,7 @@ export interface AccountFormRef {
   component?: string
 }
 
-/** An enabled gateway endpoint an account type can serve (CONTRACTS §12). */
+/** An endpoint an account type can serve (CONTRACTS §12, §13). */
 export interface AccountTypeEndpoint {
   method: string
   path: string
@@ -147,13 +183,22 @@ export interface AccountTypeEndpoint {
   protocol: string
   /** Platform that declares the endpoint. */
   platform: string
-  /** false: served through a core protocol converter. */
+  /** true: the type supports the platform; false: served through a core protocol converter. */
   native: boolean
+}
+
+/** A platform an account type declares support for. */
+export interface AccountTypePlatform {
+  id: string
+  label: LText
+  builtin: boolean
+  /** false: the platform does not exist now (its plugin is not enabled). */
+  available: boolean
 }
 
 /**
  * An account type is identified by (plugin_key, type). Any plugin can declare
- * account types; they are not tied to a platform (ARCHITECTURE §6.6).
+ * account types; each declares the platforms it supports (ARCHITECTURE §6.6).
  */
 export interface AccountType {
   plugin_key: string
@@ -166,8 +211,9 @@ export interface AccountType {
   description?: LText
   form: AccountFormRef
   sensitive_fields: string[]
-  /** Protocols the upstream supports natively. */
-  protocols: string[]
+  /** Platforms the type supports (built-in or plugin platforms). */
+  platforms: AccountTypePlatform[]
+  /** Endpoints of available supported platforms (native) plus converted ones. */
   endpoints: AccountTypeEndpoint[]
 }
 
@@ -378,8 +424,15 @@ export interface ReviewAccountType {
   id: string
   label: LText
   form_mode?: string
-  /** Natively supported upstream protocols (ids or manifest objects). */
-  protocols: Array<string | { protocol: string; [k: string]: unknown }>
+  /** Supported platforms (ids, or manifest objects {platform, ...}). */
+  platforms: Array<string | { platform: string; [k: string]: unknown }>
+}
+
+/** A new platform declared by the plugin, with its endpoints. */
+export interface ReviewPlatform {
+  id: string
+  label?: LText
+  endpoints: PlatformEndpoint[]
 }
 
 export interface PluginReview {
@@ -392,9 +445,10 @@ export interface PluginReview {
   host_compat_ok: boolean
   host_compat?: string
   capabilities: Array<string | { id: string }>
+  /** Derived from platforms[].endpoints. */
   gateway_endpoints: Array<Record<string, any>>
-  /** Endpoints of the platform; account types are listed separately. */
-  platform?: { id: string; label?: LText; protocols: string[]; sticky_rules?: string[] } | null
+  /** New platforms declared by the plugin (CONTRACTS §13). */
+  platforms?: ReviewPlatform[]
   /** Account types declared by the plugin (top level, any plugin). */
   account_types?: ReviewAccountType[]
   hooks: Array<Record<string, any>>

@@ -27,7 +27,7 @@ export function useAccountTypes() {
       pending = api
         .get<AccountType[]>('/account-types')
         .then((r) => {
-          types.value = (Array.isArray(r) ? r : []).map((x) => ({ ...x, protocols: x.protocols || [], endpoints: x.endpoints || [] }))
+          types.value = (Array.isArray(r) ? r : []).map((x) => ({ ...x, platforms: x.platforms || [], endpoints: x.endpoints || [] }))
           loaded.value = true
         })
         .catch(() => {

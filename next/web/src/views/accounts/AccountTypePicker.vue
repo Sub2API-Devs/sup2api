@@ -7,10 +7,12 @@ import { useAuthStore } from '@/stores/auth'
 import PluginAvatar from '@/views/plugins/parts/PluginAvatar.vue'
 import TrustBadge from '@/views/plugins/parts/TrustBadge.vue'
 import AccountTypeEndpoints from './AccountTypeEndpoints.vue'
+import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
 import { useAccountTypes } from './accountTypes'
 
 // Step 1 of "new account" (wireframe A.3): account types of all enabled
-// plugins, grouped by plugin, with the endpoints each type can serve.
+// plugins, grouped by plugin, with the platforms each type supports and the
+// endpoints it can serve (grouped by platform).
 const emit = defineEmits<{ (e: 'pick', t: AccountType): void }>()
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -44,9 +46,9 @@ load(true)
               <span class="muted ml-2 font-mono text-xs">{{ at.type }}</span>
             </span>
             <span v-if="at.description" class="block text-xs text-gray-500 dark:text-dark-400">{{ lt(at.description) }}</span>
-            <span v-if="at.protocols.length" class="flex flex-wrap items-center gap-1 text-xs">
-              <span class="muted">{{ t('accounts.protocols') }}:</span>
-              <code v-for="p in at.protocols" :key="p" class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[11px] dark:bg-dark-700">{{ p }}</code>
+            <span class="flex flex-wrap items-center gap-1 text-xs" data-testid="type-platforms">
+              <span class="muted">{{ t('platforms.supported') }}:</span>
+              <PlatformBadges :items="at.platforms" :empty="'—'" />
             </span>
             <span class="block border-t border-gray-100 pt-2 dark:border-dark-700">
               <span class="muted mb-1 block text-xs">{{ t('accounts.servesEndpoints') }}</span>

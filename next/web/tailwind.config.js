@@ -1,6 +1,8 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{vue,ts}', './packages/ui/src/**/*.{vue,ts}'],
+  // SBadge builds its class at runtime (badge-${tone}); keep every tone.
+  safelist: ['badge-primary', 'badge-info', 'badge-success', 'badge-warning', 'badge-danger', 'badge-gray', 'badge-purple'],
   darkMode: 'class',
   theme: {
     extend: {

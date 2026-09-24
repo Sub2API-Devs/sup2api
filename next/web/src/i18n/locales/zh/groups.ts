@@ -1,6 +1,6 @@
 export default {
   title: '分组',
-  description: '分组关联账号、API Key 和用户，决定费率倍率和可用模型。',
+  description: '分组是一组一起提供服务的账号（可混放不同类型），每个 API Key 只绑定一个分组。分组决定费率倍率、可用模型，并由其账号决定可服务的平台。',
   create: '新建分组',
   editTitle: '编辑分组 {name}',
   visibility: '可见性',

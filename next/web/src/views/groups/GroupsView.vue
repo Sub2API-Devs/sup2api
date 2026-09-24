@@ -25,6 +25,8 @@ import { useAuthStore } from '@/stores/auth'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import { formatNumber } from '@/utils/format'
 import GroupAccountsEditor from './GroupAccountsEditor.vue'
+import GroupPlatforms from '@/views/platforms/GroupPlatforms.vue'
+import PlatformEndpointsPreview from '@/views/platforms/PlatformEndpointsPreview.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -37,6 +39,7 @@ const list = useList<Group>('/groups')
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
     { key: 'name', label: t('common.name') },
+    { key: 'platforms', label: t('platforms.served') },
     { key: 'visibility', label: t('groups.visibility') },
     { key: 'rate_multiplier', label: t('groups.rateMultiplier'), align: 'right' },
     { key: 'model_allowlist', label: t('groups.modelAllowlist') },
@@ -57,6 +60,33 @@ function statusLabel(s: string) {
 function multiplier(v: string | number) {
   const n = Number(v)
   return Number.isFinite(n) ? n.toFixed(2) : String(v)
+}
+
+/** API key count; the server calls it api_key_count. */
+function keyCount(g: Group): number | undefined {
+  return g.key_count ?? g.api_key_count
+}
+
+// ------------------------------------------------------------------ detail
+
+const detail = ref<Group | null>(null)
+const detailOpen = ref(false)
+
+async function openDetail(g: Group) {
+  detail.value = g
+  detailOpen.value = true
+  try {
+    const full = await api.get<Group>(`/groups/${g.id}`)
+    if (full && detail.value?.id === g.id) detail.value = { ...g, ...full }
+  } catch {
+    /* keep the list row */
+  }
+}
+
+function editFromDetail() {
+  const g = detail.value
+  detailOpen.value = false
+  if (g) openEdit(g)
 }
 
 function changed() {
@@ -158,7 +188,7 @@ async function onAction(g: Group, key: string) {
     return
   }
   if (key !== 'delete') return
-  const extra = g.account_count || g.key_count ? ' ' + t('groups.deleteInUse', { a: g.account_count ?? 0, k: g.key_count ?? 0 }) : ''
+  const extra = g.account_count || keyCount(g) ? ' ' + t('groups.deleteInUse', { a: g.account_count ?? 0, k: keyCount(g) ?? 0 }) : ''
   const ok = await confirm({ title: t('common.delete'), message: t('common.confirmDelete', { name: g.name }) + extra, danger: true })
   if (!ok) return
   try {
@@ -181,8 +211,13 @@ async function onAction(g: Group, key: string) {
 
     <STable :columns="columns" :rows="list.items.value" :loading="list.loading.value">
       <template #cell-name="{ row }">
-        <div class="font-medium text-gray-900 dark:text-white">{{ row.name }}</div>
+        <button type="button" class="text-left font-medium text-gray-900 hover:text-primary-600 hover:underline dark:text-white" data-testid="group-name" @click="openDetail(row)">
+          {{ row.name }}
+        </button>
         <div v-if="row.description" class="muted max-w-xs truncate text-xs">{{ row.description }}</div>
+      </template>
+      <template #cell-platforms="{ row }">
+        <GroupPlatforms :group="row" />
       </template>
       <template #cell-visibility="{ row }">
         <SBadge :tone="row.visibility === 'public' ? 'primary' : 'purple'">
@@ -206,7 +241,7 @@ async function onAction(g: Group, key: string) {
         <span v-else class="muted">{{ t('common.unlimited') }}</span>
       </template>
       <template #cell-account_count="{ row }">{{ formatNumber(row.account_count) }}</template>
-      <template #cell-key_count="{ row }">{{ formatNumber(row.key_count) }}</template>
+      <template #cell-key_count="{ row }">{{ formatNumber(keyCount(row)) }}</template>
       <template #cell-status="{ row }">
         <SBadge :tone="statusTone(row.status)" dot>{{ statusLabel(row.status) }}</SBadge>
       </template>
@@ -253,6 +288,9 @@ async function onAction(g: Group, key: string) {
         <SField :label="t('groups.modelAllowlist')" :hint="t('groups.allowlistHint')" :error="errors.model_allowlist">
           <STagInput v-model="form.model_allowlist" :placeholder="t('groups.allowlistPlaceholder')" />
         </SField>
+        <SField v-if="editing" :label="t('platforms.served')">
+          <GroupPlatforms :group="editing" hint />
+        </SField>
         <SField v-if="canEditAccounts" :label="t('groups.accounts.title')" :hint="t('groups.accounts.hint')">
           <GroupAccountsEditor v-if="open" ref="accountsEditor" :group-id="editing?.id ?? null" />
         </SField>
@@ -260,6 +298,42 @@ async function onAction(g: Group, key: string) {
       <template #footer>
         <SButton @click="open = false">{{ t('common.cancel') }}</SButton>
         <SButton variant="primary" :loading="saving" @click="submit">{{ editing ? t('common.save') : t('common.create') }}</SButton>
+      </template>
+    </SModal>
+
+    <!-- detail -->
+    <SModal v-model:open="detailOpen" :title="detail?.name || ''" width="lg">
+      <template v-if="detail">
+        <dl class="kv" data-testid="group-detail">
+          <dt>ID</dt>
+          <dd>{{ detail.id }}</dd>
+          <template v-if="detail.description">
+            <dt>{{ t('common.description') }}</dt>
+            <dd>{{ detail.description }}</dd>
+          </template>
+          <dt>{{ t('common.status') }}</dt>
+          <dd><SBadge :tone="statusTone(detail.status)" dot>{{ statusLabel(detail.status) }}</SBadge></dd>
+          <dt>{{ t('groups.visibility') }}</dt>
+          <dd>{{ detail.visibility === 'public' ? t('groups.public') : t('groups.restricted') }}</dd>
+          <dt>{{ t('groups.rateMultiplier') }}</dt>
+          <dd class="font-mono">×{{ multiplier(detail.rate_multiplier) }}</dd>
+          <dt>{{ t('groups.modelAllowlist') }}</dt>
+          <dd>{{ detail.model_allowlist?.length ? detail.model_allowlist.join(', ') : t('common.unlimited') }}</dd>
+          <dt>{{ t('groups.accountCount') }}</dt>
+          <dd>{{ formatNumber(detail.account_count) }}</dd>
+          <dt>{{ t('groups.keyCount') }}</dt>
+          <dd>{{ formatNumber(keyCount(detail)) }}</dd>
+          <dt>{{ t('platforms.served') }}</dt>
+          <dd><GroupPlatforms :group="detail" hint /></dd>
+          <template v-if="detail.platforms?.length && detail.account_count !== 0">
+            <dt>{{ t('platforms.endpoints') }}</dt>
+            <dd><PlatformEndpointsPreview :ids="detail.platforms" /></dd>
+          </template>
+        </dl>
+      </template>
+      <template #footer>
+        <SButton v-if="canManage && detail" @click="editFromDetail">{{ t('common.edit') }}</SButton>
+        <SButton variant="primary" @click="detailOpen = false">{{ t('common.close') }}</SButton>
       </template>
     </SModal>
   </div>

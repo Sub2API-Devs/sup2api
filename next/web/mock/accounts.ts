@@ -1,6 +1,8 @@
 import { fail, needStepUp, nextId, noContent, now, on, paginate } from './router'
+import { activePlatforms, platformById, platformLabel } from './platforms'
 
-// Mock handlers: accounts and account types (form modes schema + iframe).
+// Mock handlers: accounts, account types (form modes schema + iframe) and
+// GET /platforms (CONTRACTS §13).
 
 const anthropicSchema = {
   type: 'object',
@@ -41,12 +43,36 @@ const relayUI = {
   model_mapping: { 'ui:widget': 'model-mapping', 'ui:title': { en: 'Model mapping', zh: '模型映射' } }
 }
 
-const messages = { method: 'POST', path: '/v1/messages', protocol: 'anthropic.messages', platform: 'anthropic' }
-const countTokens = { method: 'POST', path: '/v1/messages/count_tokens', protocol: 'anthropic.count_tokens', platform: 'anthropic' }
+const videoSchema = {
+  type: 'object',
+  required: ['api_key'],
+  properties: {
+    api_key: { type: 'string', title: 'API Key', writeOnly: true, minLength: 10 },
+    region: { type: 'string', title: 'Region', enum: ['us', 'eu', 'ap'], default: 'us' }
+  }
+}
 
-// GET /account-types (CONTRACTS §12): identified by (plugin_key, type); endpoints
-// are the enabled ones the type can serve, native=false through a converter.
-export const accountTypes = [
+interface MockAccountType {
+  plugin_key: string
+  plugin_name: { en: string; zh: string }
+  plugin_version: string
+  asset_base: string
+  trust: string
+  type: string
+  label: { en: string; zh: string }
+  description: { en: string; zh: string }
+  form: { mode: string; page?: string }
+  sensitive_fields: string[]
+  /** Declared supported platforms (built-in or plugin platforms). */
+  supports: string[]
+  /** Endpoints of other platforms served through a core converter. */
+  converts?: Array<{ platform: string; path: string }>
+}
+
+// Account types (CONTRACTS §13): identified by (plugin_key, type); each
+// declares the platforms it supports. GET /account-types adds `platforms`
+// (with availability) and `endpoints` (native + converted).
+const accountTypeDecls: MockAccountType[] = [
   {
     plugin_key: 'anthropic',
     plugin_name: { en: 'Anthropic', zh: 'Anthropic' },
@@ -58,25 +84,35 @@ export const accountTypes = [
     description: { en: 'Claude API key (x-api-key)', zh: 'Claude API 密钥' },
     form: { mode: 'schema' },
     sensitive_fields: ['api_key'],
-    protocols: ['anthropic.messages', 'anthropic.count_tokens'],
-    endpoints: [
-      { ...messages, native: true },
-      { ...countTokens, native: true }
-    ]
+    supports: ['anthropic'],
+    // openai.chat -> anthropic.messages converter of the core
+    converts: [{ platform: 'openai', path: '/v1/chat/completions' }]
   },
   {
-    plugin_key: 'openai_relay',
-    plugin_name: { en: 'OpenAI-compatible relay', zh: 'OpenAI 兼容中转' },
+    plugin_key: 'relay',
+    plugin_name: { en: 'Relay', zh: '中转' },
     plugin_version: '0.3.0',
-    asset_base: '/plugin-ui/openai_relay/0.3.0-dev',
+    asset_base: '/plugin-ui/relay/0.3.0-dev',
     trust: 'verified',
-    type: 'chat_key',
-    label: { en: 'Chat Completions key', zh: 'Chat Completions Key' },
-    description: { en: 'Relay speaking openai.chat; serves /v1/messages through the core converter', zh: '上游为 openai.chat 协议的中转，经核心转换服务 /v1/messages' },
+    type: 'relay_key',
+    label: { en: 'Relay key', zh: '中转 Key' },
+    description: { en: 'Key of an Anthropic-compatible relay', zh: 'Anthropic 兼容中转站的 Key' },
     form: { mode: 'schema' },
     sensitive_fields: ['api_key'],
-    protocols: ['openai.chat'],
-    endpoints: [{ ...messages, native: false }]
+    supports: ['anthropic']
+  },
+  {
+    plugin_key: 'videogen',
+    plugin_name: { en: 'Video generation', zh: '视频生成' },
+    plugin_version: '0.2.0',
+    asset_base: '/plugin-ui/videogen/0.2.0-dev',
+    trust: 'verified',
+    type: 'video_key',
+    label: { en: 'MyVideo key', zh: 'MyVideo Key' },
+    description: { en: 'Serves the myvideo platform declared by the same plugin', zh: '服务本插件声明的 myvideo 平台' },
+    form: { mode: 'schema' },
+    sensitive_fields: ['api_key'],
+    supports: ['myvideo']
   },
   {
     plugin_key: 'demo',
@@ -86,31 +122,72 @@ export const accountTypes = [
     trust: 'community',
     type: 'token',
     label: { en: 'Token (iframe form)', zh: 'Token（iframe 表单）' },
-    description: { en: 'Sandboxed iframe account form', zh: '沙箱 iframe 账号表单' },
+    description: { en: 'Sandboxed iframe account form; supports the foo platform (plugin not enabled) and openai', zh: '沙箱 iframe 账号表单；支持 foo 平台（插件未启用）和 openai' },
     form: { mode: 'iframe', page: 'ui/iframe/account.html' },
     sensitive_fields: ['token'],
-    protocols: ['demo.chat'],
-    endpoints: []
+    supports: ['foo', 'openai']
   }
 ]
 
-const typeLabel = (pluginKey: string, type: string) => accountTypes.find((x) => x.plugin_key === pluginKey && x.type === type)?.label || type
+function accountTypeOut(d: MockAccountType) {
+  const { supports, converts, ...rest } = d
+  const platforms = supports.map((id) => {
+    const p = platformById(id)
+    return { id, label: p?.label ?? platformLabel(id), builtin: p?.builtin ?? false, available: !!p }
+  })
+  const endpoints: any[] = []
+  for (const id of supports) {
+    for (const e of platformById(id)?.endpoints || []) endpoints.push({ method: e.method, path: e.path, protocol: e.protocol, platform: id, native: true })
+  }
+  for (const c of converts || []) {
+    const e = platformById(c.platform)?.endpoints.find((x) => x.path === c.path)
+    if (e) endpoints.push({ method: e.method, path: e.path, protocol: e.protocol, platform: c.platform, native: false })
+  }
+  return { ...rest, platforms, endpoints }
+}
+
+const typeLabel = (pluginKey: string, type: string) => accountTypeDecls.find((x) => x.plugin_key === pluginKey && x.type === type)?.label || type
 
 const accounts: any[] = [
   { id: 12, name: 'claude-main', plugin_key: 'anthropic', type: 'apikey', group_ids: [1, 2], proxy_id: null, priority: 1, max_concurrency: 10, schedulable: true, status: 'active', status_reason: '', in_use: 3, cooldown_until: null, orphaned: false, last_used_at: now(-12), created_at: now(-86400 * 20), credentials: { api_key: '******', base_url: 'https://api.anthropic.com', model_mapping: { 'claude-sonnet-4-5': 'claude-sonnet-4-5-20250929' } } },
   { id: 13, name: 'claude-bak', plugin_key: 'anthropic', type: 'apikey', group_ids: [1], proxy_id: 1, priority: 2, max_concurrency: 10, schedulable: true, status: 'active', status_reason: '', in_use: 0, cooldown_until: now(600), cooldown_reason: '429', orphaned: false, last_used_at: now(-300), created_at: now(-86400 * 10), credentials: { api_key: '******', base_url: 'https://api.anthropic.com' } },
   { id: 14, name: 'old-key', plugin_key: 'anthropic', type: 'apikey', group_ids: [1], proxy_id: null, priority: 5, max_concurrency: 10, schedulable: true, status: 'disabled', status_reason: '401 invalid credentials', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-86400), created_at: now(-86400 * 40), credentials: { api_key: '******' } },
-  { id: 16, name: 'relay-gpt', plugin_key: 'openai_relay', type: 'chat_key', group_ids: [1], proxy_id: null, priority: 3, max_concurrency: 20, schedulable: true, status: 'active', status_reason: '', in_use: 1, cooldown_until: null, orphaned: false, last_used_at: now(-40), created_at: now(-86400 * 2), credentials: { api_key: '******', base_url: 'https://relay.example.com/v1' } },
+  { id: 16, name: 'relay-1', plugin_key: 'relay', type: 'relay_key', group_ids: [1], proxy_id: null, priority: 3, max_concurrency: 20, schedulable: true, status: 'active', status_reason: '', in_use: 1, cooldown_until: null, orphaned: false, last_used_at: now(-40), created_at: now(-86400 * 2), credentials: { api_key: '******', base_url: 'https://relay.example.com' } },
+  { id: 17, name: 'video-1', plugin_key: 'videogen', type: 'video_key', group_ids: [2], proxy_id: null, priority: 1, max_concurrency: 4, schedulable: true, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-3600), created_at: now(-86400 * 3), credentials: { api_key: '******', region: 'us' } },
+  { id: 18, name: 'demo-token', plugin_key: 'demo', type: 'token', group_ids: [1], proxy_id: null, priority: 8, max_concurrency: 2, schedulable: true, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-86400), credentials: { token: '******' } },
   { id: 15, name: 'legacy-openai', plugin_key: 'openai', type: 'apikey', type_label: { en: 'API key', zh: 'API Key' }, group_ids: [], proxy_id: null, priority: 10, max_concurrency: 5, schedulable: false, status: 'active', status_reason: '', in_use: 0, orphaned: true, created_at: now(-86400 * 90) }
 ]
 for (const a of accounts) a.type_label ??= typeLabel(a.plugin_key, a.type)
 
 const withGroups = (a: any) => ({ ...a, groups: (a.group_ids || []).map((id: number) => ({ id, name: id === 1 ? 'default' : id === 2 ? 'vip' : `group-${id}` })) })
 
-on('GET', '/account-types', () => accountTypes)
+/** Accounts in a group (any status). */
+export function groupAccountCount(gid: number): number {
+  return accounts.filter((a) => (a.group_ids || []).includes(gid)).length
+}
+
+/** Platforms a group serves: supported by its accounts' types and existing now (sorted). */
+export function groupPlatforms(gid: number): string[] {
+  const out = new Set<string>()
+  for (const a of accounts) {
+    if (a.orphaned || !(a.group_ids || []).includes(gid)) continue
+    const d = accountTypeDecls.find((x) => x.plugin_key === a.plugin_key && x.type === a.type)
+    for (const id of d?.supports || []) if (platformById(id)) out.add(id)
+  }
+  return [...out].sort()
+}
+
+on('GET', '/platforms', () =>
+  activePlatforms().map((p) => ({
+    ...p,
+    account_types: accountTypeDecls.filter((d) => d.supports.includes(p.id)).map((d) => ({ plugin_key: d.plugin_key, type: d.type, label: d.label }))
+  }))
+)
+on('GET', '/account-types', () => accountTypeDecls.map(accountTypeOut))
 on('GET', '/account-types/:plugin_key/:type/form', (req) => {
   if (req.params.plugin_key === 'anthropic') return { schema: anthropicSchema, ui_schema: anthropicUI }
-  if (req.params.plugin_key === 'openai_relay') return { schema: relaySchema, ui_schema: relayUI }
+  if (req.params.plugin_key === 'relay') return { schema: relaySchema, ui_schema: relayUI }
+  if (req.params.plugin_key === 'videogen') return { schema: videoSchema, ui_schema: { api_key: { 'ui:widget': 'secret' } } }
   return fail(404, 'not_found', 'form not found')
 })
 
@@ -132,7 +209,7 @@ on('POST', '/accounts', (req) => {
   const b = req.body || {}
   const creds = b.credentials || {}
   if ('platform' in b) return fail(400, 'invalid_argument', 'unknown field "platform"')
-  const at = accountTypes.find((x) => x.plugin_key === b.plugin_key && x.type === b.type)
+  const at = accountTypeDecls.find((x) => x.plugin_key === b.plugin_key && x.type === b.type)
   if (!at) return fail(400, 'invalid_argument', 'unknown account type', { fields: [{ field: 'type', code: 'not_found', message: 'Unknown account type' }] })
   if (b.plugin_key === 'anthropic' && !String(creds.api_key || '').startsWith('sk-')) {
     return fail(400, 'invalid_argument', 'invalid credentials', { fields: [{ field: 'credentials.api_key', code: 'invalid', message: 'API key must start with sk-' }] })

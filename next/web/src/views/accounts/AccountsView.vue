@@ -14,6 +14,7 @@ import { lt } from '@/i18n'
 import { useAccountTypes, typeKey } from './accountTypes'
 import AccountTypePicker from './AccountTypePicker.vue'
 import AccountTypeEndpoints from './AccountTypeEndpoints.vue'
+import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
 import AccountEditor from './AccountEditor.vue'
 
 const { t } = useI18n()
@@ -370,6 +371,10 @@ const statusOptions = ['active', 'disabled', 'error']
               {{ accountTypes.typeLabel(detail.plugin_key, detail.type, detail.type_label) }}
               <span class="muted text-xs">· {{ accountTypes.pluginName(detail.plugin_key) }} <span class="font-mono">({{ detail.plugin_key }}/{{ detail.type }})</span></span>
             </dd>
+            <template v-if="detailType">
+              <dt>{{ t('platforms.supported') }}</dt>
+              <dd><PlatformBadges :items="detailType.platforms" empty="—" /></dd>
+            </template>
             <dt>{{ t('accounts.servesEndpoints') }}</dt>
             <dd>
               <AccountTypeEndpoints v-if="detailType" :endpoints="detailType.endpoints" />

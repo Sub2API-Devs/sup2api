@@ -1,6 +1,6 @@
 export default {
   myTitle: 'API Key',
-  myDescription: '用于调用网关的密钥。每个 Key 属于一个分组，分组决定可用模型和费率倍率。',
+  myDescription: '用于调用网关的密钥。每个 Key 只绑定一个分组，分组决定可访问的平台（端点）、可用模型和费率倍率。',
   allTitle: '全部 API Key',
   allDescription: '所有用户的 API Key。',
   create: '新建 API Key',
