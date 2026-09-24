@@ -75,10 +75,16 @@ type fakeRollout struct {
 	db       *store.DB
 	disabled []string
 	reasons  []string
+	enabled  []string
 }
 
-func (f *fakeRollout) Enable(context.Context, string, int64) (*core.Rollout, error) {
-	return nil, errors.New("n/a")
+func (f *fakeRollout) Enable(ctx context.Context, key string, _ int64) (*core.Rollout, error) {
+	if f.db == nil {
+		return nil, errors.New("n/a")
+	}
+	f.enabled = append(f.enabled, key)
+	_, err := f.db.Pool.Exec(ctx, `UPDATE plugins SET status = 'enabled', active_version = (SELECT max(version) FROM plugin_versions WHERE plugin_key = $1 AND consent_status = 'approved') WHERE key = $1`, key)
+	return &core.Rollout{ID: 2, PluginKey: key, Action: "enable", Phase: "active"}, err
 }
 func (f *fakeRollout) Upgrade(context.Context, string, string, int64) (*core.Rollout, error) {
 	return nil, errors.New("n/a")

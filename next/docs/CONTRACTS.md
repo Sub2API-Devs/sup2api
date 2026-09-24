@@ -209,6 +209,7 @@
 - 市场源 `url` 可以指向 `index.json`，也可以是以 `/` 结尾的目录（自动补 `index.json`）
 - 插件详情中的钩子统计来自 `core.HookStatsSource`（G），手动执行任务通过 `core.JobTrigger`（H）
 - 发布行为（C2）：Disable 立即提交，返回时状态已是 `disabled`；Enable 优先启用 `active_version`，否则取最新的已批准版本；`plugins` 行删除后，各节点在一次对账内停止实例
+- **内置插件**（`plugins.builtin=true`，本期为 anthropic）：随镜像提供（`SUB2API_BUILTIN_PLUGIN_DIR`，默认 `/opt/sub2api/builtin`），核心启动时在一个节点上（锁 `plugins:builtin`）自动上传、授予全部宿主权限（新插件权限授予 `admin` 角色）、首次安装后启用，镜像带新版本时自动升级；管理员禁用后保持禁用。签名密钥由入口脚本通过 `SUB2API_BUILTIN_TRUST_KEY` 始终信任。`DELETE /plugins/:key` 对内置插件返回 403，`details.reason = "builtin"`；列表与详情返回 `builtin` 字段
 - 升级包的宿主权限没有新增或扩大时，上传即沿用原授权（版本直接为 `approved`）；否则进入 `awaiting_consent`，旧版本继续运行
 - 插件设置：GET `/plugins/:key/settings` → `{schema, ui_schema, values}`；PUT 请求体 `{values:{...}}`
 - `/ui/plugins` 每项另含 `host_ui_compat`

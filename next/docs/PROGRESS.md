@@ -73,7 +73,7 @@ HTTP 挂载：`/healthz`（节点自我隔离时 503）→ `httpapi.NewRouter` �
 | C2 | MigrateData 可能因协调者接管重复执行，插件必须幂等 | 写入 SDK 文档 |
 | C2 | 超时：控制台平台调用 10s、热路径 2s、Scheduler 200ms、钩子最多 2s | 写入 §11 |
 | C2 | ~~`SET LOCAL ROLE` 迁移可被 `RESET ROLE` 绕过~~ | ✅ 主控已修（`d87ae94d7`，0003 迁移 + 插件角色登录执行） |
-| G | `UsageRecord.ClientRequestID` + `usage_logs.client_request_id` 列 | 待做（core + 0004 迁移 + B） |
+| G | `UsageRecord.ClientRequestID` + `usage_logs.client_request_id` 列 | 待做（core + 0005 迁移 + B） |
 | G | Redis `hook:stats:{plugin}:{hook}`（HASH）、`hook:statidx:{plugin}`（SET），TTL 7d；`hook:breaker` 值为熔断截止毫秒，TTL 30s | 写入 §7 |
 | G | `usage_logs.error_type` 新增 `model_not_allowed`、`price_not_configured`、`rate_limited`、`invalid_request`、`plugin_unavailable` | 写入 §6 / 表注释 |
 | G | `PlatformBinding` 缺凭证授权标记，网关总是给平台插件传解密凭证 | 符合"平台插件默认拿自己平台账号凭证"，保持 |
@@ -158,6 +158,7 @@ HTTP 挂载：`/healthz`（节点自我隔离时 503）→ `httpapi.NewRouter` �
 | 计费 | 按次/按 token/表达式三种方式统一为表达式；参考 new-api 设计但不复制代码（new-api 为 AGPL，本项目 LGPL）；只支持管理员调整余额；表达式没写的缓存类别（`cr`/`cc`/`cc1h`）不收费，`p` 始终是不含缓存的纯输入（2026-09-24 用户决定） |
 | 粘性会话 | 核心负责调度，平台插件提供默认规则，管理员可覆盖，复杂取值可由插件扩展点计算 |
 | 网关端点 | 由插件在 manifest 中声明，核心按声明执行通用流水线 |
+| 内置插件 | anthropic 为官方内置插件：随镜像提供，启动时自动安装并启用，只能禁用、不能卸载（2026-09-24 用户决定） |
 | 测试与部署 | 所有测试组件只用 docker compose；ovh 独立目录部署，对外只绑定 127.0.0.1 |
 
 ---

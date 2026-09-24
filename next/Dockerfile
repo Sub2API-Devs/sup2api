@@ -67,6 +67,8 @@ RUN apt-get update \
 
 COPY --from=build /out/bin/ /usr/local/bin/
 COPY --from=build /out/market/ /opt/sub2api/market/
+COPY --from=build /out/builtin/ /opt/sub2api/builtin/
+COPY --from=build /out/builtin/ /opt/sub2api/builtin/
 COPY --chmod=0755 deploy/docker/entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 ENV SUB2API_HTTP_ADDR=:8080 \

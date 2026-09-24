@@ -7,6 +7,9 @@ export default {
   desiredVersion: '目标版本',
   manifestVersion: 'manifest 版本',
 
+  builtin: '内置',
+  builtinHint: '内置插件随系统提供，只能禁用，不能卸载',
+
   trust: {
     official: '官方',
     verified: '已验证',

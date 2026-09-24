@@ -170,6 +170,7 @@ onMounted(load)
         <div class="flex items-center gap-2">
           <span class="text-sm">{{ row.publisher || '—' }}</span>
           <TrustBadge :trust="row.trust" />
+          <SBadge v-if="row.builtin" tone="info" :title="t('plugins.builtinHint')">{{ t('plugins.builtin') }}</SBadge>
         </div>
       </template>
       <template #cell-nodes="{ row }">

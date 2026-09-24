@@ -46,6 +46,9 @@ type PluginConfig struct {
 	MaxMemoryMB       int      // SUB2API_PLUGIN_MAX_MEMORY_MB, global cap, default 1024
 	DBRoleIsolation   bool     // SUB2API_PLUGIN_DB_ROLE_ISOLATION, default true
 	MarketSourcesJSON string   // SUB2API_MARKET_SOURCES: JSON [{name,url,public_key}] seeded at start
+	// BuiltinDir holds the built-in plugin packages installed at startup
+	// (SUB2API_BUILTIN_PLUGIN_DIR, default "/opt/sub2api/builtin").
+	BuiltinDir string
 }
 
 // Load reads the environment. goos is runtime.GOOS (passed in for tests).
@@ -97,11 +100,27 @@ func Load(goos string) (*Config, error) {
 	p.Seccomp = boolEnv("SUB2API_PLUGIN_SECCOMP", linux)
 	p.DBRoleIsolation = boolEnv("SUB2API_PLUGIN_DB_ROLE_ISOLATION", true)
 	p.MarketSourcesJSON = os.Getenv("SUB2API_MARKET_SOURCES")
+	p.BuiltinDir = env("SUB2API_BUILTIN_PLUGIN_DIR", "/opt/sub2api/builtin")
 	if s := os.Getenv("SUB2API_PLUGIN_OFFICIAL_KEYS"); s != "" {
 		for _, k := range strings.Split(s, ",") {
 			if k = strings.TrimSpace(k); k != "" {
 				p.OfficialRootKeys = append(p.OfficialRootKeys, k)
 			}
+		}
+	}
+	// The key that signed the built-in packages of this image is always
+	// trusted as official (SUB2API_BUILTIN_TRUST_KEY "keyId=base64pub", set by
+	// the image entrypoint).
+	if k := strings.TrimSpace(os.Getenv("SUB2API_BUILTIN_TRUST_KEY")); k != "" {
+		id, _, _ := strings.Cut(k, "=")
+		dup := false
+		for _, have := range p.OfficialRootKeys {
+			if hid, _, _ := strings.Cut(have, "="); hid == id {
+				dup = true
+			}
+		}
+		if !dup {
+			p.OfficialRootKeys = append(p.OfficialRootKeys, k)
 		}
 	}
 	if p.MaxPackageBytes, err = int64Env("SUB2API_PLUGIN_MAX_PACKAGE_BYTES", 200<<20); err != nil {

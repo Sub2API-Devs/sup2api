@@ -9,8 +9,8 @@ import (
 )
 
 // AC 6: disabling a plugin keeps its accounts, greys out its permissions and
-// makes forwarding return 503; re-enabling restores it; uninstalling deletes
-// its permissions and grants.
+// makes forwarding return 503; re-enabling restores it. anthropic is built
+// in, so uninstalling it is refused.
 func TestAC06_DisableEnableUninstall(t *testing.T) {
 	e := Setup(t)
 	e.Pending("c1-lifecycle, c2-runtime (generation switch), a1-identity (plugin permission status), gateway")
@@ -72,28 +72,19 @@ func TestAC06_DisableEnableUninstall(t *testing.T) {
 	}
 	e.MustMessages(tn.APIKey, MessagesBody(tn.Model, "after enable", true), nil)
 
-	// Uninstall: permissions and grants deleted. Accounts are kept (orphaned)
-	// unless purge; purge=false here.
-	e.Uninstall(admin, "anthropic", false)
-	if _, ok := pluginModule(); ok {
-		t.Fatal("plugin permissions still listed after uninstall")
+	// Built-in: uninstall is refused even while disabled; data is untouched.
+	e.Disable(admin, "anthropic")
+	r := admin.API(t, http.MethodDelete, "/plugins/anthropic", nil, Query("purge", "false"), admin.StepUp(t))
+	if r.Status != 403 || r.JSON().Get("error.details.reason").String() != "builtin" {
+		t.Fatalf("uninstall of a built-in plugin: %s", r)
 	}
-	if r := admin.API(t, http.MethodGet, "/plugins/anthropic/grants", nil); r.Status != 404 && len(r.Data().Array()) != 0 {
-		t.Fatalf("grants after uninstall: %s", r)
+	if _, ok := pluginModule(); !ok {
+		t.Fatal("plugin permissions removed by a refused uninstall")
 	}
 	acct = admin.OK(t, http.MethodGet, fmt.Sprintf("/accounts/%d", tn.Accounts[0].ID), nil)
-	if !acct.Get("orphaned").Bool() {
-		t.Errorf("account after uninstall should be orphaned: %s", acct.Raw)
+	if acct.Get("orphaned").Bool() {
+		t.Errorf("account orphaned by a refused uninstall: %s", acct.Raw)
 	}
-	if e.DockerHost != "" {
-		if rows := e.SQL(`SELECT count(*) FROM plugin_permission_grants WHERE plugin_key='anthropic'`); rows[0] != "0" {
-			t.Fatalf("grants rows left: %v", rows)
-		}
-		if rows := e.SQL(`SELECT count(*) FROM permissions WHERE plugin_key='anthropic'`); rows[0] != "0" {
-			t.Fatalf("permission rows left: %v", rows)
-		}
-	}
-
-	// Leave the environment usable for the next tests.
-	e.EnsurePlugin(admin, "anthropic", "")
+	e.Enable(admin, "anthropic")
+	e.MustMessages(tn.APIKey, MessagesBody(tn.Model, "after re-enable", false), nil)
 }

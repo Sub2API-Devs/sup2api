@@ -35,6 +35,8 @@ type PluginSummary struct {
 	EgressPolicy    string             `json:"egress_policy"`
 	InstalledAt     time.Time          `json:"installed_at"`
 	UpdatedAt       time.Time          `json:"updated_at"`
+	// Builtin plugins ship with the image: they can be disabled, not uninstalled.
+	Builtin bool `json:"builtin"`
 }
 
 // NodeSummary counts live nodes by reported plugin state.
@@ -45,7 +47,7 @@ type NodeSummary struct {
 
 const pluginSelect = `
 	SELECT p.key, p.name, p.status, p.status_reason, p.active_version, p.desired_version,
-	       COALESCE(pub.name, ''), COALESCE(pub.trust_level, 'unsigned'), p.egress_policy, p.installed_at, p.updated_at,
+	       COALESCE(pub.name, ''), COALESCE(pub.trust_level, 'unsigned'), p.egress_policy, p.installed_at, p.updated_at, p.builtin,
 	       COALESCE((SELECT array_agg(version ORDER BY uploaded_at) FROM plugin_versions
 	                 WHERE plugin_key = p.key AND consent_status = 'awaiting_consent'), '{}')
 	FROM plugins p LEFT JOIN publishers pub ON pub.id = p.publisher_id`
@@ -54,7 +56,7 @@ func scanSummary(row interface{ Scan(...any) error }) (*PluginSummary, error) {
 	var s PluginSummary
 	var name []byte
 	if err := row.Scan(&s.Key, &name, &s.Status, &s.StatusReason, &s.ActiveVersion, &s.DesiredVersion,
-		&s.Publisher, &s.Trust, &s.EgressPolicy, &s.InstalledAt, &s.UpdatedAt, &s.PendingVersions); err != nil {
+		&s.Publisher, &s.Trust, &s.EgressPolicy, &s.InstalledAt, &s.UpdatedAt, &s.Builtin, &s.PendingVersions); err != nil {
 		return nil, err
 	}
 	_ = json.Unmarshal(name, &s.Name)

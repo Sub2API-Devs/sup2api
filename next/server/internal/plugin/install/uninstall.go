@@ -25,6 +25,11 @@ func (s *Service) Uninstall(ctx context.Context, key string, purge bool, actorID
 	if err != nil {
 		return err
 	}
+	if builtin, err := IsBuiltin(ctx, s.d.DB.Pool, key); err != nil {
+		return err
+	} else if builtin {
+		return ErrBuiltin
+	}
 	if open, err := s.openRollout(ctx, key); err != nil {
 		return err
 	} else if open {
@@ -71,8 +76,10 @@ func (s *Service) Uninstall(ctx context.Context, key string, purge bool, actorID
 				return err
 			}
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM plugins WHERE key = $1`, key); err != nil {
+		if tag, err := tx.Exec(ctx, `DELETE FROM plugins WHERE key = $1 AND NOT builtin`, key); err != nil {
 			return err
+		} else if tag.RowsAffected() == 0 {
+			return ErrBuiltin
 		}
 		return Audit(ctx, tx, actorID, "plugin.uninstall", "plugin", key, map[string]any{"purge": purge, "previous_status": st})
 	})

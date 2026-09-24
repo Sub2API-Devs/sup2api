@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
-import { SButton, SCard, SDropdown, SEmpty, SIcon, SModal, SPageHeader, SSpinner, STabs, confirm, type MenuAction, type TabItem } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SDropdown, SEmpty, SIcon, SModal, SPageHeader, SSpinner, STabs, confirm, type MenuAction, type TabItem } from '@sub2api/ui'
 import type { Rollout } from '@/api/types'
 import { lt } from '@/i18n'
 import { errorMessage, notifyError } from '@/utils/errors'
@@ -91,7 +91,7 @@ const moreActions = computed<MenuAction[]>(() => [
     key: 'uninstall',
     label: t('plugins.uninstall.action'),
     danger: true,
-    hidden: !auth.has('plugin:uninstall'),
+    hidden: !auth.has('plugin:uninstall') || !!detail.value?.builtin,
     disabled: status.value === 'enabled' || inRollout.value
   }
 ])
@@ -208,6 +208,7 @@ onMounted(load)
           </span>
           <StatusBadge :status="detail.status" />
           <TrustBadge :trust="detail.trust" />
+          <SBadge v-if="detail.builtin" tone="info" :title="t('plugins.builtinHint')">{{ t('plugins.builtin') }}</SBadge>
         </template>
         <template #actions>
           <RouterLink v-if="inRollout" :to="`/plugins/${encodeURIComponent(detail.key)}/rollout`" class="btn btn-secondary btn-md">

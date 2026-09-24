@@ -175,6 +175,13 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	if err := mkt.SeedSources(ctx, cfg.Plugins.MarketSourcesJSON); err != nil {
 		return fmt.Errorf("market sources: %w", err)
 	}
+	// Built-in plugins: one node installs/enables/upgrades them per start.
+	if release, ok, err := cl.Locker.TryLock(ctx, "plugins:builtin", 5*time.Minute); err != nil {
+		log.Warn("builtin plugins: lock", "err", err)
+	} else if ok {
+		_ = inst.EnsureBuiltin(ctx, cfg.Plugins.BuiltinDir, log.With("component", "builtin-plugins"))
+		release()
+	}
 
 	jobs := job.New(db, cl.Locker, reg, log, cfg.NodeID, job.Options{})
 	if err := jobs.Start(ctx); err != nil {

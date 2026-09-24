@@ -262,6 +262,9 @@ func (s *Service) Consent(ctx context.Context, key, version string, req ConsentR
 // checkGrantRights verifies the operator may approve every newly granted
 // high/critical permission (carried-over grants were approved before).
 func (s *Service) checkGrantRights(ctx context.Context, actorID int64, ds []decision) error {
+	if isSystem(ctx) {
+		return nil // built-in plugins ship with the image
+	}
 	need := map[string][]string{}
 	for _, d := range ds {
 		if d.status != GrantGranted || d.carried {

@@ -7,6 +7,9 @@ export default {
   desiredVersion: 'Desired version',
   manifestVersion: 'Manifest version',
 
+  builtin: 'Built-in',
+  builtinHint: 'Built-in plugins ship with the system: they can be disabled but not uninstalled',
+
   trust: {
     official: 'Official',
     verified: 'Verified',

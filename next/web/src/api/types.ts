@@ -325,6 +325,8 @@ export interface PluginSummary {
   key: string
   name: LText
   status: string
+  /** Ships with the image: can be disabled, not uninstalled. */
+  builtin?: boolean
   status_reason?: string
   active_version?: string | null
   desired_version?: string | null

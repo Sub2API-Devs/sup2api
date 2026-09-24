@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -253,6 +254,24 @@ func (e *Env) EnsurePlugin(admin *Session, key, version string) {
 			return
 		}
 	}
+	if ok && d.Get("builtin").Bool() {
+		// Built-in plugins cannot be uninstalled: only forward upgrades work.
+		if d.Get("status").String() != "enabled" {
+			e.Enable(admin, key)
+			d, _ = e.Plugin(admin, key)
+		}
+		if active := d.Get("active_version").String(); version != "" && active != version {
+			if semverLess(version, active) {
+				e.T.Skipf("built-in %s is at %s and cannot go back to %s; run on a fresh deployment", key, active, version)
+			}
+			rev := e.InstallFromMarket(admin, key, version)
+			if rev.Get("consent_status").String() == "awaiting_consent" {
+				e.ConsentAll(admin, rev, []string{"admin"})
+			}
+			e.Upgrade(admin, key, version)
+		}
+		return
+	}
 	if ok {
 		// Replace whatever is installed: simplest and independent of semver order.
 		e.Uninstall(admin, key, true)
@@ -295,4 +314,23 @@ func (e *Env) PluginRoute(s *Session, base, method, key, path string, body any) 
 	e.T.Helper()
 	c := &Client{Base: base, HTTP: s.HTTP, Token: s.Token}
 	return c.API(e.T, method, "/p/"+key+path, body)
+}
+
+// semverLess compares release versions "x.y.z" numerically (pre-release
+// suffixes are ignored).
+func semverLess(a, b string) bool {
+	pa, pb := strings.Split(strings.SplitN(a, "-", 2)[0], "."), strings.Split(strings.SplitN(b, "-", 2)[0], ".")
+	for i := 0; i < len(pa) || i < len(pb); i++ {
+		var x, y int
+		if i < len(pa) {
+			x, _ = strconv.Atoi(pa[i])
+		}
+		if i < len(pb) {
+			y, _ = strconv.Atoi(pb[i])
+		}
+		if x != y {
+			return x < y
+		}
+	}
+	return false
 }

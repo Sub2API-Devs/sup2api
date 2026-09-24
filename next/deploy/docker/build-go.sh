@@ -16,7 +16,7 @@ OUT=$2
 KEYS=$3
 VERSION=${VERSION:-0.1.0-dev}
 KEY_ID=${SUB2API_DEV_KEY_ID:-sub2api-dev}
-mkdir -p "$OUT/bin" "$OUT/market"
+mkdir -p "$OUT/bin" "$OUT/market" "$OUT/builtin"
 cd "$SRC"
 
 echo "==> go version: $(go version)"
@@ -95,3 +95,20 @@ fi
 cp "$KEYS/$KEY_ID.pub" "$OUT/market/dev-official.pub"
 printf '%s\n' "$KEY_ID" > "$OUT/market/dev-official.keyid"
 ls -l "$OUT/market"
+
+# Built-in plugins (installed and enabled by the core at startup, cannot be
+# uninstalled): the package matching plugins/<name>/manifest.json's version.
+BUILTIN_PLUGINS=${BUILTIN_PLUGINS:-anthropic}
+mkdir -p "$OUT/builtin"
+cp "$KEYS/$KEY_ID.pub" "$OUT/builtin/trust.pub"
+printf '%s\n' "$KEY_ID" > "$OUT/builtin/trust.keyid"
+for name in $BUILTIN_PLUGINS; do
+  ver=$(manifest_version "plugins/$name/manifest.json")
+  if [ -f "$OUT/market/$name-$ver.s2plugin" ]; then
+    cp "$OUT/market/$name-$ver.s2plugin" "$OUT/builtin/"
+    echo "==> builtin plugin $name $ver"
+  else
+    echo "==> builtin plugin $name $ver: package not found, skipped" >&2
+  fi
+done
+ls -l "$OUT/builtin"
