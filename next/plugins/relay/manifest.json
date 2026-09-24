@@ -3,8 +3,8 @@
   "key": "relay",
   "name": { "en": "Claude relay", "zh": "Claude 中转" },
   "description": {
-    "en": "Adds the \"Relay key\" account type: accounts of an Anthropic-compatible relay (your own Base URL and key) that serve /v1/messages and /v1/messages/count_tokens together with the other account types of a group. Declares no endpoints and no prices.",
-    "zh": "新增\"中转 Key\"账号类型：Anthropic 兼容中转站的账号（自定义 Base URL 和 Key），与分组里其他类型的账号一起为 /v1/messages 和 /v1/messages/count_tokens 提供服务。不声明端点和价格。"
+    "en": "Adds the \"Relay key\" account type: accounts of an Anthropic-compatible relay (your own Base URL and key) that serve the built-in anthropic platform (/v1/messages and /v1/messages/count_tokens) together with the other account types of a group. Declares no platform, no endpoints and no prices.",
+    "zh": "新增\"中转 Key\"账号类型：Anthropic 兼容中转站的账号（自定义 Base URL 和 Key），与分组里其他类型的账号一起为内置 anthropic 平台（/v1/messages 和 /v1/messages/count_tokens）提供服务。不声明平台、端点和价格。"
   },
   "version": "0.1.0",
   "publisher": "sub2api",
@@ -32,14 +32,9 @@
       },
       "sensitiveFields": ["api_key"],
       "settingsFields": ["base_url", "model_mapping"],
-      "protocols": [
+      "platforms": [
         {
-          "protocol": "anthropic.messages",
-          "requestFields": ["model"],
-          "passHeaders": ["anthropic-version", "anthropic-beta"]
-        },
-        {
-          "protocol": "anthropic.count_tokens",
+          "platform": "anthropic",
           "requestFields": ["model"],
           "passHeaders": ["anthropic-version", "anthropic-beta"]
         }
@@ -51,7 +46,7 @@
 
   "hostPermissions": [
     { "id": "platform.register",
-      "reason": { "en": "Register the \"Relay key\" account type", "zh": "注册\"中转 Key\"账号类型" } },
+      "reason": { "en": "Register the \"Relay key\" account type for the built-in anthropic platform", "zh": "为内置 anthropic 平台注册\"中转 Key\"账号类型" } },
     { "id": "accounts.credentials", "scope": { "types": "own" },
       "reason": { "en": "Read the Base URL and key of relay key accounts to build upstream requests", "zh": "读取中转 Key 账号的 Base URL 与 Key 以构造上游请求" } }
   ]

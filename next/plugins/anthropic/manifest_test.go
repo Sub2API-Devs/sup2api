@@ -29,19 +29,14 @@ func TestManifest(t *testing.T) {
 		t.Fatalf("database = %+v", m.Database)
 	}
 
-	// Platform: endpoint defaults for its protocols (ARCHITECTURE 6.6).
-	if m.Platform == nil || m.Platform.ID != "anthropic" || m.Gateway == nil {
-		t.Fatalf("platform = %+v", m.Platform)
+	// The anthropic platform and its endpoints are built into the core
+	// (ARCHITECTURE 6.6): the plugin declares no platform of its own.
+	if len(m.Platforms) != 0 {
+		t.Fatalf("platforms = %+v, want none (anthropic is built in)", m.Platforms)
 	}
-	var endpointProtocols []string
-	for _, ep := range m.Gateway.Endpoints {
-		endpointProtocols = append(endpointProtocols, ep.Protocol)
-	}
-	if !slices.Equal(m.Platform.Protocols, endpointProtocols) || !slices.Equal(m.Platform.Protocols, anthropic.Protocols) {
-		t.Fatalf("platform protocols %v, endpoint protocols %v, implemented %v", m.Platform.Protocols, endpointProtocols, anthropic.Protocols)
-	}
+	builtin := builtinAnthropic(t)
 
-	// Top-level account types with their native protocols.
+	// Top-level account types with the platforms they serve.
 	if len(m.AccountTypes) != 1 || m.AccountTypes[0].ID != anthropic.AccountTypeAPIKey {
 		t.Fatalf("accountTypes = %+v", m.AccountTypes)
 	}
@@ -49,15 +44,25 @@ func TestManifest(t *testing.T) {
 		for _, p := range []string{at.Form.Schema, at.Form.UISchema} {
 			mustJSONFile(t, p)
 		}
-		var protos []string
-		for _, ap := range at.Protocols {
-			protos = append(protos, ap.Protocol)
+		if len(at.Platforms) != 1 || at.Platforms[0].Platform != anthropic.PlatformID {
+			t.Fatalf("account type %s platforms = %+v, want [anthropic]", at.ID, at.Platforms)
 		}
-		if !slices.Equal(protos, anthropic.Protocols) {
-			t.Fatalf("account type %s protocols = %v, want %v", at.ID, protos, anthropic.Protocols)
+		// No overrides: the built-in platform defaults apply.
+		if ap := at.Platforms[0]; len(ap.RequestFields)+len(ap.PassHeaders)+len(ap.Usage) != 0 {
+			t.Fatalf("account type %s overrides the platform defaults: %+v", at.ID, ap)
 		}
 		if !slices.Contains(at.SensitiveFields, "api_key") {
 			t.Fatalf("account type %s: api_key must be sensitive", at.ID)
+		}
+	}
+	if builtin != nil {
+		if got := builtin.Protocols(); !slices.Equal(got, anthropic.Protocols) {
+			t.Fatalf("built-in anthropic protocols %v, implemented %v", got, anthropic.Protocols)
+		}
+		for _, h := range anthropic.ForwardHeaders() {
+			if !slices.Contains(builtin.PassHeaders, h) {
+				t.Errorf("forwarded header %q is not in the built-in platform passHeaders", h)
+			}
 		}
 	}
 
@@ -73,10 +78,16 @@ func TestManifest(t *testing.T) {
 		if _, ok := manifest.HostPermissionRisk[perm.ID]; !ok {
 			t.Errorf("unknown host permission %q", perm.ID)
 		}
+		if perm.Reason["en"] == "" || perm.Reason["zh"] == "" {
+			t.Errorf("host permission %s needs an en and zh reason", perm.ID)
+		}
 		perms[perm.ID] = perm
 	}
 	if _, ok := perms["platform.register"]; !ok {
 		t.Error("account types need host permission platform.register")
+	}
+	if _, ok := perms["gateway.endpoint"]; ok {
+		t.Error("gateway.endpoint is only for plugins that declare platforms")
 	}
 	if c, ok := perms["accounts.credentials"]; !ok || c.Scope["types"] != "own" || len(c.Scope) != 1 {
 		t.Errorf("accounts.credentials scope = %v, want {\"types\":\"own\"}", c.Scope)
@@ -104,10 +115,15 @@ func TestManifest(t *testing.T) {
 	if patch["version"] != "0.2.0" {
 		t.Fatalf("0.2.0 patch version = %v", patch["version"])
 	}
-	// The overlay must not bring back the pre-6.6 layout.
-	if p, ok := patch["platform"].(map[string]any); ok {
-		if _, bad := p["accountTypes"]; bad {
-			t.Fatal("0.2.0 patch sets platform.accountTypes; account types are top-level")
+	// The overlay must not bring back the pre-6.6 layouts.
+	for _, k := range []string{"platform", "gateway", "platforms"} {
+		if _, bad := patch[k]; bad {
+			t.Fatalf("0.2.0 patch sets %q; anthropic is a built-in platform", k)
+		}
+	}
+	for _, at := range asSlice(patch["accountTypes"]) {
+		if e, ok := at.(map[string]any); ok && e["protocols"] != nil {
+			t.Fatal("0.2.0 patch sets accountTypes[].protocols; account types declare platforms")
 		}
 	}
 	for _, pe := range asSlice(patch["pricing"]) {
@@ -115,6 +131,28 @@ func TestManifest(t *testing.T) {
 			t.Fatal("0.2.0 patch sets pricing[].platform; prices are global per model")
 		}
 	}
+}
+
+// builtinAnthropic reads the core's built-in anthropic platform definition
+// when the plugin is checked out inside the next/ tree; nil otherwise.
+func builtinAnthropic(t *testing.T) *manifest.Platform {
+	t.Helper()
+	b, err := os.ReadFile(filepath.FromSlash("../../server/internal/platforms/anthropic.json"))
+	if os.IsNotExist(err) {
+		t.Log("built-in platform definition not found; skipping cross-check")
+		return nil
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	var p manifest.Platform
+	if err := json.Unmarshal(b, &p); err != nil {
+		t.Fatalf("built-in anthropic platform: %v", err)
+	}
+	if p.ID != anthropic.PlatformID {
+		t.Fatalf("built-in platform id = %q", p.ID)
+	}
+	return &p
 }
 
 func asSlice(v any) []any {

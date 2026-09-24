@@ -28,8 +28,8 @@ func TestManifest(t *testing.T) {
 	if m.Name["en"] == "" || m.Name["zh"] == "" || m.Description["en"] == "" || m.Description["zh"] == "" {
 		t.Fatal("name and description need en and zh")
 	}
-	if m.Platform != nil || m.Gateway != nil || len(m.Pricing) != 0 || m.Database != nil {
-		t.Fatal("relay declares only an account type: no platform, gateway, pricing or database")
+	if len(m.Platforms) != 0 || len(m.Pricing) != 0 || m.Database != nil {
+		t.Fatal("relay declares only an account type: no platforms, pricing or database")
 	}
 	if len(m.Capabilities) != 1 || m.Capabilities[0].ID != manifest.CapPlatformAdapter {
 		t.Fatalf("capabilities = %v", m.Capabilities)
@@ -56,15 +56,28 @@ func TestManifest(t *testing.T) {
 	if !slices.Contains(schema.Required, "base_url") || !slices.Contains(schema.Required, "api_key") || schema.Properties["model_mapping"] == nil {
 		t.Fatalf("form schema: required %v, properties %v", schema.Required, schema.Properties)
 	}
-	var protos []string
-	for _, p := range at.Protocols {
-		protos = append(protos, p.Protocol)
-		if !slices.Equal(p.PassHeaders, relay.PassHeaders) {
-			t.Errorf("%s passHeaders = %v, want %v", p.Protocol, p.PassHeaders, relay.PassHeaders)
-		}
+	if len(at.Platforms) != 1 {
+		t.Fatalf("platforms = %+v, want [anthropic]", at.Platforms)
 	}
-	if !slices.Equal(protos, relay.Protocols) {
-		t.Fatalf("protocols = %v, want %v", protos, relay.Protocols)
+	ap := at.Platforms[0]
+	if ap.Platform != relay.PlatformID {
+		t.Fatalf("platform = %q, want %q", ap.Platform, relay.PlatformID)
+	}
+	// relay_key overrides the platform defaults (demo of the override).
+	if !slices.Equal(ap.PassHeaders, relay.PassHeaders) {
+		t.Errorf("passHeaders = %v, want %v", ap.PassHeaders, relay.PassHeaders)
+	}
+	if !slices.Equal(ap.RequestFields, []string{"model"}) {
+		t.Errorf("requestFields = %v, want [model]", ap.RequestFields)
+	}
+	if b, err := os.ReadFile(filepath.FromSlash("../../server/internal/platforms/anthropic.json")); err == nil {
+		var p manifest.Platform
+		if err := json.Unmarshal(b, &p); err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(p.Protocols(), relay.Protocols) {
+			t.Fatalf("built-in anthropic protocols %v, implemented %v", p.Protocols(), relay.Protocols)
+		}
 	}
 
 	perms := map[string]manifest.HostPermission{}
