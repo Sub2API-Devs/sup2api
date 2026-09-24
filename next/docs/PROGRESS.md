@@ -244,7 +244,7 @@ go test -count=1 -timeout 50m -v ./...
 | c3-registry | `plugin/*` | next/c3-registry | ✅ `4c2b1f803`，合并 `2bc6a7ae7` |
 | a3-accounts | `account`、`billing`、`usage`、`group`、`apikey`（新接口 `/platforms`，分组/Key 的 `platforms`） | next/a3-accounts | ✅ `544e8010a`、`886cec1a7`、`3b5d09d4b`、`49aa41d97`，已合并；app 已改 group/apikey 构造函数 |
 | e3-plugins | `plugins/*`、`tools/sub2api-plugin`、`e2e`（AC19）、`sdk/pluginsdk` | next/e3-plugins | ✅ `4e3b40354`、`033940989`、`042799583`，合并 `54d6e76e6` |
-| f3-web | `web/`（平台页、分组/Key 显示可访问平台） | next/f3-web | ⏳ |
+| f3-web | `web/`（平台页、分组/Key 显示可访问平台） | next/f3-web | ✅ `56ee98453`，合并 `c92c7c0a8`；主控补 `/me/menus` 平台菜单与 `/platforms` 的 plugin_name |
 
 **sup2api 验证（部署 `298041c`，数据清空重建）**：三个内置平台及端点都在 `/platforms`；anthropic 插件只声明 apikey 账号类型（→ anthropic 平台）；市场安装 relay，relay_key → anthropic；空分组 platforms=[]，放入两种类型账号后分组与 API Key 的 platforms=[anthropic]；16 次 `/v1/messages` 两种账号各服务 8 次；同一 Key 调 openai 端点 → 503 openai 格式，调 gemini 端点 → 503 gemini 格式，未知路径 → 404；禁用内置 anthropic 插件后 anthropic 平台仍在、只由 relay 账号服务，重新启用后恢复；内置粘性规则 `claude-code-session`、`openai-prompt-cache-key`（source=builtin）已同步。验证数据已删除。
 
