@@ -29,14 +29,14 @@ type StickyRuleCatalog interface {
 
 // Rollout is the API view of one plugin_rollouts row plus live node states.
 type Rollout struct {
-	ID            int64             `json:"id"`
-	PluginKey     string            `json:"plugin_key"`
-	Action        string            `json:"action"` // enable | upgrade | disable
-	FromVersion   string            `json:"from_version"`
-	TargetVersion string            `json:"target_version"`
-	Phase         string            `json:"phase"`
-	Coordinator   string            `json:"coordinator"`
-	Error         string            `json:"error"`
+	ID            int64              `json:"id"`
+	PluginKey     string             `json:"plugin_key"`
+	Action        string             `json:"action"` // enable | upgrade | disable
+	FromVersion   string             `json:"from_version"`
+	TargetVersion string             `json:"target_version"`
+	Phase         string             `json:"phase"`
+	Coordinator   string             `json:"coordinator"`
+	Error         string             `json:"error"`
 	Nodes         []RolloutNodeState `json:"nodes"`
 }
 

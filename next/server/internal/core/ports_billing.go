@@ -63,6 +63,9 @@ type LedgerResult struct {
 // transaction; idempotent on IdempotencyKey.
 type Ledger interface {
 	Apply(ctx context.Context, ch LedgerChange) (*LedgerResult, error)
+	// ApplyTx applies the change inside the caller's transaction (used by
+	// settlement so the usage row and the ledger row commit together).
+	ApplyTx(ctx context.Context, tx pgx.Tx, ch LedgerChange) (*LedgerResult, error)
 }
 
 // UsageTokens are normalized token counts (see ARCHITECTURE 7.3).
@@ -78,41 +81,41 @@ type UsageTokens struct {
 // submitted to the Settler, which persists usage_logs, bills and emits
 // usage.recorded asynchronously.
 type UsageRecord struct {
-	RequestID     string
-	UserID        int64
-	APIKeyID      int64
-	GroupID       int64
-	AccountID     *int64
-	PluginKey     string
-	PluginVersion string
-	Platform      string
-	Protocol      string
-	Endpoint      string
-	Model         string
-	UpstreamModel string
-	Stream        bool
-	StatusCode    int
-	Success       bool
-	ErrorType     string // see usage_logs.error_type
-	ErrorMessage  string
-	Attempts      int
+	RequestID      string
+	UserID         int64
+	APIKeyID       int64
+	GroupID        int64
+	AccountID      *int64
+	PluginKey      string
+	PluginVersion  string
+	Platform       string
+	Protocol       string
+	Endpoint       string
+	Model          string
+	UpstreamModel  string
+	Stream         bool
+	StatusCode     int
+	Success        bool
+	ErrorType      string // see usage_logs.error_type
+	ErrorMessage   string
+	Attempts       int
 	UsageSemantics string // exclusive | inclusive
-	Tokens        UsageTokens
-	Metrics       map[string]any // plugin usage facts for u("key")
-	StickyRule    string
-	StickyHit     bool
-	HookDecisions []HookDecision
-	Billable      bool            // false for endpoint billing=free or zero usage
-	Price         *PriceRule      // nil when not billable or free policy
-	PriceParams   map[string]string // body path -> raw JSON value captured at request time
-	PriceHeaders  map[string]string // lower-case header -> value captured at request time
+	Tokens         UsageTokens
+	Metrics        map[string]any // plugin usage facts for u("key")
+	StickyRule     string
+	StickyHit      bool
+	HookDecisions  []HookDecision
+	Billable       bool              // false for endpoint billing=free or zero usage
+	Price          *PriceRule        // nil when not billable or free policy
+	PriceParams    map[string]string // body path -> raw JSON value captured at request time
+	PriceHeaders   map[string]string // lower-case header -> value captured at request time
 	RateMultiplier decimal.Decimal
-	LatencyMs     int
-	FirstTokenMs  int
-	ClientIP      string
-	UserAgent     string
-	NodeID        string
-	CreatedAt     time.Time // request start; time functions evaluate against it
+	LatencyMs      int
+	FirstTokenMs   int
+	ClientIP       string
+	UserAgent      string
+	NodeID         string
+	CreatedAt      time.Time // request start; time functions evaluate against it
 }
 
 type HookDecision struct {

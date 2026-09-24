@@ -61,7 +61,7 @@ func (allowAll) Can(context.Context, int64, string) (bool, error) { return true,
 func (allowAll) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{Superuser: true}, nil
 }
-func (allowAll) IsSensitive(string) bool                            { return false }
+func (allowAll) IsSensitive(string) bool                           { return false }
 func (allowAll) VerifyStepUp(context.Context, int64, string) error { return nil }
 
 type env struct {

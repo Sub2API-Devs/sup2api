@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	dnsIdleTimeout  = 30 * time.Second
+	dnsIdleTimeout   = 30 * time.Second
 	dnsLookupTimeout = 5 * time.Second
-	dnsAnswerTTL    = 30
+	dnsAnswerTTL     = 30
 )
 
 // serveDNS answers DNS-over-TCP queries (RFC 7766 framing) on conn until
