@@ -114,8 +114,8 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		return fmt.Errorf("bootstrap admin: %w", err)
 	}
 
-	grp := group.New(db, rdb, cl.Bus)
-	keys := apikey.New(db, rdb, az)
+	grp := group.New(db, rdb, cl.Bus, reg)
+	keys := apikey.New(db, rdb, az, reg)
 	prx := proxy.New(db, cipher, cl.Bus, proxy.Options{})
 	// One converter registry for the gateway (conversion) and the account
 	// module (endpoints an account type can serve), ARCHITECTURE 6.6.
