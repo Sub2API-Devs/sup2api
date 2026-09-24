@@ -13,7 +13,7 @@ type LocalizedText map[string]string
 // Manifest is the root of manifest.json.
 type Manifest struct {
 	APIVersion   int           `json:"apiVersion"`
-	Key          string        `json:"key"`     // ^[a-z][a-z0-9_]{1,29}$
+	Key          string        `json:"key"` // ^[a-z][a-z0-9_]{1,29}$
 	Name         LocalizedText `json:"name"`
 	Description  LocalizedText `json:"description,omitempty"`
 	Version      string        `json:"version"` // semver
@@ -60,12 +60,12 @@ type JSEntry struct {
 
 // Capability ids understood by host version 0.1.
 const (
-	CapPlatformAdapter  = "platform.adapter.v1"
-	CapGatewayHook      = "gateway.hook.v1"
-	CapAppJobs          = "app.jobs.v1"
-	CapAppEvents        = "app.events.v1"
-	CapHTTPRoutes       = "http.routes.v1"
-	CapMigrationData    = "migration.data.v1"
+	CapPlatformAdapter   = "platform.adapter.v1"
+	CapGatewayHook       = "gateway.hook.v1"
+	CapAppJobs           = "app.jobs.v1"
+	CapAppEvents         = "app.events.v1"
+	CapHTTPRoutes        = "http.routes.v1"
+	CapMigrationData     = "migration.data.v1"
 	CapSchedulerAffinity = "scheduler.affinity.v1"
 )
 
@@ -211,9 +211,9 @@ type StickyKeySource struct {
 // ---------------------------------------------------------------- pricing
 
 type PricingEntry struct {
-	Model      string         `json:"model"`          // exact or glob
+	Model      string         `json:"model"` // exact or glob
 	Platform   string         `json:"platform,omitempty"`
-	Mode       string         `json:"mode"`           // per_request | per_token | expression
+	Mode       string         `json:"mode"` // per_request | per_token | expression
 	Config     map[string]any `json:"config,omitempty"`
 	Expression string         `json:"expression,omitempty"`
 }

@@ -27,9 +27,9 @@ type MigrateOptions struct {
 	// LockKey is the pg_advisory_lock key serializing runs across nodes.
 	LockKey int64
 	// SearchPath, when set, is applied with SET LOCAL before each file.
+	// Privilege separation is done by the connection's login role, never by
+	// SET ROLE (a migration could RESET it).
 	SearchPath string
-	// Role, when set, is applied with SET LOCAL ROLE before each file.
-	Role string
 }
 
 // Migrate applies *.sql files from fsys in lexical order. Each file runs in
@@ -77,12 +77,6 @@ func Migrate(ctx context.Context, db *DB, fsys fs.FS, tr Tracker, opt MigrateOpt
 		tx, err := conn.Begin(ctx)
 		if err != nil {
 			return done, err
-		}
-		if opt.Role != "" {
-			if _, err := tx.Exec(ctx, "SET LOCAL ROLE "+pgx.Identifier{opt.Role}.Sanitize()); err != nil {
-				_ = tx.Rollback(ctx)
-				return done, err
-			}
 		}
 		if opt.SearchPath != "" {
 			if _, err := tx.Exec(ctx, "SET LOCAL search_path TO "+pgx.Identifier{opt.SearchPath}.Sanitize()); err != nil {

@@ -22,7 +22,9 @@ const maxFrameData = 32 << 10
 const closeGrace = 5 * time.Second
 
 func dial(ctx context.Context, c pluginv1.EgressServiceClient, network, address string) (net.Conn, error) {
-	opErr := func(err error) error { return &net.OpError{Op: "dial", Net: network, Addr: strAddr{network, address}, Err: err} }
+	opErr := func(err error) error {
+		return &net.OpError{Op: "dial", Net: network, Addr: strAddr{network, address}, Err: err}
+	}
 	switch network {
 	case "tcp", "tcp4", "tcp6":
 	default:

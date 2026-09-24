@@ -144,3 +144,44 @@ func TestSchemaWithoutRoleIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A plugin migration must not escape its role (RESET ROLE was the old hole)
+// nor record migrations for another plugin.
+func TestMigrationCannotEscalate(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := context.Background()
+	key, other := randKey(), randKey()
+	for _, k := range []string{key, other} {
+		if _, err := db.Pool.Exec(ctx, `INSERT INTO plugins (key, name, status) VALUES ($1, '{"en":"x"}', 'installed')`, k); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk := make([]byte, 32)
+	_, _ = rand.Read(mk)
+	m := dbschema.New(db, db.Pool.Config().ConnString(), mk, true)
+	t.Cleanup(func() { _ = m.Drop(context.Background(), key) })
+
+	cases := map[string]string{
+		"reset_role":   `RESET ROLE; CREATE TABLE public.escalated (id int);`,
+		"core_write":   `UPDATE public.users SET status = 'disabled';`,
+		"other_record": `SELECT public.plugin_migration_record('` + other + `', 'x.sql', 'x');`,
+		"direct_log":   `INSERT INTO public.plugin_migrations (plugin_key, migration_id, checksum) VALUES ('` + other + `', 'x.sql', 'x');`,
+	}
+	for name, sql := range cases {
+		_, err := m.Migrate(ctx, key, fstest.MapFS{"0001_" + name + ".sql": {Data: []byte(sql)}})
+		if err == nil {
+			t.Fatalf("%s: migration succeeded", name)
+		}
+	}
+	var n int
+	if err := db.Pool.QueryRow(ctx, `SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND tablename = 'escalated'`).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("escalated table exists: n=%d err=%v", n, err)
+	}
+	if err := db.Pool.QueryRow(ctx, `SELECT count(*) FROM plugin_migrations WHERE plugin_key = $1`, other).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("records for other plugin: n=%d err=%v", n, err)
+	}
+	// A normal migration still works and is recorded under its own key.
+	if applied, err := m.Migrate(ctx, key, fstest.MapFS{"0001_ok.sql": {Data: []byte(`CREATE TABLE ok (id int);`)}}); err != nil || len(applied) != 1 {
+		t.Fatalf("ok migration: %v %v", applied, err)
+	}
+}

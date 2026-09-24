@@ -16,6 +16,7 @@ import (
 	"sync"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -114,8 +115,9 @@ func (m *Manager) Ensure(ctx context.Context, pluginKey string) (Status, error) 
 				return err
 			}
 		}
-		// The host must be able to SET ROLE for migrations (PG16+ does not
-		// grant SET on created roles by default).
+		// Host membership lets a non-superuser host hand the schema to the role
+		// and DROP OWNED BY it on purge (PG16+ does not grant SET on created
+		// roles by default). Migrations never use SET ROLE.
 		var verNum int
 		if err := tx.QueryRow(ctx, `SELECT current_setting('server_version_num')::int`).Scan(&verNum); err != nil {
 			return err
@@ -138,6 +140,8 @@ func (m *Manager) Ensure(ctx context.Context, pluginKey string) (Status, error) 
 			"REVOKE ALL ON SCHEMA " + sid + " FROM PUBLIC",
 			"GRANT USAGE, CREATE ON SCHEMA " + sid + " TO " + rid,
 			"ALTER ROLE " + rid + " SET search_path TO " + sid,
+			// Migration bookkeeping for its own key only (0003 migration).
+			"GRANT EXECUTE ON FUNCTION public.plugin_migrations_applied(varchar), public.plugin_migration_record(varchar, varchar, varchar) TO " + rid,
 		}
 		for _, s := range stmts {
 			if _, err := tx.Exec(ctx, s); err != nil {
@@ -170,6 +174,11 @@ func (m *Manager) Status(ctx context.Context, pluginKey string) (Status, error) 
 
 // Migrate ensures the schema and applies the plugin's SQL migrations from
 // fsys (the package migrations directory). Returns applied file names.
+//
+// With role isolation the files run on a connection logged in as the plugin
+// role, so a migration cannot escalate with RESET ROLE; bookkeeping goes
+// through the definer functions of migration 0003. Without isolation (no
+// CREATEROLE) they run as the host role, as the install review warns.
 func (m *Manager) Migrate(ctx context.Context, pluginKey string, fsys fs.FS) ([]string, error) {
 	st, err := m.Ensure(ctx, pluginKey)
 	if err != nil {
@@ -179,10 +188,24 @@ func (m *Manager) Migrate(ctx context.Context, pluginKey string, fsys fs.FS) ([]
 		return nil, nil
 	}
 	opt := store.MigrateOptions{LockKey: store.PluginMigrationLockKey(pluginKey), SearchPath: st.Schema}
-	if st.RoleIsolated {
-		opt.Role = st.Role
+	if !st.RoleIsolated {
+		return store.Migrate(ctx, m.db, fsys, Tracker{PluginKey: pluginKey}, opt)
 	}
-	return store.Migrate(ctx, m.db, fsys, Tracker{PluginKey: pluginKey}, opt)
+	dsn, err := rewriteDSN(m.databaseURL, st.Role, m.RolePassword(pluginKey), st.Schema)
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("parse plugin dsn: %w", err)
+	}
+	cfg.MaxConns = 1
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("connect as plugin role: %w", err)
+	}
+	defer pool.Close()
+	return store.Migrate(ctx, &store.DB{Pool: pool}, fsys, Tracker{PluginKey: pluginKey, AsPluginRole: true}, opt)
 }
 
 // Pending reports whether any of ids has not been applied yet.
@@ -252,13 +275,22 @@ func (m *Manager) Drop(ctx context.Context, pluginKey string) error {
 	return nil
 }
 
-// Tracker records plugin migrations in public.plugin_migrations.
-type Tracker struct{ PluginKey string }
+// Tracker records plugin migrations in public.plugin_migrations. With
+// AsPluginRole the queries run as the plugin role and go through the
+// definer functions, which only accept the role's own key.
+type Tracker struct {
+	PluginKey    string
+	AsPluginRole bool
+}
 
 func (Tracker) Ensure(context.Context, store.Querier) error { return nil }
 
 func (t Tracker) Applied(ctx context.Context, q store.Querier) (map[string]string, error) {
-	rows, err := q.Query(ctx, `SELECT migration_id, checksum FROM public.plugin_migrations WHERE plugin_key = $1`, t.PluginKey)
+	query := `SELECT migration_id, checksum FROM public.plugin_migrations WHERE plugin_key = $1`
+	if t.AsPluginRole {
+		query = `SELECT migration_id, checksum FROM public.plugin_migrations_applied($1)`
+	}
+	rows, err := q.Query(ctx, query, t.PluginKey)
 	if err != nil {
 		return nil, err
 	}
@@ -275,8 +307,8 @@ func (t Tracker) Applied(ctx context.Context, q store.Querier) (map[string]strin
 }
 
 func (t Tracker) Record(ctx context.Context, tx pgx.Tx, id, checksum string) error {
-	// The migration body ran as the plugin role; record as the host role.
-	if _, err := tx.Exec(ctx, "RESET ROLE"); err != nil {
+	if t.AsPluginRole {
+		_, err := tx.Exec(ctx, `SELECT public.plugin_migration_record($1, $2, $3)`, t.PluginKey, id, checksum)
 		return err
 	}
 	_, err := tx.Exec(ctx,
