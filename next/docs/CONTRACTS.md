@@ -35,6 +35,7 @@
 - **数据库测试**：用 `testutil.DB(t)`，需要环境变量 `TEST_DATABASE_URL`（超级用户 DSN），没有时自动跳过。本机通过 SSH 隧道连接 ovh 上的测试库：`TEST_DATABASE_URL=postgres://postgres:sub2api@127.0.0.1:45432/postgres?sslmode=disable`（隧道：`ssh -N -L 45432:127.0.0.1:45432 -L 36379:127.0.0.1:36379 ovh`，主控已在本机常驻开启）
 - **Redis 测试**：单元测试用 `github.com/alicebob/miniredis/v2`；集成测试可用 `TEST_REDIS_URL=redis://127.0.0.1:36379/0`
 - Linux 专有代码用 `//go:build linux`，并提供非 Linux 的空实现，保证 Windows 上也能编译
+- **所有测试组件一律用 docker compose 启动，禁止在服务器上直接安装或运行任何服务/进程**。测试服务器 ovh 上：测试库为 compose 项目 `sub2api-next-testdb`（目录 `~/sub2api-next-test/testdb`）；需要在 Linux 上运行的 Go 测试（seccomp、/proc 等）用 `next/deploy/ci/compose.yml` 的 `gotest` 服务：把代码同步到 `~/sub2api-next-test/ci/<agent代号>/`，在该目录执行 `docker compose -f next/deploy/ci/compose.yml run --rm gotest go test ...`，用完删除同步目录。不要触碰服务器上的其他 compose 项目和容器
 - 前端：Node 24，npm；`web/` 下 `npm ci && npm run build`，产物输出到 `server/web/dist`（由 `server/web` 用 `embed` 嵌入）
 
 ## 3. 通用约定
