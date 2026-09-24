@@ -27,12 +27,32 @@ type Handler struct {
 	tokens core.TokenVerifier
 	authz  core.Authorizer
 	stepUp core.StepUpVerifier
+	health HealthChecker
+}
+
+// HealthChecker reports whether this node may serve traffic
+// (core.NodeRegistry satisfies it).
+type HealthChecker interface {
+	Healthy() bool
+}
+
+// Option configures optional Handler dependencies.
+type Option func(*Handler)
+
+// WithHealth makes plugin API routes answer 503 unavailable while the node
+// is unhealthy (self-fencing, CONTRACTS §14.3). Assets are still served.
+func WithHealth(h HealthChecker) Option {
+	return func(x *Handler) { x.health = h }
 }
 
 // New creates the handler. stepUp may be nil (sensitive plugin permissions
 // are then refused).
-func New(reg core.PluginRegistry, tokens core.TokenVerifier, authz core.Authorizer, stepUp core.StepUpVerifier) *Handler {
-	return &Handler{reg: reg, tokens: tokens, authz: authz, stepUp: stepUp}
+func New(reg core.PluginRegistry, tokens core.TokenVerifier, authz core.Authorizer, stepUp core.StepUpVerifier, opts ...Option) *Handler {
+	h := &Handler{reg: reg, tokens: tokens, authz: authz, stepUp: stepUp}
+	for _, o := range opts {
+		o(h)
+	}
+	return h
 }
 
 // RegisterRoutes mounts ANY /api/v1/p/:key/*path.
@@ -50,6 +70,7 @@ var (
 	errMethodNotAllowed = core.NewError(http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 	errTooLarge         = core.NewError(http.StatusRequestEntityTooLarge, "payload_too_large", "request body too large")
 	errRouteNotFound    = core.ErrNotFound.WithMessage("plugin route not found")
+	errNodeUnhealthy    = core.ErrUnavailable.WithMessage("this node is temporarily unavailable; retry on another node")
 )
 
 // Request headers never forwarded to plugins.
@@ -81,6 +102,13 @@ var strippedResponseHeaders = map[string]bool{
 }
 
 func (h *Handler) serveAPI(c *gin.Context) {
+	// A node that lost Redis/PG may hold a stale view of plugins and grants;
+	// it stops serving plugin APIs until it recovers.
+	if h.health != nil && !h.health.Healthy() {
+		c.Header("Retry-After", "5")
+		httpapi.Fail(c, errNodeUnhealthy)
+		return
+	}
 	key := c.Param("key")
 	sub := c.Param("path")
 	if sub == "" {

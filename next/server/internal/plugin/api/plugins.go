@@ -387,12 +387,15 @@ func (a *API) reject(c *gin.Context) {
 }
 
 func (a *API) uninstall(c *gin.Context) {
-	purge, _ := strconv.ParseBool(c.DefaultQuery("purge", "false"))
-	if err := a.d.Install.Uninstall(ctx(c), c.Param("key"), purge, actor(c)); err != nil {
+	var opt install.UninstallOptions
+	opt.Purge, _ = strconv.ParseBool(c.DefaultQuery("purge", "false"))
+	opt.PurgeAccounts, _ = strconv.ParseBool(c.DefaultQuery("purge_accounts", "false"))
+	res, err := a.d.Install.Uninstall(ctx(c), c.Param("key"), opt, actor(c))
+	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	httpapi.NoContent(c)
+	httpapi.OK(c, res)
 }
 
 // ---------------------------------------------------------------- rollouts

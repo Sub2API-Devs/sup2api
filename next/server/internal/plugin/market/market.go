@@ -301,7 +301,22 @@ type MarketVersion struct {
 	Version    string `json:"version"`
 	Size       int64  `json:"size"`
 	HostCompat string `json:"host_compat"`
-	Compatible bool   `json:"compatible"`
+	// Compatible reports whether this host could install the version:
+	// host_compat is matched against the core version with any
+	// pre-release suffix ignored, exactly as install-time validation does
+	// (an empty or malformed range is incompatible, since install rejects
+	// it).
+	Compatible bool `json:"compatible"`
+}
+
+// Compatible reports whether a market version's host_compat range accepts
+// hostVersion, using the same rule as manifest validation at install time.
+func Compatible(hostCompat, hostVersion string) bool {
+	if strings.TrimSpace(hostCompat) == "" {
+		return false
+	}
+	ok, err := pkg.HostCompatible(hostCompat, hostVersion)
+	return err == nil && ok
 }
 
 // ListPlugins lists the plugins of one source (sourceID > 0) or of every
@@ -346,10 +361,7 @@ func (s *Service) ListPlugins(ctx context.Context, sourceID int64, refresh bool)
 			}
 			var latest *semver.Version
 			for _, v := range sortedVersions(p.Versions) {
-				ok, _ := pkg.HostCompatible(v.HostCompat, s.inst.HostVersion())
-				if v.HostCompat == "" {
-					ok = true
-				}
+				ok := Compatible(v.HostCompat, s.inst.HostVersion())
 				mp.Versions = append(mp.Versions, MarketVersion{Version: v.Version, Size: v.Size, HostCompat: v.HostCompat, Compatible: ok})
 				sv, err := semver.NewVersion(v.Version)
 				if err == nil && ok && (latest == nil || sv.GreaterThan(latest)) {

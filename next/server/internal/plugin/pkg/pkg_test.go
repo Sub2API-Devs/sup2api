@@ -115,6 +115,18 @@ func TestValidateGuardOK(t *testing.T) {
 	}
 }
 
+// app.broadcast.v1 is a known capability and is accepted together with the
+// broadcast host permission (CONTRACTS §14.3).
+func TestValidateBroadcastOK(t *testing.T) {
+	m := pkgtest.Guard("guard", "0.1.0", "sub2api")
+	m.Capabilities = append(m.Capabilities, manifest.Capability{ID: manifest.CapAppBroadcast})
+	m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "broadcast",
+		Reason: manifest.LocalizedText{"en": "Sync rules across nodes", "zh": "在节点间同步规则"}})
+	if err := Validate(m, pkgtest.Files(m), opts()); err != nil {
+		t.Fatalf("validate: %v %v", err, fieldCodes(err))
+	}
+}
+
 func TestValidateConsistency(t *testing.T) {
 	type mut func(m *manifest.Manifest, files map[string][]byte)
 	dropPerm := func(id string) mut {
@@ -150,6 +162,9 @@ func TestValidateConsistency(t *testing.T) {
 			m.Events.Subscribe = append(m.Events.Subscribe, "balance.changed")
 		}, "events.subscribe", "exceeds_scope"},
 		{"jobs perm", dropPerm("jobs"), "jobs", "missing_host_permission"},
+		{"broadcast perm", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.Capabilities = append(m.Capabilities, manifest.Capability{ID: manifest.CapAppBroadcast})
+		}, "capabilities[4]", "missing_host_permission"},
 		{"bad cron", func(m *manifest.Manifest, _ map[string][]byte) { m.Jobs[0].Schedule = "every day" }, "jobs[0].schedule", "invalid"},
 		{"db schema name", func(m *manifest.Manifest, _ map[string][]byte) { m.Database.Schema = "plg_other" }, "database.schema", "invalid"},
 		{"db perm", dropPerm("db.schema"), "database", "missing_host_permission"},
