@@ -86,6 +86,8 @@ type env struct {
 
 const adminEmail, adminPassword = "root@example.com", "root-password-1"
 
+const testIP = "192.0.2.1"
+
 func setup(t *testing.T) *env {
 	t.Helper()
 	db := testutil.DB(t)
@@ -116,7 +118,7 @@ func isCode(err error, code string) bool {
 
 func mustLogin(t *testing.T, s *Service, email, password string) *TokenPair {
 	t.Helper()
-	p, err := s.Login(context.Background(), email, password)
+	p, err := s.Login(context.Background(), email, password, testIP)
 	if err != nil {
 		t.Fatalf("login %s: %v", email, err)
 	}
@@ -149,10 +151,10 @@ func TestBootstrapLoginRefreshLogout(t *testing.T) {
 		t.Fatalf("users after bootstrap = %d", total)
 	}
 
-	if _, err := s.Login(ctx, adminEmail, "wrong-password"); !isCode(err, "unauthenticated") {
+	if _, err := s.Login(ctx, adminEmail, "wrong-password", testIP); !isCode(err, "unauthenticated") {
 		t.Fatalf("bad password: %v", err)
 	}
-	if _, err := s.Login(ctx, "nobody@example.com", adminPassword); !isCode(err, "unauthenticated") {
+	if _, err := s.Login(ctx, "nobody@example.com", adminPassword, testIP); !isCode(err, "unauthenticated") {
 		t.Fatalf("unknown user: %v", err)
 	}
 	p := mustLogin(t, s, "ROOT@example.com ", adminPassword)
@@ -289,7 +291,7 @@ func TestUserLifecycle(t *testing.T) {
 	if u, err = s.UpdateUser(ctx, root, u.ID, UpdateUserInput{Status: &disabled}); err != nil || u.Status != StatusDisabled {
 		t.Fatalf("disable: %+v %v", u, err)
 	}
-	if _, err := s.Login(ctx, "alice@example.com", "password-1"); !isCode(err, "permission_denied") {
+	if _, err := s.Login(ctx, "alice@example.com", "password-1", testIP); !isCode(err, "permission_denied") {
 		t.Fatalf("login disabled: %v", err)
 	}
 	if _, err := s.VerifyAccessToken(ctx, pair.AccessToken); err == nil {
