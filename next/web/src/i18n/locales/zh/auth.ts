@@ -5,7 +5,10 @@ export default {
     email: '邮箱',
     password: '密码',
     submit: '登录',
-    failed: '登录失败'
+    failed: '登录失败',
+    rateLimited: '尝试次数过多，请在 {n} 秒后重试',
+    rateLimitedNoTime: '尝试次数过多，请稍后重试',
+    sessionExpired: '登录已失效，请重新登录'
   },
   stepUp: {
     title: '确认密码',

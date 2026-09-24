@@ -1,9 +1,26 @@
 export default {
   title: 'Settings',
-  description: 'System-wide billing and scheduling settings.',
+  description: 'System-wide billing, gateway and scheduling settings.',
   tabs: {
     billing: 'Billing',
+    gateway: 'Gateway',
     sticky: 'Sticky sessions'
+  },
+  gateway: {
+    title: 'Gateway',
+    subtitle: 'Failover and timeouts of gateway requests. Changes apply to new requests on every node.',
+    fields: {
+      max_attempts: 'Max attempts',
+      platform_call_timeout_ms: 'Platform call timeout',
+      default_hook_timeout_ms: 'Default hook timeout'
+    },
+    hints: {
+      max_attempts: 'Accounts tried per request, including the first attempt (failover).',
+      platform_call_timeout_ms: 'Timeout of plugin platform calls on the request path (building the upstream request, parsing usage).',
+      default_hook_timeout_ms: 'Used by hooks whose manifest sets no timeout.'
+    },
+    range: 'Range {min}–{max}.',
+    notInteger: 'Enter a whole number'
   },
   billing: {
     title: 'Billing',

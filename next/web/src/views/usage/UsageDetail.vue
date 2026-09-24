@@ -167,6 +167,14 @@ async function copy(v: string) {
               <code class="font-mono text-xs">{{ u.request_id }}</code>
               <button class="btn btn-ghost btn-sm !px-1 !py-0 text-xs" @click="copy(u.request_id)">{{ t('common.copy') }}</button>
             </dd>
+            <dt>{{ t('usage.request.clientId') }}</dt>
+            <dd class="flex min-w-0 items-center gap-1" data-testid="detail-client-request-id">
+              <template v-if="u.client_request_id">
+                <code class="break-all font-mono text-xs">{{ u.client_request_id }}</code>
+                <button class="btn btn-ghost btn-sm shrink-0 !px-1 !py-0 text-xs" @click="copy(u.client_request_id)">{{ t('common.copy') }}</button>
+              </template>
+              <span v-else class="muted" :title="t('usage.request.clientIdNone')">—</span>
+            </dd>
             <template v-if="u.endpoint || u.protocol">
               <dt>{{ t('usage.request.endpoint') }}</dt>
               <dd class="font-mono text-xs">

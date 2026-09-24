@@ -11,6 +11,7 @@ export const HOST_PERMISSION_RISK: Record<string, Risk> = {
   kv: 'low',
   config: 'low',
   log: 'low',
+  broadcast: 'low',
   'routes.admin': 'medium',
   'routes.user': 'medium',
   events: 'medium',
@@ -293,6 +294,14 @@ export interface PluginResources {
   max_open_files?: number | null
 }
 
+/** Plugin detail `resources` as the server returns it (CONTRACTS §15.6); older shapes are flat. */
+export interface PluginResourcesInfo extends PluginResources {
+  requested?: PluginResources
+  overrides?: PluginResources
+  effective?: PluginResources
+  max_memory_mb?: number
+}
+
 export interface PluginVersion {
   version: string
   consent_status: string
@@ -316,7 +325,7 @@ export interface PluginDetail {
   hooks?: PluginHook[]
   jobs?: PluginJob[]
   events?: PluginEvents | null
-  resources?: PluginResources | null
+  resources?: PluginResourcesInfo | null
   egress_policy?: string
   versions?: PluginVersion[]
 }

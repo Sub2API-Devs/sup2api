@@ -23,7 +23,9 @@ const { items, loading, page, pageSize, total, filters, reload } = useList<Usage
   group_id: '',
   account_id: '',
   model: '',
-  success: ''
+  success: '',
+  // exact match on the client's X-Request-Id (CONTRACTS §14.4)
+  client_request_id: ''
 })
 
 const canGroups = auth.has('group:read')
@@ -128,6 +130,16 @@ function refresh() {
           <label class="input-label">{{ t('common.status') }}</label>
           <SSelect v-model="filters.success" :options="successOptions" />
         </div>
+        <div class="w-56">
+          <label class="input-label">{{ t('usage.filters.clientRequestId') }}</label>
+          <input
+            v-model.trim="filters.client_request_id"
+            class="input font-mono"
+            :placeholder="t('usage.filters.clientRequestIdPlaceholder')"
+            maxlength="128"
+            data-testid="filter-client-request-id"
+          />
+        </div>
       </template>
     </SPageHeader>
 
@@ -149,7 +161,13 @@ function refresh() {
     </SCard>
 
     <div class="card overflow-hidden">
-      <UsageTable :rows="items" :loading="loading" :detail-path="(id: number) => `/usage/${id}`" />
+      <UsageTable
+        :rows="items"
+        :loading="loading"
+        show-client-request-id
+        :detail-path="(id: number) => `/usage/${id}`"
+        @filter-client-request-id="(id: string) => (filters.client_request_id = id)"
+      />
     </div>
     <SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" />
   </div>

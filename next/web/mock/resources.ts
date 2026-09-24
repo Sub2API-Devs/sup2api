@@ -433,8 +433,10 @@ const proxies: MockProxy[] = [
   { id: 3, name: 'eu-backup', protocol: 'https', host: 'eu.proxy.example.net', port: 443, username: 'backup', password: 'pw', status: 'disabled', created_at: now(-86400 * 3) }
 ]
 
+// CONTRACTS §15.4: the password is never returned, only has_password.
 function proxyOut(p: MockProxy) {
-  return { ...p, password: p.password ? '******' : '' }
+  const { password, ...rest } = p
+  return { ...rest, has_password: !!password }
 }
 
 function validateProxy(b: any, partial: boolean) {
@@ -462,7 +464,8 @@ on('PATCH', '/proxies/:id', (req) => {
   if (err) return err
   for (const k of ['name', 'protocol', 'host', 'username', 'status'] as const) if (b[k] !== undefined) (p as any)[k] = b[k]
   if (b.port !== undefined) p.port = Number(b.port)
-  if (b.password !== undefined && b.password !== '******') p.password = b.password
+  // No mask convention: omitted / null keeps, "" clears, any other string is the new password.
+  if (b.password !== undefined && b.password !== null) p.password = String(b.password)
   return proxyOut(p)
 })
 on('DELETE', '/proxies/:id', (req) => {

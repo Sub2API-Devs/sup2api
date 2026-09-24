@@ -6,6 +6,7 @@ import { SBadge, SButton, SCard, SIcon, SSelect, STable, toast, type TableColumn
 import { formatBytes, formatDateTime, formatNumber } from '@/utils/format'
 import { notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
+import type { EgressDomain } from '@/api/types'
 import { asArray, pick, type PluginDetail } from '../pluginUtil'
 
 interface EgressSummary {
@@ -24,15 +25,17 @@ interface EgressLog {
   host: string
   port?: number
   started_at?: string
-  duration_ms?: number
-  bytes_in?: number
-  bytes_out?: number
+  duration_ms?: number | null
+  bytes_in?: number | null
+  bytes_out?: number | null
+  /** "open" while the connection is alive (CONTRACTS §14.2). */
   result?: string
+  error?: string
 }
 
 const props = defineProps<{ detail: PluginDetail }>()
 const emit = defineEmits<{ (e: 'changed'): void }>()
-const { t } = useI18n()
+const { t, te } = useI18n()
 const auth = useAuthStore()
 
 const canRead = computed(() => auth.has('plugin:egress:read'))
@@ -66,6 +69,8 @@ const rangeOptions = computed(() => [
 const loading = ref(false)
 const summary = ref<EgressSummary[]>([])
 const logs = ref<EgressLog[]>([])
+/** Hosts the plugin connected to (null: not reported by the server). */
+const domains = ref<EgressDomain[] | null>(null)
 
 function aggregate(list: EgressLog[]): EgressSummary[] {
   const m = new Map<string, EgressSummary>()
@@ -89,6 +94,15 @@ function aggregate(list: EgressLog[]): EgressSummary[] {
 function normalizeSummary(x: Record<string, any>): EgressSummary {
   let results = pick<Record<string, number> | Array<{ result: string; count: number }>>(x, 'results', 'by_result') || {}
   if (Array.isArray(results)) results = Object.fromEntries(results.map((r) => [r.result, r.count]))
+  if (!Object.keys(results).length) {
+    // Server shape: separate ok / denied / errors (/ open) counters.
+    const r: Record<string, number> = {}
+    for (const [k, name] of [['ok', 'ok'], ['denied', 'denied'], ['errors', 'error'], ['open', 'open']] as const) {
+      const n = Number(x[k] ?? 0)
+      if (n > 0) r[name] = n
+    }
+    results = r
+  }
   return {
     host: String(pick(x, 'host', 'domain') ?? ''),
     port: pick<number>(x, 'port') ?? null,
@@ -98,6 +112,27 @@ function normalizeSummary(x: Record<string, any>): EgressSummary {
     results,
     last_seen: pick<string>(x, 'last_seen', 'last_at') ?? null
   }
+}
+
+const DAY_MS = 24 * 3600_000
+
+/** `new` from the server, or first seen within the last 24 hours. */
+function isNewDomain(d: EgressDomain): boolean {
+  if (typeof d.new === 'boolean') return d.new
+  const at = d.first_seen_at ? new Date(d.first_seen_at).getTime() : NaN
+  return Number.isFinite(at) && Date.now() - at < DAY_MS
+}
+
+function normalizeDomain(x: Record<string, any>): EgressDomain {
+  const d: EgressDomain = {
+    host: String(pick(x, 'host', 'domain') ?? ''),
+    first_seen_at: String(pick(x, 'first_seen_at', 'first_seen') ?? ''),
+    last_seen_at: String(pick(x, 'last_seen_at', 'last_seen') ?? ''),
+    connections: Number(pick(x, 'connections', 'count') ?? 0),
+    new: x.new as boolean
+  }
+  d.new = isNewDomain(d)
+  return d
 }
 
 async function load() {
@@ -111,10 +146,17 @@ async function load() {
     if (Array.isArray(r)) {
       logs.value = r
       summary.value = aggregate(r)
+      domains.value = null
     } else {
       logs.value = asArray<EgressLog>(pick(r, 'items', 'details', 'logs', 'detail'))
-      const s = asArray<Record<string, any>>(pick(r, 'summary', 'domains', 'by_domain'))
+      const s = asArray<Record<string, any>>(pick(r, 'summary', 'by_domain'))
       summary.value = s.length ? s.map(normalizeSummary) : aggregate(logs.value)
+      const d = pick<unknown>(r, 'domains')
+      domains.value = Array.isArray(d)
+        ? d
+            .map((x) => normalizeDomain(x as Record<string, any>))
+            .sort((a, b) => Number(b.new) - Number(a.new) || b.last_seen_at.localeCompare(a.last_seen_at))
+        : null
     }
   } catch (e) {
     notifyError(e)
@@ -137,8 +179,25 @@ async function savePolicy() {
 }
 
 function resultTone(r: string) {
+  if (r === 'open') return 'info' as const
   return r === 'ok' || r === 'success' ? ('success' as const) : r === 'denied' || r === 'blocked' ? ('warning' as const) : ('danger' as const)
 }
+
+/** Localized result label; "open" = connection still alive. */
+function resultLabel(r: string | undefined): string {
+  if (!r) return '—'
+  const k = `plugins.egress.resultLabels.${r}`
+  return te(k) ? t(k) : r
+}
+
+const domainColumns = computed<TableColumn[]>(() => [
+  { key: 'host', label: t('plugins.egress.domain') },
+  { key: 'first_seen_at', label: t('plugins.egress.firstSeen') },
+  { key: 'last_seen_at', label: t('plugins.egress.lastSeen') },
+  { key: 'connections', label: t('plugins.egress.connections'), align: 'right' }
+])
+const domainRows = computed(() => domains.value || [])
+const newDomainCount = computed(() => domainRows.value.filter((d) => d.new).length)
 
 const summaryColumns = computed<TableColumn[]>(() => [
   { key: 'host', label: t('plugins.egress.destination') },
@@ -206,12 +265,30 @@ onMounted(load)
           </template>
           <template #cell-results="{ row }">
             <div class="flex flex-wrap gap-1">
-              <SBadge v-for="(n, r) in row.results" :key="r" :tone="resultTone(String(r))">{{ r }} × {{ formatNumber(n) }}</SBadge>
+              <SBadge v-for="(n, r) in row.results" :key="r" :tone="resultTone(String(r))">{{ resultLabel(String(r)) }} × {{ formatNumber(n) }}</SBadge>
             </div>
           </template>
           <template #cell-last_seen="{ row }">
             <span class="whitespace-nowrap text-xs">{{ formatDateTime(row.last_seen) }}</span>
           </template>
+        </STable>
+      </SCard>
+
+      <SCard v-if="domains" :title="t('plugins.egress.domains')" :subtitle="t('plugins.egress.domainsHint')" :padded="false" data-testid="egress-domains">
+        <template #actions>
+          <SBadge v-if="newDomainCount" tone="warning">{{ t('plugins.egress.newDomainCount', { n: newDomainCount }) }}</SBadge>
+        </template>
+        <STable :columns="domainColumns" :rows="domainRows" :loading="loading" row-key="host" dense>
+          <template #cell-host="{ row }">
+            <span class="font-mono text-sm">{{ row.host }}</span>
+            <SBadge v-if="row.new" tone="warning" class="ml-2" data-testid="egress-new-domain">{{ t('plugins.egress.newDomain') }}</SBadge>
+            <SBadge v-if="detail.egress_policy === 'allowlist' && !allowedDomains.includes(row.host)" tone="gray" class="ml-1">
+              {{ t('plugins.egress.notAllowlisted') }}
+            </SBadge>
+          </template>
+          <template #cell-first_seen_at="{ row }"><span class="whitespace-nowrap text-xs">{{ formatDateTime(row.first_seen_at) }}</span></template>
+          <template #cell-last_seen_at="{ row }"><span class="whitespace-nowrap text-xs">{{ formatDateTime(row.last_seen_at) }}</span></template>
+          <template #cell-connections="{ row }">{{ formatNumber(row.connections) }}</template>
         </STable>
       </SCard>
 
@@ -221,12 +298,13 @@ onMounted(load)
           <template #cell-host="{ row }">
             <span class="font-mono text-xs">{{ row.host }}<span v-if="row.port" class="muted">:{{ row.port }}</span></span>
           </template>
-          <template #cell-duration_ms="{ row }">{{ row.duration_ms != null ? row.duration_ms + 'ms' : '—' }}</template>
+          <template #cell-duration_ms="{ row }">{{ row.result === 'open' ? '—' : row.duration_ms != null ? row.duration_ms + 'ms' : '—' }}</template>
           <template #cell-bytes="{ row }">
-            <span class="whitespace-nowrap text-xs">↑{{ formatBytes(row.bytes_out ?? 0) }} ↓{{ formatBytes(row.bytes_in ?? 0) }}</span>
+            <span v-if="row.result === 'open' && !row.bytes_in && !row.bytes_out" class="muted">—</span>
+            <span v-else class="whitespace-nowrap text-xs">↑{{ formatBytes(row.bytes_out ?? 0) }} ↓{{ formatBytes(row.bytes_in ?? 0) }}</span>
           </template>
           <template #cell-result="{ row }">
-            <SBadge :tone="resultTone(String(row.result))">{{ row.result || '—' }}</SBadge>
+            <SBadge :tone="resultTone(String(row.result))" :title="row.error || undefined" :data-result="row.result">{{ resultLabel(row.result) }}</SBadge>
           </template>
         </STable>
       </SCard>

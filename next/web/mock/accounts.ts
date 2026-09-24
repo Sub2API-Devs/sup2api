@@ -52,6 +52,30 @@ const videoSchema = {
   }
 }
 
+// Built-in openai / gemini plugins (CONTRACTS §14.1): api_key (sensitive),
+// base_url and model_mapping.
+function apiKeyForm(defaultBase: string, placeholder: string) {
+  return {
+    schema: {
+      type: 'object',
+      required: ['api_key'],
+      properties: {
+        api_key: { type: 'string', title: 'API Key', writeOnly: true, minLength: 10 },
+        base_url: { type: 'string', title: 'Base URL', format: 'uri', default: defaultBase },
+        model_mapping: { type: 'object', title: 'Model mapping', additionalProperties: { type: 'string' } }
+      }
+    },
+    ui_schema: {
+      'ui:order': ['api_key', 'base_url', 'model_mapping'],
+      api_key: { 'ui:widget': 'secret', 'ui:title': { en: 'API Key', zh: 'API Key' }, 'ui:placeholder': placeholder },
+      base_url: { 'ui:widget': 'url-presets', 'ui:title': { en: 'Base URL', zh: '接口地址' }, 'ui:options': { presets: [defaultBase] } },
+      model_mapping: { 'ui:widget': 'model-mapping', 'ui:title': { en: 'Model mapping', zh: '模型映射' } }
+    }
+  }
+}
+const openaiForm = apiKeyForm('https://api.openai.com', 'sk-...')
+const geminiForm = apiKeyForm('https://generativelanguage.googleapis.com', 'AIza...')
+
 interface MockAccountType {
   plugin_key: string
   plugin_name: { en: string; zh: string }
@@ -87,6 +111,32 @@ const accountTypeDecls: MockAccountType[] = [
     supports: ['anthropic'],
     // openai.chat -> anthropic.messages converter of the core
     converts: [{ platform: 'openai', path: '/v1/chat/completions' }]
+  },
+  {
+    plugin_key: 'openai',
+    plugin_name: { en: 'OpenAI', zh: 'OpenAI' },
+    plugin_version: '0.1.0',
+    asset_base: '/plugin-ui/openai/0.1.0-dev',
+    trust: 'official',
+    type: 'apikey',
+    label: { en: 'API Key', zh: 'API Key' },
+    description: { en: 'OpenAI API key (Authorization: Bearer)', zh: 'OpenAI API 密钥' },
+    form: { mode: 'schema' },
+    sensitive_fields: ['api_key'],
+    supports: ['openai']
+  },
+  {
+    plugin_key: 'gemini',
+    plugin_name: { en: 'Gemini', zh: 'Gemini' },
+    plugin_version: '0.1.0',
+    asset_base: '/plugin-ui/gemini/0.1.0-dev',
+    trust: 'official',
+    type: 'apikey',
+    label: { en: 'API Key', zh: 'API Key' },
+    description: { en: 'Google AI Studio API key (x-goog-api-key)', zh: 'Google AI Studio API 密钥' },
+    form: { mode: 'schema' },
+    sensitive_fields: ['api_key'],
+    supports: ['gemini']
   },
   {
     plugin_key: 'relay',
@@ -155,7 +205,10 @@ const accounts: any[] = [
   { id: 16, name: 'relay-1', plugin_key: 'relay', type: 'relay_key', group_ids: [1], proxy_id: null, priority: 3, max_concurrency: 20, schedulable: true, status: 'active', status_reason: '', in_use: 1, cooldown_until: null, orphaned: false, last_used_at: now(-40), created_at: now(-86400 * 2), credentials: { api_key: '******', base_url: 'https://relay.example.com' } },
   { id: 17, name: 'video-1', plugin_key: 'videogen', type: 'video_key', group_ids: [2], proxy_id: null, priority: 1, max_concurrency: 4, schedulable: true, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-3600), created_at: now(-86400 * 3), credentials: { api_key: '******', region: 'us' } },
   { id: 18, name: 'demo-token', plugin_key: 'demo', type: 'token', group_ids: [1], proxy_id: null, priority: 8, max_concurrency: 2, schedulable: true, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-86400), credentials: { token: '******' } },
-  { id: 15, name: 'legacy-openai', plugin_key: 'openai', type: 'apikey', type_label: { en: 'API key', zh: 'API Key' }, group_ids: [], proxy_id: null, priority: 10, max_concurrency: 5, schedulable: false, status: 'active', status_reason: '', in_use: 0, orphaned: true, created_at: now(-86400 * 90) }
+  { id: 19, name: 'openai-main', plugin_key: 'openai', type: 'apikey', group_ids: [1, 2], proxy_id: null, priority: 1, max_concurrency: 20, schedulable: true, status: 'active', status_reason: '', in_use: 2, cooldown_until: null, orphaned: false, last_used_at: now(-30), created_at: now(-86400 * 2), credentials: { api_key: '******', base_url: 'https://api.openai.com', model_mapping: {} } },
+  { id: 20, name: 'gemini-main', plugin_key: 'gemini', type: 'apikey', group_ids: [2], proxy_id: null, priority: 1, max_concurrency: 10, schedulable: true, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-900), created_at: now(-86400), credentials: { api_key: '******', base_url: 'https://generativelanguage.googleapis.com' } },
+  // Its plugin was uninstalled without purge_accounts: kept as an orphaned account.
+  { id: 15, name: 'legacy-vendor', plugin_key: 'legacy_vendor', type: 'apikey', type_label: { en: 'API key', zh: 'API Key' }, group_ids: [], proxy_id: null, priority: 10, max_concurrency: 5, schedulable: false, status: 'active', status_reason: '', in_use: 0, orphaned: true, created_at: now(-86400 * 90) }
 ]
 for (const a of accounts) a.type_label ??= typeLabel(a.plugin_key, a.type)
 
@@ -177,17 +230,36 @@ export function groupPlatforms(gid: number): string[] {
   return [...out].sort()
 }
 
+/**
+ * Uninstall hook (CONTRACTS §14.3): with purge, deletes the accounts of the
+ * plugin's account types and returns how many; otherwise marks them orphaned.
+ */
+export function uninstallPluginAccounts(pluginKey: string, purge: boolean): number {
+  let n = 0
+  for (let i = accounts.length - 1; i >= 0; i--) {
+    if (accounts[i].plugin_key !== pluginKey) continue
+    n++
+    if (purge) accounts.splice(i, 1)
+    else accounts[i].orphaned = true
+  }
+  return purge ? n : 0
+}
+
 on('GET', '/platforms', () =>
   activePlatforms().map((p) => ({
     ...p,
     account_types: accountTypeDecls.filter((d) => d.supports.includes(p.id)).map((d) => ({ plugin_key: d.plugin_key, type: d.type, label: d.label }))
   }))
 )
+// Any signed-in user: available platforms and endpoints, no account types (CONTRACTS §14.1).
+on('GET', '/me/platforms', () => activePlatforms().map((p) => ({ id: p.id, label: p.label, builtin: p.builtin, endpoints: p.endpoints })))
 on('GET', '/account-types', () => accountTypeDecls.map(accountTypeOut))
 on('GET', '/account-types/:plugin_key/:type/form', (req) => {
   if (req.params.plugin_key === 'anthropic') return { schema: anthropicSchema, ui_schema: anthropicUI }
   if (req.params.plugin_key === 'relay') return { schema: relaySchema, ui_schema: relayUI }
   if (req.params.plugin_key === 'videogen') return { schema: videoSchema, ui_schema: { api_key: { 'ui:widget': 'secret' } } }
+  if (req.params.plugin_key === 'openai') return openaiForm
+  if (req.params.plugin_key === 'gemini') return geminiForm
   return fail(404, 'not_found', 'form not found')
 })
 

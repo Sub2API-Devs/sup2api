@@ -10,18 +10,21 @@ import { formatDateTime, formatMoney, formatNumber } from '@/utils/format'
 
 /** Wires the HTTP client and publishes the host context for plugins. */
 export function setupHost(router: Router) {
+  const auth = useAuthStore()
+  const app = useAppStore()
   configureHttp({
     baseURL: '/api/v1',
     locale: () => currentLocale(),
     stepUp: requestStepUp,
-    onUnauthenticated: () => {
+    onUnauthenticated: (reason) => {
+      // "expired": the refresh token was rejected (expired, revoked or reused);
+      // the login page then asks the user to sign in again.
+      if (reason === 'expired') auth.sessionExpired = true
       const cur = router.currentRoute.value
       if (!cur.meta.public) router.replace({ path: '/login', query: { redirect: cur.fullPath } })
     }
   })
 
-  const auth = useAuthStore()
-  const app = useAppStore()
   const ctx: HostContext = {
     version: HOST_UI_VERSION,
     api,

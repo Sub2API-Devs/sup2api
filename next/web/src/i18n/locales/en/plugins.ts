@@ -71,6 +71,7 @@ export default {
     kv: 'KV storage',
     config: 'Configuration',
     log: 'Logging',
+    broadcast: 'Cluster broadcast',
     routes_admin: 'Admin API routes',
     routes_user: 'User API routes',
     events: 'Event subscription',
@@ -93,6 +94,10 @@ export default {
     ui_native: 'Native console UI',
     users_write: 'Modify users',
     db_core_views: 'Core database views'
+  },
+
+  hpDesc: {
+    broadcast: 'Broadcast messages to the instances of this plugin on other nodes (e.g. reload rules right after they change).'
   },
 
   hpWarn: {
@@ -147,7 +152,13 @@ export default {
     pickHint: 'Choose a version. The package is downloaded, its sha256 and signature are verified, then you review the requested permissions.',
     latest: 'latest',
     continue: 'Download & review',
-    downloaded: '{name} v{version} downloaded, please review the requested permissions.'
+    downloaded: '{name} v{version} downloaded, please review the requested permissions.',
+    hostVersion: 'Current core version v{version}',
+    compatible: 'Compatible with this core',
+    incompatible: 'Incompatible with this core',
+    incompatibleReason: 'This version requires core {range}; the running core is v{version}, so it cannot be installed.',
+    noCompatible: 'No version is compatible with the running core (v{version}); it cannot be installed.',
+    newerIncompatible: 'Newer version v{version} is incompatible with this core; upgrade the core first.'
   },
 
   consent: {
@@ -222,7 +233,8 @@ export default {
     effective: 'Effective limit',
     overridden: 'overridden',
     invalid: 'Enter a non-negative number',
-    saved: 'Resource limits saved; they apply the next time the plugin process starts.',
+    saved: 'Resource limits saved. All nodes have been notified to restart the plugin instances with the new limits.',
+    restartHint: 'Saving restarts the plugin instances on every node one by one (a new instance starts before the old one drains).',
     hint: 'Leave empty to use the manifest request. Limits cannot exceed the global maximum.'
   },
 
@@ -334,16 +346,32 @@ export default {
     last1h: 'Last hour',
     last24h: 'Last 24 hours',
     notAllowlisted: 'not allowlisted',
-    noReadPermission: 'You need plugin:egress:read to view external access records.'
+    noReadPermission: 'You need plugin:egress:read to view external access records.',
+    domains: 'Domains accessed',
+    domainsHint: 'Every external host the plugin has connected to. Hosts first seen within the last 24 hours are marked as new.',
+    domain: 'Domain',
+    firstSeen: 'First seen',
+    newDomain: 'New domain',
+    newDomainCount: '{n} new in 24h',
+    resultLabels: {
+      open: 'Connected',
+      ok: 'ok',
+      denied: 'denied',
+      error: 'error'
+    }
   },
 
   uninstall: {
     action: 'Uninstall',
     title: 'Uninstall {name}',
     body: 'Uninstalling removes the plugin package, its permissions and grants, event cursors, job records and default prices.',
-    purge: 'Also delete plugin data (schema {schema}) and its accounts',
+    purge: 'Also delete plugin data (schema {schema})',
     purgeHint: 'Without this option the data is kept and restored if the plugin is installed again.',
-    purgeWarn: 'Plugin data and accounts will be permanently deleted.',
+    purgeWarn: 'Plugin data will be permanently deleted.',
+    purgeAccounts: 'Also delete all accounts of this plugin\'s account types',
+    purgeAccountsHint: 'By default the accounts are kept as orphaned accounts: they stop serving requests but stay visible, and are served again if the plugin is reinstalled.',
+    purgeAccountsWarn: 'These accounts will be deleted and will not come back when the plugin is reinstalled.',
+    accountsDeleted: '{n} account(s) deleted.',
     typeKey: 'Type the plugin key "{key}" to confirm',
     confirm: 'Uninstall',
     done: '{name} uninstalled'

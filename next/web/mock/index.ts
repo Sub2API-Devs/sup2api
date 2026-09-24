@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { routes, type MockRequest } from './router'
 import { pluginAsset } from './pluginui'
+import { accessTokenValid } from './core'
 import './core'
 import './accounts'
 import './resources'
@@ -93,6 +94,9 @@ async function handle(req: IncomingMessage, res: ServerResponse, next: () => voi
   if (!url.pathname.startsWith('/api/v1/')) return next()
   const path = url.pathname.slice('/api/v1'.length)
   const method = (req.method || 'GET').toUpperCase()
+  if (!path.startsWith('/auth/login') && !path.startsWith('/auth/refresh') && !accessTokenValid(req.headers.authorization)) {
+    return send(res, 401, { error: { code: 'unauthenticated', message: 'access token expired or revoked' } })
+  }
   for (const r of routes) {
     if (r.method !== method && r.method !== 'ANY') continue
     const m = r.re.exec(path)

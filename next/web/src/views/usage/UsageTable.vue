@@ -15,11 +15,14 @@ const props = withDefaults(
     loading?: boolean
     showUser?: boolean
     showAccount?: boolean
+    /** Adds the client request id column (admin list, CONTRACTS §14.4). */
+    showClientRequestId?: boolean
     /** Detail endpoint for an id (GET /usage/:id or /me/usage/:id). */
     detailPath?: (id: number) => string
   }>(),
-  { showUser: true, showAccount: true }
+  { showUser: true, showAccount: true, showClientRequestId: false }
 )
+const emit = defineEmits<{ (e: 'filter-client-request-id', id: string): void }>()
 const { t } = useI18n()
 const auth = useAuthStore()
 const accountTypes = useAccountTypes()
@@ -28,6 +31,7 @@ if (auth.has('account:read')) accountTypes.load()
 
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [{ key: 'created_at', label: t('common.time'), width: '110px' }]
+  if (props.showClientRequestId) cols.push({ key: 'client_request_id', label: t('usage.cols.clientRequestId') })
   if (props.showUser) cols.push({ key: 'user', label: t('common.user') })
   cols.push({ key: 'group', label: t('common.group') })
   if (props.showAccount) cols.push({ key: 'account', label: t('common.account') })
@@ -52,6 +56,19 @@ function noUsage(u: UsageRow) {
   <STable :columns="columns" :rows="rows" :loading="loading" expandable dense>
     <template #cell-created_at="{ row }">
       <span class="whitespace-nowrap text-xs" :title="row.created_at">{{ formatTime(row.created_at) }}</span>
+    </template>
+    <template #cell-client_request_id="{ row }">
+      <button
+        v-if="row.client_request_id"
+        type="button"
+        class="block max-w-[10rem] truncate text-left font-mono text-xs text-gray-700 hover:text-primary-600 dark:text-gray-200 dark:hover:text-primary-400"
+        :title="t('usage.filterByClientRequestId', { id: row.client_request_id })"
+        data-testid="client-request-id"
+        @click.stop="emit('filter-client-request-id', row.client_request_id)"
+      >
+        {{ row.client_request_id }}
+      </button>
+      <span v-else class="muted">—</span>
     </template>
     <template #cell-user="{ row }">
       <span class="text-sm">{{ row.user_email || row.user_name || '#' + row.user_id }}</span>

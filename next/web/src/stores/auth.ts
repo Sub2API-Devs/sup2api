@@ -7,6 +7,8 @@ export const useAuthStore = defineStore('auth', () => {
   const me = ref<Me | null>(null)
   const balance = ref<string | null>(null)
   const loggedIn = ref(!!session.get())
+  /** The session ended because it could not be renewed (login page shows a notice). */
+  const sessionExpired = ref(false)
   const permSet = computed(() => new Set(me.value?.permissions || []))
 
   session.onChange((s) => {
@@ -27,6 +29,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function login(email: string, password: string) {
     const r = await api.post<TokenResponse>('/auth/login', { email, password }, { anonymous: true, noStepUp: true })
     session.fromTokenResponse(r)
+    sessionExpired.value = false
     if (r.user && Array.isArray(r.user.permissions)) me.value = r.user
     else await loadMe()
   }
@@ -54,7 +57,8 @@ export const useAuthStore = defineStore('auth', () => {
       /* ignore */
     }
     session.clear()
+    sessionExpired.value = false
   }
 
-  return { me, balance, loggedIn, has, login, loadMe, refreshBalance, logout }
+  return { me, balance, loggedIn, sessionExpired, has, login, loadMe, refreshBalance, logout }
 })
