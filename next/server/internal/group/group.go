@@ -25,11 +25,13 @@ type Service struct {
 	db  *store.DB
 	rdb redis.UniversalClient // optional: drops cached API key principals
 	bus core.Bus              // optional: announces membership changes
+	reg core.PluginRegistry   // optional: platforms are [] without it
 }
 
-// New builds the group service. rdb and bus may be nil.
-func New(db *store.DB, rdb redis.UniversalClient, bus core.Bus) *Service {
-	return &Service{db: db, rdb: rdb, bus: bus}
+// New builds the group service. rdb, bus and reg may be nil; reg resolves
+// the platforms a group serves from its account types.
+func New(db *store.DB, rdb redis.UniversalClient, bus core.Bus, reg core.PluginRegistry) *Service {
+	return &Service{db: db, rdb: rdb, bus: bus, reg: reg}
 }
 
 // RegisterRoutes mounts the group endpoints.
@@ -46,17 +48,19 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 
 // Group is the API view of a groups row.
 type Group struct {
-	ID             int64     `json:"id"`
-	Name           string    `json:"name"`
-	Description    string    `json:"description"`
-	Status         string    `json:"status"`
-	RateMultiplier string    `json:"rate_multiplier"`
-	Visibility     string    `json:"visibility"`
-	ModelAllowlist []string  `json:"model_allowlist"`
-	AccountCount   int64     `json:"account_count"`
-	APIKeyCount    int64     `json:"api_key_count"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID             int64    `json:"id"`
+	Name           string   `json:"name"`
+	Description    string   `json:"description"`
+	Status         string   `json:"status"`
+	RateMultiplier string   `json:"rate_multiplier"`
+	Visibility     string   `json:"visibility"`
+	ModelAllowlist []string `json:"model_allowlist"`
+	AccountCount   int64    `json:"account_count"`
+	APIKeyCount    int64    `json:"api_key_count"`
+	// Platforms the group serves: those of its accounts' types (CONTRACTS §13).
+	Platforms []string  `json:"platforms"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // MyGroup is the reduced view returned by GET /me/groups.
@@ -66,6 +70,7 @@ type MyGroup struct {
 	Description    string   `json:"description"`
 	RateMultiplier string   `json:"rate_multiplier"`
 	ModelAllowlist []string `json:"model_allowlist"`
+	Platforms      []string `json:"platforms"`
 }
 
 const selectGroup = `SELECT g.id, g.name, g.description, g.status, g.rate_multiplier::text, g.visibility,
@@ -134,7 +139,28 @@ func (s *Service) list(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
+	rows.Close()
+	if err := s.fillPlatforms(ctx, items); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
 	httpapi.List(c, items, httpapi.Page{Page: page, PageSize: size, Total: total})
+}
+
+// fillPlatforms sets Platforms of the groups with one query.
+func (s *Service) fillPlatforms(ctx context.Context, gs []*Group) error {
+	ids := make([]int64, len(gs))
+	for i, g := range gs {
+		ids[i] = g.ID
+	}
+	ps, err := s.groupPlatforms(ctx, ids)
+	if err != nil {
+		return err
+	}
+	for _, g := range gs {
+		g.Platforms = ps[g.ID]
+	}
+	return nil
 }
 
 func (s *Service) load(ctx context.Context, id int64) (*Group, error) {
@@ -142,7 +168,13 @@ func (s *Service) load(ctx context.Context, id int64) (*Group, error) {
 	if store.IsNoRows(err) {
 		return nil, core.ErrNotFound.WithMessage(t(ctx, "group not found", "分组不存在"))
 	}
-	return g, err
+	if err != nil {
+		return nil, err
+	}
+	if err := s.fillPlatforms(ctx, []*Group{g}); err != nil {
+		return nil, err
+	}
+	return g, nil
 }
 
 func (s *Service) get(c *gin.Context) {
@@ -396,6 +428,19 @@ func (s *Service) myGroups(c *gin.Context) {
 	if err := rows.Err(); err != nil {
 		httpapi.Fail(c, err)
 		return
+	}
+	rows.Close()
+	ids := make([]int64, len(out))
+	for i, g := range out {
+		ids[i] = g.ID
+	}
+	ps, err := s.groupPlatforms(ctx, ids)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	for i := range out {
+		out[i].Platforms = ps[out[i].ID]
 	}
 	httpapi.OK(c, out)
 }

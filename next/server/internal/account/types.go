@@ -10,9 +10,10 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/platforms"
 )
 
-// AccountTypeView is one entry of GET /account-types (CONTRACTS §12).
+// AccountTypeView is one entry of GET /account-types (CONTRACTS §12, §13).
 type AccountTypeView struct {
 	PluginKey     string                 `json:"plugin_key"`
 	PluginName    manifest.LocalizedText `json:"plugin_name"`
@@ -25,10 +26,20 @@ type AccountTypeView struct {
 	Description     manifest.LocalizedText `json:"description,omitempty"`
 	Form            FormView               `json:"form"`
 	SensitiveFields []string               `json:"sensitive_fields"`
-	// Protocols the upstream of this account type speaks natively.
-	Protocols []string `json:"protocols"`
-	// Endpoints lists the enabled gateway endpoints this type can serve now.
+	// Platforms the account type declares, in declaration order.
+	Platforms []TypePlatformView `json:"platforms"`
+	// Endpoints lists the gateway endpoints this type can serve now.
 	Endpoints []EndpointView `json:"endpoints"`
+}
+
+// TypePlatformView is a platform declared by an account type. Available is
+// false when the platform is not in the current generation (its plugin is
+// disabled or not installed); Label is then null.
+type TypePlatformView struct {
+	ID        string                 `json:"id"`
+	Label     manifest.LocalizedText `json:"label"`
+	Builtin   bool                   `json:"builtin"`
+	Available bool                   `json:"available"`
 }
 
 // FormView describes how the console renders the credentials form.
@@ -39,7 +50,8 @@ type FormView struct {
 }
 
 // EndpointView is a gateway endpoint an account type can serve. Native is
-// false when the core converts the endpoint protocol to one of the type's.
+// false when the core converts the endpoint protocol to a protocol of one of
+// the type's platforms.
 type EndpointView struct {
 	Method   string `json:"method"`
 	Path     string `json:"path"`
@@ -48,7 +60,7 @@ type EndpointView struct {
 	Native   bool   `json:"native"`
 }
 
-func typeView(b core.AccountTypeBinding, eps []core.EndpointBinding, conv core.ProtocolConverters) AccountTypeView {
+func typeView(g core.Generation, b core.AccountTypeBinding, conv core.ProtocolConverters) AccountTypeView {
 	v := AccountTypeView{
 		PluginKey:       b.Plugin.Key,
 		PluginVersion:   b.Plugin.Version,
@@ -59,8 +71,8 @@ func typeView(b core.AccountTypeBinding, eps []core.EndpointBinding, conv core.P
 		Description:     b.Type.Description,
 		Form:            FormView{Mode: b.Type.Form.Mode, Page: b.Type.Form.Page, Component: b.Type.Form.Component},
 		SensitiveFields: b.Type.SensitiveFields,
-		Protocols:       []string{},
-		Endpoints:       servedEndpoints(b, eps, conv),
+		Platforms:       typePlatforms(g, b),
+		Endpoints:       servedEndpoints(g, b, conv),
 	}
 	if b.Plugin.Manifest != nil {
 		v.PluginName = b.Plugin.Manifest.Name
@@ -71,45 +83,55 @@ func typeView(b core.AccountTypeBinding, eps []core.EndpointBinding, conv core.P
 	if v.SensitiveFields == nil {
 		v.SensitiveFields = []string{}
 	}
-	for _, p := range b.Type.Protocols {
-		v.Protocols = append(v.Protocols, p.Protocol)
-	}
 	return v
 }
 
-// servedEndpoints lists the endpoints whose protocol the account type speaks
-// natively, or that the core can convert to one of its protocols.
-func servedEndpoints(b core.AccountTypeBinding, eps []core.EndpointBinding, conv core.ProtocolConverters) []EndpointView {
-	out := []EndpointView{}
-	for _, e := range eps {
-		proto := e.Endpoint.Protocol
-		_, native := b.Protocol(proto)
-		if !native {
-			if conv == nil {
-				continue
-			}
-			convertible := false
-			for _, q := range b.Type.Protocols {
-				if conv.CanConvert(proto, q.Protocol) {
-					convertible = true
-					break
-				}
-			}
-			if !convertible {
-				continue
-			}
+// typePlatforms lists the platforms declared by the account type.
+func typePlatforms(g core.Generation, b core.AccountTypeBinding) []TypePlatformView {
+	out := []TypePlatformView{}
+	seen := map[string]bool{}
+	for _, ap := range b.Type.Platforms {
+		if seen[ap.Platform] {
+			continue
 		}
-		platform := ""
-		if m := e.Plugin.Manifest; m != nil && m.Platform != nil {
-			platform = m.Platform.ID
+		seen[ap.Platform] = true
+		v := TypePlatformView{ID: ap.Platform, Builtin: platforms.IsBuiltin(ap.Platform)}
+		if pb, ok := g.Platform(ap.Platform); ok {
+			v.Available, v.Builtin, v.Label = true, pb.Builtin, pb.Platform.Label
+		}
+		out = append(out, v)
+	}
+	return out
+}
+
+// servedEndpoints lists the endpoints of the platforms the account type
+// supports (native), plus endpoints of other platforms whose protocol the
+// core can convert to a protocol of a supported, available platform.
+func servedEndpoints(g core.Generation, b core.AccountTypeBinding, conv core.ProtocolConverters) []EndpointView {
+	// Protocols the type's upstream speaks: those of its available platforms.
+	var upstream []string
+	for _, ap := range b.Type.Platforms {
+		if pb, ok := g.Platform(ap.Platform); ok {
+			upstream = append(upstream, pb.Platform.Protocols()...)
+		}
+	}
+	out := []EndpointView{}
+	for _, e := range g.Endpoints() {
+		proto := e.Endpoint.Protocol
+		_, native := b.Supports(e.Platform)
+		if !native && !convertible(conv, proto, upstream) {
+			continue
 		}
 		out = append(out, EndpointView{Method: e.Endpoint.Method, Path: e.Endpoint.Path, Protocol: proto,
-			Platform: platform, Native: native})
+			Platform: e.Platform, Native: native})
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		a, b := out[i], out[j]
 		if a.Native != b.Native {
 			return a.Native
+		}
+		if a.Platform != b.Platform {
+			return a.Platform < b.Platform
 		}
 		if a.Path != b.Path {
 			return a.Path < b.Path
@@ -119,12 +141,25 @@ func servedEndpoints(b core.AccountTypeBinding, eps []core.EndpointBinding, conv
 	return out
 }
 
+// convertible reports whether the core can convert the client protocol to
+// one of the upstream protocols.
+func convertible(conv core.ProtocolConverters, client string, upstream []string) bool {
+	if conv == nil {
+		return false
+	}
+	for _, y := range upstream {
+		if y != client && conv.CanConvert(client, y) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Service) listTypes(c *gin.Context) {
 	out := []AccountTypeView{}
 	if g := s.gen(); g != nil {
-		eps := g.Endpoints()
 		for _, b := range g.AccountTypes() {
-			out = append(out, typeView(b, eps, s.d.Converters))
+			out = append(out, typeView(g, b, s.d.Converters))
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -135,6 +170,80 @@ func (s *Service) listTypes(c *gin.Context) {
 		return a.Type < b.Type
 	})
 	httpapi.OK(c, out)
+}
+
+// PlatformView is one entry of GET /platforms (CONTRACTS §13).
+type PlatformView struct {
+	ID      string                 `json:"id"`
+	Label   manifest.LocalizedText `json:"label"`
+	Builtin bool                   `json:"builtin"`
+	// PluginKey is the declaring plugin; null for built-in platforms.
+	PluginKey    *string                `json:"plugin_key"`
+	Endpoints    []PlatformEndpointView `json:"endpoints"`
+	AccountTypes []PlatformTypeView     `json:"account_types"`
+}
+
+// PlatformEndpointView is a gateway endpoint declared by a platform.
+type PlatformEndpointView struct {
+	Method   string `json:"method"`
+	Path     string `json:"path"`
+	Protocol string `json:"protocol"`
+	Billing  string `json:"billing"`
+}
+
+// PlatformTypeView is a registered account type serving a platform natively.
+type PlatformTypeView struct {
+	PluginKey string                 `json:"plugin_key"`
+	Type      string                 `json:"type"`
+	Label     manifest.LocalizedText `json:"label"`
+}
+
+// platformViews lists the platforms of the generation: built-in ones first,
+// then plugin platforms, each sorted by id.
+func platformViews(g core.Generation) []PlatformView {
+	out := []PlatformView{}
+	if g == nil {
+		return out
+	}
+	for _, pb := range g.Platforms() {
+		v := PlatformView{ID: pb.Platform.ID, Label: pb.Platform.Label, Builtin: pb.Builtin,
+			Endpoints: []PlatformEndpointView{}, AccountTypes: []PlatformTypeView{}}
+		if v.Label == nil {
+			v.Label = manifest.LocalizedText{"en": pb.Platform.ID}
+		}
+		if !pb.Builtin {
+			key := pb.Plugin.Key
+			v.PluginKey = &key
+		}
+		for _, e := range pb.Platform.Endpoints {
+			v.Endpoints = append(v.Endpoints, PlatformEndpointView{Method: e.Method, Path: e.Path,
+				Protocol: e.Protocol, Billing: e.Billing})
+		}
+		for _, b := range g.AccountTypesForPlatform(pb.Platform.ID) {
+			v.AccountTypes = append(v.AccountTypes, PlatformTypeView{PluginKey: b.Plugin.Key, Type: b.Type.ID,
+				Label: b.Type.Label})
+		}
+		sort.Slice(v.AccountTypes, func(i, j int) bool {
+			a, b := v.AccountTypes[i], v.AccountTypes[j]
+			if a.PluginKey != b.PluginKey {
+				return a.PluginKey < b.PluginKey
+			}
+			return a.Type < b.Type
+		})
+		out = append(out, v)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.Builtin != b.Builtin {
+			return a.Builtin
+		}
+		return a.ID < b.ID
+	})
+	return out
+}
+
+func (s *Service) listPlatforms(c *gin.Context) {
+	httpapi.OK(c, platformViews(s.gen()))
 }
 
 func rawOrNull(b json.RawMessage) json.RawMessage {

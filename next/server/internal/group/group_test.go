@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -55,6 +56,99 @@ func (b *fakeBus) Publish(_ context.Context, ch string, p []byte) error {
 }
 func (b *fakeBus) Subscribe(string, func([]byte)) func() { return func() {} }
 
+// fakeGen implements the parts of core.Generation used for group platforms.
+type fakeGen struct {
+	core.Generation
+	plats []string
+	types []core.AccountTypeBinding
+}
+
+func (g *fakeGen) Platform(id string) (core.PlatformBinding, bool) {
+	for _, p := range g.plats {
+		if p == id {
+			return core.PlatformBinding{Platform: manifest.Platform{ID: id}}, true
+		}
+	}
+	return core.PlatformBinding{}, false
+}
+
+func (g *fakeGen) AccountType(pluginKey, typ string) (core.AccountTypeBinding, bool) {
+	for _, b := range g.types {
+		if b.Plugin.Key == pluginKey && b.Type.ID == typ {
+			return b, true
+		}
+	}
+	return core.AccountTypeBinding{}, false
+}
+
+type fakeRegistry struct{ gen core.Generation }
+
+func (r fakeRegistry) Current() core.Generation                     { return r.gen }
+func (fakeRegistry) OnChange(func(core.Generation)) (cancel func()) { return func() {} }
+
+func accountType(plugin, id string, platforms ...string) core.AccountTypeBinding {
+	b := core.AccountTypeBinding{Plugin: core.PluginInfo{Key: plugin}, Type: manifest.AccountType{ID: id}}
+	for _, p := range platforms {
+		b.Type.Platforms = append(b.Type.Platforms, manifest.AccountPlatform{Platform: p})
+	}
+	return b
+}
+
+// testGen: anthropic/apikey serves anthropic; relay/relay_key serves openai,
+// anthropic and the unavailable "ghost"; video/vkey serves aivideo.
+func testGen() *fakeGen {
+	return &fakeGen{
+		plats: []string{"anthropic", "openai", "gemini", "aivideo"},
+		types: []core.AccountTypeBinding{
+			accountType("anthropic", "apikey", "anthropic"),
+			accountType("relay", "relay_key", "openai", "anthropic", "ghost"),
+			accountType("video", "vkey", "aivideo"),
+		},
+	}
+}
+
+func TestPlatformResolver(t *testing.T) {
+	key := func(p, typ string) core.AccountTypeKey { return core.AccountTypeKey{PluginKey: p, Type: typ} }
+	r := newPlatformResolver(testGen())
+	cases := []struct {
+		types []core.AccountTypeKey
+		want  string
+	}{
+		{nil, "[]"},
+		{[]core.AccountTypeKey{key("anthropic", "apikey")}, "[anthropic]"},
+		{[]core.AccountTypeKey{key("relay", "relay_key"), key("anthropic", "apikey")}, "[anthropic openai]"},
+		{[]core.AccountTypeKey{key("video", "vkey"), key("relay", "relay_key")}, "[aivideo anthropic openai]"},
+		// Unregistered type (plugin disabled) and same type id of another plugin.
+		{[]core.AccountTypeKey{key("gone", "apikey"), key("video", "apikey")}, "[]"},
+	}
+	for _, c := range cases {
+		got := r.platforms(c.types)
+		if got == nil || fmt.Sprint(got) != c.want {
+			t.Errorf("platforms(%v) = %v, want %s", c.types, got, c.want)
+		}
+	}
+	var nilResolver *platformResolver
+	if got := nilResolver.platforms([]core.AccountTypeKey{key("anthropic", "apikey")}); got == nil || len(got) != 0 {
+		t.Fatalf("nil resolver: %v", got)
+	}
+	if got := newPlatformResolver(nil).platforms([]core.AccountTypeKey{key("anthropic", "apikey")}); got == nil || len(got) != 0 {
+		t.Fatalf("nil generation: %v", got)
+	}
+}
+
+func TestGroupPlatformsWithoutRegistry(t *testing.T) {
+	// No registry: no database access, every group gets [].
+	s := New(nil, nil, nil, nil)
+	ps, err := s.groupPlatforms(context.Background(), []int64{1, 2})
+	if err != nil || len(ps) != 2 || ps[1] == nil || len(ps[2]) != 0 {
+		t.Fatalf("platforms: %v %v", ps, err)
+	}
+	b, _ := json.Marshal(MyGroup{Platforms: ps[1]})
+	if !strings.Contains(string(b), `"platforms":[]`) {
+		t.Fatalf("json: %s", b)
+	}
+}
+
 type env struct {
 	t     *testing.T
 	db    *store.DB
@@ -75,7 +169,7 @@ func setup(t *testing.T) *env {
 	e.user = mkUser(t, db, "user@x.com")
 	engine := gin.New()
 	r := httpapi.NewRouter(engine, fakeTokens{}, fakeAuthz{admin: e.admin}, fakeStepUp{})
-	New(db, rdb, e.bus).RegisterRoutes(r)
+	New(db, rdb, e.bus, fakeRegistry{gen: testGen()}).RegisterRoutes(r)
 	e.h = engine
 	return e
 }
@@ -196,5 +290,58 @@ func TestGroupCRUDAndVisibility(t *testing.T) {
 	}
 	if len(e.bus.msgs) != 1 || !strings.HasPrefix(e.bus.msgs[0], core.ChannelAccountChanged) {
 		t.Fatalf("bus: %v", e.bus.msgs)
+	}
+}
+
+func TestGroupPlatforms(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	mkGroup := func(name string) int64 {
+		code, out := e.do(e.admin, "POST", "/groups", map[string]any{"name": name})
+		if code != 201 || fmt.Sprint(out["data"].(map[string]any)["platforms"]) != "[]" {
+			t.Fatalf("create %s: %d %v", name, code, out)
+		}
+		return int64(out["data"].(map[string]any)["id"].(float64))
+	}
+	mixed, video, empty := mkGroup("mixed"), mkGroup("video"), mkGroup("empty")
+	mkAccount := func(plugin, typ string, deleted bool, groups ...int64) {
+		var id int64
+		if err := e.db.Pool.QueryRow(ctx, `INSERT INTO accounts (name, plugin_key, type, credentials_enc, deleted_at)
+			VALUES ('a', $1, $2, '\x00'::bytea, CASE WHEN $3 THEN now() END) RETURNING id`, plugin, typ, deleted).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		for _, g := range groups {
+			if _, err := e.db.Pool.Exec(ctx, `INSERT INTO account_groups (account_id, group_id) VALUES ($1, $2)`, id, g); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	mkAccount("anthropic", "apikey", false, mixed)
+	mkAccount("anthropic", "apikey", false, mixed) // same type twice
+	mkAccount("relay", "relay_key", false, mixed)
+	mkAccount("video", "vkey", true, mixed, video) // deleted: ignored
+	mkAccount("gone", "apikey", false, video)      // type not registered
+	want := map[int64]string{mixed: "[anthropic openai]", video: "[]", empty: "[]"}
+
+	_, out := e.do(e.admin, "GET", "/groups", nil)
+	for _, it := range out["data"].([]any) {
+		g := it.(map[string]any)
+		if got := fmt.Sprint(g["platforms"]); got != want[int64(g["id"].(float64))] {
+			t.Fatalf("list %v: %s", g["name"], got)
+		}
+	}
+	_, out = e.do(e.admin, "GET", fmt.Sprintf("/groups/%d", mixed), nil)
+	if got := fmt.Sprint(out["data"].(map[string]any)["platforms"]); got != "[anthropic openai]" {
+		t.Fatalf("get: %s", got)
+	}
+	_, out = e.do(e.user, "GET", "/me/groups", nil)
+	if len(out["data"].([]any)) != 3 {
+		t.Fatalf("me/groups: %v", out)
+	}
+	for _, it := range out["data"].([]any) {
+		g := it.(map[string]any)
+		if got := fmt.Sprint(g["platforms"]); got != want[int64(g["id"].(float64))] {
+			t.Fatalf("me/groups %v: %s", g["name"], got)
+		}
 	}
 }

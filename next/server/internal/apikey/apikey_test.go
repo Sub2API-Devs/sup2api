@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -57,6 +58,91 @@ type fakeStepUp struct{}
 
 func (fakeStepUp) VerifyStepUp(context.Context, int64, string) error { return nil }
 
+// fakeGen implements the parts of core.Generation used for key platforms.
+type fakeGen struct {
+	core.Generation
+	plats []string
+	types []core.AccountTypeBinding
+}
+
+func (g *fakeGen) Platform(id string) (core.PlatformBinding, bool) {
+	for _, p := range g.plats {
+		if p == id {
+			return core.PlatformBinding{Platform: manifest.Platform{ID: id}}, true
+		}
+	}
+	return core.PlatformBinding{}, false
+}
+
+func (g *fakeGen) AccountType(pluginKey, typ string) (core.AccountTypeBinding, bool) {
+	for _, b := range g.types {
+		if b.Plugin.Key == pluginKey && b.Type.ID == typ {
+			return b, true
+		}
+	}
+	return core.AccountTypeBinding{}, false
+}
+
+type fakeRegistry struct{ gen core.Generation }
+
+func (r fakeRegistry) Current() core.Generation                     { return r.gen }
+func (fakeRegistry) OnChange(func(core.Generation)) (cancel func()) { return func() {} }
+
+func accountType(plugin, id string, platforms ...string) core.AccountTypeBinding {
+	b := core.AccountTypeBinding{Plugin: core.PluginInfo{Key: plugin}, Type: manifest.AccountType{ID: id}}
+	for _, p := range platforms {
+		b.Type.Platforms = append(b.Type.Platforms, manifest.AccountPlatform{Platform: p})
+	}
+	return b
+}
+
+// testGen: anthropic/apikey serves anthropic; relay/relay_key serves openai,
+// anthropic and the unavailable "ghost".
+func testGen() *fakeGen {
+	return &fakeGen{
+		plats: []string{"anthropic", "openai", "gemini"},
+		types: []core.AccountTypeBinding{
+			accountType("anthropic", "apikey", "anthropic"),
+			accountType("relay", "relay_key", "openai", "anthropic", "ghost"),
+		},
+	}
+}
+
+func TestPlatformsOf(t *testing.T) {
+	key := func(p, typ string) core.AccountTypeKey { return core.AccountTypeKey{PluginKey: p, Type: typ} }
+	g := testGen()
+	for _, c := range []struct {
+		types []core.AccountTypeKey
+		want  string
+	}{
+		{nil, "[]"},
+		{[]core.AccountTypeKey{key("anthropic", "apikey")}, "[anthropic]"},
+		{[]core.AccountTypeKey{key("relay", "relay_key"), key("anthropic", "apikey")}, "[anthropic openai]"},
+		{[]core.AccountTypeKey{key("gone", "apikey"), key("relay", "apikey")}, "[]"},
+	} {
+		if got := platformsOf(g, c.types); got == nil || fmt.Sprint(got) != c.want {
+			t.Errorf("platformsOf(%v) = %v, want %s", c.types, got, c.want)
+		}
+	}
+	if got := platformsOf(nil, []core.AccountTypeKey{key("anthropic", "apikey")}); got == nil || len(got) != 0 {
+		t.Fatalf("nil generation: %v", got)
+	}
+}
+
+func TestFillPlatformsWithoutRegistry(t *testing.T) {
+	// No registry (or no generation): no database access, platforms are [].
+	for _, s := range []*Service{New(nil, nil, nil, nil), New(nil, nil, nil, fakeRegistry{})} {
+		keys := []*APIKey{{GroupID: 1}, {GroupID: 2}}
+		if err := s.fillPlatforms(context.Background(), keys); err != nil {
+			t.Fatal(err)
+		}
+		b, _ := json.Marshal(keys)
+		if strings.Count(string(b), `"platforms":[]`) != 2 {
+			t.Fatalf("json: %s", b)
+		}
+	}
+}
+
 type env struct {
 	t     *testing.T
 	db    *store.DB
@@ -77,7 +163,7 @@ func setup(t *testing.T) *env {
 	e.admin = e.exec1(`INSERT INTO users (email, password_hash) VALUES ('admin@x.com', 'x') RETURNING id`)
 	e.user = e.exec1(`INSERT INTO users (email, password_hash, max_concurrency) VALUES ('u@x.com', 'x', 3) RETURNING id`)
 	e.authz = &fakeAuthz{admin: e.admin, noGateway: map[int64]bool{}}
-	e.svc = New(db, rdb, e.authz)
+	e.svc = New(db, rdb, e.authz, fakeRegistry{gen: testGen()})
 	engine := gin.New()
 	r := httpapi.NewRouter(engine, fakeTokens{}, e.authz, fakeStepUp{})
 	e.svc.RegisterRoutes(r)
@@ -144,6 +230,11 @@ func TestAPIKeyLifecycleAndAuth(t *testing.T) {
 	ctx := context.Background()
 	pub := e.exec1(`INSERT INTO groups (name, rate_multiplier, model_allowlist) VALUES ('pub', 1.5, '["claude-*"]') RETURNING id`)
 	restricted := e.exec1(`INSERT INTO groups (name, visibility) VALUES ('vip', 'restricted') RETURNING id`)
+	for _, typ := range [][2]string{{"relay", "relay_key"}, {"anthropic", "apikey"}, {"gone", "apikey"}} {
+		acc := e.exec1(`INSERT INTO accounts (name, plugin_key, type, credentials_enc) VALUES ('a', $1, $2, '\x00'::bytea) RETURNING id`,
+			typ[0], typ[1])
+		e.exec(`INSERT INTO account_groups (account_id, group_id) VALUES ($1, $2)`, acc, pub)
+	}
 
 	if code, _ := e.do(e.user, "POST", "/me/api-keys", map[string]any{"name": "k", "group_id": restricted}); code != 400 {
 		t.Fatalf("restricted group accepted: %d", code)
@@ -155,7 +246,7 @@ func TestAPIKeyLifecycleAndAuth(t *testing.T) {
 	data := out["data"].(map[string]any)
 	raw := data["key"].(string)
 	keyID := int64(data["id"].(float64))
-	if data["key_prefix"] != raw[:12] || data["group_name"] != "pub" {
+	if data["key_prefix"] != raw[:12] || data["group_name"] != "pub" || fmt.Sprint(data["platforms"]) != "[anthropic openai]" {
 		t.Fatalf("create view: %v", data)
 	}
 	var stored string
@@ -166,8 +257,13 @@ func TestAPIKeyLifecycleAndAuth(t *testing.T) {
 
 	_, out = e.do(e.user, "GET", "/me/api-keys", nil)
 	items := out["data"].([]any)
-	if len(items) != 1 || items[0].(map[string]any)["key"] != nil {
+	if len(items) != 1 || items[0].(map[string]any)["key"] != nil ||
+		fmt.Sprint(items[0].(map[string]any)["platforms"]) != "[anthropic openai]" {
 		t.Fatalf("list mine: %v", out)
+	}
+	_, out = e.do(e.admin, "GET", "/api-keys", nil)
+	if items = out["data"].([]any); len(items) != 1 || fmt.Sprint(items[0].(map[string]any)["platforms"]) != "[anthropic openai]" {
+		t.Fatalf("list all: %v", out)
 	}
 
 	// Authenticate: success, cached.
