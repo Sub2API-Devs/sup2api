@@ -270,7 +270,7 @@ go test -count=1 -timeout 50m -v ./...
 | d4-runtime | `plugin/grpcruntime`、`rollout`、`registry`、`egress`、`sandbox` | 插件集群广播、资源限制即时重启、旧版本缓存清理、节点重新验签、新域名记录与告警、出口长连接 | ✅ `6f1423e52`，合并 `1ffa5dd89`；主控 `aecc4a114` 节点验签改用 VerifyInstalled（已装插件不因签名密钥过期而停），`99614fdd6` 组装验签器、egress Events、runtime Bus |
 | e4-plugins | `sdk/pluginsdk`、`plugins/*`（新增 openai、gemini）、`tools`、`e2e`（AC20）、`mock-upstream`、`build-go.sh` | 两个内置账号类型插件、SDK 广播、guard 规则即时生效、mock 上游支持 openai/gemini | ✅ `44f88c1bf`、`0f643d3ab`、`eb7d39024`、`4e0a067ae`，合并 `164f4ece9`；内置插件改为 `anthropic openai gemini` |
 | f4-web | `web/` | 对应的控制台改动 | ✅ `332ee0de1`、`b923baefc`，合并 `73676fa1b`；含代理密码按 §15.4、refresh 单飞（同标签页共用、跨标签页 Web Locks） |
-| docs4-contracts | CONTRACTS §15 | 按代码现状补齐前端提出的缺失接口说明 | ✅ `754cb51f8`，合并 `04b649149`；§15.10 列出 11 处与前文不一致待裁定；发现代理密码掩码问题已转 f4 |
+| docs4-contracts | CONTRACTS §15 | 按代码现状补齐前端提出的缺失接口说明 | ✅ `754cb51f8`，合并 `04b649149`；§15.10 列出 11 处与前文不一致，已于 `c00e2ed78` 裁定（9 处以代码为准改文档；插件列表统一用 `node_summary`、共享绑定的粘性规则 flush 返回 409 两处改代码）；发现代理密码掩码问题已转 f4 |
 
 **合并后主控要做**：`internal/app` 组装（proxy AllowPrivate、install Accounts、routes/gateway 健康检查、registry 验签、egress 事件发布等）；清空 sup2api 重建并验证 openai/gemini（上游用 httpbin 回显或真实 Key，由用户提供）；更新本节。
 
