@@ -1,0 +1,82 @@
+# Caddy for the sub2api-next test environment. Listens on :3120 inside the
+# container; compose publishes it on 127.0.0.1:3120 only. Plain HTTP (TLS is
+# terminated by the SSH tunnel / not needed for tests).
+{
+	admin off
+	auto_https off
+	servers {
+		max_header_size 64KB
+		timeouts {
+			read_header 10s
+			idle 2m
+		}
+	}
+}
+
+:3120 {
+	# Signed plugin market: index.json, index.json.sig, *.s2plugin
+	handle_path /market/* {
+		root * /srv/market
+		header Cache-Control "no-cache"
+		file_server
+	}
+
+	# ---- test-only helpers (reachable only through 127.0.0.1:3120) ----
+	# Mock upstream inspection/control: /__mock/__requests, /__mock/__control
+	handle_path /__mock/* {
+		reverse_proxy mock-upstream:8080
+	}
+	# Direct access to a single node, bypassing the load balancer.
+	handle_path /__node1/* {
+		reverse_proxy node-1:8080 {
+			flush_interval -1
+		}
+	}
+	handle_path /__node2/* {
+		reverse_proxy node-2:8080 {
+			flush_interval -1
+		}
+	}
+
+	# Everything else: console, API and gateway, balanced across both nodes.
+	handle {
+		reverse_proxy node-1:8080 node-2:8080 {
+			lb_policy round_robin
+			lb_try_duration 5s
+			lb_try_interval 250ms
+
+			health_uri /healthz
+			health_interval 2s
+			health_timeout 2s
+			health_status 200
+
+			# Passive checks count connection failures only: 503 is a legitimate
+			# gateway answer (plugin_unavailable) and must not eject a node.
+			fail_duration 10s
+			max_fails 1
+
+			# Stream SSE immediately; never buffer gateway responses.
+			flush_interval -1
+
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_down X-Served-By {http.reverse_proxy.upstream.hostport}
+
+			transport http {
+				keepalive 120s
+				keepalive_idle_conns 64
+				compression off
+			}
+		}
+	}
+
+	request_body {
+		max_size 256MB
+	}
+
+	log {
+		output stdout
+		format json
+		level INFO
+	}
+}
