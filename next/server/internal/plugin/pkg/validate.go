@@ -14,6 +14,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/platforms"
 )
 
 var (
@@ -48,11 +49,19 @@ const (
 	RequiredArchARM = "linux-arm64"
 )
 
-// EndpointOwner is a gateway endpoint claimed by another installed plugin.
+// EndpointOwner is a gateway endpoint of a platform declared by another
+// installed plugin.
 type EndpointOwner struct {
 	PluginKey string
+	Platform  string
 	Method    string
 	Path      string
+}
+
+// PlatformOwner is a platform declared by another installed plugin.
+type PlatformOwner struct {
+	PluginKey string
+	ID        string
 }
 
 // ValidateOptions carries host facts needed by Validate.
@@ -67,8 +76,27 @@ type ValidateOptions struct {
 	GOARCH  string // default runtime.GOARCH
 	// MaxMemoryMB is the global per-plugin memory cap (0 = no cap).
 	MaxMemoryMB int
-	// OtherEndpoints are the endpoints of all other installed plugins.
+	// OtherEndpoints are the platform endpoints of all other installed
+	// plugins (built-in platform endpoints are checked by Validate itself).
 	OtherEndpoints []EndpointOwner
+	// OtherPlatforms are the platforms declared by all other installed plugins.
+	OtherPlatforms []PlatformOwner
+}
+
+// OthersFromManifests collects the platforms and endpoints declared by the
+// given manifests of other installed plugins (for ValidateOptions).
+func OthersFromManifests(ms []*manifest.Manifest) ([]PlatformOwner, []EndpointOwner) {
+	var pfs []PlatformOwner
+	var eps []EndpointOwner
+	for _, m := range ms {
+		for _, p := range m.Platforms {
+			pfs = append(pfs, PlatformOwner{PluginKey: m.Key, ID: p.ID})
+			for _, e := range p.Endpoints {
+				eps = append(eps, EndpointOwner{PluginKey: m.Key, Platform: p.ID, Method: e.Method, Path: e.Path})
+			}
+		}
+	}
+	return pfs, eps
 }
 
 type validator struct {
@@ -126,8 +154,7 @@ func Validate(m *manifest.Manifest, files map[string][]byte, opt ValidateOptions
 	v.basics()
 	v.hostPermissions()
 	v.capabilities()
-	v.gateway()
-	v.platform()
+	v.platforms()
 	v.accountTypes()
 	v.pricing()
 	v.hooks()
@@ -258,58 +285,123 @@ func (v *validator) capabilities() {
 	}
 }
 
-func (v *validator) gateway() {
-	g := v.m.Gateway
-	if g == nil {
+// platforms validates the plugin's own platforms and their endpoints
+// (ARCHITECTURE 6.4, 6.6).
+func (v *validator) platforms() {
+	pfs := v.m.Platforms
+	if len(pfs) == 0 {
 		return
 	}
-	v.needPerm("gateway", "gateway.endpoint", "gateway endpoints")
-	if len(g.Endpoints) == 0 {
-		v.add("gateway.endpoints", "required", "at least one endpoint is required")
+	v.needPerm("platforms", "gateway.endpoint", "platforms")
+	v.needPerm("platforms", "platform.register", "platforms")
+	type ownEndpoint struct {
+		field string
+		ep    manifest.Endpoint
 	}
+	var own []ownEndpoint
 	ids := map[string]bool{}
-	own := map[string]bool{}
-	for i, e := range g.Endpoints {
-		f := fmt.Sprintf("gateway.endpoints[%d]", i)
-		if !idRe.MatchString(e.ID) {
-			v.add(f+".id", "invalid_format", "endpoint id %q is invalid", e.ID)
-		} else if ids[e.ID] {
-			v.add(f+".id", "duplicate", "endpoint id %q declared twice", e.ID)
+	for i, p := range pfs {
+		f := fmt.Sprintf("platforms[%d]", i)
+		switch {
+		case !keyRe.MatchString(p.ID):
+			v.add(f+".id", "invalid_format", "platform id %q must match %s", p.ID, keyRe.String())
+		case platforms.IsBuiltin(p.ID):
+			v.add(f+".id", "builtin_platform", "platform id %q is a built-in platform", p.ID)
+		case ids[p.ID]:
+			v.add(f+".id", "duplicate", "platform %q declared twice", p.ID)
+		default:
+			for _, o := range v.opt.OtherPlatforms {
+				if o.PluginKey != v.m.Key && o.ID == p.ID {
+					v.add(f+".id", "platform_conflict", "platform %q is already declared by plugin %q", p.ID, o.PluginKey)
+					break
+				}
+			}
 		}
-		ids[e.ID] = true
-		method := strings.ToUpper(e.Method)
-		if !allowedMethods[method] {
-			v.add(f+".method", "invalid", "unsupported method %q", e.Method)
+		ids[p.ID] = true
+		if len(p.Endpoints) == 0 {
+			v.add(f+".endpoints", "required", "at least one endpoint is required")
 		}
-		if msg := checkEndpointPath(e.Path); msg != "" {
-			v.add(f+".path", "invalid_path", "%s", msg)
-		}
-		if e.Protocol == "" {
-			v.add(f+".protocol", "required", "protocol is required")
-		}
-		if e.Kind != "proxy" {
-			v.add(f+".kind", "unsupported", "kind must be \"proxy\"")
-		}
-		if e.Billing != "" && e.Billing != "usage" && e.Billing != "free" {
-			v.add(f+".billing", "invalid", "billing must be usage or free")
-		}
-		if len(e.Auth.Headers) == 0 && e.Auth.Query == "" {
-			v.add(f+".auth", "required", "auth.headers or auth.query is required")
-		}
-		sig := method + " " + NormalizeRoutePath(e.Path)
-		if own[sig] {
-			v.add(f+".path", "duplicate", "endpoint %s %s declared twice", method, e.Path)
-		}
-		own[sig] = true
-		for _, o := range v.opt.OtherEndpoints {
-			if o.PluginKey == v.m.Key {
+		epIDs := map[string]bool{}
+		for j, e := range p.Endpoints {
+			ef := fmt.Sprintf("%s.endpoints[%d]", f, j)
+			if !idRe.MatchString(e.ID) {
+				v.add(ef+".id", "invalid_format", "endpoint id %q is invalid", e.ID)
+			} else if epIDs[e.ID] {
+				v.add(ef+".id", "duplicate", "endpoint id %q declared twice", e.ID)
+			}
+			epIDs[e.ID] = true
+			if !v.endpoint(ef, p.ID, e) {
 				continue
 			}
-			if strings.ToUpper(o.Method) == method && NormalizeRoutePath(o.Path) == NormalizeRoutePath(e.Path) {
-				v.add(f+".path", "endpoint_conflict", "endpoint %s %s conflicts with plugin %q", method, e.Path, o.PluginKey)
+			for _, o := range own {
+				if EndpointsConflict(o.ep, e) {
+					v.add(ef+".path", "duplicate", "endpoint %s %s conflicts with %s (%s %s)",
+						strings.ToUpper(e.Method), e.Path, o.field, strings.ToUpper(o.ep.Method), o.ep.Path)
+					break
+				}
+			}
+			own = append(own, ownEndpoint{field: ef, ep: e})
+			for _, bp := range platforms.Builtin() {
+				for _, be := range bp.Endpoints {
+					if EndpointsConflict(be, e) {
+						v.add(ef+".path", "endpoint_conflict", "endpoint %s %s conflicts with built-in platform %q (%s %s)",
+							strings.ToUpper(e.Method), e.Path, bp.ID, be.Method, be.Path)
+					}
+				}
+			}
+			for _, o := range v.opt.OtherEndpoints {
+				if o.PluginKey == v.m.Key {
+					continue
+				}
+				if EndpointsConflict(manifest.Endpoint{Method: o.Method, Path: o.Path}, e) {
+					v.add(ef+".path", "endpoint_conflict", "endpoint %s %s conflicts with plugin %q (%s %s)",
+						strings.ToUpper(e.Method), e.Path, o.PluginKey, o.Method, o.Path)
+				}
 			}
 		}
+		v.usageRules(f+".usage", p.Usage)
+		v.stickyRules(f+".stickyRules", p.StickyRules)
 	}
+}
+
+// endpoint validates one endpoint of platform platformID; ok=false when its
+// method or path is malformed (no conflict checks then).
+func (v *validator) endpoint(f, platformID string, e manifest.Endpoint) (ok bool) {
+	ok = true
+	if !allowedMethods[strings.ToUpper(e.Method)] {
+		v.add(f+".method", "invalid", "unsupported method %q", e.Method)
+		ok = false
+	}
+	if msg := checkEndpointPath(e.Path); msg != "" {
+		v.add(f+".path", "invalid_path", "%s", msg)
+		ok = false
+	}
+	name, hasPrefix := strings.CutPrefix(e.Protocol, platformID+".")
+	switch {
+	case e.Protocol == "":
+		v.add(f+".protocol", "required", "protocol is required")
+	case !hasPrefix || name == "" || !protocolRe.MatchString(name):
+		v.add(f+".protocol", "invalid_format", "protocol %q must be %q followed by a name", e.Protocol, platformID+".")
+	}
+	if e.Kind != "proxy" {
+		v.add(f+".kind", "unsupported", "kind must be \"proxy\"")
+	}
+	if e.Billing != "" && e.Billing != "usage" && e.Billing != "free" {
+		v.add(f+".billing", "invalid", "billing must be usage or free")
+	}
+	if len(e.Auth.Headers) == 0 && e.Auth.Query == "" {
+		v.add(f+".auth", "required", "auth.headers or auth.query is required")
+	}
+	switch {
+	case e.Request.ModelPath == "" && e.Request.ModelParam == "":
+		v.add(f+".request", "required", "request.modelPath or request.modelParam is required")
+	case e.Request.ModelParam != "" && !slices.Contains(PathParams(e.Path), e.Request.ModelParam):
+		v.add(f+".request.modelParam", "unknown_param", "path %q has no parameter %q", e.Path, e.Request.ModelParam)
+	}
+	if e.Usage != nil {
+		v.usageRules(f+".usage", *e.Usage)
+	}
+	return ok
 }
 
 func checkEndpointPath(p string) string {
@@ -329,6 +421,9 @@ func checkEndpointPath(p string) string {
 			return "path contains an empty or relative segment"
 		}
 	}
+	if _, err := parseEndpointPath(p); err != nil {
+		return err.Error()
+	}
 	return ""
 }
 
@@ -347,31 +442,10 @@ func NormalizeRoutePath(p string) string {
 	return strings.TrimSuffix(strings.Join(segs, "/"), "/")
 }
 
-func (v *validator) platform() {
-	p := v.m.Platform
-	if p == nil {
-		return
-	}
-	v.needCap("platform", manifest.CapPlatformAdapter)
-	v.needPerm("platform", "platform.register", "a platform")
-	if !idRe.MatchString(p.ID) {
-		v.add("platform.id", "invalid_format", "platform id %q is invalid", p.ID)
-	}
-	if len(p.Protocols) == 0 {
-		v.add("platform.protocols", "required", "at least one protocol is required")
-	}
-	if v.m.Gateway != nil {
-		for i, e := range v.m.Gateway.Endpoints {
-			if e.Protocol != "" && !slices.Contains(p.Protocols, e.Protocol) {
-				v.add(fmt.Sprintf("gateway.endpoints[%d].protocol", i), "not_in_platform",
-					"protocol %q is not listed in platform.protocols", e.Protocol)
-			}
-		}
-	}
-	v.usageRules("platform.usage", p.Usage)
+func (v *validator) stickyRules(f0 string, rules []manifest.StickyRule) {
 	names := map[string]bool{}
-	for i, r := range p.StickyRules {
-		f := fmt.Sprintf("platform.stickyRules[%d]", i)
+	for i, r := range rules {
+		f := fmt.Sprintf("%s[%d]", f0, i)
 		if r.Name == "" {
 			v.add(f+".name", "required", "name is required")
 		} else if names[r.Name] {
@@ -415,6 +489,10 @@ func (v *validator) accountTypes() {
 	v.needCap("accountTypes", manifest.CapPlatformAdapter)
 	v.needPerm("accountTypes", "platform.register", "account types")
 	v.needPerm("accountTypes", "accounts.credentials", "account types")
+	ownPlatforms := map[string]*manifest.Platform{}
+	for i := range v.m.Platforms {
+		ownPlatforms[v.m.Platforms[i].ID] = &v.m.Platforms[i]
+	}
 	ids := map[string]bool{}
 	for i, at := range ats {
 		f := fmt.Sprintf("accountTypes[%d]", i)
@@ -428,26 +506,44 @@ func (v *validator) accountTypes() {
 			v.add(f+".label", "required", "label.en is required")
 		}
 		v.form(f+".form", at.Form, false)
-		if len(at.Protocols) == 0 {
-			v.add(f+".protocols", "required", "at least one protocol is required")
+		if len(at.Platforms) == 0 {
+			v.add(f+".platforms", "required", "at least one platform is required")
 		}
-		protos := map[string]bool{}
-		for j, ap := range at.Protocols {
-			pf := fmt.Sprintf("%s.protocols[%d]", f, j)
+		seen := map[string]bool{}
+		for j, ap := range at.Platforms {
+			pf := fmt.Sprintf("%s.platforms[%d]", f, j)
 			switch {
-			case ap.Protocol == "":
-				v.add(pf+".protocol", "required", "protocol is required")
-			case !protocolRe.MatchString(ap.Protocol):
-				v.add(pf+".protocol", "invalid_format", "protocol %q must match %s", ap.Protocol, protocolRe.String())
-			case protos[ap.Protocol]:
-				v.add(pf+".protocol", "duplicate", "protocol %q listed twice", ap.Protocol)
+			case ap.Platform == "":
+				v.add(pf+".platform", "required", "platform is required")
+			case !keyRe.MatchString(ap.Platform):
+				v.add(pf+".platform", "invalid_format", "platform id %q must match %s", ap.Platform, keyRe.String())
+			case seen[ap.Platform]:
+				v.add(pf+".platform", "duplicate", "platform %q listed twice", ap.Platform)
 			}
-			protos[ap.Protocol] = true
-			if ap.Usage != nil {
-				v.usageRules(pf+".usage", *ap.Usage)
+			seen[ap.Platform] = true
+			own := ownPlatforms[ap.Platform]
+			for _, proto := range sortedKeys(ap.Usage) {
+				uf := pf + ".usage." + proto
+				if own != nil {
+					if !slices.Contains(own.Protocols(), proto) {
+						v.add(uf, "unknown_protocol", "protocol %q is not a protocol of platform %q", proto, ap.Platform)
+					}
+				} else if !strings.HasPrefix(proto, ap.Platform+".") {
+					v.add(uf, "unknown_protocol", "protocol %q does not belong to platform %q", proto, ap.Platform)
+				}
+				v.usageRules(uf, ap.Usage[proto])
 			}
 		}
 	}
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // usageRules validates usage extraction rules (platform defaults and

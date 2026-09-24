@@ -10,6 +10,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/platforms"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg/pkgtest"
 )
 
@@ -166,34 +167,35 @@ func TestValidateConsistency(t *testing.T) {
 		{"memory cap", func(m *manifest.Manifest, _ map[string][]byte) { m.Resources.MemoryMB = 4096 }, "resources.memoryMB", "out_of_range"},
 		{"user perm key", func(m *manifest.Manifest, _ map[string][]byte) { m.UserPermissions[0].Key = "Rules" }, "userPermissions[0].key", "invalid_format"},
 		{"icon missing", func(m *manifest.Manifest, _ map[string][]byte) { m.Icon = "icon.png" }, "icon", "file_missing"},
-		{"gateway without perm", func(m *manifest.Manifest, _ map[string][]byte) {
-			m.Gateway = &manifest.Gateway{Endpoints: []manifest.Endpoint{{ID: "msg", Method: "POST", Path: "/v1/messages", Protocol: "anthropic.messages", Kind: "proxy", Auth: manifest.EndpointAuth{Headers: []string{"x-api-key"}}}}}
-		}, "gateway", "missing_host_permission"},
-		{"reserved endpoint", func(m *manifest.Manifest, _ map[string][]byte) {
-			m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "gateway.endpoint"})
-			m.Gateway = &manifest.Gateway{Endpoints: []manifest.Endpoint{{ID: "x", Method: "GET", Path: "/api/v1/x", Protocol: "p", Kind: "proxy", Auth: manifest.EndpointAuth{Headers: []string{"x"}}}}}
-		}, "gateway.endpoints[0].path", "invalid_path"},
-		{"platform perms", func(m *manifest.Manifest, _ map[string][]byte) {
-			m.Capabilities = append(m.Capabilities, manifest.Capability{ID: manifest.CapPlatformAdapter})
-			m.Platform = &manifest.Platform{ID: "anthropic", Protocols: []string{"anthropic.messages"}}
-		}, "platform", "missing_host_permission"},
-		{"sticky plugin source", func(m *manifest.Manifest, _ map[string][]byte) {
-			m.Capabilities = append(m.Capabilities, manifest.Capability{ID: manifest.CapPlatformAdapter}, manifest.Capability{ID: manifest.CapSchedulerAffinity})
+		{"platform without perm", func(m *manifest.Manifest, _ map[string][]byte) {
 			m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "platform.register"})
-			m.Platform = &manifest.Platform{ID: "anthropic", Protocols: []string{"anthropic.messages"},
-				StickyRules: []manifest.StickyRule{{Name: "s", KeySources: []manifest.StickyKeySource{{Type: "plugin"}}}}}
-		}, "platform.stickyRules[0].keySources[0]", "missing_host_permission"},
+			m.Platforms = []manifest.Platform{{ID: "guardp", Endpoints: []manifest.Endpoint{guardEndpoint("guardp", "POST", "/v1/guard")}}}
+		}, "platforms", "missing_host_permission"},
+		{"reserved endpoint", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "gateway.endpoint"}, manifest.HostPermission{ID: "platform.register"})
+			m.Platforms = []manifest.Platform{{ID: "guardp", Endpoints: []manifest.Endpoint{guardEndpoint("guardp", "GET", "/api/v1/x")}}}
+		}, "platforms[0].endpoints[0].path", "invalid_path"},
+		{"platform perms", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "gateway.endpoint"})
+			m.Platforms = []manifest.Platform{{ID: "guardp", Endpoints: []manifest.Endpoint{guardEndpoint("guardp", "POST", "/v1/guard")}}}
+		}, "platforms", "missing_host_permission"},
+		{"sticky plugin source", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.Capabilities = append(m.Capabilities, manifest.Capability{ID: manifest.CapSchedulerAffinity})
+			m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "gateway.endpoint"}, manifest.HostPermission{ID: "platform.register"})
+			m.Platforms = []manifest.Platform{{ID: "guardp", Endpoints: []manifest.Endpoint{guardEndpoint("guardp", "POST", "/v1/guard")},
+				StickyRules: []manifest.StickyRule{{Name: "s", KeySources: []manifest.StickyKeySource{{Type: "plugin"}}}}}}
+		}, "platforms[0].stickyRules[0].keySources[0]", "missing_host_permission"},
 		{"account types need credentials", func(m *manifest.Manifest, _ map[string][]byte) {
 			m.Capabilities = append(m.Capabilities, manifest.Capability{ID: manifest.CapPlatformAdapter})
 			m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "platform.register"})
 			m.AccountTypes = []manifest.AccountType{{ID: "apikey", Label: manifest.LocalizedText{"en": "API key"},
-				Form: manifest.Form{Mode: "native", Component: "X"}, Protocols: []manifest.AccountProtocol{{Protocol: "anthropic.messages"}}}}
+				Form: manifest.Form{Mode: "native", Component: "X"}, Platforms: []manifest.AccountPlatform{{Platform: "anthropic"}}}}
 		}, "accountTypes", "missing_host_permission"},
 		{"account types need adapter", func(m *manifest.Manifest, _ map[string][]byte) {
 			m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "platform.register"},
 				manifest.HostPermission{ID: "accounts.credentials", Scope: map[string]any{"types": "own"}})
 			m.AccountTypes = []manifest.AccountType{{ID: "apikey", Label: manifest.LocalizedText{"en": "API key"},
-				Form: manifest.Form{Mode: "native", Component: "X"}, Protocols: []manifest.AccountProtocol{{Protocol: "anthropic.messages"}}}}
+				Form: manifest.Form{Mode: "native", Component: "X"}, Platforms: []manifest.AccountPlatform{{Platform: "anthropic"}}}}
 		}, "accountTypes", "missing_capability"},
 	}
 	for _, tc := range cases {
@@ -213,35 +215,41 @@ func TestValidateConsistency(t *testing.T) {
 	}
 }
 
+// guardEndpoint is a minimal valid endpoint of platform pid.
+func guardEndpoint(pid, method, path string) manifest.Endpoint {
+	return manifest.Endpoint{ID: "e", Method: method, Path: path, Protocol: pid + ".call", Kind: "proxy",
+		Auth: manifest.EndpointAuth{Headers: []string{"authorization"}}, Request: manifest.EndpointRequest{ModelPath: "model"}}
+}
+
 func TestValidatePlatformAndAccountTypes(t *testing.T) {
-	m := pkgtest.Platform("anthropic", "0.1.0", "sub2api")
+	m := pkgtest.Platform("video", "0.1.0", "sub2api")
 	if err := Validate(m, pkgtest.Files(m), opts()); err != nil {
 		t.Fatalf("validate: %v %v", err, fieldCodes(err))
 	}
 
-	// A platform no longer needs account types, and a plugin may declare
-	// account types without a platform (a relay plugin).
-	noTypes := pkgtest.Platform("anthropic", "0.1.0", "sub2api")
+	// A platform does not need account types, and a plugin may declare
+	// account types for a built-in platform only (the anthropic plugin).
+	noTypes := pkgtest.Platform("video", "0.1.0", "sub2api")
 	noTypes.AccountTypes = nil
+	noTypes.Capabilities = nil
 	noTypes.HostPermissions = noTypes.HostPermissions[:2]
 	if err := Validate(noTypes, pkgtest.Files(noTypes), opts()); err != nil {
 		t.Fatalf("platform without account types: %v", fieldCodes(err))
 	}
-	relay := pkgtest.Platform("relay", "0.1.0", "sub2api")
-	relay.Gateway, relay.Platform = nil, nil
-	relay.HostPermissions = relay.HostPermissions[1:]
-	if err := Validate(relay, pkgtest.Files(relay), opts()); err != nil {
-		t.Fatalf("relay without platform: %v", fieldCodes(err))
+	anth := pkgtest.Anthropic("anthropic", "0.1.0", "sub2api")
+	if err := Validate(anth, pkgtest.Files(anth), opts()); err != nil {
+		t.Fatalf("account types for a built-in platform: %v", fieldCodes(err))
+	}
+	// Account types may reference platforms of other plugins (served once
+	// that plugin is enabled).
+	anth.AccountTypes[0].Platforms = append(anth.AccountTypes[0].Platforms, manifest.AccountPlatform{Platform: "video",
+		Usage: map[string]manifest.UsageRules{"video.generate": {Semantics: "inclusive"}}})
+	if err := Validate(anth, pkgtest.Files(anth), opts()); err != nil {
+		t.Fatalf("account type for another plugin's platform: %v", fieldCodes(err))
 	}
 
 	type mut func(m *manifest.Manifest, files map[string][]byte)
-	proto := func(p ...string) []manifest.AccountProtocol {
-		out := make([]manifest.AccountProtocol, 0, len(p))
-		for _, x := range p {
-			out = append(out, manifest.AccountProtocol{Protocol: x})
-		}
-		return out
-	}
+	ep := func(m *manifest.Manifest, i int) *manifest.Endpoint { return &m.Platforms[0].Endpoints[i] }
 	cases := []struct {
 		name  string
 		mut   mut
@@ -254,21 +262,28 @@ func TestValidatePlatformAndAccountTypes(t *testing.T) {
 			m.AccountTypes = append(m.AccountTypes, m.AccountTypes[0])
 		}, "accountTypes[1].id", "duplicate"},
 		{"type label", func(m *manifest.Manifest, _ map[string][]byte) { m.AccountTypes[0].Label = nil }, "accountTypes[0].label", "required"},
-		{"no protocols", func(m *manifest.Manifest, _ map[string][]byte) { m.AccountTypes[0].Protocols = nil }, "accountTypes[0].protocols", "required"},
-		{"empty protocol", func(m *manifest.Manifest, _ map[string][]byte) { m.AccountTypes[0].Protocols = proto("") }, "accountTypes[0].protocols[0].protocol", "required"},
-		{"protocol format", func(m *manifest.Manifest, _ map[string][]byte) {
-			m.AccountTypes[0].Protocols = proto("Anthropic Messages")
-		}, "accountTypes[0].protocols[0].protocol", "invalid_format"},
-		{"protocol duplicate", func(m *manifest.Manifest, _ map[string][]byte) {
-			m.AccountTypes[0].Protocols = proto("anthropic.messages", "anthropic.messages")
-		}, "accountTypes[0].protocols[1].protocol", "duplicate"},
+		{"no platforms", func(m *manifest.Manifest, _ map[string][]byte) { m.AccountTypes[0].Platforms = nil }, "accountTypes[0].platforms", "required"},
+		{"empty platform", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.AccountTypes[0].Platforms = []manifest.AccountPlatform{{}}
+		}, "accountTypes[0].platforms[0].platform", "required"},
+		{"platform duplicate", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.AccountTypes[0].Platforms = []manifest.AccountPlatform{{Platform: "anthropic"}, {Platform: "anthropic"}}
+		}, "accountTypes[0].platforms[1].platform", "duplicate"},
+		{"usage protocol of own platform", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.AccountTypes[0].Platforms[0].Usage = map[string]manifest.UsageRules{"video.nope": {}}
+		}, "accountTypes[0].platforms[0].usage.video.nope", "unknown_protocol"},
+		{"usage protocol of other platform", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.AccountTypes[0].Platforms = []manifest.AccountPlatform{{Platform: "anthropic",
+				Usage: map[string]manifest.UsageRules{"openai.chat": {}}}}
+		}, "accountTypes[0].platforms[0].usage.openai.chat", "unknown_protocol"},
 		{"usage override", func(m *manifest.Manifest, _ map[string][]byte) {
-			m.AccountTypes[0].Protocols[0].Usage = &manifest.UsageRules{Semantics: "both"}
-		}, "accountTypes[0].protocols[0].usage.semantics", "invalid"},
+			m.AccountTypes[0].Platforms[0].Usage = map[string]manifest.UsageRules{"video.generate": {Semantics: "both"}}
+		}, "accountTypes[0].platforms[0].usage.video.generate.semantics", "invalid"},
 		{"form file", func(_ *manifest.Manifest, f map[string][]byte) { delete(f, "forms/apikey.schema.json") }, "accountTypes[0].form.schema", "file_missing"},
 		{"form ui file", func(_ *manifest.Manifest, f map[string][]byte) { delete(f, "forms/apikey.ui.json") }, "accountTypes[0].form.uiSchema", "file_missing"},
 		{"needs platform.register", func(m *manifest.Manifest, _ map[string][]byte) {
-			m.Platform, m.Gateway = nil, nil
+			m.Platforms = nil
+			m.AccountTypes[0].Platforms = []manifest.AccountPlatform{{Platform: "anthropic"}}
 			m.HostPermissions = []manifest.HostPermission{{ID: "accounts.credentials", Scope: map[string]any{"types": "own"}}}
 		}, "accountTypes", "missing_host_permission"},
 		{"old credentials scope", func(m *manifest.Manifest, _ map[string][]byte) {
@@ -277,15 +292,58 @@ func TestValidatePlatformAndAccountTypes(t *testing.T) {
 		{"missing credentials scope", func(m *manifest.Manifest, _ map[string][]byte) {
 			m.HostPermissions[2].Scope = nil
 		}, "hostPermissions[2].scope", "invalid"},
-		{"endpoint protocol outside platform", func(m *manifest.Manifest, _ map[string][]byte) {
-			m.Platform.Protocols = []string{"anthropic.messages"}
-		}, "gateway.endpoints[1].protocol", "not_in_platform"},
-		{"platform usage", func(m *manifest.Manifest, _ map[string][]byte) { m.Platform.Usage.Semantics = "x" }, "platform.usage.semantics", "invalid"},
-		{"platform protocols", func(m *manifest.Manifest, _ map[string][]byte) { m.Platform.Protocols = nil }, "platform.protocols", "required"},
+		// Platforms.
+		{"platform id format", func(m *manifest.Manifest, _ map[string][]byte) { m.Platforms[0].ID = "Video" }, "platforms[0].id", "invalid_format"},
+		{"platform id built-in", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.Platforms[0].ID = manifest.PlatformAnthropic
+		}, "platforms[0].id", "builtin_platform"},
+		{"platform id duplicate", func(m *manifest.Manifest, _ map[string][]byte) {
+			p := m.Platforms[0]
+			p.Endpoints = []manifest.Endpoint{guardEndpoint("video", "POST", "/video/v2/x")}
+			m.Platforms = append(m.Platforms, p)
+		}, "platforms[1].id", "duplicate"},
+		{"platform endpoints", func(m *manifest.Manifest, _ map[string][]byte) { m.Platforms[0].Endpoints = nil }, "platforms[0].endpoints", "required"},
+		{"platform usage", func(m *manifest.Manifest, _ map[string][]byte) { m.Platforms[0].Usage.Semantics = "x" }, "platforms[0].usage.semantics", "invalid"},
+		{"endpoint usage", func(m *manifest.Manifest, _ map[string][]byte) {
+			ep(m, 0).Usage = &manifest.UsageRules{Semantics: "x"}
+		}, "platforms[0].endpoints[0].usage.semantics", "invalid"},
+		{"endpoint id duplicate", func(m *manifest.Manifest, _ map[string][]byte) { ep(m, 1).ID = "generate" }, "platforms[0].endpoints[1].id", "duplicate"},
+		{"protocol of another platform", func(m *manifest.Manifest, _ map[string][]byte) {
+			ep(m, 0).Protocol = "anthropic.messages"
+		}, "platforms[0].endpoints[0].protocol", "invalid_format"},
+		{"protocol without name", func(m *manifest.Manifest, _ map[string][]byte) { ep(m, 0).Protocol = "video." }, "platforms[0].endpoints[0].protocol", "invalid_format"},
+		{"protocol required", func(m *manifest.Manifest, _ map[string][]byte) { ep(m, 0).Protocol = "" }, "platforms[0].endpoints[0].protocol", "required"},
+		{"model source required", func(m *manifest.Manifest, _ map[string][]byte) {
+			ep(m, 0).Request = manifest.EndpointRequest{}
+		}, "platforms[0].endpoints[0].request", "required"},
+		{"model param not in path", func(m *manifest.Manifest, _ map[string][]byte) {
+			ep(m, 1).Request.ModelParam = "name"
+		}, "platforms[0].endpoints[1].request.modelParam", "unknown_param"},
+		{"bad param segment", func(m *manifest.Manifest, _ map[string][]byte) {
+			ep(m, 1).Path = "/video/v1/models/:model:"
+		}, "platforms[0].endpoints[1].path", "invalid_path"},
+		{"catch-all not last", func(m *manifest.Manifest, _ map[string][]byte) {
+			ep(m, 1).Path = "/video/*rest/x"
+		}, "platforms[0].endpoints[1].path", "invalid_path"},
+		{"own endpoints overlap", func(m *manifest.Manifest, _ map[string][]byte) {
+			ep(m, 1).Method = "POST"
+			ep(m, 1).Path = "/video/v1/:kind"
+		}, "platforms[0].endpoints[1].path", "duplicate"},
+		{"own endpoints overlap across platforms", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.Platforms = append(m.Platforms, manifest.Platform{ID: "video2", Endpoints: []manifest.Endpoint{
+				guardEndpoint("video2", "post", "/video/:v/videos")}})
+		}, "platforms[1].endpoints[0].path", "duplicate"},
+		{"built-in endpoint conflict", func(m *manifest.Manifest, _ map[string][]byte) {
+			ep(m, 0).Path = "/v1/:x"
+			ep(m, 0).Request = manifest.EndpointRequest{ModelParam: "x"}
+		}, "platforms[0].endpoints[0].path", "endpoint_conflict"},
+		{"sticky rule name", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.Platforms[0].StickyRules[0].Name = ""
+		}, "platforms[0].stickyRules[0].name", "required"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			m := pkgtest.Platform("anthropic", "0.1.0", "sub2api")
+			m := pkgtest.Platform("video", "0.1.0", "sub2api")
 			files := pkgtest.Files(m)
 			tc.mut(m, files)
 			codes := fieldCodes(Validate(m, files, opts()))
@@ -296,19 +354,108 @@ func TestValidatePlatformAndAccountTypes(t *testing.T) {
 	}
 }
 
-func TestValidateEndpointConflict(t *testing.T) {
-	m := pkgtest.Guard("guard", "0.1.0", "sub2api")
-	m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "gateway.endpoint"})
-	m.Gateway = &manifest.Gateway{Endpoints: []manifest.Endpoint{{ID: "msg", Method: "post", Path: "/v1/:kind/messages", Protocol: "anthropic.messages", Kind: "proxy", Auth: manifest.EndpointAuth{Headers: []string{"x-api-key"}}}}}
+// Platform ids and endpoints of other installed plugins are checked at
+// install time (ARCHITECTURE 6.4).
+func TestValidateOtherPlugins(t *testing.T) {
+	other := pkgtest.Platform("video", "0.1.0", "sub2api")
+	pfs, eps := OthersFromManifests([]*manifest.Manifest{other, pkgtest.Anthropic("anthropic", "0.1.0", "sub2api")})
+	if len(pfs) != 1 || pfs[0] != (PlatformOwner{PluginKey: "video", ID: "video"}) || len(eps) != 2 || eps[1].Platform != "video" {
+		t.Fatalf("others = %+v %+v", pfs, eps)
+	}
+
+	// Same platform id declared by another plugin.
+	m := pkgtest.Platform("video", "0.1.0", "sub2api")
+	m.Key = "clone"
 	o := opts()
-	o.OtherEndpoints = []EndpointOwner{{PluginKey: "other", Method: "POST", Path: "/v1/:x/messages"}}
+	o.OtherPlatforms, o.OtherEndpoints = pfs, eps
 	codes := fieldCodes(Validate(m, pkgtest.Files(m), o))
-	if codes["gateway.endpoints[0].path"] != "endpoint_conflict" {
+	if codes["platforms[0].id"] != "platform_conflict" {
 		t.Fatalf("codes = %v", codes)
 	}
-	o.OtherEndpoints = []EndpointOwner{{PluginKey: "guard", Method: "POST", Path: "/v1/:x/messages"}}
-	if err := Validate(m, pkgtest.Files(m), o); err != nil {
-		t.Fatalf("own endpoint should not conflict: %v", fieldCodes(err))
+	// Endpoint overlapping another plugin's endpoint (parameter vs literal).
+	if codes["platforms[0].endpoints[0].path"] != "endpoint_conflict" {
+		t.Fatalf("codes = %v", codes)
+	}
+
+	// Distinct id and paths: fine.
+	m2 := pkgtest.Platform("clip", "0.1.0", "sub2api")
+	if err := Validate(m2, pkgtest.Files(m2), o); err != nil {
+		t.Fatalf("distinct platform: %v", fieldCodes(err))
+	}
+	m2.Platforms[0].Endpoints[0].Path = "/:any/v1/videos"
+	if codes := fieldCodes(Validate(m2, pkgtest.Files(m2), o)); codes["platforms[0].endpoints[0].path"] != "invalid_path" {
+		t.Fatalf("first segment parameter: %v", codes)
+	}
+	m2.Platforms[0].Endpoints[0].Path = "/video/:ver/videos"
+	if codes := fieldCodes(Validate(m2, pkgtest.Files(m2), o)); codes["platforms[0].endpoints[0].path"] != "endpoint_conflict" {
+		t.Fatalf("parameter overlap: %v", codes)
+	}
+
+	// Upgrades of the same plugin do not conflict with themselves.
+	self := pkgtest.Platform("video", "0.2.0", "sub2api")
+	if err := Validate(self, pkgtest.Files(self), o); err != nil {
+		t.Fatalf("own platform should not conflict: %v", fieldCodes(err))
+	}
+}
+
+func TestPathsOverlap(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want bool
+	}{
+		{"/v1/messages", "/v1/messages", true},
+		{"/v1/messages", "/v1/messages/", true},
+		{"/v1/messages", "/v1/chat", false},
+		{"/v1/:x/messages", "/v1/:y/messages", true},
+		{"/v1/:x", "/v1/messages", true},
+		{"/v1/:x", "/v1/messages/count", false},
+		{"/v1beta/models/:model:generateContent", "/v1beta/models/:model:streamGenerateContent", false},
+		{"/v1beta/models/:model:generateContent", "/v1beta/models/:m", true},
+		{"/v1beta/models/:model:generateContent", "/v1beta/models/gemini:generateContent", true},
+		{"/v1beta/models/:model:generateContent", "/v1beta/models/generateContent", false},
+		{"/v1beta/models/:model:generateContent", "/v1beta/models/x:countTokens", false},
+		{"/m/:a:Content", "/m/:b:generateContent", false},
+		{"/m/:a:x", "/m/:b:y:x", true},
+		{"/v1/*rest", "/v1/a/b/c", true},
+		{"/v1/*rest", "/v2/a", false},
+		{"/v1/*rest", "/v1", true},
+		{"/v1/a", "/v1/a/b", false},
+	}
+	for _, tc := range cases {
+		if got := PathsOverlap(tc.a, tc.b); got != tc.want {
+			t.Errorf("PathsOverlap(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
+		}
+		if got := PathsOverlap(tc.b, tc.a); got != tc.want {
+			t.Errorf("PathsOverlap(%q, %q) = %v, want %v", tc.b, tc.a, got, tc.want)
+		}
+	}
+	a := manifest.Endpoint{Method: "post", Path: "/v1/:x"}
+	if !EndpointsConflict(a, manifest.Endpoint{Method: "POST", Path: "/v1/y"}) || EndpointsConflict(a, manifest.Endpoint{Method: "GET", Path: "/v1/y"}) {
+		t.Fatal("EndpointsConflict")
+	}
+	if p := PathParams("/v1beta/models/:model:generateContent/*rest"); len(p) != 2 || p[0] != "model" || p[1] != "rest" {
+		t.Fatalf("PathParams = %v", p)
+	}
+}
+
+// Every built-in platform passes the endpoint rules applied to plugin
+// platforms, and its endpoints do not overlap each other.
+func TestBuiltinPlatformsValid(t *testing.T) {
+	for _, p := range platforms.Builtin() {
+		v := &validator{m: &manifest.Manifest{}, perms: map[string]*manifest.HostPermission{}}
+		for i, e := range p.Endpoints {
+			v.endpoint(p.ID, p.ID, e)
+			for _, o := range p.Endpoints[:i] {
+				if EndpointsConflict(o, e) {
+					t.Errorf("%s: %s %s overlaps %s %s", p.ID, e.Method, e.Path, o.Method, o.Path)
+				}
+			}
+		}
+		v.usageRules(p.ID+".usage", p.Usage)
+		v.stickyRules(p.ID+".stickyRules", p.StickyRules)
+		for _, fe := range v.errs {
+			t.Errorf("%s: %s %s %s", p.ID, fe.Field, fe.Code, fe.Message)
+		}
 	}
 }
 
