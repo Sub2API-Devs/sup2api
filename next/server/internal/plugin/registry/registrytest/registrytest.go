@@ -83,11 +83,12 @@ func Manifest(key, version string) *manifest.Manifest {
 		Platform: &manifest.Platform{
 			ID:        "p_" + key,
 			Protocols: []string{"test.proto"},
-			AccountTypes: []manifest.AccountType{{
-				ID: "apikey", Label: manifest.LocalizedText{"en": "API key", "zh": "API 密钥"},
-				Form: manifest.Form{Mode: "schema", Schema: "forms/apikey.schema.json", UISchema: "forms/apikey.ui.json"},
-			}},
 		},
+		AccountTypes: []manifest.AccountType{{
+			ID: "apikey", Label: manifest.LocalizedText{"en": "API key", "zh": "API 密钥"},
+			Form:      manifest.Form{Mode: "schema", Schema: "forms/apikey.schema.json", UISchema: "forms/apikey.ui.json"},
+			Protocols: []manifest.AccountProtocol{{Protocol: "test.proto"}},
+		}},
 		Hooks:           []manifest.Hook{{Point: "gateway.request", Order: 10, Needs: []string{"model", "prompt_text"}, TimeoutMs: 500}},
 		Database:        &manifest.Database{Schema: "plg_" + key, Migrations: "migrations/"},
 		UserPermissions: []manifest.UserPermission{{Key: "rules:read", Label: manifest.LocalizedText{"en": "Read rules"}}},

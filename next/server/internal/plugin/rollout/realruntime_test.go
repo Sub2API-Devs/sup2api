@@ -45,14 +45,15 @@ func TestRealRuntimeSingleNode(t *testing.T) {
 	ctl.Start(ctx)
 	t.Cleanup(func() { ctl.Stop(context.Background()) })
 
+	// The gateway calls the plugin declaring the account type.
 	call := func() map[string]string {
-		b, ok := reg.Current().Platform("p_" + h.key)
+		b, ok := reg.Current().AccountType(h.key, "apikey")
 		if !ok {
 			return nil
 		}
 		resp, err := b.Client.BuildUpstreamRequest(ctx, &pluginv1.BuildUpstreamRequestRequest{})
 		if err != nil {
-			t.Fatalf("platform call: %v", err)
+			t.Fatalf("account type call: %v", err)
 		}
 		return resp.GetHeaders()
 	}
@@ -89,6 +90,7 @@ func TestRealRuntimeSingleNode(t *testing.T) {
 	}
 	waitFor(t, "disabled", func() bool {
 		_, ok := reg.Current().Platform("p_" + h.key)
-		return !ok
+		_, typeOK := reg.Current().AccountType(h.key, "apikey")
+		return !ok && !typeOK
 	})
 }
