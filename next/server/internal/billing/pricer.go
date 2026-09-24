@@ -20,6 +20,10 @@ type priceEntry struct {
 	rule   core.PriceRule
 	source string
 	glob   bool
+	// Plugin defaults only: the declaring plugin and when it was installed
+	// (nil when the plugin row is gone).
+	pluginKey   string
+	installedAt *time.Time
 }
 
 type priceSnapshot struct {
@@ -32,14 +36,24 @@ type resolved struct {
 	rule *core.PriceRule // nil = no match
 }
 
-// rank orders entries by precedence: admin before plugin_default, a concrete
-// platform before "*", an exact model before globs, longer globs first.
+// less orders entries by precedence (ARCHITECTURE 7.3): admin prices before
+// plugin defaults; among plugin defaults the earliest installed plugin first;
+// within one source (admin, or one plugin) an exact model before globs and
+// longer globs first.
 func less(a, b priceEntry) bool {
 	if (a.source == SourceAdmin) != (b.source == SourceAdmin) {
 		return a.source == SourceAdmin
 	}
-	if (a.rule.Platform == "*") != (b.rule.Platform == "*") {
-		return a.rule.Platform != "*"
+	if a.source != SourceAdmin && a.pluginKey != b.pluginKey {
+		switch {
+		case a.installedAt == nil && b.installedAt != nil:
+			return false
+		case a.installedAt != nil && b.installedAt == nil:
+			return true
+		case a.installedAt != nil && !a.installedAt.Equal(*b.installedAt):
+			return a.installedAt.Before(*b.installedAt)
+		}
+		return a.pluginKey < b.pluginKey
 	}
 	if a.glob != b.glob {
 		return !a.glob
@@ -86,8 +100,10 @@ func (s *Service) snapshot(ctx context.Context) (*priceSnapshot, error) {
 		return snap, nil
 	}
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT id, platform, model_pattern, mode, expression, expr_version, expr_hash, source
-		FROM model_prices WHERE enabled`)
+		SELECT mp.id, mp.model_pattern, mp.mode, mp.expression, mp.expr_version, mp.expr_hash, mp.source,
+			COALESCE(mp.plugin_key, ''), p.installed_at
+		FROM model_prices mp LEFT JOIN plugins p ON p.key = mp.plugin_key
+		WHERE mp.enabled`)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +112,8 @@ func (s *Service) snapshot(ctx context.Context) (*priceSnapshot, error) {
 	for rows.Next() {
 		var e priceEntry
 		r := &e.rule
-		if err := rows.Scan(&r.ID, &r.Platform, &r.Pattern, &r.Mode, &r.Expression, &r.ExprVersion, &r.ExprHash, &e.source); err != nil {
+		if err := rows.Scan(&r.ID, &r.Pattern, &r.Mode, &r.Expression, &r.ExprVersion, &r.ExprHash, &e.source,
+			&e.pluginKey, &e.installedAt); err != nil {
 			return nil, err
 		}
 		e.glob = isGlob(r.Pattern)
@@ -113,13 +130,10 @@ func (s *Service) snapshot(ctx context.Context) (*priceSnapshot, error) {
 	return snap, nil
 }
 
-// match returns the best entry for platform/model or nil.
-func (snap *priceSnapshot) match(platform, model string) *core.PriceRule {
+// match returns the best entry for model or nil.
+func (snap *priceSnapshot) match(model string) *core.PriceRule {
 	for i := range snap.entries {
 		e := &snap.entries[i]
-		if e.rule.Platform != "*" && e.rule.Platform != platform {
-			continue
-		}
 		if e.glob {
 			if !globMatch(e.rule.Pattern, model) {
 				continue
@@ -133,9 +147,10 @@ func (snap *priceSnapshot) match(platform, model string) *core.PriceRule {
 	return nil
 }
 
-// Resolve implements core.Pricer.
-func (s *Service) Resolve(ctx context.Context, platform, model string) (*core.PriceRule, error) {
-	key := platform + "\x00" + model
+// Resolve implements core.Pricer. Prices are global per model: the platform
+// and account type serving the request do not matter (ARCHITECTURE 7.3).
+func (s *Service) Resolve(ctx context.Context, model string) (*core.PriceRule, error) {
+	key := model
 	s.mu.Lock()
 	hit, ok := s.resolved[key]
 	s.mu.Unlock()
@@ -147,7 +162,7 @@ func (s *Service) Resolve(ctx context.Context, platform, model string) (*core.Pr
 		if err != nil {
 			return nil, err
 		}
-		rule = snap.match(platform, model)
+		rule = snap.match(model)
 		s.mu.Lock()
 		if s.prices == snap {
 			s.resolved[key] = resolved{at: snap.at, rule: rule}
@@ -165,7 +180,7 @@ func (s *Service) Resolve(ctx context.Context, platform, model string) (*core.Pr
 	if st.MissingPricePolicy == PolicyFree {
 		return nil, nil
 	}
-	return nil, core.ErrPriceNotConfigured.WithDetails(map[string]any{"platform": platform, "model": model})
+	return nil, core.ErrPriceNotConfigured.WithDetails(map[string]any{"model": model})
 }
 
 // Inputs implements core.Pricer: the body paths and header names the
@@ -181,9 +196,11 @@ func (s *Service) Inputs(rule *core.PriceRule) (bodyPaths []string, headerNames 
 	return p.Params(), p.Headers()
 }
 
-// factsFor returns the u() keys declared by the platform plugin(s), or nil
-// when they cannot be determined (no registry, platform not active).
-func (s *Service) factsFor(platform string) map[string]bool {
+// factsFor returns the u() keys declared by any enabled plugin (platform
+// usage rules and account type protocol overrides), since a price applies to
+// a model whichever platform or account type serves it. It returns nil when
+// they cannot be determined (no registry or generation).
+func (s *Service) factsFor() map[string]bool {
 	if s.registry == nil {
 		return nil
 	}
@@ -191,26 +208,28 @@ func (s *Service) factsFor(platform string) map[string]bool {
 	if gen == nil {
 		return nil
 	}
+	return declaredFacts(gen)
+}
+
+func declaredFacts(gen core.Generation) map[string]bool {
 	facts := map[string]bool{}
-	add := func(b core.PlatformBinding) {
-		for k := range b.Platform.Usage.Facts {
-			facts[k] = true
-		}
-	}
-	if platform == "*" || platform == "" {
-		for _, pl := range gen.Plugins() {
-			if pl.Manifest != nil && pl.Manifest.Platform != nil {
-				if b, ok := gen.Platform(pl.Manifest.Platform.ID); ok {
-					add(b)
+	for _, pl := range gen.Plugins() {
+		if pl.Manifest != nil && pl.Manifest.Platform != nil {
+			if b, ok := gen.Platform(pl.Manifest.Platform.ID); ok {
+				for k := range b.Platform.Usage.Facts {
+					facts[k] = true
 				}
 			}
 		}
-		return facts
 	}
-	b, ok := gen.Platform(platform)
-	if !ok {
-		return nil
+	for _, b := range gen.AccountTypes() {
+		for _, p := range b.Type.Protocols {
+			if p.Usage != nil {
+				for k := range p.Usage.Facts {
+					facts[k] = true
+				}
+			}
+		}
 	}
-	add(b)
 	return facts
 }

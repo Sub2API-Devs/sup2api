@@ -16,7 +16,7 @@ func TestPriceAPI(t *testing.T) {
 	e := newEnv(t)
 	admin := e.user("admin@example.com")
 	e.plugin("anthropic")
-	if err := syncDefaultsCtx(e, "anthropic", "anthropic"); err != nil {
+	if err := syncDefaultsCtx(e, "anthropic"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -48,10 +48,11 @@ func TestPriceAPI(t *testing.T) {
 		},
 	}
 	created := data(e.mustCall(admin, 201, "POST", "/prices", map[string]any{
-		"platform": "anthropic", "model_pattern": "claude-sonnet-x", "mode": "expression", "config": visual,
+		"model_pattern": "claude-sonnet-x", "mode": "expression", "config": visual,
 	}))
 	id := int64(created["id"].(float64))
-	if created["source"] != "admin" || created["expr_hash"] == "" || !contains(str(created["expression"]), `tier("standard"`) {
+	if _, has := created["platform"]; created["source"] != "admin" || created["expr_hash"] == "" || has ||
+		!contains(str(created["expression"]), `tier("standard"`) {
 		t.Fatalf("created %v", created)
 	}
 	var hist int
@@ -63,19 +64,19 @@ func TestPriceAPI(t *testing.T) {
 	e.mustCall(admin, 404, "GET", "/prices/history/nope", nil)
 
 	code, resp := e.call(admin, "POST", "/prices", map[string]any{
-		"platform": "*", "model_pattern": "big-model", "mode": "per_token", "config": map[string]any{"p": 15, "c": 75},
+		"model_pattern": "big-model", "mode": "per_token", "config": map[string]any{"p": 15, "c": 75},
 	})
 	if code != 400 || data(map[string]any{"data": resp["error"]})["details"].(map[string]any)["confirmation_required"] != true {
 		t.Fatalf("big cost: %d %v", code, resp)
 	}
 	e.mustCall(admin, 201, "POST", "/prices", map[string]any{
-		"platform": "*", "model_pattern": "big-model", "mode": "per_token", "config": map[string]any{"p": 15, "c": 75}, "confirm": true,
+		"model_pattern": "big-model", "mode": "per_token", "config": map[string]any{"p": 15, "c": 75}, "confirm": true,
 	})
-	_, resp = e.call(admin, "POST", "/prices", map[string]any{"platform": "*", "model_pattern": "big-model", "mode": "per_token", "config": map[string]any{"p": 1}})
+	_, resp = e.call(admin, "POST", "/prices", map[string]any{"model_pattern": "big-model", "mode": "per_token", "config": map[string]any{"p": 1}})
 	if errCode(resp) != "conflict" {
 		t.Fatalf("duplicate: %v", resp)
 	}
-	_, resp = e.call(admin, "POST", "/prices", map[string]any{"platform": "*", "model_pattern": "x", "mode": "expression", "expression": "p * -1"})
+	_, resp = e.call(admin, "POST", "/prices", map[string]any{"model_pattern": "x", "mode": "expression", "expression": "p * -1"})
 	if errCode(resp) != "invalid_argument" {
 		t.Fatalf("invalid expression: %v", resp)
 	}
@@ -110,7 +111,7 @@ func TestPriceAPI(t *testing.T) {
 	e.mustCall(admin, 404, "POST", "/prices/preview", map[string]any{"price_id": 999999})
 
 	// list with filters and analysis.
-	list := e.mustCall(admin, 200, "GET", "/prices?source=plugin_default&platform=anthropic", nil)
+	list := e.mustCall(admin, 200, "GET", "/prices?source=plugin_default&plugin_key=anthropic", nil)
 	items := list["data"].([]any)
 	if len(items) != 2 || list["page"].(map[string]any)["total"].(float64) != 2 {
 		t.Fatalf("list: %v", list)
@@ -159,7 +160,7 @@ func TestPriceAPI(t *testing.T) {
 		t.Fatalf("patch: %v", upd)
 	}
 	// Resolution sees the change immediately (local invalidation + bus).
-	r, err := e.svc.Resolve(context.Background(), "anthropic", "claude-haiku-4")
+	r, err := e.svc.Resolve(context.Background(), "claude-haiku-4")
 	if err != nil || r.Expression != `tier("base", p*2 + c*4)` {
 		t.Fatalf("resolve after patch: %+v %v", r, err)
 	}
@@ -171,8 +172,8 @@ func TestPriceAPI(t *testing.T) {
 	e.mustCall(admin, 404, "GET", ovPath, nil)
 }
 
-func syncDefaultsCtx(e *env, plugin, platform string) error {
-	return syncDefaults(e.t, e, plugin, platform, anthropicDefaults)
+func syncDefaultsCtx(e *env, plugin string) error {
+	return syncDefaults(e.t, e, plugin, anthropicDefaults)
 }
 
 func TestBalanceAndSettingsAPI(t *testing.T) {
