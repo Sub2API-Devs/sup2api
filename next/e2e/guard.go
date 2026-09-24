@@ -39,7 +39,8 @@ func (e *Env) SetGuardRules(admin *Session, rules ...GuardRule) {
 	if r.Status != 200 && r.Status != 204 {
 		e.T.Fatalf("guard rules: %s", r)
 	}
-	// The receiving node reloads at once; the others refresh every 5 s.
+	// The receiving node reloads at once, the others on the rules.changed
+	// broadcast (best effort) or at the latest on their 5 s refresh.
 	time.Sleep(6 * time.Second)
 }
 
