@@ -139,25 +139,47 @@ export interface AccountFormRef {
   component?: string
 }
 
+/** An enabled gateway endpoint an account type can serve (CONTRACTS §12). */
+export interface AccountTypeEndpoint {
+  method: string
+  path: string
+  /** Protocol of the endpoint (client side). */
+  protocol: string
+  /** Platform that declares the endpoint. */
+  platform: string
+  /** false: served through a core protocol converter. */
+  native: boolean
+}
+
+/**
+ * An account type is identified by (plugin_key, type). Any plugin can declare
+ * account types; they are not tied to a platform (ARCHITECTURE §6.6).
+ */
 export interface AccountType {
   plugin_key: string
   plugin_name: LText
-  plugin_version?: string // assumed
-  platform: string
+  plugin_version?: string
+  asset_base?: string
+  trust?: Trust
   type: string
   label: LText
   description?: LText
   form: AccountFormRef
   sensitive_fields: string[]
+  /** Protocols the upstream supports natively. */
+  protocols: string[]
+  endpoints: AccountTypeEndpoint[]
 }
 
 export interface Account {
   id: number
   name: string
+  /** Plugin that declares the account type. */
   plugin_key: string
-  platform: string
   type: string
+  type_label?: LText
   group_ids: number[]
+  groups?: Array<{ id: number; name: string }>
   proxy_id: number | null
   priority: number
   max_concurrency: number
@@ -184,9 +206,9 @@ export interface AccountTestResult {
 
 export type PriceMode = 'per_request' | 'per_token' | 'expression'
 
+/** Prices are global per model (no platform); the result is the base price. */
 export interface Price {
   id: number
-  platform: string
   model_pattern: string
   mode: PriceMode
   config: Record<string, any>
@@ -239,9 +261,16 @@ export interface UsageLog {
   group_name?: string // assumed
   account_id: number | null
   account_name?: string // assumed
+  /** Plugin that declares the account type. */
   plugin_key: string
+  /** Account type id (within plugin_key). */
+  account_type?: string
+  /** Platform of the client endpoint. */
   platform: string
+  /** Protocol of the client endpoint. */
   protocol: string
+  /** Protocol sent upstream; differs from protocol when converted. */
+  upstream_protocol?: string
   endpoint: string
   model: string
   upstream_model?: string
@@ -345,6 +374,14 @@ export interface HostPermissionReview {
   requires?: string
 }
 
+export interface ReviewAccountType {
+  id: string
+  label: LText
+  form_mode?: string
+  /** Natively supported upstream protocols (ids or manifest objects). */
+  protocols: Array<string | { protocol: string; [k: string]: unknown }>
+}
+
 export interface PluginReview {
   plugin_key: string
   version: string
@@ -356,7 +393,10 @@ export interface PluginReview {
   host_compat?: string
   capabilities: Array<string | { id: string }>
   gateway_endpoints: Array<Record<string, any>>
-  platform?: { id: string; protocols: string[]; account_types: Array<Record<string, any>> } | null
+  /** Endpoints of the platform; account types are listed separately. */
+  platform?: { id: string; label?: LText; protocols: string[]; sticky_rules?: string[] } | null
+  /** Account types declared by the plugin (top level, any plugin). */
+  account_types?: ReviewAccountType[]
   hooks: Array<Record<string, any>>
   jobs: Array<Record<string, any>>
   events: Array<string | Record<string, any>>

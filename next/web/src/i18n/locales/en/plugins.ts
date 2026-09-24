@@ -84,7 +84,7 @@ export default {
     routes_webhook: 'Webhook routes',
     gateway_hook: 'Gateway hooks',
     gateway_endpoint: 'Gateway endpoints',
-    platform_register: 'Register a platform',
+    platform_register: 'Register a platform or account types',
     scheduler_affinity: 'Scheduler affinity',
     users_read: 'Read users',
     accounts_credentials: 'Account credentials',
@@ -97,7 +97,7 @@ export default {
 
   hpWarn: {
     ui_native: 'The plugin code will run inside the console with your login identity.',
-    accounts_credentials: 'The plugin can read upstream account secrets (API keys, tokens).',
+    accounts_credentials: 'The plugin can read upstream account secrets (API keys, tokens) of the account types it declares.',
     ledger_credit: 'The plugin can add balance to users.',
     ledger_debit: 'The plugin can deduct user balance.',
     users_write: 'The plugin can create and modify users.',
@@ -171,6 +171,7 @@ export default {
     platform: 'Platform',
     protocols: 'Protocols',
     accountTypes: 'Account types',
+    nativeProtocols: 'Native protocols',
     hooks: 'Gateway hooks',
     models: 'models',
     groups: 'groups',

@@ -16,5 +16,15 @@ export default {
   allowlistPlaceholder: '输入模型匹配规则后按回车',
   accountCount: '账号数',
   keyCount: 'Key 数',
-  deleteInUse: '该分组下仍有 {a} 个账号和 {k} 个 API Key。'
+  deleteInUse: '该分组下仍有 {a} 个账号和 {k} 个 API Key。',
+  accounts: {
+    title: '账号',
+    hint: '同一分组可以混放任意类型的账号，它们一起参与各自类型可服务端点的调度。',
+    onlySelected: '只看已选',
+    selectVisible: '全选当前列表',
+    clearVisible: '取消当前列表',
+    none: '没有账号',
+    selected: '已选 {n} 个',
+    saveFailed: '分组已保存，但以下账号更新失败：{names}'
+  }
 }

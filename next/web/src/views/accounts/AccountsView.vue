@@ -10,8 +10,10 @@ import { useAuthStore } from '@/stores/auth'
 import { usePluginStore } from '@/stores/plugins'
 import { errorMessage, notifyError } from '@/utils/errors'
 import { copyText, formatDateTime, formatRelative, formatTime } from '@/utils/format'
-import { useAccountTypes } from './accountTypes'
+import { lt } from '@/i18n'
+import { useAccountTypes, typeKey } from './accountTypes'
 import AccountTypePicker from './AccountTypePicker.vue'
+import AccountTypeEndpoints from './AccountTypeEndpoints.vue'
 import AccountEditor from './AccountEditor.vue'
 
 const { t } = useI18n()
@@ -21,7 +23,17 @@ const accountTypes = useAccountTypes()
 accountTypes.load()
 const { groups } = useGroupsLookup()
 
-const list = useList<Account>('/accounts', { platform: '', group_id: '', status: '', q: '' })
+const list = useList<Account>('/accounts', { plugin_key: '', type: '', group_id: '', status: '', q: '' })
+
+// One select drives both ?plugin_key= and ?type= (account type identity).
+const typeFilter = computed({
+  get: () => (list.filters.plugin_key && list.filters.type ? typeKey(list.filters.plugin_key, list.filters.type) : ''),
+  set: (v: string) => {
+    const i = v.indexOf('/')
+    list.filters.plugin_key = i > 0 ? v.slice(0, i) : ''
+    list.filters.type = i > 0 ? v.slice(i + 1) : ''
+  }
+})
 
 const columns = computed<TableColumn[]>(() => [
   { key: 'id', label: 'ID', width: '64px' },
@@ -34,9 +46,9 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'actions', label: t('common.actions'), align: 'right' }
 ])
 
-function groupNames(ids: number[] | undefined) {
+function groupNames(ids: number[] | undefined, refs?: Array<{ id: number; name: string }>) {
   if (!ids?.length) return '—'
-  return ids.map((id) => groups.value.find((g) => g.id === id)?.name || `#${id}`).join(', ')
+  return ids.map((id) => refs?.find((g) => g.id === id)?.name || groups.value.find((g) => g.id === id)?.name || `#${id}`).join(', ')
 }
 
 function coolingDown(a: Account) {
@@ -79,7 +91,7 @@ const editorLoading = ref(false)
 const editorTitle = computed(() => {
   if (editing.value) return `${t('accounts.editTitle')} · ${editing.value.name}`
   if (step.value === 1) return t('accounts.newStep1')
-  return `${t('accounts.newTitle')} · ${pickedType.value ? accountTypes.label(pickedType.value.platform, pickedType.value.type) : ''}`
+  return `${t('accounts.newTitle')} · ${pickedType.value ? accountTypes.label(pickedType.value.plugin_key, pickedType.value.type) : ''}`
 })
 
 function openCreate() {
@@ -102,7 +114,7 @@ async function openEdit(a: Account) {
     const full = await api.get<Account>(`/accounts/${a.id}`)
     editing.value = full
     await accountTypes.load()
-    pickedType.value = accountTypes.find(full.platform, full.type) || null
+    pickedType.value = accountTypes.find(full.plugin_key, full.type) || null
   } catch (e) {
     notifyError(e)
     editorOpen.value = false
@@ -175,6 +187,7 @@ function tabLabel(pluginKey: string, name: string) {
   return translated !== msgKey ? translated : `${pluginKey} · ${name}`
 }
 const detailSlot = computed(() => plugins.slotEntries('account.detail.tabs').find((e) => `${e.pluginKey}:${e.name}` === detailTab.value))
+const detailType = computed(() => (detail.value ? accountTypes.find(detail.value.plugin_key, detail.value.type) : undefined))
 
 async function openDetail(a: Account) {
   detailTab.value = 'overview'
@@ -234,9 +247,11 @@ const statusOptions = ['active', 'disabled', 'error']
         <SButton v-permission="'account:create'" variant="primary" @click="openCreate"><SIcon name="plus" class="h-4 w-4" />{{ t('accounts.new') }}</SButton>
       </template>
       <template #filters>
-        <select v-model="list.filters.platform" class="input !w-40">
-          <option value="">{{ t('accounts.allPlatforms') }}</option>
-          <option v-for="p in accountTypes.platforms()" :key="p" :value="p">{{ p }}</option>
+        <select v-model="typeFilter" class="input !w-48">
+          <option value="">{{ t('accounts.allTypes') }}</option>
+          <optgroup v-for="g in accountTypes.grouped.value" :key="g.plugin_key" :label="lt(g.plugin_name) || g.plugin_key">
+            <option v-for="at in g.types" :key="at.type" :value="typeKey(at.plugin_key, at.type)">{{ lt(at.label) || at.type }}</option>
+          </optgroup>
         </select>
         <select v-model="list.filters.group_id" class="input !w-40">
           <option value="">{{ t('accounts.allGroups') }}</option>
@@ -259,10 +274,11 @@ const statusOptions = ['active', 'disabled', 'error']
         <div v-if="row.last_used_at" class="text-xs text-gray-400">{{ t('accounts.lastUsed') }} {{ formatRelative(row.last_used_at, t) }}</div>
       </template>
       <template #cell-type="{ row }">
-        <span class="whitespace-nowrap">{{ accountTypes.label(row.platform, row.type) }}</span>
+        <div class="whitespace-nowrap">{{ accountTypes.typeLabel(row.plugin_key, row.type, row.type_label) }}</div>
+        <div class="muted text-xs" :title="row.plugin_key">{{ accountTypes.pluginName(row.plugin_key) }}</div>
         <SBadge v-if="row.orphaned" tone="gray" class="ml-1">{{ t('accounts.status.orphaned') }}</SBadge>
       </template>
-      <template #cell-groups="{ row }">{{ groupNames(row.group_ids) }}</template>
+      <template #cell-groups="{ row }">{{ groupNames(row.group_ids, row.groups) }}</template>
       <template #cell-status="{ row }">
         <SBadge :tone="statusOf(row).tone" dot>{{ statusOf(row).label }}</SBadge>
         <div v-if="statusOf(row).detail" class="mt-0.5 max-w-[16rem] truncate text-xs text-gray-500 dark:text-dark-400" :title="statusOf(row).detail">
@@ -350,14 +366,22 @@ const statusOptions = ['active', 'disabled', 'error']
             <dt>ID</dt>
             <dd>{{ detail.id }}</dd>
             <dt>{{ t('accounts.type') }}</dt>
-            <dd>{{ accountTypes.label(detail.platform, detail.type) }} <span class="muted">({{ detail.plugin_key }})</span></dd>
+            <dd>
+              {{ accountTypes.typeLabel(detail.plugin_key, detail.type, detail.type_label) }}
+              <span class="muted text-xs">· {{ accountTypes.pluginName(detail.plugin_key) }} <span class="font-mono">({{ detail.plugin_key }}/{{ detail.type }})</span></span>
+            </dd>
+            <dt>{{ t('accounts.servesEndpoints') }}</dt>
+            <dd>
+              <AccountTypeEndpoints v-if="detailType" :endpoints="detailType.endpoints" />
+              <span v-else class="muted text-xs">{{ t('accounts.typeUnavailable') }}</span>
+            </dd>
             <dt>{{ t('common.status') }}</dt>
             <dd>
               <SBadge :tone="statusOf(detail).tone" dot>{{ statusOf(detail).label }}</SBadge>
               <span v-if="statusOf(detail).detail" class="ml-2 text-xs muted">{{ statusOf(detail).detail }}</span>
             </dd>
             <dt>{{ t('accounts.groups') }}</dt>
-            <dd>{{ groupNames(detail.group_ids) }}</dd>
+            <dd>{{ groupNames(detail.group_ids, detail.groups) }}</dd>
             <dt>{{ t('accounts.priority') }}</dt>
             <dd>{{ detail.priority }}</dd>
             <dt>{{ t('accounts.concurrency') }}</dt>

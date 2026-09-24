@@ -4,8 +4,13 @@ import type { UsageLog } from '@/api/types'
 export type UsageRow = UsageLog & {
   api_key_name?: string
   user_name?: string
-  price?: { id: number; platform: string; model_pattern: string; source: string; plugin_key?: string | null } | null
+  price?: { id: number; model_pattern: string; source: string; plugin_key?: string | null } | null
   metrics?: Record<string, number> | null
+}
+
+/** True when the core converted the request to another upstream protocol. */
+export function isConverted(u: Pick<UsageLog, 'protocol' | 'upstream_protocol'>): boolean {
+  return !!u.upstream_protocol && !!u.protocol && u.upstream_protocol !== u.protocol
 }
 
 export function billingTone(s: string): 'success' | 'warning' | 'danger' | 'gray' {

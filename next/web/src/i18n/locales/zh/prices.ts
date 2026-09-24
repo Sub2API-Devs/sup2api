@@ -1,6 +1,7 @@
 export default {
   title: '模型价格',
-  description: '按平台和模型配置计费表达式；管理员价格优先于插件默认价格。',
+  description: '按模型配置计费表达式；管理员价格优先于插件默认价格。',
+  scopeNote: '价格按模型全局设置，与由哪个端点、哪种账号类型提供服务无关。表达式算出的是基础价格，实际扣费 = 基础价格 × 分组倍率。',
   new: '新增价格',
   newTitle: '新增价格',
   editTitle: '编辑价格 · {name}',
@@ -14,7 +15,6 @@ export default {
   overridden: '已复制为管理员价格',
   overrideNote: '"覆盖"会复制插件默认价格为一条管理员价格；插件升级不会改动管理员价格。',
   basic: '基本信息',
-  platformHint: '"*" 表示所有平台',
   modelPattern: '模型',
   modelPatternHint: '精确名称或通配符，如 claude-sonnet-*',
   modeCol: '方式',

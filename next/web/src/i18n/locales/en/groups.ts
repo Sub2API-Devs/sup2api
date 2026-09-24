@@ -16,5 +16,15 @@ export default {
   allowlistPlaceholder: 'Type a model pattern and press Enter',
   accountCount: 'Accounts',
   keyCount: 'Keys',
-  deleteInUse: 'It still has {a} accounts and {k} API keys.'
+  deleteInUse: 'It still has {a} accounts and {k} API keys.',
+  accounts: {
+    title: 'Accounts',
+    hint: 'Accounts of any type can be mixed in one group; they are scheduled together for every endpoint their types can serve.',
+    onlySelected: 'Selected only',
+    selectVisible: 'Select shown',
+    clearVisible: 'Clear shown',
+    none: 'No accounts',
+    selected: '{n} selected',
+    saveFailed: 'Group saved, but these accounts could not be updated: {names}'
+  }
 }

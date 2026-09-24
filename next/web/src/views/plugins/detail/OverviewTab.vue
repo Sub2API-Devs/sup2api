@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { SBadge, SCard } from '@sub2api/ui'
 import { lt } from '@/i18n'
 import { formatNumber } from '@/utils/format'
-import { asArray, display, pick, type PluginDetail } from '../pluginUtil'
+import { accountTypesOf, asArray, display, pick, type PluginDetail } from '../pluginUtil'
 import StatusBadge from '../parts/StatusBadge.vue'
 import TrustBadge from '../parts/TrustBadge.vue'
 
@@ -28,7 +28,8 @@ const pages = computed(() => {
 })
 const slots = computed(() => asArray<Record<string, any>>(pick(ui.value, 'slots') ?? pick(m.value, 'slots')))
 const protocols = computed(() => asArray<string>(pick(platform.value, 'protocols')))
-const accountTypes = computed(() => asArray<Record<string, any>>(pick(platform.value, 'account_types', 'accountTypes')))
+// Account types are top level (any plugin can declare them), not part of the platform.
+const accountTypes = computed(() => accountTypesOf(m.value))
 
 const nodeStates = computed(() => {
   const counts: Record<string, number> = {}
@@ -85,8 +86,18 @@ function endpointText(e: Record<string, any>): string {
           <dd>
             <span class="font-mono">{{ platform.id }}</span>
             <span v-if="protocols.length" class="ml-2 text-xs muted">{{ protocols.join(', ') }}</span>
-            <div v-if="accountTypes.length" class="mt-1 flex flex-wrap gap-1">
-              <SBadge v-for="(a, i) in accountTypes" :key="i" tone="primary">{{ lt(a.label) || a.type || a.id }}</SBadge>
+          </dd>
+        </template>
+        <template v-if="accountTypes.length">
+          <dt>{{ t('plugins.consent.accountTypes') }}</dt>
+          <dd class="space-y-1">
+            <div v-for="a in accountTypes" :key="a.id" class="flex flex-wrap items-center gap-1.5 text-xs" data-testid="detail-account-type">
+              <SBadge tone="primary">{{ lt(a.label) || a.id }}</SBadge>
+              <span class="muted font-mono">{{ a.id }}</span>
+              <template v-if="a.protocols.length">
+                <span class="muted">· {{ t('plugins.consent.nativeProtocols') }}:</span>
+                <code v-for="p in a.protocols" :key="p" class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[11px] dark:bg-dark-700">{{ p }}</code>
+              </template>
             </div>
           </dd>
         </template>

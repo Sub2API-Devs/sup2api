@@ -1,20 +1,33 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { api } from '@sub2api/host'
-import type { AccountType } from '@/api/types'
+import type { AccountType, LText } from '@/api/types'
 import { lt } from '@/i18n'
 
 const types = ref<AccountType[]>([])
 const loaded = ref(false)
 let pending: Promise<void> | null = null
 
-/** Account types declared by enabled platform plugins (GET /account-types), cached. */
+/** "plugin_key/type": the identity of an account type (CONTRACTS §12). */
+export function typeKey(pluginKey: string, type: string): string {
+  return `${pluginKey}/${type}`
+}
+
+export interface AccountTypeGroup {
+  plugin_key: string
+  plugin_name: LText
+  plugin_version?: string
+  trust?: string
+  types: AccountType[]
+}
+
+/** Account types declared by enabled plugins (GET /account-types), cached. */
 export function useAccountTypes() {
   function load(force = false) {
     if (!pending || force) {
       pending = api
         .get<AccountType[]>('/account-types')
         .then((r) => {
-          types.value = r || []
+          types.value = (Array.isArray(r) ? r : []).map((x) => ({ ...x, protocols: x.protocols || [], endpoints: x.endpoints || [] }))
           loaded.value = true
         })
         .catch(() => {
@@ -25,18 +38,40 @@ export function useAccountTypes() {
     return pending
   }
 
-  function find(platform: string, type: string): AccountType | undefined {
-    return types.value.find((x) => x.platform === platform && x.type === type)
+  function find(pluginKey: string, type: string): AccountType | undefined {
+    return types.value.find((x) => x.plugin_key === pluginKey && x.type === type)
+  }
+
+  /** Display name of a plugin; falls back to its key. */
+  function pluginName(pluginKey: string): string {
+    const at = types.value.find((x) => x.plugin_key === pluginKey)
+    return (at && lt(at.plugin_name)) || pluginKey
+  }
+
+  /** Label of an account type; `fallback` (e.g. an account's type_label) wins over the raw id. */
+  function typeLabel(pluginKey: string, type: string, fallback?: LText | null): string {
+    const at = find(pluginKey, type)
+    return (at && lt(at.label)) || (fallback ? lt(fallback) : '') || type
   }
 
   /** "Anthropic · API Key" style label; falls back to raw ids. */
-  function label(platform: string, type: string): string {
-    const at = find(platform, type)
-    if (!at) return `${platform} · ${type}`
-    return `${lt(at.plugin_name) || at.plugin_key} · ${lt(at.label) || at.type}`
+  function label(pluginKey: string, type: string, fallback?: LText | null): string {
+    return `${pluginName(pluginKey)} · ${typeLabel(pluginKey, type, fallback)}`
   }
 
-  const platforms = () => [...new Set(types.value.map((x) => x.platform))]
+  /** Account types grouped by their plugin, in the server order. */
+  const grouped = computed<AccountTypeGroup[]>(() => {
+    const out: AccountTypeGroup[] = []
+    for (const at of types.value) {
+      let g = out.find((x) => x.plugin_key === at.plugin_key)
+      if (!g) {
+        g = { plugin_key: at.plugin_key, plugin_name: at.plugin_name, plugin_version: at.plugin_version, trust: at.trust, types: [] }
+        out.push(g)
+      }
+      g.types.push(at)
+    }
+    return out
+  })
 
-  return { types, loaded, load, find, label, platforms }
+  return { types, loaded, load, find, label, typeLabel, pluginName, grouped }
 }

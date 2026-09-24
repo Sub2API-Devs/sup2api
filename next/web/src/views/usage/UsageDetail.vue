@@ -8,12 +8,14 @@ import { copyText, formatNumber } from '@/utils/format'
 import { errorMessage } from '@/utils/errors'
 import BillingBreakdown from '@/views/prices/BillingBreakdown.vue'
 import ExprHistoryModal from '@/views/prices/ExprHistoryModal.vue'
-import { billingTone, type UsageRow } from './usage'
+import { useAccountTypes } from '@/views/accounts/accountTypes'
+import { billingTone, isConverted, type UsageRow } from './usage'
 
 // Expanded usage record: billing detail (A.14), hooks, sticky, request info.
 const props = defineProps<{ row: UsageRow; path?: string }>()
 const { t, te } = useI18n()
 const auth = useAuthStore()
+const accountTypes = useAccountTypes()
 
 const detail = ref<UsageRow | null>(null)
 const loading = ref(false)
@@ -83,9 +85,9 @@ async function copy(v: string) {
           <dd class="flex flex-wrap items-center gap-2">
             <template v-if="u.price">
               <RouterLink v-if="auth.has('price:read')" :to="`/prices/${u.price.id}`" class="link font-mono text-xs">
-                {{ u.price.platform }} / {{ u.price.model_pattern }}
+                {{ u.price.model_pattern }}
               </RouterLink>
-              <span v-else class="font-mono text-xs">{{ u.price.platform }} / {{ u.price.model_pattern }}</span>
+              <span v-else class="font-mono text-xs">{{ u.price.model_pattern }}</span>
               <SBadge :tone="u.price.source === 'admin' ? 'primary' : 'purple'">
                 {{ u.price.source === 'admin' ? t('prices.source.admin') : t('prices.source.plugin_default') }}
                 <template v-if="u.price.plugin_key"> · {{ u.price.plugin_key }}</template>
@@ -167,10 +169,25 @@ async function copy(v: string) {
             </dd>
             <template v-if="u.endpoint || u.protocol">
               <dt>{{ t('usage.request.endpoint') }}</dt>
-              <dd class="font-mono text-xs">{{ u.endpoint || '—' }} <span class="muted">{{ u.protocol }}</span></dd>
+              <dd class="font-mono text-xs">
+                {{ u.endpoint || '—' }} <span class="muted">{{ u.protocol }}</span>
+                <span v-if="u.platform" class="muted font-sans"> · {{ t('common.platform') }} {{ u.platform }}</span>
+              </dd>
             </template>
-            <dt>{{ t('common.platform') }}</dt>
-            <dd>{{ u.platform || '—' }} <span v-if="u.plugin_key" class="muted text-xs">({{ u.plugin_key }})</span></dd>
+            <dt>{{ t('usage.cols.accountType') }}</dt>
+            <dd>
+              <template v-if="u.account_type">
+                {{ accountTypes.typeLabel(u.plugin_key, u.account_type) }}
+                <span class="muted text-xs">· {{ accountTypes.pluginName(u.plugin_key) }} <span class="font-mono">({{ u.plugin_key }}/{{ u.account_type }})</span></span>
+              </template>
+              <span v-else class="muted">—</span>
+            </dd>
+            <dt>{{ t('usage.cols.upstreamProtocol') }}</dt>
+            <dd class="flex flex-wrap items-center gap-2">
+              <span class="font-mono text-xs">{{ u.upstream_protocol || u.protocol || '—' }}</span>
+              <SBadge v-if="isConverted(u)" tone="warning">{{ t('usage.converted') }}</SBadge>
+              <span v-if="isConverted(u)" class="muted text-xs">{{ t('usage.convertedFrom', { protocol: u.protocol }) }}</span>
+            </dd>
             <template v-if="u.upstream_model && u.upstream_model !== u.model">
               <dt>{{ t('usage.request.upstreamModel') }}</dt>
               <dd class="font-mono text-xs">{{ u.upstream_model }}</dd>

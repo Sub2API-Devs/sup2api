@@ -24,10 +24,14 @@ import { useGroupsLookup } from '@/composables/lookups'
 import { useAuthStore } from '@/stores/auth'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import { formatNumber } from '@/utils/format'
+import GroupAccountsEditor from './GroupAccountsEditor.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
 const canManage = computed(() => auth.has('group:manage'))
+// Account membership is stored on accounts, so editing it needs account rights.
+const canEditAccounts = computed(() => auth.has('account:read') && auth.has('account:update'))
+const accountsEditor = ref<InstanceType<typeof GroupAccountsEditor>>()
 const list = useList<Group>('/groups')
 
 const columns = computed<TableColumn[]>(() => {
@@ -122,8 +126,13 @@ async function submit() {
   }
   saving.value = true
   try {
+    let gid = editing.value?.id ?? null
     if (editing.value) await api.patch(`/groups/${editing.value.id}`, body)
-    else await api.post('/groups', body)
+    else gid = (await api.post<Group>('/groups', body))?.id ?? null
+    if (gid && accountsEditor.value?.dirty) {
+      const failed = await accountsEditor.value.save(gid)
+      if (failed.length) toast(t('groups.accounts.saveFailed', { names: failed.join(', ') }), 'error')
+    }
     toast(t(editing.value ? 'common.updated' : 'common.created'), 'success')
     open.value = false
     changed()
@@ -216,7 +225,7 @@ async function onAction(g: Group, key: string) {
     </STable>
     <SPagination v-model:page="list.page.value" v-model:page-size="list.pageSize.value" :total="list.total.value" />
 
-    <SModal v-model:open="open" :title="editing ? t('groups.editTitle', { name: editing.name }) : t('groups.create')" width="lg">
+    <SModal v-model:open="open" :title="editing ? t('groups.editTitle', { name: editing.name }) : t('groups.create')" width="xl">
       <form class="space-y-4" @submit.prevent="submit">
         <div class="grid gap-4 sm:grid-cols-2">
           <SField :label="t('common.name')" required :error="errors.name">
@@ -243,6 +252,9 @@ async function onAction(g: Group, key: string) {
         </div>
         <SField :label="t('groups.modelAllowlist')" :hint="t('groups.allowlistHint')" :error="errors.model_allowlist">
           <STagInput v-model="form.model_allowlist" :placeholder="t('groups.allowlistPlaceholder')" />
+        </SField>
+        <SField v-if="canEditAccounts" :label="t('groups.accounts.title')" :hint="t('groups.accounts.hint')">
+          <GroupAccountsEditor v-if="open" ref="accountsEditor" :group-id="editing?.id ?? null" />
         </SField>
       </form>
       <template #footer>

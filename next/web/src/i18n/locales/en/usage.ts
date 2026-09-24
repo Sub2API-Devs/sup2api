@@ -26,10 +26,14 @@ export default {
   cols: {
     input: 'Input',
     output: 'Output',
-    cost: 'Cost'
+    cost: 'Cost',
+    accountType: 'Account type',
+    upstreamProtocol: 'Upstream protocol'
   },
   cacheTitle: 'cache read {r} · cache write {w}',
   cached: 'cached',
+  converted: 'converted',
+  convertedFrom: 'Converted from endpoint protocol {protocol}',
   free: 'Free',
   stream: 'stream',
   blocked: 'blocked',
