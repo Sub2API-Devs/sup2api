@@ -211,8 +211,8 @@ func TestProxyCRUDTestAndDirectory(t *testing.T) {
 	}
 
 	// Delete is refused while an account uses the proxy.
-	if _, err := db.Pool.Exec(ctx, `INSERT INTO accounts (name, plugin_key, platform, type, credentials_enc, proxy_id)
-		VALUES ('a', 'p', 'p', 't', '\x00', $1)`, id); err != nil {
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO accounts (name, plugin_key, type, credentials_enc, proxy_id)
+		VALUES ('a', 'p', 't', '\x00', $1)`, id); err != nil {
 		t.Fatal(err)
 	}
 	if code, _ = do(t, engine, "DELETE", fmt.Sprintf("/proxies/%d", id), nil); code != 409 {

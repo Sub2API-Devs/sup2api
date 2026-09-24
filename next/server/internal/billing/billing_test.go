@@ -90,9 +90,13 @@ func TestSyncPluginDefaultsAndResolve(t *testing.T) {
 	if r := resolve("claude-sonnet-4"); r.Pattern != "claude-sonnet-*" || r.Mode != "expression" {
 		t.Fatalf("got %+v", r)
 	}
-	// The earliest installed plugin wins even though relay has an exact match.
-	if r := resolve("claude-haiku-4-5"); r.Expression != `tier("base", p*1 + c*5 + cr*0.1 + cc*1.25 + cc1h*2)` {
-		t.Fatalf("haiku expression %q", r.Expression)
+	// A more specific pattern wins across plugins (relay's exact match)...
+	if r := resolve("claude-haiku-4-5"); r.Expression != `tier("base", p*8 + c*0)` {
+		t.Fatalf("haiku-4-5 expression %q", r.Expression)
+	}
+	// ...and for the same pattern the earliest installed plugin wins.
+	if r := resolve("claude-haiku-3"); r.Expression != `tier("base", p*1 + c*5 + cr*0.1 + cc*1.25 + cc1h*2)` {
+		t.Fatalf("haiku-3 expression %q", r.Expression)
 	}
 	if r := resolve("gpt-4o"); r.Expression != `tier("base", p*2.5 + c*10)` {
 		t.Fatalf("relay-only model: %+v", r)
