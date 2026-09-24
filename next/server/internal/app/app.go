@@ -96,7 +96,14 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	// ------------------------------------------------------------ core services
 	events := event.NewPublisher(db)
 	reg := registry.New()
-	pkgs := registry.NewPackages(db, cfg.Plugins.DataDir)
+	trust, err := pkg.NewTrustStore(cfg.Plugins.OfficialRootKeys, cfg.Plugins.AllowUnsigned)
+	if err != nil {
+		return fmt.Errorf("plugin trust: %w", err)
+	}
+	// Nodes re-verify package signatures before unpacking, so revoked keys
+	// and publishers stop loading everywhere.
+	pkgs := registry.NewPackages(db, cfg.Plugins.DataDir, registry.WithVerifier(
+		registry.TrustVerifier(trust, db.Pool, pkg.Limits{MaxPackageBytes: cfg.Plugins.MaxPackageBytes})))
 	onClose(func(context.Context) { pkgs.Close() })
 
 	bill := billing.New(db, rdb, cl.Bus, events, reg)
@@ -133,13 +140,13 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	if err != nil {
 		return err
 	}
-	egressP := egress.New(db, egress.Options{NodeID: cfg.NodeID, AlwaysAllow: []string{pgAddr}, Logger: log})
+	egressP := egress.New(db, egress.Options{NodeID: cfg.NodeID, AlwaysAllow: []string{pgAddr}, Events: events, Logger: log})
 	onClose(func(context.Context) { egressP.Close() })
 	launcher := sandbox.NewLauncher(sandbox.LauncherOptions{DisableWrap: cfg.Plugins.DevMode, Logger: log})
 	schemas := dbschema.New(db, cfg.DatabaseURL, cfg.MasterKey, cfg.Plugins.DBRoleIsolation)
 
 	rt, err := grpcruntime.New(grpcruntime.Options{
-		DB: db, Redis: rdb, Cipher: cipher, Node: cl.Registry, Launcher: launcher,
+		DB: db, Redis: rdb, Bus: cl.Bus, Cipher: cipher, Node: cl.Registry, Launcher: launcher,
 		Egress: egressP, Authorizer: az, Ledger: bill, Schemas: schemas,
 		HostVersion: version, DataDir: cfg.Plugins.DataDir,
 		StrictNetwork: cfg.Plugins.StrictNetwork, Seccomp: cfg.Plugins.Seccomp, MaxMemoryMB: cfg.Plugins.MaxMemoryMB,
@@ -167,10 +174,6 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	ctl.Start(ctx)
 	onClose(ctl.Stop)
 
-	trust, err := pkg.NewTrustStore(cfg.Plugins.OfficialRootKeys, cfg.Plugins.AllowUnsigned)
-	if err != nil {
-		return fmt.Errorf("plugin trust: %w", err)
-	}
 	inst := install.New(install.Deps{
 		DB: db, Trust: trust, Authz: az, Permissions: az, Defaults: defaults,
 		Rollout: ctl, Schemas: schemas, Bus: cl.Bus, Accounts: acc,
