@@ -1,22 +1,33 @@
-// Command mock-upstream simulates the Anthropic Messages API for the
-// sub2api-next test environment (docs/CONTRACTS.md §11.4).
+// Command mock-upstream simulates the Anthropic, OpenAI and Gemini APIs for
+// the sub2api-next test environment (docs/CONTRACTS.md §11.4, §14.1).
 //
 // Endpoints:
 //
 //	POST /v1/messages               streaming (SSE) and non-streaming responses with usage
 //	POST /v1/messages/count_tokens  {"input_tokens": N}
+//	POST /v1/chat/completions       OpenAI chat; streams send the usage chunk only when
+//	                                stream_options.include_usage is true
+//	POST /v1/responses              OpenAI Responses (usage in response.completed)
+//	POST /v1/embeddings             OpenAI embeddings (usage.prompt_tokens)
+//	POST /v1beta/models/{m}:generateContent        Gemini, usageMetadata incl. thoughtsTokenCount
+//	POST /v1beta/models/{m}:streamGenerateContent  ?alt=sse -> SSE, otherwise a JSON array
+//	POST /v1beta/models/{m}:countTokens            {"totalTokens": N}
 //	GET  /__requests[?since=ID]     last 100 recorded requests (newest last)
 //	DELETE /__requests              clear the request log
 //	GET/POST/DELETE /__control      per-API-key behaviour rules (see controlRule)
 //	ANY  /__webhook/*               accepts and records anything (plugin webhook target)
 //	GET  /healthz
 //
+// The upstream API key is read from x-api-key, Authorization: Bearer,
+// x-goog-api-key or ?key= (in that order) and recorded as "api_key".
+//
 // Behaviour for a request is resolved in this order (first match wins):
 //  1. request headers x-mock-status / x-mock-delay-ms / x-mock-usage
-//  2. a /__control rule for the request's x-api-key (optionally limited to N uses)
+//  2. a /__control rule for the request's API key (optionally limited to N uses)
 //  3. markers inside the API key itself: "...-status-429", "...-delay-500"
 //  4. body metadata.mock_status / metadata.mock_delay_ms
 //
+// Errors use the format of the endpoint's API (Anthropic, OpenAI or Google).
 // The core only forwards whitelisted client headers to the upstream, so tests
 // that go through the gateway use (2) or (3); (1) is for direct calls.
 package main
@@ -38,18 +49,29 @@ import (
 
 const maxLog = 100
 
-// Usage is the token usage reported by the mock.
+// Usage is the token usage reported by the mock. The same numbers are
+// reported in each API's own shape:
+//   - Anthropic (exclusive): input_tokens, cache_read_input_tokens,
+//     cache_creation_input_tokens (+ ephemeral_1h), output_tokens;
+//   - OpenAI (inclusive): prompt_tokens / input_tokens = InputTokens, of
+//     which cached_tokens = CacheReadTokens; completion_tokens /
+//     output_tokens = OutputTokens (reasoning_tokens = ThoughtsTokens is a
+//     detail included in it); cache creation is not reported;
+//   - Gemini (inclusive): promptTokenCount = InputTokens, of which
+//     cachedContentTokenCount = CacheReadTokens; candidatesTokenCount =
+//     OutputTokens and, separately, thoughtsTokenCount = ThoughtsTokens.
 type Usage struct {
 	InputTokens         int64 `json:"input_tokens"`
 	OutputTokens        int64 `json:"output_tokens"`
 	CacheReadTokens     int64 `json:"cache_read_input_tokens"`
 	CacheCreationTokens int64 `json:"cache_creation_input_tokens"` // 5m + 1h
 	CacheCreation1h     int64 `json:"cache_creation_1h_input_tokens"`
+	ThoughtsTokens      int64 `json:"thoughts_tokens"`
 }
 
 // DefaultUsage is returned unless a rule or header overrides it. Tests assert
 // billing against these numbers.
-var DefaultUsage = Usage{InputTokens: 120, OutputTokens: 42, CacheReadTokens: 50, CacheCreationTokens: 30, CacheCreation1h: 0}
+var DefaultUsage = Usage{InputTokens: 120, OutputTokens: 42, CacheReadTokens: 50, CacheCreationTokens: 30, CacheCreation1h: 0, ThoughtsTokens: 30}
 
 // controlRule changes the behaviour for one API key.
 type controlRule struct {
@@ -74,6 +96,7 @@ type recorded struct {
 	Query          string            `json:"query,omitempty"`
 	XAPIKey        string            `json:"x_api_key"`
 	Authorization  string            `json:"authorization,omitempty"`
+	APIKey         string            `json:"api_key"` // from whichever auth header/query carried it
 	Headers        map[string]string `json:"headers"`
 	Model          string            `json:"model,omitempty"`
 	Stream         bool              `json:"stream"`
@@ -95,22 +118,46 @@ func main() {
 	if addr == "" {
 		addr = ":8080"
 	}
-	s := &server{rules: map[string]*controlRule{}}
+	log.Printf("mock-upstream listening on %s", addr)
+	srv := &http.Server{Addr: addr, Handler: newServer().handler(), ReadHeaderTimeout: 10 * time.Second}
+	log.Fatal(srv.ListenAndServe())
+}
+
+func newServer() *server { return &server{rules: map[string]*controlRule{}} }
+
+func (s *server) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, 200, map[string]any{"status": "ok"})
 	})
 	mux.HandleFunc("POST /v1/messages", s.messages)
 	mux.HandleFunc("POST /v1/messages/count_tokens", s.countTokens)
+	mux.HandleFunc("POST /v1/chat/completions", s.chatCompletions)
+	mux.HandleFunc("POST /v1/responses", s.responses)
+	mux.HandleFunc("POST /v1/embeddings", s.embeddings)
+	mux.HandleFunc("POST /v1beta/models/{spec}", s.gemini)
 	mux.HandleFunc("GET /__requests", s.listRequests)
 	mux.HandleFunc("DELETE /__requests", s.clearRequests)
 	mux.HandleFunc("GET /__control", s.listRules)
 	mux.HandleFunc("POST /__control", s.setRule)
 	mux.HandleFunc("DELETE /__control", s.clearRules)
 	mux.HandleFunc("/__webhook/", s.webhook)
-	log.Printf("mock-upstream listening on %s", addr)
-	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
-	log.Fatal(srv.ListenAndServe())
+	return mux
+}
+
+// requestKey returns the upstream API key of r: x-api-key (Anthropic),
+// Authorization: Bearer (OpenAI), x-goog-api-key or ?key= (Gemini).
+func requestKey(r *http.Request) string {
+	if k := r.Header.Get("x-api-key"); k != "" {
+		return k
+	}
+	if a := r.Header.Get("Authorization"); a != "" {
+		return strings.TrimSpace(strings.TrimPrefix(a, "Bearer "))
+	}
+	if k := r.Header.Get("x-goog-api-key"); k != "" {
+		return k
+	}
+	return r.URL.Query().Get("key")
 }
 
 // ------------------------------------------------------------------ recording
@@ -130,7 +177,7 @@ func (s *server) record(r *http.Request, body []byte, model string, stream bool,
 	s.nextID++
 	s.log = append(s.log, recorded{
 		ID: s.nextID, Time: time.Now().UTC(), Method: r.Method, Path: r.URL.Path, Query: r.URL.RawQuery,
-		XAPIKey: r.Header.Get("x-api-key"), Authorization: r.Header.Get("Authorization"), Headers: h,
+		XAPIKey: r.Header.Get("x-api-key"), Authorization: r.Header.Get("Authorization"), APIKey: requestKey(r), Headers: h,
 		Model: model, Stream: stream, MetadataUserID: userID, Body: string(b), BodyTruncated: trunc,
 	})
 	if len(s.log) > maxLog {
@@ -220,10 +267,7 @@ var keyMarker = regexp.MustCompile(`-(status|delay)-(\d+)`)
 
 func (s *server) resolve(r *http.Request, meta map[string]any) behaviour {
 	b := behaviour{usage: DefaultUsage, chunkDelay: 20 * time.Millisecond, text: "Hello from mock-upstream."}
-	key := r.Header.Get("x-api-key")
-	if key == "" {
-		key = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	}
+	key := requestKey(r)
 	// 4. body metadata (lowest precedence, applied first)
 	if v, ok := meta["mock_status"].(float64); ok {
 		b.status = int(v)
@@ -279,7 +323,7 @@ func (s *server) resolve(r *http.Request, meta map[string]any) behaviour {
 		b.chunkDelay = time.Duration(n) * time.Millisecond
 	}
 	if v := r.Header.Get("x-mock-usage"); v != "" {
-		// "input=1,output=2,cache_read=3,cache_creation=4,cache_creation_1h=5"
+		// "input=1,output=2,cache_read=3,cache_creation=4,cache_creation_1h=5,thoughts=6"
 		for _, kv := range strings.Split(v, ",") {
 			k, val, _ := strings.Cut(strings.TrimSpace(kv), "=")
 			n, _ := strconv.ParseInt(val, 10, 64)
@@ -294,6 +338,8 @@ func (s *server) resolve(r *http.Request, meta map[string]any) behaviour {
 				b.usage.CacheCreationTokens = n
 			case "cache_creation_1h":
 				b.usage.CacheCreation1h = n
+			case "thoughts":
+				b.usage.ThoughtsTokens = n
 			}
 		}
 	}
