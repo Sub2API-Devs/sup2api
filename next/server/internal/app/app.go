@@ -116,7 +116,7 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 
 	grp := group.New(db, rdb, cl.Bus, reg)
 	keys := apikey.New(db, rdb, az, reg)
-	prx := proxy.New(db, cipher, cl.Bus, proxy.Options{})
+	prx := proxy.New(db, cipher, cl.Bus, proxy.Options{AllowPrivate: cfg.AllowPrivateUpstream})
 	// One converter registry for the gateway (conversion) and the account
 	// module (endpoints an account type can serve), ARCHITECTURE 6.6.
 	converters := convert.Default()
@@ -173,7 +173,7 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	}
 	inst := install.New(install.Deps{
 		DB: db, Trust: trust, Authz: az, Permissions: az, Defaults: defaults,
-		Rollout: ctl, Schemas: schemas, Bus: cl.Bus,
+		Rollout: ctl, Schemas: schemas, Bus: cl.Bus, Accounts: acc,
 	}, install.Options{HostVersion: version, Plugins: cfg.Plugins})
 	mkt := market.New(db, inst, nil, cfg.Plugins.MaxPackageBytes)
 	if err := mkt.SeedSources(ctx, cfg.Plugins.MarketSourcesJSON); err != nil {
@@ -201,6 +201,11 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	// ------------------------------------------------------------ HTTP
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
+	// Client IPs (login rate limiting, usage records) come from
+	// X-Forwarded-For only when the request arrives from a trusted proxy.
+	if err := engine.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+		return fmt.Errorf("trusted proxies: %w", err)
+	}
 	engine.GET("/healthz", func(c *gin.Context) {
 		status, text := http.StatusOK, "ok"
 		if !cl.Registry.Healthy() {
@@ -221,7 +226,7 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		DB: db, Install: inst, Market: mkt, Rollout: ctl, Nodes: cl.Registry, Registry: reg,
 		Authz: az, Cipher: cipher, Bus: cl.Bus, Jobs: jobs, HookStats: gw, Plugins: cfg.Plugins,
 	}).RegisterRoutes(r)
-	pr := routes.New(reg, idm, az, idm)
+	pr := routes.New(reg, idm, az, idm, routes.WithHealth(cl.Registry))
 	pr.RegisterRoutes(r)
 	pr.RegisterAssets(engine)
 	gw.RegisterRoutes(r)

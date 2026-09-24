@@ -81,16 +81,19 @@ type UsageTokens struct {
 // submitted to the Settler, which persists usage_logs, bills and emits
 // usage.recorded asynchronously.
 type UsageRecord struct {
-	RequestID     string
-	UserID        int64
-	APIKeyID      int64
-	GroupID       int64
-	AccountID     *int64
-	PluginKey     string
-	PluginVersion string
-	Platform      string // platform of the client endpoint
-	Protocol      string // protocol of the client endpoint
-	AccountType   string // type id of the account (declared by PluginKey)
+	RequestID string
+	// ClientRequestID is the client's X-Request-Id, truncated to 128 chars;
+	// recorded only, never used as an idempotency key.
+	ClientRequestID string
+	UserID          int64
+	APIKeyID        int64
+	GroupID         int64
+	AccountID       *int64
+	PluginKey       string
+	PluginVersion   string
+	Platform        string // platform of the client endpoint
+	Protocol        string // protocol of the client endpoint
+	AccountType     string // type id of the account (declared by PluginKey)
 	// UpstreamProtocol is the protocol sent upstream; differs from Protocol
 	// when the core converted the request (ARCHITECTURE 6.6).
 	UpstreamProtocol string

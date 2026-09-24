@@ -122,3 +122,28 @@ func TestStickyDefaults(t *testing.T) {
 		t.Fatal("no platforms, no sticky rules")
 	}
 }
+
+// The broadcast host permission is low risk: granting it needs no extra
+// console permission (CONTRACTS §14.3).
+func TestReviewBroadcastLowRisk(t *testing.T) {
+	m := pkgtest.Guard("guard", "0.1.0", "sub2api")
+	m.Capabilities = append(m.Capabilities, manifest.Capability{ID: manifest.CapAppBroadcast})
+	m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "broadcast"})
+	r := buildReview(m, pkgtest.Files(m), &pkg.Verification{}, "0.1.0", nil)
+	found := false
+	for _, hp := range r.HostPermissions {
+		if hp.ID != "broadcast" {
+			continue
+		}
+		found = true
+		if hp.Risk != manifest.RiskLow || hp.Requires != "" {
+			t.Fatalf("broadcast = %+v", hp)
+		}
+	}
+	if !found {
+		t.Fatal("broadcast host permission missing from review")
+	}
+	if caps := strings.Join(r.Capabilities, ","); !strings.Contains(caps, manifest.CapAppBroadcast) {
+		t.Fatalf("capabilities = %s", caps)
+	}
+}

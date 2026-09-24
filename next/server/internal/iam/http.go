@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -42,8 +43,13 @@ func (s *Service) handleLogin(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	pair, err := s.Login(c.Request.Context(), in.Email, in.Password)
+	pair, err := s.Login(c.Request.Context(), in.Email, in.Password, c.ClientIP())
 	if err != nil {
+		if e := core.AsError(err); e.Code == core.ErrRateLimited.Code {
+			if secs, ok := e.Details["retry_after_seconds"].(int64); ok {
+				c.Header("Retry-After", strconv.FormatInt(secs, 10))
+			}
+		}
 		httpapi.Fail(c, err)
 		return
 	}

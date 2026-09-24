@@ -38,6 +38,10 @@ type Options struct {
 	// RecheckInterval is how often a cached client re-reads its proxy row to
 	// pick up changes made on other nodes (default 30s).
 	RecheckInterval time.Duration
+	// AllowPrivate lets direct (non-proxied) upstream connections reach
+	// loopback/private/link-local addresses (config AllowPrivateUpstream,
+	// SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM). Test setups only.
+	AllowPrivate bool
 }
 
 // Service serves the proxy endpoints and implements core.ProxyDirectory.
@@ -75,7 +79,7 @@ func New(db *store.DB, cipher *secret.Cipher, bus core.Bus, opts Options) *Servi
 	}
 	return &Service{
 		db: db, cipher: cipher, bus: bus, opts: opts,
-		direct:  &http.Client{Transport: newTransport(nil)},
+		direct:  &http.Client{Transport: newTransport(nil, !opts.AllowPrivate)},
 		clients: map[int64]*entry{},
 	}
 }
@@ -136,9 +140,16 @@ func (s *Service) changed(ctx context.Context, id int64) {
 
 // ---------------------------------------------------------------- directory
 
-func newTransport(proxy *url.URL) *http.Transport {
+// newTransport builds an upstream transport. guard refuses non-public
+// addresses at dial time (direct clients only: through a proxy the dialer
+// only reaches the proxy, which resolves the upstream itself).
+func newTransport(proxy *url.URL, guard bool) *http.Transport {
+	dialer := &net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}
+	if guard {
+		dialer.Control = guardControl
+	}
 	tr := &http.Transport{
-		DialContext:           (&net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		DialContext:           dialer.DialContext,
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          256,
 		MaxIdleConnsPerHost:   32,
@@ -186,7 +197,7 @@ func (s *Service) buildClient(r *row) (*http.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &http.Client{Transport: newTransport(u)}, nil
+	return &http.Client{Transport: newTransport(u, false)}, nil
 }
 
 // HTTPClient returns the client for proxyID; nil means a direct connection.

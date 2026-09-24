@@ -33,6 +33,10 @@ type Config struct {
 	// AllowPrivateUpstream disables the SSRF guard for upstream URLs built by
 	// platform plugins (SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM). Test only.
 	AllowPrivateUpstream bool
+
+	// TrustedProxies lists proxy IPs/CIDRs whose X-Forwarded-For is trusted
+	// (SUB2API_TRUSTED_PROXIES, comma separated; empty = trust none).
+	TrustedProxies []string
 }
 
 type PluginConfig struct {
@@ -92,6 +96,11 @@ func Load(goos string) (*Config, error) {
 
 	linux := goos == "linux"
 	c.AllowPrivateUpstream = boolEnv("SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM", false)
+	for _, p := range strings.Split(os.Getenv("SUB2API_TRUSTED_PROXIES"), ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			c.TrustedProxies = append(c.TrustedProxies, p)
+		}
+	}
 	p := &c.Plugins
 	p.DataDir = env("SUB2API_PLUGIN_DIR", "/var/lib/sub2api/plugins")
 	p.DevMode = boolEnv("SUB2API_PLUGIN_DEV_MODE", false)

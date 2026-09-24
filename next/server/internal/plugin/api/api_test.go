@@ -283,7 +283,8 @@ func TestAPIFlow(t *testing.T) {
 		t.Fatalf("resources over cap = %d", code)
 	}
 	if code, out = h.do("PUT", "/plugins/guard/resources", "admin", map[string]any{"memory_mb": 256}); code != 200 ||
-		data(out)["effective"].(map[string]any)["memory_mb"] != float64(256) {
+		data(out)["effective"].(map[string]any)["memory_mb"] != float64(256) || data(out)["restart_notified"] != false ||
+		data(out)["message"].(map[string]any)["zh"] == "" {
 		t.Fatalf("resources = %d %v", code, out)
 	}
 	if code, _ = h.do("PUT", "/plugins/guard/egress-policy", "admin", map[string]any{"policy": "allowlist"}); code != 200 {
@@ -296,7 +297,10 @@ func TestAPIFlow(t *testing.T) {
 	mustExec(t, h.db, `INSERT INTO plugin_event_cursors (plugin_key, last_event_id) VALUES ('guard', 1)`)
 	mustExec(t, h.db, `INSERT INTO plugin_job_runs (plugin_key, job_id, node_id, scheduled_at, started_at, status) VALUES ('guard', 'rollup', 'node-1', $1, $1, 'succeeded')`, now)
 	mustExec(t, h.db, `INSERT INTO plugin_egress_logs (plugin_key, node_id, network, host, port, started_at, duration_ms, bytes_in, bytes_out, result)
-		VALUES ('guard', 'node-1', 'tcp', 'hooks.example.com', 443, $1, 5, 10, 20, 'ok'), ('guard', 'node-1', 'tcp', 'hooks.example.com', 443, $1, 5, 1, 2, 'denied')`, now)
+		VALUES ('guard', 'node-1', 'tcp', 'hooks.example.com', 443, $1, 5, 10, 20, 'ok'), ('guard', 'node-1', 'tcp', 'hooks.example.com', 443, $1, 5, 1, 2, 'denied'),
+		       ('guard', 'node-1', 'tcp', 'hooks.example.com', 443, $1, 0, 0, 0, 'open')`, now)
+	mustExec(t, h.db, `INSERT INTO plugin_egress_domains (plugin_key, host, first_seen_at, last_seen_at, connections)
+		VALUES ('guard', 'hooks.example.com', $1, $1, 3), ('guard', 'old.example.com', $2, $2, 1)`, now, now.Add(-48*time.Hour))
 
 	code, out = h.do("GET", "/plugins/guard", "admin", nil)
 	d := data(out)
@@ -321,8 +325,25 @@ func TestAPIFlow(t *testing.T) {
 		t.Fatalf("egress = %d %v", code, out)
 	}
 	sum := data(out)["summary"].([]any)[0].(map[string]any)
-	if sum["count"] != float64(2) || sum["denied"] != float64(1) || sum["bytes_out"] != float64(22) {
+	if sum["count"] != float64(3) || sum["denied"] != float64(1) || sum["open"] != float64(1) || sum["errors"] != float64(0) || sum["bytes_out"] != float64(22) {
 		t.Fatalf("egress summary = %v", sum)
+	}
+	doms := data(out)["domains"].([]any)
+	if len(doms) != 2 || doms[0].(map[string]any)["host"] != "hooks.example.com" || doms[0].(map[string]any)["new"] != true ||
+		doms[0].(map[string]any)["connections"] != float64(3) || doms[1].(map[string]any)["new"] != false {
+		t.Fatalf("egress domains = %v", doms)
+	}
+	openRows := 0
+	for _, it := range data(out)["items"].([]any) {
+		if row := it.(map[string]any); row["result"] == "open" {
+			openRows++
+			if row["closed_at"] != nil {
+				t.Fatalf("open row closed_at = %v", row["closed_at"])
+			}
+		}
+	}
+	if openRows != 1 {
+		t.Fatalf("open egress rows = %d", openRows)
 	}
 	if code, _ = h.do("POST", "/plugins/guard/jobs/rollup/run", "admin", nil); code != http.StatusServiceUnavailable {
 		t.Fatalf("run job without runner = %d", code)
@@ -353,7 +374,7 @@ func TestAPIFlow(t *testing.T) {
 	}
 
 	// Uninstall (disables first).
-	if code, out = h.do("DELETE", "/plugins/guard?purge=true", "admin", nil); code != 204 {
+	if code, out = h.do("DELETE", "/plugins/guard?purge=true", "admin", nil); code != 200 || out["data"].(map[string]any)["accounts_deleted"] != float64(0) {
 		t.Fatalf("uninstall = %d %v", code, out)
 	}
 	if code, _ = h.do("GET", "/plugins/guard", "admin", nil); code != 404 {

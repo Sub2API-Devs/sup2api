@@ -105,25 +105,34 @@ func (f *fakeSchemas) Drop(_ context.Context, key string) error {
 	return nil
 }
 
+type fakeAccounts struct{ purged []string }
+
+func (f *fakeAccounts) PurgePluginAccounts(_ context.Context, key string) (int, error) {
+	f.purged = append(f.purged, key)
+	return 3, nil
+}
+
 type env struct {
-	db      *store.DB
-	svc     *Service
-	perms   *fakePerms
-	prices  *fakePrices
-	sticky  *fakeSticky
-	rollout *fakeRollout
-	schemas *fakeSchemas
-	authz   *fakeAuthz
-	root    pkgtest.Key
-	admin   int64 // all grant rights
-	limited int64 // plugin:install + grant:high only
+	db       *store.DB
+	svc      *Service
+	perms    *fakePerms
+	prices   *fakePrices
+	sticky   *fakeSticky
+	rollout  *fakeRollout
+	schemas  *fakeSchemas
+	accounts *fakeAccounts
+	authz    *fakeAuthz
+	root     pkgtest.Key
+	admin    int64 // all grant rights
+	limited  int64 // plugin:install + grant:high only
 }
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
 	db := testutil.DB(t)
 	ctx := context.Background()
-	e := &env{db: db, perms: &fakePerms{}, prices: &fakePrices{}, sticky: &fakeSticky{}, schemas: &fakeSchemas{}, root: pkgtest.NewKey("root-1")}
+	e := &env{db: db, perms: &fakePerms{}, prices: &fakePrices{}, sticky: &fakeSticky{}, schemas: &fakeSchemas{},
+		accounts: &fakeAccounts{}, root: pkgtest.NewKey("root-1")}
 	e.rollout = &fakeRollout{db: db}
 	for _, email := range []string{"admin@x", "ops@x"} {
 		var id int64
@@ -147,7 +156,7 @@ func newEnv(t *testing.T) *env {
 	e.svc = New(Deps{
 		DB: db, Trust: ts, Authz: e.authz, Permissions: e.perms,
 		Defaults: NewDefaultsApplier(e.perms, e.prices, e.sticky),
-		Rollout:  e.rollout, Schemas: e.schemas,
+		Rollout:  e.rollout, Schemas: e.schemas, Accounts: e.accounts,
 	}, Options{HostVersion: "0.1.0", Plugins: config.PluginConfig{MaxPackageBytes: 10 << 20, MaxMemoryMB: 1024}})
 	return e
 }
@@ -368,14 +377,24 @@ func TestInstallConsentUpgradeUninstall(t *testing.T) {
 	if _, err := e.db.Pool.Exec(ctx, `INSERT INTO plugin_rollouts (plugin_key, action, phase) VALUES ('guard', 'upgrade', 'preparing')`); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.svc.Uninstall(ctx, "guard", true, e.admin); core.AsError(err).Code != "conflict" {
+	if _, err := e.svc.Uninstall(ctx, "guard", UninstallOptions{Purge: true}, e.admin); core.AsError(err).Code != "conflict" {
 		t.Fatalf("uninstall during rollout: %v", err)
 	}
 	if _, err := e.db.Pool.Exec(ctx, `UPDATE plugin_rollouts SET phase = 'cancelled'`); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.svc.Uninstall(ctx, "guard", true, e.admin); err != nil {
+	ures, err := e.svc.Uninstall(ctx, "guard", UninstallOptions{Purge: true, PurgeAccounts: true}, e.admin)
+	if err != nil {
 		t.Fatalf("uninstall: %v", err)
+	}
+	if ures.AccountsDeleted != 3 || len(e.accounts.purged) != 1 || e.accounts.purged[0] != "guard" {
+		t.Fatalf("account purge: res=%+v purged=%v", ures, e.accounts.purged)
+	}
+	var purgeAudit int
+	_ = e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM audit_logs WHERE action = 'plugin.accounts.purge'
+		AND target_id = 'guard' AND (detail->>'accounts_deleted')::int = 3`).Scan(&purgeAudit)
+	if purgeAudit != 1 {
+		t.Fatalf("account purge audit rows = %d", purgeAudit)
 	}
 	if len(e.rollout.disabled) != 1 || len(e.schemas.dropped) != 1 || len(e.perms.deleted) != 1 {
 		t.Fatalf("uninstall side effects: disabled=%v dropped=%v deleted=%v", e.rollout.disabled, e.schemas.dropped, e.perms.deleted)

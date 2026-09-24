@@ -254,11 +254,13 @@ func TestBuiltinUsageRules(t *testing.T) {
 		t.Fatalf("chat sse %+v", tokens(u))
 	}
 
-	// OpenAI responses (endpoint rules).
+	// OpenAI responses (endpoint rules). output_tokens already includes
+	// output_tokens_details.reasoning_tokens (as chat completion_tokens does),
+	// so no sum is needed.
 	resp := *endpointOf(t, oai, "openai.responses").Usage
 	u = newUsageAcc(resp)
 	u.applySSE("response.created", []byte(`{"type":"response.created","response":{"model":"gpt-5","usage":null}}`))
-	u.applySSE("response.completed", []byte(`{"type":"response.completed","response":{"model":"gpt-5","usage":{"input_tokens":40,"output_tokens":9,"input_tokens_details":{"cached_tokens":8}}}}`))
+	u.applySSE("response.completed", []byte(`{"type":"response.completed","response":{"model":"gpt-5","usage":{"input_tokens":40,"output_tokens":9,"input_tokens_details":{"cached_tokens":8},"output_tokens_details":{"reasoning_tokens":5}}}}`))
 	if tokens(u) != (core.UsageTokens{Input: 40, Output: 9, CacheRead: 8}) || u.model != "gpt-5" {
 		t.Fatalf("responses sse %+v", tokens(u))
 	}
@@ -277,7 +279,8 @@ func TestBuiltinUsageRules(t *testing.T) {
 	// Gemini: JSON, SSE (last usageMetadata wins), JSON array stream.
 	g1 := `{"candidates":[{"content":{"parts":[{"text":"he"}]}}],"usageMetadata":{"promptTokenCount":20,"candidatesTokenCount":1},"modelVersion":"gemini-2.5-pro"}`
 	g2 := `{"candidates":[{"content":{"parts":[{"text":"llo"}]}}],"usageMetadata":{"promptTokenCount":20,"candidatesTokenCount":6,"cachedContentTokenCount":4,"thoughtsTokenCount":3},"modelVersion":"gemini-2.5-pro"}`
-	want := core.UsageTokens{Input: 20, Output: 6, CacheRead: 4}
+	// output_tokens = candidatesTokenCount + thoughtsTokenCount (CONTRACTS §14.1).
+	want := core.UsageTokens{Input: 20, Output: 9, CacheRead: 4}
 	u = newUsageAcc(gem.Usage)
 	u.applyJSON([]byte(g2))
 	if tokens(u) != want || u.model != "gemini-2.5-pro" || u.metrics["thoughts_tokens"] != 3.0 {

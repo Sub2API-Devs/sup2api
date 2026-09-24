@@ -19,8 +19,11 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
-// RegisterRoutes mounts the sticky-session console API (CONTRACTS §5.6).
+// RegisterRoutes mounts the sticky-session console API (CONTRACTS §5.6) and
+// the gateway settings (CONTRACTS §14.4).
 func (g *Gateway) RegisterRoutes(r *httpapi.Router) {
+	r.Perm("GET", "/settings/gateway", "settings:read", g.getGatewaySettingsHandler)
+	r.Perm("PUT", "/settings/gateway", "settings:manage", g.putGatewaySettingsHandler)
 	r.Perm("GET", "/sticky-rules", "sticky:read", g.listRulesHandler)
 	r.Perm("POST", "/sticky-rules", "sticky:manage", g.createRuleHandler)
 	r.Perm("GET", "/sticky-rules/stats", "sticky:read", g.statsHandler)

@@ -434,7 +434,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 
 ### 14.2 安全加固
 
-- **登录限速**：同一邮箱在同一 IP 15 分钟内失败 5 次、或同一 IP 15 分钟内失败 20 次后，登录返回 429 `rate_limited`，`details.retry_after_seconds`；成功登录清除该邮箱+IP 的计数。Redis key `login:fail:e:{sha256(email|ip)}`、`login:fail:ip:{ip}`（带 TTL）。
+- **登录限速**：同一邮箱在同一 IP 15 分钟内失败 5 次、或同一 IP 15 分钟内失败 20 次后，登录返回 429 `rate_limited`，`details.retry_after_seconds`；成功登录清除该邮箱+IP 的计数。Redis key `login:fail:e:{sha256(email|ip)}`、`login:fail:ip:{ip}`（带 TTL）。 客户端 IP 取 `c.ClientIP()`：只有来自 `SUB2API_TRUSTED_PROXIES`（逗号分隔的 IP/CIDR，默认空 = 不信任任何代理）的请求才采用 `X-Forwarded-For`。
 - **refresh token 重放检测**：refresh token 属于一个家族（`refresh_tokens.family_id`，登录时新建）；轮换时旧 token 标记 `replaced_at`；再次出示已轮换或已吊销的 token 时吊销整个家族并返回 401。
 - **SSRF 拨号时校验**：`proxy` 模块给**直连**（不经代理）的上游 HTTP 客户端设置拨号检查，拒绝回环、私有、链路本地、未指定地址，防 DNS 重绑定；`SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM=true` 时放行（`proxy.Options.AllowPrivate`）。经代理的连接不检查（由代理解析）。
 - **插件新外部域名告警**：出口隧道每次连接 upsert `plugin_egress_domains`；首次出现的 host 记 WARN 日志并写事件 `plugin.egress_new_domain`。`GET /plugins/:key/egress` 增加 `domains:[{host, first_seen_at, last_seen_at, connections, new}]`（`new` = 24 小时内首次出现）。
@@ -455,3 +455,262 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 - **客户端请求 ID**：网关把客户端 `X-Request-Id`（截断到 128 字符）写入 `UsageRecord.ClientRequestID`；`usage_logs.client_request_id`；管理员使用记录列表/详情返回 `client_request_id`，支持 `?client_request_id=` 精确筛选。
 - **`GET/PUT /settings/gateway`**（`settings:read` / `settings:manage`，网关负责）：`{max_attempts, platform_call_timeout_ms, default_hook_timeout_ms}`，校验范围 1–10、100–30000、50–2000。
 - 前端此前提出的缺失接口说明见 §15（按后端现状整理）。
+
+## 15. 接口细节补充（按 2026-09-25 代码现状）
+
+本节按 `feat/next-platform`（b1348a775）上 `next/server/internal/**` 的处理器代码整理，描述**现有行为**，供前端对接；与前文不一致之处列在 §15.10，以代码为准，前文待主控裁定后统一。路径均相对 `next/server/internal/`。
+
+通用补充：
+- 列表接口（标"分页"）都读 `?page=&page_size=`（默认 1 / 20，`page_size` 最大 200，非法值回落默认），响应 `{data:[...], page:{page, page_size, total}}`（`httpapi/respond.go`）。标"不分页"的接口直接返回 `{data:[...]}`，不读分页参数。
+- 时间范围参数 `from`、`to` 一律为 RFC 3339（Go `time.RFC3339`，可带小数秒），语义为 `from <= t < to`（`to` 不含）；格式错误返回 400 `invalid_argument`。时区偏移中的 `+` 在查询串里须编码为 `%2B`（或直接用 `Z`）。
+- 布尔查询参数：`/usage` 的 `success` 按 Go `strconv.ParseBool`（`true/false/1/0/t/f`）；`/prices` 的 `enabled` 仅 `true` 或 `1` 视为真，其他任意非空值视为假。
+- 创建成功返回 201 `{data}`，删除成功返回 204 无响应体。
+
+### 15.1 API Key（`apikey/apikey.go`、`apikey/platforms.go`）
+
+响应对象 `APIKey`：
+
+| 字段 | 说明 |
+|---|---|
+| `id`、`user_id` | |
+| `user_email` | 只在管理员接口 `/api-keys` 返回；`/me/api-keys` 不含此字段 |
+| `name` | 1–100 字符 |
+| `key_prefix` | 明文前 12 个字符（如 `sk-s2a-AbCde`），用于识别 |
+| `group_id`、`group_name` | |
+| `platforms` | `[id]`，该 Key 所属分组内账号类型支持的平台（去重、排序，只含当前存在的平台）；无注册表时为 `[]` |
+| `status` | `active` \| `disabled` |
+| `expires_at`、`last_used_at` | 可为 `null`；`last_used_at` 每 10 秒批量落库，有延迟 |
+| `created_at` | |
+| `key` | 明文 Key（`sk-s2a-` + 40 位 base62），**只在创建响应中出现一次** |
+
+| 方法 路径 | 权限 | 请求 | 响应 / 约定 |
+|---|---|---|---|
+| GET `/me/api-keys` | `apikey:self:manage` | 分页；无筛选参数 | 当前用户未删除的 Key，`id` 倒序 |
+| POST `/me/api-keys` | `apikey:self:manage` | `{name, group_id, expires_at?}` | 201 `APIKey`（含 `key`）。`name` 去首尾空格后 1–100 字符；`expires_at` 必须晚于当前时间；`group_id` 须为 `active` 且对该用户可用（`visibility=public` 或已分配给用户），否则 `details.fields[{field:"group_id", code:"not_available"}]` |
+| DELETE `/me/api-keys/:id` | `apikey:self:manage` | | 204；只能删自己的 Key（软删除），他人的 Key 返回 404 |
+| GET `/api-keys` | `apikey:all:read` | 分页；`?user_id=&group_id=&status=&q=` | 全部未删除的 Key，`id` 倒序。`q` 模糊匹配 Key 名称、用户邮箱（ILIKE），或按前缀匹配 `key_prefix`；`user_id`/`group_id` 非整数返回 400 |
+| PATCH `/api-keys/:id` | `apikey:all:manage` | `{name?, status?, group_id?, expires_at?}` | 200 `APIKey`（不含 `key`）。省略的字段不修改；`status` 只能 `active`/`disabled`；`expires_at: null` 清除过期时间，非 null 必须晚于当前时间；改 `group_id` 时按**Key 所有者**校验分组可用性 |
+| DELETE `/api-keys/:id` | `apikey:all:manage` | | 204（软删除） |
+
+- 普通用户**没有**修改自己 Key 的接口（没有 `PATCH /me/api-keys/:id`），只能删除重建。
+- 修改或删除后立即清除该 Key 的 Redis 缓存（`apikey:{sha256}`），网关侧立即生效。
+
+### 15.2 列表接口的筛选与排序
+
+| 接口 | 分页 | 筛选参数 | 排序 | 代码 |
+|---|---|---|---|---|
+| GET `/users` | 分页 | `q`（邮箱或显示名 ILIKE）、`status`（`active`\|`disabled`）、`role`（角色 key） | `id` 升序 | `iam/users.go` |
+| GET `/groups` | 分页 | `q`（名称 ILIKE）、`status` | `id` 升序 | `group/group.go` |
+| GET `/me/groups` | 不分页 | 无（只返回 `active` 且对当前用户可用的分组；字段 `{id, name, description, rate_multiplier, model_allowlist, platforms}`） | `id` 升序 | `group/group.go` |
+| GET `/accounts` | 分页 | `plugin_key`、`type`、`status`、`group_id`（整数）、`q`（名称 ILIKE） | `priority` 升序，再 `id` 升序 | `account/handlers.go` |
+| GET `/proxies` | 分页 | `q`（名称或主机 ILIKE）、`status` | `id` 升序 | `proxy/proxy.go` |
+| GET `/prices` | 分页 | `mode`（`per_request`\|`per_token`\|`expression`）、`source`（`admin`\|`plugin_default`）、`plugin_key`、`enabled`、`q`（`model_pattern` 或 `note` ILIKE） | `model_pattern`、`source`、`plugin_key`（NULL 在前）、`id` | `billing/prices.go` |
+| GET `/usage` | 分页 | `user_id`、`api_key_id`、`group_id`、`account_id`（整数）；`model`、`platform`、`billing_status`、`request_id`、`account_type`（精确匹配）；`success`；`from`、`to` | `created_at` 倒序，再 `id` 倒序 | `usage/api.go` |
+| GET `/me/usage` | 分页 | 限定当前用户；`api_key_id`、`group_id`、`model`、`platform`、`billing_status`、`request_id`、`success`、`from`、`to`（**不支持** `user_id`、`account_id`、`account_type`） | 同上 | `usage/api.go` |
+| GET `/usage/summary` | 不分页 | 同 `/usage` 的全部筛选参数，加 `group_by=day\|model\|user`（默认 `day`）；未给 `from` 时默认最近 30 天 | 按 `key` 升序 | `usage/api.go` |
+| GET `/ledger` | 分页 | `user_id`（整数）、`kind`（`usage`\|`admin_adjust`\|`plugin_credit`\|`plugin_debit`\|`refund`）、`from`、`to` | `id` 倒序 | `billing/balance.go` |
+| GET `/me/ledger` | 分页 | 限定当前用户；`kind`、`from`、`to` | `id` 倒序 | `billing/balance.go` |
+| GET `/plugins` | 分页 | 无 | `key` 升序 | `plugin/api/plugins.go` |
+| GET `/sticky-rules` | 不分页 | 无（返回全部来源的规则，含被同名规则遮蔽的和停用的） | `priority` 升序，再 `id` 升序 | `gateway/sticky_api.go`、`gateway/sticky.go` |
+| GET `/roles` | 不分页 | 无 | 内置角色在前，再 `id` 升序 | `authz/roles.go` |
+| GET `/plugins/:key/egress` | 明细分页 | `from`、`to`（默认最近 24 小时） | 汇总按连接数倒序（最多 200 条）；明细按 `started_at` 倒序 | `plugin/api/ops.go` |
+
+响应字段补充：
+- `/usage`、`/me/usage` 列表项：`id, request_id, created_at, user_id, user_email?, api_key_id, api_key_name?, group_id, group_name?, account_id, account_name?, plugin_key, platform, protocol, account_type, upstream_protocol, endpoint, model, upstream_model, stream, status_code, success, error_type, error_message, attempts, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens, total_cost, rate_multiplier, billing_status, billing_mode, matched_tier, latency_ms, first_token_ms, sticky_hit`（`?` 为空串时省略）。`/me/usage`（列表与详情）把 `account_id` 置 `null`，`account_name`、`account_type`、`upstream_protocol` 置空，详情另把 `node_id` 置空。
+- `/usage/:id`、`/me/usage/:id` 详情另含：`plugin_version, metrics, sticky_rule, hook_decisions, price_id, price?:{id, model_pattern, source, plugin_key}, expr_hash, billing_detail, ledger_id, client_ip, user_agent, node_id`。`/me/usage/:id` 访问他人记录返回 404。
+- `/usage/summary` 每项：`{key, user_email?, requests, success, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, total_cost}`；`group_by=day` 时 `key` 为 UTC 日期 `YYYY-MM-DD`，`user` 时为用户 id 字符串并带 `user_email`；`cache_creation_tokens` 为 5 分钟与 1 小时缓存写入之和。
+- `/ledger`、`/me/ledger` 列表项：`{id, user_id, user_email?, user_name?, delta, balance_after, kind, ref_type, ref_id, idempotency_key, operator_id, plugin_key, note, created_at}`（金额为字符串）。
+- `/prices` 列表项：`{id, model_pattern, mode, config, expression, expr_version, expr_hash, source, plugin_key, enabled, note, updated_by, updated_at}`；`analysis` 只在详情返回。
+- `/users` 列表项：`{id, email, display_name, status, max_concurrency, roles:[key], group_ids:[id], balance?, last_login_at, created_at, updated_at}`；`balance` 只对有 `balance:all:read` 的调用者返回。
+
+### 15.3 GET `/nodes`（`node:read`，`plugin/api/ops.go`；状态 JSON 见 `plugin/rollout/types.go`、`plugin/rollout/reconcile.go`）
+
+不分页，`data` 为当前存活节点数组：
+
+```
+[{node_id, boot_id, addr, host_version, started_at, last_heartbeat,
+  plugins: { "<plugin_key>": <节点插件状态 JSON> }}]
+```
+
+节点插件状态 JSON（每个节点每个插件一份，C2 写入 `node:plugins:{boot_id}`）：
+
+| 字段 | 说明 |
+|---|---|
+| `state` | 本节点汇总：有进行中的发布时等于 `rollout`；否则按在服务的实例为 `active` \| `pending` \| `failed`；没有在服务的版本为 `stopped` |
+| `serving` | 正在服务的版本号（省略表示无） |
+| `standby` | 发布中预热的新版本号（省略表示无） |
+| `rollout_id` | 进行中的发布 id（省略表示无） |
+| `rollout` | 本节点在该发布中的状态 `pending` \| `ready` \| `active` \| `failed`（省略表示无发布） |
+| `error` | 错误信息（省略表示无） |
+| `instances` | `[{version, state, error?, restarts}]`，实例 `state` 取值 `starting` \| `ready` \| `restarting` \| `failed` \| `draining` \| `stopped` |
+
+- 若某节点写入的状态不是合法 JSON，该值原样作为 JSON 字符串返回。
+- 插件列表 `/plugins` 每项的 `nodes` 为汇总 `{total, states:{<state>: n}}`：`total` 为存活节点数，未上报该插件的节点计入 `absent`，无法解析的计入 `unknown`。
+- 插件详情 `/plugins/:key` 中：`nodes` 为逐节点列表 `[{node_id, boot_id, addr, last_heartbeat, state:<上表 JSON>}]`（只含上报了该插件的节点），汇总改名为 `node_summary`。
+
+### 15.4 代理（`proxy/proxy.go`）
+
+响应对象：`{id, name, protocol, host, port, username, has_password, status, account_count, created_at, updated_at}`。**密码从不返回**，只有 `has_password`；`account_count` 为引用该代理的未删除账号数。
+
+| 方法 路径 | 权限 | 请求 | 约定 |
+|---|---|---|---|
+| POST `/proxies` | `proxy:manage` | `{name, protocol, host, port, username?, password?, status?}` | `name` 1–100 字符（去首尾空格）；`protocol` 为 `http` \| `https` \| `socks5`；`host` 不含 `/ ? # @` 和空白、≤255；`port` 1–65535；`username` ≤255；`password` ≤1024；`status` 为 `active`（默认）\| `disabled`；前四项必填 |
+| PATCH `/proxies/:id` | `proxy:manage` | 同上，全部可选 | 省略的字段不修改。**密码约定：省略或 `null` 表示不修改；`""` 表示清除密码；其他任何字符串（包括 `"******"`）都会被保存为新密码**。代理没有掩码约定，前端不要回填 `"******"` |
+| DELETE `/proxies/:id` | `proxy:manage` | | 仍被账号引用时返回 409 `conflict`，`details.account_count` |
+| POST `/proxies/:id/test` | `proxy:manage`（注意不是 `proxy:read`） | 无请求体 | `{ok, status, latency_ms, message}` |
+
+测试说明：用数据库中保存的设置新建客户端（**禁用状态的代理也能测**），经代理 `GET https://www.google.com/generate_204`（`proxy.Options.ProbeURL` 可配），超时 15 秒。`ok` = 上游状态码 < 400；`status` 为上游状态码（连接失败时为 0）；失败时 `message` 为错误信息或 HTTP 状态行，成功时为空串。测试失败仍返回 HTTP 200。
+
+修改或删除代理后在 `config:changed` 广播 `{"type":"proxy","id":N}`，各节点丢弃缓存的客户端。
+
+### 15.5 粘性会话（`gateway/sticky_api.go`、`gateway/sticky.go`、`gateway/settings.go`）
+
+规则对象：
+
+| 字段 | 说明 |
+|---|---|
+| `id` | |
+| `name` | `^[A-Za-z0-9][A-Za-z0-9_.\-]{0,99}$`，不能是 `stats`；同一 `source` 内唯一 |
+| `source` | `admin`（管理员创建）\| `plugin_default`（插件 manifest 平台的 `stickyRules`）\| `builtin`（内置平台默认规则） |
+| `plugin_key` | `plugin_default` 为插件 key，其他为 `null` |
+| `enabled`、`priority` | 数字小的先评估；新建默认 `enabled=true`、`priority=100`；默认规则按声明顺序初始为 100、101… |
+| `match` | `{protocols:[], models:[], user_agent_contains:[]}`（空数组 = 不限；`models` 为通配；`user_agent_contains` 不区分大小写，任一命中即可） |
+| `key_sources` | `[{type, path?, name?, needs?}]`，`type` 为 `body`（需 `path`）\| `header`（需 `name`）\| `api_key` \| `user` \| `plugin`（`needs` 为交给插件 `ResolveAffinityKey` 的 body 路径）；至少一项 |
+| `value_regex` | 可空；须能编译 |
+| `ttl_seconds` | 0–2592000，0 表示使用 `/settings/sticky` 的 `default_ttl_seconds` |
+| `key_includes` | `group` \| `model` \| `rule` 的子集，新建默认三项全含 |
+| `on_failure` | `failover`（默认）\| `stick` |
+| `updated_by`、`updated_at` | |
+
+| 方法 路径 | 权限 | 请求 / 响应 | 约定 |
+|---|---|---|---|
+| GET `/sticky-rules` | `sticky:read` | → `[规则]` | 不分页 |
+| POST `/sticky-rules` | `sticky:manage` | `{name, enabled?, priority?, match?, key_sources, value_regex?, ttl_seconds?, key_includes?, on_failure?}` → 201 规则 | 只能创建 `source=admin`；同名 admin 规则已存在返回 409 |
+| PATCH `/sticky-rules/:id` | `sticky:manage` | 同上字段均可选 → 200 规则 | `admin` 规则可改全部字段；`plugin_default` / `builtin` 规则**只能改 `enabled`、`priority`**，带其他字段返回 400 `invalid_argument`（如需改定义，新建同名 admin 规则覆盖） |
+| DELETE `/sticky-rules/:id` | `sticky:manage` | 204 | 只能删 `admin` 规则，其他返回 400；已有绑定不删除（等 TTL 过期），若没有其他同名规则则清除统计 |
+| POST `/sticky-rules/:id/flush` | `sticky:manage` | → `{deleted: n}` | 删除该规则名下的全部绑定，`deleted` 为删除的 Redis key 数（无 Redis 时为 0）；Redis 出错返回 503 |
+| GET `/sticky-rules/stats` | `sticky:read` | → `[{rule_id, rule, source, hits, misses, rebinds}]` | 每条规则一项，顺序同规则列表；`rule_id` 对应规则 `id`，`rule` 为规则名 |
+| GET `/settings/sticky` | `sticky:read` | → `{enabled, default_ttl_seconds, keep_on_account_disabled}` | 默认 `true`、3600、`false` |
+| PUT `/settings/sticky` | `sticky:manage` | 三个字段均可选（省略的不改）→ 修改后的完整对象 | `default_ttl_seconds` 1–2592000 |
+
+- **同名遮蔽**：同名规则只有来源级别最高的一条参与调度（`admin` > `builtin` > `plugin_default`），级别比较时**不看 `enabled`**，所以停用的同名 admin 规则也会遮蔽默认规则。
+- **统计与绑定按规则名**（不是 id）：统计 key `sticky:stats:{name}`，绑定 key `sticky:{name}:{group}:{model}:{sha256}`（名称中 `[A-Za-z0-9_.-]` 以外的字符替换为 `_`）。同名规则共享同一份统计，`/stats` 中同名的多项数值相同；flush 任一同名规则都会清除该名称下的全部绑定。
+- `key_includes` 不含 `rule` 的规则，其绑定 key 的规则段为 `_`，**flush 无法按规则删除这些绑定**。
+- 插件安装/升级时覆盖其 `plugin_default` 规则的定义（保留管理员设置的 `enabled`、`priority`），不再声明的规则删除；内置规则在网关启动时同步，语义相同。
+
+### 15.6 发布记录（`plugin/api/plugins.go`、`plugin/rollout/controller.go`、`core/ports_plugin_infra.go`）
+
+`Rollout` 结构（`POST /plugins/:key/enable|disable|upgrade` 的响应、`GET /plugins/:key/rollouts/current`、插件详情的 `rollout` 字段相同）：
+
+```
+{id, plugin_key, action, from_version, target_version, phase, coordinator, error,
+ nodes: [{node_id, boot_id, state, error}]}
+```
+
+- `action`：`enable` \| `upgrade` \| `disable`；`phase`：`preparing` \| `activating` \| `active` \| `failed` \| `cancelled`；`coordinator` 为协调节点 id；`nodes[].state`：`pending` \| `ready` \| `active` \| `failed`。进行中时 `nodes` 为各节点实时上报，结束后为落库的最终状态。
+- `GET /plugins/:key/rollouts/current`（`plugin:read`）只返回 `phase` 为 `preparing`/`activating` 的发布；没有进行中的发布时返回 `{data: null}`（HTTP 200）。插件不存在 404。插件详情的 `rollout` 同理可为 `null`。
+- **迁移进度 `migrations[]` 未提供**：`Rollout` 没有数据库迁移的逐项进度字段，迁移失败只体现在 `phase=failed` 与 `error`（以及节点 `error`）。
+- `POST /plugins/:key/rollouts/:id/cancel`（`plugin:manage`）成功返回 204。
+- `disable` 可带可选请求体 `{reason}`（默认 `"disabled by administrator"`）。`enable` 在插件处于 `awaiting_consent` 时返回 409；`upgrade` 的版本未批准返回 409、签名已吊销返回 403。
+
+插件详情 `GET /plugins/:key` 顶层字段：列表项全部字段（`key, name, status, status_reason, active_version, desired_version, current_version, publisher, trust, signature_status, pending_versions, egress_policy, installed_at, updated_at, builtin`）加 `manifest`（当前版本的 `review` 结构，无版本时 `null`）、`grants:[{permission, risk, scope, status, plugin_version, granted_by, granted_at}]`、`nodes`（逐节点，见 §15.3）、`node_summary`、`hooks:[{id?, point, order, failure, timeout_ms, needs, stats}]`、`jobs`、`events`、`resources:{requested, overrides, effective, max_memory_mb}`、`versions:[{version, consent_status, signature_status, package_sha256, package_size, uploaded_at}]`（上传时间倒序）、`rollout`。插件 `status` 取值 `awaiting_consent` \| `installed` \| `enabling` \| `enabled` \| `upgrading` \| `disabled`；`trust` 为 `official` \| `verified` \| `community` \| `unsigned`；`signature_status` 为 `valid` \| `unsigned` \| `revoked`。
+
+### 15.7 角色（`authz/roles.go`、`authz/http.go`）
+
+角色对象：`{id, key, name:{en,zh}, description:{en,zh}, builtin, superuser, permission_keys:[key], user_count, created_at, updated_at}`。
+- `permission_keys` 按权限目录的 `sort`、`key` 排序；`superuser=true` 的角色（`super_admin`）不存权限行，`permission_keys` 为 `[]`，但拥有全部权限，前端应按 `superuser` 判断。
+- `user_count` 为持有该角色的未删除用户数。
+
+| 方法 路径 | 权限 | 请求 | 约定 |
+|---|---|---|---|
+| GET `/roles` | `role:read` | | 不分页，内置在前 |
+| GET `/roles/:id` | `role:read` | | 不存在 404 |
+| POST `/roles` | `role:manage` | `{key, name, description?, permission_keys?}` | `key` 匹配 `^[a-z][a-z0-9_]{1,49}$`；`name.en` 必填；key 重复 409；未知权限 `details.fields[{field:"permission_keys", code:"unknown"}]` |
+| PATCH `/roles/:id` | `role:manage` | `{name?, description?}` | 内置角色也可改名称和描述；给了 `name` 时 `name.en` 不能为空 |
+| DELETE `/roles/:id` | `role:manage` | | 内置角色 409；用户的该角色随之删除 |
+| PUT `/roles/:id/permissions` | `role:manage` | `{permission_keys}` | 整体替换；超级管理员角色 409；已移除（`status=removed`）的权限视为未知 |
+
+### 15.8 插件设置与前端扩展（`plugin/api/settings.go`、`plugin/api/ui.go`）
+
+GET `/plugins/:key/settings`（`plugin:read`）→
+
+| 字段 | 说明 |
+|---|---|
+| `mode` | `schema` \| `iframe` \| `native` \| `none`（manifest 未声明 `ui.settings` 时为 `none`） |
+| `schema` | `mode=schema` 时为包内 JSON Schema 文件的**内容**（JSON），否则 `null` |
+| `ui_schema` | `mode=schema` 且声明了 `uiSchema` 时为其内容，否则 `null` |
+| `page` | `mode=iframe` 的入口（省略表示无） |
+| `component` | `mode=native` 的组件名（省略表示无） |
+| `values` | 当前配置值（解密后）；敏感字段非空时为 `"******"` |
+| `secret_fields` | 敏感字段名（Schema 顶层属性中 `writeOnly: true`、`format: "password"` 或 `x-sensitive: true` 的），排序 |
+
+PUT `/plugins/:key/settings`（`plugin:manage`）请求 `{values:{...}}`：
+- `values` 是**完整**配置，整体替换（省略的键会被删除）；敏感字段传 `"******"` 表示保留原值。
+- `mode=schema` 时按 Schema 校验，失败返回 `invalid_argument`，`details.fields[].field` 为 `values` + JSON Pointer（如 `values/api_key`），`code` 为 `schema`。
+- 成功后返回与 GET 相同的结构；审计只记录变更的键名；并在 `plugin:events` 广播配置变更。
+- 插件没有可用版本时 GET/PUT 都返回 404（`plugin has no version`）。
+
+GET `/ui/plugins`（登录即可）→ 不分页数组，只含当前 generation 中已启用且声明了 `ui` 的插件：
+
+| 字段 | 说明 |
+|---|---|
+| `key`、`version` | |
+| `name` | `{en, zh}` |
+| `asset_base` | `/plugin-ui/{key}/{version_hash}`，拼接包内相对路径加载资源 |
+| `menus` | `[{id, section, label, icon?, page, permission?, order?}]`；按调用者权限过滤（`permission` 为插件内 key，检查 `plugin.<key>:<permission>`） |
+| `pages` | `{<page_id>: {type, title?, source?, columns?, schema?, submit?, src?, component?}}`；只被无权限菜单引用的页面被去掉 |
+| `slots` | `[{slot, component, permission?}]`，按权限过滤 |
+| `native_entry` | 仅 `trust` 为 `official`/`verified` 时返回 manifest `ui.native.entry`，否则空串 |
+| `trust` | |
+| `host_ui_compat` | |
+
+过滤后 `menus`、`slots`、`pages` 全空的插件不返回。
+
+### 15.9 账号（`account/handlers.go`、`account/creds.go`、`account/testreq.go`）
+
+账号对象（列表与详情）：
+
+| 字段 | 说明 |
+|---|---|
+| `id`、`name`、`plugin_key`、`type` | |
+| `type_label` | 账号类型名称 `{en, zh}`；类型未注册（插件禁用/卸载）时为 `null` |
+| `group_ids` | `[id]` |
+| `groups` | `[{id, name}]`，按 id 升序 |
+| `proxy_id` | 可为 `null`（直连） |
+| `status` | `active` \| `disabled` |
+| `status_reason` | 管理员禁用时为 `"disabled by administrator"`，重新启用时清空 |
+| `schedulable`、`priority`、`max_concurrency` | `max_concurrency=0` 表示不限 |
+| `in_use` | 当前占用的并发槽位数（集群实时） |
+| `cooldown_until` | 冷却截止时间（按 Redis TTL 推算，精确到秒），未冷却为 `null` |
+| `cooldown_reason` | 冷却原因，未冷却时省略 |
+| `orphaned` | 声明该账号类型的插件未启用（禁用或卸载）时为 `true` |
+| `settings` | 非敏感的设置字段（账号类型 `settingsFields` 列出的顶层键），明文 JSON 对象 |
+| `credentials` | **仅详情**（`GET /accounts/:id`、创建与修改的响应）：设置字段与加密字段合并后的完整对象，账号类型 `sensitiveFields` 中的非空值替换为 `"******"`；类型未注册时加密部分的所有顶层值都显示为 `"******"`。列表不含此字段 |
+| `last_used_at`、`created_at`、`updated_at` | |
+
+创建与修改：
+- POST `/accounts`（`account:create`）：`{name, plugin_key, type, group_ids?, proxy_id?, priority?, max_concurrency?, schedulable?, status?, credentials}`；默认 `priority=10`、`max_concurrency=10`、`schedulable=true`、`status=active`。`priority` 0–1000000；`max_concurrency` 0–100000；`proxy_id`、`group_ids` 必须存在（`details.fields[].code = "not_found"`）；账号类型未注册返回 `field:"type", code:"unknown"`。凭证先按表单 Schema 校验，再调插件 `ValidateCredentials`（字段错误路径为 `credentials.<a>.<b>`），插件可规范化凭证。
+- PATCH `/accounts/:id`（`account:update`）：同上字段均可选，`plugin_key`/`type` 不可修改（忽略）。`proxy_id: null` 改为直连；`group_ids` 整体替换。`credentials` 给出时为**完整对象**（省略的键会被删除），敏感字段传 `"******"` 保留原值；插件未启用时修改凭证返回 503 `plugin_unavailable`；并发修改凭证返回 409。修改 `status` 会发 `account.status_changed` 事件。
+- DELETE `/accounts/:id`（`account:delete`）：软删除，清除分组关系与冷却，204。
+- POST `/accounts/:id/credentials/reveal`（`account:credential:view`）：→ `{credentials:{...}}`（合并后的明文），写审计日志。
+
+POST `/accounts/:id/test`（`account:test`）：
+- 请求体可省略或为空；可选 `{model}`（交给插件 `BuildTestRequest`，为空时由插件选默认模型）。
+- 响应 `{ok, status, latency_ms, message}`：由声明插件构造测试请求，核心经账号的代理（或直连）发出；`ok` = 上游 2xx；`status` 为上游状态码（未发出或网络错误时为 0）；失败时 `message` 为上游响应体前 1 KB（为空时为状态行）或错误信息，成功时为空串。整个测试（含插件构造请求）超时 30 秒。
+- 测试失败（包括上游地址为内网/回环被拒、代理被禁用）仍返回 HTTP 200、`ok:false`；只有插件未启用（503 `plugin_unavailable`）、账号不存在（404）、插件调用出错时返回错误状态。
+- 直连时目标地址为回环、私有、链路本地等地址会被拒绝（`SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM=true` 时放行）；经代理且本地无法解析的域名交给代理。
+
+### 15.10 与前文不一致（以代码为准，待主控裁定）
+
+1. §5.6：`GET /sticky-rules/stats` 前文为 `[{rule, hits, misses, rebinds}]`，代码另含 `rule_id`、`source`（§15.5），且统计按规则名共享。
+2. §5.6 未写 `POST /sticky-rules/:id/flush` 的返回；代码为 `{deleted: n}`，且 `key_includes` 不含 `rule` 的规则无法 flush（§15.5）。
+3. §5.7 补充约定"插件设置：GET → `{schema, ui_schema, values}`"：代码另含 `mode`、`page`、`component`、`secret_fields`，`schema` 在非 schema 模式为 `null`；PUT 为整体替换（§15.8）。
+4. §5.7 `/ui/plugins` 前文字段不含 `name`；代码返回 `name`（§15.8）。
+5. §5.7 "`/nodes` 与插件详情中每个节点的插件状态字段为 `state`"：插件详情中逐节点列表的字段名是 `nodes`（汇总移到 `node_summary`），而 `/plugins` 列表中 `nodes` 是汇总对象，同名字段在列表和详情里结构不同（§15.3）。
+6. §5.3 未区分 `POST /proxies/:id/test` 的权限；代码为 `proxy:manage`。代理密码没有 `"******"` 掩码约定（与账号凭证、插件设置不同）：省略/`null` 不改，`""` 清除，其他值直接保存（§15.4）。
+7. §5.5 `GET /ledger`（`?user_id=&kind=`）：代码另支持 `from`、`to`；`/me/ledger` 支持 `kind`、`from`、`to`。
+8. §5.5 `GET /usage` 的筛选参数：代码另支持 `api_key_id`、`platform`、`billing_status`、`request_id`、`account_type`；`/me/usage` 不支持 `user_id`、`account_id`、`account_type`。`/usage/summary` 也接受这些筛选参数。
+9. §5.5 `GET /prices`（`?platform=`）：`platform` 已按 §12 删除，代码筛选参数为 `mode`、`source`、`plugin_key`、`enabled`、`q`。
+10. §5.4 / §11.7：前文写控制台平台调用（含 `BuildTestRequest`）超时 10 秒；账号测试接口在处理器里设置的整体超时为 30 秒（`account/service.go` `testTimeout`），插件调用本身是否另有 10 秒限制以 C2 实现为准。
+11. §5.3 / §13：`GET /me/api-keys` 不返回 `user_email`；没有普通用户修改自己 Key 的接口（只有管理员 `PATCH /api-keys/:id`）。
+12. ~~§14 中若干条目在 b1348a775 时尚未实现~~：已于第四轮合并实现（`/me/platforms`、`/settings/gateway`、`client_request_id`、`purge_accounts`、出口 `domains`、市场顶层 `host_version`、`proxy.Options.AllowPrivate`），见 §14。

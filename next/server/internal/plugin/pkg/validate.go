@@ -36,6 +36,7 @@ var KnownCapabilities = map[string]bool{
 	manifest.CapHTTPRoutes:        true,
 	manifest.CapMigrationData:     true,
 	manifest.CapSchedulerAffinity: true,
+	manifest.CapAppBroadcast:      true,
 }
 
 // Resource caps besides the configurable memory cap.
@@ -282,6 +283,11 @@ func (v *validator) capabilities() {
 			v.add(f, "duplicate", "capability %q declared twice", c.ID)
 		}
 		seen[c.ID] = true
+		// Cluster broadcast (HostService.Publish / AppService.OnBroadcast)
+		// needs the matching host permission, like jobs and events.
+		if c.ID == manifest.CapAppBroadcast {
+			v.needPerm(f, "broadcast", "capability "+manifest.CapAppBroadcast)
+		}
 	}
 }
 

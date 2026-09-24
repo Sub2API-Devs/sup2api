@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -33,7 +32,9 @@ type call struct {
 	params map[string]string
 	format string
 	rid    string
-	start  time.Time
+	// clientRID is the client's X-Request-Id (recorded only, CONTRACTS §11.6/§14.4).
+	clientRID string
+	start     time.Time
 
 	gw        GatewaySettings
 	stickyCfg StickySettings
@@ -68,15 +69,17 @@ func (g *Gateway) serve(c *gin.Context, gen core.Generation, b core.EndpointBind
 
 	cl := &call{
 		g: g, c: c, gen: gen, ep: b.Endpoint, plugin: b.Plugin, platform: b.Platform, params: params,
-		format: b.Endpoint.ErrorFormat, rid: rid, start: g.now(),
+		format: b.Endpoint.ErrorFormat, rid: rid, clientRID: clientRequestID(clientRID), start: g.now(),
 	}
 	if pb, ok := gen.Platform(b.Platform); ok {
 		cl.pf = pb.Platform
 	}
-	cl.gw, cl.stickyCfg = g.settings.get(ctx)
-	if clientRID != "" {
-		slog.DebugContext(ctx, "gateway: client request id", "request_id", rid, "client_request_id", truncateUTF8(clientRID, 128))
+	// A node that lost Redis/PG beyond the self-fencing window stops serving.
+	if !g.healthy() {
+		writeError(c, cl.format, fromCore(core.ErrUnavailable.WithMessage("node is fenced: not serving requests"), ""))
+		return
 	}
+	cl.gw, cl.stickyCfg = g.settings.get(ctx)
 	if kind := b.Endpoint.Kind; kind != "" && kind != "proxy" {
 		writeError(c, cl.format, &gwError{Status: http.StatusNotImplemented, Code: "not_implemented",
 			Message: "endpoint kind " + kind + " is not supported"})
@@ -179,21 +182,22 @@ func (c *call) apiKey() string {
 func (c *call) newRecord() *core.UsageRecord {
 	p := c.principal
 	return &core.UsageRecord{
-		RequestID:      c.rid,
-		UserID:         p.UserID,
-		APIKeyID:       p.KeyID,
-		GroupID:        p.Group.ID,
-		PluginKey:      c.plugin.Key,
-		PluginVersion:  c.plugin.Version,
-		Platform:       c.platform,
-		Protocol:       c.ep.Protocol,
-		Endpoint:       c.ep.Path,
-		RateMultiplier: p.Group.RateMultiplier,
-		ClientIP:       c.c.ClientIP(),
-		UserAgent:      truncateUTF8(c.c.Request.UserAgent(), 500),
-		NodeID:         c.g.nodeID(),
-		CreatedAt:      c.start,
-		HookDecisions:  []core.HookDecision{},
+		RequestID:       c.rid,
+		ClientRequestID: c.clientRID,
+		UserID:          p.UserID,
+		APIKeyID:        p.KeyID,
+		GroupID:         p.Group.ID,
+		PluginKey:       c.plugin.Key,
+		PluginVersion:   c.plugin.Version,
+		Platform:        c.platform,
+		Protocol:        c.ep.Protocol,
+		Endpoint:        c.ep.Path,
+		RateMultiplier:  p.Group.RateMultiplier,
+		ClientIP:        c.c.ClientIP(),
+		UserAgent:       truncateUTF8(c.c.Request.UserAgent(), 500),
+		NodeID:          c.g.nodeID(),
+		CreatedAt:       c.start,
+		HookDecisions:   []core.HookDecision{},
 	}
 }
 

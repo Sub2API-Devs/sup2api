@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -68,7 +69,7 @@ func (authz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 }
 func (authz) IsSensitive(string) bool { return false }
 
-func setup(t *testing.T) (*gin.Engine, *echo, *registry.Registry, *registry.Package) {
+func setup(t *testing.T, opts ...routes.Option) (*gin.Engine, *echo, *registry.Registry, *registry.Package) {
 	gin.SetMode(gin.TestMode)
 	m := registrytest.Manifest("demo", "1.0.0")
 	pkg, err := registry.LoadPackage(t.TempDir(), registrytest.Package(t, m, []byte("bin"), nil), "", "unsigned")
@@ -81,10 +82,43 @@ func setup(t *testing.T) (*gin.Engine, *echo, *registry.Registry, *registry.Pack
 	reg.Publish([]registry.Extension{ext{pkg: pkg, h: h}})
 	engine := gin.New()
 	r := httpapi.NewRouter(engine, tokens{}, authz{}, nil)
-	rh := routes.New(reg, tokens{}, authz{}, nil)
+	rh := routes.New(reg, tokens{}, authz{}, nil, opts...)
 	rh.RegisterRoutes(r)
 	rh.RegisterAssets(engine)
 	return engine, h, reg, pkg
+}
+
+type health struct{ ok atomic.Bool }
+
+func (h *health) Healthy() bool { return h.ok.Load() }
+
+// An unhealthy node fences itself: plugin APIs answer 503 unavailable
+// without reaching the plugin; assets are still served.
+func TestPluginAPISelfFencing(t *testing.T) {
+	hc := &health{}
+	e, h, _, pkg := setup(t, routes.WithHealth(hc))
+
+	w := do(e, "POST", "/api/v1/p/demo/hook", "", `{}`)
+	var out struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &out)
+	if w.Code != http.StatusServiceUnavailable || out.Error.Code != "unavailable" || h.last != nil {
+		t.Fatalf("unhealthy: %d %s", w.Code, w.Body)
+	}
+	if w.Header().Get("Retry-After") == "" {
+		t.Fatal("missing Retry-After")
+	}
+	if w := do(e, "GET", pkg.AssetBase()+"/ui/index.html", "", ""); w.Code != 200 {
+		t.Fatalf("assets while unhealthy: %d", w.Code)
+	}
+
+	hc.ok.Store(true)
+	if w := do(e, "POST", "/api/v1/p/demo/hook", "", `{}`); w.Code != 201 || h.last == nil {
+		t.Fatalf("healthy again: %d %s", w.Code, w.Body)
+	}
 }
 
 func do(e *gin.Engine, method, path, token, body string) *httptest.ResponseRecorder {
