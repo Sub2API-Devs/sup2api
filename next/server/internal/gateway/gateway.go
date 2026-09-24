@@ -45,6 +45,12 @@ type Deps struct {
 	// see Converters/CanConvert) to the account module as
 	// core.ProtocolConverters.
 	Converters *convert.Registry
+	// Health reports whether this node may serve (self-fencing, CONTRACTS
+	// §14.3); false answers every gateway endpoint with 503 unavailable.
+	// Optional: when nil and Node implements Healthy() bool (as
+	// core.NodeRegistry does), Node.Healthy is used; otherwise the node is
+	// always considered healthy.
+	Health func() bool
 }
 
 // Gateway serves plugin-declared endpoints and owns sticky sessions.
@@ -56,10 +62,12 @@ type Gateway struct {
 	table atomic.Pointer[routeTable]
 
 	settings *settingsCache
+	gwStore  gatewaySettingsStore
 	rules    *ruleCache
 	hooks    *hookRuntime
 
 	allowPrivate bool
+	health       func() bool
 
 	// Overridable in tests.
 	now        func() time.Time
@@ -106,7 +114,14 @@ func New(d Deps) *Gateway {
 	if d.Config != nil {
 		g.allowPrivate = d.Config.AllowPrivateUpstream
 	}
+	g.health = d.Health
+	if g.health == nil {
+		if h, ok := d.Node.(interface{ Healthy() bool }); ok {
+			g.health = h.Healthy
+		}
+	}
 	g.settings = newSettingsCache(d.DB)
+	g.gwStore = dbGatewaySettings{db: d.DB}
 	g.rules = newRuleCache(d.DB)
 	g.hooks = newHookRuntime(d.Redis)
 
@@ -215,6 +230,11 @@ func (g *Gateway) nodeID() string {
 		return ""
 	}
 	return g.d.Node.NodeID()
+}
+
+// healthy reports whether this node may serve gateway requests.
+func (g *Gateway) healthy() bool {
+	return g.health == nil || g.health()
 }
 
 func defaultLookupIP(ctx context.Context, host string) ([]net.IP, error) {
