@@ -158,7 +158,7 @@ func TestBuildUpstreamRequest(t *testing.T) {
 		t.Fatalf("patches = %v upstream = %s", r.GetPatches(), r.GetUpstreamModel())
 	}
 
-	// missing key / bad protocol
+	// missing key / bad protocol / foreign account type
 	if _, err := h.Platform.BuildUpstreamRequest(ctx, &pluginv1.BuildUpstreamRequestRequest{
 		Meta: &pluginv1.RequestMeta{Protocol: ProtocolMessages}, Account: account(`{}`, ""),
 	}); err == nil {
@@ -168,6 +168,23 @@ func TestBuildUpstreamRequest(t *testing.T) {
 		Meta: &pluginv1.RequestMeta{Protocol: "openai.chat"}, Account: account(`{"api_key":"k-12345678"}`, ""),
 	}); err == nil {
 		t.Fatal("expected error for unknown protocol")
+	}
+	foreign := account(`{"api_key":"k-12345678"}`, "")
+	foreign.Type = "relay_key"
+	if _, err := h.Platform.BuildUpstreamRequest(ctx, &pluginv1.BuildUpstreamRequestRequest{
+		Meta: &pluginv1.RequestMeta{Protocol: ProtocolMessages}, Account: foreign,
+	}); err == nil {
+		t.Fatal("expected error for an account type of another plugin")
+	}
+
+	// The upstream path follows meta.protocol, not the client endpoint's
+	// protocol (converted requests).
+	r, err = h.Platform.BuildUpstreamRequest(ctx, &pluginv1.BuildUpstreamRequestRequest{
+		Meta:    &pluginv1.RequestMeta{Protocol: ProtocolMessages, ClientProtocol: "openai.chat", Model: "claude-sonnet-5"},
+		Account: account(`{"api_key":"k-12345678"}`, ""),
+	})
+	if err != nil || r.GetUrl() != "https://api.anthropic.com/v1/messages" {
+		t.Fatalf("converted request: %v %v", r, err)
 	}
 }
 

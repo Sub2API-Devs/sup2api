@@ -20,14 +20,20 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 )
 
-// Protocol ids declared in manifest.json.
+// Protocol ids declared in manifest.json: the endpoints of the platform and
+// the native protocols of the apikey account type (accountTypes[].protocols).
 const (
 	ProtocolMessages    = "anthropic.messages"
 	ProtocolCountTokens = "anthropic.count_tokens"
 )
 
+// Protocols lists the upstream protocols BuildUpstreamRequest supports, in
+// manifest order.
+var Protocols = []string{ProtocolMessages, ProtocolCountTokens}
+
 const (
-	// AccountTypeAPIKey is the only account type in 0.1.
+	// AccountTypeAPIKey is the only account type in 0.1 (top-level
+	// accountTypes in manifest.json).
 	AccountTypeAPIKey = "apikey"
 	// DefaultBaseURL is used when an account has no base_url.
 	DefaultBaseURL = "https://api.anthropic.com"
@@ -38,7 +44,8 @@ const (
 )
 
 // forwardHeaders are client headers (lower-case, from manifest
-// platform.passHeaders) copied verbatim to the upstream request.
+// platform.passHeaders, the default the apikey account type inherits for
+// both protocols) copied verbatim to the upstream request.
 var forwardHeaders = []string{
 	"anthropic-beta",
 	"anthropic-dangerous-direct-browser-access",
@@ -328,6 +335,9 @@ func mapModel(mapping map[string]string, model string) string {
 	return model
 }
 
+// endpointPath maps the upstream protocol (RequestMeta.protocol, which may
+// differ from the client endpoint's protocol when the core converts the
+// request) to the upstream path. An empty protocol means messages.
 func endpointPath(protocol string) (string, error) {
 	switch protocol {
 	case ProtocolMessages, "":
@@ -335,7 +345,7 @@ func endpointPath(protocol string) (string, error) {
 	case ProtocolCountTokens:
 		return "/v1/messages/count_tokens", nil
 	default:
-		return "", status.Errorf(codes.InvalidArgument, "unsupported protocol %q", protocol)
+		return "", status.Errorf(codes.InvalidArgument, "unsupported upstream protocol %q", protocol)
 	}
 }
 
@@ -356,9 +366,13 @@ func upstreamHeaders(apiKey string, inbound map[string]string) map[string]string
 	return h
 }
 
-// BuildUpstreamRequest implements pluginsdk.Platform.
+// BuildUpstreamRequest implements pluginsdk.Platform. The upstream path
+// follows meta.protocol (messages or count_tokens).
 func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstreamRequestRequest) (*pluginv1.BuildUpstreamRequestResponse, error) {
 	acc := in.GetAccount()
+	if t := acc.GetType(); t != "" && t != AccountTypeAPIKey {
+		return nil, status.Errorf(codes.FailedPrecondition, "account %d: unsupported account type %q", acc.GetId(), t)
+	}
 	cfg, err := parseAccount(acc.GetCredentialsJson(), acc.GetSettingsJson())
 	if err != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "account %d: %v", acc.GetId(), err)
