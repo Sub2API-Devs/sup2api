@@ -112,6 +112,9 @@ HTTP 挂载：`/healthz`（节点自我隔离时 503）→ `httpapi.NewRouter` �
 | 14 | 出口日志只在连接关闭时写入，长连接（keep-alive、数据库）在关闭前不出现在"外部访问"页 | D | 后续：考虑连接建立时写一行 `open` 记录或定期落盘 |
 | 15 | guard 规则改动在其他节点最多延迟 5 秒生效（插件内轮询）；插件没有广播通道 | E / 核心 | 后续：可给 SDK 提供集群广播能力 |
 | 16 | 钩子熔断按节点计数（每节点连续 10 次失败），集群内各节点独立熔断 | G | 符合 §6.3，保持 |
+| 17 | OpenAI chat 流式：客户端未带 `stream_options.include_usage=true` 时上游不返回用量，会按零用量计费；将来的 openai 账号类型插件应在 BuildUpstreamRequest 中强制打开（或定为核心行为） | 插件 / 主控 | 待有 openai 账号类型时处理 |
+| 18 | Gemini 思考 token：`candidatesTokenCount` 不含 `thoughtsTokenCount`，默认按 token 定价会少计；目前暴露为计量值 `u("thoughts_tokens")`；需要用量映射支持多路径求和或新增输出附加字段 | G | 待定 |
+| 19 | Gemini 流式：插件拿不到客户端 query，应始终向上游请求 `?alt=sse`，网关按客户端要求（带不带 `alt=sse`）重新组装 | 插件 | 待有 gemini 账号类型时处理 |
 
 ---
 
@@ -237,7 +240,7 @@ go test -count=1 -timeout 50m -v ./...
 
 | 代号 | 目录 | 分支 | 状态 |
 |---|---|---|---|
-| g3-platforms-gateway | `gateway`、`platforms/openai.json`、`gemini.json` | next/g3-platforms-gateway | ⏳ |
+| g3-platforms-gateway | `gateway`、`platforms/openai.json`、`gemini.json` | next/g3-platforms-gateway | ✅ `8d5ed9e94`，合并 `0628a34c1` |
 | c3-registry | `plugin/*` | next/c3-registry | ✅ `4c2b1f803`，合并 `2bc6a7ae7` |
 | a3-accounts | `account`、`billing`、`usage`、`group`、`apikey`（新接口 `/platforms`，分组/Key 的 `platforms`） | next/a3-accounts | ✅ `544e8010a`、`886cec1a7`、`3b5d09d4b`、`49aa41d97`，已合并；app 已改 group/apikey 构造函数 |
 | e3-plugins | `plugins/*`、`tools/sub2api-plugin`、`e2e`（AC19）、`sdk/pluginsdk` | next/e3-plugins | ✅ `4e3b40354`、`033940989`、`042799583`，合并 `54d6e76e6` |
