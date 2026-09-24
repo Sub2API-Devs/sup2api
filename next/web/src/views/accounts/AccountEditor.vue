@@ -83,6 +83,15 @@ watch(
   { immediate: true }
 )
 
+// Server-side credential errors are stale once the user edits the form.
+watch(
+  credentials,
+  () => {
+    if (Object.keys(credErrors.value).length) credErrors.value = {}
+  },
+  { deep: true }
+)
+
 async function collectCredentials(): Promise<Record<string, any> | null> {
   if (!props.accountType) return credentials.value
   if (mode.value === 'schema') {

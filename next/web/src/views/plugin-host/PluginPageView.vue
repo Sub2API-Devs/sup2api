@@ -39,7 +39,12 @@ onErrorCaptured((err) => {
 
 <template>
   <div>
-    <SPageHeader :title="title" :description="found ? `${found.plugin.key} v${found.plugin.version}` : undefined" />
+    <!-- native pages render their own header -->
+    <SPageHeader
+      v-if="found?.page.type !== 'native' || !nativeComponent"
+      :title="title"
+      :description="found ? `${found.plugin.key} v${found.plugin.version}` : undefined"
+    />
     <div v-if="!plugins.ready" class="flex justify-center py-16"><SSpinner /></div>
     <SEmpty v-else-if="!found" :text="t('pluginHost.notFound', { plugin: pluginKey, page: pageId })" icon="puzzle" />
     <div v-else-if="crashed" class="card p-6 text-sm text-red-600 dark:text-red-400">{{ t('pluginHost.crashed') }}: {{ crashed }}</div>

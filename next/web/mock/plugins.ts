@@ -1,5 +1,790 @@
-// Mock handlers: plugins, rollouts, market, publishers, /ui/plugins and
-// plugin-owned routes (/p/<key>/...).
-import { on } from './router'
+// Mock handlers: plugins (list, detail, review/consent, lifecycle, rollouts,
+// grants, settings, resources, egress, jobs, events) and the plugin market.
+// /ui/plugins and /p/<key>/... live in pluginui.ts; publishers are not here.
+import { fail, needStepUp, noContent, now, on, paginate } from './router'
 
-void on
+type Any = Record<string, any>
+
+interface MockPlugin {
+  key: string
+  name: Any
+  description: Any
+  status: string
+  status_reason: string
+  active_version: string | null
+  desired_version: string | null
+  publisher: string
+  trust: string
+  egress_policy: string
+  resources: Any
+  versions: Array<{ version: string; consent_status: string }>
+  grants: Any[]
+  manifest: Any
+  settings: Any | null
+}
+
+interface MockRollout {
+  id: number
+  plugin_key: string
+  action: 'enable' | 'upgrade' | 'disable'
+  from_version: string
+  target_version: string
+  started: number
+  cancelled: boolean
+  failNode: boolean
+}
+
+const NODES = ['node-1', 'node-2']
+let rolloutSeq = 40
+
+// ------------------------------------------------------------------ fixtures
+
+function guardManifest(version: string): Any {
+  return {
+    key: 'guard',
+    version,
+    publisher: 'sub2api',
+    description: { en: 'Inspects gateway requests and blocks the ones matching rules.', zh: '检查网关请求，拦截命中规则的请求。' },
+    hostCompat: '>=0.1.0 <0.2.0',
+    capabilities: [{ id: 'gateway.hook.v1' }, { id: 'app.events.v1' }, { id: 'app.jobs.v1' }, { id: 'http.routes.v1' }],
+    ui: {
+      menus: [{ id: 'guard', section: 'plugins', label: { en: 'Guard', zh: '请求守卫' }, page: 'dashboard' }],
+      pages: { dashboard: { type: 'native', component: 'GuardDashboard' }, rules: { type: 'table' } },
+      slots: [{ slot: 'dashboard.widgets', component: 'BlockedTodayCard' }]
+    },
+    resources: { memoryMB: 128, cpu: 0.25, maxProcs: 64, maxOpenFiles: 256 }
+  }
+}
+
+function anthropicManifest(version: string): Any {
+  return {
+    key: 'anthropic',
+    version,
+    publisher: 'sub2api',
+    description: { en: 'Anthropic platform: Claude API keys and OAuth accounts.', zh: 'Anthropic 平台：Claude API Key 与 OAuth 账号。' },
+    hostCompat: '>=0.1.0 <0.2.0',
+    capabilities: [{ id: 'gateway.platform.v1' }],
+    platform: {
+      id: 'anthropic',
+      protocols: ['anthropic.messages'],
+      account_types: [
+        { type: 'apikey', label: { en: 'API key', zh: 'API Key' } },
+        { type: 'oauth', label: { en: 'Claude OAuth', zh: 'Claude OAuth' } }
+      ]
+    },
+    gateway_endpoints: [
+      { method: 'POST', path: '/v1/messages', protocol: 'anthropic.messages' },
+      { method: 'POST', path: '/v1/messages/count_tokens', protocol: 'anthropic.count_tokens' }
+    ],
+    resources: { memoryMB: 256, cpu: 0.5, maxProcs: 128, maxOpenFiles: 1024 }
+  }
+}
+
+function grant(permission: string, scope: Any | null = null, version = '0.1.0'): Any {
+  return { permission, scope, status: 'active', plugin_version: version, granted_by: 1, granted_by_email: 'admin@example.com', granted_at: now(-86400 * 3) }
+}
+
+const guardSettingsSchema = {
+  type: 'object',
+  properties: {
+    mode: { type: 'string', title: 'Mode', enum: ['block', 'log'], default: 'block' },
+    max_prompt_kb: { type: 'integer', title: 'Max prompt size (KB)', minimum: 1, maximum: 256, default: 32 },
+    alert_webhook: { type: 'string', title: 'Alert webhook URL', format: 'uri' },
+    webhook_secret: { type: 'string', title: 'Webhook secret', format: 'password' },
+    notify_on_block: { type: 'boolean', title: 'Notify on block', default: true }
+  },
+  required: ['mode']
+}
+
+const plugins = new Map<string, MockPlugin>()
+
+plugins.set('guard', {
+  key: 'guard',
+  name: { en: 'Guard', zh: '请求守卫' },
+  description: guardManifest('0.1.0').description,
+  status: 'enabled',
+  status_reason: '',
+  active_version: '0.1.0',
+  desired_version: '0.1.0',
+  publisher: 'sub2api',
+  trust: 'official',
+  egress_policy: 'allowlist',
+  resources: { memory_mb: 128, cpu: 0.25, max_threads: 64, max_open_files: 256 },
+  versions: [{ version: '0.1.0', consent_status: 'approved' }],
+  grants: [
+    grant('kv'),
+    grant('db.schema'),
+    grant('gateway.hook', { points: ['gateway.request'], fields: ['model', 'prompt_text'] }),
+    grant('events', { subscribe: ['usage.recorded'] }),
+    grant('jobs'),
+    grant('routes.admin'),
+    grant('ui.native'),
+    grant('net', { domains: ['hooks.example.com'] })
+  ],
+  manifest: guardManifest('0.1.0'),
+  settings: {
+    schema: guardSettingsSchema,
+    ui_schema: { webhook_secret: { 'ui:widget': 'password' } },
+    values: { mode: 'block', max_prompt_kb: 32, alert_webhook: 'https://hooks.example.com/guard', webhook_secret: '******', notify_on_block: true }
+  }
+})
+
+plugins.set('anthropic', {
+  key: 'anthropic',
+  name: { en: 'Anthropic', zh: 'Anthropic' },
+  description: anthropicManifest('0.1.0').description,
+  status: 'enabled',
+  status_reason: '',
+  active_version: '0.1.0',
+  desired_version: '0.1.0',
+  publisher: 'sub2api',
+  trust: 'official',
+  egress_policy: 'allow_all',
+  resources: { memory_mb: 256, cpu: 0.5, max_threads: 128, max_open_files: 1024 },
+  versions: [
+    { version: '0.1.0', consent_status: 'approved' },
+    { version: '0.2.0', consent_status: 'pending' }
+  ],
+  grants: [grant('kv'), grant('platform.register', { platform: 'anthropic' }), grant('gateway.endpoint'), grant('accounts.credentials'), grant('net')],
+  manifest: anthropicManifest('0.1.0'),
+  settings: null
+})
+
+plugins.set('foo_platform', {
+  key: 'foo_platform',
+  name: { en: 'Foo Platform', zh: 'Foo 平台' },
+  description: { en: 'Community adapter for the Foo API.', zh: 'Foo API 的社区适配器。' },
+  status: 'awaiting_consent',
+  status_reason: '',
+  active_version: null,
+  desired_version: '1.0.0',
+  publisher: 'foo-labs',
+  trust: 'community',
+  egress_policy: 'allow_all',
+  resources: {},
+  versions: [{ version: '1.0.0', consent_status: 'pending' }],
+  grants: [],
+  manifest: { key: 'foo_platform', version: '1.0.0', publisher: 'foo-labs', hostCompat: '>=0.1.0' },
+  settings: null
+})
+
+// ------------------------------------------------------------------ reviews
+
+function guardReview(version: string, diff?: Any): Any {
+  return {
+    plugin_key: 'guard',
+    version,
+    name: { en: 'Guard', zh: '请求守卫' },
+    publisher: 'sub2api',
+    trust: 'official',
+    signature_status: 'valid',
+    host_compat_ok: true,
+    host_compat: '>=0.1.0 <0.2.0',
+    capabilities: [{ id: 'gateway.hook.v1' }, { id: 'app.events.v1' }, { id: 'app.jobs.v1' }, { id: 'http.routes.v1' }],
+    gateway_endpoints: [],
+    platform: null,
+    hooks: [
+      {
+        point: 'gateway.request',
+        id: 'inspect',
+        match: { protocols: ['anthropic.messages'], models: ['*'], groups: ['*'] },
+        needs: ['model', 'prompt_text'],
+        maxPromptBytes: 32768,
+        timeoutMs: 300,
+        failure: 'open'
+      }
+    ],
+    jobs: [
+      { id: 'rollup', schedule: '@every 5m' },
+      { id: 'cleanup', schedule: '0 3 * * *' }
+    ],
+    events: ['usage.recorded'],
+    routes: [
+      { method: 'GET', path: '/rules', scope: 'admin', permission: 'rules:read' },
+      { method: 'PUT', path: '/rules', scope: 'admin', permission: 'rules:manage' },
+      { method: 'GET', path: '/stats', scope: 'admin', permission: 'stats:read' }
+    ],
+    menus: [{ id: 'guard', label: { en: 'Guard', zh: '请求守卫' }, type: 'native' }],
+    user_permissions: [
+      { key: 'rules:read', label: { en: 'View rules', zh: '查看拦截规则' } },
+      { key: 'rules:manage', label: { en: 'Manage rules', zh: '管理拦截规则' }, sensitive: true },
+      { key: 'stats:read', label: { en: 'View statistics', zh: '查看拦截统计' } }
+    ],
+    database: { schema: 'plg_guard', migrations: ['0001_init.sql', '0002_stats.sql'] },
+    resources: { memoryMB: 128, cpu: 0.25, maxProcs: 64, maxOpenFiles: 256 },
+    external_services: ['hooks.example.com'],
+    host_permissions: [
+      { id: 'kv', risk: 'low' },
+      { id: 'db.schema', risk: 'high', reason: { en: 'Store rules and statistics', zh: '保存拦截规则和统计' }, requires: 'plugin:grant:high' },
+      {
+        id: 'gateway.hook',
+        risk: 'high',
+        scope: { points: ['gateway.request'], fields: ['model', 'prompt_text'] },
+        reason: { en: 'Inspect request content', zh: '检查请求内容' },
+        requires: 'plugin:grant:high'
+      },
+      { id: 'events', risk: 'medium', scope: { subscribe: ['usage.recorded'] } },
+      { id: 'jobs', risk: 'medium' },
+      { id: 'routes.admin', risk: 'medium' },
+      { id: 'ui.native', risk: 'critical', reason: { en: 'Provides the statistics dashboard', zh: '提供统计大盘' }, requires: 'plugin:grant:critical' },
+      {
+        id: 'net',
+        risk: 'high',
+        scope: { domains: ['hooks.example.com'] },
+        optional: true,
+        reason: { en: 'Send alerts when a rule matches (effective in allowlist mode)', zh: '命中规则时发送告警（出口策略为白名单时生效）' },
+        requires: 'plugin:grant:high'
+      }
+    ],
+    diff: diff ?? null
+  }
+}
+
+function anthropicReview(version: string): Any {
+  return {
+    plugin_key: 'anthropic',
+    version,
+    name: { en: 'Anthropic', zh: 'Anthropic' },
+    publisher: 'sub2api',
+    trust: 'official',
+    signature_status: 'valid',
+    host_compat_ok: true,
+    host_compat: '>=0.1.0 <0.2.0',
+    capabilities: [{ id: 'gateway.platform.v1' }],
+    gateway_endpoints: anthropicManifest(version).gateway_endpoints,
+    platform: anthropicManifest(version).platform,
+    hooks: [],
+    jobs: [{ id: 'refresh_oauth', schedule: '@every 10m' }],
+    events: [],
+    routes: [{ method: 'POST', path: '/oauth/callback', scope: 'webhook' }],
+    menus: [],
+    user_permissions: [],
+    database: { schema: 'plg_anthropic', migrations: ['0001_init.sql', '0002_add_family.sql'] },
+    resources: { memoryMB: 256, cpu: 0.5 },
+    external_services: ['api.anthropic.com', 'console.anthropic.com'],
+    host_permissions: [
+      { id: 'kv', risk: 'low' },
+      { id: 'platform.register', risk: 'high', scope: { platform: 'anthropic' }, requires: 'plugin:grant:high' },
+      { id: 'gateway.endpoint', risk: 'high', requires: 'plugin:grant:high' },
+      { id: 'accounts.credentials', risk: 'critical', reason: { en: 'Call the upstream API with account keys', zh: '使用账号密钥调用上游接口' }, requires: 'plugin:grant:critical' },
+      { id: 'db.schema', risk: 'high', requires: 'plugin:grant:high' },
+      { id: 'jobs', risk: 'medium' },
+      { id: 'routes.webhook', risk: 'high', scope: { paths: ['/oauth/callback'] }, requires: 'plugin:grant:high' },
+      { id: 'net', risk: 'high', scope: { domains: ['api.anthropic.com', 'console.anthropic.com'] }, requires: 'plugin:grant:high' }
+    ],
+    diff: version === '0.1.0' ? null : { added: ['db.schema', 'jobs', 'routes.webhook'], widened: ['net'], removed: [] }
+  }
+}
+
+function genericReview(key: string, version: string, name: Any, publisher: string, trust: string): Any {
+  return {
+    plugin_key: key,
+    version,
+    name,
+    publisher,
+    trust,
+    signature_status: trust === 'unsigned' ? 'unsigned' : 'valid',
+    host_compat_ok: key !== 'legacy_tool',
+    host_compat: key === 'legacy_tool' ? '>=0.0.1 <0.1.0' : '>=0.1.0',
+    capabilities: [{ id: 'gateway.platform.v1' }],
+    gateway_endpoints: [{ method: 'POST', path: '/v1/foo/chat', protocol: 'foo.chat' }],
+    platform: { id: key, protocols: ['foo.chat'], account_types: [{ type: 'apikey', label: { en: 'API key', zh: 'API Key' } }] },
+    hooks: [],
+    jobs: [],
+    events: [],
+    routes: [],
+    menus: [],
+    user_permissions: [],
+    database: null,
+    resources: { memoryMB: 64, cpu: 0.1 },
+    external_services: ['api.foo.dev'],
+    host_permissions: [
+      { id: 'kv', risk: 'low' },
+      { id: 'log', risk: 'low' },
+      { id: 'platform.register', risk: 'high', scope: { platform: key }, requires: 'plugin:grant:high' },
+      { id: 'gateway.endpoint', risk: 'high', requires: 'plugin:grant:high' },
+      { id: 'accounts.read', risk: 'medium' },
+      { id: 'net', risk: 'high', scope: { domains: ['api.foo.dev'] }, optional: true, requires: 'plugin:grant:high' }
+    ]
+  }
+}
+
+const reviews = new Map<string, Any>()
+reviews.set('foo_platform@1.0.0', genericReview('foo_platform', '1.0.0', { en: 'Foo Platform', zh: 'Foo 平台' }, 'foo-labs', 'community'))
+reviews.set('anthropic@0.2.0', anthropicReview('0.2.0'))
+
+// ------------------------------------------------------------------ market
+
+const sources = [
+  { id: 1, name: 'Official market', url: 'https://market.sub2api.dev/index.json', enabled: true },
+  { id: 2, name: 'Community', url: 'https://example.com/s2a/index.json', enabled: true }
+]
+
+const market: Record<number, Any[]> = {
+  1: [
+    {
+      key: 'anthropic',
+      name: { en: 'Anthropic', zh: 'Anthropic' },
+      description: { en: 'Claude API keys and OAuth accounts.', zh: 'Claude API Key 与 OAuth 账号。' },
+      publisher: 'sub2api',
+      trust: 'official',
+      categories: ['platform'],
+      versions: [
+        { version: '0.1.0', host_compat: '>=0.1.0 <0.2.0', size: 9_830_400 },
+        { version: '0.2.0', host_compat: '>=0.1.0 <0.2.0', size: 10_223_616 }
+      ]
+    },
+    {
+      key: 'guard',
+      name: { en: 'Guard', zh: '请求守卫' },
+      description: { en: 'Request inspection and blocking.', zh: '请求检查与拦截。' },
+      publisher: 'sub2api',
+      trust: 'official',
+      categories: ['security'],
+      versions: [{ version: '0.1.0', host_compat: '>=0.1.0 <0.2.0', size: 7_340_032 }]
+    },
+    {
+      key: 'openai',
+      name: { en: 'OpenAI', zh: 'OpenAI' },
+      description: { en: 'OpenAI-compatible platform adapter.', zh: 'OpenAI 兼容平台适配。' },
+      publisher: 'sub2api',
+      trust: 'official',
+      categories: ['platform'],
+      versions: [{ version: '0.1.0', host_compat: '>=0.1.0 <0.2.0', size: 8_912_896 }]
+    }
+  ],
+  2: [
+    {
+      key: 'foo_platform',
+      name: { en: 'Foo Platform', zh: 'Foo 平台' },
+      description: { en: 'Community adapter for the Foo API.', zh: 'Foo API 的社区适配器。' },
+      publisher: 'foo-labs',
+      trust: 'community',
+      categories: ['platform'],
+      versions: [{ version: '1.0.0', host_compat: '>=0.1.0' }]
+    },
+    {
+      key: 'legacy_tool',
+      name: { en: 'Legacy tool', zh: '旧版工具' },
+      description: { en: 'Only works with old hosts.', zh: '只兼容旧版核心。' },
+      publisher: 'someone',
+      trust: 'unsigned',
+      versions: [{ version: '0.0.3', host_compat: '>=0.0.1 <0.1.0' }]
+    }
+  ]
+}
+
+function reviewFor(key: string, version: string): Any {
+  const existing = reviews.get(`${key}@${version}`)
+  if (existing) return existing
+  let r: Any
+  if (key === 'guard') r = guardReview(version)
+  else if (key === 'anthropic') r = anthropicReview(version)
+  else {
+    const m = Object.values(market)
+      .flat()
+      .find((x) => x.key === key)
+    r = genericReview(key, version, m?.name ?? { en: key }, m?.publisher ?? 'unknown', m?.trust ?? 'unsigned')
+  }
+  reviews.set(`${key}@${version}`, r)
+  return r
+}
+
+/** Registers an uploaded / downloaded version and returns its review. */
+function stageVersion(review: Any): Any {
+  const key = review.plugin_key
+  let p = plugins.get(key)
+  if (!p) {
+    p = {
+      key,
+      name: review.name,
+      description: {},
+      status: 'awaiting_consent',
+      status_reason: '',
+      active_version: null,
+      desired_version: review.version,
+      publisher: review.publisher,
+      trust: review.trust,
+      egress_policy: 'allow_all',
+      resources: {},
+      versions: [],
+      grants: [],
+      manifest: { key, version: review.version, publisher: review.publisher, hostCompat: review.host_compat, resources: review.resources },
+      settings: null
+    }
+    plugins.set(key, p)
+  }
+  const v = p.versions.find((x) => x.version === review.version)
+  if (v) v.consent_status = 'pending'
+  else p.versions.push({ version: review.version, consent_status: 'pending' })
+  reviews.set(`${key}@${review.version}`, review)
+  return review
+}
+
+// ------------------------------------------------------------------ rollouts
+
+const rollouts = new Map<string, MockRollout>()
+
+function rolloutView(r: MockRollout): Any {
+  const s = (Date.now() - r.started) / 1000
+  const p = plugins.get(r.plugin_key)
+  let phase: string
+  let error = ''
+  const nodeStates = NODES.map((n, i) => {
+    if (r.action === 'disable') return s > 1 ? 'active' : 'pending'
+    if (s < 1.5 + i * 1.5) return 'pending'
+    if (r.failNode && i === 1) return 'failed'
+    return s > 6 ? 'active' : 'ready'
+  })
+  if (r.cancelled) phase = 'cancelled'
+  else if (nodeStates.includes('failed') && s > 3.5) {
+    phase = 'failed'
+    error = 'node-2: health check failed: plugin exited with status 2'
+  } else if (r.action === 'disable') phase = s > 2 ? 'active' : 'activating'
+  else if (s < 4.5) phase = 'preparing'
+  else if (s < 6) phase = 'activating'
+  else phase = 'active'
+
+  if (p && (phase === 'active' || phase === 'failed' || phase === 'cancelled')) {
+    if (phase === 'active') {
+      if (r.action === 'disable') p.status = 'disabled'
+      else {
+        p.status = 'enabled'
+        p.active_version = r.target_version
+        p.desired_version = r.target_version
+        if (p.key === 'guard') p.manifest = guardManifest(r.target_version)
+        if (p.key === 'anthropic') p.manifest = anthropicManifest(r.target_version)
+      }
+    } else if (p.status === 'enabling') p.status = p.active_version ? 'disabled' : 'installed'
+    else if (p.status === 'upgrading') {
+      p.status = 'enabled'
+      p.desired_version = p.active_version
+    }
+    if (phase === 'failed') p.status_reason = error
+  }
+  return {
+    id: r.id,
+    plugin_key: r.plugin_key,
+    action: r.action,
+    from_version: r.from_version,
+    target_version: r.target_version,
+    phase,
+    coordinator: 'node-2',
+    error,
+    nodes: NODES.map((n, i) => ({ node_id: n, boot_id: `b00t${i}a7c9e1f2`, state: nodeStates[i], error: nodeStates[i] === 'failed' ? 'health check failed' : '' })),
+    migrations: r.action === 'disable' || s < 1 ? [] : [{ id: '0002_add_family.sql', node_id: 'node-2', duration_ms: 120 }]
+  }
+}
+
+function startRollout(p: MockPlugin, action: MockRollout['action'], target: string) {
+  const r: MockRollout = {
+    id: ++rolloutSeq,
+    plugin_key: p.key,
+    action,
+    from_version: p.active_version || '',
+    target_version: target,
+    started: Date.now(),
+    cancelled: false,
+    failNode: p.key === 'foo_platform'
+  }
+  rollouts.set(p.key, r)
+  p.status_reason = ''
+  p.status = action === 'upgrade' ? 'upgrading' : action === 'enable' ? 'enabling' : p.status
+  if (action !== 'disable') p.desired_version = target
+  return rolloutView(r)
+}
+
+// ------------------------------------------------------------------ views
+
+function summary(p: MockPlugin): Any {
+  const running = p.status === 'enabled' || p.status === 'upgrading'
+  return {
+    key: p.key,
+    name: p.name,
+    description: p.description,
+    status: p.status,
+    status_reason: p.status_reason,
+    active_version: p.active_version,
+    desired_version: p.desired_version,
+    publisher: p.publisher,
+    trust: p.trust,
+    nodes: running ? NODES.map((n) => ({ node_id: n, state: 'running' })) : []
+  }
+}
+
+function hooksOf(p: MockPlugin): Any[] {
+  if (p.key !== 'guard') return []
+  return [
+    {
+      point: 'gateway.request',
+      id: 'inspect',
+      order: 100,
+      failure: 'open',
+      timeout_ms: 300,
+      needs: ['model', 'prompt_text'],
+      stats: p.status === 'enabled' ? { calls: 12345, denied: 37, timeouts: 2, p99_ms: 4, breaker_open: false } : null
+    }
+  ]
+}
+
+function jobsOf(p: MockPlugin): Any[] {
+  if (p.key === 'guard') {
+    return [
+      { id: 'rollup', schedule: '@every 5m', last_run: { status: 'succeeded', node_id: 'node-2', started_at: now(-120), finished_at: now(-119.2), message: 'rolled up 1,204 rows' } },
+      { id: 'cleanup', schedule: '0 3 * * *', last_run: { status: 'failed', node_id: 'node-1', started_at: now(-40000), finished_at: now(-39996.8), message: 'context deadline exceeded' } }
+    ]
+  }
+  if (p.key === 'anthropic') return [{ id: 'refresh_oauth', schedule: '@every 10m', last_run: null }]
+  return []
+}
+
+function eventsOf(p: MockPlugin): Any {
+  if (p.key !== 'guard') return { subscribe: [], cursor: null, backlog: 0, deadletters: [] }
+  return {
+    subscribe: ['usage.recorded'],
+    cursor: 884201,
+    backlog: 12,
+    deadletters: [{ id: 17, event_id: 880012, event_type: 'usage.recorded', attempts: 5, error: 'handler returned: pq: deadlock detected', failed_at: now(-7200) }]
+  }
+}
+
+function detailOf(p: MockPlugin): Any {
+  const running = p.status === 'enabled' || p.status === 'upgrading' || p.status === 'enabling'
+  return {
+    ...summary(p),
+    manifest: p.manifest,
+    grants: p.grants,
+    nodes: running
+      ? NODES.map((n, i) => ({
+          node_id: n,
+          boot_id: `b00t${i}a7c9e1f2`,
+          addr: `10.0.0.${11 + i}:7070`,
+          last_heartbeat: now(-2 - i),
+          state: { status: 'running', version: p.active_version, pid: 4200 + i, memory_mb: 42 - i * 3, memory_limit_mb: p.resources.memory_mb ?? 128, cpu_percent: 3 - i, threads: 18, restarts: i, restart_reason: i ? 'oom: rss above limit' : '' }
+        }))
+      : [],
+    hooks: hooksOf(p),
+    jobs: jobsOf(p),
+    events: eventsOf(p),
+    resources: p.resources,
+    egress_policy: p.egress_policy,
+    versions: p.versions
+  }
+}
+
+function find(key: string): MockPlugin | undefined {
+  return plugins.get(key)
+}
+
+const notFound = (key: string) => fail(404, 'not_found', `plugin ${key} not found`)
+
+// ------------------------------------------------------------------ routes
+
+on('GET', '/plugins', (req) => paginate([...plugins.values()].map(summary), req.query))
+
+on('POST', '/plugins/upload', (req) => {
+  const s = needStepUp(req)
+  if (s) return s
+  // multipart bodies are not parsed by the mock server: pretend it was guard 0.1.1
+  return stageVersion(
+    guardReview('0.1.1', { added: [], widened: ['gateway.hook'], removed: [] })
+  )
+})
+
+on('POST', '/plugins/install-from-market', (req) => {
+  const s = needStepUp(req)
+  if (s) return s
+  const { key, version } = req.body || {}
+  if (!key || !version) return fail(400, 'invalid_argument', 'key and version are required')
+  return stageVersion(reviewFor(key, version))
+})
+
+on('GET', '/plugins/:key', (req) => {
+  const p = find(req.params.key)
+  return p ? detailOf(p) : notFound(req.params.key)
+})
+
+on('DELETE', '/plugins/:key', (req) => {
+  const s = needStepUp(req)
+  if (s) return s
+  const p = find(req.params.key)
+  if (!p) return notFound(req.params.key)
+  if (p.status === 'enabled') return fail(409, 'conflict', 'disable the plugin before uninstalling it')
+  plugins.delete(p.key)
+  rollouts.delete(p.key)
+  return noContent()
+})
+
+on('GET', '/plugins/:key/versions/:version/review', (req) => {
+  const r = reviews.get(`${req.params.key}@${req.params.version}`)
+  return r ?? fail(404, 'not_found', 'no review for this version')
+})
+
+on('POST', '/plugins/:key/versions/:version/consent', (req) => {
+  const p = find(req.params.key)
+  if (!p) return notFound(req.params.key)
+  const review = reviews.get(`${p.key}@${req.params.version}`)
+  const grants: Array<{ permission: string; scope?: Any }> = req.body?.grants || []
+  const critical = (review?.host_permissions || []).some((h: Any) => h.risk === 'critical' && grants.some((g) => g.permission === h.id))
+  if (critical) {
+    const s = needStepUp(req)
+    if (s) return s
+  }
+  const v = p.versions.find((x) => x.version === req.params.version)
+  if (!v) return fail(404, 'not_found', 'version not found')
+  v.consent_status = 'approved'
+  p.grants = grants.map((g) => grant(g.permission, g.scope ?? null, req.params.version))
+  if (p.status === 'awaiting_consent') p.status = 'installed'
+  if (!p.active_version) p.desired_version = req.params.version
+  return { ok: true }
+})
+
+on('POST', '/plugins/:key/versions/:version/reject', (req) => {
+  const p = find(req.params.key)
+  if (!p) return notFound(req.params.key)
+  p.versions = p.versions.filter((x) => x.version !== req.params.version)
+  reviews.delete(`${p.key}@${req.params.version}`)
+  if (!p.active_version && p.versions.length === 0) plugins.delete(p.key)
+  return { ok: true }
+})
+
+on('POST', '/plugins/:key/enable', (req) => {
+  const p = find(req.params.key)
+  if (!p) return notFound(req.params.key)
+  if (p.status !== 'installed' && p.status !== 'disabled') return fail(409, 'conflict', `cannot enable a plugin in state ${p.status}`)
+  const target = p.active_version || p.versions.filter((v) => v.consent_status === 'approved').map((v) => v.version).pop() || p.desired_version || '0.0.0'
+  return startRollout(p, 'enable', target)
+})
+
+on('POST', '/plugins/:key/disable', (req) => {
+  const p = find(req.params.key)
+  if (!p) return notFound(req.params.key)
+  if (p.status !== 'enabled') return fail(409, 'conflict', `cannot disable a plugin in state ${p.status}`)
+  return startRollout(p, 'disable', p.active_version || '')
+})
+
+on('POST', '/plugins/:key/upgrade', (req) => {
+  const p = find(req.params.key)
+  if (!p) return notFound(req.params.key)
+  const version = req.body?.version
+  const v = p.versions.find((x) => x.version === version)
+  if (!v || v.consent_status !== 'approved') return fail(409, 'conflict', 'version is not approved')
+  return startRollout(p, 'upgrade', version)
+})
+
+on('GET', '/plugins/:key/rollouts/current', (req) => {
+  const r = rollouts.get(req.params.key)
+  return r ? rolloutView(r) : null
+})
+
+on('POST', '/plugins/:key/rollouts/:id/cancel', (req) => {
+  const r = rollouts.get(req.params.key)
+  if (!r || String(r.id) !== req.params.id) return fail(404, 'not_found', 'rollout not found')
+  const v = rolloutView(r)
+  if (v.phase !== 'preparing') return fail(409, 'conflict', 'rollout already passed the commit point')
+  r.cancelled = true
+  rolloutView(r)
+  return { ok: true }
+})
+
+on('GET', '/plugins/:key/settings', (req) => {
+  const p = find(req.params.key)
+  if (!p) return notFound(req.params.key)
+  return p.settings ?? { schema: null, ui_schema: null, values: {} }
+})
+
+on('PUT', '/plugins/:key/settings', (req) => {
+  const p = find(req.params.key)
+  if (!p?.settings) return notFound(req.params.key)
+  const values = { ...(req.body?.values || {}) }
+  if (values.max_prompt_kb !== undefined && (values.max_prompt_kb < 1 || values.max_prompt_kb > 256)) {
+    return fail(400, 'invalid_argument', 'invalid settings', { fields: [{ field: 'values.max_prompt_kb', code: 'range', message: 'must be between 1 and 256' }] })
+  }
+  // "******" keeps the stored secret (the mock stores it masked anyway)
+  if (values.webhook_secret === '******' || values.webhook_secret === undefined) values.webhook_secret = p.settings.values?.webhook_secret
+  else if (values.webhook_secret) values.webhook_secret = '******'
+  p.settings.values = values
+  return p.settings
+})
+
+on('GET', '/plugins/:key/grants', (req) => {
+  const p = find(req.params.key)
+  return p ? p.grants : notFound(req.params.key)
+})
+
+on('DELETE', '/plugins/:key/grants/:permission', (req) => {
+  const p = find(req.params.key)
+  if (!p) return notFound(req.params.key)
+  const g = p.grants.find((x) => x.permission === req.params.permission)
+  if (!g) return fail(404, 'not_found', 'grant not found')
+  g.status = 'revoked'
+  return noContent()
+})
+
+on('PUT', '/plugins/:key/resources', (req) => {
+  const p = find(req.params.key)
+  if (!p) return notFound(req.params.key)
+  const b = req.body || {}
+  if (b.memory_mb && b.memory_mb > 2048) {
+    return fail(400, 'invalid_argument', 'above global limit', { fields: [{ field: 'memory_mb', code: 'max', message: 'global limit is 2048 MB' }] })
+  }
+  p.resources = { ...b }
+  return p.resources
+})
+
+on('PUT', '/plugins/:key/egress-policy', (req) => {
+  const p = find(req.params.key)
+  if (!p) return notFound(req.params.key)
+  const policy = req.body?.policy
+  if (policy !== 'allow_all' && policy !== 'allowlist') return fail(400, 'invalid_argument', 'policy must be allow_all or allowlist')
+  p.egress_policy = policy
+  return { policy }
+})
+
+on('GET', '/plugins/:key/egress', (req) => {
+  const p = find(req.params.key)
+  if (!p) return notFound(req.params.key)
+  const hosts = p.key === 'guard' ? [['hooks.example.com', 443, 'ok'], ['evil.example.net', 443, 'denied']] : [['api.anthropic.com', 443, 'ok'], ['console.anthropic.com', 443, 'ok']]
+  const items: Any[] = []
+  for (let i = 0; i < 40; i++) {
+    const [host, port, result] = hosts[i % 7 === 0 ? 1 : 0]
+    items.push({
+      id: 9000 + i,
+      node_id: NODES[i % 2],
+      host,
+      port,
+      started_at: now(-i * 600),
+      duration_ms: 80 + ((i * 37) % 400),
+      bytes_in: 2048 + i * 13,
+      bytes_out: 900 + i * 7,
+      result: i === 5 ? 'error' : result
+    })
+  }
+  const from = req.query.from ? new Date(req.query.from).getTime() : 0
+  return { items: items.filter((x) => new Date(x.started_at).getTime() >= from) }
+})
+
+on('GET', '/plugins/:key/jobs', (req) => {
+  const p = find(req.params.key)
+  return p ? jobsOf(p) : notFound(req.params.key)
+})
+
+on('POST', '/plugins/:key/jobs/:job_id/run', (req) => {
+  const p = find(req.params.key)
+  if (!p) return notFound(req.params.key)
+  if (!jobsOf(p).some((j) => j.id === req.params.job_id)) return fail(404, 'not_found', 'job not found')
+  return { ok: true }
+})
+
+on('GET', '/plugins/:key/events', (req) => {
+  const p = find(req.params.key)
+  return p ? eventsOf(p) : notFound(req.params.key)
+})
+
+on('GET', '/market/sources', () => sources)
+
+on('GET', '/market/plugins', (req) => {
+  const id = Number(req.query.source_id || 1)
+  const list = (market[id] || []).map((m) => ({ ...m, latest_version: m.versions[m.versions.length - 1]?.version }))
+  return paginate(list, req.query)
+})

@@ -36,7 +36,8 @@ const prefix = computed(() => `/api/v1/p/${props.pluginKey}/`)
 function post(msg: BridgeMessage) {
   // The sandboxed frame has an opaque ("null") origin, so "*" is the only
   // usable target origin; the frame only ever receives data meant for it.
-  frame.value?.contentWindow?.postMessage(msg, '*')
+  // JSON round-trip strips Vue proxies (not structured-cloneable).
+  frame.value?.contentWindow?.postMessage(JSON.parse(JSON.stringify(msg)), '*')
 }
 
 /** Sends a request to the iframe (getValue / setValue / validate). */

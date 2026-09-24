@@ -76,6 +76,7 @@ const chartOption = computed(() => {
   return {
     tooltip: { trigger: 'axis' },
     legend: { data: [t('dashboard.requests'), t('dashboard.cost')], top: 0 },
+    grid: { left: 48, right: 56, top: 40, bottom: 32 },
     xAxis: { type: 'category', data: days.map((d) => d.slice(5)) },
     yAxis: [{ type: 'value' }, { type: 'value', splitLine: { show: false } }],
     series: [

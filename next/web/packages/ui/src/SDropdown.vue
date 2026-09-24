@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue'
+import { nextTick, onBeforeUnmount, ref } from 'vue'
 import type { MenuAction } from './types'
 import SIcon from './SIcon.vue'
 
@@ -15,20 +15,29 @@ function onDoc(e: MouseEvent) {
   if (btn.value?.contains(t) || menu.value?.contains(t)) return
   close()
 }
+function place() {
+  const r = btn.value?.getBoundingClientRect()
+  if (!r) return close()
+  if (r.bottom < 0 || r.top > window.innerHeight) return close()
+  const h = menu.value?.offsetHeight || 0
+  const below = r.bottom + 4
+  const top = below + h > window.innerHeight - 8 && r.top - h - 4 > 8 ? r.top - h - 4 : below
+  pos.value = { top, left: Math.max(8, r.right - 176) }
+}
 function toggle() {
   if (open.value) return close()
-  const r = btn.value!.getBoundingClientRect()
-  pos.value = { top: r.bottom + 4, left: Math.max(8, r.right - 176) }
+  place()
   open.value = true
+  nextTick(place)
   document.addEventListener('mousedown', onDoc)
-  window.addEventListener('scroll', close, true)
-  window.addEventListener('resize', close)
+  window.addEventListener('scroll', place, true)
+  window.addEventListener('resize', place)
 }
 function close() {
   open.value = false
   document.removeEventListener('mousedown', onDoc)
-  window.removeEventListener('scroll', close, true)
-  window.removeEventListener('resize', close)
+  window.removeEventListener('scroll', place, true)
+  window.removeEventListener('resize', place)
 }
 function pick(a: MenuAction) {
   if (a.disabled) return

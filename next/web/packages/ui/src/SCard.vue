@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{ title?: string; subtitle?: string; padded?: boolean }>()
+withDefaults(defineProps<{ title?: string; subtitle?: string; padded?: boolean }>(), { padded: true })
 </script>
 
 <template>
@@ -13,7 +13,7 @@ defineProps<{ title?: string; subtitle?: string; padded?: boolean }>()
       </div>
       <div class="flex shrink-0 items-center gap-2"><slot name="actions" /></div>
     </header>
-    <div :class="padded === false ? '' : 'card-body'">
+    <div :class="padded ? 'card-body' : ''">
       <slot />
     </div>
   </section>
