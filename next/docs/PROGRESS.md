@@ -2,7 +2,7 @@
 
 > 用途：记录派发给开发 agent 的任务、交付结果、待办事项与环境信息，保证上下文压缩或换人接手后能完整恢复现场。
 > **每次合并分支、派发新任务、做出决策后都要更新本文件。**
-> 最后更新：2026-09-25，第四轮 7 个 agent 全部合并，sup2api 清库重建后第四轮验证全部通过（部署 `549710fa6`）；依赖数据库的单测待补跑（见 §11）。
+> 最后更新：2026-09-25，第四轮全部合并；sup2api 清库重建后第四轮验证全部通过（部署 `549710fa6`）；数据库单测已在临时测试容器补跑并通过（见 §11）。
 
 相关文档：[ARCHITECTURE.md](ARCHITECTURE.md)（设计）· [CONTRACTS.md](CONTRACTS.md)（开发契约）
 
@@ -291,4 +291,9 @@ go test -count=1 -timeout 50m -v ./...
 - 说明：平台适配插件只负责组装请求，由核心发送，所以上游域名不算插件出口，openai 的出口域名为空是正确的。
 - 顺带修复 `549710fa6`：卸载插件时清除它的 `plugin_egress_domains`（该表没有外键），重装后再次连接同一域名会重新告警。
 
-**未完成**：第四轮各 agent 以及主控本地都没有 `TEST_DATABASE_URL`（测试 PG 已按用户要求停掉），所有依赖数据库的单测都被跳过了，没有实际运行。需要用户同意临时启动测试 PG 后补跑。sup2api 的 PG 不能拿来跑测试：dbschema 测试会创建和删除与线上插件同名的 `plugin_<key>` 角色。
+**数据库单测补跑（2026-09-25，用户同意）**：在 ovh 上用 `~/sub2api-next-test/testdb`（compose）加 `deploy/ci/compose.yml` 的 Go 容器补跑，跑完已 `down -v` 清理，只剩 sup2api 在运行。
+- 结果：server 271 个测试通过；sdk、5 个插件（含 guard 广播测试）、tools、mock-upstream 全部通过。唯一跳过的是 `TestDemoPlugins`，它需要 `S2P_DEMO_DIR`。
+- 发现 2 个测试没跟上前几轮的行为变更，已修正（`c6b91604c`）：
+  - billing：价格优先级先比模式具体程度，再比安装先后；
+  - proxy：测试 SQL 还在用第三轮删掉的 `accounts.platform` 列。
+- 注意：sup2api 的 PG 不能拿来跑测试。dbschema 测试会创建和删除与线上插件同名的 `plugin_<key>` 角色。
