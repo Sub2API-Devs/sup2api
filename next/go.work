@@ -5,6 +5,7 @@ use (
 	./e2e
 	./plugins/anthropic
 	./plugins/guard
+	./plugins/relay
 	./sdk
 	./server
 	./tools/sub2api-plugin
