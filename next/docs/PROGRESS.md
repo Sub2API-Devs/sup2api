@@ -267,8 +267,8 @@ go test -count=1 -timeout 50m -v ./...
 | a4-identity-accounts | `iam`、`account`、`proxy`、`usage` | 登录限速、refresh 重放检测、`/me/platforms`、PluginAccountPurger、直连拨号 SSRF 校验、client_request_id | ✅ `414cc44fb`、`c57820207`、`05a470bbf`、`14fd7b00f`，合并 `bc7443e29`；主控组装 proxy AllowPrivate、install Accounts、可信代理配置 |
 | g4-gateway | `gateway`、`platforms` | 用量求和、gemini 思考 token 计入输出、ClientRequestID、`/settings/gateway`、网关自我隔离 | ✅ `ac29f9dbb`，已合并 |
 | c4-lifecycle | `plugin/install`、`market`、`api`、`routes`、`pkg` | 卸载清账号、市场兼容性、出口域名接口、资源限制广播、插件接口自我隔离、broadcast 校验 | ✅ `44c41864b`，已合并；routes 健康检查已组装，install.Accounts 已组装 |
-| d4-runtime | `plugin/grpcruntime`、`rollout`、`registry`、`egress`、`sandbox` | 插件集群广播、资源限制即时重启、旧版本缓存清理、节点重新验签、新域名记录与告警、出口长连接 | ⏳ |
-| e4-plugins | `sdk/pluginsdk`、`plugins/*`（新增 openai、gemini）、`tools`、`e2e`（AC20）、`mock-upstream`、`build-go.sh` | 两个内置账号类型插件、SDK 广播、guard 规则即时生效、mock 上游支持 openai/gemini | ⏳ |
+| d4-runtime | `plugin/grpcruntime`、`rollout`、`registry`、`egress`、`sandbox` | 插件集群广播、资源限制即时重启、旧版本缓存清理、节点重新验签、新域名记录与告警、出口长连接 | ✅ `6f1423e52`，合并 `1ffa5dd89`；主控 `aecc4a114` 节点验签改用 VerifyInstalled（已装插件不因签名密钥过期而停），`99614fdd6` 组装验签器、egress Events、runtime Bus |
+| e4-plugins | `sdk/pluginsdk`、`plugins/*`（新增 openai、gemini）、`tools`、`e2e`（AC20）、`mock-upstream`、`build-go.sh` | 两个内置账号类型插件、SDK 广播、guard 规则即时生效、mock 上游支持 openai/gemini | ✅ `44f88c1bf`、`0f643d3ab`、`eb7d39024`、`4e0a067ae`，合并 `164f4ece9`；内置插件改为 `anthropic openai gemini` |
 | f4-web | `web/` | 对应的控制台改动 | ⏳ |
 | docs4-contracts | CONTRACTS §15 | 按代码现状补齐前端提出的缺失接口说明 | ✅ `754cb51f8`，合并 `04b649149`；§15.10 列出 11 处与前文不一致待裁定；发现代理密码掩码问题已转 f4 |
 
