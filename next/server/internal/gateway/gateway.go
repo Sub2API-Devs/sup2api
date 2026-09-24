@@ -1,5 +1,5 @@
-// Package gateway is the client-facing API gateway: plugin-declared
-// endpoints, the proxy pipeline (auth, hooks, billing gate, scheduling,
+// Package gateway is the client-facing API gateway: platform endpoints
+// (built-in and plugin-declared), the proxy pipeline (auth, hooks, billing gate, scheduling,
 // forwarding, usage extraction), sticky sessions and the /sticky-rules
 // console API. See ARCHITECTURE chapter 6 and CONTRACTS §5.6/§5.9.
 package gateway
@@ -110,6 +110,14 @@ func New(d Deps) *Gateway {
 	g.rules = newRuleCache(d.DB)
 	g.hooks = newHookRuntime(d.Redis)
 
+	if d.DB != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if err := g.SyncBuiltinDefaults(ctx); err != nil {
+			slog.Warn("gateway: sync built-in sticky rules", "err", err)
+		}
+		cancel()
+	}
+
 	var gen core.Generation
 	if d.Registry != nil {
 		gen = d.Registry.Current()
@@ -145,16 +153,17 @@ func (g *Gateway) Close() {
 	})
 }
 
-// Middleware dispatches requests matching an endpoint of an enabled plugin
-// to the pipeline. Anything else (including endpoints of disabled or
-// uninstalled plugins) falls through to the next handler, i.e. 404. Mount it
-// with engine.Use before the core routes, or in engine.NoRoute.
+// Middleware dispatches requests matching an endpoint of a built-in platform
+// or of a platform declared by an enabled plugin to the pipeline. Anything
+// else (including endpoints of disabled or uninstalled plugins) falls
+// through to the next handler, i.e. 404. Mount it with engine.Use before the
+// core routes, or in engine.NoRoute.
 func (g *Gateway) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		method, path := c.Request.Method, c.Request.URL.Path
 		t := g.table.Load()
-		if rt := t.match(method, path); rt != nil {
-			g.serve(c, t.gen, rt.binding)
+		if rt, params := t.match(method, path); rt != nil {
+			g.serve(c, t.gen, rt.binding, params)
 			c.Abort()
 			return
 		}

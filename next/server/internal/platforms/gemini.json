@@ -1,0 +1,119 @@
+{
+  "id": "gemini",
+  "label": {
+    "en": "Gemini",
+    "zh": "Gemini"
+  },
+  "endpoints": [
+    {
+      "id": "generate_content",
+      "method": "POST",
+      "path": "/v1beta/models/:model:generateContent",
+      "protocol": "gemini.generate",
+      "kind": "proxy",
+      "auth": {
+        "headers": [
+          "x-goog-api-key"
+        ],
+        "query": "key"
+      },
+      "request": {
+        "modelParam": "model",
+        "promptTextPaths": [
+          "systemInstruction.parts.#.text",
+          "contents.#.parts.#.text"
+        ]
+      },
+      "response": {
+        "nonStream": "json"
+      },
+      "errorFormat": "gemini",
+      "billing": "usage"
+    },
+    {
+      "id": "stream_generate_content",
+      "method": "POST",
+      "path": "/v1beta/models/:model:streamGenerateContent",
+      "protocol": "gemini.stream_generate",
+      "kind": "proxy",
+      "auth": {
+        "headers": [
+          "x-goog-api-key"
+        ],
+        "query": "key"
+      },
+      "request": {
+        "modelParam": "model",
+        "stream": true,
+        "promptTextPaths": [
+          "systemInstruction.parts.#.text",
+          "contents.#.parts.#.text"
+        ]
+      },
+      "response": {
+        "stream": "sse",
+        "nonStream": "json"
+      },
+      "errorFormat": "gemini",
+      "billing": "usage"
+    },
+    {
+      "id": "count_tokens",
+      "method": "POST",
+      "path": "/v1beta/models/:model:countTokens",
+      "protocol": "gemini.count_tokens",
+      "kind": "proxy",
+      "auth": {
+        "headers": [
+          "x-goog-api-key"
+        ],
+        "query": "key"
+      },
+      "request": {
+        "modelParam": "model"
+      },
+      "response": {
+        "nonStream": "json"
+      },
+      "errorFormat": "gemini",
+      "billing": "free"
+    }
+  ],
+  "passHeaders": [
+    "user-agent",
+    "x-goog-api-client"
+  ],
+  "usage": {
+    "semantics": "inclusive",
+    "sse": [
+      {
+        "event": "",
+        "map": {
+          "model": "modelVersion",
+          "input_tokens": "usageMetadata.promptTokenCount",
+          "output_tokens": "usageMetadata.candidatesTokenCount",
+          "cache_read_tokens": "usageMetadata.cachedContentTokenCount"
+        }
+      }
+    ],
+    "json": {
+      "map": {
+        "model": "modelVersion",
+        "input_tokens": "usageMetadata.promptTokenCount",
+        "output_tokens": "usageMetadata.candidatesTokenCount",
+        "cache_read_tokens": "usageMetadata.cachedContentTokenCount"
+      }
+    },
+    "facts": {
+      "thoughts_tokens": {
+        "type": "number",
+        "unit": "tokens",
+        "path": "usageMetadata.thoughtsTokenCount",
+        "description": {
+          "en": "Thinking tokens (billed as output by Google, not included in output_tokens)",
+          "zh": "思考 token（Google 按输出计费，不含在 output_tokens 中）"
+        }
+      }
+    }
+  }
+}

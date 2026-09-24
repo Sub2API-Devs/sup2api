@@ -1,17 +1,20 @@
 package gateway
 
 import (
-	"slices"
-
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert"
 )
 
 // typeRoute is how the current request reaches accounts of one account type
-// (ARCHITECTURE 6.6): natively, or through a core protocol converter.
+// (ARCHITECTURE 6.6, CONTRACTS §13): natively (the type supports the
+// endpoint's platform) or through a core protocol converter to a protocol of
+// another platform the type supports.
 type typeRoute struct {
 	binding core.AccountTypeBinding
+	// platform is the platform served upstream: the endpoint's platform
+	// when native, else the platform owning the upstream protocol.
+	platform string
 	// upstream is the protocol sent upstream; equals the endpoint protocol
 	// when native.
 	upstream string
@@ -27,19 +30,20 @@ type typeRoute struct {
 	bodyErr   error
 }
 
-// planRoutes lists the account types able to serve the endpoint protocol:
-// the natively supporting ones, then those reachable through a converter.
-// A type supporting the protocol natively is never converted.
+// planRoutes lists the account types able to serve the endpoint: those
+// supporting the endpoint's platform P (native), then those supporting
+// another platform Q with a protocol Y the core converts the endpoint
+// protocol X to. A type supporting P is never converted.
 func (c *call) planRoutes() {
-	p := c.ep.Protocol
+	p, x := c.platform, c.ep.Protocol
 	c.routes = map[core.AccountTypeKey]*typeRoute{}
 	c.routeKeys = nil
-	for _, b := range c.gen.AccountTypesForProtocol(p) {
-		ap, ok := b.Protocol(p)
-		if !ok || b.Client == nil {
-			continue
+	if p != "" {
+		for _, b := range c.gen.AccountTypesForPlatform(p) {
+			if ap, ok := b.Supports(p); ok && b.Client != nil {
+				c.addRoute(b, ap, p, x, c.ep, c.pf, nil)
+			}
 		}
-		c.addRoute(b, ap, nil)
 	}
 	for _, b := range c.gen.AccountTypes() {
 		if b.Client == nil {
@@ -48,66 +52,73 @@ func (c *call) planRoutes() {
 		if _, done := c.routes[b.Key()]; done {
 			continue
 		}
-		if ap, ok := b.Protocol(p); ok {
-			// Native but not listed by AccountTypesForProtocol; still native.
-			c.addRoute(b, ap, nil)
+		if ap, ok := b.Supports(p); ok && p != "" {
+			// Native but not listed by AccountTypesForPlatform; still native.
+			c.addRoute(b, ap, p, x, c.ep, c.pf, nil)
 			continue
 		}
-		for _, ap := range b.Type.Protocols {
-			if conv, ok := c.g.conv.Lookup(p, ap.Protocol); ok {
-				c.addRoute(b, ap, conv)
-				break
+		c.addConvertedRoute(b, x)
+	}
+}
+
+// addConvertedRoute adds the first (platform, protocol) of b the endpoint
+// protocol x converts to. Platforms that are not available (declared by a
+// disabled plugin) are skipped.
+func (c *call) addConvertedRoute(b core.AccountTypeBinding, x string) {
+	for _, ap := range b.Type.Platforms {
+		if ap.Platform == c.platform {
+			continue
+		}
+		pb, ok := c.gen.Platform(ap.Platform)
+		if !ok {
+			continue
+		}
+		for _, y := range pb.Platform.Protocols() {
+			conv, ok := c.g.conv.Lookup(x, y)
+			if !ok {
+				continue
 			}
+			c.addRoute(b, ap, ap.Platform, y, endpointFor(&pb.Platform, y), pb.Platform, conv)
+			return
 		}
 	}
 }
 
-func (c *call) addRoute(b core.AccountTypeBinding, ap manifest.AccountProtocol, conv convert.Converter) {
+// endpointFor is the first endpoint of pf speaking protocol.
+func endpointFor(pf *manifest.Platform, protocol string) manifest.Endpoint {
+	for _, e := range pf.Endpoints {
+		if e.Protocol == protocol {
+			return e
+		}
+	}
+	return manifest.Endpoint{}
+}
+
+// addRoute records the route of b to upstream protocol y of platform q:
+// request fields and pass headers come from the account type's entry for q,
+// else the platform; usage rules from the account type (per protocol), else
+// the endpoint speaking y, else the platform.
+func (c *call) addRoute(b core.AccountTypeBinding, ap manifest.AccountPlatform, q, y string,
+	ep manifest.Endpoint, pf manifest.Platform, conv convert.Converter) {
 	k := b.Key()
 	if _, dup := c.routes[k]; dup {
 		return
 	}
-	rt := &typeRoute{binding: b, upstream: ap.Protocol, conv: conv}
-	def := c.defaultPlatform(ap.Protocol)
-	rt.requestFields = ap.RequestFields
-	rt.passHeaders = ap.PassHeaders
-	if def != nil {
-		if len(rt.requestFields) == 0 {
-			rt.requestFields = def.RequestFields
-		}
-		if len(rt.passHeaders) == 0 {
-			rt.passHeaders = def.PassHeaders
-		}
-		rt.usage = def.Usage
+	rt := &typeRoute{binding: b, platform: q, upstream: y, conv: conv,
+		requestFields: ap.RequestFields, passHeaders: ap.PassHeaders, usage: pf.Usage}
+	if len(rt.requestFields) == 0 {
+		rt.requestFields = pf.RequestFields
 	}
-	if ap.Usage != nil {
-		rt.usage = *ap.Usage
+	if len(rt.passHeaders) == 0 {
+		rt.passHeaders = pf.PassHeaders
+	}
+	if u, ok := ap.Usage[y]; ok {
+		rt.usage = u
+	} else if ep.Usage != nil {
+		rt.usage = *ep.Usage
 	}
 	c.routes[k] = rt
 	c.routeKeys = append(c.routeKeys, k)
-}
-
-// defaultPlatform is the platform whose defaults (request fields, pass
-// headers, usage rules) apply to protocol: the endpoint's own platform when
-// it declares the protocol, else the first enabled platform declaring it.
-func (c *call) defaultPlatform(protocol string) *manifest.Platform {
-	if pl := endpointPlatform(c.plugin); pl != nil && slices.Contains(pl.Protocols, protocol) {
-		return pl
-	}
-	if pbs := c.gen.PlatformsForProtocol(protocol); len(pbs) > 0 {
-		pl := pbs[0].Platform
-		return &pl
-	}
-	return nil
-}
-
-// endpointPlatform is the platform declared by the endpoint's plugin (nil
-// when the plugin declares none).
-func endpointPlatform(p core.PluginInfo) *manifest.Platform {
-	if p.Manifest == nil {
-		return nil
-	}
-	return p.Manifest.Platform
 }
 
 // route returns the route of an account, nil when its type cannot serve

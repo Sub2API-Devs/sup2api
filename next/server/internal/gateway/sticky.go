@@ -21,6 +21,7 @@ import (
 
 const (
 	sourcePluginDefault = "plugin_default"
+	sourceBuiltin       = "builtin"
 	sourceAdmin         = "admin"
 
 	onFailureFailover = "failover"
@@ -34,6 +35,18 @@ const (
 )
 
 var defaultKeyIncludes = []string{"group", "model", "rule"}
+
+// sourceRank orders rule sources for same-name shadowing.
+func sourceRank(source string) int {
+	switch source {
+	case sourceAdmin:
+		return 3
+	case sourceBuiltin:
+		return 2
+	default:
+		return 1
+	}
+}
 
 // stickyRule is one sticky_rules row.
 type stickyRule struct {
@@ -167,15 +180,17 @@ func (c *ruleCache) get(ctx context.Context) []*stickyRule {
 }
 
 func activeRules(all []*stickyRule) []*stickyRule {
-	admin := map[string]bool{}
+	// Among rules with the same name only the highest ranked source is
+	// active: admin, then built-in, then plugin defaults.
+	best := map[string]int{}
 	for _, r := range all {
-		if r.Source == sourceAdmin {
-			admin[r.Name] = true
+		if rk := sourceRank(r.Source); rk > best[r.Name] {
+			best[r.Name] = rk
 		}
 	}
 	list := make([]*stickyRule, 0, len(all))
 	for _, r := range all {
-		if !r.Enabled || (r.Source != sourceAdmin && admin[r.Name]) {
+		if !r.Enabled || sourceRank(r.Source) < best[r.Name] {
 			continue
 		}
 		if r.ValueRegex != "" {
@@ -317,13 +332,23 @@ func (c *call) stickyValue(ctx context.Context, r *stickyRule) string {
 }
 
 // affinityFromPlugin asks SchedulerService.ResolveAffinityKey of the rule's
-// plugin (or the first platform of the protocol that implements it).
+// plugin. Rules without a plugin (built-in and admin rules) ask the plugin
+// declaring the endpoint's platform, then the plugins of the account types
+// able to serve the request, in route order; the first implementing it wins.
 func (c *call) affinityFromPlugin(ctx context.Context, r *stickyRule, src manifest.StickyKeySource) string {
 	keys := []string{r.PluginKey}
 	if r.PluginKey == "" {
 		keys = keys[:0]
-		for _, pb := range c.gen.PlatformsForProtocol(c.ep.Protocol) {
-			keys = append(keys, pb.Plugin.Key)
+		seen := map[string]bool{"": true}
+		add := func(k string) {
+			if !seen[k] {
+				seen[k] = true
+				keys = append(keys, k)
+			}
+		}
+		add(c.plugin.Key)
+		for _, k := range c.routeKeys {
+			add(k.PluginKey)
 		}
 	}
 	for _, key := range keys {
@@ -337,10 +362,7 @@ func (c *call) affinityFromPlugin(ctx context.Context, r *stickyRule, src manife
 				fields[p] = res.Raw
 			}
 		}
-		headers := map[string]string{}
-		if pi, ok := c.gen.Plugin(key); ok && pi.Manifest != nil && pi.Manifest.Platform != nil {
-			headers = c.passHeaders(pi.Manifest.Platform.PassHeaders)
-		}
+		headers := c.passHeaders(c.pf.PassHeaders)
 		actx, cancel := context.WithTimeout(ctx, affinityTimeout)
 		resp, err := sch.ResolveAffinityKey(actx, &pluginv1.ResolveAffinityKeyRequest{
 			Meta: c.meta(), RuleName: r.Name, Fields: fields, InboundHeaders: headers})

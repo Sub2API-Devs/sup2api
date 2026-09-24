@@ -1,0 +1,186 @@
+{
+  "id": "openai",
+  "label": {
+    "en": "OpenAI",
+    "zh": "OpenAI"
+  },
+  "endpoints": [
+    {
+      "id": "chat_completions",
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "protocol": "openai.chat",
+      "kind": "proxy",
+      "auth": {
+        "headers": [
+          "authorization"
+        ]
+      },
+      "request": {
+        "modelPath": "model",
+        "streamPath": "stream",
+        "promptTextPaths": [
+          "messages.#.content"
+        ]
+      },
+      "response": {
+        "stream": "sse",
+        "nonStream": "json"
+      },
+      "errorFormat": "openai",
+      "billing": "usage"
+    },
+    {
+      "id": "responses",
+      "method": "POST",
+      "path": "/v1/responses",
+      "protocol": "openai.responses",
+      "kind": "proxy",
+      "auth": {
+        "headers": [
+          "authorization"
+        ]
+      },
+      "request": {
+        "modelPath": "model",
+        "streamPath": "stream",
+        "promptTextPaths": [
+          "instructions",
+          "input"
+        ]
+      },
+      "response": {
+        "stream": "sse",
+        "nonStream": "json"
+      },
+      "errorFormat": "openai",
+      "billing": "usage",
+      "usage": {
+        "semantics": "inclusive",
+        "sse": [
+          {
+            "event": "response.completed",
+            "map": {
+              "model": "response.model",
+              "input_tokens": "response.usage.input_tokens",
+              "output_tokens": "response.usage.output_tokens",
+              "cache_read_tokens": "response.usage.input_tokens_details.cached_tokens"
+            }
+          },
+          {
+            "event": "response.incomplete",
+            "map": {
+              "model": "response.model",
+              "input_tokens": "response.usage.input_tokens",
+              "output_tokens": "response.usage.output_tokens",
+              "cache_read_tokens": "response.usage.input_tokens_details.cached_tokens"
+            }
+          }
+        ],
+        "json": {
+          "map": {
+            "model": "model",
+            "input_tokens": "usage.input_tokens",
+            "output_tokens": "usage.output_tokens",
+            "cache_read_tokens": "usage.input_tokens_details.cached_tokens"
+          }
+        }
+      }
+    },
+    {
+      "id": "embeddings",
+      "method": "POST",
+      "path": "/v1/embeddings",
+      "protocol": "openai.embeddings",
+      "kind": "proxy",
+      "auth": {
+        "headers": [
+          "authorization"
+        ]
+      },
+      "request": {
+        "modelPath": "model",
+        "promptTextPaths": [
+          "input"
+        ]
+      },
+      "response": {
+        "nonStream": "json"
+      },
+      "errorFormat": "openai",
+      "billing": "usage",
+      "usage": {
+        "semantics": "inclusive",
+        "json": {
+          "map": {
+            "model": "model",
+            "input_tokens": "usage.prompt_tokens"
+          }
+        }
+      }
+    }
+  ],
+  "requestFields": [
+    "model"
+  ],
+  "passHeaders": [
+    "openai-organization",
+    "openai-project",
+    "openai-beta",
+    "user-agent",
+    "x-stainless-arch",
+    "x-stainless-lang",
+    "x-stainless-os",
+    "x-stainless-package-version",
+    "x-stainless-retry-count",
+    "x-stainless-runtime",
+    "x-stainless-runtime-version",
+    "x-stainless-timeout"
+  ],
+  "usage": {
+    "semantics": "inclusive",
+    "sse": [
+      {
+        "event": "",
+        "map": {
+          "model": "model",
+          "input_tokens": "usage.prompt_tokens",
+          "output_tokens": "usage.completion_tokens",
+          "cache_read_tokens": "usage.prompt_tokens_details.cached_tokens"
+        }
+      }
+    ],
+    "json": {
+      "map": {
+        "model": "model",
+        "input_tokens": "usage.prompt_tokens",
+        "output_tokens": "usage.completion_tokens",
+        "cache_read_tokens": "usage.prompt_tokens_details.cached_tokens"
+      }
+    }
+  },
+  "stickyRules": [
+    {
+      "name": "openai-prompt-cache-key",
+      "match": {
+        "protocols": [
+          "openai.chat",
+          "openai.responses"
+        ]
+      },
+      "keySources": [
+        {
+          "type": "body",
+          "path": "prompt_cache_key"
+        }
+      ],
+      "ttlSeconds": 3600,
+      "keyIncludes": [
+        "group",
+        "model",
+        "rule"
+      ],
+      "onFailure": "failover"
+    }
+  ]
+}

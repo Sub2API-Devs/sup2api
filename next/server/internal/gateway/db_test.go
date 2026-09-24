@@ -18,6 +18,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/platforms"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
@@ -111,7 +112,11 @@ func findRule(list gjson.Result, name, source string) gjson.Result {
 
 func TestStickyRulesAPIAndPluginDefaults(t *testing.T) {
 	e := newDBEnv(t)
-	def := testManifest(t).Platform.StickyRules
+	// Built-in defaults are covered by TestBuiltinStickyDefaults.
+	if _, err := e.db.Pool.Exec(context.Background(), `DELETE FROM sticky_rules WHERE source = 'builtin'`); err != nil {
+		t.Fatal(err)
+	}
+	def := builtinPlatform(t, "anthropic").StickyRules
 	e.sync("anthropic", def)
 
 	code, res := e.api("GET", "/sticky-rules", nil)
@@ -276,7 +281,7 @@ func TestStickyRulesFromDBDriveScheduling(t *testing.T) {
 	e := newEnv(t)
 	e.gw.rules = newRuleCache(db)
 	if err := db.Tx(ctx, func(tx pgx.Tx) error {
-		return e.gw.SyncPluginDefaults(ctx, tx, "anthropic", e.man.Platform.StickyRules)
+		return e.gw.SyncPluginDefaults(ctx, tx, "anthropic", builtinPlatform(t, "anthropic").StickyRules)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -290,5 +295,65 @@ func TestStickyRulesFromDBDriveScheduling(t *testing.T) {
 	e.messages(sess)
 	if rec := e.record(); !rec.StickyHit || rec.StickyRule != "claude-code-session" || e.up.last().key != "acc-1" {
 		t.Fatalf("db rule not applied: %+v via %s", rec, e.up.last().key)
+	}
+}
+
+// The gateway writes the built-in platforms' default rules at start
+// (source=builtin, no plugin key); administrators only switch and reorder
+// them, and an admin rule of the same name overrides one.
+func TestBuiltinStickyDefaults(t *testing.T) {
+	e := newDBEnv(t)
+	ctx := context.Background()
+	_, res := e.api("GET", "/sticky-rules", nil)
+	var want []string
+	for _, p := range platforms.Builtin() {
+		for _, r := range p.StickyRules {
+			want = append(want, r.Name)
+			got := findRule(res.Get("data"), r.Name, sourceBuiltin)
+			if !got.Exists() || got.Get("plugin_key").Type != gjson.Null || !got.Get("enabled").Bool() {
+				t.Fatalf("builtin rule %s: %s", r.Name, res.Raw)
+			}
+		}
+	}
+	if len(want) == 0 {
+		t.Skip("no built-in sticky rules")
+	}
+	r := findRule(res.Get("data"), want[0], sourceBuiltin)
+	id := r.Get("id").Int()
+	if code, _ := e.api("PATCH", "/sticky-rules/"+itoa(id), map[string]any{"ttl_seconds": 5}); code != 400 {
+		t.Fatalf("patch builtin definition: %d", code)
+	}
+	if code, _ := e.api("DELETE", "/sticky-rules/"+itoa(id), nil); code != 400 {
+		t.Fatalf("delete builtin: %d", code)
+	}
+	if code, res := e.api("PATCH", "/sticky-rules/"+itoa(id), map[string]any{"enabled": false, "priority": 3}); code != 200 ||
+		res.Get("data.enabled").Bool() {
+		t.Fatalf("disable builtin: %d %s", code, res.Raw)
+	}
+
+	// A restart keeps the administrator's switches, drops stale built-in
+	// rules and leaves plugin defaults of the same name alone.
+	if _, err := e.db.Pool.Exec(ctx, `INSERT INTO sticky_rules (name, source, key_sources) VALUES ('stale', 'builtin', '[]')`); err != nil {
+		t.Fatal(err)
+	}
+	e.sync("anthropic", []manifest.StickyRule{{Name: want[0], KeySources: []manifest.StickyKeySource{{Type: "user"}}}})
+	if err := e.gw.SyncBuiltinDefaults(ctx); err != nil {
+		t.Fatal(err)
+	}
+	_, res = e.api("GET", "/sticky-rules", nil)
+	r = findRule(res.Get("data"), want[0], sourceBuiltin)
+	if r.Get("id").Int() != id || r.Get("enabled").Bool() || r.Get("priority").Int() != 3 {
+		t.Fatalf("after restart: %s", r.Raw)
+	}
+	if findRule(res.Get("data"), "stale", sourceBuiltin).Exists() || !findRule(res.Get("data"), want[0], sourcePluginDefault).Exists() {
+		t.Fatalf("stale or plugin rule: %s", res.Raw)
+	}
+	// Re-enabled, the built-in rule shadows the plugin default of the same name.
+	e.api("PATCH", "/sticky-rules/"+itoa(id), map[string]any{"enabled": true})
+	e.gw.rules.invalidate()
+	for _, a := range e.gw.rules.get(ctx) {
+		if a.Name == want[0] && a.Source != sourceBuiltin {
+			t.Fatalf("active %s from %s", a.Name, a.Source)
+		}
 	}
 }
