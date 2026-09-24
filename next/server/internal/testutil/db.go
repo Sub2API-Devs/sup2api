@@ -4,8 +4,8 @@ package testutil
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
-	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -47,11 +47,12 @@ func DB(t testing.TB) *store.DB {
 		_, _ = c.Exec(context.Background(), "DROP DATABASE IF EXISTS "+name+" WITH (FORCE)")
 	})
 
-	cfg, err := pgx.ParseConfig(base)
+	u, err := url.Parse(base)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("parse TEST_DATABASE_URL: %v", err)
 	}
-	dsn := strings.Replace(base, "/"+cfg.Database, "/"+name, 1)
+	u.Path = "/" + name
+	dsn := u.String()
 	db, err := store.Open(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open test database: %v", err)
