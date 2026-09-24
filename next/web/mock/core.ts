@@ -29,6 +29,16 @@ export const me = {
   superuser: true
 }
 
+/** Sign in as user@example.com (password admin) to get the built-in "user" role. */
+const plainUser = {
+  id: 1,
+  email: 'user@example.com',
+  display_name: 'User',
+  roles: ['user'],
+  permissions: ['apikey:self:manage', 'balance:self:read', 'usage:self:read', 'gateway:use'],
+  superuser: false
+}
+
 // Sessions (CONTRACTS §14.2). Refresh tokens belong to a family created at
 // login and rotate on every refresh; presenting a rotated (or revoked) token
 // again revokes the whole family. Access tokens carry their family, so a
@@ -37,6 +47,7 @@ interface Family {
   current: string
   revoked: boolean
   seq: number
+  user: typeof me
 }
 const families = new Map<string, Family>()
 let familySeq = 0
@@ -45,13 +56,19 @@ function issue(fam: string) {
   const f = families.get(fam)!
   f.seq++
   f.current = `mock-refresh-${fam}-${f.seq}`
-  return { access_token: `mock-access-${fam}-${f.seq}-${Date.now()}`, refresh_token: f.current, expires_in: 7200, user: me }
+  return { access_token: `mock-access-${fam}-${f.seq}-${Date.now()}`, refresh_token: f.current, expires_in: 7200, user: f.user }
 }
 
-function newFamily() {
+function newFamily(user: typeof me = me) {
   const fam = `f${++familySeq}`
-  families.set(fam, { current: '', revoked: false, seq: 0 })
+  families.set(fam, { current: '', revoked: false, seq: 0, user })
   return issue(fam)
+}
+
+/** The signed-in identity of a request (admin for tokens of unknown families). */
+function whoAmI(auth: string | undefined): typeof me {
+  const m = /^Bearer\s+mock-access-(f\d+)-/i.exec(auth || '')
+  return (m && families.get(m[1])?.user) || me
 }
 
 /**
@@ -90,7 +107,7 @@ on('POST', '/auth/login', (req) => {
     return fail(401, 'unauthenticated', 'invalid email or password (mock password: admin)')
   }
   loginFailures.delete(email)
-  return newFamily()
+  return newFamily(email === plainUser.email ? plainUser : me)
 })
 on('POST', '/auth/refresh', (req) => {
   const tok = String(req.body?.refresh_token || '')
@@ -116,7 +133,7 @@ on('POST', '/auth/logout', (req) => {
 on('POST', '/auth/step-up', (req) =>
   req.body?.password === 'admin' ? { step_up_token: 'mock-stepup', expires_in: 300 } : fail(401, 'unauthenticated', 'wrong password')
 )
-on('GET', '/me', () => me)
+on('GET', '/me', (req) => whoAmI(req.headers.authorization))
 on('PUT', '/me/password', (req) => (req.body?.old_password === 'admin' ? {} : fail(400, 'invalid_argument', 'wrong password', { fields: [{ field: 'old_password', code: 'mismatch', message: 'Current password is wrong' }] })))
 
 on('GET', '/me/menus', () => [

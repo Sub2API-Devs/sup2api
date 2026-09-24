@@ -890,7 +890,15 @@ on('PUT', '/plugins/:key/resources', (req) => {
     return fail(400, 'invalid_argument', 'above global limit', { fields: [{ field: 'memory_mb', code: 'max', message: 'global limit is 2048 MB' }] })
   }
   p.resources = { ...b }
-  return p.resources
+  // CONTRACTS §14.3: enabled plugins restart their instances on every node.
+  const running = p.status === 'enabled' || p.status === 'enabling' || p.status === 'upgrading'
+  return {
+    ...p.resources,
+    restart_notified: true,
+    message: running
+      ? { en: 'Resource limits saved. Every node has been notified to restart the plugin instances with the new limits.', zh: '资源限制已保存，已通知各节点按新限制重启插件实例。' }
+      : { en: 'Resource limits saved. They apply when the plugin is enabled.', zh: '资源限制已保存，将在启用插件时生效。' }
+  }
 })
 
 on('PUT', '/plugins/:key/egress-policy', (req) => {

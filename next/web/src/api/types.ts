@@ -166,9 +166,12 @@ export interface Proxy {
   host: string
   port: number
   username: string
-  password?: string // write-only; "******" when set (assumed)
+  /** The password is never returned (CONTRACTS §15.4); this tells whether one is stored. */
+  has_password?: boolean
   status: string
+  account_count?: number
   created_at?: string
+  updated_at?: string
 }
 
 export interface ProxyTestResult {

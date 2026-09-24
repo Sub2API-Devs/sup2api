@@ -5,7 +5,9 @@ import { api } from '@sub2api/host'
 import { SButton, SCard, toast } from '@sub2api/ui'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
-import { pick, type PluginDetail, type PluginResources } from '../pluginUtil'
+import { lt } from '@/i18n'
+import type { LText } from '@/api/types'
+import { pick, type PluginDetail, type PluginResources, type PluginResourcesInfo } from '../pluginUtil'
 
 const props = defineProps<{ detail: PluginDetail }>()
 const emit = defineEmits<{ (e: 'changed'): void }>()
@@ -26,12 +28,25 @@ const form = reactive<Record<Field, string>>({ memory_mb: '', cpu: '', max_threa
 const errors = ref<Record<string, string>>({})
 const saving = ref(false)
 
-const requested = computed(() => pick<Record<string, any>>(props.detail.manifest, 'resources') || {})
+/** Manifest request: `resources.requested` of the detail, else the manifest's resources. */
+const requested = computed<Record<string, any>>(() => {
+  const fromInfo = props.detail.resources?.requested
+  if (fromInfo && Object.values(fromInfo).some((v) => Number(v) > 0)) return fromInfo
+  return pick<Record<string, any>>(props.detail.manifest, 'resources') || {}
+})
+
+function requestedValue(f: (typeof fields)[number]): unknown {
+  const v = pick(requested.value, f.key, ...f.manifest)
+  return v === 0 ? undefined : v
+}
 
 function reset() {
-  const r: PluginResources = props.detail.resources || {}
+  const r: PluginResourcesInfo = props.detail.resources || {}
+  // Admin overrides (0 = none) of the {requested, overrides, effective} shape; flat shape otherwise.
+  const own: PluginResources = r.overrides || r
   for (const f of fields) {
-    const v = r[f.key] ?? pick(requested.value, ...f.manifest)
+    const o = own[f.key]
+    const v = o !== undefined && o !== null && Number(o) > 0 ? o : requestedValue(f)
     form[f.key] = v === undefined || v === null ? '' : String(v)
   }
   errors.value = {}
@@ -39,12 +54,12 @@ function reset() {
 watch(() => props.detail.resources, reset, { immediate: true })
 
 function requestedOf(f: (typeof fields)[number]): string {
-  const v = pick(requested.value, ...f.manifest)
+  const v = requestedValue(f)
   return v === undefined ? '—' : `${v}${f.unit ? ' ' + f.unit : ''}`
 }
 
 function differs(f: (typeof fields)[number]): boolean {
-  const v = pick(requested.value, ...f.manifest)
+  const v = requestedValue(f)
   return v !== undefined && form[f.key] !== '' && Number(form[f.key]) !== Number(v)
 }
 
@@ -65,8 +80,9 @@ async function save() {
   saving.value = true
   errors.value = {}
   try {
-    await api.put(`/plugins/${encodeURIComponent(props.detail.key)}/resources`, body)
-    toast(t('plugins.resources.saved'), 'success')
+    const r = await api.put<{ message?: LText; restart_notified?: boolean } | null>(`/plugins/${encodeURIComponent(props.detail.key)}/resources`, body)
+    // The server explains how the limits take effect (restart notified, or on next enable).
+    toast((r?.message && lt(r.message)) || t('plugins.resources.saved'), 'success')
     emit('changed')
   } catch (e) {
     errors.value = fieldErrors(e)

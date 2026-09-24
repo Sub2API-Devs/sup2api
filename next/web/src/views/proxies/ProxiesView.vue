@@ -31,9 +31,6 @@ const auth = useAuthStore()
 const canManage = computed(() => auth.has('proxy:manage'))
 const list = useList<Proxy>('/proxies')
 
-/** Placeholder the API returns for a stored password (write-only field). */
-const MASK = '******'
-
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
     { key: 'name', label: t('common.name') },
@@ -90,6 +87,8 @@ const form = reactive({
   port: 8080 as number | string,
   username: '',
   password: '',
+  /** Edit only: explicitly clear the stored password. */
+  clearPassword: false,
   status: 'active'
 })
 
@@ -105,20 +104,20 @@ const statusOptions = computed(() => [
 
 function openCreate() {
   editing.value = null
-  Object.assign(form, { name: '', protocol: 'http', host: '', port: 8080, username: '', password: '', status: 'active' })
+  Object.assign(form, { name: '', protocol: 'http', host: '', port: 8080, username: '', password: '', clearPassword: false, status: 'active' })
   errors.value = {}
   open.value = true
 }
 
 function openEdit(p: Proxy) {
   editing.value = p
-  // The password is never shown; empty means "keep the stored one".
-  Object.assign(form, { name: p.name, protocol: p.protocol, host: p.host, port: p.port, username: p.username || '', password: '', status: p.status || 'active' })
+  // The password is never returned (only has_password); empty means "keep the stored one".
+  Object.assign(form, { name: p.name, protocol: p.protocol, host: p.host, port: p.port, username: p.username || '', password: '', clearPassword: false, status: p.status || 'active' })
   errors.value = {}
   open.value = true
 }
 
-const hasStoredPassword = computed(() => !!editing.value?.password)
+const hasStoredPassword = computed(() => !!editing.value?.has_password)
 
 async function submit() {
   errors.value = {}
@@ -136,13 +135,13 @@ async function submit() {
   }
   if (editing.value) {
     body.status = form.status
-    // Password is write-only. On edit an empty field means "unchanged": we send
-    // the mask "******" (same convention as account credentials, §5.4) unless
-    // the username was cleared, in which case the password is cleared too.
+    // CONTRACTS §15.4: proxies have no mask convention. Omitted = keep the
+    // stored password, "" = clear it, any other string = new password. So an
+    // empty field is omitted; "" is sent only when the user asks to clear the
+    // password or removes the username (credentials cleared).
     if (form.password) body.password = form.password
-    else if (!body.username) body.password = ''
-    else body.password = MASK
-  } else {
+    else if (hasStoredPassword.value && (form.clearPassword || !body.username)) body.password = ''
+  } else if (form.password) {
     body.password = form.password
   }
   saving.value = true
@@ -204,7 +203,8 @@ async function onAction(p: Proxy, key: string) {
         <code class="font-mono text-xs">{{ row.host }}:{{ row.port }}</code>
       </template>
       <template #cell-auth="{ row }">
-        <span v-if="row.username" class="text-xs">{{ row.username }}<span class="muted"> / ••••</span></span>
+        <span v-if="row.username" class="text-xs">{{ row.username }}<span v-if="row.has_password" class="muted"> / ••••</span></span>
+        <span v-else-if="row.has_password" class="text-xs muted">••••</span>
         <span v-else class="muted">{{ t('common.none') }}</span>
       </template>
       <template #cell-status="{ row }">
@@ -269,7 +269,7 @@ async function onAction(p: Proxy, key: string) {
           </SField>
           <SField
             :label="t('proxies.password')"
-            :hint="editing ? (hasStoredPassword ? t('proxies.passwordKeep') : t('proxies.passwordKeepMaybe')) : t('common.optional')"
+            :hint="editing ? (hasStoredPassword ? t('proxies.passwordKeep') : t('proxies.passwordNone')) : t('common.optional')"
             :error="errors.password"
           >
             <input
@@ -277,8 +277,13 @@ async function onAction(p: Proxy, key: string) {
               type="password"
               class="input"
               autocomplete="new-password"
-              :placeholder="editing && hasStoredPassword ? MASK : ''"
+              :disabled="form.clearPassword"
+              :placeholder="editing && hasStoredPassword ? t('proxies.passwordStored') : ''"
             />
+            <label v-if="editing && hasStoredPassword" class="mt-1.5 flex items-center gap-1.5 text-xs">
+              <input v-model="form.clearPassword" type="checkbox" class="checkbox" data-testid="proxy-clear-password" />
+              {{ t('proxies.clearPassword') }}
+            </label>
           </SField>
         </div>
         <SField v-if="editing" :label="t('common.status')" :error="errors.status">
