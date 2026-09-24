@@ -255,6 +255,8 @@ func (p *Plugin) putRules(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 	if err != nil {
 		return nil, err
 	}
+	// Committed: the other nodes reload now (best effort), this one below.
+	p.publishRulesChanged(ctx)
 	if err := p.reloadRules(ctx); err != nil {
 		return nil, err
 	}

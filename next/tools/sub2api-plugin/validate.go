@@ -56,6 +56,11 @@ func validateManifest(m *manifest.Manifest) []string {
 		}
 	}
 
+	// Cluster broadcasts: the host only relays Publish with the grant.
+	if hasCap(manifest.CapAppBroadcast) {
+		needPerm("broadcast", "capability "+manifest.CapAppBroadcast)
+	}
+
 	// Platforms declared by the plugin, with their endpoints.
 	own := map[string]*manifest.Platform{}
 	type route struct{ platform, id, method, path string }

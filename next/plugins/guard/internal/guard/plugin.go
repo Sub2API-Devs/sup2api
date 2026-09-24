@@ -27,10 +27,16 @@ type Settings struct {
 	RecordSnippets bool   `json:"record_snippets"`
 }
 
+// TopicRulesChanged is broadcast to the guard instances on the other nodes
+// after PUT /rules succeeded; they reload the rules at once. Broadcasts are
+// best effort, so the periodic reload (reloadEvery) stays as the fallback.
+const TopicRulesChanged = "rules.changed"
+
 // Plugin is the guard plugin. It implements pluginsdk.Hook, pluginsdk.App,
-// pluginsdk.HTTP and the lifecycle interfaces.
+// pluginsdk.HTTP, pluginsdk.BroadcastHandler and the lifecycle interfaces.
 type Plugin struct {
 	*pluginsdk.Router
+	*pluginsdk.BroadcastMux
 
 	host     pluginsdk.Host
 	log      *slog.Logger
@@ -58,18 +64,20 @@ var debugRoutes func(p *Plugin)
 // New returns the plugin.
 func New() *Plugin {
 	p := &Plugin{
-		Router:      pluginsdk.NewRouter(),
-		now:         time.Now,
-		reloadEvery: 5 * time.Second,
-		blocks:      make(chan blockEvent, 1024),
-		alerts:      make(chan alert, 256),
-		log:         slog.Default(),
+		Router:       pluginsdk.NewRouter(),
+		BroadcastMux: pluginsdk.NewBroadcastMux(),
+		now:          time.Now,
+		reloadEvery:  5 * time.Second,
+		blocks:       make(chan blockEvent, 1024),
+		alerts:       make(chan alert, 256),
+		log:          slog.Default(),
 	}
 	p.settings.Store(&Settings{})
 	p.rules.Store(&ruleSet{})
 	p.Handle("GET", "/rules", p.getRules)
 	p.Handle("PUT", "/rules", p.putRules)
 	p.Handle("GET", "/stats", p.getStats)
+	p.OnTopic(TopicRulesChanged, p.onRulesChanged)
 	if debugRoutes != nil {
 		debugRoutes(p)
 	}
@@ -170,4 +178,28 @@ func (p *Plugin) refreshLoop(ctx context.Context) {
 			cancel()
 		}
 	}
+}
+
+// publishRulesChanged tells the other nodes to reload the rules. Failures
+// are only logged: the periodic reload catches up within reloadEvery.
+func (p *Plugin) publishRulesChanged(ctx context.Context) {
+	if p.host == nil {
+		return
+	}
+	pctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	defer cancel()
+	if err := p.host.Publish(pctx, TopicRulesChanged, nil); err != nil {
+		p.log.Warn("guard: broadcast rules.changed failed; other nodes reload within the polling period", "error", err.Error())
+	}
+}
+
+// onRulesChanged handles a rules.changed broadcast from another node.
+func (p *Plugin) onRulesChanged(ctx context.Context, b pluginsdk.Broadcast) error {
+	rctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := p.reloadRules(rctx); err != nil {
+		p.log.Warn("guard: reload after rules.changed failed", "source_node", b.SourceNodeID, "error", err.Error())
+		return err
+	}
+	return nil
 }

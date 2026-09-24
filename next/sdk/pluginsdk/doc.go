@@ -17,6 +17,7 @@
 //	Hook       -> HookService       ("gateway.hook.v1")
 //	JobRunner  -> AppService.RunJob ("app.jobs.v1")
 //	EventHandler -> AppService.OnEvents ("app.events.v1")
+//	BroadcastHandler -> AppService.OnBroadcast ("app.broadcast.v1", see BroadcastMux)
 //	HTTP       -> HTTPService       ("http.routes.v1")
 //	Scheduler  -> SchedulerService  ("scheduler.affinity.v1")
 //	Migration  -> MigrationService  ("migration.data.v1")
@@ -25,7 +26,7 @@
 // (Initializer, Configurer, HealthChecker, Shutdowner) let the plugin hook
 // into InitHost, Configure, Health and Shutdown. After InitHost the plugin
 // reaches the host through the Host interface (log, KV, database, authz,
-// ledger).
+// ledger, cluster broadcasts via Publish).
 //
 // The pluginsdktest sub-package runs a plugin in-process over bufconn with a
 // fake host, for unit tests.

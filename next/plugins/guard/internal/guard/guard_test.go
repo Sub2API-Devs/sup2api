@@ -38,7 +38,7 @@ func setRules(t *testing.T, p *Plugin, rules ...Rule) {
 func TestHookMatching(t *testing.T) {
 	p := New()
 	h := pluginsdktest.Start(t, p, pluginsdktest.Options{SDK: sdkOpts()})
-	if got := strings.Join(h.Info.GetCapabilities(), ","); got != "gateway.hook.v1,app.jobs.v1,app.events.v1,http.routes.v1" {
+	if got := strings.Join(h.Info.GetCapabilities(), ","); got != "gateway.hook.v1,app.jobs.v1,app.events.v1,app.broadcast.v1,http.routes.v1" {
 		t.Fatalf("capabilities = %s", got)
 	}
 	setRules(t, p,

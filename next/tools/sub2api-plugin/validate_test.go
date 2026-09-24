@@ -35,3 +35,14 @@ func TestValidateAcceptsBuiltinPlatforms(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateBroadcast(t *testing.T) {
+	m := &manifest.Manifest{Capabilities: []manifest.Capability{{ID: manifest.CapAppBroadcast}}}
+	if msgs := validateManifest(m); len(msgs) != 1 || !strings.Contains(msgs[0], "broadcast") {
+		t.Fatalf("missing broadcast permission: %v", msgs)
+	}
+	m.HostPermissions = []manifest.HostPermission{{ID: "broadcast"}}
+	if msgs := validateManifest(m); len(msgs) != 0 {
+		t.Fatalf("valid broadcast manifest: %v", msgs)
+	}
+}
