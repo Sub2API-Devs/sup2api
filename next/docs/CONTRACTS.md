@@ -1,4 +1,4 @@
-# sub2api-next 开发契约（阶段 0，已冻结）
+# sub2api-next 开发契约（阶段 0 冻结；2026-09-24 并入阶段 1 交付的变更）
 
 本文件是所有开发 agent 的共同依据。**修改本文件、`sdk/proto`、`sdk/manifest`、`server/internal/core`、`server/internal/migrations/0001_core.sql` 必须经过主控**；发现契约不够用时，在交付说明里写明需要的改动，不要自行修改。
 
@@ -100,23 +100,23 @@
 |---|---|---|
 | POST `/auth/login` | - | `{email, password}` → `{access_token, refresh_token, expires_in, user}` |
 | POST `/auth/refresh` | - | `{refresh_token}` → 同上（轮换 refresh token） |
-| POST `/auth/logout` | auth | 吊销当前 refresh token |
+| POST `/auth/logout` | auth | 请求体 `{refresh_token?}` 可选；吊销该 refresh token |
 | POST `/auth/step-up` | auth | `{password}` → `{step_up_token, expires_in}` |
 | GET `/me` | auth | `{id, email, display_name, roles:[key], permissions:[key], superuser}` |
-| GET `/me/menus` | auth | 侧边栏：`[{section, items:[{id, label, icon, path, plugin_key?}]}]`（核心菜单按权限过滤，加上插件菜单） |
+| GET `/me/menus` | auth | 侧边栏：`[{section, label:{en,zh}, items:[{id, label, icon, path, plugin_key?}]}]`；section 为 `overview/gateway/finance/system/me/plugins`（核心菜单按权限过滤，加上插件菜单） |
 | PUT `/me/password` | auth | `{old_password, new_password}` |
 
 ### 5.2 用户、角色、权限（A）
 
 | 方法 路径 | 权限 |
 |---|---|
-| GET `/users`（`?q=&status=`） | `user:read` |
-| POST `/users` `{email, display_name, password, role_keys[], max_concurrency}` | `user:create` |
+| GET `/users`（`?q=&status=&role=`） | `user:read` |
+| POST `/users` `{email, display_name, password, role_keys[], max_concurrency}` | `user:create`；指定非默认角色另需 `role:manage` + step-up |
 | GET/PATCH `/users/:id` | `user:read` / `user:update` |
 | DELETE `/users/:id` | `user:delete` |
-| PUT `/users/:id/roles` `{role_keys[]}` | `role:manage` |
-| PUT `/users/:id/groups` `{group_ids[]}` | `group:manage` |
-| GET `/roles` / POST `/roles` / PATCH `/roles/:id` / DELETE `/roles/:id` | `role:read` / `role:manage` |
+| PUT `/users/:id/roles` `{role_keys[]}` | `role:manage`；只有超级管理员能授予/撤销 `super_admin` |
+| GET `/users/:id/groups`，PUT `/users/:id/groups` `{group_ids[]}` | `group:read` / `group:manage` |
+| GET `/roles` / GET `/roles/:id` / POST `/roles` / PATCH `/roles/:id` / DELETE `/roles/:id` | `role:read` / `role:manage` |
 | PUT `/roles/:id/permissions` `{permission_keys[]}` | `role:manage` |
 | GET `/permissions` | `role:read`；按 module 分组：`[{module, label, source, plugin_key, status, permissions:[{key,label,sensitive,status}]}]` |
 
@@ -128,13 +128,13 @@
 | GET `/me/groups` | auth（当前用户可用的分组） |
 | GET `/api-keys`，PATCH/DELETE `/api-keys/:id` | `apikey:all:read` / `apikey:all:manage` |
 | GET/POST `/groups`，GET/PATCH/DELETE `/groups/:id` | `group:read` / `group:manage` |
-| GET/POST `/proxies`，PATCH/DELETE `/proxies/:id`，POST `/proxies/:id/test` | `proxy:read` / `proxy:manage` |
+| GET/POST `/proxies`，GET/PATCH/DELETE `/proxies/:id`，POST `/proxies/:id/test` | `proxy:read` / `proxy:manage` |
 
 ### 5.4 账号（A；类型和表单来自插件注册表）
 
 | 方法 路径 | 权限 | 说明 |
 |---|---|---|
-| GET `/account-types` | `account:read` | `[{plugin_key, plugin_name, platform, type, label, description, form:{mode, page?, component?}, sensitive_fields}]` |
+| GET `/account-types` | `account:read` | `[{plugin_key, plugin_name, plugin_version, asset_base, platform, type, label, description, form:{mode, page?, component?}, sensitive_fields}]` |
 | GET `/account-types/:platform/:type/form` | `account:read` | `{schema, ui_schema}` |
 | GET `/accounts`（`?platform=&group_id=&status=&q=`） | `account:read` | 列表含 `in_use`（实时并发）、`cooldown_until`、`orphaned` |
 | POST `/accounts` | `account:create` | `{name, platform, type, group_ids[], proxy_id, priority, max_concurrency, schedulable, credentials:{...}}` |
@@ -147,17 +147,19 @@
 
 | 方法 路径 | 权限 |
 |---|---|
-| GET/POST `/prices`，GET/PATCH/DELETE `/prices/:id` | `price:read` / `price:manage` |
-| POST `/prices/validate` `{mode, config?, expression?}` → `{ok, expression, errors[], warnings[]}` | `price:read` |
-| POST `/prices/preview` `{price_id? \| mode+config/expression, usage:{p,c,cr,cc,cc1h,len?}, headers:{}, params:{}, at?, group_id?}` → `{cost, tier, rules:[{cond,multiplier,matched}], breakdown:{...}}` | `price:read` |
+| GET/POST `/prices`（`?platform=`），GET/PATCH/DELETE `/prices/:id`；详情返回 `analysis`（表达式读取的参数、请求头、指标） | `price:read` / `price:manage` |
+| POST `/prices/validate` `{mode, config?, expression?, platform?}` → `{ok, expression, errors[], warnings[]}` | `price:read` |
+| POST `/prices/preview` `{price_id? \| mode+config/expression, usage:{p,c,cr,cc,cc1h,len?}, metrics:{}, headers:{}, params:{}, at?, group_id?}` → `{cost, base_cost, rate_multiplier, expression, expr_hash, tier, rules:[{cond,multiplier,matched}], breakdown:{...}}` | `price:read` |
 | POST `/prices/:id/override`（复制插件默认价格为管理员价格） | `price:manage` |
 | GET `/prices/history/:expr_hash` | `price:read` |
 | GET `/me/balance` → `{balance}`；GET `/me/ledger` | `balance:self:read` |
 | GET `/ledger`（`?user_id=&kind=`） | `balance:all:read` |
-| POST `/users/:id/balance/adjust` `{amount, credit:bool, note}` | `balance:adjust` |
-| GET `/me/usage`，GET `/usage`（`?user_id=&group_id=&account_id=&model=&from=&to=&success=`），GET `/usage/:id` | `usage:self:read` / `usage:all:read` |
+| POST `/users/:id/balance/adjust` `{amount, credit:bool, note}`，支持请求头 `Idempotency-Key` | `balance:adjust` |
+| GET `/me/usage`，GET `/me/usage/:id`，GET `/usage`（`?user_id=&group_id=&account_id=&model=&from=&to=&success=`），GET `/usage/:id` | `usage:self:read` / `usage:all:read` |
 | GET `/usage/summary`（`?from=&to=&group_by=day\|model\|user`） | `usage:all:read` |
 | GET/PUT `/settings/billing` `{missing_price_policy: reject\|free, min_balance, big_cost_warning_usd}` | `settings:read` / `settings:manage` |
+
+价格表达式校验失败时 `details.fields[].message` 为 `{en, zh}`；表达式错误额外带 `detail`（位置信息）。结算时捕获的参数、请求头和 usage 口径存在 `usage_logs.billing_detail.inputs`。
 
 ### 5.6 粘性会话（G 实现调度；规则 CRUD 由 G 负责）
 
@@ -176,6 +178,7 @@
 | GET `/plugins/:key` | `plugin:read` | 详情：manifest 摘要、授权、节点状态、钩子统计、任务、事件游标、资源 |
 | POST `/plugins/upload`（multipart `file`） | `plugin:install` | → 安装审查信息 `review`（见下） |
 | POST `/plugins/install-from-market` `{source_id, key, version}` | `plugin:install` | → `review` |
+| GET `/plugins/:key/versions/:version/review` | `plugin:read` | 重新获取待确认版本的 `review` |
 | POST `/plugins/:key/versions/:version/consent` `{grants:[{permission, scope?}], denied:[permission], role_keys_for_new_permissions:[]}` | `plugin:install` + 按风险 `plugin:grant:high`/`plugin:grant:critical` | 确认授权 |
 | POST `/plugins/:key/versions/:version/reject` | `plugin:install` | |
 | POST `/plugins/:key/enable`、`/disable` | `plugin:manage` | 发起发布 → `rollout` |
@@ -194,6 +197,13 @@
 | GET `/market/sources`、GET `/market/plugins?source_id=` | `plugin:market:read` | |
 | GET/POST `/publishers`，POST `/publishers/:id/keys`，POST `/publishers/:id/revoke`，POST `/publisher-keys/:key_id/revoke` | `publisher:read` / `publisher:manage` | |
 
+补充约定（C1）：
+- 插件配置加密存于 `plugin_installs.config_enc`，AES-GCM 的 AAD 为 `"plugin-config:"+key`；配置变更后在 `config:changed` 广播 `{"type":"config","plugin_key":k}`
+- 宿主版本取 `main.Version`，比较兼容范围时忽略预发布后缀
+- `/nodes` 与插件详情中每个节点的插件状态字段为 `state`（`pending|ready|active|failed`）
+- 市场源 `url` 可以指向 `index.json`，也可以是以 `/` 结尾的目录（自动补 `index.json`）
+- 插件详情中的钩子统计来自 `core.HookStatsSource`（G），手动执行任务通过 `core.JobTrigger`（H）
+
 `review` 结构：`{plugin_key, version, name, publisher, trust, signature_status, host_compat_ok, capabilities[], gateway_endpoints[], platform:{id, protocols, account_types[]}, hooks[], jobs[], events[], routes[], menus[], user_permissions[], database:{schema, migrations[]}, resources, external_services[], host_permissions:[{id, risk, scope, reason, optional, requires:"plugin:grant:high|critical"}], diff?:{added[], widened[], removed[]}}`。
 
 ### 5.8 插件自己的接口与静态资源（C）
@@ -211,9 +221,9 @@
 
 | 类型 | payload | 写入方 |
 |---|---|---|
-| `usage.recorded` | `{request_id, user_id, api_key_id, group_id, account_id, plugin_key, platform, protocol, model, success, status_code, error_type, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, total_cost, billing_status, latency_ms, created_at}` | B（结算后） |
+| `usage.recorded` | `{request_id, user_id, api_key_id, group_id, account_id, plugin_key, platform, protocol, model, success, status_code, error_type, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens, total_cost, billing_status, latency_ms, created_at}` | B（结算后） |
 | `account.created` / `account.updated` / `account.deleted` | `{account_id, plugin_key, platform, type, name}` | A |
-| `account.status_changed` | `{account_id, platform, status, reason, cooldown_until?}` | A |
+| `account.status_changed` | `{account_id, platform, status, reason, cooldown_until?}`；status 含 `cooldown` | A |
 | `user.created` / `user.updated` | `{user_id, email, status}` | A |
 | `balance.changed` | `{user_id, ledger_id, delta, balance_after, kind}` | B |
 | `plugin.enabled` / `plugin.disabled` | `{plugin_key, version}` | C |
@@ -227,7 +237,6 @@
 | `slot:{kind}:{id}` | ZSET member=`{boot_id}:{request_id}` score=过期毫秒 | D |
 | `lock:{name}` | STRING owner token | D |
 | `cooldown:account:{id}` | STRING reason，TTL | A |
-| `authz:version` | STRING | A |
 | `stepup:{token}` | STRING user_id，TTL 5m | A |
 | `apikey:{sha256}` | STRING 缓存（JSON），TTL 60s | A |
 | `balance:{user_id}` | STRING 余额缓存 | B |
@@ -236,7 +245,9 @@
 | `plugin:kv:{plugin_key}:{ns}:{key}` | STRING | C |
 | `hook:breaker:{plugin}:{hook}` | STRING | G |
 
-广播频道：`plugin:events`、`authz:changed`、`account:changed`、`config:changed`（`core/ports_cluster.go`）。
+广播频道：`plugin:events`、`authz:changed`、`account:changed`、`config:changed`（`core/ports_cluster.go`）。权限版本以 PG `authz_meta` 为准，Redis 不存。`config:changed` payload：代理 `{"type":"proxy","id":N}`，插件配置 `{"type":"config","plugin_key":k}`。
+
+槽位回收（D）要求 Redis 为单实例（非 Cluster），且各节点时钟经 NTP 同步。
 
 ## 8. 系统设置（`settings` 表）
 
@@ -302,6 +313,20 @@ func DialContext(ctx context.Context, network, address string) (net.Conn, error)
 ### 11.3 插件主进程启动（C2 调 D）
 
 C2 通过 `core.PluginLauncher.Command` 得到 `*exec.Cmd` 交给 go-plugin 的 `ClientConfig.Cmd`；进程启动后调用 `Watch`。主进程的隐藏子命令 `sub2api plugin-exec` 由 D 实现 `sandbox.RunExec(args []string) int`，主控在 `main.go` 接上。
+
+- 插件二进制路径 `runtimes/{os}-{arch}/plugin`，Windows 开发模式为 `plugin.exe`；go-plugin 使用 `SkipHostEnv=true`，插件只拿到 `LaunchSpec.Env`
+- 无 cgroup：`LaunchSpec.CPU` 仅换算成 `GOMAXPROCS=ceil(CPU)`；`MaxThreads` 超限只告警不杀进程；`MemoryMB` 超限由看门狗重启
+- 平台插件处理本平台账号时，`Account` 消息里携带解密后的凭证
+
+### 11.5 缓存 token 口径（E 插件上报，G 填写 `core.UsageTokens`）
+
+Anthropic 的 `cache_creation_input_tokens` 是总量（含 1 小时缓存）。`UsageTokens.CacheCreation = 总量 − cache_creation_1h_tokens`，`CacheCreation1h = cache_creation_1h_tokens`，两者不重叠。
+
+### 11.6 网关请求 ID 与插件端点状态（G）
+
+- 请求 ID 一律服务端生成（客户端的 `X-Request-Id` 只记录，不作计费幂等键）
+- 已安装但未启用的插件，其声明的网关端点返回 503 `plugin_unavailable`
+- 测试环境的市场地址为内网 `http://caddy:3120/market/index.json`（市场客户端目前不过滤内网地址；市场源只有 `publisher:manage` 能配置）
 
 ### 11.4 测试用 mock 上游（QA 实现）
 

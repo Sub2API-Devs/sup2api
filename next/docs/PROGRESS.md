@@ -33,10 +33,10 @@
 | a2-resources | `apikey`、`group`、`proxy`、`account` | next/a2-resources | ✅ 已合并 | 02312e823、e2dfca146、1b1ec5cf5、db777e933 | b1f39bfae |
 | b-billing | `billing`（含 `expr`）、`usage`、`event` | next/b-billing | ✅ 已合并 | 6221b7db8 | 3041351c8 |
 | c1-lifecycle | `plugin/pkg`、`install`、`market`、`api` | next/c1-lifecycle | ✅ 已合并 | 172997d83 | 60937afd0 |
-| c2-runtime | `plugin/registry`、`grpcruntime`、`rollout`、`dbschema`、`routes` | next/c2-runtime | ⏳ 进行中 | | |
+| c2-runtime | `plugin/registry`、`grpcruntime`、`rollout`、`dbschema`、`routes` | next/c2-runtime | ⏳ 进行中（wip：fcb2609df、a88145fe8） | | |
 | d-sandbox | `cluster`、`plugin/sandbox`、`plugin/egress`、`sdk/pluginsdk/egress` | next/d-sandbox | ✅ 已合并 | 009b0ed9f | f85721f9f |
 | e-sdk-plugins | `sdk/pluginsdk`、`plugins/anthropic`、`plugins/guard`（Go）、`tools/sub2api-plugin` | next/e-sdk-plugins | ✅ 已合并 | 237873003 | 22b4387d6 |
-| f-frontend | `web/`、`plugins/guard/ui/native` | next/f-frontend | ⏳ 进行中 | | |
+| f-frontend | `web/`、`plugins/guard/ui/native` | next/f-frontend | ⏳ 进行中（已有 2c8cfe488、3fdab6209；另派生子 agent 做计费页面） | | |
 | qa-deploy | `Dockerfile`、`deploy/`、`e2e/` | next/qa-deploy | ✅ 已合并 | 7d7ea1c15、ce5111dc5 | e55c32a85 |
 | g-gateway（阶段 2） | `server/internal/gateway`（含粘性会话） | next/g-gateway | ⏳ 进行中 | | |
 | h-events-jobs（阶段 2） | `event/delivery`、`job` | next/h-events-jobs | ⏳ 进行中 | | |
@@ -91,7 +91,9 @@ api.New(api.Deps{DB, Install: inst, Market: mkt, Rollout, Nodes: cl.Registry, Re
 
 ---
 
-## 4. 待写入 CONTRACTS.md 的变更（阶段 1 全部合并后统一处理）
+## 4. 待写入 CONTRACTS.md 的变更
+
+> 2026-09-24：A1、A2、B、C1、D、E、QA 的变更**已写入 CONTRACTS.md**（§5.1–5.7、§6、§7、§11.3–11.6）。下表保留作来源记录；未落地的只剩：`PricingEntry.note`、`gateway.endpoint`/`platform.register` 的 scope 格式、`EgressLogReader`（不做）、卸载清账号（见第 5 节 #6）。C2、F、G、H 交付后在此追加。
 
 | 来源 | 变更 |
 |---|---|
