@@ -319,9 +319,9 @@ func (s *Service) insert(ctx context.Context, batch []*core.UsageRecord) ([]*cor
 					error_message, attempts, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
 					cache_creation_1h_tokens, metrics, sticky_rule, sticky_hit, hook_decisions, rate_multiplier,
 					price_id, expr_hash, billing_mode, billing_detail, billing_status, latency_ms, first_token_ms,
-					client_ip, user_agent, node_id, created_at, account_type, upstream_protocol)
+					client_ip, user_agent, node_id, created_at, account_type, upstream_protocol, client_request_id)
 				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,
-					$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41)
+					$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42)
 				ON CONFLICT (request_id) DO NOTHING
 				RETURNING id`,
 				trunc(rec.RequestID, 64), rec.UserID, rec.APIKeyID, rec.GroupID, rec.AccountID,
@@ -332,7 +332,7 @@ func (s *Service) insert(ctx context.Context, batch []*core.UsageRecord) ([]*cor
 				jsonOr(rec.Metrics, "{}"), trunc(rec.StickyRule, 100), rec.StickyHit, jsonOr(rec.HookDecisions, "[]"),
 				rate, priceID, exprHash, mode, detail, status, rec.LatencyMs, rec.FirstTokenMs,
 				trunc(rec.ClientIP, 64), trunc(rec.UserAgent, 500), trunc(rec.NodeID, 100), created,
-				trunc(rec.AccountType, 50), trunc(rec.UpstreamProtocol, 100))
+				trunc(rec.AccountType, 50), trunc(rec.UpstreamProtocol, 100), trunc(rec.ClientRequestID, 128))
 		}
 		br := tx.SendBatch(ctx, b)
 		var free []core.Event

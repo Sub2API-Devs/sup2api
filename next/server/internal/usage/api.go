@@ -18,6 +18,7 @@ import (
 type Record struct {
 	ID                    int64           `json:"id"`
 	RequestID             string          `json:"request_id"`
+	ClientRequestID       string          `json:"client_request_id"` // client X-Request-Id; shown to its owner too
 	CreatedAt             time.Time       `json:"created_at"`
 	UserID                int64           `json:"user_id"`
 	UserEmail             string          `json:"user_email,omitempty"`
@@ -90,7 +91,7 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("GET", "/usage/:id", "usage:all:read", s.usageDetail)
 }
 
-const recordColumns = `u.id, u.request_id, u.created_at, u.user_id, COALESCE(us.email, ''), u.api_key_id,
+const recordColumns = `u.id, u.request_id, u.client_request_id, u.created_at, u.user_id, COALESCE(us.email, ''), u.api_key_id,
 	COALESCE(k.name, ''), u.group_id, COALESCE(g.name, ''), u.account_id, COALESCE(a.name, ''), u.plugin_key,
 	u.platform, u.protocol, u.account_type, u.upstream_protocol, u.endpoint, u.model, u.upstream_model, u.stream,
 	u.status_code, u.success,
@@ -105,7 +106,7 @@ const recordJoins = ` FROM usage_logs u
 	LEFT JOIN accounts a ON a.id = u.account_id`
 
 func (r *Record) scanTargets() []any {
-	return []any{&r.ID, &r.RequestID, &r.CreatedAt, &r.UserID, &r.UserEmail, &r.APIKeyID, &r.APIKeyName,
+	return []any{&r.ID, &r.RequestID, &r.ClientRequestID, &r.CreatedAt, &r.UserID, &r.UserEmail, &r.APIKeyID, &r.APIKeyName,
 		&r.GroupID, &r.GroupName, &r.AccountID, &r.AccountName, &r.PluginKey, &r.Platform, &r.Protocol,
 		&r.AccountType, &r.UpstreamProtocol,
 		&r.Endpoint, &r.Model, &r.UpstreamModel, &r.Stream, &r.StatusCode, &r.Success, &r.ErrorType,
@@ -157,7 +158,8 @@ func parseFilter(c *gin.Context, self *int64) (*filter, error) {
 			f.add(x.col+" = ?", id)
 		}
 	}
-	for _, x := range []struct{ q, col string }{{"model", "u.model"}, {"platform", "u.platform"}, {"billing_status", "u.billing_status"}, {"request_id", "u.request_id"}} {
+	for _, x := range []struct{ q, col string }{{"model", "u.model"}, {"platform", "u.platform"}, {"billing_status", "u.billing_status"}, {"request_id", "u.request_id"},
+		{"client_request_id", "u.client_request_id"}} {
 		if v := c.Query(x.q); v != "" {
 			f.add(x.col+" = ?", v)
 		}
