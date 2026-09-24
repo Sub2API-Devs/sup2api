@@ -239,7 +239,7 @@ go test -count=1 -timeout 50m -v ./...
 |---|---|---|---|
 | g3-platforms-gateway | `gateway`、`platforms/openai.json`、`gemini.json` | next/g3-platforms-gateway | ⏳ |
 | c3-registry | `plugin/*` | next/c3-registry | ⏳ |
-| a3-accounts | `account`、`billing`、`usage`、`group`、`apikey`（新接口 `/platforms`，分组/Key 的 `platforms`） | next/a3-accounts | ⏳ |
+| a3-accounts | `account`、`billing`、`usage`、`group`、`apikey`（新接口 `/platforms`，分组/Key 的 `platforms`） | next/a3-accounts | ✅ `544e8010a`、`886cec1a7`、`3b5d09d4b`、`49aa41d97`，已合并；app 已改 group/apikey 构造函数 |
 | e3-plugins | `plugins/*`、`tools/sub2api-plugin`、`e2e`（AC19）、`sdk/pluginsdk` | next/e3-plugins | ⏳ |
 | f3-web | `web/`（平台页、分组/Key 显示可访问平台） | next/f3-web | ⏳ |
 
