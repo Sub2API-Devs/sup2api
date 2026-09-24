@@ -24,6 +24,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 )
 
@@ -65,7 +66,9 @@ const testManifestJSON = `{
       "match": { "protocols": ["anthropic.messages"], "models": ["claude-*"] },
       "keySources": [ { "type": "body", "path": "metadata.user_id" } ],
       "ttlSeconds": 3600, "keyIncludes": ["group", "model", "rule"], "onFailure": "failover" } ]
-  }
+  },
+  "accountTypes": [ { "id": "apikey", "label": { "en": "API key" }, "form": { "mode": "schema" },
+    "protocols": [ { "protocol": "anthropic.messages" }, { "protocol": "anthropic.count_tokens" } ] } ]
 }`
 
 func testManifest(t testing.TB) *manifest.Manifest {
@@ -80,12 +83,13 @@ func testManifest(t testing.TB) *manifest.Manifest {
 // ---------------------------------------------------------------- registry fakes
 
 type fakeGen struct {
-	num       uint64
-	plugins   []core.PluginInfo
-	endpoints []core.EndpointBinding
-	platforms []core.PlatformBinding
-	hooks     []core.HookBinding
-	scheds    map[string]core.SchedulerPlugin
+	num          uint64
+	plugins      []core.PluginInfo
+	endpoints    []core.EndpointBinding
+	platforms    []core.PlatformBinding
+	accountTypes []core.AccountTypeBinding
+	hooks        []core.HookBinding
+	scheds       map[string]core.SchedulerPlugin
 }
 
 func (g *fakeGen) Number() uint64             { return g.num }
@@ -118,9 +122,23 @@ func (g *fakeGen) Platform(id string) (core.PlatformBinding, bool) {
 	}
 	return core.PlatformBinding{}, false
 }
-func (g *fakeGen) AccountTypes() []core.AccountTypeBinding { return nil }
-func (g *fakeGen) AccountType(string, string) (core.AccountTypeBinding, bool) {
+func (g *fakeGen) AccountTypes() []core.AccountTypeBinding { return g.accountTypes }
+func (g *fakeGen) AccountType(pluginKey, typeID string) (core.AccountTypeBinding, bool) {
+	for _, b := range g.accountTypes {
+		if b.Plugin.Key == pluginKey && b.Type.ID == typeID {
+			return b, true
+		}
+	}
 	return core.AccountTypeBinding{}, false
+}
+func (g *fakeGen) AccountTypesForProtocol(protocol string) []core.AccountTypeBinding {
+	var out []core.AccountTypeBinding
+	for _, b := range g.accountTypes {
+		if _, ok := b.Protocol(protocol); ok {
+			out = append(out, b)
+		}
+	}
+	return out
 }
 func (g *fakeGen) Hooks(point string) []core.HookBinding {
 	var out []core.HookBinding
@@ -295,7 +313,7 @@ type fakePricer struct {
 	calls   int
 }
 
-func (p *fakePricer) Resolve(_ context.Context, platform, model string) (*core.PriceRule, error) {
+func (p *fakePricer) Resolve(_ context.Context, model string) (*core.PriceRule, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.calls++
@@ -327,6 +345,7 @@ type fakeAccounts struct {
 	disabled  map[int64]string
 	touched   map[int64]int
 	cooldowns []int64
+	lastTypes []core.AccountTypeKey
 }
 
 func newFakeAccounts() *fakeAccounts {
@@ -335,28 +354,33 @@ func newFakeAccounts() *fakeAccounts {
 }
 
 func (a *fakeAccounts) add(group int64, id int64, priority int, key string) {
+	a.addTyped(group, id, priority, key, "anthropic", "apikey")
+}
+
+func (a *fakeAccounts) addTyped(group int64, id int64, priority int, key, pluginKey, typ string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.accounts[id] = &core.Account{
-		AccountRef: core.AccountRef{ID: id, Name: fmt.Sprintf("acc-%d", id), PluginKey: "anthropic", Platform: "anthropic",
-			Type: "apikey", Priority: priority, MaxConcurrency: 5},
+		AccountRef: core.AccountRef{ID: id, Name: fmt.Sprintf("acc-%d", id), PluginKey: pluginKey,
+			Type: typ, Priority: priority, MaxConcurrency: 5},
 		Status: "active", Credentials: json.RawMessage(fmt.Sprintf(`{"api_key":%q}`, key)), Settings: json.RawMessage(`{}`),
 	}
 	a.groups[group] = append(a.groups[group], id)
 }
 
-func (a *fakeAccounts) Candidates(_ context.Context, group int64, platforms []string) ([]core.AccountRef, error) {
+func (a *fakeAccounts) Candidates(_ context.Context, group int64, types []core.AccountTypeKey) ([]core.AccountRef, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	a.lastTypes = append([]core.AccountTypeKey(nil), types...)
 	var out []core.AccountRef
 	for _, id := range a.groups[group] {
 		acc := a.accounts[id]
 		if _, dis := a.disabled[id]; dis || time.Now().Before(a.cooldown[id]) {
 			continue
 		}
-		ok := len(platforms) == 0
-		for _, p := range platforms {
-			ok = ok || p == acc.Platform
+		ok := false
+		for _, k := range types {
+			ok = ok || (k.PluginKey == acc.PluginKey && k.Type == acc.Type)
 		}
 		if ok {
 			out = append(out, acc.AccountRef)
@@ -620,6 +644,7 @@ type env struct {
 	mr       *miniredis.Miniredis
 	rdb      *redis.Client
 	man      *manifest.Manifest
+	conv     *convert.Registry
 }
 
 type envOpt func(*env)
@@ -639,7 +664,9 @@ func newEnv(t *testing.T, opts ...envOpt) *env {
 		e.gen.endpoints = append(e.gen.endpoints, core.EndpointBinding{Plugin: info, Endpoint: ep})
 	}
 	e.gen.platforms = []core.PlatformBinding{{Plugin: info, Platform: *e.man.Platform, Client: e.plat}}
+	e.gen.accountTypes = []core.AccountTypeBinding{{Plugin: info, Type: e.man.AccountTypes[0], Client: e.plat}}
 	e.reg = &fakeRegistry{cur: e.gen}
+	e.conv = convert.NewRegistry()
 
 	e.accounts = newFakeAccounts()
 	e.accounts.add(testGroup, 1, 1, "acc-1")
@@ -648,7 +675,7 @@ func newEnv(t *testing.T, opts ...envOpt) *env {
 	e.slots = &fakeSlots{inUse: map[string]int{}, limits: map[string]int{}}
 	e.settler = &fakeSettler{ch: make(chan *core.UsageRecord, 64)}
 	e.pricer = &fakePricer{rules: map[string]*core.PriceRule{
-		testModel: {ID: 9, Platform: "anthropic", Pattern: "claude-sonnet-*", Mode: "per_token", Expression: "p*3", ExprHash: "h"},
+		testModel: {ID: 9, Pattern: "claude-sonnet-*", Mode: "per_token", Expression: "p*3", ExprHash: "h"},
 	}}
 	e.balance = &fakeBalance{broke: map[int64]bool{}}
 	e.auth = &fakeAuth{keys: map[string]*core.APIKeyPrincipal{
@@ -661,7 +688,7 @@ func newEnv(t *testing.T, opts ...envOpt) *env {
 	e.gw = New(Deps{
 		Redis: e.rdb, Registry: e.reg, Node: fakeNode{}, Auth: e.auth, Pricer: e.pricer, Balance: e.balance,
 		Slots: e.slots, Accounts: e.accounts, Proxies: fakeProxies{}, Settler: e.settler,
-		Config: &config.Config{AllowPrivateUpstream: true},
+		Config: &config.Config{AllowPrivateUpstream: true}, Converters: e.conv,
 	})
 	t.Cleanup(e.gw.Close)
 	e.gw.shuffle = func(int, func(int, int)) {} // deterministic order within a priority

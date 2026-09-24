@@ -19,6 +19,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -39,11 +40,18 @@ type Deps struct {
 	Proxies  core.ProxyDirectory
 	Settler  core.Settler
 	Config   *config.Config
+	// Converters are the core's protocol converters (ARCHITECTURE 6.6);
+	// nil means convert.Default(). Hand the same registry (or the Gateway,
+	// see Converters/CanConvert) to the account module as
+	// core.ProtocolConverters.
+	Converters *convert.Registry
 }
 
 // Gateway serves plugin-declared endpoints and owns sticky sessions.
 type Gateway struct {
 	d Deps
+
+	conv *convert.Registry
 
 	table atomic.Pointer[routeTable]
 
@@ -66,9 +74,18 @@ type Gateway struct {
 }
 
 var (
-	_ core.StickyRuleCatalog = (*Gateway)(nil)
-	_ core.HookStatsSource   = (*Gateway)(nil)
+	_ core.StickyRuleCatalog  = (*Gateway)(nil)
+	_ core.HookStatsSource    = (*Gateway)(nil)
+	_ core.ProtocolConverters = (*Gateway)(nil)
 )
+
+// Converters returns the gateway's converter registry.
+func (g *Gateway) Converters() *convert.Registry { return g.conv }
+
+// CanConvert implements core.ProtocolConverters (for the account module).
+func (g *Gateway) CanConvert(clientProtocol, upstreamProtocol string) bool {
+	return g.conv.CanConvert(clientProtocol, upstreamProtocol)
+}
 
 // New builds the gateway, subscribes to registry and bus notifications and
 // starts its background loop (hook stats flush).
@@ -81,6 +98,10 @@ func New(d Deps) *Gateway {
 		headerWait: defaultHeaderWait,
 		shuffle:    rand.Shuffle,
 		stop:       make(chan struct{}),
+	}
+	g.conv = d.Converters
+	if g.conv == nil {
+		g.conv = convert.Default()
 	}
 	if d.Config != nil {
 		g.allowPrivate = d.Config.AllowPrivateUpstream
