@@ -17,24 +17,20 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
-// JobTrigger runs a plugin job immediately (owner: H events-jobs). Optional.
-type JobTrigger interface {
-	RunNow(ctx context.Context, pluginKey, jobID string, actorID int64) error
-}
-
-// Deps are the API collaborators. Nodes, Registry, Bus and Jobs may be nil.
+// Deps are the API collaborators. Nodes, Registry, Bus, Jobs and HookStats may be nil.
 type Deps struct {
-	DB       *store.DB
-	Install  *install.Service
-	Market   *market.Service
-	Rollout  core.RolloutController
-	Nodes    core.NodeRegistry
-	Registry core.PluginRegistry
-	Authz    core.Authorizer
-	Cipher   *secret.Cipher
-	Bus      core.Bus
-	Jobs     JobTrigger
-	Plugins  config.PluginConfig
+	DB        *store.DB
+	Install   *install.Service
+	Market    *market.Service
+	Rollout   core.RolloutController
+	Nodes     core.NodeRegistry
+	Registry  core.PluginRegistry
+	Authz     core.Authorizer
+	Cipher    *secret.Cipher
+	Bus       core.Bus
+	Jobs      core.JobTrigger
+	HookStats core.HookStatsSource
+	Plugins   config.PluginConfig
 }
 
 // API holds the handlers.

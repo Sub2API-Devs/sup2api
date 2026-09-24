@@ -24,6 +24,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/event"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/event/delivery"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/group"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/iam"
@@ -144,8 +145,14 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		return fmt.Errorf("plugin runtime: %w", err)
 	}
 
-	// TODO(G): pass the gateway's core.StickyRuleCatalog.
-	defaults := install.NewDefaultsApplier(az, bill, nil)
+	gw := gateway.New(gateway.Deps{
+		DB: db, Redis: rdb, Bus: cl.Bus, Node: cl.Registry, Registry: reg,
+		Auth: keys, Pricer: bill, Balance: bill, Slots: cl.Slots,
+		Accounts: acc, Proxies: prx, Settler: settler, Config: cfg,
+	})
+	onClose(func(context.Context) { gw.Close() })
+
+	defaults := install.NewDefaultsApplier(az, bill, gw)
 	ctl, err := rollout.New(rollout.Options{
 		DB: db, Node: cl.Registry, Bus: cl.Bus, Packages: pkgs, Registry: reg,
 		Runtime: rollout.FromGRPC(rt), Schemas: schemas, Defaults: defaults, Perms: az, Events: events, Logger: log,
@@ -201,18 +208,20 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	settler.RegisterRoutes(r)
 	api.New(api.Deps{
 		DB: db, Install: inst, Market: mkt, Rollout: ctl, Nodes: cl.Registry, Registry: reg,
-		Authz: az, Cipher: cipher, Bus: cl.Bus, Jobs: jobs, Plugins: cfg.Plugins,
+		Authz: az, Cipher: cipher, Bus: cl.Bus, Jobs: jobs, HookStats: gw, Plugins: cfg.Plugins,
 	}).RegisterRoutes(r)
 	pr := routes.New(reg, idm, az, idm)
 	pr.RegisterRoutes(r)
 	pr.RegisterAssets(engine)
-	// TODO(G): gateway endpoint dispatcher and /sticky-rules routes.
+	gw.RegisterRoutes(r)
 
 	ui, err := webui.New(web.Dist)
 	if err != nil {
 		return fmt.Errorf("console assets: %w", err)
 	}
-	engine.NoRoute(ui.Serve)
+	// Plugin-declared gateway endpoints are dynamic, so they are dispatched
+	// before the console fallback instead of being registered as routes.
+	engine.NoRoute(gw.Middleware(), ui.Serve)
 
 	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: engine, ReadHeaderTimeout: 10 * time.Second}
 	errc := make(chan error, 1)

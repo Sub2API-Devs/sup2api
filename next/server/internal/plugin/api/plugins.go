@@ -216,12 +216,32 @@ func (a *API) getPlugin(c *gin.Context) {
 			httpapi.Fail(c, err)
 			return
 		}
-		for _, h := range m.Hooks {
+		stats := map[string]core.HookStat{}
+		if a.d.HookStats != nil {
+			list, err := a.d.HookStats.HookStats(rc, key)
+			if err != nil {
+				httpapi.Fail(c, err)
+				return
+			}
+			for _, st := range list {
+				stats[st.HookID] = st
+			}
+		}
+		for i, h := range m.Hooks {
 			failure := h.Failure
 			if failure == "" {
 				failure = "open"
 			}
-			d.Hooks = append(d.Hooks, HookInfo{ID: h.ID, Point: h.Point, Order: h.Order, Failure: failure, TimeoutMs: h.TimeoutMs, Needs: h.Needs})
+			info := HookInfo{ID: h.ID, Point: h.Point, Order: h.Order, Failure: failure, TimeoutMs: h.TimeoutMs, Needs: h.Needs}
+			// Stats are keyed by the manifest id, or the index when the id is empty.
+			sid := h.ID
+			if sid == "" {
+				sid = strconv.Itoa(i)
+			}
+			if st, ok := stats[sid]; ok {
+				info.Stats = st
+			}
+			d.Hooks = append(d.Hooks, info)
 		}
 		if d.Jobs, err = a.jobInfos(rc, key, m); err != nil {
 			httpapi.Fail(c, err)
