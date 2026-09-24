@@ -125,9 +125,22 @@ func (e *Env) CreateAPIKey(u *Session, groupID int64) (int64, string) {
 
 // ------------------------------------------------------------------ accounts
 
-// AccountSpec describes an Anthropic API-key account pointing at the mock.
+// Account types used by the tests: (plugin_key, type) identifies an account
+// type (ARCHITECTURE 6.6, CONTRACTS 12).
+const (
+	AnthropicPlugin = "anthropic"
+	AnthropicAPIKey = "apikey" // declared by the built-in anthropic plugin
+	RelayPlugin     = "relay"
+	RelayKey        = "relay_key" // declared by the market plugin relay
+)
+
+// AccountSpec describes an account pointing at the mock. The default type
+// is anthropic/apikey; relay/relay_key takes the same credentials (api_key,
+// base_url, model_mapping).
 type AccountSpec struct {
 	Name           string
+	PluginKey      string // default AnthropicPlugin
+	Type           string // default AnthropicAPIKey
 	GroupIDs       []int64
 	APIKey         string // upstream key; the mock records it as x-api-key
 	BaseURL        string // default: mock-upstream
@@ -136,11 +149,14 @@ type AccountSpec struct {
 	ModelMapping   map[string]string
 }
 
-// CreateAccount creates an anthropic/apikey account (POST /accounts).
+// CreateAccount creates an account (POST /accounts with plugin_key + type).
 func (e *Env) CreateAccount(admin *Session, a AccountSpec) int64 {
 	e.T.Helper()
 	if a.Name == "" {
 		a.Name = e.Name("acct")
+	}
+	if a.PluginKey == "" {
+		a.PluginKey, a.Type = AnthropicPlugin, AnthropicAPIKey
 	}
 	if a.APIKey == "" {
 		a.APIKey = "sk-ant-mock-" + e.Name("k")
@@ -159,7 +175,7 @@ func (e *Env) CreateAccount(admin *Session, a AccountSpec) int64 {
 		creds["model_mapping"] = a.ModelMapping
 	}
 	d := admin.OK(e.T, http.MethodPost, "/accounts", map[string]any{
-		"name": a.Name, "platform": "anthropic", "type": "apikey", "group_ids": a.GroupIDs,
+		"name": a.Name, "plugin_key": a.PluginKey, "type": a.Type, "group_ids": a.GroupIDs,
 		"proxy_id": nil, "priority": a.Priority, "max_concurrency": a.MaxConcurrency,
 		"schedulable": true, "credentials": creds,
 	})
@@ -173,14 +189,33 @@ func (e *Env) CreateAccount(admin *Session, a AccountSpec) int64 {
 	return id
 }
 
+// FindAccountType returns the GET /account-types item of (pluginKey, typ).
+func FindAccountType(items []gjson.Result, pluginKey, typ string) (gjson.Result, bool) {
+	for _, it := range items {
+		if it.Get("plugin_key").String() == pluginKey && it.Get("type").String() == typ {
+			return it, true
+		}
+	}
+	return gjson.Result{}, false
+}
+
+// AccountTypeEndpoint returns the entry of an account type's "endpoints"
+// list for method + path.
+func AccountTypeEndpoint(at gjson.Result, method, path string) (gjson.Result, bool) {
+	for _, ep := range at.Get("endpoints").Array() {
+		if ep.Get("method").String() == method && ep.Get("path").String() == path {
+			return ep, true
+		}
+	}
+	return gjson.Result{}, false
+}
+
 // ------------------------------------------------------------------ billing
 
 // CreatePrice creates an admin price with POST /prices and returns its row.
+// Prices are global per model (no platform, ARCHITECTURE 7.3).
 func (e *Env) CreatePrice(admin *Session, body map[string]any) gjson.Result {
 	e.T.Helper()
-	if _, ok := body["platform"]; !ok {
-		body["platform"] = "anthropic"
-	}
 	d := admin.OK(e.T, http.MethodPost, "/prices", body)
 	if d.Get("id").Int() == 0 || d.Get("expression").String() == "" || d.Get("expr_hash").String() == "" {
 		e.T.Fatalf("POST /prices incomplete: %s", d.Raw)

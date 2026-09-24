@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/Sub2API-Devs/sup2api/next/plugins/anthropic/internal/anthropic"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 )
 
@@ -26,15 +28,58 @@ func TestManifest(t *testing.T) {
 	if m.Database == nil || m.Database.Schema != "plg_"+m.Key {
 		t.Fatalf("database = %+v", m.Database)
 	}
-	for _, at := range m.Platform.AccountTypes {
+
+	// Platform: endpoint defaults for its protocols (ARCHITECTURE 6.6).
+	if m.Platform == nil || m.Platform.ID != "anthropic" || m.Gateway == nil {
+		t.Fatalf("platform = %+v", m.Platform)
+	}
+	var endpointProtocols []string
+	for _, ep := range m.Gateway.Endpoints {
+		endpointProtocols = append(endpointProtocols, ep.Protocol)
+	}
+	if !slices.Equal(m.Platform.Protocols, endpointProtocols) || !slices.Equal(m.Platform.Protocols, anthropic.Protocols) {
+		t.Fatalf("platform protocols %v, endpoint protocols %v, implemented %v", m.Platform.Protocols, endpointProtocols, anthropic.Protocols)
+	}
+
+	// Top-level account types with their native protocols.
+	if len(m.AccountTypes) != 1 || m.AccountTypes[0].ID != anthropic.AccountTypeAPIKey {
+		t.Fatalf("accountTypes = %+v", m.AccountTypes)
+	}
+	for _, at := range m.AccountTypes {
 		for _, p := range []string{at.Form.Schema, at.Form.UISchema} {
 			mustJSONFile(t, p)
 		}
+		var protos []string
+		for _, ap := range at.Protocols {
+			protos = append(protos, ap.Protocol)
+		}
+		if !slices.Equal(protos, anthropic.Protocols) {
+			t.Fatalf("account type %s protocols = %v, want %v", at.ID, protos, anthropic.Protocols)
+		}
+		if !slices.Contains(at.SensitiveFields, "api_key") {
+			t.Fatalf("account type %s: api_key must be sensitive", at.ID)
+		}
 	}
+
+	caps := map[string]bool{}
+	for _, c := range m.Capabilities {
+		caps[c.ID] = true
+	}
+	if !caps[manifest.CapPlatformAdapter] {
+		t.Fatal("account types need capability platform.adapter.v1")
+	}
+	perms := map[string]manifest.HostPermission{}
 	for _, perm := range m.HostPermissions {
 		if _, ok := manifest.HostPermissionRisk[perm.ID]; !ok {
 			t.Errorf("unknown host permission %q", perm.ID)
 		}
+		perms[perm.ID] = perm
+	}
+	if _, ok := perms["platform.register"]; !ok {
+		t.Error("account types need host permission platform.register")
+	}
+	if c, ok := perms["accounts.credentials"]; !ok || c.Scope["types"] != "own" || len(c.Scope) != 1 {
+		t.Errorf("accounts.credentials scope = %v, want {\"types\":\"own\"}", c.Scope)
 	}
 	for _, r := range m.Routes {
 		found := false
@@ -59,6 +104,22 @@ func TestManifest(t *testing.T) {
 	if patch["version"] != "0.2.0" {
 		t.Fatalf("0.2.0 patch version = %v", patch["version"])
 	}
+	// The overlay must not bring back the pre-6.6 layout.
+	if p, ok := patch["platform"].(map[string]any); ok {
+		if _, bad := p["accountTypes"]; bad {
+			t.Fatal("0.2.0 patch sets platform.accountTypes; account types are top-level")
+		}
+	}
+	for _, pe := range asSlice(patch["pricing"]) {
+		if e, ok := pe.(map[string]any); ok && e["platform"] != nil {
+			t.Fatal("0.2.0 patch sets pricing[].platform; prices are global per model")
+		}
+	}
+}
+
+func asSlice(v any) []any {
+	s, _ := v.([]any)
+	return s
 }
 
 func mustJSONFile(t *testing.T, p string) []byte {

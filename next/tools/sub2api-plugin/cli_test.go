@@ -230,6 +230,51 @@ func TestPackChecks(t *testing.T) {
 	runFail(t, "nope")
 }
 
+// Account types are top-level (ARCHITECTURE 6.6): their form files are
+// packed, and they need protocols and the platform adapter capability.
+func TestPackAccountTypes(t *testing.T) {
+	const m = `{
+  "apiVersion": 1, "key": "relayx", "name": {"en": "Relay"}, "version": "0.1.0",
+  "publisher": "tester", "runtime": "grpc", "entry": {"grpc": {"binaries": "runtimes/{os}-{arch}/plugin"}},
+  "hostCompat": ">=0.1.0 <0.2.0", "capabilities": [{"id": "platform.adapter.v1"}],
+  "accountTypes": [{"id": "relay_key", "label": {"en": "Relay key"},
+    "form": {"mode": "schema", "schema": "forms/k.schema.json", "uiSchema": "forms/k.ui.json"},
+    "sensitiveFields": ["api_key"], "protocols": [{"protocol": "anthropic.messages"}]}]
+}`
+	dir := t.TempDir()
+	out := t.TempDir()
+	writeFile(t, filepath.Join(dir, "manifest.json"), m)
+	writeFile(t, filepath.Join(dir, "runtimes", "linux-amd64", "plugin"), "ELF-amd64")
+	writeFile(t, filepath.Join(dir, "runtimes", "linux-arm64", "plugin"), "ELF-arm64")
+	if msg := runFail(t, "pack", "--dir", dir, "--out-dir", out); !strings.Contains(msg, "forms/k.schema.json") || !strings.Contains(msg, "forms/k.ui.json") {
+		t.Fatalf("msg = %s", msg)
+	}
+	writeFile(t, filepath.Join(dir, "forms", "k.schema.json"), `{}`)
+	writeFile(t, filepath.Join(dir, "forms", "k.ui.json"), `{}`)
+	pkg := strings.TrimSpace(runOK(t, "pack", "--dir", dir, "--out-dir", out))
+	files, err := readPackage(pkg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := files["forms/k.schema.json"]; !ok {
+		t.Fatalf("form not packed: %v", keysOf(files))
+	}
+
+	writeFile(t, filepath.Join(dir, "manifest.json"), strings.Replace(m, `[{"protocol": "anthropic.messages"}]`, `[]`, 1))
+	if msg := runFail(t, "pack", "--dir", dir, "--out-dir", out); !strings.Contains(msg, "no protocols") {
+		t.Fatalf("msg = %s", msg)
+	}
+	writeFile(t, filepath.Join(dir, "manifest.json"), strings.Replace(m, `"platform.adapter.v1"`, `"http.routes.v1"`, 1))
+	if msg := runFail(t, "pack", "--dir", dir, "--out-dir", out); !strings.Contains(msg, "platform.adapter.v1") {
+		t.Fatalf("msg = %s", msg)
+	}
+	// The pre-6.6 layout (account types inside platform) is rejected.
+	writeFile(t, filepath.Join(dir, "manifest.json"), strings.Replace(m, `"accountTypes": [`, `"platform": {"id": "x", "protocols": [], "accountTypes": []}, "x": [`, 1))
+	if msg := runFail(t, "pack", "--dir", dir, "--out-dir", out); !strings.Contains(msg, "unknown field") {
+		t.Fatalf("msg = %s", msg)
+	}
+}
+
 func TestMergePatch(t *testing.T) {
 	out, err := applyMergePatch([]byte(`{"a":1,"b":{"c":2,"d":3},"e":[1,2]}`), []byte(`{"a":null,"b":{"c":5},"e":[3],"f":"x"}`))
 	if err != nil {

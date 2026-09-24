@@ -176,13 +176,38 @@ func checkPackage(files map[string][]byte, m *manifest.Manifest, allowMissingUI 
 			missing = append(missing, fmt.Sprintf("%s (%s)", p, what))
 		}
 	}
-	if m.Platform != nil {
-		for _, at := range m.Platform.AccountTypes {
-			if at.Form.Mode == "schema" {
-				need(at.Form.Schema, "account type "+at.ID+" schema")
-				need(at.Form.UISchema, "account type "+at.ID+" uiSchema")
+	// Account types are top-level (ARCHITECTURE 6.6): any plugin may declare
+	// them, with the upstream protocols they speak natively.
+	var invalid []string
+	hasCap := func(id string) bool {
+		for _, c := range m.Capabilities {
+			if c.ID == id {
+				return true
 			}
 		}
+		return false
+	}
+	if len(m.AccountTypes) > 0 && !hasCap(manifest.CapPlatformAdapter) {
+		invalid = append(invalid, "accountTypes need capability "+manifest.CapPlatformAdapter)
+	}
+	for _, at := range m.AccountTypes {
+		if at.Form.Mode == "schema" {
+			need(at.Form.Schema, "account type "+at.ID+" schema")
+			need(at.Form.UISchema, "account type "+at.ID+" uiSchema")
+		}
+		if len(at.Protocols) == 0 {
+			invalid = append(invalid, "account type "+at.ID+" declares no protocols")
+		}
+		seen := map[string]bool{}
+		for _, p := range at.Protocols {
+			if p.Protocol == "" || seen[p.Protocol] {
+				invalid = append(invalid, fmt.Sprintf("account type %s: empty or duplicate protocol %q", at.ID, p.Protocol))
+			}
+			seen[p.Protocol] = true
+		}
+	}
+	if len(invalid) > 0 {
+		return nil, fmt.Errorf("invalid manifest: %s", strings.Join(invalid, "; "))
 	}
 	if m.UI != nil {
 		if s := m.UI.Settings; s != nil && s.Mode == "schema" {

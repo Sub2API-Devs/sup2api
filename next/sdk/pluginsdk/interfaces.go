@@ -7,6 +7,16 @@ import (
 )
 
 // Platform mirrors pluginv1.PlatformServiceServer ("platform.adapter.v1").
+//
+// A plugin implements it for the account types it declares in the
+// top-level manifest accountTypes (ARCHITECTURE 6.6); a plugin may declare
+// account types without declaring a platform or gateway endpoints. The host
+// calls it only for accounts of the plugin's own types (Account.type is the
+// type id, Account.platform the platform of the client endpoint).
+// BuildUpstreamRequest must speak RequestMeta.protocol, the protocol sent
+// upstream, which is one of the account type's native protocols;
+// RequestMeta.client_protocol is the client endpoint's protocol and differs
+// only when the core converts the request and response.
 type Platform interface {
 	ValidateCredentials(context.Context, *pluginv1.ValidateCredentialsRequest) (*pluginv1.ValidateCredentialsResponse, error)
 	BuildUpstreamRequest(context.Context, *pluginv1.BuildUpstreamRequestRequest) (*pluginv1.BuildUpstreamRequestResponse, error)

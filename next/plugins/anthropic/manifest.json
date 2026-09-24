@@ -55,23 +55,6 @@
     "id": "anthropic",
     "label": { "en": "Anthropic", "zh": "Anthropic" },
     "protocols": ["anthropic.messages", "anthropic.count_tokens"],
-    "accountTypes": [
-      {
-        "id": "apikey",
-        "label": { "en": "API Key", "zh": "API Key" },
-        "description": {
-          "en": "An Anthropic Console API key, or a key for an Anthropic-compatible endpoint (set Base URL).",
-          "zh": "Anthropic 控制台的 API Key，或 Anthropic 兼容端点的 Key（需填写 Base URL）。"
-        },
-        "form": {
-          "mode": "schema",
-          "schema": "forms/apikey.schema.json",
-          "uiSchema": "forms/apikey.ui.json"
-        },
-        "sensitiveFields": ["api_key"],
-        "settingsFields": ["base_url", "model_mapping"]
-      }
-    ],
     "requestFields": ["model"],
     "passHeaders": [
       "anthropic-version",
@@ -129,6 +112,28 @@
       }
     ]
   },
+
+  "accountTypes": [
+    {
+      "id": "apikey",
+      "label": { "en": "API Key", "zh": "API Key" },
+      "description": {
+        "en": "An Anthropic Console API key, or a key for an Anthropic-compatible endpoint (set Base URL).",
+        "zh": "Anthropic 控制台的 API Key，或 Anthropic 兼容端点的 Key（需填写 Base URL）。"
+      },
+      "form": {
+        "mode": "schema",
+        "schema": "forms/apikey.schema.json",
+        "uiSchema": "forms/apikey.ui.json"
+      },
+      "sensitiveFields": ["api_key"],
+      "settingsFields": ["base_url", "model_mapping"],
+      "protocols": [
+        { "protocol": "anthropic.messages" },
+        { "protocol": "anthropic.count_tokens" }
+      ]
+    }
+  ],
 
   "pricing": [
     { "model": "claude-fable-5-1*", "mode": "per_token",
@@ -204,8 +209,8 @@
       "reason": { "en": "Serve POST /v1/messages and POST /v1/messages/count_tokens", "zh": "提供 POST /v1/messages 与 POST /v1/messages/count_tokens 网关端点" } },
     { "id": "platform.register",
       "reason": { "en": "Register the Anthropic platform and its API key account type", "zh": "注册 Anthropic 平台及其 API Key 账号类型" } },
-    { "id": "accounts.credentials", "scope": { "platform": "own" },
-      "reason": { "en": "Read the API key of Anthropic accounts to call the upstream API", "zh": "读取 Anthropic 账号的 API Key 以调用上游接口" } },
+    { "id": "accounts.credentials", "scope": { "types": "own" },
+      "reason": { "en": "Read the API key of accounts of its own account type (Anthropic API Key) to call the upstream API", "zh": "读取本插件账号类型（Anthropic API Key）账号的 API Key 以调用上游接口" } },
     { "id": "db.schema",
       "reason": { "en": "Store the model catalog", "zh": "保存模型目录" } },
     { "id": "routes.admin",
