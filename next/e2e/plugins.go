@@ -1,0 +1,295 @@
+package e2e
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/tidwall/gjson"
+)
+
+// ------------------------------------------------------------------ market
+
+// MarketSource returns the id of the dev market source (seeded from
+// SUB2API_MARKET_SOURCES, name "local-dev"), falling back to the first one.
+func (e *Env) MarketSource(admin *Session) int64 {
+	e.T.Helper()
+	srcs := admin.OK(e.T, http.MethodGet, "/market/sources", nil).Array()
+	if len(srcs) == 0 {
+		e.T.Fatal("no market sources configured (SUB2API_MARKET_SOURCES)")
+	}
+	if s, ok := Find(srcs, "name", "local-dev"); ok {
+		return s.Get("id").Int()
+	}
+	return srcs[0].Get("id").Int()
+}
+
+// MarketIndex fetches the static index.json served by Caddy.
+func (e *Env) MarketIndex() gjson.Result {
+	e.T.Helper()
+	r := NewClient(e.BaseURL).Do(e.T, http.MethodGet, "/market/index.json", nil)
+	if r.Status != 200 {
+		e.T.Fatalf("market index: %s", r)
+	}
+	return r.JSON()
+}
+
+// MarketPackage downloads a package listed in the static index.
+func (e *Env) MarketPackage(key, version string) []byte {
+	e.T.Helper()
+	idx := e.MarketIndex()
+	for _, p := range idx.Get("plugins").Array() {
+		if p.Get("key").String() != key {
+			continue
+		}
+		for _, v := range p.Get("versions").Array() {
+			if v.Get("version").String() != version {
+				continue
+			}
+			u := v.Get("url").String()
+			if !strings.Contains(u, "://") {
+				u = e.BaseURL + "/market/" + strings.TrimPrefix(u, "./")
+			}
+			resp, err := http.Get(u)
+			if err != nil {
+				e.T.Fatalf("download %s: %v", u, err)
+			}
+			defer resp.Body.Close()
+			data, _ := io.ReadAll(resp.Body)
+			if resp.StatusCode != 200 {
+				e.T.Fatalf("download %s: HTTP %d", u, resp.StatusCode)
+			}
+			if int64(len(data)) != v.Get("size").Int() || sha256hex(data) != v.Get("sha256").String() {
+				e.T.Fatalf("market package %s@%s does not match index size/sha256", key, version)
+			}
+			return data
+		}
+	}
+	e.T.Fatalf("%s@%s not in market index", key, version)
+	return nil
+}
+
+// ------------------------------------------------------------------ install
+
+// InstallFromMarket calls POST /plugins/install-from-market and returns the review.
+func (e *Env) InstallFromMarket(admin *Session, key, version string) gjson.Result {
+	e.T.Helper()
+	src := e.MarketSource(admin)
+	d := admin.OK(e.T, http.MethodPost, "/plugins/install-from-market",
+		map[string]any{"source_id": src, "key": key, "version": version}, admin.StepUp(e.T))
+	return reviewOf(e, d)
+}
+
+// UploadPlugin uploads a package and returns the raw response.
+func (e *Env) UploadPlugin(admin *Session, filename string, data []byte) *Resp {
+	e.T.Helper()
+	return admin.Upload(e.T, "/plugins/upload", "file", filename, data, admin.StepUp(e.T))
+}
+
+func reviewOf(e *Env, d gjson.Result) gjson.Result {
+	e.T.Helper()
+	if d.Get("review").Exists() {
+		d = d.Get("review")
+	}
+	for _, f := range []string{"plugin_key", "version", "trust", "signature_status", "host_permissions"} {
+		if !d.Get(f).Exists() {
+			e.T.Fatalf("review lacks %q: %s", f, d.Raw)
+		}
+	}
+	return d
+}
+
+// ConsentAll approves every requested host permission and grants new plugin
+// permissions to roleKeys. Critical permissions need a fresh step-up.
+func (e *Env) ConsentAll(admin *Session, review gjson.Result, roleKeys []string) {
+	e.T.Helper()
+	grants := []map[string]any{}
+	for _, p := range review.Get("host_permissions").Array() {
+		g := map[string]any{"permission": p.Get("id").String()}
+		if s := p.Get("scope"); s.Exists() && s.Type != gjson.Null {
+			g["scope"] = s.Value()
+		}
+		grants = append(grants, g)
+	}
+	if roleKeys == nil {
+		roleKeys = []string{}
+	}
+	admin.OK(e.T, http.MethodPost,
+		fmt.Sprintf("/plugins/%s/versions/%s/consent", review.Get("plugin_key").String(), review.Get("version").String()),
+		map[string]any{"grants": grants, "denied": []string{}, "role_keys_for_new_permissions": roleKeys},
+		admin.StepUp(e.T))
+}
+
+// Plugin returns GET /plugins/:key, or ok=false on 404.
+func (e *Env) Plugin(admin *Session, key string) (gjson.Result, bool) {
+	e.T.Helper()
+	r := admin.API(e.T, http.MethodGet, "/plugins/"+key, nil)
+	if r.Status == 404 {
+		return gjson.Result{}, false
+	}
+	if r.Status != 200 {
+		e.T.Fatalf("plugin detail: %s", r)
+	}
+	return r.Data(), true
+}
+
+// PluginNodeStates extracts node -> state from a plugin detail. It accepts
+// the fields "nodes" or "node_states" with "node_id" and "state"/"status".
+func PluginNodeStates(d gjson.Result) map[string]string {
+	out := map[string]string{}
+	nodes := d.Get("nodes")
+	if !nodes.Exists() {
+		nodes = d.Get("node_states")
+	}
+	for _, n := range nodes.Array() {
+		id := n.Get("node_id").String()
+		st := n.Get("state").String()
+		if st == "" {
+			st = n.Get("status").String()
+		}
+		out[id] = st
+	}
+	return out
+}
+
+// Enable starts an enable rollout and waits until the plugin is enabled on
+// every live node.
+func (e *Env) Enable(admin *Session, key string) {
+	e.T.Helper()
+	admin.OK(e.T, http.MethodPost, "/plugins/"+key+"/enable", nil)
+	e.WaitPlugin(admin, key, "enabled", "")
+}
+
+// Disable disables a plugin and waits for status=disabled.
+func (e *Env) Disable(admin *Session, key string) {
+	e.T.Helper()
+	admin.OK(e.T, http.MethodPost, "/plugins/"+key+"/disable", nil)
+	e.WaitPlugin(admin, key, "disabled", "")
+}
+
+// Upgrade starts an upgrade rollout to version and waits for it.
+func (e *Env) Upgrade(admin *Session, key, version string) {
+	e.T.Helper()
+	admin.OK(e.T, http.MethodPost, "/plugins/"+key+"/upgrade", map[string]any{"version": version})
+	e.WaitPlugin(admin, key, "enabled", version)
+}
+
+// Uninstall removes a plugin (DELETE /plugins/:key?purge=).
+func (e *Env) Uninstall(admin *Session, key string, purge bool) {
+	e.T.Helper()
+	r := admin.API(e.T, http.MethodDelete, "/plugins/"+key, nil, Query("purge", fmt.Sprint(purge)), admin.StepUp(e.T))
+	if r.Status != 200 && r.Status != 204 {
+		e.T.Fatalf("uninstall: %s", r)
+	}
+	Eventually(e.T, 30*time.Second, time.Second, "plugin "+key+" removed", func() bool {
+		_, ok := e.Plugin(admin, key)
+		return !ok
+	})
+}
+
+// WaitPlugin waits until the plugin has status (and active_version, if set)
+// and, for "enabled", every node reports "active". Fails fast on a failed
+// or cancelled rollout.
+func (e *Env) WaitPlugin(admin *Session, key, status, version string) gjson.Result {
+	e.T.Helper()
+	var last gjson.Result
+	msg := func() string {
+		return fmt.Sprintf("plugin %s status=%s version=%s (last detail: %s)", key, status, version, last.Raw)
+	}
+	Eventually(e.T, 90*time.Second, time.Second, msg, func() bool {
+		r := admin.API(e.T, http.MethodGet, "/plugins/"+key+"/rollouts/current", nil)
+		if r.Status == 200 {
+			switch ph := r.Data().Get("phase").String(); ph {
+			case "failed", "cancelled", "rolled_back":
+				e.T.Fatalf("rollout of %s ended in %s: %s", key, ph, r.Data().Raw)
+			}
+		}
+		d, ok := e.Plugin(admin, key)
+		if !ok {
+			return false
+		}
+		last = d
+		if d.Get("status").String() != status {
+			return false
+		}
+		if version != "" && d.Get("active_version").String() != version {
+			return false
+		}
+		if status == "enabled" {
+			states := PluginNodeStates(d)
+			if len(states) < len(e.NodeURLs) {
+				return false
+			}
+			for _, st := range states {
+				if st != "active" {
+					return false
+				}
+			}
+		}
+		return true
+	})
+	return last
+}
+
+// EnsurePlugin makes key@version (version "" = whatever the market's newest
+// base version is, or the currently active one) installed and enabled.
+// Different installed versions are replaced: newer via upgrade, older by
+// uninstall(purge)+install.
+func (e *Env) EnsurePlugin(admin *Session, key, version string) {
+	e.T.Helper()
+	d, ok := e.Plugin(admin, key)
+	if ok && (version == "" || d.Get("active_version").String() == version) {
+		switch d.Get("status").String() {
+		case "enabled":
+			e.WaitPlugin(admin, key, "enabled", version)
+			return
+		case "disabled", "installed":
+			e.Enable(admin, key)
+			return
+		}
+	}
+	if ok {
+		// Replace whatever is installed: simplest and independent of semver order.
+		e.Uninstall(admin, key, true)
+	}
+	if version == "" {
+		version = e.defaultVersion(key)
+	}
+	rev := e.InstallFromMarket(admin, key, version)
+	e.ConsentAll(admin, rev, []string{"admin"})
+	e.Enable(admin, key)
+}
+
+// defaultVersion is the lowest non-prerelease version listed for key.
+func (e *Env) defaultVersion(key string) string {
+	e.T.Helper()
+	for _, p := range e.MarketIndex().Get("plugins").Array() {
+		if p.Get("key").String() != key {
+			continue
+		}
+		best := ""
+		for _, v := range p.Get("versions.#.version").Array() {
+			s := v.String()
+			if strings.Contains(s, "-") {
+				continue
+			}
+			if best == "" || s < best {
+				best = s
+			}
+		}
+		if best != "" {
+			return best
+		}
+	}
+	e.T.Fatalf("plugin %s not in market", key)
+	return ""
+}
+
+// PluginRoute calls /api/v1/p/:key/<path> on base (LB or a single node URL).
+func (e *Env) PluginRoute(s *Session, base, method, key, path string, body any) *Resp {
+	e.T.Helper()
+	c := &Client{Base: base, HTTP: s.HTTP, Token: s.Token}
+	return c.API(e.T, method, "/p/"+key+path, body)
+}

@@ -1,0 +1,12 @@
+# Build context: next/ (see Dockerfile). Keep Go module dirs listed in go.work.
+**/node_modules
+**/.vite
+**/*.test
+**/*.exe
+**/.env
+**/.env.*
+!**/.env.example
+deploy/keys
+e2e/.cache
+web/dist
+.git
