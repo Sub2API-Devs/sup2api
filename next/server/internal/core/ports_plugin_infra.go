@@ -25,6 +25,50 @@ type StickyRuleCatalog interface {
 	SyncPluginDefaults(ctx context.Context, tx pgx.Tx, pluginKey string, rules []manifest.StickyRule) error
 }
 
+// ============================================================ lifecycle <-> runtime (C1 <-> C2)
+
+// Rollout is the API view of one plugin_rollouts row plus live node states.
+type Rollout struct {
+	ID            int64             `json:"id"`
+	PluginKey     string            `json:"plugin_key"`
+	Action        string            `json:"action"` // enable | upgrade | disable
+	FromVersion   string            `json:"from_version"`
+	TargetVersion string            `json:"target_version"`
+	Phase         string            `json:"phase"`
+	Coordinator   string            `json:"coordinator"`
+	Error         string            `json:"error"`
+	Nodes         []RolloutNodeState `json:"nodes"`
+}
+
+type RolloutNodeState struct {
+	NodeID string `json:"node_id"`
+	BootID string `json:"boot_id"`
+	State  string `json:"state"` // pending | ready | active | failed
+	Error  string `json:"error"`
+}
+
+// RolloutController (C2) starts and tracks two-phase rollouts.
+type RolloutController interface {
+	Enable(ctx context.Context, pluginKey string, actorID int64) (*Rollout, error)
+	Upgrade(ctx context.Context, pluginKey, version string, actorID int64) (*Rollout, error)
+	Disable(ctx context.Context, pluginKey string, actorID int64, reason string) (*Rollout, error)
+	Current(ctx context.Context, pluginKey string) (*Rollout, error) // nil when none open
+	Cancel(ctx context.Context, pluginKey string, rolloutID, actorID int64) error
+}
+
+// PluginSchemaManager (C2) owns plg_<key> schemas, roles and migrations.
+type PluginSchemaManager interface {
+	// Drop removes schema, role and migration records (uninstall with purge).
+	Drop(ctx context.Context, pluginKey string) error
+}
+
+// PluginDefaultsApplier (C1) writes version-scoped defaults (user
+// permissions, default prices, sticky rules) for a manifest. C1 calls it on
+// first install; C2 calls it when an upgrade activates.
+type PluginDefaultsApplier interface {
+	ApplyDefaults(ctx context.Context, tx pgx.Tx, m *manifest.Manifest, grantNewPermissionsToRoleKeys []string) error
+}
+
 // ============================================================ sandbox & egress (owner: D)
 
 // LaunchSpec describes how to start one plugin process.

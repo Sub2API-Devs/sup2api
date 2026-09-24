@@ -256,3 +256,52 @@
 3. 通过第 2 节的检查；数据库相关逻辑必须有测试（可用 `TEST_DATABASE_URL` 时运行）
 4. 在自己的分支上提交，提交信息格式 `feat(next/<模块>): ...`
 5. 交付说明写明：完成了什么、没完成什么、对其他模块的假设、需要主控组装的内容（构造函数签名、依赖）
+
+## 11. 跨 agent 约定的格式
+
+### 11.1 插件市场索引（C1 读取，E 的 `sub2api-plugin index` 生成）
+
+`index.json`：
+
+```json
+{
+  "version": 1,
+  "generated_at": "2026-09-24T12:00:00Z",
+  "plugins": [{
+    "key": "anthropic",
+    "name": {"en": "Anthropic", "zh": "Anthropic"},
+    "description": {"en": "...", "zh": "..."},
+    "publisher": "sub2api",
+    "versions": [{
+      "version": "0.1.0",
+      "url": "https://example.com/anthropic-0.1.0.s2plugin",
+      "sha256": "<hex of the .s2plugin file>",
+      "size": 1234567,
+      "host_compat": ">=0.1.0 <0.2.0"
+    }]
+  }]
+}
+```
+
+`index.json.sig`：一行 base64，内容为 Ed25519 对 ASCII 字符串 `"sub2api-market-index-v1:" + sha256hex(index.json 原始字节)` 的签名，使用市场源配置的公钥验证。`url` 可以是相对地址（相对 index.json 所在目录）。
+
+### 11.2 插件出口 SDK（D 实现 `sdk/pluginsdk/egress`，E 调用）
+
+```go
+package egress
+// Install routes http.DefaultTransport and net.DefaultResolver through the
+// host EgressService. Safe to call once, after InitHost.
+func Install(client pluginv1.EgressServiceClient) error
+// DialContext opens a tunnelled TCP connection (for DB/Redis/gRPC clients).
+func DialContext(ctx context.Context, network, address string) (net.Conn, error)
+```
+
+插件的 PostgreSQL 连接（受限 DSN）必须使用 `DialContext`（pgx: `cfg.DialFunc = egress.DialContext`）。
+
+### 11.3 插件主进程启动（C2 调 D）
+
+C2 通过 `core.PluginLauncher.Command` 得到 `*exec.Cmd` 交给 go-plugin 的 `ClientConfig.Cmd`；进程启动后调用 `Watch`。主进程的隐藏子命令 `sub2api plugin-exec` 由 D 实现 `sandbox.RunExec(args []string) int`，主控在 `main.go` 接上。
+
+### 11.4 测试用 mock 上游（QA 实现）
+
+compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/messages/count_tokens`：流式与非流式都返回带 usage 的响应；请求头 `x-mock-status: 429|401|529|500` 时返回对应错误（429 带 `retry-after: 2`）；`x-mock-delay-ms` 控制延迟。测试环境设置 `SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM=true`，账号 `base_url` 指向 `http://mock-upstream:8080`。

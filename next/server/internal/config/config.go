@@ -29,6 +29,10 @@ type Config struct {
 	BootstrapAdminPassword string // SUB2API_BOOTSTRAP_ADMIN_PASSWORD
 
 	Plugins PluginConfig
+
+	// AllowPrivateUpstream disables the SSRF guard for upstream URLs built by
+	// platform plugins (SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM). Test only.
+	AllowPrivateUpstream bool
 }
 
 type PluginConfig struct {
@@ -84,6 +88,7 @@ func Load(goos string) (*Config, error) {
 	}
 
 	linux := goos == "linux"
+	c.AllowPrivateUpstream = boolEnv("SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM", false)
 	p := &c.Plugins
 	p.DataDir = env("SUB2API_PLUGIN_DIR", "/var/lib/sub2api/plugins")
 	p.DevMode = boolEnv("SUB2API_PLUGIN_DEV_MODE", false)
