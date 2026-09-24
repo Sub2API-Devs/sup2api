@@ -218,3 +218,29 @@ go test -count=1 -timeout 50m -v ./...
 **sup2api 验证（2026-09-25，数据已清空重建，部署 `6c6b69b`）**：迁移 0001–0005 在新库上执行成功；内置 anthropic 自动启用；从市场安装并启用 relay；两种账号类型的 `/account-types` 都显示原生服务 `POST /v1/messages`、`/v1/messages/count_tokens`；同一分组放 anthropic apikey 与 relay relay_key 各一个账号（上游为 httpbin 回显、假 Key），16 次请求分别由两个账号服务（7 / 9）；使用记录的 `plugin_key`、`account_type`、`upstream_protocol` 正确；禁用 relay 后只调度 anthropic 账号、relay 账号保留。验证数据已删除，relay 保持启用。验证中发现并修复：删除用户不删除其 API Key（导致分组无法删除）。部署时修复：market-init 内存 64M 不够，改 256M。
 
 **合并后主控要做**：`internal/app` 组装（gateway 的 ProtocolConverters 交给 account）；清空 sup2api 数据卷重新部署；在 sup2api 上验证混合账号类型服务 `/v1/messages`；更新本节。
+
+---
+
+## 10. 第三轮：平台声明端点、账号类型声明平台、内置三平台（2026-09-25 起）
+
+**用户决定**
+- 账号 → 账号类型 → 声明支持的平台 → 平台声明端点；不同账号类型可以支持同一个平台；不同平台的端点不能冲突
+- 分组 = 一组账号一起提供服务（可混放类型）；API Key 只绑定一个分组
+- 核心内置 anthropic、openai、gemini 三个平台及端点；插件可以声明新平台，id 不能与内置或其他插件重复，端点不能冲突
+- 第二轮已完成的全局定价、协议转换框架、凭证授权、未启用插件端点 404 保持
+
+**第二轮收尾**：f-web-types 已合并（`95765f35e`）并部署到 sup2api（`1b47af5`），控制台与第二轮后端一致。
+
+**主控已完成**：ARCHITECTURE §6.4、§6.6 重写；CONTRACTS §13；manifest（`platforms[]` 含 endpoints、`accountTypes[].platforms`）、core（`EndpointBinding.Platform`、`PlatformBinding.Builtin`、`Platforms()`、`PlatformForProtocol`、`AccountTypesForPlatform`、`Supports`）、新包 `server/internal/platforms`（嵌入 JSON，anthropic 已从插件移入）——提交 `989d87973`、`025f7f617`
+
+**派发的 agent（基于 `025f7f617`）**
+
+| 代号 | 目录 | 分支 | 状态 |
+|---|---|---|---|
+| g3-platforms-gateway | `gateway`、`platforms/openai.json`、`gemini.json` | next/g3-platforms-gateway | ⏳ |
+| c3-registry | `plugin/*` | next/c3-registry | ⏳ |
+| a3-accounts | `account`、`billing`、`usage`、`group`、`apikey`（新接口 `/platforms`，分组/Key 的 `platforms`） | next/a3-accounts | ⏳ |
+| e3-plugins | `plugins/*`、`tools/sub2api-plugin`、`e2e`（AC19）、`sdk/pluginsdk` | next/e3-plugins | ⏳ |
+| f3-web | `web/`（平台页、分组/Key 显示可访问平台） | next/f3-web | ⏳ |
+
+**合并后主控要做**：`internal/app` 组装（group/apikey 可能新增 registry 依赖）；清空 sup2api 重建并验证；更新本节。
