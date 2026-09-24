@@ -713,4 +713,4 @@ POST `/accounts/:id/test`（`account:test`）：
 9. §5.5 `GET /prices`（`?platform=`）：`platform` 已按 §12 删除，代码筛选参数为 `mode`、`source`、`plugin_key`、`enabled`、`q`。
 10. §5.4 / §11.7：前文写控制台平台调用（含 `BuildTestRequest`）超时 10 秒；账号测试接口在处理器里设置的整体超时为 30 秒（`account/service.go` `testTimeout`），插件调用本身是否另有 10 秒限制以 C2 实现为准。
 11. §5.3 / §13：`GET /me/api-keys` 不返回 `user_email`；没有普通用户修改自己 Key 的接口（只有管理员 `PATCH /api-keys/:id`）。
-12. §14 中以下条目在本次核对的代码（b1348a775）里**尚未实现**，前端对接时注意：`GET /me/platforms`；`GET/PUT /settings/gateway`（`gateway/settings.go` 有结构但未注册路由）；使用记录的 `client_request_id` 字段与筛选（网关目前只写日志）；`DELETE /plugins/:key?purge_accounts=true`（处理器只读 `purge`）；`GET /plugins/:key/egress` 的 `domains`（处理器返回 `{from, to, summary, items, page}`）；`GET /market/plugins` 响应顶层的 `host_version`（响应仍是数组；每个版本的 `compatible` 已实现）；`proxy.Options.AllowPrivate`（直连 SSRF 检查目前只在网关 `gateway/ssrf.go` 和账号测试中）。
+12. ~~§14 中若干条目在 b1348a775 时尚未实现~~：已于第四轮合并实现（`/me/platforms`、`/settings/gateway`、`client_request_id`、`purge_accounts`、出口 `domains`、市场顶层 `host_version`、`proxy.Options.AllowPrivate`），见 §14。
