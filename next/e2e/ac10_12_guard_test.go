@@ -161,17 +161,14 @@ func TestAC12_RollupOncePerCycle(t *testing.T) {
 
 	runs := func() map[string][]string {
 		out := map[string][]string{} // scheduled_at -> node ids
-		for _, r := range admin.OK(t, http.MethodGet, "/plugins/guard/jobs", nil).Array() {
-			for _, run := range r.Get("runs").Array() {
-				if r.Get("id").String() != "rollup" && run.Get("job_id").String() != "rollup" {
-					continue
-				}
-				if run.Get("manual").Bool() {
-					continue
-				}
-				k := run.Get("scheduled_at").String()
-				out[k] = append(out[k], run.Get("node_id").String())
+		// GET /plugins/:key/jobs -> {jobs:[{id, schedule, last_run}], recent_runs:[...]}
+		d := admin.OK(t, http.MethodGet, "/plugins/guard/jobs", nil)
+		for _, run := range d.Get("recent_runs").Array() {
+			if run.Get("job_id").String() != "rollup" || run.Get("manual").Bool() {
+				continue
 			}
+			k := run.Get("scheduled_at").String()
+			out[k] = append(out[k], run.Get("node_id").String())
 		}
 		return out
 	}

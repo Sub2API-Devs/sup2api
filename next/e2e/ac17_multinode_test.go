@@ -48,9 +48,11 @@ func TestAC17_NodeLoss(t *testing.T) {
 		t.Fatalf("slot members in Redis: %q", members)
 	}
 
-	// Crash node-2 (SIGKILL: no graceful slot release).
-	killed := time.Now()
+	// Crash node-2 (SIGKILL: no graceful slot release). The clock starts once
+	// docker kill returned (it runs over ssh and may take seconds); the last
+	// heartbeat is before that, so the node must vanish within the 15 s TTL.
 	e.KillNode(2)
+	killed := time.Now()
 	defer e.StartNode(2)
 	Eventually(t, 20*time.Second, 500*time.Millisecond, "node-2 leaves the node list", func() bool {
 		return !slices.Contains(e.AliveNodeIDs(admin), "node-2")
