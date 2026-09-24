@@ -167,9 +167,12 @@ function tryEvaluate(expression: string, input: EvalInput) {
 
 // ------------------------------------------------------------------ prices
 
+// Prices are keyed by complete model ids; wildcards are rejected (same rule as the server).
+const MODEL_ID = /^[A-Za-z0-9._:/@+-]{1,200}$/
+
 interface MockPrice {
   id: number
-  model_pattern: string
+  model: string
   mode: PriceMode
   config: Record<string, any>
   expression: string
@@ -199,11 +202,11 @@ const SONNET_DEFAULT =
   'len <= 200000 ? tier("standard", p*3 + c*15 + cr*0.3 + cc*3.75 + cc1h*6) : tier("long_context", p*6 + c*22.5 + cr*0.6 + cc*7.5 + cc1h*12)'
 
 const prices: MockPrice[] = [
-  mkPrice({ id: 1, model_pattern: 'claude-sonnet-*', mode: 'expression', config: {}, expression: SONNET_DEFAULT, source: 'plugin_default', plugin_key: 'anthropic', enabled: true, note: '' }),
-  mkPrice({ id: 2, model_pattern: 'claude-haiku-*', mode: 'per_token', config: { p: 1, c: 5, cr: 0.1, cc: 1.25, cc1h: 2 }, source: 'plugin_default', plugin_key: 'anthropic', enabled: true, note: '' }),
+  mkPrice({ id: 1, model: 'claude-sonnet-4-5', mode: 'expression', config: {}, expression: SONNET_DEFAULT, source: 'plugin_default', plugin_key: 'anthropic', enabled: true, note: '' }),
+  mkPrice({ id: 2, model: 'claude-haiku-4-5', mode: 'per_token', config: { p: 1, c: 5, cr: 0.1, cc: 1.25, cc1h: 2 }, source: 'plugin_default', plugin_key: 'anthropic', enabled: true, note: '' }),
   mkPrice({
     id: 3,
-    model_pattern: 'claude-sonnet-x',
+    model: 'claude-sonnet-x',
     mode: 'expression',
     config: {
       tiers: [
@@ -217,10 +220,10 @@ const prices: MockPrice[] = [
     enabled: true,
     note: 'fast mode costs double'
   }),
-  mkPrice({ id: 4, model_pattern: 'web-search', mode: 'per_request', config: { price: 0.01 }, source: 'admin', plugin_key: null, enabled: true, note: '' }),
+  mkPrice({ id: 4, model: 'web-search', mode: 'per_request', config: { price: 0.01 }, source: 'admin', plugin_key: null, enabled: true, note: '' }),
   mkPrice({
     id: 5,
-    model_pattern: 'claude-opus-*',
+    model: 'claude-opus-4-1',
     mode: 'expression',
     config: {},
     expression: 'tier("base", flat(0.01) + p*15 + c*75) * (hour("Asia/Shanghai") < 8 ? 0.8 : 1)',
@@ -230,8 +233,8 @@ const prices: MockPrice[] = [
     note: 'night discount'
   }),
   // Default prices of the built-in openai / gemini plugins (CONTRACTS §14.1).
-  mkPrice({ id: 6, model_pattern: 'gpt-4o*', mode: 'per_token', config: { p: 2.5, c: 10, cr: 1.25, cc: 0, cc1h: 0 }, source: 'plugin_default', plugin_key: 'openai', enabled: true, note: '' }),
-  mkPrice({ id: 7, model_pattern: 'gemini-2.5-flash*', mode: 'per_token', config: { p: 0.3, c: 2.5, cr: 0.075, cc: 0, cc1h: 0 }, source: 'plugin_default', plugin_key: 'gemini', enabled: true, note: '' })
+  mkPrice({ id: 6, model: 'gpt-4o', mode: 'per_token', config: { p: 2.5, c: 10, cr: 1.25, cc: 0, cc1h: 0 }, source: 'plugin_default', plugin_key: 'openai', enabled: true, note: '' }),
+  mkPrice({ id: 7, model: 'gemini-2.5-flash', mode: 'per_token', config: { p: 0.3, c: 2.5, cr: 0.075, cc: 0, cc1h: 0 }, source: 'plugin_default', plugin_key: 'gemini', enabled: true, note: '' })
 ]
 
 function exprOf(body: any): { mode: PriceMode; config: Record<string, any>; expression: string } {
@@ -286,7 +289,7 @@ function validate(body: any) {
 function priceFilter(q: Record<string, string>) {
   return prices.filter((p) => {
     if (q.mode && p.mode !== q.mode) return false
-    if (q.q && !`${p.model_pattern} ${p.note} ${p.plugin_key || ''}`.toLowerCase().includes(q.q.toLowerCase())) return false
+    if (q.q && !`${p.model} ${p.note} ${p.plugin_key || ''}`.toLowerCase().includes(q.q.toLowerCase())) return false
     return true
   })
 }
@@ -349,17 +352,18 @@ function checkSave(body: any) {
 
 on('POST', '/prices', (req) => {
   const b = req.body || {}
-  if (!b.model_pattern) return fail(400, 'invalid_argument', 'invalid', { fields: [{ field: 'model_pattern', code: 'required', message: 'Model is required' }] })
+  if (!b.model) return fail(400, 'invalid_argument', 'invalid', { fields: [{ field: 'model', code: 'required', message: 'Model is required' }] })
+  if (!MODEL_ID.test(b.model)) return fail(400, 'invalid_argument', 'invalid', { fields: [{ field: 'model', code: 'invalid', message: 'a complete model id (no wildcards)' }] })
   if ('platform' in b) return fail(400, 'invalid_argument', 'unknown field "platform"')
   const v = checkSave(b)
   if ('__status' in v) return v
   // One admin price per model pattern (prices are global, CONTRACTS §12).
-  if (prices.some((p) => p.source === 'admin' && p.model_pattern === b.model_pattern)) {
+  if (prices.some((p) => p.source === 'admin' && p.model === b.model)) {
     return fail(409, 'conflict', 'an admin price for this model already exists')
   }
   const p: MockPrice = {
     id: nextId(),
-    model_pattern: b.model_pattern,
+    model: b.model,
     mode: v.mode,
     config: v.config,
     expression: v.expression,
@@ -381,6 +385,7 @@ on('PATCH', '/prices/:id', (req) => {
   const b = req.body || {}
   const keys = Object.keys(b).filter((k) => k !== 'confirm')
   if (p.source === 'plugin_default' && keys.some((k) => k !== 'enabled')) return fail(409, 'conflict', 'plugin default prices can only be enabled/disabled; override it instead')
+  if (b.model !== undefined && !MODEL_ID.test(b.model)) return fail(400, 'invalid_argument', 'invalid', { fields: [{ field: 'model', code: 'invalid', message: 'a complete model id (no wildcards)' }] })
   if (keys.length === 1 && keys[0] === 'enabled') {
     p.enabled = !!b.enabled
     p.updated_at = now()
@@ -389,7 +394,7 @@ on('PATCH', '/prices/:id', (req) => {
   const v = checkSave({ ...p, ...b })
   if ('__status' in v) return v
   Object.assign(p, {
-    model_pattern: b.model_pattern ?? p.model_pattern,
+    model: b.model ?? p.model,
     mode: v.mode,
     config: v.config,
     expression: v.expression,
@@ -412,7 +417,7 @@ on('DELETE', '/prices/:id', (req) => {
 on('POST', '/prices/:id/override', (req) => {
   const p = findPrice(req)
   if (!p) return fail(404, 'not_found', 'price not found')
-  const existing = prices.find((x) => x.source === 'admin' && x.model_pattern === p.model_pattern)
+  const existing = prices.find((x) => x.source === 'admin' && x.model === p.model)
   if (existing) return existing
   const copy: MockPrice = { ...p, id: nextId(), source: 'admin', plugin_key: null, note: `override of ${p.plugin_key} default`, updated_at: now() }
   prices.push(copy)
@@ -454,10 +459,10 @@ function rnd(seed: number) {
 }
 
 function priceFor(model: string) {
-  const match = (pat: string) => (pat.endsWith('*') ? model.startsWith(pat.slice(0, -1)) : model === pat)
+  const match = (id: string) => model === id // prices are keyed by complete model ids
   return (
-    prices.find((p) => p.source === 'admin' && p.enabled && match(p.model_pattern)) ||
-    prices.find((p) => p.source === 'plugin_default' && p.enabled && match(p.model_pattern)) ||
+    prices.find((p) => p.source === 'admin' && p.enabled && match(p.model)) ||
+    prices.find((p) => p.source === 'plugin_default' && p.enabled && match(p.model)) ||
     null
   )
 }
@@ -565,7 +570,7 @@ for (let i = 0; i < 90; i++) {
     hook_decisions,
     created_at: at.toISOString(),
     _detail: billing.detail,
-    _price: billing.status === 'billed' && price ? { id: price.id, model_pattern: price.model_pattern, source: price.source, plugin_key: price.plugin_key } : null
+    _price: billing.status === 'billed' && price ? { id: price.id, model: price.model, source: price.source, plugin_key: price.plugin_key } : null
   }
   usageRows.push(row)
 }

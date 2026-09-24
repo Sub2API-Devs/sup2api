@@ -14,16 +14,16 @@ import (
 )
 
 // SyncPluginDefaults implements core.PriceCatalog: it upserts the plugin's
-// default prices (source=plugin_default, one per model pattern and plugin)
+// default prices (source=plugin_default, one per model id and plugin)
 // inside the caller's transaction, deletes defaults the plugin no longer
 // declares and records expression history. Admin prices and other plugins'
 // defaults are never touched. Enabled/note of existing rows are kept so that
 // an administrator's "disable" survives upgrades.
 func (s *Service) SyncPluginDefaults(ctx context.Context, tx pgx.Tx, pluginKey string, entries []manifest.PricingEntry) error {
-	patterns := []string{} // not nil: "= ANY(NULL)" would keep every row
+	models := []string{} // not nil: "= ANY(NULL)" would keep every row
 	for i, e := range entries {
-		if e.Model == "" {
-			return core.ErrInvalidArgument.WithMessage(fmt.Sprintf("pricing[%d]: model is required", i))
+		if !manifest.ValidModelID(e.Model) {
+			return core.ErrInvalidArgument.WithMessage(fmt.Sprintf("pricing[%d]: model %q must be a complete model id (no wildcards)", i, e.Model))
 		}
 		cfg := json.RawMessage("{}")
 		if e.Config != nil {
@@ -42,9 +42,9 @@ func (s *Service) SyncPluginDefaults(ctx context.Context, tx pgx.Tx, pluginKey s
 			return core.ErrInvalidArgument.WithMessage(fmt.Sprintf("pricing[%d] (%s): %v", i, e.Model, err))
 		}
 		_, err = tx.Exec(ctx, `
-			INSERT INTO model_prices (model_pattern, mode, config, expression, expr_version, expr_hash, source, plugin_key)
+			INSERT INTO model_prices (model, mode, config, expression, expr_version, expr_hash, source, plugin_key)
 			VALUES ($1, $2, $3, $4, $5, $6, 'plugin_default', $7)
-			ON CONFLICT (plugin_key, model_pattern) WHERE source = 'plugin_default' DO UPDATE SET
+			ON CONFLICT (plugin_key, model) WHERE source = 'plugin_default' DO UPDATE SET
 				mode = EXCLUDED.mode, config = EXCLUDED.config, expression = EXCLUDED.expression,
 				expr_version = EXCLUDED.expr_version, expr_hash = EXCLUDED.expr_hash,
 				updated_by = NULL, updated_at = now()`,
@@ -55,12 +55,12 @@ func (s *Service) SyncPluginDefaults(ctx context.Context, tx pgx.Tx, pluginKey s
 		if err := recordHistory(ctx, tx, prog); err != nil {
 			return err
 		}
-		patterns = append(patterns, e.Model)
+		models = append(models, e.Model)
 	}
 	_, err := tx.Exec(ctx, `
 		DELETE FROM model_prices
-		WHERE source = 'plugin_default' AND plugin_key = $1 AND NOT (model_pattern = ANY($2::text[]))`,
-		pluginKey, patterns)
+		WHERE source = 'plugin_default' AND plugin_key = $1 AND NOT (model = ANY($2::text[]))`,
+		pluginKey, models)
 	if err != nil {
 		return fmt.Errorf("delete stale default prices: %w", err)
 	}

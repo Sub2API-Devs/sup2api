@@ -3,7 +3,6 @@ package billing
 import (
 	"context"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
@@ -20,7 +19,6 @@ const (
 type priceEntry struct {
 	rule   core.PriceRule
 	source string
-	glob   bool
 	// Plugin defaults only: the declaring plugin and when it was installed
 	// (nil when the plugin row is gone).
 	pluginKey   string
@@ -29,7 +27,7 @@ type priceEntry struct {
 
 type priceSnapshot struct {
 	at      time.Time
-	entries []priceEntry // sorted by match precedence
+	byModel map[string]core.PriceRule // the winning entry per model id
 }
 
 type resolved struct {
@@ -37,22 +35,12 @@ type resolved struct {
 	rule *core.PriceRule // nil = no match
 }
 
-// less orders entries by precedence (ARCHITECTURE 7.3): admin prices before
-// plugin defaults; among plugin defaults the earliest installed plugin first;
-// within one source (admin, or one plugin) an exact model before globs and
-// longer globs first.
+// less orders entries of one model by precedence (ARCHITECTURE 7.3): the
+// admin price first, then plugin defaults by install time (earliest first).
+// Prices are keyed by complete model id; there are no wildcards.
 func less(a, b priceEntry) bool {
-	// Admin prices always win; within a source the most specific pattern
-	// wins (exact before glob, longer glob first). Between plugin defaults
-	// of equal specificity the earliest installed plugin wins.
 	if (a.source == SourceAdmin) != (b.source == SourceAdmin) {
 		return a.source == SourceAdmin
-	}
-	if a.glob != b.glob {
-		return !a.glob
-	}
-	if len(a.rule.Pattern) != len(b.rule.Pattern) {
-		return len(a.rule.Pattern) > len(b.rule.Pattern)
 	}
 	if a.source != SourceAdmin && a.pluginKey != b.pluginKey {
 		switch {
@@ -68,34 +56,6 @@ func less(a, b priceEntry) bool {
 	return a.rule.ID < b.rule.ID
 }
 
-func isGlob(pattern string) bool { return strings.ContainsAny(pattern, "*?") }
-
-// globMatch matches '*' (any run, including '/') and '?' (one byte).
-func globMatch(pattern, s string) bool {
-	p, i := 0, 0
-	star, mark := -1, 0
-	for i < len(s) {
-		switch {
-		case p < len(pattern) && (pattern[p] == '?' || pattern[p] == s[i]):
-			p++
-			i++
-		case p < len(pattern) && pattern[p] == '*':
-			star, mark = p, i
-			p++
-		case star >= 0:
-			p = star + 1
-			mark++
-			i = mark
-		default:
-			return false
-		}
-	}
-	for p < len(pattern) && pattern[p] == '*' {
-		p++
-	}
-	return p == len(pattern)
-}
-
 func (s *Service) snapshot(ctx context.Context) (*priceSnapshot, error) {
 	s.mu.Lock()
 	snap := s.prices
@@ -104,7 +64,7 @@ func (s *Service) snapshot(ctx context.Context) (*priceSnapshot, error) {
 		return snap, nil
 	}
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT mp.id, mp.model_pattern, mp.mode, mp.expression, mp.expr_version, mp.expr_hash, mp.source,
+		SELECT mp.id, mp.model, mp.mode, mp.expression, mp.expr_version, mp.expr_hash, mp.source,
 			COALESCE(mp.plugin_key, ''), p.installed_at
 		FROM model_prices mp LEFT JOIN plugins p ON p.key = mp.plugin_key
 		WHERE mp.enabled`)
@@ -112,21 +72,20 @@ func (s *Service) snapshot(ctx context.Context) (*priceSnapshot, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	snap = &priceSnapshot{at: time.Now()}
+	var entries []priceEntry
 	for rows.Next() {
 		var e priceEntry
 		r := &e.rule
-		if err := rows.Scan(&r.ID, &r.Pattern, &r.Mode, &r.Expression, &r.ExprVersion, &r.ExprHash, &e.source,
+		if err := rows.Scan(&r.ID, &r.Model, &r.Mode, &r.Expression, &r.ExprVersion, &r.ExprHash, &e.source,
 			&e.pluginKey, &e.installedAt); err != nil {
 			return nil, err
 		}
-		e.glob = isGlob(r.Pattern)
-		snap.entries = append(snap.entries, e)
+		entries = append(entries, e)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	sort.Slice(snap.entries, func(i, j int) bool { return less(snap.entries[i], snap.entries[j]) })
+	snap = newSnapshot(time.Now(), entries)
 	s.mu.Lock()
 	s.prices = snap
 	s.resolved = map[string]resolved{}
@@ -134,21 +93,25 @@ func (s *Service) snapshot(ctx context.Context) (*priceSnapshot, error) {
 	return snap, nil
 }
 
-// match returns the best entry for model or nil.
-func (snap *priceSnapshot) match(model string) *core.PriceRule {
-	for i := range snap.entries {
-		e := &snap.entries[i]
-		if e.glob {
-			if !globMatch(e.rule.Pattern, model) {
-				continue
-			}
-		} else if e.rule.Pattern != model {
-			continue
+// newSnapshot keeps the highest-precedence entry of every model id.
+func newSnapshot(at time.Time, entries []priceEntry) *priceSnapshot {
+	sort.Slice(entries, func(i, j int) bool { return less(entries[i], entries[j]) })
+	snap := &priceSnapshot{at: at, byModel: map[string]core.PriceRule{}}
+	for _, e := range entries {
+		if _, ok := snap.byModel[e.rule.Model]; !ok {
+			snap.byModel[e.rule.Model] = e.rule
 		}
-		r := e.rule
-		return &r
 	}
-	return nil
+	return snap
+}
+
+// match returns the price of the exact model id or nil.
+func (snap *priceSnapshot) match(model string) *core.PriceRule {
+	r, ok := snap.byModel[model]
+	if !ok {
+		return nil
+	}
+	return &r
 }
 
 // Resolve implements core.Pricer. Prices are global per model: the platform

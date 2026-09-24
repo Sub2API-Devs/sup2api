@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/billing/expr"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
@@ -20,28 +21,28 @@ import (
 // Price is the API view of a model_prices row. Prices are global per model
 // (ARCHITECTURE 7.3).
 type Price struct {
-	ID           int64           `json:"id"`
-	ModelPattern string          `json:"model_pattern"`
-	Mode         string          `json:"mode"`
-	Config       json.RawMessage `json:"config"`
-	Expression   string          `json:"expression"`
-	ExprVersion  int             `json:"expr_version"`
-	ExprHash     string          `json:"expr_hash"`
-	Source       string          `json:"source"`
-	PluginKey    *string         `json:"plugin_key"`
-	Enabled      bool            `json:"enabled"`
-	Note         string          `json:"note"`
-	UpdatedBy    *int64          `json:"updated_by"`
-	UpdatedAt    time.Time       `json:"updated_at"`
-	Analysis     *expr.Analysis  `json:"analysis,omitempty"`
+	ID          int64           `json:"id"`
+	Model       string          `json:"model"`
+	Mode        string          `json:"mode"`
+	Config      json.RawMessage `json:"config"`
+	Expression  string          `json:"expression"`
+	ExprVersion int             `json:"expr_version"`
+	ExprHash    string          `json:"expr_hash"`
+	Source      string          `json:"source"`
+	PluginKey   *string         `json:"plugin_key"`
+	Enabled     bool            `json:"enabled"`
+	Note        string          `json:"note"`
+	UpdatedBy   *int64          `json:"updated_by"`
+	UpdatedAt   time.Time       `json:"updated_at"`
+	Analysis    *expr.Analysis  `json:"analysis,omitempty"`
 }
 
-const priceColumns = `id, model_pattern, mode, config, expression, expr_version, expr_hash,
+const priceColumns = `id, model, mode, config, expression, expr_version, expr_hash,
 	source, plugin_key, enabled, note, updated_by, updated_at`
 
 func scanPrice(row pgx.Row) (*Price, error) {
 	p := &Price{}
-	err := row.Scan(&p.ID, &p.ModelPattern, &p.Mode, &p.Config, &p.Expression, &p.ExprVersion,
+	err := row.Scan(&p.ID, &p.Model, &p.Mode, &p.Config, &p.Expression, &p.ExprVersion,
 		&p.ExprHash, &p.Source, &p.PluginKey, &p.Enabled, &p.Note, &p.UpdatedBy, &p.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -99,7 +100,7 @@ func (s *Service) listPrices(c *gin.Context) {
 		add("enabled = ?", v == "true" || v == "1")
 	}
 	if v := strings.TrimSpace(c.Query("q")); v != "" {
-		add("(model_pattern ILIKE ? OR note ILIKE ?)", "%"+escapeLike(v)+"%")
+		add("(model ILIKE ? OR note ILIKE ?)", "%"+escapeLike(v)+"%")
 	}
 	cond := ""
 	if len(where) > 0 {
@@ -112,7 +113,7 @@ func (s *Service) listPrices(c *gin.Context) {
 	}
 	args = append(args, size, (page-1)*size)
 	rows, err := s.db.Pool.Query(ctx, `SELECT `+priceColumns+` FROM model_prices`+cond+
-		` ORDER BY model_pattern, source, plugin_key NULLS FIRST, id LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
+		` ORDER BY model, source, plugin_key NULLS FIRST, id LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -153,12 +154,12 @@ func (s *Service) showPrice(c *gin.Context) {
 
 // priceInput is the body of POST/PATCH /prices.
 type priceInput struct {
-	ModelPattern *string         `json:"model_pattern"`
-	Mode         *string         `json:"mode"`
-	Config       json.RawMessage `json:"config"`
-	Expression   *string         `json:"expression"`
-	Enabled      *bool           `json:"enabled"`
-	Note         *string         `json:"note"`
+	Model      *string         `json:"model"`
+	Mode       *string         `json:"mode"`
+	Config     json.RawMessage `json:"config"`
+	Expression *string         `json:"expression"`
+	Enabled    *bool           `json:"enabled"`
+	Note       *string         `json:"note"`
 	// Confirm acknowledges the big-cost warning.
 	Confirm bool `json:"confirm"`
 }
@@ -214,8 +215,10 @@ func (s *Service) check(ctx context.Context, mode string, config json.RawMessage
 	return &checked{mode: mode, config: config, src: src, prog: prog}, nil
 }
 
-func validPattern(p string) bool {
-	return p != "" && len(p) <= 200 && strings.TrimSpace(p) == p
+// modelField is the field error for a model that is not a complete model id.
+func modelField(code string) core.FieldError {
+	return core.FieldError{Field: "model", Code: code,
+		Message: "a complete model id: letters, digits and . _ : / @ + - (no wildcards)"}
 }
 
 func (s *Service) createPrice(c *gin.Context) {
@@ -225,9 +228,12 @@ func (s *Service) createPrice(c *gin.Context) {
 		return
 	}
 	var fields []core.FieldError
-	pattern, mode := deref(in.ModelPattern), deref(in.Mode)
-	if !validPattern(pattern) {
-		fields = append(fields, core.FieldError{Field: "model_pattern", Code: "required", Message: "model name or glob"})
+	model, mode := deref(in.Model), deref(in.Mode)
+	switch {
+	case model == "":
+		fields = append(fields, modelField("required"))
+	case !manifest.ValidModelID(model):
+		fields = append(fields, modelField("invalid"))
 	}
 	if mode == "" {
 		fields = append(fields, core.FieldError{Field: "mode", Code: "required", Message: "per_request, per_token or expression"})
@@ -246,11 +252,11 @@ func (s *Service) createPrice(c *gin.Context) {
 	var p *Price
 	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
 		row := tx.QueryRow(ctx, `
-			INSERT INTO model_prices (model_pattern, mode, config, expression, expr_version, expr_hash,
+			INSERT INTO model_prices (model, mode, config, expression, expr_version, expr_hash,
 				source, enabled, note, updated_by)
 			VALUES ($1, $2, $3, $4, $5, $6, 'admin', $7, $8, $9)
 			RETURNING `+priceColumns,
-			pattern, ck.mode, ck.config, ck.src, ck.prog.Version(), ck.prog.Hash(),
+			model, ck.mode, ck.config, ck.src, ck.prog.Version(), ck.prog.Hash(),
 			enabled, deref(in.Note), nullID(uid))
 		var err error
 		if p, err = scanPrice(row); err != nil {
@@ -259,7 +265,7 @@ func (s *Service) createPrice(c *gin.Context) {
 		return recordHistory(ctx, tx, ck.prog)
 	})
 	if store.IsUniqueViolation(err, "") {
-		httpapi.Fail(c, core.ErrConflict.WithMessage("an admin price for this model pattern already exists"))
+		httpapi.Fail(c, core.ErrConflict.WithMessage("an admin price for this model already exists"))
 		return
 	}
 	if err != nil {
@@ -289,19 +295,19 @@ func (s *Service) updatePrice(c *gin.Context) {
 		}
 		if cur.Source == SourcePluginDefault {
 			// Plugin defaults are owned by the plugin; only enabled may change.
-			if in.ModelPattern != nil || in.Mode != nil || in.Config != nil || in.Expression != nil || in.Note != nil {
+			if in.Model != nil || in.Mode != nil || in.Config != nil || in.Expression != nil || in.Note != nil {
 				return core.ErrConflict.WithMessage("plugin default prices are read-only; use override to create an admin price")
 			}
 		}
-		pattern, mode := cur.ModelPattern, cur.Mode
-		if in.ModelPattern != nil {
-			pattern = *in.ModelPattern
+		model, mode := cur.Model, cur.Mode
+		if in.Model != nil {
+			model = *in.Model
 		}
 		if in.Mode != nil {
 			mode = *in.Mode
 		}
-		if !validPattern(pattern) {
-			return core.InvalidFields(core.FieldError{Field: "model_pattern", Code: "invalid", Message: "model name or glob"})
+		if !manifest.ValidModelID(model) {
+			return core.InvalidFields(modelField("invalid"))
 		}
 		config, expression := cur.Config, cur.Expression
 		pricing := in.Mode != nil || in.Config != nil || in.Expression != nil
@@ -332,15 +338,15 @@ func (s *Service) updatePrice(c *gin.Context) {
 			note = *in.Note
 		}
 		row := tx.QueryRow(ctx, `
-			UPDATE model_prices SET model_pattern = $2, mode = $3, config = $4, expression = $5,
+			UPDATE model_prices SET model = $2, mode = $3, config = $4, expression = $5,
 				expr_version = $6, expr_hash = $7, enabled = $8, note = $9, updated_by = $10, updated_at = now()
 			WHERE id = $1 RETURNING `+priceColumns,
-			id, pattern, mode, config, src, version, hash, enabled, note, nullID(uid))
+			id, model, mode, config, src, version, hash, enabled, note, nullID(uid))
 		out, err = scanPrice(row)
 		return err
 	})
 	if store.IsUniqueViolation(err, "") {
-		httpapi.Fail(c, core.ErrConflict.WithMessage("an admin price for this model pattern already exists"))
+		httpapi.Fail(c, core.ErrConflict.WithMessage("an admin price for this model already exists"))
 		return
 	}
 	if err != nil {
@@ -396,17 +402,17 @@ func (s *Service) overridePrice(c *gin.Context) {
 			note += " (" + *src.PluginKey + ")"
 		}
 		row := tx.QueryRow(ctx, `
-			INSERT INTO model_prices (model_pattern, mode, config, expression, expr_version, expr_hash,
+			INSERT INTO model_prices (model, mode, config, expression, expr_version, expr_hash,
 				source, enabled, note, updated_by)
 			VALUES ($1, $2, $3, $4, $5, $6, 'admin', true, $7, $8)
 			RETURNING `+priceColumns,
-			src.ModelPattern, src.Mode, src.Config, src.Expression, src.ExprVersion, src.ExprHash,
+			src.Model, src.Mode, src.Config, src.Expression, src.ExprVersion, src.ExprHash,
 			note, nullID(uid))
 		out, err = scanPrice(row)
 		return err
 	})
 	if store.IsUniqueViolation(err, "") {
-		httpapi.Fail(c, core.ErrConflict.WithMessage("an admin price for this model pattern already exists"))
+		httpapi.Fail(c, core.ErrConflict.WithMessage("an admin price for this model already exists"))
 		return
 	}
 	if err != nil {

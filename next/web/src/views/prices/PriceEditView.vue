@@ -47,7 +47,7 @@ const loading = ref(false)
 const saving = ref(false)
 const overriding = ref(false)
 const price = ref<Price | null>(null)
-const form = reactive({ model_pattern: '', note: '', enabled: true })
+const form = reactive({ model: '', note: '', enabled: true })
 const mode = ref<PriceMode>('per_token')
 const perRequest = ref<number | ''>(0.01)
 const perToken = reactive<TokenPrices>({ p: 3, c: 15, cr: 0.3, cc: 3.75, cc1h: 6 })
@@ -65,7 +65,7 @@ const isPluginDefault = computed(() => price.value?.source === 'plugin_default')
 
 function resetForm() {
   price.value = null
-  Object.assign(form, { model_pattern: '', note: '', enabled: true })
+  Object.assign(form, { model: '', note: '', enabled: true })
   mode.value = 'per_token'
   perRequest.value = 0.01
   Object.assign(perToken, { p: 3, c: 15, cr: 0.3, cc: 3.75, cc1h: 6 })
@@ -80,7 +80,7 @@ function resetForm() {
 
 function applyPrice(p: Price) {
   price.value = p
-  Object.assign(form, { model_pattern: p.model_pattern, note: p.note || '', enabled: p.enabled })
+  Object.assign(form, { model: p.model, note: p.note || '', enabled: p.enabled })
   mode.value = p.mode
   sourceText.value = p.expression || ''
   notVisual.value = false
@@ -267,8 +267,13 @@ async function submit(body: Record<string, unknown>): Promise<void> {
 async function save() {
   if (readonly.value) return
   errors.value = {}
-  if (!form.model_pattern.trim()) {
-    errors.value = { model_pattern: t('common.required') }
+  if (!form.model.trim()) {
+    errors.value = { model: t('common.required') }
+    return
+  }
+  // Prices match complete model ids exactly (same rule as the server).
+  if (!/^[A-Za-z0-9._:/@+-]{1,200}$/.test(form.model.trim())) {
+    errors.value = { model: t('prices.modelInvalid') }
     return
   }
   if (localIssues.value.length) {
@@ -278,7 +283,7 @@ async function save() {
   saving.value = true
   try {
     await submit({
-      model_pattern: form.model_pattern.trim(),
+      model: form.model.trim(),
       mode: payload.value.mode,
       config: payload.value.config,
       expression: payload.value.expression,
@@ -310,7 +315,7 @@ watch(priceId, load, { immediate: true })
 const title = computed(() => {
   if (!priceId.value) return t('prices.newTitle')
   const p = price.value
-  return p ? t('prices.editTitle', { name: p.model_pattern }) : t('prices.editTitleShort')
+  return p ? t('prices.editTitle', { name: p.model }) : t('prices.editTitleShort')
 })
 </script>
 
@@ -344,8 +349,8 @@ const title = computed(() => {
       <SCard :title="t('prices.basic')">
         <p class="mb-4 rounded-lg bg-primary-50 px-3 py-2 text-sm text-primary-800 dark:bg-primary-900/20 dark:text-primary-200">{{ t('prices.scopeNote') }}</p>
         <div class="grid gap-4 md:grid-cols-2">
-          <SField :label="t('prices.modelPattern')" :hint="t('prices.modelPatternHint')" :error="errors.model_pattern" required>
-            <input v-model.trim="form.model_pattern" class="input font-mono" placeholder="claude-sonnet-*" :disabled="readonly" />
+          <SField :label="t('prices.model')" :hint="t('prices.modelHint')" :error="errors.model" required>
+            <input v-model.trim="form.model" class="input font-mono" placeholder="claude-sonnet-4-5" :disabled="readonly" />
           </SField>
           <SField :label="t('common.note')" :error="errors.note">
             <input v-model="form.note" class="input" :disabled="readonly" />

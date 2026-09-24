@@ -23,7 +23,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "openai" || m.Version != "0.1.0" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "openai" || m.Version != "0.1.1" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("key/version/publisher = %s %s %s", m.Key, m.Version, m.Publisher)
 	}
 	if m.Name["en"] == "" || m.Name["zh"] == "" || m.Description["en"] == "" || m.Description["zh"] == "" {
@@ -86,11 +86,14 @@ func TestManifest(t *testing.T) {
 			t.Errorf("duplicate pricing %s", pe.Model)
 		}
 		seen[pe.Model] = true
+		if !manifest.ValidModelID(pe.Model) {
+			t.Errorf("pricing %s: not a complete model id (no wildcards)", pe.Model)
+		}
 		if pe.Mode != "per_token" || pe.Config["p"] == nil || pe.Config["c"] == nil {
 			t.Errorf("pricing %s incomplete", pe.Model)
 		}
 	}
-	for _, model := range []string{"gpt-5*", "gpt-4.1*", "gpt-4o*", "gpt-4o-mini*", "o3*", "text-embedding-3-small*"} {
+	for _, model := range []string{"gpt-5", "gpt-5-2025-08-07", "gpt-4.1", "gpt-4o", "gpt-4o-mini", "o3", "text-embedding-3-small"} {
 		if !seen[model] {
 			t.Errorf("no default price for %s", model)
 		}

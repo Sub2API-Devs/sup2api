@@ -300,8 +300,7 @@ erDiagram
   }
   model_prices {
     bigint id PK
-    string platform
-    string model_pattern
+    string model
     string mode
     jsonb config
     string expression
@@ -951,7 +950,7 @@ CREATE TABLE balance_ledger (
 
 - **价格只按模型全局设置**：同一个模型不论由哪个平台的端点、哪种账号类型提供服务，都用同一个价格；价格表不区分平台
 - 价格表达式算出的是**基础价格**，之后只能通过倍率调整（本期为分组倍率）
-- 插件可以提供默认价格；管理员价格始终优先；多个价格都匹配时模式越具体越优先（精确名称优先于通配，通配越长越优先），同样具体的插件默认价格以最早安装的插件为准
+- 价格按**完整模型 ID** 设置、精确匹配，**不支持通配符**（2026-09-25 决定）：别名和带日期的 ID 是不同的模型，需要分别定价。插件可以提供默认价格；管理员价格始终优先；同一模型有多个插件默认价格时以最早安装的插件为准
 
 #### 表达式语言（v1）
 
@@ -997,8 +996,7 @@ tier("base", p*5 + c*25) ||| param("service_tier") == "priority" ? 1.5 : 1 ||| h
 ```sql
 CREATE TABLE model_prices (
   id            bigserial PRIMARY KEY,
-  platform      varchar(50)  NOT NULL,        -- '*' 表示所有平台
-  model_pattern varchar(200) NOT NULL,        -- 精确名称或通配符
+  model         varchar(200) NOT NULL,        -- 完整模型 ID，不允许通配符（CHECK 只允许字母、数字和 . _ : / @ + -）
   mode          varchar(20)  NOT NULL,        -- per_request / per_token / expression
   config        jsonb        NOT NULL,        -- 可视化编辑的原始值（按次价格、各类 token 单价、分档定义）
   expression    text         NOT NULL,        -- 由 config 生成，或直接编写；计费以它为准
@@ -1009,9 +1007,9 @@ CREATE TABLE model_prices (
   enabled       boolean      NOT NULL DEFAULT true,
   note          text,
   updated_by    bigint,
-  updated_at    timestamptz  NOT NULL DEFAULT now(),
-  UNIQUE (platform, model_pattern, source)
+  updated_at    timestamptz  NOT NULL DEFAULT now()
 );
+-- 管理员价格每个 model 一条；插件默认价格每个 (plugin_key, model) 一条（部分唯一索引）
 
 -- 每一版表达式都按 hash 保存，使用记录通过 expr_hash 追溯当时的计算方式
 CREATE TABLE model_price_history (
@@ -1024,7 +1022,7 @@ CREATE TABLE model_price_history (
 
 #### 匹配与计算
 
-- 匹配顺序：管理员价格优先于插件默认价格；平台精确匹配优先于 `*`；模型名精确匹配优先于通配符，多个通配符命中时取最长的
+- 匹配：按完整模型 ID 精确匹配；管理员价格优先于插件默认价格，多个插件默认价格取最早安装的插件
 - 费用 = 表达式结果 × 分组倍率
 - 找不到价格：默认拒绝请求（返回 403 `model_price_not_configured`），可配置为免费放行
 - 编译结果按 `expr_hash` 缓存；价格变更通过 `config:changed` 广播，各节点立即生效
@@ -1045,9 +1043,9 @@ CREATE TABLE model_price_history (
 ```jsonc
 // manifest.json
 "pricing": [
-  { "model": "claude-sonnet-*", "mode": "expression",
+  { "model": "claude-sonnet-4-5", "mode": "expression",
     "expression": "len <= 200000 ? tier(\"standard\", p*3 + c*15 + cr*0.3 + cc*3.75 + cc1h*6) : tier(\"long_context\", p*6 + c*22.5 + cr*0.6 + cc*7.5 + cc1h*12)" },
-  { "model": "claude-haiku-*", "mode": "per_token",
+  { "model": "claude-haiku-4-5", "mode": "per_token",
     "config": { "p": 1, "c": 5, "cr": 0.1, "cc": 1.25, "cc1h": 2 } }
 ]
 ```
@@ -1729,8 +1727,8 @@ flowchart LR
 ┌──────────┬──────────────────┬────────┬───────────────────────────────────────┬────────────┬──────┐
 │ 平台     │ 模型             │ 方式   │ 摘要                                  │ 来源       │ 操作 │
 ├──────────┼──────────────────┼────────┼───────────────────────────────────────┼────────────┼──────┤
-│ anthropic│ claude-sonnet-*  │ 表达式 │ 2 档：≤200K / >200K · 缓存单独计价     │ 插件默认   │ 覆盖 │
-│ anthropic│ claude-haiku-*   │ 按token│ 输入 $1 · 输出 $5 · 缓存读 $0.1 /百万  │ 插件默认   │ 覆盖 │
+│ anthropic│ claude-sonnet-4-5│ 表达式 │ 2 档：≤200K / >200K · 缓存单独计价     │ 插件默认   │ 覆盖 │
+│ anthropic│ claude-haiku-4-5 │ 按token│ 输入 $1 · 输出 $5 · 缓存读 $0.1 /百万  │ 插件默认   │ 覆盖 │
 │ anthropic│ claude-sonnet-x  │ 表达式 │ 2 档 · 1 条加价规则（fast-mode ×2）    │ 管理员     │ 编辑 │
 │ *        │ web-search       │ 按次   │ $0.01 / 次                             │ 管理员     │ 编辑 │
 └──────────┴──────────────────┴────────┴───────────────────────────────────────┴────────────┴──────┘
@@ -1740,7 +1738,7 @@ flowchart LR
 **编辑：按 token**
 
 ```
-编辑价格 · anthropic / claude-haiku-*                                        ✕
+编辑价格 · anthropic / claude-haiku-4-5                                      ✕
  计费方式  ( ) 按次   (•) 按 token   ( ) 表达式
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ 每百万 token 价格（USD）                                                 │

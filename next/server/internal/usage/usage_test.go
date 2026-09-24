@@ -100,9 +100,9 @@ func newFixture(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.price = &core.PriceRule{Pattern: "claude-sonnet-*", Mode: "expression", Expression: a6Expr, ExprVersion: 1, ExprHash: prog.Hash()}
-	err = db.Pool.QueryRow(ctx, `INSERT INTO model_prices (model_pattern, mode, expression, expr_hash, source)
-		VALUES ('claude-sonnet-*', 'expression', $1, $2, 'admin') RETURNING id`, a6Expr, prog.Hash()).Scan(&f.price.ID)
+	f.price = &core.PriceRule{Model: "claude-sonnet-4-5", Mode: "expression", Expression: a6Expr, ExprVersion: 1, ExprHash: prog.Hash()}
+	err = db.Pool.QueryRow(ctx, `INSERT INTO model_prices (model, mode, expression, expr_hash, source)
+		VALUES ('claude-sonnet-4-5', 'expression', $1, $2, 'admin') RETURNING id`, a6Expr, prog.Hash()).Scan(&f.price.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -382,7 +382,7 @@ func TestUsageAPI(t *testing.T) {
 	_ = f.db.Pool.QueryRow(ctx, `SELECT id FROM usage_logs WHERE request_id = 'req-mine'`).Scan(&id)
 	_ = f.db.Pool.QueryRow(ctx, `SELECT id FROM usage_logs WHERE request_id = 'req-other'`).Scan(&otherID)
 	d := f.get(f.user, "/usage/"+strconv.FormatInt(id, 10), 200)["data"].(map[string]any)
-	if d["ledger_id"] == nil || d["price"].(map[string]any)["model_pattern"] != "claude-sonnet-*" || d["account_id"].(float64) != 42 ||
+	if d["ledger_id"] == nil || d["price"].(map[string]any)["model"] != "claude-sonnet-4-5" || d["account_id"].(float64) != 42 ||
 		d["billing_detail"].(map[string]any)["tier"] != "standard" || len(d["hook_decisions"].([]any)) != 1 ||
 		d["protocol"] != "openai.chat" || d["upstream_protocol"] != "anthropic.messages" || d["account_type"] != "relay_key" {
 		t.Fatalf("detail: %v", d)

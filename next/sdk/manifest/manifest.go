@@ -259,7 +259,7 @@ type StickyKeySource struct {
 // PricingEntry is a default model price. Prices are global per model
 // (ARCHITECTURE 7.3): they do not depend on platform or account type.
 type PricingEntry struct {
-	Model      string         `json:"model"` // exact or glob
+	Model      string         `json:"model"` // complete model id, no wildcards (ValidModelID)
 	Mode       string         `json:"mode"`  // per_request | per_token | expression
 	Config     map[string]any `json:"config,omitempty"`
 	Expression string         `json:"expression,omitempty"`

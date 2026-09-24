@@ -59,10 +59,10 @@ type Record struct {
 
 // PriceRef identifies the price rule used for a record.
 type PriceRef struct {
-	ID           int64   `json:"id"`
-	ModelPattern string  `json:"model_pattern"`
-	Source       string  `json:"source"`
-	PluginKey    *string `json:"plugin_key"`
+	ID        int64   `json:"id"`
+	Model     string  `json:"model"`
+	Source    string  `json:"source"`
+	PluginKey *string `json:"plugin_key"`
 }
 
 // Detail is the full view of one record.
@@ -264,8 +264,8 @@ func (s *Service) detail(c *gin.Context, self *int64) {
 	}
 	if d.PriceID != nil {
 		var p PriceRef
-		err := s.db.Pool.QueryRow(ctx, `SELECT id, model_pattern, source, plugin_key FROM model_prices WHERE id = $1`, *d.PriceID).
-			Scan(&p.ID, &p.ModelPattern, &p.Source, &p.PluginKey)
+		err := s.db.Pool.QueryRow(ctx, `SELECT id, model, source, plugin_key FROM model_prices WHERE id = $1`, *d.PriceID).
+			Scan(&p.ID, &p.Model, &p.Source, &p.PluginKey)
 		if err == nil {
 			d.Price = &p
 		}

@@ -158,6 +158,13 @@ func TestValidateConsistency(t *testing.T) {
 		{"hook needs exceed", func(m *manifest.Manifest, _ map[string][]byte) {
 			m.Hooks[0].Needs = append(m.Hooks[0].Needs, "messages")
 		}, "hooks[0].needs", "exceeds_scope"},
+		{"wildcard price", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.Pricing = []manifest.PricingEntry{{Model: "claude-*", Mode: "per_token", Config: map[string]any{"p": 1}}}
+		}, "pricing[0].model", "invalid"},
+		{"duplicate price", func(m *manifest.Manifest, _ map[string][]byte) {
+			e := manifest.PricingEntry{Model: "gpt-4o", Mode: "per_token", Config: map[string]any{"p": 1}}
+			m.Pricing = []manifest.PricingEntry{e, e}
+		}, "pricing[1].model", "duplicate"},
 		{"events exceed", func(m *manifest.Manifest, _ map[string][]byte) {
 			m.Events.Subscribe = append(m.Events.Subscribe, "balance.changed")
 		}, "events.subscribe", "exceeds_scope"},

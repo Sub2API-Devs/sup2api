@@ -30,13 +30,13 @@ const rows = computed(() =>
   items.value.filter((p) => {
     if (filters.mode && p.mode !== filters.mode) return false
     const q = String(filters.q || '').trim().toLowerCase()
-    if (q && !`${p.model_pattern} ${p.note || ''} ${p.plugin_key || ''}`.toLowerCase().includes(q)) return false
+    if (q && !`${p.model} ${p.note || ''} ${p.plugin_key || ''}`.toLowerCase().includes(q)) return false
     return true
   })
 )
 
 const columns = computed<TableColumn[]>(() => [
-  { key: 'model_pattern', label: t('prices.modelPattern') },
+  { key: 'model', label: t('prices.model') },
   { key: 'mode', label: t('prices.modeCol'), width: '100px' },
   { key: 'summary', label: t('prices.summaryCol') },
   { key: 'source', label: t('common.source'), width: '150px' },
@@ -94,7 +94,7 @@ async function override(p: Price) {
 }
 
 async function remove(p: Price) {
-  const ok = await confirm({ message: t('common.confirmDelete', { name: p.model_pattern }), danger: true })
+  const ok = await confirm({ message: t('common.confirmDelete', { name: p.model }), danger: true })
   if (!ok) return
   try {
     await api.del(`/prices/${p.id}`)
@@ -129,8 +129,8 @@ async function remove(p: Price) {
     </p>
     <div class="card overflow-hidden">
       <STable :columns="columns" :rows="rows" :loading="loading">
-        <template #cell-model_pattern="{ row }">
-          <RouterLink :to="`/prices/${row.id}`" class="link font-mono text-sm">{{ row.model_pattern }}</RouterLink>
+        <template #cell-model="{ row }">
+          <RouterLink :to="`/prices/${row.id}`" class="link font-mono text-sm">{{ row.model }}</RouterLink>
           <p v-if="row.note" class="muted truncate text-xs">{{ row.note }}</p>
         </template>
         <template #cell-mode="{ row }">

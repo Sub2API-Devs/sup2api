@@ -8,8 +8,8 @@ import (
 )
 
 var anthropicDefaults = []manifest.PricingEntry{
-	{Model: "claude-sonnet-*", Mode: "expression", Expression: `len <= 200000 ? tier("standard", p*3 + c*15 + cr*0.3 + cc*3.75 + cc1h*6) : tier("long_context", p*6 + c*22.5 + cr*0.6 + cc*7.5 + cc1h*12)`},
-	{Model: "claude-haiku-*", Mode: "per_token", Config: map[string]any{"p": 1, "c": 5, "cr": 0.1, "cc": 1.25, "cc1h": 2}},
+	{Model: "claude-sonnet-4-5", Mode: "expression", Expression: `len <= 200000 ? tier("standard", p*3 + c*15 + cr*0.3 + cc*3.75 + cc1h*6) : tier("long_context", p*6 + c*22.5 + cr*0.6 + cc*7.5 + cc1h*12)`},
+	{Model: "claude-haiku-4-5", Mode: "per_token", Config: map[string]any{"p": 1, "c": 5, "cr": 0.1, "cc": 1.25, "cc1h": 2}},
 }
 
 func TestPriceAPI(t *testing.T) {
@@ -48,7 +48,7 @@ func TestPriceAPI(t *testing.T) {
 		},
 	}
 	created := data(e.mustCall(admin, 201, "POST", "/prices", map[string]any{
-		"model_pattern": "claude-sonnet-x", "mode": "expression", "config": visual,
+		"model": "claude-sonnet-x", "mode": "expression", "config": visual,
 	}))
 	id := int64(created["id"].(float64))
 	if _, has := created["platform"]; created["source"] != "admin" || created["expr_hash"] == "" || has ||
@@ -64,21 +64,28 @@ func TestPriceAPI(t *testing.T) {
 	e.mustCall(admin, 404, "GET", "/prices/history/nope", nil)
 
 	code, resp := e.call(admin, "POST", "/prices", map[string]any{
-		"model_pattern": "big-model", "mode": "per_token", "config": map[string]any{"p": 15, "c": 75},
+		"model": "big-model", "mode": "per_token", "config": map[string]any{"p": 15, "c": 75},
 	})
 	if code != 400 || data(map[string]any{"data": resp["error"]})["details"].(map[string]any)["confirmation_required"] != true {
 		t.Fatalf("big cost: %d %v", code, resp)
 	}
 	e.mustCall(admin, 201, "POST", "/prices", map[string]any{
-		"model_pattern": "big-model", "mode": "per_token", "config": map[string]any{"p": 15, "c": 75}, "confirm": true,
+		"model": "big-model", "mode": "per_token", "config": map[string]any{"p": 15, "c": 75}, "confirm": true,
 	})
-	_, resp = e.call(admin, "POST", "/prices", map[string]any{"model_pattern": "big-model", "mode": "per_token", "config": map[string]any{"p": 1}})
+	_, resp = e.call(admin, "POST", "/prices", map[string]any{"model": "big-model", "mode": "per_token", "config": map[string]any{"p": 1}})
 	if errCode(resp) != "conflict" {
 		t.Fatalf("duplicate: %v", resp)
 	}
-	_, resp = e.call(admin, "POST", "/prices", map[string]any{"model_pattern": "x", "mode": "expression", "expression": "p * -1"})
+	_, resp = e.call(admin, "POST", "/prices", map[string]any{"model": "x", "mode": "expression", "expression": "p * -1"})
 	if errCode(resp) != "invalid_argument" {
 		t.Fatalf("invalid expression: %v", resp)
+	}
+	// Prices are keyed by complete model ids: wildcards are rejected.
+	for _, m := range []string{"claude-*", "gpt-4?", "gpt 4o"} {
+		_, resp = e.call(admin, "POST", "/prices", map[string]any{"model": m, "mode": "per_token", "config": map[string]any{"p": 1}})
+		if errCode(resp) != "invalid_argument" {
+			t.Fatalf("model %q accepted: %v", m, resp)
+		}
 	}
 
 	// preview by id: A.6 numbers, group multiplier applied.
@@ -127,7 +134,7 @@ func TestPriceAPI(t *testing.T) {
 
 	// plugin defaults: read-only except enabled; override creates admin copy.
 	var defID int64
-	_ = e.db.Pool.QueryRow(context.Background(), `SELECT id FROM model_prices WHERE source = 'plugin_default' AND model_pattern = 'claude-haiku-*'`).Scan(&defID)
+	_ = e.db.Pool.QueryRow(context.Background(), `SELECT id FROM model_prices WHERE source = 'plugin_default' AND model = 'claude-haiku-4-5'`).Scan(&defID)
 	path := "/prices/" + itoa(defID)
 	_, resp = e.call(admin, "PATCH", path, map[string]any{"note": "x"})
 	if errCode(resp) != "conflict" {
@@ -141,7 +148,7 @@ func TestPriceAPI(t *testing.T) {
 		t.Fatalf("delete default: %v", resp)
 	}
 	ov := data(e.mustCall(admin, 201, "POST", path+"/override", nil))
-	if ov["source"] != "admin" || ov["model_pattern"] != "claude-haiku-*" || ov["expression"] == "" {
+	if ov["source"] != "admin" || ov["model"] != "claude-haiku-4-5" || ov["expression"] == "" {
 		t.Fatalf("override: %v", ov)
 	}
 	_, resp = e.call(admin, "POST", path+"/override", nil)
@@ -160,7 +167,7 @@ func TestPriceAPI(t *testing.T) {
 		t.Fatalf("patch: %v", upd)
 	}
 	// Resolution sees the change immediately (local invalidation + bus).
-	r, err := e.svc.Resolve(context.Background(), "claude-haiku-4")
+	r, err := e.svc.Resolve(context.Background(), "claude-haiku-4-5")
 	if err != nil || r.Expression != `tier("base", p*2 + c*4)` {
 		t.Fatalf("resolve after patch: %+v %v", r, err)
 	}

@@ -76,7 +76,7 @@ func TestAC08_BillingModes(t *testing.T) {
 			e := e.With(t)
 			if c.price != nil {
 				// Prices are global per model: no platform (ARCHITECTURE 7.3).
-				body := map[string]any{"model_pattern": c.model}
+				body := map[string]any{"model": c.model}
 				for k, v := range c.price {
 					body[k] = v
 				}

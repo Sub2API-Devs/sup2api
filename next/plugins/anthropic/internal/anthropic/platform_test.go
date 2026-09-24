@@ -17,7 +17,7 @@ import (
 func start(t *testing.T) (*Plugin, *pluginsdktest.Harness) {
 	t.Helper()
 	p := New()
-	h := pluginsdktest.Start(t, p, pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("anthropic", "0.1.0")}})
+	h := pluginsdktest.Start(t, p, pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("anthropic", "0.1.1")}})
 	return p, h
 }
 

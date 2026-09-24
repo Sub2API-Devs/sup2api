@@ -85,29 +85,31 @@ var (
 )
 
 // RunModel returns "claude-e2e-<run>-<suffix>" and makes sure an admin
-// per-token price (RunPrice) covers "claude-e2e-<run>-*".
+// per-token price (RunPrice) exists for exactly that model id.
 func (e *Env) RunModel(admin *Session, suffix string) string {
 	e.T.Helper()
 	return e.RunModelOf(admin, "claude", suffix)
 }
 
 // RunModelOf returns "<family>-e2e-<run>-<suffix>" (family e.g. "claude",
-// "gpt", "gemini") and makes sure an admin per-token price (RunPrice)
-// covers "<family>-e2e-<run>-*". Admin prices win over plugin defaults.
+// "gpt", "gemini") and makes sure an admin per-token price (RunPrice) exists
+// for that model id (prices match complete model ids, no wildcards). Admin
+// prices win over plugin defaults.
 func (e *Env) RunModelOf(admin *Session, family, suffix string) string {
 	e.T.Helper()
+	model := fmt.Sprintf("%s-e2e-%s-%s", family, e.RunID, suffix)
 	runPriceMu.Lock()
 	defer runPriceMu.Unlock()
-	if !runPriceDone[family] {
+	if !runPriceDone[model] {
 		e.CreatePrice(admin, map[string]any{
-			"model_pattern": fmt.Sprintf("%s-e2e-%s-*", family, e.RunID),
-			"mode":          "per_token",
-			"config":        RunPrice,
-			"note":          "e2e run price",
+			"model":  model,
+			"mode":   "per_token",
+			"config": RunPrice,
+			"note":   "e2e run price",
 		})
-		runPriceDone[family] = true
+		runPriceDone[model] = true
 	}
-	return fmt.Sprintf("%s-e2e-%s-%s", family, e.RunID, suffix)
+	return model
 }
 
 // ExpectedTokenCost computes the per-token cost (USD) for usage with price

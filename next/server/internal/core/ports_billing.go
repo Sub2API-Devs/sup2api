@@ -15,7 +15,7 @@ import (
 // (ARCHITECTURE 7.3): the base price, adjusted only by multipliers.
 type PriceRule struct {
 	ID          int64
-	Pattern     string
+	Model       string // complete model id (exact match, no wildcards)
 	Mode        string // per_request | per_token | expression
 	Expression  string
 	ExprVersion int

@@ -269,7 +269,7 @@ export type PriceMode = 'per_request' | 'per_token' | 'expression'
 /** Prices are global per model (no platform); the result is the base price. */
 export interface Price {
   id: number
-  model_pattern: string
+  model: string
   mode: PriceMode
   config: Record<string, any>
   expression: string

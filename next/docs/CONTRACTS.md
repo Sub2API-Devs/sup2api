@@ -369,11 +369,11 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 
 **proto**：`RequestMeta.protocol` = 发给上游的协议；新增 `RequestMeta.client_protocol` = 客户端端点协议；`Account.platform` = 客户端端点所属平台，`Account.type` = 账号类型 id。
 
-**数据库（0005）**：`accounts.platform` 删除（账号类型 = `plugin_key` + `type`）；`model_prices.platform` 删除，唯一约束改为：管理员价格每个 `model_pattern` 一条，插件默认价格每个 `(plugin_key, model_pattern)` 一条；`usage_logs` 新增 `account_type`、`upstream_protocol`。
+**数据库（0005）**：`accounts.platform` 删除（账号类型 = `plugin_key` + `type`）；`model_prices.platform` 删除，唯一约束改为：管理员价格每个模型一条，插件默认价格每个 `(plugin_key, 模型)` 一条（0007 起列名为 `model`）；`usage_logs` 新增 `account_type`、`upstream_protocol`。
 
 **调度**：端点协议 P → 候选账号类型 = 原生支持 P 的，加上支持 Q 且核心有 `P→Q` 转换器的（原生优先）→ 分组内这些类型的账号。请求由账号类型所属插件构造；需转换时核心转换请求体和响应（含 SSE）。用量规则：账号类型为该协议声明的 `usage`，否则取声明该协议端点的平台的 `usage`；`requestFields`、`passHeaders` 同理。错误格式始终是端点的 `errorFormat`。
 
-**计费**：`Resolve(model)` 只按模型匹配：管理员价格优先，其次插件默认价格；同一来源内模式越具体越优先（精确优先于通配、通配越长越优先），同样具体的插件默认价格取最早安装的插件；表达式结果为基础价格 × 分组倍率。
+**计费**：`Resolve(model)` 只按模型匹配：管理员价格优先，其次插件默认价格；按完整模型 ID 精确匹配（0007 起不支持通配符，见 §16），同一模型有多个插件默认价格时取最早安装的插件；表达式结果为基础价格 × 分组倍率。
 
 **凭证授权**：`accounts.credentials` 的范围为 `{"types": "own"}`：插件只能拿到自己声明的账号类型的账号凭证。
 
@@ -505,7 +505,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 | GET `/me/groups` | 不分页 | 无（只返回 `active` 且对当前用户可用的分组；字段 `{id, name, description, rate_multiplier, model_allowlist, platforms}`） | `id` 升序 | `group/group.go` |
 | GET `/accounts` | 分页 | `plugin_key`、`type`、`status`、`group_id`（整数）、`q`（名称 ILIKE） | `priority` 升序，再 `id` 升序 | `account/handlers.go` |
 | GET `/proxies` | 分页 | `q`（名称或主机 ILIKE）、`status` | `id` 升序 | `proxy/proxy.go` |
-| GET `/prices` | 分页 | `mode`（`per_request`\|`per_token`\|`expression`）、`source`（`admin`\|`plugin_default`）、`plugin_key`、`enabled`、`q`（`model_pattern` 或 `note` ILIKE） | `model_pattern`、`source`、`plugin_key`（NULL 在前）、`id` | `billing/prices.go` |
+| GET `/prices` | 分页 | `mode`（`per_request`\|`per_token`\|`expression`）、`source`（`admin`\|`plugin_default`）、`plugin_key`、`enabled`、`q`（`model` 或 `note` ILIKE） | `model`、`source`、`plugin_key`（NULL 在前）、`id` | `billing/prices.go` |
 | GET `/usage` | 分页 | `user_id`、`api_key_id`、`group_id`、`account_id`（整数）；`model`、`platform`、`billing_status`、`request_id`、`account_type`（精确匹配）；`success`；`from`、`to` | `created_at` 倒序，再 `id` 倒序 | `usage/api.go` |
 | GET `/me/usage` | 分页 | 限定当前用户；`api_key_id`、`group_id`、`model`、`platform`、`billing_status`、`request_id`、`success`、`from`、`to`（**不支持** `user_id`、`account_id`、`account_type`） | 同上 | `usage/api.go` |
 | GET `/usage/summary` | 不分页 | 同 `/usage` 的全部筛选参数，加 `group_by=day\|model\|user`（默认 `day`）；未给 `from` 时默认最近 30 天 | 按 `key` 升序 | `usage/api.go` |
@@ -518,10 +518,10 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 
 响应字段补充：
 - `/usage`、`/me/usage` 列表项：`id, request_id, created_at, user_id, user_email?, api_key_id, api_key_name?, group_id, group_name?, account_id, account_name?, plugin_key, platform, protocol, account_type, upstream_protocol, endpoint, model, upstream_model, stream, status_code, success, error_type, error_message, attempts, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens, total_cost, rate_multiplier, billing_status, billing_mode, matched_tier, latency_ms, first_token_ms, sticky_hit`（`?` 为空串时省略）。`/me/usage`（列表与详情）把 `account_id` 置 `null`，`account_name`、`account_type`、`upstream_protocol` 置空，详情另把 `node_id` 置空。
-- `/usage/:id`、`/me/usage/:id` 详情另含：`plugin_version, metrics, sticky_rule, hook_decisions, price_id, price?:{id, model_pattern, source, plugin_key}, expr_hash, billing_detail, ledger_id, client_ip, user_agent, node_id`。`/me/usage/:id` 访问他人记录返回 404。
+- `/usage/:id`、`/me/usage/:id` 详情另含：`plugin_version, metrics, sticky_rule, hook_decisions, price_id, price?:{id, model, source, plugin_key}, expr_hash, billing_detail, ledger_id, client_ip, user_agent, node_id`。`/me/usage/:id` 访问他人记录返回 404。
 - `/usage/summary` 每项：`{key, user_email?, requests, success, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, total_cost}`；`group_by=day` 时 `key` 为 UTC 日期 `YYYY-MM-DD`，`user` 时为用户 id 字符串并带 `user_email`；`cache_creation_tokens` 为 5 分钟与 1 小时缓存写入之和。
 - `/ledger`、`/me/ledger` 列表项：`{id, user_id, user_email?, user_name?, delta, balance_after, kind, ref_type, ref_id, idempotency_key, operator_id, plugin_key, note, created_at}`（金额为字符串）。
-- `/prices` 列表项：`{id, model_pattern, mode, config, expression, expr_version, expr_hash, source, plugin_key, enabled, note, updated_by, updated_at}`；`analysis` 只在详情返回。
+- `/prices` 列表项：`{id, model, mode, config, expression, expr_version, expr_hash, source, plugin_key, enabled, note, updated_by, updated_at}`；`analysis` 只在详情返回。
 - `/users` 列表项：`{id, email, display_name, status, max_concurrency, roles:[key], group_ids:[id], balance?, last_login_at, created_at, updated_at}`；`balance` 只对有 `balance:all:read` 的调用者返回。
 
 ### 15.3 GET `/nodes`（`node:read`，`plugin/api/ops.go`；状态 JSON 见 `plugin/rollout/types.go`、`plugin/rollout/reconcile.go`）
@@ -719,3 +719,20 @@ POST `/accounts/:id/test`（`account:test`）：
 | 10 | 账号测试超时 30 秒与平台调用 10 秒 | **两者都对，不冲突**：每次插件调用（`BuildTestRequest`）限 10 秒（`grpcruntime.TimeoutPlatformConsole`），测试接口整体（含向上游发送测试请求）限 30 秒。§11.7 已改 |
 | 11 | `/me/api-keys` 不含 `user_email`；普通用户没有修改自己 Key 的接口 | **以代码为准**：用户只能删除后重建（Key 绑定的分组不应由用户随意切换，名称和过期时间也不是必要功能）。以后需要再加 `PATCH /me/api-keys/:id`。§5.3 已改 |
 | 12 | §14 部分条目当时尚未实现 | 已于第四轮实现，见 §14 |
+
+## 16. 模型价格只用完整模型 ID（2026-09-25）
+
+本节优先于前文中关于价格"模式""通配符"的描述。
+
+- **匹配**：价格按完整模型 ID 精确匹配，**禁止通配符**。别名与带日期的 ID 是不同的模型，需要分别定价（如 `claude-sonnet-4-5` 与 `claude-sonnet-4-5-20250929`）。同一模型：管理员价格优先，其次是最早安装的插件的默认价格。
+- **模型 ID 格式**：1–200 个字符，只能是字母、数字和 `. _ : / @ + -`（`manifest.ValidModelID`）。以下几处都按这条规则校验：
+  - `POST/PATCH /prices`：不合格时返回 400，`details.fields[{field:"model", code:"invalid"}]`，缺失时 `code` 为 `required`。
+  - manifest `pricing[].model`：服务端校验和 `sub2api-plugin` 都会拒绝通配符和重复模型。
+  - 数据库：`model_prices_model_id_chk` 约束。
+- **字段改名**：`model_prices.model_pattern` 改为 `model`（迁移 0007）。以下接口字段同步改名：
+  - `/prices` 列表、详情和请求体中的 `model_pattern` 改为 `model`；
+  - `/prices?q=` 匹配 `model`；
+  - `/usage/:id`、`/me/usage/:id` 的 `price.model_pattern` 改为 `price.model`；
+  - `core.PriceRule.Pattern` 改为 `Model`。
+- **迁移 0007**：删除已有的通配符价格行。插件默认价格在下次安装、升级或启用时按新的 manifest 重新写入；管理员的通配符价格需要按模型 ID 重新录入。
+- 分组 `model_allowlist`、粘性规则和钩子的 `match.models` 不受影响，仍然支持通配符。

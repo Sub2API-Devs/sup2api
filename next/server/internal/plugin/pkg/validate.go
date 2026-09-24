@@ -585,11 +585,18 @@ func (v *validator) form(field string, f manifest.Form, settings bool) {
 }
 
 func (v *validator) pricing() {
+	seen := map[string]bool{}
 	for i, p := range v.m.Pricing {
 		f := fmt.Sprintf("pricing[%d]", i)
-		if p.Model == "" {
+		switch {
+		case p.Model == "":
 			v.add(f+".model", "required", "model is required")
+		case !manifest.ValidModelID(p.Model):
+			v.add(f+".model", "invalid", "model must be a complete model id (letters, digits, . _ : / @ + -; no wildcards)")
+		case seen[p.Model]:
+			v.add(f+".model", "duplicate", "model %q is priced twice", p.Model)
 		}
+		seen[p.Model] = true
 		switch p.Mode {
 		case "per_request", "per_token":
 		case "expression":

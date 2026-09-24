@@ -4,7 +4,7 @@ import type { UsageLog } from '@/api/types'
 export type UsageRow = UsageLog & {
   api_key_name?: string
   user_name?: string
-  price?: { id: number; model_pattern: string; source: string; plugin_key?: string | null } | null
+  price?: { id: number; model: string; source: string; plugin_key?: string | null } | null
   metrics?: Record<string, number> | null
 }
 
