@@ -386,3 +386,61 @@ func TestLoadRejectsConfig(t *testing.T) {
 		t.Fatal("expected Configure rejection to fail Load")
 	}
 }
+
+// TestBroadcastRealPlugin: Publish from one instance reaches the bus; a
+// message from another node is delivered through AppService.OnBroadcast.
+func TestBroadcastRealPlugin(t *testing.T) {
+	e := setup(t, registrytest.DefaultGrants())
+	bus := &registrytest.MemBus{}
+	rt := e.runtime(t, func(o *grpcruntime.Options) { o.Bus = bus })
+	inst := e.load(t, rt)
+
+	if _, err := httpCall(t, inst, &pluginv1.HTTPRequest{Method: "POST", Path: "/publish", Body: []byte("v2")}); err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	msgs := bus.Messages(grpcruntime.BroadcastChannel(e.key))
+	if len(msgs) != 1 {
+		t.Fatalf("bus messages %d", len(msgs))
+	}
+	var m grpcruntime.BroadcastMessage
+	_ = json.Unmarshal(msgs[0].Payload, &m)
+	if m.Topic != "t.ping" || string(m.Payload) != "v2" || m.SourceBootID != "b1" {
+		t.Fatalf("message %+v", m)
+	}
+
+	if !inst.HandlesBroadcast() {
+		t.Fatal("test plugin declares app.broadcast.v1")
+	}
+	m.SourceNodeID = "n2"
+	if err := inst.OnBroadcast(context.Background(), m); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := e.rdb.Get(context.Background(), "plugin:kv:"+e.key+":t:broadcast").Result(); v != "t.ping:v2:n2" {
+		t.Fatalf("plugin received %q", v)
+	}
+}
+
+// TestLimitsStaleAfterRefresh: changing plugins.resource_limits marks the
+// running process stale after Refresh; a new instance starts with them.
+func TestLimitsStaleAfterRefresh(t *testing.T) {
+	e := setup(t, registrytest.DefaultGrants())
+	rt := e.runtime(t, nil)
+	inst := e.load(t, rt)
+	ctx := context.Background()
+	if inst.LimitsStale() {
+		t.Fatal("fresh instance stale")
+	}
+	if _, err := e.db.Pool.Exec(ctx, `UPDATE plugins SET resource_limits = '{"memory_mb": 77}' WHERE key = $1`, e.key); err != nil {
+		t.Fatal(err)
+	}
+	if err := inst.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !inst.LimitsStale() {
+		t.Fatal("limit change not detected")
+	}
+	fresh := e.load(t, rt)
+	if fresh.LimitsStale() {
+		t.Fatal("new instance stale")
+	}
+}

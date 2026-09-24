@@ -61,7 +61,14 @@ type Options struct {
 	BatchSize     int           // default 500
 	QueueSize     int           // default 10000; entries beyond are dropped
 	Retention     time.Duration // default 7 days; 0 keeps the default, <0 disables pruning
-	Logger        *slog.Logger
+	// DomainUpdateInterval bounds how often the plugin_egress_domains row of
+	// a known host is updated by this node (default 1 minute). A host this
+	// node has not written yet is written at the next flush.
+	DomainUpdateInterval time.Duration
+	// Events receives plugin.egress_new_domain when a plugin connects to a
+	// host for the first time (optional; without it only a WARN is logged).
+	Events core.EventPublisher
+	Logger *slog.Logger
 }
 
 // Provider implements core.EgressProvider.
@@ -77,6 +84,14 @@ var _ core.EgressProvider = (*Provider)(nil)
 // New builds a provider and starts its log writer. db may be nil (logs are
 // discarded). Call Close on shutdown to flush pending logs.
 func New(db *store.DB, opts Options) *Provider {
+	var st logStore
+	if db != nil {
+		st = pgStore{db: db}
+	}
+	return newProvider(st, opts)
+}
+
+func newProvider(st logStore, opts Options) *Provider {
 	if opts.DialTimeout <= 0 {
 		opts.DialTimeout = 10 * time.Second
 	}
@@ -96,12 +111,13 @@ func New(db *store.DB, opts Options) *Provider {
 	for _, a := range opts.AlwaysAllow {
 		p.always[strings.ToLower(a)] = true
 	}
-	p.logs = newLogWriter(db, opts)
+	p.logs = newLogWriter(st, opts)
 	return p
 }
 
-// Close stops the log writer after flushing pending entries.
-func (p *Provider) Close() { p.logs.close() }
+// Close stops the log writer after flushing pending entries; rows of
+// connections still open are marked reset.
+func (p *Provider) Close() { p.logs.shutdown() }
 
 // Flush writes pending log entries now.
 func (p *Provider) Flush(ctx context.Context) error { return p.logs.flushNow(ctx) }
@@ -165,6 +181,11 @@ func (s *server) Dial(stream pluginv1.EgressService_DialServer) error {
 	}
 	pol := s.policy()
 	isDNS := host == DNSHost && port == DNSPort
+	if !isDNS {
+		// Every connection attempt counts for the plugin's domain list
+		// (denied ones included: they show what the plugin tries to reach).
+		s.p.logs.observe(s.key, entry.Host, port)
+	}
 
 	var conn net.Conn
 	if isDNS {
@@ -186,13 +207,19 @@ func (s *server) Dial(stream pluginv1.EgressService_DialServer) error {
 		}
 	}
 	defer conn.Close()
+	// The connection is logged at once (result 'open') and updated when it
+	// closes, so long-lived connections are visible while they last.
+	var oc *openConn
+	if !isDNS {
+		oc = s.p.logs.open(entry)
+	}
 	remote := ""
 	if a := conn.RemoteAddr(); a != nil {
 		remote = a.String()
 	}
 	if err := sendResult(stream, true, "", remote); err != nil {
-		if !isDNS {
-			finish(ResultReset, err.Error())
+		if oc != nil {
+			s.p.logs.close(oc, ResultReset, err.Error(), 0, 0, start)
 		}
 		return err
 	}
@@ -200,11 +227,10 @@ func (s *server) Dial(stream pluginv1.EgressService_DialServer) error {
 	if isDNS {
 		return nil
 	}
-	entry.BytesIn, entry.BytesOut = in, out
 	if ferr != nil {
-		finish(ResultReset, ferr.Error())
+		s.p.logs.close(oc, ResultReset, ferr.Error(), in, out, start)
 	} else {
-		finish(ResultOK, "")
+		s.p.logs.close(oc, ResultOK, "", in, out, start)
 	}
 	return nil
 }

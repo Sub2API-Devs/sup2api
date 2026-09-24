@@ -78,7 +78,7 @@ func Manifest(key, version string) *manifest.Manifest {
 		Entry:      manifest.Entry{GRPC: &manifest.GRPCEntry{Binaries: "runtimes/{os}-{arch}/plugin"}},
 		HostCompat: ">=0.1.0",
 		Capabilities: []manifest.Capability{
-			{ID: manifest.CapPlatformAdapter}, {ID: manifest.CapHTTPRoutes}, {ID: manifest.CapGatewayHook}, {ID: manifest.CapMigrationData},
+			{ID: manifest.CapPlatformAdapter}, {ID: manifest.CapHTTPRoutes}, {ID: manifest.CapGatewayHook}, {ID: manifest.CapMigrationData}, {ID: manifest.CapAppBroadcast},
 		},
 		Platforms: []manifest.Platform{{
 			ID:        "p_" + key,
@@ -125,6 +125,7 @@ func DefaultGrants() map[string]string {
 		"accounts.credentials": `{"types":"own"}`,
 		"gateway.endpoint":     `{}`,
 		"platform.register":    `{}`,
+		"broadcast":            `{}`,
 	}
 }
 
@@ -340,4 +341,85 @@ func (b Bus) Subscribe(channel string, handler func([]byte)) func() {
 		}
 	}()
 	return func() { cancel(); _ = ps.Close() }
+}
+
+// MemBus is an in-process core.Bus: Publish calls every handler of the
+// channel synchronously. Published messages are also recorded.
+type MemBus struct {
+	mu       sync.Mutex
+	handlers map[string]map[int]func([]byte)
+	nextID   int
+	sent     []MemMessage
+}
+
+// MemMessage is one message published on a MemBus.
+type MemMessage struct {
+	Channel string
+	Payload []byte
+}
+
+var _ core.Bus = (*MemBus)(nil)
+
+func (b *MemBus) Publish(_ context.Context, channel string, payload []byte) error {
+	b.mu.Lock()
+	b.sent = append(b.sent, MemMessage{Channel: channel, Payload: append([]byte(nil), payload...)})
+	ids := make([]int, 0, len(b.handlers[channel]))
+	for id := range b.handlers[channel] {
+		ids = append(ids, id)
+	}
+	sort.Ints(ids)
+	hs := make([]func([]byte), 0, len(ids))
+	for _, id := range ids {
+		hs = append(hs, b.handlers[channel][id])
+	}
+	b.mu.Unlock()
+	for _, h := range hs {
+		h(payload)
+	}
+	return nil
+}
+
+func (b *MemBus) Subscribe(channel string, handler func([]byte)) func() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.handlers == nil {
+		b.handlers = map[string]map[int]func([]byte){}
+	}
+	if b.handlers[channel] == nil {
+		b.handlers[channel] = map[int]func([]byte){}
+	}
+	b.nextID++
+	id := b.nextID
+	b.handlers[channel][id] = handler
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			b.mu.Lock()
+			defer b.mu.Unlock()
+			delete(b.handlers[channel], id)
+			if len(b.handlers[channel]) == 0 {
+				delete(b.handlers, channel)
+			}
+		})
+	}
+}
+
+// Subscribed reports whether channel has at least one handler.
+func (b *MemBus) Subscribed(channel string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.handlers[channel]) > 0
+}
+
+// Messages returns the messages published on channel so far.
+func (b *MemBus) Messages(channel string) []MemMessage {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	var out []MemMessage
+	for _, m := range b.sent {
+		if m.Channel == channel {
+			out = append(out, m)
+		}
+	}
+	return out
 }
