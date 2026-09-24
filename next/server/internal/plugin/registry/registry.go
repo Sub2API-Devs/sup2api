@@ -136,7 +136,9 @@ type generation struct {
 	endpoints []core.EndpointBinding
 	platforms map[string]core.PlatformBinding
 	byProto   map[string][]core.PlatformBinding
-	accTypes  []core.AccountTypeBinding
+	accTypes  []core.AccountTypeBinding // sorted by plugin key, type id
+	atByKey   map[core.AccountTypeKey]core.AccountTypeBinding
+	atByProto map[string][]core.AccountTypeBinding // native protocol -> types, same order
 	hooks     map[string][]core.HookBinding
 	scheds    map[string]core.SchedulerPlugin
 	routes    map[string][]core.RouteBinding
@@ -160,6 +162,8 @@ func build(number uint64, exts []Extension) *generation {
 		packages:  map[string]*Package{},
 		platforms: map[string]core.PlatformBinding{},
 		byProto:   map[string][]core.PlatformBinding{},
+		atByKey:   map[core.AccountTypeKey]core.AccountTypeBinding{},
+		atByProto: map[string][]core.AccountTypeBinding{},
 		hooks:     map[string][]core.HookBinding{},
 		scheds:    map[string]core.SchedulerPlugin{},
 		routes:    map[string][]core.RouteBinding{},
@@ -183,21 +187,31 @@ func build(number uint64, exts []Extension) *generation {
 				g.endpoints = append(g.endpoints, core.EndpointBinding{Plugin: info, Endpoint: ep})
 			}
 		}
-		if pf := ext.Platform(); pf != nil && m.Platform != nil {
+		pf := ext.Platform()
+		if pf != nil && m.Platform != nil {
 			b := core.PlatformBinding{Plugin: info, Platform: *m.Platform, Client: pf}
 			if _, taken := g.platforms[m.Platform.ID]; !taken {
 				g.platforms[m.Platform.ID] = b
 				for _, proto := range m.Platform.Protocols {
 					g.byProto[proto] = append(g.byProto[proto], b)
 				}
-				for _, at := range m.Platform.AccountTypes {
-					atb := core.AccountTypeBinding{Plugin: info, Platform: m.Platform.ID, Type: at, Validator: pf}
-					if at.Form.Mode == "schema" {
-						atb.FormSchema = readJSON(pkg, at.Form.Schema)
-						atb.FormUI = readJSON(pkg, at.Form.UISchema)
-					}
-					g.accTypes = append(g.accTypes, atb)
+			}
+		}
+		// Account types are served by the declaring plugin, which must
+		// implement platform.adapter.v1 (ARCHITECTURE 6.6).
+		if pf != nil {
+			for _, at := range m.AccountTypes {
+				key := core.AccountTypeKey{PluginKey: pkg.Key, Type: at.ID}
+				if _, dup := g.atByKey[key]; dup {
+					continue
 				}
+				atb := core.AccountTypeBinding{Plugin: info, Type: at, Client: pf}
+				if at.Form.Mode == "schema" {
+					atb.FormSchema = readJSON(pkg, at.Form.Schema)
+					atb.FormUI = readJSON(pkg, at.Form.UISchema)
+				}
+				g.atByKey[key] = atb
+				g.accTypes = append(g.accTypes, atb)
 			}
 		}
 		if hk := ext.Hook(); hk != nil && grants.Has("gateway.hook") {
@@ -261,6 +275,23 @@ func build(number uint64, exts []Extension) *generation {
 			return hs[i].Plugin.Key < hs[j].Plugin.Key
 		})
 	}
+	sort.SliceStable(g.accTypes, func(i, j int) bool {
+		a, b := g.accTypes[i], g.accTypes[j]
+		if a.Plugin.Key != b.Plugin.Key {
+			return a.Plugin.Key < b.Plugin.Key
+		}
+		return a.Type.ID < b.Type.ID
+	})
+	for _, atb := range g.accTypes {
+		seen := map[string]bool{}
+		for _, ap := range atb.Type.Protocols {
+			if ap.Protocol == "" || seen[ap.Protocol] {
+				continue
+			}
+			seen[ap.Protocol] = true
+			g.atByProto[ap.Protocol] = append(g.atByProto[ap.Protocol], atb)
+		}
+	}
 	return g
 }
 
@@ -285,13 +316,13 @@ func (g *generation) Platform(platformID string) (core.PlatformBinding, bool) {
 	return b, ok
 }
 
-func (g *generation) AccountType(platform, accountType string) (core.AccountTypeBinding, bool) {
-	for _, b := range g.accTypes {
-		if b.Platform == platform && b.Type.ID == accountType {
-			return b, true
-		}
-	}
-	return core.AccountTypeBinding{}, false
+func (g *generation) AccountType(pluginKey, typeID string) (core.AccountTypeBinding, bool) {
+	b, ok := g.atByKey[core.AccountTypeKey{PluginKey: pluginKey, Type: typeID}]
+	return b, ok
+}
+
+func (g *generation) AccountTypesForProtocol(protocol string) []core.AccountTypeBinding {
+	return g.atByProto[protocol]
 }
 
 func (g *generation) Hooks(point string) []core.HookBinding { return g.hooks[point] }

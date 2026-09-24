@@ -2,6 +2,7 @@ package registry_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
@@ -12,8 +13,9 @@ import (
 )
 
 type ext struct {
-	pkg    *registry.Package
-	grants registry.Grants
+	pkg        *registry.Package
+	grants     registry.Grants
+	noPlatform bool // plugin without platform.adapter.v1
 }
 
 type stub struct{}
@@ -43,9 +45,14 @@ func (stub) HandleHTTP(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTTPRe
 	return nil, nil
 }
 
-func (e ext) Package() *registry.Package      { return e.pkg }
-func (e ext) Grants() registry.Grants         { return e.grants }
-func (e ext) Platform() core.PlatformPlugin   { return stub{} }
+func (e ext) Package() *registry.Package { return e.pkg }
+func (e ext) Grants() registry.Grants    { return e.grants }
+func (e ext) Platform() core.PlatformPlugin {
+	if e.noPlatform {
+		return nil
+	}
+	return stub{}
+}
 func (e ext) Hook() core.HookPlugin           { return stub{} }
 func (e ext) App() core.AppPlugin             { return stub{} }
 func (e ext) HTTP() core.HTTPPlugin           { return stub{} }
@@ -128,9 +135,12 @@ func TestGenerationBuildAndSwitch(t *testing.T) {
 	if ps := g.PlatformsForProtocol("test.proto"); len(ps) != 2 {
 		t.Fatalf("platforms for protocol = %d", len(ps))
 	}
-	at, ok := g.AccountType("p_alpha", "apikey")
-	if !ok || len(at.FormSchema) == 0 || len(at.FormUI) == 0 || at.Validator == nil {
+	at, ok := g.AccountType("alpha", "apikey")
+	if !ok || len(at.FormSchema) == 0 || len(at.FormUI) == 0 || at.Client == nil || at.Key() != (core.AccountTypeKey{PluginKey: "alpha", Type: "apikey"}) {
 		t.Fatalf("account type = %+v", at)
+	}
+	if _, ok := g.AccountType("p_alpha", "apikey"); ok {
+		t.Fatal("account types are keyed by plugin, not platform")
 	}
 
 	// Assets.
@@ -155,5 +165,70 @@ func TestGenerationBuildAndSwitch(t *testing.T) {
 	}
 	if _, ok := reg.Current().Plugin("alpha"); ok {
 		t.Fatal("alpha must be gone from the current generation")
+	}
+}
+
+// Account types are declared at the top level by any plugin and served by
+// the declaring plugin; the protocol index lists native types only.
+func TestAccountTypesManyToMany(t *testing.T) {
+	platform := registrytest.Manifest("anth", "1.0.0")
+	platform.AccountTypes = append(platform.AccountTypes, manifest.AccountType{
+		ID: "oauth", Label: manifest.LocalizedText{"en": "OAuth"}, Form: manifest.Form{Mode: "native", Component: "X"},
+		Protocols: []manifest.AccountProtocol{{Protocol: "test.proto"}, {Protocol: "test.count"}},
+	})
+	// A relay plugin declaring only account types (no platform, no endpoints).
+	relay := registrytest.Manifest("relay", "1.0.0")
+	relay.Platform = nil
+	relay.AccountTypes = []manifest.AccountType{
+		{ID: "zkey", Label: manifest.LocalizedText{"en": "Z"}, Form: manifest.Form{Mode: "native", Component: "Z"},
+			Protocols: []manifest.AccountProtocol{{Protocol: "test.proto"}}},
+		{ID: "akey", Label: manifest.LocalizedText{"en": "A"}, Form: manifest.Form{Mode: "native", Component: "A"},
+			Protocols: []manifest.AccountProtocol{{Protocol: "other.proto"}}},
+	}
+	// Without platform.adapter.v1 the account types are not registered.
+	noAdapter := registrytest.Manifest("noadapter", "1.0.0")
+	noAdapter.Platform = nil
+
+	reg := registry.New()
+	g := reg.Publish([]registry.Extension{
+		ext{pkg: load(t, relay)}, ext{pkg: load(t, noAdapter), noPlatform: true}, ext{pkg: load(t, platform)},
+	})
+
+	var keys []string
+	for _, b := range g.AccountTypes() {
+		keys = append(keys, b.Plugin.Key+"/"+b.Type.ID)
+		if b.Client == nil {
+			t.Fatalf("%v: client is nil", b.Key())
+		}
+	}
+	if want := "anth/apikey anth/oauth relay/akey relay/zkey"; strings.Join(keys, " ") != want {
+		t.Fatalf("account types = %v, want %s", keys, want)
+	}
+	if _, ok := g.AccountType("noadapter", "apikey"); ok {
+		t.Fatal("account types of a plugin without platform.adapter.v1 must not be registered")
+	}
+	if b, ok := g.AccountType("relay", "zkey"); !ok || b.Plugin.Key != "relay" {
+		t.Fatalf("relay/zkey = %+v %v", b, ok)
+	}
+	if _, ok := g.Platform("p_relay"); ok {
+		t.Fatal("relay declares no platform")
+	}
+
+	var native []string
+	for _, b := range g.AccountTypesForProtocol("test.proto") {
+		native = append(native, b.Plugin.Key+"/"+b.Type.ID)
+	}
+	if want := "anth/apikey anth/oauth relay/zkey"; strings.Join(native, " ") != want {
+		t.Fatalf("test.proto types = %v, want %s", native, want)
+	}
+	count := g.AccountTypesForProtocol("test.count")
+	if len(count) != 1 || count[0].Type.ID != "oauth" {
+		t.Fatalf("test.count types = %+v", count)
+	}
+	if p, ok := count[0].Protocol("test.count"); !ok || p.Protocol != "test.count" {
+		t.Fatal("binding protocol lookup")
+	}
+	if bs := g.AccountTypesForProtocol("nope"); len(bs) != 0 {
+		t.Fatalf("unknown protocol = %+v", bs)
 	}
 }

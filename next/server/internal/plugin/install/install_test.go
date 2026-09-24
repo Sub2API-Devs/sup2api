@@ -59,7 +59,7 @@ func (f *fakePerms) DeletePlugin(_ context.Context, _ pgx.Tx, key string) error 
 
 type fakePrices struct{ calls int }
 
-func (f *fakePrices) SyncPluginDefaults(context.Context, pgx.Tx, string, string, []manifest.PricingEntry) error {
+func (f *fakePrices) SyncPluginDefaults(context.Context, pgx.Tx, string, []manifest.PricingEntry) error {
 	f.calls++
 	return nil
 }

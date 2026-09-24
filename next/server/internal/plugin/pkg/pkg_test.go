@@ -175,17 +175,26 @@ func TestValidateConsistency(t *testing.T) {
 		}, "gateway.endpoints[0].path", "invalid_path"},
 		{"platform perms", func(m *manifest.Manifest, _ map[string][]byte) {
 			m.Capabilities = append(m.Capabilities, manifest.Capability{ID: manifest.CapPlatformAdapter})
-			m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "platform.register"})
-			m.Platform = &manifest.Platform{ID: "anthropic", Protocols: []string{"anthropic.messages"},
-				AccountTypes: []manifest.AccountType{{ID: "apikey", Label: manifest.LocalizedText{"en": "API key"}, Form: manifest.Form{Mode: "native", Component: "X"}}}}
+			m.Platform = &manifest.Platform{ID: "anthropic", Protocols: []string{"anthropic.messages"}}
 		}, "platform", "missing_host_permission"},
 		{"sticky plugin source", func(m *manifest.Manifest, _ map[string][]byte) {
 			m.Capabilities = append(m.Capabilities, manifest.Capability{ID: manifest.CapPlatformAdapter}, manifest.Capability{ID: manifest.CapSchedulerAffinity})
-			m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "platform.register"}, manifest.HostPermission{ID: "accounts.credentials"})
+			m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "platform.register"})
 			m.Platform = &manifest.Platform{ID: "anthropic", Protocols: []string{"anthropic.messages"},
-				AccountTypes: []manifest.AccountType{{ID: "apikey", Label: manifest.LocalizedText{"en": "API key"}, Form: manifest.Form{Mode: "native", Component: "X"}}},
-				StickyRules:  []manifest.StickyRule{{Name: "s", KeySources: []manifest.StickyKeySource{{Type: "plugin"}}}}}
+				StickyRules: []manifest.StickyRule{{Name: "s", KeySources: []manifest.StickyKeySource{{Type: "plugin"}}}}}
 		}, "platform.stickyRules[0].keySources[0]", "missing_host_permission"},
+		{"account types need credentials", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.Capabilities = append(m.Capabilities, manifest.Capability{ID: manifest.CapPlatformAdapter})
+			m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "platform.register"})
+			m.AccountTypes = []manifest.AccountType{{ID: "apikey", Label: manifest.LocalizedText{"en": "API key"},
+				Form: manifest.Form{Mode: "native", Component: "X"}, Protocols: []manifest.AccountProtocol{{Protocol: "anthropic.messages"}}}}
+		}, "accountTypes", "missing_host_permission"},
+		{"account types need adapter", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "platform.register"},
+				manifest.HostPermission{ID: "accounts.credentials", Scope: map[string]any{"types": "own"}})
+			m.AccountTypes = []manifest.AccountType{{ID: "apikey", Label: manifest.LocalizedText{"en": "API key"},
+				Form: manifest.Form{Mode: "native", Component: "X"}, Protocols: []manifest.AccountProtocol{{Protocol: "anthropic.messages"}}}}
+		}, "accountTypes", "missing_capability"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -197,6 +206,89 @@ func TestValidateConsistency(t *testing.T) {
 				t.Fatal("expected error")
 			}
 			codes := fieldCodes(err)
+			if codes[tc.field] != tc.code {
+				t.Fatalf("want %s=%s, got %v", tc.field, tc.code, codes)
+			}
+		})
+	}
+}
+
+func TestValidatePlatformAndAccountTypes(t *testing.T) {
+	m := pkgtest.Platform("anthropic", "0.1.0", "sub2api")
+	if err := Validate(m, pkgtest.Files(m), opts()); err != nil {
+		t.Fatalf("validate: %v %v", err, fieldCodes(err))
+	}
+
+	// A platform no longer needs account types, and a plugin may declare
+	// account types without a platform (a relay plugin).
+	noTypes := pkgtest.Platform("anthropic", "0.1.0", "sub2api")
+	noTypes.AccountTypes = nil
+	noTypes.HostPermissions = noTypes.HostPermissions[:2]
+	if err := Validate(noTypes, pkgtest.Files(noTypes), opts()); err != nil {
+		t.Fatalf("platform without account types: %v", fieldCodes(err))
+	}
+	relay := pkgtest.Platform("relay", "0.1.0", "sub2api")
+	relay.Gateway, relay.Platform = nil, nil
+	relay.HostPermissions = relay.HostPermissions[1:]
+	if err := Validate(relay, pkgtest.Files(relay), opts()); err != nil {
+		t.Fatalf("relay without platform: %v", fieldCodes(err))
+	}
+
+	type mut func(m *manifest.Manifest, files map[string][]byte)
+	proto := func(p ...string) []manifest.AccountProtocol {
+		out := make([]manifest.AccountProtocol, 0, len(p))
+		for _, x := range p {
+			out = append(out, manifest.AccountProtocol{Protocol: x})
+		}
+		return out
+	}
+	cases := []struct {
+		name  string
+		mut   mut
+		field string
+		code  string
+	}{
+		{"type id format", func(m *manifest.Manifest, _ map[string][]byte) { m.AccountTypes[0].ID = "1key" }, "accountTypes[0].id", "invalid_format"},
+		{"type id too short", func(m *manifest.Manifest, _ map[string][]byte) { m.AccountTypes[0].ID = "k" }, "accountTypes[0].id", "invalid_format"},
+		{"type id duplicate", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.AccountTypes = append(m.AccountTypes, m.AccountTypes[0])
+		}, "accountTypes[1].id", "duplicate"},
+		{"type label", func(m *manifest.Manifest, _ map[string][]byte) { m.AccountTypes[0].Label = nil }, "accountTypes[0].label", "required"},
+		{"no protocols", func(m *manifest.Manifest, _ map[string][]byte) { m.AccountTypes[0].Protocols = nil }, "accountTypes[0].protocols", "required"},
+		{"empty protocol", func(m *manifest.Manifest, _ map[string][]byte) { m.AccountTypes[0].Protocols = proto("") }, "accountTypes[0].protocols[0].protocol", "required"},
+		{"protocol format", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.AccountTypes[0].Protocols = proto("Anthropic Messages")
+		}, "accountTypes[0].protocols[0].protocol", "invalid_format"},
+		{"protocol duplicate", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.AccountTypes[0].Protocols = proto("anthropic.messages", "anthropic.messages")
+		}, "accountTypes[0].protocols[1].protocol", "duplicate"},
+		{"usage override", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.AccountTypes[0].Protocols[0].Usage = &manifest.UsageRules{Semantics: "both"}
+		}, "accountTypes[0].protocols[0].usage.semantics", "invalid"},
+		{"form file", func(_ *manifest.Manifest, f map[string][]byte) { delete(f, "forms/apikey.schema.json") }, "accountTypes[0].form.schema", "file_missing"},
+		{"form ui file", func(_ *manifest.Manifest, f map[string][]byte) { delete(f, "forms/apikey.ui.json") }, "accountTypes[0].form.uiSchema", "file_missing"},
+		{"needs platform.register", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.Platform, m.Gateway = nil, nil
+			m.HostPermissions = []manifest.HostPermission{{ID: "accounts.credentials", Scope: map[string]any{"types": "own"}}}
+		}, "accountTypes", "missing_host_permission"},
+		{"old credentials scope", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.HostPermissions[2].Scope = map[string]any{"platform": "own"}
+		}, "hostPermissions[2].scope", "invalid"},
+		{"missing credentials scope", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.HostPermissions[2].Scope = nil
+		}, "hostPermissions[2].scope", "invalid"},
+		{"endpoint protocol outside platform", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.Platform.Protocols = []string{"anthropic.messages"}
+		}, "gateway.endpoints[1].protocol", "not_in_platform"},
+		{"platform usage", func(m *manifest.Manifest, _ map[string][]byte) { m.Platform.Usage.Semantics = "x" }, "platform.usage.semantics", "invalid"},
+		{"platform protocols", func(m *manifest.Manifest, _ map[string][]byte) { m.Platform.Protocols = nil }, "platform.protocols", "required"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := pkgtest.Platform("anthropic", "0.1.0", "sub2api")
+			files := pkgtest.Files(m)
+			tc.mut(m, files)
+			codes := fieldCodes(Validate(m, files, opts()))
 			if codes[tc.field] != tc.code {
 				t.Fatalf("want %s=%s, got %v", tc.field, tc.code, codes)
 			}

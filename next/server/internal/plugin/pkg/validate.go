@@ -2,8 +2,10 @@ package pkg
 
 import (
 	"fmt"
+	"reflect"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 
@@ -18,6 +20,8 @@ var (
 	keyRe            = regexp.MustCompile(`^[a-z][a-z0-9_]{1,29}$`)
 	userPermKeyRe    = regexp.MustCompile(`^[a-z0-9_]+(:[a-z0-9_]+)+$`)
 	idRe             = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,63}$`)
+	accountTypeIDRe  = regexp.MustCompile(`^[a-z][a-z0-9_]{1,49}$`)
+	protocolRe       = regexp.MustCompile(`^[a-z0-9_.-]+$`)
 	allowedMethods   = map[string]bool{"GET": true, "POST": true, "PUT": true, "PATCH": true, "DELETE": true}
 	reservedSegments = map[string]bool{"api": true, "plugin-ui": true, "healthz": true}
 )
@@ -124,6 +128,7 @@ func Validate(m *manifest.Manifest, files map[string][]byte, opt ValidateOptions
 	v.capabilities()
 	v.gateway()
 	v.platform()
+	v.accountTypes()
 	v.pricing()
 	v.hooks()
 	v.events()
@@ -222,6 +227,9 @@ func (v *validator) hostPermissions() {
 			continue
 		}
 		v.perms[hp.ID] = hp
+		if hp.ID == "accounts.credentials" && !reflect.DeepEqual(NormalizeScope(hp.Scope), credentialsScopeOwn) {
+			v.add(f+".scope", "invalid", `accounts.credentials scope must be {"types": "own"}`)
+		}
 		if hp.ID == "net" {
 			if d, ok := StringList(hp.Scope, "domains"); ok {
 				for _, dom := range d {
@@ -346,33 +354,21 @@ func (v *validator) platform() {
 	}
 	v.needCap("platform", manifest.CapPlatformAdapter)
 	v.needPerm("platform", "platform.register", "a platform")
-	v.needPerm("platform", "accounts.credentials", "a platform")
 	if !idRe.MatchString(p.ID) {
 		v.add("platform.id", "invalid_format", "platform id %q is invalid", p.ID)
 	}
 	if len(p.Protocols) == 0 {
 		v.add("platform.protocols", "required", "at least one protocol is required")
 	}
-	if len(p.AccountTypes) == 0 {
-		v.add("platform.accountTypes", "required", "at least one account type is required")
-	}
-	if p.Usage.Semantics != "" && p.Usage.Semantics != "exclusive" && p.Usage.Semantics != "inclusive" {
-		v.add("platform.usage.semantics", "invalid", "semantics must be exclusive or inclusive")
-	}
-	ids := map[string]bool{}
-	for i, at := range p.AccountTypes {
-		f := fmt.Sprintf("platform.accountTypes[%d]", i)
-		if !idRe.MatchString(at.ID) {
-			v.add(f+".id", "invalid_format", "account type id %q is invalid", at.ID)
-		} else if ids[at.ID] {
-			v.add(f+".id", "duplicate", "account type %q declared twice", at.ID)
+	if v.m.Gateway != nil {
+		for i, e := range v.m.Gateway.Endpoints {
+			if e.Protocol != "" && !slices.Contains(p.Protocols, e.Protocol) {
+				v.add(fmt.Sprintf("gateway.endpoints[%d].protocol", i), "not_in_platform",
+					"protocol %q is not listed in platform.protocols", e.Protocol)
+			}
 		}
-		ids[at.ID] = true
-		if strings.TrimSpace(at.Label["en"]) == "" {
-			v.add(f+".label", "required", "label.en is required")
-		}
-		v.form(f+".form", at.Form, false)
 	}
+	v.usageRules("platform.usage", p.Usage)
 	names := map[string]bool{}
 	for i, r := range p.StickyRules {
 		f := fmt.Sprintf("platform.stickyRules[%d]", i)
@@ -403,6 +399,62 @@ func (v *validator) platform() {
 		if r.OnFailure != "" && r.OnFailure != "failover" && r.OnFailure != "stick" {
 			v.add(f+".onFailure", "invalid", "onFailure must be failover or stick")
 		}
+	}
+}
+
+// credentialsScopeOwn is the only accepted scope of accounts.credentials:
+// the plugin reads credentials of its own account types (ARCHITECTURE 6.6).
+var credentialsScopeOwn = map[string]any{"types": "own"}
+
+// accountTypes validates the top-level accountTypes (ARCHITECTURE 6.6).
+func (v *validator) accountTypes() {
+	ats := v.m.AccountTypes
+	if len(ats) == 0 {
+		return
+	}
+	v.needCap("accountTypes", manifest.CapPlatformAdapter)
+	v.needPerm("accountTypes", "platform.register", "account types")
+	v.needPerm("accountTypes", "accounts.credentials", "account types")
+	ids := map[string]bool{}
+	for i, at := range ats {
+		f := fmt.Sprintf("accountTypes[%d]", i)
+		if !accountTypeIDRe.MatchString(at.ID) {
+			v.add(f+".id", "invalid_format", "account type id %q must match %s", at.ID, accountTypeIDRe.String())
+		} else if ids[at.ID] {
+			v.add(f+".id", "duplicate", "account type %q declared twice", at.ID)
+		}
+		ids[at.ID] = true
+		if strings.TrimSpace(at.Label["en"]) == "" {
+			v.add(f+".label", "required", "label.en is required")
+		}
+		v.form(f+".form", at.Form, false)
+		if len(at.Protocols) == 0 {
+			v.add(f+".protocols", "required", "at least one protocol is required")
+		}
+		protos := map[string]bool{}
+		for j, ap := range at.Protocols {
+			pf := fmt.Sprintf("%s.protocols[%d]", f, j)
+			switch {
+			case ap.Protocol == "":
+				v.add(pf+".protocol", "required", "protocol is required")
+			case !protocolRe.MatchString(ap.Protocol):
+				v.add(pf+".protocol", "invalid_format", "protocol %q must match %s", ap.Protocol, protocolRe.String())
+			case protos[ap.Protocol]:
+				v.add(pf+".protocol", "duplicate", "protocol %q listed twice", ap.Protocol)
+			}
+			protos[ap.Protocol] = true
+			if ap.Usage != nil {
+				v.usageRules(pf+".usage", *ap.Usage)
+			}
+		}
+	}
+}
+
+// usageRules validates usage extraction rules (platform defaults and
+// account type overrides).
+func (v *validator) usageRules(field string, u manifest.UsageRules) {
+	if u.Semantics != "" && u.Semantics != "exclusive" && u.Semantics != "inclusive" {
+		v.add(field+".semantics", "invalid", "semantics must be exclusive or inclusive")
 	}
 }
 
@@ -444,9 +496,6 @@ func (v *validator) pricing() {
 			}
 		default:
 			v.add(f+".mode", "invalid", "mode must be per_request, per_token or expression")
-		}
-		if p.Platform == "" && v.m.Platform == nil {
-			v.add(f+".platform", "required", "platform is required when the plugin declares no platform")
 		}
 	}
 }

@@ -14,38 +14,39 @@ import (
 
 // Review is the consent screen payload (CONTRACTS §5.7).
 type Review struct {
-	PluginKey        string             `json:"plugin_key"`
-	Version          string             `json:"version"`
-	Name             core.LocalizedText `json:"name"`
-	Description      core.LocalizedText `json:"description,omitempty"`
-	Icon             string             `json:"icon,omitempty"`
-	Publisher        string             `json:"publisher"`
-	Trust            string             `json:"trust"`
-	SignatureStatus  string             `json:"signature_status"`
-	KeyID            string             `json:"key_id,omitempty"`
-	ConsentStatus    string             `json:"consent_status"`
-	HostCompat       string             `json:"host_compat"`
-	HostCompatOK     bool               `json:"host_compat_ok"`
-	PackageSHA256    string             `json:"package_sha256"`
-	PackageSize      int64              `json:"package_size"`
-	UpgradeFrom      string             `json:"upgrade_from,omitempty"`
-	Capabilities     []string           `json:"capabilities"`
-	GatewayEndpoints []ReviewEndpoint   `json:"gateway_endpoints"`
-	Platform         *ReviewPlatform    `json:"platform"`
-	Hooks            []ReviewHook       `json:"hooks"`
-	Jobs             []ReviewJob        `json:"jobs"`
-	Events           []string           `json:"events"`
-	Routes           []ReviewRoute      `json:"routes"`
-	Menus            []ReviewMenu       `json:"menus"`
-	Slots            []ReviewSlot       `json:"slots"`
-	UserPermissions  []ReviewUserPerm   `json:"user_permissions"`
-	Database         *ReviewDatabase    `json:"database"`
-	Resources        ReviewResources    `json:"resources"`
-	PricingEntries   int                `json:"pricing_entries"`
-	ExternalServices []string           `json:"external_services"`
-	HostPermissions  []ReviewHostPerm   `json:"host_permissions"`
-	Diff             *ReviewDiff        `json:"diff,omitempty"`
-	UploadedAt       time.Time          `json:"uploaded_at"`
+	PluginKey        string              `json:"plugin_key"`
+	Version          string              `json:"version"`
+	Name             core.LocalizedText  `json:"name"`
+	Description      core.LocalizedText  `json:"description,omitempty"`
+	Icon             string              `json:"icon,omitempty"`
+	Publisher        string              `json:"publisher"`
+	Trust            string              `json:"trust"`
+	SignatureStatus  string              `json:"signature_status"`
+	KeyID            string              `json:"key_id,omitempty"`
+	ConsentStatus    string              `json:"consent_status"`
+	HostCompat       string              `json:"host_compat"`
+	HostCompatOK     bool                `json:"host_compat_ok"`
+	PackageSHA256    string              `json:"package_sha256"`
+	PackageSize      int64               `json:"package_size"`
+	UpgradeFrom      string              `json:"upgrade_from,omitempty"`
+	Capabilities     []string            `json:"capabilities"`
+	GatewayEndpoints []ReviewEndpoint    `json:"gateway_endpoints"`
+	Platform         *ReviewPlatform     `json:"platform"`
+	AccountTypes     []ReviewAccountType `json:"account_types"`
+	Hooks            []ReviewHook        `json:"hooks"`
+	Jobs             []ReviewJob         `json:"jobs"`
+	Events           []string            `json:"events"`
+	Routes           []ReviewRoute       `json:"routes"`
+	Menus            []ReviewMenu        `json:"menus"`
+	Slots            []ReviewSlot        `json:"slots"`
+	UserPermissions  []ReviewUserPerm    `json:"user_permissions"`
+	Database         *ReviewDatabase     `json:"database"`
+	Resources        ReviewResources     `json:"resources"`
+	PricingEntries   int                 `json:"pricing_entries"`
+	ExternalServices []string            `json:"external_services"`
+	HostPermissions  []ReviewHostPerm    `json:"host_permissions"`
+	Diff             *ReviewDiff         `json:"diff,omitempty"`
+	UploadedAt       time.Time           `json:"uploaded_at"`
 }
 
 type ReviewEndpoint struct {
@@ -57,17 +58,18 @@ type ReviewEndpoint struct {
 }
 
 type ReviewPlatform struct {
-	ID           string              `json:"id"`
-	Label        core.LocalizedText  `json:"label,omitempty"`
-	Protocols    []string            `json:"protocols"`
-	AccountTypes []ReviewAccountType `json:"account_types"`
-	StickyRules  []string            `json:"sticky_rules"`
+	ID          string             `json:"id"`
+	Label       core.LocalizedText `json:"label,omitempty"`
+	Protocols   []string           `json:"protocols"`
+	StickyRules []string           `json:"sticky_rules"`
 }
 
+// ReviewAccountType is one top-level account type (ARCHITECTURE 6.6).
 type ReviewAccountType struct {
-	ID       string             `json:"id"`
-	Label    core.LocalizedText `json:"label"`
-	FormMode string             `json:"form_mode"`
+	ID        string             `json:"id"`
+	Label     core.LocalizedText `json:"label"`
+	Protocols []string           `json:"protocols"`
+	FormMode  string             `json:"form_mode"`
 }
 
 type ReviewHook struct {
@@ -234,6 +236,7 @@ func buildReview(m *manifest.Manifest, files map[string][]byte, ver *pkg.Verific
 		HostCompat:       m.HostCompat,
 		Capabilities:     []string{},
 		GatewayEndpoints: []ReviewEndpoint{},
+		AccountTypes:     []ReviewAccountType{},
 		Hooks:            []ReviewHook{},
 		Jobs:             []ReviewJob{},
 		Events:           []string{},
@@ -259,14 +262,18 @@ func buildReview(m *manifest.Manifest, files map[string][]byte, ver *pkg.Verific
 		}
 	}
 	if p := m.Platform; p != nil {
-		rp := &ReviewPlatform{ID: p.ID, Label: core.LocalizedText(p.Label), Protocols: p.Protocols, AccountTypes: []ReviewAccountType{}, StickyRules: []string{}}
-		for _, at := range p.AccountTypes {
-			rp.AccountTypes = append(rp.AccountTypes, ReviewAccountType{ID: at.ID, Label: core.LocalizedText(at.Label), FormMode: at.Form.Mode})
-		}
+		rp := &ReviewPlatform{ID: p.ID, Label: core.LocalizedText(p.Label), Protocols: p.Protocols, StickyRules: []string{}}
 		for _, sr := range p.StickyRules {
 			rp.StickyRules = append(rp.StickyRules, sr.Name)
 		}
 		r.Platform = rp
+	}
+	for _, at := range m.AccountTypes {
+		protos := make([]string, 0, len(at.Protocols))
+		for _, ap := range at.Protocols {
+			protos = append(protos, ap.Protocol)
+		}
+		r.AccountTypes = append(r.AccountTypes, ReviewAccountType{ID: at.ID, Label: core.LocalizedText(at.Label), Protocols: protos, FormMode: at.Form.Mode})
 	}
 	for _, h := range m.Hooks {
 		failure := h.Failure

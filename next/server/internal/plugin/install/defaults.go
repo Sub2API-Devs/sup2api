@@ -35,14 +35,12 @@ func (a *DefaultsApplier) ApplyDefaults(ctx context.Context, tx pgx.Tx, m *manif
 			return fmt.Errorf("sync plugin permissions: %w", err)
 		}
 	}
-	platform := ""
 	var sticky []manifest.StickyRule
 	if m.Platform != nil {
-		platform = m.Platform.ID
 		sticky = m.Platform.StickyRules
 	}
 	if a.prices != nil {
-		if err := a.prices.SyncPluginDefaults(ctx, tx, m.Key, platform, m.Pricing); err != nil {
+		if err := a.prices.SyncPluginDefaults(ctx, tx, m.Key, m.Pricing); err != nil {
 			return fmt.Errorf("sync plugin prices: %w", err)
 		}
 	}

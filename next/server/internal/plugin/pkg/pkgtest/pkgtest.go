@@ -105,6 +105,50 @@ func Minimal(key, version, publisher string) *manifest.Manifest {
 	}
 }
 
+// Platform returns a manifest modelled on the anthropic plugin: gateway
+// endpoints, a platform with their protocols, a top-level account type and
+// default prices (ARCHITECTURE 6.6).
+func Platform(key, version, publisher string) *manifest.Manifest {
+	return &manifest.Manifest{
+		APIVersion:   1,
+		Key:          key,
+		Name:         manifest.LocalizedText{"en": "Anthropic"},
+		Version:      version,
+		Publisher:    publisher,
+		Runtime:      "grpc",
+		Entry:        manifest.Entry{GRPC: &manifest.GRPCEntry{Binaries: "runtimes/{os}-{arch}/plugin"}},
+		HostCompat:   ">=0.1.0 <0.2.0",
+		Capabilities: []manifest.Capability{{ID: manifest.CapPlatformAdapter}},
+		Gateway: &manifest.Gateway{Endpoints: []manifest.Endpoint{
+			{ID: "messages", Method: "POST", Path: "/v1/messages", Protocol: "anthropic.messages", Kind: "proxy",
+				Auth: manifest.EndpointAuth{Headers: []string{"x-api-key"}}, Request: manifest.EndpointRequest{ModelPath: "model"}},
+			{ID: "count_tokens", Method: "POST", Path: "/v1/messages/count_tokens", Protocol: "anthropic.count_tokens", Kind: "proxy",
+				Auth: manifest.EndpointAuth{Headers: []string{"x-api-key"}}, Request: manifest.EndpointRequest{ModelPath: "model"}, Billing: "free"},
+		}},
+		Platform: &manifest.Platform{
+			ID:            "anthropic",
+			Label:         manifest.LocalizedText{"en": "Anthropic"},
+			Protocols:     []string{"anthropic.messages", "anthropic.count_tokens"},
+			RequestFields: []string{"model"},
+			Usage:         manifest.UsageRules{Semantics: "exclusive"},
+			StickyRules: []manifest.StickyRule{{Name: "session",
+				KeySources: []manifest.StickyKeySource{{Type: "body", Path: "metadata.user_id"}}}},
+		},
+		AccountTypes: []manifest.AccountType{{
+			ID: "apikey", Label: manifest.LocalizedText{"en": "API Key"},
+			Form:            manifest.Form{Mode: "schema", Schema: "forms/apikey.schema.json", UISchema: "forms/apikey.ui.json"},
+			SensitiveFields: []string{"api_key"},
+			Protocols:       []manifest.AccountProtocol{{Protocol: "anthropic.messages"}, {Protocol: "anthropic.count_tokens"}},
+		}},
+		Pricing: []manifest.PricingEntry{{Model: "claude-*", Mode: "per_token", Config: map[string]any{"p": 3, "c": 15}}},
+		HostPermissions: []manifest.HostPermission{
+			{ID: "gateway.endpoint"},
+			{ID: "platform.register"},
+			{ID: "accounts.credentials", Scope: map[string]any{"types": "own"}},
+		},
+	}
+}
+
 // SettingsSchema is the default forms/settings.schema.json.
 const SettingsSchema = `{
   "type": "object",
@@ -138,11 +182,12 @@ func Files(m *manifest.Manifest) map[string][]byte {
 			files[m.UI.Settings.Schema] = []byte(SettingsSchema)
 		}
 	}
-	if m.Platform != nil {
-		for _, at := range m.Platform.AccountTypes {
-			if at.Form.Schema != "" {
-				files[at.Form.Schema] = []byte(`{"type":"object"}`)
-			}
+	for _, at := range m.AccountTypes {
+		if at.Form.Schema != "" {
+			files[at.Form.Schema] = []byte(`{"type":"object"}`)
+		}
+		if at.Form.UISchema != "" {
+			files[at.Form.UISchema] = []byte(`{}`)
 		}
 	}
 	return files
