@@ -88,9 +88,8 @@ async function copy(v: string) {
                 {{ u.price.model }}
               </RouterLink>
               <span v-else class="font-mono text-xs">{{ u.price.model }}</span>
-              <SBadge :tone="u.price.source === 'admin' ? 'primary' : 'purple'">
-                {{ u.price.source === 'admin' ? t('prices.source.admin') : t('prices.source.plugin_default') }}
-                <template v-if="u.price.plugin_key"> · {{ u.price.plugin_key }}</template>
+              <SBadge :tone="u.price.source === 'sync' ? 'info' : 'primary'">
+                {{ te(`prices.source.${u.price.source}`) ? t(`prices.source.${u.price.source}`) : u.price.source }}
               </SBadge>
             </template>
             <template v-else-if="u.price_id">

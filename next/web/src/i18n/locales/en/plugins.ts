@@ -364,7 +364,7 @@ export default {
   uninstall: {
     action: 'Uninstall',
     title: 'Uninstall {name}',
-    body: 'Uninstalling removes the plugin package, its permissions and grants, event cursors, job records and default prices.',
+    body: 'Uninstalling removes the plugin package, its permissions and grants, event cursors and job records.',
     purge: 'Also delete plugin data (schema {schema})',
     purgeHint: 'Without this option the data is kept and restored if the plugin is installed again.',
     purgeWarn: 'Plugin data will be permanently deleted.',

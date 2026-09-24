@@ -275,11 +275,77 @@ export interface Price {
   expression: string
   expr_version: number
   expr_hash: string
-  source: 'plugin_default' | 'admin'
-  plugin_key?: string | null
+  /** manual: entered by an admin; sync: imported from a price source. */
+  source: PriceOrigin
+  /** Price source the price was imported from; null when manual or the source was deleted. */
+  sync_source_id?: number | null
+  sync_source_name?: string | null
+  synced_at?: string | null
   enabled: boolean
   note: string
+  updated_by?: number | null
   updated_at?: string
+  /** Detail only: parameters, headers and metrics the expression reads. */
+  analysis?: Record<string, unknown>
+}
+
+export type PriceOrigin = 'manual' | 'sync'
+
+export type PriceSourceKind = 'litellm' | 'models_dev' | 'sup2api'
+
+/** A price sync source (GET /price-sources). */
+export interface PriceSource {
+  id: number
+  name: string
+  kind: PriceSourceKind
+  url: string
+  has_api_key: boolean
+  /** litellm / models_dev: {providers: string[]}; sup2api: {apply_multiplier: boolean}. */
+  options: { providers?: string[]; apply_multiplier?: boolean; [k: string]: unknown }
+  enabled: boolean
+  last_synced_at: string | null
+  last_error: string
+  price_count: number
+  created_at?: string
+  updated_at?: string
+}
+
+/** A price definition as compared by a sync preview. */
+export interface PriceSyncDef {
+  mode: PriceMode
+  config: Record<string, any>
+  expression: string
+}
+
+/**
+ * create: no local price; update: the local price was synced and differs;
+ * manual: the local price is manual and differs (unticked by default);
+ * unchanged: identical.
+ */
+export type PriceSyncAction = 'create' | 'update' | 'manual' | 'unchanged'
+
+export interface PriceSyncItem {
+  model: string
+  action: PriceSyncAction
+  incoming: PriceSyncDef
+  current: null | (PriceSyncDef & { id: number; source: PriceOrigin; sync_source_id: number | null; enabled: boolean })
+}
+
+/** POST /price-sources/:id/preview */
+export interface PriceSyncPreview {
+  source_id: number
+  fetched_at: string
+  total: number
+  skipped: number
+  items: PriceSyncItem[]
+}
+
+/** POST /price-sources/:id/apply */
+export interface PriceSyncResult {
+  created: number
+  updated: number
+  unchanged: number
+  skipped: Array<{ model: string; reason: string }>
 }
 
 export interface PriceValidateResult {

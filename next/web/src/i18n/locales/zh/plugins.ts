@@ -364,7 +364,7 @@ export default {
   uninstall: {
     action: '卸载',
     title: '卸载 {name}',
-    body: '卸载会删除插件包、插件注册的权限及其授权、事件游标、任务记录和默认价格。',
+    body: '卸载会删除插件包、插件注册的权限及其授权、事件游标和任务记录。',
     purge: '同时删除插件数据（schema {schema}）',
     purgeHint: '不勾选时数据会保留，重新安装后可以继续使用。',
     purgeWarn: '插件数据将被永久删除。',
