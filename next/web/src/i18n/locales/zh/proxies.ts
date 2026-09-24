@@ -1,0 +1,20 @@
+export default {
+  title: '代理',
+  description: '账号访问上游服务时使用的出口代理。',
+  create: '新建代理',
+  editTitle: '编辑代理 {name}',
+  protocol: '协议',
+  address: '地址',
+  host: '主机',
+  port: '端口',
+  portInvalid: '端口必须在 1 到 65535 之间',
+  auth: '认证',
+  username: '用户名',
+  password: '密码',
+  passwordKeep: '留空表示不修改当前密码。',
+  passwordKeepMaybe: '留空表示不修改当前密码（如有）。',
+  testResult: '最近测试',
+  ok: '正常',
+  failed: '失败',
+  exitIp: '出口 IP'
+}

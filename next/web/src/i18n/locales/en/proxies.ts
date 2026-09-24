@@ -1,0 +1,20 @@
+export default {
+  title: 'Proxies',
+  description: 'Outbound proxies used by accounts to reach upstream providers.',
+  create: 'New proxy',
+  editTitle: 'Edit proxy {name}',
+  protocol: 'Protocol',
+  address: 'Address',
+  host: 'Host',
+  port: 'Port',
+  portInvalid: 'Port must be between 1 and 65535',
+  auth: 'Auth',
+  username: 'Username',
+  password: 'Password',
+  passwordKeep: 'Leave empty to keep the current password.',
+  passwordKeepMaybe: 'Leave empty to keep the current password (if any).',
+  testResult: 'Last test',
+  ok: 'OK',
+  failed: 'Failed',
+  exitIp: 'Exit IP'
+}

@@ -1,0 +1,28 @@
+// @sub2api/ui — component library shared by the console and native plugins.
+// Styling relies on the console's global component classes (.btn, .input,
+// .card, .table, .badge, ...), so plugin UIs look native without shipping CSS.
+
+export { default as SBadge } from './SBadge.vue'
+export { default as SButton } from './SButton.vue'
+export { default as SCard } from './SCard.vue'
+export { default as SChart } from './SChart.vue'
+export { default as SConfirmHost } from './SConfirmHost.vue'
+export { default as SDropdown } from './SDropdown.vue'
+export { default as SEmpty } from './SEmpty.vue'
+export { default as SField } from './SField.vue'
+export { default as SIcon } from './SIcon.vue'
+export { default as SKeyValue } from './SKeyValue.vue'
+export { default as SModal } from './SModal.vue'
+export { default as SPageHeader } from './SPageHeader.vue'
+export { default as SPagination } from './SPagination.vue'
+export { default as SSelect } from './SSelect.vue'
+export { default as SSpinner } from './SSpinner.vue'
+export { default as SStatCard } from './SStatCard.vue'
+export { default as SSwitch } from './SSwitch.vue'
+export { default as STable } from './STable.vue'
+export { default as STabs } from './STabs.vue'
+export { default as STagInput } from './STagInput.vue'
+export { default as SToastHost } from './SToastHost.vue'
+export { toast, confirm, toastState, confirmState, dismissToast, settleConfirm } from './feedback'
+export { default as uiMessages } from './messages'
+export type { TableColumn, TabItem, SelectOption, MenuAction, Tone } from './types'

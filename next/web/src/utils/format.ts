@@ -1,0 +1,96 @@
+import { currentLocale } from '@/i18n'
+
+/** Formats a decimal money string/number as USD with up to `digits` decimals. */
+export function formatMoney(v: string | number | null | undefined, digits = 4): string {
+  if (v === null || v === undefined || v === '') return '—'
+  const n = typeof v === 'number' ? v : Number(v)
+  if (!Number.isFinite(n)) return String(v)
+  const abs = Math.abs(n)
+  const d = abs !== 0 && abs < 0.01 ? Math.max(digits, 6) : digits
+  const s = abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: d })
+  return (n < 0 ? '-$' : '$') + s
+}
+
+/** Signed amount for ledger deltas: +12.3400 / -0.0158. */
+export function formatDelta(v: string | number | null | undefined, digits = 4): string {
+  if (v === null || v === undefined || v === '') return '—'
+  const n = Number(v)
+  if (!Number.isFinite(n)) return String(v)
+  return (n > 0 ? '+' : '') + n.toFixed(digits)
+}
+
+export function formatNumber(v: string | number | null | undefined, digits = 0): string {
+  if (v === null || v === undefined || v === '') return '—'
+  const n = Number(v)
+  if (!Number.isFinite(n)) return String(v)
+  return n.toLocaleString(currentLocale() === 'zh' ? 'zh-CN' : 'en-US', { maximumFractionDigits: digits })
+}
+
+export function formatDateTime(v: string | number | Date | null | undefined): string {
+  if (!v) return '—'
+  const d = v instanceof Date ? v : new Date(v)
+  if (Number.isNaN(d.getTime())) return String(v)
+  const p = (x: number) => String(x).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
+export function formatTime(v: string | number | Date | null | undefined): string {
+  if (!v) return '—'
+  const d = v instanceof Date ? v : new Date(v)
+  if (Number.isNaN(d.getTime())) return String(v)
+  const today = new Date()
+  const p = (x: number) => String(x).padStart(2, '0')
+  const hm = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+  if (d.toDateString() === today.toDateString()) return hm
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${hm}`
+}
+
+/** "3s ago" style; t is the i18n translate function. */
+export function formatRelative(v: string | number | Date | null | undefined, t: (k: string, p?: any) => string): string {
+  if (!v) return '—'
+  const d = v instanceof Date ? v : new Date(v)
+  const s = Math.round((Date.now() - d.getTime()) / 1000)
+  if (Number.isNaN(s)) return String(v)
+  if (s < 60) return t('common.secondsAgo', { n: Math.max(0, s) })
+  if (s < 3600) return t('common.minutesAgo', { n: Math.floor(s / 60) })
+  if (s < 86400) return t('common.hoursAgo', { n: Math.floor(s / 3600) })
+  return t('common.daysAgo', { n: Math.floor(s / 86400) })
+}
+
+export function formatBytes(n: number | null | undefined): string {
+  if (n === null || n === undefined) return '—'
+  const u = ['B', 'KB', 'MB', 'GB', 'TB']
+  let i = 0
+  let x = n
+  while (x >= 1024 && i < u.length - 1) {
+    x /= 1024
+    i++
+  }
+  return `${x.toFixed(x < 10 && i > 0 ? 1 : 0)}${u[i]}`
+}
+
+/** Start of today (local) as RFC 3339. */
+export function startOfToday(): Date {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+export function daysAgo(n: number): Date {
+  const d = startOfToday()
+  d.setDate(d.getDate() - n)
+  return d
+}
+
+export function toRFC3339(d: Date | null | undefined): string | undefined {
+  return d ? d.toISOString() : undefined
+}
+
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    return false
+  }
+}

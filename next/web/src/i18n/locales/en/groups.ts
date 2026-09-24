@@ -1,0 +1,20 @@
+export default {
+  title: 'Groups',
+  description: 'Groups bind accounts, API keys and users; they decide the rate multiplier and allowed models.',
+  create: 'New group',
+  editTitle: 'Edit group {name}',
+  visibility: 'Visibility',
+  public: 'Public',
+  restricted: 'Assigned users',
+  publicHint: 'Every user can create keys in this group.',
+  restrictedHint: 'Only users assigned on the Users page can use this group.',
+  rateMultiplier: 'Rate multiplier',
+  multiplierHint: 'Cost × multiplier is charged, e.g. 0.8 for a 20% discount.',
+  multiplierInvalid: 'Enter a non-negative number',
+  modelAllowlist: 'Model allowlist',
+  allowlistHint: 'Empty = unlimited. Wildcards such as claude-* are supported.',
+  allowlistPlaceholder: 'Type a model pattern and press Enter',
+  accountCount: 'Accounts',
+  keyCount: 'Keys',
+  deleteInUse: 'It still has {a} accounts and {k} API keys.'
+}

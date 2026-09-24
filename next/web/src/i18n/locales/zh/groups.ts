@@ -1,0 +1,20 @@
+export default {
+  title: '分组',
+  description: '分组关联账号、API Key 和用户，决定费率倍率和可用模型。',
+  create: '新建分组',
+  editTitle: '编辑分组 {name}',
+  visibility: '可见性',
+  public: '公开',
+  restricted: '指定用户',
+  publicHint: '所有用户都可以在该分组下创建 Key。',
+  restrictedHint: '只有在"用户"页面分配过的用户可以使用该分组。',
+  rateMultiplier: '倍率',
+  multiplierHint: '按 费用 × 倍率 扣费，例如 0.8 表示八折。',
+  multiplierInvalid: '请输入非负数',
+  modelAllowlist: '模型白名单',
+  allowlistHint: '留空表示不限。支持通配符，例如 claude-*。',
+  allowlistPlaceholder: '输入模型匹配规则后按回车',
+  accountCount: '账号数',
+  keyCount: 'Key 数',
+  deleteInUse: '该分组下仍有 {a} 个账号和 {k} 个 API Key。'
+}
