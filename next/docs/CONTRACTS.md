@@ -413,7 +413,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 
 | 接口 | 变更 |
 |---|---|
-| GET `/platforms`（新，`account:read`） | `[{id, label, builtin, plugin_key, endpoints:[{method, path, protocol, billing}], account_types:[{plugin_key, type, label}]}]`：内置平台 + 已启用插件的平台，以及支持它的已注册账号类型 |
+| GET `/platforms`（新，`account:read`） | `[{id, label, builtin, plugin_key, plugin_name, endpoints:[{method, path, protocol, billing}], account_types:[{plugin_key, type, label}]}]`：内置平台 + 已启用插件的平台，以及支持它的已注册账号类型 |
 | GET `/account-types` | 每项新增 `platforms:[{id, label, builtin, available}]`（`available`=该平台当前存在）；去掉 `protocols`；`endpoints` 为这些平台的端点（`native=true`）加可经转换服务的端点（`native=false`），每项含 `platform` |
 | GET `/groups`、`/groups/:id`、`/me/groups` | 新增 `platforms:[id]`：分组内账号的类型所支持的平台（去重、排序），即绑定该分组的 API Key 能访问的平台 |
 | GET `/me/api-keys`、`/api-keys` | 每项新增 `platforms:[id]`（同其分组） |

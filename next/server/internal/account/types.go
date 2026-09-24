@@ -178,7 +178,9 @@ type PlatformView struct {
 	Label   manifest.LocalizedText `json:"label"`
 	Builtin bool                   `json:"builtin"`
 	// PluginKey is the declaring plugin; null for built-in platforms.
-	PluginKey    *string                `json:"plugin_key"`
+	PluginKey *string `json:"plugin_key"`
+	// PluginName is the declaring plugin's name; null for built-in platforms.
+	PluginName   manifest.LocalizedText `json:"plugin_name"`
 	Endpoints    []PlatformEndpointView `json:"endpoints"`
 	AccountTypes []PlatformTypeView     `json:"account_types"`
 }
@@ -214,6 +216,9 @@ func platformViews(g core.Generation) []PlatformView {
 		if !pb.Builtin {
 			key := pb.Plugin.Key
 			v.PluginKey = &key
+			if pb.Plugin.Manifest != nil {
+				v.PluginName = pb.Plugin.Manifest.Name
+			}
 		}
 		for _, e := range pb.Platform.Endpoints {
 			v.Endpoints = append(v.Endpoints, PlatformEndpointView{Method: e.Method, Path: e.Path,
