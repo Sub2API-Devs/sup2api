@@ -208,9 +208,11 @@ go test -count=1 -timeout 50m -v ./...
 | 代号 | 目录 | 分支 | 状态 |
 |---|---|---|---|
 | c-plugin-types | `plugin/registry`、`pkg`、`install`、`api`、`grpcruntime`、`rollout`、`routes` | next/c-plugin-types | ✅ `cfc97cd0d`，合并 `ad7cafbd6` |
-| a-account-billing | `account`、`billing`、`usage`、`event` | next/a-account-billing | ⏳ |
+| a-account-billing | `account`、`billing`、`usage`、`event` | next/a-account-billing | ✅ `a617df00b`、`dec826607`、`20a87feb7`，合并 `8f11cfa99` |
 | g-gateway-types | `gateway`（含 `gateway/convert` 转换器框架） | next/g-gateway-types | ✅ `e58dc14c8`，合并 `dc12b4a45` |
 | f-web-types | `web/` | next/f-web-types | ⏳ |
 | e-plugins-types | `sdk/pluginsdk`、`plugins/*`（含新插件 relay）、`tools/sub2api-plugin`、`e2e`（新增 AC18）、`build-go.sh` | next/e-plugins-types | ⏳ |
+
+**主控整合（已做）**：`app` 组装共享转换器注册表；账号类型需要 `accounts.credentials` 授权才注册（未授权插件的账号不参与调度）；价格优先级改为"模式越具体越优先，同样具体再按安装先后"（billing agent 原实现是安装先后优先）。
 
 **合并后主控要做**：`internal/app` 组装（gateway 的 ProtocolConverters 交给 account）；清空 sup2api 数据卷重新部署；在 sup2api 上验证混合账号类型服务 `/v1/messages`；更新本节。
