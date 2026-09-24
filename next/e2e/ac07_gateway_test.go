@@ -83,8 +83,12 @@ func TestAC07_GatewayGroupScheduling(t *testing.T) {
 		if u.Get("group_id").Int() != mine.GroupID || !accIDs[u.Get("account_id").Int()] {
 			t.Fatalf("usage group/account: %s", u.Raw)
 		}
+		// platform/protocol are the client endpoint's; plugin_key/account_type
+		// the account type's; upstream_protocol what was sent upstream.
 		if u.Get("api_key_id").Int() != mine.KeyID || u.Get("platform").String() != "anthropic" ||
-			u.Get("protocol").String() != "anthropic.messages" || !u.Get("success").Bool() {
+			u.Get("protocol").String() != "anthropic.messages" || !u.Get("success").Bool() ||
+			u.Get("plugin_key").String() != AnthropicPlugin || u.Get("account_type").String() != AnthropicAPIKey ||
+			u.Get("upstream_protocol").String() != "anthropic.messages" {
 			t.Fatalf("usage identity: %s", u.Raw)
 		}
 		if u.Get("input_tokens").Int() != MockInputTokens || u.Get("output_tokens").Int() != MockOutputTokens ||

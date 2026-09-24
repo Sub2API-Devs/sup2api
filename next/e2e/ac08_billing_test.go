@@ -75,7 +75,8 @@ func TestAC08_BillingModes(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			e := e.With(t)
 			if c.price != nil {
-				body := map[string]any{"platform": "anthropic", "model_pattern": c.model}
+				// Prices are global per model: no platform (ARCHITECTURE 7.3).
+				body := map[string]any{"model_pattern": c.model}
 				for k, v := range c.price {
 					body[k] = v
 				}
@@ -83,7 +84,11 @@ func TestAC08_BillingModes(t *testing.T) {
 				if !v.Get("ok").Bool() || v.Get("expression").String() == "" {
 					t.Fatalf("validate: %s", v.Raw)
 				}
-				prices[c.model] = e.CreatePrice(admin, body).Get("id").Int()
+				row := e.CreatePrice(admin, body)
+				if row.Get("platform").Exists() {
+					t.Fatalf("price still has a platform: %s", row.Raw)
+				}
+				prices[c.model] = row.Get("id").Int()
 			}
 			priceID := prices[c.model]
 

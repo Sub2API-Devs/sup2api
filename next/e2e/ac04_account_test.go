@@ -15,8 +15,8 @@ func TestAC04_CreateAnthropicAccount(t *testing.T) {
 	e.EnsurePlugin(admin, "anthropic", "")
 
 	types := admin.OK(t, http.MethodGet, "/account-types", nil).Array()
-	at, ok := Find(types, "type", "apikey")
-	if !ok || at.Get("platform").String() != "anthropic" {
+	at, ok := FindAccountType(types, AnthropicPlugin, AnthropicAPIKey)
+	if !ok {
 		t.Fatalf("anthropic/apikey not offered: %v", types)
 	}
 	if at.Get("form.mode").String() == "" {
@@ -30,7 +30,8 @@ func TestAC04_CreateAnthropicAccount(t *testing.T) {
 		t.Fatalf("api_key must be a sensitive field: %s", at.Raw)
 	}
 
-	form := admin.OK(t, http.MethodGet, "/account-types/anthropic/apikey/form", nil)
+	// /account-types/:plugin_key/:type/form (CONTRACTS 12).
+	form := admin.OK(t, http.MethodGet, "/account-types/"+AnthropicPlugin+"/"+AnthropicAPIKey+"/form", nil)
 	for _, f := range []string{"api_key", "base_url"} {
 		if !form.Get("schema.properties." + f).Exists() {
 			t.Fatalf("form schema lacks %s: %s", f, form.Raw)
@@ -40,7 +41,7 @@ func TestAC04_CreateAnthropicAccount(t *testing.T) {
 	// Schema validation: missing api_key -> invalid_argument with field details.
 	gid := e.CreateGroup(admin, e.Name("grp"), "public", 1, nil)
 	r := admin.API(t, http.MethodPost, "/accounts", map[string]any{
-		"name": e.Name("bad"), "platform": "anthropic", "type": "apikey", "group_ids": []int64{gid},
+		"name": e.Name("bad"), "plugin_key": AnthropicPlugin, "type": AnthropicAPIKey, "group_ids": []int64{gid},
 		"priority": 10, "max_concurrency": 1, "schedulable": true, "credentials": map[string]any{"base_url": e.MockInternalURL},
 	})
 	if r.Status != 400 || r.ErrCode() != "invalid_argument" {
@@ -57,17 +58,17 @@ func TestAC04_CreateAnthropicAccount(t *testing.T) {
 	if got.Get("credentials.base_url").String() != e.MockInternalURL {
 		t.Fatalf("base_url (not sensitive) should be visible: %s", got.Raw)
 	}
-	if got.Get("platform").String() != "anthropic" || got.Get("type").String() != "apikey" {
+	if got.Get("plugin_key").String() != AnthropicPlugin || got.Get("type").String() != AnthropicAPIKey || got.Get("platform").Exists() {
 		t.Fatalf("account identity: %s", got.Raw)
 	}
 
 	// Listed with runtime fields.
-	list := admin.ListAll(t, "/accounts", "platform", "anthropic")
+	list := admin.ListAll(t, "/accounts", "plugin_key", AnthropicPlugin, "type", AnthropicAPIKey)
 	row, ok := Find(list, "id", id)
 	if !ok {
 		t.Fatal("new account not listed")
 	}
-	for _, f := range []string{"in_use", "orphaned"} {
+	for _, f := range []string{"in_use", "orphaned", "type_label"} {
 		if !row.Get(f).Exists() {
 			t.Errorf("account list row lacks %s: %s", f, row.Raw)
 		}

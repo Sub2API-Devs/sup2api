@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -40,8 +41,16 @@ func TestAC03_InstallAnthropicFromMarket(t *testing.T) {
 	if rev.Get("platform.id").String() != "anthropic" || rev.Get("database.schema").String() != "plg_anthropic" {
 		t.Fatalf("review platform/database: %s", rev.Raw)
 	}
-	if _, ok := Find(rev.Get("platform.account_types").Array(), "id", "apikey"); !ok {
-		t.Fatalf("review lacks account type apikey: %s", rev.Get("platform").Raw)
+	// Account types are top-level in the review (CONTRACTS 12).
+	rat, ok := Find(rev.Get("account_types").Array(), "id", AnthropicAPIKey)
+	if !ok {
+		t.Fatalf("review lacks account type apikey: %s", rev.Get("account_types").Raw)
+	}
+	if protos := rat.Get("protocols").String(); !strings.Contains(protos, "anthropic.messages") || !strings.Contains(protos, "anthropic.count_tokens") {
+		t.Fatalf("review account type protocols: %s", rat.Raw)
+	}
+	if rev.Get("platform.account_types").Exists() {
+		t.Fatalf("review still nests account types under platform: %s", rev.Get("platform").Raw)
 	}
 	grants := admin.OK(t, http.MethodGet, "/plugins/anthropic/grants", nil).Array()
 	if g, ok := Find(grants, "permission", "accounts.credentials"); !ok || g.Get("status").String() != "granted" {
@@ -78,10 +87,13 @@ func TestAC03_InstallAnthropicFromMarket(t *testing.T) {
 		}
 	})
 
-	// Account type is offered by the registry.
+	// Account type is offered by the registry with the endpoints it serves.
 	types := admin.OK(t, http.MethodGet, "/account-types", nil).Array()
-	at, ok := Find(types, "type", "apikey")
-	if !ok || at.Get("plugin_key").String() != "anthropic" || at.Get("platform").String() != "anthropic" {
+	at, ok := FindAccountType(types, AnthropicPlugin, AnthropicAPIKey)
+	if !ok {
 		t.Fatalf("account types: %v", types)
+	}
+	if ep, ok := AccountTypeEndpoint(at, http.MethodPost, "/v1/messages"); !ok || !ep.Get("native").Bool() || ep.Get("protocol").String() != "anthropic.messages" {
+		t.Fatalf("anthropic/apikey endpoints: %s", at.Get("endpoints").Raw)
 	}
 }
