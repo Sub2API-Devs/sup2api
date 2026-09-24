@@ -1,0 +1,152 @@
+syntax = "proto3";
+
+package sub2api.plugin.v1;
+
+option go_package = "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1";
+
+// HostService is served by the host to one plugin instance over the
+// go-plugin broker. The host knows which plugin is calling from the broker
+// connection and checks the matching grant on every call; calls without a
+// grant fail with PERMISSION_DENIED.
+service HostService {
+  // log (always granted)
+  rpc Log(LogRequest) returns (LogResponse);
+
+  // kv (grant "kv"): Redis-backed, namespaced per plugin.
+  rpc KVGet(KVGetRequest) returns (KVGetResponse);
+  rpc KVSet(KVSetRequest) returns (KVSetResponse);
+  rpc KVDelete(KVDeleteRequest) returns (KVDeleteResponse);
+  rpc KVList(KVListRequest) returns (KVListResponse);
+
+  // db.schema: restricted DSN for the plugin schema. The connection must go
+  // through EgressService (the SDK dialer does this automatically).
+  rpc GetDSN(GetDSNRequest) returns (GetDSNResponse);
+
+  // authz (always granted): does a console user hold a permission?
+  rpc AuthzCheck(AuthzCheckRequest) returns (AuthzCheckResponse);
+
+  // ledger.credit / ledger.debit: bounded by the approved scope
+  // (maxPerTx, maxPerDay), idempotent on idempotency_key.
+  rpc LedgerCredit(LedgerChangeRequest) returns (LedgerChangeResponse);
+  rpc LedgerDebit(LedgerChangeRequest) returns (LedgerChangeResponse);
+}
+
+message LogRequest {
+  enum Level {
+    LEVEL_UNSPECIFIED = 0;
+    LEVEL_DEBUG = 1;
+    LEVEL_INFO = 2;
+    LEVEL_WARN = 3;
+    LEVEL_ERROR = 4;
+  }
+  Level level = 1;
+  string message = 2;
+  map<string, string> attrs = 3;
+}
+
+message LogResponse {}
+
+message KVGetRequest {
+  string namespace = 1;
+  string key = 2;
+}
+
+message KVGetResponse {
+  bool found = 1;
+  bytes value = 2;
+}
+
+message KVSetRequest {
+  string namespace = 1;
+  string key = 2;
+  bytes value = 3;           // <= 64 KiB
+  int64 ttl_seconds = 4;     // 0 = no expiry
+}
+
+message KVSetResponse {}
+
+message KVDeleteRequest {
+  string namespace = 1;
+  string key = 2;
+}
+
+message KVDeleteResponse {}
+
+message KVListRequest {
+  string namespace = 1;
+  string prefix = 2;
+  string cursor = 3;
+  int32 limit = 4;           // <= 500
+}
+
+message KVListResponse {
+  repeated string keys = 1;
+  string next_cursor = 2;
+}
+
+message GetDSNRequest {}
+
+message GetDSNResponse {
+  // postgres:// DSN with the restricted plg_<key> role (or the host role
+  // with search_path pinned when role isolation is unavailable).
+  string dsn = 1;
+  string schema = 2;
+  bool role_isolated = 3;
+}
+
+message AuthzCheckRequest {
+  int64 user_id = 1;
+  // Plugin-local key ("rules:manage") or fully qualified key.
+  string permission = 2;
+}
+
+message AuthzCheckResponse {
+  bool allowed = 1;
+}
+
+message LedgerChangeRequest {
+  int64 user_id = 1;
+  string amount = 2;         // positive decimal string, USD, <= 8 decimals
+  string idempotency_key = 3;
+  string ref_type = 4;
+  string ref_id = 5;
+  string note = 6;
+}
+
+message LedgerChangeResponse {
+  int64 ledger_id = 1;
+  string balance_after = 2;
+  bool duplicate = 3;        // idempotency key already applied
+}
+
+// EgressService is the only way a plugin reaches the network in strict mode.
+// One bidirectional stream per connection:
+//   plugin -> host : open, then data..., then close
+//   host -> plugin : result, then data..., then close
+service EgressService {
+  rpc Dial(stream EgressFrame) returns (stream EgressFrame);
+}
+
+message EgressFrame {
+  oneof kind {
+    DialOpen open = 1;
+    DialResult result = 2;
+    bytes data = 3;          // <= 32 KiB per frame
+    DialClose close = 4;
+  }
+}
+
+message DialOpen {
+  string network = 1;        // "tcp" (udp is not supported)
+  string address = 2;        // "host:port"; host is resolved by the host
+}
+
+message DialResult {
+  bool ok = 1;
+  string error = 2;
+  string remote_addr = 3;
+}
+
+message DialClose {
+  string error = 1;          // empty = clean close
+}

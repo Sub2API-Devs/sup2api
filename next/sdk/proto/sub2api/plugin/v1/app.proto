@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package sub2api.plugin.v1;
+
+import "sub2api/plugin/v1/common.proto";
+
+option go_package = "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1";
+
+// AppService covers background jobs ("app.jobs.v1") and event subscriptions
+// ("app.events.v1").
+service AppService {
+  // Called on exactly one node per scheduled slot.
+  rpc RunJob(RunJobRequest) returns (RunJobResponse);
+  // At-least-once, in event id order, batched. Plugins must be idempotent
+  // on Event.id.
+  rpc OnEvents(OnEventsRequest) returns (OnEventsResponse);
+}
+
+message RunJobRequest {
+  string job_id = 1;
+  int64 scheduled_at_unix = 2;
+  bool manual = 3;                     // triggered from the console
+}
+
+message RunJobResponse {
+  string message = 1;                  // stored in plugin_job_runs
+}
+
+message Event {
+  int64 id = 1;
+  string type = 2;                     // e.g. "usage.recorded"
+  int64 occurred_at_unix_ms = 3;
+  string payload_json = 4;             // schema per type, see docs/CONTRACTS.md
+}
+
+message OnEventsRequest {
+  repeated Event events = 1;
+}
+
+message OnEventsResponse {
+  // Highest event id fully processed. The host advances the cursor to it and
+  // redelivers anything after it.
+  int64 acked_through_id = 1;
+}
+
+// HTTPService serves plugin-owned endpoints declared in manifest.routes
+// ("http.routes.v1"). The host authenticates the caller and checks the
+// route permission before forwarding.
+service HTTPService {
+  rpc HandleHTTP(HTTPRequest) returns (HTTPResponse);
+}
+
+message HeaderValues {
+  repeated string values = 1;
+}
+
+message HTTPRequest {
+  Caller caller = 1;
+  string method = 2;
+  string path = 3;                     // path below /api/v1/p/{key}, e.g. "/models"
+  string route_path = 4;               // matched manifest route pattern
+  map<string, string> path_params = 5;
+  map<string, HeaderValues> query = 6;
+  map<string, HeaderValues> headers = 7;
+  bytes body = 8;                      // capped by the host (1 MiB)
+}
+
+message HTTPResponse {
+  int32 status = 1;
+  map<string, HeaderValues> headers = 2;
+  bytes body = 3;
+}
+
+// MigrationService ("migration.data.v1", optional) runs data transformations
+// that SQL migrations cannot express. Called after SQL migrations, during
+// the prepare phase of a rollout, on one node.
+service MigrationService {
+  rpc MigrateData(MigrateDataRequest) returns (MigrateDataResponse);
+}
+
+message MigrateDataRequest {
+  string from_version = 1;             // "" on first install
+  string to_version = 2;
+}
+
+message MigrateDataResponse {
+  string message = 1;
+}

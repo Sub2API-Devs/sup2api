@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package sub2api.plugin.v1;
+
+import "sub2api/plugin/v1/common.proto";
+
+option go_package = "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1";
+
+// SchedulerService ("scheduler.affinity.v1", optional) lets a plugin compute a
+// sticky-session value that cannot be expressed declaratively. The host only
+// calls it for sticky rules whose keySources contain {"type": "plugin"}.
+// Hot path: keep it fast; the host applies a 200 ms timeout and falls back to
+// "no sticky value" on error.
+service SchedulerService {
+  rpc ResolveAffinityKey(ResolveAffinityKeyRequest) returns (ResolveAffinityKeyResponse);
+}
+
+message ResolveAffinityKeyRequest {
+  RequestMeta meta = 1;
+  string rule_name = 2;
+  // Values for the rule's declared `needs`, JSON-encoded, keyed by path.
+  map<string, string> fields = 3;
+  map<string, string> inbound_headers = 4;
+}
+
+message ResolveAffinityKeyResponse {
+  // Empty = no sticky value for this request. The host hashes the value
+  // before using it in a Redis key.
+  string value = 1;
+}

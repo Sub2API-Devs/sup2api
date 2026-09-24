@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package sub2api.plugin.v1;
+
+import "sub2api/plugin/v1/common.proto";
+
+option go_package = "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1";
+
+// HookService is implemented by plugins declaring capability "gateway.hook.v1".
+// Hooks are declared in manifest.hooks (point, order, match, needs, timeoutMs,
+// failure); the host only calls a plugin for requests its match covers.
+service HookService {
+  // Point "gateway.request": after auth and group resolution, before the
+  // balance check and scheduling. Synchronous.
+  rpc OnGatewayRequest(GatewayRequestHookRequest) returns (GatewayRequestHookResponse);
+}
+
+message GatewayRequestHookRequest {
+  RequestMeta meta = 1;
+  string hook_id = 2;                  // manifest hook index or id
+  // Values for manifest hook `needs`, JSON-encoded, keyed by field.
+  // The pseudo field "prompt_text" is plain text extracted by the host,
+  // truncated to maxPromptBytes.
+  map<string, string> fields = 3;
+  map<string, string> inbound_headers = 4;
+}
+
+message GatewayRequestHookResponse {
+  enum Decision {
+    DECISION_UNSPECIFIED = 0;          // treated as ALLOW
+    DECISION_ALLOW = 1;
+    DECISION_DENY = 2;
+  }
+  Decision decision = 1;
+  int32 deny_status = 2;               // default 403
+  string deny_code = 3;                // e.g. "guard_blocked"
+  string deny_message = 4;
+  // Only paths listed in the hook `needs` may be patched.
+  repeated BodyPatch patches = 5;
+  // Free-form note stored in usage_logs.hook_decisions (<= 1 KiB).
+  string note = 6;
+}

@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package sub2api.plugin.v1;
+
+import "sub2api/plugin/v1/common.proto";
+
+option go_package = "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1";
+
+// PluginService is implemented by every plugin. The host calls, in order:
+// GetInfo -> InitHost -> Configure -> (Health periodically) -> Shutdown.
+service PluginService {
+  rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
+  // InitHost hands the plugin the go-plugin broker id on which the host
+  // serves HostService and EgressService for this plugin instance.
+  rpc InitHost(InitHostRequest) returns (InitHostResponse);
+  rpc Configure(ConfigureRequest) returns (ConfigureResponse);
+  rpc Health(HealthRequest) returns (HealthResponse);
+  rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
+}
+
+message GetInfoRequest {}
+
+message GetInfoResponse {
+  string plugin_key = 1;       // must equal manifest.key
+  string version = 2;          // must equal manifest.version
+  string sdk_version = 3;
+  int32 protocol_version = 4;  // must equal the host's supported protocol (1)
+  // Capability ids actually implemented, e.g. "platform.adapter.v1".
+  repeated string capabilities = 5;
+}
+
+message InitHostRequest {
+  uint32 host_broker_id = 1;
+  int32 host_api_version = 2;
+  string node_id = 3;
+  string boot_id = 4;
+  string host_version = 5;
+}
+
+message InitHostResponse {
+  bool ready = 1;
+  string message = 2;
+}
+
+message ConfigureRequest {
+  // Plugin settings as edited in the console (validated against
+  // manifest.ui.settings schema by the host), "{}" when unset.
+  string config_json = 1;
+  // Host permissions the administrator granted, with the approved scope.
+  repeated Grant grants = 2;
+}
+
+message Grant {
+  string permission = 1;       // e.g. "db.schema", "ledger.credit"
+  string scope_json = 2;       // approved scope, "{}" when none
+}
+
+message ConfigureResponse {
+  repeated FieldError errors = 1;  // non-empty = configuration rejected
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  bool healthy = 1;
+  string message = 2;
+  // Optional plugin-reported gauges shown on the plugin detail page.
+  map<string, double> metrics = 3;
+}
+
+message ShutdownRequest {
+  int32 grace_seconds = 1;
+}
+
+message ShutdownResponse {}

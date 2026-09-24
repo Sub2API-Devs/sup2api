@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package sub2api.plugin.v1;
+
+import "sub2api/plugin/v1/common.proto";
+
+option go_package = "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1";
+
+// PlatformService is implemented by plugins declaring capability
+// "platform.adapter.v1". Static facts (platform id, protocols, account types,
+// forms, usage extraction rules, default pricing) live in manifest.json; this
+// service only covers behaviour that needs code.
+service PlatformService {
+  rpc ValidateCredentials(ValidateCredentialsRequest) returns (ValidateCredentialsResponse);
+  // Hot path: called once per upstream attempt. Keep it fast (< 2s timeout).
+  rpc BuildUpstreamRequest(BuildUpstreamRequestRequest) returns (BuildUpstreamRequestResponse);
+  // Called once per failed upstream attempt.
+  rpc ClassifyError(ClassifyErrorRequest) returns (ClassifyErrorResponse);
+  // Builds a minimal request used by the console "test account" button.
+  rpc BuildTestRequest(BuildTestRequestRequest) returns (BuildTestRequestResponse);
+}
+
+message ValidateCredentialsRequest {
+  string account_type = 1;
+  string credentials_json = 2;
+  string settings_json = 3;
+}
+
+message ValidateCredentialsResponse {
+  repeated FieldError errors = 1;  // empty = valid
+  // Optional normalized values the host should store instead of the input.
+  string normalized_credentials_json = 2;
+  string normalized_settings_json = 3;
+}
+
+message BuildUpstreamRequestRequest {
+  RequestMeta meta = 1;
+  Account account = 2;
+  // Values of manifest.platform.requestFields, JSON-encoded, keyed by path.
+  map<string, string> fields = 3;
+  // Client headers from the host allow-list (lower-cased names).
+  map<string, string> inbound_headers = 4;
+  // 0 for the first attempt, incremented on failover.
+  int32 attempt = 5;
+}
+
+message BuildUpstreamRequestResponse {
+  string method = 1;               // default "POST"
+  // Absolute http(s) URL. The host rejects private/loopback/link-local
+  // targets (SSRF guard) unless the account setting explicitly allows it.
+  string url = 2;
+  map<string, string> headers = 3;
+  repeated BodyPatch patches = 4;
+  // Upstream model after mapping, recorded in usage logs (optional).
+  string upstream_model = 5;
+}
+
+message ClassifyErrorRequest {
+  RequestMeta meta = 1;
+  Account account = 2;
+  int32 status = 3;                // 0 = transport error (see transport_error)
+  map<string, string> headers = 4; // lower-cased
+  bytes body_prefix = 5;           // first 4 KiB of the upstream body
+  string transport_error = 6;
+}
+
+message ClassifyErrorResponse {
+  enum Action {
+    ACTION_UNSPECIFIED = 0;        // treated as FAILOVER
+    ACTION_RETURN_TO_CLIENT = 1;
+    ACTION_FAILOVER = 2;
+  }
+  enum AccountEffect {
+    ACCOUNT_EFFECT_UNSPECIFIED = 0; // none
+    ACCOUNT_EFFECT_COOLDOWN = 1;
+    ACCOUNT_EFFECT_DISABLE = 2;
+  }
+  Action action = 1;
+  AccountEffect account_effect = 2;
+  int64 cooldown_until_unix = 3;   // for COOLDOWN
+  string reason = 4;               // shown on the account row
+  int32 client_status = 5;         // status returned to the client, 0 = upstream status
+  string client_error_type = 6;    // protocol error type, e.g. "rate_limit_error"
+  string client_message = 7;
+}
+
+message BuildTestRequestRequest {
+  Account account = 1;
+  string model = 2;                // optional, plugin default when empty
+}
+
+message BuildTestRequestResponse {
+  string method = 1;
+  string url = 2;
+  map<string, string> headers = 3;
+  string body_json = 4;
+}

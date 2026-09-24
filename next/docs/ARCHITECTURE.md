@@ -46,10 +46,11 @@
 | | 账号 | 通用账号表；录入时先选择插件定义的账号类型，再由插件提供录入界面；凭证加密存储 |
 | | 计费与余额 | 独立的模型价格页面，支持按次、按 token、按表达式三种计费方式（表达式可以按上下文长度分档、给缓存单独定价、按请求头/参数/时段加价），插件提供默认价格，管理员可覆盖；价格试算；用户余额、余额流水（账本）、请求前余额检查、请求后结算、管理员调整余额 |
 | | 使用记录 | 每次请求记录用户、Key、分组、账号、模型、token 数、费用、耗时、状态 |
-| 网关 | 转发 | `POST /v1/messages`，流式和非流式；分组内选账号、账号和用户并发控制、失败切换、账号冷却 |
+| 网关 | 转发 | 网关端点由插件声明（本期 anthropic 插件声明 `POST /v1/messages`），核心按声明执行通用流水线；流式和非流式；分组内选账号、账号和用户并发控制、失败切换、账号冷却 |
+| | 粘性会话 | 核心提供调度引擎（规则匹配、会话 key、Redis 绑定、成功后切换、失败策略、命中统计）；平台插件提供默认规则，管理员可覆盖和新增；复杂取值可由插件实现扩展点 |
 | | 网关钩子 | 插件可以在请求进入调度之前检查、修改或拒绝请求（用于审核、拦截），支持按协议/模型/分组匹配、超时、失败策略、熔断 |
 | 插件体系 | 运行时 | gRPC 独立进程；上传、授权确认、安装、启用、禁用、升级、卸载；多节点"先准备、再激活"发布 |
-| | 插件能力 | 声明账号类型和录入界面、注册用户权限、数据库 schema 和迁移脚本（含数据迁移）、插件接口、菜单和页面、网关钩子、后台任务、事件订阅、默认模型价格 |
+| | 插件能力 | 声明网关端点和协议格式、账号类型和录入界面、粘性会话默认规则、注册用户权限、数据库 schema 和迁移脚本（含数据迁移）、插件接口、菜单和页面、网关钩子、后台任务、事件订阅、默认模型价格 |
 | | 出口隧道 + 严格模式 | 插件的对外连接经过核心转发并记录；Linux 上用 seccomp 保证无法绕过；默认全部放行，可切换为白名单 |
 | | 资源限制 | 每个插件的内存、CPU、文件数限制：GOMEMLIMIT + 内存看门狗 + oom_score_adj + nice + rlimit，都不需要特权（cgroup 预留） |
 | | 签名与市场 | Ed25519 发布者签名、信任级别、发布者密钥管理与吊销；从插件市场索引（签名的静态 JSON）浏览、安装、检查更新 |
@@ -204,13 +205,13 @@ flowchart LR
 | `proxy` / `account` | 代理；通用账号表、凭证加密、状态与冷却 | 核心 |
 | `billing` | 模型价格、余额、账本、余额检查、结算 | 核心 |
 | `usage` | 使用记录的异步写入与查询 | 核心 |
-| `gateway` | 网关流水线、调度、并发、转发、失败切换、钩子执行、用量提取 | 核心 |
+| `gateway` | 网关流水线（协议无关）、动态端点路由、调度、粘性会话、并发、转发、失败切换、钩子执行、用量提取 | 核心 |
 | `event` / `job` | 事件 outbox 与投递、任务调度 | 核心 |
 | `cluster` | 节点注册、心跳、广播、分布式锁 | 核心 |
 | `plugin` | 插件包、签名与信任、manifest、授权确认、迁移、注册表、发布、Runtime 抽象、市场索引 | 核心 |
 | `plugin/grpcruntime` | go-plugin 进程管理、HostService、EgressService | 核心 |
 | `plugin/sandbox` | 启动器：seccomp、rlimit、oom_score_adj、nice；内存看门狗 | 核心 |
-| anthropic 插件 | 平台适配（账号类型与表单、构造请求、错误分类、用量规则）、默认价格、模型目录 | **插件** |
+| anthropic 插件 | 网关端点与协议格式、平台适配（账号类型与表单、构造请求、错误分类、用量规则）、粘性会话默认规则、默认价格、模型目录 | **插件** |
 | guard 插件 | 请求钩子（关键词拦截）、事件订阅（统计）、后台任务（汇总与清理）、对外告警、原生界面 | **插件** |
 
 **划分原则**：核心负责"数据、钱、安全、调度"，插件负责"某个平台怎么对接"以及"额外的业务逻辑"。核心代码里**不出现任何具体平台或插件的名字**。插件**永远不能直接改余额**，只能调用受限的账本接口。
@@ -495,9 +496,10 @@ flowchart LR
     hk["HookService<br/>OnGatewayRequest"]
     ap["AppService<br/>RunJob · OnEvents"]
     hx["HTTPService<br/>HandleHTTP"]
+    sc["SchedulerService（可选）<br/>ResolveAffinityKey"]
     ms["MigrationService<br/>MigrateData（可选）"]
   end
-  rt --> ps & pf & hk & ap & hx & ms
+  rt --> ps & pf & hk & ap & hx & sc & ms
   plugin -->|"broker 反向连接"| hs
   plugin -->|"对外连接"| eg
 ```
@@ -694,7 +696,8 @@ sequenceDiagram
   GW->>R: 余额检查（缓存，未命中回源 PG）→ 不足返回 402
   GW->>R: 获取用户并发槽位
   loop 失败切换（最多 3 次）
-    GW->>GW: 选账号：分组内 · 平台插件已启用 · 启用 · 可调度 · 未冷却 · 未排除<br/>按 priority 排序，同优先级随机
+    GW->>R: 查粘性会话绑定（规则命中时）
+    GW->>GW: 绑定的账号可用就直接用；否则选账号：分组内 · 平台插件已启用 · 启用 · 可调度 · 未冷却 · 未排除<br/>按 priority 排序，同优先级随机
     GW->>R: 获取账号并发槽位
     GW->>P: BuildUpstreamRequest
     P-->>GW: url、headers、patches
@@ -703,6 +706,7 @@ sequenceDiagram
       U-->>GW: SSE / JSON
       GW-->>C: 边收边转发
       GW->>GW: 按声明式规则提取用量
+      GW->>R: 写入或刷新粘性会话绑定
     else 失败
       U-->>GW: 4xx / 5xx
       GW->>P: ClassifyError
@@ -739,6 +743,84 @@ sequenceDiagram
 | 超时与失败 | 每个钩子单独超时（默认 300ms，上限 2 秒）；超时或出错按 `failure` 处理：`open` 放行、`closed` 拒绝（返回 503） |
 | 熔断 | 同一钩子连续失败 10 次后熔断 30 秒，熔断期间直接按 `failure` 处理，不调用插件 |
 | 观测 | 每个钩子的调用次数、拒绝次数、超时次数、耗时，显示在插件详情页 |
+
+### 6.4 网关端点由插件声明
+
+核心不写死任何网关端点和协议。插件在 manifest 的 `gateway.endpoints` 里声明端点，核心的流水线按声明执行：
+
+```jsonc
+"gateway": {
+  "endpoints": [ {
+    "id": "messages",
+    "method": "POST",
+    "path": "/v1/messages",
+    "protocol": "anthropic.messages",       // 协议 id，平台的 platform.protocols 用它来承接
+    "kind": "proxy",                         // 本期只有 proxy：鉴权 → 钩子 → 调度 → 转发 → 计费
+    "auth": { "headers": ["x-api-key", "authorization"] },  // 从哪些请求头读 API Key
+    "request": {
+      "modelPath": "model",                  // gjson 路径
+      "streamPath": "stream",
+      "promptTextPaths": ["system", "messages.#.content"]   // 供钩子提取 prompt_text
+    },
+    "response": { "stream": "sse", "nonStream": "json" },
+    "errorFormat": "anthropic",              // 核心内置 anthropic / openai / gemini / plain 四种错误格式
+    "billing": "usage"                       // usage：按用量计费；free：不计费（如 count_tokens）
+  } ]
+}
+```
+
+| 项目 | 设计 |
+|---|---|
+| 路由 | 每个 generation 构建一个内层路由表，挂在核心路由之后；插件启用、禁用、升级时随 generation 原子切换（参考 new-api 的 `plugin-router.go`） |
+| 冲突检查 | 安装和启用时检查：不能占用核心路由（`/api`、`/plugin-ui`、`/health` 等）；两个插件不能声明相同的 method + path |
+| 协议归属 | 协议由声明端点的插件定义；其他平台插件可以通过 `platform.protocols` 承接同一个协议（比如以后的"Anthropic 兼容"平台） |
+| 协议转换 | 本期不做：平台必须原生支持端点的协议。以后以核心内置的 Go 转换器提供（`protocol.converter`） |
+| 以后的扩展 | `kind: "custom"`：由插件的 HTTPService 处理，但复用核心的 API Key 鉴权和计费（用于异步任务类接口） |
+
+### 6.5 粘性会话
+
+同一个会话的连续请求尽量落到同一个账号，以提高上游的缓存命中率。参考 new-api 的 channel affinity 设计，代码自行实现。
+
+**核心负责调度，插件提供默认规则**：
+
+| 谁 | 负责什么 |
+|---|---|
+| 核心 | 规则匹配、会话 key 计算、绑定的存取（Redis，多节点共享）、账号可用性检查、失败策略、命中统计、管理页面 |
+| 平台插件 | 在 manifest `platform.stickyRules` 里提供默认规则（只有插件知道哪个字段代表会话） |
+| 管理员 | 在控制台覆盖、停用插件规则，或新增规则 |
+| 插件（可选扩展） | 规则取值太复杂、无法声明时，实现 `SchedulerService.ResolveAffinityKey`，规则里用 `{"type": "plugin"}` 引用 |
+
+**规则**：
+
+```jsonc
+"stickyRules": [ {
+  "name": "claude-code-session",
+  "match": { "protocols": ["anthropic.messages"], "models": ["claude-*"],
+             "userAgentContains": [] },
+  "keySources": [                               // 按顺序取第一个非空值
+    { "type": "body",   "path": "metadata.user_id" },
+    { "type": "header", "name": "x-session-id" }
+  ],
+  "valueRegex": "",                             // 可选：对取到的值做正则截取
+  "ttlSeconds": 3600,
+  "keyIncludes": ["group", "model", "rule"],    // 会话 key 还包含哪些维度
+  "onFailure": "failover"                       // failover：失败时照常切换账号；stick：不切换，直接返回错误（保护缓存）
+} ]
+```
+
+**调度过程**：
+
+1. 按顺序找第一条命中的规则，计算会话 key：`sticky:{规则名}:{分组}:{模型}:{sha256(取到的值)}`
+2. 从 Redis 读取绑定的账号；该账号仍在分组内、可调度、未冷却、能拿到并发槽位，就直接使用
+3. 否则走普通调度
+4. 请求成功后写入或刷新绑定（TTL 重新计时）；如果这次用的是新账号，就改绑到新账号（相当于 new-api 的 switch_on_success）
+5. 绑定的账号被禁用时，默认删除绑定（可配置为保留）
+
+**其他**：
+
+- 全局开关、默认 TTL、每条规则的命中率统计（Redis 计数），在控制台"粘性会话"页查看和管理，支持按规则清空绑定
+- 使用记录中记录本次请求是否命中粘性绑定（`sticky_rule`、`sticky_hit`）
+- 规则存在 `sticky_rules` 表：`source=plugin_default` 由插件安装和升级时写入、卸载时删除；`source=admin` 由管理员维护，插件变更不影响
 
 ---
 
@@ -1272,6 +1354,8 @@ sequenceDiagram
 | 能力 | 内容 |
 |---|---|
 | 平台 | `anthropic`，承接协议 `anthropic.messages` |
+| 网关端点 | 声明 `POST /v1/messages`（协议 `anthropic.messages`，按用量计费）和 `POST /v1/messages/count_tokens`（不计费） |
+| 粘性规则 | 默认规则 `claude-code-session`：取 `metadata.user_id`，TTL 1 小时 |
 | 账号类型 | `apikey`：`api_key`（敏感）、`base_url`（默认 `https://api.anthropic.com`）、`model_mapping` |
 | 构造请求 | `base_url + /v1/messages`；请求头 `x-api-key`、`anthropic-version`（透传，默认 `2023-06-01`）、`anthropic-beta`（透传）；命中模型映射时修改 `model` |
 | 用量规则 | `semantics=exclusive`。SSE：`message_start` 取 `message.usage` 中的输入、缓存读、缓存写（含 `cache_creation.ephemeral_1h_input_tokens`）和 `message.model`，`message_delta` 取 `usage.output_tokens`；JSON：`usage.*` |

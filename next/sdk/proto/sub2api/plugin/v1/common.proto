@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package sub2api.plugin.v1;
+
+option go_package = "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1";
+
+// Contract rules (keep the contract usable by a future JS runtime):
+//  - every RPC except EgressService.Dial is unary;
+//  - no google.protobuf.Any;
+//  - free-form JSON travels as a string field whose name ends in `_json`;
+//  - request bodies are never shipped whole on the gateway hot path: plugins
+//    declare the fields they need and answer with BodyPatch instructions.
+
+// BodyPatch is a single JSON edit the host applies to a request body (sjson).
+message BodyPatch {
+  enum Op {
+    OP_UNSPECIFIED = 0;
+    OP_SET = 1;
+    OP_DELETE = 2;
+  }
+  Op op = 1;
+  // gjson/sjson path, e.g. "model" or "metadata.user_id".
+  string path = 2;
+  // JSON-encoded value for OP_SET, e.g. "\"claude-x\"" or "1024".
+  string value_json = 3;
+}
+
+// Account is what a platform plugin sees of one core account row.
+message Account {
+  int64 id = 1;
+  string name = 2;
+  string platform = 3;
+  string type = 4;
+  // Decrypted credentials, only present when the plugin holds the
+  // accounts.credentials grant for this platform.
+  string credentials_json = 5;
+  // Non-sensitive settings (base_url, model_mapping ...).
+  string settings_json = 6;
+}
+
+// Caller identifies the console user on whose behalf the host calls a plugin.
+message Caller {
+  int64 user_id = 1;
+  string request_id = 2;
+  string client_ip = 3;
+  string locale = 4;
+}
+
+// RequestMeta describes one gateway request.
+message RequestMeta {
+  string request_id = 1;
+  string protocol = 2;       // e.g. "anthropic.messages"
+  string model = 3;
+  bool stream = 4;
+  int64 user_id = 5;
+  int64 api_key_id = 6;
+  int64 group_id = 7;
+  string client_ip = 8;
+}
+
+// FieldError reports a validation problem on one input field.
+message FieldError {
+  string field = 1;          // JSON path within the submitted object
+  string code = 2;           // machine readable, e.g. "required", "pattern"
+  string message = 3;        // human readable, localized by the plugin if possible
+}
