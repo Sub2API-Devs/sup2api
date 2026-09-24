@@ -86,11 +86,12 @@ func TestGenerationBuildAndSwitch(t *testing.T) {
 
 	pa, pb := load(t, a), load(t, b)
 	grantsA := registry.Grants{
-		"gateway.hook":  []byte(`{"points":["gateway.request"],"fields":["model"]}`),
-		"routes.admin":  []byte(`{}`),
-		"routes.public": []byte(`{}`),
-		"jobs":          []byte(`{}`),
-		"events":        []byte(`{"subscribe":["usage.recorded"]}`),
+		"gateway.hook":         []byte(`{"points":["gateway.request"],"fields":["model"]}`),
+		"routes.admin":         []byte(`{}`),
+		"routes.public":        []byte(`{}`),
+		"jobs":                 []byte(`{}`),
+		"events":               []byte(`{"subscribe":["usage.recorded"]}`),
+		"accounts.credentials": []byte(`{"types":"own"}`),
 	}
 	g := reg.Publish([]registry.Extension{ext{pkg: pb, grants: registry.Grants{}}, ext{pkg: pa, grants: grantsA}})
 	if g.Number() != 1 || len(seen) != 1 || reg.Current() != g {
@@ -190,8 +191,14 @@ func TestAccountTypesManyToMany(t *testing.T) {
 	noAdapter.Platform = nil
 
 	reg := registry.New()
+	creds := registry.Grants{"accounts.credentials": []byte(`{"types":"own"}`)}
+	// Without the accounts.credentials grant the account types are not
+	// registered either (the plugin would never receive credentials).
+	noGrant := registrytest.Manifest("nogrant", "1.0.0")
+	noGrant.Platform = nil
 	g := reg.Publish([]registry.Extension{
-		ext{pkg: load(t, relay)}, ext{pkg: load(t, noAdapter), noPlatform: true}, ext{pkg: load(t, platform)},
+		ext{pkg: load(t, relay), grants: creds}, ext{pkg: load(t, noAdapter), noPlatform: true, grants: creds},
+		ext{pkg: load(t, platform), grants: creds}, ext{pkg: load(t, noGrant)},
 	})
 
 	var keys []string
@@ -206,6 +213,9 @@ func TestAccountTypesManyToMany(t *testing.T) {
 	}
 	if _, ok := g.AccountType("noadapter", "apikey"); ok {
 		t.Fatal("account types of a plugin without platform.adapter.v1 must not be registered")
+	}
+	if _, ok := g.AccountType("nogrant", "apikey"); ok {
+		t.Fatal("account types of a plugin without the accounts.credentials grant must not be registered")
 	}
 	if b, ok := g.AccountType("relay", "zkey"); !ok || b.Plugin.Key != "relay" {
 		t.Fatalf("relay/zkey = %+v %v", b, ok)

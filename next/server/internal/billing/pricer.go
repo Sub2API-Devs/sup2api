@@ -41,8 +41,17 @@ type resolved struct {
 // within one source (admin, or one plugin) an exact model before globs and
 // longer globs first.
 func less(a, b priceEntry) bool {
+	// Admin prices always win; within a source the most specific pattern
+	// wins (exact before glob, longer glob first). Between plugin defaults
+	// of equal specificity the earliest installed plugin wins.
 	if (a.source == SourceAdmin) != (b.source == SourceAdmin) {
 		return a.source == SourceAdmin
+	}
+	if a.glob != b.glob {
+		return !a.glob
+	}
+	if len(a.rule.Pattern) != len(b.rule.Pattern) {
+		return len(a.rule.Pattern) > len(b.rule.Pattern)
 	}
 	if a.source != SourceAdmin && a.pluginKey != b.pluginKey {
 		switch {
@@ -54,12 +63,6 @@ func less(a, b priceEntry) bool {
 			return a.installedAt.Before(*b.installedAt)
 		}
 		return a.pluginKey < b.pluginKey
-	}
-	if a.glob != b.glob {
-		return !a.glob
-	}
-	if len(a.rule.Pattern) != len(b.rule.Pattern) {
-		return len(a.rule.Pattern) > len(b.rule.Pattern)
 	}
 	return a.rule.ID < b.rule.ID
 }

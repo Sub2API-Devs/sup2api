@@ -25,6 +25,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/event"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/event/delivery"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/group"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/iam"
@@ -116,9 +117,12 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	grp := group.New(db, rdb, cl.Bus)
 	keys := apikey.New(db, rdb, az)
 	prx := proxy.New(db, cipher, cl.Bus, proxy.Options{})
+	// One converter registry for the gateway (conversion) and the account
+	// module (endpoints an account type can serve), ARCHITECTURE 6.6.
+	converters := convert.Default()
 	acc := account.New(account.Deps{
 		DB: db, Redis: rdb, Cipher: cipher, Registry: reg, Proxies: prx, Events: events,
-		Slots: cl.Slots, Bus: cl.Bus, AllowPrivateUpstream: cfg.AllowPrivateUpstream,
+		Slots: cl.Slots, Bus: cl.Bus, AllowPrivateUpstream: cfg.AllowPrivateUpstream, Converters: converters,
 	})
 	go keys.Run(ctx)
 	go prx.Run(ctx)
@@ -148,7 +152,7 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	gw := gateway.New(gateway.Deps{
 		DB: db, Redis: rdb, Bus: cl.Bus, Node: cl.Registry, Registry: reg,
 		Auth: keys, Pricer: bill, Balance: bill, Slots: cl.Slots,
-		Accounts: acc, Proxies: prx, Settler: settler, Config: cfg,
+		Accounts: acc, Proxies: prx, Settler: settler, Config: cfg, Converters: converters,
 	})
 	onClose(func(context.Context) { gw.Close() })
 

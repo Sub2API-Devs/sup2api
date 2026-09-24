@@ -196,16 +196,19 @@ func TestPricePrecedence(t *testing.T) {
 		entry(7, SourcePluginDefault, "late", day(20), "gemini-2.5-*"),
 		entry(8, SourcePluginDefault, "b-same-day", day(5), "o3"),
 		entry(9, SourcePluginDefault, "a-same-day", day(5), "o3"),
+		entry(10, SourcePluginDefault, "late", day(20), "claude-opus-*"),
+		entry(11, SourcePluginDefault, "early", day(1), "claude-opus-*"),
 	}}
 	sort.Slice(snap.entries, func(i, j int) bool { return less(snap.entries[i], snap.entries[j]) })
 	cases := map[string]int64{
-		"claude-sonnet-4-5": 3, // earliest plugin, its most specific glob
+		"claude-sonnet-4-5": 1, // most specific pattern wins, even from a later plugin
 		"claude-haiku-4":    2,
 		"gpt-4o":            5, // admin exact before admin glob
 		"gpt-4.1":           4,
-		"gemini-2.5-pro":    7, // plugin with an install time before a plugin without one
+		"gemini-2.5-pro":    7, // longer glob wins
 		"gemini-1.5":        6,
-		"o3":                9, // same install time: plugin key order
+		"o3":                9,  // same install time: plugin key order
+		"claude-opus-4":     11, // same pattern: earliest installed plugin
 	}
 	for model, want := range cases {
 		r := snap.match(model)

@@ -105,12 +105,13 @@ func Manifest(key, version string) *manifest.Manifest {
 // DefaultGrants approves everything the test manifest asks for.
 func DefaultGrants() map[string]string {
 	return map[string]string{
-		"kv":             `{}`,
-		"db.schema":      `{}`,
-		"gateway.hook":   `{"points":["gateway.request"],"fields":["model"]}`,
-		"routes.admin":   `{}`,
-		"routes.webhook": `{}`,
-		"routes.public":  `{}`,
+		"kv":                   `{}`,
+		"db.schema":            `{}`,
+		"gateway.hook":         `{"points":["gateway.request"],"fields":["model"]}`,
+		"routes.admin":         `{}`,
+		"routes.webhook":       `{}`,
+		"routes.public":        `{}`,
+		"accounts.credentials": `{"types":"own"}`,
 	}
 }
 

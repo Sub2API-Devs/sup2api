@@ -198,8 +198,10 @@ func build(number uint64, exts []Extension) *generation {
 			}
 		}
 		// Account types are served by the declaring plugin, which must
-		// implement platform.adapter.v1 (ARCHITECTURE 6.6).
-		if pf != nil {
+		// implement platform.adapter.v1 (ARCHITECTURE 6.6) and hold the
+		// accounts.credentials grant: without it the plugin never receives
+		// credentials, so its account types are not offered or scheduled.
+		if pf != nil && grants.Has("accounts.credentials") {
 			for _, at := range m.AccountTypes {
 				key := core.AccountTypeKey{PluginKey: pkg.Key, Type: at.ID}
 				if _, dup := g.atByKey[key]; dup {
