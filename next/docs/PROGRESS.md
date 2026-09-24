@@ -132,8 +132,10 @@ HTTP 挂载：`/healthz`（节点自我隔离时 503）→ `httpapi.NewRouter` �
 | sub2api-next-testdb | `~/sub2api-next-test/testdb` | postgres:16（密码 sub2api）、redis:7 | 127.0.0.1:45432、127.0.0.1:36379 |
 | sub2api-next-test | `~/sub2api-next-test/src/next/deploy` | pg、redis、node-1、node-2、caddy、mock-upstream、market-init；密钥与管理员账号在 `~/sub2api-next-test/.env` | 127.0.0.1:3120（Caddy） |
 | sub2api-next-ci | `next/deploy/ci/compose.yml` | `gotest` 容器，接入 testdb 网络，用于 Linux 专有测试 | 无 |
+| **sup2api**（单节点正式部署） | `~/sup2api`（`src` 为 GitHub 稀疏克隆，`.env` 为密钥与管理员账号） | app、pg、redis、market（market 为内置签名插件市场，仅内网） | 127.0.0.1:3130（app） |
 
 - 部署：本机 `bash next/deploy/scripts/sync.sh --up`（tar 经 ssh 同步并在远程构建、启动）；远程 `up.sh`、`down.sh [--purge]`、`logs.sh`
+- sup2api 部署/更新：本机 `ssh ovh 'bash -s' < next/deploy/single/deploy.sh`（服务器从 GitHub 拉 `feat/next-platform`，见 `next/deploy/single/README.md`）
 - 访问：`ssh -N -L 3120:127.0.0.1:3120 ovh` 后打开 http://127.0.0.1:3120；测试路由 `/__node1/*`、`/__node2/*`、`/__mock/*`、`/market/*`
 - 当前 ovh 上运行的是 QA 的骨架版本（只有 `/healthz`），市场索引为空
 
