@@ -383,6 +383,9 @@ func TestInstallConsentUpgradeUninstall(t *testing.T) {
 	if _, err := e.db.Pool.Exec(ctx, `UPDATE plugin_rollouts SET phase = 'cancelled'`); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := e.db.Pool.Exec(ctx, `INSERT INTO plugin_egress_domains (plugin_key, host) VALUES ('guard', 'example.com')`); err != nil {
+		t.Fatal(err)
+	}
 	ures, err := e.svc.Uninstall(ctx, "guard", UninstallOptions{Purge: true, PurgeAccounts: true}, e.admin)
 	if err != nil {
 		t.Fatalf("uninstall: %v", err)
@@ -403,6 +406,10 @@ func TestInstallConsentUpgradeUninstall(t *testing.T) {
 	_ = e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM plugin_versions WHERE plugin_key = 'guard'`).Scan(&n)
 	if n != 0 {
 		t.Fatalf("versions left: %d", n)
+	}
+	_ = e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM plugin_egress_domains WHERE plugin_key = 'guard'`).Scan(&n)
+	if n != 0 {
+		t.Fatalf("egress domains left: %d", n)
 	}
 	_ = e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM audit_logs WHERE target_id = 'guard'`).Scan(&n)
 	if n < 6 {

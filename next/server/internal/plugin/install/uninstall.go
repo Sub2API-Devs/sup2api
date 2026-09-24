@@ -32,7 +32,7 @@ type UninstallResult struct {
 
 // Uninstall disables the plugin if needed, optionally drops its schema, and
 // deletes the plugin row (cascading grants, versions, cursors, job runs,
-// rollouts, plugin-default prices and sticky rules). Accounts are kept and
+// rollouts, plugin-default prices and sticky rules) and its egress domains. Accounts are kept and
 // show up as orphaned unless opt.PurgeAccounts is set.
 func (s *Service) Uninstall(ctx context.Context, key string, opt UninstallOptions, actorID int64) (UninstallResult, error) {
 	var res UninstallResult
@@ -99,6 +99,11 @@ func (s *Service) Uninstall(ctx context.Context, key string, opt UninstallOption
 			return err
 		} else if tag.RowsAffected() == 0 {
 			return ErrBuiltin
+		}
+		// No foreign key to plugins: a reinstalled plugin must raise
+		// plugin.egress_new_domain again for the hosts it connects to.
+		if _, err := tx.Exec(ctx, `DELETE FROM plugin_egress_domains WHERE plugin_key = $1`, key); err != nil {
+			return err
 		}
 		return Audit(ctx, tx, actorID, "plugin.uninstall", "plugin", key, map[string]any{
 			"purge": purge, "purge_accounts": opt.PurgeAccounts, "previous_status": st})
