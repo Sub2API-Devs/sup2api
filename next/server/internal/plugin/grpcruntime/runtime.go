@@ -43,6 +43,8 @@ type Options struct {
 	Authorizer core.Authorizer
 	Ledger     core.Ledger
 	Schemas    SchemaDSN
+	// Bus carries plugin cluster broadcasts (HostService.Publish).
+	Bus core.Bus
 
 	HostVersion   string
 	DataDir       string // plugin work directories live under DataDir/<key>/work

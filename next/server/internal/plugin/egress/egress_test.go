@@ -78,8 +78,20 @@ type env struct {
 // in ".test" resolve to 127.0.0.1 (and ::1 for "v6.test").
 func newEnv(t *testing.T, db *store.DB, opts Options) *env {
 	t.Helper()
+	var st logStore
+	if db != nil {
+		st = pgStore{db: db}
+	}
+	return newEnvStore(t, st, opts)
+}
+
+// newEnvStore is newEnv with an explicit log store (fakes in unit tests).
+func newEnvStore(t *testing.T, st logStore, opts Options) *env {
+	t.Helper()
 	opts.NodeID = "node-1"
-	opts.FlushInterval = 20 * time.Millisecond
+	if opts.FlushInterval == 0 {
+		opts.FlushInterval = 20 * time.Millisecond
+	}
 	lookup := func(_ context.Context, host string) ([]netip.Addr, error) {
 		switch {
 		case host == "v6.test":
@@ -104,7 +116,7 @@ func newEnv(t *testing.T, db *store.DB, opts Options) *env {
 			return d.DialContext(ctx, network, address)
 		}
 	}
-	p := New(db, opts)
+	p := newProvider(st, opts)
 	t.Cleanup(p.Close)
 	box := &policyBox{pol: core.EgressPolicy{Mode: PolicyAllowAll}}
 	lis := bufconn.Listen(1 << 20)
@@ -406,5 +418,27 @@ func TestEgressLogsWritten(t *testing.T) {
 	}
 	if !tcpRow || !dnsRow {
 		t.Fatalf("rows %+v", rows)
+	}
+	for _, r := range rows {
+		if r.Result != ResultOpen && r.ClosedAt == nil {
+			t.Fatalf("finished row without closed_at: %+v", r)
+		}
+	}
+	doms, err := Domains(ctx, db.Pool, "demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]DomainRecord{}
+	for _, d := range doms {
+		seen[d.Host] = d
+	}
+	if d, ok := seen["svc.test"]; !ok || d.Connections < 1 || !d.New {
+		t.Fatalf("domains %+v", doms)
+	}
+	if _, ok := seen["blocked.test"]; !ok {
+		t.Fatalf("denied host missing from domains %+v", doms)
+	}
+	if _, ok := seen[DNSHost]; ok {
+		t.Fatalf("dns endpoint listed as a domain %+v", doms)
 	}
 }

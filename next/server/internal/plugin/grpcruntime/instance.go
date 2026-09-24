@@ -75,7 +75,20 @@ type proc struct {
 	migration pluginv1.MigrationServiceClient
 	pid       int
 	stopWatch func()
-	failures  int // consecutive health failures
+	limits    specLimits // resource limits the process was started with
+	failures  int        // consecutive health failures
+}
+
+// specLimits are the resource fields of a LaunchSpec.
+type specLimits struct {
+	MemoryMB     int
+	CPU          float64
+	MaxThreads   int
+	MaxOpenFiles int
+}
+
+func limitsOf(s core.LaunchSpec) specLimits {
+	return specLimits{MemoryMB: s.MemoryMB, CPU: s.CPU, MaxThreads: s.MaxThreads, MaxOpenFiles: s.MaxOpenFiles}
 }
 
 func newInstance(rt *Runtime, pkg *registry.Package, binPath, sum string, st *settings) *Instance {
@@ -244,7 +257,7 @@ func (i *Instance) startProc(ctx context.Context) (_ *proc, err error) {
 		cfg.SecureConfig = &plugin.SecureConfig{Checksum: sum, Hash: sha256.New()}
 	}
 	client := plugin.NewClient(cfg)
-	p := &proc{client: client}
+	p := &proc{client: client, limits: limitsOf(spec)}
 	defer func() {
 		if err != nil {
 			i.killProc(p, false)
@@ -515,7 +528,8 @@ func (i *Instance) restart(reason string) {
 }
 
 // Refresh re-reads settings and grants; when they changed, the plugin is
-// reconfigured in place (resource limit changes apply on the next start).
+// reconfigured in place. Resource limit changes need a new process: see
+// LimitsStale (the rollout controller replaces the instance).
 func (i *Instance) Refresh(ctx context.Context) error {
 	st, err := i.rt.loadSettings(ctx, i.pkg.Key)
 	if err != nil {
@@ -536,6 +550,16 @@ func (i *Instance) Refresh(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+// LimitsStale reports whether the running process was started with other
+// resource limits than the current settings (as of the last Refresh).
+func (i *Instance) LimitsStale() bool {
+	p := i.proc.Load()
+	if p == nil {
+		return false
+	}
+	return p.limits != limitsOf(i.launchSpec())
 }
 
 // MigrateData calls MigrationService.MigrateData when the plugin declares

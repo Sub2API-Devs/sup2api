@@ -55,6 +55,17 @@ type Controller struct {
 	mu    sync.Mutex
 	slots map[string]*slot
 	sig   string // signature of the last published generation
+	// referenced: versions per plugin named by active/desired or an open
+	// rollout (from/target) in the last reconcile; their packages are kept.
+	referenced map[string]map[string]bool
+	restarting map[string]bool // key -> resource restart running
+	again      map[string]bool // key -> restart requested while running
+	stopped    bool
+
+	drainMu  sync.Mutex     // leaf lock (may be taken under mu or slot.mu)
+	draining map[string]int // key@version -> instances still draining
+
+	hub *broadcastHub
 
 	coordMu      sync.Mutex
 	coordinating map[int64]bool
@@ -89,31 +100,33 @@ func New(o Options) (*Controller, error) {
 	def(&o.DrainTimeout, 30*time.Second)
 	def(&o.LoadRetry, 30*time.Second)
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Controller{
+	c := &Controller{
 		o:            o,
 		log:          o.Logger.With("component", "plugin-rollout", "boot_id", o.Node.BootID()),
 		kickCh:       make(chan struct{}, 1),
 		wakers:       map[int64]chan struct{}{},
 		slots:        map[string]*slot{},
+		referenced:   map[string]map[string]bool{},
+		draining:     map[string]int{},
+		restarting:   map[string]bool{},
+		again:        map[string]bool{},
 		coordinating: map[int64]bool{},
 		ctx:          ctx,
 		cancel:       cancel,
-	}, nil
+	}
+	c.hub = newBroadcastHub(o.Bus, o.Node.BootID(), c.servingInstance, c.log)
+	return c, nil
 }
 
 // Start runs the reconciler (every ReconcileInterval and on broadcasts)
-// until Stop. It performs one synchronous reconcile first so plugins are
-// serving when Start returns.
+// until Stop. It removes orphaned package directories and performs one
+// synchronous reconcile first so plugins are serving when Start returns.
 func (c *Controller) Start(context.Context) {
 	ctx := c.ctx
 	if c.o.Bus != nil {
-		c.unsub = c.o.Bus.Subscribe(core.ChannelPluginEvents, func(payload []byte) {
-			var m Message
-			_ = json.Unmarshal(payload, &m)
-			c.kick()
-			c.wakeCoordinators()
-		})
+		c.unsub = c.o.Bus.Subscribe(core.ChannelPluginEvents, c.onPluginEvent)
 	}
+	c.pruneOrphans(ctx)
 	c.Reconcile(ctx)
 	c.wg.Add(1)
 	go func() {
@@ -139,6 +152,10 @@ func (c *Controller) Stop(ctx context.Context) {
 		if c.unsub != nil {
 			c.unsub()
 		}
+		c.hub.close()
+		c.mu.Lock()
+		c.stopped = true
+		c.mu.Unlock()
 		c.cancel()
 		c.wg.Wait()
 		c.recMu.Lock()
@@ -170,6 +187,19 @@ func (c *Controller) Stop(ctx context.Context) {
 		case <-ctx.Done():
 		}
 	})
+}
+
+// onPluginEvent handles core.ChannelPluginEvents: "resources" restarts the
+// plugin's local instances, anything else triggers a reconcile.
+func (c *Controller) onPluginEvent(payload []byte) {
+	var m Message
+	_ = json.Unmarshal(payload, &m)
+	if m.Type == MessageResources && m.PluginKey != "" {
+		c.requestRestart(m.PluginKey)
+		return
+	}
+	c.kick()
+	c.wakeCoordinators()
 }
 
 func (c *Controller) kick() {

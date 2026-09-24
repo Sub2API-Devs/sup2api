@@ -2,10 +2,12 @@ package rollout_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/dbschema"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/grpcruntime"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry"
@@ -84,6 +86,32 @@ func TestRealRuntimeSingleNode(t *testing.T) {
 	if v, _ := h.rdb.Get(ctx, "plugin:kv:"+h.key+":t:migrated").Result(); v != "1.0.0->2.0.0" {
 		t.Fatalf("migrated = %q", v)
 	}
+	// The package of the old version is closed and removed once drained.
+	waitFor(t, "old package released", func() bool {
+		refs := pkgs.Cached()
+		return len(refs) == 1 && refs[0].Version == "2.0.0"
+	})
+
+	// Resource limits apply at once: a new process replaces the instance.
+	if _, err := h.db.Pool.Exec(ctx, `UPDATE plugins SET resource_limits = '{"memory_mb": 300}' WHERE key = $1`, h.key); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(rollout.Message{Type: rollout.MessageResources, PluginKey: h.key})
+	if err := (registrytest.Bus{RDB: h.rdb}).Publish(ctx, core.ChannelPluginEvents, b); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "restarted with new limits", func() bool {
+		third := call()
+		return third != nil && third["x-pid"] != second["x-pid"]
+	})
+
+	// A broadcast from another node reaches the local instance.
+	msg, _ := json.Marshal(grpcruntime.BroadcastMessage{Topic: "rules.changed", Payload: []byte("x"), SourceNodeID: "other", SourceBootID: "boot-other"})
+	waitFor(t, "broadcast delivered", func() bool {
+		_ = (registrytest.Bus{RDB: h.rdb}).Publish(ctx, grpcruntime.BroadcastChannel(h.key), msg)
+		v, _ := h.rdb.Get(ctx, "plugin:kv:"+h.key+":t:broadcast").Result()
+		return v == "rules.changed:x:other"
+	})
 
 	if _, err := ctl.Disable(ctx, h.key, 0, ""); err != nil {
 		t.Fatal(err)

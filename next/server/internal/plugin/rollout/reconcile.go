@@ -3,6 +3,7 @@ package rollout
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -25,12 +26,16 @@ type entry struct {
 	epoch   int64    // plugins.row_version when (re)created
 	loadErr string
 	failAt  time.Time
+	// Last failed attempt to replace inst with new resource limits.
+	restartErr    string
+	restartFailAt time.Time
 }
 
 type pluginRow struct {
 	key        string
 	status     string
 	active     *string
+	desired    *string
 	rowVersion int64
 	ro         *rolloutRow
 }
@@ -63,7 +68,7 @@ func (c *Controller) localInstance(key, version string) Instance {
 }
 
 func (c *Controller) loadPlugins(ctx context.Context) ([]*pluginRow, error) {
-	rows, err := c.o.DB.Pool.Query(ctx, `SELECT key, status, active_version, row_version FROM plugins ORDER BY key`)
+	rows, err := c.o.DB.Pool.Query(ctx, `SELECT key, status, active_version, desired_version, row_version FROM plugins ORDER BY key`)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +76,7 @@ func (c *Controller) loadPlugins(ctx context.Context) ([]*pluginRow, error) {
 	byKey := map[string]*pluginRow{}
 	for rows.Next() {
 		p := &pluginRow{}
-		if err := rows.Scan(&p.key, &p.status, &p.active, &p.rowVersion); err != nil {
+		if err := rows.Scan(&p.key, &p.status, &p.active, &p.desired, &p.rowVersion); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -113,6 +118,7 @@ func (c *Controller) Reconcile(ctx context.Context) {
 		c.log.Warn("reconcile: load plugins failed", "err", err)
 		return
 	}
+	c.setReferenced(rows)
 	for _, p := range rows {
 		if p.ro != nil {
 			c.takeOver(ctx, p.ro)
@@ -144,9 +150,9 @@ func (c *Controller) Reconcile(ctx context.Context) {
 	c.mu.Unlock()
 	for _, s := range gone {
 		s.mu.Lock()
-		for _, e := range s.entries {
+		for v, e := range s.entries {
 			if e.inst != nil {
-				go e.inst.Drain(c.o.DrainTimeout)
+				c.drainAsync(s.key, v, e.inst, false)
 			}
 		}
 		s.entries = map[string]*entry{}
@@ -155,6 +161,8 @@ func (c *Controller) Reconcile(ctx context.Context) {
 	}
 
 	c.republish()
+	c.syncBroadcast()
+	c.sweepPackages()
 
 	for idx, p := range rows {
 		b, _ := json.Marshal(reports[idx])
@@ -216,12 +224,13 @@ func (c *Controller) reconcileKey(ctx context.Context, s *slot, p *pluginRow) No
 		if !needed[v] {
 			delete(s.entries, v)
 			if e.inst != nil {
-				go e.inst.Drain(c.o.DrainTimeout)
+				c.drainAsync(s.key, v, e.inst, false)
 			}
 		}
 	}
 	s.serving = serving
 	var running []Instance
+	var retryOK []bool // per running instance: resource restart may be tried
 	st := NodePluginState{Serving: serving, Standby: standby}
 	versions := make([]string, 0, len(s.entries))
 	for v := range s.entries {
@@ -234,7 +243,11 @@ func (c *Controller) reconcileKey(ctx context.Context, s *slot, p *pluginRow) No
 		if e.inst != nil {
 			is.State, is.Error = e.inst.State()
 			is.Restarts = e.inst.Restarts()
+			if is.Error == "" && e.restartErr != "" {
+				is.Error = e.restartErr
+			}
 			running = append(running, e.inst)
+			retryOK = append(retryOK, e.restartErr == "" || time.Since(e.restartFailAt) >= c.o.LoadRetry)
 		} else {
 			is.State, is.Error = stateFailed, e.loadErr
 		}
@@ -298,10 +311,21 @@ func (c *Controller) reconcileKey(ctx context.Context, s *slot, p *pluginRow) No
 	}
 	s.mu.Unlock()
 
-	for _, inst := range running {
+	stale := false
+	for idx, inst := range running {
 		if err := inst.Refresh(ctx); err != nil {
 			c.log.Debug("plugin refresh failed", "plugin", p.key, "err", err)
 		}
+		// Resource limits changed but the "resources" broadcast was missed
+		// (or an earlier restart failed): replace the instance now.
+		if la, ok := inst.(limitsAware); ok && retryOK[idx] && la.LimitsStale() {
+			if state, _ := inst.State(); state == stateReady {
+				stale = true
+			}
+		}
+	}
+	if stale {
+		c.requestRestart(p.key)
 	}
 	return st
 }
@@ -336,7 +360,7 @@ func (c *Controller) ensure(ctx context.Context, s *slot, version string, epoch 
 			// Failed instance and the desired state changed: replace it.
 			old := e.inst
 			delete(s.entries, version)
-			go old.Stop()
+			c.drainAsync(s.key, version, old, true)
 		} else if e.epoch == epoch && time.Since(e.failAt) < c.o.LoadRetry {
 			s.mu.Unlock()
 			return
@@ -360,7 +384,9 @@ func (c *Controller) ensure(ctx context.Context, s *slot, version string, epoch 
 	s.entries[version] = &entry{version: version, inst: inst, epoch: epoch}
 }
 
-// republish switches the registry when the serving set or grants changed.
+// republish switches the registry when the serving set (instances
+// included: a resource restart replaces the instance of the same version)
+// or grants changed.
 func (c *Controller) republish() {
 	c.mu.Lock()
 	keys := make([]string, 0, len(c.slots))
@@ -376,7 +402,7 @@ func (c *Controller) republish() {
 		if e := s.entries[s.serving]; s.serving != "" && e != nil && e.inst != nil {
 			exts = append(exts, e.inst)
 			g, _ := json.Marshal(e.inst.Grants())
-			sig.WriteString(k + "@" + s.serving + "#" + e.inst.Package().SHA256 + "#" + string(g) + "\n")
+			fmt.Fprintf(&sig, "%s@%s#%s#%p#%s\n", k, s.serving, e.inst.Package().SHA256, e.inst, g)
 		}
 		s.mu.Unlock()
 	}

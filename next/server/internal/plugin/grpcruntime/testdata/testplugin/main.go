@@ -5,6 +5,8 @@
 //   - ValidateCredentials with credentials_json containing "crash" exits.
 //   - BuildTestRequest with model "sleep:<ms>" sleeps before answering.
 //   - Configure rejects {"reject": true}.
+//   - HTTP POST /publish publishes the body as broadcast topic "t.ping";
+//     OnBroadcast stores "<topic>:<payload>:<source node>" in KV t/broadcast.
 package main
 
 import (
@@ -30,6 +32,7 @@ type server struct {
 	pluginv1.UnimplementedHTTPServiceServer
 	pluginv1.UnimplementedHookServiceServer
 	pluginv1.UnimplementedMigrationServiceServer
+	pluginv1.UnimplementedAppServiceServer
 
 	broker *plugin.GRPCBroker
 	mu     sync.Mutex
@@ -50,7 +53,7 @@ func (s *server) GetInfo(context.Context, *pluginv1.GetInfoRequest) (*pluginv1.G
 		Version:         os.Getenv(protocol.EnvPluginVersion),
 		SdkVersion:      "test",
 		ProtocolVersion: protocol.ProtocolVersion,
-		Capabilities:    []string{"platform.adapter.v1", "http.routes.v1", "gateway.hook.v1", "migration.data.v1"},
+		Capabilities:    []string{"platform.adapter.v1", "http.routes.v1", "gateway.hook.v1", "migration.data.v1", "app.broadcast.v1"},
 	}, nil
 }
 
@@ -171,6 +174,12 @@ func (s *server) HandleHTTP(ctx context.Context, in *pluginv1.HTTPRequest) (*plu
 		}
 		out["dsn"], out["schema"], out["role_isolated"] = r.GetDsn(), r.GetSchema(), r.GetRoleIsolated()
 	}
+	if in.GetPath() == "/publish" {
+		if _, err := s.hostClient().Publish(ctx, &pluginv1.PublishRequest{Topic: "t.ping", Payload: in.GetBody()}); err != nil {
+			return nil, err
+		}
+		out["published"] = true
+	}
 	if in.GetPath() == "/credit" {
 		r, err := s.hostClient().LedgerCredit(ctx, &pluginv1.LedgerChangeRequest{UserId: 1, Amount: string(in.GetBody()), IdempotencyKey: in.GetQuery()["idem"].GetValues()[0]})
 		if err != nil {
@@ -191,6 +200,12 @@ func (s *server) MigrateData(ctx context.Context, in *pluginv1.MigrateDataReques
 	return &pluginv1.MigrateDataResponse{}, err
 }
 
+func (s *server) OnBroadcast(ctx context.Context, in *pluginv1.OnBroadcastRequest) (*pluginv1.OnBroadcastResponse, error) {
+	v := in.GetTopic() + ":" + string(in.GetPayload()) + ":" + in.GetSourceNodeId()
+	_, err := s.hostClient().KVSet(ctx, &pluginv1.KVSetRequest{Namespace: "t", Key: "broadcast", Value: []byte(v)})
+	return &pluginv1.OnBroadcastResponse{}, err
+}
+
 func main() {
 	s := &server{}
 	plugin.Serve(&plugin.ServeConfig{
@@ -202,6 +217,7 @@ func main() {
 			pluginv1.RegisterHTTPServiceServer(g, s)
 			pluginv1.RegisterHookServiceServer(g, s)
 			pluginv1.RegisterMigrationServiceServer(g, s)
+			pluginv1.RegisterAppServiceServer(g, s)
 			return nil
 		}}),
 		GRPCServer: plugin.DefaultGRPCServer,

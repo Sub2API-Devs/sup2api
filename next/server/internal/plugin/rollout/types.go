@@ -101,9 +101,26 @@ type InstanceState struct {
 
 // Message is published on core.ChannelPluginEvents.
 type Message struct {
-	Type      string `json:"type"` // rollout | config
+	Type      string `json:"type"` // rollout | config | resources
 	PluginKey string `json:"plugin_key"`
 	RolloutID int64  `json:"rollout_id,omitempty"`
+}
+
+// MessageResources asks every node to restart the plugin's instances with
+// the resource limits now stored in plugins.resource_limits.
+const MessageResources = "resources"
+
+// limitsAware is implemented by instances that can tell whether their
+// process runs with outdated resource limits (grpcruntime.Instance).
+type limitsAware interface {
+	LimitsStale() bool
+}
+
+// broadcastReceiver is implemented by instances that accept cluster
+// broadcasts (grpcruntime.Instance).
+type broadcastReceiver interface {
+	HandlesBroadcast() bool
+	OnBroadcast(ctx context.Context, msg grpcruntime.BroadcastMessage) error
 }
 
 func parseState(s string) (NodePluginState, bool) {

@@ -16,8 +16,10 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	pluginpkg "github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -160,10 +162,12 @@ func (p *Package) Close() error {
 }
 
 // Packages fetches plugin packages from plugin_versions, verifies their
-// sha256 and caches them under DataDir.
+// sha256 (and, with a verifier, their signature) and caches them under
+// DataDir.
 type Packages struct {
-	db      *store.DB
-	dataDir string
+	db       *store.DB
+	dataDir  string
+	verifier PackageVerifier
 
 	mu    sync.Mutex
 	cache map[string]*Package // key@version
@@ -171,8 +175,43 @@ type Packages struct {
 	fetch map[string]*sync.Mutex
 }
 
-func NewPackages(db *store.DB, dataDir string) *Packages {
-	return &Packages{db: db, dataDir: dataDir, cache: map[string]*Package{}, fetch: map[string]*sync.Mutex{}}
+// PackageVerifier re-checks a package signature on this node before the
+// package is unpacked (CONTRACTS §14.3). data is the complete .s2plugin
+// file, already matched against plugin_versions.package_sha256.
+type PackageVerifier func(ctx context.Context, key, version string, data []byte) error
+
+// PackagesOption configures NewPackages.
+type PackagesOption func(*Packages)
+
+// WithVerifier makes Packages verify every package signature before use;
+// a failing package is not loaded (Open returns the error).
+func WithVerifier(v PackageVerifier) PackagesOption {
+	return func(s *Packages) { s.verifier = v }
+}
+
+// TrustVerifier verifies packages with the plugin trust store (official
+// root keys and publisher_keys read through q). lim bounds unpacking and
+// should match the upload limits.
+func TrustVerifier(trust *pluginpkg.TrustStore, q store.Querier, lim pluginpkg.Limits) PackageVerifier {
+	return func(ctx context.Context, key, version string, data []byte) error {
+		p, err := pluginpkg.Open(data, lim)
+		if err != nil {
+			return err
+		}
+		if p.Manifest.Key != key || p.Manifest.Version != version {
+			return fmt.Errorf("package manifest identifies %s@%s", p.Manifest.Key, p.Manifest.Version)
+		}
+		_, err = trust.Verify(ctx, q, p)
+		return err
+	}
+}
+
+func NewPackages(db *store.DB, dataDir string, opts ...PackagesOption) *Packages {
+	s := &Packages{db: db, dataDir: dataDir, cache: map[string]*Package{}, fetch: map[string]*sync.Mutex{}}
+	for _, o := range opts {
+		o(s)
+	}
+	return s
 }
 
 // DataDir returns the root directory for plugin files.
@@ -256,37 +295,67 @@ func (s *Packages) load(ctx context.Context, key, version string) (*Package, err
 		p.Trust = "community"
 	}
 	p.Dir = filepath.Join(s.dataDir, key, p.VersionHash())
-	if err := os.MkdirAll(p.Dir, 0o755); err != nil {
+	err = s.materialize(ctx, p, func() ([]byte, error) {
+		var data []byte
+		err := s.db.Pool.QueryRow(ctx,
+			`SELECT package FROM plugin_versions WHERE plugin_key = $1 AND version = $2`, key, version).Scan(&data)
+		return data, err
+	})
+	if err != nil {
 		return nil, err
 	}
+	return p, nil
+}
+
+// materialize makes sure p.Dir/package.s2plugin holds the package with
+// p.SHA256 (downloading it with fetch otherwise), verifies the signature
+// when a verifier is configured and opens the zip.
+func (s *Packages) materialize(ctx context.Context, p *Package, fetch func() ([]byte, error)) error {
+	key, version, sum := p.Key, p.Version, p.SHA256
+	if err := os.MkdirAll(p.Dir, 0o755); err != nil {
+		return err
+	}
 	file := filepath.Join(p.Dir, "package.s2plugin")
+	var data []byte
 	if cur, err := fileSHA256(file); err != nil || cur != sum {
-		var data []byte
-		if err := s.db.Pool.QueryRow(ctx,
-			`SELECT package FROM plugin_versions WHERE plugin_key = $1 AND version = $2`, key, version).Scan(&data); err != nil {
-			return nil, err
+		if data, err = fetch(); err != nil {
+			return err
 		}
 		h := sha256.Sum256(data)
 		if hex.EncodeToString(h[:]) != sum {
-			return nil, fmt.Errorf("plugin %s@%s: package sha256 mismatch", key, version)
+			return fmt.Errorf("plugin %s@%s: package sha256 mismatch", key, version)
 		}
 		tmp := file + ".tmp"
 		if err := os.WriteFile(tmp, data, 0o644); err != nil {
-			return nil, err
+			return err
 		}
 		_ = os.Remove(file)
 		if err := os.Rename(tmp, file); err != nil {
-			return nil, err
+			return err
+		}
+	}
+	if s.verifier != nil {
+		if data == nil {
+			var err error
+			if data, err = os.ReadFile(file); err != nil {
+				return err
+			}
+			h := sha256.Sum256(data)
+			if hex.EncodeToString(h[:]) != sum {
+				return fmt.Errorf("plugin %s@%s: cached package sha256 mismatch", key, version)
+			}
+		}
+		// attach re-hashes the opened file, so what is served is what was
+		// verified here.
+		if err := s.verifier(ctx, key, version, data); err != nil {
+			return fmt.Errorf("plugin %s@%s: signature verification failed: %w", key, version, err)
 		}
 	}
 	f, err := os.Open(file)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if err := p.attach(f); err != nil {
-		return nil, err
-	}
-	return p, nil
+	return p.attach(f)
 }
 
 // attach verifies f against p.SHA256 and opens it as a zip.
@@ -361,6 +430,153 @@ func (s *Packages) Close() {
 		_ = p.Close()
 		delete(s.cache, id)
 	}
+}
+
+// PackageRef names one cached package version.
+type PackageRef struct {
+	Key     string
+	Version string
+}
+
+// Adopt caches an already opened package (dev tooling and tests;
+// production packages come from Open).
+func (s *Packages) Adopt(p *Package) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cache[p.Key+"@"+p.Version] = p
+}
+
+// Cached lists the packages currently held open.
+func (s *Packages) Cached() []PackageRef {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]PackageRef, 0, len(s.cache))
+	for _, p := range s.cache {
+		out = append(out, PackageRef{Key: p.Key, Version: p.Version})
+	}
+	return out
+}
+
+// Release closes the cached package key@version and deletes its directory
+// (package file and extracted binary). Call it only once no instance of
+// the version runs anymore. Without a cached package every
+// "<version>-<hash8>" directory of the version is removed.
+func (s *Packages) Release(key, version string) error {
+	id := key + "@" + version
+	s.mu.Lock()
+	lk, ok := s.fetch[id]
+	if !ok {
+		lk = &sync.Mutex{}
+		s.fetch[id] = lk
+	}
+	s.mu.Unlock()
+	lk.Lock()
+	defer lk.Unlock()
+
+	s.mu.Lock()
+	p := s.cache[id]
+	delete(s.cache, id)
+	s.mu.Unlock()
+
+	var dirs []string
+	if p != nil {
+		_ = p.Close()
+		dirs = append(dirs, p.Dir)
+	} else if key != "" && version != "" {
+		entries, _ := os.ReadDir(filepath.Join(s.dataDir, key))
+		for _, e := range entries {
+			if v, ok := versionOfDir(e.Name()); e.IsDir() && ok && v == version {
+				dirs = append(dirs, filepath.Join(s.dataDir, key, e.Name()))
+			}
+		}
+	}
+	var firstErr error
+	for _, d := range dirs {
+		if err := removeAllRetry(d); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// PruneOrphans deletes package directories (DataDir/<key>/<version>-<hash8>)
+// that are neither cached nor kept. keep receives the plugin key, the
+// version and the hash8 of the directory. Other directories (such as the
+// plugin work directory DataDir/<key>/work) are never touched. Run it at
+// node start, before packages are opened. Returns the removed directories.
+func (s *Packages) PruneOrphans(keep func(key, version, hash8 string) bool) ([]string, error) {
+	keys, err := os.ReadDir(s.dataDir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	inUse := map[string]bool{}
+	for _, p := range s.cache {
+		inUse[filepath.Clean(p.Dir)] = true
+	}
+	s.mu.Unlock()
+	var removed []string
+	var firstErr error
+	for _, k := range keys {
+		if !k.IsDir() {
+			continue
+		}
+		entries, err := os.ReadDir(filepath.Join(s.dataDir, k.Name()))
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			name := e.Name()
+			version, ok := versionOfDir(name)
+			if !ok {
+				continue
+			}
+			dir := filepath.Join(s.dataDir, k.Name(), name)
+			if inUse[filepath.Clean(dir)] || keep(k.Name(), version, name[len(name)-8:]) {
+				continue
+			}
+			if err := removeAllRetry(dir); err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+				continue
+			}
+			removed = append(removed, dir)
+		}
+	}
+	return removed, firstErr
+}
+
+// versionOfDir parses "<version>-<hash8>" (hash8 = 8 lower-case hex).
+func versionOfDir(name string) (string, bool) {
+	if len(name) < 10 || name[len(name)-9] != '-' {
+		return "", false
+	}
+	for _, c := range name[len(name)-8:] {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return "", false
+		}
+	}
+	return name[:len(name)-9], true
+}
+
+// removeAllRetry retries briefly: on Windows a just-killed plugin binary
+// can stay locked for a moment.
+func removeAllRetry(dir string) error {
+	var err error
+	for attempt := 0; attempt < 5; attempt++ {
+		if err = os.RemoveAll(dir); err == nil {
+			return nil
+		}
+		time.Sleep(time.Duration(attempt+1) * 100 * time.Millisecond)
+	}
+	return err
 }
 
 func fileSHA256(name string) (string, error) {
