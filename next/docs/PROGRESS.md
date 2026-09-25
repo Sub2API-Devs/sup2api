@@ -345,3 +345,33 @@ go test -count=1 -timeout 50m -v ./...
   - 流式和非流式都返回 200；
   - 计费与 LiteLLM 价格一致（输入 $4、输出 $20、缓存读 $0.2、缓存写 $5 每百万 token）。
   - 上游是会注入约 1.8 万 token Claude Code 系统提示词的中转。
+
+---
+
+## 14. 账号的模型列表与映射、优先级与权重、RPM/TPM/TPD/SPM 限流；新建账号界面（2026-09-25，用户要求）
+
+**决定**（CONTRACTS §18）：模型列表、模型映射、权重和限流都是核心账号属性，由管理员在账号上配置，与插件无关；插件不再提供模型映射。优先级语义不变（数值越小越先用），同优先级内按权重加权随机。限流四项：rpm、tpm、tpd（UTC 自然日）、spm（每分钟会话数，口径参考 new-api：60 秒滚动窗口内去重的会话数，会话 = 粘性会话键，无粘性规则时每请求一会话，窗口内已有的会话总是放行）。
+
+**改动**：
+- **插件（plugins6 / plugins6b，`237cc15d7`）**：anthropic、openai、gemini 升到 0.1.3，relay 升到 0.1.1；表单、`settingsFields` 和代码里的 `model_mapping` 全部删除，`sdk/pluginsdk/apikey` 删除 `MapModel`；旧账号残留的 `model_mapping` 键解析时忽略。
+- **后端（主控，`438db154c`）**：
+  - 迁移 0009：`accounts` 新增 `models text[]`、`model_mapping jsonb`、`weight`、`rpm_limit`、`tpm_limit`、`tpd_limit`、`spm_limit`；把原来 `settings.model_mapping` 里的完整模型 ID 映射搬到核心字段（通配符项丢弃）。
+  - `core.AccountRef` 新增对应字段和 `ServesModel`/`MapModel`；新端口 `core.AccountLimiter`，`account.Limiter` 用 Redis 实现（`rl:account:{id}:*`）。
+  - 网关：候选按 `models` 过滤；`pick` 先剔除达到上限的账号，再按优先级、权重加权随机排序；选定账号后核心改写请求模型（body / 路径参数 / `RequestMeta.model`）再交给插件，`upstream_model` 记录映射后的模型；每次尝试计 rpm/spm，响应结束后累加 tpm/tpd；全部账号被限流时返回 429 `rate_limited`。
+  - 账号接口：新字段的校验（`models[i]`、`model_mapping.<from>` 等字段错误）、`?model=` 筛选、排序 `priority, weight DESC, id`、`rate_usage`；测试连接前先做映射。
+  - e2e、构建脚本的版本引用更新。
+- **前端（web6b，`77d71f289`）**：新建账号第 1 步改为紧凑卡片网格（端点折叠）；编辑表单分为基本信息 / 调度 / 限流 / 模型 / 模型映射（表格或 JSON）/ 凭证；列表新增"调度"与"限流"列和 `?model=` 筛选；详情展示模型、映射、限流与用量；mock 同步。
+- **文档**：CONTRACTS §5.4、§7、§18；ARCHITECTURE 4.3、6.2、A.4。
+- **测试**：server 全部测试（含数据库，在临时测试容器中）通过，跑完已清理容器和缓存卷；四个插件与 sdk 通过；e2e `go vet` 通过；web typecheck/build 通过。新增测试：`gateway/scheduling_test.go`（模型过滤、映射改写、限流跳过与 429、粘性会话作为 spm 身份、加权顺序）、`account/limiter_test.go`（四种窗口）、`account/models_test.go`（接口校验、列表筛选、快照、测试连接映射）。
+
+**sup2api 实际验证**（部署后未清库；三个内置插件自动升到 0.1.3，迁移 0009 把 codingplus 账号原有的插件映射搬到了核心字段）：
+- 校验：`models:["claude-*"]`、`weight:0`、`model_mapping:{"a b":"c"}`、`spm_limit:-1` 各返回对应字段错误。
+- 映射：把 `claude-sonnet-5 → claude-fable-5-1` 配到账号上，客户端请求 `claude-sonnet-5`，上游返回 `claude-fable-5-1`；使用记录 `model=claude-sonnet-5`、`upstream_model=claude-fable-5-1`，按 claude-sonnet-5 计费。
+- 模型列表：账号只列 fable-5-1 和 sonnet-5 时，请求 haiku 返回 503 `no_available_account`；`?model=gpt-4o` 列表为空。
+- rpm=2：三次调用依次 200、200、429（`all accounts are busy or rate limited`），`rate_usage` 为 rpm 2 / tpm 32。
+- spm=1：会话 A 两次都是 200，会话 B 429，`rate_usage.spm` 为 1。
+- 上游中转当时对 claude-opus-5-5 返回 503 "无可用渠道"（上游自身问题，不是本项目），验证改用 claude-sonnet-5 / claude-fable-5-1；测试完账号配置已恢复。
+
+**遗留**：
+- "从上游拉取模型列表"需要新增插件 RPC（本地没有 buf/protoc），本轮没做；模型列表的候选来自已配置价格的模型。
+- 分组白名单、粘性规则和钩子的 `match.models` 仍支持通配符，用户没有要求改。
