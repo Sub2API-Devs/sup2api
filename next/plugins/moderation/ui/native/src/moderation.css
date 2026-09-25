@@ -1,0 +1,494 @@
+/*
+ * Moderation plugin styles. The console's Tailwind build does not scan plugin
+ * sources, so layout uses these prefixed classes plus the console's global
+ * component classes (.card, .btn, .input, .badge, .table, .kv, .code-block, ...).
+ * Dark mode follows the console's `.dark` class on <html>.
+ */
+
+.mod-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+.mod-tabs {
+  margin-bottom: 1rem;
+}
+.mod-section {
+  margin-top: 1.25rem;
+}
+.mod-section-b {
+  margin-bottom: 1.25rem;
+}
+.mod-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.mod-w-40 {
+  width: 11rem !important;
+}
+.mod-mb-0 {
+  margin-bottom: 0 !important;
+}
+.mod-ml-auto {
+  margin-left: auto;
+}
+.mod-mr-auto {
+  margin-right: auto;
+}
+.mod-small {
+  font-size: 0.75rem;
+}
+.mod-num {
+  font-variant-numeric: tabular-nums;
+}
+.mod-nowrap {
+  white-space: nowrap;
+}
+.mod-prewrap {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.mod-center {
+  display: flex;
+  justify-content: center;
+  padding: 2.5rem 0;
+}
+.mod-hint {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+.dark .mod-hint {
+  color: #94a3b8;
+}
+.mod-req {
+  margin-left: 0.125rem;
+  color: #ef4444;
+}
+.mod-text-danger {
+  color: #dc2626;
+}
+.dark .mod-text-danger {
+  color: #f87171;
+}
+.mod-sub {
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+.mod-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  opacity: 0.7;
+  margin-left: 0.375rem;
+}
+.mod-code-plain {
+  opacity: 1;
+  margin-left: 0;
+  word-break: break-all;
+}
+.mod-ellipsis {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+.mod-w-reason {
+  max-width: 16rem;
+}
+.mod-w-text {
+  max-width: 20rem;
+}
+.mod-w-model {
+  max-width: 10rem;
+}
+
+/* alerts / callouts */
+.mod-alert {
+  margin: 0 0 1rem;
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+.mod-alert-danger {
+  background: rgba(239, 68, 68, 0.08);
+  color: #dc2626;
+}
+.dark .mod-alert-danger {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+}
+.mod-callout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 0.75rem;
+  background: rgba(245, 158, 11, 0.08);
+  padding: 0.75rem 1rem;
+  color: #92400e;
+}
+.dark .mod-callout {
+  color: #fcd34d;
+  background: rgba(245, 158, 11, 0.1);
+}
+.mod-callout-info {
+  border-color: rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.07);
+  color: #1e40af;
+}
+.dark .mod-callout-info {
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.1);
+}
+.mod-callout-flat {
+  margin-bottom: 0;
+}
+.mod-callout-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+.mod-callout-text {
+  flex: 1;
+  min-width: 12rem;
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+/* overview */
+.mod-grid-stats {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+.mod-grid-3 {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+.mod-rank {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mod-rank-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+.mod-rank-no {
+  width: 1.25rem;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+.mod-rank-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mod-rank-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.mod-bar {
+  margin-top: 0.25rem;
+  margin-left: 1.75rem;
+  height: 0.375rem;
+  border-radius: 9999px;
+  background: rgba(148, 163, 184, 0.2);
+  overflow: hidden;
+}
+.mod-bar-queue {
+  margin: 0.75rem 0 0;
+}
+.mod-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #f87171, #ef4444);
+  transition: width 0.3s ease;
+}
+.mod-bar-amber {
+  background: linear-gradient(90deg, #fbbf24, #f59e0b);
+}
+.mod-bar-teal {
+  background: linear-gradient(90deg, #2dd4bf, #14b8a6);
+}
+
+/* chips */
+.mod-chips {
+  display: inline-flex;
+  gap: 0.25rem;
+  max-width: 14rem;
+  overflow: hidden;
+}
+.mod-chips-wrap {
+  flex-wrap: wrap;
+  max-width: none;
+}
+.mod-chip {
+  display: inline-block;
+  white-space: nowrap;
+  border-radius: 0.375rem;
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+  padding: 0.0625rem 0.4rem;
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+}
+.dark .mod-chip {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fcd34d;
+}
+.mod-cached {
+  margin-left: 0.375rem;
+  border-radius: 0.375rem;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  color: #64748b;
+  padding: 0 0.3rem;
+  font-size: 0.6875rem;
+}
+.dark .mod-cached {
+  color: #94a3b8;
+}
+
+/* records */
+.mod-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+.mod-filter {
+  display: flex;
+  flex-direction: column;
+  width: 9.5rem;
+  min-width: 0;
+}
+.mod-filter .input-label {
+  margin-bottom: 0.25rem;
+}
+.mod-filter-wide {
+  flex: 1 1 14rem;
+  width: auto;
+}
+.mod-filter-date {
+  width: 13rem;
+}
+.mod-filter-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-self: flex-end;
+}
+.mod-clickable tbody tr {
+  cursor: pointer;
+}
+.mod-pager {
+  padding: 0 1rem;
+}
+@media (max-width: 640px) {
+  .mod-filter,
+  .mod-filter-date {
+    width: calc(50% - 0.375rem);
+  }
+  .mod-filter-wide {
+    flex-basis: 100%;
+  }
+}
+
+/* detail */
+.mod-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.mod-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.mod-detail-time {
+  margin-left: auto;
+  font-size: 0.8125rem;
+}
+.mod-detail-reason {
+  border-radius: 0.75rem;
+  background: rgba(148, 163, 184, 0.1);
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+}
+.mod-detail-reason p {
+  margin: 0;
+}
+.mod-detail-reason p + p {
+  margin-top: 0.25rem;
+}
+.mod-detail-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.mod-text-block {
+  max-height: 22rem;
+  overflow: auto;
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+/* manual block */
+.mod-block-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+.mod-block-form .mod-filter-actions {
+  align-self: flex-start;
+  padding-top: 1.5rem;
+}
+
+/* playground */
+.mod-test-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  align-items: start;
+}
+.mod-textarea {
+  min-height: 10rem;
+  resize: vertical;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.mod-test-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.75rem;
+}
+.mod-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.mod-verdict-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.mod-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mod-msg {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-left-width: 3px;
+  border-radius: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  background: rgba(248, 250, 252, 0.6);
+}
+.dark .mod-msg {
+  background: rgba(15, 23, 42, 0.4);
+  border-color: rgba(71, 85, 105, 0.5);
+}
+.mod-msg-system {
+  border-left-color: #94a3b8 !important;
+}
+.mod-msg-user {
+  border-left-color: #6366f1 !important;
+}
+.mod-msg-assistant {
+  border-left-color: #14b8a6 !important;
+}
+.mod-msg-tool {
+  border-left-color: #f59e0b !important;
+}
+.mod-msg-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.375rem;
+}
+.mod-msg-role {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.mod-msg-user .mod-msg-role {
+  color: #4f46e5;
+}
+.mod-msg-assistant .mod-msg-role {
+  color: #0d9488;
+}
+.mod-msg-tool .mod-msg-role {
+  color: #d97706;
+}
+.dark .mod-msg-user .mod-msg-role {
+  color: #a5b4fc;
+}
+.dark .mod-msg-assistant .mod-msg-role {
+  color: #5eead4;
+}
+.dark .mod-msg-tool .mod-msg-role {
+  color: #fcd34d;
+}
+.mod-msg-body {
+  margin: 0;
+  max-height: 20rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+.mod-msg-details summary {
+  display: inline-block;
+  margin-bottom: 0.375rem;
+}
+.mod-msg-details[open] summary {
+  margin-bottom: 0.5rem;
+}
+.mod-tool {
+  margin-top: 0.5rem;
+}
+.mod-tool-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+.dark .mod-tool-head {
+  color: #94a3b8;
+}
+.mod-tool-args {
+  margin: 0;
+  max-height: 16rem;
+  overflow: auto;
+}

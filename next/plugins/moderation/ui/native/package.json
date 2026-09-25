@@ -1,0 +1,16 @@
+{
+  "name": "@sub2api-plugin/moderation-ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Native console UI of the moderation plugin (built to dist/entry.js, packed as ui/native/).",
+  "scripts": {
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "@sub2api/vite-preset": "file:../../../../web/packages/vite-preset",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "vite": "^7.1.12",
+    "vue": "^3.5.22"
+  }
+}
