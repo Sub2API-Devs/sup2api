@@ -3,8 +3,10 @@ import { api } from '@sub2api/host'
 import type { LText, MyPlatform, Platform, PlatformEndpoint } from '@/api/types'
 import { lt } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import { ACCOUNT_PAGE_PERMS } from './useOwnership'
 
-// Gateway platforms. Admins with account:read load GET /platforms (CONTRACTS
+// Gateway platforms. Admins with account:read (or an own-level account key,
+// CONTRACTS §21.2) load GET /platforms (CONTRACTS
 // §13, with account types); everyone else loads GET /me/platforms (§14.1:
 // every available platform and its endpoints, no account types). When both
 // fail, the built-in catalog below is used; plugin platforms then show their
@@ -71,7 +73,7 @@ export function usePlatforms() {
     if (who !== loadedFor) force = true
     if (pending && !force) return pending
     loadedFor = who
-    const primary: Promise<Platform[]> = auth.has('account:read')
+    const primary: Promise<Platform[]> = auth.has(ACCOUNT_PAGE_PERMS)
       ? api
           .get<Platform[]>('/platforms')
           .then((r) => (Array.isArray(r) ? r : []).map(normalize))

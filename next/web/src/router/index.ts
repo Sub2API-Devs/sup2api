@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { session } from '@sub2api/host'
 import { useAuthStore } from '@/stores/auth'
+import { ACCOUNT_PAGE_PERMS, PROXY_PAGE_PERMS } from '@/composables/useOwnership'
 import AppLayout from '@/layouts/AppLayout.vue'
 
 declare module 'vue-router' {
@@ -22,9 +23,9 @@ const children: RouteRecordRaw[] = [
   { path: 'api-keys', component: () => import('@/views/keys/AllApiKeysView.vue'), meta: { perm: 'apikey:all:read', title: 'nav.items.apiKeysAll' } },
   { path: 'me/api-keys', component: () => import('@/views/keys/MyApiKeysView.vue'), meta: { perm: 'apikey:self:manage', title: 'nav.items.myApiKeys' } },
   { path: 'groups', component: () => import('@/views/groups/GroupsView.vue'), meta: { perm: 'group:read', title: 'nav.items.groups' } },
-  { path: 'proxies', component: () => import('@/views/proxies/ProxiesView.vue'), meta: { perm: 'proxy:read', title: 'nav.items.proxies' } },
-  { path: 'accounts', component: () => import('@/views/accounts/AccountsView.vue'), meta: { perm: 'account:read', title: 'nav.items.accounts' } },
-  { path: 'platforms', component: () => import('@/views/platforms/PlatformsView.vue'), meta: { perm: 'account:read', title: 'nav.items.platforms' } },
+  { path: 'proxies', component: () => import('@/views/proxies/ProxiesView.vue'), meta: { perm: PROXY_PAGE_PERMS, title: 'nav.items.proxies' } },
+  { path: 'accounts', component: () => import('@/views/accounts/AccountsView.vue'), meta: { perm: ACCOUNT_PAGE_PERMS, title: 'nav.items.accounts' } },
+  { path: 'platforms', component: () => import('@/views/platforms/PlatformsView.vue'), meta: { perm: ACCOUNT_PAGE_PERMS, title: 'nav.items.platforms' } },
 
   { path: 'prices', component: () => import('@/views/prices/PricesView.vue'), meta: { perm: 'price:read', title: 'nav.items.prices' } },
   { path: 'prices/new', component: () => import('@/views/prices/PriceEditView.vue'), meta: { perm: 'price:manage', title: 'nav.items.prices' } },

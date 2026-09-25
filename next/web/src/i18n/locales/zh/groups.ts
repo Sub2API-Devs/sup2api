@@ -25,6 +25,7 @@ export default {
     clearVisible: '取消当前列表',
     none: '没有账号',
     selected: '已选 {n} 个',
-    saveFailed: '分组已保存，但以下账号更新失败：{names}'
+    saveFailed: '分组已保存，但以下账号更新失败：{names}',
+    notEditable: '没有修改该账号的权限（只能修改自己创建的账号）'
   }
 }

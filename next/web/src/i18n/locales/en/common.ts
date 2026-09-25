@@ -68,6 +68,8 @@ export default {
   user: 'User',
   group: 'Group',
   account: 'Account',
+  createdById: 'Creator ID',
+  onlyMine: 'Only mine',
   status_: {
     active: 'Active',
     disabled: 'Disabled',

@@ -24,6 +24,7 @@ import { useGroupsLookup } from '@/composables/lookups'
 import { useAuthStore } from '@/stores/auth'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import { formatNumber } from '@/utils/format'
+import { ACCOUNT_KEYS } from '@/composables/useOwnership'
 import GroupAccountsEditor from './GroupAccountsEditor.vue'
 import GroupPlatforms from '@/views/platforms/GroupPlatforms.vue'
 import PlatformEndpointsPreview from '@/views/platforms/PlatformEndpointsPreview.vue'
@@ -31,8 +32,9 @@ import PlatformEndpointsPreview from '@/views/platforms/PlatformEndpointsPreview
 const { t } = useI18n()
 const auth = useAuthStore()
 const canManage = computed(() => auth.has('group:manage'))
-// Account membership is stored on accounts, so editing it needs account rights.
-const canEditAccounts = computed(() => auth.has('account:read') && auth.has('account:update'))
+// Account membership is stored on accounts, so editing it needs account rights
+// (all-level or own-level, CONTRACTS §21; the editor disables rows the caller cannot edit).
+const canEditAccounts = computed(() => auth.has([...ACCOUNT_KEYS.read]) && auth.has([...ACCOUNT_KEYS.update]))
 const accountsEditor = ref<InstanceType<typeof GroupAccountsEditor>>()
 const list = useList<Group>('/groups')
 

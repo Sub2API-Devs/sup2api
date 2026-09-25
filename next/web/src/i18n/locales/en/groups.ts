@@ -25,6 +25,7 @@ export default {
     clearVisible: 'Clear shown',
     none: 'No accounts',
     selected: '{n} selected',
-    saveFailed: 'Group saved, but these accounts could not be updated: {names}'
+    saveFailed: 'Group saved, but these accounts could not be updated: {names}',
+    notEditable: 'You cannot edit this account (only accounts you created)'
   }
 }

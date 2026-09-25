@@ -1,8 +1,58 @@
-import { fail, needStepUp, nextId, noContent, now, on, paginate } from './router'
+import { fail, needStepUp, nextId, noContent, now, on, paginate, type MockRequest } from './router'
 import { activePlatforms, platformById, platformLabel } from './platforms'
+import { caller, filterOwned, hasPerm, inScope, ownerScope, userEmail, type Identity } from './core'
+import { resolveProxyURL, validateProxyURL } from './resources'
 
 // Mock handlers: accounts, account types (form modes schema + iframe) and
-// GET /platforms (CONTRACTS §13).
+// GET /platforms (CONTRACTS §13). Ownership (CONTRACTS §21): own-level keys
+// only reach accounts the caller created; sign in as vendor@example.com to
+// try it (see core.ts).
+
+/** Owner scope of the caller for an account key pair, e.g. ('account:read', 'account:own:read'). */
+function accountScope(req: MockRequest, action: 'read' | 'create' | 'update' | 'delete' | 'test' | 'credential:view') {
+  const who = caller(req)
+  return { who, scope: ownerScope(who, `account:${action}`, `account:own:${action}`) }
+}
+
+/** Guarded settings (CONTRACTS §21.3): base_url of the built-in types is limited to the official address. */
+const GUARDED: Record<string, Array<{ field: string; allowed: string[] }>> = {
+  anthropic: [{ field: 'base_url', allowed: ['https://api.anthropic.com'] }],
+  openai: [{ field: 'base_url', allowed: ['https://api.openai.com'] }],
+  gemini: [{ field: 'base_url', allowed: ['https://generativelanguage.googleapis.com'] }]
+}
+
+const normURL = (s: unknown) => {
+  const v = String(s ?? '').trim().replace(/\/+$/, '')
+  return v.replace(/^([a-z]+:\/\/)([^/]+)/i, (_m, scheme: string, host: string) => scheme.toLowerCase() + host.toLowerCase())
+}
+
+/** 400 forbidden on a guarded field the caller may not change; null when fine. */
+function checkGuarded(who: Identity, pluginKey: string, creds: Record<string, any> | undefined, prev?: Record<string, any>) {
+  if (!creds || hasPerm(who, 'account:settings:custom')) return null
+  const fields: Array<{ field: string; code: string; message: string }> = []
+  for (const g of GUARDED[pluginKey] || []) {
+    const v = normURL(creds[g.field])
+    if (!v) continue
+    if (g.allowed.some((a) => normURL(a) === v)) continue
+    if (prev && normURL(prev[g.field]) === v) continue
+    fields.push({ field: `credentials.${g.field}`, code: 'forbidden', message: `Only ${g.allowed.join(', ')} is allowed` })
+  }
+  return fields.length ? fail(400, 'invalid_argument', 'restricted setting', { fields }) : null
+}
+
+/** Rewrites a form for a caller without account:settings:custom: enum (+ ui:readonly when one value). */
+function guardForm(who: Identity, pluginKey: string, form: { schema: Record<string, any>; ui_schema?: Record<string, any> }) {
+  const guards = GUARDED[pluginKey]
+  if (!guards || hasPerm(who, 'account:settings:custom')) return form
+  const schema = JSON.parse(JSON.stringify(form.schema))
+  const ui = JSON.parse(JSON.stringify(form.ui_schema || {}))
+  for (const g of guards) {
+    if (!schema.properties?.[g.field]) continue
+    schema.properties[g.field].enum = [...g.allowed]
+    if (g.allowed.length === 1) ui[g.field] = { ...(ui[g.field] || {}), 'ui:readonly': true }
+  }
+  return { schema, ui_schema: ui }
+}
 
 const anthropicSchema = {
   type: 'object',
@@ -193,16 +243,16 @@ function accountTypeOut(d: MockAccountType) {
 const typeLabel = (pluginKey: string, type: string) => accountTypeDecls.find((x) => x.plugin_key === pluginKey && x.type === type)?.label || type
 
 const accounts: any[] = [
-  { id: 12, name: 'claude-main', plugin_key: 'anthropic', type: 'apikey', group_ids: [1, 2], proxy_id: null, priority: 1, weight: 3, max_concurrency: 10, schedulable: true, models: ['claude-sonnet-4-5', 'claude-haiku-4-5'], model_mapping: { 'claude-3-5-sonnet-latest': 'claude-sonnet-4-5' }, rpm_limit: 60, tpm_limit: 100000, tpd_limit: 5000000, spm_limit: 20, status: 'active', status_reason: '', in_use: 3, cooldown_until: null, orphaned: false, last_used_at: now(-12), created_at: now(-86400 * 20), credentials: { api_key: '******', base_url: 'https://api.anthropic.com' } },
-  { id: 13, name: 'claude-bak', plugin_key: 'anthropic', type: 'apikey', group_ids: [1], proxy_id: 1, priority: 2, weight: 1, max_concurrency: 10, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: now(600), cooldown_reason: '429', orphaned: false, last_used_at: now(-300), created_at: now(-86400 * 10), credentials: { api_key: '******', base_url: 'https://api.anthropic.com' } },
-  { id: 14, name: 'old-key', plugin_key: 'anthropic', type: 'apikey', group_ids: [1], proxy_id: null, priority: 5, weight: 1, max_concurrency: 10, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'disabled', status_reason: '401 invalid credentials', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-86400), created_at: now(-86400 * 40), credentials: { api_key: '******' } },
-  { id: 16, name: 'relay-1', plugin_key: 'relay', type: 'relay_key', group_ids: [1], proxy_id: null, priority: 3, weight: 1, max_concurrency: 20, schedulable: true, models: [], model_mapping: { 'claude-opus-4-1': 'claude-sonnet-4-5' }, rpm_limit: 120, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 1, cooldown_until: null, orphaned: false, last_used_at: now(-40), created_at: now(-86400 * 2), credentials: { api_key: '******', base_url: 'https://relay.example.com' } },
-  { id: 17, name: 'video-1', plugin_key: 'videogen', type: 'video_key', group_ids: [2], proxy_id: null, priority: 1, weight: 1, max_concurrency: 4, schedulable: true, models: ['myvideo-pro'], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 5, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-3600), created_at: now(-86400 * 3), credentials: { api_key: '******', region: 'us' } },
-  { id: 18, name: 'demo-token', plugin_key: 'demo', type: 'token', group_ids: [1], proxy_id: null, priority: 8, weight: 1, max_concurrency: 2, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-86400), credentials: { token: '******' } },
-  { id: 19, name: 'openai-main', plugin_key: 'openai', type: 'apikey', group_ids: [1, 2], proxy_id: null, priority: 1, weight: 2, max_concurrency: 20, schedulable: true, models: ['gpt-4o', 'gpt-4o-mini'], model_mapping: {}, rpm_limit: 0, tpm_limit: 200000, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 2, cooldown_until: null, orphaned: false, last_used_at: now(-30), created_at: now(-86400 * 2), credentials: { api_key: '******', base_url: 'https://api.openai.com' } },
-  { id: 20, name: 'gemini-main', plugin_key: 'gemini', type: 'apikey', group_ids: [2], proxy_id: null, priority: 1, weight: 1, max_concurrency: 10, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-900), created_at: now(-86400), credentials: { api_key: '******', base_url: 'https://generativelanguage.googleapis.com' } },
+  { id: 12, name: 'claude-main', plugin_key: 'anthropic', type: 'apikey', created_by: 1, group_ids: [1, 2], proxy_id: null, priority: 1, weight: 3, max_concurrency: 10, schedulable: true, models: ['claude-sonnet-4-5', 'claude-haiku-4-5'], model_mapping: { 'claude-3-5-sonnet-latest': 'claude-sonnet-4-5' }, rpm_limit: 60, tpm_limit: 100000, tpd_limit: 5000000, spm_limit: 20, status: 'active', status_reason: '', in_use: 3, cooldown_until: null, orphaned: false, last_used_at: now(-12), created_at: now(-86400 * 20), credentials: { api_key: '******', base_url: 'https://api.anthropic.com' } },
+  { id: 13, name: 'claude-bak', plugin_key: 'anthropic', type: 'apikey', created_by: 6, group_ids: [1], proxy_id: 1, priority: 2, weight: 1, max_concurrency: 10, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: now(600), cooldown_reason: '429', orphaned: false, last_used_at: now(-300), created_at: now(-86400 * 10), credentials: { api_key: '******', base_url: 'https://api.anthropic.com' } },
+  { id: 14, name: 'old-key', plugin_key: 'anthropic', type: 'apikey', created_by: 1, group_ids: [1], proxy_id: null, priority: 5, weight: 1, max_concurrency: 10, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'disabled', status_reason: '401 invalid credentials', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-86400), created_at: now(-86400 * 40), credentials: { api_key: '******' } },
+  { id: 16, name: 'relay-1', plugin_key: 'relay', type: 'relay_key', created_by: 6, group_ids: [1], proxy_id: null, priority: 3, weight: 1, max_concurrency: 20, schedulable: true, models: [], model_mapping: { 'claude-opus-4-1': 'claude-sonnet-4-5' }, rpm_limit: 120, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 1, cooldown_until: null, orphaned: false, last_used_at: now(-40), created_at: now(-86400 * 2), credentials: { api_key: '******', base_url: 'https://relay.example.com' } },
+  { id: 17, name: 'video-1', plugin_key: 'videogen', type: 'video_key', created_by: 1, group_ids: [2], proxy_id: null, priority: 1, weight: 1, max_concurrency: 4, schedulable: true, models: ['myvideo-pro'], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 5, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-3600), created_at: now(-86400 * 3), credentials: { api_key: '******', region: 'us' } },
+  { id: 18, name: 'demo-token', plugin_key: 'demo', type: 'token', created_by: 1, group_ids: [1], proxy_id: null, priority: 8, weight: 1, max_concurrency: 2, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-86400), credentials: { token: '******' } },
+  { id: 19, name: 'openai-main', plugin_key: 'openai', type: 'apikey', created_by: 1, group_ids: [1, 2], proxy_id: null, priority: 1, weight: 2, max_concurrency: 20, schedulable: true, models: ['gpt-4o', 'gpt-4o-mini'], model_mapping: {}, rpm_limit: 0, tpm_limit: 200000, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 2, cooldown_until: null, orphaned: false, last_used_at: now(-30), created_at: now(-86400 * 2), credentials: { api_key: '******', base_url: 'https://api.openai.com' } },
+  { id: 20, name: 'gemini-main', plugin_key: 'gemini', type: 'apikey', created_by: 1, group_ids: [2], proxy_id: null, priority: 1, weight: 1, max_concurrency: 10, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-900), created_at: now(-86400), credentials: { api_key: '******', base_url: 'https://generativelanguage.googleapis.com' } },
   // Its plugin was uninstalled without purge_accounts: kept as an orphaned account.
-  { id: 15, name: 'legacy-vendor', plugin_key: 'legacy_vendor', type: 'apikey', type_label: { en: 'API key', zh: 'API Key' }, group_ids: [], proxy_id: null, priority: 10, weight: 1, max_concurrency: 5, schedulable: false, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, orphaned: true, created_at: now(-86400 * 90) }
+  { id: 15, name: 'legacy-vendor', plugin_key: 'legacy_vendor', type: 'apikey', created_by: null, type_label: { en: 'API key', zh: 'API Key' }, group_ids: [], proxy_id: null, priority: 10, weight: 1, max_concurrency: 5, schedulable: false, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, orphaned: true, created_at: now(-86400 * 90) }
 ]
 for (const a of accounts) a.type_label ??= typeLabel(a.plugin_key, a.type)
 
@@ -217,6 +267,8 @@ const withGroups = (a: any) => ({
   models: a.models || [],
   model_mapping: a.model_mapping || {},
   weight: a.weight ?? 1,
+  created_by: a.created_by ?? null,
+  created_by_email: userEmail(a.created_by),
   rate_usage: rateUsage(a),
   groups: (a.group_ids || []).map((id: number) => ({ id, name: id === 1 ? 'default' : id === 2 ? 'vip' : `group-${id}` }))
 })
@@ -224,6 +276,11 @@ const withGroups = (a: any) => ({
 /** Accounts in a group (any status). */
 export function groupAccountCount(gid: number): number {
   return accounts.filter((a) => (a.group_ids || []).includes(gid)).length
+}
+
+/** Accounts referencing a proxy (every owner, CONTRACTS §21.2). */
+export function proxyAccountCount(pid: number): number {
+  return accounts.filter((a) => a.proxy_id === pid).length
 }
 
 /** Platforms a group serves: supported by its accounts' types and existing now (sorted). */
@@ -262,11 +319,13 @@ on('GET', '/platforms', () =>
 on('GET', '/me/platforms', () => activePlatforms().map((p) => ({ id: p.id, label: p.label, builtin: p.builtin, endpoints: p.endpoints })))
 on('GET', '/account-types', () => accountTypeDecls.map(accountTypeOut))
 on('GET', '/account-types/:plugin_key/:type/form', (req) => {
-  if (req.params.plugin_key === 'anthropic') return { schema: anthropicSchema, ui_schema: anthropicUI }
-  if (req.params.plugin_key === 'relay') return { schema: relaySchema, ui_schema: relayUI }
-  if (req.params.plugin_key === 'videogen') return { schema: videoSchema, ui_schema: { api_key: { 'ui:widget': 'secret' } } }
-  if (req.params.plugin_key === 'openai') return openaiForm
-  if (req.params.plugin_key === 'gemini') return geminiForm
+  const who = caller(req)
+  const k = req.params.plugin_key
+  if (k === 'anthropic') return guardForm(who, k, { schema: anthropicSchema, ui_schema: anthropicUI })
+  if (k === 'relay') return { schema: relaySchema, ui_schema: relayUI }
+  if (k === 'videogen') return { schema: videoSchema, ui_schema: { api_key: { 'ui:widget': 'secret' } } }
+  if (k === 'openai') return guardForm(who, k, openaiForm)
+  if (k === 'gemini') return guardForm(who, k, geminiForm)
   return fail(404, 'not_found', 'form not found')
 })
 
@@ -307,8 +366,23 @@ function validateScheduling(b: Record<string, any>) {
   return fields.length ? fail(400, 'invalid_argument', 'invalid argument', { fields }) : null
 }
 
+/** Resolves the proxy of a create / patch body (CONTRACTS §21.4): proxy_id xor proxy_url. Returns the fields to set, or an error. */
+function resolveProxy(req: MockRequest, b: Record<string, any>): { proxy_id?: number | null; proxy_created?: boolean } | { __status: number; body: unknown } {
+  if (b.proxy_url !== undefined && b.proxy_id !== undefined) {
+    return fail(400, 'invalid_argument', 'proxy_id and proxy_url are exclusive', { fields: [{ field: 'proxy_url', code: 'conflict', message: 'Give proxy_id or proxy_url, not both' }] })
+  }
+  if (typeof b.proxy_url === 'string' && b.proxy_url.trim()) {
+    const r = resolveProxyURL(req, b.proxy_url)
+    if ('__status' in r) return r
+    return { proxy_id: r.id, proxy_created: r.created }
+  }
+  if (b.proxy_id !== undefined) return { proxy_id: b.proxy_id === null ? null : Number(b.proxy_id), proxy_created: false }
+  return { proxy_created: false }
+}
+
 on('GET', '/accounts', (req) => {
-  let list = accounts
+  const { who, scope } = accountScope(req, 'read')
+  let list = filterOwned(accounts, scope, who, req.query)
   const q = req.query
   if (q.plugin_key) list = list.filter((a) => a.plugin_key === q.plugin_key)
   if (q.type) list = list.filter((a) => a.type === q.type)
@@ -321,11 +395,22 @@ on('GET', '/accounts', (req) => {
   list = [...list].sort((x, y) => x.priority - y.priority || (y.weight ?? 1) - (x.weight ?? 1) || x.id - y.id)
   return paginate(list.map(({ credentials: _c, ...a }) => withGroups(a)), q)
 })
-on('GET', '/accounts/:id', (req) => {
+/**
+ * The account of :id within the caller's scope for `action`: 403 without any
+ * key of the pair, 404 when missing or not the caller's (the two are not told apart).
+ */
+function scopedAccount(req: MockRequest, action: 'read' | 'update' | 'delete' | 'test' | 'credential:view'): { a: any } | { __status: number; body: unknown } {
+  const { who, scope } = accountScope(req, action)
+  if (!scope) return fail(403, 'permission_denied', `account:${action} or account:own:${action} is required`, { permission: `account:own:${action}` })
   const a = accounts.find((x) => x.id === Number(req.params.id))
-  return a ? withGroups(a) : fail(404, 'not_found', 'account not found')
+  return a && inScope(scope, who, a) ? { a } : fail(404, 'not_found', 'account not found')
+}
+on('GET', '/accounts/:id', (req) => {
+  const r = scopedAccount(req, 'read')
+  return 'a' in r ? withGroups(r.a) : r
 })
 on('POST', '/accounts', (req) => {
+  const who = caller(req)
   const b = req.body || {}
   const creds = b.credentials || {}
   if ('platform' in b) return fail(400, 'invalid_argument', 'unknown field "platform"')
@@ -336,9 +421,14 @@ on('POST', '/accounts', (req) => {
   if (b.plugin_key === 'anthropic' && !String(creds.api_key || '').startsWith('sk-')) {
     return fail(400, 'invalid_argument', 'invalid credentials', { fields: [{ field: 'credentials.api_key', code: 'invalid', message: 'API key must start with sk-' }] })
   }
+  const guarded = checkGuarded(who, b.plugin_key, creds)
+  if (guarded) return guarded
   if (accounts.some((a) => a.name === b.name)) return fail(400, 'invalid_argument', 'name taken', { fields: [{ field: 'name', code: 'conflict', message: 'Name already used' }] })
+  const proxy = resolveProxy(req, b)
+  if ('__status' in proxy) return proxy
   const masked = { ...creds }
   for (const f of at.sensitive_fields) if (masked[f]) masked[f] = '******'
+  const { proxy_url: _u, ...fields } = b
   const a = {
     id: nextId(),
     status: 'active',
@@ -356,37 +446,51 @@ on('POST', '/accounts', (req) => {
     tpm_limit: 0,
     tpd_limit: 0,
     spm_limit: 0,
-    ...b,
+    ...fields,
+    proxy_id: proxy.proxy_id ?? null,
+    created_by: who.id,
     type_label: at.label,
     credentials: masked
   }
   accounts.unshift(a)
-  return withGroups(a)
+  return { ...withGroups(a), proxy_created: !!proxy.proxy_created }
 })
 on('PATCH', '/accounts/:id', (req) => {
-  const a = accounts.find((x) => x.id === Number(req.params.id))
-  if (!a) return fail(404, 'not_found', 'account not found')
+  const r = scopedAccount(req, 'update')
+  if (!('a' in r)) return r
+  const a = r.a
   const bad = validateScheduling(req.body || {})
   if (bad) return bad
-  const { credentials, platform: _p, plugin_key: _k, type: _t, ...rest } = req.body || {}
+  const { credentials, platform: _p, plugin_key: _k, type: _t, proxy_id: _pid, proxy_url: _purl, ...rest } = req.body || {}
+  const guarded = checkGuarded(caller(req), a.plugin_key, credentials, a.credentials)
+  if (guarded) return guarded
+  const proxy = resolveProxy(req, req.body || {})
+  if ('__status' in proxy) return proxy
   // `models` and `model_mapping` are replaced as a whole (§18.3).
   Object.assign(a, rest)
+  if (proxy.proxy_id !== undefined) a.proxy_id = proxy.proxy_id
   if (credentials) {
     a.credentials ??= {}
     for (const [k, v] of Object.entries(credentials)) if (v !== '******') a.credentials[k] = k === 'api_key' || k === 'token' ? '******' : v
   }
-  return withGroups(a)
+  return { ...withGroups(a), proxy_created: !!proxy.proxy_created }
 })
 on('DELETE', '/accounts/:id', (req) => {
-  const s = needStepUp(req)
-  if (s) return s
+  // account:delete is sensitive, account:own:delete is not (CONTRACTS §21.1).
+  const { who, scope } = accountScope(req, 'delete')
+  if (scope === 'all') {
+    const s = needStepUp(req)
+    if (s) return s
+  }
   const i = accounts.findIndex((x) => x.id === Number(req.params.id))
-  if (i >= 0) accounts.splice(i, 1)
+  if (i < 0 || !inScope(scope, who, accounts[i])) return fail(404, 'not_found', 'account not found')
+  accounts.splice(i, 1)
   return noContent()
 })
 on('POST', '/accounts/:id/test', (req) => {
-  const a = accounts.find((x) => x.id === Number(req.params.id))
-  if (!a) return fail(404, 'not_found', 'account not found')
+  const r = scopedAccount(req, 'test')
+  if (!('a' in r)) return r
+  const a = r.a
   // The model goes through the account's model_mapping first (§18.3).
   const asked = req.body?.model || 'claude-haiku-4-5'
   const model = (a.model_mapping || {})[asked] || asked
@@ -409,14 +513,29 @@ function fetchUpstreamModels(pluginKey: string, creds: Record<string, any> | und
   if (!models) return fail(501, 'unsupported', 'this account type cannot list models from the upstream')
   return { models: [...models].sort(), skipped: 0, status: 200 }
 }
-on('POST', '/account-types/:plugin_key/:type/models/fetch', (req) => fetchUpstreamModels(req.params.plugin_key, req.body?.credentials))
+on('POST', '/account-types/:plugin_key/:type/models/fetch', (req) => {
+  // A proxy_url is only parsed and used for this request (CONTRACTS §21.2): nothing is looked up or created.
+  const b = req.body || {}
+  if (b.proxy_url !== undefined && b.proxy_id !== undefined) {
+    return fail(400, 'invalid_argument', 'proxy_id and proxy_url are exclusive', { fields: [{ field: 'proxy_url', code: 'conflict', message: 'Give proxy_id or proxy_url, not both' }] })
+  }
+  if (typeof b.proxy_url === 'string' && b.proxy_url.trim()) {
+    const err = validateProxyURL(b.proxy_url)
+    if (err) return err
+  }
+  return fetchUpstreamModels(req.params.plugin_key, b.credentials)
+})
 on('POST', '/accounts/:id/models/fetch', (req) => {
-  const a = accounts.find((x) => x.id === Number(req.params.id))
-  if (!a) return fail(404, 'not_found', 'account not found')
+  const r = scopedAccount(req, 'test')
+  if (!('a' in r)) return r
+  const a = r.a
   return fetchUpstreamModels(a.plugin_key, req.body?.credentials || a.credentials)
 })
 on('POST', '/accounts/:id/credentials/reveal', (req) => {
   const s = needStepUp(req)
   if (s) return s
-  return { api_key: 'sk-ant-api03-mock-plaintext-key', base_url: 'https://api.anthropic.com' }
+  const r = scopedAccount(req, 'credential:view')
+  if (!('a' in r)) return r
+  const a = r.a
+  return { api_key: 'sk-ant-api03-mock-plaintext-key', base_url: a.credentials?.base_url || 'https://api.anthropic.com' }
 })

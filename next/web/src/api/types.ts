@@ -170,6 +170,10 @@ export interface Proxy {
   has_password?: boolean
   status: string
   account_count?: number
+  /** Owner (CONTRACTS §21.2); null for legacy rows, which only all-level keys can see. */
+  created_by?: number | null
+  /** Email of the owner, kept after the user was deleted. */
+  created_by_email?: string | null
   created_at?: string
   updated_at?: string
 }
@@ -266,8 +270,17 @@ export interface Account {
   cooldown_until?: string | null
   cooldown_reason?: string // assumed
   orphaned?: boolean
+  /** Owner (CONTRACTS §21.2); null for legacy rows, which only all-level keys can see. */
+  created_by?: number | null
+  /** Email of the owner, kept after the user was deleted. */
+  created_by_email?: string | null
   last_used_at?: string | null
   created_at?: string
+  /**
+   * Only in the create / update responses (CONTRACTS §21.4): true when the
+   * proxy_url of the request created a new proxy instead of reusing one.
+   */
+  proxy_created?: boolean
 }
 
 export interface AccountTestResult {

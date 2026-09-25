@@ -68,6 +68,8 @@ export default {
   user: '用户',
   group: '分组',
   account: '账号',
+  createdById: '创建人 ID',
+  onlyMine: '只看我的',
   status_: {
     active: '正常',
     disabled: '禁用',

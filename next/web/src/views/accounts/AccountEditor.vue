@@ -12,7 +12,10 @@ import ProxyPicker from '@/components/ProxyPicker.vue'
 import { lt } from '@/i18n'
 import { assetURL, usePluginStore } from '@/stores/plugins'
 import { useAuthStore } from '@/stores/auth'
+import { useProxiesLookup } from '@/composables/lookups'
+import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
+import { looksLikeProxyURL, parseProxyURL } from '@/utils/proxyUrl'
 
 // Step 2 of "new account" and the edit form (wireframe A.4, CONTRACTS §18.4):
 // 基本信息 / 调度 / 限流 / 模型 / 模型映射 (all core) + the plugin credential form.
@@ -21,9 +24,13 @@ const emit = defineEmits<{ (e: 'saved', a: Account): void; (e: 'cancel'): void; 
 const { t } = useI18n()
 const plugins = usePluginStore()
 const auth = useAuthStore()
+const own = useOwnership()
 
 const editing = computed(() => !!props.account?.id)
 const mode = computed(() => props.accountType?.form.mode || 'schema')
+// Row-level rights (CONTRACTS §21.1): editing an account needs the all-level
+// key or the own-level key on an account the caller created.
+const canTestAccount = computed(() => editing.value && own.can(props.account, ACCOUNT_KEYS.test))
 
 /** A complete model id (CONTRACTS §16): no wildcards. */
 const MODEL_RE = /^[A-Za-z0-9._:/@+-]{1,200}$/
@@ -42,6 +49,37 @@ const basic = reactive({
   tpd_limit: 0,
   spm_limit: 0
 })
+
+// ---------------------------------------------------------------- proxy: pick an existing one | paste a URL (CONTRACTS §21.4)
+// "url" sends proxy_url instead of proxy_id; the server parses it, reuses a
+// matching proxy the caller can see or creates one, and answers proxy_created.
+type ProxyMode = 'existing' | 'url'
+const proxyMode = ref<ProxyMode>('existing')
+const proxyUrl = ref('')
+const proxyModeTabs = computed(() => [
+  { key: 'existing', label: t('accounts.proxyPickExisting') },
+  { key: 'url', label: t('accounts.proxyPasteUrl') }
+])
+/** The proxy_url that will be sent, or '' (existing mode / empty input). */
+const proxyUrlToSend = computed(() => (proxyMode.value === 'url' ? proxyUrl.value.trim() : ''))
+/** Shape hint only (the server validates): shown while the pasted text does not look like scheme://host:port. */
+const proxyUrlHint = computed(() => {
+  const raw = proxyUrl.value.trim()
+  if (!raw) return ''
+  const r = parseProxyURL(raw)
+  if (r.ok) return ''
+  if (r.error === 'scheme') return looksLikeProxyURL(raw) ? t('accounts.proxyUrlSchemeHint') : t('accounts.proxyUrlShapeHint')
+  if (r.error === 'port') return t('accounts.proxyUrlPortHint')
+  if (r.error === 'extra') return t('accounts.proxyUrlExtraHint')
+  return t('accounts.proxyUrlShapeHint')
+})
+function setProxyMode(m: string) {
+  proxyMode.value = m as ProxyMode
+  if (errors.value.proxy_url || errors.value.proxy_id) {
+    const { proxy_url: _u, proxy_id: _i, ...rest } = errors.value
+    errors.value = rest
+  }
+}
 const models = ref<string[]>([])
 const mapping = ref<Record<string, string>>({})
 const credentials = ref<Record<string, any>>({})
@@ -162,7 +200,7 @@ const fetched = ref<string[]>([])
 const fetchedSkipped = ref(0)
 const fetchPicked = ref<Record<string, boolean>>({})
 
-const canFetch = computed(() => !!props.accountType && !props.account?.orphaned && (editing.value ? auth.has('account:test') : auth.has('account:create')))
+const canFetch = computed(() => !!props.accountType && !props.account?.orphaned && (editing.value ? canTestAccount.value : auth.has([...ACCOUNT_KEYS.create])))
 const fetchPickedCount = computed(() => Object.values(fetchPicked.value).filter(Boolean).length)
 
 async function fetchModels() {
@@ -172,11 +210,14 @@ async function fetchModels() {
   fetching.value = true
   try {
     const at = props.accountType
+    // New account: the pasted proxy_url is only parsed and used for this
+    // request (CONTRACTS §21.2), no proxy is looked up or created.
+    const proxy = proxyUrlToSend.value ? { proxy_url: proxyUrlToSend.value } : { proxy_id: basic.proxy_id }
     const r = editing.value
       ? await api.post<{ models: string[]; skipped: number }>(`/accounts/${props.account!.id}/models/fetch`, { credentials: creds })
       : await api.post<{ models: string[]; skipped: number }>(
           `/account-types/${encodeURIComponent(at.plugin_key)}/${encodeURIComponent(at.type)}/models/fetch`,
-          { credentials: creds, proxy_id: basic.proxy_id }
+          { credentials: creds, ...proxy }
         )
     fetched.value = r.models || []
     fetchedSkipped.value = r.skipped || 0
@@ -199,6 +240,7 @@ async function fetchModels() {
       }
       credErrors.value = cred
       if (mode.value === 'iframe' && Object.keys(cred).length) iframe.value?.setErrors(cred)
+      if (fe.proxy_url) errors.value = { ...errors.value, proxy_url: fe.proxy_url }
     }
     notifyError(e)
   } finally {
@@ -299,6 +341,9 @@ watch(
     basic.name = a?.name || ''
     basic.group_ids = [...(a?.group_ids || [])]
     basic.proxy_id = a?.proxy_id ?? null
+    // Editing defaults to "pick existing" with the current proxy selected.
+    proxyMode.value = 'existing'
+    proxyUrl.value = ''
     basic.priority = a?.priority ?? 10
     basic.weight = a?.weight ?? 1
     basic.max_concurrency = a?.max_concurrency ?? 10
@@ -389,7 +434,6 @@ async function save() {
   const body: Record<string, any> = {
     name: basic.name.trim(),
     group_ids: basic.group_ids,
-    proxy_id: basic.proxy_id,
     priority: Number(basic.priority),
     weight: Number(basic.weight),
     max_concurrency: Number(basic.max_concurrency),
@@ -401,6 +445,10 @@ async function save() {
     tpd_limit: Number(basic.tpd_limit) || 0,
     spm_limit: Number(basic.spm_limit) || 0
   }
+  // Exactly one of proxy_id / proxy_url (CONTRACTS §21.4: both is a conflict).
+  const withProxyUrl = !!proxyUrlToSend.value
+  if (withProxyUrl) body.proxy_url = proxyUrlToSend.value
+  else body.proxy_id = basic.proxy_id
   if (props.accountType && !props.account?.orphaned) body.credentials = creds
   try {
     let saved: Account
@@ -413,6 +461,11 @@ async function save() {
       saved = await api.post<Account>('/accounts', body)
     }
     toast(editing.value ? t('common.updated') : t('common.created'), 'success')
+    if (withProxyUrl) {
+      // The proxy picker cache may now miss the (re)used proxy.
+      useProxiesLookup(true)
+      if (saved?.proxy_created) toast(t('accounts.proxyAutoCreated'), 'info')
+    }
     emit('saved', saved)
   } catch (e) {
     const all = fieldErrors(e)
@@ -448,8 +501,35 @@ async function save() {
         <SField :label="t('accounts.groups')" :error="errors.group_ids">
           <GroupPicker v-model="basic.group_ids as any" multiple />
         </SField>
-        <SField :label="t('accounts.proxy')" :error="errors.proxy_id">
-          <ProxyPicker v-model="basic.proxy_id" />
+        <SField :label="t('accounts.proxy')" :error="proxyMode === 'url' ? errors.proxy_url : errors.proxy_id" :hint="proxyMode === 'url' && !proxyUrlHint ? t('accounts.proxyUrlHint') : ''">
+          <div class="mb-2 inline-flex rounded-lg bg-gray-100 p-0.5 text-xs dark:bg-dark-700" role="tablist" data-testid="proxy-mode">
+            <button
+              v-for="tab in proxyModeTabs"
+              :key="tab.key"
+              type="button"
+              role="tab"
+              :aria-selected="proxyMode === tab.key"
+              :data-testid="`proxy-mode-${tab.key}`"
+              class="rounded-md px-2.5 py-1 font-medium transition-colors"
+              :class="proxyMode === tab.key ? 'bg-white text-gray-900 shadow-sm dark:bg-dark-800 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-dark-400 dark:hover:text-gray-200'"
+              @click="setProxyMode(tab.key)"
+            >
+              {{ tab.label }}
+            </button>
+          </div>
+          <ProxyPicker v-if="proxyMode === 'existing'" v-model="basic.proxy_id" />
+          <template v-else>
+            <input
+              v-model="proxyUrl"
+              class="input font-mono text-sm"
+              :class="errors.proxy_url ? 'input-error' : ''"
+              autocomplete="off"
+              spellcheck="false"
+              data-testid="proxy-url"
+              placeholder="socks5://user:pass@host:port"
+            />
+            <p v-if="proxyUrlHint && !errors.proxy_url" class="mt-1 text-xs text-amber-600 dark:text-amber-400" data-testid="proxy-url-hint">{{ proxyUrlHint }}</p>
+          </template>
         </SField>
       </div>
     </section>
@@ -657,7 +737,7 @@ async function save() {
 
     <div class="flex items-center justify-end gap-2 border-t border-gray-100 pt-4 dark:border-dark-700">
       <SButton v-if="!editing" class="mr-auto" variant="ghost" @click="emit('back')">← {{ t('common.previous') }}</SButton>
-      <SButton v-if="editing && auth.has('account:test')" class="mr-auto" @click="emit('test', account!)">{{ t('accounts.testConnection') }}</SButton>
+      <SButton v-if="canTestAccount" class="mr-auto" @click="emit('test', account!)">{{ t('accounts.testConnection') }}</SButton>
       <SButton @click="emit('cancel')">{{ t('common.cancel') }}</SButton>
       <SButton type="submit" variant="primary" :loading="saving">{{ t('common.save') }}</SButton>
     </div>

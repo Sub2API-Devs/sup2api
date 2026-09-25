@@ -1,8 +1,8 @@
 // Mock handlers: users, roles, permissions, API keys, groups, proxies, nodes,
 // publishers. (Accounts and account types live in their own mock module.)
 import { fail, needStepUp, nextId, noContent, now, on, paginate, type MockRequest } from './router'
-import { ALL_PERMISSIONS } from './core'
-import { groupAccountCount, groupPlatforms } from './accounts'
+import { ALL_PERMISSIONS, caller, filterOwned, hasPerm, inScope, ownerScope, readonlyUser, userEmail, vendorUser } from './core'
+import { groupAccountCount, groupPlatforms, proxyAccountCount } from './accounts'
 
 type L = { en: string; zh: string }
 const L = (en: string, zh: string): L => ({ en, zh })
@@ -48,9 +48,14 @@ const MODULES: ModuleDef[] = [
   { module: 'account', label: L('Accounts', '账号'), source: 'core', status: 'active', permissions: [
     { key: 'account:read', label: L('View', '查看') }, { key: 'account:create', label: L('Create', '新建') },
     { key: 'account:update', label: L('Edit', '编辑') }, { key: 'account:delete', label: L('Delete', '删除'), sensitive: true },
-    { key: 'account:test', label: L('Test', '测试') }, { key: 'account:credential:view', label: L('View credentials', '查看凭证'), sensitive: true }] },
+    { key: 'account:test', label: L('Test', '测试') }, { key: 'account:credential:view', label: L('View credentials', '查看凭证'), sensitive: true },
+    { key: 'account:own:read', label: L('View own', '查看自己的') }, { key: 'account:own:create', label: L('Create own', '新建自己的') },
+    { key: 'account:own:update', label: L('Edit own', '编辑自己的') }, { key: 'account:own:delete', label: L('Delete own', '删除自己的') },
+    { key: 'account:own:test', label: L('Test own', '测试自己的') }, { key: 'account:own:credential:view', label: L('View own credentials', '查看自己的凭证'), sensitive: true },
+    { key: 'account:settings:custom', label: L('Custom restricted settings', '自定义受限设置') }] },
   { module: 'proxy', label: L('Proxies', '代理'), source: 'core', status: 'active', permissions: [
-    { key: 'proxy:read', label: L('View', '查看') }, { key: 'proxy:manage', label: L('Manage', '管理') }] },
+    { key: 'proxy:read', label: L('View', '查看') }, { key: 'proxy:manage', label: L('Manage', '管理') },
+    { key: 'proxy:own:read', label: L('View own', '查看自己的') }, { key: 'proxy:own:manage', label: L('Manage own', '管理自己的') }] },
   { module: 'price', label: L('Prices', '价格'), source: 'core', status: 'active', permissions: [
     { key: 'price:read', label: L('View', '查看') }, { key: 'price:manage', label: L('Manage', '管理') }] },
   { module: 'balance', label: L('Balance', '余额'), source: 'core', status: 'active', permissions: [
@@ -108,7 +113,10 @@ const roles: MockRole[] = [
   { id: 1, key: 'super_admin', name: L('Super admin', '超级管理员'), description: 'Has every permission', builtin: true, superuser: true, permission_keys: [], created_at: now(-86400 * 90), updated_at: now(-86400 * 90) },
   { id: 2, key: 'admin', name: L('Administrator', '管理员'), description: 'All core permissions', builtin: true, superuser: false, permission_keys: [...CORE_KEYS], created_at: now(-86400 * 90), updated_at: now(-86400 * 10) },
   { id: 3, key: 'user', name: L('User', '普通用户'), description: 'Own keys, usage and balance', builtin: true, superuser: false, permission_keys: ['apikey:self:manage', 'balance:self:read', 'usage:self:read', 'gateway:use'], created_at: now(-86400 * 90), updated_at: now(-86400 * 90) },
-  { id: 4, key: 'operator', name: L('Operator', '运营'), description: 'Day-to-day account operations', builtin: false, superuser: false, permission_keys: ['account:read', 'account:create', 'account:update', 'account:test', 'group:read', 'proxy:read', 'proxy:manage', 'plugin.anthropic:model_catalog:read', 'plugin.guard:stats:read', 'plugin.foo:dashboard:read'], created_at: now(-86400 * 20), updated_at: now(-86400 * 2) }
+  { id: 4, key: 'operator', name: L('Operator', '运营'), description: 'Day-to-day account operations', builtin: false, superuser: false, permission_keys: ['account:read', 'account:create', 'account:update', 'account:test', 'group:read', 'proxy:read', 'proxy:manage', 'plugin.anthropic:model_catalog:read', 'plugin.guard:stats:read', 'plugin.foo:dashboard:read'], created_at: now(-86400 * 20), updated_at: now(-86400 * 2) },
+  // CONTRACTS §21.1 typical roles: vendor (own-level only, no settings:custom) and read-only.
+  { id: 5, key: 'vendor', name: L('Vendor', '供应商'), description: 'Maintains only the accounts and proxies it created', builtin: false, superuser: false, permission_keys: [...vendorUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) },
+  { id: 6, key: 'readonly', name: L('Read only', '只读'), description: 'Sees every account and proxy, changes nothing', builtin: false, superuser: false, permission_keys: [...readonlyUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) }
 ]
 
 function roleOut(r: MockRole) {
@@ -257,7 +265,9 @@ const users: MockUser[] = [
   { id: 2, email: 'ops@example.com', display_name: '张三', status: 'active', max_concurrency: 10, roles: ['operator', 'user'], group_ids: [1], balance: '85.50000000', last_login_at: now(-3600 * 5), created_at: now(-86400 * 40), updated_at: now(-86400 * 3) },
   { id: 3, email: 'li.si@example.com', display_name: '李四', status: 'active', max_concurrency: 5, roles: ['operator'], group_ids: [1, 2], balance: '3.21000000', last_login_at: now(-86400 * 2), created_at: now(-86400 * 20), updated_at: now(-86400 * 2) },
   { id: 4, email: 'dev@acme.io', display_name: 'Acme Dev', status: 'active', max_concurrency: 3, roles: ['user'], group_ids: [2], balance: '250.00000000', last_login_at: now(-600), created_at: now(-86400 * 10), updated_at: now(-86400) },
-  { id: 5, email: 'old@example.com', display_name: 'Former user', status: 'disabled', max_concurrency: 1, roles: ['user'], group_ids: [], balance: '0.00000000', last_login_at: null, created_at: now(-86400 * 80), updated_at: now(-86400 * 30) }
+  { id: 5, email: 'old@example.com', display_name: 'Former user', status: 'disabled', max_concurrency: 1, roles: ['user'], group_ids: [], balance: '0.00000000', last_login_at: null, created_at: now(-86400 * 80), updated_at: now(-86400 * 30) },
+  { id: vendorUser.id, email: vendorUser.email, display_name: vendorUser.display_name, status: 'active', max_concurrency: 5, roles: ['vendor'], group_ids: [1], balance: '0.00000000', last_login_at: now(-7200), created_at: now(-86400 * 5), updated_at: now(-86400) },
+  { id: readonlyUser.id, email: readonlyUser.email, display_name: readonlyUser.display_name, status: 'active', max_concurrency: 1, roles: ['readonly'], group_ids: [], balance: '0.00000000', last_login_at: now(-86400), created_at: now(-86400 * 5), updated_at: now(-86400) }
 ]
 for (let i = 0; i < 18; i++) {
   users.push({ id: 100 + i, email: `user${i + 1}@example.org`, display_name: `User ${i + 1}`, status: i % 7 === 6 ? 'disabled' : 'active', max_concurrency: 3, roles: ['user'], group_ids: [1], balance: (Math.random() * 50).toFixed(8), last_login_at: i % 3 ? now(-3600 * i) : null, created_at: now(-86400 * (i + 1)), updated_at: now(-3600 * i) })
@@ -424,19 +434,21 @@ interface MockProxy {
   username: string
   password: string
   status: string
+  /** Owner (CONTRACTS §21.2); null for rows created before ownership existed. */
+  created_by: number | null
   created_at: string
 }
 
 const proxies: MockProxy[] = [
-  { id: 1, name: 'us-west-1', protocol: 'http', host: '10.0.1.20', port: 3128, username: '', password: '', status: 'active', created_at: now(-86400 * 40) },
-  { id: 2, name: 'jp-residential', protocol: 'socks5', host: 'jp.proxy.example.net', port: 1080, username: 'acme', password: 's3cret', status: 'active', created_at: now(-86400 * 15) },
-  { id: 3, name: 'eu-backup', protocol: 'https', host: 'eu.proxy.example.net', port: 443, username: 'backup', password: 'pw', status: 'disabled', created_at: now(-86400 * 3) }
+  { id: 1, name: 'us-west-1', protocol: 'http', host: '10.0.1.20', port: 3128, username: '', password: '', status: 'active', created_by: 1, created_at: now(-86400 * 40) },
+  { id: 2, name: 'jp-residential', protocol: 'socks5', host: 'jp.proxy.example.net', port: 1080, username: 'acme', password: 's3cret', status: 'active', created_by: vendorUser.id, created_at: now(-86400 * 15) },
+  { id: 3, name: 'eu-backup', protocol: 'https', host: 'eu.proxy.example.net', port: 443, username: 'backup', password: 'pw', status: 'disabled', created_by: null, created_at: now(-86400 * 3) }
 ]
 
 // CONTRACTS §15.4: the password is never returned, only has_password.
 function proxyOut(p: MockProxy) {
   const { password, ...rest } = p
-  return { ...rest, has_password: !!password }
+  return { ...rest, has_password: !!password, created_by_email: userEmail(p.created_by), account_count: proxyAccountCount(p.id) }
 }
 
 function validateProxy(b: any, partial: boolean) {
@@ -447,18 +459,117 @@ function validateProxy(b: any, partial: boolean) {
   return null
 }
 
-on('GET', '/proxies', (req) => paginate(proxies.map(proxyOut), req.query))
+/** Owner scope of the caller for proxies: proxy:read / proxy:own:read (read) or proxy:manage / proxy:own:manage (manage). */
+function proxyScope(req: MockRequest, action: 'read' | 'manage') {
+  const who = caller(req)
+  return { who, scope: ownerScope(who, `proxy:${action}`, `proxy:own:${action}`) }
+}
+
+/** The proxy of :id within the caller's manage scope: 403 without proxy:manage / proxy:own:manage, 404 when missing or not the caller's. */
+function managedProxy(req: MockRequest): { p: MockProxy } | { __status: number; body: unknown } {
+  const { who, scope } = proxyScope(req, 'manage')
+  if (!scope) return fail(403, 'permission_denied', 'proxy:manage or proxy:own:manage is required', { permission: 'proxy:own:manage' })
+  const p = proxies.find((x) => x.id === Number(req.params.id))
+  return p && inScope(scope, who, p) ? { p } : fail(404, 'not_found', 'proxy not found')
+}
+
+// CONTRACTS §21.4: proxy.ParseURL. scheme://user:pass@host:port, scheme
+// http / https / socks5 / socks5h (-> socks5); no path, query or fragment.
+interface ProxySpec {
+  protocol: MockProxy['protocol']
+  host: string
+  port: number
+  username: string
+  password: string
+}
+const PROXY_SCHEMES: Record<string, MockProxy['protocol']> = { http: 'http', https: 'https', socks5: 'socks5', socks5h: 'socks5' }
+
+function parseProxyURL(raw: string): ProxySpec | null {
+  const s = String(raw).trim()
+  const m = /^([a-z0-9+.-]+):\/\//i.exec(s)
+  const protocol = m ? PROXY_SCHEMES[m[1].toLowerCase()] : undefined
+  if (!m || !protocol) return null
+  let u: URL
+  try {
+    u = new URL('proxy-url://' + s.slice(m[0].length))
+  } catch {
+    return null
+  }
+  if ((u.pathname && u.pathname !== '/') || u.search || u.hash) return null
+  const host = u.hostname.replace(/^\[(.*)\]$/, '$1').toLowerCase()
+  const port = Number(u.port)
+  if (!host || !u.port || !Number.isInteger(port) || port < 1 || port > 65535) return null
+  const dec = (x: string) => {
+    try {
+      return decodeURIComponent(x)
+    } catch {
+      return x
+    }
+  }
+  return { protocol, host, port, username: dec(u.username), password: dec(u.password) }
+}
+
+/** 400 invalid on a bad proxy_url (the message never echoes the string: it may hold a password); null when fine. */
+export function validateProxyURL(raw: string) {
+  return parseProxyURL(raw) ? null : fail(400, 'invalid_argument', 'invalid proxy_url', { fields: [{ field: 'proxy_url', code: 'invalid', message: 'Expected scheme://user:pass@host:port with http, https, socks5 or socks5h' }] })
+}
+
+/**
+ * CONTRACTS §21.4 find-or-create for POST/PATCH /accounts proxy_url: needs
+ * proxy:manage or proxy:own:manage; matches protocol/host/port/username/
+ * password among the proxies the caller can see (skipping disabled ones) or
+ * creates one owned by the caller.
+ */
+export function resolveProxyURL(req: MockRequest, raw: string): { id: number; created: boolean } | { __status: number; body: unknown } {
+  const who = caller(req)
+  if (!hasPerm(who, ['proxy:manage', 'proxy:own:manage'])) {
+    return fail(403, 'permission_denied', 'proxy:own:manage is required to attach a proxy by URL', { permission: 'proxy:own:manage' })
+  }
+  const spec = parseProxyURL(raw)
+  if (!spec) return validateProxyURL(raw)!
+  const visible = hasPerm(who, 'proxy:read') ? 'all' : 'own'
+  const hit = proxies
+    .filter((p) => inScope(visible, who, p) && p.status !== 'disabled')
+    .filter((p) => p.protocol === spec.protocol && p.host.toLowerCase() === spec.host && p.port === spec.port && p.username === spec.username && p.password === spec.password)
+    .sort((a, b) => a.id - b.id)[0]
+  if (hit) return { id: hit.id, created: false }
+  const p: MockProxy = {
+    id: nextId(),
+    name: `${spec.protocol}://${spec.host}:${spec.port}`.slice(0, 100),
+    protocol: spec.protocol,
+    host: spec.host,
+    port: spec.port,
+    username: spec.username,
+    password: spec.password,
+    status: 'active',
+    created_by: who.id,
+    created_at: now()
+  }
+  proxies.push(p)
+  return { id: p.id, created: true }
+}
+
+on('GET', '/proxies', (req) => {
+  const { who, scope } = proxyScope(req, 'read')
+  return paginate(filterOwned(proxies, scope, who, req.query).map(proxyOut), req.query)
+})
+on('GET', '/proxies/:id', (req) => {
+  const { who, scope } = proxyScope(req, 'read')
+  const p = proxies.find((x) => x.id === Number(req.params.id))
+  return p && inScope(scope, who, p) ? proxyOut(p) : fail(404, 'not_found', 'proxy not found')
+})
 on('POST', '/proxies', (req) => {
   const b = req.body || {}
   const err = validateProxy(b, false)
   if (err) return err
-  const p: MockProxy = { id: nextId(), name: b.name, protocol: b.protocol, host: b.host, port: Number(b.port), username: b.username || '', password: b.password || '', status: 'active', created_at: now() }
+  const p: MockProxy = { id: nextId(), name: b.name, protocol: b.protocol, host: b.host, port: Number(b.port), username: b.username || '', password: b.password || '', status: 'active', created_by: caller(req).id, created_at: now() }
   proxies.push(p)
   return proxyOut(p)
 })
 on('PATCH', '/proxies/:id', (req) => {
-  const p = proxies.find((x) => x.id === Number(req.params.id))
-  if (!p) return fail(404, 'not_found', 'proxy not found')
+  const r = managedProxy(req)
+  if (!('p' in r)) return r
+  const p = r.p
   const b = req.body || {}
   const err = validateProxy(b, true)
   if (err) return err
@@ -469,14 +580,19 @@ on('PATCH', '/proxies/:id', (req) => {
   return proxyOut(p)
 })
 on('DELETE', '/proxies/:id', (req) => {
-  const p = proxies.find((x) => x.id === Number(req.params.id))
-  if (!p) return fail(404, 'not_found', 'proxy not found')
+  const r = managedProxy(req)
+  if (!('p' in r)) return r
+  const p = r.p
+  // Still referenced: 409 with the count over every account (§21.2), whoever owns them.
+  const n = proxyAccountCount(p.id)
+  if (n) return fail(409, 'conflict', 'proxy is used by accounts', { account_count: n })
   proxies.splice(proxies.indexOf(p), 1)
   return noContent()
 })
 on('POST', '/proxies/:id/test', async (req) => {
-  const p = proxies.find((x) => x.id === Number(req.params.id))
-  if (!p) return fail(404, 'not_found', 'proxy not found')
+  const r = managedProxy(req)
+  if (!('p' in r)) return r
+  const p = r.p
   await new Promise((r) => setTimeout(r, 400 + Math.random() * 600))
   if (p.status !== 'active' || p.host.startsWith('eu.')) return { ok: false, latency_ms: 5000, message: 'dial tcp: i/o timeout' }
   return { ok: true, latency_ms: Math.round(80 + Math.random() * 300), ip: p.host.startsWith('jp') ? '203.0.113.' + Math.floor(Math.random() * 250) : '198.51.100.7', message: 'HTTP 200 from https://api.ipify.org' }

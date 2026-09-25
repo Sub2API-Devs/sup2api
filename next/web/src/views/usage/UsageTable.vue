@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { SBadge, STable, type TableColumn } from '@sub2api/ui'
 import { formatMoney, formatNumber, formatTime } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
+import { ACCOUNT_PAGE_PERMS } from '@/composables/useOwnership'
 import { useAccountTypes } from '@/views/accounts/accountTypes'
 import UsageDetail from './UsageDetail.vue'
 import { billingTone, blockingHook, isBlocked, isConverted, type UsageRow } from './usage'
@@ -26,8 +27,8 @@ const emit = defineEmits<{ (e: 'filter-client-request-id', id: string): void }>(
 const { t } = useI18n()
 const auth = useAuthStore()
 const accountTypes = useAccountTypes()
-// Labels need account:read; without it the raw type id is shown.
-if (auth.has('account:read')) accountTypes.load()
+// Labels need GET /account-types (account:read or an own-level key, CONTRACTS §21.2); without it the raw type id is shown.
+if (auth.has(ACCOUNT_PAGE_PERMS)) accountTypes.load()
 
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [{ key: 'created_at', label: t('common.time'), width: '110px' }]

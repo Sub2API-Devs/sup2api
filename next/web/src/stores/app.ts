@@ -4,6 +4,7 @@ import { api } from '@sub2api/host'
 import type { MenuSection } from '@/api/types'
 import { useAuthStore } from './auth'
 import { usePluginStore } from './plugins'
+import { ACCOUNT_PAGE_PERMS, PROXY_PAGE_PERMS } from '@/composables/useOwnership'
 
 export type Theme = 'light' | 'dark'
 
@@ -38,8 +39,8 @@ const CORE_MENU: Array<{ key: string; items: Array<NavItem & { perm?: string | s
     key: 'gateway',
     items: [
       { id: 'groups', labelKey: 'nav.items.groups', icon: 'group', path: '/groups', perm: 'group:read' },
-      { id: 'accounts', labelKey: 'nav.items.accounts', icon: 'account', path: '/accounts', perm: 'account:read' },
-      { id: 'proxies', labelKey: 'nav.items.proxies', icon: 'proxy', path: '/proxies', perm: 'proxy:read' },
+      { id: 'accounts', labelKey: 'nav.items.accounts', icon: 'account', path: '/accounts', perm: ACCOUNT_PAGE_PERMS },
+      { id: 'proxies', labelKey: 'nav.items.proxies', icon: 'proxy', path: '/proxies', perm: PROXY_PAGE_PERMS },
       { id: 'prices', labelKey: 'nav.items.prices', icon: 'price', path: '/prices', perm: 'price:read' },
       { id: 'usage', labelKey: 'nav.items.usage', icon: 'usage', path: '/usage', perm: 'usage:all:read' },
       { id: 'sticky', labelKey: 'nav.items.sticky', icon: 'sticky', path: '/sticky', perm: 'sticky:read' }
@@ -52,7 +53,7 @@ const CORE_MENU: Array<{ key: string; items: Array<NavItem & { perm?: string | s
       { id: 'users', labelKey: 'nav.items.users', icon: 'user', path: '/users', perm: 'user:read' },
       { id: 'roles', labelKey: 'nav.items.roles', icon: 'role', path: '/roles', perm: 'role:read' },
       { id: 'api-keys', labelKey: 'nav.items.apiKeysAll', icon: 'key', path: '/api-keys', perm: 'apikey:all:read' },
-      { id: 'platforms', labelKey: 'nav.items.platforms', icon: 'globe', path: '/platforms', perm: 'account:read' },
+      { id: 'platforms', labelKey: 'nav.items.platforms', icon: 'globe', path: '/platforms', perm: ACCOUNT_PAGE_PERMS },
       { id: 'plugins', labelKey: 'nav.items.plugins', icon: 'plugin', path: '/plugins', perm: 'plugin:read' },
       { id: 'market', labelKey: 'nav.items.market', icon: 'market', path: '/market', perm: 'plugin:market:read' },
       { id: 'publishers', labelKey: 'nav.items.publishers', icon: 'publisher', path: '/publishers', perm: 'publisher:read' },
@@ -125,11 +126,11 @@ export const useAppStore = defineStore('app', () => {
  * Core pages newer than the server menu: added client-side (per permission)
  * when GET /me/menus does not list them yet.
  */
-const CLIENT_ITEMS: Array<{ section: string; before?: string; item: NavItem & { perm: string } }> = [
-  { section: 'system', before: '/plugins', item: { id: 'platforms', labelKey: 'nav.items.platforms', icon: 'globe', path: '/platforms', perm: 'account:read' } }
+const CLIENT_ITEMS: Array<{ section: string; before?: string; item: NavItem & { perm: string | string[] } }> = [
+  { section: 'system', before: '/plugins', item: { id: 'platforms', labelKey: 'nav.items.platforms', icon: 'globe', path: '/platforms', perm: ACCOUNT_PAGE_PERMS } }
 ]
 
-function ensureClientItems(sections: NavSection[], has: (perm: string) => boolean): NavSection[] {
+function ensureClientItems(sections: NavSection[], has: (perm: string | string[]) => boolean): NavSection[] {
   for (const { section, before, item } of CLIENT_ITEMS) {
     if (!has(item.perm)) continue
     if (sections.some((s) => s.items.some((i) => i.path === item.path))) continue

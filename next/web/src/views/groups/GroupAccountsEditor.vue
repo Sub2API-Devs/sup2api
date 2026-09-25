@@ -5,6 +5,7 @@ import { api } from '@sub2api/host'
 import { SBadge, SSpinner } from '@sub2api/ui'
 import type { Account } from '@/api/types'
 import { lt } from '@/i18n'
+import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { typeKey, useAccountTypes } from '@/views/accounts/accountTypes'
 
 // Accounts of a group, of any account type (ARCHITECTURE §6.6: a group can
@@ -14,6 +15,9 @@ const props = defineProps<{ groupId: number | null }>()
 const { t } = useI18n()
 const accountTypes = useAccountTypes()
 accountTypes.load()
+const own = useOwnership()
+/** Membership is a PATCH of the account: all-level key, or own-level key on the caller's accounts (CONTRACTS §21). */
+const editable = (a: Account) => own.can(a, ACCOUNT_KEYS.update)
 
 const accounts = ref<Account[]>([])
 const selected = ref(new Set<number>())
@@ -95,6 +99,7 @@ function toggle(id: number, on: boolean) {
 function setVisible(on: boolean) {
   const s = new Set(selected.value)
   for (const a of rows.value) {
+    if (!editable(a)) continue
     if (on) s.add(a.id)
     else s.delete(a.id)
   }
@@ -158,9 +163,11 @@ defineExpose({ save, dirty })
         v-for="a in rows"
         v-else
         :key="a.id"
-        class="flex cursor-pointer items-center gap-3 border-b border-gray-100 px-3 py-2 text-sm last:border-b-0 hover:bg-gray-50 dark:border-dark-700 dark:hover:bg-dark-800"
+        class="flex items-center gap-3 border-b border-gray-100 px-3 py-2 text-sm last:border-b-0 dark:border-dark-700"
+        :class="editable(a) ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-800' : 'cursor-not-allowed opacity-60'"
+        :title="editable(a) ? '' : t('groups.accounts.notEditable')"
       >
-        <input type="checkbox" class="checkbox" :checked="selected.has(a.id)" @change="toggle(a.id, ($event.target as HTMLInputElement).checked)" />
+        <input type="checkbox" class="checkbox" :checked="selected.has(a.id)" :disabled="!editable(a)" @change="toggle(a.id, ($event.target as HTMLInputElement).checked)" />
         <span class="min-w-0 flex-1 truncate font-medium">{{ a.name }}</span>
         <span class="w-44 shrink-0 text-right">
           <span class="block truncate text-xs">{{ accountTypes.typeLabel(a.plugin_key, a.type, a.type_label) }}</span>

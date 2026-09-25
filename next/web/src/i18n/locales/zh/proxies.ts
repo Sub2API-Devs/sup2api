@@ -19,5 +19,16 @@ export default {
   testResult: '最近测试',
   ok: '正常',
   failed: '失败',
-  exitIp: '出口 IP'
+  exitIp: '出口 IP',
+  createdBy: '创建人',
+  pasteUrl: '粘贴代理串自动填充',
+  pasteUrlHint: '如 socks5://user:pass@host:port，解析后填入下方各字段（socks5h 记为 socks5）',
+  pasteFill: '自动填充',
+  pasteError: {
+    scheme: '协议只能是 http、https、socks5 或 socks5h',
+    host: '缺少主机',
+    port: '必须带端口（1–65535）',
+    extra: '代理串不能带路径、查询参数或片段',
+    invalid: '无法解析代理串'
+  }
 }

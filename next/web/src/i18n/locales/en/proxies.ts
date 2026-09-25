@@ -19,5 +19,16 @@ export default {
   testResult: 'Last test',
   ok: 'OK',
   failed: 'Failed',
-  exitIp: 'Exit IP'
+  exitIp: 'Exit IP',
+  createdBy: 'Created by',
+  pasteUrl: 'Paste a proxy URL to fill the form',
+  pasteUrlHint: 'e.g. socks5://user:pass@host:port; parsed into the fields below (socks5h becomes socks5)',
+  pasteFill: 'Fill',
+  pasteError: {
+    scheme: 'The scheme must be http, https, socks5 or socks5h',
+    host: 'Missing host',
+    port: 'A port (1–65535) is required',
+    extra: 'A proxy URL cannot have a path, query or fragment',
+    invalid: 'Cannot parse the proxy URL'
+  }
 }

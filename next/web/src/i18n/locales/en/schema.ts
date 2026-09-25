@@ -2,6 +2,7 @@ export default {
   noProxy: 'No proxy',
   secretKeep: 'A value is stored. Leave empty to keep it.',
   presets: 'Presets',
+  setByAdmin: 'Set by an administrator',
   mappingFrom: 'Requested model',
   mappingTo: 'Upstream model',
   invalidJSON: 'Invalid JSON',

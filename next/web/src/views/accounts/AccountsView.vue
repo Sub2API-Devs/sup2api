@@ -6,6 +6,7 @@ import { SBadge, SButton, SDropdown, SIcon, SModal, SPageHeader, SPagination, SS
 import type { Account, AccountTestResult, AccountType } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
+import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { useAuthStore } from '@/stores/auth'
 import { usePluginStore } from '@/stores/plugins'
 import { errorMessage, notifyError } from '@/utils/errors'
@@ -20,11 +21,29 @@ import AccountEditor from './AccountEditor.vue'
 const { t } = useI18n()
 const auth = useAuthStore()
 const plugins = usePluginStore()
+const own = useOwnership()
 const accountTypes = useAccountTypes()
 accountTypes.load()
 const { groups } = useGroupsLookup()
 
-const list = useList<Account>('/accounts', { plugin_key: '', type: '', group_id: '', status: '', model: '', q: '' })
+// Ownership (CONTRACTS §21): all-level keys see every account, own-level keys
+// only the caller's (the server filters; row actions follow the same rule).
+const readScope = computed(() => own.scopeOf(ACCOUNT_KEYS.read))
+const showOwner = computed(() => readScope.value === 'all')
+const canCreate = computed(() => auth.has([...ACCOUNT_KEYS.create]))
+const canUpdate = (a: Account) => own.can(a, ACCOUNT_KEYS.update)
+const canTest = (a: Account) => own.can(a, ACCOUNT_KEYS.test)
+const canDelete = (a: Account) => own.can(a, ACCOUNT_KEYS.delete)
+const canReveal = (a: Account) => own.can(a, ACCOUNT_KEYS.reveal)
+
+// `mine=true` works at both levels; `created_by=<id>` only at the all level (ignored otherwise).
+const list = useList<Account>('/accounts', { plugin_key: '', type: '', group_id: '', status: '', model: '', q: '', mine: '', created_by: '' })
+const onlyMine = computed({
+  get: () => list.filters.mine === 'true',
+  set: (v: boolean) => {
+    list.filters.mine = v ? 'true' : ''
+  }
+})
 
 // One select drives both ?plugin_key= and ?type= (account type identity).
 const typeFilter = computed({
@@ -41,6 +60,7 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'name', label: t('common.name') },
   { key: 'type', label: t('accounts.type') },
   { key: 'groups', label: t('accounts.groups') },
+  ...(showOwner.value ? [{ key: 'created_by', label: t('accounts.createdBy') }] : []),
   { key: 'status', label: t('common.status') },
   { key: 'priority', label: t('accounts.scheduling'), align: 'right' },
   { key: 'concurrency', label: t('accounts.concurrency'), align: 'right' },
@@ -256,8 +276,8 @@ async function remove(a: Account) {
 function actionsFor(a: Account) {
   return [
     { key: 'detail', label: t('common.detail') },
-    { key: 'reveal', label: t('accounts.revealCredentials'), hidden: !auth.has('account:credential:view') || a.orphaned },
-    { key: 'delete', label: t('common.delete'), danger: true, hidden: !auth.has('account:delete') }
+    { key: 'reveal', label: t('accounts.revealCredentials'), hidden: !canReveal(a) || a.orphaned },
+    { key: 'delete', label: t('common.delete'), danger: true, hidden: !canDelete(a) }
   ]
 }
 
@@ -276,7 +296,7 @@ const statusOptions = ['active', 'disabled', 'error']
       <template #actions>
         <SSwitch v-model="autoRefresh" :label="t('accounts.autoRefresh')" />
         <SButton @click="list.reload()"><SIcon name="refresh" class="h-4 w-4" /></SButton>
-        <SButton v-permission="'account:create'" variant="primary" @click="openCreate"><SIcon name="plus" class="h-4 w-4" />{{ t('accounts.new') }}</SButton>
+        <SButton v-if="canCreate" variant="primary" data-testid="account-new" @click="openCreate"><SIcon name="plus" class="h-4 w-4" />{{ t('accounts.new') }}</SButton>
       </template>
       <template #filters>
         <select v-model="typeFilter" class="input !w-48">
@@ -298,6 +318,15 @@ const statusOptions = ['active', 'disabled', 'error']
           <input v-model="list.filters.q" class="input !pl-9" :placeholder="t('common.searchPlaceholder')" />
         </div>
         <input v-model="list.filters.model" class="input !w-52 font-mono text-sm" data-testid="model-filter" :placeholder="t('accounts.modelFilter')" />
+        <input
+          v-if="showOwner"
+          v-model="list.filters.created_by"
+          class="input !w-32"
+          inputmode="numeric"
+          data-testid="created-by-filter"
+          :placeholder="t('common.createdById')"
+        />
+        <SSwitch v-model="onlyMine" :label="t('common.onlyMine')" data-testid="only-mine" />
       </template>
     </SPageHeader>
 
@@ -312,6 +341,11 @@ const statusOptions = ['active', 'disabled', 'error']
         <SBadge v-if="row.orphaned" tone="gray" class="ml-1">{{ t('accounts.status.orphaned') }}</SBadge>
       </template>
       <template #cell-groups="{ row }">{{ groupNames(row.group_ids, row.groups) }}</template>
+      <template #cell-created_by="{ row }">
+        <span v-if="row.created_by_email" class="text-xs" :title="row.created_by ? `#${row.created_by}` : ''">{{ row.created_by_email }}</span>
+        <span v-else-if="row.created_by" class="text-xs muted">#{{ row.created_by }}</span>
+        <span v-else class="muted">-</span>
+      </template>
       <template #cell-status="{ row }">
         <SBadge :tone="statusOf(row).tone" dot>{{ statusOf(row).label }}</SBadge>
         <div v-if="statusOf(row).detail" class="mt-0.5 max-w-[16rem] truncate text-xs text-gray-500 dark:text-dark-400" :title="statusOf(row).detail">
@@ -340,13 +374,13 @@ const statusOptions = ['active', 'disabled', 'error']
       <template #cell-actions="{ row }">
         <div class="flex items-center justify-end gap-1">
           <SSwitch
-            v-if="auth.has('account:update') && !row.orphaned"
+            v-if="canUpdate(row) && !row.orphaned"
             :model-value="row.schedulable"
             :title="t('accounts.schedulable')"
             @update:model-value="toggleSchedulable(row, $event)"
           />
-          <SButton v-if="auth.has('account:test') && !row.orphaned" size="sm" variant="ghost" @click="openTest(row)">{{ t('common.test') }}</SButton>
-          <SButton v-if="auth.has('account:update')" size="sm" variant="ghost" @click="openEdit(row)">{{ t('common.edit') }}</SButton>
+          <SButton v-if="canTest(row) && !row.orphaned" size="sm" variant="ghost" @click="openTest(row)">{{ t('common.test') }}</SButton>
+          <SButton v-if="canUpdate(row)" size="sm" variant="ghost" @click="openEdit(row)">{{ t('common.edit') }}</SButton>
           <SDropdown :actions="actionsFor(row)" @select="onAction(row, $event)" />
         </div>
       </template>
@@ -468,6 +502,10 @@ const statusOptions = ['active', 'disabled', 'error']
             <dd>{{ detail.schedulable ? t('common.yes') : t('common.no') }}</dd>
             <dt>{{ t('accounts.lastUsed') }}</dt>
             <dd>{{ formatDateTime(detail.last_used_at) }}</dd>
+            <template v-if="showOwner">
+              <dt>{{ t('accounts.createdBy') }}</dt>
+              <dd>{{ detail.created_by_email || (detail.created_by ? `#${detail.created_by}` : '-') }}</dd>
+            </template>
             <dt>{{ t('common.createdAt') }}</dt>
             <dd>{{ formatDateTime(detail.created_at) }}</dd>
           </dl>

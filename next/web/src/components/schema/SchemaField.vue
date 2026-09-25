@@ -139,6 +139,19 @@ function onJSON(e: Event) {
 
 const presets = computed<string[]>(() => uiOptions.value.presets || props.schema.examples || [])
 const listId = `s2a-presets-${Math.random().toString(36).slice(2)}`
+
+// url-presets with schema.enum (CONTRACTS §21.3): the server restricted the
+// field to the allowed values (caller lacks account:settings:custom), so only
+// those can be chosen. A stored value outside the list (set by an admin) stays
+// selectable so editing other fields does not drop it.
+const urlEnum = computed<string[] | null>(() => (Array.isArray(props.schema.enum) ? props.schema.enum.map(String) : null))
+const urlEnumOptions = computed<string[]>(() => {
+  const list = urlEnum.value || []
+  const cur = typeof props.modelValue === 'string' ? props.modelValue : ''
+  return cur && !list.includes(cur) ? [cur, ...list] : list
+})
+const restrictedHint = computed(() => (widget.value === 'url-presets' && readOnly.value ? t('schema.setByAdmin') : ''))
+const fieldHint = computed(() => (restrictedHint.value ? (help.value ? `${restrictedHint.value} · ${help.value}` : restrictedHint.value) : help.value))
 </script>
 
 <template>
@@ -170,7 +183,7 @@ const listId = `s2a-presets-${Math.random().toString(36).slice(2)}`
     <p v-else-if="help" class="input-hint">{{ help }}</p>
   </div>
 
-  <SField v-else :label="bare ? undefined : label" :hint="help" :error="error || jsonError" :required="required">
+  <SField v-else :label="bare ? undefined : label" :hint="fieldHint" :error="error || jsonError" :required="required">
     <!-- secret -->
     <div v-if="widget === 'secret'" class="relative">
       <input
@@ -218,6 +231,20 @@ const listId = `s2a-presets-${Math.random().toString(36).slice(2)}`
       :disabled="readOnly"
       @input="onNumber"
     />
+
+    <!-- url-presets restricted to schema.enum: choose only (CONTRACTS §21.3) -->
+    <select
+      v-else-if="widget === 'url-presets' && urlEnum"
+      class="input"
+      :class="error ? 'input-error' : ''"
+      :value="modelValue ?? ''"
+      :disabled="readOnly"
+      data-testid="url-enum"
+      @change="set(($event.target as HTMLSelectElement).value || undefined)"
+    >
+      <option v-if="!urlEnumOptions.includes(String(modelValue ?? ''))" value="">{{ placeholder || '—' }}</option>
+      <option v-for="p in urlEnumOptions" :key="p" :value="p">{{ p }}</option>
+    </select>
 
     <div v-else-if="widget === 'url-presets'" class="flex gap-2">
       <input

@@ -1,4 +1,4 @@
-import { fail, now, on } from './router'
+import { fail, now, on, type MockRequest } from './router'
 
 // auth, me, menus
 
@@ -8,7 +8,10 @@ export const ALL_PERMISSIONS = [
   'apikey:self:manage', 'apikey:all:read', 'apikey:all:manage',
   'group:read', 'group:manage',
   'account:read', 'account:create', 'account:update', 'account:delete', 'account:test', 'account:credential:view',
-  'proxy:read', 'proxy:manage',
+  // CONTRACTS §21.1: own-level keys act on rows the caller created; settings:custom lifts the base_url guard.
+  'account:own:read', 'account:own:create', 'account:own:update', 'account:own:delete', 'account:own:test', 'account:own:credential:view',
+  'account:settings:custom',
+  'proxy:read', 'proxy:manage', 'proxy:own:read', 'proxy:own:manage',
   'price:read', 'price:manage',
   'balance:self:read', 'balance:all:read', 'balance:adjust',
   'usage:self:read', 'usage:all:read',
@@ -20,7 +23,16 @@ export const ALL_PERMISSIONS = [
   'plugin.anthropic:model_catalog:read'
 ]
 
-export const me = {
+export interface Identity {
+  id: number
+  email: string
+  display_name: string
+  roles: string[]
+  permissions: string[]
+  superuser: boolean
+}
+
+export const me: Identity = {
   id: 1,
   email: 'admin@example.com',
   display_name: 'Admin',
@@ -30,13 +42,81 @@ export const me = {
 }
 
 /** Sign in as user@example.com (password admin) to get the built-in "user" role. */
-const plainUser = {
+const plainUser: Identity = {
   id: 1,
   email: 'user@example.com',
   display_name: 'User',
   roles: ['user'],
   permissions: ['apikey:self:manage', 'balance:self:read', 'usage:self:read', 'gateway:use'],
   superuser: false
+}
+
+/**
+ * Sign in as vendor@example.com (password admin): the "vendor" role of
+ * CONTRACTS §21.1 (own-level account and proxy keys, no settings:custom).
+ * Sees and edits only the accounts / proxies it created.
+ */
+export const vendorUser: Identity = {
+  id: 6,
+  email: 'vendor@example.com',
+  display_name: 'Vendor',
+  roles: ['vendor'],
+  permissions: [
+    'account:own:read', 'account:own:create', 'account:own:update', 'account:own:delete', 'account:own:test', 'account:own:credential:view',
+    'proxy:own:read', 'proxy:own:manage',
+    'group:read', 'gateway:use'
+  ],
+  superuser: false
+}
+
+/** Sign in as readonly@example.com (password admin): sees every account and proxy, changes nothing, no credentials. */
+export const readonlyUser: Identity = {
+  id: 7,
+  email: 'readonly@example.com',
+  display_name: 'Read only',
+  roles: ['readonly'],
+  permissions: ['account:read', 'proxy:read', 'group:read', 'gateway:use'],
+  superuser: false
+}
+
+const identities = [me, plainUser, vendorUser, readonlyUser]
+
+/** Email of a (possibly deleted) user id, for created_by_email. */
+export function userEmail(id: number | null | undefined): string | null {
+  if (id == null) return null
+  return identities.find((u) => u.id === id)?.email ?? KNOWN_EMAILS[id] ?? null
+}
+const KNOWN_EMAILS: Record<number, string> = { 2: 'ops@example.com', 3: 'li.si@example.com', 5: 'old@example.com' }
+
+export function hasPerm(who: Identity, key: string | string[]): boolean {
+  if (who.superuser) return true
+  const list = Array.isArray(key) ? key : [key]
+  return list.some((k) => who.permissions.includes(k))
+}
+
+/**
+ * Owner scope of a caller (CONTRACTS §21.1, core.OwnerScope): `all` with the
+ * all-level key, `own` with only the own-level key, null with neither.
+ */
+export function ownerScope(who: Identity, allKey: string, ownKey: string): 'all' | 'own' | null {
+  if (hasPerm(who, allKey)) return 'all'
+  if (hasPerm(who, ownKey)) return 'own'
+  return null
+}
+
+/** Whether `row` (created_by) is reachable by the caller under the scope; null owners need the all level. */
+export function inScope(scope: 'all' | 'own' | null, who: Identity, row: { created_by?: number | null }): boolean {
+  if (scope === 'all') return true
+  if (scope === 'own') return row.created_by != null && row.created_by === who.id
+  return false
+}
+
+/** Applies the ?mine=true and ?created_by= list filters (the latter only at the all level). */
+export function filterOwned<T extends { created_by?: number | null }>(rows: T[], scope: 'all' | 'own' | null, who: Identity, q: Record<string, string>): T[] {
+  let out = rows.filter((r) => inScope(scope, who, r))
+  if (q.mine === 'true') out = out.filter((r) => r.created_by === who.id)
+  if (scope === 'all' && q.created_by) out = out.filter((r) => r.created_by === Number(q.created_by))
+  return out
 }
 
 // Sessions (CONTRACTS §14.2). Refresh tokens belong to a family created at
@@ -47,7 +127,7 @@ interface Family {
   current: string
   revoked: boolean
   seq: number
-  user: typeof me
+  user: Identity
 }
 const families = new Map<string, Family>()
 let familySeq = 0
@@ -59,16 +139,21 @@ function issue(fam: string) {
   return { access_token: `mock-access-${fam}-${f.seq}-${Date.now()}`, refresh_token: f.current, expires_in: 7200, user: f.user }
 }
 
-function newFamily(user: typeof me = me) {
+function newFamily(user: Identity = me) {
   const fam = `f${++familySeq}`
   families.set(fam, { current: '', revoked: false, seq: 0, user })
   return issue(fam)
 }
 
 /** The signed-in identity of a request (admin for tokens of unknown families). */
-function whoAmI(auth: string | undefined): typeof me {
+function whoAmI(auth: string | undefined): Identity {
   const m = /^Bearer\s+mock-access-(f\d+)-/i.exec(auth || '')
   return (m && families.get(m[1])?.user) || me
+}
+
+/** The signed-in identity of a mock request. */
+export function caller(req: MockRequest): Identity {
+  return whoAmI(req.headers.authorization)
 }
 
 /**
@@ -107,7 +192,7 @@ on('POST', '/auth/login', (req) => {
     return fail(401, 'unauthenticated', 'invalid email or password (mock password: admin)')
   }
   loginFailures.delete(email)
-  return newFamily(email === plainUser.email ? plainUser : me)
+  return newFamily(identities.find((u) => u.email === email) || me)
 })
 on('POST', '/auth/refresh', (req) => {
   const tok = String(req.body?.refresh_token || '')
@@ -136,7 +221,37 @@ on('POST', '/auth/step-up', (req) =>
 on('GET', '/me', (req) => whoAmI(req.headers.authorization))
 on('PUT', '/me/password', (req) => (req.body?.old_password === 'admin' ? {} : fail(400, 'invalid_argument', 'wrong password', { fields: [{ field: 'old_password', code: 'mismatch', message: 'Current password is wrong' }] })))
 
-on('GET', '/me/menus', () => [
+// Permission of each core menu path (CONTRACTS §21.2 for accounts / platforms / proxies); plugin items need their plugin permission.
+const MENU_PERMS: Record<string, string | string[]> = {
+  '/groups': 'group:read',
+  '/accounts': ['account:read', 'account:own:read', 'account:own:create'],
+  '/proxies': ['proxy:read', 'proxy:own:read', 'proxy:own:manage'],
+  '/prices': 'price:read',
+  '/usage': 'usage:all:read',
+  '/sticky': 'sticky:read',
+  '/ledger': 'balance:all:read',
+  '/users': 'user:read',
+  '/roles': 'role:read',
+  '/api-keys': 'apikey:all:read',
+  '/platforms': ['account:read', 'account:own:read', 'account:own:create'],
+  '/plugins': 'plugin:read',
+  '/market': 'plugin:market:read',
+  '/publishers': 'publisher:read',
+  '/nodes': 'node:read',
+  '/settings': ['settings:read', 'sticky:read'],
+  '/me/api-keys': 'apikey:self:manage',
+  '/me/usage': 'usage:self:read',
+  '/me/balance': 'balance:self:read',
+  '/p/anthropic/models': 'plugin.anthropic:model_catalog:read',
+  '/p/guard/dashboard': 'plugin.guard:stats:read'
+}
+
+on('GET', '/me/menus', (req) => {
+  const who = caller(req)
+  return MENUS.map((s) => ({ ...s, items: s.items.filter((i) => !MENU_PERMS[i.path] || hasPerm(who, MENU_PERMS[i.path])) })).filter((s) => s.items.length)
+})
+
+const MENUS = [
   { section: 'overview', items: [{ id: 'dashboard', label: { en: 'Overview', zh: '概览' }, icon: 'dashboard', path: '/dashboard' }] },
   {
     section: 'gateway',
@@ -178,6 +293,6 @@ on('GET', '/me/menus', () => [
       { id: 'guard.guard', label: { en: 'Request guard', zh: '请求守卫' }, icon: 'shield', path: '/p/guard/dashboard', plugin_key: 'guard' }
     ]
   }
-])
+]
 
 on('GET', '/me/balance', () => ({ balance: '12.34000000', updated_at: now() }))

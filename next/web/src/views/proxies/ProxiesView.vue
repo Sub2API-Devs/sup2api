@@ -13,6 +13,7 @@ import {
   SPagination,
   SSelect,
   SSpinner,
+  SSwitch,
   STable,
   confirm,
   toast,
@@ -22,14 +23,27 @@ import type { Proxy, ProxyTestResult } from '@/api/types'
 import { statusTone } from '@/api/admin'
 import { useList } from '@/composables/useList'
 import { useProxiesLookup } from '@/composables/lookups'
+import { PROXY_KEYS, useOwnership } from '@/composables/useOwnership'
 import { useAuthStore } from '@/stores/auth'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import { formatDateTime } from '@/utils/format'
+import { parseProxyURL } from '@/utils/proxyUrl'
 
 const { t } = useI18n()
 const auth = useAuthStore()
-const canManage = computed(() => auth.has('proxy:manage'))
-const list = useList<Proxy>('/proxies')
+const own = useOwnership()
+// Ownership (CONTRACTS §21): proxy:manage acts on every proxy, proxy:own:manage
+// only on the caller's; the list is already scoped by the server.
+const canCreate = computed(() => auth.has([...PROXY_KEYS.manage]))
+const canEditRow = (p: Proxy) => own.can(p, PROXY_KEYS.manage)
+const showOwner = computed(() => own.scopeOf(PROXY_KEYS.read) === 'all')
+const list = useList<Proxy>('/proxies', { mine: '', created_by: '' })
+const onlyMine = computed({
+  get: () => list.filters.mine === 'true',
+  set: (v: boolean) => {
+    list.filters.mine = v ? 'true' : ''
+  }
+})
 
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
@@ -38,10 +52,11 @@ const columns = computed<TableColumn[]>(() => {
     { key: 'address', label: t('proxies.address') },
     { key: 'auth', label: t('proxies.auth') },
     { key: 'status', label: t('common.status') },
-    { key: 'test', label: t('proxies.testResult') },
-    { key: 'created_at', label: t('common.createdAt') }
+    { key: 'test', label: t('proxies.testResult') }
   ]
-  if (canManage.value) cols.push({ key: 'actions', label: t('common.actions'), align: 'right' })
+  if (showOwner.value) cols.push({ key: 'created_by', label: t('proxies.createdBy') })
+  cols.push({ key: 'created_at', label: t('common.createdAt') })
+  if (canCreate.value) cols.push({ key: 'actions', label: t('common.actions'), align: 'right' })
   return cols
 })
 
@@ -106,6 +121,8 @@ function openCreate() {
   editing.value = null
   Object.assign(form, { name: '', protocol: 'http', host: '', port: 8080, username: '', password: '', clearPassword: false, status: 'active' })
   errors.value = {}
+  pasteUrl.value = ''
+  pasteError.value = ''
   open.value = true
 }
 
@@ -114,10 +131,38 @@ function openEdit(p: Proxy) {
   // The password is never returned (only has_password); empty means "keep the stored one".
   Object.assign(form, { name: p.name, protocol: p.protocol, host: p.host, port: p.port, username: p.username || '', password: '', clearPassword: false, status: p.status || 'active' })
   errors.value = {}
+  pasteUrl.value = ''
+  pasteError.value = ''
   open.value = true
 }
 
 const hasStoredPassword = computed(() => !!editing.value?.has_password)
+
+// ------------------------------------------------------------------ paste a proxy URL -> fields (client side, CONTRACTS §21.5)
+
+const pasteUrl = ref('')
+const pasteError = ref('')
+
+function applyPastedUrl() {
+  pasteError.value = ''
+  const raw = pasteUrl.value.trim()
+  if (!raw) return
+  const r = parseProxyURL(raw)
+  if (!r.ok) {
+    pasteError.value = t(`proxies.pasteError.${r.error}`)
+    return
+  }
+  const s = r.spec
+  form.protocol = s.protocol
+  form.host = s.host
+  form.port = s.port
+  form.username = s.username
+  form.password = s.password
+  form.clearPassword = false
+  if (!form.name.trim()) form.name = `${s.protocol}://${s.host}:${s.port}`.slice(0, 100)
+  errors.value = {}
+  pasteUrl.value = ''
+}
 
 async function submit() {
   errors.value = {}
@@ -188,7 +233,18 @@ async function onAction(p: Proxy, key: string) {
   <div>
     <SPageHeader :title="t('proxies.title')" :description="t('proxies.description')">
       <template #actions>
-        <SButton v-if="canManage" variant="primary" @click="openCreate">+ {{ t('proxies.create') }}</SButton>
+        <SButton v-if="canCreate" variant="primary" data-testid="proxy-new" @click="openCreate">+ {{ t('proxies.create') }}</SButton>
+      </template>
+      <template #filters>
+        <input
+          v-if="showOwner"
+          v-model="list.filters.created_by"
+          class="input !w-32"
+          inputmode="numeric"
+          data-testid="created-by-filter"
+          :placeholder="t('common.createdById')"
+        />
+        <SSwitch v-model="onlyMine" :label="t('common.onlyMine')" data-testid="only-mine" />
       </template>
     </SPageHeader>
 
@@ -226,11 +282,16 @@ async function onAction(p: Proxy, key: string) {
         </div>
         <span v-else class="muted">—</span>
       </template>
+      <template #cell-created_by="{ row }">
+        <span v-if="row.created_by_email" class="text-xs" :title="row.created_by ? `#${row.created_by}` : ''">{{ row.created_by_email }}</span>
+        <span v-else-if="row.created_by" class="text-xs muted">#{{ row.created_by }}</span>
+        <span v-else class="muted">-</span>
+      </template>
       <template #cell-created_at="{ row }">
         <span class="muted">{{ formatDateTime(row.created_at) }}</span>
       </template>
       <template #cell-actions="{ row }">
-        <div class="flex items-center justify-end gap-1">
+        <div v-if="canEditRow(row)" class="flex items-center justify-end gap-1">
           <SButton variant="ghost" size="sm" :disabled="testing[row.id]" @click="test(row)">{{ t('common.test') }}</SButton>
           <SButton variant="ghost" size="sm" @click="openEdit(row)">{{ t('common.edit') }}</SButton>
           <SDropdown
@@ -247,6 +308,21 @@ async function onAction(p: Proxy, key: string) {
 
     <SModal v-model:open="open" :title="editing ? t('proxies.editTitle', { name: editing.name }) : t('proxies.create')" width="lg">
       <form class="space-y-4" @submit.prevent="submit">
+        <SField :label="t('proxies.pasteUrl')" :hint="pasteError ? '' : t('proxies.pasteUrlHint')" :error="pasteError">
+          <div class="flex gap-2">
+            <input
+              v-model="pasteUrl"
+              class="input flex-1 font-mono text-sm"
+              :class="pasteError ? 'input-error' : ''"
+              autocomplete="off"
+              spellcheck="false"
+              data-testid="proxy-paste-url"
+              placeholder="socks5://user:pass@host:port"
+              @keydown.enter.prevent="applyPastedUrl"
+            />
+            <SButton :disabled="!pasteUrl.trim()" data-testid="proxy-paste-apply" @click="applyPastedUrl">{{ t('proxies.pasteFill') }}</SButton>
+          </div>
+        </SField>
         <div class="grid gap-4 sm:grid-cols-2">
           <SField :label="t('common.name')" required :error="errors.name">
             <input v-model="form.name" class="input" />

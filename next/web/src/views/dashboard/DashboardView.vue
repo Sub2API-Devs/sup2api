@@ -6,6 +6,7 @@ import { SCard, SChart, SPageHeader, SStatCard } from '@sub2api/ui'
 import type { Account, UsageSummaryRow } from '@/api/types'
 import PluginSlot from '@/components/plugin/PluginSlot.vue'
 import { useAuthStore } from '@/stores/auth'
+import { ACCOUNT_KEYS } from '@/composables/useOwnership'
 import { formatMoney, formatNumber, startOfToday } from '@/utils/format'
 
 const { t } = useI18n()
@@ -49,7 +50,8 @@ function dayKey(d: Date) {
 }
 
 async function loadAccounts() {
-  if (!auth.has('account:read')) return
+  // Own-level readers get their own accounts only (CONTRACTS §21.2); the card then counts those.
+  if (!auth.has([...ACCOUNT_KEYS.read])) return
   const res = await api.list<Account>('/accounts', { page_size: 200 })
   const now = Date.now()
   const available = res.items.filter(

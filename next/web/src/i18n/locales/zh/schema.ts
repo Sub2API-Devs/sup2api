@@ -2,6 +2,7 @@ export default {
   noProxy: '不使用代理',
   secretKeep: '已保存值，留空表示不修改。',
   presets: '预设',
+  setByAdmin: '由管理员设置',
   mappingFrom: '请求模型',
   mappingTo: '上游模型',
   invalidJSON: 'JSON 格式错误',
