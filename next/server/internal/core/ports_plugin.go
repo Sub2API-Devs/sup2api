@@ -162,6 +162,26 @@ type PluginRegistry interface {
 	OnChange(fn func(Generation)) (cancel func())
 }
 
+// ActivePluginKeys lists the plugins of the current generation, for SQL
+// filters that hide accounts of disabled or uninstalled plugins
+// (`plugin_key = ANY($n)`). It is nil — meaning "do not filter" — when reg is
+// nil or no generation is loaded yet.
+func ActivePluginKeys(reg PluginRegistry) []string {
+	if reg == nil {
+		return nil
+	}
+	g := reg.Current()
+	if g == nil {
+		return nil
+	}
+	ps := g.Plugins()
+	keys := make([]string, 0, len(ps))
+	for _, p := range ps {
+		keys = append(keys, p.Key)
+	}
+	return keys
+}
+
 // ProtocolConverters (owner: gateway) reports which protocol pairs the core
 // can convert (ARCHITECTURE 6.6): a client endpoint speaking clientProtocol
 // can be served by an account type whose upstream speaks upstreamProtocol.

@@ -73,12 +73,17 @@ type MyGroup struct {
 	Platforms      []string `json:"platforms"`
 }
 
-const selectGroup = `SELECT g.id, g.name, g.description, g.status, g.rate_multiplier::text, g.visibility,
+// selectGroup lists the group columns; account_count only counts accounts of
+// enabled plugins (keys is the parameter holding core.ActivePluginKeys, NULL =
+// no filter).
+func selectGroup(keys string) string {
+	return `SELECT g.id, g.name, g.description, g.status, g.rate_multiplier::text, g.visibility,
 	g.model_allowlist, g.created_at, g.updated_at,
 	(SELECT count(*) FROM account_groups ag JOIN accounts a ON a.id = ag.account_id
-	  WHERE ag.group_id = g.id AND a.deleted_at IS NULL),
+	  WHERE ag.group_id = g.id AND a.deleted_at IS NULL AND (` + keys + `::text[] IS NULL OR a.plugin_key = ANY(` + keys + `))),
 	(SELECT count(*) FROM api_keys k WHERE k.group_id = g.id AND k.deleted_at IS NULL)
 	FROM groups g`
+}
 
 func scanGroup(row pgx.Row) (*Group, error) {
 	var g Group
@@ -120,7 +125,7 @@ func (s *Service) list(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	rows, err := s.db.Pool.Query(ctx, selectGroup+where+` ORDER BY g.id LIMIT $3 OFFSET $4`, q, status, size, (page-1)*size)
+	rows, err := s.db.Pool.Query(ctx, selectGroup("$5")+where+` ORDER BY g.id LIMIT $3 OFFSET $4`, q, status, size, (page-1)*size, core.ActivePluginKeys(s.reg))
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -164,7 +169,7 @@ func (s *Service) fillPlatforms(ctx context.Context, gs []*Group) error {
 }
 
 func (s *Service) load(ctx context.Context, id int64) (*Group, error) {
-	g, err := scanGroup(s.db.Pool.QueryRow(ctx, selectGroup+` WHERE g.id = $1`, id))
+	g, err := scanGroup(s.db.Pool.QueryRow(ctx, selectGroup("$2")+` WHERE g.id = $1`, id, core.ActivePluginKeys(s.reg)))
 	if store.IsNoRows(err) {
 		return nil, core.ErrNotFound.WithMessage(t(ctx, "group not found", "分组不存在"))
 	}

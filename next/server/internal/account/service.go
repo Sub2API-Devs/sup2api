@@ -187,18 +187,7 @@ func (s *Service) pluginActive(key string) bool {
 
 // activePluginKeys lists the plugins of the current generation; nil before
 // the first generation is loaded (then nothing is filtered).
-func (s *Service) activePluginKeys() []string {
-	g := s.gen()
-	if g == nil {
-		return nil
-	}
-	ps := g.Plugins()
-	keys := make([]string, 0, len(ps))
-	for _, p := range ps {
-		keys = append(keys, p.Key)
-	}
-	return keys
-}
+func (s *Service) activePluginKeys() []string { return core.ActivePluginKeys(s.d.Registry) }
 
 // can asks the Authorizer whether the caller holds key; errors and a missing
 // Authorizer count as "no".

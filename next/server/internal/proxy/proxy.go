@@ -34,6 +34,9 @@ var passwordAAD = []byte("proxy")
 
 // Options tunes the service; zero values select defaults.
 type Options struct {
+	// Registry (optional) hides accounts of disabled plugins from
+	// account_count; nil counts every account.
+	Registry     core.PluginRegistry
 	ProbeURL     string        // default DefaultProbeURL
 	ProbeTimeout time.Duration // default 15s
 	// RecheckInterval is how often a cached client re-reads its proxy row to
@@ -278,10 +281,16 @@ type Proxy struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
-const selectProxy = `SELECT p.id, p.name, p.protocol, p.host, p.port, p.username, p.password_enc IS NOT NULL,
-	p.status, (SELECT count(*) FROM accounts a WHERE a.proxy_id = p.id AND a.deleted_at IS NULL),
+// selectProxy lists the proxy columns; account_count only counts accounts of
+// enabled plugins (keys is the parameter holding core.ActivePluginKeys, NULL =
+// no filter).
+func selectProxy(keys string) string {
+	return `SELECT p.id, p.name, p.protocol, p.host, p.port, p.username, p.password_enc IS NOT NULL,
+	p.status, (SELECT count(*) FROM accounts a WHERE a.proxy_id = p.id AND a.deleted_at IS NULL
+	  AND (` + keys + `::text[] IS NULL OR a.plugin_key = ANY(` + keys + `))),
 	p.created_by, u.email, p.created_at, p.updated_at
 	FROM proxies p LEFT JOIN users u ON u.id = p.created_by`
+}
 
 func scanProxy(r pgx.Row) (*Proxy, error) {
 	var p Proxy
@@ -311,7 +320,7 @@ func scoped(param string) string {
 
 // load returns one proxy visible in scope (nil = all); others are 404.
 func (s *Service) load(ctx context.Context, id int64, scope *int64) (*Proxy, error) {
-	p, err := scanProxy(s.db.Pool.QueryRow(ctx, selectProxy+` WHERE p.id = $1 AND `+scoped("$2"), id, scope))
+	p, err := scanProxy(s.db.Pool.QueryRow(ctx, selectProxy("$3")+` WHERE p.id = $1 AND `+scoped("$2"), id, scope, core.ActivePluginKeys(s.opts.Registry)))
 	if store.IsNoRows(err) {
 		return nil, notFound(ctx)
 	}
@@ -347,7 +356,7 @@ func (s *Service) list(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	rows, err := s.db.Pool.Query(ctx, selectProxy+where+` ORDER BY p.id LIMIT $4 OFFSET $5`, q, status, scope, size, (page-1)*size)
+	rows, err := s.db.Pool.Query(ctx, selectProxy("$6")+where+` ORDER BY p.id LIMIT $4 OFFSET $5`, q, status, scope, size, (page-1)*size, core.ActivePluginKeys(s.opts.Registry))
 	if err != nil {
 		httpapi.Fail(c, err)
 		return

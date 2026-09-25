@@ -690,7 +690,7 @@ GET `/ui/plugins`（登录即可）→ 不分页数组，只含当前 generation
 | `in_use` | 当前占用的并发槽位数（集群实时） |
 | `cooldown_until` | 冷却截止时间（按 Redis TTL 推算，精确到秒），未冷却为 `null` |
 | `cooldown_reason` | 冷却原因，未冷却时省略 |
-| `orphaned` | 声明该账号类型的插件未启用（禁用或卸载）时为 `true`。这类账号**默认不出现在列表里**（`?orphaned=all` 才列出；控制台有"显示已禁用插件的账号"开关），数据保留，插件重新启用后自动回到列表；卸载时 `purge_accounts=true` 才软删除（§14.3） |
+| `orphaned` | 声明该账号类型的插件未启用（禁用或卸载）时为 `true`。这类账号**默认不出现在列表里**（`?orphaned=all` 才列出；控制台有"显示已禁用插件的账号"开关），数据保留，插件重新启用后自动回到列表；卸载时 `purge_accounts=true` 才软删除（§14.3）。分组与代理的 `account_count` 同样只统计已启用插件的账号（`core.ActivePluginKeys`），但删除代理时的 409 仍按全部引用它的账号判断 |
 | `settings` | 非敏感的设置字段（账号类型 `settingsFields` 列出的顶层键），明文 JSON 对象 |
 | `credentials` | **仅详情**（`GET /accounts/:id`、创建与修改的响应）：设置字段与加密字段合并后的完整对象，账号类型 `sensitiveFields` 中的非空值替换为 `"******"`；类型未注册时加密部分的所有顶层值都显示为 `"******"`。列表不含此字段 |
 | `created_by`、`created_by_email` | 创建人 id 与邮箱（§21.2）；历史数据/系统创建为 `null`；创建人已软删除时邮箱仍返回 |

@@ -63,6 +63,20 @@ type fakeGen struct {
 	types []core.AccountTypeBinding
 }
 
+// Plugins lists the plugins declaring the account types (account_count only
+// counts accounts of enabled plugins).
+func (g *fakeGen) Plugins() []core.PluginInfo {
+	var out []core.PluginInfo
+	seen := map[string]bool{}
+	for _, t := range g.types {
+		if !seen[t.Plugin.Key] {
+			seen[t.Plugin.Key] = true
+			out = append(out, core.PluginInfo{Key: t.Plugin.Key})
+		}
+	}
+	return out
+}
+
 func (g *fakeGen) Platform(id string) (core.PlatformBinding, bool) {
 	for _, p := range g.plats {
 		if p == id {
@@ -322,12 +336,18 @@ func TestGroupPlatforms(t *testing.T) {
 	mkAccount("video", "vkey", true, mixed, video) // deleted: ignored
 	mkAccount("gone", "apikey", false, video)      // type not registered
 	want := map[int64]string{mixed: "[anthropic openai]", video: "[]", empty: "[]"}
+	// account_count only counts accounts of enabled plugins: the deleted
+	// video account and the "gone" plugin's account are left out.
+	wantCount := map[int64]float64{mixed: 3, video: 0, empty: 0}
 
 	_, out := e.do(e.admin, "GET", "/groups", nil)
 	for _, it := range out["data"].([]any) {
 		g := it.(map[string]any)
 		if got := fmt.Sprint(g["platforms"]); got != want[int64(g["id"].(float64))] {
 			t.Fatalf("list %v: %s", g["name"], got)
+		}
+		if got := g["account_count"]; got != wantCount[int64(g["id"].(float64))] {
+			t.Fatalf("list %v account_count = %v", g["name"], got)
 		}
 	}
 	_, out = e.do(e.admin, "GET", fmt.Sprintf("/groups/%d", mixed), nil)

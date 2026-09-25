@@ -158,12 +158,33 @@ func total(out map[string]any) float64 {
 	return n
 }
 
+// fakeRegistry / fakeGen give the service the set of enabled plugins
+// (account_count only counts accounts of enabled plugins).
+type fakeRegistry struct{ gen core.Generation }
+
+func (r *fakeRegistry) Current() core.Generation                     { return r.gen }
+func (*fakeRegistry) OnChange(func(core.Generation)) (cancel func()) { return func() {} }
+
+type fakeGen struct {
+	core.Generation
+	keys []string
+}
+
+func (g *fakeGen) Plugins() []core.PluginInfo {
+	out := make([]core.PluginInfo, 0, len(g.keys))
+	for _, k := range g.keys {
+		out = append(out, core.PluginInfo{Key: k})
+	}
+	return out
+}
+
 func TestProxyCRUDTestAndDirectory(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := testutil.DB(t)
 	ctx := context.Background()
 	bus := &fakeBus{}
-	svc := New(db, testCipher(t), bus, Options{ProbeURL: "http://probe.example.invalid/generate_204"})
+	reg := &fakeRegistry{gen: &fakeGen{keys: []string{"p"}}}
+	svc := New(db, testCipher(t), bus, Options{ProbeURL: "http://probe.example.invalid/generate_204", Registry: reg})
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	go svc.Run(runCtx)
@@ -284,6 +305,19 @@ func TestProxyCRUDTestAndDirectory(t *testing.T) {
 	if code, _ = do(t, engine, admin, "DELETE", fmt.Sprintf("/proxies/%d", id), nil); code != 409 {
 		t.Fatalf("delete in use: %d", code)
 	}
+	// account_count only counts accounts of enabled plugins; the delete
+	// conflict still considers every referencing account.
+	if _, out = do(t, engine, admin, "GET", fmt.Sprintf("/proxies/%d", id), nil); out["data"].(map[string]any)["account_count"] != float64(1) {
+		t.Fatalf("account_count: %v", out["data"])
+	}
+	reg.gen = &fakeGen{keys: []string{"other"}}
+	if _, out = do(t, engine, admin, "GET", fmt.Sprintf("/proxies/%d", id), nil); out["data"].(map[string]any)["account_count"] != float64(0) {
+		t.Fatalf("account_count with plugin p disabled: %v", out["data"])
+	}
+	if code, _ = do(t, engine, admin, "DELETE", fmt.Sprintf("/proxies/%d", id), nil); code != 409 {
+		t.Fatalf("delete in use by an orphaned account: %d", code)
+	}
+	reg.gen = &fakeGen{keys: []string{"p"}}
 	_, _ = db.Pool.Exec(ctx, `UPDATE accounts SET deleted_at = now()`)
 	if code, _ = do(t, engine, admin, "DELETE", fmt.Sprintf("/proxies/%d", id), nil); code != 204 {
 		t.Fatalf("delete: %d", code)
