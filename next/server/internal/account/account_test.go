@@ -847,7 +847,20 @@ func TestAccountLifecycle(t *testing.T) {
 	if code, _ = e.do("PATCH", fmt.Sprintf("/accounts/%d", id), map[string]any{"credentials": map[string]any{"api_key": "sk-good-key-456"}}); code != 503 {
 		t.Fatalf("orphaned patch: %d", code)
 	}
+	// Hidden from the list by default; orphaned=true / all show it.
+	if _, out = e.do("GET", "/accounts", nil); len(out["data"].([]any)) != 0 {
+		t.Fatalf("orphaned account listed by default: %v", out["data"])
+	}
+	for _, q := range []string{"orphaned=true", "orphaned=all"} {
+		_, out = e.do("GET", "/accounts?"+q, nil)
+		if items := out["data"].([]any); len(items) != 1 || items[0].(map[string]any)["orphaned"] != true {
+			t.Fatalf("%s: %v", q, out["data"])
+		}
+	}
 	e.reg.set(e.gen)
+	if _, out = e.do("GET", "/accounts?orphaned=true", nil); len(out["data"].([]any)) != 0 {
+		t.Fatalf("orphaned=true with the plugin back: %v", out["data"])
+	}
 
 	// Delete.
 	if code, _ = e.do("DELETE", fmt.Sprintf("/accounts/%d", id), nil); code != 204 {

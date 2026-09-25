@@ -221,8 +221,17 @@ func TestAC18_MixedAccountTypesServeOneEndpoint(t *testing.T) {
 	if _, ok := FindAccountType(admin.OK(t, http.MethodGet, "/account-types", nil).Array(), RelayPlugin, RelayKey); ok {
 		t.Fatal("relay_key still offered while relay is disabled")
 	}
-	if a := admin.OK(t, http.MethodGet, fmt.Sprintf("/accounts/%d", relayID), nil); a.Get("id").Int() != relayID {
+	if a := admin.OK(t, http.MethodGet, fmt.Sprintf("/accounts/%d", relayID), nil); a.Get("id").Int() != relayID || !a.Get("orphaned").Bool() {
 		t.Fatalf("relay account gone after disable: %s", a.Raw)
+	}
+	// The row stays but the list hides accounts of a disabled plugin unless
+	// asked for (?orphaned=all / true).
+	listHas := func(q ...string) bool {
+		_, ok := Find(admin.OK(t, http.MethodGet, "/accounts", nil, Query(append([]string{"group_id", fmt.Sprint(tn.GroupID), "page_size", "200"}, q...)...)).Array(), "id", relayID)
+		return ok
+	}
+	if listHas() || !listHas("orphaned", "all") || !listHas("orphaned", "true") || listHas("orphaned", "true", "plugin_key", AnthropicPlugin) {
+		t.Fatal("orphaned relay account must be hidden by default and listed with orphaned=all|true")
 	}
 	if a, r := anthropicTypes(); !a || r {
 		t.Fatalf("/platforms anthropic account types with relay disabled: anthropic/apikey %v, relay/relay_key %v", a, r)
@@ -254,4 +263,23 @@ func TestAC18_MixedAccountTypesServeOneEndpoint(t *testing.T) {
 	})
 	checkUsage(g, relayID, RelayPlugin, RelayKey)
 	waitCooldownOver(anth.ID)
+	if !listHas() {
+		t.Fatal("relay account not listed again after re-enable")
+	}
+
+	// 6. Uninstall with purge_accounts: the relay account is soft-deleted
+	// (gone even from orphaned=all), the anthropic one untouched; the
+	// plugin is reinstalled from the market for the tests that follow.
+	e.Disable(admin, RelayPlugin)
+	e.UninstallPurgeAccounts(admin, RelayPlugin)
+	if r := admin.API(t, http.MethodGet, fmt.Sprintf("/accounts/%d", relayID), nil); r.Status != 404 {
+		t.Fatalf("relay account after uninstall with purge_accounts: %s", r)
+	}
+	if listHas("orphaned", "all") {
+		t.Fatal("purged relay account still listed")
+	}
+	if a := admin.OK(t, http.MethodGet, fmt.Sprintf("/accounts/%d", anth.ID), nil); a.Get("orphaned").Bool() {
+		t.Fatalf("anthropic account touched by relay uninstall: %s", a.Raw)
+	}
+	e.EnsurePlugin(admin, RelayPlugin, "")
 }

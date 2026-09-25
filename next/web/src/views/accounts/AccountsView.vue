@@ -37,11 +37,19 @@ const canDelete = (a: Account) => own.can(a, ACCOUNT_KEYS.delete)
 const canReveal = (a: Account) => own.can(a, ACCOUNT_KEYS.reveal)
 
 // `mine=true` works at both levels; `created_by=<id>` only at the all level (ignored otherwise).
-const list = useList<Account>('/accounts', { plugin_key: '', type: '', group_id: '', status: '', model: '', q: '', mine: '', created_by: '' })
+const list = useList<Account>('/accounts', { plugin_key: '', type: '', group_id: '', status: '', model: '', q: '', mine: '', created_by: '', orphaned: '' })
 const onlyMine = computed({
   get: () => list.filters.mine === 'true',
   set: (v: boolean) => {
     list.filters.mine = v ? 'true' : ''
+  }
+})
+// Accounts of disabled/uninstalled plugins are hidden by default; the switch
+// asks for `orphaned=all`.
+const showOrphaned = computed({
+  get: () => list.filters.orphaned === 'all',
+  set: (v: boolean) => {
+    list.filters.orphaned = v ? 'all' : ''
   }
 })
 
@@ -327,6 +335,7 @@ const statusOptions = ['active', 'disabled', 'error']
           :placeholder="t('common.createdById')"
         />
         <SSwitch v-model="onlyMine" :label="t('common.onlyMine')" data-testid="only-mine" />
+        <SSwitch v-model="showOrphaned" :label="t('accounts.showOrphaned')" data-testid="show-orphaned" />
       </template>
     </SPageHeader>
 
@@ -380,7 +389,7 @@ const statusOptions = ['active', 'disabled', 'error']
             @update:model-value="toggleSchedulable(row, $event)"
           />
           <SButton v-if="canTest(row) && !row.orphaned" size="sm" variant="ghost" @click="openTest(row)">{{ t('common.test') }}</SButton>
-          <SButton v-if="canUpdate(row)" size="sm" variant="ghost" @click="openEdit(row)">{{ t('common.edit') }}</SButton>
+          <SButton v-if="canUpdate(row) && !row.orphaned" size="sm" variant="ghost" @click="openEdit(row)">{{ t('common.edit') }}</SButton>
           <SDropdown :actions="actionsFor(row)" @select="onAction(row, $event)" />
         </div>
       </template>

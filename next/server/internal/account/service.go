@@ -185,6 +185,21 @@ func (s *Service) pluginActive(key string) bool {
 	return ok
 }
 
+// activePluginKeys lists the plugins of the current generation; nil before
+// the first generation is loaded (then nothing is filtered).
+func (s *Service) activePluginKeys() []string {
+	g := s.gen()
+	if g == nil {
+		return nil
+	}
+	ps := g.Plugins()
+	keys := make([]string, 0, len(ps))
+	for _, p := range ps {
+		keys = append(keys, p.Key)
+	}
+	return keys
+}
+
 // can asks the Authorizer whether the caller holds key; errors and a missing
 // Authorizer count as "no".
 func (s *Service) can(ctx context.Context, key string) bool {

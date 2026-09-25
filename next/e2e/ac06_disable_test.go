@@ -36,10 +36,17 @@ func TestAC06_DisableEnableUninstall(t *testing.T) {
 
 	e.Disable(admin, "anthropic")
 
-	// Accounts stay (not orphaned, not deleted).
+	// Accounts stay (orphaned, not deleted): the detail answers, the list
+	// hides them unless ?orphaned=all.
 	acct := admin.OK(t, http.MethodGet, fmt.Sprintf("/accounts/%d", tn.Accounts[0].ID), nil)
-	if acct.Get("id").Int() != tn.Accounts[0].ID {
+	if acct.Get("id").Int() != tn.Accounts[0].ID || !acct.Get("orphaned").Bool() {
 		t.Fatalf("account gone after disable: %s", acct.Raw)
+	}
+	if _, ok := Find(admin.OK(t, http.MethodGet, "/accounts", nil, Query("group_id", fmt.Sprint(tn.GroupID))).Array(), "id", tn.Accounts[0].ID); ok {
+		t.Fatal("orphaned account still listed by default")
+	}
+	if _, ok := Find(admin.OK(t, http.MethodGet, "/accounts", nil, Query("group_id", fmt.Sprint(tn.GroupID), "orphaned", "all")).Array(), "id", tn.Accounts[0].ID); !ok {
+		t.Fatal("orphaned account missing from ?orphaned=all")
 	}
 	// Plugin permissions greyed out.
 	m, ok = pluginModule()

@@ -14,6 +14,7 @@ export default {
     orphaned: 'Orphaned',
     unschedulable: 'Not scheduled'
   },
+  showOrphaned: 'Show accounts of disabled plugins',
   orphanedHint: 'Plugin "{plugin}" is not installed; the account is kept but not used.',
   cooldownUntil: 'until {time}',
   type: 'Type',

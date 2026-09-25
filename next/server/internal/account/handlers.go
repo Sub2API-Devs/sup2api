@@ -320,6 +320,17 @@ func (s *Service) list(c *gin.Context) {
 	if scope != nil {
 		add("a.created_by = ?", *scope)
 	}
+	// Accounts of a disabled or uninstalled plugin are hidden by default
+	// (their rows stay); orphaned=true lists only them, orphaned=all both.
+	if keys := s.activePluginKeys(); keys != nil {
+		switch c.Query("orphaned") {
+		case "true":
+			add("NOT (a.plugin_key = ANY(?))", keys)
+		case "all":
+		default:
+			add("a.plugin_key = ANY(?)", keys)
+		}
+	}
 	if v := c.Query("plugin_key"); v != "" {
 		add("a.plugin_key = ?", v)
 	}

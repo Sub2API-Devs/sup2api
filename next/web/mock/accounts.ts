@@ -384,6 +384,9 @@ on('GET', '/accounts', (req) => {
   const { who, scope } = accountScope(req, 'read')
   let list = filterOwned(accounts, scope, who, req.query)
   const q = req.query
+  // Accounts of disabled plugins are hidden unless orphaned=true|all.
+  if (q.orphaned === 'true') list = list.filter((a) => a.orphaned)
+  else if (q.orphaned !== 'all') list = list.filter((a) => !a.orphaned)
   if (q.plugin_key) list = list.filter((a) => a.plugin_key === q.plugin_key)
   if (q.type) list = list.filter((a) => a.type === q.type)
   if (q.group_id) list = list.filter((a) => a.group_ids.includes(Number(q.group_id)))

@@ -14,6 +14,7 @@ export default {
     orphaned: '孤立',
     unschedulable: '不参与调度'
   },
+  showOrphaned: '显示已禁用插件的账号',
   orphanedHint: '插件"{plugin}"未安装，账号保留但不会被使用。',
   cooldownUntil: '至 {time}',
   type: '类型',

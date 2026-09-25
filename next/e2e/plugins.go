@@ -193,6 +193,26 @@ func (e *Env) Uninstall(admin *Session, key string, purge bool) {
 	})
 }
 
+// UninstallPurgeAccounts uninstalls a (disabled) plugin and soft-deletes the
+// accounts of its account types (CONTRACTS §14.3 purge_accounts).
+func (e *Env) UninstallPurgeAccounts(admin *Session, key string) {
+	e.T.Helper()
+	// status=disabled is reported before the disable rollout is fully
+	// closed; uninstall answers 409 until then.
+	var r *Resp
+	Eventually(e.T, 30*time.Second, time.Second, "uninstall "+key+" with purge_accounts", func() bool {
+		r = admin.API(e.T, http.MethodDelete, "/plugins/"+key, nil, Query("purge", "false", "purge_accounts", "true"), admin.StepUp(e.T))
+		return r.Status != 409
+	})
+	if r.Status != 200 && r.Status != 204 {
+		e.T.Fatalf("uninstall with purge_accounts: %s", r)
+	}
+	Eventually(e.T, 30*time.Second, time.Second, "plugin "+key+" removed", func() bool {
+		_, ok := e.Plugin(admin, key)
+		return !ok
+	})
+}
+
 // WaitPlugin waits until the plugin has status (and active_version, if set)
 // and, for "enabled", every node reports "active". Fails fast on a failed
 // or cancelled rollout.
