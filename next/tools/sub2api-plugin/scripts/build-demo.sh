@@ -11,7 +11,7 @@
 # Output:
 #   <outdir>/anthropic-0.1.6.s2plugin, anthropic-0.2.0.s2plugin (upgrade test),
 #   <outdir>/guard-0.1.0.s2plugin,
-#   <outdir>/moderation-0.1.0.s2plugin (built-in: LLM prompt moderation),
+#   <outdir>/moderation-0.1.1.s2plugin (built-in: LLM prompt moderation),
 #   <outdir>/relay-0.1.2.s2plugin  (account type only: Claude relay key),
 #   <outdir>/openai-0.1.6.s2plugin, gemini-0.1.6.s2plugin (built-in account types),
 #   <outdir>/index.json, index.json.sig

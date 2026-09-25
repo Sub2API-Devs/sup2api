@@ -74,33 +74,66 @@ var coreMenus = []coreMenuSection{
 	}},
 }
 
+// Core sections are placed by these orders; plugin sections (manifest
+// ui.sections) interleave with them by their own order.
+var coreSectionOrder = map[string]int{"overview": 100, "gateway": 200, "finance": 300, "system": 400, "me": 500, "plugins": 600}
+
 // Menus builds the sidebar of userID: core menus filtered by permission,
-// then a "plugins" section with plugin menus from the current generation.
+// plugin menus appended to the core section they name, plugin-declared
+// sections placed by order, and the shared "plugins" section last (600).
 func (s *Service) Menus(ctx context.Context, userID int64) ([]MenuSection, error) {
 	set, err := s.PermissionSet(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	out := []MenuSection{}
+	type section struct {
+		MenuSection
+		order int
+	}
+	var out []section
+	byKey := map[string]int{}
+	add := func(key string, label core.LocalizedText, order int) int {
+		if i, ok := byKey[key]; ok {
+			return i
+		}
+		out = append(out, section{MenuSection{Section: key, Label: label, Items: []MenuItem{}}, order})
+		byKey[key] = len(out) - 1
+		return len(out) - 1
+	}
 	for _, sec := range coreMenus {
-		items := []MenuItem{}
+		i := add(sec.id, sec.label, coreSectionOrder[sec.id])
 		for _, it := range sec.items {
 			if !hasAny(set, it.anyOf) {
 				continue
 			}
-			items = append(items, MenuItem{ID: it.id, Label: it.label, Icon: it.icon, Path: it.path})
-		}
-		if len(items) > 0 {
-			out = append(out, MenuSection{Section: sec.id, Label: sec.label, Items: items})
+			out[i].Items = append(out[i].Items, MenuItem{ID: it.id, Label: it.label, Icon: it.icon, Path: it.path})
 		}
 	}
-	if items := s.pluginMenus(set); len(items) > 0 {
-		out = append(out, MenuSection{Section: "plugins", Label: lt("Plugins", "插件"), Items: items})
+	for _, pm := range s.pluginMenus(set) {
+		i := add(pm.sectionKey, pm.sectionLabel, pm.sectionOrder)
+		out[i].Items = append(out[i].Items, pm.MenuItem)
 	}
-	return out, nil
+	sort.SliceStable(out, func(i, j int) bool { return out[i].order < out[j].order })
+	res := make([]MenuSection, 0, len(out))
+	for _, sec := range out {
+		if len(sec.Items) > 0 {
+			res = append(res, sec.MenuSection)
+		}
+	}
+	return res, nil
 }
 
-func (s *Service) pluginMenus(set core.PermissionSet) []MenuItem {
+// pluginMenu is a plugin menu item with the section it goes to: a core
+// section, the plugin's own section (key "<plugin>:<section>") or "plugins".
+type pluginMenu struct {
+	MenuItem
+	sectionKey   string
+	sectionLabel core.LocalizedText
+	sectionOrder int
+	order        int
+}
+
+func (s *Service) pluginMenus(set core.PermissionSet) []pluginMenu {
 	if s.plugins == nil {
 		return nil
 	}
@@ -108,11 +141,7 @@ func (s *Service) pluginMenus(set core.PermissionSet) []MenuItem {
 	if gen == nil {
 		return nil
 	}
-	type ordered struct {
-		MenuItem
-		order int
-	}
-	var list []ordered
+	var list []pluginMenu
 	for _, p := range gen.Plugins() {
 		if p.Manifest == nil || p.Manifest.UI == nil {
 			continue
@@ -125,13 +154,38 @@ func (s *Service) pluginMenus(set core.PermissionSet) []MenuItem {
 			if label == nil {
 				label = core.LocalizedText{"en": m.ID}
 			}
-			list = append(list, ordered{MenuItem{
+			pm := pluginMenu{MenuItem: MenuItem{
 				ID:        p.Key + ":" + m.ID,
 				Label:     label,
 				Icon:      cmp.Or(m.Icon, "puzzle"),
 				Path:      "/p/" + p.Key + "/" + strings.TrimPrefix(m.Page, "/"),
 				PluginKey: p.Key,
-			}, m.Order})
+			}, order: m.Order}
+			switch {
+			case m.Section == "plugins" || m.Section == "":
+				pm.sectionKey, pm.sectionLabel, pm.sectionOrder = "plugins", lt("Plugins", "插件"), coreSectionOrder["plugins"]
+			case coreSectionOrder[m.Section] != 0:
+				pm.sectionKey, pm.sectionOrder = m.Section, coreSectionOrder[m.Section]
+				for _, cs := range coreMenus {
+					if cs.id == m.Section {
+						pm.sectionLabel = cs.label
+					}
+				}
+			default:
+				pm.sectionKey = p.Key + ":" + m.Section
+				pm.sectionLabel, pm.sectionOrder = core.LocalizedText{"en": m.Section}, coreSectionOrder["plugins"]
+				for _, sec := range p.Manifest.UI.Sections {
+					if sec.ID == m.Section {
+						if l := core.LocalizedText(sec.Label); l != nil {
+							pm.sectionLabel = l
+						}
+						if sec.Order != 0 {
+							pm.sectionOrder = sec.Order
+						}
+					}
+				}
+			}
+			list = append(list, pm)
 		}
 	}
 	sort.SliceStable(list, func(i, j int) bool {
@@ -140,11 +194,7 @@ func (s *Service) pluginMenus(set core.PermissionSet) []MenuItem {
 		}
 		return list[i].ID < list[j].ID
 	})
-	items := make([]MenuItem, len(list))
-	for i := range list {
-		items[i] = list[i].MenuItem
-	}
-	return items
+	return list
 }
 
 func hasAny(set core.PermissionSet, perms []string) bool {

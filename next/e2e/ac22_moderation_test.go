@@ -20,6 +20,20 @@ func TestAC22_PromptModeration(t *testing.T) {
 	e.Pending("moderation plugin (CONTRACTS 20), core hook timeout 30s, mock-upstream submit_verdict")
 	admin := e.Admin()
 	e.EnsurePlugin(admin, moderationKey, "")
+	// The plugin's menu sits in its own sidebar section (manifest
+	// ui.sections, CONTRACTS §22), placed between finance and system.
+	var sections []string
+	for _, sec := range admin.OK(t, http.MethodGet, "/me/menus", nil).Array() {
+		sections = append(sections, sec.Get("section").String())
+		if sec.Get("section").String() == moderationKey+":safety" {
+			if sec.Get("label.zh").String() != "安全" || !strings.Contains(sec.Get("items").Raw, "/p/moderation/dashboard") {
+				t.Fatalf("moderation section: %s", sec.Raw)
+			}
+		}
+	}
+	if got := strings.Join(sections, ","); !strings.Contains(got, "finance,"+moderationKey+":safety,system") {
+		t.Fatalf("sidebar sections = %s", got)
+	}
 	m := e.Mock()
 	defer e.SetModerationSettings(admin, map[string]any{"mode": "off"})
 

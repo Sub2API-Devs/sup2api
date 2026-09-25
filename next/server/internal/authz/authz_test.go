@@ -407,14 +407,27 @@ func TestMenus(t *testing.T) {
 			{ID: "dash", Section: "plugins", Label: manifest.LocalizedText{"en": "Guard", "zh": "请求守卫"}, Page: "dashboard", Permission: "stats:read", Order: 2},
 			{ID: "public", Section: "plugins", Label: manifest.LocalizedText{"en": "Info"}, Page: "info", Order: 1},
 		}}},
+	}, {
+		// A plugin with its own sidebar section (between finance and system)
+		// and an item joining a core section.
+		Key: "mod",
+		Manifest: &manifest.Manifest{UI: &manifest.UI{
+			Sections: []manifest.MenuSection{{ID: "safety", Label: manifest.LocalizedText{"en": "Safety", "zh": "安全"}, Order: 350}},
+			Menus: []manifest.Menu{
+				{ID: "dash", Section: "safety", Label: manifest.LocalizedText{"en": "Moderation"}, Page: "dashboard", Permission: "mod:read"},
+				{ID: "rules", Section: "gateway", Label: manifest.LocalizedText{"en": "Mod rules"}, Page: "rules", Permission: "mod:read"},
+			}}},
 	}}}}
 	s := newService(t, db, newMemBus(), reg)
 	ctx := context.Background()
-	if _, err := db.Pool.Exec(ctx, `INSERT INTO plugins (key, name, status) VALUES ('guard', '{"en":"Guard"}', 'enabled')`); err != nil {
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO plugins (key, name, status) VALUES ('guard', '{"en":"Guard"}', 'enabled'), ('mod', '{"en":"Mod"}', 'enabled')`); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Tx(ctx, func(tx pgx.Tx) error {
-		return s.SyncPlugin(ctx, tx, "guard", []core.PermissionDef{{Key: "stats:read"}}, []string{RoleAdmin})
+		if err := s.SyncPlugin(ctx, tx, "guard", []core.PermissionDef{{Key: "stats:read"}}, []string{RoleAdmin}); err != nil {
+			return err
+		}
+		return s.SyncPlugin(ctx, tx, "mod", []core.PermissionDef{{Key: "mod:read"}}, []string{RoleAdmin})
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -445,11 +458,17 @@ func TestMenus(t *testing.T) {
 	for _, m := range menus {
 		sections = append(sections, m.Section)
 	}
-	if got := join(sections); got != "overview,gateway,finance,system,me,plugins" {
+	if got := join(sections); got != "overview,gateway,finance,mod:safety,system,me,plugins" {
 		t.Fatalf("admin sections = %s", got)
 	}
-	if p := menus[5].Items; len(p) != 2 || p[1].Path != "/p/guard/dashboard" || p[1].Label.Get("zh") != "请求守卫" {
+	if p := menus[6].Items; len(p) != 2 || p[1].Path != "/p/guard/dashboard" || p[1].Label.Get("zh") != "请求守卫" {
 		t.Fatalf("admin plugin menus = %+v", p)
+	}
+	if sec := menus[3]; sec.Label.Get("zh") != "安全" || len(sec.Items) != 1 || sec.Items[0].Path != "/p/mod/dashboard" {
+		t.Fatalf("plugin section = %+v", sec)
+	}
+	if gw := menus[1].Items; gw[len(gw)-1].Path != "/p/mod/rules" || gw[0].Path != "/groups" {
+		t.Fatalf("core section with plugin item = %+v", gw)
 	}
 }
 

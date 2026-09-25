@@ -6,7 +6,7 @@
     "en": "Sends the latest user message of gateway requests to an OpenAI-compatible LLM that returns its verdict through a submit_verdict tool. Enforce mode refuses violations, observe mode only records them; repeated violations can ban users automatically.",
     "zh": "把网关请求中最新一条用户消息交给 OpenAI 兼容的大模型审核，模型通过 submit_verdict 工具返回结论。拦截模式拒绝违规请求，观察模式只记录；多次违规可自动封禁用户。"
   },
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "sub2api",
   "icon": "text:M",
   "runtime": "grpc",
@@ -73,10 +73,13 @@
   ],
 
   "ui": {
+    "sections": [
+      { "id": "safety", "label": { "en": "Safety", "zh": "安全" }, "order": 350 }
+    ],
     "menus": [
       {
         "id": "moderation",
-        "section": "plugins",
+        "section": "safety",
         "label": { "en": "Prompt Moderation", "zh": "提示词审核" },
         "icon": "shield",
         "page": "dashboard",

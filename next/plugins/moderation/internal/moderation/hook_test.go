@@ -15,7 +15,7 @@ import (
 )
 
 func sdkOpts() []pluginsdk.Option {
-	return []pluginsdk.Option{pluginsdk.WithInfo("moderation", "0.1.0")}
+	return []pluginsdk.Option{pluginsdk.WithInfo("moderation", "0.1.1")}
 }
 
 var reqSeq struct {

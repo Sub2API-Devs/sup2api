@@ -324,6 +324,8 @@ type Route struct {
 }
 
 type UI struct {
+	// Sections are sidebar groups of the plugin's own (see Menu.Section).
+	Sections []MenuSection   `json:"sections,omitempty"`
 	Menus    []Menu          `json:"menus,omitempty"`
 	Pages    map[string]Page `json:"pages,omitempty"`
 	Slots    []Slot          `json:"slots,omitempty"`
@@ -331,9 +333,21 @@ type UI struct {
 	Settings *Form           `json:"settings,omitempty"`
 }
 
+// MenuSection is a sidebar group declared by a plugin. It is shown as its
+// own group, placed among the core groups by Order (overview 100, gateway
+// 200, finance 300, system 400, me 500, plugins 600).
+type MenuSection struct {
+	ID    string        `json:"id"`
+	Label LocalizedText `json:"label"`
+	Order int           `json:"order,omitempty"`
+}
+
 type Menu struct {
-	ID         string        `json:"id"`
-	Section    string        `json:"section"` // plugins (only section in 0.1)
+	ID string `json:"id"`
+	// Section is "plugins" (the shared group at the bottom), a core group
+	// (overview | gateway | finance | system | me: the item is appended to
+	// it) or the id of one of UI.Sections.
+	Section    string        `json:"section"`
 	Label      LocalizedText `json:"label"`
 	Icon       string        `json:"icon,omitempty"`
 	Page       string        `json:"page"`

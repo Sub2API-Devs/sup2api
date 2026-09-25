@@ -128,6 +128,18 @@ func TestValidateBroadcastOK(t *testing.T) {
 	}
 }
 
+// A plugin may declare its own sidebar section and put menus into it or
+// into a core section (CONTRACTS §22).
+func TestValidateMenuSectionsOK(t *testing.T) {
+	m := pkgtest.Guard("guard", "0.1.0", "sub2api")
+	m.UI.Sections = []manifest.MenuSection{{ID: "safety", Label: manifest.LocalizedText{"en": "Safety", "zh": "安全"}, Order: 350}}
+	m.UI.Menus[0].Section = "safety"
+	m.UI.Menus = append(m.UI.Menus, manifest.Menu{ID: "rules", Section: "gateway", Label: manifest.LocalizedText{"en": "Rules"}, Page: "dashboard"})
+	if err := Validate(m, pkgtest.Files(m), opts()); err != nil {
+		t.Fatalf("validate: %v %v", err, fieldCodes(err))
+	}
+}
+
 // Hook needs may be gjson queries (CONTRACTS §20.1): an identical entry in
 // gateway.hook scope.fields covers them; a different query does not. The
 // hook timeout may go up to 30 s.
@@ -230,6 +242,16 @@ func TestValidateConsistency(t *testing.T) {
 		{"routes perm", dropPerm("routes.admin"), "routes[0].scope", "missing_host_permission"},
 		{"route unknown permission", func(m *manifest.Manifest, _ map[string][]byte) { m.Routes[0].Permission = "nope:x" }, "routes[0].permission", "unknown"},
 		{"menu perm", dropPerm("ui.menu"), "ui", "missing_host_permission"},
+		{"menu section unknown", func(m *manifest.Manifest, _ map[string][]byte) { m.UI.Menus[0].Section = "nope" }, "ui.menus[0].section", "invalid"},
+		{"section id reserved", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.UI.Sections = []manifest.MenuSection{{ID: "system", Label: manifest.LocalizedText{"en": "x"}}}
+		}, "ui.sections[0].id", "invalid"},
+		{"section label", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.UI.Sections = []manifest.MenuSection{{ID: "safety"}}
+		}, "ui.sections[0].label", "required"},
+		{"section duplicate", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.UI.Sections = []manifest.MenuSection{{ID: "safety", Label: manifest.LocalizedText{"en": "x"}}, {ID: "safety", Label: manifest.LocalizedText{"en": "y"}}}
+		}, "ui.sections[1].id", "duplicate"},
 		{"native perm", dropPerm("ui.native"), "ui.native", "missing_host_permission"},
 		{"native ui compat", func(m *manifest.Manifest, _ map[string][]byte) { m.HostUICompat = "" }, "hostUICompat", "required"},
 		{"native entry missing", func(_ *manifest.Manifest, f map[string][]byte) { delete(f, "ui/native/entry.js") }, "ui.native.entry", "file_missing"},

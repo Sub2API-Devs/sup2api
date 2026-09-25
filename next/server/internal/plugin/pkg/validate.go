@@ -834,6 +834,10 @@ func (v *validator) routes() {
 	}
 }
 
+// coreMenuSections are the sidebar groups of the console a plugin menu may
+// join (authz/menus.go).
+var coreMenuSections = map[string]bool{"overview": true, "gateway": true, "finance": true, "system": true, "me": true}
+
 func (v *validator) ui() {
 	u := v.m.UI
 	if u == nil {
@@ -841,6 +845,21 @@ func (v *validator) ui() {
 	}
 	if len(u.Menus) > 0 || len(u.Pages) > 0 {
 		v.needPerm("ui", "ui.menu", "menus and pages")
+	}
+	sectionIDs := map[string]bool{}
+	for i, sec := range u.Sections {
+		f := fmt.Sprintf("ui.sections[%d]", i)
+		if !idRe.MatchString(sec.ID) {
+			v.add(f+".id", "invalid_format", "section id %q is invalid", sec.ID)
+		} else if coreMenuSections[sec.ID] || sec.ID == "plugins" {
+			v.add(f+".id", "invalid", "section id %q is reserved for the core sidebar", sec.ID)
+		} else if sectionIDs[sec.ID] {
+			v.add(f+".id", "duplicate", "section %q declared twice", sec.ID)
+		}
+		sectionIDs[sec.ID] = true
+		if firstText(sec.Label) == "" {
+			v.add(f+".label", "required", "label is required")
+		}
 	}
 	menuIDs := map[string]bool{}
 	for i, mn := range u.Menus {
@@ -851,8 +870,8 @@ func (v *validator) ui() {
 			v.add(f+".id", "duplicate", "menu %q declared twice", mn.ID)
 		}
 		menuIDs[mn.ID] = true
-		if mn.Section != "plugins" {
-			v.add(f+".section", "invalid", "section must be \"plugins\"")
+		if mn.Section != "plugins" && !coreMenuSections[mn.Section] && !sectionIDs[mn.Section] {
+			v.add(f+".section", "invalid", "section must be \"plugins\", a core section (overview, gateway, finance, system, me) or one of ui.sections")
 		}
 		if firstText(mn.Label) == "" {
 			v.add(f+".label", "required", "label is required")

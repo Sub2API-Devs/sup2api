@@ -1252,7 +1252,7 @@ flowchart TD
 Vue 3 + Vite + TypeScript + Pinia + Vue Router + Tailwind。菜单、路由权限、按钮权限全部由后端数据驱动：
 
 - `GET /api/me`：用户信息、权限集合
-- `GET /api/me/menus`：核心菜单 + 已启用插件的菜单（已按权限过滤）
+- `GET /api/me/menus`：核心菜单 + 已启用插件的菜单（已按权限过滤）。插件菜单可进共享的"插件"区、追加到某个核心区，或放进插件自己声明的区（manifest `ui.sections`，按 `order` 与核心区穿插；CONTRACTS §22）
 - `GET /api/ui/plugins`：已启用插件的前端扩展声明（页面、插槽、原生入口地址）
 
 ### 12.2 插件界面的三种方式

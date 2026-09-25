@@ -103,7 +103,7 @@
 | POST `/auth/logout` | auth | 请求体 `{refresh_token?}` 可选；吊销该 refresh token |
 | POST `/auth/step-up` | auth | `{password}` → `{step_up_token, expires_in}` |
 | GET `/me` | auth | `{id, email, display_name, roles:[key], permissions:[key], superuser}` |
-| GET `/me/menus` | auth | 侧边栏：`[{section, label:{en,zh}, items:[{id, label, icon, path, plugin_key?}]}]`；section 为 `overview/gateway/finance/system/me/plugins`（核心菜单按权限过滤，加上插件菜单） |
+| GET `/me/menus` | auth | 侧边栏：`[{section, label:{en,zh}, items:[{id, label, icon, path, plugin_key?}]}]`；section 为 `overview/gateway/finance/system/me/plugins` 或插件自己的区 `<插件key>:<id>`（核心菜单按权限过滤，加上插件菜单；§22） |
 | PUT `/me/password` | auth | `{old_password, new_password}` |
 
 ### 5.2 用户、角色、权限（A）
@@ -664,7 +664,7 @@ GET `/ui/plugins`（登录即可）→ 不分页数组，只含当前 generation
 | `key`、`version` | |
 | `name` | `{en, zh}` |
 | `asset_base` | `/plugin-ui/{key}/{version_hash}`，拼接包内相对路径加载资源 |
-| `menus` | `[{id, section, label, icon?, page, permission?, order?}]`；按调用者权限过滤（`permission` 为插件内 key，检查 `plugin.<key>:<permission>`） |
+| `menus` | `[{id, section, label, icon?, page, permission?, order?}]`；按调用者权限过滤（`permission` 为插件内 key，检查 `plugin.<key>:<permission>`）；`section` 为 manifest 原值（§22） |
 | `pages` | `{<page_id>: {type, title?, source?, columns?, schema?, submit?, src?, component?}}`；只被无权限菜单引用的页面被去掉 |
 | `slots` | `[{slot, component, permission?}]`，按权限过滤 |
 | `native_entry` | 仅 `trust` 为 `official`/`verified` 时返回 manifest `ui.native.entry`，否则空串 |
@@ -1077,3 +1077,14 @@ type ProxyResolver interface {
 
 - 单元/DB：`authz`（新 key、标签、敏感判定、菜单 anyOf：`TestOwnershipCatalog`）、`httpapi`（`PermAny` 命中全部/命中自己/都不命中/敏感 step-up、`Perm` 也写 `Granted`：`router_test.go`，无需 DB）、`audit`（fake Querier，无需 DB）、`proxy`（`ParseURL` 表驱动含 socks5h/IPv6/path 拒绝/错误不回显密码、`HTTPClientFor`：无需 DB；`TestOwnership` own 范围的列表/详情/改/删/测试越权 404、`created_by`/`created_by_email`、`mine`/`created_by` 筛选、审计行；`TestFindOrCreate` 命中/新建/密码不同新建/无密码/跳过禁用/own 范围看不到别人的/host 大小写/`AuditAutoCreate`/并发只建一条：需要 DB）、`account`（`ownership_test.go`；需要 DB：`TestOwnership` own 范围的列表/详情/改/删/测试/models/fetch/reveal 越权 404、只读角色 403、`mine`/`created_by` 筛选、`created_by_email`（含软删除的创建人）、审计行；`TestProxyURL` 命中/新建/`proxy_created`、own 范围各建各的、全部范围取最小 id、PATCH 换址、conflict、空串视同未给、invalid 不回显密码、无代理权限 403、自己级用别人的 `proxy_id` not_found、`models/fetch` 经 `proxy_url` 不建代理；`TestGuardedSettings` forbidden/官方与等价形式/空值/原值放行/`account:settings:custom`/relay 不限/form 改写 enum+readonly 且管理员不改写、缓存原件不变。无需 DB：`TestGuardNorm`、`TestCheckGuarded`、`TestGuardForm`、`TestInputProxyURL`）。
 - e2e AC23：建供应商角色与两个供应商用户、只读角色；供应商 A 建账号（带 `proxy_url`，第二次同串复用同一 `proxy_id`，`proxy_created=false`）、看不到 B 的账号（列表不含、详情 404、PATCH 404）、改 base_url 为非官方 400 forbidden、官方地址通过；只读用户列表能看到全部、PATCH 403、reveal 403；管理员用 `mine=true` 与 `created_by` 筛选；审计日志有 `account.create`/`proxy.create{auto:true}`。
+
+## 22. 插件自己的侧栏菜单区（2026-09-25，用户要求）
+
+插件菜单原来只能进侧栏最底下的"插件"区。现在 manifest `ui` 支持：
+
+- `ui.sections: [{id, label:{en,zh}, order?}]`：插件声明自己的侧栏区。`id` 用 manifest 的 id 规则，不能是核心区的 id（`overview` `gateway` `finance` `system` `me` `plugins`）；`label` 必填；`order` 决定与核心区的相对位置（核心区固定：overview 100、gateway 200、finance 300、system 400、me 500、plugins 600；不写 `order` 排在 plugins 同级 600）。
+- `ui.menus[].section` 可以是：`plugins`（共享的"插件"区，原行为）、核心区 id（菜单项**追加**到该核心区末尾，按 `order` 排）、或 `ui.sections` 里声明的 id。其他值校验失败 `ui.menus[i].section / invalid`。
+
+`GET /me/menus` 的输出：插件自己的区 `section` 为 `<插件key>:<section id>`，`label` 取声明；各区按 order 排序（同 order 保持核心在前、插件按 key 顺序），空区不返回；菜单项仍按权限过滤，插件禁用后随之消失。`GET /ui/plugins` 的 `menus[].section` 原样返回 manifest 值（前端回退菜单只在服务端菜单不可用时使用，仍把插件项放"插件"区）。
+
+内置 moderation（0.1.1）声明 `sections: [{id:"safety", label:{en:"Safety", zh:"安全"}, order: 350}]`，"提示词审核"菜单放在这个区，显示在"财务"和"系统"之间。e2e AC22 断言该区的位置和内容。
