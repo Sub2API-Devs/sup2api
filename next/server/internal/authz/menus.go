@@ -47,8 +47,8 @@ var coreMenus = []coreMenuSection{
 	}},
 	{"gateway", lt("Gateway", "网关"), []coreMenuItem{
 		{"groups", lt("Groups", "分组"), "group", "/groups", []string{"group:read"}},
-		{"accounts", lt("Accounts", "账号"), "account", "/accounts", []string{"account:read"}},
-		{"proxies", lt("Proxies", "代理"), "proxy", "/proxies", []string{"proxy:read"}},
+		{"accounts", lt("Accounts", "账号"), "account", "/accounts", []string{"account:read", "account:own:read", "account:own:create"}},
+		{"proxies", lt("Proxies", "代理"), "proxy", "/proxies", []string{"proxy:read", "proxy:own:read", "proxy:own:manage"}},
 		{"prices", lt("Model prices", "模型价格"), "price", "/prices", []string{"price:read"}},
 		{"usage", lt("Usage records", "使用记录"), "usage", "/usage", []string{"usage:all:read"}},
 		{"sticky", lt("Sticky sessions", "粘性会话"), "sticky", "/sticky", []string{"sticky:read"}},
@@ -59,7 +59,7 @@ var coreMenus = []coreMenuSection{
 	{"system", lt("System", "系统"), []coreMenuItem{
 		{"users", lt("Users", "用户"), "user", "/users", []string{"user:read"}},
 		{"api-keys", lt("API keys", "API Key"), "key", "/api-keys", []string{"apikey:all:read"}},
-		{"platforms", lt("Platforms", "平台"), "globe", "/platforms", []string{"account:read"}},
+		{"platforms", lt("Platforms", "平台"), "globe", "/platforms", []string{"account:read", "account:own:read", "account:own:create"}},
 		{"roles", lt("Roles & permissions", "角色与权限"), "role", "/roles", []string{"role:read"}},
 		{"plugins", lt("Plugins", "插件"), "plugin", "/plugins", []string{"plugin:read"}},
 		{"market", lt("Plugin market", "插件市场"), "market", "/market", []string{"plugin:market:read"}},

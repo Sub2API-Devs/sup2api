@@ -54,10 +54,21 @@ var coreModules = []coreModule{
 		{"account:delete", "Delete accounts", "删除账号", true},
 		{"account:test", "Test accounts", "测试账号", false},
 		{"account:credential:view", "View account credentials", "查看账号凭证", true},
+		// Ownership (CONTRACTS §21): "own" keys only reach accounts the caller
+		// created; a full key above overrides its own counterpart.
+		{"account:own:read", "Read own accounts", "查看自己创建的账号", false},
+		{"account:own:create", "Create own accounts", "新建账号（归自己所有）", false},
+		{"account:own:update", "Edit own accounts", "编辑自己创建的账号", false},
+		{"account:own:delete", "Delete own accounts", "删除自己创建的账号", false},
+		{"account:own:test", "Test own accounts", "测试自己创建的账号", false},
+		{"account:own:credential:view", "View own account credentials", "查看自己创建账号的凭证", true},
+		{"account:settings:custom", "Custom guarded settings (e.g. base URL)", "自定义受限设置（如 Base URL）", false},
 	}},
 	{"proxy", lt("Proxies", "代理"), []corePerm{
 		{"proxy:read", "View proxies", "查看代理", false},
 		{"proxy:manage", "Manage proxies", "管理代理", false},
+		{"proxy:own:read", "View own proxies", "查看自己创建的代理", false},
+		{"proxy:own:manage", "Manage own proxies", "管理自己创建的代理", false},
 	}},
 	{"price", lt("Model prices", "模型价格"), []corePerm{
 		{"price:read", "View model prices", "查看模型价格", false},

@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
@@ -93,7 +94,7 @@ func (a *API) RegisterRoutes(r *httpapi.Router) {
 
 // ctx returns the request context carrying the client IP for audit logs.
 func ctx(c *gin.Context) context.Context {
-	return install.WithClientIP(c.Request.Context(), c.ClientIP())
+	return audit.WithClientIP(c.Request.Context(), c.ClientIP())
 }
 
 func actor(c *gin.Context) int64 {
@@ -103,7 +104,7 @@ func actor(c *gin.Context) int64 {
 
 // audit writes an audit row outside a transaction (after controller calls).
 func (a *API) audit(c *gin.Context, action, key string, detail any) {
-	_ = install.Audit(ctx(c), a.d.DB.Pool, actor(c), action, "plugin", key, detail)
+	_ = audit.Audit(ctx(c), a.d.DB.Pool, actor(c), action, "plugin", key, detail)
 }
 
 // pluginExists returns the plugin status or renders not_found.

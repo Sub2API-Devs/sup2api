@@ -196,4 +196,47 @@ type AccountDirectory interface {
 // rebuilt when a proxy changes.
 type ProxyDirectory interface {
 	HTTPClient(ctx context.Context, proxyID *int64) (*http.Client, error)
+	// HTTPClientFor builds a transient client for a proxy that is not (or
+	// not yet) stored, e.g. a proxy_url given to a models/fetch request
+	// (CONTRACTS §21.4). Nothing is cached or written; the caller should
+	// CloseIdleConnections when done. spec must already be validated
+	// (proxy.ParseURL).
+	HTTPClientFor(ctx context.Context, spec ProxySpec) (*http.Client, error)
+}
+
+// ProxySpec is a parsed proxy address (proxy.ParseURL, CONTRACTS §21.4).
+// Protocol is http, https or socks5 (socks5h is normalised to socks5);
+// Host is lower-case without IPv6 brackets.
+type ProxySpec struct {
+	Protocol string
+	Host     string
+	Port     int
+	Username string
+	Password string
+}
+
+// ProxyResolver finds or creates the proxy row matching a parsed proxy URL
+// when an account is saved with proxy_url (CONTRACTS §21.4). Implemented by
+// proxy.Service, injected into account.Deps.
+type ProxyResolver interface {
+	// FindOrCreate returns the id of the enabled proxy equal to spec in
+	// protocol, host, port, username and password, restricted to rows the
+	// caller may see (scope nil = all, otherwise created_by = *scope; NULL
+	// created_by rows only match under nil), or inserts a new one owned by
+	// ownerID (name "<protocol>://<host>:<port>", status active). It must
+	// run inside the caller's transaction (tx) together with the account
+	// write; it takes pg_advisory_xact_lock on the match key first so two
+	// concurrent saves of the same URL never create duplicates.
+	//
+	// It writes no audit row and sends no broadcast: the account id the
+	// audit detail needs does not exist yet when the account is being
+	// created. After the account row is written, callers pass created ==
+	// true rows to AuditAutoCreate in the same transaction.
+	FindOrCreate(ctx context.Context, tx pgx.Tx, spec ProxySpec, ownerID int64, scope *int64) (id int64, created bool, err error)
+	// AuditAutoCreate records the audit row proxy.create {auto:true,
+	// account_id} (actor = ownerID, ip from audit.WithClientIP on ctx) for a
+	// proxy FindOrCreate just inserted, and announces the new proxy on
+	// config:changed. Call it once per created proxy, in the same
+	// transaction, after the account id is known.
+	AuditAutoCreate(ctx context.Context, tx pgx.Tx, proxyID, ownerID, accountID int64) error
 }

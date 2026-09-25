@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -132,7 +133,7 @@ func (s *Service) Upload(ctx context.Context, data []byte, actorID int64, opt Up
 				return err
 			}
 		}
-		return Audit(ctx, tx, actorID, "plugin.upload", "plugin", m.Key, map[string]any{
+		return audit.Audit(ctx, tx, actorID, "plugin.upload", "plugin", m.Key, map[string]any{
 			"version": m.Version, "sha256": p.SHA256, "trust": ver.Trust, "signature_status": ver.SignatureStatus,
 			"source": opt.Source,
 		})

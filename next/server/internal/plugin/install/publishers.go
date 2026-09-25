@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pkgsig"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -147,7 +148,7 @@ func (s *Service) CreatePublisher(ctx context.Context, in CreatePublisherInput, 
 				return err
 			}
 		}
-		return Audit(ctx, tx, actorID, "publisher.create", "publisher", strconv.FormatInt(id, 10), map[string]any{"name": in.Name, "trust_level": in.TrustLevel, "keys": len(in.Keys)})
+		return audit.Audit(ctx, tx, actorID, "publisher.create", "publisher", strconv.FormatInt(id, 10), map[string]any{"name": in.Name, "trust_level": in.TrustLevel, "keys": len(in.Keys)})
 	})
 	if store.IsUniqueViolation(err, "") {
 		return nil, core.ErrConflict.WithMessage("publisher or key id already exists")
@@ -184,7 +185,7 @@ func (s *Service) AddPublisherKey(ctx context.Context, pubID int64, k KeyInput, 
 		if err := insertKey(ctx, tx, pubID, k); err != nil {
 			return err
 		}
-		return Audit(ctx, tx, actorID, "publisher.key.add", "publisher", strconv.FormatInt(pubID, 10), map[string]any{"key_id": k.KeyID})
+		return audit.Audit(ctx, tx, actorID, "publisher.key.add", "publisher", strconv.FormatInt(pubID, 10), map[string]any{"key_id": k.KeyID})
 	})
 	if store.IsUniqueViolation(err, "") {
 		return nil, core.ErrConflict.WithMessage("key id already exists")
@@ -237,7 +238,7 @@ func (s *Service) RevokePublisher(ctx context.Context, pubID int64, reason strin
 			pubID, "publisher revoked: "+reason); err != nil {
 			return err
 		}
-		return Audit(ctx, tx, actorID, "publisher.revoke", "publisher", strconv.FormatInt(pubID, 10), map[string]any{"reason": reason, "revoked_versions": res.RevokedVersions})
+		return audit.Audit(ctx, tx, actorID, "publisher.revoke", "publisher", strconv.FormatInt(pubID, 10), map[string]any{"reason": reason, "revoked_versions": res.RevokedVersions})
 	})
 	if err != nil {
 		return nil, err
@@ -271,7 +272,7 @@ func (s *Service) RevokeKey(ctx context.Context, keyID, reason string, actorID i
 			              AND (v.version = p.active_version OR v.version = p.desired_version))`, keyID); err != nil {
 			return err
 		}
-		return Audit(ctx, tx, actorID, "publisher_key.revoke", "publisher_key", keyID, map[string]any{"reason": reason, "revoked_versions": res.RevokedVersions})
+		return audit.Audit(ctx, tx, actorID, "publisher_key.revoke", "publisher_key", keyID, map[string]any{"reason": reason, "revoked_versions": res.RevokedVersions})
 	})
 	if err != nil {
 		return nil, err

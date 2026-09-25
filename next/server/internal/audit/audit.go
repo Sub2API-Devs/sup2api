@@ -1,8 +1,13 @@
-package install
+// Package audit writes audit_logs rows (CONTRACTS §21.2). It is shared by
+// every module that records console actions: plugin lifecycle, publishers,
+// accounts and proxies.
+package audit
 
 import (
 	"context"
 	"encoding/json"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
@@ -14,12 +19,21 @@ func WithClientIP(ctx context.Context, ip string) context.Context {
 	return context.WithValue(ctx, ipKey{}, ip)
 }
 
-func clientIP(ctx context.Context) string {
+// ClientIP returns the IP stored by WithClientIP ("" when absent).
+func ClientIP(ctx context.Context) string {
 	ip, _ := ctx.Value(ipKey{}).(string)
 	return ip
 }
 
-// Audit writes one audit_logs row. actorID 0 means system.
+// Context returns the request context carrying the client IP, for handlers
+// that audit: pass it to Audit (and to everything else in the handler, so
+// nested audits see the IP too).
+func Context(c *gin.Context) context.Context {
+	return WithClientIP(c.Request.Context(), c.ClientIP())
+}
+
+// Audit writes one audit_logs row. actorID 0 means system. detail nil is
+// written as {}. q may be the pool or a transaction.
 func Audit(ctx context.Context, q store.Querier, actorID int64, action, targetType, targetID string, detail any) error {
 	var uid *int64
 	if actorID > 0 {
@@ -32,7 +46,7 @@ func Audit(ctx context.Context, q store.Querier, actorID int64, action, targetTy
 	if err != nil {
 		return err
 	}
-	ip := clientIP(ctx)
+	ip := ClientIP(ctx)
 	if len(ip) > 64 {
 		ip = ip[:64]
 	}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
@@ -105,7 +106,7 @@ func (s *Service) Uninstall(ctx context.Context, key string, opt UninstallOption
 		if _, err := tx.Exec(ctx, `DELETE FROM plugin_egress_domains WHERE plugin_key = $1`, key); err != nil {
 			return err
 		}
-		return Audit(ctx, tx, actorID, "plugin.uninstall", "plugin", key, map[string]any{
+		return audit.Audit(ctx, tx, actorID, "plugin.uninstall", "plugin", key, map[string]any{
 			"purge": purge, "purge_accounts": opt.PurgeAccounts, "previous_status": st})
 	})
 	if err != nil {
@@ -118,7 +119,7 @@ func (s *Service) Uninstall(ctx context.Context, key string, opt UninstallOption
 	// The plugin row is gone; accounts carry plugin_key without a foreign
 	// key, so the account module can still find and delete them.
 	n, err := s.d.Accounts.PurgePluginAccounts(ctx, key)
-	if aerr := Audit(ctx, s.d.DB.Pool, actorID, "plugin.accounts.purge", "plugin", key, map[string]any{
+	if aerr := audit.Audit(ctx, s.d.DB.Pool, actorID, "plugin.accounts.purge", "plugin", key, map[string]any{
 		"accounts_deleted": n, "ok": err == nil}); aerr != nil {
 		slog.WarnContext(ctx, "audit account purge", "plugin", key, "err", aerr)
 	}

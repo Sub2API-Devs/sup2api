@@ -44,6 +44,26 @@ func (r *Router) Perm(method, path, permission string, h ...gin.HandlerFunc) {
 	r.api.Handle(method, path, append(chain, h...)...)
 }
 
+// PermAny registers a route the caller may use with any one of keys, e.g.
+// the "all" key and its "own" counterpart (CONTRACTS §21.1). Every key the
+// caller holds is recorded in the request context (Granted /
+// core.OwnerScope); if any held key is sensitive a valid X-Step-Up-Token is
+// required. Without a match the response is permission_denied with
+// details.permission = keys[0].
+func (r *Router) PermAny(method, path string, handler gin.HandlerFunc, keys ...string) {
+	if len(keys) == 0 {
+		panic("httpapi: PermAny without permission keys")
+	}
+	chain := []gin.HandlerFunc{r.authenticate(), r.requireAny(keys), handler}
+	r.api.Handle(method, path, chain...)
+}
+
+// Granted returns the permission keys the route middleware matched for the
+// caller (see core.Granted).
+func Granted(c *gin.Context) []string {
+	return core.Granted(c.Request.Context())
+}
+
 // Group exposes the raw group for special cases (plugin route proxy).
 func (r *Router) Group() *gin.RouterGroup { return r.api }
 
@@ -84,6 +104,40 @@ func (r *Router) require(permission string) gin.HandlerFunc {
 				return
 			}
 		}
+		c.Request = c.Request.WithContext(core.WithGranted(ctx, []string{permission}))
+		c.Next()
+	}
+}
+
+func (r *Router) requireAny(keys []string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		uid, _ := core.UserID(ctx)
+		granted := make([]string, 0, len(keys))
+		sensitive := false
+		for _, k := range keys {
+			ok, err := r.authz.Can(ctx, uid, k)
+			if err != nil {
+				Fail(c, err)
+				return
+			}
+			if !ok {
+				continue
+			}
+			granted = append(granted, k)
+			sensitive = sensitive || r.authz.IsSensitive(k)
+		}
+		if len(granted) == 0 {
+			Fail(c, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": keys[0]}))
+			return
+		}
+		if sensitive {
+			if err := r.stepUp.VerifyStepUp(ctx, uid, c.GetHeader("X-Step-Up-Token")); err != nil {
+				Fail(c, core.ErrStepUpRequired.WithCause(err))
+				return
+			}
+		}
+		c.Request = c.Request.WithContext(core.WithGranted(ctx, granted))
 		c.Next()
 	}
 }

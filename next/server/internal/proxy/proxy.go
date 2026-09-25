@@ -20,6 +20,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
@@ -84,14 +85,16 @@ func New(db *store.DB, cipher *secret.Cipher, bus core.Bus, opts Options) *Servi
 	}
 }
 
-// RegisterRoutes mounts the proxy endpoints.
+// RegisterRoutes mounts the proxy endpoints. Every route accepts the "all"
+// key or its "own" counterpart (CONTRACTS §21.2); handlers narrow their SQL
+// with core.OwnerScope.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
-	r.Perm("GET", "/proxies", "proxy:read", s.list)
-	r.Perm("POST", "/proxies", "proxy:manage", s.create)
-	r.Perm("GET", "/proxies/:id", "proxy:read", s.get)
-	r.Perm("PATCH", "/proxies/:id", "proxy:manage", s.update)
-	r.Perm("DELETE", "/proxies/:id", "proxy:manage", s.delete)
-	r.Perm("POST", "/proxies/:id/test", "proxy:manage", s.test)
+	r.PermAny("GET", "/proxies", s.list, "proxy:read", "proxy:own:read")
+	r.PermAny("POST", "/proxies", s.create, "proxy:manage", "proxy:own:manage")
+	r.PermAny("GET", "/proxies/:id", s.get, "proxy:read", "proxy:own:read")
+	r.PermAny("PATCH", "/proxies/:id", s.update, "proxy:manage", "proxy:own:manage")
+	r.PermAny("DELETE", "/proxies/:id", s.delete, "proxy:manage", "proxy:own:manage")
+	r.PermAny("POST", "/proxies/:id/test", s.test, "proxy:manage", "proxy:own:manage")
 }
 
 // changeMsg is published on config:changed when a proxy changes.
@@ -259,27 +262,31 @@ func (e *entry) result() (*http.Client, error) {
 
 // Proxy is the API view of a proxies row (the password is never returned).
 type Proxy struct {
-	ID           int64     `json:"id"`
-	Name         string    `json:"name"`
-	Protocol     string    `json:"protocol"`
-	Host         string    `json:"host"`
-	Port         int       `json:"port"`
-	Username     string    `json:"username"`
-	HasPassword  bool      `json:"has_password"`
-	Status       string    `json:"status"`
-	AccountCount int64     `json:"account_count"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID           int64  `json:"id"`
+	Name         string `json:"name"`
+	Protocol     string `json:"protocol"`
+	Host         string `json:"host"`
+	Port         int    `json:"port"`
+	Username     string `json:"username"`
+	HasPassword  bool   `json:"has_password"`
+	Status       string `json:"status"`
+	AccountCount int64  `json:"account_count"`
+	CreatedBy    *int64 `json:"created_by"`
+	// CreatedByEmail is the creator's email, also for soft-deleted users.
+	CreatedByEmail *string   `json:"created_by_email"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 const selectProxy = `SELECT p.id, p.name, p.protocol, p.host, p.port, p.username, p.password_enc IS NOT NULL,
 	p.status, (SELECT count(*) FROM accounts a WHERE a.proxy_id = p.id AND a.deleted_at IS NULL),
-	p.created_at, p.updated_at FROM proxies p`
+	p.created_by, u.email, p.created_at, p.updated_at
+	FROM proxies p LEFT JOIN users u ON u.id = p.created_by`
 
 func scanProxy(r pgx.Row) (*Proxy, error) {
 	var p Proxy
 	err := r.Scan(&p.ID, &p.Name, &p.Protocol, &p.Host, &p.Port, &p.Username, &p.HasPassword,
-		&p.Status, &p.AccountCount, &p.CreatedAt, &p.UpdatedAt)
+		&p.Status, &p.AccountCount, &p.CreatedBy, &p.CreatedByEmail, &p.CreatedAt, &p.UpdatedAt)
 	return &p, err
 }
 
@@ -294,8 +301,17 @@ func notFound(ctx context.Context) error {
 	return core.ErrNotFound.WithMessage(t(ctx, "proxy not found", "代理不存在"))
 }
 
-func (s *Service) load(ctx context.Context, id int64) (*Proxy, error) {
-	p, err := scanProxy(s.db.Pool.QueryRow(ctx, selectProxy+` WHERE p.id = $1`, id))
+// scoped is the ownership condition every scoped statement carries on the
+// bigint parameter param (e.g. "$2"): nil for the "all" permission (every
+// row), otherwise the caller id (rows the caller created; created_by NULL
+// never matches).
+func scoped(param string) string {
+	return "(" + param + "::bigint IS NULL OR p.created_by = " + param + ")"
+}
+
+// load returns one proxy visible in scope (nil = all); others are 404.
+func (s *Service) load(ctx context.Context, id int64, scope *int64) (*Proxy, error) {
+	p, err := scanProxy(s.db.Pool.QueryRow(ctx, selectProxy+` WHERE p.id = $1 AND `+scoped("$2"), id, scope))
 	if store.IsNoRows(err) {
 		return nil, notFound(ctx)
 	}
@@ -307,13 +323,31 @@ func (s *Service) list(c *gin.Context) {
 	page, size := httpapi.Pagination(c)
 	q := strings.TrimSpace(c.Query("q"))
 	status := c.Query("status")
-	where := ` WHERE ($1 = '' OR p.name ILIKE '%' || $1 || '%' OR p.host ILIKE '%' || $1 || '%') AND ($2 = '' OR p.status = $2)`
+	// Visible range: the caller's own rows unless proxy:read was granted;
+	// mine=true narrows to own rows either way; created_by=<id> filters
+	// within the "all" range and is ignored under the own range.
+	scope := core.OwnerScope(ctx, "proxy:read")
+	if mine, _ := strconv.ParseBool(c.Query("mine")); mine {
+		uid, _ := core.UserID(ctx)
+		scope = &uid
+	}
+	if v := c.Query("created_by"); v != "" && scope == nil {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || id <= 0 {
+			httpapi.Fail(c, core.InvalidFields(core.FieldError{Field: "created_by", Code: "invalid",
+				Message: t(ctx, "created_by must be a user id", "created_by 必须是用户 ID")}))
+			return
+		}
+		scope = &id
+	}
+	where := ` WHERE ($1 = '' OR p.name ILIKE '%' || $1 || '%' OR p.host ILIKE '%' || $1 || '%') AND ($2 = '' OR p.status = $2)
+		AND ` + scoped("$3")
 	var total int64
-	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM proxies p`+where, q, status).Scan(&total); err != nil {
+	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM proxies p`+where, q, status, scope).Scan(&total); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	rows, err := s.db.Pool.Query(ctx, selectProxy+where+` ORDER BY p.id LIMIT $3 OFFSET $4`, q, status, size, (page-1)*size)
+	rows, err := s.db.Pool.Query(ctx, selectProxy+where+` ORDER BY p.id LIMIT $4 OFFSET $5`, q, status, scope, size, (page-1)*size)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -340,7 +374,8 @@ func (s *Service) get(c *gin.Context) {
 	if !ok {
 		return
 	}
-	p, err := s.load(c.Request.Context(), id)
+	ctx := c.Request.Context()
+	p, err := s.load(ctx, id, core.OwnerScope(ctx, "proxy:read"))
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -417,8 +452,36 @@ func (s *Service) encryptPassword(pw *string) ([]byte, error) {
 	return s.cipher.Encrypt([]byte(*pw), passwordAAD)
 }
 
+// changedFields lists the input fields present in a PATCH (audit detail:
+// names only, never values).
+func (in *input) changedFields() []string {
+	var out []string
+	if in.Name != nil {
+		out = append(out, "name")
+	}
+	if in.Protocol != nil {
+		out = append(out, "protocol")
+	}
+	if in.Host != nil {
+		out = append(out, "host")
+	}
+	if in.Port != nil {
+		out = append(out, "port")
+	}
+	if in.Username != nil {
+		out = append(out, "username")
+	}
+	if in.Password != nil {
+		out = append(out, "password")
+	}
+	if in.Status != nil {
+		out = append(out, "status")
+	}
+	return out
+}
+
 func (s *Service) create(c *gin.Context) {
-	ctx := c.Request.Context()
+	ctx := audit.Context(c)
 	var in input
 	if !httpapi.BindJSON(c, &in) {
 		return
@@ -439,14 +502,23 @@ func (s *Service) create(c *gin.Context) {
 	if in.Status != nil {
 		status = *in.Status
 	}
+	uid, _ := core.UserID(ctx)
 	var id int64
-	if err := s.db.Pool.QueryRow(ctx, `INSERT INTO proxies (name, protocol, host, port, username, password_enc, status)
-		VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-		*in.Name, *in.Protocol, *in.Host, *in.Port, user, enc, status).Scan(&id); err != nil {
+	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `INSERT INTO proxies (name, protocol, host, port, username, password_enc, status, created_by)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+			*in.Name, *in.Protocol, *in.Host, *in.Port, user, enc, status, uid).Scan(&id); err != nil {
+			return err
+		}
+		return audit.Audit(ctx, tx, uid, "proxy.create", "proxy", strconv.FormatInt(id, 10), map[string]any{
+			"auto": false, "name": *in.Name, "protocol": *in.Protocol, "host": *in.Host, "port": *in.Port,
+		})
+	})
+	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	p, err := s.load(ctx, id)
+	p, err := s.load(ctx, id, nil)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -455,7 +527,7 @@ func (s *Service) create(c *gin.Context) {
 }
 
 func (s *Service) update(c *gin.Context) {
-	ctx := c.Request.Context()
+	ctx := audit.Context(c)
 	id, ok := httpapi.PathID(c, "id")
 	if !ok {
 		return
@@ -473,26 +545,35 @@ func (s *Service) update(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	tag, err := s.db.Pool.Exec(ctx, `UPDATE proxies SET
-		name = COALESCE($2, name),
-		protocol = COALESCE($3, protocol),
-		host = COALESCE($4, host),
-		port = COALESCE($5, port),
-		username = COALESCE($6, username),
-		password_enc = CASE WHEN $7 THEN $8 ELSE password_enc END,
-		status = COALESCE($9, status),
-		updated_at = clock_timestamp()
-		WHERE id = $1`, id, in.Name, in.Protocol, in.Host, in.Port, in.Username, in.Password != nil, enc, in.Status)
+	scope := core.OwnerScope(ctx, "proxy:manage")
+	uid, _ := core.UserID(ctx)
+	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE proxies p SET
+			name = COALESCE($2, name),
+			protocol = COALESCE($3, protocol),
+			host = COALESCE($4, host),
+			port = COALESCE($5, port),
+			username = COALESCE($6, username),
+			password_enc = CASE WHEN $7 THEN $8 ELSE password_enc END,
+			status = COALESCE($9, status),
+			updated_at = clock_timestamp()
+			WHERE p.id = $1 AND `+scoped("$10"),
+			id, in.Name, in.Protocol, in.Host, in.Port, in.Username, in.Password != nil, enc, in.Status, scope)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return notFound(ctx)
+		}
+		return audit.Audit(ctx, tx, uid, "proxy.update", "proxy", strconv.FormatInt(id, 10),
+			map[string]any{"fields": in.changedFields()})
+	})
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	if tag.RowsAffected() == 0 {
-		httpapi.Fail(c, notFound(ctx))
-		return
-	}
 	s.changed(ctx, id)
-	p, err := s.load(ctx, id)
+	p, err := s.load(ctx, id, scope)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -501,12 +582,24 @@ func (s *Service) update(c *gin.Context) {
 }
 
 func (s *Service) delete(c *gin.Context) {
-	ctx := c.Request.Context()
+	ctx := audit.Context(c)
 	id, ok := httpapi.PathID(c, "id")
 	if !ok {
 		return
 	}
+	scope := core.OwnerScope(ctx, "proxy:manage")
+	uid, _ := core.UserID(ctx)
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
+		// Visibility first: a proxy outside the caller's range is 404 even
+		// when it is in use.
+		var name string
+		err := tx.QueryRow(ctx, `SELECT p.name FROM proxies p WHERE p.id = $1 AND `+scoped("$2")+` FOR UPDATE`, id, scope).Scan(&name)
+		if store.IsNoRows(err) {
+			return notFound(ctx)
+		}
+		if err != nil {
+			return err
+		}
 		var n int64
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM accounts WHERE proxy_id = $1 AND deleted_at IS NULL`, id).Scan(&n); err != nil {
 			return err
@@ -517,14 +610,10 @@ func (s *Service) delete(c *gin.Context) {
 				"the proxy is used by accounts; reassign them first",
 				"该代理仍被账号使用，请先修改这些账号的代理")).WithDetails(map[string]any{"account_count": n})
 		}
-		tag, err := tx.Exec(ctx, `DELETE FROM proxies WHERE id = $1`, id)
-		if err != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM proxies WHERE id = $1`, id); err != nil {
 			return err
 		}
-		if tag.RowsAffected() == 0 {
-			return notFound(ctx)
-		}
-		return nil
+		return audit.Audit(ctx, tx, uid, "proxy.delete", "proxy", strconv.FormatInt(id, 10), map[string]any{"name": name})
 	})
 	if err != nil {
 		httpapi.Fail(c, err)
@@ -549,7 +638,8 @@ func (s *Service) test(c *gin.Context) {
 		return
 	}
 	var r row
-	err := s.db.Pool.QueryRow(ctx, `SELECT protocol, host, port, username, password_enc FROM proxies WHERE id = $1`, id).
+	err := s.db.Pool.QueryRow(ctx, `SELECT p.protocol, p.host, p.port, p.username, p.password_enc FROM proxies p
+		WHERE p.id = $1 AND `+scoped("$2"), id, core.OwnerScope(ctx, "proxy:manage")).
 		Scan(&r.Protocol, &r.Host, &r.Port, &r.Username, &r.PasswordEnc)
 	if store.IsNoRows(err) {
 		httpapi.Fail(c, notFound(ctx))

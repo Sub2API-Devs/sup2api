@@ -3,6 +3,7 @@ package authz
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -461,4 +462,53 @@ func join(s []string) string {
 		out += x
 	}
 	return out
+}
+
+// TestOwnershipCatalog pins the CONTRACTS §21.1 keys: labels in both
+// languages, only the credential views are sensitive, the user role is
+// unchanged and the account/proxy menus accept the own keys.
+func TestOwnershipCatalog(t *testing.T) {
+	t.Parallel()
+	defs := map[string]core.PermissionDef{}
+	for _, d := range CorePermissions() {
+		defs[d.Key] = d
+	}
+	want := map[string]bool{ // key -> sensitive
+		"account:own:read": false, "account:own:create": false, "account:own:update": false,
+		"account:own:delete": false, "account:own:test": false, "account:own:credential:view": true,
+		"account:settings:custom": false, "proxy:own:read": false, "proxy:own:manage": false,
+	}
+	for key, sensitive := range want {
+		d, ok := defs[key]
+		if !ok {
+			t.Fatalf("%s missing from catalog", key)
+		}
+		if d.Sensitive != sensitive || coreSensitive[key] != sensitive {
+			t.Fatalf("%s sensitive = %v, want %v", key, d.Sensitive, sensitive)
+		}
+		if d.Label.Get("en") == "" || d.Label.Get("zh") == "" || d.Label.Get("en") == d.Label.Get("zh") {
+			t.Fatalf("%s label = %v", key, d.Label)
+		}
+		if mod := strings.SplitN(key, ":", 2)[0]; d.Module != mod {
+			t.Fatalf("%s module = %s", key, d.Module)
+		}
+	}
+	if join(userRolePermissions) != "apikey:self:manage,balance:self:read,usage:self:read,gateway:use" {
+		t.Fatalf("user role changed: %v", userRolePermissions)
+	}
+	menuKeys := map[string]string{}
+	for _, sec := range coreMenus {
+		for _, it := range sec.items {
+			menuKeys[it.id] = join(it.anyOf)
+		}
+	}
+	if menuKeys["accounts"] != "account:read,account:own:read,account:own:create" ||
+		menuKeys["platforms"] != "account:read,account:own:read,account:own:create" ||
+		menuKeys["proxies"] != "proxy:read,proxy:own:read,proxy:own:manage" {
+		t.Fatalf("menus: %v", menuKeys)
+	}
+	set := core.PermissionSet{Keys: map[string]struct{}{"proxy:own:manage": {}}}
+	if !hasAny(set, []string{"proxy:read", "proxy:own:read", "proxy:own:manage"}) || hasAny(set, []string{"proxy:read"}) {
+		t.Fatal("hasAny")
+	}
 }

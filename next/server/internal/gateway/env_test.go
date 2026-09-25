@@ -516,6 +516,10 @@ func (fakeProxies) HTTPClient(context.Context, *int64) (*http.Client, error) {
 	return &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()}, nil
 }
 
+func (fakeProxies) HTTPClientFor(context.Context, core.ProxySpec) (*http.Client, error) {
+	return &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()}, nil
+}
+
 type fakeSettler struct {
 	ch chan *core.UsageRecord
 }

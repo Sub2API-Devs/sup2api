@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -248,7 +249,7 @@ func (s *Service) Consent(ctx context.Context, key, version string, req ConsentR
 		for _, d := range decisions {
 			summary = append(summary, map[string]any{"permission": d.permission, "status": d.status, "scope": d.scope, "carried": d.carried})
 		}
-		return Audit(ctx, tx, actorID, "plugin.consent", "plugin", key, map[string]any{
+		return audit.Audit(ctx, tx, actorID, "plugin.consent", "plugin", key, map[string]any{
 			"version": version, "upgrade": upgrade, "decisions": summary, "role_keys": req.RoleKeysForNewPermissions,
 		})
 	})
@@ -325,7 +326,7 @@ func (s *Service) Reject(ctx context.Context, key, version string, actorID int64
 				removed = true
 			}
 		}
-		return Audit(ctx, tx, actorID, "plugin.reject", "plugin", key, map[string]any{"version": version, "plugin_removed": removed})
+		return audit.Audit(ctx, tx, actorID, "plugin.reject", "plugin", key, map[string]any{"version": version, "plugin_removed": removed})
 	})
 }
 
@@ -340,7 +341,7 @@ func (s *Service) RevokeGrant(ctx context.Context, key, permission string, actor
 		if tag.RowsAffected() == 0 {
 			return core.ErrNotFound.WithMessage("grant not found")
 		}
-		return Audit(ctx, tx, actorID, "plugin.grant.revoke", "plugin", key, map[string]any{"permission": permission})
+		return audit.Audit(ctx, tx, actorID, "plugin.grant.revoke", "plugin", key, map[string]any{"permission": permission})
 	})
 	if err == nil {
 		s.Notify(ctx, key)
