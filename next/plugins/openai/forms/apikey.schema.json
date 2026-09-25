@@ -17,12 +17,6 @@
       "title": "Base URL",
       "default": "https://api.openai.com",
       "pattern": "^https?://[^\\s?#]+$"
-    },
-    "model_mapping": {
-      "type": "object",
-      "title": "Model mapping",
-      "additionalProperties": { "type": "string", "minLength": 1 },
-      "default": {}
     }
   }
 }

@@ -15,7 +15,7 @@ import (
 
 func start(t *testing.T) *pluginsdktest.Harness {
 	t.Helper()
-	return pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("openai", "0.1.2")}})
+	return pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("openai", "0.1.3")}})
 }
 
 func account(creds, settings string) *pluginv1.Account {
@@ -94,15 +94,26 @@ func TestBuildUpstreamRequest(t *testing.T) {
 		t.Fatalf("non-stream chat: %v %v", r, err)
 	}
 
-	// Responses (stream: usage comes in response.completed, no patch) with
-	// mapping and a custom base URL.
+	// Responses (stream: usage comes in response.completed, no patch) with a
+	// custom base URL. A legacy model_mapping in the settings is ignored:
+	// the model is sent as received (the core maps it before calling the
+	// plugin) and no model patch is emitted.
 	acc := account(`{"api_key":"sk-key-1234"}`, `{"base_url":"http://mock-upstream:8080/v1","model_mapping":{"gpt-4o*":"gpt-4.1","gpt-4o-mini":"exact"}}`)
 	r, err = build(&pluginv1.RequestMeta{Protocol: ProtocolResponses, Model: "gpt-4o-2024-08-06", Stream: true}, acc, nil)
 	if err != nil || r.GetUrl() != "http://mock-upstream:8080/v1/responses" {
 		t.Fatalf("responses: %v %v", r, err)
 	}
-	if p := patches(r); len(p) != 1 || p["model"] != `"gpt-4.1"` || r.GetUpstreamModel() != "gpt-4.1" {
+	if len(r.GetPatches()) != 0 || r.GetUpstreamModel() != "gpt-4o-2024-08-06" {
 		t.Fatalf("responses patches = %v upstream = %s", r.GetPatches(), r.GetUpstreamModel())
+	}
+
+	// fields["model"] wins over meta.model as the upstream model.
+	r, err = h.Platform.BuildUpstreamRequest(ctx, &pluginv1.BuildUpstreamRequestRequest{
+		Meta: &pluginv1.RequestMeta{Protocol: ProtocolChat, Model: "gpt-4o"}, Account: account(`{"api_key":"sk-key-1234"}`, ""),
+		Fields: map[string]string{"model": `"gpt-4.1"`},
+	})
+	if err != nil || len(r.GetPatches()) != 0 || r.GetUpstreamModel() != "gpt-4.1" {
+		t.Fatalf("fields model: %v %v", r, err)
 	}
 
 	// Embeddings.
@@ -134,6 +145,8 @@ func TestBuildUpstreamRequest(t *testing.T) {
 
 func TestBuildTestRequest(t *testing.T) {
 	h := start(t)
+	// A legacy model_mapping in the settings is ignored; in.model is used
+	// as-is (the default model when empty).
 	r, err := h.Platform.BuildTestRequest(context.Background(), &pluginv1.BuildTestRequestRequest{
 		Account: account(`{"api_key":"sk-key-1234"}`, `{"model_mapping":{"gpt-4o-mini":"mapped"}}`),
 	})
@@ -148,7 +161,17 @@ func TestBuildTestRequest(t *testing.T) {
 		MaxTokens int    `json:"max_tokens"`
 		Messages  []any  `json:"messages"`
 	}
-	if err := json.Unmarshal([]byte(r.GetBodyJson()), &body); err != nil || body.Model != "mapped" || body.MaxTokens != 1 || len(body.Messages) != 1 {
+	if err := json.Unmarshal([]byte(r.GetBodyJson()), &body); err != nil || body.Model != DefaultTestModel || body.MaxTokens != 1 || len(body.Messages) != 1 {
+		t.Fatalf("body = %s", r.GetBodyJson())
+	}
+
+	r, err = h.Platform.BuildTestRequest(context.Background(), &pluginv1.BuildTestRequestRequest{
+		Account: account(`{"api_key":"sk-key-1234"}`, ""), Model: " gpt-4.1 ",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(r.GetBodyJson()), &body); err != nil || body.Model != "gpt-4.1" {
 		t.Fatalf("body = %s", r.GetBodyJson())
 	}
 }

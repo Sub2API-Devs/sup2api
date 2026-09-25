@@ -105,9 +105,10 @@ func upstreamHeaders(apiKey string, inbound map[string]string) map[string]string
 }
 
 // BuildUpstreamRequest implements pluginsdk.Platform. The upstream path
-// follows meta.protocol. Streaming chat completions get
-// stream_options.include_usage=true so the upstream reports usage in the
-// last chunk (CONTRACTS 14.1).
+// follows meta.protocol. The model is sent as received (the core applies
+// the account's model mapping before calling this method). Streaming chat
+// completions get stream_options.include_usage=true so the upstream
+// reports usage in the last chunk (CONTRACTS 14.1).
 func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstreamRequestRequest) (*pluginv1.BuildUpstreamRequestResponse, error) {
 	cfg, err := spec.FromAccount(in.GetAccount())
 	if err != nil {
@@ -131,11 +132,6 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 		Headers:       upstreamHeaders(cfg.APIKey, in.GetInboundHeaders()),
 		UpstreamModel: model,
 	}
-	if mapped := apikey.MapModel(cfg.ModelMapping, model); mapped != model {
-		v, _ := json.Marshal(mapped)
-		resp.Patches = append(resp.Patches, &pluginv1.BodyPatch{Op: pluginv1.BodyPatch_OP_SET, Path: "model", ValueJson: string(v)})
-		resp.UpstreamModel = mapped
-	}
 	if meta.GetStream() && (meta.GetProtocol() == ProtocolChat || meta.GetProtocol() == "") {
 		resp.Patches = append(resp.Patches, &pluginv1.BodyPatch{Op: pluginv1.BodyPatch_OP_SET, Path: "stream_options.include_usage", ValueJson: "true"})
 	}
@@ -153,7 +149,6 @@ func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestReque
 	if model == "" {
 		model = DefaultTestModel
 	}
-	model = apikey.MapModel(cfg.ModelMapping, model)
 	body, _ := json.Marshal(map[string]any{
 		"model":      model,
 		"max_tokens": 1,

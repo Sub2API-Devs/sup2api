@@ -21,20 +21,23 @@ func TestValidate(t *testing.T) {
 	}{
 		{name: "ok minimal", typ: "apikey", creds: `{"api_key":"  sk-abcdefgh  "}`, wantCreds: `{"api_key":"sk-abcdefgh"}`},
 		{name: "ok with settings", typ: "apikey", creds: `{"api_key":"sk-abcdefgh"}`,
-			settings:  `{"base_url":"https://relay.example.com/v1beta/","model_mapping":{"gpt-*":"gpt-5"}}`,
+			settings:  `{"base_url":"https://relay.example.com/v1beta/"}`,
 			wantCreds: `{"api_key":"sk-abcdefgh"}`,
-			wantSets:  `{"base_url":"https://relay.example.com","model_mapping":{"gpt-*":"gpt-5"}}`},
-		{name: "all in credentials, mapping as string", typ: "apikey",
-			creds:     `{"api_key":"sk-x1234567","base_url":"","model_mapping":"{\"a\":\"b\"}"}`,
-			wantCreds: `{"api_key":"sk-x1234567","base_url":"https://api.example.com","model_mapping":{"a":"b"}}`},
+			wantSets:  `{"base_url":"https://relay.example.com"}`},
+		{name: "all in credentials", typ: "apikey",
+			creds:     `{"api_key":"sk-x1234567","base_url":""}`,
+			wantCreds: `{"api_key":"sk-x1234567","base_url":"https://api.example.com"}`},
+		// Legacy accounts may still carry model_mapping (now a core account
+		// field): it is neither validated nor touched.
+		{name: "legacy model_mapping ignored", typ: "apikey", creds: `{"api_key":"sk-12345678"}`,
+			settings:  `{"model_mapping":{"a":1}}`,
+			wantCreds: `{"api_key":"sk-12345678"}`,
+			wantSets:  `{"model_mapping":{"a":1}}`},
 		{name: "missing key", typ: "apikey", creds: `{}`, wantFields: []string{"api_key"}},
 		{name: "key with space", typ: "apikey", creds: `{"api_key":"sk ab 123456"}`, wantFields: []string{"api_key"}},
 		{name: "key not string", typ: "apikey", creds: `{"api_key":12345678}`, wantFields: []string{"api_key"}},
 		{name: "bad url", typ: "apikey", creds: `{"api_key":"sk-12345678"}`, settings: `{"base_url":"ftp://x"}`, wantFields: []string{"base_url"}},
 		{name: "url with query", typ: "apikey", creds: `{"api_key":"sk-12345678"}`, settings: `{"base_url":"https://x.com?a=1"}`, wantFields: []string{"base_url"}},
-		{name: "bad mapping", typ: "apikey", creds: `{"api_key":"sk-12345678"}`, settings: `{"model_mapping":{"a":1}}`, wantFields: []string{"model_mapping"}},
-		{name: "empty mapping target", typ: "apikey", creds: `{"api_key":"sk-12345678"}`, settings: `{"model_mapping":{"a":""}}`, wantFields: []string{"model_mapping"}},
-		{name: "bad glob", typ: "apikey", creds: `{"api_key":"sk-12345678"}`, settings: `{"model_mapping":{"[a":"b"}}`, wantFields: []string{"model_mapping"}},
 		{name: "wrong type", typ: "oauth", creds: `{"api_key":"sk-12345678"}`, wantFields: []string{"account_type"}},
 		{name: "invalid json", typ: "apikey", creds: `[1]`, wantFields: []string{""}},
 	}
@@ -81,9 +84,10 @@ func assertJSON(t *testing.T, got, want string) {
 }
 
 func TestFromAccount(t *testing.T) {
+	// A legacy model_mapping key in the settings is ignored, not an error.
 	cfg, err := spec.FromAccount(&pluginv1.Account{Id: 1, Type: "apikey", CredentialsJson: `{"api_key":"k-1234567"}`,
 		SettingsJson: `{"base_url":"http://mock:8080/v1/","model_mapping":{"a":"b"}}`})
-	if err != nil || cfg.APIKey != "k-1234567" || cfg.BaseURL != "http://mock:8080" || cfg.ModelMapping["a"] != "b" {
+	if err != nil || cfg.APIKey != "k-1234567" || cfg.BaseURL != "http://mock:8080" {
 		t.Fatalf("cfg = %+v %v", cfg, err)
 	}
 	cfg, err = spec.FromAccount(&pluginv1.Account{Id: 1, CredentialsJson: `{"api_key":"k-1234567"}`})
@@ -97,17 +101,6 @@ func TestFromAccount(t *testing.T) {
 	} {
 		if _, err := spec.FromAccount(acc); status.Code(err) != codes.FailedPrecondition {
 			t.Errorf("account %d: err = %v", acc.GetId(), err)
-		}
-	}
-}
-
-func TestMapModel(t *testing.T) {
-	m := map[string]string{"gpt-*": "a", "gpt-4o*": "b", "gpt-4o-mini": "c", "x": ""}
-	for in, want := range map[string]string{
-		"gpt-4o-mini": "c", "gpt-4o-2024": "b", "gpt-5": "a", "claude": "claude", "x": "x", "": "",
-	} {
-		if got := MapModel(m, in); got != want {
-			t.Errorf("MapModel(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

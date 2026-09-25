@@ -22,7 +22,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "relay" || m.Version != "0.1.0" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "relay" || m.Version != "0.1.1" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("identity = %s %s %s", m.Key, m.Version, m.Publisher)
 	}
 	if m.Name["en"] == "" || m.Name["zh"] == "" || m.Description["en"] == "" || m.Description["zh"] == "" {
@@ -53,8 +53,16 @@ func TestManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustJSONFile(t, at.Form.UISchema)
-	if !slices.Contains(schema.Required, "base_url") || !slices.Contains(schema.Required, "api_key") || schema.Properties["model_mapping"] == nil {
+	if !slices.Contains(schema.Required, "base_url") || !slices.Contains(schema.Required, "api_key") {
 		t.Fatalf("form schema: required %v, properties %v", schema.Required, schema.Properties)
+	}
+	// Model mapping is a core account field (CONTRACTS §18): neither a
+	// settings field nor a form property.
+	if slices.Contains(at.SettingsFields, "model_mapping") {
+		t.Fatalf("settingsFields = %v: model_mapping must not be a settings field", at.SettingsFields)
+	}
+	if _, bad := schema.Properties["model_mapping"]; bad {
+		t.Fatal("form schema still declares model_mapping")
 	}
 	if len(at.Platforms) != 1 {
 		t.Fatalf("platforms = %+v, want [anthropic]", at.Platforms)

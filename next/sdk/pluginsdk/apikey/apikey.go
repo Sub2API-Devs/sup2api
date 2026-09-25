@@ -1,17 +1,18 @@
 // Package apikey implements the credential handling shared by API-key
-// account types: an "api_key" (sensitive), an optional "base_url" and an
-// optional "model_mapping" ({"from": "to"}, exact names or globs), each in
-// the credentials or the settings object. Platform plugins use it for
-// ValidateCredentials, to read an account in BuildUpstreamRequest and to
-// apply the model mapping.
+// account types: an "api_key" (sensitive) and an optional "base_url", each
+// in the credentials or the settings object. Platform plugins use it for
+// ValidateCredentials and to read an account in BuildUpstreamRequest.
+//
+// Model mapping is a core account field (CONTRACTS §18): the core rewrites
+// the request model before calling the plugin. Unknown keys in the
+// credentials or settings (including a legacy "model_mapping") are ignored
+// and passed through untouched by Validate.
 package apikey
 
 import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"path"
-	"sort"
 	"strings"
 
 	"google.golang.org/grpc/codes"
@@ -34,16 +35,14 @@ type Spec struct {
 
 // Config is the merged view of an account's credentials and settings.
 type Config struct {
-	APIKey       string
-	BaseURL      string // normalized, without trailing slash
-	ModelMapping map[string]string
+	APIKey  string
+	BaseURL string // normalized, without trailing slash
 }
 
 // Fields of the account form.
 const (
-	FieldAPIKey       = "api_key"
-	FieldBaseURL      = "base_url"
-	FieldModelMapping = "model_mapping"
+	FieldAPIKey  = "api_key"
+	FieldBaseURL = "base_url"
 )
 
 // decodeObject parses a JSON object; empty input yields an empty map.
@@ -70,37 +69,6 @@ func lookup(key string, objs ...map[string]any) (any, bool) {
 		}
 	}
 	return nil, false
-}
-
-// ParseModelMapping accepts an object {"from": "to"} or a string holding
-// such a JSON object (textarea input).
-func ParseModelMapping(v any) (map[string]string, error) {
-	switch t := v.(type) {
-	case nil:
-		return nil, nil
-	case string:
-		s := strings.TrimSpace(t)
-		if s == "" {
-			return nil, nil
-		}
-		var m map[string]string
-		if err := json.Unmarshal([]byte(s), &m); err != nil {
-			return nil, fmt.Errorf("must be a JSON object of model -> model")
-		}
-		return m, nil
-	case map[string]any:
-		m := make(map[string]string, len(t))
-		for k, val := range t {
-			s, ok := val.(string)
-			if !ok {
-				return nil, fmt.Errorf("value for %q must be a string", k)
-			}
-			m[k] = s
-		}
-		return m, nil
-	default:
-		return nil, fmt.Errorf("must be an object of model -> model")
-	}
 }
 
 // NormalizeBaseURL validates base_url and strips trailing slashes and the
@@ -144,7 +112,8 @@ func ValidAPIKey(k string) bool {
 }
 
 // Parse merges credentials and settings (api_key is read from the
-// credentials first, base_url and model_mapping from the settings first).
+// credentials first, base_url from the settings first). Unknown keys are
+// ignored.
 func (s Spec) Parse(credentialsJSON, settingsJSON string) (*Config, error) {
 	creds, err := decodeObject(credentialsJSON)
 	if err != nil {
@@ -165,11 +134,6 @@ func (s Spec) Parse(credentialsJSON, settingsJSON string) (*Config, error) {
 	}
 	if cfg.BaseURL, err = s.NormalizeBaseURL(base); err != nil {
 		return nil, fmt.Errorf("base_url: %w", err)
-	}
-	if v, ok := lookup(FieldModelMapping, settings, creds); ok {
-		if cfg.ModelMapping, err = ParseModelMapping(v); err != nil {
-			return nil, fmt.Errorf("model_mapping: %w", err)
-		}
 	}
 	return cfg, nil
 }
@@ -193,8 +157,7 @@ func (s Spec) FromAccount(acc *pluginv1.Account) (*Config, error) {
 
 // Validate implements ValidateCredentials: field errors (bilingual
 // messages) or the normalized credentials and settings (each object keeps
-// its key set; api_key trimmed, base_url normalized, model_mapping as an
-// object).
+// its key set; api_key trimmed, base_url normalized, other keys untouched).
 func (s Spec) Validate(in *pluginv1.ValidateCredentialsRequest) *pluginv1.ValidateCredentialsResponse {
 	var errs pluginsdk.FieldErrors
 	if in.GetAccountType() != s.AccountType {
@@ -233,27 +196,6 @@ func (s Spec) Validate(in *pluginv1.ValidateCredentialsRequest) *pluginv1.Valida
 			baseURL = n
 		}
 	}
-
-	var mapping map[string]string
-	if v, ok := lookup(FieldModelMapping, settings, creds); ok {
-		m, err := ParseModelMapping(v)
-		if err != nil {
-			errs = errs.Add(FieldModelMapping, "format", "model_mapping "+err.Error()+" / 模型映射必须是\"模型 -> 模型\"的对象")
-		} else {
-			for _, from := range sortedKeys(m) {
-				to := m[from]
-				if strings.TrimSpace(from) == "" || strings.TrimSpace(to) == "" {
-					errs = errs.Add(FieldModelMapping, "empty", "model names in model_mapping must not be empty / 模型映射中的模型名不能为空")
-					break
-				}
-				if _, err := path.Match(from, ""); err != nil {
-					errs = errs.Add(FieldModelMapping, "pattern", fmt.Sprintf("invalid pattern %q / 无效的通配符", from))
-					break
-				}
-			}
-			mapping = m
-		}
-	}
 	if len(errs) > 0 {
 		return &pluginv1.ValidateCredentialsResponse{Errors: errs}
 	}
@@ -269,12 +211,6 @@ func (s Spec) Validate(in *pluginv1.ValidateCredentialsRequest) *pluginv1.Valida
 				out[k] = key
 			case FieldBaseURL:
 				out[k] = baseURL
-			case FieldModelMapping:
-				if mapping == nil {
-					out[k] = map[string]string{}
-				} else {
-					out[k] = mapping
-				}
 			default:
 				out[k] = v
 			}
@@ -286,45 +222,6 @@ func (s Spec) Validate(in *pluginv1.ValidateCredentialsRequest) *pluginv1.Valida
 		NormalizedCredentialsJson: normalize(creds),
 		NormalizedSettingsJson:    normalize(settings),
 	}
-}
-
-func sortedKeys(m map[string]string) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
-}
-
-// MapModel applies a model mapping: exact match first, then the longest
-// matching glob pattern (ties broken alphabetically). Unmapped models and
-// empty targets return model unchanged.
-func MapModel(mapping map[string]string, model string) string {
-	if model == "" || len(mapping) == 0 {
-		return model
-	}
-	if to, ok := mapping[model]; ok && to != "" {
-		return to
-	}
-	patterns := make([]string, 0, len(mapping))
-	for from := range mapping {
-		if strings.ContainsAny(from, "*?[") {
-			patterns = append(patterns, from)
-		}
-	}
-	sort.Slice(patterns, func(i, j int) bool {
-		if len(patterns[i]) != len(patterns[j]) {
-			return len(patterns[i]) > len(patterns[j])
-		}
-		return patterns[i] < patterns[j]
-	})
-	for _, from := range patterns {
-		if ok, _ := path.Match(from, model); ok && mapping[from] != "" {
-			return mapping[from]
-		}
-	}
-	return model
 }
 
 // ForwardHeaders copies the inbound headers named in names (lower-case)

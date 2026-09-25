@@ -10,8 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"path"
-	"sort"
 	"strings"
 	"time"
 
@@ -95,10 +93,11 @@ func (p *Plugin) Init(_ context.Context, h pluginsdk.Host) error {
 // ---------------------------------------------------------------- credentials
 
 // accountConfig is the merged view of an account's credentials and settings.
+// Unknown keys (e.g. the legacy "model_mapping", now a core account field)
+// are ignored.
 type accountConfig struct {
-	APIKey       string
-	BaseURL      string
-	ModelMapping map[string]string
+	APIKey  string
+	BaseURL string
 }
 
 // decodeObject parses a JSON object; empty input yields an empty map.
@@ -125,37 +124,6 @@ func lookup(key string, objs ...map[string]any) (any, bool) {
 		}
 	}
 	return nil, false
-}
-
-// parseModelMapping accepts an object {"from": "to"} or a string holding
-// such a JSON object (textarea input).
-func parseModelMapping(v any) (map[string]string, error) {
-	switch t := v.(type) {
-	case nil:
-		return nil, nil
-	case string:
-		s := strings.TrimSpace(t)
-		if s == "" {
-			return nil, nil
-		}
-		var m map[string]string
-		if err := json.Unmarshal([]byte(s), &m); err != nil {
-			return nil, fmt.Errorf("must be a JSON object of model -> model")
-		}
-		return m, nil
-	case map[string]any:
-		m := make(map[string]string, len(t))
-		for k, val := range t {
-			s, ok := val.(string)
-			if !ok {
-				return nil, fmt.Errorf("value for %q must be a string", k)
-			}
-			m[k] = s
-		}
-		return m, nil
-	default:
-		return nil, fmt.Errorf("must be an object of model -> model")
-	}
 }
 
 // normalizeBaseURL validates base_url and strips a trailing slash and "/v1".
@@ -210,11 +178,6 @@ func parseAccount(credentialsJSON, settingsJSON string) (*accountConfig, error) 
 	if cfg.BaseURL, err = normalizeBaseURL(base); err != nil {
 		return nil, fmt.Errorf("base_url: %w", err)
 	}
-	if v, ok := lookup("model_mapping", settings, creds); ok {
-		if cfg.ModelMapping, err = parseModelMapping(v); err != nil {
-			return nil, fmt.Errorf("model_mapping: %w", err)
-		}
-	}
 	return cfg, nil
 }
 
@@ -260,31 +223,12 @@ func (p *Plugin) ValidateCredentials(_ context.Context, in *pluginv1.ValidateCre
 		}
 	}
 
-	// model_mapping
-	var mapping map[string]string
-	if v, ok := lookup("model_mapping", settings, creds); ok {
-		m, err := parseModelMapping(v)
-		if err != nil {
-			errs = errs.Add("model_mapping", "format", "model_mapping "+err.Error()+" / 模型映射必须是\"模型 -> 模型\"的对象")
-		} else {
-			for from, to := range m {
-				if strings.TrimSpace(from) == "" || strings.TrimSpace(to) == "" {
-					errs = errs.Add("model_mapping", "empty", "model names in model_mapping must not be empty / 模型映射中的模型名不能为空")
-					break
-				}
-				if _, err := path.Match(from, ""); err != nil {
-					errs = errs.Add("model_mapping", "pattern", fmt.Sprintf("invalid pattern %q / 无效的通配符", from))
-					break
-				}
-			}
-			mapping = m
-		}
-	}
 	if len(errs) > 0 {
 		return &pluginv1.ValidateCredentialsResponse{Errors: errs}, nil
 	}
 
-	// Normalize each object in place, keeping its key set.
+	// Normalize each object in place, keeping its key set (unknown keys,
+	// including a legacy model_mapping, pass through untouched).
 	normalize := func(obj map[string]any) string {
 		if len(obj) == 0 {
 			return ""
@@ -296,12 +240,6 @@ func (p *Plugin) ValidateCredentials(_ context.Context, in *pluginv1.ValidateCre
 				out[k] = key
 			case "base_url":
 				out[k] = baseURL
-			case "model_mapping":
-				if mapping == nil {
-					out[k] = map[string]string{}
-				} else {
-					out[k] = mapping
-				}
 			default:
 				out[k] = v
 			}
@@ -313,35 +251,6 @@ func (p *Plugin) ValidateCredentials(_ context.Context, in *pluginv1.ValidateCre
 		NormalizedCredentialsJson: normalize(creds),
 		NormalizedSettingsJson:    normalize(settings),
 	}, nil
-}
-
-// mapModel applies the account model mapping: exact match first, then the
-// longest matching glob pattern.
-func mapModel(mapping map[string]string, model string) string {
-	if model == "" || len(mapping) == 0 {
-		return model
-	}
-	if to, ok := mapping[model]; ok && to != "" {
-		return to
-	}
-	patterns := make([]string, 0, len(mapping))
-	for from := range mapping {
-		if strings.ContainsAny(from, "*?[") {
-			patterns = append(patterns, from)
-		}
-	}
-	sort.Slice(patterns, func(i, j int) bool {
-		if len(patterns[i]) != len(patterns[j]) {
-			return len(patterns[i]) > len(patterns[j])
-		}
-		return patterns[i] < patterns[j]
-	})
-	for _, from := range patterns {
-		if ok, _ := path.Match(from, model); ok && mapping[from] != "" {
-			return mapping[from]
-		}
-	}
-	return model
 }
 
 // endpointPath maps the upstream protocol (RequestMeta.protocol, which may
@@ -376,7 +285,9 @@ func upstreamHeaders(apiKey string, inbound map[string]string) map[string]string
 }
 
 // BuildUpstreamRequest implements pluginsdk.Platform. The upstream path
-// follows meta.protocol (messages or count_tokens).
+// follows meta.protocol (messages or count_tokens). The model is sent as
+// received: the core applies the account's model mapping before calling
+// this method.
 func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstreamRequestRequest) (*pluginv1.BuildUpstreamRequestResponse, error) {
 	acc := in.GetAccount()
 	if t := acc.GetType(); t != "" && t != AccountTypeAPIKey {
@@ -400,18 +311,12 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 			model = s
 		}
 	}
-	resp := &pluginv1.BuildUpstreamRequestResponse{
+	return &pluginv1.BuildUpstreamRequestResponse{
 		Method:        "POST",
 		Url:           cfg.BaseURL + ep,
 		Headers:       upstreamHeaders(cfg.APIKey, in.GetInboundHeaders()),
 		UpstreamModel: model,
-	}
-	if mapped := mapModel(cfg.ModelMapping, model); mapped != model {
-		v, _ := json.Marshal(mapped)
-		resp.Patches = append(resp.Patches, &pluginv1.BodyPatch{Op: pluginv1.BodyPatch_OP_SET, Path: "model", ValueJson: string(v)})
-		resp.UpstreamModel = mapped
-	}
-	return resp, nil
+	}, nil
 }
 
 // BuildTestRequest implements pluginsdk.Platform.
@@ -428,7 +333,6 @@ func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestReque
 	if model == "" {
 		model = DefaultTestModel
 	}
-	model = mapModel(cfg.ModelMapping, model)
 	body, _ := json.Marshal(map[string]any{
 		"model":      model,
 		"max_tokens": 1,

@@ -22,7 +22,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "anthropic" || m.Version != "0.1.2" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "anthropic" || m.Version != "0.1.3" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("key/version = %s %s", m.Key, m.Version)
 	}
 	if m.Database == nil || m.Database.Schema != "plg_"+m.Key {
@@ -53,6 +53,18 @@ func TestManifest(t *testing.T) {
 		}
 		if !slices.Contains(at.SensitiveFields, "api_key") {
 			t.Fatalf("account type %s: api_key must be sensitive", at.ID)
+		}
+		// Model mapping is a core account field (CONTRACTS §18): neither a
+		// settings field nor a form property.
+		if slices.Contains(at.SettingsFields, "model_mapping") {
+			t.Fatalf("account type %s: model_mapping must not be a settings field", at.ID)
+		}
+		var schema struct {
+			Properties map[string]json.RawMessage `json:"properties"`
+		}
+		_ = json.Unmarshal(mustJSONFile(t, at.Form.Schema), &schema)
+		if _, bad := schema.Properties["model_mapping"]; bad {
+			t.Fatalf("account type %s: form schema still declares model_mapping", at.ID)
 		}
 	}
 	if builtin != nil {

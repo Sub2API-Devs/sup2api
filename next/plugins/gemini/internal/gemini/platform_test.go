@@ -15,7 +15,7 @@ import (
 
 func start(t *testing.T) *pluginsdktest.Harness {
 	t.Helper()
-	return pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("gemini", "0.1.2")}})
+	return pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("gemini", "0.1.3")}})
 }
 
 func account(creds, settings string) *pluginv1.Account {
@@ -65,10 +65,13 @@ func TestBuildUpstreamRequest(t *testing.T) {
 		t.Fatalf("headers/patches = %v %v %s", hd, r.GetPatches(), r.GetUpstreamModel())
 	}
 
-	// Streaming always uses alt=sse; mapping rewrites the path model.
-	mapped := account(`{"api_key":"AIza-key-123"}`, `{"base_url":"http://mock-upstream:8080/v1beta","model_mapping":{"gemini-2.5-pro*":"gemini-2.5-flash"}}`)
-	r, err = build(&pluginv1.RequestMeta{Protocol: ProtocolStreamGenerate, Model: "gemini-2.5-pro-preview", Stream: true}, mapped, nil)
-	if err != nil || r.GetUrl() != "http://mock-upstream:8080/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse" || r.GetUpstreamModel() != "gemini-2.5-flash" {
+	// Streaming always uses alt=sse. A legacy model_mapping in the settings
+	// is ignored: the path model is meta.model as received (the core maps it
+	// before calling the plugin).
+	legacy := account(`{"api_key":"AIza-key-123"}`, `{"base_url":"http://mock-upstream:8080/v1beta","model_mapping":{"gemini-2.5-pro*":"gemini-2.5-flash"}}`)
+	r, err = build(&pluginv1.RequestMeta{Protocol: ProtocolStreamGenerate, Model: "gemini-2.5-pro-preview", Stream: true}, legacy, nil)
+	if err != nil || r.GetUrl() != "http://mock-upstream:8080/v1beta/models/gemini-2.5-pro-preview:streamGenerateContent?alt=sse" ||
+		r.GetUpstreamModel() != "gemini-2.5-pro-preview" || len(r.GetPatches()) != 0 {
 		t.Fatalf("stream: %v %v", r, err)
 	}
 	r, err = build(&pluginv1.RequestMeta{Protocol: ProtocolCountTokens, Model: "models/gemini-2.0-flash"}, acc, nil)
@@ -113,6 +116,15 @@ func TestBuildTestRequest(t *testing.T) {
 	}
 	if err := json.Unmarshal([]byte(r.GetBodyJson()), &body); err != nil || len(body.Contents) != 1 || body.Contents[0].Parts[0].Text != "ping" || body.GenerationConfig.MaxOutputTokens != 1 {
 		t.Fatalf("body = %s", r.GetBodyJson())
+	}
+
+	// in.model is used as-is (models/ prefix stripped); a legacy
+	// model_mapping in the settings is ignored.
+	r, err = h.Platform.BuildTestRequest(context.Background(), &pluginv1.BuildTestRequestRequest{
+		Account: account(`{"api_key":"AIza-key-123"}`, `{"model_mapping":{"gemini-2.5-pro":"gemini-2.5-flash"}}`), Model: "models/gemini-2.5-pro",
+	})
+	if err != nil || r.GetUrl() != "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent" {
+		t.Fatalf("explicit model: %v %v", r, err)
 	}
 }
 

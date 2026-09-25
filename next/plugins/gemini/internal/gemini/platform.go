@@ -108,8 +108,9 @@ func upstreamHeaders(apiKey string, inbound map[string]string) map[string]string
 
 // BuildUpstreamRequest implements pluginsdk.Platform. The model comes from
 // meta.model (the endpoint's path parameter, or the converted request's
-// model) after the account's model mapping; the method follows
-// meta.protocol. The body is forwarded unchanged.
+// model; the core applies the account's model mapping before calling this
+// method) and is sent as received; the method follows meta.protocol. The
+// body is forwarded unchanged.
 func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstreamRequestRequest) (*pluginv1.BuildUpstreamRequestResponse, error) {
 	cfg, err := spec.FromAccount(in.GetAccount())
 	if err != nil {
@@ -123,7 +124,6 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 	if model == "" {
 		return nil, status.Error(codes.InvalidArgument, "model is required (path /v1beta/models/{model}:...)")
 	}
-	model = normalizeModel(apikey.MapModel(cfg.ModelMapping, model))
 	return &pluginv1.BuildUpstreamRequestResponse{
 		Method:        "POST",
 		Url:           modelURL(cfg.BaseURL, model, method, stream),
@@ -143,7 +143,6 @@ func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestReque
 	if model == "" {
 		model = DefaultTestModel
 	}
-	model = normalizeModel(apikey.MapModel(cfg.ModelMapping, model))
 	body, _ := json.Marshal(map[string]any{
 		"contents":         []any{map[string]any{"role": "user", "parts": []any{map[string]string{"text": "ping"}}}},
 		"generationConfig": map[string]any{"maxOutputTokens": 1},

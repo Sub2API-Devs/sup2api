@@ -1,5 +1,5 @@
 {
-  "ui:order": ["api_key", "base_url", "model_mapping"],
+  "ui:order": ["api_key", "base_url"],
   "api_key": {
     "ui:widget": "secret",
     "ui:title": { "en": "API key", "zh": "API Key" },
@@ -16,14 +16,6 @@
     "ui:help": {
       "en": "Leave the default for OpenAI, or enter an OpenAI-compatible endpoint; requests go to <Base URL>/v1/chat/completions, /v1/responses and /v1/embeddings. A trailing /v1 is removed.",
       "zh": "使用 OpenAI 官方接口时保持默认；也可以填写 OpenAI 兼容端点，请求发往 <Base URL>/v1/chat/completions、/v1/responses、/v1/embeddings。末尾的 /v1 会被去掉。"
-    }
-  },
-  "model_mapping": {
-    "ui:widget": "model-mapping",
-    "ui:title": { "en": "Model mapping", "zh": "模型映射" },
-    "ui:help": {
-      "en": "Rewrite the requested model before forwarding, e.g. gpt-4o* -> gpt-4.1. Exact names win over wildcards.",
-      "zh": "转发前改写请求的模型，例如 gpt-4o* -> gpt-4.1。精确名称优先于通配符。"
     }
   }
 }

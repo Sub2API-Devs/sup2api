@@ -23,7 +23,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "openai" || m.Version != "0.1.2" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "openai" || m.Version != "0.1.3" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("key/version/publisher = %s %s %s", m.Key, m.Version, m.Publisher)
 	}
 	if m.Name["en"] == "" || m.Name["zh"] == "" || m.Description["en"] == "" || m.Description["zh"] == "" {
@@ -48,6 +48,18 @@ func TestManifest(t *testing.T) {
 	}
 	if !slices.Contains(at.SensitiveFields, "api_key") {
 		t.Fatal("api_key must be sensitive")
+	}
+	// Model mapping is a core account field (CONTRACTS §18): neither a
+	// settings field nor a form property.
+	if slices.Contains(at.SettingsFields, "model_mapping") {
+		t.Fatal("model_mapping must not be a settings field")
+	}
+	var schema struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	_ = json.Unmarshal(mustJSONFile(t, at.Form.Schema), &schema)
+	if _, bad := schema.Properties["model_mapping"]; bad {
+		t.Fatal("form schema still declares model_mapping")
 	}
 	if b := builtin(t); b != nil {
 		if got := b.Protocols(); !slices.Equal(got, openai.Protocols) {

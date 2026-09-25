@@ -17,12 +17,6 @@
       "minLength": 8,
       "maxLength": 512,
       "pattern": "^[!-~]+$"
-    },
-    "model_mapping": {
-      "type": "object",
-      "title": "Model mapping",
-      "additionalProperties": { "type": "string", "minLength": 1 },
-      "default": {}
     }
   }
 }

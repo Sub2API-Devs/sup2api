@@ -14,7 +14,7 @@ import (
 
 func start(t *testing.T) *pluginsdktest.Harness {
 	t.Helper()
-	return pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("relay", "0.1.0")}})
+	return pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("relay", "0.1.1")}})
 }
 
 func TestCapabilities(t *testing.T) {
@@ -41,14 +41,21 @@ func TestValidateCredentials(t *testing.T) {
 			settings:  `{"base_url":"https://relay.example.com/v1/"}`,
 			wantCreds: `{"api_key":"sk-relay-abcdef"}`,
 			wantSets:  `{"base_url":"https://relay.example.com"}`},
-		{name: "all in credentials with mapping string", typ: "relay_key",
-			creds:     `{"api_key":"sk-relay-abcdef","base_url":"http://mock-upstream:8080","model_mapping":"{\"claude-*\":\"claude-sonnet-5\"}"}`,
-			wantCreds: `{"api_key":"sk-relay-abcdef","base_url":"http://mock-upstream:8080","model_mapping":{"claude-*":"claude-sonnet-5"}}`},
+		{name: "all in credentials", typ: "relay_key",
+			creds:     `{"api_key":"sk-relay-abcdef","base_url":"http://mock-upstream:8080"}`,
+			wantCreds: `{"api_key":"sk-relay-abcdef","base_url":"http://mock-upstream:8080"}`},
+		// Model mapping moved to the core account (CONTRACTS §18). Old
+		// accounts may still carry a model_mapping key of any shape: it is
+		// never validated and passes through untouched.
+		{name: "legacy model_mapping passed through", typ: "relay_key",
+			creds:     `{"api_key":"sk-relay-abcdef","base_url":"https://r.example.com"}`,
+			settings:  `{"model_mapping":{"a":1}}`,
+			wantCreds: `{"api_key":"sk-relay-abcdef","base_url":"https://r.example.com"}`,
+			wantSets:  `{"model_mapping":{"a":1}}`},
 		{name: "missing base url", typ: "relay_key", creds: `{"api_key":"sk-relay-abcdef"}`, wantFields: []string{"base_url"}},
 		{name: "empty base url", typ: "relay_key", creds: `{"api_key":"sk-relay-abcdef","base_url":"  "}`, wantFields: []string{"base_url"}},
 		{name: "bad base url", typ: "relay_key", creds: `{"api_key":"sk-relay-abcdef","base_url":"ftp://x"}`, wantFields: []string{"base_url"}},
 		{name: "missing key", typ: "relay_key", creds: `{"base_url":"https://r.example.com"}`, wantFields: []string{"api_key"}},
-		{name: "bad mapping", typ: "relay_key", creds: `{"api_key":"sk-relay-abcdef","base_url":"https://r.example.com","model_mapping":{"a":1}}`, wantFields: []string{"model_mapping"}},
 		{name: "nothing", typ: "relay_key", creds: `{}`, wantFields: []string{"base_url", "api_key"}},
 		{name: "wrong type", typ: "apikey", creds: `{"api_key":"sk-relay-abcdef","base_url":"https://r.example.com"}`, wantFields: []string{"account_type"}},
 		{name: "invalid json", typ: "relay_key", creds: `[1]`, wantFields: []string{""}},
@@ -131,7 +138,9 @@ func TestBuildUpstreamRequest(t *testing.T) {
 		t.Fatalf("patches = %v upstream = %s", r.GetPatches(), r.GetUpstreamModel())
 	}
 
-	// count_tokens, default version, model mapping.
+	// count_tokens, default version. A legacy model_mapping in the
+	// credentials is ignored: the core maps the model before calling the
+	// plugin, so the model is sent unchanged and no patch is emitted.
 	r, err = h.Platform.BuildUpstreamRequest(ctx, &pluginv1.BuildUpstreamRequestRequest{
 		Meta:    &pluginv1.RequestMeta{Protocol: ProtocolCountTokens, Model: "claude-opus-5"},
 		Account: account(`{"api_key":"sk-relay-1","base_url":"http://mock-upstream:8080/v1","model_mapping":{"claude-opus-*":"claude-sonnet-5"}}`, ""),
@@ -142,8 +151,18 @@ func TestBuildUpstreamRequest(t *testing.T) {
 	if r.GetUrl() != "http://mock-upstream:8080/v1/messages/count_tokens" || r.GetHeaders()["anthropic-version"] != DefaultAPIVersion {
 		t.Fatalf("url/headers = %s %v", r.GetUrl(), r.GetHeaders())
 	}
-	if len(r.GetPatches()) != 1 || r.GetPatches()[0].GetValueJson() != `"claude-sonnet-5"` || r.GetUpstreamModel() != "claude-sonnet-5" {
+	if len(r.GetPatches()) != 0 || r.GetUpstreamModel() != "claude-opus-5" {
 		t.Fatalf("patches = %v upstream = %s", r.GetPatches(), r.GetUpstreamModel())
+	}
+
+	// fields["model"] wins over meta.model as the upstream model.
+	r, err = h.Platform.BuildUpstreamRequest(ctx, &pluginv1.BuildUpstreamRequestRequest{
+		Meta:    &pluginv1.RequestMeta{Protocol: ProtocolMessages, Model: "claude-opus-5"},
+		Account: account(`{"api_key":"sk-relay-1","base_url":"https://r.example.com"}`, ""),
+		Fields:  map[string]string{"model": `"claude-sonnet-5"`},
+	})
+	if err != nil || len(r.GetPatches()) != 0 || r.GetUpstreamModel() != "claude-sonnet-5" {
+		t.Fatalf("fields model: %v %v", r, err)
 	}
 
 	for name, in := range map[string]*pluginv1.BuildUpstreamRequestRequest{
@@ -162,6 +181,8 @@ func TestBuildUpstreamRequest(t *testing.T) {
 
 func TestBuildTestRequest(t *testing.T) {
 	h := start(t)
+	// A legacy model_mapping in the settings is ignored: in.model is used
+	// as-is, and the plugin default model when it is empty.
 	r, err := h.Platform.BuildTestRequest(context.Background(), &pluginv1.BuildTestRequestRequest{
 		Account: account(`{"api_key":"sk-relay-1"}`, `{"base_url":"https://relay.example.com","model_mapping":{"claude-haiku-4-5":"mapped"}}`),
 	})
@@ -175,7 +196,17 @@ func TestBuildTestRequest(t *testing.T) {
 		Model     string `json:"model"`
 		MaxTokens int    `json:"max_tokens"`
 	}
-	if err := json.Unmarshal([]byte(r.GetBodyJson()), &body); err != nil || body.Model != "mapped" || body.MaxTokens != 1 {
+	if err := json.Unmarshal([]byte(r.GetBodyJson()), &body); err != nil || body.Model != DefaultTestModel || body.MaxTokens != 1 {
+		t.Fatalf("body = %s", r.GetBodyJson())
+	}
+
+	r, err = h.Platform.BuildTestRequest(context.Background(), &pluginv1.BuildTestRequestRequest{
+		Account: account(`{"api_key":"sk-relay-1"}`, `{"base_url":"https://relay.example.com"}`), Model: "  claude-sonnet-5  ",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(r.GetBodyJson()), &body); err != nil || body.Model != "claude-sonnet-5" {
 		t.Fatalf("body = %s", r.GetBodyJson())
 	}
 }

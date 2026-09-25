@@ -17,7 +17,7 @@ import (
 func start(t *testing.T) (*Plugin, *pluginsdktest.Harness) {
 	t.Helper()
 	p := New()
-	h := pluginsdktest.Start(t, p, pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("anthropic", "0.1.2")}})
+	h := pluginsdktest.Start(t, p, pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("anthropic", "0.1.3")}})
 	return p, h
 }
 
@@ -45,18 +45,23 @@ func TestValidateCredentials(t *testing.T) {
 			wantCreds: `{"api_key":"sk-ant-api03-abcdef"}`},
 		{name: "ok with settings", typ: "apikey",
 			creds:     `{"api_key":"sk-ant-api03-abcdef"}`,
-			settings:  `{"base_url":"https://relay.example.com/v1/","model_mapping":{"claude-sonnet-*":"claude-sonnet-5"}}`,
+			settings:  `{"base_url":"https://relay.example.com/v1/"}`,
 			wantCreds: `{"api_key":"sk-ant-api03-abcdef"}`,
-			wantSets:  `{"base_url":"https://relay.example.com","model_mapping":{"claude-sonnet-*":"claude-sonnet-5"}}`},
-		{name: "all in credentials, mapping as string", typ: "apikey",
-			creds:     `{"api_key":"sk-ant-x1234567","base_url":"","model_mapping":"{\"a\":\"b\"}"}`,
-			wantCreds: `{"api_key":"sk-ant-x1234567","base_url":"https://api.anthropic.com","model_mapping":{"a":"b"}}`},
+			wantSets:  `{"base_url":"https://relay.example.com"}`},
+		{name: "all in credentials", typ: "apikey",
+			creds:     `{"api_key":"sk-ant-x1234567","base_url":""}`,
+			wantCreds: `{"api_key":"sk-ant-x1234567","base_url":"https://api.anthropic.com"}`},
+		// Legacy accounts may still carry model_mapping (now a core account
+		// field): it is neither validated nor touched.
+		{name: "legacy model_mapping ignored", typ: "apikey",
+			creds:     `{"api_key":"sk-ant-12345678"}`,
+			settings:  `{"base_url":"https://relay.example.com","model_mapping":{"a":1}}`,
+			wantCreds: `{"api_key":"sk-ant-12345678"}`,
+			wantSets:  `{"base_url":"https://relay.example.com","model_mapping":{"a":1}}`},
 		{name: "missing key", typ: "apikey", creds: `{}`, wantFields: []string{"api_key"}},
 		{name: "key with space", typ: "apikey", creds: `{"api_key":"sk ant 123456"}`, wantFields: []string{"api_key"}},
 		{name: "bad url", typ: "apikey", creds: `{"api_key":"sk-ant-12345678"}`, settings: `{"base_url":"ftp://x"}`, wantFields: []string{"base_url"}},
 		{name: "url with query", typ: "apikey", creds: `{"api_key":"sk-ant-12345678"}`, settings: `{"base_url":"https://x.com?a=1"}`, wantFields: []string{"base_url"}},
-		{name: "bad mapping", typ: "apikey", creds: `{"api_key":"sk-ant-12345678"}`, settings: `{"model_mapping":{"a":1}}`, wantFields: []string{"model_mapping"}},
-		{name: "empty mapping target", typ: "apikey", creds: `{"api_key":"sk-ant-12345678"}`, settings: `{"model_mapping":{"a":""}}`, wantFields: []string{"model_mapping"}},
 		{name: "wrong type", typ: "oauth", creds: `{"api_key":"sk-ant-12345678"}`, wantFields: []string{"account_type"}},
 		{name: "invalid json", typ: "apikey", creds: `[1]`, wantFields: []string{""}},
 	}
@@ -140,7 +145,9 @@ func TestBuildUpstreamRequest(t *testing.T) {
 		t.Fatalf("patches = %v, upstream = %s", r.GetPatches(), r.GetUpstreamModel())
 	}
 
-	// count_tokens + mapping + version pass-through + custom base url
+	// count_tokens + version pass-through + custom base url. A legacy
+	// model_mapping in the settings is ignored: the model is sent as received
+	// (the core maps it before calling the plugin) and no patch is emitted.
 	r, err = h.Platform.BuildUpstreamRequest(ctx, &pluginv1.BuildUpstreamRequestRequest{
 		Meta:           &pluginv1.RequestMeta{Protocol: ProtocolCountTokens, Model: "claude-sonnet-4-6"},
 		Account:        account(`{"api_key":"k-12345678"}`, `{"base_url":"http://mock-upstream:8080/","model_mapping":{"claude-sonnet-*":"claude-sonnet-5","claude-sonnet-4-6":"exact-wins"}}`),
@@ -153,9 +160,18 @@ func TestBuildUpstreamRequest(t *testing.T) {
 	if r.GetUrl() != "http://mock-upstream:8080/v1/messages/count_tokens" || r.GetHeaders()["anthropic-version"] != "2024-01-01" {
 		t.Fatalf("url/version = %s %v", r.GetUrl(), r.GetHeaders())
 	}
-	if len(r.GetPatches()) != 1 || r.GetPatches()[0].GetOp() != pluginv1.BodyPatch_OP_SET || r.GetPatches()[0].GetPath() != "model" ||
-		r.GetPatches()[0].GetValueJson() != `"exact-wins"` || r.GetUpstreamModel() != "exact-wins" {
+	if len(r.GetPatches()) != 0 || r.GetUpstreamModel() != "claude-sonnet-4-6" {
 		t.Fatalf("patches = %v upstream = %s", r.GetPatches(), r.GetUpstreamModel())
+	}
+
+	// fields["model"] wins over meta.model as the upstream model.
+	r, err = h.Platform.BuildUpstreamRequest(ctx, &pluginv1.BuildUpstreamRequestRequest{
+		Meta:    &pluginv1.RequestMeta{Protocol: ProtocolMessages, Model: "claude-sonnet-4-6"},
+		Account: account(`{"api_key":"k-12345678"}`, ""),
+		Fields:  map[string]string{"model": `"claude-sonnet-5"`},
+	})
+	if err != nil || len(r.GetPatches()) != 0 || r.GetUpstreamModel() != "claude-sonnet-5" {
+		t.Fatalf("fields model: %v %v", r, err)
 	}
 
 	// missing key / bad protocol / foreign account type
@@ -188,19 +204,10 @@ func TestBuildUpstreamRequest(t *testing.T) {
 	}
 }
 
-func TestMapModel(t *testing.T) {
-	m := map[string]string{"claude-*": "a", "claude-sonnet-*": "b", "claude-sonnet-4-6": "c", "x": ""}
-	for in, want := range map[string]string{
-		"claude-sonnet-4-6": "c", "claude-sonnet-5": "b", "claude-opus-5": "a", "gpt-4": "gpt-4", "x": "x", "": "",
-	} {
-		if got := mapModel(m, in); got != want {
-			t.Errorf("mapModel(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 func TestBuildTestRequest(t *testing.T) {
 	_, h := start(t)
+	// A legacy model_mapping in the settings is ignored; in.model is used
+	// as-is (the default model when empty).
 	r, err := h.Platform.BuildTestRequest(context.Background(), &pluginv1.BuildTestRequestRequest{
 		Account: account(`{"api_key":"k-12345678"}`, `{"model_mapping":{"claude-haiku-4-5":"mapped"}}`),
 	})
@@ -215,7 +222,17 @@ func TestBuildTestRequest(t *testing.T) {
 		MaxTokens int    `json:"max_tokens"`
 		Messages  []any  `json:"messages"`
 	}
-	if err := json.Unmarshal([]byte(r.GetBodyJson()), &body); err != nil || body.Model != "mapped" || body.MaxTokens != 1 || len(body.Messages) != 1 {
+	if err := json.Unmarshal([]byte(r.GetBodyJson()), &body); err != nil || body.Model != DefaultTestModel || body.MaxTokens != 1 || len(body.Messages) != 1 {
+		t.Fatalf("body = %s", r.GetBodyJson())
+	}
+
+	r, err = h.Platform.BuildTestRequest(context.Background(), &pluginv1.BuildTestRequestRequest{
+		Account: account(`{"api_key":"k-12345678"}`, ""), Model: " claude-sonnet-5 ",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(r.GetBodyJson()), &body); err != nil || body.Model != "claude-sonnet-5" {
 		t.Fatalf("body = %s", r.GetBodyJson())
 	}
 }
