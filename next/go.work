@@ -6,6 +6,7 @@ use (
 	./plugins/anthropic
 	./plugins/gemini
 	./plugins/guard
+	./plugins/moderation
 	./plugins/openai
 	./plugins/relay
 	./sdk

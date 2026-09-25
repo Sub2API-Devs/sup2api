@@ -1,0 +1,142 @@
+{
+  "apiVersion": 1,
+  "key": "moderation",
+  "name": { "en": "Prompt Moderation", "zh": "提示词审核" },
+  "description": {
+    "en": "Sends the latest user message of gateway requests to an OpenAI-compatible LLM that returns its verdict through a submit_verdict tool. Enforce mode refuses violations, observe mode only records them; repeated violations can ban users automatically.",
+    "zh": "把网关请求中最新一条用户消息交给 OpenAI 兼容的大模型审核，模型通过 submit_verdict 工具返回结论。拦截模式拒绝违规请求，观察模式只记录；多次违规可自动封禁用户。"
+  },
+  "version": "0.1.0",
+  "publisher": "sub2api",
+  "icon": "text:M",
+  "runtime": "grpc",
+  "entry": { "grpc": { "binaries": "runtimes/{os}-{arch}/plugin" } },
+  "hostCompat": ">=0.1.0 <0.2.0",
+  "hostUICompat": "^1.0",
+
+  "capabilities": [
+    { "id": "gateway.hook.v1" },
+    { "id": "app.jobs.v1" },
+    { "id": "app.broadcast.v1" },
+    { "id": "http.routes.v1" }
+  ],
+
+  "hooks": [
+    {
+      "id": "moderation",
+      "point": "gateway.request",
+      "order": 200,
+      "match": {
+        "protocols": ["anthropic.messages", "openai.chat", "openai.responses", "gemini.generate", "gemini.stream_generate"]
+      },
+      "needs": [
+        "model",
+        "messages|@reverse|#(role==\"user\")",
+        "input|@reverse|#(role==\"user\")",
+        "[input]|#(%\"*\")",
+        "contents|@reverse|#(role==\"user\")"
+      ],
+      "timeoutMs": 30000,
+      "failure": "open"
+    }
+  ],
+
+  "jobs": [
+    { "id": "cleanup", "schedule": "0 4 * * *", "timeoutSec": 600 }
+  ],
+
+  "database": { "schema": "plg_moderation", "migrations": "migrations/" },
+
+  "userPermissions": [
+    {
+      "key": "moderation:read",
+      "label": { "en": "View prompt moderation", "zh": "查看提示词审核" },
+      "description": { "en": "Overview, moderation records and the ban list", "zh": "概览、审核记录和封禁列表" }
+    },
+    {
+      "key": "moderation:manage",
+      "label": { "en": "Manage prompt moderation", "zh": "管理提示词审核" },
+      "description": { "en": "Delete records, ban and unban users, run online tests", "zh": "删除记录、封禁与解封用户、在线测试" }
+    }
+  ],
+
+  "routes": [
+    { "method": "GET", "path": "/overview", "scope": "admin", "permission": "moderation:read" },
+    { "method": "GET", "path": "/events", "scope": "admin", "permission": "moderation:read" },
+    { "method": "GET", "path": "/events/:id", "scope": "admin", "permission": "moderation:read" },
+    { "method": "DELETE", "path": "/events/:id", "scope": "admin", "permission": "moderation:manage" },
+    { "method": "GET", "path": "/blocks", "scope": "admin", "permission": "moderation:read" },
+    { "method": "POST", "path": "/blocks", "scope": "admin", "permission": "moderation:manage" },
+    { "method": "DELETE", "path": "/blocks/:user_id", "scope": "admin", "permission": "moderation:manage" },
+    { "method": "POST", "path": "/test", "scope": "admin", "permission": "moderation:manage" },
+    { "method": "GET", "path": "/defaults", "scope": "admin", "permission": "moderation:read" }
+  ],
+
+  "ui": {
+    "menus": [
+      {
+        "id": "moderation",
+        "section": "plugins",
+        "label": { "en": "Prompt Moderation", "zh": "提示词审核" },
+        "icon": "shield",
+        "page": "dashboard",
+        "permission": "moderation:read",
+        "order": 210
+      }
+    ],
+    "pages": {
+      "dashboard": {
+        "type": "native",
+        "title": { "en": "Prompt Moderation", "zh": "提示词审核" },
+        "component": "ModerationDashboard"
+      }
+    },
+    "native": { "entry": "ui/native/entry.js" },
+    "settings": {
+      "mode": "schema",
+      "schema": "forms/settings.schema.json",
+      "uiSchema": "forms/settings.ui.json"
+    }
+  },
+
+  "resources": { "memoryMB": 256, "cpu": 0.5, "maxThreads": 128, "maxOpenFiles": 512 },
+
+  "hostPermissions": [
+    { "id": "kv",
+      "reason": { "en": "Share cached moderation verdicts between nodes", "zh": "在节点之间共享审核结论缓存" } },
+    { "id": "db.schema",
+      "reason": { "en": "Store moderation records and the ban list", "zh": "保存审核记录和封禁列表" } },
+    { "id": "gateway.hook",
+      "scope": {
+        "points": ["gateway.request"],
+        "fields": [
+          "model",
+          "messages|@reverse|#(role==\"user\")",
+          "input|@reverse|#(role==\"user\")",
+          "[input]|#(%\"*\")",
+          "contents|@reverse|#(role==\"user\")"
+        ]
+      },
+      "reason": {
+        "en": "Read the model and the latest user message of gateway requests to moderate them, and refuse violating requests",
+        "zh": "读取网关请求的模型和最新一条用户消息进行审核，并拒绝违规请求"
+      } },
+    { "id": "jobs",
+      "reason": { "en": "Delete old records and expired bans daily", "zh": "每天清理过期的审核记录和封禁" } },
+    { "id": "broadcast",
+      "reason": { "en": "Tell the other nodes to reload the ban list at once after it changes", "zh": "封禁列表变化后通知其他节点立即重新加载" } },
+    { "id": "routes.admin",
+      "reason": { "en": "Overview, records, ban management and online test APIs", "zh": "概览、审核记录、封禁管理和在线测试接口" } },
+    { "id": "ui.menu",
+      "reason": { "en": "Add the \"Prompt Moderation\" menu", "zh": "添加\"提示词审核\"菜单" } },
+    { "id": "ui.native",
+      "reason": { "en": "Provide the moderation dashboard page", "zh": "提供提示词审核管理页面" } },
+    { "id": "net",
+      "scope": { "domains": ["*"] },
+      "optional": true,
+      "reason": {
+        "en": "Call the moderation LLM at the configured base URL (enforced when the egress policy is an allowlist)",
+        "zh": "调用设置中配置的审核大模型接口（出口策略为白名单时生效）"
+      } }
+  ]
+}

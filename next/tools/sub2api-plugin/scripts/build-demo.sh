@@ -11,6 +11,7 @@
 # Output:
 #   <outdir>/anthropic-0.1.4.s2plugin, anthropic-0.2.0.s2plugin (upgrade test),
 #   <outdir>/guard-0.1.0.s2plugin,
+#   <outdir>/moderation-0.1.0.s2plugin (built-in: LLM prompt moderation),
 #   <outdir>/relay-0.1.2.s2plugin  (account type only: Claude relay key),
 #   <outdir>/openai-0.1.4.s2plugin, gemini-0.1.4.s2plugin (built-in account types),
 #   <outdir>/index.json, index.json.sig
@@ -19,8 +20,8 @@
 # Environment:
 #   SUB2API_PLUGIN  CLI to use (default: sub2api-plugin on PATH, else built
 #                   from tools/sub2api-plugin into a temp dir).
-#   REQUIRE_UI=1    fail when plugins/guard/ui/native/dist is missing
-#                   (default: pack guard without its native UI and warn).
+#   REQUIRE_UI=1    fail when a plugin's ui/native/dist is missing (guard,
+#                   moderation); default: pack without the native UI and warn.
 #   PLATFORMS=...   override target platforms (default linux/amd64,linux/arm64).
 set -eu
 
@@ -87,6 +88,7 @@ package() {
 package anthropic anthropic-base "$OUT"
 package anthropic anthropic-v020 "$OUT" testdata/v0.2.0
 package guard guard-base "$OUT"
+package moderation moderation-base "$OUT"
 package relay relay-base "$OUT"
 package openai openai-base "$OUT"
 package gemini gemini-base "$OUT"

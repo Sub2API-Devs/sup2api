@@ -1,0 +1,389 @@
+{
+  "ui:order": [
+    "mode",
+    "base_url",
+    "api_key",
+    "model",
+    "system_prompt",
+    "categories",
+    "tool_choice",
+    "max_turns",
+    "temperature",
+    "max_tokens",
+    "timeout_ms",
+    "on_error",
+    "max_concurrency",
+    "queue_size",
+    "input_max_chars",
+    "min_chars",
+    "sample_rate",
+    "group_ids",
+    "model_patterns",
+    "exempt_user_ids",
+    "cache_ttl_seconds",
+    "block_status",
+    "block_message",
+    "record_pass",
+    "store_text",
+    "retention_days",
+    "ban_threshold",
+    "ban_window_hours",
+    "ban_duration_hours"
+  ],
+  "mode": {
+    "ui:widget": "select",
+    "ui:enumNames": [
+      {
+        "en": "Off",
+        "zh": "关闭"
+      },
+      {
+        "en": "Observe (record only)",
+        "zh": "观察（只记录）"
+      },
+      {
+        "en": "Enforce (block violations)",
+        "zh": "拦截（拒绝违规请求）"
+      }
+    ],
+    "ui:title": {
+      "en": "Mode",
+      "zh": "模式"
+    },
+    "ui:help": {
+      "en": "Off: nothing is checked. Observe: requests pass and are moderated in the background, results are recorded. Enforce: each request waits for the verdict and a block verdict refuses it. With base URL, API key or model empty the plugin behaves as off.",
+      "zh": "关闭：不审核。观察：请求直接放行，后台异步审核并记录结果。拦截：每个请求等待审核结论，判为 block 时拒绝。接口地址、API Key、模型任一为空时视同关闭。"
+    }
+  },
+  "base_url": {
+    "ui:placeholder": "https://api.openai.com",
+    "ui:title": {
+      "en": "Base URL",
+      "zh": "接口地址"
+    },
+    "ui:help": {
+      "en": "OpenAI-compatible API root, e.g. https://api.openai.com or https://host/v1. A URL ending in /v1 gets /chat/completions appended, otherwise /v1/chat/completions. It may point at this gateway: the plugin recognises its own calls and does not moderate them again.",
+      "zh": "OpenAI 兼容接口地址，如 https://api.openai.com 或 https://host/v1。以 /v1 结尾时拼接 /chat/completions，否则拼接 /v1/chat/completions。可以指向本网关自身，插件自己的审核请求会被识别、不会再次审核。"
+    }
+  },
+  "api_key": {
+    "ui:widget": "secret",
+    "ui:title": {
+      "en": "API key",
+      "zh": "API Key"
+    },
+    "ui:help": {
+      "en": "Sent as Authorization: Bearer.",
+      "zh": "以 Authorization: Bearer 方式发送。"
+    }
+  },
+  "model": {
+    "ui:placeholder": "gpt-4o-mini",
+    "ui:title": {
+      "en": "Model",
+      "zh": "模型"
+    },
+    "ui:help": {
+      "en": "Model that moderates the prompts; it should support tool calls (function calling) or answer in JSON.",
+      "zh": "用于审核的模型，需要支持工具调用（function calling），或能直接输出 JSON 结论。"
+    }
+  },
+  "system_prompt": {
+    "ui:widget": "textarea",
+    "ui:options": {
+      "rows": 10
+    },
+    "ui:title": {
+      "en": "System prompt",
+      "zh": "系统提示词"
+    },
+    "ui:help": {
+      "en": "Leave empty to use the built-in prompt. {{categories}} is replaced by the category list, one \"- id: description\" line each.",
+      "zh": "留空使用内置提示词。{{categories}} 会替换为分类列表（每行一个\"- id：说明\"）。"
+    }
+  },
+  "categories": {
+    "ui:widget": "object-list",
+    "ui:title": {
+      "en": "Categories",
+      "zh": "审核分类"
+    },
+    "ui:help": {
+      "en": "Leave empty to use the 12 built-in categories. The LLM may only report these ids.",
+      "zh": "留空使用内置的 12 个分类。模型只能从这些分类 id 中选择。"
+    },
+    "items": {
+      "ui:order": [
+        "id",
+        "description"
+      ],
+      "id": {
+        "ui:title": {
+          "en": "ID",
+          "zh": "分类 ID"
+        },
+        "ui:placeholder": "illegal",
+        "ui:help": {
+          "en": "Lower-case letters, digits and _ (1-32).",
+          "zh": "小写字母、数字、下划线，1–32 位。"
+        }
+      },
+      "description": {
+        "ui:title": {
+          "en": "Description",
+          "zh": "说明"
+        },
+        "ui:placeholder": {
+          "en": "Illegal activities: drugs, weapons, fraud",
+          "zh": "违法犯罪：毒品、武器、诈骗等"
+        }
+      }
+    }
+  },
+  "tool_choice": {
+    "ui:widget": "select",
+    "ui:enumNames": [
+      {
+        "en": "required (must call a tool)",
+        "zh": "required（必须调用工具）"
+      },
+      {
+        "en": "function (this tool)",
+        "zh": "function（指定工具）"
+      },
+      {
+        "en": "auto (model decides)",
+        "zh": "auto（由模型决定）"
+      }
+    ],
+    "ui:title": {
+      "en": "Tool choice",
+      "zh": "工具调用方式"
+    },
+    "ui:help": {
+      "en": "How the LLM is asked to call submit_verdict. Use auto for upstreams that reject forced tool calls.",
+      "zh": "要求模型调用 submit_verdict 的方式。上游不支持强制调用工具时选 auto。"
+    }
+  },
+  "max_turns": {
+    "ui:title": {
+      "en": "Max turns",
+      "zh": "最大轮数"
+    },
+    "ui:help": {
+      "en": "Agent loop rounds; the LLM is asked again when it calls no tool or passes invalid arguments.",
+      "zh": "模型未调用工具或参数不合法时会被追问，这是包括首轮在内的最多轮数。"
+    }
+  },
+  "temperature": {
+    "ui:options": {
+      "step": 0.1
+    },
+    "ui:title": {
+      "en": "Temperature",
+      "zh": "温度"
+    }
+  },
+  "max_tokens": {
+    "ui:title": {
+      "en": "Max tokens",
+      "zh": "最大输出 token"
+    }
+  },
+  "timeout_ms": {
+    "ui:title": {
+      "en": "Timeout (ms)",
+      "zh": "超时（毫秒）"
+    },
+    "ui:help": {
+      "en": "Total time for one moderation, including all turns and waiting for a free slot.",
+      "zh": "单次审核的总时限，包含所有轮次和排队等待。"
+    }
+  },
+  "on_error": {
+    "ui:widget": "select",
+    "ui:enumNames": [
+      {
+        "en": "Allow the request",
+        "zh": "放行请求"
+      },
+      {
+        "en": "Refuse the request",
+        "zh": "拒绝请求"
+      }
+    ],
+    "ui:title": {
+      "en": "On error",
+      "zh": "审核失败时"
+    },
+    "ui:help": {
+      "en": "Enforce mode: what happens when moderation fails (timeout, upstream error, no verdict). Refusing returns 503 moderation_unavailable.",
+      "zh": "拦截模式下审核失败（超时、上游错误、模型始终不给结论）时的处理。拒绝时返回 503 moderation_unavailable。"
+    }
+  },
+  "max_concurrency": {
+    "ui:title": {
+      "en": "Max concurrency",
+      "zh": "最大并发"
+    },
+    "ui:help": {
+      "en": "Concurrent LLM calls on each node; also the number of observe workers.",
+      "zh": "每个节点同时进行的审核调用数，也是观察模式的工作协程数。"
+    }
+  },
+  "queue_size": {
+    "ui:title": {
+      "en": "Queue size",
+      "zh": "队列长度"
+    },
+    "ui:help": {
+      "en": "Observe mode: requests waiting for moderation on each node. When full, new ones are skipped and counted as dropped.",
+      "zh": "观察模式下每个节点等待审核的请求数上限，满了之后新请求不再审核并计入丢弃数。"
+    }
+  },
+  "input_max_chars": {
+    "ui:title": {
+      "en": "Max input characters",
+      "zh": "最大审核字数"
+    },
+    "ui:help": {
+      "en": "Longer text keeps the first 2/3 and the last 1/3.",
+      "zh": "超过时保留前 2/3 和后 1/3。"
+    }
+  },
+  "min_chars": {
+    "ui:title": {
+      "en": "Min characters",
+      "zh": "最少字数"
+    },
+    "ui:help": {
+      "en": "Text shorter than this (ignoring whitespace) is not moderated.",
+      "zh": "去掉空白后短于该字数的文本不审核。"
+    }
+  },
+  "sample_rate": {
+    "ui:title": {
+      "en": "Sample rate (%)",
+      "zh": "抽样比例（%）"
+    },
+    "ui:help": {
+      "en": "Share of requests moderated, chosen deterministically by text.",
+      "zh": "按文本确定性抽样的审核比例。"
+    }
+  },
+  "group_ids": {
+    "ui:widget": "group-select",
+    "ui:title": {
+      "en": "Groups",
+      "zh": "分组"
+    },
+    "ui:help": {
+      "en": "Only moderate requests of these groups; empty means all groups.",
+      "zh": "只审核这些分组的请求，留空表示全部分组。"
+    }
+  },
+  "model_patterns": {
+    "ui:widget": "tags",
+    "ui:placeholder": "claude-*",
+    "ui:title": {
+      "en": "Model patterns",
+      "zh": "模型匹配"
+    },
+    "ui:help": {
+      "en": "Only moderate requests for matching client models (* and ? wildcards); empty means all.",
+      "zh": "只审核匹配的客户端模型（支持 * 和 ? 通配），留空表示全部。"
+    }
+  },
+  "exempt_user_ids": {
+    "ui:widget": "tags",
+    "ui:placeholder": "42",
+    "ui:title": {
+      "en": "Exempt user IDs",
+      "zh": "免审用户 ID"
+    },
+    "ui:help": {
+      "en": "Requests of these users are never moderated.",
+      "zh": "这些用户的请求不审核。"
+    }
+  },
+  "cache_ttl_seconds": {
+    "ui:title": {
+      "en": "Cache TTL (s)",
+      "zh": "缓存时长（秒）"
+    },
+    "ui:help": {
+      "en": "Verdicts of identical text are reused for this long (in memory and shared across nodes); changing the model, prompt, categories or tool choice starts over. 0 disables the cache.",
+      "zh": "相同文本的审核结论缓存时长（内存 + 跨节点共享），修改模型、提示词、分类或工具调用方式后自动失效。0 表示不缓存。"
+    }
+  },
+  "block_status": {
+    "ui:title": {
+      "en": "Block HTTP status",
+      "zh": "拦截状态码"
+    }
+  },
+  "block_message": {
+    "ui:title": {
+      "en": "Block message",
+      "zh": "拦截提示"
+    },
+    "ui:help": {
+      "en": "Error message returned to the client when a request is refused (code moderation_blocked).",
+      "zh": "请求被拒绝时返回给客户端的错误信息（错误码 moderation_blocked）。"
+    }
+  },
+  "record_pass": {
+    "ui:widget": "switch",
+    "ui:title": {
+      "en": "Record passed checks",
+      "zh": "记录通过的审核"
+    },
+    "ui:help": {
+      "en": "Also store records for pass verdicts (flag, block and errors are always recorded).",
+      "zh": "通过的审核也写入记录（flag、block 和错误始终记录）。"
+    }
+  },
+  "store_text": {
+    "ui:widget": "switch",
+    "ui:title": {
+      "en": "Store moderated text",
+      "zh": "保存审核文本"
+    },
+    "ui:help": {
+      "en": "Keep the (truncated) text in the records. It may contain user data.",
+      "zh": "在审核记录中保存（截断后的）文本，可能包含用户数据。"
+    }
+  },
+  "retention_days": {
+    "ui:title": {
+      "en": "Retention (days)",
+      "zh": "记录保留天数"
+    }
+  },
+  "ban_threshold": {
+    "ui:title": {
+      "en": "Ban threshold",
+      "zh": "自动封禁阈值"
+    },
+    "ui:help": {
+      "en": "Ban a user automatically after this many block verdicts within the window (observe mode counts too). 0 disables automatic bans.",
+      "zh": "窗口内 block 结论达到该次数时自动封禁用户（观察模式也计数），0 表示不自动封禁。"
+    }
+  },
+  "ban_window_hours": {
+    "ui:title": {
+      "en": "Ban window (hours)",
+      "zh": "计数窗口（小时）"
+    }
+  },
+  "ban_duration_hours": {
+    "ui:title": {
+      "en": "Ban duration (hours)",
+      "zh": "封禁时长（小时）"
+    },
+    "ui:help": {
+      "en": "0 bans until an administrator unblocks the user.",
+      "zh": "0 表示直到管理员手动解封。"
+    }
+  }
+}

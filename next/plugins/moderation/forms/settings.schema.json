@@ -1,0 +1,241 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "title": "Prompt moderation settings",
+  "additionalProperties": false,
+  "properties": {
+    "mode": {
+      "type": "string",
+      "title": "Mode",
+      "enum": [
+        "off",
+        "observe",
+        "enforce"
+      ],
+      "default": "off"
+    },
+    "base_url": {
+      "type": "string",
+      "title": "Base URL",
+      "default": "",
+      "maxLength": 500,
+      "pattern": "^(https?://\\S+)?$"
+    },
+    "api_key": {
+      "type": "string",
+      "title": "API key",
+      "default": "",
+      "maxLength": 1000,
+      "writeOnly": true
+    },
+    "model": {
+      "type": "string",
+      "title": "Model",
+      "default": "",
+      "maxLength": 200
+    },
+    "system_prompt": {
+      "type": "string",
+      "title": "System prompt",
+      "default": "",
+      "maxLength": 20000
+    },
+    "categories": {
+      "type": "array",
+      "title": "Categories",
+      "default": [],
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "ID",
+            "pattern": "^[a-z0-9_]{1,32}$"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": "",
+            "maxLength": 500
+          }
+        }
+      }
+    },
+    "tool_choice": {
+      "type": "string",
+      "title": "Tool choice",
+      "enum": [
+        "required",
+        "function",
+        "auto"
+      ],
+      "default": "required"
+    },
+    "max_turns": {
+      "type": "integer",
+      "title": "Max turns",
+      "minimum": 1,
+      "maximum": 5,
+      "default": 3
+    },
+    "temperature": {
+      "type": "number",
+      "title": "Temperature",
+      "minimum": 0,
+      "maximum": 2,
+      "default": 0
+    },
+    "max_tokens": {
+      "type": "integer",
+      "title": "Max tokens",
+      "minimum": 64,
+      "maximum": 4096,
+      "default": 512
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "title": "Timeout (ms)",
+      "minimum": 1000,
+      "maximum": 25000,
+      "default": 10000
+    },
+    "on_error": {
+      "type": "string",
+      "title": "On error",
+      "enum": [
+        "allow",
+        "block"
+      ],
+      "default": "allow"
+    },
+    "max_concurrency": {
+      "type": "integer",
+      "title": "Max concurrency",
+      "minimum": 1,
+      "maximum": 256,
+      "default": 16
+    },
+    "queue_size": {
+      "type": "integer",
+      "title": "Queue size",
+      "minimum": 1,
+      "maximum": 100000,
+      "default": 1000
+    },
+    "input_max_chars": {
+      "type": "integer",
+      "title": "Max input characters",
+      "minimum": 256,
+      "maximum": 100000,
+      "default": 8000
+    },
+    "min_chars": {
+      "type": "integer",
+      "title": "Min characters",
+      "minimum": 0,
+      "maximum": 1000,
+      "default": 2
+    },
+    "sample_rate": {
+      "type": "integer",
+      "title": "Sample rate (%)",
+      "minimum": 1,
+      "maximum": 100,
+      "default": 100
+    },
+    "group_ids": {
+      "type": "array",
+      "title": "Groups",
+      "default": [],
+      "uniqueItems": true,
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "model_patterns": {
+      "type": "array",
+      "title": "Model patterns",
+      "default": [],
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    },
+    "exempt_user_ids": {
+      "type": "array",
+      "title": "Exempt user IDs",
+      "default": [],
+      "maxItems": 1000,
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9]+$"
+      }
+    },
+    "cache_ttl_seconds": {
+      "type": "integer",
+      "title": "Cache TTL (s)",
+      "minimum": 0,
+      "maximum": 604800,
+      "default": 3600
+    },
+    "block_status": {
+      "type": "integer",
+      "title": "Block status",
+      "minimum": 400,
+      "maximum": 599,
+      "default": 403
+    },
+    "block_message": {
+      "type": "string",
+      "title": "Block message",
+      "default": "提示词审核未通过，请调整输入后重试",
+      "maxLength": 500
+    },
+    "record_pass": {
+      "type": "boolean",
+      "title": "Record passed checks",
+      "default": false
+    },
+    "store_text": {
+      "type": "boolean",
+      "title": "Store moderated text",
+      "default": true
+    },
+    "retention_days": {
+      "type": "integer",
+      "title": "Retention (days)",
+      "minimum": 1,
+      "maximum": 3650,
+      "default": 30
+    },
+    "ban_threshold": {
+      "type": "integer",
+      "title": "Ban threshold",
+      "minimum": 0,
+      "maximum": 1000,
+      "default": 0
+    },
+    "ban_window_hours": {
+      "type": "integer",
+      "title": "Ban window (hours)",
+      "minimum": 1,
+      "maximum": 8760,
+      "default": 24
+    },
+    "ban_duration_hours": {
+      "type": "integer",
+      "title": "Ban duration (hours)",
+      "minimum": 0,
+      "maximum": 87600,
+      "default": 24
+    }
+  }
+}
