@@ -22,7 +22,7 @@ export default {
   exitIp: '出口 IP',
   createdBy: '创建人',
   pasteUrl: '粘贴代理串自动填充',
-  pasteUrlHint: '如 socks5://user:pass@host:port，解析后填入下方各字段（socks5h 记为 socks5）',
+  pasteUrlHint: "如 socks5://user:pass{'@'}host:port，解析后填入下方各字段（socks5h 记为 socks5）",
   pasteFill: '自动填充',
   pasteError: {
     scheme: '协议只能是 http、https、socks5 或 socks5h',

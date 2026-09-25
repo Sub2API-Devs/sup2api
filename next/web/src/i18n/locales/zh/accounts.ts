@@ -22,7 +22,7 @@ export default {
   createdBy: '创建人',
   proxyPickExisting: '选择已有',
   proxyPasteUrl: '粘贴代理串',
-  proxyUrlHint: '格式 协议://用户名:密码@主机:端口，协议为 http / https / socks5(h)；保存时自动复用已有代理或新建',
+  proxyUrlHint: "格式 协议://用户名:密码{'@'}主机:端口，协议为 http / https / socks5(h)；保存时自动复用已有代理或新建",
   proxyUrlShapeHint: '看起来不是代理串：需要 协议://主机:端口 的形式',
   proxyUrlSchemeHint: '协议只能是 http、https、socks5 或 socks5h',
   proxyUrlPortHint: '必须带端口（1–65535）',

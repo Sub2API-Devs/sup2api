@@ -22,7 +22,7 @@ export default {
   createdBy: 'Created by',
   proxyPickExisting: 'Pick existing',
   proxyPasteUrl: 'Paste proxy URL',
-  proxyUrlHint: 'scheme://user:pass@host:port with http / https / socks5(h); on save a matching proxy is reused or a new one is created',
+  proxyUrlHint: "scheme://user:pass{'@'}host:port with http / https / socks5(h); on save a matching proxy is reused or a new one is created",
   proxyUrlShapeHint: 'Does not look like a proxy URL: expected scheme://host:port',
   proxyUrlSchemeHint: 'The scheme must be http, https, socks5 or socks5h',
   proxyUrlPortHint: 'A port (1–65535) is required',

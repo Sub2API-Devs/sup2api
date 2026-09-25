@@ -22,7 +22,7 @@ export default {
   exitIp: 'Exit IP',
   createdBy: 'Created by',
   pasteUrl: 'Paste a proxy URL to fill the form',
-  pasteUrlHint: 'e.g. socks5://user:pass@host:port; parsed into the fields below (socks5h becomes socks5)',
+  pasteUrlHint: "e.g. socks5://user:pass{'@'}host:port; parsed into the fields below (socks5h becomes socks5)",
   pasteFill: 'Fill',
   pasteError: {
     scheme: 'The scheme must be http, https, socks5 or socks5h',
