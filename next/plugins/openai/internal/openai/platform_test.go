@@ -15,7 +15,7 @@ import (
 
 func start(t *testing.T) *pluginsdktest.Harness {
 	t.Helper()
-	return pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("openai", "0.1.3")}})
+	return pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("openai", "0.1.4")}})
 }
 
 func account(creds, settings string) *pluginv1.Account {
@@ -241,5 +241,19 @@ func TestClassifyError(t *testing.T) {
 	// Compatible servers that answer {"error": "message"}.
 	if r := cls(400, nil, `{"error":"bad things"}`, ""); r.GetClientMessage() != "bad things" || r.GetClientErrorType() != "invalid_request_error" {
 		t.Errorf("string error body: %v", r)
+	}
+}
+
+func TestBuildModelsRequest(t *testing.T) {
+	h := start(t)
+	r, err := h.Platform.BuildModelsRequest(context.Background(), &pluginv1.BuildModelsRequestRequest{
+		Account: account(`{"api_key":"sk-key-1234"}`, `{"base_url":"http://mock-upstream:8080/v1"}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.GetMethod() != "GET" || r.GetUrl() != "http://mock-upstream:8080/v1/models" ||
+		r.GetHeaders()["authorization"] != "Bearer sk-key-1234" || r.GetIdsPath() != "data.#.id" {
+		t.Fatalf("resp = %v", r)
 	}
 }

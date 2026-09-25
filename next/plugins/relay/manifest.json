@@ -6,7 +6,7 @@
     "en": "Adds the \"Relay key\" account type: accounts of an Anthropic-compatible relay (your own Base URL and key) that serve the built-in anthropic platform (/v1/messages and /v1/messages/count_tokens) together with the other account types of a group. Declares no platform, no endpoints and no prices.",
     "zh": "新增\"中转 Key\"账号类型：Anthropic 兼容中转站的账号（自定义 Base URL 和 Key），与分组里其他类型的账号一起为内置 anthropic 平台（/v1/messages 和 /v1/messages/count_tokens）提供服务。不声明平台、端点和价格。"
   },
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "sub2api",
   "icon": "text:R",
   "runtime": "grpc",

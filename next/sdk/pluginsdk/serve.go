@@ -374,6 +374,12 @@ func (s platformServer) ClassifyError(ctx context.Context, in *pluginv1.Classify
 func (s platformServer) BuildTestRequest(ctx context.Context, in *pluginv1.BuildTestRequestRequest) (*pluginv1.BuildTestRequestResponse, error) {
 	return s.impl.BuildTestRequest(ctx, in)
 }
+func (s platformServer) BuildModelsRequest(ctx context.Context, in *pluginv1.BuildModelsRequestRequest) (*pluginv1.BuildModelsRequestResponse, error) {
+	if l, ok := s.impl.(ModelLister); ok {
+		return l.BuildModelsRequest(ctx, in)
+	}
+	return nil, status.Error(codes.Unimplemented, "this account type cannot list models")
+}
 
 type hookServer struct {
 	pluginv1.UnimplementedHookServiceServer

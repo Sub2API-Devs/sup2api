@@ -21,6 +21,9 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/tidwall/gjson"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
@@ -295,6 +298,10 @@ func (p *fakePlatform) ClassifyError(_ context.Context, in *pluginv1.ClassifyErr
 		r.Action = pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT
 	}
 	return r, nil
+}
+
+func (p *fakePlatform) BuildModelsRequest(context.Context, *pluginv1.BuildModelsRequestRequest) (*pluginv1.BuildModelsRequestResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "no")
 }
 
 func (p *fakePlatform) BuildTestRequest(context.Context, *pluginv1.BuildTestRequestRequest) (*pluginv1.BuildTestRequestResponse, error) {

@@ -374,7 +374,7 @@ erDiagram
 | `credentials_enc` | 凭证整体 AES-256-GCM 加密（主密钥 `MASTER_KEY`）；插件声明的敏感字段接口中永远脱敏 |
 | `settings` | 非敏感配置（base_url 等，由账号类型的 `settingsFields` 决定），明文 JSONB |
 | `proxy_id` / `status` / `schedulable` / `priority` / `weight` / `max_concurrency` | 代理、状态、是否参与调度、优先级（越小越优先）、权重（同优先级内加权随机）、最大并发 |
-| `models` / `model_mapping` | 账号可服务的模型列表（完整模型 ID，空 = 全部）与"客户端模型 → 上游模型"映射；都是核心属性，与插件无关（CONTRACTS §18）。核心在调插件 `BuildUpstreamRequest` 前改写模型 |
+| `models` / `model_mapping` | 账号可服务的模型列表（完整模型 ID，空 = 全部）与"客户端模型 → 上游模型"映射；都是核心属性，与插件无关（CONTRACTS §18）。核心在调插件 `BuildUpstreamRequest` 前改写模型。模型列表可从上游拉取：插件 `BuildModelsRequest` 构造请求，核心发出并提取 ID（CONTRACTS §19） |
 | `rpm_limit` / `tpm_limit` / `tpd_limit` / `spm_limit` | 每分钟请求数、每分钟 token 数、每天（UTC）token 数、每分钟会话数上限，0 = 不限；计数在 Redis `rl:account:{id}:*` |
 | 冷却 | Redis `cooldown:account:{id}`，不写 PG |
 
@@ -492,7 +492,7 @@ flowchart LR
   end
   subgraph plugin["插件进程"]
     ps["PluginService<br/>GetInfo · Health · Configure · Shutdown"]
-    pf["PlatformService<br/>ValidateCredentials · BuildUpstreamRequest<br/>ClassifyError · BuildTestRequest"]
+    pf["PlatformService<br/>ValidateCredentials · BuildUpstreamRequest<br/>ClassifyError · BuildTestRequest<br/>BuildModelsRequest（可选）"]
     hk["HookService<br/>OnGatewayRequest"]
     ap["AppService<br/>RunJob · OnEvents"]
     hx["HTTPService<br/>HandleHTTP"]

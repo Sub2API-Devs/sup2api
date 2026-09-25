@@ -78,5 +78,16 @@ export default {
   message: 'Message',
   revealCredentials: 'Reveal credentials',
   revealWarning: 'These are plaintext credentials. The access is audited; do not share them.',
-  overview: 'Overview'
+  overview: 'Overview',
+  fetchModels: 'Fetch from upstream',
+  fetchModelsHint: 'Ask the upstream which models the entered credentials can use, then merge the ticked ones into the list',
+  fetchModelsTitle: 'Upstream lists {n} models',
+  fetchPicked: '{n} of {total} selected',
+  fetchSkipped: '{n} invalid ids ignored',
+  fetchAlready: 'listed',
+  fetchApply: 'Add to model list',
+  fetchApplied: 'The model list now has {n} models',
+  fetchEmpty: 'The upstream returned no models',
+  selectAll: 'Select all',
+  selectNone: 'Select none'
 }

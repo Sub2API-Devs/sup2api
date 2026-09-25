@@ -31,6 +31,13 @@ type Platform interface {
 	BuildTestRequest(context.Context, *pluginv1.BuildTestRequestRequest) (*pluginv1.BuildTestRequestResponse, error)
 }
 
+// ModelLister is implemented by platforms whose upstream can list the models
+// an account may use (console "fetch models", CONTRACTS §19). Optional: a
+// Platform without it answers BuildModelsRequest with UNIMPLEMENTED.
+type ModelLister interface {
+	BuildModelsRequest(context.Context, *pluginv1.BuildModelsRequestRequest) (*pluginv1.BuildModelsRequestResponse, error)
+}
+
 // Hook mirrors pluginv1.HookServiceServer ("gateway.hook.v1").
 type Hook interface {
 	OnGatewayRequest(context.Context, *pluginv1.GatewayRequestHookRequest) (*pluginv1.GatewayRequestHookResponse, error)

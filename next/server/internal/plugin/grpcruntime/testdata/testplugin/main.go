@@ -22,6 +22,9 @@ import (
 	"github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 )
@@ -128,6 +131,10 @@ func (s *server) BuildUpstreamRequest(ctx context.Context, in *pluginv1.BuildUps
 
 func (s *server) ClassifyError(context.Context, *pluginv1.ClassifyErrorRequest) (*pluginv1.ClassifyErrorResponse, error) {
 	return &pluginv1.ClassifyErrorResponse{Action: pluginv1.ClassifyErrorResponse_ACTION_FAILOVER}, nil
+}
+
+func (s *server) BuildModelsRequest(context.Context, *pluginv1.BuildModelsRequestRequest) (*pluginv1.BuildModelsRequestResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "test plugin lists no models")
 }
 
 func (s *server) BuildTestRequest(ctx context.Context, in *pluginv1.BuildTestRequestRequest) (*pluginv1.BuildTestRequestResponse, error) {

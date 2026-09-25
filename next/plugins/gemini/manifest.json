@@ -6,7 +6,7 @@
     "en": "Gemini API key account type. The gemini platform and its endpoints (/v1beta/models/{model}:generateContent, :streamGenerateContent, :countTokens) are built into the core; model prices are set by administrators in the core.",
     "zh": "Gemini API Key 账号类型（gemini 平台及其端点 /v1beta/models/{model}:generateContent、:streamGenerateContent、:countTokens 由核心内置；模型价格由管理员在核心中配置）。"
   },
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "sub2api",
   "icon": "text:G",
   "runtime": "grpc",

@@ -30,6 +30,9 @@ func (stub) BuildUpstreamRequest(context.Context, *pluginv1.BuildUpstreamRequest
 func (stub) ClassifyError(context.Context, *pluginv1.ClassifyErrorRequest) (*pluginv1.ClassifyErrorResponse, error) {
 	return nil, nil
 }
+func (stub) BuildModelsRequest(context.Context, *pluginv1.BuildModelsRequestRequest) (*pluginv1.BuildModelsRequestResponse, error) {
+	return nil, nil
+}
 func (stub) BuildTestRequest(context.Context, *pluginv1.BuildTestRequestRequest) (*pluginv1.BuildTestRequestResponse, error) {
 	return nil, nil
 }

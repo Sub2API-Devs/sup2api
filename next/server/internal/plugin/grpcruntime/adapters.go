@@ -187,6 +187,14 @@ func (a platformAdapter) BuildTestRequest(ctx context.Context, in *pluginv1.Buil
 	return
 }
 
+func (a platformAdapter) BuildModelsRequest(ctx context.Context, in *pluginv1.BuildModelsRequestRequest) (out *pluginv1.BuildModelsRequestResponse, err error) {
+	err = a.i.call(ctx, TimeoutPlatformConsole, func(ctx context.Context, p *proc) (e error) {
+		out, e = p.platform.BuildModelsRequest(ctx, in)
+		return
+	})
+	return
+}
+
 type hookAdapter struct{ i *Instance }
 
 func (a hookAdapter) OnGatewayRequest(ctx context.Context, in *pluginv1.GatewayRequestHookRequest) (out *pluginv1.GatewayRequestHookResponse, err error) {

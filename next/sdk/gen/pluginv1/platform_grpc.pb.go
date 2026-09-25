@@ -23,6 +23,7 @@ const (
 	PlatformService_BuildUpstreamRequest_FullMethodName = "/sub2api.plugin.v1.PlatformService/BuildUpstreamRequest"
 	PlatformService_ClassifyError_FullMethodName        = "/sub2api.plugin.v1.PlatformService/ClassifyError"
 	PlatformService_BuildTestRequest_FullMethodName     = "/sub2api.plugin.v1.PlatformService/BuildTestRequest"
+	PlatformService_BuildModelsRequest_FullMethodName   = "/sub2api.plugin.v1.PlatformService/BuildModelsRequest"
 )
 
 // PlatformServiceClient is the client API for PlatformService service.
@@ -41,6 +42,10 @@ type PlatformServiceClient interface {
 	ClassifyError(ctx context.Context, in *ClassifyErrorRequest, opts ...grpc.CallOption) (*ClassifyErrorResponse, error)
 	// Builds a minimal request used by the console "test account" button.
 	BuildTestRequest(ctx context.Context, in *BuildTestRequestRequest, opts ...grpc.CallOption) (*BuildTestRequestResponse, error)
+	// Builds the request listing the models the account can reach; the host
+	// sends it and extracts the ids (console "fetch models" button, CONTRACTS
+	// §19). Optional: answer UNIMPLEMENTED when the upstream has no such API.
+	BuildModelsRequest(ctx context.Context, in *BuildModelsRequestRequest, opts ...grpc.CallOption) (*BuildModelsRequestResponse, error)
 }
 
 type platformServiceClient struct {
@@ -91,6 +96,16 @@ func (c *platformServiceClient) BuildTestRequest(ctx context.Context, in *BuildT
 	return out, nil
 }
 
+func (c *platformServiceClient) BuildModelsRequest(ctx context.Context, in *BuildModelsRequestRequest, opts ...grpc.CallOption) (*BuildModelsRequestResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BuildModelsRequestResponse)
+	err := c.cc.Invoke(ctx, PlatformService_BuildModelsRequest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlatformServiceServer is the server API for PlatformService service.
 // All implementations must embed UnimplementedPlatformServiceServer
 // for forward compatibility.
@@ -107,6 +122,10 @@ type PlatformServiceServer interface {
 	ClassifyError(context.Context, *ClassifyErrorRequest) (*ClassifyErrorResponse, error)
 	// Builds a minimal request used by the console "test account" button.
 	BuildTestRequest(context.Context, *BuildTestRequestRequest) (*BuildTestRequestResponse, error)
+	// Builds the request listing the models the account can reach; the host
+	// sends it and extracts the ids (console "fetch models" button, CONTRACTS
+	// §19). Optional: answer UNIMPLEMENTED when the upstream has no such API.
+	BuildModelsRequest(context.Context, *BuildModelsRequestRequest) (*BuildModelsRequestResponse, error)
 	mustEmbedUnimplementedPlatformServiceServer()
 }
 
@@ -128,6 +147,9 @@ func (UnimplementedPlatformServiceServer) ClassifyError(context.Context, *Classi
 }
 func (UnimplementedPlatformServiceServer) BuildTestRequest(context.Context, *BuildTestRequestRequest) (*BuildTestRequestResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method BuildTestRequest not implemented")
+}
+func (UnimplementedPlatformServiceServer) BuildModelsRequest(context.Context, *BuildModelsRequestRequest) (*BuildModelsRequestResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BuildModelsRequest not implemented")
 }
 func (UnimplementedPlatformServiceServer) mustEmbedUnimplementedPlatformServiceServer() {}
 func (UnimplementedPlatformServiceServer) testEmbeddedByValue()                         {}
@@ -222,6 +244,24 @@ func _PlatformService_BuildTestRequest_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformService_BuildModelsRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BuildModelsRequestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).BuildModelsRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_BuildModelsRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).BuildModelsRequest(ctx, req.(*BuildModelsRequestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlatformService_ServiceDesc is the grpc.ServiceDesc for PlatformService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -244,6 +284,10 @@ var PlatformService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "BuildTestRequest",
 			Handler:    _PlatformService_BuildTestRequest_Handler,
+		},
+		{
+			MethodName: "BuildModelsRequest",
+			Handler:    _PlatformService_BuildModelsRequest_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

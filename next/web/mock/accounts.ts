@@ -394,6 +394,27 @@ on('POST', '/accounts/:id/test', (req) => {
     ? { ok: false, status: 401, latency_ms: 212, message: 'authentication_error: invalid x-api-key' }
     : { ok: true, status: 200, latency_ms: 480 + Math.round(Math.random() * 200), message: `model ${model} answered` }
 })
+// Fetch models from the upstream (CONTRACTS §19). Per plugin a fixed list; a
+// key containing "bad" mimics an upstream 401, gemini lists resource names.
+const upstreamModels: Record<string, string[]> = {
+  anthropic: ['claude-sonnet-4-5', 'claude-opus-4-1', 'claude-haiku-4-5', 'claude-sonnet-4-5-20250929'],
+  openai: ['gpt-4.1', 'gpt-4o', 'gpt-4o-mini', 'o3', 'text-embedding-3-small'],
+  gemini: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash'],
+  relay: ['claude-sonnet-4-5', 'claude-opus-4-1']
+}
+function fetchUpstreamModels(pluginKey: string, creds: Record<string, any> | undefined) {
+  const key = String(creds?.api_key || '')
+  if (key.includes('bad')) return fail(503, 'unavailable', 'upstream returned 401: {"error":"invalid api key"}', { status: 401 })
+  const models = upstreamModels[pluginKey]
+  if (!models) return fail(501, 'unsupported', 'this account type cannot list models from the upstream')
+  return { models: [...models].sort(), skipped: 0, status: 200 }
+}
+on('POST', '/account-types/:plugin_key/:type/models/fetch', (req) => fetchUpstreamModels(req.params.plugin_key, req.body?.credentials))
+on('POST', '/accounts/:id/models/fetch', (req) => {
+  const a = accounts.find((x) => x.id === Number(req.params.id))
+  if (!a) return fail(404, 'not_found', 'account not found')
+  return fetchUpstreamModels(a.plugin_key, req.body?.credentials || a.credentials)
+})
 on('POST', '/accounts/:id/credentials/reveal', (req) => {
   const s = needStepUp(req)
   if (s) return s

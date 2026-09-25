@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SField, SKeyValue, SSpinner, SSwitch, toast } from '@sub2api/ui'
+import { SButton, SField, SKeyValue, SModal, SSpinner, SSwitch, toast } from '@sub2api/ui'
 import type { Account, AccountType, Price } from '@/api/types'
 import SchemaForm from '@/components/schema/SchemaForm.vue'
 import PluginIframe from '@/components/plugin/PluginIframe.vue'
@@ -153,6 +153,75 @@ function toggleModelsText() {
     modelsError.value = ''
     modelsTextMode.value = true
   }
+}
+
+// ---------------------------------------------------------------- fetch models from the upstream (CONTRACTS §19)
+const fetchOpen = ref(false)
+const fetching = ref(false)
+const fetched = ref<string[]>([])
+const fetchedSkipped = ref(0)
+const fetchPicked = ref<Record<string, boolean>>({})
+
+const canFetch = computed(() => !!props.accountType && !props.account?.orphaned && (editing.value ? auth.has('account:test') : auth.has('account:create')))
+const fetchPickedCount = computed(() => Object.values(fetchPicked.value).filter(Boolean).length)
+
+async function fetchModels() {
+  if (!props.accountType) return
+  const creds = await collectCredentials()
+  if (!creds) return
+  fetching.value = true
+  try {
+    const at = props.accountType
+    const r = editing.value
+      ? await api.post<{ models: string[]; skipped: number }>(`/accounts/${props.account!.id}/models/fetch`, { credentials: creds })
+      : await api.post<{ models: string[]; skipped: number }>(
+          `/account-types/${encodeURIComponent(at.plugin_key)}/${encodeURIComponent(at.type)}/models/fetch`,
+          { credentials: creds, proxy_id: basic.proxy_id }
+        )
+    fetched.value = r.models || []
+    fetchedSkipped.value = r.skipped || 0
+    const picked: Record<string, boolean> = {}
+    for (const m of fetched.value) picked[m] = true
+    fetchPicked.value = picked
+    if (!fetched.value.length) {
+      toast(t('accounts.fetchEmpty'), 'warning')
+      return
+    }
+    fetchOpen.value = true
+  } catch (e) {
+    const fe = fieldErrors(e)
+    if (Object.keys(fe).length) {
+      // Credential problems land on the plugin form, like a failed save.
+      const cred: Record<string, string> = {}
+      for (const [k, v] of Object.entries(fe)) {
+        const m = /^credentials[.[]?(.*?)]?$/.exec(k)
+        if (m && k.startsWith('credentials')) cred[m[1].replace(/^\./, '')] = v
+      }
+      credErrors.value = cred
+      if (mode.value === 'iframe' && Object.keys(cred).length) iframe.value?.setErrors(cred)
+    }
+    notifyError(e)
+  } finally {
+    fetching.value = false
+  }
+}
+
+function setAllFetched(v: boolean) {
+  const picked: Record<string, boolean> = {}
+  for (const m of fetched.value) picked[m] = v
+  fetchPicked.value = picked
+}
+
+/** Merges the ticked models into the list (existing entries are kept). */
+function applyFetched() {
+  if (modelsTextMode.value && !syncModelsText()) return
+  const next = [...models.value]
+  for (const m of fetched.value) if (fetchPicked.value[m] && !next.includes(m)) next.push(m)
+  models.value = next
+  if (modelsTextMode.value) modelsText.value = next.join('\n')
+  modelsError.value = ''
+  fetchOpen.value = false
+  toast(t('accounts.fetchApplied', { n: next.length }), 'success')
 }
 
 // ---------------------------------------------------------------- model mapping editor
@@ -428,9 +497,22 @@ async function save() {
     <section class="border-t border-gray-100 pt-5 dark:border-dark-700">
       <div class="mb-3 flex items-center justify-between">
         <h4 class="section-title !mb-0">{{ t('accounts.models') }}</h4>
-        <button type="button" class="link text-xs" data-testid="models-text-toggle" @click="toggleModelsText">
-          {{ modelsTextMode ? t('accounts.tagEdit') : t('accounts.textEdit') }}
-        </button>
+        <div class="flex items-center gap-3">
+          <button
+            v-if="canFetch"
+            type="button"
+            class="link text-xs"
+            :disabled="fetching"
+            data-testid="models-fetch"
+            :title="t('accounts.fetchModelsHint')"
+            @click="fetchModels"
+          >
+            {{ fetching ? t('common.loading') : t('accounts.fetchModels') }}
+          </button>
+          <button type="button" class="link text-xs" data-testid="models-text-toggle" @click="toggleModelsText">
+            {{ modelsTextMode ? t('accounts.tagEdit') : t('accounts.textEdit') }}
+          </button>
+        </div>
       </div>
 
       <textarea
@@ -547,6 +629,31 @@ async function save() {
         <PluginSlot name="account.form.widgets" :props="{ account, accountType, credentials }" />
       </div>
     </section>
+
+    <!-- fetched models picker -->
+    <SModal v-model:open="fetchOpen" :title="t('accounts.fetchModelsTitle', { n: fetched.length })" width="md">
+      <div class="mb-2 flex items-center justify-between text-xs">
+        <span class="muted">
+          {{ t('accounts.fetchPicked', { n: fetchPickedCount, total: fetched.length }) }}
+          <span v-if="fetchedSkipped"> · {{ t('accounts.fetchSkipped', { n: fetchedSkipped }) }}</span>
+        </span>
+        <span class="flex gap-2">
+          <button type="button" class="link" @click="setAllFetched(true)">{{ t('accounts.selectAll') }}</button>
+          <button type="button" class="link" @click="setAllFetched(false)">{{ t('accounts.selectNone') }}</button>
+        </span>
+      </div>
+      <div class="max-h-[50vh] space-y-1 overflow-y-auto rounded-lg border border-gray-100 p-2 dark:border-dark-700" data-testid="fetched-models">
+        <label v-for="m in fetched" :key="m" class="flex items-center gap-2 text-sm">
+          <input v-model="fetchPicked[m]" type="checkbox" class="checkbox" />
+          <span class="font-mono text-xs">{{ m }}</span>
+          <span v-if="models.includes(m)" class="badge badge-gray text-[10px]">{{ t('accounts.fetchAlready') }}</span>
+        </label>
+      </div>
+      <template #footer>
+        <SButton @click="fetchOpen = false">{{ t('common.cancel') }}</SButton>
+        <SButton variant="primary" :disabled="!fetchPickedCount" @click="applyFetched">{{ t('accounts.fetchApply') }}</SButton>
+      </template>
+    </SModal>
 
     <div class="flex items-center justify-end gap-2 border-t border-gray-100 pt-4 dark:border-dark-700">
       <SButton v-if="!editing" class="mr-auto" variant="ghost" @click="emit('back')">← {{ t('common.previous') }}</SButton>

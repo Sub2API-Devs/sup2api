@@ -78,5 +78,16 @@ export default {
   message: '信息',
   revealCredentials: '查看凭证',
   revealWarning: '以下是明文凭证，查看操作会被审计，请勿泄露。',
-  overview: '概览'
+  overview: '概览',
+  fetchModels: '从上游获取',
+  fetchModelsHint: '用当前填写的凭证向上游查询可用模型，勾选后合并进模型列表',
+  fetchModelsTitle: '上游返回 {n} 个模型',
+  fetchPicked: '已选 {n} / {total}',
+  fetchSkipped: '{n} 个非法 ID 已忽略',
+  fetchAlready: '已在列表',
+  fetchApply: '加入模型列表',
+  fetchApplied: '模型列表现有 {n} 个模型',
+  fetchEmpty: '上游没有返回模型',
+  selectAll: '全选',
+  selectNone: '全不选'
 }

@@ -99,6 +99,8 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("PATCH", "/accounts/:id", "account:update", s.update)
 	r.Perm("DELETE", "/accounts/:id", "account:delete", s.delete)
 	r.Perm("POST", "/accounts/:id/test", "account:test", s.test)
+	r.Perm("POST", "/accounts/:id/models/fetch", "account:test", s.fetchAccountModels)
+	r.Perm("POST", "/account-types/:plugin_key/:type/models/fetch", "account:create", s.fetchTypeModels)
 	r.Perm("POST", "/accounts/:id/credentials/reveal", "account:credential:view", s.reveal)
 }
 

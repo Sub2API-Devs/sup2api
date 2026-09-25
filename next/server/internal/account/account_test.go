@@ -20,6 +20,9 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/tidwall/gjson"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -58,6 +61,17 @@ func (*fakePlatform) BuildUpstreamRequest(context.Context, *pluginv1.BuildUpstre
 
 func (*fakePlatform) ClassifyError(context.Context, *pluginv1.ClassifyErrorRequest) (*pluginv1.ClassifyErrorResponse, error) {
 	return nil, core.ErrInternal
+}
+
+// BuildModelsRequest lists models from the fake upstream's /v1/models; the
+// "vkey" account type is not a ModelLister.
+func (p *fakePlatform) BuildModelsRequest(_ context.Context, in *pluginv1.BuildModelsRequestRequest) (*pluginv1.BuildModelsRequestResponse, error) {
+	if in.GetAccount().GetType() == "vkey" {
+		return nil, status.Error(codes.Unimplemented, "no")
+	}
+	key := gjson.Get(in.Account.CredentialsJson, "api_key").String()
+	return &pluginv1.BuildModelsRequestResponse{Method: "GET", Url: strings.TrimSuffix(p.testURL, "/v1/messages") + "/v1/models",
+		Headers: map[string]string{"x-api-key": key}, IdsPath: "data.#.id", StripPrefix: "models/"}, nil
 }
 
 func (p *fakePlatform) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestRequestRequest) (*pluginv1.BuildTestRequestResponse, error) {
@@ -527,6 +541,11 @@ func setup(t *testing.T) *env {
 		if r.Header.Get("x-api-key") != "sk-good-key-123" {
 			w.WriteHeader(401)
 			_, _ = w.Write([]byte(`{"error":"invalid x-api-key"}`))
+			return
+		}
+		if r.URL.Path == "/v1/models" && r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":[{"id":"claude-sonnet-4-5"},{"id":"models/claude-opus-4-1"},{"id":"bad model"},{"id":"claude-sonnet-4-5"},{"id":""}]}`))
 			return
 		}
 		w.WriteHeader(200)

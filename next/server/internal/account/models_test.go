@@ -157,3 +157,55 @@ func TestAccountModelsAndLimits(t *testing.T) {
 		t.Fatalf("test model sent %q, want claude-y", got)
 	}
 }
+
+// TestFetchModels covers the "fetch models from the upstream" endpoints
+// (CONTRACTS §19).
+func TestFetchModels(t *testing.T) {
+	e := setup(t)
+	g1 := e.exec1(`INSERT INTO groups (name) VALUES ('default') RETURNING id`)
+
+	// Before the account exists: credentials from the form.
+	code, out := e.do("POST", "/account-types/anthropic/apikey/models/fetch", map[string]any{
+		"credentials": map[string]any{"api_key": "sk-good-key-123"}})
+	if code != 200 || fmt.Sprint(out["data"].(map[string]any)["models"]) != "[claude-opus-4-1 claude-sonnet-4-5]" ||
+		out["data"].(map[string]any)["skipped"] != 2.0 {
+		t.Fatalf("type fetch: %d %v", code, out)
+	}
+	// Invalid credentials fail the schema before any upstream call.
+	if code, out = e.do("POST", "/account-types/anthropic/apikey/models/fetch", map[string]any{
+		"credentials": map[string]any{"api_key": "short"}}); code != 400 || fmt.Sprint(fieldsOf(out)) != "[credentials.api_key:minLength]" {
+		t.Fatalf("type fetch validation: %d %v", code, out)
+	}
+	// Bad key: the upstream answers 401 -> 503 unavailable with the status.
+	if code, out = e.do("POST", "/account-types/anthropic/apikey/models/fetch", map[string]any{
+		"credentials": map[string]any{"api_key": "sk-wrong-key-123"}}); code != 503 ||
+		out["error"].(map[string]any)["details"].(map[string]any)["status"] != 401.0 {
+		t.Fatalf("type fetch upstream 401: %d %v", code, out)
+	}
+	// A type whose plugin does not list models: 501 unsupported.
+	if code, out = e.do("POST", "/account-types/video/vkey/models/fetch", map[string]any{
+		"credentials": map[string]any{"api_key": "sk-good-key-123"}}); code != 501 || out["error"].(map[string]any)["code"] != "unsupported" {
+		t.Fatalf("type fetch unsupported: %d %v", code, out)
+	}
+
+	// Saved account: stored credentials, optionally overridden with masked values.
+	code, out = e.do("POST", "/accounts", map[string]any{"name": "a", "plugin_key": "anthropic", "type": "apikey",
+		"group_ids": []int64{g1}, "credentials": map[string]any{"api_key": "sk-good-key-123"}})
+	if code != 201 {
+		t.Fatalf("create: %d %v", code, out)
+	}
+	id := int64(out["data"].(map[string]any)["id"].(float64))
+	if code, out = e.do("POST", fmt.Sprintf("/accounts/%d/models/fetch", id), nil); code != 200 ||
+		len(out["data"].(map[string]any)["models"].([]any)) != 2 {
+		t.Fatalf("account fetch: %d %v", code, out)
+	}
+	if code, out = e.do("POST", fmt.Sprintf("/accounts/%d/models/fetch", id), map[string]any{
+		"credentials": map[string]any{"api_key": Mask, "base_url": "https://x.example.com"}}); code != 200 ||
+		len(out["data"].(map[string]any)["models"].([]any)) != 2 {
+		t.Fatalf("account fetch with mask: %d %v", code, out)
+	}
+	if code, _ = e.do("POST", fmt.Sprintf("/accounts/%d/models/fetch", id), map[string]any{
+		"credentials": map[string]any{"api_key": "sk-wrong-key-123"}}); code != 503 {
+		t.Fatalf("account fetch with wrong key: %d", code)
+	}
+}

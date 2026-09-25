@@ -142,6 +142,7 @@
 | GET/PATCH `/accounts/:id` | `account:read` / `account:update` | 凭证中的敏感字段返回 `"******"`；PATCH 时敏感字段传 `"******"` 表示不修改 |
 | DELETE `/accounts/:id` | `account:delete` | |
 | POST `/accounts/:id/test` | `account:test` | `{model?}` → `{ok, status, latency_ms, message}` |
+| POST `/accounts/:id/models/fetch`、POST `/account-types/:plugin_key/:type/models/fetch` | `account:test` / `account:create` | 从上游拉取模型列表（§19） |
 | POST `/accounts/:id/credentials/reveal` | `account:credential:view` | 明文凭证 |
 
 ### 5.5 计费（B）
@@ -831,3 +832,20 @@ POST `/accounts/:id/test`（`account:test`）：
 - 新建账号第 1 步按线框图 A.3 做成紧凑卡片网格（每个账号类型一张卡：插件头像、类型名、插件名与版本、信任标记、支持的平台徽章、一行描述；端点列表折叠，默认不展开），不再按插件分区块，也不再一张卡占半屏。
 - 第 2 步 / 编辑表单分为：基本信息（名称、分组、代理、状态开关）、调度（优先级、权重、最大并发、参与调度）、限流（rpm/tpm/tpd/spm，0 = 不限）、模型（模型列表：标签输入，候选来自 `GET /prices` 的模型；可切换为文本框逐行/逗号编辑；空 = 全部模型）、模型映射（表格编辑，可切换为 JSON 文本编辑，保存前校验为 `{string: string}` 且都是完整模型 ID）、凭证（插件表单）。
 - 账号列表：优先级列显示 `优先级 · 权重`；新增"限流"列显示 `rpm 12/60 · tpm 3.2K/100K · tpd … · spm 3/20`（未设上限的项不显示，都未设显示 `—`）；详情页展示模型列表、映射、限流与当前用量。
+
+## 19. 从上游拉取模型列表（2026-09-25，用户要求）
+
+控制台账号表单里的"模型列表"可以从上游拉取（参考 new-api 的"获取模型列表"）。价格同步不受影响，也不会因为拉取模型而改动价格。
+
+**插件 gRPC**（`platform.proto`）：`PlatformService` 新增 `BuildModelsRequest(BuildModelsRequestRequest{account}) → BuildModelsRequestResponse{method, url, headers, body_json, ids_path, strip_prefix}`。插件只构造请求，核心经账号的代理（或直连，带内网地址保护）发出，并用 gjson 路径 `ids_path`（默认 `data.#.id`）取出模型 ID，再去掉 `strip_prefix`（Gemini 的 `models/`）。**可选**：SDK `pluginsdk.ModelLister` 接口，不实现的平台由 SDK 回答 `UNIMPLEMENTED`。内置插件：anthropic、relay `GET /v1/models?limit=1000`，openai `GET /v1/models`，gemini `GET /v1beta/models?pageSize=1000`（`models.#.name`）。内置插件升到 0.1.4，relay 0.1.2。`core.PlatformPlugin` 同步新增该方法。
+
+**接口**：
+
+| 方法 路径 | 权限 | 说明 |
+|---|---|---|
+| POST `/account-types/:plugin_key/:type/models/fetch` | `account:create` | `{credentials, proxy_id?}`：表单里填的凭证（先按表单 Schema 和插件 `ValidateCredentials` 校验，错误格式同创建账号），账号还没保存时用 |
+| POST `/accounts/:id/models/fetch` | `account:test` | 可选 `{credentials}` 覆盖已保存的凭证（敏感字段传 `"******"` 保留原值），编辑表单里改了 Key 还没保存时用 |
+
+响应 `{models:[...], skipped, status}`：`models` 去重、按字母排序、只含合法的完整模型 ID（§16），最多 5000 条；`skipped` 是被丢弃的非法 ID 数；`status` 是上游状态码。错误：插件不支持返回 501 `unsupported`；上游非 2xx 返回 503 `unavailable`，`details.status` 为上游状态码、message 含响应片段；网络错误、内网地址被拒同样是 503 `unavailable`；插件未启用 503 `plugin_unavailable`。整个拉取超时 30 秒，响应体最多读 8 MiB。
+
+**控制台**：模型列表区有"从上游获取"按钮；拉回来的模型在弹窗里勾选（默认全选，已在列表里的标出），确认后合并进模型列表（不会删掉已有的）。mock-upstream 增加 `GET /v1/models` 和 `GET /v1beta/models`（e2e AC21）。

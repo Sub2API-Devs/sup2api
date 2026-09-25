@@ -14,7 +14,7 @@ import (
 
 func start(t *testing.T) *pluginsdktest.Harness {
 	t.Helper()
-	return pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("relay", "0.1.1")}})
+	return pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("relay", "0.1.2")}})
 }
 
 func TestCapabilities(t *testing.T) {
@@ -243,5 +243,19 @@ func TestClassifyError(t *testing.T) {
 	}
 	if r := cls(0, nil, ""); r.GetAction() != failover || r.GetClientStatus() != 502 {
 		t.Errorf("transport: %v", r)
+	}
+}
+
+func TestBuildModelsRequest(t *testing.T) {
+	h := start(t)
+	r, err := h.Platform.BuildModelsRequest(context.Background(), &pluginv1.BuildModelsRequestRequest{
+		Account: account(`{"api_key":"sk-relay-1"}`, `{"base_url":"https://relay.example.com"}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.GetMethod() != "GET" || r.GetUrl() != "https://relay.example.com/v1/models?limit=1000" ||
+		r.GetHeaders()["x-api-key"] != "sk-relay-1" || r.GetIdsPath() != "data.#.id" {
+		t.Fatalf("resp = %v", r)
 	}
 }

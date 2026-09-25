@@ -12,6 +12,8 @@
 //	POST /v1beta/models/{m}:generateContent        Gemini, usageMetadata incl. thoughtsTokenCount
 //	POST /v1beta/models/{m}:streamGenerateContent  ?alt=sse -> SSE, otherwise a JSON array
 //	POST /v1beta/models/{m}:countTokens            {"totalTokens": N}
+//	GET  /v1/models                 Anthropic/OpenAI style list {"data":[{"id":...}]}
+//	GET  /v1beta/models             Gemini style list {"models":[{"name":"models/..."}]}
 //	GET  /__requests[?since=ID]     last 100 recorded requests (newest last)
 //	DELETE /__requests              clear the request log
 //	GET/POST/DELETE /__control      per-API-key behaviour rules (see controlRule)
@@ -136,6 +138,8 @@ func (s *server) handler() http.Handler {
 	mux.HandleFunc("POST /v1/responses", s.responses)
 	mux.HandleFunc("POST /v1/embeddings", s.embeddings)
 	mux.HandleFunc("POST /v1beta/models/{spec}", s.gemini)
+	mux.HandleFunc("GET /v1/models", s.listModels)
+	mux.HandleFunc("GET /v1beta/models", s.listGeminiModels)
 	mux.HandleFunc("GET /__requests", s.listRequests)
 	mux.HandleFunc("DELETE /__requests", s.clearRequests)
 	mux.HandleFunc("GET /__control", s.listRules)
@@ -492,6 +496,45 @@ func (s *server) countTokens(w http.ResponseWriter, r *http.Request) {
 	// Rough estimate: 1 token per 4 bytes of messages+system.
 	n := int64(len(body)/4) + 1
 	writeJSON(w, 200, map[string]any{"input_tokens": n})
+}
+
+// MockModels are the ids returned by the model list endpoints.
+var MockModels = []string{"claude-sonnet-4-5", "claude-opus-4-1", "gpt-4.1", "gemini-2.5-pro"}
+
+// listModels answers GET /v1/models (Anthropic and OpenAI share the shape).
+// A rule or key marker with a 4xx/5xx status applies, so tests can check
+// how the console reports upstream failures.
+func (s *server) listModels(w http.ResponseWriter, r *http.Request) {
+	id := s.record(r, nil, "", false, "")
+	b := s.resolve(r, nil)
+	if b.status >= 400 {
+		s.setStatus(id, b.status)
+		writeMockError(w, b.status)
+		return
+	}
+	s.setStatus(id, 200)
+	data := make([]map[string]any, 0, len(MockModels))
+	for _, m := range MockModels {
+		data = append(data, map[string]any{"id": m, "type": "model", "object": "model"})
+	}
+	writeJSON(w, 200, map[string]any{"data": data, "object": "list", "has_more": false})
+}
+
+// listGeminiModels answers GET /v1beta/models with resource names.
+func (s *server) listGeminiModels(w http.ResponseWriter, r *http.Request) {
+	id := s.record(r, nil, "", false, "")
+	b := s.resolve(r, nil)
+	if b.status >= 400 {
+		s.setStatus(id, b.status)
+		writeMockError(w, b.status)
+		return
+	}
+	s.setStatus(id, 200)
+	models := make([]map[string]any, 0, len(MockModels))
+	for _, m := range MockModels {
+		models = append(models, map[string]any{"name": "models/" + m, "displayName": m})
+	}
+	writeJSON(w, 200, map[string]any{"models": models})
 }
 
 func (s *server) webhook(w http.ResponseWriter, r *http.Request) {

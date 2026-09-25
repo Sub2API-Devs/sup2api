@@ -15,7 +15,7 @@ import (
 
 func start(t *testing.T) *pluginsdktest.Harness {
 	t.Helper()
-	return pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("gemini", "0.1.3")}})
+	return pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("gemini", "0.1.4")}})
 }
 
 func account(creds, settings string) *pluginv1.Account {
@@ -201,4 +201,18 @@ func TestClassifyError(t *testing.T) {
 func itoa(n int) string {
 	b, _ := json.Marshal(n)
 	return string(b)
+}
+
+func TestBuildModelsRequest(t *testing.T) {
+	h := start(t)
+	r, err := h.Platform.BuildModelsRequest(context.Background(), &pluginv1.BuildModelsRequestRequest{
+		Account: account(`{"api_key":"AIza-key-123"}`, ""),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.GetMethod() != "GET" || r.GetUrl() != "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000" ||
+		r.GetHeaders()["x-goog-api-key"] != "AIza-key-123" || r.GetIdsPath() != "models.#.name" || r.GetStripPrefix() != "models/" {
+		t.Fatalf("resp = %v", r)
+	}
 }

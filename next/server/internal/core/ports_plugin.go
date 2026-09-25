@@ -20,6 +20,9 @@ type PlatformPlugin interface {
 	BuildUpstreamRequest(ctx context.Context, in *pluginv1.BuildUpstreamRequestRequest) (*pluginv1.BuildUpstreamRequestResponse, error)
 	ClassifyError(ctx context.Context, in *pluginv1.ClassifyErrorRequest) (*pluginv1.ClassifyErrorResponse, error)
 	BuildTestRequest(ctx context.Context, in *pluginv1.BuildTestRequestRequest) (*pluginv1.BuildTestRequestResponse, error)
+	// BuildModelsRequest is optional for plugins: a plugin without it answers
+	// gRPC Unimplemented (CONTRACTS §19).
+	BuildModelsRequest(ctx context.Context, in *pluginv1.BuildModelsRequestRequest) (*pluginv1.BuildModelsRequestResponse, error)
 }
 
 type HookPlugin interface {

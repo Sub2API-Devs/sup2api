@@ -74,6 +74,7 @@ var (
 	ErrNoAvailableAccount  = NewError(http.StatusServiceUnavailable, "no_available_account", "no available account")
 	ErrPluginUnavailable   = NewError(http.StatusServiceUnavailable, "plugin_unavailable", "plugin unavailable")
 	ErrUnavailable         = NewError(http.StatusServiceUnavailable, "unavailable", "service unavailable")
+	ErrUnsupported         = NewError(http.StatusNotImplemented, "unsupported", "not supported")
 	ErrInternal            = NewError(http.StatusInternalServerError, "internal", "internal error")
 )
 

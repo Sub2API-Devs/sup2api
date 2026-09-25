@@ -154,3 +154,21 @@ func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestReque
 		BodyJson: string(body),
 	}, nil
 }
+
+// BuildModelsRequest implements pluginsdk.ModelLister: GET /v1beta/models
+// (ids come back as resource names "models/<id>").
+func (p *Plugin) BuildModelsRequest(_ context.Context, in *pluginv1.BuildModelsRequestRequest) (*pluginv1.BuildModelsRequestResponse, error) {
+	cfg, err := spec.FromAccount(in.GetAccount())
+	if err != nil {
+		return nil, err
+	}
+	h := upstreamHeaders(cfg.APIKey, nil)
+	delete(h, "content-type")
+	return &pluginv1.BuildModelsRequestResponse{
+		Method:      "GET",
+		Url:         cfg.BaseURL + "/v1beta/models?pageSize=1000",
+		Headers:     h,
+		IdsPath:     "models.#.name",
+		StripPrefix: "models/",
+	}, nil
+}

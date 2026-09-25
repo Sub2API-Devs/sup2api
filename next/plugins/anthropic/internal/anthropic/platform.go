@@ -345,3 +345,23 @@ func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestReque
 		BodyJson: string(body),
 	}, nil
 }
+
+// BuildModelsRequest implements pluginsdk.ModelLister: GET /v1/models.
+func (p *Plugin) BuildModelsRequest(_ context.Context, in *pluginv1.BuildModelsRequestRequest) (*pluginv1.BuildModelsRequestResponse, error) {
+	acc := in.GetAccount()
+	cfg, err := parseAccount(acc.GetCredentialsJson(), acc.GetSettingsJson())
+	if err != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "account %d: %v", acc.GetId(), err)
+	}
+	if cfg.APIKey == "" {
+		return nil, status.Errorf(codes.FailedPrecondition, "account %d: missing api_key", acc.GetId())
+	}
+	h := upstreamHeaders(cfg.APIKey, nil)
+	delete(h, "content-type")
+	return &pluginv1.BuildModelsRequestResponse{
+		Method:  "GET",
+		Url:     cfg.BaseURL + "/v1/models?limit=1000",
+		Headers: h,
+		IdsPath: "data.#.id",
+	}, nil
+}

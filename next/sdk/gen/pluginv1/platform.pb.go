@@ -695,6 +695,137 @@ func (x *BuildTestRequestResponse) GetBodyJson() string {
 	return ""
 }
 
+type BuildModelsRequestRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Account       *Account               `protobuf:"bytes,1,opt,name=account,proto3" json:"account,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BuildModelsRequestRequest) Reset() {
+	*x = BuildModelsRequestRequest{}
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BuildModelsRequestRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BuildModelsRequestRequest) ProtoMessage() {}
+
+func (x *BuildModelsRequestRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BuildModelsRequestRequest.ProtoReflect.Descriptor instead.
+func (*BuildModelsRequestRequest) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *BuildModelsRequestRequest) GetAccount() *Account {
+	if x != nil {
+		return x.Account
+	}
+	return nil
+}
+
+type BuildModelsRequestResponse struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Method   string                 `protobuf:"bytes,1,opt,name=method,proto3" json:"method,omitempty"` // default "GET"
+	Url      string                 `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
+	Headers  map[string]string      `protobuf:"bytes,3,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	BodyJson string                 `protobuf:"bytes,4,opt,name=body_json,json=bodyJson,proto3" json:"body_json,omitempty"` // optional
+	// gjson path yielding the model ids in the response, e.g. "data.#.id" or
+	// "models.#.name".
+	IdsPath string `protobuf:"bytes,5,opt,name=ids_path,json=idsPath,proto3" json:"ids_path,omitempty"`
+	// Prefix removed from every id, e.g. "models/" for Gemini.
+	StripPrefix   string `protobuf:"bytes,6,opt,name=strip_prefix,json=stripPrefix,proto3" json:"strip_prefix,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BuildModelsRequestResponse) Reset() {
+	*x = BuildModelsRequestResponse{}
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BuildModelsRequestResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BuildModelsRequestResponse) ProtoMessage() {}
+
+func (x *BuildModelsRequestResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BuildModelsRequestResponse.ProtoReflect.Descriptor instead.
+func (*BuildModelsRequestResponse) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *BuildModelsRequestResponse) GetMethod() string {
+	if x != nil {
+		return x.Method
+	}
+	return ""
+}
+
+func (x *BuildModelsRequestResponse) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *BuildModelsRequestResponse) GetHeaders() map[string]string {
+	if x != nil {
+		return x.Headers
+	}
+	return nil
+}
+
+func (x *BuildModelsRequestResponse) GetBodyJson() string {
+	if x != nil {
+		return x.BodyJson
+	}
+	return ""
+}
+
+func (x *BuildModelsRequestResponse) GetIdsPath() string {
+	if x != nil {
+		return x.IdsPath
+	}
+	return ""
+}
+
+func (x *BuildModelsRequestResponse) GetStripPrefix() string {
+	if x != nil {
+		return x.StripPrefix
+	}
+	return ""
+}
+
 var File_sub2api_plugin_v1_platform_proto protoreflect.FileDescriptor
 
 const file_sub2api_plugin_v1_platform_proto_rawDesc = "" +
@@ -766,12 +897,25 @@ const file_sub2api_plugin_v1_platform_proto_rawDesc = "" +
 	"\tbody_json\x18\x04 \x01(\tR\bbodyJson\x1a:\n" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012\xd1\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"Q\n" +
+	"\x19BuildModelsRequestRequest\x124\n" +
+	"\aaccount\x18\x01 \x01(\v2\x1a.sub2api.plugin.v1.AccountR\aaccount\"\xb3\x02\n" +
+	"\x1aBuildModelsRequestResponse\x12\x16\n" +
+	"\x06method\x18\x01 \x01(\tR\x06method\x12\x10\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\x12T\n" +
+	"\aheaders\x18\x03 \x03(\v2:.sub2api.plugin.v1.BuildModelsRequestResponse.HeadersEntryR\aheaders\x12\x1b\n" +
+	"\tbody_json\x18\x04 \x01(\tR\bbodyJson\x12\x19\n" +
+	"\bids_path\x18\x05 \x01(\tR\aidsPath\x12!\n" +
+	"\fstrip_prefix\x18\x06 \x01(\tR\vstripPrefix\x1a:\n" +
+	"\fHeadersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012\xc4\x04\n" +
 	"\x0fPlatformService\x12t\n" +
 	"\x13ValidateCredentials\x12-.sub2api.plugin.v1.ValidateCredentialsRequest\x1a..sub2api.plugin.v1.ValidateCredentialsResponse\x12w\n" +
 	"\x14BuildUpstreamRequest\x12..sub2api.plugin.v1.BuildUpstreamRequestRequest\x1a/.sub2api.plugin.v1.BuildUpstreamRequestResponse\x12b\n" +
 	"\rClassifyError\x12'.sub2api.plugin.v1.ClassifyErrorRequest\x1a(.sub2api.plugin.v1.ClassifyErrorResponse\x12k\n" +
-	"\x10BuildTestRequest\x12*.sub2api.plugin.v1.BuildTestRequestRequest\x1a+.sub2api.plugin.v1.BuildTestRequestResponseB@Z>github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1b\x06proto3"
+	"\x10BuildTestRequest\x12*.sub2api.plugin.v1.BuildTestRequestRequest\x1a+.sub2api.plugin.v1.BuildTestRequestResponse\x12q\n" +
+	"\x12BuildModelsRequest\x12,.sub2api.plugin.v1.BuildModelsRequestRequest\x1a-.sub2api.plugin.v1.BuildModelsRequestResponseB@Z>github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1b\x06proto3"
 
 var (
 	file_sub2api_plugin_v1_platform_proto_rawDescOnce sync.Once
@@ -786,7 +930,7 @@ func file_sub2api_plugin_v1_platform_proto_rawDescGZIP() []byte {
 }
 
 var file_sub2api_plugin_v1_platform_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_sub2api_plugin_v1_platform_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_sub2api_plugin_v1_platform_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_sub2api_plugin_v1_platform_proto_goTypes = []any{
 	(ClassifyErrorResponse_Action)(0),        // 0: sub2api.plugin.v1.ClassifyErrorResponse.Action
 	(ClassifyErrorResponse_AccountEffect)(0), // 1: sub2api.plugin.v1.ClassifyErrorResponse.AccountEffect
@@ -798,44 +942,51 @@ var file_sub2api_plugin_v1_platform_proto_goTypes = []any{
 	(*ClassifyErrorResponse)(nil),            // 7: sub2api.plugin.v1.ClassifyErrorResponse
 	(*BuildTestRequestRequest)(nil),          // 8: sub2api.plugin.v1.BuildTestRequestRequest
 	(*BuildTestRequestResponse)(nil),         // 9: sub2api.plugin.v1.BuildTestRequestResponse
-	nil,                                      // 10: sub2api.plugin.v1.BuildUpstreamRequestRequest.FieldsEntry
-	nil,                                      // 11: sub2api.plugin.v1.BuildUpstreamRequestRequest.InboundHeadersEntry
-	nil,                                      // 12: sub2api.plugin.v1.BuildUpstreamRequestResponse.HeadersEntry
-	nil,                                      // 13: sub2api.plugin.v1.ClassifyErrorRequest.HeadersEntry
-	nil,                                      // 14: sub2api.plugin.v1.BuildTestRequestResponse.HeadersEntry
-	(*FieldError)(nil),                       // 15: sub2api.plugin.v1.FieldError
-	(*RequestMeta)(nil),                      // 16: sub2api.plugin.v1.RequestMeta
-	(*Account)(nil),                          // 17: sub2api.plugin.v1.Account
-	(*BodyPatch)(nil),                        // 18: sub2api.plugin.v1.BodyPatch
+	(*BuildModelsRequestRequest)(nil),        // 10: sub2api.plugin.v1.BuildModelsRequestRequest
+	(*BuildModelsRequestResponse)(nil),       // 11: sub2api.plugin.v1.BuildModelsRequestResponse
+	nil,                                      // 12: sub2api.plugin.v1.BuildUpstreamRequestRequest.FieldsEntry
+	nil,                                      // 13: sub2api.plugin.v1.BuildUpstreamRequestRequest.InboundHeadersEntry
+	nil,                                      // 14: sub2api.plugin.v1.BuildUpstreamRequestResponse.HeadersEntry
+	nil,                                      // 15: sub2api.plugin.v1.ClassifyErrorRequest.HeadersEntry
+	nil,                                      // 16: sub2api.plugin.v1.BuildTestRequestResponse.HeadersEntry
+	nil,                                      // 17: sub2api.plugin.v1.BuildModelsRequestResponse.HeadersEntry
+	(*FieldError)(nil),                       // 18: sub2api.plugin.v1.FieldError
+	(*RequestMeta)(nil),                      // 19: sub2api.plugin.v1.RequestMeta
+	(*Account)(nil),                          // 20: sub2api.plugin.v1.Account
+	(*BodyPatch)(nil),                        // 21: sub2api.plugin.v1.BodyPatch
 }
 var file_sub2api_plugin_v1_platform_proto_depIdxs = []int32{
-	15, // 0: sub2api.plugin.v1.ValidateCredentialsResponse.errors:type_name -> sub2api.plugin.v1.FieldError
-	16, // 1: sub2api.plugin.v1.BuildUpstreamRequestRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
-	17, // 2: sub2api.plugin.v1.BuildUpstreamRequestRequest.account:type_name -> sub2api.plugin.v1.Account
-	10, // 3: sub2api.plugin.v1.BuildUpstreamRequestRequest.fields:type_name -> sub2api.plugin.v1.BuildUpstreamRequestRequest.FieldsEntry
-	11, // 4: sub2api.plugin.v1.BuildUpstreamRequestRequest.inbound_headers:type_name -> sub2api.plugin.v1.BuildUpstreamRequestRequest.InboundHeadersEntry
-	12, // 5: sub2api.plugin.v1.BuildUpstreamRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildUpstreamRequestResponse.HeadersEntry
-	18, // 6: sub2api.plugin.v1.BuildUpstreamRequestResponse.patches:type_name -> sub2api.plugin.v1.BodyPatch
-	16, // 7: sub2api.plugin.v1.ClassifyErrorRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
-	17, // 8: sub2api.plugin.v1.ClassifyErrorRequest.account:type_name -> sub2api.plugin.v1.Account
-	13, // 9: sub2api.plugin.v1.ClassifyErrorRequest.headers:type_name -> sub2api.plugin.v1.ClassifyErrorRequest.HeadersEntry
+	18, // 0: sub2api.plugin.v1.ValidateCredentialsResponse.errors:type_name -> sub2api.plugin.v1.FieldError
+	19, // 1: sub2api.plugin.v1.BuildUpstreamRequestRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	20, // 2: sub2api.plugin.v1.BuildUpstreamRequestRequest.account:type_name -> sub2api.plugin.v1.Account
+	12, // 3: sub2api.plugin.v1.BuildUpstreamRequestRequest.fields:type_name -> sub2api.plugin.v1.BuildUpstreamRequestRequest.FieldsEntry
+	13, // 4: sub2api.plugin.v1.BuildUpstreamRequestRequest.inbound_headers:type_name -> sub2api.plugin.v1.BuildUpstreamRequestRequest.InboundHeadersEntry
+	14, // 5: sub2api.plugin.v1.BuildUpstreamRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildUpstreamRequestResponse.HeadersEntry
+	21, // 6: sub2api.plugin.v1.BuildUpstreamRequestResponse.patches:type_name -> sub2api.plugin.v1.BodyPatch
+	19, // 7: sub2api.plugin.v1.ClassifyErrorRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	20, // 8: sub2api.plugin.v1.ClassifyErrorRequest.account:type_name -> sub2api.plugin.v1.Account
+	15, // 9: sub2api.plugin.v1.ClassifyErrorRequest.headers:type_name -> sub2api.plugin.v1.ClassifyErrorRequest.HeadersEntry
 	0,  // 10: sub2api.plugin.v1.ClassifyErrorResponse.action:type_name -> sub2api.plugin.v1.ClassifyErrorResponse.Action
 	1,  // 11: sub2api.plugin.v1.ClassifyErrorResponse.account_effect:type_name -> sub2api.plugin.v1.ClassifyErrorResponse.AccountEffect
-	17, // 12: sub2api.plugin.v1.BuildTestRequestRequest.account:type_name -> sub2api.plugin.v1.Account
-	14, // 13: sub2api.plugin.v1.BuildTestRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildTestRequestResponse.HeadersEntry
-	2,  // 14: sub2api.plugin.v1.PlatformService.ValidateCredentials:input_type -> sub2api.plugin.v1.ValidateCredentialsRequest
-	4,  // 15: sub2api.plugin.v1.PlatformService.BuildUpstreamRequest:input_type -> sub2api.plugin.v1.BuildUpstreamRequestRequest
-	6,  // 16: sub2api.plugin.v1.PlatformService.ClassifyError:input_type -> sub2api.plugin.v1.ClassifyErrorRequest
-	8,  // 17: sub2api.plugin.v1.PlatformService.BuildTestRequest:input_type -> sub2api.plugin.v1.BuildTestRequestRequest
-	3,  // 18: sub2api.plugin.v1.PlatformService.ValidateCredentials:output_type -> sub2api.plugin.v1.ValidateCredentialsResponse
-	5,  // 19: sub2api.plugin.v1.PlatformService.BuildUpstreamRequest:output_type -> sub2api.plugin.v1.BuildUpstreamRequestResponse
-	7,  // 20: sub2api.plugin.v1.PlatformService.ClassifyError:output_type -> sub2api.plugin.v1.ClassifyErrorResponse
-	9,  // 21: sub2api.plugin.v1.PlatformService.BuildTestRequest:output_type -> sub2api.plugin.v1.BuildTestRequestResponse
-	18, // [18:22] is the sub-list for method output_type
-	14, // [14:18] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	20, // 12: sub2api.plugin.v1.BuildTestRequestRequest.account:type_name -> sub2api.plugin.v1.Account
+	16, // 13: sub2api.plugin.v1.BuildTestRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildTestRequestResponse.HeadersEntry
+	20, // 14: sub2api.plugin.v1.BuildModelsRequestRequest.account:type_name -> sub2api.plugin.v1.Account
+	17, // 15: sub2api.plugin.v1.BuildModelsRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildModelsRequestResponse.HeadersEntry
+	2,  // 16: sub2api.plugin.v1.PlatformService.ValidateCredentials:input_type -> sub2api.plugin.v1.ValidateCredentialsRequest
+	4,  // 17: sub2api.plugin.v1.PlatformService.BuildUpstreamRequest:input_type -> sub2api.plugin.v1.BuildUpstreamRequestRequest
+	6,  // 18: sub2api.plugin.v1.PlatformService.ClassifyError:input_type -> sub2api.plugin.v1.ClassifyErrorRequest
+	8,  // 19: sub2api.plugin.v1.PlatformService.BuildTestRequest:input_type -> sub2api.plugin.v1.BuildTestRequestRequest
+	10, // 20: sub2api.plugin.v1.PlatformService.BuildModelsRequest:input_type -> sub2api.plugin.v1.BuildModelsRequestRequest
+	3,  // 21: sub2api.plugin.v1.PlatformService.ValidateCredentials:output_type -> sub2api.plugin.v1.ValidateCredentialsResponse
+	5,  // 22: sub2api.plugin.v1.PlatformService.BuildUpstreamRequest:output_type -> sub2api.plugin.v1.BuildUpstreamRequestResponse
+	7,  // 23: sub2api.plugin.v1.PlatformService.ClassifyError:output_type -> sub2api.plugin.v1.ClassifyErrorResponse
+	9,  // 24: sub2api.plugin.v1.PlatformService.BuildTestRequest:output_type -> sub2api.plugin.v1.BuildTestRequestResponse
+	11, // 25: sub2api.plugin.v1.PlatformService.BuildModelsRequest:output_type -> sub2api.plugin.v1.BuildModelsRequestResponse
+	21, // [21:26] is the sub-list for method output_type
+	16, // [16:21] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_sub2api_plugin_v1_platform_proto_init() }
@@ -850,7 +1001,7 @@ func file_sub2api_plugin_v1_platform_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sub2api_plugin_v1_platform_proto_rawDesc), len(file_sub2api_plugin_v1_platform_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   13,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

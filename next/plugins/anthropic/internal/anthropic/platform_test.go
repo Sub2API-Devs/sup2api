@@ -17,7 +17,7 @@ import (
 func start(t *testing.T) (*Plugin, *pluginsdktest.Harness) {
 	t.Helper()
 	p := New()
-	h := pluginsdktest.Start(t, p, pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("anthropic", "0.1.3")}})
+	h := pluginsdktest.Start(t, p, pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("anthropic", "0.1.4")}})
 	return p, h
 }
 
@@ -308,4 +308,24 @@ func TestClassifyError(t *testing.T) {
 	check("500", cls(500, nil, "", ""), want{failover, cool, 10 * time.Second, "api_error"})
 	check("503", cls(503, nil, "", ""), want{failover, cool, 10 * time.Second, "api_error"})
 	check("transport", cls(0, nil, "", "dial tcp: connection refused"), want{failover, cool, 10 * time.Second, "api_error"})
+}
+
+func TestBuildModelsRequest(t *testing.T) {
+	_, h := start(t)
+	r, err := h.Platform.BuildModelsRequest(context.Background(), &pluginv1.BuildModelsRequestRequest{
+		Account: account(`{"api_key":"k-12345678"}`, `{"base_url":"https://relay.example.com/v1/"}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.GetMethod() != "GET" || r.GetUrl() != "https://relay.example.com/v1/models?limit=1000" ||
+		r.GetHeaders()["x-api-key"] != "k-12345678" || r.GetHeaders()["anthropic-version"] == "" ||
+		r.GetIdsPath() != "data.#.id" || r.GetBodyJson() != "" {
+		t.Fatalf("resp = %v", r)
+	}
+	if _, err := h.Platform.BuildModelsRequest(context.Background(), &pluginv1.BuildModelsRequestRequest{
+		Account: account(`{}`, ""),
+	}); err == nil {
+		t.Fatal("missing api_key must fail")
+	}
 }

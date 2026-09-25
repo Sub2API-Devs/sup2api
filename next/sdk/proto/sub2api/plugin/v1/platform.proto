@@ -18,6 +18,10 @@ service PlatformService {
   rpc ClassifyError(ClassifyErrorRequest) returns (ClassifyErrorResponse);
   // Builds a minimal request used by the console "test account" button.
   rpc BuildTestRequest(BuildTestRequestRequest) returns (BuildTestRequestResponse);
+  // Builds the request listing the models the account can reach; the host
+  // sends it and extracts the ids (console "fetch models" button, CONTRACTS
+  // §19). Optional: answer UNIMPLEMENTED when the upstream has no such API.
+  rpc BuildModelsRequest(BuildModelsRequestRequest) returns (BuildModelsRequestResponse);
 }
 
 message ValidateCredentialsRequest {
@@ -95,4 +99,20 @@ message BuildTestRequestResponse {
   string url = 2;
   map<string, string> headers = 3;
   string body_json = 4;
+}
+
+message BuildModelsRequestRequest {
+  Account account = 1;
+}
+
+message BuildModelsRequestResponse {
+  string method = 1;               // default "GET"
+  string url = 2;
+  map<string, string> headers = 3;
+  string body_json = 4;            // optional
+  // gjson path yielding the model ids in the response, e.g. "data.#.id" or
+  // "models.#.name".
+  string ids_path = 5;
+  // Prefix removed from every id, e.g. "models/" for Gemini.
+  string strip_prefix = 6;
 }
