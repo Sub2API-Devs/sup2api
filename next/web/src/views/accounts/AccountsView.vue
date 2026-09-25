@@ -24,7 +24,7 @@ const accountTypes = useAccountTypes()
 accountTypes.load()
 const { groups } = useGroupsLookup()
 
-const list = useList<Account>('/accounts', { plugin_key: '', type: '', group_id: '', status: '', q: '' })
+const list = useList<Account>('/accounts', { plugin_key: '', type: '', group_id: '', status: '', model: '', q: '' })
 
 // One select drives both ?plugin_key= and ?type= (account type identity).
 const typeFilter = computed({
@@ -42,10 +42,41 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'type', label: t('accounts.type') },
   { key: 'groups', label: t('accounts.groups') },
   { key: 'status', label: t('common.status') },
-  { key: 'priority', label: t('accounts.priorityShort'), align: 'right' },
+  { key: 'priority', label: t('accounts.scheduling'), align: 'right' },
   { key: 'concurrency', label: t('accounts.concurrency'), align: 'right' },
+  { key: 'limits', label: t('accounts.limits') },
   { key: 'actions', label: t('common.actions'), align: 'right' }
 ])
+
+/** 1234 -> "1.2K", 3_200_000 -> "3.2M"; small numbers stay as they are. */
+function abbrev(n: number): string {
+  if (!Number.isFinite(n)) return '—'
+  const a = Math.abs(n)
+  if (a >= 1_000_000) return `${trimZero(n / 1_000_000)}M`
+  if (a >= 1_000) return `${trimZero(n / 1_000)}K`
+  return String(n)
+}
+function trimZero(v: number): string {
+  return v.toFixed(1).replace(/\.0$/, '')
+}
+
+type LimitCell = { key: string; label: string; text: string; hit: boolean }
+/** Configured limits of an account with the current window usage (CONTRACTS §18.4). */
+function limitsOf(a: Account): LimitCell[] {
+  const out: LimitCell[] = []
+  const pairs = [
+    ['rpm', a.rpm_limit],
+    ['tpm', a.tpm_limit],
+    ['tpd', a.tpd_limit],
+    ['spm', a.spm_limit]
+  ] as const
+  for (const [key, limit] of pairs) {
+    if (!limit) continue
+    const used = a.rate_usage?.[key] ?? 0
+    out.push({ key, label: key, text: `${abbrev(used)}/${abbrev(limit)}`, hit: used >= limit })
+  }
+  return out
+}
 
 function groupNames(ids: number[] | undefined, refs?: Array<{ id: number; name: string }>) {
   if (!ids?.length) return '—'
@@ -266,6 +297,7 @@ const statusOptions = ['active', 'disabled', 'error']
           <SIcon name="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input v-model="list.filters.q" class="input !pl-9" :placeholder="t('common.searchPlaceholder')" />
         </div>
+        <input v-model="list.filters.model" class="input !w-52 font-mono text-sm" data-testid="model-filter" :placeholder="t('accounts.modelFilter')" />
       </template>
     </SPageHeader>
 
@@ -286,10 +318,24 @@ const statusOptions = ['active', 'disabled', 'error']
           {{ statusOf(row).detail }}
         </div>
       </template>
+      <template #cell-priority="{ row }">
+        <span class="tabular-nums whitespace-nowrap">
+          {{ row.priority }}
+          <span class="muted text-xs">· w{{ row.weight ?? 1 }}</span>
+        </span>
+      </template>
       <template #cell-concurrency="{ row }">
         <span class="tabular-nums" :class="row.max_concurrency && (row.in_use || 0) >= row.max_concurrency ? 'font-semibold text-amber-600' : ''">
           {{ row.in_use ?? 0 }}/{{ row.max_concurrency || '∞' }}
         </span>
+      </template>
+      <template #cell-limits="{ row }">
+        <div v-if="limitsOf(row).length" class="flex flex-wrap gap-x-2 gap-y-0.5 text-xs tabular-nums">
+          <span v-for="l in limitsOf(row)" :key="l.key" :class="l.hit ? 'font-semibold text-amber-600' : ''">
+            <span class="muted">{{ l.label }}</span> {{ l.text }}
+          </span>
+        </div>
+        <span v-else class="muted">—</span>
       </template>
       <template #cell-actions="{ row }">
         <div class="flex items-center justify-end gap-1">
@@ -389,8 +435,35 @@ const statusOptions = ['active', 'disabled', 'error']
             <dd>{{ groupNames(detail.group_ids, detail.groups) }}</dd>
             <dt>{{ t('accounts.priority') }}</dt>
             <dd>{{ detail.priority }}</dd>
+            <dt>{{ t('accounts.weight') }}</dt>
+            <dd>{{ detail.weight ?? 1 }}</dd>
             <dt>{{ t('accounts.concurrency') }}</dt>
             <dd>{{ detail.in_use ?? 0 }}/{{ detail.max_concurrency || '∞' }}</dd>
+            <dt>{{ t('accounts.limits') }}</dt>
+            <dd>
+              <span v-if="limitsOf(detail).length" class="flex flex-wrap gap-x-3 gap-y-0.5 text-sm tabular-nums">
+                <span v-for="l in limitsOf(detail)" :key="l.key" :class="l.hit ? 'font-semibold text-amber-600' : ''">
+                  <span class="muted">{{ l.label }}</span> {{ l.text }}
+                </span>
+              </span>
+              <span v-else class="muted">—</span>
+            </dd>
+            <dt>{{ t('accounts.models') }}</dt>
+            <dd>
+              <span v-if="detail.models?.length" class="flex flex-wrap gap-1">
+                <SBadge v-for="m in detail.models" :key="m" tone="gray"><span class="font-mono">{{ m }}</span></SBadge>
+              </span>
+              <span v-else class="muted">{{ t('accounts.allModels') }}</span>
+            </dd>
+            <dt>{{ t('accounts.modelMapping') }}</dt>
+            <dd>
+              <ul v-if="detail.model_mapping && Object.keys(detail.model_mapping).length" class="space-y-0.5">
+                <li v-for="(to, from) in detail.model_mapping" :key="from" class="font-mono text-xs">
+                  {{ from }} <span class="muted">→</span> {{ to }}
+                </li>
+              </ul>
+              <span v-else class="muted">—</span>
+            </dd>
             <dt>{{ t('accounts.schedulable') }}</dt>
             <dd>{{ detail.schedulable ? t('common.yes') : t('common.no') }}</dd>
             <dt>{{ t('accounts.lastUsed') }}</dt>

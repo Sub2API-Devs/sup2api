@@ -242,8 +242,23 @@ export interface Account {
   groups?: Array<{ id: number; name: string }>
   proxy_id: number | null
   priority: number
+  /** Weighted random order inside one priority (1–1000, default 1, CONTRACTS §18.1). */
+  weight: number
   max_concurrency: number
   schedulable: boolean
+  /** Models this account can serve; empty = all models. */
+  models: string[]
+  /** Client model -> upstream model, rewritten before the plugin builds the request. */
+  model_mapping: Record<string, string>
+  /** 0 = unlimited. */
+  rpm_limit: number
+  tpm_limit: number
+  /** Tokens per UTC day. */
+  tpd_limit: number
+  /** Sessions per minute (rolling 60s window). */
+  spm_limit: number
+  /** Read-only counters of the current windows (0 when Redis is unavailable). */
+  rate_usage?: { rpm: number; tpm: number; tpd: number; spm: number }
   status: string
   status_reason?: string
   credentials?: Record<string, unknown>

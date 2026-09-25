@@ -12,19 +12,17 @@ const anthropicSchema = {
     base_url: { type: 'string', title: 'Base URL', format: 'uri', default: 'https://api.anthropic.com' },
     auth_mode: { type: 'string', title: 'Auth header', enum: ['x-api-key', 'bearer'], default: 'x-api-key' },
     beta_passthrough: { type: 'boolean', title: 'Pass anthropic-beta through', default: true },
-    model_mapping: { type: 'object', title: 'Model mapping', additionalProperties: { type: 'string' } },
     organization: { type: 'string', title: 'Organization id' }
   }
 }
 
 const anthropicUI = {
-  'ui:order': ['api_key', 'base_url', 'auth_mode', 'organization', 'beta_passthrough', 'model_mapping'],
+  'ui:order': ['api_key', 'base_url', 'auth_mode', 'organization', 'beta_passthrough'],
   api_key: { 'ui:widget': 'secret', 'ui:title': { en: 'API Key', zh: 'API Key' }, 'ui:placeholder': 'sk-ant-...' },
   base_url: { 'ui:widget': 'url-presets', 'ui:title': { en: 'Base URL', zh: '接口地址' }, 'ui:options': { presets: ['https://api.anthropic.com'] } },
   auth_mode: { 'ui:enumNames': [{ en: 'x-api-key header', zh: 'x-api-key 请求头' }, { en: 'Authorization: Bearer', zh: 'Authorization: Bearer' }] },
   organization: { 'ui:visibleWhen': { field: 'auth_mode', equals: 'bearer' }, 'ui:help': { en: 'Only for bearer auth', zh: '仅 Bearer 方式需要' } },
-  beta_passthrough: { 'ui:widget': 'switch', 'ui:title': { en: 'Pass anthropic-beta through', zh: '透传 anthropic-beta' } },
-  model_mapping: { 'ui:widget': 'model-mapping', 'ui:title': { en: 'Model mapping', zh: '模型映射' } }
+  beta_passthrough: { 'ui:widget': 'switch', 'ui:title': { en: 'Pass anthropic-beta through', zh: '透传 anthropic-beta' } }
 }
 
 const relaySchema = {
@@ -32,15 +30,13 @@ const relaySchema = {
   required: ['api_key', 'base_url'],
   properties: {
     api_key: { type: 'string', title: 'API Key', writeOnly: true, minLength: 10 },
-    base_url: { type: 'string', title: 'Base URL', format: 'uri', default: 'https://relay.example.com/v1' },
-    model_mapping: { type: 'object', title: 'Model mapping', additionalProperties: { type: 'string' } }
+    base_url: { type: 'string', title: 'Base URL', format: 'uri', default: 'https://relay.example.com/v1' }
   }
 }
 
 const relayUI = {
   api_key: { 'ui:widget': 'secret', 'ui:title': { en: 'Relay key', zh: '中转 Key' }, 'ui:placeholder': 'sk-...' },
-  base_url: { 'ui:title': { en: 'Relay base URL', zh: '中转地址' } },
-  model_mapping: { 'ui:widget': 'model-mapping', 'ui:title': { en: 'Model mapping', zh: '模型映射' } }
+  base_url: { 'ui:title': { en: 'Relay base URL', zh: '中转地址' } }
 }
 
 const videoSchema = {
@@ -52,8 +48,8 @@ const videoSchema = {
   }
 }
 
-// Built-in openai / gemini plugins (CONTRACTS §14.1): api_key (sensitive),
-// base_url and model_mapping.
+// Built-in openai / gemini plugins (CONTRACTS §14.1): api_key (sensitive) and
+// base_url. Model mapping is a core account field (§18), not a plugin field.
 function apiKeyForm(defaultBase: string, placeholder: string) {
   return {
     schema: {
@@ -61,15 +57,13 @@ function apiKeyForm(defaultBase: string, placeholder: string) {
       required: ['api_key'],
       properties: {
         api_key: { type: 'string', title: 'API Key', writeOnly: true, minLength: 10 },
-        base_url: { type: 'string', title: 'Base URL', format: 'uri', default: defaultBase },
-        model_mapping: { type: 'object', title: 'Model mapping', additionalProperties: { type: 'string' } }
+        base_url: { type: 'string', title: 'Base URL', format: 'uri', default: defaultBase }
       }
     },
     ui_schema: {
-      'ui:order': ['api_key', 'base_url', 'model_mapping'],
+      'ui:order': ['api_key', 'base_url'],
       api_key: { 'ui:widget': 'secret', 'ui:title': { en: 'API Key', zh: 'API Key' }, 'ui:placeholder': placeholder },
-      base_url: { 'ui:widget': 'url-presets', 'ui:title': { en: 'Base URL', zh: '接口地址' }, 'ui:options': { presets: [defaultBase] } },
-      model_mapping: { 'ui:widget': 'model-mapping', 'ui:title': { en: 'Model mapping', zh: '模型映射' } }
+      base_url: { 'ui:widget': 'url-presets', 'ui:title': { en: 'Base URL', zh: '接口地址' }, 'ui:options': { presets: [defaultBase] } }
     }
   }
 }
@@ -199,20 +193,33 @@ function accountTypeOut(d: MockAccountType) {
 const typeLabel = (pluginKey: string, type: string) => accountTypeDecls.find((x) => x.plugin_key === pluginKey && x.type === type)?.label || type
 
 const accounts: any[] = [
-  { id: 12, name: 'claude-main', plugin_key: 'anthropic', type: 'apikey', group_ids: [1, 2], proxy_id: null, priority: 1, max_concurrency: 10, schedulable: true, status: 'active', status_reason: '', in_use: 3, cooldown_until: null, orphaned: false, last_used_at: now(-12), created_at: now(-86400 * 20), credentials: { api_key: '******', base_url: 'https://api.anthropic.com', model_mapping: { 'claude-sonnet-4-5': 'claude-sonnet-4-5-20250929' } } },
-  { id: 13, name: 'claude-bak', plugin_key: 'anthropic', type: 'apikey', group_ids: [1], proxy_id: 1, priority: 2, max_concurrency: 10, schedulable: true, status: 'active', status_reason: '', in_use: 0, cooldown_until: now(600), cooldown_reason: '429', orphaned: false, last_used_at: now(-300), created_at: now(-86400 * 10), credentials: { api_key: '******', base_url: 'https://api.anthropic.com' } },
-  { id: 14, name: 'old-key', plugin_key: 'anthropic', type: 'apikey', group_ids: [1], proxy_id: null, priority: 5, max_concurrency: 10, schedulable: true, status: 'disabled', status_reason: '401 invalid credentials', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-86400), created_at: now(-86400 * 40), credentials: { api_key: '******' } },
-  { id: 16, name: 'relay-1', plugin_key: 'relay', type: 'relay_key', group_ids: [1], proxy_id: null, priority: 3, max_concurrency: 20, schedulable: true, status: 'active', status_reason: '', in_use: 1, cooldown_until: null, orphaned: false, last_used_at: now(-40), created_at: now(-86400 * 2), credentials: { api_key: '******', base_url: 'https://relay.example.com' } },
-  { id: 17, name: 'video-1', plugin_key: 'videogen', type: 'video_key', group_ids: [2], proxy_id: null, priority: 1, max_concurrency: 4, schedulable: true, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-3600), created_at: now(-86400 * 3), credentials: { api_key: '******', region: 'us' } },
-  { id: 18, name: 'demo-token', plugin_key: 'demo', type: 'token', group_ids: [1], proxy_id: null, priority: 8, max_concurrency: 2, schedulable: true, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-86400), credentials: { token: '******' } },
-  { id: 19, name: 'openai-main', plugin_key: 'openai', type: 'apikey', group_ids: [1, 2], proxy_id: null, priority: 1, max_concurrency: 20, schedulable: true, status: 'active', status_reason: '', in_use: 2, cooldown_until: null, orphaned: false, last_used_at: now(-30), created_at: now(-86400 * 2), credentials: { api_key: '******', base_url: 'https://api.openai.com', model_mapping: {} } },
-  { id: 20, name: 'gemini-main', plugin_key: 'gemini', type: 'apikey', group_ids: [2], proxy_id: null, priority: 1, max_concurrency: 10, schedulable: true, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-900), created_at: now(-86400), credentials: { api_key: '******', base_url: 'https://generativelanguage.googleapis.com' } },
+  { id: 12, name: 'claude-main', plugin_key: 'anthropic', type: 'apikey', group_ids: [1, 2], proxy_id: null, priority: 1, weight: 3, max_concurrency: 10, schedulable: true, models: ['claude-sonnet-4-5', 'claude-haiku-4-5'], model_mapping: { 'claude-3-5-sonnet-latest': 'claude-sonnet-4-5' }, rpm_limit: 60, tpm_limit: 100000, tpd_limit: 5000000, spm_limit: 20, status: 'active', status_reason: '', in_use: 3, cooldown_until: null, orphaned: false, last_used_at: now(-12), created_at: now(-86400 * 20), credentials: { api_key: '******', base_url: 'https://api.anthropic.com' } },
+  { id: 13, name: 'claude-bak', plugin_key: 'anthropic', type: 'apikey', group_ids: [1], proxy_id: 1, priority: 2, weight: 1, max_concurrency: 10, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: now(600), cooldown_reason: '429', orphaned: false, last_used_at: now(-300), created_at: now(-86400 * 10), credentials: { api_key: '******', base_url: 'https://api.anthropic.com' } },
+  { id: 14, name: 'old-key', plugin_key: 'anthropic', type: 'apikey', group_ids: [1], proxy_id: null, priority: 5, weight: 1, max_concurrency: 10, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'disabled', status_reason: '401 invalid credentials', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-86400), created_at: now(-86400 * 40), credentials: { api_key: '******' } },
+  { id: 16, name: 'relay-1', plugin_key: 'relay', type: 'relay_key', group_ids: [1], proxy_id: null, priority: 3, weight: 1, max_concurrency: 20, schedulable: true, models: [], model_mapping: { 'claude-opus-4-1': 'claude-sonnet-4-5' }, rpm_limit: 120, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 1, cooldown_until: null, orphaned: false, last_used_at: now(-40), created_at: now(-86400 * 2), credentials: { api_key: '******', base_url: 'https://relay.example.com' } },
+  { id: 17, name: 'video-1', plugin_key: 'videogen', type: 'video_key', group_ids: [2], proxy_id: null, priority: 1, weight: 1, max_concurrency: 4, schedulable: true, models: ['myvideo-pro'], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 5, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-3600), created_at: now(-86400 * 3), credentials: { api_key: '******', region: 'us' } },
+  { id: 18, name: 'demo-token', plugin_key: 'demo', type: 'token', group_ids: [1], proxy_id: null, priority: 8, weight: 1, max_concurrency: 2, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-86400), credentials: { token: '******' } },
+  { id: 19, name: 'openai-main', plugin_key: 'openai', type: 'apikey', group_ids: [1, 2], proxy_id: null, priority: 1, weight: 2, max_concurrency: 20, schedulable: true, models: ['gpt-4o', 'gpt-4o-mini'], model_mapping: {}, rpm_limit: 0, tpm_limit: 200000, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 2, cooldown_until: null, orphaned: false, last_used_at: now(-30), created_at: now(-86400 * 2), credentials: { api_key: '******', base_url: 'https://api.openai.com' } },
+  { id: 20, name: 'gemini-main', plugin_key: 'gemini', type: 'apikey', group_ids: [2], proxy_id: null, priority: 1, weight: 1, max_concurrency: 10, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-900), created_at: now(-86400), credentials: { api_key: '******', base_url: 'https://generativelanguage.googleapis.com' } },
   // Its plugin was uninstalled without purge_accounts: kept as an orphaned account.
-  { id: 15, name: 'legacy-vendor', plugin_key: 'legacy_vendor', type: 'apikey', type_label: { en: 'API key', zh: 'API Key' }, group_ids: [], proxy_id: null, priority: 10, max_concurrency: 5, schedulable: false, status: 'active', status_reason: '', in_use: 0, orphaned: true, created_at: now(-86400 * 90) }
+  { id: 15, name: 'legacy-vendor', plugin_key: 'legacy_vendor', type: 'apikey', type_label: { en: 'API key', zh: 'API Key' }, group_ids: [], proxy_id: null, priority: 10, weight: 1, max_concurrency: 5, schedulable: false, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, orphaned: true, created_at: now(-86400 * 90) }
 ]
 for (const a of accounts) a.type_label ??= typeLabel(a.plugin_key, a.type)
 
-const withGroups = (a: any) => ({ ...a, groups: (a.group_ids || []).map((id: number) => ({ id, name: id === 1 ? 'default' : id === 2 ? 'vip' : `group-${id}` })) })
+/** Current window counters (CONTRACTS §18.1); mocked as a fraction of the limit. */
+function rateUsage(a: any) {
+  const used = (limit: number, ratio: number) => (limit ? Math.min(limit, Math.round(limit * ratio)) : 0)
+  return { rpm: used(a.rpm_limit, 0.2), tpm: used(a.tpm_limit, 0.032), tpd: used(a.tpd_limit, 0.22), spm: used(a.spm_limit, 0.15) }
+}
+
+const withGroups = (a: any) => ({
+  ...a,
+  models: a.models || [],
+  model_mapping: a.model_mapping || {},
+  weight: a.weight ?? 1,
+  rate_usage: rateUsage(a),
+  groups: (a.group_ids || []).map((id: number) => ({ id, name: id === 1 ? 'default' : id === 2 ? 'vip' : `group-${id}` }))
+})
 
 /** Accounts in a group (any status). */
 export function groupAccountCount(gid: number): number {
@@ -263,6 +270,43 @@ on('GET', '/account-types/:plugin_key/:type/form', (req) => {
   return fail(404, 'not_found', 'form not found')
 })
 
+/** A complete model id (CONTRACTS §16): no wildcards. */
+const MODEL_RE = /^[A-Za-z0-9._:/@+-]{1,200}$/
+const badModel = (s: unknown) => typeof s !== 'string' || !MODEL_RE.test(s) || s.includes('*')
+
+/** Validates the §18.1 scheduling / limit / model fields of a create or patch body. */
+function validateScheduling(b: Record<string, any>) {
+  const fields: Array<{ field: string; code: string; message: string }> = []
+  if (Array.isArray(b.models)) {
+    if (b.models.length > 500) fields.push({ field: 'models', code: 'too_many', message: 'At most 500 models' })
+    b.models.forEach((m: unknown, i: number) => {
+      if (badModel(m)) fields.push({ field: `models[${i}]`, code: 'invalid', message: 'Not a complete model id' })
+      else if (b.models.indexOf(m) !== i) fields.push({ field: `models[${i}]`, code: 'duplicate', message: 'Duplicate model' })
+    })
+  }
+  if (b.model_mapping && typeof b.model_mapping === 'object' && !Array.isArray(b.model_mapping)) {
+    const entries = Object.entries(b.model_mapping as Record<string, unknown>)
+    if (entries.length > 500) fields.push({ field: 'model_mapping', code: 'too_many', message: 'At most 500 entries' })
+    for (const [from, to] of entries) {
+      if (badModel(from) || badModel(to)) fields.push({ field: `model_mapping.${from}`, code: 'invalid', message: 'Not a complete model id' })
+    }
+  }
+  const range: Array<[string, number, number]> = [
+    ['priority', 0, 1000000],
+    ['weight', 1, 1000],
+    ['rpm_limit', 0, 10000000],
+    ['tpm_limit', 0, 1e12],
+    ['tpd_limit', 0, 1e12],
+    ['spm_limit', 0, 10000000]
+  ]
+  for (const [k, min, max] of range) {
+    if (b[k] === undefined) continue
+    const n = Number(b[k])
+    if (!Number.isFinite(n) || n < min || n > max) fields.push({ field: k, code: 'invalid', message: `Must be between ${min} and ${max}` })
+  }
+  return fields.length ? fail(400, 'invalid_argument', 'invalid argument', { fields }) : null
+}
+
 on('GET', '/accounts', (req) => {
   let list = accounts
   const q = req.query
@@ -270,7 +314,11 @@ on('GET', '/accounts', (req) => {
   if (q.type) list = list.filter((a) => a.type === q.type)
   if (q.group_id) list = list.filter((a) => a.group_ids.includes(Number(q.group_id)))
   if (q.status) list = list.filter((a) => a.status === q.status)
+  // ?model=: accounts that can serve it (empty `models` = all models, §18.3).
+  if (q.model) list = list.filter((a) => !(a.models || []).length || (a.models || []).includes(q.model))
   if (q.q) list = list.filter((a) => a.name.includes(q.q))
+  // priority ASC, weight DESC, id (§18.3).
+  list = [...list].sort((x, y) => x.priority - y.priority || (y.weight ?? 1) - (x.weight ?? 1) || x.id - y.id)
   return paginate(list.map(({ credentials: _c, ...a }) => withGroups(a)), q)
 })
 on('GET', '/accounts/:id', (req) => {
@@ -283,20 +331,45 @@ on('POST', '/accounts', (req) => {
   if ('platform' in b) return fail(400, 'invalid_argument', 'unknown field "platform"')
   const at = accountTypeDecls.find((x) => x.plugin_key === b.plugin_key && x.type === b.type)
   if (!at) return fail(400, 'invalid_argument', 'unknown account type', { fields: [{ field: 'type', code: 'not_found', message: 'Unknown account type' }] })
+  const bad = validateScheduling(b)
+  if (bad) return bad
   if (b.plugin_key === 'anthropic' && !String(creds.api_key || '').startsWith('sk-')) {
     return fail(400, 'invalid_argument', 'invalid credentials', { fields: [{ field: 'credentials.api_key', code: 'invalid', message: 'API key must start with sk-' }] })
   }
   if (accounts.some((a) => a.name === b.name)) return fail(400, 'invalid_argument', 'name taken', { fields: [{ field: 'name', code: 'conflict', message: 'Name already used' }] })
   const masked = { ...creds }
   for (const f of at.sensitive_fields) if (masked[f]) masked[f] = '******'
-  const a = { id: nextId(), status: 'active', status_reason: '', in_use: 0, orphaned: false, created_at: now(), ...b, type_label: at.label, credentials: masked }
+  const a = {
+    id: nextId(),
+    status: 'active',
+    status_reason: '',
+    in_use: 0,
+    orphaned: false,
+    created_at: now(),
+    priority: 10,
+    weight: 1,
+    max_concurrency: 10,
+    schedulable: true,
+    models: [],
+    model_mapping: {},
+    rpm_limit: 0,
+    tpm_limit: 0,
+    tpd_limit: 0,
+    spm_limit: 0,
+    ...b,
+    type_label: at.label,
+    credentials: masked
+  }
   accounts.unshift(a)
   return withGroups(a)
 })
 on('PATCH', '/accounts/:id', (req) => {
   const a = accounts.find((x) => x.id === Number(req.params.id))
   if (!a) return fail(404, 'not_found', 'account not found')
+  const bad = validateScheduling(req.body || {})
+  if (bad) return bad
   const { credentials, platform: _p, plugin_key: _k, type: _t, ...rest } = req.body || {}
+  // `models` and `model_mapping` are replaced as a whole (§18.3).
   Object.assign(a, rest)
   if (credentials) {
     a.credentials ??= {}
@@ -314,9 +387,12 @@ on('DELETE', '/accounts/:id', (req) => {
 on('POST', '/accounts/:id/test', (req) => {
   const a = accounts.find((x) => x.id === Number(req.params.id))
   if (!a) return fail(404, 'not_found', 'account not found')
+  // The model goes through the account's model_mapping first (§18.3).
+  const asked = req.body?.model || 'claude-haiku-4-5'
+  const model = (a.model_mapping || {})[asked] || asked
   return a.status === 'disabled'
     ? { ok: false, status: 401, latency_ms: 212, message: 'authentication_error: invalid x-api-key' }
-    : { ok: true, status: 200, latency_ms: 480 + Math.round(Math.random() * 200), message: `model ${req.body?.model || 'claude-haiku-4-5'} answered` }
+    : { ok: true, status: 200, latency_ms: 480 + Math.round(Math.random() * 200), message: `model ${model} answered` }
 })
 on('POST', '/accounts/:id/credentials/reveal', (req) => {
   const s = needStepUp(req)
