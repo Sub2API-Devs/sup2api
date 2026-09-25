@@ -153,17 +153,23 @@ export function isVisible(ui: UISchema | undefined, root: any): boolean {
   })
 }
 
-/** Fills schema defaults for missing properties (recursively). */
-export function withDefaults(s: JSONSchema, value: any): any {
+/**
+ * Fills schema defaults for missing properties (recursively). `url-presets`
+ * fields (base URLs) are left empty: the default is shown as a placeholder and
+ * an empty value means "use the plugin's default" (CONTRACTS §21.3).
+ */
+export function withDefaults(s: JSONSchema, value: any, ui?: UISchema): any {
   const t = schemaType(s)
   if (t === 'object' && s.properties) {
     const out: Record<string, any> = { ...(value && typeof value === 'object' ? value : {}) }
     for (const [k, ps] of Object.entries<JSONSchema>(s.properties)) {
+      const pu = ui?.[k]
       if (out[k] === undefined) {
+        if (resolveWidget(ps, pu) === 'url-presets') continue
         if (ps.default !== undefined) out[k] = clone(ps.default)
-        else if (schemaType(ps) === 'object' && ps.properties) out[k] = withDefaults(ps, undefined)
+        else if (schemaType(ps) === 'object' && ps.properties) out[k] = withDefaults(ps, undefined, pu)
       } else if (schemaType(ps) === 'object' && ps.properties) {
-        out[k] = withDefaults(ps, out[k])
+        out[k] = withDefaults(ps, out[k], pu)
       }
     }
     return out

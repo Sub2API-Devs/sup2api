@@ -1034,6 +1034,8 @@ manifest `accountTypes[].guardedSettings`（可选）：`[{field, allowed:[...]}
 
 校验（`account/creds.go` `prepare`，在插件 `ValidateCredentials` 归一化**之后**；`prepare` 的每个调用方都会做，所以 POST/PATCH `/accounts` 和两个 `models/fetch` 接口里带的 `credentials` 都受限）：调用者没有 `account:settings:custom` 且类型声明了 guard 时，每个受限字段的值必须满足其一：为空/缺省/`null`（由插件归一化为默认）；等于 `allowed` 之一；PATCH（以及 `/accounts/:id/models/fetch`）时等于该账号原来的值（管理员建的自定义地址，供应商编辑其他字段不被卡死）。比较前两边都做：去首尾空白、去尾部 `/`（全部）、值能按绝对 URL 解析（有 scheme 和 host）时 scheme 与 host 小写，否则原样比；非字符串值（数字、对象）一律不满足。不满足返回 400 `invalid_argument`，`details.fields[{field:"credentials.base_url", code:"forbidden"}]`。
 
+**空值即默认**：`settingsFields` 中值为空串 `""` 的键在 Schema 校验前被删除（`dropEmptySettings`），由插件 `ValidateCredentials` 归一化为默认地址（三个内置类型的 `base_url` 都有默认值）；控制台的 `url-presets` 字段不再预填 `schema.default`，占位符显示"留空使用默认地址：…"，清空即不发该键；锁定（只读）时只显示"由管理员设置"，不再拼插件自己的帮助文案。
+
 `GET /account-types/:p/:t/form`：调用者没有 `account:settings:custom` 时，对每个受限字段把 `schema.properties.<field>.enum` 设为 `allowed`（`properties` 或该字段不存在时创建），`allowed` 只有一项时再加 `ui_schema.<field>["ui:readonly"] = true`（`ui_schema` 为 `null` 时创建对象，已有的其他 `ui:*` 键保留）；改写在解码后的副本上做，缓存的原件不变；前端 `url-presets` 组件遇到 `enum` 只允许从预设里选。iframe/native 表单模式不改写，只靠服务端校验。
 
 ### 21.4 保存账号时自动关联代理

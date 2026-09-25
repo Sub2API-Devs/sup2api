@@ -245,6 +245,7 @@ func (s *Service) prepare(ctx context.Context, bt core.AccountTypeBinding, raw j
 	if old != nil {
 		b = unmask(b, old, bt.Type.SensitiveFields)
 	}
+	b = dropEmptySettings(b, bt.Type.SettingsFields)
 	if err := s.validateSchema(ctx, bt, b); err != nil {
 		return nil, err
 	}
@@ -363,4 +364,17 @@ func guardNorm(v string) string {
 // decrypt returns the plaintext secret part of an account.
 func (s *Service) decrypt(pluginKey string, enc []byte) ([]byte, error) {
 	return s.d.Cipher.Decrypt(enc, aad(pluginKey))
+}
+
+// dropEmptySettings removes settings fields (base_url and the like) whose
+// value is an empty string: the console leaves them blank to mean "use the
+// plugin's default" (CONTRACTS §21.3), and the plugin fills the default in
+// ValidateCredentials; a schema pattern would otherwise reject "".
+func dropEmptySettings(b []byte, settingsFields []string) []byte {
+	for _, f := range settingsFields {
+		if v := gjson.GetBytes(b, f); v.Type == gjson.String && v.Str == "" {
+			b, _ = sjson.DeleteBytes(b, f)
+		}
+	}
+	return b
 }

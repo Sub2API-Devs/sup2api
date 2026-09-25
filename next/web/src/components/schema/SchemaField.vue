@@ -150,8 +150,14 @@ const urlEnumOptions = computed<string[]>(() => {
   const cur = typeof props.modelValue === 'string' ? props.modelValue : ''
   return cur && !list.includes(cur) ? [cur, ...list] : list
 })
+// A locked base URL (CONTRACTS §21.3) shows only "set by an administrator";
+// the plugin's own help text would contradict it.
 const restrictedHint = computed(() => (widget.value === 'url-presets' && readOnly.value ? t('schema.setByAdmin') : ''))
-const fieldHint = computed(() => (restrictedHint.value ? (help.value ? `${restrictedHint.value} · ${help.value}` : restrictedHint.value) : help.value))
+const fieldHint = computed(() => restrictedHint.value || help.value)
+// Base URLs are not pre-filled: empty means the plugin default (schema.default
+// or the first preset), which the placeholder names.
+const urlDefault = computed<string>(() => (props.schema.default === undefined ? '' : String(props.schema.default)))
+const urlPlaceholder = computed(() => placeholder.value || (urlDefault.value ? t('schema.emptyUsesDefault', { url: urlDefault.value }) : presets.value[0] || ''))
 </script>
 
 <template>
@@ -242,7 +248,7 @@ const fieldHint = computed(() => (restrictedHint.value ? (help.value ? `${restri
       data-testid="url-enum"
       @change="set(($event.target as HTMLSelectElement).value || undefined)"
     >
-      <option v-if="!urlEnumOptions.includes(String(modelValue ?? ''))" value="">{{ placeholder || '—' }}</option>
+      <option v-if="!urlEnumOptions.includes(String(modelValue ?? ''))" value="">{{ urlPlaceholder || '—' }}</option>
       <option v-for="p in urlEnumOptions" :key="p" :value="p">{{ p }}</option>
     </select>
 
@@ -252,10 +258,10 @@ const fieldHint = computed(() => (restrictedHint.value ? (help.value ? `${restri
         class="input flex-1"
         :class="error ? 'input-error' : ''"
         :value="modelValue ?? ''"
-        :placeholder="placeholder || presets[0]"
+        :placeholder="urlPlaceholder"
         :list="listId"
         :disabled="readOnly"
-        @input="set(($event.target as HTMLInputElement).value)"
+        @input="set(($event.target as HTMLInputElement).value || undefined)"
       />
       <datalist :id="listId">
         <option v-for="p in presets" :key="p" :value="p" />

@@ -25,7 +25,7 @@ watch(
   () => props.schema,
   (s) => {
     if (!s) return
-    const filled = fillDefaults(s, props.modelValue || {})
+    const filled = fillDefaults(s, props.modelValue || {}, props.uiSchema || undefined)
     if (JSON.stringify(filled) !== JSON.stringify(props.modelValue || {})) emit('update:modelValue', filled)
   },
   { immediate: true }
