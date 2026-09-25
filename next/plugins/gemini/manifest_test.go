@@ -23,7 +23,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "gemini" || m.Version != "0.1.5" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "gemini" || m.Version != "0.1.6" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("key/version/publisher = %s %s %s", m.Key, m.Version, m.Publisher)
 	}
 	if m.Name["en"] == "" || m.Name["zh"] == "" || m.Description["en"] == "" || m.Description["zh"] == "" {

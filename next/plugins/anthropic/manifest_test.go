@@ -22,7 +22,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "anthropic" || m.Version != "0.1.5" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "anthropic" || m.Version != "0.1.6" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("key/version = %s %s", m.Key, m.Version)
 	}
 	if m.Database == nil || m.Database.Schema != "plg_"+m.Key {

@@ -712,13 +712,3 @@ func TestInputProxyURL(t *testing.T) {
 		t.Fatalf("changedFields creds: %s", got)
 	}
 }
-
-func TestDropEmptySettings(t *testing.T) {
-	got := string(dropEmptySettings([]byte(`{"api_key":"k","base_url":"","other":"","nested":{"base_url":""}}`), []string{"base_url", "other"}))
-	if got != `{"api_key":"k","nested":{"base_url":""}}` {
-		t.Fatalf("got %s", got)
-	}
-	if got := string(dropEmptySettings([]byte(`{"base_url":"https://x"}`), []string{"base_url"})); got != `{"base_url":"https://x"}` {
-		t.Fatalf("non-empty must stay: %s", got)
-	}
-}

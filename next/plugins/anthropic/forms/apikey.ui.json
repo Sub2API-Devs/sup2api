@@ -11,6 +11,7 @@
   },
   "base_url": {
     "ui:widget": "url-presets",
+    "ui:placeholder": { "en": "Leave empty to use https://api.anthropic.com", "zh": "留空使用默认地址 https://api.anthropic.com" },
     "ui:title": { "en": "Base URL", "zh": "Base URL" },
     "ui:options": { "presets": ["https://api.anthropic.com"] },
     "ui:help": {

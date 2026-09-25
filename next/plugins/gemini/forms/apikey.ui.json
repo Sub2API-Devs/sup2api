@@ -11,6 +11,7 @@
   },
   "base_url": {
     "ui:widget": "url-presets",
+    "ui:placeholder": { "en": "Leave empty to use https://generativelanguage.googleapis.com", "zh": "留空使用默认地址 https://generativelanguage.googleapis.com" },
     "ui:title": { "en": "Base URL", "zh": "Base URL" },
     "ui:options": { "presets": ["https://generativelanguage.googleapis.com"] },
     "ui:help": {

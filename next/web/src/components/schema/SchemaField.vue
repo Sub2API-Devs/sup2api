@@ -154,10 +154,7 @@ const urlEnumOptions = computed<string[]>(() => {
 // the plugin's own help text would contradict it.
 const restrictedHint = computed(() => (widget.value === 'url-presets' && readOnly.value ? t('schema.setByAdmin') : ''))
 const fieldHint = computed(() => restrictedHint.value || help.value)
-// Base URLs are not pre-filled: empty means the plugin default (schema.default
-// or the first preset), which the placeholder names.
-const urlDefault = computed<string>(() => (props.schema.default === undefined ? '' : String(props.schema.default)))
-const urlPlaceholder = computed(() => placeholder.value || (urlDefault.value ? t('schema.emptyUsesDefault', { url: urlDefault.value }) : presets.value[0] || ''))
+
 </script>
 
 <template>
@@ -248,7 +245,7 @@ const urlPlaceholder = computed(() => placeholder.value || (urlDefault.value ? t
       data-testid="url-enum"
       @change="set(($event.target as HTMLSelectElement).value || undefined)"
     >
-      <option v-if="!urlEnumOptions.includes(String(modelValue ?? ''))" value="">{{ urlPlaceholder || '—' }}</option>
+      <option v-if="!urlEnumOptions.includes(String(modelValue ?? ''))" value="">{{ placeholder || '—' }}</option>
       <option v-for="p in urlEnumOptions" :key="p" :value="p">{{ p }}</option>
     </select>
 
@@ -258,7 +255,7 @@ const urlPlaceholder = computed(() => placeholder.value || (urlDefault.value ? t
         class="input flex-1"
         :class="error ? 'input-error' : ''"
         :value="modelValue ?? ''"
-        :placeholder="urlPlaceholder"
+        :placeholder="placeholder || presets[0]"
         :list="listId"
         :disabled="readOnly"
         @input="set(($event.target as HTMLInputElement).value || undefined)"

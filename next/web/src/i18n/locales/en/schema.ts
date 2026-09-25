@@ -3,7 +3,6 @@ export default {
   secretKeep: 'A value is stored. Leave empty to keep it.',
   presets: 'Presets',
   setByAdmin: 'Set by an administrator',
-  emptyUsesDefault: 'Leave empty to use the default: {url}',
   mappingFrom: 'Requested model',
   mappingTo: 'Upstream model',
   invalidJSON: 'Invalid JSON',

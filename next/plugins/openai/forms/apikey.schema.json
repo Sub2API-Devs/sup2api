@@ -15,8 +15,7 @@
     "base_url": {
       "type": "string",
       "title": "Base URL",
-      "default": "https://api.openai.com",
-      "pattern": "^https?://[^\\s?#]+$"
+      "pattern": "^(https?://[^\\s?#]+)?$"
     }
   }
 }
