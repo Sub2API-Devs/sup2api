@@ -313,6 +313,14 @@ func TestValidatePlatformAndAccountTypes(t *testing.T) {
 	if err := Validate(anth, pkgtest.Files(anth), opts()); err != nil {
 		t.Fatalf("account types for a built-in platform: %v", fieldCodes(err))
 	}
+	// Guarded settings (CONTRACTS §21.3): a settings field restricted to
+	// official URLs.
+	anth.AccountTypes[0].SettingsFields = []string{"base_url"}
+	anth.AccountTypes[0].GuardedSettings = []manifest.GuardedSetting{{Field: "base_url",
+		Allowed: []string{"https://api.anthropic.com", "http://localhost:8080/v1"}}}
+	if err := Validate(anth, pkgtest.Files(anth), opts()); err != nil {
+		t.Fatalf("guarded settings: %v", fieldCodes(err))
+	}
 	// Account types may reference platforms of other plugins (served once
 	// that plugin is enabled).
 	anth.AccountTypes[0].Platforms = append(anth.AccountTypes[0].Platforms, manifest.AccountPlatform{Platform: "video",
@@ -354,6 +362,48 @@ func TestValidatePlatformAndAccountTypes(t *testing.T) {
 		}, "accountTypes[0].platforms[0].usage.video.generate.semantics", "invalid"},
 		{"form file", func(_ *manifest.Manifest, f map[string][]byte) { delete(f, "forms/apikey.schema.json") }, "accountTypes[0].form.schema", "file_missing"},
 		{"form ui file", func(_ *manifest.Manifest, f map[string][]byte) { delete(f, "forms/apikey.ui.json") }, "accountTypes[0].form.uiSchema", "file_missing"},
+		// Guarded settings (CONTRACTS §21.3).
+		{"guarded field required", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.AccountTypes[0].SettingsFields = []string{"base_url"}
+			m.AccountTypes[0].GuardedSettings = []manifest.GuardedSetting{{Allowed: []string{"https://api.example.com"}}}
+		}, "accountTypes[0].guardedSettings[0].field", "required"},
+		{"guarded field not a settings field", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.AccountTypes[0].SettingsFields = []string{"region"}
+			m.AccountTypes[0].GuardedSettings = []manifest.GuardedSetting{{Field: "base_url", Allowed: []string{"https://api.example.com"}}}
+		}, "accountTypes[0].guardedSettings[0].field", "unknown_field"},
+		{"guarded field without settings fields", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.AccountTypes[0].GuardedSettings = []manifest.GuardedSetting{{Field: "base_url", Allowed: []string{"https://api.example.com"}}}
+		}, "accountTypes[0].guardedSettings[0].field", "unknown_field"},
+		{"guarded field duplicate", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.AccountTypes[0].SettingsFields = []string{"base_url"}
+			m.AccountTypes[0].GuardedSettings = []manifest.GuardedSetting{
+				{Field: "base_url", Allowed: []string{"https://api.example.com"}},
+				{Field: "base_url", Allowed: []string{"https://api2.example.com"}}}
+		}, "accountTypes[0].guardedSettings[1].field", "duplicate"},
+		{"guarded allowed empty", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.AccountTypes[0].SettingsFields = []string{"base_url"}
+			m.AccountTypes[0].GuardedSettings = []manifest.GuardedSetting{{Field: "base_url"}}
+		}, "accountTypes[0].guardedSettings[0].allowed", "required"},
+		{"guarded allowed relative", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.AccountTypes[0].SettingsFields = []string{"base_url"}
+			m.AccountTypes[0].GuardedSettings = []manifest.GuardedSetting{{Field: "base_url", Allowed: []string{"https://api.example.com", "/v1"}}}
+		}, "accountTypes[0].guardedSettings[0].allowed[1]", "invalid_url"},
+		{"guarded allowed scheme", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.AccountTypes[0].SettingsFields = []string{"base_url"}
+			m.AccountTypes[0].GuardedSettings = []manifest.GuardedSetting{{Field: "base_url", Allowed: []string{"ftp://api.example.com"}}}
+		}, "accountTypes[0].guardedSettings[0].allowed[0]", "invalid_url"},
+		{"guarded allowed no host", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.AccountTypes[0].SettingsFields = []string{"base_url"}
+			m.AccountTypes[0].GuardedSettings = []manifest.GuardedSetting{{Field: "base_url", Allowed: []string{"https://"}}}
+		}, "accountTypes[0].guardedSettings[0].allowed[0]", "invalid_url"},
+		{"guarded allowed whitespace", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.AccountTypes[0].SettingsFields = []string{"base_url"}
+			m.AccountTypes[0].GuardedSettings = []manifest.GuardedSetting{{Field: "base_url", Allowed: []string{"https://api.example.com "}}}
+		}, "accountTypes[0].guardedSettings[0].allowed[0]", "invalid_url"},
+		{"guarded allowed empty string", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.AccountTypes[0].SettingsFields = []string{"base_url"}
+			m.AccountTypes[0].GuardedSettings = []manifest.GuardedSetting{{Field: "base_url", Allowed: []string{""}}}
+		}, "accountTypes[0].guardedSettings[0].allowed[0]", "invalid_url"},
 		{"needs platform.register", func(m *manifest.Manifest, _ map[string][]byte) {
 			m.Platforms = nil
 			m.AccountTypes[0].Platforms = []manifest.AccountPlatform{{Platform: "anthropic"}}

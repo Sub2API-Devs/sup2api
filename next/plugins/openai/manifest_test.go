@@ -23,7 +23,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "openai" || m.Version != "0.1.4" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "openai" || m.Version != "0.1.5" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("key/version/publisher = %s %s %s", m.Key, m.Version, m.Publisher)
 	}
 	if m.Name["en"] == "" || m.Name["zh"] == "" || m.Description["en"] == "" || m.Description["zh"] == "" {
@@ -53,6 +53,16 @@ func TestManifest(t *testing.T) {
 	// settings field nor a form property.
 	if slices.Contains(at.SettingsFields, "model_mapping") {
 		t.Fatal("model_mapping must not be a settings field")
+	}
+	// base_url is guarded (CONTRACTS §21.3): callers without
+	// account:settings:custom may only use the official endpoint, which is
+	// also the plugin default.
+	if !slices.Contains(at.SettingsFields, "base_url") {
+		t.Fatal("base_url must be a settings field")
+	}
+	if len(at.GuardedSettings) != 1 || at.GuardedSettings[0].Field != "base_url" ||
+		!slices.Equal(at.GuardedSettings[0].Allowed, []string{openai.DefaultBaseURL}) {
+		t.Fatalf("guardedSettings = %+v, want base_url -> [%s]", at.GuardedSettings, openai.DefaultBaseURL)
 	}
 	var schema struct {
 		Properties map[string]json.RawMessage `json:"properties"`

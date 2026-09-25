@@ -167,8 +167,24 @@ type AccountType struct {
 	Form            Form          `json:"form"`
 	SensitiveFields []string      `json:"sensitiveFields,omitempty"`
 	// Top-level credential keys stored as plain settings (not encrypted).
-	SettingsFields []string          `json:"settingsFields,omitempty"`
-	Platforms      []AccountPlatform `json:"platforms"`
+	SettingsFields []string `json:"settingsFields,omitempty"`
+	// GuardedSettings restricts the values of some settings fields for
+	// callers without the account:settings:custom permission (CONTRACTS
+	// §21.3), e.g. base_url may only be the official endpoint. Types that
+	// declare none are unrestricted.
+	GuardedSettings []GuardedSetting  `json:"guardedSettings,omitempty"`
+	Platforms       []AccountPlatform `json:"platforms"`
+}
+
+// GuardedSetting is one restricted settings field of an account type
+// (CONTRACTS §21.3). Field must be one of SettingsFields; Allowed is the
+// non-empty list of absolute http(s) URLs the field may take. The host
+// compares values after trimming whitespace and a trailing "/" and
+// lower-casing scheme and host; an empty value (the plugin default) and, on
+// update, the account's previous value are always accepted.
+type GuardedSetting struct {
+	Field   string   `json:"field"`
+	Allowed []string `json:"allowed"`
 }
 
 // AccountPlatform is one platform an account type serves. Empty fields fall

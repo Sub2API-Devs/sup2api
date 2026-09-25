@@ -3,6 +3,7 @@ package pkg
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -513,6 +514,7 @@ func (v *validator) accountTypes() {
 			v.add(f+".label", "required", "label.en is required")
 		}
 		v.form(f+".form", at.Form, false)
+		v.guardedSettings(f, at)
 		if len(at.Platforms) == 0 {
 			v.add(f+".platforms", "required", "at least one platform is required")
 		}
@@ -542,6 +544,47 @@ func (v *validator) accountTypes() {
 			}
 		}
 	}
+}
+
+// guardedSettings validates accountTypes[].guardedSettings (CONTRACTS §21.3):
+// each field is a distinct settings field of the same account type and its
+// allowed list holds at least one absolute http(s) URL.
+func (v *validator) guardedSettings(f string, at manifest.AccountType) {
+	seen := map[string]bool{}
+	for i, gs := range at.GuardedSettings {
+		gf := fmt.Sprintf("%s.guardedSettings[%d]", f, i)
+		switch {
+		case gs.Field == "":
+			v.add(gf+".field", "required", "field is required")
+		case !slices.Contains(at.SettingsFields, gs.Field):
+			v.add(gf+".field", "unknown_field", "field %q is not in settingsFields of account type %q", gs.Field, at.ID)
+		case seen[gs.Field]:
+			v.add(gf+".field", "duplicate", "field %q is guarded twice", gs.Field)
+		}
+		seen[gs.Field] = true
+		if len(gs.Allowed) == 0 {
+			v.add(gf+".allowed", "required", "allowed must list at least one URL")
+		}
+		for j, raw := range gs.Allowed {
+			if !isAbsoluteHTTPURL(raw) {
+				v.add(fmt.Sprintf("%s.allowed[%d]", gf, j), "invalid_url", "%q is not an absolute http(s) URL", raw)
+			}
+		}
+	}
+}
+
+// isAbsoluteHTTPURL reports whether s is an absolute http or https URL with a
+// host and no whitespace.
+func isAbsoluteHTTPURL(s string) bool {
+	if s == "" || strings.ContainsAny(s, " \t\r\n") {
+		return false
+	}
+	u, err := url.Parse(s)
+	if err != nil {
+		return false
+	}
+	scheme := strings.ToLower(u.Scheme)
+	return (scheme == "http" || scheme == "https") && u.Hostname() != ""
 }
 
 func sortedKeys[V any](m map[string]V) []string {

@@ -22,7 +22,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "anthropic" || m.Version != "0.1.4" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "anthropic" || m.Version != "0.1.5" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("key/version = %s %s", m.Key, m.Version)
 	}
 	if m.Database == nil || m.Database.Schema != "plg_"+m.Key {
@@ -58,6 +58,16 @@ func TestManifest(t *testing.T) {
 		// settings field nor a form property.
 		if slices.Contains(at.SettingsFields, "model_mapping") {
 			t.Fatalf("account type %s: model_mapping must not be a settings field", at.ID)
+		}
+		// base_url is guarded (CONTRACTS §21.3): callers without
+		// account:settings:custom may only use the official endpoint, which
+		// is also the plugin default.
+		if !slices.Contains(at.SettingsFields, "base_url") {
+			t.Fatalf("account type %s: base_url must be a settings field", at.ID)
+		}
+		if len(at.GuardedSettings) != 1 || at.GuardedSettings[0].Field != "base_url" ||
+			!slices.Equal(at.GuardedSettings[0].Allowed, []string{anthropic.DefaultBaseURL}) {
+			t.Fatalf("account type %s: guardedSettings = %+v, want base_url -> [%s]", at.ID, at.GuardedSettings, anthropic.DefaultBaseURL)
 		}
 		var schema struct {
 			Properties map[string]json.RawMessage `json:"properties"`
