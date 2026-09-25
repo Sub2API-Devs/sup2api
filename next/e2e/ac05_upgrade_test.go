@@ -14,7 +14,7 @@ func TestAC05_UpgradeAnthropicWithoutDowntime(t *testing.T) {
 	e := Setup(t)
 	e.Pending("c1-lifecycle, c2-runtime (two-phase rollout, plugin migrations), e-sdk-plugins (anthropic 0.2.0), gateway")
 	admin := e.Admin()
-	e.EnsurePlugin(admin, "anthropic", "0.1.4")
+	e.EnsurePlugin(admin, "anthropic", "0.1.5")
 	tn := e.NewTenant(admin, TenantOpts{Accounts: 2, Balance: "50"})
 
 	before := admin.OK(t, http.MethodGet, "/p/anthropic/models", nil).Array()

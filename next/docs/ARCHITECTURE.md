@@ -1333,8 +1333,8 @@ flowchart TD
 | 角色 | `role:read` `role:manage` |
 | API Key | `apikey:self:manage` `apikey:all:read` `apikey:all:manage` |
 | 分组 | `group:read` `group:manage` |
-| 账号 | `account:read` `account:create` `account:update` `account:delete` `account:test` `account:credential:view`🔐 |
-| 代理 | `proxy:read` `proxy:manage` |
+| 账号 | `account:read` `account:create` `account:update` `account:delete` `account:test` `account:credential:view`🔐；只作用于自己创建的账号：`account:own:read` `account:own:create` `account:own:update` `account:own:delete` `account:own:test` `account:own:credential:view`🔐；`account:settings:custom`（允许受限设置如 base_url 用官方地址以外的值） |
+| 代理 | `proxy:read` `proxy:manage`；只作用于自己创建的代理：`proxy:own:read` `proxy:own:manage` |
 | 价格 | `price:read` `price:manage` |
 | 余额 | `balance:self:read` `balance:all:read` `balance:adjust`🔐 |
 | 使用记录 | `usage:self:read` `usage:all:read` |
@@ -1344,6 +1344,8 @@ flowchart TD
 | 网关 | `gateway:use` |
 
 🔐 = 敏感权限，操作时需要再次输入密码。
+
+**所有权**（CONTRACTS §21）：账号与代理都记录 `created_by`；`*:own:*` 权限只作用于自己创建的资源，同一路由接受全部级或自己级任一 key（`Router.PermAny`），范围条件落在 SQL 里，越权一律 404；`created_by` 为空的历史数据只有全部级可见。所有权只约束控制台 API，不影响网关调度。
 
 ### 13.4 插件权限的生命周期
 

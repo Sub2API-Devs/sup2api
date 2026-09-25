@@ -63,7 +63,7 @@
 
 - 控制台：`Authorization: Bearer <access_token>`（JWT，HS256，`sub` 为用户 ID，默认 2 小时有效）
 - 敏感操作：先 `POST /api/v1/auth/step-up {"password"}` 得到 `step_up_token`（5 分钟有效，存 Redis），再在请求头带 `X-Step-Up-Token`
-- 路由注册：`r.Public` / `r.Authed` / `r.Perm(method, path, permission, handler)`；权限标记为 sensitive 时自动要求 step-up
+- 路由注册：`r.Public` / `r.Authed` / `r.Perm(method, path, permission, handler)` / `r.PermAny(method, path, handler, keys...)`（任一 key 即可，§21.1）；权限标记为 sensitive 时自动要求 step-up
 - 网关：由插件声明的端点按 `auth.headers` 读取 API Key；错误格式按端点的 `errorFormat`
 
 ## 4. 权限清单（核心）
@@ -76,8 +76,8 @@
 | role | `role:read` `role:manage`🔐 |
 | apikey | `apikey:self:manage` `apikey:all:read` `apikey:all:manage` |
 | group | `group:read` `group:manage` |
-| account | `account:read` `account:create` `account:update` `account:delete`🔐 `account:test` `account:credential:view`🔐 |
-| proxy | `proxy:read` `proxy:manage` |
+| account | `account:read` `account:create` `account:update` `account:delete`🔐 `account:test` `account:credential:view`🔐；自己创建的：`account:own:read` `account:own:create` `account:own:update` `account:own:delete` `account:own:test` `account:own:credential:view`🔐；`account:settings:custom`（§21） |
+| proxy | `proxy:read` `proxy:manage`；自己创建的：`proxy:own:read` `proxy:own:manage`（§21） |
 | price | `price:read` `price:manage` |
 | balance | `balance:self:read` `balance:all:read` `balance:adjust`🔐 |
 | usage | `usage:self:read` `usage:all:read` |
@@ -128,17 +128,19 @@
 | GET `/me/groups` | auth（当前用户可用的分组） |
 | GET `/api-keys`，PATCH/DELETE `/api-keys/:id` | `apikey:all:read` / `apikey:all:manage` |
 | GET/POST `/groups`，GET/PATCH/DELETE `/groups/:id` | `group:read` / `group:manage` |
-| GET/POST `/proxies`，GET/PATCH/DELETE `/proxies/:id` | `proxy:read` / `proxy:manage`；密码省略或 `null` 不改、`""` 清除，没有掩码值（§15.4） |
-| POST `/proxies/:id/test` | `proxy:manage`（会发起外部连接） |
+| GET/POST `/proxies`，GET/PATCH/DELETE `/proxies/:id` | `proxy:read` / `proxy:manage`（或 `proxy:own:*`，只作用于自己创建的，§21）；密码省略或 `null` 不改、`""` 清除，没有掩码值（§15.4） |
+| POST `/proxies/:id/test` | `proxy:manage` / `proxy:own:manage`（会发起外部连接） |
 
 ### 5.4 账号（A；类型和表单来自插件注册表）
 
+每条路由也接受对应的 `account:own:*` key，只作用于自己创建的账号（§21）；`POST /accounts`、`PATCH /accounts/:id` 可用 `proxy_url` 代替 `proxy_id`（§21.4）。
+
 | 方法 路径 | 权限 | 说明 |
 |---|---|---|
-| GET `/account-types` | `account:read` | `[{plugin_key, plugin_name, plugin_version, asset_base, platform, type, label, description, form:{mode, page?, component?}, sensitive_fields}]` |
+| GET `/account-types` | `account:read` | `[{plugin_key, plugin_name, plugin_version, asset_base, platform, type, label, description, form:{mode, page?, component?}, sensitive_fields, guarded_settings:[{field, allowed[]}]}]`（`guarded_settings` 来自 manifest `guardedSettings`，§21.3；未声明时为 `[]`） |
 | GET `/account-types/:platform/:type/form` | `account:read` | `{schema, ui_schema}` |
-| GET `/accounts`（`?plugin_key=&type=&group_id=&status=&q=&model=`） | `account:read` | 列表含 `in_use`（实时并发）、`cooldown_until`、`orphaned`、`rate_usage`（§18） |
-| POST `/accounts` | `account:create` | `{name, plugin_key, type, group_ids[], proxy_id, priority, weight, max_concurrency, schedulable, models[], model_mapping{}, rpm_limit, tpm_limit, tpd_limit, spm_limit, credentials:{...}}`（§18） |
+| GET `/accounts`（`?plugin_key=&type=&group_id=&status=&q=&model=&created_by=&mine=`） | `account:read` | 列表含 `in_use`（实时并发）、`cooldown_until`、`orphaned`、`rate_usage`（§18）、`created_by`、`created_by_email`（§21） |
+| POST `/accounts` | `account:create` | `{name, plugin_key, type, group_ids[], proxy_id \| proxy_url, priority, weight, max_concurrency, schedulable, models[], model_mapping{}, rpm_limit, tpm_limit, tpd_limit, spm_limit, credentials:{...}}`（§18、§21.4）；响应另带 `proxy_created` |
 | GET/PATCH `/accounts/:id` | `account:read` / `account:update` | 凭证中的敏感字段返回 `"******"`；PATCH 时敏感字段传 `"******"` 表示不修改 |
 | DELETE `/accounts/:id` | `account:delete` | |
 | POST `/accounts/:id/test` | `account:test` | `{model?}` → `{ok, status, latency_ms, message}` |
@@ -555,7 +557,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 
 ### 15.4 代理（`proxy/proxy.go`）
 
-响应对象：`{id, name, protocol, host, port, username, has_password, status, account_count, created_at, updated_at}`。**密码从不返回**，只有 `has_password`；`account_count` 为引用该代理的未删除账号数。
+响应对象：`{id, name, protocol, host, port, username, has_password, status, account_count, created_by, created_by_email, created_at, updated_at}`。**密码从不返回**，只有 `has_password`；`account_count` 为引用该代理的未删除账号数；`created_by` / `created_by_email`（§21，`LEFT JOIN users`，创建人软删后仍返回邮箱；历史行为 `null`）。路由权限自 §21 起为"全部级 / 自己级任一"（下表列全部级 key），自己级只作用于 `created_by` = 调用者的行。
 
 | 方法 路径 | 权限 | 请求 | 约定 |
 |---|---|---|---|
@@ -691,15 +693,17 @@ GET `/ui/plugins`（登录即可）→ 不分页数组，只含当前 generation
 | `orphaned` | 声明该账号类型的插件未启用（禁用或卸载）时为 `true` |
 | `settings` | 非敏感的设置字段（账号类型 `settingsFields` 列出的顶层键），明文 JSON 对象 |
 | `credentials` | **仅详情**（`GET /accounts/:id`、创建与修改的响应）：设置字段与加密字段合并后的完整对象，账号类型 `sensitiveFields` 中的非空值替换为 `"******"`；类型未注册时加密部分的所有顶层值都显示为 `"******"`。列表不含此字段 |
+| `created_by`、`created_by_email` | 创建人 id 与邮箱（§21.2）；历史数据/系统创建为 `null`；创建人已软删除时邮箱仍返回 |
+| `proxy_created` | **仅创建与修改的响应**：本次 `proxy_url` 是否新建了代理（§21.4）；没给 `proxy_url` 时为 `false` |
 | `last_used_at`、`created_at`、`updated_at` | |
 
-创建与修改：
-- POST `/accounts`（`account:create`）：`{name, plugin_key, type, group_ids?, proxy_id?, priority?, max_concurrency?, schedulable?, status?, credentials}`；默认 `priority=10`、`max_concurrency=10`、`schedulable=true`、`status=active`。`priority` 0–1000000；`max_concurrency` 0–100000；`proxy_id`、`group_ids` 必须存在（`details.fields[].code = "not_found"`）；账号类型未注册返回 `field:"type", code:"unknown"`。凭证先按表单 Schema 校验，再调插件 `ValidateCredentials`（字段错误路径为 `credentials.<a>.<b>`），插件可规范化凭证。
-- PATCH `/accounts/:id`（`account:update`）：同上字段均可选，`plugin_key`/`type` 不可修改（忽略）。`proxy_id: null` 改为直连；`group_ids` 整体替换。`credentials` 给出时为**完整对象**（省略的键会被删除），敏感字段传 `"******"` 保留原值；插件未启用时修改凭证返回 503 `plugin_unavailable`；并发修改凭证返回 409。修改 `status` 会发 `account.status_changed` 事件。
-- DELETE `/accounts/:id`（`account:delete`）：软删除，清除分组关系与冷却，204。
-- POST `/accounts/:id/credentials/reveal`（`account:credential:view`）：→ `{credentials:{...}}`（合并后的明文），写审计日志。
+创建与修改（每条路由也接受对应的 `account:own:*` key，只作用于 `created_by` = 调用者的账号，越权 404，§21）：
+- POST `/accounts`（`account:create` / `account:own:create`）：`{name, plugin_key, type, group_ids?, proxy_id?, proxy_url?, priority?, max_concurrency?, schedulable?, status?, credentials}`；默认 `priority=10`、`max_concurrency=10`、`schedulable=true`、`status=active`。`priority` 0–1000000；`max_concurrency` 0–100000；`proxy_id`、`group_ids` 必须存在（`details.fields[].code = "not_found"`；自己级下 `proxy_id` 还必须在调用者可见的代理范围内，§21.4）；`proxy_url` 见 §21.4；账号类型未注册返回 `field:"type", code:"unknown"`。凭证先按表单 Schema 校验，再调插件 `ValidateCredentials`（字段错误路径为 `credentials.<a>.<b>`），插件可规范化凭证，最后做受限设置校验（§21.3）。写审计 `account.create`。
+- PATCH `/accounts/:id`（`account:update` / `account:own:update`）：同上字段均可选，`plugin_key`/`type` 不可修改（忽略）。`proxy_id: null` 改为直连；`proxy_url` 见 §21.4；`group_ids` 整体替换。`credentials` 给出时为**完整对象**（省略的键会被删除），敏感字段传 `"******"` 保留原值；插件未启用时修改凭证返回 503 `plugin_unavailable`；并发修改凭证返回 409。修改 `status` 会发 `account.status_changed` 事件。写审计 `account.update`。
+- DELETE `/accounts/:id`（`account:delete` / `account:own:delete`）：软删除，清除分组关系与冷却，204。写审计 `account.delete`。
+- POST `/accounts/:id/credentials/reveal`（`account:credential:view` / `account:own:credential:view`）：→ `{credentials:{...}}`（合并后的明文），写审计日志 `account.credentials.reveal`。
 
-POST `/accounts/:id/test`（`account:test`）：
+POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 - 请求体可省略或为空；可选 `{model}`（交给插件 `BuildTestRequest`，为空时由插件选默认模型）。
 - 响应 `{ok, status, latency_ms, message}`：由声明插件构造测试请求，核心经账号的代理（或直连）发出；`ok` = 上游 2xx；`status` 为上游状态码（未发出或网络错误时为 0）；失败时 `message` 为上游响应体前 1 KB（为空时为状态行）或错误信息，成功时为空串。整个测试（含插件构造请求）超时 30 秒。
 - 测试失败（包括上游地址为内网/回环被拒、代理被禁用）仍返回 HTTP 200、`ok:false`；只有插件未启用（503 `plugin_unavailable`）、账号不存在（404）、插件调用出错时返回错误状态。
@@ -975,3 +979,99 @@ agent 循环：取 `choices[0].message`。
 ### 20.9 测试
 
 mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的工具时进入审核模拟——取最后一条 user 消息，含 `MOD-BLOCK` 返回 `{verdict:block, categories:[illegal], severity:high}`，含 `MOD-FLAG` 返回 flag，含 `MOD-NOTOOL` 且还没有 assistant 消息时先回纯文本（测 agent 追问），含 `MOD-BADARGS` 且还没有 tool 消息时先回非法参数，其余 pass；都以 `tool_calls` 返回并带 usage。e2e AC22：enforce 拦截/放行、usage 记录 `blocked_by_hook` 与 hook note、observe 放行并异步出记录、自动封禁与解封、`/test`、base_url 指向网关自身时的自身识别。
+
+## 21. 账号与代理的所有权授权、受限设置（base_url）、保存账号时自动关联代理（2026-09-25，用户要求）
+
+背景：需要"供应商"角色只维护自己创建的账号和代理、不能改 base_url（只能用官方地址）；"只读"角色能看全部账号但不能改、看不到密钥；保存账号时能直接填代理串，后端自动解析并复用已有代理或新建再关联。旧 sub2api 没有所有者模型，本节为新设计。
+
+### 21.1 权限（§4 表同步更新）
+
+现有 `account:*`、`proxy:*` 的 key **不改名**，语义固定为"全部"。新增：
+
+| 模块 | 新增 key | 说明 |
+|---|---|---|
+| account | `account:own:read` `account:own:create` `account:own:update` `account:own:delete` `account:own:test` `account:own:credential:view`🔐 | 只作用于 `created_by` = 调用者的账号；`own:delete` **不**敏感（只有 `own:credential:view` 要 step-up） |
+| account | `account:settings:custom` | 允许把受限设置（目前是 base_url，§21.3）改成插件官方值以外的值 |
+| proxy | `proxy:own:read` `proxy:own:manage` | 只作用于 `created_by` = 调用者的代理 |
+
+- 全部级 key 覆盖自己级 key：同时拥有时按全部处理。
+- `created_by` 为 `NULL` 的历史数据只有全部级 key 能看到/操作。
+- admin 角色按 `SyncCore` 规则自动获得全部新 key（含 `account:settings:custom`）；`user` 角色不变；已有自定义角色需要管理员手工勾选。
+- 典型角色：**供应商** = `account:own:*`（六个）+ `proxy:own:read` + `proxy:own:manage`，没有 `account:settings:custom`；**只读** = `account:read` + `proxy:read`，没有任何 `credential:view`。
+
+路由绑定改为**同一路由接受全部级或自己级任一 key**（`httpapi.Router.PermAny(method, path string, handler gin.HandlerFunc, keys ...string)`，现有 `Perm` 不变）：中间件对每个 key 调 `Authorizer.Can`，把命中的 key 集合按注册顺序放进 **request ctx**（`core.WithGranted` / `core.Granted(ctx) []string`；`httpapi.Granted(c *gin.Context)` 是取 `c.Request.Context()` 的便捷写法），任一命中的 key 敏感就要求 step-up（错误同 `Perm`：`step_up_required`；例：`account:delete` 敏感、`account:own:delete` 不敏感——只有 `own:delete` 的用户删自己的账号不用 step-up；有 `account:delete` 的用户删任何账号都要 step-up）；都不命中返回 403 `permission_denied`，`details.permission` 为 **第一个** key。`Perm` 也把它的单个 key 写进 `Granted`，所以 `OwnerScope` 在单 key 路由上同样可用。handler 用 `core.OwnerScope(ctx context.Context, allKey string) *int64` 取范围（ctx 为 `c.Request.Context()`，和 `core.UserID` 一致）：命中全部级 key 返回 `nil`，否则返回调用者 id 的指针；范围条件**落在 SQL 里**（列表 `WHERE ($n::bigint IS NULL OR created_by = $n)`，写操作 `UPDATE ... WHERE id=$1 AND ($2::bigint IS NULL OR created_by = $2)`，仿 `apikey.softDelete`），越权访问一律 404（不区分"不存在"和"不是你的"）。
+
+所有权只约束控制台 API；网关调度、`AccountDirectory`、分组的 `account_count`、代理的 `account_count` 仍按全部统计。
+
+### 21.2 数据与接口
+
+迁移 `0010_ownership.sql`：`proxies` 加 `created_by bigint REFERENCES users(id)`（可空）；`accounts(created_by) WHERE deleted_at IS NULL`、`proxies(created_by)` 索引。`accounts.created_by` 已有（创建时写入）。
+
+账号对象、代理对象都增加 `created_by`（`int|null`）与 `created_by_email`（`string|null`，创建人已删除时仍返回邮箱）。
+
+| 方法 路径 | 权限（任一） | 变化 |
+|---|---|---|
+| GET `/accounts` | `account:read` / `account:own:read` | 自己级只返回自己的；新增筛选 `created_by=<id>`（自己级下忽略；非正整数 400 `fields[{field:"created_by", code:"invalid"}]`）、`mine=true`（只看自己的，两级都可用，`strconv.ParseBool`） |
+| GET `/accounts/:id` | `account:read` / `account:own:read` | |
+| POST `/accounts` | `account:create` / `account:own:create` | `created_by` = 调用者；自己级时 `proxy_id` 必须是调用者**可见**的代理（§21.4 的可见范围），否则 `proxy_id/not_found`；新增 `proxy_url`（§21.4） |
+| PATCH `/accounts/:id` | `account:update` / `account:own:update` | 新增 `proxy_url`（§21.4）；自己级改 `proxy_id` 同样只能用可见的代理；受限设置校验（§21.3） |
+| DELETE `/accounts/:id` | `account:delete`🔐 / `account:own:delete` | |
+| POST `/accounts/:id/test`、POST `/accounts/:id/models/fetch` | `account:test` / `account:own:test` | |
+| POST `/account-types/:plugin_key/:type/models/fetch` | `account:create` / `account:own:create` | 可带 `proxy_url`：只解析、临时用它发请求，**不查找不创建**代理、不需要代理权限；与 `proxy_id` 同时给出 400 `fields[{proxy_url, conflict}]`；`proxy_id` 的可见性规则同 POST `/accounts` |
+| POST `/accounts/:id/credentials/reveal` | `account:credential:view`🔐 / `account:own:credential:view`🔐 | |
+| GET `/account-types`、GET `/account-types/:p/:t/form`、GET `/platforms` | `account:read` / `account:own:read` / `account:own:create` | form 按调用者权限改写（§21.3） |
+| GET `/proxies`、GET `/proxies/:id` | `proxy:read` / `proxy:own:read` | 自己级只返回自己的；新增筛选 `created_by=<id>`（自己级下忽略；非正整数 400 `fields[{field:"created_by", code:"invalid"}]`）、`mine=true`（`strconv.ParseBool`） |
+| POST `/proxies` | `proxy:manage` / `proxy:own:manage` | `created_by` = 调用者 |
+| PATCH/DELETE `/proxies/:id`、POST `/proxies/:id/test` | `proxy:manage` / `proxy:own:manage` | 范围外（含 `created_by` 为空的历史行）一律 404，**先判可见再判占用**；自己级下删除时 409 的 `account_count` 仍是引用它的全部账号数 |
+
+菜单（`/me/menus`、前端回退表、路由 meta）：账号/平台菜单 anyOf `account:read account:own:read account:own:create`；代理菜单 anyOf `proxy:read proxy:own:read proxy:own:manage`。
+
+审计（新公共包 `server/internal/audit`，`plugin/install/audit.go` 的 helper 上提到这里，原调用方改用；API：`audit.Audit(ctx, q store.Querier, actorID int64, action, targetType, targetID string, detail any) error`（actorID 0 = 系统，detail nil 写 `{}`，q 可为 pool 或 tx）、`audit.WithClientIP(ctx, ip)` / `audit.ClientIP(ctx)`、`audit.Context(c *gin.Context) context.Context`（= `WithClientIP(c.Request.Context(), c.ClientIP())`，handler 里用它替代 `c.Request.Context()` 即可）；IP 超过 64 字符截断）：账号 `account.create`（detail `{name, plugin_key, type}`）、`account.update`（`{fields:[...]}`：请求体里出现的字段名，不记值；`credentials` 只记 `credentials` 一个名，`proxy_url` 记 `proxy_url`）、`account.delete`（`{name}`）；原有的 `account.credentials.reveal`（detail `{}`）改用本包写入，因此也带 IP；代理 `proxy.create`（手工创建 detail `{auto:false, name, protocol, host, port}`，自动创建 `{auto:true, account_id}`）、`proxy.update`（`{fields:[...]}`，字段名同请求体，密码只记 `password`）、`proxy.delete`（`{name}`）。`target_type` 为 `account` / `proxy`，`target_id` 为十进制 id 字符串，`user_id` 为操作人，IP 取 `audit.WithClientIP`。账号、代理的写操作与审计行在同一事务。
+
+### 21.3 受限设置（base_url 只能用官方地址）
+
+manifest `accountTypes[].guardedSettings`（可选）：`[{field, allowed:[...]}]`。`field` 必须在 `settingsFields` 中；`allowed` 非空、每项为绝对 `http(s)` URL。三个内置账号类型插件声明 `[{field:"base_url", allowed:["https://api.anthropic.com"]}]`（openai `https://api.openai.com`，gemini `https://generativelanguage.googleapis.com`）；relay 不声明（它本来就是自定义地址），没声明的类型不受限。
+
+校验（`account/creds.go` `prepare`，在插件 `ValidateCredentials` 归一化**之后**；`prepare` 的每个调用方都会做，所以 POST/PATCH `/accounts` 和两个 `models/fetch` 接口里带的 `credentials` 都受限）：调用者没有 `account:settings:custom` 且类型声明了 guard 时，每个受限字段的值必须满足其一：为空/缺省/`null`（由插件归一化为默认）；等于 `allowed` 之一；PATCH（以及 `/accounts/:id/models/fetch`）时等于该账号原来的值（管理员建的自定义地址，供应商编辑其他字段不被卡死）。比较前两边都做：去首尾空白、去尾部 `/`（全部）、值能按绝对 URL 解析（有 scheme 和 host）时 scheme 与 host 小写，否则原样比；非字符串值（数字、对象）一律不满足。不满足返回 400 `invalid_argument`，`details.fields[{field:"credentials.base_url", code:"forbidden"}]`。
+
+`GET /account-types/:p/:t/form`：调用者没有 `account:settings:custom` 时，对每个受限字段把 `schema.properties.<field>.enum` 设为 `allowed`（`properties` 或该字段不存在时创建），`allowed` 只有一项时再加 `ui_schema.<field>["ui:readonly"] = true`（`ui_schema` 为 `null` 时创建对象，已有的其他 `ui:*` 键保留）；改写在解码后的副本上做，缓存的原件不变；前端 `url-presets` 组件遇到 `enum` 只允许从预设里选。iframe/native 表单模式不改写，只靠服务端校验。
+
+### 21.4 保存账号时自动关联代理
+
+POST/PATCH `/accounts` 新增 `proxy_url`（字符串，可选；去首尾空白后为空视同未给出）：与 `proxy_id` 同时给出（`proxy_id` 为 `null` 也算给出）返回 400 `fields[{field:"proxy_url", code:"conflict"}]`。
+
+解析（`core.ParseProxyURL(raw string) (core.ProxySpec, error)`，`ProxySpec{Protocol, Host, Port, Username, Password}`；解析器放在 core，账号模块不 import 代理模块；`proxy.ParseURL` 是它的别名）：去首尾空白；`url.Parse`；scheme 小写后必须是 `http` / `https` / `socks5` / `socks5h`（`socks5h` 记为 `socks5`）；host 取 `Hostname()` **小写**（IPv6 去方括号）、非空；port 必填 1–65535；用户名/密码取 `User.Username()`/`User.Password()`（已 URL 解码；`url.Parse` 按最后一个 `@` 切分，密码里未转义的 `@` 因此被接受）；opaque 形式（`http:host:1080`）、带 path（`/` 以外）、query（含空 `?`）、fragment 拒绝；结果再过 §15.4 的字段校验（host 不含 `/ ? # @` 与空白、≤255；username ≤255；password ≤1024）。任何错误返回 400 `invalid_argument`，`fields[{field:"proxy_url", code:"invalid", message:"invalid proxy URL: <原因>"}]`，**message 不回显原串**（可能含密码；`url.Error` 会引用整串，所以也不透传）。
+
+查找或创建（新端口 `core.ProxyResolver`，由 `proxy.Service` 实现，通过 `account.Deps` 注入；`tx` 用 `pgx.Tx`，与 `core.PermissionCatalog` 一致）：
+
+```go
+type ProxyResolver interface {
+    FindOrCreate(ctx context.Context, tx pgx.Tx, spec ProxySpec, ownerID int64, scope *int64) (id int64, created bool, err error)
+    AuditAutoCreate(ctx context.Context, tx pgx.Tx, proxyID, ownerID, accountID int64) error
+}
+```
+
+- 权限：调用者须有 `proxy:manage` 或 `proxy:own:manage`，否则 403 `permission_denied`（`details.permission = "proxy:own:manage"`）。由账号模块用 `Authorizer.Can` 判断（`FindOrCreate` 不查权限）；权限、解析都在调用插件校验凭证之前做，`account.Deps.Resolver` 为空时 `proxy_url` 返回 501 `unsupported`。
+- 可见范围 `scope`：有 `proxy:read` 为全部（`nil`），否则为自己创建的（`proxy:own:read` 或 `proxy:own:manage`，传 `&uid`）。由账号模块算好传入。同一套范围也用于校验 `proxy_id`（自己级账号 key 时）：没有任何代理 key 的调用者给出任何 `proxy_id` 都是 `proxy_id/not_found`；全部级账号 key（`account:create` / `account:update`）的调用者 `proxy_id` 只要存在即可。
+- 匹配键 = `protocol, host（小写）, port, username, password` 全等；`name`、`status` 不参与。SQL 按 `protocol = $1 AND lower(host) = $2 AND port = $3 AND username = $4` 加 `(password_enc IS NULL) = <输入密码是否为空>` 与范围条件预筛，`ORDER BY id`，候选逐条解密后 `subtle.ConstantTimeCompare` 比密码（解不开的行跳过）。**跳过 `status=disabled` 的代理**。命中多条取 id 最小的。
+- 未命中则新建：`name` = `<protocol>://<host>:<port>`（IPv6 host 带方括号；超长按 rune 截断到 100），`status=active`，`created_by` = `ownerID`。
+- 查找 + 创建与账号写入在**同一事务**，`FindOrCreate` 先 `SELECT pg_advisory_xact_lock(hashtext(protocol||'|'||host||'|'||port||'|'||username))`（不含密码）防并发重复。
+- 审计与广播拆到 `AuditAutoCreate`：`FindOrCreate` **不写审计、不广播**——POST `/accounts` 时代理必须先于账号行存在（外键），而审计 detail 要 `account_id`，所以由账号模块在账号行写入、拿到 id 之后、**同一事务内**对 `created == true` 的结果调 `AuditAutoCreate(ctx, tx, proxyID, uid, accountID)`：它写 `proxy.create {auto:true, account_id}`（IP 取 `audit.WithClientIP`，所以 ctx 用 `audit.Context(c)`）并广播 `config:changed {"type":"proxy","id"}`（广播可能先于提交：新代理不可能已被任何节点缓存，监听者只是丢弃空缓存，无害）。`created == false` 不调。
+- spec 不合法（未经 `ParseURL`）时 `FindOrCreate` / `HTTPClientFor` 返回 `invalid_argument`，不碰数据库。
+
+响应：账号对象里 `proxy_id` 为关联结果，创建/修改响应另带 `proxy_created: true|false`（仅这两个响应，没给 `proxy_url` 时为 `false`；列表、详情没有这个键）。
+
+`POST /account-types/:p/:t/models/fetch` 的 `proxy_url` 只做解析，用 `core.ProxyDirectory.HTTPClientFor(ctx context.Context, spec core.ProxySpec) (*http.Client, error)` 临时建客户端（不缓存、不落库、无整体超时，调用方用 ctx 限时并在用完后 `CloseIdleConnections()`）。`HTTPClientFor` 是 `ProxyDirectory` 接口的新方法，所有实现该接口的测试桩都要补上。`account.Deps` 新增 `Authorizer core.Authorizer`（为空时所有额外权限问题都按"无"处理）与 `Resolver core.ProxyResolver`，`app.go` 用 authz 服务与代理服务组装。
+
+### 21.5 控制台
+
+- 账号页、代理页：列表加"创建人"列（`created_by_email`，全部级才显示）与"只看我的"开关；行操作按 `OwnerScope` 语义判定（全部级或 `created_by === me.id`），封装成 `useOwnership()` 供账号页、代理页、分组页共用；`GroupsView` 等处的 `account:read` 判定改为 anyOf。
+- 账号表单代理字段二选一：**选择已有**（`ProxyPicker`，列表来自 `/proxies`，后端已按范围过滤）| **粘贴代理串**（`proxy_url`，placeholder `socks5://user:pass@host:port`，前端只做形状提示）；保存后刷新代理缓存；`proxy_url` 的字段错误显示在该输入下。
+- 代理页表单加"粘贴代理串自动填充"（前端解析填到各字段，不依赖后端）。
+- `url-presets` 组件：schema 有 `enum` 时只能选预设；只读时显示"由管理员设置"提示。
+- 角色页无需改动（新 key 由 `/permissions` 带 label 下发）。
+
+### 21.6 测试
+
+- 单元/DB：`authz`（新 key、标签、敏感判定、菜单 anyOf：`TestOwnershipCatalog`）、`httpapi`（`PermAny` 命中全部/命中自己/都不命中/敏感 step-up、`Perm` 也写 `Granted`：`router_test.go`，无需 DB）、`audit`（fake Querier，无需 DB）、`proxy`（`ParseURL` 表驱动含 socks5h/IPv6/path 拒绝/错误不回显密码、`HTTPClientFor`：无需 DB；`TestOwnership` own 范围的列表/详情/改/删/测试越权 404、`created_by`/`created_by_email`、`mine`/`created_by` 筛选、审计行；`TestFindOrCreate` 命中/新建/密码不同新建/无密码/跳过禁用/own 范围看不到别人的/host 大小写/`AuditAutoCreate`/并发只建一条：需要 DB）、`account`（`ownership_test.go`；需要 DB：`TestOwnership` own 范围的列表/详情/改/删/测试/models/fetch/reveal 越权 404、只读角色 403、`mine`/`created_by` 筛选、`created_by_email`（含软删除的创建人）、审计行；`TestProxyURL` 命中/新建/`proxy_created`、own 范围各建各的、全部范围取最小 id、PATCH 换址、conflict、空串视同未给、invalid 不回显密码、无代理权限 403、自己级用别人的 `proxy_id` not_found、`models/fetch` 经 `proxy_url` 不建代理；`TestGuardedSettings` forbidden/官方与等价形式/空值/原值放行/`account:settings:custom`/relay 不限/form 改写 enum+readonly 且管理员不改写、缓存原件不变。无需 DB：`TestGuardNorm`、`TestCheckGuarded`、`TestGuardForm`、`TestInputProxyURL`）。
+- e2e AC23：建供应商角色与两个供应商用户、只读角色；供应商 A 建账号（带 `proxy_url`，第二次同串复用同一 `proxy_id`，`proxy_created=false`）、看不到 B 的账号（列表不含、详情 404、PATCH 404）、改 base_url 为非官方 400 forbidden、官方地址通过；只读用户列表能看到全部、PATCH 403、reveal 403；管理员用 `mine=true` 与 `created_by` 筛选；审计日志有 `account.create`/`proxy.create{auto:true}`。
