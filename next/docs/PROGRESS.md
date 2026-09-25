@@ -421,3 +421,25 @@ go test -count=1 -timeout 50m -v ./...
 **sup2api 实际验证**：moderation 0.1.0 自动安装启用，菜单出现"提示词审核"。上游用 codingplus 的 OpenAI 兼容接口 + claude-sonnet-5：在线测试"写快速排序"→ pass、"合成冰毒步骤"→ block [illegal] high、"小说反派独白"→ pass（能区分虚构），每次一轮工具调用、约 2–3 秒、1.6k prompt tokens。网关拦截模式下违规请求 403 `moderation_blocked`，usage 记为 `blocked_by_hook`、免费，note 带分类和理由；同样文本第二次命中缓存、0ms。先前把 Base URL 指向网关自身 openai.chat 时因分组没有 OpenAI 账号得到 503，审核记为 error 并按 `on_error=allow` 放行，符合预期。验证后模式已设回 off（上游配置保留）。
 
 **遗留**：插件每实例 64 个并发调用上限由钩子、路由、任务共享，enforce 模式高并发时后来的请求会排队；`inbound_headers` 钩子仍拿不到；native 页面只做了构建和接口联调，没有截图目视。
+
+---
+
+## 17. 账号与代理的所有权授权、受限 base_url、保存账号自动关联代理（2026-09-25，用户要求）
+
+**需求**：供应商角色只维护自己创建的账号和代理、不能改 base_url（只能用官方地址）；只读角色能看全部账号但不能改、看不到密钥；保存账号时直接填代理串，后端自动解析并复用同配置的代理或新建再关联。
+
+**决定**（CONTRACTS §21；用户裁定）：现有 `account:*`/`proxy:*` key 不改名、语义为"全部"；新增自己级 key **拆开**（`account:own:read/create/update/delete/test/credential:view`🔐、`proxy:own:read/manage`）与 `account:settings:custom`；`own:delete` 不要求 step-up；relay 等未声明 guard 的类型供应商照常可用；历史 `created_by=NULL` 的数据只有全部级可见；审计一起做；只读角色可见 `settings.base_url` 与代理 `username`。
+
+**核心**（`c03bbdb2b`）：`Router.PermAny(method, path, handler, keys...)`，命中 key 放 ctx（`core.Granted`），任一命中 key 敏感即 step-up；`core.OwnerScope(ctx, allKey) *int64`（nil=全部）；范围条件落 SQL、越权 404；审计公共包 `internal/audit`（从 plugin/install 上提）；迁移 `0010_ownership.sql`（`proxies.created_by` + 索引）；代理模块 own 范围、`created_by`/`created_by_email`、`mine`/`created_by` 筛选、审计；`core.ParseProxyURL`（解析器放 core，账号模块不 import 代理模块）、`core.ProxyResolver.FindOrCreate`（匹配 protocol/host/port/username/password，密码解密后常量时间比较，跳过 disabled，取最小 id，事务内 advisory lock）+ `AuditAutoCreate`、`ProxyDirectory.HTTPClientFor`（临时客户端）。
+
+**manifest**（`02dcb92b6`）：`accountTypes[].guardedSettings [{field, allowed[]}]`，pkg 校验；anthropic/openai/gemini 声明 base_url 官方地址并升到 0.1.5；`GET /account-types` 返回 `guarded_settings`。
+
+**账号模块**（`5a17af470`）：路由 PermAny；own 范围贯穿列表/详情/改/删/测试/拉模型/reveal；`proxy_url`（与 `proxy_id` 互斥，需 `proxy:manage|proxy:own:manage`，在调用者可见的代理范围内匹配，与账号写入同事务）、响应 `proxy_created`；受限设置在插件归一化后校验（空/官方/原值放行，等价形式规范化），无权限 400 `credentials.base_url/forbidden`；form 按权限改写 `enum` + `ui:readonly`；`account.create/update/delete` 审计。
+
+**前端**（`4cf01e05f`）：`useOwnership()` 行级判定；账号/代理页创建人列、只看我的、创建人 ID 筛选；账号表单代理"选择已有 | 粘贴代理串"；代理页粘贴自动填充；`url-presets` 有 enum 时只能选；菜单/路由 anyOf；mock 加 vendor/readonly 身份。
+
+**测试**：server 全部测试（含库）在临时 CI 容器通过；新增 e2e AC23（供应商建账号带 proxy_url 复用/新建、越权 404、base_url forbidden/官方/原值、只读 403、管理员筛选、own:delete 免 step-up、审计行）；全新 e2e 栈跑完整 e2e 全部通过（AC12 跳过）。用完清理 e2e 栈、测试库、CI 缓存卷。
+
+**sup2api 实际验证**（`2d0813db9` 部署）：9 个新权限进目录；插件 0.1.5；临时供应商用户：菜单只有账号/代理/平台，form 的 base_url 变 enum+readonly（管理员不变），`proxy_url` 首次 `proxy_created=true`、`SOCKS5H://…/` 等价串复用同一代理，改 base_url 为非官方 400 forbidden、官方地址通过，非法串错误不含密码，对管理员账号 GET/PATCH 404，删自己账号 204 无需 step-up；管理员 `mine`/`created_by` 筛选正确。验证数据已清理。
+
+**遗留**：native 页面未目视；分组/代理的 `account_count` 仍按全部统计（按设计）；供应商能否使用某账号类型未做限制。
