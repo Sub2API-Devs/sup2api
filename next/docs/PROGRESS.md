@@ -375,3 +375,27 @@ go test -count=1 -timeout 50m -v ./...
 **遗留**：
 - "从上游拉取模型列表"需要新增插件 RPC（本地没有 buf/protoc），本轮没做；模型列表的候选来自已配置价格的模型。
 - 分组白名单、粘性规则和钩子的 `match.models` 仍支持通配符，用户没有要求改。
+
+---
+
+## 15. 从上游拉取模型列表（2026-09-25，用户要求；同步上游价格暂不做）
+
+**决定**（CONTRACTS §19）：插件新增一个可选的 gRPC 方法 `BuildModelsRequest`，只负责构造"列出模型"的请求；核心经账号的代理发出请求并提取模型 ID。控制台模型列表区新增"从上游获取"按钮。
+
+**改动**（主控，`90c89a0f7`、`5df03a25c`）：
+- **proto / SDK**：`PlatformService.BuildModelsRequest`，返回 `{method, url, headers, body_json, ids_path, strip_prefix}`；本地用 buf v1.57 + protoc-gen-go v1.36.12 + protoc-gen-go-grpc v1.6.2 重新生成（装在 `go env GOBIN`）。SDK 新增可选接口 `pluginsdk.ModelLister`，没实现的插件由 SDK 回答 `UNIMPLEMENTED`；核心把它转成 501 `unsupported`。
+- **内置插件**：anthropic、relay 用 `GET /v1/models?limit=1000`，openai 用 `GET /v1/models`，gemini 用 `GET /v1beta/models?pageSize=1000`（取 `models.#.name`，去掉 `models/` 前缀）。anthropic、openai、gemini 升到 0.1.4，relay 升到 0.1.2。
+- **核心**：
+  - 新增接口 `POST /account-types/:plugin_key/:type/models/fetch`（新建时用表单里的凭证，先走 Schema 和插件校验）和 `POST /accounts/:id/models/fetch`（可传凭证覆盖，`******` 保留原值）。
+  - 结果去重、排序，非法 ID 计入 `skipped`，最多 5000 条；上游非 2xx 返回 503 `unavailable`，`details.status` 是上游状态码；有内网地址保护，30 秒超时。
+  - 新增错误码 `unsupported`（501）。
+- **控制台**：模型区的"从上游获取"会用当前表单的凭证拉取，弹出勾选框（默认全选，已在列表里的会标出来），确认后合并进模型列表；mock 同步。
+- **mock-upstream**：新增 `GET /v1/models`、`GET /v1beta/models`；新增 e2e AC21。
+- **e2e 修正**：AC06 在插件禁用期间账号本来就算 orphaned（§15.9），改为重新启用后再检查；AC07 粘性默认规则现在是内置平台的 `builtin`（§15.5）。
+
+**测试**：
+- server 全部测试（含数据库）在临时容器中通过；sdk、五个插件、tools 通过；web typecheck/build 通过。
+- 在临时 e2e 栈（两节点 + mock）上跑完整 e2e：全部通过（AC12 需 `E2E_LONG=1`，按惯例跳过）。
+- 跑完已清理 e2e 栈、测试库、CI 缓存卷。
+
+**sup2api 实际验证**：三个内置插件自动升到 0.1.4。codingplus 账号拉到上游的 11 个模型（claude-fable-5、claude-fable-5-1、claude-opus-5-5、claude-sonnet-5 等）；openai 类型用错误 Key 拉取返回 503，`details.status=401`，message 带上游的错误信息。
