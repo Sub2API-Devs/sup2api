@@ -399,3 +399,25 @@ go test -count=1 -timeout 50m -v ./...
 - 跑完已清理 e2e 栈、测试库、CI 缓存卷。
 
 **sup2api 实际验证**：三个内置插件自动升到 0.1.4。codingplus 账号拉到上游的 11 个模型（claude-fable-5、claude-fable-5-1、claude-opus-5-5、claude-sonnet-5 等）；openai 类型用错误 Key 拉取返回 503，`details.status=401`，message 带上游的错误信息。
+
+---
+
+## 16. 提示词审核插件 moderation（2026-09-25，用户要求）
+
+**决定**（CONTRACTS §20）：做成内置插件 `moderation`。网关钩子取请求里最新一条用户消息，交给管理员配置的 OpenAI 兼容 LLM；LLM 拿到工具 `submit_verdict`，必须调用它写回结论（pass / flag / block、分类、严重度、理由）。没调用或参数不合法时，插件把错误作为 tool 消息或追加提示回给 LLM 再来一轮（小型 agent 循环，最多 `max_turns` 轮）；不支持工具的模型退回解析 JSON 文本。参考旧 sub2api 的"内容审计 / 提示词审计"：观察（异步记录）和拦截（同步拒绝）两种模式、违规计数自动封禁、审核记录页面。
+
+**核心改动**（`ba4dc35b9`）：钩子超时上限 2s → 30s（gateway `maxHookTimeout`、`grpcruntime.TimeoutHookMax`、包校验 `MaxHookTimeout`；`default_hook_timeout_ms` 仍限 50–2000）；钩子延迟直方图末尾加 10s/20s/30s 三档；manifest `needs` 支持 gjson 查询（如 `messages|@reverse|#(role=="user")`，只取最后一条用户消息），查询字段只读、不能打补丁。mock-upstream 对带 `submit_verdict` 工具的 chat completions 模拟审核模型（MOD-BLOCK / MOD-FLAG / MOD-NOTOOL / MOD-BADARGS 标记）。
+
+**插件**（`0bad81a0a`、`aeb21d000`，`plugins/moderation`，0.1.0）：
+- 设置（Schema 表单）：模式、Base URL、API Key（secret）、模型、系统提示词（空用内置，`{{categories}}` 展开分类）、自定义分类、tool_choice、轮数、temperature、max_tokens、单次超时、失败放行/拒绝、并发、观察队列、文本上限（头 2/3 + 尾 1/3 截断）、最短长度、抽样率、分组/模型/豁免用户过滤、结论缓存 TTL、拒绝状态码与文案、记录通过项、保存文本、保留天数、自动封禁阈值/窗口/时长。
+- 钩子流程：off/未配置直接放行（0 分配）→ 封禁用户 403 `moderation_user_blocked` → 分组/模型过滤 → 取文本（anthropic messages、openai chat、responses、gemini contents 四种形态，剥离 `<system-reminder>`）→ 自身标记（HMAC，base_url 指向本网关也不会递归审核）→ 缓存（内存 LRU + KV 跨节点，键含策略版本）→ observe 入队放行 / enforce 同步审核（singleflight、信号量），block 则拒绝 `moderation_blocked`。结论写进 usage 的 hook note。
+- 记录批量写库；block 累计违规，达阈值自动封禁并广播，各节点刷新封禁表；解封后计数重新开始；cleanup 任务清理过期记录和封禁。
+- 接口：`/overview`、`/events`（筛选 + 分页 + 详情/删除）、`/blocks`（列表、手动封禁、解封）、`/test`（在线测试，返回结论和完整 agent 对话）、`/defaults`。权限 `moderation:read` / `moderation:manage`。
+- native 控制台页"提示词审核"：概览（统计卡、趋势图、分类/违规用户排行、本节点运行状态）、审核记录、封禁用户、在线测试；设置按钮跳插件详情的设置页。
+- 打包：`build-demo.sh` 增加 moderation 包，`build-go.sh` 的 `BUILTIN_PLUGINS` 默认含 moderation。
+
+**测试**：plugins/moderation 单元测试（提取、截断、标记、agent 循环各分支、缓存、钩子各模式、路由）和数据库测试在临时 CI 容器中通过；server 全部测试通过；新增 e2e AC22（拦截/缓存/agent 追问/观察/自动封禁与解封/在线测试/经网关自审自身识别）；在全新 e2e 栈上跑完整 e2e 全部通过（AC12 按惯例跳过）。e2e 的设置助手改为等每个节点的 `runtime.settings_hash` 更新，避免节点还在用旧设置。`TestGatewayFailoverAndCooldown` 出现过一次超时类偶发失败（2 秒冷却窗口内的时序），单独重跑两次都通过，与本次改动无关（钩子 off 时延迟 0ms）。
+
+**sup2api 实际验证**：moderation 0.1.0 自动安装启用，菜单出现"提示词审核"。上游用 codingplus 的 OpenAI 兼容接口 + claude-sonnet-5：在线测试"写快速排序"→ pass、"合成冰毒步骤"→ block [illegal] high、"小说反派独白"→ pass（能区分虚构），每次一轮工具调用、约 2–3 秒、1.6k prompt tokens。网关拦截模式下违规请求 403 `moderation_blocked`，usage 记为 `blocked_by_hook`、免费，note 带分类和理由；同样文本第二次命中缓存、0ms。先前把 Base URL 指向网关自身 openai.chat 时因分组没有 OpenAI 账号得到 503，审核记为 error 并按 `on_error=allow` 放行，符合预期。验证后模式已设回 off（上游配置保留）。
+
+**遗留**：插件每实例 64 个并发调用上限由钩子、路由、任务共享，enforce 模式高并发时后来的请求会排队；`inbound_headers` 钩子仍拿不到；native 页面只做了构建和接口联调，没有截图目视。
