@@ -152,13 +152,15 @@ function normalizeSection(s: MenuSection): NavSection {
   let key = ''
   let label: NavSection['label']
   if (typeof raw === 'string') {
+    // Core sections are labelled by the client's i18n; a plugin's own
+    // section ("<plugin>:<id>", CONTRACTS §22) carries its label.
     if (SECTION_KEYS.includes(raw)) key = raw
-    else label = raw
+    else label = s.label || raw
   } else if (raw && typeof raw === 'object') {
     label = raw
   }
   return {
-    key: key || (typeof label === 'string' ? label : JSON.stringify(label)),
+    key: key || (typeof raw === 'string' ? raw : JSON.stringify(label)),
     label: key ? undefined : label,
     items: (s.items || []).map((i) => ({
       id: i.id,
