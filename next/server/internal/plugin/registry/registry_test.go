@@ -2,6 +2,7 @@ package registry_test
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -70,6 +71,28 @@ func load(t *testing.T, m *manifest.Manifest) *registry.Package {
 	}
 	t.Cleanup(func() { _ = p.Close() })
 	return p
+}
+
+// Hook needs that are gjson queries survive the package and grant JSON
+// unchanged and are granted when the approved scope lists them verbatim
+// (CONTRACTS §20.1).
+func TestGrantedFieldsGjsonQueries(t *testing.T) {
+	q1, q2 := `messages|@reverse|#(role=="user")`, `[input]|#(%"*")`
+	a := registrytest.Manifest("alpha", "1.0.0")
+	a.Hooks[0].Needs = []string{"model", q1, q2}
+	pa := load(t, a)
+	scope, err := json.Marshal(map[string]any{"points": []string{"gateway.request"}, "fields": []string{"model", q1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := registry.New().Publish([]registry.Extension{ext{pkg: pa, grants: registry.Grants{"gateway.hook": scope}}})
+	hooks := g.Hooks("gateway.request")
+	if len(hooks) != 1 {
+		t.Fatalf("hooks = %+v", hooks)
+	}
+	if f := hooks[0].GrantedFields; len(f) != 2 || f[0] != "model" || f[1] != q1 {
+		t.Fatalf("granted fields = %q", f)
+	}
 }
 
 func TestGenerationBuildAndSwitch(t *testing.T) {

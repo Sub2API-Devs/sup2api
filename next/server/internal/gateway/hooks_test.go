@@ -141,20 +141,123 @@ func TestHookTimeoutOpenAndClosed(t *testing.T) {
 			t.Fatalf("record %+v", rec)
 		}
 	})
-	t.Run("timeout capped at 2s", func(t *testing.T) {
+	// The deadline handed to the hook: the manifest timeoutMs up to the 30 s
+	// ceiling (CONTRACTS §20.1). The hooks return at once, nothing sleeps.
+	deadlineFor := func(t *testing.T, timeoutMs int) time.Duration {
 		e := newEnv(t)
 		var deadline time.Duration
-		e.addHook(guardHook(60000, "open"), nil, &fakeHook{fn: func(ctx context.Context, _ *pluginv1.GatewayRequestHookRequest) (*pluginv1.GatewayRequestHookResponse, error) {
+		e.addHook(guardHook(timeoutMs, "open"), nil, &fakeHook{fn: func(ctx context.Context, _ *pluginv1.GatewayRequestHookRequest) (*pluginv1.GatewayRequestHookResponse, error) {
 			d, _ := ctx.Deadline()
 			deadline = time.Until(d)
 			return &pluginv1.GatewayRequestHookResponse{}, nil
 		}})
 		e.messages(body(testModel, false))
 		e.record()
-		if deadline > maxHookTimeout || deadline < maxHookTimeout-time.Second {
-			t.Fatalf("hook deadline %s", deadline)
+		return deadline
+	}
+	t.Run("timeout capped at 30s", func(t *testing.T) {
+		if maxHookTimeout != 30*time.Second {
+			t.Fatalf("maxHookTimeout %s", maxHookTimeout)
+		}
+		if d := deadlineFor(t, 60000); d > maxHookTimeout || d < maxHookTimeout-time.Second {
+			t.Fatalf("hook deadline %s", d)
 		}
 	})
+	t.Run("manifest timeout above the old 2s ceiling", func(t *testing.T) {
+		if d := deadlineFor(t, 25000); d > 25*time.Second || d < 24*time.Second {
+			t.Fatalf("hook deadline %s", d)
+		}
+	})
+	t.Run("admin default applies without timeoutMs", func(t *testing.T) {
+		if d := deadlineFor(t, 0); d > 300*time.Millisecond || d <= 0 {
+			t.Fatalf("hook deadline %s", d)
+		}
+	})
+}
+
+// TestHookGjsonQueryNeeds: needs may be gjson queries (CONTRACTS §20.1);
+// the hook gets the raw JSON of the query result, keyed by the query text.
+func TestHookGjsonQueryNeeds(t *testing.T) {
+	const (
+		lastUserMsgs  = `messages|@reverse|#(role=="user")`
+		lastUserInput = `input|@reverse|#(role=="user")`
+		stringInput   = `[input]|#(%"*")`
+		lastUserParts = `contents|@reverse|#(role=="user")`
+	)
+	needs := []string{"model", lastUserMsgs, lastUserInput, stringInput, lastUserParts}
+
+	e := newEnv(t)
+	h := &fakeHook{}
+	hk := guardHook(300, "open")
+	hk.ID, hk.Needs = "moderation", needs
+	e.addHook(hk, needs, h)
+	b := body(testModel, false)
+	b["messages"] = []any{
+		map[string]any{"role": "user", "content": "first question"},
+		map[string]any{"role": "assistant", "content": "an answer"},
+		map[string]any{"role": "user", "content": []any{
+			map[string]any{"type": "tool_result", "tool_use_id": "t1", "content": "tool output"},
+			map[string]any{"type": "text", "text": "latest question"},
+		}},
+		map[string]any{"role": "assistant", "content": "prefill"},
+	}
+	if r := e.messages(b); r.status != 200 {
+		t.Fatalf("status %d %s", r.status, r.body)
+	}
+	e.record()
+	if h.count() != 1 {
+		t.Fatalf("hook calls %d", h.count())
+	}
+	f := h.calls[0].GetFields()
+	// Only fields present in the body are sent.
+	if len(f) != 2 || f["model"] != `"`+testModel+`"` {
+		t.Fatalf("fields %v", f)
+	}
+	raw, ok := f[lastUserMsgs]
+	if !ok || !gjson.Valid(raw) {
+		t.Fatalf("last user message %q", raw)
+	}
+	msg := gjson.Parse(raw)
+	if msg.Get("role").String() != "user" || msg.Get(`content.#(type=="text").text`).String() != "latest question" ||
+		strings.Contains(raw, "first question") || strings.Contains(raw, "prefill") {
+		t.Fatalf("last user message %s", raw)
+	}
+
+	// The other query shapes, straight through hookFields.
+	hb := e.gen.hooks[0]
+	for _, tc := range []struct {
+		body string
+		want map[string]string
+	}{
+		{`{"model":"m","input":"just a string"}`, map[string]string{"model": `"m"`, stringInput: `"just a string"`}},
+		{`{"model":"m","input":[{"role":"user","content":"a"},{"role":"assistant","content":"b"},{"role":"user","content":[{"type":"input_text","text":"c"}]}]}`,
+			map[string]string{"model": `"m"`, lastUserInput: `{"role":"user","content":[{"type":"input_text","text":"c"}]}`}},
+		{`{"contents":[{"role":"user","parts":[{"text":"x"}]},{"role":"model","parts":[{"text":"y"}]},{"role":"user","parts":[{"text":"z"}]}]}`,
+			map[string]string{lastUserParts: `{"role":"user","parts":[{"text":"z"}]}`}},
+		{`{"model":"m"}`, map[string]string{"model": `"m"`}},
+	} {
+		c := &call{body: []byte(tc.body)}
+		got := c.hookFields(hb)
+		if len(got) != len(tc.want) {
+			t.Fatalf("%s: fields %v", tc.body, got)
+		}
+		for k, v := range tc.want {
+			if got[k] != v {
+				t.Fatalf("%s: field %s = %q, want %q", tc.body, k, got[k], v)
+			}
+		}
+	}
+
+	// Query fields are read-only: no patch may write through them.
+	for _, p := range []string{lastUserMsgs, lastUserMsgs + ".content", stringInput} {
+		patch := []*pluginv1.BodyPatch{{Op: pluginv1.BodyPatch_OP_SET, Path: p, ValueJson: `"x"`}}
+		if _, err := applyHookPatches([]byte(`{"messages":[{"role":"user","content":"a"}],"input":"b"}`), patch, needs); err == nil {
+			t.Fatalf("patch through query field %q accepted", p)
+		}
+	}
+	if isQueryField("metadata.user_id") || isQueryField("model") || !isQueryField(lastUserParts) {
+		t.Fatal("isQueryField")
+	}
 }
 
 func TestHookBreaker(t *testing.T) {

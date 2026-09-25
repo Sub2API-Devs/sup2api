@@ -26,7 +26,7 @@ const (
 	TimeoutPlatformHot     = 2 * time.Second  // BuildUpstreamRequest, ClassifyError
 	TimeoutPlatformConsole = 10 * time.Second // ValidateCredentials, BuildTestRequest
 	TimeoutHookDefault     = 300 * time.Millisecond
-	TimeoutHookMax         = 2 * time.Second
+	TimeoutHookMax         = 30 * time.Second // CONTRACTS §20.1
 	TimeoutHTTP            = 30 * time.Second
 	TimeoutEvents          = 30 * time.Second
 	TimeoutJobDefault      = 60 * time.Second

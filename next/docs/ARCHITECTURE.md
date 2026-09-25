@@ -742,8 +742,8 @@ sequenceDiagram
 | 请求完成后 | 不做同步钩子，改由事件 `usage.recorded` 异步通知（见第 8 章） |
 | 匹配 | 按协议、模型（通配符）、分组过滤，只调用匹配的插件 |
 | 顺序 | 按 `order` 依次执行；任一插件拒绝即停止；修改指令按顺序叠加 |
-| 数据 | 只传 `needs` 声明且已获批准的字段；`prompt_text` 由核心从 messages 中提取纯文本，最多 `maxPromptBytes` |
-| 超时与失败 | 每个钩子单独超时（默认 300ms，上限 2 秒）；超时或出错按 `failure` 处理：`open` 放行、`closed` 拒绝（返回 503） |
+| 数据 | 只传 `needs` 声明且已获批准的字段；`needs` 可以是 gjson 路径或查询（如 `messages\|@reverse\|#(role=="user")` 取最后一条用户消息），核心原样用 gjson 取值、传原始 JSON，查询字段只读、不能用于修改指令；`prompt_text` 由核心从 messages 中提取纯文本，最多 `maxPromptBytes` |
+| 超时与失败 | 每个钩子单独超时（manifest `timeoutMs`，0–30000；未声明时用设置 `default_hook_timeout_ms`，默认 300ms、最大 2 秒；任何情况下上限 30 秒）；超时或出错按 `failure` 处理：`open` 放行、`closed` 拒绝（返回 503） |
 | 熔断 | 同一钩子连续失败 10 次后熔断 30 秒，熔断期间直接按 `failure` 处理，不调用插件 |
 | 观测 | 每个钩子的调用次数、拒绝次数、超时次数、耗时，显示在插件详情页 |
 

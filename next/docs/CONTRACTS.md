@@ -354,7 +354,7 @@ Anthropic 的 `cache_creation_input_tokens` 是总量（含 1 小时缓存）。
 
 ### 11.7 插件调用超时（C2）与任务、事件（H）
 
-- 超时：控制台路径的平台调用（ValidateCredentials、BuildTestRequest）每次插件调用 10 秒，账号测试接口整体（含向上游发测试请求）30 秒；请求热路径 2 秒，调度扩展点 200 毫秒，钩子按 manifest 且最多 2 秒
+- 超时：控制台路径的平台调用（ValidateCredentials、BuildTestRequest）每次插件调用 10 秒，账号测试接口整体（含向上游发测试请求）30 秒；请求热路径 2 秒，调度扩展点 200 毫秒，钩子按 manifest 且最多 30 秒（§20.1；原为 2 秒），未声明 `timeoutMs` 的钩子用 `default_hook_timeout_ms`（50–2000）
 - 数据迁移 `MigrateData` 在协调者被接管后可能重复执行，插件必须保证幂等
 - 任务 cron 默认按 UTC 计算（可用 `CRON_TZ=` 前缀指定时区）；`@every` 的触发时间对齐到周期整数倍，各节点一致；每个触发时间点全集群只执行一次
 - 事件投递至少一次：`OnEvents` 返回的确认 id 没有超过游标时按失败处理（退避，连续 10 次失败的批次进入死信）；新订阅从当前最大事件开始，不回放历史

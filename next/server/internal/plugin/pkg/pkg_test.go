@@ -128,6 +128,57 @@ func TestValidateBroadcastOK(t *testing.T) {
 	}
 }
 
+// Hook needs may be gjson queries (CONTRACTS §20.1): an identical entry in
+// gateway.hook scope.fields covers them; a different query does not. The
+// hook timeout may go up to 30 s.
+func TestValidateGjsonQueryNeeds(t *testing.T) {
+	queries := []string{`messages|@reverse|#(role=="user")`, `input|@reverse|#(role=="user")`, `[input]|#(%"*")`, `contents|@reverse|#(role=="user")`}
+	build := func(needs, fields []string, timeoutMs int) (*manifest.Manifest, map[string][]byte) {
+		m := pkgtest.Guard("guard", "0.1.0", "sub2api")
+		m.Hooks[0].Needs = needs
+		m.Hooks[0].TimeoutMs = timeoutMs
+		for i, hp := range m.HostPermissions {
+			if hp.ID == "gateway.hook" {
+				fa := make([]any, len(fields))
+				for j, f := range fields {
+					fa[j] = f
+				}
+				m.HostPermissions[i].Scope = map[string]any{"points": []any{"gateway.request"}, "fields": fa}
+			}
+		}
+		// Round-trip through manifest.json like a real package.
+		files := pkgtest.Files(m)
+		var back manifest.Manifest
+		if err := json.Unmarshal(files["manifest.json"], &back); err != nil {
+			t.Fatal(err)
+		}
+		return &back, files
+	}
+	needs := append([]string{"model"}, queries...)
+	m, files := build(needs, needs, 30000)
+	if got := m.Hooks[0].Needs; len(got) != len(needs) || got[1] != queries[0] || got[3] != queries[2] {
+		t.Fatalf("needs after round trip %q", got)
+	}
+	if err := Validate(m, files, opts()); err != nil {
+		t.Fatalf("validate: %v %v", err, fieldCodes(err))
+	}
+	m, files = build(needs, []string{"model", `messages|@reverse|#(role=="assistant")`}, 300)
+	if c := fieldCodes(Validate(m, files, opts())); c["hooks[0].needs"] != "exceeds_scope" {
+		t.Fatalf("codes %v", c)
+	}
+	m, files = build(needs, needs, 30001)
+	if c := fieldCodes(Validate(m, files, opts())); c["hooks[0].timeoutMs"] != "out_of_range" {
+		t.Fatalf("codes %v", c)
+	}
+	// Consent: approving the identical (or a narrower) field list is within the request.
+	req := NormalizeScope(map[string]any{"fields": needs})
+	if !ScopeWithin(NormalizeScope(map[string]any{"fields": needs}), req) ||
+		!ScopeWithin(NormalizeScope(map[string]any{"fields": []string{"model", queries[0]}}), req) ||
+		ScopeWithin(NormalizeScope(map[string]any{"fields": []string{"messages"}}), req) {
+		t.Fatal("ScopeWithin with query fields")
+	}
+}
+
 func TestValidateConsistency(t *testing.T) {
 	type mut func(m *manifest.Manifest, files map[string][]byte)
 	dropPerm := func(id string) mut {

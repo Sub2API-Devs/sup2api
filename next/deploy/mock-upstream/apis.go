@@ -163,6 +163,10 @@ func (s *server) chatCompletions(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("x-request-id", fmt.Sprintf("req_mock_%d", id))
 	w.Header().Set("x-mock-request-id", strconv.FormatInt(id, 10))
 	if !req.Stream {
+		if rep, ok := moderationFor(body); ok {
+			writeModeration(w, id, chatID, created, req.Model, rep, b.usage)
+			return
+		}
 		writeJSON(w, 200, map[string]any{
 			"id": chatID, "object": "chat.completion", "created": created, "model": req.Model,
 			"choices": []any{map[string]any{

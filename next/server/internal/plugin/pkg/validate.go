@@ -45,7 +45,7 @@ const (
 	MaxCPU          = 16.0
 	MaxThreads      = 4096
 	MaxOpenFiles    = 65536
-	MaxHookTimeout  = 10000
+	MaxHookTimeout  = 30000 // ms; CONTRACTS §20.1
 	MaxPromptBytes  = 1 << 20
 	RequiredArchAMD = "linux-amd64"
 	RequiredArchARM = "linux-arm64"

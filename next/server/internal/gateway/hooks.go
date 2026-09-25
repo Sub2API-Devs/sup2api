@@ -43,8 +43,10 @@ const (
 )
 
 // latencyBuckets are the upper bounds (ms) of the hook latency histogram
-// used for the approximate P99; the last implicit bucket is +Inf.
-var latencyBuckets = []int{1, 2, 5, 10, 20, 50, 100, 200, 300, 500, 750, 1000, 1500, 2000, 3000, 5000}
+// used for the approximate P99; the last implicit bucket is +Inf. Buckets
+// may only be appended (the Redis hash stores them by index); the upper ones
+// cover hooks with long timeouts (maxHookTimeout, CONTRACTS §20.1).
+var latencyBuckets = []int{1, 2, 5, 10, 20, 50, 100, 200, 300, 500, 750, 1000, 1500, 2000, 3000, 5000, 10000, 20000, 30000}
 
 type hookKey struct{ plugin, hook string }
 
@@ -504,7 +506,7 @@ func applyHookPatches(body []byte, patches []*pluginv1.BodyPatch, granted []stri
 	}
 	allowed := make([]string, 0, len(granted))
 	for _, f := range granted {
-		if f != fieldPromptText {
+		if f != fieldPromptText && !isQueryField(f) {
 			allowed = append(allowed, f)
 		}
 	}
@@ -514,6 +516,14 @@ func applyHookPatches(body []byte, patches []*pluginv1.BodyPatch, granted []stri
 		}
 	}
 	return applyPatches(body, patches)
+}
+
+// isQueryField reports whether a granted field is a gjson query (modifiers,
+// pipes, filters, wildcards, multipaths) rather than a plain dotted path.
+// Such fields are read-only: they are handed to the hook but never allow a
+// patch, since sjson cannot write through a query.
+func isQueryField(f string) bool {
+	return strings.ContainsAny(f, "|@#*?[]{}()=!<>%\"\\")
 }
 
 // applyPatches applies sjson set/delete instructions to a copy of body.

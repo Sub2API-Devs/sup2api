@@ -6,7 +6,9 @@
 //	POST /v1/messages               streaming (SSE) and non-streaming responses with usage
 //	POST /v1/messages/count_tokens  {"input_tokens": N}
 //	POST /v1/chat/completions       OpenAI chat; streams send the usage chunk only when
-//	                                stream_options.include_usage is true
+//	                                stream_options.include_usage is true; a non-streaming
+//	                                request offering the tool "submit_verdict" gets a
+//	                                simulated moderation verdict (moderation.go)
 //	POST /v1/responses              OpenAI Responses (usage in response.completed)
 //	POST /v1/embeddings             OpenAI embeddings (usage.prompt_tokens)
 //	POST /v1beta/models/{m}:generateContent        Gemini, usageMetadata incl. thoughtsTokenCount

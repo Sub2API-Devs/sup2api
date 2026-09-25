@@ -15,7 +15,10 @@ const (
 
 	settingsTTL = 10 * time.Second
 
-	maxHookTimeout      = 2 * time.Second
+	// maxHookTimeout caps any hook call, including a manifest timeoutMs
+	// (CONTRACTS §20.1). The admin default for hooks without timeoutMs has
+	// its own, lower ceiling (maxDefaultHookTimeoutMs).
+	maxHookTimeout      = 30 * time.Second
 	defaultMaxBodyBytes = 32 << 20
 )
 
@@ -44,7 +47,7 @@ const (
 	minPlatformCallTimeoutMs = 100
 	maxPlatformCallTimeoutMs = 30000
 	minDefaultHookTimeoutMs  = 50
-	maxDefaultHookTimeoutMs  = int(maxHookTimeout / time.Millisecond)
+	maxDefaultHookTimeoutMs  = 2000
 )
 
 func defaultStickySettings() StickySettings {
