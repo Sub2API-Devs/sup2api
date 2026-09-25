@@ -106,7 +106,7 @@ func (s *Service) Load(ctx context.Context, id int64) (*core.Account, error) {
 		acc := snap.acc
 		return &acc, nil
 	}
-	a, err := s.loadRow(ctx, s.d.DB.Pool, id, false)
+	a, err := s.loadRow(ctx, s.d.DB.Pool, id, nil, false)
 	if err != nil {
 		return nil, err
 	}

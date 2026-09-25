@@ -132,6 +132,8 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	acc := account.New(account.Deps{
 		DB: db, Redis: rdb, Cipher: cipher, Registry: reg, Proxies: prx, Events: events,
 		Slots: cl.Slots, Limiter: limiter, Bus: cl.Bus, AllowPrivateUpstream: cfg.AllowPrivateUpstream, Converters: converters,
+		// Ownership checks and proxy_url resolution (CONTRACTS §21).
+		Authorizer: az, Resolver: prx,
 	})
 	// Price sync sources (upstream API keys encrypted) and GET /key/prices for
 	// downstream sup2api instances (CONTRACTS §17).

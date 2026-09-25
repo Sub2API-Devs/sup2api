@@ -26,6 +26,10 @@ type AccountTypeView struct {
 	Description     manifest.LocalizedText `json:"description,omitempty"`
 	Form            FormView               `json:"form"`
 	SensitiveFields []string               `json:"sensitive_fields"`
+	// GuardedSettings are the settings fields restricted to official values
+	// for callers without account:settings:custom (CONTRACTS §21.3); empty
+	// when the type declares none.
+	GuardedSettings []manifest.GuardedSetting `json:"guarded_settings"`
 	// Platforms the account type declares, in declaration order.
 	Platforms []TypePlatformView `json:"platforms"`
 	// Endpoints lists the gateway endpoints this type can serve now.
@@ -71,6 +75,7 @@ func typeView(g core.Generation, b core.AccountTypeBinding, conv core.ProtocolCo
 		Description:     b.Type.Description,
 		Form:            FormView{Mode: b.Type.Form.Mode, Page: b.Type.Form.Page, Component: b.Type.Form.Component},
 		SensitiveFields: b.Type.SensitiveFields,
+		GuardedSettings: b.Type.GuardedSettings,
 		Platforms:       typePlatforms(g, b),
 		Endpoints:       servedEndpoints(g, b, conv),
 	}
@@ -82,6 +87,9 @@ func typeView(g core.Generation, b core.AccountTypeBinding, conv core.ProtocolCo
 	}
 	if v.SensitiveFields == nil {
 		v.SensitiveFields = []string{}
+	}
+	if v.GuardedSettings == nil {
+		v.GuardedSettings = []manifest.GuardedSetting{}
 	}
 	return v
 }
@@ -290,7 +298,72 @@ func (s *Service) typeForm(c *gin.Context) {
 		httpapi.Fail(c, core.ErrNotFound.WithMessage(t(ctx, "account type not found", "账号类型不存在")))
 		return
 	}
-	httpapi.OK(c, gin.H{"schema": rawOrNull(b.FormSchema), "ui_schema": rawOrNull(b.FormUI)})
+	schema, ui := rawOrNull(b.FormSchema), rawOrNull(b.FormUI)
+	if len(b.Type.GuardedSettings) > 0 && !s.customSettings(ctx) {
+		var err error
+		if schema, ui, err = guardForm(schema, ui, b.Type.GuardedSettings); err != nil {
+			httpapi.Fail(c, core.ErrPluginUnavailable.WithMessage(t(ctx, "the account form schema of the plugin is invalid",
+				"插件的账号表单 schema 无效")).WithCause(err))
+			return
+		}
+	}
+	httpapi.OK(c, gin.H{"schema": schema, "ui_schema": ui})
+}
+
+// guardForm rewrites a copy of the form for callers without
+// account:settings:custom (CONTRACTS §21.3): every guarded field gets
+// schema.properties.<field>.enum = allowed and, with a single allowed value,
+// ui_schema.<field>["ui:readonly"] = true. The cached originals are not
+// touched: both documents are decoded into fresh maps. A schema that is not
+// an object is left alone.
+func guardForm(schema, ui json.RawMessage, guards []manifest.GuardedSetting) (json.RawMessage, json.RawMessage, error) {
+	var sch map[string]any
+	if err := json.Unmarshal(schema, &sch); err != nil {
+		return nil, nil, err
+	}
+	if sch == nil {
+		return schema, ui, nil
+	}
+	props, _ := sch["properties"].(map[string]any)
+	if props == nil {
+		props = map[string]any{}
+		sch["properties"] = props
+	}
+	var uim map[string]any
+	if err := json.Unmarshal(ui, &uim); err != nil {
+		return nil, nil, err
+	}
+	for _, g := range guards {
+		prop, _ := props[g.Field].(map[string]any)
+		if prop == nil {
+			prop = map[string]any{}
+			props[g.Field] = prop
+		}
+		prop["enum"] = g.Allowed
+		if len(g.Allowed) == 1 {
+			if uim == nil {
+				uim = map[string]any{}
+			}
+			f, _ := uim[g.Field].(map[string]any)
+			if f == nil {
+				f = map[string]any{}
+				uim[g.Field] = f
+			}
+			f["ui:readonly"] = true
+		}
+	}
+	outS, err := json.Marshal(sch)
+	if err != nil {
+		return nil, nil, err
+	}
+	if uim == nil {
+		return outS, ui, nil
+	}
+	outU, err := json.Marshal(uim)
+	if err != nil {
+		return nil, nil, err
+	}
+	return outS, outU, nil
 }
 
 // typeLabel returns the label of an account type, or nil when the type is not

@@ -1,0 +1,714 @@
+package account
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
+	"sync/atomic"
+	"testing"
+
+	"github.com/tidwall/gjson"
+
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+)
+
+// Key sets of the typical roles of CONTRACTS §21.1.
+var (
+	adminKeys = []string{"account:read", "account:create", "account:update", "account:delete", "account:test",
+		"account:credential:view", "account:settings:custom", "proxy:read", "proxy:manage"}
+	supplierKeys = []string{"account:own:read", "account:own:create", "account:own:update", "account:own:delete",
+		"account:own:test", "account:own:credential:view", "proxy:own:read", "proxy:own:manage"}
+	readerKeys = []string{"account:read", "proxy:read"}
+)
+
+func data(out map[string]any) map[string]any {
+	d, _ := out["data"].(map[string]any)
+	return d
+}
+
+func total(out map[string]any) float64 {
+	p, _ := out["page"].(map[string]any)
+	n, _ := p["total"].(float64)
+	return n
+}
+
+func permission(out map[string]any) string {
+	err, _ := out["error"].(map[string]any)
+	det, _ := err["details"].(map[string]any)
+	p, _ := det["permission"].(string)
+	return p
+}
+
+func listIDs(out map[string]any) string {
+	var s []string
+	items, _ := out["data"].([]any)
+	for _, it := range items {
+		s = append(s, strconv.Itoa(int(it.(map[string]any)["id"].(float64))))
+	}
+	return strings.Join(s, ",")
+}
+
+// createAs posts a minimal anthropic/apikey account as uid with extra fields
+// merged in and asserts 201.
+func (e *env) createAs(uid int64, name string, extra map[string]any) map[string]any {
+	e.t.Helper()
+	body := map[string]any{"name": name, "plugin_key": "anthropic", "type": "apikey",
+		"credentials": map[string]any{"api_key": "sk-good-key-123"}}
+	for k, v := range extra {
+		body[k] = v
+	}
+	code, out := e.doAs(uid, "POST", "/accounts", body)
+	if code != 201 {
+		e.t.Fatalf("create %s as %d: %d %v", name, uid, code, out)
+	}
+	return data(out)
+}
+
+type auditRow struct {
+	Action string
+	UserID *int64
+	IP     string
+	Detail map[string]any
+}
+
+func (e *env) audits(targetType string, targetID int64) []auditRow {
+	e.t.Helper()
+	rows, err := e.db.Pool.Query(context.Background(), `SELECT action, user_id, ip, detail FROM audit_logs
+		WHERE target_type = $1 AND target_id = $2 ORDER BY id`, targetType, strconv.FormatInt(targetID, 10))
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	defer rows.Close()
+	var out []auditRow
+	for rows.Next() {
+		var r auditRow
+		if err := rows.Scan(&r.Action, &r.UserID, &r.IP, &r.Detail); err != nil {
+			e.t.Fatal(err)
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+func actions(rs []auditRow) string {
+	var s []string
+	for _, r := range rs {
+		s = append(s, r.Action)
+	}
+	return strings.Join(s, ",")
+}
+
+func TestOwnership(t *testing.T) {
+	authz := fakeAuthz{keys: map[int64][]string{}}
+	e := setupWith(t, authz)
+	ctx := context.Background()
+	admin := e.uid
+	alice, bob, reader := e.addUser("alice@x.com"), e.addUser("bob@x.com"), e.addUser("ro@x.com")
+	authz.keys[admin], authz.keys[alice], authz.keys[bob], authz.keys[reader] = adminKeys, supplierKeys, supplierKeys, readerKeys
+
+	a1 := e.createAs(alice, "alice's", nil)
+	if a1["created_by"].(float64) != float64(alice) || a1["created_by_email"] != "alice@x.com" || a1["proxy_created"] != false {
+		t.Fatalf("created_by: %v", a1)
+	}
+	aliceID := int64(a1["id"].(float64))
+	bobID := int64(e.createAs(bob, "bob's", nil)["id"].(float64))
+	adminID := int64(e.createAs(admin, "admin's", nil)["id"].(float64))
+	// A row without creator (before ownership existed).
+	enc, err := e.svc.d.Cipher.Encrypt([]byte(`{"api_key":"legacy-key-1"}`), aad("anthropic"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyID := e.exec1(`INSERT INTO accounts (name, plugin_key, type, credentials_enc) VALUES ('legacy', 'anthropic', 'apikey', $1) RETURNING id`, enc)
+
+	// Lists: the own range sees own rows only; the all range sees everything
+	// and can filter with mine / created_by (ignored under the own range).
+	_, out := e.doAs(alice, "GET", "/accounts", nil)
+	if total(out) != 1 || listIDs(out) != strconv.FormatInt(aliceID, 10) {
+		t.Fatalf("alice list: %v", out)
+	}
+	if _, out = e.doAs(reader, "GET", "/accounts", nil); total(out) != 4 {
+		t.Fatalf("reader list: %v", out)
+	}
+	if _, out = e.doAs(admin, "GET", "/accounts?mine=true", nil); total(out) != 1 || listIDs(out) != strconv.FormatInt(adminID, 10) {
+		t.Fatalf("admin mine: %v", out)
+	}
+	if _, out = e.doAs(admin, "GET", fmt.Sprintf("/accounts?created_by=%d", bob), nil); total(out) != 1 || listIDs(out) != strconv.FormatInt(bobID, 10) {
+		t.Fatalf("admin created_by: %v", out)
+	}
+	if code, out := e.doAs(admin, "GET", "/accounts?created_by=abc", nil); code != 400 || fmt.Sprint(fieldsOf(out)) != "[created_by:invalid]" {
+		t.Fatalf("bad created_by: %d %v", code, out)
+	}
+	if _, out = e.doAs(alice, "GET", fmt.Sprintf("/accounts?created_by=%d", bob), nil); total(out) != 1 || listIDs(out) != strconv.FormatInt(aliceID, 10) {
+		t.Fatalf("alice created_by ignored: %v", out)
+	}
+	if _, out = e.doAs(alice, "GET", "/accounts?mine=true", nil); total(out) != 1 {
+		t.Fatalf("alice mine: %v", out)
+	}
+	// The list carries the creator, never proxy_created.
+	_, raw := e.doRaw(reader, "GET", "/accounts", nil)
+	if strings.Contains(string(raw), "proxy_created") || !strings.Contains(string(raw), `"created_by_email":"bob@x.com"`) ||
+		!strings.Contains(string(raw), `"created_by":null`) {
+		t.Fatalf("list json: %s", raw)
+	}
+
+	// Everything about somebody else's account (or a legacy row) is 404
+	// under the own range.
+	for _, other := range []int64{bobID, adminID, legacyID} {
+		for _, req := range []struct {
+			method, path string
+			body         any
+		}{
+			{"GET", "/accounts/%d", nil},
+			{"PATCH", "/accounts/%d", map[string]any{"name": "hijack"}},
+			{"DELETE", "/accounts/%d", nil},
+			{"POST", "/accounts/%d/test", nil},
+			{"POST", "/accounts/%d/models/fetch", nil},
+			{"POST", "/accounts/%d/credentials/reveal", nil},
+		} {
+			if code, out := e.doAs(alice, req.method, fmt.Sprintf(req.path, other), req.body); code != 404 {
+				t.Fatalf("alice %s %d: %d %v", req.method+" "+req.path, other, code, out)
+			}
+		}
+	}
+	var name string
+	_ = e.db.Pool.QueryRow(ctx, `SELECT name FROM accounts WHERE id = $1`, bobID).Scan(&name)
+	if name != "bob's" {
+		t.Fatalf("bob's account renamed: %s", name)
+	}
+
+	// Readers see everything but hold no write or credential key.
+	if code, out := e.doAs(reader, "GET", fmt.Sprintf("/accounts/%d", bobID), nil); code != 200 || data(out)["created_by_email"] != "bob@x.com" {
+		t.Fatalf("reader get: %d %v", code, out)
+	}
+	if code, out := e.doAs(reader, "PATCH", fmt.Sprintf("/accounts/%d", bobID), map[string]any{"name": "x"}); code != 403 || permission(out) != "account:update" {
+		t.Fatalf("reader patch: %d %v", code, out)
+	}
+	if code, out := e.doAs(reader, "POST", fmt.Sprintf("/accounts/%d/credentials/reveal", bobID), nil); code != 403 || permission(out) != "account:credential:view" {
+		t.Fatalf("reader reveal: %d %v", code, out)
+	}
+	if code, out := e.doAs(reader, "POST", "/accounts", map[string]any{"name": "x"}); code != 403 || permission(out) != "account:create" {
+		t.Fatalf("reader create: %d %v", code, out)
+	}
+
+	// Own rows: every action works.
+	own := fmt.Sprintf("/accounts/%d", aliceID)
+	if code, out := e.doAs(alice, "GET", own, nil); code != 200 || data(out)["created_by_email"] != "alice@x.com" || data(out)["credentials"] == nil {
+		t.Fatalf("alice get own: %d %v", code, out)
+	}
+	if code, out := e.doAs(alice, "PATCH", own, map[string]any{"name": "mine"}); code != 200 || data(out)["name"] != "mine" || data(out)["proxy_created"] != false {
+		t.Fatalf("alice patch own: %d %v", code, out)
+	}
+	if code, out := e.doAs(alice, "POST", own+"/test", nil); code != 200 || data(out)["ok"] != true {
+		t.Fatalf("alice test own: %d %v", code, out)
+	}
+	if code, out := e.doAs(alice, "POST", own+"/models/fetch", nil); code != 200 || len(data(out)["models"].([]any)) != 2 {
+		t.Fatalf("alice models own: %d %v", code, out)
+	}
+	if code, out := e.doAs(alice, "POST", own+"/credentials/reveal", nil); code != 200 ||
+		data(out)["credentials"].(map[string]any)["api_key"] != "sk-good-key-123" {
+		t.Fatalf("alice reveal own: %d %v", code, out)
+	}
+
+	// The all range reaches every row, including legacy ones, and shows the
+	// creator email even after the user is soft-deleted.
+	if code, out := e.doAs(admin, "GET", fmt.Sprintf("/accounts/%d", legacyID), nil); code != 200 || data(out)["created_by"] != nil || data(out)["created_by_email"] != nil {
+		t.Fatalf("admin get legacy: %d %v", code, out)
+	}
+	if _, err := e.db.Pool.Exec(ctx, `UPDATE users SET deleted_at = now() WHERE id = $1`, bob); err != nil {
+		t.Fatal(err)
+	}
+	if code, out := e.doAs(admin, "GET", fmt.Sprintf("/accounts/%d", bobID), nil); code != 200 || data(out)["created_by_email"] != "bob@x.com" {
+		t.Fatalf("deleted creator email: %d %v", code, out)
+	}
+	if code, _ := e.doAs(admin, "PATCH", fmt.Sprintf("/accounts/%d", bobID), map[string]any{"status": "disabled"}); code != 200 {
+		t.Fatalf("admin patch bob's: %d", code)
+	}
+	if code, _ := e.doAs(admin, "DELETE", fmt.Sprintf("/accounts/%d", legacyID), nil); code != 204 {
+		t.Fatalf("admin delete legacy: %d", code)
+	}
+
+	// Delete own; 404 afterwards.
+	if code, _ := e.doAs(alice, "DELETE", own, nil); code != 204 {
+		t.Fatalf("alice delete own: %d", code)
+	}
+	if code, _ := e.doAs(alice, "GET", own, nil); code != 404 {
+		t.Fatalf("alice get deleted: %d", code)
+	}
+
+	// Audit trail of alice's account, all by alice with the client IP.
+	rs := e.audits("account", aliceID)
+	if actions(rs) != "account.create,account.update,account.credentials.reveal,account.delete" {
+		t.Fatalf("audit actions: %s", actions(rs))
+	}
+	for _, r := range rs {
+		if r.UserID == nil || *r.UserID != alice || r.IP == "" {
+			t.Fatalf("audit row %s: user %v ip %q", r.Action, r.UserID, r.IP)
+		}
+	}
+	if d := rs[0].Detail; d["name"] != "alice's" || d["plugin_key"] != "anthropic" || d["type"] != "apikey" {
+		t.Fatalf("create detail: %v", d)
+	}
+	if f := rs[1].Detail["fields"].([]any); len(f) != 1 || f[0] != "name" {
+		t.Fatalf("update detail: %v", rs[1].Detail)
+	}
+	if rs[3].Detail["name"] != "mine" {
+		t.Fatalf("delete detail: %v", rs[3].Detail)
+	}
+	// Admin's PATCH of bob's account is audited under admin.
+	if rs := e.audits("account", bobID); actions(rs) != "account.create,account.update" || *rs[1].UserID != admin ||
+		fmt.Sprint(rs[1].Detail["fields"]) != "[status]" {
+		t.Fatalf("bob audit: %v", rs)
+	}
+}
+
+// forwardProxy is a plain HTTP forward proxy that relays absolute-URI
+// requests to their target and counts them.
+func forwardProxy(t *testing.T) (host string, port int, hits *atomic.Int64) {
+	hits = &atomic.Int64{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		if !r.URL.IsAbs() {
+			http.Error(w, "not a proxy request", 400)
+			return
+		}
+		out, err := http.NewRequestWithContext(r.Context(), r.Method, r.URL.String(), r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), 502)
+			return
+		}
+		out.Header = r.Header.Clone()
+		out.Header.Del("Proxy-Authorization")
+		resp, err := http.DefaultTransport.RoundTrip(out)
+		if err != nil {
+			http.Error(w, err.Error(), 502)
+			return
+		}
+		defer resp.Body.Close()
+		for k, vs := range resp.Header {
+			for _, v := range vs {
+				w.Header().Add(k, v)
+			}
+		}
+		w.WriteHeader(resp.StatusCode)
+		_, _ = io.Copy(w, resp.Body)
+	}))
+	t.Cleanup(srv.Close)
+	h, p, _ := strings.Cut(strings.TrimPrefix(srv.URL, "http://"), ":")
+	port, _ = strconv.Atoi(p)
+	return h, port, hits
+}
+
+func TestProxyURL(t *testing.T) {
+	authz := fakeAuthz{keys: map[int64][]string{}}
+	e := setupWith(t, authz)
+	ctx := context.Background()
+	admin := e.uid
+	alice, bob, carol := e.addUser("alice@x.com"), e.addUser("bob@x.com"), e.addUser("carol@x.com")
+	authz.keys[admin], authz.keys[alice], authz.keys[bob] = adminKeys, supplierKeys, supplierKeys
+	// carol may create accounts but holds no proxy key at all.
+	authz.keys[carol] = []string{"account:own:create", "account:own:read", "account:own:update"}
+
+	proxies := func() int {
+		var n int
+		_ = e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM proxies`).Scan(&n)
+		return n
+	}
+	const url1 = "socks5h://u:pw@Proxy.Example:1080"
+
+	// First save creates the proxy (owned by alice, audited with the account
+	// id, announced on config:changed).
+	sent := e.bus.count()
+	a1 := e.createAs(alice, "a1", map[string]any{"proxy_url": url1})
+	if a1["proxy_created"] != true || a1["proxy_id"] == nil {
+		t.Fatalf("first save: %v", a1)
+	}
+	a1ID, p1 := int64(a1["id"].(float64)), int64(a1["proxy_id"].(float64))
+	var pname, proto, host string
+	var createdBy *int64
+	if err := e.db.Pool.QueryRow(ctx, `SELECT name, protocol, host, created_by FROM proxies WHERE id = $1`, p1).Scan(&pname, &proto, &host, &createdBy); err != nil {
+		t.Fatal(err)
+	}
+	if pname != "socks5://proxy.example:1080" || proto != "socks5" || host != "proxy.example" || createdBy == nil || *createdBy != alice {
+		t.Fatalf("auto proxy: %s %s %s %v", pname, proto, host, createdBy)
+	}
+	rs := e.audits("proxy", p1)
+	if actions(rs) != "proxy.create" || rs[0].Detail["auto"] != true || rs[0].Detail["account_id"].(float64) != float64(a1ID) || *rs[0].UserID != alice || rs[0].IP == "" {
+		t.Fatalf("proxy audit: %v", rs)
+	}
+	e.bus.mu.Lock()
+	chans := fmt.Sprint(e.bus.sent[sent:])
+	e.bus.mu.Unlock()
+	if !strings.Contains(chans, core.ChannelConfigChanged) || !strings.Contains(chans, core.ChannelAccountChanged) {
+		t.Fatalf("broadcasts: %s", chans)
+	}
+	if actions(e.audits("account", a1ID)) != "account.create" {
+		t.Fatalf("account audit: %v", e.audits("account", a1ID))
+	}
+
+	// Same address again: reused, no new row, no proxy audit.
+	a2 := e.createAs(alice, "a2", map[string]any{"proxy_url": "  " + url1 + " "})
+	if a2["proxy_created"] != false || int64(a2["proxy_id"].(float64)) != p1 || proxies() != 1 {
+		t.Fatalf("second save: %v (%d proxies)", a2, proxies())
+	}
+	if len(e.audits("proxy", p1)) != 1 {
+		t.Fatal("reuse audited as creation")
+	}
+	// Bob only matches his own proxies: he gets a second row.
+	b1 := e.createAs(bob, "b1", map[string]any{"proxy_url": url1})
+	if b1["proxy_created"] != true || int64(b1["proxy_id"].(float64)) == p1 || proxies() != 2 {
+		t.Fatalf("bob save: %v", b1)
+	}
+	// Admin (proxy:read) matches across owners: the smallest id wins.
+	ad := e.createAs(admin, "ad", map[string]any{"proxy_url": url1})
+	if ad["proxy_created"] != false || int64(ad["proxy_id"].(float64)) != p1 {
+		t.Fatalf("admin save: %v", ad)
+	}
+
+	// PATCH: a new address creates and relinks; the audit lists proxy_url.
+	own := fmt.Sprintf("/accounts/%d", a1ID)
+	code, out := e.doAs(alice, "PATCH", own, map[string]any{"proxy_url": "http://Proxy.Example:3128"})
+	if code != 200 || data(out)["proxy_created"] != true || int64(data(out)["proxy_id"].(float64)) == p1 || proxies() != 3 {
+		t.Fatalf("patch new url: %d %v", code, out)
+	}
+	p3 := int64(data(out)["proxy_id"].(float64))
+	if rs := e.audits("proxy", p3); actions(rs) != "proxy.create" || rs[0].Detail["account_id"].(float64) != float64(a1ID) {
+		t.Fatalf("patch proxy audit: %v", rs)
+	}
+	if rs := e.audits("account", a1ID); fmt.Sprint(rs[len(rs)-1].Detail["fields"]) != "[proxy_url]" {
+		t.Fatalf("patch audit: %v", rs)
+	}
+	// Back to the first address: reused.
+	if code, out = e.doAs(alice, "PATCH", own, map[string]any{"proxy_url": url1}); code != 200 || data(out)["proxy_created"] != false || int64(data(out)["proxy_id"].(float64)) != p1 {
+		t.Fatalf("patch reuse: %d %v", code, out)
+	}
+	// Both given: conflict. Blank proxy_url counts as absent.
+	if code, out = e.doAs(alice, "PATCH", own, map[string]any{"proxy_url": url1, "proxy_id": p1}); code != 400 || fmt.Sprint(fieldsOf(out)) != "[proxy_url:conflict]" {
+		t.Fatalf("conflict: %d %v", code, out)
+	}
+	if code, out = e.doAs(alice, "PATCH", own, map[string]any{"proxy_url": "", "proxy_id": nil}); code != 200 || data(out)["proxy_id"] != nil || data(out)["proxy_created"] != false {
+		t.Fatalf("blank proxy_url: %d %v", code, out)
+	}
+	// Invalid address: 400 without echoing the password.
+	code, raw := e.doRaw(alice, "POST", "/accounts", map[string]any{"name": "bad", "plugin_key": "anthropic", "type": "apikey",
+		"credentials": map[string]any{"api_key": "sk-good-key-123"}, "proxy_url": "http://u:secretpw@host.example"})
+	if code != 400 || gjson.GetBytes(raw, "error.details.fields.0.field").String() != "proxy_url" ||
+		gjson.GetBytes(raw, "error.details.fields.0.code").String() != "invalid" || strings.Contains(string(raw), "secretpw") {
+		t.Fatalf("invalid url: %d %s", code, raw)
+	}
+	if proxies() != 3 {
+		t.Fatal("invalid url created a proxy")
+	}
+	// Detail and list never carry proxy_created.
+	if _, raw = e.doRaw(alice, "GET", own, nil); strings.Contains(string(raw), "proxy_created") {
+		t.Fatalf("detail json: %s", raw)
+	}
+	if _, raw = e.doRaw(alice, "GET", "/accounts", nil); strings.Contains(string(raw), "proxy_created") {
+		t.Fatalf("list json: %s", raw)
+	}
+
+	// Without a proxy manage key proxy_url is forbidden; proxy_id must be a
+	// visible proxy under the own range.
+	code, out = e.doAs(carol, "POST", "/accounts", map[string]any{"name": "c", "plugin_key": "anthropic", "type": "apikey",
+		"credentials": map[string]any{"api_key": "sk-good-key-123"}, "proxy_url": url1})
+	if code != 403 || permission(out) != "proxy:own:manage" {
+		t.Fatalf("carol proxy_url: %d %v", code, out)
+	}
+	byID := func(uid, pid int64) (int, []string) {
+		code, out := e.doAs(uid, "POST", "/accounts", map[string]any{"name": "x", "plugin_key": "anthropic", "type": "apikey",
+			"credentials": map[string]any{"api_key": "sk-good-key-123"}, "proxy_id": pid})
+		return code, fieldsOf(out)
+	}
+	if code, f := byID(carol, p1); code != 400 || fmt.Sprint(f) != "[proxy_id:not_found]" {
+		t.Fatalf("carol by id: %d %v", code, f)
+	}
+	if code, f := byID(bob, p1); code != 400 || fmt.Sprint(f) != "[proxy_id:not_found]" {
+		t.Fatalf("bob with alice's proxy: %d %v", code, f)
+	}
+	if code, _ := byID(alice, p1); code != 201 {
+		t.Fatalf("alice with own proxy: %d", code)
+	}
+	if code, _ := byID(admin, p1); code != 201 {
+		t.Fatalf("admin with alice's proxy: %d", code)
+	}
+	c1 := e.createAs(carol, "c1", nil)
+	if code, out := e.doAs(carol, "PATCH", fmt.Sprintf("/accounts/%d", int64(c1["id"].(float64))), map[string]any{"proxy_id": p1}); code != 400 ||
+		fmt.Sprint(fieldsOf(out)) != "[proxy_id:not_found]" {
+		t.Fatalf("carol patch proxy_id: %d %v", code, out)
+	}
+	if code, out := e.doAs(bob, "PATCH", fmt.Sprintf("/accounts/%d", int64(b1["id"].(float64))), map[string]any{"proxy_id": p1}); code != 400 ||
+		fmt.Sprint(fieldsOf(out)) != "[proxy_id:not_found]" {
+		t.Fatalf("bob patch alice's proxy_id: %d %v", code, out)
+	}
+
+	// Type models/fetch with proxy_url goes through the address without
+	// creating a proxy; no proxy key is needed for that.
+	host, port, hits := forwardProxy(t)
+	before := proxies()
+	fetch := map[string]any{"credentials": map[string]any{"api_key": "sk-good-key-123"}, "proxy_url": fmt.Sprintf("http://%s:%d", host, port)}
+	code, out = e.doAs(carol, "POST", "/account-types/anthropic/apikey/models/fetch", fetch)
+	if code != 200 || len(data(out)["models"].([]any)) != 2 || hits.Load() == 0 || proxies() != before {
+		t.Fatalf("fetch through proxy_url: %d %v hits=%d proxies=%d", code, out, hits.Load(), proxies())
+	}
+	fetch["proxy_id"] = p1
+	if code, out = e.doAs(admin, "POST", "/account-types/anthropic/apikey/models/fetch", fetch); code != 400 || fmt.Sprint(fieldsOf(out)) != "[proxy_url:conflict]" {
+		t.Fatalf("fetch conflict: %d %v", code, out)
+	}
+	delete(fetch, "proxy_url")
+	if code, out = e.doAs(carol, "POST", "/account-types/anthropic/apikey/models/fetch", fetch); code != 400 || fmt.Sprint(fieldsOf(out)) != "[proxy_id:not_found]" {
+		t.Fatalf("fetch invisible proxy_id: %d %v", code, out)
+	}
+	fetch["proxy_url"] = "ftp://x:1"
+	delete(fetch, "proxy_id")
+	if code, out = e.doAs(admin, "POST", "/account-types/anthropic/apikey/models/fetch", fetch); code != 400 || fmt.Sprint(fieldsOf(out)) != "[proxy_url:invalid]" {
+		t.Fatalf("fetch bad url: %d %v", code, out)
+	}
+}
+
+func TestGuardedSettings(t *testing.T) {
+	authz := fakeAuthz{keys: map[int64][]string{}}
+	e := setupWith(t, authz)
+	admin := e.uid
+	alice, dave := e.addUser("alice@x.com"), e.addUser("dave@x.com")
+	authz.keys[admin], authz.keys[alice] = adminKeys, supplierKeys
+	authz.keys[dave] = append(append([]string{}, supplierKeys...), "account:settings:custom")
+
+	post := func(uid int64, typ string, creds map[string]any) (int, map[string]any) {
+		t.Helper()
+		pk := "anthropic"
+		if typ == "relay_key" {
+			pk = "relay"
+		}
+		return e.doAs(uid, "POST", "/accounts", map[string]any{"name": "g", "plugin_key": pk, "type": typ, "credentials": creds})
+	}
+	key := "sk-good-key-123"
+	// Forbidden for a supplier; the error names the credentials path.
+	if code, out := post(alice, "apikey", map[string]any{"api_key": key, "base_url": "https://evil.example"}); code != 400 ||
+		fmt.Sprint(fieldsOf(out)) != "[credentials.base_url:forbidden]" {
+		t.Fatalf("custom base_url: %d %v", code, out)
+	}
+	// The official value and its equivalent spellings pass; so do empty and
+	// absent values.
+	for _, v := range []any{officialBaseURL, officialBaseURL + "/", " HTTPS://API.Anthropic.COM ", "", nil} {
+		creds := map[string]any{"api_key": key}
+		if v != nil {
+			creds["base_url"] = v
+		}
+		if code, out := post(alice, "apikey", creds); code != 201 {
+			t.Fatalf("base_url %v: %d %v", v, code, out)
+		}
+	}
+	// An unguarded type accepts anything; a caller with
+	// account:settings:custom is not restricted.
+	if code, out := post(alice, "relay_key", map[string]any{"api_key": key, "base_url": "https://anything.example"}); code != 201 {
+		t.Fatalf("relay custom: %d %v", code, out)
+	}
+	if code, out := post(dave, "apikey", map[string]any{"api_key": key, "base_url": "https://custom.example"}); code != 201 {
+		t.Fatalf("dave custom: %d %v", code, out)
+	}
+	// Fetching models with a custom address is refused the same way.
+	if code, out := e.doAs(alice, "POST", "/account-types/anthropic/apikey/models/fetch", map[string]any{
+		"credentials": map[string]any{"api_key": key, "base_url": "https://evil.example"}}); code != 400 || fmt.Sprint(fieldsOf(out)) != "[credentials.base_url:forbidden]" {
+		t.Fatalf("fetch custom: %d %v", code, out)
+	}
+
+	// PATCH: the value the account already has stays allowed (an admin set
+	// it), any other custom value is not.
+	acc := e.createAs(alice, "a", map[string]any{"credentials": map[string]any{"api_key": key, "base_url": officialBaseURL}})
+	own := fmt.Sprintf("/accounts/%d", int64(acc["id"].(float64)))
+	if code, out := e.doAs(admin, "PATCH", own, map[string]any{"credentials": map[string]any{"api_key": Mask, "base_url": "https://custom.example"}}); code != 200 {
+		t.Fatalf("admin custom patch: %d %v", code, out)
+	}
+	if code, out := e.doAs(alice, "PATCH", own, map[string]any{"name": "n", "credentials": map[string]any{"api_key": Mask, "base_url": "https://CUSTOM.example/"}}); code != 200 ||
+		data(out)["name"] != "n" {
+		t.Fatalf("alice keeps old custom: %d %v", code, out)
+	}
+	if code, out := e.doAs(alice, "PATCH", own, map[string]any{"credentials": map[string]any{"api_key": Mask, "base_url": "https://other.example"}}); code != 400 ||
+		fmt.Sprint(fieldsOf(out)) != "[credentials.base_url:forbidden]" {
+		t.Fatalf("alice other custom: %d %v", code, out)
+	}
+	if code, out := e.doAs(alice, "POST", own+"/models/fetch", map[string]any{"credentials": map[string]any{"api_key": Mask, "base_url": "https://other.example"}}); code != 400 {
+		t.Fatalf("alice fetch other custom: %d %v", code, out)
+	}
+	if code, out := e.doAs(alice, "PATCH", own, map[string]any{"credentials": map[string]any{"api_key": Mask, "base_url": officialBaseURL}}); code != 200 ||
+		data(out)["settings"].(map[string]any)["base_url"] != officialBaseURL {
+		t.Fatalf("alice back to official: %d %v", code, out)
+	}
+
+	// The form is rewritten for suppliers only, and the cached original is
+	// untouched.
+	code, out := e.doAs(alice, "GET", "/account-types/anthropic/apikey/form", nil)
+	raw, _ := json.Marshal(out)
+	if code != 200 || gjson.GetBytes(raw, "data.schema.properties.base_url.enum").Raw != `["`+officialBaseURL+`"]` ||
+		gjson.GetBytes(raw, "data.ui_schema.base_url.ui:readonly").Bool() != true ||
+		gjson.GetBytes(raw, "data.ui_schema.api_key.ui:widget").String() != "password" ||
+		gjson.GetBytes(raw, "data.schema.properties.api_key.minLength").Int() != 8 {
+		t.Fatalf("supplier form: %d %s", code, raw)
+	}
+	_, out = e.doAs(admin, "GET", "/account-types/anthropic/apikey/form", nil)
+	raw, _ = json.Marshal(out)
+	if gjson.GetBytes(raw, "data.schema.properties.base_url.enum").Exists() || gjson.GetBytes(raw, "data.ui_schema.base_url").Exists() {
+		t.Fatalf("admin form rewritten: %s", raw)
+	}
+	if gjson.GetBytes(e.gen.types[0].FormSchema, "properties.base_url.enum").Exists() || gjson.GetBytes(e.gen.types[0].FormUI, "base_url").Exists() {
+		t.Fatal("cached form mutated")
+	}
+	_, out = e.doAs(alice, "GET", "/account-types/relay/relay_key/form", nil)
+	raw, _ = json.Marshal(out)
+	if gjson.GetBytes(raw, "data.schema.properties.base_url.enum").Exists() || gjson.GetBytes(raw, "data.ui_schema").Raw != "null" {
+		t.Fatalf("relay form: %s", raw)
+	}
+	// Suppliers reach the type endpoints through account:own:create alone.
+	authz.keys[alice] = []string{"account:own:create"}
+	for _, p := range []string{"/platforms", "/account-types", "/account-types/anthropic/apikey/form"} {
+		if code, _ := e.doAs(alice, "GET", p, nil); code != 200 {
+			t.Fatalf("own:create %s: %d", p, code)
+		}
+	}
+	authz.keys[alice] = nil
+	if code, out := e.doAs(alice, "GET", "/account-types", nil); code != 403 || permission(out) != "account:read" {
+		t.Fatalf("no key: %d %v", code, out)
+	}
+}
+
+// ---------------------------------------------------------------- unit (no DB)
+
+func TestGuardNorm(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://api.anthropic.com":        "https://api.anthropic.com",
+		" https://api.anthropic.com/ ":     "https://api.anthropic.com",
+		"HTTPS://API.Anthropic.COM//":      "https://api.anthropic.com",
+		"https://Api.Example.com/V1/Path/": "https://api.example.com/V1/Path",
+		"not a url":                        "not a url",
+		"relative/path/":                   "relative/path",
+		"https://api.anthropic.com:443/":   "https://api.anthropic.com:443",
+	} {
+		if got := guardNorm(in); got != want {
+			t.Errorf("guardNorm(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestCheckGuarded(t *testing.T) {
+	ctx := context.Background()
+	guards := []manifest.GuardedSetting{{Field: "base_url", Allowed: []string{"https://api.anthropic.com", "https://eu.anthropic.com"}}}
+	st := func(v string) fields { return fields{"base_url": json.RawMessage(v)} }
+	codes := func(err error) string {
+		if err == nil {
+			return ""
+		}
+		fs, _ := core.AsError(err).Details["fields"].([]core.FieldError)
+		var s []string
+		for _, f := range fs {
+			s = append(s, f.Field+":"+f.Code)
+		}
+		return strings.Join(s, ",")
+	}
+	cases := []struct {
+		name string
+		st   fields
+		old  []byte
+		want string
+	}{
+		{"absent", fields{}, nil, ""},
+		{"null", st(`null`), nil, ""},
+		{"empty", st(`""`), nil, ""},
+		{"blank", st(`"  "`), nil, ""},
+		{"official", st(`"https://api.anthropic.com"`), nil, ""},
+		{"second allowed", st(`"https://eu.anthropic.com/"`), nil, ""},
+		{"case and slash", st(`" HTTPS://API.ANTHROPIC.COM/ "`), nil, ""},
+		{"custom", st(`"https://evil.example"`), nil, "credentials.base_url:forbidden"},
+		{"not a string", st(`123`), nil, "credentials.base_url:forbidden"},
+		{"old value", st(`"https://custom.example/"`), []byte(`{"api_key":"k","base_url":"https://CUSTOM.example"}`), ""},
+		{"other than old", st(`"https://other.example"`), []byte(`{"base_url":"https://custom.example"}`), "credentials.base_url:forbidden"},
+		{"old not a string", st(`"https://custom.example"`), []byte(`{"base_url":5}`), "credentials.base_url:forbidden"},
+	}
+	for _, c := range cases {
+		if got := codes(checkGuarded(ctx, guards, c.st, c.old)); got != c.want {
+			t.Errorf("%s: got %q want %q", c.name, got, c.want)
+		}
+	}
+	if err := checkGuarded(ctx, nil, st(`"https://evil.example"`), nil); err != nil {
+		t.Errorf("no guards: %v", err)
+	}
+}
+
+func TestGuardForm(t *testing.T) {
+	schema := json.RawMessage(`{"type":"object","properties":{"api_key":{"type":"string"},"base_url":{"type":"string","title":"Base URL"}}}`)
+	one := []manifest.GuardedSetting{{Field: "base_url", Allowed: []string{"https://a.example"}}}
+	two := []manifest.GuardedSetting{{Field: "base_url", Allowed: []string{"https://a.example", "https://b.example"}}}
+
+	// null ui_schema becomes an object with the readonly flag.
+	s, u, err := guardForm(schema, json.RawMessage("null"), one)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gjson.GetBytes(s, "properties.base_url.enum").Raw != `["https://a.example"]` || gjson.GetBytes(s, "properties.base_url.title").String() != "Base URL" ||
+		gjson.GetBytes(s, "properties.api_key.type").String() != "string" || string(u) != `{"base_url":{"ui:readonly":true}}` {
+		t.Fatalf("one allowed: %s %s", s, u)
+	}
+	if strings.Contains(string(schema), "enum") {
+		t.Fatal("input mutated")
+	}
+	// Several allowed values: enum only, ui_schema untouched (still null);
+	// an existing ui entry keeps its other keys.
+	s, u, err = guardForm(schema, json.RawMessage("null"), two)
+	if err != nil || len(gjson.GetBytes(s, "properties.base_url.enum").Array()) != 2 || string(u) != "null" {
+		t.Fatalf("two allowed: %s %s %v", s, u, err)
+	}
+	_, u, err = guardForm(schema, json.RawMessage(`{"base_url":{"ui:widget":"url-presets"},"api_key":{"ui:widget":"password"}}`), one)
+	if err != nil || gjson.GetBytes(u, "base_url.ui:widget").String() != "url-presets" || gjson.GetBytes(u, "base_url.ui:readonly").Bool() != true ||
+		gjson.GetBytes(u, "api_key.ui:widget").String() != "password" {
+		t.Fatalf("merge ui: %s %v", u, err)
+	}
+	// A field missing from the schema is added; a non-object schema is left alone.
+	s, _, err = guardForm(json.RawMessage(`{"type":"object"}`), json.RawMessage("null"), one)
+	if err != nil || gjson.GetBytes(s, "properties.base_url.enum").Raw != `["https://a.example"]` {
+		t.Fatalf("missing property: %s %v", s, err)
+	}
+	if s, u, err = guardForm(json.RawMessage("null"), json.RawMessage("null"), one); err != nil || string(s) != "null" || string(u) != "null" {
+		t.Fatalf("null schema: %s %s %v", s, u, err)
+	}
+	if _, _, err = guardForm(json.RawMessage(`{bad`), json.RawMessage("null"), one); err == nil {
+		t.Fatal("invalid schema accepted")
+	}
+}
+
+func TestInputProxyURL(t *testing.T) {
+	ctx := context.Background()
+	var in input
+	_ = json.Unmarshal([]byte(`{"name":"n","plugin_key":"p","type":"t","credentials":{},"proxy_url":"http://h:1","proxy_id":3}`), &in)
+	if fe := in.validate(ctx, true); len(fe) != 1 || fe[0].Field != "proxy_url" || fe[0].Code != "conflict" {
+		t.Fatalf("conflict: %v", fe)
+	}
+	in = input{}
+	_ = json.Unmarshal([]byte(`{"proxy_url":"http://h:1","proxy_id":null}`), &in)
+	if fe := in.validate(ctx, false); len(fe) != 1 || fe[0].Code != "conflict" {
+		t.Fatalf("conflict with null proxy_id: %v", fe)
+	}
+	in = input{}
+	_ = json.Unmarshal([]byte(`{"proxy_url":"  ","proxy_id":3}`), &in)
+	if fe := in.validate(ctx, false); len(fe) != 0 || in.ProxyURL != nil {
+		t.Fatalf("blank proxy_url: %v %v", fe, in.ProxyURL)
+	}
+	in = input{}
+	_ = json.Unmarshal([]byte(`{"proxy_url":" http://h:1 "}`), &in)
+	if fe := in.validate(ctx, false); len(fe) != 0 || in.ProxyURL == nil || *in.ProxyURL != "http://h:1" {
+		t.Fatalf("trim proxy_url: %v %v", fe, in.ProxyURL)
+	}
+	in = input{}
+	_ = json.Unmarshal([]byte(`{"name":"n","proxy_id":null,"credentials":null,"models":[],"rpm_limit":1}`), &in)
+	if got := fmt.Sprint(in.changedFields()); got != "[name proxy_id models rpm_limit]" {
+		t.Fatalf("changedFields: %s", got)
+	}
+	in = input{}
+	_ = json.Unmarshal([]byte(`{"credentials":{"api_key":"k"},"proxy_url":"http://h:1"}`), &in)
+	if got := fmt.Sprint(in.changedFields()); got != "[proxy_url credentials]" {
+		t.Fatalf("changedFields creds: %s", got)
+	}
+}

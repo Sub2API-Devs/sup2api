@@ -27,6 +27,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/proxy"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
@@ -230,25 +231,31 @@ func (fakeSlots) InUse(_ context.Context, kind string, id int64) (int, error) {
 	return int(id % 7), nil
 }
 
-type directProxies struct{}
-
-func (directProxies) HTTPClient(context.Context, *int64) (*http.Client, error) {
-	return http.DefaultClient, nil
-}
-
 type fakeTokens struct{}
 
 func (fakeTokens) VerifyAccessToken(_ context.Context, tok string) (int64, error) {
 	return strconv.ParseInt(strings.TrimPrefix(tok, "u"), 10, 64)
 }
 
-type allowAll struct{}
+// fakeAuthz grants each user a fixed key set; a nil map allows everything.
+type fakeAuthz struct{ keys map[int64][]string }
 
-func (allowAll) Can(context.Context, int64, string) (bool, error) { return true, nil }
-func (allowAll) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
-	return core.PermissionSet{Superuser: true}, nil
+func (a fakeAuthz) Can(_ context.Context, uid int64, key string) (bool, error) {
+	if a.keys == nil {
+		return true, nil
+	}
+	for _, k := range a.keys[uid] {
+		if k == key {
+			return true, nil
+		}
+	}
+	return false, nil
 }
-func (allowAll) IsSensitive(string) bool { return false }
+
+func (fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
+	return core.PermissionSet{}, nil
+}
+func (fakeAuthz) IsSensitive(string) bool { return false }
 
 type noStepUp struct{}
 
@@ -268,8 +275,9 @@ func ep(method, path, protocol, billing string) manifest.Endpoint {
 }
 
 // testGen is a generation with the built-in anthropic and openai platforms, a
-// plugin platform "aivideo", and account types: anthropic/apikey (anthropic),
-// relay/relay_key (anthropic and the unavailable plugin platform "ghost") and
+// plugin platform "aivideo", and account types: anthropic/apikey (anthropic;
+// base_url guarded to the official address, CONTRACTS §21.3), relay/relay_key
+// (anthropic and the unavailable plugin platform "ghost"; unguarded) and
 // video/vkey (aivideo). openai endpoints are only reachable through conversion.
 func testGen(plat core.PlatformPlugin) *fakeGen {
 	anthropic := core.PluginInfo{Key: "anthropic", Version: "0.1.0", AssetBase: "/plugin-ui/anthropic/0.1.0-abc",
@@ -284,15 +292,17 @@ func testGen(plat core.PlatformPlugin) *fakeGen {
 			Plugin: anthropic,
 			Type: manifest.AccountType{ID: "apikey", Label: manifest.LocalizedText{"en": "API Key", "zh": "API Key"},
 				Form: manifest.Form{Mode: "schema", Schema: "forms/apikey.json"}, SensitiveFields: []string{"api_key"},
-				SettingsFields: []string{"base_url"},
-				Platforms:      []manifest.AccountPlatform{{Platform: "anthropic"}}},
+				SettingsFields:  []string{"base_url"},
+				GuardedSettings: []manifest.GuardedSetting{{Field: "base_url", Allowed: []string{officialBaseURL}}},
+				Platforms:       []manifest.AccountPlatform{{Platform: "anthropic"}}},
 			FormSchema: json.RawMessage(formSchema), FormUI: json.RawMessage(`{"api_key":{"ui:widget":"password"}}`),
 			Client: plat,
 		}, {
 			Plugin: relay,
 			Type: manifest.AccountType{ID: "relay_key", Label: manifest.LocalizedText{"en": "Relay key"},
 				Form: manifest.Form{Mode: "schema"}, SensitiveFields: []string{"api_key"},
-				Platforms: []manifest.AccountPlatform{{Platform: "anthropic"}, {Platform: "ghost"}}},
+				SettingsFields: []string{"base_url"},
+				Platforms:      []manifest.AccountPlatform{{Platform: "anthropic"}, {Platform: "ghost"}}},
 			FormSchema: json.RawMessage(formSchema),
 			Client:     plat,
 		}, {
@@ -442,7 +452,7 @@ func TestPlatformsRoute(t *testing.T) {
 	reg.set(testGen(&fakePlatform{}))
 	s := New(Deps{Registry: reg, Converters: fakeConverters{}})
 	engine := gin.New()
-	s.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, allowAll{}, noStepUp{}))
+	s.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, fakeAuthz{}, noStepUp{}))
 	for path, n := range map[string]int{"/api/v1/platforms": 3, "/api/v1/account-types": 3} {
 		req := httptest.NewRequest("GET", path, nil)
 		req.Header.Set("Authorization", "Bearer u1")
@@ -513,10 +523,15 @@ const formSchema = `{
   }
 }`
 
+// officialBaseURL is the only base_url the guarded anthropic/apikey type
+// accepts from callers without account:settings:custom.
+const officialBaseURL = "https://api.anthropic.com"
+
 type env struct {
 	t        *testing.T
 	db       *store.DB
 	svc      *Service
+	prx      *proxy.Service
 	h        http.Handler
 	mr       *miniredis.Miniredis
 	bus      *fakeBus
@@ -527,7 +542,15 @@ type env struct {
 	uid      int64
 }
 
+// setup builds the harness with an admin user allowed to do everything.
 func setup(t *testing.T) *env {
+	return setupWith(t, fakeAuthz{})
+}
+
+// setupWith builds the harness with the given authorizer (shared by the
+// router and the service). The admin user is created first; tests add more
+// users with addUser and call as them with doAs.
+func setupWith(t *testing.T, authz fakeAuthz) *env {
 	gin.SetMode(gin.TestMode)
 	db := testutil.DB(t)
 	mr := miniredis.RunT(t)
@@ -554,16 +577,24 @@ func setup(t *testing.T) *env {
 	e.plat = &fakePlatform{testURL: e.upstream.URL + "/v1/messages"}
 	e.gen = testGen(e.plat)
 	e.reg.set(e.gen)
-	e.uid = e.exec1(`INSERT INTO users (email, password_hash) VALUES ('admin@x.com', 'x') RETURNING id`)
-	e.svc = New(Deps{DB: db, Redis: rdb, Cipher: cipher, Registry: e.reg, Proxies: directProxies{},
+	e.uid = e.addUser("admin@x.com")
+	// The real proxy service serves as directory and resolver so proxy_url
+	// tests exercise FindOrCreate / AuditAutoCreate end to end.
+	e.prx = proxy.New(db, cipher, e.bus, proxy.Options{AllowPrivate: true})
+	e.svc = New(Deps{DB: db, Redis: rdb, Cipher: cipher, Registry: e.reg, Proxies: e.prx, Resolver: e.prx, Authorizer: authz,
 		Events: dbEvents{}, Slots: fakeSlots{}, Limiter: NewLimiter(rdb), Bus: e.bus, Converters: fakeConverters{}, AllowPrivateUpstream: true})
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	go e.svc.Run(ctx)
 	engine := gin.New()
-	e.svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, allowAll{}, noStepUp{}))
+	e.svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, authz, noStepUp{}))
 	e.h = engine
 	return e
+}
+
+func (e *env) addUser(email string) int64 {
+	e.t.Helper()
+	return e.exec1(`INSERT INTO users (email, password_hash) VALUES ($1, 'x') RETURNING id`, email)
 }
 
 func (e *env) exec1(sql string, args ...any) int64 {
@@ -575,19 +606,33 @@ func (e *env) exec1(sql string, args ...any) int64 {
 	return id
 }
 
+// do calls the API as the admin user.
 func (e *env) do(method, path string, body any) (int, map[string]any) {
+	e.t.Helper()
+	return e.doAs(e.uid, method, path, body)
+}
+
+// doAs calls the API as uid and decodes the JSON envelope.
+func (e *env) doAs(uid int64, method, path string, body any) (int, map[string]any) {
+	e.t.Helper()
+	code, raw := e.doRaw(uid, method, path, body)
+	var out map[string]any
+	_ = json.Unmarshal(raw, &out)
+	return code, out
+}
+
+// doRaw calls the API as uid and returns the raw body.
+func (e *env) doRaw(uid int64, method, path string, body any) (int, []byte) {
 	e.t.Helper()
 	var b []byte
 	if body != nil {
 		b, _ = json.Marshal(body)
 	}
 	req := httptest.NewRequest(method, "/api/v1"+path, bytes.NewReader(b))
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer u%d", e.uid))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer u%d", uid))
 	w := httptest.NewRecorder()
 	e.h.ServeHTTP(w, req)
-	var out map[string]any
-	_ = json.Unmarshal(w.Body.Bytes(), &out)
-	return w.Code, out
+	return w.Code, w.Body.Bytes()
 }
 
 func fieldsOf(out map[string]any) []string {

@@ -37,6 +37,13 @@ type Deps struct {
 	// AllowPrivateUpstream disables the private-address guard of the test
 	// action (config SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM).
 	AllowPrivateUpstream bool
+	// Authorizer answers the permission questions handlers ask beyond the
+	// route key (proxy visibility, account:settings:custom; CONTRACTS §21).
+	// nil denies everything it is asked.
+	Authorizer core.Authorizer
+	// Resolver finds or creates the proxy named by proxy_url when an account
+	// is saved (CONTRACTS §21.4); nil rejects proxy_url as unsupported.
+	Resolver core.ProxyResolver
 }
 
 const (
@@ -87,21 +94,24 @@ func New(d Deps) *Service {
 	}
 }
 
-// RegisterRoutes mounts the account and account type endpoints.
+// RegisterRoutes mounts the account and account type endpoints. Every route
+// accepts the "all" key or its "own" counterpart (CONTRACTS §21.2); handlers
+// narrow their SQL with core.OwnerScope.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
-	r.Perm("GET", "/platforms", "account:read", s.listPlatforms)
+	browse := []string{"account:read", "account:own:read", "account:own:create"}
+	r.PermAny("GET", "/platforms", s.listPlatforms, browse...)
 	r.Authed("GET", "/me/platforms", s.listMyPlatforms)
-	r.Perm("GET", "/account-types", "account:read", s.listTypes)
-	r.Perm("GET", "/account-types/:plugin_key/:type/form", "account:read", s.typeForm)
-	r.Perm("GET", "/accounts", "account:read", s.list)
-	r.Perm("POST", "/accounts", "account:create", s.create)
-	r.Perm("GET", "/accounts/:id", "account:read", s.get)
-	r.Perm("PATCH", "/accounts/:id", "account:update", s.update)
-	r.Perm("DELETE", "/accounts/:id", "account:delete", s.delete)
-	r.Perm("POST", "/accounts/:id/test", "account:test", s.test)
-	r.Perm("POST", "/accounts/:id/models/fetch", "account:test", s.fetchAccountModels)
-	r.Perm("POST", "/account-types/:plugin_key/:type/models/fetch", "account:create", s.fetchTypeModels)
-	r.Perm("POST", "/accounts/:id/credentials/reveal", "account:credential:view", s.reveal)
+	r.PermAny("GET", "/account-types", s.listTypes, browse...)
+	r.PermAny("GET", "/account-types/:plugin_key/:type/form", s.typeForm, browse...)
+	r.PermAny("GET", "/accounts", s.list, "account:read", "account:own:read")
+	r.PermAny("POST", "/accounts", s.create, "account:create", "account:own:create")
+	r.PermAny("GET", "/accounts/:id", s.get, "account:read", "account:own:read")
+	r.PermAny("PATCH", "/accounts/:id", s.update, "account:update", "account:own:update")
+	r.PermAny("DELETE", "/accounts/:id", s.delete, "account:delete", "account:own:delete")
+	r.PermAny("POST", "/accounts/:id/test", s.test, "account:test", "account:own:test")
+	r.PermAny("POST", "/accounts/:id/models/fetch", s.fetchAccountModels, "account:test", "account:own:test")
+	r.PermAny("POST", "/account-types/:plugin_key/:type/models/fetch", s.fetchTypeModels, "account:create", "account:own:create")
+	r.PermAny("POST", "/accounts/:id/credentials/reveal", s.reveal, "account:credential:view", "account:own:credential:view")
 }
 
 // Run subscribes to account:changed and flushes last_used_at every 10 s
@@ -173,6 +183,67 @@ func (s *Service) pluginActive(key string) bool {
 	}
 	_, ok := g.Plugin(key)
 	return ok
+}
+
+// can asks the Authorizer whether the caller holds key; errors and a missing
+// Authorizer count as "no".
+func (s *Service) can(ctx context.Context, key string) bool {
+	if s.d.Authorizer == nil {
+		return false
+	}
+	uid, ok := core.UserID(ctx)
+	if !ok {
+		return false
+	}
+	granted, err := s.d.Authorizer.Can(ctx, uid, key)
+	if err != nil {
+		slog.WarnContext(ctx, "account: permission check", "permission", key, "err", err)
+		return false
+	}
+	return granted
+}
+
+// customSettings reports whether the caller may set guarded settings to
+// values other than the official ones (account:settings:custom, CONTRACTS
+// §21.3).
+func (s *Service) customSettings(ctx context.Context) bool {
+	return s.can(ctx, "account:settings:custom")
+}
+
+// proxyRange is the set of proxies a caller may reference (by proxy_id) or
+// match (proxy_url): scope nil means every proxy, otherwise the rows created
+// by *scope; none means the caller holds no proxy key and sees nothing.
+type proxyRange struct {
+	scope *int64
+	none  bool
+}
+
+// allProxies is the range of callers holding the "all" account key: proxy_id
+// only has to exist.
+var allProxies = proxyRange{}
+
+// proxyRangeOf computes the caller's proxy visibility (CONTRACTS §21.4):
+// proxy:read sees every proxy; proxy:own:read or proxy:own:manage see the
+// caller's own; anything else sees none.
+func (s *Service) proxyRangeOf(ctx context.Context) proxyRange {
+	if s.can(ctx, "proxy:read") {
+		return allProxies
+	}
+	if s.can(ctx, "proxy:own:read") || s.can(ctx, "proxy:own:manage") {
+		uid, _ := core.UserID(ctx)
+		return proxyRange{scope: &uid}
+	}
+	return proxyRange{none: true}
+}
+
+// proxyRangeFor returns the proxies a caller of a route registered with
+// allKey may reference: everything under the "all" key, the visible range
+// under the "own" key.
+func (s *Service) proxyRangeFor(ctx context.Context, allKey string) proxyRange {
+	if core.OwnerScope(ctx, allKey) == nil {
+		return allProxies
+	}
+	return s.proxyRangeOf(ctx)
 }
 
 func t(ctx context.Context, en, zh string) string {

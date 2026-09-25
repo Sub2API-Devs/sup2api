@@ -15,6 +15,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -42,20 +43,26 @@ type row struct {
 	TPDLimit       int64
 	SPMLimit       int
 	LastUsedAt     *time.Time
+	CreatedBy      *int64
+	CreatedByEmail *string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
 
+// selectRow joins the creator's email (also for soft-deleted users); every
+// statement built on it must qualify account columns with "a.".
 const selectRow = `SELECT a.id, a.name, a.plugin_key, a.type, a.credentials_enc, a.settings, a.proxy_id,
 	a.status, a.status_reason, a.schedulable, a.priority, a.weight, a.max_concurrency,
-	a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.tpd_limit, a.spm_limit, a.last_used_at, a.created_at, a.updated_at
-	FROM accounts a`
+	a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.tpd_limit, a.spm_limit, a.last_used_at,
+	a.created_by, u.email, a.created_at, a.updated_at
+	FROM accounts a LEFT JOIN users u ON u.id = a.created_by`
 
 func scanRow(r pgx.Row) (*row, error) {
 	var a row
 	err := r.Scan(&a.ID, &a.Name, &a.PluginKey, &a.Type, &a.CredEnc, &a.Settings, &a.ProxyID,
 		&a.Status, &a.StatusReason, &a.Schedulable, &a.Priority, &a.Weight, &a.MaxConcurrency,
-		&a.Models, &a.ModelMapping, &a.RPMLimit, &a.TPMLimit, &a.TPDLimit, &a.SPMLimit, &a.LastUsedAt, &a.CreatedAt, &a.UpdatedAt)
+		&a.Models, &a.ModelMapping, &a.RPMLimit, &a.TPMLimit, &a.TPDLimit, &a.SPMLimit, &a.LastUsedAt,
+		&a.CreatedBy, &a.CreatedByEmail, &a.CreatedAt, &a.UpdatedAt)
 	return &a, err
 }
 
@@ -72,12 +79,22 @@ func notFound(ctx context.Context) error {
 	return core.ErrNotFound.WithMessage(t(ctx, "account not found", "账号不存在"))
 }
 
-func (s *Service) loadRow(ctx context.Context, q store.Querier, id int64, lock bool) (*row, error) {
-	sql := selectRow + ` WHERE a.id = $1 AND a.deleted_at IS NULL`
+// scoped is the ownership condition every scoped statement carries on the
+// bigint parameter param (e.g. "$2"): nil for the "all" permission (every
+// row), otherwise the caller id (rows the caller created; created_by NULL
+// never matches). CONTRACTS §21.1.
+func scoped(param string) string {
+	return "(" + param + "::bigint IS NULL OR a.created_by = " + param + ")"
+}
+
+// loadRow returns one live account visible in scope (nil = all); rows
+// outside the scope are 404 like missing ones.
+func (s *Service) loadRow(ctx context.Context, q store.Querier, id int64, scope *int64, lock bool) (*row, error) {
+	sql := selectRow + ` WHERE a.id = $1 AND a.deleted_at IS NULL AND ` + scoped("$2")
 	if lock {
-		sql += ` FOR UPDATE`
+		sql += ` FOR UPDATE OF a`
 	}
-	a, err := scanRow(q.QueryRow(ctx, sql, id))
+	a, err := scanRow(q.QueryRow(ctx, sql, id, scope))
 	if store.IsNoRows(err) {
 		return nil, notFound(ctx)
 	}
@@ -127,9 +144,16 @@ type View struct {
 	// Credentials (settings + secret fields, sensitive ones masked) is only
 	// present on single-account responses.
 	Credentials json.RawMessage `json:"credentials,omitempty"`
-	LastUsedAt  *time.Time      `json:"last_used_at"`
-	CreatedAt   time.Time       `json:"created_at"`
-	UpdatedAt   time.Time       `json:"updated_at"`
+	// CreatedBy is the creator (null for rows created before ownership
+	// existed or by the system); CreatedByEmail is kept for soft-deleted users.
+	CreatedBy      *int64  `json:"created_by"`
+	CreatedByEmail *string `json:"created_by_email"`
+	// ProxyCreated is only present on the create/update responses: whether
+	// proxy_url led to a new proxy row (CONTRACTS §21.4).
+	ProxyCreated *bool      `json:"proxy_created,omitempty"`
+	LastUsedAt   *time.Time `json:"last_used_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
 // views builds list views, filling groups, in_use, cooldown and orphaned.
@@ -153,6 +177,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 			MaxConcurrency: a.MaxConcurrency, Models: models, ModelMapping: a.mapping(),
 			RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit, TPDLimit: a.TPDLimit, SPMLimit: a.SPMLimit,
 			Orphaned: !s.pluginActive(a.PluginKey), Settings: st,
+			CreatedBy: a.CreatedBy, CreatedByEmail: a.CreatedByEmail,
 			LastUsedAt: a.LastUsedAt, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
 		}
 		out[i], ids[i], byID[a.ID] = v, a.ID, v
@@ -247,8 +272,10 @@ func (s *Service) credentialView(a *row) (json.RawMessage, error) {
 	return mask(mustJSON(all), bt.Type.SensitiveFields), nil
 }
 
-func (s *Service) fullView(ctx context.Context, id int64) (*View, error) {
-	a, err := s.loadRow(ctx, s.d.DB.Pool, id, false)
+// fullView is the single-account view (with credentials) of an account
+// visible in scope.
+func (s *Service) fullView(ctx context.Context, id int64, scope *int64) (*View, error) {
+	a, err := s.loadRow(ctx, s.d.DB.Pool, id, scope, false)
 	if err != nil {
 		return nil, err
 	}
@@ -272,6 +299,26 @@ func (s *Service) list(c *gin.Context) {
 	add := func(cond string, v any) {
 		args = append(args, v)
 		where += " AND " + strings.ReplaceAll(cond, "?", "$"+strconv.Itoa(len(args)))
+	}
+	// Visible range: the caller's own rows unless account:read was granted;
+	// mine=true narrows to own rows either way; created_by=<id> filters
+	// within the "all" range and is ignored under the own range (§21.2).
+	scope := core.OwnerScope(ctx, "account:read")
+	if mine, _ := strconv.ParseBool(c.Query("mine")); mine {
+		uid, _ := core.UserID(ctx)
+		scope = &uid
+	}
+	if v := c.Query("created_by"); v != "" && scope == nil {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || id <= 0 {
+			httpapi.Fail(c, core.InvalidFields(core.FieldError{Field: "created_by", Code: "invalid",
+				Message: t(ctx, "created_by must be a user id", "created_by 必须是用户 ID")}))
+			return
+		}
+		scope = &id
+	}
+	if scope != nil {
+		add("a.created_by = ?", *scope)
 	}
 	if v := c.Query("plugin_key"); v != "" {
 		add("a.plugin_key = ?", v)
@@ -326,7 +373,8 @@ func (s *Service) get(c *gin.Context) {
 	if !ok {
 		return
 	}
-	v, err := s.fullView(c.Request.Context(), id)
+	ctx := c.Request.Context()
+	v, err := s.fullView(ctx, id, core.OwnerScope(ctx, "account:read"))
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -354,11 +402,14 @@ func (n *nullable[T]) UnmarshalJSON(b []byte) error {
 }
 
 type input struct {
-	Name           *string            `json:"name"`
-	PluginKey      string             `json:"plugin_key"`
-	Type           string             `json:"type"`
-	GroupIDs       *[]int64           `json:"group_ids"`
-	ProxyID        nullable[int64]    `json:"proxy_id"`
+	Name      *string         `json:"name"`
+	PluginKey string          `json:"plugin_key"`
+	Type      string          `json:"type"`
+	GroupIDs  *[]int64        `json:"group_ids"`
+	ProxyID   nullable[int64] `json:"proxy_id"`
+	// ProxyURL names a proxy by address instead of id (CONTRACTS §21.4); it
+	// is looked up or created when the account is saved. Blank means absent.
+	ProxyURL       *string            `json:"proxy_url"`
 	Priority       *int               `json:"priority"`
 	Weight         *int               `json:"weight"`
 	MaxConcurrency *int               `json:"max_concurrency"`
@@ -371,6 +422,41 @@ type input struct {
 	TPDLimit       *int64             `json:"tpd_limit"`
 	SPMLimit       *int               `json:"spm_limit"`
 	Credentials    json.RawMessage    `json:"credentials"`
+}
+
+// hasCredentials reports whether the request carries a credentials object
+// (null counts as absent on PATCH).
+func (in *input) hasCredentials() bool {
+	creds := strings.TrimSpace(string(in.Credentials))
+	return creds != "" && creds != "null"
+}
+
+// changedFields lists the request fields present in a PATCH for the audit
+// detail (names only, never values; credentials is one name).
+func (in *input) changedFields() []string {
+	out := []string{}
+	set := func(name string, present bool) {
+		if present {
+			out = append(out, name)
+		}
+	}
+	set("name", in.Name != nil)
+	set("group_ids", in.GroupIDs != nil)
+	set("proxy_id", in.ProxyID.Set)
+	set("proxy_url", in.ProxyURL != nil)
+	set("priority", in.Priority != nil)
+	set("weight", in.Weight != nil)
+	set("max_concurrency", in.MaxConcurrency != nil)
+	set("schedulable", in.Schedulable != nil)
+	set("status", in.Status != nil)
+	set("models", in.Models != nil)
+	set("model_mapping", in.ModelMapping != nil)
+	set("rpm_limit", in.RPMLimit != nil)
+	set("tpm_limit", in.TPMLimit != nil)
+	set("tpd_limit", in.TPDLimit != nil)
+	set("spm_limit", in.SPMLimit != nil)
+	set("credentials", in.hasCredentials())
+	return out
 }
 
 const (
@@ -436,6 +522,18 @@ func (in *input) validate(ctx context.Context, create bool) []core.FieldError {
 	if in.ProxyID.Valid && in.ProxyID.V <= 0 {
 		add("proxy_id", "invalid", "invalid proxy", "代理无效")
 	}
+	if in.ProxyURL != nil {
+		// A blank proxy_url is the same as not sending it.
+		u := strings.TrimSpace(*in.ProxyURL)
+		if u == "" {
+			in.ProxyURL = nil
+		} else {
+			in.ProxyURL = &u
+			if in.ProxyID.Set {
+				add("proxy_url", "conflict", "proxy_url and proxy_id cannot both be given", "proxy_url 与 proxy_id 不能同时给出")
+			}
+		}
+	}
 	if create && len(in.Credentials) == 0 {
 		add("credentials", "required", "credentials are required", "凭证必填")
 	}
@@ -490,11 +588,15 @@ func normalizeMapping(ctx context.Context, in map[string]string) (map[string]str
 	return out, fe
 }
 
-// checkRefs verifies that the proxy and groups exist.
-func checkRefs(ctx context.Context, q store.Querier, proxyID *int64, groupIDs []int64) error {
+// checkRefs verifies that the proxy (within the caller's proxy range) and
+// the groups exist. A proxy outside the range is reported as not found, like
+// a missing one.
+func checkRefs(ctx context.Context, q store.Querier, proxyID *int64, pr proxyRange, groupIDs []int64) error {
 	if proxyID != nil {
 		var ok bool
-		if err := q.QueryRow(ctx, `SELECT true FROM proxies WHERE id = $1`, *proxyID).Scan(&ok); err != nil {
+		err := q.QueryRow(ctx, `SELECT true FROM proxies p WHERE p.id = $1 AND NOT $2::boolean
+			AND ($3::bigint IS NULL OR p.created_by = $3)`, *proxyID, pr.none, pr.scope).Scan(&ok)
+		if err != nil {
 			if store.IsNoRows(err) {
 				return core.InvalidFields(core.FieldError{Field: "proxy_id", Code: "not_found",
 					Message: t(ctx, "proxy not found", "代理不存在")})
@@ -551,8 +653,50 @@ func statusPayload(id int64, pluginKey, typ, name, status, reason string, until 
 	return p
 }
 
+// proxyByURL is a proxy_url accepted for saving: the parsed address and the
+// range FindOrCreate may match in (CONTRACTS §21.4).
+type proxyByURL struct {
+	spec  core.ProxySpec
+	scope *int64
+}
+
+// parseProxyURL checks that the caller may link proxies by address
+// (proxy:manage or proxy:own:manage) and parses raw. Errors are 403
+// permission_denied (details.permission = proxy:own:manage) or the
+// invalid_argument of core.ParseProxyURL (never echoing the address).
+func (s *Service) parseProxyURL(ctx context.Context, raw string) (*proxyByURL, error) {
+	if s.d.Resolver == nil {
+		return nil, core.ErrUnsupported.WithMessage("proxy_url is not supported")
+	}
+	if !s.can(ctx, "proxy:manage") && !s.can(ctx, "proxy:own:manage") {
+		return nil, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": "proxy:own:manage"})
+	}
+	spec, err := core.ParseProxyURL(raw)
+	if err != nil {
+		return nil, err
+	}
+	return &proxyByURL{spec: spec, scope: s.proxyRangeOf(ctx).scope}, nil
+}
+
+// resolveProxy runs FindOrCreate for a proxy_url inside the account's
+// transaction; the returned id becomes the account's proxy_id.
+func (s *Service) resolveProxy(ctx context.Context, tx pgx.Tx, p *proxyByURL, uid int64) (id int64, created bool, err error) {
+	return s.d.Resolver.FindOrCreate(ctx, tx, p.spec, uid, p.scope)
+}
+
+// auditProxy records the automatic creation once the account id is known
+// (same transaction). AuditAutoCreate also broadcasts config:changed for the
+// new proxy; nothing else is needed after the commit (no node can have
+// cached a proxy that did not exist before this request).
+func (s *Service) auditProxy(ctx context.Context, tx pgx.Tx, created bool, proxyID, uid, accountID int64) error {
+	if !created {
+		return nil
+	}
+	return s.d.Resolver.AuditAutoCreate(ctx, tx, proxyID, uid, accountID)
+}
+
 func (s *Service) create(c *gin.Context) {
-	ctx := c.Request.Context()
+	ctx := audit.Context(c)
 	var in input
 	if !httpapi.BindJSON(c, &in) {
 		return
@@ -575,11 +719,20 @@ func (s *Service) create(c *gin.Context) {
 	if in.ProxyID.Valid {
 		proxyID = &in.ProxyID.V
 	}
-	if err := checkRefs(ctx, s.d.DB.Pool, proxyID, groupIDs); err != nil {
+	// Under the own key proxy_id must be a proxy the caller can see (§21.2).
+	if err := checkRefs(ctx, s.d.DB.Pool, proxyID, s.proxyRangeFor(ctx, "account:create"), groupIDs); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	p, err := s.prepare(ctx, bt, in.Credentials, nil)
+	var byURL *proxyByURL
+	if in.ProxyURL != nil {
+		var err error
+		if byURL, err = s.parseProxyURL(ctx, *in.ProxyURL); err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+	}
+	p, err := s.prepare(ctx, bt, in.Credentials, nil, s.customSettings(ctx))
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -623,7 +776,16 @@ func (s *Service) create(c *gin.Context) {
 	}
 	uid, _ := core.UserID(ctx)
 	var id int64
+	proxyCreated := false
 	err = s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
+		if byURL != nil {
+			// The proxy row must exist before the account references it.
+			pid, created, err := s.resolveProxy(ctx, tx, byURL, uid)
+			if err != nil {
+				return err
+			}
+			proxyID, proxyCreated = &pid, created
+		}
 		if err := tx.QueryRow(ctx, `INSERT INTO accounts (name, plugin_key, type, credentials_enc, settings,
 			proxy_id, status, schedulable, priority, max_concurrency, created_by,
 			weight, models, model_mapping, rpm_limit, tpm_limit, tpd_limit, spm_limit)
@@ -637,6 +799,15 @@ func (s *Service) create(c *gin.Context) {
 		if err := setGroups(ctx, tx, id, groupIDs); err != nil {
 			return err
 		}
+		if proxyID != nil {
+			if err := s.auditProxy(ctx, tx, proxyCreated, *proxyID, uid, id); err != nil {
+				return err
+			}
+		}
+		if err := audit.Audit(ctx, tx, uid, "account.create", "account", itoa(id),
+			map[string]any{"name": *in.Name, "plugin_key": bt.Plugin.Key, "type": bt.Type.ID}); err != nil {
+			return err
+		}
 		return s.d.Events.Emit(ctx, tx, core.Event{Type: core.EventAccountCreated,
 			Payload: basicPayload(id, bt.Plugin.Key, bt.Type.ID, *in.Name)})
 	})
@@ -645,16 +816,18 @@ func (s *Service) create(c *gin.Context) {
 		return
 	}
 	s.changed(ctx, id)
-	v, err := s.fullView(ctx, id)
+	// The row was just created by the caller: no scope needed.
+	v, err := s.fullView(ctx, id, nil)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
+	v.ProxyCreated = &proxyCreated
 	httpapi.Created(c, v)
 }
 
 func (s *Service) update(c *gin.Context) {
-	ctx := c.Request.Context()
+	ctx := audit.Context(c)
 	id, ok := httpapi.PathID(c, "id")
 	if !ok {
 		return
@@ -667,7 +840,8 @@ func (s *Service) update(c *gin.Context) {
 		httpapi.Fail(c, core.InvalidFields(fe...))
 		return
 	}
-	cur, err := s.loadRow(ctx, s.d.DB.Pool, id, false)
+	scope := core.OwnerScope(ctx, "account:update")
+	cur, err := s.loadRow(ctx, s.d.DB.Pool, id, scope, false)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -680,13 +854,20 @@ func (s *Service) update(c *gin.Context) {
 	if in.ProxyID.Valid {
 		proxyID = &in.ProxyID.V
 	}
-	if err := checkRefs(ctx, s.d.DB.Pool, proxyID, groupIDs); err != nil {
+	if err := checkRefs(ctx, s.d.DB.Pool, proxyID, s.proxyRangeFor(ctx, "account:update"), groupIDs); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
+	var byURL *proxyByURL
+	if in.ProxyURL != nil {
+		if byURL, err = s.parseProxyURL(ctx, *in.ProxyURL); err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+	}
 	// Validate credentials (may call the plugin) before opening the transaction.
 	var p *prepared
-	if creds := strings.TrimSpace(string(in.Credentials)); creds != "" && creds != "null" {
+	if in.hasCredentials() {
 		bt, ok := s.accountType(cur.PluginKey, cur.Type)
 		if !ok {
 			httpapi.Fail(c, core.ErrPluginUnavailable.WithMessage(t(ctx,
@@ -704,20 +885,29 @@ func (s *Service) update(c *gin.Context) {
 			httpapi.Fail(c, err)
 			return
 		}
-		if p, err = s.prepare(ctx, bt, in.Credentials, mustJSON(old)); err != nil {
+		if p, err = s.prepare(ctx, bt, in.Credentials, mustJSON(old), s.customSettings(ctx)); err != nil {
 			httpapi.Fail(c, err)
 			return
 		}
 	}
 	statusChanged := in.Status != nil && *in.Status != cur.Status
+	uid, _ := core.UserID(ctx)
+	setProxy, proxyCreated := in.ProxyID.Set, false
 	err = s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
-		locked, err := s.loadRow(ctx, tx, id, true)
+		locked, err := s.loadRow(ctx, tx, id, scope, true)
 		if err != nil {
 			return err
 		}
 		if p != nil && !locked.UpdatedAt.Equal(cur.UpdatedAt) {
 			return core.ErrConflict.WithMessage(t(ctx, "the account was modified concurrently, please retry",
 				"账号已被其他操作修改，请重试"))
+		}
+		if byURL != nil {
+			pid, created, err := s.resolveProxy(ctx, tx, byURL, uid)
+			if err != nil {
+				return err
+			}
+			proxyID, setProxy, proxyCreated = &pid, true, created
 		}
 		var enc []byte
 		var settings *string
@@ -739,7 +929,7 @@ func (s *Service) update(c *gin.Context) {
 			m := mappingJSON(*in.ModelMapping)
 			mapping = &m
 		}
-		if _, err := tx.Exec(ctx, `UPDATE accounts SET
+		if _, err := tx.Exec(ctx, `UPDATE accounts a SET
 			name = COALESCE($2, name),
 			proxy_id = CASE WHEN $3 THEN $4 ELSE proxy_id END,
 			priority = COALESCE($5, priority),
@@ -757,14 +947,23 @@ func (s *Service) update(c *gin.Context) {
 			tpd_limit = COALESCE($17, tpd_limit),
 			spm_limit = COALESCE($18, spm_limit),
 			updated_at = clock_timestamp()
-			WHERE id = $1`, id, in.Name, in.ProxyID.Set, proxyID, in.Priority, in.MaxConcurrency, in.Schedulable,
-			in.Status, reason, enc, settings, in.Weight, in.Models, mapping, in.RPMLimit, in.TPMLimit, in.TPDLimit, in.SPMLimit); err != nil {
+			WHERE a.id = $1 AND `+scoped("$19"), id, in.Name, setProxy, proxyID, in.Priority, in.MaxConcurrency, in.Schedulable,
+			in.Status, reason, enc, settings, in.Weight, in.Models, mapping, in.RPMLimit, in.TPMLimit, in.TPDLimit, in.SPMLimit, scope); err != nil {
 			return err
 		}
 		if in.GroupIDs != nil {
 			if err := setGroups(ctx, tx, id, groupIDs); err != nil {
 				return err
 			}
+		}
+		if proxyID != nil {
+			if err := s.auditProxy(ctx, tx, proxyCreated, *proxyID, uid, id); err != nil {
+				return err
+			}
+		}
+		if err := audit.Audit(ctx, tx, uid, "account.update", "account", itoa(id),
+			map[string]any{"fields": in.changedFields()}); err != nil {
+			return err
 		}
 		name := locked.Name
 		if in.Name != nil {
@@ -783,24 +982,27 @@ func (s *Service) update(c *gin.Context) {
 		return
 	}
 	s.changed(ctx, id)
-	v, err := s.fullView(ctx, id)
+	v, err := s.fullView(ctx, id, scope)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
+	v.ProxyCreated = &proxyCreated
 	httpapi.OK(c, v)
 }
 
 func (s *Service) delete(c *gin.Context) {
-	ctx := c.Request.Context()
+	ctx := audit.Context(c)
 	id, ok := httpapi.PathID(c, "id")
 	if !ok {
 		return
 	}
+	scope := core.OwnerScope(ctx, "account:delete")
+	uid, _ := core.UserID(ctx)
 	err := s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
 		var pk, typ, name string
-		err := tx.QueryRow(ctx, `UPDATE accounts SET deleted_at = now(), updated_at = now()
-			WHERE id = $1 AND deleted_at IS NULL RETURNING plugin_key, type, name`, id).Scan(&pk, &typ, &name)
+		err := tx.QueryRow(ctx, `UPDATE accounts a SET deleted_at = now(), updated_at = now()
+			WHERE a.id = $1 AND a.deleted_at IS NULL AND `+scoped("$2")+` RETURNING plugin_key, type, name`, id, scope).Scan(&pk, &typ, &name)
 		if store.IsNoRows(err) {
 			return notFound(ctx)
 		}
@@ -808,6 +1010,9 @@ func (s *Service) delete(c *gin.Context) {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM account_groups WHERE account_id = $1`, id); err != nil {
+			return err
+		}
+		if err := audit.Audit(ctx, tx, uid, "account.delete", "account", itoa(id), map[string]any{"name": name}); err != nil {
 			return err
 		}
 		return s.d.Events.Emit(ctx, tx, core.Event{Type: core.EventAccountDeleted, Payload: basicPayload(id, pk, typ, name)})
@@ -826,12 +1031,12 @@ func (s *Service) delete(c *gin.Context) {
 // ---------------------------------------------------------------- reveal
 
 func (s *Service) reveal(c *gin.Context) {
-	ctx := c.Request.Context()
+	ctx := audit.Context(c)
 	id, ok := httpapi.PathID(c, "id")
 	if !ok {
 		return
 	}
-	a, err := s.loadRow(ctx, s.d.DB.Pool, id, false)
+	a, err := s.loadRow(ctx, s.d.DB.Pool, id, core.OwnerScope(ctx, "account:credential:view"), false)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -847,8 +1052,7 @@ func (s *Service) reveal(c *gin.Context) {
 		return
 	}
 	uid, _ := core.UserID(ctx)
-	if _, err := s.d.DB.Pool.Exec(ctx, `INSERT INTO audit_logs (user_id, action, target_type, target_id, ip)
-		VALUES (NULLIF($1::bigint, 0), 'account.credentials.reveal', 'account', $2, $3)`, uid, itoa(id), c.ClientIP()); err != nil {
+	if err := audit.Audit(ctx, s.d.DB.Pool, uid, "account.credentials.reveal", "account", itoa(id), nil); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}

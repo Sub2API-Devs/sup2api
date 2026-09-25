@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	"golang.org/x/text/message"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
@@ -225,10 +227,11 @@ type prepared struct {
 	secret   []byte
 }
 
-// prepare validates credentials (schema, then plugin) and encrypts the
-// non-settings part. old is the merged plaintext of the stored credentials
-// (nil on create); Mask values are replaced from it.
-func (s *Service) prepare(ctx context.Context, bt core.AccountTypeBinding, raw json.RawMessage, old []byte) (*prepared, error) {
+// prepare validates credentials (schema, then plugin, then the guarded
+// settings unless custom is true) and encrypts the non-settings part. old is
+// the merged plaintext of the stored credentials (nil on create); Mask values
+// are replaced from it and guarded fields equal to their old value pass.
+func (s *Service) prepare(ctx context.Context, bt core.AccountTypeBinding, raw json.RawMessage, old []byte, custom bool) (*prepared, error) {
 	raw = bytes.TrimSpace(raw)
 	if len(raw) == 0 || raw[0] != '{' {
 		return nil, core.InvalidFields(core.FieldError{Field: "credentials", Code: "invalid",
@@ -287,11 +290,74 @@ func (s *Service) prepare(ctx context.Context, bt core.AccountTypeBinding, raw j
 			secJSON, stJSON = mustJSON(sec), mustJSON(st)
 		}
 	}
+	if !custom {
+		if err := checkGuarded(ctx, bt.Type.GuardedSettings, st, old); err != nil {
+			return nil, err
+		}
+	}
 	enc, err := s.d.Cipher.Encrypt(secJSON, aad(bt.Plugin.Key))
 	if err != nil {
 		return nil, err
 	}
 	return &prepared{enc: enc, settings: stJSON, secret: secJSON}, nil
+}
+
+// ---------------------------------------------------------------- guarded settings
+
+// checkGuarded enforces manifest guardedSettings (CONTRACTS §21.3) on the
+// normalized settings of a caller without account:settings:custom: each
+// guarded field must be empty/absent, one of the allowed values or (on
+// update) the value the account already had. Values are compared after
+// guardNorm. Violations are invalid_argument with
+// fields[{credentials.<field>, forbidden}].
+func checkGuarded(ctx context.Context, guards []manifest.GuardedSetting, settings fields, old []byte) error {
+	var fe []core.FieldError
+	for _, g := range guards {
+		raw, ok := settings[g.Field]
+		if !ok {
+			continue
+		}
+		var v string
+		if err := json.Unmarshal(raw, &v); err != nil {
+			// Not a string: null passes (the plugin default applies), anything
+			// else cannot be an official URL.
+			if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+				continue
+			}
+			v = string(raw)
+		}
+		if strings.TrimSpace(v) == "" {
+			continue
+		}
+		want := guardNorm(v)
+		if slices.ContainsFunc(g.Allowed, func(a string) bool { return guardNorm(a) == want }) {
+			continue
+		}
+		if old != nil {
+			if prev := gjson.GetBytes(old, g.Field); prev.Type == gjson.String && guardNorm(prev.Str) == want {
+				continue
+			}
+		}
+		fe = append(fe, core.FieldError{Field: "credentials." + g.Field, Code: "forbidden",
+			Message: t(ctx, "only the official value is allowed for this field", "该字段只能使用官方地址")})
+	}
+	if len(fe) > 0 {
+		return core.InvalidFields(fe...)
+	}
+	return nil
+}
+
+// guardNorm is the comparison form of a guarded value: trimmed, without
+// trailing slashes, and (when it parses as an absolute URL) with lower-case
+// scheme and host.
+func guardNorm(v string) string {
+	v = strings.TrimRight(strings.TrimSpace(v), "/")
+	if u, err := url.Parse(v); err == nil && u.Scheme != "" && u.Host != "" {
+		u.Scheme = strings.ToLower(u.Scheme)
+		u.Host = strings.ToLower(u.Host)
+		return u.String()
+	}
+	return v
 }
 
 // decrypt returns the plaintext secret part of an account.

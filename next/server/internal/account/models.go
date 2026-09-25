@@ -41,6 +41,9 @@ func (s *Service) fetchTypeModels(c *gin.Context) {
 	var in struct {
 		Credentials json.RawMessage `json:"credentials"`
 		ProxyID     *int64          `json:"proxy_id"`
+		// ProxyURL is only parsed and used for this request: no proxy row is
+		// looked up or created (CONTRACTS §21.4).
+		ProxyURL *string `json:"proxy_url"`
 	}
 	if !httpapi.BindJSON(c, &in) {
 		return
@@ -51,19 +54,49 @@ func (s *Service) fetchTypeModels(c *gin.Context) {
 			Message: t(ctx, "unknown account type (is its plugin enabled?)", "未知的账号类型（插件是否已启用？）")}))
 		return
 	}
-	if in.ProxyID != nil {
-		if err := checkRefs(ctx, s.d.DB.Pool, in.ProxyID, nil); err != nil {
+	proxyURL := ""
+	if in.ProxyURL != nil {
+		proxyURL = strings.TrimSpace(*in.ProxyURL)
+	}
+	if proxyURL != "" && in.ProxyID != nil {
+		httpapi.Fail(c, core.InvalidFields(core.FieldError{Field: "proxy_url", Code: "conflict",
+			Message: t(ctx, "proxy_url and proxy_id cannot both be given", "proxy_url 与 proxy_id 不能同时给出")}))
+		return
+	}
+	var hc *http.Client
+	switch {
+	case proxyURL != "":
+		spec, err := core.ParseProxyURL(proxyURL)
+		if err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+		if hc, err = s.d.Proxies.HTTPClientFor(ctx, spec); err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+		defer hc.CloseIdleConnections()
+	default:
+		if in.ProxyID != nil {
+			// Same visibility rule as POST /accounts (§21.2).
+			if err := checkRefs(ctx, s.d.DB.Pool, in.ProxyID, s.proxyRangeFor(ctx, "account:create"), nil); err != nil {
+				httpapi.Fail(c, err)
+				return
+			}
+		}
+		var err error
+		if hc, err = s.d.Proxies.HTTPClient(ctx, in.ProxyID); err != nil {
 			httpapi.Fail(c, err)
 			return
 		}
 	}
-	p, err := s.prepare(ctx, bt, in.Credentials, nil)
+	p, err := s.prepare(ctx, bt, in.Credentials, nil, s.customSettings(ctx))
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
 	res, err := s.fetchModels(ctx, bt, &pluginv1.Account{Type: bt.Type.ID,
-		CredentialsJson: string(p.secret), SettingsJson: string(p.settings)}, in.ProxyID)
+		CredentialsJson: string(p.secret), SettingsJson: string(p.settings)}, hc, in.ProxyID != nil || proxyURL != "")
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -89,7 +122,7 @@ func (s *Service) fetchAccountModels(c *gin.Context) {
 			return
 		}
 	}
-	a, err := s.loadRow(ctx, s.d.DB.Pool, id, false)
+	a, err := s.loadRow(ctx, s.d.DB.Pool, id, core.OwnerScope(ctx, "account:test"), false)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -112,15 +145,20 @@ func (s *Service) fetchAccountModels(c *gin.Context) {
 			httpapi.Fail(c, err)
 			return
 		}
-		p, err := s.prepare(ctx, bt, in.Credentials, mustJSON(old))
+		p, err := s.prepare(ctx, bt, in.Credentials, mustJSON(old), s.customSettings(ctx))
 		if err != nil {
 			httpapi.Fail(c, err)
 			return
 		}
 		secret, settings = p.secret, p.settings
 	}
+	hc, err := s.d.Proxies.HTTPClient(ctx, a.ProxyID)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
 	res, err := s.fetchModels(ctx, bt, &pluginv1.Account{Id: a.ID, Name: a.Name, Type: a.Type,
-		CredentialsJson: string(secret), SettingsJson: string(settings)}, a.ProxyID)
+		CredentialsJson: string(secret), SettingsJson: string(settings)}, hc, a.ProxyID != nil)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -128,9 +166,10 @@ func (s *Service) fetchAccountModels(c *gin.Context) {
 	httpapi.OK(c, res)
 }
 
-// fetchModels asks the plugin for the models request, sends it through the
-// account's proxy (or directly) and extracts the ids.
-func (s *Service) fetchModels(ctx context.Context, bt core.AccountTypeBinding, acct *pluginv1.Account, proxyID *int64) (*ModelsResult, error) {
+// fetchModels asks the plugin for the models request, sends it with hc (the
+// account's proxy client, a transient proxy_url client or the direct one;
+// proxied tells the private-address guard) and extracts the ids.
+func (s *Service) fetchModels(ctx context.Context, bt core.AccountTypeBinding, acct *pluginv1.Account, hc *http.Client, proxied bool) (*ModelsResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, testTimeout)
 	defer cancel()
 	mr, err := bt.Client.BuildModelsRequest(ctx, &pluginv1.BuildModelsRequestRequest{Account: acct})
@@ -145,7 +184,7 @@ func (s *Service) fetchModels(ctx context.Context, bt core.AccountTypeBinding, a
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return nil, core.ErrPluginUnavailable.WithMessage("plugin built an invalid models URL")
 	}
-	if err := s.checkUpstream(ctx, u, proxyID != nil); err != nil {
+	if err := s.checkUpstream(ctx, u, proxied); err != nil {
 		return nil, core.ErrUnavailable.WithMessage(err.Error())
 	}
 	method := strings.ToUpper(mr.GetMethod())
@@ -165,10 +204,6 @@ func (s *Service) fetchModels(ctx context.Context, bt core.AccountTypeBinding, a
 	}
 	if body != nil && req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "application/json")
-	}
-	hc, err := s.d.Proxies.HTTPClient(ctx, proxyID)
-	if err != nil {
-		return nil, err
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
