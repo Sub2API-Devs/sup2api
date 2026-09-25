@@ -196,8 +196,10 @@ func TestGatewayStickySession(t *testing.T) {
 		}
 	}
 	rules := admin.OK(t, http.MethodGet, "/sticky-rules", nil).Array()
+	// The rule ships with the built-in anthropic platform (source "builtin",
+	// CONTRACTS §15.5); a plugin-declared one would be "plugin_default".
 	r, ok := Find(rules, "name", "claude-code-session")
-	if !ok || r.Get("source").String() != "plugin_default" {
+	if !ok || (r.Get("source").String() != "builtin" && r.Get("source").String() != "plugin_default") {
 		t.Fatalf("default sticky rule: %v", rules)
 	}
 	stats := admin.OK(t, http.MethodGet, "/sticky-rules/stats", nil).Array()

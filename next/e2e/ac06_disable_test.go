@@ -98,10 +98,13 @@ func TestAC06_DisableEnableUninstall(t *testing.T) {
 	if _, ok := pluginModule(); !ok {
 		t.Fatal("plugin permissions removed by a refused uninstall")
 	}
+	// While the plugin is disabled the account counts as orphaned (CONTRACTS
+	// §15.9); after re-enabling it must be back, untouched by the refused
+	// uninstall.
+	e.Enable(admin, "anthropic")
 	acct = admin.OK(t, http.MethodGet, fmt.Sprintf("/accounts/%d", tn.Accounts[0].ID), nil)
 	if acct.Get("orphaned").Bool() {
 		t.Errorf("account orphaned by a refused uninstall: %s", acct.Raw)
 	}
-	e.Enable(admin, "anthropic")
 	e.MustMessages(tn.APIKey, MessagesBody(tn.Model, "after re-enable", false), nil)
 }
