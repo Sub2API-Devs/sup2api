@@ -59,12 +59,18 @@ func (s *Service) test(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, testTimeout)
 	defer cancel()
+	// The account's model mapping applies to test calls too (CONTRACTS §18).
+	model := strings.TrimSpace(in.Model)
+	if model != "" {
+		ref := core.AccountRef{ModelMapping: a.mapping()}
+		model = ref.MapModel(model)
+	}
 	// A test request is not served by a client endpoint, so Account.platform
 	// is empty; the declaring plugin builds a request for the account type.
 	req, err := bt.Client.BuildTestRequest(ctx, &pluginv1.BuildTestRequestRequest{
 		Account: &pluginv1.Account{Id: a.ID, Name: a.Name, Type: a.Type,
 			CredentialsJson: string(plain), SettingsJson: string(a.Settings)},
-		Model: in.Model,
+		Model: model,
 	})
 	if err != nil {
 		httpapi.Fail(c, err)

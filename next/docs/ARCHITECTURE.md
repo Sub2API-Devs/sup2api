@@ -372,8 +372,10 @@ erDiagram
 |---|---|
 | `plugin_key` / `type` | 账号类型（`(plugin_key, type)` 唯一标识），合法取值来自插件注册表，**不在 SQL 里写死**；账号能服务哪些端点由账号类型声明的协议决定（6.6） |
 | `credentials_enc` | 凭证整体 AES-256-GCM 加密（主密钥 `MASTER_KEY`）；插件声明的敏感字段接口中永远脱敏 |
-| `settings` | 非敏感配置（base_url、模型映射等），明文 JSONB |
-| `proxy_id` / `status` / `schedulable` / `priority` / `max_concurrency` | 代理、状态、是否参与调度、优先级（越小越优先）、最大并发 |
+| `settings` | 非敏感配置（base_url 等，由账号类型的 `settingsFields` 决定），明文 JSONB |
+| `proxy_id` / `status` / `schedulable` / `priority` / `weight` / `max_concurrency` | 代理、状态、是否参与调度、优先级（越小越优先）、权重（同优先级内加权随机）、最大并发 |
+| `models` / `model_mapping` | 账号可服务的模型列表（完整模型 ID，空 = 全部）与"客户端模型 → 上游模型"映射；都是核心属性，与插件无关（CONTRACTS §18）。核心在调插件 `BuildUpstreamRequest` 前改写模型 |
+| `rpm_limit` / `tpm_limit` / `tpd_limit` / `spm_limit` | 每分钟请求数、每分钟 token 数、每天（UTC）token 数、每分钟会话数上限，0 = 不限；计数在 Redis `rl:account:{id}:*` |
 | 冷却 | Redis `cooldown:account:{id}`，不写 PG |
 
 插件被**禁用**时账号保留、不参与调度；被**卸载**时账号默认保留（标记"所属插件已卸载"），勾选"清除数据"才删除。
@@ -725,7 +727,10 @@ sequenceDiagram
 
 ### 6.2 调度
 
-- 候选账号 = API Key 所属分组的账号 ∩ 承接该协议的平台插件（已启用）的账号 ∩ 状态正常 ∩ 未冷却
+- 候选账号 = API Key 所属分组的账号 ∩ 账号类型能服务该端点（原生或经转换）的账号 ∩ 状态正常 ∩ 参与调度 ∩ `models` 为空或含请求模型 ∩ 未冷却 ∩ 未达 rpm/tpm/tpd/spm 上限
+- 顺序：粘性绑定的账号优先；其余按 `priority` 升序，同优先级按 `weight` 加权随机（不放回抽样）；逐个获取并发槽位，失败切换时跳过已试过的账号（CONTRACTS §18）
+- 限流：rpm/tpm/tpd 是固定窗口计数（分钟 / UTC 日），spm 是 60 秒滚动窗口内去重的会话数（会话 = 粘性会话键，无粘性规则时每请求一会话；窗口内已有的会话总是放行）。达到上限的账号在本窗口内不参与调度；全部不可用时返回 429 `rate_limited`
+- 模型映射：选定账号后，核心把请求里的模型（body `modelPath` / 路径参数 / `RequestMeta.model`）换成映射后的模型再交给插件，`usage_logs.upstream_model` 记录映射后的模型；计费、白名单、粘性、钩子都看客户端模型
 - 每个节点缓存分组内的账号快照，`account:changed` 广播时失效
 - 并发：账号槽位按 `accounts.max_concurrency`，用户槽位按 `users.max_concurrency`，都在 Redis 用 Lua 原子获取
 
@@ -1688,12 +1693,18 @@ flowchart LR
 ┌──────────────────────────────────────────────────────────────────────┐
 │ 基本信息                                                  [核心]     │
 │   名称 [claude-main        ]   分组 [默认 ✕][VIP ✕][+]               │
-│   代理 [不使用代理        ▾]   优先级 [1]  最大并发 [10]  ☑ 参与调度 │
+│   代理 [不使用代理        ▾]                                          │
+│ 调度                                                      [核心]     │
+│   优先级 [1]  权重 [1]  最大并发 [10]  ☑ 参与调度                     │
+│ 限流（0 = 不限）                                          [核心]     │
+│   RPM [0]  TPM [0]  TPD [0]  SPM [0]                                  │
+│ 模型                                                      [核心]     │
+│   模型列表 [claude-sonnet-4-5 ✕][claude-opus-4-1 ✕][+]  空 = 全部    │
+│   模型映射 [claude-3-5-sonnet-latest → claude-sonnet-4-5] [+] [JSON] │
 ├──────────────────────────────────────────────────────────────────────┤
 │ 凭证                                                      [插件]     │
 │   API Key * [ sk-ant-••••••••••••••••••      ] 👁                     │
 │   Base URL  [ https://api.anthropic.com    ▾ ]                       │
-│   模型映射  [ + 添加 ]                                                │
 │   （schema / iframe / 原生组件三种方式之一，由插件决定）              │
 ├──────────────────────────────────────────────────────────────────────┤
 │                               [ 测试连接 ]  [ 取消 ]  [ 保存 ]       │

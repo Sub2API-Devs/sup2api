@@ -170,3 +170,8 @@ type EventPublisher interface {
 
 // RawJSON is a helper alias for pre-encoded payloads.
 type RawJSON = json.RawMessage
+
+// Total is the number of tokens processed (all kinds), used by rate limits.
+func (t UsageTokens) Total() int64 {
+	return t.Input + t.Output + t.CacheRead + t.CacheCreation + t.CacheCreation1h
+}

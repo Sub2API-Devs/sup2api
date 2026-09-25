@@ -23,6 +23,9 @@ type typeRoute struct {
 	requestFields []string
 	passHeaders   []string
 	usage         manifest.UsageRules
+	// modelPath is the body path of the model in the upstream protocol
+	// (empty when the model travels in the path).
+	modelPath string
 
 	// Lazily converted request body (conversion path only).
 	converted bool
@@ -105,7 +108,8 @@ func (c *call) addRoute(b core.AccountTypeBinding, ap manifest.AccountPlatform, 
 		return
 	}
 	rt := &typeRoute{binding: b, platform: q, upstream: y, conv: conv,
-		requestFields: ap.RequestFields, passHeaders: ap.PassHeaders, usage: pf.Usage}
+		requestFields: ap.RequestFields, passHeaders: ap.PassHeaders, usage: pf.Usage,
+		modelPath: ep.Request.ModelPath}
 	if len(rt.requestFields) == 0 {
 		rt.requestFields = pf.RequestFields
 	}

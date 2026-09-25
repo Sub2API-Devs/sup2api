@@ -39,7 +39,10 @@ type Deps struct {
 	Accounts core.AccountDirectory
 	Proxies  core.ProxyDirectory
 	Settler  core.Settler
-	Config   *config.Config
+	// Limiter enforces per-account rpm/tpm/tpd/spm limits (CONTRACTS §18);
+	// nil = no limits.
+	Limiter core.AccountLimiter
+	Config  *config.Config
 	// Converters are the core's protocol converters (ARCHITECTURE 6.6);
 	// nil means convert.Default(). Hand the same registry (or the Gateway,
 	// see Converters/CanConvert) to the account module as
@@ -73,7 +76,8 @@ type Gateway struct {
 	now        func() time.Time
 	lookupIP   func(ctx context.Context, host string) ([]net.IP, error)
 	headerWait func(stream bool) time.Duration
-	shuffle    func(n int, swap func(i, j int))
+	// randFloat drives the weighted order inside a priority (CONTRACTS §18).
+	randFloat func() float64
 
 	stop    chan struct{}
 	wg      sync.WaitGroup
@@ -104,7 +108,7 @@ func New(d Deps) *Gateway {
 		now:        time.Now,
 		lookupIP:   defaultLookupIP,
 		headerWait: defaultHeaderWait,
-		shuffle:    rand.Shuffle,
+		randFloat:  rand.Float64,
 		stop:       make(chan struct{}),
 	}
 	g.conv = d.Converters

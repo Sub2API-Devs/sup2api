@@ -141,7 +141,8 @@ const (
 
 // AccountSpec describes an account pointing at the mock. The default type
 // is anthropic/apikey; relay/relay_key, openai/apikey and gemini/apikey take
-// the same credentials (api_key, base_url, model_mapping).
+// the same credentials (api_key, base_url). ModelMapping is the core
+// account attribute (CONTRACTS §18).
 type AccountSpec struct {
 	Name           string
 	PluginKey      string // default AnthropicPlugin
@@ -176,14 +177,15 @@ func (e *Env) CreateAccount(admin *Session, a AccountSpec) int64 {
 		a.MaxConcurrency = 5
 	}
 	creds := map[string]any{"api_key": a.APIKey, "base_url": a.BaseURL}
-	if a.ModelMapping != nil {
-		creds["model_mapping"] = a.ModelMapping
-	}
-	d := admin.OK(e.T, http.MethodPost, "/accounts", map[string]any{
+	body := map[string]any{
 		"name": a.Name, "plugin_key": a.PluginKey, "type": a.Type, "group_ids": a.GroupIDs,
 		"proxy_id": nil, "priority": a.Priority, "max_concurrency": a.MaxConcurrency,
 		"schedulable": true, "credentials": creds,
-	})
+	}
+	if a.ModelMapping != nil {
+		body["model_mapping"] = a.ModelMapping
+	}
+	d := admin.OK(e.T, http.MethodPost, "/accounts", body)
 	id := d.Get("id").Int()
 	if id == 0 {
 		e.T.Fatalf("POST /accounts returned no id: %s", d.Raw)

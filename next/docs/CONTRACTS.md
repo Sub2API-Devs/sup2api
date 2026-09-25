@@ -137,8 +137,8 @@
 |---|---|---|
 | GET `/account-types` | `account:read` | `[{plugin_key, plugin_name, plugin_version, asset_base, platform, type, label, description, form:{mode, page?, component?}, sensitive_fields}]` |
 | GET `/account-types/:platform/:type/form` | `account:read` | `{schema, ui_schema}` |
-| GET `/accounts`（`?plugin_key=&type=&group_id=&status=&q=`） | `account:read` | 列表含 `in_use`（实时并发）、`cooldown_until`、`orphaned` |
-| POST `/accounts` | `account:create` | `{name, platform, type, group_ids[], proxy_id, priority, max_concurrency, schedulable, credentials:{...}}` |
+| GET `/accounts`（`?plugin_key=&type=&group_id=&status=&q=&model=`） | `account:read` | 列表含 `in_use`（实时并发）、`cooldown_until`、`orphaned`、`rate_usage`（§18） |
+| POST `/accounts` | `account:create` | `{name, plugin_key, type, group_ids[], proxy_id, priority, weight, max_concurrency, schedulable, models[], model_mapping{}, rpm_limit, tpm_limit, tpd_limit, spm_limit, credentials:{...}}`（§18） |
 | GET/PATCH `/accounts/:id` | `account:read` / `account:update` | 凭证中的敏感字段返回 `"******"`；PATCH 时敏感字段传 `"******"` 表示不修改 |
 | DELETE `/accounts/:id` | `account:delete` | |
 | POST `/accounts/:id/test` | `account:test` | `{model?}` → `{ok, status, latency_ms, message}` |
@@ -258,6 +258,9 @@
 | `hook:stats:{plugin}:{hook}` | HASH 调用/拒绝/超时/错误计数与延迟桶，TTL 7d | G |
 | `hook:statidx:{plugin}` | SET 该插件出现过的钩子 id，TTL 7d | G |
 | `plugin:ledger:{key}:{credit\|debit}:{yyyymmdd}` | STRING 插件当日入账/扣款累计，TTL 48h | C2 |
+| `rl:account:{id}:rpm:{minute}`、`rl:account:{id}:tpm:{minute}` | STRING 账号分钟窗口请求数 / token 数，TTL 2m（§18） | A |
+| `rl:account:{id}:tpd:{yyyymmdd}` | STRING 账号当日（UTC）token 数，TTL 48h | A |
+| `rl:account:{id}:spm` | ZSET 会话身份 → 毫秒时间戳（60s 滚动窗口），TTL 2m | A |
 
 广播频道：`plugin:events`、`authz:changed`、`account:changed`、`config:changed`（`core/ports_cluster.go`）。权限版本以 PG `authz_meta` 为准，Redis 不存。`config:changed` payload：代理 `{"type":"proxy","id":N}`，插件配置 `{"type":"config","plugin_key":k}`。`plugin:events` payload：`{"type":"rollout"|"config","plugin_key","rollout_id"?}`。
 
@@ -783,3 +786,48 @@ POST `/accounts/:id/test`（`account:test`）：
 | GET `/key/prices` | API Key（`Authorization: Bearer` 或 `x-api-key`） | 供下游 sup2api 同步用：`{prices:[{model, mode, config, expression}], rate_multiplier, group:{id, name}}`，只含启用的价格，以及该 Key 所在分组白名单允许的模型 |
 
 同步只能由管理员手动触发（先预览再应用），没有定时自动覆盖。
+
+## 18. 账号的模型列表与模型映射、优先级与权重、RPM/TPM/TPD 限流（2026-09-25，ARCHITECTURE 4.3 / 6.2）
+
+本节优先于前文中与之冲突的描述（§5.4、§15.9、ARCHITECTURE A.4 里的"模型映射 [插件]"）。
+
+**概念**：模型列表、模型映射、权重和限流都是**核心账号属性**，由管理员在账号上配置，与账号类型/插件无关。插件不再提供模型映射（内置插件 anthropic、openai、gemini 升到 0.1.3，relay 升到 0.1.1，表单和 `settingsFields` 删除 `model_mapping`；旧账号 `settings` 里的 `model_mapping` 由迁移 0009 搬到核心字段，通配符项丢弃）。
+
+### 18.1 账号新增字段
+
+| 字段 | 类型 / 校验 | 说明 |
+|---|---|---|
+| `models` | `string[]`，每项是完整模型 ID（§16 规则，禁止通配符），去重，最多 500 项；默认 `[]` | 账号可服务的模型；**空表示所有模型**。调度时请求模型（映射前的客户端模型）不在列表里的账号不作为候选 |
+| `model_mapping` | `{from: to}`，键和值都是完整模型 ID，最多 500 项；默认 `{}` | 请求模型 → 上游模型。核心在调用插件 `BuildUpstreamRequest` **之前**改写请求（body 的 `request.modelPath`、路径参数 `request.modelParam`、`RequestMeta.model` 都换成映射后的模型），`usage_logs.upstream_model` 记录映射后的模型；计费、分组白名单、粘性会话、钩子都按映射前的客户端模型 |
+| `priority` | 0–1000000，默认 10 | 不变：**数值越小越先用**；只有更小优先级的账号都不可用（无空闲并发、限流、冷却、失败切换）时才轮到下一级 |
+| `weight` | 1–1000，默认 1 | 同一优先级内按权重加权随机排序（不放回的加权抽样：权重 3 的账号被先选中的概率是权重 1 的三倍） |
+| `rpm_limit` | 0–10000000，默认 0 | 每分钟请求数上限，0 = 不限。每次在该账号上发起上游尝试计 1 次（失败切换到别的账号时各账号各计各的） |
+| `tpm_limit` | 0–10^12，默认 0 | 每分钟 token 数上限，0 = 不限 |
+| `tpd_limit` | 0–10^12，默认 0 | 每天（UTC 自然日）token 数上限，0 = 不限 |
+| `spm_limit` | 0–10000000，默认 0 | 每分钟**会话**数上限（SPM），0 = 不限。会话身份 = 命中的粘性规则算出的会话键（同一会话的请求只算一个）；没有命中粘性规则的请求每个请求算一个会话。60 秒**滚动**窗口：窗口内已有该会话时总是放行，新会话只有在窗口内会话数小于上限时才放行 |
+| `rate_usage` | 只读：`{rpm, tpm, tpd, spm}` | 当前窗口的计数（列表与详情都有；Redis 不可用时都为 0） |
+
+- token 数口径：`input + output + cache_read + cache_creation`（与使用记录一致），在上游响应结束、解析出用量后累加；因此限流是"窗口内已用量达到上限就不再调度"，不预扣，单个大请求可能让窗口略超上限。
+- 窗口是固定窗口：分钟窗口按 `floor(unix/60)`，天窗口按 UTC 日期。
+- rpm/tpm/tpd 是固定窗口，spm 是滚动窗口（ZSET，成员为会话身份、分数为时间戳，每次尝试写入并修剪 60 秒外的成员）。
+- 达到任一上限的账号在本窗口内不再参与调度（和冷却一样从候选中剔除，不改状态、不发事件）。候选账号都因限流或并发满而不可用时，网关返回 429 `rate_limited`（message：`all accounts are busy or rate limited, please retry later`）；候选为空仍是 503 `no_available_account`。
+- 粘性会话绑定的账号达到限流上限时，视同"没有空闲并发槽位"：`on_failure=failover` 的规则改选别的账号并重新绑定，`stick` 的规则返回 429。
+
+### 18.2 调度顺序（ARCHITECTURE 6.2 更新）
+
+候选账号 = 分组内 `active` 且 `schedulable` 的账号 ∩ 账号类型能服务该端点（原生或经转换） ∩ `models` 为空或含请求模型 ∩ 未冷却 ∩ 未达 rpm/tpm/tpd/spm 上限（spm 对窗口内已有的会话不设限）。粘性绑定的账号仍然优先；其余按 `priority` 升序，同优先级按 `weight` 加权随机；逐个获取并发槽位，失败切换时跳过已试过的账号。
+
+### 18.3 接口变化
+
+- `Account` 对象新增 `models`、`model_mapping`、`weight`、`rpm_limit`、`tpm_limit`、`tpd_limit`、`spm_limit`、`rate_usage`；`settings` 不再含 `model_mapping`。
+- POST/PATCH `/accounts`：以上字段都可选；PATCH 时 `models`、`model_mapping` 整体替换。字段错误：`models[i]`（`invalid` / `duplicate` / `too_many`）、`model_mapping.<from>`（`invalid`）、`model_mapping`（`too_many`）、`weight`、`rpm_limit`、`tpm_limit`、`tpd_limit`、`spm_limit`（`invalid`）。
+- GET `/accounts` 新增筛选 `?model=<完整模型 ID>`：只列出能服务该模型的账号（`models` 为空或包含它）。列表排序改为 `priority, weight DESC, id`。
+- POST `/accounts/:id/test {model?}`：模型先经该账号的 `model_mapping` 映射再交给插件。
+- Redis key（§7 补充）：`rl:account:{id}:rpm:{minute}`、`rl:account:{id}:tpm:{minute}`（TTL 2 分钟）、`rl:account:{id}:tpd:{yyyymmdd}`（TTL 48 小时），STRING 计数；`rl:account:{id}:spm`（ZSET 会话身份 → 毫秒时间戳，TTL 2 分钟），负责人 A（`account` 模块实现 `core.AccountLimiter`）。
+- `core.AccountRef` 新增 `Models []string`、`ModelMapping map[string]string`、`Weight`、`RPMLimit`、`TPMLimit`、`TPDLimit`、`SPMLimit`；新增端口 `core.AccountLimiter{ Exhausted(ctx, refs, session) (map[int64]bool, error); Hit(ctx, id, session); AddTokens(ctx, id, n); Usage(ctx, ids) }`，网关 `Deps.Limiter`（nil = 不限流）。
+
+### 18.4 控制台
+
+- 新建账号第 1 步按线框图 A.3 做成紧凑卡片网格（每个账号类型一张卡：插件头像、类型名、插件名与版本、信任标记、支持的平台徽章、一行描述；端点列表折叠，默认不展开），不再按插件分区块，也不再一张卡占半屏。
+- 第 2 步 / 编辑表单分为：基本信息（名称、分组、代理、状态开关）、调度（优先级、权重、最大并发、参与调度）、限流（rpm/tpm/tpd/spm，0 = 不限）、模型（模型列表：标签输入，候选来自 `GET /prices` 的模型；可切换为文本框逐行/逗号编辑；空 = 全部模型）、模型映射（表格编辑，可切换为 JSON 文本编辑，保存前校验为 `{string: string}` 且都是完整模型 ID）、凭证（插件表单）。
+- 账号列表：优先级列显示 `优先级 · 权重`；新增"限流"列显示 `rpm 12/60 · tpm 3.2K/100K · tpd … · spm 3/20`（未设上限的项不显示，都未设显示 `—`）；详情页展示模型列表、映射、限流与当前用量。

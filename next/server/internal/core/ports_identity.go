@@ -102,9 +102,71 @@ type AccountRef struct {
 	Name           string
 	PluginKey      string // declaring plugin of the account type
 	Type           string
-	Priority       int
+	Priority       int // lower first
+	Weight         int // within a priority, 1-1000
 	MaxConcurrency int
 	ProxyID        *int64
+	// Models the account serves (complete ids); empty = all models.
+	Models []string
+	// ModelMapping rewrites the client model to the upstream model.
+	ModelMapping map[string]string
+	// Rate limits; 0 = unlimited (CONTRACTS §18).
+	RPMLimit int
+	TPMLimit int64
+	TPDLimit int64
+	// SPMLimit caps distinct sessions per rolling minute.
+	SPMLimit int
+}
+
+// ServesModel reports whether the account may serve the (client) model.
+func (a *AccountRef) ServesModel(model string) bool {
+	if len(a.Models) == 0 {
+		return true
+	}
+	for _, m := range a.Models {
+		if m == model {
+			return true
+		}
+	}
+	return false
+}
+
+// MapModel returns the upstream model for the client model.
+func (a *AccountRef) MapModel(model string) string {
+	if to, ok := a.ModelMapping[model]; ok && to != "" {
+		return to
+	}
+	return model
+}
+
+// Limited reports whether the account has any rate limit.
+func (a *AccountRef) Limited() bool {
+	return a.RPMLimit > 0 || a.TPMLimit > 0 || a.TPDLimit > 0 || a.SPMLimit > 0
+}
+
+// RateUsage is the current-window usage of an account's rate limits.
+type RateUsage struct {
+	RPM int64 `json:"rpm"`
+	TPM int64 `json:"tpm"`
+	TPD int64 `json:"tpd"`
+	SPM int64 `json:"spm"`
+}
+
+// AccountLimiter enforces per-account rpm/tpm/tpd/spm limits (CONTRACTS
+// §18): fixed minute windows for rpm and tpm, a UTC day window for tpd and
+// a rolling minute of distinct sessions for spm. session identifies the
+// request's session (sticky key, or a per-request id without one).
+type AccountLimiter interface {
+	// Exhausted returns the ids among refs whose current window reached a
+	// limit. Accounts without limits are never listed; the spm limit does
+	// not apply to a session already counted in the window.
+	Exhausted(ctx context.Context, refs []AccountRef, session string) (map[int64]bool, error)
+	// Hit counts one request of session on the account (once per upstream attempt).
+	Hit(ctx context.Context, id int64, session string)
+	// AddTokens adds tokens of a finished response to the minute and day windows.
+	AddTokens(ctx context.Context, id int64, n int64)
+	// Usage returns the current-window counters of the accounts.
+	Usage(ctx context.Context, ids []int64) (map[int64]RateUsage, error)
 }
 
 // Account adds decrypted credentials and settings.

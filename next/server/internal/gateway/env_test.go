@@ -730,7 +730,7 @@ func newEnv(t *testing.T, opts ...envOpt) *env {
 		Config: &config.Config{AllowPrivateUpstream: true}, Converters: e.conv,
 	})
 	t.Cleanup(e.gw.Close)
-	e.gw.shuffle = func(int, func(int, int)) {} // deterministic order within a priority
+	e.gw.randFloat = func() float64 { return 0 } // deterministic order within a priority
 	e.setSettings(defaultGatewaySettings(), StickySettings{Enabled: false, DefaultTTLSeconds: 3600})
 
 	engine := gin.New()

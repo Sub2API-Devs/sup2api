@@ -35,6 +35,7 @@ type fakePlatform struct {
 	testURL string
 	mu      sync.Mutex
 	calls   []*pluginv1.ValidateCredentialsRequest
+	tests   []*pluginv1.BuildTestRequestRequest
 }
 
 func (p *fakePlatform) ValidateCredentials(_ context.Context, in *pluginv1.ValidateCredentialsRequest) (*pluginv1.ValidateCredentialsResponse, error) {
@@ -60,6 +61,9 @@ func (*fakePlatform) ClassifyError(context.Context, *pluginv1.ClassifyErrorReque
 }
 
 func (p *fakePlatform) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestRequestRequest) (*pluginv1.BuildTestRequestResponse, error) {
+	p.mu.Lock()
+	p.tests = append(p.tests, in)
+	p.mu.Unlock()
 	key := gjson.Get(in.Account.CredentialsJson, "api_key").String()
 	return &pluginv1.BuildTestRequestResponse{Method: "POST", Url: p.testURL,
 		Headers: map[string]string{"x-api-key": key}, BodyJson: fmt.Sprintf(`{"model":%q}`, in.Model)}, nil
@@ -533,7 +537,7 @@ func setup(t *testing.T) *env {
 	e.reg.set(e.gen)
 	e.uid = e.exec1(`INSERT INTO users (email, password_hash) VALUES ('admin@x.com', 'x') RETURNING id`)
 	e.svc = New(Deps{DB: db, Redis: rdb, Cipher: cipher, Registry: e.reg, Proxies: directProxies{},
-		Events: dbEvents{}, Slots: fakeSlots{}, Bus: e.bus, Converters: fakeConverters{}, AllowPrivateUpstream: true})
+		Events: dbEvents{}, Slots: fakeSlots{}, Limiter: NewLimiter(rdb), Bus: e.bus, Converters: fakeConverters{}, AllowPrivateUpstream: true})
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	go e.svc.Run(ctx)

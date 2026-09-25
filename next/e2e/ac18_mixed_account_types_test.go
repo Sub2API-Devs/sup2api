@@ -67,7 +67,7 @@ func TestAC18_MixedAccountTypesServeOneEndpoint(t *testing.T) {
 		t.Fatalf("relay_key api_key must be sensitive: %s", rt.Raw)
 	}
 	form := admin.OK(t, http.MethodGet, "/account-types/"+RelayPlugin+"/"+RelayKey+"/form", nil)
-	for _, f := range []string{"base_url", "api_key", "model_mapping"} {
+	for _, f := range []string{"base_url", "api_key"} {
 		if !form.Get("schema.properties." + f).Exists() {
 			t.Fatalf("relay form schema lacks %s: %s", f, form.Raw)
 		}

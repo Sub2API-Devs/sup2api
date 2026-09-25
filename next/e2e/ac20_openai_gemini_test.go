@@ -54,7 +54,7 @@ func TestAC20_OpenAIGeminiAPIKeys(t *testing.T) {
 			t.Fatalf("%s/%s lacks native endpoint %s: %s", pl.plugin, APIKeyType, pl.endpoint, at.Get("endpoints").Raw)
 		}
 		form := admin.OK(t, http.MethodGet, "/account-types/"+pl.plugin+"/"+APIKeyType+"/form", nil)
-		for _, f := range []string{"api_key", "base_url", "model_mapping"} {
+		for _, f := range []string{"api_key", "base_url"} {
 			if !form.Get("schema.properties." + f).Exists() {
 				t.Fatalf("%s form lacks %s: %s", pl.plugin, f, form.Raw)
 			}

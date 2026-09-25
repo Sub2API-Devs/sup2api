@@ -12,6 +12,9 @@ import (
 	"time"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
+
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
@@ -39,11 +42,12 @@ func (c *call) dispatch(ctx context.Context) {
 	}
 	cands := make([]core.AccountRef, 0, len(all))
 	for i := range all {
-		if c.route(&all[i]) != nil {
+		if c.route(&all[i]) != nil && all[i].ServesModel(c.model) {
 			cands = append(cands, all[i])
 		}
 	}
 	c.sticky = c.resolveSticky(ctx)
+	c.session = c.sessionIdentity()
 	excluded := map[int64]bool{}
 	var last *gwError
 	var lastAccount int64
@@ -56,7 +60,7 @@ func (c *call) dispatch(ctx context.Context) {
 		if ref == nil {
 			if last == nil {
 				if busy {
-					last = fromCore(core.ErrRateLimited.WithMessage("all accounts are busy, please retry later"), errTypeNoAccount)
+					last = fromCore(core.ErrRateLimited.WithMessage("all accounts are busy or rate limited, please retry later"), errTypeNoAccount)
 				} else {
 					last = fromCore(core.ErrNoAvailableAccount, errTypeNoAccount)
 				}
@@ -65,11 +69,19 @@ func (c *call) dispatch(ctx context.Context) {
 		}
 		attempts++
 		stickyAttempt := c.sticky != nil && c.sticky.hit && c.sticky.bound == ref.ID
+		if lim := c.g.d.Limiter; lim != nil {
+			lim.Hit(ctx, ref.ID, c.session)
+		}
 		res := c.attempt(ctx, ref, attempts-1)
 		release()
 		lastAccount = ref.ID
 		switch res.kind {
 		case attemptDone:
+			if lim := c.g.d.Limiter; lim != nil {
+				if n := c.rec.Tokens.Total(); n > 0 {
+					lim.AddTokens(context.WithoutCancel(ctx), ref.ID, n)
+				}
+			}
 			c.finishSticky(ctx, ref.ID, c.rec.Success)
 			if c.rec.Success {
 				c.g.d.Accounts.TouchLastUsed(context.WithoutCancel(ctx), ref.ID)
@@ -109,10 +121,21 @@ func (c *call) dispatch(ctx context.Context) {
 	c.finishSticky(ctx, 0, false)
 }
 
+// sessionIdentity is the request's session for the spm limit: the sticky
+// session key when a rule matched, else a per-request identity.
+func (c *call) sessionIdentity() string {
+	if c.sticky != nil && c.sticky.key != "" {
+		return c.sticky.key
+	}
+	return "req:" + c.rid
+}
+
 // pick chooses the next account: the sticky binding first (when usable),
-// then by priority with random order inside a priority. It returns busy when
-// candidates exist but none had a free concurrency slot.
+// then by priority with weighted random order inside a priority (CONTRACTS
+// §18). Accounts whose rate-limit window is exhausted are skipped. It
+// returns busy when candidates exist but none could be used right now.
 func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[int64]bool) (*core.AccountRef, func(), bool) {
+	exhausted := c.exhausted(ctx, cands, excluded)
 	if s := c.sticky; s != nil && !s.tried {
 		s.tried = true
 		if s.bound != 0 && !excluded[s.bound] {
@@ -124,8 +147,9 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 				}
 			}
 			if bound != nil {
-				// An unusable type (request not convertible) keeps the binding.
-				if c.usable(bound) {
+				// An unusable type (request not convertible) keeps the binding;
+				// an exhausted rate window counts as "no free slot".
+				if c.usable(bound) && !exhausted[bound.ID] {
 					if release, ok := c.acquireAccount(ctx, bound); ok {
 						s.hit = true
 						return bound, release, false
@@ -140,13 +164,19 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 		}
 	}
 	var pool []core.AccountRef
+	limited := false
 	for i := range cands {
-		if !excluded[cands[i].ID] && c.usable(&cands[i]) {
-			pool = append(pool, cands[i])
+		if excluded[cands[i].ID] || !c.usable(&cands[i]) {
+			continue
 		}
+		if exhausted[cands[i].ID] {
+			limited = true
+			continue
+		}
+		pool = append(pool, cands[i])
 	}
 	if len(pool) == 0 {
-		return nil, nil, false
+		return nil, nil, limited
 	}
 	sort.SliceStable(pool, func(i, j int) bool { return pool[i].Priority < pool[j].Priority })
 	for i := 0; i < len(pool); {
@@ -154,8 +184,7 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 		for j < len(pool) && pool[j].Priority == pool[i].Priority {
 			j++
 		}
-		grp := pool[i:j]
-		c.g.shuffle(len(grp), func(a, b int) { grp[a], grp[b] = grp[b], grp[a] })
+		weightedOrder(pool[i:j], c.g.randFloat)
 		i = j
 	}
 	for i := range pool {
@@ -165,6 +194,56 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 		}
 	}
 	return nil, nil, true
+}
+
+// exhausted asks the limiter which candidates reached a rate limit. Limiter
+// failures do not block scheduling.
+func (c *call) exhausted(ctx context.Context, cands []core.AccountRef, excluded map[int64]bool) map[int64]bool {
+	lim := c.g.d.Limiter
+	if lim == nil {
+		return nil
+	}
+	var limited []core.AccountRef
+	for i := range cands {
+		if cands[i].Limited() && !excluded[cands[i].ID] {
+			limited = append(limited, cands[i])
+		}
+	}
+	if len(limited) == 0 {
+		return nil
+	}
+	out, err := lim.Exhausted(ctx, limited, c.session)
+	if err != nil {
+		slog.WarnContext(ctx, "gateway: read rate limits", "err", err)
+		return nil
+	}
+	return out
+}
+
+// weightedOrder reorders grp by weighted random sampling without
+// replacement: an account is drawn first with probability proportional to
+// its weight (weight <= 0 counts as 1). rnd yields [0,1).
+func weightedOrder(grp []core.AccountRef, rnd func() float64) {
+	w := func(a *core.AccountRef) float64 {
+		if a.Weight <= 0 {
+			return 1
+		}
+		return float64(a.Weight)
+	}
+	for i := 0; i < len(grp)-1; i++ {
+		total := 0.0
+		for j := i; j < len(grp); j++ {
+			total += w(&grp[j])
+		}
+		r := rnd() * total
+		for j := i; j < len(grp); j++ {
+			r -= w(&grp[j])
+			if r < 0 || j == len(grp)-1 {
+				grp[i], grp[j] = grp[j], grp[i]
+				break
+			}
+		}
+	}
 }
 
 func (c *call) acquireAccount(ctx context.Context, ref *core.AccountRef) (func(), bool) {
@@ -214,6 +293,18 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 			Message: "request cannot be converted to " + rt.upstream + ": " + err.Error(), RecordType: errTypeInvalidRequest}}
 	}
 
+	// The account's model mapping rewrites the model sent upstream
+	// (CONTRACTS §18); billing and hooks saw the client model.
+	upModel := ref.MapModel(c.model)
+	if upModel != c.model {
+		if rt.modelPath != "" && gjson.GetBytes(upBody, rt.modelPath).Exists() {
+			if upBody, err = sjson.SetBytes(upBody, rt.modelPath, upModel); err != nil {
+				return attemptResult{kind: attemptFailover, err: fromCore(core.ErrInternal.WithCause(err), errTypeInternal)}
+			}
+		}
+		c.rec.UpstreamModel = upModel
+	}
+
 	// Build the upstream request (plugin declaring the account type).
 	fields := map[string]string{}
 	for _, p := range rt.requestFields {
@@ -222,6 +313,7 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 		}
 	}
 	meta := c.metaFor(rt)
+	meta.Model = upModel
 	bctx, cancel := context.WithTimeout(ctx, c.gw.platformTimeout())
 	built, err := rt.binding.Client.BuildUpstreamRequest(bctx, &pluginv1.BuildUpstreamRequestRequest{
 		Meta: meta, Account: pacct, Fields: fields,

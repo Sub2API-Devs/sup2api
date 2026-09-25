@@ -127,9 +127,11 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	// One converter registry for the gateway (conversion) and the account
 	// module (endpoints an account type can serve), ARCHITECTURE 6.6.
 	converters := convert.Default()
+	// Per-account rpm/tpm/tpd/spm limits (CONTRACTS §18).
+	limiter := account.NewLimiter(rdb)
 	acc := account.New(account.Deps{
 		DB: db, Redis: rdb, Cipher: cipher, Registry: reg, Proxies: prx, Events: events,
-		Slots: cl.Slots, Bus: cl.Bus, AllowPrivateUpstream: cfg.AllowPrivateUpstream, Converters: converters,
+		Slots: cl.Slots, Limiter: limiter, Bus: cl.Bus, AllowPrivateUpstream: cfg.AllowPrivateUpstream, Converters: converters,
 	})
 	// Price sync sources (upstream API keys encrypted) and GET /key/prices for
 	// downstream sup2api instances (CONTRACTS §17).
@@ -162,7 +164,7 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	gw := gateway.New(gateway.Deps{
 		DB: db, Redis: rdb, Bus: cl.Bus, Node: cl.Registry, Registry: reg,
 		Auth: keys, Pricer: bill, Balance: bill, Slots: cl.Slots,
-		Accounts: acc, Proxies: prx, Settler: settler, Config: cfg, Converters: converters,
+		Accounts: acc, Proxies: prx, Settler: settler, Limiter: limiter, Config: cfg, Converters: converters,
 	})
 	onClose(func(context.Context) { gw.Close() })
 

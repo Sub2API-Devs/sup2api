@@ -54,7 +54,9 @@ type call struct {
 	price *core.PriceRule
 
 	sticky *stickySession
-	rec    *core.UsageRecord
+	// session identifies the request for the spm limit (sessionIdentity).
+	session string
+	rec     *core.UsageRecord
 }
 
 // serve runs the proxy pipeline (ARCHITECTURE 6.1) for one request.
