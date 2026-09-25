@@ -283,6 +283,7 @@ type config struct {
 	categories   []Category
 	categorySet  map[string]bool
 	policy       string // policy version (hex)
+	settingsHash string // sha256 of the raw settings JSON (12 hex): tells nodes apart while a change propagates
 	toolJSON     json.RawMessage
 	choiceJSON   json.RawMessage
 	markerKey    []byte

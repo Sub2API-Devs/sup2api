@@ -8,6 +8,8 @@ package moderation
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -111,6 +113,8 @@ func (p *Plugin) Configure(_ context.Context, cfg pluginsdk.Config) error {
 		return pluginsdk.FieldErrors{}.Add("", "invalid_json", "settings must be a JSON object / 设置必须是 JSON 对象").Err()
 	}
 	c := compile(s)
+	sum := sha256.Sum256(cfg.JSON)
+	c.settingsHash = hex.EncodeToString(sum[:6])
 	old := p.cfg.Swap(c)
 	if old == nil || old.MaxConcurrency != c.MaxConcurrency {
 		p.sem.Store(newSemaphore(c.MaxConcurrency))

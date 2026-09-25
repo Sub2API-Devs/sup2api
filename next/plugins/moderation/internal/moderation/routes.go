@@ -97,6 +97,7 @@ type UserCount struct {
 type Runtime struct {
 	Mode         string `json:"mode"`
 	Configured   bool   `json:"configured"`
+	SettingsHash string `json:"settings_hash"`
 	QueueLen     int    `json:"queue_len"`
 	QueueCap     int    `json:"queue_cap"`
 	Dropped      int64  `json:"dropped"`
@@ -130,7 +131,7 @@ func (p *Plugin) runtimeState() Runtime {
 		avg = p.stats.latencyMsSum.Load() / calls
 	}
 	return Runtime{
-		Mode: c.Mode, Configured: c.configured, QueueLen: qlen, QueueCap: qcap,
+		Mode: c.Mode, Configured: c.configured, SettingsHash: c.settingsHash, QueueLen: qlen, QueueCap: qcap,
 		Dropped: p.stats.dropped.Load(), Inflight: p.stats.inflight.Load(), Calls: calls,
 		Errors: p.stats.errors.Load(), CacheHits: p.stats.cacheHits.Load(), AvgLatencyMs: avg,
 		BlockedUsers: p.blockedCount(),
