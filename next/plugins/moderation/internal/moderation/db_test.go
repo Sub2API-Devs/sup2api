@@ -62,8 +62,9 @@ func TestEventsAndOverview(t *testing.T) {
 	}
 	var list struct {
 		Page struct {
-			Page, PageSize int
-			Total          int64
+			Page     int   `json:"page"`
+			PageSize int   `json:"page_size"`
+			Total    int64 `json:"total"`
 		} `json:"page"`
 	}
 	resp := h.Do("GET", "/events", map[string]string{"page_size": "2"}, nil)
@@ -228,7 +229,7 @@ func TestAutoBanAndUnblock(t *testing.T) {
 	}
 	p.now = func() time.Time { return time.Now().Add(3 * 24 * time.Hour) }
 	job, err = h.App.RunJob(ctx, &pluginv1.RunJobRequest{JobId: JobCleanup})
-	if err != nil || !strings.HasPrefix(job.GetMessage(), "deleted 4 events") {
+	if err != nil || !strings.HasPrefix(job.GetMessage(), "deleted 5 events") { // 4 blocks + the recorded "harmless" pass
 		t.Fatalf("cleanup = %v %v", job, err)
 	}
 }
