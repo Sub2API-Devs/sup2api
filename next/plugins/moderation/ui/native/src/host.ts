@@ -290,3 +290,67 @@ export function canOpenSettings(): boolean {
   const h = useModHost()
   return h.permissions.superuser() || h.permissions.has('plugin:read')
 }
+
+export function canManageSettings(): boolean {
+  const h = useModHost()
+  return h.permissions.superuser() || h.permissions.has('plugin:manage')
+}
+
+// ------------------------------------------------------------------ settings
+
+/** The LLM-related subset of Settings that lives in the native settings tab. */
+export interface LLMSettings {
+  base_url: string
+  api_key: string
+  model: string
+  system_prompt: string
+  categories: Array<{ id: string; description: string }>
+  tool_choice: string
+  max_turns: number
+  temperature: number
+  max_tokens: number
+  timeout_ms: number
+}
+
+const MASK = '******'
+
+/** Shape returned by GET /api/v1/plugins/:key/settings */
+interface PluginSettingsView {
+  values: Record<string, unknown>
+  secret_fields: string[]
+}
+
+export async function fetchLLMSettings(): Promise<LLMSettings> {
+  const h = useModHost()
+  const v = await h.api.get<PluginSettingsView>(`/plugins/${h.plugin.key}/settings`)
+  const vals = v?.values ?? {}
+  return {
+    base_url: (vals.base_url as string) ?? '',
+    api_key: (vals.api_key as string) ?? '',
+    model: (vals.model as string) ?? '',
+    system_prompt: (vals.system_prompt as string) ?? '',
+    categories: (vals.categories as LLMSettings['categories']) ?? [],
+    tool_choice: (vals.tool_choice as string) ?? 'required',
+    max_turns: (vals.max_turns as number) ?? 3,
+    temperature: (vals.temperature as number) ?? 0,
+    max_tokens: (vals.max_tokens as number) ?? 512,
+    timeout_ms: (vals.timeout_ms as number) ?? 10000
+  }
+}
+
+/**
+ * Merges the LLM settings patch back into the full settings object and saves.
+ * Masked api_key is passed through so the server retains the stored value.
+ */
+export async function saveLLMSettings(patch: LLMSettings): Promise<void> {
+  const h = useModHost()
+  const v = await h.api.get<PluginSettingsView>(`/plugins/${h.plugin.key}/settings`)
+  const merged = { ...(v?.values ?? {}), ...patch }
+  // Keep masked value so server preserves the stored secret.
+  if (patch.api_key === '' || patch.api_key === MASK) {
+    merged.api_key = MASK
+  }
+  await h.api.put(`/plugins/${h.plugin.key}/settings`, { values: merged })
+}
+
+export { MASK as SETTINGS_MASK }

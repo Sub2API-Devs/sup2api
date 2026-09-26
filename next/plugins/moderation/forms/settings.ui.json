@@ -56,149 +56,44 @@
     }
   },
   "base_url": {
-    "ui:placeholder": "https://api.openai.com",
-    "ui:title": {
-      "en": "Base URL",
-      "zh": "接口地址"
-    },
-    "ui:help": {
-      "en": "OpenAI-compatible API root, e.g. https://api.openai.com or https://host/v1. A URL ending in /v1 gets /chat/completions appended, otherwise /v1/chat/completions. It may point at this gateway: the plugin recognises its own calls and does not moderate them again.",
-      "zh": "OpenAI 兼容接口地址，如 https://api.openai.com 或 https://host/v1。以 /v1 结尾时拼接 /chat/completions，否则拼接 /v1/chat/completions。可以指向本网关自身，插件自己的审核请求会被识别、不会再次审核。"
-    }
+    "ui:widget": "hidden",
+    "ui:title": { "en": "Base URL", "zh": "接口地址" }
   },
   "api_key": {
-    "ui:widget": "secret",
-    "ui:title": {
-      "en": "API key",
-      "zh": "API Key"
-    },
-    "ui:help": {
-      "en": "Sent as Authorization: Bearer.",
-      "zh": "以 Authorization: Bearer 方式发送。"
-    }
+    "ui:widget": "hidden",
+    "ui:title": { "en": "API key", "zh": "API Key" }
   },
   "model": {
-    "ui:placeholder": "gpt-4o-mini",
-    "ui:title": {
-      "en": "Model",
-      "zh": "模型"
-    },
-    "ui:help": {
-      "en": "Model that moderates the prompts; it should support tool calls (function calling) or answer in JSON.",
-      "zh": "用于审核的模型，需要支持工具调用（function calling），或能直接输出 JSON 结论。"
-    }
+    "ui:widget": "hidden",
+    "ui:title": { "en": "Model", "zh": "模型" }
   },
   "system_prompt": {
-    "ui:widget": "textarea",
-    "ui:options": {
-      "rows": 10
-    },
-    "ui:title": {
-      "en": "System prompt",
-      "zh": "系统提示词"
-    },
-    "ui:help": {
-      "en": "Leave empty to use the built-in prompt. {{categories}} is replaced by the category list, one \"- id: description\" line each.",
-      "zh": "留空使用内置提示词。{{categories}} 会替换为分类列表（每行一个\"- id：说明\"）。"
-    }
+    "ui:widget": "hidden",
+    "ui:title": { "en": "System prompt", "zh": "系统提示词" }
   },
   "categories": {
-    "ui:widget": "object-list",
-    "ui:title": {
-      "en": "Categories",
-      "zh": "审核分类"
-    },
-    "ui:help": {
-      "en": "Leave empty to use the 12 built-in categories. The LLM may only report these ids.",
-      "zh": "留空使用内置的 12 个分类。模型只能从这些分类 id 中选择。"
-    },
-    "items": {
-      "ui:order": [
-        "id",
-        "description"
-      ],
-      "id": {
-        "ui:title": {
-          "en": "ID",
-          "zh": "分类 ID"
-        },
-        "ui:placeholder": "illegal",
-        "ui:help": {
-          "en": "Lower-case letters, digits and _ (1-32).",
-          "zh": "小写字母、数字、下划线，1–32 位。"
-        }
-      },
-      "description": {
-        "ui:title": {
-          "en": "Description",
-          "zh": "说明"
-        },
-        "ui:placeholder": {
-          "en": "Illegal activities: drugs, weapons, fraud",
-          "zh": "违法犯罪：毒品、武器、诈骗等"
-        }
-      }
-    }
+    "ui:widget": "hidden",
+    "ui:title": { "en": "Categories", "zh": "审核分类" }
   },
   "tool_choice": {
-    "ui:widget": "select",
-    "ui:enumNames": [
-      {
-        "en": "required (must call a tool)",
-        "zh": "required（必须调用工具）"
-      },
-      {
-        "en": "function (this tool)",
-        "zh": "function（指定工具）"
-      },
-      {
-        "en": "auto (model decides)",
-        "zh": "auto（由模型决定）"
-      }
-    ],
-    "ui:title": {
-      "en": "Tool choice",
-      "zh": "工具调用方式"
-    },
-    "ui:help": {
-      "en": "How the LLM is asked to call submit_verdict. Use auto for upstreams that reject forced tool calls.",
-      "zh": "要求模型调用 submit_verdict 的方式。上游不支持强制调用工具时选 auto。"
-    }
+    "ui:widget": "hidden",
+    "ui:title": { "en": "Tool choice", "zh": "工具调用方式" }
   },
   "max_turns": {
-    "ui:title": {
-      "en": "Max turns",
-      "zh": "最大轮数"
-    },
-    "ui:help": {
-      "en": "Agent loop rounds; the LLM is asked again when it calls no tool or passes invalid arguments.",
-      "zh": "模型未调用工具或参数不合法时会被追问，这是包括首轮在内的最多轮数。"
-    }
+    "ui:widget": "hidden",
+    "ui:title": { "en": "Max turns", "zh": "最大轮数" }
   },
   "temperature": {
-    "ui:options": {
-      "step": 0.1
-    },
-    "ui:title": {
-      "en": "Temperature",
-      "zh": "温度"
-    }
+    "ui:widget": "hidden",
+    "ui:title": { "en": "Temperature", "zh": "温度" }
   },
   "max_tokens": {
-    "ui:title": {
-      "en": "Max tokens",
-      "zh": "最大输出 token"
-    }
+    "ui:widget": "hidden",
+    "ui:title": { "en": "Max tokens", "zh": "最大输出 token" }
   },
   "timeout_ms": {
-    "ui:title": {
-      "en": "Timeout (ms)",
-      "zh": "超时（毫秒）"
-    },
-    "ui:help": {
-      "en": "Total time for one moderation, including all turns and waiting for a free slot.",
-      "zh": "单次审核的总时限，包含所有轮次和排队等待。"
-    }
+    "ui:widget": "hidden",
+    "ui:title": { "en": "Timeout (ms)", "zh": "超时（毫秒）" }
   },
   "on_error": {
     "ui:widget": "select",
