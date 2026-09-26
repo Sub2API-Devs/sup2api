@@ -19,6 +19,9 @@ const host = useModHost()
 const t = host.t
 
 const canEdit = canManageSettings()
+// Literal placeholder shown in the prompt help; passed as a param because
+// vue-i18n rejects nested braces in messages.
+const PROMPT_TOKEN = '{{categories}}'
 
 // ------------------------------------------------------------------ state
 
@@ -154,10 +157,10 @@ async function save() {
               v-model="form.system_prompt"
               class="input mod-textarea"
               rows="10"
-              :placeholder="t('llm.systemPromptPlaceholder')"
+              :placeholder="t('llm.systemPromptPlaceholder', { token: PROMPT_TOKEN })"
               :disabled="!canEdit"
             />
-            <span class="muted mod-small">{{ t('llm.systemPromptHelp') }}</span>
+            <span class="muted mod-small">{{ t('llm.systemPromptHelp', { token: PROMPT_TOKEN }) }}</span>
           </label>
 
           <div class="mod-label">
