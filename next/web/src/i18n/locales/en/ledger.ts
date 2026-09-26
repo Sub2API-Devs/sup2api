@@ -1,8 +1,8 @@
 export default {
   title: 'Balance ledger',
   description: 'Every balance change of every user.',
-  myTitle: 'My balance',
-  myDescription: 'Your balance and its history.',
+  myTitle: 'Usage records',
+  myDescription: 'Your balance and every change to it.',
   myLedger: 'Balance history',
   balance: 'Balance',
   updatedAt: 'Updated {time}',

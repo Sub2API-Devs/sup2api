@@ -46,7 +46,6 @@ const CORE_MENU: Array<{ key: string; items: Array<NavItem & { perm?: string | s
       { id: 'sticky', labelKey: 'nav.items.sticky', icon: 'sticky', path: '/sticky', perm: 'sticky:read' }
     ]
   },
-  { key: 'finance', items: [{ id: 'ledger', labelKey: 'nav.items.ledger', icon: 'ledger', path: '/ledger', perm: 'balance:all:read' }] },
   {
     key: 'system',
     items: [
@@ -66,7 +65,7 @@ const CORE_MENU: Array<{ key: string; items: Array<NavItem & { perm?: string | s
     items: [
       { id: 'my-api-keys', labelKey: 'nav.items.myApiKeys', icon: 'key', path: '/me/api-keys', perm: 'apikey:self:manage' },
       { id: 'my-usage', labelKey: 'nav.items.myUsage', icon: 'chart', path: '/me/usage', perm: 'usage:self:read' },
-      { id: 'my-balance', labelKey: 'nav.items.myBalance', icon: 'balance', path: '/me/balance', perm: 'balance:self:read' }
+      { id: 'my-ledger', labelKey: 'nav.items.myLedger', icon: 'ledger', path: '/me/ledger', perm: 'balance:self:read' }
     ]
   }
 ]

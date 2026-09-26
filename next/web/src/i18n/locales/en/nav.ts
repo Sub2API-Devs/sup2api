@@ -27,7 +27,7 @@ export default {
     settings: 'Settings',
     myApiKeys: 'API keys',
     myUsage: 'My usage',
-    myBalance: 'My balance'
+    myLedger: 'Usage records'
   },
   balance: 'Balance',
   profile: 'Profile',

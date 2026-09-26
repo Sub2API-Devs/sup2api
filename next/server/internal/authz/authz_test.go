@@ -458,13 +458,13 @@ func TestMenus(t *testing.T) {
 	for _, m := range menus {
 		sections = append(sections, m.Section)
 	}
-	if got := join(sections); got != "overview,gateway,finance,mod:safety,system,me,plugins" {
+	if got := join(sections); got != "overview,gateway,mod:safety,system,me,plugins" {
 		t.Fatalf("admin sections = %s", got)
 	}
-	if p := menus[6].Items; len(p) != 2 || p[1].Path != "/p/guard/dashboard" || p[1].Label.Get("zh") != "请求守卫" {
+	if p := menus[5].Items; len(p) != 2 || p[1].Path != "/p/guard/dashboard" || p[1].Label.Get("zh") != "请求守卫" {
 		t.Fatalf("admin plugin menus = %+v", p)
 	}
-	if sec := menus[3]; sec.Label.Get("zh") != "安全" || len(sec.Items) != 1 || sec.Items[0].Path != "/p/mod/dashboard" {
+	if sec := menus[2]; sec.Label.Get("zh") != "安全" || len(sec.Items) != 1 || sec.Items[0].Path != "/p/mod/dashboard" {
 		t.Fatalf("plugin section = %+v", sec)
 	}
 	if gw := menus[1].Items; gw[len(gw)-1].Path != "/p/mod/rules" || gw[0].Path != "/groups" {

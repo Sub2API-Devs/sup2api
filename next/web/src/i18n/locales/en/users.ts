@@ -22,6 +22,7 @@ export default {
   assignGroups: 'Assign groups',
   assignGroupsTitle: 'Groups of {name}',
   groupsHint: 'The user can create API keys in these groups (restricted groups require assignment).',
+  ledger: 'Balance ledger',
   adjustBalance: 'Adjust balance',
   adjustBalanceTitle: 'Adjust balance of {name}',
   currentBalance: 'Current balance',

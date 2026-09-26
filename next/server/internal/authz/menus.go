@@ -53,9 +53,9 @@ var coreMenus = []coreMenuSection{
 		{"usage", lt("Usage records", "使用记录"), "usage", "/usage", []string{"usage:all:read"}},
 		{"sticky", lt("Sticky sessions", "粘性会话"), "sticky", "/sticky", []string{"sticky:read"}},
 	}},
-	{"finance", lt("Finance", "财务"), []coreMenuItem{
-		{"ledger", lt("Balance ledger", "余额流水"), "ledger", "/ledger", []string{"balance:all:read"}},
-	}},
+	// No core items: the all-user ledger (/ledger) is opened from the users
+	// page. The section stays so plugin menus can still target "finance".
+	{"finance", lt("Finance", "财务"), nil},
 	{"system", lt("System", "系统"), []coreMenuItem{
 		{"users", lt("Users", "用户"), "user", "/users", []string{"user:read"}},
 		{"api-keys", lt("API keys", "API Key"), "key", "/api-keys", []string{"apikey:all:read"}},
@@ -70,7 +70,7 @@ var coreMenus = []coreMenuSection{
 	{"me", lt("Mine", "我的"), []coreMenuItem{
 		{"my-api-keys", lt("API keys", "API Key"), "key", "/me/api-keys", []string{"apikey:self:manage"}},
 		{"my-usage", lt("My usage", "我的用量"), "chart", "/me/usage", []string{"usage:self:read"}},
-		{"my-balance", lt("My balance", "我的余额"), "balance", "/me/balance", []string{"balance:self:read"}},
+		{"my-ledger", lt("Usage records", "使用记录"), "ledger", "/me/ledger", []string{"balance:self:read"}},
 	}},
 }
 

@@ -60,7 +60,7 @@ async function logout() {
 
     <RouterLink
       v-if="auth.balance !== null"
-      to="/me/balance"
+      to="/me/ledger"
       class="hidden items-center gap-1.5 rounded-lg bg-primary-50 px-3 py-1.5 text-sm font-medium text-primary-700 dark:bg-primary-900/20 dark:text-primary-300 sm:flex"
     >
       <SIcon name="balance" class="h-4 w-4" />

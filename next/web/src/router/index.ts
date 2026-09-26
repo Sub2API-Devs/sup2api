@@ -35,7 +35,8 @@ const children: RouteRecordRaw[] = [
   { path: 'usage', component: () => import('@/views/usage/UsageView.vue'), meta: { perm: 'usage:all:read', title: 'nav.items.usage' } },
   { path: 'me/usage', component: () => import('@/views/usage/MyUsageView.vue'), meta: { perm: 'usage:self:read', title: 'nav.items.myUsage' } },
   { path: 'ledger', component: () => import('@/views/ledger/LedgerView.vue'), meta: { perm: 'balance:all:read', title: 'nav.items.ledger' } },
-  { path: 'me/balance', component: () => import('@/views/ledger/MyBalanceView.vue'), meta: { perm: 'balance:self:read', title: 'nav.items.myBalance' } },
+  { path: 'me/ledger', component: () => import('@/views/ledger/MyLedgerView.vue'), meta: { perm: 'balance:self:read', title: 'nav.items.myLedger' } },
+  { path: 'me/balance', redirect: '/me/ledger' },
   { path: 'sticky', component: () => import('@/views/sticky/StickyView.vue'), meta: { perm: 'sticky:read', title: 'nav.items.sticky' } },
   { path: 'settings', component: () => import('@/views/settings/SettingsView.vue'), meta: { perm: ['settings:read', 'sticky:read'], title: 'nav.items.settings' } },
 

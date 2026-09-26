@@ -7,9 +7,12 @@ import type { LedgerEntry } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
 import { formatDateTime, formatMoney } from '@/utils/format'
+import TimeRangeFilter from '@/views/usage/TimeRangeFilter.vue'
+import { rangeBounds, type RangeKey } from '@/views/usage/timeRange'
 import LedgerTable from './LedgerTable.vue'
 import { LEDGER_KINDS } from './kinds'
 
+// "Mine > Usage records": the caller's balance and their own ledger.
 const { t } = useI18n()
 const auth = useAuthStore()
 
@@ -35,7 +38,8 @@ onMounted(() => {
   auth.refreshBalance()
 })
 
-const { items, loading, page, pageSize, total, filters, reload } = useList<LedgerEntry>('/me/ledger', { kind: '' })
+const range = ref<RangeKey>('month')
+const { items, loading, page, pageSize, total, filters, reload } = useList<LedgerEntry>('/me/ledger', { ...rangeBounds('month'), kind: '' })
 const kindOptions = computed(() => [{ value: '', label: t('common.all') }, ...LEDGER_KINDS.map((k) => ({ value: k, label: t(`ledger.kinds.${k}`) }))])
 
 const negative = computed(() => Number(balance.value) < 0)
@@ -53,6 +57,18 @@ function refresh() {
       <template #actions>
         <SButton @click="refresh">{{ t('common.refresh') }}</SButton>
       </template>
+      <template #filters>
+        <div class="w-40">
+          <label class="input-label">{{ t('ledger.cols.kind') }}</label>
+          <SSelect v-model="filters.kind" :options="kindOptions" />
+        </div>
+        <TimeRangeFilter
+          v-model:range="range"
+          v-model:from="filters.from"
+          v-model:to="filters.to"
+          :keys="['all', 'today', '7d', '30d', 'month', 'custom']"
+        />
+      </template>
     </SPageHeader>
 
     <div class="mb-5 grid gap-4 md:grid-cols-3">
@@ -69,12 +85,6 @@ function refresh() {
       </div>
     </div>
 
-    <div class="mb-3 flex items-end justify-between gap-3">
-      <h3 class="section-title !mb-0">{{ t('ledger.myLedger') }}</h3>
-      <div class="w-40">
-        <SSelect v-model="filters.kind" :options="kindOptions" />
-      </div>
-    </div>
     <div class="card overflow-hidden">
       <LedgerTable :rows="items" :loading="loading" :show-user="false" />
     </div>

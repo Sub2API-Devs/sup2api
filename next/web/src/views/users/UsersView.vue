@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
 import {
   SBadge,
@@ -30,6 +30,7 @@ import GroupPicker from '@/components/GroupPicker.vue'
 const { t } = useI18n()
 const auth = useAuthStore()
 const route = useRoute()
+const router = useRouter()
 const list = useList<User>('/users', { q: '', status: '', role: typeof route.query.role === 'string' ? route.query.role : '' })
 
 // ------------------------------------------------------------------ roles lookup
@@ -99,6 +100,7 @@ function rowActions(u: User): MenuAction[] {
     { key: 'edit', label: t('common.edit'), hidden: !auth.has('user:update') },
     { key: 'roles', label: t('users.assignRoles'), hidden: !auth.has('role:manage') },
     { key: 'groups', label: t('users.assignGroups'), hidden: !auth.has('group:manage') },
+    { key: 'ledger', label: t('users.ledger'), hidden: !auth.has('balance:all:read') },
     { key: 'balance', label: t('users.adjustBalance'), hidden: !auth.has('balance:adjust') },
     { key: 'delete', label: t('common.delete'), danger: true, hidden: !auth.has('user:delete') || u.id === auth.me?.id }
   ]
@@ -112,6 +114,7 @@ function onAction(u: User, key: string) {
   if (key === 'edit') openEdit(u)
   else if (key === 'roles') openRoles(u)
   else if (key === 'groups') openGroups(u)
+  else if (key === 'ledger') router.push({ path: '/ledger', query: { user_id: String(u.id) } })
   else if (key === 'balance') openBalance(u)
   else if (key === 'delete') remove(u)
 }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import { SButton, SPageHeader, SPagination, SSelect } from '@sub2api/ui'
 import type { LedgerEntry } from '@/api/types'
 import { useList } from '@/composables/useList'
@@ -11,11 +12,13 @@ import LedgerTable from './LedgerTable.vue'
 import { LEDGER_KINDS } from './kinds'
 
 const { t } = useI18n()
+const route = useRoute()
 
 const range = ref<RangeKey>('month')
 const { items, loading, page, pageSize, total, filters, reload } = useList<LedgerEntry>('/ledger', {
   ...rangeBounds('month'),
-  user_id: '',
+  // Opened from the users page with ?user_id=<id>.
+  user_id: typeof route.query.user_id === 'string' ? route.query.user_id : '',
   kind: ''
 })
 

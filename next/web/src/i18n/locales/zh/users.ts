@@ -22,6 +22,7 @@ export default {
   assignGroups: '分配分组',
   assignGroupsTitle: '{name} 的分组',
   groupsHint: '用户可以在这些分组中创建 API Key（指定用户可见的分组需要分配）。',
+  ledger: '余额流水',
   adjustBalance: '调整余额',
   adjustBalanceTitle: '调整 {name} 的余额',
   currentBalance: '当前余额',
