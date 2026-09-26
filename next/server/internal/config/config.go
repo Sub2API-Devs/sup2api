@@ -43,6 +43,7 @@ type PluginConfig struct {
 	DataDir           string   // SUB2API_PLUGIN_DIR, default "/var/lib/sub2api/plugins"
 	DevMode           bool     // SUB2API_PLUGIN_DEV_MODE: allow non-Linux, no sandbox
 	AllowUnsigned     bool     // SUB2API_PLUGIN_ALLOW_UNSIGNED
+	VerifySignatures  bool     // SUB2API_PLUGIN_VERIFY_SIGNATURES, default true
 	OfficialRootKeys  []string // SUB2API_PLUGIN_OFFICIAL_KEYS: comma separated "keyId=base64pub"
 	StrictNetwork     bool     // SUB2API_PLUGIN_STRICT_NETWORK, default true on linux
 	Seccomp           bool     // SUB2API_PLUGIN_SECCOMP, default true on linux
@@ -105,6 +106,7 @@ func Load(goos string) (*Config, error) {
 	p.DataDir = env("SUB2API_PLUGIN_DIR", "/var/lib/sub2api/plugins")
 	p.DevMode = boolEnv("SUB2API_PLUGIN_DEV_MODE", false)
 	p.AllowUnsigned = boolEnv("SUB2API_PLUGIN_ALLOW_UNSIGNED", false)
+	p.VerifySignatures = boolEnv("SUB2API_PLUGIN_VERIFY_SIGNATURES", true)
 	p.StrictNetwork = boolEnv("SUB2API_PLUGIN_STRICT_NETWORK", linux)
 	p.Seccomp = boolEnv("SUB2API_PLUGIN_SECCOMP", linux)
 	p.DBRoleIsolation = boolEnv("SUB2API_PLUGIN_DB_ROLE_ISOLATION", true)

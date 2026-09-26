@@ -103,3 +103,26 @@ func TestTrustVerify(t *testing.T) {
 		t.Fatal("revoked official publisher accepted")
 	}
 }
+
+func TestTrustSkipSignatureCheck(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := context.Background()
+	root := pkgtest.NewKey("root-skip")
+	ts, err := NewTrustStore([]string{root.ID + "=" + root.PubB64()}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := pkgtest.Sign(pkgtest.Files(pkgtest.Guard("guard_skip", "0.1.0", "sub2api")), "sub2api", root)
+	files["runtimes/linux-amd64/plugin"] = []byte("rebuilt")
+	p, err := Open(pkgtest.Zip(files), Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.Verify(ctx, db.Pool, p); err == nil {
+		t.Fatal("mismatched signature accepted with verification on")
+	}
+	ts.SetVerifySignatures(false)
+	if v, err := ts.Verify(ctx, db.Pool, p); err != nil || v.Trust != TrustOfficial {
+		t.Fatalf("verification off: %v %+v", err, v)
+	}
+}

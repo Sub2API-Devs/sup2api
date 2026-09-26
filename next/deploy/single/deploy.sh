@@ -11,6 +11,7 @@ BRANCH=${1:-feat/next-platform}
 DIR=${SUP2API_DIR:-$HOME/sup2api}
 REPO=${SUP2API_REPO:-https://github.com/Sub2API-Devs/sup2api.git}
 PORT=${SUP2API_PORT:-3130}
+PORT2=${SUP2API_PORT_2:-3131}
 SRC=$DIR/src
 
 mkdir -p "$DIR"
@@ -44,15 +45,16 @@ COMPOSE=(docker compose -p sup2api -f "$SRC/next/deploy/single/compose.yml" --en
 echo "==> building and starting"
 "${COMPOSE[@]}" up -d --build --remove-orphans
 
-echo "==> waiting for http://127.0.0.1:$PORT/healthz"
+echo "==> waiting for /healthz on :$PORT and :$PORT2"
 for _ in $(seq 1 60); do
-  if out=$(curl -fsS "http://127.0.0.1:$PORT/healthz" 2>/dev/null); then
+  if out=$(curl -fsS "http://127.0.0.1:$PORT/healthz" 2>/dev/null) && out2=$(curl -fsS "http://127.0.0.1:$PORT2/healthz" 2>/dev/null); then
     echo "    $out"
+    echo "    $out2"
     "${COMPOSE[@]}" ps
     exit 0
   fi
   sleep 2
 done
 echo "sup2api did not become healthy; recent logs:" >&2
-"${COMPOSE[@]}" logs --tail 80 app >&2
+"${COMPOSE[@]}" logs --tail 80 app app-2 >&2
 exit 1

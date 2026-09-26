@@ -100,6 +100,10 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	if err != nil {
 		return fmt.Errorf("plugin trust: %w", err)
 	}
+	if !cfg.Plugins.VerifySignatures {
+		trust.SetVerifySignatures(false)
+		log.Warn("plugin signature verification is disabled (SUB2API_PLUGIN_VERIFY_SIGNATURES=false)")
+	}
 	// Nodes re-verify package signatures before unpacking, so revoked keys
 	// and publishers stop loading everywhere.
 	pkgs := registry.NewPackages(db, cfg.Plugins.DataDir, registry.WithVerifier(

@@ -42,6 +42,7 @@ type Verification struct {
 type TrustStore struct {
 	official      map[string]officialKey
 	allowUnsigned bool
+	skipSigCheck  bool
 	now           func() time.Time
 }
 
@@ -70,6 +71,10 @@ func NewTrustStore(officialRootKeys []string, allowUnsigned bool) (*TrustStore, 
 
 // SetClock overrides time.Now (tests).
 func (t *TrustStore) SetClock(now func() time.Time) { t.now = now }
+
+// SetVerifySignatures(false) skips the cryptographic signature check while
+// keeping publisher/key resolution and revocation checks (test deployments).
+func (t *TrustStore) SetVerifySignatures(on bool) { t.skipSigCheck = !on }
 
 // AllowUnsigned reports whether unsigned packages are accepted.
 func (t *TrustStore) AllowUnsigned() bool { return t.allowUnsigned }
@@ -111,7 +116,7 @@ func (t *TrustStore) verify(ctx context.Context, q store.Querier, p *Package, ch
 		return nil, sigError(fmt.Sprintf("signature publisher %q does not match manifest publisher %q", sig.Publisher, p.Manifest.Publisher))
 	}
 	if ok, found := t.official[sig.KeyID]; found {
-		if err := pkgsig.Verify(p.Files, sig, ok.pub); err != nil {
+		if err := t.check(p, sig, ok.pub); err != nil {
 			return nil, sigError(err.Error())
 		}
 		id, err := t.registerOfficial(ctx, q, sig.Publisher, sig.KeyID, ok.b64)
@@ -157,10 +162,17 @@ func (t *TrustStore) verify(ctx context.Context, q store.Querier, p *Package, ch
 	if err != nil {
 		return nil, err
 	}
-	if err := pkgsig.Verify(p.Files, sig, pub); err != nil {
+	if err := t.check(p, sig, pub); err != nil {
 		return nil, sigError(err.Error())
 	}
 	return &Verification{Publisher: pubName, PublisherID: &pubID, KeyID: sig.KeyID, Trust: trust, SignatureStatus: SigValid}, nil
+}
+
+func (t *TrustStore) check(p *Package, sig *pkgsig.Signature, pub ed25519.PublicKey) error {
+	if t.skipSigCheck {
+		return nil
+	}
+	return pkgsig.Verify(p.Files, sig, pub)
 }
 
 // registerOfficial upserts the publisher as official and records the root
