@@ -18,8 +18,10 @@ deploy/
 ## Workflow
 
 ```bash
-# local (Git Bash): copy this worktree's next/ to ovh:~/sub2api-next-test/src/next,
-# including uncommitted files; --up also rebuilds and restarts the stack
+# local (Git Bash): push first, then make ovh:~/sub2api-next-test/src git-pull the
+# current branch (sparse, next/ only) and check it matches local HEAD;
+# --branch <name> deploys another pushed branch; --up also rebuilds and restarts
+git push
 bash next/deploy/scripts/sync.sh --up
 
 # on the server (or: ssh ovh bash ~/sub2api-next-test/src/next/deploy/scripts/<script>)

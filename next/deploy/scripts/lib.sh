@@ -11,7 +11,7 @@ compose() {
 }
 
 # ensure_env creates $ENV_FILE with random secrets on first use. It lives
-# outside src/ so sync.sh never overwrites it.
+# outside src/ (the git checkout) so sync.sh never overwrites it.
 ensure_env() {
   if [ -f "$ENV_FILE" ]; then return; fi
   mkdir -p "$(dirname "$ENV_FILE")"
