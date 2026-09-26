@@ -442,4 +442,26 @@ go test -count=1 -timeout 50m -v ./...
 
 **sup2api 实际验证**（`2d0813db9` 部署）：9 个新权限进目录；插件 0.1.5；临时供应商用户：菜单只有账号/代理/平台，form 的 base_url 变 enum+readonly（管理员不变），`proxy_url` 首次 `proxy_created=true`、`SOCKS5H://…/` 等价串复用同一代理，改 base_url 为非官方 400 forbidden、官方地址通过，非法串错误不含密码，对管理员账号 GET/PATCH 404，删自己账号 204 无需 step-up；管理员 `mine`/`created_by` 筛选正确。验证数据已清理。
 
-**遗留**：native 页面未目视；分组/代理的 `account_count` 仍按全部统计（按设计）；供应商能否使用某账号类型未做限制。
+**遗留**：供应商能否使用某账号类型未做限制。（native 页面目视、`account_count` 排除孤立账号见 §18。）
+
+---
+
+## 18. 控制台目视检查与修正、base_url 默认值交给插件、插件自有侧栏区、禁用插件后隐藏账号（2026-09-25 ~ 26，用户要求）
+
+**控制台目视**：浏览器预览工具在本机不可用，改用本机 Chrome 无头模式（puppeteer-core）登录 sup2api 截图检查账号、代理、角色、提示词审核页面，以及临时供应商用户视角。发现并修复（`0743e424e`）：代理串提示文案里的 `@` 被 vue-i18n 当成链接消息语法，点"粘贴代理串"时编辑器直接报错；改为 `{'@'}` 转义。之前只跑了 typecheck/build 和 mock 冒烟，没覆盖到这个运行时错误。
+
+**base_url 默认值由插件提示**（`217fa9d0a`，取代 `8d61c8f14` 的核心实现）：用户要求"每个账号类型都有默认 base url，留空就用默认，由插件自己完成"。三个内置插件的 apikey 表单去掉 `base_url` 的 `default`（不再预填）、`pattern` 允许空串、`ui:placeholder` 写"留空使用默认地址 …"，空值由插件 `ValidateCredentials` 归一化为官方地址；anthropic/openai/gemini 升到 0.1.6。核心撤掉了为 base_url 加的特判，只保留两处通用行为：`url-presets` 清空即不发该键；受限（只读）字段只显示"由管理员设置"。
+
+**插件自有侧栏区**（`4da9f65b2`、`26ce1fca4`，CONTRACTS §22）：manifest `ui.sections [{id, label, order}]` 声明插件自己的侧栏区，`ui.menus[].section` 可以是 `plugins`、核心区 id（追加到该区）或自己声明的区；核心区 order 固定（概览 100 … 插件 600），插件区按 order 穿插。`/me/menus` 中插件区为 `<插件key>:<id>`、带 label；校验拒绝未知区和占用核心 id。moderation 升到 0.1.1，声明"安全"区（order 350），"提示词审核"显示在财务和系统之间。说明给用户：插件页面代码（`plugins/moderation/ui/native/*`）随插件包发布，核心只提供声明格式、加载挂载、权限过滤、`@sub2api/ui` 组件库与 `@sub2api/host` 宿主 API。
+
+**禁用插件后隐藏账号**（`a846ac90f`、`dee595466`）：用户裁定"插件禁用后账号看不到，数据库保留数据"。`GET /accounts` 默认只列已启用插件的账号（`plugin_key = ANY(已启用插件)`），`?orphaned=true` 只列孤立的、`?orphaned=all` 都列，详情接口不变；控制台加"显示已禁用插件的账号"开关，孤立账号不显示编辑按钮。分组、代理的 `account_count` 同样只统计已启用插件的账号（`core.ActivePluginKeys`，注册表为空时不过滤）；删除代理的 409 仍按全部引用判断。
+
+**测试**：authz 菜单测试覆盖插件自有区与插件项进核心区；manifest 校验加正反用例；账号、分组、代理测试覆盖孤立账号过滤与计数；server 全部测试（含库）在临时 CI 容器通过。e2e：AC22 断言"安全"区位置；AC06 断言禁用后详情仍在、列表默认隐藏、`orphaned=all` 可见；AC18 新增卸载 relay + `purge_accounts=true`（账号软删除、anthropic 账号不受影响，再从市场重装）。全新 e2e 栈跑完整 e2e：25 通过、AC12 按惯例跳过。用完清理 e2e 栈、测试库、CI 缓存卷。
+
+**sup2api 实际验证**：插件 0.1.6/0.1.1 自动升级；空 base_url 建账号 201，存为 `https://api.anthropic.com`；截图确认新建表单 base_url 空白 + 默认地址占位、供应商视角只读下拉 + "由管理员设置"、侧栏"安全 → 提示词审核"。验证数据已清理。
+
+**过程问题**：
+- 用 Python 在 Windows 改过的文件变成 CRLF；提交时 git 归一化所以 GitHub 部署正常，但 `sync.sh` 打包工作区，e2e 镜像构建时 `build-go.sh` 报 `set: Illegal option -`。已把 37 个文件转回 LF，之后改文件用 Edit 工具或 `newline=''`。
+- 本机一度连不上 GitHub，推送经 ovh 的 SSH SOCKS 隧道（`git -c http.proxy=socks5h://127.0.0.1:18080 push`）。
+
+**遗留**：供应商可用的账号类型未做限制。
