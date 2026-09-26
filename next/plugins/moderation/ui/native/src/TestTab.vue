@@ -5,10 +5,9 @@ import { isApiError } from '@sub2api/host'
 import VerdictBadge from './VerdictBadge.vue'
 import CategoryChips from './CategoryChips.vue'
 import {
-  canOpenSettings,
+  canManageSettings,
   enumLabel,
   errorMessage,
-  openSettings,
   runTest,
   severityTone,
   useModHost,
@@ -16,6 +15,8 @@ import {
   type ChatToolCall,
   type TestResult
 } from './host'
+
+const emit = defineEmits<{ (e: 'go-settings'): void }>()
 
 // Playground: POST /test {text} -> verdict + agent transcript.
 const host = useModHost()
@@ -117,8 +118,8 @@ const transcript = computed(() => result.value?.transcript || [])
         <div v-if="notConfigured" class="mod-callout mod-callout-flat">
           <SIcon name="warning" class="mod-callout-icon" />
           <p class="mod-callout-text">{{ t('test.notConfigured') }}</p>
-          <SButton v-if="canOpenSettings()" variant="primary" size="sm" @click="openSettings">
-            <SIcon name="settings" class="mod-icon" />{{ t('settings') }}
+          <SButton v-if="canManageSettings()" variant="primary" size="sm" @click="emit('go-settings')">
+            <SIcon name="settings" class="mod-icon" />{{ t('tabs.settings') }}
           </SButton>
         </div>
         <p v-else-if="failure" class="mod-alert mod-alert-danger mod-mb-0">{{ failure }}</p>

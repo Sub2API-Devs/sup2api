@@ -107,10 +107,11 @@ function showUser(userId: number) {
       ref="overviewRef"
       @runtime="runtime = $event"
       @show-user="showUser"
+      @go-settings="tab = 'settings'"
     />
     <EventsTab v-if="visited.has('events')" v-show="tab === 'events'" ref="eventsRef" :preset="userPreset" />
     <BlocksTab v-if="visited.has('blocks')" v-show="tab === 'blocks'" ref="blocksRef" />
-    <TestTab v-if="manage && visited.has('test')" v-show="tab === 'test'" />
+    <TestTab v-if="manage && visited.has('test')" v-show="tab === 'test'" @go-settings="tab = 'settings'" />
     <SettingsTab v-if="showSettings && visited.has('settings')" v-show="tab === 'settings'" />
   </div>
 </template>

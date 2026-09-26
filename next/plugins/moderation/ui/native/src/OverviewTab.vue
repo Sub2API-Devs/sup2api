@@ -2,18 +2,21 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { SButton, SCard, SChart, SEmpty, SIcon, SStatCard } from '@sub2api/ui'
 import {
-  canOpenSettings,
+  canManageSettings,
   categoryLabel,
   errorMessage,
   fetchOverview,
-  openSettings,
   useModHost,
   type Overview,
   type Range,
   type Runtime
 } from './host'
 
-const emit = defineEmits<{ (e: 'runtime', r: Runtime): void; (e: 'show-user', userId: number): void }>()
+const emit = defineEmits<{
+  (e: 'runtime', r: Runtime): void
+  (e: 'show-user', userId: number): void
+  (e: 'go-settings'): void
+}>()
 const host = useModHost()
 const t = host.t
 const n = (v: number | undefined | null) => host.i18n.formatNumber(v ?? 0)
@@ -127,15 +130,15 @@ const queuePct = computed(() => {
     <div v-if="runtime && !runtime.configured" class="mod-callout">
       <SIcon name="warning" class="mod-callout-icon" />
       <p class="mod-callout-text">{{ t('overview.notConfigured') }}</p>
-      <SButton v-if="canOpenSettings()" variant="primary" size="sm" @click="openSettings">
-        <SIcon name="settings" class="mod-icon" />{{ t('settings') }}
+      <SButton v-if="canManageSettings()" variant="primary" size="sm" @click="emit('go-settings')">
+        <SIcon name="settings" class="mod-icon" />{{ t('tabs.settings') }}
       </SButton>
     </div>
     <div v-else-if="runtime && runtime.mode === 'off'" class="mod-callout mod-callout-info">
       <SIcon name="info" class="mod-callout-icon" />
       <p class="mod-callout-text">{{ t('overview.offHint') }}</p>
-      <SButton v-if="canOpenSettings()" size="sm" @click="openSettings">
-        <SIcon name="settings" class="mod-icon" />{{ t('settings') }}
+      <SButton v-if="canManageSettings()" size="sm" @click="emit('go-settings')">
+        <SIcon name="settings" class="mod-icon" />{{ t('tabs.settings') }}
       </SButton>
     </div>
 
