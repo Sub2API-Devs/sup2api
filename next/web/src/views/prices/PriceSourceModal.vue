@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ApiError, api } from '@sub2api/host'
-import { SButton, SField, SModal, SSwitch, STagInput, toast } from '@sub2api/ui'
+import { SButton, SCheckbox, SField, SGrid, SInput, SModal, SSwitch, STagInput, toast } from '@sub2api/ui'
 import type { PriceSource, PriceSourceKind } from '@/api/types'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import { DEFAULT_PROVIDERS, DEFAULT_URLS, SOURCE_KINDS, isHttpUrl } from './priceSources'
@@ -138,7 +138,7 @@ async function submit() {
   >
     <form class="space-y-4" data-testid="price-source-form" @submit.prevent="submit">
       <SField :label="t('prices.sources.kindCol')" required>
-        <div class="grid gap-2 sm:grid-cols-3">
+        <SGrid :cols="3" :gap="2">
           <button
             v-for="k in SOURCE_KINDS"
             :key="k"
@@ -155,16 +155,16 @@ async function submit() {
           >
             <span class="font-medium">{{ t(`prices.sources.kind.${k}`) }}</span>
           </button>
-        </div>
+        </SGrid>
         <p class="input-hint" data-testid="price-source-kind-hint">{{ t(`prices.sources.kindHint.${form.kind}`) }}</p>
       </SField>
 
       <SField :label="t('common.name')" required :error="errors.name">
-        <input v-model="form.name" class="input" name="name" />
+        <SInput v-model="form.name" name="name" />
       </SField>
 
       <SField :label="t('prices.sources.url')" required :error="errors.url" :hint="t(`prices.sources.urlHint.${form.kind}`)">
-        <input v-model="form.url" class="input font-mono text-xs" name="url" :placeholder="form.kind === 'sup2api' ? 'https://up.example.com' : DEFAULT_URLS[form.kind]" />
+        <SInput v-model="form.url" mono class="text-xs" name="url" :placeholder="form.kind === 'sup2api' ? 'https://up.example.com' : DEFAULT_URLS[form.kind]" />
       </SField>
 
       <SField
@@ -174,19 +174,16 @@ async function submit() {
         :error="errors.api_key"
         :hint="editing && hasStoredKey ? t('prices.sources.apiKeyKeep') : t('prices.sources.apiKeyHint')"
       >
-        <input
+        <SInput
           v-model="form.apiKey"
           type="password"
           name="api_key"
-          class="input font-mono"
+          mono
           autocomplete="new-password"
           :disabled="form.clearKey"
           :placeholder="editing && hasStoredKey ? t('prices.sources.apiKeyStored') : 'sk-s2a-...'"
         />
-        <label v-if="editing && hasStoredKey" class="mt-1.5 flex items-center gap-1.5 text-xs">
-          <input v-model="form.clearKey" type="checkbox" class="checkbox" data-testid="price-source-clear-key" />
-          {{ t('prices.sources.apiKeyClear') }}
-        </label>
+        <SCheckbox v-if="editing && hasStoredKey" v-model="form.clearKey" class="mt-1.5" :label="t('prices.sources.apiKeyClear')" data-testid="price-source-clear-key" />
       </SField>
 
       <SField

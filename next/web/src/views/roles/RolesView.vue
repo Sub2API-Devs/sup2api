@@ -2,7 +2,7 @@
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SEmpty, SField, SIcon, SModal, SPageHeader, SSpinner, confirm, toast } from '@sub2api/ui'
+import { SBadge, SButton, SEmpty, SField, SGrid, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SSectionTitle, SSpinner, STextarea, confirm, toast } from '@sub2api/ui'
 import type { LText, PermissionItem, PermissionModule, User } from '@/api/types'
 import { roleMemberCount, type RoleRow } from '@/api/admin'
 import { useAuthStore } from '@/stores/auth'
@@ -333,21 +333,21 @@ async function removeRole() {
           </div>
 
           <!-- meta -->
-          <div class="grid gap-4 md:grid-cols-3">
+          <SGrid :cols="1" :md-cols="3">
             <SField :label="t('roles.nameEn')">
-              <input v-model="form.nameEn" class="input" :disabled="readOnly" />
+              <SInput v-model="form.nameEn" :disabled="readOnly" />
             </SField>
             <SField :label="t('roles.nameZh')">
-              <input v-model="form.nameZh" class="input" :disabled="readOnly" />
+              <SInput v-model="form.nameZh" :disabled="readOnly" />
             </SField>
             <SField :label="t('common.description')">
-              <input v-model="form.description" class="input" :disabled="readOnly" />
+              <SInput v-model="form.description" :disabled="readOnly" />
             </SField>
-          </div>
+          </SGrid>
 
           <!-- permission tree -->
           <div>
-            <h4 class="section-title">{{ t('roles.permissions') }}</h4>
+            <SSectionTitle :title="t('roles.permissions')" />
             <SEmpty v-if="!modules.length" :text="t('roles.noPermissions')" />
             <div class="space-y-2">
               <template v-for="(group, gi) in [coreModules, pluginModules]" :key="gi">
@@ -422,8 +422,8 @@ async function removeRole() {
                 >{{ u.display_name || u.email }}</span>
                 <span v-if="membersTotal > members.length" class="muted text-xs">{{ t('roles.moreMembers', { n: membersTotal - members.length }) }}</span>
               </template>
-              <span v-else class="muted">{{ t('roles.noMembers') }}</span>
-              <RouterLink :to="{ path: '/users', query: { role: selected.key } }" class="link ml-auto text-xs">{{ t('roles.manageMembers') }}</RouterLink>
+              <SHint v-else inline>{{ t('roles.noMembers') }}</SHint>
+              <SLink :to="{ path: '/users', query: { role: selected.key } }" class="ml-auto text-xs">{{ t('roles.manageMembers') }}</SLink>
             </div>
           </div>
         </div>
@@ -434,18 +434,18 @@ async function removeRole() {
     <SModal v-model:open="createOpen" :title="t('roles.create')">
       <form class="space-y-4" @submit.prevent="submitCreate">
         <SField :label="t('roles.key')" required :hint="t('roles.keyHint')" :error="createErrors.key">
-          <input v-model="createForm.key" class="input font-mono" placeholder="operator" />
+          <SInput v-model="createForm.key" mono placeholder="operator" />
         </SField>
-        <div class="grid gap-4 sm:grid-cols-2">
+        <SGrid>
           <SField :label="t('roles.nameEn')" :error="createErrors.name">
-            <input v-model="createForm.nameEn" class="input" placeholder="Operator" />
+            <SInput v-model="createForm.nameEn" placeholder="Operator" />
           </SField>
           <SField :label="t('roles.nameZh')">
-            <input v-model="createForm.nameZh" class="input" placeholder="运营" />
+            <SInput v-model="createForm.nameZh" placeholder="运营" />
           </SField>
-        </div>
+        </SGrid>
         <SField :label="t('common.description')" :error="createErrors.description">
-          <textarea v-model="createForm.description" class="input" rows="2" />
+          <STextarea v-model="createForm.description" :rows="2" />
         </SField>
       </form>
       <template #footer>

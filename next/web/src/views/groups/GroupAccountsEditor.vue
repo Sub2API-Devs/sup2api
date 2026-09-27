@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SSpinner } from '@sub2api/ui'
+import { SBadge, SCheckbox, SHint, SInput, SSelect, SSpinner } from '@sub2api/ui'
 import type { Account } from '@/api/types'
 import { lt } from '@/i18n'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
@@ -67,6 +67,7 @@ const typeOptions = computed(() => {
   }
   return [...seen.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))
 })
+const typeFilterOptions = computed(() => [{ value: '', label: t('accounts.allTypes') }, ...typeOptions.value])
 
 const rows = computed(() => {
   const s = q.value.trim().toLowerCase()
@@ -143,14 +144,9 @@ defineExpose({ save, dirty })
 <template>
   <div>
     <div class="mb-2 flex flex-wrap items-center gap-2">
-      <select v-model="typeFilter" class="input !w-52" data-testid="group-accounts-type">
-        <option value="">{{ t('accounts.allTypes') }}</option>
-        <option v-for="o in typeOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
-      </select>
-      <input v-model="q" class="input !w-48" :placeholder="t('common.searchPlaceholder')" />
-      <label class="flex items-center gap-1.5 text-xs">
-        <input v-model="onlySelected" type="checkbox" class="checkbox" />{{ t('groups.accounts.onlySelected') }}
-      </label>
+      <SSelect v-model="typeFilter" class="!w-52" :options="typeFilterOptions" data-testid="group-accounts-type" />
+      <SInput v-model="q" class="!w-48" :placeholder="t('common.searchPlaceholder')" />
+      <SCheckbox v-model="onlySelected" :label="t('groups.accounts.onlySelected')" />
       <span class="ml-auto flex gap-2 text-xs">
         <button type="button" class="link" @click="setVisible(true)">{{ t('groups.accounts.selectVisible') }}</button>
         <button type="button" class="link" @click="setVisible(false)">{{ t('groups.accounts.clearVisible') }}</button>
@@ -158,7 +154,7 @@ defineExpose({ save, dirty })
     </div>
     <div class="max-h-64 overflow-y-auto rounded-lg border border-gray-200 dark:border-dark-600">
       <div v-if="loading" class="flex justify-center py-6"><SSpinner /></div>
-      <p v-else-if="!rows.length" class="muted py-6 text-center text-sm">{{ t('groups.accounts.none') }}</p>
+      <SHint v-else-if="!rows.length" class="py-6 text-center">{{ t('groups.accounts.none') }}</SHint>
       <label
         v-for="a in rows"
         v-else

@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, toast } from '@sub2api/ui'
+import { SButton, SCard, SField, SInput, toast } from '@sub2api/ui'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
 import { lt } from '@/i18n'
@@ -24,7 +24,8 @@ const fields: Array<{ key: Field; label: string; step: string; manifest: string[
   { key: 'max_open_files', label: 'plugins.resources.files', step: '1', manifest: ['maxOpenFiles', 'max_open_files'] }
 ]
 
-const form = reactive<Record<Field, string>>({ memory_mb: '', cpu: '', max_threads: '', max_open_files: '' })
+// SInput type="number" emits a number (null when cleared); reset() stores strings.
+const form = reactive<Record<Field, string | number | null>>({ memory_mb: '', cpu: '', max_threads: '', max_open_files: '' })
 const errors = ref<Record<string, string>>({})
 const saving = ref(false)
 
@@ -60,13 +61,13 @@ function requestedOf(f: (typeof fields)[number]): string {
 
 function differs(f: (typeof fields)[number]): boolean {
   const v = requestedValue(f)
-  return v !== undefined && form[f.key] !== '' && Number(form[f.key]) !== Number(v)
+  return v !== undefined && form[f.key] !== '' && form[f.key] !== null && Number(form[f.key]) !== Number(v)
 }
 
 async function save() {
   const body: Record<string, number | null> = {}
   for (const f of fields) {
-    const s = form[f.key].trim()
+    const s = String(form[f.key] ?? '').trim()
     if (s === '') body[f.key] = null
     else {
       const n = Number(s)
@@ -108,12 +109,13 @@ async function save() {
           <td class="py-2 pr-4">{{ t(f.label) }}</td>
           <td class="py-2 pr-4 font-mono">{{ requestedOf(f) }}</td>
           <td class="py-2">
-            <div class="flex items-center gap-2">
-              <input v-model="form[f.key]" type="number" min="0" :step="f.step" class="input w-40" :disabled="!canManage" />
-              <span v-if="f.unit" class="text-xs muted">{{ f.unit }}</span>
-              <span v-if="differs(f)" class="text-xs text-primary-600 dark:text-primary-400">{{ t('plugins.resources.overridden') }}</span>
-            </div>
-            <p v-if="errors[f.key]" class="input-error-text">{{ errors[f.key] }}</p>
+            <SField :error="errors[f.key]">
+              <div class="flex items-center gap-2">
+                <SInput v-model="form[f.key]" type="number" min="0" :step="f.step" class="w-40" :disabled="!canManage" />
+                <span v-if="f.unit" class="text-xs muted">{{ f.unit }}</span>
+                <span v-if="differs(f)" class="text-xs text-primary-600 dark:text-primary-400">{{ t('plugins.resources.overridden') }}</span>
+              </div>
+            </SField>
           </td>
         </tr>
       </tbody>

@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { ApiError, api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SField, SIcon, SPageHeader, SSpinner, SSwitch, confirm, toast } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SCode, SField, SGrid, SHint, SIcon, SInput, SPageHeader, SSpinner, SSwitch, STextarea, confirm, toast } from '@sub2api/ui'
 import type { Price, PriceValidateResult } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
@@ -316,9 +316,9 @@ const title = computed(() => {
   <div class="space-y-5">
     <SPageHeader :title="title">
       <template #before>
-        <button class="btn btn-ghost btn-sm !px-1.5" :title="t('common.back')" @click="router.push('/prices')">
+        <SButton variant="ghost" size="sm" class="!px-1.5" :title="t('common.back')" @click="router.push('/prices')">
           <SIcon name="arrow-left" class="h-4 w-4" />
-        </button>
+        </SButton>
       </template>
       <template #title-extra>
         <SBadge v-if="price" :tone="isSynced ? 'info' : 'primary'" data-testid="price-edit-source">
@@ -346,17 +346,17 @@ const title = computed(() => {
       <!-- basic -->
       <SCard :title="t('prices.basic')">
         <p class="mb-4 rounded-lg bg-primary-50 px-3 py-2 text-sm text-primary-800 dark:bg-primary-900/20 dark:text-primary-200">{{ t('prices.scopeNote') }}</p>
-        <div class="grid gap-4 md:grid-cols-2">
+        <SGrid :cols="1" :md-cols="2">
           <SField :label="t('prices.model')" :hint="t('prices.modelHint')" :error="errors.model" required>
-            <input v-model.trim="form.model" class="input font-mono" placeholder="claude-sonnet-4-5" :disabled="readonly" />
+            <SInput v-model.trim="form.model" mono placeholder="claude-sonnet-4-5" :disabled="readonly" />
           </SField>
           <SField :label="t('common.note')" :error="errors.note">
-            <input v-model="form.note" class="input" :disabled="readonly" />
+            <SInput v-model="form.note" :disabled="readonly" />
           </SField>
           <SField :label="t('common.status')">
             <div class="pt-2"><SSwitch v-model="form.enabled" :disabled="readonly" :label="form.enabled ? t('common.enabled') : t('common.disabled')" /></div>
           </SField>
-        </div>
+        </SGrid>
         <dl v-if="price" class="kv mt-4 border-t border-gray-100 pt-4 dark:border-dark-700">
           <dt>{{ t('prices.exprHash') }}</dt>
           <dd class="flex flex-wrap items-center gap-2">
@@ -403,7 +403,7 @@ const title = computed(() => {
 
         <div v-if="mode === 'per_request'" class="max-w-xs">
           <SField :label="t('prices.perRequestPrice')" :error="errors['config.price']">
-            <input v-model.number="perRequest" type="number" min="0" step="any" class="input" :disabled="readonly" />
+            <SInput v-model.number="perRequest" type="number" min="0" step="any" :disabled="readonly" />
           </SField>
         </div>
 
@@ -412,12 +412,12 @@ const title = computed(() => {
           <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <label v-for="k in TOKEN_VARS" :key="k" class="text-xs">
               <span class="muted">{{ t(`prices.vars.${k}`) }}</span>
-              <input
+              <SInput
                 v-model.number="perToken[k]"
                 type="number"
                 min="0"
                 step="any"
-                class="input mt-1"
+                class="mt-1"
                 :placeholder="CACHE_VARS.includes(k) ? t('prices.unsetPlaceholder') : '0'"
                 :disabled="readonly"
               />
@@ -432,11 +432,12 @@ const title = computed(() => {
           </div>
           <VisualExprEditor v-if="exprView === 'visual'" v-model="visual" :disabled="readonly" />
           <SField v-else :label="t('prices.expression')" :error="errors.expression" :hint="t('prices.sourceHint')">
-            <textarea
+            <STextarea
               v-model="sourceText"
-              rows="8"
+              :rows="8"
               spellcheck="false"
-              class="input font-mono text-xs"
+              class="text-xs"
+              mono
               :readonly="readonly"
             />
           </SField>
@@ -444,10 +445,10 @@ const title = computed(() => {
 
         <div v-if="mode !== 'expression' || exprView === 'visual'" class="mt-4">
           <p class="muted mb-1 text-xs">{{ t('prices.generated') }}</p>
-          <pre class="code-block">{{ payload.expression }}</pre>
+          <SCode :text="payload.expression" />
           <template v-if="serverExpr && mode !== 'expression'">
             <p class="muted mb-1 mt-2 text-xs">{{ t('prices.serverGenerated') }}</p>
-            <pre class="code-block">{{ serverExpr }}</pre>
+            <SCode :text="serverExpr" />
           </template>
           <p v-if="errors.expression" class="input-error-text">{{ errors.expression }}</p>
         </div>
@@ -459,16 +460,16 @@ const title = computed(() => {
         <ul v-if="localIssues.length" class="space-y-1 text-sm text-red-600 dark:text-red-400">
           <li v-for="(x, i) in localIssues" :key="i">✕ {{ x }}</li>
         </ul>
-        <p v-else-if="validationError" class="text-sm text-red-600 dark:text-red-400">{{ validationError }}</p>
+        <SHint v-else-if="validationError" tone="danger">{{ validationError }}</SHint>
         <div v-else-if="validation" class="space-y-1 text-sm">
-          <p v-if="validation.ok && !validation.errors.length" class="text-emerald-600 dark:text-emerald-400">✓ {{ t('prices.validate.ok') }}</p>
-          <p v-for="(x, i) in validation.errors" :key="'e' + i" class="text-red-600 dark:text-red-400">✕ {{ issueText(x) }}</p>
-          <p v-if="validation.cost_per_million_input !== undefined && validation.cost_per_million_input !== null" class="muted">
+          <SHint v-if="validation.ok && !validation.errors.length" tone="success">✓ {{ t('prices.validate.ok') }}</SHint>
+          <SHint v-for="(x, i) in validation.errors" :key="'e' + i" tone="danger">✕ {{ issueText(x) }}</SHint>
+          <SHint v-if="validation.cost_per_million_input !== undefined && validation.cost_per_million_input !== null">
             {{ t('prices.validate.costPerMillion', { cost: formatMoney(validation.cost_per_million_input) }) }}
-          </p>
-          <p v-for="(x, i) in validation.warnings" :key="'w' + i" class="text-amber-600 dark:text-amber-400">⚠ {{ issueText(x) }}</p>
+          </SHint>
+          <SHint v-for="(x, i) in validation.warnings" :key="'w' + i" tone="warning">⚠ {{ issueText(x) }}</SHint>
         </div>
-        <p v-else class="muted text-sm">{{ t('prices.validate.pending') }}</p>
+        <SHint v-else>{{ t('prices.validate.pending') }}</SHint>
       </SCard>
 
       <!-- trial -->

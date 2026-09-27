@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { SIcon } from '@sub2api/ui'
+import { SButton, SIcon } from '@sub2api/ui'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { usePluginStore } from '@/stores/plugins'
@@ -53,9 +53,9 @@ async function logout() {
   <header
     class="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-gray-200 bg-white/80 px-4 backdrop-blur-xl dark:border-dark-800 dark:bg-dark-900/80 sm:px-6"
   >
-    <button class="btn btn-ghost btn-sm lg:hidden" @click="app.mobileNavOpen = true">
+    <SButton variant="ghost" size="sm" class="lg:hidden" @click="app.mobileNavOpen = true">
       <SIcon name="menu" class="h-5 w-5" />
-    </button>
+    </SButton>
     <div class="min-w-0 flex-1 truncate text-sm font-medium text-gray-500 dark:text-dark-400">{{ title }}</div>
 
     <RouterLink
@@ -67,13 +67,13 @@ async function logout() {
       {{ t('nav.balance') }} {{ formatMoney(auth.balance, 2) }}
     </RouterLink>
 
-    <button class="btn btn-ghost btn-sm" :title="t('common.language')" @click="toggleLocale">
+    <SButton variant="ghost" size="sm" :title="t('common.language')" @click="toggleLocale">
       <SIcon name="globe" class="h-4 w-4" />
       <span>{{ currentLocale() === 'zh' ? '中' : 'EN' }}</span>
-    </button>
-    <button class="btn btn-ghost btn-sm" :title="t('common.theme.toggle')" @click="app.toggleTheme()">
+    </SButton>
+    <SButton variant="ghost" size="sm" :title="t('common.theme.toggle')" @click="app.toggleTheme()">
       <SIcon :name="app.theme === 'dark' ? 'sun' : 'moon'" class="h-4 w-4" />
-    </button>
+    </SButton>
 
     <div ref="root" class="relative">
       <button class="flex items-center gap-2 rounded-xl px-2 py-1 hover:bg-gray-100 dark:hover:bg-dark-800" @click="toggleMenu">

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { SSelect, type SelectOption } from '@sub2api/ui'
 import { useGroupsLookup } from '@/composables/lookups'
 
 // Group picker: multiple (number[]) or single (number | null). Also a SchemaForm
@@ -19,14 +20,15 @@ const selected = computed<number[]>(() => {
 })
 
 const available = computed(() => groups.value.filter((g) => !selected.value.includes(g.id)))
+const availableOptions = computed<SelectOption[]>(() => available.value.map((g) => ({ value: g.id, label: g.name })))
+const allOptions = computed<SelectOption[]>(() => groups.value.map((g) => ({ value: g.id, label: g.name })))
 
 function nameOf(id: number) {
   return groups.value.find((g) => g.id === id)?.name || `#${id}`
 }
 
-function add(e: Event) {
-  const id = Number((e.target as HTMLSelectElement).value)
-  ;(e.target as HTMLSelectElement).value = ''
+function add(v: unknown) {
+  const id = Number(v)
   if (!id) return
   emit('update:modelValue', [...selected.value, id])
 }
@@ -38,8 +40,7 @@ function remove(id: number) {
   )
 }
 
-function single(e: Event) {
-  const v = (e.target as HTMLSelectElement).value
+function single(v: unknown) {
   emit('update:modelValue', v ? Number(v) : null)
 }
 </script>
@@ -54,13 +55,14 @@ function single(e: Event) {
       {{ nameOf(id) }}
       <button v-if="!disabled" type="button" class="opacity-60 hover:opacity-100" @click="remove(id)">×</button>
     </span>
-    <select v-if="!disabled && available.length" class="input !w-auto !py-1 text-xs" @change="add">
-      <option value="">+ {{ t('common.group') }}</option>
-      <option v-for="g in available" :key="g.id" :value="g.id">{{ g.name }}</option>
-    </select>
+    <SSelect
+      v-if="!disabled && available.length"
+      :model-value="null"
+      :options="availableOptions"
+      :placeholder="`+ ${t('common.group')}`"
+      class="!w-auto !py-1 text-xs"
+      @update:model-value="add"
+    />
   </div>
-  <select v-else class="input" :value="selected[0] ?? ''" :disabled="disabled" @change="single">
-    <option value="">—</option>
-    <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
-  </select>
+  <SSelect v-else :model-value="selected[0] ?? null" :options="allOptions" placeholder="—" :disabled="disabled" @update:model-value="single" />
 </template>

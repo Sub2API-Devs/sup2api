@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
-import { SBadge, SButton, SCard, SDropdown, SEmpty, SIcon, SModal, SPageHeader, SSpinner, STabs, confirm, type MenuAction, type TabItem } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SDropdown, SEmpty, SHint, SIcon, SLink, SModal, SPageHeader, SSpinner, STabs, confirm, type MenuAction, type TabItem } from '@sub2api/ui'
 import type { Rollout } from '@/api/types'
 import { lt } from '@/i18n'
 import { errorMessage, notifyError } from '@/utils/errors'
@@ -183,9 +183,9 @@ onMounted(load)
 <template>
   <div>
     <div class="mb-4">
-      <RouterLink to="/plugins" class="link inline-flex items-center gap-1 text-sm">
+      <SLink to="/plugins" class="inline-flex items-center gap-1 text-sm">
         <SIcon name="arrow-left" class="h-4 w-4" />{{ t('plugins.list.title') }}
-      </RouterLink>
+      </SLink>
     </div>
 
     <div v-if="loading" class="flex justify-center py-20"><SSpinner size="lg" /></div>
@@ -290,7 +290,7 @@ onMounted(load)
       <UninstallModal v-model:open="uninstallOpen" :plugin-key="detail.key" :name="name" @done="onUninstalled" />
 
       <SModal v-model:open="upgradeOpen" :title="t('plugins.detail.upgradeTitle', { name })" width="sm">
-        <p class="mb-3 text-sm muted">{{ t('plugins.detail.upgradeHint', { version: detail.active_version || '—' }) }}</p>
+        <SHint class="mb-3">{{ t('plugins.detail.upgradeHint', { version: detail.active_version || '—' }) }}</SHint>
         <div class="space-y-2">
           <label
             v-for="v in approvedUpgrades"

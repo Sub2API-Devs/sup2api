@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge, SButton, SCard, SEmpty, SIcon, SPageHeader, SSpinner } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SEmpty, SGrid, SIcon, SPageHeader, SSpinner } from '@sub2api/ui'
 import type { Platform } from '@/api/types'
 import { lt } from '@/i18n'
 import { usePlatforms } from '@/composables/platforms'
@@ -48,7 +48,7 @@ function methodTone(m: string) {
         {{ t('platforms.fallbackNotice') }}
       </p>
       <SEmpty v-if="!list.length" :text="t('platforms.none')" />
-      <div class="grid gap-4 xl:grid-cols-2">
+      <SGrid :cols="1" :xl-cols="2">
         <SCard v-for="p in list" :key="p.id" :data-platform="p.id" data-testid="platform-card">
           <template #title>
             <span class="flex flex-wrap items-center gap-2">
@@ -105,7 +105,7 @@ function methodTone(m: string) {
           </div>
           <p v-else class="text-xs text-amber-600 dark:text-amber-400">{{ t('platforms.noAccountTypes') }}</p>
         </SCard>
-      </div>
+      </SGrid>
     </template>
   </div>
 </template>

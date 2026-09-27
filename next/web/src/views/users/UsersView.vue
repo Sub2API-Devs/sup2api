@@ -6,13 +6,17 @@ import { api } from '@sub2api/host'
 import {
   SBadge,
   SButton,
+  SCheckbox,
   SDropdown,
   SField,
+  SHint,
+  SInput,
   SModal,
   SPageHeader,
   SPagination,
   SSelect,
   STable,
+  STextarea,
   confirm,
   toast,
   type MenuAction,
@@ -322,7 +326,7 @@ async function remove(u: User) {
         <SButton v-permission="'user:create'" variant="primary" @click="openCreate">+ {{ t('users.create') }}</SButton>
       </template>
       <template #filters>
-        <input v-model="list.filters.q" class="input !w-64" :placeholder="t('users.searchPlaceholder')" />
+        <SInput v-model="list.filters.q" class="!w-64" :placeholder="t('users.searchPlaceholder')" />
         <div class="w-40">
           <SSelect v-model="list.filters.status" :options="statusOptions" />
         </div>
@@ -339,7 +343,7 @@ async function remove(u: User) {
       <template #cell-roles="{ row }">
         <div class="flex flex-wrap gap-1">
           <SBadge v-for="r in row.roles || []" :key="r" :tone="r === 'super_admin' ? 'purple' : 'primary'">{{ roleName(r) }}</SBadge>
-          <span v-if="!row.roles || !row.roles.length" class="muted">—</span>
+          <SHint v-if="!row.roles || !row.roles.length" inline>—</SHint>
         </div>
       </template>
       <template #cell-balance="{ row }">
@@ -349,10 +353,10 @@ async function remove(u: User) {
         <SBadge :tone="statusTone(row.status)" dot>{{ statusLabel(row.status) }}</SBadge>
       </template>
       <template #cell-last_login_at="{ row }">
-        <span class="muted">{{ row.last_login_at ? formatDateTime(row.last_login_at) : t('common.never') }}</span>
+        <SHint inline>{{ row.last_login_at ? formatDateTime(row.last_login_at) : t('common.never') }}</SHint>
       </template>
       <template #cell-created_at="{ row }">
-        <span class="muted">{{ formatDateTime(row.created_at) }}</span>
+        <SHint inline>{{ formatDateTime(row.created_at) }}</SHint>
       </template>
       <template #cell-actions="{ row }">
         <SDropdown v-if="hasAnyAction(row)" :actions="rowActions(row)" @select="onAction(row, $event)" />
@@ -364,36 +368,29 @@ async function remove(u: User) {
     <SModal v-model:open="createOpen" :title="t('users.create')">
       <form class="space-y-4" @submit.prevent="submitCreate">
         <SField :label="t('users.email')" required :error="createErrors.email">
-          <input v-model="createForm.email" type="email" class="input" autocomplete="off" />
+          <SInput v-model="createForm.email" type="email" autocomplete="off" />
         </SField>
         <SField :label="t('users.displayName')" :error="createErrors.display_name">
-          <input v-model="createForm.display_name" class="input" />
+          <SInput v-model="createForm.display_name" />
         </SField>
         <SField :label="t('users.password')" required :hint="t('users.passwordHint')" :error="createErrors.password">
-          <input v-model="createForm.password" type="password" class="input" autocomplete="new-password" />
+          <SInput v-model="createForm.password" type="password" autocomplete="new-password" />
         </SField>
         <SField :label="t('users.roles')" :error="createErrors.role_keys">
           <div v-if="roles.length" class="flex flex-wrap gap-x-4 gap-y-2">
-            <label
+            <SCheckbox
               v-for="r in roles"
               :key="r.key"
-              class="inline-flex items-center gap-2 text-sm"
-              :class="roleSelectable(r.key) ? '' : 'opacity-50'"
-            >
-              <input
-                type="checkbox"
-                class="checkbox"
-                :checked="createForm.role_keys.includes(r.key)"
-                :disabled="!roleSelectable(r.key)"
-                @change="toggleKey(createForm.role_keys, r.key)"
-              />
-              {{ lt(r.name) || r.key }}
-            </label>
+              :model-value="createForm.role_keys.includes(r.key)"
+              :disabled="!roleSelectable(r.key)"
+              :label="lt(r.name) || r.key"
+              @update:model-value="toggleKey(createForm.role_keys, r.key)"
+            />
           </div>
-          <p v-else class="muted text-sm">{{ t('users.rolesUnavailable') }}</p>
+          <SHint v-else>{{ t('users.rolesUnavailable') }}</SHint>
         </SField>
         <SField :label="t('users.maxConcurrency')" :hint="t('users.maxConcurrencyHint')" :error="createErrors.max_concurrency">
-          <input v-model.number="createForm.max_concurrency" type="number" min="0" class="input" />
+          <SInput v-model.number="createForm.max_concurrency" type="number" min="0" />
         </SField>
       </form>
       <template #footer>
@@ -406,7 +403,7 @@ async function remove(u: User) {
     <SModal v-model:open="editOpen" :title="t('users.editTitle', { name: editUser?.email || '' })">
       <form class="space-y-4" @submit.prevent="submitEdit">
         <SField :label="t('users.displayName')" :error="editErrors.display_name">
-          <input v-model="editForm.display_name" class="input" />
+          <SInput v-model="editForm.display_name" />
         </SField>
         <SField :label="t('common.status')" :error="editErrors.status">
           <SSelect
@@ -418,7 +415,7 @@ async function remove(u: User) {
           />
         </SField>
         <SField :label="t('users.maxConcurrency')" :hint="t('users.maxConcurrencyHint')" :error="editErrors.max_concurrency">
-          <input v-model.number="editForm.max_concurrency" type="number" min="0" class="input" />
+          <SInput v-model.number="editForm.max_concurrency" type="number" min="0" />
         </SField>
       </form>
       <template #footer>
@@ -446,7 +443,7 @@ async function remove(u: User) {
           </div>
         </label>
       </div>
-      <p v-else class="muted text-sm">{{ t('users.rolesUnavailable') }}</p>
+      <SHint v-else>{{ t('users.rolesUnavailable') }}</SHint>
       <template #footer>
         <SButton @click="rolesOpen = false">{{ t('common.cancel') }}</SButton>
         <SButton variant="primary" :loading="saving" @click="submitRoles">{{ t('common.save') }}</SButton>
@@ -468,7 +465,7 @@ async function remove(u: User) {
     <SModal v-model:open="balanceOpen" :title="t('users.adjustBalanceTitle', { name: balanceUser?.email || '' })">
       <form class="space-y-4" @submit.prevent="submitBalance">
         <div v-if="balanceUser?.balance !== undefined && balanceUser?.balance !== null" class="text-sm">
-          <span class="muted">{{ t('users.currentBalance') }}:</span>
+          <SHint inline>{{ t('users.currentBalance') }}:</SHint>
           <span class="ml-2 font-mono font-semibold">{{ formatMoney(balanceUser?.balance) }}</span>
         </div>
         <SField :label="t('users.direction')">
@@ -486,11 +483,11 @@ async function remove(u: User) {
         <SField :label="t('users.amount')" required :hint="t('users.amountHint')" :error="balanceErrors.amount">
           <div class="relative">
             <span class="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
-            <input v-model="balanceForm.amount" class="input !pl-7 font-mono" inputmode="decimal" placeholder="10.00" />
+            <SInput v-model="balanceForm.amount" class="!pl-7" mono inputmode="decimal" placeholder="10.00" />
           </div>
         </SField>
         <SField :label="t('common.note')" :error="balanceErrors.note">
-          <textarea v-model="balanceForm.note" class="input" rows="2" />
+          <STextarea v-model="balanceForm.note" :rows="2" />
         </SField>
       </form>
       <template #footer>

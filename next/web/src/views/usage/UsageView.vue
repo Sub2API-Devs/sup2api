@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, SChart, SPageHeader, SPagination, SSelect, SStatCard, STimeRange } from '@sub2api/ui'
+import { SButton, SCard, SChart, SField, SGrid, SInput, SPageHeader, SPagination, SSelect, SStatCard, STimeRange } from '@sub2api/ui'
 import type { Group, UsageSummaryRow } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
@@ -108,41 +108,35 @@ function refresh() {
       </template>
       <template #filters>
         <STimeRange v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" />
-        <div class="w-28">
-          <label class="input-label">{{ t('usage.filters.userId') }}</label>
-          <input v-model.trim="filters.user_id" class="input" inputmode="numeric" placeholder="ID" />
-        </div>
-        <div class="w-40">
-          <label class="input-label">{{ t('common.group') }}</label>
+        <SField class="w-28" :label="t('usage.filters.userId')">
+          <SInput v-model.trim="filters.user_id" inputmode="numeric" placeholder="ID" />
+        </SField>
+        <SField class="w-40" :label="t('common.group')">
           <SSelect v-if="canGroups" v-model="filters.group_id" :options="groupOptions" />
-          <input v-else v-model.trim="filters.group_id" class="input" inputmode="numeric" placeholder="ID" />
-        </div>
-        <div class="w-28">
-          <label class="input-label">{{ t('usage.filters.accountId') }}</label>
-          <input v-model.trim="filters.account_id" class="input" inputmode="numeric" placeholder="ID" />
-        </div>
-        <div class="w-48">
-          <label class="input-label">{{ t('common.model') }}</label>
-          <input v-model.trim="filters.model" class="input" placeholder="claude-sonnet-*" />
-        </div>
-        <div class="w-32">
-          <label class="input-label">{{ t('common.status') }}</label>
+          <SInput v-else v-model.trim="filters.group_id" inputmode="numeric" placeholder="ID" />
+        </SField>
+        <SField class="w-28" :label="t('usage.filters.accountId')">
+          <SInput v-model.trim="filters.account_id" inputmode="numeric" placeholder="ID" />
+        </SField>
+        <SField class="w-48" :label="t('common.model')">
+          <SInput v-model.trim="filters.model" placeholder="claude-sonnet-*" />
+        </SField>
+        <SField class="w-32" :label="t('common.status')">
           <SSelect v-model="filters.success" :options="successOptions" />
-        </div>
-        <div class="w-56">
-          <label class="input-label">{{ t('usage.filters.clientRequestId') }}</label>
-          <input
+        </SField>
+        <SField class="w-56" :label="t('usage.filters.clientRequestId')">
+          <SInput
             v-model.trim="filters.client_request_id"
-            class="input font-mono"
+            mono
             :placeholder="t('usage.filters.clientRequestIdPlaceholder')"
-            maxlength="128"
+            :maxlength="128"
             data-testid="filter-client-request-id"
           />
-        </div>
+        </SField>
       </template>
     </SPageHeader>
 
-    <div class="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <SGrid class="mb-4" :xl-cols="4">
       <SStatCard :label="t('usage.summary.requests')" :value="formatNumber(totals.requests)" icon="chart" :loading="summaryLoading" />
       <SStatCard :label="t('usage.summary.successRate')" :value="successRate" icon="check" tone="success" :loading="summaryLoading" />
       <SStatCard
@@ -154,7 +148,7 @@ function refresh() {
         :loading="summaryLoading"
       />
       <SStatCard :label="t('usage.summary.cost')" :value="formatMoney(totals.cost)" icon="balance" :loading="summaryLoading" />
-    </div>
+    </SGrid>
     <SCard v-if="summary.length > 1" :title="t('usage.summary.daily')" class="mb-4">
       <SChart :option="chartOption" height="220px" />
     </SCard>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge, SCard } from '@sub2api/ui'
+import { SBadge, SCard, SCode } from '@sub2api/ui'
 import { lt } from '@/i18n'
 import { formatNumber } from '@/utils/format'
 import { accountTypesOf, asArray, display, pick, platformsOf, type PluginDetail } from '../pluginUtil'
@@ -119,7 +119,7 @@ function endpointText(e: Record<string, any>): string {
       </dl>
       <details v-if="detail.manifest" class="mt-4">
         <summary class="cursor-pointer text-xs muted">{{ t('plugins.detail.rawManifest') }}</summary>
-        <pre class="code-block mt-2 max-h-96">{{ JSON.stringify(detail.manifest, null, 2) }}</pre>
+        <SCode class="mt-2 max-h-96" :text="JSON.stringify(detail.manifest, null, 2)" />
       </details>
     </SCard>
 

@@ -2,7 +2,7 @@
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SModal, SSpinner, toast } from '@sub2api/ui'
+import { SButton, SCode, SHint, SModal, SSpinner, toast } from '@sub2api/ui'
 import { copyText, formatDateTime } from '@/utils/format'
 import { notifyError } from '@/utils/errors'
 
@@ -59,9 +59,9 @@ async function copy() {
           <dd>{{ formatDateTime(entry.created_at) }}</dd>
         </template>
       </dl>
-      <pre class="code-block">{{ entry.expression }}</pre>
+      <SCode :text="entry.expression" />
     </div>
-    <p v-else class="muted py-6 text-center text-sm">{{ t('prices.history.notFound') }}</p>
+    <SHint v-else class="py-6 text-center">{{ t('prices.history.notFound') }}</SHint>
     <template #footer>
       <SButton v-if="entry" size="sm" @click="copy">{{ t('common.copy') }}</SButton>
       <SButton size="sm" variant="primary" @click="emit('update:open', false)">{{ t('common.close') }}</SButton>

@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SModal, SIcon, toast } from '@sub2api/ui'
+import { SButton, SField, SInput, SModal, SIcon, toast } from '@sub2api/ui'
 import type { UninstallResult } from '@/api/types'
 import { notifyError } from '@/utils/errors'
 
@@ -99,10 +99,9 @@ function close() {
       <p v-if="purgeAccounts" class="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
         <SIcon name="warning" class="h-4 w-4" />{{ t('plugins.uninstall.purgeAccountsWarn') }}
       </p>
-      <div>
-        <label class="input-label">{{ t('plugins.uninstall.typeKey', { key: pluginKey }) }}</label>
-        <input v-model="typed" class="input font-mono" :placeholder="pluginKey" autocomplete="off" @keyup.enter="submit" />
-      </div>
+      <SField :label="t('plugins.uninstall.typeKey', { key: pluginKey })">
+        <SInput v-model="typed" mono :placeholder="pluginKey" autocomplete="off" @keyup.enter="submit" />
+      </SField>
     </div>
     <template #footer>
       <SButton v-if="result" variant="primary" @click="close">{{ t('common.close') }}</SButton>

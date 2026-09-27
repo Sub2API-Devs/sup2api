@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge, STable, type TableColumn } from '@sub2api/ui'
+import { SBadge, SHint, STable, type TableColumn } from '@sub2api/ui'
 import type { LedgerEntry } from '@/api/types'
 import { formatDelta, formatNumber, formatTime } from '@/utils/format'
 
@@ -69,7 +69,7 @@ function balance(v: string) {
         </span>
         <span v-if="row.plugin_key" class="muted ml-1 text-xs">· {{ row.plugin_key }}</span>
         <span v-if="row.operator_id" class="muted ml-1 text-xs">· {{ t('ledger.operator', { id: row.operator_id }) }}</span>
-        <span v-if="!row.note && !row.ref_type && !row.ref_id" class="muted">—</span>
+        <SHint v-if="!row.note && !row.ref_type && !row.ref_id" inline>—</SHint>
       </div>
     </template>
   </STable>

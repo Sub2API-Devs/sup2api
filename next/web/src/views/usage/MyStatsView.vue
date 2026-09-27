@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, SChart, SPageHeader, SStatCard, STable, STimeRange, type TableColumn } from '@sub2api/ui'
+import { SButton, SCard, SChart, SGrid, SHint, SPageHeader, SStatCard, STable, STimeRange, type TableColumn } from '@sub2api/ui'
 import type { UsageSummaryRow } from '@/api/types'
 import { formatMoney, formatNumber } from '@/utils/format'
 import { rangeBounds, type RangeKey } from './timeRange'
@@ -98,7 +98,7 @@ function rate(r: UsageSummaryRow) {
       </template>
     </SPageHeader>
 
-    <div class="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <SGrid class="mb-4" :xl-cols="4">
       <SStatCard :label="t('usage.summary.requests')" :value="formatNumber(totals.requests)" icon="chart" :loading="loading" />
       <SStatCard :label="t('usage.summary.successRate')" :value="successRate" icon="check" tone="success" :loading="loading" />
       <SStatCard
@@ -110,11 +110,11 @@ function rate(r: UsageSummaryRow) {
         :loading="loading"
       />
       <SStatCard :label="t('usage.summary.cost')" :value="formatMoney(totals.cost)" icon="balance" :loading="loading" />
-    </div>
+    </SGrid>
 
     <SCard :title="t('usage.summary.daily')" class="mb-4">
       <SChart v-if="days.length" :option="chartOption" height="220px" :loading="loading" />
-      <p v-else class="muted py-12 text-center text-sm">{{ t('common.noData') }}</p>
+      <SHint v-else class="py-12 text-center">{{ t('common.noData') }}</SHint>
     </SCard>
 
     <SCard :title="t('usage.stats.byModel')" :padded="false">

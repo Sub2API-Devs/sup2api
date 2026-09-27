@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SCard, STable, type TableColumn } from '@sub2api/ui'
+import { SCard, SCode, STable, type TableColumn } from '@sub2api/ui'
 import { formatBytes, formatDateTime, formatRelative } from '@/utils/format'
 import { display, pick, type PluginDetail, type PluginNode } from '../pluginUtil'
 import StatusBadge from '../parts/StatusBadge.vue'
@@ -81,7 +81,7 @@ function restartReason(n: PluginNode): string {
         <span class="whitespace-nowrap text-xs" :title="formatDateTime(row.last_heartbeat)">{{ formatRelative(row.last_heartbeat, t) }}</span>
       </template>
       <template #expand="{ row }">
-        <pre class="code-block">{{ JSON.stringify(row.state ?? null, null, 2) }}</pre>
+        <SCode :text="JSON.stringify(row.state ?? null, null, 2)" />
       </template>
     </STable>
   </SCard>

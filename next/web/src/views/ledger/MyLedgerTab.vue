@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SPagination, SSelect, SStatCard, STimeRange } from '@sub2api/ui'
+import { SField, SPagination, SSelect, SStatCard, STimeRange } from '@sub2api/ui'
 import type { LedgerEntry } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
@@ -56,10 +56,9 @@ defineExpose({ reload: reloadAll })
 <template>
   <div>
     <div class="mb-4 flex flex-wrap items-end gap-3">
-      <div class="w-40">
-        <label class="input-label">{{ t('ledger.cols.kind') }}</label>
+      <SField class="w-40" :label="t('ledger.cols.kind')">
         <SSelect v-model="filters.kind" :options="kindOptions" />
-      </div>
+      </SField>
       <STimeRange
         v-model:range="range"
         v-model:from="filters.from"

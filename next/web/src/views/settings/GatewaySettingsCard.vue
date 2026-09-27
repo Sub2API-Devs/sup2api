@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, SField, SSpinner, toast } from '@sub2api/ui'
+import { SButton, SCard, SField, SGrid, SHint, SInput, SSpinner, toast } from '@sub2api/ui'
 import { GATEWAY_SETTINGS_RANGES, type GatewaySettings } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { fieldErrors, notifyError } from '@/utils/errors'
@@ -93,7 +93,7 @@ onMounted(load)
   <SCard :title="t('settings.gateway.title')" :subtitle="t('settings.gateway.subtitle')" data-testid="gateway-settings">
     <div v-if="loading && !loaded" class="py-6 text-center"><SSpinner /></div>
     <div v-else class="space-y-4">
-      <div class="grid gap-4 md:grid-cols-3">
+      <SGrid :cols="1" :md-cols="3">
         <SField
           v-for="f in fields"
           :key="f.key"
@@ -102,20 +102,19 @@ onMounted(load)
           :error="errors[f.key]"
         >
           <div class="flex items-center gap-2">
-            <input
+            <SInput
               v-model="form[f.key]"
               type="number"
               step="1"
               :min="GATEWAY_SETTINGS_RANGES[f.key][0]"
               :max="GATEWAY_SETTINGS_RANGES[f.key][1]"
-              class="input"
               :name="f.key"
               :disabled="!canManage"
             />
-            <span v-if="f.unit" class="muted text-sm">{{ f.unit }}</span>
+            <SHint v-if="f.unit" inline>{{ f.unit }}</SHint>
           </div>
         </SField>
-      </div>
+      </SGrid>
       <div v-if="canManage" class="flex justify-end gap-2">
         <SButton v-if="dirty" size="sm" @click="reset">{{ t('common.reset') }}</SButton>
         <SButton size="sm" variant="primary" :loading="saving" :disabled="!dirty" @click="save">{{ t('common.save') }}</SButton>

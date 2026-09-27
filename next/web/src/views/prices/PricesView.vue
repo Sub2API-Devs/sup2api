@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SPageHeader, SPagination, SSelect, SSwitch, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SField, SInput, SLink, SPageHeader, SPagination, SSelect, SSwitch, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
 import type { Price } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
@@ -152,18 +152,15 @@ async function remove(p: Price) {
         <SButton v-if="canManage" variant="primary" @click="router.push('/prices/new')">+ {{ t('prices.new') }}</SButton>
       </template>
       <template #filters>
-        <div class="w-40">
-          <label class="input-label">{{ t('prices.modeCol') }}</label>
+        <SField class="w-40" :label="t('prices.modeCol')">
           <SSelect v-model="filters.mode" :options="modeOptions" />
-        </div>
-        <div class="w-36" data-testid="price-source-filter">
-          <label class="input-label">{{ t('common.source') }}</label>
+        </SField>
+        <SField class="w-36" :label="t('common.source')" data-testid="price-source-filter">
           <SSelect v-model="filters.source" :options="sourceOptions" />
-        </div>
-        <div class="w-64">
-          <label class="input-label">{{ t('common.search') }}</label>
-          <input v-model="filters.q" class="input" :placeholder="t('prices.searchPlaceholder')" />
-        </div>
+        </SField>
+        <SField class="w-64" :label="t('common.search')">
+          <SInput v-model="filters.q" :placeholder="t('prices.searchPlaceholder')" />
+        </SField>
         <div v-if="filters.sync_source_id" class="pb-1.5" data-testid="price-source-chip">
           <span class="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-1 text-xs text-sky-700 dark:bg-sky-900/20 dark:text-sky-300">
             {{ t('prices.fromSource', { name: filteredSourceName }) }}
@@ -179,7 +176,7 @@ async function remove(p: Price) {
     <div class="card overflow-hidden">
       <STable :columns="columns" :rows="rows" :loading="loading">
         <template #cell-model="{ row }">
-          <RouterLink :to="`/prices/${row.id}`" class="link font-mono text-sm">{{ row.model }}</RouterLink>
+          <SLink :to="`/prices/${row.id}`" class="font-mono text-sm">{{ row.model }}</SLink>
           <p v-if="row.note" class="muted truncate text-xs">{{ row.note }}</p>
         </template>
         <template #cell-mode="{ row }">

@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api, requestRaw } from '@sub2api/host'
-import { SBadge, SButton, SCard, SEmpty, SIcon, SModal, SPageHeader, SSelect, SSpinner, toast } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SEmpty, SField, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SSelect, SSpinner, toast } from '@sub2api/ui'
 import type { MarketPlugin, MarketSource, MarketVersion, PluginReview, PluginSummary } from '@/api/types'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
@@ -180,19 +180,17 @@ onMounted(async () => {
         <SButton :loading="loading" @click="loadPlugins(), loadInstalled()"><SIcon name="refresh" class="h-4 w-4" />{{ t('common.refresh') }}</SButton>
       </template>
       <template #filters>
-        <div class="w-56">
-          <label class="input-label">{{ t('plugins.market.source') }}</label>
+        <SField :label="t('plugins.market.source')" class="w-56">
           <SSelect
             :model-value="sourceId"
             :options="sourceOptions"
             :disabled="loadingSources || !sources.length"
             @update:model-value="(v) => (sourceId = v === null ? null : Number(v))"
           />
-        </div>
-        <div class="w-72">
-          <label class="input-label">{{ t('common.search') }}</label>
-          <input v-model="q" class="input" :placeholder="t('plugins.market.searchPlaceholder')" />
-        </div>
+        </SField>
+        <SField :label="t('common.search')" class="w-72">
+          <SInput v-model="q" :placeholder="t('plugins.market.searchPlaceholder')" />
+        </SField>
         <div v-if="hostVersion" class="self-end pb-2 text-xs muted" data-testid="market-host-version">
           {{ t('plugins.market.hostVersion', { version: hostVersion }) }}
         </div>
@@ -233,7 +231,7 @@ onMounted(async () => {
             {{ t('plugins.publisher') }} {{ m.publisher || '—' }}
             <template v-if="installedOf(m)">
               · {{ t('plugins.market.installedVersion', { version: installedOf(m) }) }}
-              <RouterLink v-if="installed[m.key]" :to="`/plugins/${encodeURIComponent(m.key)}`" class="link ml-1">{{ t('common.detail') }}</RouterLink>
+              <SLink v-if="installed[m.key]" :to="`/plugins/${encodeURIComponent(m.key)}`" class="ml-1">{{ t('common.detail') }}</SLink>
             </template>
           </p>
           <p v-if="noCompatible(m)" class="mt-1 flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
@@ -267,7 +265,7 @@ onMounted(async () => {
 
     <SModal :open="!!picker" :title="picker ? t('plugins.market.pickTitle', { name: lt(picker.name) || picker.key }) : ''" width="md" @update:open="(v) => !v && (picker = null)">
       <template v-if="picker">
-        <p class="mb-3 text-sm muted">{{ t('plugins.market.pickHint') }}</p>
+        <SHint class="mb-3">{{ t('plugins.market.pickHint') }}</SHint>
         <div class="max-h-80 space-y-2 overflow-y-auto">
           <label
             v-for="v in pickerVersions"

@@ -7,12 +7,16 @@ import {
   SButton,
   SDropdown,
   SField,
+  SGrid,
+  SHint,
   SIcon,
+  SInput,
   SModal,
   SPageHeader,
   SPagination,
   SSelect,
   STable,
+  STextarea,
   confirm,
   toast,
   type MenuAction,
@@ -255,8 +259,8 @@ async function copyKey(k: PublisherKey) {
               <SIcon name="plus" class="h-3.5 w-3.5" />{{ t('publishers.addKey') }}
             </SButton>
           </div>
-          <p v-if="!row.keys" class="muted text-sm">{{ t('publishers.keysUnavailable') }}</p>
-          <p v-else-if="!row.keys.length" class="muted text-sm">{{ t('publishers.noKeys') }}</p>
+          <SHint v-if="!row.keys">{{ t('publishers.keysUnavailable') }}</SHint>
+          <SHint v-else-if="!row.keys.length">{{ t('publishers.noKeys') }}</SHint>
           <table v-else class="table table-dense">
             <thead>
               <tr>
@@ -305,7 +309,7 @@ async function copyKey(k: PublisherKey) {
     <SModal v-model:open="createOpen" :title="t('publishers.create')">
       <form class="space-y-4" @submit.prevent="submitCreate">
         <SField :label="t('common.name')" required :error="createErrors.name">
-          <input v-model="createForm.name" class="input" placeholder="acme" />
+          <SInput v-model="createForm.name" placeholder="acme" />
         </SField>
         <SField :label="t('publishers.trustLevel')" :hint="t(`publishers.trustHint_.${createForm.trust_level}`)" :error="createErrors.trust_level">
           <SSelect v-model="createForm.trust_level" :options="trustOptions" />
@@ -321,19 +325,20 @@ async function copyKey(k: PublisherKey) {
     <SModal v-model:open="keyOpen" :title="t('publishers.addKeyTitle', { name: keyPublisher?.name || '' })" width="lg">
       <form class="space-y-4" @submit.prevent="submitKey">
         <SField :label="t('publishers.keyId')" required :hint="t('publishers.keyIdHint')" :error="keyErrors.key_id">
-          <input v-model="keyForm.key_id" class="input font-mono" placeholder="acme-2026" />
+          <SInput v-model="keyForm.key_id" mono placeholder="acme-2026" />
         </SField>
         <SField :label="t('publishers.publicKey')" required :hint="t('publishers.publicKeyHint')" :error="keyErrors.public_key">
-          <textarea v-model="keyForm.public_key" class="input font-mono text-xs" rows="2" spellcheck="false" />
+          <STextarea v-model="keyForm.public_key" mono class="text-xs" :rows="2" spellcheck="false" />
         </SField>
-        <div class="grid gap-4 sm:grid-cols-2">
+        <SGrid>
+          <!-- datetime-local is not an SInput type; native inputs stay. -->
           <SField :label="t('publishers.notBefore')" :hint="t('common.optional')" :error="keyErrors.not_before">
             <input v-model="keyForm.not_before" type="datetime-local" class="input" />
           </SField>
           <SField :label="t('publishers.notAfter')" :hint="t('common.optional')" :error="keyErrors.not_after">
             <input v-model="keyForm.not_after" type="datetime-local" class="input" />
           </SField>
-        </div>
+        </SGrid>
       </form>
       <template #footer>
         <SButton @click="keyOpen = false">{{ t('common.cancel') }}</SButton>

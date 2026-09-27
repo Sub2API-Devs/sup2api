@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, SField, SPageHeader, SSpinner, STabs, toast } from '@sub2api/ui'
+import { SButton, SCard, SField, SGrid, SHint, SInput, SPageHeader, SSpinner, STabs, toast } from '@sub2api/ui'
 import type { BillingSettings } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { fieldErrors, notifyError } from '@/utils/errors'
@@ -88,7 +88,7 @@ onMounted(loadBilling)
         <div v-if="billingLoading && !billingLoaded" class="py-8 text-center"><SSpinner /></div>
         <div v-else class="space-y-6">
           <SField :label="t('settings.billing.missingPolicy')">
-            <div class="grid gap-2 md:grid-cols-2">
+            <SGrid :cols="1" :md-cols="2" :gap="2">
               <label
                 v-for="p in ['reject', 'free'] as const"
                 :key="p"
@@ -101,22 +101,22 @@ onMounted(loadBilling)
                   <span class="muted block text-xs">{{ t(`settings.billing.policyHint.${p}`) }}</span>
                 </span>
               </label>
-            </div>
+            </SGrid>
           </SField>
-          <div class="grid gap-4 md:grid-cols-2">
+          <SGrid :cols="1" :md-cols="2">
             <SField :label="t('settings.billing.minBalance')" :hint="t('settings.billing.minBalanceHint')" :error="errors.min_balance">
               <div class="flex items-center gap-2">
-                <input v-model="billing.min_balance" class="input font-mono" inputmode="decimal" :disabled="!canManageBilling" />
-                <span class="muted text-sm">USD</span>
+                <SInput v-model="billing.min_balance" mono inputmode="decimal" :disabled="!canManageBilling" />
+                <SHint inline>USD</SHint>
               </div>
             </SField>
             <SField :label="t('settings.billing.bigCost')" :hint="t('settings.billing.bigCostHint')" :error="errors.big_cost_warning_usd">
               <div class="flex items-center gap-2">
-                <input v-model="billing.big_cost_warning_usd" class="input font-mono" inputmode="decimal" :disabled="!canManageBilling" />
-                <span class="muted text-sm">USD</span>
+                <SInput v-model="billing.big_cost_warning_usd" mono inputmode="decimal" :disabled="!canManageBilling" />
+                <SHint inline>USD</SHint>
               </div>
             </SField>
-          </div>
+          </SGrid>
           <div v-if="canManageBilling" class="flex justify-end gap-2">
             <SButton v-if="dirty" size="sm" @click="billingLoaded && Object.assign(billing, billingLoaded)">{{ t('common.reset') }}</SButton>
             <SButton size="sm" variant="primary" :loading="billingSaving" :disabled="!dirty" @click="saveBilling">{{ t('common.save') }}</SButton>

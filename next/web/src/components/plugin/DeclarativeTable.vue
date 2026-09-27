@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SIcon, SPagination, STable, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SIcon, SInput, SPagination, STable, type TableColumn } from '@sub2api/ui'
 import type { UIPlugin, UIPluginPage } from '@/api/types'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
@@ -62,7 +62,7 @@ onMounted(load)
     <div class="mb-3 flex items-center gap-2">
       <div class="relative max-w-xs flex-1">
         <SIcon name="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-        <input v-model="q" class="input !pl-9" :placeholder="t('common.searchPlaceholder')" />
+        <SInput v-model="q" class="!pl-9" :placeholder="t('common.searchPlaceholder')" />
       </div>
       <SButton size="sm" :loading="loading" @click="load"><SIcon name="refresh" class="h-4 w-4" />{{ t('common.refresh') }}</SButton>
     </div>

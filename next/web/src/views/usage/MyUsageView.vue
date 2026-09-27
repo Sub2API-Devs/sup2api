@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { SButton, SPageHeader, SPagination, SSelect, STabs, STimeRange, type TabItem } from '@sub2api/ui'
+import { SButton, SField, SInput, SPageHeader, SPagination, SSelect, STabs, STimeRange, type TabItem } from '@sub2api/ui'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
 import MyLedgerTab from '@/views/ledger/MyLedgerTab.vue'
@@ -58,14 +58,12 @@ function refresh() {
       </template>
       <template v-if="tab === 'requests'" #filters>
         <STimeRange v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" />
-        <div class="w-48">
-          <label class="input-label">{{ t('common.model') }}</label>
-          <input v-model.trim="filters.model" class="input" placeholder="claude-sonnet-*" />
-        </div>
-        <div class="w-32">
-          <label class="input-label">{{ t('common.status') }}</label>
+        <SField class="w-48" :label="t('common.model')">
+          <SInput v-model.trim="filters.model" placeholder="claude-sonnet-*" />
+        </SField>
+        <SField class="w-32" :label="t('common.status')">
           <SSelect v-model="filters.success" :options="successOptions" />
-        </div>
+        </SField>
       </template>
     </SPageHeader>
 

@@ -3,7 +3,7 @@ import { computed, ref, shallowRef, triggerRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SIcon, SModal, SPageHeader, SPagination, SSpinner, STabs, confirm, type TabItem, type Tone } from '@sub2api/ui'
+import { SBadge, SButton, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSpinner, STabs, confirm, type TabItem, type Tone } from '@sub2api/ui'
 import type { PriceSource, PriceSyncAction, PriceSyncItem, PriceSyncPreview, PriceSyncResult } from '@/api/types'
 import { errorMessage, notifyError } from '@/utils/errors'
 import { formatDateTime, formatNumber } from '@/utils/format'
@@ -221,9 +221,9 @@ async function apply() {
   <div>
     <SPageHeader :title="t('prices.sync.title', { name: sourceName })">
       <template #before>
-        <button class="btn btn-ghost btn-sm !px-1.5" :title="t('common.back')" @click="router.push('/prices/sources')">
+        <SButton variant="ghost" size="sm" class="!px-1.5" :title="t('common.back')" @click="router.push('/prices/sources')">
           <SIcon name="arrow-left" class="h-4 w-4" />
-        </button>
+        </SButton>
       </template>
       <template #title-extra>
         <SBadge v-if="source" tone="gray">{{ t(`prices.sources.kind.${source.kind}`) }}</SBadge>
@@ -247,7 +247,7 @@ async function apply() {
     >
       <SIcon name="x" class="h-8 w-8 text-red-500" />
       <p class="font-medium text-gray-900 dark:text-white">{{ t('prices.sync.fetchFailed') }}</p>
-      <p class="max-w-xl break-words text-sm text-red-600 dark:text-red-400">{{ fetchError }}</p>
+      <SHint tone="danger" class="max-w-xl break-words">{{ fetchError }}</SHint>
       <SButton variant="primary" :loading="fetching" @click="fetchPreview">{{ t('prices.sync.retry') }}</SButton>
     </div>
 
@@ -280,7 +280,7 @@ async function apply() {
 
         <!-- toolbar -->
         <div class="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 py-3 dark:border-dark-700">
-          <input v-model="q" class="input !w-64" :placeholder="t('prices.sync.searchPlaceholder')" data-testid="price-sync-search" />
+          <SInput v-model="q" class="!w-64" :placeholder="t('prices.sync.searchPlaceholder')" data-testid="price-sync-search" />
           <SButton size="sm" :disabled="!filteredSelectable.length" data-testid="price-sync-select-all" @click="selectAll">
             {{ t('prices.sync.selectAll', { n: formatNumber(filteredSelectable.length) }) }}
           </SButton>

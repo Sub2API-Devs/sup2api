@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SField, SModal, SSwitch, STagInput, toast } from '@sub2api/ui'
+import { SButton, SCheckbox, SField, SGrid, SHint, SInput, SModal, SSelect, SSwitch, STagInput, toast } from '@sub2api/ui'
 import type { StickyRule } from '@/api/types'
 import { fieldErrors, notifyError } from '@/utils/errors'
 
@@ -16,6 +16,7 @@ type KeySource = { type: string; path?: string; name?: string; needs?: string[] 
 
 const KEY_TYPES = ['body', 'header', 'api_key', 'user', 'plugin'] as const
 const INCLUDES = ['group', 'model', 'rule'] as const
+const keyTypeOptions = computed(() => KEY_TYPES.map((k) => ({ value: k, label: t(`sticky.keyTypes.${k}`) })))
 
 const form = reactive({
   name: '',
@@ -170,10 +171,10 @@ async function submit() {
 
       <div class="grid gap-4 md:grid-cols-[2fr_1fr_1fr]">
         <SField :label="t('common.name')" :error="errors.name" required>
-          <input v-model.trim="form.name" class="input font-mono" :disabled="limited" placeholder="claude-code-session" />
+          <SInput v-model.trim="form.name" mono :disabled="limited" placeholder="claude-code-session" />
         </SField>
         <SField :label="t('sticky.cols.priority')" :hint="t('sticky.modal.priorityHint')" :error="errors.priority">
-          <input v-model.number="form.priority" type="number" class="input" />
+          <SInput v-model.number="form.priority" type="number" />
         </SField>
         <SField :label="t('common.enabled')">
           <div class="pt-2"><SSwitch v-model="form.enabled" /></div>
@@ -183,7 +184,7 @@ async function submit() {
       <fieldset :disabled="limited" class="space-y-5" :class="limited ? 'opacity-60' : ''">
         <div>
           <h4 class="section-title">{{ t('sticky.modal.match') }}</h4>
-          <div class="grid gap-4 md:grid-cols-3">
+          <SGrid :cols="1" :md-cols="3">
             <SField :label="t('sticky.modal.protocols')" :hint="t('sticky.modal.emptyAny')">
               <STagInput v-model="form.protocols" placeholder="anthropic.messages" :disabled="limited" />
             </SField>
@@ -193,7 +194,7 @@ async function submit() {
             <SField :label="t('sticky.modal.ua')" :hint="t('sticky.modal.emptyAny')">
               <STagInput v-model="form.userAgentContains" placeholder="claude-cli" :disabled="limited" />
             </SField>
-          </div>
+          </SGrid>
         </div>
 
         <div>
@@ -209,19 +210,17 @@ async function submit() {
             <div v-for="(ks, i) in form.key_sources" :key="i">
               <div class="flex flex-wrap items-center gap-2">
                 <span class="muted w-5 text-right text-xs">{{ i + 1 }}.</span>
-                <select class="input !w-32 !py-1.5" :value="ks.type" @change="setType(ks, ($event.target as HTMLSelectElement).value)">
-                  <option v-for="k in KEY_TYPES" :key="k" :value="k">{{ t(`sticky.keyTypes.${k}`) }}</option>
-                </select>
-                <input v-if="ks.type === 'body'" v-model="ks.path" class="input !w-64 !py-1.5 font-mono" placeholder="metadata.user_id" />
-                <input v-else-if="ks.type === 'header'" v-model="ks.name" class="input !w-64 !py-1.5 font-mono" placeholder="x-session-id" />
+                <SSelect class="!w-32 !py-1.5" :model-value="ks.type" :options="keyTypeOptions" @update:model-value="setType(ks, String($event))" />
+                <SInput v-if="ks.type === 'body'" v-model="ks.path" class="!w-64 !py-1.5" mono placeholder="metadata.user_id" />
+                <SInput v-else-if="ks.type === 'header'" v-model="ks.name" class="!w-64 !py-1.5" mono placeholder="x-session-id" />
                 <div v-else-if="ks.type === 'plugin'" class="w-80">
                   <STagInput v-model="ks.needs" :placeholder="t('sticky.modal.needsPlaceholder')" :disabled="limited" />
                 </div>
                 <span v-else class="muted text-xs">{{ t(`sticky.keyTypeHint.${ks.type}`) }}</span>
                 <div class="ml-auto flex gap-1">
-                  <button type="button" class="btn btn-ghost btn-sm !px-1.5" :disabled="i === 0" @click="move(i, -1)">↑</button>
-                  <button type="button" class="btn btn-ghost btn-sm !px-1.5" :disabled="i === form.key_sources.length - 1" @click="move(i, 1)">↓</button>
-                  <button type="button" class="btn btn-ghost btn-sm !px-1.5" @click="form.key_sources.splice(i, 1)">×</button>
+                  <SButton variant="ghost" size="sm" class="!px-1.5" :disabled="i === 0" @click="move(i, -1)">↑</SButton>
+                  <SButton variant="ghost" size="sm" class="!px-1.5" :disabled="i === form.key_sources.length - 1" @click="move(i, 1)">↓</SButton>
+                  <SButton variant="ghost" size="sm" class="!px-1.5" @click="form.key_sources.splice(i, 1)">×</SButton>
                 </div>
               </div>
               <p v-if="errors[`key_sources.${i}`]" class="input-error-text ml-7">{{ errors[`key_sources.${i}`] }}</p>
@@ -230,35 +229,33 @@ async function submit() {
         </div>
 
         <SField :label="t('sticky.modal.valueRegex')" :hint="t('sticky.modal.valueRegexHint')" :error="errors.value_regex">
-          <input v-model="form.value_regex" class="input font-mono" placeholder="session_([a-f0-9-]+)" />
+          <SInput v-model="form.value_regex" mono placeholder="session_([a-f0-9-]+)" />
         </SField>
       </fieldset>
 
-      <div class="grid gap-4 md:grid-cols-2">
+      <SGrid :cols="1" :md-cols="2">
         <SField :label="t('sticky.cols.ttl')" :hint="t('sticky.modal.ttlHint')" :error="errors.ttl_seconds">
           <div class="flex items-center gap-2">
-            <input v-model.number="form.ttl_seconds" type="number" min="0" class="input" />
-            <span class="muted text-sm">{{ t('sticky.seconds') }}</span>
+            <SInput v-model.number="form.ttl_seconds" type="number" min="0" />
+            <SHint inline>{{ t('sticky.seconds') }}</SHint>
           </div>
         </SField>
         <SField :label="t('sticky.cols.keyIncludes')" :hint="t('sticky.modal.keyIncludesHint')">
           <div class="flex gap-4 pt-2">
-            <label v-for="k in INCLUDES" :key="k" class="flex items-center gap-1.5 text-sm">
-              <input
-                type="checkbox"
-                class="checkbox"
-                :checked="form.key_includes.includes(k)"
-                :disabled="limited"
-                @change="toggleInclude(k, ($event.target as HTMLInputElement).checked)"
-              />
-              {{ t(`sticky.includes.${k}`) }}
-            </label>
+            <SCheckbox
+              v-for="k in INCLUDES"
+              :key="k"
+              :model-value="form.key_includes.includes(k)"
+              :disabled="limited"
+              :label="t(`sticky.includes.${k}`)"
+              @update:model-value="toggleInclude(k, $event)"
+            />
           </div>
         </SField>
-      </div>
+      </SGrid>
 
       <SField :label="t('sticky.cols.onFailure')">
-        <div class="grid gap-2 md:grid-cols-2">
+        <SGrid :cols="1" :md-cols="2" :gap="2">
           <label
             v-for="f in ['failover', 'stick'] as const"
             :key="f"
@@ -274,7 +271,7 @@ async function submit() {
               <span class="muted block text-xs">{{ t(`sticky.onFailureHint.${f}`) }}</span>
             </span>
           </label>
-        </div>
+        </SGrid>
       </SField>
     </div>
     <template #footer>

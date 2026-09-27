@@ -7,12 +7,15 @@ import {
   SButton,
   SDropdown,
   SField,
+  SGrid,
+  SInput,
   SModal,
   SPageHeader,
   SPagination,
   SSelect,
   STable,
   STagInput,
+  STextarea,
   confirm,
   toast,
   type TableColumn
@@ -264,20 +267,20 @@ async function onAction(g: Group, key: string) {
 
     <SModal v-model:open="open" :title="editing ? t('groups.editTitle', { name: editing.name }) : t('groups.create')" width="xl">
       <form class="space-y-4" @submit.prevent="submit">
-        <div class="grid gap-4 sm:grid-cols-2">
+        <SGrid>
           <SField :label="t('common.name')" required :error="errors.name">
-            <input v-model="form.name" class="input" />
+            <SInput v-model="form.name" />
           </SField>
           <SField :label="t('common.status')" :error="errors.status">
             <SSelect v-model="form.status" :options="statusOptions" />
           </SField>
-        </div>
+        </SGrid>
         <SField :label="t('common.description')" :error="errors.description">
-          <textarea v-model="form.description" class="input" rows="2" />
+          <STextarea v-model="form.description" :rows="2" />
         </SField>
-        <div class="grid gap-4 sm:grid-cols-2">
+        <SGrid>
           <SField :label="t('groups.rateMultiplier')" required :hint="t('groups.multiplierHint')" :error="errors.rate_multiplier">
-            <input v-model="form.rate_multiplier" class="input font-mono" inputmode="decimal" />
+            <SInput v-model="form.rate_multiplier" mono inputmode="decimal" />
           </SField>
           <SField
             :label="t('groups.visibility')"
@@ -286,7 +289,7 @@ async function onAction(g: Group, key: string) {
           >
             <SSelect v-model="form.visibility" :options="visibilityOptions" />
           </SField>
-        </div>
+        </SGrid>
         <SField :label="t('groups.modelAllowlist')" :hint="t('groups.allowlistHint')" :error="errors.model_allowlist">
           <STagInput v-model="form.model_allowlist" :placeholder="t('groups.allowlistPlaceholder')" />
         </SField>

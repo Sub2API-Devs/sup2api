@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import { SButton, SPageHeader, SPagination, SSelect, STimeRange } from '@sub2api/ui'
+import { SButton, SField, SInput, SPageHeader, SPagination, SSelect, STimeRange } from '@sub2api/ui'
 import type { LedgerEntry } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { rangeBounds, type RangeKey } from '@/views/usage/timeRange'
@@ -34,14 +34,12 @@ const adjustUser = computed(() => (/^\d+$/.test(String(filters.user_id || '')) ?
         <SButton v-permission="'balance:adjust'" variant="primary" @click="adjustOpen = true">{{ t('ledger.adjust.button') }}</SButton>
       </template>
       <template #filters>
-        <div class="w-28">
-          <label class="input-label">{{ t('usage.filters.userId') }}</label>
-          <input v-model.trim="filters.user_id" class="input" inputmode="numeric" placeholder="ID" />
-        </div>
-        <div class="w-40">
-          <label class="input-label">{{ t('ledger.cols.kind') }}</label>
+        <SField class="w-28" :label="t('usage.filters.userId')">
+          <SInput v-model.trim="filters.user_id" inputmode="numeric" placeholder="ID" />
+        </SField>
+        <SField class="w-40" :label="t('ledger.cols.kind')">
           <SSelect v-model="filters.kind" :options="kindOptions" />
-        </div>
+        </SField>
         <STimeRange
           v-model:range="range"
           v-model:from="filters.from"

@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
-import { SBadge, SButton, SCard, SEmpty, SIcon, SSpinner, confirm, toast } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SEmpty, SHint, SIcon, SLink, SSpinner, confirm, toast } from '@sub2api/ui'
 import type { Rollout, RolloutNode } from '@/api/types'
 import { lt } from '@/i18n'
 import { errorMessage, notifyError } from '@/utils/errors'
@@ -172,9 +172,9 @@ onBeforeUnmount(() => {
 <template>
   <div class="mx-auto max-w-4xl">
     <div class="mb-4">
-      <RouterLink :to="`/plugins/${encodeURIComponent(key)}`" class="link inline-flex items-center gap-1 text-sm">
+      <SLink :to="`/plugins/${encodeURIComponent(key)}`" class="inline-flex items-center gap-1 text-sm">
         <SIcon name="arrow-left" class="h-4 w-4" />{{ name }}
-      </RouterLink>
+      </SLink>
     </div>
 
     <div v-if="loading" class="flex justify-center py-20"><SSpinner size="lg" /></div>
@@ -239,7 +239,7 @@ onBeforeUnmount(() => {
             </span>
             <div class="min-w-0 flex-1">
               <div class="font-medium">① {{ t('plugins.rollout.steps.migrate') }}</div>
-              <p class="text-sm muted">{{ t(`plugins.rollout.stepState.${migrationStep}`) }}</p>
+              <SHint>{{ t(`plugins.rollout.stepState.${migrationStep}`) }}</SHint>
               <ul v-if="migrations.length" class="mt-1 space-y-0.5 text-xs">
                 <li v-for="(m, i) in migrations" :key="i" class="font-mono">
                   ✓ {{ display(pick(m, 'id', 'name', 'migration_id') ?? m) }}
@@ -257,7 +257,7 @@ onBeforeUnmount(() => {
             </span>
             <div class="min-w-0 flex-1">
               <div class="font-medium">② {{ t('plugins.rollout.steps.prepare') }}</div>
-              <p v-if="!nodes.length" class="text-sm muted">{{ t('plugins.rollout.noNodes') }}</p>
+              <SHint v-if="!nodes.length">{{ t('plugins.rollout.noNodes') }}</SHint>
               <ul v-else class="mt-2 space-y-1.5">
                 <li v-for="n in nodes" :key="n.node_id + n.boot_id" class="flex flex-wrap items-center gap-2 text-sm">
                   <span class="w-5 text-center">{{ nodeIcon(n) }}</span>
@@ -278,9 +278,9 @@ onBeforeUnmount(() => {
             </span>
             <div class="min-w-0 flex-1">
               <div class="font-medium">③ {{ t('plugins.rollout.steps.activate') }}</div>
-              <p class="text-sm muted">
+              <SHint>
                 {{ activateStep === 'waiting' && running ? t('plugins.rollout.waitingAllReady') : t(`plugins.rollout.stepState.${activateStep}`) }}
-              </p>
+              </SHint>
             </div>
           </li>
         </ol>

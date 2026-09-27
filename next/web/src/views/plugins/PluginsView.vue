@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SEmpty, SIcon, SPageHeader, SSelect, STable, toast, type TableColumn, type Tone } from '@sub2api/ui'
+import { SBadge, SButton, SEmpty, SIcon, SInput, SPageHeader, SSelect, STable, toast, type TableColumn, type Tone } from '@sub2api/ui'
 import type { PluginReview, PluginSummary } from '@/api/types'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
@@ -123,7 +123,7 @@ onMounted(load)
         <input ref="fileInput" type="file" accept=".s2plugin" class="hidden" @change="onFile" />
       </template>
       <template #filters>
-        <input v-model="q" class="input w-64" :placeholder="t('plugins.list.searchPlaceholder')" />
+        <SInput v-model="q" class="w-64" :placeholder="t('plugins.list.searchPlaceholder')" />
         <div class="w-48">
           <SSelect v-model="status" :options="statusOptions" :placeholder="t('plugins.list.allStatuses')" />
         </div>

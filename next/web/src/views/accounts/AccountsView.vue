@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SDropdown, SIcon, SModal, SPageHeader, SPagination, SSwitch, STable, STabs, confirm, toast, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCode, SDropdown, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSwitch, STable, STabs, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
 import type { Account, AccountTestResult, AccountType } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
@@ -296,6 +296,11 @@ function onAction(a: Account, key: string) {
 }
 
 const statusOptions = ['active', 'disabled', 'error']
+const statusSelectOptions = computed<SelectOption[]>(() => [
+  { value: '', label: t('accounts.allStatus') },
+  ...statusOptions.map((s) => ({ value: s, label: t(`accounts.status.${s}`) }))
+])
+const groupOptions = computed<SelectOption[]>(() => [{ value: '', label: t('accounts.allGroups') }, ...groups.value.map((g) => ({ value: g.id, label: g.name }))])
 </script>
 
 <template>
@@ -313,23 +318,17 @@ const statusOptions = ['active', 'disabled', 'error']
             <option v-for="at in g.types" :key="at.type" :value="typeKey(at.plugin_key, at.type)">{{ lt(at.label) || at.type }}</option>
           </optgroup>
         </select>
-        <select v-model="list.filters.group_id" class="input !w-40">
-          <option value="">{{ t('accounts.allGroups') }}</option>
-          <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
-        </select>
-        <select v-model="list.filters.status" class="input !w-36">
-          <option value="">{{ t('accounts.allStatus') }}</option>
-          <option v-for="s in statusOptions" :key="s" :value="s">{{ t(`accounts.status.${s}`) }}</option>
-        </select>
+        <SSelect v-model="list.filters.group_id" :options="groupOptions" class="!w-40" />
+        <SSelect v-model="list.filters.status" :options="statusSelectOptions" class="!w-36" />
         <div class="relative w-64">
           <SIcon name="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input v-model="list.filters.q" class="input !pl-9" :placeholder="t('common.searchPlaceholder')" />
+          <SInput v-model="list.filters.q" class="!pl-9" :placeholder="t('common.searchPlaceholder')" />
         </div>
-        <input v-model="list.filters.model" class="input !w-52 font-mono text-sm" data-testid="model-filter" :placeholder="t('accounts.modelFilter')" />
-        <input
+        <SInput v-model="list.filters.model" class="!w-52" mono data-testid="model-filter" :placeholder="t('accounts.modelFilter')" />
+        <SInput
           v-if="showOwner"
           v-model="list.filters.created_by"
-          class="input !w-32"
+          class="!w-32"
           inputmode="numeric"
           data-testid="created-by-filter"
           :placeholder="t('common.createdById')"
@@ -353,7 +352,7 @@ const statusOptions = ['active', 'disabled', 'error']
       <template #cell-created_by="{ row }">
         <span v-if="row.created_by_email" class="text-xs" :title="row.created_by ? `#${row.created_by}` : ''">{{ row.created_by_email }}</span>
         <span v-else-if="row.created_by" class="text-xs muted">#{{ row.created_by }}</span>
-        <span v-else class="muted">-</span>
+        <SHint v-else inline>-</SHint>
       </template>
       <template #cell-status="{ row }">
         <SBadge :tone="statusOf(row).tone" dot>{{ statusOf(row).label }}</SBadge>
@@ -378,7 +377,7 @@ const statusOptions = ['active', 'disabled', 'error']
             <span class="muted">{{ l.label }}</span> {{ l.text }}
           </span>
         </div>
-        <span v-else class="muted">—</span>
+        <SHint v-else inline>—</SHint>
       </template>
       <template #cell-actions="{ row }">
         <div class="flex items-center justify-end gap-1">
@@ -415,7 +414,7 @@ const statusOptions = ['active', 'disabled', 'error']
     <SModal v-model:open="testOpen" :title="`${t('accounts.testConnection')} · ${testTarget?.name || ''}`" width="md">
       <div class="space-y-4">
         <div class="flex gap-2">
-          <input v-model="testModel" class="input" :placeholder="t('accounts.testModelPlaceholder')" @keydown.enter="runTest" />
+          <SInput v-model="testModel" :placeholder="t('accounts.testModelPlaceholder')" @keydown.enter="runTest" />
           <SButton variant="primary" :loading="testing" @click="runTest">{{ t('common.test') }}</SButton>
         </div>
         <div v-if="testResult" class="rounded-xl p-4 text-sm" :class="testResult.ok ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-red-50 dark:bg-red-900/20'">
@@ -433,14 +432,14 @@ const statusOptions = ['active', 'disabled', 'error']
             </template>
           </dl>
         </div>
-        <p v-if="testError" class="text-sm text-red-500">{{ testError }}</p>
+        <SHint v-if="testError" tone="danger">{{ testError }}</SHint>
       </div>
     </SModal>
 
     <!-- reveal -->
     <SModal v-model:open="revealOpen" :title="t('accounts.revealCredentials')" width="lg" @close="revealed = null">
-      <p class="mb-3 text-sm text-amber-600 dark:text-amber-400">{{ t('accounts.revealWarning') }}</p>
-      <pre class="code-block">{{ JSON.stringify(revealed, null, 2) }}</pre>
+      <SHint tone="warning" class="mb-3">{{ t('accounts.revealWarning') }}</SHint>
+      <SCode>{{ JSON.stringify(revealed, null, 2) }}</SCode>
       <template #footer>
         <SButton @click="copyRevealed"><SIcon name="copy" class="h-4 w-4" />{{ t('common.copy') }}</SButton>
         <SButton variant="primary" @click="revealOpen = false">{{ t('common.close') }}</SButton>
@@ -489,14 +488,14 @@ const statusOptions = ['active', 'disabled', 'error']
                   <span class="muted">{{ l.label }}</span> {{ l.text }}
                 </span>
               </span>
-              <span v-else class="muted">—</span>
+              <SHint v-else inline>—</SHint>
             </dd>
             <dt>{{ t('accounts.models') }}</dt>
             <dd>
               <span v-if="detail.models?.length" class="flex flex-wrap gap-1">
                 <SBadge v-for="m in detail.models" :key="m" tone="gray"><span class="font-mono">{{ m }}</span></SBadge>
               </span>
-              <span v-else class="muted">{{ t('accounts.allModels') }}</span>
+              <SHint v-else inline>{{ t('accounts.allModels') }}</SHint>
             </dd>
             <dt>{{ t('accounts.modelMapping') }}</dt>
             <dd>
@@ -505,7 +504,7 @@ const statusOptions = ['active', 'disabled', 'error']
                   {{ from }} <span class="muted">→</span> {{ to }}
                 </li>
               </ul>
-              <span v-else class="muted">—</span>
+              <SHint v-else inline>—</SHint>
             </dd>
             <dt>{{ t('accounts.schedulable') }}</dt>
             <dd>{{ detail.schedulable ? t('common.yes') : t('common.no') }}</dd>
@@ -519,8 +518,8 @@ const statusOptions = ['active', 'disabled', 'error']
             <dd>{{ formatDateTime(detail.created_at) }}</dd>
           </dl>
           <div v-if="detail.credentials">
-            <h4 class="section-title">{{ t('accounts.credentials') }}</h4>
-            <pre class="code-block">{{ JSON.stringify(detail.credentials, null, 2) }}</pre>
+            <SSectionTitle :title="t('accounts.credentials')" />
+            <SCode>{{ JSON.stringify(detail.credentials, null, 2) }}</SCode>
           </div>
         </div>
         <component :is="detailSlot.component" v-else-if="detailSlot" :account="detail" />

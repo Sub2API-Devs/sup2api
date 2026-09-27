@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SSpinner, toast } from '@sub2api/ui'
+import { SBadge, SButton, SHint, SLink, SSectionTitle, SSpinner, toast } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { copyText, formatNumber } from '@/utils/format'
 import { errorMessage } from '@/utils/errors'
@@ -75,28 +75,28 @@ async function copy(v: string) {
 <template>
   <div class="px-2 py-3">
     <div v-if="loading" class="py-4 text-center"><SSpinner /></div>
-    <p v-if="error" class="mb-2 text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+    <SHint v-if="error" tone="danger" class="mb-2">{{ error }}</SHint>
     <div class="grid gap-6 lg:grid-cols-[3fr_2fr]">
       <!-- billing -->
       <section>
-        <h4 class="section-title">{{ t('usage.billing.title') }}</h4>
+        <SSectionTitle :title="t('usage.billing.title')" />
         <dl class="kv">
           <dt>{{ t('usage.billing.price') }}</dt>
           <dd class="flex flex-wrap items-center gap-2">
             <template v-if="u.price">
-              <RouterLink v-if="auth.has('price:read')" :to="`/prices/${u.price.id}`" class="link font-mono text-xs">
+              <SLink v-if="auth.has('price:read')" :to="`/prices/${u.price.id}`" class="font-mono text-xs">
                 {{ u.price.model }}
-              </RouterLink>
+              </SLink>
               <span v-else class="font-mono text-xs">{{ u.price.model }}</span>
               <SBadge :tone="u.price.source === 'sync' ? 'info' : 'primary'">
                 {{ te(`prices.source.${u.price.source}`) ? t(`prices.source.${u.price.source}`) : u.price.source }}
               </SBadge>
             </template>
             <template v-else-if="u.price_id">
-              <RouterLink v-if="auth.has('price:read')" :to="`/prices/${u.price_id}`" class="link">#{{ u.price_id }}</RouterLink>
+              <SLink v-if="auth.has('price:read')" :to="`/prices/${u.price_id}`">#{{ u.price_id }}</SLink>
               <span v-else>#{{ u.price_id }}</span>
             </template>
-            <span v-else class="muted">—</span>
+            <SHint v-else inline>—</SHint>
           </dd>
 
           <template v-if="u.expr_hash">
@@ -145,7 +145,7 @@ async function copy(v: string) {
               :rate-multiplier="rate"
               :total="u.total_cost"
             />
-            <span v-else class="muted">—</span>
+            <SHint v-else inline>—</SHint>
           </dd>
 
           <dt>{{ t('usage.billing.statusLabel') }}</dt>
@@ -159,20 +159,20 @@ async function copy(v: string) {
       <!-- request -->
       <section class="space-y-5">
         <div>
-          <h4 class="section-title">{{ t('usage.request.title') }}</h4>
+          <SSectionTitle :title="t('usage.request.title')" />
           <dl class="kv">
             <dt>{{ t('usage.request.id') }}</dt>
             <dd class="flex items-center gap-1">
               <code class="font-mono text-xs">{{ u.request_id }}</code>
-              <button class="btn btn-ghost btn-sm !px-1 !py-0 text-xs" @click="copy(u.request_id)">{{ t('common.copy') }}</button>
+              <SButton variant="ghost" size="sm" class="!px-1 !py-0 text-xs" @click="copy(u.request_id)">{{ t('common.copy') }}</SButton>
             </dd>
             <dt>{{ t('usage.request.clientId') }}</dt>
             <dd class="flex min-w-0 items-center gap-1" data-testid="detail-client-request-id">
               <template v-if="u.client_request_id">
                 <code class="break-all font-mono text-xs">{{ u.client_request_id }}</code>
-                <button class="btn btn-ghost btn-sm shrink-0 !px-1 !py-0 text-xs" @click="copy(u.client_request_id)">{{ t('common.copy') }}</button>
+                <SButton variant="ghost" size="sm" class="shrink-0 !px-1 !py-0 text-xs" @click="copy(u.client_request_id)">{{ t('common.copy') }}</SButton>
               </template>
-              <span v-else class="muted" :title="t('usage.request.clientIdNone')">—</span>
+              <SHint v-else inline :title="t('usage.request.clientIdNone')">—</SHint>
             </dd>
             <template v-if="u.endpoint || u.protocol">
               <dt>{{ t('usage.request.endpoint') }}</dt>
@@ -187,7 +187,7 @@ async function copy(v: string) {
                 {{ accountTypes.typeLabel(u.plugin_key, u.account_type) }}
                 <span class="muted text-xs">· {{ accountTypes.pluginName(u.plugin_key) }} <span class="font-mono">({{ u.plugin_key }}/{{ u.account_type }})</span></span>
               </template>
-              <span v-else class="muted">—</span>
+              <SHint v-else inline>—</SHint>
             </dd>
             <dt>{{ t('usage.cols.upstreamProtocol') }}</dt>
             <dd class="flex flex-wrap items-center gap-2">
@@ -221,7 +221,7 @@ async function copy(v: string) {
         </div>
 
         <div>
-          <h4 class="section-title">{{ t('usage.tokens.title') }}</h4>
+          <SSectionTitle :title="t('usage.tokens.title')" />
           <dl class="kv">
             <dt>{{ t('prices.vars.p') }}</dt>
             <dd>{{ formatNumber(u.input_tokens) }}</dd>
@@ -243,7 +243,7 @@ async function copy(v: string) {
         </div>
 
         <div v-if="hooks.length">
-          <h4 class="section-title">{{ t('usage.hooks.title') }}</h4>
+          <SSectionTitle :title="t('usage.hooks.title')" />
           <ul class="space-y-1 text-sm">
             <li v-for="(h, i) in hooks" :key="i" class="flex flex-wrap items-center gap-2">
               <span class="font-mono text-xs">{{ h.plugin_key }}/{{ h.hook_id }}</span>
@@ -257,7 +257,7 @@ async function copy(v: string) {
         </div>
 
         <div v-if="u.sticky_rule">
-          <h4 class="section-title">{{ t('usage.sticky.title') }}</h4>
+          <SSectionTitle :title="t('usage.sticky.title')" />
           <dl class="kv">
             <dt>{{ t('usage.sticky.rule') }}</dt>
             <dd class="font-mono text-xs">{{ u.sticky_rule }}</dd>

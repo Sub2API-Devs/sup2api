@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SEmpty, SIcon, SSpinner, confirm, toast } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SEmpty, SHint, SIcon, SLink, SSpinner, confirm, toast } from '@sub2api/ui'
 import type { HostPermissionReview, PluginReview, Role } from '@/api/types'
 import { lt } from '@/i18n'
 import { errorMessage, notifyError } from '@/utils/errors'
@@ -301,9 +301,9 @@ onMounted(load)
 <template>
   <div class="mx-auto max-w-5xl pb-24">
     <div class="mb-4">
-      <RouterLink to="/plugins" class="link inline-flex items-center gap-1 text-sm">
+      <SLink to="/plugins" class="inline-flex items-center gap-1 text-sm">
         <SIcon name="arrow-left" class="h-4 w-4" />{{ t('plugins.list.title') }}
-      </RouterLink>
+      </SLink>
     </div>
 
     <div v-if="loading" class="flex justify-center py-20"><SSpinner size="lg" /></div>
@@ -385,9 +385,9 @@ onMounted(load)
             <span class="w-24 shrink-0 font-medium muted">− {{ t('plugins.consent.diffRemoved') }}</span>
             <SBadge v-for="p in review.diff.removed" :key="p" tone="gray"><span class="line-through">{{ hpLabel(p) }}</span></SBadge>
           </div>
-          <p v-if="!review.diff.added?.length && !review.diff.widened?.length && !review.diff.removed?.length" class="muted">
+          <SHint v-if="!review.diff.added?.length && !review.diff.widened?.length && !review.diff.removed?.length">
             {{ t('plugins.consent.diffNone') }}
-          </p>
+          </SHint>
         </div>
       </SCard>
 
@@ -587,7 +587,7 @@ onMounted(load)
           <p v-else-if="missingRequired.length" class="text-gray-600 dark:text-gray-300">
             {{ t('plugins.consent.stillRequired', { n: missingRequired.length }) }}
           </p>
-          <p v-else class="muted">{{ t('plugins.consent.stepUpHint') }}</p>
+          <SHint v-else>{{ t('plugins.consent.stepUpHint') }}</SHint>
         </div>
         <div class="flex gap-2">
           <SButton variant="danger" :loading="rejecting" :disabled="submitting" @click="reject">{{ t('plugins.consent.reject') }}</SButton>

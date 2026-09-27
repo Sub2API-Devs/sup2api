@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SField, SModal, toast } from '@sub2api/ui'
+import { SButton, SField, SInput, SModal, STextarea, toast } from '@sub2api/ui'
 import type { User } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { fieldErrors, notifyError } from '@/utils/errors'
@@ -117,7 +117,7 @@ async function submit() {
     <div class="space-y-4">
       <SField :label="t('common.user')" :hint="canSearch ? t('ledger.adjust.userHintSearch') : t('ledger.adjust.userHintId')" :error="errors.user" required>
         <div class="relative">
-          <input v-model="query" class="input" :placeholder="canSearch ? t('ledger.adjust.userPlaceholder') : 'ID'" autocomplete="off" />
+          <SInput v-model="query" :placeholder="canSearch ? t('ledger.adjust.userPlaceholder') : 'ID'" autocomplete="off" />
           <div v-if="results.length" class="dropdown absolute left-0 right-0 z-10 mt-1">
             <div v-for="u in results" :key="u.id" class="dropdown-item" @mousedown.prevent="pick(u)">
               <span>{{ u.email }}</span>
@@ -142,12 +142,12 @@ async function submit() {
       <SField :label="t('ledger.adjust.amount')" :error="errors.amount" required>
         <div class="flex items-center gap-2">
           <span class="font-mono text-lg" :class="credit ? 'text-emerald-600' : 'text-red-600'">{{ credit ? '+' : '-' }}</span>
-          <input v-model="amount" class="input font-mono" inputmode="decimal" placeholder="20.00" />
+          <SInput v-model="amount" mono inputmode="decimal" placeholder="20.00" />
           <span class="muted">USD</span>
         </div>
       </SField>
       <SField :label="t('common.note')" :error="errors.note">
-        <textarea v-model="note" rows="2" class="input" :placeholder="t('ledger.adjust.notePlaceholder')" />
+        <STextarea v-model="note" :rows="2" :placeholder="t('ledger.adjust.notePlaceholder')" />
       </SField>
       <p class="muted text-xs">{{ t('ledger.adjust.stepUpHint') }}</p>
     </div>

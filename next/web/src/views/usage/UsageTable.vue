@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge, STable, type TableColumn } from '@sub2api/ui'
+import { SBadge, SHint, STable, type TableColumn } from '@sub2api/ui'
 import { formatMoney, formatNumber, formatTime } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import { ACCOUNT_PAGE_PERMS } from '@/composables/useOwnership'
@@ -69,7 +69,7 @@ function noUsage(u: UsageRow) {
       >
         {{ row.client_request_id }}
       </button>
-      <span v-else class="muted">—</span>
+      <SHint v-else inline>—</SHint>
     </template>
     <template #cell-user="{ row }">
       <span class="text-sm">{{ row.user_email || row.user_name || '#' + row.user_id }}</span>
@@ -85,31 +85,31 @@ function noUsage(u: UsageRow) {
         <span class="block whitespace-nowrap text-sm">{{ accountTypes.typeLabel(row.plugin_key, row.account_type) }}</span>
         <span class="muted block text-[11px]">{{ accountTypes.pluginName(row.plugin_key) }}</span>
       </template>
-      <span v-else class="muted">—</span>
+      <SHint v-else inline>—</SHint>
     </template>
     <template #cell-upstream_protocol="{ row }">
       <template v-if="row.upstream_protocol || row.protocol">
         <span class="font-mono text-xs">{{ row.upstream_protocol || row.protocol }}</span>
         <SBadge v-if="isConverted(row)" tone="warning" class="ml-1" :title="t('usage.convertedFrom', { protocol: row.protocol })">{{ t('usage.converted') }}</SBadge>
       </template>
-      <span v-else class="muted">—</span>
+      <SHint v-else inline>—</SHint>
     </template>
     <template #cell-model="{ row }">
       <span class="font-mono text-xs">{{ row.model || '—' }}</span>
     </template>
     <template #cell-input_tokens="{ row }">
-      <span v-if="noUsage(row)" class="muted">—</span>
+      <SHint v-if="noUsage(row)" inline>—</SHint>
       <span v-else :title="t('usage.cacheTitle', { r: formatNumber(row.cache_read_tokens), w: formatNumber(row.cache_creation_tokens) })">
         {{ formatNumber(row.input_tokens) }}
         <span v-if="row.cache_read_tokens" class="muted block text-[11px]">+{{ formatNumber(row.cache_read_tokens) }} {{ t('usage.cached') }}</span>
       </span>
     </template>
     <template #cell-output_tokens="{ row }">
-      <span v-if="noUsage(row)" class="muted">—</span>
+      <SHint v-if="noUsage(row)" inline>—</SHint>
       <span v-else>{{ formatNumber(row.output_tokens) }}</span>
     </template>
     <template #cell-total_cost="{ row }">
-      <span v-if="row.billing_status === 'free'" class="muted">{{ t('usage.free') }}</span>
+      <SHint v-if="row.billing_status === 'free'" inline>{{ t('usage.free') }}</SHint>
       <template v-else>
         <span class="font-mono text-xs">{{ formatMoney(row.total_cost) }}</span>
         <SBadge v-if="row.billing_status !== 'billed'" class="ml-1" :tone="billingTone(row.billing_status)">

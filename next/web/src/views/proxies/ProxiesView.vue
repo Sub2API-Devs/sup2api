@@ -5,9 +5,12 @@ import { api } from '@sub2api/host'
 import {
   SBadge,
   SButton,
+  SCheckbox,
   SDropdown,
   SField,
+  SGrid,
   SIcon,
+  SInput,
   SModal,
   SPageHeader,
   SPagination,
@@ -236,10 +239,10 @@ async function onAction(p: Proxy, key: string) {
         <SButton v-if="canCreate" variant="primary" data-testid="proxy-new" @click="openCreate">+ {{ t('proxies.create') }}</SButton>
       </template>
       <template #filters>
-        <input
+        <SInput
           v-if="showOwner"
           v-model="list.filters.created_by"
-          class="input !w-32"
+          class="!w-32"
           inputmode="numeric"
           data-testid="created-by-filter"
           :placeholder="t('common.createdById')"
@@ -310,10 +313,11 @@ async function onAction(p: Proxy, key: string) {
       <form class="space-y-4" @submit.prevent="submit">
         <SField :label="t('proxies.pasteUrl')" :hint="pasteError ? '' : t('proxies.pasteUrlHint')" :error="pasteError">
           <div class="flex gap-2">
-            <input
+            <SInput
               v-model="pasteUrl"
-              class="input flex-1 font-mono text-sm"
-              :class="pasteError ? 'input-error' : ''"
+              class="flex-1 text-sm"
+              mono
+              :error="!!pasteError"
               autocomplete="off"
               spellcheck="false"
               data-testid="proxy-paste-url"
@@ -323,45 +327,41 @@ async function onAction(p: Proxy, key: string) {
             <SButton :disabled="!pasteUrl.trim()" data-testid="proxy-paste-apply" @click="applyPastedUrl">{{ t('proxies.pasteFill') }}</SButton>
           </div>
         </SField>
-        <div class="grid gap-4 sm:grid-cols-2">
+        <SGrid>
           <SField :label="t('common.name')" required :error="errors.name">
-            <input v-model="form.name" class="input" />
+            <SInput v-model="form.name" />
           </SField>
           <SField :label="t('proxies.protocol')" required :error="errors.protocol">
             <SSelect v-model="form.protocol" :options="protocolOptions" />
           </SField>
-        </div>
+        </SGrid>
         <div class="grid gap-4 sm:grid-cols-[1fr_140px]">
           <SField :label="t('proxies.host')" required :error="errors.host">
-            <input v-model="form.host" class="input font-mono" placeholder="10.0.0.5" />
+            <SInput v-model="form.host" mono placeholder="10.0.0.5" />
           </SField>
           <SField :label="t('proxies.port')" required :error="errors.port">
-            <input v-model.number="form.port" type="number" min="1" max="65535" class="input font-mono" />
+            <SInput v-model.number="form.port" type="number" min="1" max="65535" mono />
           </SField>
         </div>
-        <div class="grid gap-4 sm:grid-cols-2">
+        <SGrid>
           <SField :label="t('proxies.username')" :hint="t('common.optional')" :error="errors.username">
-            <input v-model="form.username" class="input" autocomplete="off" />
+            <SInput v-model="form.username" autocomplete="off" />
           </SField>
           <SField
             :label="t('proxies.password')"
             :hint="editing ? (hasStoredPassword ? t('proxies.passwordKeep') : t('proxies.passwordNone')) : t('common.optional')"
             :error="errors.password"
           >
-            <input
+            <SInput
               v-model="form.password"
               type="password"
-              class="input"
               autocomplete="new-password"
               :disabled="form.clearPassword"
               :placeholder="editing && hasStoredPassword ? t('proxies.passwordStored') : ''"
             />
-            <label v-if="editing && hasStoredPassword" class="mt-1.5 flex items-center gap-1.5 text-xs">
-              <input v-model="form.clearPassword" type="checkbox" class="checkbox" data-testid="proxy-clear-password" />
-              {{ t('proxies.clearPassword') }}
-            </label>
+            <SCheckbox v-if="editing && hasStoredPassword" v-model="form.clearPassword" class="mt-1.5" :label="t('proxies.clearPassword')" data-testid="proxy-clear-password" />
           </SField>
-        </div>
+        </SGrid>
         <SField v-if="editing" :label="t('common.status')" :error="errors.status">
           <SSelect v-model="form.status" :options="statusOptions" />
         </SField>

@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SDropdown, SPageHeader, SPagination, SSelect, STable, confirm, toast, type MenuAction, type TableColumn } from '@sub2api/ui'
+import { SBadge, SDropdown, SHint, SInput, SPageHeader, SPagination, SSelect, STable, confirm, toast, type MenuAction, type TableColumn } from '@sub2api/ui'
 import type { ApiKey, Group } from '@/api/types'
 import { statusTone } from '@/api/admin'
 import { useList } from '@/composables/useList'
@@ -86,8 +86,8 @@ async function onAction(k: ApiKey, action: string) {
   <div>
     <SPageHeader :title="t('apikeys.allTitle')" :description="t('apikeys.allDescription')">
       <template #filters>
-        <input v-model="list.filters.q" class="input !w-64" :placeholder="t('apikeys.searchPlaceholder')" />
-        <input v-model="list.filters.user_id" class="input !w-32" inputmode="numeric" :placeholder="t('apikeys.userId')" />
+        <SInput v-model="list.filters.q" class="!w-64" :placeholder="t('apikeys.searchPlaceholder')" />
+        <SInput v-model="list.filters.user_id" class="!w-32" inputmode="numeric" :placeholder="t('apikeys.userId')" />
         <div class="w-40">
           <SSelect v-model="list.filters.status" :options="statusOptions" />
         </div>
@@ -109,15 +109,15 @@ async function onAction(k: ApiKey, action: string) {
         <SBadge :tone="statusTone(row.status)" dot>{{ statusLabel(row.status) }}</SBadge>
       </template>
       <template #cell-expires_at="{ row }">
-        <span class="muted">{{ row.expires_at ? formatDateTime(row.expires_at) : t('apikeys.noExpiry') }}</span>
+        <SHint inline>{{ row.expires_at ? formatDateTime(row.expires_at) : t('apikeys.noExpiry') }}</SHint>
       </template>
       <template #cell-last_used_at="{ row }">
-        <span class="muted" :title="row.last_used_at ? formatDateTime(row.last_used_at) : ''">
+        <SHint inline :title="row.last_used_at ? formatDateTime(row.last_used_at) : ''">
           {{ row.last_used_at ? formatRelative(row.last_used_at, t) : t('common.never') }}
-        </span>
+        </SHint>
       </template>
       <template #cell-created_at="{ row }">
-        <span class="muted">{{ formatDateTime(row.created_at) }}</span>
+        <SHint inline>{{ formatDateTime(row.created_at) }}</SHint>
       </template>
       <template #cell-actions="{ row }">
         <SDropdown :actions="actions(row)" @select="onAction(row, $event)" />

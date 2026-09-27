@@ -2,7 +2,7 @@
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SField, SIcon, SModal, SPageHeader, SPagination, SSelect, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCode, SField, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSelect, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
 import type { ApiKey, Group } from '@/api/types'
 import { fromLocalInput, statusTone } from '@/api/admin'
 import { useList } from '@/composables/useList'
@@ -159,15 +159,15 @@ async function remove(k: ApiKey) {
         <SBadge :tone="statusOf(row) === 'expired' ? 'warning' : statusTone(row.status)" dot>{{ statusLabel(statusOf(row)) }}</SBadge>
       </template>
       <template #cell-expires_at="{ row }">
-        <span class="muted">{{ row.expires_at ? formatDateTime(row.expires_at) : t('apikeys.noExpiry') }}</span>
+        <SHint inline>{{ row.expires_at ? formatDateTime(row.expires_at) : t('apikeys.noExpiry') }}</SHint>
       </template>
       <template #cell-last_used_at="{ row }">
-        <span class="muted" :title="row.last_used_at ? formatDateTime(row.last_used_at) : ''">
+        <SHint inline :title="row.last_used_at ? formatDateTime(row.last_used_at) : ''">
           {{ row.last_used_at ? formatRelative(row.last_used_at, t) : t('common.never') }}
-        </span>
+        </SHint>
       </template>
       <template #cell-created_at="{ row }">
-        <span class="muted">{{ formatDateTime(row.created_at) }}</span>
+        <SHint inline>{{ formatDateTime(row.created_at) }}</SHint>
       </template>
       <template #cell-actions="{ row }">
         <SButton variant="ghost" size="sm" class="!text-red-600" @click="remove(row)">
@@ -180,7 +180,7 @@ async function remove(k: ApiKey) {
     <SModal v-model:open="createOpen" :title="t('apikeys.create')">
       <form class="space-y-4" @submit.prevent="submitCreate">
         <SField :label="t('common.name')" required :error="errors.name">
-          <input v-model="form.name" class="input" :placeholder="t('apikeys.namePlaceholder')" />
+          <SInput v-model="form.name" :placeholder="t('apikeys.namePlaceholder')" />
         </SField>
         <SField :label="t('common.group')" required :error="errors.group_id" :hint="groups.length ? '' : t('apikeys.noGroups')">
           <SSelect v-model="form.group_id" :options="groupOptions" :placeholder="groups.length ? undefined : '—'" />
@@ -205,6 +205,7 @@ async function remove(k: ApiKey) {
           </template>
         </div>
         <SField :label="t('apikeys.expiresAt')" :hint="t('apikeys.expiresHint')" :error="errors.expires_at">
+          <!-- datetime-local is not supported by SInput -->
           <input v-model="form.expires_at" type="datetime-local" class="input" />
         </SField>
       </form>
@@ -221,7 +222,7 @@ async function remove(k: ApiKey) {
           {{ t('apikeys.onceWarning') }}
         </div>
         <div class="flex items-center gap-2">
-          <code class="code-block flex-1 select-all !text-sm">{{ plaintext }}</code>
+          <SCode class="flex-1 select-all !text-sm">{{ plaintext }}</SCode>
           <SButton @click="copyPlain"><SIcon name="copy" class="h-4 w-4" />{{ t('common.copy') }}</SButton>
         </div>
       </div>

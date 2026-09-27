@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SButton, SField, SModal } from '@sub2api/ui'
+import { SButton, SField, SInput, SModal } from '@sub2api/ui'
 import { cancelStepUp, stepUpState, submitStepUp } from './stepUp'
 import { errorMessage } from '@/utils/errors'
 
@@ -9,7 +9,7 @@ const { t } = useI18n()
 const password = ref('')
 const error = ref('')
 const busy = ref(false)
-const input = ref<HTMLInputElement>()
+const input = ref<InstanceType<typeof SInput>>()
 
 const open = computed({
   get: () => stepUpState.open,
@@ -25,7 +25,7 @@ watch(
       password.value = ''
       error.value = ''
       await nextTick()
-      input.value?.focus()
+      ;(input.value?.$el as HTMLInputElement | undefined)?.focus()
     }
   }
 )
@@ -49,7 +49,7 @@ async function submit() {
     <form class="space-y-4" @submit.prevent="submit">
       <p class="text-sm text-gray-600 dark:text-gray-300">{{ t('auth.stepUp.desc') }}</p>
       <SField :label="t('auth.stepUp.password')" :error="error">
-        <input ref="input" v-model="password" type="password" class="input" autocomplete="current-password" />
+        <SInput ref="input" v-model="password" type="password" autocomplete="current-password" />
       </SField>
       <button type="submit" class="hidden" />
     </form>

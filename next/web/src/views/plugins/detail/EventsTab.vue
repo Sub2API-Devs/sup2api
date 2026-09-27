@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, SIcon, SStatCard, STable, type TableColumn } from '@sub2api/ui'
+import { SButton, SCard, SCode, SGrid, SHint, SIcon, SStatCard, STable, type TableColumn } from '@sub2api/ui'
 import { formatDateTime, formatNumber } from '@/utils/format'
 import { notifyError } from '@/utils/errors'
 import { display, pick, type PluginDetail, type PluginEvents } from '../pluginUtil'
@@ -43,7 +43,7 @@ onMounted(load)
 
 <template>
   <div class="space-y-4">
-    <div class="grid gap-4 sm:grid-cols-3">
+    <SGrid :cols="3">
       <SStatCard :label="t('plugins.events.cursor')" :value="data.cursor != null ? '#' + formatNumber(data.cursor) : '—'" icon="bolt" :loading="loading" />
       <SStatCard
         :label="t('plugins.events.backlog')"
@@ -53,7 +53,7 @@ onMounted(load)
         :loading="loading"
       />
       <SStatCard :label="t('plugins.events.deadletters')" :value="formatNumber(deadCount)" icon="warning" :tone="deadCount > 0 ? 'danger' : 'success'" :loading="loading" />
-    </div>
+    </SGrid>
 
     <SCard :title="t('plugins.events.subscribed')">
       <template #actions>
@@ -62,7 +62,7 @@ onMounted(load)
       <div v-if="data.subscribe?.length" class="flex flex-wrap gap-2">
         <code v-for="s in data.subscribe" :key="s" class="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs dark:bg-dark-700">{{ s }}</code>
       </div>
-      <p v-else class="text-sm muted">{{ t('plugins.events.noSubscriptions') }}</p>
+      <SHint v-else>{{ t('plugins.events.noSubscriptions') }}</SHint>
     </SCard>
 
     <SCard v-if="deadList.length" :title="t('plugins.events.deadletters')" :padded="false">
@@ -79,7 +79,7 @@ onMounted(load)
           <span class="whitespace-nowrap text-xs">{{ formatDateTime(pick(row, 'failed_at', 'created_at', 'at')) }}</span>
         </template>
         <template #expand="{ row }">
-          <pre class="code-block">{{ JSON.stringify(row, null, 2) }}</pre>
+          <SCode :text="JSON.stringify(row, null, 2)" />
         </template>
       </STable>
     </SCard>

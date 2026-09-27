@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SKeyValue, SSpinner } from '@sub2api/ui'
+import { SBadge, SButton, SField, SGrid, SHint, SInput, SKeyValue, SSpinner } from '@sub2api/ui'
 import type { PricePreviewResult } from '@/api/types'
 import GroupPicker from '@/components/GroupPicker.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -19,8 +19,9 @@ const props = defineProps<{
 const { t } = useI18n()
 const auth = useAuthStore()
 
-const usage = reactive<Record<string, number | ''>>({ p: 100000, c: 2000, cr: 80000, cc: 0, cc1h: 0 })
-const len = ref<number | ''>('')
+const usage = reactive<Record<string, number | '' | null>>({ p: 100000, c: 2000, cr: 80000, cc: 0, cc1h: 0 })
+// SInput emits null for an empty number field (the native input gave '').
+const len = ref<number | '' | null>('')
 const headers = ref<Record<string, string>>({})
 const params = ref<Record<string, string>>({})
 const at = ref('')
@@ -88,7 +89,7 @@ const extra = computed(() => (result.value || {}) as PricePreviewResult & { base
 const resultLen = computed(() => {
   const v = (result.value?.breakdown as any)?.vars?.len
   if (v !== undefined && v !== null) return v
-  return len.value === '' ? defaultLen.value : len.value
+  return len.value === '' || len.value === null ? defaultLen.value : len.value
 })
 </script>
 
@@ -97,27 +98,25 @@ const resultLen = computed(() => {
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
       <label v-for="k in TOKEN_VARS" :key="k" class="text-xs">
         <span class="muted">{{ t(`prices.vars.${k}`) }}</span>
-        <input v-model.number="usage[k]" type="number" min="0" class="input mt-1 !py-1.5" />
+        <SInput v-model.number="usage[k]" type="number" min="0" class="mt-1 !py-1.5" />
       </label>
       <label class="text-xs">
         <span class="muted">{{ t('prices.trial.len') }}</span>
-        <input v-model.number="len" type="number" min="0" class="input mt-1 !py-1.5" :placeholder="String(defaultLen)" />
+        <SInput v-model.number="len" type="number" min="0" class="mt-1 !py-1.5" :placeholder="String(defaultLen)" />
       </label>
     </div>
-    <div class="grid gap-4 lg:grid-cols-2">
-      <div>
-        <p class="input-label">{{ t('prices.trial.headers') }}</p>
+    <SGrid :cols="1" :lg-cols="2">
+      <SField :label="t('prices.trial.headers')">
         <SKeyValue v-model="headers" key-placeholder="anthropic-beta" value-placeholder="fast-mode" />
-      </div>
-      <div>
-        <p class="input-label">{{ t('prices.trial.params') }}</p>
+      </SField>
+      <SField :label="t('prices.trial.params')" :hint="t('prices.trial.paramsHint')">
         <SKeyValue v-model="params" key-placeholder="service_tier" value-placeholder="priority" />
-        <p class="input-hint">{{ t('prices.trial.paramsHint') }}</p>
-      </div>
-    </div>
+      </SField>
+    </SGrid>
     <div class="flex flex-wrap items-end gap-4">
       <label class="text-sm">
         <span class="input-label">{{ t('prices.trial.at') }}</span>
+        <!-- datetime-local is not supported by SInput -->
         <input v-model="at" type="datetime-local" class="input !w-56" />
       </label>
       <label v-if="auth.has('group:read')" class="text-sm">
@@ -128,8 +127,8 @@ const resultLen = computed(() => {
     </div>
 
     <div class="rounded-xl border border-gray-200 p-4 dark:border-dark-700">
-      <p v-if="!source" class="muted text-sm">{{ t('prices.trial.fixFirst') }}</p>
-      <p v-else-if="error" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+      <SHint v-if="!source">{{ t('prices.trial.fixFirst') }}</SHint>
+      <SHint v-else-if="error" tone="danger">{{ error }}</SHint>
       <div v-else-if="result" class="space-y-3 text-sm">
         <div class="flex flex-wrap items-baseline gap-x-6 gap-y-1">
           <span>
@@ -144,7 +143,7 @@ const resultLen = computed(() => {
           <SSpinner v-if="loading" size="sm" />
         </div>
         <div v-if="result.rules?.length">
-          <p class="muted mb-1">{{ t('prices.trial.rules') }}</p>
+          <SHint class="mb-1">{{ t('prices.trial.rules') }}</SHint>
           <ul class="space-y-1">
             <li v-for="(r, i) in result.rules" :key="i" class="flex items-center gap-2">
               <SBadge :tone="r.matched ? 'success' : 'gray'">{{ r.matched ? '✓' : '✗' }}</SBadge>
@@ -154,12 +153,12 @@ const resultLen = computed(() => {
           </ul>
         </div>
         <div>
-          <p class="muted mb-1">{{ t('prices.trial.breakdown') }}</p>
+          <SHint class="mb-1">{{ t('prices.trial.breakdown') }}</SHint>
           <BillingBreakdown :breakdown="result.breakdown" :rate-multiplier="extra.rate_multiplier" :total="result.cost" />
         </div>
       </div>
       <div v-else-if="loading" class="text-center"><SSpinner /></div>
-      <p v-else class="muted text-sm">{{ t('prices.trial.empty') }}</p>
+      <SHint v-else>{{ t('prices.trial.empty') }}</SHint>
     </div>
   </div>
 </template>

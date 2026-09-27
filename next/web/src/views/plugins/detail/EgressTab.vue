@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SIcon, SSelect, STable, toast, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SHint, SIcon, SSelect, STable, toast, type TableColumn } from '@sub2api/ui'
 import { formatBytes, formatDateTime, formatNumber } from '@/utils/format'
 import { notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
@@ -309,6 +309,6 @@ onMounted(load)
         </STable>
       </SCard>
     </template>
-    <p v-else class="text-sm muted">{{ t('plugins.egress.noReadPermission') }}</p>
+    <SHint v-else>{{ t('plugins.egress.noReadPermission') }}</SHint>
   </div>
 </template>

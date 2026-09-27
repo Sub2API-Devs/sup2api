@@ -2,7 +2,7 @@
 import { reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SField, SModal, toast } from '@sub2api/ui'
+import { SButton, SField, SInput, SModal, toast } from '@sub2api/ui'
 import { errorMessage, fieldErrors } from '@/utils/errors'
 
 const props = defineProps<{ open: boolean }>()
@@ -49,13 +49,13 @@ async function submit() {
   <SModal :open="open" :title="t('nav.changePassword')" width="sm" @update:open="emit('update:open', $event)">
     <form class="space-y-4" @submit.prevent="submit">
       <SField :label="t('nav.password.old')" :error="errors.old_password" required>
-        <input v-model="form.old_password" type="password" class="input" autocomplete="current-password" />
+        <SInput v-model="form.old_password" type="password" autocomplete="current-password" />
       </SField>
       <SField :label="t('nav.password.new')" :error="errors.new_password" required>
-        <input v-model="form.new_password" type="password" class="input" autocomplete="new-password" />
+        <SInput v-model="form.new_password" type="password" autocomplete="new-password" />
       </SField>
       <SField :label="t('nav.password.confirm')" :error="errors.confirm" required>
-        <input v-model="form.confirm" type="password" class="input" autocomplete="new-password" />
+        <SInput v-model="form.confirm" type="password" autocomplete="new-password" />
       </SField>
       <button type="submit" class="hidden" />
     </form>

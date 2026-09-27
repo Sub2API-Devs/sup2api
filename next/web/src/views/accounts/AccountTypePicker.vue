@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SEmpty, SSpinner } from '@sub2api/ui'
+import { SEmpty, SGrid, SHint, SLink, SSpinner } from '@sub2api/ui'
 import type { AccountType } from '@/api/types'
 import { lt } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -34,7 +34,7 @@ const isOpen = (at: AccountType) => !!expanded.value[typeKey(at.plugin_key, at.t
   <div>
     <div v-if="!loaded" class="flex justify-center py-10"><SSpinner /></div>
     <SEmpty v-else-if="!items.length" :text="t('accounts.noTypes')" />
-    <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <SGrid v-else :gap="3" :lg-cols="3">
       <div
         v-for="at in items"
         :key="typeKey(at.plugin_key, at.type)"
@@ -80,10 +80,10 @@ const isOpen = (at: AccountType) => !!expanded.value[typeKey(at.plugin_key, at.t
           </div>
         </div>
       </div>
-    </div>
-    <p class="mt-4 text-sm text-gray-500 dark:text-dark-400">
+    </SGrid>
+    <SHint class="mt-4">
       {{ t('accounts.noTypeHint') }}
-      <RouterLink v-if="auth.has('plugin:market:read')" to="/market" class="link">{{ t('accounts.goMarket') }}</RouterLink>
-    </p>
+      <SLink v-if="auth.has('plugin:market:read')" to="/market">{{ t('accounts.goMarket') }}</SLink>
+    </SHint>
   </div>
 </template>

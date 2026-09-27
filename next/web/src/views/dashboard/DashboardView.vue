@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SCard, SChart, SPageHeader, SStatCard } from '@sub2api/ui'
+import { SCard, SChart, SGrid, SPageHeader, SStatCard } from '@sub2api/ui'
 import type { Account, UsageSummaryRow } from '@/api/types'
 import PluginSlot from '@/components/plugin/PluginSlot.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -98,7 +98,7 @@ onMounted(async () => {
 <template>
   <div>
     <SPageHeader :title="t('dashboard.title')" :description="t('dashboard.welcome', { name: auth.me?.display_name || auth.me?.email || '' })" />
-    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <SGrid :cols="2" :xl-cols="4">
       <template v-if="canAll">
         <SStatCard
           :label="t('dashboard.todayRequests')"
@@ -126,7 +126,7 @@ onMounted(async () => {
       />
       <SStatCard v-if="auth.balance !== null" :label="t('dashboard.balance')" :value="formatMoney(auth.balance, 2)" icon="balance" tone="warning" />
       <PluginSlot name="dashboard.widgets" />
-    </div>
+    </SGrid>
 
     <SCard v-if="canAll" class="mt-6" :title="t('dashboard.trend')">
       <SChart :option="chartOption" :loading="loading" height="300px" />

@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { isApiError } from '@sub2api/host'
-import { SButton, SField, SIcon } from '@sub2api/ui'
+import { SButton, SField, SIcon, SInput } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { currentLocale, setLocale } from '@/i18n'
@@ -65,12 +65,12 @@ async function submit() {
   <div class="relative flex min-h-screen items-center justify-center bg-gray-50 px-4 dark:bg-dark-950">
     <div class="login-bg pointer-events-none absolute inset-0 opacity-70" />
     <div class="absolute right-4 top-4 flex gap-1">
-      <button class="btn btn-ghost btn-sm" @click="setLocale(currentLocale() === 'zh' ? 'en' : 'zh')">
+      <SButton variant="ghost" size="sm" @click="setLocale(currentLocale() === 'zh' ? 'en' : 'zh')">
         <SIcon name="globe" class="h-4 w-4" /> {{ currentLocale() === 'zh' ? '中' : 'EN' }}
-      </button>
-      <button class="btn btn-ghost btn-sm" @click="app.toggleTheme()">
+      </SButton>
+      <SButton variant="ghost" size="sm" @click="app.toggleTheme()">
         <SIcon :name="app.theme === 'dark' ? 'sun' : 'moon'" class="h-4 w-4" />
-      </button>
+      </SButton>
     </div>
     <div class="relative w-full max-w-sm">
       <div class="mb-6 flex flex-col items-center text-center">
@@ -89,10 +89,10 @@ async function submit() {
           <SIcon name="warning" class="h-4 w-4 shrink-0" />{{ t('auth.login.sessionExpired') }}
         </p>
         <SField :label="t('auth.login.email')">
-          <input v-model="email" type="email" class="input" autocomplete="username" autofocus />
+          <SInput v-model="email" type="email" autocomplete="username" autofocus />
         </SField>
         <SField :label="t('auth.login.password')">
-          <input v-model="password" type="password" class="input" autocomplete="current-password" />
+          <SInput v-model="password" type="password" autocomplete="current-password" />
         </SField>
         <p v-if="retryLeft" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400" data-testid="login-rate-limited">
           {{ t('auth.login.rateLimited', { n: retryLeft }) }}

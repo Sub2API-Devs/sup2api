@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { SSelect, type SelectOption } from '@sub2api/ui'
 import { useProxiesLookup } from '@/composables/lookups'
 
 // Proxy picker (number | null). Also a SchemaForm widget (`proxy-select`): the
@@ -16,16 +17,16 @@ const { proxies } = useProxiesLookup()
 // does not silently show "no proxy".
 const unknownSelected = computed(() => props.modelValue != null && !proxies.value.some((p) => p.id === props.modelValue))
 
-function onChange(e: Event) {
-  const v = (e.target as HTMLSelectElement).value
+const options = computed<SelectOption[]>(() => [
+  ...(unknownSelected.value ? [{ value: props.modelValue as number, label: `#${props.modelValue}` }] : []),
+  ...proxies.value.map((p) => ({ value: p.id, label: `${p.name} (${p.protocol}://${p.host}:${p.port})` }))
+])
+
+function onChange(v: unknown) {
   emit('update:modelValue', v ? Number(v) : null)
 }
 </script>
 
 <template>
-  <select class="input" :value="modelValue ?? ''" :disabled="disabled" @change="onChange">
-    <option value="">{{ t('schema.noProxy') }}</option>
-    <option v-if="unknownSelected" :value="modelValue">#{{ modelValue }}</option>
-    <option v-for="p in proxies" :key="p.id" :value="p.id">{{ p.name }} ({{ p.protocol }}://{{ p.host }}:{{ p.port }})</option>
-  </select>
+  <SSelect :model-value="modelValue ?? null" :options="options" :placeholder="t('schema.noProxy')" :disabled="disabled" @update:model-value="onChange" />
 </template>
