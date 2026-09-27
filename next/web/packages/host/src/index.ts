@@ -8,6 +8,7 @@ import { createClient, type ApiClient } from './http'
 
 export * from './http'
 export * from './bridge-protocol'
+export { useList, type UseListOptions, type UseListResult } from './useList'
 
 /** Version of the host UI contract; plugins declare hostUICompat against it. */
 export const HOST_UI_VERSION = '1.0.0'

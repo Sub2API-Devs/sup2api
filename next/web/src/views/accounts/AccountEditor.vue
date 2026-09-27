@@ -2,9 +2,9 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SField, SKeyValue, SModal, SSpinner, SSwitch, toast } from '@sub2api/ui'
+import { SButton, SchemaForm, SField, SKeyValue, SModal, SSpinner, SSwitch, toast } from '@sub2api/ui'
 import type { Account, AccountType, Price } from '@/api/types'
-import SchemaForm from '@/components/schema/SchemaForm.vue'
+import { schemaWidgets } from '@/components/schema/widgets'
 import PluginIframe from '@/components/plugin/PluginIframe.vue'
 import PluginSlot from '@/components/plugin/PluginSlot.vue'
 import GroupPicker from '@/components/GroupPicker.vue'
@@ -412,7 +412,7 @@ async function save() {
   errors.value = {}
   credErrors.value = {}
   if (!basic.name.trim()) {
-    errors.value = { name: t('schema.v.required') }
+    errors.value = { name: t('ui.schema.v.required') }
     return
   }
   // Pending text-mode / draft edits are committed (and validated) before saving.
@@ -674,7 +674,7 @@ async function save() {
       <template v-else-if="mode === 'schema'">
         <div v-if="formLoading" class="flex justify-center py-6"><SSpinner /></div>
         <p v-else-if="formError" class="text-sm text-red-500">{{ formError }}</p>
-        <SchemaForm v-else-if="schema" ref="schemaForm" v-model="credentials" :schema="schema" :ui-schema="uiSchema" :errors="credErrors" />
+        <SchemaForm v-else-if="schema" ref="schemaForm" v-model="credentials" :schema="schema" :ui-schema="uiSchema" :errors="credErrors" :widgets="schemaWidgets" />
       </template>
       <template v-else-if="mode === 'iframe'">
         <PluginIframe

@@ -1140,6 +1140,18 @@ type ProxyResolver interface {
 - 失败抛 `ApiError {status, code, message, details, fields}`：`fields` 是 `details.fields[]` 折平后的 `{field: message}`（`invalid_argument`，§3.1；message 为 `{en,zh}` 时按当前语言取），用 `isApiError(e)` 判断。响应没有 `error.code` 时按 HTTP 状态映射（400 `invalid_argument`、401 `unauthenticated`、403 `permission_denied`、404 `not_found`、409 `conflict`、429 `rate_limited`、503 `unavailable`，其余 `internal`）。
 - 其他导出：`createClient(prefix)`、`api`（= `/api/v1` 客户端）、`session`、`configureHttp`（控制台用，插件不要调）、`satisfiesRange`、`bridge-protocol.ts`（iframe 插件的 postMessage 协议，与原生 UI 无关）。
 
+`useList`（`useList.ts`，分页列表状态，控制台的列表页和插件的列表页共用）：
+
+| 导出 | 说明 |
+|---|---|
+| `useList<T>(client, path, initialFilters?, opts?)` | `client: ApiClient`（插件传 `host.pluginApi`，核心接口传 `host.api`）；`path: string \| () => string`（相对客户端根，函数时每次加载重新求值）；`initialFilters: Record<string, any>`（`{}`）；`opts: UseListOptions {pageSize?（20）, immediate?（true，创建即加载）, onError?(e)}` |
+| 返回 `UseListResult<T>` | `{items: Ref<T[]>, loading: Ref<boolean>, error: Ref<unknown>, page: Ref<number>, pageSize: Ref<number>, total: Ref<number>, filters: reactive 对象, reload(): Promise<void>}` |
+
+- 每次加载发 `client.list(path, {page, page_size, ...filters})`（§3.1 分页信封；`filters` 中的空值由客户端省略）；`total` 取 `page.total`，响应是裸数组时用长度。
+- 改 `page` / `pageSize` 立即重载；改 `filters` 的任一键先防抖 250 ms，再把 `page` 置回 1（已在第 1 页则直接重载）。并发加载只有最后一次能写入状态（序号守卫），旧响应丢弃。
+- 失败时 `error` 置为异常并调用 `opts.onError(e)`（缺省什么也不做，`items` 保持上次的值）；插件通常传 `onError: (e) => host.toast(errorMessage(e), 'error')` 之类。控制台的 `@/composables/useList` 是它的薄封装：绑定 `api` 并把 `onError` 接到错误提示，签名 `useList<T>(path, initialFilters?, opts?)`。
+- 例：`const list = useList<Event>(host.pluginApi, '/events', { q: '', status: '' })`，配合 `STable :rows="list.items.value"`、`SPagination v-model:page="list.page.value"`，筛选框直接 `v-model="list.filters.q"`。
+
 ### 23.3 `@sub2api/ui`
 
 组件都用控制台的全局样式类渲染，自动适配暗色（`<html class="dark">`）；`v-model` = `modelValue` + `update:modelValue`。`SConfirmHost`、`SToastHost` 由控制台挂载一次，插件不要再挂。
@@ -1168,8 +1180,24 @@ type ProxyResolver interface {
 | `STagInput` | 标签输入 | `modelValue: string[] \| null`、`placeholder`（`ui.addTag`）、`disabled` | emits `update:modelValue`；Enter / 逗号 / 失焦添加，粘贴按逗号和换行拆分并去重，Backspace 删最后一个 |
 | `SKeyValue` | 字符串键值表编辑 | `modelValue: Record<string,string> \| null`、`keyLabel`、`valueLabel`、`keyPlaceholder`、`valuePlaceholder`、`disabled` | emits `update:modelValue`（空键的行被丢弃） |
 | `STimeRange` | 时间范围筛选：预设下拉 + 自定义起止（datetime-local） | `range: RangeKey`、`from`、`to`（RFC 3339，`''` = 不限）、`keys: RangeKey[]`（`['today','7d','30d','custom']`） | emits `update:range`、`update:from`、`update:to`（选预设时同时发 from/to） |
+| `SGrid` | 响应式网格：手机单列，`sm:` 起按 `cols` 分列 | `cols`（1–6，2）、`mdCols`、`lgCols`、`xlCols`（按断点覆盖列数，1–6）、`gap`（`2`/`3`/`4`/`6`，4） | slot 默认放网格项 |
+| `SStack` | flex 堆叠（默认竖排） | `direction`（`col`/`row`，col）、`gap`（`1`/`2`/`3`/`4`/`6`，3）、`align`（`start`/`center`/`end`/`stretch`）、`justify`（`start`/`between`/`end`）、`wrap` | slot 默认 |
+| `SCheckbox` | 复选框（原生 `<input type="checkbox">` + 文字） | `modelValue: boolean`（必填）、`label`、`disabled` | emits `update:modelValue`；slot 默认替代 `label` |
+| `SLink` | 链接：给 `to` 渲染 `RouterLink`，否则 `<a>` | `to`（`string \| RouteLocationRaw`）、`href`、`external`（`target=_blank` + `rel=noopener noreferrer`） | slot 默认 |
+| `SCode` | 代码：块级 `<pre>`（`.code-block`）或行内 `<code>` | `inline`、`text`、`wrap`（true；false 时不折行、横向滚动） | slot 默认替代 `text` |
+| `SSectionTitle` | 小节标题 `<h3>`（`.section-title`） | `title` | slot 默认替代 `title`；slot `actions` 右对齐 |
+| `SHint` | 小号辅助文字 | `tone`（`muted`/`danger`/`success`/`warning`，muted）、`inline`（`<span>` 而非 `<p>`） | slot 默认 |
 
 `STimeRange` 的辅助导出：`type RangeKey = 'all' \| 'today' \| '7d' \| '30d' \| 'month' \| 'custom'`、`rangeBounds(key) → {from, to}`（本地零点起算的 RFC 3339，`''` = 不限）、`toLocalInput(rfc3339)` / `fromLocalInput(local)`（与 `<input type="datetime-local">` 互转）、`dayKey(v) → 'YYYY-MM-DD'`（本地日）。
+
+JSON Schema 表单（`schema/`；账号凭据、插件设置、声明式表单页都用它，插件的原生 UI 也可以直接用）：
+
+| 组件 | 用途 | props（默认值） | emits / expose |
+|---|---|---|---|
+| `SchemaForm` | 按 JSON Schema（object）渲染整张表单，`v-model` 为对象值；schema 变化时按 `default` 补齐缺省值 | `schema: JSONSchema`（必填）、`uiSchema: UISchema \| null`（§21.3 的 uiSchema：`ui:order` `ui:widget` `ui:title` `ui:help` `ui:placeholder` `ui:options` `ui:enumNames` `ui:visibleWhen`）、`modelValue: Record<string, any> \| null`（必填）、`errors: Record<string, string>`（服务端字段错误，路径 → 文案，`a.b.0.c` 形式）、`disabled`、`widgets: Record<string, Component>`（宿主提供的 `ui:widget` 名 → 组件，见 `SchemaField`） | emits `update:modelValue`；expose `validate(): boolean`（校验可见字段：required / minLength / maxLength / pattern / minimum / maximum / integer / format uri；文案在 `ui.schema.v.*`，失败时显示在字段下） |
+| `SchemaField` | 单个字段（`SchemaForm` 内部递归使用；一般不直接用） | `name`、`path`（点号路径，错误按它查 `errors`）、`schema`、`ui`、`modelValue`、`root`（整张表单的值，`ui:visibleWhen` 按它判断）、`errors`（必填）、`required`、`disabled`、`bare`（不画 label：数组项、根对象）、`widgets` | emits `update:modelValue`。内置 widget：`text` `secret`（`******` 表示保留已存值）`textarea` `select` `switch` `number` `url-presets`（`schema.enum` 存在时只能选）`key-value` `model-mapping` `tags` `multi-select` `object-list` `json` `hidden`；`ui:widget` 命中 `widgets` 里的键时改渲染该组件（包在 `SField` 里，传 `modelValue`、`schema`、`ui`、`multiple`（schema 为 array）、`disabled`，组件要 emit `update:modelValue`）——控制台用它注入 `proxy-select` / `group-select`（`@/components/schema/widgets`），插件可注入自己的控件；不认识的 widget 名回退为普通文本框 |
+
+`schema.ts` 的辅助导出：`type JSONSchema` / `UISchema`（都是 `Record<string, any>`）、`EnumOption {value, label}`、`ValidateMessages`、`SECRET_MASK`（`'******'`）、`localizedText(v, locale = 'en')`（`{en, zh}` 或字符串取 `locale`，回退 en；和 `host.i18n.text` 同义但显式传 locale）、`uiGet(ui, key)`（`ui:key` 或 `key`）、`childUI(ui, key)`、`schemaType(s)`、`isSecret(s, ui?)`、`enumOptions(s, ui?, locale?)`、`resolveWidget(s, ui?)`、`fieldLabel(key, s, ui?, locale?)`、`fieldHelp(s, ui?, locale?)`、`orderedKeys(s, ui?)`、`getPath(obj, 'a.b')`、`isVisible(ui, root)`、`schemaWithDefaults(s, value)`（递归补 `default`）、`validateSchema(s, ui, value, msgs) → {path: message}`。文案键 `ui.schema.secretKeep` `ui.schema.presets` `ui.schema.setByAdmin` `ui.schema.mappingFrom` `ui.schema.mappingTo` `ui.schema.invalidJSON` 及 `ui.schema.v.{required,minLength,maxLength,pattern,minimum,maximum,integer,url}` 在 `uiMessages` 里。
 
 反馈与文案：
 

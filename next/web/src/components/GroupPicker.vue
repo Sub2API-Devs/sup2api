@@ -3,7 +3,10 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useGroupsLookup } from '@/composables/lookups'
 
-// Group picker: multiple (number[]) or single (number | null).
+// Group picker: multiple (number[]) or single (number | null). Also a SchemaForm
+// widget (`group-select`): the extra widget props (schema, ui) must not land
+// on the root element.
+defineOptions({ inheritAttrs: false })
 const props = defineProps<{ modelValue: number[] | number | null | undefined; multiple?: boolean; disabled?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: number[] | number | null): void }>()
 const { t } = useI18n()

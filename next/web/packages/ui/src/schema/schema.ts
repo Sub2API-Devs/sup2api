@@ -3,7 +3,9 @@
 // uiSchema (per field; "ui:" prefix optional):
 //   ui:order        ["a", "b", "*"]       field order of an object ("*" = rest)
 //   ui:widget       secret | textarea | select | switch | number | url-presets |
-//                   key-value | model-mapping | proxy-select | group-select | hidden
+//                   key-value | model-mapping | tags | multi-select | object-list |
+//                   json | hidden | <any key of the `widgets` prop (host-provided
+//                   components, e.g. the console's proxy-select / group-select)>
 //   ui:title        LocalizedText label           ui:help   LocalizedText hint
 //   ui:placeholder  LocalizedText                 ui:options {presets: [...], rows: n, ...}
 //   ui:enumNames    [LocalizedText...] labels for enum values
@@ -11,13 +13,26 @@
 //                   or a plain map {"mode": "oauth"} (all must match)
 // Secrets: widget "secret", format "password" or writeOnly: true. Existing
 // values come back as "******" and are sent back unchanged to keep them.
-
-import { lt } from '@/i18n'
+//
+// LocalizedText ({"en": "...", "zh": "..."} or a bare string) is resolved with
+// `localizedText(v, locale)`; the helpers below take the locale as their last
+// argument (SchemaField passes vue-i18n's current locale).
 
 export const SECRET_MASK = '******'
 
 export type JSONSchema = Record<string, any>
 export type UISchema = Record<string, any>
+
+/** Picks `locale` from a localized text ({en, zh} or a bare string), falling back to en. */
+export function localizedText(v: unknown, locale = 'en'): string {
+  if (v === null || v === undefined) return ''
+  if (typeof v === 'string') return v
+  if (typeof v === 'object') {
+    const o = v as Record<string, string>
+    return o[locale] || o.en || Object.values(o)[0] || ''
+  }
+  return String(v)
+}
 
 export function uiGet<T = any>(ui: UISchema | undefined, key: string): T | undefined {
   if (!ui || typeof ui !== 'object') return undefined
@@ -65,13 +80,13 @@ export interface EnumOption {
   label: string
 }
 
-export function enumOptions(s: JSONSchema, ui?: UISchema): EnumOption[] | null {
+export function enumOptions(s: JSONSchema, ui?: UISchema, locale = 'en'): EnumOption[] | null {
   const names = uiGet<any[]>(ui, 'enumNames') || s.enumNames
   if (Array.isArray(s.enum)) {
-    return s.enum.map((v: any, i: number) => ({ value: v, label: names?.[i] !== undefined ? lt(names[i]) : String(v) }))
+    return s.enum.map((v: any, i: number) => ({ value: v, label: names?.[i] !== undefined ? localizedText(names[i], locale) : String(v) }))
   }
   if (Array.isArray(s.oneOf) && s.oneOf.every((o: any) => o && 'const' in o)) {
-    return s.oneOf.map((o: any) => ({ value: o.const, label: lt(o['x-title'] || o.title) || String(o.const) }))
+    return s.oneOf.map((o: any) => ({ value: o.const, label: localizedText(o['x-title'] || o.title, locale) || String(o.const) }))
   }
   return null
 }
@@ -105,15 +120,15 @@ export function resolveWidget(s: JSONSchema, ui?: UISchema): string {
   }
 }
 
-export function fieldLabel(key: string, s: JSONSchema, ui?: UISchema): string {
+export function fieldLabel(key: string, s: JSONSchema, ui?: UISchema, locale = 'en'): string {
   const title = uiGet(ui, 'title') ?? s['x-title'] ?? s.title
-  if (title) return lt(title)
+  if (title) return localizedText(title, locale)
   return key.replace(/[_-]+/g, ' ').replace(/^\w/, (c) => c.toUpperCase())
 }
 
-export function fieldHelp(s: JSONSchema, ui?: UISchema): string {
+export function fieldHelp(s: JSONSchema, ui?: UISchema, locale = 'en'): string {
   const h = uiGet(ui, 'help') ?? s['x-description'] ?? s.description
-  return h ? lt(h) : ''
+  return h ? localizedText(h, locale) : ''
 }
 
 export function orderedKeys(s: JSONSchema, ui?: UISchema): string[] {

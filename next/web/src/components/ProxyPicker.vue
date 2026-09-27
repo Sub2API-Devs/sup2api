@@ -3,6 +3,9 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useProxiesLookup } from '@/composables/lookups'
 
+// Proxy picker (number | null). Also a SchemaForm widget (`proxy-select`): the
+// extra widget props (schema, ui, multiple) must not land on the <select>.
+defineOptions({ inheritAttrs: false })
 const props = defineProps<{ modelValue: number | null | undefined; disabled?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: number | null): void }>()
 const { t } = useI18n()

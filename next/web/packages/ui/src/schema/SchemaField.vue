@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SField, SKeyValue, SSwitch, STagInput, SIcon } from '@sub2api/ui'
-import GroupPicker from '@/components/GroupPicker.vue'
-import ProxyPicker from '@/components/ProxyPicker.vue'
-import { lt } from '@/i18n'
+import SField from '../SField.vue'
+import SKeyValue from '../SKeyValue.vue'
+import SSwitch from '../SSwitch.vue'
+import STagInput from '../STagInput.vue'
+import SIcon from '../SIcon.vue'
 import {
   SECRET_MASK,
   childUI,
@@ -12,6 +13,7 @@ import {
   fieldHelp,
   fieldLabel,
   isVisible,
+  localizedText,
   orderedKeys,
   resolveWidget,
   schemaType,
@@ -35,18 +37,27 @@ const props = defineProps<{
   disabled?: boolean
   /** Render without label (array items, root object). */
   bare?: boolean
+  /**
+   * Host-provided widgets by `ui:widget` name (e.g. the console's
+   * `proxy-select` / `group-select` pickers). A matching component is rendered
+   * inside SField with `modelValue`, `schema`, `ui`, `multiple` (array
+   * schemas) and `disabled`, and must emit `update:modelValue`. Unknown widget
+   * names fall back to the built-in field.
+   */
+  widgets?: Record<string, Component>
 }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: any): void }>()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const widget = computed(() => resolveWidget(props.schema, props.ui))
-const label = computed(() => fieldLabel(props.name, props.schema, props.ui))
-const help = computed(() => fieldHelp(props.schema, props.ui))
+const custom = computed<Component | undefined>(() => props.widgets?.[widget.value])
+const label = computed(() => fieldLabel(props.name, props.schema, props.ui, locale.value))
+const help = computed(() => fieldHelp(props.schema, props.ui, locale.value))
 const placeholder = computed(() => {
   const p = uiGet(props.ui, 'placeholder') ?? props.schema.examples?.[0]
-  return p === undefined ? '' : lt(p)
+  return p === undefined ? '' : localizedText(p, locale.value)
 })
-const options = computed(() => enumOptions(props.schema, props.ui) || [])
+const options = computed(() => enumOptions(props.schema, props.ui, locale.value) || [])
 const uiOptions = computed<Record<string, any>>(() => uiGet(props.ui, 'options') || {})
 const error = computed(() => props.errors[props.path])
 const readOnly = computed(() => props.disabled || props.schema.readOnly === true || uiGet(props.ui, 'readonly') === true)
@@ -93,7 +104,7 @@ function onSelect(e: Event) {
 const selectedIndex = computed(() => options.value.findIndex((o) => o.value === props.modelValue))
 
 // ---------------------------------------------------------------- multi-select
-const multiOptions = computed(() => enumOptions(props.schema.items || {}, childUI(props.ui, 'items')) || [])
+const multiOptions = computed(() => enumOptions(props.schema.items || {}, childUI(props.ui, 'items'), locale.value) || [])
 function toggleMulti(v: any, on: boolean) {
   const cur: any[] = Array.isArray(props.modelValue) ? [...props.modelValue] : []
   const i = cur.indexOf(v)
@@ -133,7 +144,7 @@ function onJSON(e: Event) {
     set(JSON.parse(jsonText.value))
     jsonError.value = ''
   } catch {
-    jsonError.value = t('schema.invalidJSON')
+    jsonError.value = t('ui.schema.invalidJSON')
   }
 }
 
@@ -152,14 +163,26 @@ const urlEnumOptions = computed<string[]>(() => {
 })
 // A locked base URL (CONTRACTS §21.3) shows only "set by an administrator";
 // the plugin's own help text would contradict it.
-const restrictedHint = computed(() => (widget.value === 'url-presets' && readOnly.value ? t('schema.setByAdmin') : ''))
+const restrictedHint = computed(() => (widget.value === 'url-presets' && readOnly.value ? t('ui.schema.setByAdmin') : ''))
 const fieldHint = computed(() => restrictedHint.value || help.value)
-
 </script>
 
 <template>
+  <!-- host-provided widget (console pickers, plugin custom controls) -->
+  <SField v-if="custom" :label="bare ? undefined : label" :hint="fieldHint" :error="error" :required="required">
+    <component
+      :is="custom"
+      :model-value="modelValue"
+      :schema="schema"
+      :ui="ui"
+      :multiple="schemaType(schema) === 'array'"
+      :disabled="readOnly"
+      @update:model-value="set"
+    />
+  </SField>
+
   <!-- object: nested fields -->
-  <fieldset v-if="widget === 'object'" :class="bare ? 'space-y-4' : 'space-y-4 rounded-xl border border-gray-200 p-4 dark:border-dark-700'">
+  <fieldset v-else-if="widget === 'object'" :class="bare ? 'space-y-4' : 'space-y-4 rounded-xl border border-gray-200 p-4 dark:border-dark-700'">
     <legend v-if="!bare" class="px-1 text-sm font-medium text-gray-700 dark:text-gray-300">{{ label }}</legend>
     <p v-if="!bare && help" class="input-hint !mt-0">{{ help }}</p>
     <template v-for="k in keys" :key="k">
@@ -174,6 +197,7 @@ const fieldHint = computed(() => restrictedHint.value || help.value)
         :errors="errors"
         :required="requiredKeys.includes(k)"
         :disabled="disabled"
+        :widgets="widgets"
         @update:model-value="setChild(k, $event)"
       />
     </template>
@@ -202,7 +226,7 @@ const fieldHint = computed(() => restrictedHint.value || help.value)
       <button type="button" class="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-gray-600" @click="reveal = !reveal">
         <SIcon :name="reveal ? 'eye-off' : 'eye'" class="h-4 w-4" />
       </button>
-      <p v-if="secretExisting" class="input-hint">{{ t('schema.secretKeep') }}</p>
+      <p v-if="secretExisting" class="input-hint">{{ t('ui.schema.secretKeep') }}</p>
     </div>
 
     <textarea
@@ -264,7 +288,7 @@ const fieldHint = computed(() => restrictedHint.value || help.value)
         <option v-for="p in presets" :key="p" :value="p" />
       </datalist>
       <select v-if="presets.length" class="input !w-auto" :disabled="readOnly" @change="set(($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''">
-        <option value="">{{ t('schema.presets') }}</option>
+        <option value="">{{ t('ui.schema.presets') }}</option>
         <option v-for="p in presets" :key="p" :value="p">{{ p }}</option>
       </select>
     </div>
@@ -279,20 +303,10 @@ const fieldHint = computed(() => restrictedHint.value || help.value)
     <SKeyValue
       v-else-if="widget === 'model-mapping'"
       :model-value="modelValue"
-      :key-label="t('schema.mappingFrom')"
-      :value-label="t('schema.mappingTo')"
+      :key-label="t('ui.schema.mappingFrom')"
+      :value-label="t('ui.schema.mappingTo')"
       key-placeholder="claude-sonnet-4-5"
       value-placeholder="claude-sonnet-4-5-20250929"
-      :disabled="readOnly"
-      @update:model-value="set"
-    />
-
-    <ProxyPicker v-else-if="widget === 'proxy-select'" :model-value="modelValue ?? null" :disabled="readOnly" @update:model-value="set" />
-
-    <GroupPicker
-      v-else-if="widget === 'group-select'"
-      :model-value="modelValue"
-      :multiple="schemaType(schema) === 'array'"
       :disabled="readOnly"
       @update:model-value="set"
     />
@@ -323,12 +337,13 @@ const fieldHint = computed(() => restrictedHint.value || help.value)
           :root="root"
           :errors="errors"
           :disabled="disabled"
+          :widgets="widgets"
           bare
           @update:model-value="setItem(Number(i), $event)"
         />
         <button v-if="!readOnly" type="button" class="btn btn-ghost btn-sm absolute right-1 top-1" @click="removeItem(Number(i))">×</button>
       </div>
-      <button v-if="!readOnly" type="button" class="btn btn-secondary btn-sm" @click="addItem">+ {{ t('common.add') }}</button>
+      <button v-if="!readOnly" type="button" class="btn btn-secondary btn-sm" @click="addItem">+ {{ t('ui.add') }}</button>
     </div>
 
     <textarea v-else-if="widget === 'json'" class="input font-mono text-xs" rows="5" :value="jsonText" :disabled="readOnly" @input="onJSON" />

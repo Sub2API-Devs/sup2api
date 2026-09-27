@@ -2,9 +2,9 @@
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SSpinner, toast } from '@sub2api/ui'
-import SchemaForm from '@/components/schema/SchemaForm.vue'
+import { SButton, SchemaForm, SSpinner, toast } from '@sub2api/ui'
 import type { UIPlugin, UIPluginPage } from '@/api/types'
+import { schemaWidgets } from '@/components/schema/widgets'
 import { assetURL } from '@/stores/plugins'
 import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
 import { fetchAsset, parseRouteRef } from './declarative'
@@ -77,7 +77,7 @@ onMounted(load)
     <div v-if="loading" class="flex justify-center py-10"><SSpinner /></div>
     <p v-else-if="loadError" class="text-sm text-red-500">{{ loadError }}</p>
     <form v-else-if="schema" @submit.prevent="submit">
-      <SchemaForm ref="form" v-model="value" :schema="schema" :ui-schema="uiSchema" :errors="errors" />
+      <SchemaForm ref="form" v-model="value" :schema="schema" :ui-schema="uiSchema" :errors="errors" :widgets="schemaWidgets" />
       <div v-if="page.submit" class="mt-6 flex justify-end">
         <SButton type="submit" variant="primary" :loading="saving">{{ t('common.save') }}</SButton>
       </div>

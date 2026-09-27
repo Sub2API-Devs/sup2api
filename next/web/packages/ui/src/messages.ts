@@ -24,7 +24,26 @@ export default {
     thisMonth: 'This month',
     custom: 'Custom',
     from: 'From',
-    to: 'To'
+    to: 'To',
+    // SchemaForm / SchemaField
+    schema: {
+      secretKeep: 'A value is stored. Leave empty to keep it.',
+      presets: 'Presets',
+      setByAdmin: 'Set by an administrator',
+      mappingFrom: 'Requested model',
+      mappingTo: 'Upstream model',
+      invalidJSON: 'Invalid JSON',
+      v: {
+        required: 'This field is required',
+        minLength: 'At least {n} characters',
+        maxLength: 'At most {n} characters',
+        pattern: 'Invalid format',
+        minimum: 'Must be ≥ {n}',
+        maximum: 'Must be ≤ {n}',
+        integer: 'Must be an integer',
+        url: 'Must be an http(s) URL'
+      }
+    }
   },
   zh: {
     ok: '确定',
@@ -51,6 +70,25 @@ export default {
     thisMonth: '本月',
     custom: '自定义',
     from: '开始',
-    to: '结束'
+    to: '结束',
+    // SchemaForm / SchemaField
+    schema: {
+      secretKeep: '已保存值，留空表示不修改。',
+      presets: '预设',
+      setByAdmin: '由管理员设置',
+      mappingFrom: '请求模型',
+      mappingTo: '上游模型',
+      invalidJSON: 'JSON 格式错误',
+      v: {
+        required: '此项必填',
+        minLength: '至少 {n} 个字符',
+        maxLength: '最多 {n} 个字符',
+        pattern: '格式不正确',
+        minimum: '不能小于 {n}',
+        maximum: '不能大于 {n}',
+        integer: '必须是整数',
+        url: '必须是 http(s) 地址'
+      }
+    }
   }
-} as Record<string, Record<string, string>>
+} as Record<string, Record<string, unknown>>

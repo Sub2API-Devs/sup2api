@@ -25,9 +25,38 @@ export { default as STabs } from './STabs.vue'
 export { default as STagInput } from './STagInput.vue'
 export { default as STextarea } from './STextarea.vue'
 export { default as STimeRange } from './STimeRange.vue'
+export { default as SGrid } from './SGrid.vue'
+export { default as SStack } from './SStack.vue'
+export { default as SCheckbox } from './SCheckbox.vue'
+export { default as SLink } from './SLink.vue'
+export { default as SCode } from './SCode.vue'
+export { default as SSectionTitle } from './SSectionTitle.vue'
+export { default as SHint } from './SHint.vue'
 export { default as SToastHost } from './SToastHost.vue'
 export { toast, confirm, toastState, confirmState, dismissToast, settleConfirm } from './feedback'
 export { default as uiMessages } from './messages'
 export { rangeBounds, toLocalInput, fromLocalInput, dayKey } from './timeRange'
 export type { RangeKey } from './timeRange'
 export type { TableColumn, TabItem, SelectOption, MenuAction, Tone } from './types'
+// JSON Schema form (console: account credentials, plugin settings, declarative
+// plugin pages; plugins: any schema-driven form)
+export { default as SchemaForm } from './schema/SchemaForm.vue'
+export { default as SchemaField } from './schema/SchemaField.vue'
+export {
+  SECRET_MASK,
+  localizedText,
+  uiGet,
+  childUI,
+  schemaType,
+  isSecret,
+  enumOptions,
+  resolveWidget,
+  fieldLabel,
+  fieldHelp,
+  orderedKeys,
+  getPath,
+  isVisible,
+  withDefaults as schemaWithDefaults,
+  validate as validateSchema
+} from './schema/schema'
+export type { JSONSchema, UISchema, EnumOption, ValidateMessages } from './schema/schema'

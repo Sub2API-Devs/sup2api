@@ -2,8 +2,8 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, toast } from '@sub2api/ui'
-import SchemaForm from '@/components/schema/SchemaForm.vue'
+import { SButton, SCard, SchemaForm, toast } from '@sub2api/ui'
+import { schemaWidgets } from '@/components/schema/widgets'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
 import type { PluginSettings } from '../pluginUtil'
@@ -58,6 +58,7 @@ async function save() {
         :ui-schema="(settings.ui_schema as any) || null"
         :errors="errors"
         :disabled="!canManage"
+        :widgets="schemaWidgets"
       />
     </div>
     <div v-if="canManage" class="mt-4">
