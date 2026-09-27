@@ -1,16 +1,35 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SButton, SCard, SChart, SPageHeader, SPagination, SSelect, SStatCard } from '@sub2api/ui'
+import { SButton, SCard, SChart, SPageHeader, SPagination, SSelect, SStatCard, STabs, type TabItem } from '@sub2api/ui'
 import { useList } from '@/composables/useList'
+import { useAuthStore } from '@/stores/auth'
 import { formatMoney, formatNumber } from '@/utils/format'
+import MyLedgerTab from '@/views/ledger/MyLedgerTab.vue'
 import TimeRangeFilter from './TimeRangeFilter.vue'
 import UsageTable from './UsageTable.vue'
 import { dayKey, rangeBounds, type RangeKey } from './timeRange'
 import { dailyChartOption, type DailyPoint, type UsageRow } from './usage'
 
+// Mine > Usage records: the caller's requests (with a daily chart) and, on a
+// second tab, their balance and its changes. ?tab=ledger opens the latter.
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
+
+type TabKey = 'requests' | 'ledger'
+const tabs = computed<TabItem[]>(() => {
+  const list: TabItem[] = [{ key: 'requests', label: t('usage.tabs.requests') }]
+  if (auth.has('balance:self:read')) list.push({ key: 'ledger', label: t('usage.tabs.ledger') })
+  return list
+})
+const tab = ref<TabKey>(route.query.tab === 'ledger' && auth.has('balance:self:read') ? 'ledger' : 'requests')
+watch(tab, (v) => {
+  if (route.query.tab !== v) router.replace({ query: { ...route.query, tab: v } })
+})
 
 const range = ref<RangeKey>('7d')
 const { items, loading, page, pageSize, total, filters, reload } = useList<UsageRow>('/me/usage', {
@@ -65,7 +84,13 @@ const sums = computed(() => points.value.reduce((s, p) => ({ requests: s.request
 
 const chartOption = computed(() => dailyChartOption(points.value, { requests: t('usage.summary.requests'), cost: t('usage.summary.cost') }))
 
+const ledgerRef = ref<InstanceType<typeof MyLedgerTab> | null>(null)
+
 function refresh() {
+  if (tab.value === 'ledger') {
+    ledgerRef.value?.reload()
+    return
+  }
   reload()
   loadChart()
 }
@@ -77,7 +102,7 @@ function refresh() {
       <template #actions>
         <SButton @click="refresh">{{ t('common.refresh') }}</SButton>
       </template>
-      <template #filters>
+      <template v-if="tab === 'requests'" #filters>
         <TimeRangeFilter v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" />
         <div class="w-48">
           <label class="input-label">{{ t('common.model') }}</label>
@@ -90,26 +115,32 @@ function refresh() {
       </template>
     </SPageHeader>
 
-    <div class="mb-4 grid gap-4 lg:grid-cols-[1fr_1fr_3fr]">
-      <SStatCard :label="t('usage.summary.requests')" :value="formatNumber(chartTotal || sums.requests)" icon="chart" :loading="chartLoading" />
-      <SStatCard
-        :label="t('usage.summary.cost')"
-        :value="formatMoney(sums.cost)"
-        :sub="chartTotal > CHART_LIMIT ? t('usage.summary.partial', { n: CHART_LIMIT }) : undefined"
-        icon="balance"
-        :loading="chartLoading"
-      />
-      <SCard :padded="false">
-        <div class="px-3 pt-2">
-          <SChart v-if="points.length" :option="chartOption" height="160px" :loading="chartLoading" />
-          <p v-else class="muted py-12 text-center text-sm">{{ t('common.noData') }}</p>
-        </div>
-      </SCard>
-    </div>
+    <STabs v-if="tabs.length > 1" v-model="tab" :tabs="tabs" class="mb-4" />
 
-    <div class="card overflow-hidden">
-      <UsageTable :rows="items" :loading="loading" :show-user="false" :show-account="false" :detail-path="(id: number) => `/me/usage/${id}`" />
-    </div>
-    <SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" />
+    <template v-if="tab === 'requests'">
+      <div class="mb-4 grid gap-4 lg:grid-cols-[1fr_1fr_3fr]">
+        <SStatCard :label="t('usage.summary.requests')" :value="formatNumber(chartTotal || sums.requests)" icon="chart" :loading="chartLoading" />
+        <SStatCard
+          :label="t('usage.summary.cost')"
+          :value="formatMoney(sums.cost)"
+          :sub="chartTotal > CHART_LIMIT ? t('usage.summary.partial', { n: CHART_LIMIT }) : undefined"
+          icon="balance"
+          :loading="chartLoading"
+        />
+        <SCard :padded="false">
+          <div class="px-3 pt-2">
+            <SChart v-if="points.length" :option="chartOption" height="160px" :loading="chartLoading" />
+            <p v-else class="muted py-12 text-center text-sm">{{ t('common.noData') }}</p>
+          </div>
+        </SCard>
+      </div>
+
+      <div class="card overflow-hidden">
+        <UsageTable :rows="items" :loading="loading" :show-user="false" :show-account="false" :detail-path="(id: number) => `/me/usage/${id}`" />
+      </div>
+      <SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" />
+    </template>
+
+    <MyLedgerTab v-else ref="ledgerRef" />
   </div>
 </template>

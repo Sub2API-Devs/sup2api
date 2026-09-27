@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SPageHeader, SPagination, SSelect, SStatCard } from '@sub2api/ui'
+import { SPagination, SSelect, SStatCard } from '@sub2api/ui'
 import type { LedgerEntry } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
@@ -12,7 +12,8 @@ import { rangeBounds, type RangeKey } from '@/views/usage/timeRange'
 import LedgerTable from './LedgerTable.vue'
 import { LEDGER_KINDS } from './kinds'
 
-// "Mine > Usage records": the caller's balance and their own ledger.
+// "Balance changes" tab of Mine > Usage records: the caller's balance and
+// their own ledger (GET /me/balance, GET /me/ledger).
 const { t } = useI18n()
 const auth = useAuthStore()
 
@@ -44,32 +45,29 @@ const kindOptions = computed(() => [{ value: '', label: t('common.all') }, ...LE
 
 const negative = computed(() => Number(balance.value) < 0)
 
-function refresh() {
+function reloadAll() {
   loadBalance()
   auth.refreshBalance()
   reload()
 }
+
+defineExpose({ reload: reloadAll })
 </script>
 
 <template>
   <div>
-    <SPageHeader :title="t('ledger.myTitle')" :description="t('ledger.myDescription')">
-      <template #actions>
-        <SButton @click="refresh">{{ t('common.refresh') }}</SButton>
-      </template>
-      <template #filters>
-        <div class="w-40">
-          <label class="input-label">{{ t('ledger.cols.kind') }}</label>
-          <SSelect v-model="filters.kind" :options="kindOptions" />
-        </div>
-        <TimeRangeFilter
-          v-model:range="range"
-          v-model:from="filters.from"
-          v-model:to="filters.to"
-          :keys="['all', 'today', '7d', '30d', 'month', 'custom']"
-        />
-      </template>
-    </SPageHeader>
+    <div class="mb-4 flex flex-wrap items-end gap-3">
+      <div class="w-40">
+        <label class="input-label">{{ t('ledger.cols.kind') }}</label>
+        <SSelect v-model="filters.kind" :options="kindOptions" />
+      </div>
+      <TimeRangeFilter
+        v-model:range="range"
+        v-model:from="filters.from"
+        v-model:to="filters.to"
+        :keys="['all', 'today', '7d', '30d', 'month', 'custom']"
+      />
+    </div>
 
     <div class="mb-5 grid gap-4 md:grid-cols-3">
       <SStatCard

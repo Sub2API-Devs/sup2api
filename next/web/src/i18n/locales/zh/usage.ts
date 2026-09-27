@@ -1,8 +1,12 @@
 export default {
   title: '使用记录',
   description: '网关的每一次请求及其计费过程。',
-  myTitle: '我的用量',
-  myDescription: '你的请求记录与费用。',
+  myTitle: '使用记录',
+  myDescription: '你的请求记录、费用与余额变动。',
+  tabs: {
+    requests: '请求记录',
+    ledger: '余额变动'
+  },
   range: {
     custom: '自定义'
   },

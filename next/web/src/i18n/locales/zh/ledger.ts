@@ -1,9 +1,6 @@
 export default {
   title: '余额流水',
   description: '所有用户的每一笔余额变动。',
-  myTitle: '使用记录',
-  myDescription: '当前余额与自己的每一笔余额变动。',
-  myLedger: '余额变动',
   balance: '余额',
   updatedAt: '更新于 {time}',
   negativeHint: '余额为负，新的请求会被拒绝，请先充值。',

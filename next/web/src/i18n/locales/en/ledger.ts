@@ -1,9 +1,6 @@
 export default {
   title: 'Balance ledger',
   description: 'Every balance change of every user.',
-  myTitle: 'Usage records',
-  myDescription: 'Your balance and every change to it.',
-  myLedger: 'Balance history',
   balance: 'Balance',
   updatedAt: 'Updated {time}',
   negativeHint: 'Your balance is negative; new requests are rejected until it is topped up.',

@@ -1,8 +1,12 @@
 export default {
   title: 'Usage logs',
   description: 'Every gateway request with its billing trace.',
-  myTitle: 'My usage',
-  myDescription: 'Your requests and what they cost.',
+  myTitle: 'Usage records',
+  myDescription: 'Your requests, their cost and your balance changes.',
+  tabs: {
+    requests: 'Requests',
+    ledger: 'Balance changes'
+  },
   range: {
     custom: 'Custom'
   },
