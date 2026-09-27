@@ -84,6 +84,7 @@ type Detail struct {
 // RegisterRoutes mounts the usage console API.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("GET", "/me/usage", "usage:self:read", s.myUsage)
+	r.Perm("GET", "/me/usage/summary", "usage:self:read", s.mySummary)
 	r.Perm("GET", "/me/usage/:id", "usage:self:read", s.myUsageDetail)
 	r.Perm("GET", "/usage", "usage:all:read", s.allUsage)
 	r.Perm("GET", "/usage/summary", "usage:all:read", s.summary)
@@ -295,9 +296,17 @@ type SummaryRow struct {
 
 // GET /usage/summary?from=&to=&group_by=day|model|user (default: day, last
 // 30 days). Days are UTC dates "YYYY-MM-DD"; users are keyed by id.
-func (s *Service) summary(c *gin.Context) {
+func (s *Service) summary(c *gin.Context) { s.summarize(c, nil) }
+
+// GET /me/usage/summary: the same for the caller (group_by=user refused).
+func (s *Service) mySummary(c *gin.Context) {
+	uid, _ := core.UserID(c.Request.Context())
+	s.summarize(c, &uid)
+}
+
+func (s *Service) summarize(c *gin.Context, self *int64) {
 	ctx := c.Request.Context()
-	f, err := parseFilter(c, nil)
+	f, err := parseFilter(c, self)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -312,6 +321,10 @@ func (s *Service) summary(c *gin.Context) {
 	case "model":
 		key = `u.model`
 	case "user":
+		if self != nil {
+			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day or model"))
+			return
+		}
 		key = `u.user_id::text`
 		join = ` LEFT JOIN users us ON us.id = u.user_id`
 		extra = `, COALESCE(max(us.email), '')`

@@ -2,7 +2,14 @@ export default {
   title: '使用记录',
   description: '网关的每一次请求及其计费过程。',
   myTitle: '使用记录',
-  myDescription: '你的请求记录、费用与余额变动。',
+  myDescription: '你的每一次请求与余额变动。',
+  statsTitle: '使用统计',
+  statsDescription: '按时间段统计你的请求量、Token 与费用。',
+  stats: {
+    input: '输入 Token',
+    output: '输出 Token',
+    byModel: '按模型'
+  },
   tabs: {
     requests: '请求记录',
     ledger: '余额变动'

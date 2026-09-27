@@ -26,7 +26,8 @@ export default {
     nodes: 'Cluster nodes',
     settings: 'Settings',
     myApiKeys: 'API keys',
-    myUsage: 'Usage records'
+    myUsage: 'Usage records',
+    myStats: 'Usage statistics'
   },
   balance: 'Balance',
   profile: 'Profile',

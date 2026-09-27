@@ -34,6 +34,7 @@ const children: RouteRecordRaw[] = [
   { path: 'prices/:id', component: () => import('@/views/prices/PriceEditView.vue'), meta: { perm: 'price:read', title: 'nav.items.prices' } },
   { path: 'usage', component: () => import('@/views/usage/UsageView.vue'), meta: { perm: 'usage:all:read', title: 'nav.items.usage' } },
   { path: 'me/usage', component: () => import('@/views/usage/MyUsageView.vue'), meta: { perm: 'usage:self:read', title: 'nav.items.myUsage' } },
+  { path: 'me/stats', component: () => import('@/views/usage/MyStatsView.vue'), meta: { perm: 'usage:self:read', title: 'nav.items.myStats' } },
   { path: 'ledger', component: () => import('@/views/ledger/LedgerView.vue'), meta: { perm: 'balance:all:read', title: 'nav.items.ledger' } },
   { path: 'me/ledger', redirect: { path: '/me/usage', query: { tab: 'ledger' } } },
   { path: 'me/balance', redirect: { path: '/me/usage', query: { tab: 'ledger' } } },

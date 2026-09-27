@@ -160,7 +160,7 @@
 | GET `/ledger`（`?user_id=&kind=&from=&to=`） | `balance:all:read` |
 | POST `/users/:id/balance/adjust` `{amount, credit:bool, note}`，支持请求头 `Idempotency-Key` | `balance:adjust` |
 | GET `/me/usage`，GET `/me/usage/:id`，GET `/usage`，GET `/usage/:id`（筛选参数见 §15.2；`/me/usage` 不支持 `user_id`、`account_id`、`account_type`） | `usage:self:read` / `usage:all:read` |
-| GET `/usage/summary`（`/usage` 的全部筛选参数，加 `group_by=day\|model\|user`） | `usage:all:read` |
+| GET `/usage/summary`（`/usage` 的全部筛选参数，加 `group_by=day\|model\|user`）；GET `/me/usage/summary`（限定当前用户，`group_by=day\|model`） | `usage:all:read` / `usage:self:read` |
 | GET/PUT `/settings/billing` `{missing_price_policy: reject\|free, min_balance, big_cost_warning_usd}` | `settings:read` / `settings:manage` |
 
 价格表达式校验失败时 `details.fields[].message` 为 `{en, zh}`；表达式错误额外带 `detail`（位置信息）。结算时捕获的参数、请求头和 usage 口径存在 `usage_logs.billing_detail.inputs`。
@@ -515,6 +515,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 | GET `/usage` | 分页 | `user_id`、`api_key_id`、`group_id`、`account_id`（整数）；`model`、`platform`、`billing_status`、`request_id`、`account_type`（精确匹配）；`success`；`from`、`to` | `created_at` 倒序，再 `id` 倒序 | `usage/api.go` |
 | GET `/me/usage` | 分页 | 限定当前用户；`api_key_id`、`group_id`、`model`、`platform`、`billing_status`、`request_id`、`success`、`from`、`to`（**不支持** `user_id`、`account_id`、`account_type`） | 同上 | `usage/api.go` |
 | GET `/usage/summary` | 不分页 | 同 `/usage` 的全部筛选参数，加 `group_by=day\|model\|user`（默认 `day`）；未给 `from` 时默认最近 30 天 | 按 `key` 升序 | `usage/api.go` |
+| GET `/me/usage/summary` | 不分页 | 限定当前用户；同 `/me/usage` 的筛选参数，加 `group_by=day\|model`（`user` 返回 400）；未给 `from` 时默认最近 30 天 | 按 `key` 升序 | `usage/api.go` |
 | GET `/ledger` | 分页 | `user_id`（整数）、`kind`（`usage`\|`admin_adjust`\|`plugin_credit`\|`plugin_debit`\|`refund`）、`from`、`to` | `id` 倒序 | `billing/balance.go` |
 | GET `/me/ledger` | 分页 | 限定当前用户；`kind`、`from`、`to` | `id` 倒序 | `billing/balance.go` |
 | GET `/plugins` | 分页 | 无 | `key` 升序 | `plugin/api/plugins.go` |

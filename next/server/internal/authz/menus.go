@@ -69,7 +69,8 @@ var coreMenus = []coreMenuSection{
 	}},
 	{"me", lt("Mine", "我的"), []coreMenuItem{
 		{"my-api-keys", lt("API keys", "API Key"), "key", "/me/api-keys", []string{"apikey:self:manage"}},
-		{"my-usage", lt("Usage records", "使用记录"), "chart", "/me/usage", []string{"usage:self:read"}},
+		{"my-usage", lt("Usage records", "使用记录"), "usage", "/me/usage", []string{"usage:self:read"}},
+		{"my-stats", lt("Usage statistics", "使用统计"), "chart", "/me/stats", []string{"usage:self:read"}},
 	}},
 }
 

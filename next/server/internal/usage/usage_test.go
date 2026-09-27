@@ -417,4 +417,11 @@ func TestUsageAPI(t *testing.T) {
 		t.Fatalf("summary user: %v", users)
 	}
 	f.get(f.user, "/usage/summary?group_by=week", 400)
+
+	// The self summary only sees the caller's rows and cannot group by user.
+	mine2 := f.get(f.user, "/me/usage/summary?group_by=model&from=2026-09-01T00:00:00Z", 200)["data"].([]any)
+	if len(mine2) != 1 || mine2[0].(map[string]any)["key"] != "claude-sonnet-x" || mine2[0].(map[string]any)["requests"].(float64) != 2 {
+		t.Fatalf("self summary: %v", mine2)
+	}
+	f.get(f.user, "/me/usage/summary?group_by=user", 400)
 }

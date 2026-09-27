@@ -2,7 +2,14 @@ export default {
   title: 'Usage logs',
   description: 'Every gateway request with its billing trace.',
   myTitle: 'Usage records',
-  myDescription: 'Your requests, their cost and your balance changes.',
+  myDescription: 'Each of your requests and your balance changes.',
+  statsTitle: 'Usage statistics',
+  statsDescription: 'Your requests, tokens and cost over a period.',
+  stats: {
+    input: 'Input tokens',
+    output: 'Output tokens',
+    byModel: 'By model'
+  },
   tabs: {
     requests: 'Requests',
     ledger: 'Balance changes'

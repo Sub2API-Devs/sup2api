@@ -26,7 +26,8 @@ export default {
     nodes: '集群节点',
     settings: '设置',
     myApiKeys: 'API Key',
-    myUsage: '使用记录'
+    myUsage: '使用记录',
+    myStats: '使用统计'
   },
   balance: '余额',
   profile: '个人资料',
