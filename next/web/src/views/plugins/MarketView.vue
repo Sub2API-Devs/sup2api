@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api, requestRaw } from '@sub2api/host'
-import { SBadge, SButton, SCard, SEmpty, SField, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SSelect, SSpinner, toast } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SEmpty, SField, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SRadio, SSelect, SSpinner, toast } from '@sub2api/ui'
 import type { MarketPlugin, MarketSource, MarketVersion, PluginReview, PluginSummary } from '@/api/types'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
@@ -191,9 +191,9 @@ onMounted(async () => {
         <SField :label="t('common.search')" class="w-72">
           <SInput v-model="q" :placeholder="t('plugins.market.searchPlaceholder')" />
         </SField>
-        <div v-if="hostVersion" class="self-end pb-2 text-xs muted" data-testid="market-host-version">
+        <SHint v-if="hostVersion" size="xs" class="self-end pb-2" data-testid="market-host-version">
           {{ t('plugins.market.hostVersion', { version: hostVersion }) }}
-        </div>
+        </SHint>
       </template>
     </SPageHeader>
 
@@ -213,7 +213,7 @@ onMounted(async () => {
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-2">
             <span class="font-semibold text-gray-900 dark:text-white">{{ lt(m.name) || m.key }}</span>
-            <span class="font-mono text-xs muted">{{ m.key }}</span>
+            <SHint inline size="xs" class="font-mono">{{ m.key }}</SHint>
             <span v-if="latestOf(m)" class="font-mono text-sm">v{{ latestOf(m) }}</span>
             <SBadge
               v-if="incompatible(versionOf(m, latestOf(m)))"
@@ -227,19 +227,19 @@ onMounted(async () => {
             <SBadge v-for="c in m.categories || []" :key="c" tone="gray">{{ c }}</SBadge>
           </div>
           <p v-if="m.description" class="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-gray-300">{{ lt(m.description) }}</p>
-          <p class="mt-1 text-xs muted">
+          <SHint size="xs" class="mt-1">
             {{ t('plugins.publisher') }} {{ m.publisher || '—' }}
             <template v-if="installedOf(m)">
               · {{ t('plugins.market.installedVersion', { version: installedOf(m) }) }}
               <SLink v-if="installed[m.key]" :to="`/plugins/${encodeURIComponent(m.key)}`" class="ml-1">{{ t('common.detail') }}</SLink>
             </template>
-          </p>
+          </SHint>
           <p v-if="noCompatible(m)" class="mt-1 flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
             <SIcon name="warning" class="h-3.5 w-3.5" />{{ t('plugins.market.noCompatible', { version: hostVersion || '?' }) }}
           </p>
-          <p v-else-if="stateOf(m) !== 'install' && latestCompatibleOf(m) && latestCompatibleOf(m) !== latestOf(m)" class="mt-1 text-xs muted">
+          <SHint v-else-if="stateOf(m) !== 'install' && latestCompatibleOf(m) && latestCompatibleOf(m) !== latestOf(m)" size="xs" class="mt-1">
             {{ t('plugins.market.newerIncompatible', { version: latestOf(m) }) }}
-          </p>
+          </SHint>
         </div>
         <div class="flex shrink-0 items-center gap-2">
           <template v-if="stateOf(m) === 'installed'">
@@ -267,17 +267,18 @@ onMounted(async () => {
       <template v-if="picker">
         <SHint class="mb-3">{{ t('plugins.market.pickHint') }}</SHint>
         <div class="max-h-80 space-y-2 overflow-y-auto">
-          <label
+          <!-- [&>span]:… turns SRadio's label slot into the flex row so the meta column can sit at the right edge. -->
+          <SRadio
             v-for="v in pickerVersions"
             :key="v.version"
-            class="flex items-center gap-3 rounded-lg border p-3 text-sm"
-            :class="[
-              pickVersion === v.version ? 'border-primary-400 bg-primary-50 dark:bg-primary-950/30' : 'border-gray-200 dark:border-dark-700',
-              v.version === installedOf(picker) || incompatible(v) ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
-            ]"
+            :model-value="pickVersion"
+            :value="v.version"
+            :disabled="v.version === installedOf(picker) || incompatible(v)"
+            class="!gap-3 rounded-lg border p-3 [&>span]:flex [&>span]:min-w-0 [&>span]:flex-1 [&>span]:items-center [&>span]:gap-3"
+            :class="pickVersion === v.version ? 'border-primary-400 bg-primary-50 dark:bg-primary-950/30' : 'border-gray-200 dark:border-dark-700'"
             :data-version="v.version"
+            @update:model-value="pickVersion = v.version"
           >
-            <input v-model="pickVersion" type="radio" :value="v.version" :disabled="v.version === installedOf(picker) || incompatible(v)" />
             <span class="min-w-0">
               <span class="flex flex-wrap items-center gap-1.5">
                 <span class="font-mono font-medium">v{{ v.version }}</span>
@@ -288,13 +289,13 @@ onMounted(async () => {
               </span>
               <span v-if="incompatible(v)" class="mt-0.5 block text-xs text-red-600 dark:text-red-400">{{ incompatibleReason(v) }}</span>
             </span>
-            <span class="ml-auto shrink-0 text-right text-xs muted">
+            <SHint inline size="xs" class="ml-auto shrink-0 text-right">
               <span v-if="v.host_compat">{{ t('plugins.consent.hostCompat') }} <code class="font-mono">{{ v.host_compat }}</code></span>
               <span v-if="v.size" class="ml-2">{{ formatBytes(v.size) }}</span>
-            </span>
-          </label>
+            </SHint>
+          </SRadio>
         </div>
-        <p v-if="hostVersion" class="mt-3 text-xs muted">{{ t('plugins.market.hostVersion', { version: hostVersion }) }}</p>
+        <SHint v-if="hostVersion" size="xs" class="mt-3">{{ t('plugins.market.hostVersion', { version: hostVersion }) }}</SHint>
       </template>
       <template #footer>
         <SButton @click="picker = null">{{ t('common.cancel') }}</SButton>

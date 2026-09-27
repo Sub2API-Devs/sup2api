@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge } from '@sub2api/ui'
+import { SBadge, SHint } from '@sub2api/ui'
 import type { AccountTypePlatform } from '@/api/types'
 import { lt } from '@/i18n'
 import { BUILTIN_PLATFORMS } from '@/composables/platforms'
@@ -33,23 +33,23 @@ const showTypes = computed(() => props.section !== 'platforms' && props.accountT
       <div v-for="p in platforms" :key="p.id" class="text-xs" :data-platform="p.id">
         <div class="flex flex-wrap items-center gap-1.5">
           <SBadge tone="purple">{{ lt(p.label) || p.id }}</SBadge>
-          <code class="muted font-mono">{{ p.id }}</code>
+          <SHint inline size="xs" class="font-mono">{{ p.id }}</SHint>
         </div>
         <ul v-if="p.endpoints.length" class="mt-1 space-y-0.5 pl-3">
           <li v-for="e in p.endpoints" :key="`${e.method} ${e.path}`" class="flex flex-wrap items-center gap-1.5" data-testid="plugin-platform-endpoint">
             <code class="font-mono text-gray-800 dark:text-gray-100">{{ e.method }} {{ e.path }}</code>
-            <span v-if="e.protocol" class="muted font-mono text-[11px]">{{ e.protocol }}</span>
+            <SHint v-if="e.protocol" inline size="xs" class="font-mono">{{ e.protocol }}</SHint>
             <SBadge :tone="e.billing === 'free' ? 'gray' : 'success'">{{ e.billing === 'free' ? t('platforms.free') : t('platforms.billed') }}</SBadge>
           </li>
         </ul>
-        <p v-else class="muted mt-1 pl-3">{{ t('platforms.noEndpoints') }}</p>
+        <SHint v-else size="xs" class="mt-1 pl-3">{{ t('platforms.noEndpoints') }}</SHint>
       </div>
     </div>
     <div v-if="showTypes" class="space-y-1">
       <div v-for="a in accountTypes" :key="a.id" class="flex flex-wrap items-center gap-1.5 text-xs" data-testid="plugin-account-type">
         <span class="font-medium">{{ lt(a.label) || a.id }}</span>
-        <span class="muted font-mono">({{ a.id }})</span>
-        <span class="muted">— {{ t('platforms.supported') }}:</span>
+        <SHint inline size="xs" class="font-mono">({{ a.id }})</SHint>
+        <SHint inline size="xs">— {{ t('platforms.supported') }}:</SHint>
         <PlatformBadges :items="typePlatforms(a)" empty="—" />
       </div>
     </div>

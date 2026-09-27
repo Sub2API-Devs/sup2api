@@ -2,7 +2,7 @@
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SEmpty, SField, SGrid, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SSectionTitle, SSpinner, STextarea, confirm, toast } from '@sub2api/ui'
+import { SBadge, SButton, SCheckbox, SEmpty, SField, SGrid, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SSectionTitle, SSpinner, STextarea, confirm, toast } from '@sub2api/ui'
 import type { LText, PermissionItem, PermissionModule, User } from '@/api/types'
 import { roleMemberCount, type RoleRow } from '@/api/admin'
 import { useAuthStore } from '@/stores/auth'
@@ -275,7 +275,7 @@ async function removeRole() {
 
     <div v-if="loading" class="flex justify-center py-16"><SSpinner /></div>
 
-    <div v-else class="grid gap-4 lg:grid-cols-[260px_1fr]">
+    <SGrid v-else :cols="1" lg-template="260px 1fr">
       <!-- role list -->
       <div class="card self-start p-2">
         <SEmpty v-if="!roles.length" />
@@ -293,11 +293,11 @@ async function removeRole() {
         >
           <span class="min-w-0 flex-1">
             <span class="block truncate">{{ lt(r.name) || r.key }}</span>
-            <span class="muted block truncate font-mono text-xs">{{ r.key }}</span>
+            <SHint inline size="xs" class="block truncate font-mono">{{ r.key }}</SHint>
           </span>
           <span v-if="r.superuser" class="shrink-0 text-purple-500" :title="t('roles.superuserHint')"><SIcon name="lock" class="h-4 w-4" /></span>
           <SBadge v-else-if="r.builtin" tone="gray">{{ t('roles.builtin') }}</SBadge>
-          <span v-if="roleMemberCount(r) !== undefined" class="muted shrink-0 text-xs">{{ roleMemberCount(r) }}</span>
+          <SHint v-if="roleMemberCount(r) !== undefined" inline size="xs" class="shrink-0">{{ roleMemberCount(r) }}</SHint>
         </button>
       </div>
 
@@ -306,10 +306,10 @@ async function removeRole() {
         <div class="card-header flex flex-wrap items-center justify-between gap-3">
           <div class="flex min-w-0 items-center gap-2">
             <h3 class="truncate text-base font-semibold text-gray-900 dark:text-white">{{ lt(selected.name) || selected.key }}</h3>
-            <code class="muted text-xs">{{ selected.key }}</code>
+            <SHint inline size="xs" class="font-mono">{{ selected.key }}</SHint>
             <SBadge v-if="selected.superuser" tone="purple"><SIcon name="lock" class="h-3 w-3" />{{ t('roles.superuser') }}</SBadge>
             <SBadge v-else-if="selected.builtin" tone="gray">{{ t('roles.builtin') }}</SBadge>
-            <span v-if="roleMemberCount(selected) !== undefined" class="muted text-xs">{{ t('roles.members', { n: roleMemberCount(selected) }) }}</span>
+            <SHint v-if="roleMemberCount(selected) !== undefined" inline size="xs">{{ t('roles.members', { n: roleMemberCount(selected) }) }}</SHint>
           </div>
           <div v-if="canManage" class="flex items-center gap-2">
             <SButton v-if="!selected.builtin" variant="ghost" size="sm" class="!text-red-600" @click="removeRole">
@@ -366,52 +366,54 @@ async function removeRole() {
                     <button type="button" class="flex min-w-0 flex-1 items-center gap-2 text-left" @click="toggleCollapse(m)">
                       <SIcon :name="collapsed.has(m.module) ? 'chevron-right' : 'chevron-down'" class="h-4 w-4 shrink-0 text-gray-400" />
                       <span class="truncate text-sm font-medium text-gray-900 dark:text-white">{{ lt(m.label) || m.module }}</span>
-                      <code class="muted hidden text-xs sm:inline">{{ m.module }}</code>
+                      <SHint inline size="xs" class="hidden font-mono sm:inline">{{ m.module }}</SHint>
                       <SBadge v-if="m.source === 'plugin' && m.status === 'disabled'" tone="warning">{{ t('roles.pluginDisabled') }}</SBadge>
                       <SBadge v-else-if="m.status === 'removed'" tone="gray">{{ t('roles.removed') }}</SBadge>
-                      <span class="muted ml-auto shrink-0 text-xs">{{ grantedCount(m) }}/{{ m.permissions.length }}</span>
+                      <SHint inline size="xs" class="ml-auto shrink-0">{{ grantedCount(m) }}/{{ m.permissions.length }}</SHint>
                     </button>
-                    <label class="inline-flex shrink-0 items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
-                      <input
-                        type="checkbox"
-                        class="checkbox"
-                        :checked="moduleState(m) === 'all'"
-                        :indeterminate="moduleState(m) === 'some'"
-                        :disabled="readOnly || !m.permissions.length"
-                        @change="toggleModule(m)"
-                      />
-                      {{ t('roles.selectAll') }}
-                    </label>
+                    <SCheckbox
+                      size="xs"
+                      class="shrink-0"
+                      :model-value="moduleState(m) === 'all'"
+                      :indeterminate="moduleState(m) === 'some'"
+                      :disabled="readOnly || !m.permissions.length"
+                      :label="t('roles.selectAll')"
+                      @update:model-value="toggleModule(m)"
+                    />
                   </div>
                   <div
                     v-if="!collapsed.has(m.module)"
                     class="grid gap-x-4 gap-y-2 border-t border-gray-100 px-3 py-3 sm:grid-cols-2 xl:grid-cols-3 dark:border-dark-800"
                   >
-                    <label
+                    <!-- SCheckbox's own text span fixes the colour, so the inactive tone goes on the
+                         slot content; [&>span]:min-w-0 lets the truncate inside shrink. -->
+                    <SCheckbox
                       v-for="p in m.permissions"
                       :key="p.key"
-                      class="inline-flex min-w-0 items-center gap-2 text-sm"
-                      :class="[permInactive(m, p) ? 'text-gray-400 dark:text-dark-500' : 'text-gray-700 dark:text-gray-300', readOnly ? '' : 'cursor-pointer']"
-                      :title="p.key"
+                      class="min-w-0 [&>span]:min-w-0"
+                      :model-value="isChecked(p.key)"
+                      :disabled="readOnly"
+                      @update:model-value="toggle(p.key)"
                     >
-                      <input type="checkbox" class="checkbox" :checked="isChecked(p.key)" :disabled="readOnly" @change="toggle(p.key)" />
-                      <span class="truncate">{{ lt(p.label) || p.key }}</span>
-                      <span v-if="p.sensitive" class="shrink-0 text-amber-500" :title="t('roles.sensitive')"><SIcon name="lock" class="h-3.5 w-3.5" /></span>
-                      <SBadge v-if="p.status === 'disabled' && !moduleInactive(m)" tone="warning">{{ t('roles.pluginDisabled') }}</SBadge>
-                    </label>
+                      <span class="flex min-w-0 items-center gap-2" :class="permInactive(m, p) ? 'text-gray-400 dark:text-dark-500' : ''" :title="p.key">
+                        <span class="truncate">{{ lt(p.label) || p.key }}</span>
+                        <span v-if="p.sensitive" class="shrink-0 text-amber-500" :title="t('roles.sensitive')"><SIcon name="lock" class="h-3.5 w-3.5" /></span>
+                        <SBadge v-if="p.status === 'disabled' && !moduleInactive(m)" tone="warning">{{ t('roles.pluginDisabled') }}</SBadge>
+                      </span>
+                    </SCheckbox>
                   </div>
                 </div>
               </template>
             </div>
-            <p class="muted mt-3 flex items-center gap-1 text-xs">
+            <SHint size="xs" class="mt-3 flex items-center gap-1">
               <SIcon name="lock" class="h-3.5 w-3.5 text-amber-500" />{{ t('roles.sensitiveLegend') }}
-            </p>
+            </SHint>
           </div>
 
           <!-- members -->
           <div v-if="auth.has('user:read')" class="border-t border-gray-100 pt-4 dark:border-dark-700">
             <div class="flex flex-wrap items-center gap-2 text-sm">
-              <span class="muted shrink-0">{{ t('roles.membersLabel') }}:</span>
+              <SHint inline class="shrink-0">{{ t('roles.membersLabel') }}:</SHint>
               <SSpinner v-if="membersLoading" size="sm" />
               <template v-else-if="members.length">
                 <span
@@ -420,7 +422,7 @@ async function removeRole() {
                   class="rounded-lg bg-gray-100 px-2 py-0.5 text-xs text-gray-700 dark:bg-dark-700 dark:text-gray-300"
                   :title="u.email"
                 >{{ u.display_name || u.email }}</span>
-                <span v-if="membersTotal > members.length" class="muted text-xs">{{ t('roles.moreMembers', { n: membersTotal - members.length }) }}</span>
+                <SHint v-if="membersTotal > members.length" inline size="xs">{{ t('roles.moreMembers', { n: membersTotal - members.length }) }}</SHint>
               </template>
               <SHint v-else inline>{{ t('roles.noMembers') }}</SHint>
               <SLink :to="{ path: '/users', query: { role: selected.key } }" class="ml-auto text-xs">{{ t('roles.manageMembers') }}</SLink>
@@ -429,7 +431,7 @@ async function removeRole() {
         </div>
       </div>
       <div v-else class="card"><SEmpty :text="t('roles.selectRole')" /></div>
-    </div>
+    </SGrid>
 
     <SModal v-model:open="createOpen" :title="t('roles.create')">
       <form class="space-y-4" @submit.prevent="submitCreate">

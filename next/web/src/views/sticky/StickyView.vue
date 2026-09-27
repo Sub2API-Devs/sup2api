@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SDropdown, SPageHeader, SSwitch, STable, confirm, toast, type MenuAction, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SDropdown, SHint, SPageHeader, SSwitch, STable, confirm, toast, type MenuAction, type TableColumn } from '@sub2api/ui'
 import type { StickyRule, StickyStats } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
@@ -159,7 +159,7 @@ async function toggle(r: Row, v: boolean) {
             <SBadge :tone="row.source === 'admin' ? 'primary' : 'purple'">
               {{ t(`sticky.source.${row.source}`) }}
             </SBadge>
-            <span v-if="row.plugin_key" class="muted text-xs">{{ row.plugin_key }}</span>
+            <SHint v-if="row.plugin_key" inline size="xs">{{ row.plugin_key }}</SHint>
           </div>
         </template>
         <template #cell-enabled="{ row }">
@@ -176,24 +176,24 @@ async function toggle(r: Row, v: boolean) {
               <dd class="font-mono">{{ list(row.match.userAgentContains) }}</dd>
             </template>
             <dt class="muted">{{ t('sticky.cols.keySources') }}</dt>
-            <dd class="font-mono">{{ sourcesSummary(row) || '—' }}<span v-if="row.value_regex" class="muted"> /{{ row.value_regex }}/</span></dd>
+            <dd class="font-mono">{{ sourcesSummary(row) || '—' }}<SHint v-if="row.value_regex" inline size="xs"> /{{ row.value_regex }}/</SHint></dd>
           </dl>
         </template>
         <template #cell-binding="{ row }">
           <div class="text-xs">
             <div>{{ t('sticky.cols.ttl') }}: {{ row.ttl_seconds ? t('sticky.ttlValue', { n: formatNumber(row.ttl_seconds) }) : t('sticky.ttlDefault') }}</div>
-            <div class="muted">{{ t('sticky.cols.keyIncludes') }}: {{ (row.key_includes || []).map((k) => t(`sticky.includes.${k}`)).join(' + ') || '—' }}</div>
+            <SHint size="xs">{{ t('sticky.cols.keyIncludes') }}: {{ (row.key_includes || []).map((k) => t(`sticky.includes.${k}`)).join(' + ') || '—' }}</SHint>
             <SBadge class="mt-1" :tone="row.on_failure === 'stick' ? 'warning' : 'gray'">{{ t(`sticky.onFailure.${row.on_failure}`) }}</SBadge>
           </div>
         </template>
         <template #cell-stats="{ row }">
           <div v-if="row.stats" class="text-xs">
             <div class="font-semibold text-gray-900 dark:text-white">{{ hitRate(row.stats) }}</div>
-            <div class="muted">
+            <SHint size="xs">
               {{ t('sticky.statsLine', { hits: formatNumber(row.stats.hits), misses: formatNumber(row.stats.misses), rebinds: formatNumber(row.stats.rebinds) }) }}
-            </div>
+            </SHint>
           </div>
-          <span v-else class="muted">—</span>
+          <SHint v-else inline>—</SHint>
         </template>
         <template #cell-actions="{ row }">
           <SDropdown v-if="canManage" :actions="actions(row)" @select="onAction(row, $event)" />

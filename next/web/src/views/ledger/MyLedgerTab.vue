@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SField, SPagination, SSelect, SStatCard, STimeRange } from '@sub2api/ui'
+import { SField, SGrid, SPagination, SSelect, SStatCard, STimeRange } from '@sub2api/ui'
 import type { LedgerEntry } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
@@ -67,7 +67,7 @@ defineExpose({ reload: reloadAll })
       />
     </div>
 
-    <div class="mb-5 grid gap-4 md:grid-cols-3">
+    <SGrid :cols="1" :md-cols="3" class="mb-5">
       <SStatCard
         :label="t('ledger.balance')"
         :value="formatMoney(balance)"
@@ -79,7 +79,7 @@ defineExpose({ reload: reloadAll })
       <div v-if="negative" class="card card-body text-sm text-red-600 dark:text-red-400 md:col-span-2">
         {{ t('ledger.negativeHint') }}
       </div>
-    </div>
+    </SGrid>
 
     <div class="card overflow-hidden">
       <LedgerTable :rows="items" :loading="loading" :show-user="false" />

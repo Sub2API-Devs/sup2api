@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { ApiError, api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SCode, SField, SGrid, SHint, SIcon, SInput, SPageHeader, SSpinner, SSwitch, STextarea, confirm, toast } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SCode, SField, SGrid, SHint, SIcon, SInput, SLink, SPageHeader, SRadioGroup, SSectionTitle, SSpinner, SSwitch, STextarea, confirm, toast } from '@sub2api/ui'
 import type { Price, PriceValidateResult } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
@@ -58,6 +58,8 @@ const errors = ref<Record<string, string>>({})
 const historyOpen = ref(false)
 
 const readonly = computed(() => !auth.has('price:manage'))
+const MODES = ['per_request', 'per_token', 'expression'] as const
+const modeOptions = computed(() => MODES.map((m) => ({ value: m, label: t(`prices.mode.${m}`) })))
 const isSynced = computed(() => price.value?.source === 'sync')
 const syncedNotice = computed(() => {
   const p = price.value
@@ -361,8 +363,8 @@ const title = computed(() => {
           <dt>{{ t('prices.exprHash') }}</dt>
           <dd class="flex flex-wrap items-center gap-2">
             <code class="font-mono text-xs">{{ price.expr_hash || '—' }}</code>
-            <span class="muted text-xs">v{{ price.expr_version || 1 }}</span>
-            <button v-if="price.expr_hash" class="link text-xs" @click="historyOpen = true">{{ t('prices.viewHistory') }}</button>
+            <SHint inline size="xs">v{{ price.expr_version || 1 }}</SHint>
+            <SLink v-if="price.expr_hash" as="button" class="text-xs" @click="historyOpen = true">{{ t('prices.viewHistory') }}</SLink>
           </dd>
           <template v-if="price.updated_at">
             <dt>{{ t('common.updatedAt') }}</dt>
@@ -393,13 +395,8 @@ const title = computed(() => {
             </button>
           </div>
         </template>
-        <div class="mb-4 flex flex-wrap gap-5">
-          <label v-for="m in ['per_request', 'per_token', 'expression'] as const" :key="m" class="flex items-center gap-2 text-sm">
-            <input v-model="mode" type="radio" class="checkbox !rounded-full" :value="m" :disabled="readonly" />
-            {{ t(`prices.mode.${m}`) }}
-          </label>
-        </div>
-        <p class="muted mb-4 text-xs">{{ t(`prices.modeHint.${mode}`) }}</p>
+        <SRadioGroup :model-value="mode" :options="modeOptions" inline :disabled="readonly" class="mb-4" @update:model-value="mode = $event as PriceMode" />
+        <SHint size="xs" class="mb-4">{{ t(`prices.modeHint.${mode}`) }}</SHint>
 
         <div v-if="mode === 'per_request'" class="max-w-xs">
           <SField :label="t('prices.perRequestPrice')" :error="errors['config.price']">
@@ -408,10 +405,10 @@ const title = computed(() => {
         </div>
 
         <div v-else-if="mode === 'per_token'">
-          <p class="section-title">{{ t('prices.perMillion') }}</p>
-          <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <SSectionTitle tag="p">{{ t('prices.perMillion') }}</SSectionTitle>
+          <SGrid :cols-base="2" :cols="3" :lg-cols="5" :gap="3">
             <label v-for="k in TOKEN_VARS" :key="k" class="text-xs">
-              <span class="muted">{{ t(`prices.vars.${k}`) }}</span>
+              <SHint inline size="xs">{{ t(`prices.vars.${k}`) }}</SHint>
               <SInput
                 v-model.number="perToken[k]"
                 type="number"
@@ -422,8 +419,8 @@ const title = computed(() => {
                 :disabled="readonly"
               />
             </label>
-          </div>
-          <p class="input-hint">{{ t('prices.cacheUnsetHint') }}</p>
+          </SGrid>
+          <SHint size="xs" class="mt-1">{{ t('prices.cacheUnsetHint') }}</SHint>
         </div>
 
         <template v-else>
@@ -444,13 +441,13 @@ const title = computed(() => {
         </template>
 
         <div v-if="mode !== 'expression' || exprView === 'visual'" class="mt-4">
-          <p class="muted mb-1 text-xs">{{ t('prices.generated') }}</p>
+          <SHint size="xs" class="mb-1">{{ t('prices.generated') }}</SHint>
           <SCode :text="payload.expression" />
           <template v-if="serverExpr && mode !== 'expression'">
-            <p class="muted mb-1 mt-2 text-xs">{{ t('prices.serverGenerated') }}</p>
+            <SHint size="xs" class="mb-1 mt-2">{{ t('prices.serverGenerated') }}</SHint>
             <SCode :text="serverExpr" />
           </template>
-          <p v-if="errors.expression" class="input-error-text">{{ errors.expression }}</p>
+          <SHint v-if="errors.expression" tone="danger" size="xs" class="mt-1">{{ errors.expression }}</SHint>
         </div>
       </SCard>
 

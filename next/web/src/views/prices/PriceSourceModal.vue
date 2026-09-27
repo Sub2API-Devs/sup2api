@@ -156,7 +156,7 @@ async function submit() {
             <span class="font-medium">{{ t(`prices.sources.kind.${k}`) }}</span>
           </button>
         </SGrid>
-        <p class="input-hint" data-testid="price-source-kind-hint">{{ t(`prices.sources.kindHint.${form.kind}`) }}</p>
+        <template #hint><span data-testid="price-source-kind-hint">{{ t(`prices.sources.kindHint.${form.kind}`) }}</span></template>
       </SField>
 
       <SField :label="t('common.name')" required :error="errors.name">

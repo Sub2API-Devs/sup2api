@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
+import { SButton, SCard, SHint, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
 import { formatDateTime } from '@/utils/format'
 import { notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
@@ -76,15 +76,15 @@ onMounted(load)
     <STable :columns="columns" :rows="grants" :loading="loading" row-key="permission">
       <template #cell-permission="{ row }">
         <div class="font-medium">{{ hpLabel(row.permission) }}</div>
-        <div class="font-mono text-xs muted">{{ row.permission }}</div>
-        <div v-if="te(`plugins.hpDesc.${hpKey(row.permission)}`)" class="mt-0.5 max-w-xs text-xs muted">{{ t(`plugins.hpDesc.${hpKey(row.permission)}`) }}</div>
+        <SHint size="xs" class="font-mono">{{ row.permission }}</SHint>
+        <SHint v-if="te(`plugins.hpDesc.${hpKey(row.permission)}`)" size="xs" class="mt-0.5 max-w-xs">{{ t(`plugins.hpDesc.${hpKey(row.permission)}`) }}</SHint>
       </template>
       <template #cell-risk="{ row }">
         <RiskDot :risk="riskOf(row.permission)" label />
       </template>
       <template #cell-scope="{ row }">
         <ScopeChips v-if="row.scope" :scope="row.scope" />
-        <span v-else class="muted">—</span>
+        <SHint v-else inline>—</SHint>
       </template>
       <template #cell-status="{ row }">
         <StatusBadge :status="row.status" />

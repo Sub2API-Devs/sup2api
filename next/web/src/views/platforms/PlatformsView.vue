@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge, SButton, SCard, SEmpty, SGrid, SIcon, SPageHeader, SSpinner } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SEmpty, SGrid, SHint, SIcon, SPageHeader, SSpinner } from '@sub2api/ui'
 import type { Platform } from '@/api/types'
 import { lt } from '@/i18n'
 import { usePlatforms } from '@/composables/platforms'
@@ -53,7 +53,7 @@ function methodTone(m: string) {
           <template #title>
             <span class="flex flex-wrap items-center gap-2">
               <span class="font-semibold text-gray-900 dark:text-white">{{ lt(p.label) || p.id }}</span>
-              <code class="muted font-mono text-xs">{{ p.id }}</code>
+              <SHint inline size="xs" class="font-mono">{{ p.id }}</SHint>
               <SBadge v-if="p.builtin" tone="primary">{{ t('platforms.builtin') }}</SBadge>
               <SBadge v-else tone="purple" :title="p.plugin_key || ''">
                 <RouterLink v-if="p.plugin_key && auth.has('plugin:read')" :to="`/plugins/${encodeURIComponent(p.plugin_key)}`" class="hover:underline">
@@ -87,7 +87,7 @@ function methodTone(m: string) {
               </tbody>
             </table>
           </div>
-          <p v-else class="muted text-xs">{{ t('platforms.noEndpoints') }}</p>
+          <SHint v-else size="xs">{{ t('platforms.noEndpoints') }}</SHint>
 
           <h4 class="mb-1.5 mt-4 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-dark-400">{{ t('platforms.accountTypes') }}</h4>
           <div v-if="p.account_types.length" class="flex flex-wrap gap-1.5">
@@ -98,8 +98,8 @@ function methodTone(m: string) {
               :title="`${at.plugin_key}/${at.type}`"
               data-testid="platform-account-type"
             >
-              <span class="muted">{{ accountTypes.pluginName(at.plugin_key) }}</span>
-              <span class="muted">·</span>
+              <SHint inline size="xs">{{ accountTypes.pluginName(at.plugin_key) }}</SHint>
+              <SHint inline size="xs">·</SHint>
               <span class="font-medium text-gray-800 dark:text-gray-100">{{ lt(at.label) || at.type }}</span>
             </span>
           </div>

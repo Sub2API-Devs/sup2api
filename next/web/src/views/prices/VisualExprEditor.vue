@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SButton, SHint, SInput, SSelect } from '@sub2api/ui'
+import { SButton, SGrid, SHint, SInput, SSectionTitle, SSelect } from '@sub2api/ui'
 import { CACHE_VARS, newTier, TOKEN_VARS, type MarkupRule, type VisualConfig } from './priceExpr'
 
 // Visual editor for the expression mode: len tiers + markup rules.
@@ -73,8 +73,8 @@ const paramOpOptions = computed(() => [
     <section>
       <div class="mb-2 flex items-center justify-between">
         <div>
-          <h4 class="section-title !mb-0">{{ t('prices.visual.tiers') }}</h4>
-          <p class="muted text-xs">{{ t('prices.visual.tiersHint') }}</p>
+          <SSectionTitle tag="h4" class="!mb-0">{{ t('prices.visual.tiers') }}</SSectionTitle>
+          <SHint size="xs">{{ t('prices.visual.tiersHint') }}</SHint>
         </div>
         <SButton size="sm" :disabled="disabled" @click="addTier">+ {{ t('prices.visual.addTier') }}</SButton>
       </div>
@@ -86,14 +86,14 @@ const paramOpOptions = computed(() => [
         >
           <div class="mb-2 flex flex-wrap items-center gap-3">
             <label class="flex items-center gap-2 text-sm">
-              <span class="muted">{{ t('prices.visual.tierName') }}</span>
+              <SHint inline>{{ t('prices.visual.tierName') }}</SHint>
               <SInput v-model.trim="tier.name" class="!w-40 !py-1.5" mono :disabled="disabled" />
             </label>
             <label v-if="i < model.tiers.length - 1" class="flex items-center gap-2 text-sm">
-              <span class="muted">{{ t('prices.visual.condLen') }}</span>
+              <SHint inline>{{ t('prices.visual.condLen') }}</SHint>
               <SInput v-model.number="tier.max_len" type="number" min="1" class="!w-36 !py-1.5" :disabled="disabled" />
             </label>
-            <span v-else class="muted text-sm">{{ model.tiers.length > 1 ? t('prices.visual.otherwise') : t('prices.visual.always') }}</span>
+            <SHint v-else inline>{{ model.tiers.length > 1 ? t('prices.visual.otherwise') : t('prices.visual.always') }}</SHint>
             <SButton
               v-if="model.tiers.length > 1"
               variant="ghost"
@@ -105,9 +105,9 @@ const paramOpOptions = computed(() => [
               ×
             </SButton>
           </div>
-          <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          <SGrid :cols-base="2" :cols="3" :lg-cols="6" :gap="2">
             <label v-for="k in priceKeys" :key="k" class="text-xs">
-              <span class="muted">{{ t(`prices.vars.${k}`) }}</span>
+              <SHint inline size="xs">{{ t(`prices.vars.${k}`) }}</SHint>
               <SInput
                 v-model.number="tier[k]"
                 type="number"
@@ -118,7 +118,7 @@ const paramOpOptions = computed(() => [
                 :disabled="disabled"
               />
             </label>
-          </div>
+          </SGrid>
         </div>
       </div>
     </section>
@@ -127,15 +127,15 @@ const paramOpOptions = computed(() => [
     <section>
       <div class="mb-2 flex items-center justify-between">
         <div>
-          <h4 class="section-title !mb-0">{{ t('prices.visual.rules') }}</h4>
-          <p class="muted text-xs">{{ t('prices.visual.rulesHint') }}</p>
+          <SSectionTitle tag="h4" class="!mb-0">{{ t('prices.visual.rules') }}</SSectionTitle>
+          <SHint size="xs">{{ t('prices.visual.rulesHint') }}</SHint>
         </div>
         <SButton size="sm" :disabled="disabled" @click="addRule">+ {{ t('prices.visual.addRule') }}</SButton>
       </div>
       <SHint v-if="!model.rules.length">{{ t('prices.visual.noRules') }}</SHint>
       <div class="space-y-2">
         <div v-for="(r, i) in model.rules" :key="i" class="flex flex-wrap items-center gap-2 text-sm">
-          <span class="muted">{{ t('prices.visual.when') }}</span>
+          <SHint inline>{{ t('prices.visual.when') }}</SHint>
           <SSelect class="!w-28 !py-1.5" :model-value="r.kind" :options="kindOptions" :disabled="disabled" @update:model-value="setKind(i, $event as MarkupRule['kind'])" />
           <template v-if="r.kind === 'header'">
             <SInput v-model="r.name" class="!w-44 !py-1.5" mono :placeholder="t('prices.visual.headerName')" :disabled="disabled" />
@@ -150,10 +150,10 @@ const paramOpOptions = computed(() => [
           <template v-else>
             <SInput v-model="r.tz" class="!w-44 !py-1.5" mono :placeholder="t('prices.visual.tz')" :disabled="disabled" />
             <SSelect v-model.number="r.from_hour" class="!w-24 !py-1.5" :options="hourOptions.slice(0, 24)" :disabled="disabled" />
-            <span class="muted">~</span>
+            <SHint inline>~</SHint>
             <SSelect v-model.number="r.to_hour" class="!w-24 !py-1.5" :options="hourOptions.slice(1)" :disabled="disabled" />
           </template>
-          <span class="muted ml-2">{{ t('prices.visual.multiplier') }}</span>
+          <SHint inline class="ml-2">{{ t('prices.visual.multiplier') }}</SHint>
           <SInput v-model.number="r.multiplier" type="number" min="0" step="any" class="!w-24 !py-1.5" :disabled="disabled" />
           <SButton variant="ghost" size="sm" :disabled="disabled" @click="model.rules.splice(i, 1)">×</SButton>
         </div>

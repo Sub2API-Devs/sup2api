@@ -3,7 +3,7 @@ import { computed, ref, shallowRef, triggerRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSpinner, STabs, confirm, type TabItem, type Tone } from '@sub2api/ui'
+import { SBadge, SButton, SCheckbox, SGrid, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSectionTitle, SSpinner, STabs, confirm, type TabItem, type Tone } from '@sub2api/ui'
 import type { PriceSource, PriceSyncAction, PriceSyncItem, PriceSyncPreview, PriceSyncResult } from '@/api/types'
 import { errorMessage, notifyError } from '@/utils/errors'
 import { formatDateTime, formatNumber } from '@/utils/format'
@@ -252,12 +252,12 @@ async function apply() {
     </div>
 
     <template v-else-if="preview">
-      <p class="muted mb-3 text-xs" data-testid="price-sync-fetched">
+      <SHint size="xs" class="mb-3" data-testid="price-sync-fetched">
         {{ t('prices.sync.fetchedAt', { time: formatDateTime(preview.fetched_at), total: formatNumber(preview.total) }) }}
-      </p>
+      </SHint>
 
       <!-- stats -->
-      <div class="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" data-testid="price-sync-stats">
+      <SGrid :cols-base="2" :cols="3" :lg-cols="5" :gap="3" class="mb-4" data-testid="price-sync-stats">
         <button
           v-for="s in stats"
           :key="s.key"
@@ -268,10 +268,10 @@ async function apply() {
           :data-stat="s.key"
           @click="pickStat(s.key)"
         >
-          <p class="muted text-xs">{{ t(`prices.sync.stats.${s.key}`) }}</p>
+          <SHint size="xs">{{ t(`prices.sync.stats.${s.key}`) }}</SHint>
           <p class="mt-1 text-2xl font-semibold tabular-nums" :class="s.tone">{{ formatNumber(s.value) }}</p>
         </button>
-      </div>
+      </SGrid>
 
       <div class="card overflow-hidden">
         <div class="px-4 pt-2">
@@ -285,7 +285,7 @@ async function apply() {
             {{ t('prices.sync.selectAll', { n: formatNumber(filteredSelectable.length) }) }}
           </SButton>
           <SButton size="sm" :disabled="!filteredSomeSelected" data-testid="price-sync-select-none" @click="selectNone">{{ t('prices.sync.selectNone') }}</SButton>
-          <span class="muted text-xs">{{ t('prices.sync.selectScope') }}</span>
+          <SHint inline size="xs">{{ t('prices.sync.selectScope') }}</SHint>
           <div class="ml-auto flex flex-wrap items-center gap-3">
             <span class="text-sm" data-testid="price-sync-selected">
               {{ t('prices.sync.selected', { n: formatNumber(selectedCount) }) }}
@@ -302,14 +302,13 @@ async function apply() {
             <thead>
               <tr>
                 <th class="w-10">
-                  <input
-                    type="checkbox"
-                    class="checkbox"
-                    :checked="filteredAllSelected"
+                  <SCheckbox
+                    bare
+                    :model-value="filteredAllSelected"
                     :indeterminate="!filteredAllSelected && filteredSomeSelected"
                     :disabled="!filteredSelectable.length"
                     :aria-label="t('prices.sync.selectAll', { n: filteredSelectable.length })"
-                    @change="toggleAllFiltered"
+                    @update:model-value="toggleAllFiltered()"
                   />
                 </th>
                 <th>{{ t('prices.model') }}</th>
@@ -331,13 +330,12 @@ async function apply() {
                 @click="toggle(x)"
               >
                 <td @click.stop>
-                  <input
-                    type="checkbox"
-                    class="checkbox"
-                    :checked="selected.has(x.model)"
+                  <SCheckbox
+                    bare
+                    :model-value="selected.has(x.model)"
                     :disabled="!selectable(x)"
                     :title="selectable(x) ? undefined : t('prices.sync.unchangedHint')"
-                    @change="toggle(x)"
+                    @update:model-value="toggle(x)"
                   />
                 </td>
                 <td class="font-mono text-xs">{{ x.model }}</td>
@@ -349,12 +347,12 @@ async function apply() {
                   <PriceDefSummary :def="x.incoming" :compare="x.action === 'unchanged' ? null : x.current" />
                 </td>
                 <td>
-                  <span v-if="!x.current" class="muted text-xs">{{ t('prices.sync.noCurrent') }}</span>
+                  <SHint v-if="!x.current" inline size="xs">{{ t('prices.sync.noCurrent') }}</SHint>
                   <template v-else>
                     <PriceDefSummary :def="x.current" muted />
-                    <div class="mt-0.5 flex gap-1 text-[11px]">
-                      <span class="muted">{{ x.current.source === 'sync' ? t('prices.sync.currentSync') : t('prices.sync.currentManual') }}</span>
-                      <span v-if="!x.current.enabled" class="muted">· {{ t('prices.sync.currentDisabled') }}</span>
+                    <div class="mt-0.5 flex gap-1">
+                      <SHint inline size="xs">{{ x.current.source === 'sync' ? t('prices.sync.currentSync') : t('prices.sync.currentManual') }}</SHint>
+                      <SHint v-if="!x.current.enabled" inline size="xs">· {{ t('prices.sync.currentDisabled') }}</SHint>
                     </div>
                   </template>
                 </td>
@@ -368,18 +366,18 @@ async function apply() {
 
     <SModal v-model:open="resultOpen" :title="t('prices.sync.resultTitle')" width="lg">
       <div v-if="result" class="space-y-4" data-testid="price-sync-result">
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <SGrid :cols-base="2" :cols="4" :gap="3">
           <div v-for="k in ['created', 'updated', 'unchanged'] as const" :key="k" class="rounded-lg bg-gray-50 px-3 py-2 dark:bg-dark-800">
-            <p class="muted text-xs">{{ t(`prices.sync.result.${k}`) }}</p>
+            <SHint size="xs">{{ t(`prices.sync.result.${k}`) }}</SHint>
             <p class="text-xl font-semibold tabular-nums" :data-result="k">{{ result[k] }}</p>
           </div>
           <div class="rounded-lg bg-gray-50 px-3 py-2 dark:bg-dark-800">
-            <p class="muted text-xs">{{ t('prices.sync.result.skipped') }}</p>
+            <SHint size="xs">{{ t('prices.sync.result.skipped') }}</SHint>
             <p class="text-xl font-semibold tabular-nums" :class="result.skipped.length ? 'text-amber-600' : ''" data-result="skipped">{{ result.skipped.length }}</p>
           </div>
-        </div>
+        </SGrid>
         <div v-if="result.skipped.length">
-          <p class="section-title">{{ t('prices.sync.skippedList') }}</p>
+          <SSectionTitle tag="p">{{ t('prices.sync.skippedList') }}</SSectionTitle>
           <div class="max-h-60 overflow-y-auto rounded-lg border border-gray-100 dark:border-dark-700">
             <table class="table table-dense">
               <thead>

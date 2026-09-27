@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCode, SDropdown, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSwitch, STable, STabs, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCode, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSwitch, STable, STabs, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
 import type { Account, AccountTestResult, AccountType } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
@@ -56,7 +56,8 @@ const showOrphaned = computed({
 // One select drives both ?plugin_key= and ?type= (account type identity).
 const typeFilter = computed({
   get: () => (list.filters.plugin_key && list.filters.type ? typeKey(list.filters.plugin_key, list.filters.type) : ''),
-  set: (v: string) => {
+  set: (raw: SelectOption['value']) => {
+    const v = typeof raw === 'string' ? raw : ''
     const i = v.indexOf('/')
     list.filters.plugin_key = i > 0 ? v.slice(0, i) : ''
     list.filters.type = i > 0 ? v.slice(i + 1) : ''
@@ -300,6 +301,15 @@ const statusSelectOptions = computed<SelectOption[]>(() => [
   { value: '', label: t('accounts.allStatus') },
   ...statusOptions.map((s) => ({ value: s, label: t(`accounts.status.${s}`) }))
 ])
+// Account types grouped per plugin (<optgroup>), "all types" first.
+const typeOptions = computed<SelectOption[]>(() => [
+  { value: '', label: t('accounts.allTypes') },
+  ...accountTypes.grouped.value.map((g) => ({
+    value: g.plugin_key,
+    label: lt(g.plugin_name) || g.plugin_key,
+    options: g.types.map((at) => ({ value: typeKey(at.plugin_key, at.type), label: lt(at.label) || at.type }))
+  }))
+])
 const groupOptions = computed<SelectOption[]>(() => [{ value: '', label: t('accounts.allGroups') }, ...groups.value.map((g) => ({ value: g.id, label: g.name }))])
 </script>
 
@@ -312,12 +322,7 @@ const groupOptions = computed<SelectOption[]>(() => [{ value: '', label: t('acco
         <SButton v-if="canCreate" variant="primary" data-testid="account-new" @click="openCreate"><SIcon name="plus" class="h-4 w-4" />{{ t('accounts.new') }}</SButton>
       </template>
       <template #filters>
-        <select v-model="typeFilter" class="input !w-48">
-          <option value="">{{ t('accounts.allTypes') }}</option>
-          <optgroup v-for="g in accountTypes.grouped.value" :key="g.plugin_key" :label="lt(g.plugin_name) || g.plugin_key">
-            <option v-for="at in g.types" :key="at.type" :value="typeKey(at.plugin_key, at.type)">{{ lt(at.label) || at.type }}</option>
-          </optgroup>
-        </select>
+        <SSelect v-model="typeFilter" :options="typeOptions" class="!w-48" />
         <SSelect v-model="list.filters.group_id" :options="groupOptions" class="!w-40" />
         <SSelect v-model="list.filters.status" :options="statusSelectOptions" class="!w-36" />
         <div class="relative w-64">
@@ -340,30 +345,30 @@ const groupOptions = computed<SelectOption[]>(() => [{ value: '', label: t('acco
 
     <STable :columns="columns" :rows="list.items.value" :loading="list.loading.value">
       <template #cell-name="{ row }">
-        <button class="link font-medium" @click="openDetail(row)">{{ row.name }}</button>
+        <SLink as="button" class="font-medium" @click="openDetail(row)">{{ row.name }}</SLink>
         <div v-if="row.last_used_at" class="text-xs text-gray-400">{{ t('accounts.lastUsed') }} {{ formatRelative(row.last_used_at, t) }}</div>
       </template>
       <template #cell-type="{ row }">
         <div class="whitespace-nowrap">{{ accountTypes.typeLabel(row.plugin_key, row.type, row.type_label) }}</div>
-        <div class="muted text-xs" :title="row.plugin_key">{{ accountTypes.pluginName(row.plugin_key) }}</div>
+        <SHint size="xs" :title="row.plugin_key">{{ accountTypes.pluginName(row.plugin_key) }}</SHint>
         <SBadge v-if="row.orphaned" tone="gray" class="ml-1">{{ t('accounts.status.orphaned') }}</SBadge>
       </template>
       <template #cell-groups="{ row }">{{ groupNames(row.group_ids, row.groups) }}</template>
       <template #cell-created_by="{ row }">
         <span v-if="row.created_by_email" class="text-xs" :title="row.created_by ? `#${row.created_by}` : ''">{{ row.created_by_email }}</span>
-        <span v-else-if="row.created_by" class="text-xs muted">#{{ row.created_by }}</span>
+        <SHint v-else-if="row.created_by" inline size="xs">#{{ row.created_by }}</SHint>
         <SHint v-else inline>-</SHint>
       </template>
       <template #cell-status="{ row }">
         <SBadge :tone="statusOf(row).tone" dot>{{ statusOf(row).label }}</SBadge>
-        <div v-if="statusOf(row).detail" class="mt-0.5 max-w-[16rem] truncate text-xs text-gray-500 dark:text-dark-400" :title="statusOf(row).detail">
+        <SHint v-if="statusOf(row).detail" size="xs" class="mt-0.5 max-w-[16rem] truncate" :title="statusOf(row).detail">
           {{ statusOf(row).detail }}
-        </div>
+        </SHint>
       </template>
       <template #cell-priority="{ row }">
         <span class="tabular-nums whitespace-nowrap">
           {{ row.priority }}
-          <span class="muted text-xs">· w{{ row.weight ?? 1 }}</span>
+          <SHint inline size="xs">· w{{ row.weight ?? 1 }}</SHint>
         </span>
       </template>
       <template #cell-concurrency="{ row }">
@@ -374,7 +379,7 @@ const groupOptions = computed<SelectOption[]>(() => [{ value: '', label: t('acco
       <template #cell-limits="{ row }">
         <div v-if="limitsOf(row).length" class="flex flex-wrap gap-x-2 gap-y-0.5 text-xs tabular-nums">
           <span v-for="l in limitsOf(row)" :key="l.key" :class="l.hit ? 'font-semibold text-amber-600' : ''">
-            <span class="muted">{{ l.label }}</span> {{ l.text }}
+            <SHint inline size="xs">{{ l.label }}</SHint> {{ l.text }}
           </span>
         </div>
         <SHint v-else inline>—</SHint>
@@ -457,7 +462,7 @@ const groupOptions = computed<SelectOption[]>(() => [{ value: '', label: t('acco
             <dt>{{ t('accounts.type') }}</dt>
             <dd>
               {{ accountTypes.typeLabel(detail.plugin_key, detail.type, detail.type_label) }}
-              <span class="muted text-xs">· {{ accountTypes.pluginName(detail.plugin_key) }} <span class="font-mono">({{ detail.plugin_key }}/{{ detail.type }})</span></span>
+              <SHint inline size="xs">· {{ accountTypes.pluginName(detail.plugin_key) }} <span class="font-mono">({{ detail.plugin_key }}/{{ detail.type }})</span></SHint>
             </dd>
             <template v-if="detailType">
               <dt>{{ t('platforms.supported') }}</dt>
@@ -466,12 +471,12 @@ const groupOptions = computed<SelectOption[]>(() => [{ value: '', label: t('acco
             <dt>{{ t('accounts.servesEndpoints') }}</dt>
             <dd>
               <AccountTypeEndpoints v-if="detailType" :endpoints="detailType.endpoints" />
-              <span v-else class="muted text-xs">{{ t('accounts.typeUnavailable') }}</span>
+              <SHint v-else inline size="xs">{{ t('accounts.typeUnavailable') }}</SHint>
             </dd>
             <dt>{{ t('common.status') }}</dt>
             <dd>
               <SBadge :tone="statusOf(detail).tone" dot>{{ statusOf(detail).label }}</SBadge>
-              <span v-if="statusOf(detail).detail" class="ml-2 text-xs muted">{{ statusOf(detail).detail }}</span>
+              <SHint v-if="statusOf(detail).detail" inline size="xs" class="ml-2">{{ statusOf(detail).detail }}</SHint>
             </dd>
             <dt>{{ t('accounts.groups') }}</dt>
             <dd>{{ groupNames(detail.group_ids, detail.groups) }}</dd>
@@ -485,7 +490,7 @@ const groupOptions = computed<SelectOption[]>(() => [{ value: '', label: t('acco
             <dd>
               <span v-if="limitsOf(detail).length" class="flex flex-wrap gap-x-3 gap-y-0.5 text-sm tabular-nums">
                 <span v-for="l in limitsOf(detail)" :key="l.key" :class="l.hit ? 'font-semibold text-amber-600' : ''">
-                  <span class="muted">{{ l.label }}</span> {{ l.text }}
+                  <SHint inline>{{ l.label }}</SHint> {{ l.text }}
                 </span>
               </span>
               <SHint v-else inline>—</SHint>
@@ -501,7 +506,7 @@ const groupOptions = computed<SelectOption[]>(() => [{ value: '', label: t('acco
             <dd>
               <ul v-if="detail.model_mapping && Object.keys(detail.model_mapping).length" class="space-y-0.5">
                 <li v-for="(to, from) in detail.model_mapping" :key="from" class="font-mono text-xs">
-                  {{ from }} <span class="muted">→</span> {{ to }}
+                  {{ from }} <SHint inline size="xs">→</SHint> {{ to }}
                 </li>
               </ul>
               <SHint v-else inline>—</SHint>

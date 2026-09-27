@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCheckbox, SchemaForm, SField, SGrid, SHint, SInput, SKeyValue, SModal, SSectionTitle, SSpinner, SSwitch, STextarea, toast } from '@sub2api/ui'
+import { SButton, SCheckbox, SchemaForm, SField, SGrid, SHint, SInput, SKeyValue, SLink, SModal, SSectionTitle, SSpinner, SSwitch, STextarea, toast } from '@sub2api/ui'
 import type { Account, AccountType, Price } from '@/api/types'
 import { schemaWidgets } from '@/components/schema/widgets'
 import PluginIframe from '@/components/plugin/PluginIframe.vue'
@@ -571,7 +571,7 @@ async function save() {
           <SInput v-model.number="basic.spm_limit" type="number" min="0" />
         </SField>
       </SGrid>
-      <p class="mt-2 text-xs text-gray-500 dark:text-dark-400">{{ t('accounts.spmHint') }}</p>
+      <SHint size="xs" class="mt-2">{{ t('accounts.spmHint') }}</SHint>
     </section>
 
     <!-- 模型 -->
@@ -579,20 +579,20 @@ async function save() {
       <SSectionTitle :title="t('accounts.models')">
         <template #actions>
           <div class="flex items-center gap-3">
-            <button
+            <SLink
               v-if="canFetch"
-              type="button"
-              class="link text-xs"
+              as="button"
+              class="text-xs"
               :disabled="fetching"
               data-testid="models-fetch"
               :title="t('accounts.fetchModelsHint')"
               @click="fetchModels"
             >
               {{ fetching ? t('common.loading') : t('accounts.fetchModels') }}
-            </button>
-            <button type="button" class="link text-xs" data-testid="models-text-toggle" @click="toggleModelsText">
+            </SLink>
+            <SLink as="button" class="text-xs" data-testid="models-text-toggle" @click="toggleModelsText">
               {{ modelsTextMode ? t('accounts.tagEdit') : t('accounts.textEdit') }}
-            </button>
+            </SLink>
           </div>
         </template>
       </SSectionTitle>
@@ -638,9 +638,9 @@ async function save() {
     <section class="border-t border-gray-100 pt-5 dark:border-dark-700">
       <SSectionTitle :title="t('accounts.modelMapping')">
         <template #actions>
-          <button type="button" class="link text-xs" data-testid="mapping-json-toggle" @click="toggleMappingJSON">
+          <SLink as="button" class="text-xs" data-testid="mapping-json-toggle" @click="toggleMappingJSON">
             {{ mappingJsonMode ? t('accounts.tableEdit') : t('accounts.jsonEdit') }}
-          </button>
+          </SLink>
         </template>
       </SSectionTitle>
 
@@ -717,13 +717,13 @@ async function save() {
     <!-- fetched models picker -->
     <SModal v-model:open="fetchOpen" :title="t('accounts.fetchModelsTitle', { n: fetched.length })" width="md">
       <div class="mb-2 flex items-center justify-between text-xs">
-        <span class="muted">
+        <SHint inline size="xs">
           {{ t('accounts.fetchPicked', { n: fetchPickedCount, total: fetched.length }) }}
           <span v-if="fetchedSkipped"> · {{ t('accounts.fetchSkipped', { n: fetchedSkipped }) }}</span>
-        </span>
+        </SHint>
         <span class="flex gap-2">
-          <button type="button" class="link" @click="setAllFetched(true)">{{ t('accounts.selectAll') }}</button>
-          <button type="button" class="link" @click="setAllFetched(false)">{{ t('accounts.selectNone') }}</button>
+          <SLink as="button" @click="setAllFetched(true)">{{ t('accounts.selectAll') }}</SLink>
+          <SLink as="button" @click="setAllFetched(false)">{{ t('accounts.selectNone') }}</SLink>
         </span>
       </div>
       <div class="max-h-[50vh] space-y-1 overflow-y-auto rounded-lg border border-gray-100 p-2 dark:border-dark-700" data-testid="fetched-models">

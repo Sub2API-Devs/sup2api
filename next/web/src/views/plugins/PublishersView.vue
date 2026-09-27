@@ -238,14 +238,14 @@ async function copyKey(k: PublisherKey) {
       </template>
       <template #cell-status="{ row }">
         <SBadge :tone="statusTone(row.status)" dot>{{ statusLabel(row.status) }}</SBadge>
-        <div v-if="row.revoked_at" class="muted mt-0.5 text-xs">{{ formatDateTime(row.revoked_at) }}</div>
+        <SHint v-if="row.revoked_at" size="xs" class="mt-0.5">{{ formatDateTime(row.revoked_at) }}</SHint>
       </template>
       <template #cell-keys="{ row }">
         <span v-if="row.keys">{{ activeKeys(row) }}/{{ row.keys.length }}</span>
-        <span v-else class="muted">—</span>
+        <SHint v-else inline>—</SHint>
       </template>
       <template #cell-created_at="{ row }">
-        <span class="muted">{{ formatDateTime(row.created_at) }}</span>
+        <SHint inline>{{ formatDateTime(row.created_at) }}</SHint>
       </template>
       <template #cell-actions="{ row }">
         <SDropdown :actions="rowActions(row)" @select="onAction(row, $event)" />
@@ -289,9 +289,9 @@ async function copyKey(k: PublisherKey) {
                     {{ keyStateLabel(keyState(k)) }}
                   </SBadge>
                 </td>
-                <td class="muted">{{ k.not_before ? formatDateTime(k.not_before) : '—' }}</td>
-                <td class="muted">{{ k.not_after ? formatDateTime(k.not_after) : '—' }}</td>
-                <td class="muted">{{ formatDateTime(k.created_at) }}</td>
+                <td><SHint inline>{{ k.not_before ? formatDateTime(k.not_before) : '—' }}</SHint></td>
+                <td><SHint inline>{{ k.not_after ? formatDateTime(k.not_after) : '—' }}</SHint></td>
+                <td><SHint inline>{{ formatDateTime(k.created_at) }}</SHint></td>
                 <td v-if="canManage" class="text-right">
                   <SButton v-if="k.status !== 'revoked'" variant="ghost" size="sm" class="!text-red-600" @click="revokeKey(row, k)">
                     {{ t('publishers.revoke') }}
@@ -331,12 +331,11 @@ async function copyKey(k: PublisherKey) {
           <STextarea v-model="keyForm.public_key" mono class="text-xs" :rows="2" spellcheck="false" />
         </SField>
         <SGrid>
-          <!-- datetime-local is not an SInput type; native inputs stay. -->
           <SField :label="t('publishers.notBefore')" :hint="t('common.optional')" :error="keyErrors.not_before">
-            <input v-model="keyForm.not_before" type="datetime-local" class="input" />
+            <SInput v-model="keyForm.not_before" type="datetime-local" />
           </SField>
           <SField :label="t('publishers.notAfter')" :hint="t('common.optional')" :error="keyErrors.not_after">
-            <input v-model="keyForm.not_after" type="datetime-local" class="input" />
+            <SInput v-model="keyForm.not_after" type="datetime-local" />
           </SField>
         </SGrid>
       </form>

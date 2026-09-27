@@ -64,11 +64,11 @@ function balance(v: string) {
     <template #cell-note="{ row }">
       <div class="max-w-md text-sm">
         <span v-if="row.note">{{ row.note }}</span>
-        <span v-if="row.ref_type || row.ref_id" class="muted ml-1 truncate font-mono text-xs" :title="`${row.ref_type}:${row.ref_id}`">
+        <SHint v-if="row.ref_type || row.ref_id" inline size="xs" class="ml-1 truncate font-mono" :title="`${row.ref_type}:${row.ref_id}`">
           {{ row.ref_type }}:{{ row.ref_id && row.ref_id.length > 18 ? row.ref_id.slice(0, 18) + '…' : row.ref_id }}
-        </span>
-        <span v-if="row.plugin_key" class="muted ml-1 text-xs">· {{ row.plugin_key }}</span>
-        <span v-if="row.operator_id" class="muted ml-1 text-xs">· {{ t('ledger.operator', { id: row.operator_id }) }}</span>
+        </SHint>
+        <SHint v-if="row.plugin_key" inline size="xs" class="ml-1">· {{ row.plugin_key }}</SHint>
+        <SHint v-if="row.operator_id" inline size="xs" class="ml-1">· {{ t('ledger.operator', { id: row.operator_id }) }}</SHint>
         <SHint v-if="!row.note && !row.ref_type && !row.ref_id" inline>—</SHint>
       </div>
     </template>

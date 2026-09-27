@@ -69,7 +69,7 @@ onMounted(load)
       <STable :columns="columns" :rows="deadList" expandable>
         <template #cell-event="{ row }">
           <span class="font-mono text-xs">{{ display(pick(row, 'event_type', 'type', 'event')) }}</span>
-          <span v-if="pick(row, 'event_id', 'id')" class="ml-1 text-xs muted">#{{ pick(row, 'event_id', 'id') }}</span>
+          <SHint v-if="pick(row, 'event_id', 'id')" inline size="xs" class="ml-1">#{{ pick(row, 'event_id', 'id') }}</SHint>
         </template>
         <template #cell-attempts="{ row }">{{ display(pick(row, 'attempts', 'retries')) }}</template>
         <template #cell-error="{ row }">

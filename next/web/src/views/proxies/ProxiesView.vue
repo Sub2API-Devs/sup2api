@@ -9,6 +9,7 @@ import {
   SDropdown,
   SField,
   SGrid,
+  SHint,
   SIcon,
   SInput,
   SModal,
@@ -262,9 +263,9 @@ async function onAction(p: Proxy, key: string) {
         <code class="font-mono text-xs">{{ row.host }}:{{ row.port }}</code>
       </template>
       <template #cell-auth="{ row }">
-        <span v-if="row.username" class="text-xs">{{ row.username }}<span v-if="row.has_password" class="muted"> / ••••</span></span>
-        <span v-else-if="row.has_password" class="text-xs muted">••••</span>
-        <span v-else class="muted">{{ t('common.none') }}</span>
+        <span v-if="row.username" class="text-xs">{{ row.username }}<SHint v-if="row.has_password" inline size="xs"> / ••••</SHint></span>
+        <SHint v-else-if="row.has_password" inline size="xs">••••</SHint>
+        <SHint v-else inline>{{ t('common.none') }}</SHint>
       </template>
       <template #cell-status="{ row }">
         <SBadge :tone="statusTone(row.status)" dot>{{ statusLabel(row.status) }}</SBadge>
@@ -280,18 +281,18 @@ async function onAction(p: Proxy, key: string) {
           <span v-else class="inline-flex items-center gap-1 text-red-600 dark:text-red-400">
             <SIcon name="x" class="h-3.5 w-3.5" />{{ t('proxies.failed') }}
           </span>
-          <div v-if="results[row.id].ip" class="muted">{{ t('proxies.exitIp') }}: <code>{{ results[row.id].ip }}</code></div>
-          <div v-if="results[row.id].message" class="muted max-w-xs truncate" :title="results[row.id].message">{{ results[row.id].message }}</div>
+          <SHint v-if="results[row.id].ip" size="xs">{{ t('proxies.exitIp') }}: <code>{{ results[row.id].ip }}</code></SHint>
+          <SHint v-if="results[row.id].message" size="xs" class="max-w-xs truncate" :title="results[row.id].message">{{ results[row.id].message }}</SHint>
         </div>
-        <span v-else class="muted">—</span>
+        <SHint v-else inline>—</SHint>
       </template>
       <template #cell-created_by="{ row }">
         <span v-if="row.created_by_email" class="text-xs" :title="row.created_by ? `#${row.created_by}` : ''">{{ row.created_by_email }}</span>
-        <span v-else-if="row.created_by" class="text-xs muted">#{{ row.created_by }}</span>
-        <span v-else class="muted">-</span>
+        <SHint v-else-if="row.created_by" inline size="xs">#{{ row.created_by }}</SHint>
+        <SHint v-else inline>-</SHint>
       </template>
       <template #cell-created_at="{ row }">
-        <span class="muted">{{ formatDateTime(row.created_at) }}</span>
+        <SHint inline>{{ formatDateTime(row.created_at) }}</SHint>
       </template>
       <template #cell-actions="{ row }">
         <div v-if="canEditRow(row)" class="flex items-center justify-end gap-1">
@@ -335,14 +336,14 @@ async function onAction(p: Proxy, key: string) {
             <SSelect v-model="form.protocol" :options="protocolOptions" />
           </SField>
         </SGrid>
-        <div class="grid gap-4 sm:grid-cols-[1fr_140px]">
+        <SGrid sm-template="1fr 140px">
           <SField :label="t('proxies.host')" required :error="errors.host">
             <SInput v-model="form.host" mono placeholder="10.0.0.5" />
           </SField>
           <SField :label="t('proxies.port')" required :error="errors.port">
             <SInput v-model.number="form.port" type="number" min="1" max="65535" mono />
           </SField>
-        </div>
+        </SGrid>
         <SGrid>
           <SField :label="t('proxies.username')" :hint="t('common.optional')" :error="errors.username">
             <SInput v-model="form.username" autocomplete="off" />

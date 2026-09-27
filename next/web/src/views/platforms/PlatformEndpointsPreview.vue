@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge } from '@sub2api/ui'
+import { SBadge, SHint } from '@sub2api/ui'
 import { usePlatforms } from '@/composables/platforms'
 
 // Endpoints reachable through the given platforms, grouped by platform
@@ -23,11 +23,11 @@ const groups = computed(() => platforms.endpointsOf(props.ids))
       <ul v-if="g.endpoints.length" class="mt-1 space-y-0.5 pl-1">
         <li v-for="e in max ? g.endpoints.slice(0, max) : g.endpoints" :key="`${e.method} ${e.path}`" class="flex flex-wrap items-center gap-1.5 text-xs">
           <code class="font-mono text-gray-800 dark:text-gray-100">{{ e.method }} {{ e.path }}</code>
-          <span v-if="e.billing === 'free'" class="muted text-[11px]">({{ t('platforms.free') }})</span>
+          <SHint v-if="e.billing === 'free'" inline size="xs">({{ t('platforms.free') }})</SHint>
         </li>
-        <li v-if="max && g.endpoints.length > max" class="muted text-[11px]">{{ t('platforms.moreEndpoints', { n: g.endpoints.length - max }) }}</li>
+        <li v-if="max && g.endpoints.length > max"><SHint inline size="xs">{{ t('platforms.moreEndpoints', { n: g.endpoints.length - max }) }}</SHint></li>
       </ul>
-      <p v-else class="muted mt-1 pl-1 text-[11px]">{{ g.known ? t('platforms.noEndpoints') : t('platforms.unknownEndpoints') }}</p>
+      <SHint v-else size="xs" class="mt-1 pl-1">{{ g.known ? t('platforms.noEndpoints') : t('platforms.unknownEndpoints') }}</SHint>
     </div>
   </div>
 </template>

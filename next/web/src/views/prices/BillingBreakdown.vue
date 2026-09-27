@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { SHint } from '@sub2api/ui'
 import { formatMoney, formatNumber } from '@/utils/format'
 
 // Renders a billing breakdown as produced by POST /prices/preview and stored
@@ -61,7 +62,7 @@ function display(v: unknown): string {
         {{ formatNumber(it.quantity) }} × ${{ it.rate }}/M = {{ formatMoney(it.cost, 6) }}
       </span>
       <span v-else class="font-mono text-xs">{{ formatMoney(it.cost, 6) }}</span>
-      <code v-if="it.expr" class="muted font-mono text-[11px]">{{ it.expr }}</code>
+      <SHint v-if="it.expr" inline size="xs" class="font-mono">{{ it.expr }}</SHint>
     </div>
     <dl v-if="extra.length" class="kv">
       <template v-for="[k, v] in extra" :key="k">

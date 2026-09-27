@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge, SCard, SCode } from '@sub2api/ui'
+import { SBadge, SCard, SCode, SHint } from '@sub2api/ui'
 import { lt } from '@/i18n'
 import { formatNumber } from '@/utils/format'
 import { accountTypesOf, asArray, display, pick, platformsOf, type PluginDetail } from '../pluginUtil'
@@ -118,7 +118,7 @@ function endpointText(e: Record<string, any>): string {
         </template>
       </dl>
       <details v-if="detail.manifest" class="mt-4">
-        <summary class="cursor-pointer text-xs muted">{{ t('plugins.detail.rawManifest') }}</summary>
+        <summary class="cursor-pointer"><SHint inline size="xs">{{ t('plugins.detail.rawManifest') }}</SHint></summary>
         <SCode class="mt-2 max-h-96" :text="JSON.stringify(detail.manifest, null, 2)" />
       </details>
     </SCard>
@@ -131,9 +131,9 @@ function endpointText(e: Record<string, any>): string {
             <span v-for="[s, n] in nodeStates" :key="s" class="inline-flex items-center gap-1">
               <StatusBadge :status="s" /><span class="text-xs">× {{ n }}</span>
             </span>
-            <span class="text-xs muted">{{ t('plugins.detail.nodeCount', { n: detail.nodes?.length || 0 }) }}</span>
+            <SHint inline size="xs">{{ t('plugins.detail.nodeCount', { n: detail.nodes?.length || 0 }) }}</SHint>
           </template>
-          <span v-else class="muted">—</span>
+          <SHint v-else inline>—</SHint>
         </dd>
         <dt>{{ t('plugins.detail.tabs.hooks') }}</dt>
         <dd>{{ detail.hooks?.length || 0 }}</dd>

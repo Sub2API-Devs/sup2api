@@ -14,12 +14,14 @@ import {
   SModal,
   SPageHeader,
   SPagination,
+  SRadioGroup,
   SSelect,
   STable,
   STextarea,
   confirm,
   toast,
   type MenuAction,
+  type SelectOption,
   type TableColumn
 } from '@sub2api/ui'
 import type { Role, User } from '@/api/types'
@@ -269,6 +271,10 @@ const balanceOpen = ref(false)
 const balanceUser = ref<User | null>(null)
 const balanceErrors = ref<Record<string, string>>({})
 const balanceForm = reactive({ credit: true, amount: '', note: '' })
+const directionOptions = computed<SelectOption[]>(() => [
+  { value: true, label: t('users.credit') },
+  { value: false, label: t('users.debit') }
+])
 
 function openBalance(u: User) {
   balanceUser.value = u
@@ -432,14 +438,14 @@ async function remove(u: User) {
           :key="r.key"
           class="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 px-3 py-2.5 hover:bg-gray-50 dark:border-dark-700 dark:hover:bg-dark-800"
         >
-          <input type="checkbox" class="checkbox mt-0.5" :checked="rolesSel.includes(r.key)" @change="toggleKey(rolesSel, r.key)" />
+          <SCheckbox bare class="mt-0.5" :model-value="rolesSel.includes(r.key)" @update:model-value="toggleKey(rolesSel, r.key)" />
           <div class="min-w-0">
             <div class="flex items-center gap-2 text-sm font-medium">
               {{ lt(r.name) || r.key }}
-              <code class="muted text-xs">{{ r.key }}</code>
+              <SHint inline size="xs" class="font-mono">{{ r.key }}</SHint>
               <SBadge v-if="r.superuser" tone="purple">{{ t('users.superuser') }}</SBadge>
             </div>
-            <p v-if="lt(r.description)" class="muted mt-0.5 text-xs">{{ lt(r.description) }}</p>
+            <SHint v-if="lt(r.description)" size="xs" class="mt-0.5">{{ lt(r.description) }}</SHint>
           </div>
         </label>
       </div>
@@ -469,16 +475,7 @@ async function remove(u: User) {
           <span class="ml-2 font-mono font-semibold">{{ formatMoney(balanceUser?.balance) }}</span>
         </div>
         <SField :label="t('users.direction')">
-          <div class="flex gap-6">
-            <label class="inline-flex items-center gap-2 text-sm">
-              <input v-model="balanceForm.credit" type="radio" class="checkbox !rounded-full" :value="true" />
-              {{ t('users.credit') }}
-            </label>
-            <label class="inline-flex items-center gap-2 text-sm">
-              <input v-model="balanceForm.credit" type="radio" class="checkbox !rounded-full" :value="false" />
-              {{ t('users.debit') }}
-            </label>
-          </div>
+          <SRadioGroup v-model="balanceForm.credit" inline :options="directionOptions" />
         </SField>
         <SField :label="t('users.amount')" required :hint="t('users.amountHint')" :error="balanceErrors.amount">
           <div class="relative">

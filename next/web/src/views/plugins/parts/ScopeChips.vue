@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { SHint } from '@sub2api/ui'
 import { scopeEntries } from '../pluginUtil'
 
 // Renders a permission scope ({domains:[...], fields:[...], limits:{...}}) as chips.
@@ -10,7 +11,7 @@ const entries = computed(() => scopeEntries(props.scope))
 <template>
   <div v-if="entries.length" class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
     <span v-for="e in entries" :key="e.key" class="inline-flex flex-wrap items-center gap-1">
-      <span class="muted">{{ e.key }}:</span>
+      <SHint inline size="xs">{{ e.key }}:</SHint>
       <code
         v-for="(v, i) in e.values"
         :key="i"

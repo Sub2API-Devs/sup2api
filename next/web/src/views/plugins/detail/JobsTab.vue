@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, SIcon, STable, toast, type TableColumn } from '@sub2api/ui'
+import { SButton, SCard, SHint, SIcon, STable, toast, type TableColumn } from '@sub2api/ui'
 import { formatDateTime } from '@/utils/format'
 import { notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
@@ -68,17 +68,17 @@ onMounted(load)
       </template>
       <template #cell-schedule="{ row }">
         <code class="font-mono text-xs">{{ row.schedule }}</code>
-        <div v-if="row.next_run_at" class="text-xs muted">{{ t('plugins.jobs.next') }} {{ formatDateTime(row.next_run_at) }}</div>
+        <SHint v-if="row.next_run_at" size="xs">{{ t('plugins.jobs.next') }} {{ formatDateTime(row.next_run_at) }}</SHint>
       </template>
       <template #cell-last="{ row }">
         <template v-if="row.last_run">
           <div class="flex items-center gap-2">
             <StatusBadge :status="row.last_run.status" />
-            <span class="text-xs muted">{{ row.last_run.node_id }}</span>
+            <SHint inline size="xs">{{ row.last_run.node_id }}</SHint>
           </div>
-          <div class="whitespace-nowrap text-xs muted">{{ formatDateTime(row.last_run.started_at) }}</div>
+          <SHint size="xs" class="whitespace-nowrap">{{ formatDateTime(row.last_run.started_at) }}</SHint>
         </template>
-        <span v-else class="text-xs muted">{{ t('plugins.jobs.never') }}</span>
+        <SHint v-else inline size="xs">{{ t('plugins.jobs.never') }}</SHint>
       </template>
       <template #cell-duration="{ row }">
         {{ row.last_run ? formatDuration(durationMs(row.last_run.started_at, row.last_run.finished_at)) : '—' }}

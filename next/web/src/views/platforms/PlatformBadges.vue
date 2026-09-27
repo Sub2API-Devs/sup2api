@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge } from '@sub2api/ui'
+import { SBadge, SHint } from '@sub2api/ui'
 import type { AccountTypePlatform } from '@/api/types'
 import { usePlatforms } from '@/composables/platforms'
 
@@ -36,5 +36,5 @@ const list = computed(() => {
       </SBadge>
     </span>
   </span>
-  <span v-else-if="empty" class="muted text-xs">{{ empty }}</span>
+  <SHint v-else-if="empty" inline size="xs">{{ empty }}</SHint>
 </template>

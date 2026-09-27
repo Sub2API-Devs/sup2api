@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SEmpty, SHint, SIcon, SLink, SSpinner, confirm, toast } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SCheckbox, SEmpty, SHint, SIcon, SLink, SSpinner, confirm, toast } from '@sub2api/ui'
 import type { HostPermissionReview, PluginReview, Role } from '@/api/types'
 import { lt } from '@/i18n'
 import { errorMessage, notifyError } from '@/utils/errors'
@@ -327,7 +327,7 @@ onMounted(load)
             </h1>
             <div class="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
               <span class="inline-flex items-center gap-2">
-                <span class="muted">{{ t('plugins.publisher') }}</span>
+                <SHint inline>{{ t('plugins.publisher') }}</SHint>
                 <span class="font-medium">{{ review.publisher || '—' }}</span>
                 <TrustBadge :trust="review.trust" />
               </span>
@@ -343,7 +343,7 @@ onMounted(load)
             <div v-if="capabilityIds.length" class="mt-2 flex flex-wrap gap-1">
               <SBadge v-for="c in capabilityIds" :key="c" tone="gray">{{ c }}</SBadge>
             </div>
-            <p v-if="fromCache" class="mt-2 text-xs muted">{{ t('plugins.consent.fromCache') }}</p>
+            <SHint v-if="fromCache" size="xs" class="mt-2">{{ t('plugins.consent.fromCache') }}</SHint>
           </div>
         </div>
       </SCard>
@@ -382,7 +382,7 @@ onMounted(load)
             <SBadge v-for="p in review.diff.widened" :key="p" tone="warning">{{ hpLabel(p) }}</SBadge>
           </div>
           <div v-if="review.diff.removed?.length" class="flex flex-wrap items-center gap-1.5">
-            <span class="w-24 shrink-0 font-medium muted">− {{ t('plugins.consent.diffRemoved') }}</span>
+            <SHint inline class="w-24 shrink-0 font-medium">− {{ t('plugins.consent.diffRemoved') }}</SHint>
             <SBadge v-for="p in review.diff.removed" :key="p" tone="gray"><span class="line-through">{{ hpLabel(p) }}</span></SBadge>
           </div>
           <SHint v-if="!review.diff.added?.length && !review.diff.widened?.length && !review.diff.removed?.length">
@@ -420,21 +420,21 @@ onMounted(load)
               <li v-for="(h, i) in review.hooks" :key="i" class="text-xs">
                 <div>
                   <span class="font-mono font-medium">{{ h.point }}</span>
-                  <span v-if="h.id" class="muted"> #{{ h.id }}</span>
-                  <span class="muted"> — {{ hookMatch(h) }}</span>
+                  <SHint v-if="h.id" inline size="xs"> #{{ h.id }}</SHint>
+                  <SHint inline size="xs"> — {{ hookMatch(h) }}</SHint>
                 </div>
                 <div class="mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5">
                   <span v-if="hookNeeds(h).length">
-                    <span class="muted">{{ t('plugins.consent.reads') }}{{ colon }}</span>{{ hookNeeds(h).map(fieldLabel).join(listSep) }}
+                    <SHint inline size="xs">{{ t('plugins.consent.reads') }}{{ colon }}</SHint>{{ hookNeeds(h).map(fieldLabel).join(listSep) }}
                   </span>
                   <span v-if="pick(h, 'maxPromptBytes', 'max_prompt_bytes')">
-                    <span class="muted">{{ t('plugins.consent.maxPrompt') }}{{ colon }}</span>{{ formatBytes(Number(pick(h, 'maxPromptBytes', 'max_prompt_bytes'))) }}
+                    <SHint inline size="xs">{{ t('plugins.consent.maxPrompt') }}{{ colon }}</SHint>{{ formatBytes(Number(pick(h, 'maxPromptBytes', 'max_prompt_bytes'))) }}
                   </span>
                   <span v-if="pick(h, 'timeoutMs', 'timeout_ms')">
-                    <span class="muted">{{ t('plugins.consent.timeout') }}{{ colon }}</span>{{ pick(h, 'timeoutMs', 'timeout_ms') }}ms
+                    <SHint inline size="xs">{{ t('plugins.consent.timeout') }}{{ colon }}</SHint>{{ pick(h, 'timeoutMs', 'timeout_ms') }}ms
                   </span>
                   <span v-if="hookFailure(h)">
-                    <span class="muted">{{ t('plugins.consent.onFailure') }}{{ colon }}</span>
+                    <SHint inline size="xs">{{ t('plugins.consent.onFailure') }}{{ colon }}</SHint>
                     <span :class="h.failure === 'closed' ? 'text-red-600 dark:text-red-400' : ''">{{ hookFailure(h) }}</span>
                   </span>
                 </div>
@@ -451,7 +451,7 @@ onMounted(load)
             <span class="font-medium">{{ t('plugins.consent.jobs') }}{{ colon }}</span>
             <span v-for="(j, i) in review.jobs" :key="i" class="mr-3 text-xs">
               <span class="font-mono">{{ j.id }}</span>
-              <span class="muted"> ({{ j.schedule }})</span>
+              <SHint inline size="xs"> ({{ j.schedule }})</SHint>
             </span>
           </li>
 
@@ -461,7 +461,7 @@ onMounted(load)
               <li v-for="(r, i) in review.routes" :key="i" class="text-xs">
                 <span class="font-mono">{{ routeText(r) }}</span>
                 <SBadge v-if="r.scope" class="ml-2" :tone="r.scope === 'public' || r.scope === 'webhook' ? 'warning' : 'gray'">{{ r.scope }}</SBadge>
-                <span v-if="r.permission" class="ml-2 muted">{{ r.permission }}</span>
+                <SHint v-if="r.permission" inline size="xs" class="ml-2">{{ r.permission }}</SHint>
               </li>
             </ul>
           </li>
@@ -483,17 +483,11 @@ onMounted(load)
               </li>
             </ul>
             <div v-if="roles.length" class="mt-2 pl-4">
-              <div class="text-xs muted">{{ t('plugins.consent.grantToRoles') }}</div>
+              <SHint size="xs">{{ t('plugins.consent.grantToRoles') }}</SHint>
               <div class="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-                <label v-for="r in roles" :key="r.key" class="inline-flex items-center gap-1.5 text-xs">
-                  <input
-                    type="checkbox"
-                    class="checkbox"
-                    :checked="roleKeys.includes(r.key)"
-                    @change="toggleRole(r.key, ($event.target as HTMLInputElement).checked)"
-                  />
+                <SCheckbox v-for="r in roles" :key="r.key" size="xs" :model-value="roleKeys.includes(r.key)" @update:model-value="toggleRole(r.key, $event)">
                   {{ lt(r.name) || r.key }}
-                </label>
+                </SCheckbox>
               </div>
             </div>
           </li>
@@ -504,7 +498,7 @@ onMounted(load)
               schema <code class="font-mono">{{ review.database.schema }}</code>{{ listSep }}{{ t('plugins.consent.migrations', { n: review.database.migrations?.length || 0 }) }}
             </span>
             <details v-if="review.database.migrations?.length" class="mt-1 pl-4 text-xs">
-              <summary class="cursor-pointer muted">{{ t('plugins.consent.showMigrations') }}</summary>
+              <summary class="cursor-pointer"><SHint inline size="xs">{{ t('plugins.consent.showMigrations') }}</SHint></summary>
               <ul class="mt-1 font-mono">
                 <li v-for="m in review.database.migrations" :key="m">{{ m }}</li>
               </ul>
@@ -541,7 +535,7 @@ onMounted(load)
             <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-2">
                 <span class="font-medium text-gray-900 dark:text-white">{{ hpLabel(row.id) }}</span>
-                <code class="font-mono text-xs muted">{{ row.id }}</code>
+                <SHint inline size="xs" class="font-mono">{{ row.id }}</SHint>
                 <SBadge :tone="row.risk === 'critical' ? 'danger' : row.risk === 'high' ? 'warning' : row.risk === 'medium' ? 'warning' : 'success'">
                   {{ t(`plugins.risk.${row.risk}`) }}
                 </SBadge>
@@ -549,7 +543,7 @@ onMounted(load)
                 <SBadge v-if="row.diffTag === 'added'" tone="danger">{{ t('plugins.consent.diffAdded') }}</SBadge>
                 <SBadge v-if="row.diffTag === 'widened'" tone="warning">{{ t('plugins.consent.diffWidened') }}</SBadge>
               </div>
-              <p v-if="te(`plugins.hpDesc.${hpKey(row.id)}`)" class="mt-0.5 text-xs muted" :data-hp-desc="row.id">{{ t(`plugins.hpDesc.${hpKey(row.id)}`) }}</p>
+              <SHint v-if="te(`plugins.hpDesc.${hpKey(row.id)}`)" size="xs" class="mt-0.5" :data-hp-desc="row.id">{{ t(`plugins.hpDesc.${hpKey(row.id)}`) }}</SHint>
               <p v-if="row.reason" class="mt-0.5 text-sm text-gray-600 dark:text-gray-300">{{ lt(row.reason) }}</p>
               <p v-if="row.risk === 'critical'" class="mt-0.5 text-xs text-red-600 dark:text-red-400">
                 {{ te(`plugins.hpWarn.${hpKey(row.id)}`) ? t(`plugins.hpWarn.${hpKey(row.id)}`) : t('plugins.consent.criticalWarn') }}
@@ -561,15 +555,8 @@ onMounted(load)
               </p>
             </div>
             <div class="shrink-0 pt-0.5">
-              <span v-if="row.locked" class="text-xs muted">{{ t('plugins.consent.auto') }}</span>
-              <input
-                v-else
-                type="checkbox"
-                class="checkbox h-5 w-5"
-                :checked="!!checked[row.id]"
-                :disabled="!row.allowed"
-                @change="toggle(row, ($event.target as HTMLInputElement).checked)"
-              />
+              <SHint v-if="row.locked" inline size="xs">{{ t('plugins.consent.auto') }}</SHint>
+              <SCheckbox v-else bare class="h-5 w-5" :model-value="!!checked[row.id]" :disabled="!row.allowed" @update:model-value="toggle(row, $event)" />
             </div>
           </li>
         </ul>

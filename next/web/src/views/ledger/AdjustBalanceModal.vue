@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SField, SInput, SModal, STextarea, toast } from '@sub2api/ui'
+import { SButton, SField, SHint, SInput, SModal, SRadioGroup, STextarea, toast, type SelectOption } from '@sub2api/ui'
 import type { User } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { fieldErrors, notifyError } from '@/utils/errors'
@@ -19,6 +19,10 @@ const query = ref('')
 const results = ref<User[]>([])
 const selected = ref<User | null>(null)
 const credit = ref(true)
+const directionOptions = computed<SelectOption[]>(() => [
+  { value: true, label: t('ledger.adjust.credit') },
+  { value: false, label: t('ledger.adjust.debit') }
+])
 const amount = ref('')
 const note = ref('')
 const errors = ref<Record<string, string>>({})
@@ -121,35 +125,26 @@ async function submit() {
           <div v-if="results.length" class="dropdown absolute left-0 right-0 z-10 mt-1">
             <div v-for="u in results" :key="u.id" class="dropdown-item" @mousedown.prevent="pick(u)">
               <span>{{ u.email }}</span>
-              <span class="muted ml-2 text-xs">#{{ u.id }} {{ u.display_name }}</span>
+              <SHint inline size="xs" class="ml-2">#{{ u.id }} {{ u.display_name }}</SHint>
             </div>
           </div>
         </div>
-        <p v-if="userId" class="muted mt-1 text-xs">{{ t('ledger.adjust.target', { id: userId }) }}</p>
+        <SHint v-if="userId" size="xs" class="mt-1">{{ t('ledger.adjust.target', { id: userId }) }}</SHint>
       </SField>
       <SField :label="t('ledger.adjust.direction')">
-        <div class="flex gap-5 pt-1">
-          <label class="flex items-center gap-2 text-sm">
-            <input v-model="credit" type="radio" class="checkbox !rounded-full" :value="true" />
-            {{ t('ledger.adjust.credit') }}
-          </label>
-          <label class="flex items-center gap-2 text-sm">
-            <input v-model="credit" type="radio" class="checkbox !rounded-full" :value="false" />
-            {{ t('ledger.adjust.debit') }}
-          </label>
-        </div>
+        <SRadioGroup v-model="credit" inline class="pt-1" :options="directionOptions" />
       </SField>
       <SField :label="t('ledger.adjust.amount')" :error="errors.amount" required>
         <div class="flex items-center gap-2">
           <span class="font-mono text-lg" :class="credit ? 'text-emerald-600' : 'text-red-600'">{{ credit ? '+' : '-' }}</span>
           <SInput v-model="amount" mono inputmode="decimal" placeholder="20.00" />
-          <span class="muted">USD</span>
+          <SHint inline>USD</SHint>
         </div>
       </SField>
       <SField :label="t('common.note')" :error="errors.note">
         <STextarea v-model="note" :rows="2" :placeholder="t('ledger.adjust.notePlaceholder')" />
       </SField>
-      <p class="muted text-xs">{{ t('ledger.adjust.stepUpHint') }}</p>
+      <SHint size="xs">{{ t('ledger.adjust.stepUpHint') }}</SHint>
     </div>
     <template #footer>
       <SButton @click="emit('update:open', false)">{{ t('common.cancel') }}</SButton>

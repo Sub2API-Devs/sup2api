@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge } from '@sub2api/ui'
+import { SBadge, SHint } from '@sub2api/ui'
 import type { AccountTypeEndpoint } from '@/api/types'
 import { usePlatforms } from '@/composables/platforms'
 
@@ -34,7 +34,7 @@ const byPlatform = computed(() => {
       <ul class="space-y-0.5">
         <li v-for="e in g.items" :key="`${e.method} ${e.path}`" class="flex flex-wrap items-center gap-1.5 text-xs">
           <code class="font-mono text-gray-700 dark:text-gray-200">{{ e.method }} {{ e.path }}</code>
-          <span v-if="!compact" class="muted font-mono text-[11px]">{{ e.protocol }}</span>
+          <SHint v-if="!compact" inline size="xs" class="font-mono">{{ e.protocol }}</SHint>
           <SBadge v-if="!e.native" tone="warning" :title="t('platforms.convertedHint', { protocol: e.protocol })">{{ t('platforms.converted') }}</SBadge>
         </li>
       </ul>

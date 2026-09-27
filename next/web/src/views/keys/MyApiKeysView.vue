@@ -205,8 +205,7 @@ async function remove(k: ApiKey) {
           </template>
         </div>
         <SField :label="t('apikeys.expiresAt')" :hint="t('apikeys.expiresHint')" :error="errors.expires_at">
-          <!-- datetime-local is not supported by SInput -->
-          <input v-model="form.expires_at" type="datetime-local" class="input" />
+          <SInput v-model="form.expires_at" type="datetime-local" />
         </SField>
       </form>
       <template #footer>

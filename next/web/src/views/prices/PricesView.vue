@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SField, SInput, SLink, SPageHeader, SPagination, SSelect, SSwitch, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SField, SHint, SInput, SLink, SPageHeader, SPagination, SSelect, SSwitch, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
 import type { Price } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
@@ -177,7 +177,7 @@ async function remove(p: Price) {
       <STable :columns="columns" :rows="rows" :loading="loading">
         <template #cell-model="{ row }">
           <SLink :to="`/prices/${row.id}`" class="font-mono text-sm">{{ row.model }}</SLink>
-          <p v-if="row.note" class="muted truncate text-xs">{{ row.note }}</p>
+          <SHint v-if="row.note" size="xs" class="truncate">{{ row.note }}</SHint>
         </template>
         <template #cell-mode="{ row }">
           <SBadge :tone="modeTone(row.mode)">{{ t(`prices.mode.${row.mode}`) }}</SBadge>
@@ -190,7 +190,7 @@ async function remove(p: Price) {
             </span>
             <span v-else-if="s.kind === 'visual'" class="text-sm">
               {{ t('prices.summary.visual', { tiers: s.tiers, rules: s.rules }) }}
-              <span v-if="s.tierNames.length > 1" class="muted text-xs">({{ s.tierNames.join(' / ') }})</span>
+              <SHint v-if="s.tierNames.length > 1" inline size="xs">({{ s.tierNames.join(' / ') }})</SHint>
             </span>
             <span v-else class="block max-w-md truncate font-mono text-xs text-gray-500" :title="row.expression">
               {{ t('prices.summary.custom') }} · {{ row.expression }}

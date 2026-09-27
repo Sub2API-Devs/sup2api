@@ -50,10 +50,10 @@ const isOpen = (at: AccountType) => !!expanded.value[typeKey(at.plugin_key, at.t
           <PluginAvatar :name="lt(at.plugin_name) || at.plugin_key" :plugin-key="at.plugin_key" size="sm" />
           <div class="min-w-0 flex-1">
             <div class="truncate font-medium text-gray-900 dark:text-white">{{ lt(at.label) || at.type }}</div>
-            <div class="muted truncate text-xs">
+            <SHint size="xs" class="truncate">
               {{ lt(at.plugin_name) || at.plugin_key }}
               <span class="font-mono">{{ at.plugin_version ? `v${at.plugin_version}` : '' }}</span>
-            </div>
+            </SHint>
           </div>
           <TrustBadge v-if="at.trust" :trust="at.trust" />
         </div>
@@ -62,19 +62,19 @@ const isOpen = (at: AccountType) => !!expanded.value[typeKey(at.plugin_key, at.t
           <PlatformBadges :items="at.platforms" :empty="'—'" />
         </div>
 
-        <p v-if="at.description" class="line-clamp-2 text-xs text-gray-500 dark:text-dark-400">{{ lt(at.description) }}</p>
+        <SHint v-if="at.description" size="xs" class="line-clamp-2">{{ lt(at.description) }}</SHint>
 
         <div class="mt-auto border-t border-gray-100 pt-2 dark:border-dark-700">
-          <button
-            type="button"
-            class="link text-xs"
+          <SLink
+            as="button"
+            class="text-xs"
             data-testid="type-endpoints-toggle"
             :aria-expanded="isOpen(at)"
             @click.stop="toggle(at)"
           >
             {{ t('accounts.endpointCount', { n: at.endpoints.length }) }}
             <span aria-hidden="true">{{ isOpen(at) ? '▴' : '▾' }}</span>
-          </button>
+          </SLink>
           <div v-if="isOpen(at)" class="mt-1.5" @click.stop>
             <AccountTypeEndpoints :endpoints="at.endpoints" compact />
           </div>

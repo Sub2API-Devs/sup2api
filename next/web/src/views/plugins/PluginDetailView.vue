@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
-import { SBadge, SButton, SCard, SDropdown, SEmpty, SHint, SIcon, SLink, SModal, SPageHeader, SSpinner, STabs, confirm, type MenuAction, type TabItem } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SDropdown, SEmpty, SHint, SIcon, SLink, SModal, SPageHeader, SRadio, SSpinner, STabs, confirm, type MenuAction, type TabItem } from '@sub2api/ui'
 import type { Rollout } from '@/api/types'
 import { lt } from '@/i18n'
 import { errorMessage, notifyError } from '@/utils/errors'
@@ -211,9 +211,9 @@ onMounted(load)
           <SBadge v-if="detail.builtin" tone="info" :title="t('plugins.builtinHint')">{{ t('plugins.builtin') }}</SBadge>
         </template>
         <template #actions>
-          <RouterLink v-if="inRollout" :to="`/plugins/${encodeURIComponent(detail.key)}/rollout`" class="btn btn-secondary btn-md">
+          <SButton v-if="inRollout" :to="`/plugins/${encodeURIComponent(detail.key)}/rollout`">
             <SSpinner size="sm" />{{ t('plugins.detail.viewRollout') }}
-          </RouterLink>
+          </SButton>
           <template v-if="canManage">
             <SButton
               v-if="status === 'installed' || status === 'disabled'"
@@ -270,9 +270,9 @@ onMounted(load)
         <span class="inline-flex items-center gap-2">
           <SIcon name="shield" class="h-5 w-5" />{{ t('plugins.detail.pendingConsent', { version: v.version }) }}
         </span>
-        <RouterLink v-if="auth.has('plugin:install')" :to="consentPath(detail.key, v.version)" class="btn btn-primary btn-sm">
+        <SButton v-if="auth.has('plugin:install')" :to="consentPath(detail.key, v.version)" variant="primary" size="sm">
           {{ t('plugins.list.review') }}
-        </RouterLink>
+        </SButton>
       </div>
 
       <STabs v-model="tab" :tabs="tabs" class="mb-4" />
@@ -292,15 +292,17 @@ onMounted(load)
       <SModal v-model:open="upgradeOpen" :title="t('plugins.detail.upgradeTitle', { name })" width="sm">
         <SHint class="mb-3">{{ t('plugins.detail.upgradeHint', { version: detail.active_version || '—' }) }}</SHint>
         <div class="space-y-2">
-          <label
+          <SRadio
             v-for="v in approvedUpgrades"
             :key="v.version"
-            class="flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm"
+            :model-value="upgradeVersion"
+            :value="v.version"
+            class="!gap-3 rounded-lg border p-3"
             :class="upgradeVersion === v.version ? 'border-primary-400 bg-primary-50 dark:bg-primary-950/30' : 'border-gray-200 dark:border-dark-700'"
+            @update:model-value="upgradeVersion = v.version"
           >
-            <input v-model="upgradeVersion" type="radio" :value="v.version" />
             <span class="font-mono">v{{ v.version }}</span>
-          </label>
+          </SRadio>
         </div>
         <template #footer>
           <SButton @click="upgradeOpen = false">{{ t('common.cancel') }}</SButton>

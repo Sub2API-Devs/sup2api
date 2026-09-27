@@ -1,13 +1,28 @@
 <script setup lang="ts">
 // Responsive grid: `colsBase` columns on phones (1), `cols` from sm: up;
 // md/lg/xl props override per breakpoint. `template` sets an arbitrary
-// grid-template-columns (e.g. '1fr 140px') via inline style and disables the
-// cols classes. Numbers map to literal class strings so Tailwind sees them
-// when scanning this file.
+// grid-template-columns (e.g. '1fr 140px') via inline style at every width
+// and disables the cols classes; `smTemplate`/`mdTemplate`/`lgTemplate`/
+// `xlTemplate` apply one from that breakpoint up (below it the cols classes
+// still apply, so phones stay single-column). Numbers map to literal class
+// strings so Tailwind sees them when scanning this file; the breakpoint
+// templates go through CSS variables for the same reason.
 import { computed } from 'vue'
 
 const props = withDefaults(
-  defineProps<{ cols?: number; colsBase?: number; mdCols?: number; lgCols?: number; xlCols?: number; gap?: 2 | 3 | 4 | 6; template?: string }>(),
+  defineProps<{
+    cols?: number
+    colsBase?: number
+    mdCols?: number
+    lgCols?: number
+    xlCols?: number
+    gap?: 2 | 3 | 4 | 6
+    template?: string
+    smTemplate?: string
+    mdTemplate?: string
+    lgTemplate?: string
+    xlTemplate?: string
+  }>(),
   { cols: 2, colsBase: 1, gap: 4 }
 )
 
@@ -18,19 +33,28 @@ const LG: Record<number, string> = { 1: 'lg:grid-cols-1', 2: 'lg:grid-cols-2', 3
 const XL: Record<number, string> = { 1: 'xl:grid-cols-1', 2: 'xl:grid-cols-2', 3: 'xl:grid-cols-3', 4: 'xl:grid-cols-4', 5: 'xl:grid-cols-5', 6: 'xl:grid-cols-6' }
 const GAP: Record<number, string> = { 2: 'gap-2', 3: 'gap-3', 4: 'gap-4', 6: 'gap-6' }
 
+// A breakpoint template replaces the numeric class of that breakpoint.
 const cls = computed(() => [
   GAP[props.gap] ?? 'gap-4',
   ...(props.template
     ? []
     : [
         BASE[props.colsBase] ?? 'grid-cols-1',
-        SM[props.cols] ?? 'sm:grid-cols-2',
-        props.mdCols ? MD[props.mdCols] : '',
-        props.lgCols ? LG[props.lgCols] : '',
-        props.xlCols ? XL[props.xlCols] : ''
+        props.smTemplate ? 'sm:grid-cols-[var(--s-grid-sm)]' : (SM[props.cols] ?? 'sm:grid-cols-2'),
+        props.mdTemplate ? 'md:grid-cols-[var(--s-grid-md)]' : props.mdCols ? MD[props.mdCols] : '',
+        props.lgTemplate ? 'lg:grid-cols-[var(--s-grid-lg)]' : props.lgCols ? LG[props.lgCols] : '',
+        props.xlTemplate ? 'xl:grid-cols-[var(--s-grid-xl)]' : props.xlCols ? XL[props.xlCols] : ''
       ])
 ])
-const style = computed(() => (props.template ? { gridTemplateColumns: props.template } : undefined))
+const style = computed(() => {
+  if (props.template) return { gridTemplateColumns: props.template }
+  const s: Record<string, string> = {}
+  if (props.smTemplate) s['--s-grid-sm'] = props.smTemplate
+  if (props.mdTemplate) s['--s-grid-md'] = props.mdTemplate
+  if (props.lgTemplate) s['--s-grid-lg'] = props.lgTemplate
+  if (props.xlTemplate) s['--s-grid-xl'] = props.xlTemplate
+  return Object.keys(s).length ? s : undefined
+})
 </script>
 
 <template>

@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SField, SInput, SModal, SIcon, toast } from '@sub2api/ui'
+import { SButton, SCheckbox, SField, SHint, SInput, SModal, SIcon, toast } from '@sub2api/ui'
 import type { UninstallResult } from '@/api/types'
 import { notifyError } from '@/utils/errors'
 
@@ -73,26 +73,24 @@ function close() {
     </div>
     <div v-else class="space-y-4 text-sm">
       <p>{{ t('plugins.uninstall.body') }}</p>
-      <label
-        class="flex items-start gap-2 rounded-lg border p-3"
+      <SCheckbox
+        v-model="purge"
+        class="!items-start rounded-lg border p-3"
         :class="purge ? 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/30' : 'border-gray-200 dark:border-dark-700'"
+        data-testid="uninstall-purge"
       >
-        <input v-model="purge" type="checkbox" class="checkbox mt-0.5" data-testid="uninstall-purge" />
-        <span>
-          <span class="font-medium">{{ t('plugins.uninstall.purge', { schema: 'plg_' + pluginKey }) }}</span>
-          <span class="mt-0.5 block text-xs muted">{{ t('plugins.uninstall.purgeHint') }}</span>
-        </span>
-      </label>
-      <label
-        class="flex items-start gap-2 rounded-lg border p-3"
+        <span class="font-medium">{{ t('plugins.uninstall.purge', { schema: 'plg_' + pluginKey }) }}</span>
+        <SHint inline size="xs" class="mt-0.5 block">{{ t('plugins.uninstall.purgeHint') }}</SHint>
+      </SCheckbox>
+      <SCheckbox
+        v-model="purgeAccounts"
+        class="!items-start rounded-lg border p-3"
         :class="purgeAccounts ? 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/30' : 'border-gray-200 dark:border-dark-700'"
+        data-testid="uninstall-purge-accounts"
       >
-        <input v-model="purgeAccounts" type="checkbox" class="checkbox mt-0.5" data-testid="uninstall-purge-accounts" />
-        <span>
-          <span class="font-medium">{{ t('plugins.uninstall.purgeAccounts') }}</span>
-          <span class="mt-0.5 block text-xs muted">{{ t('plugins.uninstall.purgeAccountsHint') }}</span>
-        </span>
-      </label>
+        <span class="font-medium">{{ t('plugins.uninstall.purgeAccounts') }}</span>
+        <SHint inline size="xs" class="mt-0.5 block">{{ t('plugins.uninstall.purgeAccountsHint') }}</SHint>
+      </SCheckbox>
       <p v-if="purge" class="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
         <SIcon name="warning" class="h-4 w-4" />{{ t('plugins.uninstall.purgeWarn') }}
       </p>

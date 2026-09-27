@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SIcon } from '@sub2api/ui'
+import { SHint, SIcon } from '@sub2api/ui'
 import type { Group } from '@/api/types'
 import PlatformBadges from './PlatformBadges.vue'
 
@@ -24,7 +24,7 @@ const noAccounts = computed(() => props.group.account_count === 0)
     </p>
     <template v-else>
       <PlatformBadges :ids="ids" />
-      <p v-if="hint" class="muted mt-1 text-xs">{{ t('platforms.groupHint') }}</p>
+      <SHint v-if="hint" size="xs" class="mt-1">{{ t('platforms.groupHint') }}</SHint>
     </template>
   </div>
 </template>

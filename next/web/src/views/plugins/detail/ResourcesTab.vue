@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, SField, SInput, toast } from '@sub2api/ui'
+import { SButton, SCard, SField, SHint, SInput, toast } from '@sub2api/ui'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
 import { lt } from '@/i18n'
@@ -98,10 +98,10 @@ async function save() {
   <SCard :title="t('plugins.detail.tabs.resources')" :subtitle="t('plugins.resources.hint')">
     <table class="w-full max-w-2xl text-sm">
       <thead>
-        <tr class="text-left text-xs muted">
-          <th class="py-2 font-medium">{{ t('plugins.resources.item') }}</th>
-          <th class="py-2 font-medium">{{ t('plugins.resources.requested') }}</th>
-          <th class="py-2 font-medium">{{ t('plugins.resources.effective') }}</th>
+        <tr class="text-left">
+          <th class="py-2 font-medium"><SHint inline size="xs">{{ t('plugins.resources.item') }}</SHint></th>
+          <th class="py-2 font-medium"><SHint inline size="xs">{{ t('plugins.resources.requested') }}</SHint></th>
+          <th class="py-2 font-medium"><SHint inline size="xs">{{ t('plugins.resources.effective') }}</SHint></th>
         </tr>
       </thead>
       <tbody>
@@ -112,7 +112,7 @@ async function save() {
             <SField :error="errors[f.key]">
               <div class="flex items-center gap-2">
                 <SInput v-model="form[f.key]" type="number" min="0" :step="f.step" class="w-40" :disabled="!canManage" />
-                <span v-if="f.unit" class="text-xs muted">{{ f.unit }}</span>
+                <SHint v-if="f.unit" inline size="xs">{{ f.unit }}</SHint>
                 <span v-if="differs(f)" class="text-xs text-primary-600 dark:text-primary-400">{{ t('plugins.resources.overridden') }}</span>
               </div>
             </SField>
@@ -123,7 +123,7 @@ async function save() {
     <div v-if="canManage" class="mt-4 flex flex-wrap items-center gap-2">
       <SButton variant="primary" :loading="saving" @click="save">{{ t('common.save') }}</SButton>
       <SButton :disabled="saving" @click="reset">{{ t('common.reset') }}</SButton>
-      <span class="text-xs muted">{{ t('plugins.resources.restartHint') }}</span>
+      <SHint inline size="xs">{{ t('plugins.resources.restartHint') }}</SHint>
     </div>
   </SCard>
 </template>

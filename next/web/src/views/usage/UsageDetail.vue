@@ -76,7 +76,7 @@ async function copy(v: string) {
   <div class="px-2 py-3">
     <div v-if="loading" class="py-4 text-center"><SSpinner /></div>
     <SHint v-if="error" tone="danger" class="mb-2">{{ error }}</SHint>
-    <div class="grid gap-6 lg:grid-cols-[3fr_2fr]">
+    <SGrid :cols="1" :gap="6" lg-template="3fr 2fr">
       <!-- billing -->
       <section>
         <SSectionTitle :title="t('usage.billing.title')" />
@@ -104,7 +104,7 @@ async function copy(v: string) {
             <dd class="flex flex-wrap items-center gap-2">
               <span>v{{ exprVersion }}</span>
               <code class="font-mono text-xs" :title="u.expr_hash">hash {{ u.expr_hash.slice(0, 8) }}…</code>
-              <button v-if="auth.has('price:read')" class="link text-xs" @click="historyOpen = true">{{ t('prices.viewHistory') }}</button>
+              <SLink v-if="auth.has('price:read')" as="button" class="text-xs" @click="historyOpen = true">{{ t('prices.viewHistory') }}</SLink>
             </dd>
           </template>
 
@@ -117,10 +117,10 @@ async function copy(v: string) {
             <dt>{{ t('usage.billing.tier') }}</dt>
             <dd>
               <span class="font-mono">{{ tierName }}</span>
-              <span class="muted ml-1 text-xs">
+              <SHint inline size="xs" class="ml-1">
                 (len = {{ lenParts.parts.map((x) => formatNumber(x)).join(' + ') }} = {{ formatNumber(lenParts.len) }}<template v-if="tierBound !== null">
                   ≤ {{ formatNumber(tierBound) }}</template>)
-              </span>
+              </SHint>
             </dd>
           </template>
 
@@ -151,7 +151,7 @@ async function copy(v: string) {
           <dt>{{ t('usage.billing.statusLabel') }}</dt>
           <dd class="flex flex-wrap items-center gap-2">
             <SBadge :tone="billingTone(u.billing_status)">{{ statusLabel(u.billing_status) }}</SBadge>
-            <span v-if="ledgerId" class="muted text-xs">{{ t('usage.billing.ledger', { id: ledgerId }) }}</span>
+            <SHint v-if="ledgerId" inline size="xs">{{ t('usage.billing.ledger', { id: ledgerId }) }}</SHint>
           </dd>
         </dl>
       </section>
@@ -177,15 +177,15 @@ async function copy(v: string) {
             <template v-if="u.endpoint || u.protocol">
               <dt>{{ t('usage.request.endpoint') }}</dt>
               <dd class="font-mono text-xs">
-                {{ u.endpoint || '—' }} <span class="muted">{{ u.protocol }}</span>
-                <span v-if="u.platform" class="muted font-sans"> · {{ t('common.platform') }} {{ u.platform }}</span>
+                {{ u.endpoint || '—' }} <SHint inline size="xs">{{ u.protocol }}</SHint>
+                <SHint v-if="u.platform" inline size="xs" class="font-sans"> · {{ t('common.platform') }} {{ u.platform }}</SHint>
               </dd>
             </template>
             <dt>{{ t('usage.cols.accountType') }}</dt>
             <dd>
               <template v-if="u.account_type">
                 {{ accountTypes.typeLabel(u.plugin_key, u.account_type) }}
-                <span class="muted text-xs">· {{ accountTypes.pluginName(u.plugin_key) }} <span class="font-mono">({{ u.plugin_key }}/{{ u.account_type }})</span></span>
+                <SHint inline size="xs">· {{ accountTypes.pluginName(u.plugin_key) }} <span class="font-mono">({{ u.plugin_key }}/{{ u.account_type }})</span></SHint>
               </template>
               <SHint v-else inline>—</SHint>
             </dd>
@@ -193,7 +193,7 @@ async function copy(v: string) {
             <dd class="flex flex-wrap items-center gap-2">
               <span class="font-mono text-xs">{{ u.upstream_protocol || u.protocol || '—' }}</span>
               <SBadge v-if="isConverted(u)" tone="warning">{{ t('usage.converted') }}</SBadge>
-              <span v-if="isConverted(u)" class="muted text-xs">{{ t('usage.convertedFrom', { protocol: u.protocol }) }}</span>
+              <SHint v-if="isConverted(u)" inline size="xs">{{ t('usage.convertedFrom', { protocol: u.protocol }) }}</SHint>
             </dd>
             <template v-if="u.upstream_model && u.upstream_model !== u.model">
               <dt>{{ t('usage.request.upstreamModel') }}</dt>
@@ -208,7 +208,7 @@ async function copy(v: string) {
             <dt>{{ t('usage.request.latency') }}</dt>
             <dd>
               {{ formatNumber(u.latency_ms) }} ms
-              <span v-if="u.first_token_ms" class="muted">· {{ t('usage.request.firstToken') }} {{ formatNumber(u.first_token_ms) }} ms</span>
+              <SHint v-if="u.first_token_ms" inline>· {{ t('usage.request.firstToken') }} {{ formatNumber(u.first_token_ms) }} ms</SHint>
             </dd>
             <template v-if="!u.success && (u.error_type || u.error_message)">
               <dt>{{ t('usage.request.error') }}</dt>
@@ -250,7 +250,7 @@ async function copy(v: string) {
               <SBadge :tone="['deny', 'reject', 'block', 'blocked'].includes(h.decision) ? 'danger' : h.decision === 'allow' ? 'success' : 'gray'">
                 {{ h.decision }}
               </SBadge>
-              <span class="muted text-xs">{{ h.latency_ms }} ms</span>
+              <SHint inline size="xs">{{ h.latency_ms }} ms</SHint>
               <span v-if="h.note" class="text-xs">{{ h.note }}</span>
             </li>
           </ul>
@@ -268,8 +268,8 @@ async function copy(v: string) {
           </dl>
         </div>
       </section>
-    </div>
-    <p v-if="!u.success && u.billing_status === 'free'" class="muted mt-3 text-xs">{{ t('usage.billing.freeNote') }}</p>
+    </SGrid>
+    <SHint v-if="!u.success && u.billing_status === 'free'" size="xs" class="mt-3">{{ t('usage.billing.freeNote') }}</SHint>
     <ExprHistoryModal v-model:open="historyOpen" :hash="u.expr_hash" />
   </div>
 </template>

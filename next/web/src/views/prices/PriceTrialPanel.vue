@@ -95,16 +95,16 @@ const resultLen = computed(() => {
 
 <template>
   <div class="space-y-4">
-    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+    <SGrid :cols-base="2" :cols="3" :lg-cols="6" :gap="3">
       <label v-for="k in TOKEN_VARS" :key="k" class="text-xs">
-        <span class="muted">{{ t(`prices.vars.${k}`) }}</span>
+        <SHint inline size="xs">{{ t(`prices.vars.${k}`) }}</SHint>
         <SInput v-model.number="usage[k]" type="number" min="0" class="mt-1 !py-1.5" />
       </label>
       <label class="text-xs">
-        <span class="muted">{{ t('prices.trial.len') }}</span>
+        <SHint inline size="xs">{{ t('prices.trial.len') }}</SHint>
         <SInput v-model.number="len" type="number" min="0" class="mt-1 !py-1.5" :placeholder="String(defaultLen)" />
       </label>
-    </div>
+    </SGrid>
     <SGrid :cols="1" :lg-cols="2">
       <SField :label="t('prices.trial.headers')">
         <SKeyValue v-model="headers" key-placeholder="anthropic-beta" value-placeholder="fast-mode" />
@@ -114,15 +114,12 @@ const resultLen = computed(() => {
       </SField>
     </SGrid>
     <div class="flex flex-wrap items-end gap-4">
-      <label class="text-sm">
-        <span class="input-label">{{ t('prices.trial.at') }}</span>
-        <!-- datetime-local is not supported by SInput -->
-        <input v-model="at" type="datetime-local" class="input !w-56" />
-      </label>
-      <label v-if="auth.has('group:read')" class="text-sm">
-        <span class="input-label">{{ t('prices.trial.group') }}</span>
+      <SField :label="t('prices.trial.at')">
+        <SInput v-model="at" type="datetime-local" class="!w-56" />
+      </SField>
+      <SField v-if="auth.has('group:read')" :label="t('prices.trial.group')">
         <div class="w-48"><GroupPicker :model-value="groupId" @update:model-value="groupId = typeof $event === 'number' ? $event : null" /></div>
-      </label>
+      </SField>
       <SButton size="sm" variant="primary" :loading="loading" :disabled="!source" @click="run">{{ t('prices.trial.calculate') }}</SButton>
     </div>
 
@@ -132,13 +129,13 @@ const resultLen = computed(() => {
       <div v-else-if="result" class="space-y-3 text-sm">
         <div class="flex flex-wrap items-baseline gap-x-6 gap-y-1">
           <span>
-            <span class="muted">{{ t('prices.trial.cost') }}</span>
+            <SHint inline>{{ t('prices.trial.cost') }}</SHint>
             <span class="ml-2 text-lg font-semibold text-gray-900 dark:text-white">{{ formatMoney(result.cost, 6) }}</span>
           </span>
           <span>
-            <span class="muted">{{ t('prices.trial.tier') }}</span>
+            <SHint inline>{{ t('prices.trial.tier') }}</SHint>
             <span class="ml-2 font-mono">{{ result.tier || '—' }}</span>
-            <span class="muted ml-1">(len = {{ formatNumber(resultLen) }})</span>
+            <SHint inline class="ml-1">(len = {{ formatNumber(resultLen) }})</SHint>
           </span>
           <SSpinner v-if="loading" size="sm" />
         </div>
@@ -148,7 +145,7 @@ const resultLen = computed(() => {
             <li v-for="(r, i) in result.rules" :key="i" class="flex items-center gap-2">
               <SBadge :tone="r.matched ? 'success' : 'gray'">{{ r.matched ? '✓' : '✗' }}</SBadge>
               <code class="font-mono text-xs">{{ r.cond }}</code>
-              <span class="muted">×{{ r.multiplier }}</span>
+              <SHint inline>×{{ r.multiplier }}</SHint>
             </li>
           </ul>
         </div>

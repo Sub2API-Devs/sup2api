@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCheckbox, SField, SGrid, SHint, SInput, SModal, SSelect, SSwitch, STagInput, toast } from '@sub2api/ui'
+import { SButton, SCheckbox, SField, SGrid, SHint, SInput, SModal, SRadio, SSectionTitle, SSelect, SSwitch, STagInput, toast } from '@sub2api/ui'
 import type { StickyRule } from '@/api/types'
 import { fieldErrors, notifyError } from '@/utils/errors'
 
@@ -169,7 +169,7 @@ async function submit() {
         {{ t('sticky.modal.limitedHint', { plugin: rule?.plugin_key || '—' }) }}
       </p>
 
-      <div class="grid gap-4 md:grid-cols-[2fr_1fr_1fr]">
+      <SGrid :cols="1" md-template="2fr 1fr 1fr">
         <SField :label="t('common.name')" :error="errors.name" required>
           <SInput v-model.trim="form.name" mono :disabled="limited" placeholder="claude-code-session" />
         </SField>
@@ -179,11 +179,11 @@ async function submit() {
         <SField :label="t('common.enabled')">
           <div class="pt-2"><SSwitch v-model="form.enabled" /></div>
         </SField>
-      </div>
+      </SGrid>
 
       <fieldset :disabled="limited" class="space-y-5" :class="limited ? 'opacity-60' : ''">
         <div>
-          <h4 class="section-title">{{ t('sticky.modal.match') }}</h4>
+          <SSectionTitle tag="h4">{{ t('sticky.modal.match') }}</SSectionTitle>
           <SGrid :cols="1" :md-cols="3">
             <SField :label="t('sticky.modal.protocols')" :hint="t('sticky.modal.emptyAny')">
               <STagInput v-model="form.protocols" placeholder="anthropic.messages" :disabled="limited" />
@@ -200,30 +200,30 @@ async function submit() {
         <div>
           <div class="mb-2 flex items-center justify-between">
             <div>
-              <h4 class="section-title !mb-0">{{ t('sticky.modal.keySources') }}</h4>
-              <p class="muted text-xs">{{ t('sticky.modal.keySourcesHint') }}</p>
+              <SSectionTitle tag="h4" class="!mb-0">{{ t('sticky.modal.keySources') }}</SSectionTitle>
+              <SHint size="xs">{{ t('sticky.modal.keySourcesHint') }}</SHint>
             </div>
             <SButton size="sm" :disabled="limited" @click="addSource">+ {{ t('common.add') }}</SButton>
           </div>
-          <p v-if="errors.key_sources" class="input-error-text">{{ errors.key_sources }}</p>
+          <SHint v-if="errors.key_sources" tone="danger" size="xs" class="mt-1">{{ errors.key_sources }}</SHint>
           <div class="space-y-2">
             <div v-for="(ks, i) in form.key_sources" :key="i">
               <div class="flex flex-wrap items-center gap-2">
-                <span class="muted w-5 text-right text-xs">{{ i + 1 }}.</span>
+                <SHint inline size="xs" class="w-5 text-right">{{ i + 1 }}.</SHint>
                 <SSelect class="!w-32 !py-1.5" :model-value="ks.type" :options="keyTypeOptions" @update:model-value="setType(ks, String($event))" />
                 <SInput v-if="ks.type === 'body'" v-model="ks.path" class="!w-64 !py-1.5" mono placeholder="metadata.user_id" />
                 <SInput v-else-if="ks.type === 'header'" v-model="ks.name" class="!w-64 !py-1.5" mono placeholder="x-session-id" />
                 <div v-else-if="ks.type === 'plugin'" class="w-80">
                   <STagInput v-model="ks.needs" :placeholder="t('sticky.modal.needsPlaceholder')" :disabled="limited" />
                 </div>
-                <span v-else class="muted text-xs">{{ t(`sticky.keyTypeHint.${ks.type}`) }}</span>
+                <SHint v-else inline size="xs">{{ t(`sticky.keyTypeHint.${ks.type}`) }}</SHint>
                 <div class="ml-auto flex gap-1">
                   <SButton variant="ghost" size="sm" class="!px-1.5" :disabled="i === 0" @click="move(i, -1)">↑</SButton>
                   <SButton variant="ghost" size="sm" class="!px-1.5" :disabled="i === form.key_sources.length - 1" @click="move(i, 1)">↓</SButton>
                   <SButton variant="ghost" size="sm" class="!px-1.5" @click="form.key_sources.splice(i, 1)">×</SButton>
                 </div>
               </div>
-              <p v-if="errors[`key_sources.${i}`]" class="input-error-text ml-7">{{ errors[`key_sources.${i}`] }}</p>
+              <SHint v-if="errors[`key_sources.${i}`]" tone="danger" size="xs" class="ml-7 mt-1">{{ errors[`key_sources.${i}`] }}</SHint>
             </div>
           </div>
         </div>
@@ -256,21 +256,22 @@ async function submit() {
 
       <SField :label="t('sticky.cols.onFailure')">
         <SGrid :cols="1" :md-cols="2" :gap="2">
-          <label
+          <SRadio
             v-for="f in ['failover', 'stick'] as const"
             :key="f"
-            class="flex cursor-pointer gap-2 rounded-xl border p-3 text-sm"
+            :model-value="form.on_failure"
+            :value="f"
+            :disabled="limited"
+            class="!items-start rounded-xl border p-3"
             :class="[
               form.on_failure === f ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-900/10' : 'border-gray-200 dark:border-dark-700',
-              limited ? 'pointer-events-none opacity-60' : ''
+              limited ? 'pointer-events-none' : ''
             ]"
+            @update:model-value="form.on_failure = f"
           >
-            <input v-model="form.on_failure" type="radio" class="checkbox mt-0.5 !rounded-full" :value="f" :disabled="limited" />
-            <span>
-              <span class="font-medium">{{ t(`sticky.onFailure.${f}`) }}</span>
-              <span class="muted block text-xs">{{ t(`sticky.onFailureHint.${f}`) }}</span>
-            </span>
-          </label>
+            <span class="font-medium">{{ t(`sticky.onFailure.${f}`) }}</span>
+            <SHint inline size="xs" class="block">{{ t(`sticky.onFailureHint.${f}`) }}</SHint>
+          </SRadio>
         </SGrid>
       </SField>
     </div>

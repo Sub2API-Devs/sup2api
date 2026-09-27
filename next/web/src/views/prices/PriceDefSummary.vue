@@ -4,6 +4,7 @@
 // values that differ from the compared definition are highlighted.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { SHint } from '@sub2api/ui'
 import type { PriceSyncDef } from '@/api/types'
 import { TOKEN_VARS, hasVisualConfig, isSet, normalizeVisual, num, parseExpression, tokenPricesFrom, type TokenPrices, type TokenVar } from './priceExpr'
 
@@ -73,18 +74,18 @@ function shownVars(l: Line): TokenVar[] {
     </span>
     <template v-else-if="view.kind === 'tiers'">
       <div v-for="(l, i) in view.lines" :key="i" class="flex flex-wrap gap-x-2">
-        <span v-if="l.name" class="muted font-mono">
+        <SHint v-if="l.name" inline size="xs" class="font-mono">
           {{ l.name }}<template v-if="l.max_len !== null"> ≤{{ l.max_len }}</template><template v-else-if="view.lines.length > 1"> ({{ t('prices.def.otherwise') }})</template>:
-        </span>
+        </SHint>
         <span v-if="num(l.flat)" :class="differs(i, 'flat') ? 'font-semibold text-amber-600 dark:text-amber-400' : ''">
           {{ t('prices.vars.flat') }} {{ usd(l.flat) }}
         </span>
         <span v-for="k in shownVars(l)" :key="k" :class="differs(i, k) ? 'font-semibold text-amber-600 dark:text-amber-400' : ''">
           {{ t(`prices.vars.${k}`) }} {{ usd(l.prices[k]) }}
         </span>
-        <span class="muted">{{ t('prices.def.perMillion') }}</span>
+        <SHint inline size="xs">{{ t('prices.def.perMillion') }}</SHint>
       </div>
-      <div v-if="view.rules" class="muted">{{ t('prices.def.rules', { n: view.rules }) }}</div>
+      <SHint v-if="view.rules" size="xs">{{ t('prices.def.rules', { n: view.rules }) }}</SHint>
     </template>
     <span v-else class="block max-w-md truncate font-mono" :title="view.expression">{{ t('prices.summary.custom') }} · {{ view.expression }}</span>
   </div>

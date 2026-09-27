@@ -181,7 +181,7 @@ onBeforeUnmount(() => {
 
     <SCard v-else-if="!rollout">
       <SEmpty icon="info" :text="loadError || t('plugins.rollout.none')">
-        <RouterLink :to="`/plugins/${encodeURIComponent(key)}`" class="btn btn-secondary btn-sm">{{ t('plugins.rollout.backToDetail') }}</RouterLink>
+        <SButton :to="`/plugins/${encodeURIComponent(key)}`" size="sm">{{ t('plugins.rollout.backToDetail') }}</SButton>
       </SEmpty>
     </SCard>
 
@@ -196,7 +196,7 @@ onBeforeUnmount(() => {
           </span>
         </h1>
         <div class="flex items-center gap-2 text-sm">
-          <span class="muted">{{ t('plugins.rollout.phase') }}</span>
+          <SHint inline>{{ t('plugins.rollout.phase') }}</SHint>
           <StatusBadge :status="rollout.phase" />
           <SSpinner v-if="running" size="sm" class="text-primary-500" />
         </div>
@@ -210,7 +210,7 @@ onBeforeUnmount(() => {
         <span class="inline-flex items-center gap-2 font-medium">
           <SIcon name="check" class="h-5 w-5" />{{ t(`plugins.rollout.success.${rollout.action}`, { version: rollout.target_version }) }}
         </span>
-        <RouterLink :to="`/plugins/${encodeURIComponent(key)}`" class="btn btn-primary btn-sm">{{ t('plugins.rollout.backToDetail') }}</RouterLink>
+        <SButton :to="`/plugins/${encodeURIComponent(key)}`" variant="primary" size="sm">{{ t('plugins.rollout.backToDetail') }}</SButton>
       </div>
       <div
         v-else-if="!running"
@@ -226,7 +226,7 @@ onBeforeUnmount(() => {
           {{ t(`plugins.rollout.ended.${phase}`, { version: detail?.active_version || rollout.from_version || '—' }) }}
         </div>
         <pre v-if="rollout.error" class="mt-2 whitespace-pre-wrap break-all font-mono text-xs">{{ rollout.error }}</pre>
-        <RouterLink :to="`/plugins/${encodeURIComponent(key)}`" class="btn btn-secondary btn-sm mt-3">{{ t('plugins.rollout.backToDetail') }}</RouterLink>
+        <SButton :to="`/plugins/${encodeURIComponent(key)}`" size="sm" class="mt-3">{{ t('plugins.rollout.backToDetail') }}</SButton>
       </div>
 
       <SCard>
@@ -243,7 +243,7 @@ onBeforeUnmount(() => {
               <ul v-if="migrations.length" class="mt-1 space-y-0.5 text-xs">
                 <li v-for="(m, i) in migrations" :key="i" class="font-mono">
                   ✓ {{ display(pick(m, 'id', 'name', 'migration_id') ?? m) }}
-                  <span v-if="pick(m, 'node_id')" class="muted"> ({{ pick(m, 'node_id') }}, {{ formatDuration(pick(m, 'duration_ms')) }})</span>
+                  <SHint v-if="pick(m, 'node_id')" inline size="xs"> ({{ pick(m, 'node_id') }}, {{ formatDuration(pick(m, 'duration_ms')) }})</SHint>
                 </li>
               </ul>
             </div>
@@ -287,9 +287,9 @@ onBeforeUnmount(() => {
 
         <div class="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4 text-sm dark:border-dark-700">
           <span>
-            <span class="muted">{{ t('plugins.rollout.liveVersion') }}</span>
+            <SHint inline>{{ t('plugins.rollout.liveVersion') }}</SHint>
             <span class="ml-2 font-mono">{{ detail?.active_version ? 'v' + detail.active_version : '—' }}</span>
-            <span v-if="rollout.coordinator" class="ml-4 muted">{{ t('plugins.rollout.coordinator') }}: {{ rollout.coordinator }}</span>
+            <SHint v-if="rollout.coordinator" inline class="ml-4">{{ t('plugins.rollout.coordinator') }}: {{ rollout.coordinator }}</SHint>
           </span>
           <SButton v-if="phase === 'preparing' && auth.has('plugin:manage')" variant="danger" :loading="cancelling" @click="cancel">
             <SIcon name="stop" class="h-4 w-4" />{{ t('plugins.rollout.cancel') }}

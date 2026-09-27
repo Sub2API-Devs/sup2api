@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SCheckbox, SHint, SInput, SSelect, SSpinner } from '@sub2api/ui'
+import { SBadge, SCheckbox, SHint, SInput, SLink, SSelect, SSpinner } from '@sub2api/ui'
 import type { Account } from '@/api/types'
 import { lt } from '@/i18n'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
@@ -148,8 +148,8 @@ defineExpose({ save, dirty })
       <SInput v-model="q" class="!w-48" :placeholder="t('common.searchPlaceholder')" />
       <SCheckbox v-model="onlySelected" :label="t('groups.accounts.onlySelected')" />
       <span class="ml-auto flex gap-2 text-xs">
-        <button type="button" class="link" @click="setVisible(true)">{{ t('groups.accounts.selectVisible') }}</button>
-        <button type="button" class="link" @click="setVisible(false)">{{ t('groups.accounts.clearVisible') }}</button>
+        <SLink as="button" @click="setVisible(true)">{{ t('groups.accounts.selectVisible') }}</SLink>
+        <SLink as="button" @click="setVisible(false)">{{ t('groups.accounts.clearVisible') }}</SLink>
       </span>
     </div>
     <div class="max-h-64 overflow-y-auto rounded-lg border border-gray-200 dark:border-dark-600">
@@ -163,18 +163,18 @@ defineExpose({ save, dirty })
         :class="editable(a) ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-800' : 'cursor-not-allowed opacity-60'"
         :title="editable(a) ? '' : t('groups.accounts.notEditable')"
       >
-        <input type="checkbox" class="checkbox" :checked="selected.has(a.id)" :disabled="!editable(a)" @change="toggle(a.id, ($event.target as HTMLInputElement).checked)" />
+        <SCheckbox bare :model-value="selected.has(a.id)" :disabled="!editable(a)" @update:model-value="toggle(a.id, $event)" />
         <span class="min-w-0 flex-1 truncate font-medium">{{ a.name }}</span>
         <span class="w-44 shrink-0 text-right">
           <span class="block truncate text-xs">{{ accountTypes.typeLabel(a.plugin_key, a.type, a.type_label) }}</span>
-          <span class="muted block truncate text-[11px]">{{ accountTypes.pluginName(a.plugin_key) }}</span>
+          <SHint inline size="xs" class="block truncate">{{ accountTypes.pluginName(a.plugin_key) }}</SHint>
         </span>
         <SBadge :tone="statusTone(a)" dot class="shrink-0">{{ a.orphaned ? t('accounts.status.orphaned') : t(`accounts.status.${a.status}`) }}</SBadge>
       </label>
     </div>
-    <p class="input-hint">
+    <SHint size="xs" class="mt-1">
       {{ t('groups.accounts.selected', { n: selected.size }) }}
       <template v-if="mix.length">: {{ mix.map(([k, n]) => `${k} × ${n}`).join('; ') }}</template>
-    </p>
+    </SHint>
   </div>
 </template>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge, SCard, STable, type TableColumn } from '@sub2api/ui'
+import { SBadge, SCard, SHint, STable, type TableColumn } from '@sub2api/ui'
 import { formatNumber } from '@/utils/format'
 import type { PluginDetail } from '../pluginUtil'
 
@@ -25,13 +25,13 @@ const columns = computed<TableColumn[]>(() => [
     <STable :columns="columns" :rows="rows" row-key="_k">
       <template #cell-point="{ row }">
         <div class="font-mono text-sm">{{ row.point }}</div>
-        <div v-if="row.id" class="text-xs muted">#{{ row.id }}</div>
+        <SHint v-if="row.id" size="xs">#{{ row.id }}</SHint>
       </template>
       <template #cell-failure="{ row }">
         <SBadge v-if="row.failure" :tone="row.failure === 'closed' ? 'danger' : 'gray'">
           {{ row.failure === 'closed' ? t('plugins.consent.failClosed') : t('plugins.consent.failOpen') }}
         </SBadge>
-        <span v-else class="muted">—</span>
+        <SHint v-else inline>—</SHint>
       </template>
       <template #cell-timeout_ms="{ row }">{{ row.timeout_ms ? row.timeout_ms + 'ms' : '—' }}</template>
       <template #cell-needs="{ row }">
@@ -41,16 +41,16 @@ const columns = computed<TableColumn[]>(() => [
       </template>
       <template #cell-stats="{ row }">
         <div v-if="row.stats" class="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
-          <span><span class="muted">{{ t('plugins.hooks.calls') }}</span> {{ formatNumber(row.stats.calls) }}</span>
-          <span><span class="muted">{{ t('plugins.hooks.denied') }}</span> {{ formatNumber(row.stats.denied) }}</span>
-          <span :class="row.stats.timeouts ? 'text-orange-600' : ''"><span class="muted">{{ t('plugins.hooks.timeouts') }}</span> {{ formatNumber(row.stats.timeouts) }}</span>
-          <span><span class="muted">P99</span> {{ row.stats.p99_ms }}ms</span>
+          <span><SHint inline size="xs">{{ t('plugins.hooks.calls') }}</SHint> {{ formatNumber(row.stats.calls) }}</span>
+          <span><SHint inline size="xs">{{ t('plugins.hooks.denied') }}</SHint> {{ formatNumber(row.stats.denied) }}</span>
+          <span :class="row.stats.timeouts ? 'text-orange-600' : ''"><SHint inline size="xs">{{ t('plugins.hooks.timeouts') }}</SHint> {{ formatNumber(row.stats.timeouts) }}</span>
+          <span><SHint inline size="xs">P99</SHint> {{ row.stats.p99_ms }}ms</span>
           <span>
-            <span class="muted">{{ t('plugins.hooks.breaker') }}</span>
+            <SHint inline size="xs">{{ t('plugins.hooks.breaker') }}</SHint>
             <SBadge :tone="row.stats.breaker_open ? 'danger' : 'success'">{{ row.stats.breaker_open ? t('plugins.hooks.breakerOpen') : t('plugins.hooks.breakerClosed') }}</SBadge>
           </span>
         </div>
-        <span v-else class="text-xs muted">{{ t('plugins.hooks.noStats') }}</span>
+        <SHint v-else inline size="xs">{{ t('plugins.hooks.noStats') }}</SHint>
       </template>
     </STable>
   </SCard>

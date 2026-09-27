@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SCard, SCode, STable, type TableColumn } from '@sub2api/ui'
+import { SCard, SCode, SHint, STable, type TableColumn } from '@sub2api/ui'
 import { formatBytes, formatDateTime, formatRelative } from '@/utils/format'
 import { display, pick, type PluginDetail, type PluginNode } from '../pluginUtil'
 import StatusBadge from '../parts/StatusBadge.vue'
@@ -64,7 +64,7 @@ function restartReason(n: PluginNode): string {
     <STable :columns="columns" :rows="rows" row-key="node_id" expandable>
       <template #cell-node_id="{ row }">
         <div class="font-medium">{{ row.node_id }}</div>
-        <div class="font-mono text-xs muted">{{ row.addr || '' }}<span v-if="row.boot_id"> · {{ String(row.boot_id).slice(0, 8) }}</span></div>
+        <SHint size="xs" class="font-mono">{{ row.addr || '' }}<span v-if="row.boot_id"> · {{ String(row.boot_id).slice(0, 8) }}</span></SHint>
       </template>
       <template #cell-status="{ row }">
         <StatusBadge :status="status(row)" />

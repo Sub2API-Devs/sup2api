@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SEmpty, SIcon, SInput, SPageHeader, SSelect, STable, toast, type TableColumn, type Tone } from '@sub2api/ui'
+import { SBadge, SButton, SEmpty, SHint, SIcon, SInput, SPageHeader, SSelect, STable, toast, type TableColumn, type Tone } from '@sub2api/ui'
 import type { PluginReview, PluginSummary } from '@/api/types'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
@@ -114,9 +114,9 @@ onMounted(load)
     <SPageHeader :title="t('plugins.list.title')" :description="t('plugins.list.description')">
       <template #actions>
         <SButton :loading="loading" @click="load"><SIcon name="refresh" class="h-4 w-4" />{{ t('common.refresh') }}</SButton>
-        <RouterLink v-if="auth.has('plugin:market:read')" to="/market" class="btn btn-secondary btn-md">
+        <SButton v-if="auth.has('plugin:market:read')" to="/market">
           <SIcon name="market" class="h-4 w-4" />{{ t('plugins.market.title') }}
-        </RouterLink>
+        </SButton>
         <SButton v-if="auth.has('plugin:install')" variant="primary" :loading="uploading" @click="pickFile">
           <SIcon name="upload" class="h-4 w-4" />{{ t('plugins.list.upload') }}
         </SButton>
@@ -139,7 +139,7 @@ onMounted(load)
           <PluginAvatar :name="lt(row.name)" :plugin-key="row.key" :icon="(row as any).icon" />
           <div class="min-w-0">
             <div class="truncate font-medium text-gray-900 dark:text-white">{{ lt(row.name) || row.key }}</div>
-            <div class="truncate font-mono text-xs muted">{{ row.key }}</div>
+            <SHint size="xs" class="truncate font-mono">{{ row.key }}</SHint>
           </div>
         </div>
       </template>
@@ -168,7 +168,7 @@ onMounted(load)
       <template #cell-nodes="{ row }">
         <div class="flex flex-wrap gap-1">
           <SBadge v-for="n in nodeSummary(row)" :key="n.state" :tone="nodeTone(n.state)">{{ n.state }} × {{ n.count }}</SBadge>
-          <span v-if="nodeSummary(row).length === 0" class="muted">—</span>
+          <SHint v-if="nodeSummary(row).length === 0" inline>—</SHint>
         </div>
       </template>
       <template #cell-actions="{ row }">

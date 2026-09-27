@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, SField, SGrid, SHint, SInput, SPageHeader, SSpinner, STabs, toast } from '@sub2api/ui'
+import { SButton, SCard, SField, SGrid, SHint, SInput, SPageHeader, SRadio, SSpinner, STabs, toast } from '@sub2api/ui'
 import type { BillingSettings } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { fieldErrors, notifyError } from '@/utils/errors'
@@ -89,18 +89,19 @@ onMounted(loadBilling)
         <div v-else class="space-y-6">
           <SField :label="t('settings.billing.missingPolicy')">
             <SGrid :cols="1" :md-cols="2" :gap="2">
-              <label
+              <SRadio
                 v-for="p in ['reject', 'free'] as const"
                 :key="p"
-                class="flex cursor-pointer gap-2 rounded-xl border p-3 text-sm"
+                :model-value="billing.missing_price_policy"
+                :value="p"
+                :disabled="!canManageBilling"
+                class="!items-start rounded-xl border p-3"
                 :class="billing.missing_price_policy === p ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-900/10' : 'border-gray-200 dark:border-dark-700'"
+                @update:model-value="billing.missing_price_policy = p"
               >
-                <input v-model="billing.missing_price_policy" type="radio" class="checkbox mt-0.5 !rounded-full" :value="p" :disabled="!canManageBilling" />
-                <span>
-                  <span class="font-medium">{{ t(`settings.billing.policy.${p}`) }}</span>
-                  <span class="muted block text-xs">{{ t(`settings.billing.policyHint.${p}`) }}</span>
-                </span>
-              </label>
+                <span class="font-medium">{{ t(`settings.billing.policy.${p}`) }}</span>
+                <SHint inline size="xs" class="block">{{ t(`settings.billing.policyHint.${p}`) }}</SHint>
+              </SRadio>
             </SGrid>
           </SField>
           <SGrid :cols="1" :md-cols="2">

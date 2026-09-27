@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { SIcon } from '@sub2api/ui'
+import { SButton, SIcon } from '@sub2api/ui'
 
 const { t } = useI18n()
 </script>
@@ -10,6 +10,6 @@ const { t } = useI18n()
     <SIcon name="search" class="mb-4 h-12 w-12 text-gray-300 dark:text-dark-600" />
     <h1 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('nav.notFound.title') }}</h1>
     <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">{{ t('nav.notFound.desc') }}</p>
-    <RouterLink to="/dashboard" class="btn btn-secondary mt-6">{{ t('nav.forbidden.home') }}</RouterLink>
+    <SButton to="/dashboard" class="mt-6">{{ t('nav.forbidden.home') }}</SButton>
   </div>
 </template>

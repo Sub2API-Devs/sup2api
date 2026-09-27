@@ -234,13 +234,13 @@ onMounted(load)
           {{ t('common.save') }}
         </SButton>
       </div>
-      <p class="mt-2 text-xs muted">{{ t(`plugins.egress.policyHint.${policy}`) }}</p>
+      <SHint size="xs" class="mt-2">{{ t(`plugins.egress.policyHint.${policy}`) }}</SHint>
       <div class="mt-3 text-sm">
-        <span class="muted">{{ t('plugins.egress.approvedDomains') }}</span>
+        <SHint inline>{{ t('plugins.egress.approvedDomains') }}</SHint>
         <span v-if="allowedDomains.length" class="ml-2 inline-flex flex-wrap gap-1">
           <code v-for="d in allowedDomains" :key="d" class="rounded bg-gray-100 px-1.5 font-mono text-xs dark:bg-dark-700">{{ d }}</code>
         </span>
-        <span v-else class="ml-2 muted">{{ t('common.none') }}</span>
+        <SHint v-else inline class="ml-2">{{ t('common.none') }}</SHint>
       </div>
     </SCard>
 
@@ -254,7 +254,7 @@ onMounted(load)
         </template>
         <STable :columns="summaryColumns" :rows="summaryRows" :loading="loading" row-key="_k">
           <template #cell-host="{ row }">
-            <span class="font-mono text-sm">{{ row.host }}<span v-if="row.port" class="muted">:{{ row.port }}</span></span>
+            <span class="font-mono text-sm">{{ row.host }}<SHint v-if="row.port" inline>:{{ row.port }}</SHint></span>
             <SBadge v-if="detail.egress_policy === 'allowlist' && !allowedDomains.includes(row.host)" tone="warning" class="ml-2">
               {{ t('plugins.egress.notAllowlisted') }}
             </SBadge>
@@ -296,11 +296,11 @@ onMounted(load)
         <STable :columns="logColumns" :rows="logRows" row-key="_k" dense>
           <template #cell-started_at="{ row }"><span class="whitespace-nowrap text-xs">{{ formatDateTime(row.started_at) }}</span></template>
           <template #cell-host="{ row }">
-            <span class="font-mono text-xs">{{ row.host }}<span v-if="row.port" class="muted">:{{ row.port }}</span></span>
+            <span class="font-mono text-xs">{{ row.host }}<SHint v-if="row.port" inline size="xs">:{{ row.port }}</SHint></span>
           </template>
           <template #cell-duration_ms="{ row }">{{ row.result === 'open' ? '—' : row.duration_ms != null ? row.duration_ms + 'ms' : '—' }}</template>
           <template #cell-bytes="{ row }">
-            <span v-if="row.result === 'open' && !row.bytes_in && !row.bytes_out" class="muted">—</span>
+            <SHint v-if="row.result === 'open' && !row.bytes_in && !row.bytes_out" inline>—</SHint>
             <span v-else class="whitespace-nowrap text-xs">↑{{ formatBytes(row.bytes_out ?? 0) }} ↓{{ formatBytes(row.bytes_in ?? 0) }}</span>
           </template>
           <template #cell-result="{ row }">

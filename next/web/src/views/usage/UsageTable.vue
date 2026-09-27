@@ -83,7 +83,7 @@ function noUsage(u: UsageRow) {
     <template #cell-account_type="{ row }">
       <template v-if="row.account_type">
         <span class="block whitespace-nowrap text-sm">{{ accountTypes.typeLabel(row.plugin_key, row.account_type) }}</span>
-        <span class="muted block text-[11px]">{{ accountTypes.pluginName(row.plugin_key) }}</span>
+        <SHint size="xs">{{ accountTypes.pluginName(row.plugin_key) }}</SHint>
       </template>
       <SHint v-else inline>—</SHint>
     </template>
@@ -101,7 +101,7 @@ function noUsage(u: UsageRow) {
       <SHint v-if="noUsage(row)" inline>—</SHint>
       <span v-else :title="t('usage.cacheTitle', { r: formatNumber(row.cache_read_tokens), w: formatNumber(row.cache_creation_tokens) })">
         {{ formatNumber(row.input_tokens) }}
-        <span v-if="row.cache_read_tokens" class="muted block text-[11px]">+{{ formatNumber(row.cache_read_tokens) }} {{ t('usage.cached') }}</span>
+        <SHint v-if="row.cache_read_tokens" inline size="xs" class="block">+{{ formatNumber(row.cache_read_tokens) }} {{ t('usage.cached') }}</SHint>
       </span>
     </template>
     <template #cell-output_tokens="{ row }">
@@ -128,9 +128,9 @@ function noUsage(u: UsageRow) {
           <SBadge v-if="isBlocked(row)" tone="warning">{{ t('usage.blocked') }}</SBadge>
           <span v-else class="font-mono text-xs text-red-600 dark:text-red-400">{{ row.error_type || row.status_code }}</span>
         </div>
-        <p v-if="isBlocked(row)" class="muted max-w-xs truncate text-xs" :title="blockingHook(row)?.note || row.error_message">
+        <SHint v-if="isBlocked(row)" size="xs" class="max-w-xs truncate" :title="blockingHook(row)?.note || row.error_message">
           └ {{ t('usage.blockedBy', { plugin: blockingHook(row)?.plugin_key || '—' }) }}<template v-if="blockingHook(row)?.note || row.error_message">: {{ blockingHook(row)?.note || row.error_message }}</template>
-        </p>
+        </SHint>
       </div>
     </template>
     <template #expand="{ row }">

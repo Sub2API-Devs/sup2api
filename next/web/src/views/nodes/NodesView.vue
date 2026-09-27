@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SIcon, SPageHeader, SStatCard, STable, type TableColumn, type Tone } from '@sub2api/ui'
+import { SBadge, SButton, SHint, SIcon, SPageHeader, SStatCard, STable, type TableColumn, type Tone } from '@sub2api/ui'
 import type { NodeInfo } from '@/api/types'
 import { statusTone, type NodePluginState } from '@/api/admin'
 import { notifyError } from '@/utils/errors'
@@ -152,14 +152,14 @@ const versions = computed(() => new Set(nodes.value.map((n) => n.host_version)).
   <div>
     <SPageHeader :title="t('nodes.title')" :description="t('nodes.description')">
       <template #actions>
-        <span class="muted flex items-center gap-1.5 text-xs">
+        <SHint inline size="xs" class="flex items-center gap-1.5">
           <span class="relative flex h-2 w-2">
             <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
             <span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
           </span>
           {{ t('nodes.autoRefresh') }}
           <template v-if="lastLoaded">· {{ relative(lastLoaded.toISOString()) }}</template>
-        </span>
+        </SHint>
         <SButton size="sm" @click="load(true)"><SIcon name="refresh" class="h-4 w-4" />{{ t('common.refresh') }}</SButton>
       </template>
     </SPageHeader>
@@ -176,7 +176,7 @@ const versions = computed(() => new Set(nodes.value.map((n) => n.host_version)).
           <span class="h-2 w-2 shrink-0 rounded-full" :class="isStale(row) ? 'bg-red-500' : 'bg-emerald-500'" />
           <span class="font-medium text-gray-900 dark:text-white">{{ row.node_id }}</span>
         </div>
-        <div class="muted pl-4 font-mono text-xs" :title="row.boot_id">boot {{ String(row.boot_id || '').slice(0, 8) }}</div>
+        <SHint size="xs" class="pl-4 font-mono" :title="row.boot_id">boot {{ String(row.boot_id || '').slice(0, 8) }}</SHint>
       </template>
       <template #cell-addr="{ row }">
         <code class="font-mono text-xs">{{ row.addr }}</code>
@@ -185,7 +185,7 @@ const versions = computed(() => new Set(nodes.value.map((n) => n.host_version)).
         <SBadge tone="gray">{{ row.host_version }}</SBadge>
       </template>
       <template #cell-started_at="{ row }">
-        <span class="muted" :title="formatDateTime(row.started_at)">{{ relative(row.started_at) }}</span>
+        <SHint inline :title="formatDateTime(row.started_at)">{{ relative(row.started_at) }}</SHint>
       </template>
       <template #cell-last_heartbeat="{ row }">
         <span :class="isStale(row) ? 'font-medium text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'" :title="formatDateTime(row.last_heartbeat)">
@@ -202,10 +202,10 @@ const versions = computed(() => new Set(nodes.value.map((n) => n.host_version)).
             :title="p.detail"
           >
             <span class="font-medium">{{ p.key }}</span>
-            <span v-if="p.version" class="muted font-mono">{{ p.version }}</span>
+            <SHint v-if="p.version" inline size="xs" class="font-mono">{{ p.version }}</SHint>
             <span :class="dotClass(p.tone)">●</span>
           </span>
-          <span v-if="!pluginBadges(row).length" class="muted">—</span>
+          <SHint v-if="!pluginBadges(row).length" inline>—</SHint>
         </div>
       </template>
     </STable>

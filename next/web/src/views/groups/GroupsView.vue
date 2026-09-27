@@ -8,6 +8,7 @@ import {
   SDropdown,
   SField,
   SGrid,
+  SHint,
   SInput,
   SModal,
   SPageHeader,
@@ -219,7 +220,7 @@ async function onAction(g: Group, key: string) {
         <button type="button" class="text-left font-medium text-gray-900 hover:text-primary-600 hover:underline dark:text-white" data-testid="group-name" @click="openDetail(row)">
           {{ row.name }}
         </button>
-        <div v-if="row.description" class="muted max-w-xs truncate text-xs">{{ row.description }}</div>
+        <SHint v-if="row.description" size="xs" class="max-w-xs truncate">{{ row.description }}</SHint>
       </template>
       <template #cell-platforms="{ row }">
         <GroupPlatforms :group="row" />
@@ -239,11 +240,11 @@ async function onAction(g: Group, key: string) {
             :key="m"
             class="rounded bg-gray-100 px-1.5 py-0.5 text-xs dark:bg-dark-700"
           >{{ m }}</code>
-          <span v-if="row.model_allowlist.length > 4" class="muted text-xs" :title="row.model_allowlist.join(', ')">
+          <SHint v-if="row.model_allowlist.length > 4" inline size="xs" :title="row.model_allowlist.join(', ')">
             +{{ row.model_allowlist.length - 4 }}
-          </span>
+          </SHint>
         </div>
-        <span v-else class="muted">{{ t('common.unlimited') }}</span>
+        <SHint v-else inline>{{ t('common.unlimited') }}</SHint>
       </template>
       <template #cell-account_count="{ row }">{{ formatNumber(row.account_count) }}</template>
       <template #cell-key_count="{ row }">{{ formatNumber(keyCount(row)) }}</template>
