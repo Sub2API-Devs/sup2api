@@ -1,59 +1,22 @@
-# sub2api-next test deployment
+# sub2api-next deployment
 
-Two nodes behind Caddy, PostgreSQL 16, Redis 7 and a mock Anthropic upstream,
-all started with docker compose (project `sub2api-next-test`). Only Caddy
-publishes a port, and only on `127.0.0.1:3120` of the test server.
+The test deployment is `single/` (compose project `sup2api` on ovh): two nodes
+sharing one PostgreSQL 16 / Redis 7, with the signed plugin market bundled in
+the image, published on `:3130` and `:3131`. See `single/README.md`.
 
 ```
 deploy/
-├── compose.yml            # pg, redis, node-1, node-2, market-init, mock-upstream, caddy
-├── .env.example           # secrets/settings; the real file lives at ~/sub2api-next-test/.env
-├── caddy/Caddyfile        # LB (health /healthz, flush_interval -1), /market/*, test helpers
+├── single/                # compose.yml + deploy.sh of the sup2api stack
 ├── docker/                # build and entrypoint scripts used by ../Dockerfile
-├── mock-upstream/         # mock Anthropic API (standalone Go module)
-├── scripts/               # sync.sh (local), up.sh / down.sh / logs.sh (server)
+├── mock-upstream/         # mock Anthropic API (standalone Go module, used by e2e)
 └── ci/compose.yml         # Go test runner joined to the sub2api-next-testdb network
 ```
 
-## Workflow
-
-```bash
-# local (Git Bash): push first, then make ovh:~/sub2api-next-test/src git-pull the
-# current branch (sparse, next/ only) and check it matches local HEAD;
-# --branch <name> deploys another pushed branch; --up also rebuilds and restarts
-git push
-bash next/deploy/scripts/sync.sh --up
-
-# on the server (or: ssh ovh bash ~/sub2api-next-test/src/next/deploy/scripts/<script>)
-bash ~/sub2api-next-test/src/next/deploy/scripts/up.sh [--no-cache]   # build + up -d + wait for /healthz
-bash ~/sub2api-next-test/src/next/deploy/scripts/logs.sh [node-1 ...] # follow logs (LOGS_FOLLOW=0 to print once)
-bash ~/sub2api-next-test/src/next/deploy/scripts/down.sh [--purge]    # stop; --purge drops the volumes
-```
-
-`up.sh` creates `~/sub2api-next-test/.env` with random secrets on first run
-(outside `src/`, so syncing never overwrites it). The bootstrap admin
-credentials are in that file:
-
-```bash
-ssh ovh grep ADMIN ~/sub2api-next-test/.env
-```
-
-## Access from your machine
-
-```bash
-ssh -N -L 3120:127.0.0.1:3120 ovh
-```
-
-Then open <http://127.0.0.1:3120>.
-
-| URL | What |
-|---|---|
-| `/` , `/api/v1/*`, `/v1/*` | console, API and gateway, round robin over both nodes (`X-Served-By` response header tells which) |
-| `/healthz` | `{"status","version","node"}` of the node that answered |
-| `/market/index.json`, `index.json.sig`, `*.s2plugin`, `dev-official.pub` | signed dev market (served by Caddy from the image) |
-| `/market/test/*.s2plugin` | signed test builds not listed in the index (guard `0.1.1-test`) |
-| `/__node1/*`, `/__node2/*` | one node directly, bypassing the LB |
-| `/__mock/*` | mock upstream: `/__mock/__requests`, `/__mock/__control` |
+The former two-nodes-behind-Caddy stack on `127.0.0.1:3120`
+(`sub2api-next-test`: compose.yml, caddy/, scripts/, with mock-upstream and the
+`/__node1`, `/__node2`, `/__mock` test routes) was removed on 2026-09-27. The
+e2e suite below still expects that layout and needs a new target before it
+can run again.
 
 ## Image (`next/Dockerfile`, context `next/`)
 
@@ -72,9 +35,7 @@ Then open <http://127.0.0.1:3120>.
   from the dev public key unless those variables are set.
 - Without the plugin CLI the market contains an empty, unsigned `index.json`.
 
-Node settings (compose): plugin dev mode off, unsigned packages refused, strict
-network and seccomp on, `SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM=true` so accounts
-can use `base_url=http://mock-upstream:8080`, `mem_limit` 1g per node.
+Node settings live in `single/compose.yml`.
 
 ## mock-upstream
 

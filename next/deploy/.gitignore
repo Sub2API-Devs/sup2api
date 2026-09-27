@@ -1,4 +1,2 @@
-# The repository root ignores every "scripts" directory; these are ours.
-!scripts/
 .env
 keys/
