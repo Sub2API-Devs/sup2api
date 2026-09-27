@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import SInput from './SInput.vue'
 import SSelect from './SSelect.vue'
 import { fromLocalInput, rangeBounds, toLocalInput, type RangeKey } from './timeRange'
 
@@ -28,6 +29,11 @@ const labels: Record<RangeKey, string> = {
 
 const options = computed(() => props.keys.map((k) => ({ value: k, label: t(labels[k]) })))
 
+// SInput (datetime-local, lazy) emits the local string; convert to RFC 3339.
+function local(v: unknown): string {
+  return fromLocalInput(typeof v === 'string' ? v : '')
+}
+
 function pick(v: unknown) {
   const key = v as RangeKey
   emit('update:range', key)
@@ -48,11 +54,11 @@ function pick(v: unknown) {
     <template v-if="range === 'custom'">
       <div>
         <label class="input-label">{{ t('ui.from') }}</label>
-        <input type="datetime-local" class="input !w-52" :value="toLocalInput(from)" @change="emit('update:from', fromLocalInput(($event.target as HTMLInputElement).value))" />
+        <SInput type="datetime-local" class="!w-52" :model-value="toLocalInput(from)" @update:model-value="emit('update:from', local($event))" />
       </div>
       <div>
         <label class="input-label">{{ t('ui.to') }}</label>
-        <input type="datetime-local" class="input !w-52" :value="toLocalInput(to)" @change="emit('update:to', fromLocalInput(($event.target as HTMLInputElement).value))" />
+        <SInput type="datetime-local" class="!w-52" :model-value="toLocalInput(to)" @update:model-value="emit('update:to', local($event))" />
       </div>
     </template>
   </div>

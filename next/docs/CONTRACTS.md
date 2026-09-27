@@ -1165,28 +1165,30 @@ type ProxyResolver interface {
 | `STable<T>` | 表格 | `columns: TableColumn[]`、`rows: T[]`、`loading`、`rowKey`（`'id'`）、`expandable`、`emptyText`、`dense` | emits `row-click(row)`、`expand(row, open)`；slots `cell-<key>`（`{row, value, index}`）、`expand`（`{row}`）、`empty`；`key` 支持 `a.b` 路径，空值显示 `—` |
 | `SPagination` | 分页 | `page`、`pageSize`、`total`（必填）、`pageSizes`（`[20,50,100]`） | emits `update:page`、`update:pageSize`（改每页数时 `page` 回 1） |
 | `STabs` | 标签页 | `tabs: TabItem[]`、`modelValue: string`（必填） | emits `update:modelValue` |
-| `SButton` | 按钮 | `variant`（`primary`/`secondary`/`ghost`/`danger`/`success`/`warning`，secondary）、`size`（`sm`/`md`/`lg`，md）、`loading`（显示 spinner 并禁用）、`disabled`、`type`（`button`/`submit`/`reset`，button）、`block` | 原生 `click`；slot 默认 |
+| `SButton` | 按钮；给 `to` 渲染 `RouterLink`、给 `href` 渲染 `<a>`（同样的 `.btn` 类），否则原生 `<button>` | `variant`（`primary`/`secondary`/`ghost`/`danger`/`success`/`warning`，secondary）、`size`（`sm`/`md`/`lg`，md）、`loading`（显示 spinner 并禁用；仅 button 形态）、`disabled`（仅 button 形态）、`type`（`button`/`submit`/`reset`，button）、`block`、`to`（`string \| RouteLocationRaw`）、`href` | 原生 `click`；slot 默认 |
 | `SDropdown` | 操作菜单（Teleport 到 body，自动定位） | `actions: MenuAction[]`（必填）、`label` | emits `select(key)`；slot 默认为触发按钮内容（缺省显示 `label` 或 `more` 图标） |
 | `SBadge` | 徽标 | `tone: Tone`（gray）、`dot` | slot 默认 |
 | `SIcon` | 线框图标 | `name`（必填；`dashboard` `shield` `key` `plugin` `settings` `chart` `inbox` `plus` `refresh` `trash` `edit` `more` `check` `x` `warning` `info` `upload` `download` `eye` `eye-off` `lock` `chevron-down` `chevron-right` `arrow-left` `external` `search` `play` `stop` `clock` `copy` `bolt` `cpu` `filter` `link` `code` … 全表见 `SIcon.vue`；未知名字画方块） | 尺寸用 class 控制（如 `h-4 w-4`） |
 | `SSpinner` | 加载圈 | `size`（`sm`/`md`/`lg`，md） | |
 | `SEmpty` | 空状态 | `text`（`ui.noData`）、`icon`（`inbox`） | slot 默认 |
 | `SModal` | 弹窗（Teleport 到 body） | `open`（必填，`v-model:open`）、`title`、`width`（`sm`/`md`/`lg`/`xl`/`2xl`，md）、`closable`（true）、`persistent`（true 时 Esc 和点遮罩不关闭） | emits `update:open`、`close`；slots 默认、`header`、`footer` |
-| `SField` | 表单项外框：label / hint / error / 必填星号 | `label`、`hint`、`error`（有则替代 hint）、`required`、`inline`（label 与控件同行） | slot 默认放控件 |
-| `SInput` | 输入框 | `modelValue: string \| number \| null`、`type`（`text`/`password`/`number`/`url`/`email`/`search`/`datetime-local`/`date`/`time`，text）、`placeholder`、`disabled`、`readonly`、`size`（`sm`）、`mono`、`error`、`maxlength`、`inputmode`、`autocomplete` | emits `update:modelValue`（string；`type=number` 时为 number，空或非法为 null）；其他 attrs（`id` `name` `data-testid` …）透传到 `<input>` |
+| `SField` | 表单项外框：label / hint / error / 必填星号 | `label`、`hint`、`error`（有则替代 hint）、`required`、`inline`（label 与控件同行） | slot 默认放控件；slots `hint`、`error`（替代同名 prop，可放富内容）；其他 attrs（`data-testid` …）落到根 `<div>` |
+| `SInput` | 输入框 | `modelValue: string \| number \| null`、`type`（`text`/`password`/`number`/`url`/`email`/`search`/`datetime-local`/`date`/`time`/`file`/`color`，text）、`placeholder`、`disabled`、`readonly`、`size`（`sm`）、`mono`、`error`、`maxlength`、`inputmode`、`autocomplete`、`lazy`（true 时在 `change` 而非 `input` 时发出；`datetime-local`/`date`/`time` 默认 true，其余默认 false） | emits `update:modelValue`（string；`type=number` 时为 number，空或非法为 null；`type=file` 时为 `FileList \| null`，此时忽略 `modelValue`、只在 `change` 时发出）；其他 attrs（`id` `name` `data-testid` …）透传到 `<input>` |
 | `STextarea` | 多行输入 | `modelValue`、`rows`（4）、`placeholder`、`disabled`、`readonly`、`mono`、`error`、`maxlength` | emits `update:modelValue`（string）；其他 attrs 透传 |
-| `SSelect` | 下拉（原生 `<select>`，值保持原类型） | `modelValue: SelectOption['value']`、`options: SelectOption[]`（必填）、`placeholder`（给了才有空选项，选中发 `null`）、`disabled` | emits `update:modelValue` |
+| `SSelect` | 下拉（原生 `<select>`，值保持原类型；带 `options` 的项渲染成 `<optgroup>`） | `modelValue: SelectOption['value']`、`options: SelectOption[]`（必填；分组项 `{label, options: [...]}`，自身 `value` 忽略）、`placeholder`（给了才有空选项，选中发 `null`）、`disabled` | emits `update:modelValue` |
 | `SSwitch` | 开关 | `modelValue: boolean`（必填）、`disabled`、`label` | emits `update:modelValue`；slot 默认为文字 |
 | `STagInput` | 标签输入 | `modelValue: string[] \| null`、`placeholder`（`ui.addTag`）、`disabled` | emits `update:modelValue`；Enter / 逗号 / 失焦添加，粘贴按逗号和换行拆分并去重，Backspace 删最后一个 |
 | `SKeyValue` | 字符串键值表编辑 | `modelValue: Record<string,string> \| null`、`keyLabel`、`valueLabel`、`keyPlaceholder`、`valuePlaceholder`、`disabled` | emits `update:modelValue`（空键的行被丢弃） |
 | `STimeRange` | 时间范围筛选：预设下拉 + 自定义起止（datetime-local） | `range: RangeKey`、`from`、`to`（RFC 3339，`''` = 不限）、`keys: RangeKey[]`（`['today','7d','30d','custom']`） | emits `update:range`、`update:from`、`update:to`（选预设时同时发 from/to） |
-| `SGrid` | 响应式网格：手机单列，`sm:` 起按 `cols` 分列 | `cols`（1–6，2）、`mdCols`、`lgCols`、`xlCols`（按断点覆盖列数，1–6）、`gap`（`2`/`3`/`4`/`6`，4） | slot 默认放网格项 |
+| `SGrid` | 响应式网格：手机 `colsBase` 列，`sm:` 起按 `cols` 分列 | `cols`（1–6，2）、`colsBase`（1–6，1；断点前的列数）、`mdCols`、`lgCols`、`xlCols`（按断点覆盖列数，1–6）、`gap`（`2`/`3`/`4`/`6`，4）、`template`（任意 `grid-template-columns`，如 `'1fr 140px'`，走内联样式；给了就不再输出列数 class） | slot 默认放网格项 |
 | `SStack` | flex 堆叠（默认竖排） | `direction`（`col`/`row`，col）、`gap`（`1`/`2`/`3`/`4`/`6`，3）、`align`（`start`/`center`/`end`/`stretch`）、`justify`（`start`/`between`/`end`）、`wrap` | slot 默认 |
-| `SCheckbox` | 复选框（原生 `<input type="checkbox">` + 文字） | `modelValue: boolean`（必填）、`label`、`disabled` | emits `update:modelValue`；slot 默认替代 `label` |
-| `SLink` | 链接：给 `to` 渲染 `RouterLink`，否则 `<a>` | `to`（`string \| RouteLocationRaw`）、`href`、`external`（`target=_blank` + `rel=noopener noreferrer`） | slot 默认 |
+| `SCheckbox` | 复选框（原生 `<input type="checkbox">` + 文字） | `modelValue: boolean`（必填）、`label`、`disabled`、`indeterminate`（设 DOM 的 `indeterminate` 属性）、`size`（`xs`/`sm`，sm；文字大小与间距）、`bare`（只渲染 `<input>`，不带 label 外框；表头/行选择用） | emits `update:modelValue`；slot 默认替代 `label`；`inheritAttrs: false`：`class`/`style` 落到外层 `<label>`，其余 attrs（`id` `data-testid` `aria-*` …）落到 `<input>`（`bare` 时全部落到 `<input>`） |
+| `SRadio` | 单选框（原生 `<input type="radio">` + 文字），`modelValue === value` 时选中 | `modelValue: SelectOption['value']`（必填）、`value`（必填，本项的值）、`label`、`disabled`、`size`（`xs`/`sm`，sm）、`name` | emits `update:modelValue`（发 `value`）；slot 默认替代 `label` |
+| `SRadioGroup` | 单选组：按 `options` 渲染一组 `SRadio` | `modelValue: SelectOption['value']`（必填）、`options: SelectOption[]`（必填；`disabled` 项单独禁用）、`name`、`inline`（横排换行，否则竖排）、`disabled`、`size`（`xs`/`sm`，sm） | emits `update:modelValue` |
+| `SLink` | 链接：给 `to` 渲染 `RouterLink`，`as="button"` 渲染 `<button type="button" class="link">`，否则 `<a>` | `to`（`string \| RouteLocationRaw`）、`href`、`external`（`target=_blank` + `rel=noopener noreferrer`）、`as`（`a`/`button`，a）、`disabled`（仅 button 形态） | slot 默认；button 形态发原生 `click` |
 | `SCode` | 代码：块级 `<pre>`（`.code-block`）或行内 `<code>` | `inline`、`text`、`wrap`（true；false 时不折行、横向滚动） | slot 默认替代 `text` |
-| `SSectionTitle` | 小节标题 `<h3>`（`.section-title`） | `title` | slot 默认替代 `title`；slot `actions` 右对齐 |
-| `SHint` | 小号辅助文字 | `tone`（`muted`/`danger`/`success`/`warning`，muted）、`inline`（`<span>` 而非 `<p>`） | slot 默认 |
+| `SSectionTitle` | 小节标题（`.section-title`） | `title`、`tag`（`h3`/`h4`/`p`，h3） | slot 默认替代 `title`；slot `actions` 右对齐 |
+| `SHint` | 小号辅助文字 | `tone`（`muted`/`danger`/`success`/`warning`，muted）、`inline`（`<span>` 而非 `<p>`）、`size`（`xs`/`sm`，sm；`xs` = `text-xs`，原 `muted text-xs` / `text-[11px]` 都用它） | slot 默认 |
 
 `STimeRange` 的辅助导出：`type RangeKey = 'all' \| 'today' \| '7d' \| '30d' \| 'month' \| 'custom'`、`rangeBounds(key) → {from, to}`（本地零点起算的 RFC 3339，`''` = 不限）、`toLocalInput(rfc3339)` / `fromLocalInput(local)`（与 `<input type="datetime-local">` 互转）、`dayKey(v) → 'YYYY-MM-DD'`（本地日）。
 
@@ -1208,7 +1210,7 @@ JSON Schema 表单（`schema/`；账号凭据、插件设置、声明式表单�
 | `toastState`、`confirmState`、`dismissToast`、`settleConfirm` | 宿主组件用，插件不要碰 |
 | `uiMessages` | `{en, zh}`，控制台挂在全局 i18n 的 `ui` 命名空间（`ui.ok` `ui.cancel` `ui.confirm` `ui.close` `ui.loading` `ui.noData` `ui.prev` `ui.next` `ui.total` `ui.perPage` `ui.add` `ui.remove` `ui.key` `ui.value` `ui.addTag` `ui.confirmTitle` 及 `STimeRange` 用的 `ui.time` `ui.from` `ui.to` `ui.all` `ui.today` `ui.last7d` `ui.last30d` `ui.thisMonth` `ui.custom`）；插件可用 `host.i18n.t('ui.cancel')` 复用 |
 
-类型（`types.ts`）：`TableColumn {key, label, width?, align?: 'left'|'right'|'center', class?}`、`TabItem {key, label, badge?, disabled?}`、`SelectOption {value: string|number|boolean|null, label, disabled?}`、`MenuAction {key, label, danger?, disabled?, hidden?}`、`Tone = 'primary'|'success'|'warning'|'danger'|'gray'|'purple'|'info'`。
+类型（`types.ts`）：`TableColumn {key, label, width?, align?: 'left'|'right'|'center', class?}`、`TabItem {key, label, badge?, disabled?}`、`SelectOption {value: string|number|boolean|null, label, disabled?, options?: SelectOption[]}`（带 `options` 的是 `SSelect` 的分组项）、`MenuAction {key, label, danger?, disabled?, hidden?}`、`Tone = 'primary'|'success'|'warning'|'danger'|'gray'|'purple'|'info'`。
 
 ### 23.4 约定
 

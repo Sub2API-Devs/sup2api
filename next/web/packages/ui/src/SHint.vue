@@ -1,6 +1,10 @@
 <script setup lang="ts">
-// Small helper text. `tone` picks the colour; `inline` renders a <span>.
-withDefaults(defineProps<{ tone?: 'muted' | 'danger' | 'success' | 'warning'; inline?: boolean }>(), { tone: 'muted' })
+// Small helper text. `tone` picks the colour; `inline` renders a <span>;
+// `size` is sm (text-sm) or xs (text-xs, for `muted text-xs` / `text-[11px]` leftovers).
+withDefaults(
+  defineProps<{ tone?: 'muted' | 'danger' | 'success' | 'warning'; inline?: boolean; size?: 'xs' | 'sm' }>(),
+  { tone: 'muted', size: 'sm' }
+)
 
 const TONE: Record<string, string> = {
   muted: 'muted',
@@ -11,5 +15,5 @@ const TONE: Record<string, string> = {
 </script>
 
 <template>
-  <component :is="inline ? 'span' : 'p'" class="text-sm" :class="TONE[tone]"><slot /></component>
+  <component :is="inline ? 'span' : 'p'" :class="[size === 'xs' ? 'text-xs' : 'text-sm', TONE[tone]]"><slot /></component>
 </template>

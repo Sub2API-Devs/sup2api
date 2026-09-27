@@ -17,6 +17,8 @@ export interface SelectOption {
   value: string | number | boolean | null
   label: string
   disabled?: boolean
+  /** Group entry (<optgroup>): `label` + nested `options`; its own `value` is ignored. */
+  options?: SelectOption[]
 }
 
 export interface MenuAction {

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+// Form item frame: label / hint / error / required star. `hint` and `error`
+// can also come from the `#hint` / `#error` slots (error wins over hint).
+// Remaining attrs (data-testid, ...) fall through to the root div.
 defineProps<{ label?: string; hint?: string; error?: string; required?: boolean; inline?: boolean }>()
 </script>
 
@@ -9,8 +12,8 @@ defineProps<{ label?: string; hint?: string; error?: string; required?: boolean;
     </label>
     <div :class="inline ? 'flex-1' : ''">
       <slot />
-      <p v-if="error" class="input-error-text">{{ error }}</p>
-      <p v-else-if="hint" class="input-hint">{{ hint }}</p>
+      <p v-if="error || $slots.error" class="input-error-text"><slot name="error">{{ error }}</slot></p>
+      <p v-else-if="hint || $slots.hint" class="input-hint"><slot name="hint">{{ hint }}</slot></p>
     </div>
   </div>
 </template>
