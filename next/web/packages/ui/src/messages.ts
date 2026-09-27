@@ -15,7 +15,16 @@ export default {
     key: 'Key',
     value: 'Value',
     addTag: 'Type and press Enter',
-    confirmTitle: 'Please confirm'
+    confirmTitle: 'Please confirm',
+    time: 'Time',
+    all: 'All',
+    today: 'Today',
+    last7d: 'Last 7 days',
+    last30d: 'Last 30 days',
+    thisMonth: 'This month',
+    custom: 'Custom',
+    from: 'From',
+    to: 'To'
   },
   zh: {
     ok: '确定',
@@ -33,6 +42,15 @@ export default {
     key: '键',
     value: '值',
     addTag: '输入后按回车',
-    confirmTitle: '请确认'
+    confirmTitle: '请确认',
+    time: '时间',
+    all: '全部',
+    today: '今天',
+    last7d: '最近 7 天',
+    last30d: '最近 30 天',
+    thisMonth: '本月',
+    custom: '自定义',
+    from: '开始',
+    to: '结束'
   }
 } as Record<string, Record<string, string>>

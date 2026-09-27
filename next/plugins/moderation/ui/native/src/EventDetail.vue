@@ -108,7 +108,7 @@ const idOrDash = (v: number | null | undefined) => (v ? `#${v}` : '—')
         <div class="mod-detail-label">
           <span class="section-title mod-mb-0">{{ t('detail.text') }}</span>
           <span v-if="ev.text_chars" class="muted mod-small">{{ t('detail.chars', { n: host.i18n.formatNumber(ev.text_chars) }) }}</span>
-          <button v-if="ev.text" type="button" class="btn btn-ghost btn-sm mod-ml-auto" @click="copy"><SIcon name="copy" class="mod-icon" />{{ t('detail.copy') }}</button>
+          <SButton v-if="ev.text" variant="ghost" size="sm" class="mod-ml-auto" @click="copy"><SIcon name="copy" class="mod-icon" />{{ t('detail.copy') }}</SButton>
         </div>
         <pre v-if="ev.text" class="code-block mod-text-block">{{ ev.text }}</pre>
         <p v-else class="muted mod-small">{{ t('detail.textNotStored') }}</p>

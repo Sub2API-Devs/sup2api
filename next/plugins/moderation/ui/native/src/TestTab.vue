@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { SBadge, SButton, SCard, SEmpty, SIcon } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SEmpty, SIcon, STextarea } from '@sub2api/ui'
 import { isApiError } from '@sub2api/host'
 import VerdictBadge from './VerdictBadge.vue'
 import CategoryChips from './CategoryChips.vue'
@@ -98,16 +98,10 @@ const transcript = computed(() => result.value?.transcript || [])
 
     <div class="mod-test-grid">
       <SCard :title="t('test.title')">
-        <textarea
-          v-model="text"
-          class="input mod-textarea"
-          rows="8"
-          :placeholder="t('test.placeholder')"
-          @keydown="onKey"
-        />
+        <STextarea v-model="text" class="mod-textarea" :rows="8" :placeholder="t('test.placeholder')" @keydown="onKey" />
         <div class="mod-test-actions">
           <span class="muted mod-small">{{ t('test.samples') }}：</span>
-          <button v-for="s in samples" :key="s" type="button" class="btn btn-ghost btn-sm" @click="useSample(s)">{{ t(`test.sample.${s}`) }}</button>
+          <SButton v-for="s in samples" :key="s" variant="ghost" size="sm" @click="useSample(s)">{{ t(`test.sample.${s}`) }}</SButton>
           <SButton variant="primary" class="mod-ml-auto" :loading="running" :disabled="!text.trim()" @click="run">
             <SIcon v-if="!running" name="play" class="mod-icon" />{{ running ? t('test.running') : t('test.run') }}
           </SButton>

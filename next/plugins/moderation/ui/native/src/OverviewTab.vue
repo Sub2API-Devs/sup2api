@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { SButton, SCard, SChart, SEmpty, SIcon, SStatCard } from '@sub2api/ui'
+import { SButton, SCard, SChart, SEmpty, SIcon, SSelect, SStatCard } from '@sub2api/ui'
 import {
   canManageSettings,
   categoryLabel,
@@ -23,6 +23,7 @@ const n = (v: number | undefined | null) => host.i18n.formatNumber(v ?? 0)
 
 const ranges: Range[] = ['24h', '7d', '30d']
 const range = ref<Range>('24h')
+const rangeOptions = computed(() => ranges.map((r) => ({ value: r, label: t(`range.${r}`) })))
 const data = ref<Overview | null>(null)
 const loading = ref(false)
 const error = ref('')
@@ -120,9 +121,7 @@ const queuePct = computed(() => {
 <template>
   <div>
     <div class="mod-toolbar">
-      <select v-model="range" class="input mod-w-40">
-        <option v-for="r in ranges" :key="r" :value="r">{{ t(`range.${r}`) }}</option>
-      </select>
+      <SSelect v-model="range" :options="rangeOptions" class="mod-w-40" />
     </div>
 
     <p v-if="error" class="mod-alert mod-alert-danger">{{ error }}</p>

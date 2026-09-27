@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { isApiError } from '@sub2api/host'
-import { SButton, SCard, SIcon } from '@sub2api/ui'
+import { SButton, SCard, SField, SIcon, SInput, SSelect, STextarea } from '@sub2api/ui'
 import {
   canManageSettings,
   errorMessage,
@@ -46,6 +46,12 @@ const form = reactive<LLMSettings>({
 
 // Track whether api_key was masked on load (existing secret stored server-side).
 const apiKeyMasked = ref(false)
+
+const toolChoiceOptions = computed(() => [
+  { value: 'required', label: t('llm.toolChoiceRequired') },
+  { value: 'function', label: t('llm.toolChoiceFunction') },
+  { value: 'auto', label: t('llm.toolChoiceAuto') }
+])
 
 function applyLoaded(s: LLMSettings) {
   Object.assign(form, s)
@@ -109,123 +115,79 @@ async function save() {
       <!-- Connection -->
       <SCard :title="t('llm.connection')" class="mod-section">
         <div class="mod-form">
-          <label class="mod-label">
-            <span>{{ t('llm.baseUrl') }}</span>
-            <input
-              v-model="form.base_url"
-              type="url"
-              class="input"
-              :placeholder="t('llm.baseUrlPlaceholder')"
-              :disabled="!canEdit"
-            />
-            <span class="muted mod-small">{{ t('llm.baseUrlHelp') }}</span>
-          </label>
+          <SField :label="t('llm.baseUrl')" :hint="t('llm.baseUrlHelp')">
+            <SInput v-model="form.base_url" type="url" :placeholder="t('llm.baseUrlPlaceholder')" :disabled="!canEdit" />
+          </SField>
 
-          <label class="mod-label">
-            <span>{{ t('llm.apiKey') }}</span>
-            <input
+          <SField :label="t('llm.apiKey')" :hint="t('llm.apiKeyHelp')">
+            <SInput
               v-model="form.api_key"
               type="password"
-              class="input"
               :placeholder="apiKeyMasked ? t('llm.apiKeySet') : t('llm.apiKeyPlaceholder')"
               :disabled="!canEdit"
               autocomplete="new-password"
             />
-            <span class="muted mod-small">{{ t('llm.apiKeyHelp') }}</span>
-          </label>
+          </SField>
 
-          <label class="mod-label">
-            <span>{{ t('llm.model') }}</span>
-            <input
-              v-model="form.model"
-              type="text"
-              class="input"
-              placeholder="gpt-4o-mini"
-              :disabled="!canEdit"
-            />
-            <span class="muted mod-small">{{ t('llm.modelHelp') }}</span>
-          </label>
+          <SField :label="t('llm.model')" :hint="t('llm.modelHelp')">
+            <SInput v-model="form.model" placeholder="gpt-4o-mini" :disabled="!canEdit" />
+          </SField>
         </div>
       </SCard>
 
       <!-- Prompt -->
       <SCard :title="t('llm.prompt')" class="mod-section">
         <div class="mod-form">
-          <label class="mod-label">
-            <span>{{ t('llm.systemPrompt') }}</span>
-            <textarea
+          <SField :label="t('llm.systemPrompt')" :hint="t('llm.systemPromptHelp', { token: PROMPT_TOKEN })">
+            <STextarea
               v-model="form.system_prompt"
-              class="input mod-textarea"
-              rows="10"
+              class="mod-textarea"
+              :rows="10"
               :placeholder="t('llm.systemPromptPlaceholder', { token: PROMPT_TOKEN })"
               :disabled="!canEdit"
             />
-            <span class="muted mod-small">{{ t('llm.systemPromptHelp', { token: PROMPT_TOKEN }) }}</span>
-          </label>
+          </SField>
 
-          <div class="mod-label">
-            <span>{{ t('llm.categories') }}</span>
+          <SField :label="t('llm.categories')" :hint="t('llm.categoriesHelp')">
             <div v-if="form.categories.length" class="mod-cat-list">
               <div v-for="(cat, i) in form.categories" :key="i" class="mod-cat-row">
-                <input
-                  v-model="cat.id"
-                  type="text"
-                  class="input mod-cat-id"
-                  :placeholder="t('llm.catIdPlaceholder')"
-                  :disabled="!canEdit"
-                />
-                <input
-                  v-model="cat.description"
-                  type="text"
-                  class="input mod-cat-desc"
-                  :placeholder="t('llm.catDescPlaceholder')"
-                  :disabled="!canEdit"
-                />
-                <button v-if="canEdit" type="button" class="btn btn-ghost btn-sm mod-cat-del" @click="removeCategory(i)">
+                <SInput v-model="cat.id" class="mod-cat-id" :placeholder="t('llm.catIdPlaceholder')" :disabled="!canEdit" />
+                <SInput v-model="cat.description" class="mod-cat-desc" :placeholder="t('llm.catDescPlaceholder')" :disabled="!canEdit" />
+                <SButton v-if="canEdit" variant="ghost" size="sm" class="mod-cat-del" @click="removeCategory(i)">
                   <SIcon name="close" class="mod-icon" />
-                </button>
+                </SButton>
               </div>
             </div>
             <p v-else class="muted mod-small">{{ t('llm.categoriesEmpty') }}</p>
-            <button v-if="canEdit" type="button" class="btn btn-ghost btn-sm mod-mt-xs" @click="addCategory">
+            <SButton v-if="canEdit" variant="ghost" size="sm" class="mod-mt-xs" @click="addCategory">
               <SIcon name="plus" class="mod-icon" />{{ t('llm.addCategory') }}
-            </button>
-            <span class="muted mod-small">{{ t('llm.categoriesHelp') }}</span>
-          </div>
+            </SButton>
+          </SField>
         </div>
       </SCard>
 
       <!-- Agent loop knobs -->
       <SCard :title="t('llm.agentLoop')" class="mod-section">
         <div class="mod-form mod-form-grid">
-          <label class="mod-label">
-            <span>{{ t('llm.toolChoice') }}</span>
-            <select v-model="form.tool_choice" class="input" :disabled="!canEdit">
-              <option value="required">{{ t('llm.toolChoiceRequired') }}</option>
-              <option value="function">{{ t('llm.toolChoiceFunction') }}</option>
-              <option value="auto">{{ t('llm.toolChoiceAuto') }}</option>
-            </select>
-          </label>
+          <SField :label="t('llm.toolChoice')">
+            <SSelect v-model="form.tool_choice" :options="toolChoiceOptions" :disabled="!canEdit" />
+          </SField>
 
-          <label class="mod-label">
-            <span>{{ t('llm.maxTurns') }}</span>
-            <input v-model.number="form.max_turns" type="number" class="input" min="1" max="5" :disabled="!canEdit" />
-          </label>
+          <SField :label="t('llm.maxTurns')">
+            <SInput v-model="form.max_turns" type="number" min="1" max="5" :disabled="!canEdit" />
+          </SField>
 
-          <label class="mod-label">
-            <span>{{ t('llm.temperature') }}</span>
-            <input v-model.number="form.temperature" type="number" class="input" min="0" max="2" step="0.1" :disabled="!canEdit" />
-          </label>
+          <SField :label="t('llm.temperature')">
+            <SInput v-model="form.temperature" type="number" min="0" max="2" step="0.1" :disabled="!canEdit" />
+          </SField>
 
-          <label class="mod-label">
-            <span>{{ t('llm.maxTokens') }}</span>
-            <input v-model.number="form.max_tokens" type="number" class="input" min="64" max="4096" :disabled="!canEdit" />
-          </label>
+          <SField :label="t('llm.maxTokens')">
+            <SInput v-model="form.max_tokens" type="number" min="64" max="4096" :disabled="!canEdit" />
+          </SField>
 
-          <label class="mod-label">
-            <span>{{ t('llm.timeoutMs') }}</span>
-            <input v-model.number="form.timeout_ms" type="number" class="input" min="1000" max="25000" step="500" :disabled="!canEdit" />
-          </label>
+          <SField :label="t('llm.timeoutMs')">
+            <SInput v-model="form.timeout_ms" type="number" min="1000" max="25000" step="500" :disabled="!canEdit" />
+          </SField>
         </div>
       </SCard>
 

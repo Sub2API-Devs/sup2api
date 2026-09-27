@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { SBadge, SButton, SCard, SIcon, STable } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SField, SIcon, SInput, STable } from '@sub2api/ui'
 import { canManage, createBlock, deleteBlock, enumLabel, errorMessage, fetchBlocks, useModHost, type Block } from './host'
 
 // Blocked users: list (GET /blocks), unblock (DELETE /blocks/:user_id),
@@ -58,7 +58,7 @@ async function unblock(b: Block) {
 }
 
 // Manual block form.
-const form = reactive({ user_id: '', reason: '', duration_hours: '24' })
+const form = reactive<{ user_id: string; reason: string; duration_hours: number | null }>({ user_id: '', reason: '', duration_hours: 24 })
 const formErr = reactive({ user_id: '', duration_hours: '' })
 const saving = ref(false)
 
@@ -67,7 +67,7 @@ async function submit() {
   formErr.duration_hours = ''
   const uid = Number(form.user_id.trim())
   if (!/^\d+$/.test(form.user_id.trim()) || !Number.isSafeInteger(uid) || uid <= 0) formErr.user_id = t('blocks.invalidUser')
-  // v-model on type=number may hand back a number
+  // SInput type=number hands back a number (null when empty)
   const rawDh = String(form.duration_hours ?? '').trim()
   const dh = rawDh === '' ? 0 : Number(rawDh)
   if (!Number.isInteger(dh) || dh < 0) formErr.duration_hours = t('blocks.invalidDuration')
@@ -98,21 +98,15 @@ async function submit() {
 
     <SCard v-if="manage" :title="t('blocks.manual')" class="mod-section-b">
       <form class="mod-block-form" @submit.prevent="submit">
-        <label class="mod-filter">
-          <span class="input-label">{{ t('blocks.userId') }}<span class="mod-req">*</span></span>
-          <input v-model="form.user_id" class="input" :class="formErr.user_id ? 'input-error' : ''" inputmode="numeric" />
-          <span v-if="formErr.user_id" class="input-error-text">{{ formErr.user_id }}</span>
-        </label>
-        <label class="mod-filter mod-filter-wide">
-          <span class="input-label">{{ t('blocks.reason') }}</span>
-          <input v-model="form.reason" class="input" maxlength="500" :placeholder="t('blocks.reasonPlaceholder')" />
-        </label>
-        <label class="mod-filter">
-          <span class="input-label">{{ t('blocks.duration') }}</span>
-          <input v-model="form.duration_hours" class="input" :class="formErr.duration_hours ? 'input-error' : ''" type="number" min="0" step="1" />
-          <span v-if="formErr.duration_hours" class="input-error-text">{{ formErr.duration_hours }}</span>
-          <span v-else class="input-hint">{{ t('blocks.durationHint') }}</span>
-        </label>
+        <SField class="mod-filter" :label="t('blocks.userId')" required :error="formErr.user_id">
+          <SInput v-model="form.user_id" :error="!!formErr.user_id" inputmode="numeric" />
+        </SField>
+        <SField class="mod-filter mod-filter-wide" :label="t('blocks.reason')">
+          <SInput v-model="form.reason" :maxlength="500" :placeholder="t('blocks.reasonPlaceholder')" />
+        </SField>
+        <SField class="mod-filter" :label="t('blocks.duration')" :error="formErr.duration_hours" :hint="t('blocks.durationHint')">
+          <SInput v-model="form.duration_hours" type="number" min="0" step="1" :error="!!formErr.duration_hours" />
+        </SField>
         <div class="mod-filter-actions">
           <SButton type="submit" variant="danger" :loading="saving"><SIcon name="lock" class="mod-icon" />{{ t('blocks.submit') }}</SButton>
         </div>

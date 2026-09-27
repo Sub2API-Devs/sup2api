@@ -2,13 +2,12 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, SChart, SPageHeader, SPagination, SSelect, SStatCard } from '@sub2api/ui'
+import { SButton, SCard, SChart, SPageHeader, SPagination, SSelect, SStatCard, STimeRange } from '@sub2api/ui'
 import type { Group, UsageSummaryRow } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
 import { useAuthStore } from '@/stores/auth'
 import { formatMoney, formatNumber } from '@/utils/format'
-import TimeRangeFilter from './TimeRangeFilter.vue'
 import UsageTable from './UsageTable.vue'
 import { rangeBounds, type RangeKey } from './timeRange'
 import { dailyChartOption, type UsageRow } from './usage'
@@ -108,7 +107,7 @@ function refresh() {
         <SButton @click="refresh">{{ t('common.refresh') }}</SButton>
       </template>
       <template #filters>
-        <TimeRangeFilter v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" />
+        <STimeRange v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" />
         <div class="w-28">
           <label class="input-label">{{ t('usage.filters.userId') }}</label>
           <input v-model.trim="filters.user_id" class="input" inputmode="numeric" placeholder="ID" />

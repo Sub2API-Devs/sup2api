@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { SButton, SCard, SChart, SEmpty, SIcon, SPageHeader, SStatCard, STable } from '@sub2api/ui'
+import { SButton, SCard, SChart, SEmpty, SIcon, SPageHeader, SSelect, SStatCard, STable } from '@sub2api/ui'
 import { isApiError } from '@sub2api/host'
 import RulesEditor from './RulesEditor.vue'
 import { fetchStats, useGuardHost, type Range, type Stats } from './host'
@@ -17,6 +17,7 @@ const error = ref('')
 const rulesOpen = ref(false)
 
 const ranges: Range[] = ['today', '24h', '7d', '30d']
+const rangeOptions = computed(() => ranges.map((r) => ({ value: r, label: t(`range.${r}`) })))
 
 async function load() {
   loading.value = true
@@ -80,9 +81,7 @@ const recentColumns = computed(() => [
   <div class="guard-dashboard">
     <SPageHeader :title="t('title')" :description="t('subtitle')">
       <template #actions>
-        <select v-model="range" class="input !w-40">
-          <option v-for="r in ranges" :key="r" :value="r">{{ t(`range.${r}`) }}</option>
-        </select>
+        <SSelect v-model="range" :options="rangeOptions" class="!w-40" />
         <SButton :loading="loading" @click="load"><SIcon name="refresh" class="h-4 w-4" /></SButton>
         <SButton v-if="host.can('rules:read')" variant="primary" @click="rulesOpen = true">
           <SIcon name="shield" class="h-4 w-4" />{{ t('manageRules') }}

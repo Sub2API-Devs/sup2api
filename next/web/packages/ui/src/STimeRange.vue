@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SSelect } from '@sub2api/ui'
+import SSelect from './SSelect.vue'
 import { fromLocalInput, rangeBounds, toLocalInput, type RangeKey } from './timeRange'
 
 // Time range filter: preset select + custom from/to (datetime-local).
@@ -18,12 +18,12 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const labels: Record<RangeKey, string> = {
-  all: 'common.all',
-  today: 'common.today',
-  '7d': 'common.last7d',
-  '30d': 'common.last30d',
-  month: 'common.thisMonth',
-  custom: 'usage.range.custom'
+  all: 'ui.all',
+  today: 'ui.today',
+  '7d': 'ui.last7d',
+  '30d': 'ui.last30d',
+  month: 'ui.thisMonth',
+  custom: 'ui.custom'
 }
 
 const options = computed(() => props.keys.map((k) => ({ value: k, label: t(labels[k]) })))
@@ -42,16 +42,16 @@ function pick(v: unknown) {
 <template>
   <div class="flex flex-wrap items-end gap-2">
     <div class="w-36">
-      <label class="input-label">{{ t('common.time') }}</label>
+      <label class="input-label">{{ t('ui.time') }}</label>
       <SSelect :model-value="range" :options="options" @update:model-value="pick" />
     </div>
     <template v-if="range === 'custom'">
       <div>
-        <label class="input-label">{{ t('common.from') }}</label>
+        <label class="input-label">{{ t('ui.from') }}</label>
         <input type="datetime-local" class="input !w-52" :value="toLocalInput(from)" @change="emit('update:from', fromLocalInput(($event.target as HTMLInputElement).value))" />
       </div>
       <div>
-        <label class="input-label">{{ t('common.to') }}</label>
+        <label class="input-label">{{ t('ui.to') }}</label>
         <input type="datetime-local" class="input !w-52" :value="toLocalInput(to)" @change="emit('update:to', fromLocalInput(($event.target as HTMLInputElement).value))" />
       </div>
     </template>

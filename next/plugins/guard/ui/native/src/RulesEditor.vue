@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { SButton, SEmpty, SModal, SSpinner, SSwitch } from '@sub2api/ui'
+import { SButton, SEmpty, SField, SInput, SModal, SSelect, SSpinner, SSwitch, STable } from '@sub2api/ui'
+import type { TableColumn } from '@sub2api/ui'
 import { isApiError } from '@sub2api/host'
 import { fetchRules, saveRules, useGuardHost, type Rule } from './host'
 
@@ -15,6 +16,22 @@ const loading = ref(false)
 const saving = ref(false)
 const errors = ref<Record<string, string>>({})
 const canManage = computed(() => host.can('rules:manage'))
+
+const kindOptions = computed(() => [
+  { value: 'keyword', label: t('kind.keyword') },
+  { value: 'regex', label: t('kind.regex') }
+])
+
+const columns = computed<TableColumn[]>(() => {
+  const c: TableColumn[] = [
+    { key: 'name', label: t('rules.name') },
+    { key: 'kind', label: t('rules.kind'), width: '9rem' },
+    { key: 'pattern', label: t('rules.pattern') },
+    { key: 'enabled', label: t('rules.enabled'), width: '5rem' }
+  ]
+  if (canManage.value) c.push({ key: 'actions', label: '', width: '3rem' })
+  return c
+})
 
 watch(
   () => props.open,
@@ -84,45 +101,33 @@ async function save() {
     <template v-else>
       <p v-if="!canManage" class="guard-note">{{ t('rules.readOnly') }}</p>
       <SEmpty v-if="!rules.length" :text="t('rules.empty')" icon="shield" />
-      <table v-else class="table">
-        <thead>
-          <tr>
-            <th>{{ t('rules.name') }}</th>
-            <th class="guard-w-kind">{{ t('rules.kind') }}</th>
-            <th>{{ t('rules.pattern') }}</th>
-            <th class="guard-w-switch">{{ t('rules.enabled') }}</th>
-            <th v-if="canManage" class="guard-w-x" />
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(r, i) in rules" :key="r.id ?? `new-${i}`">
-            <td>
-              <input v-model="r.name" class="input input-sm" :class="err(i, 'name') ? 'input-error' : ''" :disabled="!canManage" maxlength="100" />
-              <p v-if="err(i, 'name')" class="input-error-text">{{ err(i, 'name') }}</p>
-            </td>
-            <td>
-              <select v-model="r.kind" class="input input-sm" :disabled="!canManage">
-                <option value="keyword">{{ t('kind.keyword') }}</option>
-                <option value="regex">{{ t('kind.regex') }}</option>
-              </select>
-            </td>
-            <td>
-              <input
-                v-model="r.pattern"
-                class="input input-sm guard-mono"
-                :class="err(i, 'pattern') ? 'input-error' : ''"
-                :disabled="!canManage"
-                :placeholder="r.kind === 'regex' ? '\\d{18}' : 'keyword'"
-              />
-              <p v-if="err(i, 'pattern')" class="input-error-text">{{ err(i, 'pattern') }}</p>
-            </td>
-            <td><SSwitch v-model="r.enabled" :disabled="!canManage" /></td>
-            <td v-if="canManage">
-              <button type="button" class="btn btn-ghost btn-sm" @click="remove(i)">×</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <!-- row-key names no field so every row keys by index; saved rules (id) and new rows would otherwise collide -->
+      <STable v-else :columns="columns" :rows="rules" row-key="__index" dense>
+        <template #cell-name="{ row, index }">
+          <SField :error="err(index, 'name')">
+            <SInput v-model="row.name" size="sm" :error="!!err(index, 'name')" :disabled="!canManage" :maxlength="100" />
+          </SField>
+        </template>
+        <template #cell-kind="{ row }">
+          <SSelect v-model="row.kind" :options="kindOptions" class="input-sm" :disabled="!canManage" />
+        </template>
+        <template #cell-pattern="{ row, index }">
+          <SField :error="err(index, 'pattern')">
+            <SInput
+              v-model="row.pattern"
+              size="sm"
+              mono
+              :error="!!err(index, 'pattern')"
+              :disabled="!canManage"
+              :placeholder="row.kind === 'regex' ? '\\d{18}' : 'keyword'"
+            />
+          </SField>
+        </template>
+        <template #cell-enabled="{ row }"><SSwitch v-model="row.enabled" :disabled="!canManage" /></template>
+        <template #cell-actions="{ index }">
+          <SButton variant="ghost" size="sm" @click="remove(index)">×</SButton>
+        </template>
+      </STable>
       <p class="input-hint">{{ t('rules.regexHint') }}</p>
     </template>
     <template #footer>
@@ -143,18 +148,6 @@ async function save() {
   margin-bottom: 0.75rem;
   font-size: 0.875rem;
   color: #d97706;
-}
-.guard-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-.guard-w-kind {
-  width: 9rem;
-}
-.guard-w-switch {
-  width: 5rem;
-}
-.guard-w-x {
-  width: 3rem;
 }
 .guard-left {
   margin-right: auto;

@@ -2,12 +2,11 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SPagination, SSelect, SStatCard } from '@sub2api/ui'
+import { SPagination, SSelect, SStatCard, STimeRange } from '@sub2api/ui'
 import type { LedgerEntry } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
 import { formatDateTime, formatMoney } from '@/utils/format'
-import TimeRangeFilter from '@/views/usage/TimeRangeFilter.vue'
 import { rangeBounds, type RangeKey } from '@/views/usage/timeRange'
 import LedgerTable from './LedgerTable.vue'
 import { LEDGER_KINDS } from './kinds'
@@ -61,7 +60,7 @@ defineExpose({ reload: reloadAll })
         <label class="input-label">{{ t('ledger.cols.kind') }}</label>
         <SSelect v-model="filters.kind" :options="kindOptions" />
       </div>
-      <TimeRangeFilter
+      <STimeRange
         v-model:range="range"
         v-model:from="filters.from"
         v-model:to="filters.to"

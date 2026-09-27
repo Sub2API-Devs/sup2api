@@ -2,10 +2,9 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import { SButton, SPageHeader, SPagination, SSelect } from '@sub2api/ui'
+import { SButton, SPageHeader, SPagination, SSelect, STimeRange } from '@sub2api/ui'
 import type { LedgerEntry } from '@/api/types'
 import { useList } from '@/composables/useList'
-import TimeRangeFilter from '@/views/usage/TimeRangeFilter.vue'
 import { rangeBounds, type RangeKey } from '@/views/usage/timeRange'
 import AdjustBalanceModal from './AdjustBalanceModal.vue'
 import LedgerTable from './LedgerTable.vue'
@@ -43,7 +42,7 @@ const adjustUser = computed(() => (/^\d+$/.test(String(filters.user_id || '')) ?
           <label class="input-label">{{ t('ledger.cols.kind') }}</label>
           <SSelect v-model="filters.kind" :options="kindOptions" />
         </div>
-        <TimeRangeFilter
+        <STimeRange
           v-model:range="range"
           v-model:from="filters.from"
           v-model:to="filters.to"

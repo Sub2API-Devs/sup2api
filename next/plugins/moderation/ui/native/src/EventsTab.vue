@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { SButton, SCard, SIcon, SPagination, STable } from '@sub2api/ui'
+import { SButton, SCard, SField, SIcon, SInput, SPagination, SSelect, STable } from '@sub2api/ui'
 import VerdictBadge from './VerdictBadge.vue'
 import CategoryChips from './CategoryChips.vue'
 import EventDetail from './EventDetail.vue'
@@ -47,6 +47,12 @@ function reset() {
   Object.assign(filters, empty())
   search()
 }
+
+// Static filter choices ('' = all).
+const withAll = (opts: Array<{ value: string; label: string }>) => [{ value: '', label: t('events.all') }, ...opts]
+const verdictOptions = computed(() => withAll(['pass', 'flag', 'block', 'error'].map((v) => ({ value: v, label: t(`verdict.${v}`) }))))
+const actionOptions = computed(() => withAll(['allow', 'deny'].map((v) => ({ value: v, label: t(`action.${v}`) }))))
+const modeOptions = computed(() => withAll(['observe', 'enforce'].map((v) => ({ value: v, label: t(`mode.${v}`) }))))
 
 // Selects apply immediately; text inputs on Enter / Search.
 watch(() => [filters.verdict, filters.action, filters.mode, filters.from, filters.to], search)
@@ -103,47 +109,31 @@ function filterUser(id: number | null | undefined) {
   <div>
     <SCard class="mod-filters-card">
       <form class="mod-filters" @submit.prevent="search">
-        <label class="mod-filter">
-          <span class="input-label">{{ t('events.verdict') }}</span>
-          <select v-model="filters.verdict" class="input">
-            <option value="">{{ t('events.all') }}</option>
-            <option v-for="v in ['pass', 'flag', 'block', 'error']" :key="v" :value="v">{{ t(`verdict.${v}`) }}</option>
-          </select>
-        </label>
-        <label class="mod-filter">
-          <span class="input-label">{{ t('events.action') }}</span>
-          <select v-model="filters.action" class="input">
-            <option value="">{{ t('events.all') }}</option>
-            <option v-for="v in ['allow', 'deny']" :key="v" :value="v">{{ t(`action.${v}`) }}</option>
-          </select>
-        </label>
-        <label class="mod-filter">
-          <span class="input-label">{{ t('events.mode') }}</span>
-          <select v-model="filters.mode" class="input">
-            <option value="">{{ t('events.all') }}</option>
-            <option v-for="v in ['observe', 'enforce']" :key="v" :value="v">{{ t(`mode.${v}`) }}</option>
-          </select>
-        </label>
-        <label class="mod-filter">
-          <span class="input-label">{{ t('events.category') }}</span>
-          <input v-model="filters.category" class="input" placeholder="jailbreak" />
-        </label>
-        <label class="mod-filter">
-          <span class="input-label">{{ t('events.userId') }}</span>
-          <input v-model="filters.user_id" class="input" inputmode="numeric" />
-        </label>
-        <label class="mod-filter mod-filter-wide">
-          <span class="input-label">{{ t('events.q') }}</span>
-          <input v-model="filters.q" class="input" type="search" />
-        </label>
-        <label class="mod-filter mod-filter-date">
-          <span class="input-label">{{ t('events.from') }}</span>
+        <SField class="mod-filter" :label="t('events.verdict')">
+          <SSelect v-model="filters.verdict" :options="verdictOptions" />
+        </SField>
+        <SField class="mod-filter" :label="t('events.action')">
+          <SSelect v-model="filters.action" :options="actionOptions" />
+        </SField>
+        <SField class="mod-filter" :label="t('events.mode')">
+          <SSelect v-model="filters.mode" :options="modeOptions" />
+        </SField>
+        <SField class="mod-filter" :label="t('events.category')">
+          <SInput v-model="filters.category" placeholder="jailbreak" />
+        </SField>
+        <SField class="mod-filter" :label="t('events.userId')">
+          <SInput v-model="filters.user_id" inputmode="numeric" />
+        </SField>
+        <SField class="mod-filter mod-filter-wide" :label="t('events.q')">
+          <SInput v-model="filters.q" type="search" />
+        </SField>
+        <!-- datetime-local is not an SInput type; plain console class until the library grows one -->
+        <SField class="mod-filter mod-filter-date" :label="t('events.from')">
           <input v-model="filters.from" class="input" type="datetime-local" />
-        </label>
-        <label class="mod-filter mod-filter-date">
-          <span class="input-label">{{ t('events.to') }}</span>
+        </SField>
+        <SField class="mod-filter mod-filter-date" :label="t('events.to')">
           <input v-model="filters.to" class="input" type="datetime-local" />
-        </label>
+        </SField>
         <div class="mod-filter-actions">
           <SButton type="submit" variant="primary" :loading="loading"><SIcon name="search" class="mod-icon" />{{ t('events.search') }}</SButton>
           <SButton @click="reset">{{ t('events.reset') }}</SButton>

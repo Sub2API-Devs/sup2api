@@ -492,3 +492,51 @@
   max-height: 16rem;
   overflow: auto;
 }
+
+/* settings (LLM config) */
+.mod-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.mod-form-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+.mod-cat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.mod-cat-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.mod-cat-id {
+  flex: 0 0 11rem;
+}
+.mod-cat-desc {
+  flex: 1;
+  min-width: 0;
+}
+.mod-mt-xs {
+  margin-top: 0.5rem;
+}
+.mod-settings-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+.mod-alert-success {
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+}
+.dark .mod-alert-success {
+  background: rgba(16, 185, 129, 0.14);
+  color: #6ee7b7;
+}

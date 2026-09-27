@@ -668,9 +668,9 @@ GET `/ui/plugins`（登录即可）→ 不分页数组，只含当前 generation
 | `menus` | `[{id, section, label, icon?, page, permission?, order?}]`；按调用者权限过滤（`permission` 为插件内 key，检查 `plugin.<key>:<permission>`）；`section` 为 manifest 原值（§22） |
 | `pages` | `{<page_id>: {type, title?, source?, columns?, schema?, submit?, src?, component?}}`；只被无权限菜单引用的页面被去掉 |
 | `slots` | `[{slot, component, permission?}]`，按权限过滤 |
-| `native_entry` | 仅 `trust` 为 `official`/`verified` 时返回 manifest `ui.native.entry`，否则空串 |
+| `native_entry` | 仅 `trust` 为 `official`/`verified` 时返回 manifest `ui.native.entry`，否则空串；加载方式与插件可用的共享库见 §23 |
 | `trust` | |
-| `host_ui_compat` | |
+| `host_ui_compat` | manifest `hostUICompat`；前端用它和 `HOST_UI_VERSION` 比较，不匹配则不加载原生 UI（§23.1） |
 
 过滤后 `menus`、`slots`、`pages` 全空的插件不返回。
 
@@ -1089,3 +1089,106 @@ type ProxyResolver interface {
 `GET /me/menus` 的输出：插件自己的区 `section` 为 `<插件key>:<section id>`，`label` 取声明；各区按 order 排序（同 order 保持核心在前、插件按 key 顺序），空区不返回；菜单项仍按权限过滤，插件禁用后随之消失。`GET /ui/plugins` 的 `menus[].section` 原样返回 manifest 值（前端回退菜单只在服务端菜单不可用时使用，仍把插件项放"插件"区）。
 
 内置 moderation（0.1.1）声明 `sections: [{id:"safety", label:{en:"Safety", zh:"安全"}, order: 350}]`，"提示词审核"菜单放在这个区，显示在"财务"和"系统"之间。e2e AC22 断言该区的位置和内容。
+
+## 23. 原生插件 UI 的共享库：`@sub2api/ui`、`@sub2api/host`、`@sub2api/vite-preset`（2026-09-27，用户要求）
+
+原生插件 UI（manifest `ui.native.entry`，§15.8 `native_entry`）直接在控制台页面里运行，和控制台共用同一份 Vue、同一套组件与主题。插件**不要**手写控制台的全局 CSS 类（`.input` `.btn` `.card` `.muted` `.table` `.badge` …）：这些类名是控制台内部实现，会随控制台改版变化；页面用下面的组件和宿主 API 拼。源码：`web/packages/ui/src`、`web/packages/host/src`、`web/packages/vite-preset`；示范：`plugins/moderation/ui/native/src`。
+
+### 23.1 加载方式与 import map
+
+- 控制台 `GET /ui/plugins` 后（`web/src/stores/plugins.ts`），对 `native_entry` 非空、`trust` 为 `official`/`verified`、且 `host_ui_compat` 匹配 `HOST_UI_VERSION`（当前 `1.0.0`；`satisfiesRange` 支持 `^1.0`、`~1.2`、`>=1.0.0 <2.0.0`、`1.x`、`*`、`||`）的插件执行 `import(asset_base + native_entry)`，调用模块导出的 `register(host)`；插件被禁用或 `native_entry` 的 URL 变化（版本升级）时调用 `unregister?()` 并丢弃已注册组件。不满足条件或 `register` 抛错的记在 `errors[key]`，页面显示原因。
+- `entry.js` 的形状是 `NativePluginModule`：`register(host: PluginHost): void | Promise<void>`、`unregister?(): void | Promise<void>`。`register` 里用 `host.registerComponent(name, comp)` 注册 manifest `ui.pages[].component`、`ui.slots[].component` 引用的组件名，用 `host.addMessages({en, zh})` 注册文案；`unregister` 释放模块级状态（moderation 的 `entry.ts` 是最小样例）。
+- **import map**：控制台 `index.html` 注入 `<script type="importmap">`，把 `vue`、`vue-router`、`pinia`、`vue-i18n`、`@sub2api/ui`、`@sub2api/host` 映射到控制台自己构建出的 chunk（`web/vite.config.ts` 的 `SHARED`，`preserveEntrySignatures: 'strict'`，所有导出都保留；dev 下映射到源码，复用同样的预打包依赖）。插件用 `@sub2api/vite-preset` 构建时这些模块（`SHARED_MODULES`，前缀匹配 `vue/*` 之类的子路径）全部 external，**不得打进插件包**，否则页面里会出现第二份 Vue 运行时和第二套组件/状态：`toast`、`confirm`、i18n、路由、`theme` 都不再与控制台共享，组件的 `provide/inject` 也会失效。
+- 构建：`vite.config.ts` 写 `export default defineConfig(sub2apiPlugin({ entry: 'src/entry.ts' }))`；选项 `entry`（默认 `src/entry.ts`）、`outDir`（默认 `dist`）、`vue`（透传 `@vitejs/plugin-vue`）、`minify`（默认 true）。输出 `dist/entry.js`（ES module，target es2022）、`dist/entry.css`（有样式时；`entry.js` 头部自动按自身 URL 插一条 `<link rel="stylesheet">`，同源，CSP 不用改）、`dist/chunks/*`、`dist/assets/*`。打包成插件时放到 manifest `ui.native.entry` 指向的位置（moderation：`ui/native/entry.js`）。preset 也导出 `HOST_UI_VERSION`，manifest `hostUICompat` 按它声明（moderation 用 `^1.0`；`sdk/manifest`：声明了 `ui.native` 时必填）。
+- 插件的 `package.json` 只需 devDependencies：`@sub2api/vite-preset`、`@vitejs/plugin-vue`、`vite`、`vue`（类型用）；`@sub2api/ui`、`@sub2api/host` 通过 import map 在运行时解析，本地开发用 tsconfig `paths` 指到 `web/packages/*/src` 取类型。
+
+### 23.2 `@sub2api/host`
+
+`register(host)` 收到 `PluginHost`（= `HostContext` + 插件作用域成员）；控制台自己的代码用 `useHost()` 取 `HostContext`（`provideHost` 由控制台启动时调用一次，插件不要调）。
+
+| 成员 | 类型 / 说明 |
+|---|---|
+| `version` | 宿主 UI 契约版本（`HOST_UI_VERSION`） |
+| `api` | `ApiClient`，根为 `/api/v1`（核心接口，如 `/plugins/:key/settings`） |
+| `pluginApi` | `ApiClient`，根为 `/api/v1/p/<key>`（插件自己的 `routes`，§5.8） |
+| `router` | vue-router `Router`（控制台实例；如 `router.push({path:'/plugins/'+plugin.key, query:{tab:'settings'}})` 跳插件设置页） |
+| `i18n` | `HostI18n`：`locale: Ref<string>`（`zh`/`en`）、`t(key, params?)`（全局 key）、`text(LocalizedText)`（从 `{en,zh}` 或字符串取当前语言，回退 en）、`addMessages(namespace, {en:{…},zh:{…}})`、`formatNumber(n, digits?)`、`formatMoney(v, digits?)`、`formatDateTime(v)` |
+| `permissions` | `HostPermissions`：`superuser()`、`has(key)`、`any(...keys)`；key 是核心权限（§4），如 `plugin:manage` |
+| `theme` | `Ref<'light' \| 'dark'>`，随控制台主题切换 |
+| `toast(message, kind?)` | `kind`：`success` `error` `info` `warning`，默认 `info` |
+| `confirm(opts)` | `ConfirmOptions {title?, message, confirmText?, cancelText?, danger?}` → `Promise<boolean>` |
+| `plugin` | `{key, version, assetBase, trust}` |
+| `registerComponent(name, component)` | 注册 manifest 引用的组件名（同名覆盖） |
+| `asset(path)` | 包内文件的绝对 URL（`assetBase + '/' + path`，如 `asset('ui/native/logo.svg')`） |
+| `t(key, params?)` | 插件本地文案：查 `plugin.<key>.<key>` |
+| `addMessages({en:{…}, zh:{…}})` | 注册到命名空间 `plugin.<key>` |
+| `can(permission)` | 插件本地权限：`can('stats:read')` → `permissions.has('plugin.<key>:stats:read')`（manifest `userPermissions`） |
+
+`ApiClient`（`http.ts`）：
+
+| 方法 | 说明 |
+|---|---|
+| `get<T>(path, query?, opts?)` | 返回信封的 `data` |
+| `list<T>(path, query?, opts?)` | → `{items: T[], page: {page, page_size, total}}`；响应是裸数组时 `page` 用数组长度补齐 |
+| `post<T>(path, body?, opts?)`、`put<T>`、`patch<T>` | body 转 JSON；`FormData` 原样发送 |
+| `del<T>(path, query?, opts?)` | |
+| `upload<T>(path, form: FormData, opts?)` | POST multipart |
+| `request<T>(method, path, opts?)` | 通用 |
+
+- `path` 相对客户端根；`query` 中 `undefined`/`null`/`''` 省略，数组按重复键展开。`opts: {query?, body?, headers?, signal?, anonymous?, noStepUp?}`。
+- 自动带 `Authorization`、`Accept-Language`；401 自动刷新一次并重试（多标签页串行，§14.2）；403 `step_up_required` 弹密码确认后带 `X-Step-Up-Token` 重试；204 返回 `null`。
+- 失败抛 `ApiError {status, code, message, details, fields}`：`fields` 是 `details.fields[]` 折平后的 `{field: message}`（`invalid_argument`，§3.1；message 为 `{en,zh}` 时按当前语言取），用 `isApiError(e)` 判断。响应没有 `error.code` 时按 HTTP 状态映射（400 `invalid_argument`、401 `unauthenticated`、403 `permission_denied`、404 `not_found`、409 `conflict`、429 `rate_limited`、503 `unavailable`，其余 `internal`）。
+- 其他导出：`createClient(prefix)`、`api`（= `/api/v1` 客户端）、`session`、`configureHttp`（控制台用，插件不要调）、`satisfiesRange`、`bridge-protocol.ts`（iframe 插件的 postMessage 协议，与原生 UI 无关）。
+
+### 23.3 `@sub2api/ui`
+
+组件都用控制台的全局样式类渲染，自动适配暗色（`<html class="dark">`）；`v-model` = `modelValue` + `update:modelValue`。`SConfirmHost`、`SToastHost` 由控制台挂载一次，插件不要再挂。
+
+| 组件 | 用途 | props（默认值） | emits / slots |
+|---|---|---|---|
+| `SPageHeader` | 页面标题行 | `title`（必填）、`description` | slots `before`、`title-extra`、`actions`、`filters`（筛选行） |
+| `SCard` | 卡片 | `title`、`subtitle`、`padded`（true） | slots 默认、`title`、`actions` |
+| `SStatCard` | 统计卡 | `label`、`value`（必填）、`sub`、`icon`、`tone`（`primary`/`success`/`warning`/`danger`，primary）、`trend`（number \| null，显示 ▲/▼ 百分比）、`loading` | slot 默认 |
+| `SChart` | ECharts 图（懒加载 echarts；已注册 Line/Bar/Pie、Grid/Tooltip/Legend/Title/Dataset、Canvas） | `option`（必填，按原样应用，自动补主题色、文字和轴线颜色）、`height`（`'280px'`）、`loading` | 自动 resize、随暗色重绘 |
+| `STable<T>` | 表格 | `columns: TableColumn[]`、`rows: T[]`、`loading`、`rowKey`（`'id'`）、`expandable`、`emptyText`、`dense` | emits `row-click(row)`、`expand(row, open)`；slots `cell-<key>`（`{row, value, index}`）、`expand`（`{row}`）、`empty`；`key` 支持 `a.b` 路径，空值显示 `—` |
+| `SPagination` | 分页 | `page`、`pageSize`、`total`（必填）、`pageSizes`（`[20,50,100]`） | emits `update:page`、`update:pageSize`（改每页数时 `page` 回 1） |
+| `STabs` | 标签页 | `tabs: TabItem[]`、`modelValue: string`（必填） | emits `update:modelValue` |
+| `SButton` | 按钮 | `variant`（`primary`/`secondary`/`ghost`/`danger`/`success`/`warning`，secondary）、`size`（`sm`/`md`/`lg`，md）、`loading`（显示 spinner 并禁用）、`disabled`、`type`（`button`/`submit`/`reset`，button）、`block` | 原生 `click`；slot 默认 |
+| `SDropdown` | 操作菜单（Teleport 到 body，自动定位） | `actions: MenuAction[]`（必填）、`label` | emits `select(key)`；slot 默认为触发按钮内容（缺省显示 `label` 或 `more` 图标） |
+| `SBadge` | 徽标 | `tone: Tone`（gray）、`dot` | slot 默认 |
+| `SIcon` | 线框图标 | `name`（必填；`dashboard` `shield` `key` `plugin` `settings` `chart` `inbox` `plus` `refresh` `trash` `edit` `more` `check` `x` `warning` `info` `upload` `download` `eye` `eye-off` `lock` `chevron-down` `chevron-right` `arrow-left` `external` `search` `play` `stop` `clock` `copy` `bolt` `cpu` `filter` `link` `code` … 全表见 `SIcon.vue`；未知名字画方块） | 尺寸用 class 控制（如 `h-4 w-4`） |
+| `SSpinner` | 加载圈 | `size`（`sm`/`md`/`lg`，md） | |
+| `SEmpty` | 空状态 | `text`（`ui.noData`）、`icon`（`inbox`） | slot 默认 |
+| `SModal` | 弹窗（Teleport 到 body） | `open`（必填，`v-model:open`）、`title`、`width`（`sm`/`md`/`lg`/`xl`/`2xl`，md）、`closable`（true）、`persistent`（true 时 Esc 和点遮罩不关闭） | emits `update:open`、`close`；slots 默认、`header`、`footer` |
+| `SField` | 表单项外框：label / hint / error / 必填星号 | `label`、`hint`、`error`（有则替代 hint）、`required`、`inline`（label 与控件同行） | slot 默认放控件 |
+| `SInput` | 输入框 | `modelValue: string \| number \| null`、`type`（`text`/`password`/`number`/`url`/`email`/`search`/`datetime-local`/`date`/`time`，text）、`placeholder`、`disabled`、`readonly`、`size`（`sm`）、`mono`、`error`、`maxlength`、`inputmode`、`autocomplete` | emits `update:modelValue`（string；`type=number` 时为 number，空或非法为 null）；其他 attrs（`id` `name` `data-testid` …）透传到 `<input>` |
+| `STextarea` | 多行输入 | `modelValue`、`rows`（4）、`placeholder`、`disabled`、`readonly`、`mono`、`error`、`maxlength` | emits `update:modelValue`（string）；其他 attrs 透传 |
+| `SSelect` | 下拉（原生 `<select>`，值保持原类型） | `modelValue: SelectOption['value']`、`options: SelectOption[]`（必填）、`placeholder`（给了才有空选项，选中发 `null`）、`disabled` | emits `update:modelValue` |
+| `SSwitch` | 开关 | `modelValue: boolean`（必填）、`disabled`、`label` | emits `update:modelValue`；slot 默认为文字 |
+| `STagInput` | 标签输入 | `modelValue: string[] \| null`、`placeholder`（`ui.addTag`）、`disabled` | emits `update:modelValue`；Enter / 逗号 / 失焦添加，粘贴按逗号和换行拆分并去重，Backspace 删最后一个 |
+| `SKeyValue` | 字符串键值表编辑 | `modelValue: Record<string,string> \| null`、`keyLabel`、`valueLabel`、`keyPlaceholder`、`valuePlaceholder`、`disabled` | emits `update:modelValue`（空键的行被丢弃） |
+| `STimeRange` | 时间范围筛选：预设下拉 + 自定义起止（datetime-local） | `range: RangeKey`、`from`、`to`（RFC 3339，`''` = 不限）、`keys: RangeKey[]`（`['today','7d','30d','custom']`） | emits `update:range`、`update:from`、`update:to`（选预设时同时发 from/to） |
+
+`STimeRange` 的辅助导出：`type RangeKey = 'all' \| 'today' \| '7d' \| '30d' \| 'month' \| 'custom'`、`rangeBounds(key) → {from, to}`（本地零点起算的 RFC 3339，`''` = 不限）、`toLocalInput(rfc3339)` / `fromLocalInput(local)`（与 `<input type="datetime-local">` 互转）、`dayKey(v) → 'YYYY-MM-DD'`（本地日）。
+
+反馈与文案：
+
+| 导出 | 说明 |
+|---|---|
+| `toast(message, kind = 'info', timeoutMs?)` | 右上角提示；`error` 默认 6000ms，其余 3500ms。与 `host.toast` 同一实现 |
+| `confirm(opts: ConfirmOptions) → Promise<boolean>` | 确认弹窗；新的 `confirm` 会把上一个未决的按 `false` 结束。与 `host.confirm` 同一实现 |
+| `toastState`、`confirmState`、`dismissToast`、`settleConfirm` | 宿主组件用，插件不要碰 |
+| `uiMessages` | `{en, zh}`，控制台挂在全局 i18n 的 `ui` 命名空间（`ui.ok` `ui.cancel` `ui.confirm` `ui.close` `ui.loading` `ui.noData` `ui.prev` `ui.next` `ui.total` `ui.perPage` `ui.add` `ui.remove` `ui.key` `ui.value` `ui.addTag` `ui.confirmTitle` 及 `STimeRange` 用的 `ui.time` `ui.from` `ui.to` `ui.all` `ui.today` `ui.last7d` `ui.last30d` `ui.thisMonth` `ui.custom`）；插件可用 `host.i18n.t('ui.cancel')` 复用 |
+
+类型（`types.ts`）：`TableColumn {key, label, width?, align?: 'left'|'right'|'center', class?}`、`TabItem {key, label, badge?, disabled?}`、`SelectOption {value: string|number|boolean|null, label, disabled?}`、`MenuAction {key, label, danger?, disabled?, hidden?}`、`Tone = 'primary'|'success'|'warning'|'danger'|'gray'|'purple'|'info'`。
+
+### 23.4 约定
+
+- 用 `@sub2api/ui` 组件，不手写 `.input` `.btn` `.card` `.muted` `.table` `.badge` `.kv` `.code-block` 等控制台全局类；也不要依赖控制台的 Tailwind 工具类（`flex` `gap-2` `text-sm` …）——控制台的 Tailwind 构建不扫描插件源码，这些类只在控制台恰好用到时才存在。布局和间距写在插件自己的 CSS 里。
+- 输入控件外面用 `SField` 放 label / hint / error / 必填标记；服务端字段错误从 `ApiError.fields[field]` 取，塞给 `SField` 的 `error` 并给控件 `error` 属性。
+- 数字、金额、时间用 `host.i18n.formatNumber` / `formatMoney` / `formatDateTime`，不自己拼；多语言文本（`{en,zh}`）用 `host.i18n.text`；插件文案走 `host.addMessages` + `host.t`。
+- 提示和确认用 `host.toast` / `host.confirm`（或 `@sub2api/ui` 的同名函数），不自己弹。
+- 需要感知暗色时读 `host.theme`（`Ref<'light'|'dark'>`），不要自己查 `document.documentElement.classList`；组件本身已自动适配。
+- 插件私有样式（类名、CSS 变量、keyframes）一律以插件 key 为前缀，避免与控制台和其他插件冲突：moderation 的 `ui/native/src/moderation.css` 全部用 `mod-` 前缀（`.mod-toolbar` `.mod-num` `.mod-prewrap` `.mod-hint` …），新插件照此（如 `guard-`）。不写全局选择器（`body`、`.card`、`input` …）。
+- 权限：核心权限用 `host.permissions.has/any/superuser`，插件自己的 `userPermissions` 用 `host.can`；菜单已按权限过滤，页面内的按钮仍要自己判断。
+- 接口：插件自己的 `routes` 走 `host.pluginApi`（相对路径，如 `pluginApi.list('/events', {page})`），核心接口走 `host.api`；不要自己 `fetch`（会丢掉 token 刷新与 step-up）。

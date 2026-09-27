@@ -2,10 +2,9 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, SChart, SPageHeader, SStatCard, STable, type TableColumn } from '@sub2api/ui'
+import { SButton, SCard, SChart, SPageHeader, SStatCard, STable, STimeRange, type TableColumn } from '@sub2api/ui'
 import type { UsageSummaryRow } from '@/api/types'
 import { formatMoney, formatNumber } from '@/utils/format'
-import TimeRangeFilter from './TimeRangeFilter.vue'
 import { rangeBounds, type RangeKey } from './timeRange'
 import { dailyChartOption } from './usage'
 
@@ -95,7 +94,7 @@ function rate(r: UsageSummaryRow) {
         <SButton @click="load">{{ t('common.refresh') }}</SButton>
       </template>
       <template #filters>
-        <TimeRangeFilter v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" />
+        <STimeRange v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" />
       </template>
     </SPageHeader>
 

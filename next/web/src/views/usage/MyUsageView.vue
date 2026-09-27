@@ -2,11 +2,10 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { SButton, SPageHeader, SPagination, SSelect, STabs, type TabItem } from '@sub2api/ui'
+import { SButton, SPageHeader, SPagination, SSelect, STabs, STimeRange, type TabItem } from '@sub2api/ui'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
 import MyLedgerTab from '@/views/ledger/MyLedgerTab.vue'
-import TimeRangeFilter from './TimeRangeFilter.vue'
 import UsageTable from './UsageTable.vue'
 import { rangeBounds, type RangeKey } from './timeRange'
 import type { UsageRow } from './usage'
@@ -58,7 +57,7 @@ function refresh() {
         <SButton @click="refresh">{{ t('common.refresh') }}</SButton>
       </template>
       <template v-if="tab === 'requests'" #filters>
-        <TimeRangeFilter v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" />
+        <STimeRange v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" />
         <div class="w-48">
           <label class="input-label">{{ t('common.model') }}</label>
           <input v-model.trim="filters.model" class="input" placeholder="claude-sonnet-*" />
