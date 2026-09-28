@@ -582,7 +582,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 | `source` | `admin`（管理员创建）\| `plugin_default`（插件 manifest 平台的 `stickyRules`）\| `builtin`（内置平台默认规则） |
 | `plugin_key` | `plugin_default` 为插件 key，其他为 `null` |
 | `enabled`、`priority` | 数字小的先评估；新建默认 `enabled=true`、`priority=100`；默认规则按声明顺序初始为 100、101… |
-| `match` | `{protocols:[], models:[], user_agent_contains:[]}`（空数组 = 不限；`models` 为通配；`user_agent_contains` 不区分大小写，任一命中即可） |
+| `match` | `{protocols:[], models:[], user_agent_contains:[]}`（空数组 = 不限；`protocols` 必须是已注册平台端点声明的协议，见下；`models` 为通配；`user_agent_contains` 不区分大小写，任一命中即可） |
 | `key_sources` | `[{type, path?, name?, needs?}]`，`type` 为 `body`（需 `path`）\| `header`（需 `name`）\| `api_key` \| `user` \| `plugin`（`needs` 为交给插件 `ResolveAffinityKey` 的 body 路径）；至少一项 |
 | `value_regex` | 可空；须能编译 |
 | `ttl_seconds` | 0–2592000，0 表示使用 `/settings/sticky` 的 `default_ttl_seconds` |
@@ -605,6 +605,12 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 - **统计与绑定按规则名**（不是 id）：统计 key `sticky:stats:{name}`，绑定 key `sticky:{name}:{group}:{model}:{sha256}`（名称中 `[A-Za-z0-9_.-]` 以外的字符替换为 `_`）。同名规则共享同一份统计，`/stats` 中同名的多项数值相同；flush 任一同名规则都会清除该名称下的全部绑定。
 - `key_includes` 不含 `rule` 的规则，其绑定 key 的规则段为 `_`，与其他同类规则共用；flush 这类规则返回 409，控制台不显示"清除绑定"。
 - 插件安装/升级时覆盖其 `plugin_default` 规则的定义（保留管理员设置的 `enabled`、`priority`），不再声明的规则删除；内置规则在网关启动时同步，语义相同。
+- **`match.protocols` 的取值与校验**：协议的权威来源是平台的端点声明 —— 内置平台（`server/internal/platforms/{anthropic,openai,gemini}.json` 的 `endpoints[].protocol`）与插件 manifest 的 `platforms[].endpoints[].protocol`；注册表按协议建索引（`Generation.PlatformForProtocol`）。空数组表示不限；含 `*`/`?` 的值按通配与已注册协议集合比较（与运行时 `matchList` 的语义一致），匹配不到任何协议才算无效。
+  - 管理员规则（`source=admin`）保存时校验：POST 中每个协议都必须命中，否则 400，`error.details.fields` 含一项 `{field:"match.protocols", code:"invalid"}`，消息点明是哪些协议无效（同一次提交的多个无效协议合并为一条错误）。
+  - **PATCH 只校验本次新增的协议**：不在库中原有 `match.protocols` 里的值才校验，原有值一律放行（即使它现在已经无法命中注册表）。控制台提交的是全量 body，这样一条引用了已停用/卸载插件协议的旧规则，改 TTL 或开关不会被锁死，只能删掉重建；而编辑时新加一个拼错的协议仍会被拒。不带 `match` 的 PATCH（只改 `enabled`/`priority`）完全不校验协议。
+  - 插件注册表不可用时（未安装插件的最小部署、generation 尚未加载）整体跳过该校验。
+  - `plugin_default` / `builtin` 默认规则的同步不做此校验：插件安装顺序可能让协议暂时还不存在，规则同步不能因此失败；这类规则的定义来自代码与 manifest，出错由插件作者负责。
+- 插件 hook 的 `match.protocols` 引用不存在的协议**只记警告日志、不阻止安装**：hook 可以引用别的插件声明的平台，安装顺序决定协议何时出现。注册表构建 generation 时（平台全部注册完、hook 绑定已知后）对每个未命中的协议记一条 `slog.Warn`（含 plugin key、hook id、point、协议名），行为不变 —— 这样的 hook 只是永不匹配。
 
 ### 15.6 发布记录（`plugin/api/plugins.go`、`plugin/rollout/controller.go`、`core/ports_plugin_infra.go`）
 

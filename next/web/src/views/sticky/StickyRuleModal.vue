@@ -2,8 +2,25 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCheckbox, SField, SGrid, SHint, SInput, SModal, SRadio, SSectionTitle, SSelect, SSwitch, STagInput, toast } from '@sub2api/ui'
-import type { StickyRule } from '@/api/types'
+import {
+  SBadge,
+  SButton,
+  SCheckbox,
+  SField,
+  SGrid,
+  SHint,
+  SInput,
+  SModal,
+  SRadio,
+  SSectionTitle,
+  SSelect,
+  SSwitch,
+  STagInput,
+  toast,
+  type SelectOption
+} from '@sub2api/ui'
+import type { PlatformEndpoint, StickyRule } from '@/api/types'
+import { usePlatforms } from '@/composables/platforms'
 import { fieldErrors, notifyError } from '@/utils/errors'
 
 // Create / edit a sticky rule. Plugin default rules only allow enabled,
@@ -17,6 +34,8 @@ type KeySource = { type: string; path?: string; name?: string; needs?: string[] 
 const KEY_TYPES = ['body', 'header', 'api_key', 'user', 'plugin'] as const
 const INCLUDES = ['group', 'model', 'rule'] as const
 const keyTypeOptions = computed(() => KEY_TYPES.map((k) => ({ value: k, label: t(`sticky.keyTypes.${k}`) })))
+
+const platformsCx = usePlatforms()
 
 const form = reactive({
   name: '',
@@ -33,6 +52,8 @@ const form = reactive({
 })
 const errors = ref<Record<string, string>>({})
 const busy = ref(false)
+/** Manual protocol entry, only offered when the platform list may be incomplete. */
+const protocolDraft = ref('')
 
 const isEdit = computed(() => !!props.rule && !props.copy)
 const limited = computed(() => isEdit.value && props.rule?.source === 'plugin_default')
@@ -45,6 +66,10 @@ watch(
   (v) => {
     if (!v) return
     errors.value = {}
+    protocolDraft.value = ''
+    // Protocols are picked from the declared endpoints; the composable caches
+    // and de-duplicates concurrent calls, so calling it on every open is fine.
+    platformsCx.load()
     const r = props.rule
     Object.assign(form, {
       name: r ? (props.copy ? `${r.name}-admin` : r.name) : '',
@@ -65,6 +90,87 @@ watch(
 
 function addSource() {
   form.key_sources.push({ type: 'header', name: '' })
+}
+
+// ------------------------------------------------------- protocols (match)
+
+type ProtocolEntry = { protocol: string; platformId: string; platformLabel: string; detail: string }
+
+/** One entry per declared protocol, in platform order; the first platform declaring it wins. */
+const protocolEntries = computed<ProtocolEntry[]>(() => {
+  const out: ProtocolEntry[] = []
+  const seen = new Set<string>()
+  for (const p of platformsCx.platforms.value) {
+    const byProtocol = new Map<string, PlatformEndpoint[]>()
+    for (const e of p.endpoints || []) {
+      if (!e.protocol) continue
+      const eps = byProtocol.get(e.protocol)
+      if (eps) eps.push(e)
+      else byProtocol.set(e.protocol, [e])
+    }
+    for (const [protocol, eps] of byProtocol) {
+      if (seen.has(protocol)) continue
+      seen.add(protocol)
+      const first = eps[0]
+      // Several endpoints may share a protocol: show the first one and "+n".
+      const detail = `${first.method} ${first.path}${eps.length > 1 ? ` +${eps.length - 1}` : ''}`
+      out.push({ protocol, platformId: p.id, platformLabel: platformsCx.label(p.id), detail })
+    }
+  }
+  return out
+})
+
+const protocolIndex = computed(() => new Map(protocolEntries.value.map((e) => [e.protocol, e])))
+
+/** Not yet selected protocols, grouped by platform (<optgroup>). */
+const protocolOptions = computed<SelectOption[]>(() => {
+  const groups: SelectOption[] = []
+  const byPlatform = new Map<string, SelectOption[]>()
+  for (const e of protocolEntries.value) {
+    if (form.protocols.includes(e.protocol)) continue
+    let items = byPlatform.get(e.platformId)
+    if (!items) {
+      items = []
+      byPlatform.set(e.platformId, items)
+      groups.push({ value: e.platformId, label: e.platformLabel, options: items })
+    }
+    items.push({ value: e.protocol, label: `${e.protocol} · ${e.detail}` })
+  }
+  return groups
+})
+
+/** Selected but not declared anywhere (e.g. its plugin was removed): kept as is. */
+function unknownProtocol(p: string) {
+  return platformsCx.loaded.value && !patternProtocol(p) && !protocolIndex.value.has(p)
+}
+
+/** A hand-written glob ("anthropic.*", "*"): the server matches those too, so never "unknown". */
+function patternProtocol(p: string) {
+  return /[*?]/.test(p)
+}
+
+const hasUnknownProtocol = computed(() => form.protocols.some(unknownProtocol))
+/** The built-in catalog is a fallback: plugin protocols are then missing. */
+const protocolsPartial = computed(() => platformsCx.loaded.value && !platformsCx.complete.value)
+
+function protocolTitle(p: string) {
+  const e = protocolIndex.value.get(p)
+  return e ? `${e.platformLabel} · ${e.detail}` : ''
+}
+
+function addProtocol(v: unknown) {
+  const p = String(v || '').trim()
+  if (!p || form.protocols.includes(p)) return
+  form.protocols.push(p)
+}
+
+function removeProtocol(p: string) {
+  form.protocols = form.protocols.filter((x) => x !== p)
+}
+
+function addProtocolDraft() {
+  addProtocol(protocolDraft.value)
+  protocolDraft.value = ''
 }
 
 function move(i: number, d: number) {
@@ -185,8 +291,48 @@ async function submit() {
         <div>
           <SSectionTitle tag="h4">{{ t('sticky.modal.match') }}</SSectionTitle>
           <SGrid :cols="1" :md-cols="3">
-            <SField :label="t('sticky.modal.protocols')" :hint="t('sticky.modal.emptyAny')">
-              <STagInput v-model="form.protocols" placeholder="anthropic.messages" :disabled="limited" />
+            <SField :label="t('sticky.modal.protocols')" :hint="t('sticky.modal.emptyAny')" :error="errors['match.protocols']">
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span
+                  v-for="p in form.protocols"
+                  :key="p"
+                  class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs"
+                  :class="
+                    unknownProtocol(p)
+                      ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                      : 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+                  "
+                  :title="protocolTitle(p)"
+                >
+                  <span class="font-mono">{{ p }}</span>
+                  <SBadge v-if="unknownProtocol(p)" tone="warning">{{ t('sticky.modal.protocolUnknown') }}</SBadge>
+                  <SBadge v-else-if="patternProtocol(p)" tone="gray">{{ t('sticky.modal.protocolPattern') }}</SBadge>
+                  <button v-if="!limited" type="button" class="opacity-60 hover:opacity-100" @click="removeProtocol(p)">×</button>
+                </span>
+                <SSelect
+                  v-if="!limited && protocolOptions.length"
+                  :model-value="null"
+                  :options="protocolOptions"
+                  :placeholder="t('sticky.modal.protocolPick')"
+                  class="!w-auto !py-1 text-xs"
+                  @update:model-value="addProtocol"
+                />
+                <SHint v-if="limited && !form.protocols.length" inline size="xs">{{ t('sticky.any') }}</SHint>
+              </div>
+              <SHint v-if="hasUnknownProtocol" tone="warning" size="xs" class="mt-1">{{ t('sticky.modal.protocolUnknownHint') }}</SHint>
+              <template v-if="protocolsPartial">
+                <SHint tone="warning" size="xs" class="mt-1">{{ t('sticky.modal.protocolsPartial') }}</SHint>
+                <div v-if="!limited" class="mt-1 flex items-center gap-1.5">
+                  <SInput
+                    v-model="protocolDraft"
+                    mono
+                    class="!py-1 text-xs"
+                    :placeholder="t('sticky.modal.protocolManual')"
+                    @keydown.enter.prevent="addProtocolDraft"
+                  />
+                  <SButton size="sm" :disabled="!protocolDraft.trim()" @click="addProtocolDraft">+ {{ t('common.add') }}</SButton>
+                </div>
+              </template>
             </SField>
             <SField :label="t('sticky.modal.models')" :hint="t('sticky.modal.modelsHint')">
               <STagInput v-model="form.models" placeholder="claude-*" :disabled="limited" />

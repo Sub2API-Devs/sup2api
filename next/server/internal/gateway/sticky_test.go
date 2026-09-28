@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tidwall/gjson"
+
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 )
@@ -260,5 +262,61 @@ func TestStickyRuleMatching(t *testing.T) {
 	})
 	if len(list) != 2 || list[0].Source != sourceAdmin || list[1].Name != "d" || list[1].Source != sourceBuiltin {
 		t.Fatalf("active rules %+v", list)
+	}
+}
+
+// Admin rules may only name protocols some platform endpoint declares: a typo
+// would silently never match. Needs a database.
+func TestStickyRuleProtocolValidation(t *testing.T) {
+	e := newDBEnv(t, withRegistry(newFakeGen()))
+	create := func(name string, match any) (int, gjson.Result) {
+		body := map[string]any{"name": name, "key_sources": []any{map[string]any{"type": "user"}}}
+		if match != nil {
+			body["match"] = match
+		}
+		return e.api("POST", "/sticky-rules", body)
+	}
+	code, res := create("ghost-protocol", map[string]any{"protocols": []string{"anthropic.mesages"}})
+	fe := res.Get(`error.details.fields.#(field=="match.protocols")`)
+	if code != 400 || !fe.Exists() || fe.Get("code").String() != "invalid" ||
+		!strings.Contains(fe.Get("message").String(), "anthropic.mesages") {
+		t.Fatalf("unknown protocol: %d %s", code, res.Raw)
+	}
+	// Known protocols, a pattern over known protocols, an empty list and no
+	// match at all (any protocol) are all accepted.
+	for i, match := range []any{
+		map[string]any{"protocols": []string{"anthropic.messages", "openai.chat"}},
+		map[string]any{"protocols": []string{"gemini.*"}},
+		map[string]any{"protocols": []string{}},
+		nil,
+	} {
+		if code, res := create("ok-"+itoa(int64(i)), match); code != 201 {
+			t.Fatalf("case %d: %d %s", i, code, res.Raw)
+		}
+	}
+	// A rule whose platform went away stays editable: a full-body PATCH may
+	// resubmit the protocols it already had, only added ones are checked.
+	var id int64
+	if err := e.db.Pool.QueryRow(context.Background(), `
+		INSERT INTO sticky_rules (name, source, enabled, priority, match, key_sources, value_regex, ttl_seconds,
+			key_includes, on_failure, updated_at)
+		VALUES ('stale-protocol', 'admin', true, 100, $1, $2, '', 0, $3, 'failover', now()) RETURNING id`,
+		mustJSON(manifest.StickyMatch{Protocols: []string{"ghost.chat"}}),
+		mustJSON([]manifest.StickyKeySource{{Type: "user"}}), mustJSON(defaultKeyIncludes)).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	if code, res := e.api("PATCH", "/sticky-rules/"+itoa(id), map[string]any{"enabled": false}); code != 200 ||
+		res.Get("data.enabled").Bool() {
+		t.Fatalf("patch enabled only: %d %s", code, res.Raw)
+	}
+	if code, res := e.api("PATCH", "/sticky-rules/"+itoa(id), map[string]any{"ttl_seconds": 60,
+		"match": map[string]any{"protocols": []string{"ghost.chat"}}}); code != 200 || res.Get("data.ttl_seconds").Int() != 60 {
+		t.Fatalf("patch keeping a stale protocol: %d %s", code, res.Raw)
+	}
+	code, res = e.api("PATCH", "/sticky-rules/"+itoa(id), map[string]any{
+		"match": map[string]any{"protocols": []string{"ghost.chat", "anthropic.mesages"}}})
+	if code != 400 || res.Get(`error.details.fields.#(field=="match.protocols").code`).String() != "invalid" ||
+		!strings.Contains(res.Raw, "anthropic.mesages") {
+		t.Fatalf("patch adding an unknown protocol: %d %s", code, res.Raw)
 	}
 }

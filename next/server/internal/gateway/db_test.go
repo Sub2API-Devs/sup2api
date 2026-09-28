@@ -43,7 +43,15 @@ type dbEnv struct {
 	uid int64
 }
 
-func newDBEnv(t *testing.T) *dbEnv {
+type dbEnvOpt func(*Deps)
+
+// withRegistry gives the gateway a plugin registry, so the protocols declared
+// by gen's platforms are known to rule validation.
+func withRegistry(gen core.Generation) dbEnvOpt {
+	return func(d *Deps) { d.Registry = &fakeRegistry{cur: gen} }
+}
+
+func newDBEnv(t *testing.T, opts ...dbEnvOpt) *dbEnv {
 	t.Helper()
 	db := testutil.DB(t)
 	ctx := context.Background()
@@ -59,7 +67,11 @@ func newDBEnv(t *testing.T) *dbEnv {
 	e.mr = miniredis.RunT(t)
 	e.rdb = redis.NewClient(&redis.Options{Addr: e.mr.Addr()})
 	t.Cleanup(func() { _ = e.rdb.Close() })
-	e.gw = New(Deps{DB: db, Redis: e.rdb})
+	d := Deps{DB: db, Redis: e.rdb}
+	for _, o := range opts {
+		o(&d)
+	}
+	e.gw = New(d)
 	t.Cleanup(e.gw.Close)
 	engine := gin.New()
 	auth := allowAll{uid: e.uid}

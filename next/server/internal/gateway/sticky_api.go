@@ -145,8 +145,60 @@ func (in *ruleInput) applyTo(r *stickyRule) {
 
 var ruleNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.\-]{0,99}$`)
 
+// knownProtocol reports whether a match.protocols entry names a protocol the
+// current generation declares: protocols come from the endpoint declarations
+// of the built-in platforms and of the platforms enabled plugins declare, and
+// the registry indexes them (core.Generation.PlatformForProtocol). Patterns
+// ("anthropic.*", "*") are accepted when they match at least one of them,
+// matchList being how rules compare protocols at request time.
+//
+// It returns nil when the registry is unavailable (unit tests, a node whose
+// generation is not loaded yet): the caller then skips the check instead of
+// rejecting the rule.
+func (g *Gateway) knownProtocol() func(string) bool {
+	if g.d.Registry == nil {
+		return nil
+	}
+	gen := g.d.Registry.Current()
+	if gen == nil {
+		return nil
+	}
+	return func(protocol string) bool {
+		if _, ok := gen.PlatformForProtocol(protocol); ok {
+			return true
+		}
+		if !strings.ContainsAny(protocol, "*?") {
+			return false
+		}
+		for _, p := range gen.Platforms() {
+			if matchList([]string{protocol}, p.Platform.Protocols()...) {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+// keeping extends a protocol check with the values a stored rule already has:
+// an administrator editing a rule whose platform went away (plugin disabled or
+// uninstalled) can still save it, while a new or mistyped protocol is still
+// rejected. It returns nil when known is nil (check skipped).
+func keeping(known func(string) bool, stored []string) func(string) bool {
+	if known == nil {
+		return nil
+	}
+	kept := make(map[string]bool, len(stored))
+	for _, p := range stored {
+		kept[p] = true
+	}
+	return func(protocol string) bool { return kept[protocol] || known(protocol) }
+}
+
 // validateRule checks an admin rule; messages follow the request locale.
-func validateRule(ctx context.Context, r *stickyRule) []core.FieldError {
+// knownProtocol validates match.protocols; nil skips that check, for a request
+// that does not carry a match (a PATCH of the switches only) or when the
+// plugin registry is unavailable.
+func validateRule(ctx context.Context, r *stickyRule, knownProtocol func(string) bool) []core.FieldError {
 	loc := core.Locale(ctx)
 	t := func(en, zh string) string {
 		if loc == "zh" {
@@ -198,6 +250,23 @@ func validateRule(ctx context.Context, r *stickyRule) []core.FieldError {
 	}
 	if r.OnFailure != onFailureFailover && r.OnFailure != onFailureStick {
 		add("on_failure", "invalid", "must be failover or stick", "只能是 failover 或 stick")
+	}
+	// An empty list means "any protocol"; a typo in a listed protocol would
+	// silently never match, so it is rejected here. All offenders go into one
+	// field error: a console keyed by field name shows a single message.
+	if knownProtocol != nil {
+		var bad []string
+		for _, p := range r.Match.Protocols {
+			if !knownProtocol(p) {
+				bad = append(bad, "\""+p+"\"")
+			}
+		}
+		if len(bad) > 0 {
+			list := strings.Join(bad, ", ")
+			add("match.protocols", "invalid",
+				"unknown protocol(s) "+list+"; protocols come from the endpoint declarations of the installed platforms",
+				"协议 "+list+" 不存在；可用协议来自已注册平台的端点声明")
+		}
 	}
 	return fe
 }
@@ -263,7 +332,7 @@ func (g *Gateway) createRuleHandler(c *gin.Context) {
 	r := &stickyRule{Source: sourceAdmin, Enabled: true, Priority: 100, OnFailure: onFailureFailover,
 		KeyIncludes: append([]string(nil), defaultKeyIncludes...)}
 	in.applyTo(r)
-	if fe := validateRule(ctx, r); len(fe) > 0 {
+	if fe := validateRule(ctx, r, g.knownProtocol()); len(fe) > 0 {
 		httpapi.Fail(c, core.InvalidFields(fe...))
 		return
 	}
@@ -323,9 +392,19 @@ func (g *Gateway) updateRuleHandler(c *gin.Context) {
 		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage(msg))
 		return
 	}
+	stored := append([]string(nil), r.Match.Protocols...)
 	in.applyTo(r)
 	if r.Source == sourceAdmin {
-		if fe := validateRule(ctx, r); len(fe) > 0 {
+		// Protocols are only checked when the request carries a match, and
+		// the ones the rule already had are kept: the console submits the
+		// whole rule, so changing the TTL or a switch of a rule whose
+		// platform went away (plugin disabled or uninstalled) must not be
+		// rejected. A protocol added by this request is still checked.
+		var known func(string) bool
+		if in.Match != nil {
+			known = keeping(g.knownProtocol(), stored)
+		}
+		if fe := validateRule(ctx, r, known); len(fe) > 0 {
 			httpapi.Fail(c, core.InvalidFields(fe...))
 			return
 		}

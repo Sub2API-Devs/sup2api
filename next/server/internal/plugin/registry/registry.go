@@ -329,6 +329,19 @@ func build(number uint64, exts []Extension) *generation {
 			}
 			return hs[i].Plugin.Key < hs[j].Plugin.Key
 		})
+		// A hook may match a protocol declared by another plugin's platform,
+		// so install order decides what exists: an unknown protocol is not an
+		// install error, it only means the hook never runs. Warn once per
+		// generation so a typo is visible. Patterns are left alone.
+		for _, h := range hs {
+			for _, proto := range h.Hook.Match.Protocols {
+				if _, ok := g.byProto[proto]; ok || strings.ContainsAny(proto, "*?") {
+					continue
+				}
+				slog.Warn("plugin registry: hook matches a protocol no platform declares",
+					"plugin", h.Plugin.Key, "hook", h.Hook.ID, "point", point, "protocol", proto)
+			}
+		}
 	}
 	sort.SliceStable(g.accTypes, func(i, j int) bool {
 		a, b := g.accTypes[i], g.accTypes[j]
