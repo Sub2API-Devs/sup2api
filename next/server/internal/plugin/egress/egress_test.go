@@ -215,9 +215,15 @@ func TestHTTPThroughDefaultTransport(t *testing.T) {
 }
 
 func TestPolicyDeniesAndDialErrors(t *testing.T) {
-	e := newEnv(t, nil, Options{AlwaysAllow: []string{"db.internal.test:5432"}})
 	addr := echoTCP(t)
 	_, port, _ := net.SplitHostPort(addr)
+	// AlwaysAllow is an exact "host:port" target, so it is pointed at the echo
+	// server: the bypass is then proven by a dial that succeeds. Naming a port
+	// nothing is expected to listen on ("db.internal.test:5432") and asserting
+	// the dial fails would instead make the test depend on the machine -- the
+	// server CI job publishes its PostgreSQL service container on 127.0.0.1:5432,
+	// where the supposedly unreachable dial connects and the assertion inverts.
+	e := newEnv(t, nil, Options{AlwaysAllow: []string{"db.internal.test:" + port}})
 	e.policy.set(core.EgressPolicy{Mode: PolicyAllowlist, AllowedDomains: []string{"*.good.test"}})
 
 	if _, err := sdkegress.DialContext(context.Background(), "tcp", "evil.test:"+port); err == nil ||
@@ -229,11 +235,13 @@ func TestPolicyDeniesAndDialErrors(t *testing.T) {
 		t.Fatalf("allowed host: %v", err)
 	}
 	_ = c.Close()
-	// AlwaysAllow bypasses the policy (reaches nothing here: dial error, not denial).
-	_, err = sdkegress.DialContext(context.Background(), "tcp", "db.internal.test:5432")
-	if err == nil || strings.Contains(err.Error(), "not allowed") {
+	// AlwaysAllow bypasses the policy: db.internal.test matches no allowed
+	// domain (evil.test above, same shape, was denied) yet the dial goes through.
+	c, err = sdkegress.DialContext(context.Background(), "tcp", "db.internal.test:"+port)
+	if err != nil {
 		t.Fatalf("always-allow: %v", err)
 	}
+	_ = c.Close()
 	// Dial error from the target.
 	e.policy.set(core.EgressPolicy{Mode: PolicyAllowAll})
 	ln, _ := net.Listen("tcp", "127.0.0.1:0")

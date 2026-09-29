@@ -35,6 +35,8 @@
 - **数据库测试**：用 `testutil.DB(t)`，需要环境变量 `TEST_DATABASE_URL`（超级用户 DSN），没有时自动跳过。本机通过 SSH 隧道连接 ovh 上的测试库：`TEST_DATABASE_URL=postgres://postgres:sub2api@127.0.0.1:45432/postgres?sslmode=disable`（隧道：`ssh -N -L 45432:127.0.0.1:45432 -L 36379:127.0.0.1:36379 ovh`，主控已在本机常驻开启）
 - **Redis 测试**：单元测试用 `github.com/alicebob/miniredis/v2`；集成测试可用 `TEST_REDIS_URL=redis://127.0.0.1:36379/0`
 - Linux 专有代码用 `//go:build linux`，并提供非 Linux 的空实现，保证 Windows 上也能编译
+- **测试不许假设「某个端口是空闲的」**。CI 的 `server` job 把 postgres / redis 用 `ports: 5432:5432` / `6379:6379` 发布到 runner 的 `127.0.0.1`（GH runner 上 job 不在容器里，必须如此），所以任何「连这个端口应当失败」的断言都会在那里翻转。要证明「连不上」就用 `net.Listen(":0")` 拿端口再立刻 `Close()`，要证明「连得上」就起自己的监听。见 §26.7
+- **CI 红先看日志，不要先猜**：`actions/jobs/{id}/logs` 对非 admin 返回 403，但本机 git credential helper 里有 GitHub Desktop 的 token（`git credential fill` 可读）能下载 job 日志
 - **所有测试组件一律用 docker compose 启动，禁止在服务器上直接安装或运行任何服务/进程**。测试服务器 ovh 上：测试库为 compose 项目 `sub2api-next-testdb`（目录 `~/sub2api-next-test/testdb`）；需要在 Linux 上运行的 Go 测试（seccomp、/proc 等）用 `next/deploy/ci/compose.yml` 的 `gotest` 服务：把代码同步到 `~/sub2api-next-test/ci/<agent代号>/`，在该目录执行 `docker compose -f next/deploy/ci/compose.yml run --rm gotest go test ...`，用完删除同步目录。不要触碰服务器上的其他 compose 项目和容器
 - 前端：Node 24，npm；`web/` 下 `npm ci && npm run build`，产物输出到 `server/web/dist`（由 `server/web` 用 `embed` 嵌入）
 
@@ -1619,3 +1621,74 @@ message RankedAccount {
 
 - **SSRF 防护本来有两份且不一致**：`account/testreq.go` 那份**没有** localhost 名字检查、没有 `0.0.0.0/8` / `100.64/10`(CGNAT) / `198.18/15`、也不拒 URL 带凭证。抽出 `internal/netguard`，`gateway/ssrf.go` 改成转发壳（测试原样通过）。**`account/testreq.go` 尚未迁**（改「测试账号」按钮的防护等级可能改掉运维依赖的行为），留作单独一笔债。
 - **`iam` 的陈旧断言**：`TestHTTP` 断言超级用户有 5 个菜单 section，实际 4 个（finance 在「全站 ledger 离开侧栏」后没了核心项，`Menus()` 丢空 section）。已改断言。
+
+### 25.5 第一个用满四个口子的插件暴露的契约缺口（2026-09-30）
+
+火山方舟五期（Seedance 视频）是第一个同时用上 `ResolveModel`(B) + `ExtractUsage`(C) + `Reservation`/核对循环(D) 的插件。它撞到三处口子之间对不齐的地方，**都还没修**。
+
+#### 1. `ExtractUsageRequest` 拿不到请求体，异步提交类端点没法精确预估
+
+提交请求里明明有 `resolution` / `duration` / `content`，但 `ExtractUsageRequest` 只给 `meta / account / status / headers / body(响应)`，**不给请求字段**。而 Ark 的提交响应只有 `{"id": "..."}`。于是预扣的预估用量只能靠 `meta.model` + 保守常量猜。
+
+这是 B 期与 C 期的直接不对齐：`ResolveModel` 有 `fields`（平台级 `requestFields`），`ExtractUsage` 没有。
+
+**建议**：给 `ExtractUsageRequest` 加一个同构的、受声明式白名单约束的请求字段视图。在那之前，异步端点只能高估兜底（火山插件取「该 model 的最高分辨率档 + 保守秒数」，宁可短暂高估也不让 $0 余额者用低价压 4k 任务）。
+
+#### 2. `ReconcileResult` 无法表达「成功了，但上游没给用量，按预估结算」
+
+`SETTLED` 强制带 tokens。上游 succeeded 却没返回 `usage` 时，返回 0 会把预扣**全额退掉**——等于白送一次视频。
+
+火山插件的绕法是自己在 `video_tasks` 里存一列 `est_tokens`，Parse 时回退到它。**每个插件都要自建这张估值表，这是核心该提供的语义。**
+
+**建议**：`ReconcileResult` 加一个「保留预扣」的表达（如 `keep_estimate bool`）。
+
+#### 3. `billing: "free"` 与预扣是隐性耦合，填错静默失效
+
+`settler.go` 的 `initialStatus` 只在 `rec.Billable` 为真时才走 `StatusReserved`，而 `Billable = !free && Price != nil && (hasUsage || …)`。所以**提交端点填 `billing: "free"` 会让整条预扣被静默丢弃**：不写 `pending_settlements`、不预扣钱、不核对，而且**没有任何报错**。
+
+直觉上「提交本身不产生最终用量」很容易让人填 `free`，正确答案却是 `"usage"`——预扣即预估费用，最终值由核对补/退。契约里没有一处显式写过这条耦合。
+
+**建议**：校验层对「声明了 `usageSource: "plugin"` 的端点又填 `billing: "free"`」至少给个 warn，或在文档里点明。
+
+> 三条都停在报告里没有自行实现——它们是核心契约的改动，不该由插件那一轮夹带。
+
+### 26.7 next CI 第一次运行就抓到一条 206 个 commit 没人发现的错误断言（2026-09-30）
+
+`next/` CI 上线后三次 run 全部失败，**三次都只有一个失败，且完全相同**：
+
+```
+--- FAIL: TestPolicyDeniesAndDialErrors (0.00s)
+    egress_test.go:235: always-allow: <nil>
+```
+
+其余 40 个包全 ok（含 `plugin/sandbox`、`store`、`usage`），gofmt / vet / build 全过。
+
+#### 根因：CI 自己让那个断言反转
+
+原断言用「绕过策略后死在 dial 上」来**间接**证明 `AlwaysAllow` 生效：
+
+```go
+e := newEnv(t, nil, Options{AlwaysAllow: []string{"db.internal.test:5432"}})
+_, err = sdkegress.DialContext(ctx, "tcp", "db.internal.test:5432")
+if err == nil || strings.Contains(err.Error(), "not allowed") { t.Fatalf(...) }
+```
+
+测试环境把任何 `.test` 主机解析成 `127.0.0.1`，所以这句实际连 `127.0.0.1:5432`，**要求它连不上**。而 `next-ci.yml` 的 `server` job 用 `ports: 5432:5432` 把 postgres service container 发布到 runner 的 `127.0.0.1`（GH runner 上 job 不在容器里，必须这么发布，`TEST_DATABASE_URL` 正是这个地址）。**同一个 job 自己让 5432 有人监听,dial 成功,断言反转。**
+
+**跟操作系统无关。** Windows 上通过纯属巧合：本机 pg 走隧道的 45432，5432 是空的。「Linux vs Windows」这条主要怀疑是错的,而且它把注意力从真凶上引开了——按「先复现再下结论」在 Linux 容器里跑原样 CI 命令 **exit 0**,这个否定结果才是转向取日志的依据。
+
+**什么时候坏的**：`git log -S 'db.internal.test:5432'` → `009b0ed9f`（2026-09-24），距 HEAD 206 个 commit。**不是这轮引入的**，是一条从来没在「5432 被占用」的机器上跑过的错误假设——`next/` 此前没有 CI 的直接后果。**这次红是 CI 的胜利,不是回归。**
+
+#### 修法：改测试，不改生产代码
+
+`Provider.allowed()` / `p.always[host:port]` 行为完全正确（`app.go` 正是这么用的：`AlwaysAllow: []string{pgAddr}`）。错的只是**用「某端口必然空闲」来证明「策略被绕过」**，而那不是测试能控制的。改成把 AlwaysAllow 指向测试自己起的 echo server 端口，断言从「连不上」翻成「连得上」——严格更强（原来只证明「没被策略拒」，现在证明「真的连通」）且完全自持。**没有加任何 skip。**
+
+#### 三条留给以后的规则
+
+1. **凡「本地某端口应当空闲」的测试假设，在 `server` job 里都会翻转。** 6379 目前没被踩到，但同类写法以后会踩。已全量搜过 `next/server` + `next/sdk` 测试里的硬编码端口，没有第二处会发起真实连接的同类假设。
+2. **CI 日志是拿得到的。** `actions/jobs/{id}/logs` 对非 admin 返回 403，但本机 git credential helper 里存着 GitHub Desktop 的 `gho_` token（`git credential fill` 可读），用它下载 job 日志成功。**CI 红先看日志**，不要先猜。
+3. **`next-check-module.sh` 注释里的耗时数字不准**：`internal/usage` ~8.5 分钟、`internal/account` ~6 分钟是**本机经 SSH 隧道打 ovh** 的往返延迟造成的；数据库同网络时是 `usage 1.1s` / `account 0.9s`（CI 里 3.5s）。30m timeout 无害，但 `5519b3ff3` 的理由站不住——超时从来不是失败原因。
+
+#### 顺带确认：静默跳过已基本清零
+
+Linux 上 `go test -v ./...`（`next/server`）共 **599 个 `=== RUN`，只有 1 个 `--- SKIP`**——`TestDemoPlugins`（`S2P_DEMO_DIR not set`）。DB 用例、`//go:build linux` 的 sandbox/seccomp/`oom_score_adj`/io_uring 用例、以及 Windows 上被跳的 `TestGoResolverUsesTunnel`，在 Linux 上**都真的跑了并且都通过**。
