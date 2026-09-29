@@ -41,9 +41,10 @@ func (s dbGatewaySettings) save(ctx context.Context, v GatewaySettings, updatedB
 // gatewaySettingsInput is the PUT /settings/gateway body; nil fields keep
 // their current value.
 type gatewaySettingsInput struct {
-	MaxAttempts           *int `json:"max_attempts"`
-	PlatformCallTimeoutMs *int `json:"platform_call_timeout_ms"`
-	DefaultHookTimeoutMs  *int `json:"default_hook_timeout_ms"`
+	MaxAttempts              *int `json:"max_attempts"`
+	PlatformCallTimeoutMs    *int `json:"platform_call_timeout_ms"`
+	DefaultHookTimeoutMs     *int `json:"default_hook_timeout_ms"`
+	PlatformHotpathTimeoutMs *int `json:"platform_hotpath_timeout_ms"`
 }
 
 // validate checks the provided fields against the accepted ranges
@@ -64,6 +65,7 @@ func (in *gatewaySettingsInput) validate(ctx context.Context) []core.FieldError 
 	check("max_attempts", in.MaxAttempts, minMaxAttempts, maxMaxAttempts)
 	check("platform_call_timeout_ms", in.PlatformCallTimeoutMs, minPlatformCallTimeoutMs, maxPlatformCallTimeoutMs)
 	check("default_hook_timeout_ms", in.DefaultHookTimeoutMs, minDefaultHookTimeoutMs, maxDefaultHookTimeoutMs)
+	check("platform_hotpath_timeout_ms", in.PlatformHotpathTimeoutMs, minPlatformHotpathTimeoutMs, maxPlatformHotpathTimeoutMs)
 	return fe
 }
 
@@ -76,6 +78,9 @@ func (in *gatewaySettingsInput) applyTo(v *GatewaySettings) {
 	}
 	if in.DefaultHookTimeoutMs != nil {
 		v.DefaultHookTimeoutMs = *in.DefaultHookTimeoutMs
+	}
+	if in.PlatformHotpathTimeoutMs != nil {
+		v.PlatformHotpathTimeoutMs = *in.PlatformHotpathTimeoutMs
 	}
 }
 

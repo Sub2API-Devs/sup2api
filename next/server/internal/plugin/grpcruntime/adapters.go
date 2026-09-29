@@ -197,6 +197,48 @@ func (a platformAdapter) BuildModelsRequest(ctx context.Context, in *pluginv1.Bu
 	return
 }
 
+// ResolveModel runs on the gateway hot path (before scheduling), so it uses
+// the hot-path timeout like BuildUpstreamRequest; the gateway applies its own,
+// shorter deadline on top.
+func (a platformAdapter) ResolveModel(ctx context.Context, in *pluginv1.ResolveModelRequest) (out *pluginv1.ResolveModelResponse, err error) {
+	err = a.i.call(ctx, TimeoutPlatformHot, func(ctx context.Context, p *proc) (e error) {
+		out, e = p.platform.ResolveModel(ctx, in)
+		return
+	})
+	return
+}
+
+// ExtractUsage runs after the response reached the client, so it is off the
+// latency path; it still uses the hot-path timeout because it holds a usage
+// record open, and the gateway applies its own, shorter deadline on top.
+func (a platformAdapter) ExtractUsage(ctx context.Context, in *pluginv1.ExtractUsageRequest) (out *pluginv1.UsageReport, err error) {
+	err = a.i.call(ctx, TimeoutPlatformHot, func(ctx context.Context, p *proc) (e error) {
+		out, e = p.platform.ExtractUsage(ctx, in)
+		return
+	})
+	return
+}
+
+// BuildReconcileRequest and ParseReconcileResponse run in the core's offline
+// reconcile loop, not in a request, so they get the console budget rather
+// than the hot-path one: nobody is waiting, and being stingy here only
+// burns an attempt of an entry's limited allowance.
+func (a platformAdapter) BuildReconcileRequest(ctx context.Context, in *pluginv1.BuildReconcileRequestRequest) (out *pluginv1.BuildReconcileRequestResponse, err error) {
+	err = a.i.call(ctx, TimeoutPlatformConsole, func(ctx context.Context, p *proc) (e error) {
+		out, e = p.platform.BuildReconcileRequest(ctx, in)
+		return
+	})
+	return
+}
+
+func (a platformAdapter) ParseReconcileResponse(ctx context.Context, in *pluginv1.ParseReconcileResponseRequest) (out *pluginv1.ReconcileResult, err error) {
+	err = a.i.call(ctx, TimeoutPlatformConsole, func(ctx context.Context, p *proc) (e error) {
+		out, e = p.platform.ParseReconcileResponse(ctx, in)
+		return
+	})
+	return
+}
+
 type hookAdapter struct{ i *Instance }
 
 func (a hookAdapter) OnGatewayRequest(ctx context.Context, in *pluginv1.GatewayRequestHookRequest) (out *pluginv1.GatewayRequestHookResponse, err error) {

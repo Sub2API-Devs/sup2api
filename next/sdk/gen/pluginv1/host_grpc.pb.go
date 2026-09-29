@@ -19,16 +19,18 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	HostService_Log_FullMethodName          = "/sub2api.plugin.v1.HostService/Log"
-	HostService_KVGet_FullMethodName        = "/sub2api.plugin.v1.HostService/KVGet"
-	HostService_KVSet_FullMethodName        = "/sub2api.plugin.v1.HostService/KVSet"
-	HostService_KVDelete_FullMethodName     = "/sub2api.plugin.v1.HostService/KVDelete"
-	HostService_KVList_FullMethodName       = "/sub2api.plugin.v1.HostService/KVList"
-	HostService_GetDSN_FullMethodName       = "/sub2api.plugin.v1.HostService/GetDSN"
-	HostService_AuthzCheck_FullMethodName   = "/sub2api.plugin.v1.HostService/AuthzCheck"
-	HostService_LedgerCredit_FullMethodName = "/sub2api.plugin.v1.HostService/LedgerCredit"
-	HostService_LedgerDebit_FullMethodName  = "/sub2api.plugin.v1.HostService/LedgerDebit"
-	HostService_Publish_FullMethodName      = "/sub2api.plugin.v1.HostService/Publish"
+	HostService_Log_FullMethodName                   = "/sub2api.plugin.v1.HostService/Log"
+	HostService_KVGet_FullMethodName                 = "/sub2api.plugin.v1.HostService/KVGet"
+	HostService_KVSet_FullMethodName                 = "/sub2api.plugin.v1.HostService/KVSet"
+	HostService_KVDelete_FullMethodName              = "/sub2api.plugin.v1.HostService/KVDelete"
+	HostService_KVList_FullMethodName                = "/sub2api.plugin.v1.HostService/KVList"
+	HostService_GetDSN_FullMethodName                = "/sub2api.plugin.v1.HostService/GetDSN"
+	HostService_AuthzCheck_FullMethodName            = "/sub2api.plugin.v1.HostService/AuthzCheck"
+	HostService_LedgerCredit_FullMethodName          = "/sub2api.plugin.v1.HostService/LedgerCredit"
+	HostService_LedgerDebit_FullMethodName           = "/sub2api.plugin.v1.HostService/LedgerDebit"
+	HostService_Publish_FullMethodName               = "/sub2api.plugin.v1.HostService/Publish"
+	HostService_ListAccounts_FullMethodName          = "/sub2api.plugin.v1.HostService/ListAccounts"
+	HostService_GetAccountCredentials_FullMethodName = "/sub2api.plugin.v1.HostService/GetAccountCredentials"
 )
 
 // HostServiceClient is the client API for HostService service.
@@ -60,6 +62,14 @@ type HostServiceClient interface {
 	// instances on every other live node (AppService.OnBroadcast), best
 	// effort, e.g. "rules changed, reload". Payload at most 64 KiB.
 	Publish(ctx context.Context, in *PublishRequest, opts ...grpc.CallOption) (*PublishResponse, error)
+	// accounts.read (Medium): metadata of the accounts of this plugin's account
+	// types. The response carries no credential field of any kind; it is the
+	// list a plugin needs to offer "pick an account" in its own console page.
+	// Paginated: at most 200 rows per call (100 by default).
+	ListAccounts(ctx context.Context, in *ListAccountsRequest, opts ...grpc.CallOption) (*ListAccountsResponse, error)
+	// accounts.credentials {"types":"own"} (Critical): the decrypted credentials
+	// of ONE account of this plugin's account types. Audited on every call.
+	GetAccountCredentials(ctx context.Context, in *GetAccountCredentialsRequest, opts ...grpc.CallOption) (*GetAccountCredentialsResponse, error)
 }
 
 type hostServiceClient struct {
@@ -170,6 +180,26 @@ func (c *hostServiceClient) Publish(ctx context.Context, in *PublishRequest, opt
 	return out, nil
 }
 
+func (c *hostServiceClient) ListAccounts(ctx context.Context, in *ListAccountsRequest, opts ...grpc.CallOption) (*ListAccountsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAccountsResponse)
+	err := c.cc.Invoke(ctx, HostService_ListAccounts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) GetAccountCredentials(ctx context.Context, in *GetAccountCredentialsRequest, opts ...grpc.CallOption) (*GetAccountCredentialsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAccountCredentialsResponse)
+	err := c.cc.Invoke(ctx, HostService_GetAccountCredentials_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // HostServiceServer is the server API for HostService service.
 // All implementations must embed UnimplementedHostServiceServer
 // for forward compatibility.
@@ -199,6 +229,14 @@ type HostServiceServer interface {
 	// instances on every other live node (AppService.OnBroadcast), best
 	// effort, e.g. "rules changed, reload". Payload at most 64 KiB.
 	Publish(context.Context, *PublishRequest) (*PublishResponse, error)
+	// accounts.read (Medium): metadata of the accounts of this plugin's account
+	// types. The response carries no credential field of any kind; it is the
+	// list a plugin needs to offer "pick an account" in its own console page.
+	// Paginated: at most 200 rows per call (100 by default).
+	ListAccounts(context.Context, *ListAccountsRequest) (*ListAccountsResponse, error)
+	// accounts.credentials {"types":"own"} (Critical): the decrypted credentials
+	// of ONE account of this plugin's account types. Audited on every call.
+	GetAccountCredentials(context.Context, *GetAccountCredentialsRequest) (*GetAccountCredentialsResponse, error)
 	mustEmbedUnimplementedHostServiceServer()
 }
 
@@ -238,6 +276,12 @@ func (UnimplementedHostServiceServer) LedgerDebit(context.Context, *LedgerChange
 }
 func (UnimplementedHostServiceServer) Publish(context.Context, *PublishRequest) (*PublishResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Publish not implemented")
+}
+func (UnimplementedHostServiceServer) ListAccounts(context.Context, *ListAccountsRequest) (*ListAccountsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAccounts not implemented")
+}
+func (UnimplementedHostServiceServer) GetAccountCredentials(context.Context, *GetAccountCredentialsRequest) (*GetAccountCredentialsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAccountCredentials not implemented")
 }
 func (UnimplementedHostServiceServer) mustEmbedUnimplementedHostServiceServer() {}
 func (UnimplementedHostServiceServer) testEmbeddedByValue()                     {}
@@ -440,6 +484,42 @@ func _HostService_Publish_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HostService_ListAccounts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAccountsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).ListAccounts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostService_ListAccounts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).ListAccounts(ctx, req.(*ListAccountsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_GetAccountCredentials_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAccountCredentialsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).GetAccountCredentials(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostService_GetAccountCredentials_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).GetAccountCredentials(ctx, req.(*GetAccountCredentialsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // HostService_ServiceDesc is the grpc.ServiceDesc for HostService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -486,6 +566,14 @@ var HostService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Publish",
 			Handler:    _HostService_Publish_Handler,
+		},
+		{
+			MethodName: "ListAccounts",
+			Handler:    _HostService_ListAccounts_Handler,
+		},
+		{
+			MethodName: "GetAccountCredentials",
+			Handler:    _HostService_GetAccountCredentials_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

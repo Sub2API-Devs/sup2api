@@ -1,0 +1,25 @@
+-- Observability markers of one usage row: facts about how the record itself
+-- was produced, NOT about what it costs.
+--
+-- They used to live in billing_detail, whose name says "this is the billing
+-- breakdown" and which held two of them by the time this migration was
+-- written: response_mismatch (the upstream answered in a shape the endpoint
+-- never declared, CONTRACTS §26.5) and usage_extract (who read the usage this
+-- cost was computed from, §25.3). §26.5 named the threshold itself - "when
+-- there is a second marker the right shape is a column of its own" - and the
+-- reconcile state of a pre-charged row (§25.4) is the third.
+--
+-- Being its own column buys more than tidiness: billing_detail is rewritten
+-- wholesale by settlement, so a marker recorded at insert time had to be
+-- carried through the unbilled phase and copied back in by settle(). Here it
+-- simply stays put, and the abandon path of the reconcile loop can append to
+-- it with || without touching a single billing figure.
+--
+-- Shape: a flat JSON object of string values, '{}' when nothing was unusual -
+-- which is every request of every endpoint on the declarative usage rules
+-- whose upstream answered in the declared shape.
+--   {"response_mismatch":"sse_not_declared"}
+--   {"usage_extract":"fallback"}
+--   {"reconcile":"abandoned","reconcile_attempts":"7","reconcile_error":"..."}
+
+ALTER TABLE usage_logs ADD COLUMN anomalies jsonb NOT NULL DEFAULT '{}';

@@ -75,10 +75,27 @@ type Detail struct {
 	Price         *PriceRef       `json:"price,omitempty"`
 	ExprHash      string          `json:"expr_hash"`
 	BillingDetail json.RawMessage `json:"billing_detail"`
-	LedgerID      *int64          `json:"ledger_id"`
-	ClientIP      string          `json:"client_ip"`
-	UserAgent     string          `json:"user_agent"`
-	NodeID        string          `json:"node_id"`
+	// Anomalies are the observability markers of the row
+	// (usage_logs.anomalies, core.Anomaly*): the upstream answered in an
+	// undeclared shape, a plugin was asked for the usage and did not answer,
+	// the core gave up reconciling a pre-charged row. '{}' is the normal
+	// case. Hidden from self-service views: every one of them is a statement
+	// about the upstream side of the request.
+	Anomalies json.RawMessage `json:"anomalies,omitempty"`
+	// PluginDetail is what the plugin said about the upstream response
+	// (usage_logs.plugin_detail, CONTRACTS §25.3). Hidden from self-service
+	// views like the other upstream-side fields: it is written by the plugin
+	// that talked to the upstream, about the upstream.
+	PluginDetail json.RawMessage `json:"plugin_detail,omitempty"`
+	// Settlement is the pre-charged entry this row is waiting on, or the one
+	// it ended up with (CONTRACTS §25.4); absent for the ordinary request
+	// whose usage was final when its response ended. Hidden from
+	// self-service views like the rest of the upstream side.
+	Settlement *Settlement `json:"settlement,omitempty"`
+	LedgerID   *int64      `json:"ledger_id"`
+	ClientIP   string      `json:"client_ip"`
+	UserAgent  string      `json:"user_agent"`
+	NodeID     string      `json:"node_id"`
 }
 
 // RegisterRoutes mounts the usage console API.
@@ -89,6 +106,12 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("GET", "/usage", "usage:all:read", s.allUsage)
 	r.Perm("GET", "/usage/summary", "usage:all:read", s.summary)
 	r.Perm("GET", "/usage/:id", "usage:all:read", s.usageDetail)
+	// The manual way out of the abandon policy (§25.4). Both move money, so
+	// they get their own permission rather than riding on usage:all:read.
+	r.Perm("POST", "/usage/:id/reconcile", "usage:settle", s.retryReconcile)
+	r.Perm("POST", "/usage/:id/refund", "usage:settle", s.refundAbandoned)
+	r.Perm("GET", "/settings/reconcile", "settings:read", s.getReconcileSettings)
+	r.Perm("PUT", "/settings/reconcile", "settings:manage", s.putReconcileSettings)
 }
 
 const recordColumns = `u.id, u.request_id, u.client_request_id, u.created_at, u.user_id, COALESCE(us.email, ''), u.api_key_id,
@@ -250,9 +273,10 @@ func (s *Service) detail(c *gin.Context, self *int64) {
 	}
 	var d Detail
 	targets := append(d.Record.scanTargets(), &d.PluginVersion, &d.Metrics, &d.StickyRule, &d.HookDecisions,
-		&d.PriceID, &d.ExprHash, &d.BillingDetail, &d.ClientIP, &d.UserAgent, &d.NodeID)
+		&d.PriceID, &d.ExprHash, &d.BillingDetail, &d.ClientIP, &d.UserAgent, &d.NodeID, &d.PluginDetail, &d.Anomalies)
 	err := s.db.Pool.QueryRow(ctx, `SELECT `+recordColumns+`, u.plugin_version, u.metrics, u.sticky_rule,
-		u.hook_decisions, u.price_id, u.expr_hash, u.billing_detail, u.client_ip, u.user_agent, u.node_id`+
+		u.hook_decisions, u.price_id, u.expr_hash, u.billing_detail, u.client_ip, u.user_agent, u.node_id,
+		u.plugin_detail, u.anomalies`+
 		recordJoins+` WHERE u.id = $1`, id).Scan(targets...)
 	if store.IsNoRows(err) || (err == nil && self != nil && d.UserID != *self) {
 		httpapi.Fail(c, core.ErrNotFound.WithMessage("usage record not found"))
@@ -277,6 +301,10 @@ func (s *Service) detail(c *gin.Context, self *int64) {
 	if self != nil {
 		d.hideUpstream()
 		d.NodeID = ""
+		d.PluginDetail = nil
+		d.Anomalies = nil
+	} else if e, err := s.loadSettlement(ctx, s.db.Pool, d.ID); err == nil {
+		d.Settlement = e
 	}
 	httpapi.OK(c, d)
 }

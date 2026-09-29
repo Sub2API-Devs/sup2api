@@ -23,6 +23,30 @@ type PlatformPlugin interface {
 	// BuildModelsRequest is optional for plugins: a plugin without it answers
 	// gRPC Unimplemented (CONTRACTS §19).
 	BuildModelsRequest(ctx context.Context, in *pluginv1.BuildModelsRequestRequest) (*pluginv1.BuildModelsRequestResponse, error)
+	// ResolveModel answers the model (and whether the response streams) of a
+	// request to an endpoint declaring request.modelSource "plugin"
+	// (CONTRACTS §25.2). It is called on the PlatformBinding.Client of the
+	// endpoint's platform, before any account is picked. Optional for
+	// plugins: one without it answers gRPC Unimplemented, and the gateway
+	// turns any failure into 400 "model is required".
+	ResolveModel(ctx context.Context, in *pluginv1.ResolveModelRequest) (*pluginv1.ResolveModelResponse, error)
+	// ExtractUsage reads the token usage of a finished upstream response for
+	// endpoints whose usage rules declare usage.source "plugin" (CONTRACTS
+	// §25.3). Like ResolveModel it is called on the PlatformBinding.Client of
+	// the response's platform, but after the response has been forwarded in
+	// full, so it costs the client nothing. Optional for plugins: one without
+	// it answers gRPC Unimplemented, and the gateway then keeps what the
+	// declarative rules produced.
+	ExtractUsage(ctx context.Context, in *pluginv1.ExtractUsageRequest) (*pluginv1.UsageReport, error)
+	// BuildReconcileRequest and ParseReconcileResponse check one pre-charged
+	// entry (CONTRACTS §25.4): the plugin describes the request and reads the
+	// answer, the core sends it through the account's proxy behind its SSRF
+	// guard. Called on the PlatformBinding.Client of the platform whose
+	// ExtractUsage returned the Reservation, from the offline reconcile loop.
+	// Optional for plugins: one without them answers gRPC Unimplemented, and
+	// its entries are retried until their deadline and then abandoned.
+	BuildReconcileRequest(ctx context.Context, in *pluginv1.BuildReconcileRequestRequest) (*pluginv1.BuildReconcileRequestResponse, error)
+	ParseReconcileResponse(ctx context.Context, in *pluginv1.ParseReconcileResponseRequest) (*pluginv1.ReconcileResult, error)
 }
 
 type HookPlugin interface {
@@ -71,6 +95,10 @@ type PlatformBinding struct {
 	Plugin   PluginInfo
 	Builtin  bool
 	Platform manifest.Platform
+	// Client is the declaring plugin's PlatformService; nil for built-in
+	// platforms and for plugins that do not implement platform.adapter.v1.
+	// Every caller must check it.
+	Client PlatformPlugin
 }
 
 // AccountTypeKey identifies an account type: the declaring plugin and the

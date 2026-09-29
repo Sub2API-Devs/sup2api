@@ -12,12 +12,15 @@ export default {
     fields: {
       max_attempts: 'Max attempts',
       platform_call_timeout_ms: 'Platform call timeout',
-      default_hook_timeout_ms: 'Default hook timeout'
+      default_hook_timeout_ms: 'Default hook timeout',
+      platform_hotpath_timeout_ms: 'Platform hot-path timeout'
     },
     hints: {
       max_attempts: 'Accounts tried per request, including the first attempt (failover).',
       platform_call_timeout_ms: 'Timeout of plugin platform calls on the request path (building the upstream request, parsing usage).',
-      default_hook_timeout_ms: 'Used by hooks whose manifest sets no timeout.'
+      default_hook_timeout_ms: 'Used by hooks whose manifest sets no timeout.',
+      platform_hotpath_timeout_ms:
+        'Timeout of the per-request platform calls that are not hooks: resolving the model before scheduling, and reading usage after the response was sent.'
     },
     range: 'Range {min}–{max}.',
     notInteger: 'Enter a whole number'

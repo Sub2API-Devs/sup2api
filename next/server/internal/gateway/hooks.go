@@ -600,4 +600,8 @@ func (c *call) promptText(limit int) string {
 func (c *call) setBody(b []byte) {
 	c.body = b
 	c.promptCache = nil
+	// The model a platform plugin derived from the old body may be wrong for
+	// the new one, so the next checkModel asks again (endpoints with
+	// request.modelSource "plugin" only).
+	c.modelResolved = false
 }

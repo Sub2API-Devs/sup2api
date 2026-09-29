@@ -15,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 )
@@ -22,8 +23,24 @@ import (
 // NoncePlaceholder is written into index.html by the Vite build (web/vite.config.ts).
 const NoncePlaceholder = "__CSP_NONCE__"
 
-// reservedPrefixes never fall back to index.html.
-var reservedPrefixes = []string{"/api/", "/plugin-ui/", "/healthz"}
+// reservedPrefixes never fall back to index.html. The names come from
+// manifest.CoreRouteSegments, the one list of route segments the core owns,
+// but the match here is a path prefix rather than the first-segment match the
+// gateway applies to plugin endpoints: this handler only decides whether a
+// browser path is served index.html, and a prefix keeps the console from
+// swallowing /api/... and /plugin-ui/... without claiming an unrelated path
+// like /apifoo. /healthz has no children, so it is matched whole.
+var reservedPrefixes = func() []string {
+	out := make([]string, 0, len(manifest.CoreRouteSegments))
+	for _, s := range manifest.CoreRouteSegments {
+		if s == manifest.RouteHealthz {
+			out = append(out, "/"+s)
+			continue
+		}
+		out = append(out, "/"+s+"/")
+	}
+	return out
+}()
 
 type Handler struct {
 	files fs.FS

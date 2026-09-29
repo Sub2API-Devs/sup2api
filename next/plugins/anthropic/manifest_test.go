@@ -11,6 +11,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/anthropic/internal/anthropic"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/platforms"
 )
 
 // TestManifest checks manifest.json against the SDK types (no unknown
@@ -148,26 +149,17 @@ func TestManifest(t *testing.T) {
 	}
 }
 
-// builtinAnthropic reads the core's built-in anthropic platform definition
-// when the plugin is checked out inside the next/ tree; nil otherwise.
+// builtinAnthropic is the core's built-in anthropic platform definition,
+// which the SDK carries so plugins can check themselves against it.
 func builtinAnthropic(t *testing.T) *manifest.Platform {
 	t.Helper()
-	b, err := os.ReadFile(filepath.FromSlash("../../server/internal/platforms/anthropic.json"))
-	if os.IsNotExist(err) {
-		t.Log("built-in platform definition not found; skipping cross-check")
-		return nil
+	for _, p := range platforms.Builtin() {
+		if p.ID == anthropic.PlatformID {
+			return &p
+		}
 	}
-	if err != nil {
-		t.Fatal(err)
-	}
-	var p manifest.Platform
-	if err := json.Unmarshal(b, &p); err != nil {
-		t.Fatalf("built-in anthropic platform: %v", err)
-	}
-	if p.ID != anthropic.PlatformID {
-		t.Fatalf("built-in platform id = %q", p.ID)
-	}
-	return &p
+	t.Fatalf("no built-in platform %q", anthropic.PlatformID)
+	return nil
 }
 
 func asSlice(v any) []any {

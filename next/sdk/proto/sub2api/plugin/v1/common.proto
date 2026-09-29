@@ -60,6 +60,25 @@ message RequestMeta {
   string client_ip = 8;
   // Protocol of the client-facing endpoint (ARCHITECTURE 6.6).
   string client_protocol = 9;
+  // Path parameters of the matched endpoint pattern, e.g. "model" for
+  // /v1beta/models/:model:generateContent. Empty when the pattern has none.
+  // At most 32 entries (lowest keys by name when more), keys cut to 64 bytes
+  // and values to 512 bytes on a UTF-8 boundary.
+  map<string, string> path_params = 10;
+  // Query parameters the endpoint declared in request.queryParams, and only
+  // those - the same "the plugin states what it needs and the host hands over
+  // nothing else" rule request.requestFields follows. The endpoint's
+  // auth.query parameter is always excluded (case-insensitively) because it
+  // carries the API key, and the host never ships the whole query string:
+  // that would leak credentials in parameters nobody declared.
+  //
+  // Names are matched case-insensitively, so a declared "alt" also picks up
+  // "?Alt=sse"; the key is the name as the client sent it. Only the first
+  // value of a repeated parameter is passed. Empty when the endpoint declared
+  // none. Bounded exactly like path_params: at most 32 entries (lowest keys
+  // by name when more), keys cut to 64 bytes and values to 512 bytes on a
+  // UTF-8 boundary, invalid UTF-8 dropped.
+  map<string, string> query = 11;
 }
 
 // FieldError reports a validation problem on one input field.
@@ -67,4 +86,21 @@ message FieldError {
   string field = 1;          // JSON path within the submitted object
   string code = 2;           // machine readable, e.g. "required", "pattern"
   string message = 3;        // human readable, localized by the plugin if possible
+}
+
+// UsageTokens are the token counts of one upstream response, in exactly the
+// shape the declarative usage rules produce (manifest usage.json / usage.sse
+// keys). The host normalises and prices them; a plugin states what the
+// upstream reported and never what it costs.
+//
+// cache_creation_tokens is the TOTAL cache write, including the 1 hour part:
+// the host subtracts cache_creation_1h_tokens from it, exactly as it does for
+// the declarative rules, so both sources mean the same thing. A negative
+// value counts as 0.
+message UsageTokens {
+  int64 input_tokens = 1;
+  int64 output_tokens = 2;
+  int64 cache_read_tokens = 3;
+  int64 cache_creation_tokens = 4;
+  int64 cache_creation_1h_tokens = 5;
 }

@@ -102,8 +102,14 @@ func newFakeGen() *fakeGen {
 }
 
 // addPlatform adds a platform with its endpoints (Plugin zero = built-in).
-func (g *fakeGen) addPlatform(info core.PluginInfo, p manifest.Platform) {
-	g.platforms = append(g.platforms, core.PlatformBinding{Plugin: info, Builtin: info.Key == "", Platform: p})
+// client is the declaring plugin's PlatformService (PlatformBinding.Client):
+// nil for built-in platforms and for plugins without platform.adapter.v1.
+func (g *fakeGen) addPlatform(info core.PluginInfo, p manifest.Platform, client ...core.PlatformPlugin) {
+	b := core.PlatformBinding{Plugin: info, Builtin: info.Key == "", Platform: p}
+	if len(client) > 0 {
+		b.Client = client[0]
+	}
+	g.platforms = append(g.platforms, b)
 	for _, e := range p.Endpoints {
 		g.endpoints = append(g.endpoints, core.EndpointBinding{Plugin: info, Platform: p.ID, Endpoint: e})
 	}
@@ -240,6 +246,74 @@ type fakePlatform struct {
 	urlFor    func(acct *pluginv1.Account) string
 	// route overrides the upstream URL from the whole request.
 	route func(in *pluginv1.BuildUpstreamRequestRequest) string
+	// resolve answers ResolveModel; nil = UNIMPLEMENTED, like a plugin that
+	// never wrote the optional method. resolves counts every call, so a test
+	// can prove an endpoint without request.modelSource never triggers one.
+	resolve  func(ctx context.Context, in *pluginv1.ResolveModelRequest) (*pluginv1.ResolveModelResponse, error)
+	resolves []*pluginv1.ResolveModelRequest
+	// extract answers ExtractUsage; nil = UNIMPLEMENTED, like a plugin that
+	// never wrote the optional method. extracts counts every call, so a test
+	// can prove an endpoint without usage.source "plugin" never triggers one.
+	extract  func(ctx context.Context, in *pluginv1.ExtractUsageRequest) (*pluginv1.UsageReport, error)
+	extracts []*pluginv1.ExtractUsageRequest
+	// classifyHook adjusts the classification before it goes back to the
+	// gateway, e.g. to set client_error_code.
+	classifyHook func(in *pluginv1.ClassifyErrorRequest, out *pluginv1.ClassifyErrorResponse)
+}
+
+func (p *fakePlatform) ResolveModel(ctx context.Context, in *pluginv1.ResolveModelRequest) (*pluginv1.ResolveModelResponse, error) {
+	p.mu.Lock()
+	p.resolves = append(p.resolves, in)
+	fn := p.resolve
+	p.mu.Unlock()
+	if fn == nil {
+		return nil, status.Error(codes.Unimplemented, "no")
+	}
+	return fn(ctx, in)
+}
+
+func (p *fakePlatform) resolveCount() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.resolves)
+}
+
+func (p *fakePlatform) ExtractUsage(ctx context.Context, in *pluginv1.ExtractUsageRequest) (*pluginv1.UsageReport, error) {
+	p.mu.Lock()
+	p.extracts = append(p.extracts, in)
+	fn := p.extract
+	p.mu.Unlock()
+	if fn == nil {
+		return nil, status.Error(codes.Unimplemented, "no")
+	}
+	return fn(ctx, in)
+}
+
+func (p *fakePlatform) extractCount() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.extracts)
+}
+
+// The reconcile half of PlatformService is never reached from the gateway:
+// the loop that calls it lives in the usage module. Answering UNIMPLEMENTED
+// is what a plugin with no asynchronous work does.
+func (p *fakePlatform) BuildReconcileRequest(context.Context, *pluginv1.BuildReconcileRequestRequest) (*pluginv1.BuildReconcileRequestResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "no")
+}
+
+func (p *fakePlatform) ParseReconcileResponse(context.Context, *pluginv1.ParseReconcileResponseRequest) (*pluginv1.ReconcileResult, error) {
+	return nil, status.Error(codes.Unimplemented, "no")
+}
+
+// lastExtract returns the request of the last ExtractUsage call.
+func (p *fakePlatform) lastExtract() *pluginv1.ExtractUsageRequest {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.extracts) == 0 {
+		return nil
+	}
+	return p.extracts[len(p.extracts)-1]
 }
 
 func (p *fakePlatform) ValidateCredentials(context.Context, *pluginv1.ValidateCredentialsRequest) (*pluginv1.ValidateCredentialsResponse, error) {
@@ -279,6 +353,7 @@ func (p *fakePlatform) BuildUpstreamRequest(ctx context.Context, in *pluginv1.Bu
 func (p *fakePlatform) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequest) (*pluginv1.ClassifyErrorResponse, error) {
 	p.mu.Lock()
 	p.classify = append(p.classify, in)
+	hook := p.classifyHook
 	p.mu.Unlock()
 	code := int(in.GetStatus())
 	msg := gjson.GetBytes(in.GetBodyPrefix(), "error.message").String()
@@ -298,6 +373,9 @@ func (p *fakePlatform) ClassifyError(_ context.Context, in *pluginv1.ClassifyErr
 		r.Reason = "bad credentials"
 	default:
 		r.Action = pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT
+	}
+	if hook != nil {
+		hook(in, r)
 	}
 	return r, nil
 }
@@ -550,6 +628,8 @@ type upstreamRule struct {
 	hold        chan struct{} // SSE: wait after message_start
 	breakStream bool          // SSE: abort the connection after message_start
 	waitCancel  bool          // block until the request is canceled
+	// body replaces the default error body of a status rule.
+	body string
 }
 
 type upstreamCall struct {
@@ -631,6 +711,10 @@ func (u *upstream) handle(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("retry-after", "2")
 		}
 		w.WriteHeader(rule.status)
+		if rule.body != "" {
+			_, _ = io.WriteString(w, rule.body)
+			return
+		}
 		_, _ = fmt.Fprintf(w, `{"type":"error","error":{"type":%q,"message":"mock status %d"}}`, anthropicType(rule.status), rule.status)
 		return
 	}

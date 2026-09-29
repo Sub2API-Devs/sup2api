@@ -383,6 +383,34 @@ func (s platformServer) BuildModelsRequest(ctx context.Context, in *pluginv1.Bui
 	return nil, status.Error(codes.Unimplemented, "this account type cannot list models")
 }
 
+func (s platformServer) ResolveModel(ctx context.Context, in *pluginv1.ResolveModelRequest) (*pluginv1.ResolveModelResponse, error) {
+	if r, ok := s.impl.(ModelResolver); ok {
+		return r.ResolveModel(ctx, in)
+	}
+	return nil, status.Error(codes.Unimplemented, "this platform does not resolve models")
+}
+
+func (s platformServer) ExtractUsage(ctx context.Context, in *pluginv1.ExtractUsageRequest) (*pluginv1.UsageReport, error) {
+	if x, ok := s.impl.(UsageExtractor); ok {
+		return x.ExtractUsage(ctx, in)
+	}
+	return nil, status.Error(codes.Unimplemented, "this platform does not extract usage")
+}
+
+func (s platformServer) BuildReconcileRequest(ctx context.Context, in *pluginv1.BuildReconcileRequestRequest) (*pluginv1.BuildReconcileRequestResponse, error) {
+	if r, ok := s.impl.(Reconciler); ok {
+		return r.BuildReconcileRequest(ctx, in)
+	}
+	return nil, status.Error(codes.Unimplemented, "this platform does not reconcile pre-charged entries")
+}
+
+func (s platformServer) ParseReconcileResponse(ctx context.Context, in *pluginv1.ParseReconcileResponseRequest) (*pluginv1.ReconcileResult, error) {
+	if r, ok := s.impl.(Reconciler); ok {
+		return r.ParseReconcileResponse(ctx, in)
+	}
+	return nil, status.Error(codes.Unimplemented, "this platform does not reconcile pre-charged entries")
+}
+
 type hookServer struct {
 	pluginv1.UnimplementedHookServiceServer
 	impl Hook

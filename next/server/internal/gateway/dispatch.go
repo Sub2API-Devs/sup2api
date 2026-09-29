@@ -77,10 +77,13 @@ func (c *call) dispatch(ctx context.Context) {
 		lastAccount = ref.ID
 		switch res.kind {
 		case attemptDone:
-			if lim := c.g.d.Limiter; lim != nil {
-				if n := c.rec.Tokens.Total(); n > 0 {
-					lim.AddTokens(context.WithoutCancel(ctx), ref.ID, n)
-				}
+			// An endpoint whose usage a plugin reports does not know its
+			// token count yet (submit asks after the handler returns), so the
+			// rate-limit window is updated there instead of here.
+			if c.usage != nil {
+				c.usage.accountID = ref.ID
+			} else {
+				c.countTokens(ctx, ref.ID)
 			}
 			c.finishSticky(ctx, ref.ID, c.rec.Success)
 			if c.rec.Success {
@@ -414,7 +417,7 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 		}
 		return res
 	}
-	return c.forward(ctx, rt, resp)
+	return c.forward(ctx, rt, pacct, resp)
 }
 
 func canceledErr() *gwError {
@@ -478,12 +481,18 @@ func (c *call) classify(ctx context.Context, rt *typeRoute, acct *pluginv1.Accou
 		clientStatus = http.StatusBadGateway
 	}
 	e := &gwError{Status: clientStatus, Type: cls.GetClientErrorType(), Message: cls.GetClientMessage(),
-		RecordType: errTypeUpstream, Code: "upstream_error"}
+		RecordType: errTypeUpstream, Code: clientErrorCode(ctx, cls.GetClientErrorCode(), rt.binding.Plugin.Key)}
 	if rt.conv != nil {
 		// The upstream speaks another protocol: its error body and error
 		// types do not fit the endpoint's errorFormat, which always wins.
 		e.Type = ""
-	} else if e.Type == "" && e.Message == "" && len(body) > 0 {
+	} else if e.Type == "" && e.Message == "" && e.Code == codeUpstreamError && len(body) > 0 {
+		// Nothing the plugin said would survive rendering, so the upstream
+		// body is returned verbatim. A plugin that did name a code is asking
+		// for the rendered envelope instead - passing the body through would
+		// throw that code away, which is the very thing client_error_code
+		// exists to stop. (A rejected code leaves e.Code generic and the old
+		// passthrough applies, as before this field existed.)
 		e.Raw = body
 	}
 	if e.Message == "" {

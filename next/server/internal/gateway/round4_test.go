@@ -272,14 +272,17 @@ func TestGatewaySettingsValidation(t *testing.T) {
 		fe[2].Field != "default_hook_timeout_ms" || fe[0].Code != "out_of_range" {
 		t.Fatalf("fields %+v", fe)
 	}
-	for _, in := range []gatewaySettingsInput{{MaxAttempts: i(11)}, {PlatformCallTimeoutMs: i(30001)}, {DefaultHookTimeoutMs: i(49)}} {
+	for _, in := range []gatewaySettingsInput{{MaxAttempts: i(11)}, {PlatformCallTimeoutMs: i(30001)},
+		{DefaultHookTimeoutMs: i(49)}, {PlatformHotpathTimeoutMs: i(2001)}, {PlatformHotpathTimeoutMs: i(49)}} {
 		if len(in.validate(context.Background())) != 1 {
 			t.Errorf("%+v accepted", in)
 		}
 	}
 	// Stored values outside the ranges are clamped on read.
-	n := GatewaySettings{MaxAttempts: 50, PlatformCallTimeoutMs: 10, DefaultHookTimeoutMs: 9000}.normalized()
-	if n != (GatewaySettings{MaxAttempts: 10, PlatformCallTimeoutMs: 100, DefaultHookTimeoutMs: 2000}) {
+	n := GatewaySettings{MaxAttempts: 50, PlatformCallTimeoutMs: 10, DefaultHookTimeoutMs: 9000,
+		PlatformHotpathTimeoutMs: 9000}.normalized()
+	if n != (GatewaySettings{MaxAttempts: 10, PlatformCallTimeoutMs: 100, DefaultHookTimeoutMs: 2000,
+		PlatformHotpathTimeoutMs: 2000}) {
 		t.Fatalf("normalized %+v", n)
 	}
 	if (GatewaySettings{}).normalized() != defaultGatewaySettings() {
@@ -347,10 +350,14 @@ func TestGatewaySettingsAPI(t *testing.T) {
 
 	code, res = api("PUT", map[string]any{"max_attempts": 5, "default_hook_timeout_ms": 800})
 	if code != 200 || res.Get("data.max_attempts").Int() != 5 || res.Get("data.platform_call_timeout_ms").Int() != 2000 ||
-		res.Get("data.default_hook_timeout_ms").Int() != 800 {
+		res.Get("data.default_hook_timeout_ms").Int() != 800 ||
+		// The hot-path timeout is its own setting: widening the hook default
+		// does not move it (CONTRACTS §25.3).
+		res.Get("data.platform_hotpath_timeout_ms").Int() != 300 {
 		t.Fatalf("put: %d %s", code, res.Raw)
 	}
-	if store.v == nil || *store.v != (GatewaySettings{MaxAttempts: 5, PlatformCallTimeoutMs: 2000, DefaultHookTimeoutMs: 800}) || store.by != 7 {
+	if store.v == nil || *store.v != (GatewaySettings{MaxAttempts: 5, PlatformCallTimeoutMs: 2000, DefaultHookTimeoutMs: 800,
+		PlatformHotpathTimeoutMs: 300}) || store.by != 7 {
 		t.Fatalf("stored %+v by %d", store.v, store.by)
 	}
 	g.settings.mu.Lock()

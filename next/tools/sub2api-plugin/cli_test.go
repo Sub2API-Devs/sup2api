@@ -51,8 +51,9 @@ func writeFile(t *testing.T, p, content string) {
 const demoManifest = `{
   "apiVersion": 1, "key": "demo", "name": {"en": "Demo", "zh": "演示"}, "version": "0.1.0",
   "publisher": "tester", "runtime": "grpc", "entry": {"grpc": {"binaries": "runtimes/{os}-{arch}/plugin"}},
-  "hostCompat": ">=0.1.0 <0.2.0", "capabilities": [{"id": "http.routes.v1"}],
+  "hostCompat": ">=0.1.0 <0.2.0", "hostUICompat": ">=0.1.0 <0.2.0", "capabilities": [{"id": "http.routes.v1"}],
   "database": {"schema": "plg_demo", "migrations": "migrations/"},
+  "hostPermissions": [{"id": "db.schema"}, {"id": "ui.native"}],
   "ui": {"native": {"entry": "ui/native/entry.js"}, "settings": {"mode": "schema", "schema": "forms/s.json"}}
 }`
 
@@ -263,11 +264,11 @@ func TestPackAccountTypes(t *testing.T) {
 	}
 
 	writeFile(t, filepath.Join(dir, "manifest.json"), strings.Replace(m, `[{"platform": "anthropic", "passHeaders": ["anthropic-version"]}]`, `[]`, 1))
-	if msg := runFail(t, "pack", "--dir", dir, "--out-dir", out); !strings.Contains(msg, "no platforms") {
+	if msg := runFail(t, "pack", "--dir", dir, "--out-dir", out); !strings.Contains(msg, "at least one platform") {
 		t.Fatalf("msg = %s", msg)
 	}
 	writeFile(t, filepath.Join(dir, "manifest.json"), strings.Replace(m, `"passHeaders"`, `"usage": {"openai.chat": {"semantics": "inclusive"}}, "passHeaders"`, 1))
-	if msg := runFail(t, "pack", "--dir", dir, "--out-dir", out); !strings.Contains(msg, "does not belong to the platform") {
+	if msg := runFail(t, "pack", "--dir", dir, "--out-dir", out); !strings.Contains(msg, "does not belong to platform") {
 		t.Fatalf("msg = %s", msg)
 	}
 	writeFile(t, filepath.Join(dir, "manifest.json"), strings.Replace(m, `"platform.adapter.v1"`, `"http.routes.v1"`, 1))
@@ -308,27 +309,37 @@ func TestPackPlatforms(t *testing.T) {
        "errorFormat": "plain", "billing": "usage"}
     ],
     "usage": {"semantics": "inclusive", "json": {"map": {"input_tokens": "usage.input"}}}}],
-  "accountTypes": [{"id": "vkey", "label": {"en": "Key"}, "form": {"mode": "schema"},
+  "accountTypes": [{"id": "vkey", "label": {"en": "Key"}, "form": {"mode": "schema", "schema": "forms/v.json"},
     "platforms": [{"platform": "myvideo", "usage": {"myvideo.gen": {"semantics": "inclusive"}}}]}],
   "hostPermissions": [{"id": "gateway.endpoint"}, {"id": "platform.register"}, {"id": "accounts.credentials", "scope": {"types": "own"}}]
 }`
 	dir := t.TempDir()
 	out := t.TempDir()
 	writeFile(t, filepath.Join(dir, "runtimes", "linux-amd64", "plugin"), "ELF-amd64")
+	writeFile(t, filepath.Join(dir, "forms", "v.json"), `{}`)
 	writeFile(t, filepath.Join(dir, "manifest.json"), m)
 	runOK(t, "pack", "--dir", dir, "--out-dir", out)
 
+	// The CLI runs the host's rules (sdk/manifest/check), so these are the
+	// host's messages - including the endpoint and usage rules the core only
+	// gained with the shared implementation.
 	cases := []struct{ old, new, want string }{
-		{`"id": "myvideo"`, `"id": "openai"`, "built into the core"},
+		{`"id": "myvideo"`, `"id": "openai"`, "is a built-in platform"},
 		{`{"id": "gateway.endpoint"}, `, ``, "gateway.endpoint"},
-		{`"protocol": "myvideo.gen"`, `"protocol": "video.gen"`, `must be "myvideo.<name>"`},
-		{`"/v1/video/generations"`, `"/api/v1/video"`, "core route /api"},
+		{`"protocol": "myvideo.gen"`, `"protocol": "video.gen"`, `must be "myvideo."`},
+		{`"/v1/video/generations"`, `"/api/v1/video"`, "must not start with /api"},
 		{`"/v1/video/models/:model:run"`, `"/v1/video/models/x:run"`, "modelParam"},
-		{`"/v1/video/generations"`, `"/v1/video/models/:id"`, "conflicts with platform myvideo endpoint"},
+		{`"/v1/video/generations"`, `"/v1/video/models/:id"`, "conflicts with platforms[0].endpoints[0]"},
 		{`"/v1/video/generations"`, `"/v1/video/models/gemini:run"`, "conflicts"},
-		{`"errorFormat": "plain", "billing": "usage"}`, `"errorFormat": "xml", "billing": "usage"}`, "errorFormat"},
-		{`"myvideo.gen": {`, `"myvideo.other": {`, "not a protocol of the platform"},
-		{`"semantics": "inclusive", "json"`, `"json"`, "usage.semantics is required"},
+		{`"myvideo.gen": {`, `"myvideo.other": {`, "is not a protocol of platform"},
+		{`"errorFormat": "plain", "billing": "usage"},`, `"errorFormat": "xml", "billing": "usage"},`, "errorFormat must be one of"},
+		{`"response": {"nonStream": "json"},
+       "errorFormat": "plain", "billing": "usage"},`, `"response": {},
+       "errorFormat": "plain", "billing": "usage"},`, "response.nonStream is required"},
+		{`"errorFormat": "plain", "billing": "usage"},`, `"errorFormat": "plain"},`, "billing is required"},
+		{`"usage": {"semantics": "inclusive", "json"`, `"usage": {"json"`, "semantics is required"},
+		{`"map": {"input_tokens": "usage.input"}`, `"map": {"total_tokens": "usage.input"}`, "unknown usage field"},
+		{`"map": {"input_tokens": "usage.input"}`, `"map": {"input_tokens": "usage..[["}`, "not a gjson path"},
 	}
 	for _, tc := range cases {
 		bad := strings.Replace(m, tc.old, tc.new, 1)
@@ -342,31 +353,8 @@ func TestPackPlatforms(t *testing.T) {
 	}
 }
 
-func TestPathsOverlap(t *testing.T) {
-	cases := []struct {
-		a, b string
-		want bool
-	}{
-		{"/v1/messages", "/v1/messages", true},
-		{"/v1/messages", "/v1/messages/count_tokens", false},
-		{"/v1/:x", "/v1/messages", true},
-		{"/v1beta/models/:model:generateContent", "/v1beta/models/:model:streamGenerateContent", false},
-		{"/v1beta/models/:model:generateContent", "/v1beta/models/:m", true},
-		{"/v1beta/models/:model:generateContent", "/v1beta/models/gemini:generateContent", true},
-		{"/v1beta/models/:model:generateContent", "/v1beta/models/:generateContent", true}, // plain param
-		{"/v1beta/models/:model:generateContent", "/v1beta/models/:generateContent:x", false},
-		{"/v1beta/models/:a:x.y", "/v1beta/models/:b:y", false},
-		{"/v1beta/models/:a:run", "/v1beta/models/:b:run", true},
-	}
-	for _, tc := range cases {
-		if got := pathsOverlap(tc.a, tc.b); got != tc.want {
-			t.Errorf("pathsOverlap(%s, %s) = %v", tc.a, tc.b, got)
-		}
-		if got := pathsOverlap(tc.b, tc.a); got != tc.want {
-			t.Errorf("pathsOverlap(%s, %s) = %v", tc.b, tc.a, got)
-		}
-	}
-}
+// The endpoint path rules (including overlap) are the host's and are tested
+// in sdk/manifest/check; the CLI only feeds manifests to them.
 
 func TestMergePatch(t *testing.T) {
 	out, err := applyMergePatch([]byte(`{"a":1,"b":{"c":2,"d":3},"e":[1,2]}`), []byte(`{"a":null,"b":{"c":5},"e":[3],"f":"x"}`))

@@ -119,6 +119,65 @@ func (ClassifyErrorResponse_AccountEffect) EnumDescriptor() ([]byte, []int) {
 	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{5, 1}
 }
 
+type ReconcileResult_State int32
+
+const (
+	// Still running. The host reschedules with next_check_after_sec (or its
+	// own backoff) and counts one attempt. This is the ZERO VALUE, so a
+	// plugin that cannot tell yet - and an empty answer - means "ask again",
+	// never "settle for nothing".
+	ReconcileResult_PENDING ReconcileResult_State = 0
+	// Finished: tokens carries the REAL usage. The host reprices, charges
+	// the difference (kind "usage") or refunds it (kind "refund"), and
+	// closes the row as billed.
+	ReconcileResult_SETTLED ReconcileResult_State = 1
+	// The work failed upstream and produced nothing. The host refunds the
+	// whole reservation and records the row as free with reason as its
+	// error type.
+	ReconcileResult_FAILED ReconcileResult_State = 2
+)
+
+// Enum value maps for ReconcileResult_State.
+var (
+	ReconcileResult_State_name = map[int32]string{
+		0: "PENDING",
+		1: "SETTLED",
+		2: "FAILED",
+	}
+	ReconcileResult_State_value = map[string]int32{
+		"PENDING": 0,
+		"SETTLED": 1,
+		"FAILED":  2,
+	}
+)
+
+func (x ReconcileResult_State) Enum() *ReconcileResult_State {
+	p := new(ReconcileResult_State)
+	*p = x
+	return p
+}
+
+func (x ReconcileResult_State) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ReconcileResult_State) Descriptor() protoreflect.EnumDescriptor {
+	return file_sub2api_plugin_v1_platform_proto_enumTypes[2].Descriptor()
+}
+
+func (ReconcileResult_State) Type() protoreflect.EnumType {
+	return &file_sub2api_plugin_v1_platform_proto_enumTypes[2]
+}
+
+func (x ReconcileResult_State) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ReconcileResult_State.Descriptor instead.
+func (ReconcileResult_State) EnumDescriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{20, 0}
+}
+
 type ValidateCredentialsRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	AccountType     string                 `protobuf:"bytes,1,opt,name=account_type,json=accountType,proto3" json:"account_type,omitempty"`
@@ -492,8 +551,23 @@ type ClassifyErrorResponse struct {
 	ClientStatus      int32                               `protobuf:"varint,5,opt,name=client_status,json=clientStatus,proto3" json:"client_status,omitempty"`                  // status returned to the client, 0 = upstream status
 	ClientErrorType   string                              `protobuf:"bytes,6,opt,name=client_error_type,json=clientErrorType,proto3" json:"client_error_type,omitempty"`        // protocol error type, e.g. "rate_limit_error"
 	ClientMessage     string                              `protobuf:"bytes,7,opt,name=client_message,json=clientMessage,proto3" json:"client_message,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// Machine-readable error code rendered in the client error body ("code" in
+	// the anthropic/openai/plain formats, "reason" in the gemini one). It is the
+	// only place the plugin's own classification of an upstream failure reaches
+	// the client: without it every upstream error looks like "upstream_error",
+	// so a content-moderation block and a bad parameter are indistinguishable to
+	// an SDK. Leave it empty to keep "upstream_error" (the pre-existing
+	// behaviour, which every plugin written before this field gets).
+	//
+	// The value ends up in a body the client reads, so the host constrains it:
+	// at most 64 bytes matching ^[A-Za-z0-9][A-Za-z0-9._:-]*$ (upstream codes
+	// such as "InputTextSensitiveContentDetected" or "context_length_exceeded"
+	// fit). A value outside that is DROPPED, not truncated - a truncated code is
+	// a different code, and silently inventing one is worse than falling back to
+	// "upstream_error" - and the host logs a warning.
+	ClientErrorCode string `protobuf:"bytes,8,opt,name=client_error_code,json=clientErrorCode,proto3" json:"client_error_code,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ClassifyErrorResponse) Reset() {
@@ -571,6 +645,13 @@ func (x *ClassifyErrorResponse) GetClientErrorType() string {
 func (x *ClassifyErrorResponse) GetClientMessage() string {
 	if x != nil {
 		return x.ClientMessage
+	}
+	return ""
+}
+
+func (x *ClassifyErrorResponse) GetClientErrorCode() string {
+	if x != nil {
+		return x.ClientErrorCode
 	}
 	return ""
 }
@@ -848,6 +929,901 @@ func (x *BuildModelsRequestResponse) GetStripPrefix() string {
 	return ""
 }
 
+type ResolveModelRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// meta.model is empty (that is what this call answers); meta.path_params
+	// and meta.query carry the parts of the URL the endpoint declared.
+	Meta *RequestMeta `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
+	// Values of the platform's request fields, JSON-encoded, keyed by path -
+	// the same map BuildUpstreamRequest receives, read from the client body
+	// before any conversion.
+	Fields map[string]string `protobuf:"bytes,2,rep,name=fields,proto3" json:"fields,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Client headers from the platform's passHeaders allow-list (lower-cased).
+	InboundHeaders map[string]string `protobuf:"bytes,3,rep,name=inbound_headers,json=inboundHeaders,proto3" json:"inbound_headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ResolveModelRequest) Reset() {
+	*x = ResolveModelRequest{}
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveModelRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveModelRequest) ProtoMessage() {}
+
+func (x *ResolveModelRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveModelRequest.ProtoReflect.Descriptor instead.
+func (*ResolveModelRequest) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ResolveModelRequest) GetMeta() *RequestMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+func (x *ResolveModelRequest) GetFields() map[string]string {
+	if x != nil {
+		return x.Fields
+	}
+	return nil
+}
+
+func (x *ResolveModelRequest) GetInboundHeaders() map[string]string {
+	if x != nil {
+		return x.InboundHeaders
+	}
+	return nil
+}
+
+type ResolveModelResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The model this request bills as. Empty ends the request with 400
+	// "model is required".
+	Model string `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
+	// Whether the response streams. It replaces request.streamPath, which such
+	// an endpoint must not declare; an endpoint declaring request.stream (it
+	// always streams) keeps that, the plugin cannot turn streaming off.
+	Stream        bool `protobuf:"varint,2,opt,name=stream,proto3" json:"stream,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveModelResponse) Reset() {
+	*x = ResolveModelResponse{}
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveModelResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveModelResponse) ProtoMessage() {}
+
+func (x *ResolveModelResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveModelResponse.ProtoReflect.Descriptor instead.
+func (*ResolveModelResponse) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ResolveModelResponse) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *ResolveModelResponse) GetStream() bool {
+	if x != nil {
+		return x.Stream
+	}
+	return false
+}
+
+// StreamEvent is one SSE event of an upstream stream that matched the
+// endpoint's usage.streamEvents allow-list.
+type StreamEvent struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The event name as the host resolved it: the "event:" line when the
+	// upstream sent one, otherwise the "type" field of the data object (the
+	// same resolution the declarative usage.sse rules use, so a plugin and a
+	// rule match the same events).
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// The event's data, exactly as it arrived: never joined with another
+	// event, never rewritten.
+	Data          []byte `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamEvent) Reset() {
+	*x = StreamEvent{}
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamEvent) ProtoMessage() {}
+
+func (x *StreamEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamEvent.ProtoReflect.Descriptor instead.
+func (*StreamEvent) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *StreamEvent) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *StreamEvent) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+type ExtractUsageRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Meta  *RequestMeta           `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
+	// The account that served the request. Credentials are NEVER included:
+	// this call reads a response, it does not build one. A plugin that needs
+	// credentials outside a request asks HostService.GetAccountCredentials,
+	// which audits the read (CONTRACTS §26.6). settings_json is present only
+	// when the account type belongs to the plugin being called.
+	Account *Account `protobuf:"bytes,2,opt,name=account,proto3" json:"account,omitempty"`
+	// Upstream HTTP status (always 2xx: a failed attempt is classified by
+	// ClassifyError instead and never reaches here).
+	Status int32 `protobuf:"varint,3,opt,name=status,proto3" json:"status,omitempty"`
+	// Upstream response headers, lower-cased.
+	Headers map[string]string `protobuf:"bytes,4,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Non-streaming: the whole response body. Empty when the body was larger
+	// than usage.maxBytes (the host then skips the call entirely) and when the
+	// response streamed.
+	Body []byte `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`
+	// Streaming: the events matching usage.streamEvents, in arrival order.
+	// Empty for a non-streaming response.
+	Events []*StreamEvent `protobuf:"bytes,6,rep,name=events,proto3" json:"events,omitempty"`
+	// True when the host stopped collecting events before the stream ended
+	// (the event count cap or usage.maxBytes was reached), so the plugin knows
+	// it is looking at a prefix. Never set for a non-streaming response: an
+	// oversized body is not handed over at all.
+	Truncated     bool `protobuf:"varint,7,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExtractUsageRequest) Reset() {
+	*x = ExtractUsageRequest{}
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExtractUsageRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExtractUsageRequest) ProtoMessage() {}
+
+func (x *ExtractUsageRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExtractUsageRequest.ProtoReflect.Descriptor instead.
+func (*ExtractUsageRequest) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ExtractUsageRequest) GetMeta() *RequestMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+func (x *ExtractUsageRequest) GetAccount() *Account {
+	if x != nil {
+		return x.Account
+	}
+	return nil
+}
+
+func (x *ExtractUsageRequest) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+func (x *ExtractUsageRequest) GetHeaders() map[string]string {
+	if x != nil {
+		return x.Headers
+	}
+	return nil
+}
+
+func (x *ExtractUsageRequest) GetBody() []byte {
+	if x != nil {
+		return x.Body
+	}
+	return nil
+}
+
+func (x *ExtractUsageRequest) GetEvents() []*StreamEvent {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+func (x *ExtractUsageRequest) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
+// UsageReport is what the plugin states about the upstream response. Every
+// field is an UPSTREAM FACT. Attribution (user, api key, group, account),
+// pricing (multiplier, price id, expression, cost) and the request's own
+// facts (status, attempts, latency, node, timestamps) are filled by the host
+// and OVERWRITE anything a plugin might try to say about them - this message
+// has no field for them on purpose.
+type UsageReport struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Token counts; zero-valued when the upstream reports none.
+	Tokens *UsageTokens `protobuf:"bytes,1,opt,name=tokens,proto3" json:"tokens,omitempty"`
+	// Extra metering facts, keyed exactly like the endpoint's usage.facts
+	// declarations (price expressions read them as u("key")). A key the
+	// manifest does not declare is dropped with a warning, and a value that
+	// does not fit the declared type (number / boolean / enum) is dropped the
+	// same way: what a price expression can read stays what the manifest says
+	// exists.
+	Facts map[string]string `protobuf:"bytes,2,rep,name=facts,proto3" json:"facts,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// The model the upstream actually served, when it differs from the one the
+	// request was billed as (usage_logs.upstream_model).
+	UpstreamModel string `protobuf:"bytes,3,opt,name=upstream_model,json=upstreamModel,proto3" json:"upstream_model,omitempty"`
+	// The plugin's reading of an upstream error inside a 2xx response (an
+	// error event in a stream, a body that reports a failure with status 200).
+	// Empty leaves whatever the host itself concluded.
+	ErrorType    string `protobuf:"bytes,4,opt,name=error_type,json=errorType,proto3" json:"error_type,omitempty"`
+	ErrorMessage string `protobuf:"bytes,5,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	// Free-form JSON object stored in usage_logs.plugin_detail and shown in
+	// the console's usage detail. At most 4 KiB.
+	//
+	// The column is jsonb, so an over-long document cannot be stored as a
+	// prefix - half a JSON document is not a JSON document. The host therefore
+	// replaces it with {"_truncated":true,"_bytes":N} and warns; a document
+	// that is not a JSON object at all becomes {} and warns. Keep it small and
+	// keep it an object.
+	DetailJson string `protobuf:"bytes,6,opt,name=detail_json,json=detailJson,proto3" json:"detail_json,omitempty"`
+	// Set when this request only STARTED work upstream whose real usage is not
+	// known yet - a video generation job, say. The host prices the estimate,
+	// charges it through the ordinary ledger path, marks the usage row
+	// "reserved" and reconciles it later through the two rpcs below. Leave it
+	// unset (the case for every endpoint that answers within its response) and
+	// nothing about this request changes.
+	Reserve       *Reservation `protobuf:"bytes,7,opt,name=reserve,proto3" json:"reserve,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UsageReport) Reset() {
+	*x = UsageReport{}
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UsageReport) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UsageReport) ProtoMessage() {}
+
+func (x *UsageReport) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UsageReport.ProtoReflect.Descriptor instead.
+func (*UsageReport) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *UsageReport) GetTokens() *UsageTokens {
+	if x != nil {
+		return x.Tokens
+	}
+	return nil
+}
+
+func (x *UsageReport) GetFacts() map[string]string {
+	if x != nil {
+		return x.Facts
+	}
+	return nil
+}
+
+func (x *UsageReport) GetUpstreamModel() string {
+	if x != nil {
+		return x.UpstreamModel
+	}
+	return ""
+}
+
+func (x *UsageReport) GetErrorType() string {
+	if x != nil {
+		return x.ErrorType
+	}
+	return ""
+}
+
+func (x *UsageReport) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
+func (x *UsageReport) GetDetailJson() string {
+	if x != nil {
+		return x.DetailJson
+	}
+	return ""
+}
+
+func (x *UsageReport) GetReserve() *Reservation {
+	if x != nil {
+		return x.Reserve
+	}
+	return nil
+}
+
+// Reservation is a plugin's statement that the work is not finished and its
+// own estimate of it (PLUGIN-EXECUTES-CORE-RECORDS §3.4).
+//
+// The estimate is what keeps a user with a $0 balance from submitting a
+// thousand video jobs: the pre-request balance check is a cached read that
+// tolerates a brief overdraft, and a job that answers in an hour turns that
+// "brief" into an hour per job, all of them in flight at once.
+type Reservation struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The plugin's own id for the work (a task id). Unique per plugin: it is
+	// half of the key of the host's pending_settlements table, so submitting
+	// the same ref_id twice registers one entry, not two. At most 200 bytes.
+	RefId string `protobuf:"bytes,1,opt,name=ref_id,json=refId,proto3" json:"ref_id,omitempty"`
+	// The ESTIMATE. Priced, charged and recorded exactly like a real usage
+	// report, and it stays the charge if the reconcile never succeeds.
+	Tokens *UsageTokens `protobuf:"bytes,2,opt,name=tokens,proto3" json:"tokens,omitempty"`
+	// Estimated metering facts, keyed like the endpoint's usage.facts, same
+	// rules as UsageReport.facts.
+	Facts map[string]string `protobuf:"bytes,3,rep,name=facts,proto3" json:"facts,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// How long to wait before the first reconcile. 0 (or less) leaves it to
+	// the host's backoff. The host clamps it to its own backoff ceiling.
+	NextCheckAfterSec int32 `protobuf:"varint,4,opt,name=next_check_after_sec,json=nextCheckAfterSec,proto3" json:"next_check_after_sec,omitempty"`
+	// UPSTREAM FACT: how long this entry can be asked about at all - an Ark
+	// video task is queryable for 7 days, after which no answer exists to be
+	// had. The host clamps it with the max_reconcile_age_sec setting; 0 takes
+	// the host's default. When it passes, the host STOPS asking and the
+	// estimate becomes the final charge (it does not refund: the call really
+	// was made and the upstream really did the work).
+	DeadlineSec   int32 `protobuf:"varint,5,opt,name=deadline_sec,json=deadlineSec,proto3" json:"deadline_sec,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Reservation) Reset() {
+	*x = Reservation{}
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Reservation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Reservation) ProtoMessage() {}
+
+func (x *Reservation) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Reservation.ProtoReflect.Descriptor instead.
+func (*Reservation) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *Reservation) GetRefId() string {
+	if x != nil {
+		return x.RefId
+	}
+	return ""
+}
+
+func (x *Reservation) GetTokens() *UsageTokens {
+	if x != nil {
+		return x.Tokens
+	}
+	return nil
+}
+
+func (x *Reservation) GetFacts() map[string]string {
+	if x != nil {
+		return x.Facts
+	}
+	return nil
+}
+
+func (x *Reservation) GetNextCheckAfterSec() int32 {
+	if x != nil {
+		return x.NextCheckAfterSec
+	}
+	return 0
+}
+
+func (x *Reservation) GetDeadlineSec() int32 {
+	if x != nil {
+		return x.DeadlineSec
+	}
+	return 0
+}
+
+// ReconcileEntry is one pre-charged row the host is asking about.
+type ReconcileEntry struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The ref_id the plugin gave in its Reservation.
+	RefId string `protobuf:"bytes,1,opt,name=ref_id,json=refId,proto3" json:"ref_id,omitempty"`
+	// The gateway request this entry came from (usage_logs.request_id), so a
+	// plugin can correlate it with what it stored in detail_json.
+	RequestId string `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	// How many times this entry has already been checked; 0 on the first.
+	Attempts int32 `protobuf:"varint,3,opt,name=attempts,proto3" json:"attempts,omitempty"`
+	// When the entry was registered, and the moment after which the host stops
+	// asking (the clamped deadline). Unix seconds.
+	CreatedAtUnix  int64 `protobuf:"varint,4,opt,name=created_at_unix,json=createdAtUnix,proto3" json:"created_at_unix,omitempty"`
+	DeadlineAtUnix int64 `protobuf:"varint,5,opt,name=deadline_at_unix,json=deadlineAtUnix,proto3" json:"deadline_at_unix,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ReconcileEntry) Reset() {
+	*x = ReconcileEntry{}
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReconcileEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReconcileEntry) ProtoMessage() {}
+
+func (x *ReconcileEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReconcileEntry.ProtoReflect.Descriptor instead.
+func (*ReconcileEntry) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ReconcileEntry) GetRefId() string {
+	if x != nil {
+		return x.RefId
+	}
+	return ""
+}
+
+func (x *ReconcileEntry) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *ReconcileEntry) GetAttempts() int32 {
+	if x != nil {
+		return x.Attempts
+	}
+	return 0
+}
+
+func (x *ReconcileEntry) GetCreatedAtUnix() int64 {
+	if x != nil {
+		return x.CreatedAtUnix
+	}
+	return 0
+}
+
+func (x *ReconcileEntry) GetDeadlineAtUnix() int64 {
+	if x != nil {
+		return x.DeadlineAtUnix
+	}
+	return 0
+}
+
+type BuildReconcileRequestRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Entry *ReconcileEntry        `protobuf:"bytes,1,opt,name=entry,proto3" json:"entry,omitempty"`
+	// The account that served the original request. credentials_json is filled
+	// ONLY when the account's type is declared by the plugin being called -
+	// i.e. only when this plugin already receives the same credentials on every
+	// BuildUpstreamRequest for that account, so nothing new is exposed. When
+	// the platform and the account type come from different plugins the
+	// credentials are withheld and the plugin should answer UNIMPLEMENTED or
+	// build a request that does not need them.
+	Account       *Account `protobuf:"bytes,2,opt,name=account,proto3" json:"account,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BuildReconcileRequestRequest) Reset() {
+	*x = BuildReconcileRequestRequest{}
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BuildReconcileRequestRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BuildReconcileRequestRequest) ProtoMessage() {}
+
+func (x *BuildReconcileRequestRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BuildReconcileRequestRequest.ProtoReflect.Descriptor instead.
+func (*BuildReconcileRequestRequest) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *BuildReconcileRequestRequest) GetEntry() *ReconcileEntry {
+	if x != nil {
+		return x.Entry
+	}
+	return nil
+}
+
+func (x *BuildReconcileRequestRequest) GetAccount() *Account {
+	if x != nil {
+		return x.Account
+	}
+	return nil
+}
+
+type BuildReconcileRequestResponse struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Method string                 `protobuf:"bytes,1,opt,name=method,proto3" json:"method,omitempty"` // default "GET"
+	// Absolute http(s) URL. The host rejects private/loopback/link-local
+	// targets (SSRF guard) unless the deployment allows them, and sends it
+	// through the account's proxy.
+	Url           string            `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
+	Headers       map[string]string `protobuf:"bytes,3,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	BodyJson      string            `protobuf:"bytes,4,opt,name=body_json,json=bodyJson,proto3" json:"body_json,omitempty"` // optional
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BuildReconcileRequestResponse) Reset() {
+	*x = BuildReconcileRequestResponse{}
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BuildReconcileRequestResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BuildReconcileRequestResponse) ProtoMessage() {}
+
+func (x *BuildReconcileRequestResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BuildReconcileRequestResponse.ProtoReflect.Descriptor instead.
+func (*BuildReconcileRequestResponse) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *BuildReconcileRequestResponse) GetMethod() string {
+	if x != nil {
+		return x.Method
+	}
+	return ""
+}
+
+func (x *BuildReconcileRequestResponse) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *BuildReconcileRequestResponse) GetHeaders() map[string]string {
+	if x != nil {
+		return x.Headers
+	}
+	return nil
+}
+
+func (x *BuildReconcileRequestResponse) GetBodyJson() string {
+	if x != nil {
+		return x.BodyJson
+	}
+	return ""
+}
+
+type ParseReconcileResponseRequest struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Entry   *ReconcileEntry        `protobuf:"bytes,1,opt,name=entry,proto3" json:"entry,omitempty"`
+	Account *Account               `protobuf:"bytes,2,opt,name=account,proto3" json:"account,omitempty"` // credentials as in BuildReconcileRequest
+	// Upstream status, 0 for a transport error (see transport_error).
+	Status         int32             `protobuf:"varint,3,opt,name=status,proto3" json:"status,omitempty"`
+	Headers        map[string]string `protobuf:"bytes,4,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // lower-cased
+	Body           []byte            `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`                                                                                 // truncated to the host's reconcile body cap
+	TransportError string            `protobuf:"bytes,6,opt,name=transport_error,json=transportError,proto3" json:"transport_error,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ParseReconcileResponseRequest) Reset() {
+	*x = ParseReconcileResponseRequest{}
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ParseReconcileResponseRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ParseReconcileResponseRequest) ProtoMessage() {}
+
+func (x *ParseReconcileResponseRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ParseReconcileResponseRequest.ProtoReflect.Descriptor instead.
+func (*ParseReconcileResponseRequest) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *ParseReconcileResponseRequest) GetEntry() *ReconcileEntry {
+	if x != nil {
+		return x.Entry
+	}
+	return nil
+}
+
+func (x *ParseReconcileResponseRequest) GetAccount() *Account {
+	if x != nil {
+		return x.Account
+	}
+	return nil
+}
+
+func (x *ParseReconcileResponseRequest) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+func (x *ParseReconcileResponseRequest) GetHeaders() map[string]string {
+	if x != nil {
+		return x.Headers
+	}
+	return nil
+}
+
+func (x *ParseReconcileResponseRequest) GetBody() []byte {
+	if x != nil {
+		return x.Body
+	}
+	return nil
+}
+
+func (x *ParseReconcileResponseRequest) GetTransportError() string {
+	if x != nil {
+		return x.TransportError
+	}
+	return ""
+}
+
+// ReconcileResult is what the plugin read out of that answer.
+type ReconcileResult struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	State ReconcileResult_State  `protobuf:"varint,1,opt,name=state,proto3,enum=sub2api.plugin.v1.ReconcileResult_State" json:"state,omitempty"`
+	// PENDING only: when to ask again. 0 leaves it to the host's backoff; the
+	// host clamps it to the backoff ceiling either way.
+	NextCheckAfterSec int32 `protobuf:"varint,2,opt,name=next_check_after_sec,json=nextCheckAfterSec,proto3" json:"next_check_after_sec,omitempty"`
+	// SETTLED only: the real usage, replacing the estimate.
+	Tokens *UsageTokens `protobuf:"bytes,3,opt,name=tokens,proto3" json:"tokens,omitempty"`
+	// SETTLED only: the real metering facts, replacing the estimated ones.
+	Facts map[string]string `protobuf:"bytes,4,rep,name=facts,proto3" json:"facts,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// FAILED only: why, recorded as usage_logs.error_type (truncated to 50
+	// bytes) and error_message.
+	Reason        string `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReconcileResult) Reset() {
+	*x = ReconcileResult{}
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReconcileResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReconcileResult) ProtoMessage() {}
+
+func (x *ReconcileResult) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReconcileResult.ProtoReflect.Descriptor instead.
+func (*ReconcileResult) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *ReconcileResult) GetState() ReconcileResult_State {
+	if x != nil {
+		return x.State
+	}
+	return ReconcileResult_PENDING
+}
+
+func (x *ReconcileResult) GetNextCheckAfterSec() int32 {
+	if x != nil {
+		return x.NextCheckAfterSec
+	}
+	return 0
+}
+
+func (x *ReconcileResult) GetTokens() *UsageTokens {
+	if x != nil {
+		return x.Tokens
+	}
+	return nil
+}
+
+func (x *ReconcileResult) GetFacts() map[string]string {
+	if x != nil {
+		return x.Facts
+	}
+	return nil
+}
+
+func (x *ReconcileResult) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
 var File_sub2api_plugin_v1_platform_proto protoreflect.FileDescriptor
 
 const file_sub2api_plugin_v1_platform_proto_rawDesc = "" +
@@ -892,7 +1868,7 @@ const file_sub2api_plugin_v1_platform_proto_rawDesc = "" +
 	"\x0ftransport_error\x18\x06 \x01(\tR\x0etransportError\x1a:\n" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xbd\x04\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe9\x04\n" +
 	"\x15ClassifyErrorResponse\x12G\n" +
 	"\x06action\x18\x01 \x01(\x0e2/.sub2api.plugin.v1.ClassifyErrorResponse.ActionR\x06action\x12]\n" +
 	"\x0eaccount_effect\x18\x02 \x01(\x0e26.sub2api.plugin.v1.ClassifyErrorResponse.AccountEffectR\raccountEffect\x12.\n" +
@@ -900,7 +1876,8 @@ const file_sub2api_plugin_v1_platform_proto_rawDesc = "" +
 	"\x06reason\x18\x04 \x01(\tR\x06reason\x12#\n" +
 	"\rclient_status\x18\x05 \x01(\x05R\fclientStatus\x12*\n" +
 	"\x11client_error_type\x18\x06 \x01(\tR\x0fclientErrorType\x12%\n" +
-	"\x0eclient_message\x18\a \x01(\tR\rclientMessage\"R\n" +
+	"\x0eclient_message\x18\a \x01(\tR\rclientMessage\x12*\n" +
+	"\x11client_error_code\x18\b \x01(\tR\x0fclientErrorCode\"R\n" +
 	"\x06Action\x12\x16\n" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17ACTION_RETURN_TO_CLIENT\x10\x01\x12\x13\n" +
@@ -933,13 +1910,111 @@ const file_sub2api_plugin_v1_platform_proto_rawDesc = "" +
 	"\fstrip_prefix\x18\x06 \x01(\tR\vstripPrefix\x1a:\n" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012\xc4\x04\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf8\x02\n" +
+	"\x13ResolveModelRequest\x122\n" +
+	"\x04meta\x18\x01 \x01(\v2\x1e.sub2api.plugin.v1.RequestMetaR\x04meta\x12J\n" +
+	"\x06fields\x18\x02 \x03(\v22.sub2api.plugin.v1.ResolveModelRequest.FieldsEntryR\x06fields\x12c\n" +
+	"\x0finbound_headers\x18\x03 \x03(\v2:.sub2api.plugin.v1.ResolveModelRequest.InboundHeadersEntryR\x0einboundHeaders\x1a9\n" +
+	"\vFieldsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aA\n" +
+	"\x13InboundHeadersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"D\n" +
+	"\x14ResolveModelResponse\x12\x14\n" +
+	"\x05model\x18\x01 \x01(\tR\x05model\x12\x16\n" +
+	"\x06stream\x18\x02 \x01(\bR\x06stream\"5\n" +
+	"\vStreamEvent\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\"\x8c\x03\n" +
+	"\x13ExtractUsageRequest\x122\n" +
+	"\x04meta\x18\x01 \x01(\v2\x1e.sub2api.plugin.v1.RequestMetaR\x04meta\x124\n" +
+	"\aaccount\x18\x02 \x01(\v2\x1a.sub2api.plugin.v1.AccountR\aaccount\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\x05R\x06status\x12M\n" +
+	"\aheaders\x18\x04 \x03(\v23.sub2api.plugin.v1.ExtractUsageRequest.HeadersEntryR\aheaders\x12\x12\n" +
+	"\x04body\x18\x05 \x01(\fR\x04body\x126\n" +
+	"\x06events\x18\x06 \x03(\v2\x1e.sub2api.plugin.v1.StreamEventR\x06events\x12\x1c\n" +
+	"\ttruncated\x18\a \x01(\bR\ttruncated\x1a:\n" +
+	"\fHeadersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x86\x03\n" +
+	"\vUsageReport\x126\n" +
+	"\x06tokens\x18\x01 \x01(\v2\x1e.sub2api.plugin.v1.UsageTokensR\x06tokens\x12?\n" +
+	"\x05facts\x18\x02 \x03(\v2).sub2api.plugin.v1.UsageReport.FactsEntryR\x05facts\x12%\n" +
+	"\x0eupstream_model\x18\x03 \x01(\tR\rupstreamModel\x12\x1d\n" +
+	"\n" +
+	"error_type\x18\x04 \x01(\tR\terrorType\x12#\n" +
+	"\rerror_message\x18\x05 \x01(\tR\ferrorMessage\x12\x1f\n" +
+	"\vdetail_json\x18\x06 \x01(\tR\n" +
+	"detailJson\x128\n" +
+	"\areserve\x18\a \x01(\v2\x1e.sub2api.plugin.v1.ReservationR\areserve\x1a8\n" +
+	"\n" +
+	"FactsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xab\x02\n" +
+	"\vReservation\x12\x15\n" +
+	"\x06ref_id\x18\x01 \x01(\tR\x05refId\x126\n" +
+	"\x06tokens\x18\x02 \x01(\v2\x1e.sub2api.plugin.v1.UsageTokensR\x06tokens\x12?\n" +
+	"\x05facts\x18\x03 \x03(\v2).sub2api.plugin.v1.Reservation.FactsEntryR\x05facts\x12/\n" +
+	"\x14next_check_after_sec\x18\x04 \x01(\x05R\x11nextCheckAfterSec\x12!\n" +
+	"\fdeadline_sec\x18\x05 \x01(\x05R\vdeadlineSec\x1a8\n" +
+	"\n" +
+	"FactsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb4\x01\n" +
+	"\x0eReconcileEntry\x12\x15\n" +
+	"\x06ref_id\x18\x01 \x01(\tR\x05refId\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x02 \x01(\tR\trequestId\x12\x1a\n" +
+	"\battempts\x18\x03 \x01(\x05R\battempts\x12&\n" +
+	"\x0fcreated_at_unix\x18\x04 \x01(\x03R\rcreatedAtUnix\x12(\n" +
+	"\x10deadline_at_unix\x18\x05 \x01(\x03R\x0edeadlineAtUnix\"\x8d\x01\n" +
+	"\x1cBuildReconcileRequestRequest\x127\n" +
+	"\x05entry\x18\x01 \x01(\v2!.sub2api.plugin.v1.ReconcileEntryR\x05entry\x124\n" +
+	"\aaccount\x18\x02 \x01(\v2\x1a.sub2api.plugin.v1.AccountR\aaccount\"\xfb\x01\n" +
+	"\x1dBuildReconcileRequestResponse\x12\x16\n" +
+	"\x06method\x18\x01 \x01(\tR\x06method\x12\x10\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\x12W\n" +
+	"\aheaders\x18\x03 \x03(\v2=.sub2api.plugin.v1.BuildReconcileRequestResponse.HeadersEntryR\aheaders\x12\x1b\n" +
+	"\tbody_json\x18\x04 \x01(\tR\bbodyJson\x1a:\n" +
+	"\fHeadersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf8\x02\n" +
+	"\x1dParseReconcileResponseRequest\x127\n" +
+	"\x05entry\x18\x01 \x01(\v2!.sub2api.plugin.v1.ReconcileEntryR\x05entry\x124\n" +
+	"\aaccount\x18\x02 \x01(\v2\x1a.sub2api.plugin.v1.AccountR\aaccount\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\x05R\x06status\x12W\n" +
+	"\aheaders\x18\x04 \x03(\v2=.sub2api.plugin.v1.ParseReconcileResponseRequest.HeadersEntryR\aheaders\x12\x12\n" +
+	"\x04body\x18\x05 \x01(\fR\x04body\x12'\n" +
+	"\x0ftransport_error\x18\x06 \x01(\tR\x0etransportError\x1a:\n" +
+	"\fHeadersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x80\x03\n" +
+	"\x0fReconcileResult\x12>\n" +
+	"\x05state\x18\x01 \x01(\x0e2(.sub2api.plugin.v1.ReconcileResult.StateR\x05state\x12/\n" +
+	"\x14next_check_after_sec\x18\x02 \x01(\x05R\x11nextCheckAfterSec\x126\n" +
+	"\x06tokens\x18\x03 \x01(\v2\x1e.sub2api.plugin.v1.UsageTokensR\x06tokens\x12C\n" +
+	"\x05facts\x18\x04 \x03(\v2-.sub2api.plugin.v1.ReconcileResult.FactsEntryR\x05facts\x12\x16\n" +
+	"\x06reason\x18\x05 \x01(\tR\x06reason\x1a8\n" +
+	"\n" +
+	"FactsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"-\n" +
+	"\x05State\x12\v\n" +
+	"\aPENDING\x10\x00\x12\v\n" +
+	"\aSETTLED\x10\x01\x12\n" +
+	"\n" +
+	"\x06FAILED\x10\x022\xe9\a\n" +
 	"\x0fPlatformService\x12t\n" +
 	"\x13ValidateCredentials\x12-.sub2api.plugin.v1.ValidateCredentialsRequest\x1a..sub2api.plugin.v1.ValidateCredentialsResponse\x12w\n" +
 	"\x14BuildUpstreamRequest\x12..sub2api.plugin.v1.BuildUpstreamRequestRequest\x1a/.sub2api.plugin.v1.BuildUpstreamRequestResponse\x12b\n" +
 	"\rClassifyError\x12'.sub2api.plugin.v1.ClassifyErrorRequest\x1a(.sub2api.plugin.v1.ClassifyErrorResponse\x12k\n" +
 	"\x10BuildTestRequest\x12*.sub2api.plugin.v1.BuildTestRequestRequest\x1a+.sub2api.plugin.v1.BuildTestRequestResponse\x12q\n" +
-	"\x12BuildModelsRequest\x12,.sub2api.plugin.v1.BuildModelsRequestRequest\x1a-.sub2api.plugin.v1.BuildModelsRequestResponseB@Z>github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1b\x06proto3"
+	"\x12BuildModelsRequest\x12,.sub2api.plugin.v1.BuildModelsRequestRequest\x1a-.sub2api.plugin.v1.BuildModelsRequestResponse\x12_\n" +
+	"\fResolveModel\x12&.sub2api.plugin.v1.ResolveModelRequest\x1a'.sub2api.plugin.v1.ResolveModelResponse\x12V\n" +
+	"\fExtractUsage\x12&.sub2api.plugin.v1.ExtractUsageRequest\x1a\x1e.sub2api.plugin.v1.UsageReport\x12z\n" +
+	"\x15BuildReconcileRequest\x12/.sub2api.plugin.v1.BuildReconcileRequestRequest\x1a0.sub2api.plugin.v1.BuildReconcileRequestResponse\x12n\n" +
+	"\x16ParseReconcileResponse\x120.sub2api.plugin.v1.ParseReconcileResponseRequest\x1a\".sub2api.plugin.v1.ReconcileResultB@Z>github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1b\x06proto3"
 
 var (
 	file_sub2api_plugin_v1_platform_proto_rawDescOnce sync.Once
@@ -953,64 +2028,114 @@ func file_sub2api_plugin_v1_platform_proto_rawDescGZIP() []byte {
 	return file_sub2api_plugin_v1_platform_proto_rawDescData
 }
 
-var file_sub2api_plugin_v1_platform_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_sub2api_plugin_v1_platform_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_sub2api_plugin_v1_platform_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_sub2api_plugin_v1_platform_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
 var file_sub2api_plugin_v1_platform_proto_goTypes = []any{
 	(ClassifyErrorResponse_Action)(0),        // 0: sub2api.plugin.v1.ClassifyErrorResponse.Action
 	(ClassifyErrorResponse_AccountEffect)(0), // 1: sub2api.plugin.v1.ClassifyErrorResponse.AccountEffect
-	(*ValidateCredentialsRequest)(nil),       // 2: sub2api.plugin.v1.ValidateCredentialsRequest
-	(*ValidateCredentialsResponse)(nil),      // 3: sub2api.plugin.v1.ValidateCredentialsResponse
-	(*BuildUpstreamRequestRequest)(nil),      // 4: sub2api.plugin.v1.BuildUpstreamRequestRequest
-	(*BuildUpstreamRequestResponse)(nil),     // 5: sub2api.plugin.v1.BuildUpstreamRequestResponse
-	(*ClassifyErrorRequest)(nil),             // 6: sub2api.plugin.v1.ClassifyErrorRequest
-	(*ClassifyErrorResponse)(nil),            // 7: sub2api.plugin.v1.ClassifyErrorResponse
-	(*BuildTestRequestRequest)(nil),          // 8: sub2api.plugin.v1.BuildTestRequestRequest
-	(*BuildTestRequestResponse)(nil),         // 9: sub2api.plugin.v1.BuildTestRequestResponse
-	(*BuildModelsRequestRequest)(nil),        // 10: sub2api.plugin.v1.BuildModelsRequestRequest
-	(*BuildModelsRequestResponse)(nil),       // 11: sub2api.plugin.v1.BuildModelsRequestResponse
-	nil,                                      // 12: sub2api.plugin.v1.BuildUpstreamRequestRequest.FieldsEntry
-	nil,                                      // 13: sub2api.plugin.v1.BuildUpstreamRequestRequest.InboundHeadersEntry
-	nil,                                      // 14: sub2api.plugin.v1.BuildUpstreamRequestResponse.HeadersEntry
-	nil,                                      // 15: sub2api.plugin.v1.ClassifyErrorRequest.HeadersEntry
-	nil,                                      // 16: sub2api.plugin.v1.BuildTestRequestResponse.HeadersEntry
-	nil,                                      // 17: sub2api.plugin.v1.BuildModelsRequestResponse.HeadersEntry
-	(*FieldError)(nil),                       // 18: sub2api.plugin.v1.FieldError
-	(*RequestMeta)(nil),                      // 19: sub2api.plugin.v1.RequestMeta
-	(*Account)(nil),                          // 20: sub2api.plugin.v1.Account
-	(*BodyPatch)(nil),                        // 21: sub2api.plugin.v1.BodyPatch
+	(ReconcileResult_State)(0),               // 2: sub2api.plugin.v1.ReconcileResult.State
+	(*ValidateCredentialsRequest)(nil),       // 3: sub2api.plugin.v1.ValidateCredentialsRequest
+	(*ValidateCredentialsResponse)(nil),      // 4: sub2api.plugin.v1.ValidateCredentialsResponse
+	(*BuildUpstreamRequestRequest)(nil),      // 5: sub2api.plugin.v1.BuildUpstreamRequestRequest
+	(*BuildUpstreamRequestResponse)(nil),     // 6: sub2api.plugin.v1.BuildUpstreamRequestResponse
+	(*ClassifyErrorRequest)(nil),             // 7: sub2api.plugin.v1.ClassifyErrorRequest
+	(*ClassifyErrorResponse)(nil),            // 8: sub2api.plugin.v1.ClassifyErrorResponse
+	(*BuildTestRequestRequest)(nil),          // 9: sub2api.plugin.v1.BuildTestRequestRequest
+	(*BuildTestRequestResponse)(nil),         // 10: sub2api.plugin.v1.BuildTestRequestResponse
+	(*BuildModelsRequestRequest)(nil),        // 11: sub2api.plugin.v1.BuildModelsRequestRequest
+	(*BuildModelsRequestResponse)(nil),       // 12: sub2api.plugin.v1.BuildModelsRequestResponse
+	(*ResolveModelRequest)(nil),              // 13: sub2api.plugin.v1.ResolveModelRequest
+	(*ResolveModelResponse)(nil),             // 14: sub2api.plugin.v1.ResolveModelResponse
+	(*StreamEvent)(nil),                      // 15: sub2api.plugin.v1.StreamEvent
+	(*ExtractUsageRequest)(nil),              // 16: sub2api.plugin.v1.ExtractUsageRequest
+	(*UsageReport)(nil),                      // 17: sub2api.plugin.v1.UsageReport
+	(*Reservation)(nil),                      // 18: sub2api.plugin.v1.Reservation
+	(*ReconcileEntry)(nil),                   // 19: sub2api.plugin.v1.ReconcileEntry
+	(*BuildReconcileRequestRequest)(nil),     // 20: sub2api.plugin.v1.BuildReconcileRequestRequest
+	(*BuildReconcileRequestResponse)(nil),    // 21: sub2api.plugin.v1.BuildReconcileRequestResponse
+	(*ParseReconcileResponseRequest)(nil),    // 22: sub2api.plugin.v1.ParseReconcileResponseRequest
+	(*ReconcileResult)(nil),                  // 23: sub2api.plugin.v1.ReconcileResult
+	nil,                                      // 24: sub2api.plugin.v1.BuildUpstreamRequestRequest.FieldsEntry
+	nil,                                      // 25: sub2api.plugin.v1.BuildUpstreamRequestRequest.InboundHeadersEntry
+	nil,                                      // 26: sub2api.plugin.v1.BuildUpstreamRequestResponse.HeadersEntry
+	nil,                                      // 27: sub2api.plugin.v1.ClassifyErrorRequest.HeadersEntry
+	nil,                                      // 28: sub2api.plugin.v1.BuildTestRequestResponse.HeadersEntry
+	nil,                                      // 29: sub2api.plugin.v1.BuildModelsRequestResponse.HeadersEntry
+	nil,                                      // 30: sub2api.plugin.v1.ResolveModelRequest.FieldsEntry
+	nil,                                      // 31: sub2api.plugin.v1.ResolveModelRequest.InboundHeadersEntry
+	nil,                                      // 32: sub2api.plugin.v1.ExtractUsageRequest.HeadersEntry
+	nil,                                      // 33: sub2api.plugin.v1.UsageReport.FactsEntry
+	nil,                                      // 34: sub2api.plugin.v1.Reservation.FactsEntry
+	nil,                                      // 35: sub2api.plugin.v1.BuildReconcileRequestResponse.HeadersEntry
+	nil,                                      // 36: sub2api.plugin.v1.ParseReconcileResponseRequest.HeadersEntry
+	nil,                                      // 37: sub2api.plugin.v1.ReconcileResult.FactsEntry
+	(*FieldError)(nil),                       // 38: sub2api.plugin.v1.FieldError
+	(*RequestMeta)(nil),                      // 39: sub2api.plugin.v1.RequestMeta
+	(*Account)(nil),                          // 40: sub2api.plugin.v1.Account
+	(*BodyPatch)(nil),                        // 41: sub2api.plugin.v1.BodyPatch
+	(*UsageTokens)(nil),                      // 42: sub2api.plugin.v1.UsageTokens
 }
 var file_sub2api_plugin_v1_platform_proto_depIdxs = []int32{
-	18, // 0: sub2api.plugin.v1.ValidateCredentialsResponse.errors:type_name -> sub2api.plugin.v1.FieldError
-	19, // 1: sub2api.plugin.v1.BuildUpstreamRequestRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
-	20, // 2: sub2api.plugin.v1.BuildUpstreamRequestRequest.account:type_name -> sub2api.plugin.v1.Account
-	12, // 3: sub2api.plugin.v1.BuildUpstreamRequestRequest.fields:type_name -> sub2api.plugin.v1.BuildUpstreamRequestRequest.FieldsEntry
-	13, // 4: sub2api.plugin.v1.BuildUpstreamRequestRequest.inbound_headers:type_name -> sub2api.plugin.v1.BuildUpstreamRequestRequest.InboundHeadersEntry
-	14, // 5: sub2api.plugin.v1.BuildUpstreamRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildUpstreamRequestResponse.HeadersEntry
-	21, // 6: sub2api.plugin.v1.BuildUpstreamRequestResponse.patches:type_name -> sub2api.plugin.v1.BodyPatch
-	19, // 7: sub2api.plugin.v1.ClassifyErrorRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
-	20, // 8: sub2api.plugin.v1.ClassifyErrorRequest.account:type_name -> sub2api.plugin.v1.Account
-	15, // 9: sub2api.plugin.v1.ClassifyErrorRequest.headers:type_name -> sub2api.plugin.v1.ClassifyErrorRequest.HeadersEntry
+	38, // 0: sub2api.plugin.v1.ValidateCredentialsResponse.errors:type_name -> sub2api.plugin.v1.FieldError
+	39, // 1: sub2api.plugin.v1.BuildUpstreamRequestRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	40, // 2: sub2api.plugin.v1.BuildUpstreamRequestRequest.account:type_name -> sub2api.plugin.v1.Account
+	24, // 3: sub2api.plugin.v1.BuildUpstreamRequestRequest.fields:type_name -> sub2api.plugin.v1.BuildUpstreamRequestRequest.FieldsEntry
+	25, // 4: sub2api.plugin.v1.BuildUpstreamRequestRequest.inbound_headers:type_name -> sub2api.plugin.v1.BuildUpstreamRequestRequest.InboundHeadersEntry
+	26, // 5: sub2api.plugin.v1.BuildUpstreamRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildUpstreamRequestResponse.HeadersEntry
+	41, // 6: sub2api.plugin.v1.BuildUpstreamRequestResponse.patches:type_name -> sub2api.plugin.v1.BodyPatch
+	39, // 7: sub2api.plugin.v1.ClassifyErrorRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	40, // 8: sub2api.plugin.v1.ClassifyErrorRequest.account:type_name -> sub2api.plugin.v1.Account
+	27, // 9: sub2api.plugin.v1.ClassifyErrorRequest.headers:type_name -> sub2api.plugin.v1.ClassifyErrorRequest.HeadersEntry
 	0,  // 10: sub2api.plugin.v1.ClassifyErrorResponse.action:type_name -> sub2api.plugin.v1.ClassifyErrorResponse.Action
 	1,  // 11: sub2api.plugin.v1.ClassifyErrorResponse.account_effect:type_name -> sub2api.plugin.v1.ClassifyErrorResponse.AccountEffect
-	20, // 12: sub2api.plugin.v1.BuildTestRequestRequest.account:type_name -> sub2api.plugin.v1.Account
-	16, // 13: sub2api.plugin.v1.BuildTestRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildTestRequestResponse.HeadersEntry
-	20, // 14: sub2api.plugin.v1.BuildModelsRequestRequest.account:type_name -> sub2api.plugin.v1.Account
-	17, // 15: sub2api.plugin.v1.BuildModelsRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildModelsRequestResponse.HeadersEntry
-	2,  // 16: sub2api.plugin.v1.PlatformService.ValidateCredentials:input_type -> sub2api.plugin.v1.ValidateCredentialsRequest
-	4,  // 17: sub2api.plugin.v1.PlatformService.BuildUpstreamRequest:input_type -> sub2api.plugin.v1.BuildUpstreamRequestRequest
-	6,  // 18: sub2api.plugin.v1.PlatformService.ClassifyError:input_type -> sub2api.plugin.v1.ClassifyErrorRequest
-	8,  // 19: sub2api.plugin.v1.PlatformService.BuildTestRequest:input_type -> sub2api.plugin.v1.BuildTestRequestRequest
-	10, // 20: sub2api.plugin.v1.PlatformService.BuildModelsRequest:input_type -> sub2api.plugin.v1.BuildModelsRequestRequest
-	3,  // 21: sub2api.plugin.v1.PlatformService.ValidateCredentials:output_type -> sub2api.plugin.v1.ValidateCredentialsResponse
-	5,  // 22: sub2api.plugin.v1.PlatformService.BuildUpstreamRequest:output_type -> sub2api.plugin.v1.BuildUpstreamRequestResponse
-	7,  // 23: sub2api.plugin.v1.PlatformService.ClassifyError:output_type -> sub2api.plugin.v1.ClassifyErrorResponse
-	9,  // 24: sub2api.plugin.v1.PlatformService.BuildTestRequest:output_type -> sub2api.plugin.v1.BuildTestRequestResponse
-	11, // 25: sub2api.plugin.v1.PlatformService.BuildModelsRequest:output_type -> sub2api.plugin.v1.BuildModelsRequestResponse
-	21, // [21:26] is the sub-list for method output_type
-	16, // [16:21] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	40, // 12: sub2api.plugin.v1.BuildTestRequestRequest.account:type_name -> sub2api.plugin.v1.Account
+	28, // 13: sub2api.plugin.v1.BuildTestRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildTestRequestResponse.HeadersEntry
+	40, // 14: sub2api.plugin.v1.BuildModelsRequestRequest.account:type_name -> sub2api.plugin.v1.Account
+	29, // 15: sub2api.plugin.v1.BuildModelsRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildModelsRequestResponse.HeadersEntry
+	39, // 16: sub2api.plugin.v1.ResolveModelRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	30, // 17: sub2api.plugin.v1.ResolveModelRequest.fields:type_name -> sub2api.plugin.v1.ResolveModelRequest.FieldsEntry
+	31, // 18: sub2api.plugin.v1.ResolveModelRequest.inbound_headers:type_name -> sub2api.plugin.v1.ResolveModelRequest.InboundHeadersEntry
+	39, // 19: sub2api.plugin.v1.ExtractUsageRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	40, // 20: sub2api.plugin.v1.ExtractUsageRequest.account:type_name -> sub2api.plugin.v1.Account
+	32, // 21: sub2api.plugin.v1.ExtractUsageRequest.headers:type_name -> sub2api.plugin.v1.ExtractUsageRequest.HeadersEntry
+	15, // 22: sub2api.plugin.v1.ExtractUsageRequest.events:type_name -> sub2api.plugin.v1.StreamEvent
+	42, // 23: sub2api.plugin.v1.UsageReport.tokens:type_name -> sub2api.plugin.v1.UsageTokens
+	33, // 24: sub2api.plugin.v1.UsageReport.facts:type_name -> sub2api.plugin.v1.UsageReport.FactsEntry
+	18, // 25: sub2api.plugin.v1.UsageReport.reserve:type_name -> sub2api.plugin.v1.Reservation
+	42, // 26: sub2api.plugin.v1.Reservation.tokens:type_name -> sub2api.plugin.v1.UsageTokens
+	34, // 27: sub2api.plugin.v1.Reservation.facts:type_name -> sub2api.plugin.v1.Reservation.FactsEntry
+	19, // 28: sub2api.plugin.v1.BuildReconcileRequestRequest.entry:type_name -> sub2api.plugin.v1.ReconcileEntry
+	40, // 29: sub2api.plugin.v1.BuildReconcileRequestRequest.account:type_name -> sub2api.plugin.v1.Account
+	35, // 30: sub2api.plugin.v1.BuildReconcileRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildReconcileRequestResponse.HeadersEntry
+	19, // 31: sub2api.plugin.v1.ParseReconcileResponseRequest.entry:type_name -> sub2api.plugin.v1.ReconcileEntry
+	40, // 32: sub2api.plugin.v1.ParseReconcileResponseRequest.account:type_name -> sub2api.plugin.v1.Account
+	36, // 33: sub2api.plugin.v1.ParseReconcileResponseRequest.headers:type_name -> sub2api.plugin.v1.ParseReconcileResponseRequest.HeadersEntry
+	2,  // 34: sub2api.plugin.v1.ReconcileResult.state:type_name -> sub2api.plugin.v1.ReconcileResult.State
+	42, // 35: sub2api.plugin.v1.ReconcileResult.tokens:type_name -> sub2api.plugin.v1.UsageTokens
+	37, // 36: sub2api.plugin.v1.ReconcileResult.facts:type_name -> sub2api.plugin.v1.ReconcileResult.FactsEntry
+	3,  // 37: sub2api.plugin.v1.PlatformService.ValidateCredentials:input_type -> sub2api.plugin.v1.ValidateCredentialsRequest
+	5,  // 38: sub2api.plugin.v1.PlatformService.BuildUpstreamRequest:input_type -> sub2api.plugin.v1.BuildUpstreamRequestRequest
+	7,  // 39: sub2api.plugin.v1.PlatformService.ClassifyError:input_type -> sub2api.plugin.v1.ClassifyErrorRequest
+	9,  // 40: sub2api.plugin.v1.PlatformService.BuildTestRequest:input_type -> sub2api.plugin.v1.BuildTestRequestRequest
+	11, // 41: sub2api.plugin.v1.PlatformService.BuildModelsRequest:input_type -> sub2api.plugin.v1.BuildModelsRequestRequest
+	13, // 42: sub2api.plugin.v1.PlatformService.ResolveModel:input_type -> sub2api.plugin.v1.ResolveModelRequest
+	16, // 43: sub2api.plugin.v1.PlatformService.ExtractUsage:input_type -> sub2api.plugin.v1.ExtractUsageRequest
+	20, // 44: sub2api.plugin.v1.PlatformService.BuildReconcileRequest:input_type -> sub2api.plugin.v1.BuildReconcileRequestRequest
+	22, // 45: sub2api.plugin.v1.PlatformService.ParseReconcileResponse:input_type -> sub2api.plugin.v1.ParseReconcileResponseRequest
+	4,  // 46: sub2api.plugin.v1.PlatformService.ValidateCredentials:output_type -> sub2api.plugin.v1.ValidateCredentialsResponse
+	6,  // 47: sub2api.plugin.v1.PlatformService.BuildUpstreamRequest:output_type -> sub2api.plugin.v1.BuildUpstreamRequestResponse
+	8,  // 48: sub2api.plugin.v1.PlatformService.ClassifyError:output_type -> sub2api.plugin.v1.ClassifyErrorResponse
+	10, // 49: sub2api.plugin.v1.PlatformService.BuildTestRequest:output_type -> sub2api.plugin.v1.BuildTestRequestResponse
+	12, // 50: sub2api.plugin.v1.PlatformService.BuildModelsRequest:output_type -> sub2api.plugin.v1.BuildModelsRequestResponse
+	14, // 51: sub2api.plugin.v1.PlatformService.ResolveModel:output_type -> sub2api.plugin.v1.ResolveModelResponse
+	17, // 52: sub2api.plugin.v1.PlatformService.ExtractUsage:output_type -> sub2api.plugin.v1.UsageReport
+	21, // 53: sub2api.plugin.v1.PlatformService.BuildReconcileRequest:output_type -> sub2api.plugin.v1.BuildReconcileRequestResponse
+	23, // 54: sub2api.plugin.v1.PlatformService.ParseReconcileResponse:output_type -> sub2api.plugin.v1.ReconcileResult
+	46, // [46:55] is the sub-list for method output_type
+	37, // [37:46] is the sub-list for method input_type
+	37, // [37:37] is the sub-list for extension type_name
+	37, // [37:37] is the sub-list for extension extendee
+	0,  // [0:37] is the sub-list for field type_name
 }
 
 func init() { file_sub2api_plugin_v1_platform_proto_init() }
@@ -1024,8 +2149,8 @@ func file_sub2api_plugin_v1_platform_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sub2api_plugin_v1_platform_proto_rawDesc), len(file_sub2api_plugin_v1_platform_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   16,
+			NumEnums:      3,
+			NumMessages:   35,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

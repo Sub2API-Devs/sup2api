@@ -406,7 +406,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 
 本节优先于 §12 及前文中冲突的描述。§12 中"全局定价""凭证授权""转换失败""插件未启用 404"等仍然有效。
 
-**概念**：平台声明端点；账号类型声明支持的平台；账号属于账号类型；分组是一组账号（可混放类型）；API Key 只绑定一个分组。核心内置平台 `anthropic`、`openai`、`gemini`（`server/internal/platforms`，嵌入的 JSON，格式同 manifest `Platform`；任何模块都可以 import，和 `core` 一样）。
+**概念**：平台声明端点；账号类型声明支持的平台；账号属于账号类型；分组是一组账号（可混放类型）；API Key 只绑定一个分组。核心内置平台 `anthropic`、`openai`、`gemini`（`sdk/platforms`，嵌入的 JSON，格式同 manifest `Platform`；任何模块都可以 import，和 `core` 一样）。
 
 **manifest**：删除顶层 `gateway`、`platform`；新增 `platforms: [Platform]`（插件自己的新平台）：`{id, label, endpoints:[Endpoint], requestFields, passHeaders, usage, stickyRules}`，平台协议由端点推出（`Platform.Protocols()`）。`Endpoint` 新增 `usage`（覆盖平台用量规则）、`request.modelParam`（模型取自路径参数）、`request.stream`（端点固定为流式）；路径段可以是 `:param` 或 `:param:suffix`（如 `/v1beta/models/:model:generateContent`）。端点协议必须是 `<平台 id>.<名称>`。`AccountType.protocols` 改为 `platforms: [{platform, requestFields?, passHeaders?, usage?: {<protocol>: UsageRules}}]`。
 
@@ -606,7 +606,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 - **统计与绑定按规则名**（不是 id）：统计 key `sticky:stats:{name}`，绑定 key `sticky:{name}:{group}:{model}:{sha256}`（名称中 `[A-Za-z0-9_.-]` 以外的字符替换为 `_`）。同名规则共享同一份统计，`/stats` 中同名的多项数值相同；flush 任一同名规则都会清除该名称下的全部绑定。
 - `key_includes` 不含 `rule` 的规则，其绑定 key 的规则段为 `_`，与其他同类规则共用；flush 这类规则返回 409，控制台不显示"清除绑定"。
 - 插件安装/升级时覆盖其 `plugin_default` 规则的定义（保留管理员设置的 `enabled`、`priority`），不再声明的规则删除；内置规则在网关启动时同步，语义相同。
-- **`match.protocols` 的取值与校验**：协议的权威来源是平台的端点声明 —— 内置平台（`server/internal/platforms/{anthropic,openai,gemini}.json` 的 `endpoints[].protocol`）与插件 manifest 的 `platforms[].endpoints[].protocol`；注册表按协议建索引（`Generation.PlatformForProtocol`）。空数组表示不限；含 `*`/`?` 的值按通配与已注册协议集合比较（与运行时 `matchList` 的语义一致），匹配不到任何协议才算无效。
+- **`match.protocols` 的取值与校验**：协议的权威来源是平台的端点声明 —— 内置平台（`sdk/platforms/{anthropic,openai,gemini}.json` 的 `endpoints[].protocol`）与插件 manifest 的 `platforms[].endpoints[].protocol`；注册表按协议建索引（`Generation.PlatformForProtocol`）。空数组表示不限；含 `*`/`?` 的值按通配与已注册协议集合比较（与运行时 `matchList` 的语义一致），匹配不到任何协议才算无效。
   - 管理员规则（`source=admin`）保存时校验：POST 中每个协议都必须命中，否则 400，`error.details.fields` 含一项 `{field:"match.protocols", code:"invalid"}`，消息点明是哪些协议无效（同一次提交的多个无效协议合并为一条错误）。
   - **PATCH 只校验本次新增的协议**：不在库中原有 `match.protocols` 里的值才校验，原有值一律放行（即使它现在已经无法命中注册表）。控制台提交的是全量 body，这样一条引用了已停用/卸载插件协议的旧规则，改 TTL 或开关不会被锁死，只能删掉重建；而编辑时新加一个拼错的协议仍会被拒。不带 `match` 的 PATCH（只改 `enabled`/`priority`）完全不校验协议。
   - 插件注册表不可用时（未安装插件的最小部署、generation 尚未加载）整体跳过该校验。
@@ -1329,3 +1329,293 @@ message RankedAccount {
 - **当前限制（有意为之）**：这一列**只落库，`GET /usage/:id`、`/me/usage/:id` 的响应体都不暴露它**（§15.2 的详情字段表里没有它，与 `hook_decisions` 不同）。排查需要直接查库，例如 `SELECT sched_decisions FROM usage_logs WHERE request_id = '…'`。
 
 
+
+---
+
+## 25. 插件执行、核心记录：插件参与模型解析、用量与计费（2026-09-29，用户要求）
+
+本节优先于前文中冲突的描述，设计背景见 `PLUGIN-EXECUTES-CORE-RECORDS.md`。原则：**插件只陈述上游事实，核心据此定价、扣费、落记录**。插件永远不说「扣多少钱」，只说「用了多少」。
+
+分 A / B / C / D 四期落地，本节按期补写。
+
+### 25.1 A 期：请求上下文与平台插件句柄（已实现）
+
+**`RequestMeta` 新增两个字段**（`sdk/proto/sub2api/plugin/v1/common.proto`）：
+
+| 字段 | 说明 |
+|---|---|
+| `path_params` (10) | 匹配到的端点路径参数，如 `/v1beta/models/:model:generateContent` 的 `model` |
+| `query` (11) | **占位，核心恒不填**。将来只填端点在 `request.queryParams` 里显式声明过的参数（B 期），语义与 `requestFields` 同构，`auth.query` 自动排除 |
+
+`query` 一开始的设计是「整个 query 兜给插件 + 黑名单挡凭证」，实现时否掉了：黑名单永远在错的一侧（既误杀 `key_field` 这类无辜参数，又漏掉将来某厂商新发明的凭证参数名），且与本文件开头「插件声明它需要哪些字段，主机只给这些」的契约不一致。**趁零消费者时改成声明式**，避免以后收紧成破坏性变更。
+
+**上限与净化**（核心保证，插件可依赖）：
+
+- 路径参数最多 32 个键；超出时按键名排序取前 32，保证稳定
+- 键最长 64 字节、值最长 512 字节，按 UTF-8 边界截断
+- 为空时字段是 nil，不是空 map
+- **非法 UTF-8 一律剔除**（`strings.ToValidUTF8`）：这两个 map 的内容直接来自 URL，客户端可以塞 `%FF`；proto3 的 string 字段强制 UTF-8，不净化的话 `proto.Marshal` 会失败，该请求的每一次插件调用都挂，`BuildUpstreamRequest` 挂了就是 5xx——**一个 curl 就能稳定打出 500**。
+  > **通用规则**：今后任何把客户端原始字节放进 proto `string` 字段的地方，都必须过同一道净化。
+
+受益的是**五个已有调用点**，它们本来就带 `RequestMeta`，无需各自改动：`BuildUpstreamRequest`、`ClassifyError`、`OnGatewayRequest`、`ResolveAffinityKey`、`RankAccounts`。
+
+**`core.PlatformBinding` 增加 `Client PlatformPlugin`**，覆盖 §13 中「`PlatformBinding{Plugin, Builtin, Platform}`（去掉 `Client`）」的表述。
+
+- 内置平台的 `Client` 恒为 nil
+- 插件平台的 `Client` 是声明该平台的插件的 `PlatformService`；**该插件没有 `platform.adapter.v1` 时同样是 nil**
+- **所有调用方必须做 nil 检查**
+
+最后一条是有后果的：按 §13，**声明平台只要 `gateway.endpoint` + `platform.register`，不要 `platform.adapter.v1`**（那是声明账号类型才要的）。所以一个完全合法的插件可以声明平台却没有 `Client`。因此：
+
+> **B / C 期的安装校验必须新增一条**：任何端点声明 `request.modelSource: "plugin"` 或 `usage.source: "plugin"` 的插件，**必须同时声明 `platform.adapter.v1`**。否则请求时拿到 nil `Client`，只能 500。
+
+**B 期实现 `request.queryParams` 时的两个坑**（A 期实现过黑名单版本后留下的经验）：
+
+1. `auth.query` 的自动排除必须**大小写不敏感**（`strings.EqualFold`）。端点声明 `auth.query: "key"`、客户端发 `?Key=sk-...`，而 Go 的 `url.Values` 是大小写敏感的 map，按名字直接 delete 会漏掉。
+2. `queryParams` 白名单的匹配建议也大小写不敏感（否则 `?Alt=sse` 取不到，插件作者会困惑）。但那样就必须保证「白名单里的名字不得与 `auth.query` 忽略大小写相等」——**这条放进安装校验，比放在运行时可靠**。
+
+---
+
+## 26. 插件机制加固：manifest 校验收敛到 SDK（2026-09-29，用户要求）
+
+本节优先于前文中冲突的描述。起因是实现火山方舟插件时发现 manifest 校验**有两份实现且已经分叉**，而且**插件作者 import 不到核心的校验**，写不了「我的 manifest 能通过核心校验」这种单元测试。
+
+### 26.1 收敛后的结构
+
+| 位置 | 内容 |
+|---|---|
+| `sdk/manifest/check` | **manifest 静态校验的唯一实现**。`Validate`、`CheckPlatform`、`PathParams`、`PathsOverlap`、`EndpointsConflict`、scope 工具；错误类型 `FieldError` / `ValidationError` |
+| `sdk/manifest/routes.go` | 核心保留路径段的唯一来源：`RouteAPI`/`RoutePluginUI`/`RouteHealthz`、`CoreRouteSegments`、`ReservedFirstSegment()` |
+| `sdk/platforms` | 内置平台 JSON 与加载器（从 `server/internal/platforms` 整包移来） |
+| `server/internal/plugin/pkg` | 转发壳，**导出 API 一字未变**，只多做 `core.Error` 包装。18 个 importer 零改动 |
+| `server/internal/platforms` | 17 行转发壳 |
+| `tools/sub2api-plugin/validate.go` | 267 行副本 → 28 行适配器，调同一份 |
+
+`ValidateOptions.Tooling` 是唯一的语义开关，只放宽三项「没有安装宿主就无法满足」的检查（hostCompat 只解析不匹配、不要求 runtime 二进制、不要求 `ui.native.entry`）。**宿主永远不设它**，install 时的校验逐字节不变。
+
+**插件模块现在可以 import `sdk/manifest/check`**，在自己的 `manifest_test.go` 里跑核心校验。这是本次收敛的验收标志，七个内置插件都已这么做。
+
+代价：`sdk` 因此依赖 `Masterminds/semver` 和 `robfig/cron`，所有插件模块的 go.mod 会带上这两个 indirect。
+
+### 26.2 保留路径
+
+保留段是 `api` / `plugin-ui` / `healthz`，**首段精确匹配**（与 gin 路由语义一致）。
+
+`webui/webui.go` 引用同一份名字列表，但**保留自己的前缀匹配语义**并在注释里写明原因：它只决定浏览器路径要不要回落到 `index.html`，前缀匹配才能既拦住 `/api/...` 又不误伤 `/apifoo`。
+
+**尚未收敛**：`httpapi/router.go` 的 `/api/v1`、`plugin/routes/routes.go` 与 `registry/package.go` 的 `/plugin-ui/` 仍是字面量。
+
+### 26.3 收敛暴露出来的历史分叉（存档）
+
+两份实现在 15 处规则上不一致，其中方向相反或漏拦的：
+
+| 规则 | 核心 | CLI |
+|---|---|---|
+| HTTP method 大小写 | `ToUpper` 后比较 | 精确比较 → `"post"` 被 CLI 拒、核心接受 |
+| catch-all `*rest` | 支持尾段 | 见 `*` 一律拒 |
+| 路径重叠算法 | 支持 catch-all、TrimSuffix `/` | 要求段数相同、不 trim → `/v1/a` vs `/v1/a/` 结论相反 |
+| `accounts.credentials` scope | 深度等于 `{"types":"own"}` | 只看 `["types"]=="own"`，允许多余 key |
+| `billing` 空串 | 放行 | 报错（方向相反） |
+| `/healthz` | 拒绝 | **放行**（CLI 拦的是 `/health` 前缀，而 `/healthz` 既不等于也不以 `/health/` 开头） |
+| 账号类型 id / 端点 id / protocol 字符集 | 有正则 | 只查空与重复 |
+| `errorFormat` / `response.nonStream` / `modelPath`-`modelParam` 互斥 / 平台 `usage.semantics` | **不校验** | 校验 |
+| manifest 其余 20 多块 | 全校验 | **完全不校验** |
+
+最后两行是要点：**CLI 打包绿灯 ≠ 能装进核心**，反过来也有漏。最讽刺的是「CLI 比核心严」这个印象在唯一真实存在的那条核心路由（`/healthz`）上恰好是反的。
+
+实证：切到共享实现后，CLI 自己的三个测试 fixture 立刻被判非法（声明 `ui.native` 却没有对应权限和 `hostUICompat`、`database` 没有 `db.schema` 权限、`form.mode:"schema"` 没有 `schema` 字段）——这些 manifest 打包一直是绿的，装进核心必然失败。
+
+### 26.4 顺带修掉的静默跳过
+
+插件的 `manifest_test.go` 原来用 `os.ReadFile("../../server/internal/platforms/anthropic.json")` 这种**跨模块字符串路径**去够内置平台，且 `os.IsNotExist` 时 `t.Log` 后跳过。内置平台一搬家，「与内置平台交叉校验」那段就**一直在空跑且显示为绿**。现已全部改成 `platforms.Builtin()`，找不到即失败。
+
+> 这类「找不到就跳过」的测试写法值得在仓库里扫一遍。
+
+### 25.2 B 期：插件解析模型、声明式查询参数（已实现）
+
+**`PlatformService.ResolveModel`**（`platform.proto`）：端点声明 `request.modelSource: "plugin"` 时，核心在 `checkModel()` 处问声明该平台的插件要模型。`modelPath` / `modelParam` / `modelSource` **三选一、互斥、必填其一**。
+
+| 项 | 定 |
+|---|---|
+| 调用者 | 声明该平台的插件（`PlatformBinding.Client`），不是账号类型所属插件 |
+| 时机 | 钩子匹配 / 分组白名单 / 定价 / 候选账号 `models` 过滤**之前**。未声明 `modelSource` 的端点一次都不调 |
+| `fields` | **平台级 `requestFields` + `passHeaders`**，与 `ResolveAffinityKey` 一致。`Endpoint` 上没有 `requestFields`，且此时还没选账号，账号类型那层的覆盖不可用 |
+| 每请求次数 | 1 次。`checkModel()` 一次请求跑两次，结果缓存在 `call.modelResolved`；唯一失效点是钩子的 `setBody()`——钩子改了 body 才重问 |
+| 失败 | 超时 / 出错 / `Unimplemented` / nil / 空 model 一律 **400**。模型取不到就没法定价和限额，放行等于免费 |
+| `Client == nil` | **500** + `slog.Error`（带 platform/plugin/endpoint/protocol/builtin）。校验层已要求声明 `platform.adapter.v1`，运行时仍做 nil 检查 |
+| 超时 | 暂时复用 `default_hook_timeout_ms`（50–2000ms，默认 300ms） |
+
+**`stream` 的优先级**（这里推翻了设计稿的建议）：
+
+- `request.stream: true` **压过插件返回值**。它是端点级静态事实，核心据它决定按 SSE 还是 JSON 读上游；让远程插件的一个 bool 能推翻它，等于把响应解析交给插件去破坏
+- 其余情况下 `modelSource: "plugin"` 以插件返回的为准，`streamPath` 不再读
+- 因此新增校验：**`modelSource: "plugin"` 与 `request.streamPath` 互斥**，保证每个端点恰好一个 stream 来源
+
+**`request.queryParams`**：声明式白名单，核心只填声明过的参数（A 期占位的 `RequestMeta.query` 至此生效）。
+
+- `auth.query` 命名的参数**自动排除**，比较用 `EqualFold`
+- 白名单匹配也 `EqualFold`（否则 `?Alt=sse` 取不到）
+- 校验层保证：名字格式 `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`；**忽略大小写不得自我重复**（`["alt","ALT"]` 会抢同一个参数）；**不得与 `auth.query` 忽略大小写相等**
+- **客户端同时发 `?Alt=1&alt=2` 时按 key 排序取最小的**。不定这条的话结果取决于 map 迭代顺序，同一次请求在不同节点可能不同，插件行为不可复现
+- 上限、截断、`ToValidUTF8` 净化与 `path_params` 同
+
+**`usage.facts` 的键**：`^[a-z][a-z0-9_]{0,63}$`，且不得与 6 个标准 usage 字段同名。这个键同时是价格表达式里 `u("…")` 的字面量和 `usage_logs.metrics` 的 JSON 键，撞名会制造混淆。全仓只有 `gemini.json` 的 `thoughts_tokens` 和 volcengine 的 `images` 两处 facts，零误伤。
+
+**`CheckPlatform` 的陷阱（新出现，已局部处理）**：`CheckPlatform(p)` 用的是空 `manifest.Manifest{}`，没有 capabilities。把 `needCap(platform.adapter.v1)` 无条件放进 `endpoint()`，会让一个**确实声明了该能力**的插件调 SDK 的 `CheckPlatform` 自检时被误报。现用 `validator.standalone` 只在该调用点关掉这条。
+
+> 这正是 §26 校验收敛之后新出现的一类坑，而且在收敛后的**第一个**新规则上就撞到了：`endpoint()` 里任何依赖 `v.m` 的检查，在内置平台和 `CheckPlatform` 路径上都没有 manifest 可读。今后往 `endpoint()` 加规则必须先问一句「它读 `v.m` 吗」。
+
+**待办**：`default_hook_timeout_ms` 现在同时控制一个不是钩子的热路径 RPC。管理员为某个慢钩子放宽到 2000ms 会连带放宽 `ResolveModel`，反之亦然，两者没有理由同步。C 期的 `ExtractUsage` 也会要超时——**建议 C 期之前加独立设置**（`resolve_model_timeout_ms`，或更通用的 `platform_hotpath_timeout_ms`）。
+
+### 26.5 `endpoint.response` 生效与用量运行时修补（2026-09-29）
+
+**网关真的读 `endpoint.response` 了**，但**转发方式一行没改**——仍然只看上游 `Content-Type`。一个能跑的客户端不该因为 manifest 写漏了就被打断。新增的只是「比对 + 出声」：
+
+| 实际形态 | 端点声明 | 结果 |
+|---|---|---|
+| SSE | 没声明 `response.stream` | `slog.Warn` + `usage_logs.billing_detail` 记 `{"response_mismatch":"sse_not_declared"}` |
+| JSON | 没声明 `response.nonStream`（只承诺流式） | 同上，标记 `json_while_stream_declared` |
+| 一致 | — | **什么都不记**，`billing_detail` 里一个新键都不多（`omitempty`） |
+
+> 设计稿原本写的反向条件是「声明了 stream、上游回 JSON」。**那是错的**：绝大多数端点两个都声明（`openai.chat`、`anthropic.messages`、`gemini.stream_generate` 全是 `{"stream":"sse","nonStream":"json"}`），上游回 JSON 完全合法，照字面实现会给几乎每个正常请求打标记，这一列上线当天就变成噪音。真正可达且真正不匹配的是「只承诺流式却回了 JSON」。
+
+标记贯穿 `billing_detail` 的三个写入点（`insert` 的 pending 行、`insert` 的 free/不计费行、`settle`），`markFailed` 的 `||` 合并自动保留，重试后仍在。**比对用的是上游端点的声明**，不是客户端端点——转换路由上响应形态由上游端点承诺。
+
+**这个检查买到的保障比听起来小**：它只能抓「端点没声明这种形态」，抓不到「声明了 `response.stream` 但 `usage.sse` 是空的」——后者才是真正吞用量的形状，已排进校验层静态抓。
+
+**用量运行时三项**（`usagerules.go`）：`facts[].enum` 真的与声明的候选比对（不在列表内不写入 + warn，非字符串值一律拒）；`Path` 统一成「单路径与求和项都 Trim」（不一致的那一半是静默失败的那一半，且对现有资产是 no-op）；标准 token 字段取到非数字时 warn（取值逻辑没改，`"1234"` 照常计 1234 且不 warn）。日志按 `enum:<key>` / `field:<name>` 分桶去重，**每请求每个出问题的声明只记一条**。
+
+**顺带修掉一个会污染全进程的潜伏 bug**：`sdk/platforms.Builtin()` 注释写着 "returns copies"，实现是 `copy(out, builtin)`——只复制结构体头，而 `manifest.Platform` 几乎全是 slice 和 map（`Endpoints`、`StickyRules`、`Usage.JSON.Map`、`Facts`），底层数组与包级变量**共享**。任何调用方原地改一个 endpoint，就把核心自带的平台定义改掉了，进程剩余生命周期内全局生效。现在每次从内嵌 JSON 重新解码返回真正的深拷贝（四个调用点都不是热路径）。
+
+> **通用规则**：返回值里带 slice/map 的「拷贝」函数，`copy()` 是不够的。今后写这类函数要么深拷贝，要么把注释改成「共享底层数据，不要修改」。
+
+**待观察**：`billing_detail` 正在变成杂物间——它的名字说「这是计费明细」，现在塞了一条纯可观测性的标记。再有第二条、第三条这类标记时，正确的形状是 `usage_logs` 加 `anomalies jsonb`，而不是继续往 `billing_detail` 里堆。
+
+### 26.6 插件错误码透传、插件读自己账号类型的凭证、流式端点必须有 SSE 用量规则（2026-09-29）
+
+#### 1. `ClassifyErrorResponse.client_error_code`
+
+网关原来把客户端错误码**硬编码**成 `"upstream_error"`，插件已经分类出来的信息在最后一步被抹掉——Ark 的 `InputTextSensitiveContentDetected`（内容审核拦截）和普通参数错误，到 OpenAI SDK 手里都是 `400 + invalid_request_error + code="upstream_error"`，客户端分不出「换个 prompt」和「改参数」。
+
+现在插件可以填 `client_error_code`：
+
+- **空 = 保持 `upstream_error`**。字段出现之前写的插件全都留空，它们的客户端必须看到和以前一模一样的东西
+- 约束 `^[A-Za-z0-9][A-Za-z0-9._:-]*$`、最长 64 字节。值会原样进客户端解析的 JSON 错误体，以及 Gemini 格式的 `ErrorInfo.reason`（规范要求是 UPPER_SNAKE 形状的 token），所以不许出现空白、引号、斜杠和非 ASCII
+- **非法值直接丢弃回落到通用码，不截断**。截断出来的是**另一个码**，按它分支的客户端会分支错；回落是诚实答案，同时 warn 指名是哪个插件该修
+
+#### 2. `HostService.ListAccounts` / `GetAccountCredentials`
+
+插件的 HTTP 路由只拿到 `Caller`，`HostService` 里没有任何账号接口，所以插件做不了「账号相关的管理界面」（第一个真实需求是火山方舟素材库要用账号上的 AK/SK 做 V4 签名）。
+
+**为什么可以开**：插件在每一次 `BuildUpstreamRequest` 里本来就收到解密后的凭证。拉取式不增加信息暴露面，只改变访问时机。新增的面是「可以在没有流量时批量读」，由下面四条收住：
+
+| 约束 | 落法 |
+|---|---|
+| 只能看到本插件声明的账号类型 | SQL 直接 `WHERE a.plugin_key = $1`；另外 `decrypt(pluginKey, enc)` 用插件 key 作 AES-GCM 的 AAD，跨插件解密在密码学上也会失败（纵深防御） |
+| 不泄露存在性 | 「没有这个账号」与「这是别人账号类型的账号」**返回同一个 `NOT_FOUND`**，否则这个调用会变成 account-id 预言机 |
+| 审计 | `GetAccountCredentials` 每次写 `audit_logs`（action `plugin.account.credentials.read`，记 plugin_key / account_type / account_name / via）。**审计行先于明文离开函数，审计失败即调用失败**——「这个插件在这个时刻读了这个凭证」的记录正是这项能力被允许的前提，发了密钥却没记上等于悄悄取消了授权条件 |
+| 分页 | 游标 `a.id > $2` + LIMIT，默认 100 上限 200，不能一次拉全量 |
+
+授权拆成两级：`ListAccounts` 由 **`accounts.read`**（Medium）授权且**绝不返回凭证**——这个权限在风险表里列着却从未被使用过，就是为这个入口预留的；`GetAccountCredentials` 需要 **`accounts.credentials` 且 scope 必须是 `{"types":"own"}`**。
+
+> 这解冻了火山方舟插件三期（素材库），见 `PLUGIN-VOLCENGINE-ARK.md` §4.5.2。
+
+#### 3. 流式端点必须有生效的 SSE 用量规则
+
+`check.streamUsage`：端点声明了 `response.stream` 且 `billing != "free"` 时，**生效的**用量规则必须有非空的 SSE map。
+
+运行时流式响应只读 `UsageRules.SSE`（`usagerules.Acc.ApplySSE`），`UsageRules.JSON` **从不**施加于它。所以「声明了流式 + 计费 + SSE 规则为空」的端点，每一个流式请求都提取零 token——请求被正常应答，钱一分不计，而且什么都不说。
+
+这正是 §26.5 那个运行时形态比对**看不到**的情况：声明是对的，缺的是用量规则。静态抓比运行时早得多也便宜得多。
+
+「生效的」= 端点自己的 `usage` 有就用它，否则用平台的。账号类型那层（`AccountPlatform.usage[protocol]`）按协议覆盖，单独校验平台时看不见，是这条规则不声称覆盖的另一个洞。
+
+**这条规则只读端点和平台、不读 `v.m`**，所以在 `CheckPlatform` 和内置平台两条无 manifest 的路径上同样成立——核心自带的三个平台被完全相同的规则检查（`TestBuiltinPlatformsHaveStreamUsage`）。
+
+前置检查结果：三个内置平台 + 七个插件全部原样通过，零误伤。
+
+### 25.3 C 期：插件返回用量、核心记录（已实现）
+
+端点声明 `usage.source: "plugin"` 时，核心在响应结束后调 `PlatformService.ExtractUsage`，拿 `UsageReport` 里的 token 与 facts 跑**管理员配置的价格表**。**声明式规则（`source: "rules"`）仍是默认，不是被取代。**
+
+#### 「转发完之后调用」是不够的——这是设计稿写错的一条
+
+响应没有 `Content-Length`（chunked / SSE），**终止分块要等 gin handler 返回**。所以「字节发完」≠「客户端看到响应结束」：把 `ExtractUsage` 留在 handler 里调，客户端会实打实多等一个插件往返（实测插件 sleep 150ms → 客户端 151.6ms）。
+
+落法：`forward()` 末尾只**装配**（把需要的东西从池化的 gin context 里拷出来），真正的调用在结算提交阶段 `go` 出去，handler 立刻返回。测试用「客户端耗时 < 插件 sleep」钉住。
+
+连带：TPM/TPD 的 token 计数原本紧跟 `forward()`，会用插件还没上报的（往往是 0 的）数字记限流，已抽成 `countTokens()`，plugin-usage 端点等异步完成后才计。粘性绑定与 `TouchLastUsed` 仍用插件之前的成功状态——那是调度关注点，一个已交付的 200 在那里算成功更合理。
+
+#### 流式：核心到底缓冲了什么
+
+热路径不搬运整个响应体这条契约没有破。`forwardSSE` 里**每个事件转发完就丢**，只对端点声明过的名字留一份拷贝（转发缓冲会复用，必须 copy，有测试钉住）。三重上限：
+
+| 上限 | 值 |
+|---|---|
+| `usage.streamEvents` 白名单 | 校验层最多 8 个事件名 |
+| `usage.maxBytes` 字节预算 | 默认 256 KiB，可声明 1 KiB–1 MiB |
+| 核心常量 `maxUsageStreamEvents` | 64 条 |
+
+任一触顶 → 此后一个事件都不再看，`UsageReport` 请求里的 **`truncated`** 告诉插件（设计稿漏了这个字段：没有它，插件无法区分「事件就这么多」和「核心到上限停了」，会把前缀算出的数当总量上报）。事件名的解析用 `usagerules.EventName`，与声明式 sse 规则**同一套**，插件和规则看到同一批事件同一个名字。
+
+非流式给整个 body，**超过 `maxBytes` 直接不调**而不是截断——半个 JSON 文档解出来的是错数字，比没有更糟。这条不对称是刻意的：事件是列表，前缀有意义；body 是一个文档。
+
+未声明 `usage.source` 的端点：热路径上一次比较、一次分配都没有。
+
+#### 插件失败 = 退回声明式规则
+
+出错 / 超时 / `Unimplemented` / nil / `Client` 为 nil / body 超限 → 保留转发时声明式规则算出的用量，请求仍是 200。字节已发完、上游成本已产生，事后把成功的请求改成错误谁也不受益。
+
+**代价**：选了 `source: "plugin"` 的端点通常**没有**可用的 gjson 规则（那正是它选这个源的原因），所以 fallback 往往计 0，即静默少计费。用两件事去掉「静默」：每次 warn 指名插件与原因；`billing_detail.usage_extract = "fallback"` 落库，可以据此告警或在控制台标出「按声明式规则计费，插件未应答」。
+
+#### 边界：插件填事实，核心补齐并覆盖
+
+`UsageReport` 里**根本没有**归属与费用字段，所以这条边界是结构性的而非代码检查。插件唯一的旁门是 `facts`（塞一个 `total_cost` 键）和 `detail_json`：未声明的 fact 一律丢弃 + warn，类型/enum 不符也丢弃；`detail_json` 原样存但没有任何东西读它。
+
+`detail_json` **超限不能截断**——`plugin_detail` 是 jsonb，截断出来不是 JSON，insert 失败会拖垮整批。超 4 KiB → 存 `{"_truncated":true,"_bytes":N}` + warn；非 object / 非法 JSON → `{}` + warn。
+
+#### 其他
+
+- 迁移 `0012`：`usage_logs.plugin_detail jsonb NOT NULL DEFAULT '{}'`。self 视图隐藏它（插件往里写什么核心不知道，可能带上游账号线索）
+- `ExtractUsage` 的 `Account` **永不带凭证**；要凭证走 §26.6 的 `GetAccountCredentials`（有审计）
+- 热路径超时拆出独立设置 **`platform_hotpath_timeout_ms`**（默认 300，50–2000），`ResolveModel` 与 `ExtractUsage` 共用，不再挪用 `default_hook_timeout_ms`
+- §26.6 第 3 条（流式 + 计费 ⇒ 必须有非空 sse 规则）对 `source: "plugin"` 豁免——不豁免等于禁用这个特性。这重新打开「流式计 0」的洞，但只在 fallback 路径上，由 `usage_extract` 标记兜住
+- `usage.facts` 在 `source == "plugin"` 时允许空 `path`（path 对插件上报毫无意义），但 `type` 仍必填——它是 `u()` 键存在的依据，也是核心对插件上报值做类型校验的依据
+
+#### 两个待办
+
+1. **`usage.source` 放错了层。** 它现在在 `UsageRules` 上，于是跟着 §13 的覆盖链走，而 `AccountPlatform.usage[protocol]` 属于**第三个插件**。现在靠「禁止账号类型覆盖里出现 `usage.source`」这条禁令 + 注释堵住，但**遗留一个洞**：账号类型的覆盖是整块替换 `UsageRules` 的，所以一个不写 source 的覆盖会**静默把端点切回声明式规则**。正确的位置是 `Endpoint` 上（与 B 期的 `request.modelSource` 对称），那样「谁来答」没有第二种读法。零消费者，现在改代价最小。
+2. **`billing_detail` 到期了。** §26.5 自己写的「再有第二条纯可观测标记时，正确的形状是 `usage_logs` 加 `anomalies jsonb`」——`usage_extract` 就是第二条（第一条是 `response_mismatch`）。
+
+### 25.4 D 期：预扣费 + 核心驱动的核对循环（已实现）
+
+声明了 `Reservation` 的插件（视频等异步任务的第一个用户是火山方舟五期）：提交请求时核心按预估用量**预扣**，之后由核心驱动的核对循环拿真实用量补扣或退回。全部复用已有机制（价格表、`balance_ledger` 的 `usage`/`refund` kind、幂等键）。
+
+**先还的两笔 C 期债**：
+- `usage.source` 从 `UsageRules` 挪到 `Endpoint`（`usageSource` / `usageStreamEvents` / `usageMaxBytes`），与 B 期的 `request.modelSource` 对称，不再跟着 §13 覆盖链走。那条「禁止账号类型覆盖里写 source」的禁令**变成不可表达的问题**（`UsageRules` 里根本没这个字段了），删除。
+- `usage_logs` 新增 `anomalies jsonb`（迁移 0013），`response_mismatch`（§26.5）与 `usage_extract`（§25.3）两个纯可观测标记从 `billing_detail` 搬过来。搬完更干净：新列**只在 insert 写一次**，settle / retry / markFailed 三段自动全通，不再需要在各处搬运。
+
+**核对超时保留预扣，且绝不写 `failed`**（§3.4 定的陷阱，已钉死）：放弃时 `billing_status='billed'`、钱不动、`anomalies` 记 `reconcile=abandoned`，`pending_settlements.state='abandoned'`。测试 `TestAbandonKeepsTheChargeAndStaysOutOfTheRetryLoop` **真的跑一遍 `RetryPending`** 断言这一行不会被结算重试循环再捞到（返回 0 行、余额不变、`usage_logs WHERE billing_status IN ('pending','failed')` 计数为 0——直接断言那条部分索引的谓词）。
+
+**多节点只跑一份**：`cluster` 锁（整个 sweep 持锁）+ claim 即租约（`UPDATE ... FOR UPDATE SKIP LOCKED RETURNING`，调插件前把 `next_check_at` 推后 3 分钟；节点中途死只损失一个租约）。**一个慢插件拖不死循环**：sweep 硬预算 2 分钟、单条目 30s、HTTP 20s；4 worker 并行；`interleaveByPlugin()` 按插件轮转（慢插件只拖累自己的条目）；所有落账写用 `WithoutCancel` + 15s 预算（插件把预算用光不能把记账一起拖掉）。
+
+**人工出口**：`POST /usage/:id/reconcile`、`POST /usage/:id/refund`，权限 `usage:settle`（新增 sensitive 权限——「能看使用记录」不该「能动钱」）。退款走 kind=`refund`，幂等键 `refund:{request_id}`。
+
+设置行 `reconcile`：`max_reconcile_age_sec`(86400) / `reconcile_backoff`("10s,30s,1m,5m,15m") / `max_reconcile_attempts`(100)，`GET`/`PUT /settings/reconcile`。
+
+#### D 期实现里推翻/修正的指令
+
+1. **重复 `ref_id` 的 `ON CONFLICT DO NOTHING` 是和 `failed` 同类的洞。** 我给的 DDL 让插件复用 ref_id 时第二条静默丢弃，于是那一行 `reserved`、钱已扣、**两个循环都看不见它**。改成 `RETURNING id`，`IsNoRows` 时当场按放弃路径收尾（`closeUnreconcilable()`）。
+2. **凭证只在平台插件 == 账号类型所属插件时下发。** 设计稿说「核对时把 Account 含凭证传给插件，授权模型不变」——这只在两者同一个插件时成立。§13 允许「平台由 X 声明、账号类型由 Y 声明」，那种情况给 X 凭证是**全新暴露面**。已限制为 `acc.PluginKey == e.pluginKey` 才下发（与 C 期 `ExtractUsage` 同规则）。代价：只声明平台、靠别人账号类型的插件无法核对——安全的默认，但是个没人决定过的功能限制。
+3. **退避「之后固定 15m」没照做。** 7 天 deadline × 15 分钟 = 单任务约 672 次上游请求。改成：插件给了 `next_check_after_sec` 就以它为准（夹 5s–6h），只在插件不表态时用退避梯子。「插件陈述上游事实、核心做主」用在节奏上——插件是唯一知道这个上游多久出结果的一方。
+4. **`Reservation.tokens/facts` 是唯一真值源**：预扣存在时它替换记录自己的 tokens/metrics，核对成功前预估**就是**这次请求的用量。`core.UsageReservation` 故意不带 Tokens/Facts 避免分叉。
+
+#### 两个到期未做的（需决策）
+
+1. **`abandoned → billed` 把预估混进所有收入聚合，聚合层无声。** `anomalies` 是逐行的，`/usage/summary` 碰不到它。一个有大量放弃条目的平台，报出的收入里有一部分是虚构的，而 §26.5 给可观测标记定的标准就是「不能是静默的」——在汇总层没满足。缺的一半是 `/usage/summary` 加一列 `count(*) FILTER (WHERE anomalies ? 'reconcile')`。没擅自加，它改前端在用的响应形状。
+2. **`max_reconcile_age_sec` 默认 24h 会坑第一个真实用户**：Ark 视频任务保留 7 天，插件照实说 `deadline_sec=7d`，核心夹到 24h → 每个跑过 24 小时的任务都在 24h 放弃并保留预估。**上线 Ark 视频那天必须先把这个设置调到 7 天**，否则长任务计费全是预估。藏在默认值里的产品决策。
+
+#### 顺带修的既有问题
+
+- **SSRF 防护本来有两份且不一致**：`account/testreq.go` 那份**没有** localhost 名字检查、没有 `0.0.0.0/8` / `100.64/10`(CGNAT) / `198.18/15`、也不拒 URL 带凭证。抽出 `internal/netguard`，`gateway/ssrf.go` 改成转发壳（测试原样通过）。**`account/testreq.go` 尚未迁**（改「测试账号」按钮的防护等级可能改掉运维依赖的行为），留作单独一笔债。
+- **`iam` 的陈旧断言**：`TestHTTP` 断言超级用户有 5 个菜单 section，实际 4 个（finance 在「全站 ledger 离开侧栏」后没了核心项，`Menus()` 丢空 section）。已改断言。

@@ -283,9 +283,14 @@ func TestTwoNodeRollout(t *testing.T) {
 	if _, err := b.ctl.Enable(ctx, h.key, 0); core.AsError(err).Code != "conflict" {
 		t.Fatalf("second enable: %v", err)
 	}
-	waitFor(t, "enable completes", func() bool {
+	// plugins.status flips to "enabled" when the coordinator commits the
+	// rollout; each node only switches its own registry generation on its
+	// next reconcile pass, so the DB row alone does not mean both nodes are
+	// serving 1.0.0 yet. Wait for what is actually asserted below (the
+	// "upgrade completes" wait further down does the same).
+	waitFor(t, "enable completes on both nodes", func() bool {
 		s, act, _ := h.plugin()
-		return s == "enabled" && act == "1.0.0"
+		return s == "enabled" && act == "1.0.0" && a.version(h.key) == "1.0.0" && b.version(h.key) == "1.0.0"
 	})
 	if a.version(h.key) != "1.0.0" || b.version(h.key) != "1.0.0" {
 		t.Fatalf("generations: a=%q b=%q", a.version(h.key), b.version(h.key))

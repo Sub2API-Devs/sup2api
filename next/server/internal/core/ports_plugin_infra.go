@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"os/exec"
 
 	"github.com/jackc/pgx/v5"
@@ -119,4 +120,67 @@ type EgressProvider interface {
 // Returns the number of accounts deleted.
 type PluginAccountPurger interface {
 	PurgePluginAccounts(ctx context.Context, pluginKey string) (int, error)
+}
+
+// ---------------------------------------------------------------- plugin account access
+
+// PluginAccountQuery selects a page of PluginAccountReader.ListPluginAccounts.
+type PluginAccountQuery struct {
+	// Type restricts the page to one account type id ("" = every type of the
+	// plugin). An unknown id matches nothing.
+	Type string
+	// AfterID is the keyset cursor: only accounts with a greater id are
+	// returned, in ascending id order. 0 starts at the beginning.
+	AfterID int64
+	// Limit is the maximum number of rows; the implementation caps it.
+	Limit int
+	// IncludeInactive also returns accounts that are disabled, in error or
+	// taken out of scheduling.
+	IncludeInactive bool
+}
+
+// PluginAccountSummary is account metadata without credentials.
+type PluginAccountSummary struct {
+	ID          int64
+	Name        string
+	Type        string
+	Status      string
+	Schedulable bool
+	// Settings is the plain (non-encrypted) settings object of the account:
+	// the account type's settingsFields, e.g. base_url.
+	Settings json.RawMessage
+}
+
+// PluginAccountCredentials is one account with its decrypted credentials.
+type PluginAccountCredentials struct {
+	PluginAccountSummary
+	// Credentials is the decrypted non-settings part of the account, the same
+	// JSON the plugin receives as Account.credentials_json on the gateway path.
+	Credentials json.RawMessage
+}
+
+// PluginAccountReader (owner: account) serves HostService.ListAccounts and
+// HostService.GetAccountCredentials: it lets a plugin read the accounts of its
+// OWN account types outside a gateway request.
+//
+// Both methods take the calling plugin's key and filter on accounts.plugin_key
+// in SQL, which is by construction the plugin that declared the account type.
+// That filter is the whole security boundary, so it lives here, in the module
+// that owns accounts, and not in the caller: a caller cannot ask for another
+// plugin's accounts even by mistake, and there is no "all accounts" variant to
+// reach for.
+type PluginAccountReader interface {
+	// ListPluginAccounts returns one page of the plugin's own accounts,
+	// ordered by id. It never returns credentials.
+	ListPluginAccounts(ctx context.Context, pluginKey string, q PluginAccountQuery) ([]PluginAccountSummary, error)
+	// ReadPluginAccountCredentials returns one of the plugin's own accounts
+	// with its decrypted credentials, and writes exactly one audit_logs row
+	// per successful call. An account that exists but belongs to another
+	// plugin's account type is reported as ErrNotFound, like one that does not
+	// exist at all: telling the two apart would leak which account ids exist.
+	//
+	// The audit row is the price of the pull-style access, so it is not best
+	// effort: when it cannot be written the call fails and no credential is
+	// handed out.
+	ReadPluginAccountCredentials(ctx context.Context, pluginKey string, id int64) (*PluginAccountCredentials, error)
 }

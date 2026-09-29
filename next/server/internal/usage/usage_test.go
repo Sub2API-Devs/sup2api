@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -432,4 +433,162 @@ func TestUsageAPI(t *testing.T) {
 		t.Fatalf("self summary: %v", mine2)
 	}
 	f.get(f.user, "/me/usage/summary?group_by=user", 400)
+}
+
+// A response shape the endpoint never declared is recorded in
+// usage_logs.anomalies - its own column, so settling cannot erase it and
+// settling does not have to carry it through the unbilled phase to put it
+// back (CONTRACTS §26.5: the marker is observability, it changes nothing
+// about the money, and billing_detail is not where it belongs).
+func TestResponseMismatchInAnomalies(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+
+	billed := f.record("req-mismatch", true)
+	billed.ResponseMismatch = core.ResponseMismatchSSENotDeclared
+	free := f.record("req-mismatch-free", false)
+	free.ResponseMismatch = core.ResponseMismatchJSONWhileStream
+	clean := f.record("req-clean", true)
+	f.svc.process(ctx, []*core.UsageRecord{billed, free, clean})
+
+	if s := f.scalar(`SELECT anomalies->>'response_mismatch' FROM usage_logs WHERE request_id = 'req-mismatch'`); s != core.ResponseMismatchSSENotDeclared {
+		t.Fatalf("marker missing: %s", s)
+	}
+	// billing_detail holds billing and nothing else now.
+	var detail BillingDetail
+	raw := f.scalar(`SELECT billing_detail::text FROM usage_logs WHERE request_id = 'req-mismatch'`)
+	if err := json.Unmarshal([]byte(raw), &detail); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(raw, "response_mismatch") {
+		t.Fatalf("marker still in billing_detail: %s", raw)
+	}
+	// Everything settlement writes is still there.
+	if detail.LedgerID == nil || detail.Tier != "standard" || len(detail.Rules) != 1 || !detail.Rules[0].Matched ||
+		detail.Breakdown.Vars.Len != 180000 || detail.Inputs.Headers["anthropic-beta"] != "fast-mode" ||
+		detail.Inputs.Semantics != "exclusive" || detail.Attempts != 1 || !detail.TotalCost.Equal(detail.Cost) {
+		t.Fatalf("billing detail lost content: %s", raw)
+	}
+	if s := f.scalar(`SELECT billing_status FROM usage_logs WHERE request_id = 'req-mismatch'`); s != "billed" {
+		t.Fatalf("status = %s", s)
+	}
+
+	// A free row is never settled, so the marker has to survive the insert.
+	if s := f.scalar(`SELECT billing_status || ' ' || (anomalies->>'response_mismatch') FROM usage_logs WHERE request_id = 'req-mismatch-free'`); s != "free "+core.ResponseMismatchJSONWhileStream {
+		t.Fatalf("free row: %s", s)
+	}
+
+	// A request whose shape matched must not be marked at all.
+	if s := f.scalar(`SELECT anomalies::text FROM usage_logs WHERE request_id = 'req-clean'`); s != "{}" {
+		t.Fatalf("clean row carries a marker: %s", s)
+	}
+}
+
+// A row that fails to settle keeps the marker, and so does the row the retry
+// loop finally bills: the column is written once at insert and neither
+// markFailed nor settle touches it.
+func TestResponseMismatchSurvivesFailedSettlement(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+
+	f.ledger.fail.Store(1)
+	rec := f.record("req-mismatch-retry", true)
+	rec.ResponseMismatch = core.ResponseMismatchSSENotDeclared
+	f.svc.process(ctx, []*core.UsageRecord{rec})
+	if s := f.scalar(`SELECT billing_status || ' ' || (anomalies->>'response_mismatch') FROM usage_logs WHERE request_id = 'req-mismatch-retry'`); s != "failed "+core.ResponseMismatchSSENotDeclared {
+		t.Fatalf("after failure: %s", s)
+	}
+	if _, err := f.svc.RetryPending(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if s := f.scalar(`SELECT billing_status || ' ' || (anomalies->>'response_mismatch') FROM usage_logs WHERE request_id = 'req-mismatch-retry'`); s != "billed "+core.ResponseMismatchSSENotDeclared {
+		t.Fatalf("after retry: %s", s)
+	}
+}
+
+// ---------------------------------------------------------------- plugin-reported usage
+
+// What a plugin stated goes into usage_logs.plugin_detail and nowhere else.
+// The row's attribution and money are the core's, computed from the record
+// the gateway built - which is why UsageReport has no field for any of them
+// (CONTRACTS §25.3, PLUGIN-EXECUTES-CORE-RECORDS §4).
+func TestPluginDetailStoredAndBoundaryHolds(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+
+	rec := f.record("req-plugin", true)
+	rec.UsageExtract = core.UsageExtractPlugin
+	// Everything a plugin can reach: its own opaque document (which here
+	// claims a different user and a zero cost) and the metering facts.
+	rec.PluginDetail = core.RawJSON(`{"task":"t-1","user_id":999,"total_cost":0}`)
+	rec.Metrics = map[string]any{"images": float64(2)}
+	f.svc.process(ctx, []*core.UsageRecord{rec})
+
+	if s := f.scalar(`SELECT plugin_detail->>'task' FROM usage_logs WHERE request_id = 'req-plugin'`); s != "t-1" {
+		t.Fatalf("plugin detail = %s", s)
+	}
+	// The claims inside plugin_detail changed nothing: the row is charged to
+	// the user the gateway authenticated, for the cost the core computed.
+	if s := f.scalar(`SELECT user_id::text || ' ' || billing_status || ' ' || total_cost::text FROM usage_logs WHERE request_id = 'req-plugin'`); s != strconv.FormatInt(f.user, 10)+" billed 0.70800000" {
+		t.Fatalf("row = %s", s)
+	}
+	if s := f.scalar(`SELECT (anomalies->>'usage_extract') FROM usage_logs WHERE request_id = 'req-plugin'`); s != core.UsageExtractPlugin {
+		t.Fatalf("usage_extract = %s", s)
+	}
+
+	// A row for an endpoint on the declarative rules carries neither.
+	plain := f.record("req-rules", true)
+	f.svc.process(ctx, []*core.UsageRecord{plain})
+	if s := f.scalar(`SELECT plugin_detail::text FROM usage_logs WHERE request_id = 'req-rules'`); s != "{}" {
+		t.Fatalf("plugin detail = %s", s)
+	}
+	if s := f.scalar(`SELECT anomalies::text FROM usage_logs WHERE request_id = 'req-rules'`); s != "{}" {
+		t.Fatalf("clean row carries a marker: %s", s)
+	}
+}
+
+// The fallback marker is the one that matters operationally: it says this row
+// was billed from the declarative rules because the plugin could not answer.
+// It must survive both the unbilled phase and a failed settlement.
+func TestUsageExtractFallbackMarker(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+
+	free := f.record("req-fb-free", false)
+	free.UsageExtract = core.UsageExtractFallback
+	f.ledger.fail.Store(1)
+	billed := f.record("req-fb", true)
+	billed.UsageExtract = core.UsageExtractFallback
+	f.svc.process(ctx, []*core.UsageRecord{free, billed})
+
+	if s := f.scalar(`SELECT billing_status || ' ' || (anomalies->>'usage_extract') FROM usage_logs WHERE request_id = 'req-fb-free'`); s != "free "+core.UsageExtractFallback {
+		t.Fatalf("free row: %s", s)
+	}
+	if s := f.scalar(`SELECT billing_status || ' ' || (anomalies->>'usage_extract') FROM usage_logs WHERE request_id = 'req-fb'`); s != "failed "+core.UsageExtractFallback {
+		t.Fatalf("after failure: %s", s)
+	}
+	if _, err := f.svc.RetryPending(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if s := f.scalar(`SELECT billing_status || ' ' || (anomalies->>'usage_extract') FROM usage_logs WHERE request_id = 'req-fb'`); s != "billed "+core.UsageExtractFallback {
+		t.Fatalf("after retry: %s", s)
+	}
+}
+
+// plugin_detail is jsonb, so a document that is not a JSON object would fail
+// the whole batch insert and take unrelated records down with it. The gateway
+// already guards this; the settler guards it again.
+func TestPluginDetailRejectsNonObjects(t *testing.T) {
+	for _, raw := range []string{"", "[1,2]", "{nope", `"text"`} {
+		if got := string(pluginDetailJSON(core.RawJSON(raw))); got != "{}" {
+			t.Errorf("pluginDetailJSON(%q) = %s", raw, got)
+		}
+	}
+	if got := string(pluginDetailJSON(core.RawJSON(`{"a":1}`))); got != `{"a":1}` {
+		t.Errorf("object dropped: %s", got)
+	}
+	big := core.RawJSON(`{"pad":"` + strings.Repeat("x", core.MaxPluginDetailBytes) + `"}`)
+	if got := string(pluginDetailJSON(big)); got != "{}" {
+		t.Errorf("oversized document stored: %d bytes", len(got))
+	}
 }

@@ -19,11 +19,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PlatformService_ValidateCredentials_FullMethodName  = "/sub2api.plugin.v1.PlatformService/ValidateCredentials"
-	PlatformService_BuildUpstreamRequest_FullMethodName = "/sub2api.plugin.v1.PlatformService/BuildUpstreamRequest"
-	PlatformService_ClassifyError_FullMethodName        = "/sub2api.plugin.v1.PlatformService/ClassifyError"
-	PlatformService_BuildTestRequest_FullMethodName     = "/sub2api.plugin.v1.PlatformService/BuildTestRequest"
-	PlatformService_BuildModelsRequest_FullMethodName   = "/sub2api.plugin.v1.PlatformService/BuildModelsRequest"
+	PlatformService_ValidateCredentials_FullMethodName    = "/sub2api.plugin.v1.PlatformService/ValidateCredentials"
+	PlatformService_BuildUpstreamRequest_FullMethodName   = "/sub2api.plugin.v1.PlatformService/BuildUpstreamRequest"
+	PlatformService_ClassifyError_FullMethodName          = "/sub2api.plugin.v1.PlatformService/ClassifyError"
+	PlatformService_BuildTestRequest_FullMethodName       = "/sub2api.plugin.v1.PlatformService/BuildTestRequest"
+	PlatformService_BuildModelsRequest_FullMethodName     = "/sub2api.plugin.v1.PlatformService/BuildModelsRequest"
+	PlatformService_ResolveModel_FullMethodName           = "/sub2api.plugin.v1.PlatformService/ResolveModel"
+	PlatformService_ExtractUsage_FullMethodName           = "/sub2api.plugin.v1.PlatformService/ExtractUsage"
+	PlatformService_BuildReconcileRequest_FullMethodName  = "/sub2api.plugin.v1.PlatformService/BuildReconcileRequest"
+	PlatformService_ParseReconcileResponse_FullMethodName = "/sub2api.plugin.v1.PlatformService/ParseReconcileResponse"
 )
 
 // PlatformServiceClient is the client API for PlatformService service.
@@ -46,6 +50,87 @@ type PlatformServiceClient interface {
 	// sends it and extracts the ids (console "fetch models" button, CONTRACTS
 	// §19). Optional: answer UNIMPLEMENTED when the upstream has no such API.
 	BuildModelsRequest(ctx context.Context, in *BuildModelsRequestRequest, opts ...grpc.CallOption) (*BuildModelsRequestResponse, error)
+	// Resolves the model of one gateway request for endpoints whose model is
+	// not in the request at all (manifest request.modelSource: "plugin").
+	//
+	// Implemented by the plugin declaring the endpoint's PLATFORM, not the one
+	// owning the account type: it runs before scheduling, when no account has
+	// been picked yet. The host calls it only for endpoints declaring
+	// modelSource "plugin", on the hot path, before hook matching, the group
+	// allowlist, pricing and the candidate `models` filter - the model decides
+	// all four, so there is no later point to ask.
+	//
+	// Optional: answer UNIMPLEMENTED when no endpoint needs it. A plugin whose
+	// endpoint declares modelSource "plugin" must also declare capability
+	// "platform.adapter.v1" (install-time check): without it the host has no
+	// PlatformService to call at all.
+	//
+	// Failure is never permissive: an UNIMPLEMENTED, an error, a timeout or an
+	// empty model all end the request with 400 "model is required". Without a
+	// model the host cannot price or limit the request, so serving it would
+	// serve it for free.
+	ResolveModel(ctx context.Context, in *ResolveModelRequest, opts ...grpc.CallOption) (*ResolveModelResponse, error)
+	// Reads the token usage of one finished upstream response for endpoints
+	// whose usage the declarative rules cannot express (manifest
+	// usage.source: "plugin").
+	//
+	// Implemented by the plugin declaring the PLATFORM of the upstream
+	// response, like ResolveModel - the response shape belongs to the platform,
+	// not to the account type that happened to serve it. A plugin whose
+	// platform or endpoint declares usage.source "plugin" must also declare
+	// capability "platform.adapter.v1" (install-time check).
+	//
+	// Called AFTER the response has been forwarded in full, so it costs the
+	// client nothing: it only delays the usage record, which is written
+	// asynchronously anyway. It must never be moved before forwarding.
+	//
+	// What it receives depends on the response shape, and in neither case is
+	// it the whole stream:
+	//   - non-streaming: the whole body, but only while the body fits in
+	//     usage.maxBytes; a larger body is not handed over at all (half a JSON
+	//     document parses into wrong numbers, which is worse than none);
+	//   - streaming: only the events whose name the endpoint listed in
+	//     usage.streamEvents, in arrival order, bounded by a host event count
+	//     cap and by usage.maxBytes. Collection stops at the cap and
+	//     `truncated` says so; the host never buffers the whole stream.
+	//
+	// Optional: answer UNIMPLEMENTED when no endpoint needs it. Failure is
+	// NEVER fatal to the request - the response already reached the client. On
+	// an error, a timeout, an UNIMPLEMENTED or a nil answer the host falls
+	// back to the declarative rules it ran while forwarding and marks the
+	// usage record so the silence is visible.
+	ExtractUsage(ctx context.Context, in *ExtractUsageRequest, opts ...grpc.CallOption) (*UsageReport, error)
+	// Builds the request that asks the upstream how a PRE-CHARGED entry ended
+	// (manifest: none - an endpoint arms this by having its ExtractUsage return
+	// a Reservation, CONTRACTS §25.4).
+	//
+	// This is BuildTestRequest / BuildModelsRequest's shape, and it is the
+	// shape on purpose. The plugin only DESCRIBES the request and READS the
+	// answer; the host is what sends it, through the account's proxy, behind
+	// the SSRF guard, under the host's timeout. Which means a plugin that
+	// reconciles asynchronous work needs:
+	//   - no "net" host permission: it never opens a socket;
+	//   - no way to list accounts: the host hands it the one that served the
+	//     request, credentials included, exactly as BuildUpstreamRequest does;
+	//   - no "app.jobs.v1" timer of its own: the host drives the schedule,
+	//     with the backoff, the deadline and the multi-node locking that a
+	//     plugin would otherwise each have to reinvent.
+	// Do not "simplify" this into a single call that lets the plugin fetch:
+	// every one of those three would have to be opened up again.
+	//
+	// Optional: answer UNIMPLEMENTED when no endpoint reserves. A plugin that
+	// returns a Reservation and then cannot build the request has its entries
+	// retried until the deadline and then abandoned - the estimate stands as
+	// the final charge.
+	BuildReconcileRequest(ctx context.Context, in *BuildReconcileRequestRequest, opts ...grpc.CallOption) (*BuildReconcileRequestResponse, error)
+	// Reads the upstream's answer to the request above and says whether the
+	// work is still running, finished (with its REAL usage) or failed. The
+	// host prices, charges the difference or refunds, and closes the usage row.
+	//
+	// Like every other call in this file it states upstream facts only: there
+	// is no field here for an amount, and the tokens it reports are priced by
+	// the administrator's price table exactly like a live request's.
+	ParseReconcileResponse(ctx context.Context, in *ParseReconcileResponseRequest, opts ...grpc.CallOption) (*ReconcileResult, error)
 }
 
 type platformServiceClient struct {
@@ -106,6 +191,46 @@ func (c *platformServiceClient) BuildModelsRequest(ctx context.Context, in *Buil
 	return out, nil
 }
 
+func (c *platformServiceClient) ResolveModel(ctx context.Context, in *ResolveModelRequest, opts ...grpc.CallOption) (*ResolveModelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveModelResponse)
+	err := c.cc.Invoke(ctx, PlatformService_ResolveModel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformServiceClient) ExtractUsage(ctx context.Context, in *ExtractUsageRequest, opts ...grpc.CallOption) (*UsageReport, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UsageReport)
+	err := c.cc.Invoke(ctx, PlatformService_ExtractUsage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformServiceClient) BuildReconcileRequest(ctx context.Context, in *BuildReconcileRequestRequest, opts ...grpc.CallOption) (*BuildReconcileRequestResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BuildReconcileRequestResponse)
+	err := c.cc.Invoke(ctx, PlatformService_BuildReconcileRequest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformServiceClient) ParseReconcileResponse(ctx context.Context, in *ParseReconcileResponseRequest, opts ...grpc.CallOption) (*ReconcileResult, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReconcileResult)
+	err := c.cc.Invoke(ctx, PlatformService_ParseReconcileResponse_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlatformServiceServer is the server API for PlatformService service.
 // All implementations must embed UnimplementedPlatformServiceServer
 // for forward compatibility.
@@ -126,6 +251,87 @@ type PlatformServiceServer interface {
 	// sends it and extracts the ids (console "fetch models" button, CONTRACTS
 	// §19). Optional: answer UNIMPLEMENTED when the upstream has no such API.
 	BuildModelsRequest(context.Context, *BuildModelsRequestRequest) (*BuildModelsRequestResponse, error)
+	// Resolves the model of one gateway request for endpoints whose model is
+	// not in the request at all (manifest request.modelSource: "plugin").
+	//
+	// Implemented by the plugin declaring the endpoint's PLATFORM, not the one
+	// owning the account type: it runs before scheduling, when no account has
+	// been picked yet. The host calls it only for endpoints declaring
+	// modelSource "plugin", on the hot path, before hook matching, the group
+	// allowlist, pricing and the candidate `models` filter - the model decides
+	// all four, so there is no later point to ask.
+	//
+	// Optional: answer UNIMPLEMENTED when no endpoint needs it. A plugin whose
+	// endpoint declares modelSource "plugin" must also declare capability
+	// "platform.adapter.v1" (install-time check): without it the host has no
+	// PlatformService to call at all.
+	//
+	// Failure is never permissive: an UNIMPLEMENTED, an error, a timeout or an
+	// empty model all end the request with 400 "model is required". Without a
+	// model the host cannot price or limit the request, so serving it would
+	// serve it for free.
+	ResolveModel(context.Context, *ResolveModelRequest) (*ResolveModelResponse, error)
+	// Reads the token usage of one finished upstream response for endpoints
+	// whose usage the declarative rules cannot express (manifest
+	// usage.source: "plugin").
+	//
+	// Implemented by the plugin declaring the PLATFORM of the upstream
+	// response, like ResolveModel - the response shape belongs to the platform,
+	// not to the account type that happened to serve it. A plugin whose
+	// platform or endpoint declares usage.source "plugin" must also declare
+	// capability "platform.adapter.v1" (install-time check).
+	//
+	// Called AFTER the response has been forwarded in full, so it costs the
+	// client nothing: it only delays the usage record, which is written
+	// asynchronously anyway. It must never be moved before forwarding.
+	//
+	// What it receives depends on the response shape, and in neither case is
+	// it the whole stream:
+	//   - non-streaming: the whole body, but only while the body fits in
+	//     usage.maxBytes; a larger body is not handed over at all (half a JSON
+	//     document parses into wrong numbers, which is worse than none);
+	//   - streaming: only the events whose name the endpoint listed in
+	//     usage.streamEvents, in arrival order, bounded by a host event count
+	//     cap and by usage.maxBytes. Collection stops at the cap and
+	//     `truncated` says so; the host never buffers the whole stream.
+	//
+	// Optional: answer UNIMPLEMENTED when no endpoint needs it. Failure is
+	// NEVER fatal to the request - the response already reached the client. On
+	// an error, a timeout, an UNIMPLEMENTED or a nil answer the host falls
+	// back to the declarative rules it ran while forwarding and marks the
+	// usage record so the silence is visible.
+	ExtractUsage(context.Context, *ExtractUsageRequest) (*UsageReport, error)
+	// Builds the request that asks the upstream how a PRE-CHARGED entry ended
+	// (manifest: none - an endpoint arms this by having its ExtractUsage return
+	// a Reservation, CONTRACTS §25.4).
+	//
+	// This is BuildTestRequest / BuildModelsRequest's shape, and it is the
+	// shape on purpose. The plugin only DESCRIBES the request and READS the
+	// answer; the host is what sends it, through the account's proxy, behind
+	// the SSRF guard, under the host's timeout. Which means a plugin that
+	// reconciles asynchronous work needs:
+	//   - no "net" host permission: it never opens a socket;
+	//   - no way to list accounts: the host hands it the one that served the
+	//     request, credentials included, exactly as BuildUpstreamRequest does;
+	//   - no "app.jobs.v1" timer of its own: the host drives the schedule,
+	//     with the backoff, the deadline and the multi-node locking that a
+	//     plugin would otherwise each have to reinvent.
+	// Do not "simplify" this into a single call that lets the plugin fetch:
+	// every one of those three would have to be opened up again.
+	//
+	// Optional: answer UNIMPLEMENTED when no endpoint reserves. A plugin that
+	// returns a Reservation and then cannot build the request has its entries
+	// retried until the deadline and then abandoned - the estimate stands as
+	// the final charge.
+	BuildReconcileRequest(context.Context, *BuildReconcileRequestRequest) (*BuildReconcileRequestResponse, error)
+	// Reads the upstream's answer to the request above and says whether the
+	// work is still running, finished (with its REAL usage) or failed. The
+	// host prices, charges the difference or refunds, and closes the usage row.
+	//
+	// Like every other call in this file it states upstream facts only: there
+	// is no field here for an amount, and the tokens it reports are priced by
+	// the administrator's price table exactly like a live request's.
+	ParseReconcileResponse(context.Context, *ParseReconcileResponseRequest) (*ReconcileResult, error)
 	mustEmbedUnimplementedPlatformServiceServer()
 }
 
@@ -150,6 +356,18 @@ func (UnimplementedPlatformServiceServer) BuildTestRequest(context.Context, *Bui
 }
 func (UnimplementedPlatformServiceServer) BuildModelsRequest(context.Context, *BuildModelsRequestRequest) (*BuildModelsRequestResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method BuildModelsRequest not implemented")
+}
+func (UnimplementedPlatformServiceServer) ResolveModel(context.Context, *ResolveModelRequest) (*ResolveModelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveModel not implemented")
+}
+func (UnimplementedPlatformServiceServer) ExtractUsage(context.Context, *ExtractUsageRequest) (*UsageReport, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExtractUsage not implemented")
+}
+func (UnimplementedPlatformServiceServer) BuildReconcileRequest(context.Context, *BuildReconcileRequestRequest) (*BuildReconcileRequestResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BuildReconcileRequest not implemented")
+}
+func (UnimplementedPlatformServiceServer) ParseReconcileResponse(context.Context, *ParseReconcileResponseRequest) (*ReconcileResult, error) {
+	return nil, status.Error(codes.Unimplemented, "method ParseReconcileResponse not implemented")
 }
 func (UnimplementedPlatformServiceServer) mustEmbedUnimplementedPlatformServiceServer() {}
 func (UnimplementedPlatformServiceServer) testEmbeddedByValue()                         {}
@@ -262,6 +480,78 @@ func _PlatformService_BuildModelsRequest_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformService_ResolveModel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveModelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).ResolveModel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_ResolveModel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).ResolveModel(ctx, req.(*ResolveModelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformService_ExtractUsage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExtractUsageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).ExtractUsage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_ExtractUsage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).ExtractUsage(ctx, req.(*ExtractUsageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformService_BuildReconcileRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BuildReconcileRequestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).BuildReconcileRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_BuildReconcileRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).BuildReconcileRequest(ctx, req.(*BuildReconcileRequestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformService_ParseReconcileResponse_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ParseReconcileResponseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).ParseReconcileResponse(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_ParseReconcileResponse_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).ParseReconcileResponse(ctx, req.(*ParseReconcileResponseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlatformService_ServiceDesc is the grpc.ServiceDesc for PlatformService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -288,6 +578,22 @@ var PlatformService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "BuildModelsRequest",
 			Handler:    _PlatformService_BuildModelsRequest_Handler,
+		},
+		{
+			MethodName: "ResolveModel",
+			Handler:    _PlatformService_ResolveModel_Handler,
+		},
+		{
+			MethodName: "ExtractUsage",
+			Handler:    _PlatformService_ExtractUsage_Handler,
+		},
+		{
+			MethodName: "BuildReconcileRequest",
+			Handler:    _PlatformService_BuildReconcileRequest_Handler,
+		},
+		{
+			MethodName: "ParseReconcileResponse",
+			Handler:    _PlatformService_ParseReconcileResponse_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

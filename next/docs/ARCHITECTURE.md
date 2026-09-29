@@ -214,7 +214,7 @@ flowchart LR
 | anthropic 插件 | `apikey` 账号类型（支持内置平台 anthropic）：构造请求、错误分类；默认价格、模型目录 | **插件** |
 | guard 插件 | 请求钩子（关键词拦截）、事件订阅（统计）、后台任务（汇总与清理）、对外告警、原生界面 | **插件** |
 
-**划分原则**：核心负责"数据、钱、安全、调度"，以及内置平台（anthropic、openai、gemini）的端点定义——它们是数据文件（`server/internal/platforms/*.json`），流水线代码本身不针对任何平台写死逻辑；插件负责"某种账号怎么对接上游"以及"额外的业务逻辑"。插件**永远不能直接改余额**，只能调用受限的账本接口。
+**划分原则**：核心负责"数据、钱、安全、调度"，以及内置平台（anthropic、openai、gemini）的端点定义——它们是数据文件（`sdk/platforms/*.json`），流水线代码本身不针对任何平台写死逻辑；插件负责"某种账号怎么对接上游"以及"额外的业务逻辑"。插件**永远不能直接改余额**，只能调用受限的账本接口。
 
 ---
 
@@ -761,7 +761,7 @@ sequenceDiagram
 端点属于平台：核心内置 anthropic、openai、gemini 三个平台的端点，插件可以在 manifest 的 `platforms[].endpoints` 里为自己的新平台声明端点（见 6.6），核心流水线按声明执行。端点字段如下（以 anthropic 为例）：
 
 ```jsonc
-{ "id": "anthropic",                          // 平台（内置平台在 server/internal/platforms/*.json）
+{ "id": "anthropic",                          // 平台（内置平台在 sdk/platforms/*.json）
   "endpoints": [ {
     "id": "messages",
     "method": "POST",
@@ -870,7 +870,7 @@ flowchart LR
 4. 没有候选账号 → 503 `no_available_account`；有则按优先级、粘性会话、并发、失败切换调度
 5. 选中账号后由其账号类型所属插件构造上游请求；需转换时由核心转换请求和响应
 
-**内置平台**（定义在核心 `server/internal/platforms`，不再由插件声明）
+**内置平台**（定义在核心 `sdk/platforms`，不再由插件声明）
 
 | 平台 | 端点 | 协议 | 错误格式 | 用量口径 |
 |---|---|---|---|---|
@@ -1437,7 +1437,7 @@ sequenceDiagram
 
 ### 15.1 anthropic（账号类型插件，内置）
 
-anthropic 平台及其端点、用量规则、默认粘性规则由**核心内置**（`server/internal/platforms/anthropic.json`，见 6.6）；插件本身随镜像内置、只能禁用不能卸载。
+anthropic 平台及其端点、用量规则、默认粘性规则由**核心内置**（`sdk/platforms/anthropic.json`，见 6.6）；插件本身随镜像内置、只能禁用不能卸载。
 
 | 能力 | 内容 |
 |---|---|

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,6 +27,10 @@ const (
 	LogMaxMessage    = 8 << 10
 	LogMaxAttrs      = 32
 	LedgerMaxIdemKey = 100
+	// AccountsMaxListLimit caps one ListAccounts page; 0 or a larger value
+	// uses AccountsDefaultListLimit.
+	AccountsMaxListLimit     = 200
+	AccountsDefaultListLimit = 100
 )
 
 // hostServer serves HostService to exactly one plugin instance, so the
@@ -330,6 +335,98 @@ func (h *hostServer) ledger(ctx context.Context, in *pluginv1.LedgerChangeReques
 		BalanceAfter: res.BalanceAfter.StringFixed(8),
 		Duplicate:    res.Duplicate,
 	}, nil
+}
+
+// ------------------------------------------------------------------ accounts
+
+// accountsScopeOwn is the only approved scope of accounts.credentials: the
+// plugin's own account types. Validate rejects any other scope at install
+// time; this re-checks it at call time so a grant row edited or migrated into
+// something else cannot silently widen the call.
+func (h *hostServer) requireOwnCredentials() error {
+	if err := h.require("accounts.credentials"); err != nil {
+		return err
+	}
+	if v, _ := h.i.Grants().Scope("accounts.credentials")["types"].(string); v != "own" {
+		return status.Errorf(codes.PermissionDenied,
+			`plugin %s: accounts.credentials scope must be {"types":"own"}`, h.key())
+	}
+	return nil
+}
+
+// ListAccounts returns the metadata of the accounts of this plugin's own
+// account types. The response has no credential field: this call is authorised
+// by accounts.read, which is not a credential grant.
+func (h *hostServer) ListAccounts(ctx context.Context, in *pluginv1.ListAccountsRequest) (*pluginv1.ListAccountsResponse, error) {
+	if err := h.require("accounts.read"); err != nil {
+		return nil, err
+	}
+	if h.i.rt.o.Accounts == nil {
+		return nil, status.Error(codes.Unavailable, "accounts unavailable")
+	}
+	limit := int(in.GetLimit())
+	if limit <= 0 || limit > AccountsMaxListLimit {
+		limit = AccountsDefaultListLimit
+	}
+	var after int64
+	if c := in.GetCursor(); c != "" {
+		// strconv, not fmt.Sscan: Sscan stops at the first byte it cannot use,
+		// so "1;drop" would parse as 1 without an error.
+		n, err := strconv.ParseInt(c, 10, 64)
+		if err != nil || n < 0 {
+			return nil, status.Error(codes.InvalidArgument, "invalid cursor")
+		}
+		after = n
+	}
+	rows, err := h.i.rt.o.Accounts.ListPluginAccounts(ctx, h.key(), core.PluginAccountQuery{
+		Type: in.GetType(), AfterID: after, Limit: limit, IncludeInactive: in.GetIncludeInactive(),
+	})
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	out := &pluginv1.ListAccountsResponse{Accounts: make([]*pluginv1.AccountSummary, 0, len(rows))}
+	for _, r := range rows {
+		out.Accounts = append(out.Accounts, accountSummary(r))
+	}
+	// A full page may or may not be the last one; the next call settles it.
+	if len(rows) == limit {
+		out.NextCursor = fmt.Sprint(rows[len(rows)-1].ID)
+	}
+	return out, nil
+}
+
+// GetAccountCredentials returns the decrypted credentials of one account of
+// this plugin's own account types. The account module filters by plugin key in
+// SQL and writes the audit row; an account of another plugin is NOT_FOUND, not
+// PERMISSION_DENIED, so this call cannot be used to probe which ids exist.
+func (h *hostServer) GetAccountCredentials(ctx context.Context, in *pluginv1.GetAccountCredentialsRequest) (*pluginv1.GetAccountCredentialsResponse, error) {
+	if err := h.requireOwnCredentials(); err != nil {
+		return nil, err
+	}
+	if h.i.rt.o.Accounts == nil {
+		return nil, status.Error(codes.Unavailable, "accounts unavailable")
+	}
+	if in.GetAccountId() <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "account_id is required")
+	}
+	a, err := h.i.rt.o.Accounts.ReadPluginAccountCredentials(ctx, h.key(), in.GetAccountId())
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &pluginv1.GetAccountCredentialsResponse{
+		Account:         accountSummary(a.PluginAccountSummary),
+		CredentialsJson: string(a.Credentials),
+	}, nil
+}
+
+func accountSummary(a core.PluginAccountSummary) *pluginv1.AccountSummary {
+	settings := string(a.Settings)
+	if settings == "" {
+		settings = "{}"
+	}
+	return &pluginv1.AccountSummary{
+		Id: a.ID, Name: a.Name, Type: a.Type, Status: a.Status, Enabled: a.Schedulable, SettingsJson: settings,
+	}
 }
 
 func scopeDecimal(scope map[string]any, field string) (decimal.Decimal, bool) {

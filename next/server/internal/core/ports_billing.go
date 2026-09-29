@@ -109,12 +109,38 @@ type UsageRecord struct {
 	UsageSemantics   string // exclusive | inclusive
 	Tokens           UsageTokens
 	Metrics          map[string]any // plugin usage facts for u("key")
-	StickyRule       string
-	StickyHit        bool
-	HookDecisions    []HookDecision
+	// PluginDetail is the free-form JSON object a plugin returned from
+	// PlatformService.ExtractUsage (usage_logs.plugin_detail). It is the only
+	// part of a usage record a plugin writes verbatim, billing never reads
+	// it, and it is capped at 4 KiB. nil = "{}".
+	PluginDetail RawJSON
+	// UsageExtract records how this request's usage was obtained, when that
+	// is worth knowing: empty for the declarative rules (the normal case, and
+	// nothing is stored), UsageExtractPlugin when a plugin's ExtractUsage
+	// answer was used, UsageExtractFallback when the plugin was asked and
+	// could not answer, so the request is billed from whatever the
+	// declarative rules found - possibly nothing at all. The gateway also
+	// warns; this is the part that survives into usage_logs.
+	UsageExtract  string
+	StickyRule    string
+	StickyHit     bool
+	HookDecisions []HookDecision
 	// SchedDecisions is what the scheduler.rank plugins changed for this
 	// request; empty when none took part (CONTRACTS §24).
 	SchedDecisions []SchedDecision
+	// ResponseMismatch names the way the upstream response shape disagreed
+	// with what the endpoint's manifest declares in endpoint.response
+	// (ResponseMismatchSSENotDeclared / ResponseMismatchJSONWhileStream);
+	// empty when they agree or no endpoint declaration was available. The
+	// gateway records it in usage_logs.anomalies and changes nothing
+	// else: the request is forwarded and billed exactly as before.
+	ResponseMismatch string
+	// Reservation is set when the plugin reported that this request only
+	// STARTED the work upstream and gave an estimate of it (CONTRACTS §25.4).
+	// The settler then charges the estimate, marks the row "reserved" and
+	// registers it in pending_settlements for the reconcile loop. nil is the
+	// ordinary case: the usage is final when the response ends.
+	Reservation    *UsageReservation
 	Billable       bool              // false for endpoint billing=free or zero usage
 	Price          *PriceRule        // nil when not billable or free policy
 	PriceParams    map[string]string // body path -> raw JSON value captured at request time
@@ -126,6 +152,123 @@ type UsageRecord struct {
 	UserAgent      string
 	NodeID         string
 	CreatedAt      time.Time // request start; time functions evaluate against it
+}
+
+// Response shape mismatches recorded in usage_logs.anomalies
+// ("response_mismatch"). endpoint.request.stream / request.streamPath is what
+// the *client* asked for; endpoint.response.stream / response.nonStream is the
+// shape the endpoint *promises*. The gateway still picks the forwarding mode
+// from the upstream Content-Type - a working client must not break because a
+// manifest is incomplete - but an endpoint that never declares the shape it
+// actually returns has no usage rules for it either, so its tokens are lost
+// silently. These markers make that visible.
+const (
+	// ResponseMismatchSSENotDeclared: upstream answered text/event-stream but
+	// the endpoint declares no response.stream. The dangerous direction: the
+	// usage.sse rules are usually missing too, so token usage is not counted.
+	ResponseMismatchSSENotDeclared = "sse_not_declared"
+	// ResponseMismatchJSONWhileStream: upstream answered JSON but the endpoint
+	// declares only response.stream (no response.nonStream, which manifest
+	// validation allows for an always-streaming endpoint). Harmless in
+	// comparison, recorded for symmetry.
+	ResponseMismatchJSONWhileStream = "json_while_stream_declared"
+)
+
+// How a usage record's tokens were obtained, recorded in
+// usage_logs.anomalies ("usage_extract") for the endpoints that declare
+// usage.source "plugin". Endpoints using the declarative rules - every
+// endpoint in the tree today - record nothing.
+const (
+	// UsageExtractPlugin: PlatformService.ExtractUsage answered and its
+	// report is what was billed.
+	UsageExtractPlugin = "plugin"
+	// UsageExtractFallback: the endpoint asked a plugin for its usage and the
+	// plugin could not answer (error, timeout, UNIMPLEMENTED, nil, or a
+	// response the host would not hand over). The request was billed from
+	// whatever the declarative rules produced while forwarding, which for an
+	// endpoint that chose usage.source "plugin" is often nothing - it chose
+	// that source precisely because the rules cannot express its usage. This
+	// marker is the difference between under-billing and *silent*
+	// under-billing.
+	UsageExtractFallback = "fallback"
+)
+
+// MaxPluginDetailBytes caps UsageReport.detail_json.
+const MaxPluginDetailBytes = 4 << 10
+
+// Keys of usage_logs.anomalies: facts about how a usage record was produced,
+// never about what it costs. The column exists because billing_detail - whose
+// name promises a billing breakdown, and which settlement rewrites wholesale -
+// had collected two of them (CONTRACTS §26.5).
+const (
+	// AnomalyResponseMismatch: one of the ResponseMismatch* values above.
+	AnomalyResponseMismatch = "response_mismatch"
+	// AnomalyUsageExtract: one of the UsageExtract* values above.
+	AnomalyUsageExtract = "usage_extract"
+	// AnomalyReconcile: the outcome of the reconcile loop for a pre-charged
+	// row, "abandoned" being the one that matters (the reservation became the
+	// final charge because the upstream never gave an answer).
+	AnomalyReconcile = "reconcile"
+	// AnomalyReconcileAttempts / AnomalyReconcileError describe that give-up.
+	AnomalyReconcileAttempts = "reconcile_attempts"
+	AnomalyReconcileError    = "reconcile_error"
+)
+
+// ReconcileAbandoned is the AnomalyReconcile value for a pre-charged row the
+// core stopped trying to reconcile.
+const ReconcileAbandoned = "abandoned"
+
+// Anomalies collects the observability markers of a record for
+// usage_logs.anomalies; nil when there is nothing unusual to say, which is
+// the normal case.
+func (r *UsageRecord) Anomalies() map[string]string {
+	var m map[string]string
+	put := func(k, v string) {
+		if v == "" {
+			return
+		}
+		if m == nil {
+			m = map[string]string{}
+		}
+		m[k] = v
+	}
+	put(AnomalyResponseMismatch, r.ResponseMismatch)
+	put(AnomalyUsageExtract, r.UsageExtract)
+	return m
+}
+
+// UsageReservation is a plugin's statement that this request started work
+// upstream whose real usage is not known yet - a video generation job, say -
+// together with its own estimate (PLUGIN-EXECUTES-CORE-RECORDS §3.4,
+// UsageReport.reserve). It is filled from what the plugin returned and
+// nothing else: the estimate is priced, charged and reconciled by the core.
+//
+// Its point is a hole the pre-request balance check cannot close: that check
+// is a cached read that allows a brief overdraft, so a user with $0 can
+// submit a thousand jobs before the first of them settles. A reservation
+// charges the estimate up front, at submit time, through the ordinary ledger
+// path and the ordinary idempotency key.
+//
+// The ESTIMATE itself is not in here: it is the record's own Tokens and
+// Metrics, because until a reconcile says otherwise it IS this request's
+// usage - that is what was priced, charged and recorded, and what stays if
+// the core ever gives up asking.
+type UsageReservation struct {
+	// PluginKey is the plugin the core will ask to reconcile this entry: the
+	// one declaring the platform of the response, i.e. the one that answered
+	// ExtractUsage. Filled by the gateway, never by the plugin.
+	PluginKey string
+	// RefID is the plugin's own id for the work (a task id). It is unique
+	// per plugin: (plugin_key, ref_id) is the key of pending_settlements.
+	RefID string
+	// NextCheckAfter is when the plugin expects an answer to be available.
+	// Zero (or negative) leaves the delay to the core's backoff.
+	NextCheckAfter time.Duration
+	// Deadline is an UPSTREAM FACT the plugin states: how long this entry can
+	// be asked about at all (an Ark video task is queryable for 7 days). The
+	// core clamps it with its own max_reconcile_age_sec; zero takes the
+	// core's default.
+	Deadline time.Duration
 }
 
 type HookDecision struct {

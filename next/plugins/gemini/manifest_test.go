@@ -10,6 +10,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/gemini/internal/gemini"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/platforms"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/pluginsdktest"
 )
@@ -122,26 +123,17 @@ func TestManifestServes(t *testing.T) {
 	}
 }
 
-// builtin reads the core's built-in gemini platform when the plugin is
-// checked out inside the next/ tree; nil otherwise.
+// builtin is the core's built-in gemini platform definition, which the SDK
+// carries so plugins can check themselves against it.
 func builtin(t *testing.T) *manifest.Platform {
 	t.Helper()
-	b, err := os.ReadFile(filepath.FromSlash("../../server/internal/platforms/gemini.json"))
-	if os.IsNotExist(err) {
-		t.Log("built-in platform definition not found; skipping cross-check")
-		return nil
+	for _, p := range platforms.Builtin() {
+		if p.ID == gemini.PlatformID {
+			return &p
+		}
 	}
-	if err != nil {
-		t.Fatal(err)
-	}
-	var p manifest.Platform
-	if err := json.Unmarshal(b, &p); err != nil {
-		t.Fatalf("built-in gemini platform: %v", err)
-	}
-	if p.ID != gemini.PlatformID {
-		t.Fatalf("built-in platform id = %q", p.ID)
-	}
-	return &p
+	t.Fatalf("no built-in platform %q", gemini.PlatformID)
+	return nil
 }
 
 func mustJSONFile(t *testing.T, p string) []byte {

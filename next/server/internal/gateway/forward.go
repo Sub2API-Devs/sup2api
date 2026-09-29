@@ -11,7 +11,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tidwall/gjson"
+
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/usagerules"
 )
@@ -34,20 +38,29 @@ func (e *convertError) Unwrap() error { return e.err }
 // the client, so the attempt is final whatever happens. On a converting
 // route the response is converted to the endpoint protocol; usage is always
 // read from the upstream response with the upstream protocol's rules.
-func (c *call) forward(ctx context.Context, rt *typeRoute, resp *http.Response) attemptResult {
-	u := newUsageAcc(rt.usage)
+//
+// The declarative rules run here in every case. When the endpoint declares
+// usage.source "plugin" they are joined by a capture (see usageplugin.go)
+// that keeps the few bytes PlatformService.ExtractUsage will be shown, and
+// the plugin is asked once the last byte has left - never before.
+func (c *call) forward(ctx context.Context, rt *typeRoute, acct *pluginv1.Account, resp *http.Response) attemptResult {
+	u := newUsageAcc(rt.usage).WithLog("request_id", c.rid, "plugin", rt.binding.Plugin.Key,
+		"platform", rt.platform, "protocol", rt.upstream)
+	cap := newUsageCapture(rt)
 	c.rec.StatusCode = resp.StatusCode
 	c.rec.Success = true
 	c.rec.ErrorType = ""
 	c.rec.ErrorMessage = ""
 	var err error
+	sse := isSSE(resp.Header.Get("Content-Type"))
+	c.checkResponseShape(ctx, rt, resp, sse)
 	switch {
-	case isSSE(resp.Header.Get("Content-Type")):
-		err = c.forwardSSE(ctx, resp, u, rt.conv)
+	case sse:
+		err = c.forwardSSE(ctx, resp, u, rt.conv, cap)
 	case rt.conv != nil:
-		err = c.forwardJSONConverted(resp, u, rt.conv)
+		err = c.forwardJSONConverted(resp, u, cap, rt.conv)
 	default:
-		err = c.forwardJSON(resp, u)
+		err = c.forwardJSON(resp, u, cap)
 	}
 	c.rec.Tokens = u.Tokens()
 	if len(u.Metrics) > 0 {
@@ -86,6 +99,9 @@ func (c *call) forward(ctx context.Context, rt *typeRoute, resp *http.Response) 
 		c.rec.ErrorMessage = truncateUTF8("upstream stream interrupted: "+err.Error(), 1000)
 		slog.WarnContext(ctx, "gateway: upstream response interrupted", "request_id", c.rid, "err", err)
 	}
+	// The client has its bytes. The plugin, if any, is asked in submit -
+	// after the handler returns, so the response is terminated first.
+	c.armUsageExtraction(rt, acct, resp, cap)
 	return attemptResult{kind: attemptDone}
 }
 
@@ -95,7 +111,53 @@ func isSSE(ct string) bool {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(ct)), "text/event-stream")
 }
 
-func (c *call) forwardJSON(resp *http.Response, u *usageAcc) error {
+// checkResponseShape compares the shape the upstream actually answered with
+// against the one the upstream endpoint promises in endpoint.response, and
+// records the disagreement without acting on it.
+//
+// Two different things are declared per endpoint and they must not be
+// conflated:
+//
+//   - request.stream / request.streamPath is what the *client* asks for - an
+//     endpoint that always streams, or the body path carrying the client's
+//     "stream": true. The gateway reads it before the request goes out
+//     (checkModel) and records it as usage_logs.stream.
+//   - response.stream / response.nonStream is the shape the endpoint
+//     *promises* to answer with. Nothing forces the upstream to keep that
+//     promise, so it is only ever a declaration to check against.
+//
+// The forwarding mode itself still follows the upstream Content-Type
+// (forward): a client whose request works must not be cut off because a
+// manifest is incomplete. But the declaration is what the usage rules are
+// written for - an endpoint that never mentions response.stream almost never
+// carries usage.sse rules either, so an unexpected SSE answer is billed by
+// whatever facts happen to apply and its token counts are lost. Recording the
+// mismatch is what makes that visible; correcting it (adding the missing
+// usage.sse rules) stays with the plugin author.
+//
+// Nothing here blocks the response or changes the amount billed.
+func (c *call) checkResponseShape(ctx context.Context, rt *typeRoute, resp *http.Response, sse bool) {
+	if !rt.respDeclared || c.rec == nil {
+		return
+	}
+	var mismatch string
+	switch {
+	case sse && rt.resp.Stream == "":
+		mismatch = core.ResponseMismatchSSENotDeclared
+	case !sse && rt.resp.NonStream == "" && rt.resp.Stream != "":
+		mismatch = core.ResponseMismatchJSONWhileStream
+	default:
+		return
+	}
+	c.rec.ResponseMismatch = mismatch
+	slog.WarnContext(ctx, "gateway: upstream response shape not declared by the endpoint",
+		"request_id", c.rid, "plugin", rt.binding.Plugin.Key, "platform", rt.platform,
+		"protocol", rt.upstream, "endpoint", c.ep.Path, "mismatch", mismatch,
+		"content_type", resp.Header.Get("Content-Type"),
+		"declared_stream", rt.resp.Stream, "declared_non_stream", rt.resp.NonStream)
+}
+
+func (c *call) forwardJSON(resp *http.Response, u *usageAcc, cap *usageCapture) error {
 	w := c.c.Writer
 	ct := resp.Header.Get("Content-Type")
 	if ct == "" {
@@ -131,16 +193,18 @@ func (c *call) forwardJSON(resp *http.Response, u *usageAcc) error {
 	w.Flush()
 	if overflow {
 		slog.Warn("gateway: response too large for usage extraction", "request_id", c.rid)
+		cap.dropBody()
 		return nil
 	}
 	u.ApplyJSON(buf.Bytes())
+	cap.setBody(buf.Bytes())
 	return nil
 }
 
 // forwardJSONConverted reads the whole upstream response, extracts usage
 // from it (upstream rules) and writes the converted body. Nothing is written
 // when reading or converting fails.
-func (c *call) forwardJSONConverted(resp *http.Response, u *usageAcc, conv convert.Converter) error {
+func (c *call) forwardJSONConverted(resp *http.Response, u *usageAcc, cap *usageCapture, conv convert.Converter) error {
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxUsageJSONBuf+1))
 	if err != nil {
 		return err
@@ -149,6 +213,7 @@ func (c *call) forwardJSONConverted(resp *http.Response, u *usageAcc, conv conve
 		return &convertError{err: errors.New("upstream response too large")}
 	}
 	u.ApplyJSON(raw)
+	cap.setBody(raw)
 	out, err := conv.Response(raw)
 	if err != nil {
 		return &convertError{err: err}
@@ -170,7 +235,7 @@ func (c *call) forwardJSONConverted(resp *http.Response, u *usageAcc, conv conve
 // and its output events are written instead. When the client asked for a
 // JSON array stream (jsonArrayStream) the event data are written as the
 // elements of one JSON array instead of SSE.
-func (c *call) forwardSSE(ctx context.Context, resp *http.Response, u *usageAcc, conv convert.Converter) error {
+func (c *call) forwardSSE(ctx context.Context, resp *http.Response, u *usageAcc, conv convert.Converter, cap *usageCapture) error {
 	arr := c.jsonArrayStream()
 	w := c.c.Writer
 	h := w.Header()
@@ -247,6 +312,12 @@ func (c *call) forwardSSE(ctx context.Context, resp *http.Response, u *usageAcc,
 			c.rec.FirstTokenMs = max(1, int(c.g.now().Sub(c.start)/time.Millisecond))
 		}
 		u.ApplySSE(event, data)
+		// Only the events the endpoint named are kept, and only while the
+		// caps allow: the stream itself is relayed and dropped, never
+		// accumulated (usageplugin.go).
+		if cap != nil && gjson.ValidBytes(data) {
+			cap.addEvent(usagerules.EventName(event, data), data)
+		}
 		var err error
 		switch {
 		case sc != nil:

@@ -43,6 +43,10 @@ type Options struct {
 	Authorizer core.Authorizer
 	Ledger     core.Ledger
 	Schemas    SchemaDSN
+	// Accounts serves HostService.ListAccounts / GetAccountCredentials: the
+	// accounts of the calling plugin's own account types.
+	// Nil makes both calls fail with UNAVAILABLE.
+	Accounts core.PluginAccountReader
 	// Bus carries plugin cluster broadcasts (HostService.Publish).
 	Bus core.Bus
 

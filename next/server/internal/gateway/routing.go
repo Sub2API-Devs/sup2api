@@ -24,6 +24,27 @@ type typeRoute struct {
 	requestFields []string
 	passHeaders   []string
 	usage         manifest.UsageRules
+	// pluginUsage, usageEvents and usageMaxBytes are the upstream endpoint's
+	// usageSource / usageStreamEvents / usageMaxBytes (CONTRACTS §25.3).
+	//
+	// They come off the endpoint and NOT off `usage` above, which is the
+	// result of the §13 override chain: its last link,
+	// AccountPlatform.usage[protocol], belongs to the account type's plugin -
+	// a third party that has no business redirecting a call that goes to the
+	// platform's plugin, and that (because an override replaces the whole
+	// block) used to be able to switch the source off just by not mentioning
+	// it. On the endpoint there is one reading and one writer.
+	pluginUsage   bool
+	usageEvents   []string
+	usageMaxBytes int64
+	// resp is the response shape the upstream endpoint promises
+	// (endpoint.response); respDeclared is false when no endpoint of the
+	// upstream platform speaks the protocol, in which case there is nothing
+	// to compare the actual response against. Note this is the *upstream*
+	// endpoint on a converting route, not the client endpoint: the shape
+	// being checked is the one the upstream answers with.
+	resp         manifest.EndpointResp
+	respDeclared bool
 	// modelPath is the body path of the model in the upstream protocol
 	// (empty when the model travels in the path).
 	modelPath string
@@ -110,8 +131,13 @@ func (c *call) addRoute(b core.AccountTypeBinding, ap manifest.AccountPlatform, 
 	}
 	rt := &typeRoute{binding: b, platform: q, upstream: y, conv: conv,
 		requestFields: ap.RequestFields, passHeaders: ap.PassHeaders,
-		usage:     usagerules.For(ap, &ep, &pf, y),
-		modelPath: ep.Request.ModelPath}
+		usage:         usagerules.For(ap, &ep, &pf, y),
+		pluginUsage:   ep.PluginUsage(),
+		usageEvents:   ep.UsageStreamEvents,
+		usageMaxBytes: ep.UsageMaxBytes,
+		resp:          ep.Response,
+		respDeclared:  ep.Protocol != "",
+		modelPath:     ep.Request.ModelPath}
 	if len(rt.requestFields) == 0 {
 		rt.requestFields = pf.RequestFields
 	}

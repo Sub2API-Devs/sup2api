@@ -65,6 +65,28 @@ type Host interface {
 	// accepted the message. See BroadcastMux.
 	Publish(ctx context.Context, topic string, payload []byte) error
 
+	// ListAccounts returns one page of the accounts of THIS plugin's own
+	// account types (grant "accounts.read"), ordered by id and never
+	// carrying credentials. Pass the returned cursor to continue; "" means
+	// there is no further page. Limit is capped by the host at 200.
+	//
+	// Use it in the plugin's own HTTP routes, where the host tells it only
+	// who the caller is: on the gateway path the account arrives with the
+	// request and this call is unnecessary.
+	ListAccounts(ctx context.Context, q AccountQuery) (accounts []AccountSummary, next string, err error)
+	// AccountCredentials returns one of THIS plugin's own accounts with its
+	// decrypted credentials (grant "accounts.credentials" with scope
+	// {"types":"own"}).
+	//
+	// EVERY call is written to the host's audit log, by design: reading a
+	// credential without upstream traffic to justify it is exactly what an
+	// administrator has to be able to review afterwards. Fetch on use, do not
+	// cache the plaintext, and never persist it in the plugin's own schema.
+	//
+	// An account of another plugin's account type answers NOT_FOUND, the same
+	// as an id that does not exist.
+	AccountCredentials(ctx context.Context, accountID int64) (*AccountCredentials, error)
+
 	// Client exposes the raw HostService client.
 	Client() pluginv1.HostServiceClient
 	// Egress exposes the raw EgressService client.
@@ -97,6 +119,41 @@ type LedgerResult struct {
 	LedgerID     int64
 	BalanceAfter string
 	Duplicate    bool
+}
+
+// AccountQuery selects one page of Host.ListAccounts.
+type AccountQuery struct {
+	// Type restricts the page to one of the plugin's account type ids
+	// ("" = all of them).
+	Type string
+	// Cursor is "" for the first page, else the cursor of the previous one.
+	Cursor string
+	// Limit is the page size, capped by the host at 200 (0 = host default).
+	Limit int
+	// IncludeInactive also lists disabled/error accounts and accounts taken
+	// out of scheduling. Default: only active, schedulable ones.
+	IncludeInactive bool
+}
+
+// AccountSummary is account metadata without credentials.
+type AccountSummary struct {
+	ID   int64
+	Name string
+	Type string
+	// Status is active, disabled or error.
+	Status string
+	// Enabled reports whether the account takes gateway traffic.
+	Enabled bool
+	// SettingsJSON holds the non-sensitive settings (base_url ...).
+	SettingsJSON string
+}
+
+// AccountCredentials is one account with its decrypted credentials.
+type AccountCredentials struct {
+	AccountSummary
+	// CredentialsJSON is the same JSON the plugin gets as
+	// Account.credentials_json in BuildUpstreamRequest.
+	CredentialsJSON string
 }
 
 // KV is the per-plugin key/value store.
@@ -229,6 +286,33 @@ func (h *host) LedgerDebit(ctx context.Context, ch LedgerChange) (*LedgerResult,
 
 func (h *host) Publish(ctx context.Context, topic string, payload []byte) error {
 	return publish(ctx, h.client, topic, payload)
+}
+
+func (h *host) ListAccounts(ctx context.Context, q AccountQuery) ([]AccountSummary, string, error) {
+	r, err := h.client.ListAccounts(ctx, &pluginv1.ListAccountsRequest{
+		Type: q.Type, Cursor: q.Cursor, Limit: int32(q.Limit), IncludeInactive: q.IncludeInactive,
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	out := make([]AccountSummary, 0, len(r.GetAccounts()))
+	for _, a := range r.GetAccounts() {
+		out = append(out, accountSummary(a))
+	}
+	return out, r.GetNextCursor(), nil
+}
+
+func (h *host) AccountCredentials(ctx context.Context, accountID int64) (*AccountCredentials, error) {
+	r, err := h.client.GetAccountCredentials(ctx, &pluginv1.GetAccountCredentialsRequest{AccountId: accountID})
+	if err != nil {
+		return nil, err
+	}
+	return &AccountCredentials{AccountSummary: accountSummary(r.GetAccount()), CredentialsJSON: r.GetCredentialsJson()}, nil
+}
+
+func accountSummary(a *pluginv1.AccountSummary) AccountSummary {
+	return AccountSummary{ID: a.GetId(), Name: a.GetName(), Type: a.GetType(), Status: a.GetStatus(),
+		Enabled: a.GetEnabled(), SettingsJSON: a.GetSettingsJson()}
 }
 
 func ledgerReq(ch LedgerChange) *pluginv1.LedgerChangeRequest {

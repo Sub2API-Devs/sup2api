@@ -2,15 +2,18 @@ package gateway
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -374,5 +377,163 @@ func TestP99(t *testing.T) {
 	}
 	if p99(b, 0) != 0 {
 		t.Fatal("empty")
+	}
+}
+
+// metaCall builds a call for meta() with the given endpoint, path parameters
+// and raw query string.
+func metaCall(ep manifest.Endpoint, params map[string]string, rawQuery string) *call {
+	w := httptest.NewRecorder()
+	gc, _ := gin.CreateTestContext(w)
+	target := "/v1beta/models/gemini-2.5-pro:generateContent"
+	if rawQuery != "" {
+		target += "?" + rawQuery
+	}
+	gc.Request = httptest.NewRequest(http.MethodPost, target, nil)
+	return &call{c: gc, ep: ep, params: params, rid: "rid-1", model: "gemini-2.5-pro"}
+}
+
+// RequestMeta carries the matched path parameters so plugins can read the
+// model (and anything else) out of the URL.
+func TestMetaPathParams(t *testing.T) {
+	ep := manifest.Endpoint{Protocol: "gemini.generate", Request: manifest.EndpointRequest{ModelParam: "model"}}
+	m := metaCall(ep, map[string]string{"model": "gemini-2.5-pro"}, "").meta()
+	if got := m.GetPathParams(); len(got) != 1 || got["model"] != "gemini-2.5-pro" {
+		t.Fatalf("path params = %v", got)
+	}
+}
+
+// path_params is bounded in key count, key length and value length, and is
+// nil (not an empty map) when the pattern has no parameters.
+func TestMetaMapsBounded(t *testing.T) {
+	params := map[string]string{}
+	for i := 0; i < 40; i++ {
+		params[fmt.Sprintf("p%02d", i)] = "v"
+	}
+	pp := metaCall(manifest.Endpoint{Protocol: "p.x"}, params, "").meta().GetPathParams()
+	if len(pp) != metaMapMaxKeys {
+		t.Fatalf("size = %d", len(pp))
+	}
+	// The kept keys are the lowest by name, so the choice is stable.
+	if _, ok := pp["p31"]; !ok {
+		t.Fatal("p31 missing")
+	}
+	if _, ok := pp["p32"]; ok {
+		t.Fatal("p32 kept")
+	}
+	// Long keys and values are cut on a UTF-8 boundary.
+	longKey, longVal := strings.Repeat("é", 100), strings.Repeat("ü", 600)
+	got := metaCall(manifest.Endpoint{Protocol: "p.x"}, map[string]string{longKey: longVal}, "").meta().GetPathParams()
+	if len(got) != 1 {
+		t.Fatalf("long: %v", got)
+	}
+	for k, v := range got {
+		if k != truncateUTF8(longKey, metaMapMaxKeyBytes) || len(k) > metaMapMaxKeyBytes {
+			t.Fatalf("key %d bytes", len(k))
+		}
+		if v != truncateUTF8(longVal, metaMapMaxValueBytes) || len(v) > metaMapMaxValueBytes {
+			t.Fatalf("value %d bytes", len(v))
+		}
+	}
+	// No path parameters: the map stays nil.
+	if m := metaCall(manifest.Endpoint{Protocol: "p.x"}, nil, "").meta(); m.GetPathParams() != nil {
+		t.Fatalf("empty path params = %v", m.GetPathParams())
+	}
+}
+
+// RequestMeta.query carries the parameters the endpoint declared in
+// request.queryParams and nothing else. The query string can carry
+// credentials — the endpoint's auth.query parameter, and whatever an upstream
+// invents — so the host never ships the whole thing and never guesses which
+// names are secret.
+func TestMetaQueryIsDeclaredOnly(t *testing.T) {
+	ep := manifest.Endpoint{Protocol: "gemini.generate", Auth: manifest.EndpointAuth{Query: "key"},
+		Request: manifest.EndpointRequest{QueryParams: []string{"alt", "page"}}}
+	q := metaCall(ep, map[string]string{"model": "x"}, "key=sk-secret&alt=sse&page=2&tracking=t").meta().GetQuery()
+	if len(q) != 2 || q["alt"] != "sse" || q["page"] != "2" {
+		t.Fatalf("query = %v", q)
+	}
+
+	// Names are matched case-insensitively in both directions: a declared
+	// "alt" picks up "?Alt", and auth.query "key" still excludes "?Key"
+	// (url.Values is a case-sensitive map, so an exact delete would leak it).
+	q = metaCall(ep, nil, "Alt=sse&Key=sk-secret&KEY=sk-2").meta().GetQuery()
+	if len(q) != 1 || q["Alt"] != "sse" {
+		t.Fatalf("case-insensitive query = %v", q)
+	}
+
+	// An endpoint declaring nothing gets nothing, not even harmless-looking
+	// parameters, and the map is nil rather than empty.
+	if q := metaCall(manifest.Endpoint{Protocol: "p.x"}, nil, "alt=sse").meta().GetQuery(); q != nil {
+		t.Fatalf("undeclared query = %v", q)
+	}
+	// Declared but absent: still nil.
+	if q := metaCall(ep, nil, "other=1").meta().GetQuery(); q != nil {
+		t.Fatalf("absent query = %v", q)
+	}
+	// Only the first value of a repeated parameter travels.
+	if q := metaCall(ep, nil, "alt=a&alt=b").meta().GetQuery(); len(q) != 1 || q["alt"] != "a" {
+		t.Fatalf("repeated query = %v", q)
+	}
+	// Two spellings of the same declared name: the choice is stable.
+	for i := 0; i < 20; i++ {
+		if q := metaCall(ep, nil, "Alt=upper&alt=lower").meta().GetQuery(); len(q) != 1 || q["Alt"] != "upper" {
+			t.Fatalf("mixed-case query = %v", q)
+		}
+	}
+}
+
+// A client can put arbitrary bytes in the path. proto3 string fields must be
+// valid UTF-8, so invalid bytes are dropped before they can break the
+// marshalling of every plugin call of the request.
+func TestMetaMapsDropInvalidUTF8(t *testing.T) {
+	m := metaCall(manifest.Endpoint{Protocol: "p.x"},
+		map[string]string{"model": "a\xffb", "\xff": "v"}, "").meta()
+	if got := m.GetPathParams(); len(got) != 1 || got["model"] != "ab" {
+		t.Fatalf("path params = %q", got)
+	}
+	if _, err := proto.Marshal(m); err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	// The query goes through the same sanitiser: it also comes straight from
+	// the URL, so "?alt=%FF" would otherwise make proto.Marshal fail and turn
+	// one curl into a reliable 500 on every plugin call of the request.
+	ep := manifest.Endpoint{Protocol: "p.x", Request: manifest.EndpointRequest{QueryParams: []string{"alt", "bad"}}}
+	m = metaCall(ep, nil, "alt=a%FFb&bad=%FF").meta()
+	q := m.GetQuery()
+	if len(q) != 2 || q["alt"] != "ab" || q["bad"] != "" {
+		t.Fatalf("query = %q", q)
+	}
+	if _, err := proto.Marshal(m); err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+}
+
+// The query map is bounded exactly like path_params.
+func TestMetaQueryBounded(t *testing.T) {
+	names := make([]string, 0, 40)
+	var raw []string
+	for i := 0; i < 40; i++ {
+		n := fmt.Sprintf("p%02d", i)
+		names = append(names, n)
+		raw = append(raw, n+"=v")
+	}
+	ep := manifest.Endpoint{Protocol: "p.x", Request: manifest.EndpointRequest{QueryParams: names}}
+	q := metaCall(ep, nil, strings.Join(raw, "&")).meta().GetQuery()
+	if len(q) != metaMapMaxKeys {
+		t.Fatalf("size = %d", len(q))
+	}
+	if _, ok := q["p31"]; !ok {
+		t.Fatal("p31 missing")
+	}
+	if _, ok := q["p32"]; ok {
+		t.Fatal("p32 kept")
+	}
+	longVal := strings.Repeat("ü", 600)
+	ep2 := manifest.Endpoint{Protocol: "p.x", Request: manifest.EndpointRequest{QueryParams: []string{"alt"}}}
+	q = metaCall(ep2, nil, "alt="+url.QueryEscape(longVal)).meta().GetQuery()
+	if len(q) != 1 || q["alt"] != truncateUTF8(longVal, metaMapMaxValueBytes) || len(q["alt"]) > metaMapMaxValueBytes {
+		t.Fatalf("value %d bytes", len(q["alt"]))
 	}
 }

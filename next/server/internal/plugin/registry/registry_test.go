@@ -1,8 +1,10 @@
 package registry_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -54,6 +56,20 @@ func (stub) ResolveAffinityKey(context.Context, *pluginv1.ResolveAffinityKeyRequ
 	return nil, nil
 }
 func (stub) RankAccounts(context.Context, *pluginv1.RankAccountsRequest) (*pluginv1.RankAccountsResponse, error) {
+	return nil, nil
+}
+func (stub) ResolveModel(context.Context, *pluginv1.ResolveModelRequest) (*pluginv1.ResolveModelResponse, error) {
+	return nil, nil
+}
+func (stub) ExtractUsage(context.Context, *pluginv1.ExtractUsageRequest) (*pluginv1.UsageReport, error) {
+	return nil, nil
+}
+
+func (stub) BuildReconcileRequest(context.Context, *pluginv1.BuildReconcileRequestRequest) (*pluginv1.BuildReconcileRequestResponse, error) {
+	return nil, nil
+}
+
+func (stub) ParseReconcileResponse(context.Context, *pluginv1.ParseReconcileResponseRequest) (*pluginv1.ReconcileResult, error) {
 	return nil, nil
 }
 
@@ -488,4 +504,82 @@ func TestPlatformConflictsSkipped(t *testing.T) {
 	if len(g.Plugins()) != 7 {
 		t.Fatalf("plugins = %d", len(g.Plugins()))
 	}
+}
+
+// PlatformBinding.Client is the declaring plugin's PlatformService, so the
+// core can call the plugin that owns an endpoint's platform. Built-in
+// platforms and plugins without platform.adapter.v1 leave it nil.
+func TestPlatformBindingClient(t *testing.T) {
+	pAlpha := load(t, registrytest.Manifest("alpha", "1.0.0"))
+	noAdapter := registrytest.Manifest("bravo", "1.0.0")
+	noAdapter.Capabilities = nil
+	pBravo := load(t, noAdapter)
+	g := registry.New().Publish([]registry.Extension{
+		ext{pkg: pAlpha, grants: registry.Grants{}},
+		ext{pkg: pBravo, grants: registry.Grants{}, noPlatform: true},
+	})
+
+	pb, ok := g.Platform("p_alpha")
+	if !ok || pb.Builtin || pb.Client == nil {
+		t.Fatalf("p_alpha = %+v %v", pb, ok)
+	}
+	// PlatformForProtocol returns the same binding, Client included.
+	if fp, ok := g.PlatformForProtocol("p_alpha.test"); !ok || fp.Client != pb.Client {
+		t.Fatalf("p_alpha.test = %+v %v", fp, ok)
+	}
+	// Platforms() carries it too.
+	for _, b := range g.Platforms() {
+		if b.Platform.ID == "p_alpha" && b.Client == nil {
+			t.Fatal("Platforms() dropped the client")
+		}
+	}
+	// A plugin platform whose plugin has no platform.adapter.v1: nil client.
+	if pb, ok := g.Platform("p_bravo"); !ok || pb.Client != nil {
+		t.Fatalf("p_bravo = %+v %v", pb, ok)
+	}
+	// Built-in platforms are always nil; every caller must check.
+	for _, bp := range platforms.Builtin() {
+		b, ok := g.Platform(bp.ID)
+		if !ok || !b.Builtin || b.Client != nil {
+			t.Fatalf("built-in %s = %+v %v", bp.ID, b, ok)
+		}
+	}
+}
+
+// An account type may name a platform another plugin declares, which need not
+// be installed yet, so this stays a warning - but it must be a warning, not
+// silence: a misspelt platform id otherwise costs nothing at install time and
+// every request for it ends in "no enabled account type serves this endpoint".
+func TestUnknownPlatformOfAccountTypeWarns(t *testing.T) {
+	m := registrytest.Manifest("anth", "1.0.0")
+	m.AccountTypes[0].Platforms = []manifest.AccountPlatform{
+		{Platform: "p_anth"}, {Platform: manifest.PlatformAnthropic}, {Platform: "volcegnine"},
+	}
+	log := captureWarnings(t)
+	reg := registry.New()
+	g := reg.Publish([]registry.Extension{
+		ext{pkg: load(t, m), grants: registry.Grants{"accounts.credentials": []byte(`{"types":"own"}`)}},
+	})
+	// The binding is kept either way: the platform may arrive later.
+	if len(g.AccountTypesForPlatform("volcegnine")) != 1 {
+		t.Fatal("the account type must stay bound to the unknown platform")
+	}
+	out := log.String()
+	if !strings.Contains(out, "volcegnine") || !strings.Contains(out, "account type serves a platform") {
+		t.Fatalf("no warning for the unknown platform: %s", out)
+	}
+	// The platforms that do exist (the plugin's own and a built-in) are quiet.
+	if strings.Contains(out, "p_anth") || strings.Contains(out, "\"anthropic\"") {
+		t.Fatalf("known platforms must not warn: %s", out)
+	}
+}
+
+// captureWarnings redirects slog for the duration of one test.
+func captureWarnings(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	buf := &bytes.Buffer{}
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	return buf
 }

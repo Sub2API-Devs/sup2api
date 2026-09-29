@@ -365,7 +365,8 @@ func TestValidateConsistency(t *testing.T) {
 // guardEndpoint is a minimal valid endpoint of platform pid.
 func guardEndpoint(pid, method, path string) manifest.Endpoint {
 	return manifest.Endpoint{ID: "e", Method: method, Path: path, Protocol: pid + ".call", Kind: "proxy",
-		Auth: manifest.EndpointAuth{Headers: []string{"authorization"}}, Request: manifest.EndpointRequest{ModelPath: "model"}}
+		Auth: manifest.EndpointAuth{Headers: []string{"authorization"}}, Request: manifest.EndpointRequest{ModelPath: "model"},
+		Response: manifest.EndpointResp{NonStream: "json"}, ErrorFormat: "plain", Billing: "usage"}
 }
 
 func TestValidatePlatformAndAccountTypes(t *testing.T) {
@@ -639,18 +640,14 @@ func TestPathsOverlap(t *testing.T) {
 // platforms, and its endpoints do not overlap each other.
 func TestBuiltinPlatformsValid(t *testing.T) {
 	for _, p := range platforms.Builtin() {
-		v := &validator{m: &manifest.Manifest{}, perms: map[string]*manifest.HostPermission{}}
 		for i, e := range p.Endpoints {
-			v.endpoint(p.ID, p.ID, e)
 			for _, o := range p.Endpoints[:i] {
 				if EndpointsConflict(o, e) {
 					t.Errorf("%s: %s %s overlaps %s %s", p.ID, e.Method, e.Path, o.Method, o.Path)
 				}
 			}
 		}
-		v.usageRules(p.ID+".usage", p.Usage)
-		v.stickyRules(p.ID+".stickyRules", p.StickyRules)
-		for _, fe := range v.errs {
+		for _, fe := range CheckPlatform(p) {
 			t.Errorf("%s: %s %s %s", p.ID, fe.Field, fe.Code, fe.Message)
 		}
 	}

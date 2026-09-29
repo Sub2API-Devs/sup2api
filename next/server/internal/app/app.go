@@ -16,6 +16,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/account"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/apikey"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/authz"
@@ -146,6 +147,17 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	go prx.Run(ctx)
 	go acc.Run(ctx)
 
+	// The reconcile loop closes pre-charged usage rows (CONTRACTS §25.4). It
+	// starts here rather than next to settler.Start because it needs the
+	// account and proxy directories: the core sends the reconcile request
+	// itself, through the account's proxy, so that a plugin with
+	// asynchronous work needs neither network access nor account access of
+	// its own. Only one node sweeps at a time (cl.Locker).
+	settler.StartReconcile(ctx, usage.ReconcileDeps{
+		Locker: cl.Locker, Registry: reg, Accounts: acc, Proxies: prx,
+		AllowPrivateUpstream: cfg.AllowPrivateUpstream, NodeID: cfg.NodeID, Logger: log,
+	})
+
 	// ------------------------------------------------------------ plugin runtime
 	pgAddr, err := databaseAddr(cfg.DatabaseURL)
 	if err != nil {
@@ -158,7 +170,7 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 
 	rt, err := grpcruntime.New(grpcruntime.Options{
 		DB: db, Redis: rdb, Bus: cl.Bus, Cipher: cipher, Node: cl.Registry, Launcher: launcher,
-		Egress: egressP, Authorizer: az, Ledger: bill, Schemas: schemas,
+		Egress: egressP, Authorizer: az, Ledger: bill, Schemas: schemas, Accounts: acc,
 		HostVersion: version, DataDir: cfg.Plugins.DataDir,
 		StrictNetwork: cfg.Plugins.StrictNetwork, Seccomp: cfg.Plugins.Seccomp, MaxMemoryMB: cfg.Plugins.MaxMemoryMB,
 		Logger: log,
@@ -220,7 +232,9 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	if err := engine.SetTrustedProxies(cfg.TrustedProxies); err != nil {
 		return fmt.Errorf("trusted proxies: %w", err)
 	}
-	engine.GET("/healthz", func(c *gin.Context) {
+	// The core owns exactly the route segments of manifest.CoreRouteSegments;
+	// manifest/check rejects plugin endpoints that would shadow them.
+	engine.GET("/"+manifest.RouteHealthz, func(c *gin.Context) {
 		status, text := http.StatusOK, "ok"
 		if !cl.Registry.Healthy() {
 			status, text = http.StatusServiceUnavailable, "unavailable"

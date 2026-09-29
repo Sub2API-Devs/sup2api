@@ -38,6 +38,54 @@ type ModelLister interface {
 	BuildModelsRequest(context.Context, *pluginv1.BuildModelsRequestRequest) (*pluginv1.BuildModelsRequestResponse, error)
 }
 
+// ModelResolver is implemented by platforms with endpoints whose model is not
+// in the request (manifest request.modelSource: "plugin"). The host calls it
+// before scheduling — no account exists yet — so it is the plugin declaring
+// the PLATFORM that answers, not the one owning the account type. Optional: a
+// Platform without it answers ResolveModel with UNIMPLEMENTED, which the host
+// turns into 400 "model is required" like any other failure.
+type ModelResolver interface {
+	ResolveModel(context.Context, *pluginv1.ResolveModelRequest) (*pluginv1.ResolveModelResponse, error)
+}
+
+// UsageExtractor is implemented by platforms with endpoints whose token usage
+// the declarative manifest rules cannot express (manifest usage.source:
+// "plugin"). Like ModelResolver it is answered by the plugin declaring the
+// PLATFORM, and it runs after the response has been forwarded in full, so it
+// adds nothing to what the client waits for.
+//
+// It is handed the whole body of a non-streaming response, or - for a stream -
+// only the events the endpoint listed in usage.streamEvents; the host never
+// buffers a whole stream. Optional: a Platform without it answers
+// ExtractUsage with UNIMPLEMENTED, and the host falls back to the declarative
+// rules rather than failing a request whose response already reached the
+// client.
+type UsageExtractor interface {
+	ExtractUsage(context.Context, *pluginv1.ExtractUsageRequest) (*pluginv1.UsageReport, error)
+}
+
+// Reconciler is implemented by platforms whose ExtractUsage returns a
+// Reservation: work that only STARTS during the gateway request and whose
+// real usage arrives later (CONTRACTS §25.4). The host charges the estimate
+// straight away and then drives the checking itself - backoff, deadline,
+// one node at a time - calling these two methods each round.
+//
+// The division of labour is the point. The plugin describes the request and
+// reads the answer; the HOST sends it, through the account's proxy and behind
+// its SSRF guard, with the account (credentials included, when the account
+// type is this plugin's) handed in. A plugin that reconciles therefore needs
+// no "net" permission, no way to enumerate accounts and no scheduled job of
+// its own.
+//
+// Optional: a Platform without it answers both with UNIMPLEMENTED. Returning
+// a Reservation without implementing this leaves the entries to be retried
+// until their deadline and then abandoned, with the estimate as the final
+// charge.
+type Reconciler interface {
+	BuildReconcileRequest(context.Context, *pluginv1.BuildReconcileRequestRequest) (*pluginv1.BuildReconcileRequestResponse, error)
+	ParseReconcileResponse(context.Context, *pluginv1.ParseReconcileResponseRequest) (*pluginv1.ReconcileResult, error)
+}
+
 // Hook mirrors pluginv1.HookServiceServer ("gateway.hook.v1").
 type Hook interface {
 	OnGatewayRequest(context.Context, *pluginv1.GatewayRequestHookRequest) (*pluginv1.GatewayRequestHookResponse, error)

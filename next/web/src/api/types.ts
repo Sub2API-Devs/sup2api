@@ -503,13 +503,16 @@ export interface GatewaySettings {
   platform_call_timeout_ms: number
   /** Default hook timeout when the manifest sets none, 50–2000 ms (default 300). */
   default_hook_timeout_ms: number
+  /** Timeout of the per-request platform RPCs that are not hooks (ResolveModel, ExtractUsage), 50–2000 ms (default 300). */
+  platform_hotpath_timeout_ms: number
 }
 
 /** Validation ranges of GatewaySettings, mirrored from the server. */
 export const GATEWAY_SETTINGS_RANGES: Record<keyof GatewaySettings, [number, number]> = {
   max_attempts: [1, 10],
   platform_call_timeout_ms: [100, 30000],
-  default_hook_timeout_ms: [50, 2000]
+  default_hook_timeout_ms: [50, 2000],
+  platform_hotpath_timeout_ms: [50, 2000]
 }
 
 // ------------------------------------------------------------------ sticky

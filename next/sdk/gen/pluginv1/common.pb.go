@@ -305,8 +305,27 @@ type RequestMeta struct {
 	ClientIp string `protobuf:"bytes,8,opt,name=client_ip,json=clientIp,proto3" json:"client_ip,omitempty"`
 	// Protocol of the client-facing endpoint (ARCHITECTURE 6.6).
 	ClientProtocol string `protobuf:"bytes,9,opt,name=client_protocol,json=clientProtocol,proto3" json:"client_protocol,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Path parameters of the matched endpoint pattern, e.g. "model" for
+	// /v1beta/models/:model:generateContent. Empty when the pattern has none.
+	// At most 32 entries (lowest keys by name when more), keys cut to 64 bytes
+	// and values to 512 bytes on a UTF-8 boundary.
+	PathParams map[string]string `protobuf:"bytes,10,rep,name=path_params,json=pathParams,proto3" json:"path_params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Query parameters the endpoint declared in request.queryParams, and only
+	// those - the same "the plugin states what it needs and the host hands over
+	// nothing else" rule request.requestFields follows. The endpoint's
+	// auth.query parameter is always excluded (case-insensitively) because it
+	// carries the API key, and the host never ships the whole query string:
+	// that would leak credentials in parameters nobody declared.
+	//
+	// Names are matched case-insensitively, so a declared "alt" also picks up
+	// "?Alt=sse"; the key is the name as the client sent it. Only the first
+	// value of a repeated parameter is passed. Empty when the endpoint declared
+	// none. Bounded exactly like path_params: at most 32 entries (lowest keys
+	// by name when more), keys cut to 64 bytes and values to 512 bytes on a
+	// UTF-8 boundary, invalid UTF-8 dropped.
+	Query         map[string]string `protobuf:"bytes,11,rep,name=query,proto3" json:"query,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RequestMeta) Reset() {
@@ -402,6 +421,20 @@ func (x *RequestMeta) GetClientProtocol() string {
 	return ""
 }
 
+func (x *RequestMeta) GetPathParams() map[string]string {
+	if x != nil {
+		return x.PathParams
+	}
+	return nil
+}
+
+func (x *RequestMeta) GetQuery() map[string]string {
+	if x != nil {
+		return x.Query
+	}
+	return nil
+}
+
 // FieldError reports a validation problem on one input field.
 type FieldError struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -463,6 +496,91 @@ func (x *FieldError) GetMessage() string {
 	return ""
 }
 
+// UsageTokens are the token counts of one upstream response, in exactly the
+// shape the declarative usage rules produce (manifest usage.json / usage.sse
+// keys). The host normalises and prices them; a plugin states what the
+// upstream reported and never what it costs.
+//
+// cache_creation_tokens is the TOTAL cache write, including the 1 hour part:
+// the host subtracts cache_creation_1h_tokens from it, exactly as it does for
+// the declarative rules, so both sources mean the same thing. A negative
+// value counts as 0.
+type UsageTokens struct {
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	InputTokens            int64                  `protobuf:"varint,1,opt,name=input_tokens,json=inputTokens,proto3" json:"input_tokens,omitempty"`
+	OutputTokens           int64                  `protobuf:"varint,2,opt,name=output_tokens,json=outputTokens,proto3" json:"output_tokens,omitempty"`
+	CacheReadTokens        int64                  `protobuf:"varint,3,opt,name=cache_read_tokens,json=cacheReadTokens,proto3" json:"cache_read_tokens,omitempty"`
+	CacheCreationTokens    int64                  `protobuf:"varint,4,opt,name=cache_creation_tokens,json=cacheCreationTokens,proto3" json:"cache_creation_tokens,omitempty"`
+	CacheCreation_1HTokens int64                  `protobuf:"varint,5,opt,name=cache_creation_1h_tokens,json=cacheCreation1hTokens,proto3" json:"cache_creation_1h_tokens,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *UsageTokens) Reset() {
+	*x = UsageTokens{}
+	mi := &file_sub2api_plugin_v1_common_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UsageTokens) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UsageTokens) ProtoMessage() {}
+
+func (x *UsageTokens) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_common_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UsageTokens.ProtoReflect.Descriptor instead.
+func (*UsageTokens) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_common_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *UsageTokens) GetInputTokens() int64 {
+	if x != nil {
+		return x.InputTokens
+	}
+	return 0
+}
+
+func (x *UsageTokens) GetOutputTokens() int64 {
+	if x != nil {
+		return x.OutputTokens
+	}
+	return 0
+}
+
+func (x *UsageTokens) GetCacheReadTokens() int64 {
+	if x != nil {
+		return x.CacheReadTokens
+	}
+	return 0
+}
+
+func (x *UsageTokens) GetCacheCreationTokens() int64 {
+	if x != nil {
+		return x.CacheCreationTokens
+	}
+	return 0
+}
+
+func (x *UsageTokens) GetCacheCreation_1HTokens() int64 {
+	if x != nil {
+		return x.CacheCreation_1HTokens
+	}
+	return 0
+}
+
 var File_sub2api_plugin_v1_common_proto protoreflect.FileDescriptor
 
 const file_sub2api_plugin_v1_common_proto_rawDesc = "" +
@@ -490,7 +608,7 @@ const file_sub2api_plugin_v1_common_proto_rawDesc = "" +
 	"\n" +
 	"request_id\x18\x02 \x01(\tR\trequestId\x12\x1b\n" +
 	"\tclient_ip\x18\x03 \x01(\tR\bclientIp\x12\x16\n" +
-	"\x06locale\x18\x04 \x01(\tR\x06locale\"\x8e\x02\n" +
+	"\x06locale\x18\x04 \x01(\tR\x06locale\"\x99\x04\n" +
 	"\vRequestMeta\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x1a\n" +
@@ -502,12 +620,29 @@ const file_sub2api_plugin_v1_common_proto_rawDesc = "" +
 	"api_key_id\x18\x06 \x01(\x03R\bapiKeyId\x12\x19\n" +
 	"\bgroup_id\x18\a \x01(\x03R\agroupId\x12\x1b\n" +
 	"\tclient_ip\x18\b \x01(\tR\bclientIp\x12'\n" +
-	"\x0fclient_protocol\x18\t \x01(\tR\x0eclientProtocol\"P\n" +
+	"\x0fclient_protocol\x18\t \x01(\tR\x0eclientProtocol\x12O\n" +
+	"\vpath_params\x18\n" +
+	" \x03(\v2..sub2api.plugin.v1.RequestMeta.PathParamsEntryR\n" +
+	"pathParams\x12?\n" +
+	"\x05query\x18\v \x03(\v2).sub2api.plugin.v1.RequestMeta.QueryEntryR\x05query\x1a=\n" +
+	"\x0fPathParamsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a8\n" +
+	"\n" +
+	"QueryEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"P\n" +
 	"\n" +
 	"FieldError\x12\x14\n" +
 	"\x05field\x18\x01 \x01(\tR\x05field\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\tR\x04code\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\tR\amessageB@Z>github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1b\x06proto3"
+	"\amessage\x18\x03 \x01(\tR\amessage\"\xee\x01\n" +
+	"\vUsageTokens\x12!\n" +
+	"\finput_tokens\x18\x01 \x01(\x03R\vinputTokens\x12#\n" +
+	"\routput_tokens\x18\x02 \x01(\x03R\foutputTokens\x12*\n" +
+	"\x11cache_read_tokens\x18\x03 \x01(\x03R\x0fcacheReadTokens\x122\n" +
+	"\x15cache_creation_tokens\x18\x04 \x01(\x03R\x13cacheCreationTokens\x127\n" +
+	"\x18cache_creation_1h_tokens\x18\x05 \x01(\x03R\x15cacheCreation1hTokensB@Z>github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1b\x06proto3"
 
 var (
 	file_sub2api_plugin_v1_common_proto_rawDescOnce sync.Once
@@ -522,7 +657,7 @@ func file_sub2api_plugin_v1_common_proto_rawDescGZIP() []byte {
 }
 
 var file_sub2api_plugin_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_sub2api_plugin_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_sub2api_plugin_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_sub2api_plugin_v1_common_proto_goTypes = []any{
 	(BodyPatch_Op)(0),   // 0: sub2api.plugin.v1.BodyPatch.Op
 	(*BodyPatch)(nil),   // 1: sub2api.plugin.v1.BodyPatch
@@ -530,14 +665,19 @@ var file_sub2api_plugin_v1_common_proto_goTypes = []any{
 	(*Caller)(nil),      // 3: sub2api.plugin.v1.Caller
 	(*RequestMeta)(nil), // 4: sub2api.plugin.v1.RequestMeta
 	(*FieldError)(nil),  // 5: sub2api.plugin.v1.FieldError
+	(*UsageTokens)(nil), // 6: sub2api.plugin.v1.UsageTokens
+	nil,                 // 7: sub2api.plugin.v1.RequestMeta.PathParamsEntry
+	nil,                 // 8: sub2api.plugin.v1.RequestMeta.QueryEntry
 }
 var file_sub2api_plugin_v1_common_proto_depIdxs = []int32{
 	0, // 0: sub2api.plugin.v1.BodyPatch.op:type_name -> sub2api.plugin.v1.BodyPatch.Op
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	7, // 1: sub2api.plugin.v1.RequestMeta.path_params:type_name -> sub2api.plugin.v1.RequestMeta.PathParamsEntry
+	8, // 2: sub2api.plugin.v1.RequestMeta.query:type_name -> sub2api.plugin.v1.RequestMeta.QueryEntry
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_sub2api_plugin_v1_common_proto_init() }
@@ -551,7 +691,7 @@ func file_sub2api_plugin_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sub2api_plugin_v1_common_proto_rawDesc), len(file_sub2api_plugin_v1_common_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   5,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

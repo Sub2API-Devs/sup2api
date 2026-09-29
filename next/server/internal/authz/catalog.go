@@ -82,6 +82,10 @@ var coreModules = []coreModule{
 	{"usage", lt("Usage", "使用记录"), []corePerm{
 		{"usage:self:read", "View own usage", "查看自己的用量", false},
 		{"usage:all:read", "View all usage", "查看全部使用记录", false},
+		// Reconcile again, or refund, a pre-charged request the core gave up
+		// on (CONTRACTS §25.4). It moves money, so it is sensitive and is
+		// not implied by reading usage.
+		{"usage:settle", "Reconcile or refund pre-charged usage", "重新核对或退款预扣费用", true},
 	}},
 	{"sticky", lt("Sticky sessions", "粘性会话"), []corePerm{
 		{"sticky:read", "View sticky sessions", "查看粘性会话", false},

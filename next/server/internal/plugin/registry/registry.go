@@ -263,16 +263,18 @@ func build(number uint64, exts []Extension) *generation {
 		g.byKey[pkg.Key] = info
 		g.packages[pkg.Key] = pkg
 
+		pf := ext.Platform()
 		// Plugin platforms: ids are unique across built-in and plugin
 		// platforms and endpoints never overlap; a conflicting platform is
-		// skipped as a whole (first plugin by key wins).
+		// skipped as a whole (first plugin by key wins). Client is the
+		// declaring plugin's PlatformService, nil when it does not implement
+		// platform.adapter.v1 (built-in platforms always have nil).
 		for _, p := range m.Platforms {
-			if reason := g.addPlatform(core.PlatformBinding{Plugin: info, Platform: p}); reason != "" {
+			if reason := g.addPlatform(core.PlatformBinding{Plugin: info, Platform: p, Client: pf}); reason != "" {
 				slog.Warn("plugin registry: platform skipped", "plugin", pkg.Key, "version", pkg.Version,
 					"platform", p.ID, "reason", reason)
 			}
 		}
-		pf := ext.Platform()
 		// Account types are served by the declaring plugin, which must
 		// implement platform.adapter.v1 (ARCHITECTURE 6.6) and hold the
 		// accounts.credentials grant: without it the plugin never receives
@@ -398,6 +400,19 @@ func build(number uint64, exts []Extension) *generation {
 				continue
 			}
 			seen[ap.Platform] = true
+			// An account type may serve a platform another plugin declares,
+			// which need not be installed or enabled yet, so validation
+			// deliberately does not check that the platform exists and this
+			// cannot be an install error. But while it does not exist the type
+			// serves no endpoint at all and every request for that platform
+			// ends in "no enabled account type serves this endpoint", so warn
+			// once per generation: a misspelt platform id is indistinguishable
+			// from a platform whose plugin is simply not enabled yet.
+			if _, ok := g.platByID[ap.Platform]; !ok {
+				slog.Warn("plugin registry: account type serves a platform no platform of this generation declares",
+					"plugin", atb.Plugin.Key, "accountType", atb.Type.ID, "platform", ap.Platform,
+					"hint", "the plugin declaring the platform may not be installed or enabled yet, or the platform id is misspelled")
+			}
 			g.atByPlat[ap.Platform] = append(g.atByPlat[ap.Platform], atb)
 		}
 	}

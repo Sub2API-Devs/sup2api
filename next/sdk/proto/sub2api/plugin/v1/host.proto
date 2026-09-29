@@ -34,6 +34,87 @@ service HostService {
   // instances on every other live node (AppService.OnBroadcast), best
   // effort, e.g. "rules changed, reload". Payload at most 64 KiB.
   rpc Publish(PublishRequest) returns (PublishResponse);
+
+  // ---------------------------------------------------------------- accounts
+  //
+  // The two calls below let a plugin read the accounts of ITS OWN account
+  // types outside a gateway request - a plugin's own HTTP routes get only
+  // Caller{user_id, request_id, client_ip, locale}, so without them a console
+  // page that has to talk to the upstream with the account's own credentials
+  // (the Volcengine Ark asset library signs its OpenAPI calls with the
+  // account's AK/SK) cannot be built at all.
+  //
+  // They do not widen what a plugin may see: BuildUpstreamRequest already
+  // hands it the decrypted credentials of exactly these accounts on every
+  // single request. What they do change is WHEN it may look - with no traffic,
+  // and for every account at once - so two limits are part of the contract and
+  // not optional:
+  //
+  //   * only accounts whose account type this plugin declares are visible.
+  //     Anything else is reported as NOT_FOUND, never PERMISSION_DENIED: a
+  //     different code would tell the plugin that an account id it may not
+  //     read exists.
+  //   * every GetAccountCredentials call writes an audit_logs row before the
+  //     credentials are returned. A failed audit write fails the call.
+
+  // accounts.read (Medium): metadata of the accounts of this plugin's account
+  // types. The response carries no credential field of any kind; it is the
+  // list a plugin needs to offer "pick an account" in its own console page.
+  // Paginated: at most 200 rows per call (100 by default).
+  rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse);
+
+  // accounts.credentials {"types":"own"} (Critical): the decrypted credentials
+  // of ONE account of this plugin's account types. Audited on every call.
+  rpc GetAccountCredentials(GetAccountCredentialsRequest) returns (GetAccountCredentialsResponse);
+}
+
+message ListAccountsRequest {
+  // Restrict to one account type id declared by this plugin; "" = all of them.
+  // An unknown type simply matches nothing (it names no account the plugin
+  // could see anyway).
+  string type = 1;
+  // Keyset cursor: "" starts at the lowest account id, otherwise pass the
+  // next_cursor of the previous response. Rows are ordered by id.
+  string cursor = 2;
+  // Page size, 1..200; 0 or out of range uses 100.
+  int32 limit = 3;
+  // Include accounts whose status is not "active" (disabled, error) and
+  // accounts taken out of scheduling. Default: only active, schedulable ones.
+  bool include_inactive = 4;
+}
+
+message ListAccountsResponse {
+  repeated AccountSummary accounts = 1;
+  // Cursor of the next page; "" when this was the last one.
+  string next_cursor = 2;
+}
+
+// AccountSummary is account metadata WITHOUT credentials. Deliberately no
+// credentials field exists on this message: ListAccounts is authorised by
+// accounts.read, which is not a credential grant.
+message AccountSummary {
+  int64 id = 1;
+  string name = 2;
+  // Account type id, always one this plugin declares.
+  string type = 3;
+  string status = 4;         // active | disabled | error
+  // Whether the account takes gateway traffic (accounts.schedulable).
+  bool enabled = 5;
+  // Non-sensitive settings, the account type's settingsFields (base_url ...).
+  // These are stored in plain JSONB and are the same values the plugin is
+  // given as Account.settings_json on the gateway path.
+  string settings_json = 6;
+}
+
+message GetAccountCredentialsRequest {
+  int64 account_id = 1;
+}
+
+message GetAccountCredentialsResponse {
+  AccountSummary account = 1;
+  // Decrypted credentials (the non-settings part), the same JSON the plugin
+  // receives as Account.credentials_json in BuildUpstreamRequest.
+  string credentials_json = 2;
 }
 
 message PublishRequest {

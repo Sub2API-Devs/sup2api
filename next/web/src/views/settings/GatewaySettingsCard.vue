@@ -13,11 +13,17 @@ const auth = useAuthStore()
 const canManage = computed(() => auth.has('settings:manage'))
 
 type Key = keyof GatewaySettings
-const DEFAULTS: GatewaySettings = { max_attempts: 3, platform_call_timeout_ms: 2000, default_hook_timeout_ms: 300 }
+const DEFAULTS: GatewaySettings = {
+  max_attempts: 3,
+  platform_call_timeout_ms: 2000,
+  default_hook_timeout_ms: 300,
+  platform_hotpath_timeout_ms: 300
+}
 const fields: Array<{ key: Key; unit?: string }> = [
   { key: 'max_attempts' },
   { key: 'platform_call_timeout_ms', unit: 'ms' },
-  { key: 'default_hook_timeout_ms', unit: 'ms' }
+  { key: 'default_hook_timeout_ms', unit: 'ms' },
+  { key: 'platform_hotpath_timeout_ms', unit: 'ms' }
 ]
 
 const loading = ref(false)

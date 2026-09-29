@@ -22,6 +22,87 @@ service PlatformService {
   // sends it and extracts the ids (console "fetch models" button, CONTRACTS
   // §19). Optional: answer UNIMPLEMENTED when the upstream has no such API.
   rpc BuildModelsRequest(BuildModelsRequestRequest) returns (BuildModelsRequestResponse);
+  // Resolves the model of one gateway request for endpoints whose model is
+  // not in the request at all (manifest request.modelSource: "plugin").
+  //
+  // Implemented by the plugin declaring the endpoint's PLATFORM, not the one
+  // owning the account type: it runs before scheduling, when no account has
+  // been picked yet. The host calls it only for endpoints declaring
+  // modelSource "plugin", on the hot path, before hook matching, the group
+  // allowlist, pricing and the candidate `models` filter - the model decides
+  // all four, so there is no later point to ask.
+  //
+  // Optional: answer UNIMPLEMENTED when no endpoint needs it. A plugin whose
+  // endpoint declares modelSource "plugin" must also declare capability
+  // "platform.adapter.v1" (install-time check): without it the host has no
+  // PlatformService to call at all.
+  //
+  // Failure is never permissive: an UNIMPLEMENTED, an error, a timeout or an
+  // empty model all end the request with 400 "model is required". Without a
+  // model the host cannot price or limit the request, so serving it would
+  // serve it for free.
+  rpc ResolveModel(ResolveModelRequest) returns (ResolveModelResponse);
+  // Reads the token usage of one finished upstream response for endpoints
+  // whose usage the declarative rules cannot express (manifest
+  // usage.source: "plugin").
+  //
+  // Implemented by the plugin declaring the PLATFORM of the upstream
+  // response, like ResolveModel - the response shape belongs to the platform,
+  // not to the account type that happened to serve it. A plugin whose
+  // platform or endpoint declares usage.source "plugin" must also declare
+  // capability "platform.adapter.v1" (install-time check).
+  //
+  // Called AFTER the response has been forwarded in full, so it costs the
+  // client nothing: it only delays the usage record, which is written
+  // asynchronously anyway. It must never be moved before forwarding.
+  //
+  // What it receives depends on the response shape, and in neither case is
+  // it the whole stream:
+  //   - non-streaming: the whole body, but only while the body fits in
+  //     usage.maxBytes; a larger body is not handed over at all (half a JSON
+  //     document parses into wrong numbers, which is worse than none);
+  //   - streaming: only the events whose name the endpoint listed in
+  //     usage.streamEvents, in arrival order, bounded by a host event count
+  //     cap and by usage.maxBytes. Collection stops at the cap and
+  //     `truncated` says so; the host never buffers the whole stream.
+  //
+  // Optional: answer UNIMPLEMENTED when no endpoint needs it. Failure is
+  // NEVER fatal to the request - the response already reached the client. On
+  // an error, a timeout, an UNIMPLEMENTED or a nil answer the host falls
+  // back to the declarative rules it ran while forwarding and marks the
+  // usage record so the silence is visible.
+  rpc ExtractUsage(ExtractUsageRequest) returns (UsageReport);
+  // Builds the request that asks the upstream how a PRE-CHARGED entry ended
+  // (manifest: none - an endpoint arms this by having its ExtractUsage return
+  // a Reservation, CONTRACTS §25.4).
+  //
+  // This is BuildTestRequest / BuildModelsRequest's shape, and it is the
+  // shape on purpose. The plugin only DESCRIBES the request and READS the
+  // answer; the host is what sends it, through the account's proxy, behind
+  // the SSRF guard, under the host's timeout. Which means a plugin that
+  // reconciles asynchronous work needs:
+  //   - no "net" host permission: it never opens a socket;
+  //   - no way to list accounts: the host hands it the one that served the
+  //     request, credentials included, exactly as BuildUpstreamRequest does;
+  //   - no "app.jobs.v1" timer of its own: the host drives the schedule,
+  //     with the backoff, the deadline and the multi-node locking that a
+  //     plugin would otherwise each have to reinvent.
+  // Do not "simplify" this into a single call that lets the plugin fetch:
+  // every one of those three would have to be opened up again.
+  //
+  // Optional: answer UNIMPLEMENTED when no endpoint reserves. A plugin that
+  // returns a Reservation and then cannot build the request has its entries
+  // retried until the deadline and then abandoned - the estimate stands as
+  // the final charge.
+  rpc BuildReconcileRequest(BuildReconcileRequestRequest) returns (BuildReconcileRequestResponse);
+  // Reads the upstream's answer to the request above and says whether the
+  // work is still running, finished (with its REAL usage) or failed. The
+  // host prices, charges the difference or refunds, and closes the usage row.
+  //
+  // Like every other call in this file it states upstream facts only: there
+  // is no field here for an amount, and the tokens it reports are priced by
+  // the administrator's price table exactly like a live request's.
+  rpc ParseReconcileResponse(ParseReconcileResponseRequest) returns (ReconcileResult);
 }
 
 message ValidateCredentialsRequest {
@@ -87,6 +168,21 @@ message ClassifyErrorResponse {
   int32 client_status = 5;         // status returned to the client, 0 = upstream status
   string client_error_type = 6;    // protocol error type, e.g. "rate_limit_error"
   string client_message = 7;
+  // Machine-readable error code rendered in the client error body ("code" in
+  // the anthropic/openai/plain formats, "reason" in the gemini one). It is the
+  // only place the plugin's own classification of an upstream failure reaches
+  // the client: without it every upstream error looks like "upstream_error",
+  // so a content-moderation block and a bad parameter are indistinguishable to
+  // an SDK. Leave it empty to keep "upstream_error" (the pre-existing
+  // behaviour, which every plugin written before this field gets).
+  //
+  // The value ends up in a body the client reads, so the host constrains it:
+  // at most 64 bytes matching ^[A-Za-z0-9][A-Za-z0-9._:-]*$ (upstream codes
+  // such as "InputTextSensitiveContentDetected" or "context_length_exceeded"
+  // fit). A value outside that is DROPPED, not truncated - a truncated code is
+  // a different code, and silently inventing one is worse than falling back to
+  // "upstream_error" - and the host logs a warning.
+  string client_error_code = 8;
 }
 
 message BuildTestRequestRequest {
@@ -123,4 +219,215 @@ message BuildModelsRequestResponse {
   string ids_path = 5;
   // Prefix removed from every id, e.g. "models/" for Gemini.
   string strip_prefix = 6;
+}
+
+message ResolveModelRequest {
+  // meta.model is empty (that is what this call answers); meta.path_params
+  // and meta.query carry the parts of the URL the endpoint declared.
+  RequestMeta meta = 1;
+  // Values of the platform's request fields, JSON-encoded, keyed by path -
+  // the same map BuildUpstreamRequest receives, read from the client body
+  // before any conversion.
+  map<string, string> fields = 2;
+  // Client headers from the platform's passHeaders allow-list (lower-cased).
+  map<string, string> inbound_headers = 3;
+}
+
+message ResolveModelResponse {
+  // The model this request bills as. Empty ends the request with 400
+  // "model is required".
+  string model = 1;
+  // Whether the response streams. It replaces request.streamPath, which such
+  // an endpoint must not declare; an endpoint declaring request.stream (it
+  // always streams) keeps that, the plugin cannot turn streaming off.
+  bool stream = 2;
+}
+
+// StreamEvent is one SSE event of an upstream stream that matched the
+// endpoint's usage.streamEvents allow-list.
+message StreamEvent {
+  // The event name as the host resolved it: the "event:" line when the
+  // upstream sent one, otherwise the "type" field of the data object (the
+  // same resolution the declarative usage.sse rules use, so a plugin and a
+  // rule match the same events).
+  string name = 1;
+  // The event's data, exactly as it arrived: never joined with another
+  // event, never rewritten.
+  bytes data = 2;
+}
+
+message ExtractUsageRequest {
+  RequestMeta meta = 1;
+  // The account that served the request. Credentials are NEVER included:
+  // this call reads a response, it does not build one. A plugin that needs
+  // credentials outside a request asks HostService.GetAccountCredentials,
+  // which audits the read (CONTRACTS §26.6). settings_json is present only
+  // when the account type belongs to the plugin being called.
+  Account account = 2;
+  // Upstream HTTP status (always 2xx: a failed attempt is classified by
+  // ClassifyError instead and never reaches here).
+  int32 status = 3;
+  // Upstream response headers, lower-cased.
+  map<string, string> headers = 4;
+  // Non-streaming: the whole response body. Empty when the body was larger
+  // than usage.maxBytes (the host then skips the call entirely) and when the
+  // response streamed.
+  bytes body = 5;
+  // Streaming: the events matching usage.streamEvents, in arrival order.
+  // Empty for a non-streaming response.
+  repeated StreamEvent events = 6;
+  // True when the host stopped collecting events before the stream ended
+  // (the event count cap or usage.maxBytes was reached), so the plugin knows
+  // it is looking at a prefix. Never set for a non-streaming response: an
+  // oversized body is not handed over at all.
+  bool truncated = 7;
+}
+
+// UsageReport is what the plugin states about the upstream response. Every
+// field is an UPSTREAM FACT. Attribution (user, api key, group, account),
+// pricing (multiplier, price id, expression, cost) and the request's own
+// facts (status, attempts, latency, node, timestamps) are filled by the host
+// and OVERWRITE anything a plugin might try to say about them - this message
+// has no field for them on purpose.
+message UsageReport {
+  // Token counts; zero-valued when the upstream reports none.
+  UsageTokens tokens = 1;
+  // Extra metering facts, keyed exactly like the endpoint's usage.facts
+  // declarations (price expressions read them as u("key")). A key the
+  // manifest does not declare is dropped with a warning, and a value that
+  // does not fit the declared type (number / boolean / enum) is dropped the
+  // same way: what a price expression can read stays what the manifest says
+  // exists.
+  map<string, string> facts = 2;
+  // The model the upstream actually served, when it differs from the one the
+  // request was billed as (usage_logs.upstream_model).
+  string upstream_model = 3;
+  // The plugin's reading of an upstream error inside a 2xx response (an
+  // error event in a stream, a body that reports a failure with status 200).
+  // Empty leaves whatever the host itself concluded.
+  string error_type = 4;
+  string error_message = 5;
+  // Free-form JSON object stored in usage_logs.plugin_detail and shown in
+  // the console's usage detail. At most 4 KiB.
+  //
+  // The column is jsonb, so an over-long document cannot be stored as a
+  // prefix - half a JSON document is not a JSON document. The host therefore
+  // replaces it with {"_truncated":true,"_bytes":N} and warns; a document
+  // that is not a JSON object at all becomes {} and warns. Keep it small and
+  // keep it an object.
+  string detail_json = 6;
+  // Set when this request only STARTED work upstream whose real usage is not
+  // known yet - a video generation job, say. The host prices the estimate,
+  // charges it through the ordinary ledger path, marks the usage row
+  // "reserved" and reconciles it later through the two rpcs below. Leave it
+  // unset (the case for every endpoint that answers within its response) and
+  // nothing about this request changes.
+  Reservation reserve = 7;
+}
+
+// Reservation is a plugin's statement that the work is not finished and its
+// own estimate of it (PLUGIN-EXECUTES-CORE-RECORDS §3.4).
+//
+// The estimate is what keeps a user with a $0 balance from submitting a
+// thousand video jobs: the pre-request balance check is a cached read that
+// tolerates a brief overdraft, and a job that answers in an hour turns that
+// "brief" into an hour per job, all of them in flight at once.
+message Reservation {
+  // The plugin's own id for the work (a task id). Unique per plugin: it is
+  // half of the key of the host's pending_settlements table, so submitting
+  // the same ref_id twice registers one entry, not two. At most 200 bytes.
+  string ref_id = 1;
+  // The ESTIMATE. Priced, charged and recorded exactly like a real usage
+  // report, and it stays the charge if the reconcile never succeeds.
+  UsageTokens tokens = 2;
+  // Estimated metering facts, keyed like the endpoint's usage.facts, same
+  // rules as UsageReport.facts.
+  map<string, string> facts = 3;
+  // How long to wait before the first reconcile. 0 (or less) leaves it to
+  // the host's backoff. The host clamps it to its own backoff ceiling.
+  int32 next_check_after_sec = 4;
+  // UPSTREAM FACT: how long this entry can be asked about at all - an Ark
+  // video task is queryable for 7 days, after which no answer exists to be
+  // had. The host clamps it with the max_reconcile_age_sec setting; 0 takes
+  // the host's default. When it passes, the host STOPS asking and the
+  // estimate becomes the final charge (it does not refund: the call really
+  // was made and the upstream really did the work).
+  int32 deadline_sec = 5;
+}
+
+// ReconcileEntry is one pre-charged row the host is asking about.
+message ReconcileEntry {
+  // The ref_id the plugin gave in its Reservation.
+  string ref_id = 1;
+  // The gateway request this entry came from (usage_logs.request_id), so a
+  // plugin can correlate it with what it stored in detail_json.
+  string request_id = 2;
+  // How many times this entry has already been checked; 0 on the first.
+  int32 attempts = 3;
+  // When the entry was registered, and the moment after which the host stops
+  // asking (the clamped deadline). Unix seconds.
+  int64 created_at_unix = 4;
+  int64 deadline_at_unix = 5;
+}
+
+message BuildReconcileRequestRequest {
+  ReconcileEntry entry = 1;
+  // The account that served the original request. credentials_json is filled
+  // ONLY when the account's type is declared by the plugin being called -
+  // i.e. only when this plugin already receives the same credentials on every
+  // BuildUpstreamRequest for that account, so nothing new is exposed. When
+  // the platform and the account type come from different plugins the
+  // credentials are withheld and the plugin should answer UNIMPLEMENTED or
+  // build a request that does not need them.
+  Account account = 2;
+}
+
+message BuildReconcileRequestResponse {
+  string method = 1;               // default "GET"
+  // Absolute http(s) URL. The host rejects private/loopback/link-local
+  // targets (SSRF guard) unless the deployment allows them, and sends it
+  // through the account's proxy.
+  string url = 2;
+  map<string, string> headers = 3;
+  string body_json = 4;            // optional
+}
+
+message ParseReconcileResponseRequest {
+  ReconcileEntry entry = 1;
+  Account account = 2;             // credentials as in BuildReconcileRequest
+  // Upstream status, 0 for a transport error (see transport_error).
+  int32 status = 3;
+  map<string, string> headers = 4; // lower-cased
+  bytes body = 5;                  // truncated to the host's reconcile body cap
+  string transport_error = 6;
+}
+
+// ReconcileResult is what the plugin read out of that answer.
+message ReconcileResult {
+  enum State {
+    // Still running. The host reschedules with next_check_after_sec (or its
+    // own backoff) and counts one attempt. This is the ZERO VALUE, so a
+    // plugin that cannot tell yet - and an empty answer - means "ask again",
+    // never "settle for nothing".
+    PENDING = 0;
+    // Finished: tokens carries the REAL usage. The host reprices, charges
+    // the difference (kind "usage") or refunds it (kind "refund"), and
+    // closes the row as billed.
+    SETTLED = 1;
+    // The work failed upstream and produced nothing. The host refunds the
+    // whole reservation and records the row as free with reason as its
+    // error type.
+    FAILED = 2;
+  }
+  State state = 1;
+  // PENDING only: when to ask again. 0 leaves it to the host's backoff; the
+  // host clamps it to the backoff ceiling either way.
+  int32 next_check_after_sec = 2;
+  // SETTLED only: the real usage, replacing the estimate.
+  UsageTokens tokens = 3;
+  // SETTLED only: the real metering facts, replacing the estimated ones.
+  map<string, string> facts = 4;
+  // FAILED only: why, recorded as usage_logs.error_type (truncated to 50
+  // bytes) and error_message.
+  string reason = 5;
 }

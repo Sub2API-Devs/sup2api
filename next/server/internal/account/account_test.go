@@ -66,6 +66,22 @@ func (*fakePlatform) BuildUpstreamRequest(context.Context, *pluginv1.BuildUpstre
 	return nil, core.ErrInternal
 }
 
+func (*fakePlatform) ResolveModel(context.Context, *pluginv1.ResolveModelRequest) (*pluginv1.ResolveModelResponse, error) {
+	return nil, core.ErrInternal
+}
+
+func (*fakePlatform) ExtractUsage(context.Context, *pluginv1.ExtractUsageRequest) (*pluginv1.UsageReport, error) {
+	return nil, core.ErrInternal
+}
+
+func (*fakePlatform) BuildReconcileRequest(context.Context, *pluginv1.BuildReconcileRequestRequest) (*pluginv1.BuildReconcileRequestResponse, error) {
+	return nil, core.ErrInternal
+}
+
+func (*fakePlatform) ParseReconcileResponse(context.Context, *pluginv1.ParseReconcileResponseRequest) (*pluginv1.ReconcileResult, error) {
+	return nil, core.ErrInternal
+}
+
 func (p *fakePlatform) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequest) (*pluginv1.ClassifyErrorResponse, error) {
 	p.mu.Lock()
 	p.classes = append(p.classes, in)

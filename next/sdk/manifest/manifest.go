@@ -132,7 +132,37 @@ type Endpoint struct {
 	Billing     string          `json:"billing"`     // usage | free
 	// Usage overrides the platform usage rules for this endpoint.
 	Usage *UsageRules `json:"usage,omitempty"`
+	// UsageSource decides WHO reads the token usage out of this endpoint's
+	// upstream responses: UsageSourceRules (the default, and what "" means)
+	// applies the declarative sse/json maps of the usage rules in effect,
+	// UsageSourcePlugin asks the plugin declaring the endpoint's platform
+	// through PlatformService.ExtractUsage once the response has been
+	// forwarded in full.
+	//
+	// It sits on the endpoint, beside Request.ModelSource, and deliberately
+	// NOT on UsageRules. The rules follow the override chain of CONTRACTS
+	// §13, whose last link - AccountPlatform.usage[protocol] - belongs to a
+	// THIRD plugin and replaces the whole block. A source living there could
+	// be redirected by that plugin, and, worse, an override that simply does
+	// not mention it would switch the endpoint back to the declarative rules
+	// without saying anything. On the endpoint there is exactly one reading
+	// of "who answers ExtractUsage", and no ban is needed to keep it.
+	UsageSource string `json:"usageSource,omitempty"`
+	// UsageStreamEvents are the SSE event names the host collects for
+	// ExtractUsage on a streaming response - and the only ones. The whole
+	// stream is never buffered. Only read with UsageSource
+	// UsageSourcePlugin.
+	UsageStreamEvents []string `json:"usageStreamEvents,omitempty"`
+	// UsageMaxBytes caps what ExtractUsage receives: the non-streaming body,
+	// and the total size of the collected stream events. 0 uses the host
+	// default. Only read with UsageSource UsageSourcePlugin.
+	UsageMaxBytes int64 `json:"usageMaxBytes,omitempty"`
 }
+
+// PluginUsage reports whether this endpoint's usage is read by the plugin
+// declaring its platform (PlatformService.ExtractUsage) instead of by the
+// declarative usage rules.
+func (e Endpoint) PluginUsage() bool { return e.UsageSource == UsageSourcePlugin }
 
 type EndpointAuth struct {
 	// Request headers carrying the API key, checked in order. "authorization"
@@ -146,12 +176,28 @@ type EndpointRequest struct {
 	ModelPath string `json:"modelPath,omitempty"` // gjson path in the body
 	// ModelParam reads the model from a path parameter instead (e.g. "model").
 	ModelParam string `json:"modelParam,omitempty"`
-	StreamPath string `json:"streamPath,omitempty"`
+	// ModelSource asks a plugin for the model instead of reading it out of the
+	// request. The only value is ModelSourcePlugin: the plugin declaring the
+	// endpoint's platform answers PlatformService.ResolveModel. Mutually
+	// exclusive with ModelPath and ModelParam, and with StreamPath (ResolveModel
+	// answers both the model and whether the response streams).
+	ModelSource string `json:"modelSource,omitempty"`
+	StreamPath  string `json:"streamPath,omitempty"`
 	// Stream marks endpoints that always stream (e.g. streamGenerateContent).
 	Stream          bool     `json:"stream,omitempty"`
 	PromptTextPaths []string `json:"promptTextPaths,omitempty"`
 	MaxBodyBytes    int64    `json:"maxBodyBytes,omitempty"` // 0 = host default
+	// QueryParams are the query parameter names the host puts in
+	// RequestMeta.query, and the only ones - like RequestFields for the body.
+	// Matched case-insensitively; the endpoint's Auth.Query parameter may not
+	// be listed and is never passed on.
+	QueryParams []string `json:"queryParams,omitempty"`
 }
+
+// ModelSourcePlugin is the only value of EndpointRequest.ModelSource: the
+// plugin declaring the endpoint's platform answers PlatformService.ResolveModel
+// with the model (and whether the response streams) for every request.
+const ModelSourcePlugin = "plugin"
 
 type EndpointResp struct {
 	Stream    string `json:"stream,omitempty"` // "sse"
@@ -219,6 +265,21 @@ type UsageRules struct {
 	// Extra metering facts usable in price expressions as u("key").
 	Facts map[string]UsageFact `json:"facts,omitempty"`
 }
+
+// Values of Endpoint.UsageSource.
+const (
+	// UsageSourceRules is the default: the host reads usage from the
+	// declarative sse/json maps of the rules in effect. An empty
+	// Endpoint.UsageSource means this.
+	UsageSourceRules = "rules"
+	// UsageSourcePlugin asks PlatformService.ExtractUsage instead.
+	//
+	// The declarative rules are not replaced by the plugin: the host keeps
+	// applying them while it forwards (they cost nothing extra and detect
+	// stream errors), and falls back to what they produced when the plugin
+	// call fails.
+	UsageSourcePlugin = "plugin"
+)
 
 // Usage map values are gjson paths; "a+b" sums several numeric paths
 // (missing ones count as 0), e.g. output tokens plus thinking tokens.

@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -62,6 +64,26 @@ type call struct {
 	// session identifies the request for the spm limit (sessionIdentity).
 	session string
 	rec     *core.UsageRecord
+
+	// metaPathParams and metaQuery are the bounded maps handed to plugins in
+	// RequestMeta; built once per request because meta() runs for every hook,
+	// ranker and upstream attempt. nil when the pattern has no parameters /
+	// the endpoint declares no request.queryParams.
+	metaPathParams map[string]string
+	metaQuery      map[string]string
+	metaMapsDone   bool
+
+	// modelResolved marks that ResolveModel already answered for the current
+	// body (endpoints with request.modelSource "plugin" only). setBody clears
+	// it, so the plugin is asked again exactly when a hook changed the body.
+	modelResolved bool
+
+	// usage is the armed PlatformService.ExtractUsage call for endpoints
+	// declaring usage.source "plugin" (usageplugin.go); nil for every other
+	// endpoint, which is how they pay nothing for the feature. It is filled
+	// at the end of forwarding and consumed by submit, on its own goroutine,
+	// after the handler returned.
+	usage *pendingExtract
 }
 
 // serve runs the proxy pipeline (ARCHITECTURE 6.1) for one request.
@@ -116,7 +138,7 @@ func (c *call) run(ctx context.Context) {
 		c.fail(e)
 		return
 	}
-	if e := c.checkModel(); e != nil {
+	if e := c.checkModel(ctx); e != nil {
 		c.fail(e)
 		return
 	}
@@ -126,7 +148,7 @@ func (c *call) run(ctx context.Context) {
 		c.fail(e)
 		return
 	}
-	if e := c.checkModel(); e != nil { // hooks may have patched the model
+	if e := c.checkModel(ctx); e != nil { // hooks may have patched the model
 		c.fail(e)
 		return
 	}
@@ -238,11 +260,22 @@ func (c *call) readBody() *gwError {
 
 // checkModel (re)reads model and stream and applies the group allowlist.
 // The model comes from the path parameter request.modelParam when declared
-// (e.g. Gemini's /v1beta/models/:model:generateContent), else from the body
-// at request.modelPath. request.stream marks endpoints that always stream.
-func (c *call) checkModel() *gwError {
+// (e.g. Gemini's /v1beta/models/:model:generateContent), from the body at
+// request.modelPath, or from the platform plugin when the endpoint declares
+// request.modelSource "plugin" (resolveModelFromPlugin).
+// request.stream marks endpoints that always stream.
+//
+// It runs before hooks and again after them, and it must stay there: the
+// model decides hook matching, the group allowlist, pricing and the `models`
+// filter on the candidate accounts, so every one of those needs it already
+// resolved.
+func (c *call) checkModel(ctx context.Context) *gwError {
 	req := c.ep.Request
 	switch {
+	case req.ModelSource == manifest.ModelSourcePlugin:
+		if e := c.resolveModelFromPlugin(ctx); e != nil {
+			return e
+		}
 	case req.ModelParam != "":
 		c.model = strings.TrimSpace(c.params[req.ModelParam])
 	case req.ModelPath != "":
@@ -252,9 +285,16 @@ func (c *call) checkModel() *gwError {
 		return &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code,
 			Message: "model is required", RecordType: errTypeInvalidRequest}
 	}
+	// request.stream is an endpoint-level fact ("this endpoint only streams")
+	// and always wins, including over a plugin: a plugin answering false would
+	// have the host read an SSE response as JSON. Otherwise the plugin's
+	// answer replaces request.streamPath, which such an endpoint may not
+	// declare (manifest validation).
 	switch {
 	case req.Stream:
 		c.stream = true
+	case req.ModelSource == manifest.ModelSourcePlugin:
+		// c.stream was set by resolveModelFromPlugin.
 	case req.StreamPath != "":
 		c.stream = gjson.GetBytes(c.body, req.StreamPath).Bool()
 	}
@@ -263,6 +303,53 @@ func (c *call) checkModel() *gwError {
 	if allow := c.principal.Group.ModelAllowlist; len(allow) > 0 && !anyGlob(allow, c.model) {
 		return fromCore(core.ErrModelNotAllowed.WithDetails(map[string]any{"model": c.model}), errTypeModelNotAllowed)
 	}
+	return nil
+}
+
+// resolveModelFromPlugin asks PlatformService.ResolveModel of the plugin
+// declaring the endpoint's platform for the model and the stream flag
+// (CONTRACTS §25.2). Endpoints that do not declare request.modelSource
+// "plugin" never reach it, so nothing existing pays for this.
+//
+// Every failure is a 400 "model is required" — a timeout, a transport error,
+// an UNIMPLEMENTED from a plugin that never wrote the method, an empty
+// answer. Without a model the host cannot resolve a price, apply the group
+// allowlist or filter the candidate accounts, so letting the request through
+// would serve it for free.
+//
+// The one exception is a nil Client: the plugin declared the platform without
+// declaring platform.adapter.v1 (legal per §13, and rejected at install time
+// since B, but a package installed earlier or a built-in platform can still
+// get here). That is a host-side misconfiguration, not a client mistake, so
+// it is a 500 with a log naming the plugin.
+func (c *call) resolveModelFromPlugin(ctx context.Context) *gwError {
+	if c.modelResolved {
+		return nil // same body as the last call: the answer cannot have changed
+	}
+	pb, ok := c.gen.Platform(c.platform)
+	if !ok || pb.Client == nil {
+		slog.ErrorContext(ctx, "gateway: endpoint declares modelSource \"plugin\" but its platform has no plugin client",
+			"platform", c.platform, "plugin", c.plugin.Key, "endpoint", c.ep.Path, "protocol", c.ep.Protocol,
+			"builtin", pb.Builtin, "found", ok)
+		return fromCore(core.ErrInternal.WithMessage("the platform of this endpoint cannot resolve models"), errTypeInternal)
+	}
+	fields := map[string]string{}
+	for _, p := range c.pf.RequestFields {
+		if r := getJSON(c.body, p); r != "" {
+			fields[p] = r
+		}
+	}
+	rctx, cancel := context.WithTimeout(ctx, c.gw.hotpathTimeout())
+	resp, err := pb.Client.ResolveModel(rctx, &pluginv1.ResolveModelRequest{
+		Meta: c.meta(), Fields: fields, InboundHeaders: c.passHeaders(c.pf.PassHeaders)})
+	cancel()
+	if err != nil || resp.GetModel() == "" {
+		slog.InfoContext(ctx, "gateway: resolve model failed", "plugin", pb.Plugin.Key,
+			"platform", c.platform, "protocol", c.ep.Protocol, "err", err)
+		return &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code,
+			Message: "model is required", RecordType: errTypeInvalidRequest}
+	}
+	c.model, c.stream, c.modelResolved = resp.GetModel(), resp.GetStream(), true
 	return nil
 }
 
@@ -324,14 +411,112 @@ func (c *call) capturePriceInputs(rule *core.PriceRule) {
 // attempts on a converting route override it with the upstream protocol
 // (metaFor).
 func (c *call) meta() *pluginv1.RequestMeta {
+	if !c.metaMapsDone {
+		c.metaPathParams = boundMeta(c.params)
+		c.metaQuery = boundMeta(c.declaredQuery())
+		c.metaMapsDone = true
+	}
 	m := &pluginv1.RequestMeta{
 		RequestId: c.rid, Protocol: c.ep.Protocol, ClientProtocol: c.ep.Protocol,
 		Model: c.model, Stream: c.stream, ClientIp: c.c.ClientIP(),
+		PathParams: c.metaPathParams, Query: c.metaQuery,
 	}
 	if p := c.principal; p != nil {
 		m.UserId, m.ApiKeyId, m.GroupId = p.UserID, p.KeyID, p.Group.ID
 	}
 	return m
+}
+
+// declaredQuery returns the query parameters the endpoint listed in
+// request.queryParams, and nothing else. The query string can carry
+// credentials — the endpoint's auth.query parameter, and whatever the next
+// upstream invents — so the host never hands over the whole thing and never
+// tries to guess which names are secret: an allow-list is wrong in the safe
+// direction, a deny-list in the unsafe one.
+//
+// Matching is case-insensitive in both directions, because url.Values is a
+// case-sensitive map and HTTP clients are not: "?Alt=sse" must satisfy a
+// declared "alt", and "?Key=sk-..." must still be excluded by auth.query
+// "key". Install-time validation guarantees no declared name equals
+// auth.query under EqualFold, so the exclusion can never be overridden here.
+func (c *call) declaredQuery() map[string]string {
+	names := c.ep.Request.QueryParams
+	if len(names) == 0 || c.c.Request == nil || c.c.Request.URL == nil {
+		return nil
+	}
+	values := c.c.Request.URL.Query()
+	if len(values) == 0 {
+		return nil
+	}
+	// Sorted, so a client sending both "?alt=" and "?Alt=" gets the same
+	// answer on every node and every attempt.
+	sent := make([]string, 0, len(values))
+	for k := range values {
+		sent = append(sent, k)
+	}
+	sort.Strings(sent)
+	out := make(map[string]string, len(names))
+	for _, name := range names {
+		if auth := c.ep.Auth.Query; auth != "" && strings.EqualFold(name, auth) {
+			continue
+		}
+		for _, k := range sent {
+			vs := values[k]
+			if !strings.EqualFold(k, name) || len(vs) == 0 {
+				continue
+			}
+			// The key is the name as the client sent it; only the first value
+			// of a repeated parameter travels.
+			out[k] = vs[0]
+			break
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// metaMapMaxKeys, metaMapMaxKeyBytes and metaMapMaxValueBytes bound the
+// RequestMeta path_params and query maps: both come straight from the client.
+const (
+	metaMapMaxKeys       = 32
+	metaMapMaxKeyBytes   = 64
+	metaMapMaxValueBytes = 512
+)
+
+// boundMeta caps in to metaMapMaxKeys entries (lowest key names first, so the
+// choice is stable) and truncates keys and values on a UTF-8 boundary. It
+// returns nil for an empty map: the field is optional and a nil map costs no
+// allocation on the hot path.
+//
+// The map comes straight off the wire, so invalid UTF-8 is dropped first:
+// proto3 string fields must be valid UTF-8 and marshalling a RequestMeta with
+// a stray byte would fail every plugin call of the request.
+func boundMeta(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(in))
+	for k := range in {
+		keys = append(keys, k)
+	}
+	if len(keys) > metaMapMaxKeys {
+		sort.Strings(keys)
+		keys = keys[:metaMapMaxKeys]
+	}
+	out := make(map[string]string, len(keys))
+	for _, k := range keys {
+		name := truncateUTF8(strings.ToValidUTF8(k, ""), metaMapMaxKeyBytes)
+		if name == "" {
+			continue
+		}
+		out[name] = truncateUTF8(strings.ToValidUTF8(in[k], ""), metaMapMaxValueBytes)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // metaFor is meta for an upstream attempt on rt.
@@ -372,6 +557,13 @@ func (c *call) fail(e *gwError) {
 }
 
 // submit finalizes the usage record and hands it to the settler.
+//
+// For an endpoint whose usage a plugin reports, the plugin is asked here
+// rather than in forward(): the handler returns as soon as submit does, so
+// the response is terminated for the client before a remote call is made. The
+// record is finished on that goroutine instead (finishSubmit), which is the
+// one thing that was always allowed to be late - it goes to an asynchronous
+// settler either way.
 func (c *call) submit() {
 	rec := c.rec
 	if rec == nil || c.g.d.Settler == nil {
@@ -381,11 +573,47 @@ func (c *call) submit() {
 	if rec.StatusCode == 0 {
 		rec.StatusCode = c.c.Writer.Status()
 	}
+	// Read off the gin context here: it is pooled and reused once the handler
+	// returns, so nothing below this point may touch it.
+	billing := c.ep.Billing
+	if p := c.usage; p != nil {
+		c.usage = nil
+		// g.wg is the gateway's own group, so Close waits for the extraction
+		// instead of dropping the record. Add is safe here because it happens
+		// inside the handler: app.go shuts the HTTP server down (every handler
+		// returned) before it calls Gateway.Close.
+		c.g.wg.Add(1)
+		go func() {
+			defer c.g.wg.Done()
+			ctx := context.Background()
+			c.extractUsage(ctx, p)
+			// Rate limits count what was really used, so they are updated
+			// with the plugin's answer rather than the rules' guess.
+			c.countTokens(ctx, p.accountID)
+			c.finishSubmit(rec, billing)
+		}()
+		return
+	}
+	c.finishSubmit(rec, billing)
+}
+
+func (c *call) finishSubmit(rec *core.UsageRecord, billing string) {
 	hasUsage := rec.Tokens != (core.UsageTokens{}) || len(rec.Metrics) > 0
-	rec.Billable = !strings.EqualFold(c.ep.Billing, "free") && rec.Price != nil &&
+	rec.Billable = !strings.EqualFold(billing, "free") && rec.Price != nil &&
 		(hasUsage || (rec.Success && rec.Price.Mode == "per_request"))
 	if !rec.Billable {
 		rec.Price = nil
 	}
 	c.g.d.Settler.Submit(rec)
+}
+
+// countTokens adds this request's tokens to the account's rate-limit window.
+func (c *call) countTokens(ctx context.Context, accountID int64) {
+	lim := c.g.d.Limiter
+	if lim == nil || accountID == 0 {
+		return
+	}
+	if n := c.rec.Tokens.Total(); n > 0 {
+		lim.AddTokens(context.WithoutCancel(ctx), accountID, n)
+	}
 }

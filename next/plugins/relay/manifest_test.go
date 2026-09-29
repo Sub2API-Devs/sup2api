@@ -3,14 +3,70 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/relay/internal/relay"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest/check"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/platforms"
 )
+
+// TestManifestPassesCoreChecks runs manifest.json through the very checks the
+// server runs before it installs a plugin: sdk/manifest/check holds the one
+// implementation of those rules, and server/internal/plugin/pkg only wraps it
+// (CONTRACTS §13). Tooling mode drops the three checks that need an
+// installing host or a finished build - hostCompat against a host version,
+// the runtime binaries and the native UI entry - and nothing else, so a
+// manifest that passes here installs.
+func TestManifestPassesCoreChecks(t *testing.T) {
+	var m manifest.Manifest
+	if err := json.Unmarshal(manifestJSON, &m); err != nil {
+		t.Fatalf("manifest.json: %v", err)
+	}
+	fields, _ := check.Fields(check.Validate(&m, packageFiles(t), check.ValidateOptions{Tooling: true}))
+	for _, f := range fields {
+		t.Errorf("%s: %s (%s)", f.Field, f.Message, f.Code)
+	}
+}
+
+// packageFiles is what `sub2api-plugin pack` would put in the package, minus
+// the built artifacts: every file of the plugin directory, keyed by its slash
+// path, so the checks that resolve manifest paths (form schemas, migrations,
+// icon) see the real tree.
+func packageFiles(t *testing.T) map[string][]byte {
+	t.Helper()
+	files := map[string][]byte{}
+	err := filepath.WalkDir(".", func(p string, d fs.DirEntry, err error) error {
+		switch {
+		case err != nil:
+			return err
+		case p == ".":
+			return nil
+		case strings.HasPrefix(d.Name(), "."):
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		case d.IsDir() || !d.Type().IsRegular() || strings.HasSuffix(p, ".go"):
+			return nil
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		files[filepath.ToSlash(p)] = b
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return files
+}
 
 // TestManifest checks manifest.json against the SDK types (no unknown
 // fields), the files it references and the shape of an account-type-only
@@ -78,10 +134,11 @@ func TestManifest(t *testing.T) {
 	if !slices.Equal(ap.RequestFields, []string{"model"}) {
 		t.Errorf("requestFields = %v, want [model]", ap.RequestFields)
 	}
-	if b, err := os.ReadFile(filepath.FromSlash("../../server/internal/platforms/anthropic.json")); err == nil {
-		var p manifest.Platform
-		if err := json.Unmarshal(b, &p); err != nil {
-			t.Fatal(err)
+	// The account type serves the core's built-in anthropic platform: it must
+	// implement exactly its protocols.
+	for _, p := range platforms.Builtin() {
+		if p.ID != relay.PlatformID {
+			continue
 		}
 		if !slices.Equal(p.Protocols(), relay.Protocols) {
 			t.Fatalf("built-in anthropic protocols %v, implemented %v", p.Protocols(), relay.Protocols)

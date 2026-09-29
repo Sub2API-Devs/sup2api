@@ -73,7 +73,326 @@ func (x LogRequest_Level) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use LogRequest_Level.Descriptor instead.
 func (LogRequest_Level) EnumDescriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{2, 0}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{7, 0}
+}
+
+type ListAccountsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Restrict to one account type id declared by this plugin; "" = all of them.
+	// An unknown type simply matches nothing (it names no account the plugin
+	// could see anyway).
+	Type string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
+	// Keyset cursor: "" starts at the lowest account id, otherwise pass the
+	// next_cursor of the previous response. Rows are ordered by id.
+	Cursor string `protobuf:"bytes,2,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	// Page size, 1..200; 0 or out of range uses 100.
+	Limit int32 `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
+	// Include accounts whose status is not "active" (disabled, error) and
+	// accounts taken out of scheduling. Default: only active, schedulable ones.
+	IncludeInactive bool `protobuf:"varint,4,opt,name=include_inactive,json=includeInactive,proto3" json:"include_inactive,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ListAccountsRequest) Reset() {
+	*x = ListAccountsRequest{}
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAccountsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAccountsRequest) ProtoMessage() {}
+
+func (x *ListAccountsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAccountsRequest.ProtoReflect.Descriptor instead.
+func (*ListAccountsRequest) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *ListAccountsRequest) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *ListAccountsRequest) GetCursor() string {
+	if x != nil {
+		return x.Cursor
+	}
+	return ""
+}
+
+func (x *ListAccountsRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *ListAccountsRequest) GetIncludeInactive() bool {
+	if x != nil {
+		return x.IncludeInactive
+	}
+	return false
+}
+
+type ListAccountsResponse struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Accounts []*AccountSummary      `protobuf:"bytes,1,rep,name=accounts,proto3" json:"accounts,omitempty"`
+	// Cursor of the next page; "" when this was the last one.
+	NextCursor    string `protobuf:"bytes,2,opt,name=next_cursor,json=nextCursor,proto3" json:"next_cursor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAccountsResponse) Reset() {
+	*x = ListAccountsResponse{}
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAccountsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAccountsResponse) ProtoMessage() {}
+
+func (x *ListAccountsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAccountsResponse.ProtoReflect.Descriptor instead.
+func (*ListAccountsResponse) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ListAccountsResponse) GetAccounts() []*AccountSummary {
+	if x != nil {
+		return x.Accounts
+	}
+	return nil
+}
+
+func (x *ListAccountsResponse) GetNextCursor() string {
+	if x != nil {
+		return x.NextCursor
+	}
+	return ""
+}
+
+// AccountSummary is account metadata WITHOUT credentials. Deliberately no
+// credentials field exists on this message: ListAccounts is authorised by
+// accounts.read, which is not a credential grant.
+type AccountSummary struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name  string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// Account type id, always one this plugin declares.
+	Type   string `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"`
+	Status string `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"` // active | disabled | error
+	// Whether the account takes gateway traffic (accounts.schedulable).
+	Enabled bool `protobuf:"varint,5,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	// Non-sensitive settings, the account type's settingsFields (base_url ...).
+	// These are stored in plain JSONB and are the same values the plugin is
+	// given as Account.settings_json on the gateway path.
+	SettingsJson  string `protobuf:"bytes,6,opt,name=settings_json,json=settingsJson,proto3" json:"settings_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AccountSummary) Reset() {
+	*x = AccountSummary{}
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccountSummary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccountSummary) ProtoMessage() {}
+
+func (x *AccountSummary) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccountSummary.ProtoReflect.Descriptor instead.
+func (*AccountSummary) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *AccountSummary) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *AccountSummary) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AccountSummary) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *AccountSummary) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *AccountSummary) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *AccountSummary) GetSettingsJson() string {
+	if x != nil {
+		return x.SettingsJson
+	}
+	return ""
+}
+
+type GetAccountCredentialsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AccountId     int64                  `protobuf:"varint,1,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAccountCredentialsRequest) Reset() {
+	*x = GetAccountCredentialsRequest{}
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAccountCredentialsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAccountCredentialsRequest) ProtoMessage() {}
+
+func (x *GetAccountCredentialsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAccountCredentialsRequest.ProtoReflect.Descriptor instead.
+func (*GetAccountCredentialsRequest) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *GetAccountCredentialsRequest) GetAccountId() int64 {
+	if x != nil {
+		return x.AccountId
+	}
+	return 0
+}
+
+type GetAccountCredentialsResponse struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Account *AccountSummary        `protobuf:"bytes,1,opt,name=account,proto3" json:"account,omitempty"`
+	// Decrypted credentials (the non-settings part), the same JSON the plugin
+	// receives as Account.credentials_json in BuildUpstreamRequest.
+	CredentialsJson string `protobuf:"bytes,2,opt,name=credentials_json,json=credentialsJson,proto3" json:"credentials_json,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *GetAccountCredentialsResponse) Reset() {
+	*x = GetAccountCredentialsResponse{}
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAccountCredentialsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAccountCredentialsResponse) ProtoMessage() {}
+
+func (x *GetAccountCredentialsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAccountCredentialsResponse.ProtoReflect.Descriptor instead.
+func (*GetAccountCredentialsResponse) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GetAccountCredentialsResponse) GetAccount() *AccountSummary {
+	if x != nil {
+		return x.Account
+	}
+	return nil
+}
+
+func (x *GetAccountCredentialsResponse) GetCredentialsJson() string {
+	if x != nil {
+		return x.CredentialsJson
+	}
+	return ""
 }
 
 type PublishRequest struct {
@@ -86,7 +405,7 @@ type PublishRequest struct {
 
 func (x *PublishRequest) Reset() {
 	*x = PublishRequest{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[0]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -98,7 +417,7 @@ func (x *PublishRequest) String() string {
 func (*PublishRequest) ProtoMessage() {}
 
 func (x *PublishRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[0]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -111,7 +430,7 @@ func (x *PublishRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublishRequest.ProtoReflect.Descriptor instead.
 func (*PublishRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{0}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *PublishRequest) GetTopic() string {
@@ -136,7 +455,7 @@ type PublishResponse struct {
 
 func (x *PublishResponse) Reset() {
 	*x = PublishResponse{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[1]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -148,7 +467,7 @@ func (x *PublishResponse) String() string {
 func (*PublishResponse) ProtoMessage() {}
 
 func (x *PublishResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[1]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -161,7 +480,7 @@ func (x *PublishResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublishResponse.ProtoReflect.Descriptor instead.
 func (*PublishResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{1}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{6}
 }
 
 type LogRequest struct {
@@ -175,7 +494,7 @@ type LogRequest struct {
 
 func (x *LogRequest) Reset() {
 	*x = LogRequest{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[2]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -187,7 +506,7 @@ func (x *LogRequest) String() string {
 func (*LogRequest) ProtoMessage() {}
 
 func (x *LogRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[2]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -200,7 +519,7 @@ func (x *LogRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogRequest.ProtoReflect.Descriptor instead.
 func (*LogRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{2}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *LogRequest) GetLevel() LogRequest_Level {
@@ -232,7 +551,7 @@ type LogResponse struct {
 
 func (x *LogResponse) Reset() {
 	*x = LogResponse{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[3]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -244,7 +563,7 @@ func (x *LogResponse) String() string {
 func (*LogResponse) ProtoMessage() {}
 
 func (x *LogResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[3]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -257,7 +576,7 @@ func (x *LogResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogResponse.ProtoReflect.Descriptor instead.
 func (*LogResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{3}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{8}
 }
 
 type KVGetRequest struct {
@@ -270,7 +589,7 @@ type KVGetRequest struct {
 
 func (x *KVGetRequest) Reset() {
 	*x = KVGetRequest{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[4]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -282,7 +601,7 @@ func (x *KVGetRequest) String() string {
 func (*KVGetRequest) ProtoMessage() {}
 
 func (x *KVGetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[4]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -295,7 +614,7 @@ func (x *KVGetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KVGetRequest.ProtoReflect.Descriptor instead.
 func (*KVGetRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{4}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *KVGetRequest) GetNamespace() string {
@@ -322,7 +641,7 @@ type KVGetResponse struct {
 
 func (x *KVGetResponse) Reset() {
 	*x = KVGetResponse{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[5]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -334,7 +653,7 @@ func (x *KVGetResponse) String() string {
 func (*KVGetResponse) ProtoMessage() {}
 
 func (x *KVGetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[5]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -347,7 +666,7 @@ func (x *KVGetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KVGetResponse.ProtoReflect.Descriptor instead.
 func (*KVGetResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{5}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *KVGetResponse) GetFound() bool {
@@ -376,7 +695,7 @@ type KVSetRequest struct {
 
 func (x *KVSetRequest) Reset() {
 	*x = KVSetRequest{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[6]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -388,7 +707,7 @@ func (x *KVSetRequest) String() string {
 func (*KVSetRequest) ProtoMessage() {}
 
 func (x *KVSetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[6]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -401,7 +720,7 @@ func (x *KVSetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KVSetRequest.ProtoReflect.Descriptor instead.
 func (*KVSetRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{6}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *KVSetRequest) GetNamespace() string {
@@ -440,7 +759,7 @@ type KVSetResponse struct {
 
 func (x *KVSetResponse) Reset() {
 	*x = KVSetResponse{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[7]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -452,7 +771,7 @@ func (x *KVSetResponse) String() string {
 func (*KVSetResponse) ProtoMessage() {}
 
 func (x *KVSetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[7]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -465,7 +784,7 @@ func (x *KVSetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KVSetResponse.ProtoReflect.Descriptor instead.
 func (*KVSetResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{7}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{12}
 }
 
 type KVDeleteRequest struct {
@@ -478,7 +797,7 @@ type KVDeleteRequest struct {
 
 func (x *KVDeleteRequest) Reset() {
 	*x = KVDeleteRequest{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[8]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -490,7 +809,7 @@ func (x *KVDeleteRequest) String() string {
 func (*KVDeleteRequest) ProtoMessage() {}
 
 func (x *KVDeleteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[8]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -503,7 +822,7 @@ func (x *KVDeleteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KVDeleteRequest.ProtoReflect.Descriptor instead.
 func (*KVDeleteRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{8}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *KVDeleteRequest) GetNamespace() string {
@@ -528,7 +847,7 @@ type KVDeleteResponse struct {
 
 func (x *KVDeleteResponse) Reset() {
 	*x = KVDeleteResponse{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[9]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -540,7 +859,7 @@ func (x *KVDeleteResponse) String() string {
 func (*KVDeleteResponse) ProtoMessage() {}
 
 func (x *KVDeleteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[9]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -553,7 +872,7 @@ func (x *KVDeleteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KVDeleteResponse.ProtoReflect.Descriptor instead.
 func (*KVDeleteResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{9}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{14}
 }
 
 type KVListRequest struct {
@@ -568,7 +887,7 @@ type KVListRequest struct {
 
 func (x *KVListRequest) Reset() {
 	*x = KVListRequest{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[10]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -580,7 +899,7 @@ func (x *KVListRequest) String() string {
 func (*KVListRequest) ProtoMessage() {}
 
 func (x *KVListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[10]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -593,7 +912,7 @@ func (x *KVListRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KVListRequest.ProtoReflect.Descriptor instead.
 func (*KVListRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{10}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *KVListRequest) GetNamespace() string {
@@ -634,7 +953,7 @@ type KVListResponse struct {
 
 func (x *KVListResponse) Reset() {
 	*x = KVListResponse{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[11]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -646,7 +965,7 @@ func (x *KVListResponse) String() string {
 func (*KVListResponse) ProtoMessage() {}
 
 func (x *KVListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[11]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -659,7 +978,7 @@ func (x *KVListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KVListResponse.ProtoReflect.Descriptor instead.
 func (*KVListResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{11}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *KVListResponse) GetKeys() []string {
@@ -684,7 +1003,7 @@ type GetDSNRequest struct {
 
 func (x *GetDSNRequest) Reset() {
 	*x = GetDSNRequest{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[12]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -696,7 +1015,7 @@ func (x *GetDSNRequest) String() string {
 func (*GetDSNRequest) ProtoMessage() {}
 
 func (x *GetDSNRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[12]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -709,7 +1028,7 @@ func (x *GetDSNRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDSNRequest.ProtoReflect.Descriptor instead.
 func (*GetDSNRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{12}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{17}
 }
 
 type GetDSNResponse struct {
@@ -725,7 +1044,7 @@ type GetDSNResponse struct {
 
 func (x *GetDSNResponse) Reset() {
 	*x = GetDSNResponse{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[13]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -737,7 +1056,7 @@ func (x *GetDSNResponse) String() string {
 func (*GetDSNResponse) ProtoMessage() {}
 
 func (x *GetDSNResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[13]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -750,7 +1069,7 @@ func (x *GetDSNResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDSNResponse.ProtoReflect.Descriptor instead.
 func (*GetDSNResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{13}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *GetDSNResponse) GetDsn() string {
@@ -785,7 +1104,7 @@ type AuthzCheckRequest struct {
 
 func (x *AuthzCheckRequest) Reset() {
 	*x = AuthzCheckRequest{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[14]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -797,7 +1116,7 @@ func (x *AuthzCheckRequest) String() string {
 func (*AuthzCheckRequest) ProtoMessage() {}
 
 func (x *AuthzCheckRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[14]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -810,7 +1129,7 @@ func (x *AuthzCheckRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthzCheckRequest.ProtoReflect.Descriptor instead.
 func (*AuthzCheckRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{14}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *AuthzCheckRequest) GetUserId() int64 {
@@ -836,7 +1155,7 @@ type AuthzCheckResponse struct {
 
 func (x *AuthzCheckResponse) Reset() {
 	*x = AuthzCheckResponse{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[15]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -848,7 +1167,7 @@ func (x *AuthzCheckResponse) String() string {
 func (*AuthzCheckResponse) ProtoMessage() {}
 
 func (x *AuthzCheckResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[15]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -861,7 +1180,7 @@ func (x *AuthzCheckResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthzCheckResponse.ProtoReflect.Descriptor instead.
 func (*AuthzCheckResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{15}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *AuthzCheckResponse) GetAllowed() bool {
@@ -885,7 +1204,7 @@ type LedgerChangeRequest struct {
 
 func (x *LedgerChangeRequest) Reset() {
 	*x = LedgerChangeRequest{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[16]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -897,7 +1216,7 @@ func (x *LedgerChangeRequest) String() string {
 func (*LedgerChangeRequest) ProtoMessage() {}
 
 func (x *LedgerChangeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[16]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -910,7 +1229,7 @@ func (x *LedgerChangeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LedgerChangeRequest.ProtoReflect.Descriptor instead.
 func (*LedgerChangeRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{16}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *LedgerChangeRequest) GetUserId() int64 {
@@ -966,7 +1285,7 @@ type LedgerChangeResponse struct {
 
 func (x *LedgerChangeResponse) Reset() {
 	*x = LedgerChangeResponse{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[17]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -978,7 +1297,7 @@ func (x *LedgerChangeResponse) String() string {
 func (*LedgerChangeResponse) ProtoMessage() {}
 
 func (x *LedgerChangeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[17]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -991,7 +1310,7 @@ func (x *LedgerChangeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LedgerChangeResponse.ProtoReflect.Descriptor instead.
 func (*LedgerChangeResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{17}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *LedgerChangeResponse) GetLedgerId() int64 {
@@ -1030,7 +1349,7 @@ type EgressFrame struct {
 
 func (x *EgressFrame) Reset() {
 	*x = EgressFrame{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[18]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1042,7 +1361,7 @@ func (x *EgressFrame) String() string {
 func (*EgressFrame) ProtoMessage() {}
 
 func (x *EgressFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[18]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1055,7 +1374,7 @@ func (x *EgressFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EgressFrame.ProtoReflect.Descriptor instead.
 func (*EgressFrame) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{18}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *EgressFrame) GetKind() isEgressFrame_Kind {
@@ -1139,7 +1458,7 @@ type DialOpen struct {
 
 func (x *DialOpen) Reset() {
 	*x = DialOpen{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[19]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1151,7 +1470,7 @@ func (x *DialOpen) String() string {
 func (*DialOpen) ProtoMessage() {}
 
 func (x *DialOpen) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[19]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1164,7 +1483,7 @@ func (x *DialOpen) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DialOpen.ProtoReflect.Descriptor instead.
 func (*DialOpen) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{19}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *DialOpen) GetNetwork() string {
@@ -1192,7 +1511,7 @@ type DialResult struct {
 
 func (x *DialResult) Reset() {
 	*x = DialResult{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[20]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1204,7 +1523,7 @@ func (x *DialResult) String() string {
 func (*DialResult) ProtoMessage() {}
 
 func (x *DialResult) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[20]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1217,7 +1536,7 @@ func (x *DialResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DialResult.ProtoReflect.Descriptor instead.
 func (*DialResult) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{20}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *DialResult) GetOk() bool {
@@ -1250,7 +1569,7 @@ type DialClose struct {
 
 func (x *DialClose) Reset() {
 	*x = DialClose{}
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[21]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1262,7 +1581,7 @@ func (x *DialClose) String() string {
 func (*DialClose) ProtoMessage() {}
 
 func (x *DialClose) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[21]
+	mi := &file_sub2api_plugin_v1_host_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1275,7 +1594,7 @@ func (x *DialClose) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DialClose.ProtoReflect.Descriptor instead.
 func (*DialClose) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{21}
+	return file_sub2api_plugin_v1_host_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *DialClose) GetError() string {
@@ -1289,7 +1608,29 @@ var File_sub2api_plugin_v1_host_proto protoreflect.FileDescriptor
 
 const file_sub2api_plugin_v1_host_proto_rawDesc = "" +
 	"\n" +
-	"\x1csub2api/plugin/v1/host.proto\x12\x11sub2api.plugin.v1\"@\n" +
+	"\x1csub2api/plugin/v1/host.proto\x12\x11sub2api.plugin.v1\"\x82\x01\n" +
+	"\x13ListAccountsRequest\x12\x12\n" +
+	"\x04type\x18\x01 \x01(\tR\x04type\x12\x16\n" +
+	"\x06cursor\x18\x02 \x01(\tR\x06cursor\x12\x14\n" +
+	"\x05limit\x18\x03 \x01(\x05R\x05limit\x12)\n" +
+	"\x10include_inactive\x18\x04 \x01(\bR\x0fincludeInactive\"v\n" +
+	"\x14ListAccountsResponse\x12=\n" +
+	"\baccounts\x18\x01 \x03(\v2!.sub2api.plugin.v1.AccountSummaryR\baccounts\x12\x1f\n" +
+	"\vnext_cursor\x18\x02 \x01(\tR\n" +
+	"nextCursor\"\x9f\x01\n" +
+	"\x0eAccountSummary\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
+	"\x04type\x18\x03 \x01(\tR\x04type\x12\x16\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\x12\x18\n" +
+	"\aenabled\x18\x05 \x01(\bR\aenabled\x12#\n" +
+	"\rsettings_json\x18\x06 \x01(\tR\fsettingsJson\"=\n" +
+	"\x1cGetAccountCredentialsRequest\x12\x1d\n" +
+	"\n" +
+	"account_id\x18\x01 \x01(\x03R\taccountId\"\x87\x01\n" +
+	"\x1dGetAccountCredentialsResponse\x12;\n" +
+	"\aaccount\x18\x01 \x01(\v2!.sub2api.plugin.v1.AccountSummaryR\aaccount\x12)\n" +
+	"\x10credentials_json\x18\x02 \x01(\tR\x0fcredentialsJson\"@\n" +
 	"\x0ePublishRequest\x12\x14\n" +
 	"\x05topic\x18\x01 \x01(\tR\x05topic\x12\x18\n" +
 	"\apayload\x18\x02 \x01(\fR\apayload\"\x11\n" +
@@ -1377,7 +1718,7 @@ const file_sub2api_plugin_v1_host_proto_rawDesc = "" +
 	"\vremote_addr\x18\x03 \x01(\tR\n" +
 	"remoteAddr\"!\n" +
 	"\tDialClose\x12\x14\n" +
-	"\x05error\x18\x01 \x01(\tR\x05error2\xcc\x06\n" +
+	"\x05error\x18\x01 \x01(\tR\x05error2\xa9\b\n" +
 	"\vHostService\x12D\n" +
 	"\x03Log\x12\x1d.sub2api.plugin.v1.LogRequest\x1a\x1e.sub2api.plugin.v1.LogResponse\x12J\n" +
 	"\x05KVGet\x12\x1f.sub2api.plugin.v1.KVGetRequest\x1a .sub2api.plugin.v1.KVGetResponse\x12J\n" +
@@ -1389,7 +1730,9 @@ const file_sub2api_plugin_v1_host_proto_rawDesc = "" +
 	"AuthzCheck\x12$.sub2api.plugin.v1.AuthzCheckRequest\x1a%.sub2api.plugin.v1.AuthzCheckResponse\x12_\n" +
 	"\fLedgerCredit\x12&.sub2api.plugin.v1.LedgerChangeRequest\x1a'.sub2api.plugin.v1.LedgerChangeResponse\x12^\n" +
 	"\vLedgerDebit\x12&.sub2api.plugin.v1.LedgerChangeRequest\x1a'.sub2api.plugin.v1.LedgerChangeResponse\x12P\n" +
-	"\aPublish\x12!.sub2api.plugin.v1.PublishRequest\x1a\".sub2api.plugin.v1.PublishResponse2[\n" +
+	"\aPublish\x12!.sub2api.plugin.v1.PublishRequest\x1a\".sub2api.plugin.v1.PublishResponse\x12_\n" +
+	"\fListAccounts\x12&.sub2api.plugin.v1.ListAccountsRequest\x1a'.sub2api.plugin.v1.ListAccountsResponse\x12z\n" +
+	"\x15GetAccountCredentials\x12/.sub2api.plugin.v1.GetAccountCredentialsRequest\x1a0.sub2api.plugin.v1.GetAccountCredentialsResponse2[\n" +
 	"\rEgressService\x12J\n" +
 	"\x04Dial\x12\x1e.sub2api.plugin.v1.EgressFrame\x1a\x1e.sub2api.plugin.v1.EgressFrame(\x010\x01B@Z>github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1b\x06proto3"
 
@@ -1406,66 +1749,77 @@ func file_sub2api_plugin_v1_host_proto_rawDescGZIP() []byte {
 }
 
 var file_sub2api_plugin_v1_host_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_sub2api_plugin_v1_host_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_sub2api_plugin_v1_host_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_sub2api_plugin_v1_host_proto_goTypes = []any{
-	(LogRequest_Level)(0),        // 0: sub2api.plugin.v1.LogRequest.Level
-	(*PublishRequest)(nil),       // 1: sub2api.plugin.v1.PublishRequest
-	(*PublishResponse)(nil),      // 2: sub2api.plugin.v1.PublishResponse
-	(*LogRequest)(nil),           // 3: sub2api.plugin.v1.LogRequest
-	(*LogResponse)(nil),          // 4: sub2api.plugin.v1.LogResponse
-	(*KVGetRequest)(nil),         // 5: sub2api.plugin.v1.KVGetRequest
-	(*KVGetResponse)(nil),        // 6: sub2api.plugin.v1.KVGetResponse
-	(*KVSetRequest)(nil),         // 7: sub2api.plugin.v1.KVSetRequest
-	(*KVSetResponse)(nil),        // 8: sub2api.plugin.v1.KVSetResponse
-	(*KVDeleteRequest)(nil),      // 9: sub2api.plugin.v1.KVDeleteRequest
-	(*KVDeleteResponse)(nil),     // 10: sub2api.plugin.v1.KVDeleteResponse
-	(*KVListRequest)(nil),        // 11: sub2api.plugin.v1.KVListRequest
-	(*KVListResponse)(nil),       // 12: sub2api.plugin.v1.KVListResponse
-	(*GetDSNRequest)(nil),        // 13: sub2api.plugin.v1.GetDSNRequest
-	(*GetDSNResponse)(nil),       // 14: sub2api.plugin.v1.GetDSNResponse
-	(*AuthzCheckRequest)(nil),    // 15: sub2api.plugin.v1.AuthzCheckRequest
-	(*AuthzCheckResponse)(nil),   // 16: sub2api.plugin.v1.AuthzCheckResponse
-	(*LedgerChangeRequest)(nil),  // 17: sub2api.plugin.v1.LedgerChangeRequest
-	(*LedgerChangeResponse)(nil), // 18: sub2api.plugin.v1.LedgerChangeResponse
-	(*EgressFrame)(nil),          // 19: sub2api.plugin.v1.EgressFrame
-	(*DialOpen)(nil),             // 20: sub2api.plugin.v1.DialOpen
-	(*DialResult)(nil),           // 21: sub2api.plugin.v1.DialResult
-	(*DialClose)(nil),            // 22: sub2api.plugin.v1.DialClose
-	nil,                          // 23: sub2api.plugin.v1.LogRequest.AttrsEntry
+	(LogRequest_Level)(0),                 // 0: sub2api.plugin.v1.LogRequest.Level
+	(*ListAccountsRequest)(nil),           // 1: sub2api.plugin.v1.ListAccountsRequest
+	(*ListAccountsResponse)(nil),          // 2: sub2api.plugin.v1.ListAccountsResponse
+	(*AccountSummary)(nil),                // 3: sub2api.plugin.v1.AccountSummary
+	(*GetAccountCredentialsRequest)(nil),  // 4: sub2api.plugin.v1.GetAccountCredentialsRequest
+	(*GetAccountCredentialsResponse)(nil), // 5: sub2api.plugin.v1.GetAccountCredentialsResponse
+	(*PublishRequest)(nil),                // 6: sub2api.plugin.v1.PublishRequest
+	(*PublishResponse)(nil),               // 7: sub2api.plugin.v1.PublishResponse
+	(*LogRequest)(nil),                    // 8: sub2api.plugin.v1.LogRequest
+	(*LogResponse)(nil),                   // 9: sub2api.plugin.v1.LogResponse
+	(*KVGetRequest)(nil),                  // 10: sub2api.plugin.v1.KVGetRequest
+	(*KVGetResponse)(nil),                 // 11: sub2api.plugin.v1.KVGetResponse
+	(*KVSetRequest)(nil),                  // 12: sub2api.plugin.v1.KVSetRequest
+	(*KVSetResponse)(nil),                 // 13: sub2api.plugin.v1.KVSetResponse
+	(*KVDeleteRequest)(nil),               // 14: sub2api.plugin.v1.KVDeleteRequest
+	(*KVDeleteResponse)(nil),              // 15: sub2api.plugin.v1.KVDeleteResponse
+	(*KVListRequest)(nil),                 // 16: sub2api.plugin.v1.KVListRequest
+	(*KVListResponse)(nil),                // 17: sub2api.plugin.v1.KVListResponse
+	(*GetDSNRequest)(nil),                 // 18: sub2api.plugin.v1.GetDSNRequest
+	(*GetDSNResponse)(nil),                // 19: sub2api.plugin.v1.GetDSNResponse
+	(*AuthzCheckRequest)(nil),             // 20: sub2api.plugin.v1.AuthzCheckRequest
+	(*AuthzCheckResponse)(nil),            // 21: sub2api.plugin.v1.AuthzCheckResponse
+	(*LedgerChangeRequest)(nil),           // 22: sub2api.plugin.v1.LedgerChangeRequest
+	(*LedgerChangeResponse)(nil),          // 23: sub2api.plugin.v1.LedgerChangeResponse
+	(*EgressFrame)(nil),                   // 24: sub2api.plugin.v1.EgressFrame
+	(*DialOpen)(nil),                      // 25: sub2api.plugin.v1.DialOpen
+	(*DialResult)(nil),                    // 26: sub2api.plugin.v1.DialResult
+	(*DialClose)(nil),                     // 27: sub2api.plugin.v1.DialClose
+	nil,                                   // 28: sub2api.plugin.v1.LogRequest.AttrsEntry
 }
 var file_sub2api_plugin_v1_host_proto_depIdxs = []int32{
-	0,  // 0: sub2api.plugin.v1.LogRequest.level:type_name -> sub2api.plugin.v1.LogRequest.Level
-	23, // 1: sub2api.plugin.v1.LogRequest.attrs:type_name -> sub2api.plugin.v1.LogRequest.AttrsEntry
-	20, // 2: sub2api.plugin.v1.EgressFrame.open:type_name -> sub2api.plugin.v1.DialOpen
-	21, // 3: sub2api.plugin.v1.EgressFrame.result:type_name -> sub2api.plugin.v1.DialResult
-	22, // 4: sub2api.plugin.v1.EgressFrame.close:type_name -> sub2api.plugin.v1.DialClose
-	3,  // 5: sub2api.plugin.v1.HostService.Log:input_type -> sub2api.plugin.v1.LogRequest
-	5,  // 6: sub2api.plugin.v1.HostService.KVGet:input_type -> sub2api.plugin.v1.KVGetRequest
-	7,  // 7: sub2api.plugin.v1.HostService.KVSet:input_type -> sub2api.plugin.v1.KVSetRequest
-	9,  // 8: sub2api.plugin.v1.HostService.KVDelete:input_type -> sub2api.plugin.v1.KVDeleteRequest
-	11, // 9: sub2api.plugin.v1.HostService.KVList:input_type -> sub2api.plugin.v1.KVListRequest
-	13, // 10: sub2api.plugin.v1.HostService.GetDSN:input_type -> sub2api.plugin.v1.GetDSNRequest
-	15, // 11: sub2api.plugin.v1.HostService.AuthzCheck:input_type -> sub2api.plugin.v1.AuthzCheckRequest
-	17, // 12: sub2api.plugin.v1.HostService.LedgerCredit:input_type -> sub2api.plugin.v1.LedgerChangeRequest
-	17, // 13: sub2api.plugin.v1.HostService.LedgerDebit:input_type -> sub2api.plugin.v1.LedgerChangeRequest
-	1,  // 14: sub2api.plugin.v1.HostService.Publish:input_type -> sub2api.plugin.v1.PublishRequest
-	19, // 15: sub2api.plugin.v1.EgressService.Dial:input_type -> sub2api.plugin.v1.EgressFrame
-	4,  // 16: sub2api.plugin.v1.HostService.Log:output_type -> sub2api.plugin.v1.LogResponse
-	6,  // 17: sub2api.plugin.v1.HostService.KVGet:output_type -> sub2api.plugin.v1.KVGetResponse
-	8,  // 18: sub2api.plugin.v1.HostService.KVSet:output_type -> sub2api.plugin.v1.KVSetResponse
-	10, // 19: sub2api.plugin.v1.HostService.KVDelete:output_type -> sub2api.plugin.v1.KVDeleteResponse
-	12, // 20: sub2api.plugin.v1.HostService.KVList:output_type -> sub2api.plugin.v1.KVListResponse
-	14, // 21: sub2api.plugin.v1.HostService.GetDSN:output_type -> sub2api.plugin.v1.GetDSNResponse
-	16, // 22: sub2api.plugin.v1.HostService.AuthzCheck:output_type -> sub2api.plugin.v1.AuthzCheckResponse
-	18, // 23: sub2api.plugin.v1.HostService.LedgerCredit:output_type -> sub2api.plugin.v1.LedgerChangeResponse
-	18, // 24: sub2api.plugin.v1.HostService.LedgerDebit:output_type -> sub2api.plugin.v1.LedgerChangeResponse
-	2,  // 25: sub2api.plugin.v1.HostService.Publish:output_type -> sub2api.plugin.v1.PublishResponse
-	19, // 26: sub2api.plugin.v1.EgressService.Dial:output_type -> sub2api.plugin.v1.EgressFrame
-	16, // [16:27] is the sub-list for method output_type
-	5,  // [5:16] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	3,  // 0: sub2api.plugin.v1.ListAccountsResponse.accounts:type_name -> sub2api.plugin.v1.AccountSummary
+	3,  // 1: sub2api.plugin.v1.GetAccountCredentialsResponse.account:type_name -> sub2api.plugin.v1.AccountSummary
+	0,  // 2: sub2api.plugin.v1.LogRequest.level:type_name -> sub2api.plugin.v1.LogRequest.Level
+	28, // 3: sub2api.plugin.v1.LogRequest.attrs:type_name -> sub2api.plugin.v1.LogRequest.AttrsEntry
+	25, // 4: sub2api.plugin.v1.EgressFrame.open:type_name -> sub2api.plugin.v1.DialOpen
+	26, // 5: sub2api.plugin.v1.EgressFrame.result:type_name -> sub2api.plugin.v1.DialResult
+	27, // 6: sub2api.plugin.v1.EgressFrame.close:type_name -> sub2api.plugin.v1.DialClose
+	8,  // 7: sub2api.plugin.v1.HostService.Log:input_type -> sub2api.plugin.v1.LogRequest
+	10, // 8: sub2api.plugin.v1.HostService.KVGet:input_type -> sub2api.plugin.v1.KVGetRequest
+	12, // 9: sub2api.plugin.v1.HostService.KVSet:input_type -> sub2api.plugin.v1.KVSetRequest
+	14, // 10: sub2api.plugin.v1.HostService.KVDelete:input_type -> sub2api.plugin.v1.KVDeleteRequest
+	16, // 11: sub2api.plugin.v1.HostService.KVList:input_type -> sub2api.plugin.v1.KVListRequest
+	18, // 12: sub2api.plugin.v1.HostService.GetDSN:input_type -> sub2api.plugin.v1.GetDSNRequest
+	20, // 13: sub2api.plugin.v1.HostService.AuthzCheck:input_type -> sub2api.plugin.v1.AuthzCheckRequest
+	22, // 14: sub2api.plugin.v1.HostService.LedgerCredit:input_type -> sub2api.plugin.v1.LedgerChangeRequest
+	22, // 15: sub2api.plugin.v1.HostService.LedgerDebit:input_type -> sub2api.plugin.v1.LedgerChangeRequest
+	6,  // 16: sub2api.plugin.v1.HostService.Publish:input_type -> sub2api.plugin.v1.PublishRequest
+	1,  // 17: sub2api.plugin.v1.HostService.ListAccounts:input_type -> sub2api.plugin.v1.ListAccountsRequest
+	4,  // 18: sub2api.plugin.v1.HostService.GetAccountCredentials:input_type -> sub2api.plugin.v1.GetAccountCredentialsRequest
+	24, // 19: sub2api.plugin.v1.EgressService.Dial:input_type -> sub2api.plugin.v1.EgressFrame
+	9,  // 20: sub2api.plugin.v1.HostService.Log:output_type -> sub2api.plugin.v1.LogResponse
+	11, // 21: sub2api.plugin.v1.HostService.KVGet:output_type -> sub2api.plugin.v1.KVGetResponse
+	13, // 22: sub2api.plugin.v1.HostService.KVSet:output_type -> sub2api.plugin.v1.KVSetResponse
+	15, // 23: sub2api.plugin.v1.HostService.KVDelete:output_type -> sub2api.plugin.v1.KVDeleteResponse
+	17, // 24: sub2api.plugin.v1.HostService.KVList:output_type -> sub2api.plugin.v1.KVListResponse
+	19, // 25: sub2api.plugin.v1.HostService.GetDSN:output_type -> sub2api.plugin.v1.GetDSNResponse
+	21, // 26: sub2api.plugin.v1.HostService.AuthzCheck:output_type -> sub2api.plugin.v1.AuthzCheckResponse
+	23, // 27: sub2api.plugin.v1.HostService.LedgerCredit:output_type -> sub2api.plugin.v1.LedgerChangeResponse
+	23, // 28: sub2api.plugin.v1.HostService.LedgerDebit:output_type -> sub2api.plugin.v1.LedgerChangeResponse
+	7,  // 29: sub2api.plugin.v1.HostService.Publish:output_type -> sub2api.plugin.v1.PublishResponse
+	2,  // 30: sub2api.plugin.v1.HostService.ListAccounts:output_type -> sub2api.plugin.v1.ListAccountsResponse
+	5,  // 31: sub2api.plugin.v1.HostService.GetAccountCredentials:output_type -> sub2api.plugin.v1.GetAccountCredentialsResponse
+	24, // 32: sub2api.plugin.v1.EgressService.Dial:output_type -> sub2api.plugin.v1.EgressFrame
+	20, // [20:33] is the sub-list for method output_type
+	7,  // [7:20] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_sub2api_plugin_v1_host_proto_init() }
@@ -1473,7 +1827,7 @@ func file_sub2api_plugin_v1_host_proto_init() {
 	if File_sub2api_plugin_v1_host_proto != nil {
 		return
 	}
-	file_sub2api_plugin_v1_host_proto_msgTypes[18].OneofWrappers = []any{
+	file_sub2api_plugin_v1_host_proto_msgTypes[23].OneofWrappers = []any{
 		(*EgressFrame_Open)(nil),
 		(*EgressFrame_Result)(nil),
 		(*EgressFrame_Data)(nil),
@@ -1485,7 +1839,7 @@ func file_sub2api_plugin_v1_host_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sub2api_plugin_v1_host_proto_rawDesc), len(file_sub2api_plugin_v1_host_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   23,
+			NumMessages:   28,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

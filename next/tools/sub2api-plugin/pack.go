@@ -176,9 +176,9 @@ func checkPackage(files map[string][]byte, m *manifest.Manifest, allowMissingUI 
 			missing = append(missing, fmt.Sprintf("%s (%s)", p, what))
 		}
 	}
-	// Platforms (with their endpoints) and account types (with the platforms
-	// they serve) are top-level (ARCHITECTURE 6.6).
-	invalid := validateManifest(m)
+	// The manifest is held to the rules the installing host applies
+	// (sdk/manifest/check), so a package that packs here also installs.
+	invalid := validateManifest(m, files)
 	for _, at := range m.AccountTypes {
 		if at.Form.Mode == "schema" {
 			need(at.Form.Schema, "account type "+at.ID+" schema")

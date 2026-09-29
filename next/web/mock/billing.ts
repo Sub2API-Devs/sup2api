@@ -1133,11 +1133,12 @@ on('PUT', '/settings/sticky', (req) => {
 })
 
 // Gateway settings (CONTRACTS §8, §14.4): ranges 1–10, 100–30000, 50–2000.
-const gatewaySettings = { max_attempts: 3, platform_call_timeout_ms: 2000, default_hook_timeout_ms: 300 }
+const gatewaySettings = { max_attempts: 3, platform_call_timeout_ms: 2000, default_hook_timeout_ms: 300, platform_hotpath_timeout_ms: 300 }
 const GATEWAY_RANGES: Record<keyof typeof gatewaySettings, [number, number]> = {
   max_attempts: [1, 10],
   platform_call_timeout_ms: [100, 30000],
-  default_hook_timeout_ms: [50, 2000]
+  default_hook_timeout_ms: [50, 2000],
+  platform_hotpath_timeout_ms: [50, 2000]
 }
 on('GET', '/settings/gateway', () => gatewaySettings)
 on('PUT', '/settings/gateway', (req) => {
@@ -1150,7 +1151,7 @@ on('PUT', '/settings/gateway', (req) => {
     }
   }
   if (fields.length) return fail(400, 'invalid_argument', 'invalid gateway settings', { fields })
-  Object.assign(gatewaySettings, { max_attempts: b.max_attempts, platform_call_timeout_ms: b.platform_call_timeout_ms, default_hook_timeout_ms: b.default_hook_timeout_ms })
+  Object.assign(gatewaySettings, { max_attempts: b.max_attempts, platform_call_timeout_ms: b.platform_call_timeout_ms, default_hook_timeout_ms: b.default_hook_timeout_ms, platform_hotpath_timeout_ms: b.platform_hotpath_timeout_ms })
   return gatewaySettings
 })
 

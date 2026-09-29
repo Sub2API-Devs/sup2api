@@ -12,12 +12,14 @@ export default {
     fields: {
       max_attempts: '最大尝试次数',
       platform_call_timeout_ms: '平台调用超时',
-      default_hook_timeout_ms: '钩子默认超时'
+      default_hook_timeout_ms: '钩子默认超时',
+      platform_hotpath_timeout_ms: '平台热路径超时'
     },
     hints: {
       max_attempts: '每个请求最多尝试的账号数（含首次，用于失败切换）。',
       platform_call_timeout_ms: '请求路径上调用插件平台接口（构造上游请求、解析用量）的超时。',
-      default_hook_timeout_ms: 'manifest 未设置超时的钩子使用此值。'
+      default_hook_timeout_ms: 'manifest 未设置超时的钩子使用此值。',
+      platform_hotpath_timeout_ms: '每个请求中不属于钩子的平台调用超时：调度前解析模型、响应发完后提取用量。'
     },
     range: '范围 {min}–{max}。',
     notInteger: '请输入整数'

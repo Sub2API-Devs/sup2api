@@ -1,8 +1,11 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -36,6 +39,49 @@ const (
 // statusClientClosed is the conventional status for requests the client
 // abandoned (nginx 499); only ever written to usage records.
 const statusClientClosed = 499
+
+// codeUpstreamError is the client error code of an upstream failure the
+// platform plugin did not name itself.
+const codeUpstreamError = "upstream_error"
+
+// maxClientErrorCode is the longest client error code a plugin may set. The
+// longest real upstream code seen so far is Volcengine Ark's
+// "InputTextSensitiveContentDetected" (33 bytes); 64 leaves room without
+// letting an upstream string of unbounded length into the client body.
+const maxClientErrorCode = 64
+
+// clientErrorCodeRe constrains ClassifyErrorResponse.client_error_code. The
+// value is written verbatim into a JSON error body the client parses and into
+// the Gemini format's ErrorInfo.reason, which is specified as an UPPER_SNAKE
+// enum-like token - so the set is the characters real upstream codes use
+// ("insufficient_quota", "InputTextSensitiveContentDetected",
+// "billing.hard_limit_reached") and nothing that could be mistaken for
+// structure: no whitespace, quotes, slashes or non-ASCII.
+var clientErrorCodeRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]*$`)
+
+// clientErrorCode validates the code a platform plugin classified an upstream
+// failure with.
+//
+// Empty is the normal case and keeps "upstream_error": every plugin written
+// before the field existed leaves it empty, and their clients must keep seeing
+// exactly what they saw before.
+//
+// An invalid value is dropped rather than truncated or sanitised. A truncated
+// code is a *different* code, and a client that branches on it would branch
+// wrongly; falling back to the generic code is the honest answer, and the
+// warning tells the plugin author which plugin to fix.
+func clientErrorCode(ctx context.Context, code, pluginKey string) string {
+	if code == "" {
+		return codeUpstreamError
+	}
+	if len(code) > maxClientErrorCode || !clientErrorCodeRe.MatchString(code) {
+		slog.WarnContext(ctx, "gateway: plugin returned an invalid client_error_code, using the generic one",
+			"plugin", pluginKey, "code", truncateUTF8(code, 200), "max_bytes", maxClientErrorCode,
+			"pattern", clientErrorCodeRe.String())
+		return codeUpstreamError
+	}
+	return code
+}
 
 // gwError is an error rendered to a gateway client.
 type gwError struct {
@@ -119,7 +165,7 @@ func defaultCode(status int) string {
 		return core.ErrUnavailable.Code
 	}
 	if status >= 500 {
-		return "upstream_error"
+		return codeUpstreamError
 	}
 	return "request_failed"
 }

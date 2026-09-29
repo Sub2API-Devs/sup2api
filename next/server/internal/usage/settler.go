@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
+	"github.com/tidwall/gjson"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/billing/expr"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -25,6 +26,22 @@ const (
 	StatusBilled  = "billed"
 	StatusFailed  = "failed"
 	StatusFree    = "free"
+	// StatusReserved is a row whose cost was CHARGED from a plugin's
+	// estimate and is waiting for the real figure (CONTRACTS §25.4). It is
+	// deliberately outside usage_logs_billing_pending_idx, which covers
+	// ('pending','failed'): the money has already moved, so the settlement
+	// retry loop must never see the row again.
+	StatusReserved = "reserved"
+)
+
+// States of pending_settlements.state.
+const (
+	SettleStatePending = "pending"
+	SettleStateSettled = "settled"
+	SettleStateFailed  = "failed"
+	// SettleStateAbandoned: the core stopped asking (attempts or deadline).
+	// The reservation stands as the final charge.
+	SettleStateAbandoned = "abandoned"
 )
 
 // TxLedger is the transactional ledger used for settlement. The billing
@@ -82,6 +99,12 @@ type Service struct {
 	wg    sync.WaitGroup
 	stop  context.CancelFunc
 	mu    sync.Mutex
+
+	// Reconcile loop (CONTRACTS §25.4); zero until StartReconcile.
+	rec            *reconciler
+	recStop        context.CancelFunc
+	reconcileCfg   *resolved
+	reconcileCfgAt time.Time
 }
 
 var _ core.Settler = (*Service)(nil)
@@ -109,12 +132,17 @@ func (s *Service) Start(ctx context.Context) {
 // Stop drains the queue and waits for the workers (bounded by ctx).
 func (s *Service) Stop(ctx context.Context) {
 	s.mu.Lock()
-	stop := s.stop
+	stop, recStop := s.stop, s.recStop
 	s.mu.Unlock()
-	if stop == nil {
+	if recStop != nil {
+		recStop()
+	}
+	if stop == nil && recStop == nil {
 		return
 	}
-	stop()
+	if stop != nil {
+		stop()
+	}
 	done := make(chan struct{})
 	go func() { s.wg.Wait(); close(done) }()
 	select {
@@ -244,6 +272,12 @@ func initialStatus(rec *core.UsageRecord) string {
 	if !rec.Billable || rec.Price == nil {
 		return StatusFree
 	}
+	// A reservation charges the estimate and then waits: the row is settled
+	// the moment it is written, and it is the reconcile loop, not the
+	// settlement retry loop, that finishes it.
+	if rec.Reservation != nil {
+		return StatusReserved
+	}
 	return StatusPending
 }
 
@@ -259,6 +293,21 @@ type pendingDetail struct {
 	Inputs   pendingInputs `json:"inputs"`
 	Attempts int           `json:"attempts"`
 	Error    string        `json:"error,omitempty"`
+}
+
+// pluginDetailJSON is what goes into usage_logs.plugin_detail: the plugin's
+// own document when it is a JSON object within the cap, "{}" otherwise. The
+// gateway already applies the cap and warns; this is the last guard, because
+// a non-object (or invalid) document would fail the whole batch insert and
+// take unrelated records down with it.
+func pluginDetailJSON(raw core.RawJSON) []byte {
+	if len(raw) == 0 || len(raw) > core.MaxPluginDetailBytes {
+		return []byte("{}")
+	}
+	if !gjson.ValidBytes(raw) || !gjson.ParseBytes(raw).IsObject() {
+		return []byte("{}")
+	}
+	return raw
 }
 
 func trunc(s string, n int) string {
@@ -284,15 +333,18 @@ func jsonOr(v any, empty string) []byte {
 // usage.recorded for free records. It returns the newly inserted records.
 func (s *Service) insert(ctx context.Context, batch []*core.UsageRecord) ([]*core.UsageRecord, error) {
 	var inserted []*core.UsageRecord
+	var reserved []reservedRow
+	var cached []balanceUpdate
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
 		inserted = inserted[:0]
+		reserved, cached = reserved[:0], cached[:0]
 		b := &pgx.Batch{}
 		for _, rec := range batch {
 			status := initialStatus(rec)
 			var priceID *int64
 			var exprHash, mode string
 			detail := []byte("{}")
-			if status == StatusPending {
+			if status == StatusPending || status == StatusReserved {
 				exprHash, mode = rec.Price.ExprHash, rec.Price.Mode
 				if rec.Price.ID > 0 {
 					priceID = &rec.Price.ID
@@ -303,6 +355,11 @@ func (s *Service) insert(ctx context.Context, batch []*core.UsageRecord) ([]*cor
 				detail = jsonOr(pendingDetail{Inputs: pendingInputs{
 					Semantics: rec.UsageSemantics, Params: rec.PriceParams, Headers: rec.PriceHeaders}}, "{}")
 			}
+			// The observability markers have their own column, so they are
+			// written once here and never touched again: settle() rewrites
+			// billing_detail wholesale, and used to have to carry them
+			// through the unbilled phase to put them back.
+			anomalies := jsonOr(rec.Anomalies(), "{}")
 			created := rec.CreatedAt
 			if created.IsZero() {
 				created = time.Now()
@@ -320,9 +377,9 @@ func (s *Service) insert(ctx context.Context, batch []*core.UsageRecord) ([]*cor
 					cache_creation_1h_tokens, metrics, sticky_rule, sticky_hit, hook_decisions, rate_multiplier,
 					price_id, expr_hash, billing_mode, billing_detail, billing_status, latency_ms, first_token_ms,
 					client_ip, user_agent, node_id, created_at, account_type, upstream_protocol, client_request_id,
-					sched_decisions)
+					sched_decisions, plugin_detail, anomalies)
 				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,
-					$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43)
+					$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45)
 				ON CONFLICT (request_id) DO NOTHING
 				RETURNING id`,
 				trunc(rec.RequestID, 64), rec.UserID, rec.APIKeyID, rec.GroupID, rec.AccountID,
@@ -334,7 +391,7 @@ func (s *Service) insert(ctx context.Context, batch []*core.UsageRecord) ([]*cor
 				rate, priceID, exprHash, mode, detail, status, rec.LatencyMs, rec.FirstTokenMs,
 				trunc(rec.ClientIP, 64), trunc(rec.UserAgent, 500), trunc(rec.NodeID, 100), created,
 				trunc(rec.AccountType, 50), trunc(rec.UpstreamProtocol, 100), trunc(rec.ClientRequestID, 128),
-				jsonOr(rec.SchedDecisions, "[]"))
+				jsonOr(rec.SchedDecisions, "[]"), pluginDetailJSON(rec.PluginDetail), anomalies)
 		}
 		br := tx.SendBatch(ctx, b)
 		var free []core.Event
@@ -349,19 +406,136 @@ func (s *Service) insert(ctx context.Context, batch []*core.UsageRecord) ([]*cor
 				return err
 			}
 			inserted = append(inserted, rec)
-			if initialStatus(rec) == StatusFree {
+			switch initialStatus(rec) {
+			case StatusFree:
 				free = append(free, recordedEvent(fromRecord(rec), decimal.Zero, StatusFree))
+			case StatusReserved:
+				reserved = append(reserved, reservedRow{rec: rec, id: id})
 			}
 		}
 		if err := br.Close(); err != nil {
 			return err
+		}
+		// Charging the estimate and registering the entry happen in the same
+		// transaction as the row itself: a reserved row that exists without a
+		// ledger entry would be a free request, and one without a
+		// pending_settlements entry would keep the estimate forever with
+		// nothing left to correct it.
+		for _, r := range reserved {
+			res, err := s.reserveTx(ctx, tx, r)
+			if err != nil {
+				return err
+			}
+			if res != nil && !res.Duplicate {
+				cached = append(cached, balanceUpdate{userID: r.rec.UserID, ledgerID: res.LedgerID, balance: res.BalanceAfter})
+			}
 		}
 		if s.events != nil && len(free) > 0 {
 			return s.events.Emit(ctx, tx, free...)
 		}
 		return nil
 	})
+	if err == nil {
+		for _, c := range cached {
+			s.ledger.CacheBalance(ctx, c.userID, c.ledgerID, c.balance)
+		}
+	}
 	return inserted, err
+}
+
+// reservedRow is one inserted usage row whose cost was estimated by a plugin.
+type reservedRow struct {
+	rec *core.UsageRecord
+	id  int64
+}
+
+// balanceUpdate is a cache refresh owed once the transaction commits.
+type balanceUpdate struct {
+	userID, ledgerID int64
+	balance          decimal.Decimal
+}
+
+// reserveTx prices a plugin's estimate, charges it and registers the entry
+// for the reconcile loop, inside the caller's transaction.
+//
+// Every step is the ordinary one. The price comes from the administrator's
+// table exactly as for a finished request; the charge is kind "usage" with
+// idempotency key "usage:{request_id}", the same key settlement would have
+// used, so a reservation and a later settlement of the same request can never
+// both take the base amount. What is new is only the row's status and the
+// pending_settlements entry.
+func (s *Service) reserveTx(ctx context.Context, tx pgx.Tx, r reservedRow) (*core.LedgerResult, error) {
+	rec := r.rec
+	p := fromRecord(rec)
+	total, detail, _, err := priceOf(p)
+	if err != nil {
+		return nil, fmt.Errorf("price reservation: %w", err)
+	}
+	var res *core.LedgerResult
+	if total.Sign() > 0 {
+		if s.ledger == nil {
+			return nil, errors.New("no ledger configured")
+		}
+		res, err = s.ledger.ApplyTx(ctx, tx, core.LedgerChange{
+			UserID: p.UserID, Amount: total, Credit: false, Kind: "usage",
+			RefType: "usage", RefID: p.RequestID, IdempotencyKey: "usage:" + p.RequestID,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("ledger: %w", err)
+		}
+		detail.LedgerID = &res.LedgerID
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE usage_logs SET total_cost = $2, billing_detail = $3, matched_tier = $4
+		WHERE id = $1`, r.id, total, jsonOr(detail, "{}"), trunc(detail.Tier, 100)); err != nil {
+		return nil, err
+	}
+	rv := rec.Reservation
+	rs := s.reconcileSettings(ctx)
+	now := time.Now()
+	deadlineAt := now.Add(rs.clampDeadline(rv.Deadline))
+	nextAt := now.Add(rs.clampDelay(rv.NextCheckAfter, 0))
+	if nextAt.After(deadlineAt) {
+		nextAt = deadlineAt
+	}
+	var entryID int64
+	err = tx.QueryRow(ctx, `
+		INSERT INTO pending_settlements (plugin_key, ref_id, usage_log_id, account_id, next_check_at, deadline_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (plugin_key, ref_id) DO NOTHING
+		RETURNING id`,
+		trunc(rv.PluginKey, 30), trunc(rv.RefID, 200), r.id, rec.AccountID, nextAt, deadlineAt).Scan(&entryID)
+	if store.IsNoRows(err) {
+		// The plugin reused a ref_id that is already being reconciled, so
+		// this row would never be looked at again: it would sit "reserved"
+		// forever, charged and invisible to both loops. Close it here, the
+		// same way an abandoned entry is closed - billed at the estimate,
+		// with the reason on the row - instead of leaking it.
+		return res, s.closeUnreconcilable(ctx, tx, r.id,
+			"duplicate ref_id "+trunc(rv.RefID, 100)+" for plugin "+rv.PluginKey)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("register pending settlement: %w", err)
+	}
+	return res, nil
+}
+
+// closeUnreconcilable turns a reserved row into a final billed one: the
+// estimate stands, and usage_logs.anomalies says why nobody will ever
+// correct it. Same shape as the reconcile loop's abandon path, and for the
+// same reason it writes 'billed' and never 'failed' - the money has already
+// moved, and usage_logs_billing_pending_idx covers ('pending','failed').
+func (s *Service) closeUnreconcilable(ctx context.Context, tx pgx.Tx, usageLogID int64, reason string) error {
+	slog.ErrorContext(ctx, "usage: a reserved row cannot be reconciled, billing the estimate",
+		"usage_log_id", usageLogID, "reason", reason)
+	marker, _ := json.Marshal(map[string]string{
+		core.AnomalyReconcile:      core.ReconcileAbandoned,
+		core.AnomalyReconcileError: trunc(reason, 500),
+	})
+	_, err := tx.Exec(ctx, `
+		UPDATE usage_logs SET billing_status = 'billed', anomalies = anomalies || $2::jsonb
+		WHERE id = $1`, usageLogID, marker)
+	return err
 }
 
 // pending is everything needed to settle one usage row.
@@ -414,7 +588,9 @@ func fromRecord(rec *core.UsageRecord) *pending {
 	return p
 }
 
-// BillingDetail is stored in usage_logs.billing_detail once billed.
+// BillingDetail is stored in usage_logs.billing_detail once billed. It holds
+// billing inputs and results only: the observability markers that used to
+// share it live in usage_logs.anomalies (core.Anomaly*).
 type BillingDetail struct {
 	ExprVersion    int               `json:"expr_version"`
 	Tier           string            `json:"tier"`
@@ -432,13 +608,19 @@ var errNotPending = errors.New("usage row is not pending")
 
 // settle computes the cost and, in one transaction, writes the ledger row,
 // the usage billing fields and the usage.recorded event.
-func (s *Service) settle(ctx context.Context, p *pending, skipLocked bool) error {
+// priceOf runs the administrator's price expression over one pending row and
+// returns what it costs, the breakdown that records how, and the hash of the
+// expression used. It is the single place a usage figure becomes money:
+// settlement, a plugin's reservation and a reconcile that brings back the
+// real usage all go through it, so none of them can price a request
+// differently from the others.
+func priceOf(p *pending) (total decimal.Decimal, detail BillingDetail, exprHash string, err error) {
 	if p.Expression == "" {
-		return errors.New("price expression not found")
+		return decimal.Zero, BillingDetail{}, "", errors.New("price expression not found")
 	}
 	prog, err := expr.CompileCached(p.Expression)
 	if err != nil {
-		return fmt.Errorf("compile price expression: %w", err)
+		return decimal.Zero, BillingDetail{}, "", fmt.Errorf("compile price expression: %w", err)
 	}
 	t := p.Tokens
 	vars := expr.Normalize(p.Inputs.Semantics, expr.Tokens{
@@ -447,12 +629,19 @@ func (s *Service) settle(ctx context.Context, p *pending, skipLocked bool) error
 	}, prog.Uses)
 	res, err := prog.Eval(expr.Input{Vars: vars, Metrics: p.Metrics, Params: p.Inputs.Params, Headers: p.Inputs.Headers, At: p.CreatedAt})
 	if err != nil {
-		return err
+		return decimal.Zero, BillingDetail{}, "", err
 	}
-	total := res.Cost.Mul(p.Rate).Round(8)
-	detail := BillingDetail{
+	total = res.Cost.Mul(p.Rate).Round(8)
+	return total, BillingDetail{
 		ExprVersion: prog.Version(), Tier: res.Tier, Rules: res.Rules, Breakdown: res.Breakdown,
 		Cost: res.Cost, RateMultiplier: p.Rate, TotalCost: total, Inputs: p.Inputs, Attempts: p.Attempts + 1,
+	}, prog.Hash(), nil
+}
+
+func (s *Service) settle(ctx context.Context, p *pending, skipLocked bool) error {
+	total, detail, exprHash, err := priceOf(p)
+	if err != nil {
+		return err
 	}
 	var ledgerRes *core.LedgerResult
 	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
@@ -491,7 +680,7 @@ func (s *Service) settle(ctx context.Context, p *pending, skipLocked bool) error
 			UPDATE usage_logs SET total_cost = $2, billing_status = 'billed', billing_detail = $3, matched_tier = $4,
 				expr_hash = $5, billing_mode = $6, price_id = $7, rate_multiplier = $8
 			WHERE request_id = $1`,
-			p.RequestID, total, jsonOr(detail, "{}"), trunc(res.Tier, 100), prog.Hash(), p.Mode, priceID, p.Rate)
+			p.RequestID, total, jsonOr(detail, "{}"), trunc(detail.Tier, 100), exprHash, p.Mode, priceID, p.Rate)
 		if err != nil {
 			return err
 		}
