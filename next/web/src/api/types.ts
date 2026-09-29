@@ -283,11 +283,34 @@ export interface Account {
   proxy_created?: boolean
 }
 
+/** Token counters the plugin reported for the probe request (all optional). */
+export interface AccountTestUsage {
+  input_tokens?: number
+  output_tokens?: number
+  cache_read_tokens?: number
+  cache_creation_tokens?: number
+}
+
 export interface AccountTestResult {
   ok: boolean
   status: number
   latency_ms: number
-  message: string
+  /** Transport error or failure summary. */
+  message?: string
+  /** Model actually requested, as reported by the plugin (may differ from the input). */
+  model?: string
+  /** Upstream address: scheme://host + path (the server strips the query). */
+  upstream?: string
+  /** Snippet of the upstream response, present on success and failure (~4 KiB max). */
+  body?: string
+  usage?: AccountTestUsage
+  /** Failure cause classified by the plugin. */
+  reason?: string
+  /**
+   * The account effect the plugin would suggest ('cooldown' | 'disable' | '').
+   * A diagnosis only: a test never cools down or disables the account.
+   */
+  effect?: string
 }
 
 // ------------------------------------------------------------------ billing

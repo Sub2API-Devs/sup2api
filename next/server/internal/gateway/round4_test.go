@@ -17,6 +17,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/usagerules"
 )
 
 // ---------------------------------------------------------------- usage sums
@@ -40,12 +41,12 @@ func TestUsagePathSum(t *testing.T) {
 		{"missing", false, 0},
 	}
 	for _, tc := range cases {
-		r := usagePath(doc, tc.spec)
+		r := usagerules.Path(doc, tc.spec)
 		if r.Exists() != tc.exists || (tc.exists && r.Float() != tc.want) {
 			t.Errorf("%q: exists=%v value=%v", tc.spec, r.Exists(), r.Float())
 		}
 	}
-	if r := usagePath(doc, "a+b"); r.Int() != 7 || r.String() != "7" {
+	if r := usagerules.Path(doc, "a+b"); r.Int() != 7 || r.String() != "7" {
 		t.Fatalf("sum as int/string: %d %q", r.Int(), r.String())
 	}
 
@@ -61,16 +62,16 @@ func TestUsagePathSum(t *testing.T) {
 		Facts: map[string]manifest.UsageFact{"total": {Type: "number", Path: "u.in+u.out+u.think"}},
 	}
 	u := newUsageAcc(rules)
-	u.applySSE("", []byte(`{"u":{"out":2}}`))
-	u.applySSE("", []byte(`{"u":{"out":5,"think":6}}`))
-	u.applySSE("", []byte(`{"other":1}`))
-	if u.tokens().Output != 11 {
-		t.Fatalf("sse sum %+v", u.tokens())
+	u.ApplySSE("", []byte(`{"u":{"out":2}}`))
+	u.ApplySSE("", []byte(`{"u":{"out":5,"think":6}}`))
+	u.ApplySSE("", []byte(`{"other":1}`))
+	if u.Tokens().Output != 11 {
+		t.Fatalf("sse sum %+v", u.Tokens())
 	}
 	u = newUsageAcc(rules)
-	u.applyJSON([]byte(`{"u":{"in":10,"out":5,"think":6}}`))
-	if u.tokens() != (core.UsageTokens{Input: 10, Output: 11}) || u.metrics["total"] != 21.0 {
-		t.Fatalf("json sum %+v %v", u.tokens(), u.metrics)
+	u.ApplyJSON([]byte(`{"u":{"in":10,"out":5,"think":6}}`))
+	if u.Tokens() != (core.UsageTokens{Input: 10, Output: 11}) || u.Metrics["total"] != 21.0 {
+		t.Fatalf("json sum %+v %v", u.Tokens(), u.Metrics)
 	}
 }
 
@@ -80,20 +81,20 @@ func TestGeminiThoughtsCountAsOutput(t *testing.T) {
 	gem := builtinPlatform(t, "gemini")
 	chunk := `{"usageMetadata":{"promptTokenCount":12,"candidatesTokenCount":5,"thoughtsTokenCount":40},"modelVersion":"gemini-2.5-flash"}`
 	u := newUsageAcc(gem.Usage)
-	u.applyJSON([]byte(chunk))
-	if u.tokens() != (core.UsageTokens{Input: 12, Output: 45}) || u.metrics["thoughts_tokens"] != 40.0 {
-		t.Fatalf("json %+v %v", u.tokens(), u.metrics)
+	u.ApplyJSON([]byte(chunk))
+	if u.Tokens() != (core.UsageTokens{Input: 12, Output: 45}) || u.Metrics["thoughts_tokens"] != 40.0 {
+		t.Fatalf("json %+v %v", u.Tokens(), u.Metrics)
 	}
 	u = newUsageAcc(gem.Usage)
-	u.applySSE("", []byte(chunk))
-	if u.tokens().Output != 45 || u.metrics["thoughts_tokens"] != 40.0 {
-		t.Fatalf("sse %+v %v", u.tokens(), u.metrics)
+	u.ApplySSE("", []byte(chunk))
+	if u.Tokens().Output != 45 || u.Metrics["thoughts_tokens"] != 40.0 {
+		t.Fatalf("sse %+v %v", u.Tokens(), u.Metrics)
 	}
 	// Without thinking the output is the candidates count alone.
 	u = newUsageAcc(gem.Usage)
-	u.applyJSON([]byte(`{"usageMetadata":{"promptTokenCount":12,"candidatesTokenCount":5}}`))
-	if u.tokens().Output != 5 {
-		t.Fatalf("no thoughts %+v", u.tokens())
+	u.ApplyJSON([]byte(`{"usageMetadata":{"promptTokenCount":12,"candidatesTokenCount":5}}`))
+	if u.Tokens().Output != 5 {
+		t.Fatalf("no thoughts %+v", u.Tokens())
 	}
 	for _, p := range []string{gem.Usage.JSON.Map[manifest.UsageOutputTokens], gem.Usage.SSE[0].Map[manifest.UsageOutputTokens]} {
 		if p != "usageMetadata.candidatesTokenCount+usageMetadata.thoughtsTokenCount" {

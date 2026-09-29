@@ -8,15 +8,12 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/tidwall/gjson"
-
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/usagerules"
 )
 
 const (
@@ -52,20 +49,20 @@ func (c *call) forward(ctx context.Context, rt *typeRoute, resp *http.Response) 
 	default:
 		err = c.forwardJSON(resp, u)
 	}
-	c.rec.Tokens = u.tokens()
-	if len(u.metrics) > 0 {
-		c.rec.Metrics = u.metrics
+	c.rec.Tokens = u.Tokens()
+	if len(u.Metrics) > 0 {
+		c.rec.Metrics = u.Metrics
 	}
-	if c.rec.UpstreamModel == "" && u.model != "" && u.model != c.model {
-		c.rec.UpstreamModel = u.model
+	if c.rec.UpstreamModel == "" && u.Model != "" && u.Model != c.model {
+		c.rec.UpstreamModel = u.Model
 	}
 	var cerr *convertError
 	switch {
 	case err == nil:
-		if u.streamError != "" {
+		if u.StreamError != "" {
 			c.rec.Success = false
 			c.rec.ErrorType = errTypeUpstream
-			c.rec.ErrorMessage = truncateUTF8(u.streamError, 1000)
+			c.rec.ErrorMessage = truncateUTF8(u.StreamError, 1000)
 		}
 	case errors.As(err, &cerr):
 		c.rec.Success = false
@@ -136,7 +133,7 @@ func (c *call) forwardJSON(resp *http.Response, u *usageAcc) error {
 		slog.Warn("gateway: response too large for usage extraction", "request_id", c.rid)
 		return nil
 	}
-	u.applyJSON(buf.Bytes())
+	u.ApplyJSON(buf.Bytes())
 	return nil
 }
 
@@ -151,7 +148,7 @@ func (c *call) forwardJSONConverted(resp *http.Response, u *usageAcc, conv conve
 	if len(raw) > maxUsageJSONBuf {
 		return &convertError{err: errors.New("upstream response too large")}
 	}
-	u.applyJSON(raw)
+	u.ApplyJSON(raw)
 	out, err := conv.Response(raw)
 	if err != nil {
 		return &convertError{err: err}
@@ -249,7 +246,7 @@ func (c *call) forwardSSE(ctx context.Context, resp *http.Response, u *usageAcc,
 		if c.rec.FirstTokenMs == 0 && len(data) > 0 {
 			c.rec.FirstTokenMs = max(1, int(c.g.now().Sub(c.start)/time.Millisecond))
 		}
-		u.applySSE(event, data)
+		u.ApplySSE(event, data)
 		var err error
 		switch {
 		case sc != nil:
@@ -347,171 +344,11 @@ func readLine(br *bufio.Reader, limit int) ([]byte, error) {
 
 // ---------------------------------------------------------------- usage extraction
 
-// usageAcc applies the platform's declarative usage rules. Later values win,
-// so cumulative counters (message_delta) override earlier ones.
-type usageAcc struct {
-	rules manifest.UsageRules
+// usageAcc applies the platform's declarative usage rules. The extraction
+// itself lives in usagerules, shared with the console "test account" action.
+type usageAcc = usagerules.Acc
 
-	input, output, cacheRead, cacheCreation, cacheCreation1h int64
-
-	model       string
-	metrics     map[string]any
-	streamError string
-}
-
-func newUsageAcc(rules manifest.UsageRules) *usageAcc { return &usageAcc{rules: rules} }
-
-func (u *usageAcc) set(field string, r gjson.Result) {
-	if !r.Exists() || r.Type == gjson.Null {
-		return
-	}
-	switch field {
-	case manifest.UsageModel:
-		u.model = r.String()
-	case manifest.UsageInputTokens:
-		u.input = r.Int()
-	case manifest.UsageOutputTokens:
-		u.output = r.Int()
-	case manifest.UsageCacheReadTokens:
-		u.cacheRead = r.Int()
-	case manifest.UsageCacheCreationTokens:
-		u.cacheCreation = r.Int()
-	case manifest.UsageCacheCreation1h:
-		u.cacheCreation1h = r.Int()
-	default:
-		u.setMetric(field, r, "")
-	}
-}
-
-func (u *usageAcc) setMetric(key string, r gjson.Result, typ string) {
-	if !r.Exists() || r.Type == gjson.Null {
-		return
-	}
-	var v any
-	switch {
-	case typ == "boolean" || r.Type == gjson.True || r.Type == gjson.False:
-		v = r.Bool()
-	case typ == "number" || r.Type == gjson.Number:
-		v = r.Float()
-	default:
-		v = r.String()
-	}
-	if u.metrics == nil {
-		u.metrics = map[string]any{}
-	}
-	u.metrics[key] = v
-}
-
-func (u *usageAcc) applyFacts(doc []byte) {
-	for key, f := range u.rules.Facts {
-		if f.Path != "" {
-			u.setMetric(key, usagePath(doc, f.Path), f.Type)
-		}
-	}
-}
-
-// usagePath evaluates a usage map value: a gjson path, or "a+b+..." summing
-// several numeric paths. Missing (or null) terms count as 0; when every term
-// is missing the result does not exist, i.e. the value was not provided.
-func usagePath(doc []byte, spec string) gjson.Result {
-	if !strings.Contains(spec, "+") {
-		return gjson.GetBytes(doc, spec)
-	}
-	var (
-		sum   float64
-		found bool
-	)
-	for _, p := range strings.Split(spec, "+") {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		r := gjson.GetBytes(doc, p)
-		if !r.Exists() || r.Type == gjson.Null {
-			continue
-		}
-		found = true
-		sum += r.Float()
-	}
-	if !found {
-		return gjson.Result{}
-	}
-	return gjson.Result{Type: gjson.Number, Num: sum, Raw: strconv.FormatFloat(sum, 'f', -1, 64)}
-}
-
-// applyJSON applies the JSON rules to a response body. A top-level array
-// (Gemini's JSON array stream) applies them to each element in order.
-func (u *usageAcc) applyJSON(body []byte) {
-	if len(body) == 0 || !gjson.ValidBytes(body) {
-		return
-	}
-	if r := gjson.ParseBytes(body); r.IsArray() {
-		r.ForEach(func(_, v gjson.Result) bool {
-			if v.IsObject() {
-				u.applyJSONDoc([]byte(v.Raw))
-			}
-			return true
-		})
-		return
-	}
-	u.applyJSONDoc(body)
-}
-
-func (u *usageAcc) applyJSONDoc(body []byte) {
-	if m := u.rules.JSON; m != nil {
-		for field, path := range m.Map {
-			u.set(field, usagePath(body, path))
-		}
-	}
-	u.applyFacts(body)
-}
-
-func (u *usageAcc) applySSE(event string, data []byte) {
-	if len(data) == 0 || !gjson.ValidBytes(data) {
-		return
-	}
-	name := event
-	if name == "" {
-		name = gjson.GetBytes(data, "type").String()
-	}
-	// Anthropic/Responses name error events; OpenAI chat and Gemini send an
-	// unnamed {"error": {...}} chunk.
-	if name == "error" || (name == "" && gjson.GetBytes(data, "error").IsObject()) {
-		msg := gjson.GetBytes(data, "error.message").String()
-		if msg == "" {
-			msg = gjson.GetBytes(data, "message").String()
-		}
-		if msg == "" {
-			msg = string(data)
-		}
-		u.streamError = "upstream stream error: " + msg
-	}
-	for _, rule := range u.rules.SSE {
-		if rule.Event != "" && rule.Event != name {
-			continue
-		}
-		for field, path := range rule.Map {
-			u.set(field, usagePath(data, path))
-		}
-	}
-	u.applyFacts(data)
-}
-
-// tokens converts to core.UsageTokens. cache_creation_tokens is the total
-// cache write (5 minute + 1 hour); the core counts the two separately.
-func (u *usageAcc) tokens() core.UsageTokens {
-	cc := u.cacheCreation - u.cacheCreation1h
-	if cc < 0 {
-		cc = 0
-	}
-	return core.UsageTokens{
-		Input:           max(u.input, 0),
-		Output:          max(u.output, 0),
-		CacheRead:       max(u.cacheRead, 0),
-		CacheCreation:   cc,
-		CacheCreation1h: max(u.cacheCreation1h, 0),
-	}
-}
+func newUsageAcc(rules manifest.UsageRules) *usageAcc { return usagerules.New(rules) }
 
 // readPrefix reads at most n bytes of r.
 func readPrefix(r io.Reader, n int64) ([]byte, error) {

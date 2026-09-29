@@ -188,44 +188,44 @@ func TestExtractPromptText(t *testing.T) {
 func TestUsageExtraction(t *testing.T) {
 	anth := builtinPlatform(t, "anthropic").Usage
 	u := newUsageAcc(anth)
-	u.applySSE("message_start", []byte(`{"type":"message_start","message":{"model":"claude-x","usage":{"input_tokens":100,"output_tokens":1,"cache_read_input_tokens":20,"cache_creation_input_tokens":30,"cache_creation":{"ephemeral_1h_input_tokens":10}}}}`))
-	u.applySSE("content_block_delta", []byte(`{"type":"content_block_delta","delta":{"text":"hi"}}`))
-	u.applySSE("message_delta", []byte(`{"type":"message_delta","usage":{"output_tokens":55}}`))
-	got := u.tokens()
+	u.ApplySSE("message_start", []byte(`{"type":"message_start","message":{"model":"claude-x","usage":{"input_tokens":100,"output_tokens":1,"cache_read_input_tokens":20,"cache_creation_input_tokens":30,"cache_creation":{"ephemeral_1h_input_tokens":10}}}}`))
+	u.ApplySSE("content_block_delta", []byte(`{"type":"content_block_delta","delta":{"text":"hi"}}`))
+	u.ApplySSE("message_delta", []byte(`{"type":"message_delta","usage":{"output_tokens":55}}`))
+	got := u.Tokens()
 	want := core.UsageTokens{Input: 100, Output: 55, CacheRead: 20, CacheCreation: 20, CacheCreation1h: 10}
-	if got != want || u.model != "claude-x" {
-		t.Fatalf("sse usage %+v model %s", got, u.model)
+	if got != want || u.Model != "claude-x" {
+		t.Fatalf("sse usage %+v model %s", got, u.Model)
 	}
 	// Events without an "event:" line fall back to the data "type".
 	u = newUsageAcc(anth)
-	u.applySSE("", []byte(`{"type":"message_delta","usage":{"output_tokens":9}}`))
-	if u.output != 9 {
-		t.Fatalf("type fallback: %d", u.output)
+	u.ApplySSE("", []byte(`{"type":"message_delta","usage":{"output_tokens":9}}`))
+	if u.Tokens().Output != 9 {
+		t.Fatalf("type fallback: %d", u.Tokens().Output)
 	}
 	// 1h larger than total never goes negative.
 	u = newUsageAcc(anth)
-	u.applyJSON([]byte(`{"usage":{"input_tokens":1,"cache_creation_input_tokens":2,"cache_creation":{"ephemeral_1h_input_tokens":5}}}`))
-	if tk := u.tokens(); tk.CacheCreation != 0 || tk.CacheCreation1h != 5 {
+	u.ApplyJSON([]byte(`{"usage":{"input_tokens":1,"cache_creation_input_tokens":2,"cache_creation":{"ephemeral_1h_input_tokens":5}}}`))
+	if tk := u.Tokens(); tk.CacheCreation != 0 || tk.CacheCreation1h != 5 {
 		t.Fatalf("clamp %+v", tk)
 	}
 	// Facts and extra map keys become metrics.
 	rules := manifest.UsageRules{JSON: &manifest.UsageMap{Map: map[string]string{"images": "usage.images"}},
 		Facts: map[string]manifest.UsageFact{"seconds": {Type: "number", Path: "usage.seconds"}, "hd": {Type: "boolean", Path: "hd"}}}
 	u = newUsageAcc(rules)
-	u.applyJSON([]byte(`{"hd":true,"usage":{"images":2,"seconds":1.5}}`))
-	if u.metrics["images"] != 2.0 || u.metrics["seconds"] != 1.5 || u.metrics["hd"] != true {
-		t.Fatalf("metrics %v", u.metrics)
+	u.ApplyJSON([]byte(`{"hd":true,"usage":{"images":2,"seconds":1.5}}`))
+	if u.Metrics["images"] != 2.0 || u.Metrics["seconds"] != 1.5 || u.Metrics["hd"] != true {
+		t.Fatalf("metrics %v", u.Metrics)
 	}
 	// Stream error events are noticed, named or not.
 	u = newUsageAcc(anth)
-	u.applySSE("error", []byte(`{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}`))
-	if !strings.Contains(u.streamError, "Overloaded") {
-		t.Fatalf("stream error %q", u.streamError)
+	u.ApplySSE("error", []byte(`{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}`))
+	if !strings.Contains(u.StreamError, "Overloaded") {
+		t.Fatalf("stream error %q", u.StreamError)
 	}
 	u = newUsageAcc(builtinPlatform(t, "openai").Usage)
-	u.applySSE("", []byte(`{"error":{"message":"server busy","type":"server_error"}}`))
-	if !strings.Contains(u.streamError, "server busy") {
-		t.Fatalf("unnamed stream error %q", u.streamError)
+	u.ApplySSE("", []byte(`{"error":{"message":"server busy","type":"server_error"}}`))
+	if !strings.Contains(u.StreamError, "server busy") {
+		t.Fatalf("unnamed stream error %q", u.StreamError)
 	}
 }
 
@@ -233,13 +233,13 @@ func TestUsageExtraction(t *testing.T) {
 func TestBuiltinUsageRules(t *testing.T) {
 	oai := builtinPlatform(t, "openai")
 	gem := builtinPlatform(t, "gemini")
-	tokens := func(u *usageAcc) core.UsageTokens { return u.tokens() }
+	tokens := func(u *usageAcc) core.UsageTokens { return u.Tokens() }
 
 	// OpenAI chat: JSON, and SSE where only the last chunk carries usage.
 	u := newUsageAcc(oai.Usage)
-	u.applyJSON([]byte(`{"model":"gpt-4o-2024","usage":{"prompt_tokens":30,"completion_tokens":7,"prompt_tokens_details":{"cached_tokens":12}}}`))
-	if tokens(u) != (core.UsageTokens{Input: 30, Output: 7, CacheRead: 12}) || u.model != "gpt-4o-2024" {
-		t.Fatalf("chat json %+v %s", tokens(u), u.model)
+	u.ApplyJSON([]byte(`{"model":"gpt-4o-2024","usage":{"prompt_tokens":30,"completion_tokens":7,"prompt_tokens_details":{"cached_tokens":12}}}`))
+	if tokens(u) != (core.UsageTokens{Input: 30, Output: 7, CacheRead: 12}) || u.Model != "gpt-4o-2024" {
+		t.Fatalf("chat json %+v %s", tokens(u), u.Model)
 	}
 	u = newUsageAcc(oai.Usage)
 	for _, d := range []string{
@@ -248,7 +248,7 @@ func TestBuiltinUsageRules(t *testing.T) {
 		`{"model":"gpt-4o-2024","choices":[],"usage":{"prompt_tokens":30,"completion_tokens":7,"prompt_tokens_details":{"cached_tokens":0}}}`,
 		`[DONE]`,
 	} {
-		u.applySSE("", []byte(d))
+		u.ApplySSE("", []byte(d))
 	}
 	if tokens(u) != (core.UsageTokens{Input: 30, Output: 7}) {
 		t.Fatalf("chat sse %+v", tokens(u))
@@ -259,20 +259,20 @@ func TestBuiltinUsageRules(t *testing.T) {
 	// so no sum is needed.
 	resp := *endpointOf(t, oai, "openai.responses").Usage
 	u = newUsageAcc(resp)
-	u.applySSE("response.created", []byte(`{"type":"response.created","response":{"model":"gpt-5","usage":null}}`))
-	u.applySSE("response.completed", []byte(`{"type":"response.completed","response":{"model":"gpt-5","usage":{"input_tokens":40,"output_tokens":9,"input_tokens_details":{"cached_tokens":8},"output_tokens_details":{"reasoning_tokens":5}}}}`))
-	if tokens(u) != (core.UsageTokens{Input: 40, Output: 9, CacheRead: 8}) || u.model != "gpt-5" {
+	u.ApplySSE("response.created", []byte(`{"type":"response.created","response":{"model":"gpt-5","usage":null}}`))
+	u.ApplySSE("response.completed", []byte(`{"type":"response.completed","response":{"model":"gpt-5","usage":{"input_tokens":40,"output_tokens":9,"input_tokens_details":{"cached_tokens":8},"output_tokens_details":{"reasoning_tokens":5}}}}`))
+	if tokens(u) != (core.UsageTokens{Input: 40, Output: 9, CacheRead: 8}) || u.Model != "gpt-5" {
 		t.Fatalf("responses sse %+v", tokens(u))
 	}
 	u = newUsageAcc(resp)
-	u.applyJSON([]byte(`{"model":"gpt-5","usage":{"input_tokens":40,"output_tokens":9,"input_tokens_details":{"cached_tokens":8}}}`))
+	u.ApplyJSON([]byte(`{"model":"gpt-5","usage":{"input_tokens":40,"output_tokens":9,"input_tokens_details":{"cached_tokens":8}}}`))
 	if tokens(u) != (core.UsageTokens{Input: 40, Output: 9, CacheRead: 8}) {
 		t.Fatalf("responses json %+v", tokens(u))
 	}
 	// Embeddings.
 	u = newUsageAcc(*endpointOf(t, oai, "openai.embeddings").Usage)
-	u.applyJSON([]byte(`{"object":"list","model":"text-embedding-3-small","usage":{"prompt_tokens":5,"total_tokens":5}}`))
-	if tokens(u) != (core.UsageTokens{Input: 5}) || u.model != "text-embedding-3-small" {
+	u.ApplyJSON([]byte(`{"object":"list","model":"text-embedding-3-small","usage":{"prompt_tokens":5,"total_tokens":5}}`))
+	if tokens(u) != (core.UsageTokens{Input: 5}) || u.Model != "text-embedding-3-small" {
 		t.Fatalf("embeddings %+v", tokens(u))
 	}
 
@@ -282,18 +282,18 @@ func TestBuiltinUsageRules(t *testing.T) {
 	// output_tokens = candidatesTokenCount + thoughtsTokenCount (CONTRACTS §14.1).
 	want := core.UsageTokens{Input: 20, Output: 9, CacheRead: 4}
 	u = newUsageAcc(gem.Usage)
-	u.applyJSON([]byte(g2))
-	if tokens(u) != want || u.model != "gemini-2.5-pro" || u.metrics["thoughts_tokens"] != 3.0 {
-		t.Fatalf("gemini json %+v %v", tokens(u), u.metrics)
+	u.ApplyJSON([]byte(g2))
+	if tokens(u) != want || u.Model != "gemini-2.5-pro" || u.Metrics["thoughts_tokens"] != 3.0 {
+		t.Fatalf("gemini json %+v %v", tokens(u), u.Metrics)
 	}
 	u = newUsageAcc(gem.Usage)
-	u.applySSE("", []byte(g1))
-	u.applySSE("", []byte(g2))
+	u.ApplySSE("", []byte(g1))
+	u.ApplySSE("", []byte(g2))
 	if tokens(u) != want {
 		t.Fatalf("gemini sse %+v", tokens(u))
 	}
 	u = newUsageAcc(gem.Usage)
-	u.applyJSON([]byte("[" + g1 + ",\r\n" + g2 + "]"))
+	u.ApplyJSON([]byte("[" + g1 + ",\r\n" + g2 + "]"))
 	if tokens(u) != want {
 		t.Fatalf("gemini json array %+v", tokens(u))
 	}

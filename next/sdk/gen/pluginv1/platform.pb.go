@@ -628,11 +628,19 @@ func (x *BuildTestRequestRequest) GetModel() string {
 }
 
 type BuildTestRequestResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Method        string                 `protobuf:"bytes,1,opt,name=method,proto3" json:"method,omitempty"`
-	Url           string                 `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
-	Headers       map[string]string      `protobuf:"bytes,3,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	BodyJson      string                 `protobuf:"bytes,4,opt,name=body_json,json=bodyJson,proto3" json:"body_json,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Method   string                 `protobuf:"bytes,1,opt,name=method,proto3" json:"method,omitempty"`
+	Url      string                 `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
+	Headers  map[string]string      `protobuf:"bytes,3,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	BodyJson string                 `protobuf:"bytes,4,opt,name=body_json,json=bodyJson,proto3" json:"body_json,omitempty"`
+	// The model the plugin actually requested. Set it when the host passed an
+	// empty model and the plugin fell back to its own default, so the console
+	// can show what was really tested.
+	Model string `protobuf:"bytes,5,opt,name=model,proto3" json:"model,omitempty"`
+	// Protocol whose usage rules describe this test response, e.g.
+	// "anthropic.messages". The host uses it to extract the token counts from
+	// the response body. Empty = the host does not report usage.
+	UsageProtocol string `protobuf:"bytes,6,opt,name=usage_protocol,json=usageProtocol,proto3" json:"usage_protocol,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -691,6 +699,20 @@ func (x *BuildTestRequestResponse) GetHeaders() map[string]string {
 func (x *BuildTestRequestResponse) GetBodyJson() string {
 	if x != nil {
 		return x.BodyJson
+	}
+	return ""
+}
+
+func (x *BuildTestRequestResponse) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *BuildTestRequestResponse) GetUsageProtocol() string {
+	if x != nil {
+		return x.UsageProtocol
 	}
 	return ""
 }
@@ -889,12 +911,14 @@ const file_sub2api_plugin_v1_platform_proto_rawDesc = "" +
 	"\x16ACCOUNT_EFFECT_DISABLE\x10\x02\"e\n" +
 	"\x17BuildTestRequestRequest\x124\n" +
 	"\aaccount\x18\x01 \x01(\v2\x1a.sub2api.plugin.v1.AccountR\aaccount\x12\x14\n" +
-	"\x05model\x18\x02 \x01(\tR\x05model\"\xf1\x01\n" +
+	"\x05model\x18\x02 \x01(\tR\x05model\"\xae\x02\n" +
 	"\x18BuildTestRequestResponse\x12\x16\n" +
 	"\x06method\x18\x01 \x01(\tR\x06method\x12\x10\n" +
 	"\x03url\x18\x02 \x01(\tR\x03url\x12R\n" +
 	"\aheaders\x18\x03 \x03(\v28.sub2api.plugin.v1.BuildTestRequestResponse.HeadersEntryR\aheaders\x12\x1b\n" +
-	"\tbody_json\x18\x04 \x01(\tR\bbodyJson\x1a:\n" +
+	"\tbody_json\x18\x04 \x01(\tR\bbodyJson\x12\x14\n" +
+	"\x05model\x18\x05 \x01(\tR\x05model\x12%\n" +
+	"\x0eusage_protocol\x18\x06 \x01(\tR\rusageProtocol\x1a:\n" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"Q\n" +

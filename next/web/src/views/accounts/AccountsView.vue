@@ -219,6 +219,57 @@ async function runTest() {
   }
 }
 
+/**
+ * The upstream response snippet, re-indented when it parses as JSON. A snippet
+ * is truncated at ~4 KiB, so parsing often fails — then it is shown verbatim.
+ */
+const testBody = computed(() => {
+  const raw = testResult.value?.body
+  if (!raw) return ''
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2)
+  } catch {
+    return raw
+  }
+})
+
+async function copyTestBody() {
+  if (testBody.value && (await copyText(testBody.value))) toast(t('common.copied'), 'success')
+}
+
+/** "input 123 · output 45" (+ cache read / creation when reported). */
+const testUsage = computed(() => {
+  const u = testResult.value?.usage
+  if (!u) return ''
+  const parts: string[] = []
+  const pairs = [
+    ['testUsageInput', u.input_tokens],
+    ['testUsageOutput', u.output_tokens],
+    ['testUsageCacheRead', u.cache_read_tokens],
+    ['testUsageCacheWrite', u.cache_creation_tokens]
+  ] as const
+  for (const [key, v] of pairs) if (v != null) parts.push(`${t(`accounts.${key}`)} ${v}`)
+  return parts.join(' · ')
+})
+
+/**
+ * What the plugin *would* do to the account. The server never applies it for a
+ * test, so the UI shows it as a diagnosis (see `accounts.testEffectNotApplied`).
+ */
+const testEffect = computed<{ tone: 'warning' | 'danger'; label: string } | null>(() => {
+  const e = testResult.value?.effect
+  if (!e) return null
+  if (e === 'cooldown') return { tone: 'warning', label: t('accounts.testEffect.cooldown') }
+  if (e === 'disable') return { tone: 'danger', label: t('accounts.testEffect.disable') }
+  return { tone: 'warning', label: e }
+})
+
+/** Whether the summary block has anything below the status line. */
+const testHasMeta = computed(() => {
+  const r = testResult.value
+  return !!(r && (r.model || r.upstream || r.message || r.reason || testUsage.value || testEffect.value))
+})
+
 // ---------------------------------------------------------------- reveal credentials
 const revealOpen = ref(false)
 const revealed = ref<Record<string, unknown> | null>(null)
@@ -416,27 +467,62 @@ const groupOptions = computed<SelectOption[]>(() => [{ value: '', label: t('acco
     </SModal>
 
     <!-- test -->
-    <SModal v-model:open="testOpen" :title="`${t('accounts.testConnection')} · ${testTarget?.name || ''}`" width="md">
+    <SModal v-model:open="testOpen" :title="`${t('accounts.testConnection')} · ${testTarget?.name || ''}`" width="xl">
       <div class="space-y-4">
-        <div class="flex gap-2">
-          <SInput v-model="testModel" :placeholder="t('accounts.testModelPlaceholder')" @keydown.enter="runTest" />
-          <SButton variant="primary" :loading="testing" @click="runTest">{{ t('common.test') }}</SButton>
+        <div>
+          <div class="flex gap-2">
+            <SInput v-model="testModel" :placeholder="t('accounts.testModelPlaceholder')" @keydown.enter="runTest" />
+            <SButton variant="primary" :loading="testing" @click="runTest">{{ t('common.test') }}</SButton>
+          </div>
+          <SHint size="xs" class="mt-1.5">{{ t('accounts.testModelHint') }}</SHint>
         </div>
-        <div v-if="testResult" class="rounded-xl p-4 text-sm" :class="testResult.ok ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-red-50 dark:bg-red-900/20'">
-          <p class="font-medium" :class="testResult.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300'">
-            {{ testResult.ok ? t('accounts.testOk') : t('accounts.testFailed') }}
-          </p>
-          <dl class="kv mt-2">
-            <dt>HTTP</dt>
-            <dd>{{ testResult.status }}</dd>
-            <dt>{{ t('accounts.latency') }}</dt>
-            <dd>{{ testResult.latency_ms }} ms</dd>
-            <template v-if="testResult.message">
-              <dt>{{ t('accounts.message') }}</dt>
-              <dd class="break-all">{{ testResult.message }}</dd>
-            </template>
-          </dl>
-        </div>
+        <template v-if="testResult">
+          <div class="rounded-xl p-4 text-sm" :class="testResult.ok ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-red-50 dark:bg-red-900/20'">
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <SBadge :tone="testResult.ok ? 'success' : 'danger'" dot>{{ testResult.ok ? t('accounts.testOk') : t('accounts.testFailed') }}</SBadge>
+              <span class="font-mono text-xs tabular-nums text-gray-700 dark:text-gray-200">HTTP {{ testResult.status }}</span>
+              <SHint inline size="xs">{{ t('accounts.latency') }} {{ testResult.latency_ms }} ms</SHint>
+            </div>
+            <dl v-if="testHasMeta" class="kv mt-3">
+              <template v-if="testResult.model">
+                <dt>{{ t('accounts.testActualModel') }}</dt>
+                <dd class="font-mono text-xs">{{ testResult.model }}</dd>
+              </template>
+              <template v-if="testResult.upstream">
+                <dt>{{ t('accounts.testUpstream') }}</dt>
+                <dd class="break-all font-mono text-xs">{{ testResult.upstream }}</dd>
+              </template>
+              <template v-if="testUsage">
+                <dt>{{ t('accounts.testUsage') }}</dt>
+                <dd class="tabular-nums">{{ testUsage }}</dd>
+              </template>
+              <template v-if="testResult.message">
+                <dt>{{ t('accounts.message') }}</dt>
+                <dd class="break-all">{{ testResult.message }}</dd>
+              </template>
+              <template v-if="testResult.reason">
+                <dt>{{ t('accounts.testReason') }}</dt>
+                <dd class="break-all">{{ testResult.reason }}</dd>
+              </template>
+              <template v-if="testEffect">
+                <dt>{{ t('accounts.testEffectTitle') }}</dt>
+                <dd>
+                  <SBadge :tone="testEffect.tone">{{ testEffect.label }}</SBadge>
+                  <SHint inline size="xs" class="ml-2">{{ t('accounts.testEffectNotApplied') }}</SHint>
+                </dd>
+              </template>
+            </dl>
+          </div>
+          <div v-if="testBody">
+            <SSectionTitle :title="t('accounts.testBody')">
+              <template #actions>
+                <SButton size="sm" @click="copyTestBody"><SIcon name="copy" class="h-4 w-4" />{{ t('common.copy') }}</SButton>
+              </template>
+            </SSectionTitle>
+            <SCode class="max-h-80 overflow-y-auto">{{ testBody }}</SCode>
+          </div>
+          <SHint v-else size="xs">{{ t('accounts.testBodyEmpty') }}</SHint>
+        </template>
         <SHint v-if="testError" tone="danger">{{ testError }}</SHint>
       </div>
     </SModal>

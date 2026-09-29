@@ -117,6 +117,10 @@ func TestBuildTestRequest(t *testing.T) {
 	if err := json.Unmarshal([]byte(r.GetBodyJson()), &body); err != nil || len(body.Contents) != 1 || body.Contents[0].Parts[0].Text != "ping" || body.GenerationConfig.MaxOutputTokens != 1 {
 		t.Fatalf("body = %s", r.GetBodyJson())
 	}
+	// The host is told which model was really used and how to read the usage.
+	if r.GetModel() != DefaultTestModel || r.GetUsageProtocol() != "gemini.generate" {
+		t.Fatalf("model = %q usage protocol = %q", r.GetModel(), r.GetUsageProtocol())
+	}
 
 	// in.model is used as-is (models/ prefix stripped); a legacy
 	// model_mapping in the settings is ignored.
@@ -125,6 +129,9 @@ func TestBuildTestRequest(t *testing.T) {
 	})
 	if err != nil || r.GetUrl() != "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent" {
 		t.Fatalf("explicit model: %v %v", r, err)
+	}
+	if r.GetModel() != "gemini-2.5-pro" {
+		t.Fatalf("model = %q", r.GetModel())
 	}
 }
 

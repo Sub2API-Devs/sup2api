@@ -37,9 +37,15 @@ import (
 
 type fakePlatform struct {
 	testURL string
-	mu      sync.Mutex
-	calls   []*pluginv1.ValidateCredentialsRequest
-	tests   []*pluginv1.BuildTestRequestRequest
+	// testModel and usageProtocol are reported by BuildTestRequest.
+	testModel     string
+	usageProtocol string
+	// classify is the answer of ClassifyError; nil fails the call.
+	classify *pluginv1.ClassifyErrorResponse
+	mu       sync.Mutex
+	calls    []*pluginv1.ValidateCredentialsRequest
+	tests    []*pluginv1.BuildTestRequestRequest
+	classes  []*pluginv1.ClassifyErrorRequest
 }
 
 func (p *fakePlatform) ValidateCredentials(_ context.Context, in *pluginv1.ValidateCredentialsRequest) (*pluginv1.ValidateCredentialsResponse, error) {
@@ -60,8 +66,15 @@ func (*fakePlatform) BuildUpstreamRequest(context.Context, *pluginv1.BuildUpstre
 	return nil, core.ErrInternal
 }
 
-func (*fakePlatform) ClassifyError(context.Context, *pluginv1.ClassifyErrorRequest) (*pluginv1.ClassifyErrorResponse, error) {
-	return nil, core.ErrInternal
+func (p *fakePlatform) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequest) (*pluginv1.ClassifyErrorResponse, error) {
+	p.mu.Lock()
+	p.classes = append(p.classes, in)
+	cls := p.classify
+	p.mu.Unlock()
+	if cls == nil {
+		return nil, core.ErrInternal
+	}
+	return cls, nil
 }
 
 // BuildModelsRequest lists models from the fake upstream's /v1/models; the
@@ -81,7 +94,8 @@ func (p *fakePlatform) BuildTestRequest(_ context.Context, in *pluginv1.BuildTes
 	p.mu.Unlock()
 	key := gjson.Get(in.Account.CredentialsJson, "api_key").String()
 	return &pluginv1.BuildTestRequestResponse{Method: "POST", Url: p.testURL,
-		Headers: map[string]string{"x-api-key": key}, BodyJson: fmt.Sprintf(`{"model":%q}`, in.Model)}, nil
+		Headers: map[string]string{"x-api-key": key}, BodyJson: fmt.Sprintf(`{"model":%q}`, in.Model),
+		Model: p.testModel, UsageProtocol: p.usageProtocol}, nil
 }
 
 type fakeGen struct {

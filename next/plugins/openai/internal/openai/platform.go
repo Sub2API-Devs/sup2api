@@ -139,7 +139,8 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 }
 
 // BuildTestRequest implements pluginsdk.Platform: a one-token chat
-// completion.
+// completion. The response reports the model really used and names
+// openai.chat as the protocol whose usage rules read the token counts.
 func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestRequestRequest) (*pluginv1.BuildTestRequestResponse, error) {
 	cfg, err := spec.FromAccount(in.GetAccount())
 	if err != nil {
@@ -155,10 +156,12 @@ func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestReque
 		"messages":   []map[string]string{{"role": "user", "content": "ping"}},
 	})
 	return &pluginv1.BuildTestRequestResponse{
-		Method:   "POST",
-		Url:      cfg.BaseURL + "/v1/chat/completions",
-		Headers:  upstreamHeaders(cfg.APIKey, nil),
-		BodyJson: string(body),
+		Method:        "POST",
+		Url:           cfg.BaseURL + "/v1/chat/completions",
+		Headers:       upstreamHeaders(cfg.APIKey, nil),
+		BodyJson:      string(body),
+		Model:         model,
+		UsageProtocol: "openai.chat",
 	}, nil
 }
 

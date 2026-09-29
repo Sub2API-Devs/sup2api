@@ -99,6 +99,14 @@ message BuildTestRequestResponse {
   string url = 2;
   map<string, string> headers = 3;
   string body_json = 4;
+  // The model the plugin actually requested. Set it when the host passed an
+  // empty model and the plugin fell back to its own default, so the console
+  // can show what was really tested.
+  string model = 5;
+  // Protocol whose usage rules describe this test response, e.g.
+  // "anthropic.messages". The host uses it to extract the token counts from
+  // the response body. Empty = the host does not report usage.
+  string usage_protocol = 6;
 }
 
 message BuildModelsRequestRequest {

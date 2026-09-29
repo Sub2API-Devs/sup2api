@@ -164,6 +164,10 @@ func TestBuildTestRequest(t *testing.T) {
 	if err := json.Unmarshal([]byte(r.GetBodyJson()), &body); err != nil || body.Model != DefaultTestModel || body.MaxTokens != 1 || len(body.Messages) != 1 {
 		t.Fatalf("body = %s", r.GetBodyJson())
 	}
+	// The host is told which model was really used and how to read the usage.
+	if r.GetModel() != DefaultTestModel || r.GetUsageProtocol() != "openai.chat" {
+		t.Fatalf("model = %q usage protocol = %q", r.GetModel(), r.GetUsageProtocol())
+	}
 
 	r, err = h.Platform.BuildTestRequest(context.Background(), &pluginv1.BuildTestRequestRequest{
 		Account: account(`{"api_key":"sk-key-1234"}`, ""), Model: " gpt-4.1 ",
@@ -173,6 +177,9 @@ func TestBuildTestRequest(t *testing.T) {
 	}
 	if err := json.Unmarshal([]byte(r.GetBodyJson()), &body); err != nil || body.Model != "gpt-4.1" {
 		t.Fatalf("body = %s", r.GetBodyJson())
+	}
+	if r.GetModel() != "gpt-4.1" {
+		t.Fatalf("model = %q", r.GetModel())
 	}
 }
 

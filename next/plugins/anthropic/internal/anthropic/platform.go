@@ -319,7 +319,9 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 	}, nil
 }
 
-// BuildTestRequest implements pluginsdk.Platform.
+// BuildTestRequest implements pluginsdk.Platform: a one-token messages call.
+// The response reports the model really used and names anthropic.messages as
+// the protocol whose usage rules read the token counts.
 func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestRequestRequest) (*pluginv1.BuildTestRequestResponse, error) {
 	acc := in.GetAccount()
 	cfg, err := parseAccount(acc.GetCredentialsJson(), acc.GetSettingsJson())
@@ -339,10 +341,12 @@ func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestReque
 		"messages":   []map[string]string{{"role": "user", "content": "ping"}},
 	})
 	return &pluginv1.BuildTestRequestResponse{
-		Method:   "POST",
-		Url:      cfg.BaseURL + "/v1/messages",
-		Headers:  upstreamHeaders(cfg.APIKey, nil),
-		BodyJson: string(body),
+		Method:        "POST",
+		Url:           cfg.BaseURL + "/v1/messages",
+		Headers:       upstreamHeaders(cfg.APIKey, nil),
+		BodyJson:      string(body),
+		Model:         model,
+		UsageProtocol: "anthropic.messages",
 	}, nil
 }
 

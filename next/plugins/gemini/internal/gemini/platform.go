@@ -133,7 +133,8 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 }
 
 // BuildTestRequest implements pluginsdk.Platform: a one-token
-// generateContent call.
+// generateContent call. The response reports the model really used and names
+// gemini.generate as the protocol whose usage rules read the token counts.
 func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestRequestRequest) (*pluginv1.BuildTestRequestResponse, error) {
 	cfg, err := spec.FromAccount(in.GetAccount())
 	if err != nil {
@@ -148,10 +149,12 @@ func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestReque
 		"generationConfig": map[string]any{"maxOutputTokens": 1},
 	})
 	return &pluginv1.BuildTestRequestResponse{
-		Method:   "POST",
-		Url:      modelURL(cfg.BaseURL, model, "generateContent", false),
-		Headers:  upstreamHeaders(cfg.APIKey, nil),
-		BodyJson: string(body),
+		Method:        "POST",
+		Url:           modelURL(cfg.BaseURL, model, "generateContent", false),
+		Headers:       upstreamHeaders(cfg.APIKey, nil),
+		BodyJson:      string(body),
+		Model:         model,
+		UsageProtocol: "gemini.generate",
 	}, nil
 }
 

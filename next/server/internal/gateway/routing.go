@@ -4,6 +4,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/usagerules"
 )
 
 // typeRoute is how the current request reaches accounts of one account type
@@ -108,18 +109,14 @@ func (c *call) addRoute(b core.AccountTypeBinding, ap manifest.AccountPlatform, 
 		return
 	}
 	rt := &typeRoute{binding: b, platform: q, upstream: y, conv: conv,
-		requestFields: ap.RequestFields, passHeaders: ap.PassHeaders, usage: pf.Usage,
+		requestFields: ap.RequestFields, passHeaders: ap.PassHeaders,
+		usage:     usagerules.For(ap, &ep, &pf, y),
 		modelPath: ep.Request.ModelPath}
 	if len(rt.requestFields) == 0 {
 		rt.requestFields = pf.RequestFields
 	}
 	if len(rt.passHeaders) == 0 {
 		rt.passHeaders = pf.PassHeaders
-	}
-	if u, ok := ap.Usage[y]; ok {
-		rt.usage = u
-	} else if ep.Usage != nil {
-		rt.usage = *ep.Usage
 	}
 	c.routes[k] = rt
 	c.routeKeys = append(c.routeKeys, k)
