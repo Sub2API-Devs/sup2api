@@ -1,6 +1,6 @@
 #!/bin/sh
-# Builds, packs and signs the demo plugins and writes a signed market index.
-# POSIX sh; run from anywhere.
+# Builds, packs and signs every plugin under next/plugins and writes a signed
+# market index. POSIX sh; run from anywhere.
 #
 # Usage: build-demo.sh <outdir> <keydir> <keyid> [publisher]
 #
@@ -9,24 +9,29 @@
 #   never regenerated. The same key signs the packages and the index.
 #
 # Output:
-#   <outdir>/anthropic-0.1.6.s2plugin, anthropic-0.2.0.s2plugin (upgrade test),
-#   <outdir>/guard-0.1.0.s2plugin,
-#   <outdir>/moderation-0.1.1.s2plugin (built-in: LLM prompt moderation),
-#   <outdir>/relay-0.1.2.s2plugin  (account type only: Claude relay key),
-#   <outdir>/openai-0.1.6.s2plugin, gemini-0.1.6.s2plugin (built-in account types),
-#   <outdir>/index.json, index.json.sig
-#   <outdir>/test/guard-0.1.1-test.s2plugin   (guardtest build, not indexed)
+#   <outdir>/<name>-<version>.s2plugin for every next/plugins/<name> that has a
+#     manifest.json -- the list is DISCOVERED, not enumerated here, so a new
+#     plugin lands in the market with no change to this script,
+#   <outdir>/anthropic-<next>.s2plugin  (testdata/v0.2.0 overlay, upgrade test),
+#   <outdir>/index.json, index.json.sig,
+#   <outdir>/test/guard-<version>-test.s2plugin  (guardtest build, not indexed)
+#
+#   Which plugins are *built into the image* is a separate, deliberate
+#   deployment decision and stays an explicit list: BUILTIN_PLUGINS in
+#   deploy/docker/build-go.sh. Being in the market is not being built in.
 #
 # Environment:
 #   SUB2API_PLUGIN  CLI to use (default: sub2api-plugin on PATH, else built
 #                   from tools/sub2api-plugin into a temp dir).
+#   PLUGINS=...     space separated plugin names to package instead of every
+#                   plugins/*/manifest.json (debugging / partial rebuilds).
 #   REQUIRE_UI=1    fail when a plugin's ui/native/dist is missing (guard,
 #                   moderation); default: pack without the native UI and warn.
 #   PLATFORMS=...   override target platforms (default linux/amd64,linux/arm64).
 set -eu
 
 if [ $# -lt 3 ]; then
-  sed -n '2,24p' "$0"
+  sed -n '2,30p' "$0"
   exit 2
 fi
 
@@ -85,13 +90,35 @@ package() {
   "$BIN" sign --key "$KEY" --key-id "$KEYID" --publisher "$PUBLISHER" "$pkg"
 }
 
-package anthropic anthropic-base "$OUT"
+# The plugins that go into the market are discovered, not listed: every
+# next/plugins/<name> holding a manifest.json is packaged at its manifest
+# version. Adding a plugin therefore needs no edit here.
+if [ -n "${PLUGINS:-}" ]; then
+  names=$PLUGINS
+else
+  names=
+  for dir in "$NEXT"/plugins/*/; do
+    [ -f "$dir/manifest.json" ] || continue
+    names="$names $(basename "$dir")"
+  done
+fi
+if [ -z "$(printf '%s' "$names" | tr -d ' ')" ]; then
+  echo "no plugins with a manifest.json under $NEXT/plugins" >&2
+  exit 1
+fi
+for name in $names; do
+  if [ ! -f "$NEXT/plugins/$name/manifest.json" ]; then
+    echo "$NEXT/plugins/$name/manifest.json missing" >&2
+    exit 1
+  fi
+  echo "==> packaging $name" >&2
+  package "$name" "$name-base" "$OUT"
+done
+
+# Extra packages the e2e suite needs. These are overlays of a plugin already
+# packaged above (a second version, a differently tagged build), not plugins of
+# their own, so they stay explicit.
 package anthropic anthropic-v020 "$OUT" testdata/v0.2.0
-package guard guard-base "$OUT"
-package moderation moderation-base "$OUT"
-package relay relay-base "$OUT"
-package openai openai-base "$OUT"
-package gemini gemini-base "$OUT"
 package guard guard-test "$OUT/test" testdata/guardtest guardtest
 
 "$BIN" index --dir "$OUT" --key "$KEY"

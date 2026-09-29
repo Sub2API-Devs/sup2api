@@ -17,7 +17,6 @@ import (
 // itself does not moderate the plugin's own calls.
 func TestAC22_PromptModeration(t *testing.T) {
 	e := Setup(t)
-	e.Pending("moderation plugin (CONTRACTS 20), core hook timeout 30s, mock-upstream submit_verdict")
 	admin := e.Admin()
 	e.EnsurePlugin(admin, moderationKey, "")
 	// The plugin's menu sits in its own sidebar section (manifest

@@ -13,7 +13,6 @@ import (
 // request ui.native.
 func TestAC15_SignatureAndTrust(t *testing.T) {
 	e := Setup(t)
-	e.Pending("c1-lifecycle (pkg verify, trust, publishers, revocation), c2-runtime (auto-disable)")
 	admin := e.Admin()
 
 	t.Run("tampered official package is rejected", func(t *testing.T) {
@@ -116,7 +115,6 @@ func TestAC15_SignatureAndTrust(t *testing.T) {
 // console; disabling guard removes them.
 func TestAC16_GuardNativeUI(t *testing.T) {
 	e := Setup(t)
-	e.Pending("c1-lifecycle (/ui/plugins), c2-runtime (/plugin-ui assets), f-frontend (guard native UI), a1-identity (menus)")
 	admin := e.Admin()
 	e.EnsurePlugin(admin, "guard", "")
 

@@ -13,7 +13,6 @@ import (
 // guard process is killed the hook fails open and the breaker trips.
 func TestAC10_GuardBlocksAndFailsOpen(t *testing.T) {
 	e := Setup(t)
-	e.Pending("e-sdk-plugins (guard), c2-runtime (hooks via grpcruntime), gateway (G hook executor, breaker)")
 	admin := e.Admin()
 	tn := e.NewTenant(admin, TenantOpts{})
 	e.EnsurePlugin(admin, "guard", "")
@@ -101,7 +100,6 @@ func TestAC10_GuardBlocksAndFailsOpen(t *testing.T) {
 // after disable + enable delivery resumes from the cursor.
 func TestAC11_GuardEventStatsMatchUsage(t *testing.T) {
 	e := Setup(t)
-	e.Pending("h events-jobs (delivery, cursors), b-billing (usage.recorded), e-sdk-plugins (guard stats)")
 	admin := e.Admin()
 	tn := e.NewTenant(admin, TenantOpts{})
 	e.EnsurePlugin(admin, "guard", "")
@@ -155,7 +153,6 @@ func TestAC11_GuardEventStatsMatchUsage(t *testing.T) {
 // AC 12: guard's rollup job runs once per cycle with two nodes.
 func TestAC12_RollupOncePerCycle(t *testing.T) {
 	e := Setup(t)
-	e.Pending("h events-jobs (job scheduler, Redis lock), e-sdk-plugins (guard rollup)")
 	admin := e.Admin()
 	e.EnsurePlugin(admin, "guard", "")
 

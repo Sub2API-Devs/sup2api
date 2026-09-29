@@ -24,7 +24,6 @@ import (
 // 503 from the openai endpoints.
 func TestAC20_OpenAIGeminiAPIKeys(t *testing.T) {
 	e := Setup(t)
-	e.Pending("round 4 (openai/gemini accounts): e4-plugins (openai/gemini built-in plugins, mock-upstream), g4-gateway (gemini alt=sse re-framing, usage a+b sums in gemini.json), a4 (accounts of the new types)")
 	admin := e.Admin()
 	m := e.Mock()
 
@@ -292,7 +291,6 @@ func TestAC20_OpenAIGeminiAPIKeys(t *testing.T) {
 // 14.3), well before guard's 5 s polling fallback.
 func TestAC20_GuardRulesBroadcast(t *testing.T) {
 	e := Setup(t)
-	e.Pending("round 4 (plugin broadcast): d4 (HostService.Publish / OnBroadcast relay), c4 (app.broadcast.v1 validation), e4-plugins (guard rules.changed)")
 	if len(e.NodeURLs) < 2 {
 		t.Skip("needs two node URLs (E2E_NODE_URLS)")
 	}

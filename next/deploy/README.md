@@ -59,17 +59,23 @@ through the gateway use `/__control` rules or key markers.
 
 ```bash
 cd next/e2e
-E2E_ADMIN_PASSWORD=... E2E_DOCKER_HOST=ovh go test -count=1 -v ./...
-E2E_RUN_PENDING=1 ...   # also run tests whose modules are not merged yet
+E2E_BASE_URL=http://127.0.0.1:3130 E2E_ADMIN_PASSWORD=... E2E_DOCKER_HOST=ovh \
+  go test -count=1 -v ./...
 E2E_LONG=1 ...          # also wait for multi-minute schedules (AC 12)
 ```
 
 | Variable | Default |
 |---|---|
-| `E2E_BASE_URL` | `http://127.0.0.1:3120` |
+| `E2E_BASE_URL` | **required, no default** — `Setup` fails with instructions when it is unset. A stale default (it used to be `http://127.0.0.1:3120`) makes every case skip as "unreachable" and the suite read as green |
 | `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD` | `admin@sub2api.test` / (required beyond AC 1) |
 | `E2E_DOCKER_HOST` | empty; `ovh` runs `ssh ovh docker ...`, `local` runs docker locally. Needed to kill nodes/plugins and to query PG/Redis |
 | `E2E_MOCK_URL`, `E2E_MOCK_INTERNAL_URL`, `E2E_NODE_URLS`, `E2E_PROJECT` | Caddy helper routes / compose names |
+
+`Setup` fails (it does not skip) when `E2E_BASE_URL` is unset or the target
+does not answer, and there is no longer an `E2E_RUN_PENDING` knob: every
+`Pending()` marker named a module that has since been merged, so they were
+removed (2026-09-29). The suite is not part of CI — `.github/workflows/next-ci.yml`
+covers the Go modules only, because e2e needs a deployed stack.
 
 Request bodies the contract leaves open are assumed as follows (adjust in
 `e2e/resources.go` if the modules differ): `POST /roles {key, name, description}`,

@@ -53,11 +53,12 @@ manifest_version() {
 }
 
 if [ -f tools/sub2api-plugin/scripts/build-demo.sh ]; then
-  # Owned by the SDK team: builds, packs and signs every demo package
-  # (anthropic 0.1.6/0.2.0, guard 0.1.0, moderation 0.1.1, relay 0.1.2,
-  # openai 0.1.6, gemini 0.1.6, guard test build) and
-  # writes the index. Only BUILTIN_PLUGINS below are built in; relay is a
-  # market plugin.
+  # Owned by the SDK team: builds, packs and signs one package per
+  # plugins/<name>/manifest.json (the list is discovered there, so a new plugin
+  # needs no change in either script), plus the e2e fixtures (anthropic's
+  # upgrade version, the guard test build), and writes the signed index.
+  # Everything packaged here is in the market; only BUILTIN_PLUGINS below is
+  # built into the image.
   echo "==> tools/sub2api-plugin/scripts/build-demo.sh"
   sh tools/sub2api-plugin/scripts/build-demo.sh "$OUT/market" "$KEYS" "$KEY_ID"
 else
@@ -101,11 +102,23 @@ ls -l "$OUT/market"
 
 # Built-in plugins (installed and enabled by the core at startup, cannot be
 # uninstalled): the package matching plugins/<name>/manifest.json's version.
+#
+# This list is DELIBERATELY explicit and must NOT be derived from plugins/*.
+# Being in the market (which *is* discovered, see build-demo.sh) means "an
+# operator can install it"; being here means "every deployment ships it and
+# nobody can remove it", which is a deployment decision, not a consequence of
+# a directory existing. A new plugin therefore reaches the market with no
+# change and is added here only on purpose.
+#
 # The anthropic/openai/gemini platforms and their endpoints are built into the
 # core itself; the anthropic, openai and gemini plugins only add the API key
 # account types of their platform (anthropic also a model
 # catalog). moderation is the LLM prompt moderation hook (CONTRACTS §20):
 # enabled at install, but its mode defaults to off until configured.
+#
+# Intentionally NOT built in: relay (a market-only account type), guard (an
+# optional gateway hook), volcengine (still blocked in round 3 of its plan,
+# see docs/PLUGIN-VOLCENGINE-ARK.md - it ships in the market only).
 BUILTIN_PLUGINS=${BUILTIN_PLUGINS:-anthropic openai gemini moderation}
 mkdir -p "$OUT/builtin"
 cp "$KEYS/$KEY_ID.pub" "$OUT/builtin/trust.pub"

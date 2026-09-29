@@ -10,7 +10,6 @@ import (
 // form; it saves and credentials are masked.
 func TestAC04_CreateAnthropicAccount(t *testing.T) {
 	e := Setup(t)
-	e.Pending("a2-resources (accounts, account types), c2-runtime (ValidateCredentials), e-sdk-plugins (anthropic form)")
 	admin := e.Admin()
 	e.EnsurePlugin(admin, "anthropic", "")
 

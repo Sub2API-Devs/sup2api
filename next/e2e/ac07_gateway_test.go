@@ -12,7 +12,6 @@ import (
 // that group are scheduled.
 func TestAC07_GatewayGroupScheduling(t *testing.T) {
 	e := Setup(t)
-	e.Pending("gateway (G), a2-resources (groups, keys), b-billing (usage), anthropic plugin")
 	admin := e.Admin()
 	mine := e.NewTenant(admin, TenantOpts{Accounts: 2})
 	other := e.NewTenant(admin, TenantOpts{Accounts: 1})
@@ -124,7 +123,6 @@ func TestAC07_GatewayGroupScheduling(t *testing.T) {
 // cools the failed account down (ClassifyError of the anthropic plugin).
 func TestGatewayFailoverAndCooldown(t *testing.T) {
 	e := Setup(t)
-	e.Pending("gateway (G), anthropic ClassifyError, a2-resources (cooldown)")
 	admin := e.Admin()
 	tn := e.NewTenant(admin, TenantOpts{Accounts: 2, Priorities: []int{1, 50}})
 	primary, backup := tn.Accounts[0], tn.Accounts[1]
@@ -178,7 +176,6 @@ func TestGatewayFailoverAndCooldown(t *testing.T) {
 // account (default rule claude-code-session of the anthropic plugin).
 func TestGatewayStickySession(t *testing.T) {
 	e := Setup(t)
-	e.Pending("gateway (G) sticky sessions, anthropic stickyRules")
 	admin := e.Admin()
 	tn := e.NewTenant(admin, TenantOpts{Accounts: 3})
 	m := e.Mock()

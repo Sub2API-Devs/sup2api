@@ -14,7 +14,6 @@ import (
 // serving.
 func TestAC17_NodeLoss(t *testing.T) {
 	e := Setup(t)
-	e.Pending("d-sandbox (cluster: heartbeat, node list, slots), c1-lifecycle (/nodes), gateway (G slots)")
 	e.RequireDocker()
 	admin := e.Admin()
 	tn := e.NewTenant(admin, TenantOpts{Accounts: 1})

@@ -16,7 +16,6 @@ import (
 // plugin, so uninstalling it is refused.
 func TestAC06_DisableEnableUninstall(t *testing.T) {
 	e := Setup(t)
-	e.Pending("c1-lifecycle, c2-runtime (generation switch), a1-identity (plugin permission status), gateway; round 3: g3-platforms-gateway (built-in platforms, /platforms), a3-accounts (group platforms)")
 	admin := e.Admin()
 	tn := e.NewTenant(admin, TenantOpts{})
 	e.MustMessages(tn.APIKey, MessagesBody(tn.Model, "before disable", false), nil)

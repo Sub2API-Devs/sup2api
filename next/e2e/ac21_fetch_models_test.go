@@ -12,7 +12,6 @@ import (
 // the form) and for a saved account; upstream failures are reported as 503.
 func TestAC21_FetchUpstreamModels(t *testing.T) {
 	e := Setup(t)
-	e.Pending("a2-resources (models fetch), e-sdk-plugins (BuildModelsRequest), mock-upstream (/v1/models)")
 	admin := e.Admin()
 	e.EnsurePlugin(admin, "anthropic", "")
 	e.EnsurePlugin(admin, "openai", "")

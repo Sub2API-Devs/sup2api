@@ -11,7 +11,6 @@ import (
 // menus and gets 403 on everything else.
 func TestAC02_CustomRoleMenusAndForbidden(t *testing.T) {
 	e := Setup(t)
-	e.Pending("a1-identity (auth, users, roles, /me/menus), a2-resources (accounts, proxies)")
 	admin := e.Admin()
 
 	// The super admin sees everything.

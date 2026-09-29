@@ -12,7 +12,6 @@ import (
 // direct net.Dial fails under strict mode.
 func TestAC13_EgressLogAndStrictNetwork(t *testing.T) {
 	e := Setup(t)
-	e.Pending("d-sandbox (egress tunnel, seccomp), c2-runtime, e-sdk-plugins (guard webhook, guard test build)")
 	admin := e.Admin()
 	tn := e.NewTenant(admin, TenantOpts{})
 	e.EnsurePlugin(admin, "guard", "")
@@ -65,7 +64,6 @@ func TestAC13_EgressLogAndStrictNetwork(t *testing.T) {
 // resource requests above the global cap are rejected at install time.
 func TestAC14_ResourceLimits(t *testing.T) {
 	e := Setup(t)
-	e.Pending("d-sandbox (watchdog, oom_score_adj), c2-runtime (restart reasons), c1-lifecycle (resource cap), e-sdk-plugins (guard test build)")
 	admin := e.Admin()
 
 	t.Run("over-limit allocation restarts the plugin", func(t *testing.T) {

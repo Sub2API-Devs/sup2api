@@ -9,7 +9,6 @@ import (
 // continue; the ledger records the operator.
 func TestAC09_InsufficientBalance(t *testing.T) {
 	e := Setup(t)
-	e.Pending("b-billing (balance, ledger, adjust), gateway (G)")
 	admin := e.Admin()
 	tn := e.NewTenant(admin, TenantOpts{Balance: "0"})
 	m := e.Mock()

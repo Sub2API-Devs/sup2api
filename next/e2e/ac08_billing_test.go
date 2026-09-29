@@ -14,7 +14,6 @@ import (
 // request twice never charges twice.
 func TestAC08_BillingModes(t *testing.T) {
 	e := Setup(t)
-	e.Pending("b-billing (prices, preview, settlement, ledger), gateway (G)")
 	admin := e.Admin()
 	tn := e.NewTenant(admin, TenantOpts{Accounts: 1, Balance: "20"})
 	acctKey := tn.Accounts[0].Key

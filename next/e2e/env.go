@@ -1,10 +1,13 @@
 // Package e2e holds the end-to-end acceptance tests of sub2api-next
 // (docs/ARCHITECTURE.md §17.3). The tests talk to a running deployment
-// (deploy/compose.yml) through Caddy; see deploy/README.md.
+// through one origin that also exposes the /__node1, /__node2 and /__mock
+// helper routes; see deploy/README.md.
 //
 // Environment:
 //
-//	E2E_BASE_URL          default http://127.0.0.1:3120
+//	E2E_BASE_URL          required, e.g. http://127.0.0.1:3130 (no default: a
+//	                      stale default silently points the whole suite at a
+//	                      deployment that no longer exists)
 //	E2E_ADMIN_EMAIL       default admin@sub2api.test
 //	E2E_ADMIN_PASSWORD    required for everything past the infrastructure checks
 //	E2E_MOCK_URL          mock-upstream control URL, default $E2E_BASE_URL/__mock
@@ -13,11 +16,11 @@
 //	E2E_DOCKER_HOST       "ovh" (docker via ssh), "local", or empty (tests that
 //	                      kill containers / query PG and Redis are skipped)
 //	E2E_PROJECT           compose project name, default sub2api-next-test
-//	E2E_RUN_PENDING=1     run tests still marked pending (modules not merged yet)
 //	E2E_LONG=1            run tests that wait for multi-minute schedules
 package e2e
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -37,13 +40,33 @@ type Config struct {
 	NodeURLs        []string
 	DockerHost      string
 	Project         string
-	RunPending      bool
 	Long            bool
 	RunID           string // unique suffix for resources created by this run
 }
 
-func loadConfig() *Config {
-	base := strings.TrimRight(env("E2E_BASE_URL", "http://127.0.0.1:3120"), "/")
+// errNoBaseURL is reported by Setup when E2E_BASE_URL is not set. There is
+// deliberately no default: the previous one (127.0.0.1:3120) outlived the
+// deployment it named, so every test skipped as "unreachable" for weeks and
+// the suite read as green.
+const errNoBaseURL = `E2E_BASE_URL is not set.
+
+The e2e suite needs a running sub2api-next deployment reachable under one
+origin: two nodes, mock-upstream, and the /__node1, /__node2, /__mock helper
+routes (see deploy/README.md; the stack that provided them, sub2api-next-test
+on :3120, was removed on 2026-09-27 and has no replacement yet - a bare
+single/ stack on :3130 does NOT satisfy the suite). Once such a stack exists:
+
+    export E2E_BASE_URL=http://127.0.0.1:3130
+    export E2E_ADMIN_EMAIL=...  E2E_ADMIN_PASSWORD=...   # bootstrap admin of that stack
+    export E2E_DOCKER_HOST=ovh                           # for PG/Redis/container checks
+
+See deploy/README.md and docs/PROGRESS.md for the current test deployment.`
+
+func loadConfig() (*Config, error) {
+	base := strings.TrimRight(os.Getenv("E2E_BASE_URL"), "/")
+	if base == "" {
+		return nil, errors.New(errNoBaseURL)
+	}
 	c := &Config{
 		BaseURL:         base,
 		AdminEmail:      env("E2E_ADMIN_EMAIL", "admin@sub2api.test"),
@@ -52,7 +75,6 @@ func loadConfig() *Config {
 		MockInternalURL: strings.TrimRight(env("E2E_MOCK_INTERNAL_URL", "http://mock-upstream:8080"), "/"),
 		DockerHost:      os.Getenv("E2E_DOCKER_HOST"),
 		Project:         env("E2E_PROJECT", "sub2api-next-test"),
-		RunPending:      os.Getenv("E2E_RUN_PENDING") == "1",
 		Long:            os.Getenv("E2E_LONG") == "1",
 		RunID:           fmt.Sprintf("%x", time.Now().UnixNano()/1e6%0xffffffff),
 	}
@@ -61,7 +83,7 @@ func loadConfig() *Config {
 			c.NodeURLs = append(c.NodeURLs, u)
 		}
 	}
-	return c
+	return c, nil
 }
 
 func env(k, def string) string {
@@ -74,49 +96,46 @@ func env(k, def string) string {
 var (
 	cfgOnce  sync.Once
 	cfg      *Config
-	reachErr error
+	setupErr error
 )
 
-// Env is the per-test entry point: it skips the test when the deployment is
-// unreachable and exposes the configuration and shared fixtures.
+// Env is the per-test entry point: it resolves the configuration, verifies the
+// deployment answers, and exposes the shared fixtures.
 type Env struct {
 	*Config
 	T *testing.T
 }
 
-// Setup must be the first call of every test.
+// Setup must be the first call of every test. It fails the test (it does not
+// skip) when the target deployment is not configured or does not answer: a
+// silent skip here turns the whole suite into 0 assertions while still
+// reporting green, which is how the stale :3120 default went unnoticed.
 func Setup(t *testing.T) *Env {
 	t.Helper()
 	cfgOnce.Do(func() {
-		cfg = loadConfig()
+		cfg, setupErr = loadConfig()
+		if setupErr != nil {
+			return
+		}
 		cl := &http.Client{Timeout: 5 * time.Second}
 		resp, err := cl.Get(cfg.BaseURL + "/healthz")
 		if err != nil {
-			reachErr = err
+			setupErr = fmt.Errorf("deployment at %s does not answer (%w); bring the e2e stack up and open the tunnel (deploy/README.md)", cfg.BaseURL, err)
 			return
 		}
 		resp.Body.Close()
 		if resp.StatusCode != 200 {
-			reachErr = fmt.Errorf("GET /healthz: HTTP %d", resp.StatusCode)
+			setupErr = fmt.Errorf("GET %s/healthz: HTTP %d", cfg.BaseURL, resp.StatusCode)
 		}
 	})
-	if reachErr != nil {
-		t.Skipf("deployment at %s unreachable (%v); start it with deploy/scripts/up.sh and open the tunnel", cfg.BaseURL, reachErr)
+	if setupErr != nil {
+		t.Fatal(setupErr)
 	}
 	return &Env{Config: cfg, T: t}
 }
 
 // With returns a copy of e bound to a subtest.
 func (e *Env) With(t *testing.T) *Env { return &Env{Config: e.Config, T: t} }
-
-// Pending skips the test unless E2E_RUN_PENDING=1. reason names the modules
-// the test waits for; remove the call once they are merged.
-func (e *Env) Pending(reason string) {
-	e.T.Helper()
-	if !e.RunPending {
-		e.T.Skip("pending: " + reason)
-	}
-}
 
 // RequireAdmin skips when admin credentials are not configured.
 func (e *Env) RequireAdmin() {

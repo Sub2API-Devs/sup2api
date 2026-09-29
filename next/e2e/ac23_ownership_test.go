@@ -14,7 +14,6 @@ import (
 // changes nothing and never sees secrets; admins filter by creator.
 func TestAC23_OwnershipAndProxyURL(t *testing.T) {
 	e := Setup(t)
-	e.Pending("ownership (CONTRACTS 21): own-scoped keys, PermAny, proxy_url auto-link, guardedSettings, created_by filters")
 	admin := e.Admin()
 	e.EnsurePlugin(admin, "anthropic", "")
 
@@ -326,11 +325,12 @@ func TestAC23_OwnershipAndProxyURL(t *testing.T) {
 	}
 
 	// 7. Audit log. There is no console endpoint for audit_logs (CONTRACTS
-	// §21.2 only defines the rows), so the table is read directly when
-	// container access is configured; otherwise this part is skipped.
-	if e.DockerHost == "" {
-		t.Log("E2E_DOCKER_HOST not set: audit_logs assertions skipped")
-	} else {
+	// §21.2 only defines the rows), so the table is read directly. This is a
+	// subtest so that a missing E2E_DOCKER_HOST shows up as a SKIP in the test
+	// output instead of silently dropping the assertions from a passing case.
+	t.Run("audit log", func(t *testing.T) {
+		e := e.With(t)
+		e.RequireDocker()
 		rows := e.SQL(fmt.Sprintf(`SELECT action, target_type, target_id, detail::text FROM audit_logs WHERE user_id=%d AND action IN ('account.create','proxy.create') ORDER BY id`, a.UserID))
 		var accCreate, proxyAuto bool
 		for _, row := range rows {
@@ -351,5 +351,5 @@ func TestAC23_OwnershipAndProxyURL(t *testing.T) {
 		if !accCreate || !proxyAuto {
 			t.Fatalf("audit rows for A (account.create=%v proxy.create{auto}=%v): %v", accCreate, proxyAuto, rows)
 		}
-	}
+	})
 }

@@ -19,7 +19,6 @@ import (
 // the anthropic accounts; re-enabling restores the mix.
 func TestAC18_MixedAccountTypesServeOneEndpoint(t *testing.T) {
 	e := Setup(t)
-	e.Pending("round 3 (built-in platforms): c3-registry (account types by platform), a3-accounts (account-types/groups/api-keys platforms), g3-platforms-gateway (built-in endpoints, /platforms), relay in the market")
 	admin := e.Admin()
 	m := e.Mock()
 

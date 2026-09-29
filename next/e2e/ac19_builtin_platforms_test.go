@@ -9,13 +9,13 @@ import (
 
 // AC 19: the core has built-in platforms (ARCHITECTURE 6.6, CONTRACTS 13).
 // GET /platforms lists at least anthropic, openai and gemini, built in and
-// each with its endpoints. The endpoints of a built-in platform always
-// exist: an API key whose group only has anthropic-type accounts gets 503
-// no_available_account (in the endpoint's openai error format) from
-// /v1/chat/completions, not 404, and no upstream is called.
+// each with its endpoints. The endpoints of a built-in platform always exist,
+// so /v1/chat/completions is never a 404 for an API key whose group only has
+// anthropic-type accounts: it is 503 no_available_account (in the endpoint's
+// openai error format, no upstream called) while no protocol converter is
+// registered, and a served 200 once one is.
 func TestAC19_BuiltinPlatforms(t *testing.T) {
 	e := Setup(t)
-	e.Pending("round 3 (built-in platforms): g3-platforms-gateway (built-in platforms, /platforms, openai endpoints), a3-accounts (groups/api-keys platforms)")
 	admin := e.Admin()
 
 	// 1. Built-in platforms with their endpoints.
@@ -65,17 +65,20 @@ func TestAC19_BuiltinPlatforms(t *testing.T) {
 		t.Fatalf("api key platforms = %v, want [anthropic]", ids)
 	}
 
-	// 3. /v1/chat/completions exists (built in) but nothing in the group can
-	// serve it. This assumes the core has no openai.chat -> anthropic.*
-	// converter; with one, anthropic/apikey would list the endpoint as
-	// convertible and serve it.
+	// 3. /v1/chat/completions exists (it is built in) but which outcome is
+	// correct depends on whether the core registers an
+	// openai.chat -> anthropic.messages converter
+	// (server/internal/gateway/convert): with one, anthropic/apikey lists the
+	// endpoint as convertible and must serve it; without one, nothing in the
+	// group can serve it and the answer is 503 in the endpoint's openai error
+	// format. Both are asserted below - a skip here would swallow the 503
+	// branch the day the first converter lands, and would also mask the
+	// assertions this function already made.
 	at, ok := FindAccountType(admin.OK(t, http.MethodGet, "/account-types", nil).Array(), AnthropicPlugin, AnthropicAPIKey)
 	if !ok {
 		t.Fatal("anthropic/apikey not offered")
 	}
-	if ep, ok := AccountTypeEndpoint(at, http.MethodPost, "/v1/chat/completions"); ok {
-		t.Skipf("anthropic/apikey serves /v1/chat/completions through conversion (%s); the 503 case no longer applies", ep.Raw)
-	}
+	convEP, converted := AccountTypeEndpoint(at, http.MethodPost, "/v1/chat/completions")
 	m := e.Mock()
 	mark := m.Mark(t)
 	body := map[string]any{
@@ -84,18 +87,38 @@ func TestAC19_BuiltinPlatforms(t *testing.T) {
 	}
 	g := e.Gateway(t, e.BaseURL, "/v1/chat/completions", "", body, map[string]string{"Authorization": "Bearer " + tn.APIKey})
 	j := g.JSON()
-	if g.Status != http.StatusServiceUnavailable {
-		t.Fatalf("/v1/chat/completions with only anthropic accounts: HTTP %d %s (want 503, not 404)", g.Status, g.Body)
-	}
-	// OpenAI error format: {"error": {"message", "type", "code", "param"}},
-	// without Anthropic's top-level "type": "error".
-	if j.Get("error.code").String() != "no_available_account" || j.Get("error.message").String() == "" ||
-		j.Get("error.type").String() == "" || j.Get("type").Exists() {
-		t.Fatalf("/v1/chat/completions error body (want openai format, no_available_account): %s", g.Body)
-	}
-	for _, k := range KeysUsed(m.Since(t, mark), "") {
-		if tn.AccountKeys()[k] {
-			t.Fatalf("an upstream was called with account key %s for an unservable endpoint", k)
+	keysUsed := KeysUsed(m.Since(t, mark), "")
+
+	if converted {
+		// Conversion path: the request is served by an anthropic account and
+		// answered in the OpenAI chat-completion shape.
+		if g.Status != http.StatusOK {
+			t.Fatalf("/v1/chat/completions with a convertible anthropic/apikey (%s): HTTP %d %s (want 200)", convEP.Raw, g.Status, g.Body)
+		}
+		if j.Get("choices.0.message.role").String() != "assistant" || j.Get("object").String() == "" {
+			t.Fatalf("/v1/chat/completions converted response is not in openai shape: %s", g.Body)
+		}
+		used := false
+		for _, k := range keysUsed {
+			used = used || tn.AccountKeys()[k]
+		}
+		if !used {
+			t.Fatalf("converted /v1/chat/completions answered 200 without calling any of the tenant's upstream accounts (keys used: %v)", keysUsed)
+		}
+	} else {
+		if g.Status != http.StatusServiceUnavailable {
+			t.Fatalf("/v1/chat/completions with only anthropic accounts: HTTP %d %s (want 503, not 404)", g.Status, g.Body)
+		}
+		// OpenAI error format: {"error": {"message", "type", "code", "param"}},
+		// without Anthropic's top-level "type": "error".
+		if j.Get("error.code").String() != "no_available_account" || j.Get("error.message").String() == "" ||
+			j.Get("error.type").String() == "" || j.Get("type").Exists() {
+			t.Fatalf("/v1/chat/completions error body (want openai format, no_available_account): %s", g.Body)
+		}
+		for _, k := range keysUsed {
+			if tn.AccountKeys()[k] {
+				t.Fatalf("an upstream was called with account key %s for an unservable endpoint", k)
+			}
 		}
 	}
 	// The anthropic endpoint still works for the same key.

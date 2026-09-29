@@ -1,0 +1,213 @@
+name: next CI
+
+# CI for the next/ platform (multi-module Go workspace). Until this workflow
+# existed, nothing in .github/workflows referenced next/ at all -- backend-ci.yml
+# only runs backend/ -- so "next is green" meant "green on a developer's
+# machine". See next/docs/PLUGIN-VOLCENGINE-ARK.md §9.8.
+#
+# next/e2e is deliberately NOT run here. It drives a deployed stack (two nodes,
+# mock-upstream and the /__node1 /__node2 /__mock helper routes behind one
+# origin) which no GitHub runner has; the suite now fails loudly instead of
+# skipping when E2E_BASE_URL is unset, so running it here would only produce
+# red. What CI can do for e2e is compile it, which the "sdk, tools and e2e" job
+# does (go vet builds the test binaries).
+#
+# The shared per-module gate is .github/next-ci/next-check-module.sh; it runs
+# the four commands CONTRACTS §2 requires and can be run locally too.
+
+on:
+  push:
+    paths:
+      - 'next/**'
+      - '.github/workflows/next-ci.yml'
+      - '.github/next-ci/next-*.sh'
+  pull_request:
+    paths:
+      - 'next/**'
+      - '.github/workflows/next-ci.yml'
+      - '.github/next-ci/next-*.sh'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: next-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # -buildvcs=false matches deploy/ci/compose.yml and the Dockerfile.
+  GOFLAGS: -buildvcs=false
+  # GOWORK is deliberately left at its default: all next/ modules are built in
+  # workspace mode, exactly as next/Dockerfile does (`COPY . .` brings
+  # next/go.work into the build stage), so CI resolves the sdk through the
+  # workspace like the image and like a developer, not through the module cache.
+
+jobs:
+  # -------------------------------------------------------------- sdk / tools
+  sdk-tools:
+    name: sdk, tools and e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          # Read from the repository, never pinned here.
+          go-version-file: next/go.work
+          check-latest: false
+          cache: true
+          cache-dependency-path: |
+            next/go.work.sum
+            next/**/go.sum
+      - name: Verify the Go version matches next/go.work
+        run: sh .github/next-ci/next-go-version.sh
+      - name: sdk
+        run: sh .github/next-ci/next-check-module.sh next/sdk
+      - name: plugin CLI
+        run: sh .github/next-ci/next-check-module.sh next/tools/sub2api-plugin
+      - name: mock-upstream
+        run: sh .github/next-ci/next-check-module.sh next/deploy/mock-upstream
+      # e2e: gofmt, vet and build only. `go vet ./...` type-checks the test
+      # files, so a contract change that breaks the acceptance tests is caught
+      # here even though the tests cannot run without a deployment.
+      - name: e2e (compile only, never run)
+        run: sh .github/next-ci/next-check-module.sh --no-test next/e2e
+      - name: go.sum / go.work.sum unchanged
+        run: sh .github/next-ci/next-sums-clean.sh
+
+  # ---------------------------------------------------------------- plugins
+  plugins:
+    name: plugins
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: next/go.work
+          check-latest: false
+          cache: true
+          cache-dependency-path: |
+            next/go.work.sum
+            next/**/go.sum
+      - name: Verify the Go version matches next/go.work
+        run: sh .github/next-ci/next-go-version.sh
+      # Every next/plugins/<name> with a go.mod is checked; the list is
+      # discovered, so a new plugin is covered without touching this workflow
+      # (same principle as the market index in build-demo.sh). One job rather
+      # than a matrix so the plugins share one warm sdk build cache.
+      - name: Check every plugin module
+        run: |
+          set -u
+          found=0
+          failed=''
+          for mod in next/plugins/*/go.mod; do
+            [ -f "$mod" ] || continue
+            dir=${mod%/go.mod}
+            found=$((found + 1))
+            echo "::group::${dir}"
+            if sh .github/next-ci/next-check-module.sh "$dir"; then
+              echo "${dir}: ok"
+            else
+              failed="$failed $dir"
+            fi
+            echo "::endgroup::"
+          done
+          if [ "$found" -lt 1 ]; then
+            echo "::error::no plugin modules found under next/plugins"
+            exit 1
+          fi
+          echo "checked $found plugin module(s)"
+          if [ -n "$failed" ]; then
+            echo "::error::failing plugin modules:$failed"
+            exit 1
+          fi
+      - name: go.sum / go.work.sum unchanged
+        run: sh .github/next-ci/next-sums-clean.sh
+
+  # ----------------------------------------------------------------- server
+  server:
+    name: server (with PostgreSQL and Redis)
+    runs-on: ubuntu-latest
+    # Image versions follow the test deployment: the sub2api-next-testdb
+    # compose project (~/sub2api-next-test/testdb, per docs/PROGRESS.md §7) and
+    # deploy/single/compose.yml both run postgres:16 with the password sub2api
+    # and redis:7; deploy/ci/compose.yml uses the same DSNs.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: sub2api
+          POSTGRES_USER: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # testutil.DB(t) needs a superuser DSN (it creates a role and a database
+      # per test). Without it the ~70 database cases skip -- which is exactly
+      # how they would keep looking green -- so they are wired up here.
+      TEST_DATABASE_URL: postgres://postgres:sub2api@127.0.0.1:5432/postgres?sslmode=disable
+      TEST_REDIS_URL: redis://127.0.0.1:6379/0
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: next/go.work
+          check-latest: false
+          cache: true
+          cache-dependency-path: |
+            next/go.work.sum
+            next/**/go.sum
+      - name: Verify the Go version matches next/go.work
+        run: sh .github/next-ci/next-go-version.sh
+      # Guard before the full run: prove the database cases really execute.
+      # TestCoreMigrationsApplyAndAreIdempotent calls testutil.DB(t) on its
+      # first line, so a SKIP here means TEST_DATABASE_URL never reached the
+      # tests and the 70 database cases below did nothing.
+      - name: Database tests really run
+        working-directory: next/server
+        run: |
+          set -eu
+          out=$(go test -count=1 -v -run '^TestCoreMigrationsApplyAndAreIdempotent$' ./internal/store/ 2>&1) || {
+            printf '%s\n' "$out"
+            exit 1
+          }
+          printf '%s\n' "$out"
+          if printf '%s' "$out" | grep -q -- '--- SKIP'; then
+            echo "::error::the database tests skipped; the postgres service container did not reach the tests"
+            exit 1
+          fi
+          if ! printf '%s' "$out" | grep -q -- '--- PASS'; then
+            echo "::error::TestCoreMigrationsApplyAndAreIdempotent neither passed nor failed; check the test selector"
+            exit 1
+          fi
+      - name: server
+        run: sh .github/next-ci/next-check-module.sh next/server
+      # The server has //go:build linux code (seccomp, /proc, cgroups) with
+      # stubs for other platforms (CONTRACTS §2). ubuntu-latest already builds
+      # for linux, so GOOS=linux only restates the contract explicitly;
+      # GOOS=windows and GOOS=darwin are the checks that actually catch a stub
+      # that stopped compiling -- until now that surfaced only when a developer
+      # on Windows tried to build.
+      - name: Cross build
+        working-directory: next/server
+        run: |
+          set -eu
+          for os in linux windows darwin; do
+            echo "==> GOOS=$os go build ./..."
+            GOOS=$os go build ./...
+          done
+      - name: go.sum / go.work.sum unchanged
+        run: sh .github/next-ci/next-sums-clean.sh

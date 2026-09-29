@@ -64,13 +64,18 @@ func TestAC01_ComposeStack(t *testing.T) {
 		if idx.Get("version").Int() != 1 || !idx.Get("plugins").IsArray() {
 			t.Fatalf("index format: %s", r.Body)
 		}
+		// The image always builds tools/sub2api-plugin and packages plugins/*
+		// (deploy/docker/build-go.sh), so in this deployment an empty or
+		// unsigned index means the build chain broke, not "not ready yet".
+		// Returning early here used to hide every assertion below - the
+		// ed25519 verification, dev-official.pub and the per-version package
+		// download - while the test still reported PASS.
+		if len(idx.Get("plugins").Array()) == 0 {
+			t.Fatalf("market index lists no plugins: build-go.sh packaged nothing (index: %s)", r.Body)
+		}
 		sig := c.Do(t, http.MethodGet, "/market/index.json.sig", nil)
-		if sig.Status == 404 {
-			if len(idx.Get("plugins").Array()) > 0 {
-				t.Fatal("index lists plugins but index.json.sig is missing")
-			}
-			t.Log("index.json.sig missing: plugin CLI not built yet (empty unsigned index)")
-			return
+		if sig.Status != 200 {
+			t.Fatalf("index.json.sig: %s; the market index must be signed with the dev key (CONTRACTS §11.1)", sig)
 		}
 		pubResp := c.Do(t, http.MethodGet, "/market/dev-official.pub", nil)
 		if pubResp.Status != 200 {

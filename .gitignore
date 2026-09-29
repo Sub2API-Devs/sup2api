@@ -121,7 +121,12 @@ tests
 !deploy/tests/**
 CLAUDE.md
 .claude
-scripts
+# Only the repository root's own scripts/ directory. This used to be a bare
+# "scripts", which silently swallowed EVERY directory named scripts anywhere in
+# the tree (next/deploy/scripts, .github/scripts, ...) - files written there
+# never showed up in git status. next/tools/sub2api-plugin/.gitignore still
+# carries a "!/scripts/" un-ignore from the last time someone hit this.
+/scripts/
 !backend/scripts/
 !backend/scripts/resolve-version.sh
 .code-review-state
