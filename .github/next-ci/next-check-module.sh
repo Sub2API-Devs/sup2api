@@ -52,7 +52,13 @@ go build ./...
 
 if [ "$test" = 1 ]; then
   echo "--- go test ./..."
-  go test -count=1 ./...
+  # -timeout is per package, and go's default is 10 minutes. next/server has
+  # packages that legitimately run longer than that against a real database
+  # (internal/usage is ~8.5 minutes on a developer machine, internal/account
+  # ~6), so the default turns a passing suite into a panic on any runner
+  # slower than a laptop. Every local full run in this repo already passes
+  # -timeout 25m or 30m; this makes the CI gate agree with them.
+  go test -count=1 -timeout 30m ./...
 else
   echo "--- go test: skipped on purpose (compiled by go vet above)"
 fi
