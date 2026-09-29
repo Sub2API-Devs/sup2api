@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { api, isApiError, isBridgeMessage, type BridgeMessage, type BridgeMode } from '@sub2api/host'
+import { api, apiBase, isApiError, isBridgeMessage, pluginApiBase, type BridgeMessage, type BridgeMode } from '@sub2api/host'
 import { toast } from '@sub2api/ui'
 import { i18n } from '@/i18n'
 import { useAppStore } from '@/stores/app'
@@ -31,7 +31,10 @@ let seq = 0
 const pending = new Map<string, { resolve: (v: any) => void; reject: (e: any) => void; timer: ReturnType<typeof setTimeout> }>()
 
 const locale = computed(() => i18n.global.locale.value as string)
-const prefix = computed(() => `/api/v1/p/${props.pluginKey}/`)
+// Absolute prefix the frame must stay inside. Derived from the client's own
+// base so the allow-list and the path handed to api.request can never drift
+// apart: this check is what keeps a sandboxed plugin off /users etc.
+const prefix = computed(() => pluginApiBase(props.pluginKey, apiBase()) + '/')
 
 function post(msg: BridgeMessage) {
   // The sandboxed frame has an opaque ("null") origin, so "*" is the only
@@ -61,7 +64,7 @@ function pluginPath(raw: unknown): string | null {
   const rel = raw.startsWith(prefix.value) ? raw.slice(prefix.value.length) : raw.replace(/^\/+/, '')
   const url = new URL(rel, 'http://host' + prefix.value)
   if (url.origin !== 'http://host' || !url.pathname.startsWith(prefix.value)) return null
-  return url.pathname.slice('/api/v1'.length) + url.search
+  return url.pathname.slice(apiBase().length) + url.search
 }
 
 async function handleRequest(id: string, method: string, params: any) {

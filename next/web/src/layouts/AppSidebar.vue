@@ -22,6 +22,11 @@ function itemLabel(i: NavItem): string {
 function active(i: NavItem): boolean {
   return route.path === i.path || (i.path !== '/' && route.path.startsWith(i.path + '/'))
 }
+
+/** Attribution for SIcon's unknown-name warning: which menu entry declared it. */
+function iconContext(i: NavItem): string {
+  return i.pluginKey ? `plugin "${i.pluginKey}" menu "${i.id}"` : `menu "${i.id}"`
+}
 </script>
 
 <template>
@@ -60,7 +65,7 @@ function active(i: NavItem): boolean {
           "
           @click="app.mobileNavOpen = false"
         >
-          <SIcon :name="i.icon || 'puzzle'" class="h-5 w-5 shrink-0" />
+          <SIcon :name="i.icon || 'puzzle'" :context="iconContext(i)" class="h-5 w-5 shrink-0" />
           <span v-if="!app.sidebarCollapsed" class="truncate">{{ itemLabel(i) }}</span>
         </RouterLink>
       </div>

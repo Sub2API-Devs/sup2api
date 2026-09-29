@@ -7,6 +7,7 @@ import type { Router } from 'vue-router'
 import { createClient, type ApiClient } from './http'
 
 export * from './http'
+export * from './routes'
 export * from './bridge-protocol'
 export { useList, type UseListOptions, type UseListResult } from './useList'
 

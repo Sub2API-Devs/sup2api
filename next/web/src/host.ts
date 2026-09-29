@@ -13,7 +13,7 @@ export function setupHost(router: Router) {
   const auth = useAuthStore()
   const app = useAppStore()
   configureHttp({
-    baseURL: '/api/v1',
+    // baseURL stays at @sub2api/host's API_BASE; see packages/host/src/routes.ts.
     locale: () => currentLocale(),
     stepUp: requestStepUp,
     onUnauthenticated: (reason) => {

@@ -1,4 +1,4 @@
-// Session-aware HTTP client for the console API (/api/v1).
+// Session-aware HTTP client for the console API (API_BASE, see ./routes).
 //
 // Contract (docs/CONTRACTS.md §3):
 //   success  -> {"data": ...}            list -> {"data": [...], "page": {...}}
@@ -6,6 +6,8 @@
 // 401 triggers one refresh attempt (POST /auth/refresh) and a retry.
 // 403 step_up_required asks the registered step-up handler for a token
 // (password dialog -> POST /auth/step-up) and retries with X-Step-Up-Token.
+
+import { API_BASE } from './routes'
 
 export interface FieldError {
   field: string
@@ -166,10 +168,18 @@ export interface HttpConfig {
   locale?: () => string
 }
 
-const config: HttpConfig = { baseURL: '/api/v1' }
+const config: HttpConfig = { baseURL: API_BASE }
 
 export function configureHttp(c: Partial<HttpConfig>) {
   Object.assign(config, c)
+}
+
+/**
+ * The console API base every request is built on. Use it instead of writing
+ * "/api/v1" again: it is the one place that can change.
+ */
+export function apiBase(): string {
+  return config.baseURL
 }
 
 let stepUpToken: { token: string; until: number } | null = null

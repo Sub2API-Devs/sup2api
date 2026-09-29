@@ -11,6 +11,9 @@ export { default as SDropdown } from './SDropdown.vue'
 export { default as SEmpty } from './SEmpty.vue'
 export { default as SField } from './SField.vue'
 export { default as SIcon } from './SIcon.vue'
+// Icon vocabulary: the authoritative list of names <SIcon> (and therefore
+// manifest ui.menus[].icon) accepts.
+export { ICON_NAMES, ICON_PATHS, hasIcon, iconPaths } from './icons'
 export { default as SInput } from './SInput.vue'
 export { default as SKeyValue } from './SKeyValue.vue'
 export { default as SModal } from './SModal.vue'

@@ -2,13 +2,20 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SIcon, SInput, SPagination, STable, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SIcon, SPagination, STable, type TableColumn } from '@sub2api/ui'
 import type { UIPlugin, UIPluginPage } from '@/api/types'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
 import { badgeTone, formatCell, parseRouteRef } from './declarative'
 
 // Declarative plugin table page: rows from the plugin route in page.source.
+//
+// No search box: manifest.Page cannot say whether its source route honours a
+// query parameter, and most do not (anthropic's GET /models takes ?q=,
+// volcengine's GET /assets and GET /asset-groups ignore it). A box that
+// filters only the rows already on screen, or that silently returns the whole
+// list from a route that drops ?q=, lies about having searched. Bring it back
+// when Page declares its search parameter.
 const props = defineProps<{ plugin: UIPlugin; page: UIPluginPage }>()
 const { t } = useI18n()
 
@@ -18,7 +25,6 @@ const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
 const serverPaged = ref(false)
-const q = ref('')
 
 const columns = computed<TableColumn[]>(() =>
   (props.page.columns || []).map((c) => ({
@@ -29,13 +35,8 @@ const columns = computed<TableColumn[]>(() =>
 )
 const formats = computed(() => Object.fromEntries((props.page.columns || []).map((c) => [c.key, c.format || 'text'])))
 
-const filtered = computed(() => {
-  if (serverPaged.value || !q.value.trim()) return rows.value
-  const needle = q.value.trim().toLowerCase()
-  return rows.value.filter((r) => Object.values(r).some((v) => v !== null && v !== undefined && String(v).toLowerCase().includes(needle)))
-})
-const visible = computed(() => (serverPaged.value ? filtered.value : filtered.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value)))
-const shownTotal = computed(() => (serverPaged.value ? total.value : filtered.value.length))
+const visible = computed(() => (serverPaged.value ? rows.value : rows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value)))
+const shownTotal = computed(() => (serverPaged.value ? total.value : rows.value.length))
 
 async function load() {
   const ref = parseRouteRef(props.page.source)
@@ -60,10 +61,6 @@ onMounted(load)
 <template>
   <div>
     <div class="mb-3 flex items-center gap-2">
-      <div class="relative max-w-xs flex-1">
-        <SIcon name="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-        <SInput v-model="q" class="!pl-9" :placeholder="t('common.searchPlaceholder')" />
-      </div>
       <SButton size="sm" :loading="loading" @click="load"><SIcon name="refresh" class="h-4 w-4" />{{ t('common.refresh') }}</SButton>
     </div>
     <STable :columns="columns" :rows="visible" :loading="loading">
