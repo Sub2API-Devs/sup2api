@@ -26,12 +26,14 @@ type Manifest struct {
 
 	Capabilities []Capability `json:"capabilities"`
 
-	Platforms    []Platform     `json:"platforms,omitempty"` // new platforms with their endpoints
-	AccountTypes []AccountType  `json:"accountTypes,omitempty"`
-	Hooks        []Hook         `json:"hooks,omitempty"`
-	Events       *Events        `json:"events,omitempty"`
-	Jobs         []Job          `json:"jobs,omitempty"`
-	Database     *Database      `json:"database,omitempty"`
+	Platforms    []Platform    `json:"platforms,omitempty"` // new platforms with their endpoints
+	AccountTypes []AccountType `json:"accountTypes,omitempty"`
+	Hooks        []Hook        `json:"hooks,omitempty"`
+	// Scheduler declares how the plugin takes part in gateway scheduling.
+	Scheduler *Scheduler `json:"scheduler,omitempty"`
+	Events    *Events    `json:"events,omitempty"`
+	Jobs      []Job      `json:"jobs,omitempty"`
+	Database  *Database  `json:"database,omitempty"`
 
 	UserPermissions []UserPermission `json:"userPermissions,omitempty"`
 	Routes          []Route          `json:"routes,omitempty"`
@@ -66,6 +68,7 @@ const (
 	CapHTTPRoutes        = "http.routes.v1"
 	CapMigrationData     = "migration.data.v1"
 	CapSchedulerAffinity = "scheduler.affinity.v1"
+	CapSchedulerRank     = "scheduler.rank.v1"
 	CapAppBroadcast      = "app.broadcast.v1"
 )
 
@@ -288,6 +291,34 @@ type HookMatch struct {
 	Groups    []string `json:"groups,omitempty"`
 }
 
+// ---------------------------------------------------------------- scheduling
+
+// Scheduler is the plugin's part in gateway scheduling. Sticky sessions are
+// declared per platform (Platform.StickyRules) and need no entry here; this
+// struct carries the extension points that apply to scheduling itself.
+type Scheduler struct {
+	// Rank lets the plugin rewrite the priority/weight of the candidate
+	// accounts of requests that did not hit a sticky binding.
+	Rank *SchedulerRank `json:"rank,omitempty"`
+}
+
+// SchedulerRank declares SchedulerService.RankAccounts ("scheduler.rank.v1").
+// Several plugins declaring it run serially in Order; each sees the values
+// left by the previous one. There is deliberately no `failure` field: the
+// call is always fail open, because refusing a request over a weight the
+// plugin could not compute would be far too aggressive. On error, timeout or
+// a malformed answer the host keeps the accounts' own priority and weight.
+type SchedulerRank struct {
+	// Order sorts plugins that declare rank; the smaller one runs first
+	// (ties are broken by plugin key).
+	Order int `json:"order,omitempty"`
+	// Match restricts the requests the host calls for (protocols / models /
+	// groups); empty matches every request.
+	Match HookMatch `json:"match,omitempty"`
+	// TimeoutMs bounds one call; 0 uses the host default.
+	TimeoutMs int `json:"timeoutMs,omitempty"`
+}
+
 type Events struct {
 	Subscribe []string `json:"subscribe"` // event types or "prefix.*"
 	BatchSize int      `json:"batchSize,omitempty"`
@@ -427,6 +458,7 @@ var HostPermissionRisk = map[string]string{
 	"gateway.endpoint":     RiskHigh,
 	"platform.register":    RiskHigh,
 	"scheduler.affinity":   RiskHigh,
+	"scheduler.rank":       RiskHigh,
 	"users.read":           RiskHigh,
 	"accounts.credentials": RiskCritical,
 	"ledger.credit":        RiskCritical,

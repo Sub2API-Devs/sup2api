@@ -54,6 +54,11 @@ type call struct {
 	price *core.PriceRule
 
 	sticky *stickySession
+	// ranked holds the per-request priority/weight the scheduler.rank
+	// plugins asked for (CONTRACTS §24); rankDone marks the single call, so
+	// failover attempts reuse the same result. nil = the accounts' own values.
+	ranked   map[int64]rankValues
+	rankDone bool
 	// session identifies the request for the spm limit (sessionIdentity).
 	session string
 	rec     *core.UsageRecord

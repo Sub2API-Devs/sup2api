@@ -40,6 +40,9 @@ type HTTPPlugin interface {
 
 type SchedulerPlugin interface {
 	ResolveAffinityKey(ctx context.Context, in *pluginv1.ResolveAffinityKeyRequest) (*pluginv1.ResolveAffinityKeyResponse, error)
+	// RankAccounts is optional for plugins: one that does not declare
+	// scheduler.rank answers gRPC Unimplemented.
+	RankAccounts(ctx context.Context, in *pluginv1.RankAccountsRequest) (*pluginv1.RankAccountsResponse, error)
 }
 
 // PluginInfo identifies one active plugin version on this node.
@@ -116,6 +119,17 @@ type RouteBinding struct {
 	Client HTTPPlugin
 }
 
+// AccountRankerBinding is one plugin taking part in account scheduling
+// through manifest scheduler.rank ("scheduler.rank.v1"). The gateway calls
+// Client.RankAccounts for requests Rank.Match covers that did not hit a
+// sticky binding, and falls back to the accounts' own priority and weight on
+// error (rank is always fail open).
+type AccountRankerBinding struct {
+	Plugin PluginInfo
+	Rank   manifest.SchedulerRank
+	Client SchedulerPlugin
+}
+
 type JobBinding struct {
 	Plugin PluginInfo
 	Job    manifest.Job
@@ -148,6 +162,9 @@ type Generation interface {
 	AccountTypesForPlatform(platformID string) []AccountTypeBinding
 	Hooks(point string) []HookBinding // sorted by order
 	Scheduler(pluginKey string) (SchedulerPlugin, bool)
+	// AccountRankers lists the plugins declaring scheduler.rank, sorted by
+	// declared order then plugin key; the gateway calls them in that order.
+	AccountRankers() []AccountRankerBinding
 	Routes(pluginKey string) []RouteBinding
 	Jobs() []JobBinding
 	Subscriptions() []SubscriptionBinding

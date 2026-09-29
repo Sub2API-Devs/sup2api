@@ -31,6 +31,8 @@ const (
 	TimeoutEvents          = 30 * time.Second
 	TimeoutJobDefault      = 60 * time.Second
 	TimeoutScheduler       = 200 * time.Millisecond
+	TimeoutRankDefault     = 200 * time.Millisecond // manifest scheduler.rank.timeoutMs = 0
+	TimeoutRankMax         = time.Second            // pkg.MaxRankTimeout
 )
 
 // call runs fn against the current process with the concurrency limit, the
@@ -145,7 +147,7 @@ func (i *Instance) HTTP() core.HTTPPlugin {
 }
 
 func (i *Instance) Scheduler() core.SchedulerPlugin {
-	if !i.has(manifest.CapSchedulerAffinity) {
+	if !i.has(manifest.CapSchedulerAffinity) && !i.has(manifest.CapSchedulerRank) {
 		return nil
 	}
 	return schedAdapter{i}
@@ -251,6 +253,21 @@ type schedAdapter struct{ i *Instance }
 func (a schedAdapter) ResolveAffinityKey(ctx context.Context, in *pluginv1.ResolveAffinityKeyRequest) (out *pluginv1.ResolveAffinityKeyResponse, err error) {
 	err = a.i.call(ctx, TimeoutScheduler, func(ctx context.Context, p *proc) (e error) {
 		out, e = p.sched.ResolveAffinityKey(ctx, in)
+		return
+	})
+	return
+}
+
+func (a schedAdapter) RankAccounts(ctx context.Context, in *pluginv1.RankAccountsRequest) (out *pluginv1.RankAccountsResponse, err error) {
+	timeout := TimeoutRankDefault
+	if s := a.i.pkg.Manifest.Scheduler; s != nil && s.Rank != nil && s.Rank.TimeoutMs > 0 {
+		timeout = time.Duration(s.Rank.TimeoutMs) * time.Millisecond
+	}
+	if timeout > TimeoutRankMax {
+		timeout = TimeoutRankMax
+	}
+	err = a.i.call(ctx, timeout, func(ctx context.Context, p *proc) (e error) {
+		out, e = p.sched.RankAccounts(ctx, in)
 		return
 	})
 	return

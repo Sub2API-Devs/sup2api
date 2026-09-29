@@ -127,7 +127,9 @@ func (f *fixture) record(id string, billable bool) *core.UsageRecord {
 		PriceHeaders:   map[string]string{"anthropic-beta": "fast-mode"},
 		RateMultiplier: decimal.NewFromInt(1),
 		HookDecisions:  []core.HookDecision{{PluginKey: "guard", HookID: "h", Decision: "allow"}},
-		CreatedAt:      bj10,
+		SchedDecisions: []core.SchedDecision{{PluginKey: "guard",
+			Changed: []core.RankChange{{AccountID: 42, Priority: 10, Weight: 500}}}},
+		CreatedAt: bj10,
 	}
 	if billable {
 		rec.Price = f.price
@@ -389,6 +391,12 @@ func TestUsageAPI(t *testing.T) {
 	}
 	if _, has := d["price"].(map[string]any)["platform"]; has {
 		t.Fatalf("price ref has platform: %v", d["price"])
+	}
+	// What the scheduler.rank plugins changed is stored per request (§24).
+	if s := f.scalar(`SELECT sched_decisions->0->>'plugin' || ':' || (sched_decisions->0->'changed'->0->>'account_id')
+		|| '/' || (sched_decisions->0->'changed'->0->>'priority') || '/' || (sched_decisions->0->'changed'->0->>'weight')
+		FROM usage_logs WHERE request_id = 'req-mine'`); s != "guard:42/10/500" {
+		t.Fatalf("sched_decisions %q", s)
 	}
 	md := f.get(f.user, "/me/usage/"+strconv.FormatInt(id, 10), 200)["data"].(map[string]any)
 	if md["account_id"] != nil || md["account_type"] != "" || md["upstream_protocol"] != "" {

@@ -112,17 +112,20 @@ type UsageRecord struct {
 	StickyRule       string
 	StickyHit        bool
 	HookDecisions    []HookDecision
-	Billable         bool              // false for endpoint billing=free or zero usage
-	Price            *PriceRule        // nil when not billable or free policy
-	PriceParams      map[string]string // body path -> raw JSON value captured at request time
-	PriceHeaders     map[string]string // lower-case header -> value captured at request time
-	RateMultiplier   decimal.Decimal
-	LatencyMs        int
-	FirstTokenMs     int
-	ClientIP         string
-	UserAgent        string
-	NodeID           string
-	CreatedAt        time.Time // request start; time functions evaluate against it
+	// SchedDecisions is what the scheduler.rank plugins changed for this
+	// request; empty when none took part (CONTRACTS §24).
+	SchedDecisions []SchedDecision
+	Billable       bool              // false for endpoint billing=free or zero usage
+	Price          *PriceRule        // nil when not billable or free policy
+	PriceParams    map[string]string // body path -> raw JSON value captured at request time
+	PriceHeaders   map[string]string // lower-case header -> value captured at request time
+	RateMultiplier decimal.Decimal
+	LatencyMs      int
+	FirstTokenMs   int
+	ClientIP       string
+	UserAgent      string
+	NodeID         string
+	CreatedAt      time.Time // request start; time functions evaluate against it
 }
 
 type HookDecision struct {
@@ -131,6 +134,24 @@ type HookDecision struct {
 	Decision  string `json:"decision"` // allow | deny | error_open | error_closed | skipped_breaker
 	LatencyMs int    `json:"latency_ms"`
 	Note      string `json:"note,omitempty"`
+}
+
+// SchedDecision is what one scheduler.rank plugin changed while the gateway
+// scheduled the request (usage_logs.sched_decisions, CONTRACTS §24). Only
+// accounts whose priority or weight the plugin actually moved are listed, and
+// only when the rewrite was applied: a run the gateway discarded (every
+// candidate excluded) records nothing.
+type SchedDecision struct {
+	PluginKey string       `json:"plugin"`
+	Changed   []RankChange `json:"changed"`
+}
+
+// RankChange is the final priority/weight one plugin gave one candidate for
+// this request; the account's own configuration is untouched.
+type RankChange struct {
+	AccountID int64 `json:"account_id"`
+	Priority  int   `json:"priority"`
+	Weight    int   `json:"weight"` // 0 = not used for this request
 }
 
 // Settler accepts usage records without blocking the request path.

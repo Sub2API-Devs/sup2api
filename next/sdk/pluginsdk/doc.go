@@ -19,7 +19,8 @@
 //	EventHandler -> AppService.OnEvents ("app.events.v1")
 //	BroadcastHandler -> AppService.OnBroadcast ("app.broadcast.v1", see BroadcastMux)
 //	HTTP       -> HTTPService       ("http.routes.v1")
-//	Scheduler  -> SchedulerService  ("scheduler.affinity.v1")
+//	Scheduler  -> SchedulerService.ResolveAffinityKey ("scheduler.affinity.v1")
+//	AccountRanker -> SchedulerService.RankAccounts ("scheduler.rank.v1")
 //	Migration  -> MigrationService  ("migration.data.v1")
 //
 // The SDK implements PluginService itself. Optional lifecycle interfaces

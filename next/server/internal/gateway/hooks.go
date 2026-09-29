@@ -17,6 +17,7 @@ import (
 	"github.com/tidwall/sjson"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
@@ -372,11 +373,16 @@ func hookID(hb core.HookBinding) string {
 
 // ---------------------------------------------------------------- execution
 
-func (c *call) hookMatches(hb core.HookBinding) bool {
-	m := hb.Hook.Match
+// matchesRequest reports whether a manifest match block (hooks §20.1,
+// scheduler.rank §24.1 — both use manifest.HookMatch) covers this request.
+func (c *call) matchesRequest(m manifest.HookMatch) bool {
 	return matchList(m.Protocols, c.ep.Protocol) &&
 		matchList(m.Models, c.model) &&
 		matchList(m.Groups, c.principal.Group.Name, itoa(c.principal.Group.ID))
+}
+
+func (c *call) hookMatches(hb core.HookBinding) bool {
+	return c.matchesRequest(hb.Hook.Match)
 }
 
 // runHooks executes the matching gateway.request hooks in order. It returns

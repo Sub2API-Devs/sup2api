@@ -87,6 +87,7 @@ export default {
     gateway_endpoint: '网关端点',
     platform_register: '注册平台或账号类型',
     scheduler_affinity: '调度亲和',
+    scheduler_rank: '改写账号调度参数',
     users_read: '读取用户',
     accounts_credentials: '账号凭证',
     ledger_credit: '余额入账',

@@ -18,6 +18,7 @@ type ext struct {
 	pkg        *registry.Package
 	grants     registry.Grants
 	noPlatform bool // plugin without platform.adapter.v1
+	sched      bool // plugin whose runtime exposes SchedulerService
 }
 
 type stub struct{}
@@ -49,6 +50,12 @@ func (stub) OnEvents(context.Context, *pluginv1.OnEventsRequest) (*pluginv1.OnEv
 func (stub) HandleHTTP(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	return nil, nil
 }
+func (stub) ResolveAffinityKey(context.Context, *pluginv1.ResolveAffinityKeyRequest) (*pluginv1.ResolveAffinityKeyResponse, error) {
+	return nil, nil
+}
+func (stub) RankAccounts(context.Context, *pluginv1.RankAccountsRequest) (*pluginv1.RankAccountsResponse, error) {
+	return nil, nil
+}
 
 func (e ext) Package() *registry.Package { return e.pkg }
 func (e ext) Grants() registry.Grants    { return e.grants }
@@ -58,10 +65,15 @@ func (e ext) Platform() core.PlatformPlugin {
 	}
 	return stub{}
 }
-func (e ext) Hook() core.HookPlugin           { return stub{} }
-func (e ext) App() core.AppPlugin             { return stub{} }
-func (e ext) HTTP() core.HTTPPlugin           { return stub{} }
-func (e ext) Scheduler() core.SchedulerPlugin { return nil }
+func (e ext) Hook() core.HookPlugin { return stub{} }
+func (e ext) App() core.AppPlugin   { return stub{} }
+func (e ext) HTTP() core.HTTPPlugin { return stub{} }
+func (e ext) Scheduler() core.SchedulerPlugin {
+	if !e.sched {
+		return nil
+	}
+	return stub{}
+}
 
 func load(t *testing.T, m *manifest.Manifest) *registry.Package {
 	t.Helper()
@@ -92,6 +104,66 @@ func TestGrantedFieldsGjsonQueries(t *testing.T) {
 	}
 	if f := hooks[0].GrantedFields; len(f) != 2 || f[0] != "model" || f[1] != q1 {
 		t.Fatalf("granted fields = %q", f)
+	}
+}
+
+// AccountRankers collects only plugins that both declare manifest
+// scheduler.rank and the scheduler.rank.v1 capability, and orders them by the
+// declared order with ties broken by plugin key.
+func TestAccountRankersCollectionAndOrder(t *testing.T) {
+	withRank := func(key string, order int, caps ...manifest.Capability) *registry.Package {
+		m := registrytest.Manifest(key, "1.0.0")
+		m.Capabilities = append(m.Capabilities, caps...)
+		m.Scheduler = &manifest.Scheduler{Rank: &manifest.SchedulerRank{
+			Order:     order,
+			Match:     manifest.HookMatch{Protocols: []string{"p_" + key + ".test"}},
+			TimeoutMs: 120,
+		}}
+		return load(t, m)
+	}
+	rank := manifest.Capability{ID: manifest.CapSchedulerRank}
+
+	// delta and bravo share order 10 (bravo wins on key), alpha runs last.
+	pBravo := withRank("bravo", 10, rank)
+	pDelta := withRank("delta", 10, rank)
+	pAlpha := withRank("alpha", 30, rank)
+	// echo declares scheduler.rank without the capability; fox declares the
+	// capability without manifest scheduler.rank; gamma has both but its
+	// runtime exposes no SchedulerService at all.
+	pEcho := withRank("echo", 1)
+	mFox := registrytest.Manifest("fox", "1.0.0")
+	mFox.Capabilities = append(mFox.Capabilities, rank)
+	pFox := load(t, mFox)
+	pGamma := withRank("gamma", 0, rank)
+
+	g := registry.New().Publish([]registry.Extension{
+		ext{pkg: pAlpha, grants: registry.Grants{}, sched: true},
+		ext{pkg: pBravo, grants: registry.Grants{}, sched: true},
+		ext{pkg: pDelta, grants: registry.Grants{}, sched: true},
+		ext{pkg: pEcho, grants: registry.Grants{}, sched: true},
+		ext{pkg: pFox, grants: registry.Grants{}, sched: true},
+		ext{pkg: pGamma, grants: registry.Grants{}},
+	})
+	rankers := g.AccountRankers()
+	var keys []string
+	for _, r := range rankers {
+		keys = append(keys, r.Plugin.Key)
+	}
+	if want := []string{"bravo", "delta", "alpha"}; strings.Join(keys, ",") != strings.Join(want, ",") {
+		t.Fatalf("rankers = %v, want %v", keys, want)
+	}
+	if r := rankers[0]; r.Rank.Order != 10 || r.Rank.TimeoutMs != 120 || r.Client == nil {
+		t.Fatalf("binding = %+v", r)
+	}
+	if ps := rankers[0].Rank.Match.Protocols; len(ps) != 1 || ps[0] != "p_bravo.test" {
+		t.Fatalf("match protocols = %v", ps)
+	}
+	// The plugins are still reachable as schedulers for affinity keys.
+	if _, ok := g.Scheduler("echo"); !ok {
+		t.Fatal("echo must still be a scheduler")
+	}
+	if _, ok := g.Scheduler("gamma"); ok {
+		t.Fatal("gamma exposes no SchedulerService")
 	}
 }
 

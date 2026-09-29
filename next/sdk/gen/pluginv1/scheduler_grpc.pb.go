@@ -20,19 +20,31 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	SchedulerService_ResolveAffinityKey_FullMethodName = "/sub2api.plugin.v1.SchedulerService/ResolveAffinityKey"
+	SchedulerService_RankAccounts_FullMethodName       = "/sub2api.plugin.v1.SchedulerService/RankAccounts"
 )
 
 // SchedulerServiceClient is the client API for SchedulerService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// SchedulerService ("scheduler.affinity.v1", optional) lets a plugin compute a
+// SchedulerService lets a plugin take part in gateway scheduling. Each rpc is
+// a separate capability; a plugin implements only the ones it declares.
+//
+// ResolveAffinityKey ("scheduler.affinity.v1", optional) computes a
 // sticky-session value that cannot be expressed declaratively. The host only
 // calls it for sticky rules whose keySources contain {"type": "plugin"}.
 // Hot path: keep it fast; the host applies a 200 ms timeout and falls back to
 // "no sticky value" on error.
 type SchedulerServiceClient interface {
 	ResolveAffinityKey(ctx context.Context, in *ResolveAffinityKeyRequest, opts ...grpc.CallOption) (*ResolveAffinityKeyResponse, error)
+	// RankAccounts ("scheduler.rank.v1", optional) lets a plugin rewrite the
+	// scheduling parameters of the candidate accounts of one request. The host
+	// only calls it for requests that did not hit a sticky binding, and applies
+	// its own scheduling (priority groups, weighted random, concurrency slots,
+	// rate limits, cooldown) to the rewritten values afterwards.
+	// Hot path: the host applies a timeout and falls back to the accounts' own
+	// values on error.
+	RankAccounts(ctx context.Context, in *RankAccountsRequest, opts ...grpc.CallOption) (*RankAccountsResponse, error)
 }
 
 type schedulerServiceClient struct {
@@ -53,17 +65,38 @@ func (c *schedulerServiceClient) ResolveAffinityKey(ctx context.Context, in *Res
 	return out, nil
 }
 
+func (c *schedulerServiceClient) RankAccounts(ctx context.Context, in *RankAccountsRequest, opts ...grpc.CallOption) (*RankAccountsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RankAccountsResponse)
+	err := c.cc.Invoke(ctx, SchedulerService_RankAccounts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SchedulerServiceServer is the server API for SchedulerService service.
 // All implementations must embed UnimplementedSchedulerServiceServer
 // for forward compatibility.
 //
-// SchedulerService ("scheduler.affinity.v1", optional) lets a plugin compute a
+// SchedulerService lets a plugin take part in gateway scheduling. Each rpc is
+// a separate capability; a plugin implements only the ones it declares.
+//
+// ResolveAffinityKey ("scheduler.affinity.v1", optional) computes a
 // sticky-session value that cannot be expressed declaratively. The host only
 // calls it for sticky rules whose keySources contain {"type": "plugin"}.
 // Hot path: keep it fast; the host applies a 200 ms timeout and falls back to
 // "no sticky value" on error.
 type SchedulerServiceServer interface {
 	ResolveAffinityKey(context.Context, *ResolveAffinityKeyRequest) (*ResolveAffinityKeyResponse, error)
+	// RankAccounts ("scheduler.rank.v1", optional) lets a plugin rewrite the
+	// scheduling parameters of the candidate accounts of one request. The host
+	// only calls it for requests that did not hit a sticky binding, and applies
+	// its own scheduling (priority groups, weighted random, concurrency slots,
+	// rate limits, cooldown) to the rewritten values afterwards.
+	// Hot path: the host applies a timeout and falls back to the accounts' own
+	// values on error.
+	RankAccounts(context.Context, *RankAccountsRequest) (*RankAccountsResponse, error)
 	mustEmbedUnimplementedSchedulerServiceServer()
 }
 
@@ -76,6 +109,9 @@ type UnimplementedSchedulerServiceServer struct{}
 
 func (UnimplementedSchedulerServiceServer) ResolveAffinityKey(context.Context, *ResolveAffinityKeyRequest) (*ResolveAffinityKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveAffinityKey not implemented")
+}
+func (UnimplementedSchedulerServiceServer) RankAccounts(context.Context, *RankAccountsRequest) (*RankAccountsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RankAccounts not implemented")
 }
 func (UnimplementedSchedulerServiceServer) mustEmbedUnimplementedSchedulerServiceServer() {}
 func (UnimplementedSchedulerServiceServer) testEmbeddedByValue()                          {}
@@ -116,6 +152,24 @@ func _SchedulerService_ResolveAffinityKey_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SchedulerService_RankAccounts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RankAccountsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SchedulerServiceServer).RankAccounts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SchedulerService_RankAccounts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SchedulerServiceServer).RankAccounts(ctx, req.(*RankAccountsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SchedulerService_ServiceDesc is the grpc.ServiceDesc for SchedulerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -126,6 +180,10 @@ var SchedulerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ResolveAffinityKey",
 			Handler:    _SchedulerService_ResolveAffinityKey_Handler,
+		},
+		{
+			MethodName: "RankAccounts",
+			Handler:    _SchedulerService_RankAccounts_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -88,6 +88,7 @@ type fakeGen struct {
 	accountTypes []core.AccountTypeBinding
 	hooks        []core.HookBinding
 	scheds       map[string]core.SchedulerPlugin
+	rankers      []core.AccountRankerBinding
 }
 
 // newFakeGen returns a generation with the built-in platforms and their
@@ -194,6 +195,7 @@ func (g *fakeGen) Scheduler(key string) (core.SchedulerPlugin, bool) {
 	s, ok := g.scheds[key]
 	return s, ok
 }
+func (g *fakeGen) AccountRankers() []core.AccountRankerBinding      { return g.rankers }
 func (g *fakeGen) Routes(string) []core.RouteBinding                { return nil }
 func (g *fakeGen) Jobs() []core.JobBinding                          { return nil }
 func (g *fakeGen) Subscriptions() []core.SubscriptionBinding        { return nil }

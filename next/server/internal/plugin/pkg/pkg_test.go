@@ -191,6 +191,58 @@ func TestValidateGjsonQueryNeeds(t *testing.T) {
 	}
 }
 
+// manifest scheduler.rank needs both the scheduler.rank host permission and
+// the scheduler.rank.v1 capability, and its timeoutMs is 0 (host default) or
+// 50-1000 ms. The order is unconstrained and match protocols are not checked
+// here (the platform may belong to a plugin installed later).
+func TestValidateSchedulerRank(t *testing.T) {
+	build := func(timeoutMs int, withPerm, withCap bool) *manifest.Manifest {
+		m := pkgtest.Guard("guard", "0.1.0", "sub2api")
+		m.Scheduler = &manifest.Scheduler{Rank: &manifest.SchedulerRank{
+			Order:     -50,
+			Match:     manifest.HookMatch{Protocols: []string{"someplugin.chat"}, Models: []string{"gpt-*"}},
+			TimeoutMs: timeoutMs,
+		}}
+		if withCap {
+			m.Capabilities = append(m.Capabilities, manifest.Capability{ID: manifest.CapSchedulerRank})
+		}
+		if withPerm {
+			m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "scheduler.rank",
+				Reason: manifest.LocalizedText{"en": "Prefer accounts with spare quota"}})
+		}
+		return m
+	}
+	m := build(200, true, true)
+	if err := Validate(m, pkgtest.Files(m), opts()); err != nil {
+		t.Fatalf("validate: %v %v", err, fieldCodes(err))
+	}
+	// 0 means "host default" and is accepted.
+	m = build(0, true, true)
+	if err := Validate(m, pkgtest.Files(m), opts()); err != nil {
+		t.Fatalf("timeoutMs 0: %v %v", err, fieldCodes(err))
+	}
+	for _, bad := range []int{49, 1001, -1} {
+		m = build(bad, true, true)
+		if c := fieldCodes(Validate(m, pkgtest.Files(m), opts())); c["scheduler.rank.timeoutMs"] != "invalid" {
+			t.Fatalf("timeoutMs %d: codes %v", bad, c)
+		}
+	}
+	m = build(200, false, true)
+	if c := fieldCodes(Validate(m, pkgtest.Files(m), opts())); c["scheduler.rank"] != "missing_host_permission" {
+		t.Fatalf("without permission: codes %v", c)
+	}
+	m = build(200, true, false)
+	if c := fieldCodes(Validate(m, pkgtest.Files(m), opts())); c["scheduler.rank"] != "missing_capability" {
+		t.Fatalf("without capability: codes %v", c)
+	}
+	// scheduler without rank declares nothing and needs neither.
+	m = pkgtest.Guard("guard", "0.1.0", "sub2api")
+	m.Scheduler = &manifest.Scheduler{}
+	if err := Validate(m, pkgtest.Files(m), opts()); err != nil {
+		t.Fatalf("empty scheduler: %v %v", err, fieldCodes(err))
+	}
+}
+
 func TestValidateConsistency(t *testing.T) {
 	type mut func(m *manifest.Manifest, files map[string][]byte)
 	dropPerm := func(id string) mut {

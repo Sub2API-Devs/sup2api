@@ -38,6 +38,7 @@ var KnownCapabilities = map[string]bool{
 	manifest.CapHTTPRoutes:        true,
 	manifest.CapMigrationData:     true,
 	manifest.CapSchedulerAffinity: true,
+	manifest.CapSchedulerRank:     true,
 	manifest.CapAppBroadcast:      true,
 }
 
@@ -47,6 +48,8 @@ const (
 	MaxThreads      = 4096
 	MaxOpenFiles    = 65536
 	MaxHookTimeout  = 30000 // ms; CONTRACTS §20.1
+	MinRankTimeout  = 50    // ms; scheduler.rank runs on the hot path
+	MaxRankTimeout  = 1000  // ms
 	MaxPromptBytes  = 1 << 20
 	RequiredArchAMD = "linux-amd64"
 	RequiredArchARM = "linux-arm64"
@@ -161,6 +164,7 @@ func Validate(m *manifest.Manifest, files map[string][]byte, opt ValidateOptions
 	v.accountTypes()
 	v.pricing()
 	v.hooks()
+	v.scheduler()
 	v.events()
 	v.jobs()
 	v.database()
@@ -685,6 +689,27 @@ func (v *validator) hooks() {
 		if pointsOK && len(CoveredBy([]string{h.Point}, points)) > 0 {
 			v.add(f+".point", "exceeds_scope", "point %q is not in gateway.hook scope.points", h.Point)
 		}
+	}
+}
+
+// scheduler validates manifest.scheduler (scheduling extension points).
+// Rank.Match protocols are deliberately not checked: a plugin may match a
+// protocol declared by another plugin's platform, which need not be installed
+// yet; the registry warns at runtime instead. Rank.Order is unconstrained,
+// like hook order.
+func (v *validator) scheduler() {
+	s := v.m.Scheduler
+	if s == nil {
+		return
+	}
+	if s.Rank == nil {
+		return
+	}
+	v.needPerm("scheduler.rank", "scheduler.rank", "rewriting account scheduling parameters")
+	v.needCap("scheduler.rank", manifest.CapSchedulerRank)
+	if t := s.Rank.TimeoutMs; t != 0 && (t < MinRankTimeout || t > MaxRankTimeout) {
+		v.add("scheduler.rank.timeoutMs", "invalid",
+			"timeoutMs must be 0 (host default) or between %d and %d", MinRankTimeout, MaxRankTimeout)
 	}
 }
 

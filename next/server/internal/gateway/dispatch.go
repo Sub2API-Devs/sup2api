@@ -132,8 +132,10 @@ func (c *call) sessionIdentity() string {
 
 // pick chooses the next account: the sticky binding first (when usable),
 // then by priority with weighted random order inside a priority (CONTRACTS
-// §18). Accounts whose rate-limit window is exhausted are skipped. It
-// returns busy when candidates exist but none could be used right now.
+// §18), over the priority/weight the scheduler.rank plugins left for this
+// request (CONTRACTS §24). Accounts whose rate-limit window is exhausted are
+// skipped. It returns busy when candidates exist but none could be used
+// right now.
 func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[int64]bool) (*core.AccountRef, func(), bool) {
 	exhausted := c.exhausted(ctx, cands, excluded)
 	if s := c.sticky; s != nil && !s.tried {
@@ -163,6 +165,9 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 			}
 		}
 	}
+	// Plugins may rewrite the priority/weight of the candidates for this
+	// request (CONTRACTS §24); everything below still gates them.
+	over := c.rankOverrides(ctx, cands)
 	var pool []core.AccountRef
 	limited := false
 	for i := range cands {
@@ -173,7 +178,14 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 			limited = true
 			continue
 		}
-		pool = append(pool, cands[i])
+		ref := cands[i]
+		if o, ok := over[ref.ID]; ok {
+			if o.weight == 0 {
+				continue // a plugin took the account out of this request
+			}
+			ref.Priority, ref.Weight = o.priority, o.weight
+		}
+		pool = append(pool, ref)
 	}
 	if len(pool) == 0 {
 		return nil, nil, limited

@@ -71,6 +71,14 @@ type Scheduler interface {
 	ResolveAffinityKey(context.Context, *pluginv1.ResolveAffinityKeyRequest) (*pluginv1.ResolveAffinityKeyResponse, error)
 }
 
+// AccountRanker is implemented by schedulers that also rewrite the
+// priority/weight of the candidate accounts of a request
+// ("scheduler.rank.v1", declared in manifest scheduler.rank). Optional: a
+// Scheduler without it answers RankAccounts with UNIMPLEMENTED.
+type AccountRanker interface {
+	RankAccounts(context.Context, *pluginv1.RankAccountsRequest) (*pluginv1.RankAccountsResponse, error)
+}
+
 // Migration mirrors pluginv1.MigrationServiceServer ("migration.data.v1").
 type Migration interface {
 	MigrateData(context.Context, *pluginv1.MigrateDataRequest) (*pluginv1.MigrateDataResponse, error)

@@ -87,6 +87,7 @@ export default {
     gateway_endpoint: 'Gateway endpoints',
     platform_register: 'Register a platform or account types',
     scheduler_affinity: 'Scheduler affinity',
+    scheduler_rank: 'Rewrite account scheduling',
     users_read: 'Read users',
     accounts_credentials: 'Account credentials',
     ledger_credit: 'Credit user balances',

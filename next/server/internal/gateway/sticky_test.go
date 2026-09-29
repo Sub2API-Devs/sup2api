@@ -184,12 +184,19 @@ func TestStickyDisabledGlobally(t *testing.T) {
 }
 
 type fakeScheduler struct {
-	got *pluginv1.ResolveAffinityKeyRequest
+	got     *pluginv1.ResolveAffinityKeyRequest
+	gotRank *pluginv1.RankAccountsRequest
+	ranked  []*pluginv1.RankedAccount
 }
 
 func (s *fakeScheduler) ResolveAffinityKey(_ context.Context, in *pluginv1.ResolveAffinityKeyRequest) (*pluginv1.ResolveAffinityKeyResponse, error) {
 	s.got = in
 	return &pluginv1.ResolveAffinityKeyResponse{Value: "conv-" + strings.Trim(in.GetFields()["metadata.conv"], `"`)}, nil
+}
+
+func (s *fakeScheduler) RankAccounts(_ context.Context, in *pluginv1.RankAccountsRequest) (*pluginv1.RankAccountsResponse, error) {
+	s.gotRank = in
+	return &pluginv1.RankAccountsResponse{Accounts: s.ranked}, nil
 }
 
 func TestStickyKeySources(t *testing.T) {

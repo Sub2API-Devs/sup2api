@@ -6,13 +6,25 @@ import "sub2api/plugin/v1/common.proto";
 
 option go_package = "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1";
 
-// SchedulerService ("scheduler.affinity.v1", optional) lets a plugin compute a
+// SchedulerService lets a plugin take part in gateway scheduling. Each rpc is
+// a separate capability; a plugin implements only the ones it declares.
+//
+// ResolveAffinityKey ("scheduler.affinity.v1", optional) computes a
 // sticky-session value that cannot be expressed declaratively. The host only
 // calls it for sticky rules whose keySources contain {"type": "plugin"}.
 // Hot path: keep it fast; the host applies a 200 ms timeout and falls back to
 // "no sticky value" on error.
 service SchedulerService {
   rpc ResolveAffinityKey(ResolveAffinityKeyRequest) returns (ResolveAffinityKeyResponse);
+
+  // RankAccounts ("scheduler.rank.v1", optional) lets a plugin rewrite the
+  // scheduling parameters of the candidate accounts of one request. The host
+  // only calls it for requests that did not hit a sticky binding, and applies
+  // its own scheduling (priority groups, weighted random, concurrency slots,
+  // rate limits, cooldown) to the rewritten values afterwards.
+  // Hot path: the host applies a timeout and falls back to the accounts' own
+  // values on error.
+  rpc RankAccounts(RankAccountsRequest) returns (RankAccountsResponse);
 }
 
 message ResolveAffinityKeyRequest {
@@ -27,4 +39,41 @@ message ResolveAffinityKeyResponse {
   // Empty = no sticky value for this request. The host hashes the value
   // before using it in a Redis key.
   string value = 1;
+}
+
+message RankAccountsRequest {
+  RequestMeta meta = 1;
+  // Candidates are the accounts that may serve this request, after the host
+  // filtered out disabled, cooling down and non-matching ones.
+  repeated RankCandidate candidates = 2;
+}
+
+message RankCandidate {
+  int64 account_id = 1;
+  string name = 2;
+  string account_type = 3;
+  // Plugin key declaring the account type.
+  string type_plugin_key = 4;
+  // The account's current priority, lower is picked first (0-1000000).
+  int32 priority = 5;
+  // The account's current weight; the host guarantees it is normalized to
+  // 1-1000.
+  int32 weight = 6;
+}
+
+message RankAccountsResponse {
+  // Only the accounts to rewrite need to be listed; a candidate left out
+  // keeps the priority and weight of the account itself.
+  repeated RankedAccount accounts = 1;
+}
+
+message RankedAccount {
+  int64 account_id = 1;
+  // priority and weight are both final values, not deltas: an account listed
+  // here must carry both, so a plugin that only wants to change one of them
+  // echoes the other value back as it was received in RankCandidate. There is
+  // no presence tracking, and 0 is not "unset": weight = 0 means the account
+  // is not used for this request.
+  int32 priority = 2;
+  int32 weight = 3;
 }

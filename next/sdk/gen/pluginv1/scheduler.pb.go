@@ -136,6 +136,259 @@ func (x *ResolveAffinityKeyResponse) GetValue() string {
 	return ""
 }
 
+type RankAccountsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Meta  *RequestMeta           `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
+	// Candidates are the accounts that may serve this request, after the host
+	// filtered out disabled, cooling down and non-matching ones.
+	Candidates    []*RankCandidate `protobuf:"bytes,2,rep,name=candidates,proto3" json:"candidates,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RankAccountsRequest) Reset() {
+	*x = RankAccountsRequest{}
+	mi := &file_sub2api_plugin_v1_scheduler_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RankAccountsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RankAccountsRequest) ProtoMessage() {}
+
+func (x *RankAccountsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_scheduler_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RankAccountsRequest.ProtoReflect.Descriptor instead.
+func (*RankAccountsRequest) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_scheduler_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *RankAccountsRequest) GetMeta() *RequestMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+func (x *RankAccountsRequest) GetCandidates() []*RankCandidate {
+	if x != nil {
+		return x.Candidates
+	}
+	return nil
+}
+
+type RankCandidate struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	AccountId   int64                  `protobuf:"varint,1,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	Name        string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	AccountType string                 `protobuf:"bytes,3,opt,name=account_type,json=accountType,proto3" json:"account_type,omitempty"`
+	// Plugin key declaring the account type.
+	TypePluginKey string `protobuf:"bytes,4,opt,name=type_plugin_key,json=typePluginKey,proto3" json:"type_plugin_key,omitempty"`
+	// The account's current priority, lower is picked first (0-1000000).
+	Priority int32 `protobuf:"varint,5,opt,name=priority,proto3" json:"priority,omitempty"`
+	// The account's current weight; the host guarantees it is normalized to
+	// 1-1000.
+	Weight        int32 `protobuf:"varint,6,opt,name=weight,proto3" json:"weight,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RankCandidate) Reset() {
+	*x = RankCandidate{}
+	mi := &file_sub2api_plugin_v1_scheduler_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RankCandidate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RankCandidate) ProtoMessage() {}
+
+func (x *RankCandidate) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_scheduler_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RankCandidate.ProtoReflect.Descriptor instead.
+func (*RankCandidate) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_scheduler_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *RankCandidate) GetAccountId() int64 {
+	if x != nil {
+		return x.AccountId
+	}
+	return 0
+}
+
+func (x *RankCandidate) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *RankCandidate) GetAccountType() string {
+	if x != nil {
+		return x.AccountType
+	}
+	return ""
+}
+
+func (x *RankCandidate) GetTypePluginKey() string {
+	if x != nil {
+		return x.TypePluginKey
+	}
+	return ""
+}
+
+func (x *RankCandidate) GetPriority() int32 {
+	if x != nil {
+		return x.Priority
+	}
+	return 0
+}
+
+func (x *RankCandidate) GetWeight() int32 {
+	if x != nil {
+		return x.Weight
+	}
+	return 0
+}
+
+type RankAccountsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Only the accounts to rewrite need to be listed; a candidate left out
+	// keeps the priority and weight of the account itself.
+	Accounts      []*RankedAccount `protobuf:"bytes,1,rep,name=accounts,proto3" json:"accounts,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RankAccountsResponse) Reset() {
+	*x = RankAccountsResponse{}
+	mi := &file_sub2api_plugin_v1_scheduler_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RankAccountsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RankAccountsResponse) ProtoMessage() {}
+
+func (x *RankAccountsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_scheduler_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RankAccountsResponse.ProtoReflect.Descriptor instead.
+func (*RankAccountsResponse) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_scheduler_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *RankAccountsResponse) GetAccounts() []*RankedAccount {
+	if x != nil {
+		return x.Accounts
+	}
+	return nil
+}
+
+type RankedAccount struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	AccountId int64                  `protobuf:"varint,1,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	// priority and weight are both final values, not deltas: an account listed
+	// here must carry both, so a plugin that only wants to change one of them
+	// echoes the other value back as it was received in RankCandidate. There is
+	// no presence tracking, and 0 is not "unset": weight = 0 means the account
+	// is not used for this request.
+	Priority      int32 `protobuf:"varint,2,opt,name=priority,proto3" json:"priority,omitempty"`
+	Weight        int32 `protobuf:"varint,3,opt,name=weight,proto3" json:"weight,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RankedAccount) Reset() {
+	*x = RankedAccount{}
+	mi := &file_sub2api_plugin_v1_scheduler_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RankedAccount) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RankedAccount) ProtoMessage() {}
+
+func (x *RankedAccount) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_scheduler_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RankedAccount.ProtoReflect.Descriptor instead.
+func (*RankedAccount) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_scheduler_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *RankedAccount) GetAccountId() int64 {
+	if x != nil {
+		return x.AccountId
+	}
+	return 0
+}
+
+func (x *RankedAccount) GetPriority() int32 {
+	if x != nil {
+		return x.Priority
+	}
+	return 0
+}
+
+func (x *RankedAccount) GetWeight() int32 {
+	if x != nil {
+		return x.Weight
+	}
+	return 0
+}
+
 var File_sub2api_plugin_v1_scheduler_proto protoreflect.FileDescriptor
 
 const file_sub2api_plugin_v1_scheduler_proto_rawDesc = "" +
@@ -153,9 +406,30 @@ const file_sub2api_plugin_v1_scheduler_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"2\n" +
 	"\x1aResolveAffinityKeyResponse\x12\x14\n" +
-	"\x05value\x18\x01 \x01(\tR\x05value2\x85\x01\n" +
+	"\x05value\x18\x01 \x01(\tR\x05value\"\x8b\x01\n" +
+	"\x13RankAccountsRequest\x122\n" +
+	"\x04meta\x18\x01 \x01(\v2\x1e.sub2api.plugin.v1.RequestMetaR\x04meta\x12@\n" +
+	"\n" +
+	"candidates\x18\x02 \x03(\v2 .sub2api.plugin.v1.RankCandidateR\n" +
+	"candidates\"\xc1\x01\n" +
+	"\rRankCandidate\x12\x1d\n" +
+	"\n" +
+	"account_id\x18\x01 \x01(\x03R\taccountId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12!\n" +
+	"\faccount_type\x18\x03 \x01(\tR\vaccountType\x12&\n" +
+	"\x0ftype_plugin_key\x18\x04 \x01(\tR\rtypePluginKey\x12\x1a\n" +
+	"\bpriority\x18\x05 \x01(\x05R\bpriority\x12\x16\n" +
+	"\x06weight\x18\x06 \x01(\x05R\x06weight\"T\n" +
+	"\x14RankAccountsResponse\x12<\n" +
+	"\baccounts\x18\x01 \x03(\v2 .sub2api.plugin.v1.RankedAccountR\baccounts\"b\n" +
+	"\rRankedAccount\x12\x1d\n" +
+	"\n" +
+	"account_id\x18\x01 \x01(\x03R\taccountId\x12\x1a\n" +
+	"\bpriority\x18\x02 \x01(\x05R\bpriority\x12\x16\n" +
+	"\x06weight\x18\x03 \x01(\x05R\x06weight2\xe6\x01\n" +
 	"\x10SchedulerService\x12q\n" +
-	"\x12ResolveAffinityKey\x12,.sub2api.plugin.v1.ResolveAffinityKeyRequest\x1a-.sub2api.plugin.v1.ResolveAffinityKeyResponseB@Z>github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1b\x06proto3"
+	"\x12ResolveAffinityKey\x12,.sub2api.plugin.v1.ResolveAffinityKeyRequest\x1a-.sub2api.plugin.v1.ResolveAffinityKeyResponse\x12_\n" +
+	"\fRankAccounts\x12&.sub2api.plugin.v1.RankAccountsRequest\x1a'.sub2api.plugin.v1.RankAccountsResponseB@Z>github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1b\x06proto3"
 
 var (
 	file_sub2api_plugin_v1_scheduler_proto_rawDescOnce sync.Once
@@ -169,25 +443,34 @@ func file_sub2api_plugin_v1_scheduler_proto_rawDescGZIP() []byte {
 	return file_sub2api_plugin_v1_scheduler_proto_rawDescData
 }
 
-var file_sub2api_plugin_v1_scheduler_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_sub2api_plugin_v1_scheduler_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_sub2api_plugin_v1_scheduler_proto_goTypes = []any{
 	(*ResolveAffinityKeyRequest)(nil),  // 0: sub2api.plugin.v1.ResolveAffinityKeyRequest
 	(*ResolveAffinityKeyResponse)(nil), // 1: sub2api.plugin.v1.ResolveAffinityKeyResponse
-	nil,                                // 2: sub2api.plugin.v1.ResolveAffinityKeyRequest.FieldsEntry
-	nil,                                // 3: sub2api.plugin.v1.ResolveAffinityKeyRequest.InboundHeadersEntry
-	(*RequestMeta)(nil),                // 4: sub2api.plugin.v1.RequestMeta
+	(*RankAccountsRequest)(nil),        // 2: sub2api.plugin.v1.RankAccountsRequest
+	(*RankCandidate)(nil),              // 3: sub2api.plugin.v1.RankCandidate
+	(*RankAccountsResponse)(nil),       // 4: sub2api.plugin.v1.RankAccountsResponse
+	(*RankedAccount)(nil),              // 5: sub2api.plugin.v1.RankedAccount
+	nil,                                // 6: sub2api.plugin.v1.ResolveAffinityKeyRequest.FieldsEntry
+	nil,                                // 7: sub2api.plugin.v1.ResolveAffinityKeyRequest.InboundHeadersEntry
+	(*RequestMeta)(nil),                // 8: sub2api.plugin.v1.RequestMeta
 }
 var file_sub2api_plugin_v1_scheduler_proto_depIdxs = []int32{
-	4, // 0: sub2api.plugin.v1.ResolveAffinityKeyRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
-	2, // 1: sub2api.plugin.v1.ResolveAffinityKeyRequest.fields:type_name -> sub2api.plugin.v1.ResolveAffinityKeyRequest.FieldsEntry
-	3, // 2: sub2api.plugin.v1.ResolveAffinityKeyRequest.inbound_headers:type_name -> sub2api.plugin.v1.ResolveAffinityKeyRequest.InboundHeadersEntry
-	0, // 3: sub2api.plugin.v1.SchedulerService.ResolveAffinityKey:input_type -> sub2api.plugin.v1.ResolveAffinityKeyRequest
-	1, // 4: sub2api.plugin.v1.SchedulerService.ResolveAffinityKey:output_type -> sub2api.plugin.v1.ResolveAffinityKeyResponse
-	4, // [4:5] is the sub-list for method output_type
-	3, // [3:4] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	8, // 0: sub2api.plugin.v1.ResolveAffinityKeyRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	6, // 1: sub2api.plugin.v1.ResolveAffinityKeyRequest.fields:type_name -> sub2api.plugin.v1.ResolveAffinityKeyRequest.FieldsEntry
+	7, // 2: sub2api.plugin.v1.ResolveAffinityKeyRequest.inbound_headers:type_name -> sub2api.plugin.v1.ResolveAffinityKeyRequest.InboundHeadersEntry
+	8, // 3: sub2api.plugin.v1.RankAccountsRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	3, // 4: sub2api.plugin.v1.RankAccountsRequest.candidates:type_name -> sub2api.plugin.v1.RankCandidate
+	5, // 5: sub2api.plugin.v1.RankAccountsResponse.accounts:type_name -> sub2api.plugin.v1.RankedAccount
+	0, // 6: sub2api.plugin.v1.SchedulerService.ResolveAffinityKey:input_type -> sub2api.plugin.v1.ResolveAffinityKeyRequest
+	2, // 7: sub2api.plugin.v1.SchedulerService.RankAccounts:input_type -> sub2api.plugin.v1.RankAccountsRequest
+	1, // 8: sub2api.plugin.v1.SchedulerService.ResolveAffinityKey:output_type -> sub2api.plugin.v1.ResolveAffinityKeyResponse
+	4, // 9: sub2api.plugin.v1.SchedulerService.RankAccounts:output_type -> sub2api.plugin.v1.RankAccountsResponse
+	8, // [8:10] is the sub-list for method output_type
+	6, // [6:8] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_sub2api_plugin_v1_scheduler_proto_init() }
@@ -202,7 +485,7 @@ func file_sub2api_plugin_v1_scheduler_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sub2api_plugin_v1_scheduler_proto_rawDesc), len(file_sub2api_plugin_v1_scheduler_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -432,6 +432,14 @@ guard-0.1.0.s2plugin
     "failure": "open"                           // 超时或出错时：open 放行 / closed 拒绝
   } ],
 
+  "scheduler": {                                // 可选：参与调度，见 6.2 与 CONTRACTS §24
+    "rank": {                                   // 改写候选账号的 priority / weight
+      "order": 100,                             // 多个插件按 order 串行，后者看到前者的结果
+      "match": { "protocols": ["anthropic.messages"], "models": ["claude-*"], "groups": [] },
+      "timeoutMs": 200                          // 0 = 宿主默认；固定 fail open，没有 failure 字段
+    }
+  },
+
   "events": { "subscribe": ["usage.recorded"], "batchSize": 100 },
   "jobs": [ { "id": "rollup", "schedule": "@every 5m", "timeoutSec": 60 },
             { "id": "cleanup", "schedule": "0 3 * * *", "timeoutSec": 300 } ],
@@ -496,7 +504,7 @@ flowchart LR
     hk["HookService<br/>OnGatewayRequest"]
     ap["AppService<br/>RunJob · OnEvents"]
     hx["HTTPService<br/>HandleHTTP"]
-    sc["SchedulerService（可选）<br/>ResolveAffinityKey"]
+    sc["SchedulerService（可选）<br/>ResolveAffinityKey · RankAccounts"]
     ms["MigrationService<br/>MigrateData（可选）"]
   end
   rt --> ps & pf & hk & ap & hx & sc & ms
@@ -600,7 +608,7 @@ stateDiagram-v2
 |---|---|
 | 🟢 低 | `kv`、`config`、`log` |
 | 🟡 中 | `routes.admin`、`routes.user`、`events`、`jobs`、`ui.menu`、`ui.iframe`、`accounts.read` |
-| 🟠 高 | `db.schema`、`net`（白名单模式下）、`routes.public`、`routes.webhook`、`gateway.hook`、`platform.register`、`users.read` |
+| 🟠 高 | `db.schema`、`net`（白名单模式下）、`routes.public`、`routes.webhook`、`gateway.hook`、`gateway.endpoint`、`platform.register`、`scheduler.affinity`、`scheduler.rank`、`users.read` |
 | 🔴 极高 | `accounts.credentials`、`ledger.credit`、`ledger.debit`、`ui.native`、`users.write`、`db.core_views` |
 
 - 高和极高风险需要逐项勾选；极高风险只能由拥有 `plugin:grant:critical` 的用户批准，并再次输入密码
@@ -697,7 +705,7 @@ sequenceDiagram
   GW->>R: 获取用户并发槽位
   loop 失败切换（最多 3 次）
     GW->>R: 查粘性会话绑定（规则命中时）
-    GW->>GW: 绑定的账号可用就直接用；否则选账号：分组内 · 平台插件已启用 · 启用 · 可调度 · 未冷却 · 未排除<br/>按 priority 排序，同优先级随机
+    GW->>GW: 绑定的账号可用就直接用；否则选账号：分组内 · 平台插件已启用 · 启用 · 可调度 · 未冷却 · 未排除<br/>按 priority 排序，同优先级按 weight 加权随机<br/>未命中粘性时 priority/weight 可能先被插件改写，见 6.2
     GW->>R: 获取账号并发槽位
     GW->>P: BuildUpstreamRequest
     P-->>GW: url、headers、patches
@@ -728,7 +736,8 @@ sequenceDiagram
 ### 6.2 调度
 
 - 候选账号 = API Key 所属分组的账号 ∩ 账号类型能服务该端点（原生或经转换）的账号 ∩ 状态正常 ∩ 参与调度 ∩ `models` 为空或含请求模型 ∩ 未冷却 ∩ 未达 rpm/tpm/tpd/spm 上限
-- 顺序：粘性绑定的账号优先；其余按 `priority` 升序，同优先级按 `weight` 加权随机（不放回抽样）；逐个获取并发槽位，失败切换时跳过已试过的账号（CONTRACTS §18）
+- 顺序：粘性绑定的账号优先；其余按 `priority` 升序，同优先级按 `weight` 加权随机（不放回抽样）；逐个获取并发槽位，失败切换时跳过已试过的账号（CONTRACTS §18）。排序用的 `priority` / `weight` 可能已被插件为本次请求改写（见下）
+- **插件改写调度参数（可选扩展点，CONTRACTS §24）**：声明了 `scheduler.rank` 的插件可以为**一次请求**改写候选账号的 `priority` 和 `weight`，核心拿改写后的值跑上面这套算法。只对**未命中粘性绑定**的请求调用，每个请求一次（失败切换复用结果），多个插件按 `order` 串行、后者看到前者的结果；超时、出错或结果非法一律 fail open，退回账号自身的值。候选集的筛选、并发槽位、限流、冷却、端点与模型支持性仍全部由核心把关 —— **核心保留最终调度权**，插件只是临时改写账号本来就有的两个参数，不能凭空加账号，也不写库。本次实际发生的改写记入 `usage_logs.sched_decisions`（jsonb，迁移 0011，接口暂不暴露，CONTRACTS §24.5）
 - 限流：rpm/tpm/tpd 是固定窗口计数（分钟 / UTC 日），spm 是 60 秒滚动窗口内去重的会话数（会话 = 粘性会话键，无粘性规则时每请求一会话；窗口内已有的会话总是放行）。达到上限的账号在本窗口内不参与调度；全部不可用时返回 429 `rate_limited`
 - 模型映射：选定账号后，核心把请求里的模型（body `modelPath` / 路径参数 / `RequestMeta.model`）换成映射后的模型再交给插件，`usage_logs.upstream_model` 记录映射后的模型；计费、白名单、粘性、钩子都看客户端模型
 - 每个节点缓存分组内的账号快照，`account:changed` 广播时失效
@@ -792,6 +801,8 @@ sequenceDiagram
 | 平台插件 | 在 manifest `platform.stickyRules` 里提供默认规则（只有插件知道哪个字段代表会话） |
 | 管理员 | 在控制台覆盖、停用插件规则，或新增规则 |
 | 插件（可选扩展） | 规则取值太复杂、无法声明时，实现 `SchedulerService.ResolveAffinityKey`，规则里用 `{"type": "plugin"}` 引用 |
+
+`SchedulerService` 的两个方法分工不同，都是独立能力：`ResolveAffinityKey`（`scheduler.affinity.v1`）决定**怎么粘**（会话键怎么算），`RankAccounts`（`scheduler.rank.v1`，见 6.2 与 CONTRACTS §24）决定**未命中粘性时在候选里怎么排**。命中粘性绑定的请求直接用绑定账号，不会调用 `RankAccounts`。
 
 **规则**：
 

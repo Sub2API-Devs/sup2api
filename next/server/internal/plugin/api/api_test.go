@@ -122,6 +122,7 @@ func (gen) AccountType(string, string) (core.AccountTypeBinding, bool) {
 func (gen) AccountTypesForPlatform(string) []core.AccountTypeBinding { return nil }
 func (gen) Hooks(string) []core.HookBinding                          { return nil }
 func (gen) Scheduler(string) (core.SchedulerPlugin, bool)            { return nil, false }
+func (gen) AccountRankers() []core.AccountRankerBinding              { return nil }
 func (gen) Routes(string) []core.RouteBinding                        { return nil }
 func (gen) Jobs() []core.JobBinding                                  { return nil }
 func (gen) Subscriptions() []core.SubscriptionBinding                { return nil }

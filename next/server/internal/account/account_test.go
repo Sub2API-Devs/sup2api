@@ -148,6 +148,7 @@ func (g *fakeGen) AccountTypesForPlatform(platformID string) []core.AccountTypeB
 }
 func (g *fakeGen) Hooks(string) []core.HookBinding                  { return nil }
 func (g *fakeGen) Scheduler(string) (core.SchedulerPlugin, bool)    { return nil, false }
+func (g *fakeGen) AccountRankers() []core.AccountRankerBinding      { return nil }
 func (g *fakeGen) Routes(string) []core.RouteBinding                { return nil }
 func (g *fakeGen) Jobs() []core.JobBinding                          { return nil }
 func (g *fakeGen) Subscriptions() []core.SubscriptionBinding        { return nil }

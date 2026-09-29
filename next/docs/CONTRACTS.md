@@ -526,6 +526,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 响应字段补充：
 - `/usage`、`/me/usage` 列表项：`id, request_id, created_at, user_id, user_email?, api_key_id, api_key_name?, group_id, group_name?, account_id, account_name?, plugin_key, platform, protocol, account_type, upstream_protocol, endpoint, model, upstream_model, stream, status_code, success, error_type, error_message, attempts, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens, total_cost, rate_multiplier, billing_status, billing_mode, matched_tier, latency_ms, first_token_ms, sticky_hit`（`?` 为空串时省略）。`/me/usage`（列表与详情）把 `account_id` 置 `null`，`account_name`、`account_type`、`upstream_protocol` 置空，详情另把 `node_id` 置空。
 - `/usage/:id`、`/me/usage/:id` 详情另含：`plugin_version, metrics, sticky_rule, hook_decisions, price_id, price?:{id, model, source, plugin_key}, expr_hash, billing_detail, ledger_id, client_ip, user_agent, node_id`。`/me/usage/:id` 访问他人记录返回 404。
+- `usage_logs` 还有一列 `sched_decisions`（jsonb，迁移 0011，记录 `scheduler.rank` 插件对本次调度的改写，格式与语义见 §24.5），**接口不返回它**：它不在上面的详情字段里，`hook_decisions` 暴露而它不暴露是当前有意的取舍，排查请直接查库。
 - `/usage/summary` 每项：`{key, user_email?, requests, success, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, total_cost}`；`group_by=day` 时 `key` 为 UTC 日期 `YYYY-MM-DD`，`user` 时为用户 id 字符串并带 `user_email`；`cache_creation_tokens` 为 5 分钟与 1 小时缓存写入之和。
 - `/ledger`、`/me/ledger` 列表项：`{id, user_id, user_email?, user_name?, delta, balance_after, kind, ref_type, ref_id, idempotency_key, operator_id, plugin_key, note, created_at}`（金额为字符串）。
 - `/prices` 列表项：`{id, model, mode, config, expression, expr_version, expr_hash, source, plugin_key, enabled, note, updated_by, updated_at}`；`analysis` 只在详情返回。
@@ -811,8 +812,8 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 |---|---|---|
 | `models` | `string[]`，每项是完整模型 ID（§16 规则，禁止通配符），去重，最多 500 项；默认 `[]` | 账号可服务的模型；**空表示所有模型**。调度时请求模型（映射前的客户端模型）不在列表里的账号不作为候选 |
 | `model_mapping` | `{from: to}`，键和值都是完整模型 ID，最多 500 项；默认 `{}` | 请求模型 → 上游模型。核心在调用插件 `BuildUpstreamRequest` **之前**改写请求（body 的 `request.modelPath`、路径参数 `request.modelParam`、`RequestMeta.model` 都换成映射后的模型），`usage_logs.upstream_model` 记录映射后的模型；计费、分组白名单、粘性会话、钩子都按映射前的客户端模型 |
-| `priority` | 0–1000000，默认 10 | 不变：**数值越小越先用**；只有更小优先级的账号都不可用（无空闲并发、限流、冷却、失败切换）时才轮到下一级 |
-| `weight` | 1–1000，默认 1 | 同一优先级内按权重加权随机排序（不放回的加权抽样：权重 3 的账号被先选中的概率是权重 1 的三倍） |
+| `priority` | 0–1000000，默认 10 | 不变：**数值越小越先用**；只有更小优先级的账号都不可用（无空闲并发、限流、冷却、失败切换）时才轮到下一级。插件可为单次请求临时改写（§24） |
+| `weight` | 1–1000，默认 1 | 同一优先级内按权重加权随机排序（不放回的加权抽样：权重 3 的账号被先选中的概率是权重 1 的三倍）。插件可为单次请求临时改写（§24） |
 | `rpm_limit` | 0–10000000，默认 0 | 每分钟请求数上限，0 = 不限。每次在该账号上发起上游尝试计 1 次（失败切换到别的账号时各账号各计各的） |
 | `tpm_limit` | 0–10^12，默认 0 | 每分钟 token 数上限，0 = 不限 |
 | `tpd_limit` | 0–10^12，默认 0 | 每天（UTC 自然日）token 数上限，0 = 不限 |
@@ -828,6 +829,8 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 ### 18.2 调度顺序（ARCHITECTURE 6.2 更新）
 
 候选账号 = 分组内 `active` 且 `schedulable` 的账号 ∩ 账号类型能服务该端点（原生或经转换） ∩ `models` 为空或含请求模型 ∩ 未冷却 ∩ 未达 rpm/tpm/tpd/spm 上限（spm 对窗口内已有的会话不设限）。粘性绑定的账号仍然优先；其余按 `priority` 升序，同优先级按 `weight` 加权随机；逐个获取并发槽位，失败切换时跳过已试过的账号。
+
+排序用的 `priority` / `weight` **可能已被插件为本次请求改写**（§24：未命中粘性绑定的请求会先过一遍 `SchedulerService.RankAccounts`，`weight=0` 的账号本次不用）。候选集合的筛选、并发槽位、限流、冷却仍完全由核心把关，插件改不到。
 
 ### 18.3 接口变化
 
@@ -1228,3 +1231,101 @@ JSON Schema 表单（`schema/`；账号凭据、插件设置、声明式表单�
 - 插件私有样式（类名、CSS 变量、keyframes）一律以插件 key 为前缀，避免与控制台和其他插件冲突：moderation 的 `ui/native/src/moderation.css` 全部用 `mod-` 前缀（`.mod-toolbar` `.mod-num` `.mod-prewrap` `.mod-hint` …），新插件照此（如 `guard-`）。不写全局选择器（`body`、`.card`、`input` …）。
 - 权限：核心权限用 `host.permissions.has/any/superuser`，插件自己的 `userPermissions` 用 `host.can`；菜单已按权限过滤，页面内的按钮仍要自己判断。
 - 接口：插件自己的 `routes` 走 `host.pluginApi`（相对路径，如 `pluginApi.list('/events', {page})`），核心接口走 `host.api`；不要自己 `fetch`（会丢掉 token 刷新与 step-up）。
+
+## 24. 插件改写候选账号的调度参数（priority / weight）（2026-09-29，用户要求）
+
+网关调度新增一个插件扩展点：插件可以为**单次请求**改写候选账号的 `priority` 和 `weight`，核心拿改写后的值跑自己原来的调度算法（§18.2）。这**不是"插件接管调度"**——插件只是临时改写账号本来就有的两个调度参数；候选集怎么筛、按什么顺序试、能不能试，仍然由核心决定。与已有的 `SchedulerService.ResolveAffinityKey`（§15.5，规则里 `{"type":"plugin"}` 的取值）分工：那个决定"怎么粘"，这个决定"未命中粘性时在候选里怎么排"。
+
+### 24.1 manifest 声明
+
+`scheduler` 是 manifest 顶层字段，与 `hooks` 并列（`sdk/manifest`：`Scheduler{Rank *SchedulerRank}`）：
+
+```jsonc
+"scheduler": {
+  "rank": {
+    "order": 100,
+    "match": { "protocols": ["anthropic.messages"], "models": ["claude-*"], "groups": [] },
+    "timeoutMs": 200
+  }
+}
+```
+
+| 字段 | 类型 / 校验 | 说明 |
+|---|---|---|
+| `order` | 整数，默认 0 | 多个声明了 `rank` 的插件按 `order` **升序串行**调用，`order` 相同按插件 key 升序。**后一个插件收到的候选是前一个改写后的值**（含钳制后的值） |
+| `match` | 复用钩子的 `HookMatch`：`{protocols:[], models:[], groups:[]}`，空数组 = 不限 | 只对匹配的请求调用；`models` 为通配，语义与 `hooks[].match` 的 `matchList` 完全一致 |
+| `timeoutMs` | 0 或 50–1000（`pkg.MinRankTimeout` / `MaxRankTimeout`），默认 0 | 单次调用超时；0 = 用宿主默认值 `grpcruntime.TimeoutRankDefault`（200 ms，与 `ResolveAffinityKey` 相同），一律再被 `TimeoutRankMax`（1 s）钳住。热路径，上限刻意比钩子（30 s）小得多。超出范围的值在包校验里报 `scheduler.rank.timeoutMs` / `invalid` |
+
+- **没有 `failure` 字段**：该调用固定 **fail open**。为一个算不出来的权重去拒绝请求太激进，所以出错一律退回账号自身的值（见 §24.3）。
+- 需要 capability `scheduler.rank.v1` 和宿主权限 `scheduler.rank`；声明了 `scheduler.rank` 却没申请权限（或反过来）在安装一致性检查里失败，与 `hooks` / `gateway.hook` 的规则相同。
+- 注册表按 `order`（同 order 按插件 key）排好序后由 `Generation.AccountRankers()` 交出：`[]core.AccountRankerBinding{Plugin, Rank, Client}`；manifest 声明与 capability 缺一不可，两者都齐才进这张表。
+- `match.protocols` 引用了**没有任何平台声明的协议**时只记 `slog.Warn`（含 plugin key、协议名）、**不阻止安装**——与插件 hook 的处理一致（§15.5 末尾），原因同样是插件可以引用别的插件声明的平台，协议什么时候出现取决于安装顺序；这样的声明只是永不匹配。
+
+### 24.2 gRPC
+
+`SchedulerService` 新增一个方法（`sdk/proto/sub2api/plugin/v1/scheduler.proto`，与 `ResolveAffinityKey` 同一个 service，各自是独立能力，插件只实现自己声明的那个）：
+
+```proto
+rpc RankAccounts(RankAccountsRequest) returns (RankAccountsResponse);
+
+message RankAccountsRequest {
+  RequestMeta meta = 1;                 // 同钩子：request_id、protocol、model、stream、user_id、api_key_id、group_id、client_ip
+  repeated RankCandidate candidates = 2;
+}
+message RankCandidate {
+  int64  account_id      = 1;
+  string name            = 2;
+  string account_type    = 3;
+  string type_plugin_key = 4;           // 声明该账号类型的插件 key
+  int32  priority        = 5;           // 账号当前的 priority（0–1000000，越小越先用）
+  int32  weight          = 6;           // 账号当前的 weight，宿主保证已归一化到 1–1000
+}
+
+message RankAccountsResponse { repeated RankedAccount accounts = 1; }
+message RankedAccount {
+  int64 account_id = 1;
+  int32 priority   = 2;                 // 最终值，不是增量
+  int32 weight     = 3;                 // 最终值；0 = 本次请求不使用该账号
+}
+```
+
+- `candidates` 是核心已经筛完的候选（§18.2 的集合：分组、账号类型能服务该端点、状态、`models`、冷却、限流都已判过），`priority` / `weight` 是**账号当前的值**（经前面插件改写后的值，见 §24.1 的 `order`）。**宿主保证出站值也落在声明的区间内**：`priority` 钳进 0–1000000，`weight` 钳进 1–1000（不只是 `weight<=0 → 1` 的归一化），所以插件不必自己防御越界的入参。
+- 响应里 `priority` 和 `weight` 都是**最终值而不是增量**：proto3 没有 presence，`0` 不是"未设置"，所以列出来的账号必须两个都带；只想改其中一个就把另一个按收到的值原样带回。
+- **只需列出要改写的账号**；没列出的保持账号自身的值。`accounts` 为**空数组**是合法应答，含义是"本次什么都不改"（等价于不实现）：不算故障、不记警告、也不打断后面的插件，最终效果与回退一致。与之相对，**整个响应对象为空（nil）**属于应答非法，按 §24.3 第 3 条 fail open 处理。
+- `weight = 0` 表示本次请求不使用该账号（该账号退出本次候选，但不是冷却、不改状态、不发事件）。
+
+### 24.3 调用时机与边界
+
+1. **只对未命中粘性绑定的请求调用**。命中粘性绑定的请求直接用绑定账号，完全不调插件——热路径不为这个扩展点付代价。这里取严：**只要绑定账号在本次请求里被返回过，后续的失败切换重试一律不再调用插件**（不会因为绑定账号失败、转入普通调度就补调一次）。
+2. **每个请求只调一次**；失败切换重试时复用同一次的结果，不重新调用，结果也不跨请求缓存。
+3. **故障一律 fail open**：超时、报错、插件不可用、应答非法（含响应对象为空）、或把所有候选的 `weight` 都置 0 —— 全部回退到账号自身的 `priority` / `weight`，并记一条警告日志。插件不能让网关无账号可用。（`accounts` 为空数组不算故障，见 §24.2。）
+4. **插件只能改写核心已经筛出的候选，不能凭空加账号**：响应里出现不在 `candidates` 中的 `account_id` 一律忽略（记警告）。
+5. **核心的每一道闸门插件都绕不过**：并发槽位、限流窗口（RPM/TPM/TPD/SPM）、冷却、账号是否支持该端点与该模型，全部仍由核心把关，都在拿到改写值之后照常执行。
+6. **取值钳制**：`priority` 限 0–1000000，`weight` 限 0–1000（`0` 是排除，不是"非法"）；超出范围钳到边界并记警告，不整体作废这次结果。
+7. 改写只影响本次请求的排序，**不写库**：账号上的 `priority` / `weight` 不变，控制台、`GET /accounts` 看到的仍是管理员配置的值。
+
+
+### 24.4 能力与权限
+
+| 项 | 值 |
+|---|---|
+| capability | `scheduler.rank.v1`（`sdk/manifest`：`CapSchedulerRank`；`ResolveAffinityKey` 是另一条 `scheduler.affinity.v1`） |
+| 宿主权限 | `scheduler.rank`，风险等级 **🟠 高**（同 `gateway.hook`、`platform.register`、`scheduler.affinity`；ARCHITECTURE 5.5 的分级表同步） |
+
+定为高风险的理由：拿到它的插件能把流量导向指定账号，管理员在授权确认页（§5.7 的 `review.host_permissions`）必须逐项勾选看见，批准需要 `plugin:grant:high`。插件详情页的 `capabilities` 里也会出现 `scheduler.rank.v1`。
+
+### 24.5 可观测性：`usage_logs.sched_decisions`
+
+每条使用记录都留下本次调度被哪些插件改写过。迁移 `0011_sched_decisions.sql`：`usage_logs` 新增一列 `sched_decisions jsonb NOT NULL DEFAULT '[]'`，按插件调用顺序排列：
+
+```json
+[{"plugin":"guard","changed":[{"account_id":42,"priority":10,"weight":500}]}]
+```
+
+- **只记录实际发生了改变的账号**：把钳制后的最终值与该插件**收到的当前值**逐项比较，一致的不记；一个插件一条都没改动就不产生条目，全程没有改动时整列保持 `[]`。
+- `priority` / `weight` 是该插件改完之后的值（后一个插件的条目里是它自己的结果），所以按顺序读下来就是这次请求的改写链。
+- 每个插件条目的 `changed` **最多 100 条**，超出的不再记录（只影响这列的取证，不影响调度本身）。
+- 触发 fail open 的插件不产生条目；整次运行因"所有候选都被置 0"而作废时（§24.3 第 3 条），**已累积的条目一并清空**，与"这次调度没有被改写过"保持一致。
+- **当前限制（有意为之）**：这一列**只落库，`GET /usage/:id`、`/me/usage/:id` 的响应体都不暴露它**（§15.2 的详情字段表里没有它，与 `hook_decisions` 不同）。排查需要直接查库，例如 `SELECT sched_decisions FROM usage_logs WHERE request_id = '…'`。
+
+

@@ -145,6 +145,7 @@ type generation struct {
 	atByPlat  map[string][]core.AccountTypeBinding // platform id -> types, same order
 	hooks     map[string][]core.HookBinding
 	scheds    map[string]core.SchedulerPlugin
+	rankers   []core.AccountRankerBinding // sorted by rank order, then plugin key
 	routes    map[string][]core.RouteBinding
 	jobs      []core.JobBinding
 	subs      []core.SubscriptionBinding
@@ -205,6 +206,28 @@ func platformOwner(b core.PlatformBinding) string {
 		return "the core (built-in)"
 	}
 	return fmt.Sprintf("plugin %q", b.Plugin.Key)
+}
+
+// unknownProtocols returns the protocols of a declarative match that no
+// platform of this generation declares. Glob patterns are left alone.
+func (g *generation) unknownProtocols(protos []string) []string {
+	var out []string
+	for _, proto := range protos {
+		if _, ok := g.byProto[proto]; ok || strings.ContainsAny(proto, "*?") {
+			continue
+		}
+		out = append(out, proto)
+	}
+	return out
+}
+
+func hasCapability(m *manifest.Manifest, capID string) bool {
+	for _, c := range m.Capabilities {
+		if c.ID == capID {
+			return true
+		}
+	}
+	return false
 }
 
 func build(number uint64, exts []Extension) *generation {
@@ -290,6 +313,12 @@ func build(number uint64, exts []Extension) *generation {
 		}
 		if sc := ext.Scheduler(); sc != nil {
 			g.scheds[pkg.Key] = sc
+			// Rewriting the scheduling parameters of candidate accounts needs
+			// both the manifest declaration and the capability; the
+			// scheduler.rank grant is checked by install-time validation.
+			if m.Scheduler != nil && m.Scheduler.Rank != nil && hasCapability(m, manifest.CapSchedulerRank) {
+				g.rankers = append(g.rankers, core.AccountRankerBinding{Plugin: info, Rank: *m.Scheduler.Rank, Client: sc})
+			}
 		}
 		if hx := ext.HTTP(); hx != nil {
 			for _, rt := range m.Routes {
@@ -334,13 +363,25 @@ func build(number uint64, exts []Extension) *generation {
 		// install error, it only means the hook never runs. Warn once per
 		// generation so a typo is visible. Patterns are left alone.
 		for _, h := range hs {
-			for _, proto := range h.Hook.Match.Protocols {
-				if _, ok := g.byProto[proto]; ok || strings.ContainsAny(proto, "*?") {
-					continue
-				}
+			for _, proto := range g.unknownProtocols(h.Hook.Match.Protocols) {
 				slog.Warn("plugin registry: hook matches a protocol no platform declares",
 					"plugin", h.Plugin.Key, "hook", h.Hook.ID, "point", point, "protocol", proto)
 			}
+		}
+	}
+	// scheduler.rank runs in declared order, ties by plugin key, and its match
+	// may name a protocol of another plugin's platform: same warning as hooks.
+	sort.SliceStable(g.rankers, func(i, j int) bool {
+		a, b := g.rankers[i], g.rankers[j]
+		if a.Rank.Order != b.Rank.Order {
+			return a.Rank.Order < b.Rank.Order
+		}
+		return a.Plugin.Key < b.Plugin.Key
+	})
+	for _, rk := range g.rankers {
+		for _, proto := range g.unknownProtocols(rk.Rank.Match.Protocols) {
+			slog.Warn("plugin registry: scheduler.rank matches a protocol no platform declares",
+				"plugin", rk.Plugin.Key, "protocol", proto)
 		}
 	}
 	sort.SliceStable(g.accTypes, func(i, j int) bool {
@@ -405,6 +446,10 @@ func (g *generation) Scheduler(pluginKey string) (core.SchedulerPlugin, bool) {
 	s, ok := g.scheds[pluginKey]
 	return s, ok
 }
+
+// AccountRankers lists the plugins declaring scheduler.rank, sorted by
+// declared order then plugin key.
+func (g *generation) AccountRankers() []core.AccountRankerBinding { return g.rankers }
 
 func (g *generation) Routes(pluginKey string) []core.RouteBinding { return g.routes[pluginKey] }
 
