@@ -1,0 +1,327 @@
+{
+  "apiVersion": 1,
+  "key": "volcengine",
+  "name": { "en": "Volcengine Ark", "zh": "字节火山方舟" },
+  "description": {
+    "en": "Adds the \"Ark API key\" account type: Volcengine Ark (Doubao) accounts that serve the built-in openai platform (/v1/chat/completions, /v1/responses, /v1/embeddings) upstream at <Base URL>/api/v3/..., next to the other account types of a group. It also declares the \"volcengine\" platform with Ark's synchronous image generation (Seedream) at POST /ark/v3/images/generations, metered by generated images and output tokens, and Doubao Seedance video generation: POST /ark/v3/contents/generations/tasks submits a task and is pre-charged an estimate, GET /ark/v3/contents/generations/tasks/{id} polls it free of charge, and the real completion tokens are settled by the core's reconcile loop when the task finishes. Accounts that carry an access key and secret key additionally get the Ark asset library: console pages and admin APIs that create, list, update and delete asset groups and assets through the Ark asset OpenAPI, with a local index. The Base URL defaults to the official Chinese endpoint and may be switched to BytePlus; a custom address needs account:settings:custom. Declares no prices.",
+    "zh": "新增「方舟 API Key」账号类型：字节火山方舟（豆包）账号，为内置 openai 平台（/v1/chat/completions、/v1/responses、/v1/embeddings）提供服务，上游发往 <Base URL>/api/v3/…，与分组里其他类型的账号一起调度。同时声明 volcengine 平台，提供方舟的同步图片生成（Seedream）端点 POST /ark/v3/images/generations，按生成张数与输出 token 计量；以及豆包 Seedance 视频生成：POST /ark/v3/contents/generations/tasks 提交任务并按预估用量预扣，GET /ark/v3/contents/generations/tasks/{id} 查询任务不计费，任务完成后由核心的核对循环按真实 completion token 结算。填写了 Access Key / Secret Key 的账号还可以使用方舟素材库：通过方舟素材 OpenAPI 增删改查素材组与素材的控制台页面与后台接口，并在本地建立索引。Base URL 默认官方国内地址，可切换到 BytePlus 海外地址；填其他地址需要 account:settings:custom 权限。不声明价格。"
+  },
+  "version": "0.4.0",
+  "publisher": "sub2api",
+  "icon": "text:V",
+  "runtime": "grpc",
+  "entry": { "grpc": { "binaries": "runtimes/{os}-{arch}/plugin" } },
+  "hostCompat": ">=0.1.0 <0.2.0",
+
+  "capabilities": [
+    { "id": "platform.adapter.v1" },
+    { "id": "http.routes.v1" }
+  ],
+
+  "platforms": [
+    {
+      "id": "volcengine",
+      "label": { "en": "Volcengine Ark", "zh": "火山方舟" },
+      "requestFields": ["model"],
+      "passHeaders": ["user-agent"],
+      "usage": { "semantics": "inclusive" },
+      "endpoints": [
+        {
+          "id": "images",
+          "method": "POST",
+          "path": "/ark/v3/images/generations",
+          "protocol": "volcengine.images",
+          "kind": "proxy",
+          "auth": { "headers": ["authorization"] },
+          "request": {
+            "modelPath": "model",
+            "promptTextPaths": ["prompt"]
+          },
+          "response": { "nonStream": "json" },
+          "errorFormat": "openai",
+          "billing": "usage",
+          "usage": {
+            "semantics": "inclusive",
+            "json": {
+              "map": {
+                "model": "model",
+                "output_tokens": "usage.output_tokens"
+              }
+            },
+            "facts": {
+              "images": {
+                "type": "number",
+                "unit": "image",
+                "path": "usage.generated_images",
+                "description": {
+                  "en": "Images the request generated (usage.generated_images), for price expressions such as u(\"images\") * 0.03",
+                  "zh": "本次请求生成的图片张数（usage.generated_images），价格表达式里写 u(\"images\") * 0.03"
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "video_submit",
+          "method": "POST",
+          "path": "/ark/v3/contents/generations/tasks",
+          "protocol": "volcengine.video_submit",
+          "kind": "proxy",
+          "auth": { "headers": ["authorization"] },
+          "request": {
+            "modelPath": "model",
+            "promptTextPaths": ["content.#.text"]
+          },
+          "response": { "nonStream": "json" },
+          "errorFormat": "openai",
+          "billing": "usage",
+          "usageSource": "plugin",
+          "usage": {
+            "semantics": "inclusive",
+            "facts": {
+              "resolution": {
+                "type": "enum",
+                "enum": ["480p", "720p", "1080p", "4k"],
+                "description": {
+                  "en": "Output tier of the clip: the plugin's estimate while the task runs, the tier Ark really rendered once it is reconciled. For tiered price expressions such as tier(u(\"resolution\"), ...)",
+                  "zh": "视频的输出档位：任务进行中是插件的预估值，核对完成后是方舟实际渲染的档位。用于分档价格表达式，如 tier(u(\"resolution\"), …)"
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "video_query",
+          "method": "GET",
+          "path": "/ark/v3/contents/generations/tasks/:task_id",
+          "protocol": "volcengine.video_query",
+          "kind": "proxy",
+          "auth": { "headers": ["authorization"] },
+          "request": { "modelSource": "plugin" },
+          "response": { "nonStream": "json" },
+          "errorFormat": "openai",
+          "billing": "free"
+        }
+      ]
+    }
+  ],
+
+  "accountTypes": [
+    {
+      "id": "apikey",
+      "label": { "en": "Ark API key", "zh": "方舟 API Key" },
+      "description": {
+        "en": "An API key of Volcengine Ark (or of BytePlus / an Ark-compatible relay, by setting the Base URL). Requests go to <Base URL>/api/v3/... (chat completions, responses, embeddings, image generations) with the key in Authorization: Bearer. The optional access key / secret key pair enables the Ark asset library for this account.",
+        "zh": "火山方舟的 API Key（也可以填 BytePlus 海外或 Ark 兼容中转的地址）。请求发往 <Base URL>/api/v3/…（对话、responses、嵌入、图片生成），Key 放在 Authorization: Bearer 中。另外填写 Access Key / Secret Key 即为该账号启用方舟素材库。"
+      },
+      "form": {
+        "mode": "schema",
+        "schema": "forms/apikey.schema.json",
+        "uiSchema": "forms/apikey.ui.json"
+      },
+      "sensitiveFields": ["api_key", "secret_key"],
+      "settingsFields": ["base_url", "asset_base_url", "asset_region"],
+      "guardedSettings": [
+        {
+          "field": "base_url",
+          "allowed": [
+            "https://ark.cn-beijing.volces.com",
+            "https://ark.ap-southeast.bytepluses.com"
+          ]
+        },
+        {
+          "field": "asset_base_url",
+          "allowed": [
+            "https://ark.cn-beijing.volcengineapi.com"
+          ]
+        }
+      ],
+      "platforms": [
+        {
+          "platform": "openai",
+          "passHeaders": ["user-agent"]
+        },
+        {
+          "platform": "volcengine"
+        }
+      ]
+    }
+  ],
+
+  "database": { "schema": "plg_volcengine", "migrations": "migrations/" },
+
+  "userPermissions": [
+    {
+      "key": "assets:read",
+      "label": { "en": "View the Ark asset library", "zh": "查看方舟素材库" },
+      "description": {
+        "en": "The asset and asset group pages, and the live listing of what an account holds upstream",
+        "zh": "素材与素材组页面，以及账号上游素材的实时列表"
+      }
+    },
+    {
+      "key": "assets:manage",
+      "label": { "en": "Manage the Ark asset library", "zh": "管理方舟素材库" },
+      "description": {
+        "en": "Create, rename and delete asset groups and assets on the Volcengine side",
+        "zh": "在火山方舟上创建、改名、删除素材组与素材"
+      }
+    }
+  ],
+
+  "routes": [
+    { "method": "GET",    "path": "/accounts",             "scope": "admin", "permission": "assets:read" },
+
+    { "method": "GET",    "path": "/asset-groups",         "scope": "admin", "permission": "assets:read" },
+    { "method": "POST",   "path": "/asset-groups",         "scope": "admin", "permission": "assets:manage" },
+    { "method": "GET",    "path": "/asset-groups/:id",     "scope": "admin", "permission": "assets:read" },
+    { "method": "PATCH",  "path": "/asset-groups/:id",     "scope": "admin", "permission": "assets:manage" },
+    { "method": "DELETE", "path": "/asset-groups/:id",     "scope": "admin", "permission": "assets:manage" },
+
+    { "method": "GET",    "path": "/assets",               "scope": "admin", "permission": "assets:read" },
+    { "method": "POST",   "path": "/assets",               "scope": "admin", "permission": "assets:manage" },
+    { "method": "GET",    "path": "/assets/:id",           "scope": "admin", "permission": "assets:read" },
+    { "method": "PATCH",  "path": "/assets/:id",           "scope": "admin", "permission": "assets:manage" },
+    { "method": "DELETE", "path": "/assets/:id",           "scope": "admin", "permission": "assets:manage" },
+
+    { "method": "GET", "path": "/accounts/:account_id/upstream/asset-groups", "scope": "admin", "permission": "assets:read" },
+    { "method": "GET", "path": "/accounts/:account_id/upstream/assets",       "scope": "admin", "permission": "assets:read" }
+  ],
+
+  "ui": {
+    "sections": [
+      { "id": "volcengine", "label": { "en": "Volcengine Ark", "zh": "火山方舟" }, "order": 620 }
+    ],
+    "menus": [
+      {
+        "id": "volcengine-assets",
+        "section": "volcengine",
+        "label": { "en": "Asset library", "zh": "素材库" },
+        "icon": "inbox",
+        "page": "assets",
+        "permission": "assets:read",
+        "order": 100
+      },
+      {
+        "id": "volcengine-asset-groups",
+        "section": "volcengine",
+        "label": { "en": "Asset groups", "zh": "素材组" },
+        "icon": "group",
+        "page": "asset_groups",
+        "permission": "assets:read",
+        "order": 110
+      },
+      {
+        "id": "volcengine-new-asset-group",
+        "section": "volcengine",
+        "label": { "en": "New asset group", "zh": "新建素材组" },
+        "icon": "plus",
+        "page": "new_asset_group",
+        "permission": "assets:manage",
+        "order": 120
+      },
+      {
+        "id": "volcengine-new-asset",
+        "section": "volcengine",
+        "label": { "en": "New asset", "zh": "新建素材" },
+        "icon": "plus",
+        "page": "new_asset",
+        "permission": "assets:manage",
+        "order": 130
+      }
+    ],
+    "pages": {
+      "assets": {
+        "type": "table",
+        "title": { "en": "Ark asset library", "zh": "方舟素材库" },
+        "source": "GET /assets",
+        "columns": [
+          { "key": "id", "label": { "en": "#", "zh": "#" }, "format": "text" },
+          { "key": "account_name", "label": { "en": "Account", "zh": "账号" }, "format": "text" },
+          { "key": "group_name", "label": { "en": "Group", "zh": "素材组" }, "format": "text" },
+          { "key": "name", "label": { "en": "Name", "zh": "名称" }, "format": "text" },
+          { "key": "asset_type", "label": { "en": "Type", "zh": "类型" }, "format": "text" },
+          { "key": "status", "label": { "en": "Upstream status", "zh": "上游状态" }, "format": "badge" },
+          { "key": "index_status", "label": { "en": "Index", "zh": "索引" }, "format": "badge" },
+          { "key": "upstream_id", "label": { "en": "Ark id", "zh": "方舟 id" }, "format": "text" },
+          { "key": "updated_at", "label": { "en": "Updated", "zh": "更新时间" }, "format": "datetime" }
+        ]
+      },
+      "asset_groups": {
+        "type": "table",
+        "title": { "en": "Ark asset groups", "zh": "方舟素材组" },
+        "source": "GET /asset-groups",
+        "columns": [
+          { "key": "id", "label": { "en": "#", "zh": "#" }, "format": "text" },
+          { "key": "account_name", "label": { "en": "Account", "zh": "账号" }, "format": "text" },
+          { "key": "name", "label": { "en": "Name", "zh": "名称" }, "format": "text" },
+          { "key": "title", "label": { "en": "Title", "zh": "标题" }, "format": "text" },
+          { "key": "group_type", "label": { "en": "Type", "zh": "类型" }, "format": "text" },
+          { "key": "asset_count", "label": { "en": "Assets", "zh": "素材数" }, "format": "number" },
+          { "key": "index_status", "label": { "en": "Index", "zh": "索引" }, "format": "badge" },
+          { "key": "upstream_id", "label": { "en": "Ark id", "zh": "方舟 id" }, "format": "text" },
+          { "key": "updated_at", "label": { "en": "Updated", "zh": "更新时间" }, "format": "datetime" }
+        ]
+      },
+      "new_asset_group": {
+        "type": "form",
+        "title": { "en": "New asset group", "zh": "新建素材组" },
+        "schema": "forms/asset-group.schema.json",
+        "submit": "POST /asset-groups"
+      },
+      "new_asset": {
+        "type": "form",
+        "title": { "en": "New asset", "zh": "新建素材" },
+        "schema": "forms/asset.schema.json",
+        "submit": "POST /assets"
+      }
+    }
+  },
+
+  "resources": { "memoryMB": 64, "cpu": 0.2, "maxThreads": 32, "maxOpenFiles": 128 },
+
+  "hostPermissions": [
+    { "id": "platform.register",
+      "reason": { "en": "Register the \"Ark API key\" account type and the \"volcengine\" platform", "zh": "注册「方舟 API Key」账号类型与 volcengine 平台" } },
+    { "id": "gateway.endpoint",
+      "reason": { "en": "Serve Ark image generation at POST /ark/v3/images/generations and Doubao Seedance video generation at POST/GET /ark/v3/contents/generations/tasks", "zh": "在 POST /ark/v3/images/generations 上提供方舟图片生成，在 POST/GET /ark/v3/contents/generations/tasks 上提供豆包 Seedance 视频生成" } },
+    { "id": "accounts.credentials", "scope": { "types": "own" },
+      "reason": {
+        "en": "Read the Base URL and API key of Ark API key accounts to build upstream requests, and their asset library access key / secret key to sign asset library calls. Every read of an account's credentials outside gateway traffic is written to the audit log.",
+        "zh": "读取方舟 API Key 账号的 Base URL 与 API Key 以构造上游请求，并读取素材库的 Access Key / Secret Key 为素材库调用签名。网关流量之外的每一次凭证读取都会写入审计日志。"
+      } },
+    { "id": "accounts.read",
+      "reason": {
+        "en": "List this plugin's own Ark accounts (names and settings only, never credentials) so the asset library pages can show which account an asset belongs to and which accounts have an asset endpoint configured",
+        "zh": "列出本插件自己的方舟账号（只有名称与设置，绝不含凭证），素材库页面才能显示素材属于哪个账号、哪些账号配置了素材端点"
+      } },
+    { "id": "db.schema",
+      "reason": {
+        "en": "Keep the local index of asset groups and assets (account id, Ark id, name, type, status, timestamps) in plg_volcengine, so a list page does not need one signed upstream call - and one audited credential read - per account",
+        "zh": "在 plg_volcengine 中保存素材组与素材的本地索引（账号 id、方舟 id、名称、类型、状态、时间），列表页因此不必为每个账号各发一次签名的上游调用、各读一次（会记审计的）凭证"
+      } },
+    { "id": "routes.admin",
+      "reason": {
+        "en": "Serve the asset library APIs under /api/v1/p/volcengine: list, create, update and delete asset groups and assets. Administrators only, behind the plugin's own assets:read / assets:manage permissions.",
+        "zh": "在 /api/v1/p/volcengine 下提供素材库接口：素材组与素材的列表、创建、修改、删除。仅管理员可用，并受插件自己的 assets:read / assets:manage 权限约束。"
+      } },
+    { "id": "ui.menu",
+      "reason": {
+        "en": "Add the \"Volcengine Ark\" sidebar group with the asset and asset group pages. These pages are rendered by the console from the manifest (table and form), so the plugin ships no front-end code and does not need ui.native.",
+        "zh": "添加「火山方舟」侧边栏分组与素材、素材组页面。这些页面由控制台按 manifest 渲染（table 与 form），插件不带前端代码，因此不需要 ui.native 权限。"
+      } },
+    { "id": "net",
+      "scope": { "domains": ["ark.cn-beijing.volcengineapi.com", "*.volcengineapi.com"] },
+      "optional": true,
+      "reason": {
+        "en": "Call the Ark asset library OpenAPI at the account's asset endpoint - the Ark control plane, a different host from the API Base URL. Only enforced when the egress policy is an allowlist; an account pointed at any other host then needs that host added.",
+        "zh": "调用账号的素材端点上的方舟素材库 OpenAPI —— 那是方舟控制面，与 API 的 Base URL 不是同一个主机。仅在出口策略为白名单时生效；账号指向其他主机时需要把该主机加进白名单。"
+      } }
+  ],
+
+  "externalServices": [
+    "ark.cn-beijing.volces.com",
+    "ark.ap-southeast.bytepluses.com",
+    "ark.cn-beijing.volcengineapi.com"
+  ]
+}

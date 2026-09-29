@@ -9,6 +9,7 @@ use (
 	./plugins/moderation
 	./plugins/openai
 	./plugins/relay
+	./plugins/volcengine
 	./sdk
 	./server
 	./tools/sub2api-plugin
