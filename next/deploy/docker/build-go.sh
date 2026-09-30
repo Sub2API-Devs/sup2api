@@ -117,8 +117,9 @@ ls -l "$OUT/market"
 # enabled at install, but its mode defaults to off until configured.
 #
 # Intentionally NOT built in: relay (a market-only account type), guard (an
-# optional gateway hook), volcengine (still blocked in round 3 of its plan,
-# see docs/PLUGIN-VOLCENGINE-ARK.md - it ships in the market only).
+# optional gateway hook), volcengine (needs per-deployment Ark credentials and
+# a chosen base URL, so shipping it enabled in every image buys nothing - it is
+# in the market, where an operator installs it on purpose).
 BUILTIN_PLUGINS=${BUILTIN_PLUGINS:-anthropic openai gemini moderation}
 mkdir -p "$OUT/builtin"
 cp "$KEYS/$KEY_ID.pub" "$OUT/builtin/trust.pub"
@@ -128,8 +129,16 @@ for name in $BUILTIN_PLUGINS; do
   if [ -f "$OUT/market/$name-$ver.s2plugin" ]; then
     cp "$OUT/market/$name-$ver.s2plugin" "$OUT/builtin/"
     echo "==> builtin plugin $name $ver"
+  elif [ -n "${PLUGINS:-}" ]; then
+    # The market list was narrowed on purpose (PLUGINS=...), so a built-in
+    # whose package was not asked for is expected to be absent.
+    echo "==> builtin plugin $name $ver: not in PLUGINS, skipped" >&2
   else
-    echo "==> builtin plugin $name $ver: package not found, skipped" >&2
+    # A built-in cannot be uninstalled, so an image missing one is an image
+    # whose operator has no way to add it back. This used to warn and carry
+    # on: the build went green and the plugin was simply not there.
+    echo "::error::builtin plugin $name $ver: $OUT/market/$name-$ver.s2plugin was not built" >&2
+    exit 1
   fi
 done
 ls -l "$OUT/builtin"
