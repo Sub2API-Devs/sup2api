@@ -9,7 +9,7 @@
 ## 0. 三十秒摘要
 
 - **做的是什么**：给 sup2api 的 `next/` 平台做了一个字节火山方舟 / 豆包插件（`next/plugins/volcengine`，0.5.0），以及为它长出来的**核心插件契约五期改造**（代号 A→E，主题「**插件执行，核心记录**」）。
-- **状态**：用户最初要的东西**全部做完**，核心五期**全部落地**，`next` CI **连续全绿**（run #4 起）。
+- **状态**：用户最初要的东西**全部做完**，核心五期**全部落地**，`next` CI **连续全绿**。但 ⚠️ **「做完」= 测试全绿，不等于被真实上游验证过 —— 先读 §1.1**，那一节会改变你对现状的判断。
 - **还欠什么**：见 §7。其中**一条会漏钱**（`ParseReconcileResponseRequest` 缺 `truncated`）、**一条是最大的信心缺口**（e2e 仍是 0 断言）。
 - **最重要的一条纪律**：见 §8.1——报告里必须指出上级（用户 / 主控 / 设计文档）写错的地方。这条在这一轮抓到了十几个真问题，包括一个一条 `curl` 就能打出稳定 5xx 的缺陷。
 
@@ -33,6 +33,26 @@
 ```
 
 新增 Go 模块要加进 `go.work`，并在自己的 `go.mod` 里 `replace github.com/Sub2API-Devs/sup2api/next/sdk => ../../sdk`（按相对路径）。
+
+### 1.1 ⚠️ 「做完了」的准确含义：**没有任何东西被真实上游验证过**
+
+**这一节很重要，不读会高估现状。** 下面每条都核实过：
+
+| 事实 | 核实方式 |
+|---|---|
+| **火山方舟插件从未打过真实 Ark API** | 测试里没有任何真实凭证、没有 `os.Getenv` 取凭证的集成测试、没有一次真实网络调用。`arksign_test.go` 里出现的 `ark.cn-beijing.volcengineapi.com` 全是**字符串处理**用例（规范化 host）和 golden vector，不发请求 |
+| **这个插件从未被安装到任何环境** | 隧道那个测试库里连 `public.plugin_migrations` 这张表都不存在，也没有任何 `plg_*` schema。它的 `0001` / `0002` 迁移**一次都没跑过** |
+| **ovh 上跑着的 sup2api 栈早于这一整轮** | 最后一次部署记录是 2026-09-25（`PROGRESS.md`），而这一轮是 09-29 ~ 09-30 |
+| **分支从未合并，也没有 PR** | `feat/next-platform` 比 `origin/main` 领先 **225 个 commit**，落后 0 个；GitHub 上查不到对应的 PR |
+
+所以「volcengine 0.5.0 做完了」的准确含义是：**它通过了自己的全部测试，CI 全绿，契约用对了** —— 但**上游的真实行为、真实凭证的签名、真实任务的核对闭环，一次都没跑过**。
+
+**这不是说它写得不对**（Ark 的参数与像素表是逐条核对官方文档来的，签名有厂商 SDK 的 golden vector 交叉验证），而是说：
+
+- 第一次拿真实凭证跑通之前，**预估公式的绝对数值、`ListAssets` 之类 Action 的真实响应形状、视频任务核对的完整闭环都还是纸面推导**
+- 那份 Ark 事实表（`PLUGIN-VOLCENGINE-ARK.md` §11.1）是从文档读出来的，**文档与实现不一致的情况在 Ark 上已经出现过一次**（`Content-Type` 被下游 handler 改写，见 §8.8）
+
+**建议接手后的第一件实事**：拿一对真实 Ark AK/SK，在 `single` 栈上装一次这个插件，跑一次图片、一次视频提交 + 核对，把结果记进 `PLUGIN-VOLCENGINE-ARK.md`。**这比 §7 里任何一项都更能暴露问题。**
 
 ---
 
@@ -85,6 +105,13 @@ ssh -N -L 45432:127.0.0.1:45432 -L 36379:127.0.0.1:36379 ovh
 **先确认隧道活着**（`echo > /dev/tcp/127.0.0.1/45432`）。没有这个变量时数据库测试会**自动跳过**——所以「本地全绿」可能意味着「约 70 条 DB 用例一条没跑」。
 
 Redis：单测用 `github.com/alicebob/miniredis/v2`；集成测试用 `TEST_REDIS_URL=redis://127.0.0.1:36379/0`。
+
+**注意有两个不同的库，别搞混**：
+
+| 库 | 隧道 | 用途 |
+|---|---|---|
+| `sub2api-next-testdb`（compose 项目） | `45432` | **Go 测试用这个**。`testutil` 自己建/删 `t_*` 数据库 |
+| `sup2api` 栈自己的 pg | 另开一条到 pg 容器 IP（如 `ssh -f -N -L 15432:<pg-ip>:5432 ovh`），用 `~/sup2api/.env` 里的 sup2api 用户 | 查**部署环境**的真实数据时用。**别拿它跑测试** |
 
 **耗时注意**：经隧道跑 `internal/usage` 约 **610 秒**，`internal/account` 约 370 秒。`go test` 默认超时 10 分钟，所以 **`next/server` 的完整 `./...` 必须带 `-timeout 30m`**，否则会 `panic: test timed out` 而与代码无关。CI 的门禁脚本已经带了。
 
@@ -223,6 +250,7 @@ CI 有三个 job：`server (with PostgreSQL and Redis)` / `sdk, tools and e2e` /
 
 | 项 | 位置 | 说明 |
 |---|---|---|
+| **`manifest.StickyRule` 只能声明在 `Platform.StickyRules` 里，没有顶层 `stickyRules`** | `sdk/manifest` | 语义上粘性规则只需要端点协议 + 请求体路径，与平台账号无关（`matches(protocol, model, userAgent)` 不含平台参数，包校验也不检查协议是否属于所在平台）。**后果：插件想给内置端点加粘性规则，必须凭空声明一个平台，从而被迫申请 RiskHigh 的 `platform.register`。** 待办是提到顶层，并定一个比 `platform.register` 轻的权限（倾向新增 `scheduler.sticky`）。这条只在主控的记忆里，**文档里此前没有** |
 | `anthropic /models?q=` 不转义 LIKE 元字符 | `next/plugins/anthropic/internal/anthropic/models.go` | `?q=%` 返回全量目录并显示成搜索结果，`?q=a_c` 命中 `abc`。`moderation` 和 `volcengine` 都是正确写法，照抄即可（`volcengine` 的叫 `LikeTerm`）。可考虑把它提到 `pluginsdk` 省得每个插件各写一遍 |
 | `usageRequestFields` 表达不了数组任意元素 | CONTRACTS §25.7 第 2 条 | `ValidUsagePath` 只收单值路径，`content.#.text` 被拒。火山靠枚举 `content.0/1/2.text` + `content.#`（数组长度）绕过。建议允许受限的多值路径 |
 | `fields` 的值是原始 JSON 这件事要写进契约正文 | CONTRACTS §25.7 第 3 条 | 取的是 `gjson.Result.Raw`，字符串**带引号**。插件作者极易写错 |
@@ -370,6 +398,14 @@ CI 有三个 job：`server (with PostgreSQL and Redis)` / `sdk, tools and e2e` /
 
 `max_reconcile_age_sec` 的 7 天、未知时长按模型上界预扣——都是定过的。**代码注释里写明了它是决策**，不要当成随手填的数字调低。反过来，你自己写这类常量时也要说明。
 
+### 9.9 行尾（CRLF）会在服务器上炸，而且本机看不出来
+
+本机是 Windows，`core.autocrlf` 是开的。`.gitattributes` 把源文件钉成 LF，**所以经 git 走的路径是安全的**。
+
+但历史上踩过：当时部署是**打包上传工作树**，于是 Windows 的 CRLF 文件被原样送上服务器，`build-go.sh` 报 `set: Illegal option -`。这也是后来改成「服务器自己 git fetch」的原因之一（§13）。
+
+**推论**：任何绕过 git 的传输方式（scp、tar、rsync 工作树）都可能重新引入这个问题。而且 `.gitattributes` 只在 checkout 时生效，**工作树里的文件本身可能是 CRLF**。写跨平台的 shell 脚本或做哈希比对时要想到这条（`icons.json` 的 sha256 闸门两侧都做了 CRLF 归一化，正是为此，见 §8.6）。
+
 ---
 
 ## 10. 核心契约速查（A→E 五期的产出）
@@ -475,13 +511,22 @@ sub2api-plugin keygen   --key-id <id> --out <dir>
 
 ## 13. 部署与看它跑起来
 
-**测试部署**是 `next/deploy/single/`（ovh 上的 compose 项目 `sup2api`）：两个节点共享一套 PostgreSQL 16 / Redis 7，签名过的插件市场打进镜像，发布在 **`:3130` 和 `:3131`**。
+**测试部署**是 `next/deploy/single/`（ovh 上的 compose 项目 `sup2api`）：两个节点（`sup2api-1` / `sup2api-2`）共享一套 PostgreSQL 16 / Redis 7，签名过的插件市场打进镜像，发布在 **`:3130` 和 `:3131`**。
+
+**部署命令**（自 2026-09-26 起，服务器自己 `git fetch`，**不再上传工作树**）：
 
 ```bash
-docker compose -p sup2api -f compose.yml --env-file ~/sup2api/.env up -d --build
+ssh ovh 'bash ~/sup2api/src/next/deploy/single/deploy.sh [branch]'
 ```
 
-**两套栈都是在服务器上 git pull 的**，所以**改动要先推送**再在服务器上拉。
+**整个远程命令要用引号包住**，否则 `~` 在本机而不是服务器上展开。
+
+**所以改动必须先 commit 并 push** —— 未提交的改动永远到不了服务器。`.env` 文件在 `src/` 之外，部署不碰它。
+
+几条部署侧的事实：
+
+- 这个栈上 **插件签名校验是关掉的**（`SUB2API_PLUGIN_VERIFY_SIGNATURES=false`），所以「装上去能跑」不代表签名链是对的
+- 直接 `docker compose` 起的写法（调试用）：`docker compose -p sup2api -f compose.yml --env-file ~/sup2api/.env up -d --build`
 
 镜像构建（`next/Dockerfile`，context 是 `next/`）：`node:24` 构建 `web/` 到 `server/web/dist` 以及每个 `plugins/*/ui/native`；`golang:1.27-trixie` 构建 `sub2api`、插件 CLI 和插件；插件用**开发密钥**打包签名（首次构建生成，存在 BuildKit 缓存挂载 `sub2api-next-devkeys` 里，**不进镜像**）。
 
@@ -559,12 +604,21 @@ feat(next/plugins): volcengine reads the request it is pricing, ... (0.5.0)
 
 ## 16. 第一件该做的事
 
-1. **通读 [`ROUND-2026-09-PLUGIN-MECHANISM.md`](ROUND-2026-09-PLUGIN-MECHANISM.md)**（约 20 分钟）。它有时间线，读完你就知道每个决策的由来。
-2. **读 CONTRACTS §2**（构建与测试）和 **§25.7**（最新的三条待办）。
-3. **扫一遍本文 §11 的代码地图**，认一下主干那几个文件。
-4. **确认环境**：隧道活着（§3.2）、能推送（§3.3）、能读 CI 日志（§3.4）。
-5. **跑一遍门禁确认基线是绿的**：`sh .github/next-ci/next-check-module.sh next/sdk`（快），再看最近一次 CI run 的 conclusion。
-6. 然后从 **§7.1（`truncated`，会漏钱）** 或 **§7.2（e2e，需要先出方案给用户定）** 开始。
+1. **读 §1.1**（「做完了」的准确含义）。它会纠正你对现状最容易产生的一个误判。
+2. **通读 [`ROUND-2026-09-PLUGIN-MECHANISM.md`](ROUND-2026-09-PLUGIN-MECHANISM.md)**（约 20 分钟）。它有时间线，读完你就知道每个决策的由来。
+3. **读 CONTRACTS §2**（构建与测试）和 **§25.7**（最新的三条待办）。
+4. **扫一遍本文 §11 的代码地图**，认一下主干那几个文件。
+5. **确认环境**：隧道活着（§3.2）、能推送（§3.3）、能读 CI 日志（§3.4）。
+6. **跑一遍门禁确认基线是绿的**：`sh .github/next-ci/next-check-module.sh next/sdk`（快），再看最近一次 CI run 的 conclusion。
+
+然后按这个优先级挑活：
+
+| 顺位 | 做什么 | 为什么排这里 |
+|---|---|---|
+| **1** | **拿真实 Ark 凭证装一次插件、跑通图片 + 视频提交核对**（§1.1） | 整条线上全部代码都没被真实上游验证过。这一步能暴露的问题比下面任何一项都多，而且做起来最快 |
+| **2** | `ParseReconcileResponseRequest` 加 `truncated`（§7.1） | 唯一还留在「会漏钱」类别里的 |
+| **3** | e2e 目标拓扑（§7.2） | 最大的信心缺口，但**要先出方案给用户定**，别闷头建 |
+| 4 | §7.3 / §7.4 的小项 | 都是「会静默」，不急但会攒 |
 
 ---
 
