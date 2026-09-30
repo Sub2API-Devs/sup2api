@@ -41,6 +41,16 @@ package volcengine
 //     documents no default at all for the 2.0 and 1.0 families and does not
 //     say what omitting the field does, so an unknown duration means the
 //     model's maximum: 30s on 2.5, 15s on 2.0, 12s on 1.0 pro.
+//
+//     The maximum is a DECIDED policy, not a placeholder (2026-09-30). It
+//     prices a bare 2.5 submit - model and prompt, no duration - at 30
+//     seconds, roughly six times what a 5 second clip really costs, and that
+//     pre-charge is what a small balance has to clear to submit at all. It
+//     stands because the reservation is an estimate the reconcile settles: the
+//     difference comes back as soon as Ark reports the real usage, so the cost
+//     of guessing high is a temporary hold, while the cost of guessing low is
+//     a 30 second video rendered against a balance that could only afford 5.
+//     Any lower number would be one nothing upstream supports.
 //  3. Input video. The formula adds the INPUT video's duration for an edit, an
 //     extend or a reference-video task, and the input arrives as a URL or an
 //     asset id whose length nothing here can know. Those tasks are therefore
