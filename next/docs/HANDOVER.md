@@ -396,18 +396,180 @@ CI 有三个 job：`server (with PostgreSQL and Redis)` / `sdk, tools and e2e` /
 
 ---
 
-## 11. 第一件该做的事
+## 11. 代码地图：一次网关请求都经过谁
 
-1. **通读 `ROUND-2026-09-PLUGIN-MECHANISM.md`**（约 20 分钟）。它有时间线，读完你就知道每个决策的由来。
-2. **读 CONTRACTS §2**（构建与测试）和 **§25.7**（最新的三条待办）。
-3. **确认环境**：隧道活着（§3.2）、能推送（§3.3）、能读 CI 日志（§3.4）。
-4. **跑一遍门禁确认基线是绿的**：`sh .github/next-ci/next-check-module.sh next/sdk`（快），再看最近一次 CI run 的 conclusion。
-5. 然后从 **§7.1（`truncated`，会漏钱）** 或 **§7.2（e2e，需要先出方案给用户定）** 开始。
+**这条链是整个系统的主干**，动核心之前先认这几个文件（全在 `next/server/internal/`）：
+
+```
+gateway/routes.go      端点注册：把 manifest 声明的 endpoint 变成 gin 路由
+gateway/pipeline.go    ① readBody（含 UTF-8 校验）→ 取模型/stream → 鉴权 → 余额检查
+                       ② submit()：结算提交，plugin-usage 端点在这里起 goroutine
+                       ③ releaseBodies() / finishSubmit() / dropReservation()
+gateway/routing.go     typeRoute：一个「账号类型 × 协议」的候选路线，带它的用量规则与声明
+gateway/rank.go        候选账号排序（插件可用 RankAccounts 建议，核心保留最终决定权）
+gateway/dispatch.go    尝试循环：选账号 → BuildUpstreamRequest → 发 → 失败则 failover
+gateway/forward.go     转发响应。SSE 边转发边累计用量；末尾 armUsageExtraction（只装配）
+gateway/usageplugin.go ExtractUsage 的装配与调用、usageRequestFields 的读取
+gateway/hooks.go       OnGatewayRequest 等钩子、插件的请求 patch
+gateway/errors.go      ClassifyError 的结果落地，含 client_error_code 的校验与回落
+gateway/ssrf.go        转发壳，真正的防护在 internal/netguard
+
+usage/settler.go       写 usage_logs + balance_ledger（同一事务）。initialStatus 决定
+                       一行是 billed 还是 reserved
+usage/reconcile.go     核对循环：抢集群锁 → 捞到期条目 → BuildReconcileRequest →
+                       发 → ParseReconcileResponse → 落账。keepEstimate() 在这里
+usage/api.go           /usage、/usage/summary
+usage/settlements_api.go  人工出口：重新核对 / 退款
+
+store/migrate.go       迁移执行器。:73 是那条 checksum 不可变的错误（见 §9.2）
+netguard/              SSRF 防护（本轮从两份不一致的实现抽出来的）
+```
+
+SDK 侧（`next/sdk/`）：
+
+```
+proto/sub2api/plugin/v1/     契约本体。改完要 buf generate
+manifest/manifest.go         manifest 的 Go 结构（Page / Endpoint / Platform ...）
+manifest/check/              唯一的 manifest 校验器（本轮从两份分叉实现收敛而来）
+  ├── validate.go            入口与总装
+  ├── endpoints.go           端点规则
+  ├── usage.go               用量规则，含 streamUsage / usageSource / usageRequestFields
+  ├── ui.go                  UI 规则，含 page search / route ref / menu icon
+  ├── icons.go + icons.json  图标名清单（生成物，见 §8.6）
+  └── scope.go errors.go
+manifest/routes.go           保留路径常量（api / plugin-ui / healthz）
+platforms/                   三个内置平台的 JSON（Builtin() 每次重新解码，见 §5.3 的浅拷贝坑）
+```
+
+**一条容易搞错的事实**：**上游请求是核心发的**，插件只返回 `{method, url, headers, patches}`。所以厂商 SDK 在代理路径上**用不了**，只能用在插件自己的出网调用里（如素材库）。
+
+**另一条**：端点路径首段不能是 `api` / `plugin-ui` / `healthz`（`manifest.CoreRouteSegments`）。所以 Ark 原生的 `/api/v3/...` 用不了，对外用 `/ark/v3/...`。
 
 ---
 
-## 12. 交接时的未决事项
+## 12. 插件开发工作流
+
+开发工具是 `next/tools/sub2api-plugin`（自己的 Go 模块）：
+
+```
+sub2api-plugin manifest --dir <plugin dir>          # 打印生效的 manifest（先看这个）
+sub2api-plugin build    --dir <plugin dir>          # 编译插件二进制到 runtimes/
+sub2api-plugin pack     --dir <plugin dir> --out-dir <dir>
+sub2api-plugin sign     --key <私钥> --key-id <id> <file.s2plugin>
+sub2api-plugin verify   --pub <公钥|base64> <file.s2plugin>
+sub2api-plugin index    --dir <market dir> --key <私钥>    # 生成签名的市场索引
+sub2api-plugin keygen   --key-id <id> --out <dir>
+```
+
+`<command> -h` 看单个命令的 flag。
+
+**一个插件包含什么**：`manifest.json` + 编译好的二进制（`runtimes/`，gitignore 的本地产物）+ 可选的 `ui/native/dist`（原生 UI）+ `migrations/*.sql`（插件自己的表，跑在 `plg_<key>` schema 里）。
+
+**改了 manifest 之后至少要**：跑插件自己的 `go test ./...`（`manifest_test.go` 通常会断言 manifest 与代码常量一致），以及 `sh .github/next-ci/next-check-module.sh next/sdk`（校验规则变了的话）。
+
+**版本号**：对外行为变了就升一位（本轮 volcengine `0.4.0 → 0.5.0`）。`manifest.json` 的 `version` 是包版本，市场和 builtin 都按它找包。
+
+**进镜像 vs 进市场**（这个区分很重要，见 §6）：进市场是**发现式**的——`build-demo.sh` 扫每个 `plugins/*/manifest.json`，新插件零改动就进；进 `BUILTIN_PLUGINS`（`next/deploy/docker/build-go.sh`）是**显式列举**的部署决策，意思是「每个部署都带且不能卸载」。
+
+---
+
+## 13. 部署与看它跑起来
+
+**测试部署**是 `next/deploy/single/`（ovh 上的 compose 项目 `sup2api`）：两个节点共享一套 PostgreSQL 16 / Redis 7，签名过的插件市场打进镜像，发布在 **`:3130` 和 `:3131`**。
+
+```bash
+docker compose -p sup2api -f compose.yml --env-file ~/sup2api/.env up -d --build
+```
+
+**两套栈都是在服务器上 git pull 的**，所以**改动要先推送**再在服务器上拉。
+
+镜像构建（`next/Dockerfile`，context 是 `next/`）：`node:24` 构建 `web/` 到 `server/web/dist` 以及每个 `plugins/*/ui/native`；`golang:1.27-trixie` 构建 `sub2api`、插件 CLI 和插件；插件用**开发密钥**打包签名（首次构建生成，存在 BuildKit 缓存挂载 `sub2api-next-devkeys` 里，**不进镜像**）。
+
+**已删除的拓扑**（e2e 还指着它，见 §7.2）：`127.0.0.1:3120` 那套「两节点 + Caddy」（compose.yml、caddy/、scripts/、mock-upstream 和 `/__node1` `/__node2` `/__mock` 三条辅助路由）**已于 2026-09-27 删除**。
+
+---
+
+## 14. 派活模板（用 agent team 时直接改）
+
+**§8 的纪律必须写进提示词，agent 不会自己遵守。** 这是本轮用过、验证有效的骨架：
+
+```
+你在仓库 D:\projects\golang\sup2api 的 feat/next-platform 分支上工作。
+
+## 先读（真相源，不要凭猜）
+1. next/docs/HANDOVER.md（环境、纪律、坑）
+2. next/docs/CONTRACTS.md §2（构建与测试）+ §<本任务相关的小节>
+3. <本任务相关的设计文档小节>
+
+## 你的模块（一模块一写者）
+**你独占 <目录>。** 同时有别的 agent 在 <目录> 干活 —— **禁止修改 <列出来>**。
+也不要动 next/docs/（文档由主控写，但你必须在报告里把该记的写清楚）。
+
+## 任务
+<具体任务，每项写清「为什么现在要做」和「判断留给你的地方」>
+
+## 硬性要求
+1. **报告里必须指出我的设计文档或指令写错、不可行的地方，直说，不要替我圆场。**
+   每一轮都有 agent 靠这条抓到真东西（一条会把整列变成噪音的错误指令、一个污染
+   全进程的 Builtin() 浅拷贝、endpoint.response 是死声明、一条 206 个 commit
+   没人发现的错误断言、一个 curl 就能打出的稳定 5xx）。
+2. **文件编辑一律用 Edit / Write 工具。** 这台机器上用 python 或 sed 写文件会
+   **静默失败**（python 是 WindowsApps 占位符，exit 49）。
+3. **收紧校验规则必须设前置关卡**：先确认三个内置平台 + 七个现有插件满不满足新规则。
+   不满足时判断是资产不规范还是规则太死，**不许为了让测试过悄悄放宽规则，也不许
+   为了保住规则硬改资产**，两种都要显式报告。
+4. 必须过：gofmt -l .（无输出）、go vet ./...、go build ./...、GOOS=linux go build ./...、
+   go test ./...。数据库测试需要
+   TEST_DATABASE_URL=postgres://postgres:sub2api@127.0.0.1:45432/postgres?sslmode=disable
+   （SSH 隧道，先确认活着）。**next/server 的完整 ./... 要带 -timeout 30m。**
+   **不许给测试加 skip 来让它过** —— 这一整轮的主题就是消灭静默跳过的测试。
+5. **钱的场景必须有测试钉住**，而且要证明「旧的错误行为会被这个测试抓住」，
+   不是「新行为有测试」。
+6. **测试不许假设某个本地端口是空闲的**，也不要用「A 失败」来间接证明「B 生效」——
+   直接证明 B（原因见 CONTRACTS §26.7）。
+7. 改 proto 后要 cd next/sdk && buf generate；改了 SDK 后确认七个插件仍能编译。
+8. **不要 commit、不要 push**，由主控统一处理。
+
+## 报告格式
+每个任务到哪一步；改了哪些文件；新增/修改了哪些测试；四条检查结果**原样贴出**；
+**我的指令哪里错了**；文档该记什么（主控照抄）；下一步从哪接、有什么坑。
+```
+
+**跨轨依赖用 SendMessage 直接通知对方**，不必绕主控——本轮 `core-declare` 落地新的 manifest 字段后直接通知了 `plugin-adopt`，后者自己把声明加上了。
+
+**agent 被中断 / 进程退出会丢报告。** 本轮有一个 agent 随上一个进程退出，输出文件是空的、树也是干净的（它连第一个工具调用都没做）。重派即可，但**先 `git status` 确认没有半成品**。
+
+---
+
+## 15. 提交约定
+
+本轮的提交信息是**长散文体**：标题一句话说清「变化是什么」（不是「改了哪个文件」），正文解释**为什么**、**旧行为错在哪**、**代价是什么**。例如：
+
+```
+fix(next/server): the egress test must not assume 127.0.0.1:5432 is free
+feat(next): the estimate a plugin reserves can be read, defended and kept
+feat(next/plugins): volcengine reads the request it is pricing, ... (0.5.0)
+```
+
+前缀用 `feat(next)` / `fix(next/server)` / `docs(next)` / `ci(next)` / `refactor(next/web)` 这一类。
+
+**理由**：这条线上大量决策的价值在于「为什么不选另一条路」，而那些推演只活在提交信息和文档里。`git log` 是这个项目事实上的第二份设计文档。
+
+---
+
+## 16. 第一件该做的事
+
+1. **通读 [`ROUND-2026-09-PLUGIN-MECHANISM.md`](ROUND-2026-09-PLUGIN-MECHANISM.md)**（约 20 分钟）。它有时间线，读完你就知道每个决策的由来。
+2. **读 CONTRACTS §2**（构建与测试）和 **§25.7**（最新的三条待办）。
+3. **扫一遍本文 §11 的代码地图**，认一下主干那几个文件。
+4. **确认环境**：隧道活着（§3.2）、能推送（§3.3）、能读 CI 日志（§3.4）。
+5. **跑一遍门禁确认基线是绿的**：`sh .github/next-ci/next-check-module.sh next/sdk`（快），再看最近一次 CI run 的 conclusion。
+6. 然后从 **§7.1（`truncated`，会漏钱）** 或 **§7.2（e2e，需要先出方案给用户定）** 开始。
+
+---
+
+## 17. 交接时的未决事项
 
 - **e2e 的目标拓扑需要用户决策**（§7.2）。建议出 2–3 个方案（重建 Caddy 拓扑 / 改写 e2e 适配 single / 用 compose 起一套专用 e2e 栈），列出代价，让用户选。
-- **主控在交接前正准备派三轨**：核心轨（`truncated` + 数组路径）、插件轨（anthropic 的 LIKE 转义）、工程轨（CI 前端 job + 镜像构建 + e2e 拓扑调研）。**这个切分已按一模块一写者验证过，可以直接用。**
+- **主控在交接前拟好但未派出的三轨**：核心轨（`truncated` + 数组路径）、插件轨（anthropic 的 LIKE 转义）、工程轨（CI 前端 job + 镜像构建 + e2e 拓扑调研）。**这个切分已按一模块一写者验证过，可以直接用**（模板见 §14）。
 - 本轮开过一个后台任务 chip 去修 anthropic 的 LIKE 转义，**未确认是否被执行**，动手前先看那个文件的现状。
