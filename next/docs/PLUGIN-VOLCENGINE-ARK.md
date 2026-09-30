@@ -883,7 +883,28 @@ token = **帧数 × 输出宽 × 输出高 / 1024**，固定 24fps。以下每�
 1. **两个前缀必须出现在 `settingsFields` 里。** 核心的 `split()` 按这个列表分区，漏了的键进**加密 blob**，而插件读的是明文 settings —— 运维改了前缀、没有任何报错、每个请求照旧发往 `/api/v3`。核心**不校验** `settingsFields` 与表单 schema 的一致性，所以这个遗漏在安装期完全无声。
 2. **表单的 `maxLength` 必须等于 Go 的 `MaxPrefixLen`。** 两个数字写在两种语言里、没有任何东西把它们连起来；只改一边，表单就会接受一个插件在每次请求时都拒绝的值。
 
-### 13.7 仍未验证
+### 13.7 真实验证（2026-09-30，经网关）
 
-- **Anthropic 面一次都没真实跑过。** 用户那个 key 的分组里只有 seedance 视频模型（`/v1/messages` 返回 503 `model_not_found`），所以「继承 anthropic 用量规则」这条**还是纸面推导**。要一个能调文本模型的 key，发一次流式 + 一次非流式，确认 `usage_logs` 的 token 非零。**在那之前不要把它当成已验证。**
-- 前缀改动本身的端到端验证（官方默认值的行为没变，现有测试覆盖；`/v1` 与 `/doubao/api/v3` 的组合只有单测）。
+在 ovh 的 `single` 栈上部署 `7bafd35`（volcengine **0.6.0 enabled**），账号指向中转站、**经网关**发四次请求。
+
+| # | 协议 | 流式 | input / output | 状态 | 计费 |
+|---|---|---|---|---|---|
+| 53 | `openai.chat` | 否 | 32 / 20 | 200 | billed |
+| 56 | `openai.chat` | **是** | 31 / 20 | 200 | billed |
+| 54 | `anthropic.messages` | 否 | 32 / 20 | 200 | billed |
+| **55** | **`anthropic.messages`** | **是** | **54** / 24 | 200 | billed |
+
+**第 55 行是这次验证的全部意义。** 同一个 prompt 直接打中转站测过：`message_start` 报 34、`message_delta` 报 54。平台原生规则**只从 `message_start` 读 input**，而 JSON 规则不施加于 SSE —— 所以网关记下的 **54 只能来自 §13.4 那条覆盖**。少记 37% 的问题在真实链路上确认修好了。
+
+其余核对：
+
+- `usage_logs.anomalies` 四行**全为 `{}`** —— 没有响应形态不匹配，也没有用量回落
+- `balance_ledger` 四笔扣款与 `usage_logs.total_cost` 逐笔一致，余额递减正确
+- `count_tokens` 返回 **503 `no_available_account`，而且错误体是 Anthropic 形状**：`{"type":"error","error":{"type":"overloaded_error"}}` —— `overloaded_error` 正是 Anthropic 对 503 的词表。`usage_logs` 记 `error_type=no_account`。**不静默**，而且比预想的干净：插件按名字拒绝 → 网关当 failover → 没有其他账号能服务 → 503，词表由核心按 `errorFormat` 正确推导
+- **破坏性变更在现实中撞上了**：这个账号原来的 `base_url` 是 `https://cdn.api.codingplus.ai/doubao`，新语义下会被当成中转站、把 chat 打到不存在的 `/doubao/v1/…`。改成 `base_url = https://cdn.api.codingplus.ai` + `video_api_prefix = /doubao/api/v3` 才对。**这就是 §13.2 那条迁移说明的现实案例。** 同时确认 `video_api_prefix` 存进了**明文 settings**（`settingsFields` 那道守门有效）
+
+### 13.8 仍未验证
+
+- **官方 Ark 的 Anthropic 面**（`/api/coding/v1/messages`）需要 CodingPlan 订阅，手上的账号没有（`InvalidSubscription`）。路由位置已实测确认，但**真实调用没跑过**
+- **视频在新前缀语义下的回归**：§12 那次视频全链路是旧语义（`base_url` 末尾带 `/doubao`）跑的。新语义下 `video_api_prefix` 有单测，但**没有再跑一次真实的提交 + 核对**
+- **图片**（§12.3，这个中转站不提供任何 Seedream 模型，换上游才能验）
