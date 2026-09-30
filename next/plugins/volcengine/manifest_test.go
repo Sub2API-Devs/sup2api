@@ -3,10 +3,12 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 	"testing"
 
@@ -218,16 +220,40 @@ func TestManifest(t *testing.T) {
 	// not the other is dropped at whichever side forgot it. anthropic-version
 	// and anthropic-beta are in both because they change how the upstream
 	// reads the body.
-	//
-	// The usage rules are inherited on purpose. This is protocol passthrough:
-	// a client calling /v1/messages gets the upstream's body back unchanged,
-	// so an upstream usable on this route necessarily answers in Anthropic's
-	// shape - which is what the platform's rules already read. Overriding is
-	// the dangerous move, because the override replaces the whole block and a
-	// forgotten SSE list bills every streaming request at zero, silently.
-	if anth := byName[volcengine.PlatformAnthropic]; !slices.Equal(anth.PassHeaders, volcengine.AnthropicForwardHeaders()) ||
-		len(anth.RequestFields) != 0 || len(anth.Usage) != 0 {
+	anth := byName[volcengine.PlatformAnthropic]
+	if !slices.Equal(anth.PassHeaders, volcengine.AnthropicForwardHeaders()) || len(anth.RequestFields) != 0 {
 		t.Fatalf("anthropic platform entry = %+v, want passHeaders %v", anth, volcengine.AnthropicForwardHeaders())
+	}
+	// The usage override exists for ONE measured reason, and the test below
+	// proves it adds nothing else.
+	//
+	// Measured 2026-09-30 against an Ark-compatible relay: on a streaming
+	// Anthropic request the same fixed prompt reports input_tokens 34 in
+	// message_start and 54 in message_delta, and 54 non-streaming - twice,
+	// identically. The platform reads input from message_start, so every
+	// streaming request through that upstream under-counted input by 37%.
+	//
+	// Reading it from message_delta as well is safe in both directions
+	// because Acc.set OVERWRITES and SKIPS A MISSING PATH: on that relay the
+	// later 54 replaces 34, and on Anthropic itself, whose message_delta
+	// carries no usage.input_tokens at all, nothing is overwritten and
+	// message_start's own value stands.
+	over, ok := anth.Usage[volcengine.ProtocolMessages]
+	if !ok || len(anth.Usage) != 1 {
+		t.Fatalf("anthropic usage override = %+v, want exactly %s", anth.Usage, volcengine.ProtocolMessages)
+	}
+	if b := builtinNamed(t, volcengine.PlatformAnthropic); b != nil {
+		// An AccountPlatform usage override REPLACES the platform's whole
+		// block, so a field left out of it is a field nobody reads - and a
+		// forgotten SSE list bills every streaming request at zero, silently.
+		// Rather than trust a hand copy, diff it: the override must equal the
+		// platform's rules EXCEPT for the one key it exists to add.
+		diffs := usageDiff(b.Usage, over)
+		want := []string{`sse[message_delta].map[input_tokens]: "" -> "usage.input_tokens"`}
+		if !slices.Equal(diffs, want) {
+			t.Errorf("the anthropic usage override differs from the platform's by:\n  %s\nwant exactly:\n  %s",
+				strings.Join(diffs, "\n  "), strings.Join(want, "\n  "))
+		}
 	}
 	// Ark ignores OpenAI's org/project and x-stainless-* headers, so the
 	// account type narrows the built-in platform's passHeaders; the usage
@@ -751,4 +777,76 @@ func mustFile(t *testing.T, p string) []byte {
 		t.Fatalf("read %s: %v", p, err)
 	}
 	return b
+}
+
+// builtinNamed returns one built-in platform by id.
+func builtinNamed(t *testing.T, id string) *manifest.Platform {
+	t.Helper()
+	for _, p := range platforms.Builtin() {
+		if p.ID == id {
+			return &p
+		}
+	}
+	t.Fatalf("no built-in platform %q", id)
+	return nil
+}
+
+// usageDiff lists every way b differs from a, as sorted "where: old -> new"
+// lines. It exists so an account-type usage override can be asserted to differ
+// from the platform's rules in exactly the ways it means to: the override
+// replaces the whole block, so a hand copy that drops a field silently stops
+// counting it, and comparing the two structures is the only way to notice.
+func usageDiff(a, b manifest.UsageRules) []string {
+	var out []string
+	if a.Semantics != b.Semantics {
+		out = append(out, fmt.Sprintf("semantics: %q -> %q", a.Semantics, b.Semantics))
+	}
+	sse := func(u manifest.UsageRules) map[string]map[string]string {
+		m := map[string]map[string]string{}
+		for _, s := range u.SSE {
+			m[s.Event] = s.Map
+		}
+		return m
+	}
+	as, bs := sse(a), sse(b)
+	for _, ev := range union(keys(as), keys(bs)) {
+		for _, f := range union(keys(as[ev]), keys(bs[ev])) {
+			if as[ev][f] != bs[ev][f] {
+				out = append(out, fmt.Sprintf("sse[%s].map[%s]: %q -> %q", ev, f, as[ev][f], bs[ev][f]))
+			}
+		}
+	}
+	for _, f := range union(keys(a.JSON.Map), keys(b.JSON.Map)) {
+		if a.JSON.Map[f] != b.JSON.Map[f] {
+			out = append(out, fmt.Sprintf("json.map[%s]: %q -> %q", f, a.JSON.Map[f], b.JSON.Map[f]))
+		}
+	}
+	// Facts are part of the block too: an override that dropped them would
+	// stop every u("key") price expression from resolving.
+	if len(a.Facts) != len(b.Facts) {
+		out = append(out, fmt.Sprintf("facts: %d -> %d", len(a.Facts), len(b.Facts)))
+	}
+	sort.Strings(out)
+	return out
+}
+
+func keys[V any](m map[string]V) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
+func union(a, b []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, s := range append(append([]string{}, a...), b...) {
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
