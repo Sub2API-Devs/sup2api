@@ -23,8 +23,8 @@
     "ui:title": { "en": "API path prefix", "zh": "API 路径前缀" },
     "ui:placeholder": { "en": "Leave empty - the layout follows the Base URL", "zh": "留空即可 —— 路径布局由 Base URL 决定" },
     "ui:help": {
-      "en": "Normally leave this empty. An Ark address uses Ark's own layout (/api/v3/chat/completions, and Anthropic Messages at /api/coding/v1/messages, which is NOT under /api/v3). Any other address is taken for an Ark-compatible relay and uses the standard paths (/v1/chat/completions, /v1/messages). Set this only for a relay that mirrors Ark's own paths under its own host - then everything, Anthropic included, is built under the prefix you give. It must start with / and can never move the request to another host.",
-      "zh": "通常留空。填方舟地址就走方舟自己的布局（/api/v3/chat/completions，而 Anthropic Messages 在 /api/coding/v1/messages，**不在** /api/v3 下）；填其他地址则按 Ark 兼容中转站处理，走标准路径（/v1/chat/completions、/v1/messages）。只有当中转站在自己的域名下原样镜像方舟路径时才需要填 —— 填了之后所有路径（含 Anthropic）都建在这个前缀下。必须以 / 开头，任何情况下都不能把请求导到别的主机。"
+      "en": "Normally leave this empty. An Ark address uses Ark's own layout (/api/v3/chat/completions). Ark itself does not serve Anthropic Messages at all, so that protocol needs a relay. Any other address is taken for an Ark-compatible relay and uses the standard paths (/v1/chat/completions, /v1/messages). Set this only for a relay that mirrors Ark's own paths under its own host - then everything, Anthropic included, is built under the prefix you give. It must start with / and can never move the request to another host.",
+      "zh": "通常留空。填方舟地址就走方舟自己的布局（/api/v3/chat/completions）。方舟本身**不提供** Anthropic Messages，那个协议需要中转站；填其他地址则按 Ark 兼容中转站处理，走标准路径（/v1/chat/completions、/v1/messages）。只有当中转站在自己的域名下原样镜像方舟路径时才需要填 —— 填了之后所有路径（含 Anthropic）都建在这个前缀下。必须以 / 开头，任何情况下都不能把请求导到别的主机。"
     }
   },
   "video_api_prefix": {

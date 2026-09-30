@@ -112,14 +112,19 @@ const (
 	// account points at one of Ark's endpoints.
 	APIPrefix = "/api/v3"
 
-	// AnthropicOfficialPrefix is where Ark serves Anthropic Messages, and it
-	// is NOT under APIPrefix. Measured 2026-09-30: /api/v3/messages answers
-	// 404 with an empty body - the same as a path that was never registered,
-	// while a registered route answers 404 with a JSON error - and
-	// /api/coding/v1/messages answers UnsupportedModel or InvalidSubscription,
-	// i.e. it reads the request. That surface belongs to the Coding Plan and
-	// needs a subscription.
-	AnthropicOfficialPrefix = "/api/coding/v1"
+	// AnthropicOfficialPrefix is empty on purpose: Ark's own endpoints do not
+	// serve Anthropic Messages, so an official account refuses that protocol
+	// by name instead of sending it somewhere.
+	//
+	// Measured 2026-09-30 with a working key: /api/v3/messages answers 404
+	// with a zero-byte body, the same as a path that was never registered,
+	// while a registered route answers 404 with a JSON error. The only Ark
+	// surface that did speak Anthropic was /api/coding/v1/messages, behind a
+	// Coding Plan subscription - deliberately NOT used, on the operator's
+	// call: it is a subscription product whose quota its own documentation
+	// says is not for direct API calls, and pointing at it would make the
+	// plugin's behaviour depend on a plan the account may not hold.
+	AnthropicOfficialPrefix = ""
 
 	// RelayAPIPrefix is the layout of an Ark-compatible relay: the standard
 	// OpenAI and Anthropic paths (/v1/chat/completions, /v1/messages). An
@@ -312,7 +317,17 @@ func upstreamPath(px prefixes, protocol, model string) (string, error) {
 	case ProtocolMessages:
 		// Forwarded as it arrived: the core has no Anthropic-to-OpenAI
 		// converter, so the body reaching us is already Anthropic-shaped and
-		// the only thing to get right is where to send it.
+		// the only decision is where to send it.
+		//
+		// An account on one of Ark's own endpoints has nowhere to send it -
+		// see AnthropicOfficialPrefix - so it says so rather than posting to a
+		// path measured not to exist. An Ark-compatible relay serves the
+		// standard /v1/messages and is the supported way to use this protocol.
+		if px.anthropic == "" {
+			return "", status.Errorf(codes.InvalidArgument,
+				"Ark's own endpoints do not serve Anthropic Messages, so %q needs an account whose base URL is an "+
+					"Ark-compatible relay that does (or an explicit %s)", protocol, FieldAPIPrefix)
+		}
 		return px.anthropic + "/messages", nil
 	case ProtocolCountTokens:
 		// Declaring the anthropic platform makes this account type a

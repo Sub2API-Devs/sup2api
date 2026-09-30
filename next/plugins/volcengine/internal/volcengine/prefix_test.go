@@ -94,15 +94,12 @@ func TestLayoutIsDerivedFromTheBaseURL(t *testing.T) {
 		{"official responses", official, ProtocolResponses, DefaultBaseURL + "/api/v3/responses"},
 		{"official embeddings", official, ProtocolEmbeddings, DefaultBaseURL + "/api/v3/embeddings"},
 		{"official images", official, ProtocolImages, DefaultBaseURL + "/api/v3/images/generations"},
-		// The one that is not a sibling: Ark has no /api/v3/messages at all.
-		{"official messages", official, ProtocolMessages, DefaultBaseURL + "/api/coding/v1/messages"},
 		{"official video", official, ProtocolVideoSubmit, DefaultBaseURL + "/api/v3/contents/generations/tasks"},
 
 		// BytePlus is Ark's overseas endpoint, so it must NOT be treated as a
 		// relay. A rule of "base_url is set" rather than "base_url is an Ark
 		// endpoint" would send every BytePlus account to /v1/* and break it.
 		{"byteplus chat", byteplus, ProtocolChat, BytePlusBaseURL + "/api/v3/chat/completions"},
-		{"byteplus messages", byteplus, ProtocolMessages, BytePlusBaseURL + "/api/coding/v1/messages"},
 
 		{"relay chat", relay, ProtocolChat, "https://cdn.api.codingplus.ai/v1/chat/completions"},
 		{"relay responses", relay, ProtocolResponses, "https://cdn.api.codingplus.ai/v1/responses"},
@@ -113,6 +110,26 @@ func TestLayoutIsDerivedFromTheBaseURL(t *testing.T) {
 		r, err := buildFor(t, c.acc, &pluginv1.RequestMeta{Protocol: c.protocol, Model: "m"})
 		if err != nil || r.GetUrl() != c.want {
 			t.Errorf("%s: url = %q (%v), want %q", c.name, r.GetUrl(), err, c.want)
+		}
+	}
+
+	// Ark's own endpoints do not serve Anthropic Messages - measured, see
+	// AnthropicOfficialPrefix - so an official account refuses the protocol
+	// instead of posting to a path that answers 404 with an empty body. The
+	// error has to name what would fix it, because "Ark does not do this" is
+	// only useful next to "a relay does".
+	for _, name := range []string{"official", "byteplus"} {
+		acc := official
+		if name == "byteplus" {
+			acc = byteplus
+		}
+		r, err := buildFor(t, acc, &pluginv1.RequestMeta{Protocol: ProtocolMessages, Model: "m"})
+		if err == nil {
+			t.Errorf("%s messages: accepted and would have sent %s", name, r.GetUrl())
+			continue
+		}
+		if !strings.Contains(err.Error(), FieldAPIPrefix) {
+			t.Errorf("%s messages: the error should name %s: %v", name, FieldAPIPrefix, err)
 		}
 	}
 }
