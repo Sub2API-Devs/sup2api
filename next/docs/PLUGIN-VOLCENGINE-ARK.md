@@ -324,7 +324,7 @@ created_at  timestamptz NOT NULL
 | **二期** ✅ | `volcengine` 平台 + 同步图片端点（Seedream），张数计量与计费 | 无 | 图片生成可用可计费 |
 | **三期** ✅ | 素材库：插件路由 + 火山官方 SDK 做 V4 签名 + `plg_volcengine` 索引 + 控制台页面 | 无 | 自定义素材端点落地（0.3.0） |
 | **四期 · 核心** | [插件执行、核心记录](PLUGIN-EXECUTES-CORE-RECORDS.md) 的 A + B + C + D | 是，且都是通用能力 | 插件参与用量与使用记录、预扣费、异步核对 |
-| **五期** ✅ | 视频（Seedance）：提交 + 轮询 + 核对结算，落在四期的契约上；收尾见 §11 | 无 | 豆包视频可用（0.5.0）；预估从猜变成读，官方 SDK 退场 |
+| **五期** ✅ | 视频（Seedance）：提交 + 轮询 + 核对结算。真实上游验证见 §12，端点可配与 Anthropic 见 §13 | 无 | 豆包视频可用（0.6.0）；预估从猜变成读，官方 SDK 退场，上游端点可配 |
 
 一到三期覆盖了需求里「合并成一个插件 + 自定义 baseurl + 素材端点」的全部字面要求，可以独立发布。四期是一笔**核心投资**：那四条扩展没有一条带厂商或「任务」语义，做完之后豆包视频只是第一个用户。
 
@@ -699,7 +699,7 @@ token = **帧数 × 输出宽 × 输出高 / 1024**，固定 24fps。以下每�
 | 项 | 值 |
 |---|---|
 | 上游 | 一个 Seedance 中转站 `https://cdn.api.codingplus.ai`，**不是官方 Ark** |
-| 账号 `base_url` | `https://cdn.api.codingplus.ai/doubao` —— 中转站把 Ark 原生路径挂在 `/doubao` 前缀下，插件拼上 `/api/v3/...` 后原样可用，**不需要改插件**。`NormalizeBaseURL` 只去尾部 `/api/v3`，路径前缀保留 |
+| 账号 `base_url` | `https://cdn.api.codingplus.ai/doubao` —— 中转站把 Ark **原生视频**路径挂在 `/doubao` 前缀下，插件拼上 `/api/v3/...` 后原样可用，**这一期不需要改插件**。`NormalizeBaseURL` 只去尾部 `/api/v3`，路径前缀保留。**⚠️ 2026-09-30 补测更正：`/doubao` 下只有视频**，`chat/completions`、`embeddings`、`messages` 在 `/doubao/api/v3/` 下全都**不存在**（返回中转站 SPA 的 HTML + 200）。所以「整个 Ark 面都在 `/doubao` 下」这个当时的理解是错的，只有视频成立。文本面在**根**上的 `/v1/*`。这条促成了 §13 的两个前缀设置 |
 | 中转站根路径 | 是 new-api 风格（`/v1/models`、`/v1/video/generations`，顶层 `prompt`），**Ark 原生路径在根上全是 404**。第一次探测以为插件对接不了，是用户指出 `/doubao` 前缀才打通 |
 | 部署 | ovh `single` 栈，`2cc0371a3`。volcengine 以**内建只安装**身份进镜像（CONTRACTS §26.8），部署后 `status=installed, builtin=true, active_version=null`，管理员启用后 `enabled 0.5.0`。**这是插件第一次被安装：`plg_volcengine` 的三张表建出来了，0001/0002 迁移第一次执行** |
 | 中转站 `/v1/models` | 只列 4 个：`doubao-seedance-2-0-260128`、`-2-0-fast-260128`、`-2-0-mini-260615`、`doubao-seedance-2-5-260628` |
@@ -773,3 +773,91 @@ token = **帧数 × 输出宽 × 输出高 / 1024**，固定 24fps。以下每�
 - 失败 / 取消 / 过期任务的核对（`FAILED` 全额退）；核对超时路径
 - **素材的上传与索引链路**（只验了组的增删查，`CreateAsset` 与 `plg_volcengine` 的索引写入未测）
 - 官方 Ark 本身（这次全程是中转站）
+---
+
+## 13. 上游端点可配 + Anthropic Messages（2026-09-30，0.6.0）
+
+用户的要求是「一套通用插件，支持指定端点和默认官方端点」，原则是**协议透传**：客户端用什么协议就以同样协议转发上游，不做转换。
+
+### 13.1 实测的三种上游布局
+
+| 上游 | 文本 / 图片 / Anthropic | Ark 原生视频 |
+|---|---|---|
+| 官方 Ark | `/api/v3/*` | `/api/v3/contents/generations/tasks` |
+| 本轮验证的中转站 | **根上的 `/v1/*`** —— `chat/completions`、`responses`、`embeddings`、`images/generations`、`messages` 全部存在 | **`/doubao/api/v3/contents/generations/tasks`** |
+| `/doubao/api/v3/` 下的其他路径 | **不存在**，返回中转站 SPA 的 HTML + **200** | — |
+
+所以**文本面和视频面的前缀可以不同**，一个固定的 `/api/v3` 两个都表达不了。
+
+### 13.2 两个设置项
+
+| 字段 | 默认 | 语义 |
+|---|---|---|
+| `api_prefix` | `/api/v3` | OpenAI / Anthropic 兼容面的前缀。官方留空；上面那个中转站填 `/v1` |
+| `video_api_prefix` | 空 | 视频面的前缀。**空 = 跟随 `api_prefix`**；那个中转站填 `/doubao/api/v3` |
+
+**三处调用点都要用视频前缀**，其中 `BuildReconcileRequest` 最容易漏：它跑在离线循环里，路径错了每次轮询都 404 → 核心读成「仍在进行」→ 到 deadline 放弃 → **保留预扣**。于是一个真的跑完、真的上报了用量的任务，被按预估收费。测试专门钉了这一条。
+
+`spec.StripSuffixes` **保持字面 `/api/v3`，不跟随设置**。两者看着像、其实是两件事：它的作用是「撤销一次从 Ark SDK 文档粘贴 base URL 的动作」，与上游实际挂载点无关。让它跟随设置，填了 `/v1` 的账号就没法再粘贴官方 base URL 了。
+
+### 13.3 安全：前缀不能把请求移出 base_url 的主机
+
+**这是这一轮最重要的一条。** `base_url` 受 `guardedSettings` 限制成官方地址（没有 `account:settings:custom` 只能填白名单内的），而 `guardedSettings` **管不住路径类设置** —— `check/validate.go` 要求 `allowed` 每项是绝对 http(s) URL。
+
+于是自由文本的前缀填 `@evil.com/v3`，`https://ark.cn-beijing.volces.com` + `@evil.com/v3` 会被解析成**主机 `evil.com`**（前半段降级成 userinfo）：限制被绕过，账号凭证发去别处。核心的 `netguard.CheckURL` 拦不住 —— 它问的是「这个主机是不是私有地址」，不是「这是不是我们想去的主机」。
+
+**不做字符黑名单**（黑名单永远在错的一侧，CONTRACTS §25.1 已有这条教训）。两层，各自独立成立：
+
+| 层 | 做什么 | 何时跑 |
+|---|---|---|
+| `normalizePrefix` | 只接受一种形状：以单个 `/` 开头的路径（URL 的 authority 在第一个 `/` 处结束，所以 `@` 再也挤不进去）。拒 `//` 开头、`?` `#`、`..` 段、超长 | 保存账号时（`ValidateCredentials`），**唯一能把错误告诉人的地方** |
+| `upstreamURL` | 拼出最终 URL 后解析，**scheme 与 host 必须与 base_url 相同** | **每次请求**（`BuildUpstreamRequest` / `BuildTestRequest` / `BuildReconcileRequest`） |
+
+第二层必须无条件成立,因为第一层只在保存时跑：旧版本存下的行、备份恢复的行、以及将来新增的前缀形状都可能绕过它。这是凭证真正离开进程的那一层。
+
+**两层各挡什么，容易搞反，测试里写清了**：
+
+- `@evil.com/x` 是**真的逃逸** —— 拼在绝对 base 后面，authority 变成 `ark.cn-beijing.volces.com@evil.com`，主机是 `evil.com`。这是 `upstreamURL` 存在的理由
+- `//evil.com/x` **在这里不是逃逸** —— base 已经带了 scheme 和 authority，结果是 `https://ark.cn-beijing.volces.com//evil.com/x`，**主机没变**，双斜杠只是个古怪的路径。它被前一层拒掉，理由是「以 `//` 开头的路径前缀无论如何都是笔误」，而且同一个字符串在 base 没有主机时**确实**是逃逸
+
+`upstreamURL` 返回的是**原始拼接串**而不是 `u.String()`：核心的 SSRF 防护会重新解析同一批字节，任何在这里经过序列化往返的东西都可能与被检查的不同。
+
+### 13.4 Anthropic Messages
+
+账号类型声明第三个平台 `{"platform":"anthropic", "passHeaders":[...]}`。核心**零个协议转换器**，所以客户端说 Anthropic 就只能由插件按原样转发 —— 请求体到插件手里已经是 Anthropic 形状，唯一要决定的是发到哪。路径 `{api_prefix}/messages`。
+
+四件连带的事：
+
+**1. `anthropic-version` 之前根本没发。** Anthropic 的 API 要求这个头。现在客户端没送就补默认值 `2023-06-01`，**客户端送了就用它的** —— 它知道自己的请求体是哪个 beta 形状，静默降级会让上游按不同规则解读。`anthropic-beta` 同样转发。注意 `passHeaders` 是**整列替换不是合并**，所以 manifest 和 `upstreamHeaders` 两侧必须写同一组头，否则漏的那一侧会把客户端的头丢掉。
+
+**2. 错误词表之前是 OpenAI 的。** 网关在插件填了 `client_error_type` 时**逐字使用**（只有插件没说话才自己按 `errorFormat` 推导）。所以 Anthropic 客户端会收到 `{"type":"error","error":{"type":"server_error"}}` —— 而 **`server_error` 根本不在 Anthropic 的词表里**（该是 `api_error`），404 该是 `not_found_error` 而不是被折进 `invalid_request_error`。现在按 `meta.protocol` 切词表；其余四个值（`invalid_request_error` / `authentication_error` / `permission_error` / `rate_limit_error`）两边拼写相同。
+
+**3. `count_tokens` 按名字拒绝。** 平台声明了两个端点，而 `AccountPlatform` **没有按端点过滤的能力**，所以声明这个平台就等于连带接受 `count_tokens`；Ark 没有这个端点。带理由失败优于编一个会 404 的路径。**后果**：混合分组里调度到 Ark 账号的 `count_tokens` 会失败一次再 failover 到真 Anthropic 账号（理想行为）；纯 Ark 分组里客户端拿到 503 而不是干净的 404 —— 这是契约现状。
+
+**4. 用量规则故意不覆盖。** 论证不依赖对上游的猜测：这是协议透传，客户端打 `/v1/messages` 拿回的响应体必须是 Anthropic 形状（否则它的 SDK 解析不了），那么 usage 就在 `usage.input_tokens` / `message_start` / `message_delta` 里，正是平台规则读的地方。**覆盖才是危险动作** —— `usagerules.For` 是整块替换，漏了 SSE 列表就等于每个流式请求静默计零。
+
+**还有一条要知道**：平台级 sticky 规则 `claude-code-session` 匹配 `models:["claude-*"]`，而 `resolveSticky` 用的是**客户端请求的模型**（账号的 model mapping 发生得更晚）。所以客户端打 `claude-sonnet-4-5` 再映射到 `doubao-*` 时**会**命中，把会话钉在一个账号上。无害（就是会话亲和），但排查「为什么总是同一个账号」时要想到它。
+
+### 13.5 为什么没有「视频形状开关」—— 考虑过并拒绝
+
+中转站根上还有一条 new-api 风格的视频路由 `/v1/video/generations`（提交要求**顶层 `prompt`**，明确拒绝 Ark 的 `content[]`；查询是 `GET /v1/video/generations/{id}`）。做成第二种上游形状技术上可行（`BodyPatch` 只有 `OP_SET` / `OP_DELETE`，但声明 `requestFields` 拿到 `content[].text` 后 `OP_SET prompt` + `OP_DELETE content` 走得通），**但不该做**，三条理由各自独立成立：
+
+1. **Ark 原生那条路是全保真透传。** 读中转站的参考实现：它把**整个原始 Ark 请求体原封不动存进 `metadata`**，发上游时再逐字还原 —— `ratio`、`camera_fixed`、`generate_audio`、`content[]` 里的图片与视频输入、prompt 里的 `--rs/--dur` 后缀，全都保留。查询时返回的是**存下来的真实 Ark 响应体**，含 `usage.completion_tokens`。也就是说现有代码**一行都不用改**，而且核对能拿真实用量做 `SETTLED` 结算。
+2. **new-api 形状是有损的，且失败不可见。** 走那条路必须把 Ark 字段逐个枚举进 `requestFields` 再重挂。任何没枚举的字段**静默消失** —— 用户要 `16:9` 拿到默认比例，请求 200，没有任何地方报错。而 Seedance 每一代都在加参数。
+3. **它的查询更差。** new-api 视频查询的状态词表是 `queued/in_progress/completed/failed`，**且完全没有 usage 数字**。`completed` 会掉进 `ParseReconcileResponse` 的 `default:` 分支 → **永远 PENDING** → 轮询到 7 天 deadline 才把预估当终值。
+
+**所以只保留 Ark 形状**，靠 `video_api_prefix` 指到中转站挂载的位置。连带的好处：`ParseReconcileResponse` 的状态词表不用改，`usageRequestFields` 的 `content.#` / `content.0.text` 也不用改 —— 客户端打的和上游收的都还是 Ark 形状。
+
+> 给中转站作者的一条要求：**new-api 系中转站要接这个插件的视频，必须暴露 Ark 原生视频路由**（参考实现本来就是这么做的）。
+
+### 13.6 两道只为抓静默失败而存在的测试
+
+都是**先把它守的东西弄坏、确认测试变红**之后才留下的：
+
+1. **两个前缀必须出现在 `settingsFields` 里。** 核心的 `split()` 按这个列表分区，漏了的键进**加密 blob**，而插件读的是明文 settings —— 运维改了前缀、没有任何报错、每个请求照旧发往 `/api/v3`。核心**不校验** `settingsFields` 与表单 schema 的一致性，所以这个遗漏在安装期完全无声。
+2. **表单的 `maxLength` 必须等于 Go 的 `MaxPrefixLen`。** 两个数字写在两种语言里、没有任何东西把它们连起来；只改一边，表单就会接受一个插件在每次请求时都拒绝的值。
+
+### 13.7 仍未验证
+
+- **Anthropic 面一次都没真实跑过。** 用户那个 key 的分组里只有 seedance 视频模型（`/v1/messages` 返回 503 `model_not_found`），所以「继承 anthropic 用量规则」这条**还是纸面推导**。要一个能调文本模型的 key，发一次流式 + 一次非流式，确认 `usage_logs` 的 token 非零。**在那之前不要把它当成已验证。**
+- 前缀改动本身的端到端验证（官方默认值的行为没变，现有测试覆盖；`/v1` 与 `/doubao/api/v3` 的组合只有单测）。
