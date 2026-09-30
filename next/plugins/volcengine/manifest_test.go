@@ -42,7 +42,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "volcengine" || m.Version != "0.5.1" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "volcengine" || m.Version != "0.6.0" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("identity = %s %s %s", m.Key, m.Version, m.Publisher)
 	}
 	if m.Name["en"] == "" || m.Name["zh"] == "" || m.Description["en"] == "" || m.Description["zh"] == "" {
@@ -89,8 +89,18 @@ func TestManifest(t *testing.T) {
 		slices.Contains(at.SettingsFields, volcengine.FieldSecretKey) {
 		t.Fatalf("the AK/SK pair must not be plaintext settings: %v", at.SettingsFields)
 	}
-	if !slices.Equal(at.SettingsFields, []string{"base_url", volcengine.FieldAssetBaseURL, volcengine.FieldAssetRegion}) {
+	if !slices.Equal(at.SettingsFields, []string{"base_url", volcengine.FieldAPIPrefix,
+		volcengine.FieldVideoAPIPrefix, volcengine.FieldAssetBaseURL, volcengine.FieldAssetRegion}) {
 		t.Fatalf("settingsFields = %v", at.SettingsFields)
+	}
+	// The two prefixes are paths, and guardedSettings is a URL allow-list
+	// (check requires every allowed entry to be an absolute http(s) URL), so
+	// they cannot be guarded that way. What keeps them from moving a request
+	// off the guarded host is upstreamURL's origin check, on every request.
+	for _, g := range at.GuardedSettings {
+		if g.Field == volcengine.FieldAPIPrefix || g.Field == volcengine.FieldVideoAPIPrefix {
+			t.Fatalf("%s cannot be a guarded setting: guardedSettings only allow-lists absolute URLs", g.Field)
+		}
 	}
 	// base_url and asset_base_url are both guarded (CONTRACTS §21.3):
 	// without account:settings:custom only the official addresses (or an
@@ -112,6 +122,34 @@ func TestManifest(t *testing.T) {
 		t.Fatalf("the asset endpoint must not be the API host: %s", volcengine.DefaultAssetBaseURL)
 	}
 
+	// The two prefixes MUST be settings fields. Nothing in the core checks
+	// this: split() partitions on exactly this list, so a prefix left out of
+	// it goes into the ENCRYPTED blob while prefixesOf reads the plaintext
+	// one. The result is an operator who sets a prefix, gets no error, and
+	// sees every request keep going to /api/v3 - the exact shape of silent
+	// failure this round exists to remove.
+	for _, f := range []string{volcengine.FieldAPIPrefix, volcengine.FieldVideoAPIPrefix} {
+		if !slices.Contains(at.SettingsFields, f) {
+			t.Fatalf("%s must be a settings field or it is stored encrypted and never read: %v", f, at.SettingsFields)
+		}
+	}
+	// The form's length limit and the plugin's must agree. They are written in
+	// two languages and nothing links them, so a change to one alone means the
+	// form accepts a value the plugin then refuses on every request.
+	var limits struct {
+		Properties map[string]struct {
+			MaxLength int `json:"maxLength"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(mustJSONFile(t, at.Form.Schema), &limits); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{volcengine.FieldAPIPrefix, volcengine.FieldVideoAPIPrefix} {
+		if got := limits.Properties[f].MaxLength; got != volcengine.MaxPrefixLen {
+			t.Errorf("form %s maxLength = %d, plugin MaxPrefixLen = %d", f, got, volcengine.MaxPrefixLen)
+		}
+	}
+
 	var schema struct {
 		Required   []string                   `json:"required"`
 		Properties map[string]json.RawMessage `json:"properties"`
@@ -123,7 +161,8 @@ func TestManifest(t *testing.T) {
 	if !slices.Equal(schema.Required, []string{"api_key"}) {
 		t.Fatalf("form schema: required %v", schema.Required)
 	}
-	for _, f := range []string{"api_key", "base_url", volcengine.FieldAccessKey, volcengine.FieldSecretKey,
+	for _, f := range []string{"api_key", "base_url", volcengine.FieldAPIPrefix, volcengine.FieldVideoAPIPrefix,
+		volcengine.FieldAccessKey, volcengine.FieldSecretKey,
 		volcengine.FieldAssetBaseURL, volcengine.FieldAssetRegion} {
 		if _, ok := schema.Properties[f]; !ok {
 			t.Fatalf("form schema has no %s property", f)
@@ -145,20 +184,50 @@ func TestManifest(t *testing.T) {
 		t.Fatal("form schema still declares model_mapping")
 	}
 
-	// One account type serves both platforms: an operator enters the Ark key
-	// once and gets chat (built-in openai) and images (own platform).
-	if len(at.Platforms) != 2 {
-		t.Fatalf("platforms = %+v, want [openai volcengine]", at.Platforms)
+	// One account type serves three platforms: an operator enters the Ark key
+	// once and gets chat and responses (built-in openai), Anthropic Messages
+	// (built-in anthropic) and images plus video (own platform).
+	//
+	// Looked up by name, never by index: this list grew once already, and an
+	// index-based assertion silently starts checking a different platform when
+	// it grows again.
+	byName := map[string]manifest.AccountPlatform{}
+	for _, ap := range at.Platforms {
+		byName[ap.Platform] = ap
 	}
-	ap := at.Platforms[0]
-	if ap.Platform != volcengine.PlatformID {
-		t.Fatalf("platform = %q, want %q", ap.Platform, volcengine.PlatformID)
+	if len(at.Platforms) != len(byName) {
+		t.Fatalf("a platform is listed twice: %+v", at.Platforms)
 	}
+	for _, want := range []string{volcengine.PlatformID, volcengine.PlatformAnthropic, volcengine.PlatformVolcengine} {
+		if _, ok := byName[want]; !ok {
+			t.Fatalf("platforms = %+v, want %s among them", at.Platforms, want)
+		}
+	}
+	if len(at.Platforms) != 3 {
+		t.Fatalf("platforms = %+v, want exactly the three known ones", at.Platforms)
+	}
+	ap := byName[volcengine.PlatformID]
 	// The own platform inherits everything from platforms[] (no override).
-	own := at.Platforms[1]
-	if own.Platform != volcengine.PlatformVolcengine || len(own.PassHeaders) != 0 ||
-		len(own.RequestFields) != 0 || len(own.Usage) != 0 {
+	own := byName[volcengine.PlatformVolcengine]
+	if len(own.PassHeaders) != 0 || len(own.RequestFields) != 0 || len(own.Usage) != 0 {
 		t.Fatalf("own platform entry = %+v", own)
+	}
+	// anthropic's passHeaders must be narrowed the same way openai's is, and
+	// must match what upstreamHeaders forwards: passHeaders REPLACES the
+	// platform's list rather than merging, so a header named on one side and
+	// not the other is dropped at whichever side forgot it. anthropic-version
+	// and anthropic-beta are in both because they change how the upstream
+	// reads the body.
+	//
+	// The usage rules are inherited on purpose. This is protocol passthrough:
+	// a client calling /v1/messages gets the upstream's body back unchanged,
+	// so an upstream usable on this route necessarily answers in Anthropic's
+	// shape - which is what the platform's rules already read. Overriding is
+	// the dangerous move, because the override replaces the whole block and a
+	// forgotten SSE list bills every streaming request at zero, silently.
+	if anth := byName[volcengine.PlatformAnthropic]; !slices.Equal(anth.PassHeaders, volcengine.AnthropicForwardHeaders()) ||
+		len(anth.RequestFields) != 0 || len(anth.Usage) != 0 {
+		t.Fatalf("anthropic platform entry = %+v, want passHeaders %v", anth, volcengine.AnthropicForwardHeaders())
 	}
 	// Ark ignores OpenAI's org/project and x-stainless-* headers, so the
 	// account type narrows the built-in platform's passHeaders; the usage

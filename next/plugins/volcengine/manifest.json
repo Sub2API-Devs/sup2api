@@ -3,10 +3,10 @@
   "key": "volcengine",
   "name": { "en": "Volcengine Ark", "zh": "字节火山方舟" },
   "description": {
-    "en": "Adds the \"Ark API key\" account type: Volcengine Ark (Doubao) accounts that serve the built-in openai platform (/v1/chat/completions, /v1/responses, /v1/embeddings) upstream at <Base URL>/api/v3/..., next to the other account types of a group. It also declares the \"volcengine\" platform with Ark's synchronous image generation (Seedream) at POST /ark/v3/images/generations, metered by generated images and output tokens, and Doubao Seedance video generation: POST /ark/v3/contents/generations/tasks submits a task and is pre-charged an estimate read from the requested resolution, aspect ratio and duration, GET /ark/v3/contents/generations/tasks/{id} polls it free of charge, and the real completion tokens are settled by the core's reconcile loop when the task finishes. Accounts that carry an access key and secret key additionally get the Ark asset library: console pages and admin APIs that create, list, search, update and delete asset groups and assets through the Ark asset OpenAPI, with a local index. The Base URL defaults to the official Chinese endpoint and may be switched to BytePlus; a custom address needs account:settings:custom. Declares no prices.",
-    "zh": "新增「方舟 API Key」账号类型：字节火山方舟（豆包）账号，为内置 openai 平台（/v1/chat/completions、/v1/responses、/v1/embeddings）提供服务，上游发往 <Base URL>/api/v3/…，与分组里其他类型的账号一起调度。同时声明 volcengine 平台，提供方舟的同步图片生成（Seedream）端点 POST /ark/v3/images/generations，按生成张数与输出 token 计量；以及豆包 Seedance 视频生成：POST /ark/v3/contents/generations/tasks 提交任务并按请求里的分辨率、宽高比与时长算出预估用量预扣，GET /ark/v3/contents/generations/tasks/{id} 查询任务不计费，任务完成后由核心的核对循环按真实 completion token 结算。填写了 Access Key / Secret Key 的账号还可以使用方舟素材库：通过方舟素材 OpenAPI 增删改查与搜索素材组与素材的控制台页面与后台接口，并在本地建立索引。Base URL 默认官方国内地址，可切换到 BytePlus 海外地址；填其他地址需要 account:settings:custom 权限。不声明价格。"
+    "en": "Adds the \"Ark API key\" account type: Volcengine Ark (Doubao) accounts that serve the built-in openai and anthropic platforms (/v1/chat/completions, /v1/responses, /v1/embeddings, /v1/messages) upstream at <Base URL><API path prefix>/..., next to the other account types of a group. It also declares the \"volcengine\" platform with Ark's synchronous image generation (Seedream) at POST /ark/v3/images/generations, metered by generated images and output tokens, and Doubao Seedance video generation: POST /ark/v3/contents/generations/tasks submits a task and is pre-charged an estimate read from the requested resolution, aspect ratio and duration, GET /ark/v3/contents/generations/tasks/{id} polls it free of charge, and the real completion tokens are settled by the core's reconcile loop when the task finishes. Accounts that carry an access key and secret key additionally get the Ark asset library: console pages and admin APIs that create, list, search, update and delete asset groups and assets through the Ark asset OpenAPI, with a local index. The Base URL defaults to the official Chinese endpoint and may be switched to BytePlus; a custom address needs account:settings:custom. Declares no prices.",
+    "zh": "新增「方舟 API Key」账号类型：字节火山方舟（豆包）账号，为内置 openai 与 anthropic 平台（/v1/chat/completions、/v1/responses、/v1/embeddings、/v1/messages）提供服务，上游发往 <Base URL><API 路径前缀>/…，与分组里其他类型的账号一起调度。同时声明 volcengine 平台，提供方舟的同步图片生成（Seedream）端点 POST /ark/v3/images/generations，按生成张数与输出 token 计量；以及豆包 Seedance 视频生成：POST /ark/v3/contents/generations/tasks 提交任务并按请求里的分辨率、宽高比与时长算出预估用量预扣，GET /ark/v3/contents/generations/tasks/{id} 查询任务不计费，任务完成后由核心的核对循环按真实 completion token 结算。填写了 Access Key / Secret Key 的账号还可以使用方舟素材库：通过方舟素材 OpenAPI 增删改查与搜索素材组与素材的控制台页面与后台接口，并在本地建立索引。Base URL 默认官方国内地址，可切换到 BytePlus 海外地址；填其他地址需要 account:settings:custom 权限。不声明价格。"
   },
-  "version": "0.5.1",
+  "version": "0.6.0",
   "publisher": "sub2api",
   "icon": "text:V",
   "runtime": "grpc",
@@ -121,8 +121,8 @@
       "id": "apikey",
       "label": { "en": "Ark API key", "zh": "方舟 API Key" },
       "description": {
-        "en": "An API key of Volcengine Ark (or of BytePlus / an Ark-compatible relay, by setting the Base URL). Requests go to <Base URL>/api/v3/... (chat completions, responses, embeddings, image generations) with the key in Authorization: Bearer. The optional access key / secret key pair enables the Ark asset library for this account.",
-        "zh": "火山方舟的 API Key（也可以填 BytePlus 海外或 Ark 兼容中转的地址）。请求发往 <Base URL>/api/v3/…（对话、responses、嵌入、图片生成），Key 放在 Authorization: Bearer 中。另外填写 Access Key / Secret Key 即为该账号启用方舟素材库。"
+        "en": "An API key of Volcengine Ark (or of BytePlus / an Ark-compatible relay, by setting the Base URL). Requests go to <Base URL><API path prefix>/... (chat completions, responses, embeddings, messages, image generations) with the key in Authorization: Bearer. The prefix defaults to Ark's own /api/v3; a relay serving those paths at the root takes /v1, and a relay keeping Ark's native video tasks elsewhere has its own video prefix. Anthropic Messages is forwarded as it arrives, so this account type also serves the built-in anthropic platform; Ark has no token-counting endpoint, so a count_tokens request routed here is refused by name and fails over. The optional access key / secret key pair enables the Ark asset library for this account.",
+        "zh": "火山方舟的 API Key（也可以填 BytePlus 海外或 Ark 兼容中转的地址）。请求发往 <Base URL><API 路径前缀>/…（对话、responses、嵌入、messages、图片生成），Key 放在 Authorization: Bearer 中。前缀默认方舟自己的 /api/v3；把这些路径挂在根上的中转站填 /v1，把方舟原生视频任务留在别处的中转站另有视频前缀。Anthropic Messages 按原样转发，所以这个账号类型同时服务内置 anthropic 平台；方舟没有 token 计数端点，调度到这里的 count_tokens 请求会被指名拒绝并转由其他账号处理。另外填写 Access Key / Secret Key 即为该账号启用方舟素材库。"
       },
       "form": {
         "mode": "schema",
@@ -130,7 +130,7 @@
         "uiSchema": "forms/apikey.ui.json"
       },
       "sensitiveFields": ["api_key", "secret_key"],
-      "settingsFields": ["base_url", "asset_base_url", "asset_region"],
+      "settingsFields": ["base_url", "api_prefix", "video_api_prefix", "asset_base_url", "asset_region"],
       "guardedSettings": [
         {
           "field": "base_url",
@@ -150,6 +150,10 @@
         {
           "platform": "openai",
           "passHeaders": ["user-agent"]
+        },
+        {
+          "platform": "anthropic",
+          "passHeaders": ["anthropic-version", "anthropic-beta", "user-agent"]
         },
         {
           "platform": "volcengine"

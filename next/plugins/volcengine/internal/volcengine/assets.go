@@ -310,11 +310,12 @@ func (p *Plugin) validateWithAssets(in *pluginv1.ValidateCredentialsRequest) *pl
 		}
 	}
 	errs = validateAssetFields(errs, in.GetCredentialsJson(), in.GetSettingsJson())
+	errs = validatePrefixFields(errs, in.GetSettingsJson())
 	if len(errs) > 0 {
 		return &pluginv1.ValidateCredentialsResponse{Errors: errs}
 	}
 	return &pluginv1.ValidateCredentialsResponse{
 		NormalizedCredentialsJson: normalizeAssetFields(resp.GetNormalizedCredentialsJson()),
-		NormalizedSettingsJson:    normalizeAssetFields(resp.GetNormalizedSettingsJson()),
+		NormalizedSettingsJson:    normalizePrefixFields(normalizeAssetFields(resp.GetNormalizedSettingsJson())),
 	}
 }

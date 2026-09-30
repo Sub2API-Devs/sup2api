@@ -47,12 +47,32 @@ const PlatformID = "openai"
 // (manifest platforms[]): Ark capabilities that have no built-in platform.
 const PlatformVolcengine = "volcengine"
 
+// PlatformAnthropic is the second built-in platform the apikey account type
+// serves. Ark exposes an Anthropic-Messages-compatible surface, and the core
+// registers no protocol converters at all (gateway/convert: the list is
+// empty), so a client speaking Anthropic can only reach an Ark account if the
+// account type declares this platform and the plugin forwards the body as it
+// arrived - protocol in, same protocol out.
+const PlatformAnthropic = "anthropic"
+
 // Protocol ids of the built-in openai platform's endpoints
 // (server/internal/platforms/openai.json).
 const (
 	ProtocolChat       = "openai.chat"
 	ProtocolResponses  = "openai.responses"
 	ProtocolEmbeddings = "openai.embeddings"
+)
+
+// Protocol ids of the built-in anthropic platform's endpoints
+// (sdk/platforms/anthropic.json).
+const (
+	ProtocolMessages = "anthropic.messages"
+	// ProtocolCountTokens is declared by the platform and therefore routed to
+	// this account type whether we want it or not: AccountPlatform has no
+	// per-endpoint filter, so declaring the platform accepts both endpoints.
+	// Ark documents no token-counting endpoint, so BuildUpstreamRequest
+	// refuses it by name rather than inventing a path that 404s.
+	ProtocolCountTokens = "anthropic.count_tokens"
 )
 
 // Protocol ids of the volcengine platform declared in manifest.json.
@@ -66,6 +86,13 @@ const (
 // Protocols lists the protocols of the built-in openai platform that
 // BuildUpstreamRequest supports, in that platform's endpoint order.
 var Protocols = []string{ProtocolChat, ProtocolResponses, ProtocolEmbeddings}
+
+// AnthropicProtocols lists the protocols of the built-in anthropic platform
+// this plugin supports. count_tokens is deliberately absent - the platform
+// declares it and routing therefore offers it to this account type anyway
+// (AccountPlatform has no per-endpoint filter), but Ark has no such endpoint,
+// so it is refused by name instead of sent somewhere that would 404.
+var AnthropicProtocols = []string{ProtocolMessages}
 
 // OwnProtocols lists the protocols of the plugin's own volcengine platform,
 // in manifest endpoint order.
@@ -81,10 +108,25 @@ const (
 	// BytePlusBaseURL is Ark's overseas (BytePlus) endpoint.
 	BytePlusBaseURL = "https://ark.ap-southeast.bytepluses.com"
 
-	// APIPrefix is the root of Ark's OpenAI-compatible API. Ark's own SDK
-	// base URL is "<host>/api/v3", which is why NormalizeBaseURL strips it
-	// from a pasted value and every path below adds it back.
+	// APIPrefix is the root of Ark's OpenAI-compatible API, and the default
+	// of the api_prefix setting. Every upstream path is built as
+	// base_url + prefix + a fixed suffix, so an upstream that mounts the same
+	// shapes somewhere else is reachable by changing one field: an Ark-shaped
+	// relay serving OpenAI paths at the root takes "/v1", which turns chat
+	// into /v1/chat/completions and messages into /v1/messages.
 	APIPrefix = "/api/v3"
+
+	// FieldAPIPrefix is the settings key holding that prefix, and
+	// FieldVideoAPIPrefix the video surface's own. Empty video prefix means
+	// "follow api_prefix": relays that mount Ark's native video tasks under
+	// their own namespace while serving text at the root need the two to
+	// differ, and everyone else should only have to set one.
+	FieldAPIPrefix      = "api_prefix"
+	FieldVideoAPIPrefix = "video_api_prefix"
+
+	// MaxPrefixLen bounds a prefix. Long enough for a namespaced relay path
+	// ("/doubao/api/v3"), short enough that the field cannot carry a payload.
+	MaxPrefixLen = 128
 
 	// DefaultTestModel is used by BuildTestRequest when the operator names
 	// no model. doubao-seed-1-6-250615 is Ark's long-standing general chat
@@ -105,6 +147,12 @@ const (
 	// by a different path than a plain model. Ark ids look like
 	// "bot-20250101...".
 	BotModelPrefix = "bot"
+
+	// DefaultAnthropicVersion is sent on Anthropic-protocol requests whose
+	// client sent none. Anthropic's API requires the header; the value is the
+	// one its own docs and every current SDK use, and the same default the
+	// anthropic plugin applies.
+	DefaultAnthropicVersion = "2023-06-01"
 )
 
 // spec describes the apikey account type. A trailing /api/v3 of base_url is
@@ -112,6 +160,14 @@ const (
 // ("https://ark.cn-beijing.volces.com/api/v3"), while guardedSettings
 // (CONTRACTS §21.3) compares against the bare host, and the paths below add
 // the prefix themselves.
+//
+// StripSuffixes stays the LITERAL "/api/v3" and must not follow the
+// api_prefix setting. The two look alike and are different things: this one
+// undoes a paste of Ark's documented SDK base URL, which operators do
+// regardless of where their upstream actually serves the API. Making it follow
+// the setting would mean an account whose prefix is "/v1" could no longer
+// accept the official base URL, because the /api/v3 it ends with would be kept
+// and then "/v1/chat/completions" appended to it.
 var spec = apikey.Spec{AccountType: AccountTypeAPIKey, DefaultBaseURL: DefaultBaseURL, StripSuffixes: []string{APIPrefix}}
 
 // forwardHeaders are the client headers copied verbatim to the upstream
@@ -120,8 +176,25 @@ var spec = apikey.Spec{AccountType: AccountTypeAPIKey, DefaultBaseURL: DefaultBa
 // so only the user agent is passed on.
 var forwardHeaders = []string{"user-agent"}
 
+// anthropicForwardHeaders are the client headers copied on the Anthropic
+// surface. It must stay equal to the anthropic entry's passHeaders override in
+// manifest.json - that list REPLACES the platform's rather than merging with
+// it, so the two have to be written the same on both sides or the header a
+// client sent is dropped at one of them.
+//
+// anthropic-version and anthropic-beta are here because they change how the
+// upstream reads the body: a client that asked for a beta shape and had the
+// header dropped would get its request interpreted under different rules.
+var anthropicForwardHeaders = []string{"anthropic-version", "anthropic-beta", "user-agent"}
+
 // ForwardHeaders returns the client headers copied to the upstream request.
 func ForwardHeaders() []string { return append([]string(nil), forwardHeaders...) }
+
+// AnthropicForwardHeaders returns the client headers copied on the Anthropic
+// surface.
+func AnthropicForwardHeaders() []string {
+	return append([]string(nil), anthropicForwardHeaders...)
+}
 
 // Plugin is the volcengine plugin. It implements pluginsdk.Platform and,
 // since stage three, pluginsdk.HTTP (the asset library routes in routes.go)
@@ -197,13 +270,13 @@ func (p *Plugin) ValidateCredentials(_ context.Context, in *pluginv1.ValidateCre
 }
 
 // chatPath returns the chat completions path for an upstream model: Ark
-// serves bots (applications) under /api/v3/bots/chat/completions and plain
-// models under /api/v3/chat/completions.
-func chatPath(model string) string {
+// serves bots (applications) under <prefix>/bots/chat/completions and plain
+// models under <prefix>/chat/completions.
+func chatPath(prefix, model string) string {
 	if strings.HasPrefix(model, BotModelPrefix) {
-		return APIPrefix + "/bots/chat/completions"
+		return prefix + "/bots/chat/completions"
 	}
-	return APIPrefix + "/chat/completions"
+	return prefix + "/chat/completions"
 }
 
 // upstreamPath maps the upstream protocol (RequestMeta.protocol, which may
@@ -215,17 +288,30 @@ func chatPath(model string) string {
 // decides from the request body, not the URL. Note the asymmetry with the
 // client-facing path: the gateway endpoint is /ark/v3/images/generations
 // because "api" is a reserved first path segment of the core, while upstream
-// it stays Ark's own /api/v3/images/generations.
-func upstreamPath(protocol, model string) (string, error) {
+// it stays Ark's own <prefix>/images/generations.
+func upstreamPath(prefix, protocol, model string) (string, error) {
 	switch protocol {
 	case ProtocolChat, "":
-		return chatPath(model), nil
+		return chatPath(prefix, model), nil
 	case ProtocolResponses:
-		return APIPrefix + "/responses", nil
+		return prefix + "/responses", nil
 	case ProtocolEmbeddings:
-		return APIPrefix + "/embeddings", nil
+		return prefix + "/embeddings", nil
 	case ProtocolImages:
-		return APIPrefix + "/images/generations", nil
+		return prefix + "/images/generations", nil
+	case ProtocolMessages:
+		// Forwarded as it arrived: the core has no Anthropic-to-OpenAI
+		// converter, so the body reaching us is already Anthropic-shaped and
+		// the only thing to get right is where to send it.
+		return prefix + "/messages", nil
+	case ProtocolCountTokens:
+		// Declaring the anthropic platform makes this account type a
+		// candidate for both of its endpoints (AccountPlatform has no
+		// per-endpoint filter), and Ark documents no token-counting endpoint.
+		// Failing by name beats guessing a path: the client gets a reason and
+		// the core fails over to an account that does serve it.
+		return "", status.Errorf(codes.InvalidArgument,
+			"Ark has no token-counting endpoint, so %q cannot be served by an Ark account", protocol)
 	default:
 		return "", status.Errorf(codes.InvalidArgument, "unsupported upstream protocol %q", protocol)
 	}
@@ -235,23 +321,42 @@ func upstreamPath(protocol, model string) (string, error) {
 // path. Everything but the video line is a POST; video_query is a GET whose
 // task id comes from the matched path parameter, which is why this takes the
 // whole meta rather than just the protocol.
-func upstreamTarget(meta *pluginv1.RequestMeta, model string) (method, path string, err error) {
-	if m, p, ok, err := videoUpstream(meta); ok {
+func upstreamTarget(px prefixes, meta *pluginv1.RequestMeta, model string) (method, path string, err error) {
+	if m, p, ok, err := videoUpstream(px.video, meta); ok {
 		return m, p, err
 	}
-	p, err := upstreamPath(meta.GetProtocol(), model)
+	p, err := upstreamPath(px.api, meta.GetProtocol(), model)
 	if err != nil {
 		return "", "", err
 	}
 	return "POST", p, nil
 }
 
-func upstreamHeaders(apiKey string, inbound map[string]string) map[string]string {
+// upstreamHeaders builds the upstream request headers for one protocol.
+//
+// Authorization: Bearer for every surface, including Anthropic Messages: Ark
+// authenticates its whole API with the one key, and an Ark-compatible relay
+// accepts the bearer form on the Anthropic route too. Sending x-api-key
+// instead - the way api.anthropic.com wants it - would mean this plugin
+// carried two notions of "the key" for one key.
+//
+// Anthropic requires a version header and rejects a request without one, so an
+// Anthropic-protocol request that the client sent none for gets the default.
+// The client's own value wins when it sent one: it knows which beta shape its
+// body is in, and we must not silently downgrade it.
+func upstreamHeaders(protocol, apiKey string, inbound map[string]string) map[string]string {
 	h := map[string]string{
 		"authorization": "Bearer " + apiKey,
 		"content-type":  "application/json",
 	}
-	apikey.ForwardHeaders(h, inbound, forwardHeaders)
+	names := forwardHeaders
+	if protocol == ProtocolMessages || protocol == ProtocolCountTokens {
+		names = anthropicForwardHeaders
+		if strings.TrimSpace(inbound["anthropic-version"]) == "" {
+			h["anthropic-version"] = DefaultAnthropicVersion
+		}
+	}
+	apikey.ForwardHeaders(h, inbound, names)
 	return h
 }
 
@@ -270,25 +375,33 @@ func requestModel(in *pluginv1.BuildUpstreamRequestRequest) string {
 }
 
 // BuildUpstreamRequest implements pluginsdk.Platform: POST
-// {base_url}/api/v3/... following meta.protocol and, for chat completions,
-// the model (bots have their own path). Streaming chat completions get
-// stream_options.include_usage=true so the upstream reports usage in the
-// last chunk (CONTRACTS 14.1); Ark is OpenAI-compatible here.
+// {base_url}{api_prefix}/... following meta.protocol and, for chat
+// completions, the model (bots have their own path). Streaming chat
+// completions get stream_options.include_usage=true so the upstream reports
+// usage in the last chunk (CONTRACTS 14.1); Ark is OpenAI-compatible here.
 func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstreamRequestRequest) (*pluginv1.BuildUpstreamRequestResponse, error) {
 	cfg, err := spec.FromAccount(in.GetAccount())
 	if err != nil {
 		return nil, err
 	}
+	px, err := prefixesOf(in.GetAccount().GetSettingsJson())
+	if err != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "account settings: %v", err)
+	}
 	meta := in.GetMeta()
 	model := requestModel(in)
-	method, ep, err := upstreamTarget(meta, model)
+	method, ep, err := upstreamTarget(px, meta, model)
+	if err != nil {
+		return nil, err
+	}
+	u, err := upstreamURL(cfg.BaseURL, ep)
 	if err != nil {
 		return nil, err
 	}
 	resp := &pluginv1.BuildUpstreamRequestResponse{
 		Method:        method,
-		Url:           cfg.BaseURL + ep,
-		Headers:       upstreamHeaders(cfg.APIKey, in.GetInboundHeaders()),
+		Url:           u,
+		Headers:       upstreamHeaders(meta.GetProtocol(), cfg.APIKey, in.GetInboundHeaders()),
 		UpstreamModel: model,
 	}
 	if meta.GetStream() && (meta.GetProtocol() == ProtocolChat || meta.GetProtocol() == "") {
@@ -306,9 +419,19 @@ func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestReque
 	if err != nil {
 		return nil, err
 	}
+	px, err := prefixesOf(in.GetAccount().GetSettingsJson())
+	if err != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "account settings: %v", err)
+	}
 	model := strings.TrimSpace(in.GetModel())
 	if model == "" {
 		model = DefaultTestModel
+	}
+	// The test must use the same prefix real traffic will, or "test account"
+	// answers a question nobody asked.
+	u, err := upstreamURL(cfg.BaseURL, chatPath(px.api, model))
+	if err != nil {
+		return nil, err
 	}
 	body, _ := json.Marshal(map[string]any{
 		"model":      model,
@@ -317,8 +440,8 @@ func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestReque
 	})
 	return &pluginv1.BuildTestRequestResponse{
 		Method:        "POST",
-		Url:           cfg.BaseURL + chatPath(model),
-		Headers:       upstreamHeaders(cfg.APIKey, nil),
+		Url:           u,
+		Headers:       upstreamHeaders(ProtocolChat, cfg.APIKey, nil),
 		BodyJson:      string(body),
 		Model:         model,
 		UsageProtocol: ProtocolChat,

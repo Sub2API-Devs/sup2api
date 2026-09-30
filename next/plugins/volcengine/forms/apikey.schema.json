@@ -17,6 +17,18 @@
       "title": "Base URL",
       "pattern": "^(https?://[^\\s?#]+)?$"
     },
+    "api_prefix": {
+      "type": "string",
+      "title": "API path prefix",
+      "maxLength": 128,
+      "pattern": "^(/|/[^/\\s?#][^\\s?#]*)?$"
+    },
+    "video_api_prefix": {
+      "type": "string",
+      "title": "Video API path prefix",
+      "maxLength": 128,
+      "pattern": "^(/|/[^/\\s?#][^\\s?#]*)?$"
+    },
     "access_key": {
       "type": "string",
       "title": "Asset library access key",

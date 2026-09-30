@@ -57,10 +57,15 @@ const (
 // core fills in RequestMeta.path_params (CONTRACTS §25.1).
 const TaskIDParam = "task_id"
 
-// videoTasksPath is Ark's own task collection, under APIPrefix. Note the
-// asymmetry with the client-facing path: clients call /ark/v3/... because
-// "api" is a reserved first segment of the core.
-const videoTasksPath = APIPrefix + "/contents/generations/tasks"
+// videoTasksPath is Ark's own task collection, under the account's video
+// prefix. Note the asymmetry with the client-facing path: clients call
+// /ark/v3/... because "api" is a core-reserved first segment.
+//
+// A function rather than a constant because the prefix is per account: a relay
+// may mount Ark's native video tasks under its own namespace
+// ("/doubao/api/v3") while serving text at the root, and the first real
+// upstream this plugin was verified against does exactly that.
+func videoTasksPath(prefix string) string { return prefix + "/contents/generations/tasks" }
 
 // Task states mirrored into video_tasks.state.
 const (
@@ -181,16 +186,16 @@ func setVideoTaskState(ctx context.Context, db *pgxpool.Pool, taskID, state stri
 // (RequestMeta.path_params, filled by the core since CONTRACTS §25.1) and
 // escapes it into the URL: it is client input, and this is the one place on
 // the video line where client input becomes part of an upstream address.
-func videoUpstream(meta *pluginv1.RequestMeta) (method, path string, ok bool, err error) {
+func videoUpstream(prefix string, meta *pluginv1.RequestMeta) (method, path string, ok bool, err error) {
 	switch meta.GetProtocol() {
 	case ProtocolVideoSubmit:
-		return "POST", videoTasksPath, true, nil
+		return "POST", videoTasksPath(prefix), true, nil
 	case ProtocolVideoQuery:
 		id := taskIDOf(meta)
 		if id == "" {
 			return "", "", true, status.Error(codes.InvalidArgument, "task_id path parameter is required")
 		}
-		return "GET", videoTasksPath + "/" + url.PathEscape(id), true, nil
+		return "GET", videoTasksPath(prefix) + "/" + url.PathEscape(id), true, nil
 	default:
 		return "", "", false, nil
 	}
@@ -342,10 +347,15 @@ func (p *Plugin) ExtractUsage(ctx context.Context, in *pluginv1.ExtractUsageRequ
 // ---------------------------------------------------------------- reconcile
 
 // BuildReconcileRequest implements pluginsdk.Reconciler: it DESCRIBES the
-// poll, GET {base}/api/v3/contents/generations/tasks/{ref_id}. The core sends
-// it, through the account's proxy and behind its SSRF guard, with the
-// account's credentials - present here because the video platform and the
+// poll, GET {base}{video_api_prefix}/contents/generations/tasks/{ref_id}. The
+// core sends it, through the account's proxy and behind its SSRF guard, with
+// the account's credentials - present here because the video platform and the
 // apikey account type belong to the same plugin (CONTRACTS §25.4).
+//
+// It must use the SAME prefix the submit did. A poll built against a different
+// path answers 404 for every entry, which the core reads as "still pending"
+// until the deadline and then keeps the estimate - an account charged at its
+// pre-charge for work that really finished.
 func (p *Plugin) BuildReconcileRequest(_ context.Context, in *pluginv1.BuildReconcileRequestRequest) (*pluginv1.BuildReconcileRequestResponse, error) {
 	ref := strings.TrimSpace(in.GetEntry().GetRefId())
 	if ref == "" {
@@ -358,9 +368,17 @@ func (p *Plugin) BuildReconcileRequest(_ context.Context, in *pluginv1.BuildReco
 		// without a key there is no poll to build.
 		return nil, status.Errorf(codes.FailedPrecondition, "reconcile needs the account credentials: %v", err)
 	}
+	px, err := prefixesOf(in.GetAccount().GetSettingsJson())
+	if err != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "account settings: %v", err)
+	}
+	u, err := upstreamURL(cfg.BaseURL, videoTasksPath(px.video)+"/"+url.PathEscape(ref))
+	if err != nil {
+		return nil, err
+	}
 	return &pluginv1.BuildReconcileRequestResponse{
 		Method:  "GET",
-		Url:     cfg.BaseURL + videoTasksPath + "/" + url.PathEscape(ref),
+		Url:     u,
 		Headers: map[string]string{"authorization": "Bearer " + cfg.APIKey},
 	}, nil
 }

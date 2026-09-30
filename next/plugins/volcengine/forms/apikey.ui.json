@@ -1,5 +1,5 @@
 {
-  "ui:order": ["api_key", "base_url", "access_key", "secret_key", "asset_base_url", "asset_region"],
+  "ui:order": ["api_key", "base_url", "api_prefix", "video_api_prefix", "access_key", "secret_key", "asset_base_url", "asset_region"],
   "api_key": {
     "ui:widget": "secret",
     "ui:title": { "en": "API key", "zh": "API Key" },
@@ -15,8 +15,24 @@
     "ui:placeholder": { "en": "Leave empty to use https://ark.cn-beijing.volces.com", "zh": "留空使用默认地址 https://ark.cn-beijing.volces.com" },
     "ui:options": { "presets": ["https://ark.cn-beijing.volces.com", "https://ark.ap-southeast.bytepluses.com"] },
     "ui:help": {
-      "en": "Leave the default for Ark in China, or pick the BytePlus address; requests go to <Base URL>/api/v3/chat/completions, /api/v3/responses and /api/v3/embeddings. A trailing /api/v3 is removed. Any other address needs the account:settings:custom permission.",
-      "zh": "使用方舟国内接口时保持默认，海外可选 BytePlus 地址；请求发往 <Base URL>/api/v3/chat/completions、/api/v3/responses、/api/v3/embeddings。末尾的 /api/v3 会被去掉。填写其他地址需要 account:settings:custom 权限。"
+      "en": "Leave the default for Ark in China, or pick the BytePlus address; requests go to <Base URL><API path prefix>/chat/completions and the other paths below it. A trailing /api/v3 is removed, so the Ark SDK base URL can be pasted as it is. Any other address needs the account:settings:custom permission.",
+      "zh": "使用方舟国内接口时保持默认，海外可选 BytePlus 地址；请求发往 <Base URL><API 路径前缀>/chat/completions 等路径。末尾的 /api/v3 会被去掉，所以可以直接粘贴方舟 SDK 的 base URL。填写其他地址需要 account:settings:custom 权限。"
+    }
+  },
+  "api_prefix": {
+    "ui:title": { "en": "API path prefix", "zh": "API 路径前缀" },
+    "ui:placeholder": { "en": "Leave empty to use /api/v3", "zh": "留空使用 /api/v3" },
+    "ui:help": {
+      "en": "Where the upstream serves the OpenAI- and Anthropic-compatible paths. Official Ark uses /api/v3, so leave this empty for it. A relay that serves them at the root takes /v1, which makes chat /v1/chat/completions and messages /v1/messages. It must be a path starting with / - it can never move the request to another host.",
+      "zh": "上游把 OpenAI / Anthropic 兼容的路径挂在哪里。官方方舟是 /api/v3，用官方就留空。把这些路径挂在根上的中转站填 /v1，于是对话是 /v1/chat/completions、messages 是 /v1/messages。只能是以 / 开头的路径，任何情况下都不能把请求导到别的主机。"
+    }
+  },
+  "video_api_prefix": {
+    "ui:title": { "en": "Video API path prefix", "zh": "视频 API 路径前缀" },
+    "ui:placeholder": { "en": "Leave empty to follow the API path prefix", "zh": "留空则跟随上面的 API 路径前缀" },
+    "ui:help": {
+      "en": "Only needed when the upstream serves Ark's native video tasks somewhere other than the prefix above - a relay may keep them under /doubao/api/v3 while serving text at the root. Leave it empty and video follows the API path prefix. The task poll that settles the real cost uses this too.",
+      "zh": "只有当上游把方舟原生的视频任务挂在上面那个前缀之外时才需要填 —— 有些中转站把视频保留在 /doubao/api/v3，而文本在根上。留空则视频跟随 API 路径前缀。按真实用量结算的任务轮询也用这个前缀。"
     }
   },
   "access_key": {

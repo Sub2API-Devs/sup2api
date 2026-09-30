@@ -35,6 +35,17 @@ const (
 	errServer         = "server_error"
 )
 
+// Anthropic's error vocabulary differs from OpenAI's in two of the values this
+// plugin can produce, and the gateway uses a plugin's type VERBATIM when it is
+// set (it only derives the right vocabulary itself when the plugin said
+// nothing). So on the Anthropic surface the OpenAI words would reach the
+// client as-is: "server_error" is not an Anthropic type at all, and a 404
+// carries its own name there rather than being folded into invalid_request.
+const (
+	errAnthropicAPI      = "api_error"
+	errAnthropicNotFound = "not_found_error"
+)
+
 // Ark error codes (火山方舟 公共错误码) that need more than their HTTP
 // status. The codes handled by the status alone are AuthenticationError
 // (401), AccessDenied (403), MissingParameter / InvalidParameter (400),
@@ -67,6 +78,26 @@ func errorTypeForStatus(code int) string {
 		return errServer
 	default:
 		return errInvalidRequest
+	}
+}
+
+// errorTypeFor translates a status into the vocabulary of the protocol the
+// client spoke. Every surface this plugin serves but one is OpenAI-shaped; the
+// Anthropic one needs its own two words (see the constants above).
+func errorTypeFor(protocol string, code int) string {
+	t := errorTypeForStatus(code)
+	if protocol != ProtocolMessages && protocol != ProtocolCountTokens {
+		return t
+	}
+	switch {
+	case t == errServer:
+		return errAnthropicAPI
+	case code == http.StatusNotFound:
+		return errAnthropicNotFound
+	default:
+		// invalid_request_error, authentication_error, permission_error and
+		// rate_limit_error are spelled the same in both vocabularies.
+		return t
 	}
 }
 
@@ -116,7 +147,10 @@ func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequ
 	now := p.now()
 	code := int(in.GetStatus())
 	ue := parseError(in.GetBodyPrefix())
-	resp := &pluginv1.ClassifyErrorResponse{ClientErrorType: errorTypeForStatus(code), ClientMessage: ue.Message}
+	resp := &pluginv1.ClassifyErrorResponse{
+		ClientErrorType: errorTypeFor(in.GetMeta().GetProtocol(), code),
+		ClientMessage:   ue.Message,
+	}
 
 	// reasonText names the Ark code so the console shows why an account was
 	// cooled down or disabled.
