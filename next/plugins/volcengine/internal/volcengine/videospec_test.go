@@ -416,7 +416,7 @@ func TestFieldsOmittedIsNotAbsent(t *testing.T) {
 	}
 	// It must be the model's worst case, because that is the only bound
 	// available: 15 seconds at 4k.
-	if want := int64(15*videoFPS) * tierArea(gen20, Res4K, "") / 1024; blind.Tokens != want {
+	if want := int64(15*videoFPS+1) * tierArea(gen20, Res4K, "") / 1024; blind.Tokens != want {
 		t.Fatalf("unreadable prompt estimated %d, want the model's worst case %d", blind.Tokens, want)
 	}
 
@@ -459,7 +459,7 @@ func TestEstimateVideoExactNumbers(t *testing.T) {
 		name   string
 		model  string
 		fields map[string]string
-		// wantTokens is written as seconds x w x h x fps / 1024.
+		// wantTokens is written as (seconds x fps + 1) x w x h / 1024.
 		sec, w, h  int64
 		wantTier   string
 		wantAssume []string
@@ -538,10 +538,10 @@ func TestEstimateVideoExactNumbers(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			est := estimateVideo(tc.model, readVideoSpec(tc.fields, nil))
-			want := tc.sec * tc.w * tc.h * videoFPS / 1024
+			want := (tc.sec*videoFPS + 1) * tc.w * tc.h / 1024
 			if est.Tokens != want {
-				t.Errorf("tokens = %d, want %d (%ds x %dx%d x %dfps / 1024)",
-					est.Tokens, want, tc.sec, tc.w, tc.h, videoFPS)
+				t.Errorf("tokens = %d, want %d ((%ds x %dfps + 1) x %dx%d / 1024)",
+					est.Tokens, want, tc.sec, videoFPS, tc.w, tc.h)
 			}
 			if est.Resolution != tc.wantTier {
 				t.Errorf("resolution fact = %q, want %q", est.Resolution, tc.wantTier)
@@ -607,7 +607,7 @@ func TestFourKAskedOfAModelWithoutIt(t *testing.T) {
 	}, nil))
 	// 2.5 has no 4k row, so the largest 4k area any generation publishes is
 	// used - over, not under.
-	if want := int64(5*videoFPS) * pixelArea[gen20][Res4K][Ratio169] / 1024; est.Tokens != want {
+	if want := int64(5*videoFPS+1) * pixelArea[gen20][Res4K][Ratio169] / 1024; est.Tokens != want {
 		t.Fatalf("tokens = %d, want %d", est.Tokens, want)
 	}
 	if !hasAssumption(est.Assumed, assumedPixelArea) {
@@ -620,5 +620,21 @@ func TestFourKAskedOfAModelWithoutIt(t *testing.T) {
 	})
 	if est.Resolution != Res1080 || est.Tokens <= 0 {
 		t.Fatalf("an impossible tier gave %+v", est)
+	}
+}
+
+// The one number in this file that did not come from documentation: a real
+// Seedance task, submitted through the gateway to a real upstream on
+// 2026-09-30 (doubao-seedance-2-0-mini-260615, 480p, 16:9, duration 4), came
+// back with usage.completion_tokens = 40594. That is floor(97 x 864x496 / 1024):
+// Ark bills seconds x 24 + 1 frames. The published formula (seconds x 24)
+// gives 40176 - what this plugin reserved before - so this test fails on it.
+func TestEstimateMatchesARealArkTask(t *testing.T) {
+	fields := map[string]string{PathResolution: `"480p"`, PathRatio: `"16:9"`, PathDuration: `4`,
+		PathContentCount: `1`, "content.0.text": `"A red ball slowly rolls across a wooden table, soft daylight"`}
+	est := estimateVideo("doubao-seedance-2-0-mini-260615", readVideoSpec(fields, nil))
+	if est.Tokens != 40594 || est.Resolution != Res480 || len(est.Assumed) != 0 {
+		t.Fatalf("estimate = %d tokens at %s (assumed %v), want 40594 at 480p with nothing assumed - the completion_tokens Ark really billed",
+			est.Tokens, est.Resolution, est.Assumed)
 	}
 }

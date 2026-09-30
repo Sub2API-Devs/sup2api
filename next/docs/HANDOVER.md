@@ -54,6 +54,8 @@
 
 **建议接手后的第一件实事**：拿一对真实 Ark AK/SK，在 `single` 栈上装一次这个插件，跑一次图片、一次视频提交 + 核对，把结果记进 `PLUGIN-VOLCENGINE-ARK.md`。**这比 §7 里任何一项都更能暴露问题。**
 
+> **2026-09-30 更新：视频链路已第一次经真实上游跑通**（一个 Seedance 中转站，不是官方 Ark），提交 → 预扣 → 核对 → 补扣分毫不差，**并当场推翻了事实表的一条**：Ark 计 N×24+1 帧而不是 N×24，预扣一直偏低约 1%，已修（0.5.1）。**图片没跑通（中转站不支持）、素材库没测（缺 AK/SK）、官方 Ark 本身仍未打过**。详见 `PLUGIN-VOLCENGINE-ARK.md` §12。上面表格的前两行对视频已不再成立，其余仍成立。
+
 ---
 
 ## 2. 文档地图：哪份是哪件事的真相源
@@ -148,6 +150,17 @@ cd next/web && npm run typecheck && npm run build
 ```
 
 产物输出到 `next/server/web/dist`（被 `next/server/web` 用 `embed` 嵌入）。**跑完 build 必须还原占位文件**，见 §9.1。
+
+### 3.5.1 终端乱码与每条命令的 mise 报错（2026-09-30 已修）
+
+Shell 是 **Windows PowerShell 5.1**（没装 PowerShell 7）。曾经每条命令都带一段乱码报错，原因两条：
+
+- 控制台编码默认 GBK（代码页 936），工具按 UTF-8 读输出 → 中文全乱；5.1 的 `Get-Content` / `Select-String` 还把无 BOM 的 UTF-8 文件当 GBK 读
+- profile 里的 `mise activate pwsh` 生成 **PowerShell 7 语法**，5.1 解析失败
+
+已改用户 profile（`文档\WindowsPowerShell\Microsoft.PowerShell_profile.ps1`，原件 `.bak-20260930`）：控制台 I/O 设 UTF-8，两个读文件命令默认 UTF-8，5.1 下用 `mise activate pwsh --shims`。
+
+仍要知道的 5.1 坑（本轮都踩过）：**传给原生命令的参数里内层双引号会被吃掉**（`ssh ovh 'grep -E "a|b"'` 会坏，跨多层引号就把脚本经 stdin 喂给 `ssh ovh 'bash -s'`）；`R` 是 `Invoke-History` 的别名，别拿来当函数名；脚本 `param()` 里声明的参数默认可按位置绑定，会吞掉你以为落进 `$args` 的值（要 `[CmdletBinding(PositionalBinding = $false)]`）。**`Edit` 工具在这个环境里不可用**，改文件用 `Write`，或 PowerShell 的 `[IO.File]::ReadAllText` + `.Replace` + `WriteAllText`（UTF-8 无 BOM，先确认旧串唯一命中）。
 
 ### 3.6 在 Linux 上跑测试（seccomp / `/proc` 等）
 
@@ -615,7 +628,7 @@ feat(next/plugins): volcengine reads the request it is pricing, ... (0.5.0)
 
 | 顺位 | 做什么 | 为什么排这里 |
 |---|---|---|
-| **1** | **拿真实 Ark 凭证装一次插件、跑通图片 + 视频提交核对**（§1.1） | 整条线上全部代码都没被真实上游验证过。这一步能暴露的问题比下面任何一项都多，而且做起来最快 |
+| **1** | **拿真实 Ark 凭证装一次插件、跑通图片 + 视频提交核对**（§1.1）。**视频已跑通（中转站），图片 / 素材库 / 官方 Ark 仍欠**，见 `PLUGIN-VOLCENGINE-ARK.md` §12.5 | 整条线上全部代码都没被真实上游验证过。这一步能暴露的问题比下面任何一项都多，而且做起来最快 |
 | **2** | `ParseReconcileResponseRequest` 加 `truncated`（§7.1） | 唯一还留在「会漏钱」类别里的 |
 | **3** | e2e 目标拓扑（§7.2） | 最大的信心缺口，但**要先出方案给用户定**，别闷头建 |
 | 4 | §7.3 / §7.4 的小项 | 都是「会静默」，不急但会攒 |

@@ -109,7 +109,7 @@ func TestExtractUsageReservation(t *testing.T) {
 	// usageRequestFields: the 4k-capable model above used to be reserved at 4k
 	// for a guessed ten seconds, 1,944,000 tokens against this request's
 	// 243,000 - eight times the charge, for the same video.
-	if want := int64(5) * 1920 * 1080 * videoFPS / 1024; rv.GetTokens().GetOutputTokens() != want {
+	if want := int64(5*videoFPS+1) * 1920 * 1080 / 1024; rv.GetTokens().GetOutputTokens() != want {
 		t.Fatalf("estimated output tokens = %d, want %d (5s of 1080p 16:9)",
 			rv.GetTokens().GetOutputTokens(), want)
 	}

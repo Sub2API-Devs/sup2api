@@ -17,9 +17,10 @@ package volcengine
 //
 // with the frame rate fixed at 24 fps for every Seedance model, and a table of
 // the exact output pixel size per resolution x aspect ratio x model
-// generation. Since frames = seconds x 24, the formula is frames x area /
-// 1024, which is how it is written here: one number per table cell instead of
-// two, and no rounding of a frame count Ark itself counts in frames.
+// generation. It is written here as frames x area / 1024: one number per table
+// cell instead of two, and no rounding of a frame count Ark itself counts in
+// frames. A clip of N seconds is N x 24 + 1 frames, not N x 24 - see framesFor:
+// the published formula is one frame short of what Ark really bills.
 //
 // Ark calls its own formula an estimate and names usage.completion_tokens as
 // the authority. That is exactly the division of labour here: this file
@@ -99,6 +100,15 @@ var VideoRatios = []string{Ratio169, Ratio43, Ratio11, Ratio34, Ratio916, Ratio2
 // request parameter - there is no fps field and no documented --fps command;
 // a finished task echoes it back as framespersecond.
 const videoFPS = 24
+
+// framesFor is the frame count Ark bills for a clip of the given length:
+// seconds x 24 + 1. Measured against the real upstream on 2026-09-30
+// (doubao-seedance-2-0-mini-260615, 480p 16:9, duration 4): completion_tokens
+// 40594 = floor(97 x 864x496 / 1024). 96 frames gives 40176, and no pixel area
+// fits 96 frames exactly. Ark's published formula (seconds x fps) omits that
+// frame, so every duration-based estimate came out about 1/(24N+1) low. An
+// explicit frames parameter is already the rendered count and is used as is.
+func framesFor(seconds int64) int64 { return seconds*videoFPS + 1 }
 
 // pixelArea is width x height of one output, by generation, resolution tier
 // and aspect ratio, transcribed from Ark's own table on the create-task page
@@ -615,9 +625,9 @@ func estimateVideo(model string, spec videoSpec) videoEstimate {
 	}
 	if frames <= 0 {
 		if seconds > 0 {
-			frames = seconds * videoFPS
+			frames = framesFor(seconds)
 		} else {
-			frames = p.maxDurationSec * videoFPS
+			frames = framesFor(p.maxDurationSec)
 			est.Assumed = append(est.Assumed, assumedDuration)
 		}
 	}

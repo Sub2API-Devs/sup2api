@@ -57,7 +57,7 @@ func TestVideoExtractUsagePersists(t *testing.T) {
 	rv := submitTask(t, p, 1, 42, "doubao-seedance-2-0-260128", "cgt-persist-1", requested(Res1080, Ratio169, 5))
 	// The estimate is the request's own 5 seconds of 1080p 16:9, read out of
 	// the submit body - not the model's 4k maximum for a guessed ten seconds.
-	wantEst := int64(5) * 1920 * 1080 * videoFPS / 1024
+	wantEst := int64(5*videoFPS+1) * 1920 * 1080 / 1024
 	if rv.GetTokens().GetOutputTokens() != wantEst {
 		t.Fatalf("reservation tokens = %d, want %d", rv.GetTokens().GetOutputTokens(), wantEst)
 	}

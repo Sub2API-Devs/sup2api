@@ -1,6 +1,6 @@
 # 插件设计：字节火山方舟 / 豆包（`volcengine`）
 
-> 状态：**设计稿，尚未实现**。2026-09-29 调研产出。
+> 状态：2026-09-29 调研产出的设计稿，**已实现**（0.5.x）。**2026-09-30 第一次经真实上游跑通视频全链路，见 §12**；正文里与 §12 冲突的数字以 §12 为准。
 > 目标：把 new-api 拆成两个渠道类型的「字节火山方舟」和「豆包通用 / 豆包视频」合成 **一个** sup2api 插件，支持自定义 Base URL 与素材库端点。
 > 参考实现：`D:\projects\golang\new-api`（AGPL-3.0，**只读设计、不复制代码**；sup2api 为 LGPL-3.0）。
 
@@ -604,7 +604,7 @@ Ark 图片响应的 `data[]` 每条带 `size`（如 `"2848x1600"`），**按分�
 
 ### 11.1 Ark Seedance 事实表（对账时会反复用到）
 
-token = **帧数 × 输出宽 × 输出高 / 1024**，固定 24fps。以下每一条都核对过官方文档，**其中好几条推翻了插件原来的假设**：
+token = **帧数 × 输出宽 × 输出高 / 1024**，固定 24fps。以下每一条都核对过官方文档，**其中好几条推翻了插件原来的假设**。⚠️ **N 秒的片子是 N×24+1 帧，不是 N×24**——官方公式漏了这一帧，是真实上游实测出来的（§12.2）：
 
 | 事实 | 说明 |
 |---|---|
@@ -687,3 +687,72 @@ token = **帧数 × 输出宽 × 输出高 / 1024**，固定 24fps。以下每�
 - `profileOf` 是子串匹配，Ark 的 Endpoint ID（`ep-...`）会落进 unknown 画像。管理员若用 Endpoint ID 注册模型，估算会退化 —— 但只在请求没写 resolution 时才用到这个默认值。
 - 估算凡是 bound 了东西都会打一条 `assumed` INFO 日志（哪几项被兜底、`fields_omitted` 是什么、算出多少 token）。用户问「为什么扣这么多」时先看这条。
 - 版本 **0.4.0 → 0.5.0**。
+
+---
+
+## 12. 第一次真实上游验证（2026-09-30，0.5.1）
+
+§1.1（HANDOVER）说「没有任何东西被真实上游验证过」，这一节是它的第一次例外。**只覆盖视频链路**；图片没跑通（上游的问题），素材库没测（缺凭证）。
+
+### 12.1 环境与路径
+
+| 项 | 值 |
+|---|---|
+| 上游 | 一个 Seedance 中转站 `https://cdn.api.codingplus.ai`，**不是官方 Ark** |
+| 账号 `base_url` | `https://cdn.api.codingplus.ai/doubao` —— 中转站把 Ark 原生路径挂在 `/doubao` 前缀下，插件拼上 `/api/v3/...` 后原样可用，**不需要改插件**。`NormalizeBaseURL` 只去尾部 `/api/v3`，路径前缀保留 |
+| 中转站根路径 | 是 new-api 风格（`/v1/models`、`/v1/video/generations`，顶层 `prompt`），**Ark 原生路径在根上全是 404**。第一次探测以为插件对接不了，是用户指出 `/doubao` 前缀才打通 |
+| 部署 | ovh `single` 栈，`2cc0371a3`。volcengine 以**内建只安装**身份进镜像（CONTRACTS §26.8），部署后 `status=installed, builtin=true, active_version=null`，管理员启用后 `enabled 0.5.0`。**这是插件第一次被安装：`plg_volcengine` 的三张表建出来了，0001/0002 迁移第一次执行** |
+| 中转站 `/v1/models` | 只列 4 个：`doubao-seedance-2-0-260128`、`-2-0-fast-260128`、`-2-0-mini-260615`、`doubao-seedance-2-5-260628` |
+
+### 12.2 视频：提交 → 预扣 → 核对 → 补扣，全链路通
+
+请求（经网关，用户 API Key）：`doubao-seedance-2-0-mini-260615`，`480p`，`16:9`，`duration: 4`。测试价 `per_token c = 10`（每百万输出 token 10 美元）。
+
+| 步骤 | 实测 |
+|---|---|
+| 提交 | 200，2.7 s。中转站回 `{"created_at","id","model","status":"queued"}`，**任务 id 形如 `task_…` 而不是 Ark 的 `cgt-…`**，且多带了字段。插件按 `id` 取，兼容 |
+| 预扣 | `usage_logs.billing_status=reserved`，`output_tokens=40176`，0.40176 美元，`metrics.resolution=480p`；`pending_settlements` 一条，`ref_id` = 任务 id，`deadline` = 7 天；插件 `video_tasks.est_tokens=40176`，与核心一致 |
+| 核对 | 约 2.5 分钟后上游 `succeeded`，核心第 4 次核对拿到结果，`state=settled` |
+| 结算 | `billing_status=billed`，**`output_tokens=40594`**，0.40594 美元。账本：预扣 −0.40176（幂等键 `usage:<req>`）+ 补扣 −0.00418（`usage:<req>:reconcile`），余额 10 → 9.59406，**分毫不差** |
+| 免费查询 | `GET /ark/v3/contents/generations/tasks/:id` 每次 200，记为 `free`，不影响结算 |
+
+**实测推翻的一条事实（已修，0.5.1）**：上游的 `completion_tokens = 40594 = floor(97 × 864×496 / 1024)`。按 §11.1 的「秒 × 24」是 96 帧 → 40176；**96 帧下没有任何像素面积能整除出 40594，97 帧的 864×496 正好**。所以 Ark 实际计 **N×24+1 帧**（与视频扩散模型惯用的 24n+1 帧一致），官方公式漏了一帧。
+
+- 后果：此前**每个按时长估算的预扣都偏低约 1/(24N+1)**（4 s 1%，5 s 0.8%）。核对按真实用量补扣，所以**钱没算错**，只是预扣系统性偏低——余额刚好够预扣的用户会在结算时被扣到略负
+- 修法：`videospec.go` 的 `framesFor(seconds) = seconds×24 + 1`，时长上界那条分支同样 +1。**显式传 `frames` 的不 +1**（那已经是实际帧数）——但这条**没有实测**，是推断
+- 测试：`TestEstimateMatchesARealArkTask` 把 40594 写成字面量；把 `framesFor` 改回 `×24` 时它报 40176 并失败（已验证）。§11.3 表里的数字全部按旧的 24N 帧算，**现在各自多 1 帧**（如 2.0 1080p 16:9 5s：243,000 → 245,025）
+
+**成功任务的真实响应形状**（URL 已略）：
+
+```json
+{"id":"task_…","model":"doubao-seedance-2-0-mini-260615","status":"succeeded",
+ "resolution":"480p","ratio":"16:9","duration":4,"framespersecond":24,"seed":33139,
+ "generate_audio":true,"execution_expires_after":172800,"tools":[],
+ "content":{"video_url":"https://ark-acg-cn-beijing.tos-cn-beijing.volces.com/…",
+            "kz_video_url":"https://bk-hs-p-bj-lizhen.tos-cn-beijing.volces.com/…","last_frame_url":""},
+ "usage":{"completion_tokens":40594,"total_tokens":40594},"created_at":1790766021,"updated_at":1790766099}
+```
+
+值得记的三点：
+
+- **`generate_audio: true` 是默认值**（2.0 mini 上没传也开着）。这次的 token 与「无音频」公式完全吻合，所以**至少在 2.0 mini 上音频不改变 token 计数**
+- **`execution_expires_after: 172800`（48 小时）**。与 `max_reconcile_age_sec` 的 7 天不是一回事（那是「任务可查」的保留期），但若某些中转站只保留 48 小时，7 天的核对窗口后半段会一直查不到——**未验证**
+- `content.kz_video_url` 是中转站自己加的字段；`video_url` 指向 Ark 的 TOS，说明中转站背后确实是 Ark
+
+### 12.3 图片：没跑通，原因在上游
+
+`POST /ark/v3/images/generations`，`doubao-seedream-4-0-250828`，`size: 1K`。网关回 **503 `upstream_error`**，上游原文 `Task request failed`（`server_error`）。
+
+- **插件/核心行为是对的**：这条记为 `free`、不计费，`error_type=upstream_error`，账号**没有**被打入冷却
+- 中转站会校验模型名（一个不存在的 id 回 `model "…" is not served by this plugin`），Seedream 4.0 通过了名字校验却在执行时失败。**中转站 `/v1/models` 本来就没列任何 Seedream 模型**，所以大概率是它不支持图片。图片链路仍**未被真实验证**
+
+### 12.4 素材库：未测，缺 AK/SK
+
+素材端点 `https://cdn.api.codingplus.ai/api/support/v1/asset` 模仿 Ark OpenAPI（`ResponseMetadata` 形状、`Service=ark`、`Version=2024-01-01`），**只接受 AK/SK 签名**，`sk-` key 被拒（`InvalidAccessKey` / `InvalidAuthorization`）。插件拼的 `{asset_base_url}/?Action=…` 带尾斜杠与不带都认。**要在中转站后台「素材库 → AK/SK」建一对**才能测，填进账号的 `access_key` / `secret_key` / `asset_base_url`。
+
+### 12.5 仍未验证的
+
+- 图片（§12.3）、素材库（§12.4）、自写 V4 签名打真实服务
+- 2.5、2.0 pro/fast，其他分辨率与比例；`frames` 显式传参的计数；参考图 / 视频输入任务
+- 失败 / 取消 / 过期任务的核对（`FAILED` 全额退）；核对超时路径
+- 官方 Ark 本身（这次全程是中转站）
