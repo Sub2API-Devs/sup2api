@@ -903,8 +903,33 @@ token = **帧数 × 输出宽 × 输出高 / 1024**，固定 24fps。以下每�
 - `count_tokens` 返回 **503 `no_available_account`，而且错误体是 Anthropic 形状**：`{"type":"error","error":{"type":"overloaded_error"}}` —— `overloaded_error` 正是 Anthropic 对 503 的词表。`usage_logs` 记 `error_type=no_account`。**不静默**，而且比预想的干净：插件按名字拒绝 → 网关当 failover → 没有其他账号能服务 → 503，词表由核心按 `errorFormat` 正确推导
 - **破坏性变更在现实中撞上了**：这个账号原来的 `base_url` 是 `https://cdn.api.codingplus.ai/doubao`，新语义下会被当成中转站、把 chat 打到不存在的 `/doubao/v1/…`。改成 `base_url = https://cdn.api.codingplus.ai` + `video_api_prefix = /doubao/api/v3` 才对。**这就是 §13.2 那条迁移说明的现实案例。** 同时确认 `video_api_prefix` 存进了**明文 settings**（`settingsFields` 那道守门有效）
 
-### 13.8 仍未验证
+### 13.8 视频在新语义下重跑（2026-09-30，经网关）
 
-- **官方 Ark 的 Anthropic 面**（`/api/coding/v1/messages`）需要 CodingPlan 订阅，手上的账号没有（`InvalidSubscription`）。路由位置已实测确认，但**真实调用没跑过**
-- **视频在新前缀语义下的回归**：§12 那次视频全链路是旧语义（`base_url` 末尾带 `/doubao`）跑的。新语义下 `video_api_prefix` 有单测，但**没有再跑一次真实的提交 + 核对**
+新前缀语义下的视频全链路重跑了一次：账号 `base_url = https://cdn.api.codingplus.ai` + `video_api_prefix = /doubao/api/v3`（旧语义是 `base_url` 末尾带 `/doubao`）。
+
+| 步骤 | 实测 |
+|---|---|
+| 提交 | 200，`{"id":"task_ZjC3XTwLZA8FjMwG1G7k9AWiGsmlGug7"}` —— **`video_api_prefix` 在真实链路上生效** |
+| 预扣 | `usage_logs.billing_status=reserved`，`output_tokens=40594`，$0.40594；`pending_settlements` 一条 `pending`，deadline 7 天 |
+| 核对 | 第 **5** 次轮询拿到 `succeeded`，`state=settled` |
+| 结算 | `billing_status=billed`，`output_tokens` **仍是 40594**、费用不变 |
+| 账本 | **只有一条预扣流水,没有补扣也没有退款** |
+
+**最后一行是 0.5.1 那个帧数修复的独立确认**：`(4×24+1) × 864×496 / 1024 = 40594`，上游报的 `completion_tokens` 与预扣**分毫不差**，所以核对没有产生任何差额流水。§12.2 那次（修复前）产生过 −0.00418 的补扣。
+
+一处配置上的坑（部署时撞到）：这个中转站的 key 是**按分组授权模型**的。文本那个 key 的分组只有 `claude-*` 与 `deepseek-flash`，**没有 seedance**，所以用它提交视频会得到上游的 503 `Task request failed`。要两个账号各自带自己的 key、用 `models` 限定（文本账号限 `deepseek-flash`，视频账号限 `doubao-seedance-2-0-mini-260615`），同一个分组里共存。
+
+### 13.9 官方 Ark 的 Anthropic 面：不支持（2026-09-30 决定）
+
+实测确认过官方唯一会说 Anthropic 的地方是 `/api/coding/v1/messages`（返回 `UnsupportedModel` / `InvalidSubscription`，即它读了请求），而 `/api/v3/messages` 根本不存在（404 + 零字节 body，与未注册的路径逐字相同）。
+
+**决定不支持它**：那是订阅制产品，官方文档写着套餐额度「不可直接用于 API 调用」，而且测试账号返回 `InvalidSubscription` —— 指向它会让插件的行为取决于账号是否持有某个套餐。
+
+所以**官方账号对 `anthropic.messages` 按名字拒绝**，和 `count_tokens` 同一个做法，而不是往一个实测不存在的路径上发请求。错误信息里点明怎么修（把 `base_url` 指向支持该协议的 Ark 兼容中转站，或显式填 `api_prefix`）——「方舟不提供这个」只有和「而中转站提供」放在一起才有用。
+
+中转站不受影响:它们的 `/v1/messages` 是使用这个协议的受支持方式,也就是 §13.7 端到端验证过的那条路。
+
+### 13.10 仍未验证
+
 - **图片**（§12.3，这个中转站不提供任何 Seedream 模型，换上游才能验）
+- 官方 Ark 的 Anthropic 面（按 §13.9 已决定不支持，所以不再是缺口）
