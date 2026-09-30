@@ -1622,7 +1622,7 @@ message RankedAccount {
 - **SSRF 防护本来有两份且不一致**：`account/testreq.go` 那份**没有** localhost 名字检查、没有 `0.0.0.0/8` / `100.64/10`(CGNAT) / `198.18/15`、也不拒 URL 带凭证。抽出 `internal/netguard`，`gateway/ssrf.go` 改成转发壳（测试原样通过）。**`account/testreq.go` 尚未迁**（改「测试账号」按钮的防护等级可能改掉运维依赖的行为），留作单独一笔债。
 - **`iam` 的陈旧断言**：`TestHTTP` 断言超级用户有 5 个菜单 section，实际 4 个（finance 在「全站 ledger 离开侧栏」后没了核心项，`Menus()` 丢空 section）。已改断言。
 
-### 25.5 第一个用满四个口子的插件暴露的契约缺口（2026-09-30）
+### 25.5 第一个用满四个口子的插件暴露的契约缺口（2026-09-30，**已全部修复**）
 
 火山方舟五期（Seedance 视频）是第一个同时用上 `ResolveModel`(B) + `ExtractUsage`(C) + `Reservation`/核对循环(D) 的插件。它撞到三处口子之间对不齐的地方，**都还没修**。
 
@@ -1692,3 +1692,66 @@ if err == nil || strings.Contains(err.Error(), "not allowed") { t.Fatalf(...) }
 #### 顺带确认：静默跳过已基本清零
 
 Linux 上 `go test -v ./...`（`next/server`）共 **599 个 `=== RUN`，只有 1 个 `--- SKIP`**——`TestDemoPlugins`（`S2P_DEMO_DIR not set`）。DB 用例、`//go:build linux` 的 sandbox/seccomp/`oom_score_adj`/io_uring 用例、以及 Windows 上被跳的 `TestGoResolverUsesTunnel`，在 Linux 上**都真的跑了并且都通过**。
+
+### 25.6 §25.5 三处缺口的落地，以及一个 `curl` 就能打出的稳定 5xx（2026-09-30）
+
+§25.5 那三条「建议」里**有两条我写错了方向**，实现时都改了；另外顺手修掉一处 A 期 §25.1 明文规则被既有代码违反的地方。
+
+#### 1. `Endpoint.usageRequestFields`：白名单在**端点**层，不复用 `requestFields`
+
+```jsonc
+"usageRequestFields": ["resolution", "duration", "ratio"]   // 仅 usageSource: "plugin" 下有效
+```
+
+`ExtractUsageRequest` 新增 `fields`（map）与 **`fields_omitted`**（repeated string）。
+
+**为什么不复用平台级 `requestFields`**（§25.5 把这个当成一个开放选项，其实它是错的）：`requestFields` 是给 `BuildUpstreamRequest` 用的，而且会被**账号类型层 `AccountPlatform.requestFields` 整块覆盖**。`ExtractUsage` 的被调方是**平台插件**，让第三个插件（账号类型的提供者）决定平台插件能看到什么，正是 §25.3 待办 1「`usage.source` 放错层」的同一个错误再犯一次。端点级声明还保证**只有声明了的端点付代价**（未声明 → 直接返回，零分配）。
+
+三重上限（常量在 `sdk/manifest/check`，主机与工具共用一份）：**16 条路径** / 单值 **4 KiB** / 总量 **32 KiB**。取值来源是**发往上游的 body**（转换后、插件 patch 前），与 `BuildUpstreamRequest.fields` 读的是同一份文档，在 `armUsageExtraction` 里算（handler 内），goroutine 只拿到小 map。
+
+**超限的值整个不给，不截断** —— 与 C 期「body 超 `maxBytes` 不给」同理：半个 JSON 值解出来是**错数**，不是没数。被去掉的路径名进 `fields_omitted`：**没有这个字段，插件分不清「客户端没发 `resolution`」和「主机没搬过来」**，会按最便宜的默认档位低估。预算按**声明顺序**消耗，各节点结果一致。
+
+#### 2. 「多留一份请求体拷贝」这个顾虑不成立，真实开销早就存在
+
+§25.5 担心为这个功能在热路径多留一份 body。实际上 `submit()` 的 goroutine 闭包捕获的是**整个 `call`**，所以**D 期以来整个请求体本来就一直活到插件往返结束** —— 图生视频那几 MB 的 base64 也一样。新增 `releaseBodies()`：起 goroutine 前把 `c.body` / `c.promptCache` / 各 route 的转换体置 nil。**这是净减少，不是净增加。**
+
+#### 3. `ReconcileResult.SETTLED_ESTIMATE`，不是 `keep_estimate bool`
+
+§25.5 建议加个 bool，**方向可行但不干净**：bool 允许 `SETTLED + keep_estimate + tokens`、`PENDING + keep_estimate`、`FAILED + keep_estimate` 三种需要靠文字解释的矛盾组合。做成**枚举值 `SETTLED_ESTIMATE = 3`** 让这些状态不可表达。该状态下 tokens / facts 被忽略（带了会 warn 一次，因为「有真数字就该答 SETTLED」），`reason` 可作备注。
+
+落账与 `abandoned` **共用同一个写入**（新抽出的 `keepEstimate()`，「**状态必须写 `billed` 不能写 `failed`**，否则 `usage_logs_billing_pending_idx` 会再捞一次导致重复扣费」那段注释跟着搬进去了）：钱不动、tokens/metrics 保持预估、`billing_status='billed'`。两者**在行上分得开**：
+
+| | `anomalies.reconcile` | `pending_settlements.state` | 语义 |
+|---|---|---|---|
+| 放弃核对 | `abandoned` | `abandoned` | 没人能确认这活干了没 |
+| 按预估结算 | `estimated` | `estimated` | 活确认干完了，只是没有数字可以替换预估 |
+
+人工出口 `POST /usage/:id/reconcile` 与 `/refund` 对两种状态都开放。`pending_settlements.state` 是 `varchar(20)` 无 CHECK，新值不需要 schema 变更（`0014` 的注释已补上这一行）。
+
+#### 4. `billing:"free"` + plugin 源 → **硬错误**（`check` 没有 warning 等级）
+
+§25.5 建议「至少给个 warn」—— **在校验层不可行**：`check` 只有 `FieldError`，没有 warning。要么硬错误要么什么都没有。选了硬错误：`usageSource:"plugin"` + `billing:"free"` → `endpoints[i].billing` = `conflict`。
+
+**代价写在规则旁边**：「免费端点只想用插件算 token 做统计」也被拒了 —— 主机为每个请求付一次热路径 RPC，换一堆永远不参与定价的数字，这个组合本身就该重新想。前置关卡：三个内置平台 + 七个插件**原样通过**，全仓只有 volcengine 一个端点用 plugin 源且已是 `billing:"usage"`，零误伤。
+
+运行时补一道 `dropReservation()`：判出不可计费而插件确实返回了 `Reservation` 时，**warn 指名 plugin / platform / endpoint / protocol / request_id / ref_id / billing / reason**，并写 `usage_logs.anomalies` 的 `reservation` / `reservation_error`。三种原因分开记：端点 `free` / 没解析到价格 / **预估既无 token 又无 facts 且价格不是 per_request**（第三种是插件 bug，以前同样静默）。
+
+#### 5. `/usage/summary` 三列 + `max_reconcile_age_sec` 默认 7 天
+
+`/usage/summary` 与 `/me/usage/summary` 每行新增 `anomalies`（带标记的行数）、`estimated`（预估结算的行数）、`estimated_cost`（**收入里「猜」的那部分**）。
+
+两处必须按**值**而不是按**键**匹配：
+- `reconcile` 还有 `retrying`（又排进重试，不是终态）和 `refunded`（这行免费）两个值，都不是收入里的预估
+- **`anomalies` 列里有一个值根本不是异常**：`usage_extract=plugin` 只表示「插件答了」，插件计量平台**每一行都有**。按「列非空」计数会让整列立刻变噪音（正是 §26.5 那类错误）。SQL 里把它排除，`fallback`（插件没答）照计
+
+`max_reconcile_age_sec` 默认 **86400 → 604800**（7 天）：Ark 视频任务上游保留 7 天可查，24h 会让**本来核对得上**的任务被提前放弃，而放弃 = 保留预扣，**用户为一个猜出来的数字付钱**。`clampDeadline` 在新默认下的行为（插件说 7d 原样过 / 0 回落 7d / 8d 夹到 7d / 越界存值回落 7d / 默认值在 API 区间 [60s, 30d] 内）全部有测试。
+
+> 根子上的一条建议：D 期把 `usage_extract=plugin` 这个**事实**放进了一个叫 `anomalies` 的列。以后应该把它挪出去，或者干脆不写。
+
+#### 6. 一个 `curl` 就能打出稳定 5xx：`readBody` 不查 UTF-8
+
+`readBody` 只跑 `gjson.ValidBytes`，而 **gjson 不检查 UTF-8**（实测 `{"model":"a\xffb"}` → `valid=true`）。RFC 8259 §8.1 要求 JSON 必须是 UTF-8，所以这本来就不是合法 JSON。
+
+后果：这个字节串会进 `RequestMeta.model`（`request.modelPath`）、`BuildUpstreamRequest.fields`、`ResolveModel.fields`、`PriceParams`，而 **`proto.Marshal` 拒绝非法 UTF-8** → 该请求的**每一次**插件调用都失败 → failover 全挂 → **稳定 5xx**，而且 `usage_logs.model` 也会被 PostgreSQL 拒。
+
+这是 A 期 §25.1 已经写明的规则（「净化不是可选项」）被既有代码违反。修法是在 `readBody` 加 `utf8.Valid` → 400 `request body is not valid JSON`，**一处堵住整类**，不必在五个下游各自净化。

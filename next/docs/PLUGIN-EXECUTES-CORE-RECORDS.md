@@ -1,6 +1,6 @@
 # 插件执行、核心记录：插件参与计费与使用记录的契约
 
-> 状态：**设计稿，尚未实现**。2026-09-29。
+> 状态：**已全部实现**（A–D 四期 + E 期收尾，2026-09-30）。落地记录与设计更正在 [CONTRACTS](CONTRACTS.md) §25.1–§25.6 —— **那里才是真相源**，本文是当初的设计稿，正文里有若干条后来被证伪（每条都在 §25 对应小节里点明）。
 > 这份文档讲的是**核心 SDK 契约的扩展**，不是某个插件。第一个用户是 [字节火山方舟 / 豆包插件](PLUGIN-VOLCENGINE-ARK.md)，但每一条都不带厂商语义。
 
 ---
@@ -308,8 +308,9 @@ CREATE INDEX pending_settlements_due_idx ON pending_settlements (next_check_at) 
 | **B** ✅ | `ResolveModel` + `request.modelSource`；`request.queryParams` 声明式白名单；「用 plugin 源必须声明 `platform.adapter.v1`」校验；facts 键格式约束 | 模型不在请求里的端点 |
 | **C** ✅ | `ExtractUsage` + `usage.source`（D 期挪到 Endpoint）+ `streamEvents`；`UsageReport`；`usage_logs.plugin_detail`；热路径超时独立设置 | 非标准用量、插件补日志字段 |
 | **D** ✅ | `Reservation` + `pending_settlements` + 核对循环 + `BuildReconcileRequest` / `ParseReconcileResponse`；`usage.source` 挪到 Endpoint；`usage_logs.anomalies` | 异步任务、预扣费、延迟结算 |
+| **E** ✅ | 第一个用满四期的插件暴露的三处缺口：`Endpoint.usageRequestFields` + `fields_omitted`；`ReconcileResult.SETTLED_ESTIMATE`；`billing:"free"` + plugin 源改硬错误 + 运行时 `dropReservation` 告警。附 `/usage/summary` 三列、`max_reconcile_age_sec` 默认 7 天、`readBody` 拒非法 UTF-8 | 异步提交类端点能精确预估、上游不给用量时不白送 |
 
-**四期核心契约全部落地**（CONTRACTS §25.1–§25.4）。剩两个到期未做项见 §25.4 末尾：`/usage/summary` 加 anomaly 计数、`max_reconcile_age_sec` 上线前调整。
+**四期核心契约全部落地，E 期收尾也已落地**（CONTRACTS §25.1–§25.6）。§25.5 提的三条「建议」里有两条方向写错了，实现时都改了，更正见 §25.6。
 
 A 是纯增量，B / C 互不依赖，D 依赖 C（预扣搭在 `UsageReport` 上）。
 
