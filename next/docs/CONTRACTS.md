@@ -1755,3 +1755,41 @@ Linux 上 `go test -v ./...`（`next/server`）共 **599 个 `=== RUN`，只有 
 后果：这个字节串会进 `RequestMeta.model`（`request.modelPath`）、`BuildUpstreamRequest.fields`、`ResolveModel.fields`、`PriceParams`，而 **`proto.Marshal` 拒绝非法 UTF-8** → 该请求的**每一次**插件调用都失败 → failover 全挂 → **稳定 5xx**，而且 `usage_logs.model` 也会被 PostgreSQL 拒。
 
 这是 A 期 §25.1 已经写明的规则（「净化不是可选项」）被既有代码违反。修法是在 `readBody` 加 `utf8.Valid` → 400 `request body is not valid JSON`，**一处堵住整类**，不必在五个下游各自净化。
+
+### 25.7 第一个真实消费者用完 E 期之后（2026-09-30）
+
+火山方舟 0.5.0 是 `usageRequestFields` / `SETTLED_ESTIMATE` 的第一个真实使用者。E 期实现本身**没有发现 bug**，但用满之后暴露三条契约面的问题，**都还没修**。
+
+#### 1. `ParseReconcileResponseRequest` 缺 `truncated`，而 body 是被静默截断的
+
+`reconcile.go` 用 `io.ReadAll(io.LimitReader(resp.Body, 256KiB))` 读核对响应，**插件收到半个 JSON 文档而且无从得知**。
+
+这与 §25.3 给 `ExtractUsage` 定的规则**正好相反**：那里「非流式 body 超 `maxBytes` 就不给」，理由写得很明白 ——「半个 JSON 值解出来是错数，不是没数」。C 期给 `ExtractUsage` 加 `truncated`、E 期给它加 `fields_omitted`，都是为了同一件事，而核对这条路上两个都没有。
+
+后果具体化：被截断的状态文档里 `status` 在前会读出 `succeeded`，`usage` 在后被切掉读成 0 → 插件答 `SETTLED` 带 0 → **全额退款**。（火山插件现在会答 `SETTLED_ESTIMATE`，方向是安全的，但真实用量高于预估时仍然静默少收。）
+
+**建议**：给 `ParseReconcileResponseRequest` 加 `truncated`，或者干脆照 `ExtractUsage` 的规矩——超限就不给。
+
+#### 2. `usageRequestFields` 表达不了「数组里任意位置的某个字段」
+
+`ValidUsagePath` 要求路径读出**单个值**（sjson 往返校验），所以 `content.#.text` 被拒。火山的绕法是枚举 `content.0/1/2.text`，再声明 `content.#`（数组长度，这个合法）来判断「有没有看不见的元素」——**没有 `content.#` 就分不清「数组只有 3 个」和「第 4 个藏了东西」**。
+
+任何「参数可能出现在数组任意位置」的上游都会撞上这个。**建议**：允许一种受限的多值路径（如 `a.#.b`，值按数组拼进一个 JSON 数组，仍受同样的字节上限约束），或者至少把这条限制和 `content.#` 这个绕法写进契约正文。
+
+#### 3. `fields` 的值是**原始 JSON**，字符串是带引号的
+
+实现取的是 `gjson.Result.Raw`（核心另外做了 `strings.ToValidUTF8`）。这是对的也是必要的——数字、布尔、对象都要能表达——但插件侧极容易写成直接当字符串用。**契约正文里要明写这一句**，省掉下一个插件作者一轮调试。
+
+#### 落地经验（写给下一个用 `fields_omitted` 的人）
+
+火山插件第一版在这里写错过，是测试抓出来的：**只 bound 了 duration，没 bound resolution**，于是「全部 absent」和「全部 omitted」估出完全相同的数字。两条经验：
+
+- `fields_omitted` 必须让**每一个可能受影响的参数**同时作废，而不只是那一个字段
+- 如果上游允许参数有第二种写法（如写在 prompt 文本里），那么**文本读不全时，连已经读到的结构化字段也不能信**——因为上游往往没定两种写法的优先级
+
+#### 顺带确认的一条插件迁移硬约束
+
+`store/migrate.go` 对每个迁移文件算 sha256 并与 `plugin_migrations.checksum` 比对，**改动已应用的迁移文件会让整个安装/升级中止**。所以：
+
+- 列的增删一律新写迁移文件，已应用的一个字节都不能动
+- **迁移文件里不要写「这一列为什么存在」**——那种注释会随语义变化而失效，而且**无法修改**。`0002_video_tasks.sql` 里关于 `est_tokens` 的那段注释就是现存的一处。语义变了只能靠后续迁移的 `COMMENT ON COLUMN` 追平
