@@ -38,7 +38,7 @@
 - **测试不许假设「某个端口是空闲的」**。CI 的 `server` job 把 postgres / redis 用 `ports: 5432:5432` / `6379:6379` 发布到 runner 的 `127.0.0.1`（GH runner 上 job 不在容器里，必须如此），所以任何「连这个端口应当失败」的断言都会在那里翻转。要证明「连不上」就用 `net.Listen(":0")` 拿端口再立刻 `Close()`，要证明「连得上」就起自己的监听。见 §26.7
 - **CI 红先看日志，不要先猜**：`actions/jobs/{id}/logs` 对非 admin 返回 403，但本机 git credential helper 里有 GitHub Desktop 的 token（`git credential fill` 可读）能下载 job 日志
 - **所有测试组件一律用 docker compose 启动，禁止在服务器上直接安装或运行任何服务/进程**。测试服务器 ovh 上：测试库为 compose 项目 `sub2api-next-testdb`（目录 `~/sub2api-next-test/testdb`）；需要在 Linux 上运行的 Go 测试（seccomp、/proc 等）用 `next/deploy/ci/compose.yml` 的 `gotest` 服务：把代码同步到 `~/sub2api-next-test/ci/<agent代号>/`，在该目录执行 `docker compose -f next/deploy/ci/compose.yml run --rm gotest go test ...`，用完删除同步目录。不要触碰服务器上的其他 compose 项目和容器
-- 前端：Node 24，npm；`web/` 下 `npm ci && npm run build`，产物输出到 `server/web/dist`（由 `server/web` 用 `embed` 嵌入）
+- 前端：Node 24，npm；`web/` 下 `npm ci && npm run build`，产物输出到 `server/web/dist`（由 `server/web` 用 `embed` 嵌入）。**`server/web/dist/index.html` 是被 git 跟踪的占位文件**（占位页给 `embed` 兜底，镜像的 `ui` stage 自己 build），`assets/` 则被忽略——`npm run build` 会把它覆盖成引用不存在文件的真页面，**提交前 `git checkout` 还原它**。`web/` 只有 `typecheck` 和 `build`，没有 lint 脚本
 
 ## 3. 通用约定
 

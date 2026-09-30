@@ -517,6 +517,28 @@ Ark 图片响应的 `data[]` 每条带 `size`（如 `"2848x1600"`），**按分�
 
 已收窄成 `/scripts/`（只忽略仓库根的那个）。改动前量过影响面：树里现存的 `scripts` 目录没有任何被静默忽略的文件（`node_modules` 下那几个另有 `node_modules/` 规则兜住），所以这次收窄**没有让任何意外文件变成待跟踪**。
 
+### 9.11 前端杂项第二批的落地与三处判断更正（2026-09-30）
+
+§9.7 里前端侧的三项（`DeclarativeTable` 搜索框、图标名、`/api/v1` 字面量）已落地（`c8a4daf66`）。做的时候发现我原来的描述有三处不准，记下来免得下次按错的前提排活：
+
+**1. 搜索框不是「死的」，是随数据量在能用和不能用之间切换。** `serverPaged = total > items.length` 是个启发式：一页装得下时 `serverPaged=false`，客户端过滤**真的生效**；数据一超过一页就变 `true`，同一个框立刻变哑。比一直死更难发现。
+
+**2. 「没接后端参数 / 后端不认」两个选项都不对。** 核心是**全量转发** query 给插件的（`plugin/routes/routes.go` 把 `URL.Query()` 整个交出去），`anthropic` 的 `/models` 确实实现了 `?q=`（ILIKE，有测试）。真问题是三个 declarative table 页里**只有一个**认 `q`：volcengine 的 `GET /assets`、`GET /asset-groups` 只认 `index_status` / `group_id`。所以「接通」会让 2/3 的页面**返回全量却显示成搜索结果**——比空白更糟的谎。删掉的理由是这个。
+
+真正的修法（**排期**）：`manifest.Page` 加一条「这个 source 认哪个查询参数」的声明（如 `"search": "q"`），`check` 校验参数名；前端**声明了才渲染搜索框**，输入防抖发 `q=` 并回第 1 页。之后 volcengine 两个 assets 路由要么实现 `q` 要么不声明。顺带 `serverPaged` 也该从启发式改成声明式——服务端分页开没开应来自声明，不该靠比较 `total > len(items)` 猜。
+
+**3. 图标名写错的后果比「空白」严重。** 渲染不存在的图标**不空白、不报错、零控制台输出**，画一个 `M5 5h14v14H5z` 的空心方块——和真图标 `stop`（`M6 6h12v12H6z`）几乎一模一样。manifest 里写错名字**不像坏了，像故意的**。现在：名字表抽到 `packages/ui/src/icons.ts`（导出 `ICON_NAMES` / `hasIcon`），兜底换成方框加问号（没有任何真图标长这样），解析不到时 `console.warn` 一次并指名插件与菜单。
+
+`anthropic` 的 `list` **不是名字写错，是图标集缺了一个**：模型目录菜单本来就该是列表图标，现存 55 个里没有合适替代（`ledger` 是账本、`inbox` 是收件箱、`menu` 是汉堡）。加了 `list` 图标，manifest 不改。
+
+图标名静态校验（**排期**）：`icons.ts` 是纯数据无浏览器依赖，加一个 `npm run icons:json` 用 `node --experimental-strip-types` 导出到 `sdk/manifest/check/icons.json`，Go 侧 `embed` 做校验。**两个 icon 字段是两套词汇表，校验层千万别搞混**：顶层 `manifest.icon` 是 `text:<1-2字>` / 包内相对路径 / URL / `data:`（`PluginAvatar.vue` 渲染，已有兜底，七个插件全是 `text:X`）；**只有 `ui.menus[].icon`** 是 SIcon 名字，该对 `ICON_NAMES` 校验。
+
+**4. `/plugin-ui/` 在前端生产代码里一处硬编码都没有**——插件资源 URL 全来自服务端下发的 `UIPlugin.asset_base`，字面量只在 mock fixture 和 vite dev proxy 里。§9.7 第 9 项的前端部分比描述的小得多。`/api/v1` 收敛到 `packages/host/src/routes.ts`（镜像 `sdk/manifest/routes.go`）。
+
+其中一处**不是整洁问题，是安全边界**：`PluginIframe.vue` 里 `/api/v1` 出现三次——建沙箱 iframe 的路径白名单前缀（拦住插件调 `/api/v1/users` 的那道门）、`'/api/v1'.length` 剥前缀、api client 再用**可被 `configureHttp` 改的** `baseURL` 加回去。三个独立的值，**只要一个不一致，白名单校验的路径就和真正发出的路径脱钩**。今天恰好一致，所以不是活漏洞，是雷。现在全部从 `apiBase()` 推导，`src/host.ts` 那个能改掉其中一个值的冗余覆盖也删了。
+
+**5. 一个仓库级陷阱**：`next/server/web/dist/index.html` 是**被 git 跟踪**的占位文件（给 `//go:embed all:dist` 兜底，Docker 的 `ui` stage 自己 build），而同目录 `assets/` 被 `.gitignore` 的 `dist/` 忽略。每次 `npm run build` 都会把它覆盖成引用一堆 ignored 文件的真 index.html——一旦提交，仓库里就有个指向不存在资源的 index.html。**提交前必须确认它不在 diff 里**。
+
 ---
 
 ## 10. 三期（素材库）落地记录与代价
