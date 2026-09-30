@@ -1,10 +1,13 @@
 # sub2api-next 开发进度与交接记录
 
+> ⚠️ **本文件停在 2026-09-25（第四轮）。之后的「插件执行、核心记录」五期改造与火山方舟插件不在这里。**
+> **接手工作请先读 [HANDOVER.md](HANDOVER.md)**（环境、纪律、待办、坑），再读 [ROUND-2026-09-PLUGIN-MECHANISM.md](ROUND-2026-09-PLUGIN-MECHANISM.md)（那一轮的前因后果）。
+
 > 用途：记录派发给开发 agent 的任务、交付结果、待办事项与环境信息，保证上下文压缩或换人接手后能完整恢复现场。
 > **每次合并分支、派发新任务、做出决策后都要更新本文件。**
 > 最后更新：2026-09-25，第四轮全部合并；sup2api 清库重建后第四轮验证全部通过（部署 `549710fa6`）；数据库单测已在临时测试容器补跑并通过（见 §11）。
 
-相关文档：[ARCHITECTURE.md](ARCHITECTURE.md)（设计）· [CONTRACTS.md](CONTRACTS.md)（开发契约）
+相关文档：[HANDOVER.md](HANDOVER.md)（交接）· [ROUND-2026-09-PLUGIN-MECHANISM.md](ROUND-2026-09-PLUGIN-MECHANISM.md)（最近一轮的前因后果）· [ARCHITECTURE.md](ARCHITECTURE.md)（设计）· [CONTRACTS.md](CONTRACTS.md)（开发契约）
 
 ---
 
