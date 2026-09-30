@@ -22,6 +22,19 @@ import (
 // answer often enough that an administrator has to be able to say otherwise,
 // which is what these two actions are. Without them the only recourse would
 // be a hand-written balance adjustment with no link to the row.
+//
+// They apply to every row that is billed AT ITS RESERVATION: the abandoned
+// ones, and the ones a plugin closed with SETTLED_ESTIMATE (the work is
+// confirmed, the usage is not). The second kind is a smaller injustice than
+// the first, but the amount on the row is an estimate either way, and an
+// estimate is what an administrator may want to ask about again or give
+// back.
+
+// billedAtEstimate reports whether a settlement entry left its row charged
+// at the plugin's estimate, which is what the two manual actions act on.
+func billedAtEstimate(state string) bool {
+	return state == SettleStateAbandoned || state == SettleStateEstimated
+}
 
 // Settlement is the pending_settlements entry of a usage row, as the console
 // shows it in the usage detail.
@@ -73,8 +86,8 @@ func (s *Service) retryReconcile(c *gin.Context) {
 		if err != nil {
 			return err
 		}
-		if entry.State != SettleStateAbandoned {
-			return core.ErrConflict.WithMessage("only an abandoned settlement can be reconciled again")
+		if !billedAtEstimate(entry.State) {
+			return core.ErrConflict.WithMessage("only a settlement billed at its estimate (abandoned or estimated) can be reconciled again")
 		}
 		if row.status != StatusBilled {
 			return core.ErrConflict.WithMessage("this usage row is no longer billed at its reservation")
@@ -108,9 +121,9 @@ func (s *Service) retryReconcile(c *gin.Context) {
 
 // POST /usage/:id/refund — give a kept reservation back.
 //
-// Only for a row the core abandoned: a row that settled or failed has already
-// had its difference applied, and refunding on top of that would be a second,
-// unrelated credit. The key is "refund:{request_id}", distinct from the
+// Only for a row billed at its estimate (abandoned, or estimated by the
+// plugin): a row that settled or failed has already had its difference
+// applied, and refunding on top of that would be a second, unrelated credit. The key is "refund:{request_id}", distinct from the
 // reconcile loop's own "refund:{request_id}:reconcile", so an automatic
 // partial refund and a manual one can never silently collapse into one.
 func (s *Service) refundAbandoned(c *gin.Context) {
@@ -132,8 +145,8 @@ func (s *Service) refundAbandoned(c *gin.Context) {
 		if err != nil {
 			return err
 		}
-		if entry.State != SettleStateAbandoned {
-			return core.ErrConflict.WithMessage("only an abandoned settlement can be refunded here")
+		if !billedAtEstimate(entry.State) {
+			return core.ErrConflict.WithMessage("only a settlement billed at its estimate (abandoned or estimated) can be refunded here")
 		}
 		if row.status != StatusBilled {
 			return core.ErrConflict.WithMessage("this usage row is no longer billed at its reservation")

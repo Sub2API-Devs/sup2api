@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
@@ -251,7 +252,15 @@ func (c *call) readBody() *gwError {
 		}
 		c.body = body
 	}
-	if len(c.body) > 0 && !gjson.ValidBytes(c.body) {
+	// JSON text is UTF-8 (RFC 8259 §8.1) and gjson's validator does not check
+	// that, so a body with a stray byte inside a string would pass here and
+	// then poison every proto string it is copied into - RequestMeta.model
+	// from request.modelPath, the fields of BuildUpstreamRequest / ResolveModel
+	// / ExtractUsage, price params - and proto.Marshal refuses invalid UTF-8,
+	// which makes every plugin call of the request fail: one curl, a stable
+	// 5xx, and a usage row PostgreSQL refuses as well (CONTRACTS §25.1). It is
+	// not valid JSON; say so, once, here.
+	if len(c.body) > 0 && (!utf8.Valid(c.body) || !gjson.ValidBytes(c.body)) {
 		return &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code,
 			Message: "request body is not valid JSON", RecordType: errTypeInvalidRequest}
 	}
@@ -578,6 +587,13 @@ func (c *call) submit() {
 	billing := c.ep.Billing
 	if p := c.usage; p != nil {
 		c.usage = nil
+		// The goroutine below captures c, and with it the request body (and
+		// its converted copies) - possibly megabytes of base64 for exactly
+		// the endpoints this path serves. Nothing after this point reads
+		// them: ExtractUsage was armed with the few request fields it is
+		// shown, so let the body go before the handler returns rather than
+		// keep it for the length of a plugin round trip.
+		c.releaseBodies()
 		// g.wg is the gateway's own group, so Close waits for the extraction
 		// instead of dropping the record. Add is safe here because it happens
 		// inside the handler: app.go shuts the HTTP server down (every handler
@@ -590,21 +606,69 @@ func (c *call) submit() {
 			// Rate limits count what was really used, so they are updated
 			// with the plugin's answer rather than the rules' guess.
 			c.countTokens(ctx, p.accountID)
-			c.finishSubmit(rec, billing)
+			c.finishSubmit(ctx, rec, billing)
 		}()
 		return
 	}
-	c.finishSubmit(rec, billing)
+	c.finishSubmit(context.Background(), rec, billing)
 }
 
-func (c *call) finishSubmit(rec *core.UsageRecord, billing string) {
+// releaseBodies drops every reference the call holds to the request body.
+// Only for the asynchronous submit path, once nothing will read them again.
+func (c *call) releaseBodies() {
+	c.body = nil
+	c.promptCache = nil
+	for _, rt := range c.routes {
+		rt.body = nil
+	}
+}
+
+func (c *call) finishSubmit(ctx context.Context, rec *core.UsageRecord, billing string) {
 	hasUsage := rec.Tokens != (core.UsageTokens{}) || len(rec.Metrics) > 0
 	rec.Billable = !strings.EqualFold(billing, "free") && rec.Price != nil &&
 		(hasUsage || (rec.Success && rec.Price.Mode == "per_request"))
 	if !rec.Billable {
+		c.dropReservation(ctx, rec, billing, hasUsage)
 		rec.Price = nil
 	}
 	c.g.d.Settler.Submit(rec)
+}
+
+// dropReservation clears a Reservation from a record that turned out not to
+// be billable, and says so - in the log, naming the plugin and the endpoint,
+// and on the record, under usage_logs.anomalies.
+//
+// The settler would have dropped it anyway (initialStatus reads Billable
+// first), silently: no pre-charge, no pending_settlements entry, no reconcile,
+// for a job the upstream really started - the shape CONTRACTS §25.5 found in
+// the first plugin to reserve, where the submit endpoint had been marked
+// billing "free" because "the submit itself has no final usage". The manifest
+// check now refuses that combination; this is what stands for packages
+// installed before it did, and for the other two ways here: a price the
+// request did not resolve, and an estimate with no tokens and no facts on a
+// per-token price, which is a plugin bug the plugin author has to hear about.
+func (c *call) dropReservation(ctx context.Context, rec *core.UsageRecord, billing string, hasUsage bool) {
+	rv := rec.Reservation
+	if rv == nil {
+		return
+	}
+	var why string
+	switch {
+	case strings.EqualFold(billing, "free"):
+		why = "endpoint billing is \"free\""
+	case rec.Price == nil:
+		why = "no price was resolved for the request"
+	case !hasUsage:
+		why = "the estimate has no tokens and no facts, and the price is not per-request"
+	default:
+		why = "record is not billable"
+	}
+	rec.Reservation = nil
+	rec.ReservationDropped = why
+	slog.WarnContext(ctx, "gateway: plugin reserved a pre-charge the request cannot carry; the reservation is DROPPED - "+
+		"nothing is charged now and nothing will be reconciled",
+		"request_id", c.rid, "plugin", rv.PluginKey, "platform", c.platform, "endpoint", c.ep.Path,
+		"protocol", c.ep.Protocol, "ref_id", rv.RefID, "billing", billing, "reason", why)
 }
 
 // countTokens adds this request's tokens to the account's rate-limit window.

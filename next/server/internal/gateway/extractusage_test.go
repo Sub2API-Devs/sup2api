@@ -12,6 +12,7 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest/check"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
@@ -130,6 +131,10 @@ func TestPluginUsageNonStream(t *testing.T) {
 	}
 	if in.GetMeta().GetRequestId() == "" || in.GetMeta().GetProtocol() != "pu.chat" {
 		t.Fatalf("meta %+v", in.GetMeta())
+	}
+	// No usageRequestFields declared: not one request field travels.
+	if len(in.GetFields()) != 0 || len(in.GetFieldsOmitted()) != 0 {
+		t.Fatalf("request fields handed over without a declaration: %v %v", in.GetFields(), in.GetFieldsOmitted())
 	}
 
 	// cache_creation_tokens is the total, so the 5 minute figure is 12-4.
@@ -264,6 +269,112 @@ func TestUsageCaptureCopiesEventData(t *testing.T) {
 	}
 	if string(cap.events[0].GetData()) != `{"type":"message_delta","n":1}` {
 		t.Fatalf("data aliased the caller's buffer: %s", cap.events[0].GetData())
+	}
+}
+
+// ---------------------------------------------------------------- request fields
+
+// An endpoint that only starts a job answers {"id": ...}; the size of the job
+// is in the request. usageRequestFields hands ExtractUsage exactly the
+// declared paths - as raw JSON, keyed by path, like BuildUpstreamRequest's
+// fields - and nothing else of the body. A value over the per-value cap is
+// not cut, it is left out and NAMED, so the plugin can tell "not sent" from
+// "not carried".
+func TestPluginUsageRequestFields(t *testing.T) {
+	e, pp := usageEnvEP(t, pluginUsageRules(), func(ep *manifest.Endpoint) {
+		ep.UsageRequestFields = []string{"resolution", "duration", "options.ratio", "image", "absent"}
+	})
+	pp.extract = func(context.Context, *pluginv1.ExtractUsageRequest) (*pluginv1.UsageReport, error) {
+		return report(1, 1), nil
+	}
+	huge := strings.Repeat("A", check.MaxUsageRequestFieldBytes) // base64-ish, over the cap once quoted
+	b := body(testModel, false)
+	b["resolution"] = "1080p"
+	b["duration"] = 5
+	b["options"] = map[string]any{"ratio": "16:9", "seed": 42}
+	b["image"] = huge
+	if res := e.do("/pu/v1/chat", b, nil); res.status != 200 {
+		t.Fatalf("status %d %s", res.status, res.body)
+	}
+	e.record()
+	in := pp.lastExtract()
+	want := map[string]string{"resolution": `"1080p"`, "duration": `5`, "options.ratio": `"16:9"`}
+	if got := in.GetFields(); len(got) != len(want) || got["resolution"] != want["resolution"] ||
+		got["duration"] != want["duration"] || got["options.ratio"] != want["options.ratio"] {
+		t.Fatalf("fields = %v, want %v", got, want)
+	}
+	if got := in.GetFieldsOmitted(); len(got) != 1 || got[0] != "image" {
+		t.Fatalf("omitted = %v, want [image]", got)
+	}
+	// The body itself never travels: not under a declared key, not anywhere.
+	for k, v := range in.GetFields() {
+		if strings.Contains(v, "hello there") || k == "messages" {
+			t.Fatalf("request body leaked into fields: %s=%s", k, v)
+		}
+	}
+}
+
+// The total budget is spent in declared order, so which paths make it is the
+// same on every node; the ones past it are named, not silently absent.
+func TestUsageRequestFieldsTotalBudget(t *testing.T) {
+	const each = 3 << 10 // under the per-value cap; ten of them are over the total
+	var paths []string
+	doc := map[string]string{}
+	for i := range 12 {
+		p := fmt.Sprintf("f%02d", i)
+		paths = append(paths, p)
+		doc[p] = strings.Repeat("x", each-2) // quoted: exactly `each` bytes of raw JSON
+	}
+	raw, _ := json.Marshal(doc)
+	fields, omitted := usageRequestFields(paths, raw)
+	fit := check.MaxUsageRequestFieldsBytes / each
+	if len(fields) != fit {
+		t.Fatalf("%d fields carried, want the first %d", len(fields), fit)
+	}
+	for i := range fit {
+		if len(fields[paths[i]]) != each {
+			t.Fatalf("field %s missing or resized: %d bytes", paths[i], len(fields[paths[i]]))
+		}
+	}
+	if len(omitted) != 12-fit || omitted[0] != paths[fit] {
+		t.Fatalf("omitted = %v", omitted)
+	}
+	// Nothing declared, nothing read - not even an allocation's worth.
+	if f, o := usageRequestFields(nil, raw); f != nil || o != nil {
+		t.Fatalf("read without a declaration: %v %v", f, o)
+	}
+	// A path the client did not send is neither carried nor "omitted".
+	if f, o := usageRequestFields([]string{"nope"}, raw); f != nil || o != nil {
+		t.Fatalf("absent path reported: %v %v", f, o)
+	}
+}
+
+// A body with invalid UTF-8 inside a string is not JSON (RFC 8259 §8.1), and
+// gjson does not check that. Left in, the bytes would be copied into
+// RequestMeta.model and every plugin's fields map, where proto.Marshal refuses
+// them: every plugin call of the request fails, the client gets a 5xx and the
+// usage row is refused by PostgreSQL too. It is refused here, as the 400 it
+// is, before anything is asked.
+func TestInvalidUTF8BodyIsRejectedAsInvalidJSON(t *testing.T) {
+	e := newEnv(t)
+	req, _ := http.NewRequest(http.MethodPost, e.srv.URL+"/v1/messages",
+		strings.NewReader("{\"model\":\""+testModel+"\xff\",\"max_tokens\":1,\"messages\":[]}"))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", testKey)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status %d", resp.StatusCode)
+	}
+	rec := e.record()
+	if rec.ErrorType != errTypeInvalidRequest || rec.StatusCode != 400 {
+		t.Fatalf("record %+v", rec)
+	}
+	if e.plat.buildCount() != 0 {
+		t.Fatalf("a plugin was called %d times with a body it cannot be handed", e.plat.buildCount())
 	}
 }
 

@@ -37,6 +37,10 @@ type typeRoute struct {
 	pluginUsage   bool
 	usageEvents   []string
 	usageMaxBytes int64
+	// usageRequestFields are the request body paths ExtractUsage is shown
+	// (endpoint.usageRequestFields); nil for every endpoint that declares
+	// none, which is how those pay nothing for the feature.
+	usageRequestFields []string
 	// resp is the response shape the upstream endpoint promises
 	// (endpoint.response); respDeclared is false when no endpoint of the
 	// upstream platform speaks the protocol, in which case there is nothing
@@ -131,13 +135,14 @@ func (c *call) addRoute(b core.AccountTypeBinding, ap manifest.AccountPlatform, 
 	}
 	rt := &typeRoute{binding: b, platform: q, upstream: y, conv: conv,
 		requestFields: ap.RequestFields, passHeaders: ap.PassHeaders,
-		usage:         usagerules.For(ap, &ep, &pf, y),
-		pluginUsage:   ep.PluginUsage(),
-		usageEvents:   ep.UsageStreamEvents,
-		usageMaxBytes: ep.UsageMaxBytes,
-		resp:          ep.Response,
-		respDeclared:  ep.Protocol != "",
-		modelPath:     ep.Request.ModelPath}
+		usage:              usagerules.For(ap, &ep, &pf, y),
+		pluginUsage:        ep.PluginUsage(),
+		usageEvents:        ep.UsageStreamEvents,
+		usageMaxBytes:      ep.UsageMaxBytes,
+		usageRequestFields: ep.UsageRequestFields,
+		resp:               ep.Response,
+		respDeclared:       ep.Protocol != "",
+		modelPath:          ep.Request.ModelPath}
 	if len(rt.requestFields) == 0 {
 		rt.requestFields = pf.RequestFields
 	}

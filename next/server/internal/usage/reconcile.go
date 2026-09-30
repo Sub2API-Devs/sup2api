@@ -336,6 +336,8 @@ func (s *Service) reconcileOne(ctx context.Context, e *settleEntry) bool {
 	switch res.GetState() {
 	case pluginv1.ReconcileResult_SETTLED:
 		s.settleReconciled(ctx, e, row, res)
+	case pluginv1.ReconcileResult_SETTLED_ESTIMATE:
+		s.settleEstimate(ctx, e, row, res)
 	case pluginv1.ReconcileResult_FAILED:
 		s.refundFailed(ctx, e, row, res.GetReason())
 	default:
@@ -668,7 +670,69 @@ func (s *Service) refundFailed(ctx context.Context, e *settleEntry, row *reserve
 // really was made, the upstream really started the work, and making the
 // platform eat a cost that was genuinely incurred because the upstream never
 // answered a status query is the wrong default. A human can still reverse it
-// (POST /usage/:id/refund).
+// (POST /usage/:id/refund). The write itself, and why it must say 'billed',
+// is keepEstimate.
+func (s *Service) abandon(ctx context.Context, e *settleEntry, row *reservedRowState, reason string) {
+	marker := map[string]string{
+		core.AnomalyReconcile:         core.ReconcileAbandoned,
+		core.AnomalyReconcileAttempts: strconv.Itoa(e.attempts),
+		core.AnomalyReconcileError:    trunc(reason, 500),
+	}
+	if !s.keepEstimate(ctx, e, row, SettleStateAbandoned, marker, reason, false) {
+		return
+	}
+	s.rec.log.Error("reconcile: gave up on a pre-charged entry; the estimate is now the final charge",
+		"entry", e.id, "request_id", row.p.RequestID, "plugin", e.pluginKey, "ref_id", e.refID,
+		"attempts", e.attempts, "charged", row.totalCost.String(), "reason", reason)
+}
+
+// settleEstimate closes an entry the plugin answered SETTLED_ESTIMATE to: the
+// work finished, the upstream reported no usage for it, the estimate is the
+// final charge (CONTRACTS §25.5 gap 2).
+//
+// It is the same ledger outcome as abandon - nothing moves, the row becomes
+// 'billed' at the reservation - reached for the opposite reason: not "nobody
+// could confirm the work" but "the work is confirmed and there is no figure
+// to replace the estimate with". The row says which. usage_logs.anomalies
+// carries reconcile=estimated rather than abandoned, and the entry closes as
+// 'estimated' rather than 'abandoned', so a revenue summary counts both as
+// estimates while an operator reading either row is not told the wrong story.
+//
+// Before this state existed a plugin in this position had two answers, both
+// wrong: SETTLED with zero tokens refunded the whole reservation for a job
+// that was delivered, and keeping its own table of estimates to answer
+// SETTLED from meant every reserving plugin rebuilding what the core already
+// holds on the row.
+func (s *Service) settleEstimate(ctx context.Context, e *settleEntry, row *reservedRowState, res *pluginv1.ReconcileResult) {
+	if t := res.GetTokens(); t.GetInputTokens() != 0 || t.GetOutputTokens() != 0 || t.GetCacheReadTokens() != 0 ||
+		t.GetCacheCreationTokens() != 0 || t.GetCacheCreation_1HTokens() != 0 || len(res.GetFacts()) > 0 {
+		// Not an error, but a plugin that has real figures should answer
+		// SETTLED with them; ignoring what it sent is the contract, saying so
+		// is what keeps the contract from being a surprise.
+		s.rec.log.Warn("reconcile: SETTLED_ESTIMATE carried tokens or facts; they are ignored, the estimate stands",
+			"entry", e.id, "plugin", e.pluginKey, "ref_id", e.refID)
+	}
+	reason := res.GetReason()
+	marker := map[string]string{
+		core.AnomalyReconcile:         core.ReconcileEstimated,
+		core.AnomalyReconcileAttempts: strconv.Itoa(e.attempts + 1),
+	}
+	if reason != "" {
+		marker[core.AnomalyReconcileError] = trunc(reason, 500)
+	}
+	if !s.keepEstimate(ctx, e, row, SettleStateEstimated, marker, reason, true) {
+		return
+	}
+	s.rec.log.Info("reconcile: upstream confirmed the work without a usage figure; the estimate is the final charge",
+		"entry", e.id, "request_id", row.p.RequestID, "plugin", e.pluginKey, "ref_id", e.refID,
+		"charged", row.totalCost.String(), "note", reason)
+}
+
+// keepEstimate is the one write that turns a reserved row into a final billed
+// one WITHOUT moving money: the reservation is the charge. abandon and
+// settleEstimate both end here; marker is what they disagree about. It
+// reports whether the row was closed by this call (false when another actor
+// got there first, or on a database error, both already logged as needed).
 //
 // THE STATUS MUST BE 'billed'. Not 'failed', which reads more naturally and
 // is a duplicate charge:
@@ -682,13 +746,10 @@ func (s *Service) refundFailed(ctx context.Context, e *settleEntry, row *reserve
 // the amount a second time - silently, minutes later, on a row nobody is
 // looking at. 'billed' is not a euphemism here, it is the truth: an amount
 // was computed, charged, and is final.
-func (s *Service) abandon(ctx context.Context, e *settleEntry, row *reservedRowState, reason string) {
+func (s *Service) keepEstimate(ctx context.Context, e *settleEntry, row *reservedRowState, entryState string,
+	marker map[string]string, note string, countAttempt bool) bool {
 	p := row.p
-	marker, _ := json.Marshal(map[string]string{
-		core.AnomalyReconcile:         core.ReconcileAbandoned,
-		core.AnomalyReconcileAttempts: strconv.Itoa(e.attempts),
-		core.AnomalyReconcileError:    trunc(reason, 500),
-	})
+	mk, _ := json.Marshal(marker)
 	ctx, cancel := bookkeeping(ctx)
 	defer cancel()
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
@@ -701,11 +762,15 @@ func (s *Service) abandon(ctx context.Context, e *settleEntry, row *reservedRowS
 		}
 		if _, err := tx.Exec(ctx, `
 			UPDATE usage_logs SET billing_status = 'billed', anomalies = anomalies || $2::jsonb
-			WHERE id = $1`, e.usageLogID, marker); err != nil {
+			WHERE id = $1`, e.usageLogID, mk); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `UPDATE pending_settlements SET state = $2, last_error = $3 WHERE id = $1`,
-			e.id, SettleStateAbandoned, trunc(reason, 2000)); err != nil {
+		attempts := "attempts"
+		if countAttempt {
+			attempts = "attempts + 1"
+		}
+		if _, err := tx.Exec(ctx, `UPDATE pending_settlements SET state = $2, last_error = $3, attempts = `+attempts+`
+			WHERE id = $1`, e.id, entryState, trunc(note, 2000)); err != nil {
 			return err
 		}
 		if s.events != nil {
@@ -714,15 +779,14 @@ func (s *Service) abandon(ctx context.Context, e *settleEntry, row *reservedRowS
 		return nil
 	})
 	if errors.Is(err, errNotPending) {
-		return
+		return false
 	}
 	if err != nil {
-		s.rec.log.Error("reconcile: abandon", "entry", e.id, "request_id", p.RequestID, "err", err)
-		return
+		s.rec.log.Error("reconcile: close at the estimate", "entry", e.id, "request_id", p.RequestID,
+			"state", entryState, "err", err)
+		return false
 	}
-	s.rec.log.Error("reconcile: gave up on a pre-charged entry; the estimate is now the final charge",
-		"entry", e.id, "request_id", p.RequestID, "plugin", e.pluginKey, "ref_id", e.refID,
-		"attempts", e.attempts, "charged", row.totalCost.String(), "reason", reason)
+	return true
 }
 
 // ---------------------------------------------------------------- helpers

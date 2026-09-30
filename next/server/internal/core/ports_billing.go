@@ -140,18 +140,26 @@ type UsageRecord struct {
 	// The settler then charges the estimate, marks the row "reserved" and
 	// registers it in pending_settlements for the reconcile loop. nil is the
 	// ordinary case: the usage is final when the response ends.
-	Reservation    *UsageReservation
-	Billable       bool              // false for endpoint billing=free or zero usage
-	Price          *PriceRule        // nil when not billable or free policy
-	PriceParams    map[string]string // body path -> raw JSON value captured at request time
-	PriceHeaders   map[string]string // lower-case header -> value captured at request time
-	RateMultiplier decimal.Decimal
-	LatencyMs      int
-	FirstTokenMs   int
-	ClientIP       string
-	UserAgent      string
-	NodeID         string
-	CreatedAt      time.Time // request start; time functions evaluate against it
+	Reservation *UsageReservation
+	// ReservationDropped says why a Reservation the plugin DID return is not
+	// on this record: the gateway found the record unbillable (the endpoint
+	// bills "free", no price, an empty estimate on a per-token price) and
+	// cleared it. Empty in the ordinary case. It is recorded in
+	// usage_logs.anomalies because the alternative - a job that was really
+	// started upstream, never pre-charged, never reconciled, and nothing
+	// anywhere saying so - is the silent kind of wrong (CONTRACTS §25.5).
+	ReservationDropped string
+	Billable           bool              // false for endpoint billing=free or zero usage
+	Price              *PriceRule        // nil when not billable or free policy
+	PriceParams        map[string]string // body path -> raw JSON value captured at request time
+	PriceHeaders       map[string]string // lower-case header -> value captured at request time
+	RateMultiplier     decimal.Decimal
+	LatencyMs          int
+	FirstTokenMs       int
+	ClientIP           string
+	UserAgent          string
+	NodeID             string
+	CreatedAt          time.Time // request start; time functions evaluate against it
 }
 
 // Response shape mismatches recorded in usage_logs.anomalies
@@ -206,17 +214,40 @@ const (
 	// AnomalyUsageExtract: one of the UsageExtract* values above.
 	AnomalyUsageExtract = "usage_extract"
 	// AnomalyReconcile: the outcome of the reconcile loop for a pre-charged
-	// row, "abandoned" being the one that matters (the reservation became the
-	// final charge because the upstream never gave an answer).
+	// row when that outcome left the ESTIMATE as the charge: ReconcileAbandoned
+	// (the upstream never gave an answer) or ReconcileEstimated (the upstream
+	// confirmed the work but reported no usage). A row whose real usage came
+	// back carries no marker. Both values mean "the tokens and the cost of
+	// this row are a plugin's estimate", which is what a revenue summary has
+	// to be able to count; they differ in why, which is what an operator
+	// looking at the row has to be able to tell.
 	AnomalyReconcile = "reconcile"
-	// AnomalyReconcileAttempts / AnomalyReconcileError describe that give-up.
+	// AnomalyReconcileAttempts / AnomalyReconcileError describe that give-up
+	// (or, for ReconcileEstimated, the plugin's note on why no usage exists).
 	AnomalyReconcileAttempts = "reconcile_attempts"
 	AnomalyReconcileError    = "reconcile_error"
+	// AnomalyReservation: ReservationDropped - the plugin returned a
+	// Reservation the gateway could not honour (UsageRecord.ReservationDropped
+	// says why, under AnomalyReservationError). The request was billed as an
+	// ordinary one, i.e. for a free endpoint not at all.
+	AnomalyReservation      = "reservation"
+	AnomalyReservationError = "reservation_error"
 )
 
-// ReconcileAbandoned is the AnomalyReconcile value for a pre-charged row the
-// core stopped trying to reconcile.
-const ReconcileAbandoned = "abandoned"
+// Values of AnomalyReconcile.
+const (
+	// ReconcileAbandoned: the core stopped trying to reconcile (deadline or
+	// attempts). The estimate stands as the final charge.
+	ReconcileAbandoned = "abandoned"
+	// ReconcileEstimated: the plugin answered SETTLED_ESTIMATE - the work
+	// finished, the upstream reported no usage. The estimate stands as the
+	// final charge.
+	ReconcileEstimated = "estimated"
+)
+
+// ReservationDropped is the AnomalyReservation value for a reservation the
+// gateway received and cleared.
+const ReservationDropped = "dropped"
 
 // Anomalies collects the observability markers of a record for
 // usage_logs.anomalies; nil when there is nothing unusual to say, which is
@@ -234,6 +265,10 @@ func (r *UsageRecord) Anomalies() map[string]string {
 	}
 	put(AnomalyResponseMismatch, r.ResponseMismatch)
 	put(AnomalyUsageExtract, r.UsageExtract)
+	if r.ReservationDropped != "" {
+		put(AnomalyReservation, ReservationDropped)
+		put(AnomalyReservationError, r.ReservationDropped)
+	}
 	return m
 }
 

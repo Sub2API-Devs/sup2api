@@ -2,10 +2,12 @@ package gateway
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
@@ -63,6 +65,89 @@ func TestReservationReachesTheRecord(t *testing.T) {
 	}
 	if rec.UsageExtract != core.UsageExtractPlugin {
 		t.Fatalf("usage extract %q", rec.UsageExtract)
+	}
+	if rec.ReservationDropped != "" || rec.Anomalies()[core.AnomalyReservation] != "" {
+		t.Fatalf("an honoured reservation was marked dropped: %q", rec.ReservationDropped)
+	}
+}
+
+// ---------------------------------------------------------------- dropped, loudly
+
+// billing "free" and a Reservation cannot both be meant (CONTRACTS §25.5 gap
+// 3). The settler decides by Billable first, so a reservation on a free
+// endpoint used to vanish without a trace: no pre-charge, no entry, no
+// reconcile, for a job the upstream really started. The manifest check now
+// refuses the combination at install time; a package installed before it did
+// gets this: the reservation is still dropped - a free endpoint has no price
+// to charge an estimate with - but the log names the plugin and the endpoint,
+// and the record carries the marker into usage_logs.anomalies.
+func TestReservationOnAFreeEndpointIsDroppedLoudly(t *testing.T) {
+	buf := captureWarnings(t)
+	e, pp := usageEnvEP(t, pluginUsageRules(), func(ep *manifest.Endpoint) { ep.Billing = "free" })
+	pp.extract = func(context.Context, *pluginv1.ExtractUsageRequest) (*pluginv1.UsageReport, error) {
+		return reserve("task-free", 1200, 300, 120, 3600), nil
+	}
+	if res := e.do("/pu/v1/chat", body(testModel, false), nil); res.status != 200 {
+		t.Fatalf("status %d %s", res.status, res.body)
+	}
+	rec := e.record()
+	if rec.Reservation != nil || rec.Billable || rec.Price != nil {
+		t.Fatalf("a free endpoint carried a reservation: %+v billable=%v", rec.Reservation, rec.Billable)
+	}
+	if rec.ReservationDropped == "" || !strings.Contains(rec.ReservationDropped, "free") {
+		t.Fatalf("reason = %q", rec.ReservationDropped)
+	}
+	an := rec.Anomalies()
+	if an[core.AnomalyReservation] != core.ReservationDropped || an[core.AnomalyReservationError] != rec.ReservationDropped {
+		t.Fatalf("anomalies = %v", an)
+	}
+	// The warning names what an operator needs to find the manifest to fix:
+	// the plugin, the endpoint, the request and the task.
+	s := buf.String()
+	for _, want := range []string{"DROPPED", "plugin=pu", "endpoint=/pu/v1/chat", "request_id=" + rec.RequestID,
+		"ref_id=task-free", "billing=free"} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("warning lacks %q:\n%s", want, s)
+		}
+	}
+}
+
+// The other way a reservation is unbillable: an estimate with no tokens and
+// no facts on a per-token price. That is a plugin bug (an estimate of nothing
+// pre-charges nothing), and it is reported the same way rather than passed
+// through as a normal request.
+func TestReservationWithAnEmptyEstimateIsDroppedLoudly(t *testing.T) {
+	buf := captureWarnings(t)
+	e, pp := usageEnv(t, pluginUsageRules())
+	pp.extract = func(context.Context, *pluginv1.ExtractUsageRequest) (*pluginv1.UsageReport, error) {
+		return &pluginv1.UsageReport{Reserve: &pluginv1.Reservation{RefId: "task-empty", DeadlineSec: 3600}}, nil
+	}
+	if res := e.do("/pu/v1/chat", body(testModel, false), nil); res.status != 200 {
+		t.Fatalf("status %d %s", res.status, res.body)
+	}
+	rec := e.record()
+	if rec.Reservation != nil || rec.Billable {
+		t.Fatalf("an empty estimate was accepted: %+v", rec.Reservation)
+	}
+	if !strings.Contains(rec.ReservationDropped, "no tokens and no facts") {
+		t.Fatalf("reason = %q", rec.ReservationDropped)
+	}
+	if !strings.Contains(buf.String(), "ref_id=task-empty") || !strings.Contains(buf.String(), "plugin=pu") {
+		t.Fatalf("warning:\n%s", buf.String())
+	}
+}
+
+// And the ordinary record - no reservation, nothing dropped - carries no
+// marker at all: the column stays "{}" for every request that is not unusual.
+func TestNoReservationLeavesNoMarker(t *testing.T) {
+	e, pp := usageEnvEP(t, pluginUsageRules(), func(ep *manifest.Endpoint) { ep.Billing = "free" })
+	pp.extract = func(context.Context, *pluginv1.ExtractUsageRequest) (*pluginv1.UsageReport, error) {
+		return report(3, 4), nil
+	}
+	e.do("/pu/v1/chat", body(testModel, false), nil)
+	rec := e.record()
+	if rec.ReservationDropped != "" || rec.Anomalies()[core.AnomalyReservation] != "" {
+		t.Fatalf("marker on a record with nothing to drop: %+v", rec.Anomalies())
 	}
 }
 

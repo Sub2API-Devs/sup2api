@@ -417,7 +417,7 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 		}
 		return res
 	}
-	return c.forward(ctx, rt, pacct, resp)
+	return c.forward(ctx, rt, pacct, resp, upBody)
 }
 
 func canceledErr() *gwError {

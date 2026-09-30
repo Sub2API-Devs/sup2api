@@ -448,6 +448,218 @@ func TestReconcilePendingReschedules(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------- settled at the estimate
+
+// SETTLED_ESTIMATE (CONTRACTS §25.5 gap 2): the upstream confirms the work
+// but reports no usage. The estimate stands as the charge - the same ledger
+// outcome as abandon - and the row says it was THIS reason and not that one:
+// an operator reading "abandoned" would look for an upstream that never
+// answered, and there was none.
+func TestReconcileSettledEstimateKeepsTheChargeAndSaysWhy(t *testing.T) {
+	rf := reconcileFixture(t)
+	ctx := context.Background()
+	before := rf.balance()
+	rf.svc.process(ctx, []*core.UsageRecord{rf.reserved("req-est", "task-est", core.UsageTokens{Input: 2000, Output: 200})})
+	charged := rf.cost("req-est")
+	afterReserve := rf.balance()
+	if charged.Sign() <= 0 || afterReserve.Equal(before) {
+		t.Fatalf("the reservation was not charged: %s", charged)
+	}
+
+	rf.plugin.parse = func(*pluginv1.ParseReconcileResponseRequest) (*pluginv1.ReconcileResult, error) {
+		return &pluginv1.ReconcileResult{
+			State:  pluginv1.ReconcileResult_SETTLED_ESTIMATE,
+			Reason: "status document carries no usage",
+			// Sent by mistake: ignored, and the estimate still stands.
+			Tokens: &pluginv1.UsageTokens{InputTokens: 1},
+		}, nil
+	}
+	rf.due()
+	if n := rf.svc.ReconcileDue(ctx); n != 1 {
+		t.Fatalf("claimed %d entries", n)
+	}
+	if rf.plugin.builds.Load() != 1 || rf.plugin.parses.Load() != 1 {
+		t.Fatalf("builds=%d parses=%d", rf.plugin.builds.Load(), rf.plugin.parses.Load())
+	}
+	// 1. Billed, at the estimate, with the estimate's tokens - not repriced
+	//    at the zero a SETTLED answer would have carried, not refunded.
+	if s := rf.scalar(`SELECT billing_status || ' ' || input_tokens::text || '/' || output_tokens::text || ' ' || success::text
+		FROM usage_logs WHERE request_id = 'req-est'`); s != "billed 2000/200 true" {
+		t.Fatalf("row = %q", s)
+	}
+	if got := rf.cost("req-est"); !got.Equal(charged) {
+		t.Fatalf("cost changed from %s to %s", charged, got)
+	}
+	if got := rf.balance(); !got.Equal(afterReserve) {
+		t.Fatalf("balance changed from %s to %s", afterReserve, got)
+	}
+	if s := rf.scalar(`SELECT count(*) FROM balance_ledger WHERE ref_id = 'req-est'`); s != "1" {
+		t.Fatalf("ledger rows for the request = %s, want only the reservation", s)
+	}
+	// 2. The row says which of the two reasons kept the estimate.
+	an := rf.scalar(`SELECT anomalies::text FROM usage_logs WHERE request_id = 'req-est'`)
+	var m map[string]string
+	if err := json.Unmarshal([]byte(an), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m[core.AnomalyReconcile] != core.ReconcileEstimated || m[core.AnomalyReconcile] == core.ReconcileAbandoned ||
+		m[core.AnomalyReconcileError] != "status document carries no usage" || m[core.AnomalyReconcileAttempts] != "1" {
+		t.Fatalf("anomalies = %s", an)
+	}
+	// 3. The entry is closed under its own state, and counts the check.
+	if s := rf.scalar(`SELECT state || ' ' || attempts::text FROM pending_settlements`); s != SettleStateEstimated+" 1" {
+		t.Fatalf("entry = %q", s)
+	}
+	if n := rf.svc.ReconcileDue(ctx); n != 0 {
+		t.Fatalf("a closed entry was claimed again: %d", n)
+	}
+	// 4. Like abandon, it is out of the settlement retry loop's index.
+	if n, err := rf.svc.RetryPending(ctx); err != nil || n != 0 {
+		t.Fatalf("RetryPending saw %d rows (err %v); that is a second charge", n, err)
+	}
+	if s := rf.scalar(`SELECT count(*) FROM usage_logs WHERE billing_status IN ('pending','failed')`); s != "0" {
+		t.Fatalf("%s rows are in the retry index", s)
+	}
+	// 5. The manual way out applies to it: an estimate is an estimate.
+	id := rf.scalar(`SELECT id::text FROM usage_logs WHERE request_id = 'req-est'`)
+	rf.post(rf.user, "/usage/"+id+"/refund", 200)
+	if got := rf.balance(); !got.Equal(before) {
+		t.Fatalf("balance after the manual refund %s, want %s", got, before)
+	}
+	rf.post(rf.user, "/usage/"+id+"/refund", 409)
+}
+
+// The answer SETTLED_ESTIMATE exists to replace: SETTLED with nothing in it.
+// That reprices the row at zero and refunds the whole reservation - a
+// delivered job for free - and nothing on the row says an estimate was ever
+// involved. Pinned so the contrast stays visible.
+func TestReconcileSettledWithZeroTokensRefundsEverything(t *testing.T) {
+	rf := reconcileFixture(t)
+	ctx := context.Background()
+	before := rf.balance()
+	rf.svc.process(ctx, []*core.UsageRecord{rf.reserved("req-zero", "task-zero", core.UsageTokens{Input: 2000, Output: 200})})
+	rf.plugin.parse = func(*pluginv1.ParseReconcileResponseRequest) (*pluginv1.ReconcileResult, error) {
+		return &pluginv1.ReconcileResult{State: pluginv1.ReconcileResult_SETTLED}, nil
+	}
+	rf.due()
+	rf.svc.ReconcileDue(ctx)
+	if got := rf.balance(); !got.Equal(before) {
+		t.Fatalf("balance %s, want the whole reservation back at %s", got, before)
+	}
+	if s := rf.scalar(`SELECT total_cost::text || ' ' || (anomalies ? 'reconcile')::text FROM usage_logs WHERE request_id = 'req-zero'`); s != "0.00000000 false" {
+		t.Fatalf("row = %q", s)
+	}
+}
+
+// The summary is where the estimates have to show (CONTRACTS §25.4, the
+// first of the two open items): a row kept at its estimate - abandoned or
+// estimated - is counted, and so is what it contributes to the revenue, next
+// to a count of every row with any marker at all.
+func TestSummaryCountsAnomaliesAndEstimatedRevenue(t *testing.T) {
+	rf := reconcileFixture(t)
+	ctx := context.Background()
+	rf.svc.process(ctx, []*core.UsageRecord{
+		rf.reserved("req-s-est", "task-s-est", core.UsageTokens{Input: 2000, Output: 200}),
+		rf.reserved("req-s-aband", "task-s-aband", core.UsageTokens{Input: 3000, Output: 300}),
+		rf.reserved("req-s-real", "task-s-real", core.UsageTokens{Input: 1000, Output: 100}),
+		rf.record("req-s-plain", true),
+	})
+	// A marker that is not an estimate: counted as an anomaly, not as revenue
+	// that is a guess. And a plugin that could not answer at all (fallback)
+	// counts too - while "the plugin answered" (usage_extract=plugin, on the
+	// three reserved rows above) is a fact, not an anomaly, and must not.
+	mism := rf.record("req-s-mism", true)
+	mism.ResponseMismatch = core.ResponseMismatchSSENotDeclared
+	fb := rf.record("req-s-fallback", true)
+	fb.UsageExtract = core.UsageExtractFallback
+	rf.svc.process(ctx, []*core.UsageRecord{mism, fb})
+
+	answers := map[string]*pluginv1.ReconcileResult{
+		"task-s-est":  {State: pluginv1.ReconcileResult_SETTLED_ESTIMATE},
+		"task-s-real": {State: pluginv1.ReconcileResult_SETTLED, Tokens: &pluginv1.UsageTokens{InputTokens: 1000, OutputTokens: 100}},
+	}
+	rf.plugin.parse = func(in *pluginv1.ParseReconcileResponseRequest) (*pluginv1.ReconcileResult, error) {
+		return answers[in.GetEntry().GetRefId()], nil
+	}
+	if _, err := rf.db.Pool.Exec(ctx, `UPDATE pending_settlements SET deadline_at = now() - interval '1 minute' WHERE ref_id = 'task-s-aband'`); err != nil {
+		t.Fatal(err)
+	}
+	rf.due()
+	if n := rf.svc.ReconcileDue(ctx); n != 3 {
+		t.Fatalf("claimed %d entries", n)
+	}
+	estCost := rf.cost("req-s-est").Add(rf.cost("req-s-aband"))
+	if estCost.Sign() <= 0 {
+		t.Fatalf("estimated rows carry no cost: %s", estCost)
+	}
+
+	rows := rf.get(rf.user, "/usage/summary?group_by=model&from=2026-09-01T00:00:00Z", 200)["data"].([]any)
+	var vid map[string]any
+	for _, r := range rows {
+		if m := r.(map[string]any); m["key"] == "claude-sonnet-x" {
+			vid = m
+		}
+	}
+	if vid == nil {
+		t.Fatalf("no summary row: %v", rows)
+	}
+	// Six rows: two kept at an estimate, one reconciled to a real figure
+	// (its only marker says the plugin answered - not an anomaly), one plain,
+	// one with a shape mismatch, one billed from the fallback. Four carry a
+	// marker that counts.
+	if vid["requests"].(float64) != 6 || vid["estimated"].(float64) != 2 || vid["anomalies"].(float64) != 4 {
+		t.Fatalf("summary row: %v", vid)
+	}
+	if got, _ := decimal.NewFromString(vid["estimated_cost"].(string)); !got.Equal(estCost) {
+		t.Fatalf("estimated_cost = %v, want %s", vid["estimated_cost"], estCost)
+	}
+	total, _ := decimal.NewFromString(vid["total_cost"].(string))
+	if !total.GreaterThan(estCost) {
+		t.Fatalf("total_cost %s should exceed the estimated share %s", total, estCost)
+	}
+	// After a manual refund the row is free: it leaves the estimate count and
+	// its cost leaves the estimated share.
+	id := rf.scalar(`SELECT id::text FROM usage_logs WHERE request_id = 'req-s-aband'`)
+	rf.post(rf.user, "/usage/"+id+"/refund", 200)
+	rows = rf.get(rf.user, "/usage/summary?group_by=model&from=2026-09-01T00:00:00Z", 200)["data"].([]any)
+	for _, r := range rows {
+		if m := r.(map[string]any); m["key"] == "claude-sonnet-x" {
+			if m["estimated"].(float64) != 1 || m["anomalies"].(float64) != 4 {
+				t.Fatalf("summary after refund: %v", m)
+			}
+			if got, _ := decimal.NewFromString(m["estimated_cost"].(string)); !got.Equal(rf.cost("req-s-est")) {
+				t.Fatalf("estimated_cost after refund = %v", m["estimated_cost"])
+			}
+		}
+	}
+}
+
+// A reservation the gateway dropped (CONTRACTS §25.5 gap 3) reaches the
+// database as a marker: billing "free" on a reserving endpoint used to leave
+// no trace at all - no charge, no entry, no row saying a job was started.
+func TestDroppedReservationIsRecordedInAnomalies(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	rec := f.record("req-dropped", false)
+	rec.UsageExtract = core.UsageExtractPlugin
+	rec.ReservationDropped = `endpoint billing is "free"`
+	f.svc.process(ctx, []*core.UsageRecord{rec})
+
+	s := f.scalar(`SELECT billing_status || ' ' || (anomalies->>'reservation') || ' ' || (anomalies->>'reservation_error')
+		FROM usage_logs WHERE request_id = 'req-dropped'`)
+	if s != `free dropped endpoint billing is "free"` {
+		t.Fatalf("row = %q", s)
+	}
+	if n := f.scalar(`SELECT count(*) FROM pending_settlements`); n != "0" {
+		t.Fatalf("pending_settlements rows = %s", n)
+	}
+	// And it is what the summary counts as an anomaly.
+	rows := f.get(f.user, "/usage/summary?group_by=model&from=2026-09-01T00:00:00Z", 200)["data"].([]any)
+	if len(rows) != 1 || rows[0].(map[string]any)["anomalies"].(float64) != 1 || rows[0].(map[string]any)["estimated"].(float64) != 0 {
+		t.Fatalf("summary: %v", rows)
+	}
+}
+
 // ---------------------------------------------------------------- abandon
 
 // The one that has to be right.
@@ -749,6 +961,34 @@ func TestBackoffAndDeadlineClamp(t *testing.T) {
 	// A nonsense ladder falls back to the default rather than to "no delay".
 	if got := (ReconcileSettings{Backoff: "nonsense,3ms"}).resolve(); len(got.backoff) != 5 || got.backoff[0] != 10*time.Second {
 		t.Errorf("fallback ladder = %v", got.backoff)
+	}
+
+	// The default policy is 7 days, not 24 hours (CONTRACTS §25.4, the second
+	// open item): the first real upstream keeps its answers for 7 days and
+	// states so; a 24h cap would have abandoned - and billed at the estimate -
+	// every job that ran past a day. With the default in force a 7 day
+	// statement passes through whole, no opinion gets the 7 days, and longer
+	// is still the policy's call.
+	def := DefaultReconcileSettings().resolve()
+	if DefaultReconcileAgeSec != 7*24*3600 || def.maxAge != 7*24*time.Hour {
+		t.Fatalf("default max age = %s", def.maxAge)
+	}
+	if got := def.clampDeadline(7 * 24 * time.Hour); got != 7*24*time.Hour {
+		t.Errorf("a 7 day deadline under the default = %s", got)
+	}
+	if got := def.clampDeadline(0); got != 7*24*time.Hour {
+		t.Errorf("no opinion under the default = %s", got)
+	}
+	if got := def.clampDeadline(8 * 24 * time.Hour); got != 7*24*time.Hour {
+		t.Errorf("8 days under the default = %s, want the policy", got)
+	}
+	// An out-of-range stored value resolves to the new default too, and the
+	// default is inside the range the API accepts.
+	if got := (ReconcileSettings{MaxAgeSec: 1}).resolve(); got.maxAge != 7*24*time.Hour {
+		t.Errorf("out-of-range max age resolved to %s", got.maxAge)
+	}
+	if d := time.Duration(DefaultReconcileAgeSec) * time.Second; d < minReconcileAge || d > maxReconcileAge {
+		t.Errorf("the default %s is outside [%s, %s]", d, minReconcileAge, maxReconcileAge)
 	}
 }
 

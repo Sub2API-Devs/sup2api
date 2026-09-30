@@ -24,7 +24,16 @@ const settingsKeyReconcile = "reconcile"
 
 // ReconcileSettings is that row.
 type ReconcileSettings struct {
-	// MaxAgeSec caps Reservation.deadline_sec. Default 24h.
+	// MaxAgeSec caps Reservation.deadline_sec. Default 7 days.
+	//
+	// It was 24 hours until 2026-09-30, which would have quietly mis-billed
+	// the first real user: an Ark video task is queryable for 7 days and the
+	// plugin says so (deadline_sec = 7d), the cap clamped that to 24h, and
+	// every task still running after a day was abandoned - "abandoned" being
+	// the outcome that keeps the estimate as the charge. A default that turns
+	// a reconcilable job into an estimated bill is a product decision hiding
+	// in a constant; 7 days is what the first upstream needs, and the ceiling
+	// (maxReconcileAge, 30 days) leaves room for the next one.
 	MaxAgeSec int `json:"max_reconcile_age_sec"`
 	// Backoff is the delay ladder between checks, comma separated Go
 	// durations. The last entry repeats for every further attempt.
@@ -35,9 +44,12 @@ type ReconcileSettings struct {
 	MaxAttempts int `json:"max_reconcile_attempts"`
 }
 
+// DefaultReconcileAgeSec is the default of max_reconcile_age_sec: 7 days.
+const DefaultReconcileAgeSec = 7 * 24 * 3600
+
 // DefaultReconcileSettings are used when the row is absent.
 func DefaultReconcileSettings() ReconcileSettings {
-	return ReconcileSettings{MaxAgeSec: 86400, Backoff: "10s,30s,1m,5m,15m", MaxAttempts: 100}
+	return ReconcileSettings{MaxAgeSec: DefaultReconcileAgeSec, Backoff: "10s,30s,1m,5m,15m", MaxAttempts: 100}
 }
 
 // Bounds. minReconcileDelay keeps a plugin (or an administrator) from turning

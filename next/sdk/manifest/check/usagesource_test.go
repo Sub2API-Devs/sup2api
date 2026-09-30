@@ -145,6 +145,76 @@ func TestStreamingEndpointWithPluginUsageNeedsNoSSERules(t *testing.T) {
 	}
 }
 
+// endpoint.usageRequestFields (CONTRACTS §25.5 gap 1): the request body paths
+// the host hands to ExtractUsage, and nothing else of the request. The list
+// is bounded, each path must read one value, and it means nothing outside
+// the plugin source.
+func TestUsageRequestFields(t *testing.T) {
+	p := pluginSourcePlatform()
+	p.Endpoints[0].UsageRequestFields = []string{"resolution", "duration", "content.0.type", "options.ratio"}
+	if got := platformCodes(p); len(got) > 0 {
+		t.Fatalf("request fields rejected: %v", got)
+	}
+	cases := []struct {
+		name        string
+		mut         func(e *manifest.Endpoint)
+		field, code string
+	}{
+		// Rejected, not ignored, outside the plugin source: the author
+		// believes a plugin will see these and none is ever asked.
+		{"without the plugin source", func(e *manifest.Endpoint) {
+			e.UsageSource = ""
+			e.UsageStreamEvents, e.UsageMaxBytes = nil, 0
+			e.UsageRequestFields = []string{"resolution"}
+		}, "endpoints[0].usageRequestFields", "unsupported"},
+		{"too many", func(e *manifest.Endpoint) {
+			for i := range MaxUsageRequestFields + 1 {
+				e.UsageRequestFields = append(e.UsageRequestFields, "f"+string(rune('a'+i)))
+			}
+		}, "endpoints[0].usageRequestFields", "too_many"},
+		{"empty path", func(e *manifest.Endpoint) { e.UsageRequestFields = []string{" "} },
+			"endpoints[0].usageRequestFields[0]", "required"},
+		// A typo does not fail at runtime, it reads nothing - and an estimate
+		// made from a missing "resolution" is the cheapest tier every time.
+		{"path that reads nothing", func(e *manifest.Endpoint) { e.UsageRequestFields = []string{"content.#(type==image)"} },
+			"endpoints[0].usageRequestFields[0]", "invalid_path"},
+		{"untrimmed path", func(e *manifest.Endpoint) { e.UsageRequestFields = []string{" resolution"} },
+			"endpoints[0].usageRequestFields[0]", "invalid_path"},
+		{"duplicate", func(e *manifest.Endpoint) { e.UsageRequestFields = []string{"resolution", "resolution"} },
+			"endpoints[0].usageRequestFields[1]", "duplicate"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := pluginSourcePlatform()
+			tc.mut(&p.Endpoints[0])
+			got := platformCodes(p)
+			if got[tc.field] != tc.code {
+				t.Fatalf("codes = %v, want %s=%s", got, tc.field, tc.code)
+			}
+		})
+	}
+}
+
+// billing "free" with usageSource "plugin" (CONTRACTS §25.5 gap 3): the host
+// never prices a free endpoint, so whatever the plugin reports - and any
+// Reservation it returns - is dropped before the settler sees it. That used
+// to happen silently; it is now refused at install time. The rule reads the
+// endpoint only, so it holds on the CheckPlatform path as well.
+func TestPluginUsageSourceRefusesFreeBilling(t *testing.T) {
+	p := pluginSourcePlatform()
+	p.Endpoints[0].Billing = "free"
+	if got := platformCodes(p); got["endpoints[0].billing"] != "conflict" {
+		t.Fatalf("codes = %v", got)
+	}
+	// The declarative source is what a free endpoint should use, and it is
+	// accepted exactly as before.
+	p = validPlatform()
+	p.Endpoints[0].Billing = "free"
+	if got := platformCodes(p); len(got) > 0 {
+		t.Fatalf("free endpoint on the declarative rules rejected: %v", got)
+	}
+}
+
 // pluginSourceManifest is a manifest declaring pluginSourcePlatform, with the
 // permissions a platform needs (CONTRACTS §13) but WITHOUT
 // platform.adapter.v1 - the case §25.1 requires to be rejected.

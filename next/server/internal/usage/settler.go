@@ -42,6 +42,11 @@ const (
 	// SettleStateAbandoned: the core stopped asking (attempts or deadline).
 	// The reservation stands as the final charge.
 	SettleStateAbandoned = "abandoned"
+	// SettleStateEstimated: the plugin answered SETTLED_ESTIMATE - the work
+	// finished and the upstream reported no usage. The reservation stands as
+	// the final charge, for the opposite reason to abandoned; the manual
+	// refund and re-check apply to both (settlements_api.go).
+	SettleStateEstimated = "estimated"
 )
 
 // TxLedger is the transactional ledger used for settlement. The billing

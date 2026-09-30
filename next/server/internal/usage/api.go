@@ -2,6 +2,7 @@ package usage
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -320,6 +321,23 @@ type SummaryRow struct {
 	CacheReadTokens     int64           `json:"cache_read_tokens"`
 	CacheCreationTokens int64           `json:"cache_creation_tokens"`
 	TotalCost           decimal.Decimal `json:"total_cost"`
+	// Anomalies counts the rows of the group that carry a marker in
+	// usage_logs.anomalies (a response shape the endpoint did not declare, a
+	// plugin that could not report usage, a dropped reservation, a row billed
+	// at an estimate) - except usage_extract "plugin", which only says the
+	// plugin answered and is on every request of a plugin-metered endpoint.
+	// The per-row markers were never silent; the aggregate was (CONTRACTS
+	// §25.4), and a summary is where an operator looks first.
+	Anomalies int64 `json:"anomalies"`
+	// Estimated counts the rows whose tokens and cost are a plugin's
+	// ESTIMATE, not a confirmed figure: a pre-charged row the core gave up
+	// reconciling (reconcile=abandoned) or one the upstream confirmed without
+	// a usage figure (reconcile=estimated). EstimatedCost is what those rows
+	// contribute to TotalCost - the part of the revenue that is a guess.
+	// Without these two, a platform with many abandoned jobs reports revenue
+	// of which a share is invented and nothing in the summary says so.
+	Estimated     int64           `json:"estimated"`
+	EstimatedCost decimal.Decimal `json:"estimated_cost"`
 }
 
 // GET /usage/summary?from=&to=&group_by=day|model|user (default: day, last
@@ -363,12 +381,27 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 	if extra == "" {
 		extra = `, ''`
 	}
+	// The estimate markers are matched by value, not by key: 'reconcile' also
+	// takes "retrying" (the row is reserved again, not final) and "refunded"
+	// (the row is free), neither of which is an estimate in the revenue.
+	f.args = append(f.args, core.ReconcileAbandoned, core.ReconcileEstimated, core.UsageExtractPlugin)
+	est := fmt.Sprintf(`u.anomalies->>'%s' IN ($%d, $%d)`, core.AnomalyReconcile, len(f.args)-2, len(f.args)-1)
+	// One value in the column is a fact, not an anomaly: usage_extract
+	// "plugin" says the plugin answered, which on a plugin-metered platform is
+	// every request. Counting it would make this column read "everything is
+	// wrong" exactly where nothing is; "fallback" (the plugin did not answer)
+	// still counts.
+	anomalous := fmt.Sprintf(`(u.anomalies - '%s') <> '{}'::jsonb OR (u.anomalies ? '%s' AND u.anomalies->>'%s' <> $%d)`,
+		core.AnomalyUsageExtract, core.AnomalyUsageExtract, core.AnomalyUsageExtract, len(f.args))
 	rows, err := s.db.Pool.Query(ctx, `
 		SELECT `+key+` AS k`+extra+`, count(*), count(*) FILTER (WHERE u.success),
 		       COALESCE(sum(u.input_tokens), 0), COALESCE(sum(u.output_tokens), 0),
 		       COALESCE(sum(u.cache_read_tokens), 0),
 		       COALESCE(sum(u.cache_creation_tokens + u.cache_creation_1h_tokens), 0),
-		       COALESCE(sum(u.total_cost), 0)
+		       COALESCE(sum(u.total_cost), 0),
+		       count(*) FILTER (WHERE `+anomalous+`),
+		       count(*) FILTER (WHERE `+est+`),
+		       COALESCE(sum(u.total_cost) FILTER (WHERE `+est+`), 0)
 		FROM usage_logs u`+join+f.sql()+` GROUP BY k ORDER BY k`, f.args...)
 	if err != nil {
 		httpapi.Fail(c, err)
@@ -379,7 +412,7 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 	for rows.Next() {
 		var r SummaryRow
 		if err := rows.Scan(&r.Key, &r.UserEmail, &r.Requests, &r.Success, &r.InputTokens, &r.OutputTokens,
-			&r.CacheReadTokens, &r.CacheCreationTokens, &r.TotalCost); err != nil {
+			&r.CacheReadTokens, &r.CacheCreationTokens, &r.TotalCost, &r.Anomalies, &r.Estimated, &r.EstimatedCost); err != nil {
 			httpapi.Fail(c, err)
 			return
 		}

@@ -135,6 +135,18 @@ const (
 	// whole reservation and records the row as free with reason as its
 	// error type.
 	ReconcileResult_FAILED ReconcileResult_State = 2
+	// Finished, but the upstream reported NO usage for it - a status document
+	// that says "succeeded" and nothing else. The estimate the plugin gave in
+	// its Reservation stands as the final usage and the final charge: the
+	// host closes the row as billed without moving any money, and marks it
+	// so an operator can tell it from a row whose usage was confirmed.
+	//
+	// This is what to answer instead of SETTLED with zero tokens, which would
+	// reprice the row at zero and REFUND the whole reservation - the work was
+	// done, so that is a free job, and nothing in the record would say so.
+	// tokens and facts are ignored in this state: a plugin that has some of
+	// the real figures answers SETTLED with the ones it has.
+	ReconcileResult_SETTLED_ESTIMATE ReconcileResult_State = 3
 )
 
 // Enum value maps for ReconcileResult_State.
@@ -143,11 +155,13 @@ var (
 		0: "PENDING",
 		1: "SETTLED",
 		2: "FAILED",
+		3: "SETTLED_ESTIMATE",
 	}
 	ReconcileResult_State_value = map[string]int32{
-		"PENDING": 0,
-		"SETTLED": 1,
-		"FAILED":  2,
+		"PENDING":          0,
+		"SETTLED":          1,
+		"FAILED":           2,
+		"SETTLED_ESTIMATE": 3,
 	}
 )
 
@@ -1137,7 +1151,25 @@ type ExtractUsageRequest struct {
 	// (the event count cap or usage.maxBytes was reached), so the plugin knows
 	// it is looking at a prefix. Never set for a non-streaming response: an
 	// oversized body is not handed over at all.
-	Truncated     bool `protobuf:"varint,7,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	Truncated bool `protobuf:"varint,7,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	// Values of the REQUEST fields the endpoint listed in usageRequestFields,
+	// JSON-encoded and keyed by path - the same shape as ResolveModelRequest
+	// .fields and BuildUpstreamRequest.fields, read from the body that went
+	// upstream (after conversion, before the plugin's own patches). It exists
+	// for endpoints that only START work: their response says {"id": ...} and
+	// nothing about the size of the job, while the request carries the
+	// resolution and the duration an estimate has to be made from.
+	//
+	// Never the whole body, and never a large part of it: only declared paths
+	// travel, a value over the per-value cap is left out, and once the total
+	// budget is spent the remaining declared paths are left out too (both caps
+	// are constants of the SDK, manifest/check). A left-out path is named in
+	// fields_omitted so the plugin can tell "the client did not send it" from
+	// "the host would not carry it" - without that a whitelisted field that
+	// happens to be huge would read as absent and be estimated as the default.
+	// Empty for endpoints that declare no usageRequestFields.
+	Fields        map[string]string `protobuf:"bytes,8,rep,name=fields,proto3" json:"fields,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	FieldsOmitted []string          `protobuf:"bytes,9,rep,name=fields_omitted,json=fieldsOmitted,proto3" json:"fields_omitted,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1219,6 +1251,20 @@ func (x *ExtractUsageRequest) GetTruncated() bool {
 		return x.Truncated
 	}
 	return false
+}
+
+func (x *ExtractUsageRequest) GetFields() map[string]string {
+	if x != nil {
+		return x.Fields
+	}
+	return nil
+}
+
+func (x *ExtractUsageRequest) GetFieldsOmitted() []string {
+	if x != nil {
+		return x.FieldsOmitted
+	}
+	return nil
 }
 
 // UsageReport is what the plugin states about the upstream response. Every
@@ -1748,12 +1794,15 @@ type ReconcileResult struct {
 	// PENDING only: when to ask again. 0 leaves it to the host's backoff; the
 	// host clamps it to the backoff ceiling either way.
 	NextCheckAfterSec int32 `protobuf:"varint,2,opt,name=next_check_after_sec,json=nextCheckAfterSec,proto3" json:"next_check_after_sec,omitempty"`
-	// SETTLED only: the real usage, replacing the estimate.
+	// SETTLED only: the real usage, replacing the estimate. Ignored in every
+	// other state, including SETTLED_ESTIMATE.
 	Tokens *UsageTokens `protobuf:"bytes,3,opt,name=tokens,proto3" json:"tokens,omitempty"`
 	// SETTLED only: the real metering facts, replacing the estimated ones.
 	Facts map[string]string `protobuf:"bytes,4,rep,name=facts,proto3" json:"facts,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// FAILED only: why, recorded as usage_logs.error_type (truncated to 50
-	// bytes) and error_message.
+	// bytes) and error_message. SETTLED_ESTIMATE may use it too, as a short
+	// note on why no usage was available (recorded with the marker, not as an
+	// error: the row stays a success).
 	Reason        string `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1926,7 +1975,7 @@ const file_sub2api_plugin_v1_platform_proto_rawDesc = "" +
 	"\x06stream\x18\x02 \x01(\bR\x06stream\"5\n" +
 	"\vStreamEvent\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
-	"\x04data\x18\x02 \x01(\fR\x04data\"\x8c\x03\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\"\xba\x04\n" +
 	"\x13ExtractUsageRequest\x122\n" +
 	"\x04meta\x18\x01 \x01(\v2\x1e.sub2api.plugin.v1.RequestMetaR\x04meta\x124\n" +
 	"\aaccount\x18\x02 \x01(\v2\x1a.sub2api.plugin.v1.AccountR\aaccount\x12\x16\n" +
@@ -1934,8 +1983,13 @@ const file_sub2api_plugin_v1_platform_proto_rawDesc = "" +
 	"\aheaders\x18\x04 \x03(\v23.sub2api.plugin.v1.ExtractUsageRequest.HeadersEntryR\aheaders\x12\x12\n" +
 	"\x04body\x18\x05 \x01(\fR\x04body\x126\n" +
 	"\x06events\x18\x06 \x03(\v2\x1e.sub2api.plugin.v1.StreamEventR\x06events\x12\x1c\n" +
-	"\ttruncated\x18\a \x01(\bR\ttruncated\x1a:\n" +
+	"\ttruncated\x18\a \x01(\bR\ttruncated\x12J\n" +
+	"\x06fields\x18\b \x03(\v22.sub2api.plugin.v1.ExtractUsageRequest.FieldsEntryR\x06fields\x12%\n" +
+	"\x0efields_omitted\x18\t \x03(\tR\rfieldsOmitted\x1a:\n" +
 	"\fHeadersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a9\n" +
+	"\vFieldsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x86\x03\n" +
 	"\vUsageReport\x126\n" +
@@ -1989,7 +2043,7 @@ const file_sub2api_plugin_v1_platform_proto_rawDesc = "" +
 	"\x0ftransport_error\x18\x06 \x01(\tR\x0etransportError\x1a:\n" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x80\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x96\x03\n" +
 	"\x0fReconcileResult\x12>\n" +
 	"\x05state\x18\x01 \x01(\x0e2(.sub2api.plugin.v1.ReconcileResult.StateR\x05state\x12/\n" +
 	"\x14next_check_after_sec\x18\x02 \x01(\x05R\x11nextCheckAfterSec\x126\n" +
@@ -1999,12 +2053,13 @@ const file_sub2api_plugin_v1_platform_proto_rawDesc = "" +
 	"\n" +
 	"FactsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"-\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"C\n" +
 	"\x05State\x12\v\n" +
 	"\aPENDING\x10\x00\x12\v\n" +
 	"\aSETTLED\x10\x01\x12\n" +
 	"\n" +
-	"\x06FAILED\x10\x022\xe9\a\n" +
+	"\x06FAILED\x10\x02\x12\x14\n" +
+	"\x10SETTLED_ESTIMATE\x10\x032\xe9\a\n" +
 	"\x0fPlatformService\x12t\n" +
 	"\x13ValidateCredentials\x12-.sub2api.plugin.v1.ValidateCredentialsRequest\x1a..sub2api.plugin.v1.ValidateCredentialsResponse\x12w\n" +
 	"\x14BuildUpstreamRequest\x12..sub2api.plugin.v1.BuildUpstreamRequestRequest\x1a/.sub2api.plugin.v1.BuildUpstreamRequestResponse\x12b\n" +
@@ -2029,7 +2084,7 @@ func file_sub2api_plugin_v1_platform_proto_rawDescGZIP() []byte {
 }
 
 var file_sub2api_plugin_v1_platform_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_sub2api_plugin_v1_platform_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
+var file_sub2api_plugin_v1_platform_proto_msgTypes = make([]protoimpl.MessageInfo, 36)
 var file_sub2api_plugin_v1_platform_proto_goTypes = []any{
 	(ClassifyErrorResponse_Action)(0),        // 0: sub2api.plugin.v1.ClassifyErrorResponse.Action
 	(ClassifyErrorResponse_AccountEffect)(0), // 1: sub2api.plugin.v1.ClassifyErrorResponse.AccountEffect
@@ -2064,78 +2119,80 @@ var file_sub2api_plugin_v1_platform_proto_goTypes = []any{
 	nil,                                      // 30: sub2api.plugin.v1.ResolveModelRequest.FieldsEntry
 	nil,                                      // 31: sub2api.plugin.v1.ResolveModelRequest.InboundHeadersEntry
 	nil,                                      // 32: sub2api.plugin.v1.ExtractUsageRequest.HeadersEntry
-	nil,                                      // 33: sub2api.plugin.v1.UsageReport.FactsEntry
-	nil,                                      // 34: sub2api.plugin.v1.Reservation.FactsEntry
-	nil,                                      // 35: sub2api.plugin.v1.BuildReconcileRequestResponse.HeadersEntry
-	nil,                                      // 36: sub2api.plugin.v1.ParseReconcileResponseRequest.HeadersEntry
-	nil,                                      // 37: sub2api.plugin.v1.ReconcileResult.FactsEntry
-	(*FieldError)(nil),                       // 38: sub2api.plugin.v1.FieldError
-	(*RequestMeta)(nil),                      // 39: sub2api.plugin.v1.RequestMeta
-	(*Account)(nil),                          // 40: sub2api.plugin.v1.Account
-	(*BodyPatch)(nil),                        // 41: sub2api.plugin.v1.BodyPatch
-	(*UsageTokens)(nil),                      // 42: sub2api.plugin.v1.UsageTokens
+	nil,                                      // 33: sub2api.plugin.v1.ExtractUsageRequest.FieldsEntry
+	nil,                                      // 34: sub2api.plugin.v1.UsageReport.FactsEntry
+	nil,                                      // 35: sub2api.plugin.v1.Reservation.FactsEntry
+	nil,                                      // 36: sub2api.plugin.v1.BuildReconcileRequestResponse.HeadersEntry
+	nil,                                      // 37: sub2api.plugin.v1.ParseReconcileResponseRequest.HeadersEntry
+	nil,                                      // 38: sub2api.plugin.v1.ReconcileResult.FactsEntry
+	(*FieldError)(nil),                       // 39: sub2api.plugin.v1.FieldError
+	(*RequestMeta)(nil),                      // 40: sub2api.plugin.v1.RequestMeta
+	(*Account)(nil),                          // 41: sub2api.plugin.v1.Account
+	(*BodyPatch)(nil),                        // 42: sub2api.plugin.v1.BodyPatch
+	(*UsageTokens)(nil),                      // 43: sub2api.plugin.v1.UsageTokens
 }
 var file_sub2api_plugin_v1_platform_proto_depIdxs = []int32{
-	38, // 0: sub2api.plugin.v1.ValidateCredentialsResponse.errors:type_name -> sub2api.plugin.v1.FieldError
-	39, // 1: sub2api.plugin.v1.BuildUpstreamRequestRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
-	40, // 2: sub2api.plugin.v1.BuildUpstreamRequestRequest.account:type_name -> sub2api.plugin.v1.Account
+	39, // 0: sub2api.plugin.v1.ValidateCredentialsResponse.errors:type_name -> sub2api.plugin.v1.FieldError
+	40, // 1: sub2api.plugin.v1.BuildUpstreamRequestRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	41, // 2: sub2api.plugin.v1.BuildUpstreamRequestRequest.account:type_name -> sub2api.plugin.v1.Account
 	24, // 3: sub2api.plugin.v1.BuildUpstreamRequestRequest.fields:type_name -> sub2api.plugin.v1.BuildUpstreamRequestRequest.FieldsEntry
 	25, // 4: sub2api.plugin.v1.BuildUpstreamRequestRequest.inbound_headers:type_name -> sub2api.plugin.v1.BuildUpstreamRequestRequest.InboundHeadersEntry
 	26, // 5: sub2api.plugin.v1.BuildUpstreamRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildUpstreamRequestResponse.HeadersEntry
-	41, // 6: sub2api.plugin.v1.BuildUpstreamRequestResponse.patches:type_name -> sub2api.plugin.v1.BodyPatch
-	39, // 7: sub2api.plugin.v1.ClassifyErrorRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
-	40, // 8: sub2api.plugin.v1.ClassifyErrorRequest.account:type_name -> sub2api.plugin.v1.Account
+	42, // 6: sub2api.plugin.v1.BuildUpstreamRequestResponse.patches:type_name -> sub2api.plugin.v1.BodyPatch
+	40, // 7: sub2api.plugin.v1.ClassifyErrorRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	41, // 8: sub2api.plugin.v1.ClassifyErrorRequest.account:type_name -> sub2api.plugin.v1.Account
 	27, // 9: sub2api.plugin.v1.ClassifyErrorRequest.headers:type_name -> sub2api.plugin.v1.ClassifyErrorRequest.HeadersEntry
 	0,  // 10: sub2api.plugin.v1.ClassifyErrorResponse.action:type_name -> sub2api.plugin.v1.ClassifyErrorResponse.Action
 	1,  // 11: sub2api.plugin.v1.ClassifyErrorResponse.account_effect:type_name -> sub2api.plugin.v1.ClassifyErrorResponse.AccountEffect
-	40, // 12: sub2api.plugin.v1.BuildTestRequestRequest.account:type_name -> sub2api.plugin.v1.Account
+	41, // 12: sub2api.plugin.v1.BuildTestRequestRequest.account:type_name -> sub2api.plugin.v1.Account
 	28, // 13: sub2api.plugin.v1.BuildTestRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildTestRequestResponse.HeadersEntry
-	40, // 14: sub2api.plugin.v1.BuildModelsRequestRequest.account:type_name -> sub2api.plugin.v1.Account
+	41, // 14: sub2api.plugin.v1.BuildModelsRequestRequest.account:type_name -> sub2api.plugin.v1.Account
 	29, // 15: sub2api.plugin.v1.BuildModelsRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildModelsRequestResponse.HeadersEntry
-	39, // 16: sub2api.plugin.v1.ResolveModelRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	40, // 16: sub2api.plugin.v1.ResolveModelRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
 	30, // 17: sub2api.plugin.v1.ResolveModelRequest.fields:type_name -> sub2api.plugin.v1.ResolveModelRequest.FieldsEntry
 	31, // 18: sub2api.plugin.v1.ResolveModelRequest.inbound_headers:type_name -> sub2api.plugin.v1.ResolveModelRequest.InboundHeadersEntry
-	39, // 19: sub2api.plugin.v1.ExtractUsageRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
-	40, // 20: sub2api.plugin.v1.ExtractUsageRequest.account:type_name -> sub2api.plugin.v1.Account
+	40, // 19: sub2api.plugin.v1.ExtractUsageRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	41, // 20: sub2api.plugin.v1.ExtractUsageRequest.account:type_name -> sub2api.plugin.v1.Account
 	32, // 21: sub2api.plugin.v1.ExtractUsageRequest.headers:type_name -> sub2api.plugin.v1.ExtractUsageRequest.HeadersEntry
 	15, // 22: sub2api.plugin.v1.ExtractUsageRequest.events:type_name -> sub2api.plugin.v1.StreamEvent
-	42, // 23: sub2api.plugin.v1.UsageReport.tokens:type_name -> sub2api.plugin.v1.UsageTokens
-	33, // 24: sub2api.plugin.v1.UsageReport.facts:type_name -> sub2api.plugin.v1.UsageReport.FactsEntry
-	18, // 25: sub2api.plugin.v1.UsageReport.reserve:type_name -> sub2api.plugin.v1.Reservation
-	42, // 26: sub2api.plugin.v1.Reservation.tokens:type_name -> sub2api.plugin.v1.UsageTokens
-	34, // 27: sub2api.plugin.v1.Reservation.facts:type_name -> sub2api.plugin.v1.Reservation.FactsEntry
-	19, // 28: sub2api.plugin.v1.BuildReconcileRequestRequest.entry:type_name -> sub2api.plugin.v1.ReconcileEntry
-	40, // 29: sub2api.plugin.v1.BuildReconcileRequestRequest.account:type_name -> sub2api.plugin.v1.Account
-	35, // 30: sub2api.plugin.v1.BuildReconcileRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildReconcileRequestResponse.HeadersEntry
-	19, // 31: sub2api.plugin.v1.ParseReconcileResponseRequest.entry:type_name -> sub2api.plugin.v1.ReconcileEntry
-	40, // 32: sub2api.plugin.v1.ParseReconcileResponseRequest.account:type_name -> sub2api.plugin.v1.Account
-	36, // 33: sub2api.plugin.v1.ParseReconcileResponseRequest.headers:type_name -> sub2api.plugin.v1.ParseReconcileResponseRequest.HeadersEntry
-	2,  // 34: sub2api.plugin.v1.ReconcileResult.state:type_name -> sub2api.plugin.v1.ReconcileResult.State
-	42, // 35: sub2api.plugin.v1.ReconcileResult.tokens:type_name -> sub2api.plugin.v1.UsageTokens
-	37, // 36: sub2api.plugin.v1.ReconcileResult.facts:type_name -> sub2api.plugin.v1.ReconcileResult.FactsEntry
-	3,  // 37: sub2api.plugin.v1.PlatformService.ValidateCredentials:input_type -> sub2api.plugin.v1.ValidateCredentialsRequest
-	5,  // 38: sub2api.plugin.v1.PlatformService.BuildUpstreamRequest:input_type -> sub2api.plugin.v1.BuildUpstreamRequestRequest
-	7,  // 39: sub2api.plugin.v1.PlatformService.ClassifyError:input_type -> sub2api.plugin.v1.ClassifyErrorRequest
-	9,  // 40: sub2api.plugin.v1.PlatformService.BuildTestRequest:input_type -> sub2api.plugin.v1.BuildTestRequestRequest
-	11, // 41: sub2api.plugin.v1.PlatformService.BuildModelsRequest:input_type -> sub2api.plugin.v1.BuildModelsRequestRequest
-	13, // 42: sub2api.plugin.v1.PlatformService.ResolveModel:input_type -> sub2api.plugin.v1.ResolveModelRequest
-	16, // 43: sub2api.plugin.v1.PlatformService.ExtractUsage:input_type -> sub2api.plugin.v1.ExtractUsageRequest
-	20, // 44: sub2api.plugin.v1.PlatformService.BuildReconcileRequest:input_type -> sub2api.plugin.v1.BuildReconcileRequestRequest
-	22, // 45: sub2api.plugin.v1.PlatformService.ParseReconcileResponse:input_type -> sub2api.plugin.v1.ParseReconcileResponseRequest
-	4,  // 46: sub2api.plugin.v1.PlatformService.ValidateCredentials:output_type -> sub2api.plugin.v1.ValidateCredentialsResponse
-	6,  // 47: sub2api.plugin.v1.PlatformService.BuildUpstreamRequest:output_type -> sub2api.plugin.v1.BuildUpstreamRequestResponse
-	8,  // 48: sub2api.plugin.v1.PlatformService.ClassifyError:output_type -> sub2api.plugin.v1.ClassifyErrorResponse
-	10, // 49: sub2api.plugin.v1.PlatformService.BuildTestRequest:output_type -> sub2api.plugin.v1.BuildTestRequestResponse
-	12, // 50: sub2api.plugin.v1.PlatformService.BuildModelsRequest:output_type -> sub2api.plugin.v1.BuildModelsRequestResponse
-	14, // 51: sub2api.plugin.v1.PlatformService.ResolveModel:output_type -> sub2api.plugin.v1.ResolveModelResponse
-	17, // 52: sub2api.plugin.v1.PlatformService.ExtractUsage:output_type -> sub2api.plugin.v1.UsageReport
-	21, // 53: sub2api.plugin.v1.PlatformService.BuildReconcileRequest:output_type -> sub2api.plugin.v1.BuildReconcileRequestResponse
-	23, // 54: sub2api.plugin.v1.PlatformService.ParseReconcileResponse:output_type -> sub2api.plugin.v1.ReconcileResult
-	46, // [46:55] is the sub-list for method output_type
-	37, // [37:46] is the sub-list for method input_type
-	37, // [37:37] is the sub-list for extension type_name
-	37, // [37:37] is the sub-list for extension extendee
-	0,  // [0:37] is the sub-list for field type_name
+	33, // 23: sub2api.plugin.v1.ExtractUsageRequest.fields:type_name -> sub2api.plugin.v1.ExtractUsageRequest.FieldsEntry
+	43, // 24: sub2api.plugin.v1.UsageReport.tokens:type_name -> sub2api.plugin.v1.UsageTokens
+	34, // 25: sub2api.plugin.v1.UsageReport.facts:type_name -> sub2api.plugin.v1.UsageReport.FactsEntry
+	18, // 26: sub2api.plugin.v1.UsageReport.reserve:type_name -> sub2api.plugin.v1.Reservation
+	43, // 27: sub2api.plugin.v1.Reservation.tokens:type_name -> sub2api.plugin.v1.UsageTokens
+	35, // 28: sub2api.plugin.v1.Reservation.facts:type_name -> sub2api.plugin.v1.Reservation.FactsEntry
+	19, // 29: sub2api.plugin.v1.BuildReconcileRequestRequest.entry:type_name -> sub2api.plugin.v1.ReconcileEntry
+	41, // 30: sub2api.plugin.v1.BuildReconcileRequestRequest.account:type_name -> sub2api.plugin.v1.Account
+	36, // 31: sub2api.plugin.v1.BuildReconcileRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildReconcileRequestResponse.HeadersEntry
+	19, // 32: sub2api.plugin.v1.ParseReconcileResponseRequest.entry:type_name -> sub2api.plugin.v1.ReconcileEntry
+	41, // 33: sub2api.plugin.v1.ParseReconcileResponseRequest.account:type_name -> sub2api.plugin.v1.Account
+	37, // 34: sub2api.plugin.v1.ParseReconcileResponseRequest.headers:type_name -> sub2api.plugin.v1.ParseReconcileResponseRequest.HeadersEntry
+	2,  // 35: sub2api.plugin.v1.ReconcileResult.state:type_name -> sub2api.plugin.v1.ReconcileResult.State
+	43, // 36: sub2api.plugin.v1.ReconcileResult.tokens:type_name -> sub2api.plugin.v1.UsageTokens
+	38, // 37: sub2api.plugin.v1.ReconcileResult.facts:type_name -> sub2api.plugin.v1.ReconcileResult.FactsEntry
+	3,  // 38: sub2api.plugin.v1.PlatformService.ValidateCredentials:input_type -> sub2api.plugin.v1.ValidateCredentialsRequest
+	5,  // 39: sub2api.plugin.v1.PlatformService.BuildUpstreamRequest:input_type -> sub2api.plugin.v1.BuildUpstreamRequestRequest
+	7,  // 40: sub2api.plugin.v1.PlatformService.ClassifyError:input_type -> sub2api.plugin.v1.ClassifyErrorRequest
+	9,  // 41: sub2api.plugin.v1.PlatformService.BuildTestRequest:input_type -> sub2api.plugin.v1.BuildTestRequestRequest
+	11, // 42: sub2api.plugin.v1.PlatformService.BuildModelsRequest:input_type -> sub2api.plugin.v1.BuildModelsRequestRequest
+	13, // 43: sub2api.plugin.v1.PlatformService.ResolveModel:input_type -> sub2api.plugin.v1.ResolveModelRequest
+	16, // 44: sub2api.plugin.v1.PlatformService.ExtractUsage:input_type -> sub2api.plugin.v1.ExtractUsageRequest
+	20, // 45: sub2api.plugin.v1.PlatformService.BuildReconcileRequest:input_type -> sub2api.plugin.v1.BuildReconcileRequestRequest
+	22, // 46: sub2api.plugin.v1.PlatformService.ParseReconcileResponse:input_type -> sub2api.plugin.v1.ParseReconcileResponseRequest
+	4,  // 47: sub2api.plugin.v1.PlatformService.ValidateCredentials:output_type -> sub2api.plugin.v1.ValidateCredentialsResponse
+	6,  // 48: sub2api.plugin.v1.PlatformService.BuildUpstreamRequest:output_type -> sub2api.plugin.v1.BuildUpstreamRequestResponse
+	8,  // 49: sub2api.plugin.v1.PlatformService.ClassifyError:output_type -> sub2api.plugin.v1.ClassifyErrorResponse
+	10, // 50: sub2api.plugin.v1.PlatformService.BuildTestRequest:output_type -> sub2api.plugin.v1.BuildTestRequestResponse
+	12, // 51: sub2api.plugin.v1.PlatformService.BuildModelsRequest:output_type -> sub2api.plugin.v1.BuildModelsRequestResponse
+	14, // 52: sub2api.plugin.v1.PlatformService.ResolveModel:output_type -> sub2api.plugin.v1.ResolveModelResponse
+	17, // 53: sub2api.plugin.v1.PlatformService.ExtractUsage:output_type -> sub2api.plugin.v1.UsageReport
+	21, // 54: sub2api.plugin.v1.PlatformService.BuildReconcileRequest:output_type -> sub2api.plugin.v1.BuildReconcileRequestResponse
+	23, // 55: sub2api.plugin.v1.PlatformService.ParseReconcileResponse:output_type -> sub2api.plugin.v1.ReconcileResult
+	47, // [47:56] is the sub-list for method output_type
+	38, // [38:47] is the sub-list for method input_type
+	38, // [38:38] is the sub-list for extension type_name
+	38, // [38:38] is the sub-list for extension extendee
+	0,  // [0:38] is the sub-list for field type_name
 }
 
 func init() { file_sub2api_plugin_v1_platform_proto_init() }
@@ -2150,7 +2207,7 @@ func file_sub2api_plugin_v1_platform_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sub2api_plugin_v1_platform_proto_rawDesc), len(file_sub2api_plugin_v1_platform_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   35,
+			NumMessages:   36,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

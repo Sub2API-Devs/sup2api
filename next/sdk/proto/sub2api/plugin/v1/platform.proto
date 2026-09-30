@@ -65,6 +65,9 @@ service PlatformService {
   //     usage.streamEvents, in arrival order, bounded by a host event count
   //     cap and by usage.maxBytes. Collection stops at the cap and
   //     `truncated` says so; the host never buffers the whole stream.
+  //   - either way, the request fields the endpoint listed in
+  //     usageRequestFields (`fields`), for endpoints whose response does not
+  //     say how big the work is. Never the whole request body.
   //
   // Optional: answer UNIMPLEMENTED when no endpoint needs it. Failure is
   // NEVER fatal to the request - the response already reached the client. On
@@ -281,6 +284,24 @@ message ExtractUsageRequest {
   // it is looking at a prefix. Never set for a non-streaming response: an
   // oversized body is not handed over at all.
   bool truncated = 7;
+  // Values of the REQUEST fields the endpoint listed in usageRequestFields,
+  // JSON-encoded and keyed by path - the same shape as ResolveModelRequest
+  // .fields and BuildUpstreamRequest.fields, read from the body that went
+  // upstream (after conversion, before the plugin's own patches). It exists
+  // for endpoints that only START work: their response says {"id": ...} and
+  // nothing about the size of the job, while the request carries the
+  // resolution and the duration an estimate has to be made from.
+  //
+  // Never the whole body, and never a large part of it: only declared paths
+  // travel, a value over the per-value cap is left out, and once the total
+  // budget is spent the remaining declared paths are left out too (both caps
+  // are constants of the SDK, manifest/check). A left-out path is named in
+  // fields_omitted so the plugin can tell "the client did not send it" from
+  // "the host would not carry it" - without that a whitelisted field that
+  // happens to be huge would read as absent and be estimated as the default.
+  // Empty for endpoints that declare no usageRequestFields.
+  map<string, string> fields = 8;
+  repeated string fields_omitted = 9;
 }
 
 // UsageReport is what the plugin states about the upstream response. Every
@@ -418,16 +439,31 @@ message ReconcileResult {
     // whole reservation and records the row as free with reason as its
     // error type.
     FAILED = 2;
+    // Finished, but the upstream reported NO usage for it - a status document
+    // that says "succeeded" and nothing else. The estimate the plugin gave in
+    // its Reservation stands as the final usage and the final charge: the
+    // host closes the row as billed without moving any money, and marks it
+    // so an operator can tell it from a row whose usage was confirmed.
+    //
+    // This is what to answer instead of SETTLED with zero tokens, which would
+    // reprice the row at zero and REFUND the whole reservation - the work was
+    // done, so that is a free job, and nothing in the record would say so.
+    // tokens and facts are ignored in this state: a plugin that has some of
+    // the real figures answers SETTLED with the ones it has.
+    SETTLED_ESTIMATE = 3;
   }
   State state = 1;
   // PENDING only: when to ask again. 0 leaves it to the host's backoff; the
   // host clamps it to the backoff ceiling either way.
   int32 next_check_after_sec = 2;
-  // SETTLED only: the real usage, replacing the estimate.
+  // SETTLED only: the real usage, replacing the estimate. Ignored in every
+  // other state, including SETTLED_ESTIMATE.
   UsageTokens tokens = 3;
   // SETTLED only: the real metering facts, replacing the estimated ones.
   map<string, string> facts = 4;
   // FAILED only: why, recorded as usage_logs.error_type (truncated to 50
-  // bytes) and error_message.
+  // bytes) and error_message. SETTLED_ESTIMATE may use it too, as a short
+  // note on why no usage was available (recorded with the marker, not as an
+  // error: the row stays a success).
   string reason = 5;
 }

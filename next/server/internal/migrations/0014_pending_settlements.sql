@@ -27,6 +27,15 @@
 --               ('pending','failed'), so writing 'failed' here would hand the
 --               row back to the settlement retry loop and charge it twice.
 --               usage_logs.anomalies records {"reconcile":"abandoned",...}.
+--   estimated - the plugin answered SETTLED_ESTIMATE: the work finished and
+--               the upstream reported no usage for it, so the reservation is
+--               the final charge. Same ledger outcome and the same 'billed'
+--               rule as abandoned, for the opposite reason - the work is
+--               confirmed, there is simply no figure to replace the estimate
+--               with. usage_logs.anomalies records
+--               {"reconcile":"estimated",...} so the two are told apart.
+--               (Added with CONTRACTS §25.5 gap 2; the column is a plain
+--               varchar with no CHECK, so no schema change was needed.)
 --
 -- An abandoned entry is not the end of the story for a human: the console
 -- offers "reconcile again" and "refund" on it, because the automatic policy

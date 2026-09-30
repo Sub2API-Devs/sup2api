@@ -51,6 +51,18 @@ const (
 	MaxUsageStreamEvents = 8
 	MinUsageMaxBytes     = 1 << 10 // 1 KiB
 	MaxUsageMaxBytes     = 1 << 20 // 1 MiB
+	// MaxUsageRequestFields is how many request body paths an endpoint may
+	// list in usageRequestFields. The list names the few scalars an estimate
+	// is made from; a long one is asking for the request body.
+	MaxUsageRequestFields = 16
+	// MaxUsageRequestFieldBytes caps one value of ExtractUsageRequest.fields
+	// (its raw JSON); MaxUsageRequestFieldsBytes caps all of them together.
+	// The host leaves a value out rather than cutting it - half a JSON value
+	// is not a value - and names the path in fields_omitted. Both are host
+	// constants, not manifest knobs: an author who needs a base64 image in
+	// ExtractUsage is asking for the thing this design does not hand over.
+	MaxUsageRequestFieldBytes  = 4 << 10  // 4 KiB
+	MaxUsageRequestFieldsBytes = 32 << 10 // 32 KiB
 )
 
 // usageEventRe is what an SSE event name may look like. It is the name of an
@@ -102,10 +114,11 @@ func (v *validator) usageRules(field string, u manifest.UsageRules, owner usageO
 	}
 }
 
-// usageSource validates endpoint.usageSource and the two knobs that only mean
-// anything with it, source "plugin".
+// usageSource validates endpoint.usageSource and the three knobs that only
+// mean anything with it, source "plugin": usageStreamEvents, usageMaxBytes
+// and usageRequestFields.
 //
-// Both knobs are rejected outside that source rather than ignored. An
+// All three are rejected outside that source rather than ignored. An
 // endpoint that lists usageStreamEvents while the host reads its usage from
 // the declarative rules is a manifest whose author believes something the
 // host does not do - and the symptom (usage counted from the gjson rules, as
@@ -133,7 +146,36 @@ func (v *validator) usageSource(f string, e manifest.Endpoint) {
 			v.add(f+".usageMaxBytes", "unsupported",
 				"usageMaxBytes is only read when usageSource is %q", manifest.UsageSourcePlugin)
 		}
+		if len(e.UsageRequestFields) > 0 {
+			v.add(f+".usageRequestFields", "unsupported",
+				"usageRequestFields is only read when usageSource is %q; no plugin is asked for the usage otherwise",
+				manifest.UsageSourcePlugin)
+		}
 		return
+	}
+	// billing "free" and a plugin-reported usage cannot both be meant. With
+	// "free" the host never prices this endpoint, so every token, fact and -
+	// the case that hurts - every Reservation the plugin returns is dropped
+	// before it reaches the settler: no pre-charge, no pending_settlements
+	// entry, no reconcile, and until this rule nothing that said so. The
+	// endpoint that only starts a job is exactly the one an author is tempted
+	// to mark free ("the submit itself has no final usage"); the right value
+	// is "usage", the estimate is the charge and the reconcile corrects it.
+	//
+	// What this rule can and cannot see: it cannot know whether the plugin
+	// will return a Reservation - that is a runtime answer - so it refuses
+	// the whole combination, including a free endpoint that only wanted the
+	// plugin's token counts for statistics. That case is deliberately not
+	// carved out: the host would pay one hot-path RPC per request for numbers
+	// it never prices, and an author who really wants it should be told here
+	// rather than discover the silent half later. The runtime keeps its own
+	// guard for packages installed before this rule (gateway warns and marks
+	// the record when a reservation is dropped).
+	if e.Billing == "free" {
+		v.add(f+".billing", "conflict",
+			"billing %q discards everything ExtractUsage reports for this endpoint, including a Reservation "+
+				"(no pre-charge, no reconcile); an endpoint with usageSource %q must bill by usage",
+			e.Billing, manifest.UsageSourcePlugin)
 	}
 	if n := len(e.UsageStreamEvents); n > MaxUsageStreamEvents {
 		v.add(f+".usageStreamEvents", "too_many",
@@ -155,6 +197,34 @@ func (v *validator) usageSource(f string, e manifest.Endpoint) {
 	if e.UsageMaxBytes != 0 && (e.UsageMaxBytes < MinUsageMaxBytes || e.UsageMaxBytes > MaxUsageMaxBytes) {
 		v.add(f+".usageMaxBytes", "out_of_range", "usageMaxBytes must be between %d and %d (0 uses the host default)",
 			MinUsageMaxBytes, MaxUsageMaxBytes)
+	}
+	v.usageRequestFields(f, e)
+}
+
+// usageRequestFields validates endpoint.usageRequestFields: a short list of
+// distinct gjson paths that each read one value. The path syntax is checked
+// the way usage map values are (ValidUsagePath), because the host reads them
+// with the same gjson call and a typo would not fail, it would read nothing -
+// and a plugin estimating a video from a "resolution" it never receives
+// estimates the cheapest tier every time.
+func (v *validator) usageRequestFields(f string, e manifest.Endpoint) {
+	if n := len(e.UsageRequestFields); n > MaxUsageRequestFields {
+		v.add(f+".usageRequestFields", "too_many",
+			"at most %d request fields may be handed to ExtractUsage (declared %d); the request body is never handed over whole",
+			MaxUsageRequestFields, n)
+	}
+	seen := map[string]bool{}
+	for i, p := range e.UsageRequestFields {
+		pf := fmt.Sprintf("%s.usageRequestFields[%d]", f, i)
+		switch {
+		case strings.TrimSpace(p) == "":
+			v.add(pf, "required", "a gjson path is required")
+		case p != strings.TrimSpace(p) || !ValidUsagePath(p):
+			v.add(pf, "invalid_path", "%q is not a gjson path that reads one value", p)
+		case seen[p]:
+			v.add(pf, "duplicate", "request field %q is declared twice", p)
+		}
+		seen[p] = true
 	}
 }
 

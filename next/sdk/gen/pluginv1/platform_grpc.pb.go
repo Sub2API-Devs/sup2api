@@ -93,6 +93,9 @@ type PlatformServiceClient interface {
 	//     usage.streamEvents, in arrival order, bounded by a host event count
 	//     cap and by usage.maxBytes. Collection stops at the cap and
 	//     `truncated` says so; the host never buffers the whole stream.
+	//   - either way, the request fields the endpoint listed in
+	//     usageRequestFields (`fields`), for endpoints whose response does not
+	//     say how big the work is. Never the whole request body.
 	//
 	// Optional: answer UNIMPLEMENTED when no endpoint needs it. Failure is
 	// NEVER fatal to the request - the response already reached the client. On
@@ -294,6 +297,9 @@ type PlatformServiceServer interface {
 	//     usage.streamEvents, in arrival order, bounded by a host event count
 	//     cap and by usage.maxBytes. Collection stops at the cap and
 	//     `truncated` says so; the host never buffers the whole stream.
+	//   - either way, the request fields the endpoint listed in
+	//     usageRequestFields (`fields`), for endpoints whose response does not
+	//     say how big the work is. Never the whole request body.
 	//
 	// Optional: answer UNIMPLEMENTED when no endpoint needs it. Failure is
 	// NEVER fatal to the request - the response already reached the client. On

@@ -12,6 +12,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest/check"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/usagerules"
 )
@@ -182,6 +183,7 @@ func (c *call) extractUsage(ctx context.Context, p *pendingExtract) {
 	rep, err := pb.Client.ExtractUsage(ectx, &pluginv1.ExtractUsageRequest{
 		Meta: p.meta, Account: p.account, Status: int32(p.status), Headers: p.headers,
 		Body: p.cap.body, Events: p.cap.events, Truncated: p.cap.stopped,
+		Fields: p.fields, FieldsOmitted: p.fieldsOmitted,
 	})
 	cancel()
 	if err != nil || rep == nil {
@@ -200,6 +202,13 @@ type pendingExtract struct {
 	account *pluginv1.Account
 	headers map[string]string
 	status  int
+	// fields are the values of the endpoint's usageRequestFields, read out of
+	// the request body at arming time; fieldsOmitted names the declared paths
+	// whose value was there but over a cap. Both nil for endpoints declaring
+	// no request fields. The body itself is NOT kept: this is the whole of
+	// what survives the handler.
+	fields        map[string]string
+	fieldsOmitted []string
 	// accountID is the account that served the request; its rate-limit token
 	// counter is only updated once the real usage is known.
 	accountID int64
@@ -207,8 +216,10 @@ type pendingExtract struct {
 
 // armUsageExtraction records what the plugin call will need, at the end of
 // forwarding. It does not call anything: the call happens in submit, after
-// the handler returned.
-func (c *call) armUsageExtraction(rt *typeRoute, acct *pluginv1.Account, resp *http.Response, cap *usageCapture) {
+// the handler returned. upBody is the request body as it went upstream
+// (converted when the route converts, before the plugin's own patches) - the
+// document BuildUpstreamRequest's fields were read from.
+func (c *call) armUsageExtraction(rt *typeRoute, acct *pluginv1.Account, resp *http.Response, cap *usageCapture, upBody []byte) {
 	if cap == nil || c.rec == nil {
 		return
 	}
@@ -226,8 +237,46 @@ func (c *call) armUsageExtraction(rt *typeRoute, acct *pluginv1.Account, resp *h
 	if pb, ok := c.gen.Platform(rt.platform); ok && pb.Plugin.Key != "" && pb.Plugin.Key == rt.binding.Plugin.Key {
 		small.SettingsJson = acct.GetSettingsJson()
 	}
+	fields, omitted := usageRequestFields(rt.usageRequestFields, upBody)
 	c.usage = &pendingExtract{rt: rt, cap: cap, meta: c.metaFor(rt), account: small,
-		headers: headers, status: resp.StatusCode}
+		headers: headers, status: resp.StatusCode, fields: fields, fieldsOmitted: omitted}
+}
+
+// usageRequestFields reads the declared request paths out of body for
+// ExtractUsageRequest.fields, under the SDK's two caps: a value larger than
+// check.MaxUsageRequestFieldBytes is left out, and so is every value that
+// would take the total past check.MaxUsageRequestFieldsBytes. Left-out paths
+// are returned in omitted, so the plugin can tell them from paths the client
+// did not send. Declared order decides who wins the budget, so the answer is
+// the same on every node.
+//
+// A value is left out rather than cut for the reason a non-streaming body
+// over usage.maxBytes is not handed over: half a JSON value parses into the
+// wrong thing, not into nothing. And the raw JSON comes straight from the
+// client, so it is sanitised the way every other client byte that enters a
+// proto string field is (CONTRACTS §25.1) - readBody already refuses a body
+// with invalid UTF-8, this is the belt to that brace.
+func usageRequestFields(paths []string, body []byte) (fields map[string]string, omitted []string) {
+	if len(paths) == 0 || len(body) == 0 {
+		return nil, nil
+	}
+	budget := check.MaxUsageRequestFieldsBytes
+	for _, p := range paths {
+		raw := getJSON(body, p)
+		if raw == "" {
+			continue
+		}
+		if len(raw) > check.MaxUsageRequestFieldBytes || len(raw) > budget {
+			omitted = append(omitted, p)
+			continue
+		}
+		budget -= len(raw)
+		if fields == nil {
+			fields = make(map[string]string, len(paths))
+		}
+		fields[p] = strings.ToValidUTF8(raw, "")
+	}
+	return fields, omitted
 }
 
 func (c *call) usageFallback(ctx context.Context, rt *typeRoute, why string, err error) {

@@ -157,6 +157,23 @@ type Endpoint struct {
 	// and the total size of the collected stream events. 0 uses the host
 	// default. Only read with UsageSource UsageSourcePlugin.
 	UsageMaxBytes int64 `json:"usageMaxBytes,omitempty"`
+	// UsageRequestFields are request body paths (gjson) whose values the host
+	// hands to ExtractUsage in ExtractUsageRequest.fields - and the only ones,
+	// like Platform.RequestFields for BuildUpstreamRequest. They are for
+	// endpoints that only START work: the response is {"id": ...} and the
+	// request is where the resolution and the duration of the job are, which
+	// is what a pre-charge estimate has to be made from.
+	//
+	// Declared on the endpoint, not reused from the platform's RequestFields,
+	// for two reasons. RequestFields serves BuildUpstreamRequest on every
+	// endpoint and is overridden per account type - by a third plugin, which
+	// must not decide what the platform's plugin sees in ExtractUsage. And the
+	// need is per endpoint: the submit endpoint wants "resolution", nothing
+	// else on the platform does, and only the endpoints that ask pay for it.
+	// Values are capped per field and in total (check.MaxUsageRequestField*);
+	// a request body is never handed over whole. Only read with UsageSource
+	// UsageSourcePlugin.
+	UsageRequestFields []string `json:"usageRequestFields,omitempty"`
 }
 
 // PluginUsage reports whether this endpoint's usage is read by the plugin
