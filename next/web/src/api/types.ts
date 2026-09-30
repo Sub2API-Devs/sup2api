@@ -646,6 +646,12 @@ export interface UIPluginPage {
   submit?: string
   src?: string
   component?: string
+  /**
+   * Query parameter the `source` route honours as a free-text search (mirrors
+   * manifest.Page.Search). A table page renders a search box only when this is
+   * set; the typed text is sent as `?<search>=…`.
+   */
+  search?: string
 }
 
 export interface UIPlugin {

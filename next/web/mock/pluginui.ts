@@ -1,7 +1,7 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join, normalize } from 'node:path'
-import { now, on } from './router'
+import { now, on, paginate } from './router'
 
 // Mock handlers: GET /ui/plugins, plugin-owned routes (/p/<key>/...) and the
 // /plugin-ui/<key>/<hash>/... static files (guard native UI from its dist
@@ -21,6 +21,7 @@ on('GET', '/ui/plugins', () => [
         type: 'table',
         title: { en: 'Model catalog', zh: '模型目录' },
         source: 'GET /models',
+        search: 'q',
         columns: [
           { key: 'id', label: { en: 'Model', zh: '模型' } },
           { key: 'family', label: { en: 'Family', zh: '系列' }, format: 'badge' },
@@ -65,11 +66,27 @@ on('GET', '/ui/plugins', () => [
   }
 ])
 
-on('GET', '/p/anthropic/models', () => [
+// The anthropic model catalog is the mock's declarative table. It declares
+// `search: 'q'` and the route below really honours ?q= and really paginates
+// (it answers with a page envelope), so `npm run dev` exercises both halves of
+// the declaration: the box appears because the page declared a parameter, and
+// DeclarativeTable reads server pagination off the response instead of
+// guessing it from the row count. Giving the demo route only three rows used
+// to hide the bug this replaces - the old heuristic said "client paged" until
+// the data outgrew one page.
+const MOCK_MODELS = [
   { id: 'claude-opus-4-1', family: 'opus', context_window: 200000, input_price: '15', released_at: '2025-08-05T00:00:00Z' },
   { id: 'claude-sonnet-4-5', family: 'sonnet', context_window: 1000000, input_price: '3', released_at: '2025-09-29T00:00:00Z' },
   { id: 'claude-haiku-4-5', family: 'haiku', context_window: 200000, input_price: '1', released_at: '2025-10-15T00:00:00Z' }
-])
+]
+
+on('GET', '/p/anthropic/models', (req) => {
+  const q = String(req.query.q || '')
+    .trim()
+    .toLowerCase()
+  const items = q ? MOCK_MODELS.filter((m) => m.id.toLowerCase().includes(q) || m.family.includes(q)) : MOCK_MODELS
+  return paginate(items, req.query)
+})
 
 let demoSettings: Record<string, unknown> = { endpoint: 'https://demo.example.com', retries: 3, verbose: false }
 on('GET', '/p/demo/settings', () => demoSettings)

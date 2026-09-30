@@ -475,6 +475,24 @@ type Page struct {
 	Submit    string        `json:"submit,omitempty"`
 	Src       string        `json:"src,omitempty"`
 	Component string        `json:"component,omitempty"`
+	// Search names the query parameter the page's Source route honours as a
+	// free-text search, e.g. "q". The host renders a search box on a table
+	// page only when it is set, and sends the typed text as
+	// "?<Search>=<text>" (resetting to page 1). Leaving it out means "this
+	// route cannot search": no box is rendered.
+	//
+	// It is a single parameter name, not a list, because it describes the one
+	// control the host has - one text box over one route. A list would let a
+	// manifest declare a filter set the renderer has no way to draw, which is
+	// the same "declared and nobody honours it" shape this field was added to
+	// close: before it existed the box was always drawn and filtered either
+	// the rows already on screen or nothing at all, depending on how much
+	// data there happened to be. A second parameter is not blocked by this
+	// choice - per-field filters need a label, a type and, for enums, the
+	// options, so they are a different field with a different shape
+	// (filters[]) rather than another string in this one, and adding them
+	// leaves "search" meaning exactly what it means now.
+	Search string `json:"search,omitempty"`
 }
 
 type Column struct {

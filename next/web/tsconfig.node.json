@@ -10,7 +10,8 @@
     "noEmit": true,
     "skipLibCheck": true,
     "isolatedModules": true,
+    "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["vite.config.ts", "mock/**/*.ts"]
+  "include": ["vite.config.ts", "mock/**/*.ts", "scripts/**/*.ts", "packages/ui/src/icons.ts"]
 }

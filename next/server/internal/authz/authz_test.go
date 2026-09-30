@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest/check"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
@@ -529,5 +530,24 @@ func TestOwnershipCatalog(t *testing.T) {
 	set := core.PermissionSet{Keys: map[string]struct{}{"proxy:own:manage": {}}}
 	if !hasAny(set, []string{"proxy:read", "proxy:own:read", "proxy:own:manage"}) || hasAny(set, []string{"proxy:read"}) {
 		t.Fatal("hasAny")
+	}
+}
+
+// The core sidebar addresses icons by the same names a manifest does, but from
+// Go string literals that nothing validated. A wrong name there fails exactly
+// as silently as it used to in a manifest (CONTRACTS §26.8), and the icon set
+// is now readable from Go, so hold the core's own menus to it too - including
+// the "puzzle" fallback pluginMenus() uses for a menu with no icon.
+func TestCoreMenuIconsExist(t *testing.T) {
+	t.Parallel()
+	for _, sec := range coreMenus {
+		for _, it := range sec.items {
+			if !check.KnownIcon(it.icon) {
+				t.Errorf("core menu %q uses icon %q, which is not in %s", it.id, it.icon, check.IconSource())
+			}
+		}
+	}
+	if !check.KnownIcon("puzzle") {
+		t.Error(`the fallback icon "puzzle" is not in the icon set`)
 	}
 }

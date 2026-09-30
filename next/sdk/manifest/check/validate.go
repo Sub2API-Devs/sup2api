@@ -1134,6 +1134,7 @@ func (v *validator) ui() {
 		if _, ok := u.Pages[mn.Page]; !ok {
 			v.add(f+".page", "unknown", "page %q is not declared in ui.pages", mn.Page)
 		}
+		v.menuIcon(f+".icon", mn.Icon)
 		if mn.Permission != "" && !v.userPerm(mn.Permission) {
 			v.add(f+".permission", "unknown", "permission %q is not declared in userPermissions", mn.Permission)
 		}
@@ -1153,9 +1154,24 @@ func (v *validator) ui() {
 		case "table":
 			if pg.Source == "" {
 				v.add(f+".source", "required", "table pages require source")
+			} else {
+				v.pageRouteRef(f+".source", pg.Source, "GET")
 			}
 		case "form":
 			v.needFile(f+".schema", pg.Schema)
+			if pg.Source != "" {
+				// Optional on a form: it pre-fills the fields.
+				v.pageRouteRef(f+".source", pg.Source, "GET")
+			}
+			// Without submit the console's Save button does nothing and says
+			// nothing (DeclarativeForm returns early when the reference does
+			// not parse), so a form page without it is a page that cannot be
+			// used, not a read-only one.
+			if pg.Submit == "" {
+				v.add(f+".submit", "required", "form pages require submit (the route the form posts to)")
+			} else {
+				v.pageRouteRef(f+".submit", pg.Submit, "POST")
+			}
 		case "iframe":
 			v.needPerm(f, "ui.iframe", "iframe pages")
 			v.needFile(f+".src", pg.Src)
@@ -1170,6 +1186,7 @@ func (v *validator) ui() {
 		default:
 			v.add(f+".type", "invalid", "page type must be table, form, iframe or native")
 		}
+		v.pageSearch(f+".search", pg)
 	}
 	for i, s := range u.Slots {
 		f := fmt.Sprintf("ui.slots[%d]", i)

@@ -67,6 +67,18 @@ export interface PageInfo {
 export interface ListResult<T> {
   items: T[]
   page: PageInfo
+  /**
+   * True when the response body carried its own `page` object, i.e. the route
+   * really paginates and `page`/`page_size` mean something to it. False when
+   * `page` below was synthesised from the returned array.
+   *
+   * Callers that need to know cannot recover this from `page` alone: a
+   * synthesised page is indistinguishable from a real last-and-only page, and
+   * comparing `page.total > items.length` answers "is there more than one
+   * page", not "does the server paginate" — the two differ for every route
+   * whose data happens to fit in one page today.
+   */
+  paged: boolean
 }
 
 export type Query = Record<string, string | number | boolean | null | undefined | Array<string | number>>
@@ -435,8 +447,10 @@ export async function request<T = any>(method: string, path: string, opts: Reque
 export async function requestList<T = any>(path: string, query?: Query, opts: RequestOptions = {}): Promise<ListResult<T>> {
   const json = await requestRaw('GET', path, { ...opts, query })
   const items: T[] = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : []
-  const page: PageInfo = json?.page || { page: 1, page_size: items.length, total: items.length }
-  return { items, page }
+  const envelope = json?.page
+  const paged = !!envelope && typeof envelope === 'object' && !Array.isArray(envelope)
+  const page: PageInfo = paged ? envelope : { page: 1, page_size: items.length, total: items.length }
+  return { items, page, paged }
 }
 
 export interface ApiClient {
