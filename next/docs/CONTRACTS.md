@@ -215,7 +215,7 @@
 - 市场源 `url` 可以指向 `index.json`，也可以是以 `/` 结尾的目录（自动补 `index.json`）
 - 插件详情中的钩子统计来自 `core.HookStatsSource`（G），手动执行任务通过 `core.JobTrigger`（H）
 - 发布行为（C2）：Disable 立即提交，返回时状态已是 `disabled`；Enable 优先启用 `active_version`，否则取最新的已批准版本；`plugins` 行删除后，各节点在一次对账内停止实例
-- **内置插件**（`plugins.builtin=true`，本期为 anthropic）：随镜像提供（`SUB2API_BUILTIN_PLUGIN_DIR`，默认 `/opt/sub2api/builtin`），核心启动时在一个节点上（锁 `plugins:builtin`）自动上传、授予全部宿主权限（新插件权限授予 `admin` 角色）、首次安装后启用，镜像带新版本时自动升级；管理员禁用后保持禁用。签名密钥由入口脚本通过 `SUB2API_BUILTIN_TRUST_KEY` 始终信任。`DELETE /plugins/:key` 对内置插件返回 403，`details.reason = "builtin"`；列表与详情返回 `builtin` 字段
+- **内置插件**（`plugins.builtin=true`，本期为 anthropic）：随镜像提供（`SUB2API_BUILTIN_PLUGIN_DIR`，默认 `/opt/sub2api/builtin`），核心启动时在一个节点上（锁 `plugins:builtin`）自动上传、授予全部宿主权限（新插件权限授予 `admin` 角色）、首次安装后启用（**只安装**类的除外，见 §26.8），镜像带新版本时自动升级；管理员禁用后保持禁用。签名密钥由入口脚本通过 `SUB2API_BUILTIN_TRUST_KEY` 始终信任。`DELETE /plugins/:key` 对内置插件返回 403，`details.reason = "builtin"`；列表与详情返回 `builtin` 字段
 - 升级包的宿主权限没有新增或扩大时，上传即沿用原授权（版本直接为 `approved`）；否则进入 `awaiting_consent`，旧版本继续运行
 - 插件设置：GET `/plugins/:key/settings` → `{mode, schema, ui_schema, values, page, component, secret_fields}`（`schema` 在非 schema 模式为 `null`）；PUT 请求体 `{values:{...}}`，整体替换（§15.8）
 - `/ui/plugins` 每项另含 `name`、`host_ui_compat`
@@ -1793,3 +1793,25 @@ Linux 上 `go test -v ./...`（`next/server`）共 **599 个 `=== RUN`，只有 
 
 - 列的增删一律新写迁移文件，已应用的一个字节都不能动
 - **迁移文件里不要写「这一列为什么存在」**——那种注释会随语义变化而失效，而且**无法修改**。`0002_video_tasks.sql` 里关于 `est_tokens` 的那段注释就是现存的一处。语义变了只能靠后续迁移的 `COMMENT ON COLUMN` 追平
+
+### 26.8 内建插件分两种：安装并启用 / 只安装（2026-09-30）
+
+**用户裁定**：volcengine 随镜像内建安装，但默认不启用。它在运维加上 Ark 账号（每个部署自己的凭证和 base URL）之前什么都做不了，所以「每个镜像都带、默认启用」没有意义；而「只进市场」又要求每个部署自己去市场装一遍。这推翻了此前 `build-go.sh` 里「volcengine 故意不内置」那条决定（HANDOVER §6 旧行），理由正是它原来的理由：启用它才没有意义，安装它有意义。
+
+**两份列表**（`next/deploy/docker/build-go.sh`，都必须显式列举，不从 `plugins/*` 推导）：
+
+| 列表 | 默认值 | 含义 |
+|---|---|---|
+| `BUILTIN_PLUGINS` | `anthropic openai gemini moderation` | 安装，首次安装即启用 |
+| `BUILTIN_PLUGINS_INSTALL_ONLY` | `volcengine` | 安装，**保持未启用**，由管理员在配置好之后手动启用 |
+
+同一个插件同时出现在两份列表里时构建失败。第二份列表写进内建目录的 **`install-only.txt`**（每行一个 key，`#` 注释、空行、CRLF 都容忍），核心的 `EnsureBuiltin`（`server/internal/plugin/install/builtin.go`）读它。
+
+**语义**（都有测试钉住，`builtin_test.go`）：
+
+- 只安装类与另一类的**唯一区别是首次安装后不调用 `Enable`**。上传、自动授予全部宿主权限（含高危的 `platform.register` / `accounts.credentials`）、`builtin = true`、不能卸载，全部相同。所以管理员启用时**不需要再走授权**。
+- 这份列表**只管从未启用过的插件**（`status = installed` 且 `active_version IS NULL`）。管理员一旦启用或禁用过，以后每次启动都不再改动它；把一个 key 从只安装挪到启用列表，会在下次启动时启用（因为它仍是「从未启用」）。
+- 从未启用过的只安装插件，镜像带来新版本时**不走升级**（没有在跑的版本可升）。管理员启用时 `Rollout.Enable` 取最新一个已批准的版本，所以拿到的就是镜像里的新版本。
+- **`install-only.txt` 读不出来 ≠ 空列表**：读失败时 `EnsureBuiltin` 报错并**一个内建插件都不装**。当成空列表的后果是每个部署都把本该关着的插件启用了。文件**不存在**才等于空（兼容没有这个文件的旧镜像）。注意 `app.go` 调用处丢弃了返回的错误，只有 ERROR 日志可见。
+
+**写测试时踩的一个坑**：插件 key 必须匹配 `^[a-z][a-z0-9_]{1,29}$`，**不能带 `-`**。第一版测试用了 `guard-on`，包装装不上，而 `EnsureBuiltin` 对单个包的失败只记日志、不返回错误，测试里的 logger 又是丢弃型的，于是失败信息成了「核心没启用 guard-on」，看起来像被测逻辑错了。**以后在这里写测试，logger 用 `t.Log` 的 handler，别用 `slog.DiscardHandler`**。

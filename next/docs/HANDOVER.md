@@ -208,7 +208,7 @@ CI 有三个 job：`server (with PostgreSQL and Redis)` / `sdk, tools and e2e` /
 | **未知时长按模型上界预扣** | Ark 2.5 的 `duration: -1` 是官方默认（模型自选），所以不写时长的提交按 30 秒预扣 ≈ 45 元。**接受，靠核对退回** | 用户裁定 2026-09-30，理由写在 `videospec.go` 头部 |
 | **`max_reconcile_age_sec` 默认 7 天** | Ark 视频任务上游保留 7 天可查，24h 会让本来核对得上的任务被提前放弃（而放弃 = 保留预扣 = 用户为猜出来的数字付钱） | CONTRACTS §25.6 |
 | **`billing:"free"` + plugin 用量源 = 硬错误** | `check` 只有 `FieldError` 没有 warning 等级，所以只能硬错误。代价（免费端点想用插件计量做统计也被拒）写在规则旁边 | CONTRACTS §25.6 |
-| **`BUILTIN_PLUGINS` 显式列举** | 进市场 = 「运维可以装」（发现式，新插件零改动）；进 builtin = 「每个部署都带且不能卸载」，是部署决策，不该是「目录存在」的副产品。volcengine 故意不内置（需要每个部署自己的 Ark 凭证和 baseurl） | `build-go.sh` 注释 |
+| **`BUILTIN_PLUGINS` 显式列举** | 进市场 = 「运维可以装」（发现式，新插件零改动）；进 builtin = 「每个部署都带且不能卸载」，是部署决策，不该是「目录存在」的副产品。**内建分两种**：`BUILTIN_PLUGINS` 安装并启用；`BUILTIN_PLUGINS_INSTALL_ONLY` 只安装、默认不启用。**volcengine 是只安装类**（2026-09-30 用户裁定，推翻了此前「故意不内置」：它没配 Ark 账号前什么都做不了，所以启用没意义，但安装有意义） | `build-go.sh` 注释、CONTRACTS §26.8 |
 | **粘性会话留在核心** | 不做成插件（与限流身份 / failover 耦合）。插件选账号的扩展点已由 `RankAccounts` 提供，核心保留最终调度权 | CONTRACTS §24 |
 | **官方火山 SDK 已移除** | 换成自写 V4 签名，用官方 SDK 的 golden vector 交叉验证。收益：`ctx` 可取消、不再重试非幂等 `Create*`、少 6 个模块 | `PLUGIN-VOLCENGINE-ARK.md` §11.5 |
 
@@ -505,7 +505,7 @@ sub2api-plugin keygen   --key-id <id> --out <dir>
 
 **版本号**：对外行为变了就升一位（本轮 volcengine `0.4.0 → 0.5.0`）。`manifest.json` 的 `version` 是包版本，市场和 builtin 都按它找包。
 
-**进镜像 vs 进市场**（这个区分很重要，见 §6）：进市场是**发现式**的——`build-demo.sh` 扫每个 `plugins/*/manifest.json`，新插件零改动就进；进 `BUILTIN_PLUGINS`（`next/deploy/docker/build-go.sh`）是**显式列举**的部署决策，意思是「每个部署都带且不能卸载」。
+**进镜像 vs 进市场**（这个区分很重要，见 §6）：进市场是**发现式**的——`build-demo.sh` 扫每个 `plugins/*/manifest.json`，新插件零改动就进；进 `BUILTIN_PLUGINS`（`next/deploy/docker/build-go.sh`）是**显式列举**的部署决策，意思是「每个部署都带且不能卸载」；进 `BUILTIN_PLUGINS_INSTALL_ONLY` 意思相同，只是首次安装后不启用，等管理员配置好再手动启用（CONTRACTS §26.8）。
 
 ---
 

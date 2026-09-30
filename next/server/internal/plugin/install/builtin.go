@@ -1,6 +1,8 @@
 package install
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -19,8 +21,17 @@ import (
 
 // Built-in plugins ship inside the image (config Plugins.BuiltinDir). The
 // core installs them at startup with every requested host permission granted,
-// enables them on first install and upgrades them when the image carries a
-// newer version. Administrators can disable them but not uninstall them.
+// enables them on first install (unless listed in InstallOnlyFile) and
+// upgrades enabled ones when the image carries a newer version.
+// Administrators can disable them but not uninstall them.
+
+// InstallOnlyFile, in the built-in directory, lists the keys (one per line,
+// "#" comments) of built-in plugins that are installed but left disabled on
+// first install: they need per-deployment configuration before they can do
+// anything, so an operator enables them on purpose. Written by build-go.sh
+// from BUILTIN_PLUGINS_INSTALL_ONLY. It only governs a plugin that was never
+// enabled: once an operator enabled or disabled one, that choice stands.
+const InstallOnlyFile = "install-only.txt"
 
 type systemKey struct{}
 
@@ -52,12 +63,40 @@ type builtinPkg struct {
 	data    []byte
 }
 
+// readInstallOnly reads InstallOnlyFile from dir; a missing file lists nothing.
+func readInstallOnly(dir string) (map[string]bool, error) {
+	data, err := os.ReadFile(filepath.Join(dir, InstallOnlyFile))
+	if errors.Is(err, os.ErrNotExist) {
+		return map[string]bool{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	keys := map[string]bool{}
+	sc := bufio.NewScanner(bytes.NewReader(data))
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		keys[line] = true
+	}
+	return keys, sc.Err()
+}
+
 // EnsureBuiltin installs, marks and enables (or upgrades) every package in
 // dir. Errors of one package are logged and do not stop the others. Run it on
 // one node at a time (cluster lock); it is idempotent.
 func (s *Service) EnsureBuiltin(ctx context.Context, dir string, log *slog.Logger) error {
 	if dir == "" {
 		return nil
+	}
+	// Unreadable is not "empty": treating it so would enable, on every
+	// deployment, the plugins that were meant to stay off.
+	installOnly, err := readInstallOnly(dir)
+	if err != nil {
+		log.Error("builtin plugins: read "+InstallOnlyFile+"; no built-in plugin is installed", "err", err)
+		return err
 	}
 	paths, err := filepath.Glob(filepath.Join(dir, "*.s2plugin"))
 	if err != nil {
@@ -91,14 +130,14 @@ func (s *Service) EnsureBuiltin(ctx context.Context, dir string, log *slog.Logge
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		if err := s.ensureBuiltin(withSystem(ctx), latest[k], log); err != nil {
+		if err := s.ensureBuiltin(withSystem(ctx), latest[k], installOnly[k], log); err != nil {
 			log.Error("builtin plugin", "plugin", k, "version", latest[k].version.Original(), "err", err)
 		}
 	}
 	return nil
 }
 
-func (s *Service) ensureBuiltin(ctx context.Context, b *builtinPkg, log *slog.Logger) error {
+func (s *Service) ensureBuiltin(ctx context.Context, b *builtinPkg, installOnly bool, log *slog.Logger) error {
 	version := b.version.Original()
 	_, err := s.Upload(ctx, b.data, 0, UploadOptions{ExpectKey: b.key, ExpectVersion: version, Source: "builtin"})
 	var ce *core.Error
@@ -147,6 +186,10 @@ func (s *Service) ensureBuiltin(ctx context.Context, b *builtinPkg, log *slog.Lo
 		return err
 	}
 	switch {
+	case status == StatusInstalled && active == nil && installOnly:
+		// Never enabled and install-only: an operator enables it once it is
+		// configured; Enable then picks the newest approved version.
+		log.Info("builtin plugin installed, left disabled (install-only)", "plugin", b.key, "version", version)
 	case status == StatusInstalled && active == nil:
 		// Never enabled: built-in plugins are on by default. A disabled one
 		// stays disabled (the operator chose so).

@@ -100,10 +100,17 @@ cp "$KEYS/$KEY_ID.pub" "$OUT/market/dev-official.pub"
 printf '%s\n' "$KEY_ID" > "$OUT/market/dev-official.keyid"
 ls -l "$OUT/market"
 
-# Built-in plugins (installed and enabled by the core at startup, cannot be
-# uninstalled): the package matching plugins/<name>/manifest.json's version.
+# Built-in plugins (installed by the core at startup, cannot be uninstalled,
+# only disabled): the package matching plugins/<name>/manifest.json's version.
+# Two lists:
+#   BUILTIN_PLUGINS               installed and enabled on first install
+#   BUILTIN_PLUGINS_INSTALL_ONLY  installed but left disabled until an operator
+#                                 enables them (written to install-only.txt,
+#                                 read by the core's EnsureBuiltin)
+# Either way the core grants the requested host permissions itself, so an
+# install-only plugin is ready to enable without a consent step.
 #
-# This list is DELIBERATELY explicit and must NOT be derived from plugins/*.
+# These lists are DELIBERATELY explicit and must NOT be derived from plugins/*.
 # Being in the market (which *is* discovered, see build-demo.sh) means "an
 # operator can install it"; being here means "every deployment ships it and
 # nobody can remove it", which is a deployment decision, not a consequence of
@@ -116,15 +123,26 @@ ls -l "$OUT/market"
 # catalog). moderation is the LLM prompt moderation hook (CONTRACTS §20):
 # enabled at install, but its mode defaults to off until configured.
 #
+# volcengine is install-only: it does nothing until an operator adds an Ark
+# account (per-deployment credentials and base URL), so it ships with every
+# image but is enabled on purpose.
+#
 # Intentionally NOT built in: relay (a market-only account type), guard (an
-# optional gateway hook), volcengine (needs per-deployment Ark credentials and
-# a chosen base URL, so shipping it enabled in every image buys nothing - it is
-# in the market, where an operator installs it on purpose).
+# optional gateway hook).
 BUILTIN_PLUGINS=${BUILTIN_PLUGINS:-anthropic openai gemini moderation}
+BUILTIN_PLUGINS_INSTALL_ONLY=${BUILTIN_PLUGINS_INSTALL_ONLY:-volcengine}
+for name in $BUILTIN_PLUGINS_INSTALL_ONLY; do
+  case " $BUILTIN_PLUGINS " in
+    *" $name "*)
+      echo "::error::builtin plugin $name is in both BUILTIN_PLUGINS and BUILTIN_PLUGINS_INSTALL_ONLY" >&2
+      exit 1 ;;
+  esac
+done
 mkdir -p "$OUT/builtin"
 cp "$KEYS/$KEY_ID.pub" "$OUT/builtin/trust.pub"
 printf '%s\n' "$KEY_ID" > "$OUT/builtin/trust.keyid"
-for name in $BUILTIN_PLUGINS; do
+: > "$OUT/builtin/install-only.txt"
+for name in $BUILTIN_PLUGINS $BUILTIN_PLUGINS_INSTALL_ONLY; do
   ver=$(manifest_version "plugins/$name/manifest.json")
   if [ -f "$OUT/market/$name-$ver.s2plugin" ]; then
     cp "$OUT/market/$name-$ver.s2plugin" "$OUT/builtin/"
@@ -140,5 +158,9 @@ for name in $BUILTIN_PLUGINS; do
     echo "::error::builtin plugin $name $ver: $OUT/market/$name-$ver.s2plugin was not built" >&2
     exit 1
   fi
+done
+for name in $BUILTIN_PLUGINS_INSTALL_ONLY; do
+  printf '%s\n' "$name" >> "$OUT/builtin/install-only.txt"
+  echo "==> builtin plugin $name: install-only (left disabled)"
 done
 ls -l "$OUT/builtin"
