@@ -1003,3 +1003,42 @@ new-api 的两个渠道是同一条轴（下表是读代码得到的，不是看
 没有写迁移，因为这条分支未发布，而且此刻全世界的这类账号就是测试环境里那两个。**处理办法是用 `relay` 类型重建**（api_key、base_url、两个前缀照抄）。
 
 顺带一条：这类账号如果还有未结算的 `pending_settlements`，拆分后核对会按 `/api/v3` 去轮询中转站 → 404 → 保留预扣。重建前先确认没有在途任务。
+
+### 14.5 真实验证（2026-10-01，经网关）
+
+在 ovh 的 `single` 栈上部署 `1ded989`（volcengine **0.7.0 enabled**，内置插件随镜像重建）。
+
+**先证明破坏性变更真的生效**（拆分若没牙齿，后面的验证就没意义）。旧的两个 `apikey` 账号（16 / 17，`base_url` 指向中转站）保持原样发请求：
+
+| 协议 | 结果 | 说明 |
+|---|---|---|
+| `openai.chat` | 404 `Invalid URL (POST /api/v3/chat/completions)` | **中转站自己说的** —— `apikey` 现在固定 `/api/v3`，布局真的换了 |
+| `anthropic.messages` | 503 `no_available_account` | `apikey` 不再声明 anthropic 平台，分组里没有候选 |
+
+还有一处在**授权层**就能看见：给分组 4 新建网关 key，`platforms` 是 `["openai","volcengine"]`；把两个账号换成 `relay` 类型后再建一个，变成 `["anthropic","openai","volcengine"]`。**平台授权跟着账号类型变**，而不是跟着插件变。
+
+然后按 §14.4 重建成 `relay`（18 文本 / 19 视频，`base_url = https://cdn.api.codingplus.ai`、`video_api_prefix = /doubao/api/v3`），四条协议 + 视频全跑一遍：
+
+| # | 协议 | 流式 | in / out | 状态 | 计费 | `account_type` |
+|---|---|---|---|---|---|---|
+| 62 | `openai.chat` | 否 | 38 / 16 | 200 | billed | relay |
+| 63 | `openai.chat` | 是 | 38 / 16 | 200 | billed | relay |
+| 64 | `anthropic.messages` | 否 | 38 / 16 | 200 | billed | relay |
+| **65** | **`anthropic.messages`** | **是** | **38** / 16 | 200 | billed | relay |
+| 66 | `anthropic.count_tokens` | 否 | — | 503 | free | relay |
+
+**第 65 行仍然是关键**：这次流式响应的 `message_start` 报的 `input_tokens` 是 **11**，而网关记的是 **38** —— 和非流式一致。§13.4 那条 `message_delta` 覆盖在新类型下照样生效，少记 37% 的问题没有随拆分回归。
+
+第 66 行是 §13.4 记过的既定行为：插件按名拒绝 → failover → 纯中转分组里没有别的候选 → 503。
+
+视频（账号 19）：
+
+| 步骤 | 实测 |
+|---|---|
+| 提交 | 200，`task_iInIHVfl32LAGZzicq5rX6LMaxmK4E1J` —— `video_api_prefix` 在 `relay` 类型下生效 |
+| 预扣 | `reserved`，40594 output token，$0.40594 |
+| 核对 | 第 **4** 次轮询 `settled` |
+| 结算 | `billed`，`output_tokens` 仍是 40594，费用不变 |
+| 账本 | **只有一条 `-0.40594`，没有补扣也没有退款** |
+
+最后一行第二次独立确认了 0.5.1 的帧数修复（§13.8 是第一次）。
