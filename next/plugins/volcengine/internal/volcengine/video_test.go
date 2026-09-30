@@ -8,37 +8,11 @@ import (
 )
 
 // ---------------------------------------------------------------- estimate
-
-func TestEstimateTokensAndResolution(t *testing.T) {
-	// The published Seedance rule of thumb: seconds x w x h x 24 / 1024.
-	if got := EstimateTokens(10, Res1080); got != 10*1920*1080*24/1024 {
-		t.Fatalf("1080p/10s tokens = %d", got)
-	}
-	// Higher tiers cost strictly more for the same duration; unknown tiers
-	// fall to the 720p frame size.
-	if EstimateTokens(10, Res4K) <= EstimateTokens(10, Res1080) {
-		t.Fatal("4k must estimate above 1080p")
-	}
-	if EstimateTokens(5, "weird") != EstimateTokens(5, Res720) {
-		t.Fatal("an unknown tier must estimate as 720p")
-	}
-
-	// The estimate assumes the model's HIGHEST tier, so a $0 balance cannot
-	// queue an expensive task cheaply. Unknown models default to 1080p.
-	cases := map[string]string{
-		"doubao-seedance-1-0-pro-250528":   Res1080,
-		"doubao-seedance-2-0-260128":       Res4K,
-		"dreamina-seedance-2-0-260128":     Res4K,
-		"doubao-seedance-2-0-fast-260128":  Res1080, // fast/mini are not 4k
-		"doubao-seedance-2-0-mini-260615":  Res1080,
-		"some-model-nobody-registered-yet": Res1080,
-	}
-	for model, want := range cases {
-		if got := ModelMaxResolution(model); got != want {
-			t.Errorf("ModelMaxResolution(%q) = %q, want %q", model, got, want)
-		}
-	}
-}
+//
+// The estimate itself is tested in videospec_test.go, against Ark's published
+// pixel table and formula. What used to be here - a check that the model's
+// highest tier is assumed and that 10 seconds is the assumed duration - tested
+// a guess that no longer exists.
 
 // ---------------------------------------------------------------- BuildUpstreamRequest (video)
 
@@ -105,6 +79,12 @@ func TestExtractUsageReservation(t *testing.T) {
 		Account: &pluginv1.Account{Id: 7},
 		Status:  200,
 		Body:    []byte(`{"id":"cgt-777"}`),
+		// The request the submit carried, as the host delivers it: the raw JSON
+		// of each declared path.
+		Fields: map[string]string{
+			PathResolution: `"1080p"`, PathRatio: `"16:9"`, PathDuration: `5`,
+			PathContentCount: `1`, "content.0.text": `"a cat yawning"`,
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -116,20 +96,38 @@ func TestExtractUsageReservation(t *testing.T) {
 	if rv.GetRefId() != "cgt-777" {
 		t.Fatalf("ref_id = %q", rv.GetRefId())
 	}
-	// The deadline is Ark's 7 days, stated so the core does not abandon a long
-	// task at its own 24h default.
+	// The deadline is Ark's 7 days, which is also the core's default since
+	// CONTRACTS §25.6, so it passes through unchanged.
 	if rv.GetDeadlineSec() != 7*24*60*60 {
 		t.Fatalf("deadline_sec = %d, want 7 days", rv.GetDeadlineSec())
 	}
 	if rv.GetNextCheckAfterSec() != firstCheckSec {
 		t.Fatalf("next_check_after_sec = %d", rv.GetNextCheckAfterSec())
 	}
-	// A 4k-capable model estimates at 4k, its highest tier.
-	if want := EstimateTokens(EstimateDurationSec, Res4K); rv.GetTokens().GetOutputTokens() != want {
-		t.Fatalf("estimated output tokens = %d, want %d", rv.GetTokens().GetOutputTokens(), want)
+	// The estimate is what the REQUEST asked for - 5 seconds of 1080p 16:9 -
+	// not the model's most expensive tier. This is the whole point of
+	// usageRequestFields: the 4k-capable model above used to be reserved at 4k
+	// for a guessed ten seconds, 1,944,000 tokens against this request's
+	// 243,000 - eight times the charge, for the same video.
+	if want := int64(5) * 1920 * 1080 * videoFPS / 1024; rv.GetTokens().GetOutputTokens() != want {
+		t.Fatalf("estimated output tokens = %d, want %d (5s of 1080p 16:9)",
+			rv.GetTokens().GetOutputTokens(), want)
 	}
-	if rv.GetFacts()[FactResolution] != Res4K {
-		t.Fatalf("estimate resolution fact = %q", rv.GetFacts()[FactResolution])
+	if rv.GetFacts()[FactResolution] != Res1080 {
+		t.Fatalf("estimate resolution fact = %q, want the requested tier", rv.GetFacts()[FactResolution])
+	}
+	// And with no request fields at all it falls back to the model's bounds,
+	// which must be STRICTLY more expensive - never less.
+	bare, err := p.ExtractUsage(ctx, &pluginv1.ExtractUsageRequest{
+		Meta:   &pluginv1.RequestMeta{Protocol: ProtocolVideoSubmit, Model: "doubao-seedance-2-0-260128"},
+		Status: 200, Body: []byte(`{"id":"cgt-778"}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bare.GetReserve().GetTokens().GetOutputTokens() <= rv.GetTokens().GetOutputTokens() {
+		t.Fatalf("a request that stated nothing reserved %d, one that stated 1080p/5s reserved %d",
+			bare.GetReserve().GetTokens().GetOutputTokens(), rv.GetTokens().GetOutputTokens())
 	}
 	// The report repeats the estimate outside the reservation: when the core
 	// refuses a ref_id it drops the reservation and bills from these fields,
@@ -224,7 +222,7 @@ func TestBuildReconcileRequest(t *testing.T) {
 }
 
 func TestParseReconcileResponse(t *testing.T) {
-	p := New() // markState/est fallback need a DB; the paths here supply tokens so they do not
+	p := New() // no host at all: not one answer below may depend on the plugin's own table
 	ctx := context.Background()
 	entry := &pluginv1.ReconcileEntry{RefId: "cgt-1"}
 
@@ -260,6 +258,45 @@ func TestParseReconcileResponse(t *testing.T) {
 	r = parse(200, "", `{"status":"succeeded","usage":{"total_tokens":999}}`)
 	if r.GetTokens().GetOutputTokens() != 999 {
 		t.Fatalf("total fallback -> %v", r)
+	}
+
+	// THE MONEY RULE, with no database in reach: a succeeded task the upstream
+	// reports no usage for is SETTLED_ESTIMATE, never SETTLED at zero. SETTLED
+	// with zero tokens reprices the row at zero and refunds the whole
+	// reservation, i.e. hands out a delivered video for free. Before
+	// SETTLED_ESTIMATE existed this needed the plugin's own est_tokens column,
+	// so without a host it fell through to exactly that zero; the point of the
+	// change is that the answer no longer depends on the plugin's table.
+	for _, body := range []string{
+		`{"status":"succeeded"}`,
+		`{"status":"succeeded","content":{"video_url":"https://x/v.mp4"}}`,
+		`{"status":"succeeded","usage":{}}`,
+		`{"status":"succeeded","usage":{"completion_tokens":0,"total_tokens":0}}`,
+	} {
+		r := parse(200, "", body)
+		if r.GetState() != pluginv1.ReconcileResult_SETTLED_ESTIMATE {
+			t.Fatalf("%s -> %v, want SETTLED_ESTIMATE", body, r.GetState())
+		}
+		if r.GetTokens() != nil || len(r.GetFacts()) != 0 {
+			t.Fatalf("%s: SETTLED_ESTIMATE must carry no tokens or facts: %v", body, r)
+		}
+		if r.GetReason() == "" {
+			t.Fatalf("%s: SETTLED_ESTIMATE should note why there was no usage", body)
+		}
+	}
+	// The invariant behind that state, asserted directly: no succeeded body
+	// may ever produce SETTLED with a zero (or negative) token count.
+	for _, body := range []string{
+		`{"status":"succeeded"}`, `{"status":"succeeded","usage":{"completion_tokens":0}}`,
+		`{"status":"succeeded","usage":{"completion_tokens":-5}}`,
+		`{"status":"succeeded","usage":{"completion_tokens":"nonsense"}}`,
+		`{"status":"succeeded","usage":null}`,
+	} {
+		r := parse(200, "", body)
+		if r.GetState() == pluginv1.ReconcileResult_SETTLED && r.GetTokens().GetOutputTokens() <= 0 {
+			t.Fatalf("%s settled at %d tokens: that refunds the whole reservation",
+				body, r.GetTokens().GetOutputTokens())
+		}
 	}
 
 	// An unknown upstream resolution is not reported as a fact (the core would

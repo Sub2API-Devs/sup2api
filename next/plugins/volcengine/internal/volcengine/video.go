@@ -81,28 +81,17 @@ const (
 // FactResolution is the metering fact key the endpoint declares.
 const FactResolution = "resolution"
 
-// VideoResolutions is the enum declared for the resolution fact; a value
-// upstream reports that is not one of these is not reported as a fact (the
-// core would drop it anyway, with a warning).
+// VideoResolutions is the enum declared for the resolution fact, and the tiers
+// the pixel table in videospec.go has areas for. Ark publishes no "2k", so
+// there is none here.
 var VideoResolutions = []string{Res480, Res720, Res1080, Res4K}
-
-// EstimateDurationSec is the clip length the reservation estimate assumes.
-//
-// THE ESTIMATE CANNOT SEE THE REQUEST. ExtractUsage is given the response,
-// the account and the meta - not the submit body - so the requested
-// resolution and duration are not available to it (see the stage-five report:
-// this is a real gap in ExtractUsageRequest). The estimate is therefore built
-// from what IS known, the model, plus a conservative duration at or above
-// Ark Seedance's common maximum. It is corrected in full at reconcile, so
-// being a little high only over-reserves briefly.
-const EstimateDurationSec = 10
 
 // DeadlineSec is how long a task can be reconciled at all: Ark keeps a video
 // task queryable for 7 days, after which no answer exists to be had. The
 // plugin states this upstream fact; the core clamps it with the
-// max_reconcile_age_sec setting - whose default is 24h, which must be raised
-// before this endpoint goes live or every task running past a day is
-// abandoned on its estimate (CONTRACTS §25.4).
+// max_reconcile_age_sec setting, whose default is also 7 days (604800) since
+// CONTRACTS §25.6 - so this value passes through unchanged and a task running
+// for days is reconciled rather than abandoned on its estimate.
 const DeadlineSec = 7 * 24 * 60 * 60
 
 // firstCheckSec / runningCheckSec pace the reconcile poll. Seedance tasks
@@ -115,59 +104,39 @@ const (
 	runningCheckSec = 30
 )
 
-// resolutionPixels is the frame size of a tier, for the token estimate.
-func resolutionPixels(resolution string) (w, h int64) {
-	switch resolution {
-	case Res480:
-		return 854, 480
-	case Res1080:
-		return 1920, 1080
-	case Res4K:
-		return 3840, 2160
-	default: // 720p and anything unrecognised
-		return 1280, 720
-	}
-}
-
-// EstimateTokens is Ark's published rule of thumb for a Seedance clip's
-// completion tokens: seconds x width x height x 24fps / 1024. Only ever an
-// estimate here - the reconcile settles on the real usage.completion_tokens.
-func EstimateTokens(seconds int64, resolution string) int64 {
-	w, h := resolutionPixels(resolution)
-	return seconds * w * h * 24 / 1024
-}
-
-// ModelMaxResolution is the tier the estimate assumes for a model. Since the
-// requested tier is not visible to ExtractUsage, the estimate uses the
-// model's HIGHEST supported one: over-reserving briefly is safe, under-
-// reserving would let a $0 balance queue an expensive 4k task for the price
-// of a 1080p one, and the pre-charge exists precisely to stop that.
-//
-// Unknown models get 1080p, the common Seedance maximum; the 4k-capable
-// families are recognised so they are not under-reserved. The table is coarse
-// on purpose - it only shifts a pre-charge that the reconcile then corrects
-// exactly - and it must never grow into a model registry (Ark has no
-// API-key-callable model list; models are entered by an administrator).
-func ModelMaxResolution(model string) string {
-	m := strings.ToLower(model)
-	if strings.Contains(m, "seedance-2-0") && !strings.Contains(m, "fast") && !strings.Contains(m, "mini") {
-		return Res4K
-	}
-	return Res1080
-}
+// The estimate itself lives in videospec.go. What used to be here - a
+// tier-to-16:9-pixels switch, a fixed 10-second assumption and a
+// ModelMaxResolution table - could not do better, because ExtractUsage was not
+// shown the request (CONTRACTS §25.5 gap 1). It is now, so the estimate reads
+// the requested resolution, ratio and duration instead of guessing them, and
+// uses Ark's own per-generation pixel table rather than assuming 16:9.
 
 // ---------------------------------------------------------------- video_tasks store
 
 // VideoTask is the part of a video_tasks row the plugin reads back.
+//
+// est_tokens is NOT in here, and that is the point of the SETTLED_ESTIMATE
+// change: the column is still written (see insertVideoTask) as the record of
+// what a task was pre-charged, but nothing in the plugin reads it any more.
+// The core holds the reservation and answers for it.
 type VideoTask struct {
-	Model     string
-	EstTokens int64
-	State     string
+	Model string
+	State string
 }
 
 // insertVideoTask records a submitted task. task_id is the upstream id and
 // the primary key; a resubmit that somehow yields the same id updates the row
 // instead of duplicating it, so there is exactly one row per upstream task.
+//
+// est_tokens is still written even though nothing reads it. It used to be the
+// plugin's own fallback for "succeeded with no usage", which the core now
+// answers itself (SETTLED_ESTIMATE); what is left is a record of the figure
+// this task was pre-charged with, which is the first thing anyone asks for
+// when a charge is questioned - and after usageRequestFields that figure is
+// derived from what the client really requested, so it is worth keeping.
+// Leaving the column in place but writing nothing would be worse than either
+// option: it is NOT NULL DEFAULT 0, so an unwritten row claims a zero
+// estimate rather than an unknown one.
 func insertVideoTask(ctx context.Context, db *pgxpool.Pool, taskID string, accountID, userID int64, model string, est int64) error {
 	_, err := db.Exec(ctx, `
 		INSERT INTO video_tasks (task_id, account_id, model, user_id, state, est_tokens)
@@ -184,8 +153,8 @@ func insertVideoTask(ctx context.Context, db *pgxpool.Pool, taskID string, accou
 // an empty model, i.e. a 400).
 func lookupVideoTask(ctx context.Context, db *pgxpool.Pool, taskID string) (*VideoTask, error) {
 	var t VideoTask
-	err := db.QueryRow(ctx, `SELECT model, est_tokens, state FROM video_tasks WHERE task_id = $1`, taskID).
-		Scan(&t.Model, &t.EstTokens, &t.State)
+	err := db.QueryRow(ctx, `SELECT model, state FROM video_tasks WHERE task_id = $1`, taskID).
+		Scan(&t.Model, &t.State)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -317,20 +286,31 @@ func (p *Plugin) ExtractUsage(ctx context.Context, in *pluginv1.ExtractUsageRequ
 		return &pluginv1.UsageReport{}, nil
 	}
 	model := in.GetMeta().GetModel()
-	resolution := ModelMaxResolution(model)
-	est := EstimateTokens(EstimateDurationSec, resolution)
-	tokens := &pluginv1.UsageTokens{OutputTokens: est}
-	facts := map[string]string{FactResolution: resolution}
+	spec := readVideoSpec(in.GetFields(), in.GetFieldsOmitted())
+	est := estimateVideo(model, spec)
+	if len(est.Assumed) > 0 {
+		// The one line that explains an unexpectedly large pre-charge. An
+		// estimate that had to bound something is not an error - a client may
+		// legitimately leave duration to the model - but it is the difference
+		// between "you were charged for what you asked for" and "you were
+		// charged for the most this model could have done", and nobody should
+		// have to guess which happened.
+		p.log.Info("volcengine: video estimate had to assume part of the request",
+			"request_id", in.GetMeta().GetRequestId(), "task_id", taskID, "model", model,
+			"assumed", strings.Join(est.Assumed, ","), "resolution", est.Resolution,
+			"est_output_tokens", est.Tokens, "fields_omitted", strings.Join(in.GetFieldsOmitted(), ","))
+	}
+	tokens := &pluginv1.UsageTokens{OutputTokens: est.Tokens}
+	facts := map[string]string{FactResolution: est.Resolution}
 
-	// Record the task so the poll can resolve its model and a succeeded-but-
-	// usage-less task can settle on its estimate. A write failure does NOT
-	// stop the reservation: the core reconciles from pending_settlements and
-	// the account, never from this table, so revenue is protected either way
-	// and only the client's own polling would degrade to a 400.
+	// Record the task so the poll can resolve its model. A write failure does
+	// NOT stop the reservation: the core reconciles from pending_settlements
+	// and the account, never from this table, so revenue is protected either
+	// way and only the client's own polling would degrade to a 400.
 	if db, err := p.pool(ctx); err != nil {
 		p.log.Error("volcengine: cannot record a video task (reserving anyway)",
 			"task_id", taskID, "error", err.Error())
-	} else if err := insertVideoTask(ctx, db, taskID, in.GetAccount().GetId(), in.GetMeta().GetUserId(), model, est); err != nil {
+	} else if err := insertVideoTask(ctx, db, taskID, in.GetAccount().GetId(), in.GetMeta().GetUserId(), model, est.Tokens); err != nil {
 		p.log.Error("volcengine: cannot record a video task (reserving anyway)",
 			"task_id", taskID, "error", err.Error())
 	}
@@ -390,7 +370,8 @@ func (p *Plugin) BuildReconcileRequest(_ context.Context, in *pluginv1.BuildReco
 // pre-charged row.
 //
 //	queued / running           -> PENDING, ask again
-//	succeeded                  -> SETTLED, tokens = usage.completion_tokens
+//	succeeded + a usage figure  -> SETTLED, tokens = usage.completion_tokens
+//	succeeded, no usage figure  -> SETTLED_ESTIMATE, the estimate is the charge
 //	failed / expired/cancelled -> FAILED, reason from error.message
 //	transport error / non-2xx  -> PENDING (a blip is not a verdict; the
 //	                              deadline then keeps the estimate, which is
@@ -414,9 +395,29 @@ func (p *Plugin) ParseReconcileResponse(ctx context.Context, in *pluginv1.ParseR
 		return pending, nil
 	case "succeeded":
 		p.markState(ctx, ref, TaskDone)
+		tokens := succeededTokens(body)
+		if tokens <= 0 {
+			// Ark confirmed the work and reported no usage for it. Answering
+			// SETTLED with the zero we can read would reprice the row at zero
+			// and REFUND the whole reservation: the video was delivered, so
+			// that is one given away, and nothing in the record would say so.
+			//
+			// SETTLED_ESTIMATE is the core's answer for exactly this (CONTRACTS
+			// §25.6): the reservation stands as the final usage and the final
+			// charge, no money moves, and the row is marked reconcile=estimated
+			// so an operator - and /usage/summary's estimated_cost column - can
+			// tell it from a row whose usage was confirmed. tokens and facts
+			// are ignored in this state, so none are sent.
+			p.log.Warn("volcengine: succeeded video task reported no usage, settling on the reserved estimate",
+				"task_id", ref)
+			return &pluginv1.ReconcileResult{
+				State:  pluginv1.ReconcileResult_SETTLED_ESTIMATE,
+				Reason: "Ark reported the task as succeeded without a usage object",
+			}, nil
+		}
 		return &pluginv1.ReconcileResult{
 			State:  pluginv1.ReconcileResult_SETTLED,
-			Tokens: &pluginv1.UsageTokens{OutputTokens: p.succeededTokens(ctx, ref, body)},
+			Tokens: &pluginv1.UsageTokens{OutputTokens: tokens},
 			Facts:  succeededFacts(body),
 		}, nil
 	case "failed", "expired", "cancelled", "canceled":
@@ -435,27 +436,21 @@ func (p *Plugin) ParseReconcileResponse(ctx context.Context, in *pluginv1.ParseR
 }
 
 // succeededTokens is the real output-token usage of a finished task:
-// usage.completion_tokens, falling back to usage.total_tokens and - only when
-// Ark reports a succeeded task with NO usage at all - to the estimate the
-// task was reserved with. Settling such a task on 0 would refund the whole
-// reservation and give the video away: the work was really done, and the
-// estimate is the only measure of it anyone has.
-func (p *Plugin) succeededTokens(ctx context.Context, ref string, body []byte) int64 {
+// usage.completion_tokens, falling back to usage.total_tokens. It returns 0
+// when Ark reports a succeeded task with NO usage at all, which the caller
+// turns into SETTLED_ESTIMATE rather than into a settle at zero.
+//
+// It no longer reads the plugin's own est_tokens column: that column was this
+// plugin's workaround for a core that could not express "keep the estimate",
+// and reading it here meant the plugin restating a figure the core already
+// held on the reserved row - two copies of one number, with the plugin's copy
+// the one that could be missing (a ledger write that failed at submit, a task
+// from before the table existed) and silently settle the row at zero.
+func succeededTokens(body []byte) int64 {
 	if n := gjson.GetBytes(body, "usage.completion_tokens").Int(); n > 0 {
 		return n
 	}
-	if n := gjson.GetBytes(body, "usage.total_tokens").Int(); n > 0 {
-		return n
-	}
-	if db, err := p.pool(ctx); err == nil {
-		if t, err := lookupVideoTask(ctx, db, ref); err == nil && t != nil && t.EstTokens > 0 {
-			p.log.Warn("volcengine: succeeded video task reported no usage, settling on the estimate",
-				"task_id", ref, "est_tokens", t.EstTokens)
-			return t.EstTokens
-		}
-	}
-	p.log.Warn("volcengine: succeeded video task has neither usage nor a stored estimate, settling on 0", "task_id", ref)
-	return 0
+	return gjson.GetBytes(body, "usage.total_tokens").Int()
 }
 
 // succeededFacts reports the REAL resolution as the resolution fact when Ark

@@ -18,6 +18,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"sync"
 	"testing"
@@ -539,5 +540,151 @@ func TestUnknownRoute(t *testing.T) {
 	p, _, _ := startRoutes(t)
 	if resp := do(t, p, "GET", "/nope", nil, nil, nil); resp.GetStatus() != http.StatusNotFound {
 		t.Fatalf("HTTP %d", resp.GetStatus())
+	}
+}
+
+// ---------------------------------------------------------------- ?q= search
+
+// seedSearchRows puts four groups and four assets in the index directly, so
+// the names can contain the characters a search has to treat as text.
+func seedSearchRows(t *testing.T, p *Plugin) {
+	t.Helper()
+	ctx := context.Background()
+	db, err := p.host.DB(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := []struct{ upstream, name, title string }{
+		{"g-hero", "hero-shots", "Hero shots"},
+		{"g-villain", "villain-shots", "Villains"},
+		{"g-pct", "100%-done", "literal percent"},
+		{"g-us", "a_c", "literal underscore"},
+	}
+	for _, r := range rows {
+		var gid int64
+		if err := db.QueryRow(ctx, `INSERT INTO asset_groups (account_id, upstream_id, name, title)
+			VALUES (1, $1, $2, $3) RETURNING id`, r.upstream, r.name, r.title).Scan(&gid); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(ctx, `INSERT INTO assets (account_id, group_id, upstream_id, name, url)
+			VALUES (1, $1, $2, $3, $4)`, gid, "a-"+r.upstream, r.name, "https://cdn.invalid/"+r.upstream+".png"); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func searchNames(t *testing.T, p *Plugin, route, q string) []string {
+	t.Helper()
+	rows := dataOf[[]map[string]any](t, do(t, p, "GET", route, nil, map[string]string{"q": q}, nil), http.StatusOK)
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, r["name"].(string))
+	}
+	sort.Strings(out)
+	return out
+}
+
+func searchTotal(t *testing.T, p *Plugin, route, q string) int64 {
+	t.Helper()
+	resp := do(t, p, "GET", route, nil, map[string]string{"q": q}, nil)
+	var out struct {
+		Page struct {
+			Total int64 `json:"total"`
+		} `json:"page"`
+	}
+	if err := json.Unmarshal(resp.GetBody(), &out); err != nil {
+		t.Fatalf("%v: %s", err, resp.GetBody())
+	}
+	return out.Page.Total
+}
+
+// TestAssetSearchQ is the whole point of ?q=: both asset routes really filter.
+// The console's search box was deleted because these two answered the full
+// list to every term, which reads as "no matches were filtered out" and is
+// worse than an empty table. So the assertions here are POSITIVE (this term
+// returns exactly these rows), never "the count changed".
+func TestAssetSearchQ(t *testing.T) {
+	p, _, _ := startRoutes(t)
+	seedSearchRows(t, p)
+
+	for _, route := range []string{"/asset-groups", "/assets"} {
+		// A name substring, case-insensitively, on both routes.
+		if got := searchNames(t, p, route, "hero"); len(got) != 1 || got[0] != "hero-shots" {
+			t.Fatalf("%s ?q=hero = %v", route, got)
+		}
+		if got := searchNames(t, p, route, "HERO"); len(got) != 1 || got[0] != "hero-shots" {
+			t.Fatalf("%s is case sensitive: ?q=HERO = %v", route, got)
+		}
+		// A term shared by two rows returns both, and nothing else.
+		if got := searchNames(t, p, route, "shots"); len(got) != 2 ||
+			got[0] != "hero-shots" || got[1] != "villain-shots" {
+			t.Fatalf("%s ?q=shots = %v", route, got)
+		}
+		// A term nothing matches returns an EMPTY page, not the full list.
+		if got := searchNames(t, p, route, "nothing-has-this"); len(got) != 0 {
+			t.Fatalf("%s answered %v for a term nothing matches", route, got)
+		}
+		// An empty / whitespace term is "no filter", not "matches nothing".
+		for _, q := range []string{"", "   "} {
+			if got := searchNames(t, p, route, q); len(got) != 4 {
+				t.Fatalf("%s ?q=%q = %v, want the unfiltered page", route, q, got)
+			}
+		}
+		// The Ark id is searchable: it is what gets pasted in from a usage
+		// record or the Volcengine console.
+		if got := searchNames(t, p, route, "g-villain"); len(got) != 1 || got[0] != "villain-shots" {
+			t.Fatalf("%s ?q=g-villain = %v", route, got)
+		}
+		// total is filtered too. A count that ignored q would make the console
+		// page through rows the filter had already removed.
+		if got := searchTotal(t, p, route, "shots"); got != 2 {
+			t.Fatalf("%s total for ?q=shots = %d, want 2", route, got)
+		}
+
+		// LIKE metacharacters are TEXT, not syntax. "%" used to match every
+		// row and "a_c" every three-character name - a search that answers
+		// something other than what was asked.
+		if got := searchNames(t, p, route, "%"); len(got) != 1 || got[0] != "100%-done" {
+			t.Fatalf("%s ?q=%% = %v, want only the row whose name contains a percent sign", route, got)
+		}
+		if got := searchNames(t, p, route, "a_c"); len(got) != 1 || got[0] != "a_c" {
+			t.Fatalf("%s ?q=a_c = %v, want only the row literally named a_c", route, got)
+		}
+		if got := searchNames(t, p, route, `\`); len(got) != 0 {
+			t.Fatalf("%s ?q=backslash = %v, want no rows (no name contains one)", route, got)
+		}
+	}
+
+	// A group's title is searchable; an asset has none, so the same term finds
+	// the group and no asset.
+	if got := searchNames(t, p, "/asset-groups", "Villains"); len(got) != 1 || got[0] != "villain-shots" {
+		t.Fatalf("group title search = %v", got)
+	}
+
+	// q composes with the filters that were already there instead of replacing
+	// them: index_status=missing plus a term that matches an 'ok' row is empty.
+	rows := dataOf[[]map[string]any](t, do(t, p, "GET", "/assets", nil,
+		map[string]string{"q": "hero", "index_status": IndexMissing}, nil), http.StatusOK)
+	if len(rows) != 0 {
+		t.Fatalf("q replaced index_status instead of narrowing with it: %v", rows)
+	}
+}
+
+// TestLikeTerm pins the escaping on its own, so a future call site cannot
+// reintroduce the wildcard by forgetting it.
+func TestLikeTerm(t *testing.T) {
+	cases := map[string]string{
+		"":        "",
+		"   ":     "",
+		"  hero ": "hero",
+		"100%":    `100\%`,
+		"a_c":     `a\_c`,
+		`a\b`:     `a\\b`,
+		`%_\`:     `\%\_\\`,
+	}
+	for in, want := range cases {
+		if got := LikeTerm(in); got != want {
+			t.Errorf("LikeTerm(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

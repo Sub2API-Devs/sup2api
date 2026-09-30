@@ -344,12 +344,33 @@ func (p *Plugin) listGroupIndex(ctx context.Context, req *pluginv1.HTTPRequest) 
 		return bad, nil
 	}
 	page, size := pluginsdk.Pagination(req, 50)
-	res, err := listGroups(ctx, db, queryID(req, "account_id"), indexStatusQuery(req), size, (page-1)*size)
+	res, err := listGroups(ctx, db, queryID(req, "account_id"), indexStatusQuery(req), searchQuery(req), size, (page-1)*size)
 	if err != nil {
 		return nil, err
 	}
 	items := withAccountNames(res.Items, p.newCreds().accountNames(ctx))
 	return pluginsdk.ListResponse(items, pluginsdk.Page{Page: page, PageSize: size, Total: res.Total}), nil
+}
+
+// searchQuery reads the console table's search box.
+//
+// The parameter name is this plugin's own choice, declared as
+// ui.pages.<page>.search in manifest.json; the console renders a search box
+// only for a page that declares one, and sends the typed text under that name.
+// So the constant below and the manifest have to agree - and if the manifest
+// ever drops the declaration, this code stops being reached rather than
+// quietly returning unfiltered rows.
+//
+// That is the second half of the fix. These two routes shipped reading only
+// index_status and group_id, while the console drew a search box on every
+// table page: the box sent nothing, the route answered the full list, and the
+// console rendered it as a result set - worse than an empty table, because it
+// looks like an answer. The front end deleted the box; it comes back because
+// both halves now exist.
+const SearchParam = "q"
+
+func searchQuery(req *pluginv1.HTTPRequest) string {
+	return LikeTerm(pluginsdk.Query(req, SearchParam))
 }
 
 func indexStatusQuery(req *pluginv1.HTTPRequest) string {
@@ -590,7 +611,8 @@ func (p *Plugin) listAssetIndex(ctx context.Context, req *pluginv1.HTTPRequest) 
 		return bad, nil
 	}
 	page, size := pluginsdk.Pagination(req, 50)
-	res, err := listAssets(ctx, db, queryID(req, "account_id"), queryID(req, "group_id"), indexStatusQuery(req), size, (page-1)*size)
+	res, err := listAssets(ctx, db, queryID(req, "account_id"), queryID(req, "group_id"), indexStatusQuery(req),
+		searchQuery(req), size, (page-1)*size)
 	if err != nil {
 		return nil, err
 	}

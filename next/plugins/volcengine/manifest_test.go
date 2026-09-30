@@ -42,7 +42,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "volcengine" || m.Version != "0.4.0" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "volcengine" || m.Version != "0.5.0" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("identity = %s %s %s", m.Key, m.Version, m.Publisher)
 	}
 	if m.Name["en"] == "" || m.Name["zh"] == "" || m.Description["en"] == "" || m.Description["zh"] == "" {
@@ -302,6 +302,16 @@ func TestAssetRoutesAndPages(t *testing.T) {
 			if len(pg.Columns) == 0 {
 				t.Errorf("page %s has no columns", id)
 			}
+			// Both index tables are searchable, and the name they declare has
+			// to be the one the route reads. The console renders a search box
+			// only for a page that declares one and sends the text under that
+			// name, so a mismatch here is a box that filters nothing while
+			// looking like it does - which is what these two pages shipped
+			// with, and why the front end deleted the box.
+			if pg.Search != volcengine.SearchParam {
+				t.Errorf("page %s declares search %q, but the route reads %q",
+					id, pg.Search, volcengine.SearchParam)
+			}
 			for _, c := range pg.Columns {
 				switch c.Format {
 				case "text", "number", "datetime", "badge", "currency":
@@ -480,6 +490,37 @@ func TestVideoEndpoints(t *testing.T) {
 	}
 	if submit.ErrorFormat != "openai" || submit.Response.NonStream != "json" || submit.Response.Stream != "" {
 		t.Fatalf("video_submit errorFormat/response = %q %+v", submit.ErrorFormat, submit.Response)
+	}
+	// usageRequestFields is what makes the pre-charge a reading instead of a
+	// guess. The manifest and the estimate have to agree EXACTLY, including the
+	// order: a path the manifest does not declare is never delivered, and the
+	// estimate would then silently fall back to a default - the request would
+	// succeed and the wrong amount would be charged, with nothing to see. The
+	// order matters because the host spends its total byte budget in
+	// declaration order, so the five short scalars have to come before the
+	// prompt texts (CONTRACTS §25.6).
+	if !slices.Equal(submit.UsageRequestFields, volcengine.UsageRequestFields) {
+		t.Fatalf("video_submit usageRequestFields = %v, want exactly %v (same order)",
+			submit.UsageRequestFields, volcengine.UsageRequestFields)
+	}
+	for i, p := range submit.UsageRequestFields {
+		if !check.ValidUsagePath(p) {
+			t.Errorf("usageRequestFields[%d] = %q is not a path that reads one value", i, p)
+		}
+		if i < 5 && strings.Contains(p, "text") {
+			t.Errorf("usageRequestFields[%d] = %q: a prompt text must not come before the scalars", i, p)
+		}
+	}
+	if n := len(submit.UsageRequestFields); n > check.MaxUsageRequestFields {
+		t.Fatalf("usageRequestFields declares %d paths, over the SDK cap of %d", n, check.MaxUsageRequestFields)
+	}
+	// Only the submit endpoint declares them: the query endpoint reads no
+	// usage at all, and the checker refuses the field outside usageSource
+	// "plugin".
+	for _, e := range p.Endpoints {
+		if e.ID != "video_submit" && len(e.UsageRequestFields) != 0 {
+			t.Errorf("endpoint %q declares usageRequestFields: %v", e.ID, e.UsageRequestFields)
+		}
 	}
 	// The resolution fact is the estimate's tier and the real tier after
 	// reconcile; declared as an enum so a bad upstream value is dropped.

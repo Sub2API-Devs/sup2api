@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -186,18 +187,53 @@ type listPage struct {
 	Total int64
 }
 
+// LikeTerm turns a search box's text into the middle of an ILIKE pattern:
+// the three characters LIKE treats as syntax are escaped so the term matches
+// itself and nothing else.
+//
+// Without this, "%" in the box matches every row and "a_c" matches "abc" -
+// a search that silently answers something other than what was asked, which
+// is worse than a search that finds nothing. Backslash is escaped first
+// because it is PostgreSQL's default LIKE escape character, which is also why
+// no ESCAPE clause is needed at the call sites.
+//
+// An empty term is left empty: every query treats "" as "no filter" rather
+// than as "matches everything", so the two must not be confused.
+func LikeTerm(q string) string {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return ""
+	}
+	q = strings.ReplaceAll(q, `\`, `\\`)
+	q = strings.ReplaceAll(q, `%`, `\%`)
+	return strings.ReplaceAll(q, `_`, `\_`)
+}
+
+// The columns a free-text search looks at, per resource. Both lists hold only
+// values an operator can SEE in the console table and would plausibly type:
+// the name, a group's title, and the Ark id (which is what gets pasted in
+// from a usage record or the Volcengine console). Deliberately not searched:
+// an asset's url and a group's description, which are long, are not columns
+// of either table, and would turn a name search into a haystack.
+const (
+	groupSearch = `(g.name ILIKE '%' || $3 || '%' OR g.title ILIKE '%' || $3 || '%' OR g.upstream_id ILIKE '%' || $3 || '%')`
+	assetSearch = `(a.name ILIKE '%' || $4 || '%' OR a.upstream_id ILIKE '%' || $4 || '%')`
+)
+
 // listGroups returns a page of the group index, newest first, optionally for
-// one account.
-func listGroups(ctx context.Context, db *pgxpool.Pool, accountID int64, status string, limit, offset int) (*listPage, error) {
-	const where = `WHERE ($1 = 0 OR g.account_id = $1) AND ($2 = '' OR g.index_status = $2)`
+// one account, one index status and/or a search term (already escaped by
+// LikeTerm).
+func listGroups(ctx context.Context, db *pgxpool.Pool, accountID int64, status, q string, limit, offset int) (*listPage, error) {
+	const where = `WHERE ($1 = 0 OR g.account_id = $1) AND ($2 = '' OR g.index_status = $2)
+	  AND ($3 = '' OR ` + groupSearch + `)`
 	out := &listPage{Items: []json.RawMessage{}}
-	if err := db.QueryRow(ctx, `SELECT count(*) FROM asset_groups g `+where, accountID, status).Scan(&out.Total); err != nil {
+	if err := db.QueryRow(ctx, `SELECT count(*) FROM asset_groups g `+where, accountID, status, q).Scan(&out.Total); err != nil {
 		return nil, err
 	}
 	rows, err := db.Query(ctx, `
 		SELECT to_jsonb(g) || jsonb_build_object('asset_count',
 		         (SELECT count(*) FROM assets a WHERE a.group_id = g.id))
-		FROM asset_groups g `+where+` ORDER BY g.id DESC LIMIT $3 OFFSET $4`, accountID, status, limit, offset)
+		FROM asset_groups g `+where+` ORDER BY g.id DESC LIMIT $4 OFFSET $5`, accountID, status, q, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -209,17 +245,19 @@ func listGroups(ctx context.Context, db *pgxpool.Pool, accountID int64, status s
 }
 
 // listAssets returns a page of the asset index, newest first, optionally for
-// one account and/or one local group.
-func listAssets(ctx context.Context, db *pgxpool.Pool, accountID, groupID int64, status string, limit, offset int) (*listPage, error) {
-	const where = `WHERE ($1 = 0 OR a.account_id = $1) AND ($2 = 0 OR a.group_id = $2) AND ($3 = '' OR a.index_status = $3)`
+// one account, one local group, one index status and/or a search term
+// (already escaped by LikeTerm).
+func listAssets(ctx context.Context, db *pgxpool.Pool, accountID, groupID int64, status, q string, limit, offset int) (*listPage, error) {
+	const where = `WHERE ($1 = 0 OR a.account_id = $1) AND ($2 = 0 OR a.group_id = $2) AND ($3 = '' OR a.index_status = $3)
+	  AND ($4 = '' OR ` + assetSearch + `)`
 	out := &listPage{Items: []json.RawMessage{}}
-	if err := db.QueryRow(ctx, `SELECT count(*) FROM assets a `+where, accountID, groupID, status).Scan(&out.Total); err != nil {
+	if err := db.QueryRow(ctx, `SELECT count(*) FROM assets a `+where, accountID, groupID, status, q).Scan(&out.Total); err != nil {
 		return nil, err
 	}
 	rows, err := db.Query(ctx, `
 		SELECT to_jsonb(a) || jsonb_build_object('group_name', g.name, 'group_upstream_id', g.upstream_id)
 		FROM assets a JOIN asset_groups g ON g.id = a.group_id `+where+`
-		ORDER BY a.id DESC LIMIT $4 OFFSET $5`, accountID, groupID, status, limit, offset)
+		ORDER BY a.id DESC LIMIT $5 OFFSET $6`, accountID, groupID, status, q, limit, offset)
 	if err != nil {
 		return nil, err
 	}

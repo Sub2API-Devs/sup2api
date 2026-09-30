@@ -144,7 +144,7 @@ func verifySignature(t *testing.T, c capturedRequest, ak, sk, region, service st
 	}
 	// The body hash is both a header and the last line of the canonical
 	// request: this is what binds the request body into the signature.
-	payloadHash := sha256hex(c.Body)
+	payloadHash := recomputeSHA256Hex(c.Body)
 	if got := c.Header.Get("X-Content-Sha256"); got != payloadHash {
 		t.Fatalf("X-Content-Sha256 = %q, want the body hash %q", got, payloadHash)
 	}
@@ -175,22 +175,26 @@ func verifySignature(t *testing.T, c capturedRequest, ak, sk, region, service st
 		c.Method, c.Path, query, headersToSign.String(), signedHeaders, payloadHash,
 	}, "\n")
 	scope := strings.Join([]string{date, region, service, "request"}, "/")
-	stringToSign := strings.Join([]string{"HMAC-SHA256", xDate, scope, sha256hex([]byte(canonical))}, "\n")
+	stringToSign := strings.Join([]string{"HMAC-SHA256", xDate, scope, recomputeSHA256Hex([]byte(canonical))}, "\n")
 
-	key := hmacSHA256(hmacSHA256(hmacSHA256(hmacSHA256([]byte(sk), date), region), service), "request")
-	want := hex.EncodeToString(hmacSHA256(key, stringToSign))
+	key := recomputeHMAC(recomputeHMAC(recomputeHMAC(recomputeHMAC([]byte(sk), date), region), service), "request")
+	want := hex.EncodeToString(recomputeHMAC(key, stringToSign))
 	if signature != want {
 		t.Fatalf("signature = %s, recomputed %s\ncanonical request:\n%s", signature, want, canonical)
 	}
 }
 
-func hmacSHA256(key []byte, content string) []byte {
+// recomputeHMAC and recomputeSHA256Hex are deliberately NOT the production
+// helpers of arksign.go. verifySignature is worth what its independence from
+// the code under test is worth: if it called signV4's own primitives, a bug in
+// one of them would cancel out on both sides and the test would pass.
+func recomputeHMAC(key []byte, content string) []byte {
 	mac := hmac.New(sha256.New, key)
 	mac.Write([]byte(content))
 	return mac.Sum(nil)
 }
 
-func sha256hex(b []byte) string {
+func recomputeSHA256Hex(b []byte) string {
 	h := sha256.Sum256(b)
 	return hex.EncodeToString(h[:])
 }
@@ -434,9 +438,8 @@ func TestUpstreamErrorClassification(t *testing.T) {
 	}
 }
 
-// TestCanceledContextNeverDials: universal.DoCall takes no context, so the
-// check has to happen before the call. A dead request must not reach
-// upstream.
+// TestCanceledContextNeverDials: a request that is already dead must not reach
+// upstream at all.
 func TestCanceledContextNeverDials(t *testing.T) {
 	f := newFakeArk(t)
 	api := newArkAPI(f.dialer())
@@ -452,6 +455,241 @@ func TestCanceledContextNeverDials(t *testing.T) {
 	if n != 0 {
 		t.Fatalf("upstream saw %d requests for a cancelled context", n)
 	}
+}
+
+// TestCancelAbortsTheCallInFlight is the defect PLUGIN-VOLCENGINE-ARK §10.3
+// recorded against the vendor SDK, asserted directly rather than by its
+// absence: universal.DoCall took no context, so a console request that went
+// away left a goroutine and a socket in hc.Do until the client timeout - up to
+// 30 seconds each, in a plugin allowed 128 open files.
+//
+// The proof is on BOTH sides, because "call returned quickly" alone would also
+// be true of a signer that abandoned the request and left it running: the
+// upstream handler is asked whether ITS request context was cancelled. That is
+// the socket going away.
+func TestCancelAbortsTheCallInFlight(t *testing.T) {
+	arrived := make(chan struct{})
+	serverSaw := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The body has to be drained before the wait: net/http only starts the
+		// background read that cancels r.Context() on a client disconnect once
+		// the handler is done with the request body. A handler that ignores it
+		// never learns the client went away - which would make this test fail
+		// for a reason that has nothing to do with the code under test.
+		_, _ = io.Copy(io.Discard, r.Body)
+		close(arrived)
+		select {
+		case <-r.Context().Done():
+			serverSaw <- "cancelled"
+		case <-time.After(10 * time.Second):
+			// Long enough to be a real answer about the connection, short
+			// enough not to hang the suite.
+			serverSaw <- "still connected after 10s"
+		}
+	}))
+	defer srv.Close()
+
+	dial := func(ctx context.Context, network, _ string) (net.Conn, error) {
+		var d net.Dialer
+		return d.DialContext(ctx, network, srv.Listener.Addr().String())
+	}
+	api := newArkAPI(dial)
+	defer api.close()
+	cfg := &AssetConfig{
+		AccountID: 7, AccessKey: testAK, SecretKey: testSK,
+		BaseURL: srv.URL, Region: DefaultAssetRegion,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	type outcome struct {
+		err     *ArkError
+		elapsed time.Duration
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		start := time.Now()
+		// A Get, so the retry ladder is in play too: cancelling must stop the
+		// whole Action, not just the attempt in flight.
+		_, err := api.call(ctx, cfg, ActionGetAsset, map[string]any{"Id": "a-1"})
+		done <- outcome{err, time.Since(start)}
+	}()
+
+	select {
+	case <-arrived:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the upstream call never arrived")
+	}
+	cancel()
+
+	select {
+	case got := <-done:
+		if got.err == nil || got.err.Code != "Canceled" {
+			t.Fatalf("err = %v, want Canceled", got.err)
+		}
+		// assetCallTimeout is 30s; a call that only stopped because of it is
+		// exactly the old behaviour.
+		if got.elapsed > 5*time.Second {
+			t.Fatalf("the call took %v to notice the cancellation", got.elapsed)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("the call did not return after its context was cancelled")
+	}
+	if saw := <-serverSaw; saw != "cancelled" {
+		t.Fatalf("upstream says: %s - the request was abandoned, not aborted", saw)
+	}
+}
+
+// TestCreateIsNeverRetried is a money-adjacent rule about upstream state, not
+// about money: a retried Create mints a SECOND group or asset upstream, and
+// the create route only ever learns the id of the last attempt, so the first
+// becomes an orphan no compensation can reach. The Actions that address a
+// resource by id are retried, because sending them twice lands on the same
+// state.
+func TestCreateIsNeverRetried(t *testing.T) {
+	cases := map[string]int{
+		ActionCreateAssetGroup: 1,
+		ActionCreateAsset:      1,
+		ActionGetAssetGroup:    assetMaxAttempts,
+		ActionListAssets:       assetMaxAttempts,
+		ActionUpdateAsset:      assetMaxAttempts,
+		ActionDeleteAsset:      assetMaxAttempts,
+	}
+	for action, want := range cases {
+		t.Run(action, func(t *testing.T) {
+			f := newFakeArk(t)
+			f.reply = func(capturedRequest) (int, string) {
+				return http.StatusServiceUnavailable, `{"ResponseMetadata":{"RequestId":"r"}}`
+			}
+			api := newArkAPI(f.dialer())
+			defer api.close()
+			if _, err := api.call(context.Background(), f.config(), action, map[string]any{"Id": "x"}); err == nil {
+				t.Fatal("want an error")
+			}
+			f.mu.Lock()
+			n := len(f.requests)
+			f.mu.Unlock()
+			if n != want {
+				t.Fatalf("%s was sent %d times, want %d", action, n, want)
+			}
+		})
+	}
+}
+
+// TestRetryRecoversAndDoesNotRetryAVerdict: a 503 that clears on the second
+// try is not surfaced, and a 403 (a wrong signature, the same answer forever)
+// is not asked about again.
+func TestRetryRecoversAndDoesNotRetryAVerdict(t *testing.T) {
+	f := newFakeArk(t)
+	var n int
+	f.reply = func(capturedRequest) (int, string) {
+		n++
+		if n == 1 {
+			return http.StatusBadGateway, `bad gateway`
+		}
+		return http.StatusOK, `{"ResponseMetadata":{"RequestId":"r"},"Result":{"Id":"g-9"}}`
+	}
+	api := newArkAPI(f.dialer())
+	defer api.close()
+	result, err := api.call(context.Background(), f.config(), ActionGetAssetGroup, map[string]any{"Id": "g-9"})
+	if err != nil {
+		t.Fatalf("a 502 that cleared on retry surfaced as %v", err)
+	}
+	if groupFromResult(result).ID != "g-9" {
+		t.Fatalf("result = %v", result)
+	}
+
+	f2 := newFakeArk(t)
+	f2.reply = func(capturedRequest) (int, string) {
+		return http.StatusForbidden, `{"ResponseMetadata":{"RequestId":"r","Error":{"Code":"SignatureDoesNotMatch","Message":"no"}}}`
+	}
+	api2 := newArkAPI(f2.dialer())
+	defer api2.close()
+	if _, err := api2.call(context.Background(), f2.config(), ActionGetAssetGroup, map[string]any{"Id": "g-1"}); err == nil {
+		t.Fatal("want an error")
+	}
+	f2.mu.Lock()
+	sent := len(f2.requests)
+	f2.mu.Unlock()
+	if sent != 1 {
+		t.Fatalf("a 403 was sent %d times; it answers the same way every time", sent)
+	}
+}
+
+// TestNonEnvelopeAnswers: a proxy's HTML error page, an empty body and a JSON
+// document that is not a volcengine envelope each have to become a readable
+// ArkError rather than a panic or an empty success. The plugin's egress goes
+// through a host tunnel, so "something in between answered instead of Ark" is
+// a real case.
+func TestNonEnvelopeAnswers(t *testing.T) {
+	cases := []struct {
+		name     string
+		status   int
+		body     string
+		wantCode string
+		wantIn   string
+	}{
+		{"html 502 from something in between", http.StatusBadGateway,
+			"<html>\n<body>502 Bad Gateway</body>\n</html>", "HTTPError", "502 Bad Gateway"},
+		{"empty 500", http.StatusInternalServerError, "", "HTTPError", "(empty body)"},
+		{"a 200 that is not JSON at all", http.StatusOK, "not json", "InternalError", "not json"},
+		{"a 200 whose envelope is an array", http.StatusOK, "[1,2,3]", "InternalError", "[1,2,3]"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeArk(t)
+			f.reply = func(capturedRequest) (int, string) { return tc.status, tc.body }
+			api := newArkAPI(f.dialer())
+			defer api.close()
+			// A Create, so the retry ladder does not multiply the assertions.
+			_, err := api.call(context.Background(), f.config(), ActionCreateAsset, map[string]any{"URL": "u"})
+			if err == nil {
+				t.Fatal("want an error")
+			}
+			if err.Code != tc.wantCode {
+				t.Fatalf("code = %q, want %q (message %q)", err.Code, tc.wantCode, err.Message)
+			}
+			if !strings.Contains(err.Message, tc.wantIn) {
+				t.Fatalf("message = %q, want it to contain %q", err.Message, tc.wantIn)
+			}
+			if strings.Contains(err.Error(), testSK) {
+				t.Fatal("the error message leaks the secret key")
+			}
+		})
+	}
+
+	// A success with no Result is an empty object, never nil: every caller
+	// indexes into it.
+	f := newFakeArk(t)
+	f.reply = func(capturedRequest) (int, string) {
+		return http.StatusOK, `{"ResponseMetadata":{"RequestId":"r"}}`
+	}
+	api := newArkAPI(f.dialer())
+	defer api.close()
+	result, err := api.call(context.Background(), f.config(), ActionDeleteAsset, map[string]any{"Id": "a-1"})
+	if err != nil {
+		t.Fatalf("a Result-less success surfaced as %v", err)
+	}
+	if result == nil {
+		t.Fatal("result is nil; callers index into it")
+	}
+}
+
+// TestAnActionWithNoParametersSendsAnObject: an Action called with a nil body
+// still has to carry "{}" - and that body is what the signature covers, so
+// sending "null" while signing "{}" (or the reverse) is a 403.
+func TestAnActionWithNoParametersSendsAnObject(t *testing.T) {
+	f := newFakeArk(t)
+	api := newArkAPI(f.dialer())
+	defer api.close()
+	if _, err := api.call(context.Background(), f.config(), ActionListAssets, nil); err != nil {
+		t.Fatal(err)
+	}
+	c := f.last(t)
+	if string(c.Body) != "{}" {
+		t.Fatalf("body = %q, want {}", c.Body)
+	}
+	// The signature has to be over what was actually sent.
+	verifySignature(t, c, testAK, testSK, DefaultAssetRegion, AssetServiceName)
 }
 
 // TestResultItemsAndTotal pins the tolerant reading of list results: the

@@ -3,10 +3,10 @@
   "key": "volcengine",
   "name": { "en": "Volcengine Ark", "zh": "字节火山方舟" },
   "description": {
-    "en": "Adds the \"Ark API key\" account type: Volcengine Ark (Doubao) accounts that serve the built-in openai platform (/v1/chat/completions, /v1/responses, /v1/embeddings) upstream at <Base URL>/api/v3/..., next to the other account types of a group. It also declares the \"volcengine\" platform with Ark's synchronous image generation (Seedream) at POST /ark/v3/images/generations, metered by generated images and output tokens, and Doubao Seedance video generation: POST /ark/v3/contents/generations/tasks submits a task and is pre-charged an estimate, GET /ark/v3/contents/generations/tasks/{id} polls it free of charge, and the real completion tokens are settled by the core's reconcile loop when the task finishes. Accounts that carry an access key and secret key additionally get the Ark asset library: console pages and admin APIs that create, list, update and delete asset groups and assets through the Ark asset OpenAPI, with a local index. The Base URL defaults to the official Chinese endpoint and may be switched to BytePlus; a custom address needs account:settings:custom. Declares no prices.",
-    "zh": "新增「方舟 API Key」账号类型：字节火山方舟（豆包）账号，为内置 openai 平台（/v1/chat/completions、/v1/responses、/v1/embeddings）提供服务，上游发往 <Base URL>/api/v3/…，与分组里其他类型的账号一起调度。同时声明 volcengine 平台，提供方舟的同步图片生成（Seedream）端点 POST /ark/v3/images/generations，按生成张数与输出 token 计量；以及豆包 Seedance 视频生成：POST /ark/v3/contents/generations/tasks 提交任务并按预估用量预扣，GET /ark/v3/contents/generations/tasks/{id} 查询任务不计费，任务完成后由核心的核对循环按真实 completion token 结算。填写了 Access Key / Secret Key 的账号还可以使用方舟素材库：通过方舟素材 OpenAPI 增删改查素材组与素材的控制台页面与后台接口，并在本地建立索引。Base URL 默认官方国内地址，可切换到 BytePlus 海外地址；填其他地址需要 account:settings:custom 权限。不声明价格。"
+    "en": "Adds the \"Ark API key\" account type: Volcengine Ark (Doubao) accounts that serve the built-in openai platform (/v1/chat/completions, /v1/responses, /v1/embeddings) upstream at <Base URL>/api/v3/..., next to the other account types of a group. It also declares the \"volcengine\" platform with Ark's synchronous image generation (Seedream) at POST /ark/v3/images/generations, metered by generated images and output tokens, and Doubao Seedance video generation: POST /ark/v3/contents/generations/tasks submits a task and is pre-charged an estimate read from the requested resolution, aspect ratio and duration, GET /ark/v3/contents/generations/tasks/{id} polls it free of charge, and the real completion tokens are settled by the core's reconcile loop when the task finishes. Accounts that carry an access key and secret key additionally get the Ark asset library: console pages and admin APIs that create, list, search, update and delete asset groups and assets through the Ark asset OpenAPI, with a local index. The Base URL defaults to the official Chinese endpoint and may be switched to BytePlus; a custom address needs account:settings:custom. Declares no prices.",
+    "zh": "新增「方舟 API Key」账号类型：字节火山方舟（豆包）账号，为内置 openai 平台（/v1/chat/completions、/v1/responses、/v1/embeddings）提供服务，上游发往 <Base URL>/api/v3/…，与分组里其他类型的账号一起调度。同时声明 volcengine 平台，提供方舟的同步图片生成（Seedream）端点 POST /ark/v3/images/generations，按生成张数与输出 token 计量；以及豆包 Seedance 视频生成：POST /ark/v3/contents/generations/tasks 提交任务并按请求里的分辨率、宽高比与时长算出预估用量预扣，GET /ark/v3/contents/generations/tasks/{id} 查询任务不计费，任务完成后由核心的核对循环按真实 completion token 结算。填写了 Access Key / Secret Key 的账号还可以使用方舟素材库：通过方舟素材 OpenAPI 增删改查与搜索素材组与素材的控制台页面与后台接口，并在本地建立索引。Base URL 默认官方国内地址，可切换到 BytePlus 海外地址；填其他地址需要 account:settings:custom 权限。不声明价格。"
   },
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "sub2api",
   "icon": "text:V",
   "runtime": "grpc",
@@ -76,6 +76,16 @@
           "errorFormat": "openai",
           "billing": "usage",
           "usageSource": "plugin",
+          "usageRequestFields": [
+            "resolution",
+            "ratio",
+            "duration",
+            "frames",
+            "content.#",
+            "content.0.text",
+            "content.1.text",
+            "content.2.text"
+          ],
           "usage": {
             "semantics": "inclusive",
             "facts": {
@@ -235,6 +245,7 @@
         "type": "table",
         "title": { "en": "Ark asset library", "zh": "方舟素材库" },
         "source": "GET /assets",
+        "search": "q",
         "columns": [
           { "key": "id", "label": { "en": "#", "zh": "#" }, "format": "text" },
           { "key": "account_name", "label": { "en": "Account", "zh": "账号" }, "format": "text" },
@@ -251,6 +262,7 @@
         "type": "table",
         "title": { "en": "Ark asset groups", "zh": "方舟素材组" },
         "source": "GET /asset-groups",
+        "search": "q",
         "columns": [
           { "key": "id", "label": { "en": "#", "zh": "#" }, "format": "text" },
           { "key": "account_name", "label": { "en": "Account", "zh": "账号" }, "format": "text" },
