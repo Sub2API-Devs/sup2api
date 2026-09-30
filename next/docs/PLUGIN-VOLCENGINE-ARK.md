@@ -779,26 +779,50 @@ token = **帧数 × 输出宽 × 输出高 / 1024**，固定 24fps。以下每�
 
 用户的要求是「一套通用插件，支持指定端点和默认官方端点」，原则是**协议透传**：客户端用什么协议就以同样协议转发上游，不做转换。
 
-### 13.1 实测的三种上游布局
+### 13.1 实测的上游布局
 
-| 上游 | 文本 / 图片 / Anthropic | Ark 原生视频 |
+| 上游 | 文本 / 图片 | **Anthropic Messages** | Ark 原生视频 |
+|---|---|---|---|
+| 官方 Ark | `/api/v3/*` | **`/api/coding/v1/messages`** —— **不在 `/api/v3` 下** | `/api/v3/contents/generations/tasks` |
+| 本轮验证的中转站 | 根上的 `/v1/*`（`chat/completions`、`responses`、`embeddings`、`images/generations` 全在） | 根上的 **`/v1/messages`** | **`/doubao/api/v3/contents/generations/tasks`** |
+| 中转站 `/doubao/api/v3/` 下的其他路径 | **不存在**，返回 SPA 的 HTML + **200** | — | — |
+
+**官方 Ark 那一行是用一个可用的 key 实测出来的**，对照实验如下（这条悬了一整轮，之前两次推断都错了）：
+
+| 请求 | 结果 | 含义 |
 |---|---|---|
-| 官方 Ark | `/api/v3/*` | `/api/v3/contents/generations/tasks` |
-| 本轮验证的中转站 | **根上的 `/v1/*`** —— `chat/completions`、`responses`、`embeddings`、`images/generations`、`messages` 全部存在 | **`/doubao/api/v3/contents/generations/tasks`** |
-| `/doubao/api/v3/` 下的其他路径 | **不存在**，返回中转站 SPA 的 HTML + **200** | — |
+| `/api/v3/chat/completions` | 404 + **JSON 错误体**（说模型不存在） | 路由存在 |
+| `/api/v3/definitely-not-a-route-xyz` | 404 + **空 body** | 路由不存在的形态 |
+| **`/api/v3/messages`** | 404 + **空 body** | **与不存在的路由逐字相同 → 官方没有这个端点** |
+| **`/api/coding/v1/messages`** | 404 `UnsupportedModel` / 400 `InvalidSubscription` | **路由存在且读了请求** → 这才是官方的 Anthropic 面，属于 Coding Plan，需要订阅 |
 
-所以**文本面和视频面的前缀可以不同**，一个固定的 `/api/v3` 两个都表达不了。
+> 在此之前我判断过两次都不成立：第一次拿 401 当「路由存在」的证据 —— **Ark 的鉴权跑在路由之前**，不带有效 key 时真假路径都回 401，对照实验当场推翻了它；第二次假定 Anthropic 会与 chat 同居于 `/api/v3`。**只有拿到一个 active 的 key 才能分辨。**
 
-### 13.2 两个设置项
+### 13.2 布局由 Base URL 推导，不由运维配置
 
-| 字段 | 默认 | 语义 |
-|---|---|---|
-| `api_prefix` | `/api/v3` | OpenAI / Anthropic 兼容面的前缀。官方留空；上面那个中转站填 `/v1` |
-| `video_api_prefix` | 空 | 视频面的前缀。**空 = 跟随 `api_prefix`**；那个中转站填 `/doubao/api/v3` |
+**官方 Ark 的 OpenAI 面在 `/api/v3`、Anthropic 面在 `/api/coding/v1`** —— 同一个账号上两个不同的前缀，一个 `api_prefix` 字段表达不了。所以布局不再是运维填的前缀，而是**从他们已经选的地址推导出来的**：
+
+| Base URL | 文本 / 图片 | Anthropic | 视频 |
+|---|---|---|---|
+| 留空 或 方舟自己的地址（含 BytePlus） | `/api/v3/*` | `/api/coding/v1/messages` | `/api/v3/...`（或视频前缀） |
+| 其他任何地址 | `/v1/*` | `/v1/messages` | 视频前缀 |
+
+**两种常见情况都不需要填任何路径设置。**
+
+**判断依据是「base_url 是不是方舟的地址」，不是「base_url 是不是空」** —— BytePlus 是方舟的海外地址，也走 `/api/v3`。按「非空即中转站」判断会把每个 BytePlus 账号都发去 `/v1/*` 打烂。测试专门钉了这一条。
+
+两个设置项剩下的职责：
+
+| 字段 | 什么时候要填 |
+|---|---|
+| `api_prefix` | **只为一种情况存在**：中转站在自己的域名下**原样镜像方舟路径**（推导会判错）。填了之后所有路径（含 Anthropic）都建在这个前缀下 —— 填前缀的运维是在说「这上游就是 Ark 的样子，只是换了个地方」 |
+| `video_api_prefix` | 方舟原生视频任务的位置。中转站常把它们放进自己的命名空间（验证过的那个是 `/doubao/api/v3`），因为这些路径**没有标准位置**。官方留空 |
+
+> **破坏性变更**：原先指向自定义地址、期望走 `/api/v3/*` 的账号，现在会解析成 `/v1/*`，需要补 `api_prefix: "/api/v3"`。`mock-upstream` 的测试正是这个形状，已经补上 —— 它同时也是「什么时候该用这个字段」的文档。
 
 **三处调用点都要用视频前缀**，其中 `BuildReconcileRequest` 最容易漏：它跑在离线循环里，路径错了每次轮询都 404 → 核心读成「仍在进行」→ 到 deadline 放弃 → **保留预扣**。于是一个真的跑完、真的上报了用量的任务，被按预估收费。测试专门钉了这一条。
 
-`spec.StripSuffixes` **保持字面 `/api/v3`，不跟随设置**。两者看着像、其实是两件事：它的作用是「撤销一次从 Ark SDK 文档粘贴 base URL 的动作」，与上游实际挂载点无关。让它跟随设置，填了 `/v1` 的账号就没法再粘贴官方 base URL 了。
+`spec.StripSuffixes` **保持字面 `/api/v3`，不跟随任何设置**。两者看着像、其实是两件事：它的作用是「撤销一次从 Ark SDK 文档粘贴 base URL 的动作」，与上游实际挂载点无关。
 
 ### 13.3 安全：前缀不能把请求移出 base_url 的主机
 
@@ -824,7 +848,9 @@ token = **帧数 × 输出宽 × 输出高 / 1024**，固定 24fps。以下每�
 
 ### 13.4 Anthropic Messages
 
-账号类型声明第三个平台 `{"platform":"anthropic", "passHeaders":[...]}`。核心**零个协议转换器**，所以客户端说 Anthropic 就只能由插件按原样转发 —— 请求体到插件手里已经是 Anthropic 形状，唯一要决定的是发到哪。路径 `{api_prefix}/messages`。
+账号类型声明第三个平台 `{"platform":"anthropic", "passHeaders":[...]}`。核心**零个协议转换器**，所以客户端说 Anthropic 就只能由插件按原样转发 —— 请求体到插件手里已经是 Anthropic 形状，唯一要决定的是发到哪。路径由布局决定（§13.2）：官方 `/api/coding/v1/messages`、中转站 `/v1/messages`、填了 `api_prefix` 则是 `{api_prefix}/messages`。
+
+> **官方那条要 CodingPlan 订阅**（实测 `InvalidSubscription`），而套餐的模型名也是另一套。所以在官方 Ark 上启用 Anthropic 面之前，先确认账号有有效订阅，否则每个请求都会 400。
 
 四件连带的事：
 
