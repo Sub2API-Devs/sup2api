@@ -1,11 +1,17 @@
 package volcengine
 
-// Tests for the two upstream path prefixes and the Anthropic surface.
+// Tests for the two account types: which upstream path layout each one gets,
+// the path prefixes only the relay type has, and the Anthropic surface only the
+// relay type serves.
 //
-// The security case is first and is the reason this file exists: base_url is
-// restricted to the official endpoints by guardedSettings unless the caller
-// holds account:settings:custom, and a path prefix that could move the request
-// to another host would make that restriction decorative.
+// The security case is first and is the reason this file exists. The apikey
+// type's base_url is restricted to Ark's own endpoints by guardedSettings
+// unless the caller holds account:settings:custom; the relay type's cannot be
+// (guardedSettings is a URL allow-list and a relay's address is not an
+// enumerable set), so on that type the prefixes are the one free-text input
+// that ends up inside an upstream address, and a prefix able to move the
+// request to another host would let one account's configuration send another
+// upstream's traffic.
 
 import (
 	"context"
@@ -15,8 +21,8 @@ import (
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 )
 
-// settingsWith builds an account whose settings carry the two prefixes.
-func settingsWith(api, video string) *pluginv1.Account {
+// relayAccount builds a relay account with an optional pair of prefixes.
+func relayAccount(api, video string) *pluginv1.Account {
 	s := `{"base_url":"https://relay.test"`
 	if api != "" {
 		s += `,"api_prefix":` + jsonStr(api)
@@ -24,7 +30,9 @@ func settingsWith(api, video string) *pluginv1.Account {
 	if video != "" {
 		s += `,"video_api_prefix":` + jsonStr(video)
 	}
-	return account(testKey, s+`}`)
+	acc := account(testKey, s+`}`)
+	acc.Type = AccountTypeRelay
+	return acc
 }
 
 func jsonStr(s string) string {
@@ -42,9 +50,7 @@ func buildFor(t *testing.T, acc *pluginv1.Account, meta *pluginv1.RequestMeta) (
 // TestPrefixCannotLeaveTheHost is the point of upstreamURL. Each of these
 // values, appended to a base URL, parses as a DIFFERENT origin - "@evil.com"
 // demotes the real host to userinfo, "//evil.com" is a protocol-relative URL,
-// and an absolute URL replaces everything. Without the origin check they would
-// all be sent, carrying the account's key, from an account whose base_url is
-// pinned to an official address by guardedSettings.
+// and an absolute URL replaces everything.
 //
 // The prefix is written straight into settings here, not through
 // ValidateCredentials: that is the whole point. The form rejects these, and
@@ -54,7 +60,7 @@ func buildFor(t *testing.T, acc *pluginv1.Account, meta *pluginv1.RequestMeta) (
 func TestPrefixCannotLeaveTheHost(t *testing.T) {
 	for _, bad := range []string{"@evil.com/v3", "//evil.com/v3", "https://evil.com/v3", "@evil.com"} {
 		t.Run(bad, func(t *testing.T) {
-			r, err := buildFor(t, settingsWith(bad, ""), &pluginv1.RequestMeta{Protocol: ProtocolChat, Model: "m"})
+			r, err := buildFor(t, relayAccount(bad, ""), &pluginv1.RequestMeta{Protocol: ProtocolChat, Model: "m"})
 			if err == nil {
 				t.Fatalf("accepted %q and would have sent %s", bad, r.GetUrl())
 			}
@@ -65,25 +71,31 @@ func TestPrefixCannotLeaveTheHost(t *testing.T) {
 	}
 	// The mirror image: a legitimate prefix must go through, or the check
 	// above would be satisfied by refusing everything.
-	r, err := buildFor(t, settingsWith("/v1", ""), &pluginv1.RequestMeta{Protocol: ProtocolChat, Model: "m"})
+	r, err := buildFor(t, relayAccount("/v1", ""), &pluginv1.RequestMeta{Protocol: ProtocolChat, Model: "m"})
 	if err != nil || r.GetUrl() != "https://relay.test/v1/chat/completions" {
 		t.Fatalf("a plain prefix must work: %v %v", r.GetUrl(), err)
 	}
 	// And the video prefix is checked by the same code on its own field.
-	if _, err := buildFor(t, settingsWith("", "@evil.com/v3"),
+	if _, err := buildFor(t, relayAccount("", "@evil.com/v3"),
 		&pluginv1.RequestMeta{Protocol: ProtocolVideoSubmit, Model: "m"}); err == nil {
 		t.Fatal("the video prefix must be checked too")
 	}
 }
 
-// TestLayoutIsDerivedFromTheBaseURL is the shape of the feature: the operator
-// does not configure paths, they choose an address. Ark's own endpoints serve
-// Ark's layout; anything else is an Ark-compatible relay and serves the
-// standard one. Both were measured against the real services.
-func TestLayoutIsDerivedFromTheBaseURL(t *testing.T) {
-	official := account(testKey, `{}`)                                        // empty base_url -> the default, which is official
-	byteplus := account(testKey, `{"base_url":"`+BytePlusBaseURL+`"}`)        // official too, and NOT a relay
-	relay := account(testKey, `{"base_url":"https://cdn.api.codingplus.ai"}`) //
+// TestLayoutFollowsTheAccountType is the shape of the feature: the layout is
+// the account type, not a guess from the base URL. The apikey type is Ark and
+// serves Ark's paths; the relay type defaults to the standard ones. Both were
+// measured against the real services.
+//
+// The previous version derived this from the host of base_url, which is why
+// this test keeps BytePlus in it: under that rule Ark's own overseas endpoint
+// had to be special-cased or every BytePlus account would have been treated as
+// a relay and sent to /v1/*. Here it is just another apikey account, and that
+// is the improvement being asserted.
+func TestLayoutFollowsTheAccountType(t *testing.T) {
+	official := account(testKey, `{}`)                                 // empty base_url -> the official default
+	byteplus := account(testKey, `{"base_url":"`+BytePlusBaseURL+`"}`) // Ark's overseas endpoint, NOT a relay
+	relay := relayAccount("", "")
 	for _, c := range []struct {
 		name     string
 		acc      *pluginv1.Account
@@ -95,51 +107,82 @@ func TestLayoutIsDerivedFromTheBaseURL(t *testing.T) {
 		{"official embeddings", official, ProtocolEmbeddings, DefaultBaseURL + "/api/v3/embeddings"},
 		{"official images", official, ProtocolImages, DefaultBaseURL + "/api/v3/images/generations"},
 		{"official video", official, ProtocolVideoSubmit, DefaultBaseURL + "/api/v3/contents/generations/tasks"},
-
-		// BytePlus is Ark's overseas endpoint, so it must NOT be treated as a
-		// relay. A rule of "base_url is set" rather than "base_url is an Ark
-		// endpoint" would send every BytePlus account to /v1/* and break it.
 		{"byteplus chat", byteplus, ProtocolChat, BytePlusBaseURL + "/api/v3/chat/completions"},
 
-		{"relay chat", relay, ProtocolChat, "https://cdn.api.codingplus.ai/v1/chat/completions"},
-		{"relay responses", relay, ProtocolResponses, "https://cdn.api.codingplus.ai/v1/responses"},
-		{"relay embeddings", relay, ProtocolEmbeddings, "https://cdn.api.codingplus.ai/v1/embeddings"},
-		{"relay images", relay, ProtocolImages, "https://cdn.api.codingplus.ai/v1/images/generations"},
-		{"relay messages", relay, ProtocolMessages, "https://cdn.api.codingplus.ai/v1/messages"},
+		{"relay chat", relay, ProtocolChat, "https://relay.test/v1/chat/completions"},
+		{"relay responses", relay, ProtocolResponses, "https://relay.test/v1/responses"},
+		{"relay embeddings", relay, ProtocolEmbeddings, "https://relay.test/v1/embeddings"},
+		{"relay images", relay, ProtocolImages, "https://relay.test/v1/images/generations"},
+		{"relay messages", relay, ProtocolMessages, "https://relay.test/v1/messages"},
+		{"relay video", relay, ProtocolVideoSubmit, "https://relay.test/v1/contents/generations/tasks"},
 	} {
 		r, err := buildFor(t, c.acc, &pluginv1.RequestMeta{Protocol: c.protocol, Model: "m"})
 		if err != nil || r.GetUrl() != c.want {
 			t.Errorf("%s: url = %q (%v), want %q", c.name, r.GetUrl(), err, c.want)
 		}
 	}
+}
 
-	// Ark's own endpoints do not serve Anthropic Messages - measured, see
-	// AnthropicOfficialPrefix - so an official account refuses the protocol
-	// instead of posting to a path that answers 404 with an empty body. The
-	// error has to name what would fix it, because "Ark does not do this" is
-	// only useful next to "a relay does".
-	for _, name := range []string{"official", "byteplus"} {
-		acc := official
-		if name == "byteplus" {
-			acc = byteplus
-		}
-		r, err := buildFor(t, acc, &pluginv1.RequestMeta{Protocol: ProtocolMessages, Model: "m"})
+// TestOfficialRefusesAnthropic covers the defensive half of the split. The
+// apikey type does not declare the anthropic platform, so routing should never
+// hand it an Anthropic request; if it ever does, it must say so rather than
+// post to /api/v3/messages, which was measured to answer 404 with an empty body
+// exactly like a path that was never registered.
+func TestOfficialRefusesAnthropic(t *testing.T) {
+	for _, c := range []struct{ name, settings string }{
+		{"official", `{}`},
+		{"byteplus", `{"base_url":"` + BytePlusBaseURL + `"}`},
+	} {
+		r, err := buildFor(t, account(testKey, c.settings), &pluginv1.RequestMeta{Protocol: ProtocolMessages, Model: "m"})
 		if err == nil {
-			t.Errorf("%s messages: accepted and would have sent %s", name, r.GetUrl())
+			t.Errorf("%s: accepted and would have sent %s", c.name, r.GetUrl())
 			continue
 		}
-		if !strings.Contains(err.Error(), FieldAPIPrefix) {
-			t.Errorf("%s messages: the error should name %s: %v", name, FieldAPIPrefix, err)
+		// The error has to name the way out, because "Ark does not do this" is
+		// only useful next to "this account type does".
+		if !strings.Contains(err.Error(), AccountTypeRelay) {
+			t.Errorf("%s: the error should name the %s account type: %v", c.name, AccountTypeRelay, err)
 		}
 	}
 }
 
-// TestAPIPrefixOverridesTheLayout covers the one case the derivation gets
-// wrong: a relay that mirrors Ark's own paths under a custom host. An operator
-// who names a prefix is saying "this looks like Ark, just over here", so the
-// Anthropic path follows it rather than jumping to the Coding Plan location.
-func TestAPIPrefixOverridesTheLayout(t *testing.T) {
-	acc := settingsWith("/api/v3", "")
+// TestOfficialIgnoresPrefixSettings pins the other half of the split: the
+// prefixes are not in the apikey type's settingsFields, so a value that reached
+// its settings anyway (a row from before the split, a restored backup) must not
+// move an official account's paths.
+func TestOfficialIgnoresPrefixSettings(t *testing.T) {
+	acc := account(testKey, `{"api_prefix":"/v1","video_api_prefix":"/doubao/api/v3"}`)
+	for _, c := range []struct{ protocol, want string }{
+		{ProtocolChat, DefaultBaseURL + "/api/v3/chat/completions"},
+		{ProtocolVideoSubmit, DefaultBaseURL + "/api/v3/contents/generations/tasks"},
+	} {
+		r, err := buildFor(t, acc, &pluginv1.RequestMeta{Protocol: c.protocol, Model: "m"})
+		if err != nil || r.GetUrl() != c.want {
+			t.Errorf("%s: url = %q (%v), want %q", c.protocol, r.GetUrl(), err, c.want)
+		}
+	}
+}
+
+// TestRelayNeedsABaseURL: relaySpec has no DefaultBaseURL on purpose. Falling
+// back to Ark's address would send a relay's key to Ark, which answers 401 -
+// an error that says nothing about the missing setting.
+func TestRelayNeedsABaseURL(t *testing.T) {
+	acc := account(testKey, `{}`)
+	acc.Type = AccountTypeRelay
+	_, err := buildFor(t, acc, &pluginv1.RequestMeta{Protocol: ProtocolChat, Model: "m"})
+	if err == nil {
+		t.Fatal("a relay account with no base_url must be refused")
+	}
+	if !strings.Contains(err.Error(), "base_url") {
+		t.Errorf("the error must name the missing setting: %v", err)
+	}
+}
+
+// TestRelayMirroringArkPaths covers the case api_prefix exists for: a relay
+// that mirrors Ark's own paths under its own host. Everything, Anthropic
+// included, is then built under the prefix given.
+func TestRelayMirroringArkPaths(t *testing.T) {
+	acc := relayAccount("/api/v3", "")
 	for _, c := range []struct{ protocol, want string }{
 		{ProtocolChat, "https://relay.test/api/v3/chat/completions"},
 		{ProtocolMessages, "https://relay.test/api/v3/messages"},
@@ -155,7 +198,7 @@ func TestAPIPrefixOverridesTheLayout(t *testing.T) {
 // TestPrefixAppliesToEveryProtocol pins an explicit prefix across the whole
 // mapping.
 func TestPrefixAppliesToEveryProtocol(t *testing.T) {
-	acc := settingsWith("/v1", "")
+	acc := relayAccount("/v1", "")
 	for _, c := range []struct{ protocol, model, want string }{
 		{ProtocolChat, "doubao-seed-1-6-250615", "https://relay.test/v1/chat/completions"},
 		{ProtocolChat, "bot-20250101", "https://relay.test/v1/bots/chat/completions"},
@@ -174,9 +217,10 @@ func TestPrefixAppliesToEveryProtocol(t *testing.T) {
 
 // TestVideoPrefixIsIndependent covers the layout that made two settings
 // necessary: a relay serving text at the root while keeping Ark's native video
-// tasks under its own namespace.
+// tasks under its own namespace. This is the configuration verified end to end
+// against a real relay (docs §13.8).
 func TestVideoPrefixIsIndependent(t *testing.T) {
-	acc := settingsWith("/v1", "/doubao/api/v3")
+	acc := relayAccount("/v1", "/doubao/api/v3")
 	r, err := buildFor(t, acc, &pluginv1.RequestMeta{Protocol: ProtocolChat, Model: "m"})
 	if err != nil || r.GetUrl() != "https://relay.test/v1/chat/completions" {
 		t.Fatalf("text: %q %v", r.GetUrl(), err)
@@ -203,22 +247,42 @@ func TestVideoPrefixIsIndependent(t *testing.T) {
 	}
 	// An unset video prefix follows the api one, so the common case of a
 	// single prefix needs one field.
-	r, err = buildFor(t, settingsWith("/v1", ""), &pluginv1.RequestMeta{Protocol: ProtocolVideoSubmit, Model: "m"})
+	r, err = buildFor(t, relayAccount("/v1", ""), &pluginv1.RequestMeta{Protocol: ProtocolVideoSubmit, Model: "m"})
 	if err != nil || r.GetUrl() != "https://relay.test/v1/contents/generations/tasks" {
 		t.Fatalf("video following api prefix: %q %v", r.GetUrl(), err)
 	}
+	// And an official account's reconcile poll uses Ark's own path, reading no
+	// setting at all.
+	rr, err = New().BuildReconcileRequest(context.Background(), &pluginv1.BuildReconcileRequestRequest{
+		Account: account(testKey, `{}`), Entry: &pluginv1.ReconcileEntry{RefId: "task_1"},
+	})
+	if err != nil || rr.GetUrl() != DefaultBaseURL+"/api/v3/contents/generations/tasks/task_1" {
+		t.Fatalf("official reconcile: %q %v", rr.GetUrl(), err)
+	}
 }
 
-// TestCountTokensIsRefusedByName documents the cost of declaring the anthropic
-// platform: it declares two endpoints and AccountPlatform cannot select one,
-// so this account type is offered count_tokens whether it can serve it or not.
+// TestCountTokensIsRefusedByName documents the cost of the relay type
+// declaring the anthropic platform: it declares two endpoints and
+// AccountPlatform cannot select one, so the type is offered count_tokens
+// whether it can serve it or not.
 func TestCountTokensIsRefusedByName(t *testing.T) {
-	_, err := buildFor(t, settingsWith("/v1", ""), &pluginv1.RequestMeta{Protocol: ProtocolCountTokens, Model: "m"})
+	_, err := buildFor(t, relayAccount("/v1", ""), &pluginv1.RequestMeta{Protocol: ProtocolCountTokens, Model: "m"})
 	if err == nil {
 		t.Fatal("count_tokens must not be sent anywhere")
 	}
 	if !strings.Contains(err.Error(), "count_tokens") {
 		t.Errorf("the error must name the protocol, or the log does not explain itself: %v", err)
+	}
+}
+
+// TestUnknownAccountTypeIsRefused: the plugin now has two types and picks the
+// credential spec by name, so an unknown one must fail loudly instead of
+// silently getting the official layout.
+func TestUnknownAccountTypeIsRefused(t *testing.T) {
+	acc := account(testKey, `{}`)
+	acc.Type = "something-else"
+	if _, err := buildFor(t, acc, &pluginv1.RequestMeta{Protocol: ProtocolChat, Model: "m"}); err == nil {
+		t.Fatal("an unknown account type must be refused")
 	}
 }
 
@@ -341,5 +405,45 @@ func TestNormalizePrefix(t *testing.T) {
 		if got, err := normalizePrefix(bad); err == nil {
 			t.Errorf("normalizePrefix(%q) = %q, want an error", bad, got)
 		}
+	}
+}
+
+// TestValidateRelayBaseURL covers the save-time guard on the relay base URL.
+// The prefixes are what express a path, and a base URL that already carries one
+// would double it - loudly on text, but on video the poll 404s forever and the
+// core keeps the pre-charge, so this is refused rather than stripped.
+func TestValidateRelayBaseURL(t *testing.T) {
+	validate := func(settings string) []*pluginv1.FieldError {
+		return New().validateWithAssets(&pluginv1.ValidateCredentialsRequest{
+			AccountType: AccountTypeRelay, CredentialsJson: testKey, SettingsJson: settings,
+		}).GetErrors()
+	}
+	for _, bad := range []string{
+		`{"base_url":"https://relay.test/v1"}`,
+		`{"base_url":"https://relay.test/api/v3"}`,
+		`{"base_url":"https://relay.test/doubao/api/v3/"}`,
+		`{}`, // required
+	} {
+		errs := validate(bad)
+		if len(errs) == 0 {
+			t.Errorf("%s was accepted", bad)
+			continue
+		}
+		if errs[0].GetField() != "base_url" {
+			t.Errorf("%s: error on %q, want base_url", bad, errs[0].GetField())
+		}
+	}
+	if errs := validate(`{"base_url":"https://relay.test","video_api_prefix":"/doubao/api/v3"}`); len(errs) != 0 {
+		t.Errorf("the verified configuration must be accepted: %v", errs)
+	}
+	// The official type keeps its own rules: base_url is optional there, and
+	// "https://ark.cn-beijing.volces.com/api/v3" is a paste of the SDK base URL
+	// that spec.StripSuffixes exists to accept.
+	official := New().validateWithAssets(&pluginv1.ValidateCredentialsRequest{
+		AccountType: AccountTypeAPIKey, CredentialsJson: testKey,
+		SettingsJson: `{"base_url":"` + DefaultBaseURL + `/api/v3"}`,
+	})
+	if errs := official.GetErrors(); len(errs) != 0 {
+		t.Errorf("the official type must still accept a pasted SDK base URL: %v", errs)
 	}
 }

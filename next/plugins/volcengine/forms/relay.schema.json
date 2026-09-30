@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "title": "Volcengine Ark API key",
-  "required": ["api_key"],
+  "title": "Doubao relay key",
+  "required": ["api_key", "base_url"],
   "additionalProperties": false,
   "properties": {
     "api_key": {
@@ -15,7 +15,20 @@
     "base_url": {
       "type": "string",
       "title": "Base URL",
-      "pattern": "^(https?://[^\\s?#]+)?$"
+      "minLength": 8,
+      "pattern": "^https?://[^\\s?#]+$"
+    },
+    "api_prefix": {
+      "type": "string",
+      "title": "API path prefix",
+      "maxLength": 128,
+      "pattern": "^(/|/[^/\\s?#][^\\s?#]*)?$"
+    },
+    "video_api_prefix": {
+      "type": "string",
+      "title": "Video API path prefix",
+      "maxLength": 128,
+      "pattern": "^(/|/[^/\\s?#][^\\s?#]*)?$"
     },
     "access_key": {
       "type": "string",

@@ -298,9 +298,17 @@ func normalizeAssetFields(objJSON string) string {
 }
 
 // validateWithAssets runs the shared API-key validation and then the asset
-// library rules on top of it.
+// library rules on top of it. The spec depends on the account type being
+// created: the two differ in whether base_url has a default (assets.go's own
+// rules are the same for both).
 func (p *Plugin) validateWithAssets(in *pluginv1.ValidateCredentialsRequest) *pluginv1.ValidateCredentialsResponse {
-	resp := spec.Validate(in)
+	sp, err := specFor(in.GetAccountType())
+	if err != nil {
+		return &pluginv1.ValidateCredentialsResponse{Errors: pluginsdk.FieldErrors(nil).Add(
+			"account_type", "unsupported",
+			fmt.Sprintf("unsupported account type %q / 不支持的账号类型", in.GetAccountType()))}
+	}
+	resp := sp.Validate(in)
 	errs := pluginsdk.FieldErrors(resp.GetErrors())
 	if len(errs) > 0 {
 		// The account type itself was rejected: further field errors would
@@ -310,7 +318,10 @@ func (p *Plugin) validateWithAssets(in *pluginv1.ValidateCredentialsRequest) *pl
 		}
 	}
 	errs = validateAssetFields(errs, in.GetCredentialsJson(), in.GetSettingsJson())
-	errs = validatePrefixFields(errs, in.GetSettingsJson())
+	if in.GetAccountType() == AccountTypeRelay {
+		errs = validateRelayBaseURL(errs, in.GetCredentialsJson(), in.GetSettingsJson())
+		errs = validatePrefixFields(errs, in.GetSettingsJson())
+	}
 	if len(errs) > 0 {
 		return &pluginv1.ValidateCredentialsResponse{Errors: errs}
 	}

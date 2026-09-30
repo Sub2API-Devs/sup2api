@@ -361,16 +361,12 @@ func (p *Plugin) BuildReconcileRequest(_ context.Context, in *pluginv1.BuildReco
 	if ref == "" {
 		return nil, status.Error(codes.InvalidArgument, "reconcile entry has no ref_id")
 	}
-	cfg, err := spec.FromAccount(in.GetAccount())
+	cfg, px, err := accountConfig(in.GetAccount())
 	if err != nil {
 		// Credentials are withheld when the account type belongs to another
 		// plugin - impossible for video, where both are this plugin, but
 		// without a key there is no poll to build.
 		return nil, status.Errorf(codes.FailedPrecondition, "reconcile needs the account credentials: %v", err)
-	}
-	px, err := prefixesOf(cfg.BaseURL, in.GetAccount().GetSettingsJson())
-	if err != nil {
-		return nil, status.Errorf(codes.FailedPrecondition, "account settings: %v", err)
 	}
 	u, err := upstreamURL(cfg.BaseURL, videoTasksPath(px.video)+"/"+url.PathEscape(ref))
 	if err != nil {

@@ -44,7 +44,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "volcengine" || m.Version != "0.6.0" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "volcengine" || m.Version != "0.7.0" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("identity = %s %s %s", m.Key, m.Version, m.Publisher)
 	}
 	if m.Name["en"] == "" || m.Name["zh"] == "" || m.Description["en"] == "" || m.Description["zh"] == "" {
@@ -72,49 +72,81 @@ func TestManifest(t *testing.T) {
 		t.Fatalf("capabilities = %v, want %v", gotCaps, wantCaps)
 	}
 
-	if len(m.AccountTypes) != 1 {
-		t.Fatalf("accountTypes = %+v", m.AccountTypes)
+	// Two account types, split the way the upstreams are: apikey is Ark itself
+	// (address pinned, one path layout, no Anthropic surface) and relay is an
+	// Ark-compatible relay (address free, paths configurable, Anthropic
+	// served). Looked up by ID, never by index.
+	types := map[string]manifest.AccountType{}
+	for _, at := range m.AccountTypes {
+		types[at.ID] = at
 	}
-	at := m.AccountTypes[0]
-	if at.ID != volcengine.AccountTypeAPIKey || at.Label["en"] == "" || at.Label["zh"] == "" {
-		t.Fatalf("account type = %+v", at)
+	if len(m.AccountTypes) != 2 || len(types) != 2 {
+		t.Fatalf("accountTypes = %+v, want exactly apikey and relay", m.AccountTypes)
 	}
-	// secret_key is masked like the API key; access_key is NOT, because an
-	// access key id identifies the Volcengine account and hiding it would
-	// stop an operator from telling two accounts apart in the form. It is
-	// still stored encrypted: everything outside settingsFields is
-	// (server account/creds.go split()).
-	if !slices.Equal(at.SensitiveFields, []string{"api_key", volcengine.FieldSecretKey}) {
-		t.Fatalf("sensitiveFields = %v", at.SensitiveFields)
+	official, ok := types[volcengine.AccountTypeAPIKey]
+	if !ok {
+		t.Fatalf("no %s account type: %+v", volcengine.AccountTypeAPIKey, m.AccountTypes)
 	}
-	if slices.Contains(at.SettingsFields, volcengine.FieldAccessKey) ||
-		slices.Contains(at.SettingsFields, volcengine.FieldSecretKey) {
-		t.Fatalf("the AK/SK pair must not be plaintext settings: %v", at.SettingsFields)
+	relay, ok := types[volcengine.AccountTypeRelay]
+	if !ok {
+		t.Fatalf("no %s account type: %+v", volcengine.AccountTypeRelay, m.AccountTypes)
 	}
-	if !slices.Equal(at.SettingsFields, []string{"base_url", volcengine.FieldAPIPrefix,
-		volcengine.FieldVideoAPIPrefix, volcengine.FieldAssetBaseURL, volcengine.FieldAssetRegion}) {
-		t.Fatalf("settingsFields = %v", at.SettingsFields)
+	for _, at := range m.AccountTypes {
+		if at.Label["en"] == "" || at.Label["zh"] == "" || at.Description["en"] == "" || at.Description["zh"] == "" {
+			t.Fatalf("account type %s needs an en and zh label and description", at.ID)
+		}
+		// secret_key is masked like the API key; access_key is NOT, because an
+		// access key id identifies the Volcengine account and hiding it would
+		// stop an operator from telling two accounts apart in the form. It is
+		// still stored encrypted: everything outside settingsFields is
+		// (server account/creds.go split()).
+		if !slices.Equal(at.SensitiveFields, []string{"api_key", volcengine.FieldSecretKey}) {
+			t.Fatalf("%s sensitiveFields = %v", at.ID, at.SensitiveFields)
+		}
+		if slices.Contains(at.SettingsFields, volcengine.FieldAccessKey) ||
+			slices.Contains(at.SettingsFields, volcengine.FieldSecretKey) {
+			t.Fatalf("%s: the AK/SK pair must not be plaintext settings: %v", at.ID, at.SettingsFields)
+		}
+		// Model mapping is a core account field (CONTRACTS §18).
+		if slices.Contains(at.SettingsFields, "model_mapping") {
+			t.Fatalf("%s: model_mapping must not be a settings field", at.ID)
+		}
+		// The two prefixes are paths, and guardedSettings is a URL allow-list
+		// (check requires every allowed entry to be an absolute http(s) URL),
+		// so they cannot be guarded that way. What keeps a prefix from moving a
+		// request off its account's host is upstreamURL's origin check, on
+		// every request.
+		for _, g := range at.GuardedSettings {
+			if g.Field == volcengine.FieldAPIPrefix || g.Field == volcengine.FieldVideoAPIPrefix {
+				t.Fatalf("%s cannot be a guarded setting: guardedSettings only allow-lists absolute URLs", g.Field)
+			}
+		}
 	}
-	// The two prefixes are paths, and guardedSettings is a URL allow-list
-	// (check requires every allowed entry to be an absolute http(s) URL), so
-	// they cannot be guarded that way. What keeps them from moving a request
-	// off the guarded host is upstreamURL's origin check, on every request.
-	for _, g := range at.GuardedSettings {
-		if g.Field == volcengine.FieldAPIPrefix || g.Field == volcengine.FieldVideoAPIPrefix {
-			t.Fatalf("%s cannot be a guarded setting: guardedSettings only allow-lists absolute URLs", g.Field)
+
+	// ---- the official type: pinned address, no paths, no Anthropic.
+	if !slices.Equal(official.SettingsFields,
+		[]string{"base_url", volcengine.FieldAssetBaseURL, volcengine.FieldAssetRegion}) {
+		t.Fatalf("apikey settingsFields = %v", official.SettingsFields)
+	}
+	// The prefixes must NOT be offered here: Ark serves one layout, and a
+	// prefix field on this type would be a setting that changes nothing
+	// (prefixesOf reads none for it) while looking like it does.
+	for _, f := range []string{volcengine.FieldAPIPrefix, volcengine.FieldVideoAPIPrefix} {
+		if slices.Contains(official.SettingsFields, f) {
+			t.Errorf("the apikey type must not offer %s: Ark has one path layout", f)
 		}
 	}
 	// base_url and asset_base_url are both guarded (CONTRACTS §21.3):
 	// without account:settings:custom only the official addresses (or an
 	// empty value, which the plugin normalizes to the default) may be used.
 	want := []string{volcengine.DefaultBaseURL, volcengine.BytePlusBaseURL}
-	if len(at.GuardedSettings) != 2 || at.GuardedSettings[0].Field != "base_url" ||
-		!slices.Equal(at.GuardedSettings[0].Allowed, want) {
-		t.Fatalf("guardedSettings = %+v, want base_url -> %v", at.GuardedSettings, want)
+	if len(official.GuardedSettings) != 2 || official.GuardedSettings[0].Field != "base_url" ||
+		!slices.Equal(official.GuardedSettings[0].Allowed, want) {
+		t.Fatalf("apikey guardedSettings = %+v, want base_url -> %v", official.GuardedSettings, want)
 	}
-	if g := at.GuardedSettings[1]; g.Field != volcengine.FieldAssetBaseURL ||
+	if g := official.GuardedSettings[1]; g.Field != volcengine.FieldAssetBaseURL ||
 		!slices.Equal(g.Allowed, []string{volcengine.DefaultAssetBaseURL}) {
-		t.Fatalf("guardedSettings[1] = %+v, want %s -> %q", g, volcengine.FieldAssetBaseURL, volcengine.DefaultAssetBaseURL)
+		t.Fatalf("apikey guardedSettings[1] = %+v, want %s -> %q", g, volcengine.FieldAssetBaseURL, volcengine.DefaultAssetBaseURL)
 	}
 	// The asset endpoint is the Ark CONTROL plane and a different host from
 	// the API base URL. Conflating them yields a signed request to a host
@@ -124,17 +156,29 @@ func TestManifest(t *testing.T) {
 		t.Fatalf("the asset endpoint must not be the API host: %s", volcengine.DefaultAssetBaseURL)
 	}
 
-	// The two prefixes MUST be settings fields. Nothing in the core checks
-	// this: split() partitions on exactly this list, so a prefix left out of
-	// it goes into the ENCRYPTED blob while prefixesOf reads the plaintext
-	// one. The result is an operator who sets a prefix, gets no error, and
-	// sees every request keep going to /api/v3 - the exact shape of silent
-	// failure this round exists to remove.
+	// ---- the relay type: free address, both paths, Anthropic served.
+	if !slices.Equal(relay.SettingsFields, []string{"base_url", volcengine.FieldAPIPrefix,
+		volcengine.FieldVideoAPIPrefix, volcengine.FieldAssetBaseURL, volcengine.FieldAssetRegion}) {
+		t.Fatalf("relay settingsFields = %v", relay.SettingsFields)
+	}
+	// The two prefixes MUST be settings fields of this type. Nothing in the
+	// core checks it: split() partitions on exactly this list, so a prefix left
+	// out of it goes into the ENCRYPTED blob while prefixesOf reads the
+	// plaintext one. The result is an operator who sets a prefix, gets no
+	// error, and sees every request keep going to /v1.
 	for _, f := range []string{volcengine.FieldAPIPrefix, volcengine.FieldVideoAPIPrefix} {
-		if !slices.Contains(at.SettingsFields, f) {
-			t.Fatalf("%s must be a settings field or it is stored encrypted and never read: %v", f, at.SettingsFields)
+		if !slices.Contains(relay.SettingsFields, f) {
+			t.Fatalf("%s must be a settings field or it is stored encrypted and never read: %v", f, relay.SettingsFields)
 		}
 	}
+	// A relay's address is not an enumerable set, so it cannot be guarded -
+	// which is exactly why it is a separate account type rather than a value of
+	// the official one. Asserted so that nobody "fixes" it by adding a guard
+	// with one example relay in it.
+	if len(relay.GuardedSettings) != 0 {
+		t.Fatalf("relay guardedSettings = %+v, want none: a relay's address cannot be an allow-list", relay.GuardedSettings)
+	}
+
 	// The form's length limit and the plugin's must agree. They are written in
 	// two languages and nothing links them, so a change to one alone means the
 	// form accepts a value the plugin then refuses on every request.
@@ -143,7 +187,7 @@ func TestManifest(t *testing.T) {
 			MaxLength int `json:"maxLength"`
 		} `json:"properties"`
 	}
-	if err := json.Unmarshal(mustJSONFile(t, at.Form.Schema), &limits); err != nil {
+	if err := json.Unmarshal(mustJSONFile(t, relay.Form.Schema), &limits); err != nil {
 		t.Fatal(err)
 	}
 	for _, f := range []string{volcengine.FieldAPIPrefix, volcengine.FieldVideoAPIPrefix} {
@@ -152,67 +196,126 @@ func TestManifest(t *testing.T) {
 		}
 	}
 
-	var schema struct {
-		Required   []string                   `json:"required"`
-		Properties map[string]json.RawMessage `json:"properties"`
-	}
-	if err := json.Unmarshal(mustJSONFile(t, at.Form.Schema), &schema); err != nil {
-		t.Fatal(err)
-	}
-	mustJSONFile(t, at.Form.UISchema)
-	if !slices.Equal(schema.Required, []string{"api_key"}) {
-		t.Fatalf("form schema: required %v", schema.Required)
-	}
-	for _, f := range []string{"api_key", "base_url", volcengine.FieldAPIPrefix, volcengine.FieldVideoAPIPrefix,
-		volcengine.FieldAccessKey, volcengine.FieldSecretKey,
-		volcengine.FieldAssetBaseURL, volcengine.FieldAssetRegion} {
-		if _, ok := schema.Properties[f]; !ok {
-			t.Fatalf("form schema has no %s property", f)
+	// Both forms: the fields each type offers, and what each one requires.
+	for _, c := range []struct {
+		at       manifest.AccountType
+		required []string
+		fields   []string
+		absent   []string
+	}{
+		{official, []string{"api_key"},
+			[]string{"api_key", "base_url", volcengine.FieldAccessKey, volcengine.FieldSecretKey,
+				volcengine.FieldAssetBaseURL, volcengine.FieldAssetRegion},
+			[]string{volcengine.FieldAPIPrefix, volcengine.FieldVideoAPIPrefix, "model_mapping"}},
+		// base_url is required on the relay form because relaySpec has no
+		// default: falling back to Ark's address would send a relay's key to
+		// Ark, which answers 401 - an error that says nothing about the
+		// missing setting.
+		{relay, []string{"api_key", "base_url"},
+			[]string{"api_key", "base_url", volcengine.FieldAPIPrefix, volcengine.FieldVideoAPIPrefix,
+				volcengine.FieldAccessKey, volcengine.FieldSecretKey,
+				volcengine.FieldAssetBaseURL, volcengine.FieldAssetRegion},
+			[]string{"model_mapping"}},
+	} {
+		var schema struct {
+			Required   []string                   `json:"required"`
+			Properties map[string]json.RawMessage `json:"properties"`
 		}
-	}
-	// The asset library is opt-in per account: neither half of the AK/SK
-	// pair may be a required form field, or every Ark account would suddenly
-	// need one.
-	for _, f := range []string{volcengine.FieldAccessKey, volcengine.FieldSecretKey} {
-		if slices.Contains(schema.Required, f) {
-			t.Fatalf("%s must not be required: an account without an asset library is legal", f)
+		if err := json.Unmarshal(mustJSONFile(t, c.at.Form.Schema), &schema); err != nil {
+			t.Fatal(err)
 		}
-	}
-	// Model mapping is a core account field (CONTRACTS §18).
-	if slices.Contains(at.SettingsFields, "model_mapping") {
-		t.Fatal("model_mapping must not be a settings field")
-	}
-	if _, bad := schema.Properties["model_mapping"]; bad {
-		t.Fatal("form schema still declares model_mapping")
+		mustJSONFile(t, c.at.Form.UISchema)
+		if !slices.Equal(schema.Required, c.required) {
+			t.Fatalf("%s form: required %v, want %v", c.at.ID, schema.Required, c.required)
+		}
+		for _, f := range c.fields {
+			if _, ok := schema.Properties[f]; !ok {
+				t.Fatalf("%s form schema has no %s property", c.at.ID, f)
+			}
+		}
+		for _, f := range c.absent {
+			if _, bad := schema.Properties[f]; bad {
+				t.Fatalf("%s form schema must not declare %s", c.at.ID, f)
+			}
+		}
+		// The asset library is opt-in per account: neither half of the AK/SK
+		// pair may be a required form field, or every account would suddenly
+		// need one.
+		for _, f := range []string{volcengine.FieldAccessKey, volcengine.FieldSecretKey} {
+			if slices.Contains(schema.Required, f) {
+				t.Fatalf("%s: %s must not be required: an account without an asset library is legal", c.at.ID, f)
+			}
+		}
+		// ui:order must list every property, or a field the form offers has no
+		// defined position.
+		var ui struct {
+			Order []string `json:"ui:order"`
+		}
+		if err := json.Unmarshal(mustJSONFile(t, c.at.Form.UISchema), &ui); err != nil {
+			t.Fatal(err)
+		}
+		for f := range schema.Properties {
+			if !slices.Contains(ui.Order, f) {
+				t.Errorf("%s ui:order does not list %s", c.at.ID, f)
+			}
+		}
+		if len(ui.Order) != len(schema.Properties) {
+			t.Errorf("%s ui:order = %v, but the schema has %d properties", c.at.ID, ui.Order, len(schema.Properties))
+		}
 	}
 
-	// One account type serves three platforms: an operator enters the Ark key
-	// once and gets chat and responses (built-in openai), Anthropic Messages
-	// (built-in anthropic) and images plus video (own platform).
+	// The official type serves two platforms, the relay type three: the extra
+	// one is anthropic, because Ark itself does not serve Anthropic Messages
+	// and a relay does. That difference IS the split.
 	//
-	// Looked up by name, never by index: this list grew once already, and an
+	// Looked up by name, never by index: these lists have grown before, and an
 	// index-based assertion silently starts checking a different platform when
-	// it grows again.
-	byName := map[string]manifest.AccountPlatform{}
-	for _, ap := range at.Platforms {
-		byName[ap.Platform] = ap
+	// they grow again.
+	platformsOf := func(at manifest.AccountType) map[string]manifest.AccountPlatform {
+		byName := map[string]manifest.AccountPlatform{}
+		for _, ap := range at.Platforms {
+			byName[ap.Platform] = ap
+		}
+		if len(at.Platforms) != len(byName) {
+			t.Fatalf("%s lists a platform twice: %+v", at.ID, at.Platforms)
+		}
+		return byName
 	}
-	if len(at.Platforms) != len(byName) {
-		t.Fatalf("a platform is listed twice: %+v", at.Platforms)
-	}
-	for _, want := range []string{volcengine.PlatformID, volcengine.PlatformAnthropic, volcengine.PlatformVolcengine} {
-		if _, ok := byName[want]; !ok {
-			t.Fatalf("platforms = %+v, want %s among them", at.Platforms, want)
+	officialPlatforms, relayPlatforms := platformsOf(official), platformsOf(relay)
+	for _, want := range []string{volcengine.PlatformID, volcengine.PlatformVolcengine} {
+		for id, byName := range map[string]map[string]manifest.AccountPlatform{
+			volcengine.AccountTypeAPIKey: officialPlatforms, volcengine.AccountTypeRelay: relayPlatforms} {
+			if _, ok := byName[want]; !ok {
+				t.Fatalf("%s platforms = %v, want %s among them", id, byName, want)
+			}
 		}
 	}
-	if len(at.Platforms) != 3 {
-		t.Fatalf("platforms = %+v, want exactly the three known ones", at.Platforms)
+	if len(officialPlatforms) != 2 {
+		t.Fatalf("apikey platforms = %+v, want exactly openai and volcengine", official.Platforms)
 	}
-	ap := byName[volcengine.PlatformID]
-	// The own platform inherits everything from platforms[] (no override).
-	own := byName[volcengine.PlatformVolcengine]
-	if len(own.PassHeaders) != 0 || len(own.RequestFields) != 0 || len(own.Usage) != 0 {
-		t.Fatalf("own platform entry = %+v", own)
+	// This is the assertion that keeps the split honest. Declaring the
+	// anthropic platform here would make every official Ark account a
+	// candidate for /v1/messages, which Ark answers 404 with an empty body -
+	// one failed request plus a failover for every Anthropic call that happens
+	// to land on it.
+	if _, bad := officialPlatforms[volcengine.PlatformAnthropic]; bad {
+		t.Fatalf("the apikey type must not declare the %s platform: Ark does not serve it", volcengine.PlatformAnthropic)
+	}
+	if len(relayPlatforms) != 3 {
+		t.Fatalf("relay platforms = %+v, want exactly the three known ones", relay.Platforms)
+	}
+	if _, ok := relayPlatforms[volcengine.PlatformAnthropic]; !ok {
+		t.Fatalf("the relay type must declare the %s platform: that is what it exists for", volcengine.PlatformAnthropic)
+	}
+
+	// The own platform inherits everything from platforms[] (no override), on
+	// both types.
+	for id, byName := range map[string]map[string]manifest.AccountPlatform{
+		volcengine.AccountTypeAPIKey: officialPlatforms, volcengine.AccountTypeRelay: relayPlatforms} {
+		own := byName[volcengine.PlatformVolcengine]
+		if len(own.PassHeaders) != 0 || len(own.RequestFields) != 0 || len(own.Usage) != 0 {
+			t.Fatalf("%s own platform entry = %+v", id, own)
+		}
 	}
 	// anthropic's passHeaders must be narrowed the same way openai's is, and
 	// must match what upstreamHeaders forwards: passHeaders REPLACES the
@@ -220,7 +323,7 @@ func TestManifest(t *testing.T) {
 	// not the other is dropped at whichever side forgot it. anthropic-version
 	// and anthropic-beta are in both because they change how the upstream
 	// reads the body.
-	anth := byName[volcengine.PlatformAnthropic]
+	anth := relayPlatforms[volcengine.PlatformAnthropic]
 	if !slices.Equal(anth.PassHeaders, volcengine.AnthropicForwardHeaders()) || len(anth.RequestFields) != 0 {
 		t.Fatalf("anthropic platform entry = %+v, want passHeaders %v", anth, volcengine.AnthropicForwardHeaders())
 	}
@@ -255,15 +358,19 @@ func TestManifest(t *testing.T) {
 				strings.Join(diffs, "\n  "), strings.Join(want, "\n  "))
 		}
 	}
-	// Ark ignores OpenAI's org/project and x-stainless-* headers, so the
-	// account type narrows the built-in platform's passHeaders; the usage
+	// Ark ignores OpenAI's org/project and x-stainless-* headers, so both
+	// account types narrow the built-in platform's passHeaders; the usage
 	// rules and requestFields are inherited (Ark is OpenAI-compatible and
 	// its token counts are inclusive, like the built-in platform's).
-	if !slices.Equal(ap.PassHeaders, volcengine.ForwardHeaders()) {
-		t.Errorf("passHeaders = %v, want %v", ap.PassHeaders, volcengine.ForwardHeaders())
-	}
-	if len(ap.RequestFields) != 0 || len(ap.Usage) != 0 {
-		t.Errorf("requestFields/usage must stay inherited: %+v", ap)
+	for id, byName := range map[string]map[string]manifest.AccountPlatform{
+		volcengine.AccountTypeAPIKey: officialPlatforms, volcengine.AccountTypeRelay: relayPlatforms} {
+		ap := byName[volcengine.PlatformID]
+		if !slices.Equal(ap.PassHeaders, volcengine.ForwardHeaders()) {
+			t.Errorf("%s openai passHeaders = %v, want %v", id, ap.PassHeaders, volcengine.ForwardHeaders())
+		}
+		if len(ap.RequestFields) != 0 || len(ap.Usage) != 0 {
+			t.Errorf("%s: requestFields/usage must stay inherited: %+v", id, ap)
+		}
 	}
 	if b := builtin(t); b != nil {
 		if got := b.Protocols(); !slices.Equal(got, volcengine.Protocols) {
@@ -464,6 +571,8 @@ func TestValidate(t *testing.T) {
 		"runtimes/linux-arm64/plugin":     []byte("elf"),
 		"forms/apikey.schema.json":        mustJSONFile(t, "forms/apikey.schema.json"),
 		"forms/apikey.ui.json":            mustJSONFile(t, "forms/apikey.ui.json"),
+		"forms/relay.schema.json":         mustJSONFile(t, "forms/relay.schema.json"),
+		"forms/relay.ui.json":             mustJSONFile(t, "forms/relay.ui.json"),
 		"forms/asset-group.schema.json":   mustJSONFile(t, "forms/asset-group.schema.json"),
 		"forms/asset-group.ui.json":       mustJSONFile(t, "forms/asset-group.ui.json"),
 		"forms/asset.schema.json":         mustJSONFile(t, "forms/asset.schema.json"),

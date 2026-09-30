@@ -99,43 +99,46 @@ var AnthropicProtocols = []string{ProtocolMessages}
 var OwnProtocols = []string{ProtocolImages, ProtocolVideoSubmit, ProtocolVideoQuery}
 
 const (
-	// AccountTypeAPIKey is the only account type (manifest accountTypes).
+	// AccountTypeAPIKey is the official account type: a key of Ark itself, at
+	// one of Ark's own endpoints, serving Ark's own path layout.
 	AccountTypeAPIKey = "apikey"
-	// DefaultBaseURL is used when an account has no base_url: the official
-	// Chinese Ark endpoint. The overseas BytePlus endpoint
+	// AccountTypeRelay is the Ark-compatible relay account type, named for
+	// what people use it for: Doubao video through an aggregator. Its base URL
+	// is free text and its paths are configurable, because a relay mounts the
+	// Ark shapes wherever it likes.
+	//
+	// The two types exist so that "official or relay" is DECLARED rather than
+	// guessed. An earlier version had one type and derived the layout from the
+	// host of base_url; that works until it does not, and it made every field
+	// of both cases share one form. The same split already exists one level up
+	// in this repo - the anthropic plugin guards base_url to api.anthropic.com
+	// while the relay plugin's relay_key type leaves it free - and for the same
+	// reason: a relay's address cannot be expressed as an allow-list, so it
+	// cannot share an account type with an upstream whose address is pinned.
+	AccountTypeRelay = "relay"
+
+	// DefaultBaseURL is used when an apikey account has no base_url: the
+	// official Chinese Ark endpoint. The overseas BytePlus endpoint
 	// (BytePlusBaseURL) is the other value guardedSettings allows.
 	DefaultBaseURL = "https://ark.cn-beijing.volces.com"
 	// BytePlusBaseURL is Ark's overseas (BytePlus) endpoint.
 	BytePlusBaseURL = "https://ark.ap-southeast.bytepluses.com"
 
-	// APIPrefix is the root of Ark's own OpenAI-compatible API, used when the
-	// account points at one of Ark's endpoints.
+	// APIPrefix is the root of Ark's own OpenAI-compatible API, and the whole
+	// layout of an apikey account: not configurable there, because Ark serves
+	// one layout and an account of that type is by definition on Ark.
 	APIPrefix = "/api/v3"
 
-	// AnthropicOfficialPrefix is empty on purpose: Ark's own endpoints do not
-	// serve Anthropic Messages, so an official account refuses that protocol
-	// by name instead of sending it somewhere.
-	//
-	// Measured 2026-09-30 with a working key: /api/v3/messages answers 404
-	// with a zero-byte body, the same as a path that was never registered,
-	// while a registered route answers 404 with a JSON error. The only Ark
-	// surface that did speak Anthropic was /api/coding/v1/messages, behind a
-	// Coding Plan subscription - deliberately NOT used, on the operator's
-	// call: it is a subscription product whose quota its own documentation
-	// says is not for direct API calls, and pointing at it would make the
-	// plugin's behaviour depend on a plan the account may not hold.
-	AnthropicOfficialPrefix = ""
-
-	// RelayAPIPrefix is the layout of an Ark-compatible relay: the standard
-	// OpenAI and Anthropic paths (/v1/chat/completions, /v1/messages). An
-	// account pointed at anything other than Ark's own endpoints is assumed to
-	// be one of these, which is why neither layout needs to be configured.
+	// RelayAPIPrefix is the default layout of a relay account: the standard
+	// OpenAI and Anthropic paths (/v1/chat/completions, /v1/messages), which is
+	// what every Ark-compatible relay measured so far serves.
 	RelayAPIPrefix = "/v1"
 
-	// FieldAPIPrefix overrides the derived layout, for the one case the rule
-	// gets wrong: a relay that mirrors Ark's own paths under a custom host.
-	// FieldVideoAPIPrefix is separate because Ark's native video tasks are the
-	// thing a relay most often mounts in a namespace of its own.
+	// FieldAPIPrefix overrides a relay's text-surface layout, for a relay that
+	// mirrors Ark's own paths under its own host. FieldVideoAPIPrefix is
+	// separate because Ark's native video tasks are the thing a relay most
+	// often mounts in a namespace of its own. Neither is offered on the apikey
+	// type.
 	FieldAPIPrefix      = "api_prefix"
 	FieldVideoAPIPrefix = "video_api_prefix"
 
@@ -170,20 +173,64 @@ const (
 	DefaultAnthropicVersion = "2023-06-01"
 )
 
-// spec describes the apikey account type. A trailing /api/v3 of base_url is
-// removed: operators paste the Ark SDK base URL
+// spec describes the apikey (official Ark) account type. A trailing /api/v3 of
+// base_url is removed: operators paste the Ark SDK base URL
 // ("https://ark.cn-beijing.volces.com/api/v3"), while guardedSettings
 // (CONTRACTS §21.3) compares against the bare host, and the paths below add
 // the prefix themselves.
-//
-// StripSuffixes stays the LITERAL "/api/v3" and must not follow the
-// api_prefix setting. The two look alike and are different things: this one
-// undoes a paste of Ark's documented SDK base URL, which operators do
-// regardless of where their upstream actually serves the API. Making it follow
-// the setting would mean an account whose prefix is "/v1" could no longer
-// accept the official base URL, because the /api/v3 it ends with would be kept
-// and then "/v1/chat/completions" appended to it.
 var spec = apikey.Spec{AccountType: AccountTypeAPIKey, DefaultBaseURL: DefaultBaseURL, StripSuffixes: []string{APIPrefix}}
+
+// relaySpec describes the relay account type. Two deliberate differences from
+// spec:
+//
+//   - No DefaultBaseURL. A relay has no default address, so an account with no
+//     base_url is a misconfiguration rather than an official account, and
+//     relayBaseURL below says so instead of quietly sending a relay's key to
+//     Ark.
+//   - No StripSuffixes. On the apikey type, stripping /api/v3 undoes a paste of
+//     Ark's documented SDK base URL. Here the base URL is the relay's root and
+//     the layout is named by api_prefix, so stripping anything would silently
+//     move an operator's request: "https://r/api/v3" with the default prefix
+//     would become "https://r/v1/...". validateRelayBaseURL refuses that shape
+//     with a message pointing at api_prefix, which is the value that expresses
+//     it.
+var relaySpec = apikey.Spec{AccountType: AccountTypeRelay}
+
+// specFor returns the credential spec of an account type. An empty type means
+// the official one: that is what an account row carried before the split, and
+// what a caller that did not fill Account.type means.
+func specFor(accountType string) (apikey.Spec, error) {
+	switch accountType {
+	case AccountTypeAPIKey, "":
+		return spec, nil
+	case AccountTypeRelay:
+		return relaySpec, nil
+	default:
+		return apikey.Spec{}, status.Errorf(codes.FailedPrecondition, "unsupported account type %q", accountType)
+	}
+}
+
+// accountConfig reads an account of either type: its credentials through the
+// matching spec, and the upstream path layout the type implies.
+func accountConfig(acc *pluginv1.Account) (*apikey.Config, prefixes, error) {
+	sp, err := specFor(acc.GetType())
+	if err != nil {
+		return nil, prefixes{}, err
+	}
+	cfg, err := sp.FromAccount(acc)
+	if err != nil {
+		return nil, prefixes{}, err
+	}
+	if acc.GetType() == AccountTypeRelay && cfg.BaseURL == "" {
+		return nil, prefixes{}, status.Errorf(codes.FailedPrecondition,
+			"account %d: a %s account needs a base_url - there is no default relay address", acc.GetId(), AccountTypeRelay)
+	}
+	px, err := prefixesOf(acc.GetType(), acc.GetSettingsJson())
+	if err != nil {
+		return nil, prefixes{}, status.Errorf(codes.FailedPrecondition, "account %d settings: %v", acc.GetId(), err)
+	}
+	return cfg, px, nil
+}
 
 // forwardHeaders are the client headers copied verbatim to the upstream
 // request. It must stay equal to the account type's passHeaders override in
@@ -319,22 +366,27 @@ func upstreamPath(px prefixes, protocol, model string) (string, error) {
 		// converter, so the body reaching us is already Anthropic-shaped and
 		// the only decision is where to send it.
 		//
-		// An account on one of Ark's own endpoints has nowhere to send it -
-		// see AnthropicOfficialPrefix - so it says so rather than posting to a
-		// path measured not to exist. An Ark-compatible relay serves the
-		// standard /v1/messages and is the supported way to use this protocol.
+		// Only the relay account type declares the anthropic platform, so in
+		// practice px.anthropic is always set when this runs. The refusal is
+		// the defensive half: Ark's own endpoints were measured on 2026-09-30
+		// not to serve this protocol at all (/api/v3/messages answers 404 with
+		// a zero-byte body, exactly like a path that was never registered,
+		// while a real route answers 404 with a JSON error), so if routing ever
+		// does hand an official account an Anthropic request, saying so beats
+		// posting to a path known not to exist.
 		if px.anthropic == "" {
 			return "", status.Errorf(codes.InvalidArgument,
-				"Ark's own endpoints do not serve Anthropic Messages, so %q needs an account whose base URL is an "+
-					"Ark-compatible relay that does (or an explicit %s)", protocol, FieldAPIPrefix)
+				"Ark's own endpoints do not serve Anthropic Messages, so %q needs a %q account pointed at an "+
+					"Ark-compatible relay that does", protocol, AccountTypeRelay)
 		}
 		return px.anthropic + "/messages", nil
 	case ProtocolCountTokens:
-		// Declaring the anthropic platform makes this account type a
-		// candidate for both of its endpoints (AccountPlatform has no
-		// per-endpoint filter), and Ark documents no token-counting endpoint.
-		// Failing by name beats guessing a path: the client gets a reason and
-		// the core fails over to an account that does serve it.
+		// The relay type declares the anthropic platform, which makes it a
+		// candidate for both of that platform's endpoints: AccountPlatform has
+		// no per-endpoint filter. Neither Ark nor any relay measured so far
+		// serves token counting. Failing by name beats guessing a path: the
+		// client gets a reason and the core fails over to an account that does
+		// serve it.
 		return "", status.Errorf(codes.InvalidArgument,
 			"Ark has no token-counting endpoint, so %q cannot be served by an Ark account", protocol)
 	default:
@@ -405,13 +457,9 @@ func requestModel(in *pluginv1.BuildUpstreamRequestRequest) string {
 // completions get stream_options.include_usage=true so the upstream reports
 // usage in the last chunk (CONTRACTS 14.1); Ark is OpenAI-compatible here.
 func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstreamRequestRequest) (*pluginv1.BuildUpstreamRequestResponse, error) {
-	cfg, err := spec.FromAccount(in.GetAccount())
+	cfg, px, err := accountConfig(in.GetAccount())
 	if err != nil {
 		return nil, err
-	}
-	px, err := prefixesOf(cfg.BaseURL, in.GetAccount().GetSettingsJson())
-	if err != nil {
-		return nil, status.Errorf(codes.FailedPrecondition, "account settings: %v", err)
 	}
 	meta := in.GetMeta()
 	model := requestModel(in)
@@ -440,13 +488,9 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 // whose usage rules read the token counts, so the console test can show the
 // token usage (account/testreq.go testUsage).
 func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestRequestRequest) (*pluginv1.BuildTestRequestResponse, error) {
-	cfg, err := spec.FromAccount(in.GetAccount())
+	cfg, px, err := accountConfig(in.GetAccount())
 	if err != nil {
 		return nil, err
-	}
-	px, err := prefixesOf(cfg.BaseURL, in.GetAccount().GetSettingsJson())
-	if err != nil {
-		return nil, status.Errorf(codes.FailedPrecondition, "account settings: %v", err)
 	}
 	model := strings.TrimSpace(in.GetModel())
 	if model == "" {

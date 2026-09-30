@@ -3,10 +3,10 @@
   "key": "volcengine",
   "name": { "en": "Volcengine Ark", "zh": "字节火山方舟" },
   "description": {
-    "en": "Adds the \"Ark API key\" account type: Volcengine Ark (Doubao) accounts that serve the built-in openai and anthropic platforms (/v1/chat/completions, /v1/responses, /v1/embeddings, /v1/messages) upstream at <Base URL><API path prefix>/..., next to the other account types of a group. It also declares the \"volcengine\" platform with Ark's synchronous image generation (Seedream) at POST /ark/v3/images/generations, metered by generated images and output tokens, and Doubao Seedance video generation: POST /ark/v3/contents/generations/tasks submits a task and is pre-charged an estimate read from the requested resolution, aspect ratio and duration, GET /ark/v3/contents/generations/tasks/{id} polls it free of charge, and the real completion tokens are settled by the core's reconcile loop when the task finishes. Accounts that carry an access key and secret key additionally get the Ark asset library: console pages and admin APIs that create, list, search, update and delete asset groups and assets through the Ark asset OpenAPI, with a local index. The Base URL defaults to the official Chinese endpoint and may be switched to BytePlus; a custom address needs account:settings:custom. Declares no prices.",
-    "zh": "新增「方舟 API Key」账号类型：字节火山方舟（豆包）账号，为内置 openai 与 anthropic 平台（/v1/chat/completions、/v1/responses、/v1/embeddings、/v1/messages）提供服务，上游发往 <Base URL><API 路径前缀>/…，与分组里其他类型的账号一起调度。同时声明 volcengine 平台，提供方舟的同步图片生成（Seedream）端点 POST /ark/v3/images/generations，按生成张数与输出 token 计量；以及豆包 Seedance 视频生成：POST /ark/v3/contents/generations/tasks 提交任务并按请求里的分辨率、宽高比与时长算出预估用量预扣，GET /ark/v3/contents/generations/tasks/{id} 查询任务不计费，任务完成后由核心的核对循环按真实 completion token 结算。填写了 Access Key / Secret Key 的账号还可以使用方舟素材库：通过方舟素材 OpenAPI 增删改查与搜索素材组与素材的控制台页面与后台接口，并在本地建立索引。Base URL 默认官方国内地址，可切换到 BytePlus 海外地址；填其他地址需要 account:settings:custom 权限。不声明价格。"
+    "en": "Adds two account types for Volcengine Ark (Doubao), split the way the upstreams are: \"Ark API key\" is a key of Ark itself, pinned to Ark's own endpoints and its one path layout (<Base URL>/api/v3/...), and \"Doubao relay key\" is a key of an Ark-compatible relay or aggregator, whose root address is required and whose text and video path prefixes are configurable - which is what people use for Doubao video through a relay. Both serve the built-in openai platform (/v1/chat/completions, /v1/responses, /v1/embeddings) next to the other account types of a group; only the relay type serves the anthropic platform (/v1/messages), because Ark itself does not. It also declares the \"volcengine\" platform with Ark's synchronous image generation (Seedream) at POST /ark/v3/images/generations, metered by generated images and output tokens, and Doubao Seedance video generation: POST /ark/v3/contents/generations/tasks submits a task and is pre-charged an estimate read from the requested resolution, aspect ratio and duration, GET /ark/v3/contents/generations/tasks/{id} polls it free of charge, and the real completion tokens are settled by the core's reconcile loop when the task finishes. Accounts that carry an access key and secret key additionally get the Ark asset library: console pages and admin APIs that create, list, search, update and delete asset groups and assets through the Ark asset OpenAPI, with a local index. The official type's addresses are restricted to Ark's own unless the caller holds account:settings:custom; a relay's address cannot be an allow-list and is therefore free text. Declares no prices.",
+    "zh": "新增两个字节火山方舟（豆包）账号类型，按上游本身的分界拆开：「方舟 API Key」是方舟自己的 Key，地址限定在方舟自己的端点、路径布局只有一种（<Base URL>/api/v3/…）；「豆包中转 Key」是 Ark 兼容中转站 / 聚合站的 Key，根地址必填、文本与视频路径前缀均可配 —— 通过中转站用豆包视频的就是这个。两者都为内置 openai 平台（/v1/chat/completions、/v1/responses、/v1/embeddings）提供服务，与分组里其他类型的账号一起调度；只有中转类型服务 anthropic 平台（/v1/messages），因为方舟本身不提供。同时声明 volcengine 平台，提供方舟的同步图片生成（Seedream）端点 POST /ark/v3/images/generations，按生成张数与输出 token 计量；以及豆包 Seedance 视频生成：POST /ark/v3/contents/generations/tasks 提交任务并按请求里的分辨率、宽高比与时长算出预估用量预扣，GET /ark/v3/contents/generations/tasks/{id} 查询任务不计费，任务完成后由核心的核对循环按真实 completion token 结算。填写了 Access Key / Secret Key 的账号还可以使用方舟素材库：通过方舟素材 OpenAPI 增删改查与搜索素材组与素材的控制台页面与后台接口，并在本地建立索引。官方类型的地址没有 account:settings:custom 权限时只能填方舟自己的地址；中转站的地址无法用白名单表达，因此是自由文本。不声明价格。"
   },
-  "version": "0.6.0",
+  "version": "0.7.0",
   "publisher": "sub2api",
   "icon": "text:V",
   "runtime": "grpc",
@@ -121,8 +121,8 @@
       "id": "apikey",
       "label": { "en": "Ark API key", "zh": "方舟 API Key" },
       "description": {
-        "en": "An API key of Volcengine Ark (or of BytePlus / an Ark-compatible relay, by setting the Base URL). Requests go to <Base URL><API path prefix>/... (chat completions, responses, embeddings, messages, image generations) with the key in Authorization: Bearer. The path layout follows the Base URL: an Ark address uses Ark's own paths and does not serve Anthropic Messages at all, so that protocol needs a relay, while any other address is taken for an Ark-compatible relay and uses the standard /v1/... ones; api_prefix overrides either, for a relay that mirrors Ark's paths under its own host. Ark's native video tasks have their own prefix setting, because relays commonly keep those in a namespace of their own. Anthropic Messages is forwarded as it arrives, so this account type also serves the built-in anthropic platform; Ark has no token-counting endpoint, so a count_tokens request routed here is refused by name and fails over. The optional access key / secret key pair enables the Ark asset library for this account.",
-        "zh": "火山方舟的 API Key（也可以填 BytePlus 海外或 Ark 兼容中转的地址）。请求发往 <Base URL><API 路径前缀>/…（对话、responses、嵌入、messages、图片生成），Key 放在 Authorization: Bearer 中。路径布局由 Base URL 决定：方舟地址走方舟自己的布局，且方舟本身不提供 Anthropic Messages（那个协议需要中转站），其他地址按 Ark 兼容中转站处理、走标准的 /v1/… 路径；两者都可以用 api_prefix 覆盖。方舟原生视频任务另有前缀设置。Anthropic Messages 按原样转发，所以这个账号类型同时服务内置 anthropic 平台；方舟没有 token 计数端点，调度到这里的 count_tokens 请求会被指名拒绝并转由其他账号处理。另外填写 Access Key / Secret Key 即为该账号启用方舟素材库。"
+        "en": "An API key of Volcengine Ark itself, at one of Ark's own endpoints: the Chinese one by default, or the overseas BytePlus one. Requests go to <Base URL>/api/v3/... (chat completions, responses, embeddings, image generations, video tasks) with the key in Authorization: Bearer - Ark serves one layout, so there is nothing to configure. Ark does not serve Anthropic Messages at all (measured: /api/v3/messages answers 404 with an empty body), so this type does not declare the anthropic platform and an Anthropic request is never routed here; use the \"Doubao relay key\" type pointed at a relay that does. The optional access key / secret key pair enables the Ark asset library through Ark's control plane. Use this type for official Ark keys and the \"Doubao relay key\" type for an aggregator.",
+        "zh": "火山方舟本身的 API Key，地址是方舟自己的端点：默认国内，海外可选 BytePlus。请求发往 <Base URL>/api/v3/…（对话、responses、嵌入、图片生成、视频任务），Key 放在 Authorization: Bearer 中 —— 方舟只有一种路径布局，所以没有可配的东西。方舟本身不提供 Anthropic Messages（实测 /api/v3/messages 返回 404 且响应体为空），因此这个类型不声明 anthropic 平台，Anthropic 协议的请求不会被调度到这里；那种请求请用「豆包中转 Key」类型指向支持它的中转站。另外填写 Access Key / Secret Key 即通过方舟控制面为该账号启用素材库。官方方舟 Key 用这个类型，聚合中转站用「豆包中转 Key」类型。"
       },
       "form": {
         "mode": "schema",
@@ -130,7 +130,7 @@
         "uiSchema": "forms/apikey.ui.json"
       },
       "sensitiveFields": ["api_key", "secret_key"],
-      "settingsFields": ["base_url", "api_prefix", "video_api_prefix", "asset_base_url", "asset_region"],
+      "settingsFields": ["base_url", "asset_base_url", "asset_region"],
       "guardedSettings": [
         {
           "field": "base_url",
@@ -146,6 +146,30 @@
           ]
         }
       ],
+      "platforms": [
+        {
+          "platform": "openai",
+          "passHeaders": ["user-agent"]
+        },
+        {
+          "platform": "volcengine"
+        }
+      ]
+    },
+    {
+      "id": "relay",
+      "label": { "en": "Doubao relay key", "zh": "豆包中转 Key" },
+      "description": {
+        "en": "A key of an Ark-compatible relay or aggregator - the type to use for Doubao video (Seedance) through a relay, which is what most of these are for. The Base URL is the relay's root address and is required: a relay has no default address, and because of that it is NOT restricted to an allow-list the way the official type's is, so creating an account of this type points traffic and a key wherever the address says. Paths default to the standard ones (/v1/chat/completions, /v1/responses, /v1/embeddings, /v1/messages, /v1/images/generations) and both prefixes can be set: video is separate because a relay commonly keeps Ark's native task paths in a namespace of its own while serving text at the root. Anthropic Messages is forwarded as it arrived, so this type also serves the built-in anthropic platform; there is no token-counting endpoint, so a count_tokens request routed here is refused by name and fails over. The optional access key / secret key pair enables the asset library at the relay's own asset endpoint.",
+        "zh": "Ark 兼容中转站 / 聚合站的 Key —— 通过中转站用豆包视频（Seedance）就用这个类型，这也是这类站点的主要用途。Base URL 是中转站的根地址，必填：中转站没有默认地址，也正因如此，它**不像**官方类型那样被限制在白名单内，所以建一个这种类型的账号就等于把流量和 Key 指向地址里写的任何地方。路径默认走标准布局（/v1/chat/completions、/v1/responses、/v1/embeddings、/v1/messages、/v1/images/generations），两个前缀都可以填：视频前缀独立，因为中转站常把方舟原生任务路径放在自己的命名空间下、而文本在根上。Anthropic Messages 按原样转发，所以这个类型同时服务内置 anthropic 平台；没有 token 计数端点，调度到这里的 count_tokens 请求会被指名拒绝并转由其他账号处理。另外填写 Access Key / Secret Key 即在中转站自己的素材端点上启用素材库。"
+      },
+      "form": {
+        "mode": "schema",
+        "schema": "forms/relay.schema.json",
+        "uiSchema": "forms/relay.ui.json"
+      },
+      "sensitiveFields": ["api_key", "secret_key"],
+      "settingsFields": ["base_url", "api_prefix", "video_api_prefix", "asset_base_url", "asset_region"],
       "platforms": [
         {
           "platform": "openai",
@@ -332,7 +356,7 @@
 
   "hostPermissions": [
     { "id": "platform.register",
-      "reason": { "en": "Register the \"Ark API key\" account type and the \"volcengine\" platform", "zh": "注册「方舟 API Key」账号类型与 volcengine 平台" } },
+      "reason": { "en": "Register the \"Ark API key\" and \"Doubao relay key\" account types and the \"volcengine\" platform", "zh": "注册「方舟 API Key」与「豆包中转 Key」账号类型，以及 volcengine 平台" } },
     { "id": "gateway.endpoint",
       "reason": { "en": "Serve Ark image generation at POST /ark/v3/images/generations and Doubao Seedance video generation at POST/GET /ark/v3/contents/generations/tasks", "zh": "在 POST /ark/v3/images/generations 上提供方舟图片生成，在 POST/GET /ark/v3/contents/generations/tasks 上提供豆包 Seedance 视频生成" } },
     { "id": "accounts.credentials", "scope": { "types": "own" },

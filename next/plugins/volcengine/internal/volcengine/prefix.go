@@ -1,12 +1,17 @@
 package volcengine
 
-// Upstream path prefixes. Ark's OpenAI- and Anthropic-compatible surfaces sit
-// under /api/v3 on the official endpoint, but a relay in front of Ark mounts
-// the same shapes wherever it likes: the one this plugin was first verified
-// against serves text at the root (/v1/chat/completions, /v1/messages) while
-// keeping Ark's native video tasks under /doubao/api/v3. One fixed prefix
-// cannot express that, so both are settings, and the video one falls back to
-// the other.
+// Upstream path prefixes. Ark's OpenAI-compatible surface sits under /api/v3
+// on its own endpoints, but a relay in front of Ark mounts the same shapes
+// wherever it likes: the one this plugin was first verified against serves text
+// at the root (/v1/chat/completions, /v1/messages) while keeping Ark's native
+// video tasks under /doubao/api/v3. One fixed prefix cannot express that.
+//
+// Which of the two an account is, is its ACCOUNT TYPE, not a guess: apikey is
+// Ark itself and has no path settings, relay is a relay and has two. An earlier
+// version had one account type and derived the layout from the host of
+// base_url, which meant the official case and the relay case shared one form
+// and the rule had to special-case BytePlus to avoid treating Ark's own
+// overseas endpoint as a relay.
 
 import (
 	"encoding/json"
@@ -18,54 +23,38 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/apikey"
 )
 
-// prefixes are the two path prefixes of one account, already normalized.
+// prefixes are the path prefixes of one account, already normalized.
 type prefixes struct {
 	api   string
 	video string
-	// anthropic is where the upstream serves Anthropic Messages. On Ark it is
-	// NOT a sibling of api: measured on 2026-09-30, /api/v3/messages does not
-	// exist there (it answers 404 with an empty body, exactly like a path that
-	// was never registered, while a real route answers 404 with a JSON error),
-	// and the Anthropic surface is /api/coding/v1/messages, which does exist -
-	// it answers UnsupportedModel and InvalidSubscription, i.e. it read the
-	// request. A relay, serving the standard paths, has it next to the others.
+	// anthropic is where the upstream serves Anthropic Messages, and is empty
+	// for an apikey account: measured on 2026-09-30, Ark's own endpoints do not
+	// serve that protocol at all (/api/v3/messages answers 404 with an empty
+	// body, exactly like a path that was never registered, while a real route
+	// answers 404 with a JSON error). Only the relay account type declares the
+	// anthropic platform, so an empty value here is normally unreachable -
+	// upstreamPath refuses it rather than assuming so.
 	anthropic string
 }
 
-// officialBaseURL reports whether a base URL is one of Ark's own endpoints.
-// Those two are also the guardedSettings allow-list, which is the point: an
-// account that has not been pointed somewhere else is an Ark account and gets
-// Ark's own path layout.
-func officialBaseURL(base string) bool {
-	h := hostOfURL(base)
-	return h != "" && (h == hostOfURL(DefaultBaseURL) || h == hostOfURL(BytePlusBaseURL))
-}
-
-func hostOfURL(raw string) string {
-	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil {
-		return ""
+// prefixesOf returns the path layout of one account.
+//
+// An apikey account is on Ark, which serves exactly one layout, so it reads no
+// settings at all: api_prefix and video_api_prefix are not in that type's
+// settingsFields and not in its form, and a value smuggled past both would land
+// in the encrypted credentials blob where this never looks.
+//
+// A relay account defaults to the standard paths and may name either prefix.
+// The two are separate because Ark's native video tasks are the one thing a
+// relay commonly mounts somewhere of its own (the first one verified keeps them
+// under /doubao/api/v3 while serving text at the root).
+func prefixesOf(accountType, settingsJSON string) (prefixes, error) {
+	if accountType != AccountTypeRelay {
+		return prefixes{api: APIPrefix, video: APIPrefix}, nil
 	}
-	return strings.ToLower(u.Host)
-}
-
-// prefixesOf reads the layout for one account.
-//
-// The layout is derived, not configured, because the operator already told us
-// which it is by choosing a base URL. Ark's own endpoints serve Ark's paths;
-// anything else is an Ark-compatible relay, and those serve the standard ones
-// (/v1/chat/completions, /v1/messages). So the common cases need no path
-// setting at all - which is the whole point, since the two layouts differ in
-// more than a prefix and no single prefix could express both.
-//
-// api_prefix overrides it for the one case the rule gets wrong: a relay that
-// mirrors Ark's own paths under a custom host. video_api_prefix is separate
-// because Ark's native video tasks are the one thing a relay commonly mounts
-// somewhere of its own (the first one verified keeps them under /doubao/api/v3
-// while serving text at the root).
-func prefixesOf(baseURL, settingsJSON string) (prefixes, error) {
 	settings, err := decodeJSONObject(settingsJSON)
 	if err != nil {
 		return prefixes{}, fmt.Errorf("settings: %w", err)
@@ -96,29 +85,67 @@ func prefixesOf(baseURL, settingsJSON string) (prefixes, error) {
 	if err != nil {
 		return prefixes{}, err
 	}
-	px := prefixes{api: api, video: video}
-	switch {
-	case api != "":
-		// Explicitly set: Ark-shaped paths under it, Anthropic included. An
-		// operator who names a prefix is saying "this upstream looks like Ark,
-		// just over here".
-		px.anthropic = api
-	case officialBaseURL(baseURL):
-		px.api = APIPrefix
-		px.anthropic = AnthropicOfficialPrefix
-	default:
-		px.api = RelayAPIPrefix
-		px.anthropic = RelayAPIPrefix
+	if api == "" {
+		api = RelayAPIPrefix
 	}
-	if px.video == "" {
-		// Video follows the API surface, except that on a relay there is no
-		// standard place for Ark's native task paths - hence the setting.
-		px.video = APIPrefix
-		if api != "" {
-			px.video = api
+	if video == "" {
+		// Video follows the text surface. A relay that keeps Ark's native task
+		// paths elsewhere is exactly what the second setting is for, but the
+		// common case of one prefix must need one field.
+		video = api
+	}
+	return prefixes{api: api, video: video, anthropic: api}, nil
+}
+
+// validateRelayBaseURL refuses a relay base_url that already carries a path
+// prefix, and refuses a missing one.
+//
+// Both halves exist because of the same failure, which is a billing failure
+// rather than a 404. relaySpec strips nothing (see its comment), so a base URL
+// of "https://r/v1" with the default prefix yields "https://r/v1/v1/...". On
+// the text surface that is a loud 404. On the video surface the submit 404s,
+// but if a relay instead answers 200 for the submit and 404 for the poll - or
+// if only one of the two prefixes is wrong - the reconcile poll answers 404 for
+// every entry, the core reads that as "still pending" until the deadline, and
+// then keeps the estimate: the account is charged its pre-charge for work that
+// really finished and reported real usage.
+//
+// So this is refused at save time with a message naming the setting that
+// expresses it, rather than stripped: stripping would silently move the request
+// somewhere the operator did not write.
+func validateRelayBaseURL(errs pluginsdk.FieldErrors, credentialsJSON, settingsJSON string) pluginsdk.FieldErrors {
+	raw := ""
+	for _, src := range []string{settingsJSON, credentialsJSON} {
+		obj, err := decodeJSONObject(src)
+		if err != nil {
+			continue
+		}
+		if s, ok := obj[apikey.FieldBaseURL].(string); ok && strings.TrimSpace(s) != "" {
+			raw = strings.TrimSpace(s)
+			break
 		}
 	}
-	return px, nil
+	if raw == "" {
+		return errs.Add(apikey.FieldBaseURL, "required",
+			"base_url is required for a relay account - there is no default relay address / "+
+				"中转账号必须填写 base_url —— 中转站没有默认地址")
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		// apikey.Spec.Validate has already reported this shape.
+		return errs
+	}
+	p := strings.TrimRight(u.Path, "/")
+	for _, known := range []string{RelayAPIPrefix, APIPrefix} {
+		if !strings.HasSuffix(p, known) {
+			continue
+		}
+		return errs.Add(apikey.FieldBaseURL, "format", fmt.Sprintf(
+			"base_url must be the relay's root address, without %s: put the path in %s instead, so the video paths "+
+				"can differ from the text ones / base_url 要填中转站的根地址，不要带 %s —— 路径请填在 %s 里，"+
+				"视频路径才能与文本路径不同", known, FieldAPIPrefix, known, FieldAPIPrefix))
+	}
+	return errs
 }
 
 // normalizePrefix trims a prefix and rejects the shapes that would not stay a

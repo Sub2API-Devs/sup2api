@@ -101,7 +101,9 @@ AssetLibraryRegion   string // 签名区域，空 = cn-beijing；BytePlus 海外
 
 > 这张表按期递增，**不要照最终形态去实现一期**，那会多申请两个高危权限。
 
-### 4.2 账号类型（只有一个）
+### 4.2 账号类型
+
+> **已被 §14 取代（0.7.0）。** 这里写的「只有一个账号类型」不再成立：0.7.0 把它拆成 `apikey`（方舟官方）与 `relay`（Ark 兼容中转站），下面这段是一期的原始设计记录。
 
 ```jsonc
 {
@@ -800,6 +802,8 @@ token = **帧数 × 输出宽 × 输出高 / 1024**，固定 24fps。以下每�
 
 ### 13.2 布局由 Base URL 推导，不由运维配置
 
+> **已被 §14 取代（0.7.0）。** 布局现在由**账号类型**决定，不再从 base_url 的主机推导 —— 下面这段（含 `officialBaseURL` 那条 BytePlus 特例）是 0.6.0 的记录，保留是因为 §14.1 的论证要引用它。Anthropic 那一列另见 §13.9：官方那条路后来决定不支持。
+
 **官方 Ark 的 OpenAI 面在 `/api/v3`、Anthropic 面在 `/api/coding/v1`** —— 同一个账号上两个不同的前缀，一个 `api_prefix` 字段表达不了。所以布局不再是运维填的前缀，而是**从他们已经选的地址推导出来的**：
 
 | Base URL | 文本 / 图片 | Anthropic | 视频 |
@@ -933,3 +937,69 @@ token = **帧数 × 输出宽 × 输出高 / 1024**，固定 24fps。以下每�
 
 - **图片**（§12.3，这个中转站不提供任何 Seedream 模型，换上游才能验）
 - 官方 Ark 的 Anthropic 面（按 §13.9 已决定不支持，所以不再是缺口）
+
+---
+
+## 14. 拆成两个账号类型：官方 / 中转（2026-10-01，0.7.0）
+
+参考 new-api 的渠道划分，把一个 `apikey` 账号类型拆成两个。**这一节取代 §4.2 与 §13.2 的「一个类型 + 从 Base URL 推导布局」。**
+
+### 14.1 为什么是「官方 / 中转」这条轴，不是「视频 / 文本」
+
+要简化的复杂度具体是三样东西，它们**全都长在官方与中转的差别上**：
+
+1. 一个表单 8 个字段，官方只用 3 个（`base_url` / `asset_base_url` / `asset_region`）、中转用 5 个（多两个前缀），彼此的字段对另一边**没有意义**
+2. `officialBaseURL()` —— 靠**主机名猜**这个账号是官方还是中转，而且为了不把 BytePlus（方舟自己的海外地址）误判成中转站，必须把它硬编码进判断
+3. 同一个类型声明 `anthropic` 平台，于是官方账号也成了 `/v1/messages` 与 `count_tokens` 的候选，只能在请求路径上**按名字拒绝**
+
+按「视频 / 文本」拆一样都解决不了：视频类型照样要两个前缀（中转站的视频前缀正是为它存在的），文本类型照样要猜官方还是中转。
+
+**而这条轴在本仓库里已经有先例**：`anthropic` 插件把 `base_url` guard 到 `api.anthropic.com`，`relay` 插件的 `relay_key` 类型让它自由 —— 同一个协议、两个插件，分界就是官方与中转。理由也相同：**中转站的地址无法用白名单表达**（`sdk/manifest/check/validate.go:807` 要求 `guardedSettings.allowed` 至少一个绝对 http(s) URL，空白名单过不了校验），所以它不能和一个地址被钉死的上游共用账号类型。
+
+new-api 的两个渠道是同一条轴（下表是读代码得到的，不是看文档）：
+
+| | new-api 45 `VolcEngine` | new-api 54 `Doubao` |
+|---|---|---|
+| api type | `APITypeVolcEngine`（Ark 原生 `/api/v3`） | 落到 default（OpenAI 兼容） |
+| 流式 | 在 `streamSupportedChannels` 里 | 不在 |
+| 任务插件 | `doubao` | `doubao` |
+| 素材库端点 | 官方控制面 `ark.cn-beijing.volcengineapi.com` | **base_url 下的一个路径**（`asset_library_endpoint`） |
+| 视频路径 | `/api/v3/...` | `doubao_video_legacy_api` 开关 |
+
+54 也是 OpenAI 兼容地服务文本的（它不在 `api_type.go` 的 switch 里，落到默认分支），所以「中转类型也服务文本」与 new-api 一致 —— 更重要的是，那正是 §13.7 在这个中转站上实测通过的东西。
+
+### 14.2 两个类型
+
+| | `apikey`「方舟 API Key」 | `relay`「豆包中转 Key」 |
+|---|---|---|
+| 上游 | 方舟自己（含 BytePlus） | Ark 兼容中转站 / 聚合站 |
+| `base_url` | 可留空（默认国内），**guarded** 到两个官方地址 | **必填**，**不 guarded**（无法 guard） |
+| 路径布局 | 固定 `/api/v3`，**没有前缀字段** | 默认 `/v1`，`api_prefix` + `video_api_prefix` 可配 |
+| 平台 | `openai` + `volcengine` | `openai` + **`anthropic`** + `volcengine` |
+| `StripSuffixes` | `/api/v3`（撤销粘贴 SDK base URL） | **无**（见 14.3） |
+| 素材库 | 官方控制面，`asset_base_url` guarded | 中转站自己的端点，完整地址，不 guarded |
+
+`prefixesOf` 于是只有两个分支，且**官方那支不读任何设置**：前缀不在它的 `settingsFields` 里、不在它的表单里，真被写进去也读不到（会落进加密 blob）。测试钉了这一条 —— 一个「看起来能改、其实改不了」的设置比没有更糟。
+
+**官方类型不声明 `anthropic` 平台**，这是拆分带来的实际收益而不只是整洁：
+
+- `count_tokens` 不再被路由到官方账号（在混合分组里，那本来是「失败一次 + failover」）
+- `anthropic.messages` 同理
+
+`upstreamPath` 里对两者的拒绝**保留**，但性质变了：`count_tokens` 那条是真在跑的（中转类型声明了平台，而 `AccountPlatform` 没有按端点过滤的能力）；`messages` 那条是防御性的 —— 正常路由到不了，到了就说清楚，而不是往一个实测返回「404 + 零字节」的路径上发请求。
+
+### 14.3 中转 `base_url` 的保存期检查（新增）
+
+`relaySpec` 不设 `StripSuffixes`，理由和官方那边设它的理由是同一个：官方那边是「撤销一次从 Ark SDK 文档粘贴 base URL 的动作」，而中转类型的 `base_url` 是**中转站的根**、路径由两个前缀表达 —— 去掉任何后缀都等于**把请求悄悄挪到运维没写的地方**（`https://r/api/v3` 配默认前缀会变成 `https://r/v1/...`）。
+
+所以改成**保存时拒绝**：`base_url` 的路径以 `/v1` 或 `/api/v3` 结尾时报字段错误，并点明「把路径填到 `api_prefix` 里」。
+
+**为什么值得单独加一道**：文本面上路径错了是响亮的 404，但视频面上 —— 提交 404 而轮询也 404 时，核心把 404 读成「仍在进行」，到 deadline 放弃并**保留预扣**。一个真跑完、真上报了用量的任务被按预估收费。这是 §13.2 已经记过一次的失败形态，端点可配之后它的触发概率变高了，而「base_url 带了前缀」正是最可能的误配。
+
+### 14.4 破坏性变更（需要人工处理）
+
+**原先指向中转站的 `apikey` 账号会失效。** 它们在库里的 `type` 是 `apikey`，而 `apikey` 现在的含义是「方舟官方」：布局固定 `/api/v3`、`base_url` 受 guard、不服务 Anthropic。
+
+没有写迁移，因为这条分支未发布，而且此刻全世界的这类账号就是测试环境里那两个。**处理办法是用 `relay` 类型重建**（api_key、base_url、两个前缀照抄）。
+
+顺带一条：这类账号如果还有未结算的 `pending_settlements`，拆分后核对会按 `/api/v3` 去轮询中转站 → 404 → 保留预扣。重建前先确认没有在途任务。
