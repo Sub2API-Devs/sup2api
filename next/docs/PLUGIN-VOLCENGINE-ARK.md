@@ -747,13 +747,29 @@ token = **帧数 × 输出宽 × 输出高 / 1024**，固定 24fps。以下每�
 - **插件/核心行为是对的**：这条记为 `free`、不计费，`error_type=upstream_error`，账号**没有**被打入冷却
 - 中转站会校验模型名（一个不存在的 id 回 `model "…" is not served by this plugin`），Seedream 4.0 通过了名字校验却在执行时失败。**中转站 `/v1/models` 本来就没列任何 Seedream 模型**，所以大概率是它不支持图片。图片链路仍**未被真实验证**
 
-### 12.4 素材库：未测，缺 AK/SK
+### 12.4 素材库：**已真实验证**（2026-09-30 补测）
 
-素材端点 `https://cdn.api.codingplus.ai/api/support/v1/asset` 模仿 Ark OpenAPI（`ResponseMetadata` 形状、`Service=ark`、`Version=2024-01-01`），**只接受 AK/SK 签名**，`sk-` key 被拒（`InvalidAccessKey` / `InvalidAuthorization`）。插件拼的 `{asset_base_url}/?Action=…` 带尾斜杠与不带都认。**要在中转站后台「素材库 → AK/SK」建一对**才能测，填进账号的 `access_key` / `secret_key` / `asset_base_url`。
+素材端点 `https://cdn.api.codingplus.ai/api/support/v1/asset` 模仿 Ark OpenAPI（`ResponseMetadata` 形状、`Service=ark`、`Version=2024-01-01`），**只接受 AK/SK 签名**，`sk-` key 被拒且错误信息自己指路：`the asset library OpenAPI only accepts an AccessKey (AK/SK); create one under 素材库 → AK/SK`。插件拼的 `{asset_base_url}/?Action=…` 带尾斜杠与不带都认。
+
+用户在中转站后台建了一对 AK/SK 后补测，**四个 Action 全部通过**，走的是插件自己的 `arkAPI.call` + `signV4`（不是 curl 手拼）：
+
+| Action | 结果 |
+|---|---|
+| `ListAssetGroups` | 200 `{"Items":[],"PageNumber":1,"PageSize":5,"TotalCount":0}` |
+| `ListAssets` | 200 同形状 |
+| `CreateAssetGroup` | 200 `{"Id":"group-20260930114147-cy5acgfc"}`（`Name` + `GroupType:"AIGC"`） |
+| `DeleteAssetGroup` | 200 `{}`，探测组已清除（删前 `ListAssetGroups` 确认看得到它） |
+
+**这一次同时关掉了 §11.5 留下的最后一个风险：自写的 V4 签名被真实服务接受了。** golden vector 只能证明「与厂商 SDK 逐字节一致」，**证明不了服务器会接受** —— 现在两种都成立，而且**带 body 的写请求也过**（签名绑定 payload hash，只读通过不代表写也对）。
+
+真实响应比插件假设的多几个字段（`CreateTime` / `UpdateTime` / `Description` / `ProjectName` / `GroupType`），插件按需取，兼容。
+
+> 验证方式：临时测试文件 + 凭证走环境变量，跑完删除。**没有给仓库新增「缺凭证就跳过」的测试** —— 那正是本轮在消灭的模式（§8.7 / CONTRACTS §26.4）。要复现就照这个做法临时加一个。
 
 ### 12.5 仍未验证的
 
-- 图片（§12.3）、素材库（§12.4）、自写 V4 签名打真实服务
+- **图片**（§12.3，这个中转站不提供任何 Seedream 模型，换上游才能验）
 - 2.5、2.0 pro/fast，其他分辨率与比例；`frames` 显式传参的计数；参考图 / 视频输入任务
 - 失败 / 取消 / 过期任务的核对（`FAILED` 全额退）；核对超时路径
+- **素材的上传与索引链路**（只验了组的增删查，`CreateAsset` 与 `plg_volcengine` 的索引写入未测）
 - 官方 Ark 本身（这次全程是中转站）
