@@ -108,19 +108,29 @@ const (
 	// BytePlusBaseURL is Ark's overseas (BytePlus) endpoint.
 	BytePlusBaseURL = "https://ark.ap-southeast.bytepluses.com"
 
-	// APIPrefix is the root of Ark's OpenAI-compatible API, and the default
-	// of the api_prefix setting. Every upstream path is built as
-	// base_url + prefix + a fixed suffix, so an upstream that mounts the same
-	// shapes somewhere else is reachable by changing one field: an Ark-shaped
-	// relay serving OpenAI paths at the root takes "/v1", which turns chat
-	// into /v1/chat/completions and messages into /v1/messages.
+	// APIPrefix is the root of Ark's own OpenAI-compatible API, used when the
+	// account points at one of Ark's endpoints.
 	APIPrefix = "/api/v3"
 
-	// FieldAPIPrefix is the settings key holding that prefix, and
-	// FieldVideoAPIPrefix the video surface's own. Empty video prefix means
-	// "follow api_prefix": relays that mount Ark's native video tasks under
-	// their own namespace while serving text at the root need the two to
-	// differ, and everyone else should only have to set one.
+	// AnthropicOfficialPrefix is where Ark serves Anthropic Messages, and it
+	// is NOT under APIPrefix. Measured 2026-09-30: /api/v3/messages answers
+	// 404 with an empty body - the same as a path that was never registered,
+	// while a registered route answers 404 with a JSON error - and
+	// /api/coding/v1/messages answers UnsupportedModel or InvalidSubscription,
+	// i.e. it reads the request. That surface belongs to the Coding Plan and
+	// needs a subscription.
+	AnthropicOfficialPrefix = "/api/coding/v1"
+
+	// RelayAPIPrefix is the layout of an Ark-compatible relay: the standard
+	// OpenAI and Anthropic paths (/v1/chat/completions, /v1/messages). An
+	// account pointed at anything other than Ark's own endpoints is assumed to
+	// be one of these, which is why neither layout needs to be configured.
+	RelayAPIPrefix = "/v1"
+
+	// FieldAPIPrefix overrides the derived layout, for the one case the rule
+	// gets wrong: a relay that mirrors Ark's own paths under a custom host.
+	// FieldVideoAPIPrefix is separate because Ark's native video tasks are the
+	// thing a relay most often mounts in a namespace of its own.
 	FieldAPIPrefix      = "api_prefix"
 	FieldVideoAPIPrefix = "video_api_prefix"
 
@@ -289,21 +299,21 @@ func chatPath(prefix, model string) string {
 // client-facing path: the gateway endpoint is /ark/v3/images/generations
 // because "api" is a reserved first path segment of the core, while upstream
 // it stays Ark's own <prefix>/images/generations.
-func upstreamPath(prefix, protocol, model string) (string, error) {
+func upstreamPath(px prefixes, protocol, model string) (string, error) {
 	switch protocol {
 	case ProtocolChat, "":
-		return chatPath(prefix, model), nil
+		return chatPath(px.api, model), nil
 	case ProtocolResponses:
-		return prefix + "/responses", nil
+		return px.api + "/responses", nil
 	case ProtocolEmbeddings:
-		return prefix + "/embeddings", nil
+		return px.api + "/embeddings", nil
 	case ProtocolImages:
-		return prefix + "/images/generations", nil
+		return px.api + "/images/generations", nil
 	case ProtocolMessages:
 		// Forwarded as it arrived: the core has no Anthropic-to-OpenAI
 		// converter, so the body reaching us is already Anthropic-shaped and
 		// the only thing to get right is where to send it.
-		return prefix + "/messages", nil
+		return px.anthropic + "/messages", nil
 	case ProtocolCountTokens:
 		// Declaring the anthropic platform makes this account type a
 		// candidate for both of its endpoints (AccountPlatform has no
@@ -325,7 +335,7 @@ func upstreamTarget(px prefixes, meta *pluginv1.RequestMeta, model string) (meth
 	if m, p, ok, err := videoUpstream(px.video, meta); ok {
 		return m, p, err
 	}
-	p, err := upstreamPath(px.api, meta.GetProtocol(), model)
+	p, err := upstreamPath(px, meta.GetProtocol(), model)
 	if err != nil {
 		return "", "", err
 	}
@@ -384,7 +394,7 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 	if err != nil {
 		return nil, err
 	}
-	px, err := prefixesOf(in.GetAccount().GetSettingsJson())
+	px, err := prefixesOf(cfg.BaseURL, in.GetAccount().GetSettingsJson())
 	if err != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "account settings: %v", err)
 	}
@@ -419,7 +429,7 @@ func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestReque
 	if err != nil {
 		return nil, err
 	}
-	px, err := prefixesOf(in.GetAccount().GetSettingsJson())
+	px, err := prefixesOf(cfg.BaseURL, in.GetAccount().GetSettingsJson())
 	if err != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "account settings: %v", err)
 	}

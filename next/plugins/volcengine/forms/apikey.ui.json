@@ -21,18 +21,18 @@
   },
   "api_prefix": {
     "ui:title": { "en": "API path prefix", "zh": "API 路径前缀" },
-    "ui:placeholder": { "en": "Leave empty to use /api/v3", "zh": "留空使用 /api/v3" },
+    "ui:placeholder": { "en": "Leave empty - the layout follows the Base URL", "zh": "留空即可 —— 路径布局由 Base URL 决定" },
     "ui:help": {
-      "en": "Where the upstream serves the OpenAI- and Anthropic-compatible paths. Official Ark uses /api/v3, so leave this empty for it. A relay that serves them at the root takes /v1, which makes chat /v1/chat/completions and messages /v1/messages. It must be a path starting with / - it can never move the request to another host.",
-      "zh": "上游把 OpenAI / Anthropic 兼容的路径挂在哪里。官方方舟是 /api/v3，用官方就留空。把这些路径挂在根上的中转站填 /v1，于是对话是 /v1/chat/completions、messages 是 /v1/messages。只能是以 / 开头的路径，任何情况下都不能把请求导到别的主机。"
+      "en": "Normally leave this empty. An Ark address uses Ark's own layout (/api/v3/chat/completions, and Anthropic Messages at /api/coding/v1/messages, which is NOT under /api/v3). Any other address is taken for an Ark-compatible relay and uses the standard paths (/v1/chat/completions, /v1/messages). Set this only for a relay that mirrors Ark's own paths under its own host - then everything, Anthropic included, is built under the prefix you give. It must start with / and can never move the request to another host.",
+      "zh": "通常留空。填方舟地址就走方舟自己的布局（/api/v3/chat/completions，而 Anthropic Messages 在 /api/coding/v1/messages，**不在** /api/v3 下）；填其他地址则按 Ark 兼容中转站处理，走标准路径（/v1/chat/completions、/v1/messages）。只有当中转站在自己的域名下原样镜像方舟路径时才需要填 —— 填了之后所有路径（含 Anthropic）都建在这个前缀下。必须以 / 开头，任何情况下都不能把请求导到别的主机。"
     }
   },
   "video_api_prefix": {
     "ui:title": { "en": "Video API path prefix", "zh": "视频 API 路径前缀" },
-    "ui:placeholder": { "en": "Leave empty to follow the API path prefix", "zh": "留空则跟随上面的 API 路径前缀" },
+    "ui:placeholder": { "en": "Leave empty to use /api/v3", "zh": "留空使用 /api/v3" },
     "ui:help": {
-      "en": "Only needed when the upstream serves Ark's native video tasks somewhere other than the prefix above - a relay may keep them under /doubao/api/v3 while serving text at the root. Leave it empty and video follows the API path prefix. The task poll that settles the real cost uses this too.",
-      "zh": "只有当上游把方舟原生的视频任务挂在上面那个前缀之外时才需要填 —— 有些中转站把视频保留在 /doubao/api/v3，而文本在根上。留空则视频跟随 API 路径前缀。按真实用量结算的任务轮询也用这个前缀。"
+      "en": "Ark's native video task paths. A relay usually keeps these in a namespace of its own while serving text at the root - /doubao/api/v3 on the one this was verified against - because there is no standard place for them. Leave it empty for Ark itself. The task poll that settles the real cost uses this too, so a wrong value means every task is charged at its estimate.",
+      "zh": "方舟原生视频任务的路径。中转站通常把它们放在自己的命名空间下、而文本在根上（本插件验证过的那个是 /doubao/api/v3），因为这些路径没有标准位置。用官方方舟就留空。按真实用量结算的任务轮询也用这个前缀，**填错等于每个任务都按预估收费**。"
     }
   },
   "access_key": {

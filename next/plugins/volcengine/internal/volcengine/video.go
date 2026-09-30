@@ -368,7 +368,7 @@ func (p *Plugin) BuildReconcileRequest(_ context.Context, in *pluginv1.BuildReco
 		// without a key there is no poll to build.
 		return nil, status.Errorf(codes.FailedPrecondition, "reconcile needs the account credentials: %v", err)
 	}
-	px, err := prefixesOf(in.GetAccount().GetSettingsJson())
+	px, err := prefixesOf(cfg.BaseURL, in.GetAccount().GetSettingsJson())
 	if err != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "account settings: %v", err)
 	}

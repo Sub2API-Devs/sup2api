@@ -76,9 +76,67 @@ func TestPrefixCannotLeaveTheHost(t *testing.T) {
 	}
 }
 
-// TestPrefixAppliesToEveryProtocol pins the whole mapping at a non-default
-// prefix, which is the layout of the first relay this was built for: the
-// OpenAI- and Anthropic-compatible paths at the root under /v1.
+// TestLayoutIsDerivedFromTheBaseURL is the shape of the feature: the operator
+// does not configure paths, they choose an address. Ark's own endpoints serve
+// Ark's layout; anything else is an Ark-compatible relay and serves the
+// standard one. Both were measured against the real services.
+func TestLayoutIsDerivedFromTheBaseURL(t *testing.T) {
+	official := account(testKey, `{}`)                                        // empty base_url -> the default, which is official
+	byteplus := account(testKey, `{"base_url":"`+BytePlusBaseURL+`"}`)        // official too, and NOT a relay
+	relay := account(testKey, `{"base_url":"https://cdn.api.codingplus.ai"}`) //
+	for _, c := range []struct {
+		name     string
+		acc      *pluginv1.Account
+		protocol string
+		want     string
+	}{
+		{"official chat", official, ProtocolChat, DefaultBaseURL + "/api/v3/chat/completions"},
+		{"official responses", official, ProtocolResponses, DefaultBaseURL + "/api/v3/responses"},
+		{"official embeddings", official, ProtocolEmbeddings, DefaultBaseURL + "/api/v3/embeddings"},
+		{"official images", official, ProtocolImages, DefaultBaseURL + "/api/v3/images/generations"},
+		// The one that is not a sibling: Ark has no /api/v3/messages at all.
+		{"official messages", official, ProtocolMessages, DefaultBaseURL + "/api/coding/v1/messages"},
+		{"official video", official, ProtocolVideoSubmit, DefaultBaseURL + "/api/v3/contents/generations/tasks"},
+
+		// BytePlus is Ark's overseas endpoint, so it must NOT be treated as a
+		// relay. A rule of "base_url is set" rather than "base_url is an Ark
+		// endpoint" would send every BytePlus account to /v1/* and break it.
+		{"byteplus chat", byteplus, ProtocolChat, BytePlusBaseURL + "/api/v3/chat/completions"},
+		{"byteplus messages", byteplus, ProtocolMessages, BytePlusBaseURL + "/api/coding/v1/messages"},
+
+		{"relay chat", relay, ProtocolChat, "https://cdn.api.codingplus.ai/v1/chat/completions"},
+		{"relay responses", relay, ProtocolResponses, "https://cdn.api.codingplus.ai/v1/responses"},
+		{"relay embeddings", relay, ProtocolEmbeddings, "https://cdn.api.codingplus.ai/v1/embeddings"},
+		{"relay images", relay, ProtocolImages, "https://cdn.api.codingplus.ai/v1/images/generations"},
+		{"relay messages", relay, ProtocolMessages, "https://cdn.api.codingplus.ai/v1/messages"},
+	} {
+		r, err := buildFor(t, c.acc, &pluginv1.RequestMeta{Protocol: c.protocol, Model: "m"})
+		if err != nil || r.GetUrl() != c.want {
+			t.Errorf("%s: url = %q (%v), want %q", c.name, r.GetUrl(), err, c.want)
+		}
+	}
+}
+
+// TestAPIPrefixOverridesTheLayout covers the one case the derivation gets
+// wrong: a relay that mirrors Ark's own paths under a custom host. An operator
+// who names a prefix is saying "this looks like Ark, just over here", so the
+// Anthropic path follows it rather than jumping to the Coding Plan location.
+func TestAPIPrefixOverridesTheLayout(t *testing.T) {
+	acc := settingsWith("/api/v3", "")
+	for _, c := range []struct{ protocol, want string }{
+		{ProtocolChat, "https://relay.test/api/v3/chat/completions"},
+		{ProtocolMessages, "https://relay.test/api/v3/messages"},
+		{ProtocolVideoSubmit, "https://relay.test/api/v3/contents/generations/tasks"},
+	} {
+		r, err := buildFor(t, acc, &pluginv1.RequestMeta{Protocol: c.protocol, Model: "m"})
+		if err != nil || r.GetUrl() != c.want {
+			t.Errorf("%s: url = %q (%v), want %q", c.protocol, r.GetUrl(), err, c.want)
+		}
+	}
+}
+
+// TestPrefixAppliesToEveryProtocol pins an explicit prefix across the whole
+// mapping.
 func TestPrefixAppliesToEveryProtocol(t *testing.T) {
 	acc := settingsWith("/v1", "")
 	for _, c := range []struct{ protocol, model, want string }{
@@ -94,13 +152,6 @@ func TestPrefixAppliesToEveryProtocol(t *testing.T) {
 		if err != nil || r.GetUrl() != c.want {
 			t.Errorf("%s: url = %q (%v), want %q", c.protocol, r.GetUrl(), err, c.want)
 		}
-	}
-	// Unset means the official Ark prefix, so every account that predates
-	// these settings keeps the exact URL it had.
-	r, err := buildFor(t, account(testKey, `{"base_url":"https://relay.test"}`),
-		&pluginv1.RequestMeta{Protocol: ProtocolChat, Model: "m"})
-	if err != nil || r.GetUrl() != "https://relay.test"+APIPrefix+"/chat/completions" {
-		t.Fatalf("default prefix = %q (%v)", r.GetUrl(), err)
 	}
 }
 

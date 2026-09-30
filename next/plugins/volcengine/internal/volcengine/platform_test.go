@@ -156,7 +156,12 @@ func TestBuildUpstreamRequest(t *testing.T) {
 
 	// A custom base URL with a trailing slash and the /api/v3 the operator
 	// pasted from the Ark SDK docs; responses never uses the bots path.
-	acc := account(testKey, `{"base_url":"http://mock-upstream:8080/api/v3/"}`)
+	//
+	// mock-upstream speaks Ark's own paths while not being an Ark host, which
+	// is exactly the case the derived layout gets wrong and api_prefix exists
+	// for: without it this account would be taken for a standard relay and
+	// asked for /v1/responses.
+	acc := account(testKey, `{"base_url":"http://mock-upstream:8080/api/v3/","api_prefix":"/api/v3"}`)
 	r, err = build(&pluginv1.RequestMeta{Protocol: ProtocolResponses, Model: "bot-1", Stream: true}, acc, nil)
 	if err != nil || r.GetUrl() != "http://mock-upstream:8080/api/v3/responses" || len(r.GetPatches()) != 0 {
 		t.Fatalf("responses: %v %v", r, err)

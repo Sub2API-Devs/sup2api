@@ -24,11 +24,48 @@ import (
 type prefixes struct {
 	api   string
 	video string
+	// anthropic is where the upstream serves Anthropic Messages. On Ark it is
+	// NOT a sibling of api: measured on 2026-09-30, /api/v3/messages does not
+	// exist there (it answers 404 with an empty body, exactly like a path that
+	// was never registered, while a real route answers 404 with a JSON error),
+	// and the Anthropic surface is /api/coding/v1/messages, which does exist -
+	// it answers UnsupportedModel and InvalidSubscription, i.e. it read the
+	// request. A relay, serving the standard paths, has it next to the others.
+	anthropic string
 }
 
-// prefixesOf reads them from an account's settings. The zero value of either
-// means "the default": api falls back to APIPrefix, video to api.
-func prefixesOf(settingsJSON string) (prefixes, error) {
+// officialBaseURL reports whether a base URL is one of Ark's own endpoints.
+// Those two are also the guardedSettings allow-list, which is the point: an
+// account that has not been pointed somewhere else is an Ark account and gets
+// Ark's own path layout.
+func officialBaseURL(base string) bool {
+	h := hostOfURL(base)
+	return h != "" && (h == hostOfURL(DefaultBaseURL) || h == hostOfURL(BytePlusBaseURL))
+}
+
+func hostOfURL(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(u.Host)
+}
+
+// prefixesOf reads the layout for one account.
+//
+// The layout is derived, not configured, because the operator already told us
+// which it is by choosing a base URL. Ark's own endpoints serve Ark's paths;
+// anything else is an Ark-compatible relay, and those serve the standard ones
+// (/v1/chat/completions, /v1/messages). So the common cases need no path
+// setting at all - which is the whole point, since the two layouts differ in
+// more than a prefix and no single prefix could express both.
+//
+// api_prefix overrides it for the one case the rule gets wrong: a relay that
+// mirrors Ark's own paths under a custom host. video_api_prefix is separate
+// because Ark's native video tasks are the one thing a relay commonly mounts
+// somewhere of its own (the first one verified keeps them under /doubao/api/v3
+// while serving text at the root).
+func prefixesOf(baseURL, settingsJSON string) (prefixes, error) {
 	settings, err := decodeJSONObject(settingsJSON)
 	if err != nil {
 		return prefixes{}, fmt.Errorf("settings: %w", err)
@@ -59,13 +96,29 @@ func prefixesOf(settingsJSON string) (prefixes, error) {
 	if err != nil {
 		return prefixes{}, err
 	}
-	if api == "" {
-		api = APIPrefix
+	px := prefixes{api: api, video: video}
+	switch {
+	case api != "":
+		// Explicitly set: Ark-shaped paths under it, Anthropic included. An
+		// operator who names a prefix is saying "this upstream looks like Ark,
+		// just over here".
+		px.anthropic = api
+	case officialBaseURL(baseURL):
+		px.api = APIPrefix
+		px.anthropic = AnthropicOfficialPrefix
+	default:
+		px.api = RelayAPIPrefix
+		px.anthropic = RelayAPIPrefix
 	}
-	if video == "" {
-		video = api
+	if px.video == "" {
+		// Video follows the API surface, except that on a relay there is no
+		// standard place for Ark's native task paths - hence the setting.
+		px.video = APIPrefix
+		if api != "" {
+			px.video = api
+		}
 	}
-	return prefixes{api: api, video: video}, nil
+	return px, nil
 }
 
 // normalizePrefix trims a prefix and rejects the shapes that would not stay a
