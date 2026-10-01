@@ -3,42 +3,18 @@
 package control
 
 import (
-	"archive/tar"
-	"bytes"
-	"compress/gzip"
 	"context"
-	"crypto/ed25519"
-	"crypto/rand"
-	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
 	"io"
-	"math/big"
-	"net"
 	"net/http"
-	"net/http/httptest"
-	"net/url"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	rc "github.com/Sub2API-Devs/sup2api/next/runtime-contract"
-	"github.com/Sub2API-Devs/sup2api/next/shell/internal/peer"
-	"github.com/Sub2API-Devs/sup2api/next/shell/internal/proxy"
-	"github.com/Sub2API-Devs/sup2api/next/shell/internal/release"
-	"github.com/Sub2API-Devs/sup2api/next/shell/internal/supervisor"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"
 )
 
 // This test requires separately built real core binaries. It does not fake the
@@ -46,281 +22,20 @@ import (
 // Its historic name is retained, but the policy is now primary-first: every
 // old follower exits before primary migration; the planned 503 window is checked.
 func TestRealCoreRollingUpgrade(t *testing.T) {
-	v1, v2 := os.Getenv("TEST_CORE_V1"), os.Getenv("TEST_CORE_V2")
-	dsn, redisURL := os.Getenv("TEST_DATABASE_URL"), os.Getenv("TEST_REDIS_URL")
-	if v1 == "" || v2 == "" || dsn == "" || redisURL == "" {
-		t.Skip("requires TEST_CORE_V1, TEST_CORE_V2, TEST_DATABASE_URL and TEST_REDIS_URL")
-	}
-	b1, err := os.ReadFile(v1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b2, err := os.ReadFile(v2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if bytes.Equal(b1, b2) {
-		t.Fatal("R1/R2 must be genuinely different separately built core binaries")
-	}
-	schema := func(p string) string {
-		b, e := exec.Command(p, "schema-contract").Output()
-		if e != nil {
-			t.Fatal(e)
-		}
-		return strings.TrimSpace(string(b))
-	}
-	s1, s2 := schema(v1), schema(v2)
-	coreVersion := func(path string) string {
-		b, e := exec.Command(path, "version").Output()
-		if e != nil {
-			t.Fatal(e)
-		}
-		return strings.TrimSpace(string(b))
-	}
-	version1, version2 := coreVersion(v1), coreVersion(v2)
-	if s1 == "" || s2 == "" {
-		t.Fatal("both releases require non-empty embedded schema contracts")
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	dbcfg, err := pgxpool.ParseConfig(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	admin, err := pgxpool.NewWithConfig(ctx, dbcfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(admin.Close)
-	dbname := fmt.Sprintf("shell_real_%d", time.Now().UnixNano())
-	quoted := pgx.Identifier{dbname}.Sanitize()
-	if _, err = admin.Exec(ctx, "CREATE DATABASE "+quoted); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		cleanup, c := context.WithTimeout(context.Background(), 20*time.Second)
-		defer c()
-		_, _ = admin.Exec(cleanup, "DROP DATABASE "+quoted+" WITH (FORCE)")
-	})
-	coreDSN := dsn + " dbname=" + dbname
-	if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
-		u, e := url.Parse(dsn)
-		if e != nil {
-			t.Fatal(e)
-		}
-		u.Path = "/" + dbname
-		coreDSN = u.String()
-	}
-	testDB, err := pgxpool.New(ctx, coreDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(testDB.Close)
-	store := &Store{DB: testDB, Cluster: dbname}
-	if err = store.EnsureSchema(ctx); err != nil {
-		t.Fatal(err)
-	}
-	opt, err := redis.ParseURL(redisURL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	rdb := redis.NewClient(opt)
-	defer rdb.Close()
-	store.Locks = NewRedisLocks(rdb)
-	store.Redis = rdb
-	cert, ca := realTestCertificate(t)
-	clientTLS := &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: ca}
-	transport := &http.Transport{TLSClientConfig: clientTLS}
-	defer transport.CloseIdleConnections()
-	artifactClient := &http.Client{Transport: transport, Timeout: time.Minute}
-	pub, priv, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	blobs := map[string][]byte{}
-	source := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, ok := blobs[r.URL.Path]
-		if !ok {
-			http.NotFound(w, r)
-			return
-		}
-		_, _ = w.Write(b)
-	}))
-	source.TLS = proxy.ServerTLS(cert, ca)
-	source.StartTLS()
-	defer source.Close()
-	type bundledFile struct {
-		name string
-		data []byte
-	}
-	var bundled []bundledFile
-	if dir := os.Getenv("TEST_BUILTIN_DIR"); dir != "" {
-		if os.Getenv("TEST_BUILTIN_KEY") == "" {
-			t.Fatal("TEST_BUILTIN_KEY is required with TEST_BUILTIN_DIR")
-		}
-		paths, e := filepath.Glob(filepath.Join(dir, "*.s2plugin"))
-		if e != nil {
-			t.Fatal(e)
-		}
-		if len(paths) == 0 {
-			t.Fatal("TEST_BUILTIN_DIR contains no signed packages")
-		}
-		for _, path := range paths {
-			data, e := os.ReadFile(path)
-			if e != nil {
-				t.Fatal(e)
-			}
-			bundled = append(bundled, bundledFile{"builtin/" + filepath.Base(path), data})
-		}
-	}
-	makeRelease := func(id, version string, core []byte) Release {
-		var buffer bytes.Buffer
-		gz := gzip.NewWriter(&buffer)
-		tw := tar.NewWriter(gz)
-		if err := tw.WriteHeader(&tar.Header{Name: "bin/sub2api", Mode: 0755, Size: int64(len(core))}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := tw.Write(core); err != nil {
-			t.Fatal(err)
-		}
-		files := []rc.File{{Path: "bin/sub2api", SHA256: release.Digest(core), Size: int64(len(core)), Mode: 0755}}
-		for _, file := range bundled {
-			if err := tw.WriteHeader(&tar.Header{Name: file.name, Mode: 0644, Size: int64(len(file.data))}); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := tw.Write(file.data); err != nil {
-				t.Fatal(err)
-			}
-			files = append(files, rc.File{Path: file.name, SHA256: release.Digest(file.data), Size: int64(len(file.data)), Mode: 0644})
-		}
-		if err := tw.Close(); err != nil {
-			t.Fatal(err)
-		}
-		if err := gz.Close(); err != nil {
-			t.Fatal(err)
-		}
-		bundle := append([]byte(nil), buffer.Bytes()...)
-		digest := release.Digest(bundle)
-		after := s2
-		if id == "r1" {
-			after = s1
-		}
-		before := s1
-		if id == "broken-candidate" {
-			before = s2
-		}
-		m := rc.Manifest{CoreVersion: version, ManifestVersion: 1, ReleaseID: id, BuildID: release.Digest(core), SourceCommit: id, CreatedAt: time.Now(), Platforms: []rc.Platform{{OS: "linux", Arch: runtime.GOARCH, RuntimeABI: "test", BundleDigest: digest, BundleBytes: int64(len(bundle)), Files: files}}, ShellProtocol: rc.Range{Min: rc.Protocol, Max: rc.Protocol}, CoreControlProtocol: rc.Range{Min: rc.Protocol, Max: rc.Protocol}, ClusterProtocol: rc.Range{Min: 1, Max: 1}, TaskProtocol: rc.Range{Min: 1, Max: 1}, SchemaBefore: before, SchemaAfter: after, Strategy: "maintenance", HostAPIVersion: 4}
-		payload, e := json.Marshal(m)
-		if e != nil {
-			t.Fatal(e)
-		}
-		signed := rc.SignedManifest{KeyID: "test", Payload: payload, Signature: ed25519.Sign(priv, payload)}
-		blobs["/blobs/"+digest+".tar.gz"] = bundle
-		return Release{Digest: release.Digest(payload), Manifest: m, Signed: signed, BundleBase: source.URL + "/blobs"}
-	}
-	old, target := makeRelease("r1", version1, b1), makeRelease("r2", version2, b2)
-	broken := makeRelease("broken-candidate", version2, []byte("#!/bin/sh\nexit 23\n"))
-	for _, r := range []Release{old, target, broken} {
-		if err = store.PutRelease(ctx, r); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err = store.InitCluster(ctx, "a", old.Digest); err != nil {
-		t.Fatal(err)
-	}
-	type node struct {
-		engine          *Engine
-		runtime         *LocalRuntime
-		public, private *httptest.Server
-		supervisor      *supervisor.Manager
-	}
+	c := newRealCluster(t, ctx, realOptions{})
+	store, testDB, rdb, dbname := c.store, c.db, c.direct, c.dbname
+	old, target, broken, s1, s2, bundled := c.old, c.target, c.broken, c.s1, c.s2, c.bundled
 	ids := []string{"a", "b"}
 	if os.Getenv("TEST_SHELL_NODES") == "3" {
 		ids = append(ids, "c")
 	}
-	nodes := make([]node, 0, len(ids))
 	for _, id := range ids {
-		root, err := os.MkdirTemp("", "s2-real-")
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { _ = os.RemoveAll(root) })
-		mgr, err := supervisor.New(filepath.Join(root, "runtime"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		coreAddr := freeAddress(t)
-		rm := &release.Manager{Root: root, TrustedKeys: map[string]ed25519.PublicKey{"test": pub}, OS: "linux", Arch: runtime.GOARCH, RuntimeABI: "test", Client: artifactClient}
-		rt := &LocalRuntime{Releases: rm, Supervisor: mgr, NodeID: id, PrimaryNode: "a", CoreSocket: filepath.Join(root, "core.sock"), ManagementSocket: filepath.Join(root, "shell.sock"), CoreURL: "http://" + coreAddr, Root: root, Env: []string{
-			"SUB2API_DATABASE_URL=" + coreDSN, "SUB2API_REDIS_URL=" + redisURL, "SUB2API_MASTER_KEY=" + base64.StdEncoding.EncodeToString(make([]byte, 32)), "SUB2API_JWT_SECRET=" + strings.Repeat("test", 10), "SUB2API_PLUGIN_DIR=" + filepath.Join(root, "plugins"), "SUB2API_LOG_LEVEL=error",
-		}}
-		if key := os.Getenv("TEST_BUILTIN_KEY"); key != "" {
-			rt.Env = append(rt.Env, "SUB2API_BUILTIN_TRUST_KEY="+key)
-		}
-		if dev := os.Getenv("TEST_PLUGIN_DEV_MODE"); dev != "" {
-			rt.Env = append(rt.Env, "SUB2API_PLUGIN_DEV_MODE="+dev)
-		}
-		ownNode := Node{ID: id, ShellBootID: id + "-shell", OS: "linux", Arch: runtime.GOARCH, RuntimeABI: "test", PeerProtocol: PeerProtocol, Strategy: PrimaryFirst}
-		configuredKey := ""
-		if id == "b" {
-			configuredKey = strings.Repeat("b", 32)
-		}
-		pm, e := peer.New(peer.Config{Redis: rdb, Cluster: dbname, NodeID: id, BootID: ownNode.ShellBootID, ConfiguredKey: configuredKey, Validate: func(ctx context.Context, p peer.Identity) error { return store.ValidateNode(ctx, p.NodeID, p.BootID) }, Register: func(ctx context.Context) error { return store.RegisterLocked(ctx, ownNode) }, WithRegistration: func(ctx context.Context, fn func(context.Context) error) error {
-			return store.WithRegistration(ctx, id, fn)
-		}})
-		if e != nil {
-			t.Fatal(e)
-		}
-		peerTransport := pm.WrapTransport(proxy.PeerTransport(clientTLS), func(ctx context.Context, u *url.URL) error {
-			registered, e := store.Nodes(ctx)
-			if e != nil {
-				return e
-			}
-			for _, n := range registered {
-				target, _ := url.Parse(n.PeerURL)
-				if n.ID == "a" && n.Enabled && target != nil && target.Scheme == u.Scheme && target.Host == u.Host {
-					return nil
-				}
-			}
-			return peer.ErrForbidden
-		})
-		rt.Peer = pm
-		rt.PeerArtifactClient = peer.NewClient(peerTransport, time.Minute)
-		rt.AuthorizePeer = func(ctx context.Context, p peer.Identity, scope, digest string) error {
-			return store.AuthorizePeer(ctx, p.NodeID, p.BootID, id, scope, digest)
-		}
-		rt.OnStopped = func(ctx context.Context, boot string) error {
-			return store.ConfirmStoppedCore(ctx, id, ownNode.ShellBootID, boot)
-		}
-		router := proxy.New(proxy.Config{PeerTLS: clientTLS, PeerTransport: peerTransport, LocalReady: func() bool {
-			c, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			st, _, e := rt.Status(c)
-			return e == nil && st.Ready
-		}})
-		rt.Router = router
-		private := httptest.NewUnstartedServer(rt.PrivateHandler())
-		private.TLS = proxy.ServerTLS(cert, ca)
-		private.StartTLS()
-		public := httptest.NewServer(router.Public())
-		ownNode.PeerURL = private.URL
-		eng := &Engine{Store: store, Locks: store.Locks, Runtime: rt, Node: ownNode, PeerMaintain: pm.Maintain, PeerCheck: pm.Check}
-		if err = pm.Maintain(ctx); err != nil {
-			t.Fatal(err)
-		}
-		go pm.Run(ctx)
-		nodes = append(nodes, node{eng, rt, public, private, mgr})
+		c.startShell(id)
 	}
-	t.Cleanup(func() {
-		for _, n := range nodes {
-			stop, c := context.WithTimeout(context.Background(), 30*time.Second)
-			_ = n.supervisor.Terminate(stop)
-			c()
-			_ = n.supervisor.Close()
-			n.public.Close()
-			n.private.Close()
-		}
-	})
+	nodes := c.list()
+	var err error
 	if err = nodes[0].engine.Recover(ctx, true); err != nil {
 		t.Fatal("bootstrap primary", err)
 	}
@@ -432,7 +147,7 @@ func TestRealCoreRollingUpgrade(t *testing.T) {
 		}
 	}
 	for _, n := range nodes {
-		go n.engine.Run(ctx)
+		c.run(n)
 	}
 	pf, err := store.Preflight(ctx, target.Digest)
 	if err != nil || len(pf.Blockers) > 0 {
@@ -825,64 +540,4 @@ func TestRealCoreRollingUpgrade(t *testing.T) {
 	}
 	t.Logf("baseline recovery completed; next update %s accepted", next.ID)
 	t.Logf("real R1->R2 primary-first upgrade passed; %d business requests, %d planned 503s; old=%s target=%s", requests.Load(), unavailable.Load(), old.Digest, target.Digest)
-}
-
-// These checks wrap actual operations; they do not replace the process/runtime.
-type observedPrimaryFirstRuntime struct {
-	*LocalRuntime
-	beforeMaintenance func(context.Context) error
-	beforeStart       func(context.Context, string, rc.PrepareRequest) error
-}
-
-func (r *observedPrimaryFirstRuntime) Maintenance(ctx context.Context) error {
-	if r.beforeMaintenance != nil {
-		if err := r.beforeMaintenance(ctx); err != nil {
-			return err
-		}
-	}
-	return r.LocalRuntime.Maintenance(ctx)
-}
-func (r *observedPrimaryFirstRuntime) Start(ctx context.Context, digest string, options rc.PrepareRequest) (rc.Status, error) {
-	if r.beforeStart != nil {
-		if err := r.beforeStart(ctx, digest, options); err != nil {
-			return rc.Status{}, err
-		}
-	}
-	return r.LocalRuntime.Start(ctx, digest, options)
-}
-
-func freeAddress(t *testing.T) string {
-	t.Helper()
-	l, e := net.Listen("tcp", "127.0.0.1:0")
-	if e != nil {
-		t.Fatal(e)
-	}
-	addr := l.Addr().String()
-	_ = l.Close()
-	return addr
-}
-func realTestCertificate(t *testing.T) (tls.Certificate, *x509.CertPool) {
-	t.Helper()
-	pub, key, e := ed25519.GenerateKey(rand.Reader)
-	if e != nil {
-		t.Fatal(e)
-	}
-	template := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "test-node"}, DNSNames: []string{"test-node"}, IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth}}
-	der, e := x509.CreateCertificate(rand.Reader, template, template, pub, key)
-	if e != nil {
-		t.Fatal(e)
-	}
-	pk, e := x509.MarshalPKCS8PrivateKey(key)
-	if e != nil {
-		t.Fatal(e)
-	}
-	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pk})
-	cert, e := tls.X509KeyPair(certPEM, keyPEM)
-	if e != nil {
-		t.Fatal(e)
-	}
-	pool := x509.NewCertPool()
-	pool.AppendCertsFromPEM(certPEM)
-	return cert, pool
 }

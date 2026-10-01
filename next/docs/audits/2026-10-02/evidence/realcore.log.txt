@@ -1,20 +1,35 @@
+=== RUN   TestRealCoreFaultsDuringPrimaryFirstUpgrade
+    realcore_faults_linux_test.go:289: SSE through forwarding node lasted 13.53s across TTL 3s and a key replacement
+    realcore_faults_linux_test.go:305: video task s2task_e949bc47-1e01-42e4-bfc1-19f623aa33a1 submitted; an upstream observation is held open
+    realcore_faults_linux_test.go:318: primary-first plan b21f906901a38034756f913f98b19633 started
+    realcore_faults_linux_test.go:132: fault: restarted stopped follower shell as c-shell-2
+    realcore_faults_linux_test.go:138: fault: node d joined during the update as d-shell-1
+    realcore_faults_linux_test.go:192: fault: SIGKILL primary core pid 3002 during its migration
+    realcore_faults_linux_test.go:332: fault: plan paused after the interrupted migration: Get "http://core/v1/status": dial unix /tmp/s2-real-371407566/core.sock: connect: connection refused
+    realcore_faults_linux_test.go:359: fault: Redis partitioned for 9s
+    realcore_faults_linux_test.go:373: plan resumed
+    realcore_faults_linux_test.go:399: update completed; the retried migration applied once; d serves the target
+    realcore_faults_linux_test.go:444: video task settled once on its account: cost=0.00025500, 3 upstream observations (2 canceled by the update), 0 poll failures
+    realcore_faults_linux_test.go:456: fault: Redis partitioned for 9s while serving
+    realcore_faults_linux_test.go:477: Redis partition while serving: every core kept its boot and serves again
+--- PASS: TestRealCoreFaultsDuringPrimaryFirstUpgrade (203.13s)
 === RUN   TestRealCoreRollingUpgrade
-    realcore_linux_test.go:327: bootstrap primary a prepared and admitted
-    realcore_linux_test.go:334: follower b downloaded, prepared and admitted
-    realcore_linux_test.go:334: follower c downloaded, prepared and admitted
-    realcore_linux_test.go:445: primary-first plan ebbf501a4aa59816265edbfa29feb796 started across 3 nodes
-    realcore_linux_test.go:548: primary-first completed: requests=8514 planned503=1277 forwardedSuccess=2358 failures=0 counts=map[a:local-serving:401:2439 a:maintenance:503:399 b:forward-only:401:1119 b:forward-only:503:40 b:local-serving:401:1280 b:maintenance:503:399 c:forward-only:401:1239 c:forward-only:503:39 c:local-serving:401:1160 c:maintenance:503:400]
-    realcore_linux_test.go:593: primary applied migrations [9999_managed_upgrade_probe.sql] while followers were stopped
-    realcore_linux_test.go:643: node b re-registered after Redis loss; key reused=true; core boot unchanged
-    realcore_linux_test.go:643: node c re-registered after Redis loss; key reused=false; core boot unchanged
-    realcore_linux_test.go:655: killed core b boot=e0fa2db286e7e3c4b9abc19d98c815b4591e7a76ebc8390f54c18cdca44f6c42; waiting for approved-release recovery
-    realcore_linux_test.go:659: core b recovered with new boot=28326781d07aefea5cb4967449ab922fbba1d615f55e9d081efccb3bdc9366e4
-    realcore_linux_test.go:688: failed-candidate plan a02da15c06a10956b23ba2ec6c32b220 started
-    realcore_linux_test.go:695: failed-candidate plan paused safely: candidate exited before handshake
-    realcore_linux_test.go:740: baseline recovery plan 188e64ba8d2469c739dda6b2a659d709 started; order=[a b c]
-    realcore_linux_test.go:755: recovery: primary serving and all entrances converged
-    realcore_linux_test.go:826: baseline recovery completed; next update 2d5aefc97ff69a045fd09ddff55dbb73 accepted
-    realcore_linux_test.go:827: real R1->R2 primary-first upgrade passed; 8514 business requests, 1277 planned 503s; old=b33a217fdd450691a3d6b158960acbcde286db853e051ba2765e587ce916a747 target=aa1e0e7364ac766d564320b6c72b9b9c2144f600b64d926e8759ec62102225e6
---- PASS: TestRealCoreRollingUpgrade (218.85s)
+    realcore_linux_test.go:42: bootstrap primary a prepared and admitted
+    realcore_linux_test.go:49: follower b downloaded, prepared and admitted
+    realcore_linux_test.go:49: follower c downloaded, prepared and admitted
+    realcore_linux_test.go:160: primary-first plan 845765ccd4e2cd884e7edc2ff6008ffc started across 3 nodes
+    realcore_linux_test.go:263: primary-first completed: requests=8832 planned503=1639 forwardedSuccess=2332 failures=0 counts=map[a:local-serving:401:2424 a:maintenance:503:520 b:forward-only:401:1104 b:forward-only:503:39 b:local-serving:401:1281 b:maintenance:503:520 c:forward-only:401:1226 c:forward-only:503:40 c:local-serving:401:1158 c:maintenance:503:520]
+    realcore_linux_test.go:308: primary applied migrations [9999_managed_upgrade_probe.sql] while followers were stopped
+    realcore_linux_test.go:358: node b re-registered after Redis loss; key reused=true; core boot unchanged
+    realcore_linux_test.go:358: node c re-registered after Redis loss; key reused=false; core boot unchanged
+    realcore_linux_test.go:370: killed core b boot=76029f692f94ce76b620f6dd04035cf58db0c4f619b69d7eac258d1deb8093ca; waiting for approved-release recovery
+    realcore_linux_test.go:374: core b recovered with new boot=999e68a36f27622a67673fccc493de62eaa225a3eb131025f22c77f750594200
+    realcore_linux_test.go:403: failed-candidate plan 7d02500947a6469a3d5a6fd47247ec9c started
+    realcore_linux_test.go:410: failed-candidate plan paused safely: candidate exited before handshake
+    realcore_linux_test.go:455: baseline recovery plan ec8c871bd2712b62f22484565b4dc081 started; order=[a b c]
+    realcore_linux_test.go:470: recovery: primary serving and all entrances converged
+    realcore_linux_test.go:541: baseline recovery completed; next update b5d56461f53477f38c25e7dbdc99d870 accepted
+    realcore_linux_test.go:542: real R1->R2 primary-first upgrade passed; 8832 business requests, 1639 planned 503s; old=d10aac17415c402b6e82c4974081be1987e3deae74cd3af5d3913ae40e280973 target=cbfbac7be31e8157d51b6aef6e20652b914c3097c112b51685d9421dadbbb739
+--- PASS: TestRealCoreRollingUpgrade (223.08s)
 PASS
-ok  	github.com/Sub2API-Devs/sup2api/next/shell/internal/control	219.914s
+ok  	github.com/Sub2API-Devs/sup2api/next/shell/internal/control	427.293s

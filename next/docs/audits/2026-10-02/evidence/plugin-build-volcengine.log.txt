@@ -1,0 +1,3 @@
+/src/checks/volcengine-runtime/runtimes/linux-amd64/plugin
+/src/checks/volcengine-runtime/runtimes/linux-arm64/plugin
+signed /src/checks/builtin/volcengine-0.10.0.s2plugin (volcengine 0.10.0) digest sha256:3a90bafe33d292907e582eff6cdf6c57731eef9232f946c8f6435949d3dc1e4a key managed-test

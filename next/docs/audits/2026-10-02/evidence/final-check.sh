@@ -55,6 +55,21 @@ mutation() {
   rm -rf "$tmp"
 }
 
+# Signed test packages for the bundled-plugin bootstrap (anthropic, volcengine).
+plugins() {
+  set -e
+  checks=/src/checks
+  mkdir -p "$checks/builtin"
+  CGO_ENABLED=0 go build -o "$checks/sub2api-plugin" ./tools/sub2api-plugin
+  [ -f "$checks/keys/managed-test.key" ] || "$checks/sub2api-plugin" keygen --key-id managed-test --out "$checks/keys" > "$out/plugin-keygen.log"
+  for p in anthropic volcengine; do
+    "$checks/sub2api-plugin" build --dir "plugins/$p" --out "$checks/$p-runtime" > "$out/plugin-build-$p.log"
+    pkg=$("$checks/sub2api-plugin" pack --dir "plugins/$p" --runtimes "$checks/$p-runtime" --out-dir "$checks/builtin")
+    "$checks/sub2api-plugin" sign --key "$checks/keys/managed-test.key" --key-id managed-test --publisher sub2api "$pkg" >> "$out/plugin-build-$p.log"
+  done
+  ls "$checks/builtin"
+}
+
 realcore() {
   set -e
   checks=/src/checks
@@ -66,6 +81,8 @@ realcore() {
   cp -a /src/next "$target"
   cat > "$target/server/internal/migrations/9999_managed_upgrade_probe.sql" <<'SQL'
 CREATE TABLE managed_upgrade_probe (id integer PRIMARY KEY, migrated_at timestamptz NOT NULL DEFAULT now());
+-- Long enough for the fault test to interrupt the running migration.
+SELECT pg_sleep(4);
 INSERT INTO managed_upgrade_probe(id) VALUES (1);
 SQL
   (cd "$target" && CGO_ENABLED=0 go build -ldflags '-X main.Version=0.1.1' -o "$checks/core-r2" ./server/cmd/sub2api)
@@ -73,11 +90,11 @@ SQL
   "$checks/core-r2" schema-contract > "$out/schema-r2.txt"
   sha256sum "$checks/core-r1" "$checks/core-r2" "$checks"/builtin/*.s2plugin > "$out/artifact-digests.txt"
   export TEST_CORE_V1="$checks/core-r1" TEST_CORE_V2="$checks/core-r2" TEST_SHELL_NODES=3
-  export TEST_BUILTIN_DIR="$checks/builtin" TEST_EXPECT_MIGRATION=9999_managed_upgrade_probe.sql
+  export TEST_BUILTIN_DIR="$checks/builtin" TEST_EXPECT_MIGRATION=9999_managed_upgrade_probe.sql TEST_MOCK_URL=http://mock:8080
   TEST_BUILTIN_KEY="managed-test=$(cat "$checks/keys/managed-test.pub")"
   export TEST_BUILTIN_KEY
   set +e
-  go test -race -count=1 -timeout 15m -v ./shell/internal/control -run 'TestRealCoreRollingUpgrade' > "$out/realcore.log" 2>&1
+  go test -race -count=1 -timeout 45m -v ./shell/internal/control -run "${REALCORE_RUN:-TestRealCore}" > "$out/realcore.log" 2>&1
   rc=$?
   echo "realcore rc=$rc" | tee "$out/realcore.summary"
   return $rc

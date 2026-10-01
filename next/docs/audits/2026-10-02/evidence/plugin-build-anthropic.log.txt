@@ -1,0 +1,3 @@
+/src/checks/anthropic-runtime/runtimes/linux-amd64/plugin
+/src/checks/anthropic-runtime/runtimes/linux-arm64/plugin
+signed /src/checks/builtin/anthropic-0.2.0.s2plugin (anthropic 0.2.0) digest sha256:32198e6e36dbf5d6f5719333e15e797957e9496818cba06f02b13248d15bc7da key managed-test
