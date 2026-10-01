@@ -73,7 +73,7 @@ HTTP 挂载：`/healthz`（节点自我隔离时 503）→ `httpapi.NewRouter` �
 | C2 | Redis `plugin:ledger:{key}:{credit\|debit}:{yyyymmdd}`（每日累计，TTL 48h） | 写入 §7 |
 | C2 | `plugin:events` 广播 `{"type":"rollout"\|"config","plugin_key","rollout_id"}`；`ReportPlugin` JSON = `rollout.NodePluginState`（serving、standby、rollout_id、rollout 状态、instances） | 写入 §7 |
 | C2 | Disable 立即提交；Enable 优先 `active_version` 否则最新已批准版本；plugins 行删除后各节点一次对账内停实例 | 写入 §5.7 |
-| C2 | MigrateData 可能因协调者接管重复执行，插件必须幂等 | 写入 SDK 文档 |
+| C2 | MigrateData 可能因协调者接管重复执行，插件必须幂等 | ✅ 已写入 CONTRACTS §11.7，并收进 §27.4「插件作者的多节点须知」；SDK `Migration` 接口注释已同步（2026-10-01） |
 | C2 | 超时：控制台平台调用 10s、热路径 2s、Scheduler 200ms、钩子最多 2s | 写入 §11 |
 | C2 | ~~`SET LOCAL ROLE` 迁移可被 `RESET ROLE` 绕过~~ | ✅ 主控已修（`d87ae94d7`，0003 迁移 + 插件角色登录执行） |
 | G | `UsageRecord.ClientRequestID` + `usage_logs.client_request_id` 列 | 待做（core + 0005 迁移 + B） |
@@ -85,7 +85,8 @@ HTTP 挂载：`/healthz`（节点自我隔离时 503）→ `httpapi.NewRouter` �
 | G | `HookBinding` 加 `ID`（现在未写 id 时用 manifest 下标） | 可选；C1 详情已按同规则匹配 |
 | G | SSRF：共享代理客户端无法拨号时校验，防不住 DNS rebinding | 待 D 提供拨号钩子 |
 | G | `sticky_rules UNIQUE(name, source)` 使两个插件不能声明同名默认规则 | 保持（后来者跳过并记日志） |
-| H | `core.Locker` 增加续租（`Extend`） | 可选 |
+| H | ~~`core.Locker` 增加续租（`Extend`）~~ | ✅ 已完成（2026-10-01）：换成 redsync，`Lock.Extend` + `core.KeepLock`，去掉 PG 兜底；七个调用点与第二重保护见 CONTRACTS §27.1、§27.2 |
+| C2 / E | ~~插件没有互斥手段（KV 无 SETNX / CAS）~~ | ✅ 已完成（2026-10-01）：宿主权限 `lock`（medium）+ `HostService.LockAcquire/LockRenew/LockRelease`，proto、manifest、SDK（`Host.Locks()`）、宿主侧（`grpcruntime/lock.go`，`core.TokenLocker` 新增 `TryLockToken`、`ReleaseToken`）均已实现；owner token 由插件生成，结果未知时 SDK 用同一 token 补偿释放。见 CONTRACTS §27.3、§27.4 |
 | H | core 定义"有新事件"频道 `events:appended`，B 的 Publisher 提交后发布 | 可选（现最多延迟 1s） |
 | H | job cron 默认 UTC（支持 `CRON_TZ=`）、`@every` 对齐周期；`OnEvents` 确认 id 不超过游标算失败 | 写入 §11 |
 | H | `plugin_job_runs.triggered_by`；`core.JobTrigger.NextRun` | 可选 |

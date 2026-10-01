@@ -170,7 +170,7 @@ flowchart LR
     slots["slot:account:{id} · slot:user:{id}<br/>并发槽位"]
     cool["cooldown:account:{id}"]
     bal["balance:{user_id}<br/>余额缓存"]
-    locks["lock:*<br/>任务、事件投递、迁移协调"]
+    locks["lock:*<br/>任务、事件投递、对账、内置插件安装<br/>插件锁 lock:plugin:{key}:*"]
     bus["广播频道<br/>plugin:events · authz:changed<br/>account:changed · config:changed"]
   end
   subgraph pg["PostgreSQL"]
@@ -192,7 +192,7 @@ flowchart LR
 | 状态同步 | 状态变更通过 Redis 广播，节点收到后立即对账；另有每 5 秒一次对账兜底 |
 | 自我隔离 | 连续 15 秒无法和 Redis/PG 通信的节点，停止接收依赖插件的请求（返回 503） |
 | 并发槽位 | 槽位成员带 `boot_id` 前缀；节点启动时只清理已下线节点的槽位 |
-| 单节点执行 | 插件任务、事件投递、迁移用 Redis 锁（失败时退到 PG advisory lock）保证只在一个节点执行 |
+| 单节点执行 | 插件任务、事件投递、对账、保留清理、内置插件安装用 Redis 锁（redsync，`core.Locker`）保证同一时刻只在一个节点执行；**没有 PG 兜底**，连不上 Redis 的节点不拿锁。锁不带 fencing token，不可幂等的工作另有数据库层保护（CONTRACTS §27）。插件自己需要按需互斥时，凭宿主权限 `lock` 经 `HostService.LockAcquire/LockRenew/LockRelease` 使用同一套锁，key 由宿主强制加上 `plugin:{plugin_key}:` 前缀，owner token 由插件生成（CONTRACTS §27.3）。核心迁移、插件 schema 迁移、IAM 引导用的是各自独立的 PG advisory lock，与 Redis 锁无关 |
 
 ---
 
@@ -495,7 +495,7 @@ guard-0.1.0.s2plugin
 flowchart LR
   subgraph host["核心"]
     rt["grpcRuntime"]
-    hs["HostService<br/>Log · KV · GetConfig · GetDSN<br/>AuthzCheck · Ledger.Credit/Debit"]
+    hs["HostService<br/>Log · KVGet/KVSet/KVDelete/KVList · GetDSN<br/>AuthzCheck · LedgerCredit/LedgerDebit · Publish<br/>ListAccounts · GetAccountCredentials<br/>LockAcquire/LockRenew/LockRelease（CONTRACTS §27.3）"]
     eg["EgressService<br/>Dial（双向流）"]
   end
   subgraph plugin["插件进程"]
@@ -602,12 +602,12 @@ stateDiagram-v2
 
 ### 5.5 授权确认
 
-- `hostPermissions` 按风险分级：
+- `hostPermissions` 按风险分级（以 `sdk/manifest/manifest.go` 的 `HostPermissionRisk` 为准；低风险在确认授权时自动授予，见 `plugin/install/consent.go`）：
 
 | 等级 | 权限 |
 |---|---|
-| 🟢 低 | `kv`、`config`、`log` |
-| 🟡 中 | `routes.admin`、`routes.user`、`events`、`jobs`、`ui.menu`、`ui.iframe`、`accounts.read` |
+| 🟢 低 | `kv`、`config`、`log`、`broadcast` |
+| 🟡 中 | `routes.admin`、`routes.user`、`events`、`jobs`、`ui.menu`、`ui.iframe`、`accounts.read`、`lock`（CONTRACTS §27.3） |
 | 🟠 高 | `db.schema`、`net`（白名单模式下）、`routes.public`、`routes.webhook`、`gateway.hook`、`gateway.endpoint`、`platform.register`、`scheduler.affinity`、`scheduler.rank`、`users.read` |
 | 🔴 极高 | `accounts.credentials`、`ledger.credit`、`ledger.debit`、`ui.native`、`users.write`、`db.core_views` |
 
@@ -1131,7 +1131,7 @@ sequenceDiagram
 |---|---|
 | 声明 | manifest `jobs`：`id`、`schedule`（cron 或 `@every`）、`timeoutSec` |
 | 调度 | 每个节点都计算下一次触发时间；到点后抢 Redis 锁 `lock:job:<plugin>:<job>:<触发时间>`，抢到的节点调用本机插件的 `AppService.RunJob` |
-| 保证 | 同一个任务的同一次触发只执行一次；错过的触发不补跑 |
+| 保证 | 同一个任务的同一次触发只执行一次（Redis 锁 + `plugin_job_runs` 上的唯一索引 `plugin_job_runs_slot_uniq`，CONTRACTS §27.2）；错过的触发不补跑 |
 | 记录 | `plugin_job_runs(id, plugin_key, job_id, node_id, scheduled_at, started_at, finished_at, status, error)`，保留最近 1000 条 |
 | 手动触发 | 插件详情页"立即执行"，需要 `plugin:manage` |
 | 禁用 | 插件禁用时停止调度 |

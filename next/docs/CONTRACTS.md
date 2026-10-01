@@ -251,7 +251,8 @@
 | `node:live` | ZSET boot_id → 心跳毫秒 | D |
 | `node:info:{boot_id}`、`node:plugins:{boot_id}` | HASH，TTL 15s | D |
 | `slot:{kind}:{id}` | ZSET member=`{boot_id}:{request_id}` score=过期毫秒 | D |
-| `lock:{name}` | STRING owner token | D |
+| `lock:{name}` | STRING owner token，TTL = 锁有效期（redsync `SET NX PX`，比对删除 / 比对 `PEXPIRE`）；**没有 PG 兜底**，连不上 Redis 的节点不拿锁（§27） | D |
+| `lock:plugin:{plugin_key}:{name}` | 同上，但 owner token **由插件生成**（每次 `LockAcquire` 一个新的）；插件经 `HostService.LockAcquire/Renew/Release` 使用，前缀由宿主按调用者强制加上（§27.3）。核心自己的锁名**不得**以 `plugin:` 开头 | C2 |
 | `cooldown:account:{id}` | STRING reason，TTL | A |
 | `stepup:{token}` | STRING user_id，TTL 5m | A |
 | `apikey:{sha256}` | STRING 缓存（JSON），TTL 60s | A |
@@ -271,7 +272,7 @@
 
 节点插件状态（`node:plugins:{boot_id}` 每个插件一个 JSON，C2 写、C1 与控制台读）：`{state, serving, standby?, rollout_id?, rollout?, error?, instances:[{version, state, error?, restarts}]}`。`state` 汇总本节点：有进行中的发布时等于 `rollout`（`pending|ready|active|failed`），否则按在服务的实例为 `active|pending|failed`，没有在服务的版本为 `stopped`。
 
-槽位回收（D）要求 Redis 为单实例（非 Cluster），且各节点时钟经 NTP 同步。
+槽位回收（D）要求 Redis 为单实例（非 Cluster），且各节点时钟经 NTP 同步。分布式锁（§27）同样按单实例设计（Redlock 法定数为 1）。
 
 ## 8. 系统设置（`settings` 表）
 
@@ -1815,3 +1816,128 @@ Linux 上 `go test -v ./...`（`next/server`）共 **599 个 `=== RUN`，只有 
 - **`install-only.txt` 读不出来 ≠ 空列表**：读失败时 `EnsureBuiltin` 报错并**一个内建插件都不装**。当成空列表的后果是每个部署都把本该关着的插件启用了。文件**不存在**才等于空（兼容没有这个文件的旧镜像）。注意 `app.go` 调用处丢弃了返回的错误，只有 ERROR 日志可见。
 
 **写测试时踩的一个坑**：插件 key 必须匹配 `^[a-z][a-z0-9_]{1,29}$`，**不能带 `-`**。第一版测试用了 `guard-on`，包装装不上，而 `EnsureBuiltin` 对单个包的失败只记日志、不返回错误，测试里的 logger 又是丢弃型的，于是失败信息成了「核心没启用 guard-on」，看起来像被测逻辑错了。**以后在这里写测试，logger 用 `t.Log` 的 handler，别用 `slog.DiscardHandler`**。
+
+## 27. 分布式锁：换成 redsync、去掉 PG 兜底、插件锁（2026-10-01）
+
+本节优先于前文中冲突的描述（§7 `lock:*` 两行、§5.7 内置插件的 `plugins:builtin`、§11.7 已按本节同步或仍然成立）。§27.1、§27.2 是核心锁，§27.3 是插件锁（proto、manifest 权限、SDK、宿主侧），均**已实现**；§27.4 是写给插件作者的多节点须知。
+
+### 27.1 核心锁 `core.Locker`（D；`core/ports_cluster.go`、`core/lock.go`、`cluster/locker.go`）
+
+- **实现**：`github.com/go-redsync/redsync/v4`。Redis 是单实例（§7 末尾），Redlock 法定数为 1，等价于 `SET lock:{key} <token> NX PX <ttl>` + 比对 token 删除 + 比对 token `PEXPIRE`。每次 Redis 调用的超时为 TTL 的 5%，但不低于 500 毫秒、不高于 TTL 的一半（`cluster/locker.go` 的 `timeoutFactor`）。
+- **删除了 PostgreSQL advisory lock 兜底**。原来 Redis 报错时改拿 PG 锁，但那是**第二个锁命名空间**：某节点自己的 Redis 连接出错时去拿 PG 锁，另一节点此时仍持有 Redis 锁，两边都以为独占。连不上 Redis 的节点本来就不能服务网关（并发槽 fail-closed），现在它干脆不拿锁——拿不到锁的后果只是「这一轮别的节点做或者没人做」，而两个节点同时做才是锁要防的事。
+- **不受影响**（各自独立的 PG advisory lock，与 `core.Locker` 无关）：核心迁移 `store/migrate.go`（`pg_advisory_lock`）、插件 schema 与迁移 `plugin/dbschema/dbschema.go`、IAM 引导 `iam/service.go`（`pg_advisory_xact_lock(hashtext('sub2api:iam:bootstrap'))`）、保存账号时自动关联代理 `proxy/resolve.go`（§21.4）。
+- **不用 `WithSetNXOnExtend`**：Redis 不开持久化，重启会清空所有锁。续期时发现 key 没了，说明中间可能已有别的节点拿过这把锁，必须**如实报告丢锁**，不能悄悄重建。
+
+接口：
+
+| 方法 | 语义 |
+|---|---|
+| `Locker.TryLock(ctx, key, ttl) (Lock, ok, err)` | **只尝试一次**，不等待。`ok=false, err=nil` = 被别人持有；`err` = Redis 出错（含「拿到了但 Redis 答得太慢、剩余有效期已不够，已主动退还」）。返回的 `Lock` 永不为 nil，`ok=false` 时其方法都是空操作 |
+| `Lock.Token()` | Redis 里存的 owner token；未持有时为 `""` |
+| `Lock.Until()` | 本进程认为自己仍持有到何时：**本机时钟**减去漂移余量。未持有为零值；`Resume` 得到的句柄在第一次成功 `Extend` 之前也是零值 |
+| `Lock.Extend(ctx) (bool, error)` | 把过期时间推到「现在 + ttl」。`false, nil` = **确定丢锁**（过期了，别人可能已拿到），受保护的工作必须停；`err` = **结果未知**（Redis 没回话） |
+| `Lock.Release()` | 仍以本 token 持有时才删除；**幂等**，永不删除别人的锁。不带 ctx（内部 3 秒上限）、不返回错误，失败只记日志，锁靠 TTL 过期 |
+| `TokenLocker.TryLockToken(ctx, key, token, ttl) (Lock, ok, err)` | 与 `TryLock` 相同，但 owner token 由**调用方**给出，供宿主用插件生成的 token 替插件拿锁（§27.3）：调用方即使没收到结果（回包丢失）也能用这个 token `ReleaseToken`。`token == ""` 或 `ttl <= 0` 返回错误。实现用 redsync 的 `WithGenValueFunc` 把 token 作为 `SET NX` 写入的值——**不能用 `WithValue`**，它只设置句柄上供 `Extend` / `Unlock` 比对的值，加锁时 redsync 仍会自己生成一个随机值写进 Redis（`cluster/locker.go` 的 `TryLockToken` 注释）。**token 每次尝试必须是新的**：用一把**已以该 token 持有**的锁的 token 再抢，`SET NX` 失败，redsync 对失败尝试的清理（用同一 token 比对删除）会把这把锁删掉——返回 `ok=false`，之后**无人持有** |
+| `TokenLocker.Resume(key, token, ttl) Lock` | 不访问 Redis，按 token 构造句柄，供宿主**无状态地**替插件续期（§27.3 `LockRenew`）。`token == ""` 或 `ttl <= 0` 时返回空操作句柄——**`Release` 也会静默什么都不做** |
+| `TokenLocker.ReleaseToken(ctx, key, token) error` | 仍以 `token` 持有时删除，受 `ctx` 约束（另有 3 秒上限）。与 `Lock.Release` 不同，它**报告失败**：`nil` = 这把锁现在不以该 token 持有（刚删掉、早已释放或过期、从未拿到）；`err` = 结果未知。`token == ""` 直接返回 `nil`。宿主的 `LockRelease` 走它，而不是 `Resume(...).Release()`：后者既不能遵守请求的截止时间，也没法告诉插件 Redis 没回话 |
+
+实现：`cluster.Locker`（`cluster/locker.go`，实现 `core.TokenLocker`）。测试替身：`testutil.MemLocker`（`server/internal/testutil/locker.go`，内存版 `core.TokenLocker`，复现同 token 重抢删锁；`Holder(key)` / `Expire(key)` 供断言）。
+
+`core.KeepLock(ctx, lk) (ctx, stop)`（`core/lock.go`）：
+
+- 在剩余有效期过半时后台 `Extend`；结果未知时在有效期内重试，每次 `Extend` 调用都以 `Until()` 为截止
+- 确定丢锁、或 `Until()` 过了仍没续上，就取消返回的 ctx，`context.Cause(ctx) == core.ErrLockLost`
+- **续期只活到父 ctx 结束，不会更久**。所以持锁上限 = 父 ctx 截止 + 一个 TTL——卡死的节点靠这个不会永远占着锁，**调用方必须给父 ctx 一个能框住工作的截止时间**
+- 用法：工作用返回的 ctx 跑，结束先 `stop()` 再 `lk.Release()`；`lk` 必须是已持有的锁（`Until()` 为零值会被立即当作丢锁）
+- 取消 ctx 就是 KeepLock 能给的全部保护：不看 ctx 的工作、或 ctx 取消时已经在执行副作用的工作，仍可能和下一个持有者短暂重叠
+
+**不变式：锁不带 fencing token。** 一个卡过了 `Until()` 的持有者无从得知别的节点已经拿到锁，会继续往下跑。所以**锁只保证「不同时做」，不可幂等的工作必须在数据库层另有原子保护**（条件 UPDATE、唯一索引、幂等键）。新增调用点时必须在 §27.2 表里写出它的第二重保护，或写明为什么不需要。
+
+### 27.2 七个调用点
+
+| key（Redis 里加前缀 `lock:`） | TTL | 释放 | 续期 | 第二重保护 |
+|---|---|---|---|---|
+| `usage:reconcile`（`usage/reconcile.go` `ReconcileDue`） | 30 秒（原 5 分钟） | 一轮扫描结束释放 | `KeepLock`，父 ctx = 2 分钟扫描预算，故最长持有约 2.5 分钟 | `claimDue` 用 `FOR UPDATE SKIP LOCKED` 领取并把 `next_check_at` 推后 3 分钟（租约）；结算事务内 `SELECT billing_status … FOR UPDATE` 重查；账本 `balance_ledger.idempotency_key` UNIQUE |
+| `job:{plugin}:{job}:{slot}`（`job/job.go` `runScheduled`；`slot` = 触发时刻 Unix 秒） | 任务超时 + `LockGrace`（60 秒） | **故意不释放**：让时钟落后的节点在锁过期前也跳过这个触发点 | 无 | 迁移 `0015_job_runs_unique_slot.sql` 的唯一索引 `plugin_job_runs_slot_uniq (plugin_key, job_id, scheduled_at) WHERE NOT manual`；原先只有 `INSERT … WHERE NOT EXISTS`，没有唯一索引时它不是原子的。插入撞上唯一约束即视为「别的节点拿到了这个触发点」 |
+| `job:{plugin}:{job}:manual`（`job/job.go` `RunNow`） | 任务超时 + 60 秒 | 执行结束释放 | 无 | 锁本身就是「同一任务已有手动运行 → 409 `conflict`」语义的边界，没有数据库保护（手动运行的 `scheduled_at` 是点击时刻，不进唯一索引）。执行受任务超时约束，正常情况下锁比执行活得久；Redis 重启丢锁时可能出现两个手动运行，接受 |
+| `jobs:retention`（`job/retention.go`） | 保留周期 × 0.9（默认 54 分钟） | **故意不释放**：让其他节点跳过本周期 | 无 | 工作幂等（`PurgeRuns`：删多余历史、标记卡死的运行） |
+| `events:retention`（`event/delivery/retention.go`） | 同上 | **故意不释放** | 无 | 工作幂等（`PurgeEvents`：删所有游标都已越过的旧事件） |
+| `events:{plugin}`（`event/delivery/worker.go` `holdLock`） | 默认 30 秒（`Options.LockTTL`），`Options.defaults` 会把它**自动抬高**到至少 `minLockTTL` = `max(CallTimeout + 10 秒, (CallTimeout + 9 秒) × 100/99)`：每步开始前要求剩余有效期超过 `stepValidity` = `CallTimeout + 5 秒`，刚续完的有效期 = TTL − redsync 1% 漂移余量 − Redis 往返，TTL 太短会让每一步都丢锁重抢（换新 token，中间留出别的节点接手的窗口）而不是原地续期；×100/99 补的就是这 1%。默认 `CallTimeout` 20 秒时下限为 30 秒，默认值不变 | 停止时释放；续期没续上（确定丢锁、结果未知、或续上后有效期仍不足 `stepValidity`）时释放并立即重抢 | 每一步之前剩余有效期不足 `stepValidity` 时**原地 `Extend`**；单步 ctx 截止 = `Until()` | 游标 CAS：`UPDATE plugin_event_cursors … WHERE plugin_key = $1 AND last_event_id = $from`。原来靠「释放再重抢」续租，窗口里别的节点可能接手、把在途整批再投一遍；现在只有续期没续上才重新抢。插件侧仍是**至少一次**（§27.4） |
+| `plugins:builtin`（`app/app.go`，§5.7） | 1 分钟（原 5 分钟） | 结束释放 | `KeepLock`，父 ctx = 进程根 ctx 派生、**10 分钟超时**的 ctx；超时或丢锁时 `EnsureBuiltin` 的 ctx 被取消并记一条 `builtin plugins: install cut short` 警告。所以最长持有约 11 分钟 | 下游的发布协调者租约（`plugin_rollouts.coordinator_lease_until`，`plugin/rollout/coordinator.go`） |
+
+注：`plugins:builtin` 的上限是为满足 §27.1「调用方必须给父 ctx 一个截止」加的——没有它，`EnsureBuiltin` 卡死时这个节点会一直续着锁直到进程退出。其他节点只尝试一次、拿不到就跳过，不会被卡住；安装被截断的后果是「这次启动内置插件可能没装完」，而不是死锁。
+
+### 27.3 插件锁 `HostService.LockAcquire` / `LockRenew` / `LockRelease`（C2 宿主、E SDK；**已实现**）
+
+落点：proto `sdk/proto/sub2api/plugin/v1/host.proto`（`HostService` 的 lock 注释是插件作者读的规则全文）；name / ttl / token 的校验规则 `sdk/protocol/lock.go`（宿主与 SDK 共用同一份，`LockMinTTL`、`LockMaxTTL`、`LockNamePattern`、`LockTokenPattern`、`ValidLockName`、`ValidLockToken`、`ValidLockTTL`、`LockTTLFromMs`）；宿主 `server/internal/plugin/grpcruntime/lock.go`（`hostServer.LockAcquire` / `LockRenew` / `LockRelease`、`LockKey`、`PermLock`）；SDK `sdk/pluginsdk/lock.go`；测试替身 `sdk/pluginsdk/pluginsdktest/locks.go`。
+
+在此之前插件没有任何互斥手段：KV 只有 Get/Set/Delete/List（§27.4），没有 SETNX 也没有 CAS，多节点上「只让一个节点做」只能靠 manifest `jobs[]` 的触发点语义，做不了「一个素材同步同时只跑一个」这类按需互斥。
+
+宿主权限 **`lock`，风险 `medium`**（`low` 会被 `plugin/install/consent.go` 的 `decide` 自动授予，互斥能力会让插件在 Redis 里留下带 TTL 的 key、并可能因持锁阻塞本插件的其他节点，应当让管理员看见）。**只需 `hostPermissions`，不需要 capability**（与 `broadcast` 不同，锁不需要宿主回调插件）。已加入 `sdk/manifest/manifest.go` 的 `HostPermissionRisk`（`"lock": RiskMedium`）。注意：已有插件在升级时新申请 `lock`，新版本按 §5.7 进入 `awaiting_consent`。
+
+三个 RPC 都是**一元**的，遵守 ARCHITECTURE §5.3「除 `EgressService.Dial` 外所有方法都是一次请求、一次响应」：
+
+```proto
+rpc LockAcquire(LockAcquireRequest) returns (LockAcquireResponse);
+rpc LockRenew(LockRenewRequest)     returns (LockRenewResponse);
+rpc LockRelease(LockReleaseRequest) returns (LockReleaseResponse);
+
+message LockAcquireRequest  { string name = 1; int64 ttl_ms = 2; string token = 3; } // token 必填，插件生成
+message LockAcquireResponse { bool acquired = 1; reserved 2; reserved "token"; int64 valid_ms = 3; }
+message LockRenewRequest    { string name = 1; string token = 2; int64 ttl_ms = 3; }
+message LockRenewResponse   { bool held = 1; int64 valid_ms = 2; }
+message LockReleaseRequest  { string name = 1; string token = 2; }
+message LockReleaseResponse {}
+```
+
+`LockAcquireResponse` 的 2 号字段原是宿主生成的 `token`，改为插件生成后删除并 `reserved`。
+
+| 约束 | 落法 |
+|---|---|
+| 只能锁自己的命名空间 | Redis key `lock:plugin:{plugin_key}:{name}`（`grpcruntime.LockKey` 给出 `plugin:{plugin_key}:{name}`，locker 再加 `lock:`），`plugin_key` 由宿主按 broker 连接的调用者身份**强制**加上，请求里没有这个字段。插件 key 不含 `:`（`^[a-z][a-z0-9_]{1,29}$`），前缀无歧义；同一插件新旧两个版本（升级期间并存）共享同一命名空间，这是想要的 |
+| `name` | `^[A-Za-z0-9._:/-]{1,128}$`（`protocol.LockNamePattern`） |
+| `ttl_ms` | 1000 到 300000（1 秒到 5 分钟，`protocol.LockTTLFromMs`：先按毫秒比较范围再换算，超大值不会溢出 `time.Duration` 后落回范围内）；超出范围 `INVALID_ARGUMENT`（不静默夹紧，夹紧会让插件以为自己拿到了它要的时长）。`LockRelease` 没有 ttl，不校验 |
+| owner token **由插件生成** | `LockAcquireRequest.token` 必填，`^[A-Za-z0-9_-]{16,128}$`（`protocol.LockTokenPattern`，URL-safe base64 或 hex）。宿主只查格式，随机性是插件的责任：至少 16 字节 CSPRNG 随机数（SDK 发 16 字节、无填充 URL-safe base64，22 个字符）。宿主把它原样作为锁在 Redis 里的值。之所以由插件生成：插件**发请求之前**就知道 token，`LockAcquire` 结果未知时（`UNAVAILABLE`、超时、连接断开）能用 `LockRelease(name, token)` 撤销，不必让其他节点干等一个 TTL。`LockRenew` / `LockRelease` 也校验同一格式 |
+| **每次 `LockAcquire` 必须用新 token** | 用一把**本插件已以该 token 持有**的锁的 token 再 `LockAcquire`：`SET NX` 失败，redsync 对失败尝试的清理（用同一 token 比对删除）会**把这把锁删掉**——返回 `acquired=false`，之后**无人持有**；原持有者下一次 `LockRenew` 才得知 `held=false`，这之间别的节点可能已经拿到。SDK 每次 `TryAcquire` 都生成新 token，自己手写 gRPC 调用的插件必须照做 |
+| 有效期用**时长**表示 | `valid_ms` = 宿主按 `Lock.Until()` 算出的剩余有效期（已扣 redsync 1% 漂移余量，不为负）。不传绝对时间，避免插件进程与宿主的时钟问题。插件应以**发出请求之前**的本机时刻 + `valid_ms` 作为自己的截止，把往返时间算在自己头上 |
+| 宿主无状态 | `LockAcquire` 调 `TokenLocker.TryLockToken(ctx, key, token, ttl)`（§27.1）后不保留句柄；`LockRenew` 用 `TokenLocker.Resume(key, token, ttl)` 按 token 续期；`LockRelease` 调 `TokenLocker.ReleaseToken(ctx, key, token)`。插件进程死掉后锁按 TTL 自然失效，宿主不需要跟踪插件实例的生死 |
+| 结果 | `LockAcquire`：被别人持有 → `acquired=false`（`valid_ms` 不填），不是错误。`LockRenew`：`Extend` 返回 `false,nil` → `held=false`（**确定丢锁**：过期、或已归别人，插件必须停手），不是错误。`LockRelease`：幂等，锁已过期、已释放、从未拿到或已归别人时同样返回成功 |
+| `UNAVAILABLE` | Redis 不可用、宿主没配 locker，或**结果未知**：锁可能被拿到 / 续上 / 释放了，也可能没有；错误详情只进宿主日志（Redis 出错时记 `plugin lock call failed` 警告），回给插件的只有 `locks unavailable`。**`LockAcquire`** 得到它时按没拿到处理，并用同一 token 调一次 `LockRelease` 撤销。SDK 的 `TryAcquire` 自动做这件事：除 `InvalidArgument` / `PermissionDenied` / `Unimplemented`（宿主没碰 Redis 就拒绝了）以外的所有错误——含 `DeadlineExceeded`、调用方 ctx 取消——都视为结果未知，尽力补偿调用一次 `LockRelease`（脱离调用方 ctx 的取消，2 秒上限，忽略其错误），再返回原错误。**残留竞态**：补偿释放可能比宿主仍在进行的 `SET NX` 先到 Redis，这时锁会被留下，一个 TTL 后自然失效。**`LockRenew`** 得到它时锁在上次得到的有效期内仍可能是自己的，SDK 的 `Keep` 在 `Until` 之前重试、过了 `Until` 判为丢锁。**`LockRelease`** 得到它表示没能确认释放，锁一个 TTL 后自然失效（也可以重试） |
+| 授权与校验顺序 | 先查授权：没有 `lock` 授权 → `PERMISSION_DENIED`（与其他 HostService 方法一致），然后才校验 name / ttl / token → `INVALID_ARGUMENT` |
+
+**为什么不做流式租约**（「开一条流，流断即释放」）：
+
+- `Drain` 只等**宿主→插件**的在途调用（`grpcruntime/adapters.go` 的 `inflight` 计数），插件→宿主的流不计数，排空时不会等它
+- `restart()` 用 `killProc(old, false)` **非优雅**杀进程（`grpcruntime/instance.go`），不给插件释放的机会
+- 卡死但仍存活的插件在健康检查判它不健康之前（每 10 秒一次、连续 3 次失败，约 30 秒）一直开着流，照样占着锁
+
+无论如何都要 TTL；有了 TTL，流几乎不再多买到什么，却要破上面那条契约规则。
+
+**SDK**（`sdk/pluginsdk`）：
+
+- 导出：`Host.Locks() Locks`；`Locks{TryAcquire, WithLock}`；`*Lock{Name, Until, Renew, Release, Keep}`；`ErrLockLost`；`MinLockTTL = 1s`、`MaxLockTTL = 5m`；`ValidLockName(name)`。这些常量与校验都转发自 `sdk/protocol`（与宿主同一份规则）。非法 name / ttl 在**客户端**就返回 `codes.InvalidArgument`，不发 RPC；token 由 SDK 生成，插件接触不到
+- 低层：`Locks.TryAcquire(ctx, name, ttl) (*Lock, bool, error)`，被别人持有时 `ok=false`、`err=nil`；宿主回 `acquired=true` 但按本机时钟算出的 `Until` 已不晚于当前时刻（Redis 太慢，锁到手时已到期）时，SDK 用自己的 token 尽力归还后同样返回 `ok=false`、`err=nil`，`WithLock` 因此返回 `ran=false`、不运行 fn。**每次调用生成新的随机 token**（16 字节 `crypto/rand`，无填充 URL-safe base64）；结果未知时的补偿释放见上表 `UNAVAILABLE` 行。`Until` 是本机时刻，从**发请求前**的本机时间加 `valid_ms` 算出；确定丢锁或已释放后为零值。`Renew` 返回 `(false, nil)` 后永远如此，不再问宿主。`Keep` 与 `core.KeepLock` 同义：后台续期，丢锁时以 `ErrLockLost` 取消返回的 ctx；每次续期调用的截止设为 `Until`，宿主卡住不会让丢锁判定拖过有效期；续期只活到父 ctx 结束
+- `Release`：从第一次调用起就不再续期；返回错误表示宿主没能确认释放（锁靠 TTL 过期，也可再调一次），宿主确认过之后再调直接返回 `nil`；正在跑的 `Keep` 在下一次续期时以 `ErrLockLost` 取消
+- 高层：`Locks.WithLock(ctx, name, ttl, fn func(ctx) error) (ran bool, err error)`——拿到锁后自动续期并执行 `fn`，**丢锁时 `fn` 的 ctx 被取消**，结束时释放（脱离 ctx 的取消，5 秒上限，`fn` panic 也释放；释放失败只记警告日志）。返回值：
+  - 被别人持有 → `(false, nil)`，不算错误；拿锁出错 → `(false, err)`
+  - `fn` 返回非 nil → 原样返回 `fn` 的错误
+  - `fn` 返回 nil 但运行期间丢过锁 → `(true, ErrLockLost)`：`fn` 可能在丢锁之后还做了事，调用方要知道
+- 测试替身（`sdk/pluginsdk/pluginsdktest`）：`FakeHost.Locks *LockTable`（`NewFakeHost` 默认每个各建一张；`hostB.Locks = hostA.Locks` 即可模拟两个节点抢同一把锁）；`LockTable.Expire(name)` / `Held(name)` / `Holder(name)`（返回持有者的 token，空闲为 `""`）/ `SetValidity(d)`（给上报的 `valid_ms` 设上限，让测试在 1 秒下限下也能快速续期）；`FakeHost.LockErr` / `SetLockErr(err)` 模拟 `PERMISSION_DENIED` / `UNAVAILABLE`（`FakeHost` 本身没有授权概念）；`FakeHost.LockAcquireLostReply` / `SetLockAcquireLostReply(err)`：`LockAcquire` 照常拿锁（锁空闲时），却回这个错误而不是结果，模拟回包丢失，用来测补偿释放。`FakeHost` 按 `sdk/protocol` 校验 name / ttl / token（与宿主一致），并复现同 token 重抢删锁
+- 给 `Host` 接口加方法会让插件自己写的 `Host` 测试替身编译失败，属于 SDK 的不兼容变更，发版说明里要写
+
+§27.1 的不变式对插件同样成立：**插件锁不带 fencing token，不可幂等的工作要在插件自己的 schema 里另加原子保护**（唯一索引、条件 UPDATE）。
+
+### 27.4 插件作者的多节点须知
+
+sub2api 按多节点部署设计，**插件的每个实例都跑在每个节点上**。下面每条都是会在单节点测试里完全看不出来的问题。
+
+| 事实 | 该怎么写 | 出处 |
+|---|---|---|
+| `Initializer.Init` **每个实例调用一次**：每个节点各一次，进程重启、资源限制变更（§14.3）、升级时新版本 standby 启动都会再调用 | 不要在 `Init` 里做「全集群只该做一次」的事（建表、导数据、发通知）。建表写进 `migrations/*.sql`；一次性工作放进 manifest `jobs[]` 或用 `lock` | `sdk/pluginsdk/interfaces.go`（`Initializer`），`sdk/pluginsdk/serve.go`（`InitHost` 里调用 `Init`） |
+| 周期性工作用 manifest `jobs[]`：**全集群每个触发点执行一次**（锁 + 唯一索引，§27.2），错过的触发点不补跑；节点在插入运行记录后崩溃，这个触发点就没跑完，也不会重试 | 不要在 `Init` 里自己起定时器 goroutine——那会在每个节点各跑一份。任务本身按「可能没跑完」来写（下一个触发点能接着做） | `server/internal/job/job.go`（包注释、`runScheduled`），§11.7 |
+| 按需互斥（「同一素材同时只同步一次」）用宿主权限 `lock` | 用 `Host.Locks().WithLock(ctx, name, ttl, fn)`：`fn` 用传进来的 ctx 干活（丢锁时它被取消，cause 为 `ErrLockLost`），给外层 ctx 一个框住工作的截止时间（续期只活到它结束）。返回 `(false, nil)` = 别的节点正持有，不是错误；**`fn` 成功但中途丢过锁时返回 `(true, ErrLockLost)`**，说明 `fn` 可能和下一个持有者重叠过，不可幂等的部分必须另有数据库保护。自己手写 gRPC 调用时每次 `LockAcquire` 都要新 token（同 token 重抢会删掉自己的锁） | §27.3，`sdk/pluginsdk/lock.go`（`Locks`） |
+| KV 只有 `Get` / `Set` / `Delete` / `List`，**没有 CAS、自增或 SETNX** | 「读 → 改 → 写」在两个节点并发时**会丢更新**。计数、累加、状态机放进自己的 schema（事务 / 条件 UPDATE），或在 `lock` 下做 | `sdk/pluginsdk/host.go`（`KV` 接口），`sdk/proto/sub2api/plugin/v1/host.proto` |
+| `Publish` 是 **best effort**：无确认、无顺序、无重放，**发布者所在节点自己收不到** | 缓存失效要「**本节点直接生效 + 广播通知其他节点 + 短周期轮询兜底**」三件都做：只广播，本节点不会失效；只靠广播，丢一条消息某个节点就一直是旧的 | `sdk/pluginsdk/host.go`（`Host.Publish` 注释），`server/internal/plugin/rollout/broadcast.go`（`broadcastHub.handle` 跳过 `SourceBootID` 为本节点的消息），`server/internal/core/ports_cluster.go`（`Bus` 注释「every consumer must also reconcile periodically」），§14.3 |
+| `OnEvents` **至少一次**：确认之前的批次会重投，持锁节点切换时也可能重投 | 按事件 `id` 去重（例如在自己的 schema 里对事件 id 建唯一索引） | `server/internal/event/delivery/delivery.go`（包注释），§11.7 |
+| `MigrateData` 在发布协调者被接管后**可能重复执行** | 必须幂等：重跑一遍得到同样的结果 | `server/internal/plugin/rollout/coordinator.go`（`takeOver`、`migrateData`），§11.7 |
+| 插件自己的并发、队列、内存限流等设置**按节点计**：集群总量 = 设置值 × 节点数 | 在设置说明里写明「每个节点」；需要全集群上限的，用数据库或 `lock` 协调，不要用进程内计数 | 例：`plugins/moderation/forms/settings.ui.json` 的 `max_concurrency`、`queue_size`（说明均为「每个节点」） |
