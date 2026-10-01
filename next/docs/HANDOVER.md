@@ -12,7 +12,7 @@
 
 ---
 
-> **2026-10-02 主节点优先升级与 Redis 节点密钥**：已在工作区实现，并在 OVH 隔离环境通过全部 Go 模块 `-race`、真实 PG/Redis 控制层用例和真实三节点升级验收，见 [验证记录](audits/2026-10-02/MULTINODE-VALIDATION.md)；规约见 [MULTINODE-SYNC-PROTOCOL.md](MULTINODE-SYNC-PROTOCOL.md)，契约见 CONTRACTS §34。验证记录第 5 节列出未覆盖场景。10月1日的兼容滚动结果保留在 [`SHELL-UPGRADE-VALIDATION.md`](audits/2026-10-01/SHELL-UPGRADE-VALIDATION.md)。未提交、推送或部署业务环境。
+> **2026-10-02 主节点优先升级与 Redis 节点密钥**：已在工作区实现，并在 OVH 隔离环境通过全部 Go 模块 `-race`、真实 PG/Redis 控制层用例和真实三节点升级验收，见 [验证记录](audits/2026-10-02/MULTINODE-VALIDATION.md)；规约见 [MULTINODE-SYNC-PROTOCOL.md](MULTINODE-SYNC-PROTOCOL.md)，契约见 CONTRACTS §34。验证记录第 5 节列出未覆盖场景。10月1日的兼容滚动结果保留在 [`SHELL-UPGRADE-VALIDATION.md`](audits/2026-10-01/SHELL-UPGRADE-VALIDATION.md)。已提交为 `7ad11483c` 并推送，同日部署到 `single/` 业务栈（核心迁移 0016–0021、内建插件随包升级）；外壳托管部署未上线。
 
 ## 0. 三十秒摘要
 
