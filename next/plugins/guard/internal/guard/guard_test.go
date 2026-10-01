@@ -17,7 +17,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/pluginsdktest"
 )
 
-func sdkOpts() []pluginsdk.Option { return []pluginsdk.Option{pluginsdk.WithInfo("guard", "0.1.0")} }
+func sdkOpts() []pluginsdk.Option { return []pluginsdk.Option{pluginsdk.WithInfo("guard", "0.2.0")} }
 
 func hookReq(prompt string) *pluginv1.GatewayRequestHookRequest {
 	return &pluginv1.GatewayRequestHookRequest{

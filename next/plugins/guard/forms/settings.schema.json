@@ -14,6 +14,13 @@
       "type": "boolean",
       "title": "Record matched snippets",
       "default": false
+    },
+    "alert_cooldown_sec": {
+      "type": "integer",
+      "title": "Alert cooldown (seconds)",
+      "minimum": 0,
+      "maximum": 300,
+      "default": 60
     }
   }
 }

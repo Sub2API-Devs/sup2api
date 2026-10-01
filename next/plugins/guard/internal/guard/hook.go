@@ -31,10 +31,12 @@ type blockEvent struct {
 	Snippet   string
 }
 
-// alert is one webhook notification.
+// alert is one webhook notification. Cooldown is the throttling window in
+// force when the request was blocked (0 = not throttled).
 type alert struct {
-	URL   string
-	Event blockEvent
+	URL      string
+	Event    blockEvent
+	Cooldown time.Duration
 }
 
 // fieldString decodes a hook field: JSON string when possible, raw otherwise.
@@ -104,10 +106,18 @@ func (p *Plugin) OnGatewayRequest(_ context.Context, in *pluginv1.GatewayRequest
 			p.stats.droppedBlocks.Add(1)
 		}
 		if settings.WebhookURL != "" {
-			select {
-			case p.alerts <- alert{URL: settings.WebhookURL, Event: ev}:
-			default:
-				p.stats.droppedAlerts.Add(1)
+			// Throttling is decided in alertSender (it may call the host);
+			// here only the in-memory check that drops alerts this node
+			// already knows cannot go out.
+			cooldown := settings.alertCooldown()
+			if cooldown > 0 && p.throttle.cooling(r.ID, ev.At, cooldown) {
+				p.stats.alertsThrottled.Add(1)
+			} else {
+				select {
+				case p.alerts <- alert{URL: settings.WebhookURL, Event: ev, Cooldown: cooldown}:
+				default:
+					p.stats.droppedAlerts.Add(1)
+				}
 			}
 		}
 		return &pluginv1.GatewayRequestHookResponse{
@@ -193,7 +203,9 @@ func (p *Plugin) writeBlocks(ctx context.Context, evs []blockEvent) error {
 }
 
 // alertSender posts webhook alerts with plain http.Post semantics (the
-// default transport goes through the egress tunnel in strict mode).
+// default transport goes through the egress tunnel in strict mode). Alerts
+// with a cooldown are sent only when claimAlert allows it; the others are
+// counted as throttled. A failed POST still uses up the window.
 func (p *Plugin) alertSender(ctx context.Context) {
 	defer p.wg.Done()
 	client := &http.Client{Timeout: 5 * time.Second}
@@ -202,17 +214,22 @@ func (p *Plugin) alertSender(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case a := <-p.alerts:
+			if a.Cooldown > 0 && !p.claimAlert(ctx, a.Event.RuleID, a.Cooldown) {
+				p.stats.alertsThrottled.Add(1)
+				continue
+			}
 			body, _ := json.Marshal(map[string]any{
-				"plugin":     "guard",
-				"event":      "request.blocked",
-				"rule_id":    a.Event.RuleID,
-				"rule_name":  a.Event.RuleName,
-				"request_id": a.Event.RequestID,
-				"user_id":    a.Event.UserID,
-				"group_id":   a.Event.GroupID,
-				"model":      a.Event.Model,
-				"snippet":    a.Event.Snippet,
-				"at":         a.Event.At.Format(time.RFC3339),
+				"plugin":       "guard",
+				"event":        "request.blocked",
+				"rule_id":      a.Event.RuleID,
+				"rule_name":    a.Event.RuleName,
+				"request_id":   a.Event.RequestID,
+				"user_id":      a.Event.UserID,
+				"group_id":     a.Event.GroupID,
+				"model":        a.Event.Model,
+				"snippet":      a.Event.Snippet,
+				"at":           a.Event.At.Format(time.RFC3339),
+				"cooldown_sec": int64(a.Cooldown / time.Second),
 			})
 			resp, err := client.Post(a.URL, "application/json", bytes.NewReader(body))
 			if err != nil {

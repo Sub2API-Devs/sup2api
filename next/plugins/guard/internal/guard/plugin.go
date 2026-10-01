@@ -6,6 +6,7 @@ package guard
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -25,6 +26,14 @@ import (
 type Settings struct {
 	WebhookURL     string `json:"webhook_url"`
 	RecordSnippets bool   `json:"record_snippets"`
+	// AlertCooldownSec: per rule, at most one webhook alert per this many
+	// seconds across the cluster (throttle.go). 0 = an alert per block.
+	AlertCooldownSec int `json:"alert_cooldown_sec"`
+}
+
+// alertCooldown is AlertCooldownSec as a duration.
+func (s *Settings) alertCooldown() time.Duration {
+	return time.Duration(s.AlertCooldownSec) * time.Second
 }
 
 // TopicRulesChanged is broadcast to the guard instances on the other nodes
@@ -47,11 +56,12 @@ type Plugin struct {
 	// reloadEvery is the rule refresh period (other nodes may change rules).
 	reloadEvery time.Duration
 
-	blocks chan blockEvent
-	alerts chan alert
+	blocks   chan blockEvent
+	alerts   chan alert
+	throttle alertThrottle
 
 	stats struct {
-		checked, blocked, droppedBlocks, droppedAlerts, alertErrors atomic.Int64
+		checked, blocked, droppedBlocks, droppedAlerts, alertErrors, alertsThrottled atomic.Int64
 	}
 
 	cancel context.CancelFunc
@@ -72,7 +82,7 @@ func New() *Plugin {
 		alerts:       make(chan alert, 256),
 		log:          slog.Default(),
 	}
-	p.settings.Store(&Settings{})
+	p.settings.Store(&Settings{AlertCooldownSec: defaultAlertCooldownSec})
 	p.rules.Store(&ruleSet{})
 	p.Handle("GET", "/rules", p.getRules)
 	p.Handle("PUT", "/rules", p.putRules)
@@ -104,9 +114,17 @@ func (p *Plugin) Init(ctx context.Context, h pluginsdk.Host) error {
 
 // Configure implements pluginsdk.Configurer.
 func (p *Plugin) Configure(_ context.Context, cfg pluginsdk.Config) error {
-	var s Settings
+	s := Settings{AlertCooldownSec: defaultAlertCooldownSec} // kept when the key is absent
 	if err := cfg.Decode(&s); err != nil {
+		var te *json.UnmarshalTypeError
+		if errors.As(err, &te) && te.Field == "alert_cooldown_sec" {
+			return pluginsdk.FieldErrors{}.Add("alert_cooldown_sec", "type", "alert_cooldown_sec must be an integer / 告警冷却时间必须是整数").Err()
+		}
 		return pluginsdk.FieldErrors{}.Add("", "invalid_json", "settings must be a JSON object / 设置必须是 JSON 对象").Err()
+	}
+	if s.AlertCooldownSec < 0 || s.AlertCooldownSec > maxAlertCooldownSec {
+		return pluginsdk.FieldErrors{}.Add("alert_cooldown_sec", "range",
+			fmt.Sprintf("alert_cooldown_sec must be between 0 and %d / 告警冷却时间须在 0 到 %d 秒之间", maxAlertCooldownSec, maxAlertCooldownSec)).Err()
 	}
 	s.WebhookURL = strings.TrimSpace(s.WebhookURL)
 	if s.WebhookURL != "" {
@@ -123,12 +141,13 @@ func (p *Plugin) Configure(_ context.Context, cfg pluginsdk.Config) error {
 func (p *Plugin) Health(context.Context) (*pluginv1.HealthResponse, error) {
 	rs := p.rules.Load()
 	return &pluginv1.HealthResponse{Healthy: true, Metrics: map[string]float64{
-		"rules":          float64(len(rs.rules)),
-		"checked":        float64(p.stats.checked.Load()),
-		"blocked":        float64(p.stats.blocked.Load()),
-		"dropped_blocks": float64(p.stats.droppedBlocks.Load()),
-		"dropped_alerts": float64(p.stats.droppedAlerts.Load()),
-		"alert_errors":   float64(p.stats.alertErrors.Load()),
+		"rules":            float64(len(rs.rules)),
+		"checked":          float64(p.stats.checked.Load()),
+		"blocked":          float64(p.stats.blocked.Load()),
+		"dropped_blocks":   float64(p.stats.droppedBlocks.Load()),
+		"dropped_alerts":   float64(p.stats.droppedAlerts.Load()),
+		"alert_errors":     float64(p.stats.alertErrors.Load()),
+		"alerts_throttled": float64(p.stats.alertsThrottled.Load()),
 	}}, nil
 }
 

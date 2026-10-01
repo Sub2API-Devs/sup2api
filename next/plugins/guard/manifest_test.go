@@ -33,7 +33,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "guard" || m.Version != "0.1.1" || m.HostUICompat == "" || m.UI == nil || m.UI.Native == nil {
+	if m.Key != "guard" || m.Version != "0.2.0" || m.HostUICompat == "" || m.UI == nil || m.UI.Native == nil {
 		t.Fatalf("manifest = %+v", m)
 	}
 	perms := map[string]bool{}
@@ -51,8 +51,13 @@ func TestManifest(t *testing.T) {
 			t.Errorf("unknown host permission %q", hp.ID)
 		}
 		granted[hp.ID] = true
+		// Alert throttling degrades to per node without "lock", so admins
+		// may deny it.
+		if hp.ID == "lock" && !hp.Optional {
+			t.Error(`host permission "lock" must be optional`)
+		}
 	}
-	for _, need := range []string{"gateway.hook", "events", "jobs", "db.schema", "routes.admin", "ui.native", "ui.menu", "broadcast"} {
+	for _, need := range []string{"gateway.hook", "events", "jobs", "db.schema", "routes.admin", "ui.native", "ui.menu", "broadcast", "lock"} {
 		if !granted[need] {
 			t.Errorf("missing host permission %s", need)
 		}
@@ -72,7 +77,7 @@ func TestManifest(t *testing.T) {
 	}
 	var patch map[string]any
 	b, err := os.ReadFile(filepath.Join("testdata", "guardtest", "manifest.patch.json"))
-	if err != nil || json.Unmarshal(b, &patch) != nil || patch["version"] != "0.1.1-test" {
+	if err != nil || json.Unmarshal(b, &patch) != nil || patch["version"] != m.Version+"-test" {
 		t.Fatalf("guardtest patch: %v %v", err, patch["version"])
 	}
 }

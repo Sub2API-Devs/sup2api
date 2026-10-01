@@ -190,7 +190,8 @@ func (p *Plugin) getRules(ctx context.Context, _ *pluginv1.HTTPRequest) (*plugin
 
 // putRules serves PUT /rules: replaces the whole rule set. Body is
 // {"rules": [...]} or a bare array. Rules without id are created; existing
-// rules missing from the list are deleted.
+// rules missing from the list are deleted. Concurrent PUTs (other admins,
+// other nodes) are serialized: the last one replaces the set as a whole.
 func (p *Plugin) putRules(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	var in []ruleInput
 	body := strings.TrimSpace(string(req.GetBody()))
@@ -216,6 +217,25 @@ func (p *Plugin) putRules(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 		return pluginsdk.ErrorResponse(http.StatusServiceUnavailable, "unavailable", err.Error()), nil
 	}
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		// Serialize whole-set replacements so the last save wins as a whole.
+		// Without it two PUTs on two nodes interleave under READ COMMITTED:
+		// each DELETE misses the rows the other one inserts, so both sets'
+		// new rules survive (or the two DELETEs deadlock on each other's
+		// rows). SHARE ROW EXCLUSIVE conflicts with itself and with row
+		// writes, not with plain SELECTs, so rule reloads and GET /rules are
+		// not blocked. Taking it needs UPDATE/DELETE on rules, which this
+		// handler needs anyway; the plugin role owns the table.
+		//
+		// A table lock rather than a cluster lock (host "lock" permission):
+		// those live in Redis, are not fenced and are not part of this
+		// transaction - a holder that stalls past its ttl would overlap the
+		// next one again. This one is held by the transaction itself and
+		// released on commit or rollback, exactly the span to protect. Not
+		// pg_advisory_xact_lock either: advisory keys are database-wide,
+		// shared with the core and every other plugin.
+		if _, err := tx.Exec(ctx, `LOCK TABLE rules IN SHARE ROW EXCLUSIVE MODE`); err != nil {
+			return err
+		}
 		keep := make([]int64, 0, len(rules))
 		for _, r := range rules {
 			if r.ID > 0 {
