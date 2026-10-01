@@ -23,6 +23,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/billing"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/cluster"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/event"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/event/delivery"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway"
@@ -169,7 +170,7 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	schemas := dbschema.New(db, cfg.DatabaseURL, cfg.MasterKey, cfg.Plugins.DBRoleIsolation)
 
 	rt, err := grpcruntime.New(grpcruntime.Options{
-		DB: db, Redis: rdb, Bus: cl.Bus, Cipher: cipher, Node: cl.Registry, Launcher: launcher,
+		DB: db, Redis: rdb, Bus: cl.Bus, Locker: cl.Locker, Cipher: cipher, Node: cl.Registry, Launcher: launcher,
 		Egress: egressP, Authorizer: az, Ledger: bill, Schemas: schemas, Accounts: acc,
 		HostVersion: version, DataDir: cfg.Plugins.DataDir,
 		StrictNetwork: cfg.Plugins.StrictNetwork, Seccomp: cfg.Plugins.Seccomp, MaxMemoryMB: cfg.Plugins.MaxMemoryMB,
@@ -206,11 +207,23 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		return fmt.Errorf("market sources: %w", err)
 	}
 	// Built-in plugins: one node installs/enables/upgrades them per start.
-	if release, ok, err := cl.Locker.TryLock(ctx, "plugins:builtin", 5*time.Minute); err != nil {
+	// The install can take long (unpacking, migrations), so the lock is kept
+	// alive while it runs rather than sized to a guess. KeepLock renews only
+	// as long as its parent lives, so the parent carries the bound: an
+	// install stuck for 10 minutes is cancelled and the lock lapses, instead
+	// of this node renewing it until the process exits.
+	if lk, ok, err := cl.Locker.TryLock(ctx, "plugins:builtin", time.Minute); err != nil {
 		log.Warn("builtin plugins: lock", "err", err)
 	} else if ok {
-		_ = inst.EnsureBuiltin(ctx, cfg.Plugins.BuiltinDir, log.With("component", "builtin-plugins"))
-		release()
+		ictx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+		bctx, stop := core.KeepLock(ictx, lk)
+		_ = inst.EnsureBuiltin(bctx, cfg.Plugins.BuiltinDir, log.With("component", "builtin-plugins"))
+		if cause := context.Cause(bctx); cause != nil && ctx.Err() == nil {
+			log.Warn("builtin plugins: install cut short", "cause", cause)
+		}
+		stop()
+		cancel()
+		lk.Release()
 	}
 
 	jobs := job.New(db, cl.Locker, reg, log, cfg.NodeID, job.Options{})

@@ -20,6 +20,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/cluster"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
 // Pre-charged usage and the reconcile loop (CONTRACTS §25.4).
@@ -193,7 +194,7 @@ func reconcileFixtureWith(t *testing.T, acc *core.Account) *recFixture {
 	t.Cleanup(rf.up.Close)
 	rf.plugin = &recPlugin{url: rf.up.URL}
 	f.svc.StartReconcile(context.Background(), ReconcileDeps{
-		Locker:               noLocker{},
+		Locker:               testutil.NewMemLocker(), // single node: always granted
 		Registry:             recRegistry{gen: reconcileGen(rf.plugin)},
 		Accounts:             recAccounts{acc: acc},
 		Proxies:              recProxies{},
@@ -216,13 +217,6 @@ func reconcileGen(p core.PlatformPlugin) core.Generation {
 		}}},
 		client: p,
 	}
-}
-
-// noLocker always grants: the single-node tests are not about locking.
-type noLocker struct{}
-
-func (noLocker) TryLock(context.Context, string, time.Duration) (func(), bool, error) {
-	return func() {}, true, nil
 }
 
 // reserved builds a pre-charged record: the plugin's estimate, plus the
@@ -832,7 +826,7 @@ func TestReconcileRunsOnOneNodeOnly(t *testing.T) {
 	for _, node := range []string{"node-a", "node-b"} {
 		s := New(rf.db, rf.ledger, nil, Options{RetryInterval: time.Hour, RetryAfter: time.Hour})
 		s.StartReconcile(ctx, ReconcileDeps{
-			Locker:               cluster.NewLocker(rdb, nil, nil),
+			Locker:               cluster.NewLocker(rdb, nil),
 			Registry:             recRegistry{gen: reconcileGen(rf.plugin)},
 			Accounts:             recAccounts{},
 			Proxies:              recProxies{},

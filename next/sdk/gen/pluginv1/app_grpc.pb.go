@@ -332,7 +332,9 @@ const (
 //
 // MigrationService ("migration.data.v1", optional) runs data transformations
 // that SQL migrations cannot express. Called after SQL migrations, during
-// the prepare phase of a rollout, on one node.
+// the prepare phase of a rollout, on one node. When the rollout coordinator
+// is taken over by another node, MigrateData may run again for the same
+// versions: it MUST be idempotent.
 type MigrationServiceClient interface {
 	MigrateData(ctx context.Context, in *MigrateDataRequest, opts ...grpc.CallOption) (*MigrateDataResponse, error)
 }
@@ -361,7 +363,9 @@ func (c *migrationServiceClient) MigrateData(ctx context.Context, in *MigrateDat
 //
 // MigrationService ("migration.data.v1", optional) runs data transformations
 // that SQL migrations cannot express. Called after SQL migrations, during
-// the prepare phase of a rollout, on one node.
+// the prepare phase of a rollout, on one node. When the rollout coordinator
+// is taken over by another node, MigrateData may run again for the same
+// versions: it MUST be idempotent.
 type MigrationServiceServer interface {
 	MigrateData(context.Context, *MigrateDataRequest) (*MigrateDataResponse, error)
 	mustEmbedUnimplementedMigrationServiceServer()

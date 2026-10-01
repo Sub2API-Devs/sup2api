@@ -20,37 +20,8 @@ import (
 
 // ---------------------------------------------------------------- fakes
 
-// memLocker is an in-memory core.Locker shared by several fake nodes.
-type memLocker struct {
-	mu    sync.Mutex
-	locks map[string]memLock
-	seq   int
-}
-
-type memLock struct {
-	token   int
-	expires time.Time
-}
-
-func newMemLocker() *memLocker { return &memLocker{locks: map[string]memLock{}} }
-
-func (l *memLocker) TryLock(_ context.Context, key string, ttl time.Duration) (func(), bool, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if cur, ok := l.locks[key]; ok && time.Now().Before(cur.expires) {
-		return func() {}, false, nil
-	}
-	l.seq++
-	tok := l.seq
-	l.locks[key] = memLock{token: tok, expires: time.Now().Add(ttl)}
-	return func() {
-		l.mu.Lock()
-		defer l.mu.Unlock()
-		if cur, ok := l.locks[key]; ok && cur.token == tok {
-			delete(l.locks, key)
-		}
-	}, true, nil
-}
+// newMemLocker is an in-memory core.Locker shared by several fake nodes.
+func newMemLocker() *testutil.MemLocker { return testutil.NewMemLocker() }
 
 type fakeGen struct {
 	core.Generation
@@ -322,6 +293,42 @@ func TestBackoff(t *testing.T) {
 	}
 }
 
+// A LockTTL too short for one step is raised: otherwise holdLock would drop
+// and re-take the lock (under a new token) at every step instead of
+// extending it. The check mirrors holdLock: after an extend the validity is
+// the ttl minus redsync's 1% drift margin (and a Redis round trip), and it
+// must still exceed stepValidity.
+func TestOptionsLockTTLCoversAStep(t *testing.T) {
+	for _, c := range []struct {
+		name          string
+		lockTTL, call time.Duration
+		want          time.Duration // 0: must be raised to minLockTTL
+	}{
+		{"defaults", 0, 0, 30 * time.Second},
+		{"fits", 20 * time.Second, 2 * time.Second, 20 * time.Second},
+		{"too short", 6 * time.Second, 200 * time.Millisecond, 0},
+		{"equal to the call", 20 * time.Second, 20 * time.Second, 0},
+		{"long call: +10s alone is not enough", 610 * time.Second, 10 * time.Minute, 0},
+	} {
+		o := Options{LockTTL: c.lockTTL, CallTimeout: c.call}
+		o.defaults()
+		want := c.want
+		if want == 0 {
+			want = o.minLockTTL()
+		}
+		if o.LockTTL != want {
+			t.Errorf("%s: LockTTL = %v, want %v", c.name, o.LockTTL, want)
+		}
+		if o.LockTTL < o.CallTimeout+10*time.Second {
+			t.Errorf("%s: LockTTL %v < CallTimeout %v + 10s", c.name, o.LockTTL, o.CallTimeout)
+		}
+		const rtt = time.Second
+		if afterExtend := o.LockTTL - o.LockTTL/100 - rtt; afterExtend <= o.stepValidity() {
+			t.Errorf("%s: validity after an extend %v does not cover a step (%v)", c.name, afterExtend, o.stepValidity())
+		}
+	}
+}
+
 // ---------------------------------------------------------------- db tests
 
 func TestNewSubscriptionSkipsHistory(t *testing.T) {
@@ -378,6 +385,47 @@ func TestTwoNodesDeliverEachEventOnce(t *testing.T) {
 	app.mu.Unlock()
 	if overlap {
 		t.Fatal("two nodes called OnEvents concurrently")
+	}
+}
+
+// The holder extends its lock in place between steps: delivering for longer
+// than LockTTL, it keeps the same token the whole time, so the other node
+// never gets a window to take over mid-stream.
+func TestHolderKeepsItsTokenPastLockTTL(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	addPlugin(t, db, "guard")
+	locker := newMemLocker()
+	app := &fakeApp{}
+	o := testOpts()
+	// holdLock wants CallTimeout+5s of validity per step, so with these the
+	// lock is extended from ~5.8s on, and at every step after that. (A
+	// LockTTL below about CallTimeout+10s would be raised by defaults.)
+	o.CallTimeout = 200 * time.Millisecond
+	o.LockTTL = 11 * time.Second
+	startNode(t, db, locker, nil, newRegistry(binding("guard", app, 5, "usage.recorded")), "n1", o)
+	startNode(t, db, locker, nil, newRegistry(binding("guard", app, 5, "usage.recorded")), "n2", o)
+	eventually(t, 20*time.Second, "cursor created", func() bool { return cursorExists(db, "guard") })
+
+	const key = "events:guard"
+	token := locker.Holder(key)
+	if token == "" {
+		t.Fatal("nobody holds the delivery lock")
+	}
+	var want []int64
+	for end := time.Now().Add(o.LockTTL + 2*time.Second); time.Now().Before(end); {
+		want = append(want, emit(t, db.Pool, "usage.recorded"))
+		if h := locker.Holder(key); h != token {
+			t.Fatalf("lock holder changed from %q to %q while delivering", token, h)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	eventually(t, 20*time.Second, "all events delivered", func() bool { return len(app.delivered()) >= len(want) })
+	if got := app.delivered(); !equalIDs(got, want) {
+		t.Fatalf("delivered %d events, want %d exactly once in order", len(got), len(want))
+	}
+	if h := locker.Holder(key); h != token {
+		t.Fatalf("lock holder changed from %q to %q", token, h)
 	}
 }
 

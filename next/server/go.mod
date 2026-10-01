@@ -11,6 +11,7 @@ require (
 	github.com/elastic/go-seccomp-bpf v1.6.0
 	github.com/expr-lang/expr v1.17.8
 	github.com/gin-gonic/gin v1.12.0
+	github.com/go-redsync/redsync/v4 v4.18.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-hclog v1.6.3

@@ -35,6 +35,55 @@ service HostService {
   // effort, e.g. "rules changed, reload". Payload at most 64 KiB.
   rpc Publish(PublishRequest) returns (PublishResponse);
 
+  // lock (grant "lock"): short cross-node mutual exclusion on the host's
+  // Redis, for work that must not run on two nodes at once. Periodic work
+  // belongs in manifest jobs[] instead (each trigger runs once cluster-wide).
+  //
+  //   * The host prefixes every name: the Redis key is
+  //     lock:plugin:{plugin_key}:{name}, so plugins never see each other's
+  //     locks. name must match ^[A-Za-z0-9._:/-]{1,128}$ and ttl_ms must be
+  //     1000..300000, otherwise INVALID_ARGUMENT.
+  //   * Validity is reported as a DURATION (valid_ms), counted by the host on
+  //     its own clock from when it took or extended the lock, minus a drift
+  //     margin - never as an absolute time, so plugin and host clocks do not
+  //     have to agree. The plugin should count it from BEFORE it sent the
+  //     request.
+  //   * The locks are NOT fenced: a holder that stalls past its validity may
+  //     find another node has taken the lock meanwhile, so the guarded work
+  //     must still be idempotent.
+  //   * The PLUGIN chooses the owner token: a fresh random value for every
+  //     LockAcquire (at least 16 random bytes, e.g. from a CSPRNG, encoded
+  //     as URL-safe base64 or hex), matching ^[A-Za-z0-9_-]{16,128}$. The
+  //     host stores it as the lock's value in Redis. Because the plugin
+  //     knows the token before it asks, a LockAcquire whose outcome is
+  //     unknown (UNAVAILABLE, a deadline, a broken connection) can be undone
+  //     with LockRelease(name, token) instead of blocking every other node
+  //     until the ttl runs out.
+  //   * Never reuse a token: a LockAcquire with the token of a lock this
+  //     plugin ALREADY holds under that name fails the SET NX, and the
+  //     cleanup of the failed attempt (a compare-and-delete with the same
+  //     token) then deletes the held lock. The call answers acquired=false
+  //     and nobody holds the lock afterwards.
+  //   * The host keeps no state per lock: when the plugin process dies its
+  //     locks lapse after their ttl.
+  //   * Errors: no "lock" grant -> PERMISSION_DENIED; bad name, ttl or token
+  //     -> INVALID_ARGUMENT; Redis unavailable or outcome unknown ->
+  //     UNAVAILABLE (the lock may or may not be held - treat it as not held;
+  //     after a LockAcquire, call LockRelease with the same token).
+  //
+  // LockAcquire makes ONE attempt, without waiting. acquired=false means
+  // another holder has it; that is not an error.
+  rpc LockAcquire(LockAcquireRequest) returns (LockAcquireResponse);
+  // LockRenew extends a lock still held with token to ttl_ms from now.
+  // held=false means the lock is definitely lost (expired, or held by
+  // someone else); it is not an error.
+  rpc LockRenew(LockRenewRequest) returns (LockRenewResponse);
+  // LockRelease releases the lock only if it is still held with token.
+  // Idempotent: releasing a lock that expired, was already released or was
+  // never taken is not an error. UNAVAILABLE means the host could not tell
+  // whether it was released; it then lapses after its ttl (or retry).
+  rpc LockRelease(LockReleaseRequest) returns (LockReleaseResponse);
+
   // ---------------------------------------------------------------- accounts
   //
   // The two calls below let a plugin read the accounts of ITS OWN account
@@ -123,6 +172,46 @@ message PublishRequest {
 }
 
 message PublishResponse {}
+
+message LockAcquireRequest {
+  string name = 1;                     // ^[A-Za-z0-9._:/-]{1,128}$
+  int64 ttl_ms = 2;                    // 1000..300000
+  // Required. The owner token, chosen by the plugin: fresh random for every
+  // call, ^[A-Za-z0-9_-]{16,128}$. Pass the same value to LockRenew and
+  // LockRelease. See the notes on HostService.LockAcquire.
+  string token = 3;
+}
+
+message LockAcquireResponse {
+  // false = held by someone else (not an error); valid_ms unset.
+  bool acquired = 1;
+  // The token is the one sent in the request (the host used to generate it).
+  reserved 2;
+  reserved "token";
+  // How long the lock stays valid, counted by the host from when it took
+  // it, minus a drift margin.
+  int64 valid_ms = 3;
+}
+
+message LockRenewRequest {
+  string name = 1;
+  string token = 2;                    // ^[A-Za-z0-9_-]{16,128}$
+  int64 ttl_ms = 3;                    // 1000..300000
+}
+
+message LockRenewResponse {
+  // false = definitely lost (expired, or held by someone else).
+  bool held = 1;
+  // Remaining validity after the renewal, as in LockAcquireResponse.
+  int64 valid_ms = 2;
+}
+
+message LockReleaseRequest {
+  string name = 1;
+  string token = 2;                    // ^[A-Za-z0-9_-]{16,128}$
+}
+
+message LockReleaseResponse {}
 
 message LogRequest {
   enum Level {

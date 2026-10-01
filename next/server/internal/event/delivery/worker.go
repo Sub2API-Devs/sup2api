@@ -32,9 +32,8 @@ type worker struct {
 	match   matcher
 
 	// owned by the run goroutine
-	release    func()
-	leaseUntil time.Time
-	gap        *gapState
+	lock core.Lock
+	gap  *gapState
 }
 
 // gapState tracks the first hole in the id sequence after the cursor. A
@@ -86,7 +85,7 @@ func (w *worker) run() {
 		if w.holdLock() {
 			// The step never outlives the lease, so two nodes can not call
 			// the plugin at the same time.
-			sctx, cancel := context.WithDeadline(w.ctx, w.leaseUntil)
+			sctx, cancel := context.WithDeadline(w.ctx, w.lock.Until())
 			d, err := w.step(sctx)
 			cancel()
 			if err != nil {
@@ -113,18 +112,29 @@ func (w *worker) run() {
 	}
 }
 
-// holdLock makes sure this node holds events:{plugin} with enough lease left
-// for one full step. core.Locker has no extend operation, so the lease is
-// renewed by releasing and re-acquiring between steps; another node may take
-// over in that window, which is safe because the cursor is committed before.
+// holdLock makes sure this node holds events:{plugin} with enough validity
+// left for one full step. A held lock is extended in place between steps, so
+// it never lapses while this node is delivering and no other node can take
+// over mid-stream (which would redeliver the batch in flight). It is only
+// taken again from scratch when the extend says it was lost. The cursor is
+// committed before the next step either way, so a takeover stays safe.
 func (w *worker) holdLock() bool {
 	o := w.s.opts
-	if w.release != nil && time.Until(w.leaseUntil) > o.CallTimeout+5*time.Second {
-		return true
+	need := o.stepValidity()
+	if w.lock != nil {
+		if time.Until(w.lock.Until()) > need {
+			return true
+		}
+		ok, err := w.lock.Extend(w.ctx)
+		if ok && time.Until(w.lock.Until()) > need {
+			return true
+		}
+		if err != nil && w.ctx.Err() == nil {
+			w.s.log.Warn("event delivery lock extend failed", "plugin", w.key, "err", err)
+		}
+		w.dropLock()
 	}
-	w.dropLock()
-	start := time.Now() // the lease is counted from before the request
-	release, ok, err := w.s.locker.TryLock(w.ctx, "events:"+w.key, o.LockTTL)
+	lk, ok, err := w.s.locker.TryLock(w.ctx, "events:"+w.key, o.LockTTL)
 	if err != nil {
 		if w.ctx.Err() == nil {
 			w.s.log.Warn("event delivery lock failed", "plugin", w.key, "err", err)
@@ -134,15 +144,14 @@ func (w *worker) holdLock() bool {
 	if !ok {
 		return false
 	}
-	w.release = release
-	w.leaseUntil = start.Add(o.LockTTL)
+	w.lock = lk
 	return true
 }
 
 func (w *worker) dropLock() {
-	if w.release != nil {
-		w.release()
-		w.release = nil
+	if w.lock != nil {
+		w.lock.Release()
+		w.lock = nil
 	}
 }
 

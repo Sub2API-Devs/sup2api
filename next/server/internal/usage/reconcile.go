@@ -64,9 +64,10 @@ const (
 	// always finishes before the lease lapses, and short enough that a dead
 	// one is forgiven quickly.
 	reconcileLease = 3 * time.Minute
-	// reconcileLockTTL outlives a whole sweep; a node that dies holding it
-	// blocks the loop for at most this long.
-	reconcileLockTTL = 5 * time.Minute
+	// reconcileLockTTL is the lock's validity. It is extended while a sweep
+	// runs, and never past reconcileSweepBudget, so a node that dies (or is
+	// stuck in a sweep) blocks the loop for at most this long after that.
+	reconcileLockTTL = 30 * time.Second
 	// reconcileSweepBudget bounds one sweep. Whatever is not reached stays
 	// due (its lease lapses) and is picked up next time, in order.
 	reconcileSweepBudget = 2 * time.Minute
@@ -169,7 +170,7 @@ func (s *Service) ReconcileDue(ctx context.Context) int {
 	// One node at a time. This is not the only guard - every claimed entry is
 	// leased below - but it keeps N nodes from each taking a slice of the
 	// same due set and calling N plugins at once every ten seconds.
-	release, ok, err := r.Locker.TryLock(ctx, reconcileLockKey, reconcileLockTTL)
+	lk, ok, err := r.Locker.TryLock(ctx, reconcileLockKey, reconcileLockTTL)
 	if err != nil {
 		if ctx.Err() == nil {
 			r.log.Warn("reconcile lock failed", "err", err)
@@ -179,10 +180,14 @@ func (s *Service) ReconcileDue(ctx context.Context) int {
 	if !ok {
 		return 0
 	}
-	defer release()
+	defer lk.Release()
 
 	ctx, cancel := context.WithTimeout(ctx, reconcileSweepBudget)
 	defer cancel()
+	// Losing the lock mid-sweep stops the sweep; what it claimed stays
+	// leased and is picked up again once the lease lapses.
+	ctx, stop := core.KeepLock(ctx, lk)
+	defer stop()
 	entries, err := s.claimDue(ctx, reconcileBatch)
 	if err != nil {
 		r.log.Error("reconcile: claim due entries", "err", err)

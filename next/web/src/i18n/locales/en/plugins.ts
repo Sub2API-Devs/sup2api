@@ -79,6 +79,7 @@ export default {
     ui_menu: 'Console menus',
     ui_iframe: 'Sandboxed iframe pages',
     accounts_read: 'Read accounts',
+    lock: 'Cross-node lock',
     db_schema: 'Dedicated database schema',
     net: 'External network access',
     routes_public: 'Public API routes',
@@ -98,7 +99,8 @@ export default {
   },
 
   hpDesc: {
-    broadcast: 'Broadcast messages to the instances of this plugin on other nodes (e.g. reload rules right after they change).'
+    broadcast: 'Broadcast messages to the instances of this plugin on other nodes (e.g. reload rules right after they change).',
+    lock: 'Keep the instances of this plugin on different nodes from doing the same work at the same time (e.g. a scheduled sync). Its locks are invisible to other plugins.'
   },
 
   hpWarn: {

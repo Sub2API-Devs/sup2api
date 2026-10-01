@@ -126,6 +126,7 @@ func DefaultGrants() map[string]string {
 		"gateway.endpoint":     `{}`,
 		"platform.register":    `{}`,
 		"broadcast":            `{}`,
+		"lock":                 `{}`,
 	}
 }
 

@@ -49,6 +49,10 @@ type Options struct {
 	Accounts core.PluginAccountReader
 	// Bus carries plugin cluster broadcasts (HostService.Publish).
 	Bus core.Bus
+	// Locker serves the plugin cluster locks (HostService.LockAcquire /
+	// LockRenew / LockRelease). Nil makes the three calls fail with
+	// UNAVAILABLE.
+	Locker core.TokenLocker
 
 	HostVersion   string
 	DataDir       string // plugin work directories live under DataDir/<key>/work

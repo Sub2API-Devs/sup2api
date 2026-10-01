@@ -50,6 +50,21 @@ type FakeHost struct {
 	// simulate a second node. PublishErr, when set, fails every Publish.
 	OnPublish  func(PublishedMessage)
 	PublishErr error
+	// Locks backs LockAcquire/LockRenew/LockRelease. Share one table between
+	// two FakeHosts (set it before Start) to simulate two nodes; see
+	// LockTable. LockErr, when set, fails every lock call (e.g. UNAVAILABLE
+	// to simulate a Redis outage). The fake has no grants: lock calls are
+	// never PERMISSION_DENIED unless LockErr says so. As on the host, a
+	// PERMISSION_DENIED LockErr is returned before the arguments are checked
+	// and any other LockErr after (invalid arguments win over it).
+	//
+	// LockAcquireLostReply, when set, makes LockAcquire take the lock as
+	// usual (if it is free) and then answer with this error instead of the
+	// result: an outcome the plugin cannot know, as when the host's reply is
+	// lost. The lock stays held with the plugin's token until released.
+	Locks                *LockTable
+	LockErr              error
+	LockAcquireLostReply error
 
 	logs      []LogEntry
 	kv        map[string]kvItem
@@ -72,7 +87,7 @@ type kvItem struct {
 
 // NewFakeHost returns an empty fake host.
 func NewFakeHost() *FakeHost {
-	return &FakeHost{kv: map[string]kvItem{}, ledgerBy: map[string]LedgerEntry{}}
+	return &FakeHost{kv: map[string]kvItem{}, ledgerBy: map[string]LedgerEntry{}, Locks: NewLockTable()}
 }
 
 // Logs returns a copy of the received log records.

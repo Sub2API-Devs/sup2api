@@ -29,6 +29,9 @@ const (
 	HostService_LedgerCredit_FullMethodName          = "/sub2api.plugin.v1.HostService/LedgerCredit"
 	HostService_LedgerDebit_FullMethodName           = "/sub2api.plugin.v1.HostService/LedgerDebit"
 	HostService_Publish_FullMethodName               = "/sub2api.plugin.v1.HostService/Publish"
+	HostService_LockAcquire_FullMethodName           = "/sub2api.plugin.v1.HostService/LockAcquire"
+	HostService_LockRenew_FullMethodName             = "/sub2api.plugin.v1.HostService/LockRenew"
+	HostService_LockRelease_FullMethodName           = "/sub2api.plugin.v1.HostService/LockRelease"
 	HostService_ListAccounts_FullMethodName          = "/sub2api.plugin.v1.HostService/ListAccounts"
 	HostService_GetAccountCredentials_FullMethodName = "/sub2api.plugin.v1.HostService/GetAccountCredentials"
 )
@@ -62,6 +65,54 @@ type HostServiceClient interface {
 	// instances on every other live node (AppService.OnBroadcast), best
 	// effort, e.g. "rules changed, reload". Payload at most 64 KiB.
 	Publish(ctx context.Context, in *PublishRequest, opts ...grpc.CallOption) (*PublishResponse, error)
+	// lock (grant "lock"): short cross-node mutual exclusion on the host's
+	// Redis, for work that must not run on two nodes at once. Periodic work
+	// belongs in manifest jobs[] instead (each trigger runs once cluster-wide).
+	//
+	//   * The host prefixes every name: the Redis key is
+	//     lock:plugin:{plugin_key}:{name}, so plugins never see each other's
+	//     locks. name must match ^[A-Za-z0-9._:/-]{1,128}$ and ttl_ms must be
+	//     1000..300000, otherwise INVALID_ARGUMENT.
+	//   * Validity is reported as a DURATION (valid_ms), counted by the host on
+	//     its own clock from when it took or extended the lock, minus a drift
+	//     margin - never as an absolute time, so plugin and host clocks do not
+	//     have to agree. The plugin should count it from BEFORE it sent the
+	//     request.
+	//   * The locks are NOT fenced: a holder that stalls past its validity may
+	//     find another node has taken the lock meanwhile, so the guarded work
+	//     must still be idempotent.
+	//   * The PLUGIN chooses the owner token: a fresh random value for every
+	//     LockAcquire (at least 16 random bytes, e.g. from a CSPRNG, encoded
+	//     as URL-safe base64 or hex), matching ^[A-Za-z0-9_-]{16,128}$. The
+	//     host stores it as the lock's value in Redis. Because the plugin
+	//     knows the token before it asks, a LockAcquire whose outcome is
+	//     unknown (UNAVAILABLE, a deadline, a broken connection) can be undone
+	//     with LockRelease(name, token) instead of blocking every other node
+	//     until the ttl runs out.
+	//   * Never reuse a token: a LockAcquire with the token of a lock this
+	//     plugin ALREADY holds under that name fails the SET NX, and the
+	//     cleanup of the failed attempt (a compare-and-delete with the same
+	//     token) then deletes the held lock. The call answers acquired=false
+	//     and nobody holds the lock afterwards.
+	//   * The host keeps no state per lock: when the plugin process dies its
+	//     locks lapse after their ttl.
+	//   * Errors: no "lock" grant -> PERMISSION_DENIED; bad name, ttl or token
+	//     -> INVALID_ARGUMENT; Redis unavailable or outcome unknown ->
+	//     UNAVAILABLE (the lock may or may not be held - treat it as not held;
+	//     after a LockAcquire, call LockRelease with the same token).
+	//
+	// LockAcquire makes ONE attempt, without waiting. acquired=false means
+	// another holder has it; that is not an error.
+	LockAcquire(ctx context.Context, in *LockAcquireRequest, opts ...grpc.CallOption) (*LockAcquireResponse, error)
+	// LockRenew extends a lock still held with token to ttl_ms from now.
+	// held=false means the lock is definitely lost (expired, or held by
+	// someone else); it is not an error.
+	LockRenew(ctx context.Context, in *LockRenewRequest, opts ...grpc.CallOption) (*LockRenewResponse, error)
+	// LockRelease releases the lock only if it is still held with token.
+	// Idempotent: releasing a lock that expired, was already released or was
+	// never taken is not an error. UNAVAILABLE means the host could not tell
+	// whether it was released; it then lapses after its ttl (or retry).
+	LockRelease(ctx context.Context, in *LockReleaseRequest, opts ...grpc.CallOption) (*LockReleaseResponse, error)
 	// accounts.read (Medium): metadata of the accounts of this plugin's account
 	// types. The response carries no credential field of any kind; it is the
 	// list a plugin needs to offer "pick an account" in its own console page.
@@ -180,6 +231,36 @@ func (c *hostServiceClient) Publish(ctx context.Context, in *PublishRequest, opt
 	return out, nil
 }
 
+func (c *hostServiceClient) LockAcquire(ctx context.Context, in *LockAcquireRequest, opts ...grpc.CallOption) (*LockAcquireResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LockAcquireResponse)
+	err := c.cc.Invoke(ctx, HostService_LockAcquire_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) LockRenew(ctx context.Context, in *LockRenewRequest, opts ...grpc.CallOption) (*LockRenewResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LockRenewResponse)
+	err := c.cc.Invoke(ctx, HostService_LockRenew_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) LockRelease(ctx context.Context, in *LockReleaseRequest, opts ...grpc.CallOption) (*LockReleaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LockReleaseResponse)
+	err := c.cc.Invoke(ctx, HostService_LockRelease_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *hostServiceClient) ListAccounts(ctx context.Context, in *ListAccountsRequest, opts ...grpc.CallOption) (*ListAccountsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListAccountsResponse)
@@ -229,6 +310,54 @@ type HostServiceServer interface {
 	// instances on every other live node (AppService.OnBroadcast), best
 	// effort, e.g. "rules changed, reload". Payload at most 64 KiB.
 	Publish(context.Context, *PublishRequest) (*PublishResponse, error)
+	// lock (grant "lock"): short cross-node mutual exclusion on the host's
+	// Redis, for work that must not run on two nodes at once. Periodic work
+	// belongs in manifest jobs[] instead (each trigger runs once cluster-wide).
+	//
+	//   * The host prefixes every name: the Redis key is
+	//     lock:plugin:{plugin_key}:{name}, so plugins never see each other's
+	//     locks. name must match ^[A-Za-z0-9._:/-]{1,128}$ and ttl_ms must be
+	//     1000..300000, otherwise INVALID_ARGUMENT.
+	//   * Validity is reported as a DURATION (valid_ms), counted by the host on
+	//     its own clock from when it took or extended the lock, minus a drift
+	//     margin - never as an absolute time, so plugin and host clocks do not
+	//     have to agree. The plugin should count it from BEFORE it sent the
+	//     request.
+	//   * The locks are NOT fenced: a holder that stalls past its validity may
+	//     find another node has taken the lock meanwhile, so the guarded work
+	//     must still be idempotent.
+	//   * The PLUGIN chooses the owner token: a fresh random value for every
+	//     LockAcquire (at least 16 random bytes, e.g. from a CSPRNG, encoded
+	//     as URL-safe base64 or hex), matching ^[A-Za-z0-9_-]{16,128}$. The
+	//     host stores it as the lock's value in Redis. Because the plugin
+	//     knows the token before it asks, a LockAcquire whose outcome is
+	//     unknown (UNAVAILABLE, a deadline, a broken connection) can be undone
+	//     with LockRelease(name, token) instead of blocking every other node
+	//     until the ttl runs out.
+	//   * Never reuse a token: a LockAcquire with the token of a lock this
+	//     plugin ALREADY holds under that name fails the SET NX, and the
+	//     cleanup of the failed attempt (a compare-and-delete with the same
+	//     token) then deletes the held lock. The call answers acquired=false
+	//     and nobody holds the lock afterwards.
+	//   * The host keeps no state per lock: when the plugin process dies its
+	//     locks lapse after their ttl.
+	//   * Errors: no "lock" grant -> PERMISSION_DENIED; bad name, ttl or token
+	//     -> INVALID_ARGUMENT; Redis unavailable or outcome unknown ->
+	//     UNAVAILABLE (the lock may or may not be held - treat it as not held;
+	//     after a LockAcquire, call LockRelease with the same token).
+	//
+	// LockAcquire makes ONE attempt, without waiting. acquired=false means
+	// another holder has it; that is not an error.
+	LockAcquire(context.Context, *LockAcquireRequest) (*LockAcquireResponse, error)
+	// LockRenew extends a lock still held with token to ttl_ms from now.
+	// held=false means the lock is definitely lost (expired, or held by
+	// someone else); it is not an error.
+	LockRenew(context.Context, *LockRenewRequest) (*LockRenewResponse, error)
+	// LockRelease releases the lock only if it is still held with token.
+	// Idempotent: releasing a lock that expired, was already released or was
+	// never taken is not an error. UNAVAILABLE means the host could not tell
+	// whether it was released; it then lapses after its ttl (or retry).
+	LockRelease(context.Context, *LockReleaseRequest) (*LockReleaseResponse, error)
 	// accounts.read (Medium): metadata of the accounts of this plugin's account
 	// types. The response carries no credential field of any kind; it is the
 	// list a plugin needs to offer "pick an account" in its own console page.
@@ -276,6 +405,15 @@ func (UnimplementedHostServiceServer) LedgerDebit(context.Context, *LedgerChange
 }
 func (UnimplementedHostServiceServer) Publish(context.Context, *PublishRequest) (*PublishResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Publish not implemented")
+}
+func (UnimplementedHostServiceServer) LockAcquire(context.Context, *LockAcquireRequest) (*LockAcquireResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LockAcquire not implemented")
+}
+func (UnimplementedHostServiceServer) LockRenew(context.Context, *LockRenewRequest) (*LockRenewResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LockRenew not implemented")
+}
+func (UnimplementedHostServiceServer) LockRelease(context.Context, *LockReleaseRequest) (*LockReleaseResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LockRelease not implemented")
 }
 func (UnimplementedHostServiceServer) ListAccounts(context.Context, *ListAccountsRequest) (*ListAccountsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListAccounts not implemented")
@@ -484,6 +622,60 @@ func _HostService_Publish_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HostService_LockAcquire_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LockAcquireRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).LockAcquire(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostService_LockAcquire_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).LockAcquire(ctx, req.(*LockAcquireRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_LockRenew_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LockRenewRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).LockRenew(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostService_LockRenew_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).LockRenew(ctx, req.(*LockRenewRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_LockRelease_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LockReleaseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).LockRelease(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostService_LockRelease_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).LockRelease(ctx, req.(*LockReleaseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _HostService_ListAccounts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListAccountsRequest)
 	if err := dec(in); err != nil {
@@ -566,6 +758,18 @@ var HostService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Publish",
 			Handler:    _HostService_Publish_Handler,
+		},
+		{
+			MethodName: "LockAcquire",
+			Handler:    _HostService_LockAcquire_Handler,
+		},
+		{
+			MethodName: "LockRenew",
+			Handler:    _HostService_LockRenew_Handler,
+		},
+		{
+			MethodName: "LockRelease",
+			Handler:    _HostService_LockRelease_Handler,
 		},
 		{
 			MethodName: "ListAccounts",

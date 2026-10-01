@@ -28,8 +28,8 @@ const ChannelEventsAppended = "events:appended"
 type Options struct {
 	BatchSize    int           // default batch when the manifest omits it (100)
 	PollInterval time.Duration // idle poll period (1s)
-	LockTTL      time.Duration // lease of lock events:{plugin} (30s)
-	CallTimeout  time.Duration // OnEvents timeout; must be well below LockTTL (20s)
+	LockTTL      time.Duration // lease of lock events:{plugin} (30s; at least ~CallTimeout+10s, see defaults)
+	CallTimeout  time.Duration // OnEvents timeout (20s)
 	MaxFailures  int           // consecutive failures before dead-lettering (10)
 	BackoffMin   time.Duration // first retry delay (1s)
 	BackoffMax   time.Duration // retry delay cap (5min)
@@ -57,6 +57,16 @@ func (o *Options) defaults() {
 	def(&o.PollInterval, time.Second)
 	def(&o.LockTTL, 30*time.Second)
 	def(&o.CallTimeout, 20*time.Second)
+	// holdLock wants stepValidity (CallTimeout+5s) of validity left before
+	// every step. A LockTTL that cannot give that even right after an extend
+	// makes every step drop the lock and take it again - under a new token,
+	// with a window for another node in between - instead of extending it in
+	// place. So LockTTL is raised to at least CallTimeout+10s (5s of slack
+	// for Redis round trips), and for long CallTimeouts a little more:
+	// redsync takes 1% of the ttl off every validity as a drift margin.
+	if min := o.minLockTTL(); o.LockTTL < min {
+		o.LockTTL = min
+	}
 	if o.MaxFailures <= 0 {
 		o.MaxFailures = 10
 	}
@@ -69,6 +79,17 @@ func (o *Options) defaults() {
 	def(&o.GapMaxWait, 5*time.Minute)
 	def(&o.RetentionAge, 7*24*time.Hour)
 	def(&o.RetentionInterval, time.Hour)
+}
+
+// stepValidity is the lock validity holdLock wants left for one step: a
+// whole OnEvents call plus the database work around it.
+func (o *Options) stepValidity() time.Duration { return o.CallTimeout + 5*time.Second }
+
+// minLockTTL is the smallest LockTTL that leaves stepValidity after an
+// extend (see defaults): CallTimeout+10s, or more when redsync's 1% drift
+// margin would eat into the 4s left for the Redis round trip.
+func (o *Options) minLockTTL() time.Duration {
+	return max(o.CallTimeout+10*time.Second, (o.stepValidity()+4*time.Second)*100/99)
 }
 
 // Service runs the delivery workers and the event retention loop.

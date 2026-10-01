@@ -545,6 +545,7 @@ var HostPermissionRisk = map[string]string{
 	"jobs":                 RiskMedium,
 	"ui.menu":              RiskMedium,
 	"ui.iframe":            RiskMedium,
+	"lock":                 RiskMedium, // not low: low is granted without the administrator (install/consent.go)
 	"accounts.read":        RiskMedium,
 	"db.schema":            RiskHigh,
 	"net":                  RiskHigh,

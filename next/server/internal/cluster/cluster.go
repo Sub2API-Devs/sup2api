@@ -1,7 +1,7 @@
 // Package cluster implements the multi-node primitives of the core: node
 // registry and heartbeats, distributed locks, pub/sub bus and concurrency
 // slots. Everything is backed by a single Redis instance (multi-key Lua
-// scripts assume non-cluster Redis) with PostgreSQL as lock fallback.
+// scripts assume non-cluster Redis); PostgreSQL is only pinged for health.
 package cluster
 
 import (
@@ -73,8 +73,8 @@ var (
 	_ core.Slots        = (*Slots)(nil)
 )
 
-// New builds all cluster services. pool may be nil (no PG health tracking
-// and no advisory-lock fallback). Call Start before use and Close on exit.
+// New builds all cluster services. pool may be nil (no PG health tracking).
+// Call Start before use and Close on exit.
 func New(rdb redis.UniversalClient, pool *pgxpool.Pool, opts Options) *Cluster {
 	var pinger Pinger
 	if pool != nil {
@@ -85,7 +85,7 @@ func New(rdb redis.UniversalClient, pool *pgxpool.Pool, opts Options) *Cluster {
 	})
 	return &Cluster{
 		Registry: reg,
-		Locker:   NewLocker(rdb, pool, opts.Logger),
+		Locker:   NewLocker(rdb, opts.Logger),
 		Bus:      NewBus(rdb, opts.Logger),
 		Slots:    NewSlots(rdb, reg, SlotOptions{Logger: opts.Logger}),
 	}

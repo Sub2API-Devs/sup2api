@@ -84,7 +84,9 @@ message HTTPResponse {
 
 // MigrationService ("migration.data.v1", optional) runs data transformations
 // that SQL migrations cannot express. Called after SQL migrations, during
-// the prepare phase of a rollout, on one node.
+// the prepare phase of a rollout, on one node. When the rollout coordinator
+// is taken over by another node, MigrateData may run again for the same
+// versions: it MUST be idempotent.
 service MigrationService {
   rpc MigrateData(MigrateDataRequest) returns (MigrateDataResponse);
 }

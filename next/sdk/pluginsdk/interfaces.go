@@ -128,14 +128,25 @@ type AccountRanker interface {
 }
 
 // Migration mirrors pluginv1.MigrationServiceServer ("migration.data.v1").
+// The host calls MigrateData on one node, but a coordinator that is taken
+// over mid-rollout may make another node call it again for the same
+// versions: it MUST be idempotent (CONTRACTS §11.7).
 type Migration interface {
 	MigrateData(context.Context, *pluginv1.MigrateDataRequest) (*pluginv1.MigrateDataResponse, error)
 }
 
 // ---------------------------------------------------------------- lifecycle
 
-// Initializer is called once after InitHost succeeded, before the first
-// Configure. Use it to open the database, start background workers, etc.
+// Initializer is called once per plugin PROCESS after InitHost succeeded,
+// before the first Configure. Use it to open the database and set up local
+// state.
+//
+// In a cluster every node runs its own plugin process, so Init runs once on
+// EVERY node, and a goroutine started here runs once per node too. Work that
+// must happen once for the whole cluster does not belong here: declare
+// periodic work as manifest jobs[] (each trigger runs on one node only), and
+// guard other work that must not overlap across nodes with Host.Locks. See
+// CONTRACTS §27.4.
 type Initializer interface {
 	Init(ctx context.Context, host Host) error
 }

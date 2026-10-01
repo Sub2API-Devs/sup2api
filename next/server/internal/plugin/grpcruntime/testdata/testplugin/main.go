@@ -7,6 +7,7 @@
 //   - Configure rejects {"reject": true}.
 //   - HTTP POST /publish publishes the body as broadcast topic "t.ping";
 //     OnBroadcast stores "<topic>:<payload>:<source node>" in KV t/broadcast.
+//   - HTTP POST /lock makes one HostService lock call (see lockCall).
 package main
 
 import (
@@ -194,6 +195,9 @@ func (s *server) HandleHTTP(ctx context.Context, in *pluginv1.HTTPRequest) (*plu
 		}
 		out["ledger_id"], out["balance_after"], out["duplicate"] = r.GetLedgerId(), r.GetBalanceAfter(), r.GetDuplicate()
 	}
+	if in.GetPath() == "/lock" {
+		lockCall(ctx, s.hostClient(), in.GetBody(), out)
+	}
 	b, _ := json.Marshal(out)
 	return &pluginv1.HTTPResponse{
 		Status:  200,
@@ -211,6 +215,39 @@ func (s *server) OnBroadcast(ctx context.Context, in *pluginv1.OnBroadcastReques
 	v := in.GetTopic() + ":" + string(in.GetPayload()) + ":" + in.GetSourceNodeId()
 	_, err := s.hostClient().KVSet(ctx, &pluginv1.KVSetRequest{Namespace: "t", Key: "broadcast", Value: []byte(v)})
 	return &pluginv1.OnBroadcastResponse{}, err
+}
+
+// lockCall runs one HostService lock call described by body
+// {"op":"acquire|renew|release","name":...,"token":...,"ttl_ms":...} and
+// reports the result in out; a host error is reported as out["code"] (the
+// gRPC code name) rather than failing the HTTP call, so the test sees the
+// exact code the plugin got.
+func lockCall(ctx context.Context, h pluginv1.HostServiceClient, body []byte, out map[string]any) {
+	var req struct {
+		Op    string `json:"op"`
+		Name  string `json:"name"`
+		Token string `json:"token"`
+		TTLMs int64  `json:"ttl_ms"`
+	}
+	_ = json.Unmarshal(body, &req)
+	var err error
+	switch req.Op {
+	case "acquire":
+		var r *pluginv1.LockAcquireResponse
+		if r, err = h.LockAcquire(ctx, &pluginv1.LockAcquireRequest{Name: req.Name, Token: req.Token, TtlMs: req.TTLMs}); err == nil {
+			out["acquired"], out["valid_ms"] = r.GetAcquired(), r.GetValidMs()
+		}
+	case "renew":
+		var r *pluginv1.LockRenewResponse
+		if r, err = h.LockRenew(ctx, &pluginv1.LockRenewRequest{Name: req.Name, Token: req.Token, TtlMs: req.TTLMs}); err == nil {
+			out["held"], out["valid_ms"] = r.GetHeld(), r.GetValidMs()
+		}
+	case "release":
+		_, err = h.LockRelease(ctx, &pluginv1.LockReleaseRequest{Name: req.Name, Token: req.Token})
+	default:
+		err = status.Error(codes.InvalidArgument, "unknown op")
+	}
+	out["code"] = status.Code(err).String()
 }
 
 func main() {

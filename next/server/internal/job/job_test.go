@@ -17,36 +17,7 @@ import (
 
 // ---------------------------------------------------------------- fakes
 
-type memLocker struct {
-	mu    sync.Mutex
-	locks map[string]memLock
-	seq   int
-}
-
-type memLock struct {
-	token   int
-	expires time.Time
-}
-
-func newMemLocker() *memLocker { return &memLocker{locks: map[string]memLock{}} }
-
-func (l *memLocker) TryLock(_ context.Context, key string, ttl time.Duration) (func(), bool, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if cur, ok := l.locks[key]; ok && time.Now().Before(cur.expires) {
-		return func() {}, false, nil
-	}
-	l.seq++
-	tok := l.seq
-	l.locks[key] = memLock{token: tok, expires: time.Now().Add(ttl)}
-	return func() {
-		l.mu.Lock()
-		defer l.mu.Unlock()
-		if cur, ok := l.locks[key]; ok && cur.token == tok {
-			delete(l.locks, key)
-		}
-	}, true, nil
-}
+func newMemLocker() *testutil.MemLocker { return testutil.NewMemLocker() }
 
 type fakeGen struct {
 	core.Generation
@@ -287,6 +258,50 @@ func TestTwoNodesRunEachSlotOnce(t *testing.T) {
 	}
 }
 
+// The slot lock is not fenced, so it is not what makes a slot run once: two
+// nodes that both hold "the" lock (here: each has its own locker, as after
+// a Redis restart) race the insert, and the unique slot index lets one in.
+func TestSlotRunsOnceWithoutTheLock(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	addPlugin(t, db, "guard")
+	app := &fakeApp{}
+	b := jobBinding("guard", "tick", "@every 1h", 0, app)
+	s1 := start(t, db, newMemLocker(), newRegistry(), "n1")
+	s2 := start(t, db, newMemLocker(), newRegistry(), "n2")
+
+	base := time.Now().Truncate(time.Second).Add(-time.Hour)
+	const slots = 20
+	for i := range slots {
+		slot := base.Add(time.Duration(i) * time.Second)
+		var wg sync.WaitGroup
+		begin := make(chan struct{})
+		for _, s := range []*Scheduler{s1, s2} {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-begin
+				s.runScheduled(b, slot)
+			}()
+		}
+		close(begin)
+		wg.Wait()
+	}
+
+	if n := len(app.snapshot()); n != slots {
+		t.Fatalf("plugin called %d times for %d slots", n, slots)
+	}
+	rs := runs(t, db, "guard", "tick")
+	if len(rs) != slots {
+		t.Fatalf("%d runs recorded for %d slots", len(rs), slots)
+	}
+	for _, r := range rs {
+		if r.status != StatusSucceeded {
+			t.Fatalf("bad run %+v", r)
+		}
+	}
+}
+
 func TestRunNowConflictAndTimeout(t *testing.T) {
 	t.Parallel()
 	db := testutil.DB(t)
@@ -376,8 +391,10 @@ func TestStartRecoversAbandonedRuns(t *testing.T) {
 	db := testutil.DB(t)
 	addPlugin(t, db, "guard")
 	ctx := context.Background()
+	// Two slots (one scheduled run per slot is a unique index): n1's is
+	// recovered, n2's is left alone.
 	if _, err := db.Pool.Exec(ctx, `INSERT INTO plugin_job_runs (plugin_key, job_id, node_id, scheduled_at, started_at, status)
-		VALUES ('guard', 'a', 'n1', now(), now(), 'running'), ('guard', 'a', 'n2', now(), now(), 'running')`); err != nil {
+		VALUES ('guard', 'a', 'n1', now() - interval '1 minute', now(), 'running'), ('guard', 'a', 'n2', now(), now(), 'running')`); err != nil {
 		t.Fatal(err)
 	}
 	start(t, db, newMemLocker(), newRegistry(), "n1")
@@ -392,13 +409,14 @@ func TestPurgeRuns(t *testing.T) {
 	db := testutil.DB(t)
 	addPlugin(t, db, "guard")
 	ctx := context.Background()
+	// Distinct slots: one scheduled run per slot is a unique index.
 	if _, err := db.Pool.Exec(ctx, `INSERT INTO plugin_job_runs (plugin_key, job_id, node_id, scheduled_at, started_at, status, message)
-		SELECT 'guard', 'a', 'n1', now(), now(), 'succeeded', g::text FROM generate_series(1, 1005) g`); err != nil {
+		SELECT 'guard', 'a', 'n1', now() - make_interval(mins => 2000 - g), now(), 'succeeded', g::text FROM generate_series(1, 1005) g`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(ctx, `INSERT INTO plugin_job_runs (plugin_key, job_id, node_id, scheduled_at, started_at, status)
 		VALUES ('guard', 'b', 'n1', now(), now(), 'succeeded'),
-		       ('guard', 'b', 'n1', now(), now() - interval '2 days', 'running')`); err != nil {
+		       ('guard', 'b', 'n1', now() - interval '2 days', now() - interval '2 days', 'running')`); err != nil {
 		t.Fatal(err)
 	}
 	s := New(db, newMemLocker(), newRegistry(), nil, "n1", Options{})

@@ -37,10 +37,61 @@ type NodeRegistry interface {
 	Healthy() bool
 }
 
-// Locker provides short distributed locks (Redis SET NX PX with owner token,
-// falling back to pg_try_advisory_lock when Redis is unavailable).
+// Locker provides short distributed locks on Redis (redsync: SET NX PX with
+// an owner token). There is no fallback: a node that cannot reach Redis
+// takes no locks.
+//
+// The locks are NOT fenced. A holder that stalls past Until cannot tell
+// that another node has taken the lock since, and keeps going. So a lock
+// only keeps nodes from doing the same work at the same time; work that must
+// never run twice needs its own guard in the database as well - a
+// conditional UPDATE, a unique index, an idempotency key.
 type Locker interface {
-	TryLock(ctx context.Context, key string, ttl time.Duration) (release func(), ok bool, err error)
+	// TryLock makes one attempt to take lock:{key} for ttl, without waiting.
+	// ok=false with a nil error means another process holds it. The Lock is
+	// never nil; when ok is false its methods are no-ops.
+	TryLock(ctx context.Context, key string, ttl time.Duration) (lock Lock, ok bool, err error)
+}
+
+// TokenLocker is a Locker whose locks can be resumed by token, so a holder in
+// another process (a plugin, over HostService) can extend and release them.
+type TokenLocker interface {
+	Locker
+	// TryLockToken is TryLock with the owner token chosen by the caller
+	// instead of generated, so a caller that never learns the outcome (a lost
+	// reply) can still release the lock with ReleaseToken. token must be
+	// non-empty and fresh for every attempt: an attempt with the token of a
+	// lock already held with it fails, and the cleanup of the failed attempt
+	// (a compare-and-delete with the same token) deletes that lock - the call
+	// reports ok=false and nobody holds the lock afterwards.
+	TryLockToken(ctx context.Context, key, token string, ttl time.Duration) (lock Lock, ok bool, err error)
+	// Resume returns a handle on lock:{key} as held with token. It does not
+	// talk to Redis: Extend and Release on the handle only act if the lock
+	// is still held with that token.
+	Resume(key, token string, ttl time.Duration) Lock
+	// ReleaseToken deletes lock:{key} if it is held with token, within ctx.
+	// Unlike Lock.Release it reports failure: nil means the lock is not held
+	// with token any more (released now, or before, or never taken); an error
+	// means the outcome is unknown.
+	ReleaseToken(ctx context.Context, key, token string) error
+}
+
+// Lock is one lock taken by TryLock.
+type Lock interface {
+	// Token is the owner token stored in Redis ("" for a lock not taken).
+	Token() string
+	// Until is when this process stops considering itself the holder: its
+	// local clock, minus a drift margin. Zero when not held, and for a
+	// resumed lock until its first successful Extend.
+	Until() time.Time
+	// Extend pushes the expiry to ttl from now. false with a nil error means
+	// the lock is no longer held with this token - it expired, and another
+	// process may have it - so the guarded work must stop. An error means
+	// the outcome is unknown (Redis did not answer).
+	Extend(ctx context.Context) (bool, error)
+	// Release gives the lock up if it is still held with this token. It is
+	// idempotent and never deletes a lock another process holds.
+	Release()
 }
 
 // Bus is Redis pub/sub for cache invalidation and coordination. Messages are

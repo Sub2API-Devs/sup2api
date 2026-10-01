@@ -65,6 +65,11 @@ type Host interface {
 	// accepted the message. See BroadcastMux.
 	Publish(ctx context.Context, topic string, payload []byte) error
 
+	// Locks takes short cluster-wide locks on the host's Redis (grant
+	// "lock"), for work that must not run on two nodes at once. Periodic
+	// work belongs in manifest jobs[] instead. The locks are not fenced:
+	// the guarded work must still be idempotent. See Locks.
+	Locks() Locks
 	// ListAccounts returns one page of the accounts of THIS plugin's own
 	// account types (grant "accounts.read"), ordered by id and never
 	// carrying credentials. Pass the returned cursor to continue; "" means

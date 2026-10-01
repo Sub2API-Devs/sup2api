@@ -172,66 +172,6 @@ func TestRegistryHealthyWithPG(t *testing.T) {
 	}
 }
 
-func TestLocker(t *testing.T) {
-	ctx := context.Background()
-	mr, rdb := newRedis(t)
-	l := NewLocker(rdb, nil, nil)
-	rel, ok, err := l.TryLock(ctx, "job:x", time.Second)
-	if err != nil || !ok {
-		t.Fatalf("lock: ok=%v err=%v", ok, err)
-	}
-	if _, ok, _ := l.TryLock(ctx, "job:x", time.Second); ok {
-		t.Fatal("second lock must fail")
-	}
-	rel()
-	rel() // idempotent
-	rel2, ok, _ := l.TryLock(ctx, "job:x", time.Second)
-	if !ok {
-		t.Fatal("relock after release")
-	}
-	// Lock expires and someone else takes it; the stale release must not delete it.
-	mr.FastForward(2 * time.Second)
-	rel3, ok, _ := l.TryLock(ctx, "job:x", time.Second)
-	if !ok {
-		t.Fatal("lock after expiry")
-	}
-	rel2()
-	if !mr.Exists("lock:job:x") {
-		t.Fatal("stale release deleted another owner's lock")
-	}
-	rel3()
-	if mr.Exists("lock:job:x") {
-		t.Fatal("release did not delete")
-	}
-	// No fallback: redis error is returned.
-	mr.Close()
-	if _, ok, err := l.TryLock(ctx, "job:x", time.Second); ok || err == nil {
-		t.Fatalf("expected error, ok=%v err=%v", ok, err)
-	}
-}
-
-func TestLockerPGFallback(t *testing.T) {
-	db := testutil.DB(t)
-	ctx := context.Background()
-	mr, rdb := newRedis(t)
-	mr.Close()
-	l := NewLocker(rdb, db.Pool, nil)
-	rel, ok, err := l.TryLock(ctx, "migrate", time.Second)
-	if err != nil || !ok {
-		t.Fatalf("pg lock: ok=%v err=%v", ok, err)
-	}
-	if _, ok, err := l.TryLock(ctx, "migrate", time.Second); ok || err != nil {
-		t.Fatalf("second pg lock: ok=%v err=%v", ok, err)
-	}
-	rel()
-	rel()
-	rel2, ok, err := l.TryLock(ctx, "migrate", time.Second)
-	if err != nil || !ok {
-		t.Fatalf("pg relock: ok=%v err=%v", ok, err)
-	}
-	rel2()
-}
-
 func waitFor(t *testing.T, d time.Duration, cond func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(d)

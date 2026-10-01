@@ -32,6 +32,10 @@ const (
 
 const maxMessageLen = 2000
 
+// slotUniqueIndex allows one scheduled (non-manual) run per slot (migration
+// 0015).
+const slotUniqueIndex = "plugin_job_runs_slot_uniq"
+
 // Options tunes the scheduler; zero values take the defaults.
 type Options struct {
 	DefaultTimeout    time.Duration // when timeoutSec is 0 (60s)
@@ -252,8 +256,10 @@ func (s *Scheduler) timeout(b core.JobBinding) time.Duration {
 
 // runScheduled executes one slot if this node wins its lock. The lock is not
 // released: it keeps other nodes (even ones with a lagging clock) from
-// running the same slot until it expires, and the NOT EXISTS insert guards
-// the slot after that.
+// running the same slot until it expires. It is not fenced, though, so the
+// slot is really claimed by the insert: plugin_job_runs_slot_uniq allows one
+// scheduled run per slot, and whichever node loses that - by NOT EXISTS, or
+// by the unique violation when two inserts race - skips the slot.
 func (s *Scheduler) runScheduled(b core.JobBinding, slot time.Time) {
 	timeout := s.timeout(b)
 	key := fmt.Sprintf("job:%s:%s:%d", b.Plugin.Key, b.Job.ID, slot.Unix())
@@ -273,8 +279,8 @@ func (s *Scheduler) runScheduled(b core.JobBinding, slot time.Time) {
 		WHERE NOT EXISTS (SELECT 1 FROM plugin_job_runs
 			WHERE plugin_key = $1 AND job_id = $2 AND scheduled_at = $4 AND NOT manual)
 		RETURNING id`, b.Plugin.Key, b.Job.ID, s.nodeID, slot, StatusRunning).Scan(&id)
-	if store.IsNoRows(err) {
-		return
+	if store.IsNoRows(err) || store.IsUniqueViolation(err, slotUniqueIndex) {
+		return // another node has this slot
 	}
 	if err != nil {
 		if s.ctx.Err() == nil {
@@ -301,7 +307,7 @@ func (s *Scheduler) RunNow(ctx context.Context, pluginKey, jobID string, actorID
 		return err
 	}
 	timeout := s.timeout(b)
-	release, ok, err := s.locker.TryLock(ctx, fmt.Sprintf("job:%s:%s:manual", pluginKey, jobID), timeout+s.opts.LockGrace)
+	lk, ok, err := s.locker.TryLock(ctx, fmt.Sprintf("job:%s:%s:manual", pluginKey, jobID), timeout+s.opts.LockGrace)
 	if err != nil {
 		return core.ErrUnavailable.WithCause(err)
 	}
@@ -313,14 +319,14 @@ func (s *Scheduler) RunNow(ctx context.Context, pluginKey, jobID string, actorID
 	if err := s.db.Pool.QueryRow(ctx, `INSERT INTO plugin_job_runs (plugin_key, job_id, node_id, scheduled_at, started_at, status, manual)
 		VALUES ($1, $2, $3, $4, now(), $5, true) RETURNING id`,
 		pluginKey, jobID, s.nodeID, now, StatusRunning).Scan(&id); err != nil {
-		release()
+		lk.Release()
 		return fmt.Errorf("jobs: record manual run: %w", err)
 	}
 	s.log.Info("manual job run", "plugin", pluginKey, "job", jobID, "run_id", id, "actor_id", actorID)
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		defer release()
+		defer lk.Release()
 		s.execute(b, id, now, true, timeout)
 	}()
 	return nil

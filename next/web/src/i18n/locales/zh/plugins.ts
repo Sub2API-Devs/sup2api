@@ -79,6 +79,7 @@ export default {
     ui_menu: '控制台菜单',
     ui_iframe: '沙箱 iframe 页面',
     accounts_read: '读取账号',
+    lock: '跨节点锁',
     db_schema: '独立数据库 schema',
     net: '外部网络访问',
     routes_public: '公开接口',
@@ -98,7 +99,8 @@ export default {
   },
 
   hpDesc: {
-    broadcast: '向其他节点上的本插件实例广播消息（例如规则修改后让各节点立即重载）。'
+    broadcast: '向其他节点上的本插件实例广播消息（例如规则修改后让各节点立即重载）。',
+    lock: '让不同节点上的本插件实例不同时做同一件事（例如定时同步）。它的锁对其他插件不可见。'
   },
 
   hpWarn: {

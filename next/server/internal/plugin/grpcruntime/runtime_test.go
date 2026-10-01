@@ -16,6 +16,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/cluster"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/dbschema"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/grpcruntime"
@@ -127,6 +128,7 @@ func (e *env) runtime(t *testing.T, mod func(*grpcruntime.Options)) *grpcruntime
 		Authorizer:     fakeAuthz{allow: "plugin." + e.key + ":rules:read"},
 		Ledger:         e.ledger,
 		Schemas:        e.schemas,
+		Locker:         cluster.NewLocker(e.rdb, nil),
 		DataDir:        t.TempDir(),
 		HostVersion:    "0.1.0-test",
 		HealthInterval: 200 * time.Millisecond,
@@ -335,6 +337,7 @@ func TestHostServiceRequiresGrants(t *testing.T) {
 	grants := registrytest.DefaultGrants()
 	delete(grants, "kv")
 	delete(grants, "db.schema")
+	delete(grants, "lock")
 	e := setup(t, grants)
 	inst := e.load(t, e.runtime(t, nil))
 
@@ -348,6 +351,75 @@ func TestHostServiceRequiresGrants(t *testing.T) {
 	if _, err := httpCall(t, inst, &pluginv1.HTTPRequest{Method: "POST", Path: "/credit", Body: []byte("1"),
 		Query: map[string]*pluginv1.HeaderValues{"idem": {Values: []string{"x"}}}}); core.AsError(err).Code != "permission_denied" {
 		t.Fatalf("ledger without grant: %v", err)
+	}
+	if out, err := httpCall(t, inst, lockReq("acquire", "x", lockTokA, 1000)); err != nil || out["code"] != "PermissionDenied" {
+		t.Fatalf("lock without grant: %v %v", out, err)
+	}
+}
+
+const (
+	lockTokA = "token-a-0123456789abcdef"
+	lockTokB = "token-b-0123456789abcdef"
+)
+
+func lockReq(op, name, token string, ttlMs int64) *pluginv1.HTTPRequest {
+	b, _ := json.Marshal(map[string]any{"op": op, "name": name, "token": token, "ttl_ms": ttlMs})
+	return &pluginv1.HTTPRequest{Method: "POST", Path: "/lock", Body: b}
+}
+
+// TestLockRealPlugin: the lock calls from a real plugin process, on the
+// cluster locker over (mini)Redis, under lock:plugin:{key}:{name} with the
+// plugin's own token.
+func TestLockRealPlugin(t *testing.T) {
+	grants := registrytest.DefaultGrants()
+	delete(grants, "kv") // the lock grant stands on its own
+	e := setup(t, grants)
+	inst := e.load(t, e.runtime(t, nil))
+	call := func(op, name, token string, ttlMs int64) map[string]any {
+		t.Helper()
+		out, err := httpCall(t, inst, lockReq(op, name, token, ttlMs))
+		if err != nil {
+			t.Fatalf("%s %s: %v", op, name, err)
+		}
+		return out
+	}
+	rkey := "lock:plugin:" + e.key + ":jobs/sync:1"
+
+	out := call("acquire", "jobs/sync:1", lockTokA, 10000)
+	if out["code"] != "OK" || out["acquired"] != true {
+		t.Fatalf("acquire: %v", out)
+	}
+	if v, _ := out["valid_ms"].(float64); v <= 9000 || v > 10000 {
+		t.Fatalf("valid_ms = %v", out["valid_ms"])
+	}
+	if got, _ := e.mr.Get(rkey); got != lockTokA {
+		t.Fatalf("redis %s = %q, want the plugin's token", rkey, got)
+	}
+	if out := call("acquire", "jobs/sync:1", lockTokB, 10000); out["code"] != "OK" || out["acquired"] != false {
+		t.Fatalf("contended acquire: %v", out)
+	}
+	if out := call("renew", "jobs/sync:1", lockTokA, 20000); out["code"] != "OK" || out["held"] != true {
+		t.Fatalf("renew: %v", out)
+	}
+	if ttl := e.mr.TTL(rkey); ttl != 20*time.Second {
+		t.Fatalf("ttl after renew = %v", ttl)
+	}
+	if out := call("release", "jobs/sync:1", lockTokB, 0); out["code"] != "OK" {
+		t.Fatalf("release with another token: %v", out)
+	}
+	if !e.mr.Exists(rkey) {
+		t.Fatal("release with another token freed the lock")
+	}
+	if out := call("release", "jobs/sync:1", lockTokA, 0); out["code"] != "OK" || e.mr.Exists(rkey) {
+		t.Fatalf("release: %v exists=%v", out, e.mr.Exists(rkey))
+	}
+	if out := call("renew", "jobs/sync:1", lockTokA, 10000); out["code"] != "OK" || out["held"] != false {
+		t.Fatalf("renew after release: %v", out)
+	}
+	for _, bad := range [][3]any{{"bad name", lockTokA, int64(1000)}, {"x", "short", int64(1000)}, {"x", lockTokA, int64(999)}} {
+		if out := call("acquire", bad[0].(string), bad[1].(string), bad[2].(int64)); out["code"] != "InvalidArgument" {
+			t.Fatalf("acquire %v: %v", bad, out)
+		}
 	}
 }
 
