@@ -14,6 +14,9 @@ import (
 // startCoordinator runs the coordinator loop for a rollout this node leads
 // (it created it or took it over), unless one is already running.
 func (c *Controller) startCoordinator(id int64) {
+	if c.o.CanCoordinate != nil && !c.o.CanCoordinate() {
+		return
+	}
 	c.coordMu.Lock()
 	if c.coordinating[id] {
 		c.coordMu.Unlock()
@@ -44,6 +47,9 @@ func (c *Controller) startCoordinator(id int64) {
 
 // takeOver claims rollouts whose coordinator lease expired.
 func (c *Controller) takeOver(ctx context.Context, r *rolloutRow) {
+	if c.o.CanCoordinate != nil && !c.o.CanCoordinate() {
+		return
+	}
 	if r.coordBoot == c.o.Node.BootID() {
 		c.startCoordinator(r.id)
 		return
@@ -131,6 +137,9 @@ func (c *Controller) keepLease(ctx context.Context, cancel context.CancelFunc, i
 
 // coordinateStep advances one rollout; done=true ends the loop.
 func (c *Controller) coordinateStep(ctx context.Context, id int64, st *coordState) (bool, error) {
+	if c.o.CanCoordinate != nil && !c.o.CanCoordinate() {
+		return true, nil
+	}
 	r, err := c.loadRollout(ctx, id)
 	if err != nil {
 		return false, err
@@ -221,7 +230,7 @@ func (c *Controller) fail(ctx context.Context, r *rolloutRow, msg string) (bool,
 		return true, ctx.Err() // stopping or lease lost: not a rollout failure
 	}
 	c.log.Warn("plugin rollout failed", "rollout_id", r.id, "plugin", r.key, "reason", msg)
-	ok, err := c.finishFailed(ctx, r, PhaseFailed, msg)
+	ok, err := c.finishFailed(ctx, r, PhaseFailed, msg, true)
 	if err != nil {
 		return false, err
 	}
@@ -369,6 +378,9 @@ func (c *Controller) complete(ctx context.Context, r *rolloutRow) error {
 			return err
 		}
 		c.log.Info("plugin rollout completed", "rollout_id", r.id, "plugin", r.key, "action", r.action)
-		return c.writeNodes(ctx, tx, r)
+		if err := c.writeNodes(ctx, tx, r); err != nil {
+			return err
+		}
+		return c.markCleanup(ctx, tx, r)
 	})
 }

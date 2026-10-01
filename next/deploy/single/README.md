@@ -25,6 +25,11 @@ The script clones or fast-forwards `~/sup2api/src`, builds the image, runs
 `docker compose up -d --build` and waits for `/healthz`. Data volumes survive
 updates; core migrations run on start.
 
+Both application nodes have `stop_grace_period: 180s`. On SIGTERM the core
+marks readiness unhealthy, drains HTTP requests, then drains plugin work and
+pending usage before closing storage. Keep the container grace period longer
+than the application's combined drain budgets when changing these settings.
+
 ## Operate
 
 ```bash

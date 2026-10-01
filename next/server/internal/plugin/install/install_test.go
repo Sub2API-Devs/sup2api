@@ -93,9 +93,19 @@ func (f *fakeRollout) Cancel(context.Context, string, int64, int64) error     { 
 
 type fakeSchemas struct{ dropped []string }
 
+type emptyNodes struct{ core.NodeRegistry }
+
+func (emptyNodes) LiveNodes(context.Context) ([]core.NodeStatus, error) {
+	return []core.NodeStatus{}, nil
+}
+
 func (f *fakeSchemas) Drop(_ context.Context, key string) error {
 	f.dropped = append(f.dropped, key)
 	return nil
+}
+
+func (f *fakeSchemas) DropTx(ctx context.Context, _ pgx.Tx, key string) error {
+	return f.Drop(ctx, key)
 }
 
 type fakeAccounts struct{ purged []string }
@@ -148,7 +158,7 @@ func newEnv(t *testing.T) *env {
 	e.svc = New(Deps{
 		DB: db, Trust: ts, Authz: e.authz, Permissions: e.perms,
 		Defaults: NewDefaultsApplier(e.perms, e.sticky),
-		Rollout:  e.rollout, Schemas: e.schemas, Accounts: e.accounts,
+		Rollout:  e.rollout, Schemas: e.schemas, Accounts: e.accounts, Nodes: emptyNodes{},
 	}, Options{HostVersion: "0.1.0", Plugins: config.PluginConfig{MaxPackageBytes: 10 << 20, MaxMemoryMB: 1024}})
 	return e
 }
@@ -391,7 +401,7 @@ func TestInstallConsentUpgradeUninstall(t *testing.T) {
 	if purgeAudit != 1 {
 		t.Fatalf("account purge audit rows = %d", purgeAudit)
 	}
-	if len(e.rollout.disabled) != 1 || len(e.schemas.dropped) != 1 || len(e.perms.deleted) != 1 {
+	if len(e.schemas.dropped) != 1 || len(e.perms.deleted) != 1 {
 		t.Fatalf("uninstall side effects: disabled=%v dropped=%v deleted=%v", e.rollout.disabled, e.schemas.dropped, e.perms.deleted)
 	}
 	var n int

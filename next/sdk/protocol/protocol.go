@@ -13,8 +13,20 @@ import (
 // equal GetInfoResponse.protocol_version.
 const ProtocolVersion = 1
 
-// HostAPIVersion is sent in InitHostRequest.host_api_version.
-const HostAPIVersion = 1
+// HostAPIVersion is sent in InitHostRequest.host_api_version. Version 4 adds
+// plugin-driven execution and transactional reporting; the wire protocol stays at 1.
+const HostAPIVersion = 4
+
+// ExecutionHostAPIVersion is the first host with Execute/Monitor callbacks.
+const ExecutionHostAPIVersion = 4
+
+// ManagedTasksHostAPIVersion is the first host API that owns task submission,
+// query snapshots and polling. Task plugins must reject older hosts at InitHost,
+// including hosts loading an already-approved package from a shared database.
+const ManagedTasksHostAPIVersion = 2
+
+// PollHostAPIVersion is the first host API with invocation-bound ExecuteHTTP.
+const PollHostAPIVersion = 3
 
 // Handshake is the go-plugin handshake. A binary started without the magic
 // cookie prints a hint and exits.

@@ -298,10 +298,13 @@ func TestTwoNodeRollout(t *testing.T) {
 	if phase, _, _ := h.rolloutRow(r.ID); phase != rollout.PhaseActive {
 		t.Fatalf("phase = %s", phase)
 	}
-	var nodesActive int
+	// The per-node outcome survives completion; the cleanup barrier for every
+	// boot that may still hold an instance is tracked separately.
+	var nodesActive, nodesTracked int
 	_ = h.db.Pool.QueryRow(ctx, `SELECT count(*) FROM plugin_rollout_nodes WHERE rollout_id = $1 AND state = 'active'`, r.ID).Scan(&nodesActive)
-	if nodesActive != 2 {
-		t.Fatalf("rollout nodes active = %d", nodesActive)
+	_ = h.db.Pool.QueryRow(ctx, `SELECT count(*) FROM plugin_rollout_cleanup WHERE rollout_id = $1`, r.ID).Scan(&nodesTracked)
+	if nodesActive != 2 || nodesTracked != 2 {
+		t.Fatalf("rollout nodes active = %d, tracked for cleanup = %d", nodesActive, nodesTracked)
 	}
 	var mig int
 	_ = h.db.Pool.QueryRow(ctx, `SELECT count(*) FROM plugin_migrations WHERE plugin_key = $1`, h.key).Scan(&mig)

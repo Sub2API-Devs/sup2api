@@ -376,7 +376,7 @@ func TestBuildRealPlugin(t *testing.T) {
 	}
 	dir := filepath.Join("..", "..", "plugins", "anthropic")
 	out := t.TempDir()
-	res := runOK(t, "build", "--dir", dir, "--out", out, "--platforms", "linux/amd64", "--dev", "--overlay", "testdata/v0.2.0")
+	res := runOK(t, "build", "--dir", dir, "--out", out, "--platforms", "linux/amd64", "--dev", "--overlay", "testdata/v0.3.0-test")
 	bin := filepath.Join(out, "runtimes", "linux-amd64", "plugin")
 	if !strings.Contains(res, bin) {
 		t.Fatalf("build output = %q", res)
@@ -406,7 +406,7 @@ func TestBuildRealPlugin(t *testing.T) {
 		t.Fatal(err)
 	}
 	info, err := pluginv1.NewPluginServiceClient(raw.(*protocol.Client).Conn).GetInfo(context.Background(), &pluginv1.GetInfoRequest{})
-	if err != nil || info.GetPluginKey() != "anthropic" || info.GetVersion() != "0.2.0" {
+	if err != nil || info.GetPluginKey() != "anthropic" || info.GetVersion() != "0.3.0-test" {
 		t.Fatalf("GetInfo = %v %v", info, err)
 	}
 }

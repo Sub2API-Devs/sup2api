@@ -15,7 +15,7 @@ import (
 
 func start(t *testing.T) *pluginsdktest.Harness {
 	t.Helper()
-	return pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("volcengine", "0.4.0")}})
+	return pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("volcengine", "0.10.0")}})
 }
 
 func account(creds, settings string) *pluginv1.Account {
@@ -29,7 +29,7 @@ const testKey = `{"api_key":"11111111-2222-3333-4444-555555555555"}`
 // adapter.
 func TestCapabilities(t *testing.T) {
 	h := start(t)
-	if got := strings.Join(h.Info.GetCapabilities(), ","); got != "platform.adapter.v1,http.routes.v1" {
+	if got := strings.Join(h.Info.GetCapabilities(), ","); got != "platform.execute.v1,platform.monitor.v1,platform.adapter.v1,platform.tasks.v1,platform.poll.v1,http.routes.v1" {
 		t.Fatalf("capabilities = %s", got)
 	}
 }

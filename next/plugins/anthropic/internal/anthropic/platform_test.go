@@ -17,14 +17,14 @@ import (
 func start(t *testing.T) (*Plugin, *pluginsdktest.Harness) {
 	t.Helper()
 	p := New()
-	h := pluginsdktest.Start(t, p, pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("anthropic", "0.1.6")}})
+	h := pluginsdktest.Start(t, p, pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("anthropic", "0.2.0")}})
 	return p, h
 }
 
 func TestCapabilities(t *testing.T) {
 	_, h := start(t)
 	got := strings.Join(h.Info.GetCapabilities(), ",")
-	if got != "platform.adapter.v1,http.routes.v1" {
+	if got != "platform.execute.v1,platform.adapter.v1,http.routes.v1" {
 		t.Fatalf("capabilities = %s", got)
 	}
 }

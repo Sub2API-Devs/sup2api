@@ -1,5 +1,7 @@
 # 插件执行、核心记录：插件参与计费与使用记录的契约
 
+> 2026-10-01 最新执行契约见 CONTRACTS §31：插件通过 ExecuteDefault 发起核心代理请求，再调用 RecordUsage / ReserveAndWatch；Monitor 中调用 ReportTaskProgress。核心负责身份、调度、价格、幂等事务。新路径按用户要求在记录确认后返回，流式仍逐块转发、EOF 等待记录；本文的“Host.RecordUsage 作废”和“ExtractUsage 永远异步且零 EOF 延迟”仅描述旧路径。托管任务契约见 §28，后台执行器见 §30。
+
 > 状态：**已全部实现**（A–D 四期 + E 期收尾，2026-09-30）。落地记录与设计更正在 [CONTRACTS](CONTRACTS.md) §25.1–§25.6 —— **那里才是真相源**，本文是当初的设计稿，正文里有若干条后来被证伪（每条都在 §25 对应小节里点明）。
 > 这份文档讲的是**核心 SDK 契约的扩展**，不是某个插件。第一个用户是 [字节火山方舟 / 豆包插件](PLUGIN-VOLCENGINE-ARK.md)，但每一条都不带厂商语义。
 

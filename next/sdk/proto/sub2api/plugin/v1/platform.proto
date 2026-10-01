@@ -11,6 +11,15 @@ option go_package = "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;plugi
 // forms, usage extraction rules, default pricing) live in manifest.json; this
 // service only covers behaviour that needs code.
 service PlatformService {
+  // Plugin-driven request execution. The host selected the account and owns
+  // the request body. The plugin builds and forwards it through the scoped
+  // host API, then records usage or atomically reserves and registers a task.
+  // Requires platform.execute.v1 and host API 4.
+  rpc Execute(ExecuteRequest) returns (ExecuteResponse);
+  // One scheduled observation, completed by ReportTaskProgress. Scheduling,
+  // fencing, snapshots and financial transactions remain host-owned.
+  // Requires platform.monitor.v1 and host API 4.
+  rpc Monitor(PollRequest) returns (MonitorResponse);
   rpc ValidateCredentials(ValidateCredentialsRequest) returns (ValidateCredentialsResponse);
   // Hot path: called once per upstream attempt. Keep it fast (< 2s timeout).
   rpc BuildUpstreamRequest(BuildUpstreamRequestRequest) returns (BuildUpstreamRequestResponse);
@@ -75,9 +84,21 @@ service PlatformService {
   // back to the declarative rules it ran while forwarding and marks the
   // usage record so the silence is visible.
   rpc ExtractUsage(ExtractUsageRequest) returns (UsageReport);
-  // Builds the request that asks the upstream how a PRE-CHARGED entry ended
-  // (manifest: none - an endpoint arms this by having its ExtractUsage return
-  // a Reservation, CONTRACTS §25.4).
+  // Opt-in asynchronous task submissions only (endpoint.task.action=submit).
+  // Unlike ExtractUsage, this runs BEFORE forwarding the bounded JSON success
+  // response. The host persists identity, initial snapshot and optional usage
+  // atomically, then replaces declared task ID fields with its public ID.
+  // Attribution and account ownership are always determined by the host.
+  // Ordinary endpoints retain ExtractUsage's asynchronous contract above.
+  rpc ParseTaskSubmission(ExtractUsageRequest) returns (TaskSubmission);
+  // Executes one observation. The host owns scheduling, account selection,
+  // leases and persistence; the plugin initiates its HTTP request through
+  // HostService.ExecuteHTTP using the invocation's short-lived permission.
+  // Requires platform.poll.v1 and host API 3. No plugin timer or net grant.
+  rpc Poll(PollRequest) returns (ReconcileResult);
+  // Builds the request that observes a pre-charged entry or a host-managed
+  // asynchronous task. Legacy endpoints arm it through Reservation; task
+  // endpoints declare endpoint.task and may be free (no reservation needed).
   //
   // This is BuildTestRequest / BuildModelsRequest's shape, and it is the
   // shape on purpose. The plugin only DESCRIBES the request and READS the
@@ -90,10 +111,10 @@ service PlatformService {
   //   - no "app.jobs.v1" timer of its own: the host drives the schedule,
   //     with the backoff, the deadline and the multi-node locking that a
   //     plugin would otherwise each have to reinvent.
-  // Do not "simplify" this into a single call that lets the plugin fetch:
-  // every one of those three would have to be opened up again.
+  // Legacy compatibility path. New plugins use Poll and the host's scoped
+  // ExecuteHTTP callback, which preserves these account/network constraints.
   //
-  // Optional: answer UNIMPLEMENTED when no endpoint reserves. A plugin that
+  // Optional: answer UNIMPLEMENTED when no endpoint reserves or declares tasks. A plugin that
   // returns a Reservation and then cannot build the request has its entries
   // retried until the deadline and then abandoned - the estimate stands as
   // the final charge.
@@ -106,6 +127,27 @@ service PlatformService {
   // is no field here for an amount, and the tokens it reports are priced by
   // the administrator's price table exactly like a live request's.
   rpc ParseReconcileResponse(ParseReconcileResponseRequest) returns (ReconcileResult);
+}
+
+message ExecuteRequest {
+  BuildUpstreamRequestRequest request = 1;
+  string execution_token = 2;
+}
+
+message ExecuteResponse {
+  // Only for an upstream error returned by ForwardUpstream. The host still
+  // decides whether another account may be attempted.
+  ClassifyErrorResponse classification = 1;
+}
+
+message MonitorResponse {}
+
+message PollRequest {
+  ReconcileEntry entry = 1;
+  Account account = 2;
+  // Opaque, invocation-local permission. The SDK binds it to Poll's context.
+  // Never persist it or use it outside the current Poll invocation.
+  string execution_token = 3;
 }
 
 message ValidateCredentialsRequest {
@@ -346,6 +388,21 @@ message UsageReport {
   Reservation reserve = 7;
 }
 
+// Facts about a newly accepted upstream task, never scheduling or ownership.
+message TaskSubmission {
+  // Must match the task ID in a declared endpoint.task.idPaths response field.
+  string upstream_ref_id = 1;
+  // Complete initial query response, as a JSON object, at most 256 KiB.
+  // It carries the upstream ID; the host substitutes its public task ID.
+  string snapshot_json = 2;
+  // Optional usage or estimate. Free tasks do not need a reservation.
+  // A reservation's ref_id must equal upstream_ref_id; the host replaces it
+  // with the public ID before persisting the reservation.
+  UsageReport usage = 3;
+  int32 next_check_after_sec = 4;
+  int32 deadline_sec = 5;
+}
+
 // Reservation is a plugin's statement that the work is not finished and its
 // own estimate of it (PLUGIN-EXECUTES-CORE-RECORDS §3.4).
 //
@@ -389,6 +446,10 @@ message ReconcileEntry {
   // asking (the clamped deadline). Unix seconds.
   int64 created_at_unix = 4;
   int64 deadline_at_unix = 5;
+  // Set for host-managed async tasks. ref_id remains the upstream ID.
+  string task_kind = 6;
+  string model = 7;
+  string protocol = 8;
 }
 
 message BuildReconcileRequestRequest {
@@ -421,15 +482,18 @@ message ParseReconcileResponseRequest {
   map<string, string> headers = 4; // lower-cased
   bytes body = 5;                  // truncated to the host's reconcile body cap
   string transport_error = 6;
+  // The response exceeded the host's body cap. Never settle based on a
+  // partial document, even if a permissive parser finds a status/usage field.
+  bool truncated = 7;
 }
 
 // ReconcileResult is what the plugin read out of that answer.
 message ReconcileResult {
   enum State {
     // Still running. The host reschedules with next_check_after_sec (or its
-    // own backoff) and counts one attempt. This is the ZERO VALUE, so a
-    // plugin that cannot tell yet - and an empty answer - means "ask again",
-    // never "settle for nothing".
+    // own backoff). Valid progress resets consecutive query failures.
+    // This is the ZERO VALUE for wire compatibility. A plugin that cannot
+    // interpret the response must explicitly return POLL_FAILED instead.
     PENDING = 0;
     // Finished: tokens carries the REAL usage. The host reprices, charges
     // the difference (kind "usage") or refunds it (kind "refund"), and
@@ -451,9 +515,17 @@ message ReconcileResult {
     // tokens and facts are ignored in this state: a plugin that has some of
     // the real figures answers SETTLED with the ones it has.
     SETTLED_ESTIMATE = 3;
+    // The upstream explicitly says this task does not exist (including gone).
+    // The host closes observation and refunds any outstanding reservation.
+    // No task snapshot is required; this is not an HTTP/RPC NotFound error.
+    NOT_FOUND = 4;
+    // This query failed: network/auth/rate limit/server/parser errors, or an
+    // unrecognized status. The host counts consecutive failures and retries.
+    // A valid PENDING resets that counter. Never disguise query errors as PENDING.
+    POLL_FAILED = 5;
   }
   State state = 1;
-  // PENDING only: when to ask again. 0 leaves it to the host's backoff; the
+  // PENDING/POLL_FAILED: when to ask again. 0 leaves it to the host's backoff; the
   // host clamps it to the backoff ceiling either way.
   int32 next_check_after_sec = 2;
   // SETTLED only: the real usage, replacing the estimate. Ignored in every
@@ -461,9 +533,15 @@ message ReconcileResult {
   UsageTokens tokens = 3;
   // SETTLED only: the real metering facts, replacing the estimated ones.
   map<string, string> facts = 4;
-  // FAILED only: why, recorded as usage_logs.error_type (truncated to 50
+  // FAILED/NOT_FOUND/POLL_FAILED: why. Terminal failures are recorded as
+  // usage_logs.error_type (truncated to 50
   // bytes) and error_message. SETTLED_ESTIMATE may use it too, as a short
   // note on why no usage was available (recorded with the marker, not as an
   // error: the row stays a success).
   string reason = 5;
+  // Complete query response for a successfully observed async task (JSON
+  // object, at most 256 KiB). Empty preserves the prior snapshot. Transport
+  // errors must never erase an existing result. The host substitutes its
+  // public ID and fences every write by the current task claim token.
+  string task_snapshot_json = 6;
 }

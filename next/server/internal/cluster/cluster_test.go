@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -248,8 +249,15 @@ func TestSlotsAcquireRelease(t *testing.T) {
 	if n, _ := s.InUse(ctx, "account", 7); n != 2 {
 		t.Fatalf("in use %d", n)
 	}
-	if score, _ := rdb.ZScore(ctx, "slot:account:7", "boot-a:req1").Result(); score == 0 {
-		t.Fatal("member format")
+	members, _ := rdb.ZRange(ctx, "slot:account:7", 0, -1).Result()
+	found := false
+	for _, m := range members {
+		if strings.HasPrefix(m, "boot-a:req1:") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("member must preserve boot/request identity and add a lease token")
 	}
 	r1()
 	r1() // idempotent: must not release req2 or anything else
@@ -344,7 +352,7 @@ func TestSlotsReclaimOnlyDeadNodes(t *testing.T) {
 	}
 	acc, _ := rdb.ZRange(ctx, "slot:account:1", 0, -1).Result()
 	usr, _ := rdb.ZRange(ctx, "slot:user:9", 0, -1).Result()
-	if !sameSet(acc, "boot-a:a1", "boot-b:b:1") || !sameSet(usr, "boot-b:b2") {
+	if len(acc) != 2 || len(usr) != 1 || !strings.HasPrefix(acc[0], "boot-a:a1:") || !strings.HasPrefix(acc[1], "boot-b:b:1:") || !strings.HasPrefix(usr[0], "boot-b:b2:") {
 		t.Fatalf("live slots touched: account=%v user=%v", acc, usr)
 	}
 	// Running again is a no-op.

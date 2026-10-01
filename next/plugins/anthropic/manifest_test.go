@@ -23,7 +23,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "anthropic" || m.Version != "0.1.7" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "anthropic" || m.Version != "0.2.0" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("key/version = %s %s", m.Key, m.Version)
 	}
 	if m.Database == nil || m.Database.Schema != "plg_"+m.Key {
@@ -93,8 +93,8 @@ func TestManifest(t *testing.T) {
 	for _, c := range m.Capabilities {
 		caps[c.ID] = true
 	}
-	if !caps[manifest.CapPlatformAdapter] {
-		t.Fatal("account types need capability platform.adapter.v1")
+	if !caps[manifest.CapPlatformAdapter] || !caps[manifest.CapPlatformExecute] {
+		t.Fatal("account types need platform.adapter.v1 and platform.execute.v1")
 	}
 	perms := map[string]manifest.HostPermission{}
 	for _, perm := range m.HostPermissions {
@@ -128,24 +128,24 @@ func TestManifest(t *testing.T) {
 		t.Fatalf("migrations dir: %v", err)
 	}
 	var patch map[string]any
-	raw := mustJSONFile(t, "testdata/v0.2.0/manifest.patch.json")
+	raw := mustJSONFile(t, "testdata/v0.3.0-test/manifest.patch.json")
 	_ = json.Unmarshal(raw, &patch)
-	if patch["version"] != "0.2.0" {
-		t.Fatalf("0.2.0 patch version = %v", patch["version"])
+	if patch["version"] != "0.3.0-test" || patch["version"] == m.Version {
+		t.Fatalf("upgrade fixture must have a distinct version: %v", patch["version"])
 	}
 	// The overlay must not bring back the pre-6.6 layouts.
 	for _, k := range []string{"platform", "gateway", "platforms"} {
 		if _, bad := patch[k]; bad {
-			t.Fatalf("0.2.0 patch sets %q; anthropic is a built-in platform", k)
+			t.Fatalf("upgrade fixture sets %q; anthropic is a built-in platform", k)
 		}
 	}
 	for _, at := range asSlice(patch["accountTypes"]) {
 		if e, ok := at.(map[string]any); ok && e["protocols"] != nil {
-			t.Fatal("0.2.0 patch sets accountTypes[].protocols; account types declare platforms")
+			t.Fatal("upgrade fixture sets accountTypes[].protocols; account types declare platforms")
 		}
 	}
 	if patch["pricing"] != nil {
-		t.Fatal("0.2.0 patch declares model prices; administrators set prices in the core (CONTRACTS §17)")
+		t.Fatal("upgrade fixture declares model prices; administrators set prices in the core (CONTRACTS §17)")
 	}
 }
 

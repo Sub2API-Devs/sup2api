@@ -29,6 +29,7 @@ type resolved struct {
 func (s *Service) snapshot(ctx context.Context) (*priceSnapshot, error) {
 	s.mu.Lock()
 	snap := s.prices
+	epoch := s.epoch
 	s.mu.Unlock()
 	if snap != nil && time.Since(snap.at) < s.cacheTTL {
 		return snap, nil
@@ -51,8 +52,10 @@ func (s *Service) snapshot(ctx context.Context) (*priceSnapshot, error) {
 		return nil, err
 	}
 	s.mu.Lock()
-	s.prices = snap
-	s.resolved = map[string]resolved{}
+	if s.epoch == epoch {
+		s.prices = snap
+		s.resolved = map[string]resolved{}
+	}
 	s.mu.Unlock()
 	return snap, nil
 }

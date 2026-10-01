@@ -18,6 +18,9 @@ func (s *Scheduler) retentionLoop() {
 		case <-t.C:
 		}
 		t.Reset(s.opts.RetentionInterval)
+		if !s.opts.Executor.Allowed() {
+			continue
+		}
 		ttl := s.opts.RetentionInterval - s.opts.RetentionInterval/10
 		_, ok, err := s.locker.TryLock(s.ctx, "jobs:retention", ttl)
 		if err != nil || !ok {

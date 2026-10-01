@@ -61,7 +61,7 @@ func cmdPack(args []string, stdout, stderr io.Writer) error {
 	if dest == "" {
 		dest = filepath.Join(*outDir, m.Key+"-"+m.Version+PackageExt)
 	}
-	if err := writePackage(dest, files); err != nil {
+	if err := writePackageMode(dest, files, true); err != nil {
 		return err
 	}
 	fmt.Fprintf(stderr, "packed %s %s: %d files\n", m.Key, m.Version, len(files))
@@ -255,7 +255,13 @@ func fileMode(p string) os.FileMode {
 }
 
 // writePackage writes files as a zip, sorted, with fixed timestamps.
+// Signing intentionally replaces an existing archive; pack uses exclusive mode
+// so a fixture with the same key/version cannot overwrite a release package.
 func writePackage(dest string, files map[string][]byte) error {
+	return writePackageMode(dest, files, false)
+}
+
+func writePackageMode(dest string, files map[string][]byte, exclusive bool) error {
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return err
 	}
@@ -281,6 +287,25 @@ func writePackage(dest string, files map[string][]byte) error {
 	}
 	if err := zw.Close(); err != nil {
 		return err
+	}
+	if exclusive {
+		f, err := os.OpenFile(dest, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if os.IsExist(err) {
+			return fmt.Errorf("refusing to overwrite existing package %s; use a unique plugin key/version or a fresh output directory", dest)
+		}
+		if err != nil {
+			return err
+		}
+		_, writeErr := f.Write(buf.Bytes())
+		closeErr := f.Close()
+		if writeErr != nil || closeErr != nil {
+			_ = os.Remove(dest)
+			if writeErr != nil {
+				return writeErr
+			}
+			return closeErr
+		}
+		return nil
 	}
 	tmp := dest + ".tmp"
 	if err := os.WriteFile(tmp, buf.Bytes(), 0o644); err != nil {

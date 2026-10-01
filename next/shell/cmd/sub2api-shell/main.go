@@ -1,0 +1,462 @@
+// sub2api-shell owns the public listener and one replaceable core process.
+package main
+
+import (
+	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"log/slog"
+	"net"
+	"net/http"
+	"net/url"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"sync/atomic"
+	"syscall"
+	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/shell/internal/control"
+	"github.com/Sub2API-Devs/sup2api/next/shell/internal/peer"
+	"github.com/Sub2API-Devs/sup2api/next/shell/internal/proxy"
+	"github.com/Sub2API-Devs/sup2api/next/shell/internal/release"
+	"github.com/Sub2API-Devs/sup2api/next/shell/internal/supervisor"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
+)
+
+type config struct {
+	Root             string            `json:"root"`
+	ClusterID        string            `json:"cluster_id"`
+	NodeID           string            `json:"node_id"`
+	PrimaryNode      string            `json:"primary_node"`
+	BaselineDigest   string            `json:"baseline_digest"`
+	DatabaseURL      string            `json:"database_url"`
+	RedisURL         string            `json:"redis_url"`
+	PublicAddr       string            `json:"public_addr"`
+	PeerAddr         string            `json:"peer_addr"`
+	PeerURL          string            `json:"peer_url"`
+	CertFile         string            `json:"cert_file"`
+	KeyFile          string            `json:"key_file"`
+	CAFile           string            `json:"ca_file"`
+	PeerAuthKey      string            `json:"peer_auth_key"`
+	TrustedProxies   []string          `json:"trusted_proxies"`
+	TrustedKeys      map[string]string `json:"trusted_keys"`
+	ReleaseOrigin    string            `json:"release_origin"`
+	CoreURL          string            `json:"core_url"`
+	CoreArgs         []string          `json:"core_args"`
+	CoreEnv          []string          `json:"core_env"`
+	RuntimeABI       string            `json:"runtime_abi"`
+	ManagementSocket string            `json:"management_socket"`
+	CoreSocket       string            `json:"core_socket"`
+}
+
+func main() {
+	if err := run(); err != nil {
+		slog.Error("shell stopped", "error", err)
+		os.Exit(1)
+	}
+}
+func run() error {
+	if len(os.Args) < 2 {
+		return errors.New("usage: sub2api-shell init|import|serve|status|pause|resume|cancel|rollback|enable-node|disable-node")
+	}
+	command := os.Args[1]
+	fs := flag.NewFlagSet(command, flag.ContinueOnError)
+	cfgPath := fs.String("config", "/etc/sub2api/shell.json", "shell configuration")
+	manifestURL := fs.String("manifest", "", "signed manifest URL at the configured release origin")
+	socket := fs.String("socket", "", "local management socket")
+	id := fs.String("id", "", "upgrade ID")
+	bootstrap := fs.Bool("bootstrap", false, "explicitly initialize the first core database on the primary")
+	if err := fs.Parse(os.Args[2:]); err != nil {
+		return err
+	}
+	if command == "status" || command == "pause" || command == "resume" || command == "cancel" || command == "rollback" || command == "enable-node" || command == "disable-node" {
+		if *socket == "" {
+			c, err := readConfig(*cfgPath)
+			if err != nil {
+				return err
+			}
+			*socket = c.ManagementSocket
+		}
+		return localCommand(command, *socket, *id)
+	}
+	c, err := readConfig(*cfgPath)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	db, err := pgxpool.New(ctx, c.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	store := &control.Store{DB: db, Cluster: c.ClusterID}
+	keys := map[string]ed25519.PublicKey{}
+	for id, b64 := range c.TrustedKeys {
+		b, err := base64.StdEncoding.DecodeString(b64)
+		if err != nil || len(b) != ed25519.PublicKeySize {
+			return fmt.Errorf("invalid trusted public key %q", id)
+		}
+		keys[id] = ed25519.PublicKey(b)
+	}
+	releases := &release.Manager{Root: c.Root, TrustedKeys: keys, OS: runtime.GOOS, Arch: runtime.GOARCH, RuntimeABI: c.RuntimeABI}
+	if command == "init" {
+		if err = store.EnsureSchema(ctx); err != nil {
+			return err
+		}
+	}
+	if command == "init" || command == "import" {
+		if *manifestURL != "" {
+			r, err := importRelease(ctx, c, releases, *manifestURL)
+			if err != nil {
+				return err
+			}
+			if err = store.PutRelease(ctx, r); err != nil {
+				return err
+			}
+			if c.BaselineDigest == "" {
+				c.BaselineDigest = r.Digest
+			}
+			fmt.Println(r.Digest)
+		}
+		if command == "import" {
+			if *manifestURL == "" {
+				return errors.New("import requires -manifest")
+			}
+			return nil
+		}
+		if !release.ValidDigest(c.BaselineDigest) {
+			return errors.New("init requires baseline_digest or a signed -manifest")
+		}
+		if _, err = store.Release(ctx, c.BaselineDigest); err != nil {
+			return err
+		}
+		return store.InitCluster(ctx, c.PrimaryNode, c.BaselineDigest)
+	}
+	if command != "serve" {
+		return errors.New("unknown command")
+	}
+	supervisor, err := supervisor.New(filepath.Join(c.Root, "runtime"))
+	if err != nil {
+		return err
+	}
+	defer supervisor.Close()
+	cert, err := tls.LoadX509KeyPair(c.CertFile, c.KeyFile)
+	if err != nil {
+		return err
+	}
+	pem, err := os.ReadFile(c.CAFile)
+	if err != nil {
+		return err
+	}
+	ca := x509.NewCertPool()
+	if !ca.AppendCertsFromPEM(pem) {
+		return errors.New("invalid cluster CA")
+	}
+	clientTLS := &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: ca}
+	// The publisher is usually served with a public certificate; signatures,
+	// not the transport, authorize its content. It never sees node keys.
+	publisherRoots, err := x509.SystemCertPool()
+	if err != nil || publisherRoots == nil {
+		publisherRoots = x509.NewCertPool()
+	}
+	publisherRoots.AppendCertsFromPEM(pem)
+	releases.Client = &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: publisherRoots}}, Timeout: 10 * time.Minute}
+	opt, err := redis.ParseURL(c.RedisURL)
+	if err != nil {
+		return err
+	}
+	redisClient := redis.NewClient(opt)
+	defer redisClient.Close()
+	boot := make([]byte, 16)
+	if _, err = rand.Read(boot); err != nil {
+		return err
+	}
+	ownNode := control.Node{ID: c.NodeID, PeerURL: c.PeerURL, ShellBootID: hex.EncodeToString(boot), OS: runtime.GOOS, Arch: runtime.GOARCH, RuntimeABI: c.RuntimeABI, PeerProtocol: peer.Protocol, Strategy: control.PrimaryFirst}
+	locks := control.NewRedisLocks(redisClient)
+	store.Locks = locks
+	store.Redis = redisClient
+	peerManager, err := peer.New(peer.Config{Redis: redisClient, Cluster: c.ClusterID, NodeID: c.NodeID, BootID: ownNode.ShellBootID, ConfiguredKey: c.PeerAuthKey, Validate: func(ctx context.Context, id peer.Identity) error {
+		return store.ValidateNode(ctx, id.NodeID, id.BootID)
+	}, Register: func(ctx context.Context) error { return store.RegisterLocked(ctx, ownNode) }, WithRegistration: func(ctx context.Context, fn func(context.Context) error) error {
+		return store.WithRegistration(ctx, c.NodeID, fn)
+	}})
+	if err != nil {
+		return err
+	}
+	store.RevokePeer = peerManager.Revoke
+	// A disabled, conflicting or Redis-less boot stays up in maintenance with its
+	// management socket; Run and the engine heartbeat keep retrying registration,
+	// and every engine pass refuses work until it succeeds.
+	if err = peerManager.Maintain(ctx); err != nil {
+		slog.Error("node registration pending", "error", err)
+	}
+	go peerManager.Run(ctx)
+	defer func() {
+		cleanup, done := context.WithTimeout(context.Background(), 3*time.Second)
+		defer done()
+		_ = peerManager.Unregister(cleanup)
+	}()
+	authorizeTarget := func(ctx context.Context, u *url.URL) error {
+		primary, _, _, err := store.ClusterState(ctx)
+		if err != nil {
+			return peer.ErrUnavailable
+		}
+		nodes, err := store.Nodes(ctx)
+		if err != nil {
+			return peer.ErrUnavailable
+		}
+		for _, n := range nodes {
+			target, err := url.Parse(n.PeerURL)
+			if err == nil && n.ID == primary && n.Enabled && n.ID != c.NodeID && target.Scheme == u.Scheme && target.Host == u.Host {
+				return nil
+			}
+		}
+		return peer.ErrForbidden
+	}
+	peerTransport := peerManager.WrapTransport(proxy.PeerTransport(clientTLS), authorizeTarget)
+	trustedProxies := make([]*net.IPNet, 0, len(c.TrustedProxies))
+	for _, cidr := range c.TrustedProxies {
+		_, network, parseErr := net.ParseCIDR(cidr)
+		if parseErr != nil {
+			return fmt.Errorf("invalid trusted_proxies CIDR %q: %w", cidr, parseErr)
+		}
+		trustedProxies = append(trustedProxies, network)
+	}
+	var peerCache atomic.Value
+	peerCache.Store([]control.Node{})
+	go func() {
+		tick := time.NewTicker(3 * time.Second)
+		defer tick.Stop()
+		for {
+			lookup, cancel := context.WithTimeout(ctx, 2*time.Second)
+			nodes, err := store.Nodes(lookup)
+			cancel()
+			if err == nil {
+				peerCache.Store(nodes)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+			}
+		}
+	}()
+	var rt *control.LocalRuntime
+	router := proxy.New(proxy.Config{PeerTLS: clientTLS, PeerTransport: peerTransport, TrustedProxies: trustedProxies, PeerReady: func(route proxy.Route) bool {
+		for _, n := range peerCache.Load().([]control.Node) {
+			if n.Enabled && n.PeerURL == route.PeerURL && n.CoreBootID == route.CoreBootID && n.RouteRevision == route.PeerRevision && n.Ready && n.Mode == "local" && time.Since(n.LastSeen) < 20*time.Second {
+				return true
+			}
+		}
+		return false
+	}, LocalReady: func() bool {
+		if rt == nil {
+			return false
+		}
+		statusCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		st, _, err := rt.Status(statusCtx)
+		return err == nil && st.Ready
+	}})
+	rt = &control.LocalRuntime{Releases: releases, Supervisor: supervisor, Router: router, NodeID: c.NodeID, PrimaryNode: c.PrimaryNode, CoreSocket: c.CoreSocket, ManagementSocket: c.ManagementSocket, CoreURL: c.CoreURL, Root: c.Root, Args: c.CoreArgs, Env: c.coreEnvironment()}
+	rt.OnStopped = func(ctx context.Context, coreBoot string) error {
+		return store.ConfirmStoppedCore(ctx, c.NodeID, ownNode.ShellBootID, coreBoot)
+	}
+	rt.Peer = peerManager
+	rt.PeerArtifactClient = peer.NewClient(peerTransport, 10*time.Minute)
+	rt.AuthorizePeer = func(ctx context.Context, id peer.Identity, scope, digest string) error {
+		return store.AuthorizePeer(ctx, id.NodeID, id.BootID, c.NodeID, scope, digest)
+	}
+	engine := &control.Engine{Store: store, Locks: locks, Runtime: rt, Node: ownNode, PeerMaintain: peerManager.Maintain, PeerCheck: peerManager.Check}
+	if err = os.MkdirAll(filepath.Dir(c.ManagementSocket), 0700); err != nil {
+		return err
+	}
+	if info, err := os.Lstat(c.ManagementSocket); err == nil {
+		if info.Mode()&os.ModeSocket == 0 {
+			return errors.New("management socket path is occupied by a non-socket")
+		}
+		if err = os.Remove(c.ManagementSocket); err != nil {
+			return err
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	listener, err := net.Listen("unix", c.ManagementSocket)
+	if err != nil {
+		return err
+	}
+	defer listener.Close()
+	if err = os.Chmod(c.ManagementSocket, 0600); err != nil {
+		return err
+	}
+	local := &http.Server{Handler: store.Handler(), ReadHeaderTimeout: 5 * time.Second}
+	public := &http.Server{Addr: c.PublicAddr, Handler: router.Public(), ReadHeaderTimeout: 15 * time.Second}
+	private := &http.Server{Addr: c.PeerAddr, Handler: rt.PrivateHandler(), TLSConfig: proxy.ServerTLS(cert, ca), ReadHeaderTimeout: 15 * time.Second}
+	errs := make(chan error, 3)
+	go func() { errs <- local.Serve(listener) }()
+	go func() { errs <- public.ListenAndServe() }()
+	go func() { errs <- private.ListenAndServeTLS("", "") }()
+	// Management and artifact listeners remain available even if a candidate
+	// fails startup, so operators can inspect/recover without a public admin port.
+	recoveryCtx, recoveryCancel := context.WithTimeout(ctx, 10*time.Minute)
+	_, err = engine.Locks.WithLock(recoveryCtx, "system:upgrade-node:"+c.ClusterID+":"+c.NodeID, 10*time.Minute, func(ctx context.Context) error { return engine.Recover(ctx, *bootstrap) })
+	recoveryCancel()
+	if err != nil {
+		slog.Error("startup reconciliation paused", "error", err)
+	}
+	go func() { _ = engine.Run(ctx) }()
+	select {
+	case <-ctx.Done():
+	case err = <-errs:
+		cancel()
+	}
+	stopCtx, stopCancel := context.WithTimeout(context.Background(), 150*time.Second)
+	defer stopCancel()
+	_ = router.SetRoute(proxy.Route{Mode: "maintenance", Revision: time.Now().UnixNano()})
+	stopErr := supervisor.Terminate(stopCtx)
+	_ = public.Shutdown(stopCtx)
+	_ = private.Shutdown(stopCtx)
+	_ = local.Shutdown(stopCtx)
+	if stopErr != nil {
+		return stopErr
+	}
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
+}
+func readConfig(path string) (config, error) {
+	var c config
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return c, err
+	}
+	if err = json.Unmarshal(b, &c); err != nil {
+		return c, err
+	}
+	// Compose passes an unset per-node variable as an empty string; only a
+	// non-empty value overrides the file, and it must then be valid.
+	if value := os.Getenv("SUB2API_PEER_AUTH_KEY"); value != "" {
+		if err := peer.ValidateKey(value); err != nil {
+			return c, err
+		}
+		c.PeerAuthKey = value
+	}
+	if c.PeerAuthKey != "" {
+		if err := peer.ValidateKey(c.PeerAuthKey); err != nil {
+			return c, err
+		}
+	}
+	if v := os.Getenv("DATABASE_URL"); v != "" {
+		c.DatabaseURL = v
+	}
+	if v := os.Getenv("REDIS_URL"); v != "" {
+		c.RedisURL = v
+	}
+	if c.Root == "" {
+		c.Root = "/var/lib/sub2api"
+	}
+	if c.PublicAddr == "" {
+		c.PublicAddr = ":8080"
+	}
+	if c.PeerAddr == "" {
+		c.PeerAddr = ":7443"
+	}
+	if c.CoreURL == "" {
+		c.CoreURL = "http://127.0.0.1:18080"
+	}
+	if c.ManagementSocket == "" {
+		c.ManagementSocket = filepath.Join(c.Root, "runtime", "shell.sock")
+	}
+	if c.CoreSocket == "" {
+		c.CoreSocket = filepath.Join(c.Root, "runtime", "core.sock")
+	}
+	if c.ClusterID == "" || c.NodeID == "" || c.PrimaryNode == "" || c.RuntimeABI == "" || c.DatabaseURL == "" || c.RedisURL == "" {
+		return c, errors.New("cluster_id, node_id, primary_node, runtime_abi, DATABASE_URL and REDIS_URL are required")
+	}
+	if !filepath.IsAbs(c.Root) || !filepath.IsAbs(c.CoreSocket) || !filepath.IsAbs(c.ManagementSocket) {
+		return c, errors.New("root and socket paths must be absolute")
+	}
+	u, err := url.Parse(c.PeerURL)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.Path != "" || u.User != nil {
+		return c, errors.New("peer_url must be an HTTPS origin")
+	}
+	return c, nil
+}
+
+// The supervised core must use this shell's approved cluster stores. Append
+// these last so neither inherited process variables nor core_env can silently
+// point the child at a different database or lock namespace.
+func (c config) coreEnvironment() []string {
+	env := append([]string(nil), c.CoreEnv...)
+	return append(env, "SUB2API_DATABASE_URL="+c.DatabaseURL, "SUB2API_REDIS_URL="+c.RedisURL)
+}
+func importRelease(ctx context.Context, c config, m *release.Manager, raw string) (control.Release, error) {
+	var out control.Release
+	u, err := url.Parse(raw)
+	if err != nil {
+		return out, err
+	}
+	origin, err := url.Parse(c.ReleaseOrigin)
+	if err != nil || origin.Scheme != "https" || origin.Host == "" {
+		return out, errors.New("release_origin must be configured as HTTPS")
+	}
+	if u.Scheme != origin.Scheme || u.Host != origin.Host || u.User != nil || !strings.HasPrefix(u.Path, strings.TrimRight(origin.Path, "/")+"/") {
+		return out, errors.New("manifest must come from the configured release origin")
+	}
+	signed, err := m.FetchManifest(ctx, raw)
+	if err != nil {
+		return out, err
+	}
+	manifest, digest, err := release.Verify(signed, m.TrustedKeys)
+	if err != nil {
+		return out, err
+	}
+	return control.Release{Digest: digest, Manifest: manifest, Signed: signed, BundleBase: strings.TrimRight(c.ReleaseOrigin, "/")}, nil
+}
+func localCommand(command, socket, id string) error {
+	method, path := "GET", "/system/upgrades"
+	if command != "status" {
+		if id == "" {
+			return errors.New("-id is required")
+		}
+		method = "POST"
+		if command == "enable-node" || command == "disable-node" {
+			path = "/system/nodes/" + url.PathEscape(id) + "/" + strings.TrimSuffix(command, "-node")
+		} else {
+			path += "/" + url.PathEscape(id) + "/" + command
+		}
+	}
+	client := &http.Client{Timeout: 15 * time.Second, Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "unix", socket)
+	}}}
+	req, _ := http.NewRequest(method, "http://shell"+path, nil)
+	req.Header.Set("X-Updater-Actor", "local-operator")
+	res, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	_, err = io.Copy(os.Stdout, io.LimitReader(res.Body, 8<<20))
+	if err != nil {
+		return err
+	}
+	if res.StatusCode >= 400 {
+		return fmt.Errorf("shell returned HTTP %d", res.StatusCode)
+	}
+	return nil
+}

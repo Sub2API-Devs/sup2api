@@ -67,11 +67,9 @@ func TestBuildUpstreamRequestVideo(t *testing.T) {
 // ---------------------------------------------------------------- ExtractUsage (no DB)
 
 // TestExtractUsageReservation checks the reservation ExtractUsage returns for
-// a submit response - without a database, which ExtractUsage tolerates (it
-// logs and still reserves, so revenue is protected even if the ledger write
-// fails).
+// a submit response without a database. The host owns persistence.
 func TestExtractUsageReservation(t *testing.T) {
-	p := New() // no host: the task-row write fails and is logged, the reservation stands
+	p := New() // no host: estimation is pure parsing
 	ctx := context.Background()
 
 	rep, err := p.ExtractUsage(ctx, &pluginv1.ExtractUsageRequest{
@@ -237,10 +235,20 @@ func TestParseReconcileResponse(t *testing.T) {
 	}
 
 	// Running / queued -> PENDING, with the plugin's own cadence.
-	for _, st := range []string{"queued", "running", "processing", "", "something-new"} {
+	for _, st := range []string{"queued", "running", "processing"} {
 		r := parse(200, "", `{"status":"`+st+`"}`)
 		if r.GetState() != pluginv1.ReconcileResult_PENDING || r.GetNextCheckAfterSec() != runningCheckSec {
 			t.Fatalf("status %q -> %v", st, r)
+		}
+	}
+	for _, st := range []string{"", "something-new"} {
+		if r := parse(200, "", `{"status":"`+st+`"}`); r.GetState() != pluginv1.ReconcileResult_POLL_FAILED || r.GetTaskSnapshotJson() != "" {
+			t.Fatalf("unknown status was treated as valid progress: %v", r)
+		}
+	}
+	for _, code := range []int32{404, 410} {
+		if r := parse(code, "", `{}`); r.GetState() != pluginv1.ReconcileResult_NOT_FOUND {
+			t.Fatalf("missing task: %v", r)
 		}
 	}
 
@@ -318,14 +326,14 @@ func TestParseReconcileResponse(t *testing.T) {
 
 	// A transport error or a non-2xx is not a verdict: PENDING, so the
 	// deadline (not a refund) decides an upstream that really ran the task.
-	if r := parse(0, "connection refused", ``); r.GetState() != pluginv1.ReconcileResult_PENDING {
+	if r := parse(0, "connection refused", ``); r.GetState() != pluginv1.ReconcileResult_POLL_FAILED {
 		t.Fatalf("transport error -> %v", r)
 	}
-	if r := parse(503, "", `nope`); r.GetState() != pluginv1.ReconcileResult_PENDING {
+	if r := parse(503, "", `nope`); r.GetState() != pluginv1.ReconcileResult_POLL_FAILED {
 		t.Fatalf("503 -> %v", r)
 	}
 	// A malformed 200 body does not panic and asks again.
-	if r := parse(200, "", `not json at all`); r.GetState() != pluginv1.ReconcileResult_PENDING {
+	if r := parse(200, "", `not json at all`); r.GetState() != pluginv1.ReconcileResult_POLL_FAILED {
 		t.Fatalf("garbage body -> %v", r)
 	}
 }

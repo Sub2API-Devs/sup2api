@@ -27,6 +27,8 @@ type UploadOptions struct {
 // consent without touching the running version, unless they request no new
 // or wider host permissions, in which case consent is carried over.
 func (s *Service) Upload(ctx context.Context, data []byte, actorID int64, opt UploadOptions) (*Review, error) {
+	// Unpacking and hashing a large package depends on nothing shared, so it
+	// runs before the short cluster change lock and its submission deadline.
 	p, err := pkg.Open(data, s.Limits())
 	if err != nil {
 		return nil, err
@@ -38,6 +40,11 @@ func (s *Service) Upload(ctx context.Context, data []byte, actorID int64, opt Up
 	if opt.ExpectVersion != "" && m.Version != opt.ExpectVersion {
 		return nil, core.ErrInvalidArgument.WithMessage(fmt.Sprintf("package version %q does not match %q", m.Version, opt.ExpectVersion))
 	}
+	ctx, release, guardErr := core.BeginPluginMutation(ctx, s.d.Mutations)
+	if guardErr != nil {
+		return nil, guardErr
+	}
+	defer release()
 	otherPlatforms, otherEndpoints, err := s.otherPlatforms(ctx, m.Key)
 	if err != nil {
 		return nil, err
@@ -82,6 +89,11 @@ func (s *Service) Upload(ctx context.Context, data []byte, actorID int64, opt Up
 		}
 		if existing && !sameID(pubID, ver.PublisherID) {
 			return core.ErrConflict.WithMessage(fmt.Sprintf("plugin %q is owned by another publisher", m.Key))
+		}
+		if existing {
+			if err := checkUninstall(ctx, tx, m.Key); err != nil {
+				return err
+			}
 		}
 		if !existing {
 			name, _ := json.Marshal(m.Name)

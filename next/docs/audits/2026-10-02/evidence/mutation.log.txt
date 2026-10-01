@@ -1,0 +1,10 @@
+1
+=== RUN   TestPostgresPauseBetweenAdmissionCheckAndCommitWins
+    control_test.go:829: admission committed after the plan was paused
+--- FAIL: TestPostgresPauseBetweenAdmissionCheckAndCommitWins (0.05s)
+=== RUN   TestPostgresPlanCreatedBeforeBaselineAdmissionCommitWins
+    control_test.go:862: baseline admission committed after a plan became active
+--- FAIL: TestPostgresPlanCreatedBeforeBaselineAdmissionCommitWins (0.01s)
+FAIL
+FAIL	github.com/Sub2API-Devs/sup2api/next/shell/internal/control	0.080s
+FAIL

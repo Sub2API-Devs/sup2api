@@ -129,12 +129,14 @@ func (s *Service) EnsureBuiltin(ctx context.Context, dir string, log *slog.Logge
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
+	var failures []error
 	for _, k := range keys {
 		if err := s.ensureBuiltin(withSystem(ctx), latest[k], installOnly[k], log); err != nil {
 			log.Error("builtin plugin", "plugin", k, "version", latest[k].version.Original(), "err", err)
+			failures = append(failures, fmt.Errorf("%s: %w", k, err))
 		}
 	}
-	return nil
+	return errors.Join(failures...)
 }
 
 func (s *Service) ensureBuiltin(ctx context.Context, b *builtinPkg, installOnly bool, log *slog.Logger) error {

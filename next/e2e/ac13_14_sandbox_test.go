@@ -49,12 +49,15 @@ func TestAC13_EgressLogAndStrictNetwork(t *testing.T) {
 	defer e.EnsurePlugin(admin, "guard", "")
 	e.OnEachNode(admin, func(n int, c *Client) {
 		r := c.API(t, http.MethodPost, "/p/guard/debug/dial", map[string]any{"address": "1.1.1.1:443"})
-		if r.Status == 200 && r.Data().Get("ok").Bool() {
-			t.Fatalf("node-%d: direct net.Dial succeeded under strict mode: %s", n, r)
+		// debugDial returns a raw JSON object, not a console data envelope.
+		// A missing route, crashed plugin, or ordinary network timeout must not
+		// be mistaken for the seccomp policy rejecting socket creation.
+		if r.Status != http.StatusOK || r.JSON().Get("ok").Raw != "false" {
+			t.Fatalf("node-%d: expected the debug route to report a rejected direct dial: %s", n, r)
 		}
-		if !strings.Contains(strings.ToLower(string(r.Body)), "not permitted") &&
-			!strings.Contains(strings.ToLower(string(r.Body)), "denied") {
-			t.Logf("node-%d dial error (expected EPERM/EACCES): %s", n, r.Body)
+		dialError := strings.ToLower(r.JSON().Get("error").String())
+		if !strings.Contains(dialError, "not permitted") && !strings.Contains(dialError, "denied") {
+			t.Fatalf("node-%d: direct dial did not report EPERM/EACCES: %s", n, r)
 		}
 	})
 }

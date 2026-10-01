@@ -1,0 +1,9 @@
+=== shell ===
+ok  	github.com/Sub2API-Devs/sup2api/next/shell/cmd/sub2api-release	1.039s
+ok  	github.com/Sub2API-Devs/sup2api/next/shell/cmd/sub2api-shell	1.034s
+ok  	github.com/Sub2API-Devs/sup2api/next/shell/internal/control	2.176s
+?   	github.com/Sub2API-Devs/sup2api/next/shell/internal/localapi	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/shell/internal/peer	1.453s
+ok  	github.com/Sub2API-Devs/sup2api/next/shell/internal/proxy	1.134s
+ok  	github.com/Sub2API-Devs/sup2api/next/shell/internal/release	1.065s
+ok  	github.com/Sub2API-Devs/sup2api/next/shell/internal/supervisor	1.132s

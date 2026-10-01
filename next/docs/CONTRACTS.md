@@ -250,12 +250,12 @@
 |---|---|---|
 | `node:live` | ZSET boot_id → 心跳毫秒 | D |
 | `node:info:{boot_id}`、`node:plugins:{boot_id}` | HASH，TTL 15s | D |
-| `slot:{kind}:{id}` | ZSET member=`{boot_id}:{request_id}` score=过期毫秒 | D |
+| `slot:{kind}:{id}` | ZSET member=`{boot_id}:{request_id}:{lease_id}`，score 为 Redis 时间下的到期毫秒；失去成员即取消执行 | D |
 | `lock:{name}` | STRING owner token，TTL = 锁有效期（redsync `SET NX PX`，比对删除 / 比对 `PEXPIRE`）；**没有 PG 兜底**，连不上 Redis 的节点不拿锁（§27） | D |
 | `lock:plugin:{plugin_key}:{name}` | 同上，但 owner token **由插件生成**（每次 `LockAcquire` 一个新的）；插件经 `HostService.LockAcquire/Renew/Release` 使用，前缀由宿主按调用者强制加上（§27.3）。核心自己的锁名**不得**以 `plugin:` 开头 | C2 |
 | `cooldown:account:{id}` | STRING reason，TTL | A |
 | `stepup:{token}` | STRING user_id，TTL 5m | A |
-| `apikey:{sha256}` | STRING 缓存（JSON），TTL 60s | A |
+| `apikey:{sha256}` | 历史身份缓存，当前认证不再读取或写入；变更时保留删除旧 key 的兼容清理，每次认证直接读 PG | A |
 | `balance:{user_id}` | STRING 余额缓存 | B |
 | `sticky:{rule}:{group}:{model}:{hash}` | STRING account_id，TTL | G |
 | `sticky:stats:{rule}` | HASH hits/misses/rebinds | G |
@@ -272,7 +272,7 @@
 
 节点插件状态（`node:plugins:{boot_id}` 每个插件一个 JSON，C2 写、C1 与控制台读）：`{state, serving, standby?, rollout_id?, rollout?, error?, instances:[{version, state, error?, restarts}]}`。`state` 汇总本节点：有进行中的发布时等于 `rollout`（`pending|ready|active|failed`），否则按在服务的实例为 `active|pending|failed`，没有在服务的版本为 `stopped`。
 
-槽位回收（D）要求 Redis 为单实例（非 Cluster），且各节点时钟经 NTP 同步。分布式锁（§27）同样按单实例设计（Redlock 法定数为 1）。
+槽位回收（D）要求 Redis 为单实例（非 Cluster）。心跳、存活判断、槽位的共享分数和到期比较使用 Redis `TIME`，不再用不同节点的本机时间相互判定过期；本地取消定时器扣除通信耗时。账号限额也统一由 Redis 时间派生既有分钟/UTC 日期 key。分布式锁（§27）同样按单实例设计（Redlock 法定数为 1）。
 
 ## 8. 系统设置（`settings` 表）
 
@@ -826,6 +826,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 - token 数口径：`input + output + cache_read + cache_creation`（与使用记录一致），在上游响应结束、解析出用量后累加；因此限流是"窗口内已用量达到上限就不再调度"，不预扣，单个大请求可能让窗口略超上限。
 - 窗口是固定窗口：分钟窗口按 `floor(unix/60)`，天窗口按 UTC 日期。
 - rpm/tpm/tpd 是固定窗口，spm 是滚动窗口（ZSET，成员为会话身份、分数为时间戳，每次尝试写入并修剪 60 秒外的成员）。
+- 候选筛选只是预检查；拿到账号并发槽后必须调用 Redis Lua `TryHit`，在一次原子操作中检查并占用 RPM/SPM。共享时间取 Redis `TIME`，Redis 出错则拒绝这次准入。TPM/TPD 检查已记录用量，仍不做 token 预留。
 - 达到任一上限的账号在本窗口内不再参与调度（和冷却一样从候选中剔除，不改状态、不发事件）。候选账号都因限流或并发满而不可用时，网关返回 429 `rate_limited`（message：`all accounts are busy or rate limited, please retry later`）；候选为空仍是 503 `no_available_account`。
 - 粘性会话绑定的账号达到限流上限时，视同"没有空闲并发槽位"：`on_failure=failover` 的规则改选别的账号并重新绑定，`stick` 的规则返回 429。
 
@@ -842,7 +843,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 - GET `/accounts` 新增筛选 `?model=<完整模型 ID>`：只列出能服务该模型的账号（`models` 为空或包含它）。列表排序改为 `priority, weight DESC, id`。
 - POST `/accounts/:id/test {model?}`：模型先经该账号的 `model_mapping` 映射再交给插件。
 - Redis key（§7 补充）：`rl:account:{id}:rpm:{minute}`、`rl:account:{id}:tpm:{minute}`（TTL 2 分钟）、`rl:account:{id}:tpd:{yyyymmdd}`（TTL 48 小时），STRING 计数；`rl:account:{id}:spm`（ZSET 会话身份 → 毫秒时间戳，TTL 2 分钟），负责人 A（`account` 模块实现 `core.AccountLimiter`）。
-- `core.AccountRef` 新增 `Models []string`、`ModelMapping map[string]string`、`Weight`、`RPMLimit`、`TPMLimit`、`TPDLimit`、`SPMLimit`；新增端口 `core.AccountLimiter{ Exhausted(ctx, refs, session) (map[int64]bool, error); Hit(ctx, id, session); AddTokens(ctx, id, n); Usage(ctx, ids) }`，网关 `Deps.Limiter`（nil = 不限流）。
+- `core.AccountRef` 新增 `Models []string`、`ModelMapping map[string]string`、`Weight`、`RPMLimit`、`TPMLimit`、`TPDLimit`、`SPMLimit`；端口 `core.AccountLimiter` 包含 `Exhausted(ctx, refs, session)` 预检查、`TryHit(ctx, ref, session) (bool, error)` 原子准入、`AddTokens(ctx, id, n)` 与 `Usage(ctx, ids)`。保留 `Hit` 兼容计数，网关和托管任务轮询使用 `TryHit`。网关 `Deps.Limiter` 为 nil 时不限流。
 
 ### 18.4 控制台
 
@@ -1598,13 +1599,13 @@ message RankedAccount {
 - `usage.source` 从 `UsageRules` 挪到 `Endpoint`（`usageSource` / `usageStreamEvents` / `usageMaxBytes`），与 B 期的 `request.modelSource` 对称，不再跟着 §13 覆盖链走。那条「禁止账号类型覆盖里写 source」的禁令**变成不可表达的问题**（`UsageRules` 里根本没这个字段了），删除。
 - `usage_logs` 新增 `anomalies jsonb`（迁移 0013），`response_mismatch`（§26.5）与 `usage_extract`（§25.3）两个纯可观测标记从 `billing_detail` 搬过来。搬完更干净：新列**只在 insert 写一次**，settle / retry / markFailed 三段自动全通，不再需要在各处搬运。
 
-**核对超时保留预扣，且绝不写 `failed`**（§3.4 定的陷阱，已钉死）：放弃时 `billing_status='billed'`、钱不动、`anomalies` 记 `reconcile=abandoned`，`pending_settlements.state='abandoned'`。测试 `TestAbandonKeepsTheChargeAndStaysOutOfTheRetryLoop` **真的跑一遍 `RetryPending`** 断言这一行不会被结算重试循环再捞到（返回 0 行、余额不变、`usage_logs WHERE billing_status IN ('pending','failed')` 计数为 0——直接断言那条部分索引的谓词）。
+**旧结算队列核对超时保留预扣，且绝不写 `failed`**（托管任务的当前超时退款策略见 §32）（§3.4 定的陷阱，已钉死）：放弃时 `billing_status='billed'`、钱不动、`anomalies` 记 `reconcile=abandoned`，`pending_settlements.state='abandoned'`。测试 `TestAbandonKeepsTheChargeAndStaysOutOfTheRetryLoop` **真的跑一遍 `RetryPending`** 断言这一行不会被结算重试循环再捞到（返回 0 行、余额不变、`usage_logs WHERE billing_status IN ('pending','failed')` 计数为 0——直接断言那条部分索引的谓词）。
 
 **多节点只跑一份**：`cluster` 锁（整个 sweep 持锁）+ claim 即租约（`UPDATE ... FOR UPDATE SKIP LOCKED RETURNING`，调插件前把 `next_check_at` 推后 3 分钟；节点中途死只损失一个租约）。**一个慢插件拖不死循环**：sweep 硬预算 2 分钟、单条目 30s、HTTP 20s；4 worker 并行；`interleaveByPlugin()` 按插件轮转（慢插件只拖累自己的条目）；所有落账写用 `WithoutCancel` + 15s 预算（插件把预算用光不能把记账一起拖掉）。
 
 **人工出口**：`POST /usage/:id/reconcile`、`POST /usage/:id/refund`，权限 `usage:settle`（新增 sensitive 权限——「能看使用记录」不该「能动钱」）。退款走 kind=`refund`，幂等键 `refund:{request_id}`。
 
-设置行 `reconcile`：`max_reconcile_age_sec`(86400) / `reconcile_backoff`("10s,30s,1m,5m,15m") / `max_reconcile_attempts`(100)，`GET`/`PUT /settings/reconcile`。
+设置行 `reconcile`：`max_reconcile_age_sec`(604800) / `reconcile_backoff`("10s,30s,1m,5m,15m") / `max_reconcile_attempts`(100，旧结算队列) / `max_poll_failures`(20)，`GET`/`PUT /settings/reconcile`。
 
 #### D 期实现里推翻/修正的指令
 
@@ -1941,3 +1942,204 @@ sub2api 按多节点部署设计，**插件的每个实例都跑在每个节点�
 | `OnEvents` **至少一次**：确认之前的批次会重投，持锁节点切换时也可能重投 | 按事件 `id` 去重（例如在自己的 schema 里对事件 id 建唯一索引） | `server/internal/event/delivery/delivery.go`（包注释），§11.7 |
 | `MigrateData` 在发布协调者被接管后**可能重复执行** | 必须幂等：重跑一遍得到同样的结果 | `server/internal/plugin/rollout/coordinator.go`（`takeOver`、`migrateData`），§11.7 |
 | 插件自己的并发、队列、内存限流等设置**按节点计**：集群总量 = 设置值 × 节点数 | 在设置说明里写明「每个节点」；需要全集群上限的，用数据库或 `lock` 协调，不要用进程内计数 | 例：`plugins/moderation/forms/settings.ui.json` 的 `max_concurrency`、`queue_size`（说明均为「每个节点」） |
+
+## 28. 核心托管异步任务（2026-10-01）
+
+本节定义显式声明 `endpoint.task` 的端点。插件陈述上游事实，核心决定身份、执行权、调度与账务，不在核心增加视频厂商字段。最新插件驱动执行与主动上报接口见 §31；§25 的异步 ExtractUsage 时序仅保留在兼容路径。
+
+### 28.1 声明与插件接口
+
+插件必须同时声明 `platform.adapter.v1` 和 `platform.tasks.v1`，实现 Platform、TaskSubmissionParser。最新实现另加 Executor / TaskMonitor，见 §31；Poller 和旧 Reconciler 的两阶段接口保留兼容。宿主 API 当前为 4，gRPC/进程协议仍为 1；原托管任务要求 API 2，Poll 要求 API 3，Execute / Monitor 要求 API 4。SDK 在连接宿主和执行初始化之前拒绝不满足最低版本的核心。只有上传时的 capability 校验不够：其他节点可能直接从共享 PG 加载已批准包，必须保留这道进程握手检查。
+
+同一插件内每个 `task.kind` 必须有且仅有一个 submit 和一个 query：
+
+```json
+{"task":{"action":"submit","kind":"video","idPaths":["id","task_id","data.id","result.id"]}}
+{"task":{"action":"query","kind":"video","idParam":"task_id","idPaths":["id","task_id","data.id","result.id"]}}
+```
+
+- submit 是 POST，query 是 GET 且 `billing: "free"`；都只支持非流式 JSON。query 不声明 `modelPath`、`modelParam`、`modelSource`，模型从核心记录取得。
+- `idPaths` 为 1–8 个简单 JSON 对象路径，不支持通配、数组搜索或表达式。所有存在的声明 ID 都必须匹配上游引用，且至少命中一个。响应和快照不超过 256 KiB。
+- submit 实现可选 `pluginsdk.TaskSubmissionParser.ParseTaskSubmission(ExtractUsageRequest) -> TaskSubmission`。只拿白名单请求字段、完整有界响应和不含凭证的账号；返回 `upstream_ref_id`、完整初始查询快照 `snapshot_json`、可选 `usage`、首查间隔和上游保留期限。
+- 初始快照必须是上游查询协议的完整 JSON 对象，例如 `{"id":"上游ID","status":"queued"}`，不能把未知字段的提交响应当成任意查询协议。
+- 免费任务无需 Reservation。按用量计费的任务仍可返回估计和 Reservation，`reserve.ref_id` 必须等于 `upstream_ref_id`，宿主持久化时换成自己的公开 ID。已有 `billing:free + usageSource:plugin` 禁止规则不变。
+- 轮询使用 `Poll(PollRequest) -> ReconcileResult`。插件通过 `pluginsdk.ExecuteHTTP(ctx, request)` 发起本次查询，再解析响应并返回结果；核心提供原账号代理、限额、超时和网络检查。`ReconcileEntry` 包含 `task_kind`、`model`、`protocol`；其 `ref_id` 始终是上游 ID。插件返回完整的 `task_snapshot_json`，宿主再替换公开 ID；暂未观测到结果时留空，不能抹掉旧快照。未声明新能力的旧插件继续使用 `BuildReconcileRequest` / `ParseReconcileResponse`。
+- `ExecutionHTTPResponse.truncated`（旧接口为 `ParseReconcileResponseRequest.truncated`）表示超过宿主响应上限或读取不完整。截断数据不能用于确认终态或结算。托管任务的终态必须带有效、ID 匹配的快照，否则重试。新 Poll 的宿主还独立记录本次 HTTP 结果，插件忽略截断或传输错误也不能据此提交终态。
+
+### 28.2 核心职责
+
+| 环节 | 核心约束 |
+|---|---|
+| 提交 | 选定账号后记录提交意图；上游成功响应在解析/登记成功之前不返回给客户端。任务身份、初始快照、使用记录及可选预扣在同一 PG 事务中持久化，随后替换响应 ID |
+| 身份 | 核心生成 `s2task_` 公开 ID；用户、API Key、分组、插件、任务种类、模型、原账号及上游引用来自已认证请求与实际执行结果，插件不能指定归属 |
+| 唯一性 | 上游 ID 以插件、任务种类和账号隔离；重号不得覆盖已有任务的用户或账号 |
+| 查询 | 认证后校验同一用户、同一分组及当前模型权限；允许更换同组有效 API Key。读取共享快照不依赖原账号仍可调度；不进入账号排名、粘性、普通转发或失败换号路径 |
+| 轮询 | 核心协调循环按 PG claim token 和有限租约领取任务；节点故障后可接管；旧持有者的迟到结果被条件写入拒绝 |
+| 账号 | 始终用提交账号、对应代理及宿主 SSRF/超时策略；不可用时等待/明确失败，不改用别的账号。托管提交当前要求本插件账号及原协议，避免提交后才发现插件无法取得轮询凭证 |
+| 结果与账务 | 快照终态和账务在同一事务校验执行权、锁行并提交；账本保留幂等键。客户端查询不会重复请求上游，也不会重复扣款 |
+| 截止 | 核心停止观测不是上游失败，不伪造 `failed`、不自动退款。未确认终态的任务到期查询返回 410；已确认终态的快照继续可读，包括人工重试后再次终止观测的情况。管理员仍可按既有机制核查账务 |
+
+首次查询旧裸任务 ID 时，只能从核心 `pending_settlements` 与 `usage_logs` 中恢复可信归属；匹配不唯一或属于别的用户即拒绝。旧插件任务表曾允许裸 ID 覆盖，不作为授权依据。旧任务沿用原截止时间，不因导入重新开启观测窗口；尚在期限内且没有完整快照时由核心轮询补齐，期间返回 `task_snapshot_pending`，已过期则返回 410，不为兼容而恢复直通上游。
+
+### 28.3 故障边界与插件作者须知
+
+任务提交、厂商 HTTP 和本地 PG 不是同一事务。上游成功而 PG 不可用时不能返回“已可靠登记”的成功；持久提交意图/受限响应 receipt 用于排查，不自动换账号重提。没有上游幂等支持，就不能承诺跨系统恰好一次。正常成功登记后清除 receipt 的原始响应，异常记录有保留期限。
+
+异步任务插件无需申请额外 `lock` / `net` / `app.jobs.v1` 来轮询，也无需自行保存另一份任务归属。普通定时工作继续使用 `jobs[]`；它保证同一触发点去重，不自动保证不同触发点与手动执行互不重叠。插件业务集合替换、封禁/解封等多步写操作仍需在宿主分配的 PG schema 内使用事务与同一资源锁。
+
+低层 `Host.Locks()` 提供可续期的执行权，不能代替数据库条件写入或跨系统事务。用量核对、托管任务和生命周期由核心提供高层机制，插件优先使用对应机制。
+
+### 28.4 核心升级与回退边界
+
+本轮支持相同核心版本的多节点，**不能在产生托管任务之后混跑旧核心**。旧核心的对账 SQL 不认识 `task_public_id`，仍可能领取托管任务对应的预扣记录，并按错误的引用或估值收尾。插件握手能阻止旧节点启动新插件，不能修改已经发布的旧后台程序；只把旧节点从负载均衡摘掉也不会停止它的后台对账。
+
+发布时先停止所有旧核心的请求和后台工作、完成所有节点的核心升级及迁移，再激活支持任务的新插件。也可先发布仍携带旧 volcengine 的新版核心镜像，完成整群核心升级后再发布新插件。必须同时更新故障恢复、扩容和回退所使用的镜像，避免旧进程重新加入共享 PG/Redis。
+
+已启用的内置平台插件会自动升级到镜像携带版本。当前 anthropic/openai/gemini 0.2.0 及 volcengine 0.10.0 都要求 API 4；禁用 volcengine 并不能消除这个升级约束。首个新节点可能因旧节点无法通过插件握手而尚未 ready，不能以“首个节点 ready 后才升级下一个”为唯一推进条件。
+
+产生 `s2task_` ID 后，插件回退版本仍必须声明任务契约并能读取现有任务。直接回退至 volcengine 0.7.0 会失去公开 ID 查询和后台快照解析能力。保留新增的任务表和回执表；增量 SQL 迁移本身不保证旧二进制的业务兼容性。旧免费任务若没有可信核心账务历史，也不从插件旧表恢复归属。
+
+## 29. 节点关停、卸载与跨构建资源（2026-10-01）
+
+### 29.1 关停和就绪
+
+收到 SIGTERM 后，节点先进入 draining：`/healthz` 返回不可用，新请求被拒绝，再等待已进入的 HTTP 处理器退出。HTTP 正常等待预算 30 秒，随后取消请求并关闭连接，实际处理器结束后再关闭网关异步用量提取、用量队列、插件与共享依赖。用量队列溢出的独立持久化也加入停止等待。单栈 Compose 的 `stop_grace_period` 为 180 秒；强制杀进程、断电或持续存储故障仍可能打断尚未持久化的工作。
+
+内置插件安装在锁竞争或单个包失败后持续重试。就绪检查要求镜像所需版本已获批准，数据库 active 版本和本地已发布的服务实例均已获批准且不低于镜像要求；没有本地实例、版本过低或授权无效时不就绪。正常升级期间允许旧实例继续服务，不要求本地版本在每个瞬间都与数据库 active 版本相等，具体目标版本的收敛由 rollout 状态表示。管理员主动禁用的插件、尚未启用的 install-only 插件不阻断整节点就绪。进程的 Configure 只有成功应答后才记为已应用，失败会重试；权限撤销的宿主侧检查立即采用新授权，不能因插件 Configure 失败继续使用旧权限。
+
+### 29.2 卸载屏障与异常节点恢复
+
+迁移 `0016_plugin_uninstalls.sql` 保存卸载 epoch、目标 boot ID 与停止确认。插件进程启动前在 PG 登记，卸载先禁止新启动、启用、升级、上传和授权变更，再等待各目标实际停止。心跳消失不能证明插件进程已经退出；确认全部停止后，才在持有插件行锁的事务中删除 schema 和插件状态。
+
+核心提供以下管理接口，前缀均为 `/api/v1`：
+
+| 接口 | 权限与行为 |
+|---|---|
+| `GET /plugins/:key/uninstall` | 插件读取权限；返回 `epoch`、`target_boot_ids`、`stopped_boot_ids`、`pending_boot_ids`、`requested_at` |
+| `POST /plugins/:key/uninstall/confirm-stopped` | 插件卸载权限及敏感操作 step-up；请求含 `epoch`、`boot_ids`、非空 `reason`，表示管理员已确认这些进程实际终止 |
+
+停止确认拒绝旧 epoch、非本次目标、仍有存活心跳的 boot，以及无法读取当前节点列表的情况；确认和 `plugin.uninstall.confirm_stopped` 审计在同一事务。接口只更新停止确认，不直接执行删除。管理员确认异常进程确已终止后提交说明，再重试原卸载请求；不需要手写 SQL 或仅凭超时强制丢弃屏障。
+
+### 29.3 跨节点静态资源
+
+插件资源通过 PG 中已批准、未撤销的不可变版本包提供回退读取，节点无需仍在运行该版本进程。包哈希、签名、身份及既有公开路径范围继续校验；插件卸载屏障存在时不再提供其资源。
+
+迁移 `0018_web_assets.sql` 为控制台保存构建引用和公开的 `dist/assets/**` 哈希资源。常态读取本节点嵌入文件，跨构建本地缺失才查 PG；首页、CSP nonce 和非哈希文件不共享。同一保留期内 URL 不允许换内容，发布事务遇到冲突整体回滚。未成功发布的节点不输出首页引用，也不能用本地冲突字节抢先响应。
+
+构建默认每 30 秒续期，租约 2 分钟；就绪期限扣除发布/续期耗时，暂停到期后必须先重新收敛。GC 同时保护有效租约、最近 7 天仍被看到的构建及最近 3 个发布构建，只删除无引用资源。默认单文件 16 MiB、单构建 128 MiB、总资源 1 GiB、最多 64 个构建和 65,536 个资源；容量不足时拒绝新构建就绪，不驱逐仍需保留的版本。过了保留期且完成 GC 的 URL 不保留永久墓碑，也不保证多年打开的旧页面继续加载其懒加载资源。
+
+## 30. 统一后台执行与单次 Poll（2026-10-01）
+
+### 30.1 调度与业务职责
+
+核心的 `internal/background` 提供同一套执行准入、并发上限、超时、取消、租约续期与关闭等待。应用为定时任务和用量/任务轮询注入同一个 Executor：每节点总并发 8，jobs 与 reconcile 各最多 4；jobs 另有 128 个等待位置。组关闭后拒绝新工作，取消并等待已接收工作。排队时不先占分布式锁；已从 PG 领取的轮询批次仍受短于任务租约的 sweep 截止时间限制。
+
+两类工作的业务状态仍由各自模块管理：jobs 保留 cron 时间与 `plugin_job_runs` 的触发点去重，错过触发点不补跑；异步任务保留 `async_tasks` 的到期时间、claim token、截止和同事务账务。通用执行器不把非幂等业务统一改成自动重试。手动作业执行位忙或关闭中返回 503，有执行位但同一手动作业已经运行仍返回 409。
+
+轮询保留每轮由一个核心节点取得集群锁处理批次、节点内部有限并发的策略。Executor 上限按节点计，Redis 的账号并发槽和限额继续按全集群计。在线请求的选账号、粘性和 failover 仍在网关执行；SDK 历史名称 `Scheduler`/`AccountRanker` 是同步策略扩展，不负责后台任务或节点选择。插件的本地缓存刷新、批写和单次调用内的业务步骤不强行迁入后台队列。
+
+### 30.2 单次 Poll 与受控 HTTP
+
+新插件声明 `platform.poll.v1`，实现 `Poll(ctx, *PollRequest) (*ReconcileResult, error)`。核心固定原账号后调用一次 Poll；插件构造并发起一次查询、解释厂商状态和用量，返回下次查询建议。实际执行时间、跨次重试、结果写入和结算仍由核心决定。
+
+`PollRequest` 含 `entry`、`account` 和一次调用的 `execution_token`。SDK 把 token 和当前宿主 client 放入这次 Poll 的 context，插件通过 `pluginsdk.ExecuteHTTP(ctx, *ExecutionHTTPRequest)` 发起查询，不手动保存 token，也不在 Poll 内启动持续轮询。请求提供 method、URL、headers、body；核心 `HostService.ExecuteHTTP` 执行有界的 HTTP 交换并返回 status、headers、body、transport_error、truncated。
+
+执行约束：
+
+- token 为随机 256 bit，仅存在于提供本次调用的具体插件进程及其 broker；不能用于同插件另一个进程或重启后的实例。
+- 每次 Poll 最多一次 ExecuteHTTP。token 在 Poll 返回时撤销；取消在途 HTTP 并等待其结束后，才释放账号执行资源。SDK 也取消已返回调用的 context。
+- 账号、代理及限额由核心捕获，插件请求没有可更换的账号/代理字段。每次实际发送前执行原账号的原子限额检查。
+- 使用核心 SSRF 检查，禁用自动重定向，不做应用层自动重试（Go transport 仍可能按标准规则重试可重放请求）。URL 最多 8 KiB，请求/响应 body 最多 256 KiB，headers 最多 64 个、累计 32 KiB；禁止 Host、代理认证及 hop-by-hop 等传输控制头。
+- 宿主独立记录 HTTP 是否已完成、是否传输失败或截断。无有效网络观测不能提交终态，即便插件错误地声称成功。任务快照 ID 校验、执行权 fencing 与账务事务保持 §28 的约束。
+
+这项能力不要求插件新增通用 `net` 或账号枚举权限。它约束的是本次受调度执行的专用 HTTP 通道；插件既有的通用 Egress 权限仍独立存在，不能据此声称任意恶意插件的所有出网都会自动使用任务账号限额。内置 volcengine 的 Poll 只使用 ExecuteHTTP，素材管理继续使用其已授权的通用出口。
+
+旧插件的 `BuildReconcileRequest` / `ParseReconcileResponse` 保留兼容；声明 Poll 能力的插件走单次 Poll，不在新接口失败后重复调用旧接口。Poll 要求 Host API 3，旧普通插件无需因此重新编译。最新普通请求执行与主动上报契约在 §31。
+
+## 31. 插件驱动执行与 SDK 主动上报（2026-10-01）
+
+### 31.1 请求执行
+
+核心继续负责认证、价格、账号选择、限额与并发；选定账号后调用声明 `platform.execute.v1` 的插件 `Execute`。SDK 的 `ExecuteDefault` 在插件进程里依次构造请求、调用 `ForwardUpstream`、解释用量/任务、调用 `RecordUsage` 或 `ReserveAndWatch`。插件可实现自己的 Execute，但不能跳过宿主的执行和记录确认。
+
+`ForwardUpstream` 是本次请求的代理通道：完整请求体留在核心，插件只给 URL、headers 和已有 BodyPatch；核心仍做协议转换、账号代理、SSRF 与超时控制。返回给插件的是有界用量观察，不搬运整条 SSE。声明式用量继续由核心按当前生效的规则在线累计；`RecordUsage(ctx, nil)` 确认这些事实，不会用一个截断响应重新计算总用量。需要插件解析的用量在插件本地调用 ExtractUsage，失败时显式采用核心规则并记录 fallback。
+
+上游错误通过 ForwardUpstream 返回给插件本地 ClassifyError，Execute 将分类返回核心；换号、冷却和能否重试仍由核心裁决。避免在一次占用执行并发位的 RPC 内再次等待同一插件的普通 RPC。用量解析属于另一插件的跨平台特殊路由保留旧执行路径，不能由账号插件擅自替换其解析器。
+
+新路径按用户要求在记录确认后返回。非流式成功响应先暂存，记录成功后发布；内存暂存上限 1 MiB，超过后使用仅本进程用户可读的临时文件，总上限 64 MiB，用完删除。SSE 继续及时逐块转发，结束时等待有界记录收尾。这明确改变了 §25 旧路径的“插件提取不延迟 EOF”约束。客户端断连取消上游读取，已取得的用量仍进入独立有界的记录收尾。不能把已发出的流式字节撤回，也不承诺 PG 持续不可用时仍完成实时记账；已开始的流若最终未获记录确认，中断连接，不伪造干净 EOF。
+
+### 31.2 异步提交与监控
+
+`ReserveAndWatch(ctx, TaskSubmission)` 把已接受任务的使用记录、可选估计预扣和监控登记作为一个事务。核心保留原账号、认证归属与公开 ID，提交响应在确认后发布。这里的预扣发生在上游接受提交之后、客户端取得成功响应之前；不是发送上游前的严格余额预留，不提供并发请求绝不透支的保证。
+
+声明 `platform.monitor.v1` 的插件实现 `Monitor(ctx, PollRequest) error`。核心沿用 §28/§30 的共享调度、任务租约与原账号约束，选定一个节点调用一次 Monitor。插件通过 ExecuteHTTP 观察一次，再调用 `ReportTaskProgress(ctx, ReconcileResult)`：pending 保存快照与下一次建议；终态在同一事务保存快照、结算/退款并结束监控。插件不创建轮询定时器，不决定执行节点，不直接写核心账务表。
+
+`ReportTaskProgress` 确认表示事务已经提交；Monitor 返回本身不触发第二次结算。超时、不可用、额度不足及未上报结果由核心安排后续处理。每次终态上报仍需完整网络证据、匹配的任务快照和有效执行权，不能用失效租约覆盖其他节点的结果。
+
+### 31.3 权限、幂等与兼容
+
+所有回调使用核心为具体插件进程签发的随机执行 token，SDK 自动从本次 context 注入。token 不授予任意账号或任意用户的记账权；上报字段只有上游事实，价格、金额、归属和账本幂等键都由核心决定。调用返回后撤销权限，并等待已准入的回调结束。相同操作和相同事实的重试读取已提交回执，冲突事实被拒绝。
+
+迁移 `0019_plugin_executions.sql` 保存执行意图与事务回执。网络前记录不含账号凭证的执行基线；网络后保存可信用量事实与受限诊断摘要，成功提交后清除重复内容。核心只自动恢复已持久化观察的同步用量，不重放网络请求；异步提交不因任务 receipt 被清理而改按同步请求收费。若硬崩发生在上游已经处理、观察尚未落库之间，只能保留未确定意图，不能承诺跨 HTTP/PG 精确补账。回执在 7 天后具备回收资格，按有时间预算的批次清理；该期限不是清理积压时的硬存储上限。
+
+同一次执行已收到有效 Record/Watch 事实但事务确认失败时，核心在有界收尾期间优先重试相同事实和 digest，包括任务登记；不重新请求上游，也不把已有插件事实换成规则用量。只有尚未收到可提交的插件事实时才使用同步用量的规则 fallback。恢复扫描中的单条永久错误会退后重试，不能阻塞其他记录。
+
+宿主 API 4 是 Execute / Monitor 的最低版本；SDK 初始化前做门禁，普通旧插件仍走原接口。内置 anthropic/openai/gemini/relay 0.2.0 和 volcengine 0.10.0 使用 Execute；volcengine 使用 Monitor。guard/moderation 的 hook、定时任务及事件处理不伪装成平台 Execute。Poll 与两阶段 Build/Parse 仅作为未声明 Monitor 的兼容通路，新接口失败不会偷偷再次执行旧通路。
+
+执行上下文只约束这些专用通道。插件另有权限使用通用 Egress 时，仍服从那个通道自身的策略，不能据此声称所有插件出网都继承本次账号限额。升级与回退继续遵守 §28.4 的全节点要求。
+
+
+## 32. 异步查询失败与任务不存在（2026-10-01）
+
+插件每次只查询一次，使用 `ReconcileResult` 报告结果，核心持久化计数并调度下一次查询：
+
+- `PENDING`：成功读到仍在运行的任务；连续失败计数清零。未知状态、空响应、解析失败不能伪装为 PENDING。
+- `NOT_FOUND`：上游明确表示任务不存在或已删除；立即停止观察，退回尚处于 reserved 状态的预扣费用。无需构造任务快照。
+- `POLL_FAILED`：本次查询失败（网络、鉴权、限流、服务端错误、无法解析等），`reason` 说明原因；保持旧快照，增加连续失败计数，核心按退避继续查询。
+- `SETTLED`、`SETTLED_ESTIMATE`、`FAILED` 的现有成功/估算/上游失败结算语义不变。
+
+SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` 以及可选的 `ClassifyPollResponse(status, transportError, truncated)`。默认分类把完整 404/410 视作 NOT_FOUND，其他非 2xx 以及不完整响应视作 POLL_FAILED；HTTP 200 返回业务错误的服务由插件根据供应商契约解释。任务不存在是领域结果，不使用 gRPC NotFound 代替。网络不完整时宿主允许报告 POLL_FAILED，但仍禁止据此报告成功或 NOT_FOUND。
+
+`settings.reconcile.max_poll_failures` 默认 20，允许 0–1000，0 关闭连续失败次数限制。第 20 次失败与停止任务、退款在原有账务事务中一同提交；配置为其他正数时按配置执行。`poll_failures` 存于 PG，换节点与重启不会清零；旧记录导入托管任务时继承计数。账号忙、冷却、限额暂缓及核心调用取消不计失败。Monitor 回报重试使用原有 receipt 去重，不能重复累计或退款。
+
+托管任务不再用 `max_reconcile_attempts` 限制正常进度查询，总尝试次数仅作记录；旧结算队列保留原总次数上限。托管任务仍使用插件期限与 `max_reconcile_age_sec` 的较小值（默认最大 7 天），到期后以 `task_timeout` 结束并退回尚未结算的预扣费用。已经确认成功、后由管理员重新对账的任务不会因查询失败推翻已确认结果，仍保留原估算结算语义。
+
+核心政策结束与上游明确生成失败分开记录：`task_not_found`、`task_poll_failed`、`task_timeout` 保存到任务中。查询接口分别返回 HTTP 404、502、504，不再把旧的“处理中”快照当作当前结果；错误响应不透出上游私有信息。达到重试上限不意味着上游一定未完成，而是部署采用的停止观察并退款策略。
+
+内置 volcengine 已采用该接口：正常运行进度为 PENDING；完整 404/410 为 NOT_FOUND；网络错误、其他非 2xx、截断、无效 JSON、缺失或未知状态均为 POLL_FAILED。调度、连续失败上限和退款均由核心完成。
+
+## 33. 外壳托管与兼容滚动升级（2026-10-01）
+
+> 本节记录10月1日的已验证方案。10月2日起由 §34 主节点优先流程与 Redis 节点密钥鉴权取代：本节的滚动顺序与 mTLS 节点身份不再是当前行为，其余发布单元、核心状态和管理接口约定仍适用。
+
+独立 Go 模块 `runtime-contract` 定义协议，`shell` 实现 Linux 外壳。外壳保持公共 HTTP 入口、私网 mTLS 入口和本机管理 Unix socket；核心仅监听回环 HTTP 和令牌认证的控制 Unix socket。外壳自身不经该协议在线替换。部署与发布步骤见 [`deploy/shell`](../deploy/shell/README.md)。
+
+**发布单元。** Ed25519 签名覆盖清单的精确 Payload 字节，清单摘要与压缩包摘要分离；清单包含源提交、构建标识、实际核心版本、目标 OS/架构/运行 ABI、逐文件摘要/大小/权限及协议范围。核心 `version`、`schema-contract` 命令不依赖配置或数据库。后者是嵌入迁移库存的确定性摘要；候选报告的版本及摘要必须等于签名声明。下载来源固定且不跟随重定向，解包拒绝逃逸、链接、特殊文件、未声明内容及超限体积。发布私钥不进入运行节点。
+
+**核心状态。** `candidate → preparing → prepared → serving → draining → drained`。准备失败报告 `failed` 与原因。初始不接收业务或领取后台任务。控制端点为 `/v1/hello`、`/v1/status`、`/v1/prepare`、`/v1/admission`、`/v1/drain`、`/v1/shutdown`。状态绑定 NodeID/BootID/ReleaseDigest；准入还绑定 PG 中的 revision 和 HTTP/后台领取/插件协调三项权限。准备只读检查业务迁移及插件状态；仅显式首次 bootstrap 允许业务迁移和首装。数据库准入被收回或不可验证时关闭新请求与领取并排空。
+
+排空是不可逆状态；再次服务须重启出新的 BootID。必须等 HTTP、计费用量写入、后台任务和插件关闭屏障完成才能报告 `DrainComplete=true`。`ActiveBackground` 是统一执行器的活动槽数，并非所有内部协程计数；`PendingUsageWrites=-1` 表示仍在等待屏障，不能解释为零。外壳不能只凭计数或锁超时强杀核心。
+
+**流量。** `local-serving` 转给本机获准核心，`forward-only` 单跳转给已登记、获准服务的对端；维护/候选状态返回 503。对端验证证书 SAN 身份、核心 BootID 和路由 revision，禁止继续转发。公共入口去掉客户端注入的内部头；只信任配置的直接代理网段所传递的客户端地址和单值协议头。请求不自动重放；SSE/WebSocket 按流传输。`/livez` 表示外壳在线，`/readyz` 和 `/healthz` 表示当前路由可服务。
+
+**协调与恢复。** PG 的独立 `updater` schema 保存集群基线、节点心跳、版本、计划、步骤、准入与事件。指定主节点在 Redis 协调锁内发布下一步，各节点在自己的 Redis 锁内执行；锁续期丢失时取消工作且不登记成功。没有 PostgreSQL 兜底锁命名空间。操作幂等并绑定节点/版本；重启重新取锁，从持久状态恢复。旧核心或进程组仍存活、启动结果无法确认时拒绝另起核心，留待人工核实。
+
+顺序为所有节点预下载、主节点转发到从节点、排空停止、启动候选、检查并准入、回本地服务，再逐个更新从节点。最终全部成员本地服务目标版本且心跳新鲜才提交新基线。暂停阻止下一步骤领取，当前步骤安全收尾；切流前可取消。暂停计划可继续，或通过 `rollback` 回到最近一次已完成基线：先取得协调锁与全部成员操作锁，确认兼容性和健康承接节点，再原子标记原计划 `superseded` 并创建新恢复计划，沿用逐节点切流流程。新计划继承旧步骤形成的路由状态，旧 worker 迟到结果不能改写终态计划或步骤历史。已完成版本回到更早版本则通过另一个兼容升级计划执行。
+
+**插件。** 内建与第三方插件均使用自身发布生命周期。核心升级预检当前启用及 rollout 中插件的 `hostCompat`；准备、准入和运行就绪检查本机是否加载已批准且兼容的插件。随包内建插件仅是首次安装来源，不覆盖已安装版本、不复活已删除插件。任务轮询、调度和记账仍由现有核心机制负责，更新主节点不独占业务任务。
+
+**管理接口。** `/api/v1/system/releases`、`/system/upgrades` 与计划的详情/事件接口需要 `system:update:read`；创建需要敏感权限 `system:update:execute`，暂停/恢复/取消需要敏感权限 `system:update:recover`，沿用核心 RBAC 与二次验证。创建携带 `release_digest`、预检取得的 `expected_revision` 和 `idempotency_key`，过期预检或同幂等键不同请求被拒绝。核心仅转发认证后的操作到 mode 0600 本机 socket。
+
+当前 v1 仅支持 schema/cluster/task/Host API 契约保持不变的滚动更新。维护迁移、跨协议转换、自动主节点选举、未经校验的任意目标强制回滚、外壳自身更新不在此协议实现范围内。不能用新签名或更改声明绕过这些检查。
+
+## 34. 主节点优先升级与 Redis 节点密钥（2026-10-02）
+
+依据 [多节点同步规约](MULTINODE-SYNC-PROTOCOL.md)；验收与未覆盖范围见 [验证记录](audits/2026-10-02/MULTINODE-VALIDATION.md)。四个协议号互相独立：shell/core 控制协议 2（`runtime-contract.Protocol`）、业务集群协议 1、任务协议 1、Host API 4；SDK `protocol.HostAPIVersion` 必须等于 `runtime-contract.HostAPIVersion`，有测试约束。
+
+**节点身份。** 每节点一份可复用密钥：配置 `peer_auth_key`，或非空的 `SUB2API_PEER_AUTH_KEY` 覆盖它（空值视为未设置）；都没有时用 32 字节随机值。Redis 键 `s2a:peer:{cluster}:node:<node>` 保存 cluster/node/shell boot/peer 协议/密钥/启用状态，TTL 30 秒、每 10 秒用 Lua 比较后续期，续期不换密钥、不能创建缺失键。登记缺失时所属外壳在登记锁内复核 PG（启用、当前 boot、无其他活实例）后重建：配置模式复用原值，自动模式生成新值；不重启核心、不清除 PG 就绪。外壳启动时登记失败不退出，保持维护态并重试。密钥不进入核心及插件环境，也不发往发布源。
+
+**节点请求。** 发送端只带自身 `X-Sub2api-Peer-Node/Boot/Key`，业务 `Authorization` 原样保留。接收端先认证（头数量/长度/格式、Redis 当前登记、常量时间比较、PG 当前 boot），再按方向、范围和批准制品授权：仅从节点→主节点转发，制品只限基线与活动计划。内部错误 401（来源登记或 boot 无效）、403（操作不允许）、409（目标 boot/路由变化）、503（无法验证或维护），带 `X-Sub2api-Peer-Error`，源外壳统一映射为公网 503；核心自身的 401/403 原样返回，核心伪造的保留头被清除。转发保留原始路径与 query，不跟随重定向，业务请求不重放。
+
+**升级顺序。** 策略 `primary-first-v1`：全部预下载 → 从节点转发并停止核心与插件（真实停止确认绑定计划、步骤与 shell boot）→ 主节点维护并停止 → 仅主节点以 `AllowMigration` 启动目标并迁移 → 主节点准入并本地服务 → 从节点逐个启动、准入、回本地。主节点维护期间入口 503。准入事务内锁计划行与集群行并复核计划，暂停或新建计划与首次准入串行。从节点因主节点不可用退回维护后，心跳在主节点就绪时恢复转发，不启动核心。被禁用节点仍可有界停机并写入当前 boot 的停止确认，但不能借禁用绕过停止屏障。
+
+**插件互斥。** 核心计划与插件安装/批准/启用/升级/停用/卸载通过 Redis 锁 `system:cluster-change` 串行提交（25 秒提交上下文），running/paused 计划存在时插件变更被拒绝；紧急撤权例外。大包解包与哈希在取锁前完成。rollout 进入终态后，每个可能仍有旧实例的 boot 在 `plugin_rollout_cleanup`（迁移 0021）记录清理屏障 `cleanup_pending → cleaned`，`plugin_rollout_nodes` 保留各节点 active/failed 结果；未清理完成会阻止新核心计划；运行中的核心在本机旧实例排空后自行确认，已退出核心的 boot 只有外壳确认进程组退出后才标为 `cleaned`，存活过期不算证据。

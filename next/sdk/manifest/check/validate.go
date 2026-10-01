@@ -34,6 +34,10 @@ var (
 // KnownCapabilities lists the capability ids host 0.1 understands.
 var KnownCapabilities = map[string]bool{
 	manifest.CapPlatformAdapter:   true,
+	manifest.CapPlatformTasks:     true,
+	manifest.CapPlatformPoll:      true,
+	manifest.CapPlatformExecute:   true,
+	manifest.CapPlatformMonitor:   true,
 	manifest.CapGatewayHook:       true,
 	manifest.CapAppJobs:           true,
 	manifest.CapAppEvents:         true,
@@ -185,6 +189,7 @@ func Validate(m *manifest.Manifest, files map[string][]byte, opt ValidateOptions
 	v.hostPermissions()
 	v.capabilities()
 	v.platforms()
+	v.taskPairs(v.m.Platforms)
 	v.accountTypes()
 	v.pricing()
 	v.hooks()
@@ -226,6 +231,7 @@ func CheckPlatform(p manifest.Platform) []FieldError {
 	for i, e := range p.Endpoints {
 		v.endpoint(fmt.Sprintf("endpoints[%d]", i), p, e)
 	}
+	v.taskPairs([]manifest.Platform{p})
 	v.usageRules("usage", p.Usage, ownerPlatform, anyPluginUsage(p))
 	v.stickyRules("stickyRules", p.StickyRules)
 	return v.errs
@@ -237,7 +243,7 @@ func CheckPlatform(p manifest.Platform) []FieldError {
 // soon as one endpoint asks for it.
 func anyPluginUsage(p manifest.Platform) bool {
 	for _, e := range p.Endpoints {
-		if e.PluginUsage() {
+		if e.PluginUsage() || e.TaskSubmit() {
 			return true
 		}
 	}
@@ -382,6 +388,9 @@ func (v *validator) capabilities() {
 			v.add(f, "duplicate", "capability %q declared twice", c.ID)
 		}
 		seen[c.ID] = true
+		if c.ID == manifest.CapPlatformPoll || c.ID == manifest.CapPlatformExecute || c.ID == manifest.CapPlatformMonitor {
+			v.needCap(f, manifest.CapPlatformAdapter)
+		}
 		// Cluster broadcast (HostService.Publish / AppService.OnBroadcast)
 		// needs the matching host permission, like jobs and events.
 		if c.ID == manifest.CapAppBroadcast {
@@ -514,7 +523,7 @@ func (v *validator) endpoint(f string, p manifest.Platform, e manifest.Endpoint)
 		v.add(f+".auth", "required", "auth.headers or auth.query is required")
 	}
 	switch {
-	case e.Request.ModelPath == "" && e.Request.ModelParam == "" && e.Request.ModelSource == "":
+	case e.Request.ModelPath == "" && e.Request.ModelParam == "" && e.Request.ModelSource == "" && !e.TaskQuery():
 		v.add(f+".request", "required", "request.modelPath, request.modelParam or request.modelSource is required")
 	case boolCount(e.Request.ModelPath != "", e.Request.ModelParam != "", e.Request.ModelSource != "") > 1:
 		v.add(f+".request", "mutually_exclusive", "request.modelPath, request.modelParam and request.modelSource are mutually exclusive")
@@ -538,9 +547,10 @@ func (v *validator) endpoint(f string, p manifest.Platform, e manifest.Endpoint)
 		}
 	}
 	v.queryParams(f, e)
+	v.taskEndpoint(f, e)
 	v.usageSource(f, e)
 	if e.Usage != nil {
-		v.usageRules(f+".usage", *e.Usage, ownerEndpoint, e.PluginUsage())
+		v.usageRules(f+".usage", *e.Usage, ownerEndpoint, e.PluginUsage() || e.TaskSubmit())
 	}
 	// The other half of the §25.1 rule the modelSource branch above covers:
 	// ExtractUsage goes to the PlatformService of the plugin declaring the

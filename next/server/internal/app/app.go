@@ -12,18 +12,21 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
+	runtimecontract "github.com/Sub2API-Devs/sup2api/next/runtime-contract"
 	"github.com/gin-gonic/gin"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/account"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/apikey"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/authz"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/background"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/billing"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/cluster"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/event"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/event/delivery"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway"
@@ -47,6 +50,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/proxy"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/updater"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/usage"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/webui"
 	"github.com/Sub2API-Devs/sup2api/next/server/web"
@@ -55,10 +59,22 @@ import (
 // Run starts the server and blocks until ctx is cancelled, then shuts down
 // in reverse order.
 func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logger) error {
+	if cfg.Managed.Enabled {
+		return runManaged(ctx, cfg, version, log)
+	}
+	return run(ctx, cfg, version, log, nil)
+}
+
+func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logger, managed *managedCore) error {
 	var closers []func(context.Context)
 	defer func() {
-		sctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		sctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer cancel()
+		// The supervisor observes its own drain deadline. It must never receive
+		// completion while core producers are still running after a timeout.
+		if managed != nil {
+			sctx = context.Background()
+		}
 		for i := len(closers) - 1; i >= 0; i-- {
 			closers[i](sctx)
 		}
@@ -71,11 +87,19 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		return fmt.Errorf("database: %w", err)
 	}
 	onClose(func(context.Context) { db.Close() })
-	applied, err := store.Migrate(ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
-	if err != nil {
-		return fmt.Errorf("migrate: %w", err)
+	if managed == nil {
+		applied, err := store.Migrate(ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
+		if err != nil {
+			return fmt.Errorf("migrate: %w", err)
+		}
+		log.Info("migrations applied", "files", applied)
+	} else {
+		applied, err := prepareCoreSchema(ctx, db, managed.prepare)
+		if err != nil {
+			return fmt.Errorf("core schema preparation: %w", err)
+		}
+		log.Info("managed core schema verified", "migrations_applied", applied)
 	}
-	log.Info("migrations applied", "files", applied)
 
 	rdb, err := cluster.OpenRedis(ctx, cfg.RedisURL)
 	if err != nil {
@@ -89,7 +113,7 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	}
 
 	// ------------------------------------------------------------ cluster
-	cl := cluster.New(rdb, db.Pool, cluster.Options{NodeID: cfg.NodeID, Addr: cfg.PublicURL, HostVersion: version, Logger: log})
+	cl := cluster.New(rdb, db.Pool, cluster.Options{NodeID: cfg.NodeID, Addr: cfg.PublicURL, HostVersion: version, Logger: log, Managed: cfg.Managed.Enabled, CoreBootID: cfg.Managed.BootID})
 	if err := cl.Start(ctx); err != nil {
 		return fmt.Errorf("cluster: %w", err)
 	}
@@ -114,7 +138,14 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 
 	bill := billing.New(db, rdb, cl.Bus, events, reg)
 	onClose(func(context.Context) { bill.Close() })
-	settler := usage.New(db, bill, events, usage.Options{})
+	backgroundWork := background.New(8)
+	var canWork, canCoordinate func() bool
+	if managed != nil {
+		canWork = managed.backgroundAllowed
+		canCoordinate = managed.coordinateAllowed
+		backgroundWork.Admitted = canWork
+	}
+	settler := usage.New(db, bill, events, usage.Options{CanRetry: canWork})
 	settler.Start(ctx)
 	onClose(settler.Stop)
 
@@ -123,8 +154,10 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		return fmt.Errorf("authz: %w", err)
 	}
 	idm := iam.New(iam.Deps{DB: db, Redis: rdb, Config: cfg, Events: events, Authz: az})
-	if err := idm.Bootstrap(ctx); err != nil {
-		return fmt.Errorf("bootstrap admin: %w", err)
+	if managed == nil || managed.prepare.Bootstrap {
+		if err := idm.Bootstrap(ctx); err != nil {
+			return fmt.Errorf("bootstrap admin: %w", err)
+		}
 	}
 
 	grp := group.New(db, rdb, cl.Bus, reg)
@@ -155,7 +188,9 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	// asynchronous work needs neither network access nor account access of
 	// its own. Only one node sweeps at a time (cl.Locker).
 	settler.StartReconcile(ctx, usage.ReconcileDeps{
-		Locker: cl.Locker, Registry: reg, Accounts: acc, Proxies: prx,
+		Executor: backgroundWork,
+		Locker:   cl.Locker, Registry: reg, Accounts: acc, Proxies: prx,
+		Slots: cl.Slots, Limiter: limiter,
 		AllowPrivateUpstream: cfg.AllowPrivateUpstream, NodeID: cfg.NodeID, Logger: log,
 	})
 
@@ -183,13 +218,17 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	gw := gateway.New(gateway.Deps{
 		DB: db, Redis: rdb, Bus: cl.Bus, Node: cl.Registry, Registry: reg,
 		Auth: keys, Pricer: bill, Balance: bill, Slots: cl.Slots,
-		Accounts: acc, Proxies: prx, Settler: settler, Limiter: limiter, Config: cfg, Converters: converters,
+		Accounts: acc, Proxies: prx, Settler: settler, Tasks: settler, Limiter: limiter, Config: cfg, Converters: converters,
 	})
-	onClose(func(context.Context) { gw.Close() })
 
+	mutations := &cluster.PluginMutations{DB: db, Locker: cl.Locker}
+	if managed != nil {
+		mutations.AllowBootstrap = managed.bootstrapAllowed
+	}
 	defaults := install.NewDefaultsApplier(az, gw)
-	ctl, err := rollout.New(rollout.Options{
-		DB: db, Node: cl.Registry, Bus: cl.Bus, Packages: pkgs, Registry: reg,
+	ctl, err := rollout.New(rollout.Options{Mutations: mutations,
+		CanCoordinate: canCoordinate,
+		DB:            db, Node: cl.Registry, Bus: cl.Bus, Packages: pkgs, Registry: reg,
 		Runtime: rollout.FromGRPC(rt), Schemas: schemas, Defaults: defaults, Perms: az, Events: events, Logger: log,
 	})
 	if err != nil {
@@ -197,49 +236,71 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	}
 	ctl.Start(ctx)
 	onClose(ctl.Stop)
+	// Polling must stop before plugin instances and their egress. Keep the
+	// earlier cleanup too, for initialization errors before this point.
+	onClose(settler.Stop)
 
-	inst := install.New(install.Deps{
+	inst := install.New(install.Deps{Mutations: mutations,
 		DB: db, Trust: trust, Authz: az, Permissions: az, Defaults: defaults,
-		Rollout: ctl, Schemas: schemas, Bus: cl.Bus, Accounts: acc,
+		Rollout: ctl, Schemas: schemas, Bus: cl.Bus, Accounts: acc, Nodes: cl.Registry,
 	}, install.Options{HostVersion: version, Plugins: cfg.Plugins})
 	mkt := market.New(db, inst, nil, cfg.Plugins.MaxPackageBytes)
-	if err := mkt.SeedSources(ctx, cfg.Plugins.MarketSourcesJSON); err != nil {
-		return fmt.Errorf("market sources: %w", err)
-	}
-	// Built-in plugins: one node installs/enables/upgrades them per start.
-	// The install can take long (unpacking, migrations), so the lock is kept
-	// alive while it runs rather than sized to a guess. KeepLock renews only
-	// as long as its parent lives, so the parent carries the bound: an
-	// install stuck for 10 minutes is cancelled and the lock lapses, instead
-	// of this node renewing it until the process exits.
-	if lk, ok, err := cl.Locker.TryLock(ctx, "plugins:builtin", time.Minute); err != nil {
-		log.Warn("builtin plugins: lock", "err", err)
-	} else if ok {
-		ictx, cancel := context.WithTimeout(ctx, 10*time.Minute)
-		bctx, stop := core.KeepLock(ictx, lk)
-		_ = inst.EnsureBuiltin(bctx, cfg.Plugins.BuiltinDir, log.With("component", "builtin-plugins"))
-		if cause := context.Cause(bctx); cause != nil && ctx.Err() == nil {
-			log.Warn("builtin plugins: install cut short", "cause", cause)
+	if managed == nil || managed.prepare.Bootstrap {
+		if err := mkt.SeedSources(ctx, cfg.Plugins.MarketSourcesJSON); err != nil {
+			return fmt.Errorf("market sources: %w", err)
 		}
-		stop()
-		cancel()
-		lk.Release()
+	}
+	builtinReady := &atomic.Bool{}
+	if managed == nil || managed.prepare.Bootstrap {
+		var stopBuiltins func(context.Context)
+		if managed == nil {
+			builtinReady, stopBuiltins = startBuiltinConvergence(ctx, inst, cl.Locker, reg, cfg.Plugins.BuiltinDir, log.With("component", "builtin-plugins"))
+		} else {
+			builtinReady, stopBuiltins = startBuiltinBootstrap(ctx, inst, cl.Locker, reg, cfg.Plugins.BuiltinDir, log.With("component", "builtin-plugins"))
+		}
+		onClose(stopBuiltins)
+	} else {
+		builtinReady.Store(true)
 	}
 
-	jobs := job.New(db, cl.Locker, reg, log, cfg.NodeID, job.Options{})
-	if err := jobs.Start(ctx); err != nil {
-		return fmt.Errorf("jobs: %w", err)
-	}
+	jobs := job.New(db, cl.Locker, reg, log, cfg.NodeID, job.Options{Executor: backgroundWork})
 	onClose(func(c context.Context) { _ = jobs.Stop(c) })
-	dlv := delivery.New(db, cl.Locker, cl.Bus, reg, log, cfg.NodeID, delivery.Options{})
-	if err := dlv.Start(ctx); err != nil {
-		return fmt.Errorf("event delivery: %w", err)
-	}
+	dlv := delivery.New(db, cl.Locker, cl.Bus, reg, log, cfg.NodeID, delivery.Options{CanRun: canWork})
 	onClose(func(c context.Context) { _ = dlv.Stop(c) })
+	var startOnce sync.Once
+	var startErr error
+	startBackground := func() error {
+		startOnce.Do(func() {
+			if startErr = jobs.Start(ctx); startErr == nil {
+				startErr = dlv.Start(ctx)
+			}
+		})
+		return startErr
+	}
+	if managed == nil {
+		if err := startBackground(); err != nil {
+			return fmt.Errorf("background startup: %w", err)
+		}
+	}
+	// Extraction goroutines still call plugins and submit usage after their
+	// HTTP handler returns. Join them before stopping either dependency.
+	// Reverse close order: drain gateway producers, then stop all usage
+	// polling before the plugin controller and egress are torn down. The
+	// earlier registration still covers failures during initialization.
+	onClose(func(context.Context) { gw.Close() })
 
 	// ------------------------------------------------------------ HTTP
+	sharedAssets, err := webui.NewSharedAssets(db, web.Dist, webui.SharedOptions{Logger: log})
+	if err != nil {
+		return fmt.Errorf("console asset manifest: %w", err)
+	}
+	onClose(sharedAssets.Start(ctx))
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
+	gate := &requestGate{}
+	if managed != nil {
+		gate.stop()
+	}
 	// Client IPs (login rate limiting, usage records) come from
 	// X-Forwarded-For only when the request arrives from a trusted proxy.
 	if err := engine.SetTrustedProxies(cfg.TrustedProxies); err != nil {
@@ -249,12 +310,13 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	// manifest/check rejects plugin endpoints that would shadow them.
 	engine.GET("/"+manifest.RouteHealthz, func(c *gin.Context) {
 		status, text := http.StatusOK, "ok"
-		if !cl.Registry.Healthy() {
+		if gate.isDraining() || !cl.Registry.Healthy() || !builtinReady.Load() || !sharedAssets.Ready() {
 			status, text = http.StatusServiceUnavailable, "unavailable"
 		}
 		c.JSON(status, gin.H{"status": text, "version": version, "node": cfg.NodeID, "boot_id": cl.Registry.BootID()})
 	})
 	r := httpapi.NewRouter(engine, idm, az, idm)
+	updater.RegisterRoutes(r, cfg.Managed.UpdaterSocket)
 	idm.RegisterRoutes(r)
 	az.RegisterRoutes(r)
 	grp.RegisterRoutes(r)
@@ -267,12 +329,12 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		DB: db, Install: inst, Market: mkt, Rollout: ctl, Nodes: cl.Registry, Registry: reg,
 		Authz: az, Cipher: cipher, Bus: cl.Bus, Jobs: jobs, HookStats: gw, Plugins: cfg.Plugins,
 	}).RegisterRoutes(r)
-	pr := routes.New(reg, idm, az, idm, routes.WithHealth(cl.Registry))
+	pr := routes.New(reg, idm, az, idm, routes.WithHealth(cl.Registry), routes.WithVersionAssets(pkgs))
 	pr.RegisterRoutes(r)
 	pr.RegisterAssets(engine)
 	gw.RegisterRoutes(r)
 
-	ui, err := webui.New(web.Dist)
+	ui, err := webui.New(web.Dist, webui.WithSharedAssets(sharedAssets))
 	if err != nil {
 		return fmt.Errorf("console assets: %w", err)
 	}
@@ -280,23 +342,52 @@ func Run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	// before the console fallback instead of being registered as routes.
 	engine.NoRoute(gw.Middleware(), ui.Serve)
 
-	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: engine, ReadHeaderTimeout: 10 * time.Second}
+	requestCtx, cancelRequests := context.WithCancel(context.Background())
+	defer cancelRequests()
+	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: gate.wrap(engine), ReadHeaderTimeout: 10 * time.Second,
+		BaseContext: func(net.Listener) context.Context { return requestCtx }}
+	listener, err := net.Listen("tcp", cfg.HTTPAddr)
+	if err != nil {
+		return fmt.Errorf("http listen: %w", err)
+	}
+	defer listener.Close()
 	errc := make(chan error, 1)
 	go func() {
 		log.Info("listening", "addr", cfg.HTTPAddr, "boot_id", cl.Registry.BootID(), "version", version)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errc <- err
 		}
 	}()
+	if managed != nil {
+		managed.mu.Lock()
+		managed.gate, managed.start, managed.active = gate, startBackground, backgroundWork.Active
+		managed.validate = func(c context.Context, a runtimecontract.Admission) error {
+			return verifyAdmission(c, db, cfg.NodeID, a)
+		}
+		managed.liveValidate = func(c context.Context, a runtimecontract.Admission) error {
+			return verifyLiveAdmission(c, db, cfg.NodeID, a)
+		}
+		managed.check = func(c context.Context) (string, error) {
+			if !cl.Registry.Healthy() || !sharedAssets.Ready() || !builtinReady.Load() {
+				return "", errors.New("node dependencies are not ready")
+			}
+			return approvedPluginsReady(c, db, reg, version)
+		}
+		if managed.mode == "preparing" {
+			managed.mode = "prepared"
+		}
+		managed.mu.Unlock()
+	}
 	select {
 	case <-ctx.Done():
 	case err := <-errc:
 		return fmt.Errorf("http: %w", err)
 	}
-	// Stop taking requests first; background services close afterwards.
-	sctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	return srv.Shutdown(sctx)
+	// Expose non-readiness before closing the listener, so health-based
+	// balancers can remove this node while existing requests are still alive.
+	gate.stop()
+	time.Sleep(3 * time.Second)
+	return shutdownHTTP(srv, gate, cancelRequests, 30*time.Second)
 }
 
 // databaseAddr extracts host:port from a PostgreSQL URL or key=value DSN;

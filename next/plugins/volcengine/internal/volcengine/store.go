@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -24,6 +25,13 @@ const (
 
 // ErrNoRow is returned when an index row does not exist.
 var ErrNoRow = errors.New("not found in the local index")
+
+// Both the pool and a transaction implement indexDB. Routes changing an
+// existing resource pass the transaction holding its row lock.
+type indexDB interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}
 
 // groupRow is an asset_groups row, only the columns the plugin acts on. The
 // console table gets the full row as JSON (to_jsonb), so a column added by a
@@ -43,7 +51,7 @@ type assetRow struct {
 	UpstreamID string
 }
 
-func loadGroup(ctx context.Context, db *pgxpool.Pool, id int64) (*groupRow, error) {
+func loadGroup(ctx context.Context, db indexDB, id int64) (*groupRow, error) {
 	var g groupRow
 	err := db.QueryRow(ctx, `SELECT id, account_id, upstream_id, name FROM asset_groups WHERE id = $1`, id).
 		Scan(&g.ID, &g.AccountID, &g.UpstreamID, &g.Name)
@@ -56,7 +64,7 @@ func loadGroup(ctx context.Context, db *pgxpool.Pool, id int64) (*groupRow, erro
 	return &g, nil
 }
 
-func loadAsset(ctx context.Context, db *pgxpool.Pool, id int64) (*assetRow, error) {
+func loadAsset(ctx context.Context, db indexDB, id int64) (*assetRow, error) {
 	var a assetRow
 	err := db.QueryRow(ctx, `SELECT id, account_id, group_id, upstream_id FROM assets WHERE id = $1`, id).
 		Scan(&a.ID, &a.AccountID, &a.GroupID, &a.UpstreamID)
@@ -75,7 +83,7 @@ func loadAsset(ctx context.Context, db *pgxpool.Pool, id int64) (*assetRow, erro
 // happens when a create is retried after a response that never arrived. The
 // existing row wins and its id is returned, making the route idempotent
 // instead of leaving a duplicate.
-func insertGroup(ctx context.Context, db *pgxpool.Pool, accountID int64, g UpstreamGroup) (int64, error) {
+func insertGroup(ctx context.Context, db indexDB, accountID int64, g UpstreamGroup) (int64, error) {
 	groupType := g.GroupType
 	if groupType == "" {
 		groupType = "AIGC"
@@ -85,8 +93,7 @@ func insertGroup(ctx context.Context, db *pgxpool.Pool, accountID int64, g Upstr
 		INSERT INTO asset_groups (account_id, upstream_id, name, title, description, group_type, index_status, checked_at)
 		VALUES ($1, $2, $3, $4, $5, $6, 'ok', now())
 		ON CONFLICT (account_id, upstream_id) DO UPDATE
-		   SET name = excluded.name, title = excluded.title, description = excluded.description,
-		       group_type = excluded.group_type, index_status = 'ok', updated_at = now(), checked_at = now()
+		   SET upstream_id = asset_groups.upstream_id
 		RETURNING id`,
 		accountID, g.ID, g.Name, g.Title, g.Description, groupType).Scan(&id)
 	return id, err
@@ -94,15 +101,13 @@ func insertGroup(ctx context.Context, db *pgxpool.Pool, accountID int64, g Upstr
 
 // insertAsset indexes an asset created upstream, with the same idempotency
 // rule as insertGroup.
-func insertAsset(ctx context.Context, db *pgxpool.Pool, accountID, groupID int64, a UpstreamAsset) (int64, error) {
+func insertAsset(ctx context.Context, db indexDB, accountID, groupID int64, a UpstreamAsset) (int64, error) {
 	var id int64
 	err := db.QueryRow(ctx, `
 		INSERT INTO assets (account_id, group_id, upstream_id, name, asset_type, url, status, index_status, checked_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, 'ok', now())
 		ON CONFLICT (account_id, upstream_id) DO UPDATE
-		   SET group_id = excluded.group_id, name = excluded.name, asset_type = excluded.asset_type,
-		       url = excluded.url, status = excluded.status, index_status = 'ok',
-		       updated_at = now(), checked_at = now()
+		   SET upstream_id = assets.upstream_id
 		RETURNING id`,
 		accountID, groupID, a.ID, a.Name, a.AssetType, a.URL, a.Status).Scan(&id)
 	return id, err
@@ -112,7 +117,7 @@ func insertAsset(ctx context.Context, db *pgxpool.Pool, accountID, groupID int64
 // kept out of the update: a result that does not carry a field must not blank
 // the indexed value. (An UPDATE the operator asked for goes through
 // applyGroupUpdate instead, which can blank a field on purpose.)
-func refreshGroup(ctx context.Context, db *pgxpool.Pool, id int64, g UpstreamGroup) error {
+func refreshGroup(ctx context.Context, db indexDB, id int64, g UpstreamGroup) error {
 	_, err := db.Exec(ctx, `
 		UPDATE asset_groups SET
 		  name        = CASE WHEN $2 <> '' THEN $2 ELSE name END,
@@ -127,7 +132,7 @@ func refreshGroup(ctx context.Context, db *pgxpool.Pool, id int64, g UpstreamGro
 // applyGroupUpdate writes exactly the fields the operator submitted, so
 // clearing a title upstream clears it in the index too. A nil pointer means
 // "not submitted".
-func applyGroupUpdate(ctx context.Context, db *pgxpool.Pool, id int64, name, title, description *string) error {
+func applyGroupUpdate(ctx context.Context, db indexDB, id int64, name, title, description *string) error {
 	_, err := db.Exec(ctx, `
 		UPDATE asset_groups SET
 		  name        = coalesce($2, name),
@@ -139,7 +144,7 @@ func applyGroupUpdate(ctx context.Context, db *pgxpool.Pool, id int64, name, tit
 }
 
 // refreshAsset writes back what a GetAsset reported.
-func refreshAsset(ctx context.Context, db *pgxpool.Pool, id int64, a UpstreamAsset) error {
+func refreshAsset(ctx context.Context, db indexDB, id int64, a UpstreamAsset) error {
 	_, err := db.Exec(ctx, `
 		UPDATE assets SET
 		  name       = CASE WHEN $2 <> '' THEN $2 ELSE name END,
@@ -152,7 +157,7 @@ func refreshAsset(ctx context.Context, db *pgxpool.Pool, id int64, a UpstreamAss
 }
 
 // applyAssetUpdate writes exactly the fields the operator submitted.
-func applyAssetUpdate(ctx context.Context, db *pgxpool.Pool, id int64, name *string) error {
+func applyAssetUpdate(ctx context.Context, db indexDB, id int64, name *string) error {
 	_, err := db.Exec(ctx, `
 		UPDATE assets SET name = coalesce($2, name),
 		  index_status = 'ok', updated_at = now(), checked_at = now()
@@ -163,7 +168,7 @@ func applyAssetUpdate(ctx context.Context, db *pgxpool.Pool, id int64, name *str
 // markMissing records that the upstream copy of an index row is gone. The
 // row is kept: an operator has to be able to see that the index and the
 // Volcengine console disagree, and DELETE still cleans it up.
-func markMissing(ctx context.Context, db *pgxpool.Pool, table string, id int64) error {
+func markMissing(ctx context.Context, db indexDB, table string, id int64) error {
 	if table != "asset_groups" && table != "assets" {
 		return fmt.Errorf("unknown table %q", table)
 	}
@@ -171,7 +176,7 @@ func markMissing(ctx context.Context, db *pgxpool.Pool, table string, id int64) 
 	return err
 }
 
-func deleteRow(ctx context.Context, db *pgxpool.Pool, table string, id int64) error {
+func deleteRow(ctx context.Context, db indexDB, table string, id int64) error {
 	if table != "asset_groups" && table != "assets" {
 		return fmt.Errorf("unknown table %q", table)
 	}

@@ -15,7 +15,7 @@ import (
 // fake in tests.
 type gatewaySettingsStore interface {
 	load(ctx context.Context) (GatewaySettings, error)
-	save(ctx context.Context, v GatewaySettings, updatedBy int64) error
+	update(ctx context.Context, in gatewaySettingsInput, updatedBy int64) (GatewaySettings, error)
 }
 
 type dbGatewaySettings struct{ db *store.DB }
@@ -27,15 +27,13 @@ func (s dbGatewaySettings) load(ctx context.Context) (GatewaySettings, error) {
 	return loadGatewaySettings(ctx, s.db.Pool)
 }
 
-func (s dbGatewaySettings) save(ctx context.Context, v GatewaySettings, updatedBy int64) error {
+func (s dbGatewaySettings) update(ctx context.Context, in gatewaySettingsInput, updatedBy int64) (GatewaySettings, error) {
+	v := defaultGatewaySettings()
 	if s.db == nil {
-		return core.ErrUnavailable
+		return v, core.ErrUnavailable
 	}
-	_, err := s.db.Pool.Exec(ctx, `
-		INSERT INTO settings (key, value, updated_by, updated_at) VALUES ($1, $2, $3, now())
-		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-		settingsKeyGateway, mustJSON(v), nullID(updatedBy))
-	return err
+	err := store.PatchSettingJSON(ctx, s.db, settingsKeyGateway, nullID(updatedBy), in, &v)
+	return v.normalized(), err
 }
 
 // gatewaySettingsInput is the PUT /settings/gateway body; nil fields keep
@@ -107,15 +105,9 @@ func (g *Gateway) putGatewaySettingsHandler(c *gin.Context) {
 		httpapi.Fail(c, core.InvalidFields(fe...))
 		return
 	}
-	cur, err := g.gwStore.load(ctx)
-	if err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
-	cur = cur.normalized()
-	in.applyTo(&cur)
 	uid, _ := core.UserID(ctx)
-	if err := g.gwStore.save(ctx, cur, uid); err != nil {
+	cur, err := g.gwStore.update(ctx, in, uid)
+	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}

@@ -61,6 +61,22 @@ func (s *Service) Login(ctx context.Context, email, password, ip string) (*Token
 	}
 	var pair *TokenPair
 	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
+		// The user row is the parent lock for every refresh-token family.
+		// Recheck the password snapshot after acquiring it: a password change
+		// may have committed while bcrypt was running above.
+		var currentHash, currentStatus string
+		if err := tx.QueryRow(ctx, `SELECT password_hash, status FROM users WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, id).Scan(&currentHash, &currentStatus); err != nil {
+			if store.IsNoRows(err) {
+				return errBadCredentials
+			}
+			return err
+		}
+		if currentHash != hash {
+			return errBadCredentials
+		}
+		if currentStatus != StatusActive {
+			return errUserDisabled
+		}
 		if _, err := tx.Exec(ctx, `UPDATE users SET last_login_at = now() WHERE id = $1`, id); err != nil {
 			return err
 		}
@@ -143,6 +159,17 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*TokenPair,
 	var replayFamily string
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
 		var id, uid int64
+		// Discover the parent without locking a child first. All issuers and
+		// revokers serialize on the user, then read a fresh token snapshot.
+		if err := tx.QueryRow(ctx, `SELECT user_id FROM refresh_tokens WHERE token_hash=$1`, hashToken(refreshToken)).Scan(&uid); err != nil {
+			if store.IsNoRows(err) {
+				return errBadRefresh
+			}
+			return err
+		}
+		if err := lockRefreshUser(ctx, tx, uid); err != nil {
+			return err
+		}
 		var family string
 		var revokedAt, replacedAt *time.Time
 		var expiresAt time.Time
@@ -206,12 +233,16 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*TokenPair,
 // Logout revokes refreshToken (only that token, not its family) if it
 // belongs to userID; an empty token revokes every refresh token of the user.
 func (s *Service) Logout(ctx context.Context, userID int64, refreshToken string) error {
-	if refreshToken == "" {
-		return revokeAllRefreshTokens(ctx, s.db.Pool, userID)
-	}
-	_, err := s.db.Pool.Exec(ctx, `UPDATE refresh_tokens SET revoked_at = now() WHERE token_hash = $1 AND user_id = $2 AND revoked_at IS NULL`,
-		hashToken(refreshToken), userID)
-	return err
+	return s.db.Tx(ctx, func(tx pgx.Tx) error {
+		if err := lockRefreshUser(ctx, tx, userID); err != nil {
+			return err
+		}
+		if refreshToken == "" {
+			return revokeAllRefreshTokens(ctx, tx, userID)
+		}
+		_, err := tx.Exec(ctx, `UPDATE refresh_tokens SET revoked_at = now() WHERE token_hash = $1 AND user_id = $2 AND revoked_at IS NULL`, hashToken(refreshToken), userID)
+		return err
+	})
 }
 
 // ChangePassword changes the caller's password and revokes all refresh
@@ -236,6 +267,13 @@ func (s *Service) ChangePassword(ctx context.Context, userID int64, oldPassword,
 		return err
 	}
 	return s.db.Tx(ctx, func(tx pgx.Tx) error {
+		var currentHash string
+		if err := tx.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, userID).Scan(&currentHash); err != nil {
+			return err
+		}
+		if currentHash != hash {
+			return core.ErrConflict.WithMessage("password changed concurrently; retry")
+		}
 		if _, err := tx.Exec(ctx, `UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1`, userID, string(newHash)); err != nil {
 			return err
 		}

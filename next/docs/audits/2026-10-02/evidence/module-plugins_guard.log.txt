@@ -1,0 +1,3 @@
+=== plugins/guard ===
+ok  	github.com/Sub2API-Devs/sup2api/next/plugins/guard	1.049s
+ok  	github.com/Sub2API-Devs/sup2api/next/plugins/guard/internal/guard	3.685s

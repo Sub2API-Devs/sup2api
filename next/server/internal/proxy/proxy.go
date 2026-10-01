@@ -59,6 +59,7 @@ type Service struct {
 
 	mu      sync.Mutex
 	clients map[int64]*entry
+	epoch   uint64
 }
 
 type entry struct {
@@ -125,6 +126,7 @@ func (s *Service) Run(ctx context.Context) {
 // Invalidate drops the cached client of one proxy.
 func (s *Service) Invalidate(id int64) {
 	s.mu.Lock()
+	s.epoch++
 	e := s.clients[id]
 	delete(s.clients, id)
 	s.mu.Unlock()
@@ -216,6 +218,7 @@ func (s *Service) HTTPClient(ctx context.Context, proxyID *int64) (*http.Client,
 	now := time.Now()
 	s.mu.Lock()
 	e := s.clients[id]
+	epoch := s.epoch
 	s.mu.Unlock()
 	if e != nil && now.Sub(e.checkedAt) < s.opts.RecheckInterval {
 		return e.result()
@@ -236,10 +239,16 @@ func (s *Service) HTTPClient(ctx context.Context, proxyID *int64) (*http.Client,
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if cur := s.clients[id]; cur != nil && cur.updatedAt.Equal(r.UpdatedAt) {
-		cur.checkedAt = now
-		cur.status = r.Status
+	if cur := s.clients[id]; cur != nil && !cur.updatedAt.Before(r.UpdatedAt) {
+		if s.epoch == epoch && cur.updatedAt.Equal(r.UpdatedAt) {
+			copy := *cur
+			copy.checkedAt = now
+			s.clients[id] = &copy
+		}
 		return cur.result()
+	}
+	if s.epoch != epoch {
+		return nil, core.ErrUnavailable.WithMessage("proxy changed while resolving; retry")
 	}
 	c, err := s.buildClient(&r)
 	if err != nil {

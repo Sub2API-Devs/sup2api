@@ -259,6 +259,10 @@ func build(number uint64, exts []Extension) *generation {
 		info := Info(pkg)
 		m := pkg.Manifest
 		grants := ext.Grants()
+		for permission := range grants {
+			info.GrantedPermissions = append(info.GrantedPermissions, permission)
+		}
+		sort.Strings(info.GrantedPermissions)
 		g.plugins = append(g.plugins, info)
 		g.byKey[pkg.Key] = info
 		g.packages[pkg.Key] = pkg

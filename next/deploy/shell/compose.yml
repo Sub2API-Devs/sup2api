@@ -1,0 +1,45 @@
+name: sup2api-managed
+x-shell: &shell
+  image: ${SHELL_IMAGE:-sup2api-shell:local}
+  build:
+    context: ../..
+    dockerfile: deploy/shell/Dockerfile
+  restart: unless-stopped
+  stop_grace_period: 180s
+  environment: &env
+    DATABASE_URL: ${DATABASE_URL:?set shared PostgreSQL URL}
+    REDIS_URL: ${REDIS_URL:?set shared Redis URL}
+    SUB2API_DATABASE_URL: ${DATABASE_URL}
+    SUB2API_REDIS_URL: ${REDIS_URL}
+    SUB2API_MASTER_KEY: ${SUB2API_MASTER_KEY:?set shared base64 master key}
+    SUB2API_JWT_SECRET: ${SUB2API_JWT_SECRET:?set shared JWT secret}
+    SUB2API_PUBLIC_URL: ${SUB2API_PUBLIC_URL:?set public URL}
+    SUB2API_TRUSTED_PROXIES: 127.0.0.1/32
+    SUB2API_PLUGIN_OFFICIAL_KEYS: ${SUB2API_PLUGIN_OFFICIAL_KEYS:-}
+    SUB2API_PLUGIN_DIR: /var/lib/sub2api/plugins
+    SUB2API_BOOTSTRAP_ADMIN_EMAIL: ${SUB2API_BOOTSTRAP_ADMIN_EMAIL:-}
+    SUB2API_BOOTSTRAP_ADMIN_PASSWORD: ${SUB2API_BOOTSTRAP_ADMIN_PASSWORD:-}
+services:
+  node-a:
+    <<: *shell
+    environment:
+      <<: *env
+      SUB2API_PEER_AUTH_KEY: ${NODE_A_PEER_AUTH_KEY:-}
+    ports: ["127.0.0.1:8081:8080"]
+    volumes:
+      - node-a:/var/lib/sub2api
+      - ./config/node-a.json:/etc/sub2api/shell.json:ro
+      - ./certs/node-a:/etc/sub2api/tls:ro
+  node-b:
+    <<: *shell
+    environment:
+      <<: *env
+      SUB2API_PEER_AUTH_KEY: ${NODE_B_PEER_AUTH_KEY:-}
+    ports: ["127.0.0.1:8082:8080"]
+    volumes:
+      - node-b:/var/lib/sub2api
+      - ./config/node-b.json:/etc/sub2api/shell.json:ro
+      - ./certs/node-b:/etc/sub2api/tls:ro
+volumes:
+  node-a: {}
+  node-b: {}

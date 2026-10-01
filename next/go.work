@@ -10,7 +10,9 @@ use (
 	./plugins/openai
 	./plugins/relay
 	./plugins/volcengine
+	./runtime-contract
 	./sdk
 	./server
+	./shell
 	./tools/sub2api-plugin
 )

@@ -182,6 +182,11 @@ func (e *Env) MustMessages(apiKey string, body map[string]any, headers map[strin
 }
 
 func readSSE(r io.Reader, start time.Time) ([]SSEEvent, error) {
+	return readSSEEvents(r, start, nil)
+}
+
+// readSSEEvents optionally observes each fully decoded event before EOF.
+func readSSEEvents(r io.Reader, start time.Time, onEvent func(SSEEvent)) ([]SSEEvent, error) {
 	var out []SSEEvent
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 1<<20), 8<<20)
@@ -195,7 +200,11 @@ func readSSE(r io.Reader, start time.Time) ([]SSEEvent, error) {
 		if ev == "" {
 			ev = d.Get("type").String()
 		}
-		out = append(out, SSEEvent{Event: ev, Data: d, At: time.Since(start)})
+		event := SSEEvent{Event: ev, Data: d, At: time.Since(start)}
+		out = append(out, event)
+		if onEvent != nil {
+			onEvent(event)
+		}
 		ev = ""
 		data.Reset()
 	}

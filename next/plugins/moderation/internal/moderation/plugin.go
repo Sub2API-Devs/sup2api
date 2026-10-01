@@ -54,9 +54,11 @@ type Plugin struct {
 	events chan eventRec
 
 	// blocked maps user id -> expiry (zero = until unblocked).
-	blocked      atomic.Pointer[map[int64]time.Time]
-	refreshEvery time.Duration
-	refreshNow   chan struct{}
+	blocked        atomic.Pointer[map[int64]time.Time]
+	blockReloadMu  sync.Mutex
+	blockReloadSeq uint64
+	refreshEvery   time.Duration
+	refreshNow     chan struct{}
 
 	stats struct {
 		calls, errors, cacheHits, dropped, droppedEvents, kvErrors atomic.Int64

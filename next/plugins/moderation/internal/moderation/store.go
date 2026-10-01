@@ -127,31 +127,37 @@ func (p *Plugin) applyBans(ctx context.Context, evs []eventRec) {
 	now := p.now().UTC()
 	changed := false
 	for uid := range users {
-		n, err := countViolations(ctx, db, uid, now.Add(-c.banWindow))
-		if err != nil {
-			p.log.Warn("moderation: count violations failed", "user_id", uid, "error", err.Error())
-			continue
-		}
-		if n < int64(c.BanThreshold) {
-			continue
-		}
-		var expires *time.Time
-		if c.banDuration > 0 {
-			t := now.Add(c.banDuration)
-			expires = &t
-		}
-		reason := fmt.Sprintf("%d violations within %dh / %d 小时内违规 %d 次", n, c.BanWindowHours, c.BanWindowHours, n)
-		tag, err := db.Exec(ctx, `INSERT INTO blocks (user_id, reason, violations, source, created_at, expires_at, created_by)
-			VALUES ($1, $2, $3, 'auto', $4, $5, NULL)
-			ON CONFLICT (user_id) DO UPDATE SET reason = EXCLUDED.reason, violations = EXCLUDED.violations,
-				source = 'auto', created_at = EXCLUDED.created_at, expires_at = EXCLUDED.expires_at, created_by = NULL
-			WHERE blocks.expires_at IS NOT NULL AND blocks.expires_at <= $4`,
-			uid, reason, n, now, expires)
+		var n int64
+		var banned bool
+		err := pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+			if err := lockBlockSubject(ctx, tx, uid); err != nil {
+				return err
+			}
+			var err error
+			n, err = countViolations(ctx, tx, uid, now.Add(-c.banWindow))
+			if err != nil || n < int64(c.BanThreshold) {
+				return err
+			}
+			var expires *time.Time
+			if c.banDuration > 0 {
+				t := now.Add(c.banDuration)
+				expires = &t
+			}
+			reason := fmt.Sprintf("%d violations within %dh / %d 小时内违规 %d 次", n, c.BanWindowHours, c.BanWindowHours, n)
+			tag, err := tx.Exec(ctx, `INSERT INTO blocks (user_id, reason, violations, source, created_at, expires_at, created_by)
+				VALUES ($1, $2, $3, 'auto', $4, $5, NULL)
+				ON CONFLICT (user_id) DO UPDATE SET reason = EXCLUDED.reason, violations = EXCLUDED.violations,
+					source = 'auto', created_at = EXCLUDED.created_at, expires_at = EXCLUDED.expires_at, created_by = NULL
+				WHERE blocks.expires_at IS NOT NULL AND blocks.expires_at <= $4`,
+				uid, reason, n, now, expires)
+			banned = tag.RowsAffected() > 0
+			return err
+		})
 		if err != nil {
 			p.log.Warn("moderation: auto ban failed", "user_id", uid, "error", err.Error())
 			continue
 		}
-		if tag.RowsAffected() > 0 {
+		if banned {
 			changed = true
 			p.log.Info("moderation: user banned automatically", "user_id", uid, "violations", n)
 		}
@@ -159,6 +165,17 @@ func (p *Plugin) applyBans(ctx context.Context, evs []eventRec) {
 	if changed {
 		p.blocksChanged(ctx)
 	}
+}
+
+// lockBlockSubject must precede reading the violation baseline or modifying a
+// ban. The parent survives unblocking and cleanup, unlike the blocks row itself.
+// All work for one user is serialized across nodes; other users stay concurrent.
+func lockBlockSubject(ctx context.Context, tx pgx.Tx, uid int64) error {
+	if _, err := tx.Exec(ctx, `INSERT INTO block_subjects (user_id) VALUES ($1) ON CONFLICT DO NOTHING`, uid); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `SELECT user_id FROM block_subjects WHERE user_id = $1 FOR UPDATE`, uid)
+	return err
 }
 
 // countViolations counts block verdicts of uid since the later of since,
@@ -199,6 +216,13 @@ func (p *Plugin) blockedCount() int {
 
 // reloadBlocks reads the active blocks into memory.
 func (p *Plugin) reloadBlocks(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	p.blockReloadMu.Lock()
+	p.blockReloadSeq++
+	seq := p.blockReloadSeq
+	p.blockReloadMu.Unlock()
 	db, err := p.db(ctx)
 	if err != nil {
 		return err
@@ -221,7 +245,16 @@ func (p *Plugin) reloadBlocks(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	p.blocked.Store(&m)
+	// A broadcast/newer reload may have completed while this SELECT was in
+	// flight. Never put its older snapshot back over the newer generation.
+	p.blockReloadMu.Lock()
+	defer p.blockReloadMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if seq == p.blockReloadSeq {
+		p.blocked.Store(&m)
+	}
 	return nil
 }
 

@@ -39,6 +39,7 @@ type Deps struct {
 	Accounts core.AccountDirectory
 	Proxies  core.ProxyDirectory
 	Settler  core.Settler
+	Tasks    core.AsyncTasks
 	// Limiter enforces per-account rpm/tpm/tpd/spm limits (CONTRACTS §18);
 	// nil = no limits.
 	Limiter core.AccountLimiter

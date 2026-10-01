@@ -62,6 +62,8 @@ jobs:
         run: sh .github/next-ci/next-go-version.sh
       - name: sdk
         run: sh .github/next-ci/next-check-module.sh next/sdk
+      - name: shell/core runtime contract
+        run: sh .github/next-ci/next-check-module.sh next/runtime-contract
       - name: plugin CLI
         run: sh .github/next-ci/next-check-module.sh next/tools/sub2api-plugin
       - name: mock-upstream
@@ -195,6 +197,11 @@ jobs:
           fi
       - name: server
         run: sh .github/next-ci/next-check-module.sh next/server
+      - name: update shell (with PostgreSQL and Redis)
+        run: sh .github/next-ci/next-check-module.sh next/shell
+      - name: update coordination race checks
+        working-directory: next
+        run: go test -race -count=1 -timeout=10m ./shell/... ./runtime-contract/... ./server/internal/app/... ./server/internal/background/...
       # The server has //go:build linux code (seccomp, /proc, cgroups) with
       # stubs for other platforms (CONTRACTS §2). ubuntu-latest already builds
       # for linux, so GOOS=linux only restates the contract explicitly;

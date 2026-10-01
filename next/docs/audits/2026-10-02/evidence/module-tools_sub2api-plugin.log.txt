@@ -1,0 +1,2 @@
+=== tools/sub2api-plugin ===
+ok  	github.com/Sub2API-Devs/sup2api/next/tools/sub2api-plugin	1.688s

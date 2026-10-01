@@ -595,11 +595,7 @@ func (g *Gateway) putStickySettingsHandler(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	cur, err := loadStickySettings(ctx, db.Pool)
-	if err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
+	cur := defaultStickySettings()
 	var in struct {
 		Enabled               *bool `json:"enabled"`
 		DefaultTTLSeconds     *int  `json:"default_ttl_seconds"`
@@ -626,10 +622,7 @@ func (g *Gateway) putStickySettingsHandler(c *gin.Context) {
 		cur.DefaultTTLSeconds = *in.DefaultTTLSeconds
 	}
 	uid, _ := core.UserID(ctx)
-	if _, err := db.Pool.Exec(ctx, `
-		INSERT INTO settings (key, value, updated_by, updated_at) VALUES ($1, $2, $3, now())
-		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-		settingsKeySticky, mustJSON(cur), nullID(uid)); err != nil {
+	if err := store.PatchSettingJSON(ctx, db, settingsKeySticky, nullID(uid), in, &cur); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}

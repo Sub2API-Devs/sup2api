@@ -545,11 +545,19 @@ func (p *Plugin) createBlock(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	if id := req.GetCaller().GetUserId(); id > 0 {
 		by = &id
 	}
-	b, err := scanBlock(db.QueryRow(ctx, `INSERT INTO blocks (user_id, reason, violations, source, created_at, expires_at, created_by)
+	var b Block
+	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		if err := lockBlockSubject(ctx, tx, uid); err != nil {
+			return err
+		}
+		var err error
+		b, err = scanBlock(tx.QueryRow(ctx, `INSERT INTO blocks (user_id, reason, violations, source, created_at, expires_at, created_by)
 		VALUES ($1, $2, 0, 'manual', $3, $4, $5)
 		ON CONFLICT (user_id) DO UPDATE SET reason = EXCLUDED.reason, source = 'manual', created_at = EXCLUDED.created_at,
 			expires_at = EXCLUDED.expires_at, created_by = EXCLUDED.created_by
 		RETURNING `+blockColumns, uid, reason, now, expires, by))
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -568,6 +576,9 @@ func (p *Plugin) deleteBlock(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	}
 	var found bool
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		if err := lockBlockSubject(ctx, tx, uid); err != nil {
+			return err
+		}
 		tag, err := tx.Exec(ctx, `DELETE FROM blocks WHERE user_id = $1`, uid)
 		if err != nil {
 			return err
@@ -668,20 +679,36 @@ func (p *Plugin) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*plugi
 	now := p.now().UTC()
 	var events, blocks int64
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		// Lock stable parents in a consistent order before removing bans or
+		// their counting baseline. Recheck predicates below after waiting.
+		rows, err := tx.Query(ctx, `SELECT user_id FROM blocks WHERE expires_at <= $1
+			UNION SELECT user_id FROM unblocks WHERE at < $2 ORDER BY user_id`, now, now.Add(-366*24*time.Hour))
+		if err != nil {
+			return err
+		}
+		users, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+		if err != nil {
+			return err
+		}
+		for _, uid := range users {
+			if err := lockBlockSubject(ctx, tx, uid); err != nil {
+				return err
+			}
+		}
 		tag, err := tx.Exec(ctx, `DELETE FROM events WHERE created_at < $1`, now.Add(-c.retention))
 		if err != nil {
 			return err
 		}
 		events = tag.RowsAffected()
 		tag, err = tx.Exec(ctx, `WITH expired AS (
-				DELETE FROM blocks WHERE expires_at IS NOT NULL AND expires_at <= $1 RETURNING user_id, expires_at)
+				DELETE FROM blocks WHERE user_id = ANY($2) AND expires_at IS NOT NULL AND expires_at <= $1 RETURNING user_id, expires_at)
 			INSERT INTO unblocks (user_id, at) SELECT user_id, expires_at FROM expired
-			ON CONFLICT (user_id) DO UPDATE SET at = GREATEST(unblocks.at, EXCLUDED.at)`, now)
+			ON CONFLICT (user_id) DO UPDATE SET at = GREATEST(unblocks.at, EXCLUDED.at)`, now, users)
 		if err != nil {
 			return err
 		}
 		blocks = tag.RowsAffected()
-		_, err = tx.Exec(ctx, `DELETE FROM unblocks WHERE at < $1`, now.Add(-366*24*time.Hour))
+		_, err = tx.Exec(ctx, `DELETE FROM unblocks WHERE user_id = ANY($2) AND at < $1`, now.Add(-366*24*time.Hour), users)
 		return err
 	})
 	if err != nil {

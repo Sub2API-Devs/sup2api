@@ -28,7 +28,7 @@ func getModels(t *testing.T, h *pluginsdktest.Harness, q map[string]string) mode
 }
 
 // TestModelCatalogUpgrade applies 0001, checks GET /models, then applies the
-// 0.2.0 test migration and checks the backfilled family column is served.
+// 0.3.0-test migration and checks the backfilled family column is served.
 func TestModelCatalogUpgrade(t *testing.T) {
 	dsn, schema := pluginsdktest.NewSchema(t, "plg_anthropic_t")
 	root := filepath.Join("..", "..")
@@ -39,7 +39,7 @@ func TestModelCatalogUpgrade(t *testing.T) {
 
 	fh := pluginsdktest.NewFakeHost()
 	fh.SetDSN(dsn, schema)
-	h := pluginsdktest.Start(t, New(), pluginsdktest.Options{Host: fh, SDK: []pluginsdk.Option{pluginsdk.WithInfo("anthropic", "0.1.6")}})
+	h := pluginsdktest.Start(t, New(), pluginsdktest.Options{Host: fh, SDK: []pluginsdk.Option{pluginsdk.WithInfo("anthropic", "0.2.0")}})
 
 	all := getModels(t, h, nil)
 	if all.Page.Total != 10 || len(all.Data) != 10 || all.Data[0]["model_id"] != "claude-fable-5-1" {
@@ -53,7 +53,7 @@ func TestModelCatalogUpgrade(t *testing.T) {
 		t.Fatalf("paged = %+v", paged)
 	}
 
-	pluginsdktest.ApplyMigrations(t, dsn, schema, filepath.Join(root, "testdata", "v0.2.0", "migrations"))
+	pluginsdktest.ApplyMigrations(t, dsn, schema, filepath.Join(root, "testdata", "v0.3.0-test", "migrations"))
 	all = getModels(t, h, nil)
 	fam := map[string]string{}
 	for _, m := range all.Data {

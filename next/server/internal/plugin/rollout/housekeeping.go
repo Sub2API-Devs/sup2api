@@ -13,7 +13,9 @@ func (c *Controller) drainAsync(key, version string, inst Instance, stop bool) {
 	c.drainMu.Lock()
 	c.draining[id]++
 	c.drainMu.Unlock()
+	c.wg.Add(1)
 	go func() {
+		defer c.wg.Done()
 		if stop {
 			inst.Stop()
 		} else {

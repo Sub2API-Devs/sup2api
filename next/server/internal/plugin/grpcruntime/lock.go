@@ -31,8 +31,8 @@ func LockKey(pluginKey, name string) string { return "plugin:" + pluginKey + ":"
 // lockReq validates a lock call and returns the core key, the ttl and the
 // locker. withTTL is false for LockRelease, which carries no ttl (a sentinel
 // ttl_ms value would let a plugin skip the check by sending it).
-func (h *hostServer) lockReq(name, token string, withTTL bool, ttlMs int64) (string, time.Duration, core.TokenLocker, error) {
-	if err := h.require(PermLock); err != nil {
+func (h *hostServer) lockReq(ctx context.Context, name, token string, withTTL bool, ttlMs int64) (string, time.Duration, core.TokenLocker, error) {
+	if err := h.require(ctx, PermLock); err != nil {
 		return "", 0, nil, err
 	}
 	if !protocol.ValidLockName(name) {
@@ -69,7 +69,7 @@ func (h *hostServer) lockUnavailable(call, name string, err error) error {
 // LockAcquire implements HostService.LockAcquire: one attempt, with the
 // plugin's token as the lock's value.
 func (h *hostServer) LockAcquire(ctx context.Context, in *pluginv1.LockAcquireRequest) (*pluginv1.LockAcquireResponse, error) {
-	key, ttl, locker, err := h.lockReq(in.GetName(), in.GetToken(), true, in.GetTtlMs())
+	key, ttl, locker, err := h.lockReq(ctx, in.GetName(), in.GetToken(), true, in.GetTtlMs())
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func (h *hostServer) LockAcquire(ctx context.Context, in *pluginv1.LockAcquireRe
 
 // LockRenew implements HostService.LockRenew.
 func (h *hostServer) LockRenew(ctx context.Context, in *pluginv1.LockRenewRequest) (*pluginv1.LockRenewResponse, error) {
-	key, ttl, locker, err := h.lockReq(in.GetName(), in.GetToken(), true, in.GetTtlMs())
+	key, ttl, locker, err := h.lockReq(ctx, in.GetName(), in.GetToken(), true, in.GetTtlMs())
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func (h *hostServer) LockRenew(ctx context.Context, in *pluginv1.LockRenewReques
 // errors, so the call could neither honour the request's deadline nor tell
 // the plugin that Redis did not answer.
 func (h *hostServer) LockRelease(ctx context.Context, in *pluginv1.LockReleaseRequest) (*pluginv1.LockReleaseResponse, error) {
-	key, _, locker, err := h.lockReq(in.GetName(), in.GetToken(), false, 0)
+	key, _, locker, err := h.lockReq(ctx, in.GetName(), in.GetToken(), false, 0)
 	if err != nil {
 		return nil, err
 	}

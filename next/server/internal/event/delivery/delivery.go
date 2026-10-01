@@ -26,6 +26,7 @@ const ChannelEventsAppended = "events:appended"
 
 // Options tunes delivery; zero values take the defaults.
 type Options struct {
+	CanRun       func() bool   // node admission; nil permits ordinary standalone operation
 	BatchSize    int           // default batch when the manifest omits it (100)
 	PollInterval time.Duration // idle poll period (1s)
 	LockTTL      time.Duration // lease of lock events:{plugin} (30s; at least ~CallTimeout+10s, see defaults)

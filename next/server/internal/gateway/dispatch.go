@@ -67,13 +67,24 @@ func (c *call) dispatch(ctx context.Context) {
 			}
 			break
 		}
-		attempts++
-		stickyAttempt := c.sticky != nil && c.sticky.hit && c.sticky.bound == ref.ID
 		if lim := c.g.d.Limiter; lim != nil {
-			lim.Hit(ctx, ref.ID, c.session)
+			admitted, err := lim.TryHit(c.slotCtx, *ref, c.session)
+			if err != nil {
+				release()
+				c.fail(fromCore(core.ErrUnavailable.WithMessage("account limits unavailable").WithCause(err), errTypeInternal))
+				return
+			}
+			if !admitted {
+				release()
+				excluded[ref.ID] = true
+				last = fromCore(core.ErrRateLimited.WithMessage("all accounts are busy or rate limited, please retry later"), errTypeNoAccount)
+				continue
+			}
 		}
-		res := c.attempt(ctx, ref, attempts-1)
-		release()
+		attempts++
+		c.rec.Attempts = attempts
+		stickyAttempt := c.sticky != nil && c.sticky.hit && c.sticky.bound == ref.ID
+		res := func() attemptResult { defer release(); return c.attempt(c.slotCtx, ref, attempts-1) }()
 		lastAccount = ref.ID
 		switch res.kind {
 		case attemptDone:
@@ -262,7 +273,7 @@ func weightedOrder(grp []core.AccountRef, rnd func() float64) {
 }
 
 func (c *call) acquireAccount(ctx context.Context, ref *core.AccountRef) (func(), bool) {
-	release, ok, err := c.g.d.Slots.Acquire(ctx, "account", ref.ID, ref.MaxConcurrency, c.rid)
+	leaseCtx, release, ok, err := core.AcquireSlot(ctx, c.g.d.Slots, "account", ref.ID, ref.MaxConcurrency, c.rid)
 	if err != nil {
 		slog.WarnContext(ctx, "gateway: acquire account slot", "account", ref.ID, "err", err)
 		return nil, false
@@ -270,6 +281,7 @@ func (c *call) acquireAccount(ctx context.Context, ref *core.AccountRef) (func()
 	if !ok {
 		return nil, false
 	}
+	c.slotCtx = leaseCtx
 	return release, true
 }
 
@@ -329,11 +341,12 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	}
 	meta := c.metaFor(rt)
 	meta.Model = upModel
+	buildRequest := &pluginv1.BuildUpstreamRequestRequest{Meta: meta, Account: pacct, Fields: fields, InboundHeaders: c.passHeaders(rt.passHeaders), Attempt: int32(n)}
+	if c.canExecute(rt) {
+		return c.executeAttempt(ctx, rt, acc, pacct, upBody, buildRequest)
+	}
 	bctx, cancel := context.WithTimeout(ctx, c.gw.platformTimeout())
-	built, err := rt.binding.Client.BuildUpstreamRequest(bctx, &pluginv1.BuildUpstreamRequestRequest{
-		Meta: meta, Account: pacct, Fields: fields,
-		InboundHeaders: c.passHeaders(rt.passHeaders), Attempt: int32(n),
-	})
+	built, err := rt.binding.Client.BuildUpstreamRequest(bctx, buildRequest)
 	cancel()
 	if ctx.Err() != nil {
 		return attemptResult{kind: attemptCanceled, err: canceledErr()}
@@ -344,10 +357,20 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	if err != nil {
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
 	}
+	return c.forwardBuilt(ctx, rt, acc, pacct, upBody, built, nil)
+}
+
+func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Account, pacct *pluginv1.Account, upBody []byte, built *pluginv1.BuildUpstreamRequestResponse, execution *gatewayExecution) attemptResult {
+	prepareCtx := ctx
+	if execution != nil {
+		var cancel context.CancelFunc
+		prepareCtx, cancel = context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+	}
 	if built.GetUpstreamModel() != "" {
 		c.rec.UpstreamModel = built.GetUpstreamModel()
 	}
-	target, err := c.g.checkUpstreamURL(ctx, built.GetUrl())
+	target, err := c.g.checkUpstreamURL(prepareCtx, built.GetUrl())
 	if err != nil {
 		slog.WarnContext(ctx, "gateway: upstream url rejected", "plugin", rt.binding.Plugin.Key, "account", acc.ID, "err", err)
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrUnavailable.WithMessage("upstream address rejected"), errTypeInternal)}
@@ -356,9 +379,9 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	if err != nil {
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
 	}
-	client, err := c.g.d.Proxies.HTTPClient(ctx, acc.ProxyID)
+	client, err := c.g.d.Proxies.HTTPClient(prepareCtx, acc.ProxyID)
 	if err != nil || client == nil {
-		return unavailable("proxy", err)
+		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrUnavailable.WithCause(err), errTypeInternal)}
 	}
 
 	// Send. Canceling ctx (client gone) cancels the upstream request.
@@ -392,17 +415,31 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	hc := *client
 	hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	hc.Timeout = 0
+	if c.ep.TaskSubmit() {
+		if err := c.beginTask(prepareCtx); err != nil {
+			return attemptResult{kind: attemptReturn, err: fromCore(core.ErrUnavailable.WithMessage("task registration unavailable").WithCause(err), errTypeInternal)}
+		}
+	}
 
 	timer := time.AfterFunc(c.g.headerWait(c.stream), ucancel)
+	if execution != nil {
+		execution.sent = true
+	}
 	resp, err := hc.Do(req)
 	headerTimedOut := !timer.Stop()
 	if err != nil {
+		if c.ep.TaskSubmit() {
+			return c.taskFailure(ctx, "task submission outcome is uncertain", err)
+		}
 		if ctx.Err() != nil {
 			return attemptResult{kind: attemptCanceled, err: canceledErr()}
 		}
 		msg := err.Error()
 		if headerTimedOut {
 			msg = "timeout waiting for upstream response headers"
+		}
+		if execution != nil {
+			return execution.classify(ctx, 0, nil, nil, msg)
 		}
 		return c.classify(ctx, rt, pacct, 0, nil, nil, msg)
 	}
@@ -411,11 +448,26 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		raw, _ := readPrefix(resp.Body, maxErrorBody)
 		ct := resp.Header.Get("Content-Type")
-		res := c.classify(ctx, rt, pacct, resp.StatusCode, resp.Header, raw, "")
+		var res attemptResult
+		if execution != nil {
+			res = execution.classify(ctx, resp.StatusCode, resp.Header, raw, "")
+		} else {
+			res = c.classify(ctx, rt, pacct, resp.StatusCode, resp.Header, raw, "")
+		}
+		if c.ep.TaskSubmit() {
+			c.recordTaskFailure(ctx, resp.StatusCode, raw, "upstream rejected task submission")
+			res.kind = attemptReturn
+		}
 		if res.err != nil && res.err.Raw != nil {
 			res.err.ContentType = ct
 		}
 		return res
+	}
+	if execution != nil {
+		return execution.forward(ctx, resp)
+	}
+	if c.ep.TaskSubmit() {
+		return c.forwardTask(ctx, rt, pacct, resp, upBody)
 	}
 	return c.forward(ctx, rt, pacct, resp, upBody)
 }
@@ -455,6 +507,10 @@ func (c *call) classify(ctx context.Context, rt *typeRoute, acct *pluginv1.Accou
 		cls = defaultClassification(status)
 	}
 
+	return c.applyClassification(ctx, rt, acct, status, body, transportErr, cls)
+}
+
+func (c *call) applyClassification(ctx context.Context, rt *typeRoute, acct *pluginv1.Account, status int, body []byte, transportErr string, cls *pluginv1.ClassifyErrorResponse) attemptResult {
 	switch cls.GetAccountEffect() {
 	case pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN:
 		until := time.Unix(cls.GetCooldownUntilUnix(), 0)

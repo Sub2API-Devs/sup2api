@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -17,6 +18,19 @@ import (
 var Version = "0.1.0-dev"
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "version" {
+		fmt.Println(Version)
+		return
+	}
+	if len(os.Args) == 2 && os.Args[1] == "schema-contract" {
+		contract, err := app.SchemaContract()
+		if err != nil {
+			slog.Error("schema contract", "err", err)
+			os.Exit(1)
+		}
+		fmt.Println(contract)
+		return
+	}
 	// Hidden subcommand used by the plugin sandbox launcher.
 	if len(os.Args) > 1 && os.Args[1] == "plugin-exec" {
 		os.Exit(runPluginExec(os.Args[2:]))

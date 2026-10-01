@@ -19,6 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	HostService_ForwardUpstream_FullMethodName       = "/sub2api.plugin.v1.HostService/ForwardUpstream"
+	HostService_RecordUsage_FullMethodName           = "/sub2api.plugin.v1.HostService/RecordUsage"
+	HostService_ReserveAndWatch_FullMethodName       = "/sub2api.plugin.v1.HostService/ReserveAndWatch"
+	HostService_ReportTaskProgress_FullMethodName    = "/sub2api.plugin.v1.HostService/ReportTaskProgress"
 	HostService_Log_FullMethodName                   = "/sub2api.plugin.v1.HostService/Log"
 	HostService_KVGet_FullMethodName                 = "/sub2api.plugin.v1.HostService/KVGet"
 	HostService_KVSet_FullMethodName                 = "/sub2api.plugin.v1.HostService/KVSet"
@@ -34,6 +38,7 @@ const (
 	HostService_LockRelease_FullMethodName           = "/sub2api.plugin.v1.HostService/LockRelease"
 	HostService_ListAccounts_FullMethodName          = "/sub2api.plugin.v1.HostService/ListAccounts"
 	HostService_GetAccountCredentials_FullMethodName = "/sub2api.plugin.v1.HostService/GetAccountCredentials"
+	HostService_ExecuteHTTP_FullMethodName           = "/sub2api.plugin.v1.HostService/ExecuteHTTP"
 )
 
 // HostServiceClient is the client API for HostService service.
@@ -42,9 +47,21 @@ const (
 //
 // HostService is served by the host to one plugin instance over the
 // go-plugin broker. The host knows which plugin is calling from the broker
-// connection and checks the matching grant on every call; calls without a
-// grant fail with PERMISSION_DENIED.
+// connection and checks the matching grant on every call. ExecuteHTTP instead
+// requires the invocation-local authority issued by the host for Poll.
+// Calls without the required authority fail with PERMISSION_DENIED.
 type HostServiceClient interface {
+	// These callbacks are authorized only by an active Execute/Monitor scope,
+	// bound to the calling process, selected account and immutable attribution.
+	// No monetary amount, user identity or account selector is accepted.
+	ForwardUpstream(ctx context.Context, in *ForwardUpstreamRequest, opts ...grpc.CallOption) (*ForwardUpstreamResponse, error)
+	RecordUsage(ctx context.Context, in *RecordUsageRequest, opts ...grpc.CallOption) (*ExecutionReceipt, error)
+	// Submission usage, optional precharge and the durable polling registration
+	// commit together. Success must precede publishing the submission response.
+	ReserveAndWatch(ctx context.Context, in *ReserveAndWatchRequest, opts ...grpc.CallOption) (*ExecutionReceipt, error)
+	// Atomically persists progress; terminal reports settle/refund and close
+	// monitoring in the same transaction. Repeating the same report is safe.
+	ReportTaskProgress(ctx context.Context, in *ReportTaskProgressRequest, opts ...grpc.CallOption) (*ExecutionReceipt, error)
 	// log (always granted)
 	Log(ctx context.Context, in *LogRequest, opts ...grpc.CallOption) (*LogResponse, error)
 	// kv (grant "kv"): Redis-backed, namespaced per plugin.
@@ -121,6 +138,12 @@ type HostServiceClient interface {
 	// accounts.credentials {"types":"own"} (Critical): the decrypted credentials
 	// of ONE account of this plugin's account types. Audited on every call.
 	GetAccountCredentials(ctx context.Context, in *GetAccountCredentialsRequest, opts ...grpc.CallOption) (*GetAccountCredentialsResponse, error)
+	// One bounded HTTP observation on behalf of an active Poll invocation.
+	// Authority comes from an opaque token bound to this exact plugin process,
+	// account and invocation, not from a generic net/accounts permission.
+	// The host enforces cancellation, the account proxy, limits and SSRF checks.
+	// A token permits at most one HTTP request; redirects are not followed.
+	ExecuteHTTP(ctx context.Context, in *ExecutionHTTPRequest, opts ...grpc.CallOption) (*ExecutionHTTPResponse, error)
 }
 
 type hostServiceClient struct {
@@ -129,6 +152,46 @@ type hostServiceClient struct {
 
 func NewHostServiceClient(cc grpc.ClientConnInterface) HostServiceClient {
 	return &hostServiceClient{cc}
+}
+
+func (c *hostServiceClient) ForwardUpstream(ctx context.Context, in *ForwardUpstreamRequest, opts ...grpc.CallOption) (*ForwardUpstreamResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ForwardUpstreamResponse)
+	err := c.cc.Invoke(ctx, HostService_ForwardUpstream_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) RecordUsage(ctx context.Context, in *RecordUsageRequest, opts ...grpc.CallOption) (*ExecutionReceipt, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExecutionReceipt)
+	err := c.cc.Invoke(ctx, HostService_RecordUsage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) ReserveAndWatch(ctx context.Context, in *ReserveAndWatchRequest, opts ...grpc.CallOption) (*ExecutionReceipt, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExecutionReceipt)
+	err := c.cc.Invoke(ctx, HostService_ReserveAndWatch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) ReportTaskProgress(ctx context.Context, in *ReportTaskProgressRequest, opts ...grpc.CallOption) (*ExecutionReceipt, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExecutionReceipt)
+	err := c.cc.Invoke(ctx, HostService_ReportTaskProgress_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *hostServiceClient) Log(ctx context.Context, in *LogRequest, opts ...grpc.CallOption) (*LogResponse, error) {
@@ -281,15 +344,37 @@ func (c *hostServiceClient) GetAccountCredentials(ctx context.Context, in *GetAc
 	return out, nil
 }
 
+func (c *hostServiceClient) ExecuteHTTP(ctx context.Context, in *ExecutionHTTPRequest, opts ...grpc.CallOption) (*ExecutionHTTPResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExecutionHTTPResponse)
+	err := c.cc.Invoke(ctx, HostService_ExecuteHTTP_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // HostServiceServer is the server API for HostService service.
 // All implementations must embed UnimplementedHostServiceServer
 // for forward compatibility.
 //
 // HostService is served by the host to one plugin instance over the
 // go-plugin broker. The host knows which plugin is calling from the broker
-// connection and checks the matching grant on every call; calls without a
-// grant fail with PERMISSION_DENIED.
+// connection and checks the matching grant on every call. ExecuteHTTP instead
+// requires the invocation-local authority issued by the host for Poll.
+// Calls without the required authority fail with PERMISSION_DENIED.
 type HostServiceServer interface {
+	// These callbacks are authorized only by an active Execute/Monitor scope,
+	// bound to the calling process, selected account and immutable attribution.
+	// No monetary amount, user identity or account selector is accepted.
+	ForwardUpstream(context.Context, *ForwardUpstreamRequest) (*ForwardUpstreamResponse, error)
+	RecordUsage(context.Context, *RecordUsageRequest) (*ExecutionReceipt, error)
+	// Submission usage, optional precharge and the durable polling registration
+	// commit together. Success must precede publishing the submission response.
+	ReserveAndWatch(context.Context, *ReserveAndWatchRequest) (*ExecutionReceipt, error)
+	// Atomically persists progress; terminal reports settle/refund and close
+	// monitoring in the same transaction. Repeating the same report is safe.
+	ReportTaskProgress(context.Context, *ReportTaskProgressRequest) (*ExecutionReceipt, error)
 	// log (always granted)
 	Log(context.Context, *LogRequest) (*LogResponse, error)
 	// kv (grant "kv"): Redis-backed, namespaced per plugin.
@@ -366,6 +451,12 @@ type HostServiceServer interface {
 	// accounts.credentials {"types":"own"} (Critical): the decrypted credentials
 	// of ONE account of this plugin's account types. Audited on every call.
 	GetAccountCredentials(context.Context, *GetAccountCredentialsRequest) (*GetAccountCredentialsResponse, error)
+	// One bounded HTTP observation on behalf of an active Poll invocation.
+	// Authority comes from an opaque token bound to this exact plugin process,
+	// account and invocation, not from a generic net/accounts permission.
+	// The host enforces cancellation, the account proxy, limits and SSRF checks.
+	// A token permits at most one HTTP request; redirects are not followed.
+	ExecuteHTTP(context.Context, *ExecutionHTTPRequest) (*ExecutionHTTPResponse, error)
 	mustEmbedUnimplementedHostServiceServer()
 }
 
@@ -376,6 +467,18 @@ type HostServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedHostServiceServer struct{}
 
+func (UnimplementedHostServiceServer) ForwardUpstream(context.Context, *ForwardUpstreamRequest) (*ForwardUpstreamResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ForwardUpstream not implemented")
+}
+func (UnimplementedHostServiceServer) RecordUsage(context.Context, *RecordUsageRequest) (*ExecutionReceipt, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecordUsage not implemented")
+}
+func (UnimplementedHostServiceServer) ReserveAndWatch(context.Context, *ReserveAndWatchRequest) (*ExecutionReceipt, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReserveAndWatch not implemented")
+}
+func (UnimplementedHostServiceServer) ReportTaskProgress(context.Context, *ReportTaskProgressRequest) (*ExecutionReceipt, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportTaskProgress not implemented")
+}
 func (UnimplementedHostServiceServer) Log(context.Context, *LogRequest) (*LogResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Log not implemented")
 }
@@ -421,6 +524,9 @@ func (UnimplementedHostServiceServer) ListAccounts(context.Context, *ListAccount
 func (UnimplementedHostServiceServer) GetAccountCredentials(context.Context, *GetAccountCredentialsRequest) (*GetAccountCredentialsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAccountCredentials not implemented")
 }
+func (UnimplementedHostServiceServer) ExecuteHTTP(context.Context, *ExecutionHTTPRequest) (*ExecutionHTTPResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExecuteHTTP not implemented")
+}
 func (UnimplementedHostServiceServer) mustEmbedUnimplementedHostServiceServer() {}
 func (UnimplementedHostServiceServer) testEmbeddedByValue()                     {}
 
@@ -440,6 +546,78 @@ func RegisterHostServiceServer(s grpc.ServiceRegistrar, srv HostServiceServer) {
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&HostService_ServiceDesc, srv)
+}
+
+func _HostService_ForwardUpstream_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ForwardUpstreamRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).ForwardUpstream(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostService_ForwardUpstream_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).ForwardUpstream(ctx, req.(*ForwardUpstreamRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_RecordUsage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordUsageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).RecordUsage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostService_RecordUsage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).RecordUsage(ctx, req.(*RecordUsageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_ReserveAndWatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReserveAndWatchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).ReserveAndWatch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostService_ReserveAndWatch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).ReserveAndWatch(ctx, req.(*ReserveAndWatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_ReportTaskProgress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportTaskProgressRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).ReportTaskProgress(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostService_ReportTaskProgress_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).ReportTaskProgress(ctx, req.(*ReportTaskProgressRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _HostService_Log_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -712,6 +890,24 @@ func _HostService_GetAccountCredentials_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HostService_ExecuteHTTP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExecutionHTTPRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).ExecuteHTTP(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostService_ExecuteHTTP_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).ExecuteHTTP(ctx, req.(*ExecutionHTTPRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // HostService_ServiceDesc is the grpc.ServiceDesc for HostService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -719,6 +915,22 @@ var HostService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "sub2api.plugin.v1.HostService",
 	HandlerType: (*HostServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ForwardUpstream",
+			Handler:    _HostService_ForwardUpstream_Handler,
+		},
+		{
+			MethodName: "RecordUsage",
+			Handler:    _HostService_RecordUsage_Handler,
+		},
+		{
+			MethodName: "ReserveAndWatch",
+			Handler:    _HostService_ReserveAndWatch_Handler,
+		},
+		{
+			MethodName: "ReportTaskProgress",
+			Handler:    _HostService_ReportTaskProgress_Handler,
+		},
 		{
 			MethodName: "Log",
 			Handler:    _HostService_Log_Handler,
@@ -778,6 +990,10 @@ var HostService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAccountCredentials",
 			Handler:    _HostService_GetAccountCredentials_Handler,
+		},
+		{
+			MethodName: "ExecuteHTTP",
+			Handler:    _HostService_ExecuteHTTP_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

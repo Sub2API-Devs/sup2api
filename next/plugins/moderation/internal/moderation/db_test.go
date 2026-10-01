@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -12,13 +13,16 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/pluginsdktest"
 )
 
-func startDB(t *testing.T, llm *fakeLLM, extra map[string]any) (*Plugin, *pluginsdktest.Harness, *pluginsdktest.FakeHost) {
+func startDB(t *testing.T, llm *fakeLLM, extra map[string]any, beforeInit ...func(*Plugin)) (*Plugin, *pluginsdktest.Harness, *pluginsdktest.FakeHost) {
 	t.Helper()
 	dsn, schema := pluginsdktest.NewSchema(t, "plg_moderation_t")
 	pluginsdktest.ApplyMigrations(t, dsn, schema, filepath.Join("..", "..", "migrations"))
 	fh := pluginsdktest.NewFakeHost()
 	fh.SetDSN(dsn, schema)
 	p := New()
+	for _, configure := range beforeInit {
+		configure(p)
+	}
 	h := pluginsdktest.Start(t, p, pluginsdktest.Options{Host: fh, SDK: sdkOpts(), Config: settingsMap(llm.srv.URL, ModeEnforce, extra)})
 	return p, h, fh
 }
@@ -142,8 +146,13 @@ func fmtInt(i int64) string {
 
 func TestAutoBanAndUnblock(t *testing.T) {
 	llm := mockLLM(t)
-	p, h, fh := startDB(t, llm, map[string]any{"ban_threshold": 2, "ban_window_hours": 1, "ban_duration_hours": 0, "cache_ttl_seconds": 0})
-	p.refreshEvery = time.Hour // only broadcasts/kicks reload
+	var clockOffset atomic.Int64
+	p, h, fh := startDB(t, llm, map[string]any{"ban_threshold": 2, "ban_window_hours": 1, "ban_duration_hours": 0, "cache_ttl_seconds": 0}, func(p *Plugin) {
+		p.refreshEvery = time.Hour // only broadcasts/kicks reload
+		// Install the clock before Init starts readers. Only its synchronized
+		// offset changes while background event and refresh workers are active.
+		p.now = func() time.Time { return time.Now().Add(time.Duration(clockOffset.Load())) }
+	})
 	ctx := context.Background()
 	mustHook(t, h, hookReq("first MOD-BLOCK"))
 	if r := mustHook(t, h, hookReq("harmless")); denied(r) {
@@ -210,7 +219,7 @@ func TestAutoBanAndUnblock(t *testing.T) {
 	if list := decodeData[[]Block](t, h.Do("GET", "/blocks", nil, nil)); len(list) != 2 || list[0].UserID != 42 {
 		t.Fatalf("blocks = %+v", list)
 	}
-	p.now = func() time.Time { return time.Now().Add(2 * time.Hour) }
+	clockOffset.Store(int64(2 * time.Hour))
 	job, err := h.App.RunJob(ctx, &pluginv1.RunJobRequest{JobId: JobCleanup})
 	if err != nil || !strings.Contains(job.GetMessage(), "1 expired blocks") {
 		t.Fatalf("cleanup = %v %v", job, err)
@@ -227,7 +236,7 @@ func TestAutoBanAndUnblock(t *testing.T) {
 	if errs := h.Configure(settingsMap(llm.srv.URL, ModeEnforce, map[string]any{"retention_days": 1}), nil); len(errs) > 0 {
 		t.Fatal(errs)
 	}
-	p.now = func() time.Time { return time.Now().Add(3 * 24 * time.Hour) }
+	clockOffset.Store(int64(3 * 24 * time.Hour))
 	job, err = h.App.RunJob(ctx, &pluginv1.RunJobRequest{JobId: JobCleanup})
 	if err != nil || !strings.HasPrefix(job.GetMessage(), "deleted 5 events") { // 4 blocks + the recorded "harmless" pass
 		t.Fatalf("cleanup = %v %v", job, err)

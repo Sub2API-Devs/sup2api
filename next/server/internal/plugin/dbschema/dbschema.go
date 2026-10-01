@@ -236,13 +236,22 @@ func (m *Manager) DSN(ctx context.Context, pluginKey string) (dsn string, st Sta
 
 // Drop removes the schema, the role and the migration records.
 func (m *Manager) Drop(ctx context.Context, pluginKey string) error {
+	return m.db.Tx(ctx, func(tx pgx.Tx) error { return m.DropTx(ctx, tx, pluginKey) })
+}
+
+// DropTx holds both schema and migration locks until the lifecycle transaction
+// commits. Invalidate the local DSN cache even on rollback; Ensure rebuilds it.
+func (m *Manager) DropTx(ctx context.Context, tx pgx.Tx, pluginKey string) error {
 	if !keyRe.MatchString(pluginKey) {
 		return fmt.Errorf("invalid plugin key %q", pluginKey)
 	}
 	schema := SchemaName(pluginKey)
 	sid := pgx.Identifier{schema}.Sanitize()
-	err := m.db.Tx(ctx, func(tx pgx.Tx) error {
+	err := func() error {
 		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, store.PluginMigrationLockKey(pluginKey)^0x5a5a); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, store.PluginMigrationLockKey(pluginKey)); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, "DROP SCHEMA IF EXISTS "+sid+" CASCADE"); err != nil {
@@ -265,7 +274,7 @@ func (m *Manager) Drop(ctx context.Context, pluginKey string) error {
 			}
 		}
 		return nil
-	})
+	}()
 	if err != nil {
 		return fmt.Errorf("drop plugin schema %s: %w", schema, err)
 	}

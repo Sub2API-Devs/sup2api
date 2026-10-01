@@ -1,0 +1,11 @@
+=== sdk ===
+?   	github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1	[no test files]
+?   	github.com/Sub2API-Devs/sup2api/next/sdk/manifest	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/sdk/manifest/check	1.085s
+?   	github.com/Sub2API-Devs/sup2api/next/sdk/pkgsig	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/sdk/platforms	1.033s
+ok  	github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk	3.588s
+ok  	github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/apikey	1.031s
+ok  	github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/egress	1.223s
+?   	github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/pluginsdktest	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/sdk/protocol	1.051s

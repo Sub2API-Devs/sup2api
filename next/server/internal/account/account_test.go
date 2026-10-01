@@ -70,6 +70,9 @@ func (*fakePlatform) ResolveModel(context.Context, *pluginv1.ResolveModelRequest
 	return nil, core.ErrInternal
 }
 
+func (*fakePlatform) ParseTaskSubmission(context.Context, *pluginv1.ExtractUsageRequest) (*pluginv1.TaskSubmission, error) {
+	return nil, nil
+}
 func (*fakePlatform) ExtractUsage(context.Context, *pluginv1.ExtractUsageRequest) (*pluginv1.UsageReport, error) {
 	return nil, core.ErrInternal
 }

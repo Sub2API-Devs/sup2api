@@ -266,7 +266,7 @@ func TestAPIKeyLifecycleAndAuth(t *testing.T) {
 		t.Fatalf("list all: %v", out)
 	}
 
-	// Authenticate: success, cached.
+	// Authentication always reads the current principal from PostgreSQL.
 	p, err := e.svc.Authenticate(ctx, raw)
 	if err != nil {
 		t.Fatal(err)
@@ -275,8 +275,8 @@ func TestAPIKeyLifecycleAndAuth(t *testing.T) {
 		len(p.Group.ModelAllowlist) != 1 {
 		t.Fatalf("principal: %+v", p)
 	}
-	if !e.mr.Exists("apikey:" + HashKey(raw)) {
-		t.Fatal("not cached")
+	if e.mr.Exists("apikey:" + HashKey(raw)) {
+		t.Fatal("security principal must not be cached")
 	}
 	if _, err := e.svc.Authenticate(ctx, "sk-s2a-"+strings.Repeat("x", 40)); codeOf(err) != "unauthenticated" {
 		t.Fatalf("unknown key: %v", err)
@@ -324,9 +324,8 @@ func TestAPIKeyLifecycleAndAuth(t *testing.T) {
 	if err != nil || p.Group.ID != restricted {
 		t.Fatalf("after move: %+v %v", p, err)
 	}
-	// Removing the membership: stale cache until TTL; simulate expiry.
+	// Removing membership takes effect without waiting for cache expiry.
 	e.exec(`DELETE FROM user_groups WHERE user_id = $1`, e.user)
-	e.mr.FastForward(61 * time.Second)
 	if _, err := e.svc.Authenticate(ctx, raw); codeOf(err) != "permission_denied" {
 		t.Fatalf("group not available: %v", err)
 	}
@@ -336,18 +335,15 @@ func TestAPIKeyLifecycleAndAuth(t *testing.T) {
 		t.Fatalf("clear expiry: %d %v", code, out)
 	}
 	e.exec(`UPDATE api_keys SET expires_at = now() - interval '1 minute' WHERE id = $1`, keyID)
-	e.mr.FlushAll()
 	if _, err := e.svc.Authenticate(ctx, raw); codeOf(err) != "unauthenticated" {
 		t.Fatalf("expired: %v", err)
 	}
 	e.exec(`UPDATE api_keys SET expires_at = NULL WHERE id = $1`, keyID)
 	e.exec(`UPDATE users SET status = 'disabled' WHERE id = $1`, e.user)
-	e.mr.FlushAll()
 	if _, err := e.svc.Authenticate(ctx, raw); codeOf(err) != "unauthenticated" {
 		t.Fatalf("disabled user: %v", err)
 	}
 	e.exec(`UPDATE users SET status = 'active' WHERE id = $1`, e.user)
-	e.mr.FlushAll() // user changes are picked up after the cache TTL
 	// Admin list with filter.
 	_, out = e.do(e.admin, "GET", fmt.Sprintf("/api-keys?user_id=%d&q=main", e.user), nil)
 	if out["page"].(map[string]any)["total"].(float64) != 1 || out["data"].([]any)[0].(map[string]any)["user_email"] != "u@x.com" {

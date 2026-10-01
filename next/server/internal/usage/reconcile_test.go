@@ -85,6 +85,10 @@ func (p *recPlugin) ExtractUsage(context.Context, *pluginv1.ExtractUsageRequest)
 	return nil, nil
 }
 
+func (p *recPlugin) ParseTaskSubmission(context.Context, *pluginv1.ExtractUsageRequest) (*pluginv1.TaskSubmission, error) {
+	return nil, nil
+}
+
 // recGen is a generation holding exactly one plugin platform.
 type recGen struct {
 	info   core.PluginInfo
@@ -97,7 +101,13 @@ func (g *recGen) Plugins() []core.PluginInfo { return []core.PluginInfo{g.info} 
 func (g *recGen) Plugin(key string) (core.PluginInfo, bool) {
 	return g.info, key == g.info.Key
 }
-func (g *recGen) Endpoints() []core.EndpointBinding { return nil }
+func (g *recGen) Endpoints() []core.EndpointBinding {
+	var out []core.EndpointBinding
+	for _, e := range g.pf.Endpoints {
+		out = append(out, core.EndpointBinding{Plugin: g.info, Platform: g.pf.ID, Endpoint: e})
+	}
+	return out
+}
 func (g *recGen) Platforms() []core.PlatformBinding {
 	return []core.PlatformBinding{{Plugin: g.info, Platform: g.pf, Client: g.client}}
 }

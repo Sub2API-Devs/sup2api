@@ -18,6 +18,7 @@ import (
 	"github.com/robfig/cron/v3"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/background"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
@@ -38,16 +39,28 @@ const slotUniqueIndex = "plugin_job_runs_slot_uniq"
 
 // Options tunes the scheduler; zero values take the defaults.
 type Options struct {
-	DefaultTimeout    time.Duration // when timeoutSec is 0 (60s)
-	LockGrace         time.Duration // slot lock TTL = timeout + LockGrace (60s)
-	KeepRuns          int           // runs kept per (plugin, job) (1000)
-	RetentionInterval time.Duration // retention period (1h)
+	Executor          *background.Executor // shared with other offline work
+	Concurrency       int                  // default 4
+	QueueSize         int                  // default 128
+	DefaultTimeout    time.Duration        // when timeoutSec is 0 (60s)
+	LockGrace         time.Duration        // slot lock TTL = timeout + LockGrace (60s)
+	KeepRuns          int                  // runs kept per (plugin, job) (1000)
+	RetentionInterval time.Duration        // retention period (1h)
 	// StaleAfter marks "running" rows older than this as failed during
 	// retention (their node died). Must exceed the maximum job timeout (25h).
 	StaleAfter time.Duration
 }
 
 func (o *Options) defaults() {
+	if o.Executor == nil {
+		o.Executor = background.New(8)
+	}
+	if o.Concurrency <= 0 {
+		o.Concurrency = 4
+	}
+	if o.QueueSize <= 0 {
+		o.QueueSize = 128
+	}
 	if o.DefaultTimeout <= 0 {
 		o.DefaultTimeout = 60 * time.Second
 	}
@@ -83,6 +96,7 @@ type Scheduler struct {
 	changed chan struct{}
 	unsub   func()
 	started bool
+	group   *background.Group
 }
 
 var _ core.JobTrigger = (*Scheduler)(nil)
@@ -118,6 +132,9 @@ func (s *Scheduler) Start(ctx context.Context) error {
 	if s.started {
 		return nil
 	}
+	if s.group != nil {
+		return errors.New("job scheduler cannot restart after Stop")
+	}
 	if _, err := s.db.Pool.Exec(ctx, `UPDATE plugin_job_runs
 		SET status = $2, finished_at = now(), message = 'abandoned: node restarted before the run finished'
 		WHERE node_id = $1 AND status = $3`, s.nodeID, StatusFailed, StatusRunning); err != nil {
@@ -125,6 +142,7 @@ func (s *Scheduler) Start(ctx context.Context) error {
 	}
 	s.started = true
 	s.ctx, s.cancel = context.WithCancel(context.WithoutCancel(ctx))
+	s.group = s.opts.Executor.Group(s.ctx, s.opts.Concurrency, s.opts.QueueSize)
 	s.unsub = s.registry.OnChange(func(core.Generation) {
 		select {
 		case s.changed <- struct{}{}:
@@ -142,14 +160,20 @@ func (s *Scheduler) Start(ctx context.Context) error {
 // for them, bounded by ctx.
 func (s *Scheduler) Stop(ctx context.Context) error {
 	s.mu.Lock()
-	if !s.started {
+	if s.group == nil {
 		s.mu.Unlock()
 		return nil
 	}
-	s.started = false
-	s.unsub()
-	s.cancel()
+	if s.started {
+		s.started = false
+		s.unsub()
+		s.cancel()
+	}
+	group := s.group
 	s.mu.Unlock()
+	if err := group.Close(ctx); err != nil {
+		return err
+	}
 	done := make(chan struct{})
 	go func() { s.wg.Wait(); close(done) }()
 	select {
@@ -213,11 +237,15 @@ func (s *Scheduler) fireDue(now time.Time) {
 		}
 		b, slot := e.binding, e.next
 		e.next = e.sched.Next(now)
-		s.wg.Add(1)
-		go func() {
-			defer s.wg.Done()
-			s.runScheduled(b, slot)
-		}()
+		if err := s.group.Submit(s.ctx, background.Work{}, func(ctx context.Context) error {
+			current, err := s.lookup(ctx, b.Plugin.Key, b.Job.ID)
+			if err == nil && current.Job.Schedule == b.Job.Schedule {
+				s.runScheduledAdmitted(ctx, current, slot)
+			}
+			return nil
+		}); err != nil && s.ctx.Err() == nil {
+			s.log.Warn("job execution queue is full", "plugin", b.Plugin.Key, "job", b.Job.ID, "err", err)
+		}
 	}
 }
 
@@ -261,9 +289,21 @@ func (s *Scheduler) timeout(b core.JobBinding) time.Duration {
 // scheduled run per slot, and whichever node loses that - by NOT EXISTS, or
 // by the unique violation when two inserts race - skips the slot.
 func (s *Scheduler) runScheduled(b core.JobBinding, slot time.Time) {
+	_ = s.group.Run(s.ctx, background.Work{}, func(ctx context.Context) error {
+		s.runScheduledAdmitted(ctx, b, slot)
+		return nil
+	})
+}
+
+func (s *Scheduler) runScheduledAdmitted(ctx context.Context, b core.JobBinding, slot time.Time) {
+	if ctx.Err() != nil {
+		return
+	}
 	timeout := s.timeout(b)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	key := fmt.Sprintf("job:%s:%s:%d", b.Plugin.Key, b.Job.ID, slot.Unix())
-	_, ok, err := s.locker.TryLock(s.ctx, key, timeout+s.opts.LockGrace)
+	lk, ok, err := s.locker.TryLock(ctx, key, timeout+s.opts.LockGrace)
 	if err != nil {
 		if s.ctx.Err() == nil {
 			s.log.Warn("job lock failed", "plugin", b.Plugin.Key, "job", b.Job.ID, "err", err)
@@ -274,7 +314,7 @@ func (s *Scheduler) runScheduled(b core.JobBinding, slot time.Time) {
 		return
 	}
 	var id int64
-	err = s.db.Pool.QueryRow(s.ctx, `INSERT INTO plugin_job_runs (plugin_key, job_id, node_id, scheduled_at, started_at, status, manual)
+	err = s.db.Pool.QueryRow(ctx, `INSERT INTO plugin_job_runs (plugin_key, job_id, node_id, scheduled_at, started_at, status, manual)
 		SELECT $1::varchar, $2::varchar, $3::varchar, $4::timestamptz, now(), $5::varchar, false
 		WHERE NOT EXISTS (SELECT 1 FROM plugin_job_runs
 			WHERE plugin_key = $1 AND job_id = $2 AND scheduled_at = $4 AND NOT manual)
@@ -288,7 +328,7 @@ func (s *Scheduler) runScheduled(b core.JobBinding, slot time.Time) {
 		}
 		return
 	}
-	s.execute(b, id, slot, false, timeout)
+	s.execute(ctx, b, id, slot, false, timeout, lk)
 }
 
 // RunNow implements core.JobTrigger: the job starts on this node right away
@@ -298,16 +338,37 @@ func (s *Scheduler) runScheduled(b core.JobBinding, slot time.Time) {
 func (s *Scheduler) RunNow(ctx context.Context, pluginKey, jobID string, actorID int64) error {
 	s.mu.Lock()
 	started := s.started
+	group := s.group
 	s.mu.Unlock()
 	if !started {
 		return core.ErrUnavailable.WithMessage("job scheduler is not running")
 	}
-	b, err := s.lookup(ctx, pluginKey, jobID)
+	// Admission precedes every preparation call, so shutdown also joins
+	// lookup/lock/insert work. It never waits in a queue holding a lease.
+	permit, err := group.TryAcquire(ctx)
+	if err != nil {
+		return core.ErrUnavailable.WithMessage("background execution is busy or stopping").WithCause(err)
+	}
+	admittedAt := time.Now()
+	launched := false
+	defer func() {
+		if !launched {
+			permit.Release()
+		}
+	}()
+	prepareCtx, cancelPrepare := permit.Context(ctx)
+	defer cancelPrepare()
+	lookupCtx, cancelLookup := context.WithTimeout(prepareCtx, s.opts.DefaultTimeout)
+	b, err := s.lookup(lookupCtx, pluginKey, jobID)
+	cancelLookup()
 	if err != nil {
 		return err
 	}
 	timeout := s.timeout(b)
-	lk, ok, err := s.locker.TryLock(ctx, fmt.Sprintf("job:%s:%s:manual", pluginKey, jobID), timeout+s.opts.LockGrace)
+	deadline := admittedAt.Add(timeout)
+	prepareCtx, cancelBudget := context.WithDeadline(prepareCtx, deadline)
+	defer cancelBudget()
+	lk, ok, err := s.locker.TryLock(prepareCtx, fmt.Sprintf("job:%s:%s:manual", pluginKey, jobID), timeout+s.opts.LockGrace)
 	if err != nil {
 		return core.ErrUnavailable.WithCause(err)
 	}
@@ -316,18 +377,23 @@ func (s *Scheduler) RunNow(ctx context.Context, pluginKey, jobID string, actorID
 	}
 	now := time.Now()
 	var id int64
-	if err := s.db.Pool.QueryRow(ctx, `INSERT INTO plugin_job_runs (plugin_key, job_id, node_id, scheduled_at, started_at, status, manual)
+	if err := s.db.Pool.QueryRow(prepareCtx, `INSERT INTO plugin_job_runs (plugin_key, job_id, node_id, scheduled_at, started_at, status, manual)
 		VALUES ($1, $2, $3, $4, now(), $5, true) RETURNING id`,
 		pluginKey, jobID, s.nodeID, now, StatusRunning).Scan(&id); err != nil {
 		lk.Release()
 		return fmt.Errorf("jobs: record manual run: %w", err)
 	}
 	s.log.Info("manual job run", "plugin", pluginKey, "job", jobID, "run_id", id, "actor_id", actorID)
-	s.wg.Add(1)
+	launched = true
 	go func() {
-		defer s.wg.Done()
-		defer lk.Release()
-		s.execute(b, id, now, true, timeout)
+		defer permit.Release()
+		// Always finalize the durable row, including cancellation between the
+		// insert and goroutine start. The permit keeps Stop waiting for this.
+		runCtx, cancel := permit.Context(s.ctx)
+		defer cancel()
+		runCtx, cancelBudget := context.WithDeadline(runCtx, deadline)
+		defer cancelBudget()
+		s.execute(runCtx, b, id, now, true, timeout, lk)
 	}()
 	return nil
 }
@@ -358,22 +424,20 @@ func (s *Scheduler) lookup(ctx context.Context, pluginKey, jobID string) (core.J
 }
 
 // execute calls the plugin and records the outcome of run id.
-func (s *Scheduler) execute(b core.JobBinding, id int64, slot time.Time, manual bool, timeout time.Duration) {
-	ctx, cancel := context.WithTimeout(s.ctx, timeout)
+func (s *Scheduler) execute(ctx context.Context, b core.JobBinding, id int64, slot time.Time, manual bool, timeout time.Duration, lk core.Lock) {
 	started := time.Now()
-	resp, err := b.Client.RunJob(ctx, &pluginv1.RunJobRequest{
-		JobId:           b.Job.ID,
-		ScheduledAtUnix: slot.Unix(),
-		Manual:          manual,
+	var resp *pluginv1.RunJobResponse
+	err := background.Scope(ctx, background.Work{Timeout: timeout, Lease: lk, RetainLease: !manual}, func(ctx context.Context) error {
+		var err error
+		resp, err = b.Client.RunJob(ctx, &pluginv1.RunJobRequest{JobId: b.Job.ID, ScheduledAtUnix: slot.Unix(), Manual: manual})
+		return err
 	})
-	ctxErr := ctx.Err()
-	cancel()
 
 	status, msg := StatusSucceeded, resp.GetMessage()
 	switch {
 	case s.ctx.Err() != nil:
 		status, msg = StatusFailed, "canceled: node shutting down"
-	case errors.Is(ctxErr, context.DeadlineExceeded):
+	case errors.Is(err, context.DeadlineExceeded):
 		status, msg = StatusTimeout, fmt.Sprintf("timed out after %s", timeout)
 	case err != nil:
 		status, msg = StatusFailed, err.Error()

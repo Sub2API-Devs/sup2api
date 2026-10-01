@@ -14,12 +14,12 @@ import (
 
 func start(t *testing.T) *pluginsdktest.Harness {
 	t.Helper()
-	return pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("relay", "0.1.2")}})
+	return pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("relay", "0.2.0")}})
 }
 
 func TestCapabilities(t *testing.T) {
 	h := start(t)
-	if got := strings.Join(h.Info.GetCapabilities(), ","); got != "platform.adapter.v1" {
+	if got := strings.Join(h.Info.GetCapabilities(), ","); got != "platform.execute.v1,platform.adapter.v1" {
 		t.Fatalf("capabilities = %s", got)
 	}
 }

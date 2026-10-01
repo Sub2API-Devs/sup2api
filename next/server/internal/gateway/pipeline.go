@@ -85,6 +85,11 @@ type call struct {
 	// at the end of forwarding and consumed by submit, on its own goroutine,
 	// after the handler returned.
 	usage *pendingExtract
+	// Context of the currently selected account's concurrency lease.
+	slotCtx       context.Context
+	task          *core.TaskSnapshot
+	taskPublicID  string
+	taskPersisted bool
 }
 
 // serve runs the proxy pipeline (ARCHITECTURE 6.1) for one request.
@@ -153,6 +158,10 @@ func (c *call) run(ctx context.Context) {
 		c.fail(e)
 		return
 	}
+	if c.ep.TaskQuery() {
+		c.serveTaskSnapshot()
+		return
+	}
 
 	// 4. Account types serving the protocol, billing gate.
 	c.planRoutes()
@@ -166,7 +175,7 @@ func (c *call) run(ctx context.Context) {
 	}
 
 	// 5. User concurrency slot.
-	release, ok, err := c.g.d.Slots.Acquire(ctx, "user", p.UserID, p.UserMaxConcurrency, c.rid)
+	ctx, release, ok, err := core.AcquireSlot(ctx, c.g.d.Slots, "user", p.UserID, p.UserMaxConcurrency, c.rid)
 	if err != nil {
 		c.fail(fromCore(core.ErrUnavailable.WithCause(err), errTypeInternal))
 		return
@@ -281,6 +290,10 @@ func (c *call) readBody() *gwError {
 func (c *call) checkModel(ctx context.Context) *gwError {
 	req := c.ep.Request
 	switch {
+	case c.ep.TaskQuery():
+		if e := c.resolveTask(ctx); e != nil {
+			return e
+		}
 	case req.ModelSource == manifest.ModelSourcePlugin:
 		if e := c.resolveModelFromPlugin(ctx); e != nil {
 			return e
@@ -575,7 +588,7 @@ func (c *call) fail(e *gwError) {
 // settler either way.
 func (c *call) submit() {
 	rec := c.rec
-	if rec == nil || c.g.d.Settler == nil {
+	if rec == nil || c.g.d.Settler == nil || c.taskPersisted {
 		return
 	}
 	rec.LatencyMs = int(c.g.now().Sub(c.start) / time.Millisecond)
@@ -624,6 +637,11 @@ func (c *call) releaseBodies() {
 }
 
 func (c *call) finishSubmit(ctx context.Context, rec *core.UsageRecord, billing string) {
+	c.finalizeBillability(ctx, rec, billing)
+	c.g.d.Settler.Submit(rec)
+}
+
+func (c *call) finalizeBillability(ctx context.Context, rec *core.UsageRecord, billing string) {
 	hasUsage := rec.Tokens != (core.UsageTokens{}) || len(rec.Metrics) > 0
 	rec.Billable = !strings.EqualFold(billing, "free") && rec.Price != nil &&
 		(hasUsage || (rec.Success && rec.Price.Mode == "per_request"))
@@ -631,7 +649,6 @@ func (c *call) finishSubmit(ctx context.Context, rec *core.UsageRecord, billing 
 		c.dropReservation(ctx, rec, billing, hasUsage)
 		rec.Price = nil
 	}
-	c.g.d.Settler.Submit(rec)
 }
 
 // dropReservation clears a Reservation from a record that turned out not to

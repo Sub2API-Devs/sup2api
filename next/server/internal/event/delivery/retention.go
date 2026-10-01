@@ -23,6 +23,9 @@ func (s *Service) retentionLoop() {
 		case <-t.C:
 		}
 		t.Reset(s.opts.RetentionInterval)
+		if s.opts.CanRun != nil && !s.opts.CanRun() {
+			continue
+		}
 		ttl := s.opts.RetentionInterval - s.opts.RetentionInterval/10
 		_, ok, err := s.locker.TryLock(s.ctx, "events:retention", ttl)
 		if err != nil || !ok {

@@ -57,6 +57,9 @@ type RolloutController interface {
 type PluginSchemaManager interface {
 	// Drop removes schema, role and migration records (uninstall with purge).
 	Drop(ctx context.Context, pluginKey string) error
+	// DropTx participates in the lifecycle transaction holding the plugin row.
+	// A concurrent re-install cannot begin between DROP and plugin deletion.
+	DropTx(ctx context.Context, tx pgx.Tx, pluginKey string) error
 }
 
 // PluginDefaultsApplier (C1) writes version-scoped defaults (user

@@ -1,0 +1,2 @@
+=== deploy/mock-upstream ===
+ok  	github.com/Sub2API-Devs/sup2api/next/deploy/mock-upstream	1.096s

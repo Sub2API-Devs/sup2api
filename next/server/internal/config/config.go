@@ -37,6 +37,14 @@ type Config struct {
 	// TrustedProxies lists proxy IPs/CIDRs whose X-Forwarded-For is trusted
 	// (SUB2API_TRUSTED_PROXIES, comma separated; empty = trust none).
 	TrustedProxies []string
+
+	// Managed is enabled only when a local supervisor owns process admission.
+	Managed ManagedConfig
+}
+
+type ManagedConfig struct {
+	Enabled                                             bool
+	Socket, Token, ReleaseDigest, BootID, UpdaterSocket string
 }
 
 type PluginConfig struct {
@@ -67,6 +75,10 @@ func Load(goos string) (*Config, error) {
 		LogLevel:               env("SUB2API_LOG_LEVEL", "info"),
 		BootstrapAdminEmail:    os.Getenv("SUB2API_BOOTSTRAP_ADMIN_EMAIL"),
 		BootstrapAdminPassword: os.Getenv("SUB2API_BOOTSTRAP_ADMIN_PASSWORD"),
+	}
+	c.Managed = ManagedConfig{Enabled: boolEnv("SUB2API_MANAGED", false), Socket: os.Getenv("SUB2API_CONTROL_SOCKET"), Token: os.Getenv("SUB2API_CONTROL_TOKEN"), ReleaseDigest: os.Getenv("SUB2API_RELEASE_DIGEST"), BootID: os.Getenv("SUB2API_CORE_BOOT_ID"), UpdaterSocket: os.Getenv("UPDATER_SOCKET")}
+	if c.Managed.Enabled && (c.Managed.Socket == "" || len(c.Managed.Token) < 32 || c.Managed.ReleaseDigest == "" || c.Managed.BootID == "") {
+		return nil, fmt.Errorf("managed core requires control socket, >=32 byte boot token, release digest and core boot ID")
 	}
 	if c.NodeID == "" {
 		h, _ := os.Hostname()

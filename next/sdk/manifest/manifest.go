@@ -62,6 +62,10 @@ type JSEntry struct {
 // Capability ids understood by host version 0.1.
 const (
 	CapPlatformAdapter   = "platform.adapter.v1"
+	CapPlatformTasks     = "platform.tasks.v1"
+	CapPlatformPoll      = "platform.poll.v1"
+	CapPlatformExecute   = "platform.execute.v1"
+	CapPlatformMonitor   = "platform.monitor.v1"
 	CapGatewayHook       = "gateway.hook.v1"
 	CapAppJobs           = "app.jobs.v1"
 	CapAppEvents         = "app.events.v1"
@@ -130,6 +134,10 @@ type Endpoint struct {
 	Response    EndpointResp    `json:"response"`
 	ErrorFormat string          `json:"errorFormat"` // anthropic | openai | gemini | plain
 	Billing     string          `json:"billing"`     // usage | free
+	// Task opts into durable host-managed async work. Submission is recorded
+	// before a successful response; queries read the shared, owner-checked
+	// snapshot. Polling and account affinity belong to the host.
+	Task *AsyncTaskEndpoint `json:"task,omitempty"`
 	// Usage overrides the platform usage rules for this endpoint.
 	Usage *UsageRules `json:"usage,omitempty"`
 	// UsageSource decides WHO reads the token usage out of this endpoint's
@@ -155,7 +163,7 @@ type Endpoint struct {
 	UsageStreamEvents []string `json:"usageStreamEvents,omitempty"`
 	// UsageMaxBytes caps what ExtractUsage receives: the non-streaming body,
 	// and the total size of the collected stream events. 0 uses the host
-	// default. Only read with UsageSource UsageSourcePlugin.
+	// default. Also bounds the synchronous parser on task submissions.
 	UsageMaxBytes int64 `json:"usageMaxBytes,omitempty"`
 	// UsageRequestFields are request body paths (gjson) whose values the host
 	// hands to ExtractUsage in ExtractUsageRequest.fields - and the only ones,
@@ -172,7 +180,7 @@ type Endpoint struct {
 	// else on the platform does, and only the endpoints that ask pay for it.
 	// Values are capped per field and in total (check.MaxUsageRequestField*);
 	// a request body is never handed over whole. Only read with UsageSource
-	// UsageSourcePlugin.
+	// UsageSourcePlugin or TaskSubmit().
 	UsageRequestFields []string `json:"usageRequestFields,omitempty"`
 }
 
@@ -180,6 +188,24 @@ type Endpoint struct {
 // declaring its platform (PlatformService.ExtractUsage) instead of by the
 // declarative usage rules.
 func (e Endpoint) PluginUsage() bool { return e.UsageSource == UsageSourcePlugin }
+
+const (
+	TaskActionSubmit = "submit"
+	TaskActionQuery  = "query"
+)
+
+// AsyncTaskEndpoint pairs one JSON submission and query endpoint of a task
+// kind within a plugin. IDPaths are simple dot-separated JSON object paths,
+// e.g. "id" or "data.id", whose matching upstream IDs the host replaces.
+type AsyncTaskEndpoint struct {
+	Action  string   `json:"action"`
+	Kind    string   `json:"kind"`
+	IDParam string   `json:"idParam,omitempty"`
+	IDPaths []string `json:"idPaths"`
+}
+
+func (e Endpoint) TaskSubmit() bool { return e.Task != nil && e.Task.Action == TaskActionSubmit }
+func (e Endpoint) TaskQuery() bool  { return e.Task != nil && e.Task.Action == TaskActionQuery }
 
 type EndpointAuth struct {
 	// Request headers carrying the API key, checked in order. "authorization"

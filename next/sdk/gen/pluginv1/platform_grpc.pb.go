@@ -19,6 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	PlatformService_Execute_FullMethodName                = "/sub2api.plugin.v1.PlatformService/Execute"
+	PlatformService_Monitor_FullMethodName                = "/sub2api.plugin.v1.PlatformService/Monitor"
 	PlatformService_ValidateCredentials_FullMethodName    = "/sub2api.plugin.v1.PlatformService/ValidateCredentials"
 	PlatformService_BuildUpstreamRequest_FullMethodName   = "/sub2api.plugin.v1.PlatformService/BuildUpstreamRequest"
 	PlatformService_ClassifyError_FullMethodName          = "/sub2api.plugin.v1.PlatformService/ClassifyError"
@@ -26,6 +28,8 @@ const (
 	PlatformService_BuildModelsRequest_FullMethodName     = "/sub2api.plugin.v1.PlatformService/BuildModelsRequest"
 	PlatformService_ResolveModel_FullMethodName           = "/sub2api.plugin.v1.PlatformService/ResolveModel"
 	PlatformService_ExtractUsage_FullMethodName           = "/sub2api.plugin.v1.PlatformService/ExtractUsage"
+	PlatformService_ParseTaskSubmission_FullMethodName    = "/sub2api.plugin.v1.PlatformService/ParseTaskSubmission"
+	PlatformService_Poll_FullMethodName                   = "/sub2api.plugin.v1.PlatformService/Poll"
 	PlatformService_BuildReconcileRequest_FullMethodName  = "/sub2api.plugin.v1.PlatformService/BuildReconcileRequest"
 	PlatformService_ParseReconcileResponse_FullMethodName = "/sub2api.plugin.v1.PlatformService/ParseReconcileResponse"
 )
@@ -39,6 +43,15 @@ const (
 // forms, usage extraction rules, default pricing) live in manifest.json; this
 // service only covers behaviour that needs code.
 type PlatformServiceClient interface {
+	// Plugin-driven request execution. The host selected the account and owns
+	// the request body. The plugin builds and forwards it through the scoped
+	// host API, then records usage or atomically reserves and registers a task.
+	// Requires platform.execute.v1 and host API 4.
+	Execute(ctx context.Context, in *ExecuteRequest, opts ...grpc.CallOption) (*ExecuteResponse, error)
+	// One scheduled observation, completed by ReportTaskProgress. Scheduling,
+	// fencing, snapshots and financial transactions remain host-owned.
+	// Requires platform.monitor.v1 and host API 4.
+	Monitor(ctx context.Context, in *PollRequest, opts ...grpc.CallOption) (*MonitorResponse, error)
 	ValidateCredentials(ctx context.Context, in *ValidateCredentialsRequest, opts ...grpc.CallOption) (*ValidateCredentialsResponse, error)
 	// Hot path: called once per upstream attempt. Keep it fast (< 2s timeout).
 	BuildUpstreamRequest(ctx context.Context, in *BuildUpstreamRequestRequest, opts ...grpc.CallOption) (*BuildUpstreamRequestResponse, error)
@@ -103,9 +116,21 @@ type PlatformServiceClient interface {
 	// back to the declarative rules it ran while forwarding and marks the
 	// usage record so the silence is visible.
 	ExtractUsage(ctx context.Context, in *ExtractUsageRequest, opts ...grpc.CallOption) (*UsageReport, error)
-	// Builds the request that asks the upstream how a PRE-CHARGED entry ended
-	// (manifest: none - an endpoint arms this by having its ExtractUsage return
-	// a Reservation, CONTRACTS §25.4).
+	// Opt-in asynchronous task submissions only (endpoint.task.action=submit).
+	// Unlike ExtractUsage, this runs BEFORE forwarding the bounded JSON success
+	// response. The host persists identity, initial snapshot and optional usage
+	// atomically, then replaces declared task ID fields with its public ID.
+	// Attribution and account ownership are always determined by the host.
+	// Ordinary endpoints retain ExtractUsage's asynchronous contract above.
+	ParseTaskSubmission(ctx context.Context, in *ExtractUsageRequest, opts ...grpc.CallOption) (*TaskSubmission, error)
+	// Executes one observation. The host owns scheduling, account selection,
+	// leases and persistence; the plugin initiates its HTTP request through
+	// HostService.ExecuteHTTP using the invocation's short-lived permission.
+	// Requires platform.poll.v1 and host API 3. No plugin timer or net grant.
+	Poll(ctx context.Context, in *PollRequest, opts ...grpc.CallOption) (*ReconcileResult, error)
+	// Builds the request that observes a pre-charged entry or a host-managed
+	// asynchronous task. Legacy endpoints arm it through Reservation; task
+	// endpoints declare endpoint.task and may be free (no reservation needed).
 	//
 	// This is BuildTestRequest / BuildModelsRequest's shape, and it is the
 	// shape on purpose. The plugin only DESCRIBES the request and READS the
@@ -118,10 +143,10 @@ type PlatformServiceClient interface {
 	//   - no "app.jobs.v1" timer of its own: the host drives the schedule,
 	//     with the backoff, the deadline and the multi-node locking that a
 	//     plugin would otherwise each have to reinvent.
-	// Do not "simplify" this into a single call that lets the plugin fetch:
-	// every one of those three would have to be opened up again.
+	// Legacy compatibility path. New plugins use Poll and the host's scoped
+	// ExecuteHTTP callback, which preserves these account/network constraints.
 	//
-	// Optional: answer UNIMPLEMENTED when no endpoint reserves. A plugin that
+	// Optional: answer UNIMPLEMENTED when no endpoint reserves or declares tasks. A plugin that
 	// returns a Reservation and then cannot build the request has its entries
 	// retried until the deadline and then abandoned - the estimate stands as
 	// the final charge.
@@ -142,6 +167,26 @@ type platformServiceClient struct {
 
 func NewPlatformServiceClient(cc grpc.ClientConnInterface) PlatformServiceClient {
 	return &platformServiceClient{cc}
+}
+
+func (c *platformServiceClient) Execute(ctx context.Context, in *ExecuteRequest, opts ...grpc.CallOption) (*ExecuteResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExecuteResponse)
+	err := c.cc.Invoke(ctx, PlatformService_Execute_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformServiceClient) Monitor(ctx context.Context, in *PollRequest, opts ...grpc.CallOption) (*MonitorResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MonitorResponse)
+	err := c.cc.Invoke(ctx, PlatformService_Monitor_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *platformServiceClient) ValidateCredentials(ctx context.Context, in *ValidateCredentialsRequest, opts ...grpc.CallOption) (*ValidateCredentialsResponse, error) {
@@ -214,6 +259,26 @@ func (c *platformServiceClient) ExtractUsage(ctx context.Context, in *ExtractUsa
 	return out, nil
 }
 
+func (c *platformServiceClient) ParseTaskSubmission(ctx context.Context, in *ExtractUsageRequest, opts ...grpc.CallOption) (*TaskSubmission, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TaskSubmission)
+	err := c.cc.Invoke(ctx, PlatformService_ParseTaskSubmission_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformServiceClient) Poll(ctx context.Context, in *PollRequest, opts ...grpc.CallOption) (*ReconcileResult, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReconcileResult)
+	err := c.cc.Invoke(ctx, PlatformService_Poll_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformServiceClient) BuildReconcileRequest(ctx context.Context, in *BuildReconcileRequestRequest, opts ...grpc.CallOption) (*BuildReconcileRequestResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BuildReconcileRequestResponse)
@@ -243,6 +308,15 @@ func (c *platformServiceClient) ParseReconcileResponse(ctx context.Context, in *
 // forms, usage extraction rules, default pricing) live in manifest.json; this
 // service only covers behaviour that needs code.
 type PlatformServiceServer interface {
+	// Plugin-driven request execution. The host selected the account and owns
+	// the request body. The plugin builds and forwards it through the scoped
+	// host API, then records usage or atomically reserves and registers a task.
+	// Requires platform.execute.v1 and host API 4.
+	Execute(context.Context, *ExecuteRequest) (*ExecuteResponse, error)
+	// One scheduled observation, completed by ReportTaskProgress. Scheduling,
+	// fencing, snapshots and financial transactions remain host-owned.
+	// Requires platform.monitor.v1 and host API 4.
+	Monitor(context.Context, *PollRequest) (*MonitorResponse, error)
 	ValidateCredentials(context.Context, *ValidateCredentialsRequest) (*ValidateCredentialsResponse, error)
 	// Hot path: called once per upstream attempt. Keep it fast (< 2s timeout).
 	BuildUpstreamRequest(context.Context, *BuildUpstreamRequestRequest) (*BuildUpstreamRequestResponse, error)
@@ -307,9 +381,21 @@ type PlatformServiceServer interface {
 	// back to the declarative rules it ran while forwarding and marks the
 	// usage record so the silence is visible.
 	ExtractUsage(context.Context, *ExtractUsageRequest) (*UsageReport, error)
-	// Builds the request that asks the upstream how a PRE-CHARGED entry ended
-	// (manifest: none - an endpoint arms this by having its ExtractUsage return
-	// a Reservation, CONTRACTS §25.4).
+	// Opt-in asynchronous task submissions only (endpoint.task.action=submit).
+	// Unlike ExtractUsage, this runs BEFORE forwarding the bounded JSON success
+	// response. The host persists identity, initial snapshot and optional usage
+	// atomically, then replaces declared task ID fields with its public ID.
+	// Attribution and account ownership are always determined by the host.
+	// Ordinary endpoints retain ExtractUsage's asynchronous contract above.
+	ParseTaskSubmission(context.Context, *ExtractUsageRequest) (*TaskSubmission, error)
+	// Executes one observation. The host owns scheduling, account selection,
+	// leases and persistence; the plugin initiates its HTTP request through
+	// HostService.ExecuteHTTP using the invocation's short-lived permission.
+	// Requires platform.poll.v1 and host API 3. No plugin timer or net grant.
+	Poll(context.Context, *PollRequest) (*ReconcileResult, error)
+	// Builds the request that observes a pre-charged entry or a host-managed
+	// asynchronous task. Legacy endpoints arm it through Reservation; task
+	// endpoints declare endpoint.task and may be free (no reservation needed).
 	//
 	// This is BuildTestRequest / BuildModelsRequest's shape, and it is the
 	// shape on purpose. The plugin only DESCRIBES the request and READS the
@@ -322,10 +408,10 @@ type PlatformServiceServer interface {
 	//   - no "app.jobs.v1" timer of its own: the host drives the schedule,
 	//     with the backoff, the deadline and the multi-node locking that a
 	//     plugin would otherwise each have to reinvent.
-	// Do not "simplify" this into a single call that lets the plugin fetch:
-	// every one of those three would have to be opened up again.
+	// Legacy compatibility path. New plugins use Poll and the host's scoped
+	// ExecuteHTTP callback, which preserves these account/network constraints.
 	//
-	// Optional: answer UNIMPLEMENTED when no endpoint reserves. A plugin that
+	// Optional: answer UNIMPLEMENTED when no endpoint reserves or declares tasks. A plugin that
 	// returns a Reservation and then cannot build the request has its entries
 	// retried until the deadline and then abandoned - the estimate stands as
 	// the final charge.
@@ -348,6 +434,12 @@ type PlatformServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedPlatformServiceServer struct{}
 
+func (UnimplementedPlatformServiceServer) Execute(context.Context, *ExecuteRequest) (*ExecuteResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Execute not implemented")
+}
+func (UnimplementedPlatformServiceServer) Monitor(context.Context, *PollRequest) (*MonitorResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Monitor not implemented")
+}
 func (UnimplementedPlatformServiceServer) ValidateCredentials(context.Context, *ValidateCredentialsRequest) (*ValidateCredentialsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ValidateCredentials not implemented")
 }
@@ -368,6 +460,12 @@ func (UnimplementedPlatformServiceServer) ResolveModel(context.Context, *Resolve
 }
 func (UnimplementedPlatformServiceServer) ExtractUsage(context.Context, *ExtractUsageRequest) (*UsageReport, error) {
 	return nil, status.Error(codes.Unimplemented, "method ExtractUsage not implemented")
+}
+func (UnimplementedPlatformServiceServer) ParseTaskSubmission(context.Context, *ExtractUsageRequest) (*TaskSubmission, error) {
+	return nil, status.Error(codes.Unimplemented, "method ParseTaskSubmission not implemented")
+}
+func (UnimplementedPlatformServiceServer) Poll(context.Context, *PollRequest) (*ReconcileResult, error) {
+	return nil, status.Error(codes.Unimplemented, "method Poll not implemented")
 }
 func (UnimplementedPlatformServiceServer) BuildReconcileRequest(context.Context, *BuildReconcileRequestRequest) (*BuildReconcileRequestResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method BuildReconcileRequest not implemented")
@@ -394,6 +492,42 @@ func RegisterPlatformServiceServer(s grpc.ServiceRegistrar, srv PlatformServiceS
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&PlatformService_ServiceDesc, srv)
+}
+
+func _PlatformService_Execute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExecuteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).Execute(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_Execute_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).Execute(ctx, req.(*ExecuteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformService_Monitor_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PollRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).Monitor(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_Monitor_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).Monitor(ctx, req.(*PollRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _PlatformService_ValidateCredentials_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -522,6 +656,42 @@ func _PlatformService_ExtractUsage_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformService_ParseTaskSubmission_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExtractUsageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).ParseTaskSubmission(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_ParseTaskSubmission_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).ParseTaskSubmission(ctx, req.(*ExtractUsageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformService_Poll_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PollRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).Poll(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_Poll_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).Poll(ctx, req.(*PollRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformService_BuildReconcileRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(BuildReconcileRequestRequest)
 	if err := dec(in); err != nil {
@@ -566,6 +736,14 @@ var PlatformService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*PlatformServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "Execute",
+			Handler:    _PlatformService_Execute_Handler,
+		},
+		{
+			MethodName: "Monitor",
+			Handler:    _PlatformService_Monitor_Handler,
+		},
+		{
 			MethodName: "ValidateCredentials",
 			Handler:    _PlatformService_ValidateCredentials_Handler,
 		},
@@ -592,6 +770,14 @@ var PlatformService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ExtractUsage",
 			Handler:    _PlatformService_ExtractUsage_Handler,
+		},
+		{
+			MethodName: "ParseTaskSubmission",
+			Handler:    _PlatformService_ParseTaskSubmission_Handler,
+		},
+		{
+			MethodName: "Poll",
+			Handler:    _PlatformService_Poll_Handler,
 		},
 		{
 			MethodName: "BuildReconcileRequest",

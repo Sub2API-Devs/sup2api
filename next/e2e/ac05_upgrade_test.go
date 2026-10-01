@@ -8,12 +8,12 @@ import (
 	"time"
 )
 
-// AC 5: upgrade anthropic to 0.2.0: the migration runs once, old rows are
+// AC 5: upgrade anthropic from 0.2.0 to the 0.3.0-test fixture: the migration runs once, old rows are
 // backfilled and requests keep succeeding on both nodes during the switch.
 func TestAC05_UpgradeAnthropicWithoutDowntime(t *testing.T) {
 	e := Setup(t)
 	admin := e.Admin()
-	e.EnsurePlugin(admin, "anthropic", "0.1.6")
+	e.EnsurePlugin(admin, "anthropic", "0.2.0")
 	tn := e.NewTenant(admin, TenantOpts{Accounts: 2, Balance: "50"})
 
 	before := admin.OK(t, http.MethodGet, "/p/anthropic/models", nil).Array()
@@ -21,9 +21,9 @@ func TestAC05_UpgradeAnthropicWithoutDowntime(t *testing.T) {
 		t.Fatal("model catalog empty before upgrade")
 	}
 
-	// Upload 0.2.0: it adds a migration and asks for no new permission, so it
+	// Upload the fixture: it adds a migration and asks for no new permission, so it
 	// should not need consent; if it does, approve it.
-	rev := e.InstallFromMarket(admin, "anthropic", "0.2.0")
+	rev := e.InstallFromMarket(admin, "anthropic", "0.3.0-test")
 	if d := rev.Get("diff"); d.Exists() {
 		t.Logf("permission diff: %s", d.Raw)
 	}
@@ -63,7 +63,7 @@ func TestAC05_UpgradeAnthropicWithoutDowntime(t *testing.T) {
 	}
 
 	time.Sleep(2 * time.Second) // baseline traffic before the switch
-	e.Upgrade(admin, "anthropic", "0.2.0")
+	e.Upgrade(admin, "anthropic", "0.3.0-test")
 	time.Sleep(3 * time.Second) // traffic after the switch
 	close(stop)
 	wg.Wait()
@@ -76,9 +76,9 @@ func TestAC05_UpgradeAnthropicWithoutDowntime(t *testing.T) {
 		t.Fatalf("too little traffic during the upgrade: %d", ok.Load())
 	}
 
-	// Both nodes run 0.2.0 and serve the backfilled catalog.
-	d := e.WaitPlugin(admin, "anthropic", "enabled", "0.2.0")
-	if d.Get("desired_version").Exists() && d.Get("desired_version").String() != "0.2.0" {
+	// Both nodes run the fixture and serve the backfilled catalog.
+	d := e.WaitPlugin(admin, "anthropic", "enabled", "0.3.0-test")
+	if d.Get("desired_version").Exists() && d.Get("desired_version").String() != "0.3.0-test" {
 		t.Fatalf("desired_version: %s", d.Raw)
 	}
 	e.OnEachNode(admin, func(n int, c *Client) {

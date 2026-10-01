@@ -5,8 +5,10 @@ package webui
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"io/fs"
 	"mime"
 	"net/http"
@@ -43,12 +45,21 @@ var reservedPrefixes = func() []string {
 }()
 
 type Handler struct {
-	files fs.FS
-	index []byte
+	files  fs.FS
+	index  []byte
+	shared AssetSource
 }
 
+type AssetSource interface {
+	Read(context.Context, string) ([]byte, error)
+	Ready() bool
+}
+type Option func(*Handler)
+
+func WithSharedAssets(shared AssetSource) Option { return func(h *Handler) { h.shared = shared } }
+
 // New takes the embed FS rooted above "dist".
-func New(embedded fs.FS) (*Handler, error) {
+func New(embedded fs.FS, options ...Option) (*Handler, error) {
 	sub, err := fs.Sub(embedded, "dist")
 	if err != nil {
 		return nil, err
@@ -57,7 +68,11 @@ func New(embedded fs.FS) (*Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Handler{files: sub, index: index}, nil
+	h := &Handler{files: sub, index: index}
+	for _, opt := range options {
+		opt(h)
+	}
+	return h, nil
 }
 
 // Serve is meant for engine.NoRoute, after the gateway dispatcher.
@@ -75,9 +90,32 @@ func (h *Handler) Serve(c *gin.Context) {
 	}
 	name := strings.TrimPrefix(path.Clean(p), "/")
 	if name != "" && name != "index.html" {
+		if h.shared != nil && publicAsset(name) && !h.shared.Ready() {
+			// A failed publication may indicate a path collision. Until this
+			// build is admitted, only already published canonical bytes may
+			// be served for an immutable URL, even on a direct request.
+			data, err := h.shared.Read(c.Request.Context(), name)
+			if err != nil {
+				c.Status(http.StatusServiceUnavailable)
+				return
+			}
+			h.serveFile(c, name, data)
+			return
+		}
 		if data, err := fs.ReadFile(h.files, name); err == nil {
 			h.serveFile(c, name, data)
 			return
+		}
+		if h.shared != nil && publicAsset(name) {
+			data, err := h.shared.Read(c.Request.Context(), name)
+			if err == nil {
+				h.serveFile(c, name, data)
+				return
+			}
+			if !errors.Is(err, fs.ErrNotExist) {
+				c.Status(http.StatusServiceUnavailable)
+				return
+			}
 		}
 		if strings.HasPrefix(name, "assets/") || path.Ext(name) != "" {
 			c.Status(http.StatusNotFound)
@@ -102,6 +140,13 @@ func (h *Handler) serveFile(c *gin.Context, name string, data []byte) {
 }
 
 func (h *Handler) serveIndex(c *gin.Context) {
+	// Do not emit new references after this build's publication lease was
+	// lost, including requests sent directly to a node outside the balancer.
+	if h.shared != nil && !h.shared.Ready() {
+		c.Header("Retry-After", "5")
+		c.Status(http.StatusServiceUnavailable)
+		return
+	}
 	nonce := newNonce()
 	body := bytes.ReplaceAll(h.index, []byte(NoncePlaceholder), []byte(nonce))
 	c.Header("Content-Security-Policy", CSP(nonce))

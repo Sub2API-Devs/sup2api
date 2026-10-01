@@ -220,6 +220,15 @@ func (a platformAdapter) ExtractUsage(ctx context.Context, in *pluginv1.ExtractU
 }
 
 // BuildReconcileRequest and ParseReconcileResponse run in the core's offline
+func (a platformAdapter) ParseTaskSubmission(ctx context.Context, in *pluginv1.ExtractUsageRequest) (out *pluginv1.TaskSubmission, err error) {
+	err = a.i.call(ctx, TimeoutPlatformHot, func(ctx context.Context, p *proc) (e error) {
+		out, e = p.platform.ParseTaskSubmission(ctx, in)
+		return
+	})
+	return
+}
+
+// BuildReconcileRequest and ParseReconcileResponse run in the core's offline
 // reconcile loop, not in a request, so they get the console budget rather
 // than the hot-path one: nobody is waiting, and being stingy here only
 // burns an attempt of an entry's limited allowance.

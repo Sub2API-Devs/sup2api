@@ -119,6 +119,10 @@ func (w *worker) run() {
 // taken again from scratch when the extend says it was lost. The cursor is
 // committed before the next step either way, so a takeover stays safe.
 func (w *worker) holdLock() bool {
+	if w.s.opts.CanRun != nil && !w.s.opts.CanRun() {
+		w.dropLock()
+		return false
+	}
 	o := w.s.opts
 	need := o.stepValidity()
 	if w.lock != nil {

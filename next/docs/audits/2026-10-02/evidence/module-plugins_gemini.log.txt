@@ -1,0 +1,3 @@
+=== plugins/gemini ===
+ok  	github.com/Sub2API-Devs/sup2api/next/plugins/gemini	1.048s
+ok  	github.com/Sub2API-Devs/sup2api/next/plugins/gemini/internal/gemini	1.078s

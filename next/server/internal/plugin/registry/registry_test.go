@@ -61,6 +61,9 @@ func (stub) RankAccounts(context.Context, *pluginv1.RankAccountsRequest) (*plugi
 func (stub) ResolveModel(context.Context, *pluginv1.ResolveModelRequest) (*pluginv1.ResolveModelResponse, error) {
 	return nil, nil
 }
+func (stub) ParseTaskSubmission(context.Context, *pluginv1.ExtractUsageRequest) (*pluginv1.TaskSubmission, error) {
+	return nil, nil
+}
 func (stub) ExtractUsage(context.Context, *pluginv1.ExtractUsageRequest) (*pluginv1.UsageReport, error) {
 	return nil, nil
 }

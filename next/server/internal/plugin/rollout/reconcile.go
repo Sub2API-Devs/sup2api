@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/jackc/pgx/v5"
 	"sort"
 	"strings"
 	"sync"
@@ -32,12 +34,13 @@ type entry struct {
 }
 
 type pluginRow struct {
-	key        string
-	status     string
-	active     *string
-	desired    *string
-	rowVersion int64
-	ro         *rolloutRow
+	key          string
+	status       string
+	active       *string
+	desired      *string
+	rowVersion   int64
+	uninstalling bool
+	ro           *rolloutRow
 }
 
 func (c *Controller) slotFor(key string) *slot {
@@ -68,7 +71,8 @@ func (c *Controller) localInstance(key, version string) Instance {
 }
 
 func (c *Controller) loadPlugins(ctx context.Context) ([]*pluginRow, error) {
-	rows, err := c.o.DB.Pool.Query(ctx, `SELECT key, status, active_version, desired_version, row_version FROM plugins ORDER BY key`)
+	rows, err := c.o.DB.Pool.Query(ctx, `SELECT key, status, active_version, desired_version, row_version,
+		EXISTS (SELECT 1 FROM plugin_uninstalls u WHERE u.plugin_key = plugins.key) FROM plugins ORDER BY key`)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +80,7 @@ func (c *Controller) loadPlugins(ctx context.Context) ([]*pluginRow, error) {
 	byKey := map[string]*pluginRow{}
 	for rows.Next() {
 		p := &pluginRow{}
-		if err := rows.Scan(&p.key, &p.status, &p.active, &p.desired, &p.rowVersion); err != nil {
+		if err := rows.Scan(&p.key, &p.status, &p.active, &p.desired, &p.rowVersion, &p.uninstalling); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -165,6 +169,17 @@ func (c *Controller) Reconcile(ctx context.Context) {
 	c.sweepPackages()
 
 	for idx, p := range rows {
+		c.acknowledgeCleanup(ctx, p)
+		if reports[idx].State == "stopped" {
+			_, _ = c.o.DB.Pool.Exec(ctx, `UPDATE plugin_runtime_nodes SET stopped=true, updated_at=now() WHERE plugin_key=$1 AND boot_id=$2`, p.key, c.o.Node.BootID())
+		}
+		if p.uninstalling && reports[idx].State == "stopped" {
+			if _, err := c.o.DB.Pool.Exec(ctx, `UPDATE plugin_uninstalls SET stopped_boot_ids = array_append(stopped_boot_ids, $2)
+				WHERE plugin_key = $1 AND epoch <= $3 AND NOT ($2 = ANY(stopped_boot_ids))`,
+				p.key, c.o.Node.BootID(), p.rowVersion); err != nil {
+				c.log.Warn("acknowledge plugin stop failed", "plugin", p.key, "err", err)
+			}
+		}
 		b, _ := json.Marshal(reports[idx])
 		if err := c.o.Node.ReportPlugin(ctx, p.key, string(b)); err != nil {
 			c.log.Warn("report plugin state failed", "plugin", p.key, "err", err)
@@ -327,6 +342,23 @@ func (c *Controller) reconcileKey(ctx context.Context, s *slot, p *pluginRow) No
 	if stale {
 		c.requestRestart(p.key)
 	}
+	// A generation switch alone does not prove the old processes have exited.
+	// A purge acknowledgement is sent only after all asynchronous drains end.
+	if st.State == "stopped" {
+		c.mu.Lock()
+		if c.restarting[p.key] {
+			st.State = "draining"
+		}
+		c.mu.Unlock()
+		c.drainMu.Lock()
+		for id, count := range c.draining {
+			if count > 0 && strings.HasPrefix(id, p.key+"@") {
+				st.State = "draining"
+				break
+			}
+		}
+		c.drainMu.Unlock()
+	}
 	return st
 }
 
@@ -371,6 +403,9 @@ func (c *Controller) ensure(ctx context.Context, s *slot, version string, epoch 
 	pkg, err := c.o.Packages.Open(ctx, s.key, version)
 	var inst Instance
 	if err == nil {
+		err = c.registerRuntime(ctx, s.key, pVersionEpoch{version, epoch})
+	}
+	if err == nil {
 		inst, err = c.o.Runtime.Load(ctx, pkg)
 	}
 	s.mu.Lock()
@@ -382,6 +417,65 @@ func (c *Controller) ensure(ctx context.Context, s *slot, version string, epoch 
 	}
 	c.log.Info("plugin instance started", "plugin", s.key, "version", version)
 	s.entries[version] = &entry{version: version, inst: inst, epoch: epoch}
+}
+
+// registerRuntime shares the plugin row lock with uninstall's durable marker.
+// It prevents a stale reconcile snapshot from starting a process after a purge
+// barrier, and remembers disconnected instances beyond Redis's liveness TTL.
+type pVersionEpoch struct {
+	version string
+	epoch   int64
+}
+
+func (c *Controller) registerRuntime(ctx context.Context, key string, expected ...pVersionEpoch) error {
+	return c.o.DB.Tx(ctx, func(tx pgx.Tx) error {
+		var epoch int64
+		if err := tx.QueryRow(ctx, `SELECT row_version FROM plugins WHERE key=$1 FOR SHARE`, key).Scan(&epoch); err != nil {
+			return err
+		}
+		if len(expected) > 0 && epoch != expected[0].epoch {
+			return core.ErrConflict.WithMessage("plugin generation changed before instance start")
+		}
+		var pending bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM plugin_uninstalls WHERE plugin_key=$1)`, key).Scan(&pending); err != nil {
+			return err
+		}
+		if pending {
+			return core.ErrConflict.WithMessage("plugin is uninstalling")
+		}
+		_, err := tx.Exec(ctx, `INSERT INTO plugin_runtime_nodes(plugin_key,boot_id) VALUES($1,$2)
+			ON CONFLICT(plugin_key,boot_id) DO UPDATE SET stopped=false,updated_at=now()`, key, c.o.Node.BootID())
+		return err
+	})
+}
+
+// Only a reconciliation of the current PG generation may acknowledge cleanup.
+// Its removed instances must have completed Drain; stale passes cannot clear a
+// barrier written by a concurrently failed or committed rollout.
+func (c *Controller) acknowledgeCleanup(ctx context.Context, p *pluginRow) {
+	if p.ro != nil {
+		return
+	}
+	c.mu.Lock()
+	restarting := c.restarting[p.key]
+	c.mu.Unlock()
+	if restarting {
+		return
+	}
+	c.drainMu.Lock()
+	defer c.drainMu.Unlock()
+	for id, n := range c.draining {
+		if n > 0 && strings.HasPrefix(id, p.key+"@") {
+			return
+		}
+	}
+	_, err := c.o.DB.Pool.Exec(ctx, `UPDATE plugin_rollout_cleanup n SET state='cleaned',updated_at=now()
+		FROM plugin_rollouts r,plugins p WHERE n.rollout_id=r.id AND r.plugin_key=p.key
+		AND p.key=$1 AND p.row_version=$3 AND n.boot_id=$2 AND n.state='cleanup_pending'
+		AND r.phase NOT IN ('preparing','activating')`, p.key, c.o.Node.BootID(), p.rowVersion)
+	if err != nil {
+		c.log.Warn("acknowledge rollout cleanup failed", "plugin", p.key, "err", err)
+	}
 }
 
 // republish switches the registry when the serving set (instances

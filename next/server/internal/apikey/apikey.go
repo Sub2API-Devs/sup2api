@@ -32,7 +32,6 @@ const (
 	keyRandomLen  = 40
 	keyLen        = len(KeyPrefix) + keyRandomLen
 	displayPrefix = 12
-	cacheTTL      = 60 * time.Second
 	flushInterval = 10 * time.Second
 	base62        = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 )
@@ -152,8 +151,9 @@ func cacheKey(hash string) string { return "apikey:" + hash }
 
 // ---------------------------------------------------------------- authenticator
 
-// cached is the Redis representation of a key lookup. It stores facts, not a
-// verdict, so expiry is evaluated at use time.
+// cached holds one authoritative database read. Authentication and scheduling
+// facts are deliberately not cached: a concurrent revoke must not be undone
+// by a reader refilling a Redis entry after invalidation.
 type cached struct {
 	Found              bool       `json:"found"`
 	KeyID              int64      `json:"key_id,omitempty"`
@@ -224,17 +224,6 @@ func (s *Service) Authenticate(ctx context.Context, rawKey string) (*core.APIKey
 }
 
 func (s *Service) lookup(ctx context.Context, hash string) (*cached, error) {
-	if s.rdb != nil {
-		b, err := s.rdb.Get(ctx, cacheKey(hash)).Bytes()
-		if err == nil {
-			var e cached
-			if json.Unmarshal(b, &e) == nil {
-				return &e, nil
-			}
-		} else if err != redis.Nil {
-			slog.WarnContext(ctx, "apikey: cache read", "err", err)
-		}
-	}
 	e := &cached{}
 	var rate string
 	err := s.db.Pool.QueryRow(ctx, `SELECT k.id, k.user_id, k.status, k.expires_at,
@@ -255,12 +244,6 @@ func (s *Service) lookup(ctx context.Context, hash string) (*cached, error) {
 	default:
 		e.Found = true
 		e.RateMultiplier = rate
-	}
-	if s.rdb != nil {
-		b, _ := json.Marshal(e)
-		if err := s.rdb.Set(ctx, cacheKey(hash), b, cacheTTL).Err(); err != nil {
-			slog.WarnContext(ctx, "apikey: cache write", "err", err)
-		}
 	}
 	return e, nil
 }

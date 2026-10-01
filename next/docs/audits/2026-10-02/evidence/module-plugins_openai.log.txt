@@ -1,0 +1,3 @@
+=== plugins/openai ===
+ok  	github.com/Sub2API-Devs/sup2api/next/plugins/openai	1.046s
+ok  	github.com/Sub2API-Devs/sup2api/next/plugins/openai/internal/openai	1.079s

@@ -153,6 +153,7 @@ type AccountSpec struct {
 	Priority       int
 	MaxConcurrency int
 	ModelMapping   map[string]string
+	Settings       map[string]any // non-secret form fields; the host splits them from credentials
 }
 
 // CreateAccount creates an account (POST /accounts with plugin_key + type).
@@ -177,6 +178,9 @@ func (e *Env) CreateAccount(admin *Session, a AccountSpec) int64 {
 		a.MaxConcurrency = 5
 	}
 	creds := map[string]any{"api_key": a.APIKey, "base_url": a.BaseURL}
+	for key, value := range a.Settings {
+		creds[key] = value
+	}
 	body := map[string]any{
 		"name": a.Name, "plugin_key": a.PluginKey, "type": a.Type, "group_ids": a.GroupIDs,
 		"proxy_id": nil, "priority": a.Priority, "max_concurrency": a.MaxConcurrency,

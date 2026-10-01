@@ -1,22 +1,33 @@
 # sub2api-next deployment
 
-The test deployment is `single/` (compose project `sup2api` on ovh): two nodes
-sharing one PostgreSQL 16 / Redis 7, with the signed plugin market bundled in
-the image, published on `:3130` and `:3131`. See `single/README.md`.
+The long-running deployment is `single/` (compose project `sup2api` on ovh),
+published on `:3130` and `:3131`. See `single/README.md`.
+
+The opt-in [shell-managed deployment](shell/README.md) runs a stable public
+proxy/supervisor and downloads signed core releases. It now uses the
+primary-first maintenance flow with Redis per-node peer keys described in the
+[multi-node protocol](../docs/MULTINODE-SYNC-PROTOCOL.md); it passed isolated
+real-PG/Redis and three-node validation on 2026-10-02 (see
+[the record](../docs/audits/2026-10-02/MULTINODE-VALIDATION.md)) but is not
+deployed. It does not replace `single/` automatically.
+
+Automated acceptance tests use the separate `e2e/` stack: two nodes behind
+Caddy on `127.0.0.1:3120`, their own PostgreSQL/Redis, signed plugin market and
+mock upstream. See [e2e/README.md](e2e/README.md) for setup and commands. Never
+run these destructive tests against `sup2api` or the unit-test `testdb` database.
 
 ```
 deploy/
 ├── single/                # compose.yml + deploy.sh of the sup2api stack
+├── e2e/                   # isolated two-node stack + Caddy + opt-in Go test runner
 ├── docker/                # build and entrypoint scripts used by ../Dockerfile
 ├── mock-upstream/         # mock Anthropic API (standalone Go module, used by e2e)
 └── ci/compose.yml         # Go test runner joined to the sub2api-next-testdb network
 ```
 
-The former two-nodes-behind-Caddy stack on `127.0.0.1:3120`
-(`sub2api-next-test`: compose.yml, caddy/, scripts/, with mock-upstream and the
-`/__node1`, `/__node2`, `/__mock` test routes) was removed on 2026-09-27. The
-e2e suite below still expects that layout and needs a new target before it
-can run again.
+`e2e/` replaces the old Caddy topology removed on 2026-09-27. It provides the
+`/__node1`, `/__node2`, `/__mock` and `/market` routes expected by the suite,
+using the dedicated Compose project `sub2api-next-e2e` by default.
 
 ## Image (`next/Dockerfile`, context `next/`)
 
@@ -35,7 +46,10 @@ can run again.
   from the dev public key unless those variables are set.
 - Without the plugin CLI the market contains an empty, unsigned `index.json`.
 
-Node settings live in `single/compose.yml`.
+Node settings live in each stack's `compose.yml`. The E2E stack explicitly
+enables package signature checks, plugin seccomp, strict networking and
+database role isolation. Its private-upstream exception is only for the mock
+on that stack's internal network.
 
 ## mock-upstream
 
@@ -58,18 +72,26 @@ through the gateway use `/__control` rules or key markers.
 ## End-to-end tests (`next/e2e`)
 
 ```bash
-cd next/e2e
-E2E_BASE_URL=http://127.0.0.1:3130 E2E_ADMIN_PASSWORD=... E2E_DOCKER_HOST=ovh \
-  go test -count=1 -v ./...
-E2E_LONG=1 ...          # also wait for multi-minute schedules (AC 12)
+# First start the dedicated stack as documented in e2e/README.md.
+# Run on its Docker host from the full repository checkout; no host Go needed.
+sh next/deploy/e2e/test.sh
 ```
+
+The opt-in runner compiles and executes tests under `/src` with Go 1.27.
+AC14/AC15 rebuild derived guard plugins, so a standalone test binary without
+Go and sources at its original compilation path is insufficient. The runner
+mounts the Docker socket for fault injection; `test.sh` checks the dedicated
+project and container labels first. This is an accident guard, not a Docker
+authorization boundary. See [e2e/README.md](e2e/README.md) for direct Go/SSH
+usage and runner options.
 
 | Variable | Default |
 |---|---|
 | `E2E_BASE_URL` | **required, no default** — `Setup` fails with instructions when it is unset. A stale default (it used to be `http://127.0.0.1:3120`) makes every case skip as "unreachable" and the suite read as green |
 | `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD` | `admin@sub2api.test` / (required beyond AC 1) |
 | `E2E_DOCKER_HOST` | empty; `ovh` runs `ssh ovh docker ...`, `local` runs docker locally. Needed to kill nodes/plugins and to query PG/Redis |
-| `E2E_MOCK_URL`, `E2E_MOCK_INTERNAL_URL`, `E2E_NODE_URLS`, `E2E_PROJECT` | Caddy helper routes / compose names |
+| `E2E_MOCK_URL`, `E2E_MOCK_INTERNAL_URL`, `E2E_NODE_URLS` | Caddy helper routes / `http://mock-upstream:8080` |
+| `E2E_PROJECT` | Set to the dedicated Compose project, `sub2api-next-e2e` in the supplied `.env`; container inspection must target that same project |
 
 `Setup` fails (it does not skip) when `E2E_BASE_URL` is unset or the target
 does not answer, and there is no longer an `E2E_RUN_PENDING` knob: every

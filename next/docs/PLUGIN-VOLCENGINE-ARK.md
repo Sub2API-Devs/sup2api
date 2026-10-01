@@ -237,7 +237,7 @@ rpc GetAccountCredentials(GetAccountCredentialsRequest) returns (GetAccountCrede
 
 **代理路径上用不了它。** 在 sup2api 的架构里上游请求是**核心发的**：插件的 `BuildUpstreamRequest` 只返回 `{method, url, headers, patches}`，真正的 HTTP 调用连同账号代理、SSRF 防护、用量提取、失败切换、并发槽位全在核心手里（`gateway/dispatch.go`）。插件改用 Ark SDK 自己发请求，就等于把这一整套全部绕过。
 
-四期的核对循环（`BuildReconcileRequest` → 核心代发 → `ParseReconcileResponse`）同理，也是核心发请求。
+四期的核对循环使用 `BuildReconcileRequest` → 核心代发 → `ParseReconcileResponse`。后续 Poll 将查询与解析合并；当前 0.10.0 由核心调用一次 `Monitor`，插件通过受执行上下文约束的 `ExecuteHTTP` 查询，再用 `ReportTaskProgress` 提交进度或终态；连接仍由核心代理，沿用原账号的网络与限额约束，账务和结束监控由核心原子提交。
 
 所以本插件里火山官方 SDK 的作用域**只有素材库这一处**：它是插件自己的 HTTP 路由 + 自己的出口调用，不经过网关。
 
@@ -258,62 +258,45 @@ rpc GetAccountCredentials(GetAccountCredentialsRequest) returns (GetAccountCrede
 
 ## 5. 异步任务：插件执行，核心记录
 
-这一节原本在本文里展开，现已抽成独立的核心契约文档：**[插件执行、核心记录](PLUGIN-EXECUTES-CORE-RECORDS.md)**。那份文档里的四条扩展（`path_params`、`ResolveModel`、`ExtractUsage` + `UsageReport`、预扣费 + 核心驱动的核对循环）都不带厂商语义，豆包视频只是第一个用户。
+本轮先接入 [CONTRACTS §28](CONTRACTS.md#28-核心托管异步任务2026-10-01) 的核心托管任务，最终 0.10.0 使用 §31 的 Execute / Monitor 和 SDK 主动上报接口。插件负责 Ark/relay 的请求、状态和计量事实；核心提供任务身份、账号约束、统一调度、共享快照和账务。此前“不让核心拥有任何异步任务概念”的方案未能提供跨节点归属和查询协调，本轮用不带厂商字段的通用契约替代。
 
-这里只说本插件怎么落在那套契约上。
-
-先否掉两个看起来更省事的方案：
-
-| 方案 | 为什么不行 |
-|---|---|
-| 核心长出「异步任务」这个一等概念（提交、绑定、轮询、结算都在核心） | 把一类厂商接口的形状写进核心。即梦、可灵、Sora、混元各家任务模型都不一样，核心会被不断拉扯 |
-| 插件彻底绕开网关，用自己的 `routes` 全包 | 约束 I：插件没法列账号、读凭证，**挑不出账号**；而且丢掉 API Key 鉴权、分组、限流、并发槽位、价格表、使用记录 |
+新插件声明 `platform.tasks.v1`、`platform.execute.v1` 和 `platform.monitor.v1`，并在 `InitHost` 要求宿主 API 4，避免旧节点从共享数据库加载新包后缺少执行或记录能力。提交时由插件调用 ReserveAndWatch；后续查询读核心快照，监控由核心回调插件。先停止全部旧核心及其后台对账、升级完整集群，再激活此版本；内置插件自动升级和回退限制见 CONTRACTS §28.4。客户端应把提交响应中的 `s2task_` ID 当作不透明字符串，后续原样传回查询端点。
 
 ### 5.1 跑起来是这样
 
 ```
 提交  POST /ark/v3/contents/generations/tasks
-      核心鉴权 → 调度选账号 → 插件 BuildUpstreamRequest → 转发
-      响应转发完后核心调 ExtractUsage：
-        插件从响应体读出 task id，写进 plg_volcengine.tasks（连同账号、模型、用户）
-        返回 Reservation{ ref_id = task_id, tokens = 按分辨率与时长预估, next_check_after_sec }
-      核心按价格表算出预估费用 → 预扣 → usage_logs(billing_status='reserved')
-                             → pending_settlements 登记一条
+      核心鉴权 → 调度选本插件账号 → 持久记录提交意图 → 插件 BuildUpstreamRequest → 请求上游
+      核心收到有界成功 JSON 后同步调 ParseTaskSubmission：
+        插件返回上游 task id、初始 queued 查询快照、按分辨率与时长预估的 Reservation
+      核心同事务写任务归属/账号/快照、usage_logs、预扣和 pending_settlements
+      核心把提交响应中的上游 ID 换成 s2task_ 公开 ID，再返回客户端
 
 轮询  GET /ark/v3/contents/generations/tasks/:task_id      billing: free
-      核心用 ResolveModel 问插件模型（插件拿 path_params 里的 task_id 查表）
-      核心用 RankAccounts + path_params 把请求钉到建任务的那个账号
-      插件 BuildUpstreamRequest 拼出上游 URL → 转发 → 原样返回客户端
-      这条路不计费，纯粹是把客户端的查询转给上游
+      核心鉴权、校验任务所属用户及当前分组的模型权限
+      直接返回共享快照；不选账号、不使用 RankAccounts、不访问上游
 
-结算  核心的核对循环到期 → BuildReconcileRequest（核心带着账号凭证和代理去发）
-      → ParseReconcileResponse：
-          还在跑    → PENDING + next_check_after_sec
-          成功      → SETTLED + tokens{Output: usage.completion_tokens} + facts{resolution}
-          失败/过期 → FAILED + reason
-      核心按真实用量重算，与预扣差额补扣或退回，usage_logs 改 billed，发 usage.recorded
+观测  核心认领到期任务 → Poll（始终使用提交账号）
+      → ExecuteHTTP（核心绑定账号代理和限额）→ 插件解析结果：
+          还在跑    → PENDING + task_snapshot_json + next_check_after_sec
+          成功      → SETTLED + 真实用量 + task_snapshot_json；无用量则 SETTLED_ESTIMATE
+          上游失败  → FAILED + reason + task_snapshot_json
+      核心验证认领 token，同事务保存终态快照并补扣/退款；旧持有者迟到响应被拒绝
+      核心观测超时不等于上游失败，不自动退款
 ```
 
 ### 5.2 为什么这样是对的
 
 - **钱收得到**：客户端提交完再也不回来查是常态，new-api 正是因此用后台轮询（`fetchMode: "per_task"`）而不是依赖客户端。核对由核心驱动，与客户端来不来无关。
-- **钱不会重复收**：计费只发生在核对循环里，客户端查多少次都不计费（查询端点 `billing: free`）。
-- **钱不会漏收**：提交时就预扣，用户不能用 $0 余额压一批任务进来。
-- **插件权限很小**：不需要 `net`（请求由核心代发）、不需要列账号（核心把账号传给它）、不需要 `app.jobs.v1`（核心驱动节奏）、不需要 `ledger.debit`（核心按价格表算钱）。插件只要 `platform.register` + `gateway.endpoint` + `accounts.credentials` + `db.schema`。
+- 提交估计与后续差额结算都由核心事务和幂等账本负责；客户端查询免费，不会触发重复轮询或扣款。
+- 视频链路不需要额外 `net`、`app.jobs.v1`、`lock`、`ledger.debit` 或任务表权限。素材库仍有自己的数据库和出网需求，不能据此删除整个插件的相关权限。
+- 余额门禁保留现有允许短时超额的契约，不能把异步预扣宣传成严格并发资金预授权。
 
-### 5.3 插件自己的任务表
+### 5.3 历史任务
 
-```sql
--- plg_volcengine.tasks
-task_id     varchar PRIMARY KEY,   -- 上游返回的任务 id
-account_id  bigint NOT NULL,       -- 建任务的账号，轮询要钉回它
-model       varchar NOT NULL,      -- ResolveModel 要用
-user_id     bigint NOT NULL,
-state       varchar NOT NULL,      -- running | done | failed
-created_at  timestamptz NOT NULL
-```
+已应用的 `0002_video_tasks.sql` 及旧表保留，不篡改迁移，也不再向它登记新视频任务。旧裸 ID 的归属只从核心可信账务恢复，不能使用曾按裸 ID 覆盖的插件表授权。
 
-插件要能容忍记录缺失：查不到就让 `ResolveModel` 返回空（核心 400），或退回普通调度让上游自己回 404。
+旧任务首次恢复缺少完整结果时，核心安排统一轮询，查询暂时返回 `task_snapshot_pending`。未知、歧义或其他用户的任务不得退回普通调度；上游结果已超过保留期时明确返回无法继续观测。
 
 
 ---

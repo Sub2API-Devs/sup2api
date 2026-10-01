@@ -132,7 +132,7 @@ func Register(s grpc.ServiceRegistrar, p any, dial HostDialer, opts ...Option) e
 	}
 	pluginv1.RegisterPluginServiceServer(s, rt)
 	if v, ok := p.(Platform); ok {
-		pluginv1.RegisterPlatformServiceServer(s, platformServer{impl: v})
+		pluginv1.RegisterPlatformServiceServer(s, platformServer{impl: v, runtime: rt})
 	}
 	if v, ok := p.(Hook); ok {
 		pluginv1.RegisterHookServiceServer(s, hookServer{impl: v})
@@ -168,8 +168,20 @@ func buildOptions(opts []Option) options {
 // Capabilities lists the capability ids p implements.
 func Capabilities(p any) []string {
 	var caps []string
+	if _, ok := p.(Executor); ok {
+		caps = append(caps, manifest.CapPlatformExecute)
+	}
+	if _, ok := p.(TaskMonitor); ok {
+		caps = append(caps, manifest.CapPlatformMonitor)
+	}
 	if _, ok := p.(Platform); ok {
 		caps = append(caps, manifest.CapPlatformAdapter)
+	}
+	if _, ok := p.(TaskSubmissionParser); ok {
+		caps = append(caps, manifest.CapPlatformTasks)
+	}
+	if _, ok := p.(Poller); ok {
+		caps = append(caps, manifest.CapPlatformPoll)
 	}
 	if _, ok := p.(Hook); ok {
 		caps = append(caps, manifest.CapGatewayHook)
@@ -188,6 +200,9 @@ func Capabilities(p any) []string {
 	}
 	if _, ok := p.(Scheduler); ok {
 		caps = append(caps, manifest.CapSchedulerAffinity)
+	}
+	if _, ok := p.(AccountRanker); ok {
+		caps = append(caps, manifest.CapSchedulerRank)
 	}
 	if _, ok := p.(Migration); ok {
 		caps = append(caps, manifest.CapMigrationData)
@@ -231,6 +246,9 @@ func newRuntime(p any, o options, dial HostDialer) (*runtime, error) {
 		if err := checkBroadcastManifest(p, &m, declared); err != nil {
 			return nil, err
 		}
+		if err := checkTaskManifest(p, &m, declared); err != nil {
+			return nil, err
+		}
 	}
 	if o.key != "" {
 		rt.key = o.key
@@ -249,6 +267,11 @@ func newRuntime(p any, o options, dial HostDialer) (*runtime, error) {
 	}
 	for _, c := range Capabilities(p) {
 		if declared == nil || declared[c] {
+			if c == manifest.CapPlatformExecute || c == manifest.CapPlatformMonitor {
+				if _, ok := p.(Platform); !ok {
+					return nil, fmt.Errorf("%s requires Platform", c)
+				}
+			}
 			rt.capabilities = append(rt.capabilities, c)
 		}
 	}
@@ -279,6 +302,17 @@ func (rt *runtime) strictWanted() bool {
 func (rt *runtime) InitHost(ctx context.Context, in *pluginv1.InitHostRequest) (*pluginv1.InitHostResponse, error) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
+	for _, capability := range rt.capabilities {
+		if (capability == manifest.CapPlatformExecute || capability == manifest.CapPlatformMonitor) && in.GetHostApiVersion() < protocol.ExecutionHostAPIVersion {
+			return nil, status.Errorf(codes.FailedPrecondition, "execution callbacks require host API version %d or newer", protocol.ExecutionHostAPIVersion)
+		}
+		if capability == manifest.CapPlatformPoll && in.GetHostApiVersion() < protocol.PollHostAPIVersion {
+			return nil, status.Errorf(codes.FailedPrecondition, "polling requires host API version %d or newer", protocol.PollHostAPIVersion)
+		}
+		if capability == manifest.CapPlatformTasks && in.GetHostApiVersion() < protocol.ManagedTasksHostAPIVersion {
+			return nil, status.Errorf(codes.FailedPrecondition, "managed tasks require host API version %d or newer", protocol.ManagedTasksHostAPIVersion)
+		}
+	}
 	if rt.inited {
 		return &pluginv1.InitHostResponse{Ready: true, Message: "already initialised"}, nil
 	}
@@ -361,7 +395,8 @@ func (rt *runtime) Shutdown(ctx context.Context, _ *pluginv1.ShutdownRequest) (*
 
 type platformServer struct {
 	pluginv1.UnimplementedPlatformServiceServer
-	impl Platform
+	impl    Platform
+	runtime *runtime
 }
 
 func (s platformServer) ValidateCredentials(ctx context.Context, in *pluginv1.ValidateCredentialsRequest) (*pluginv1.ValidateCredentialsResponse, error) {
@@ -395,6 +430,13 @@ func (s platformServer) ExtractUsage(ctx context.Context, in *pluginv1.ExtractUs
 		return x.ExtractUsage(ctx, in)
 	}
 	return nil, status.Error(codes.Unimplemented, "this platform does not extract usage")
+}
+
+func (s platformServer) ParseTaskSubmission(ctx context.Context, in *pluginv1.ExtractUsageRequest) (*pluginv1.TaskSubmission, error) {
+	if p, ok := s.impl.(TaskSubmissionParser); ok {
+		return p.ParseTaskSubmission(ctx, in)
+	}
+	return nil, status.Error(codes.Unimplemented, "this platform does not parse task submissions")
 }
 
 func (s platformServer) BuildReconcileRequest(ctx context.Context, in *pluginv1.BuildReconcileRequestRequest) (*pluginv1.BuildReconcileRequestResponse, error) {

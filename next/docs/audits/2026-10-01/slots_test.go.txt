@@ -1,0 +1,54 @@
+package cluster
+
+import (
+	"context"
+	"testing"
+	"time"
+)
+
+func TestAuditBothRequestSlotsStayRefreshed(t *testing.T) {
+	ctx := context.Background()
+	_, rdb := newRedis(t)
+	c := newClock()
+	reg := newReg(rdb, c, "node-a", "boot-a")
+	s := NewSlots(rdb, reg, SlotOptions{Now: c.Now, TTL: time.Minute})
+	u, ok, err := s.Acquire(ctx, "user", 1, 1, "request-same")
+	if !ok || err != nil {
+		t.Fatal(ok, err)
+	}
+	defer u()
+	a, ok, err := s.Acquire(ctx, "account", 2, 1, "request-same")
+	if !ok || err != nil {
+		t.Fatal(ok, err)
+	}
+	defer a()
+	c.Add(50 * time.Second)
+	if err := s.refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	c.Add(20 * time.Second)
+	un, _ := s.InUse(ctx, "user", 1)
+	an, _ := s.InUse(ctx, "account", 2)
+	if un != 1 || an != 1 {
+		t.Fatalf("live request lost concurrency slot: user=%d account=%d held_entries=%d", un, an, len(s.held))
+	}
+}
+func TestAuditRefreshDetectsLostSlots(t *testing.T) {
+	ctx := context.Background()
+	_, rdb := newRedis(t)
+	c := newClock()
+	s := NewSlots(rdb, newReg(rdb, c, "node-a", "boot-a"), SlotOptions{Now: c.Now})
+	release, ok, err := s.Acquire(ctx, "account", 2, 1, "inflight")
+	if !ok || err != nil {
+		t.Fatal(ok, err)
+	}
+	defer release()
+	if err := rdb.Del(ctx, SlotKey("account", 2)).Err(); err != nil {
+		t.Fatal(err)
+	}
+	err = s.refresh(ctx)
+	n, _ := s.InUse(ctx, "account", 2)
+	if err == nil && n == 0 {
+		t.Fatal("refresh reports success after losing a live request slot; existing request receives no failure signal")
+	}
+}

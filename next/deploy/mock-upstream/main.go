@@ -115,6 +115,7 @@ type server struct {
 	nextID int64
 	log    []recorded
 	rules  map[string]*controlRule
+	video  *videoStore
 }
 
 func main() {
@@ -127,7 +128,9 @@ func main() {
 	log.Fatal(srv.ListenAndServe())
 }
 
-func newServer() *server { return &server{rules: map[string]*controlRule{}} }
+func newServer() *server {
+	return &server{rules: map[string]*controlRule{}, video: newVideoStore()}
+}
 
 func (s *server) handler() http.Handler {
 	mux := http.NewServeMux()
@@ -142,6 +145,10 @@ func (s *server) handler() http.Handler {
 	mux.HandleFunc("POST /v1beta/models/{spec}", s.gemini)
 	mux.HandleFunc("GET /v1/models", s.listModels)
 	mux.HandleFunc("GET /v1beta/models", s.listGeminiModels)
+	mux.HandleFunc("POST /api/v3/contents/generations/tasks", s.submitVideo)
+	mux.HandleFunc("GET /api/v3/contents/generations/tasks/{id}", s.queryVideo)
+	mux.HandleFunc("POST /__video/control", s.controlVideo)
+	mux.HandleFunc("GET /__video/stats", s.videoStats)
 	mux.HandleFunc("GET /__requests", s.listRequests)
 	mux.HandleFunc("DELETE /__requests", s.clearRequests)
 	mux.HandleFunc("GET /__control", s.listRules)

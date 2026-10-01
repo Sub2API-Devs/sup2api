@@ -47,11 +47,13 @@ type Plugin struct {
 	*pluginsdk.Router
 	*pluginsdk.BroadcastMux
 
-	host     pluginsdk.Host
-	log      *slog.Logger
-	settings atomic.Pointer[Settings]
-	rules    atomic.Pointer[ruleSet]
-	now      func() time.Time
+	host          pluginsdk.Host
+	log           *slog.Logger
+	settings      atomic.Pointer[Settings]
+	rules         atomic.Pointer[ruleSet]
+	ruleReloadMu  sync.Mutex
+	ruleReloadSeq uint64
+	now           func() time.Time
 
 	// reloadEvery is the rule refresh period (other nodes may change rules).
 	reloadEvery time.Duration

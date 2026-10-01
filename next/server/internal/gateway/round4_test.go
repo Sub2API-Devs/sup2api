@@ -232,12 +232,17 @@ func (m *memGatewaySettings) load(context.Context) (GatewaySettings, error) {
 	return *m.v, nil
 }
 
-func (m *memGatewaySettings) save(_ context.Context, v GatewaySettings, by int64) error {
+func (m *memGatewaySettings) update(_ context.Context, in gatewaySettingsInput, by int64) (GatewaySettings, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	v := defaultGatewaySettings()
+	if m.v != nil {
+		v = *m.v
+	}
+	in.applyTo(&v)
 	m.v, m.by = &v, by
 	m.saves++
-	return nil
+	return v, nil
 }
 
 type recBus struct {

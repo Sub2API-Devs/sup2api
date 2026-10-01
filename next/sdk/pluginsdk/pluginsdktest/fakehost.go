@@ -45,6 +45,17 @@ type FakeHost struct {
 	Authz func(userID int64, permission string) bool
 	// DialFunc is used by EgressService.Dial (default net.Dialer).
 	DialFunc func(ctx context.Context, network, address string) (net.Conn, error)
+	// ExecuteHTTPFunc handles scoped Poll requests. Set it before Start.
+	// No real network is used by default; nil returns UNIMPLEMENTED. The fake
+	// forwards the SDK-injected token so tests can assert invocation isolation;
+	// real token admission, proxy and lease enforcement belong to host tests.
+	ExecuteHTTPFunc func(context.Context, *pluginv1.ExecutionHTTPRequest) (*pluginv1.ExecutionHTTPResponse, error)
+	// Execution callbacks do not simulate real host authority or transactions.
+	// Set before Start; nil returns UNIMPLEMENTED.
+	ForwardUpstreamFunc    func(context.Context, *pluginv1.ForwardUpstreamRequest) (*pluginv1.ForwardUpstreamResponse, error)
+	RecordUsageFunc        func(context.Context, *pluginv1.RecordUsageRequest) (*pluginv1.ExecutionReceipt, error)
+	ReserveAndWatchFunc    func(context.Context, *pluginv1.ReserveAndWatchRequest) (*pluginv1.ExecutionReceipt, error)
+	ReportTaskProgressFunc func(context.Context, *pluginv1.ReportTaskProgressRequest) (*pluginv1.ExecutionReceipt, error)
 	// OnPublish, when set, is called (outside the lock) for every accepted
 	// Publish, e.g. to relay it to another Harness with Harness.Deliver and
 	// simulate a second node. PublishErr, when set, fails every Publish.
@@ -88,6 +99,13 @@ type kvItem struct {
 // NewFakeHost returns an empty fake host.
 func NewFakeHost() *FakeHost {
 	return &FakeHost{kv: map[string]kvItem{}, ledgerBy: map[string]LedgerEntry{}, Locks: NewLockTable()}
+}
+
+func (f *FakeHost) ExecuteHTTP(ctx context.Context, in *pluginv1.ExecutionHTTPRequest) (*pluginv1.ExecutionHTTPResponse, error) {
+	if f.ExecuteHTTPFunc == nil {
+		return nil, status.Error(codes.Unimplemented, "set FakeHost.ExecuteHTTPFunc for polling HTTP")
+	}
+	return f.ExecuteHTTPFunc(ctx, in)
 }
 
 // Logs returns a copy of the received log records.

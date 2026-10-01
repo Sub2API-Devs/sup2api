@@ -48,11 +48,32 @@ type ModelResolver interface {
 	ResolveModel(context.Context, *pluginv1.ResolveModelRequest) (*pluginv1.ResolveModelResponse, error)
 }
 
+// TaskSubmissionParser describes a task accepted by an upstream service.
+// Only endpoints declaring task.action "submit" call this synchronous hook:
+// the host persists the task before returning success. Plugins never start a
+// polling goroutine; implement TaskMonitor to perform individual observations.
+// ExecuteDefault invokes this parser locally before ReserveAndWatch.
+type TaskSubmissionParser interface {
+	ParseTaskSubmission(context.Context, *pluginv1.ExtractUsageRequest) (*pluginv1.TaskSubmission, error)
+}
+
+// Poller performs ONE observation when scheduled by the host. Use ExecuteHTTP
+// with the supplied context to send one request through the original account's
+// proxy, limits and host SSRF policy. Return the observed state and a suggested
+// next-check delay; the host owns retries, leases, persistence and billing.
+// The invocation permission expires when Poll returns or its context is
+// cancelled. Never cache the context/token or start a background polling loop.
+// Requires platform.poll.v1 and host API 3.
+type Poller interface {
+	Poll(context.Context, *pluginv1.PollRequest) (*pluginv1.ReconcileResult, error)
+}
+
 // UsageExtractor is implemented by platforms with endpoints whose token usage
 // the declarative manifest rules cannot express (manifest usage.source:
 // "plugin"). Like ModelResolver it is answered by the plugin declaring the
-// PLATFORM, and it runs after the response has been forwarded in full, so it
-// adds nothing to what the client waits for.
+// PLATFORM. Legacy execution invokes it asynchronously after forwarding.
+// With Executor, ExecuteDefault invokes it locally before RecordUsage and
+// returning: streamed bytes arrive immediately, but EOF waits for recording.
 //
 // It is handed the whole body of a non-streaming response, or - for a stream -
 // only the events the endpoint listed in usage.streamEvents; the host never
@@ -64,7 +85,9 @@ type UsageExtractor interface {
 	ExtractUsage(context.Context, *pluginv1.ExtractUsageRequest) (*pluginv1.UsageReport, error)
 }
 
-// Reconciler is implemented by platforms whose ExtractUsage returns a
+// Reconciler is the legacy two-call observation interface. New plugins use
+// Poller with ExecuteHTTP. It remains supported for existing plugins.
+// It is implemented by platforms whose ExtractUsage returns a
 // Reservation: work that only STARTS during the gateway request and whose
 // real usage arrives later (CONTRACTS §25.4). The host charges the estimate
 // straight away and then drives the checking itself - backoff, deadline,
@@ -114,12 +137,14 @@ type HTTP interface {
 	HandleHTTP(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error)
 }
 
-// Scheduler mirrors pluginv1.SchedulerServiceServer ("scheduler.affinity.v1").
+// Scheduler supplies a request-affinity policy ("scheduler.affinity.v1").
+// Despite its historical name, it does not run tasks or choose a node: the
+// core invokes it synchronously and retains all execution/scheduling authority.
 type Scheduler interface {
 	ResolveAffinityKey(context.Context, *pluginv1.ResolveAffinityKeyRequest) (*pluginv1.ResolveAffinityKeyResponse, error)
 }
 
-// AccountRanker is implemented by schedulers that also rewrite the
+// AccountRanker is a policy extension that rewrites the
 // priority/weight of the candidate accounts of a request
 // ("scheduler.rank.v1", declared in manifest scheduler.rank). Optional: a
 // Scheduler without it answers RankAccounts with UNIMPLEMENTED.
@@ -146,7 +171,9 @@ type Migration interface {
 // must happen once for the whole cluster does not belong here: declare
 // periodic work as manifest jobs[] (each trigger runs on one node only), and
 // guard other work that must not overlap across nodes with Host.Locks. See
-// CONTRACTS §27.4.
+// CONTRACTS §27.4. For upstream async tasks, declare endpoint.task and
+// implement Executor + TaskSubmissionParser + TaskMonitor: the host persists, schedules and
+// serves shared progress; no plugin timer or task polling job is needed.
 type Initializer interface {
 	Init(ctx context.Context, host Host) error
 }

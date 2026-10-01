@@ -33,7 +33,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "guard" || m.Version != "0.2.0" || m.HostUICompat == "" || m.UI == nil || m.UI.Native == nil {
+	if m.Key != "guard" || m.Version != "0.2.1" || m.HostUICompat == "" || m.UI == nil || m.UI.Native == nil {
 		t.Fatalf("manifest = %+v", m)
 	}
 	perms := map[string]bool{}

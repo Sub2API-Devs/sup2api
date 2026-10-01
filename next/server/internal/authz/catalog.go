@@ -115,6 +115,11 @@ var coreModules = []coreModule{
 		{"settings:read", "View settings", "查看设置", false},
 		{"settings:manage", "Manage settings", "管理设置", false},
 	}},
+	{"system_update", lt("Core updates", "核心升级"), []corePerm{
+		{"system:update:read", "View core updates", "查看核心升级", false},
+		{"system:update:execute", "Execute core updates", "执行核心升级", true},
+		{"system:update:recover", "Recover core updates", "恢复核心升级", true},
+	}},
 }
 
 // userRolePermissions are granted to the built-in "user" role.

@@ -15,6 +15,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest/check"
+
 	"github.com/redis/go-redis/v9"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -111,6 +113,14 @@ func New(o Options) (*Runtime, error) {
 // handshake (GetInfo, InitHost, Configure, Health) and starts supervision.
 // The returned instance serves calls until Drain or Stop.
 func (r *Runtime) Load(ctx context.Context, pkg *registry.Package) (*Instance, error) {
+	// Validate before ExtractBinary/Init: an incompatible plugin may already
+	// have side effects by the time a post-start health check rejects it.
+	if pkg.Manifest != nil && r.o.HostVersion != "" {
+		compatible, err := check.HostCompatible(pkg.Manifest.HostCompat, r.o.HostVersion)
+		if err != nil || !compatible {
+			return nil, fmt.Errorf("plugin %s@%s is incompatible with host %s", pkg.Key, pkg.Version, r.o.HostVersion)
+		}
+	}
 	binPath, sum, err := pkg.ExtractBinary(runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		return nil, fmt.Errorf("plugin %s@%s: %w", pkg.Key, pkg.Version, err)

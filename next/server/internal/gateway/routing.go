@@ -64,6 +64,21 @@ type typeRoute struct {
 // another platform Q with a protocol Y the core converts the endpoint
 // protocol X to. A type supporting P is never converted.
 func (c *call) planRoutes() {
+	defer func() {
+		if !c.ep.TaskSubmit() {
+			return
+		}
+		keys := c.routeKeys[:0]
+		for _, key := range c.routeKeys {
+			rt := c.routes[key]
+			if key.PluginKey != c.plugin.Key || rt.upstream != c.ep.Protocol || rt.conv != nil {
+				delete(c.routes, key)
+				continue
+			}
+			keys = append(keys, key)
+		}
+		c.routeKeys = keys
+	}()
 	p, x := c.platform, c.ep.Protocol
 	c.routes = map[core.AccountTypeKey]*typeRoute{}
 	c.routeKeys = nil

@@ -38,13 +38,27 @@ const (
 type hostServer struct {
 	pluginv1.UnimplementedHostServiceServer
 	i *Instance
+	p *proc // the broker belongs to this process, never to its replacement
 }
 
 func (h *hostServer) key() string { return h.i.pkg.Key }
 
-func (h *hostServer) require(permission string) error {
+func (h *hostServer) require(ctx context.Context, permission string) error {
 	if !h.i.Grants().Has(permission) {
 		return status.Errorf(codes.PermissionDenied, "plugin %s has no %q grant", h.key(), permission)
+	}
+	// Pub/sub accelerates local convergence but cannot authorize calls made
+	// after an emergency revocation has committed in PG. Also reject a stale
+	// broader scope until the local settings have refreshed.
+	if db := h.i.rt.o.DB; db != nil {
+		var allowed bool
+		err := db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM plugin_permission_grants WHERE plugin_key=$1 AND permission=$2 AND status='granted' AND scope=$3::jsonb)`, h.key(), permission, []byte(h.i.Grants()[permission])).Scan(&allowed)
+		if err != nil {
+			return status.Error(codes.Unavailable, "cannot verify current plugin grant")
+		}
+		if !allowed {
+			return status.Errorf(codes.PermissionDenied, "plugin %s grant %q was revoked or changed", h.key(), permission)
+		}
 	}
 	return nil
 }
@@ -99,7 +113,7 @@ func validNamespace(ns string) error {
 }
 
 func (h *hostServer) KVGet(ctx context.Context, in *pluginv1.KVGetRequest) (*pluginv1.KVGetResponse, error) {
-	if err := h.require("kv"); err != nil {
+	if err := h.require(ctx, "kv"); err != nil {
 		return nil, err
 	}
 	key, err := h.kvKey(in.GetNamespace(), in.GetKey())
@@ -117,7 +131,7 @@ func (h *hostServer) KVGet(ctx context.Context, in *pluginv1.KVGetRequest) (*plu
 }
 
 func (h *hostServer) KVSet(ctx context.Context, in *pluginv1.KVSetRequest) (*pluginv1.KVSetResponse, error) {
-	if err := h.require("kv"); err != nil {
+	if err := h.require(ctx, "kv"); err != nil {
 		return nil, err
 	}
 	key, err := h.kvKey(in.GetNamespace(), in.GetKey())
@@ -137,7 +151,7 @@ func (h *hostServer) KVSet(ctx context.Context, in *pluginv1.KVSetRequest) (*plu
 }
 
 func (h *hostServer) KVDelete(ctx context.Context, in *pluginv1.KVDeleteRequest) (*pluginv1.KVDeleteResponse, error) {
-	if err := h.require("kv"); err != nil {
+	if err := h.require(ctx, "kv"); err != nil {
 		return nil, err
 	}
 	key, err := h.kvKey(in.GetNamespace(), in.GetKey())
@@ -151,7 +165,7 @@ func (h *hostServer) KVDelete(ctx context.Context, in *pluginv1.KVDeleteRequest)
 }
 
 func (h *hostServer) KVList(ctx context.Context, in *pluginv1.KVListRequest) (*pluginv1.KVListResponse, error) {
-	if err := h.require("kv"); err != nil {
+	if err := h.require(ctx, "kv"); err != nil {
 		return nil, err
 	}
 	if err := validNamespace(in.GetNamespace()); err != nil {
@@ -204,7 +218,7 @@ func globEscape(s string) string {
 // ------------------------------------------------------------------ db
 
 func (h *hostServer) GetDSN(ctx context.Context, _ *pluginv1.GetDSNRequest) (*pluginv1.GetDSNResponse, error) {
-	if err := h.require("db.schema"); err != nil {
+	if err := h.require(ctx, "db.schema"); err != nil {
 		return nil, err
 	}
 	if h.i.pkg.Manifest.Database == nil {
@@ -267,7 +281,7 @@ func (h *hostServer) ledger(ctx context.Context, in *pluginv1.LedgerChangeReques
 	if credit {
 		perm, kind, dir = "ledger.credit", "plugin_credit", "credit"
 	}
-	if err := h.require(perm); err != nil {
+	if err := h.require(ctx, perm); err != nil {
 		return nil, err
 	}
 	if h.i.rt.o.Ledger == nil {
@@ -343,8 +357,8 @@ func (h *hostServer) ledger(ctx context.Context, in *pluginv1.LedgerChangeReques
 // plugin's own account types. Validate rejects any other scope at install
 // time; this re-checks it at call time so a grant row edited or migrated into
 // something else cannot silently widen the call.
-func (h *hostServer) requireOwnCredentials() error {
-	if err := h.require("accounts.credentials"); err != nil {
+func (h *hostServer) requireOwnCredentials(ctx context.Context) error {
+	if err := h.require(ctx, "accounts.credentials"); err != nil {
 		return err
 	}
 	if v, _ := h.i.Grants().Scope("accounts.credentials")["types"].(string); v != "own" {
@@ -358,7 +372,7 @@ func (h *hostServer) requireOwnCredentials() error {
 // account types. The response has no credential field: this call is authorised
 // by accounts.read, which is not a credential grant.
 func (h *hostServer) ListAccounts(ctx context.Context, in *pluginv1.ListAccountsRequest) (*pluginv1.ListAccountsResponse, error) {
-	if err := h.require("accounts.read"); err != nil {
+	if err := h.require(ctx, "accounts.read"); err != nil {
 		return nil, err
 	}
 	if h.i.rt.o.Accounts == nil {
@@ -400,7 +414,7 @@ func (h *hostServer) ListAccounts(ctx context.Context, in *pluginv1.ListAccounts
 // SQL and writes the audit row; an account of another plugin is NOT_FOUND, not
 // PERMISSION_DENIED, so this call cannot be used to probe which ids exist.
 func (h *hostServer) GetAccountCredentials(ctx context.Context, in *pluginv1.GetAccountCredentialsRequest) (*pluginv1.GetAccountCredentialsResponse, error) {
-	if err := h.requireOwnCredentials(); err != nil {
+	if err := h.requireOwnCredentials(ctx); err != nil {
 		return nil, err
 	}
 	if h.i.rt.o.Accounts == nil {

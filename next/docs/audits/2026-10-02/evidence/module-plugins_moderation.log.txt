@@ -1,0 +1,3 @@
+=== plugins/moderation ===
+ok  	github.com/Sub2API-Devs/sup2api/next/plugins/moderation	1.052s
+ok  	github.com/Sub2API-Devs/sup2api/next/plugins/moderation/internal/moderation	11.164s

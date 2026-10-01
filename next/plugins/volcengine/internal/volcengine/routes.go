@@ -17,11 +17,11 @@ package volcengine
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -485,37 +485,32 @@ func (p *Plugin) getGroup(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 	if bad != nil {
 		return bad, nil
 	}
-	row, err := loadGroup(ctx, db, id)
-	if errors.Is(err, ErrNoRow) {
-		return notFound("no such asset group in the index / 索引里没有这个素材组"), nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	cfg, bad := p.newCreds().config(ctx, row.AccountID)
-	if bad != nil {
-		return bad, nil
-	}
-	result, callErr := p.ark.call(ctx, cfg, ActionGetAssetGroup, map[string]any{"Id": row.UpstreamID})
-	if callErr != nil {
-		if callErr.NotFound() {
-			// Upstream is the truth: the index is stale, and it says so.
-			if err := markMissing(ctx, db, "asset_groups", id); err != nil {
-				p.log.Warn("volcengine: cannot mark an asset group missing", "id", id, "error", err.Error())
-			}
-			return pluginsdk.ErrorResponse(http.StatusNotFound, "upstream_not_found",
-				"asset group "+row.UpstreamID+" no longer exists upstream; the index row is marked missing"+
-					" / 上游已经没有这个素材组，索引行已标记为 missing"), nil
+	return withGroup(ctx, db, id, func(tx pgx.Tx, row *groupRow) (*pluginv1.HTTPResponse, error) {
+		cfg, bad := p.newCreds().config(ctx, row.AccountID)
+		if bad != nil {
+			return bad, nil
 		}
-		return upstreamFail(callErr), nil
-	}
-	g := groupFromResult(result)
-	if err := refreshGroup(ctx, db, id, g); err != nil {
-		p.log.Warn("volcengine: cannot refresh an asset group row", "id", id, "error", err.Error())
-	}
-	return pluginsdk.DataResponse(map[string]any{
-		"id": id, "account_id": row.AccountID, "upstream_id": row.UpstreamID, "upstream": result,
-	}), nil
+		result, callErr := p.ark.call(ctx, cfg, ActionGetAssetGroup, map[string]any{"Id": row.UpstreamID})
+		if callErr != nil {
+			if callErr.NotFound() {
+				// Upstream is the truth: the index is stale, and it says so.
+				if err := markMissing(ctx, tx, "asset_groups", id); err != nil {
+					p.log.Warn("volcengine: cannot mark an asset group missing", "id", id, "error", err.Error())
+				}
+				return pluginsdk.ErrorResponse(http.StatusNotFound, "upstream_not_found",
+					"asset group "+row.UpstreamID+" no longer exists upstream; the index row is marked missing"+
+						" / 上游已经没有这个素材组，索引行已标记为 missing"), nil
+			}
+			return upstreamFail(callErr), nil
+		}
+		g := groupFromResult(result)
+		if err := refreshGroup(ctx, tx, id, g); err != nil {
+			p.log.Warn("volcengine: cannot refresh an asset group row", "id", id, "error", err.Error())
+		}
+		return pluginsdk.DataResponse(map[string]any{
+			"id": id, "account_id": row.AccountID, "upstream_id": row.UpstreamID, "upstream": result,
+		}), nil
+	})
 }
 
 // updateBody is the PATCH body of both resources. A nil pointer means "not
@@ -542,33 +537,28 @@ func (p *Plugin) updateGroup(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	if bad != nil {
 		return bad, nil
 	}
-	row, err := loadGroup(ctx, db, id)
-	if errors.Is(err, ErrNoRow) {
-		return notFound("no such asset group in the index / 索引里没有这个素材组"), nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	cfg, bad := p.newCreds().config(ctx, row.AccountID)
-	if bad != nil {
-		return bad, nil
-	}
-	body := map[string]any{"Id": row.UpstreamID}
-	putPtr(body, "Name", in.Name)
-	putPtr(body, "Title", in.Title)
-	putPtr(body, "Description", in.Description)
-	if _, callErr := p.ark.call(ctx, cfg, ActionUpdateAssetGroup, body); callErr != nil {
-		if callErr.NotFound() {
-			if err := markMissing(ctx, db, "asset_groups", id); err != nil {
-				p.log.Warn("volcengine: cannot mark an asset group missing", "id", id, "error", err.Error())
-			}
+	return withGroup(ctx, db, id, func(tx pgx.Tx, row *groupRow) (*pluginv1.HTTPResponse, error) {
+		cfg, bad := p.newCreds().config(ctx, row.AccountID)
+		if bad != nil {
+			return bad, nil
 		}
-		return upstreamFail(callErr), nil
-	}
-	if err := applyGroupUpdate(ctx, db, id, in.Name, in.Title, in.Description); err != nil {
-		return nil, err
-	}
-	return pluginsdk.DataResponse(map[string]any{"id": id, "upstream_id": row.UpstreamID}), nil
+		body := map[string]any{"Id": row.UpstreamID}
+		putPtr(body, "Name", in.Name)
+		putPtr(body, "Title", in.Title)
+		putPtr(body, "Description", in.Description)
+		if _, callErr := p.ark.call(ctx, cfg, ActionUpdateAssetGroup, body); callErr != nil {
+			if callErr.NotFound() {
+				if err := markMissing(ctx, tx, "asset_groups", id); err != nil {
+					p.log.Warn("volcengine: cannot mark an asset group missing", "id", id, "error", err.Error())
+				}
+			}
+			return upstreamFail(callErr), nil
+		}
+		if err := applyGroupUpdate(ctx, tx, id, in.Name, in.Title, in.Description); err != nil {
+			return nil, err
+		}
+		return pluginsdk.DataResponse(map[string]any{"id": id, "upstream_id": row.UpstreamID}), nil
+	})
 }
 
 func (p *Plugin) deleteGroup(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
@@ -580,27 +570,22 @@ func (p *Plugin) deleteGroup(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	if bad != nil {
 		return bad, nil
 	}
-	row, err := loadGroup(ctx, db, id)
-	if errors.Is(err, ErrNoRow) {
-		return notFound("no such asset group in the index / 索引里没有这个素材组"), nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	cfg, bad := p.newCreds().config(ctx, row.AccountID)
-	if bad != nil {
-		return bad, nil
-	}
-	// Upstream first, index second. An upstream failure other than "already
-	// gone" leaves the index alone: dropping the row would lose the only
-	// pointer to a group that still exists.
-	if _, callErr := p.ark.call(ctx, cfg, ActionDeleteAssetGroup, map[string]any{"Id": row.UpstreamID}); callErr != nil && !callErr.NotFound() {
-		return upstreamFail(callErr), nil
-	}
-	if err := deleteRow(ctx, db, "asset_groups", id); err != nil {
-		return nil, err
-	}
-	return pluginsdk.DataResponse(map[string]any{"id": id, "deleted": true}), nil
+	return withGroup(ctx, db, id, func(tx pgx.Tx, row *groupRow) (*pluginv1.HTTPResponse, error) {
+		cfg, bad := p.newCreds().config(ctx, row.AccountID)
+		if bad != nil {
+			return bad, nil
+		}
+		// Upstream first, index second. An upstream failure other than "already
+		// gone" leaves the index alone: dropping the row would lose the only
+		// pointer to a group that still exists.
+		if _, callErr := p.ark.call(ctx, cfg, ActionDeleteAssetGroup, map[string]any{"Id": row.UpstreamID}); callErr != nil && !callErr.NotFound() {
+			return upstreamFail(callErr), nil
+		}
+		if err := deleteRow(ctx, tx, "asset_groups", id); err != nil {
+			return nil, err
+		}
+		return pluginsdk.DataResponse(map[string]any{"id": id, "deleted": true}), nil
+	})
 }
 
 // ---------------------------------------------------------------- asset index
@@ -645,52 +630,56 @@ func (p *Plugin) createAsset(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	if bad != nil {
 		return bad, nil
 	}
-	group, err := loadGroup(ctx, db, in.GroupID)
-	if errors.Is(err, ErrNoRow) {
-		return notFound("no such asset group in the index / 索引里没有这个素材组"), nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	cfg, bad := p.newCreds().config(ctx, group.AccountID)
-	if bad != nil {
-		return bad, nil
-	}
-	body := map[string]any{"GroupId": group.UpstreamID, "URL": in.URL}
-	putIf(body, "Name", in.Name)
-	putIf(body, "AssetType", in.AssetType)
+	var createdID string
+	var createdWith *AssetConfig
+	resp, err := withGroup(ctx, db, in.GroupID, func(tx pgx.Tx, group *groupRow) (*pluginv1.HTTPResponse, error) {
+		cfg, bad := p.newCreds().config(ctx, group.AccountID)
+		if bad != nil {
+			return bad, nil
+		}
+		body := map[string]any{"GroupId": group.UpstreamID, "URL": in.URL}
+		putIf(body, "Name", in.Name)
+		putIf(body, "AssetType", in.AssetType)
 
-	result, callErr := p.ark.call(ctx, cfg, ActionCreateAsset, body)
-	if callErr != nil {
-		return upstreamFail(callErr), nil
-	}
-	a := assetFromResult(result)
-	if a.ID == "" {
-		return pluginsdk.ErrorResponse(http.StatusBadGateway, "upstream_error",
-			"CreateAsset returned no Id / 上游没有返回素材 Id"), nil
-	}
-	if a.Name == "" {
-		a.Name = in.Name
-	}
-	if a.AssetType == "" {
-		a.AssetType = in.AssetType
-	}
-	if a.URL == "" {
-		a.URL = in.URL
-	}
-	id, err := insertAsset(ctx, db, group.AccountID, group.ID, a)
-	if err != nil {
-		if delErr := p.compensate(ctx, cfg, ActionDeleteAsset, a.ID); delErr != nil {
+		result, callErr := p.ark.call(ctx, cfg, ActionCreateAsset, body)
+		if callErr != nil {
+			return upstreamFail(callErr), nil
+		}
+		a := assetFromResult(result)
+		if a.ID == "" {
+			return pluginsdk.ErrorResponse(http.StatusBadGateway, "upstream_error",
+				"CreateAsset returned no Id / 上游没有返回素材 Id"), nil
+		}
+		createdID, createdWith = a.ID, cfg
+		if a.Name == "" {
+			a.Name = in.Name
+		}
+		if a.AssetType == "" {
+			a.AssetType = in.AssetType
+		}
+		if a.URL == "" {
+			a.URL = in.URL
+		}
+		id, err := insertAsset(ctx, tx, group.AccountID, group.ID, a)
+		if err != nil {
+			return nil, err
+		}
+		return pluginsdk.JSONResponse(http.StatusCreated, map[string]any{"data": map[string]any{
+			"id": id, "account_id": group.AccountID, "group_id": group.ID, "upstream_id": a.ID,
+			"name": a.Name, "status": a.Status,
+		}}), nil
+	})
+	// The transaction can fail at COMMIT as well as INSERT. Compensate only
+	// after it has released the group lock, retaining the existing orphan
+	// reporting behavior for either failure.
+	if err != nil && createdID != "" {
+		if delErr := p.compensate(ctx, createdWith, ActionDeleteAsset, createdID); delErr != nil {
 			return pluginsdk.ErrorResponse(http.StatusInternalServerError, "index_write_failed",
-				"the asset was created upstream as "+a.ID+" but could not be indexed ("+err.Error()+
+				"the asset was created upstream as "+createdID+" but could not be indexed ("+err.Error()+
 					") and could not be deleted again ("+delErr.Error()+"); delete it in the Volcengine console"), nil
 		}
-		return nil, err
 	}
-	return pluginsdk.JSONResponse(http.StatusCreated, map[string]any{"data": map[string]any{
-		"id": id, "account_id": group.AccountID, "group_id": group.ID, "upstream_id": a.ID,
-		"name": a.Name, "status": a.Status,
-	}}), nil
+	return resp, err
 }
 
 func (p *Plugin) getAsset(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
@@ -702,36 +691,31 @@ func (p *Plugin) getAsset(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 	if bad != nil {
 		return bad, nil
 	}
-	row, err := loadAsset(ctx, db, id)
-	if errors.Is(err, ErrNoRow) {
-		return notFound("no such asset in the index / 索引里没有这个素材"), nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	cfg, bad := p.newCreds().config(ctx, row.AccountID)
-	if bad != nil {
-		return bad, nil
-	}
-	result, callErr := p.ark.call(ctx, cfg, ActionGetAsset, map[string]any{"Id": row.UpstreamID})
-	if callErr != nil {
-		if callErr.NotFound() {
-			if err := markMissing(ctx, db, "assets", id); err != nil {
-				p.log.Warn("volcengine: cannot mark an asset missing", "id", id, "error", err.Error())
-			}
-			return pluginsdk.ErrorResponse(http.StatusNotFound, "upstream_not_found",
-				"asset "+row.UpstreamID+" no longer exists upstream; the index row is marked missing"+
-					" / 上游已经没有这个素材，索引行已标记为 missing"), nil
+	return withAsset(ctx, db, id, func(tx pgx.Tx, row *assetRow) (*pluginv1.HTTPResponse, error) {
+		cfg, bad := p.newCreds().config(ctx, row.AccountID)
+		if bad != nil {
+			return bad, nil
 		}
-		return upstreamFail(callErr), nil
-	}
-	if err := refreshAsset(ctx, db, id, assetFromResult(result)); err != nil {
-		p.log.Warn("volcengine: cannot refresh an asset row", "id", id, "error", err.Error())
-	}
-	return pluginsdk.DataResponse(map[string]any{
-		"id": id, "account_id": row.AccountID, "group_id": row.GroupID,
-		"upstream_id": row.UpstreamID, "upstream": result,
-	}), nil
+		result, callErr := p.ark.call(ctx, cfg, ActionGetAsset, map[string]any{"Id": row.UpstreamID})
+		if callErr != nil {
+			if callErr.NotFound() {
+				if err := markMissing(ctx, tx, "assets", id); err != nil {
+					p.log.Warn("volcengine: cannot mark an asset missing", "id", id, "error", err.Error())
+				}
+				return pluginsdk.ErrorResponse(http.StatusNotFound, "upstream_not_found",
+					"asset "+row.UpstreamID+" no longer exists upstream; the index row is marked missing"+
+						" / 上游已经没有这个素材，索引行已标记为 missing"), nil
+			}
+			return upstreamFail(callErr), nil
+		}
+		if err := refreshAsset(ctx, tx, id, assetFromResult(result)); err != nil {
+			p.log.Warn("volcengine: cannot refresh an asset row", "id", id, "error", err.Error())
+		}
+		return pluginsdk.DataResponse(map[string]any{
+			"id": id, "account_id": row.AccountID, "group_id": row.GroupID,
+			"upstream_id": row.UpstreamID, "upstream": result,
+		}), nil
+	})
 }
 
 func (p *Plugin) updateAsset(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
@@ -750,32 +734,27 @@ func (p *Plugin) updateAsset(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	if bad != nil {
 		return bad, nil
 	}
-	row, err := loadAsset(ctx, db, id)
-	if errors.Is(err, ErrNoRow) {
-		return notFound("no such asset in the index / 索引里没有这个素材"), nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	cfg, bad := p.newCreds().config(ctx, row.AccountID)
-	if bad != nil {
-		return bad, nil
-	}
-	body := map[string]any{"Id": row.UpstreamID}
-	putPtr(body, "Name", in.Name)
-	putPtr(body, "Description", in.Description)
-	if _, callErr := p.ark.call(ctx, cfg, ActionUpdateAsset, body); callErr != nil {
-		if callErr.NotFound() {
-			if err := markMissing(ctx, db, "assets", id); err != nil {
-				p.log.Warn("volcengine: cannot mark an asset missing", "id", id, "error", err.Error())
-			}
+	return withAsset(ctx, db, id, func(tx pgx.Tx, row *assetRow) (*pluginv1.HTTPResponse, error) {
+		cfg, bad := p.newCreds().config(ctx, row.AccountID)
+		if bad != nil {
+			return bad, nil
 		}
-		return upstreamFail(callErr), nil
-	}
-	if err := applyAssetUpdate(ctx, db, id, in.Name); err != nil {
-		return nil, err
-	}
-	return pluginsdk.DataResponse(map[string]any{"id": id, "upstream_id": row.UpstreamID}), nil
+		body := map[string]any{"Id": row.UpstreamID}
+		putPtr(body, "Name", in.Name)
+		putPtr(body, "Description", in.Description)
+		if _, callErr := p.ark.call(ctx, cfg, ActionUpdateAsset, body); callErr != nil {
+			if callErr.NotFound() {
+				if err := markMissing(ctx, tx, "assets", id); err != nil {
+					p.log.Warn("volcengine: cannot mark an asset missing", "id", id, "error", err.Error())
+				}
+			}
+			return upstreamFail(callErr), nil
+		}
+		if err := applyAssetUpdate(ctx, tx, id, in.Name); err != nil {
+			return nil, err
+		}
+		return pluginsdk.DataResponse(map[string]any{"id": id, "upstream_id": row.UpstreamID}), nil
+	})
 }
 
 func (p *Plugin) deleteAsset(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
@@ -787,24 +766,19 @@ func (p *Plugin) deleteAsset(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	if bad != nil {
 		return bad, nil
 	}
-	row, err := loadAsset(ctx, db, id)
-	if errors.Is(err, ErrNoRow) {
-		return notFound("no such asset in the index / 索引里没有这个素材"), nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	cfg, bad := p.newCreds().config(ctx, row.AccountID)
-	if bad != nil {
-		return bad, nil
-	}
-	if _, callErr := p.ark.call(ctx, cfg, ActionDeleteAsset, map[string]any{"Id": row.UpstreamID}); callErr != nil && !callErr.NotFound() {
-		return upstreamFail(callErr), nil
-	}
-	if err := deleteRow(ctx, db, "assets", id); err != nil {
-		return nil, err
-	}
-	return pluginsdk.DataResponse(map[string]any{"id": id, "deleted": true}), nil
+	return withAsset(ctx, db, id, func(tx pgx.Tx, row *assetRow) (*pluginv1.HTTPResponse, error) {
+		cfg, bad := p.newCreds().config(ctx, row.AccountID)
+		if bad != nil {
+			return bad, nil
+		}
+		if _, callErr := p.ark.call(ctx, cfg, ActionDeleteAsset, map[string]any{"Id": row.UpstreamID}); callErr != nil && !callErr.NotFound() {
+			return upstreamFail(callErr), nil
+		}
+		if err := deleteRow(ctx, tx, "assets", id); err != nil {
+			return nil, err
+		}
+		return pluginsdk.DataResponse(map[string]any{"id": id, "deleted": true}), nil
+	})
 }
 
 // ---------------------------------------------------------------- live upstream listings

@@ -119,9 +119,10 @@ type settingsSnapshot struct {
 // settingsCache reads the gateway and sticky rows with a short TTL; the
 // config:changed broadcast invalidates it immediately.
 type settingsCache struct {
-	db   *store.DB
-	mu   sync.Mutex
-	snap *settingsSnapshot
+	db    *store.DB
+	mu    sync.Mutex
+	snap  *settingsSnapshot
+	epoch uint64
 	// override replaces the DB in tests.
 	override *settingsSnapshot
 }
@@ -130,6 +131,7 @@ func newSettingsCache(db *store.DB) *settingsCache { return &settingsCache{db: d
 
 func (c *settingsCache) invalidate() {
 	c.mu.Lock()
+	c.epoch++
 	c.snap = nil
 	c.mu.Unlock()
 }
@@ -142,6 +144,7 @@ func (c *settingsCache) get(ctx context.Context) (GatewaySettings, StickySetting
 		return o.gateway.normalized(), o.sticky
 	}
 	snap := c.snap
+	epoch := c.epoch
 	c.mu.Unlock()
 	if snap != nil && time.Since(snap.at) < settingsTTL {
 		return snap.gateway, snap.sticky
@@ -159,7 +162,9 @@ func (c *settingsCache) get(ctx context.Context) (GatewaySettings, StickySetting
 	}
 	gw = gw.normalized()
 	c.mu.Lock()
-	c.snap = &settingsSnapshot{at: time.Now(), gateway: gw, sticky: st}
+	if c.epoch == epoch {
+		c.snap = &settingsSnapshot{at: time.Now(), gateway: gw, sticky: st}
+	}
 	c.mu.Unlock()
 	return gw, st
 }

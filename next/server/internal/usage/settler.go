@@ -60,6 +60,8 @@ type TxLedger interface {
 
 // Options tune the settler; zero values take defaults.
 type Options struct {
+	// CanRetry gates new background retry batches; queued request usage still flushes.
+	CanRetry      func() bool
 	QueueSize     int           // default 10000
 	Workers       int           // default 4
 	BatchSize     int           // default 200
@@ -100,16 +102,18 @@ type Service struct {
 	events core.EventPublisher
 	opts   Options
 
-	queue chan *core.UsageRecord
-	wg    sync.WaitGroup
-	stop  context.CancelFunc
-	mu    sync.Mutex
+	queue    chan *core.UsageRecord
+	wg       sync.WaitGroup
+	stop     context.CancelFunc
+	mu       sync.Mutex
+	stopping bool // serializes Submit registration against Stop/Wait
 
 	// Reconcile loop (CONTRACTS §25.4); zero until StartReconcile.
 	rec            *reconciler
 	recStop        context.CancelFunc
 	reconcileCfg   *resolved
 	reconcileCfgAt time.Time
+	reconcileEpoch uint64
 }
 
 var _ core.Settler = (*Service)(nil)
@@ -138,12 +142,14 @@ func (s *Service) Start(ctx context.Context) {
 func (s *Service) Stop(ctx context.Context) {
 	s.mu.Lock()
 	stop, recStop := s.stop, s.recStop
+	rec := s.rec
+	s.stopping = true
 	s.mu.Unlock()
 	if recStop != nil {
 		recStop()
 	}
-	if stop == nil && recStop == nil {
-		return
+	if rec != nil {
+		_ = rec.group.Close(ctx)
 	}
 	if stop != nil {
 		stop()
@@ -157,23 +163,36 @@ func (s *Service) Stop(ctx context.Context) {
 	}
 }
 
-// Submit implements core.Settler. It never blocks: when the queue is full
+// Submit implements core.Settler. During normal operation, when the queue is full
 // the record is persisted by a separate goroutine and billed by the retry
 // loop.
 func (s *Service) Submit(rec *core.UsageRecord) {
 	if rec == nil {
 		return
 	}
+	persist := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if _, err := s.insert(ctx, []*core.UsageRecord{rec}); err != nil {
+			logLost(rec, err)
+		}
+	}
+	s.mu.Lock()
+	if s.stopping {
+		s.mu.Unlock()
+		// The HTTP/gateway shutdown barrier normally prevents late producers.
+		// A late caller must persist synchronously, never enqueue into a stopped
+		// worker or spawn a goroutine behind Stop's completion barrier.
+		persist()
+		return
+	}
+	defer s.mu.Unlock()
 	select {
 	case s.queue <- rec:
 	default:
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			if _, err := s.insert(ctx, []*core.UsageRecord{rec}); err != nil {
-				logLost(rec, err)
-			}
-		}()
+		// Add while holding mu: Stop cannot begin waiting before this fallback
+		// has joined the same lifecycle as the regular workers.
+		s.wg.Go(persist)
 	}
 }
 
@@ -201,7 +220,9 @@ func (s *Service) worker(ctx context.Context) {
 			}
 		}
 		timer.Stop()
-		s.process(context.WithoutCancel(ctx), batch)
+		bctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		s.process(bctx, batch)
+		cancel()
 	}
 }
 
@@ -337,10 +358,24 @@ func jsonOr(v any, empty string) []byte {
 // insert writes the batch (ignoring duplicate request ids) and emits
 // usage.recorded for free records. It returns the newly inserted records.
 func (s *Service) insert(ctx context.Context, batch []*core.UsageRecord) ([]*core.UsageRecord, error) {
+	return s.insertWith(ctx, batch, nil)
+}
+
+func (s *Service) insertWith(ctx context.Context, batch []*core.UsageRecord, after func(pgx.Tx, map[string]int64) error) ([]*core.UsageRecord, error) {
+	return s.insertAtomic(ctx, batch, nil, after, false)
+}
+
+func (s *Service) insertAtomic(ctx context.Context, batch []*core.UsageRecord, before func(pgx.Tx) error, after func(pgx.Tx, map[string]int64) error, settleNow bool) ([]*core.UsageRecord, error) {
 	var inserted []*core.UsageRecord
 	var reserved []reservedRow
 	var cached []balanceUpdate
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
+		if before != nil {
+			if err := before(tx); err != nil {
+				return err
+			}
+		}
+		ids := make(map[string]int64, len(batch))
 		inserted = inserted[:0]
 		reserved, cached = reserved[:0], cached[:0]
 		b := &pgx.Batch{}
@@ -411,6 +446,7 @@ func (s *Service) insert(ctx context.Context, batch []*core.UsageRecord) ([]*cor
 				return err
 			}
 			inserted = append(inserted, rec)
+			ids[rec.RequestID] = id
 			switch initialStatus(rec) {
 			case StatusFree:
 				free = append(free, recordedEvent(fromRecord(rec), decimal.Zero, StatusFree))
@@ -433,6 +469,24 @@ func (s *Service) insert(ctx context.Context, batch []*core.UsageRecord) ([]*cor
 			}
 			if res != nil && !res.Duplicate {
 				cached = append(cached, balanceUpdate{userID: r.rec.UserID, ledgerID: res.LedgerID, balance: res.BalanceAfter})
+			}
+		}
+		if settleNow {
+			for _, rec := range inserted {
+				if initialStatus(rec) == StatusPending {
+					lr, err := s.settleTx(ctx, tx, fromRecord(rec), false)
+					if err != nil {
+						return err
+					}
+					if lr != nil && !lr.Duplicate {
+						cached = append(cached, balanceUpdate{userID: rec.UserID, ledgerID: lr.LedgerID, balance: lr.BalanceAfter})
+					}
+				}
+			}
+		}
+		if after != nil {
+			if err := after(tx, ids); err != nil {
+				return err
 			}
 		}
 		if s.events != nil && len(free) > 0 {
@@ -644,55 +698,12 @@ func priceOf(p *pending) (total decimal.Decimal, detail BillingDetail, exprHash 
 }
 
 func (s *Service) settle(ctx context.Context, p *pending, skipLocked bool) error {
-	total, detail, exprHash, err := priceOf(p)
-	if err != nil {
-		return err
-	}
+	var err error
 	var ledgerRes *core.LedgerResult
 	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
-		lock := `SELECT billing_status FROM usage_logs WHERE request_id = $1 FOR UPDATE`
-		if skipLocked {
-			lock += ` SKIP LOCKED`
-		}
-		var status string
-		if err := tx.QueryRow(ctx, lock, p.RequestID).Scan(&status); err != nil {
-			if store.IsNoRows(err) {
-				return errNotPending
-			}
-			return err
-		}
-		if status != StatusPending && status != StatusFailed {
-			return errNotPending
-		}
-		if total.Sign() > 0 {
-			if s.ledger == nil {
-				return errors.New("no ledger configured")
-			}
-			ledgerRes, err = s.ledger.ApplyTx(ctx, tx, core.LedgerChange{
-				UserID: p.UserID, Amount: total, Credit: false, Kind: "usage",
-				RefType: "usage", RefID: p.RequestID, IdempotencyKey: "usage:" + p.RequestID,
-			})
-			if err != nil {
-				return fmt.Errorf("ledger: %w", err)
-			}
-			detail.LedgerID = &ledgerRes.LedgerID
-		}
-		var priceID *int64
-		if p.PriceID > 0 {
-			priceID = &p.PriceID
-		}
-		_, err := tx.Exec(ctx, `
-			UPDATE usage_logs SET total_cost = $2, billing_status = 'billed', billing_detail = $3, matched_tier = $4,
-				expr_hash = $5, billing_mode = $6, price_id = $7, rate_multiplier = $8
-			WHERE request_id = $1`,
-			p.RequestID, total, jsonOr(detail, "{}"), trunc(detail.Tier, 100), exprHash, p.Mode, priceID, p.Rate)
-		if err != nil {
-			return err
-		}
-		if s.events != nil {
-			return s.events.Emit(ctx, tx, recordedEvent(p, total, StatusBilled))
-		}
-		return nil
+		var err error
+		ledgerRes, err = s.settleTx(ctx, tx, p, skipLocked)
+		return err
 	})
 	if errors.Is(err, errNotPending) {
 		return nil
@@ -757,6 +768,12 @@ func (s *Service) retryLoop(ctx context.Context) {
 // RetryPending settles pending/failed rows older than Options.RetryAfter
 // that have not exhausted their attempts. It returns the rows examined.
 func (s *Service) RetryPending(ctx context.Context) (int, error) {
+	if s.opts.CanRetry != nil && !s.opts.CanRetry() {
+		return 0, nil
+	}
+	if err := s.recoverExecutions(ctx); err != nil {
+		slog.WarnContext(ctx, "usage: recover execution observations", "err", err)
+	}
 	rows, err := s.db.Pool.Query(ctx, `
 		SELECT u.request_id, u.user_id, u.api_key_id, u.group_id, u.account_id, u.plugin_key, u.platform,
 		       u.protocol, u.account_type, u.upstream_protocol, u.model, u.success, u.status_code, u.error_type,
@@ -805,4 +822,55 @@ func (s *Service) RetryPending(ctx context.Context) (int, error) {
 		}
 	}
 	return len(list), nil
+}
+
+func (s *Service) settleTx(ctx context.Context, tx pgx.Tx, p *pending, skipLocked bool) (*core.LedgerResult, error) {
+	total, detail, exprHash, err := priceOf(p)
+	if err != nil {
+		return nil, err
+	}
+	var ledgerRes *core.LedgerResult
+	lock := `SELECT billing_status FROM usage_logs WHERE request_id = $1 FOR UPDATE`
+	if skipLocked {
+		lock += ` SKIP LOCKED`
+	}
+	var status string
+	if err := tx.QueryRow(ctx, lock, p.RequestID).Scan(&status); err != nil {
+		if store.IsNoRows(err) {
+			return nil, errNotPending
+		}
+		return nil, err
+	}
+	if status != StatusPending && status != StatusFailed {
+		return nil, errNotPending
+	}
+	if total.Sign() > 0 {
+		if s.ledger == nil {
+			return nil, errors.New("no ledger configured")
+		}
+		ledgerRes, err = s.ledger.ApplyTx(ctx, tx, core.LedgerChange{
+			UserID: p.UserID, Amount: total, Credit: false, Kind: "usage",
+			RefType: "usage", RefID: p.RequestID, IdempotencyKey: "usage:" + p.RequestID,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("ledger: %w", err)
+		}
+		detail.LedgerID = &ledgerRes.LedgerID
+	}
+	var priceID *int64
+	if p.PriceID > 0 {
+		priceID = &p.PriceID
+	}
+	_, err = tx.Exec(ctx, `
+			UPDATE usage_logs SET total_cost = $2, billing_status = 'billed', billing_detail = $3, matched_tier = $4,
+				expr_hash = $5, billing_mode = $6, price_id = $7, rate_multiplier = $8
+			WHERE request_id = $1`,
+		p.RequestID, total, jsonOr(detail, "{}"), trunc(detail.Tier, 100), exprHash, p.Mode, priceID, p.Rate)
+	if err != nil {
+		return nil, err
+	}
+	if s.events != nil {
+		return ledgerRes, s.events.Emit(ctx, tx, recordedEvent(p, total, StatusBilled))
+	}
+	return ledgerRes, nil
 }

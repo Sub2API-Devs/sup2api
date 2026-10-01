@@ -20,8 +20,10 @@ func (c *Controller) requestRestart(key string) {
 		return
 	}
 	c.restarting[key] = true
+	c.wg.Add(1)
 	c.mu.Unlock()
 	go func() {
+		defer c.wg.Done()
 		for {
 			c.restartKey(key)
 			c.mu.Lock()

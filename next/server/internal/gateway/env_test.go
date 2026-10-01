@@ -237,13 +237,14 @@ func (r *fakeRegistry) set(g core.Generation) {
 // ---------------------------------------------------------------- platform plugin fake
 
 type fakePlatform struct {
-	mu        sync.Mutex
-	base      string
-	buildHook func(ctx context.Context, in *pluginv1.BuildUpstreamRequestRequest) error
-	patches   []*pluginv1.BodyPatch
-	builds    []*pluginv1.BuildUpstreamRequestRequest
-	classify  []*pluginv1.ClassifyErrorRequest
-	urlFor    func(acct *pluginv1.Account) string
+	taskSubmission func(context.Context, *pluginv1.ExtractUsageRequest) (*pluginv1.TaskSubmission, error)
+	mu             sync.Mutex
+	base           string
+	buildHook      func(ctx context.Context, in *pluginv1.BuildUpstreamRequestRequest) error
+	patches        []*pluginv1.BodyPatch
+	builds         []*pluginv1.BuildUpstreamRequestRequest
+	classify       []*pluginv1.ClassifyErrorRequest
+	urlFor         func(acct *pluginv1.Account) string
 	// route overrides the upstream URL from the whole request.
 	route func(in *pluginv1.BuildUpstreamRequestRequest) string
 	// resolve answers ResolveModel; nil = UNIMPLEMENTED, like a plugin that
@@ -259,6 +260,13 @@ type fakePlatform struct {
 	// classifyHook adjusts the classification before it goes back to the
 	// gateway, e.g. to set client_error_code.
 	classifyHook func(in *pluginv1.ClassifyErrorRequest, out *pluginv1.ClassifyErrorResponse)
+}
+
+func (p *fakePlatform) ParseTaskSubmission(ctx context.Context, in *pluginv1.ExtractUsageRequest) (*pluginv1.TaskSubmission, error) {
+	if p.taskSubmission != nil {
+		return p.taskSubmission(ctx, in)
+	}
+	return nil, nil
 }
 
 func (p *fakePlatform) ResolveModel(ctx context.Context, in *pluginv1.ResolveModelRequest) (*pluginv1.ResolveModelResponse, error) {

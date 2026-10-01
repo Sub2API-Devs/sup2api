@@ -14,6 +14,9 @@
 // interfaces (without the mustEmbed method):
 //
 //	Platform   -> PlatformService   ("platform.adapter.v1")
+//	Executor   -> PlatformService.Execute ("platform.execute.v1")
+//	TaskMonitor -> PlatformService.Monitor ("platform.monitor.v1")
+//	Poller     -> PlatformService.Poll ("platform.poll.v1")
 //	Hook       -> HookService       ("gateway.hook.v1")
 //	JobRunner  -> AppService.RunJob ("app.jobs.v1")
 //	EventHandler -> AppService.OnEvents ("app.events.v1")
@@ -37,6 +40,17 @@
 //   - Init runs once per process, i.e. on every node, and so does any
 //     goroutine it starts. Declare periodic work as manifest jobs[]: each
 //     trigger runs on one node for the whole cluster.
+//   - Request execution uses Executor and ExecuteDefault: build, forward
+//     through the host, then RecordUsage or ReserveAndWatch before returning.
+//     Prices, attribution and all ledger writes remain host-owned.
+//   - Upstream async work uses endpoint.task + TaskSubmissionParser +
+//     TaskMonitor. The host records owner and original account before success,
+//     coordinates polling and serves shared snapshots on every node. Do not
+//     poll the same task from jobs[], Init or client query handlers.
+//     In Monitor, call ExecuteHTTP and ReportTaskProgress with its context;
+//     the host atomically records progress and settlement, and binds the request
+//     to the account proxy and limits. Generic Egress is a separate permission
+//     and does not inherit the polling execution's account limits.
 //   - Host.Locks gives cross-node mutual exclusion for other work. The locks
 //     are not fenced, so the guarded work must still be idempotent.
 //   - KV has no compare-and-set: two nodes doing read-modify-write on one key

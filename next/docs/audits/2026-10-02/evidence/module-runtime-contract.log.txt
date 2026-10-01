@@ -1,0 +1,3 @@
+=== runtime-contract ===
+?   	github.com/Sub2API-Devs/sup2api/next/runtime-contract	[no test files]
+?   	github.com/Sub2API-Devs/sup2api/next/runtime-contract/locklease	[no test files]

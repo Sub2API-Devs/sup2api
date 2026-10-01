@@ -46,6 +46,8 @@ services:
     image: sup2api:latest
     pull_policy: never
     restart: unless-stopped
+    # HTTP drains first, then plugins and pending usage flush to PostgreSQL.
+    stop_grace_period: 180s
     mem_limit: ${SUP2API_MEM_LIMIT:-2g}
     hostname: sup2api-1
     depends_on:
@@ -88,6 +90,7 @@ services:
     image: sup2api:latest
     pull_policy: never
     restart: unless-stopped
+    stop_grace_period: 180s
     mem_limit: ${SUP2API_MEM_LIMIT:-2g}
     hostname: sup2api-2
     depends_on:

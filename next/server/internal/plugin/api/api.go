@@ -60,6 +60,8 @@ func (a *API) RegisterRoutes(r *httpapi.Router) {
 	r.Perm(http.MethodPost, "/plugins/install-from-market", PermInstall, a.installFromMarket)
 	r.Perm(http.MethodGet, "/plugins/:key", PermRead, a.getPlugin)
 	r.Perm(http.MethodDelete, "/plugins/:key", PermUninstall, a.uninstall)
+	r.Perm(http.MethodGet, "/plugins/:key/uninstall", PermRead, a.uninstallState)
+	r.Perm(http.MethodPost, "/plugins/:key/uninstall/confirm-stopped", PermUninstall, a.confirmStopped)
 	r.Perm(http.MethodGet, "/plugins/:key/versions/:version/review", PermRead, a.review)
 	r.Perm(http.MethodPost, "/plugins/:key/versions/:version/consent", PermInstall, a.consent)
 	r.Perm(http.MethodPost, "/plugins/:key/versions/:version/reject", PermInstall, a.reject)

@@ -16,7 +16,7 @@ import (
 //   POST /debug/dial {"address"} -> {"ok":false,"error"}; POST /debug/alloc?mb=N[&free=1]
 
 const (
-	guardTestVersion = "0.2.0-test"
+	guardTestVersion = "0.2.1-test"
 	guardTestPath    = "/market/test/guard-" + guardTestVersion + ".s2plugin"
 	guardDenyCode    = "guard_blocked"
 )

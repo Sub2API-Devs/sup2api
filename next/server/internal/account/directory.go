@@ -145,27 +145,29 @@ func (s *Service) IsCoolingDown(ctx context.Context, id int64) (bool, error) {
 
 // SetCooldown excludes the account from scheduling until the given time. The
 // first cooldown of a period emits account.status_changed (status "cooldown").
+var extendCooldown = redis.NewScript(`
+local clock = redis.call('TIME')
+local ttl = tonumber(ARGV[1]) - (tonumber(clock[1])*1000 + math.floor(tonumber(clock[2])/1000))
+if ttl <= 0 then return 0 end
+local previous = redis.call('PTTL', KEYS[1])
+if previous == -1 or previous >= ttl then return 0 end
+redis.call('SET', KEYS[1], ARGV[2], 'PX', ttl)
+if previous >= 0 then return 0 end
+return 1`)
+
 func (s *Service) SetCooldown(ctx context.Context, id int64, until time.Time, reason string) error {
 	if s.d.Redis == nil {
 		return nil
 	}
-	ttl := time.Until(until)
-	if ttl <= 0 {
-		return s.d.Redis.Del(ctx, cooldownKey(id)).Err()
-	}
-	prev, err := s.d.Redis.PTTL(ctx, cooldownKey(id)).Result()
+	first, err := extendCooldown.Run(ctx, s.d.Redis, []string{cooldownKey(id)}, until.UnixMilli(), reason).Int()
 	if err != nil {
 		return err
 	}
-	if prev > ttl {
-		// Never shorten an existing, longer cooldown.
-		return nil
-	}
-	if err := s.d.Redis.Set(ctx, cooldownKey(id), reason, ttl).Err(); err != nil {
-		return err
-	}
-	if prev > 0 {
+	if first != 1 {
 		return nil // extending an existing cooldown
+	}
+	if s.d.DB == nil || s.d.Events == nil {
+		return nil
 	}
 	var pluginKey, typ, name string
 	if err := s.d.DB.Pool.QueryRow(ctx, `SELECT plugin_key, type, name FROM accounts WHERE id = $1`, id).

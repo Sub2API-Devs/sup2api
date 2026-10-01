@@ -4,6 +4,7 @@
 package routes
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -28,7 +29,16 @@ type Handler struct {
 	authz  core.Authorizer
 	stepUp core.StepUpVerifier
 	health HealthChecker
+	assets VersionAssets
 }
+
+// VersionAssets reads an approved immutable package independently of whichever
+// version this node currently serves. The handler still enforces assetAllowed.
+type VersionAssets interface {
+	ReadVersionAsset(context.Context, string, string, string) (core.PluginInfo, []byte, string, error)
+}
+
+func WithVersionAssets(assets VersionAssets) Option { return func(h *Handler) { h.assets = assets } }
 
 // HealthChecker reports whether this node may serve traffic
 // (core.NodeRegistry satisfies it).
@@ -323,21 +333,43 @@ func (h *Handler) serveAsset(c *gin.Context) {
 	key, vh := c.Param("key"), c.Param("vh")
 	gen := h.reg.Current()
 	info, ok := gen.Plugin(key)
-	if !ok || info.AssetBase != "/plugin-ui/"+key+"/"+vh {
-		c.AbortWithStatus(http.StatusNotFound)
-		return
-	}
+	current := ok && info.AssetBase == "/plugin-ui/"+key+"/"+vh
 	raw := c.Param("path")
 	if strings.Contains(raw, "..") || strings.Contains(raw, "\\") {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
 	name := strings.TrimPrefix(path.Clean("/"+raw), "/")
+	var data []byte
+	var ct string
+	var err error
+	if !current {
+		if h.assets == nil {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
+		info, data, ct, err = h.assets.ReadVersionAsset(c.Request.Context(), key, vh, name)
+		if err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+	}
 	if !assetAllowed(info, name) {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
-	data, ct, err := gen.ReadAsset(key, name)
+	if current {
+		data, ct, err = gen.ReadAsset(key, name)
+		if err != nil && h.assets != nil {
+			// The generation can be retired between the lookup and asset read.
+			// Recover the exact approved version from shared immutable storage.
+			info, data, ct, err = h.assets.ReadVersionAsset(c.Request.Context(), key, vh, name)
+			if err == nil && !assetAllowed(info, name) {
+				c.AbortWithStatus(http.StatusNotFound)
+				return
+			}
+		}
+	}
 	if err != nil {
 		if e := core.AsError(err); e.Status == http.StatusNotFound {
 			c.AbortWithStatus(http.StatusNotFound)

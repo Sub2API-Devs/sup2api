@@ -49,6 +49,8 @@ func OpenRedis(ctx context.Context, url string) (*redis.Client, error) {
 
 // Options configures a Cluster.
 type Options struct {
+	Managed     bool
+	CoreBootID  string
 	NodeID      string // config.NodeID
 	Addr        string // advertised address, informational (e.g. public URL)
 	HostVersion string
@@ -81,8 +83,11 @@ func New(rdb redis.UniversalClient, pool *pgxpool.Pool, opts Options) *Cluster {
 		pinger = pool
 	}
 	reg := NewRegistry(rdb, pinger, RegistryOptions{
-		NodeID: opts.NodeID, Addr: opts.Addr, HostVersion: opts.HostVersion, Logger: opts.Logger,
+		NodeID: opts.NodeID, Addr: opts.Addr, HostVersion: opts.HostVersion, Logger: opts.Logger, Managed: opts.Managed, CoreBootID: opts.CoreBootID,
 	})
+	if opts.Managed {
+		reg.opts.BootID = opts.CoreBootID
+	}
 	return &Cluster{
 		Registry: reg,
 		Locker:   NewLocker(rdb, opts.Logger),

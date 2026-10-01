@@ -5,7 +5,7 @@
 //
 // Environment:
 //
-//	E2E_BASE_URL          required, e.g. http://127.0.0.1:3130 (no default: a
+//	E2E_BASE_URL          required, e.g. http://127.0.0.1:3120 (no default: a
 //	                      stale default silently points the whole suite at a
 //	                      deployment that no longer exists)
 //	E2E_ADMIN_EMAIL       default admin@sub2api.test
@@ -15,7 +15,7 @@
 //	E2E_NODE_URLS         comma separated direct node URLs, default $E2E_BASE_URL/__node1,$E2E_BASE_URL/__node2
 //	E2E_DOCKER_HOST       "ovh" (docker via ssh), "local", or empty (tests that
 //	                      kill containers / query PG and Redis are skipped)
-//	E2E_PROJECT           compose project name, default sub2api-next-test
+//	E2E_PROJECT           compose project name, default sub2api-next-e2e
 //	E2E_LONG=1            run tests that wait for multi-minute schedules
 package e2e
 
@@ -52,13 +52,14 @@ const errNoBaseURL = `E2E_BASE_URL is not set.
 
 The e2e suite needs a running sub2api-next deployment reachable under one
 origin: two nodes, mock-upstream, and the /__node1, /__node2, /__mock helper
-routes (see deploy/README.md; the stack that provided them, sub2api-next-test
-on :3120, was removed on 2026-09-27 and has no replacement yet - a bare
-single/ stack on :3130 does NOT satisfy the suite). Once such a stack exists:
+routes. The isolated deploy/e2e stack provides these routes; the single/
+production stack does not satisfy the two-node suite. Start the isolated
+stack following deploy/README.md, then configure:
 
-    export E2E_BASE_URL=http://127.0.0.1:3130
+    export E2E_BASE_URL=http://127.0.0.1:3120
     export E2E_ADMIN_EMAIL=...  E2E_ADMIN_PASSWORD=...   # bootstrap admin of that stack
     export E2E_DOCKER_HOST=ovh                           # for PG/Redis/container checks
+    export E2E_PROJECT=sub2api-next-e2e
 
 See deploy/README.md and docs/PROGRESS.md for the current test deployment.`
 
@@ -74,7 +75,7 @@ func loadConfig() (*Config, error) {
 		MockURL:         strings.TrimRight(env("E2E_MOCK_URL", base+"/__mock"), "/"),
 		MockInternalURL: strings.TrimRight(env("E2E_MOCK_INTERNAL_URL", "http://mock-upstream:8080"), "/"),
 		DockerHost:      os.Getenv("E2E_DOCKER_HOST"),
-		Project:         env("E2E_PROJECT", "sub2api-next-test"),
+		Project:         env("E2E_PROJECT", "sub2api-next-e2e"),
 		Long:            os.Getenv("E2E_LONG") == "1",
 		RunID:           fmt.Sprintf("%x", time.Now().UnixNano()/1e6%0xffffffff),
 	}

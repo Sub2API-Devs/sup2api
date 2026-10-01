@@ -12,7 +12,7 @@ import (
 
 // listModels serves GET /models: the model catalog from plg_anthropic.
 // Rows are returned with every column (to_jsonb), so columns added by later
-// migrations (e.g. "family" in 0.2.0) show up without code changes.
+// migrations (e.g. "family" in 0.3.0-test) show up without code changes.
 // Query: q (substring of model_id/display_name), status, page, page_size.
 func (p *Plugin) listModels(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	if p.host == nil {

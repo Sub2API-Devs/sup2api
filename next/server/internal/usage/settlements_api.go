@@ -104,12 +104,16 @@ func (s *Service) retryReconcile(c *gin.Context) {
 		}
 		now := time.Now()
 		if _, err := tx.Exec(ctx, `
-			UPDATE pending_settlements SET state = 'pending', attempts = 0, next_check_at = $2,
+			UPDATE pending_settlements SET state = 'pending', attempts = 0, poll_failures = 0, next_check_at = $2,
 				deadline_at = $3, last_error = ''
 			WHERE id = $1`, entry.ID, now, now.Add(cfg.maxAge)); err != nil {
 			return err
 		}
 		out, err = s.loadSettlement(ctx, tx, id)
+		if err == nil {
+			_, err = tx.Exec(ctx, `UPDATE async_tasks SET observation_status='pending',claim_token='',lease_until=NULL,
+			attempts=0,poll_failures=0,failure_code='',next_check_at=$2,deadline_at=$3,last_error='' WHERE usage_log_id=$1`, id, now, now.Add(cfg.maxAge))
+		}
 		return err
 	})
 	if err != nil {
@@ -178,6 +182,9 @@ func (s *Service) refundAbandoned(c *gin.Context) {
 			WHERE id = $1`, id, marker); err != nil {
 			return err
 		}
+		if _, err = tx.Exec(ctx, `UPDATE async_tasks SET claim_token='',lease_until=NULL WHERE usage_log_id=$1`, id); err != nil {
+			return err
+		}
 		_, err = tx.Exec(ctx, `UPDATE pending_settlements SET last_error = $2 WHERE id = $1`,
 			entry.ID, trunc("refunded by an administrator: "+note, 2000))
 		return err
@@ -195,6 +202,10 @@ func (s *Service) refundAbandoned(c *gin.Context) {
 // lockSettlement loads a usage row and its settlement entry, both locked, or
 // reports why the action does not apply.
 func lockSettlement(ctx context.Context, tx pgx.Tx, usageLogID int64) (*reservedRowState, *Settlement, error) {
+	// Shared lock order with managed reconciliation: task, usage, settlement.
+	if _, err := tx.Exec(ctx, `SELECT public_id FROM async_tasks WHERE usage_log_id=$1 FOR UPDATE`, usageLogID); err != nil {
+		return nil, nil, err
+	}
 	p := &pending{}
 	st := &reservedRowState{p: p}
 	err := tx.QueryRow(ctx, `

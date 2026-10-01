@@ -522,6 +522,13 @@ func (s *Service) setUserGroups(c *gin.Context) {
 	}
 	ids := uniqueIDs(in.GroupIDs)
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
+		var parent int64
+		if err := tx.QueryRow(ctx, `SELECT id FROM users WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, uid).Scan(&parent); err != nil {
+			if store.IsNoRows(err) {
+				return core.ErrNotFound.WithMessage("user not found")
+			}
+			return err
+		}
 		if err := s.userExists(ctx, tx, uid); err != nil {
 			return err
 		}

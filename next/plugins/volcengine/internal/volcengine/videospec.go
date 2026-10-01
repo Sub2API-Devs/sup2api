@@ -24,7 +24,7 @@ package volcengine
 //
 // Ark calls its own formula an estimate and names usage.completion_tokens as
 // the authority. That is exactly the division of labour here: this file
-// reserves, ParseReconcileResponse settles on completion_tokens.
+// reserves, Poll reports completion_tokens for the core to settle.
 //
 // THREE THINGS THE ESTIMATE CANNOT SEE, each bounded rather than guessed:
 //

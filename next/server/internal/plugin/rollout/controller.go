@@ -19,17 +19,21 @@ import (
 // Options wires the controller. DB, Node, Packages, Registry and Runtime are
 // required; Bus, Schemas, Defaults, Perms and Events are optional.
 type Options struct {
-	DB       *store.DB
-	Node     core.NodeRegistry
-	Bus      core.Bus
-	Packages *registry.Packages
-	Registry *registry.Registry
-	Runtime  Runtime
-	Schemas  Schemas
-	Defaults core.PluginDefaultsApplier
-	Perms    core.PermissionCatalog
-	Events   core.EventPublisher
-	Logger   *slog.Logger
+	Mutations core.PluginMutationGate
+	// CanCoordinate gates global rollout ownership independently from local
+	// convergence, which candidates need before receiving traffic.
+	CanCoordinate func() bool
+	DB            *store.DB
+	Node          core.NodeRegistry
+	Bus           core.Bus
+	Packages      *registry.Packages
+	Registry      *registry.Registry
+	Runtime       Runtime
+	Schemas       Schemas
+	Defaults      core.PluginDefaultsApplier
+	Perms         core.PermissionCatalog
+	Events        core.EventPublisher
+	Logger        *slog.Logger
 
 	// Timing knobs; zero values use the production defaults.
 	ReconcileInterval time.Duration // 5s
@@ -184,6 +188,12 @@ func (c *Controller) Stop(ctx context.Context) {
 		go func() { wg.Wait(); close(done) }()
 		select {
 		case <-done:
+			// Persist stop acknowledgement before Redis liveness disappears.
+			// Uninstall can then distinguish a clean shutdown from a partition.
+			_, _ = c.o.DB.Pool.Exec(ctx, `UPDATE plugin_runtime_nodes SET stopped=true,updated_at=now() WHERE boot_id=$1`, c.o.Node.BootID())
+			_, _ = c.o.DB.Pool.Exec(ctx, `UPDATE plugin_rollout_cleanup SET state='cleaned',updated_at=now() WHERE boot_id=$1 AND state='cleanup_pending'`, c.o.Node.BootID())
+			_, _ = c.o.DB.Pool.Exec(ctx, `UPDATE plugin_uninstalls SET stopped_boot_ids=array_append(stopped_boot_ids,$1)
+				WHERE $1=ANY(target_boot_ids) AND NOT($1=ANY(stopped_boot_ids))`, c.o.Node.BootID())
 		case <-ctx.Done():
 		}
 	})
@@ -254,6 +264,13 @@ func lockPlugin(ctx context.Context, tx pgx.Tx, key string) (*pluginLock, error)
 	if err != nil {
 		return nil, err
 	}
+	var uninstalling bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM plugin_uninstalls WHERE plugin_key = $1)`, key).Scan(&uninstalling); err != nil {
+		return nil, err
+	}
+	if uninstalling {
+		return nil, core.ErrConflict.WithMessage("plugin uninstall is waiting for nodes to stop")
+	}
 	var open bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM plugin_rollouts WHERE plugin_key = $1 AND phase IN ('preparing','activating'))`, key).Scan(&open); err != nil {
 		return nil, err
@@ -293,6 +310,12 @@ func (c *Controller) insertRollout(ctx context.Context, tx pgx.Tx, key, action s
 
 // Enable starts a rollout of the plugin's active (or newest approved) version.
 func (c *Controller) Enable(ctx context.Context, pluginKey string, actorID int64) (*core.Rollout, error) {
+	ctx, release, guardErr := core.BeginPluginMutation(ctx, c.o.Mutations)
+	if guardErr != nil {
+		return nil, guardErr
+	}
+	defer release()
+
 	var id int64
 	err := c.o.DB.Tx(ctx, func(tx pgx.Tx) error {
 		p, err := lockPlugin(ctx, tx, pluginKey)
@@ -339,6 +362,12 @@ func (c *Controller) Enable(ctx context.Context, pluginKey string, actorID int64
 
 // Upgrade starts a rollout from the active version to version.
 func (c *Controller) Upgrade(ctx context.Context, pluginKey, version string, actorID int64) (*core.Rollout, error) {
+	ctx, release, guardErr := core.BeginPluginMutation(ctx, c.o.Mutations)
+	if guardErr != nil {
+		return nil, guardErr
+	}
+	defer release()
+
 	var id int64
 	err := c.o.DB.Tx(ctx, func(tx pgx.Tx) error {
 		p, err := lockPlugin(ctx, tx, pluginKey)
@@ -376,6 +405,15 @@ func (c *Controller) Upgrade(ctx context.Context, pluginKey, version string, act
 // and every node stops serving within one reconcile; the rollout row
 // completes once all nodes report it.
 func (c *Controller) Disable(ctx context.Context, pluginKey string, actorID int64, reason string) (*core.Rollout, error) {
+	if !core.IsEmergencyRevocation(ctx) {
+		work, release, err := core.BeginPluginMutation(ctx, c.o.Mutations)
+		if err != nil {
+			return nil, err
+		}
+		defer release()
+		ctx = work
+	}
+
 	var id int64
 	err := c.o.DB.Tx(ctx, func(tx pgx.Tx) error {
 		p, err := lockPlugin(ctx, tx, pluginKey)
@@ -477,7 +515,7 @@ func (c *Controller) Cancel(ctx context.Context, pluginKey string, rolloutID, ac
 	if r.phase != PhasePreparing {
 		return core.ErrConflict.WithMessage("only a preparing rollout can be cancelled")
 	}
-	ok, err := c.finishFailed(ctx, r, PhaseCancelled, fmt.Sprintf("cancelled by user %d", actorID))
+	ok, err := c.finishFailed(ctx, r, PhaseCancelled, fmt.Sprintf("cancelled by user %d", actorID), false)
 	if err != nil {
 		return err
 	}
@@ -531,11 +569,13 @@ func (c *Controller) loadRollout(ctx context.Context, id int64) (*rolloutRow, er
 // plugin status. The phase check alone guards against the commit point (the
 // commit CAS fails once the phase changed). Returns false when the rollout
 // is no longer preparing.
-func (c *Controller) finishFailed(ctx context.Context, r *rolloutRow, phase, msg string) (bool, error) {
+func (c *Controller) finishFailed(ctx context.Context, r *rolloutRow, phase, msg string, fenced bool) (bool, error) {
 	ok := false
 	err := c.o.DB.Tx(ctx, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `UPDATE plugin_rollouts SET phase = $2, error = $3, updated_at = now(), row_version = row_version + 1
-			WHERE id = $1 AND phase = 'preparing'`, r.id, phase, msg)
+			WHERE id = $1 AND phase = 'preparing'
+			AND (NOT $4::boolean OR (row_version = $5 AND coordinator_boot_id = $6
+				AND coordinator_lease_until > clock_timestamp()))`, r.id, phase, msg, fenced, r.rowVersion, c.o.Node.BootID())
 		if err != nil || tag.RowsAffected() == 0 {
 			return err
 		}
@@ -550,9 +590,21 @@ func (c *Controller) finishFailed(ctx context.Context, r *rolloutRow, phase, msg
 		if err != nil {
 			return err
 		}
-		return c.writeNodes(ctx, tx, r)
+		if err := c.writeNodes(ctx, tx, r); err != nil {
+			return err
+		}
+		return c.markCleanup(ctx, tx, r)
 	})
 	return ok, err
+}
+
+// Mark every boot which could own an instance, including disconnected boots.
+// Liveness expiry is not evidence that an old version has stopped.
+func (c *Controller) markCleanup(ctx context.Context, tx pgx.Tx, r *rolloutRow) error {
+	_, err := tx.Exec(ctx, `INSERT INTO plugin_rollout_cleanup(rollout_id,boot_id,state)
+		SELECT $1,boot_id,'cleanup_pending' FROM plugin_runtime_nodes WHERE plugin_key=$2 AND NOT stopped
+		ON CONFLICT(rollout_id,boot_id) DO UPDATE SET state='cleanup_pending',updated_at=now()`, r.id, r.key)
+	return err
 }
 
 // writeNodes records the per-node outcome from the live node reports.

@@ -142,16 +142,18 @@ func (v *validator) usageSource(f string, e manifest.Endpoint) {
 				"usageStreamEvents is only read when usageSource is %q; the declarative sse rules decide which events are read otherwise",
 				manifest.UsageSourcePlugin)
 		}
-		if e.UsageMaxBytes != 0 {
+		if e.UsageMaxBytes != 0 && !e.TaskSubmit() {
 			v.add(f+".usageMaxBytes", "unsupported",
 				"usageMaxBytes is only read when usageSource is %q", manifest.UsageSourcePlugin)
 		}
-		if len(e.UsageRequestFields) > 0 {
+		if len(e.UsageRequestFields) > 0 && !e.TaskSubmit() {
 			v.add(f+".usageRequestFields", "unsupported",
 				"usageRequestFields is only read when usageSource is %q; no plugin is asked for the usage otherwise",
 				manifest.UsageSourcePlugin)
 		}
-		return
+		if !e.TaskSubmit() {
+			return
+		}
 	}
 	// billing "free" and a plugin-reported usage cannot both be meant. With
 	// "free" the host never prices this endpoint, so every token, fact and -
@@ -171,7 +173,7 @@ func (v *validator) usageSource(f string, e manifest.Endpoint) {
 	// rather than discover the silent half later. The runtime keeps its own
 	// guard for packages installed before this rule (gateway warns and marks
 	// the record when a reservation is dropped).
-	if e.Billing == "free" {
+	if e.Billing == "free" && e.PluginUsage() {
 		v.add(f+".billing", "conflict",
 			"billing %q discards everything ExtractUsage reports for this endpoint, including a Reservation "+
 				"(no pre-charge, no reconcile); an endpoint with usageSource %q must bill by usage",

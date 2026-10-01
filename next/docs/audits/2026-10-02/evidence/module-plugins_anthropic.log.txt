@@ -1,0 +1,3 @@
+=== plugins/anthropic ===
+ok  	github.com/Sub2API-Devs/sup2api/next/plugins/anthropic	1.039s
+ok  	github.com/Sub2API-Devs/sup2api/next/plugins/anthropic/internal/anthropic	1.158s

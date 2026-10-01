@@ -161,6 +161,10 @@ type AccountLimiter interface {
 	// limit. Accounts without limits are never listed; the spm limit does
 	// not apply to a session already counted in the window.
 	Exhausted(ctx context.Context, refs []AccountRef, session string) (map[int64]bool, error)
+	// TryHit atomically checks current limits and counts an admitted request.
+	// RPM and new-session SPM admission are exact; token counts are reported
+	// afterwards and do not reserve predicted future consumption.
+	TryHit(ctx context.Context, ref AccountRef, session string) (bool, error)
 	// Hit counts one request of session on the account (once per upstream attempt).
 	Hit(ctx context.Context, id int64, session string)
 	// AddTokens adds tokens of a finished response to the minute and day windows.

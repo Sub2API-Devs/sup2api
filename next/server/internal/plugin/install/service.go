@@ -48,6 +48,7 @@ const (
 
 // Deps are the collaborators of Service. Bus, Schemas and Accounts may be nil.
 type Deps struct {
+	Mutations   core.PluginMutationGate
 	DB          *store.DB
 	Trust       *pkg.TrustStore
 	Authz       core.Authorizer
@@ -56,6 +57,7 @@ type Deps struct {
 	Rollout     core.RolloutController
 	Schemas     core.PluginSchemaManager
 	Bus         core.Bus
+	Nodes       core.NodeRegistry
 	// Accounts deletes a plugin's accounts on uninstall with
 	// purge_accounts=true; nil makes such requests fail with unavailable.
 	Accounts core.PluginAccountPurger

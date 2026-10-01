@@ -44,7 +44,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "volcengine" || m.Version != "0.7.0" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "volcengine" || m.Version != "0.10.0" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("identity = %s %s %s", m.Key, m.Version, m.Publisher)
 	}
 	if m.Name["en"] == "" || m.Name["zh"] == "" || m.Description["en"] == "" || m.Description["zh"] == "" {
@@ -63,7 +63,7 @@ func TestManifest(t *testing.T) {
 	if m.Database == nil || m.Database.Schema != "plg_volcengine" || m.Database.Migrations != "migrations/" {
 		t.Fatalf("database = %+v", m.Database)
 	}
-	wantCaps := []string{manifest.CapPlatformAdapter, manifest.CapHTTPRoutes}
+	wantCaps := []string{manifest.CapPlatformAdapter, manifest.CapPlatformExecute, manifest.CapPlatformTasks, manifest.CapPlatformPoll, manifest.CapPlatformMonitor, manifest.CapHTTPRoutes}
 	gotCaps := make([]string, 0, len(m.Capabilities))
 	for _, c := range m.Capabilities {
 		gotCaps = append(gotCaps, c.ID)
@@ -552,7 +552,7 @@ func TestAssetRoutesAndPages(t *testing.T) {
 // TestManifestServes runs the plugin with its embedded manifest.
 func TestManifestServes(t *testing.T) {
 	h := pluginsdktest.Start(t, volcengine.New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithManifest(manifestJSON)}})
-	want := []string{manifest.CapPlatformAdapter, manifest.CapHTTPRoutes}
+	want := []string{manifest.CapPlatformAdapter, manifest.CapPlatformExecute, manifest.CapPlatformTasks, manifest.CapPlatformPoll, manifest.CapPlatformMonitor, manifest.CapHTTPRoutes}
 	got := h.Info.GetCapabilities()
 	slices.Sort(got)
 	slices.Sort(want)
@@ -751,10 +751,15 @@ func TestVideoEndpoints(t *testing.T) {
 	if query.Protocol != volcengine.ProtocolVideoQuery {
 		t.Fatalf("video_query protocol = %q", query.Protocol)
 	}
-	// No model in the request: the plugin resolves it from the task id.
-	if query.Request.ModelSource != manifest.ModelSourcePlugin ||
+	// The core resolves owner, model and original account from its task record.
+	if query.Request.ModelSource != "" ||
 		query.Request.ModelPath != "" || query.Request.ModelParam != "" {
-		t.Fatalf("video_query request = %+v, want modelSource plugin", query.Request)
+		t.Fatalf("video_query request = %+v, want core task lookup", query.Request)
+	}
+	if !submit.TaskSubmit() || !query.TaskQuery() || submit.Task.Kind != "video" || query.Task.Kind != "video" ||
+		query.Task.IDParam != volcengine.TaskIDParam || !slices.Equal(submit.Task.IDPaths, []string{"id", "task_id", "data.id", "result.id"}) ||
+		!slices.Equal(query.Task.IDPaths, submit.Task.IDPaths) {
+		t.Fatalf("video task contract: submit=%+v query=%+v", submit.Task, query.Task)
 	}
 	// modelSource "plugin" must not also declare streamPath (ResolveModel
 	// answers stream); this endpoint never streams anyway.

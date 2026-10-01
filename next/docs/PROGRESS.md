@@ -1,5 +1,9 @@
 # sub2api-next 开发进度与交接记录
 
+> **2026-10-02 主节点优先升级完成验收**：先停所有从核心、主节点停机迁移并恢复、再逐个恢复从节点；节点间用 Redis 中每节点一份的可复用密钥鉴权。实现已在隔离环境通过全部 Go 模块 `-race`、真实 PG/Redis 和真实三节点（真实新增迁移、签名插件、Redis 登记丢失恢复、失败候选与基线恢复）验收，见 [验证记录](audits/2026-10-02/MULTINODE-VALIDATION.md)。规约见 [MULTINODE-SYNC-PROTOCOL.md](MULTINODE-SYNC-PROTOCOL.md)。未提交或部署。
+
+> **2026-10-01 补充**：本文件下面保留 09-25 的历史进度。当前多节点整改、统一 Execute / Monitor 调度及实际验收结果以 [整改记录](audits/2026-10-01/REMEDIATION.md) 为准；已新增 [隔离双节点 E2E 环境](../deploy/e2e/README.md)，不再依赖下文已经删除的旧测试拓扑。
+
 > ⚠️ **本文件停在 2026-09-25（第四轮）。之后的「插件执行、核心记录」五期改造与火山方舟插件不在这里。**
 > **接手工作请先读 [HANDOVER.md](HANDOVER.md)**（环境、纪律、待办、坑），再读 [ROUND-2026-09-PLUGIN-MECHANISM.md](ROUND-2026-09-PLUGIN-MECHANISM.md)（那一轮的前因后果）。
 

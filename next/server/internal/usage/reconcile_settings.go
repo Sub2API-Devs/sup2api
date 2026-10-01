@@ -38,10 +38,12 @@ type ReconcileSettings struct {
 	// Backoff is the delay ladder between checks, comma separated Go
 	// durations. The last entry repeats for every further attempt.
 	Backoff string `json:"reconcile_backoff"`
-	// MaxAttempts stops an entry whose plugin keeps saying "ask again soon"
-	// long before its deadline. It is a safety net, not the primary bound:
-	// the deadline is.
+	// MaxAttempts is the legacy settlement queue's total-attempt limit.
+	// Managed async tasks use consecutive failures and the deadline instead.
 	MaxAttempts int `json:"max_reconcile_attempts"`
+	// MaxPollFailures bounds consecutive failed queries, not valid pending results.
+	// Zero disables this cutoff; the observation deadline still applies.
+	MaxPollFailures int `json:"max_poll_failures"`
 }
 
 // DefaultReconcileAgeSec is the default of max_reconcile_age_sec: 7 days.
@@ -49,7 +51,7 @@ const DefaultReconcileAgeSec = 7 * 24 * 3600
 
 // DefaultReconcileSettings are used when the row is absent.
 func DefaultReconcileSettings() ReconcileSettings {
-	return ReconcileSettings{MaxAgeSec: DefaultReconcileAgeSec, Backoff: "10s,30s,1m,5m,15m", MaxAttempts: 100}
+	return ReconcileSettings{MaxAgeSec: DefaultReconcileAgeSec, Backoff: "10s,30s,1m,5m,15m", MaxAttempts: 100, MaxPollFailures: 20}
 }
 
 // Bounds. minReconcileDelay keeps a plugin (or an administrator) from turning
@@ -66,22 +68,27 @@ const (
 
 // resolved is the usable form of the settings: parsed, clamped, defaulted.
 type resolved struct {
-	maxAge      time.Duration
-	backoff     []time.Duration
-	maxAttempts int
+	maxAge          time.Duration
+	backoff         []time.Duration
+	maxAttempts     int
+	maxPollFailures int
 }
 
 func (s ReconcileSettings) resolve() resolved {
 	d := DefaultReconcileSettings()
 	r := resolved{
-		maxAge:      time.Duration(s.MaxAgeSec) * time.Second,
-		maxAttempts: s.MaxAttempts,
+		maxAge:          time.Duration(s.MaxAgeSec) * time.Second,
+		maxAttempts:     s.MaxAttempts,
+		maxPollFailures: s.MaxPollFailures,
 	}
 	if r.maxAge < minReconcileAge || r.maxAge > maxReconcileAge {
 		r.maxAge = time.Duration(d.MaxAgeSec) * time.Second
 	}
 	if r.maxAttempts <= 0 || r.maxAttempts > maxReconcileTries {
 		r.maxAttempts = d.MaxAttempts
+	}
+	if r.maxPollFailures < 0 || r.maxPollFailures > maxReconcileTries {
+		r.maxPollFailures = d.MaxPollFailures
 	}
 	r.backoff = parseBackoff(s.Backoff)
 	if len(r.backoff) == 0 {
@@ -146,6 +153,7 @@ func (r resolved) clampDelay(want time.Duration, attempts int) time.Duration {
 func (s *Service) reconcileSettings(ctx context.Context) resolved {
 	s.mu.Lock()
 	snap, at := s.reconcileCfg, s.reconcileCfgAt
+	epoch := s.reconcileEpoch
 	s.mu.Unlock()
 	if snap != nil && time.Since(at) < reconcileSettingsTTL {
 		return *snap
@@ -156,7 +164,9 @@ func (s *Service) reconcileSettings(ctx context.Context) resolved {
 	}
 	r := v.resolve()
 	s.mu.Lock()
-	s.reconcileCfg, s.reconcileCfgAt = &r, time.Now()
+	if s.reconcileEpoch == epoch {
+		s.reconcileCfg, s.reconcileCfgAt = &r, time.Now()
+	}
 	s.mu.Unlock()
 	return r
 }
@@ -175,9 +185,10 @@ func loadReconcileSettings(ctx context.Context, q store.Querier) (ReconcileSetti
 	}
 	// Fields absent from the stored document keep their defaults.
 	var partial struct {
-		MaxAgeSec   *int    `json:"max_reconcile_age_sec"`
-		Backoff     *string `json:"reconcile_backoff"`
-		MaxAttempts *int    `json:"max_reconcile_attempts"`
+		MaxAgeSec       *int    `json:"max_reconcile_age_sec"`
+		Backoff         *string `json:"reconcile_backoff"`
+		MaxAttempts     *int    `json:"max_reconcile_attempts"`
+		MaxPollFailures *int    `json:"max_poll_failures"`
 	}
 	if err := json.Unmarshal(raw, &partial); err != nil {
 		return v, err
@@ -190,6 +201,9 @@ func loadReconcileSettings(ctx context.Context, q store.Querier) (ReconcileSetti
 	}
 	if partial.MaxAttempts != nil {
 		v.MaxAttempts = *partial.MaxAttempts
+	}
+	if partial.MaxPollFailures != nil {
+		v.MaxPollFailures = *partial.MaxPollFailures
 	}
 	return v, nil
 }
@@ -205,15 +219,12 @@ func (s *Service) getReconcileSettings(c *gin.Context) {
 
 func (s *Service) putReconcileSettings(c *gin.Context) {
 	ctx := c.Request.Context()
-	cur, err := loadReconcileSettings(ctx, s.db.Pool)
-	if err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
+	cur := DefaultReconcileSettings()
 	var in struct {
-		MaxAgeSec   *int    `json:"max_reconcile_age_sec"`
-		Backoff     *string `json:"reconcile_backoff"`
-		MaxAttempts *int    `json:"max_reconcile_attempts"`
+		MaxAgeSec       *int    `json:"max_reconcile_age_sec"`
+		Backoff         *string `json:"reconcile_backoff"`
+		MaxAttempts     *int    `json:"max_reconcile_attempts"`
+		MaxPollFailures *int    `json:"max_poll_failures"`
 	}
 	if !httpapi.BindJSON(c, &in) {
 		return
@@ -241,25 +252,27 @@ func (s *Service) putReconcileSettings(c *gin.Context) {
 		}
 		cur.MaxAttempts = *in.MaxAttempts
 	}
+	if in.MaxPollFailures != nil {
+		if *in.MaxPollFailures < 0 || *in.MaxPollFailures > maxReconcileTries {
+			fields = append(fields, core.FieldError{Field: "max_poll_failures", Code: "out_of_range", Message: "must be between 0 and 1000"})
+		}
+		cur.MaxPollFailures = *in.MaxPollFailures
+	}
 	if len(fields) > 0 {
 		httpapi.Fail(c, core.InvalidFields(fields...))
 		return
 	}
-	raw, _ := json.Marshal(cur)
 	uid, _ := core.UserID(ctx)
 	var updatedBy *int64
 	if uid > 0 {
 		updatedBy = &uid
 	}
-	_, err = s.db.Pool.Exec(ctx, `
-		INSERT INTO settings (key, value, updated_by, updated_at) VALUES ($1, $2, $3, now())
-		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-		settingsKeyReconcile, raw, updatedBy)
-	if err != nil {
+	if err := store.PatchSettingJSON(ctx, s.db, settingsKeyReconcile, updatedBy, in, &cur); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
 	s.mu.Lock()
+	s.reconcileEpoch++
 	s.reconcileCfg = nil
 	s.mu.Unlock()
 	httpapi.OK(c, cur)

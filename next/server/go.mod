@@ -4,7 +4,10 @@ go 1.27
 
 replace github.com/Sub2API-Devs/sup2api/next/sdk => ../sdk
 
+replace github.com/Sub2API-Devs/sup2api/next/runtime-contract => ../runtime-contract
+
 require (
+	github.com/Sub2API-Devs/sup2api/next/runtime-contract v0.0.0
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/Sub2API-Devs/sup2api/next/sdk v0.0.0-00010101000000-000000000000
 	github.com/alicebob/miniredis/v2 v2.39.0

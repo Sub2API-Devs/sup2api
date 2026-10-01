@@ -16,6 +16,7 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 )
 
 // HostBrokerID is the broker id the harness announces in InitHost.
@@ -116,7 +117,7 @@ func Start(t testing.TB, p any, opts Options) *Harness {
 		return h
 	}
 	init, err := h.Plugin.InitHost(ctx, &pluginv1.InitHostRequest{
-		HostBrokerId: HostBrokerID, HostApiVersion: 1, NodeId: "test-node", BootId: "test-boot", HostVersion: "0.1.0-test",
+		HostBrokerId: HostBrokerID, HostApiVersion: protocol.HostAPIVersion, NodeId: "test-node", BootId: "test-boot", HostVersion: "0.1.0-test",
 	})
 	if err != nil {
 		t.Fatalf("pluginsdktest: InitHost: %v", err)

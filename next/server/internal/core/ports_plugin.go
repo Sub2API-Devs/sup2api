@@ -38,6 +38,7 @@ type PlatformPlugin interface {
 	// it answers gRPC Unimplemented, and the gateway then keeps what the
 	// declarative rules produced.
 	ExtractUsage(ctx context.Context, in *pluginv1.ExtractUsageRequest) (*pluginv1.UsageReport, error)
+	ParseTaskSubmission(ctx context.Context, in *pluginv1.ExtractUsageRequest) (*pluginv1.TaskSubmission, error)
 	// BuildReconcileRequest and ParseReconcileResponse check one pre-charged
 	// entry (CONTRACTS §25.4): the plugin describes the request and reads the
 	// answer, the core sends it through the account's proxy behind its SSRF
@@ -47,6 +48,16 @@ type PlatformPlugin interface {
 	// its entries are retried until their deadline and then abandoned.
 	BuildReconcileRequest(ctx context.Context, in *pluginv1.BuildReconcileRequestRequest) (*pluginv1.BuildReconcileRequestResponse, error)
 	ParseReconcileResponse(ctx context.Context, in *pluginv1.ParseReconcileResponseRequest) (*pluginv1.ReconcileResult, error)
+}
+
+// ExecutionHTTP is the one-request network capability supplied by the current
+// offline execution. The closure binds the account, proxy, limits and lifetime.
+type ExecutionHTTP func(context.Context, *pluginv1.ExecutionHTTPRequest) (*pluginv1.ExecutionHTTPResponse, error)
+
+// PollPlugin is optional and selected only for platform.poll.v1. Runtime
+// adapters bind the callback to the exact process and discard it after Poll.
+type PollPlugin interface {
+	Poll(context.Context, *pluginv1.PollRequest, ExecutionHTTP) (*pluginv1.ReconcileResult, error)
 }
 
 type HookPlugin interface {
@@ -71,11 +82,14 @@ type SchedulerPlugin interface {
 
 // PluginInfo identifies one active plugin version on this node.
 type PluginInfo struct {
-	Key       string
-	Version   string
-	Manifest  *manifest.Manifest
-	Publisher string
-	Trust     string // official | verified | community | unsigned
+	// GrantedPermissions is the local generation's authority snapshot. It is
+	// checked against PG before a managed node is declared ready.
+	GrantedPermissions []string `json:"-"`
+	Key                string
+	Version            string
+	Manifest           *manifest.Manifest
+	Publisher          string
+	Trust              string // official | verified | community | unsigned
 	// AssetBase is the public URL prefix for package assets, e.g.
 	// "/plugin-ui/guard/0.1.0-3fa9c1" (version + package hash for caching).
 	AssetBase string

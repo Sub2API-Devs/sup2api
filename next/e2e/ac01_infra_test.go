@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -18,16 +19,23 @@ func TestAC01_ComposeStack(t *testing.T) {
 	t.Run("both nodes serve through the load balancer", func(t *testing.T) {
 		seen := map[string]bool{}
 		c := NewClient(e.BaseURL)
-		for i := 0; i < 10 && len(seen) < 2; i++ {
+		c.HTTP.Timeout = time.Second
+		// A healthy least-connection balancer need not alternate sequential
+		// requests. Require both nodes within a bound, not a fixed pick order.
+		Eventually(t, 5*time.Second, 50*time.Millisecond, func() string {
+			return fmt.Sprintf("both healthy nodes through load balancer (seen %v)", seen)
+		}, func() bool {
 			r := c.Do(t, http.MethodGet, "/healthz", nil)
 			if r.Status != 200 || r.JSON().Get("status").String() != "ok" {
 				t.Fatalf("healthz: %s", r)
 			}
-			seen[r.JSON().Get("node").String()] = true
-		}
-		if !seen["node-1"] || !seen["node-2"] {
-			t.Fatalf("load balancer reached %v, want node-1 and node-2", seen)
-		}
+			node := r.JSON().Get("node").String()
+			if node != "node-1" && node != "node-2" {
+				t.Fatalf("healthz reported unexpected node %q: %s", node, r)
+			}
+			seen[node] = true
+			return seen["node-1"] && seen["node-2"]
+		})
 	})
 
 	t.Run("each node healthy with the same version", func(t *testing.T) {

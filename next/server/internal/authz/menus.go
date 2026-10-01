@@ -65,6 +65,7 @@ var coreMenus = []coreMenuSection{
 		{"market", lt("Plugin market", "插件市场"), "market", "/market", []string{"plugin:market:read"}},
 		{"publishers", lt("Publishers", "发布者"), "publisher", "/publishers", []string{"publisher:read"}},
 		{"nodes", lt("Cluster nodes", "集群节点"), "node", "/nodes", []string{"node:read"}},
+		{"upgrades", lt("Core updates", "核心升级"), "refresh", "/system/upgrades", []string{"system:update:read"}},
 		{"settings", lt("Settings", "设置"), "settings", "/settings", []string{"settings:read"}},
 	}},
 	{"me", lt("Mine", "我的"), []coreMenuItem{

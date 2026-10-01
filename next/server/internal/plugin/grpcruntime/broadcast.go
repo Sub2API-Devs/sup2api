@@ -42,7 +42,7 @@ func ValidBroadcastTopic(topic string) bool { return broadcastTopicRE.MatchStrin
 
 // Publish implements HostService.Publish.
 func (h *hostServer) Publish(ctx context.Context, in *pluginv1.PublishRequest) (*pluginv1.PublishResponse, error) {
-	if err := h.require(PermBroadcast); err != nil {
+	if err := h.require(ctx, PermBroadcast); err != nil {
 		return nil, err
 	}
 	if !ValidBroadcastTopic(in.GetTopic()) {

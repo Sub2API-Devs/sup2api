@@ -133,10 +133,11 @@ func stickyKey(r *stickyRule, groupID int64, model, value string) string {
 // ---------------------------------------------------------------- rule cache
 
 type ruleCache struct {
-	db   *store.DB
-	mu   sync.Mutex
-	at   time.Time
-	list []*stickyRule
+	db    *store.DB
+	mu    sync.Mutex
+	at    time.Time
+	list  []*stickyRule
+	epoch uint64
 	// override replaces the DB in tests.
 	override []*stickyRule
 }
@@ -145,6 +146,7 @@ func newRuleCache(db *store.DB) *ruleCache { return &ruleCache{db: db} }
 
 func (c *ruleCache) invalidate() {
 	c.mu.Lock()
+	c.epoch++
 	c.list, c.at = nil, time.Time{}
 	c.mu.Unlock()
 }
@@ -163,6 +165,7 @@ func (c *ruleCache) get(ctx context.Context) []*stickyRule {
 		c.mu.Unlock()
 		return l
 	}
+	epoch := c.epoch
 	c.mu.Unlock()
 	if c.db == nil {
 		return nil
@@ -174,7 +177,9 @@ func (c *ruleCache) get(ctx context.Context) []*stickyRule {
 	}
 	list := activeRules(all)
 	c.mu.Lock()
-	c.list, c.at = list, time.Now()
+	if c.epoch == epoch {
+		c.list, c.at = list, time.Now()
+	}
 	c.mu.Unlock()
 	return list
 }

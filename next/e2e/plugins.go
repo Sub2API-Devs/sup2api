@@ -166,7 +166,7 @@ func (e *Env) Enable(admin *Session, key string) {
 	e.WaitPlugin(admin, key, "enabled", "")
 }
 
-// Disable disables a plugin and waits for status=disabled.
+// Disable disables a plugin and waits for the disable rollout to finish.
 func (e *Env) Disable(admin *Session, key string) {
 	e.T.Helper()
 	admin.OK(e.T, http.MethodPost, "/plugins/"+key+"/disable", nil)
@@ -214,21 +214,35 @@ func (e *Env) UninstallPurgeAccounts(admin *Session, key string) {
 }
 
 // WaitPlugin waits until the plugin has status (and active_version, if set)
-// and, for "enabled", every node reports "active". Fails fast on a failed
-// or cancelled rollout.
+// and its rollout has finished; for "enabled", every node must also report
+// "active". The current-rollout API returns 200 with data:null when none is
+// open; transport/server errors do not prove completion.
 func (e *Env) WaitPlugin(admin *Session, key, status, version string) gjson.Result {
 	e.T.Helper()
 	var last gjson.Result
+	var lastRollout string
 	msg := func() string {
-		return fmt.Sprintf("plugin %s status=%s version=%s (last detail: %s)", key, status, version, last.Raw)
+		return fmt.Sprintf("plugin %s status=%s version=%s (last detail: %s; rollout: %s)", key, status, version, last.Raw, lastRollout)
 	}
 	Eventually(e.T, 90*time.Second, time.Second, msg, func() bool {
 		r := admin.API(e.T, http.MethodGet, "/plugins/"+key+"/rollouts/current", nil)
-		if r.Status == 200 {
-			switch ph := r.Data().Get("phase").String(); ph {
-			case "failed", "cancelled", "rolled_back":
-				e.T.Fatalf("rollout of %s ended in %s: %s", key, ph, r.Data().Raw)
-			}
+		lastRollout = r.String()
+		if r.Status >= 500 {
+			return false
+		}
+		if r.Status != http.StatusOK {
+			e.T.Fatalf("cannot determine rollout completion for %s: %s", key, r)
+		}
+		if !r.Data().Exists() || (r.Data().Type != gjson.Null && !r.Data().IsObject()) {
+			e.T.Fatalf("invalid current rollout response for %s: %s", key, r)
+		}
+		switch ph := r.Data().Get("phase").String(); ph {
+		case "preparing", "activating":
+			// Disable publishes status=disabled before nodes acknowledge it.
+			// Returning now makes the next enable/uninstall race that rollout.
+			return false
+		case "failed", "cancelled", "rolled_back":
+			e.T.Fatalf("rollout of %s ended in %s: %s", key, ph, r.Data().Raw)
 		}
 		d, ok := e.Plugin(admin, key)
 		if !ok {

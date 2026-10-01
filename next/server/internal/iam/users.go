@@ -270,15 +270,26 @@ func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUs
 	var v int64
 	var u *User
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
+		// Keep the established authz -> user lock order. Even an apparently
+		// unchanged status must invalidate authorization after concurrent edits.
+		if in.Status != nil {
+			var err error
+			if v, err = s.authz.Bump(ctx, tx); err != nil {
+				return err
+			}
+		}
+		if err := lockRefreshUser(ctx, tx, id); err != nil {
+			if err == errBadRefresh {
+				return core.ErrNotFound.WithMessage("user not found")
+			}
+			return err
+		}
 		cur, err := s.getUser(ctx, tx, id)
 		if err != nil {
 			return err
 		}
 		statusChange := in.Status != nil && *in.Status != cur.Status
 		if statusChange {
-			if v, err = s.authz.Bump(ctx, tx); err != nil {
-				return err
-			}
 			if *in.Status == StatusDisabled {
 				if actorID == id {
 					return errSelfDisable
@@ -432,8 +443,20 @@ func emailTaken() error {
 	})
 }
 
-func revokeAllRefreshTokens(ctx context.Context, q store.Querier, userID int64) error {
-	_, err := q.Exec(ctx, `UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, userID)
+func lockRefreshUser(ctx context.Context, tx pgx.Tx, userID int64) error {
+	var id int64
+	err := tx.QueryRow(ctx, `SELECT id FROM users WHERE id=$1 FOR UPDATE`, userID).Scan(&id)
+	if store.IsNoRows(err) {
+		return errBadRefresh
+	}
+	return err
+}
+
+func revokeAllRefreshTokens(ctx context.Context, tx pgx.Tx, userID int64) error {
+	if err := lockRefreshUser(ctx, tx, userID); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, userID)
 	return err
 }
 

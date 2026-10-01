@@ -42,6 +42,7 @@ type settingsSnapshot struct {
 func (s *Service) Settings(ctx context.Context) (Settings, error) {
 	s.mu.Lock()
 	snap := s.settings
+	epoch := s.epoch
 	s.mu.Unlock()
 	if snap != nil && time.Since(snap.at) < s.cacheTTL {
 		return snap.v, nil
@@ -51,7 +52,9 @@ func (s *Service) Settings(ctx context.Context) (Settings, error) {
 		return DefaultSettings(), err
 	}
 	s.mu.Lock()
-	s.settings = &settingsSnapshot{at: time.Now(), v: v}
+	if s.epoch == epoch {
+		s.settings = &settingsSnapshot{at: time.Now(), v: v}
+	}
 	s.mu.Unlock()
 	return v, nil
 }
@@ -103,11 +106,7 @@ func (s *Service) getSettings(c *gin.Context) {
 
 func (s *Service) putSettings(c *gin.Context) {
 	ctx := c.Request.Context()
-	cur, err := loadSettings(ctx, s.db.Pool)
-	if err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
+	cur := DefaultSettings()
 	var in struct {
 		MissingPricePolicy *string          `json:"missing_price_policy"`
 		MinBalance         *decimal.Decimal `json:"min_balance"`
@@ -136,13 +135,8 @@ func (s *Service) putSettings(c *gin.Context) {
 		httpapi.Fail(c, core.InvalidFields(fields...))
 		return
 	}
-	raw, _ := json.Marshal(cur)
 	uid, _ := core.UserID(ctx)
-	_, err = s.db.Pool.Exec(ctx, `
-		INSERT INTO settings (key, value, updated_by, updated_at) VALUES ($1, $2, $3, now())
-		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-		settingsKey, raw, nullID(uid))
-	if err != nil {
+	if err := store.PatchSettingJSON(ctx, s.db, settingsKey, nullID(uid), in, &cur); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}

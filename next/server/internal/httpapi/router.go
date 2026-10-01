@@ -167,6 +167,9 @@ func Recover() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {
 			if p := recover(); p != nil {
+				if p == http.ErrAbortHandler {
+					panic(p)
+				}
 				slog.ErrorContext(c.Request.Context(), "panic", "request_id", core.RequestID(c.Request.Context()), "panic", p)
 				if !c.Writer.Written() {
 					c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": core.ErrInternal})

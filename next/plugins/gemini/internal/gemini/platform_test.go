@@ -15,7 +15,7 @@ import (
 
 func start(t *testing.T) *pluginsdktest.Harness {
 	t.Helper()
-	return pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("gemini", "0.1.6")}})
+	return pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("gemini", "0.2.0")}})
 }
 
 func account(creds, settings string) *pluginv1.Account {
@@ -24,7 +24,7 @@ func account(creds, settings string) *pluginv1.Account {
 
 func TestCapabilities(t *testing.T) {
 	h := start(t)
-	if got := strings.Join(h.Info.GetCapabilities(), ","); got != "platform.adapter.v1" {
+	if got := strings.Join(h.Info.GetCapabilities(), ","); got != "platform.execute.v1,platform.adapter.v1" {
 		t.Fatalf("capabilities = %s", got)
 	}
 }

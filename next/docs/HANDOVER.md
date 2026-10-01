@@ -1,10 +1,18 @@
 # 交接文档：sup2api `next/` 插件机制这条线
 
+> **最新交接入口（2026-10-02）**：[多节点同步与停机升级交接](HANDOVER-2026-10-02-MULTINODE.md)。当前三个子代理已停止编辑；新节点鉴权与升级代码已大部分落地，但最终真实三节点验收尚未完成，OVH 隔离环境仍待验证和清理。下文各历史日期的“完成”“未实现”描述不能替代该最新交接状态。
+
 > 写给**接手这项工作的人 / AI**。2026-09-30 交接。分支 `feat/next-platform`，HEAD `aab0c5cee`，已全部推送到 origin，工作树干净。
 >
 > **先读这一份，再按 §2 的指引读别的。** 这份文档假设你对仓库一无所知。
 
+> **2026-10-01 多节点整改更新**：上述 HEAD、版本和完成状态是 09-30 的历史交接，不能代替当前工作树。新一轮以 `7ec4a9fbc` 为基线，审计证据见 [`audits/2026-10-01/REPORT.md`](audits/2026-10-01/REPORT.md)，实施与验证状态见 [`REMEDIATION.md`](audits/2026-10-01/REMEDIATION.md)。核心托管异步任务的新契约在 CONTRACTS §28；它优先于旧设计稿中由客户端直接查询上游的描述。本轮改动尚未提交、推送或部署到业务环境；独立双节点验收环境见 [`deploy/e2e`](../deploy/e2e/README.md)。
+
+> **同日后续统一调度与执行**：用户进一步要求插件完成请求后主动通过 SDK 记录用量；异步提交预扣并登记核心监控，核心回调插件后由插件上报进度/完成。最新契约见 CONTRACTS §31：`platform.execute.v1` / `platform.monitor.v1` 要求 Host API 4；五个平台插件接入 Execute，volcengine 0.10.0 接入 Monitor。§30 的 Poll 与旧 Build/Parse 接口保留兼容。实际测试状态以整改记录最后一节为准。
+
 ---
+
+> **2026-10-02 主节点优先升级与 Redis 节点密钥**：已在工作区实现，并在 OVH 隔离环境通过全部 Go 模块 `-race`、真实 PG/Redis 控制层用例和真实三节点升级验收，见 [验证记录](audits/2026-10-02/MULTINODE-VALIDATION.md)；规约见 [MULTINODE-SYNC-PROTOCOL.md](MULTINODE-SYNC-PROTOCOL.md)，契约见 CONTRACTS §34。验证记录第 5 节列出未覆盖场景。10月1日的兼容滚动结果保留在 [`SHELL-UPGRADE-VALIDATION.md`](audits/2026-10-01/SHELL-UPGRADE-VALIDATION.md)。未提交、推送或部署业务环境。
 
 ## 0. 三十秒摘要
 
@@ -231,6 +239,8 @@ CI 有三个 job：`server (with PostgreSQL and Redis)` / `sdk, tools and e2e` /
 
 ### 7.1 会漏钱 —— 最高优先
 
+> **2026-10-01 更新**：本轮已给 `ParseReconcileResponseRequest` 增加 `truncated`，核心按上限加一字节读取并拒绝截断响应的终态，volcengine 对截断/不完整 JSON 保持 pending。下文保留问题来源；最终测试证据见整改记录。
+
 **`ParseReconcileResponseRequest` 缺 `truncated`**（CONTRACTS §25.7 第 1 条）
 
 `next/server/internal/usage/reconcile.go` 用 `io.ReadAll(io.LimitReader(resp.Body, 256KiB))` 读核对响应，**插件收到半个 JSON 文档而且无从得知**。
@@ -242,6 +252,8 @@ CI 有三个 job：`server (with PostgreSQL and Redis)` / `sdk, tools and e2e` /
 **两个修法二选一**：加 `truncated` 字段，或者照 `ExtractUsage` 的规矩超限就不给。**后者更符合已有契约**。
 
 ### 7.2 最大的信心缺口
+
+> **2026-10-01 更新：以下为历史缺口，现已补齐。** 用户要求继续验收后新增隔离 `deploy/e2e` 环境，完整 30 个用例通过、0 跳过，覆盖单节点监控、故障接管和优雅停机。结果与剩余真实上游边界见 [整改记录](audits/2026-10-01/REMEDIATION.md#完整复跑结果通过)。临时环境用后已清理，未改动业务部署。
 
 **e2e 仍是 0 断言**（`PLUGIN-VOLCENGINE-ARK.md` §9.9）
 

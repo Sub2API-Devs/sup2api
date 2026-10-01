@@ -127,6 +127,12 @@ func decide(m *manifest.Manifest, req ConsentRequest, current map[string]Grant, 
 // plugin to installed; upgrades only approve the version (the runtime
 // applies defaults when it activates).
 func (s *Service) Consent(ctx context.Context, key, version string, req ConsentRequest, actorID int64) (*ConsentResult, error) {
+	ctx, release, guardErr := core.BeginPluginMutation(ctx, s.d.Mutations)
+	if guardErr != nil {
+		return nil, guardErr
+	}
+	defer release()
+
 	var res *ConsentResult
 	err := s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
 		var (
@@ -143,6 +149,9 @@ func (s *Service) Consent(ctx context.Context, key, version string, req ConsentR
 			return err
 		}
 		var consent, sigStatus, manifestHash string
+		if err := checkUninstall(ctx, tx, key); err != nil {
+			return err
+		}
 		err = tx.QueryRow(ctx, `SELECT consent_status, signature_status, manifest_hash FROM plugin_versions
 			WHERE plugin_key = $1 AND version = $2 FOR UPDATE`, key, version).Scan(&consent, &sigStatus, &manifestHash)
 		if store.IsNoRows(err) {
@@ -296,6 +305,12 @@ func (s *Service) checkGrantRights(ctx context.Context, actorID int64, ds []deci
 // Reject marks a version rejected. A plugin that was never installed and
 // has no other pending version is removed.
 func (s *Service) Reject(ctx context.Context, key, version string, actorID int64) error {
+	ctx, release, guardErr := core.BeginPluginMutation(ctx, s.d.Mutations)
+	if guardErr != nil {
+		return guardErr
+	}
+	defer release()
+
 	return s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
 		var status string
 		err := tx.QueryRow(ctx, `SELECT status FROM plugins WHERE key = $1 FOR UPDATE`, key).Scan(&status)
@@ -340,6 +355,9 @@ func (s *Service) RevokeGrant(ctx context.Context, key, permission string, actor
 		}
 		if tag.RowsAffected() == 0 {
 			return core.ErrNotFound.WithMessage("grant not found")
+		}
+		if _, err := tx.Exec(ctx, `UPDATE plugins SET row_version=row_version+1,updated_at=now() WHERE key=$1`, key); err != nil {
+			return err
 		}
 		return audit.Audit(ctx, tx, actorID, "plugin.grant.revoke", "plugin", key, map[string]any{"permission": permission})
 	})

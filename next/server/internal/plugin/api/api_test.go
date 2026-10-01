@@ -85,6 +85,14 @@ func (r rollout) Cancel(context.Context, string, int64, int64) error     { retur
 
 type nodes struct{}
 
+// Lifecycle fixtures have no launched processes; the UI node-report fake
+// below is intentionally separate and must not create uninstall targets.
+type emptyLifecycleNodes struct{ core.NodeRegistry }
+
+func (emptyLifecycleNodes) LiveNodes(context.Context) ([]core.NodeStatus, error) {
+	return []core.NodeStatus{}, nil
+}
+
 func (nodes) NodeID() string { return "node-1" }
 func (nodes) BootID() string { return "boot-1" }
 func (nodes) LiveNodes(context.Context) ([]core.NodeStatus, error) {
@@ -201,7 +209,7 @@ func newHarness(t *testing.T) (*harness, pkgtest.Key) {
 	}
 	cfg := config.PluginConfig{MaxPackageBytes: 10 << 20, MaxMemoryMB: 1024}
 	svc := install.New(install.Deps{DB: db, Trust: ts, Authz: authz{}, Permissions: noopPerms{},
-		Defaults: install.NewDefaultsApplier(noopPerms{}, nil), Rollout: rollout{db}},
+		Defaults: install.NewDefaultsApplier(noopPerms{}, nil), Rollout: rollout{db}, Nodes: emptyLifecycleNodes{}},
 		install.Options{HostVersion: "0.1.0", Plugins: cfg})
 	cipher, _ := secret.New(bytes.Repeat([]byte{7}, 32))
 	m := pkgtest.Guard("guard", "0.1.0", "sub2api")

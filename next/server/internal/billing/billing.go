@@ -29,6 +29,7 @@ type Service struct {
 	cacheTTL time.Duration
 
 	mu       sync.Mutex
+	epoch    uint64
 	prices   *priceSnapshot
 	resolved map[string]resolved // model
 	settings *settingsSnapshot
@@ -73,6 +74,7 @@ func (s *Service) Close() {
 // invalidate drops the price and settings caches.
 func (s *Service) invalidate() {
 	s.mu.Lock()
+	s.epoch++
 	s.prices = nil
 	s.settings = nil
 	s.resolved = map[string]resolved{}

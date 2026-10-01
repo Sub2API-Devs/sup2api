@@ -48,8 +48,9 @@ type Instance struct {
 	idle     chan struct{} // closed once draining and no call in flight
 	idleOnce sync.Once
 
-	settings atomic.Pointer[settings]
-	proc     atomic.Pointer[proc]
+	settings  atomic.Pointer[settings]
+	proc      atomic.Pointer[proc]
+	refreshMu sync.Mutex // serialize DB reads and Configure acknowledgements
 
 	mu        sync.Mutex
 	state     string
@@ -65,18 +66,21 @@ type Instance struct {
 
 // proc is one OS process of an instance; replaced on restart.
 type proc struct {
-	client    *plugin.Client
-	plugin    pluginv1.PluginServiceClient
-	platform  pluginv1.PlatformServiceClient
-	hook      pluginv1.HookServiceClient
-	app       pluginv1.AppServiceClient
-	http      pluginv1.HTTPServiceClient
-	sched     pluginv1.SchedulerServiceClient
-	migration pluginv1.MigrationServiceClient
-	pid       int
-	stopWatch func()
-	limits    specLimits // resource limits the process was started with
-	failures  int        // consecutive health failures
+	client     *plugin.Client
+	plugin     pluginv1.PluginServiceClient
+	platform   pluginv1.PlatformServiceClient
+	hook       pluginv1.HookServiceClient
+	app        pluginv1.AppServiceClient
+	http       pluginv1.HTTPServiceClient
+	sched      pluginv1.SchedulerServiceClient
+	migration  pluginv1.MigrationServiceClient
+	pid        int
+	stopWatch  func()
+	limits     specLimits               // resource limits the process was started with
+	failures   int                      // consecutive health failures
+	configured atomic.Pointer[settings] // last configuration acknowledged by this process
+	polls      executionScopes
+	executions onlineScopes
 }
 
 // specLimits are the resource fields of a LaunchSpec.
@@ -309,7 +313,7 @@ func (i *Instance) startProc(ctx context.Context) (_ *proc, err error) {
 	}
 
 	// Serve HostService and EgressService for this instance on the broker.
-	host := &hostServer{i: i}
+	host := &hostServer{i: i, p: p}
 	var egress pluginv1.EgressServiceServer = pluginv1.UnimplementedEgressServiceServer{}
 	if i.rt.o.Egress != nil {
 		egress = i.rt.o.Egress.ServerFor(i.pkg.Key, i.egressPolicy)
@@ -363,6 +367,7 @@ func (i *Instance) configure(ctx context.Context, p *proc, st *settings) error {
 	if errs := resp.GetErrors(); len(errs) > 0 {
 		return fmt.Errorf("Configure rejected: %s: %s", errs[0].GetField(), errs[0].GetMessage())
 	}
+	p.configured.Store(st)
 	return nil
 }
 
@@ -531,16 +536,21 @@ func (i *Instance) restart(reason string) {
 // reconfigured in place. Resource limit changes need a new process: see
 // LimitsStale (the rollout controller replaces the instance).
 func (i *Instance) Refresh(ctx context.Context) error {
+	i.refreshMu.Lock()
+	defer i.refreshMu.Unlock()
 	st, err := i.rt.loadSettings(ctx, i.pkg.Key)
 	if err != nil {
 		return err
 	}
-	if st.fingerprint == i.settings.Load().fingerprint {
-		return nil
-	}
+	// Host authorization changes (especially revocation) apply immediately;
+	// a plugin cannot delay them by failing Configure. Its acknowledgement is
+	// tracked separately so a transient RPC error is retried on the next pass.
 	i.settings.Store(st)
 	p := i.proc.Load()
 	if p == nil {
+		return nil
+	}
+	if applied := p.configured.Load(); applied != nil && applied.fingerprint == st.fingerprint {
 		return nil
 	}
 	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)

@@ -57,8 +57,9 @@ type Service struct {
 
 	dummyHash []byte
 
-	mu     sync.Mutex
-	status map[int64]statusEntry
+	mu          sync.Mutex
+	status      map[int64]statusEntry
+	statusEpoch uint64
 }
 
 type statusEntry struct {
@@ -89,12 +90,14 @@ func New(d Deps) *Service {
 
 func (s *Service) clearStatusCache() {
 	s.mu.Lock()
+	s.statusEpoch++
 	s.status = map[int64]statusEntry{}
 	s.mu.Unlock()
 }
 
 func (s *Service) forgetStatus(userID int64) {
 	s.mu.Lock()
+	s.statusEpoch++
 	delete(s.status, userID)
 	s.mu.Unlock()
 }
@@ -141,6 +144,7 @@ func (s *Service) VerifyAccessToken(ctx context.Context, token string) (int64, e
 func (s *Service) isActive(ctx context.Context, uid int64) (bool, error) {
 	s.mu.Lock()
 	e, ok := s.status[uid]
+	epoch := s.statusEpoch
 	s.mu.Unlock()
 	if ok && time.Since(e.at) < statusCacheTTL {
 		return e.active, nil
@@ -154,7 +158,9 @@ func (s *Service) isActive(ctx context.Context, uid int64) (bool, error) {
 		return false, err
 	}
 	s.mu.Lock()
-	s.status[uid] = statusEntry{active: active, at: time.Now()}
+	if epoch == s.statusEpoch {
+		s.status[uid] = statusEntry{active: active, at: time.Now()}
+	}
 	s.mu.Unlock()
 	return active, nil
 }

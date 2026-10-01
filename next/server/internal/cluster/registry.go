@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"sync"
@@ -21,18 +22,20 @@ type Pinger interface {
 
 // RegistryOptions configures a Registry. Zero values use the defaults.
 type RegistryOptions struct {
+	Managed     bool
+	CoreBootID  string
 	NodeID      string
 	BootID      string // default: random UUID
 	Addr        string
 	HostVersion string
-	Interval    time.Duration // heartbeat interval, default 5 s
-	TTL         time.Duration // liveness window, default 15 s
-	Now         func() time.Time
+	Interval    time.Duration    // heartbeat interval, default 5 s
+	TTL         time.Duration    // liveness window, default 15 s
+	Now         func() time.Time // tests only: override the shared Redis clock and local health clock
 	Logger      *slog.Logger
 }
 
 // Registry implements core.NodeRegistry. Heartbeats write node:live,
-// node:info:{boot} and node:plugins:{boot} in one pipeline.
+// node:info:{boot} and node:plugins:{boot} atomically using Redis time.
 type Registry struct {
 	rdb    redis.UniversalClient
 	pg     Pinger
@@ -77,6 +80,25 @@ func (r *Registry) TTL() time.Duration { return r.opts.TTL }
 
 func (r *Registry) now() time.Time { return r.nowFn() }
 
+var heartbeatScript = redis.NewScript(redisTimeLua + `
+local ttl = tonumber(ARGV[2])
+redis.call('ZADD',KEYS[1],now,ARGV[3])
+redis.call('ZREMRANGEBYSCORE',KEYS[1],'-inf','('..tostring(now-ttl))
+redis.call('HSET',KEYS[2],'node_id',ARGV[4],'addr',ARGV[5],'host_version',ARGV[6],
+  'started_at',ARGV[7],'last_heartbeat',tostring(now),'managed',ARGV[8],'core_boot_id',ARGV[9])
+redis.call('PEXPIRE',KEYS[2],ttl)
+if #ARGV > 9 then redis.call('HSET',KEYS[3],unpack(ARGV,10)) end
+redis.call('PEXPIRE',KEYS[3],ttl)
+return 1`)
+
+var liveNodesScript = redis.NewScript(redisTimeLua + `
+return redis.call('ZRANGEBYSCORE',KEYS[1],now-tonumber(ARGV[2]),'+inf','WITHSCORES')`)
+
+var isAliveScript = redis.NewScript(redisTimeLua + `
+local score=redis.call('ZSCORE',KEYS[1],ARGV[3])
+if score and tonumber(score)>=now-tonumber(ARGV[2]) then return 1 end
+return 0`)
+
 // Run heartbeats every interval until ctx is done.
 func (r *Registry) Run(ctx context.Context) {
 	t := time.NewTicker(r.opts.Interval)
@@ -105,7 +127,6 @@ func (r *Registry) Heartbeat(ctx context.Context) error {
 			r.log.Warn("cluster pg ping failed", "err", err)
 		}
 	}
-	now := r.now()
 	boot := r.opts.BootID
 	ttl := r.opts.TTL
 	infoKey := keyNodeInfoPrefix + boot
@@ -118,23 +139,9 @@ func (r *Registry) Heartbeat(ctx context.Context) error {
 	}
 	r.mu.Unlock()
 
-	_, err := r.rdb.Pipelined(ctx, func(p redis.Pipeliner) error {
-		p.ZAdd(ctx, keyNodeLive, redis.Z{Score: float64(now.UnixMilli()), Member: boot})
-		p.ZRemRangeByScore(ctx, keyNodeLive, "-inf", "("+strconv.FormatInt(now.Add(-ttl).UnixMilli(), 10))
-		p.HSet(ctx, infoKey,
-			"node_id", r.opts.NodeID,
-			"addr", r.opts.Addr,
-			"host_version", r.opts.HostVersion,
-			"started_at", r.start.UTC().Format(time.RFC3339Nano),
-			"last_heartbeat", strconv.FormatInt(now.UnixMilli(), 10),
-		)
-		p.PExpire(ctx, infoKey, ttl)
-		if len(plugins) > 0 {
-			p.HSet(ctx, plugKey, plugins...)
-		}
-		p.PExpire(ctx, plugKey, ttl)
-		return nil
-	})
+	args := []any{sharedClockOverride(r.opts.Now), ttl.Milliseconds(), boot, r.opts.NodeID, r.opts.Addr, r.opts.HostVersion, r.start.UTC().Format(time.RFC3339Nano), strconv.FormatBool(r.opts.Managed), r.opts.CoreBootID}
+	args = append(args, plugins...)
+	_, err := heartbeatScript.Run(ctx, r.rdb, []string{keyNodeLive, infoKey, plugKey}, args...).Result()
 	if err != nil {
 		return err
 	}
@@ -154,12 +161,17 @@ func (r *Registry) Leave(ctx context.Context) {
 
 // LiveNodes returns every node with a heartbeat inside the TTL window.
 func (r *Registry) LiveNodes(ctx context.Context) ([]core.NodeStatus, error) {
-	cutoff := r.now().Add(-r.opts.TTL).UnixMilli()
-	zs, err := r.rdb.ZRangeByScoreWithScores(ctx, keyNodeLive, &redis.ZRangeBy{
-		Min: strconv.FormatInt(cutoff, 10), Max: "+inf",
-	}).Result()
+	values, err := liveNodesScript.Run(ctx, r.rdb, []string{keyNodeLive}, sharedClockOverride(r.opts.Now), r.opts.TTL.Milliseconds()).Slice()
 	if err != nil {
 		return nil, err
+	}
+	zs := make([]redis.Z, 0, len(values)/2)
+	for i := 0; i+1 < len(values); i += 2 {
+		score, err := strconv.ParseFloat(fmt.Sprint(values[i+1]), 64)
+		if err != nil {
+			return nil, err
+		}
+		zs = append(zs, redis.Z{Member: fmt.Sprint(values[i]), Score: score})
 	}
 	r.markRedisOK()
 	if len(zs) == 0 {
@@ -206,16 +218,12 @@ func (r *Registry) LiveNodes(ctx context.Context) ([]core.NodeStatus, error) {
 
 // IsAlive reports whether bootID heartbeated within the TTL window.
 func (r *Registry) IsAlive(ctx context.Context, bootID string) (bool, error) {
-	score, err := r.rdb.ZScore(ctx, keyNodeLive, bootID).Result()
-	if err == redis.Nil {
-		r.markRedisOK()
-		return false, nil
-	}
+	n, err := isAliveScript.Run(ctx, r.rdb, []string{keyNodeLive}, sharedClockOverride(r.opts.Now), r.opts.TTL.Milliseconds(), bootID).Int()
 	if err != nil {
 		return false, err
 	}
 	r.markRedisOK()
-	return int64(score) >= r.now().Add(-r.opts.TTL).UnixMilli(), nil
+	return n == 1, nil
 }
 
 // ReportPlugin publishes this node's state for one plugin. An empty

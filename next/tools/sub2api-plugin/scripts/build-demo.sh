@@ -12,7 +12,7 @@
 #   <outdir>/<name>-<version>.s2plugin for every next/plugins/<name> that has a
 #     manifest.json -- the list is DISCOVERED, not enumerated here, so a new
 #     plugin lands in the market with no change to this script,
-#   <outdir>/anthropic-<next>.s2plugin  (testdata/v0.2.0 overlay, upgrade test),
+#   <outdir>/anthropic-0.3.0-test.s2plugin  (upgrade test fixture),
 #   <outdir>/index.json, index.json.sig,
 #   <outdir>/test/guard-<version>-test.s2plugin  (guardtest build, not indexed)
 #
@@ -118,7 +118,7 @@ done
 # Extra packages the e2e suite needs. These are overlays of a plugin already
 # packaged above (a second version, a differently tagged build), not plugins of
 # their own, so they stay explicit.
-package anthropic anthropic-v020 "$OUT" testdata/v0.2.0
+package anthropic anthropic-upgrade "$OUT" testdata/v0.3.0-test
 package guard guard-test "$OUT/test" testdata/guardtest guardtest
 
 "$BIN" index --dir "$OUT" --key "$KEY"

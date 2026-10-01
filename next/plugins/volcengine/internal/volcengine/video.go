@@ -1,29 +1,28 @@
 package volcengine
 
-// Ark video (Seedance): the async task line built on the A/B/C/D core
-// extensions (docs/PLUGIN-VOLCENGINE-ARK.md §4.3/§5, CONTRACTS §25). Two
-// gateway endpoints and three optional PlatformService methods:
+// Ark video (Seedance) uses the core's managed async tasks. The host durably
+// binds owner/account/model and returns its own public task ID before success.
+// A single claimed core poll supplies both billing and the shared query snapshot.
 //
 //	POST /ark/v3/contents/generations/tasks        video_submit (usageSource plugin)
-//	GET  /ark/v3/contents/generations/tasks/:id    video_query  (modelSource plugin, billing free)
+//	GET  /ark/v3/contents/generations/tasks/:id    video_query  (core snapshot, billing free)
 //
-//	ExtractUsage           reads the task id out of the submit response,
-//	                       records it and PRE-CHARGES an estimate (Reservation)
-//	ResolveModel           the query endpoint has no model in the request, so
-//	                       it looks the task_id up here (hot path)
-//	Build/ParseReconcile   the core-driven checking loop: the core sends the
-//	                       request, the plugin only describes it and reads it
+//	ParseTaskSubmission    parses the upstream ID, initial snapshot and estimate
+//	ExtractUsage           computes that estimate without storing task identity
+//	ResolveModel           retained only for old manifest compatibility
+//	Monitor                observes once, then reports progress through the SDK
+//	Poll                   one query through the core's scoped execution API,
+//	                       shared with the legacy return-based poll interface
 //
-// WHO SENDS WHAT. Nothing on this line is a socket the plugin opens. The
-// submit and the poll are ordinary gateway proxy traffic - the core forwards
-// them, this plugin only rewrites the URL in BuildUpstreamRequest. The
-// reconcile poll is also sent by the core (through the account's proxy and
-// SSRF guard); BuildReconcileRequest only DESCRIBES it. So unlike the asset
-// library (arkapi.go, which really dials out), the video line never needs the
-// plugin's own network - only its database, for the task ledger.
+// The submit is gateway proxy traffic; client queries read the host's snapshot.
+// The core schedules Monitor and binds its execution context to the original
+// account, proxy and deadline. Its Poll helper requests exactly one HTTP exchange
+// through that context and never opens its own socket or retries. Response
+// parsing needs no plugin database; the old ledger is retained only as history.
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/url"
 	"strings"
@@ -35,6 +34,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 )
 
 // Protocol ids of the two video endpoints declared in manifest.json.
@@ -47,7 +47,7 @@ const (
 	ProtocolVideoSubmit = "volcengine.video_submit"
 	// ProtocolVideoQuery is the client's poll of one task, GET
 	// /ark/v3/contents/generations/tasks/:task_id. The request has no model,
-	// so ResolveModel looks it up (modelSource "plugin"); the endpoint is
+	// so the core looks it up from the managed task; the endpoint is
 	// billing "free" because charging happens only in the reconcile loop, no
 	// matter how many times a client polls.
 	ProtocolVideoQuery = "volcengine.video_query"
@@ -66,13 +66,6 @@ const TaskIDParam = "task_id"
 // ("/doubao/api/v3") while serving text at the root, and the first real
 // upstream this plugin was verified against does exactly that.
 func videoTasksPath(prefix string) string { return prefix + "/contents/generations/tasks" }
-
-// Task states mirrored into video_tasks.state.
-const (
-	TaskRunning = "running"
-	TaskDone    = "done"
-	TaskFailed  = "failed"
-)
 
 // Resolution tiers: the vocabulary of the "resolution" fact declared on the
 // video_submit endpoint, and the tiers the token estimate understands.
@@ -118,39 +111,14 @@ const (
 
 // ---------------------------------------------------------------- video_tasks store
 
-// VideoTask is the part of a video_tasks row the plugin reads back.
-//
-// est_tokens is NOT in here, and that is the point of the SETTLED_ESTIMATE
-// change: the column is still written (see insertVideoTask) as the record of
-// what a task was pre-charged, but nothing in the plugin reads it any more.
-// The core holds the reservation and answers for it.
+// VideoTask reads historical plugin rows for old manifest compatibility.
+// New tasks and reservations live exclusively in the host. This legacy table
+// is not an authorization source for the host's managed or imported tasks.
 type VideoTask struct {
-	Model string
-	State string
-}
-
-// insertVideoTask records a submitted task. task_id is the upstream id and
-// the primary key; a resubmit that somehow yields the same id updates the row
-// instead of duplicating it, so there is exactly one row per upstream task.
-//
-// est_tokens is still written even though nothing reads it. It used to be the
-// plugin's own fallback for "succeeded with no usage", which the core now
-// answers itself (SETTLED_ESTIMATE); what is left is a record of the figure
-// this task was pre-charged with, which is the first thing anyone asks for
-// when a charge is questioned - and after usageRequestFields that figure is
-// derived from what the client really requested, so it is worth keeping.
-// Leaving the column in place but writing nothing would be worse than either
-// option: it is NOT NULL DEFAULT 0, so an unwritten row claims a zero
-// estimate rather than an unknown one.
-func insertVideoTask(ctx context.Context, db *pgxpool.Pool, taskID string, accountID, userID int64, model string, est int64) error {
-	_, err := db.Exec(ctx, `
-		INSERT INTO video_tasks (task_id, account_id, model, user_id, state, est_tokens)
-		VALUES ($1, $2, $3, $4, 'running', $5)
-		ON CONFLICT (task_id) DO UPDATE
-		   SET account_id = excluded.account_id, model = excluded.model,
-		       user_id = excluded.user_id, est_tokens = excluded.est_tokens, updated_at = now()`,
-		taskID, accountID, model, userID, est)
-	return err
+	Model     string
+	State     string
+	UserID    int64
+	AccountID int64
 }
 
 // lookupVideoTask reads one task by its upstream id. A missing row is
@@ -158,8 +126,8 @@ func insertVideoTask(ctx context.Context, db *pgxpool.Pool, taskID string, accou
 // an empty model, i.e. a 400).
 func lookupVideoTask(ctx context.Context, db *pgxpool.Pool, taskID string) (*VideoTask, error) {
 	var t VideoTask
-	err := db.QueryRow(ctx, `SELECT model, state FROM video_tasks WHERE task_id = $1`, taskID).
-		Scan(&t.Model, &t.State)
+	err := db.QueryRow(ctx, `SELECT model, state, user_id, account_id FROM video_tasks WHERE task_id = $1`, taskID).
+		Scan(&t.Model, &t.State, &t.UserID, &t.AccountID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -167,13 +135,6 @@ func lookupVideoTask(ctx context.Context, db *pgxpool.Pool, taskID string) (*Vid
 		return nil, err
 	}
 	return &t, nil
-}
-
-// setVideoTaskState records the last reconciliation result. Best-effort: the
-// core settles money against usage_logs, not this column.
-func setVideoTaskState(ctx context.Context, db *pgxpool.Pool, taskID, state string) error {
-	_, err := db.Exec(ctx, `UPDATE video_tasks SET state = $2, updated_at = now() WHERE task_id = $1`, taskID, state)
-	return err
 }
 
 // ---------------------------------------------------------------- upstream path
@@ -208,25 +169,13 @@ func taskIDOf(meta *pluginv1.RequestMeta) string {
 
 // ---------------------------------------------------------------- ResolveModel
 
-// ResolveModel implements pluginsdk.ModelResolver for the video_query
-// endpoint, whose request carries no model at all. The task id in the URL is
-// looked up in video_tasks and the model the submit billed as is returned, so
-// the core evaluates the poll against the same model as the submit.
-//
-// A task_id that is not in the ledger returns an EMPTY model, which the core
-// turns into 400 "model is required". That is deliberate, and the alternative
-// - falling back to ordinary scheduling and letting Ark answer - was
-// rejected: a poll the plugin cannot attribute to a model cannot be checked
-// against the client's group allowlist, and an unknown task 404s upstream
-// anyway. A clean 400 beats a scheduled request that dies upstream. The row
-// is written at submit and never deleted, so the ways to miss are: a task
-// from another installation, a submit whose ledger write failed, or a
-// database that is down - each a 400, none a silent pass.
+// ResolveModel remains for callers holding an old endpoint manifest. The
+// current manifest routes queries through the host's task owner/account checks
+// and never uses this method. Missing and foreign legacy rows are identical.
 func (p *Plugin) ResolveModel(ctx context.Context, in *pluginv1.ResolveModelRequest) (*pluginv1.ResolveModelResponse, error) {
 	if in.GetMeta().GetProtocol() != ProtocolVideoQuery {
-		// video_query is the only endpoint declaring modelSource "plugin";
-		// another protocol here is a routing mismatch, not a model the plugin
-		// may invent. Empty model -> 400.
+		// Only historical video queries used plugin model resolution. Another
+		// protocol here is a routing mismatch, never a model to invent.
 		return &pluginv1.ResolveModelResponse{}, nil
 	}
 	id := taskIDOf(in.GetMeta())
@@ -244,7 +193,7 @@ func (p *Plugin) ResolveModel(ctx context.Context, in *pluginv1.ResolveModelRequ
 		p.log.Warn("volcengine: ResolveModel lookup failed", "task_id", id, "error", err.Error())
 		return &pluginv1.ResolveModelResponse{}, nil
 	}
-	if t == nil || t.Model == "" {
+	if t == nil || t.Model == "" || in.GetMeta().GetUserId() <= 0 || t.UserID != in.GetMeta().GetUserId() {
 		return &pluginv1.ResolveModelResponse{}, nil
 	}
 	// The video poll is a plain JSON GET; it never streams.
@@ -259,9 +208,63 @@ func (p *Plugin) ResolveModel(ctx context.Context, in *pluginv1.ResolveModelRequ
 // submit.
 var taskIDPaths = []string{"id", "task_id", "data.id", "result.id"}
 
+var _ pluginsdk.TaskSubmissionParser = (*Plugin)(nil)
+
+// ParseTaskSubmission is synchronous on the managed task path. It describes
+// the upstream task and initial query response; only the host persists owner,
+// original account, task ID and reservation before returning to the client.
+func (p *Plugin) ParseTaskSubmission(ctx context.Context, in *pluginv1.ExtractUsageRequest) (*pluginv1.TaskSubmission, error) {
+	if in.GetMeta().GetProtocol() != ProtocolVideoSubmit {
+		return nil, status.Error(codes.Unimplemented, "only video submissions create tasks")
+	}
+	if in.GetTruncated() || in.GetStatus() < 200 || in.GetStatus() >= 300 || !gjson.ValidBytes(in.GetBody()) || !gjson.ParseBytes(in.GetBody()).IsObject() {
+		return nil, status.Error(codes.DataLoss, "video submission did not return a complete successful JSON object")
+	}
+	usage, err := p.ExtractUsage(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	ref := usage.GetReserve().GetRefId()
+	if ref == "" {
+		return nil, status.Error(codes.DataLoss, "video submission did not return a task id")
+	}
+	snapshot, err := videoSnapshot(in.GetBody(), ref, in.GetMeta().GetModel(), true)
+	if err != nil {
+		return nil, status.Error(codes.DataLoss, "invalid video submission snapshot")
+	}
+	return &pluginv1.TaskSubmission{UpstreamRefId: ref, SnapshotJson: snapshot, Usage: usage,
+		NextCheckAfterSec: firstCheckSec, DeadlineSec: DeadlineSec}, nil
+}
+
+// Preserve the complete upstream payload (including result URLs and errors),
+// adding only query fields absent from submit/relay responses. The core rewrites
+// the upstream IDs to its opaque public task ID before serving the snapshot.
+func videoSnapshot(body []byte, ref, model string, initial bool) (string, error) {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(body, &obj); err != nil {
+		return "", err
+	}
+	if obj == nil {
+		return "", errors.New("task response must be an object")
+	}
+	if len(obj["id"]) == 0 {
+		obj["id"], _ = json.Marshal(ref)
+	}
+	if initial {
+		if len(obj["status"]) == 0 {
+			obj["status"] = json.RawMessage(`"queued"`)
+		}
+		if len(obj["model"]) == 0 && model != "" {
+			obj["model"], _ = json.Marshal(model)
+		}
+	}
+	out, err := json.Marshal(obj)
+	return string(out), err
+}
+
 // ExtractUsage implements pluginsdk.UsageExtractor for the video_submit
 // endpoint. The submit response is {"id": "..."} and carries nothing
-// billable, so this reads the task id, records the task and returns a
+// billable, so this reads the task id and returns a
 // Reservation: the core pre-charges the estimate now and reconciles the real
 // usage later.
 //
@@ -276,8 +279,9 @@ func (p *Plugin) ExtractUsage(ctx context.Context, in *pluginv1.ExtractUsageRequ
 	}
 	taskID := ""
 	for _, path := range taskIDPaths {
-		if v := strings.TrimSpace(gjson.GetBytes(in.GetBody(), path).String()); v != "" {
-			taskID = v
+		v := gjson.GetBytes(in.GetBody(), path)
+		if v.Type == gjson.String && strings.TrimSpace(v.Str) != "" {
+			taskID = strings.TrimSpace(v.Str)
 			break
 		}
 	}
@@ -308,18 +312,6 @@ func (p *Plugin) ExtractUsage(ctx context.Context, in *pluginv1.ExtractUsageRequ
 	tokens := &pluginv1.UsageTokens{OutputTokens: est.Tokens}
 	facts := map[string]string{FactResolution: est.Resolution}
 
-	// Record the task so the poll can resolve its model. A write failure does
-	// NOT stop the reservation: the core reconciles from pending_settlements
-	// and the account, never from this table, so revenue is protected either
-	// way and only the client's own polling would degrade to a 400.
-	if db, err := p.pool(ctx); err != nil {
-		p.log.Error("volcengine: cannot record a video task (reserving anyway)",
-			"task_id", taskID, "error", err.Error())
-	} else if err := insertVideoTask(ctx, db, taskID, in.GetAccount().GetId(), in.GetMeta().GetUserId(), model, est.Tokens); err != nil {
-		p.log.Error("volcengine: cannot record a video task (reserving anyway)",
-			"task_id", taskID, "error", err.Error())
-	}
-
 	return &pluginv1.UsageReport{
 		// The report carries the estimate TOO, not only the reservation, and
 		// that is not redundancy. When the core cannot use a ref_id it drops
@@ -346,16 +338,35 @@ func (p *Plugin) ExtractUsage(ctx context.Context, in *pluginv1.ExtractUsageRequ
 
 // ---------------------------------------------------------------- reconcile
 
-// BuildReconcileRequest implements pluginsdk.Reconciler: it DESCRIBES the
-// poll, GET {base}{video_api_prefix}/contents/generations/tasks/{ref_id}. The
-// core sends it, through the account's proxy and behind its SSRF guard, with
-// the account's credentials - present here because the video platform and the
-// apikey account type belong to the same plugin (CONTRACTS §25.4).
+// Poll implements pluginsdk.Poller. The host owns scheduling and the scoped
+// execution context; the plugin performs one query and interprets the result.
+// An execution failure is returned to the host, never retried in this process.
+func (p *Plugin) Poll(ctx context.Context, in *pluginv1.PollRequest) (*pluginv1.ReconcileResult, error) {
+	req, err := p.BuildReconcileRequest(ctx, &pluginv1.BuildReconcileRequestRequest{
+		Entry: in.GetEntry(), Account: in.GetAccount(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	resp, err := pluginsdk.ExecuteHTTP(ctx, &pluginv1.ExecutionHTTPRequest{
+		Method: req.GetMethod(), Url: req.GetUrl(), Headers: req.GetHeaders(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return p.ParseReconcileResponse(ctx, &pluginv1.ParseReconcileResponseRequest{
+		Entry: in.GetEntry(), Status: resp.GetStatus(), Headers: resp.GetHeaders(),
+		Body: resp.GetBody(), TransportError: resp.GetTransportError(), Truncated: resp.GetTruncated(),
+	})
+}
+
+// BuildReconcileRequest retains the legacy pluginsdk.Reconciler interface and
+// is the request builder for Poll. It describes GET
+// {base}{video_api_prefix}/contents/generations/tasks/{ref_id} using the original
+// account credentials supplied by the host. New hosts invoke Poll once instead
+// of splitting request construction and response parsing into separate RPCs.
 //
-// It must use the SAME prefix the submit did. A poll built against a different
-// path answers 404 for every entry, which the core reads as "still pending"
-// until the deadline and then keeps the estimate - an account charged at its
-// pre-charge for work that really finished.
+// It must use the SAME prefix as submission; a wrong path can report not found.
 func (p *Plugin) BuildReconcileRequest(_ context.Context, in *pluginv1.BuildReconcileRequestRequest) (*pluginv1.BuildReconcileRequestResponse, error) {
 	ref := strings.TrimSpace(in.GetEntry().GetRefId())
 	if ref == "" {
@@ -379,36 +390,35 @@ func (p *Plugin) BuildReconcileRequest(_ context.Context, in *pluginv1.BuildReco
 	}, nil
 }
 
-// ParseReconcileResponse implements pluginsdk.Reconciler: it reads Ark's task
-// status out of the poll answer and states what the core should do with the
-// pre-charged row.
+// ParseReconcileResponse retains the legacy pluginsdk.Reconciler interface and
+// is Poll's pure response parser. It reads Ark's task status and states what
+// the core should do with the pre-charged row.
 //
 //	queued / running           -> PENDING, ask again
 //	succeeded + a usage figure  -> SETTLED, tokens = usage.completion_tokens
 //	succeeded, no usage figure  -> SETTLED_ESTIMATE, the estimate is the charge
 //	failed / expired/cancelled -> FAILED, reason from error.message
-//	transport error / non-2xx  -> PENDING (a blip is not a verdict; the
-//	                              deadline then keeps the estimate, which is
-//	                              the right end for work the upstream ran)
-//	unknown / empty            -> PENDING (the zero value: ask again, never
-//	                              settle for nothing)
+//	404 / 410                 -> NOT_FOUND
+//	query / parse error       -> POLL_FAILED; host owns retries and the cutoff
 func (p *Plugin) ParseReconcileResponse(ctx context.Context, in *pluginv1.ParseReconcileResponseRequest) (*pluginv1.ReconcileResult, error) {
 	ref := strings.TrimSpace(in.GetEntry().GetRefId())
 	pending := &pluginv1.ReconcileResult{State: pluginv1.ReconcileResult_PENDING, NextCheckAfterSec: runningCheckSec}
-	// Neither a transport error nor a non-2xx answer is a verdict on the
-	// task: keep asking until the deadline, which keeps the estimate rather
-	// than refunding a task the upstream really ran.
-	if in.GetTransportError() != "" || in.GetStatus() < 200 || in.GetStatus() >= 300 {
-		return pending, nil
+	if result := pluginsdk.ClassifyPollResponse(in.GetStatus(), in.GetTransportError(), in.GetTruncated()); result != nil {
+		return result, nil
 	}
 	body := in.GetBody()
+	if !gjson.ValidBytes(body) || !gjson.ParseBytes(body).IsObject() {
+		return pluginsdk.PollFailure("invalid task query JSON"), nil
+	}
+	snapshot, err := videoSnapshot(body, ref, in.GetEntry().GetModel(), false)
+	if err != nil {
+		return pluginsdk.PollFailure("invalid task query snapshot"), nil
+	}
+	pending.TaskSnapshotJson = snapshot
 	switch st := strings.ToLower(strings.TrimSpace(gjson.GetBytes(body, "status").String())); st {
-	case "queued", "pending", "running", "processing", "":
-		// Empty included: a body this plugin cannot read yet means "ask
-		// again", never "settle for nothing".
+	case "queued", "pending", "running", "processing":
 		return pending, nil
 	case "succeeded":
-		p.markState(ctx, ref, TaskDone)
 		tokens := succeededTokens(body)
 		if tokens <= 0 {
 			// Ark confirmed the work and reported no usage for it. Answering
@@ -425,27 +435,28 @@ func (p *Plugin) ParseReconcileResponse(ctx context.Context, in *pluginv1.ParseR
 			p.log.Warn("volcengine: succeeded video task reported no usage, settling on the reserved estimate",
 				"task_id", ref)
 			return &pluginv1.ReconcileResult{
-				State:  pluginv1.ReconcileResult_SETTLED_ESTIMATE,
-				Reason: "Ark reported the task as succeeded without a usage object",
+				State:            pluginv1.ReconcileResult_SETTLED_ESTIMATE,
+				Reason:           "Ark reported the task as succeeded without a usage object",
+				TaskSnapshotJson: snapshot,
 			}, nil
 		}
 		return &pluginv1.ReconcileResult{
-			State:  pluginv1.ReconcileResult_SETTLED,
-			Tokens: &pluginv1.UsageTokens{OutputTokens: tokens},
-			Facts:  succeededFacts(body),
+			State:            pluginv1.ReconcileResult_SETTLED,
+			Tokens:           &pluginv1.UsageTokens{OutputTokens: tokens},
+			Facts:            succeededFacts(body),
+			TaskSnapshotJson: snapshot,
 		}, nil
 	case "failed", "expired", "cancelled", "canceled":
-		p.markState(ctx, ref, TaskFailed)
 		reason := strings.TrimSpace(gjson.GetBytes(body, "error.message").String())
 		if reason == "" {
 			reason = st
 		}
-		return &pluginv1.ReconcileResult{State: pluginv1.ReconcileResult_FAILED, Reason: reason}, nil
+		return &pluginv1.ReconcileResult{State: pluginv1.ReconcileResult_FAILED, Reason: reason, TaskSnapshotJson: snapshot}, nil
 	default:
 		// An unrecognised status is not guessed into "done" (which settles)
-		// or "failed" (which refunds). Ask again; the deadline decides.
+		// or "failed" (which refunds). The host counts this query failure.
 		p.log.Warn("volcengine: unrecognised video task status", "task_id", ref, "status", st)
-		return pending, nil
+		return pluginsdk.PollFailure("unrecognized task status"), nil
 	}
 }
 
@@ -454,7 +465,7 @@ func (p *Plugin) ParseReconcileResponse(ctx context.Context, in *pluginv1.ParseR
 // when Ark reports a succeeded task with NO usage at all, which the caller
 // turns into SETTLED_ESTIMATE rather than into a settle at zero.
 //
-// It no longer reads the plugin's own est_tokens column: that column was this
+// It does not read the historical plugin est_tokens column: that column was this
 // plugin's workaround for a core that could not express "keep the estimate",
 // and reading it here meant the plugin restating a figure the core already
 // held on the reserved row - two copies of one number, with the plugin's copy
@@ -482,20 +493,6 @@ func succeededFacts(body []byte) map[string]string {
 		}
 	}
 	return nil
-}
-
-// markState records the last reconciliation result in the task ledger,
-// best-effort and outside the caller's cancellation: the core settles against
-// usage_logs, so a failed write here is logged, never returned.
-func (p *Plugin) markState(ctx context.Context, taskID, state string) {
-	ctx = context.WithoutCancel(ctx)
-	db, err := p.pool(ctx)
-	if err != nil {
-		return
-	}
-	if err := setVideoTaskState(ctx, db, taskID, state); err != nil {
-		p.log.Warn("volcengine: cannot update a video task state", "task_id", taskID, "state", state, "error", err.Error())
-	}
 }
 
 // pool returns the plugin's database pool.

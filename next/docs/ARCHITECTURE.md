@@ -178,6 +178,7 @@ flowchart LR
     ledger["余额 · 账本（唯一依据）"]
     outbox["events（outbox）· 投递游标"]
     data["用户 · 权限 · 分组 · 账号 · 使用记录"]
+    tasks["异步任务 · 提交回执 · 共享进度<br/>执行租约与令牌"]
   end
   n1["node-1"] & n2["node-2"] -- "心跳 5s" --> live
   n1 & n2 -- "上报插件实际状态" --> info
@@ -188,10 +189,11 @@ flowchart LR
 | 机制 | 说明 |
 |---|---|
 | 节点身份 | `node_id`（环境变量 `NODE_ID`，其次主机名）+ `boot_id`（每次启动生成） |
-| 存活判断 | 每 5 秒心跳，15 秒没有心跳视为下线 |
+| 存活判断 | 每 5 秒心跳，15 秒没有心跳视为下线；共享存活分数及筛选统一使用 Redis 时间，避免节点钟差误删活跃节点 |
 | 状态同步 | 状态变更通过 Redis 广播，节点收到后立即对账；另有每 5 秒一次对账兜底 |
 | 自我隔离 | 连续 15 秒无法和 Redis/PG 通信的节点，停止接收依赖插件的请求（返回 503） |
-| 并发槽位 | 槽位成员带 `boot_id` 前缀；节点启动时只清理已下线节点的槽位 |
+| 并发槽位 | 成员为 `boot_id:request_id:lease_id`；共享到期判断使用 Redis 时间，只续期现存未过期成员。租约丢失即取消请求，本地有效期扣除通信耗时；持有表按完整槽键和成员区分用户槽、账号槽和重试 |
+| 异步任务 | 核心登记用户归属、原账号和初始快照，按 PG 执行令牌与租约领取轮询；快照和财务结果同事务提交。客户端查询任一节点均读取共享快照，详见 CONTRACTS §28 |
 | 单节点执行 | 插件任务、事件投递、对账、保留清理、内置插件安装用 Redis 锁（redsync，`core.Locker`）保证同一时刻只在一个节点执行；**没有 PG 兜底**，连不上 Redis 的节点不拿锁。锁不带 fencing token，不可幂等的工作另有数据库层保护（CONTRACTS §27）。插件自己需要按需互斥时，凭宿主权限 `lock` 经 `HostService.LockAcquire/LockRenew/LockRelease` 使用同一套锁，key 由宿主强制加上 `plugin:{plugin_key}:` 前缀，owner token 由插件生成（CONTRACTS §27.3）。核心迁移、插件 schema 迁移、IAM 引导用的是各自独立的 PG advisory lock，与 Redis 锁无关 |
 
 ---
@@ -204,7 +206,7 @@ flowchart LR
 | `apikey` / `group` | API Key；分组、账号归属、倍率、模型白名单、可用用户 | 核心 |
 | `proxy` / `account` | 代理；通用账号表、凭证加密、状态与冷却 | 核心 |
 | `billing` | 模型价格、余额、账本、余额检查、结算 | 核心 |
-| `usage` | 使用记录的异步写入与查询 | 核心 |
+| `usage` | 使用记录、幂等结算、核心托管异步任务的身份/轮询/共享快照（CONTRACTS §28） | 核心 |
 | `gateway` | 网关流水线（协议无关）、动态端点路由、调度、粘性会话、并发、转发、失败切换、钩子执行、用量提取 | 核心 |
 | `event` / `job` | 事件 outbox 与投递、任务调度 | 核心 |
 | `cluster` | 节点注册、心跳、广播、分布式锁 | 核心 |
@@ -1126,6 +1128,8 @@ sequenceDiagram
 - 权限：订阅需要 `events` 权限，scope 限定可订阅的事件类型
 
 ### 8.2 后台任务
+
+上游异步生成任务使用 `endpoint.task` + `Executor` + `TaskSubmissionParser` + `TaskMonitor`（CONTRACTS §28、§31）。插件通过 SDK 发起核心代理请求，再调用 ReserveAndWatch 原子记录预扣与监控；核心按任务认领并回调一次 Monitor，插件通过 ExecuteHTTP 查询、ReportTaskProgress 上报。核心固定原账号，事务性保存共享快照并结算。Poller 和旧 Reconciler 保留兼容。下表的 `jobs[]` 用于插件普通定时工作，不用于重复实现上游任务轮询；同一触发点去重也不等于不同触发点和手动执行互斥。两类后台工作共用核心执行器，保留各自触发和持久状态规则；SDK 的 `Scheduler` 只是在线请求的粘性/账号排序策略扩展，不创建后台调度器。
 
 | 项目 | 设计 |
 |---|---|

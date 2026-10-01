@@ -5,12 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
 	"strconv"
-	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -19,37 +15,20 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/background"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/netguard"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/usagerules"
 )
 
 // The reconcile loop closes pre-charged usage rows (CONTRACTS §25.4).
 //
-// It is GENERIC. It knows nothing about tasks, videos or jobs: it knows that
-// pending_settlements holds entries, that some of them are due, and that the
-// plugin named on each one can describe a request that answers "is it done
-// yet?". Everything domain-specific is on the plugin's side of two rpcs.
-//
-// Three properties are the design and must survive editing:
-//
-//  1. THE CORE SENDS THE REQUEST. The plugin only builds it and parses the
-//     answer. That is what lets the core hand it the account with its
-//     credentials (exactly as BuildUpstreamRequest already does) while the
-//     plugin needs no "net" permission, no way to enumerate accounts and no
-//     scheduler of its own. Collapsing the two rpcs into one "go and check"
-//     call would require opening all three.
-//
-//  2. ONE NODE AT A TIME, AND NEVER FOREVER. A cluster lock keeps the sweep
-//     to one node; on top of it every claimed entry is LEASED (its
-//     next_check_at is pushed forward before any plugin is called), so a node
-//     that dies mid-sweep costs one lease, not a stuck entry. The sweep has a
-//     hard budget and the entries of different plugins are interleaved across
-//     a small worker pool, so one plugin that answers slowly delays its own
-//     entries and not the loop.
-//
-//  3. GIVING UP DOES NOT REFUND, AND MUST NOT WRITE 'failed'. See abandon().
-
+// Plugins supply upstream facts through Monitor (or the compatible Poll /
+// Build+Parse paths). The host owns account admission, network policy,
+// observation fencing, pricing and all financial transactions.
+// A renewable cluster lock coordinates sweeps, PG claims fence per-task
+// outcomes, and the shared background executor bounds work and shutdown.
+// Giving up keeps the estimate and must never requeue a reserved debit as
+// ordinary failed billing; see abandon().
 const (
 	// reconcileLockKey is the cluster lock the sweep holds.
 	reconcileLockKey = "usage:reconcile"
@@ -71,8 +50,7 @@ const (
 	// reconcileSweepBudget bounds one sweep. Whatever is not reached stays
 	// due (its lease lapses) and is picked up next time, in order.
 	reconcileSweepBudget = 2 * time.Minute
-	// reconcileEntryBudget bounds one entry end to end: two plugin calls and
-	// one upstream request.
+	// reconcileEntryBudget bounds one observation including network and accounting.
 	reconcileEntryBudget = 30 * time.Second
 	// reconcileHTTPTimeout bounds the upstream request itself.
 	reconcileHTTPTimeout = 20 * time.Second
@@ -84,6 +62,8 @@ const (
 // ReconcileDeps are what the loop needs beyond the settler itself. The loop
 // does not run until StartReconcile is called with all of them.
 type ReconcileDeps struct {
+	// Executor is shared with plugin jobs; the reconcile group keeps its own cap.
+	Executor *background.Executor
 	// Locker keeps the sweep to one node (cluster.Locker).
 	Locker core.Locker
 	// Registry resolves the plugin named on an entry to its PlatformService.
@@ -95,6 +75,8 @@ type ReconcileDeps struct {
 	// Proxies gives the account's HTTP client, so a reconcile leaves the
 	// deployment by the same route the request did.
 	Proxies core.ProxyDirectory
+	Slots   core.Slots
+	Limiter core.AccountLimiter
 	// AllowPrivateUpstream mirrors the gateway's setting for the SSRF guard.
 	AllowPrivateUpstream bool
 	NodeID               string
@@ -105,7 +87,8 @@ type ReconcileDeps struct {
 
 type reconciler struct {
 	ReconcileDeps
-	log *slog.Logger
+	log   *slog.Logger
+	group *background.Group
 }
 
 // StartReconcile starts the reconcile loop, which runs until Stop. It is a
@@ -121,15 +104,20 @@ func (s *Service) StartReconcile(ctx context.Context, d ReconcileDeps) {
 	if d.Interval <= 0 {
 		d.Interval = reconcileInterval
 	}
+	if d.Executor == nil {
+		d.Executor = background.New(8)
+	}
 	s.mu.Lock()
-	if s.rec != nil {
+	if s.rec != nil || s.stopping {
 		s.mu.Unlock()
 		return
 	}
 	s.rec = &reconciler{ReconcileDeps: d, log: d.Logger.With("component", "reconcile", "node", d.NodeID)}
 	ctx, s.recStop = context.WithCancel(context.WithoutCancel(ctx))
+	s.rec.group = d.Executor.Group(ctx, reconcileWorkers, reconcileBatch*2)
+	s.wg.Add(1)
 	s.mu.Unlock()
-	s.wg.Go(func() { s.reconcileLoop(ctx) })
+	go func() { defer s.wg.Done(); s.reconcileLoop(ctx) }()
 }
 
 func (s *Service) reconcileLoop(ctx context.Context) {
@@ -149,14 +137,21 @@ func (s *Service) reconcileLoop(ctx context.Context) {
 
 // settleEntry is one claimed row of pending_settlements.
 type settleEntry struct {
-	id         int64
-	pluginKey  string
-	refID      string
-	usageLogID int64
-	accountID  *int64
-	attempts   int
-	createdAt  time.Time
-	deadlineAt time.Time
+	id           int64
+	pluginKey    string
+	refID        string
+	usageLogID   int64
+	accountID    *int64
+	attempts     int
+	pollFailures int
+	pollObserved bool
+	pollFailed   bool
+	createdAt    time.Time
+	deadlineAt   time.Time
+	task         *taskClaim
+	account      core.AccountRef // the fixed account used by this observation
+	monitor      *monitorOutcome
+	reported     bool
 }
 
 // ReconcileDue runs one sweep: claim the due entries and work through them.
@@ -164,7 +159,7 @@ type settleEntry struct {
 // lock), which is what the tests assert on.
 func (s *Service) ReconcileDue(ctx context.Context) int {
 	r := s.rec
-	if r == nil {
+	if r == nil || !r.Executor.Allowed() {
 		return 0
 	}
 	// One node at a time. This is not the only guard - every claimed entry is
@@ -180,44 +175,41 @@ func (s *Service) ReconcileDue(ctx context.Context) int {
 	if !ok {
 		return 0
 	}
-	defer lk.Release()
+	var claimed int
+	_ = background.Scope(ctx, background.Work{Timeout: reconcileSweepBudget, Lease: lk}, func(ctx context.Context) error {
+		claimed = s.reconcileSweep(ctx)
+		return nil
+	})
+	return claimed
+}
 
-	ctx, cancel := context.WithTimeout(ctx, reconcileSweepBudget)
-	defer cancel()
-	// Losing the lock mid-sweep stops the sweep; what it claimed stays
-	// leased and is picked up again once the lease lapses.
-	ctx, stop := core.KeepLock(ctx, lk)
-	defer stop()
+func (s *Service) reconcileSweep(ctx context.Context) int {
+	r := s.rec
+	if !r.Executor.Allowed() {
+		return 0
+	}
 	entries, err := s.claimDue(ctx, reconcileBatch)
 	if err != nil {
 		r.log.Error("reconcile: claim due entries", "err", err)
 		return 0
 	}
+	s.cleanTaskReceipts(ctx)
+	tasks, err := s.claimTasks(ctx, reconcileBatch)
+	if err != nil {
+		r.log.Error("reconcile: claim tasks", "err", err)
+	} else {
+		entries = append(entries, tasks...)
+	}
 	if len(entries) == 0 {
 		return 0
 	}
 	var abandoned atomic.Int64
-	ch := make(chan *settleEntry)
-	var wg sync.WaitGroup
-	for range reconcileWorkers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for e := range ch {
-				if s.reconcileOne(ctx, e) {
-					abandoned.Add(1)
-				}
-			}
-		}()
-	}
-	for _, e := range interleaveByPlugin(entries) {
-		select {
-		case ch <- e:
-		case <-ctx.Done():
+	ordered := interleaveByPlugin(entries)
+	_ = r.group.Each(ctx, background.Work{}, len(ordered), func(ctx context.Context, index int) {
+		if s.reconcileOne(ctx, ordered[index]) {
+			abandoned.Add(1)
 		}
-	}
-	close(ch)
-	wg.Wait()
+	})
 	// Abandoning is the outcome an operator has to know about: money was
 	// kept on an estimate nobody could confirm.
 	if n := abandoned.Load(); n > 0 {
@@ -237,13 +229,13 @@ func (s *Service) claimDue(ctx context.Context, limit int) ([]*settleEntry, erro
 		SET next_check_at = now() + make_interval(secs => $2)
 		FROM (
 			SELECT id FROM pending_settlements
-			WHERE state = 'pending' AND next_check_at <= now()
+			WHERE state = 'pending' AND next_check_at <= now() AND task_public_id IS NULL
 			ORDER BY next_check_at
 			LIMIT $1
 			FOR UPDATE SKIP LOCKED
 		) due
 		WHERE p.id = due.id
-		RETURNING p.id, p.plugin_key, p.ref_id, p.usage_log_id, p.account_id, p.attempts, p.created_at, p.deadline_at`,
+		RETURNING p.id, p.plugin_key, p.ref_id, p.usage_log_id, p.account_id, p.attempts, p.poll_failures, p.created_at, p.deadline_at`,
 		limit, reconcileLease.Seconds())
 	if err != nil {
 		return nil, err
@@ -252,7 +244,7 @@ func (s *Service) claimDue(ctx context.Context, limit int) ([]*settleEntry, erro
 	var out []*settleEntry
 	for rows.Next() {
 		e := &settleEntry{}
-		if err := rows.Scan(&e.id, &e.pluginKey, &e.refID, &e.usageLogID, &e.accountID, &e.attempts,
+		if err := rows.Scan(&e.id, &e.pluginKey, &e.refID, &e.usageLogID, &e.accountID, &e.attempts, &e.pollFailures,
 			&e.createdAt, &e.deadlineAt); err != nil {
 			return nil, err
 		}
@@ -303,9 +295,19 @@ type reservedRowState struct {
 // reconcileOne checks one entry and applies the outcome. It reports whether
 // the entry was abandoned.
 func (s *Service) reconcileOne(ctx context.Context, e *settleEntry) bool {
+	var abandoned bool
+	_ = background.Scope(ctx, background.Work{Timeout: reconcileEntryBudget}, func(ctx context.Context) error {
+		abandoned = s.reconcileOneAdmitted(ctx, e)
+		return nil
+	})
+	return abandoned
+}
+
+func (s *Service) reconcileOneAdmitted(ctx context.Context, e *settleEntry) bool {
+	if e.task != nil {
+		return s.reconcileTask(ctx, e)
+	}
 	r := s.rec
-	ctx, cancel := context.WithTimeout(ctx, reconcileEntryBudget)
-	defer cancel()
 
 	row, err := s.loadReserved(ctx, e.usageLogID)
 	if err != nil {
@@ -331,11 +333,16 @@ func (s *Service) reconcileOne(ctx context.Context, e *settleEntry) bool {
 	}
 
 	res, err := s.askPlugin(ctx, e, row)
+	if e.reported {
+		return false
+	}
 	if err != nil {
-		// Nothing was learned. Count the attempt and come back: a plugin
-		// that is down during a rollout must not cost anyone a refund, and
-		// the deadline is what eventually stops this.
-		s.reschedule(ctx, e, cfg, 0, err.Error())
+		// Query failures have a persisted consecutive-failure budget. Local
+		// account deferrals and caller cancellation do not spend that budget.
+		s.handlePollError(ctx, e, row, cfg, err)
+		return false
+	}
+	if s.handlePollResult(ctx, e, row, cfg, res) {
 		return false
 	}
 	switch res.GetState() {
@@ -354,7 +361,7 @@ func (s *Service) reconcileOne(ctx context.Context, e *settleEntry) bool {
 	return false
 }
 
-// askPlugin runs the two rpcs with the upstream request in between.
+// askPlugin selects the declared observation contract within one account lease.
 func (s *Service) askPlugin(ctx context.Context, e *settleEntry, row *reservedRowState) (*pluginv1.ReconcileResult, error) {
 	r := s.rec
 	gen := r.Registry.Current()
@@ -365,10 +372,70 @@ func (s *Service) askPlugin(ctx context.Context, e *settleEntry, row *reservedRo
 	if client == nil {
 		return nil, fmt.Errorf("plugin %q has no platform service", e.pluginKey)
 	}
-	acct, proxyID := s.reconcileAccount(ctx, e)
+	poll, monitor := false, false
+	if info, ok := gen.Plugin(e.pluginKey); ok && info.Manifest != nil {
+		for _, capability := range info.Manifest.Capabilities {
+			if capability.ID == manifest.CapPlatformMonitor {
+				monitor = true
+			}
+			if capability.ID == manifest.CapPlatformPoll {
+				poll = true
+			}
+		}
+	}
+	if e.task != nil {
+		var err error
+		e.task.paths, err = taskPaths(gen, e)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var acct *pluginv1.Account
+	var proxyID *int64
+	if e.task != nil || poll || monitor {
+		var release func()
+		var err error
+		ctx, acct, proxyID, release, err = s.acquireTaskAccount(ctx, e)
+		if err != nil {
+			return nil, err
+		}
+		defer release()
+	} else {
+		acct, proxyID = s.reconcileAccount(ctx, e)
+	}
 	entry := &pluginv1.ReconcileEntry{
 		RefId: e.refID, RequestId: row.p.RequestID, Attempts: int32(e.attempts),
 		CreatedAtUnix: e.createdAt.Unix(), DeadlineAtUnix: e.deadlineAt.Unix(),
+		Model: row.p.Model, Protocol: row.p.Protocol,
+	}
+	if e.task != nil {
+		entry.TaskKind = e.task.kind
+	}
+	if monitor {
+		return s.askMonitor(ctx, e, row, client, entry, acct, proxyID)
+	}
+	if poll {
+		p, ok := client.(core.PollPlugin)
+		if !ok {
+			return nil, errors.New("platform.poll.v1 has no Poll implementation")
+		}
+		var deferred atomic.Bool
+		result, err := p.Poll(ctx, &pluginv1.PollRequest{Entry: entry, Account: acct}, func(ctx context.Context, in *pluginv1.ExecutionHTTPRequest) (*pluginv1.ExecutionHTTPResponse, error) {
+			return s.fetchExecutionHTTP(ctx, in, proxyID, func(ctx context.Context) error {
+				if r.Limiter != nil {
+					ok, err := r.Limiter.TryHit(ctx, e.account, "poll:"+row.p.RequestID)
+					if err != nil || !ok {
+						deferred.Store(true)
+						return errTaskDeferred
+					}
+				}
+				return nil
+			})
+		})
+		if deferred.Load() {
+			return nil, errTaskDeferred
+		}
+		return result, err
 	}
 	built, err := client.BuildReconcileRequest(ctx, &pluginv1.BuildReconcileRequestRequest{Entry: entry, Account: acct})
 	if err != nil {
@@ -377,16 +444,25 @@ func (s *Service) askPlugin(ctx context.Context, e *settleEntry, row *reservedRo
 	if built == nil {
 		return nil, errors.New("BuildReconcileRequest returned nothing")
 	}
-	status, headers, body, transportErr := s.fetchReconcile(ctx, built, proxyID)
+	if e.task != nil && r.Limiter != nil {
+		ok, err := r.Limiter.TryHit(ctx, e.account, e.task.id)
+		if err != nil || !ok {
+			return nil, errTaskDeferred
+		}
+	}
+	status, headers, body, transportErr, truncated := s.fetchReconcile(ctx, built, proxyID)
 	res, err := client.ParseReconcileResponse(ctx, &pluginv1.ParseReconcileResponseRequest{
 		Entry: entry, Account: acct, Status: int32(status), Headers: headers,
-		Body: body, TransportError: transportErr,
+		Body: body, TransportError: transportErr, Truncated: truncated,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("ParseReconcileResponse: %w", err)
 	}
 	if res == nil {
 		return nil, errors.New("ParseReconcileResponse returned nothing")
+	}
+	if (truncated || transportErr != "" || status < 200 || status > 599) && res.GetState() != pluginv1.ReconcileResult_PENDING && res.GetState() != pluginv1.ReconcileResult_POLL_FAILED {
+		return nil, errors.New("incomplete or failed HTTP response cannot confirm a terminal outcome")
 	}
 	return res, nil
 }
@@ -432,50 +508,12 @@ func (s *Service) reconcileAccount(ctx context.Context, e *settleEntry) (*plugin
 // account's proxy and behind the same SSRF guard the gateway applies. A
 // failure is not an error here: the plugin is shown the transport error and
 // decides what it means, exactly as ClassifyError is shown one.
-func (s *Service) fetchReconcile(ctx context.Context, b *pluginv1.BuildReconcileRequestResponse, proxyID *int64) (int, map[string]string, []byte, string) {
-	u, err := netguard.CheckURL(ctx, b.GetUrl(), s.rec.AllowPrivateUpstream, netguard.DefaultLookup)
+func (s *Service) fetchReconcile(ctx context.Context, b *pluginv1.BuildReconcileRequestResponse, proxyID *int64) (int, map[string]string, []byte, string, bool) {
+	out, err := s.fetchExecutionHTTP(ctx, &pluginv1.ExecutionHTTPRequest{Method: b.GetMethod(), Url: b.GetUrl(), Headers: b.GetHeaders(), Body: []byte(b.GetBodyJson())}, proxyID, nil)
 	if err != nil {
-		return 0, nil, nil, err.Error()
+		return 0, nil, nil, err.Error(), false
 	}
-	method := strings.ToUpper(strings.TrimSpace(b.GetMethod()))
-	if method == "" {
-		method = http.MethodGet
-	}
-	var body io.Reader
-	if b.GetBodyJson() != "" {
-		body = strings.NewReader(b.GetBodyJson())
-	}
-	ctx, cancel := context.WithTimeout(ctx, reconcileHTTPTimeout)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
-	if err != nil {
-		return 0, nil, nil, err.Error()
-	}
-	for k, v := range b.GetHeaders() {
-		req.Header.Set(k, v)
-	}
-	if body != nil && req.Header.Get("Content-Type") == "" {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	hc, err := s.rec.Proxies.HTTPClient(ctx, proxyID)
-	if err != nil {
-		return 0, nil, nil, err.Error()
-	}
-	resp, err := hc.Do(req)
-	if err != nil {
-		// The URL may carry the credential (a "?key=..." style API), so the
-		// address is reported without query or fragment.
-		return 0, nil, nil, "reconcile request to " + u.Scheme + "://" + u.Host + u.Path + " failed: " + err.Error()
-	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, maxReconcileBody))
-	headers := make(map[string]string, len(resp.Header))
-	for k, v := range resp.Header {
-		if len(v) > 0 {
-			headers[strings.ToLower(k)] = v[0]
-		}
-	}
-	return resp.StatusCode, headers, raw, ""
+	return int(out.GetStatus()), out.GetHeaders(), out.GetBody(), out.GetTransportError(), out.GetTruncated()
 }
 
 // ---------------------------------------------------------------- outcomes
@@ -496,23 +534,52 @@ func bookkeeping(ctx context.Context) (context.Context, context.CancelFunc) {
 // reschedule counts the attempt and puts the entry back in the queue. want is
 // the plugin's own suggestion, 0 when it made none.
 func (s *Service) reschedule(ctx context.Context, e *settleEntry, cfg resolved, want time.Duration, lastErr string) {
+	s.rescheduleAttempt(ctx, e, cfg, want, lastErr, true)
+}
+
+func (s *Service) rescheduleAttempt(ctx context.Context, e *settleEntry, cfg resolved, want time.Duration, lastErr string, count bool) {
+	if e.task != nil {
+		s.rescheduleTask(ctx, e, cfg, want, lastErr, count)
+		return
+	}
 	ctx, cancel := bookkeeping(ctx)
 	defer cancel()
-	next := time.Now().Add(cfg.clampDelay(want, e.attempts+1))
+	increment := 0
+	if count {
+		increment = 1
+	}
+	next := time.Now().Add(cfg.clampDelay(want, e.attempts+increment))
 	if next.After(e.deadlineAt) {
 		// One last attempt exactly at the deadline rather than one fewer.
 		next = e.deadlineAt
 	}
-	_, err := s.db.Pool.Exec(ctx, `
-		UPDATE pending_settlements SET attempts = attempts + 1, next_check_at = $2, last_error = $3
-		WHERE id = $1 AND state = 'pending'`, e.id, next, trunc(lastErr, 2000))
+	err := s.outcomeTx(ctx, e, func(tx pgx.Tx) error {
+		var status string
+		if err := tx.QueryRow(ctx, `SELECT billing_status FROM usage_logs WHERE id=$1 FOR UPDATE`, e.usageLogID).Scan(&status); err != nil {
+			return err
+		}
+		if status != StatusReserved {
+			return errNotPending
+		}
+		if err := lockLegacyOutcome(ctx, tx, e); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, `
+		UPDATE pending_settlements SET attempts = attempts + $4, next_check_at = $2, last_error = $3,
+		poll_failures=CASE WHEN $5 THEN poll_failures+1 WHEN $6 THEN 0 ELSE poll_failures END
+		WHERE id = $1 AND state = 'pending' AND task_public_id IS NULL`, e.id, next, trunc(lastErr, 2000), increment, e.pollFailed, e.pollObserved)
+		if err == nil && tag.RowsAffected() != 1 {
+			return errNotPending
+		}
+		return err
+	})
 	if err != nil {
 		s.rec.log.Error("reconcile: reschedule", "entry", e.id, "err", err)
 		return
 	}
 	if lastErr != "" {
 		s.rec.log.Warn("reconcile: check failed, will retry", "entry", e.id, "plugin", e.pluginKey,
-			"ref_id", e.refID, "attempts", e.attempts+1, "next_check_at", next, "err", lastErr)
+			"ref_id", e.refID, "attempts", e.attempts+increment, "next_check_at", next, "err", lastErr)
 	}
 }
 
@@ -520,7 +587,7 @@ func (s *Service) reschedule(ctx context.Context, e *settleEntry, cfg resolved, 
 func (s *Service) closeEntry(ctx context.Context, e *settleEntry, state, note string) {
 	ctx, cancel := bookkeeping(ctx)
 	defer cancel()
-	_, err := s.db.Pool.Exec(ctx, `UPDATE pending_settlements SET state = $2, last_error = $3 WHERE id = $1`,
+	_, err := s.db.Pool.Exec(ctx, `UPDATE pending_settlements SET state = $2, last_error = $3 WHERE id = $1 AND task_public_id IS NULL`,
 		e.id, state, trunc(note, 2000))
 	if err != nil {
 		s.rec.log.Error("reconcile: close entry", "entry", e.id, "err", err)
@@ -540,6 +607,10 @@ func (s *Service) settleReconciled(ctx context.Context, e *settleEntry, row *res
 	}
 	total, detail, exprHash, err := priceOf(p)
 	if err != nil {
+		if e.monitor != nil {
+			e.monitor.err = err
+			return
+		}
 		s.rec.log.Error("reconcile: price the real usage", "entry", e.id, "err", err)
 		s.reschedule(ctx, e, s.reconcileSettings(ctx), 0, "pricing failed: "+err.Error())
 		return
@@ -548,13 +619,19 @@ func (s *Service) settleReconciled(ctx context.Context, e *settleEntry, row *res
 	var ledgerRes *core.LedgerResult
 	ctx, cancel := bookkeeping(ctx)
 	defer cancel()
-	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
+	err = s.outcomeTx(ctx, e, func(tx pgx.Tx) error {
+		if err := s.lockTaskOutcome(ctx, tx, e, "closed"); err != nil {
+			return err
+		}
 		var status string
 		if err := tx.QueryRow(ctx, `SELECT billing_status FROM usage_logs WHERE id = $1 FOR UPDATE`, e.usageLogID).Scan(&status); err != nil {
 			return err
 		}
 		if status != StatusReserved {
 			return errNotPending
+		}
+		if err := lockLegacyOutcome(ctx, tx, e); err != nil {
+			return err
 		}
 		switch {
 		case diff.Sign() > 0:
@@ -619,13 +696,19 @@ func (s *Service) refundFailed(ctx context.Context, e *settleEntry, row *reserve
 	var ledgerRes *core.LedgerResult
 	ctx, cancel := bookkeeping(ctx)
 	defer cancel()
-	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
+	err := s.outcomeTx(ctx, e, func(tx pgx.Tx) error {
+		if err := s.lockTaskOutcome(ctx, tx, e, "closed"); err != nil {
+			return err
+		}
 		var status string
 		if err := tx.QueryRow(ctx, `SELECT billing_status FROM usage_logs WHERE id = $1 FOR UPDATE`, e.usageLogID).Scan(&status); err != nil {
 			return err
 		}
 		if status != StatusReserved {
 			return errNotPending
+		}
+		if err := lockLegacyOutcome(ctx, tx, e); err != nil {
+			return err
 		}
 		if row.totalCost.Sign() > 0 {
 			var err error
@@ -647,8 +730,9 @@ func (s *Service) refundFailed(ctx context.Context, e *settleEntry, row *reserve
 			WHERE id = $1`, e.usageLogID, trunc(reason, 50), trunc(reason, 1000)); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `UPDATE pending_settlements SET state = $2, attempts = attempts + 1, last_error = $3
-			WHERE id = $1`, e.id, SettleStateFailed, trunc(reason, 2000)); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE pending_settlements SET state = $2, attempts = attempts + 1, last_error = $3,
+			poll_failures=CASE WHEN $4 THEN poll_failures+1 WHEN $5 THEN 0 ELSE poll_failures END
+			WHERE id = $1`, e.id, SettleStateFailed, trunc(reason, 2000), e.pollFailed, e.pollObserved); err != nil {
 			return err
 		}
 		p.Success, p.ErrorType = false, trunc(reason, 50)
@@ -757,13 +841,23 @@ func (s *Service) keepEstimate(ctx context.Context, e *settleEntry, row *reserve
 	mk, _ := json.Marshal(marker)
 	ctx, cancel := bookkeeping(ctx)
 	defer cancel()
-	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
+	err := s.outcomeTx(ctx, e, func(tx pgx.Tx) error {
+		observation := "closed"
+		if entryState == SettleStateAbandoned {
+			observation = "abandoned"
+		}
+		if err := s.lockTaskOutcome(ctx, tx, e, observation); err != nil {
+			return err
+		}
 		var status string
 		if err := tx.QueryRow(ctx, `SELECT billing_status FROM usage_logs WHERE id = $1 FOR UPDATE`, e.usageLogID).Scan(&status); err != nil {
 			return err
 		}
 		if status != StatusReserved {
 			return errNotPending
+		}
+		if err := lockLegacyOutcome(ctx, tx, e); err != nil {
+			return err
 		}
 		if _, err := tx.Exec(ctx, `
 			UPDATE usage_logs SET billing_status = 'billed', anomalies = anomalies || $2::jsonb

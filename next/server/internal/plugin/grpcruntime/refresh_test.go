@@ -1,0 +1,124 @@
+package grpcruntime
+
+import (
+	"context"
+	"fmt"
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
+	"github.com/jackc/pgx/v5/pgproto3"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"google.golang.org/grpc"
+	"log/slog"
+	"net"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+)
+
+type auditConfigClient struct {
+	pluginv1.PluginServiceClient
+	calls atomic.Int32
+}
+
+func (c *auditConfigClient) Configure(context.Context, *pluginv1.ConfigureRequest, ...grpc.CallOption) (*pluginv1.ConfigureResponse, error) {
+	if c.calls.Add(1) == 1 {
+		return nil, fmt.Errorf("transient Configure unavailable")
+	}
+	return &pluginv1.ConfigureResponse{}, nil
+}
+func auditFakeSettingsPool(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { listener.Close() })
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer conn.Close()
+				backend := pgproto3.NewBackend(conn, conn)
+				if _, err := backend.ReceiveStartupMessage(); err != nil {
+					return
+				}
+				backend.Send(&pgproto3.AuthenticationOk{})
+				backend.Send(&pgproto3.ParameterStatus{Name: "server_version", Value: "16.0"})
+				backend.Send(&pgproto3.ParameterStatus{Name: "client_encoding", Value: "UTF8"})
+				backend.Send(&pgproto3.ParameterStatus{Name: "standard_conforming_strings", Value: "on"})
+				backend.Send(&pgproto3.BackendKeyData{ProcessID: 1, SecretKey: []byte{0, 0, 0, 2}})
+				backend.Send(&pgproto3.ReadyForQuery{TxStatus: 'I'})
+				if backend.Flush() != nil {
+					return
+				}
+				for {
+					msg, err := backend.Receive()
+					if err != nil {
+						return
+					}
+					switch q := msg.(type) {
+					case *pgproto3.Query:
+						switch {
+						case strings.Contains(q.String, "config_enc"):
+							backend.Send(&pgproto3.RowDescription{Fields: []pgproto3.FieldDescription{{Name: []byte("config_enc"), DataTypeOID: 17, DataTypeSize: -1}, {Name: []byte("egress_policy"), DataTypeOID: 25, DataTypeSize: -1}, {Name: []byte("resource_limits"), DataTypeOID: 3802, DataTypeSize: -1}}})
+							backend.Send(&pgproto3.DataRow{Values: [][]byte{nil, []byte("restricted"), []byte("{}")}})
+							backend.Send(&pgproto3.CommandComplete{CommandTag: []byte("SELECT 1")})
+						case strings.Contains(q.String, "plugin_permission_grants"):
+							backend.Send(&pgproto3.RowDescription{Fields: []pgproto3.FieldDescription{{Name: []byte("permission"), DataTypeOID: 25, DataTypeSize: -1}, {Name: []byte("scope"), DataTypeOID: 3802, DataTypeSize: -1}}})
+							backend.Send(&pgproto3.CommandComplete{CommandTag: []byte("SELECT 0")})
+						default:
+							backend.Send(&pgproto3.CommandComplete{CommandTag: []byte("SELECT 0")})
+						}
+						backend.Send(&pgproto3.ReadyForQuery{TxStatus: 'I'})
+						if backend.Flush() != nil {
+							return
+						}
+					case *pgproto3.Terminate:
+						return
+					}
+				}
+			}()
+		}
+	}()
+	cfg, err := pgxpool.ParseConfig("postgres://audit@" + listener.Addr().String() + "/audit?sslmode=disable&default_query_exec_mode=simple_protocol")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.MaxConns = 1
+	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	return pool
+}
+func TestRefreshRetriesFailedConfigure(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	pool := auditFakeSettingsPool(t)
+	rt := &Runtime{o: Options{DB: &store.DB{Pool: pool}}}
+	i := &Instance{rt: rt, pkg: &registry.Package{Key: "audit"}, log: slog.Default()}
+	i.settings.Store(&settings{configJSON: "{}", grants: registry.Grants{"lock": []byte("{}")}, fingerprint: "old-version"})
+	client := &auditConfigClient{}
+	i.proc.Store(&proc{plugin: client})
+	if err := i.Refresh(ctx); err == nil {
+		t.Fatal("first transient configure failure was expected")
+	}
+	if client.calls.Load() != 1 {
+		t.Fatal("first Refresh failed before Configure")
+	}
+	if _, allowed := i.Grants()["lock"]; allowed {
+		t.Fatal("revoked host permission survived failed Configure")
+	}
+	if err := i.Refresh(ctx); err != nil {
+		t.Fatalf("second Refresh: %v", err)
+	}
+	if client.calls.Load() != 2 {
+		t.Fatalf("Configure invoked %d times; second Refresh returned nil without retry after transient failure", client.calls.Load())
+	}
+}

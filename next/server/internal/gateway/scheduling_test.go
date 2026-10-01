@@ -44,6 +44,11 @@ func (l *fakeLimiter) Hit(_ context.Context, id int64, session string) {
 	l.hits = append(l.hits, itoa(id)+":"+session)
 }
 
+func (l *fakeLimiter) TryHit(ctx context.Context, ref core.AccountRef, session string) (bool, error) {
+	l.Hit(ctx, ref.ID, session)
+	return true, nil
+}
+
 func (l *fakeLimiter) AddTokens(_ context.Context, id int64, n int64) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

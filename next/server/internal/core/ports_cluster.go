@@ -117,3 +117,21 @@ type Slots interface {
 	Acquire(ctx context.Context, kind string, id int64, limit int, requestID string) (release func(), ok bool, err error)
 	InUse(ctx context.Context, kind string, id int64) (int, error)
 }
+
+// LeasedSlots additionally cancels the returned context when a held slot is
+// lost. Callers must use it for all work admitted by the slot, and release it
+// before another attempt. A Redis failure must not silently admit uncounted work.
+type LeasedSlots interface {
+	Slots
+	AcquireLease(ctx context.Context, kind string, id int64, limit int, requestID string) (context.Context, func(), bool, error)
+}
+
+// AcquireSlot keeps simple test limiters compatible while production uses
+// leases. The returned context always covers the admitted operation.
+func AcquireSlot(ctx context.Context, slots Slots, kind string, id int64, limit int, requestID string) (context.Context, func(), bool, error) {
+	if leased, ok := slots.(LeasedSlots); ok {
+		return leased.AcquireLease(ctx, kind, id, limit, requestID)
+	}
+	release, ok, err := slots.Acquire(ctx, kind, id, limit, requestID)
+	return ctx, release, ok, err
+}

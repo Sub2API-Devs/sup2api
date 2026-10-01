@@ -167,6 +167,13 @@ func (p *Plugin) loadRules(ctx context.Context) ([]Rule, error) {
 
 // reloadRules reads the rules table and swaps the matcher snapshot.
 func (p *Plugin) reloadRules(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	p.ruleReloadMu.Lock()
+	p.ruleReloadSeq++
+	seq := p.ruleReloadSeq
+	p.ruleReloadMu.Unlock()
 	rules, err := p.loadRules(ctx)
 	if err != nil {
 		return err
@@ -175,7 +182,16 @@ func (p *Plugin) reloadRules(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	p.rules.Store(rs)
+	// Newer reloads invalidate in-flight SELECTs before publishing. Polls,
+	// broadcasts and PUT-triggered refreshes cannot restore an old matcher.
+	p.ruleReloadMu.Lock()
+	defer p.ruleReloadMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if seq == p.ruleReloadSeq {
+		p.rules.Store(rs)
+	}
 	return nil
 }
 
