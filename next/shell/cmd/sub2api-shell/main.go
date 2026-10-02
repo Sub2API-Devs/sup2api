@@ -113,6 +113,12 @@ func run() error {
 		keys[id] = ed25519.PublicKey(b)
 	}
 	releases := &release.Manager{Root: c.Root, TrustedKeys: keys, OS: runtime.GOOS, Arch: runtime.GOARCH, RuntimeABI: c.RuntimeABI}
+	// The publisher is usually served with a public certificate, but may use
+	// the cluster CA; signatures, not the transport, authorize its content.
+	// init/import and serve share this client. It never carries node keys.
+	if releases.Client, err = publisherClient(c.CAFile); err != nil {
+		return err
+	}
 	if command == "init" {
 		if err = store.EnsureSchema(ctx); err != nil {
 			return err
@@ -167,14 +173,6 @@ func run() error {
 		return errors.New("invalid cluster CA")
 	}
 	clientTLS := &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: ca}
-	// The publisher is usually served with a public certificate; signatures,
-	// not the transport, authorize its content. It never sees node keys.
-	publisherRoots, err := x509.SystemCertPool()
-	if err != nil || publisherRoots == nil {
-		publisherRoots = x509.NewCertPool()
-	}
-	publisherRoots.AppendCertsFromPEM(pem)
-	releases.Client = &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: publisherRoots}}, Timeout: 10 * time.Minute}
 	opt, err := redis.ParseURL(c.RedisURL)
 	if err != nil {
 		return err
@@ -338,6 +336,24 @@ func run() error {
 		return nil
 	}
 	return err
+}
+
+// publisherClient trusts system roots plus the cluster CA when configured.
+func publisherClient(caFile string) (*http.Client, error) {
+	roots, err := x509.SystemCertPool()
+	if err != nil || roots == nil {
+		roots = x509.NewCertPool()
+	}
+	if caFile != "" {
+		pem, err := os.ReadFile(caFile)
+		if err != nil {
+			return nil, err
+		}
+		if !roots.AppendCertsFromPEM(pem) {
+			return nil, errors.New("invalid cluster CA")
+		}
+	}
+	return &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots}}, Timeout: 10 * time.Minute}, nil
 }
 func readConfig(path string) (config, error) {
 	var c config

@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"encoding/pem"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,5 +118,28 @@ func TestNodeCommandsUseLocalManagementRoutes(t *testing.T) {
 	}
 	if err = localCommand("enable-node", socket, ""); err == nil {
 		t.Fatal("node command without -id accepted")
+	}
+}
+
+// init/import fetch the manifest with the same client as serve, so a release
+// origin signed by the cluster CA works for every command.
+func TestPublisherClientTrustsClusterCA(t *testing.T) {
+	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) }))
+	defer origin.Close()
+	ca := filepath.Join(t.TempDir(), "ca.crt")
+	if err := os.WriteFile(ca, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: origin.Certificate().Raw}), 0600); err != nil {
+		t.Fatal(err)
+	}
+	client, err := publisherClient(ca)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := client.Get(origin.URL)
+	if err != nil || res.StatusCode != 204 {
+		t.Fatalf("cluster-CA origin rejected: %v %v", res, err)
+	}
+	res.Body.Close()
+	if _, err = publisherClient(filepath.Join(t.TempDir(), "missing.crt")); err == nil {
+		t.Fatal("missing CA file accepted")
 	}
 }
