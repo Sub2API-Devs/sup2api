@@ -1,0 +1,6 @@
+=== RUN   TestRealCoreResponsesWebSocket
+    realcore_responses_ws_linux_test.go:167: session on b: rejected key failed over at the handshake, three turns on one upstream connection, each recorded and billed
+    realcore_responses_ws_linux_test.go:216: draining b closed its session with 1012; the client reconnected through a and continued
+--- PASS: TestRealCoreResponsesWebSocket (54.10s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/shell/internal/control	55.213s

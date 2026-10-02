@@ -88,6 +88,62 @@
       }
     },
     {
+      "id": "responses_websocket",
+      "method": "GET",
+      "path": "/v1/responses",
+      "protocol": "openai.responses_ws",
+      "kind": "websocket",
+      "auth": {
+        "headers": [
+          "authorization"
+        ]
+      },
+      "request": {
+        "modelPath": "model",
+        "promptTextPaths": [
+          "instructions",
+          "input"
+        ]
+      },
+      "response": {
+        "stream": "websocket"
+      },
+      "errorFormat": "openai",
+      "billing": "usage",
+      "usage": {
+        "semantics": "inclusive",
+        "sse": [
+          {
+            "event": "response.completed",
+            "map": {
+              "model": "response.model",
+              "input_tokens": "response.usage.input_tokens",
+              "output_tokens": "response.usage.output_tokens",
+              "cache_read_tokens": "response.usage.input_tokens_details.cached_tokens"
+            }
+          },
+          {
+            "event": "response.incomplete",
+            "map": {
+              "model": "response.model",
+              "input_tokens": "response.usage.input_tokens",
+              "output_tokens": "response.usage.output_tokens",
+              "cache_read_tokens": "response.usage.input_tokens_details.cached_tokens"
+            }
+          },
+          {
+            "event": "response.failed",
+            "map": {
+              "model": "response.model",
+              "input_tokens": "response.usage.input_tokens",
+              "output_tokens": "response.usage.output_tokens",
+              "cache_read_tokens": "response.usage.input_tokens_details.cached_tokens"
+            }
+          }
+        ]
+      }
+    },
+    {
       "id": "embeddings",
       "method": "POST",
       "path": "/v1/embeddings",
@@ -165,7 +221,8 @@
       "match": {
         "protocols": [
           "openai.chat",
-          "openai.responses"
+          "openai.responses",
+          "openai.responses_ws"
         ]
       },
       "keySources": [

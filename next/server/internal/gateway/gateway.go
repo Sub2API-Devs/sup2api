@@ -55,6 +55,11 @@ type Deps struct {
 	// core.NodeRegistry does), Node.Healthy is used; otherwise the node is
 	// always considered healthy.
 	Health func() bool
+	// Draining reports that the node is draining (CONTRACTS §35): WebSocket
+	// sessions end their turn in progress and close with 1012 so clients
+	// reconnect elsewhere. http.Server.Shutdown does not track upgraded
+	// connections, so the sessions watch this themselves. nil = never.
+	Draining func() bool
 }
 
 // Gateway serves plugin-declared endpoints and owns sticky sessions.
@@ -79,6 +84,8 @@ type Gateway struct {
 	headerWait func(stream bool) time.Duration
 	// randFloat drives the weighted order inside a priority (CONTRACTS §18).
 	randFloat func() float64
+	// ws holds the WebSocket session limits (websocket.go).
+	ws wsLimits
 
 	stop    chan struct{}
 	wg      sync.WaitGroup
@@ -110,6 +117,7 @@ func New(d Deps) *Gateway {
 		lookupIP:   defaultLookupIP,
 		headerWait: defaultHeaderWait,
 		randFloat:  rand.Float64,
+		ws:         defaultWSLimits(),
 		stop:       make(chan struct{}),
 	}
 	g.conv = d.Converters

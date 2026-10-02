@@ -32,7 +32,7 @@ func TestBuiltinPlatforms(t *testing.T) {
 				t.Errorf("%s: duplicate endpoint id %s", p.ID, e.ID)
 			}
 			endpointIDs[e.ID] = true
-			if e.Kind != "proxy" || (e.Billing != "usage" && e.Billing != "free") || e.ErrorFormat != p.ID {
+			if (e.Kind != manifest.EndpointKindProxy && e.Kind != manifest.EndpointKindWebSocket) || (e.Billing != "usage" && e.Billing != "free") || e.ErrorFormat != p.ID {
 				t.Errorf("%s/%s: kind %q billing %q errorFormat %q", p.ID, e.ID, e.Kind, e.Billing, e.ErrorFormat)
 			}
 			if e.Request.ModelPath == "" && e.Request.ModelParam == "" {
@@ -92,7 +92,7 @@ func TestBuiltinEndpointsDoNotConflict(t *testing.T) {
 func TestProtocols(t *testing.T) {
 	want := map[string][]string{
 		"anthropic": {"anthropic.messages", "anthropic.count_tokens"},
-		"openai":    {"openai.chat", "openai.responses", "openai.embeddings"},
+		"openai":    {"openai.chat", "openai.responses", "openai.responses_ws", "openai.embeddings"},
 		"gemini":    {"gemini.generate", "gemini.stream_generate", "gemini.count_tokens"},
 	}
 	for _, p := range Builtin() {

@@ -1,0 +1,7 @@
+=== plugins/volcengine ===
+--- FAIL: TestManifest (0.01s)
+    manifest_test.go:377: built-in openai protocols [openai.chat openai.responses openai.responses_ws openai.embeddings], implemented [openai.chat openai.responses openai.embeddings]
+FAIL
+FAIL	github.com/Sub2API-Devs/sup2api/next/plugins/volcengine	0.080s
+ok  	github.com/Sub2API-Devs/sup2api/next/plugins/volcengine/internal/volcengine	4.556s
+FAIL

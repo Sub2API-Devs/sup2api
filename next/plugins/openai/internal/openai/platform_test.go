@@ -15,7 +15,7 @@ import (
 
 func start(t *testing.T) *pluginsdktest.Harness {
 	t.Helper()
-	return pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("openai", "0.2.0")}})
+	return pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: []pluginsdk.Option{pluginsdk.WithInfo("openai", "0.3.0")}})
 }
 
 func account(creds, settings string) *pluginv1.Account {
@@ -262,5 +262,37 @@ func TestBuildModelsRequest(t *testing.T) {
 	if r.GetMethod() != "GET" || r.GetUrl() != "http://mock-upstream:8080/v1/models" ||
 		r.GetHeaders()["authorization"] != "Bearer sk-key-1234" || r.GetIdsPath() != "data.#.id" {
 		t.Fatalf("resp = %v", r)
+	}
+}
+
+func TestBuildUpstreamWebSocketRequest(t *testing.T) {
+	h := start(t)
+	build := func(settings string, inbound map[string]string) (*pluginv1.BuildUpstreamRequestResponse, error) {
+		return h.Platform.BuildUpstreamRequest(context.Background(), &pluginv1.BuildUpstreamRequestRequest{
+			Meta:    &pluginv1.RequestMeta{Protocol: ProtocolResponsesWS, Model: "gpt-5", Stream: true},
+			Account: account(`{"api_key":"sk-key-1234"}`, settings), Fields: map[string]string{"model": `"gpt-5"`}, InboundHeaders: inbound,
+		})
+	}
+	r, err := build("", map[string]string{"user-agent": "codex_cli_rs/0.40", "cookie": "no"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hd := r.GetHeaders()
+	if r.GetMethod() != "GET" || r.GetUrl() != "wss://api.openai.com/v1/responses" || hd["authorization"] != "Bearer sk-key-1234" ||
+		hd["openai-beta"] != webSocketBeta || hd["user-agent"] != "codex_cli_rs/0.40" || r.GetUpstreamModel() != "gpt-5" {
+		t.Fatalf("websocket request = %s %s %v", r.GetMethod(), r.GetUrl(), hd)
+	}
+	if _, ok := hd["content-type"]; ok || len(r.GetPatches()) != 0 || hd["cookie"] != "" {
+		t.Fatalf("a handshake has no body: %v %v", hd, r.GetPatches())
+	}
+	// A plain-http compatible endpoint becomes ws://; a client's other betas
+	// are kept and a version it names itself is not replaced.
+	r, err = build(`{"base_url":"http://mock-upstream:8080/v1"}`, map[string]string{"openai-beta": "assistants=v2"})
+	if err != nil || r.GetUrl() != "ws://mock-upstream:8080/v1/responses" || r.GetHeaders()["openai-beta"] != "assistants=v2,"+webSocketBeta {
+		t.Fatalf("custom base url: %v %v", r, err)
+	}
+	r, err = build("", map[string]string{"openai-beta": "responses_websockets=2026-02-04"})
+	if err != nil || r.GetHeaders()["openai-beta"] != "responses_websockets=2026-02-04" {
+		t.Fatalf("client beta version: %v %v", r, err)
 	}
 }

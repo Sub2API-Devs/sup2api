@@ -3,6 +3,7 @@ package pluginsdk
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 
@@ -123,5 +124,19 @@ func TestPollManifestRequiresImplementation(t *testing.T) {
 	delete(caps, manifest.CapPlatformAdapter)
 	if err := checkTaskManifest(pollTestPlatform{}, m, caps); err == nil {
 		t.Fatal("polling without platform adapter")
+	}
+}
+
+func TestWebSocketCapabilityIsReportedForPlatforms(t *testing.T) {
+	raw := []byte(`{"key":"ws","version":"0.1.0","capabilities":[{"id":"platform.adapter.v1"},{"id":"platform.websocket.v1"}]}`)
+	rt, err := newRuntime(ordinaryTestPlatform{}, options{manifestRaw: raw}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(rt.capabilities, manifest.CapPlatformWebSocket) {
+		t.Fatalf("declared websocket capability not reported: %v", rt.capabilities)
+	}
+	if _, err = newRuntime(struct{}{}, options{manifestRaw: raw}, nil); err == nil {
+		t.Fatal("websocket capability without a Platform accepted")
 	}
 }

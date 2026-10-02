@@ -229,10 +229,17 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		return fmt.Errorf("plugin runtime: %w", err)
 	}
 
+	// The request gate admits HTTP traffic; WebSocket sessions also watch it to
+	// end themselves on drain, which http.Server.Shutdown cannot do for them.
+	gate := &requestGate{}
+	if managed != nil {
+		gate.stop()
+	}
 	gw := gateway.New(gateway.Deps{
 		DB: db, Redis: rdb, Bus: cl.Bus, Node: cl.Registry, Registry: reg,
 		Auth: keys, Pricer: bill, Balance: bill, Slots: cl.Slots,
 		Accounts: acc, Proxies: prx, Settler: settler, Tasks: settler, Limiter: limiter, Config: cfg, Converters: converters,
+		Draining: gate.isDraining,
 	})
 
 	mutations := &cluster.PluginMutations{DB: db, Locker: cl.Locker}
@@ -311,10 +318,6 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	onClose(sharedAssets.Start(ctx))
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
-	gate := &requestGate{}
-	if managed != nil {
-		gate.stop()
-	}
 	// Client IPs (login rate limiting, usage records) come from
 	// X-Forwarded-For only when the request arrives from a trusted proxy.
 	if err := engine.SetTrustedProxies(cfg.TrustedProxies); err != nil {

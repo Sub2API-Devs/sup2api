@@ -23,14 +23,17 @@ const PlatformID = "openai"
 
 // Protocol ids of the built-in openai platform's endpoints.
 const (
-	ProtocolChat       = "openai.chat"
-	ProtocolResponses  = "openai.responses"
-	ProtocolEmbeddings = "openai.embeddings"
+	ProtocolChat      = "openai.chat"
+	ProtocolResponses = "openai.responses"
+	// ProtocolResponsesWS is the Responses WebSocket mode (GET /v1/responses
+	// upgraded; one upstream WebSocket per client connection).
+	ProtocolResponsesWS = "openai.responses_ws"
+	ProtocolEmbeddings  = "openai.embeddings"
 )
 
 // Protocols lists the upstream protocols BuildUpstreamRequest supports, in
 // the built-in platform's endpoint order.
-var Protocols = []string{ProtocolChat, ProtocolResponses, ProtocolEmbeddings}
+var Protocols = []string{ProtocolChat, ProtocolResponses, ProtocolResponsesWS, ProtocolEmbeddings}
 
 const (
 	// AccountTypeAPIKey is the only account type (manifest accountTypes).
@@ -86,7 +89,7 @@ func upstreamPath(protocol string) (string, error) {
 	switch protocol {
 	case ProtocolChat, "":
 		return "/v1/chat/completions", nil
-	case ProtocolResponses:
+	case ProtocolResponses, ProtocolResponsesWS:
 		return "/v1/responses", nil
 	case ProtocolEmbeddings:
 		return "/v1/embeddings", nil
@@ -131,6 +134,9 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 		Url:           cfg.BaseURL + ep,
 		Headers:       upstreamHeaders(cfg.APIKey, in.GetInboundHeaders()),
 		UpstreamModel: model,
+	}
+	if meta.GetProtocol() == ProtocolResponsesWS {
+		return webSocketRequest(resp)
 	}
 	if meta.GetStream() && (meta.GetProtocol() == ProtocolChat || meta.GetProtocol() == "") {
 		resp.Patches = append(resp.Patches, &pluginv1.BodyPatch{Op: pluginv1.BodyPatch_OP_SET, Path: "stream_options.include_usage", ValueJson: "true"})
@@ -179,4 +185,32 @@ func (p *Plugin) BuildModelsRequest(_ context.Context, in *pluginv1.BuildModelsR
 		Headers: h,
 		IdsPath: "data.#.id",
 	}, nil
+}
+
+// webSocketBeta opts the upstream connection into the Responses WebSocket
+// mode, as the official clients do.
+const webSocketBeta = "responses_websockets=2026-02-06"
+
+// webSocketRequest turns the Responses request into the upstream WebSocket
+// handshake: GET on the same path with a ws(s) scheme. The core dials it and
+// relays the session; there is no body, so no content type and no patches.
+// A client that already names a responses_websockets version keeps it.
+func webSocketRequest(resp *pluginv1.BuildUpstreamRequestResponse) (*pluginv1.BuildUpstreamRequestResponse, error) {
+	switch {
+	case strings.HasPrefix(resp.Url, "https://"):
+		resp.Url = "wss://" + strings.TrimPrefix(resp.Url, "https://")
+	case strings.HasPrefix(resp.Url, "http://"):
+		resp.Url = "ws://" + strings.TrimPrefix(resp.Url, "http://")
+	default:
+		return nil, status.Errorf(codes.InvalidArgument, "base_url %q has no http(s) scheme", resp.Url)
+	}
+	resp.Method = "GET"
+	delete(resp.Headers, "content-type")
+	switch beta := resp.Headers["openai-beta"]; {
+	case beta == "":
+		resp.Headers["openai-beta"] = webSocketBeta
+	case !strings.Contains(beta, "responses_websockets="):
+		resp.Headers["openai-beta"] = beta + "," + webSocketBeta
+	}
+	return resp, nil
 }

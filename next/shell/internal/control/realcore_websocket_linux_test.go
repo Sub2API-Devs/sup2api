@@ -365,3 +365,26 @@ func (c *wsConn) closeFrame() {
 	_ = wsWrite(c.w, true, 8, nil)
 	_ = c.Close()
 }
+
+// sendText sends one masked text message.
+func (c *wsConn) sendText(t *testing.T, msg []byte) {
+	t.Helper()
+	_ = c.SetDeadline(time.Now().Add(20 * time.Second))
+	if err := wsWrite(c.w, true, 1, msg); err != nil {
+		t.Fatalf("websocket write: %v", err)
+	}
+}
+
+// readFrame reads the next frame; a close frame yields its status code.
+func (c *wsConn) readFrame(t *testing.T) (op byte, payload []byte, closeCode int) {
+	t.Helper()
+	_ = c.SetDeadline(time.Now().Add(60 * time.Second))
+	op, payload, err := wsRead(c.r)
+	if err != nil {
+		t.Fatalf("websocket read: %v", err)
+	}
+	if op == 8 && len(payload) >= 2 {
+		closeCode = int(binary.BigEndian.Uint16(payload[:2]))
+	}
+	return op, payload, closeCode
+}

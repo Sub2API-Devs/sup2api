@@ -63,8 +63,8 @@ plugins() {
   CGO_ENABLED=0 go build -o "$checks/sub2api-plugin" ./tools/sub2api-plugin
   [ -f "$checks/keys/managed-test.key" ] || "$checks/sub2api-plugin" keygen --key-id managed-test --out "$checks/keys" > "$out/plugin-keygen.log"
   mkdir -p "$checks/upload" "$checks/market"
-  # anthropic and volcengine are bundled, guard is uploaded, relay comes from a market.
-  for spec in anthropic:builtin volcengine:builtin guard:upload relay:market; do
+  # anthropic, volcengine and openai are bundled, guard is uploaded, relay comes from a market.
+  for spec in anthropic:builtin volcengine:builtin openai:builtin guard:upload relay:market; do
     p=${spec%%:*}; dest="$checks/${spec#*:}"
     "$checks/sub2api-plugin" build --dir "plugins/$p" --out "$checks/$p-runtime" > "$out/plugin-build-$p.log"
     pkg=$("$checks/sub2api-plugin" pack --dir "plugins/$p" --runtimes "$checks/$p-runtime" --out-dir "$dest")

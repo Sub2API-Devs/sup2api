@@ -38,6 +38,7 @@ var KnownCapabilities = map[string]bool{
 	manifest.CapPlatformPoll:      true,
 	manifest.CapPlatformExecute:   true,
 	manifest.CapPlatformMonitor:   true,
+	manifest.CapPlatformWebSocket: true,
 	manifest.CapGatewayHook:       true,
 	manifest.CapAppJobs:           true,
 	manifest.CapAppEvents:         true,
@@ -388,7 +389,7 @@ func (v *validator) capabilities() {
 			v.add(f, "duplicate", "capability %q declared twice", c.ID)
 		}
 		seen[c.ID] = true
-		if c.ID == manifest.CapPlatformPoll || c.ID == manifest.CapPlatformExecute || c.ID == manifest.CapPlatformMonitor {
+		if c.ID == manifest.CapPlatformPoll || c.ID == manifest.CapPlatformExecute || c.ID == manifest.CapPlatformMonitor || c.ID == manifest.CapPlatformWebSocket {
 			v.needCap(f, manifest.CapPlatformAdapter)
 		}
 		// Cluster broadcast (HostService.Publish / AppService.OnBroadcast)
@@ -498,8 +499,15 @@ func (v *validator) endpoint(f string, p manifest.Platform, e manifest.Endpoint)
 	case !hasPrefix || name == "" || !protocolRe.MatchString(name):
 		v.add(f+".protocol", "invalid_format", "protocol %q must be %q followed by a name", e.Protocol, platformID+".")
 	}
-	if e.Kind != "proxy" {
-		v.add(f+".kind", "unsupported", "kind must be \"proxy\"")
+	switch e.Kind {
+	case manifest.EndpointKindProxy:
+		if e.Response.Stream == manifest.ResponseWebSocket {
+			v.add(f+".response.stream", "invalid", "response.stream %q is only for kind %q", manifest.ResponseWebSocket, manifest.EndpointKindWebSocket)
+		}
+	case manifest.EndpointKindWebSocket:
+		v.webSocketEndpoint(f, e)
+	default:
+		v.add(f+".kind", "unsupported", "kind must be %q or %q", manifest.EndpointKindProxy, manifest.EndpointKindWebSocket)
 	}
 	// The gateway renders every upstream error of this endpoint in this format
 	// and bills according to this mode, so neither may be left to a default.
@@ -516,7 +524,7 @@ func (v *validator) endpoint(f string, p manifest.Platform, e manifest.Endpoint)
 	default:
 		v.add(f+".billing", "invalid", "billing must be usage or free")
 	}
-	if e.Response.NonStream == "" && !e.Request.Stream {
+	if e.Response.NonStream == "" && !e.Request.Stream && !e.WebSocket() {
 		v.add(f+".response.nonStream", "required", "response.nonStream is required unless request.stream is set")
 	}
 	if len(e.Auth.Headers) == 0 && e.Auth.Query == "" {

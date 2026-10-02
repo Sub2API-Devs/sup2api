@@ -2147,3 +2147,13 @@ SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` �
 **插件包分发（2026-10-02 补充）。** 插件包字节不再存 PG：迁移 0022 删除 `plugin_versions.package`，新增 `package_url`。市场版本由每个节点按 `package_url` 自行下载；上传和首装的包由主节点外壳保存，从节点经节点网络拉取。核心通过 `blobs.Source` 取包（市场优先，失败或摘要不符时回退到存储），存储在外壳托管下是本机管理 socket 上的 `/system/plugin-blobs/<sha256>`，没有外壳时是本机目录（只支持单节点）。节点间新增两个范围：`plugin-upload`（`PUT /internal/plugin-blobs/`，从节点→主节点）与 `plugin-artifact`（`GET /internal/plugin-blobs/`，摘要须被某个版本引用）。所有写入校验 sha256 与大小上限（外壳 `plugin_max_bytes`，默认 256 MiB）；上传在主节点确认保存后才写入版本行。细节见 [规约 §6.2](MULTINODE-SYNC-PROTOCOL.md)。
 
 **CPU 保护（2026-10-02 补充）。** 管理员在系统设置的“CPU 保护”页开关并设定阈值（`GET/PUT /api/v1/system/offload`，`settings:read` / `settings:manage`，经核心转给本机外壳；未托管节点返回 503 `updater_unavailable`）。设置存于 `updater.clusters.offload_enabled/offload_cpu_percent`，默认关闭、阈值 80，取值 50–95。每个外壳每秒采样 CPU，取本节点 cgroup（相对其可用 CPU）与整机两者较高者，按最近 10 秒平均，随心跳写入 `updater.nodes.cpu_percent`（未测得为 NULL）。本地服务的节点平均值达到阈值后，把新的公网请求轮流交给其他节点：目标须启用、本地服务就绪、同一核心版本、心跳 20 秒内、自身未在转移且 CPU 低于阈值减 10；没有目标就留在本节点。低于阈值减 10 才停止。外壳先在 PG 写入 `offloading=true` 再开始转移，先停止转移再清除标记；接收端只接受带标记的来源的 `forward`，因此转移可以从主节点到从节点。转移不续期 10 秒后自动失效。转移的请求走现有 `/internal/forward`，接收端只交给本地核心，不再转发；进行中的请求不迁移，业务请求不重放，目标路由变化时该请求得到 503。细节见 [规约 §5.1](MULTINODE-SYNC-PROTOCOL.md)。
+
+## 35. OpenAI Responses WebSocket 模式（2026-10-02）
+
+依据 [Responses WebSocket 设计](OPENAI-RESPONSES-WEBSOCKET.md)；验收见 [验证记录](audits/2026-10-02/MULTINODE-VALIDATION.md) 第 14 节。
+
+**清单。** `Endpoint.Kind` 新增 `websocket`：必须 `GET`、`response.stream` 为 `websocket`、无 `response.nonStream`/`request.stream`/`request.streamPath`/`modelParam`/`modelSource`/`usageSource: plugin`/`task`，模型只从每条消息的 `request.modelPath` 读；`billing: usage` 时需要非空 `usage.sse`，规则按消息 `type` 匹配。新能力 `platform.websocket.v1`（需 `platform.adapter.v1`）表示插件的 `BuildUpstreamRequest` 能为本平台 WebSocket 协议返回 `GET ws(s)://…` 握手；SDK 在清单声明它时上报该能力。内置 openai 平台新增端点 `GET /v1/responses`，协议 `openai.responses_ws`，用量规则读取 `response.completed`/`response.incomplete`/`response.failed`，粘性规则 `openai-prompt-cache-key` 也匹配该协议。openai 插件 0.3.0 声明该能力，握手带 `OpenAI-Beta: responses_websockets=2026-02-06`（客户端自带版本时保留）。
+
+**会话。** 升级前完成鉴权与连接数限制（每个 API Key 集群范围 64 条，Redis 并发位 `ws:<key id>`）；排空中的节点不接受新会话。每条 `response.create` 是一轮：新请求 ID、模型白名单、钩子、价格与余额、用户并发位；首轮按 HTTP 规则调度账号并建立上游连接，握手失败交给插件分类并换号；后续轮次复用同一账号与连接，账号并发位或限额最多等 10 s。只路由到声明了 `platform.websocket.v1` 的插件的原生账号类型，不做协议转换。每轮一条使用记录（`protocol=openai.responses_ws`、`stream=true`）与一次结算，轮次结束即释放用户与账号并发位。带 HTTP 状态的上游 `error` 事件交给插件分类以冷却或禁用账号，连接保持。首条消息超时 30 s（1008）、轮间空闲 300 s（1000）、上游断开（1011）。节点排空时空闲会话立即以 1012 关闭，进行中的一轮最多再等 30 s；核心经 `gateway.Deps.Draining` 观察请求闸门，因为 `http.Server.Shutdown` 不跟踪已升级连接。
+
+**不在范围。** ChatGPT OAuth/Codex 账号、上游连接池与预热、断线后 `previous_response_id` 恢复和 HTTP 桥接回退未移植；上游断开时由客户端重连。

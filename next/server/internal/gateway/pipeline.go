@@ -115,7 +115,11 @@ func (g *Gateway) serve(c *gin.Context, gen core.Generation, b core.EndpointBind
 		return
 	}
 	cl.gw, cl.stickyCfg = g.settings.get(ctx)
-	if kind := b.Endpoint.Kind; kind != "" && kind != "proxy" {
+	if b.Endpoint.WebSocket() {
+		g.serveWebSocket(ctx, cl)
+		return
+	}
+	if kind := b.Endpoint.Kind; kind != "" && kind != manifest.EndpointKindProxy {
 		writeError(c, cl.format, &gwError{Status: http.StatusNotImplemented, Code: "not_implemented",
 			Message: "endpoint kind " + kind + " is not supported"})
 		return

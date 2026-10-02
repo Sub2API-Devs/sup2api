@@ -66,6 +66,7 @@ const (
 	CapPlatformPoll      = "platform.poll.v1"
 	CapPlatformExecute   = "platform.execute.v1"
 	CapPlatformMonitor   = "platform.monitor.v1"
+	CapPlatformWebSocket = "platform.websocket.v1" // upstream requests for websocket endpoints
 	CapGatewayHook       = "gateway.hook.v1"
 	CapAppJobs           = "app.jobs.v1"
 	CapAppEvents         = "app.events.v1"
@@ -128,7 +129,7 @@ type Endpoint struct {
 	Path string `json:"path"`
 	// Protocol id, "<platform id>.<name>", e.g. "anthropic.messages".
 	Protocol    string          `json:"protocol"`
-	Kind        string          `json:"kind"` // "proxy" ("custom" reserved)
+	Kind        string          `json:"kind"` // EndpointKindProxy or EndpointKindWebSocket ("custom" reserved)
 	Auth        EndpointAuth    `json:"auth"`
 	Request     EndpointRequest `json:"request"`
 	Response    EndpointResp    `json:"response"`
@@ -243,7 +244,7 @@ type EndpointRequest struct {
 const ModelSourcePlugin = "plugin"
 
 type EndpointResp struct {
-	Stream    string `json:"stream,omitempty"` // "sse"
+	Stream    string `json:"stream,omitempty"` // "sse", or "websocket" on a websocket endpoint
 	NonStream string `json:"nonStream"`        // "json"
 }
 
@@ -590,3 +591,19 @@ var HostPermissionRisk = map[string]string{
 	"users.write":          RiskCritical,
 	"db.core_views":        RiskCritical,
 }
+
+// Values of Endpoint.Kind.
+const (
+	// EndpointKindProxy forwards one HTTP request to one upstream request.
+	EndpointKindProxy = "proxy"
+	// EndpointKindWebSocket upgrades the client connection and keeps one
+	// upstream WebSocket per connection. Every client message carrying a model
+	// at request.modelPath starts a turn that is scheduled, metered with the
+	// usage.sse rules (matched by the message "type") and billed on its own.
+	EndpointKindWebSocket = "websocket"
+	// ResponseWebSocket is EndpointResp.Stream of a websocket endpoint.
+	ResponseWebSocket = "websocket"
+)
+
+// WebSocket reports whether the endpoint is a websocket endpoint.
+func (e Endpoint) WebSocket() bool { return e.Kind == EndpointKindWebSocket }

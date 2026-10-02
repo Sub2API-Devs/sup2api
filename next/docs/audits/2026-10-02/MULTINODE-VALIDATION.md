@@ -202,3 +202,17 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 | 关闭全部会话 | 三个外壳的排空计数和两个回显服务的连接数都回到 0 |
 
 另加单元测试 `TestForwardedUpgradeStreamsOverPeerTLS`：升级连接经节点 TLS 与节点密钥转发后双向流式传输并计入排空。验证在 ovh 隔离目录进行（[日志](evidence/websocket-realcore.log.txt)），同一轮改动后的 harness 上其余四个真实三节点测试也全部通过，shell 模块 `-race` 通过；完毕已清理，生产四个入口 401。
+
+## 14. OpenAI Responses WebSocket 模式
+
+设计见 [OPENAI-RESPONSES-WEBSOCKET.md](../../OPENAI-RESPONSES-WEBSOCKET.md)，契约见 CONTRACTS §35。在 ovh 隔离目录用独立 Compose 项目（pg16、redis7、带 WebSocket 接口的 mock、golang:1.27）验证，openai 0.3.0 与 anthropic、volcengine 一起签名后作为首装插件放进核心包；完毕后 `down -v` 并删除目录，保留 external 卷，生产四个入口 401。
+
+| 项 | 结果 |
+|---|---|
+| 全部 Go 模块 `-race` | 第一轮 volcengine 的清单测试失败（[日志](evidence/responses-ws-volcengine-first.log.txt)）：它把内置 openai 平台的全部协议与自身实现比较，新加的 `openai.responses_ws` 不在其中。volcengine 不声明 `platform.websocket.v1`，网关不会把 WebSocket 轮次交给它，测试改为只比较非 WebSocket 协议后通过；其余模块全部通过（[汇总](evidence/responses-ws-modules.summary)，[server](evidence/responses-ws-module-server.log.txt)）|
+| PG/Redis 用例 | 19 通过、0 跳过 |
+| 网关单元测试（真实 WebSocket 与模拟上游，`-count=40` 稳定） | 多轮共用一条上游连接且逐轮独立请求 ID、记录与计费；首个账号握手 401 后换号并禁用；所有账号都被拒时本轮报上游错误、连接保持；非 `response.create`、白名单外模型、无价格、余额不足按轮报错不断开；轮内重复 `response.create` 被拒；上游限流事件冷却账号；`response.failed` 记失败；上游断开以 1011 关闭；客户端断开记为取消并释放账号并发位；排空时空闲会话 1012、进行中一轮完成后 1012、超过宽限期强制 1012；首条消息超时 1008、空闲超时 1000；每 Key 连接上限 429；未声明能力的插件不被调度；握手期限不影响已建立的上游连接；账号模型映射逐轮生效 |
+| 真实三节点 `TestRealCoreResponsesWebSocket` | 通过（[日志](evidence/responses-ws-realcore.log.txt)）。经从节点 b 建立会话：首个账号的 key 被 mock 拒绝，换到第二个账号并禁用前者；三轮对话 mock 只收到一次握手、三条消息；PG 中三条 `openai.responses_ws` 记录，用量 120/42/50、扣费大于 0、`node_id=b`。经转发节点 c 建立的会话由主节点 a 处理并记录在 a。排空 b 的核心时会话收到 1012，排空正常完成；客户端经 a 重连后继续，第五条记录写入 |
+| 其余真实三节点测试 | 同一轮：升级、故障、CPU 保护、插件包、外壳层 WebSocket 均通过（第一轮完整日志被单测重跑覆盖，未保留） |
+
+限制：未连接真实 OpenAI；ChatGPT OAuth/Codex 账号、上游连接池、`previous_response_id` 断线恢复、HTTP 桥接回退未移植（设计文档 §1）。

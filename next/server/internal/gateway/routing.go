@@ -65,6 +65,23 @@ type typeRoute struct {
 // protocol X to. A type supporting P is never converted.
 func (c *call) planRoutes() {
 	defer func() {
+		if !c.ep.WebSocket() {
+			return
+		}
+		// A WebSocket session is relayed as is: only account types whose
+		// plugin builds upstream WebSocket requests, and never converted.
+		keys := c.routeKeys[:0]
+		for _, key := range c.routeKeys {
+			rt := c.routes[key]
+			if rt.conv != nil || !hasCapability(rt.binding.Plugin.Manifest, manifest.CapPlatformWebSocket) {
+				delete(c.routes, key)
+				continue
+			}
+			keys = append(keys, key)
+		}
+		c.routeKeys = keys
+	}()
+	defer func() {
 		if !c.ep.TaskSubmit() {
 			return
 		}
@@ -191,4 +208,16 @@ func (rt *typeRoute) upstreamBody(body []byte) ([]byte, error) {
 		rt.body, rt.bodyErr = rt.conv.Request(body)
 	}
 	return rt.body, rt.bodyErr
+}
+
+func hasCapability(m *manifest.Manifest, id string) bool {
+	if m == nil {
+		return false
+	}
+	for _, c := range m.Capabilities {
+		if c.ID == id {
+			return true
+		}
+	}
+	return false
 }

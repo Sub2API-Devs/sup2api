@@ -10,6 +10,7 @@
 //	                                request offering the tool "submit_verdict" gets a
 //	                                simulated moderation verdict (moderation.go)
 //	POST /v1/responses              OpenAI Responses (usage in response.completed)
+//	GET  /v1/responses              Responses WebSocket mode (ws.go)
 //	POST /v1/embeddings             OpenAI embeddings (usage.prompt_tokens)
 //	POST /v1beta/models/{m}:generateContent        Gemini, usageMetadata incl. thoughtsTokenCount
 //	POST /v1beta/models/{m}:streamGenerateContent  ?alt=sse -> SSE, otherwise a JSON array
@@ -141,6 +142,7 @@ func (s *server) handler() http.Handler {
 	mux.HandleFunc("POST /v1/messages/count_tokens", s.countTokens)
 	mux.HandleFunc("POST /v1/chat/completions", s.chatCompletions)
 	mux.HandleFunc("POST /v1/responses", s.responses)
+	mux.HandleFunc("GET /v1/responses", s.responsesWebSocket)
 	mux.HandleFunc("POST /v1/embeddings", s.embeddings)
 	mux.HandleFunc("POST /v1beta/models/{spec}", s.gemini)
 	mux.HandleFunc("GET /v1/models", s.listModels)

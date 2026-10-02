@@ -275,6 +275,14 @@ func newRuntime(p any, o options, dial HostDialer) (*runtime, error) {
 			rt.capabilities = append(rt.capabilities, c)
 		}
 	}
+	// platform.websocket.v1 is a promise about BuildUpstreamRequest, not an
+	// extra service, so it is reported when the manifest declares it.
+	if declared[manifest.CapPlatformWebSocket] {
+		if _, ok := p.(Platform); !ok {
+			return nil, fmt.Errorf("%s requires Platform", manifest.CapPlatformWebSocket)
+		}
+		rt.capabilities = append(rt.capabilities, manifest.CapPlatformWebSocket)
+	}
 	return rt, nil
 }
 

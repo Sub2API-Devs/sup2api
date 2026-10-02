@@ -373,7 +373,15 @@ func TestManifest(t *testing.T) {
 		}
 	}
 	if b := builtin(t); b != nil {
-		if got := b.Protocols(); !slices.Equal(got, volcengine.Protocols) {
+		// WebSocket endpoints are only routed to plugins declaring
+		// platform.websocket.v1, which this one does not.
+		var got []string
+		for _, p := range b.Protocols() {
+			if !slices.ContainsFunc(b.Endpoints, func(e manifest.Endpoint) bool { return e.Protocol == p && e.WebSocket() }) {
+				got = append(got, p)
+			}
+		}
+		if !slices.Equal(got, volcengine.Protocols) {
 			t.Fatalf("built-in openai protocols %v, implemented %v", got, volcengine.Protocols)
 		}
 		for _, h := range volcengine.ForwardHeaders() {
