@@ -1,0 +1,78 @@
+# sup2api on ovh as a shell-managed cluster: four shells on the existing
+# sup2api PostgreSQL/Redis/market (project network sup2api_default), each
+# supervising its own core. Core releases are signed and served by "releases".
+name: sup2api-managed
+
+x-node: &node
+  image: sup2api-shell:local
+  pull_policy: never
+  restart: unless-stopped
+  # The shell drains its core (HTTP, then plugins and pending usage) on stop.
+  stop_grace_period: 180s
+  mem_limit: 2g
+  networks: [sup2api]
+  depends_on: [releases]
+  environment: &env
+    DATABASE_URL: postgres://sup2api:${PG_PASSWORD:?}@pg:5432/sup2api?sslmode=disable
+    REDIS_URL: redis://redis:6379/0
+    SUB2API_LOG_LEVEL: info
+    SUB2API_MASTER_KEY: ${SUB2API_MASTER_KEY:?}
+    SUB2API_JWT_SECRET: ${SUB2API_JWT_SECRET:?}
+    SUB2API_BOOTSTRAP_ADMIN_EMAIL: ${SUB2API_BOOTSTRAP_ADMIN_EMAIL:?}
+    SUB2API_BOOTSTRAP_ADMIN_PASSWORD: ${SUB2API_BOOTSTRAP_ADMIN_PASSWORD:?}
+    SUB2API_PLUGIN_DIR: /var/lib/sub2api/plugins
+    SUB2API_PLUGIN_DEV_MODE: "false"
+    SUB2API_PLUGIN_ALLOW_UNSIGNED: "false"
+    SUB2API_PLUGIN_VERIFY_SIGNATURES: "false"
+    SUB2API_PLUGIN_STRICT_NETWORK: "true"
+    SUB2API_PLUGIN_SECCOMP: "true"
+    SUB2API_PLUGIN_DB_ROLE_ISOLATION: "true"
+    SUB2API_PLUGIN_MAX_MEMORY_MB: "1024"
+    # The image entrypoint used to derive these from the bundled dev key;
+    # managed cores start without it, so they are explicit here.
+    SUB2API_PLUGIN_OFFICIAL_KEYS: ${PLUGIN_TRUST_KEY:?}
+    SUB2API_BUILTIN_TRUST_KEY: ${PLUGIN_TRUST_KEY:?}
+    SUB2API_MARKET_SOURCES: ${MARKET_SOURCES:?}
+
+services:
+  releases:
+    image: caddy:2
+    restart: unless-stopped
+    mem_limit: 64m
+    networks: [sup2api]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./publish:/srv/sup2api:ro
+      - ./certs/releases:/certs:ro
+
+  sup2api-1:
+    <<: *node
+    environment: { <<: *env, SUB2API_PUBLIC_URL: "http://15.204.107.38:3130" }
+    ports: ["0.0.0.0:3130:8080"]
+    volumes: [state-1:/var/lib/sub2api, ./config/sup2api-1.json:/etc/sub2api/shell.json:ro, ./certs/sup2api-1:/etc/sub2api/tls:ro]
+  sup2api-2:
+    <<: *node
+    environment: { <<: *env, SUB2API_PUBLIC_URL: "http://15.204.107.38:3131" }
+    ports: ["0.0.0.0:3131:8080"]
+    volumes: [state-2:/var/lib/sub2api, ./config/sup2api-2.json:/etc/sub2api/shell.json:ro, ./certs/sup2api-2:/etc/sub2api/tls:ro]
+  sup2api-3:
+    <<: *node
+    environment: { <<: *env, SUB2API_PUBLIC_URL: "http://15.204.107.38:3132" }
+    ports: ["0.0.0.0:3132:8080"]
+    volumes: [state-3:/var/lib/sub2api, ./config/sup2api-3.json:/etc/sub2api/shell.json:ro, ./certs/sup2api-3:/etc/sub2api/tls:ro]
+  sup2api-4:
+    <<: *node
+    environment: { <<: *env, SUB2API_PUBLIC_URL: "http://15.204.107.38:3133" }
+    ports: ["0.0.0.0:3133:8080"]
+    volumes: [state-4:/var/lib/sub2api, ./config/sup2api-4.json:/etc/sub2api/shell.json:ro, ./certs/sup2api-4:/etc/sub2api/tls:ro]
+
+networks:
+  sup2api:
+    external: true
+    name: sup2api_default
+
+volumes:
+  state-1: {}
+  state-2: {}
+  state-3: {}
+  state-4: {}

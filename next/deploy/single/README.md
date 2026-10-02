@@ -1,5 +1,7 @@
 # sup2api single-node deployment
 
+> 2026-10-02 起 ovh 的 `sup2api` 栈改为外壳托管四节点（3130–3133），见 [`../shell/ovh`](../shell/ovh/README.md)。不要再在 ovh 上运行本目录的 `deploy.sh`，它会在相同端口重新拉起旧容器。
+
 One sub2api-next node with its own PostgreSQL 16, Redis 7 and the signed plugin
 market bundled in the image, all started by docker compose (project `sup2api`).
 PostgreSQL, Redis and the market are reachable only inside the project network;

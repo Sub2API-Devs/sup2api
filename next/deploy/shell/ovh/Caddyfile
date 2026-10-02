@@ -1,0 +1,9 @@
+{
+	auto_https off
+	admin off
+}
+https://releases:443 {
+	tls /certs/node.crt /certs/node.key
+	root * /srv
+	file_server
+}

@@ -14,6 +14,14 @@ PORT=${SUP2API_PORT:-3130}
 PORT2=${SUP2API_PORT_2:-3131}
 SRC=$DIR/src
 
+# A host migrated to the shell-managed cluster (deploy/shell/ovh) uses the same
+# ports and database; starting the single-stack app containers there would run
+# unmanaged cores next to it.
+if docker ps -a --format '{{.Names}}' | grep -q '^sup2api-managed-'; then
+  echo "this host runs the shell-managed sup2api cluster; see next/deploy/shell/ovh/README.md" >&2
+  exit 1
+fi
+
 mkdir -p "$DIR"
 if [ ! -d "$SRC/.git" ]; then
   echo "==> cloning $REPO ($BRANCH)"
