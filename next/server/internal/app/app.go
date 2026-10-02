@@ -23,6 +23,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/account"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/apikey"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/authz"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/background"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/billing"
@@ -286,7 +287,16 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		// versions it carries, once it may coordinate plugins and no core plan
 		// blocks plugin changes (CONTRACTS §37).
 		builtinReady.Store(true)
-		onClose(startBuiltinUpgrade(ctx, inst, cl.Locker, cfg.Plugins.BuiltinDir, canCoordinate, log.With("component", "builtin-plugins")))
+		builtinAllowed := func() bool {
+			if canCoordinate != nil && !canCoordinate() {
+				return false
+			}
+			check, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			busy, err := cluster.CoreUpdateBusy(check, db.Pool)
+			return err == nil && !busy
+		}
+		onClose(startBuiltinUpgrade(ctx, inst, cl.Locker, cfg.Plugins.BuiltinDir, builtinAllowed, log.With("component", "builtin-plugins")))
 	}
 
 	jobs := job.New(db, cl.Locker, reg, log, cfg.NodeID, job.Options{Executor: backgroundWork})
@@ -338,7 +348,8 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		c.JSON(status, gin.H{"status": text, "version": version, "node": cfg.NodeID, "boot_id": cl.Registry.BootID()})
 	})
 	r := httpapi.NewRouter(engine, idm, az, idm)
-	updater.RegisterRoutes(r, cfg.Managed.UpdaterSocket)
+	updater.RegisterRoutes(r, cfg.Managed.UpdaterSocket, db)
+	audit.RegisterRoutes(r, db)
 	idm.RegisterRoutes(r)
 	az.RegisterRoutes(r)
 	grp.RegisterRoutes(r)

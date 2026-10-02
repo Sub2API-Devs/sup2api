@@ -1,0 +1,4 @@
+=== RUN   TestManagedRuntimeMigrationDoesNotBootstrap
+--- PASS: TestManagedRuntimeMigrationDoesNotBootstrap (4.08s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/app	5.146s

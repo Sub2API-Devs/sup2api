@@ -1,0 +1,12 @@
+isolated-directory-removed
+sub2api-next-ci_gomod
+sub2api-next-ci_gocache
+3130 401
+3131 401
+3132 401
+3133 401
+/sup2api-managed-sup2api-1-1 {"Type":"json-file","Config":{"max-file":"5","max-size":"50m"}}
+/sup2api-managed-sup2api-2-1 {"Type":"json-file","Config":{"max-file":"5","max-size":"50m"}}
+/sup2api-managed-sup2api-3-1 {"Type":"json-file","Config":{"max-file":"5","max-size":"50m"}}
+/sup2api-managed-sup2api-4-1 {"Type":"json-file","Config":{"max-file":"5","max-size":"50m"}}
+/sup2api-managed-releases-1 {"Type":"json-file","Config":{"max-file":"5","max-size":"50m"}}

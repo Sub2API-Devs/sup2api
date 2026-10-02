@@ -53,6 +53,7 @@ const children: RouteRecordRaw[] = [
   { path: 'publishers', component: () => import('@/views/plugins/PublishersView.vue'), meta: { perm: 'publisher:read', title: 'nav.items.publishers' } },
   { path: 'nodes', component: () => import('@/views/nodes/NodesView.vue'), meta: { perm: 'node:read', title: 'nav.items.nodes' } },
   { path: 'system/upgrades', component: () => import('@/views/upgrades/UpgradesView.vue'), meta: { perm: 'system:update:read', title: 'upgrades.title' } },
+  { path: 'system/audit', component: () => import('@/views/upgrades/AuditView.vue'), meta: { perm: 'audit:read', title: 'observe.audit' } },
 
   { path: 'p/:plugin/:page', component: () => import('@/views/plugin-host/PluginPageView.vue') },
   { path: 'forbidden', component: () => import('@/views/errors/ForbiddenView.vue') },

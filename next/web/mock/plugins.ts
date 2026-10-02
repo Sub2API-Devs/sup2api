@@ -720,7 +720,7 @@ function detailOf(p: MockPlugin): Any {
           boot_id: `b00t${i}a7c9e1f2`,
           addr: `10.0.0.${11 + i}:7070`,
           last_heartbeat: now(-2 - i),
-          state: { status: 'running', version: p.active_version, pid: 4200 + i, memory_mb: 42 - i * 3, memory_limit_mb: p.resources.memory_mb ?? 128, cpu_percent: 3 - i, threads: 18, restarts: i, restart_reason: i ? 'oom: rss above limit' : '' }
+          state: { state: 'active', serving: p.active_version, instances: [{ version: p.active_version, state: 'ready', restarts: i }], pid: 4200 + i, memory_mb: 42 - i * 3, memory_limit_mb: p.resources.memory_mb ?? 128, cpu_percent: 3 - i, threads: 18, restart_reason: i ? 'oom: rss above limit' : '' }
         }))
       : [],
     hooks: hooksOf(p),

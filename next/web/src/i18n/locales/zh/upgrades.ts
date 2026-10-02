@@ -6,7 +6,7 @@ export default {
   manageNode: '节点管理', disableNode: '停用节点', enableNode: '允许节点重新加入', disabled: '已停用', stopped: '核心已停止',
   nodes: '集群状态', node: '节点', version: '核心版本', mode: '流量模式', ready: '就绪', lastSeen: '最近上报', reason: '原因', primary: '升级主节点',
   serving: '已就绪', waiting: '未就绪', stale: '连接暂时中断，以下为上次读取的状态。恢复连接后将继续刷新。', unavailable: '无法连接升级服务。请确认节点以外壳托管模式运行，并配置了升级控制接口。',
-  newPlan: '创建升级任务', independentPlugins: '本次只更新核心。插件保留各自已批准的版本，通过插件管理独立升级。', target: '目标版本', choose: '选择已验证的发布版本',
+  newPlan: '创建升级任务', independentPlugins: '核心计划结束后自动升级包内已启用的内置插件。各节点独立切换；已停用或手动安装的更新版本会保留。', target: '目标版本', choose: '选择已验证的发布版本',
   noReleases: '尚无发布版本。请先通过受信发布源导入签名发布包。', activePlan: '集群已有未完成的升级，请先处理当前任务。', preflight: '检查升级条件', start: '开始升级', order: '升级顺序', preflightOK: '当前升级条件通过。开始时会再次检查集群状态。',
   history: '升级任务', noPlans: '暂无升级任务。', status: '状态', step: '步骤', pause: '暂停', resume: '继续', rollback: '恢复到升级前版本', cancel: '取消未执行任务',
   states: { running: '进行中', paused: '已暂停', failed: '失败', completed: '已完成', cancelled: '已取消', superseded: '已由恢复任务接替', pending: '等待执行', done: '已完成' },

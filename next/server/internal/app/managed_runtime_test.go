@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -44,11 +45,13 @@ func testManagedRuntime(t *testing.T, migrate bool) {
 	defer os.RemoveAll(dir)
 	prepare := runtimecontract.PrepareRequest{BootID: "boot", ReleaseDigest: "release"}
 	if migrate {
-		// Rewind to the pre-0023 schema, preserving all previous rows (0023 only
-		// replaces a function, so forgetting it is enough to make it pending).
+		// Replay the suffix from 0023: its function replacement and 0024's
+		// history objects are idempotent. Keep the recorded history a prefix,
+		// rather than removing one row from the middle of the inventory.
 		// This must run the embedded migration without importing the deliberately
 		// invalid bundled plugin or creating the configured bootstrap account.
-		_, err = db.Pool.Exec(context.Background(), `DELETE FROM schema_migrations WHERE id='0023_plugin_migration_rerun.sql'`)
+		const rewindFrom = "0023_plugin_migration_rerun.sql"
+		_, err = db.Pool.Exec(context.Background(), `DELETE FROM schema_migrations WHERE id >= $1`, rewindFrom)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -56,9 +59,13 @@ func testManagedRuntime(t *testing.T, migrate bool) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		prefix := slices.IndexFunc(inventory, func(m coreMigration) bool { return m.name == rewindFrom })
+		if prefix < 0 {
+			t.Fatal("rewind migration missing from inventory")
+		}
 		prepare.AllowMigration = true
 		prepare.CoordinatePlugins = true
-		prepare.ExpectedSchemaBefore = inventoryContract(inventory[:len(inventory)-1])
+		prepare.ExpectedSchemaBefore = inventoryContract(inventory[:prefix])
 		prepare.ExpectedSchemaAfter = inventoryContract(inventory)
 	}
 	if err = os.WriteFile(filepath.Join(dir, "invalid.s2plugin"), []byte("must never import this bundle"), 0600); err != nil {

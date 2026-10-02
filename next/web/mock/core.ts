@@ -19,6 +19,7 @@ export const ALL_PERMISSIONS = [
   'plugin:read', 'plugin:install', 'plugin:manage', 'plugin:uninstall', 'plugin:grant:high', 'plugin:grant:critical', 'plugin:egress:read', 'plugin:market:read',
   'publisher:read', 'publisher:manage',
   'node:read', 'gateway:use', 'settings:read', 'settings:manage',
+  'audit:read', 'system:update:read', 'system:update:execute', 'system:update:recover',
   'plugin.guard:rules:read', 'plugin.guard:rules:manage', 'plugin.guard:stats:read',
   'plugin.anthropic:model_catalog:read'
 ]
@@ -275,6 +276,8 @@ const MENUS = [
       { id: 'market', label: { en: 'Plugin market', zh: '插件市场' }, icon: 'market', path: '/market' },
       { id: 'publishers', label: { en: 'Publishers', zh: '发布者' }, icon: 'publisher', path: '/publishers' },
       { id: 'nodes', label: { en: 'Cluster nodes', zh: '集群节点' }, icon: 'node', path: '/nodes' },
+      { id: 'upgrades', label: { en: 'Core updates', zh: '核心升级' }, icon: 'refresh', path: '/system/upgrades' },
+      { id: 'audit', label: { en: 'Audit logs', zh: '审计日志' }, icon: 'clock', path: '/system/audit' },
       { id: 'settings', label: { en: 'Settings', zh: '设置' }, icon: 'settings', path: '/settings' }
     ]
   },

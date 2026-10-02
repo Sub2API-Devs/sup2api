@@ -1,0 +1,51 @@
+=== server ===
+?   	github.com/Sub2API-Devs/sup2api/next/server/cmd/sub2api	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/account	2.224s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/apikey	1.120s
+--- FAIL: TestManagedRuntimeMigrationDoesNotBootstrap (0.07s)
+    managed_runtime_test.go:33: core failed: {Hello:{CoreVersion:0.1.0-dev Protocol:2 NodeID:managed-runtime-test BootID:boot ReleaseDigest:release ClusterProtocol:{Min:1 Max:1} TaskProtocol:{Min:1 Max:1} HostAPIVersion:4} Mode:failed Ready:false DrainComplete:false ActiveHTTP:0 ActiveBackground:0 PendingUsageWrites:0 PluginRevision: SchemaContract:5698cd713b25a12f8cdb4c9242b9ead9110f16bdae33383907ac787c9abe8f5d Blockers:[core schema preparation: migration history has a gap before 0024_plugin_history.sql]}
+FAIL
+FAIL	github.com/Sub2API-Devs/sup2api/next/server/internal/app	4.505s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/audit	1.029s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/authz	1.276s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/background	1.079s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/billing	6.932s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/billing/expr	1.070s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/cluster	5.247s
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/config	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/core	4.335s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/event	1.090s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/event/delivery	14.207s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/gateway	5.818s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert	1.029s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/group	1.286s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi	1.031s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/iam	6.366s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/job	8.044s
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/migrations	[no test files]
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/netguard	[no test files]
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/platforms	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/api	1.304s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/blobs	1.028s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/dbschema	1.434s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/egress	1.561s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/grpcruntime	35.501s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/install	1.965s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/market	1.122s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg	1.473s
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg/pkgtest	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry	1.256s
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry/registrytest	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/rollout	27.578s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/routes	1.089s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/sandbox	7.004s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/proxy	1.346s
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/secret	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/store	1.142s
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/testutil	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/updater	1.104s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/usage	4.056s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/usagerules	1.028s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/webui	1.176s
+?   	github.com/Sub2API-Devs/sup2api/next/server/web	[no test files]
+FAIL

@@ -212,6 +212,12 @@ flowchart TD
 
 ## 9. 可观测性与管理入口
 
+2026-10-03 新增实现：节点页和升级页展示“外壳 → 核心 → 插件”嵌套拓扑，通过 `node_id` 和当前 `core_boot_id` 合并外壳与核心报告，避免旧进程的插件状态混入新核心。CPU 虚线仅表示当前心跳、同版本、就绪状态、路由版本及阈值减 10 条件下的候选接收节点，不表示实际请求流量；信息过期或读取失败时不画推算连线。
+
+插件事件持久化至 `plugin_history`（核心迁移 0024）：发布创建、阶段变化与协调者交接由数据库触发器在同一事务记录，节点状态由本节点按变化写入；重复错误文本不单独生成事件。事件保留 30 天，卸载不删除历史。发布终态的节点结果仍由 `plugin_rollout_nodes` 保存。`GET /plugins/:key/rollouts`、`/plugins/:key/history` 与 `/plugins/rollouts?since=` 要求 `plugin:read`，分页上限 200；历史事件支持 `rollout_id` 过滤。
+
+升级页展示总步骤进度和节点泳道；耗时由相应 step/done 事件推算，缺失起止事件时显示未知。核心计划后续的插件发布按时间列出，可能包含手动操作，不宣称它们都由核心计划触发。暂时断线保留快照并自动重试。审计页 `/system/audit` 及 `GET /audit-logs` 要求独立权限 `audit:read`。
+
 管理页面明确展示：当前主节点、各节点版本/启动实例、forward/local/maintenance、插件同步进度、升级阶段和失败原因。点击更新前说明主节点更新期间全群不可用；主节点停机时页面可以断开，恢复后重新读取持久状态。
 
 日志保留 `cluster_id/node_id/shell_boot_id/core_boot_id/upgrade_id/step_id/request_id`，凭证只记录不可用于鉴权的随机诊断 ID 或短摘要。计数区分登记缺失、密钥不匹配、错误启动实例、错误目标、权限不足、Redis 故障与目标未就绪。任何日志都不得输出 token、业务 Authorization、Redis 密码或签名私钥。

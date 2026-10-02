@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -55,10 +56,12 @@ type Controller struct {
 	wakeMu sync.Mutex
 	wakers map[int64]chan struct{} // coordinator wake-ups by rollout id
 
-	recMu sync.Mutex // one reconcile pass at a time
-	mu    sync.Mutex
-	slots map[string]*slot
-	sig   string // signature of the last published generation
+	recMu          sync.Mutex              // one reconcile pass at a time
+	history        map[string]historyState // guarded by recMu; updated only after persistence
+	historyCleaned time.Time
+	mu             sync.Mutex
+	slots          map[string]*slot
+	sig            string // signature of the last published generation
 	// referenced: versions per plugin named by active/desired or an open
 	// rollout (from/target) in the last reconcile; their packages are kept.
 	referenced map[string]map[string]bool
@@ -308,6 +311,13 @@ func (c *Controller) insertRollout(ctx context.Context, tx pgx.Tx, key, action s
 		key, action, from, target, phase, c.o.Node.NodeID(), c.o.Node.BootID(), c.o.LeaseTTL.Milliseconds(), actor(actorID)).Scan(&id)
 	if store.IsUniqueViolation(err, "") {
 		return 0, errOpen
+	}
+	if err == nil && audit.Source(ctx) == "builtin" {
+		err = audit.Audit(ctx, tx, actorID, "plugin."+action, "plugin", key, map[string]any{"source": "builtin", "from": from, "version": target, "rollout_id": id})
+		if err == nil {
+			_, err = tx.Exec(ctx, `UPDATE plugin_history SET message=(message::jsonb || '{"source":"builtin"}'::jsonb)::text
+				WHERE rollout_id=$1 AND node_id='' AND state='created'`, id)
+		}
 	}
 	return id, err
 }

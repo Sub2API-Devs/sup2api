@@ -163,6 +163,7 @@ func (c *Controller) Reconcile(ctx context.Context) {
 		s.entries = map[string]*entry{}
 		s.mu.Unlock()
 		_ = c.o.Node.ReportPlugin(ctx, s.key, "{}")
+		c.recordNodeHistory(ctx, s.key, NodePluginState{State: "uninstalled"})
 	}
 
 	c.republish()
@@ -182,10 +183,12 @@ func (c *Controller) Reconcile(ctx context.Context) {
 			}
 		}
 		b, _ := json.Marshal(reports[idx])
+		c.recordNodeHistory(ctx, p.key, reports[idx])
 		if err := c.o.Node.ReportPlugin(ctx, p.key, string(b)); err != nil {
 			c.log.Warn("report plugin state failed", "plugin", p.key, "err", err)
 		}
 	}
+	c.cleanHistory(ctx)
 }
 
 func (c *Controller) reconcileKey(ctx context.Context, s *slot, p *pluginRow) NodePluginState {

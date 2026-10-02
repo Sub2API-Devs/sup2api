@@ -56,6 +56,9 @@ const (
 // RegisterRoutes mounts every route of the module.
 func (a *API) RegisterRoutes(r *httpapi.Router) {
 	r.Perm(http.MethodGet, "/plugins", PermRead, a.listPlugins)
+	r.Perm(http.MethodGet, "/plugins/rollouts", PermRead, a.listRollouts)
+	r.Perm(http.MethodGet, "/plugins/:key/rollouts", PermRead, a.listRollouts)
+	r.Perm(http.MethodGet, "/plugins/:key/history", PermRead, a.pluginHistory)
 	r.Perm(http.MethodPost, "/plugins/upload", PermInstall, a.upload)
 	r.Perm(http.MethodPost, "/plugins/install-from-market", PermInstall, a.installFromMarket)
 	r.Perm(http.MethodGet, "/plugins/:key", PermRead, a.getPlugin)

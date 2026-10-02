@@ -61,10 +61,21 @@ export function fromLocalInput(v: string | null | undefined): string | null {
 
 /** Plugin state on a node, parsed from the JSON string / object in NodeInfo.plugins. */
 export interface NodePluginState {
-  version?: string
+  serving?: string
+  standby?: string
+  fallback?: string
+  rollout_id?: number
+  rollout?: string
+  instances?: Array<{ version: string; state: string; restarts: number; error?: string }>
   state?: string
   error?: string
   [k: string]: unknown
+}
+
+export function parseNodePlugin(raw: unknown): NodePluginState {
+  if (raw && typeof raw === 'object') return raw as NodePluginState
+  if (typeof raw !== 'string') return {}
+  try { const value = JSON.parse(raw); return value && typeof value === 'object' ? value : { state: raw } } catch { return { state: raw } }
 }
 
 /** Positive decimal with at most 8 fraction digits ("12.5", "0.00000001"). */

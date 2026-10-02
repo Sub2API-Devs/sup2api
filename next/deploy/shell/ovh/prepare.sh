@@ -102,4 +102,6 @@ release 0.1.5
 # 0.1.6 adds migration 0023 (plugin migrations re-run when changed) and
 # upgrades the bundled plugins with the core.
 release 0.1.6 0.1.5
+# 0.1.7 adds migration 0024, durable plugin history, audit and upgrade UI.
+release 0.1.7 0.1.6
 ls -la publish

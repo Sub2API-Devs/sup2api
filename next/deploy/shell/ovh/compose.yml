@@ -3,7 +3,14 @@
 # supervising its own core. Core releases are signed and served by "releases".
 name: sup2api-managed
 
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+
 x-node: &node
+  logging: *logging
   image: sup2api-shell:local
   pull_policy: never
   restart: unless-stopped
@@ -39,6 +46,7 @@ x-node: &node
 
 services:
   releases:
+    logging: *logging
     image: caddy:2
     restart: unless-stopped
     mem_limit: 64m

@@ -1,0 +1,7 @@
+c7d097b7389ec1db168b3db09ed16e091d500a1b7a55aa497245f839cd43c67c  /src/checks/core-r1
+8f14bf618a78e47109295efb737c7d66912c36eebdb2b1db403990a97be14f8f  /src/checks/core-r2
+112bb16093ecfeb5a2bc41ddb9375b0e1f85c0ceec809823b0c00e754655e26d  /src/checks/builtin/anthropic-0.2.1.s2plugin
+d5a9cf629bbfa15e7e76788e284f2e5563b9890ac9c64731ec435288829922d0  /src/checks/builtin/openai-0.3.0.s2plugin
+a2cdec517b14fb792efb7fe76fec602b47226d1d5b7c14a6adb20ee608c6bf39  /src/checks/builtin/volcengine-0.10.1.s2plugin
+8148bb9f6dfea273a8dacbf627c868897896044a8576e4df1462880c08575e06  /src/checks/upload/guard-0.2.2.s2plugin
+df9c90d2647f4ae819735fdd8dbd074bba87c79b6a00834675c8f8a142530214  /src/checks/market/relay-0.2.0.s2plugin

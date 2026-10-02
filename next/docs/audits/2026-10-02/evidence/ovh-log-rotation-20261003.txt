@@ -1,0 +1,30 @@
+ Container sup2api-managed-releases-1 Recreate 
+ Container sup2api-managed-releases-1 Recreated 
+ Container sup2api-managed-releases-1 Starting 
+ Container sup2api-managed-releases-1 Started 
+{"service": "releases", "elapsed_seconds": 0.89, "logging": {"Type": "json-file", "Config": {"max-file": "5", "max-size": "50m"}}, "verified_image": "sha256:0c994536bddb66445885237f1a5dcc1916bccea922661c76b4e9fc24061f9b52"}
+ Container sup2api-managed-sup2api-2-1 Recreate 
+ Container sup2api-managed-sup2api-2-1 Recreated 
+ Container sup2api-managed-sup2api-2-1 Starting 
+ Container sup2api-managed-sup2api-2-1 Started 
+{"service": "sup2api-2", "elapsed_seconds": 6.05, "logging": {"Type": "json-file", "Config": {"max-file": "5", "max-size": "50m"}}, "verified_image": "sha256:8653040f82e75fedbd2e4305832d43e391ef1e22e6b64f60e243f3fd0afec88f"}
+ Container sup2api-managed-sup2api-3-1 Recreate 
+ Container sup2api-managed-sup2api-3-1 Recreated 
+ Container sup2api-managed-sup2api-3-1 Starting 
+ Container sup2api-managed-sup2api-3-1 Started 
+{"service": "sup2api-3", "elapsed_seconds": 6.04, "logging": {"Type": "json-file", "Config": {"max-file": "5", "max-size": "50m"}}, "verified_image": "sha256:8653040f82e75fedbd2e4305832d43e391ef1e22e6b64f60e243f3fd0afec88f"}
+ Container sup2api-managed-sup2api-4-1 Recreate 
+ Container sup2api-managed-sup2api-4-1 Recreated 
+ Container sup2api-managed-sup2api-4-1 Starting 
+ Container sup2api-managed-sup2api-4-1 Started 
+{"service": "sup2api-4", "elapsed_seconds": 6.0, "logging": {"Type": "json-file", "Config": {"max-file": "5", "max-size": "50m"}}, "verified_image": "sha256:8653040f82e75fedbd2e4305832d43e391ef1e22e6b64f60e243f3fd0afec88f"}
+ Container sup2api-managed-sup2api-1-1 Recreate 
+ Container sup2api-managed-sup2api-1-1 Recreated 
+ Container sup2api-managed-sup2api-1-1 Starting 
+ Container sup2api-managed-sup2api-1-1 Started 
+{"service": "sup2api-1", "elapsed_seconds": 6.0, "logging": {"Type": "json-file", "Config": {"max-file": "5", "max-size": "50m"}}, "verified_image": "sha256:8653040f82e75fedbd2e4305832d43e391ef1e22e6b64f60e243f3fd0afec88f"}
+{"port": 3130, "models": 200, "admin": 401}
+{"port": 3131, "models": 200, "admin": 401}
+{"port": 3132, "models": 200, "admin": 401}
+{"port": 3133, "models": 200, "admin": 401}
+backup=/home/debian/sup2api-managed/log-rotation-20261002T185905Z

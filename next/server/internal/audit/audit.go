@@ -13,6 +13,13 @@ import (
 )
 
 type ipKey struct{}
+type sourceKey struct{}
+
+// WithSource marks host-originated operations, never input from an HTTP body.
+func WithSource(ctx context.Context, source string) context.Context {
+	return context.WithValue(ctx, sourceKey{}, source)
+}
+func Source(ctx context.Context) string { value, _ := ctx.Value(sourceKey{}).(string); return value }
 
 // WithClientIP stores the client IP for audit records.
 func WithClientIP(ctx context.Context, ip string) context.Context {

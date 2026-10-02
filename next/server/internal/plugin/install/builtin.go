@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg"
@@ -88,6 +89,7 @@ func readInstallOnly(dir string) (map[string]bool, error) {
 // dir. Errors of one package are logged and do not stop the others. Run it on
 // one node at a time (cluster lock); it is idempotent.
 func (s *Service) EnsureBuiltin(ctx context.Context, dir string, log *slog.Logger) error {
+	ctx = audit.WithSource(ctx, "builtin")
 	if dir == "" {
 		return nil
 	}

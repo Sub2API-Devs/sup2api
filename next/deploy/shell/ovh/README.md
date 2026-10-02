@@ -69,3 +69,11 @@ docker start sup2api-app-1 sup2api-app-2-1
 ```
 
 The single stack ignores the `updater` schema the shells created.
+
+## Container log rotation
+
+All five managed services use json-file rotation: 50 MB per file, five files
+per container (about 250 MB maximum). Applying this setting requires container
+recreation. Recreate followers one at a time, verify each entrance recovers,
+then recreate the primary. Preserve state volumes and the running image IDs;
+the local shell image tag can point to a newer image than the running shells.

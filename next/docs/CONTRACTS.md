@@ -2185,3 +2185,12 @@ SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` �
 - 回退到旧核心时，旧核心包里的插件版本更低，不会降级已升级的插件。
 - 节点准入不等待这项升级，避免与“计划运行时拒绝插件变更”互相等待。
 - 不经外壳的单机部署原本就按包内版本升级内置插件，不变。
+## 38. 升级可观测性与审计（2026-10-03）
+
+- 内置插件自动升级在节点获准协调且不存在 running/paused 核心计划时启动；查询失败则等待。提交插件变更仍在共享锁内复查，不以页面或前置检查代替互斥。
+- 迁移 `0024_plugin_history.sql` 新增无外键的插件历史表，卸载后保留。发布创建、阶段变化、协调者接管和主动交接通过触发器与发布变更一起提交或回滚；续租不写历史。节点状态按 `(state, serving, standby, fallback, rollout, rollout_id)` 去重，成功持久化后才更新内存签名，重启后的首个报告会重新记录。错误文本独自变化不追加记录。每节点每小时最多删除 10,000 条超过 30 天的事件。
+- `GET /plugins/:key/rollouts` 与 `GET /plugins/rollouts?since=<RFC3339>` 返回发布分页；运行中的发布读取实时节点状态，终态返回结束时的节点快照。`GET /plugins/:key/history?rollout_id=<id>` 返回倒序事件分页，也可省略过滤。三个接口均要求 `plugin:read`，`page/page_size` 默认 1/20，最大 200。不补造升级前不存在的事件。
+- 内置插件 enable/upgrade 由发布控制器在创建发布的事务里写审计，actor 为系统，detail 包含 `source=builtin`、版本和 rollout_id。核心管理桥在外壳返回成功后写 `system.upgrade.create/pause/resume/cancel/rollback`、`system.node.enable/disable` 与 `system.offload.update`。外壳操作与核心审计跨进程、非同一事务；若审计写入失败，保留动作成功响应并记录明确 ERROR，避免客户端重复提交已成功的操作。
+- `GET /audit-logs?action=<exact action>` 与审计界面要求新权限 `audit:read`，使用同样分页规则。返回现有审计字段，不新增记录凭证的路径。
+- 节点插件状态按真实 `serving/standby/fallback/instances` 契约显示。拓扑按当前 boot 匹配报告，`node:read` 控制插件报告读取，`system:update:read` 控制外壳信息，`settings:read` 控制 CPU 转移阈值读取；权限不足或非托管部署允许部分展示。
+- 拓扑转发实线指向主节点；CPU 虚线表示推算候选，非实际请求路径。升级泳道的耗时依赖已保存的 step/done 事件，缺失时显示未知。关联插件列表仅按核心计划创建时间过滤，可包含手动发布；插件实际版本与 fallback 以当前节点报告为准。

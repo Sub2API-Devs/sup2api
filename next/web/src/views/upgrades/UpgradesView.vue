@@ -7,9 +7,12 @@ import { SBadge, SButton, SCard, SField, SHint, SPageHeader, SSelect, STable, ty
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
 import { formatDateTime } from '@/utils/format'
+import TopologyGraph from '../nodes/TopologyGraph.vue'
+import StepLanes from './StepLanes.vue'
+import ReleaseHistory from '../plugins/parts/ReleaseHistory.vue'
+import type { ShellNode as Node } from '@/api/observability'
 
 interface Release { digest: string; manifest: { release_id: string; build_id: string; source_commit: string; created_at: string } }
-interface Node { node_id: string; release_digest: string; mode: string; ready: boolean; last_seen: string; enabled: boolean; stopped: boolean; error?: string }
 interface Step { step_id: number; node_id: string; action: string; status: string; error?: string }
 interface Plan { id: string; release_digest: string; status: string; cursor: number; error?: string; nodes: string[]; created_at: string; steps?: Step[] }
 interface Preflight { release_digest: string; expected_revision: number; primary_node: string; nodes: string[]; blockers: string[]; strategy: string }
@@ -26,7 +29,7 @@ const canExecute = computed(() => auth.has('system:update:execute'))
 const canRecover = computed(() => auth.has('system:update:recover'))
 const options = computed(() => releases.value.map(r => ({ value: r.digest, label: r.manifest.release_id + ' · ' + r.digest.slice(0, 12) })))
 const active = computed(() => plans.value.some(p => !['completed', 'cancelled', 'failed', 'superseded'].includes(p.status)))
-const columns = computed<TableColumn[]>(() => [{ key: 'node_id', label: t('upgrades.node') }, { key: 'release_digest', label: t('upgrades.version') }, { key: 'mode', label: t('upgrades.mode') }, { key: 'ready', label: t('upgrades.ready') }, { key: 'last_seen', label: t('upgrades.lastSeen') }, { key: 'error', label: t('upgrades.reason') }, ...(canRecover.value ? [{ key: 'manage', label: t('upgrades.manageNode') }] : [])])
+const columns = computed<TableColumn[]>(() => [{ key: 'node_id', label: t('upgrades.node') }, { key: 'release_digest', label: t('upgrades.version') }, { key: 'mode', label: t('upgrades.mode') }, { key: 'ready', label: t('upgrades.ready') }, { key: 'cpu_percent', label: 'CPU' }, { key: 'offloading', label: t('observe.offloadState') }, { key: 'last_seen', label: t('upgrades.lastSeen') }, { key: 'error', label: t('upgrades.reason') }, ...(canRecover.value ? [{ key: 'manage', label: t('upgrades.manageNode') }] : [])])
 const stepColumns = computed<TableColumn[]>(() => [{ key: 'node_id', label: t('upgrades.node') }, { key: 'action', label: t('upgrades.step') }, { key: 'status', label: t('upgrades.status') }, { key: 'error', label: t('upgrades.reason') }])
 const readyToCreate = computed(() => canExecute.value && available.value && !stale.value && !active.value && !!preflight.value && preflight.value.blockers.length === 0 && preflight.value.expected_revision === revision.value && preflight.value.release_digest === target.value)
 function label(group: string, value: string) { const key = `upgrades.${group}.${value}`; return te(key) ? t(key) : value }
@@ -44,7 +47,7 @@ async function load(manual = false) {
     if (preflight.value && preflight.value.expected_revision !== revision.value) preflight.value = null
     if (!selectedID.value && plans.value.length) selectedID.value = plans.value[0].id
     if (selectedID.value) await loadPlan(selectedID.value)
-  } catch (e) { if (manual || !stale.value) notifyError(e); stale.value = true } finally { inflight = false; loading.value = false }
+  } catch (e) { if (manual || (!stale.value && !active.value)) notifyError(e); stale.value = true } finally { inflight = false; loading.value = false }
 }
 async function loadPlan(id: string) {
   const [plan, log] = await Promise.all([api.get<Plan>(`/system/upgrades/${encodeURIComponent(id)}`), api.get<{ events: Event[] }>(`/system/upgrades/${encodeURIComponent(id)}/events`)])
@@ -87,13 +90,16 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
 <template>
   <div class="space-y-5">
     <SPageHeader :title="t('upgrades.title')" :description="t('upgrades.description')"><template #actions><SButton :loading="loading" @click="load(true)">{{ t('common.refresh') }}</SButton></template></SPageHeader>
-    <SHint v-if="stale" tone="warning">{{ t(available ? 'upgrades.stale' : 'upgrades.unavailable') }}</SHint>
+    <SHint v-if="stale" tone="warning">{{ t(active ? 'observe.reconnect' : available ? 'upgrades.stale' : 'upgrades.unavailable') }}</SHint>
+    <TopologyGraph />
     <template v-if="available">
       <SCard :title="t('upgrades.nodes')">
         <p class="mb-4 text-sm text-gray-500">{{ t('upgrades.primary') }}: {{ primary || '—' }}</p>
         <STable :columns="columns" :rows="nodes" row-key="node_id">
           <template #cell-release_digest="{ row }"><span :title="row.release_digest">{{ version(row.release_digest) }}</span></template>
           <template #cell-mode="{ row }">{{ label('modes', row.mode) }}</template>
+          <template #cell-cpu_percent="{ row }">{{ row.cpu_percent == null ? '—' : row.cpu_percent.toFixed(1) + '%' }}</template>
+          <template #cell-offloading="{ row }"><SBadge :tone="row.offloading ? 'warning' : 'gray'">{{ t(row.offloading ? 'observe.offloading' : 'observe.notOffloading') }}</SBadge></template>
           <template #cell-ready="{ row }"><SBadge :tone="row.ready ? 'success' : 'warning'">{{ t(!row.enabled ? 'upgrades.disabled' : row.ready ? 'upgrades.serving' : row.stopped ? 'upgrades.stopped' : 'upgrades.waiting') }}</SBadge></template>
           <template #cell-last_seen="{ row }">{{ formatDateTime(row.last_seen) }}</template>
           <template #cell-manage="{ row }"><SButton size="sm" :disabled="busy || stale" @click="setNodeEnabled(row, !row.enabled)">{{ t(row.enabled ? 'upgrades.disableNode' : 'upgrades.enableNode') }}</SButton></template>
@@ -121,6 +127,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
         <div v-if="selected" class="space-y-4">
           <div class="flex flex-wrap items-center gap-3"><SBadge :tone="tone(selected.status)">{{ label('states', selected.status) }}</SBadge><span class="text-sm">{{ formatDateTime(selected.created_at) }}</span><code class="text-xs text-gray-500">{{ selected.id }}</code></div>
           <SHint v-if="selected.error" tone="warning">{{ selected.error }}</SHint>
+          <StepLanes :steps="selected.steps || []" :events="events" :cursor="selected.cursor" />
           <SHint v-if="selected.status === 'paused'">{{ t('upgrades.recovery') }}</SHint>
           <div v-if="canRecover" class="flex gap-2">
             <SButton v-if="selected.status === 'running'" :loading="busy" :disabled="stale" @click="action('pause')">{{ t('upgrades.pause') }}</SButton>
@@ -130,6 +137,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
           </div>
           <STable :columns="stepColumns" :rows="selected.steps || []" row-key="step_id"><template #cell-action="{ row }">{{ label('actions', row.action) }}</template><template #cell-status="{ row }"><SBadge :tone="tone(row.status)">{{ label('states', row.status) }}</SBadge></template></STable>
           <ol class="space-y-2 text-sm"><li v-for="event in events" :key="event.id" class="flex flex-wrap gap-2"><time class="text-gray-500">{{ formatDateTime(event.created_at) }}</time><span>{{ event.message }}</span></li></ol>
+          <ReleaseHistory v-if="auth.has('plugin:read')" :since="selected.created_at" />
         </div>
       </SCard>
     </template>

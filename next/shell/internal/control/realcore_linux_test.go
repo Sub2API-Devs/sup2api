@@ -313,6 +313,13 @@ func TestRealCoreRollingUpgrade(t *testing.T) {
 			time.Sleep(time.Second)
 		}
 		pluginsBefore = pluginSnapshot()
+		var stages, historyNodes, audits int
+		if err := testDB.QueryRow(ctx, `SELECT
+			(SELECT count(*) FROM plugin_history WHERE plugin_key='anthropic' AND node_id='' AND state='active' AND version=$1),
+			(SELECT count(DISTINCT node_id) FROM plugin_history WHERE plugin_key='anthropic' AND node_id<>''),
+			(SELECT count(*) FROM audit_logs WHERE action='plugin.upgrade' AND target_id='anthropic' AND detail->>'source'='builtin' AND detail->>'version'=$1)`, nextVersion).Scan(&stages, &historyNodes, &audits); err != nil || stages < 1 || historyNodes < len(nodes) || audits != 1 {
+			t.Fatalf("missing durable builtin history: stages=%d nodes=%d audits=%d err=%v", stages, historyNodes, audits, err)
+		}
 	}
 	migrationsAfter := appliedMigrations()
 	for id, sum := range migrationsBefore {

@@ -15,6 +15,7 @@ import './core'
 import './accounts'
 import './resources'
 import './billing'
+import './observability'
 import './plugins'
 
 async function readBody(req: IncomingMessage): Promise<any> {

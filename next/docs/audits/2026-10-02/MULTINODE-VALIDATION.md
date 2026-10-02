@@ -254,3 +254,16 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 - 迁移：`schema_migrations` 记录 0023；三个插件改为幂等的脚本各在集群范围重跑一次（`plugin_migrations` 每个脚本一行，校验和与时间已更新），数据不变。
 - 部署后：四个节点运行 v0.1.6 并本地服务，业务入口未带凭证返回 401；CPU 保护仍开启、阈值 80，各节点 CPU 约 0.3%、未转移。
 - 日志问题：计划执行期间，已获准协调插件的节点每 12 秒左右就尝试一次内置插件升级，被“核心更新进行中”拒绝，每轮 5 条 ERROR（sup2api-1 三轮，sup2api-2、-3 各一轮）。原因是 `startBuiltinUpgrade` 用 `canCoordinate` 作门槛，而节点在计划的准备阶段就已获准协调插件。结果不受影响，计划完成后第一次尝试即成功，但门槛应同时要求没有进行中或暂停的核心计划，待修正。另有一条 WARN：包内 gemini 0.2.0 与库中已存的同版本内容不同（重新构建、未升版本号），按规则保留已存版本。
+
+## 17. 升级可视化、插件历史与审计（v0.1.7 待部署）
+
+实现见 CONTRACTS §38：修复内置插件升级前置门槛与节点版本字段；迁移 0024 持久化发布阶段及节点状态；补充内置升级和核心管理操作审计；新增发布历史接口、审计界面、外壳→核心→插件拓扑、总进度与节点步骤泳道。guard 仍由管理员独立管理，不新增到内置包。
+
+- 本地：server Go 测试、前端类型检查与生产构建通过。前端输出到临时目录，未覆盖工作区原有 `server/web/dist/index.html`。mock 浏览器检查了拓扑、版本与 fallback、升级泳道和审计列表，无控制台错误；未完成深色模式视觉验证。
+- OVH：使用独立项目 `sub2api-observe-ac7lwd`，私有 PG 16、Redis 7、源码构建 mock；不发布端口，不连接生产数据库。首次准备遗漏 guard 的忽略目录 UI 构建产物，补建后完成打包；首次业务故障测试发现复用的旧 mock 缺少视频接口，改为独立项目从当前源码构建 mock 后重跑。
+- 六项真实多节点回归全部通过（[日志](evidence/observability-realcore.log.txt)，661.5 秒）：升级中断与 Redis 故障、正常升级及基线恢复、CPU 转移、插件包跨节点、Responses WebSocket、外壳 WebSocket。正常升级进行了 8,559 次入口探测，计划内 503 为 1,642 次，其余无失败；内置 anthropic 在三个节点升至 0.3.0-test，迁移一次，新增断言验证发布历史、各节点历史和唯一一条内置升级审计。测试包摘要见 [digests](evidence/observability-artifact-digests.txt)。
+- 全模块格式检查、`go vet`、构建与 `go test -race` 最终通过，e2e 只编译（[最终汇总](evidence/observability-modules.summary)）。首轮 server 的旧 `TestManagedRuntimeMigrationDoesNotBootstrap` 只删除 0023 记录，0024 留在库中导致历史缺口；改为删除连续后缀、按同一边界计算预期契约后，单例和 server 完整重跑通过（[首轮汇总](evidence/observability-modules-first.summary)、[首轮 server](evidence/observability-module-server-first.log.txt)、[单例](evidence/observability-migration-focus.log.txt)、[最终 server](evidence/observability-module-server.log.txt)）。业务代码没有因该夹具修正再变更，六项真实测试无需重复运行。
+- PG/Redis 专项 19 项通过、0 跳过（[日志](evidence/observability-db-guard.log.txt)）。新增历史事务、去重、失败重试、保留期、接口权限与分页、Unix socket 管理桥审计测试也包含在 server 的完整回归中。前端构建记录见 [日志](evidence/observability-web-build.log.txt)。
+- 生产只读核验：四个入口 `/api/v1/me` 未带凭证均为 401；四个外壳与 releases 容器已配置 `json-file`、`max-size=50m`、`max-file=5`，无需重复重建以启用轮转。
+- 验证结束后已删除独立项目的容器、网络、临时 mock 镜像及目录，保留两个 external Go 缓存卷；再次核验生产入口与日志配置正常（[清理证据](evidence/observability-cleanup.txt)）。本地 mock 预览进程已关闭。
+- 本轮尚未提交、推送或部署。`prepare.sh` 已准备 `release 0.1.7 0.1.6`，上线仍按用户最初要求在验证后确认；预计维护窗口参考 §16.1，不将隔离测试的耗时作为生产承诺。历史不回填上线前的状态，CPU 虚线是候选关系而非流量追踪。

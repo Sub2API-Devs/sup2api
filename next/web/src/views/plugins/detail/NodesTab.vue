@@ -5,6 +5,7 @@ import { SCard, SCode, SHint, STable, type TableColumn } from '@sub2api/ui'
 import { formatBytes, formatDateTime, formatRelative } from '@/utils/format'
 import { display, pick, type PluginDetail, type PluginNode } from '../pluginUtil'
 import StatusBadge from '../parts/StatusBadge.vue'
+import { parseNodePlugin } from '@/api/admin'
 
 // Per-node runtime state. The state object is owned by the runtime (C2);
 // well-known fields are pulled out, everything is available as JSON.
@@ -25,11 +26,10 @@ const columns = computed<TableColumn[]>(() => [
 const rows = computed(() => props.detail.nodes || [])
 
 function st(n: PluginNode): Record<string, any> {
-  return n.state && typeof n.state === 'object' ? n.state : {}
+  return parseNodePlugin(n.state)
 }
 
 function status(n: PluginNode): string {
-  if (typeof n.state === 'string') return n.state
   return String(pick(st(n), 'status', 'state', 'phase') ?? '—')
 }
 
@@ -50,6 +50,8 @@ function cpu(n: PluginNode): string {
 }
 
 function restarts(n: PluginNode): string {
+  const instances = parseNodePlugin(n.state).instances
+  if (instances) return String(instances.reduce((sum, i) => sum + i.restarts, 0))
   const v = pick(st(n), 'restarts', 'restart_count')
   return v === undefined ? '—' : String(v)
 }
@@ -71,7 +73,10 @@ function restartReason(n: PluginNode): string {
         <div v-if="restartReason(row)" class="mt-0.5 max-w-[14rem] truncate text-xs text-red-500" :title="restartReason(row)">{{ restartReason(row) }}</div>
       </template>
       <template #cell-version="{ row }">
-        <span class="font-mono text-sm">{{ display(pick(st(row), 'version', 'active_version')) }}</span>
+        <span class="font-mono text-sm">{{ display(st(row).serving) }}</span>
+        <SHint v-if="st(row).standby" size="xs">{{ t('observe.standby') }}: {{ st(row).standby }}</SHint>
+        <div v-if="st(row).fallback" class="text-xs text-amber-600">{{ t('observe.fallback') }}: {{ st(row).fallback }}</div>
+        <SHint size="xs">{{ t('observe.instances') }}: {{ st(row).instances?.length || 0 }}</SHint>
       </template>
       <template #cell-memory="{ row }">{{ memory(row) }}</template>
       <template #cell-cpu="{ row }">{{ cpu(row) }}</template>

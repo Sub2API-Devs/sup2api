@@ -107,6 +107,7 @@ var coreModules = []coreModule{
 	}},
 	{"node", lt("Cluster", "集群"), []corePerm{
 		{"node:read", "View cluster nodes", "查看集群节点", false},
+		{"audit:read", "View audit logs", "查看审计日志", false},
 	}},
 	{"gateway", lt("Gateway", "网关"), []corePerm{
 		{"gateway:use", "Call the gateway", "调用网关", false},

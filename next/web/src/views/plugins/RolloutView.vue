@@ -12,6 +12,7 @@ import { useAppStore } from '@/stores/app'
 import { usePluginStore } from '@/stores/plugins'
 import { ROLLOUT_RUNNING, asArray, display, formatDuration, pick, statusTone, type PluginDetail } from './pluginUtil'
 import StatusBadge from './parts/StatusBadge.vue'
+import ReleaseHistory from './parts/ReleaseHistory.vue'
 
 type StepState = 'waiting' | 'running' | 'done' | 'failed' | 'skipped' | 'cancelled'
 
@@ -115,7 +116,11 @@ async function refreshShell() {
 async function poll() {
   clearTimeout(timer)
   try {
-    const r = await api.get<Rollout | null>(`/plugins/${encodeURIComponent(key.value)}/rollouts/current`)
+    let r = await api.get<Rollout | null>(`/plugins/${encodeURIComponent(key.value)}/rollouts/current`)
+    if (!r) {
+      const recent = await api.list<Rollout>(`/plugins/${encodeURIComponent(key.value)}/rollouts`, { page_size: 1 })
+      r = recent.items[0] || null
+    }
     const wasRunning = running.value
     rollout.value = r && typeof r === 'object' && 'phase' in r ? r : null
     loadError.value = ''
@@ -297,5 +302,6 @@ onBeforeUnmount(() => {
         </div>
       </SCard>
     </template>
+    <ReleaseHistory :plugin-key="key" />
   </div>
 </template>

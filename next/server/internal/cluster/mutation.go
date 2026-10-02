@@ -39,18 +39,25 @@ func (g *PluginMutations) Begin(ctx context.Context) (context.Context, func(), e
 	}
 	work, stop := core.KeepLock(work, lk)
 	done := func() { stop(); cancel(); lk.Release() }
-	// An ordinary deployment has no updater schema. Do not create it here.
-	var installed bool
-	if err = g.DB.Pool.QueryRow(work, `SELECT to_regclass('updater.upgrades') IS NOT NULL`).Scan(&installed); err == nil && installed {
-		var busy bool
-		err = g.DB.Pool.QueryRow(work, `SELECT EXISTS(SELECT 1 FROM updater.upgrades WHERE status IN ('running','paused'))`).Scan(&busy)
-		if err == nil && busy {
-			err = core.ErrConflict.WithMessage("core update is running or paused; finish or cancel it before changing plugins")
-		}
+	busy, err := CoreUpdateBusy(work, g.DB.Pool)
+	if err == nil && busy {
+		err = core.ErrConflict.WithMessage("core update is running or paused; finish or cancel it before changing plugins")
 	}
 	if err != nil {
 		done()
 		return ctx, noop, err
 	}
 	return context.WithValue(work, mutationScopeKey{}, g), done, nil
+}
+
+// CoreUpdateBusy also works on installations without a managed shell.
+// Callers must fail closed on errors. The mutation gate still rechecks under
+// the shared lock: this preflight alone does not authorize a plugin change.
+func CoreUpdateBusy(ctx context.Context, q store.Querier) (bool, error) {
+	var installed, busy bool
+	if err := q.QueryRow(ctx, `SELECT to_regclass('updater.upgrades') IS NOT NULL`).Scan(&installed); err != nil || !installed {
+		return false, err
+	}
+	err := q.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM updater.upgrades WHERE status IN ('running','paused'))`).Scan(&busy)
+	return busy, err
 }

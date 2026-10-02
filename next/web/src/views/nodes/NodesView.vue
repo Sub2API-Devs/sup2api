@@ -7,6 +7,7 @@ import type { NodeInfo } from '@/api/types'
 import { statusTone, type NodePluginState } from '@/api/admin'
 import { notifyError } from '@/utils/errors'
 import { formatDateTime, formatRelative } from '@/utils/format'
+import TopologyGraph from './TopologyGraph.vue'
 
 const { t } = useI18n()
 
@@ -92,6 +93,8 @@ interface PluginBadge {
   state: string
   tone: Tone
   detail: string
+  fallback?: string
+  standby?: string
 }
 
 function pluginBadges(n: NodeInfo): PluginBadge[] {
@@ -100,13 +103,16 @@ function pluginBadges(n: NodeInfo): PluginBadge[] {
       const p = parsePlugin(raw)
       const state = String(p.state || p.status || 'unknown')
       const detail = [
-        `${key}${p.version ? ' ' + p.version : ''}`,
+        `${key}${p.serving ? ' ' + p.serving : ''}`,
+        p.standby ? `${t('observe.standby')}: ${p.standby}` : '',
+        p.fallback ? `${t('observe.fallback')}: ${p.fallback}` : '',
+        `${t('observe.instances')}: ${p.instances?.length || 0}; ${t('observe.restarts')}: ${p.instances?.reduce((sum, i) => sum + i.restarts, 0) || 0}`,
         `${t('nodes.state')}: ${state}`,
         p.error ? `${t('nodes.error')}: ${p.error}` : ''
       ]
         .filter(Boolean)
         .join('\n')
-      return { key, version: p.version, state, tone: pluginTone(state), detail }
+      return { key, version: p.serving, fallback: p.fallback, standby: p.standby, state, tone: p.fallback ? 'warning' as Tone : pluginTone(state), detail }
     })
     .sort((a, b) => a.key.localeCompare(b.key))
 }
@@ -170,7 +176,8 @@ const versions = computed(() => new Set(nodes.value.map((n) => n.host_version)).
       <SStatCard :label="t('nodes.hostVersions')" :value="versions" icon="cpu" :tone="versions > 1 ? 'warning' : 'primary'" :sub="versions > 1 ? t('nodes.mixedVersions') : undefined" :loading="loading" />
     </div>
 
-    <STable :columns="columns" :rows="nodes" :loading="loading" row-key="node_id">
+    <TopologyGraph />
+    <STable :columns="columns" :rows="nodes" :loading="loading" row-key="boot_id">
       <template #cell-node_id="{ row }">
         <div class="flex items-center gap-2">
           <span class="h-2 w-2 shrink-0 rounded-full" :class="isStale(row) ? 'bg-red-500' : 'bg-emerald-500'" />
@@ -203,6 +210,8 @@ const versions = computed(() => new Set(nodes.value.map((n) => n.host_version)).
           >
             <span class="font-medium">{{ p.key }}</span>
             <SHint v-if="p.version" inline size="xs" class="font-mono">{{ p.version }}</SHint>
+            <span v-if="p.standby" class="text-xs">→ {{ p.standby }}</span>
+            <SBadge v-if="p.fallback" tone="warning">{{ t('observe.fallback') }}</SBadge>
             <span :class="dotClass(p.tone)">●</span>
           </span>
           <SHint v-if="!pluginBadges(row).length" inline>—</SHint>

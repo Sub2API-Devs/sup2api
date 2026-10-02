@@ -614,8 +614,8 @@ on('GET', '/nodes', () => [
     started_at: startedA,
     last_heartbeat: now(-Math.floor(Math.random() * 4)),
     plugins: {
-      anthropic: JSON.stringify({ version: '0.1.0', state: 'running' }),
-      guard: { version: '0.1.0', state: 'running' }
+      anthropic: JSON.stringify({ serving: '0.2.1', state: 'active', instances: [{ version: '0.2.1', state: 'ready', restarts: 0 }] }),
+      guard: { serving: '0.1.0', state: 'active', instances: [{ version: '0.1.0', state: 'ready', restarts: 0 }] }
     }
   },
   {
@@ -626,8 +626,8 @@ on('GET', '/nodes', () => [
     started_at: startedB,
     last_heartbeat: now(-Math.floor(Math.random() * 4)),
     plugins: {
-      anthropic: JSON.stringify({ version: '0.1.0', state: 'running' }),
-      guard: JSON.stringify({ version: '0.2.0', state: 'starting' })
+      anthropic: JSON.stringify({ serving: '0.2.0', standby: '0.2.1', fallback: '0.2.0', state: 'pending', instances: [{ version: '0.2.0', state: 'ready', restarts: 1 }] }),
+      guard: JSON.stringify({ serving: '0.1.0', standby: '0.2.0', state: 'pending' })
     }
   },
   {
@@ -638,7 +638,7 @@ on('GET', '/nodes', () => [
     started_at: now(-86400 * 9),
     last_heartbeat: now(-95),
     plugins: {
-      anthropic: JSON.stringify({ version: '0.1.0', state: 'failed', error: 'health check timeout' })
+      anthropic: JSON.stringify({ serving: '0.2.0', fallback: '0.2.0', state: 'failed', error: 'health check timeout' })
     }
   }
 ])

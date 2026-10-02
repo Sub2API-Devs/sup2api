@@ -4,19 +4,23 @@ package updater
 
 import (
 	"context"
+	"encoding/json"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterRoutes(r *httpapi.Router, socketPath string) {
+func RegisterRoutes(r *httpapi.Router, socketPath string, db *store.DB) {
 	client := &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
 	}}}
@@ -42,9 +46,33 @@ func RegisterRoutes(r *httpapi.Router, socketPath string) {
 			return
 		}
 		defer response.Body.Close()
+		payload, err := io.ReadAll(io.LimitReader(response.Body, 8<<20))
+		if err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+		if action, targetType := auditAction(c.Request.Method, c.FullPath()); action != "" && response.StatusCode >= 200 && response.StatusCode < 300 {
+			id := c.Param("id")
+			var result struct {
+				Data struct {
+					ID string `json:"id"`
+				} `json:"data"`
+			}
+			_ = json.Unmarshal(payload, &result)
+			if result.Data.ID != "" {
+				id = result.Data.ID
+			}
+			// The shell has committed independently. Never turn an audit-write
+			// failure into a failed action response that invites duplicate work.
+			auditCtx, cancel := context.WithTimeout(context.WithoutCancel(audit.Context(c)), 5*time.Second)
+			if err := audit.Audit(auditCtx, db.Pool, uid, action, targetType, id, map[string]any{"source": "console", "request_target": c.Param("id")}); err != nil {
+				slog.Error("audit updater action failed", "action", action, "target", id, "err", err)
+			}
+			cancel()
+		}
 		c.Header("Content-Type", "application/json")
 		c.Status(response.StatusCode)
-		_, _ = io.Copy(c.Writer, io.LimitReader(response.Body, 8<<20))
+		_, _ = c.Writer.Write(payload)
 	}
 	for _, path := range []string{"/system/releases", "/system/upgrades", "/system/upgrades/:id", "/system/upgrades/:id/events"} {
 		r.Perm("GET", path, "system:update:read", handler)
@@ -60,4 +88,27 @@ func RegisterRoutes(r *httpapi.Router, socketPath string) {
 	// CPU offload is a system setting of the managed cluster.
 	r.Perm("GET", "/system/offload", "settings:read", handler)
 	r.Perm("PUT", "/system/offload", "settings:manage", handler)
+}
+
+func auditAction(method, path string) (string, string) {
+	if method == "PUT" && path == "/api/v1/system/offload" {
+		return "system.offload.update", "system"
+	}
+	if method != "POST" {
+		return "", ""
+	}
+	if path == "/api/v1/system/upgrades" {
+		return "system.upgrade.create", "upgrade"
+	}
+	for _, action := range []string{"pause", "resume", "cancel", "rollback"} {
+		if path == "/api/v1/system/upgrades/:id/"+action {
+			return "system.upgrade." + action, "upgrade"
+		}
+	}
+	for _, action := range []string{"enable", "disable"} {
+		if path == "/api/v1/system/nodes/:id/"+action {
+			return "system.node." + action, "node"
+		}
+	}
+	return "", ""
 }
