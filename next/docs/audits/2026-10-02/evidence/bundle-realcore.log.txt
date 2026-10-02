@@ -1,0 +1,84 @@
+=== RUN   TestRealCoreFaultsDuringPrimaryFirstUpgrade
+    realcore_faults_linux_test.go:289: SSE through forwarding node lasted 13.525s across TTL 3s and a key replacement
+    realcore_faults_linux_test.go:305: video task s2task_d5ddbfbe-79eb-46aa-a376-41018189843e submitted; an upstream observation is held open
+    realcore_faults_linux_test.go:318: primary-first plan 1bfcce698e84386277643c6ceb9a6e07 started
+    realcore_faults_linux_test.go:132: fault: restarted stopped follower shell as c-shell-2
+    realcore_faults_linux_test.go:138: fault: node d joined during the update as d-shell-1
+    realcore_faults_linux_test.go:192: fault: SIGKILL primary core pid 4775 during its migration
+    realcore_faults_linux_test.go:332: fault: plan paused after the interrupted migration: Get "http://core/v1/status": dial unix /tmp/s2-real-1286729460/core.sock: connect: connection refused
+    realcore_faults_linux_test.go:359: fault: Redis partitioned for 9s
+    realcore_faults_linux_test.go:373: plan resumed
+{"time":"2026-10-02T16:32:19.470345745Z","level":"ERROR","msg":"builtin plugin","node":"a","component":"builtin-plugins","plugin":"anthropic","version":"0.3.0-test","err":"upload anthropic-0.3.0-test.s2plugin: conflict: core update is running or paused; finish or cancel it before changing plugins"}
+{"time":"2026-10-02T16:32:19.692725885Z","level":"ERROR","msg":"builtin plugin","node":"a","component":"builtin-plugins","plugin":"openai","version":"0.3.0","err":"upload openai-0.3.0.s2plugin: conflict: core update is running or paused; finish or cancel it before changing plugins"}
+{"time":"2026-10-02T16:32:19.919159009Z","level":"ERROR","msg":"builtin plugin","node":"a","component":"builtin-plugins","plugin":"volcengine","version":"0.10.1","err":"upload volcengine-0.10.1.s2plugin: conflict: core update is running or paused; finish or cancel it before changing plugins"}
+{"time":"2026-10-02T16:32:30.756810887Z","level":"ERROR","msg":"builtin plugin","node":"a","component":"builtin-plugins","plugin":"anthropic","version":"0.3.0-test","err":"upload anthropic-0.3.0-test.s2plugin: conflict: core update is running or paused; finish or cancel it before changing plugins"}
+{"time":"2026-10-02T16:32:30.97884003Z","level":"ERROR","msg":"builtin plugin","node":"a","component":"builtin-plugins","plugin":"openai","version":"0.3.0","err":"upload openai-0.3.0.s2plugin: conflict: core update is running or paused; finish or cancel it before changing plugins"}
+{"time":"2026-10-02T16:32:31.205005901Z","level":"ERROR","msg":"builtin plugin","node":"a","component":"builtin-plugins","plugin":"volcengine","version":"0.10.1","err":"upload volcengine-0.10.1.s2plugin: conflict: core update is running or paused; finish or cancel it before changing plugins"}
+{"time":"2026-10-02T16:32:37.603005243Z","level":"ERROR","msg":"builtin plugin","node":"b","component":"builtin-plugins","plugin":"anthropic","version":"0.3.0-test","err":"upload anthropic-0.3.0-test.s2plugin: conflict: core update is running or paused; finish or cancel it before changing plugins"}
+{"time":"2026-10-02T16:32:37.896040647Z","level":"ERROR","msg":"builtin plugin","node":"b","component":"builtin-plugins","plugin":"openai","version":"0.3.0","err":"upload openai-0.3.0.s2plugin: conflict: core update is running or paused; finish or cancel it before changing plugins"}
+{"time":"2026-10-02T16:32:38.190734806Z","level":"ERROR","msg":"builtin plugin","node":"b","component":"builtin-plugins","plugin":"volcengine","version":"0.10.1","err":"upload volcengine-0.10.1.s2plugin: conflict: core update is running or paused; finish or cancel it before changing plugins"}
+    realcore_faults_linux_test.go:399: update completed; the retried migration applied once; d serves the target
+    realcore_faults_linux_test.go:444: video task settled once on its account: cost=0.00025500, 3 upstream observations (2 canceled by the update), 0 poll failures
+    realcore_faults_linux_test.go:456: fault: Redis partitioned for 9s while serving
+    realcore_faults_linux_test.go:477: Redis partition while serving: every core kept its boot and serves again
+--- PASS: TestRealCoreFaultsDuringPrimaryFirstUpgrade (202.87s)
+=== RUN   TestRealCoreRollingUpgrade
+    realcore_linux_test.go:43: bootstrap primary a prepared and admitted
+    realcore_linux_test.go:50: follower b downloaded, prepared and admitted
+    realcore_linux_test.go:50: follower c downloaded, prepared and admitted
+    realcore_linux_test.go:161: primary-first plan 52869b407f6a404685b2aa85d14beda4 started across 3 nodes
+{"time":"2026-10-02T16:34:37.154614163Z","level":"ERROR","msg":"builtin plugin","node":"a","component":"builtin-plugins","plugin":"anthropic","version":"0.3.0-test","err":"upload anthropic-0.3.0-test.s2plugin: conflict: core update is running or paused; finish or cancel it before changing plugins"}
+{"time":"2026-10-02T16:34:37.377824391Z","level":"ERROR","msg":"builtin plugin","node":"a","component":"builtin-plugins","plugin":"openai","version":"0.3.0","err":"upload openai-0.3.0.s2plugin: conflict: core update is running or paused; finish or cancel it before changing plugins"}
+{"time":"2026-10-02T16:34:37.604842997Z","level":"ERROR","msg":"builtin plugin","node":"a","component":"builtin-plugins","plugin":"volcengine","version":"0.10.1","err":"upload volcengine-0.10.1.s2plugin: conflict: core update is running or paused; finish or cancel it before changing plugins"}
+{"time":"2026-10-02T16:34:48.405606157Z","level":"ERROR","msg":"builtin plugin","node":"a","component":"builtin-plugins","plugin":"anthropic","version":"0.3.0-test","err":"upload anthropic-0.3.0-test.s2plugin: conflict: core update is running or paused; finish or cancel it before changing plugins"}
+{"time":"2026-10-02T16:34:48.629990947Z","level":"ERROR","msg":"builtin plugin","node":"a","component":"builtin-plugins","plugin":"openai","version":"0.3.0","err":"upload openai-0.3.0.s2plugin: conflict: core update is running or paused; finish or cancel it before changing plugins"}
+{"time":"2026-10-02T16:34:48.856166105Z","level":"ERROR","msg":"builtin plugin","node":"a","component":"builtin-plugins","plugin":"volcengine","version":"0.10.1","err":"upload volcengine-0.10.1.s2plugin: conflict: core update is running or paused; finish or cancel it before changing plugins"}
+{"time":"2026-10-02T16:34:56.274156583Z","level":"ERROR","msg":"builtin plugin","node":"b","component":"builtin-plugins","plugin":"anthropic","version":"0.3.0-test","err":"upload anthropic-0.3.0-test.s2plugin: conflict: core update is running or paused; finish or cancel it before changing plugins"}
+{"time":"2026-10-02T16:34:56.564414379Z","level":"ERROR","msg":"builtin plugin","node":"b","component":"builtin-plugins","plugin":"openai","version":"0.3.0","err":"upload openai-0.3.0.s2plugin: conflict: core update is running or paused; finish or cancel it before changing plugins"}
+{"time":"2026-10-02T16:34:56.861401713Z","level":"ERROR","msg":"builtin plugin","node":"b","component":"builtin-plugins","plugin":"volcengine","version":"0.10.1","err":"upload volcengine-0.10.1.s2plugin: conflict: core update is running or paused; finish or cancel it before changing plugins"}
+{"time":"2026-10-02T16:34:59.668383265Z","level":"ERROR","msg":"builtin plugin","node":"a","component":"builtin-plugins","plugin":"anthropic","version":"0.3.0-test","err":"upload anthropic-0.3.0-test.s2plugin: conflict: core update is running or paused; finish or cancel it before changing plugins"}
+{"time":"2026-10-02T16:34:59.896708655Z","level":"ERROR","msg":"builtin plugin","node":"a","component":"builtin-plugins","plugin":"openai","version":"0.3.0","err":"upload openai-0.3.0.s2plugin: conflict: core update is running or paused; finish or cancel it before changing plugins"}
+{"time":"2026-10-02T16:35:00.134495942Z","level":"ERROR","msg":"builtin plugin","node":"a","component":"builtin-plugins","plugin":"volcengine","version":"0.10.1","err":"upload volcengine-0.10.1.s2plugin: conflict: core update is running or paused; finish or cancel it before changing plugins"}
+    realcore_linux_test.go:264: primary-first completed: requests=8697 planned503=1642 forwardedSuccess=2280 failures=0 counts=map[a:local-serving:401:2379 a:maintenance:503:520 b:forward-only:401:1100 b:forward-only:503:41 b:local-serving:401:1238 b:maintenance:503:520 c:forward-only:401:1180 c:forward-only:503:41 c:local-serving:401:1158 c:maintenance:503:520]
+    realcore_linux_test.go:307: bundled anthropic upgraded to 0.3.0-test with the core on all 3 nodes; its migration ran once
+    realcore_linux_test.go:340: primary applied migrations [9999_managed_upgrade_probe.sql] while followers were stopped
+    realcore_linux_test.go:390: node b re-registered after Redis loss; key reused=true; core boot unchanged
+    realcore_linux_test.go:390: node c re-registered after Redis loss; key reused=false; core boot unchanged
+    realcore_linux_test.go:402: killed core b boot=9a5c361f95f1bd37e1dc47d63b908f54eaaa2c7b5b229776e18cd6a4b973e33d; waiting for approved-release recovery
+    realcore_linux_test.go:406: core b recovered with new boot=6f20f013b02b46c4f45030abc87fa55d70cc69505aa9c1c7c3599eba8185cd45
+    realcore_linux_test.go:435: failed-candidate plan 7c8a5c65dd131a00c9aed4c90f50fe3d started
+    realcore_linux_test.go:442: failed-candidate plan paused safely: candidate exited before handshake
+    realcore_linux_test.go:487: baseline recovery plan 16a6002c7986b34249767cdc8ba21c64 started; order=[a b c]
+    realcore_linux_test.go:502: recovery: primary serving and all entrances converged
+    realcore_linux_test.go:573: baseline recovery completed; next update b0f923fa03fd235c8a45a76e0ac6c1ab accepted
+    realcore_linux_test.go:574: real R1->R2 primary-first upgrade passed; 8697 business requests, 1642 planned 503s; old=db38ec29f15e6a2cf6b23a075d41350931c804b75b0a4f6cbf53f92dae54b12b target=a59c9193116309623defbf8c50f194ace00f3386c2da2d7219f72a603de8c46d
+--- PASS: TestRealCoreRollingUpgrade (230.76s)
+=== RUN   TestRealCoreCPUOffloadMovesNewRequests
+2026/10/02 16:37:45 WARN cpu offload started node=a cpu_percent=95 targets="[b c]"
+    realcore_offload_linux_test.go:109: primary a at 95%: 30 requests answered by b (15) and c (15)
+2026/10/02 16:37:49 INFO cpu offload stopped node=a cpu_percent=95
+2026/10/02 16:37:50 WARN cpu offload started node=a cpu_percent=95 targets="[b c]"
+2026/10/02 16:37:54 INFO cpu offload stopped node=a cpu_percent=65
+2026/10/02 16:37:55 WARN cpu offload started node=b cpu_percent=99 targets="[a c]"
+2026/10/02 16:37:56 INFO cpu offload stopped node=b cpu_percent=99
+    realcore_offload_linux_test.go:157: follower b offloaded at 99% and stopped when the setting was turned off
+--- PASS: TestRealCoreCPUOffloadMovesNewRequests (64.10s)
+=== RUN   TestRealCorePluginPackagesTravelBetweenNodes
+    realcore_packages_linux_test.go:131: bundled packages: kept by the primary's shell, pulled by both followers over the node network
+    realcore_packages_linux_test.go:152: upload guard through follower b: stored on the primary before the response, pulled by c
+    realcore_packages_linux_test.go:185: market relay@0.2.0: 4 downloads from the market (install + each node); b never used the node network for it
+    realcore_packages_linux_test.go:193: primary a stopped
+    realcore_packages_linux_test.go:199: follower b restarted with a new core while the primary was down; it serves from its local release and plugin copies
+    realcore_packages_linux_test.go:210: node d cannot start while the primary is down: Get "https://127.0.0.1:43653/internal/blobs/849306cccd7d3ac7bb53dbf78024763a5eef3aab8d8c5b9e098d9c37159bb8bd": dial tcp 127.0.0.1:43653: connect: connection refused
+    realcore_packages_linux_test.go:224: node d started after the primary returned, pulling bundled and uploaded packages from it and the market package from the market
+--- PASS: TestRealCorePluginPackagesTravelBetweenNodes (75.18s)
+=== RUN   TestRealCoreResponsesWebSocket
+    realcore_responses_ws_linux_test.go:167: session on b: rejected key failed over at the handshake, three turns on one upstream connection, each recorded and billed
+    realcore_responses_ws_linux_test.go:216: draining b closed its session with 1012; the client reconnected through a and continued
+--- PASS: TestRealCoreResponsesWebSocket (56.37s)
+=== RUN   TestRealCoreShellsCarryWebSocketsAcrossNodes
+    realcore_websocket_linux_test.go:117: session through the follower survived 6s and new keys for both nodes
+    realcore_websocket_linux_test.go:165: while a offloads, its new session runs on b; the open and the forwarded sessions stay on a
+--- PASS: TestRealCoreShellsCarryWebSocketsAcrossNodes (35.57s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/shell/internal/control	666.012s

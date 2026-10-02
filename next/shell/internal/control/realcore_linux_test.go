@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -279,8 +280,39 @@ func TestRealCoreRollingUpgrade(t *testing.T) {
 			t.Fatalf("target not serving: %+v %s %v", st, mode, err)
 		}
 	}
-	if after := pluginSnapshot(); after != pluginsBefore {
-		t.Fatalf("core upgrade changed independent plugin state: before=%s after=%s", pluginsBefore, after)
+	if len(c.bundledNext) == 0 {
+		if after := pluginSnapshot(); after != pluginsBefore {
+			t.Fatalf("a release with the same bundle changed plugin state: before=%s after=%s", pluginsBefore, after)
+		}
+	} else {
+		// R2 bundles a newer anthropic: updating the core updates it on every
+		// node once the plan completed, running its new migration once.
+		var nextVersion string
+		for _, f := range c.bundledNext {
+			if name := strings.TrimSuffix(filepath.Base(f.name), ".s2plugin"); strings.HasPrefix(name, "anthropic-") {
+				nextVersion = strings.TrimPrefix(name, "anthropic-")
+			}
+		}
+		deadline := time.Now().Add(4 * time.Minute)
+		for {
+			var status, active string
+			var running, migrations int
+			var busy bool
+			_ = testDB.QueryRow(ctx, `SELECT status, coalesce(active_version,''),
+				(SELECT count(*) FROM plugin_runtime_nodes r JOIN updater.nodes n ON n.core_boot_id=r.boot_id AND n.cluster_id=$1 WHERE r.plugin_key='anthropic' AND NOT r.stopped AND n.ready),
+				(SELECT count(*) FROM plugin_migrations WHERE plugin_key='anthropic' AND migration_id='0002_add_family.sql'),
+				EXISTS(SELECT 1 FROM plugin_rollouts WHERE plugin_key='anthropic' AND phase IN ('preparing','activating')) OR EXISTS(SELECT 1 FROM plugin_rollout_cleanup WHERE state='cleanup_pending')
+				FROM plugins WHERE key='anthropic'`, dbname).Scan(&status, &active, &running, &migrations, &busy)
+			if status == "enabled" && active == nextVersion && migrations == 1 && running >= len(nodes) && !busy {
+				t.Logf("bundled anthropic upgraded to %s with the core on all %d nodes; its migration ran once", nextVersion, len(nodes))
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("bundled plugin not upgraded with the core: status=%s active=%s want=%s running=%d migrations=%d", status, active, nextVersion, running, migrations)
+			}
+			time.Sleep(time.Second)
+		}
+		pluginsBefore = pluginSnapshot()
 	}
 	migrationsAfter := appliedMigrations()
 	for id, sum := range migrationsBefore {

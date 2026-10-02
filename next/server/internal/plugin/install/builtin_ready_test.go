@@ -63,6 +63,17 @@ func TestBuiltinReadinessDuringUpgrade(t *testing.T) {
 			if err != nil || ready != tc.ready {
 				t.Fatalf("ready=%v, err=%v; want ready=%v", ready, err, tc.ready)
 			}
+			// The cluster-level check ignores this node's instances: a lagging
+			// node catches up on its own and must not keep the bundle upgrade busy.
+			committed, err := e.svc.BuiltinsCommitted(ctx, want)
+			wantCommitted := tc.ready
+			switch tc.name {
+			case "missing local instance", "local below image minimum", "local version unapproved":
+				wantCommitted = true
+			}
+			if err != nil || committed != wantCommitted {
+				t.Fatalf("committed=%v, err=%v; want %v", committed, err, wantCommitted)
+			}
 		})
 	}
 }

@@ -77,3 +77,65 @@ func builtinConvergence(ctx context.Context, s *install.Service, locker core.Loc
 		}
 	}
 }
+
+// startBuiltinUpgrade brings the plugins of a managed core's bundle up to the
+// versions it carries, so a core update upgrades its bundled plugins with
+// it. It waits until this node may coordinate plugins; plugin changes are
+// refused while a core plan is running or paused, so the upgrade starts when
+// the plan has completed and every node runs this release. It installs
+// bundled plugins never seen before, upgrades enabled ones that are older
+// than the bundle, and never downgrades, re-enables or overrides a newer
+// version an operator installed. It stops once the cluster runs the bundle;
+// a node whose own instance lags behind catches up by itself (§36).
+func startBuiltinUpgrade(ctx context.Context, s *install.Service, locker core.Locker, dir string, allowed func() bool, log *slog.Logger) func(context.Context) {
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if dir == "" {
+			return
+		}
+		want, err := s.BuiltinRequirements(dir)
+		if err != nil {
+			log.Warn("read builtin requirements failed; bundled plugins are not upgraded", "err", err)
+			return
+		}
+		for {
+			if allowed == nil || allowed() {
+				rctx, rcancel := context.WithTimeout(ctx, 10*time.Second)
+				committed, err := s.BuiltinsCommitted(rctx, want)
+				rcancel()
+				if err == nil && committed {
+					log.Info("bundled plugins run the versions of this release")
+					return
+				}
+				if lk, held, err := locker.TryLock(ctx, "plugins:builtin", time.Minute); err != nil {
+					log.Warn("builtin upgrade lock failed", "err", err)
+				} else if held {
+					work, stop := core.KeepLock(ctx, lk)
+					ictx, icancel := context.WithTimeout(work, 10*time.Minute)
+					if err := s.EnsureBuiltin(ictx, dir, log); err != nil {
+						log.Info("bundled plugin upgrade not finished; will retry", "err", err)
+					}
+					icancel()
+					stop()
+					lk.Release()
+				}
+			}
+			t := time.NewTimer(10 * time.Second)
+			select {
+			case <-ctx.Done():
+				t.Stop()
+				return
+			case <-t.C:
+			}
+		}
+	}()
+	return func(stopCtx context.Context) {
+		cancel()
+		select {
+		case <-done:
+		case <-stopCtx.Done():
+		}
+	}
+}

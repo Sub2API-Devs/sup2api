@@ -281,7 +281,12 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		}
 		onClose(stopBuiltins)
 	} else {
+		// A managed core that was not bootstrapped does not wait for its bundle
+		// to admit the node, but it still brings the bundled plugins up to the
+		// versions it carries, once it may coordinate plugins and no core plan
+		// blocks plugin changes (CONTRACTS §37).
 		builtinReady.Store(true)
+		onClose(startBuiltinUpgrade(ctx, inst, cl.Locker, cfg.Plugins.BuiltinDir, canCoordinate, log.With("component", "builtin-plugins")))
 	}
 
 	jobs := job.New(db, cl.Locker, reg, log, cfg.NodeID, job.Options{Executor: backgroundWork})

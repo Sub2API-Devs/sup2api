@@ -56,6 +56,18 @@ func (s *Service) BuiltinRequirements(dir string) (map[string]BuiltinRequirement
 // approved old generation until the local atomic switch. Explicitly disabled
 // and install-only plugins remain optional.
 func (s *Service) BuiltinsReady(ctx context.Context, want map[string]BuiltinRequirement, gen core.Generation) (bool, error) {
+	return s.builtinsReady(ctx, want, gen, true)
+}
+
+// BuiltinsCommitted reports that the cluster runs the bundle: every builtin
+// the bundle carries is approved and, unless disabled or install-only, active
+// at least at the bundled version. Unlike BuiltinsReady it does not look at
+// this node's instances, which follow on their own (CONTRACTS §36).
+func (s *Service) BuiltinsCommitted(ctx context.Context, want map[string]BuiltinRequirement) (bool, error) {
+	return s.builtinsReady(ctx, want, nil, false)
+}
+
+func (s *Service) builtinsReady(ctx context.Context, want map[string]BuiltinRequirement, gen core.Generation, checkLocal bool) (bool, error) {
 	for key, need := range want {
 		var local core.PluginInfo
 		var hasLocal bool
@@ -79,7 +91,7 @@ func (s *Service) BuiltinsReady(ctx context.Context, want map[string]BuiltinRequ
 		if status == StatusDisabled || (status == StatusInstalled && need.InstallOnly) {
 			continue
 		}
-		if (status != StatusEnabled && status != StatusUpgrading) || active == nil || !activeApproved || !hasLocal || !localApproved {
+		if (status != StatusEnabled && status != StatusUpgrading) || active == nil || !activeApproved || (checkLocal && (!hasLocal || !localApproved)) {
 			return false, nil
 		}
 		v, err := semver.NewVersion(*active)
@@ -88,6 +100,9 @@ func (s *Service) BuiltinsReady(ctx context.Context, want map[string]BuiltinRequ
 		}
 		if v.LessThan(need.Version) {
 			return false, nil
+		}
+		if !checkLocal {
+			continue
 		}
 		localVersion, err := semver.NewVersion(local.Version)
 		if err != nil {

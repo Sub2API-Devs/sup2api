@@ -70,8 +70,14 @@ plugins() {
     pkg=$("$checks/sub2api-plugin" pack --dir "plugins/$p" --runtimes "$checks/$p-runtime" --out-dir "$dest")
     "$checks/sub2api-plugin" sign --key "$checks/keys/managed-test.key" --key-id managed-test --publisher sub2api "$pkg" >> "$out/plugin-build-$p.log"
   done
+  # R2 alone bundles a newer anthropic (the 0.3.0-test overlay, which adds a
+  # migration), so updating the core must update it.
+  mkdir -p "$checks/builtin-next"
+  "$checks/sub2api-plugin" build --dir plugins/anthropic --overlay testdata/v0.3.0-test --out "$checks/anthropic-next-runtime" >> "$out/plugin-build-anthropic.log"
+  pkg=$("$checks/sub2api-plugin" pack --dir plugins/anthropic --runtimes "$checks/anthropic-next-runtime" --overlay testdata/v0.3.0-test --out-dir "$checks/builtin-next")
+  "$checks/sub2api-plugin" sign --key "$checks/keys/managed-test.key" --key-id managed-test --publisher sub2api "$pkg" >> "$out/plugin-build-anthropic.log"
   "$checks/sub2api-plugin" index --dir "$checks/market" --key "$checks/keys/managed-test.key" > "$out/plugin-market-index.log"
-  ls "$checks/builtin" "$checks/upload" "$checks/market"
+  ls "$checks/builtin" "$checks/builtin-next" "$checks/upload" "$checks/market"
 }
 
 realcore() {
@@ -94,7 +100,7 @@ SQL
   "$checks/core-r2" schema-contract > "$out/schema-r2.txt"
   sha256sum "$checks/core-r1" "$checks/core-r2" "$checks"/builtin/*.s2plugin "$checks"/upload/*.s2plugin "$checks"/market/*.s2plugin > "$out/artifact-digests.txt"
   export TEST_CORE_V1="$checks/core-r1" TEST_CORE_V2="$checks/core-r2" TEST_SHELL_NODES=3
-  export TEST_BUILTIN_DIR="$checks/builtin" TEST_EXPECT_MIGRATION=9999_managed_upgrade_probe.sql TEST_MOCK_URL=http://mock:8080
+  export TEST_BUILTIN_DIR="$checks/builtin" TEST_BUILTIN_NEXT_DIR="$checks/builtin-next" TEST_EXPECT_MIGRATION=9999_managed_upgrade_probe.sql TEST_MOCK_URL=http://mock:8080
   TEST_BUILTIN_KEY="managed-test=$(cat "$checks/keys/managed-test.pub")"
   TEST_UPLOAD_PACKAGE=$(ls "$checks"/upload/*.s2plugin) TEST_MARKET_DIR="$checks/market" TEST_MARKET_KEY=$(cat "$checks/keys/managed-test.pub")
   export TEST_UPLOAD_PACKAGE TEST_MARKET_DIR TEST_MARKET_KEY

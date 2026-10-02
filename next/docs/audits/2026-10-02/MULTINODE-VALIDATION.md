@@ -237,3 +237,10 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 | 真实三节点回归 | 六项全部通过（[日志](evidence/pernode-realcore.log.txt)）|
 
 限制：没有在真实三节点上专门注入“某个节点插件起不来”的故障，这部分由 PG 测试覆盖。迁移在任何节点切换前执行，落后节点上的旧版本会运行在新表结构上，因此迁移必须向后兼容。
+
+## 16. 内置插件随核心一起升级
+
+规则见 CONTRACTS §37。ovh 隔离目录验证，完毕已清理，生产四个入口 401。
+
+- 真实三节点 `TestRealCoreRollingUpgrade`（[日志](evidence/bundle-realcore.log.txt)）：R1 核心包内置 anthropic 0.2.1、openai 0.3.0、volcengine 0.10.1；R2 核心包把 anthropic 换成 0.3.0-test（带新迁移 `0002_add_family.sql`）。主节点优先升级完成后，新核心自动把 anthropic 升到 0.3.0-test，三个节点都运行新版本、旧实例清理完毕，迁移只执行一次；之后回退到 R1 的恢复计划没有把它降级。其余五项真实测试同一轮通过。
+- 全部模块通过（[汇总](evidence/bundle-modules.summary)）；PG 用例 19 通过 0 跳过；`BuiltinsCommitted` 在 `BuiltinsReady` 的表格测试中逐例对照（只看集群版本，不看本节点实例）。

@@ -99,6 +99,8 @@ type realCluster struct {
 	old, target    Release
 	broken         Release
 	bundled        []bundledFile
+	// bundledNext replaces same-key packages in R2's bundle (TEST_BUILTIN_NEXT_DIR).
+	bundledNext    []bundledFile
 	options        realOptions
 	configuredKeys map[string]string
 	// wrap, when set, observes the runtime of every shell started afterwards.
@@ -243,6 +245,21 @@ func newRealCluster(t *testing.T, ctx context.Context, options realOptions) *rea
 			c.bundled = append(c.bundled, bundledFile{"builtin/" + filepath.Base(path), data})
 		}
 	}
+	// TEST_BUILTIN_NEXT_DIR holds newer versions of some bundled plugins that
+	// only R2 carries, so updating the core also updates them.
+	if dir := os.Getenv("TEST_BUILTIN_NEXT_DIR"); dir != "" {
+		paths, e := filepath.Glob(filepath.Join(dir, "*.s2plugin"))
+		if e != nil || len(paths) == 0 {
+			t.Fatalf("TEST_BUILTIN_NEXT_DIR has no packages: %v", e)
+		}
+		for _, path := range paths {
+			data, e := os.ReadFile(path)
+			if e != nil {
+				t.Fatal(e)
+			}
+			c.bundledNext = append(c.bundledNext, bundledFile{"builtin/" + filepath.Base(path), data})
+		}
+	}
 	makeRelease := func(id, version string, core []byte) Release {
 		var buffer bytes.Buffer
 		gz := gzip.NewWriter(&buffer)
@@ -254,7 +271,11 @@ func newRealCluster(t *testing.T, ctx context.Context, options realOptions) *rea
 			t.Fatal(err)
 		}
 		files := []rc.File{{Path: "bin/sub2api", SHA256: release.Digest(core), Size: int64(len(core)), Mode: 0755}}
-		for _, file := range c.bundled {
+		bundledFiles := c.bundled
+		if id == "r2" && len(c.bundledNext) > 0 {
+			bundledFiles = bundleWith(c.bundled, c.bundledNext)
+		}
+		for _, file := range bundledFiles {
 			if err := tw.WriteHeader(&tar.Header{Name: file.name, Mode: 0644, Size: int64(len(file.data))}); err != nil {
 				t.Fatal(err)
 			}
@@ -627,4 +648,27 @@ func realTestCertificate(t *testing.T) (tls.Certificate, *x509.CertPool) {
 	pool := x509.NewCertPool()
 	pool.AppendCertsFromPEM(certPEM)
 	return cert, pool
+}
+
+// bundleWith replaces the packages of base whose plugin key ("<key>-<version>
+// .s2plugin") one of next carries.
+func bundleWith(base, next []bundledFile) []bundledFile {
+	key := func(f bundledFile) string {
+		name := strings.TrimSuffix(filepath.Base(f.name), ".s2plugin")
+		if i := strings.Index(name, "-"); i > 0 {
+			return name[:i]
+		}
+		return name
+	}
+	replaced := map[string]bool{}
+	for _, f := range next {
+		replaced[key(f)] = true
+	}
+	out := append([]bundledFile(nil), next...)
+	for _, f := range base {
+		if !replaced[key(f)] {
+			out = append(out, f)
+		}
+	}
+	return out
 }
