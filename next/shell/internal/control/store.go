@@ -784,6 +784,21 @@ func (s *Store) AuthorizePeer(ctx context.Context, source, boot, target, scope, 
 	if scope == "forward" {
 		return nil
 	}
+	switch scope {
+	case "plugin-upload":
+		// A follower's core stores an upload on the primary before any row
+		// names it; size and digest are checked while writing.
+		return nil
+	case "plugin-artifact":
+		referenced, err := s.packageReferenced(ctx, digest)
+		if err != nil {
+			return peer.ErrUnavailable
+		}
+		if !referenced {
+			return fmt.Errorf("%w: plugin package is not referenced by any version", peer.ErrForbidden)
+		}
+		return nil
+	}
 	if scope != "core-artifact" {
 		return fmt.Errorf("%w: peer scope is not permitted", peer.ErrForbidden)
 	}
@@ -968,4 +983,56 @@ func (s *Store) ConfirmStoppedCore(ctx context.Context, node, shellBoot, coreBoo
 		}
 	}
 	return tx.Commit(ctx)
+}
+
+func (s *Store) packageReferenced(ctx context.Context, sum string) (bool, error) {
+	var present, referenced bool
+	if err := s.DB.QueryRow(ctx, `SELECT to_regclass('public.plugin_versions') IS NOT NULL`).Scan(&present); err != nil || !present {
+		return false, err
+	}
+	err := s.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM plugin_versions WHERE package_sha256=$1)`, sum).Scan(&referenced)
+	return referenced, err
+}
+
+// ReferencedPackages lists every plugin package digest a version names.
+func (s *Store) ReferencedPackages(ctx context.Context) (map[string]bool, error) {
+	out := map[string]bool{}
+	var present bool
+	if err := s.DB.QueryRow(ctx, `SELECT to_regclass('public.plugin_versions') IS NOT NULL`).Scan(&present); err != nil || !present {
+		return out, err
+	}
+	rows, err := s.DB.Query(ctx, `SELECT DISTINCT lower(package_sha256) FROM plugin_versions`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var sum string
+		if err = rows.Scan(&sum); err != nil {
+			return nil, err
+		}
+		out[sum] = true
+	}
+	return out, rows.Err()
+}
+
+// PrimaryPeer reports whether self is the primary and the primary's peer URL.
+func (s *Store) PrimaryPeer(ctx context.Context, self string) (bool, string, error) {
+	primary, _, _, err := s.ClusterState(ctx)
+	if err != nil {
+		return false, "", err
+	}
+	if primary == self {
+		return true, "", nil
+	}
+	nodes, err := s.Nodes(ctx)
+	if err != nil {
+		return false, "", err
+	}
+	for _, n := range nodes {
+		if n.ID == primary && n.Enabled && n.PeerURL != "" {
+			return false, strings.TrimRight(n.PeerURL, "/"), nil
+		}
+	}
+	return false, "", errors.New("primary node is not registered")
 }

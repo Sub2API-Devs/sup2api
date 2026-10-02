@@ -201,7 +201,7 @@ func (h *harness) node(name, boot string) *node {
 	t := h.t
 	reg := registry.New()
 	rt := newFakeRuntime()
-	pkgs := registry.NewPackages(h.db, t.TempDir())
+	pkgs := registry.NewPackages(h.db, t.TempDir(), registry.WithSource(registrytest.Source()))
 	t.Cleanup(pkgs.Close)
 	nd := &registrytest.Node{RDB: h.rdb, ID: name, Boot: boot}
 	nd.Heartbeat(context.Background())

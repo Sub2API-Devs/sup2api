@@ -15,7 +15,7 @@ func TestVersionAssetsReadApprovedPackageWithoutLocalProcess(t *testing.T) {
 	m := registrytest.Manifest("assets", "1.0.0")
 	raw := registrytest.Package(t, m, []byte("bin"), map[string][]byte{"ui/main.js": []byte("old version")})
 	registrytest.Install(t, db, m, raw, nil, "enabled")
-	packages := registry.NewPackages(db, t.TempDir())
+	packages := registry.NewPackages(db, t.TempDir(), registry.WithSource(registrytest.Source()))
 	defer packages.Close()
 	vh := "1.0.0-" + pluginpkg.SHA256Hex(raw)[:8]
 	info, data, _, err := packages.ReadVersionAsset(ctx, "assets", vh, "ui/main.js")

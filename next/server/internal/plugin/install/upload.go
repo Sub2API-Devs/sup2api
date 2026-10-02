@@ -20,6 +20,9 @@ type UploadOptions struct {
 	ExpectKey     string
 	ExpectVersion string
 	Source        string // "upload" | "market:<source id>"
+	// PackageURL is the market download URL; every node fetches the package
+	// from it. Empty for uploads, which nodes fetch from the primary.
+	PackageURL string
 }
 
 // Upload validates a package, stores it and returns the review. New plugins
@@ -39,6 +42,14 @@ func (s *Service) Upload(ctx context.Context, data []byte, actorID int64, opt Up
 	}
 	if opt.ExpectVersion != "" && m.Version != opt.ExpectVersion {
 		return nil, core.ErrInvalidArgument.WithMessage(fmt.Sprintf("package version %q does not match %q", m.Version, opt.ExpectVersion))
+	}
+	// The bytes must be retrievable before any row names them. A package
+	// rejected below stays unreferenced and is collected by the shell.
+	if s.d.Packages == nil || s.d.Packages.Store == nil {
+		return nil, core.ErrUnavailable.WithMessage("plugin package store is not configured")
+	}
+	if err := s.d.Packages.Store.Put(ctx, p.SHA256, p.Raw); err != nil {
+		return nil, core.ErrUnavailable.WithMessage("store the plugin package on the primary node").WithCause(err)
 	}
 	ctx, release, guardErr := core.BeginPluginMutation(ctx, s.d.Mutations)
 	if guardErr != nil {
@@ -125,10 +136,10 @@ func (s *Service) Upload(ctx context.Context, data []byte, actorID int64, opt Up
 		}
 		if insert {
 			if _, err := tx.Exec(ctx, `
-				INSERT INTO plugin_versions (plugin_key, version, manifest, manifest_hash, package_sha256, package,
+				INSERT INTO plugin_versions (plugin_key, version, manifest, manifest_hash, package_sha256, package_url,
 				  package_size, publisher_id, key_id, signature_status, consent_status, uploaded_by)
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-				m.Key, m.Version, p.ManifestRaw, p.ManifestHash, p.SHA256, p.Raw, len(p.Raw),
+				m.Key, m.Version, p.ManifestRaw, p.ManifestHash, p.SHA256, opt.PackageURL, len(p.Raw),
 				ver.PublisherID, nullStr(ver.KeyID), ver.SignatureStatus, ConsentAwaiting, nullID(actorID)); err != nil {
 				return err
 			}

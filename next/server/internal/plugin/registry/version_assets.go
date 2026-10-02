@@ -3,6 +3,8 @@ package registry
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -11,21 +13,32 @@ import (
 )
 
 // ReadVersionAsset serves approved versioned assets for as long as the plugin
-// remains enabled and its package is retained. Read from immutable package
-// bytes rather than a local process cache: rollout cleanup may close that
-// cache concurrently, and a joining node may never have run this version.
+// remains enabled and its package is retained. Read from the node's own copy
+// of the immutable package rather than a process cache: rollout cleanup may
+// close that cache concurrently, and a joining node may never have run this
+// version, in which case the package is fetched like any other.
 func (s *Packages) ReadVersionAsset(ctx context.Context, key, vh, name string) (core.PluginInfo, []byte, string, error) {
-	var version, sum string
-	var raw []byte
-	err := s.db.Pool.QueryRow(ctx, `SELECT v.version,v.package_sha256,v.package FROM plugin_versions v JOIN plugins p ON p.key=v.plugin_key
+	var version, sum, url string
+	err := s.db.Pool.QueryRow(ctx, `SELECT v.version,v.package_sha256,v.package_url FROM plugin_versions v JOIN plugins p ON p.key=v.plugin_key
 		WHERE p.key=$1 AND v.version || '-' || left(v.package_sha256,8)=$2
 		AND p.status IN ('enabled','enabling','upgrading') AND v.consent_status='approved' AND v.signature_status<>'revoked'
-		AND NOT EXISTS(SELECT 1 FROM plugin_uninstalls u WHERE u.plugin_key=p.key)`, key, vh).Scan(&version, &sum, &raw)
+		AND NOT EXISTS(SELECT 1 FROM plugin_uninstalls u WHERE u.plugin_key=p.key)`, key, vh).Scan(&version, &sum, &url)
 	if store.IsNoRows(err) {
 		return core.PluginInfo{}, nil, "", ErrAssetNotFound
 	}
 	if err != nil {
 		return core.PluginInfo{}, nil, "", err
+	}
+	sum = strings.ToLower(sum)
+	file := filepath.Join(s.dataDir, key, vh, "package.s2plugin")
+	raw, err := os.ReadFile(file)
+	if err != nil || !strings.EqualFold(pluginpkg.SHA256Hex(raw), sum) {
+		if err = s.materialize(ctx, &Package{Key: key, Version: version, SHA256: sum, Dir: filepath.Dir(file)}, func() ([]byte, error) { return s.source.Fetch(ctx, sum, url) }); err != nil {
+			return core.PluginInfo{}, nil, "", err
+		}
+		if raw, err = os.ReadFile(file); err != nil {
+			return core.PluginInfo{}, nil, "", err
+		}
 	}
 	if !strings.EqualFold(pluginpkg.SHA256Hex(raw), sum) {
 		return core.PluginInfo{}, nil, "", fmt.Errorf("package checksum mismatch")

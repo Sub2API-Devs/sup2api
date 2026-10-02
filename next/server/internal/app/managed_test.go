@@ -39,8 +39,8 @@ func TestManagedReadinessFollowsIndependentApprovedPlugins(t *testing.T) {
 	db := testutil.DB(t)
 	ctx := context.Background()
 	_, err := db.Pool.Exec(ctx, `INSERT INTO plugins(key,name,status,active_version) VALUES('thirdparty','{}','enabled','2.0.0');
-		INSERT INTO plugin_versions(plugin_key,version,manifest,manifest_hash,package_sha256,package,package_size,signature_status,consent_status)
-		VALUES('thirdparty','2.0.0','{}','hash','hash','bytes',5,'valid','approved')`)
+		INSERT INTO plugin_versions(plugin_key,version,manifest,manifest_hash,package_sha256,package_size,signature_status,consent_status)
+		VALUES('thirdparty','2.0.0','{}','hash','hash',5,'valid','approved')`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,8 +85,8 @@ func TestManagedReadinessWaitsForPermissionRevocation(t *testing.T) {
 	db := testutil.DB(t)
 	ctx := context.Background()
 	_, err := db.Pool.Exec(ctx, `INSERT INTO plugins(key,name,status,active_version) VALUES('granted','{}','enabled','1.0.0');
-		INSERT INTO plugin_versions(plugin_key,version,manifest,manifest_hash,package_sha256,package,package_size,signature_status,consent_status)
-		VALUES('granted','1.0.0','{}','hash','hash','bytes',5,'valid','approved');
+		INSERT INTO plugin_versions(plugin_key,version,manifest,manifest_hash,package_sha256,package_size,signature_status,consent_status)
+		VALUES('granted','1.0.0','{}','hash','hash',5,'valid','approved');
 		INSERT INTO plugin_permission_grants(plugin_key,permission,status,plugin_version,manifest_hash)
 		VALUES('granted','db.schema','granted','1.0.0','hash'),('granted','net.outbound','granted','1.0.0','hash')`)
 	if err != nil {

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/blobs"
 	pluginpkg "github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
@@ -161,13 +162,14 @@ func (p *Package) Close() error {
 	return nil
 }
 
-// Packages fetches plugin packages from plugin_versions, verifies their
+// Packages fetches plugin packages through its blob Source, verifies their
 // sha256 (and, with a verifier, their signature) and caches them under
 // DataDir.
 type Packages struct {
 	db       *store.DB
 	dataDir  string
 	verifier PackageVerifier
+	source   *blobs.Source
 
 	mu    sync.Mutex
 	cache map[string]*Package // key@version
@@ -187,6 +189,11 @@ type PackagesOption func(*Packages)
 // a failing package is not loaded (Open returns the error).
 func WithVerifier(v PackageVerifier) PackagesOption {
 	return func(s *Packages) { s.verifier = v }
+}
+
+// WithSource sets where package bytes come from (the market or the primary).
+func WithSource(src *blobs.Source) PackagesOption {
+	return func(s *Packages) { s.source = src }
 }
 
 // TrustVerifier verifies packages with the plugin trust store (official
@@ -218,7 +225,7 @@ func NewPackages(db *store.DB, dataDir string, opts ...PackagesOption) *Packages
 func (s *Packages) DataDir() string { return s.dataDir }
 
 // Open returns the verified package of key@version, downloading it from the
-// database when it is not cached on disk yet.
+// market or the primary when it is not cached on disk yet.
 func (s *Packages) Open(ctx context.Context, key, version string) (*Package, error) {
 	id := key + "@" + version
 	s.mu.Lock()
@@ -256,15 +263,16 @@ func (s *Packages) load(ctx context.Context, key, version string) (*Package, err
 	var (
 		manifestJSON []byte
 		sum          string
+		url          string
 		sigStatus    string
 		publisher    *string
 		trust        *string
 	)
 	err := s.db.Pool.QueryRow(ctx, `
-		SELECT v.manifest, v.package_sha256, v.signature_status, p.name, p.trust_level
+		SELECT v.manifest, v.package_sha256, v.package_url, v.signature_status, p.name, p.trust_level
 		FROM plugin_versions v LEFT JOIN publishers p ON p.id = v.publisher_id
 		WHERE v.plugin_key = $1 AND v.version = $2`, key, version).
-		Scan(&manifestJSON, &sum, &sigStatus, &publisher, &trust)
+		Scan(&manifestJSON, &sum, &url, &sigStatus, &publisher, &trust)
 	if err != nil {
 		if store.IsNoRows(err) {
 			return nil, fmt.Errorf("plugin %s@%s: version not found", key, version)
@@ -295,12 +303,7 @@ func (s *Packages) load(ctx context.Context, key, version string) (*Package, err
 		p.Trust = "community"
 	}
 	p.Dir = filepath.Join(s.dataDir, key, p.VersionHash())
-	err = s.materialize(ctx, p, func() ([]byte, error) {
-		var data []byte
-		err := s.db.Pool.QueryRow(ctx,
-			`SELECT package FROM plugin_versions WHERE plugin_key = $1 AND version = $2`, key, version).Scan(&data)
-		return data, err
-	})
+	err = s.materialize(ctx, p, func() ([]byte, error) { return s.source.Fetch(ctx, sum, url) })
 	if err != nil {
 		return nil, err
 	}

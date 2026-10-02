@@ -57,6 +57,7 @@ type realNode struct {
 	runtime         *LocalRuntime
 	peer            *peer.Manager
 	public, private *httptest.Server
+	management      *http.Server
 	supervisor      *supervisor.Manager
 	ctx             context.Context
 	cancel          context.CancelFunc
@@ -378,6 +379,17 @@ func (c *realCluster) startShell(id string) *realNode {
 	})
 	rt.Peer = pm
 	rt.PeerArtifactClient = peer.NewClient(peerTransport, time.Minute)
+	blobs := PluginBlobs(store, id, root, rt.PeerArtifactClient, 0)
+	rt.PluginBlobs = blobs.Peer()
+	// The core reaches its plugin packages through this socket, as under
+	// sub2api-shell serve.
+	_ = os.Remove(rt.ManagementSocket)
+	managementListener, err := net.Listen("unix", rt.ManagementSocket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	management := &http.Server{Handler: ManagementHandler(store, blobs), ReadHeaderTimeout: 5 * time.Second}
+	go func() { _ = management.Serve(managementListener) }()
 	rt.AuthorizePeer = func(ctx context.Context, p peer.Identity, scope, digest string) error {
 		return store.AuthorizePeer(ctx, p.NodeID, p.BootID, id, scope, digest)
 	}
@@ -396,7 +408,7 @@ func (c *realCluster) startShell(id string) *realNode {
 	private.StartTLS()
 	public := httptest.NewServer(router.Public())
 	ownNode.PeerURL = private.URL
-	n := &realNode{id: id, root: root, runtime: rt, peer: pm, public: public, private: private, supervisor: mgr}
+	n := &realNode{id: id, root: root, runtime: rt, peer: pm, public: public, private: private, management: management, supervisor: mgr}
 	n.engine = &Engine{Store: store, Locks: store.Locks, Runtime: rt, Node: ownNode, PeerMaintain: pm.Maintain, PeerCheck: pm.Check}
 	if c.wrap != nil {
 		n.engine.Runtime = c.wrap(n)
@@ -449,6 +461,7 @@ func (c *realCluster) stopShell(n *realNode) {
 	n.private.CloseClientConnections()
 	n.private.Close()
 	_ = n.peer.Unregister(stop)
+	_ = n.management.Close()
 	_ = n.supervisor.Close()
 }
 

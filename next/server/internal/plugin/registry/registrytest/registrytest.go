@@ -24,6 +24,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/blobs"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -193,10 +194,13 @@ func AddVersion(t testing.TB, db *store.DB, m *manifest.Manifest, pkg []byte) {
 	mj, _ := json.Marshal(m)
 	sum := sha256.Sum256(pkg)
 	msum := sha256.Sum256(mj)
+	if err := Source().Store.Put(context.Background(), hex.EncodeToString(sum[:]), pkg); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := db.Pool.Exec(context.Background(), `INSERT INTO plugin_versions (plugin_key, version, manifest, manifest_hash,
-			package_sha256, package, package_size, signature_status, consent_status)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, 'unsigned', 'approved')`,
-		m.Key, m.Version, mj, hex.EncodeToString(msum[:]), hex.EncodeToString(sum[:]), pkg, len(pkg)); err != nil {
+			package_sha256, package_size, signature_status, consent_status)
+		VALUES ($1, $2, $3, $4, $5, $6, 'unsigned', 'approved')`,
+		m.Key, m.Version, mj, hex.EncodeToString(msum[:]), hex.EncodeToString(sum[:]), len(pkg)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -423,4 +427,22 @@ func (b *MemBus) Messages(channel string) []MemMessage {
 		}
 	}
 	return out
+}
+
+var (
+	sourceOnce sync.Once
+	source     *blobs.Source
+)
+
+// Source is the package source shared by every node of a test process, as
+// the primary's store is in a cluster. AddVersion and uploads put into it.
+func Source() *blobs.Source {
+	sourceOnce.Do(func() {
+		dir, err := os.MkdirTemp("", "sub2api-test-blobs-")
+		if err != nil {
+			panic(err)
+		}
+		source = &blobs.Source{Store: blobs.Dir(dir), MaxBytes: 256 << 20}
+	})
+	return source
 }

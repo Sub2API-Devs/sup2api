@@ -62,12 +62,16 @@ plugins() {
   mkdir -p "$checks/builtin"
   CGO_ENABLED=0 go build -o "$checks/sub2api-plugin" ./tools/sub2api-plugin
   [ -f "$checks/keys/managed-test.key" ] || "$checks/sub2api-plugin" keygen --key-id managed-test --out "$checks/keys" > "$out/plugin-keygen.log"
-  for p in anthropic volcengine; do
+  mkdir -p "$checks/upload" "$checks/market"
+  # anthropic and volcengine are bundled, guard is uploaded, relay comes from a market.
+  for spec in anthropic:builtin volcengine:builtin guard:upload relay:market; do
+    p=${spec%%:*}; dest="$checks/${spec#*:}"
     "$checks/sub2api-plugin" build --dir "plugins/$p" --out "$checks/$p-runtime" > "$out/plugin-build-$p.log"
-    pkg=$("$checks/sub2api-plugin" pack --dir "plugins/$p" --runtimes "$checks/$p-runtime" --out-dir "$checks/builtin")
+    pkg=$("$checks/sub2api-plugin" pack --dir "plugins/$p" --runtimes "$checks/$p-runtime" --out-dir "$dest")
     "$checks/sub2api-plugin" sign --key "$checks/keys/managed-test.key" --key-id managed-test --publisher sub2api "$pkg" >> "$out/plugin-build-$p.log"
   done
-  ls "$checks/builtin"
+  "$checks/sub2api-plugin" index --dir "$checks/market" --key "$checks/keys/managed-test.key" > "$out/plugin-market-index.log"
+  ls "$checks/builtin" "$checks/upload" "$checks/market"
 }
 
 realcore() {
@@ -88,10 +92,12 @@ SQL
   (cd "$target" && CGO_ENABLED=0 go build -ldflags '-X main.Version=0.1.1' -o "$checks/core-r2" ./server/cmd/sub2api)
   "$checks/core-r1" schema-contract > "$out/schema-r1.txt"
   "$checks/core-r2" schema-contract > "$out/schema-r2.txt"
-  sha256sum "$checks/core-r1" "$checks/core-r2" "$checks"/builtin/*.s2plugin > "$out/artifact-digests.txt"
+  sha256sum "$checks/core-r1" "$checks/core-r2" "$checks"/builtin/*.s2plugin "$checks"/upload/*.s2plugin "$checks"/market/*.s2plugin > "$out/artifact-digests.txt"
   export TEST_CORE_V1="$checks/core-r1" TEST_CORE_V2="$checks/core-r2" TEST_SHELL_NODES=3
   export TEST_BUILTIN_DIR="$checks/builtin" TEST_EXPECT_MIGRATION=9999_managed_upgrade_probe.sql TEST_MOCK_URL=http://mock:8080
   TEST_BUILTIN_KEY="managed-test=$(cat "$checks/keys/managed-test.pub")"
+  TEST_UPLOAD_PACKAGE=$(ls "$checks"/upload/*.s2plugin) TEST_MARKET_DIR="$checks/market" TEST_MARKET_KEY=$(cat "$checks/keys/managed-test.pub")
+  export TEST_UPLOAD_PACKAGE TEST_MARKET_DIR TEST_MARKET_KEY
   export TEST_BUILTIN_KEY
   set +e
   go test -race -count=1 -timeout 45m -v ./shell/internal/control -run "${REALCORE_RUN:-TestRealCore}" > "$out/realcore.log" 2>&1

@@ -12,6 +12,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/blobs"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
@@ -61,6 +62,8 @@ type Deps struct {
 	// Accounts deletes a plugin's accounts on uninstall with
 	// purge_accounts=true; nil makes such requests fail with unavailable.
 	Accounts core.PluginAccountPurger
+	// Packages holds the package bytes; PostgreSQL keeps only their sha256.
+	Packages *blobs.Source
 }
 
 // Options are host facts.
@@ -138,9 +141,13 @@ func (s *Service) Package(ctx context.Context, key, version string) (*pkg.Packag
 	}
 	s.cacheMu.Unlock()
 
-	var raw []byte
+	var url string
 	if err := s.d.DB.Pool.QueryRow(ctx,
-		`SELECT package FROM plugin_versions WHERE plugin_key = $1 AND version = $2`, key, version).Scan(&raw); err != nil {
+		`SELECT package_url FROM plugin_versions WHERE plugin_key = $1 AND version = $2`, key, version).Scan(&url); err != nil {
+		return nil, err
+	}
+	raw, err := s.d.Packages.Fetch(ctx, sha, url)
+	if err != nil {
 		return nil, err
 	}
 	lim := s.Limits()

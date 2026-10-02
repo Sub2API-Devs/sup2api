@@ -250,11 +250,17 @@ func SignIndex(raw []byte, priv ed25519.PrivateKey) []byte {
 }
 
 func (s *Service) fetch(ctx context.Context, u string, limit int64) ([]byte, error) {
+	return Fetch(ctx, s.client, u, limit)
+}
+
+// Fetch downloads at most limit bytes from a market URL. Each node also uses
+// it to obtain market-installed packages itself.
+func Fetch(ctx context.Context, client *http.Client, u string, limit int64) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, core.ErrInvalidArgument.WithMessage("invalid market URL")
 	}
-	resp, err := s.client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, core.ErrUnavailable.WithMessage("market fetch failed").WithCause(err)
 	}
@@ -484,7 +490,7 @@ func (s *Service) Install(ctx context.Context, sourceID int64, key, version stri
 		return nil, core.ErrInvalidArgument.WithMessage("downloaded package sha256 does not match the index")
 	}
 	return s.inst.Upload(ctx, data, actorID, install.UploadOptions{
-		ExpectKey: key, ExpectVersion: version, Source: fmt.Sprintf("market:%d", src.ID),
+		ExpectKey: key, ExpectVersion: version, Source: fmt.Sprintf("market:%d", src.ID), PackageURL: dl.String(),
 	})
 }
 

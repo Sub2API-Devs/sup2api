@@ -2,6 +2,7 @@ package install
 
 import (
 	"context"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry/registrytest"
 	"testing"
 	"time"
 
@@ -19,7 +20,7 @@ func TestInstallMutationsBlockedButEmergencyRevocationAllowed(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	defer rdb.Close()
 	g := &cluster.PluginMutations{DB: db, Locker: cluster.NewLocker(rdb, nil)}
-	s := New(Deps{DB: db, Mutations: g, Nodes: emptyNodes{}}, Options{})
+	s := New(Deps{DB: db, Mutations: g, Nodes: emptyNodes{}, Packages: registrytest.Source()}, Options{})
 	if _, err := db.Pool.Exec(ctx, `CREATE SCHEMA updater;CREATE TABLE updater.upgrades(status text);INSERT INTO updater.upgrades VALUES('paused');
 		INSERT INTO plugins(key,name,status)VALUES('guard','{}','installed');
 		INSERT INTO plugin_permission_grants(plugin_key,permission,scope,status,plugin_version,manifest_hash)VALUES('guard','lock','{}','granted','1.0.0','hash')`); err != nil {
@@ -56,7 +57,7 @@ func TestUninstallReleasesSubmissionLockBeforeWaitingForPhysicalStop(t *testing.
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	defer rdb.Close()
 	g := &cluster.PluginMutations{DB: db, Locker: cluster.NewLocker(rdb, nil)}
-	s := New(Deps{DB: db, Mutations: g, Nodes: emptyNodes{}}, Options{})
+	s := New(Deps{DB: db, Mutations: g, Nodes: emptyNodes{}, Packages: registrytest.Source()}, Options{})
 	if _, err := db.Pool.Exec(ctx, `INSERT INTO plugins(key,name,status)VALUES('guard','{}','disabled');INSERT INTO plugin_runtime_nodes(plugin_key,boot_id)VALUES('guard','lost-boot')`); err != nil {
 		t.Fatal(err)
 	}

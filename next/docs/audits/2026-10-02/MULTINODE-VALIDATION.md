@@ -114,3 +114,20 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
   - 从节点在主节点就绪后逐个启动新核心（47 s、57 s、65 s），各自准入后切回本地；70.8 s 计划完成，基线为 v0.1.1。全程除重启容器那 7 次外，只出现 401 与维护窗口内的 503，没有失败或暂停的步骤。
 - 变化：外壳托管后 `/healthz` 由外壳应答，只返回状态码，不再带核心的 JSON 正文。
 - 此后 ovh 不再使用 `single/deploy.sh`，核心更新按 `deploy/shell/ovh/README.md` 发布与升级。
+
+## 10. 插件包改为节点间传输，PG 不再存包
+
+按用户要求：插件包字节不存 PG；市场插件由各节点自己从市场下载，非市场插件（上传、首装）由主节点下发。设计与接口见[规约 §6.2](../../MULTINODE-SYNC-PROTOCOL.md)，核心迁移 `0022_plugin_packages_off_database.sql` 删除 `plugin_versions.package`、新增 `package_url`。
+
+隔离环境（项目 `…-20261002d`，第四轮）全部通过（[真实核心日志](evidence/plugin-packages-realcore.log.txt)、[server -race](evidence/plugin-packages-module-server.log.txt)、[模块汇总](evidence/plugin-packages-modules.summary)）：全部 Go 模块 `-race`、真实 PG 用例、原有两项真实三节点测试，以及新增的 `TestRealCorePluginPackagesTravelBetweenNodes`：
+
+| 场景 | 结果 |
+|---|---|
+| PG 结构 | `plugin_versions` 已无 `package` 列 |
+| 首装插件（anthropic、volcengine） | 主节点外壳保存；两个从节点外壳的存储里都出现这两个包，说明它们经节点网络从主节点拉取 |
+| 通过从节点 b 上传 guard | 上传返回前主节点已保存该包；启用后从节点 c 从主节点拉到 |
+| 通过从节点 c 从市场安装 relay | `package_url` 指向市场；市场收到 4 次包下载（安装 1 次 + 每个节点各 1 次）；b 的外壳从未从主节点拉这个包；主节点另存一份作兜底 |
+| 主节点停机，重启从节点 b | b 用本地缓存的核心版本和插件包，以新的核心 boot 恢复服务 |
+| 主节点停机，新节点 d 加入 | 没有缓存，拿不到核心包，不启动核心、入口 503；主节点恢复后 d 自动启动，首装与上传的包从主节点拉取，市场包从市场下载 |
+
+限制：没有外壳的核心只用本机目录，只支持单节点；`deploy/e2e` 与 `single/` 的两节点栈上传插件后另一节点拿不到包，按用户决定，这些部署以后都改为外壳托管。

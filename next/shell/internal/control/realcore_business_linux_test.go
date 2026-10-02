@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"testing"
@@ -238,4 +239,74 @@ func (m mockClient) rule(rule map[string]any) {
 	if r := m.do(http.MethodPost, "/__control", rule, nil); r.status != 200 {
 		m.t.Fatalf("mock rule: %s", r)
 	}
+}
+
+// upload posts one file as multipart form field "file" under /api/v1.
+func (c *apiClient) upload(path, filename string, data []byte, headers map[string]string) apiResponse {
+	c.t.Helper()
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, err := mw.CreateFormFile("file", filename)
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	_, _ = fw.Write(data)
+	_ = mw.Close()
+	req, err := http.NewRequest(http.MethodPost, c.base+"/api/v1"+path, &buf)
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	res, err := c.http.Do(req)
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	defer res.Body.Close()
+	raw, _ := io.ReadAll(res.Body)
+	return apiResponse{status: res.StatusCode, header: res.Header, body: raw}
+}
+
+// consentAll approves every host permission a review requests.
+func (c *apiClient) consentAll(review apiResponse) (key, version string) {
+	c.t.Helper()
+	var body struct {
+		Data struct {
+			Review *struct {
+				Key     string `json:"plugin_key"`
+				Version string `json:"version"`
+				Perms   []struct {
+					ID    string `json:"id"`
+					Scope any    `json:"scope"`
+				} `json:"host_permissions"`
+			} `json:"review"`
+			Key     string `json:"plugin_key"`
+			Version string `json:"version"`
+			Perms   []struct {
+				ID    string `json:"id"`
+				Scope any    `json:"scope"`
+			} `json:"host_permissions"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(review.body, &body); err != nil {
+		c.t.Fatal(err)
+	}
+	key, version, perms := body.Data.Key, body.Data.Version, body.Data.Perms
+	if r := body.Data.Review; r != nil {
+		key, version, perms = r.Key, r.Version, r.Perms
+	}
+	grants := []map[string]any{}
+	for _, p := range perms {
+		g := map[string]any{"permission": p.ID}
+		if p.Scope != nil {
+			g["scope"] = p.Scope
+		}
+		grants = append(grants, g)
+	}
+	c.ok(http.MethodPost, fmt.Sprintf("/plugins/%s/versions/%s/consent", key, version),
+		map[string]any{"grants": grants, "denied": []string{}, "role_keys_for_new_permissions": []string{}}, c.stepUp())
+	return key, version
 }

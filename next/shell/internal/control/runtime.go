@@ -32,12 +32,14 @@ type LocalRuntime struct {
 	Peer                                                *peer.Manager
 	PeerArtifactClient                                  *http.Client
 	AuthorizePeer                                       func(context.Context, peer.Identity, string, string) error
-	Args, Env                                           []string
-	mu                                                  sync.RWMutex
-	routeMu                                             sync.Mutex
-	client                                              *localapi.Client
-	prepared                                            map[string]release.Prepared
-	revision                                            atomic.Int64
+	// PluginBlobs serves /internal/plugin-blobs/ to authorized followers.
+	PluginBlobs http.Handler
+	Args, Env   []string
+	mu          sync.RWMutex
+	routeMu     sync.Mutex
+	client      *localapi.Client
+	prepared    map[string]release.Prepared
+	revision    atomic.Int64
 }
 
 func (r *LocalRuntime) Prepare(ctx context.Context, v Release, base string) error {
@@ -426,6 +428,21 @@ func (r *LocalRuntime) PrivateHandler() http.Handler {
 		case strings.HasPrefix(escaped, "/internal/releases/"):
 			scope = "core-artifact"
 			digest = strings.TrimPrefix(escaped, "/internal/releases/")
+		case strings.HasPrefix(escaped, "/internal/plugin-blobs/") && r.PluginBlobs != nil:
+			digest = strings.TrimPrefix(escaped, "/internal/plugin-blobs/")
+			switch q.Method {
+			case http.MethodGet, http.MethodHead:
+				scope = "plugin-artifact"
+			case http.MethodPut:
+				scope = "plugin-upload"
+			default:
+				peer.Failure(w, 403)
+				return
+			}
+			if !release.ValidDigest(digest) {
+				peer.Failure(w, 403)
+				return
+			}
 		default:
 			peer.Failure(w, 403)
 			return
@@ -439,11 +456,14 @@ func (r *LocalRuntime) PrivateHandler() http.Handler {
 			return
 		}
 		// No ServeMux: preserve raw business paths without cleaning redirects.
-		if scope == "forward" {
+		switch scope {
+		case "forward":
 			r.Router.Private().ServeHTTP(w, q)
-			return
+		case "plugin-artifact", "plugin-upload":
+			r.PluginBlobs.ServeHTTP(w, q)
+		default:
+			r.Releases.BlobHandler().ServeHTTP(w, q)
 		}
-		r.Releases.BlobHandler().ServeHTTP(w, q)
 	}))
 }
 

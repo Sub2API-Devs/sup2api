@@ -44,11 +44,11 @@ func testManagedRuntime(t *testing.T, migrate bool) {
 	defer os.RemoveAll(dir)
 	prepare := runtimecontract.PrepareRequest{BootID: "boot", ReleaseDigest: "release"}
 	if migrate {
-		// Recreate the exact pre-0021 fixture, preserving all previous rows.
+		// Recreate the exact pre-0022 fixture, preserving all previous rows.
 		// This must run the embedded migration without importing the deliberately
 		// invalid bundled plugin or creating the configured bootstrap account.
-		_, err = db.Pool.Exec(context.Background(), `DROP TABLE plugin_rollout_cleanup;
-			DELETE FROM schema_migrations WHERE id='0021_plugin_rollout_cleanup.sql'`)
+		_, err = db.Pool.Exec(context.Background(), `ALTER TABLE plugin_versions DROP COLUMN package_url, ADD COLUMN package bytea;
+			DELETE FROM schema_migrations WHERE id='0022_plugin_packages_off_database.sql'`)
 		if err != nil {
 			t.Fatal(err)
 		}

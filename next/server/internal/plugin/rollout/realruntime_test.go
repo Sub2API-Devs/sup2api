@@ -33,7 +33,7 @@ func TestRealRuntimeSingleNode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pkgs := registry.NewPackages(h.db, t.TempDir())
+	pkgs := registry.NewPackages(h.db, t.TempDir(), registry.WithSource(registrytest.Source()))
 	t.Cleanup(pkgs.Close)
 	reg := registry.New()
 	ctl, err := rollout.New(rollout.Options{DB: h.db, Node: nd, Bus: registrytest.Bus{RDB: h.rdb}, Packages: pkgs,

@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -37,6 +38,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/job"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/migrations"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/api"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/blobs"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/dbschema"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/egress"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/grpcruntime"
@@ -130,9 +132,21 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		trust.SetVerifySignatures(false)
 		log.Warn("plugin signature verification is disabled (SUB2API_PLUGIN_VERIFY_SIGNATURES=false)")
 	}
+	// Package bytes are not in PostgreSQL. Under the shell they are kept by
+	// the primary and fetched over the node network; market packages are
+	// downloaded by each node. Without a shell only one node is supported.
+	var packageStore blobs.Store = blobs.Dir(filepath.Join(cfg.Plugins.DataDir, "blobs"))
+	if cfg.Managed.Enabled && cfg.Managed.UpdaterSocket != "" {
+		packageStore = blobs.NewShell(cfg.Managed.UpdaterSocket, cfg.Plugins.MaxPackageBytes)
+	}
+	marketClient := &http.Client{Timeout: 60 * time.Second}
+	packageSource := &blobs.Source{Store: packageStore, MaxBytes: cfg.Plugins.MaxPackageBytes,
+		Download: func(ctx context.Context, url string, limit int64) ([]byte, error) {
+			return market.Fetch(ctx, marketClient, url, limit)
+		}}
 	// Nodes re-verify package signatures before unpacking, so revoked keys
 	// and publishers stop loading everywhere.
-	pkgs := registry.NewPackages(db, cfg.Plugins.DataDir, registry.WithVerifier(
+	pkgs := registry.NewPackages(db, cfg.Plugins.DataDir, registry.WithSource(packageSource), registry.WithVerifier(
 		registry.TrustVerifier(trust, db.Pool, pkg.Limits{MaxPackageBytes: cfg.Plugins.MaxPackageBytes})))
 	onClose(func(context.Context) { pkgs.Close() })
 
@@ -242,9 +256,9 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 
 	inst := install.New(install.Deps{Mutations: mutations,
 		DB: db, Trust: trust, Authz: az, Permissions: az, Defaults: defaults,
-		Rollout: ctl, Schemas: schemas, Bus: cl.Bus, Accounts: acc, Nodes: cl.Registry,
+		Rollout: ctl, Schemas: schemas, Bus: cl.Bus, Accounts: acc, Nodes: cl.Registry, Packages: packageSource,
 	}, install.Options{HostVersion: version, Plugins: cfg.Plugins})
-	mkt := market.New(db, inst, nil, cfg.Plugins.MaxPackageBytes)
+	mkt := market.New(db, inst, marketClient, cfg.Plugins.MaxPackageBytes)
 	if managed == nil || managed.prepare.Bootstrap {
 		if err := mkt.SeedSources(ctx, cfg.Plugins.MarketSourcesJSON); err != nil {
 			return fmt.Errorf("market sources: %w", err)

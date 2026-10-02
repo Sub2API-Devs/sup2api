@@ -3,6 +3,7 @@ package install
 import (
 	"context"
 	"errors"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry/registrytest"
 	"sync"
 	"testing"
 
@@ -158,7 +159,7 @@ func newEnv(t *testing.T) *env {
 	e.svc = New(Deps{
 		DB: db, Trust: ts, Authz: e.authz, Permissions: e.perms,
 		Defaults: NewDefaultsApplier(e.perms, e.sticky),
-		Rollout:  e.rollout, Schemas: e.schemas, Accounts: e.accounts, Nodes: emptyNodes{},
+		Rollout:  e.rollout, Schemas: e.schemas, Accounts: e.accounts, Nodes: emptyNodes{}, Packages: registrytest.Source(),
 	}, Options{HostVersion: "0.1.0", Plugins: config.PluginConfig{MaxPackageBytes: 10 << 20, MaxMemoryMB: 1024}})
 	return e
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry/registrytest"
 	"net/http/httptest"
 	"testing"
 
@@ -33,7 +34,7 @@ func TestUninstallRecoveryRequiresPermissionStepUpAndExplicitRetry(t *testing.T)
 		t.Fatal(code, out)
 	}
 	mustExec(t, h.db, `INSERT INTO plugin_uninstalls(plugin_key,epoch,target_boot_ids)VALUES('guard',9,ARRAY['dead-boot']); UPDATE plugins SET status='disabled',status_reason='uninstalling' WHERE key='guard'`)
-	svc := install.New(install.Deps{DB: h.db, Nodes: emptyLifecycleNodes{}}, install.Options{})
+	svc := install.New(install.Deps{DB: h.db, Nodes: emptyLifecycleNodes{}, Packages: registrytest.Source()}, install.Options{})
 	e := gin.New()
 	New(Deps{DB: h.db, Install: svc}).RegisterRoutes(httpapi.NewRouter(e, tokens{}, uninstallSensitiveAuth{}, confirmedStepUp{}))
 	do := func(method, url, user, step string, body any) (int, map[string]any) {

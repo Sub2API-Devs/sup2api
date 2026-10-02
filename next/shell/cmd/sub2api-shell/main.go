@@ -60,6 +60,8 @@ type config struct {
 	RuntimeABI       string            `json:"runtime_abi"`
 	ManagementSocket string            `json:"management_socket"`
 	CoreSocket       string            `json:"core_socket"`
+	// PluginMaxBytes bounds stored plugin packages (default 256 MiB).
+	PluginMaxBytes int64 `json:"plugin_max_bytes"`
 }
 
 func main() {
@@ -276,6 +278,9 @@ func run() error {
 	}
 	rt.Peer = peerManager
 	rt.PeerArtifactClient = peer.NewClient(peerTransport, 10*time.Minute)
+	pluginBlobs := control.PluginBlobs(store, c.NodeID, c.Root, rt.PeerArtifactClient, c.PluginMaxBytes)
+	rt.PluginBlobs = pluginBlobs.Peer()
+	go control.CollectPluginBlobs(ctx, store, pluginBlobs, 10*time.Minute)
 	rt.AuthorizePeer = func(ctx context.Context, id peer.Identity, scope, digest string) error {
 		return store.AuthorizePeer(ctx, id.NodeID, id.BootID, c.NodeID, scope, digest)
 	}
@@ -301,7 +306,7 @@ func run() error {
 	if err = os.Chmod(c.ManagementSocket, 0600); err != nil {
 		return err
 	}
-	local := &http.Server{Handler: store.Handler(), ReadHeaderTimeout: 5 * time.Second}
+	local := &http.Server{Handler: control.ManagementHandler(store, pluginBlobs), ReadHeaderTimeout: 5 * time.Second}
 	public := &http.Server{Addr: c.PublicAddr, Handler: router.Public(), ReadHeaderTimeout: 15 * time.Second}
 	private := &http.Server{Addr: c.PeerAddr, Handler: rt.PrivateHandler(), TLSConfig: proxy.ServerTLS(cert, ca), ReadHeaderTimeout: 15 * time.Second}
 	errs := make(chan error, 3)

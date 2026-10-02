@@ -102,7 +102,7 @@ func setup(t *testing.T, grants map[string]string) *env {
 	registrytest.Install(t, db, m, pkg, grants, "enabled")
 	schemas := dbschema.New(db, db.Pool.Config().ConnString(), mk, true)
 	t.Cleanup(func() { _ = schemas.Drop(context.Background(), key) })
-	pkgs := registry.NewPackages(db, t.TempDir())
+	pkgs := registry.NewPackages(db, t.TempDir(), registry.WithSource(registrytest.Source()))
 	t.Cleanup(pkgs.Close)
 	return &env{db: db, rdb: rdb, mr: mr, cipher: c, launcher: &registrytest.Launcher{}, ledger: &fakeLedger{},
 		pkgs: pkgs, schemas: schemas, key: key}
