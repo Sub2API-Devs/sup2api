@@ -6,7 +6,7 @@ import json, os, subprocess, sys, threading, time, urllib.request, urllib.error,
 M = os.path.expanduser("~/sup2api-managed")
 PORTS = {"sup2api-1": 3130, "sup2api-2": 3131, "sup2api-3": 3132, "sup2api-4": 3133}
 CONTAINER = {n: f"sup2api-managed-{n}-1" for n in PORTS}
-RESTART = sys.argv[2] if len(sys.argv) > 2 else "sup2api-3"
+RESTART = sys.argv[2] if len(sys.argv) > 2 else ""
 env = dict(l.split("=", 1) for l in open(f"{M}/.env").read().splitlines() if "=" in l)
 T0 = time.time()
 log = open(f"{M}/upgrade-{time.strftime('%Y%m%dT%H%M%S')}.log", "w")
@@ -90,7 +90,7 @@ restarted = False
 while True:
     status = psql(f"select status||'|'||cursor from updater.upgrades where id='{pid}'")
     rows = {r.split("|")[0]: r.split("|") for r in psql("select node_id,mode,ready,stopped from updater.nodes").splitlines()}
-    if not restarted and rows.get(RESTART, [None, None, None, "f"])[3] == "t" and rows.get("sup2api-1", [None, "local"])[1] != "local":
+    if RESTART and not restarted and rows.get(RESTART, [None, None, None, "f"])[3] == "t" and rows.get("sup2api-1", [None, "local"])[1] != "local":
         say(f"fault: docker restart {CONTAINER[RESTART]} (stopped follower, primary not serving)")
         subprocess.run(["docker", "restart", "-t", "60", CONTAINER[RESTART]], capture_output=True)
         say("fault: restart returned")

@@ -131,3 +131,14 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 | 主节点停机，新节点 d 加入 | 没有缓存，拿不到核心包，不启动核心、入口 503；主节点恢复后 d 自动启动，首装与上传的包从主节点拉取，市场包从市场下载 |
 
 限制：没有外壳的核心只用本机目录，只支持单节点；`deploy/e2e` 与 `single/` 的两节点栈上传插件后另一节点拿不到包，按用户决定，这些部署以后都改为外壳托管。
+
+### 10.1 ovh 部署
+
+用户确认后部署到 ovh 四节点集群：
+
+- 部署前备份业务库到 `~/sup2api/backups/pre-plugin-packages-20261002.sql.gz`。PG 中有 38 个插件版本，包共 496 MB。
+- 用 [`export_plugin_packages.py`](../../../deploy/shell/ovh/export_plugin_packages.py) 把 38 个包逐个校验 sha256 后写入主节点 sup2api-1 的外壳存储（`plugin-blobs/`，属主 1000，目录 0700）。
+- 逐个替换四个节点的外壳镜像（先从节点后主节点），每个节点约 5 秒恢复，其余节点期间正常。
+- 签名 v0.1.2（含迁移 0022，`schema_before` 为 v0.1.1 的 schema），在控制台 API 创建主节点优先计划并记录（[原始记录](evidence/ovh-upgrade-0.1.2.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.2-summary.txt)）：68.5 秒完成；从节点停核心期间四个入口全部正常应答；全集群 503 从 32.4 s 到 42.3–44.7 s，约 10–12 秒；迁移 0022 只由主节点执行。
+- 部署后：`plugin_versions` 已无 `package` 列，五个插件保持启用与原版本，四个入口未鉴权业务接口 401，日志无新的 WARN/ERROR。对 sup2api-4 的外壳请求一个它本地没有的旧 volcengine 包，外壳从主节点拉取 13,846,219 字节并校验，摘要一致。
+- `VACUUM FULL plugin_versions` 回收删除列后残留的空间：表从 529 MB 降到 184 kB。

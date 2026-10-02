@@ -71,6 +71,8 @@ chmod 755 config
 commit=$(git -C "$HOME/sup2api/src" rev-parse --short HEAD)
 release() {
   ver=$1
+  # A schema-changing release names the version it migrates from.
+  from=${2:-}
   if [ -f "publish/v$ver.digests" ]; then
     return 0
   fi
@@ -83,10 +85,12 @@ release() {
   chmod -R a+rX stage publish
   chmod 777 publish
   docker run --rm -v "$M/stage/$ver:/stage:ro" -v "$M/publish:/publish" -v "$M/keys/release.key:/release.key:ro" \
-    -v "$SRC/deploy/shell/package-release.sh:/package-release.sh:ro" --user 0 --entrypoint sh sup2api-shell:local \
-    /package-release.sh /stage /publish /release.key sup2api-ovh-2026 "v$ver" "$commit" | tee "publish/v$ver.digests"
+    -v "$SRC/deploy/shell/package-release.sh:/package-release.sh:ro" --user "$(id -u)" --entrypoint sh sup2api-shell:local \
+    /package-release.sh /stage /publish /release.key sup2api-ovh-2026 "v$ver" "$commit" ${from:+"$(stage/$from/bin/sub2api schema-contract)"} | tee "publish/v$ver.digests"
   chmod 755 publish && chmod 644 publish/*
 }
 release 0.1.0
 release 0.1.1
+# 0.1.2 adds migration 0022: plugin packages leave PostgreSQL.
+release 0.1.2 0.1.1
 ls -la publish
