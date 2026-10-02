@@ -122,7 +122,9 @@ func run() error {
 	if releases.Client, err = publisherClient(c.CAFile); err != nil {
 		return err
 	}
-	if command == "init" {
+	// A newer shell adds its columns before serving; the schema is additive and
+	// idempotent, so older shells still running are unaffected.
+	if command == "init" || command == "serve" {
 		if err = store.EnsureSchema(ctx); err != nil {
 			return err
 		}

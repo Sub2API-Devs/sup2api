@@ -34,7 +34,12 @@ type Store struct {
 	RevokePeer func(context.Context, string) error
 }
 
-func (s *Store) EnsureSchema(ctx context.Context) error { _, err := s.DB.Exec(ctx, Schema); return err }
+// EnsureSchema installs or extends the shell schema. Shells starting together
+// take turns, so concurrent CREATE IF NOT EXISTS cannot collide.
+func (s *Store) EnsureSchema(ctx context.Context) error {
+	_, err := s.DB.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext('sub2api-shell-schema'));\n"+Schema)
+	return err
+}
 func (s *Store) InitCluster(ctx context.Context, primary, baseline string) error {
 	_, err := s.DB.Exec(ctx, `INSERT INTO updater.clusters(cluster_id,primary_node,baseline) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, s.Cluster, primary, baseline)
 	return err
