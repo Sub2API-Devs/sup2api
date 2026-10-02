@@ -1,0 +1,474 @@
+== notes
+   0.12s preflight HTTP 200: blockers=[] nodes=['sup2api-1', 'sup2api-2', 'sup2api-3', 'sup2api-4']
+   3.13s create plan HTTP 202: id=87840ffd278fa1bcd6cf6821cf13781f order=['sup2api-1', 'sup2api-2', 'sup2api-3', 'sup2api-4']
+  77.69s plan completed|27
+  81.76s done; log /home/debian/sup2api-managed/upgrade-20261002T182913.log
+== entrance status segments (start-end s: code xN)
+sup2api-1: 0.1-36.9:401x342  37.0-46.9:503x98  47.0-80.6:401x304
+sup2api-2: 0.1-36.9:401x342  37.0-48.0:503x109  48.1-80.6:401x293
+sup2api-3: 0.1-36.9:401x342  37.0-49.5:503x122  49.6-80.6:401x280
+sup2api-4: 0.1-36.9:401x342  37.0-47.9:503x108  48.0-80.6:401x294
+== core/plugin processes inside each container
+   0.15s sup2api-1: container=up core=['1159647'] plugins=5
+   0.18s sup2api-2: container=up core=['1172307'] plugins=5
+   0.21s sup2api-3: container=up core=['1186244'] plugins=5
+   0.23s sup2api-4: container=up core=['1200372'] plugins=5
+  20.73s sup2api-2: container=up core=- plugins=0
+  27.98s sup2api-3: container=up core=['1186244'] plugins=0
+  28.58s sup2api-3: container=up core=- plugins=0
+  35.84s sup2api-4: container=up core=- plugins=0
+  42.37s sup2api-1: container=up core=- plugins=0
+  43.58s sup2api-1: container=up core=['2587776'] plugins=0
+  44.79s sup2api-1: container=up core=['2587776'] plugins=5
+  52.05s sup2api-2: container=up core=['2600477'] plugins=0
+  53.26s sup2api-2: container=up core=['2600477'] plugins=5
+  61.12s sup2api-3: container=up core=['2614305'] plugins=0
+  62.33s sup2api-3: container=up core=['2614305'] plugins=5
+  70.81s sup2api-4: container=up core=['2628828'] plugins=0
+  72.02s sup2api-4: container=up core=['2628828'] plugins=5
+  77.98s sup2api-1: container=up core=['2587776'] plugins=6
+  78.01s sup2api-2: container=up core=['2600477'] plugins=6
+  78.03s sup2api-3: container=up core=['2614305'] plugins=6
+  78.06s sup2api-4: container=up core=['2628828'] plugins=6
+  80.40s sup2api-1: container=up core=['2587776'] plugins=5
+  80.42s sup2api-2: container=up core=['2600477'] plugins=5
+  80.45s sup2api-3: container=up core=['2614305'] plugins=5
+  80.47s sup2api-4: container=up core=['2628828'] plugins=5
+== cluster state changes (node|mode|ready|stopped|release|shell boot|core boot ; plan status|cursor|step)
+   0.35s plan=completed|27|
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|local|t|f|49ed5664|847c2810|cbc0e544
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+   3.24s plan=running|0|
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|local|t|f|49ed5664|847c2810|cbc0e544
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+   4.60s plan=running|0|sup2api-1:prepare:running
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|local|t|f|49ed5664|847c2810|cbc0e544
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+   5.24s plan=running|1|
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|local|t|f|49ed5664|847c2810|cbc0e544
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+   6.63s plan=running|1|sup2api-2:prepare:running
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|local|t|f|49ed5664|847c2810|cbc0e544
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+   7.30s plan=running|1|sup2api-2:prepare:done
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|local|t|f|49ed5664|847c2810|cbc0e544
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+   8.66s plan=running|2|
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|local|t|f|49ed5664|847c2810|cbc0e544
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+   9.37s plan=running|2|sup2api-3:prepare:pending
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|local|t|f|49ed5664|847c2810|cbc0e544
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  10.04s plan=running|2|sup2api-3:prepare:running
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|local|t|f|49ed5664|847c2810|cbc0e544
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  10.71s plan=running|2|sup2api-3:prepare:done
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|local|t|f|49ed5664|847c2810|cbc0e544
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  11.39s plan=running|3|
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|local|t|f|49ed5664|847c2810|cbc0e544
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  12.08s plan=running|3|sup2api-4:prepare:pending
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|local|t|f|49ed5664|847c2810|cbc0e544
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  12.75s plan=running|3|sup2api-4:prepare:running
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|local|t|f|49ed5664|847c2810|cbc0e544
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  13.43s plan=running|3|sup2api-4:prepare:done
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|local|t|f|49ed5664|847c2810|cbc0e544
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  14.09s plan=running|4|
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|local|t|f|49ed5664|847c2810|cbc0e544
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  15.45s plan=running|4|sup2api-2:redirect:pending
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|local|t|f|49ed5664|847c2810|cbc0e544
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  16.12s plan=running|5|
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|forward|f|f|49ed5664|847c2810|cbc0e544
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  17.48s plan=running|5|sup2api-2:stop:pending
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|forward|f|f|49ed5664|847c2810|cbc0e544
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  18.16s plan=running|5|sup2api-2:stop:running
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|forward|f|f|49ed5664|847c2810|cbc0e544
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  20.92s plan=running|5|sup2api-2:stop:done
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  21.60s plan=running|6|
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  22.27s plan=running|6|sup2api-3:redirect:pending
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|local|t|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  22.98s plan=running|6|sup2api-3:redirect:done
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|forward|f|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  23.60s plan=running|7|
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|forward|f|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  24.30s plan=running|7|sup2api-3:stop:pending
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|forward|f|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  24.99s plan=running|7|sup2api-3:stop:running
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|forward|f|f|49ed5664|3ff94e42|d73a3347
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  28.38s plan=running|7|sup2api-3:stop:done
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  29.06s plan=running|8|
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  30.41s plan=running|8|sup2api-4:redirect:done
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|local|t|f|49ed5664|6ff65809|5308967f
+  31.09s plan=running|9|
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|forward|f|f|49ed5664|6ff65809|5308967f
+  32.44s plan=running|9|sup2api-4:stop:running
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|forward|f|f|49ed5664|6ff65809|5308967f
+  35.78s plan=running|9|sup2api-4:stop:done
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|forward|f|t||6ff65809|
+  36.46s plan=running|10|
+          sup2api-1|local|t|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|forward|f|t||6ff65809|
+  37.13s plan=running|10|sup2api-1:maintenance:done
+          sup2api-1|maintenance|f|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|forward|f|t||6ff65809|
+  37.80s plan=running|10|sup2api-1:maintenance:done
+          sup2api-1|maintenance|f|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|maintenance|f|t||847c2810|
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|maintenance|f|t||6ff65809|
+  38.49s plan=running|11|
+          sup2api-1|maintenance|f|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|maintenance|f|t||847c2810|
+          sup2api-3|maintenance|f|t||3ff94e42|
+          sup2api-4|maintenance|f|t||6ff65809|
+  39.17s plan=running|11|sup2api-1:stop:running
+          sup2api-1|maintenance|f|f|49ed5664|a1a99a17|267d68f7
+          sup2api-2|maintenance|f|t||847c2810|
+          sup2api-3|maintenance|f|t||3ff94e42|
+          sup2api-4|maintenance|f|t||6ff65809|
+  42.58s plan=running|12|
+          sup2api-1|maintenance|f|t||a1a99a17|
+          sup2api-2|maintenance|f|t||847c2810|
+          sup2api-3|maintenance|f|t||3ff94e42|
+          sup2api-4|maintenance|f|t||6ff65809|
+  43.25s plan=running|12|sup2api-1:start-primary:running
+          sup2api-1|maintenance|f|t||a1a99a17|
+          sup2api-2|maintenance|f|t||847c2810|
+          sup2api-3|maintenance|f|t||3ff94e42|
+          sup2api-4|maintenance|f|t||6ff65809|
+  44.61s plan=running|13|
+          sup2api-1|maintenance|f|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|maintenance|f|t||847c2810|
+          sup2api-3|maintenance|f|t||3ff94e42|
+          sup2api-4|maintenance|f|t||6ff65809|
+  45.24s plan=running|13|sup2api-1:admit:done
+          sup2api-1|maintenance|f|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|maintenance|f|t||847c2810|
+          sup2api-3|maintenance|f|t||3ff94e42|
+          sup2api-4|maintenance|f|t||6ff65809|
+  46.57s plan=running|14|
+          sup2api-1|maintenance|f|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|maintenance|f|t||847c2810|
+          sup2api-3|maintenance|f|t||3ff94e42|
+          sup2api-4|maintenance|f|t||6ff65809|
+  47.26s plan=running|14|sup2api-1:local:done
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|maintenance|f|t||847c2810|
+          sup2api-3|maintenance|f|t||3ff94e42|
+          sup2api-4|maintenance|f|t||6ff65809|
+  47.94s plan=running|14|sup2api-1:local:done
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|maintenance|f|t||3ff94e42|
+          sup2api-4|forward|f|t||6ff65809|
+  48.60s plan=running|15|
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|forward|f|t||6ff65809|
+  49.29s plan=running|15|sup2api-2:redirect:pending
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|forward|f|t||6ff65809|
+  49.96s plan=running|15|sup2api-2:redirect:done
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|forward|f|t||6ff65809|
+  50.64s plan=running|16|
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|forward|f|t||6ff65809|
+  51.26s plan=running|16|sup2api-2:start:pending
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|forward|f|t||6ff65809|
+  51.92s plan=running|16|sup2api-2:start:running
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|forward|f|t||847c2810|
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|forward|f|t||6ff65809|
+  53.29s plan=running|17|
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|forward|f|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|forward|f|t||6ff65809|
+  54.57s plan=running|17|sup2api-2:admit:done
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|forward|f|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|forward|f|t||6ff65809|
+  55.27s plan=running|18|
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|forward|f|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|forward|f|t||6ff65809|
+  56.65s plan=running|18|sup2api-2:local:done
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|forward|f|t||6ff65809|
+  57.33s plan=running|19|
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|forward|f|t||6ff65809|
+  58.01s plan=running|19|sup2api-3:redirect:pending
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|forward|f|t||6ff65809|
+  59.42s plan=running|20|
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|forward|f|t||6ff65809|
+  60.09s plan=running|20|sup2api-3:start:pending
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|forward|f|t||6ff65809|
+  61.44s plan=running|20|sup2api-3:start:running
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|forward|f|t||3ff94e42|
+          sup2api-4|forward|f|t||6ff65809|
+  62.79s plan=running|20|sup2api-3:start:done
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|forward|f|f|b4f36bea|3ff94e42|f8713034
+          sup2api-4|forward|f|t||6ff65809|
+  63.41s plan=running|21|
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|forward|f|f|b4f36bea|3ff94e42|f8713034
+          sup2api-4|forward|f|t||6ff65809|
+  64.04s plan=running|21|sup2api-3:admit:pending
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|forward|f|f|b4f36bea|3ff94e42|f8713034
+          sup2api-4|forward|f|t||6ff65809|
+  65.40s plan=running|22|
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|forward|f|f|b4f36bea|3ff94e42|f8713034
+          sup2api-4|forward|f|t||6ff65809|
+  66.07s plan=running|22|sup2api-3:local:pending
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|forward|f|f|b4f36bea|3ff94e42|f8713034
+          sup2api-4|forward|f|t||6ff65809|
+  67.50s plan=running|23|
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|local|t|f|b4f36bea|3ff94e42|f8713034
+          sup2api-4|forward|f|t||6ff65809|
+  68.18s plan=running|23|sup2api-4:redirect:pending
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|local|t|f|b4f36bea|3ff94e42|f8713034
+          sup2api-4|forward|f|t||6ff65809|
+  68.85s plan=running|23|sup2api-4:redirect:done
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|local|t|f|b4f36bea|3ff94e42|f8713034
+          sup2api-4|forward|f|t||6ff65809|
+  69.50s plan=running|24|
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|local|t|f|b4f36bea|3ff94e42|f8713034
+          sup2api-4|forward|f|t||6ff65809|
+  70.18s plan=running|24|sup2api-4:start:pending
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|local|t|f|b4f36bea|3ff94e42|f8713034
+          sup2api-4|forward|f|t||6ff65809|
+  70.88s plan=running|24|sup2api-4:start:running
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|local|t|f|b4f36bea|3ff94e42|f8713034
+          sup2api-4|forward|f|t||6ff65809|
+  72.23s plan=running|25|
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|local|t|f|b4f36bea|3ff94e42|f8713034
+          sup2api-4|forward|f|f|b4f36bea|6ff65809|7e5d7687
+  73.60s plan=running|25|sup2api-4:admit:done
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|local|t|f|b4f36bea|3ff94e42|f8713034
+          sup2api-4|forward|f|f|b4f36bea|6ff65809|7e5d7687
+  74.26s plan=running|26|
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|local|t|f|b4f36bea|3ff94e42|f8713034
+          sup2api-4|forward|f|f|b4f36bea|6ff65809|7e5d7687
+  75.61s plan=running|26|sup2api-4:local:done
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|local|t|f|b4f36bea|3ff94e42|f8713034
+          sup2api-4|local|t|f|b4f36bea|6ff65809|7e5d7687
+  76.31s plan=running|27|
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|local|t|f|b4f36bea|3ff94e42|f8713034
+          sup2api-4|local|t|f|b4f36bea|6ff65809|7e5d7687
+  77.69s plan=completed|27|
+          sup2api-1|local|t|f|b4f36bea|a1a99a17|26ccdc5e
+          sup2api-2|local|t|f|b4f36bea|847c2810|e4bba215
+          sup2api-3|local|t|f|b4f36bea|3ff94e42|f8713034
+          sup2api-4|local|t|f|b4f36bea|6ff65809|7e5d7687
+== plan events
+  281|created|primary-first maintenance update approved|2026-10-02 18:29:16.487137+00
+  282|step|sup2api-1: prepare|2026-10-02 18:29:17.358019+00
+  283|done|sup2api-1: prepare |2026-10-02 18:29:17.987688+00
+  284|step|sup2api-2: prepare|2026-10-02 18:29:19.357855+00
+  285|done|sup2api-2: prepare |2026-10-02 18:29:20.555063+00
+  286|step|sup2api-3: prepare|2026-10-02 18:29:22.360021+00
+  287|done|sup2api-3: prepare |2026-10-02 18:29:23.883352+00
+  288|step|sup2api-4: prepare|2026-10-02 18:29:25.358152+00
+  289|done|sup2api-4: prepare |2026-10-02 18:29:26.380456+00
+  290|step|sup2api-2: redirect|2026-10-02 18:29:28.358861+00
+  291|done|sup2api-2: redirect |2026-10-02 18:29:28.921873+00
+  292|step|sup2api-2: stop|2026-10-02 18:29:30.357386+00
+  293|done|sup2api-2: stop |2026-10-02 18:29:34.029495+00
+  294|step|sup2api-3: redirect|2026-10-02 18:29:35.356823+00
+  295|done|sup2api-3: redirect |2026-10-02 18:29:36.253666+00
+  296|step|sup2api-3: stop|2026-10-02 18:29:37.358556+00
+  297|done|sup2api-3: stop |2026-10-02 18:29:41.360713+00
+  298|step|sup2api-4: redirect|2026-10-02 18:29:43.357668+00
+  299|done|sup2api-4: redirect |2026-10-02 18:29:43.745237+00
+  300|step|sup2api-4: stop|2026-10-02 18:29:45.357124+00
+  301|done|sup2api-4: stop |2026-10-02 18:29:48.851481+00
+  302|step|sup2api-1: maintenance|2026-10-02 18:29:50.358485+00
+  303|done|sup2api-1: maintenance |2026-10-02 18:29:50.362099+00
+  304|step|sup2api-1: stop|2026-10-02 18:29:52.359363+00
+  305|done|sup2api-1: stop |2026-10-02 18:29:55.470518+00
+  306|step|sup2api-1: start-primary|2026-10-02 18:29:56.356755+00
+  307|done|sup2api-1: start-primary |2026-10-02 18:29:57.719423+00
+  308|step|sup2api-1: admit|2026-10-02 18:29:58.359479+00
+  309|done|sup2api-1: admit |2026-10-02 18:29:58.364195+00
+  310|step|sup2api-1: local|2026-10-02 18:30:00.357656+00
+  311|done|sup2api-1: local |2026-10-02 18:30:00.359795+00
+  312|step|sup2api-2: redirect|2026-10-02 18:30:02.357062+00
+  313|done|sup2api-2: redirect |2026-10-02 18:30:02.920414+00
+  314|step|sup2api-2: start|2026-10-02 18:30:04.358766+00
+  315|done|sup2api-2: start |2026-10-02 18:30:06.281681+00
+  316|step|sup2api-2: admit|2026-10-02 18:30:07.358364+00
+  317|done|sup2api-2: admit |2026-10-02 18:30:07.92603+00
+  318|step|sup2api-2: local|2026-10-02 18:30:09.357011+00
+  319|done|sup2api-2: local |2026-10-02 18:30:09.922369+00
+  320|step|sup2api-3: redirect|2026-10-02 18:30:11.357218+00
+  321|done|sup2api-3: redirect |2026-10-02 18:30:12.252737+00
+  322|step|sup2api-3: start|2026-10-02 18:30:13.360132+00
+  323|done|sup2api-3: start |2026-10-02 18:30:15.517149+00
+  324|step|sup2api-3: admit|2026-10-02 18:30:17.357498+00
+  325|done|sup2api-3: admit |2026-10-02 18:30:18.257648+00
+  326|step|sup2api-3: local|2026-10-02 18:30:19.357254+00
+  327|done|sup2api-3: local |2026-10-02 18:30:20.254558+00
+  328|step|sup2api-4: redirect|2026-10-02 18:30:21.358008+00
+  329|done|sup2api-4: redirect |2026-10-02 18:30:21.743566+00
+  330|step|sup2api-4: start|2026-10-02 18:30:23.356934+00
+  331|done|sup2api-4: start |2026-10-02 18:30:25.111449+00
+  332|step|sup2api-4: admit|2026-10-02 18:30:26.356889+00
+  333|done|sup2api-4: admit |2026-10-02 18:30:26.748593+00
+  334|step|sup2api-4: local|2026-10-02 18:30:28.373966+00
+  335|done|sup2api-4: local |2026-10-02 18:30:28.745151+00
+  336|completed|all node steps acknowledged|2026-10-02 18:30:30.358142+00

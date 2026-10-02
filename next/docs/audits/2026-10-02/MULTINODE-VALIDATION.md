@@ -244,3 +244,13 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 
 - 真实三节点 `TestRealCoreRollingUpgrade`（[日志](evidence/bundle-realcore.log.txt)）：R1 核心包内置 anthropic 0.2.1、openai 0.3.0、volcengine 0.10.1；R2 核心包把 anthropic 换成 0.3.0-test（带新迁移 `0002_add_family.sql`）。主节点优先升级完成后，新核心自动把 anthropic 升到 0.3.0-test，三个节点都运行新版本、旧实例清理完毕，迁移只执行一次；之后回退到 R1 的恢复计划没有把它降级。其余五项真实测试同一轮通过。
 - 全部模块通过（[汇总](evidence/bundle-modules.summary)）；PG 用例 19 通过 0 跳过；`BuiltinsCommitted` 在 `BuiltinsReady` 的表格测试中逐例对照（只看集群版本，不看本节点实例）。
+
+### 16.1 ovh 部署（v0.1.6，含 §15、§16）
+
+用户确认后部署：
+
+- 备份业务库到 `~/sup2api/backups/pre-v0.1.6-20261003.sql.gz`；签名 v0.1.6（核心迁移 0023，外壳代码不变），主节点优先升级（[原始记录](evidence/ovh-upgrade-0.1.6.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.6-summary.txt)）：77.7 秒完成，全集群 503 从 37.0 s 到 46.9–49.5 s，约 10–12.5 秒。
+- 内置插件随核心升级：计划完成 1 秒后（18:30:30）新核心依次发起 rollout #52 anthropic 0.2.0→0.2.1、#53 moderation 0.1.5→0.1.6、#54 volcengine 0.10.0→0.10.1，约 7 秒内全部完成，四个节点都为 `active`，旧实例清理全部 `cleaned`。gemini 0.2.0、openai 0.3.0 已是包内版本，未变；guard 不在核心包中，未动。
+- 迁移：`schema_migrations` 记录 0023；三个插件改为幂等的脚本各在集群范围重跑一次（`plugin_migrations` 每个脚本一行，校验和与时间已更新），数据不变。
+- 部署后：四个节点运行 v0.1.6 并本地服务，业务入口未带凭证返回 401；CPU 保护仍开启、阈值 80，各节点 CPU 约 0.3%、未转移。
+- 日志问题：计划执行期间，已获准协调插件的节点每 12 秒左右就尝试一次内置插件升级，被“核心更新进行中”拒绝，每轮 5 条 ERROR（sup2api-1 三轮，sup2api-2、-3 各一轮）。原因是 `startBuiltinUpgrade` 用 `canCoordinate` 作门槛，而节点在计划的准备阶段就已获准协调插件。结果不受影响，计划完成后第一次尝试即成功，但门槛应同时要求没有进行中或暂停的核心计划，待修正。另有一条 WARN：包内 gemini 0.2.0 与库中已存的同版本内容不同（重新构建、未升版本号），按规则保留已存版本。
