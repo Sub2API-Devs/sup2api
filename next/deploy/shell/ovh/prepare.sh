@@ -99,4 +99,7 @@ release 0.1.3
 release 0.1.4
 # 0.1.5 adds the OpenAI Responses WebSocket mode (no schema change).
 release 0.1.5
+# 0.1.6 adds migration 0023 (plugin migrations re-run when changed) and
+# upgrades the bundled plugins with the core.
+release 0.1.6 0.1.5
 ls -la publish
