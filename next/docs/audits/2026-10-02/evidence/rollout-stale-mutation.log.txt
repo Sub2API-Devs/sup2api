@@ -1,0 +1,8 @@
+1
+=== RUN   TestStaleReconcileReadDefersStandbyInsteadOfFailingRollout
+2026/10/02 10:58:26 ERROR plugin instance failed to start component=plugin-rollout boot_id=boot-self plugin=stale version=2.0.0 err="conflict: plugin generation changed before instance start"
+    stale_generation_test.go:37: stale read reported "failed" (conflict: plugin generation changed before instance start) after 0 loads; want pending without a start
+--- FAIL: TestStaleReconcileReadDefersStandbyInsteadOfFailingRollout (0.15s)
+FAIL
+FAIL	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/rollout	0.165s
+FAIL

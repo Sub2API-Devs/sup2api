@@ -159,7 +159,7 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 
 - 同一台机器上的节点共用 CPU。ovh 四个节点没有 CPU 配额，容器内可用 CPU 等于整机核数，单节点的 cgroup 占比很难达到阈值；整机满载时四个节点同时超阈值，也没有可转的目标。要在 ovh 起作用，需要给每个节点设置 `cpus:` 配额，或把节点放到不同机器。
 - 只转新请求，进行中的请求不迁移；目标恰好在转移途中改变路由时，这一次请求返回 503，不重放。
-- `TestTwoNodeRollout` 的偶发失败是已有的插件 rollout 竞态，未在本次处理。
+- `TestTwoNodeRollout` 的偶发失败是已有的插件 rollout 竞态，已在第 12 节修复。
 
 ### 11.1 ovh 部署
 
@@ -171,3 +171,16 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 - 设置是集群全局的：经 3131 开启（阈值 80），四个入口读到的都是同一设置；阈值 30 返回 400。
 - 真实负载：在 sup2api-4 容器里跑两个忙循环 35 秒，其 10 秒平均 CPU 到 89.6% 时开始把新请求转给其余三个节点，期间经 3133 的请求都正常应答；循环结束后降到 60.7% 时停止。
 - 部署后五个插件保持启用与原版本，日志除上面的转移记录外无 WARN/ERROR。CPU 保护保持开启，阈值 80。
+
+## 12. 插件 rollout 因过时读取误判失败
+
+**现象。** 第 11 节满载运行时 `TestTwoNodeRollout` 失败一次：停用后重新启用插件，rollout 因 `node node-b failed to prepare: conflict: plugin generation changed before instance start` 直接失败。
+
+**原因。** 节点的一次 reconcile 先查 `plugins` 行、再查进行中的 rollout，是两次独立查询。Enable 恰好在两次之间提交时，这一轮拿到的是旧的 `row_version` 和新的 preparing rollout。启动 standby 时 `registerRuntime` 发现代数已变而拒绝，这本是正确的保护，但 `ensure` 把它记成实例启动失败，节点上报 failed，协调者随即判定整个 rollout 失败。生产中同样可能发生，表现为偶尔启用或升级插件无故失败。
+
+**修复。** 代数变化单独用 `errStaleGeneration` 表示，`ensure` 遇到它不记录失败，节点上报 pending，下一轮用当前代数启动。插件卸载中等其他冲突仍按失败处理，过时代数仍不能启动实例。
+
+**验证**（ovh 隔离目录，完毕已清理）：
+
+- 新回归 `TestStaleReconcileReadDefersStandbyInsteadOfFailingRollout` 直接构造这次的过时读取：修复前报出与现场相同的错误而失败（[变异记录](evidence/rollout-stale-mutation.log.txt)），修复后先报 pending、下一轮 ready（[日志](evidence/rollout-stale-regression.log.txt)，0 跳过）。
+- rollout 包 `-race -count=10` 通过；`TestTwoNodeRollout` 与整个 server 模块并行再跑 20 次通过；随后 server 模块 `-race` 全部通过（[日志](evidence/rollout-stale-module-server.log.txt)）。

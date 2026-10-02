@@ -1,0 +1,7 @@
+=== RUN   TestTerminalRolloutCleanupRequiresCurrentGenerationAndFinishedDrain
+--- PASS: TestTerminalRolloutCleanupRequiresCurrentGenerationAndFinishedDrain (0.07s)
+=== RUN   TestStaleReconcileReadDefersStandbyInsteadOfFailingRollout
+2026/10/02 10:58:28 INFO plugin instance started component=plugin-rollout boot_id=boot-self plugin=stale version=2.0.0
+--- PASS: TestStaleReconcileReadDefersStandbyInsteadOfFailingRollout (0.07s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/rollout	1.178s

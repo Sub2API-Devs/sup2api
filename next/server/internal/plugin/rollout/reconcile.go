@@ -3,6 +3,7 @@ package rollout
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/jackc/pgx/v5"
@@ -405,6 +406,11 @@ func (c *Controller) ensure(ctx context.Context, s *slot, version string, epoch 
 	if err == nil {
 		err = c.registerRuntime(ctx, s.key, pVersionEpoch{version, epoch})
 	}
+	if errors.Is(err, errStaleGeneration) {
+		// Pending, not failed: a rollout must not fail on an outdated read.
+		c.log.Debug("plugin instance start deferred to the next pass", "plugin", s.key, "version", version)
+		return
+	}
 	if err == nil {
 		inst, err = c.o.Runtime.Load(ctx, pkg)
 	}
@@ -427,6 +433,12 @@ type pVersionEpoch struct {
 	epoch   int64
 }
 
+// errStaleGeneration means the reconcile pass read an older plugins row than
+// the one now committed, for instance the plugin row before and the new
+// rollout after an Enable. It says nothing about the instance: ensure records
+// no failure and the next pass starts it with the current generation.
+var errStaleGeneration = core.ErrConflict.WithMessage("plugin generation changed before instance start")
+
 func (c *Controller) registerRuntime(ctx context.Context, key string, expected ...pVersionEpoch) error {
 	return c.o.DB.Tx(ctx, func(tx pgx.Tx) error {
 		var epoch int64
@@ -434,7 +446,7 @@ func (c *Controller) registerRuntime(ctx context.Context, key string, expected .
 			return err
 		}
 		if len(expected) > 0 && epoch != expected[0].epoch {
-			return core.ErrConflict.WithMessage("plugin generation changed before instance start")
+			return errStaleGeneration
 		}
 		var pending bool
 		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM plugin_uninstalls WHERE plugin_key=$1)`, key).Scan(&pending); err != nil {
