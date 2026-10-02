@@ -95,4 +95,6 @@ release 0.1.1
 release 0.1.2 0.1.1
 # 0.1.3 adds the CPU protection setting (no schema change).
 release 0.1.3
+# 0.1.4 fixes plugin rollouts failing on an outdated reconcile read.
+release 0.1.4
 ls -la publish
