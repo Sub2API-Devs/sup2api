@@ -18,7 +18,7 @@ func TestAC24_ManagedVideoAcrossNodes(t *testing.T) {
 		t.Fatal("AC24 requires exactly two nodes")
 	}
 	admin := e.Admin()
-	e.EnsurePlugin(admin, "volcengine", "0.10.0")
+	e.EnsurePlugin(admin, "volcengine", "0.10.1")
 	for _, success := range []bool{true, false} {
 		state := "failed"
 		if success {
@@ -97,7 +97,7 @@ func TestAC24_VideoMonitorSIGKILLTakeover(t *testing.T) {
 		t.Fatal("AC24 requires exactly two nodes")
 	}
 	admin := e.Admin()
-	e.EnsurePlugin(admin, "volcengine", "0.10.0")
+	e.EnsurePlugin(admin, "volcengine", "0.10.1")
 	tn := e.newVideoTenant(admin)
 	v := e.submitVideo(tn)
 	stats := e.waitVideoActive(v)

@@ -36,7 +36,7 @@ func startVideoRPC(t *testing.T, configure func(*pluginsdktest.FakeHost)) *plugi
 	p := New()
 	p.SetDialer(denyDial)
 	h := pluginsdktest.Start(t, p, pluginsdktest.Options{
-		Host: fh, SDK: []pluginsdk.Option{pluginsdk.WithInfo("volcengine", "0.10.0")},
+		Host: fh, SDK: []pluginsdk.Option{pluginsdk.WithInfo("volcengine", "0.10.1")},
 	})
 	t.Cleanup(func() {
 		if dials := fh.Dials(); len(dials) != 0 {

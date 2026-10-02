@@ -153,9 +153,9 @@ type AccountRanker interface {
 }
 
 // Migration mirrors pluginv1.MigrationServiceServer ("migration.data.v1").
-// The host calls MigrateData on one node, but a coordinator that is taken
-// over mid-rollout may make another node call it again for the same
-// versions: it MUST be idempotent (CONTRACTS §11.7).
+// The host calls MigrateData once per rollout, on one node, and records it;
+// a record lost after a successful call makes it run again, so it MUST be
+// idempotent (CONTRACTS §11.7, §36).
 type Migration interface {
 	MigrateData(context.Context, *pluginv1.MigrateDataRequest) (*pluginv1.MigrateDataResponse, error)
 }

@@ -24,7 +24,7 @@
 -- never deleted here: a task id an operator sees in a usage record must
 -- resolve to a model for the lifetime of that record.
 
-CREATE TABLE video_tasks (
+CREATE TABLE IF NOT EXISTS video_tasks (
     -- The upstream task id returned by POST .../generations/tasks. It is the
     -- primary key, which is exactly the index ResolveModel needs: that call
     -- is on the hot path (every client poll hits it) and does one lookup by

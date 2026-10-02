@@ -40,7 +40,7 @@ func TestExecuteForwardsAndRecordsOnce(t *testing.T) {
 		return &pluginv1.ExecutionReceipt{}, nil
 	}
 	h := pluginsdktest.Start(t, New(), pluginsdktest.Options{Host: fh,
-		SDK: []pluginsdk.Option{pluginsdk.WithInfo("anthropic", "0.2.0")}})
+		SDK: []pluginsdk.Option{pluginsdk.WithInfo("anthropic", "0.2.1")}})
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	r, err := h.Platform.Execute(ctx, &pluginv1.ExecuteRequest{

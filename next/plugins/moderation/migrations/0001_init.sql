@@ -2,7 +2,7 @@
 -- Runs with search_path pinned to the plugin schema (plg_moderation).
 
 -- One row per moderated request (pass verdicts only with record_pass).
-CREATE TABLE events (
+CREATE TABLE IF NOT EXISTS events (
     id                bigserial   PRIMARY KEY,
     created_at        timestamptz NOT NULL DEFAULT now(),
     request_id        text        NOT NULL DEFAULT '',
@@ -28,12 +28,12 @@ CREATE TABLE events (
     prompt_tokens     integer     NOT NULL DEFAULT 0,
     completion_tokens integer     NOT NULL DEFAULT 0
 );
-CREATE INDEX events_created_at_idx ON events (created_at);
-CREATE INDEX events_verdict_created_at_idx ON events (verdict, created_at);
-CREATE INDEX events_user_created_at_idx ON events (user_id, created_at);
+CREATE INDEX IF NOT EXISTS events_created_at_idx ON events (created_at);
+CREATE INDEX IF NOT EXISTS events_verdict_created_at_idx ON events (verdict, created_at);
+CREATE INDEX IF NOT EXISTS events_user_created_at_idx ON events (user_id, created_at);
 
 -- Banned users (automatic after ban_threshold violations, or manual).
-CREATE TABLE blocks (
+CREATE TABLE IF NOT EXISTS blocks (
     user_id    bigint      PRIMARY KEY,
     reason     text        NOT NULL DEFAULT '',
     violations integer     NOT NULL DEFAULT 0,
@@ -42,10 +42,10 @@ CREATE TABLE blocks (
     expires_at timestamptz,          -- NULL = until unblocked
     created_by bigint
 );
-CREATE INDEX blocks_expires_at_idx ON blocks (expires_at);
+CREATE INDEX IF NOT EXISTS blocks_expires_at_idx ON blocks (expires_at);
 
 -- Last unblock per user: violations are only counted after it.
-CREATE TABLE unblocks (
+CREATE TABLE IF NOT EXISTS unblocks (
     user_id bigint      PRIMARY KEY,
     at      timestamptz NOT NULL
 );

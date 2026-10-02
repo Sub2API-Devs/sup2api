@@ -224,3 +224,16 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 - 备份业务库到 `~/sup2api/backups/pre-v0.1.5-20261002.sql.gz`；签名 v0.1.5（无 schema 变化，外壳代码不变），主节点优先升级（[原始记录](evidence/ovh-upgrade-0.1.5.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.5-summary.txt)）：77.6 秒完成，全集群 503 从 37.0 s 到 46.9–49.5 s，约 10–12 秒。
 - 核心包附带的插件不会覆盖已启用版本，因此通过控制台 API 上传同一核心包中的 `openai-0.3.0.s2plugin`：签名有效、官方信任，权限与 0.2.0 相同，上传即批准；随后升级 rollout #51 在 2 秒内完成，四个节点都运行 0.3.0。
 - 部署后：四个节点运行 v0.1.5 并本地服务；`GET /v1/responses` 不带升级返回 426，带升级但 key 无效返回 401；五个插件均启用（openai 0.3.0，其余版本不变）；日志无 WARN/ERROR。集群里有 2 个 openai 账号，它们连接真实上游，没有用它们发起会话。
+
+## 15. 插件按节点独立更新，迁移由核心执行一次
+
+规则见 CONTRACTS §36。ovh 隔离目录验证，完毕已清理，生产四个入口 401。
+
+| 项 | 结果 |
+|---|---|
+| 第一轮全部模块 | 除 server 外通过（[汇总](evidence/pernode-modules-first.summary)）。server 两处是新测试自身的问题（[日志](evidence/pernode-module-server-first.log.txt)）：`TestSchemaRoleMigrateDSNDrop` 后面按旧行数断言，而重跑改过的脚本多插了一行；`TestRolloutDoesNotWaitForAStuckNode` 在启用的发布正式结束前就发起升级。改正后 server 模块 `-race` 全部通过（[日志](evidence/pernode-module-server.log.txt)），相关包 `-count=3` 通过 |
+| 发布逻辑（PG，两个控制器各代表一个节点） | 节点 B 新版本启动失败：A 照常切换到 3.0.0，B 继续用 2.0.0 服务，发布完成并记录 B 失败；B 恢复后自行切到 3.0.0 并排空 2.0.0。两个节点都起不来：发布失败，提示“没有节点能准备新版本”，都留在旧版本。B 一直卡在启动：准备期满后不再等它，A 切换，B 用旧版本服务，放开后自行跟上。协调节点自己起不来：把协调权交给已就绪节点。数据迁移每次发布只执行一次并有记录（[日志](evidence/pernode-focus.log.txt)）|
+| 迁移幂等 | `TestOfficialPluginMigrationsAreIdempotent`：anthropic（含 0.3.0-test 覆盖包）、guard、moderation、volcengine 的全部脚本按顺序执行两遍无错；核心迁移改动已应用文件仍被拒绝，插件迁移改动后重跑一次并更新校验和（含角色隔离下的定义者函数）|
+| 真实三节点回归 | 六项全部通过（[日志](evidence/pernode-realcore.log.txt)）|
+
+限制：没有在真实三节点上专门注入“某个节点插件起不来”的故障，这部分由 PG 测试覆盖。迁移在任何节点切换前执行，落后节点上的旧版本会运行在新表结构上，因此迁移必须向后兼容。

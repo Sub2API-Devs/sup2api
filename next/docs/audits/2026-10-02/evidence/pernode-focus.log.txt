@@ -1,0 +1,22 @@
+=== RUN   TestSchemaRoleMigrateDSNDrop
+--- PASS: TestSchemaRoleMigrateDSNDrop (0.14s)
+=== RUN   TestOfficialPluginMigrationsAreIdempotent
+=== RUN   TestOfficialPluginMigrationsAreIdempotent/anthropic/0001_init.sql
+=== RUN   TestOfficialPluginMigrationsAreIdempotent/anthropic/0001_init.sql,0002_add_family.sql
+=== RUN   TestOfficialPluginMigrationsAreIdempotent/guard/0001_init.sql
+=== RUN   TestOfficialPluginMigrationsAreIdempotent/moderation/0001_init.sql,0002_block_subjects.sql
+=== RUN   TestOfficialPluginMigrationsAreIdempotent/volcengine/0001_init.sql,0002_video_tasks.sql
+--- PASS: TestOfficialPluginMigrationsAreIdempotent (0.07s)
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/dbschema	1.247s
+=== RUN   TestTwoNodeRollout
+--- PASS: TestTwoNodeRollout (2.09s)
+=== RUN   TestRolloutDoesNotWaitForAStuckNode
+--- PASS: TestRolloutDoesNotWaitForAStuckNode (5.49s)
+=== RUN   TestRolloutTakeoverAndLateJoiner
+--- PASS: TestRolloutTakeoverAndLateJoiner (8.66s)
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/rollout	17.287s
+=== RUN   TestCoreMigrationsApplyAndAreIdempotent
+--- PASS: TestCoreMigrationsApplyAndAreIdempotent (0.08s)
+=== RUN   TestChangedMigrationIsRefusedForCoreAndRerunForPlugins
+--- PASS: TestChangedMigrationIsRefusedForCoreAndRerunForPlugins (0.05s)
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/store	1.167s

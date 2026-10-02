@@ -1,7 +1,8 @@
 -- plg_anthropic 0001: model catalog.
+-- Idempotent: the core records it once, and running it again changes nothing.
 -- Runs with search_path pinned to the plugin schema (plg_anthropic).
 
-CREATE TABLE model_catalog (
+CREATE TABLE IF NOT EXISTS model_catalog (
     id                bigserial    PRIMARY KEY,
     model_id          varchar(100) NOT NULL UNIQUE,
     display_name      varchar(200) NOT NULL,
@@ -23,4 +24,5 @@ INSERT INTO model_catalog (model_id, display_name, context_window, max_output_to
     ('claude-opus-4-6',   'Claude Opus 4.6',   1000000, 128000, 'active', 70),
     ('claude-sonnet-5',   'Claude Sonnet 5',   1000000, 128000, 'active', 80),
     ('claude-sonnet-4-6', 'Claude Sonnet 4.6', 1000000, 128000, 'active', 90),
-    ('claude-haiku-4-5',  'Claude Haiku 4.5',   200000,  64000, 'active', 100);
+    ('claude-haiku-4-5',  'Claude Haiku 4.5',   200000,  64000, 'active', 100)
+ON CONFLICT (model_id) DO NOTHING;

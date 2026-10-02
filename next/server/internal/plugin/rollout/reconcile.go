@@ -236,6 +236,21 @@ func (c *Controller) reconcileKey(ctx context.Context, s *slot, p *pluginRow) No
 	wg.Wait()
 
 	s.mu.Lock()
+	// Each node switches on its own: while the version it should serve is
+	// still starting or failed here, a version it already runs keeps serving,
+	// and the wanted one is retried. No node waits for another.
+	want, fallback := serving, ""
+	if serving != "" && (ro == nil || ro.phase != PhasePreparing) && !entryReady(s.entries[serving]) {
+		for v, e := range s.entries {
+			if v != serving && entryReady(e) && (fallback == "" || v == keep) {
+				fallback = v
+			}
+		}
+		if fallback != "" {
+			needed[fallback] = true
+			serving = fallback
+		}
+	}
 	for v, e := range s.entries {
 		if !needed[v] {
 			delete(s.entries, v)
@@ -247,7 +262,7 @@ func (c *Controller) reconcileKey(ctx context.Context, s *slot, p *pluginRow) No
 	s.serving = serving
 	var running []Instance
 	var retryOK []bool // per running instance: resource restart may be tried
-	st := NodePluginState{Serving: serving, Standby: standby}
+	st := NodePluginState{Serving: serving, Standby: standby, Fallback: fallback}
 	versions := make([]string, 0, len(s.entries))
 	for v := range s.entries {
 		versions = append(versions, v)
@@ -299,10 +314,10 @@ func (c *Controller) reconcileKey(ctx context.Context, s *slot, p *pluginRow) No
 				st.Rollout, st.Error = entryState(standby)
 			}
 		case PhaseActivating:
-			if serving == "" {
+			if want == "" {
 				st.Rollout = NodeActive
 			} else {
-				state, msg := entryState(serving)
+				state, msg := entryState(want)
 				if state == NodeReady {
 					state = NodeActive
 				}
@@ -316,7 +331,7 @@ func (c *Controller) reconcileKey(ctx context.Context, s *slot, p *pluginRow) No
 	case serving == "":
 		st.State = "stopped"
 	default:
-		state, msg := entryState(serving)
+		state, msg := entryState(want)
 		if state == NodeReady {
 			state = NodeActive
 		}
@@ -533,4 +548,13 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n]
+}
+
+// entryReady reports a running instance that can serve.
+func entryReady(e *entry) bool {
+	if e == nil || e.inst == nil {
+		return false
+	}
+	state, _ := e.inst.State()
+	return state == stateReady
 }

@@ -19,7 +19,7 @@
 --   * assets or groups created directly in the Volcengine console are NOT
 --     in this index. The live upstream listing routes exist for that.
 
-CREATE TABLE asset_groups (
+CREATE TABLE IF NOT EXISTS asset_groups (
     id           bigserial   PRIMARY KEY,
     -- Account of this plugin's own account type the group lives on. There
     -- is no foreign key: accounts belong to the core, which the plugin
@@ -37,9 +37,9 @@ CREATE TABLE asset_groups (
     checked_at   timestamptz,
     UNIQUE (account_id, upstream_id)
 );
-CREATE INDEX asset_groups_account_idx ON asset_groups (account_id, id);
+CREATE INDEX IF NOT EXISTS asset_groups_account_idx ON asset_groups (account_id, id);
 
-CREATE TABLE assets (
+CREATE TABLE IF NOT EXISTS assets (
     id           bigserial   PRIMARY KEY,
     account_id   bigint      NOT NULL,
     -- The local group row. Deleting a group drops its assets from the index
@@ -60,5 +60,5 @@ CREATE TABLE assets (
     checked_at   timestamptz,
     UNIQUE (account_id, upstream_id)
 );
-CREATE INDEX assets_group_idx ON assets (group_id, id);
-CREATE INDEX assets_account_idx ON assets (account_id, id);
+CREATE INDEX IF NOT EXISTS assets_group_idx ON assets (group_id, id);
+CREATE INDEX IF NOT EXISTS assets_account_idx ON assets (account_id, id);

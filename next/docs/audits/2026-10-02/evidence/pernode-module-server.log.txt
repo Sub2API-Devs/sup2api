@@ -1,0 +1,46 @@
+?   	github.com/Sub2API-Devs/sup2api/next/server/cmd/sub2api	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/account	2.376s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/apikey	1.120s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/app	9.572s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/audit	1.029s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/authz	1.272s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/background	1.078s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/billing	6.951s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/billing/expr	1.071s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/cluster	5.203s
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/config	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/core	4.336s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/event	1.112s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/event/delivery	14.160s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/gateway	6.088s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert	1.029s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/group	1.305s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi	1.032s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/iam	6.402s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/job	7.854s
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/migrations	[no test files]
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/netguard	[no test files]
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/platforms	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/api	1.257s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/blobs	1.029s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/dbschema	1.448s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/egress	1.575s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/grpcruntime	35.528s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/install	1.995s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/market	1.137s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg	1.481s
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg/pkgtest	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry	1.252s
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry/registrytest	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/rollout	27.346s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/routes	1.090s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/sandbox	6.994s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/proxy	1.364s
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/secret	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/store	1.154s
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/testutil	[no test files]
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/updater	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/usage	4.162s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/usagerules	1.029s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/webui	1.181s
+?   	github.com/Sub2API-Devs/sup2api/next/server/web	[no test files]

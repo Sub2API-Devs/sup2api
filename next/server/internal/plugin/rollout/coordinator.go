@@ -2,7 +2,9 @@ package rollout
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -48,6 +50,12 @@ func (c *Controller) startCoordinator(id int64) {
 // takeOver claims rollouts whose coordinator lease expired.
 func (c *Controller) takeOver(ctx context.Context, r *rolloutRow) {
 	if c.o.CanCoordinate != nil && !c.o.CanCoordinate() {
+		return
+	}
+	c.coordMu.Lock()
+	handed := c.handedOff[r.id]
+	c.coordMu.Unlock()
+	if handed {
 		return
 	}
 	if r.coordBoot == c.o.Node.BootID() {
@@ -153,9 +161,6 @@ func (c *Controller) coordinateStep(ctx context.Context, id int64, st *coordStat
 
 	switch r.phase {
 	case PhasePreparing:
-		if r.ageSec > c.o.PrepareTimeout.Seconds() {
-			return c.fail(ctx, r, "prepare timed out")
-		}
 		if !st.migrated {
 			if err := c.migrate(ctx, r); err != nil {
 				return c.fail(ctx, r, "migration failed: "+err.Error())
@@ -171,17 +176,31 @@ func (c *Controller) coordinateStep(ctx context.Context, id int64, st *coordStat
 		if err != nil {
 			return false, err
 		}
-		for _, n := range states {
-			if n.State == NodeFailed {
-				return c.fail(ctx, r, fmt.Sprintf("node %s (%s) failed to prepare: %s", n.NodeID, n.BootID, n.Error))
-			}
-		}
 		if !st.dataMigrated {
 			ok, err := c.migrateData(ctx, r, st.dataFrom)
+			var local *localStandbyError
+			if errors.As(err, &local) {
+				for _, n := range states {
+					if n.State == NodeReady && n.BootID != c.o.Node.BootID() {
+						return c.handOff(ctx, r)
+					}
+				}
+				settled := true
+				for _, n := range states {
+					settled = settled && n.State == NodeFailed
+				}
+				if settled || r.ageSec > c.o.PrepareTimeout.Seconds() {
+					return c.fail(ctx, r, "no node could prepare the new version: "+err.Error())
+				}
+				return false, nil // wait for another node to become ready
+			}
 			if err != nil {
 				return c.fail(ctx, r, "data migration failed: "+err.Error())
 			}
 			if !ok {
+				if r.ageSec > c.o.PrepareTimeout.Seconds() {
+					return c.fail(ctx, r, "prepare timed out: the coordinator's new instance is not ready for the data migration")
+				}
 				return false, nil // local standby not ready yet
 			}
 			st.dataMigrated = true
@@ -189,10 +208,34 @@ func (c *Controller) coordinateStep(ctx context.Context, id int64, st *coordStat
 		if !selfSeen {
 			return false, nil
 		}
+		// Every node prepares on its own and none can hold the others back:
+		// the rollout commits once one node runs the new version and the
+		// rest are ready or failed, or the prepare window ran out. A node
+		// that is not ready keeps serving its old version and retries.
+		ready, settled := 0, true
+		var failures []string
 		for _, n := range states {
-			if n.State != NodeReady {
-				return false, nil
+			switch n.State {
+			case NodeReady:
+				ready++
+			case NodeFailed:
+				failures = append(failures, fmt.Sprintf("node %s (%s): %s", n.NodeID, n.BootID, n.Error))
+			default:
+				settled = false
 			}
+		}
+		timedOut := r.ageSec > c.o.PrepareTimeout.Seconds()
+		switch {
+		case ready == 0 && settled:
+			return c.fail(ctx, r, "no node could prepare the new version: "+strings.Join(failures, "; "))
+		case ready == 0 && timedOut:
+			return c.fail(ctx, r, "prepare timed out: no node is ready")
+		case ready == 0 || (!settled && !timedOut):
+			return false, nil
+		}
+		if len(failures) > 0 || !settled {
+			c.log.Warn("plugin rollout commits without every node", "rollout_id", r.id, "plugin", r.key,
+				"ready", ready, "failed", failures, "timed_out", timedOut)
 		}
 		if err := c.commit(ctx, r); err != nil {
 			return false, err
@@ -297,17 +340,35 @@ func (c *Controller) migrateData(ctx context.Context, r *rolloutRow, from string
 	if !declared {
 		return true, nil
 	}
+	if msg, failed := c.localFailure(r.key, *r.target); failed {
+		return false, &localStandbyError{msg}
+	}
 	inst := c.localInstance(r.key, *r.target)
 	if inst == nil {
 		return false, nil
 	}
 	if s, msg := inst.State(); s != stateReady {
 		if s == stateFailed {
-			return false, fmt.Errorf("standby failed: %s", msg)
+			return false, &localStandbyError{msg}
 		}
 		return false, nil
 	}
-	return true, inst.MigrateData(ctx, from, *r.target)
+	// The core runs a data migration once per rollout: the result is recorded
+	// beside the SQL migrations, so a coordinator that takes over does not
+	// run it again. Recording can still be lost after a successful call, so
+	// MigrateData must stay idempotent.
+	id := fmt.Sprintf("data:rollout-%d:%s->%s", r.id, from, *r.target)
+	var done bool
+	if err := c.o.DB.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM plugin_migrations WHERE plugin_key = $1 AND migration_id = $2)`,
+		r.key, id).Scan(&done); err != nil || done {
+		return done, err
+	}
+	if err := inst.MigrateData(ctx, from, *r.target); err != nil {
+		return false, err
+	}
+	_, err = c.o.DB.Pool.Exec(ctx, `INSERT INTO plugin_migrations (plugin_key, migration_id, checksum) VALUES ($1, $2, 'data')
+		ON CONFLICT DO NOTHING`, r.key, id)
+	return err == nil, err
 }
 
 // commit is the commit point: preparing -> activating.
@@ -383,4 +444,41 @@ func (c *Controller) complete(ctx context.Context, r *rolloutRow) error {
 		}
 		return c.markCleanup(ctx, tx, r)
 	})
+}
+
+// localStandbyError: the coordinator's own new instance failed, so it cannot
+// run the data migration; another ready node has to coordinate.
+type localStandbyError struct{ msg string }
+
+func (e *localStandbyError) Error() string { return "standby failed on the coordinator: " + e.msg }
+
+// localFailure reports a failed load of key@version on this node.
+func (c *Controller) localFailure(key, version string) (string, bool) {
+	c.mu.Lock()
+	s := c.slots[key]
+	c.mu.Unlock()
+	if s == nil {
+		return "", false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if e := s.entries[version]; e != nil && e.inst == nil {
+		return e.loadErr, true
+	}
+	return "", false
+}
+
+// handOff releases the lease of a rollout this node cannot finish, so a
+// node with a ready new instance takes it over at its next reconcile.
+func (c *Controller) handOff(ctx context.Context, r *rolloutRow) (bool, error) {
+	c.coordMu.Lock()
+	c.handedOff[r.id] = true
+	c.coordMu.Unlock()
+	_, err := c.o.DB.Pool.Exec(ctx, `UPDATE plugin_rollouts SET coordinator_lease_until = clock_timestamp(), row_version = row_version + 1
+		WHERE id = $1 AND coordinator_boot_id = $2 AND phase = 'preparing'`, r.id, c.o.Node.BootID())
+	if err != nil {
+		return false, err
+	}
+	c.log.Warn("handing plugin rollout to a ready node", "rollout_id", r.id, "plugin", r.key)
+	return true, nil
 }

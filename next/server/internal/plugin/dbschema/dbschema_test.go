@@ -4,6 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -68,10 +71,21 @@ func TestSchemaRoleMigrateDSNDrop(t *testing.T) {
 	if owner != "plg_"+key {
 		t.Fatalf("items owner = %s", owner)
 	}
-	// Modified migration is refused.
-	fsys["0001_init.sql"] = &fstest.MapFile{Data: []byte(`SELECT 1;`)}
-	if _, err := m.Migrate(ctx, key, fsys); err == nil {
-		t.Fatal("expected checksum mismatch")
+	// A script changed after it was applied runs again (scripts are
+	// idempotent) and its record takes the new checksum, through the
+	// definer function of the isolated role.
+	fsys["0001_init.sql"] = &fstest.MapFile{Data: []byte(`CREATE TABLE IF NOT EXISTS items (id int PRIMARY KEY);
+		INSERT INTO items VALUES (1), (2) ON CONFLICT DO NOTHING;`)}
+	again, err := m.Migrate(ctx, key, fsys)
+	if err != nil || len(again) != 1 || again[0] != "0001_init.sql" {
+		t.Fatalf("changed script: %v %v", again, err)
+	}
+	var rows int
+	if err := db.Pool.QueryRow(ctx, `SELECT count(*) FROM `+pgx.Identifier{"plg_" + key, "items"}.Sanitize()).Scan(&rows); err != nil || rows != 2 {
+		t.Fatalf("items after the re-run = %d %v", rows, err)
+	}
+	if again, err := m.Migrate(ctx, key, fsys); err != nil || len(again) != 0 {
+		t.Fatalf("the new checksum was not recorded: %v %v", again, err)
 	}
 
 	// The restricted DSN logs in as the plugin role, sees its schema, not core tables.
@@ -89,7 +103,7 @@ func TestSchemaRoleMigrateDSNDrop(t *testing.T) {
 	if err := conn.QueryRow(ctx, `SELECT current_user, (SELECT count(*) FROM items)`).Scan(&who, &n); err != nil {
 		t.Fatal(err)
 	}
-	if who != "plg_"+key || n != 1 {
+	if who != "plg_"+key || n != 2 {
 		t.Fatalf("who=%s n=%d", who, n)
 	}
 	if _, err := conn.Exec(ctx, `SELECT count(*) FROM public.users`); err == nil || !strings.Contains(err.Error(), "permission denied") {
@@ -184,4 +198,68 @@ func TestMigrationCannotEscalate(t *testing.T) {
 	if applied, err := m.Migrate(ctx, key, fstest.MapFS{"0001_ok.sql": {Data: []byte(`CREATE TABLE ok (id int);`)}}); err != nil || len(applied) != 1 {
 		t.Fatalf("ok migration: %v %v", applied, err)
 	}
+}
+
+// Every SQL migration shipped with an official plugin (and its test
+// overlays) is idempotent: applied twice in order, the second pass changes
+// nothing and fails nowhere. The core records each file once, but a lost
+// record or a corrected script runs it again.
+func TestOfficialPluginMigrationsAreIdempotent(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := context.Background()
+	root := filepath.Join("..", "..", "..", "..", "plugins")
+	dirs, err := filepath.Glob(filepath.Join(root, "*", "migrations"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	overlays, _ := filepath.Glob(filepath.Join(root, "*", "testdata", "*", "migrations"))
+	if len(dirs) < 4 {
+		t.Fatalf("found only %v under %s", dirs, root)
+	}
+	for _, dir := range dirs {
+		plugin := filepath.Base(filepath.Dir(dir))
+		sets := [][]string{}
+		base, _ := filepath.Glob(filepath.Join(dir, "*.sql"))
+		sort.Strings(base)
+		sets = append(sets, base)
+		for _, o := range overlays {
+			if strings.Contains(o, string(filepath.Separator)+plugin+string(filepath.Separator)) {
+				extra, _ := filepath.Glob(filepath.Join(o, "*.sql"))
+				sort.Strings(extra)
+				sets = append(sets, append(append([]string(nil), base...), extra...))
+			}
+		}
+		for _, files := range sets {
+			t.Run(plugin+"/"+strings.Join(names(files), ","), func(t *testing.T) {
+				tx, err := db.Pool.Begin(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer tx.Rollback(ctx)
+				schema := pgx.Identifier{"idem_" + randKey()}.Sanitize()
+				if _, err = tx.Exec(ctx, "CREATE SCHEMA "+schema+"; SET LOCAL search_path TO "+schema); err != nil {
+					t.Fatal(err)
+				}
+				for pass := 1; pass <= 2; pass++ {
+					for _, f := range files {
+						body, err := os.ReadFile(f)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if _, err = tx.Exec(ctx, string(body)); err != nil {
+							t.Fatalf("pass %d of %s: %v", pass, filepath.Base(f), err)
+						}
+					}
+				}
+			})
+		}
+	}
+}
+
+func names(files []string) []string {
+	out := make([]string, len(files))
+	for i, f := range files {
+		out[i] = filepath.Base(f)
+	}
+	return out
 }

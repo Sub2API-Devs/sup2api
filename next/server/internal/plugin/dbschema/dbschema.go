@@ -187,7 +187,9 @@ func (m *Manager) Migrate(ctx context.Context, pluginKey string, fsys fs.FS) ([]
 	if fsys == nil {
 		return nil, nil
 	}
-	opt := store.MigrateOptions{LockKey: store.PluginMigrationLockKey(pluginKey), SearchPath: st.Schema}
+	// Plugin scripts are idempotent by contract: a script whose content
+	// changed after it was applied runs again and its record is updated.
+	opt := store.MigrateOptions{LockKey: store.PluginMigrationLockKey(pluginKey), SearchPath: st.Schema, RerunChanged: true}
 	if !st.RoleIsolated {
 		return store.Migrate(ctx, m.db, fsys, Tracker{PluginKey: pluginKey}, opt)
 	}
@@ -321,7 +323,8 @@ func (t Tracker) Record(ctx context.Context, tx pgx.Tx, id, checksum string) err
 		return err
 	}
 	_, err := tx.Exec(ctx,
-		`INSERT INTO public.plugin_migrations (plugin_key, migration_id, checksum) VALUES ($1, $2, $3)`,
+		`INSERT INTO public.plugin_migrations (plugin_key, migration_id, checksum) VALUES ($1, $2, $3)
+		ON CONFLICT (plugin_key, migration_id) DO UPDATE SET checksum = EXCLUDED.checksum, applied_at = now()`,
 		t.PluginKey, id, checksum)
 	return err
 }

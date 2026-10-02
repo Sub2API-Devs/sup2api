@@ -73,6 +73,9 @@ type Controller struct {
 
 	coordMu      sync.Mutex
 	coordinating map[int64]bool
+	// handedOff lists rollouts this boot gave up coordinating because its own
+	// new instance failed; it does not take them over again.
+	handedOff map[int64]bool
 
 	stopOnce sync.Once
 	ctx      context.Context // cancelled by Stop
@@ -115,6 +118,7 @@ func New(o Options) (*Controller, error) {
 		restarting:   map[string]bool{},
 		again:        map[string]bool{},
 		coordinating: map[int64]bool{},
+		handedOff:    map[int64]bool{},
 		ctx:          ctx,
 		cancel:       cancel,
 	}

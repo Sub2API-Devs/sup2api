@@ -1,0 +1,221 @@
+=== server ===
+?   	github.com/Sub2API-Devs/sup2api/next/server/cmd/sub2api	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/account	2.538s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/apikey	1.236s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/app	9.529s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/audit	1.027s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/authz	1.286s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/background	1.078s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/billing	7.023s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/billing/expr	1.070s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/cluster	5.229s
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/config	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/core	4.335s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/event	1.097s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/event/delivery	14.181s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/gateway	5.878s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert	1.032s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/group	1.307s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi	1.037s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/iam	6.264s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/job	8.172s
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/migrations	[no test files]
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/netguard	[no test files]
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/platforms	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/api	1.247s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/blobs	1.032s
+--- FAIL: TestSchemaRoleMigrateDSNDrop (0.15s)
+    dbschema_test.go:107: who=plg_dsad524bae n=2
+FAIL
+FAIL	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/dbschema	0.462s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/egress	1.578s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/grpcruntime	35.348s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/install	2.037s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/market	1.141s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg	1.514s
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg/pkgtest	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry	1.263s
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry/registrytest	[no test files]
+2026/10/02 13:53:11 INFO plugin generation published component=plugin-rollout boot_id=boot-self generation=1 plugins=1
+2026/10/02 13:53:11 INFO plugin generation published component=plugin-rollout boot_id=boot-self generation=1 plugins=1
+2026/10/02 13:53:11 INFO restarting plugin instance with new resource limits component=plugin-rollout boot_id=boot-self plugin=demo version=1.0.0
+2026/10/02 13:53:11 INFO plugin generation published component=plugin-rollout boot_id=boot-self generation=2 plugins=1
+2026/10/02 13:53:11 INFO plugin instance replaced component=plugin-rollout boot_id=boot-self plugin=demo version=1.0.0
+2026/10/02 13:53:11 INFO plugin generation published component=plugin-rollout boot_id=boot-self generation=1 plugins=1
+2026/10/02 13:53:11 INFO restarting plugin instance with new resource limits component=plugin-rollout boot_id=boot-self plugin=demo version=1.0.0
+2026/10/02 13:53:11 ERROR plugin restart with new resource limits failed; keeping the running instance component=plugin-rollout boot_id=boot-self plugin=demo version=1.0.0 err="health check failed"
+2026/10/02 13:53:11 INFO restarting plugin instance with new resource limits component=plugin-rollout boot_id=boot-self plugin=demo version=1.0.0
+2026/10/02 13:53:11 INFO plugin generation published component=plugin-rollout boot_id=boot-self generation=2 plugins=1
+2026/10/02 13:53:11 INFO plugin instance replaced component=plugin-rollout boot_id=boot-self plugin=demo version=1.0.0
+2026/10/02 13:53:11 INFO plugin generation published component=plugin-rollout boot_id=boot-self generation=1 plugins=1
+2026/10/02 13:53:11 INFO restarting plugin instance with new resource limits component=plugin-rollout boot_id=boot-self plugin=demo version=1.0.0
+2026/10/02 13:53:11 INFO plugin generation published component=plugin-rollout boot_id=boot-self generation=2 plugins=1
+2026/10/02 13:53:11 INFO plugin instance replaced component=plugin-rollout boot_id=boot-self plugin=demo version=1.0.0
+2026/10/02 13:53:11 INFO plugin generation published component=plugin-rollout boot_id=boot-self generation=1 plugins=1
+2026/10/02 13:53:11 INFO restarting plugin instance with new resource limits component=plugin-rollout boot_id=boot-self plugin=demo version=1.0.0
+2026/10/02 13:53:11 INFO plugin generation published component=plugin-rollout boot_id=boot-self generation=1 plugins=1
+2026/10/02 13:53:11 INFO removed unused plugin package component=plugin-rollout boot_id=boot-self plugin=gone version=1.0.0
+2026/10/02 13:53:11 INFO removed unused plugin package component=plugin-rollout boot_id=boot-self plugin=demo version=1.0.0
+2026/10/02 13:53:11 INFO plugin generation published component=plugin-rollout boot_id=boot-self generation=1 plugins=1
+2026/10/02 13:53:11 INFO plugin generation published component=plugin-rollout boot_id=boot-self generation=2 plugins=2
+2026/10/02 13:53:11 WARN plugin broadcast delivery failed component=plugin-rollout boot_id=boot-self plugin=guard topic=rules.changed source_node=node-boot-other err="plugin error"
+2026/10/02 13:53:11 WARN plugin broadcast: malformed message component=plugin-rollout boot_id=boot-self plugin=guard
+2026/10/02 13:53:11 WARN plugin broadcast delivery failed component=plugin-rollout boot_id=boot-self plugin=guard topic=second source_node=node-boot-other err="plugin error"
+2026/10/02 13:53:11 INFO plugin instance started component=plugin-rollout boot_id=boot-self plugin=stale version=2.0.0
+2026/10/02 13:53:16 INFO plugin instance started component=plugin-rollout boot_id=boot-solo plugin=rod6ef52d1 version=1.0.0
+2026/10/02 13:53:16 INFO plugin rollout committed component=plugin-rollout boot_id=boot-solo rollout_id=1 plugin=rod6ef52d1 version=1.0.0
+2026/10/02 13:53:16 INFO plugin generation published component=plugin-rollout boot_id=boot-solo generation=1 plugins=1
+2026/10/02 13:53:16 INFO plugin rollout completed component=plugin-rollout boot_id=boot-solo rollout_id=1 plugin=rod6ef52d1 action=enable
+2026/10/02 13:53:16 INFO build component=plugin-runtime plugin=rod6ef52d1 version=1.0.0 source=plugin p.n=1
+2026/10/02 13:53:20 INFO plugin instance started component=plugin-rollout boot_id=boot-solo plugin=rod6ef52d1 version=2.0.0
+2026/10/02 13:53:20 INFO plugin rollout committed component=plugin-rollout boot_id=boot-solo rollout_id=2 plugin=rod6ef52d1 version=2.0.0
+2026/10/02 13:53:20 INFO plugin generation published component=plugin-rollout boot_id=boot-solo generation=2 plugins=1
+2026/10/02 13:53:20 INFO plugin rollout completed component=plugin-rollout boot_id=boot-solo rollout_id=2 plugin=rod6ef52d1 action=upgrade
+2026/10/02 13:53:20 INFO plugin process exited component=plugin-runtime plugin=rod6ef52d1 version=1.0.0 plugin=/tmp/TestRealRuntimeSingleNode3822530910/002/rod6ef52d1/1.0.0-32bb17a3/bin/plugin @module=plugin id=54513
+2026/10/02 13:53:20 INFO removed unused plugin package component=plugin-rollout boot_id=boot-solo plugin=rod6ef52d1 version=1.0.0
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=2
+2026/10/02 13:53:20 INFO restarting plugin instance with new resource limits component=plugin-rollout boot_id=boot-solo plugin=rod6ef52d1 version=2.0.0
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=3
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=4
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=5
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=6
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=7
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=8
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=9
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=10
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=11
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=12
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=13
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=14
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=15
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=16
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=17
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=18
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=19
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=20
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=21
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=22
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=23
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=24
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=25
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=26
+2026/10/02 13:53:20 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=27
+2026/10/02 13:53:21 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=28
+2026/10/02 13:53:21 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=29
+2026/10/02 13:53:21 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=30
+2026/10/02 13:53:21 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=31
+2026/10/02 13:53:21 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=32
+2026/10/02 13:53:21 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=33
+2026/10/02 13:53:21 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=34
+2026/10/02 13:53:21 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=35
+2026/10/02 13:53:21 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=36
+2026/10/02 13:53:21 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=37
+2026/10/02 13:53:21 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=38
+2026/10/02 13:53:21 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=39
+2026/10/02 13:53:21 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=40
+2026/10/02 13:53:21 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=41
+2026/10/02 13:53:21 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=42
+2026/10/02 13:53:21 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=43
+2026/10/02 13:53:21 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=44
+2026/10/02 13:53:21 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=45
+2026/10/02 13:53:21 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=46
+2026/10/02 13:53:21 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=47
+2026/10/02 13:53:21 INFO plugin generation published component=plugin-rollout boot_id=boot-solo generation=3 plugins=1
+2026/10/02 13:53:21 INFO plugin instance replaced component=plugin-rollout boot_id=boot-solo plugin=rod6ef52d1 version=2.0.0
+2026/10/02 13:53:21 INFO plugin process exited component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 plugin=/tmp/TestRealRuntimeSingleNode3822530910/002/rod6ef52d1/2.0.0-90d0de74/bin/plugin @module=plugin id=56096
+2026/10/02 13:53:21 INFO build component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 source=plugin p.n=48
+2026/10/02 13:53:21 INFO plugin generation published component=plugin-rollout boot_id=boot-solo generation=4 plugins=0
+2026/10/02 13:53:21 INFO plugin process exited component=plugin-runtime plugin=rod6ef52d1 version=2.0.0 @module=plugin id=56738 plugin=/tmp/TestRealRuntimeSingleNode3822530910/002/rod6ef52d1/2.0.0-90d0de74/bin/plugin
+2026/10/02 13:53:21 INFO plugin migrations applied component=plugin-rollout boot_id=boot-a plugin=ro31d8b18d version=1.0.0 files=[0001.sql]
+2026/10/02 13:53:21 INFO plugin instance started component=plugin-rollout boot_id=boot-a plugin=ro31d8b18d version=1.0.0
+2026/10/02 13:53:21 INFO plugin instance started component=plugin-rollout boot_id=boot-b plugin=ro31d8b18d version=1.0.0
+2026/10/02 13:53:21 INFO plugin rollout committed component=plugin-rollout boot_id=boot-a rollout_id=1 plugin=ro31d8b18d version=1.0.0
+2026/10/02 13:53:21 INFO plugin generation published component=plugin-rollout boot_id=boot-b generation=1 plugins=1
+2026/10/02 13:53:21 INFO plugin generation published component=plugin-rollout boot_id=boot-a generation=1 plugins=1
+2026/10/02 13:53:21 INFO plugin rollout completed component=plugin-rollout boot_id=boot-a rollout_id=1 plugin=ro31d8b18d action=enable
+2026/10/02 13:53:21 INFO plugin migrations applied component=plugin-rollout boot_id=boot-a plugin=ro31d8b18d version=2.0.0 files=[0002.sql]
+2026/10/02 13:53:21 INFO plugin instance started component=plugin-rollout boot_id=boot-b plugin=ro31d8b18d version=2.0.0
+2026/10/02 13:53:21 INFO plugin instance started component=plugin-rollout boot_id=boot-a plugin=ro31d8b18d version=2.0.0
+2026/10/02 13:53:22 INFO plugin rollout committed component=plugin-rollout boot_id=boot-a rollout_id=2 plugin=ro31d8b18d version=2.0.0
+2026/10/02 13:53:22 INFO plugin generation published component=plugin-rollout boot_id=boot-a generation=2 plugins=1
+2026/10/02 13:53:22 INFO plugin generation published component=plugin-rollout boot_id=boot-b generation=2 plugins=1
+2026/10/02 13:53:22 INFO plugin rollout completed component=plugin-rollout boot_id=boot-a rollout_id=2 plugin=ro31d8b18d action=upgrade
+2026/10/02 13:53:22 INFO removed unused plugin package component=plugin-rollout boot_id=boot-a plugin=ro31d8b18d version=1.0.0
+2026/10/02 13:53:22 INFO removed unused plugin package component=plugin-rollout boot_id=boot-b plugin=ro31d8b18d version=1.0.0
+2026/10/02 13:53:22 INFO removed unused plugin package component=plugin-rollout boot_id=boot-b plugin=ro31d8b18d version=1.0.0
+2026/10/02 13:53:22 INFO plugin instance started component=plugin-rollout boot_id=boot-a plugin=ro31d8b18d version=3.0.0
+2026/10/02 13:53:22 ERROR plugin instance failed to start component=plugin-rollout boot_id=boot-b plugin=ro31d8b18d version=3.0.0 err="simulated start failure of 3.0.0"
+2026/10/02 13:53:22 WARN handing plugin rollout to a ready node component=plugin-rollout boot_id=boot-b rollout_id=3 plugin=ro31d8b18d
+2026/10/02 13:53:22 INFO took over plugin rollout component=plugin-rollout boot_id=boot-a rollout_id=3 plugin=ro31d8b18d previous=boot-b
+2026/10/02 13:53:22 WARN plugin rollout commits without every node component=plugin-rollout boot_id=boot-a rollout_id=3 plugin=ro31d8b18d ready=1 failed="[node node-b (boot-b): simulated start failure of 3.0.0]" timed_out=false
+2026/10/02 13:53:22 INFO plugin rollout committed component=plugin-rollout boot_id=boot-a rollout_id=3 plugin=ro31d8b18d version=3.0.0
+2026/10/02 13:53:22 ERROR plugin instance failed to start component=plugin-rollout boot_id=boot-b plugin=ro31d8b18d version=3.0.0 err="simulated start failure of 3.0.0"
+2026/10/02 13:53:22 INFO plugin generation published component=plugin-rollout boot_id=boot-a generation=3 plugins=1
+2026/10/02 13:53:22 INFO plugin rollout completed component=plugin-rollout boot_id=boot-a rollout_id=3 plugin=ro31d8b18d action=upgrade
+2026/10/02 13:53:22 INFO removed unused plugin package component=plugin-rollout boot_id=boot-a plugin=ro31d8b18d version=2.0.0
+2026/10/02 13:53:22 INFO removed unused plugin package component=plugin-rollout boot_id=boot-a plugin=ro31d8b18d version=2.0.0
+2026/10/02 13:53:22 ERROR plugin instance failed to start component=plugin-rollout boot_id=boot-b plugin=ro31d8b18d version=3.0.0 err="simulated start failure of 3.0.0"
+2026/10/02 13:53:23 INFO plugin instance started component=plugin-rollout boot_id=boot-b plugin=ro31d8b18d version=3.0.0
+2026/10/02 13:53:23 INFO removed unused plugin package component=plugin-rollout boot_id=boot-b plugin=ro31d8b18d version=2.0.0
+2026/10/02 13:53:23 INFO plugin generation published component=plugin-rollout boot_id=boot-b generation=3 plugins=1
+2026/10/02 13:53:23 ERROR plugin instance failed to start component=plugin-rollout boot_id=boot-b plugin=ro31d8b18d version=4.0.0 err="simulated start failure of 4.0.0"
+2026/10/02 13:53:23 ERROR plugin instance failed to start component=plugin-rollout boot_id=boot-a plugin=ro31d8b18d version=4.0.0 err="simulated start failure of 4.0.0"
+2026/10/02 13:53:23 WARN plugin rollout failed component=plugin-rollout boot_id=boot-b rollout_id=4 plugin=ro31d8b18d reason="no node could prepare the new version: standby failed on the coordinator: simulated start failure of 4.0.0"
+2026/10/02 13:53:23 INFO removed unused plugin package component=plugin-rollout boot_id=boot-b plugin=ro31d8b18d version=4.0.0
+2026/10/02 13:53:23 INFO removed unused plugin package component=plugin-rollout boot_id=boot-a plugin=ro31d8b18d version=4.0.0
+2026/10/02 13:53:23 INFO plugin instance started component=plugin-rollout boot_id=boot-a plugin=ro31d8b18d version=4.0.0
+2026/10/02 13:53:23 INFO plugin instance started component=plugin-rollout boot_id=boot-b plugin=ro31d8b18d version=4.0.0
+2026/10/02 13:53:23 INFO removed unused plugin package component=plugin-rollout boot_id=boot-b plugin=ro31d8b18d version=4.0.0
+2026/10/02 13:53:23 INFO removed unused plugin package component=plugin-rollout boot_id=boot-a plugin=ro31d8b18d version=4.0.0
+2026/10/02 13:53:23 INFO removed unused plugin package component=plugin-rollout boot_id=boot-b plugin=ro31d8b18d version=4.0.0
+2026/10/02 13:53:23 INFO removed unused plugin package component=plugin-rollout boot_id=boot-a plugin=ro31d8b18d version=4.0.0
+2026/10/02 13:53:23 INFO plugin generation published component=plugin-rollout boot_id=boot-a generation=4 plugins=0
+2026/10/02 13:53:23 INFO plugin generation published component=plugin-rollout boot_id=boot-b generation=4 plugins=0
+2026/10/02 13:53:23 INFO plugin rollout completed component=plugin-rollout boot_id=boot-b rollout_id=6 plugin=ro31d8b18d action=disable
+2026/10/02 13:53:23 INFO plugin instance started component=plugin-rollout boot_id=boot-a plugin=ro31d8b18d version=3.0.0
+2026/10/02 13:53:23 INFO plugin instance started component=plugin-rollout boot_id=boot-b plugin=ro31d8b18d version=3.0.0
+2026/10/02 13:53:23 INFO plugin rollout committed component=plugin-rollout boot_id=boot-a rollout_id=7 plugin=ro31d8b18d version=3.0.0
+2026/10/02 13:53:23 INFO plugin generation published component=plugin-rollout boot_id=boot-b generation=5 plugins=1
+2026/10/02 13:53:23 INFO plugin generation published component=plugin-rollout boot_id=boot-a generation=5 plugins=1
+2026/10/02 13:53:23 INFO plugin rollout completed component=plugin-rollout boot_id=boot-a rollout_id=7 plugin=ro31d8b18d action=enable
+2026/10/02 13:53:23 INFO plugin instance started component=plugin-rollout boot_id=boot-b plugin=ro53180800 version=1.0.0
+2026/10/02 13:53:23 INFO plugin instance started component=plugin-rollout boot_id=boot-a plugin=ro53180800 version=1.0.0
+2026/10/02 13:53:23 INFO plugin rollout committed component=plugin-rollout boot_id=boot-a rollout_id=1 plugin=ro53180800 version=1.0.0
+2026/10/02 13:53:23 INFO plugin generation published component=plugin-rollout boot_id=boot-a generation=1 plugins=1
+2026/10/02 13:53:23 INFO plugin generation published component=plugin-rollout boot_id=boot-b generation=1 plugins=1
+--- FAIL: TestRolloutDoesNotWaitForAStuckNode (0.20s)
+    rollout_test.go:528: conflict: a rollout is already in progress for this plugin
+2026/10/02 13:53:23 INFO plugin instance started component=plugin-rollout boot_id=boot-a plugin=ro999ca3af version=1.0.0
+2026/10/02 13:53:23 INFO plugin instance started component=plugin-rollout boot_id=boot-b plugin=ro999ca3af version=1.0.0
+2026/10/02 13:53:23 INFO plugin rollout committed component=plugin-rollout boot_id=boot-a rollout_id=1 plugin=ro999ca3af version=1.0.0
+2026/10/02 13:53:23 INFO plugin generation published component=plugin-rollout boot_id=boot-a generation=1 plugins=1
+2026/10/02 13:53:23 INFO plugin generation published component=plugin-rollout boot_id=boot-b generation=1 plugins=1
+2026/10/02 13:53:24 INFO plugin rollout completed component=plugin-rollout boot_id=boot-a rollout_id=1 plugin=ro999ca3af action=enable
+2026/10/02 13:53:24 INFO plugin instance started component=plugin-rollout boot_id=boot-a plugin=ro999ca3af version=2.0.0
+2026/10/02 13:53:24 INFO plugin instance started component=plugin-rollout boot_id=boot-b plugin=ro999ca3af version=2.0.0
+2026/10/02 13:53:32 INFO took over plugin rollout component=plugin-rollout boot_id=boot-b rollout_id=2 plugin=ro999ca3af previous=boot-a
+2026/10/02 13:53:32 INFO plugin instance started component=plugin-rollout boot_id=boot-c plugin=ro999ca3af version=2.0.0
+2026/10/02 13:53:32 INFO plugin instance started component=plugin-rollout boot_id=boot-c plugin=ro999ca3af version=1.0.0
+2026/10/02 13:53:32 INFO plugin generation published component=plugin-rollout boot_id=boot-c generation=1 plugins=1
+2026/10/02 13:53:32 INFO plugin rollout committed component=plugin-rollout boot_id=boot-b rollout_id=2 plugin=ro999ca3af version=2.0.0
+2026/10/02 13:53:32 INFO plugin generation published component=plugin-rollout boot_id=boot-b generation=2 plugins=1
+2026/10/02 13:53:32 INFO plugin generation published component=plugin-rollout boot_id=boot-c generation=2 plugins=1
+2026/10/02 13:53:32 INFO plugin rollout completed component=plugin-rollout boot_id=boot-b rollout_id=2 plugin=ro999ca3af action=upgrade
+2026/10/02 13:53:32 INFO removed unused plugin package component=plugin-rollout boot_id=boot-c plugin=ro999ca3af version=1.0.0
+2026/10/02 13:53:32 INFO removed unused plugin package component=plugin-rollout boot_id=boot-b plugin=ro999ca3af version=1.0.0
+2026/10/02 13:53:32 INFO plugin instance started component=plugin-rollout boot_id=boot-d plugin=ro999ca3af version=2.0.0
+2026/10/02 13:53:32 INFO plugin generation published component=plugin-rollout boot_id=boot-d generation=1 plugins=1
+FAIL
+FAIL	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/rollout	21.301s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/routes	1.089s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/sandbox	7.085s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/proxy	1.366s
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/secret	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/store	1.167s
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/testutil	[no test files]
+?   	github.com/Sub2API-Devs/sup2api/next/server/internal/updater	[no test files]
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/usage	4.201s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/usagerules	1.033s
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/webui	1.195s
+?   	github.com/Sub2API-Devs/sup2api/next/server/web	[no test files]
+FAIL

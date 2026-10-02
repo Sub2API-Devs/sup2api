@@ -8,12 +8,12 @@ import (
 	"time"
 )
 
-// AC 5: upgrade anthropic from 0.2.0 to the 0.3.0-test fixture: the migration runs once, old rows are
+// AC 5: upgrade anthropic from 0.2.1 to the 0.3.0-test fixture: the migration runs once, old rows are
 // backfilled and requests keep succeeding on both nodes during the switch.
 func TestAC05_UpgradeAnthropicWithoutDowntime(t *testing.T) {
 	e := Setup(t)
 	admin := e.Admin()
-	e.EnsurePlugin(admin, "anthropic", "0.2.0")
+	e.EnsurePlugin(admin, "anthropic", "0.2.1")
 	tn := e.NewTenant(admin, TenantOpts{Accounts: 2, Balance: "50"})
 
 	before := admin.OK(t, http.MethodGet, "/p/anthropic/models", nil).Array()

@@ -30,6 +30,11 @@ type MigrateOptions struct {
 	// Privilege separation is done by the connection's login role, never by
 	// SET ROLE (a migration could RESET it).
 	SearchPath string
+	// RerunChanged re-runs an applied file whose content changed and records
+	// the new checksum, instead of refusing it. Plugin migrations must be
+	// idempotent, so a corrected script converges; core migrations keep the
+	// strict rule.
+	RerunChanged bool
 }
 
 // Migrate applies *.sql files from fsys in lexical order. Each file runs in
@@ -69,10 +74,12 @@ func Migrate(ctx context.Context, db *DB, fsys fs.FS, tr Tracker, opt MigrateOpt
 		sum := sha256.Sum256(body)
 		checksum := hex.EncodeToString(sum[:])
 		if prev, ok := applied[name]; ok {
-			if prev != checksum {
+			if prev == checksum {
+				continue
+			}
+			if !opt.RerunChanged {
 				return done, fmt.Errorf("migration %s was modified after being applied", name)
 			}
-			continue
 		}
 		tx, err := conn.Begin(ctx)
 		if err != nil {

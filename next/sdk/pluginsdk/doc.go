@@ -58,8 +58,9 @@
 //   - Publish is best effort and the publishing node does not receive its
 //     own message: apply a change locally, then publish it.
 //   - OnEvents is delivered at least once (idempotent on Event.Id), and
-//     MigrateData may run again when the rollout coordinator is taken over;
-//     both must be idempotent (CONTRACTS §11.7).
+//     MigrateData runs once per rollout (the host records it), but a
+//     record lost after a successful call means it runs again; both must
+//     be idempotent (CONTRACTS §11.7, §36). So must migrations/*.sql.
 //
 // The pluginsdktest sub-package runs a plugin in-process over bufconn with a
 // fake host, for unit tests.

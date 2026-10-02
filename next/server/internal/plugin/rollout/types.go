@@ -83,11 +83,14 @@ type NodePluginState struct {
 	// State summarizes this node for the console (CONTRACTS §5.7): the
 	// rollout state while a rollout is open, else the serving instance as
 	// active | pending | failed, or "stopped" when nothing is served.
-	State     string          `json:"state"`
-	Serving   string          `json:"serving,omitempty"`
-	Standby   string          `json:"standby,omitempty"`
-	RolloutID int64           `json:"rollout_id,omitempty"`
-	Rollout   string          `json:"rollout,omitempty"` // pending | ready | active | failed
+	State     string `json:"state"`
+	Serving   string `json:"serving,omitempty"`
+	Standby   string `json:"standby,omitempty"`
+	RolloutID int64  `json:"rollout_id,omitempty"`
+	Rollout   string `json:"rollout,omitempty"` // pending | ready | active | failed
+	// Fallback is the version this node still serves because the one it
+	// should serve is not ready here yet (starting, or failed and retried).
+	Fallback  string          `json:"fallback,omitempty"`
 	Error     string          `json:"error,omitempty"`
 	Instances []InstanceState `json:"instances,omitempty"`
 }

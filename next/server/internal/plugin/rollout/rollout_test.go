@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -197,7 +198,7 @@ func (h *harness) pkg(version string, migrations ...string) []byte {
 	return registrytest.Package(h.t, h.manifest(version), h.bin, extra)
 }
 
-func (h *harness) node(name, boot string) *node {
+func (h *harness) node(name, boot string, adjust ...func(*rollout.Options)) *node {
 	t := h.t
 	reg := registry.New()
 	rt := newFakeRuntime()
@@ -205,7 +206,7 @@ func (h *harness) node(name, boot string) *node {
 	t.Cleanup(pkgs.Close)
 	nd := &registrytest.Node{RDB: h.rdb, ID: name, Boot: boot}
 	nd.Heartbeat(context.Background())
-	ctl, err := rollout.New(rollout.Options{
+	opts := rollout.Options{
 		DB: h.db, Node: nd, Bus: registrytest.Bus{RDB: h.rdb}, Packages: pkgs, Registry: reg, Runtime: rt,
 		Schemas:  dbschema.New(h.db, h.db.Pool.Config().ConnString(), make([]byte, 32), false),
 		Defaults: h.rec, Perms: h.rec, Events: h.rec,
@@ -217,7 +218,11 @@ func (h *harness) node(name, boot string) *node {
 		ActivateTimeout:   20 * time.Second,
 		DrainTimeout:      time.Second,
 		LoadRetry:         300 * time.Millisecond,
-	})
+	}
+	for _, fn := range adjust {
+		fn(&opts)
+	}
+	ctl, err := rollout.New(opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +312,7 @@ func TestTwoNodeRollout(t *testing.T) {
 		t.Fatalf("rollout nodes active = %d, tracked for cleanup = %d", nodesActive, nodesTracked)
 	}
 	var mig int
-	_ = h.db.Pool.QueryRow(ctx, `SELECT count(*) FROM plugin_migrations WHERE plugin_key = $1`, h.key).Scan(&mig)
+	_ = h.db.Pool.QueryRow(ctx, `SELECT count(*) FROM plugin_migrations WHERE plugin_key = $1 AND migration_id LIKE '%.sql'`, h.key).Scan(&mig)
 	if mig != 1 {
 		t.Fatalf("migrations applied = %d", mig)
 	}
@@ -374,12 +379,20 @@ func TestTwoNodeRollout(t *testing.T) {
 	if _, defs, _ := h.rec.snapshot(); len(defs) != 1 || defs[0] != "2.0.0" {
 		t.Fatalf("ApplyDefaults calls = %v", defs)
 	}
-	_ = h.db.Pool.QueryRow(ctx, `SELECT count(*) FROM plugin_migrations WHERE plugin_key = $1`, h.key).Scan(&mig)
+	_ = h.db.Pool.QueryRow(ctx, `SELECT count(*) FROM plugin_migrations WHERE plugin_key = $1 AND migration_id LIKE '%.sql'`, h.key).Scan(&mig)
 	if mig != 2 {
 		t.Fatalf("migrations applied = %d", mig)
 	}
 
-	// ---- a node that fails to prepare cancels the rollout; everyone keeps 2.0.0.
+	// The data migration ran once and is recorded, so a takeover skips it.
+	var data int
+	_ = h.db.Pool.QueryRow(ctx, `SELECT count(*) FROM plugin_migrations WHERE plugin_key = $1 AND migration_id LIKE 'data:%'`, h.key).Scan(&data)
+	if data != 2 {
+		t.Fatalf("recorded data migrations = %d, want enable and upgrade", data)
+	}
+
+	// ---- a node that fails to prepare holds nobody back: A switches to
+	// 3.0.0, B keeps serving 2.0.0 and retries until 3.0.0 starts there too.
 	registrytest.AddVersion(t, h.db, h.manifest("3.0.0"), h.pkg("3.0.0", `CREATE TABLE a (id int);`, `ALTER TABLE a ADD COLUMN b int;`))
 	b.rt.mu.Lock()
 	b.rt.fail["3.0.0"] = true
@@ -388,34 +401,67 @@ func TestTwoNodeRollout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "rollout fails", func() bool {
+	waitFor(t, "rollout completes without node B", func() bool {
 		phase, _, _ := h.rolloutRow(r.ID)
-		return phase == rollout.PhaseFailed
+		return phase == rollout.PhaseActive && a.version(h.key) == "3.0.0"
 	})
-	if s, act, d := h.plugin(); s != "enabled" || act != "2.0.0" || d != "2.0.0" {
-		t.Fatalf("after failed rollout: %s %s %s", s, act, d)
+	if s, act, _ := h.plugin(); s != "enabled" || act != "3.0.0" {
+		t.Fatalf("after a partial rollout: %s %s", s, act)
 	}
-	if _, _, msg := h.rolloutRow(r.ID); msg == "" {
-		t.Fatal("failed rollout has no error")
+	if b.version(h.key) != "2.0.0" {
+		t.Fatalf("node B must keep serving its old version, serves %q", b.version(h.key))
 	}
-	waitFor(t, "standby 3.0.0 stopped on node A", func() bool {
-		for _, f := range a.rt.instances("3.0.0") {
+	var bState string
+	_ = h.db.Pool.QueryRow(ctx, `SELECT state FROM plugin_rollout_nodes WHERE rollout_id = $1 AND boot_id = 'boot-b'`, r.ID).Scan(&bState)
+	if bState != rollout.NodeFailed {
+		t.Fatalf("node B outcome = %q", bState)
+	}
+	b.rt.mu.Lock()
+	b.rt.fail["3.0.0"] = false
+	b.rt.mu.Unlock()
+	waitFor(t, "node B catches up on its own", func() bool { return b.version(h.key) == "3.0.0" })
+	waitFor(t, "node B drained 2.0.0", func() bool {
+		for _, f := range b.rt.instances("2.0.0") {
 			if s, _ := f.State(); s != grpcruntime.StateStopped {
 				return false
 			}
 		}
 		return true
 	})
-	if a.version(h.key) != "2.0.0" || b.version(h.key) != "2.0.0" {
+
+	// ---- a version no node can start fails the rollout; everyone keeps 3.0.0.
+	registrytest.AddVersion(t, h.db, h.manifest("4.0.0"), h.pkg("4.0.0", `CREATE TABLE a (id int);`, `ALTER TABLE a ADD COLUMN b int;`))
+	for _, n := range []*node{a, b} {
+		n.rt.mu.Lock()
+		n.rt.fail["4.0.0"] = true
+		n.rt.mu.Unlock()
+	}
+	r, err = b.ctl.Upgrade(ctx, h.key, "4.0.0", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "rollout fails", func() bool {
+		phase, _, _ := h.rolloutRow(r.ID)
+		return phase == rollout.PhaseFailed
+	})
+	if s, act, d := h.plugin(); s != "enabled" || act != "3.0.0" || d != "3.0.0" {
+		t.Fatalf("after failed rollout: %s %s %s", s, act, d)
+	}
+	if _, _, msg := h.rolloutRow(r.ID); !strings.Contains(msg, "no node could prepare") {
+		t.Fatalf("failed rollout error = %q", msg)
+	}
+	if a.version(h.key) != "3.0.0" || b.version(h.key) != "3.0.0" {
 		t.Fatal("nodes must keep the old version after a failed rollout")
 	}
 
 	// ---- cancel a preparing rollout.
-	b.rt.mu.Lock()
-	b.rt.fail["3.0.0"] = false
-	b.rt.hold["3.0.0"] = true
-	b.rt.mu.Unlock()
-	r, err = a.ctl.Upgrade(ctx, h.key, "3.0.0", 0)
+	for _, n := range []*node{a, b} {
+		n.rt.mu.Lock()
+		n.rt.fail["4.0.0"] = false
+		n.rt.hold["4.0.0"] = true
+		n.rt.mu.Unlock()
+	}
+	r, err = a.ctl.Upgrade(ctx, h.key, "4.0.0", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -425,7 +471,7 @@ func TestTwoNodeRollout(t *testing.T) {
 	if phase, _, _ := h.rolloutRow(r.ID); phase != rollout.PhaseCancelled {
 		t.Fatalf("phase = %s", phase)
 	}
-	if s, act, _ := h.plugin(); s != "enabled" || act != "2.0.0" {
+	if s, act, _ := h.plugin(); s != "enabled" || act != "3.0.0" {
 		t.Fatalf("after cancel: %s %s", s, act)
 	}
 
@@ -442,7 +488,7 @@ func TestTwoNodeRollout(t *testing.T) {
 		return phase == rollout.PhaseActive && a.version(h.key) == "" && b.version(h.key) == ""
 	})
 	act, _, evs = h.rec.snapshot()
-	if len(act) != 2 || act[1] || evs[len(evs)-1] != "plugin.disabled:2.0.0" {
+	if len(act) != 2 || act[1] || evs[len(evs)-1] != "plugin.disabled:3.0.0" {
 		t.Fatalf("perms=%v events=%v", act, evs)
 	}
 
@@ -451,13 +497,48 @@ func TestTwoNodeRollout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.TargetVersion != "2.0.0" {
+	if r.TargetVersion != "3.0.0" {
 		t.Fatalf("re-enable target = %s", r.TargetVersion)
 	}
 	waitFor(t, "re-enable completes", func() bool {
 		s, _, _ := h.plugin()
-		return s == "enabled" && a.version(h.key) == "2.0.0" && b.version(h.key) == "2.0.0"
+		return s == "enabled" && a.version(h.key) == "3.0.0" && b.version(h.key) == "3.0.0"
 	})
+}
+
+// A node that never gets its new version ready does not stall the cluster:
+// after the prepare window the rollout commits on the nodes that are ready,
+// and the stuck node serves its old version until it catches up.
+func TestRolloutDoesNotWaitForAStuckNode(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	registrytest.Install(t, h.db, h.manifest("1.0.0"), h.pkg("1.0.0"), map[string]string{"db.schema": "{}"}, "installed")
+	t.Cleanup(func() { _ = dbschema.New(h.db, "", nil, false).Drop(context.Background(), h.key) })
+	short := func(o *rollout.Options) { o.PrepareTimeout, o.ActivateTimeout = 3*time.Second, 2*time.Second }
+	a := h.node("node-a", "boot-a", short)
+	b := h.node("node-b", "boot-b", short)
+	if _, err := a.ctl.Enable(ctx, h.key, 0); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "enable completes", func() bool {
+		cur, _ := a.ctl.Current(ctx, h.key)
+		return cur == nil && a.version(h.key) == "1.0.0" && b.version(h.key) == "1.0.0"
+	})
+	registrytest.AddVersion(t, h.db, h.manifest("2.0.0"), h.pkg("2.0.0"))
+	b.rt.setHold("2.0.0", true)
+	r, err := a.ctl.Upgrade(ctx, h.key, "2.0.0", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "rollout completes past the stuck node", func() bool {
+		phase, _, _ := h.rolloutRow(r.ID)
+		return phase == rollout.PhaseActive && a.version(h.key) == "2.0.0"
+	})
+	if b.version(h.key) != "1.0.0" {
+		t.Fatalf("stuck node serves %q, want its old version", b.version(h.key))
+	}
+	b.rt.setHold("2.0.0", false)
+	waitFor(t, "stuck node catches up", func() bool { return b.version(h.key) == "2.0.0" })
 }
 
 func TestRolloutTakeoverAndLateJoiner(t *testing.T) {
