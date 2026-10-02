@@ -1,0 +1,6 @@
+=== RUN   TestRealCoreShellsCarryWebSocketsAcrossNodes
+    realcore_websocket_linux_test.go:117: session through the follower survived 6s and new keys for both nodes
+    realcore_websocket_linux_test.go:165: while a offloads, its new session runs on b; the open and the forwarded sessions stay on a
+--- PASS: TestRealCoreShellsCarryWebSocketsAcrossNodes (35.03s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/shell/internal/control	36.106s

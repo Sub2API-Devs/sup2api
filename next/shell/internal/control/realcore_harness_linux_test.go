@@ -74,6 +74,9 @@ type realOptions struct {
 	peerTTL time.Duration
 	// coreEnv is appended to every core's environment.
 	coreEnv []string
+	// standInCores lets a test route nodes to its own loopback servers instead
+	// of supervised cores: a local route is then ready without a core.
+	standInCores bool
 }
 
 type realCluster struct {
@@ -393,6 +396,9 @@ func (c *realCluster) startShell(id string) *realNode {
 		return store.ConfirmStoppedCore(ctx, id, boot, coreBoot)
 	}
 	router = proxy.New(proxy.Config{PeerTLS: c.clientTLS, PeerTransport: peerTransport, LocalReady: func() bool {
+		if c.options.standInCores {
+			return true
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 		st, _, e := rt.Status(ctx)

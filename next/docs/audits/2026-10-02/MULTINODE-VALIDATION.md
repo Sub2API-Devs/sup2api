@@ -64,7 +64,7 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 ## 5. 未覆盖与限制
 
 - 测试中的外壳与生产相同代码路径（启动、登记、恢复、引擎循环、HTTPS 监听、监管真实核心进程组），但运行在测试进程内；"重启外壳"是在同一状态目录上以新 boot 重建这些对象，而不是重启独立的 `sub2api-shell` 进程或容器。核心、插件、PG、Redis 与模拟上游都是真实进程。
-- WebSocket 跨登记 TTL 未在多节点上测：模拟上游没有 WebSocket 接口；proxy 单元测试覆盖升级连接的流式与计数。SSE 已在 §8 覆盖。
+- WebSocket 跨登记 TTL 已在第 13 节用真实外壳测试（核心本身没有 WebSocket 接口，由回显服务代替核心）。SSE 已在 §8 覆盖。
 - 未测试付费上游；视频任务与流式请求只连接模拟上游。
 - Windows supervisor 无实际进程测试。
 - 非 race 的 6 个 server 包组合运行中出现过一次失败，未能定位用例；随后 14 轮（含 `-count=8`）及第二轮全量 `-race` 均未复现。记录为未定位的偶发问题。
@@ -188,3 +188,17 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 ### 12.1 ovh 部署
 
 用户确认后部署：备份业务库到 `~/sup2api/backups/pre-v0.1.4-20261002.sql.gz`；签名 v0.1.4（无 schema 变化，外壳不变），主节点优先升级（[原始记录](evidence/ovh-upgrade-0.1.4.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.4-summary.txt)）：77.4 秒完成，全集群 503 从 36.7 s 到 46.6–48.7 s，约 10–12 秒。之后四个节点均运行 v0.1.4 并本地服务，四个入口 401，五个插件保持启用与原版本，CPU 保护仍为开启、阈值 80，日志无 WARN/ERROR。
+
+## 13. WebSocket 经外壳跨节点
+
+当前核心没有任何 WebSocket 接口（网关与插件路由都会去掉 `Upgrade`），旧版 sub2api 的 OpenAI WebSocket 模式尚未移植到 next，因此业务 WebSocket 端到端无法测试。可测的是外壳这一层：`TestRealCoreShellsCarryWebSocketsAcrossNodes` 使用真实外壳代码（公网监听、Redis 节点密钥、节点间 TLS、私有监听）、真实 PG 与可切断的真实 Redis，每个节点的本地路由指向一个代替核心的 WebSocket 回显服务（harness 的 `standInCores`）。客户端是按 RFC 6455 握手与收发帧的最小实现。
+
+| 场景 | 结果 |
+|---|---|
+| 经从节点 c 建立会话，转发到主节点 a | 101，`Sec-WebSocket-Accept` 原样到达；业务 `Authorization` 到达核心，`X-Sub2api-*` 内部头没有到达；c、a 两个外壳都把会话计入排空计数；70 000 字节的帧正常往返 |
+| 删除 a、c 的 Redis 登记 | 两者以新的自动密钥重新登记；已有会话在之后 2 个 TTL（6 秒）里持续收发；新会话正常 |
+| 切断 Redis 9 秒 | 已有会话继续收发；新会话被拒为 503；Redis 恢复、登记重建后新会话恢复 |
+| a 因 CPU 转移 | 经 a 入口的新会话落到 b；经 c 转来的会话仍由 a 自己处理、不再转发；转移前已开的会话不迁移 |
+| 关闭全部会话 | 三个外壳的排空计数和两个回显服务的连接数都回到 0 |
+
+另加单元测试 `TestForwardedUpgradeStreamsOverPeerTLS`：升级连接经节点 TLS 与节点密钥转发后双向流式传输并计入排空。验证在 ovh 隔离目录进行（[日志](evidence/websocket-realcore.log.txt)），同一轮改动后的 harness 上其余四个真实三节点测试也全部通过，shell 模块 `-race` 通过；完毕已清理，生产四个入口 401。

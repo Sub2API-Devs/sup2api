@@ -340,6 +340,50 @@ func TestUpgradedConnectionIsStreamedAndTracked(t *testing.T) {
 	}
 }
 
+func TestForwardedUpgradeStreamsOverPeerTLS(t *testing.T) {
+	a, _, _ := forwardPair(t, http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) {
+		if q.Header.Get(peer.KeyHeader) != "" || q.Header.Get("Upgrade") != "websocket" {
+			t.Error("node key reached the core or the upgrade was dropped")
+		}
+		c, rw, e := w.(http.Hijacker).Hijack()
+		if e != nil {
+			t.Error(e)
+			return
+		}
+		defer c.Close()
+		rw.WriteString("HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n")
+		rw.Flush()
+		io.Copy(c, rw)
+	}))
+	srv := httptest.NewServer(a.Public())
+	defer srv.Close()
+	u, _ := url.Parse(srv.URL)
+	c, e := net.DialTimeout("tcp", u.Host, time.Second)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer c.Close()
+	c.SetDeadline(time.Now().Add(5 * time.Second))
+	fmt.Fprintf(c, "GET /ws HTTP/1.1\r\nHost: public\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n")
+	reader := bufio.NewReader(c)
+	res, e := http.ReadResponse(reader, nil)
+	if e != nil || res.StatusCode != 101 {
+		t.Fatalf("forwarded upgrade: %v %v", res, e)
+	}
+	for _, msg := range []string{"first", "second"} {
+		if _, e = c.Write([]byte(msg)); e != nil {
+			t.Fatal(e)
+		}
+		buf := make([]byte, len(msg))
+		if _, e = io.ReadFull(reader, buf); e != nil || string(buf) != msg {
+			t.Fatalf("duplex stream through the peer failed %q %v", buf, e)
+		}
+	}
+	if a.Active() != 1 {
+		t.Fatalf("forwarded upgrade not tracked: %d", a.Active())
+	}
+}
+
 func testPeers(t *testing.T) (*peer.Manager, *peer.Manager) {
 	t.Helper()
 	db := miniredis.RunT(t)
