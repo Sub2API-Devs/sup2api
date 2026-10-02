@@ -57,4 +57,7 @@ func RegisterRoutes(r *httpapi.Router, socketPath string) {
 	for _, action := range []string{"disable", "enable"} {
 		r.Perm("POST", "/system/nodes/:id/"+action, "system:update:recover", handler)
 	}
+	// CPU offload is a system setting of the managed cluster.
+	r.Perm("GET", "/system/offload", "settings:read", handler)
+	r.Perm("PUT", "/system/offload", "settings:manage", handler)
 }

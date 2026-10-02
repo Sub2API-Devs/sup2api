@@ -1,0 +1,47 @@
+=== RUN   TestCoreMigrationsApplyAndAreIdempotent
+--- PASS: TestCoreMigrationsApplyAndAreIdempotent (0.05s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/store	0.067s
+=== RUN   TestPostgresRollingPlanPauseResumeAndIdempotency
+--- PASS: TestPostgresRollingPlanPauseResumeAndIdempotency (0.05s)
+=== RUN   TestPostgresOfflineNodeBlocksAndRestartRecoversPlan
+--- PASS: TestPostgresOfflineNodeBlocksAndRestartRecoversPlan (0.01s)
+=== RUN   TestRedisMutualExclusionRenewalAndLoss
+--- PASS: TestRedisMutualExclusionRenewalAndLoss (0.25s)
+=== RUN   TestPostgresBootstrapFlagCannotReimportPluginsAfterFirstAdmission
+--- PASS: TestPostgresBootstrapFlagCannotReimportPluginsAfterFirstAdmission (0.01s)
+=== RUN   TestPostgresRollbackUsesHealthyAnchorAndPreservesInheritedRoute
+--- PASS: TestPostgresRollbackUsesHealthyAnchorAndPreservesInheritedRoute (0.06s)
+=== RUN   TestPostgresRollbackWaitsForOldNodeWork
+--- PASS: TestPostgresRollbackWaitsForOldNodeWork (0.02s)
+=== RUN   TestPostgresLateOldWorkerCannotResurrectSupersededPlan
+--- PASS: TestPostgresLateOldWorkerCannotResurrectSupersededPlan (0.04s)
+=== RUN   TestPostgresMaintenanceStopBarrierAndRecovery
+--- PASS: TestPostgresMaintenanceStopBarrierAndRecovery (0.04s)
+=== RUN   TestPostgresLegacyPlanAndCrossSchemaRollbackAreRejected
+--- PASS: TestPostgresLegacyPlanAndCrossSchemaRollbackAreRejected (0.02s)
+=== RUN   TestPostgresNodeRegistrationDisableAndBootValidation
+--- PASS: TestPostgresNodeRegistrationDisableAndBootValidation (0.01s)
+=== RUN   TestPostgresUnknownCoreAndOldShellBlockUpgrade
+--- PASS: TestPostgresUnknownCoreAndOldShellBlockUpgrade (0.01s)
+=== RUN   TestPostgresPausedCandidateCannotSelfAdmit
+--- PASS: TestPostgresPausedCandidateCannotSelfAdmit (0.04s)
+=== RUN   TestPostgresPauseBetweenAdmissionCheckAndCommitWins
+--- PASS: TestPostgresPauseBetweenAdmissionCheckAndCommitWins (0.03s)
+=== RUN   TestPostgresPlanCreatedBeforeBaselineAdmissionCommitWins
+--- PASS: TestPostgresPlanCreatedBeforeBaselineAdmissionCommitWins (0.01s)
+=== RUN   TestPostgresPeerAuthorizationClassifiesFailures
+--- PASS: TestPostgresPeerAuthorizationClassifiesFailures (0.01s)
+=== RUN   TestPostgresDisabledWorkerStillStopsAndAcknowledges
+--- PASS: TestPostgresDisabledWorkerStillStopsAndAcknowledges (0.02s)
+=== RUN   TestPostgresFollowerResumesForwardingWhenPrimaryServes
+--- PASS: TestPostgresFollowerResumesForwardingWhenPrimaryServes (0.01s)
+=== RUN   TestPostgresCPUOffloadIsMarkedBeforeSheddingAndAuthorizesForwards
+2026/10/02 10:21:44 WARN cpu offload started node=updater-test-1790936504811423903a cpu_percent=85 targets=[updater-test-1790936504811423903b]
+2026/10/02 10:21:44 INFO cpu offload stopped node=updater-test-1790936504811423903a cpu_percent=0x10efb6c58c68
+2026/10/02 10:21:44 WARN cpu offload started node=updater-test-1790936504811423903a cpu_percent=80 targets=[updater-test-1790936504811423903b]
+2026/10/02 10:21:44 INFO cpu offload stopped node=updater-test-1790936504811423903a cpu_percent=0x10efb6c590b0
+2026/10/02 10:21:44 WARN cpu offload started node=updater-test-1790936504811423903a cpu_percent=80 targets=[updater-test-1790936504811423903b]
+--- PASS: TestPostgresCPUOffloadIsMarkedBeforeSheddingAndAuthorizesForwards (0.01s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/shell/internal/control	0.674s

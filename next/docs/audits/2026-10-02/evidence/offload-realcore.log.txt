@@ -1,0 +1,54 @@
+=== RUN   TestRealCoreFaultsDuringPrimaryFirstUpgrade
+    realcore_faults_linux_test.go:289: SSE through forwarding node lasted 13.526s across TTL 3s and a key replacement
+    realcore_faults_linux_test.go:305: video task s2task_a27a0515-e6ab-4b28-b4c0-df6fd7306028 submitted; an upstream observation is held open
+    realcore_faults_linux_test.go:318: primary-first plan 71ed42201045eb70f3f841457e432453 started
+    realcore_faults_linux_test.go:132: fault: restarted stopped follower shell as c-shell-2
+    realcore_faults_linux_test.go:138: fault: node d joined during the update as d-shell-1
+    realcore_faults_linux_test.go:192: fault: SIGKILL primary core pid 4259 during its migration
+    realcore_faults_linux_test.go:332: fault: plan paused after the interrupted migration: Get "http://core/v1/status": dial unix /tmp/s2-real-4076618834/core.sock: connect: connection refused
+    realcore_faults_linux_test.go:359: fault: Redis partitioned for 9s
+    realcore_faults_linux_test.go:373: plan resumed
+    realcore_faults_linux_test.go:399: update completed; the retried migration applied once; d serves the target
+    realcore_faults_linux_test.go:444: video task settled once on its account: cost=0.00025500, 2 upstream observations (1 canceled by the update), 0 poll failures
+    realcore_faults_linux_test.go:456: fault: Redis partitioned for 9s while serving
+    realcore_faults_linux_test.go:477: Redis partition while serving: every core kept its boot and serves again
+--- PASS: TestRealCoreFaultsDuringPrimaryFirstUpgrade (200.78s)
+=== RUN   TestRealCoreRollingUpgrade
+    realcore_linux_test.go:42: bootstrap primary a prepared and admitted
+    realcore_linux_test.go:49: follower b downloaded, prepared and admitted
+    realcore_linux_test.go:49: follower c downloaded, prepared and admitted
+    realcore_linux_test.go:160: primary-first plan 4740ddb893f74cba0e9f0213603b8fc2 started across 3 nodes
+    realcore_linux_test.go:263: primary-first completed: requests=8742 planned503=1640 forwardedSuccess=2350 failures=0 counts=map[a:local-serving:401:2394 a:maintenance:503:520 b:forward-only:401:1114 b:forward-only:503:40 b:local-serving:401:1240 b:maintenance:503:520 c:forward-only:401:1236 c:forward-only:503:39 c:local-serving:401:1118 c:maintenance:503:521]
+    realcore_linux_test.go:308: primary applied migrations [9999_managed_upgrade_probe.sql] while followers were stopped
+    realcore_linux_test.go:358: node b re-registered after Redis loss; key reused=true; core boot unchanged
+    realcore_linux_test.go:358: node c re-registered after Redis loss; key reused=false; core boot unchanged
+    realcore_linux_test.go:370: killed core b boot=044dcefdab2c67f6e2e0ae5f540b5d4a7570d8007a4216809e38cb8b8b112127; waiting for approved-release recovery
+    realcore_linux_test.go:374: core b recovered with new boot=848537edde52de45aee8b4e176416f33f536e7d16fb89c4561026e8abf1ce418
+    realcore_linux_test.go:403: failed-candidate plan 3adf429852c5dad320321159f993cfe7 started
+    realcore_linux_test.go:410: failed-candidate plan paused safely: candidate exited before handshake
+    realcore_linux_test.go:455: baseline recovery plan 7aabcad3cf4dfcc3faca0b2f3e32ab66 started; order=[a b c]
+    realcore_linux_test.go:470: recovery: primary serving and all entrances converged
+    realcore_linux_test.go:541: baseline recovery completed; next update d85a280c9b9c7c9ffd6d9de5967ac552 accepted
+    realcore_linux_test.go:542: real R1->R2 primary-first upgrade passed; 8742 business requests, 1640 planned 503s; old=6c721237aa87e650bab8cc14e4e1255134263b0b7043643d504b78a2b9d494a2 target=a2eeeb4f4420ca48d49846e87baf6a6c3fd3ae6decd7fb5bdb57d8a430670385
+--- PASS: TestRealCoreRollingUpgrade (222.01s)
+=== RUN   TestRealCoreCPUOffloadMovesNewRequests
+2026/10/02 10:26:51 WARN cpu offload started node=a cpu_percent=95 targets="[b c]"
+    realcore_offload_linux_test.go:109: primary a at 95%: 30 requests answered by b (15) and c (15)
+2026/10/02 10:26:55 INFO cpu offload stopped node=a cpu_percent=0xc00b4be698
+2026/10/02 10:26:56 WARN cpu offload started node=a cpu_percent=95 targets="[b c]"
+2026/10/02 10:27:00 INFO cpu offload stopped node=a cpu_percent=0xc00c008fd8
+2026/10/02 10:27:01 WARN cpu offload started node=b cpu_percent=99 targets="[a c]"
+2026/10/02 10:27:02 INFO cpu offload stopped node=b cpu_percent=0xc00c09bac8
+    realcore_offload_linux_test.go:157: follower b offloaded at 99% and stopped when the setting was turned off
+--- PASS: TestRealCoreCPUOffloadMovesNewRequests (61.78s)
+=== RUN   TestRealCorePluginPackagesTravelBetweenNodes
+    realcore_packages_linux_test.go:131: bundled packages: kept by the primary's shell, pulled by both followers over the node network
+    realcore_packages_linux_test.go:152: upload guard through follower b: stored on the primary before the response, pulled by c
+    realcore_packages_linux_test.go:185: market relay@0.2.0: 4 downloads from the market (install + each node); b never used the node network for it
+    realcore_packages_linux_test.go:193: primary a stopped
+    realcore_packages_linux_test.go:199: follower b restarted with a new core while the primary was down; it serves from its local release and plugin copies
+    realcore_packages_linux_test.go:210: node d cannot start while the primary is down: Get "https://127.0.0.1:34911/internal/blobs/9b44cebec01a729ac30b03517a87435b96777d400ab98104dd8cbb5be90f0b91": dial tcp 127.0.0.1:34911: connect: connection refused
+    realcore_packages_linux_test.go:224: node d started after the primary returned, pulling bundled and uploaded packages from it and the market package from the market
+--- PASS: TestRealCorePluginPackagesTravelBetweenNodes (72.43s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/shell/internal/control	558.139s

@@ -57,3 +57,10 @@ CREATE TABLE IF NOT EXISTS updater.stop_confirmations (
  core_boot_id text NOT NULL DEFAULT '', confirmed_at timestamptz NOT NULL DEFAULT now(),
  PRIMARY KEY(cluster_id,node_id,upgrade_id)
 );
+-- CPU offload (2026-10-02): the cluster setting, and each node's measured load.
+-- A NULL cpu_percent is an unmeasured node or an older shell; neither takes
+-- offloaded traffic.
+ALTER TABLE updater.clusters ADD COLUMN IF NOT EXISTS offload_enabled boolean NOT NULL DEFAULT false;
+ALTER TABLE updater.clusters ADD COLUMN IF NOT EXISTS offload_cpu_percent integer NOT NULL DEFAULT 80;
+ALTER TABLE updater.nodes ADD COLUMN IF NOT EXISTS cpu_percent real;
+ALTER TABLE updater.nodes ADD COLUMN IF NOT EXISTS offloading boolean NOT NULL DEFAULT false;

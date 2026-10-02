@@ -1,0 +1,15 @@
+runtime-contract rc=0
+sdk rc=0
+tools/sub2api-plugin rc=0
+deploy/mock-upstream rc=0
+shell rc=0
+server rc=1
+plugins/anthropic rc=0
+plugins/gemini rc=0
+plugins/guard rc=0
+plugins/moderation rc=0
+plugins/openai rc=0
+plugins/relay rc=0
+plugins/volcengine rc=0
+e2e(compile) rc=0
+db-guard rc=0 skips=0 passes=19

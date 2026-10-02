@@ -9,6 +9,9 @@ x-node: &node
   restart: unless-stopped
   # The shell drains its core (HTTP, then plugins and pending usage) on stop.
   stop_grace_period: 180s
+  # CPU protection measures each node against its own quota; without one a
+  # node sees all 384 host CPUs and never reaches the threshold.
+  cpus: 2
   mem_limit: 2g
   networks: [sup2api]
   depends_on: [releases]

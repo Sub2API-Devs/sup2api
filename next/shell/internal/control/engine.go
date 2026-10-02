@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"sync"
 	"time"
 
 	rc "github.com/Sub2API-Devs/sup2api/next/runtime-contract"
@@ -19,6 +21,11 @@ type Engine struct {
 	StepTimeout  time.Duration
 	PeerMaintain func(context.Context) error
 	PeerCheck    func(context.Context) error
+	// CPU reports this node's averaged CPU load; ok is false when unmeasured.
+	CPU func() (percent float64, ok bool)
+
+	heartbeat  sync.Mutex
+	offloading bool
 }
 
 // Run polls durable state; restart never resumes an in-memory command. Each pass
@@ -60,12 +67,15 @@ func (e *Engine) Run(ctx context.Context) error {
 	}
 }
 func (e *Engine) Heartbeat(ctx context.Context) error {
+	e.heartbeat.Lock()
+	defer e.heartbeat.Unlock()
 	if e.PeerMaintain != nil {
 		if err := e.PeerMaintain(ctx); err != nil {
 			return err
 		}
 	}
-	if nodes, err := e.Store.Nodes(ctx); err == nil {
+	nodes, nodesErr := e.Store.Nodes(ctx)
+	if nodesErr == nil {
 		if refresher, ok := e.Runtime.(interface {
 			RefreshForward(context.Context, []Node) error
 		}); ok {
@@ -84,7 +94,47 @@ func (e *Engine) Heartbeat(ctx context.Context) error {
 	if err != nil {
 		n.Error = err.Error()
 	}
-	return e.Store.Heartbeat(ctx, n)
+	if e.CPU != nil {
+		if cpu, ok := e.CPU(); ok {
+			n.CPUPercent = &cpu
+		}
+	}
+	// Receivers accept offloaded requests only from a node marked offloading,
+	// so the mark is stored before shedding starts and cleared after it ends.
+	shedder, _ := e.Runtime.(interface{ SetOffload([]Node) error })
+	var targets []Node
+	if shedder != nil && nodesErr == nil {
+		if set, err := e.Store.Offload(ctx); err == nil {
+			targets = offloadTargets(set, n, nodes, e.offloading)
+		}
+	}
+	if len(targets) == 0 && shedder != nil {
+		_ = shedder.SetOffload(nil)
+		if e.offloading {
+			attrs := []any{"node", n.ID}
+			if n.CPUPercent != nil {
+				attrs = append(attrs, "cpu_percent", *n.CPUPercent)
+			}
+			slog.Info("cpu offload stopped", attrs...)
+		}
+		e.offloading = false
+	}
+	n.Offloading = len(targets) > 0
+	if err = e.Store.Heartbeat(ctx, n); err != nil || len(targets) == 0 {
+		return err
+	}
+	if err = shedder.SetOffload(targets); err != nil {
+		return err
+	}
+	if !e.offloading {
+		ids := make([]string, len(targets))
+		for i, t := range targets {
+			ids[i] = t.ID
+		}
+		slog.Warn("cpu offload started", "node", n.ID, "cpu_percent", *n.CPUPercent, "targets", ids)
+	}
+	e.offloading = true
+	return nil
 }
 
 // resumeForward lets a follower that fell back to maintenance only because the

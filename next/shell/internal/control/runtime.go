@@ -126,6 +126,16 @@ func (r *LocalRuntime) Redirect(ctx context.Context, n Node) error {
 	defer r.routeMu.Unlock()
 	return r.redirectLocked(ctx, n)
 }
+
+// SetOffload sends new public requests to nodes while this one is
+// overloaded; the heartbeat renews it, and it lapses after offloadTTL.
+func (r *LocalRuntime) SetOffload(nodes []Node) error {
+	targets := make([]proxy.Target, 0, len(nodes))
+	for _, n := range nodes {
+		targets = append(targets, proxy.Target{PeerURL: n.PeerURL, CoreBootID: n.CoreBootID, Revision: n.RouteRevision})
+	}
+	return r.Router.SetOffload(targets, offloadTTL)
+}
 func (r *LocalRuntime) redirectLocked(ctx context.Context, n Node) error {
 	if err := ctx.Err(); err != nil {
 		return err

@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/auth'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import StickySettingsCard from '@/views/sticky/StickySettingsCard.vue'
 import GatewaySettingsCard from './GatewaySettingsCard.vue'
+import OffloadSettingsCard from './OffloadSettingsCard.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -17,6 +18,7 @@ const tabs = computed(() => {
   if (auth.has('settings:read')) out.push({ key: 'billing', label: t('settings.tabs.billing') })
   if (auth.has('settings:read')) out.push({ key: 'gateway', label: t('settings.tabs.gateway') })
   if (auth.has('sticky:read')) out.push({ key: 'sticky', label: t('settings.tabs.sticky') })
+  if (auth.has('settings:read')) out.push({ key: 'offload', label: t('settings.tabs.offload') })
   return out
 })
 const tab = ref(tabs.value[0]?.key || 'billing')
@@ -128,5 +130,6 @@ onMounted(loadBilling)
 
     <GatewaySettingsCard v-else-if="tab === 'gateway' && auth.has('settings:read')" />
     <StickySettingsCard v-else-if="tab === 'sticky' && auth.has('sticky:read')" />
+    <OffloadSettingsCard v-else-if="tab === 'offload' && auth.has('settings:read')" />
   </div>
 </template>

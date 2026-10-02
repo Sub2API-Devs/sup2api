@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/shell/internal/control"
+	"github.com/Sub2API-Devs/sup2api/next/shell/internal/cpuload"
 	"github.com/Sub2API-Devs/sup2api/next/shell/internal/peer"
 	"github.com/Sub2API-Devs/sup2api/next/shell/internal/proxy"
 	"github.com/Sub2API-Devs/sup2api/next/shell/internal/release"
@@ -210,22 +211,11 @@ func run() error {
 		defer done()
 		_ = peerManager.Unregister(cleanup)
 	}()
+	// The node key goes to the primary, or to a serving node while this node
+	// offloads its new requests because of CPU load.
+	var router *proxy.Router
 	authorizeTarget := func(ctx context.Context, u *url.URL) error {
-		primary, _, _, err := store.ClusterState(ctx)
-		if err != nil {
-			return peer.ErrUnavailable
-		}
-		nodes, err := store.Nodes(ctx)
-		if err != nil {
-			return peer.ErrUnavailable
-		}
-		for _, n := range nodes {
-			target, err := url.Parse(n.PeerURL)
-			if err == nil && n.ID == primary && n.Enabled && n.ID != c.NodeID && target.Scheme == u.Scheme && target.Host == u.Host {
-				return nil
-			}
-		}
-		return peer.ErrForbidden
+		return store.AuthorizeTarget(ctx, c.NodeID, u, router != nil && router.Offloading())
 	}
 	peerTransport := peerManager.WrapTransport(proxy.PeerTransport(clientTLS), authorizeTarget)
 	trustedProxies := make([]*net.IPNet, 0, len(c.TrustedProxies))
@@ -256,7 +246,7 @@ func run() error {
 		}
 	}()
 	var rt *control.LocalRuntime
-	router := proxy.New(proxy.Config{PeerTLS: clientTLS, PeerTransport: peerTransport, TrustedProxies: trustedProxies, PeerReady: func(route proxy.Route) bool {
+	router = proxy.New(proxy.Config{PeerTLS: clientTLS, PeerTransport: peerTransport, TrustedProxies: trustedProxies, PeerReady: func(route proxy.Route) bool {
 		for _, n := range peerCache.Load().([]control.Node) {
 			if n.Enabled && n.PeerURL == route.PeerURL && n.CoreBootID == route.CoreBootID && n.RouteRevision == route.PeerRevision && n.Ready && n.Mode == "local" && time.Since(n.LastSeen) < 20*time.Second {
 				return true
@@ -284,7 +274,9 @@ func run() error {
 	rt.AuthorizePeer = func(ctx context.Context, id peer.Identity, scope, digest string) error {
 		return store.AuthorizePeer(ctx, id.NodeID, id.BootID, c.NodeID, scope, digest)
 	}
-	engine := &control.Engine{Store: store, Locks: locks, Runtime: rt, Node: ownNode, PeerMaintain: peerManager.Maintain, PeerCheck: peerManager.Check}
+	cpu := &cpuload.Sampler{Counters: cpuload.Counters(), Window: 10}
+	go cpu.Run(ctx, time.Second)
+	engine := &control.Engine{Store: store, Locks: locks, Runtime: rt, Node: ownNode, PeerMaintain: peerManager.Maintain, PeerCheck: peerManager.Check, CPU: cpu.Percent}
 	if err = os.MkdirAll(filepath.Dir(c.ManagementSocket), 0700); err != nil {
 		return err
 	}

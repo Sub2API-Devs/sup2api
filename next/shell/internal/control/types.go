@@ -26,6 +26,11 @@ type Node struct {
 	Arch          string    `json:"arch"`
 	RuntimeABI    string    `json:"runtime_abi"`
 	RouteRevision int64     `json:"route_revision"`
+	// CPUPercent is the node's averaged CPU load; nil when it is not measured.
+	CPUPercent *float64 `json:"cpu_percent"`
+	// Offloading is set before the node sends its new requests elsewhere and
+	// cleared after it stopped; receivers authorize offloaded forwards by it.
+	Offloading bool `json:"offloading"`
 }
 type Release struct {
 	Digest     string            `json:"digest"`

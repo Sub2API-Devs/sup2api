@@ -4,7 +4,28 @@ export default {
   tabs: {
     billing: '计费',
     gateway: '网关',
-    sticky: '粘性会话'
+    sticky: '粘性会话',
+    offload: 'CPU 保护'
+  },
+  offload: {
+    title: 'CPU 保护',
+    subtitle: '节点 CPU 过高时，把新请求转给其他空闲节点。只在外壳托管的多节点集群中可用。',
+    enabled: '启用',
+    enabledHint: '关闭时每个节点只处理自己入口的请求。',
+    threshold: 'CPU 阈值',
+    thresholdHint: '节点最近 10 秒的平均 CPU 达到该值后开始转移，降到阈值减 10 以下时停止。只转给低于阈值减 10、版本相同的正常节点；没有这样的节点就留在本节点处理。已在处理的请求不受影响。',
+    range: '范围 {min}–{max}。',
+    unmanaged: '当前节点不是由外壳托管的，没有 CPU 保护。多节点部署请使用外壳托管。',
+    node: '节点',
+    cpu: 'CPU',
+    state: '状态',
+    states: {
+      serving: '本地处理',
+      offloading: '正在转移',
+      forwarding: '转发到主节点',
+      unavailable: '未就绪',
+      disabled: '已禁用'
+    }
   },
   gateway: {
     title: '网关',

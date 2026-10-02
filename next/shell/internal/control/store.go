@@ -12,6 +12,7 @@ import (
 	"github.com/Masterminds/semver/v3"
 	rc "github.com/Sub2API-Devs/sup2api/next/runtime-contract"
 	"github.com/Sub2API-Devs/sup2api/next/shell/internal/peer"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -128,7 +129,9 @@ func (s *Store) RegisterLocked(ctx context.Context, n Node) error {
  stopped=CASE WHEN updater.nodes.shell_boot_id=EXCLUDED.shell_boot_id THEN updater.nodes.stopped ELSE false END,
  mode=CASE WHEN updater.nodes.shell_boot_id=EXCLUDED.shell_boot_id THEN updater.nodes.mode ELSE 'maintenance' END,
  last_seen=now(),os=EXCLUDED.os,arch=EXCLUDED.arch,runtime_abi=EXCLUDED.runtime_abi,peer_protocol=EXCLUDED.peer_protocol,strategy=EXCLUDED.strategy,
- joining_plan=CASE WHEN updater.nodes.shell_boot_id=EXCLUDED.shell_boot_id THEN updater.nodes.joining_plan ELSE EXCLUDED.joining_plan END
+ joining_plan=CASE WHEN updater.nodes.shell_boot_id=EXCLUDED.shell_boot_id THEN updater.nodes.joining_plan ELSE EXCLUDED.joining_plan END,
+ cpu_percent=CASE WHEN updater.nodes.shell_boot_id=EXCLUDED.shell_boot_id THEN updater.nodes.cpu_percent END,
+ offloading=updater.nodes.offloading AND updater.nodes.shell_boot_id=EXCLUDED.shell_boot_id
  WHERE updater.nodes.cluster_id=EXCLUDED.cluster_id AND updater.nodes.enabled`, n.ID, s.Cluster, n.PeerURL, n.ShellBootID, n.OS, n.Arch, n.RuntimeABI, n.PeerProtocol, n.Strategy, plan)
 		if err != nil {
 			return err
@@ -140,14 +143,14 @@ func (s *Store) RegisterLocked(ctx context.Context, n Node) error {
 	})
 }
 func (s *Store) Heartbeat(ctx context.Context, n Node) error {
-	tag, err := s.DB.Exec(ctx, `UPDATE updater.nodes SET release_digest=$3,core_boot_id=$4,mode=$5,ready=$6,last_seen=now(),error=$7,route_revision=$9,stopped=$10 WHERE node_id=$1 AND cluster_id=$2 AND shell_boot_id=$8 AND enabled`, n.ID, s.Cluster, n.ReleaseDigest, n.CoreBootID, n.Mode, n.Ready, n.Error, n.ShellBootID, n.RouteRevision, n.Stopped)
+	tag, err := s.DB.Exec(ctx, `UPDATE updater.nodes SET release_digest=$3,core_boot_id=$4,mode=$5,ready=$6,last_seen=now(),error=$7,route_revision=$9,stopped=$10,cpu_percent=$11,offloading=$12 WHERE node_id=$1 AND cluster_id=$2 AND shell_boot_id=$8 AND enabled`, n.ID, s.Cluster, n.ReleaseDigest, n.CoreBootID, n.Mode, n.Ready, n.Error, n.ShellBootID, n.RouteRevision, n.Stopped, n.CPUPercent, n.Offloading)
 	if err == nil && tag.RowsAffected() != 1 {
 		return ErrConflict
 	}
 	return err
 }
 func (s *Store) Nodes(ctx context.Context) ([]Node, error) {
-	rows, err := s.DB.Query(ctx, `SELECT node_id,peer_url,shell_boot_id,release_digest,core_boot_id,mode,ready,last_seen,error,os,arch,runtime_abi,route_revision,stopped,enabled,peer_protocol,strategy,joining_plan FROM updater.nodes WHERE cluster_id=$1 ORDER BY node_id`, s.Cluster)
+	rows, err := s.DB.Query(ctx, `SELECT node_id,peer_url,shell_boot_id,release_digest,core_boot_id,mode,ready,last_seen,error,os,arch,runtime_abi,route_revision,stopped,enabled,peer_protocol,strategy,joining_plan,cpu_percent,offloading FROM updater.nodes WHERE cluster_id=$1 ORDER BY node_id`, s.Cluster)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +158,7 @@ func (s *Store) Nodes(ctx context.Context) ([]Node, error) {
 	out := []Node{}
 	for rows.Next() {
 		var n Node
-		if err = rows.Scan(&n.ID, &n.PeerURL, &n.ShellBootID, &n.ReleaseDigest, &n.CoreBootID, &n.Mode, &n.Ready, &n.LastSeen, &n.Error, &n.OS, &n.Arch, &n.RuntimeABI, &n.RouteRevision, &n.Stopped, &n.Enabled, &n.PeerProtocol, &n.Strategy, &n.JoiningPlan); err != nil {
+		if err = rows.Scan(&n.ID, &n.PeerURL, &n.ShellBootID, &n.ReleaseDigest, &n.CoreBootID, &n.Mode, &n.Ready, &n.LastSeen, &n.Error, &n.OS, &n.Arch, &n.RuntimeABI, &n.RouteRevision, &n.Stopped, &n.Enabled, &n.PeerProtocol, &n.Strategy, &n.JoiningPlan, &n.CPUPercent, &n.Offloading); err != nil {
 			return nil, err
 		}
 		out = append(out, n)
@@ -763,12 +766,13 @@ func (s *Store) DisableNode(ctx context.Context, node string) error {
 // AuthorizePeer classifies failures for the private listener: a stale or
 // disabled source is 401, a disallowed operation 403, storage errors 503.
 func (s *Store) AuthorizePeer(ctx context.Context, source, boot, target, scope, digest string) error {
-	var ok bool
-	if err := s.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM updater.nodes WHERE cluster_id=$1 AND node_id=$2 AND shell_boot_id=$3 AND enabled AND peer_protocol=$4 AND strategy=$5)`, s.Cluster, source, boot, PeerProtocol, PrimaryFirst).Scan(&ok); err != nil {
-		return peer.ErrUnavailable
-	}
-	if !ok {
+	var offloading bool
+	err := s.DB.QueryRow(ctx, `SELECT offloading FROM updater.nodes WHERE cluster_id=$1 AND node_id=$2 AND shell_boot_id=$3 AND enabled AND peer_protocol=$4 AND strategy=$5`, s.Cluster, source, boot, PeerProtocol, PrimaryFirst).Scan(&offloading)
+	if errors.Is(err, pgx.ErrNoRows) {
 		return peer.ErrUnauthorized
+	}
+	if err != nil {
+		return peer.ErrUnavailable
 	}
 	primary, baseline, _, err := s.ClusterState(ctx)
 	if err != nil {
@@ -777,6 +781,12 @@ func (s *Store) AuthorizePeer(ctx context.Context, source, boot, target, scope, 
 	var enabled bool
 	if err = s.DB.QueryRow(ctx, `SELECT enabled FROM updater.nodes WHERE cluster_id=$1 AND node_id=$2`, s.Cluster, target).Scan(&enabled); err != nil {
 		return peer.ErrUnavailable
+	}
+	if enabled && source != target && scope == "forward" && offloading {
+		// An overloaded serving node may hand new requests to any serving node,
+		// the primary's to a follower included. The private router still only
+		// serves them locally and never forwards them again.
+		return nil
 	}
 	if !enabled || target != primary || source == primary {
 		return fmt.Errorf("%w: peer direction is not permitted", peer.ErrForbidden)
@@ -830,6 +840,26 @@ func (s *Store) AuthorizePeer(ctx context.Context, source, boot, target, scope, 
 		return peer.ErrUnavailable
 	}
 	return fmt.Errorf("%w: artifact is not approved for this cluster", peer.ErrForbidden)
+}
+
+// AuthorizeTarget decides whether self may send its node key to u: only to
+// the primary, or to a serving node while self offloads because of CPU load.
+func (s *Store) AuthorizeTarget(ctx context.Context, self string, u *url.URL, offloading bool) error {
+	primary, _, _, err := s.ClusterState(ctx)
+	if err != nil {
+		return peer.ErrUnavailable
+	}
+	nodes, err := s.Nodes(ctx)
+	if err != nil {
+		return peer.ErrUnavailable
+	}
+	for _, n := range nodes {
+		target, err := url.Parse(n.PeerURL)
+		if err == nil && n.Enabled && n.ID != self && target.Scheme == u.Scheme && target.Host == u.Host && (n.ID == primary || (offloading && n.Mode == "local")) {
+			return nil
+		}
+	}
+	return peer.ErrForbidden
 }
 
 // UnmanagedBlockers reads the existing core registry. A healthy old core that

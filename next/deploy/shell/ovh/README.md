@@ -17,6 +17,11 @@ The nodes share the existing `sup2api` PostgreSQL, Redis and plugin market
 before. `releases` serves the signed core releases over HTTPS with a
 certificate from the cluster CA (`certs/ca.crt`).
 
+Each node is limited to 2 CPUs (`cpus: 2`). CPU protection (System settings →
+CPU protection, one setting for the whole cluster) compares a node's load with
+its own quota; without a quota a node would see all 384 host CPUs and never
+reach the threshold.
+
 **Do not run `deploy/single/deploy.sh` on ovh any more.** It would start the old
 app containers on 3130/3131 next to the managed nodes. Core updates are
 releases, applied with a primary-first plan.

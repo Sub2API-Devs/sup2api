@@ -28,6 +28,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -62,6 +63,10 @@ type realNode struct {
 	ctx             context.Context
 	cancel          context.CancelFunc
 	wg              sync.WaitGroup
+	// forwards counts forwarded requests arriving at the private listener.
+	forwards *atomic.Int64
+	// cpu is the CPU load the engine reports; negative is unmeasured.
+	cpu *atomic.Int64
 }
 
 type realOptions struct {
@@ -364,18 +369,9 @@ func (c *realCluster) startShell(id string) *realNode {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var router *proxy.Router
 	peerTransport := pm.WrapTransport(proxy.PeerTransport(c.clientTLS), func(ctx context.Context, u *url.URL) error {
-		registered, e := store.Nodes(ctx)
-		if e != nil {
-			return e
-		}
-		for _, n := range registered {
-			target, _ := url.Parse(n.PeerURL)
-			if n.ID == "a" && n.Enabled && target != nil && target.Scheme == u.Scheme && target.Host == u.Host {
-				return nil
-			}
-		}
-		return peer.ErrForbidden
+		return store.AuthorizeTarget(ctx, id, u, router != nil && router.Offloading())
 	})
 	rt.Peer = pm
 	rt.PeerArtifactClient = peer.NewClient(peerTransport, time.Minute)
@@ -396,20 +392,28 @@ func (c *realCluster) startShell(id string) *realNode {
 	rt.OnStopped = func(ctx context.Context, coreBoot string) error {
 		return store.ConfirmStoppedCore(ctx, id, boot, coreBoot)
 	}
-	router := proxy.New(proxy.Config{PeerTLS: c.clientTLS, PeerTransport: peerTransport, LocalReady: func() bool {
+	router = proxy.New(proxy.Config{PeerTLS: c.clientTLS, PeerTransport: peerTransport, LocalReady: func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 		st, _, e := rt.Status(ctx)
 		return e == nil && st.Ready
 	}})
 	rt.Router = router
-	private := httptest.NewUnstartedServer(rt.PrivateHandler())
+	forwards := new(atomic.Int64)
+	privateHandler := rt.PrivateHandler()
+	private := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) {
+		if strings.HasPrefix(q.URL.Path, "/internal/forward/") {
+			forwards.Add(1)
+		}
+		privateHandler.ServeHTTP(w, q)
+	}))
 	private.TLS = proxy.ServerTLS(c.cert, c.ca)
 	private.StartTLS()
 	public := httptest.NewServer(router.Public())
 	ownNode.PeerURL = private.URL
-	n := &realNode{id: id, root: root, runtime: rt, peer: pm, public: public, private: private, management: management, supervisor: mgr}
-	n.engine = &Engine{Store: store, Locks: store.Locks, Runtime: rt, Node: ownNode, PeerMaintain: pm.Maintain, PeerCheck: pm.Check}
+	n := &realNode{id: id, root: root, runtime: rt, peer: pm, public: public, private: private, management: management, supervisor: mgr, forwards: forwards, cpu: new(atomic.Int64)}
+	n.cpu.Store(10)
+	n.engine = &Engine{Store: store, Locks: store.Locks, Runtime: rt, Node: ownNode, PeerMaintain: pm.Maintain, PeerCheck: pm.Check, CPU: func() (float64, bool) { v := n.cpu.Load(); return float64(v), v >= 0 }}
 	if c.wrap != nil {
 		n.engine.Runtime = c.wrap(n)
 	}

@@ -421,6 +421,63 @@ func TestForwardPreservesUnusualPathsAndQueries(t *testing.T) {
 	}
 }
 
+func TestOffloadSendsNewRequestsToTargetsUntilItLapses(t *testing.T) {
+	a, _, _ := forwardPair(t, http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) {
+		if q.Header.Get(hopHeader) != "" || q.Header.Get(bootHeader) != "" {
+			t.Error("routing headers reached the target core")
+		}
+		w.Header().Set("X-Served-By", "target")
+	}))
+	target := Target{PeerURL: a.Route().PeerURL, CoreBootID: "b-boot", Revision: 7}
+	local := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.Header().Set("X-Served-By", "local") }))
+	defer local.Close()
+	if e := a.SetRoute(Route{Mode: "local-serving", LocalURL: local.URL, CoreBootID: "a-boot", Revision: 100}); e != nil {
+		t.Fatal(e)
+	}
+	servedBy := func() string {
+		w := httptest.NewRecorder()
+		a.Public().ServeHTTP(w, httptest.NewRequest("POST", "http://public.example/v1/chat", strings.NewReader("{}")))
+		if w.Code != 200 {
+			t.Fatalf("status %d", w.Code)
+		}
+		return w.Header().Get("X-Served-By")
+	}
+	if got := servedBy(); got != "local" || a.Offloading() {
+		t.Fatalf("without offload: %s", got)
+	}
+	if e := a.SetOffload([]Target{target}, 300*time.Millisecond); e != nil {
+		t.Fatal(e)
+	}
+	if got := servedBy(); got != "target" || !a.Offloading() {
+		t.Fatalf("while offloading: %s", got)
+	}
+	time.Sleep(400 * time.Millisecond)
+	if got := servedBy(); got != "local" || a.Offloading() {
+		t.Fatalf("an offload that is not renewed must lapse: %s", got)
+	}
+	if e := a.SetOffload([]Target{target}, time.Minute); e != nil {
+		t.Fatal(e)
+	}
+	if e := a.SetOffload(nil, time.Minute); e != nil || servedBy() != "local" {
+		t.Fatal("clearing the offload must serve locally", e)
+	}
+	for _, bad := range []Target{{PeerURL: "http://node:8443", CoreBootID: "b", Revision: 1}, {PeerURL: target.PeerURL, Revision: 1}, {PeerURL: target.PeerURL, CoreBootID: "b"}} {
+		if e := a.SetOffload([]Target{bad}, time.Minute); e == nil {
+			t.Fatalf("accepted %+v", bad)
+		}
+	}
+	// A target whose route moved on refuses the request; the client sees 503
+	// and the request is not retried locally.
+	if e := a.SetOffload([]Target{{PeerURL: target.PeerURL, CoreBootID: "b-boot", Revision: 6}}, time.Minute); e != nil {
+		t.Fatal(e)
+	}
+	w := httptest.NewRecorder()
+	a.Public().ServeHTTP(w, httptest.NewRequest("POST", "http://public.example/v1/chat", strings.NewReader("{}")))
+	if w.Code != 503 || w.Header().Get("X-Served-By") != "" {
+		t.Fatalf("stale target: %d %s", w.Code, w.Header().Get("X-Served-By"))
+	}
+}
+
 func TestBusinessAuthFailuresPassButNodeFailuresBecome503(t *testing.T) {
 	a, sourceAuth, targetAuth := forwardPair(t, http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) {
 		if q.Header.Get(peer.KeyHeader) != "" || q.Header.Get(peer.NodeHeader) != "" {

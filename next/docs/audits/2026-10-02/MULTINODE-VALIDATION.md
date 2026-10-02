@@ -142,3 +142,21 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 - 签名 v0.1.2（含迁移 0022，`schema_before` 为 v0.1.1 的 schema），在控制台 API 创建主节点优先计划并记录（[原始记录](evidence/ovh-upgrade-0.1.2.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.2-summary.txt)）：68.5 秒完成；从节点停核心期间四个入口全部正常应答；全集群 503 从 32.4 s 到 42.3–44.7 s，约 10–12 秒；迁移 0022 只由主节点执行。
 - 部署后：`plugin_versions` 已无 `package` 列，五个插件保持启用与原版本，四个入口未鉴权业务接口 401，日志无新的 WARN/ERROR。对 sup2api-4 的外壳请求一个它本地没有的旧 volcengine 包，外壳从主节点拉取 13,846,219 字节并校验，摘要一致。
 - `VACUUM FULL plugin_versions` 回收删除列后残留的空间：表从 529 MB 降到 184 kB。
+
+## 11. CPU 保护
+
+设计见 [规约 §5.1](../../MULTINODE-SYNC-PROTOCOL.md)。在 ovh 隔离目录用独立 Compose 项目（pg16、redis7、mock、golang:1.27）验证，完毕后 `down -v` 并删除目录，保留 external 卷，生产四个入口仍为 401。
+
+| 项 | 结果 |
+|---|---|
+| 全部 Go 模块 `-race` | 除 server 外全部通过；server 的 `TestTwoNodeRollout` 在与真实三节点测试并行的满载下失败一次（重新启用插件时 rollout 因 `plugin generation changed before instance start` 失败），单独重跑 5 次通过，与本次改动无关，见下方限制 |
+| PG/Redis 用例 | 19 通过、0 跳过，含 `TestPostgresCPUOffloadIsMarkedBeforeSheddingAndAuthorizesForwards`（先写标记再转移、先停转移再清标记；阈值与回差；转移只放行 `forward`） |
+| 真实三节点 `TestRealCoreCPUOffloadMovesNewRequests` | 通过（[日志](evidence/offload-realcore.log.txt)）。通过控制台 API 开启（阈值 30 被拒）；主节点 a 报 95% 后，经 a 入口的 30 个请求由 b、c 各答 15 个；b 到 75% 后只转给 c；c 也到 85% 时没有目标，a 留在本地处理；a 降到 75% 继续转移，65% 停止；从节点 b 到 99% 时转给 a 和 c；关闭设置后停止。CPU 读数为注入值。日志里“cpu offload stopped”一行的 cpu_percent 打印成了指针，修正后单独重跑该测试通过（该次日志未保留） |
+| 其余真实三节点测试 | 升级、故障、插件包三项在改动后的 harness 上全部通过 |
+| 真实 CPU 测量 | 在 `--cpus 1` 的容器里跑满一个核，采样器读 cgroup `cpu.max` 得到 98–99.6% |
+
+限制：
+
+- 同一台机器上的节点共用 CPU。ovh 四个节点没有 CPU 配额，容器内可用 CPU 等于整机核数，单节点的 cgroup 占比很难达到阈值；整机满载时四个节点同时超阈值，也没有可转的目标。要在 ovh 起作用，需要给每个节点设置 `cpus:` 配额，或把节点放到不同机器。
+- 只转新请求，进行中的请求不迁移；目标恰好在转移途中改变路由时，这一次请求返回 503，不重放。
+- `TestTwoNodeRollout` 的偶发失败是已有的插件 rollout 竞态，未在本次处理。

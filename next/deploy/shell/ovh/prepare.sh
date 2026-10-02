@@ -93,4 +93,6 @@ release 0.1.0
 release 0.1.1
 # 0.1.2 adds migration 0022: plugin packages leave PostgreSQL.
 release 0.1.2 0.1.1
+# 0.1.3 adds the CPU protection setting (no schema change).
+release 0.1.3
 ls -la publish

@@ -40,12 +40,26 @@ type Config struct {
 	TrustedProxies []*net.IPNet
 }
 type Router struct {
-	mu     sync.RWMutex
-	route  Route
-	config Config
-	local  *http.Transport
-	peer   http.RoundTripper
-	active atomic.Int64
+	mu      sync.RWMutex
+	route   Route
+	config  Config
+	local   *http.Transport
+	peer    http.RoundTripper
+	active  atomic.Int64
+	offload atomic.Pointer[offloadSet]
+	next    atomic.Uint64
+}
+
+// Target is a serving node that takes new requests while this node's CPU is
+// overloaded. Revision is the target's route revision.
+type Target struct {
+	PeerURL    string
+	CoreBootID string
+	Revision   int64
+}
+type offloadSet struct {
+	targets []Target
+	until   time.Time
 }
 
 func New(c Config) *Router {
@@ -70,12 +84,8 @@ func (r *Router) SetRoute(v Route) error {
 		}
 	}
 	if v.Mode == "forward-only" {
-		u, e := url.Parse(v.PeerURL)
-		if e != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || v.CoreBootID == "" {
-			return errors.New("peer route must identify an HTTPS node")
-		}
-		if r.config.PeerTLS == nil || r.config.PeerTLS.InsecureSkipVerify || r.config.PeerTransport == nil {
-			return errors.New("peer routing requires verified HTTPS and node authentication transport")
+		if err := r.validPeer(v.PeerURL, v.CoreBootID); err != nil {
+			return err
 		}
 	}
 	r.mu.Lock()
@@ -85,6 +95,49 @@ func (r *Router) SetRoute(v Route) error {
 	}
 	r.route = v
 	return nil
+}
+func (r *Router) validPeer(peerURL, boot string) error {
+	u, e := url.Parse(peerURL)
+	if e != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || boot == "" {
+		return errors.New("peer route must identify an HTTPS node")
+	}
+	if r.config.PeerTLS == nil || r.config.PeerTLS.InsecureSkipVerify || r.config.PeerTransport == nil {
+		return errors.New("peer routing requires verified HTTPS and node authentication transport")
+	}
+	return nil
+}
+
+// SetOffload sends new business requests arriving while this node serves
+// locally to targets, in turn, until ttl passes; the caller keeps renewing it.
+// No targets serves everything locally again. In-flight requests stay put.
+func (r *Router) SetOffload(targets []Target, ttl time.Duration) error {
+	if len(targets) == 0 {
+		r.offload.Store(nil)
+		return nil
+	}
+	for _, t := range targets {
+		if err := r.validPeer(t.PeerURL, t.CoreBootID); err != nil {
+			return err
+		}
+		if t.Revision == 0 {
+			return errors.New("offload target has no route revision")
+		}
+	}
+	r.offload.Store(&offloadSet{targets: append([]Target(nil), targets...), until: time.Now().Add(ttl)})
+	return nil
+}
+
+// Offloading reports whether new requests currently leave this node.
+func (r *Router) Offloading() bool { return r.offload.Load().live() }
+func (s *offloadSet) live() bool {
+	return s != nil && len(s.targets) > 0 && time.Now().Before(s.until)
+}
+func (r *Router) offloadTarget() (Target, bool) {
+	set := r.offload.Load()
+	if !set.live() {
+		return Target{}, false
+	}
+	return set.targets[r.next.Add(1)%uint64(len(set.targets))], true
 }
 func loopback(s string) bool    { ip := net.ParseIP(s); return ip != nil && ip.IsLoopback() }
 func (r *Router) Route() Route  { r.mu.RLock(); defer r.mu.RUnlock(); return r.route }
@@ -126,6 +179,11 @@ func (r *Router) Public() http.Handler {
 			q.Header.Set(bootHeader, v.CoreBootID)
 			q.Header.Set(hopHeader, "1")
 			r.serve(w, q, v.PeerURL, true)
+		} else if t, ok := r.offloadTarget(); ok {
+			q.Header.Set(revisionHeader, strconv.FormatInt(t.Revision, 10))
+			q.Header.Set(bootHeader, t.CoreBootID)
+			q.Header.Set(hopHeader, "1")
+			r.serve(w, q, t.PeerURL, true)
 		} else {
 			r.serve(w, q, v.LocalURL, false)
 		}
