@@ -184,3 +184,7 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 
 - 新回归 `TestStaleReconcileReadDefersStandbyInsteadOfFailingRollout` 直接构造这次的过时读取：修复前报出与现场相同的错误而失败（[变异记录](evidence/rollout-stale-mutation.log.txt)），修复后先报 pending、下一轮 ready（[日志](evidence/rollout-stale-regression.log.txt)，0 跳过）。
 - rollout 包 `-race -count=10` 通过；`TestTwoNodeRollout` 与整个 server 模块并行再跑 20 次通过；随后 server 模块 `-race` 全部通过（[日志](evidence/rollout-stale-module-server.log.txt)）。
+
+### 12.1 ovh 部署
+
+用户确认后部署：备份业务库到 `~/sup2api/backups/pre-v0.1.4-20261002.sql.gz`；签名 v0.1.4（无 schema 变化，外壳不变），主节点优先升级（[原始记录](evidence/ovh-upgrade-0.1.4.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.4-summary.txt)）：77.4 秒完成，全集群 503 从 36.7 s 到 46.6–48.7 s，约 10–12 秒。之后四个节点均运行 v0.1.4 并本地服务，四个入口 401，五个插件保持启用与原版本，CPU 保护仍为开启、阈值 80，日志无 WARN/ERROR。
