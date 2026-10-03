@@ -316,3 +316,14 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 - server app/updater/httpapi 的 vet、全模块构建和相关 `-race` 测试通过：19 项、0 跳过。验证改源需要权限及二次认证，导入沿既有敏感权限，审计仅记录成功操作并包含仓库/tag/digest。见 [服务端回归](evidence/online-update-server.log.txt)。
 - 初次上传因根 `.gitignore` 的 `release/` 规则遗漏新增 GitHub provider 源文件，已为真实 Go release 包增加例外；随后 vet 发现测试复制带锁 Manager，已改成独立实例并完整重跑 gateway 通过。这两次前置失败未计为测试通过。
 - GitHub 资产导出工具 4 项测试通过，验证原签名字节保留、仅导出声明资产、拒绝 payload/bundle 篡改和输出目录覆盖；另用生产已有 v0.1.8 的签名包只读导出到隔离目录成功，未上传任何 GitHub Release，未复制签名私钥。见 [资产工具测试](evidence/online-update-assets.log.txt)。
+- 测试后已停止并移除 `sub2api-online-sfz5x6` 私有容器与网络，核对绝对路径后删除 `online.sFZ5X6`（包括测试导出的资产），保留 external Go 缓存卷；本地模拟预览进程已关闭。
+
+### 19.1 OVH v0.1.9 上线
+
+沿用已授权的 Git 同步、服务器构建及网关滚动替换流程，部署功能提交 `d7c31a7af`。数据库备份 `~/sup2api/backups/pre-v0.1.9-20261003T082940Z.sql.gz` 已通过 gzip 校验。
+
+- 网关镜像 `sup2api-gateway:d7c31a7af`，ID `sha256:4e7d50471c4a9c8fae64a016ae381db9890383cbc77bfb35120e0879a447f0ee`。按 2 → 3 → 4 → 1 顺序替换，每节点与最终全体健康检查通过。总观测 29.85 秒，各入口分别中断约 4.98–5.14 秒，无四入口同时中断。回退配置及原镜像记录为 `~/sup2api-managed/gateway-rollbacks/20261003T083234Z-9812cf26/`。见 [滚动记录](evidence/ovh-gateway-0.1.9-roll.txt)、[采样](evidence/ovh-gateway-0.1.9-http.jsonl.txt)、[汇总](evidence/ovh-gateway-0.1.9-summary.json)。
+- 核心签名 manifest digest `d75f903267998ea9d30fed3d0b01154b3749a514d615306a7d3578b82a94a803`；计划 `02907eefd59f6eee1b6b13713248f418` 完成全部 27 步，观测从 3.13 秒创建到 25.52 秒完成，约 22.39 秒。各入口 503 从 15.6 秒开始，在 20.1–22.4 秒恢复，即约 4.5–6.8 秒。见 [原始记录](evidence/ovh-upgrade-0.1.9.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.9-summary.txt)。
+- 四节点均为核心 0.1.9、local/ready；五个插件版本保持既有值且全部 active，无 standby/fallback。接口、前端 HTML 引用 JS、401 鉴权边界通过；8 秒取样再次确认 Redis 更新、PG 节点行不随遥测改写。
+- 四入口认证调用 `/system/version` 均返回 `managed=true, version=0.1.9`；更新源为空，`/system/update-check` 明确返回未配置且无更新。没有擅自选择或写入用户的 GitHub 仓库，没有创建 GitHub Release；因此生产验证的是新接口和关闭状态，GitHub 网络/制品异常由隔离模拟传输测试覆盖，并非宣称已从真实 GitHub Release 完成一次升级。见 [上线验证](evidence/ovh-upgrade-0.1.9-verify.txt)。
+- 四容器目标镜像、入口程序与日志轮转（50m × 5）均正确，新容器日志无 ERROR。见 [运行时记录](evidence/ovh-gateway-0.1.9-runtime.json)。

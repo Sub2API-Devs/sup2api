@@ -1,0 +1,78 @@
+[
+  {
+    "node": 1,
+    "running": true,
+    "image": "sha256:4e7d50471c4a9c8fae64a016ae381db9890383cbc77bfb35120e0879a447f0ee",
+    "entrypoint": [
+      "sub2api-gateway"
+    ],
+    "log_config": {
+      "Type": "json-file",
+      "Config": {
+        "max-file": "5",
+        "max-size": "50m"
+      }
+    },
+    "log_levels": {
+      "INFO": 23,
+      "WARN": 2
+    }
+  },
+  {
+    "node": 2,
+    "running": true,
+    "image": "sha256:4e7d50471c4a9c8fae64a016ae381db9890383cbc77bfb35120e0879a447f0ee",
+    "entrypoint": [
+      "sub2api-gateway"
+    ],
+    "log_config": {
+      "Type": "json-file",
+      "Config": {
+        "max-file": "5",
+        "max-size": "50m"
+      }
+    },
+    "log_levels": {
+      "INFO": 23,
+      "WARN": 2
+    }
+  },
+  {
+    "node": 3,
+    "running": true,
+    "image": "sha256:4e7d50471c4a9c8fae64a016ae381db9890383cbc77bfb35120e0879a447f0ee",
+    "entrypoint": [
+      "sub2api-gateway"
+    ],
+    "log_config": {
+      "Type": "json-file",
+      "Config": {
+        "max-file": "5",
+        "max-size": "50m"
+      }
+    },
+    "log_levels": {
+      "INFO": 23,
+      "WARN": 2
+    }
+  },
+  {
+    "node": 4,
+    "running": true,
+    "image": "sha256:4e7d50471c4a9c8fae64a016ae381db9890383cbc77bfb35120e0879a447f0ee",
+    "entrypoint": [
+      "sub2api-gateway"
+    ],
+    "log_config": {
+      "Type": "json-file",
+      "Config": {
+        "max-file": "5",
+        "max-size": "50m"
+      }
+    },
+    "log_levels": {
+      "INFO": 23,
+      "WARN": 2
+    }
+  }
+]
