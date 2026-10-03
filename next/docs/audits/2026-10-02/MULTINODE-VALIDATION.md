@@ -436,3 +436,15 @@ OVH 已配置到 cc-max 的专用 SSH 私钥，端口转发限定远端 127.0.0.
 提交 `e92d0fbae` 将 volcengine 名称改为中文「字节火山方舟、豆包视频」、英文「Volcengine Ark, Doubao Video」，发布 0.11.1。现有清单测试通过，OVH 从 Git 构建签名包并通过管理员 API 升级，四节点 active。包 SHA256 `6902dfcb949456078fe44afb609407368b42282a89afc743bbc18a1b151bf341`。没有更换核心或 gateway。
 
 现有插件升级不会刷新 plugins.name，因此在版本收敛后，使用事务仅将该字段同步为已验签、指定 digest 的 0.11.1 manifest.name，并记录 plugin.name.sync 审计（含旧名与新名）。四入口再次确认新名称与版本，CCGateway 保持 builtin/enabled。见 [四入口名称验证](evidence/plugin-names-0.11.1.jsonl)。
+
+### 24.2 插件设置入口与 OVH v0.1.16
+
+提交 `870151ec6` 为声明 schema 设置的插件增加列表行内设置按钮，CCGateway 管理页放入自身详情的设置页签，旧地址重定向，移除列表顶部和系统设置的专属入口。保留多语言与权限检查。本次仅调整页面归属，CCGateway 的 SSH、Docker、授权业务仍在核心，未宣称完成插件解耦。
+
+前端类型检查、临时目录生产构建、插件 API 包测试通过。OVH 从 Git 构建 v0.1.16，数据库备份 `/home/debian/sup2api/backups/pre-v0.1.16-20261003T133128Z.dump` 经 pg_restore 目录校验。与 v0.1.15 schema-contract 一致。manifest digest `c41d3d2264f5df4512bc5c918bac07af5128d656fdc2822d369cde2f7b1172c5`，bundle digest `1fd7b504d56fb3c1dcd441cef2619566390cfb6538b24d6873dea41821c80df3`。
+
+计划 `5e8c433078dc54b3a682d3abae25b1b0` 预检无阻断，完成全部 27 步，创建至完成约 23.26 秒，入口采样 503 持续约 4.7–7.3 秒。四入口均报告核心 0.1.16，实际静态文件包含行内设置按钮、详情内嵌管理页及旧路由重定向；列表 API 返回 has_settings。验收脚本已适配 CCGateway 页面改由 PluginDetailView 异步加载。
+
+四节点 CCGateway 0.1.0 enabled/active，SSH Docker 连接与健康检查通过，代理保持 inherit/revision 3，Claude 仍未授权；未执行模型调用。自本次发布前 13:32 UTC 起的四节点日志 ERROR 计数均为 0。Gateway 镜像保持 `sup2api-gateway:3a2017d`。
+
+证据：[升级采样](evidence/ovh-upgrade-0.1.16.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.16-summary.txt)、[入口与静态文件核验](evidence/plugin-settings-v016-verify.jsonl)、[远程连接验证](evidence/ccgateway-v016-verify.txt)。本轮通过 API 和实际发布文件验证，未新增浏览器交互验收。

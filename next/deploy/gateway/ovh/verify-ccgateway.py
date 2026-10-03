@@ -84,6 +84,11 @@ def main():
             javascript = response.read().decode()
         chunk = re.search(r'CCGatewayView-[a-zA-Z0-9_-]+\.js', javascript)
         if not chunk:
+            detail = re.search(r'PluginDetailView-[a-zA-Z0-9_-]+\.js', javascript)
+            if detail:
+                with urllib.request.urlopen(web + "/assets/" + detail[0], timeout=10) as response:
+                    chunk = re.search(r'CCGatewayView-[a-zA-Z0-9_-]+\.js', response.read().decode())
+        if not chunk:
             raise RuntimeError(f"port {port}: missing CCGateway frontend route")
         with urllib.request.urlopen(web + "/assets/" + chunk[0], timeout=10) as response:
             if "ccgateway" not in response.read().decode().lower():
