@@ -1,4 +1,9 @@
 export default {
+  nodeView: '节点视图', chartView: '图表', topologyView: '拓扑图',
+  topologyHint: '查看网关、核心与插件的连接关系；支持缩放和滚动。', chartHint: '查看各节点的版本、实例和运行详情。',
+  contains: '组件归属关系', clusterNode: '集群节点', zoomIn: '放大', zoomOut: '缩小', resetView: '重置',
+  noCrossLinks: '当前未显示跨节点转发或 CPU 转移候选连线。',
+  graphLegend: '灰线表示组件归属；紫色箭头表示转发至主节点；橙色虚线表示按心跳与 CPU 阈值推算的接收候选，不代表实际请求路径。',
   topology: '节点拓扑', gateway: '网关', core: '核心', plugins: '插件',
   forwarding: '转发至主节点', offload: 'CPU 转移候选', legend: '实线：转发至主节点；虚线：按当前心跳与 CPU 阈值推算的可接收节点，不代表实际请求路径。',
   partial: '网关信息不可用，展示核心与插件。', unavailable: '暂时无法读取数据，保留上次快照。', empty: '暂无节点',

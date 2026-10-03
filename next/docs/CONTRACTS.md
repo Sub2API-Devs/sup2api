@@ -2205,3 +2205,13 @@ SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` �
 - `updater:wakeup:<cluster_id>` Pub/Sub 仅发送提交后的唤醒提示，不承载可执行命令或可靠事件。计划创建、操作、启禁及升级状态变更在 PG 提交后通知；节点步骤完成先提交结果并刷新状态，再通知。通知丢失依靠 1 秒轮询补查，重复通知合并，不重放已完成步骤；Redis 断连恢复后重新订阅。
 - 每轮最多连续推进 16 次，每次重新取得 Redis 执行锁并读取 PG，空提交不算进展；提示驱动的外循环有 50 ms 让出，避免内部自激忙循环。独立 3 秒心跳在长下载或排空时继续运行。PG 事务内的计划与准入校验、租约丢失取消语义不变。
 - 此变化属于网关二进制，单发核心安装包不会生效；需在无 running/paused 核心计划时逐个更换网关，从节点先、主节点最后，保留状态卷与旧镜像。核心版本无需仅为此变更而升级。控制台仍按既有轮询周期刷新，本次不新增浏览器推送。
+
+## 40. 核心版本提示、GitHub 更新源及拓扑视角（2026-10-03）
+
+- 左上角品牌旁显示当前核心版本，基础 `GET /system/version` 仅要求登录，返回 `version/managed`。托管模式下有 `system:update:read` 权限的用户可以打开更新面板，查看稳定版与发布说明、手动检测；其他用户不获得更新源读取或导入权限。
+- 更新源在 PG `updater.clusters.update_repository` 持久保存。`GET /system/update-source` 要求 `settings:read`，`PUT` 要求 `settings:manage` 并显式二次认证。接受 GitHub.com 公开仓库的 `owner/repo` 或完整 HTTPS 仓库地址，空值关闭。此设置不改变网关信任密钥、不支持任意 URL、私人 token 或预发布版本。
+- `GET /system/update-check?force=true` 使用固定 GitHub API 查询 latest stable Release。响应包含当前/最新版本、是否有更新、兼容性、阻断原因、tag、发布说明、检查时间和缓存标记。检测不仅看 tag，还验证 `next-core-manifest.json` 的签名、语义版本绑定、当前平台和摘要包资产，并检查当前基线的 schema/协议兼容性。网络失败或不兼容不能冒充已经最新。
+- `POST /system/releases/import` 要求 `system:update:execute` 及既有二次认证，输入当前规范化 `repository` 与 `tag`。网关重新获取并验签，在 PG 事务持有集群行共享锁时复核来源，登记后仍走原有预检与升级计划。相同摘要已存在于其他来源时不静默改写下载地址，不影响已执行中的计划。核心桥记录 `system.update_source.update` 和 `system.release.import` 审计。
+- GitHub 下载使用独立 HTTPS 策略，仅允许 Release 资产路径与指定的 GitHub 资产 CDN 跳转；禁止非公开目标 IP，跳转不携带认证信息。原发布源继续禁止重定向，节点认证传输与发布下载隔离。完整 bundle 大小、摘要、解包文件清单和运行平台仍由现有 release manager 验证。
+- 更新检测结果属于临时状态，按来源及基线缓存；改变来源或集群基线后不得复用旧结果。前端也用请求代次防止过期响应覆盖新设置。发布包格式与导出工具见 `next/deploy/gateway/github/README.md`；已有旧版 backend Release 不是 next 核心包。
+- 节点视图提供“图表 / 拓扑图”切换，默认拓扑。拓扑展示节点分组及网关—核心—插件连接，灰线仅表示归属；紫色箭头表示转发至主节点，橙色虚线表示 CPU 可接收候选，非流量追踪。保留详情图表，支持缩放与滚动；核心自身心跳过期时不因为网关在线而标成运行。

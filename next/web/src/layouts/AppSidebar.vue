@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { SIcon } from '@sub2api/ui'
 import { useAppStore, type NavItem, type NavSection } from '@/stores/app'
 import { lt } from '@/i18n'
+import VersionBadge from '@/components/VersionBadge.vue'
 
 const app = useAppStore()
 const route = useRoute()
@@ -35,11 +36,14 @@ function iconContext(i: NavItem): string {
     class="fixed inset-y-0 left-0 z-40 flex flex-col border-r border-gray-200 bg-white transition-all duration-200 dark:border-dark-800 dark:bg-dark-900 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0"
     :class="[app.sidebarCollapsed ? 'w-[72px]' : 'w-60', app.mobileNavOpen ? 'translate-x-0' : '-translate-x-full']"
   >
-    <div class="flex h-14 shrink-0 items-center gap-2 border-b border-gray-100 px-4 dark:border-dark-800">
+    <div class="flex min-h-14 shrink-0 items-center gap-2 border-b border-gray-100 px-4 py-2 dark:border-dark-800" :class="app.sidebarCollapsed ? 'flex-col px-1' : ''">
       <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary-500 to-primary-700 text-sm font-bold text-white">
         S
       </div>
-      <span v-if="!app.sidebarCollapsed" class="text-base font-semibold tracking-tight text-gray-900 dark:text-white">sub2api</span>
+      <div class="min-w-0" :class="app.sidebarCollapsed ? 'max-w-full' : ''">
+        <span v-if="!app.sidebarCollapsed" class="block text-base font-semibold leading-tight tracking-tight text-gray-900 dark:text-white">sub2api</span>
+        <VersionBadge :compact="app.sidebarCollapsed" />
+      </div>
     </div>
     <nav class="flex-1 overflow-y-auto px-3 py-3">
       <div v-if="!app.menusLoaded" class="space-y-2 px-2">

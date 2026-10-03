@@ -100,6 +100,7 @@ func (s *Store) Handler() http.Handler {
 		reply(w, map[string]any{"node_id": r.PathValue("id"), "enabled": true}, err)
 	})
 	s.offloadHandlers(mux, reply)
+	s.updateHandlers(mux, reply)
 	return mux
 }
 func decode(w http.ResponseWriter, r *http.Request, v any) error {

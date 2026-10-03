@@ -7,7 +7,9 @@ import { useAuthStore } from '@/stores/auth'
 import { parseNodePlugin, statusTone } from '@/api/admin'
 import type { NodeInfo } from '@/api/types'
 import type { Release, ShellNode } from '@/api/observability'
+import NodeTopology from './NodeTopology.vue'
 const { t } = useI18n(), auth = useAuthStore()
+const view = ref<'chart' | 'topology'>('topology')
 const marker = useId().replace(/:/g, '')
 const registered = ref<NodeInfo[]>([]), shells = ref<ShellNode[]>([]), releases = ref<Release[]>([])
 const primary = ref(''), shellOK = ref(false), failed = ref(false), tick = ref(Date.now())
@@ -42,7 +44,7 @@ const cards = computed(() => {
     const shell = shells.value.find(n => n.node_id === id)
     const core = registered.value.filter(n => n.node_id === id && (!shell || n.boot_id === shell.core_boot_id)).sort((a,b) => Date.parse(b.last_heartbeat) - Date.parse(a.last_heartbeat))[0]
     const plugins = Object.entries(core?.plugins || {}).map(([key, raw]) => ({ key, ...parseNodePlugin(raw) })).sort((a,b) => a.key.localeCompare(b.key))
-    return { id, index, shell, core, plugins, stale: !fresh(shell?.last_seen || core?.last_heartbeat), version: releases.value.find(r => r.digest === shell?.release_digest)?.manifest.release_id || core?.host_version || shell?.release_digest.slice(0,12) || '—' }
+    return { id, index, shell, core, plugins, coreStale: !fresh(core?.last_heartbeat), stale: !fresh(shell?.last_seen || core?.last_heartbeat), version: releases.value.find(r => r.digest === shell?.release_digest)?.manifest.release_id || core?.host_version || shell?.release_digest.slice(0,12) || '—' }
   })
 })
 const height = computed(() => 370 + Math.max(1, ...cards.value.map(n => n.plugins.length)) * 128)
@@ -69,11 +71,18 @@ onMounted(() => { void load(); timer = setInterval(() => { tick.value = Date.now
 onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
 </script>
 <template>
-  <SCard :title="t('observe.topology')" class="mb-5">
+  <SCard :title="t('observe.nodeView')" class="mb-5">
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div class="inline-flex rounded-lg bg-gray-100 p-1 dark:bg-dark-800" role="group" :aria-label="t('observe.nodeView')">
+        <button v-for="mode in (['chart', 'topology'] as const)" :key="mode" type="button" :aria-pressed="view === mode" class="rounded-md px-4 py-2 text-sm font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500" :class="view === mode ? 'bg-white text-primary-600 shadow-sm dark:bg-dark-700 dark:text-primary-300' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'" @click="view = mode">{{ t(`observe.${mode}View`) }}</button>
+      </div>
+      <SHint size="xs">{{ t(view === 'topology' ? 'observe.topologyHint' : 'observe.chartHint') }}</SHint>
+    </div>
     <SHint v-if="failed" tone="warning">{{ t('observe.unavailable') }}</SHint>
     <SHint v-if="!shellOK && !shells.length">{{ t('observe.partial') }}</SHint>
-    <SHint>{{ t('observe.legend') }}</SHint>
-    <div v-if="cards.length" class="overflow-x-auto">
+    <NodeTopology v-if="cards.length && view === 'topology'" :cards="cards" :edges="edges" :primary="primary" :uncertain="failed" />
+    <div v-else-if="cards.length" class="overflow-x-auto">
+      <SHint>{{ t('observe.legend') }}</SHint>
       <svg :width="cards.length * 340" :height="height" role="img" :aria-label="t('observe.topology')">
         <defs><marker :id="marker" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" /></marker></defs>
         <g v-for="edge in edges" :key="`${edge.from}-${edge.to}-${edge.kind}`" class="text-primary-500">

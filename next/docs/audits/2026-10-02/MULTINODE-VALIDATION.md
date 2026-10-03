@@ -306,3 +306,13 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 - 四核心均为 0.1.8、local/ready；anthropic 0.2.1、gemini 0.2.0、moderation 0.1.6、openai 0.3.0、volcengine 0.10.1 在四节点全部 active，无 standby/fallback。guard 仍独立管理。审计、发布历史、插件历史接口及四节点 HTML 引用的 JS 均通过访问核验；无凭证业务入口返回 401。
 - 生产间隔 8 秒的两次取样确认：四节点 `telemetry_boot_id` 均绑定当前 gateway boot，Redis 序号持续增长且 TTL 有效，而 PG 节点行 `xmin` 与 `last_seen` 不变。证明稳态遥测不再持续改写 PG，不代表网关完全不访问 PG。见 [上线核验](evidence/ovh-upgrade-0.1.8-verify.txt)。
 - 新建升级的 `system.upgrade.create` 审计记录存在。四容器都运行目标镜像，日志轮转仍为 50m × 5；本轮新容器日志无 ERROR，只有既有关闭插件签名验证配置的启动 WARN。见 [运行时核验](evidence/ovh-gateway-0.1.8-runtime.txt)。
+
+## 19. 拓扑视角与自有 GitHub 核心更新（2026-10-03）
+
+- 节点视图新增“图表 / 拓扑图”切换，保留原详情卡片，默认用组件节点和连接关系展示 gateway、核心、插件；支持缩放、滚动和跨节点转发/CPU 候选箭头。核心报告过期时显示未知，灰色归属线不代表实时流量。
+- 左上角显示核心版本及新版本提示，设置新增公开 GitHub 仓库地址。导入受信签名发布后跳转并选中目标版本，继续使用原预检与计划；不会直接替换运行核心。配置空值关闭检测。参见 CONTRACTS §40 和 [发布资产说明](../../../deploy/gateway/github/README.md)。
+- 本地前端类型检查和构建通过，输出到 TEMP，未改写原有未提交 dist。浏览器使用模拟数据验证了视角切换、缩放、版本面板、签名发布导入后的目标预选，以及完整 GitHub URL 保存规范化后检测结果切换；模拟活动计划仍阻止开始新升级。浏览器验证不是实际 GitHub 下载验收。见 [构建记录](evidence/online-update-web-build.log.txt)。
+- OVH 私有 PG/Redis 项目 `sub2api-online-sfz5x6`：gateway `go vet`、构建、完整普通 `go test -race` 通过，顶层 85 项通过；需要额外真实核心制品的 6 项 RealCore 用例跳过，本轮未声称重跑 §18 的真实多节点六项。覆盖来源规范化、PG 持久化、缓存绑定基线和源修订、来源变更与导入竞争、取消不缓存、已安装同摘要、同版本不同签名身份、旧来源不静默替换等。GitHub HTTP 用模拟 transport 验证重定向域/协议限制、签名、缺失/不匹配资产、bundle 校验及非公网目标拒绝。见 [gateway 回归](evidence/online-update-gateway.log.txt)。
+- server app/updater/httpapi 的 vet、全模块构建和相关 `-race` 测试通过：19 项、0 跳过。验证改源需要权限及二次认证，导入沿既有敏感权限，审计仅记录成功操作并包含仓库/tag/digest。见 [服务端回归](evidence/online-update-server.log.txt)。
+- 初次上传因根 `.gitignore` 的 `release/` 规则遗漏新增 GitHub provider 源文件，已为真实 Go release 包增加例外；随后 vet 发现测试复制带锁 Manager，已改成独立实例并完整重跑 gateway 通过。这两次前置失败未计为测试通过。
+- GitHub 资产导出工具 4 项测试通过，验证原签名字节保留、仅导出声明资产、拒绝 payload/bundle 篡改和输出目录覆盖；另用生产已有 v0.1.8 的签名包只读导出到隔离目录成功，未上传任何 GitHub Release，未复制签名私钥。见 [资产工具测试](evidence/online-update-assets.log.txt)。

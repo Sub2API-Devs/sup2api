@@ -36,6 +36,7 @@ function label(group: string, value: string) { const key = `upgrades.${group}.${
 function tone(status: string): Tone { return ['completed', 'done', 'ready'].includes(status) ? 'success' : ['failed', 'error'].includes(status) ? 'danger' : ['paused', 'pending', 'running'].includes(status) ? 'warning' : 'gray' }
 function version(digest: string) { return releases.value.find(r => r.digest === digest)?.manifest.release_id || digest.slice(0, 12) || '—' }
 watch(target, () => { preflight.value = null; requestKey = crypto.randomUUID() })
+watch(() => route.query.release, value => { if (typeof value === 'string' && value) target.value = value }, { immediate: true })
 async function load(manual = false) {
   if (inflight || disposed) return
   inflight = true

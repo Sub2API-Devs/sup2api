@@ -1,0 +1,58 @@
+=== RUN   TestShutdownWaitsForCanceledHandlerCompletion
+--- PASS: TestShutdownWaitsForCanceledHandlerCompletion (0.02s)
+=== RUN   TestDrainRejectsNewWorkAndKeepsHealthObservable
+--- PASS: TestDrainRejectsNewWorkAndKeepsHealthObservable (0.00s)
+=== RUN   TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory
+=== RUN   TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/missing_source
+=== RUN   TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/wrong_source
+=== RUN   TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/wrong_target
+=== RUN   TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/older_than_source
+=== RUN   TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/unknown_future_migration
+=== RUN   TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/changed_history
+=== RUN   TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/gap
+--- PASS: TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory (0.00s)
+    --- PASS: TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/missing_source (0.00s)
+    --- PASS: TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/wrong_source (0.00s)
+    --- PASS: TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/wrong_target (0.00s)
+    --- PASS: TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/older_than_source (0.00s)
+    --- PASS: TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/unknown_future_migration (0.00s)
+    --- PASS: TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/changed_history (0.00s)
+    --- PASS: TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/gap (0.00s)
+=== RUN   TestManagedSchemaRejectsUnknownFutureMigration
+--- PASS: TestManagedSchemaRejectsUnknownFutureMigration (0.14s)
+=== RUN   TestMigrationAndPluginPreparationDoNotAdmitBusiness
+--- PASS: TestMigrationAndPluginPreparationDoNotAdmitBusiness (0.00s)
+=== RUN   TestManagedRuntimeCandidatePrepareAdmitAndDrain
+--- PASS: TestManagedRuntimeCandidatePrepareAdmitAndDrain (4.07s)
+=== RUN   TestManagedRuntimeMigrationDoesNotBootstrap
+--- PASS: TestManagedRuntimeMigrationDoesNotBootstrap (4.06s)
+=== RUN   TestManagedReadinessFollowsIndependentApprovedPlugins
+--- PASS: TestManagedReadinessFollowsIndependentApprovedPlugins (0.06s)
+=== RUN   TestManagedReadinessWaitsForPermissionRevocation
+--- PASS: TestManagedReadinessWaitsForPermissionRevocation (0.05s)
+=== RUN   TestManagedCandidateAuthenticatesAndDoesNoWork
+--- PASS: TestManagedCandidateAuthenticatesAndDoesNoWork (0.00s)
+=== RUN   TestOnlyExplicitBootstrapCanCoordinateBeforeAdmission
+--- PASS: TestOnlyExplicitBootstrapCanCoordinateBeforeAdmission (0.00s)
+=== RUN   TestManagedAdmissionUsesPersistedBootAndRoles
+--- PASS: TestManagedAdmissionUsesPersistedBootAndRoles (0.05s)
+=== RUN   TestManagedSchemaCheckIsReadOnly
+--- PASS: TestManagedSchemaCheckIsReadOnly (0.05s)
+=== RUN   TestManagedHostAPIMatchesRuntimeContract
+--- PASS: TestManagedHostAPIMatchesRuntimeContract (0.00s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/app	9.568s
+=== RUN   TestBridgeAuditsOnlySuccessfulMutations
+--- PASS: TestBridgeAuditsOnlySuccessfulMutations (0.19s)
+=== RUN   TestUpdateSourceAndImportRequireAuthorizationAndConfirmation
+--- PASS: TestUpdateSourceAndImportRequireAuthorizationAndConfirmation (0.00s)
+=== RUN   TestAuditActions
+--- PASS: TestAuditActions (0.00s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/updater	1.230s
+=== RUN   TestPermAny
+--- PASS: TestPermAny (0.00s)
+=== RUN   TestOwnerScopeWithoutGrant
+--- PASS: TestOwnerScopeWithoutGrant (0.00s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi	1.035s

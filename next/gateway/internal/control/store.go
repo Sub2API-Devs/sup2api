@@ -28,6 +28,7 @@ var Schema string
 var ErrConflict = errors.New("updater state changed; repeat preflight")
 
 type Store struct {
+	Updates           *UpdateService
 	telemetrySequence atomic.Uint64
 	DB                *pgxpool.Pool
 	Cluster           string

@@ -3,6 +3,7 @@
 package updater
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -21,7 +22,7 @@ import (
 )
 
 func RegisterRoutes(r *httpapi.Router, socketPath string, db *store.DB) {
-	client := &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+	client := &http.Client{Timeout: 60 * time.Second, Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
 	}}}
 	handler := func(c *gin.Context) {
@@ -31,6 +32,19 @@ func RegisterRoutes(r *httpapi.Router, socketPath string, db *store.DB) {
 		}
 		body := http.MaxBytesReader(c.Writer, c.Request.Body, 32<<10)
 		path := strings.TrimPrefix(c.Request.URL.Path, "/api/v1")
+		var releaseRequest struct {
+			Repository string `json:"repository"`
+			Tag        string `json:"tag"`
+		}
+		if (path == "/system/update-source" && c.Request.Method == "PUT") || (path == "/system/releases/import" && c.Request.Method == "POST") {
+			raw, err := io.ReadAll(body)
+			if err != nil {
+				httpapi.Fail(c, core.ErrInvalidArgument)
+				return
+			}
+			_ = json.Unmarshal(raw, &releaseRequest)
+			body = io.NopCloser(bytes.NewReader(raw))
+		}
 		req, err := http.NewRequestWithContext(c.Request.Context(), c.Request.Method, "http://shell"+path, body)
 		if err != nil {
 			httpapi.Fail(c, err)
@@ -55,17 +69,29 @@ func RegisterRoutes(r *httpapi.Router, socketPath string, db *store.DB) {
 			id := c.Param("id")
 			var result struct {
 				Data struct {
-					ID string `json:"id"`
+					ID         string `json:"id"`
+					Digest     string `json:"digest"`
+					Repository string `json:"repository"`
 				} `json:"data"`
 			}
 			_ = json.Unmarshal(payload, &result)
 			if result.Data.ID != "" {
 				id = result.Data.ID
 			}
+			details := map[string]any{"source": "console", "request_target": c.Param("id")}
+			if action == "system.update_source.update" {
+				details["repository"] = result.Data.Repository
+			}
+			if action == "system.release.import" {
+				id = result.Data.Digest
+				details["digest"] = id
+				details["tag"] = releaseRequest.Tag
+				details["repository"] = releaseRequest.Repository
+			}
 			// The gateway has committed independently. Never turn an audit-write
 			// failure into a failed action response that invites duplicate work.
 			auditCtx, cancel := context.WithTimeout(context.WithoutCancel(audit.Context(c)), 5*time.Second)
-			if err := audit.Audit(auditCtx, db.Pool, uid, action, targetType, id, map[string]any{"source": "console", "request_target": c.Param("id")}); err != nil {
+			if err := audit.Audit(auditCtx, db.Pool, uid, action, targetType, id, details); err != nil {
 				slog.Error("audit updater action failed", "action", action, "target", id, "err", err)
 			}
 			cancel()
@@ -88,9 +114,19 @@ func RegisterRoutes(r *httpapi.Router, socketPath string, db *store.DB) {
 	// CPU offload is a system setting of the managed cluster.
 	r.Perm("GET", "/system/offload", "settings:read", handler)
 	r.Perm("PUT", "/system/offload", "settings:manage", handler)
+	r.Perm("GET", "/system/update-source", "settings:read", handler)
+	r.PermStepUp("PUT", "/system/update-source", "settings:manage", handler)
+	r.Perm("GET", "/system/update-check", "system:update:read", handler)
+	r.Perm("POST", "/system/releases/import", "system:update:execute", handler)
 }
 
 func auditAction(method, path string) (string, string) {
+	if method == "PUT" && path == "/api/v1/system/update-source" {
+		return "system.update_source.update", "system"
+	}
+	if method == "POST" && path == "/api/v1/system/releases/import" {
+		return "system.release.import", "release"
+	}
 	if method == "PUT" && path == "/api/v1/system/offload" {
 		return "system.offload.update", "system"
 	}

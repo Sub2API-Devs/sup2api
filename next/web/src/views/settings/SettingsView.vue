@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SButton, SCard, SField, SGrid, SHint, SInput, SPageHeader, SRadio, SSpinner, STabs, toast } from '@sub2api/ui'
@@ -9,9 +10,11 @@ import { fieldErrors, notifyError } from '@/utils/errors'
 import StickySettingsCard from '@/views/sticky/StickySettingsCard.vue'
 import GatewaySettingsCard from './GatewaySettingsCard.vue'
 import OffloadSettingsCard from './OffloadSettingsCard.vue'
+import UpdateSourceCard from './UpdateSourceCard.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
+const route = useRoute()
 
 const tabs = computed(() => {
   const out = []
@@ -19,9 +22,11 @@ const tabs = computed(() => {
   if (auth.has('settings:read')) out.push({ key: 'gateway', label: t('settings.tabs.gateway') })
   if (auth.has('sticky:read')) out.push({ key: 'sticky', label: t('settings.tabs.sticky') })
   if (auth.has('settings:read')) out.push({ key: 'offload', label: t('settings.tabs.offload') })
+  if (auth.has('settings:read')) out.push({ key: 'updates', label: t('coreUpdates.sourceTitle') })
   return out
 })
 const tab = ref(tabs.value[0]?.key || 'billing')
+watch(() => route.query.tab, value => { if (typeof value === 'string' && tabs.value.some(t => t.key === value)) tab.value = value }, { immediate: true })
 
 // ------------------------------------------------------------------ billing
 
@@ -131,5 +136,6 @@ onMounted(loadBilling)
     <GatewaySettingsCard v-else-if="tab === 'gateway' && auth.has('settings:read')" />
     <StickySettingsCard v-else-if="tab === 'sticky' && auth.has('sticky:read')" />
     <OffloadSettingsCard v-else-if="tab === 'offload' && auth.has('settings:read')" />
+    <UpdateSourceCard v-else-if="tab === 'updates' && auth.has('settings:read')" />
   </div>
 </template>

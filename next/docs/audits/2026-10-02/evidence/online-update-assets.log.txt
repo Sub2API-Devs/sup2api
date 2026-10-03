@@ -1,0 +1,9 @@
+test_preserves_signed_bytes_and_only_exports_declared_assets (test_prepare_assets.AssetExportTests.test_preserves_signed_bytes_and_only_exports_declared_assets) ... ok
+test_refuses_existing_output (test_prepare_assets.AssetExportTests.test_refuses_existing_output) ... ok
+test_rejects_changed_payload (test_prepare_assets.AssetExportTests.test_rejects_changed_payload) ... ok
+test_rejects_corrupted_bundle_of_same_length (test_prepare_assets.AssetExportTests.test_rejects_corrupted_bundle_of_same_length) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.001s
+
+OK

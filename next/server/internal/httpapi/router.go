@@ -44,6 +44,25 @@ func (r *Router) Perm(method, path, permission string, h ...gin.HandlerFunc) {
 	r.api.Handle(method, path, append(chain, h...)...)
 }
 
+// PermStepUp adds explicit confirmation for a sensitive operation within a
+// permission whose other operations do not require password confirmation.
+func (r *Router) PermStepUp(method, path, permission string, h ...gin.HandlerFunc) {
+	confirm := func(c *gin.Context) {
+		uid, _ := core.UserID(c.Request.Context())
+		if r.stepUp == nil {
+			Fail(c, core.ErrStepUpRequired)
+			return
+		}
+		if err := r.stepUp.VerifyStepUp(c.Request.Context(), uid, c.GetHeader("X-Step-Up-Token")); err != nil {
+			Fail(c, core.ErrStepUpRequired.WithCause(err))
+			return
+		}
+		c.Next()
+	}
+	chain := []gin.HandlerFunc{r.authenticate(), r.require(permission), confirm}
+	r.api.Handle(method, path, append(chain, h...)...)
+}
+
 // PermAny registers a route the caller may use with any one of keys, e.g.
 // the "all" key and its "own" counterpart (CONTRACTS §21.1). Every key the
 // caller holds is recorded in the request context (Granted /

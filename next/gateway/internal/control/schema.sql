@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS updater.releases (
  digest text PRIMARY KEY, release_id text NOT NULL UNIQUE, manifest jsonb NOT NULL,
  signed_manifest jsonb NOT NULL, bundle_base text NOT NULL, created_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE updater.clusters ADD COLUMN IF NOT EXISTS update_repository text NOT NULL DEFAULT '';
+ALTER TABLE updater.clusters ADD COLUMN IF NOT EXISTS update_source_revision bigint NOT NULL DEFAULT 0;
 CREATE TABLE IF NOT EXISTS updater.nodes (
  node_id text PRIMARY KEY, cluster_id text NOT NULL REFERENCES updater.clusters(cluster_id),
  peer_url text NOT NULL, shell_boot_id text NOT NULL, release_digest text NOT NULL DEFAULT '',

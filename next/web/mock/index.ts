@@ -15,6 +15,7 @@ import './core'
 import './accounts'
 import './resources'
 import './billing'
+import './updates'
 import './observability'
 import './plugins'
 

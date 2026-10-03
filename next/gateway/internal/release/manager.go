@@ -31,6 +31,7 @@ type Manager struct {
 	TrustedKeys          map[string]ed25519.PublicKey
 	OS, Arch, RuntimeABI string
 	Client               *http.Client
+	GitHubClient         *http.Client
 	// AllowHTTP is intended for explicitly configured development repositories.
 	AllowHTTP bool
 	mu        sync.Mutex
@@ -117,6 +118,9 @@ func (m *Manager) get(ctx context.Context, raw string) (*http.Response, error) {
 	return m.getUsing(ctx, raw, m.Client)
 }
 func (m *Manager) getUsing(ctx context.Context, raw string, client *http.Client) (*http.Response, error) {
+	if IsGitHubAssetURL(raw) {
+		return GitHubGet(ctx, m.GitHubClient, raw)
+	}
 	u, e := url.Parse(raw)
 	if e != nil || u.Host == "" || u.User != nil || (u.Scheme != "https" && !(m.AllowHTTP && u.Scheme == "http")) {
 		return nil, errors.New("invalid release source URL")
@@ -141,6 +145,9 @@ func (m *Manager) getUsing(ctx context.Context, raw string, client *http.Client)
 	}
 	return r, nil
 }
+
+// ValidatePlatform checks the same signed platform contract as Prepare.
+func (m *Manager) ValidatePlatform(v rc.Manifest) (rc.Platform, error) { return m.selectPlatform(v) }
 
 // Prepare verifies the signed manifest before downloading the exact bundleURL.
 // It never changes current and is safe while the old core serves traffic.

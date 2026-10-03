@@ -10,6 +10,8 @@ func TestAuditActions(t *testing.T) {
 		{"POST", "/api/v1/system/upgrades/preflight", ""},
 		{"GET", "/api/v1/system/upgrades", ""},
 		{"PUT", "/api/v1/system/offload", "system.offload.update"},
+		{"PUT", "/api/v1/system/update-source", "system.update_source.update"},
+		{"POST", "/api/v1/system/releases/import", "system.release.import"},
 	} {
 		if action, _ := auditAction(tc.method, tc.path); action != tc.action {
 			t.Fatalf("%s %s: %s", tc.method, tc.path, action)

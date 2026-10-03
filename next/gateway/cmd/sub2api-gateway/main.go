@@ -116,6 +116,7 @@ func run() error {
 		keys[id] = ed25519.PublicKey(b)
 	}
 	releases := &release.Manager{Root: c.Root, TrustedKeys: keys, OS: runtime.GOOS, Arch: runtime.GOARCH, RuntimeABI: c.RuntimeABI}
+	store.Updates = control.NewUpdateService(releases)
 	// The publisher is usually served with a public certificate, but may use
 	// the cluster CA; signatures, not the transport, authorize its content.
 	// init/import and serve share this client. It never carries node keys.

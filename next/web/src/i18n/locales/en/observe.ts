@@ -1,4 +1,9 @@
 export default {
+  nodeView: 'Node views', chartView: 'Chart', topologyView: 'Topology',
+  topologyHint: 'Explore gateway, core and plugin connections. Zoom and scroll to navigate.', chartHint: 'Inspect node versions, instances and runtime details.',
+  contains: 'Component ownership', clusterNode: 'Cluster node', zoomIn: 'Zoom in', zoomOut: 'Zoom out', resetView: 'Reset',
+  noCrossLinks: 'No cross-node forwarding or CPU offload candidate links are currently shown.',
+  graphLegend: 'Gray links show ownership; purple arrows show forwarding to the primary; dashed orange arrows show eligible receivers inferred from heartbeats and CPU thresholds, not actual request paths.',
   topology: 'Node topology', gateway: 'Gateway', core: 'Core', plugins: 'Plugins',
   forwarding: 'Forward to primary', offload: 'CPU offload candidates', legend: 'Solid: forward to primary. Dashed: eligible receivers inferred from current heartbeats and CPU threshold, not actual request paths.',
   partial: 'Gateway information unavailable; showing cores and plugins.', unavailable: 'Data temporarily unavailable; showing the last snapshot.', empty: 'No nodes',

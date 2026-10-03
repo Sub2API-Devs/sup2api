@@ -108,4 +108,7 @@ release 0.1.7 0.1.6
 # 0.1.8 names the managed entry component gateway in the console (same schema).
 # Redis telemetry and upgrade wakeups are installed by updating the gateway image.
 release 0.1.8
+# 0.1.9 adds the topology view and configurable signed GitHub core updates.
+# Install the matching gateway image before publishing this core release.
+release 0.1.9
 ls -la publish

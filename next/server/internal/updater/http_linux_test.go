@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -49,7 +50,7 @@ func TestBridgeAuditsOnlySuccessfulMutations(t *testing.T) {
 			t.Error("missing actor header")
 		}
 		w.WriteHeader(201)
-		_, _ = w.Write([]byte(`{"data":{"id":"new-plan"}}`))
+		_, _ = w.Write([]byte(`{"data":{"id":"new-plan","digest":"verified-digest","repository":"owner/repo"}}`))
 	})}
 	go func() { _ = shell.Serve(listener) }()
 	t.Cleanup(func() { _ = shell.Close() })
@@ -66,12 +67,14 @@ func TestBridgeAuditsOnlySuccessfulMutations(t *testing.T) {
 		{"POST", "/system/nodes/node-1/disable", "system.node.disable"},
 		{"POST", "/system/nodes/node-1/enable", "system.node.enable"},
 		{"PUT", "/system/offload", "system.offload.update"},
+		{"PUT", "/system/update-source", "system.update_source.update"},
+		{"POST", "/system/releases/import", "system.release.import"},
 		{"POST", "/system/upgrades/preflight", ""},
 		{"GET", "/system/upgrades", ""},
 		{"POST", "/system/upgrades?fail=1", ""},
 	}
 	for _, tc := range cases {
-		req := httptest.NewRequest(tc.method, "/api/v1"+tc.path, nil)
+		req := httptest.NewRequest(tc.method, "/api/v1"+tc.path, strings.NewReader(`{"repository":"owner/repo","tag":"v0.2.0"}`))
 		req.Header.Set("Authorization", "Bearer test")
 		response := httptest.NewRecorder()
 		engine.ServeHTTP(response, req)
@@ -86,7 +89,11 @@ func TestBridgeAuditsOnlySuccessfulMutations(t *testing.T) {
 		}
 	}
 	var count int
-	if err := db.Pool.QueryRow(ctx, `SELECT count(*) FROM audit_logs`).Scan(&count); err != nil || count != 8 {
+	if err := db.Pool.QueryRow(ctx, `SELECT count(*) FROM audit_logs`).Scan(&count); err != nil || count != 10 {
 		t.Fatal(count, err)
+	}
+	var imported bool
+	if err := db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM audit_logs WHERE action='system.release.import' AND target_id='verified-digest' AND detail->>'tag'='v0.2.0' AND detail->>'repository'='owner/repo' AND detail->>'digest'='verified-digest')`).Scan(&imported); err != nil || !imported {
+		t.Fatal("missing import audit details", err)
 	}
 }
