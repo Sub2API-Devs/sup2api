@@ -759,8 +759,15 @@ func registerTLSFingerprintProfileRoutes(admin *gin.RouterGroup, h *handler.Hand
 func registerPluginRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth middleware.StepUpAuthMiddleware) {
 	plugins := admin.Group("/plugins")
 	plugins.GET("/builtin/ccgateway/status", h.Admin.Plugin.CCGateway)
+	plugins.GET("/builtin/ccgateway/remote", h.Admin.Plugin.CCGatewayRemoteConfig)
+	plugins.PUT("/builtin/ccgateway/remote", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.CCGatewayRemoteConfig)
+	plugins.POST("/builtin/ccgateway/remote/fingerprint", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.CCGatewayRemoteFingerprint)
+	plugins.POST("/builtin/ccgateway/remote/test", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.CCGatewayRemoteTest)
+	plugins.POST("/builtin/ccgateway/remote/action", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.CCGatewayRemoteAction)
+	plugins.GET("/builtin/ccgateway/proxy", h.Admin.Plugin.CCGatewayProxy)
+	plugins.PUT("/builtin/ccgateway/proxy", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.CCGatewayProxy)
 	plugins.POST("/builtin/ccgateway/auth/:action", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.CCGateway)
-	plugins.POST("/builtin/ccgateway/connect", gin.HandlerFunc(stepUpAuth), h.Admin.Account.ConnectCCGateway)
+	plugins.POST("/builtin/ccgateway/connect", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.ConnectRemoteCCGateway(h.Admin.Account))
 	{
 		plugins.GET("", h.Admin.Plugin.List)
 		plugins.GET("/:id", h.Admin.Plugin.Get)

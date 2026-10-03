@@ -1,5 +1,21 @@
 export default {
   plugins: {
+    ccProxy: {
+      title: 'CCGateway outbound proxy', description: 'Configure Claude CLI outbound connections. Only HTTP / HTTPS proxies are supported; the official CLI does not support SOCKS.', effect: 'New requests use the saved configuration. In-flight requests keep their previous proxy; no container restart is required. The proxy must be reachable from the remote container.',
+      mode: 'Proxy mode', inherit: 'Inherit container environment', direct: 'Connect directly', proxy: 'Custom proxy', url: 'Proxy URL', keep: 'Saved; leave blank to retain', support: 'HTTP / HTTPS URLs may include authentication. Saved credentials are never returned.', current: 'Saved proxy:', clear: 'Saving this mode clears the stored custom proxy URL.', revision: 'Configuration revision {revision}',
+      save: 'Save outbound proxy', saved: 'Proxy configuration saved for new requests.', reload: 'Reload proxy configuration', required: 'Enter a URL when configuring a proxy for the first time.', invalid: 'Enter a valid HTTP or HTTPS proxy URL.', failed: 'Proxy operation failed. Check the connection and configuration, then retry.', show: 'Show', hide: 'Hide'
+    },
+    ccRemote: {
+      title: 'CCGateway Docker connection', authorization: 'Built-in · Gateway authorization', description: 'Manage an existing CCGateway container locally or through SSH. This does not install Docker or deploy an image.',
+      routingHint: 'SSH mode tunnels authorization and model requests to remote 127.0.0.1:8787; Docker and gateway API ports need not be public. Local mode still uses CCGATEWAY_URL. The remote container must use the same CCG_API_KEY and CCG_ADMIN_KEY as the host.',
+      mode: 'Connection mode', local: 'Local Docker', ssh: 'Remote SSH', host: 'SSH host', port: 'SSH port', user: 'SSH user', authMode: 'SSH authentication', password: 'SSH password', privateKey: 'SSH private key', passphrase: 'Private key passphrase (optional)',
+      fingerprint: 'Host key fingerprint', probe: 'Probe host fingerprint', verifyFingerprint: 'Verify this fingerprint through a trusted channel. The discovered fingerprint is not saved automatically; explicitly use it after checking.', useFingerprint: 'Use this fingerprint',
+      keepSecret: 'Saved; leave blank to keep', secretsHint: 'Passwords, private keys and passphrases are never returned. Leave blank to retain saved values. Do not enter Claude authorization codes or model API keys here.', newCredentials: 'After changing the host, port or SSH user, enter the corresponding password or private key again.',
+      required: 'Enter a valid SSH host, port, user and host fingerprint.', targetRequired: 'Enter an SSH host and a valid port first.',
+      save: 'Save connection', saved: 'Connection configuration saved.', reload: 'Reload configuration', test: 'Test saved connection', saveFirst: 'Save the configuration before testing or managing containers.', savedOnly: 'Actions use only the saved SSH configuration. Remote actions are unavailable in local mode.',
+      actions: { status: 'Container status', start: 'Start container', stop: 'Stop container', restart: 'Restart container', logs: 'View logs' },
+      confirmAction: 'Run “{action}”? This may interrupt requests handled by the container.', confirm: 'Confirm action', cancel: 'Cancel', failed: 'Operation failed. Please retry.'
+    },
     title: 'Plugin Management',
     description: 'Manage the built-in Claude gateway and installable OAuth outbound transport plugins.',
     upload: 'Install plugin',

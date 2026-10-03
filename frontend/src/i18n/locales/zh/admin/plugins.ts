@@ -1,5 +1,21 @@
 export default {
   plugins: {
+    ccProxy: {
+      title: 'CCGateway 出站代理', description: '控制 Claude CLI 的出站连接，仅支持 HTTP / HTTPS 代理；官方 CLI 不支持 SOCKS。', effect: '保存后新请求使用新配置，进行中的请求继续使用旧代理，无需重启容器。代理地址必须可从远程容器访问。',
+      mode: '代理模式', inherit: '继承容器环境代理', direct: '直接连接', proxy: '指定代理', url: '代理 URL', keep: '已保存，留空保持原代理', support: '可输入含认证信息的 HTTP / HTTPS URL；保存后不回显凭证。', current: '已保存代理：', clear: '保存此模式会清除已保存的自定义代理 URL。', revision: '配置版本 {revision}',
+      save: '保存出站代理', saved: '出站代理配置已保存，新请求生效。', reload: '重新加载代理配置', required: '首次指定代理时，请填写代理 URL。', invalid: '请输入有效的 HTTP 或 HTTPS 代理 URL。', failed: '代理操作失败，请检查连接及配置后重试。', show: '显示', hide: '隐藏'
+    },
+    ccRemote: {
+      title: 'CCGateway Docker 连接', authorization: '内建 · 网关授权', description: '管理已部署的 CCGateway 容器，可选择本机或通过 SSH 连接远程 Docker。不会自动安装 Docker 或部署镜像。',
+      routingHint: 'SSH 模式通过加密隧道访问远端 127.0.0.1:8787，支持授权管理与模型请求，无需公开 Docker 或网关 API 端口。本地模式仍使用 CCGATEWAY_URL。远端容器的 CCG_API_KEY、CCG_ADMIN_KEY 必须与宿主配置一致。',
+      mode: '连接方式', local: '本地 Docker', ssh: '远程 SSH', host: 'SSH 主机', port: 'SSH 端口', user: 'SSH 用户', authMode: 'SSH 认证方式', password: 'SSH 密码', privateKey: 'SSH 私钥', passphrase: '私钥口令（可选）',
+      fingerprint: '主机密钥指纹', probe: '探测主机指纹', verifyFingerprint: '请通过可信渠道核对以下指纹。探测结果不会自动保存，确认后再使用。', useFingerprint: '使用此指纹',
+      keepSecret: '已保存，留空保持不变', secretsHint: '密码、私钥和口令不会回显；留空保留已保存的值。请勿在此填写 Claude 授权码或模型 API Key。', newCredentials: '连接目标或 SSH 用户变化后，必须重新输入对应密码或私钥。',
+      required: '请填写有效的 SSH 主机、端口、用户和主机指纹。', targetRequired: '请先填写 SSH 主机与有效端口。',
+      save: '保存连接配置', saved: '连接配置已保存。', reload: '重新加载配置', test: '测试已保存连接', saveFirst: '请先保存配置，再测试连接或管理容器。', savedOnly: '以下操作仅使用已保存的 SSH 配置；本地模式不提供远程操作。',
+      actions: { status: '容器状态', start: '启动容器', stop: '停止容器', restart: '重启容器', logs: '查看日志' },
+      confirmAction: '确定执行“{action}”？这可能中断该容器正在处理的请求。', confirm: '确认执行', cancel: '取消', failed: '操作失败，请重试。'
+    },
     title: '插件管理',
     description: '管理内建 Claude 网关和可安装的 OAuth 出站传输插件。',
     upload: '安装插件',

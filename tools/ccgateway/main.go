@@ -276,12 +276,16 @@ func serve() error {
 			native[n] = true
 		}
 	}
-	g := &Gateway{Runner: &Runner{CLI: cli, Version: version, Plugin: plugin, Work: work}, Cache: cache, Key: key, Timeout: timeout, Slots: make(chan struct{}, 4), NativeAllowed: native}
+	proxy, e := NewProxyConfigStore(root, os.Getenv("CCG_ADMIN_KEY"))
+	if e != nil {
+		return e
+	}
+	g := &Gateway{Runner: &Runner{CLI: cli, Version: version, Plugin: plugin, Work: work, Proxy: proxy}, Cache: cache, Key: key, Timeout: timeout, Slots: make(chan struct{}, 4), NativeAllowed: native}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	mux := http.NewServeMux()
 	mux.Handle("/", g)
-	mux.Handle("/admin/", &authManager{cli: cli, key: os.Getenv("CCG_ADMIN_KEY")})
+	mux.Handle("/admin/", &authManager{cli: cli, key: os.Getenv("CCG_ADMIN_KEY"), proxy: proxy})
 	server := &http.Server{Addr: bind, Handler: mux, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 	done := make(chan struct{})
 	backgroundDone := make(chan struct{})

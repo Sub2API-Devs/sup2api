@@ -29,6 +29,8 @@ func RegisterGatewayRoutes(
 	compositeResolver *service.CompositeRouteResolver,
 	cfg *config.Config,
 ) {
+	// Internal account upstream: independently authenticated, never a general proxy.
+	r.POST("/builtin/ccgateway/v1/messages", h.Admin.Plugin.CCGatewayMessages)
 	bodyLimit := middleware.RequestBodyLimit(cfg.Gateway.MaxBodySize)
 	textBodyLimit := middleware.RequestBodyLimit(cfg.Gateway.TextMaxBodySize)
 	clientRequestID := middleware.ClientRequestID()

@@ -28,6 +28,7 @@ type authManager struct {
 	mu       sync.Mutex
 	session  *authSession
 	cli, key string
+	proxy    *ProxyConfigStore
 }
 
 func (s *authSession) call(ctx context.Context, request Object) (Object, error) {
@@ -67,7 +68,7 @@ func (a *authManager) start(ctx context.Context) (Object, error) {
 	}
 	life, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	cmd := exec.CommandContext(life, a.cli, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--tools", "", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--setting-sources", "", "--settings", `{"disableAllHooks":true}`, "--no-session-persistence", "--no-chrome", "--disable-slash-commands")
-	cmd.Env = envWith(os.Environ(), nil, "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_BASE_URL")
+	cmd.Env = envWith(a.proxy.Environment(os.Environ()), nil, "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_BASE_URL")
 	input, err := cmd.StdinPipe()
 	if err != nil {
 		cancel()
@@ -129,6 +130,10 @@ func (a *authManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		apiError(w, 401, "authentication_error", "Invalid management key")
 		return
 	}
+	if r.URL.Path == "/admin/proxy" {
+		a.proxy.serve(w, r)
+		return
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
@@ -138,6 +143,7 @@ func (a *authManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method + " " + r.URL.Path {
 	case "GET /admin/status":
 		cmd := exec.CommandContext(ctx, a.cli, "auth", "status", "--json")
+		cmd.Env = a.proxy.Environment(os.Environ())
 		b, runErr := cmd.Output()
 		var status struct {
 			LoggedIn   bool   `json:"loggedIn"`
@@ -194,7 +200,9 @@ func (a *authManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			a.session.cancel()
 			a.session = nil
 		}
-		if exec.CommandContext(ctx, a.cli, "auth", "logout").Run() != nil {
+		cmd := exec.CommandContext(ctx, a.cli, "auth", "logout")
+		cmd.Env = a.proxy.Environment(os.Environ())
+		if cmd.Run() != nil {
 			err = errors.New("退出授权失败")
 		} else {
 			result = Object{"success": true}

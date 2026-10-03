@@ -53,3 +53,37 @@ go vet ./...
 ```
 
 原网关真实 CLI 测试使用 `CCG_REAL_CLI` 指定可执行文件；未配置时跳过。真实浏览器 OAuth 和 Docker 启动验证需要可用的 Docker 环境及用户完成授权。
+
+## SSH 远程 Docker 与代理
+
+本功能属于 `backend/` + `frontend/` 的内建 CCGateway，并非 `next` 的 `.s2plugin`；未部署到 next 核心时，next 插件页不会出现这些配置。
+
+远程主机用本仓库 Dockerfile / Compose 部署容器，名称固定为 `ccgateway`，端口只绑定远程 `127.0.0.1:8787`。页面可以检查 Docker/Compose、查询状态、启动、停止、重启、读取日志；安装 Docker、构建镜像与首次创建容器仍使用 Compose。后端和远程容器需配置相同且互不相同的 `CCG_API_KEY`、`CCG_ADMIN_KEY`。
+
+在插件卡片选择 SSH，填写主机、端口、用户名及密码或私钥。探测指纹不会发送凭据；通过已有可信连接核对指纹后，再点击使用并保存。SSH 凭据使用宿主既有加密服务持久化，页面只返回是否已配置。留空保留原凭据只适用于相同主机、用户、认证方式和指纹；更换目标必须重新提供凭据。
+
+Docker 操作复用原生 Docker CLI；SSH 使用 `golang.org/x/crypto/ssh`，HTTP/SSE 使用 Go `net/http` 与 `httputil.ReverseProxy`。管理请求和模型请求通过 SSH direct-tcpip 到远程回环端口，无需暴露 Docker TCP API。可复用封装在 `backend/internal/remotedocker`，插件适配层在 `backend/internal/ccgatewayremote`。新接入账号统一通过宿主内部桥接地址，随后切换本地/SSH 会作用于新请求。旧版已创建的直连账号需要重新接入或更新 base_url。
+
+### Claude Code 出站代理
+
+代理控制远端 Claude Code 访问模型服务的出口，与 SSH 连接配置独立。支持三种模式：
+
+- 继承：使用容器启动环境中的代理变量。
+- 直连：移除子进程的 HTTP_PROXY、HTTPS_PROXY、ALL_PROXY、NO_PROXY 及小写形式。
+- 指定代理：设置 HTTP_PROXY / HTTPS_PROXY 及小写形式，移除 ALL_PROXY，保留容器 NO_PROXY；支持 HTTP/HTTPS 地址和可选用户名密码。
+
+代理地址必须能从远端容器访问；127.0.0.1 指容器自身。Claude Code 官方不支持 SOCKS，因此界面与后端均拒绝 SOCKS 地址，参见 [官方网络配置](https://code.claude.com/docs/en/network-config)。代理界面保存后清空输入框，只显示脱敏地址；在已启用指定代理时留空保存保留原地址。
+
+每个模型请求或授权子进程启动时读取配置快照；新请求使用新配置，已运行请求保持原配置，无需重建或重启容器。正在进行的 OAuth 授权要重新发起才会应用新代理。
+
+配置通过管理接口 `/admin/proxy` 更新，以 AES-GCM 加密保存到数据卷内的 `proxy.enc`。加密密钥从管理密钥派生；更换 CCG_ADMIN_KEY 前需安排配置迁移或重置，旧文件不能用新密钥解密。SSH 密码/私钥和代理 URL 不进入管理审计请求体。
+
+### 2026-10-03 验证记录
+
+- 后端管理/服务/审计测试、远程 SSH 框架测试、Go vet 与宿主编译通过；前端 16 个相关测试、类型检查和生产构建通过。
+- cc-max 上密码和私钥登录均通过；Docker 状态、启停、重启、日志操作以及 SSH HTTP 健康检查通过。
+- Linux 下 SSH 框架和代理模块 `go test -race` 通过。
+- 测试容器使用 `ccgateway:ssh-proxy-test`，数据卷保留，端口仅绑定回环，日志轮转 20m × 3。
+- 经 SSH 管理接口验证指定代理 → 容器重启后配置与 revision 保留 → 直连 → 继承，最终恢复继承。此项使用不可用的模拟代理地址，仅验证配置，不向它发送模型请求。
+- 容器内 Claude Code 2.1.288 的真实 CLI 测试通过：7 次本地模拟模型请求，覆盖历史、system、工具往返和 SSE，0 次云端模型调用。
+- 尚未完成真实 OAuth 登录、真实出站代理或收费模型调用；未将这套旧版宿主界面部署到 OVH next 核心。

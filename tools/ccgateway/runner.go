@@ -24,6 +24,7 @@ var modFiles embed.FS
 type Runner struct {
 	CLI, Version, Plugin, Work string
 	Env                        []string
+	Proxy                      *ProxyConfigStore
 }
 
 func extractMod(root string) (string, error) {
@@ -146,6 +147,7 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 	if env == nil {
 		env = os.Environ()
 	}
+	env = r.Proxy.Environment(env)
 	cmd.Env = envWith(env, map[string]string{"CCGATEWAY_READY_FILE": ready, "CLAUDE_CODE_MAX_OUTPUT_TOKENS": strconv.Itoa(req.MaxTokens), "DISABLE_AUTOUPDATER": "1", "DISABLE_AUTO_COMPACT": "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "CLAUDE_CODE_DISABLE_ATTACHMENTS": "1", "ENABLE_TOOL_SEARCH": "false", "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "0"}, "CLAUDE_CODE_RESUME_INTERRUPTED_TURN", "CLAUDE_CODE_RESUME_FROM_SESSION", "CLAUDE_CODE_PLUGIN_DIRS")
 	stdin, e := cmd.StdinPipe()
 	if e != nil {

@@ -1,8 +1,10 @@
 <template>
+  <CCGatewayRemote :disabled="actionBusy || proxyBusy || !!session" @busy="remoteBusy = $event" @saved="remoteSaved" />
+  <CCGatewayProxy :disabled="actionBusy || remoteBusy || !!session" :target-revision="targetRevision" @busy="proxyBusy = $event" />
   <section class="card space-y-4 border border-gray-200 p-5 dark:border-dark-700" aria-label="CCGateway 内建插件">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h3 class="font-semibold">CCGateway <span class="ml-2 text-xs text-blue-600">内建 · 本地 Docker</span></h3>
+        <h3 class="font-semibold">CCGateway <span class="ml-2 text-xs text-blue-600">{{ t('admin.plugins.ccRemote.authorization') }}</span></h3>
         <p class="mt-1 text-sm text-gray-500">通过 Claude Code 提供 Messages API，每个容器使用一套独立授权。</p>
       </div>
       <button class="btn btn-secondary btn-sm" :disabled="busy" @click="run(refresh)">刷新状态</button>
@@ -45,7 +47,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import CCGatewayRemote from './CCGatewayRemote.vue'
+import CCGatewayProxy from './CCGatewayProxy.vue'
 import { apiClient } from '@/api/client'
 import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
 import { isStepUpCancelled, useStepUp } from '@/composables/useStepUp'
@@ -54,24 +59,28 @@ interface Status { healthy: boolean; logged_in: boolean; auth_method: string }
 interface Session { session_id: string; url: string; expires_at: string }
 const base = '/admin/plugins/builtin/ccgateway'
 const stepUp = useStepUp()
+const { t } = useI18n()
 const post = <T,>(path: string, body: unknown) => stepUp.run(() => apiClient.post<T>(`${base}/${path}`, body, { timeout: 55000 }))
 const status = ref<Status | null>(null)
 const session = ref<Session | null>(null)
 const code = ref('')
-const name = ref('CCGateway（本地 Docker）')
-const busy = ref(false)
+const name = ref('CCGateway')
+const actionBusy = ref(false), remoteBusy = ref(false)
+const proxyBusy = ref(false), targetRevision = ref(0)
+const busy = computed(() => actionBusy.value || remoteBusy.value || proxyBusy.value)
 const connected = ref(false)
 const confirmLogout = ref(false)
 const error = ref('')
 const notice = ref('')
 async function run(action: () => Promise<void>) {
-  busy.value = true; error.value = ''; notice.value = ''
+  actionBusy.value = true; error.value = ''; notice.value = ''
   try { await action() } catch (e: unknown) {
     if (isStepUpCancelled(e)) return
     const failure = e as { response?: { data?: { message?: string } }; message?: string }
     error.value = failure.response?.data?.message || failure.message || '操作失败，请重试'
-  } finally { busy.value = false }
+  } finally { actionBusy.value = false }
 }
+function remoteSaved() { targetRevision.value++; connected.value = false; status.value = null; void run(refresh) }
 async function refresh() {
   try { status.value = (await apiClient.get<Status>(`${base}/status`, { timeout: 55000 })).data }
   catch (e) { status.value = null; throw e }

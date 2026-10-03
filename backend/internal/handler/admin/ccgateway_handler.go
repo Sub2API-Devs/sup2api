@@ -51,7 +51,7 @@ func (h *PluginHandler) CCGateway(c *gin.Context) {
 		response.Error(c, 503, "请配置 CCG_ADMIN_KEY 并启动本地 Docker 网关")
 		return
 	}
-	res, err := ccgatewayRequest(c.Request.Context(), c.Request.Method, path, http.MaxBytesReader(c.Writer, c.Request.Body, 8192))
+	res, err := h.ccgatewayRequest(c.Request.Context(), c.Request.Method, path, http.MaxBytesReader(c.Writer, c.Request.Body, 8192))
 	if err != nil {
 		response.Error(c, 502, "无法连接本地 Docker 网关，请检查容器状态")
 		return
@@ -81,17 +81,21 @@ func (h *PluginHandler) CCGateway(c *gin.Context) {
 // Provision through the existing account service so scheduling, group policy,
 // encryption and the public /v1/messages entrypoint retain their usual behavior.
 func (h *AccountHandler) ConnectCCGateway(c *gin.Context) {
+	h.connectCCGateway(c, ccgatewayRequest, ccgatewayURL())
+}
+
+func (h *AccountHandler) connectCCGateway(c *gin.Context, request func(context.Context, string, string, io.Reader) (*http.Response, error), baseURL string) {
 	key := os.Getenv("CCG_API_KEY")
 	if key == "" || os.Getenv("CCG_ADMIN_KEY") == "" {
 		response.BadRequest(c, "请先配置网关密钥")
 		return
 	}
-	target, err := url.Parse(ccgatewayURL())
+	target, err := url.Parse(baseURL)
 	if err != nil || target.Host == "" || (target.Scheme != "http" && target.Scheme != "https") {
 		response.BadRequest(c, "网关地址无效")
 		return
 	}
-	res, err := ccgatewayRequest(c.Request.Context(), http.MethodGet, "/admin/status", nil)
+	res, err := request(c.Request.Context(), http.MethodGet, "/admin/status", nil)
 	if err != nil {
 		response.BadRequest(c, "网关不可用")
 		return
@@ -117,7 +121,7 @@ func (h *AccountHandler) ConnectCCGateway(c *gin.Context) {
 	}
 	account, err := h.adminService.CreateAccount(c.Request.Context(), &service.CreateAccountInput{
 		Name: input.Name, Platform: service.PlatformAnthropic, Type: service.AccountTypeAPIKey,
-		Credentials: map[string]any{"base_url": ccgatewayURL(), "api_key": key},
+		Credentials: map[string]any{"base_url": baseURL, "api_key": key},
 		Extra:       map[string]any{"builtin_plugin": "ccgateway"}, Concurrency: 4, Priority: 50, GroupIDs: input.GroupIDs,
 	})
 	if err != nil {

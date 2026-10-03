@@ -1,3 +1,4 @@
+vi.mock('../CCGatewayProxy.vue', () => ({ default: { template: '<div />' } }))
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CCGatewayPlugin from '../CCGatewayPlugin.vue'
@@ -8,6 +9,8 @@ const { get, post, stepUpRun } = vi.hoisted(() => ({
 vi.mock('@/api/client', () => ({ apiClient: { get, post } }))
 vi.mock('@/composables/useStepUp', () => ({ useStepUp: () => ({ run: stepUpRun }), isStepUpCancelled: () => false }))
 vi.mock('@/components/auth/TotpStepUpDialog.vue', () => ({ default: { template: '<div />' } }))
+vi.mock('../CCGatewayRemote.vue', () => ({ default: { template: '<div />' } }))
+vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 const render = () => mount(CCGatewayPlugin, { global: { stubs: { RouterLink: true } } })
 
 describe('CCGateway 授权', () => {
