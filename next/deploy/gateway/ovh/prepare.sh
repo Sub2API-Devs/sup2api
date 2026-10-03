@@ -129,4 +129,6 @@ release 0.1.13
 release 0.1.14
 # 0.1.15 adds CCGateway remote management and the bundled account plugin (same schema).
 release 0.1.15
+# 0.1.16 puts plugin settings in each plugin row and detail tab (same schema).
+release 0.1.16
 ls -la publish

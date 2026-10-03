@@ -73,6 +73,13 @@ function open(p: PluginSummary) {
   router.push(`/plugins/${encodeURIComponent(p.key)}`)
 }
 
+function canOpenSettings(p: PluginSummary): boolean {
+  if (p.status === 'awaiting_consent') return false
+  // Compatibility with the existing core-hosted CCGateway management page.
+  // Other plugins advertise their schema settings through the list API.
+  return p.key === 'ccgateway' ? auth.has('settings:read') : !!p.has_settings
+}
+
 function review(p: PluginSummary) {
   const v = p.desired_version || p.active_version
   if (v) router.push(consentPath(p.key, v))
@@ -113,7 +120,6 @@ onMounted(load)
   <div>
     <SPageHeader :title="t('plugins.list.title')" :description="t('plugins.list.description')">
       <template #actions>
-        <SButton v-if="auth.has('settings:read')" to="/system/ccgateway">{{ t('ccgateway.title') }}</SButton>
         <SButton :loading="loading" @click="load"><SIcon name="refresh" class="h-4 w-4" />{{ t('common.refresh') }}</SButton>
         <SButton v-if="auth.has('plugin:market:read')" to="/market">
           <SIcon name="market" class="h-4 w-4" />{{ t('plugins.market.title') }}
@@ -178,6 +184,9 @@ onMounted(load)
             <SIcon name="shield" class="h-4 w-4" />{{ t('plugins.list.review') }}
           </SButton>
           <SButton size="sm" variant="ghost" @click="open(row)">{{ t('common.detail') }}</SButton>
+          <SButton v-if="canOpenSettings(row)" size="sm" :to="`/plugins/${encodeURIComponent(row.key)}?tab=settings`">
+            <SIcon name="settings" class="h-4 w-4" />{{ t('plugins.detail.tabs.settings') }}
+          </SButton>
         </div>
       </template>
     </STable>

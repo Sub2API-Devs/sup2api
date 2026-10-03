@@ -656,6 +656,7 @@ function summary(p: MockPlugin): Any {
   const running = p.status === 'enabled' || p.status === 'upgrading'
   return {
     key: p.key,
+    has_settings: !!p.settings?.schema,
     name: p.name,
     description: p.description,
     status: p.status,

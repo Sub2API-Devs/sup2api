@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
@@ -30,6 +30,8 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const CCGatewaySettings = defineAsyncComponent(() => import('@/views/ccgateway/CCGatewayView.vue'))
+const isCCGatewaySettings = computed(() => key.value === 'ccgateway' && auth.has('settings:read') && status.value !== 'awaiting_consent')
 
 const key = computed(() => String(route.params.key))
 const detail = ref<PluginDetail | null>(null)
@@ -76,13 +78,14 @@ const tabs = computed<TabItem[]>(() => {
   ]
   if (auth.has(['plugin:egress:read', 'plugin:manage'])) list.push({ key: 'egress', label: t('plugins.detail.tabs.egress') })
   list.push({ key: 'resources', label: t('plugins.detail.tabs.resources') })
-  if (settings.value?.schema) list.push({ key: 'settings', label: t('plugins.detail.tabs.settings') })
+  if (settings.value?.schema || isCCGatewaySettings.value) list.push({ key: 'settings', label: t('plugins.detail.tabs.settings') })
   return list
 })
 
 watch(tab, (v) => {
   if (route.query.tab !== v) router.replace({ query: { ...route.query, tab: v } })
 })
+watch(() => route.query.tab, (v) => { tab.value = typeof v === 'string' ? v : 'overview' })
 
 const moreActions = computed<MenuAction[]>(() => [
   { key: 'refresh', label: t('common.refresh') },
@@ -285,6 +288,7 @@ onMounted(load)
       <EventsTab v-else-if="tab === 'events'" :detail="detail" />
       <EgressTab v-else-if="tab === 'egress'" :detail="detail" @changed="load" />
       <ResourcesTab v-else-if="tab === 'resources'" :detail="detail" @changed="load" />
+      <CCGatewaySettings v-else-if="tab === 'settings' && isCCGatewaySettings" embedded />
       <SettingsTab v-else-if="tab === 'settings' && settings" :plugin-key="detail.key" :settings="settings" @saved="loadSettings" />
 
       <UninstallModal v-model:open="uninstallOpen" :plugin-key="detail.key" :name="name" @done="onUninstalled" />

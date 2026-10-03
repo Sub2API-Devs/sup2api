@@ -28,8 +28,11 @@ releases, applied with a primary-first plan.
 
 ## Shipping a new core version
 
-Core 0.1.15 includes CCGateway management under System settings and the plugin
-list, plus the bundled `ccgateway` managed account plugin. It is initially
+Core 0.1.16 puts CCGateway management in the plugin detail Settings tab, opened
+from the plugin list row. The old management URL redirects there. Schema-based
+plugin settings also have a row action. CCGateway's backend remains core-hosted;
+this release changes navigation, not the backend plugin boundary.
+The bundled `ccgateway` managed account plugin is initially
 installed disabled. Configure the remote connection and enable the plugin;
 after Claude authorization, create an account and assign its groups/models in
 account management. Connection settings are shared across nodes and encrypted

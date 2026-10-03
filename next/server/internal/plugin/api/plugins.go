@@ -36,7 +36,8 @@ type PluginSummary struct {
 	InstalledAt     time.Time          `json:"installed_at"`
 	UpdatedAt       time.Time          `json:"updated_at"`
 	// Builtin plugins ship with the image: they can be disabled, not uninstalled.
-	Builtin bool `json:"builtin"`
+	Builtin     bool `json:"builtin"`
+	HasSettings bool `json:"has_settings"`
 }
 
 // NodeSummary counts live nodes by reported plugin state.
@@ -73,8 +74,8 @@ func (a *API) fillSummary(ctx context.Context, s *PluginSummary) error {
 	if v != "" {
 		var sig string
 		var pub string
-		if err := a.d.DB.Pool.QueryRow(ctx, `SELECT signature_status, manifest->>'publisher' FROM plugin_versions
-			WHERE plugin_key = $1 AND version = $2`, s.Key, v).Scan(&sig, &pub); err != nil {
+		if err := a.d.DB.Pool.QueryRow(ctx, `SELECT signature_status, manifest->>'publisher', COALESCE(manifest->'ui'->'settings'->>'mode' = 'schema', false) FROM plugin_versions
+			WHERE plugin_key = $1 AND version = $2`, s.Key, v).Scan(&sig, &pub, &s.HasSettings); err != nil {
 			return err
 		}
 		s.SignatureStatus = sig

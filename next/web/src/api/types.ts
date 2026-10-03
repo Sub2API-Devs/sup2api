@@ -550,6 +550,7 @@ export interface StickySettings {
 export type Trust = 'official' | 'verified' | 'community' | 'unsigned' | string
 
 export interface PluginSummary {
+  has_settings?: boolean
   key: string
   name: LText
   status: string

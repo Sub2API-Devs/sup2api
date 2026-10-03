@@ -10,6 +10,7 @@ import ProxySettings from './ProxySettings.vue'
 import { isTrustedAuthorizationURL, sessionExpired } from './validation'
 interface Status { healthy: boolean; logged_in: boolean; auth_method: string }
 interface Session { session_id: string; url: string; expires_at: string }
+defineProps<{ embedded?: boolean }>()
 const { t } = useI18n(), auth = useAuthStore()
 const base = '/system/ccgateway'
 const manage = computed(() => auth.has('settings:manage'))
@@ -52,7 +53,7 @@ onBeforeUnmount(() => { code.value = ''; session.value = null })
 </script>
 <template>
   <div class="space-y-5">
-    <SPageHeader :title="t('ccgateway.title')" :description="t('ccgateway.description')"><template #actions><SButton to="/settings">{{ t('nav.items.settings') }}</SButton></template></SPageHeader>
+    <SPageHeader v-if="!embedded" :title="t('ccgateway.title')" :description="t('ccgateway.description')"><template #actions><SButton to="/plugins/ccgateway?tab=settings">{{ t('plugins.detail.tabs.settings') }}</SButton></template></SPageHeader>
     <SHint v-if="!manage">{{ t('ccgateway.readOnly') }}</SHint>
     <RemoteSettings :disabled="!manage || authBusy || proxyBusy || !!session" @busy="remoteBusy = $event" @saved="remoteSaved" />
     <ProxySettings :disabled="!manage || authBusy || remoteBusy || !!session" :target-revision="revision" @busy="proxyBusy = $event" />
