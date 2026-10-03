@@ -1,0 +1,8 @@
+{"test_group": 6, "account_id": 21, "temporary_key_id": 13}
+{"stream": false, "http_status": 200, "text": "OK", "usage": {"cache_creation": {"ephemeral_1h_input_tokens": 0, "ephemeral_5m_input_tokens": 0}, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0, "inference_geo": "not_available", "input_tokens": 193, "output_tokens": 4, "service_tier": "standard"}, "elapsed_s": 2.87}
+{"stream": true, "http_status": 200, "complete": true, "text": "OK", "elapsed_s": 3.1}
+USAGE_ROUTING_EVIDENCE
+875ca5cd0e14ee20d5ee0025|21|ccgateway|f|200|t|193|4|0.00021300|billed
+91364d889fa0c78639ddcfdf|21|ccgateway|t|200|t|193|4|0.00021300|billed
+
+TEMPORARY_KEY_REVOKED; TEST_GROUP_DISABLED; ACCOUNT_RETAINED_UNSCHEDULED

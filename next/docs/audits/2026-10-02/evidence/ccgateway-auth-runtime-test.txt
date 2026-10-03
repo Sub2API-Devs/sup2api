@@ -1,0 +1,3 @@
+{"api_key_rotation": "PASS", "data_preserved": "PASS", "oauth_environment": "PASS", "api_key_proxy_switch": "PASS"}
+{"isolated_accounts": 2, "concurrent_requests": 16, "proxy_switch": "PASS", "fail_closed": "PASS", "dns_over_proxy": "PASS", "private_ipv6_blocked": "PASS", "socks5_auth": "PASS", "unchanged_config_reused": "PASS", "restart_recovery": "PASS", "proxy_environment": "ABSENT", "model_calls": 0}
+

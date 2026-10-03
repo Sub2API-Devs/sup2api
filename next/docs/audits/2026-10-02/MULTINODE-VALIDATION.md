@@ -470,3 +470,21 @@ cc-max 控制器先在 18787 验证鉴权，再停止保留旧 `ccgateway` 容�
 未创建生产测试账号、未填写真实代理、未完成 Claude OAuth 或发起模型调用。网络隔离、并发、HTTP/SOCKS5、DNS、断代理阻断与恢复已在上一轮隔离环境验证，见 [运行环境验证](../../../../tools/ccgateway/runtime/VALIDATION.md)。本轮验证上线后的版本、配置、页面文件、鉴权和 SSH 转发，不将其描述为真实模型调用成功。
 
 证据：[采样](evidence/ovh-upgrade-0.1.17.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.17-summary.txt)、[四节点与转发验证](evidence/ccgateway-v017-verify.jsonl)。后续使用 `python3 verify-account-runtimes.py` 检查新版；旧 verify-ccgateway.py 针对共享容器，不适用于账号模式。
+
+### 24.4 CCGateway 双认证与真实代理调用：OVH v0.1.18
+
+2026-10-04（北京时间），功能源码 `d0fabc4dc`，回归测试补充 `45df24181`。CCGateway 0.1.1 提供 OAuth（兼容原 managed）与 API Key 两种账号类型，使用同一业务镜像、独立容器和代理出口。API Key 与 Base URL 经标准账号 API 校验并加密保存，读取时密钥掩码；控制面通过固定主机指纹的 SSH 同步凭证。更换凭证重建该账号业务容器并保留卷，代理变化仅重建出口。API Key 账号拒绝 OAuth 操作及旧共享运行模式。没有伪造 OAuth 授权结果。
+
+插件单测、核心 ccgateway 数据库集成测试、account 完整包测试、go vet、前端类型检查和生产构建通过。gateway 首次回归中 CCGateway 两项测试因仅有调度内存假账号、缺少权威数据库账号失败；补齐数据库 fixture 后所有 TestCCGateway 子测试通过，并补测 API Key 不能误用共享容器。其余 gateway 测试在首次运行中通过。隔离 Docker 测试覆盖密钥轮换、数据保留、OAuth 环境恢复、代理更新不重建业务容器，以及两个账号 16 次并发、HTTP CONNECT/SOCKS5、DNS、阻断直连与重启恢复，全部通过。
+
+OVH 从 Git 构建核心 0.1.18，备份 `/home/debian/sup2api/backups/pre-v0.1.18-20261003T184653Z.dump` 经 pg_restore 目录校验，schema-contract 未变。manifest `2a2a704e11f4ec2178e056b3560c2b07dadc780c811da1d54dd6aa20158630ed`，bundle `dfee56889207f4f8b39125702704d05bebb82cdbeab3e19d1ed535dc6c65dd08`。升级计划 `b4b79799c3cca635866e9d93b42f9791` 完成 27 步，创建至完成约 23.37 秒，四入口 503 采样约 4.6–6.0 秒。四核心 0.1.18、CCGateway 0.1.1 四节点 active；两种账号类型及 API Key 表单均通过四入口验证，静态管理页为 `CCGatewayView-9gpd20ro.js`。发布至验收时四节点 ERROR 为 0，未替换 gateway 容器。
+
+cc-max 控制器由同一 Git 源码构建，固定镜像 `sha256:95d00e6d164a8fc19a81ce3544f608938eeda5bd51bf9abe88490bb251f6d861`；业务和 sing-box 镜像沿用 v0.1.17 的固定 ID。旧控制器停用保存为 `ccg-controller-v017`，仍只通过 SSH 访问 127.0.0.1:8787。存在 API Key 账号后不要回退控制器而继续使用新版账号。
+
+通过正式账号 API 创建 **账号 21：CCGateway API Key 联调测试**，绑定已有代理 6，配置用户指定的十个模型。旧临时注入账号 20 已停用，其业务容器停止并保留数据。新账号由控制器自动配置 `ccg-21-app`，健康结果为 `api_key`；验证读取密钥掩码、携带掩码编辑后仍正常、OAuth start 返回 400。容器以 UID 1000、cap-drop ALL 运行，无代理环境变量，控制器 state.json 不含上游密钥。API Key 本身按此认证方式注入业务容器环境，不等于对 Claude Code 隐藏 API Key。
+
+实际链路为 OVH 网关 → 核心 → 固定指纹 SSH → cc-max 控制器 → 账号独立业务容器 → sing-box → 用户提供的 HTTP CONNECT 代理 → 用户指定 API 中转。模型 `claude-haiku-4-5-20251001` 的 JSON 请求 HTTP 200、约 2.87 秒，SSE HTTP 200、完整 message_stop、约 3.10 秒，两次均返回 OK。用量记录归属账号 21 / ccgateway，各输入 193、输出 4、费用 0.00021300，billing_status=billed。真实 OAuth 登录未执行，其余九个模型仅配置白名单，未逐个调用。
+
+临时平台 API Key 13 已撤销，测试分组 6 已禁用并从用户、账号解除；账号 21 保持 active 但 schedulable=false、无分组，供后续手动测试或配置调度。隔离 PostgreSQL、SSH 隧道和 Docker 测试资源已清理。原有 dist/index.html、.mcp.json 和交接文件未纳入提交。
+
+证据：[升级采样](evidence/ovh-upgrade-0.1.18.jsonl.txt)、[升级时间线](evidence/ovh-upgrade-0.1.18-summary.txt)、[四入口验证](evidence/ccgateway-v018-verify.jsonl)、[正式账号真实调用](evidence/ccg-formal-relay-result.jsonl)、[Docker 认证与代理验证](evidence/ccgateway-auth-runtime-test.txt)。本轮以 API、实际发布静态文件和真实调用验收，未新增浏览器交互验收。
