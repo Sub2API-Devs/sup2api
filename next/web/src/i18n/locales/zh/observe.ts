@@ -1,6 +1,9 @@
 export default {
+  showOverview: '显示概览', hideOverview: '隐藏概览',
+  relayout: '重新布局', fitView: '适应画布', closeDetails: '关闭详情', address: '核心地址',
+  canvasHelp: '拖动圆节点调整位置；拖动画布平移，滚轮缩放，小地图定位。点击节点高亮相邻关系并查看详情。按集群节点分簇，实时刷新保留位置与视角。',
   nodeView: '节点视图', chartView: '图表', topologyView: '拓扑图',
-  topologyHint: '查看网关、核心与插件的连接关系；支持缩放和滚动。', chartHint: '查看各节点的版本、实例和运行详情。',
+  topologyHint: '自由画布展示网关、核心与插件的节点网络；支持拖拽、缩放、平移和邻接高亮。', chartHint: '查看各节点的版本、实例和运行详情。',
   contains: '组件归属关系', clusterNode: '集群节点', zoomIn: '放大', zoomOut: '缩小', resetView: '重置',
   noCrossLinks: '当前未显示跨节点转发或 CPU 转移候选连线。',
   graphLegend: '灰线表示组件归属；紫色箭头表示转发至主节点；橙色虚线表示按心跳与 CPU 阈值推算的接收候选，不代表实际请求路径。',

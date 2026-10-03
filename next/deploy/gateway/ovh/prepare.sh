@@ -111,4 +111,6 @@ release 0.1.8
 # 0.1.9 adds the topology view and configurable signed GitHub core updates.
 # Install the matching gateway image before publishing this core release.
 release 0.1.9
+# 0.1.10 replaces the static topology drawing with an interactive node graph.
+release 0.1.10
 ls -la publish

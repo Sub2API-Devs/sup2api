@@ -1,117 +1,173 @@
 <script setup lang="ts">
-import { computed, ref, useId } from 'vue'
+import { computed, nextTick, ref, shallowRef, watch, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { VueFlow, MarkerType, useVueFlow, type Node, type Edge, type NodeMouseEvent, type NodeDragEvent } from '@vue-flow/core'
+import { Background } from '@vue-flow/background'
+import { Controls, ControlButton } from '@vue-flow/controls'
+import { MiniMap } from '@vue-flow/minimap'
+import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY, type SimulationNodeDatum, type SimulationLinkDatum } from 'd3-force'
 import { SButton, SHint } from '@sub2api/ui'
 import type { NodeInfo } from '@/api/types'
 import type { ShellNode } from '@/api/observability'
 import type { NodePluginState } from '@/api/admin'
+import TopologyCircle from './TopologyCircle.vue'
+import '@vue-flow/core/dist/style.css'
+import '@vue-flow/core/dist/theme-default.css'
+import '@vue-flow/controls/dist/style.css'
+import '@vue-flow/minimap/dist/style.css'
 
-const props = defineProps<{
-  cards: Array<{ id: string; index: number; shell?: ShellNode; core?: NodeInfo; plugins: Array<NodePluginState & { key: string }>; stale: boolean; coreStale: boolean; version: string }>
-  edges: Array<{ from: number; to: number; kind: string }>
-  primary: string
-  uncertain: boolean
-}>()
+type Card = { id: string; index: number; shell?: ShellNode; core?: NodeInfo; plugins: Array<NodePluginState & { key: string }>; stale: boolean; coreStale: boolean; version: string }
+type CircleData = { label: string; subtitle: string; kind: string; size: number; color: string; dim: boolean; inactive: boolean; cluster: string; details: Array<{ label: string; value: string }> }
+type CircleNode = Node<CircleData> & { data: CircleData }
+const props = defineProps<{ cards: Card[]; edges: Array<{ from: string; to: string; kind: string }>; primary: string; uncertain: boolean }>()
 const { t } = useI18n()
-const uid = useId().replace(/:/g, '')
-const zoom = ref(1)
-const width = computed(() => Math.max(1, props.cards.length) * 300 + 40)
-const gatewayY = computed(() => 110 + Math.min(props.cards.length, 12) * 12)
-const coreY = computed(() => gatewayY.value + 132)
-const pluginY = computed(() => coreY.value + 112)
-const height = computed(() => pluginY.value + Math.max(1, ...props.cards.map(c => c.plugins.length)) * 68 + 36)
-const x = (i: number) => 40 + i * 300
-function route(from: number, to: number, kind: string) {
-  const a = x(from) + 120, b = x(to) + 120
-  const y = gatewayY.value, top = y - 42 - Math.abs(to - from) * 16 - (kind === 'offload' ? 12 : 0)
-  return `M ${a} ${y} C ${a} ${top}, ${b} ${top}, ${b} ${y}`
+const flowID = `topology-${useId()}`
+const { fitView, zoomIn, zoomOut } = useVueFlow({ id: flowID })
+const nodes = shallowRef<CircleNode[]>([]), links = shallowRef<Edge[]>([])
+const selectedID = ref('')
+const overview = ref(false)
+const pinned = new Set<string>()
+let structure = '', initialized = false
+const idFor = (host: string, kind: string, plugin = '') => JSON.stringify([host, kind, plugin])
+const chosen = computed(() => nodes.value.find(n => n.id === selectedID.value))
+const adjacent = computed(() => {
+  const ids = new Set<string>(selectedID.value ? [selectedID.value] : [])
+  for (const e of links.value) if (e.source === selectedID.value || e.target === selectedID.value) { ids.add(e.source); ids.add(e.target) }
+  return ids
+})
+const visibleNodes = computed(() => nodes.value.map(n => ({ ...n, selected: n.id === selectedID.value, data: { ...n.data, dim: !!selectedID.value && !adjacent.value.has(n.id) } })))
+const visibleEdges = computed(() => links.value.map(e => ({ ...e, style: { ...e.style, opacity: selectedID.value && e.source !== selectedID.value && e.target !== selectedID.value ? 0.12 : 0.8 } })))
+
+function refresh() {
+  const old = new Map(nodes.value.map(n => [n.id, n]))
+  const nextNodes: CircleNode[] = [], nextEdges: Edge[] = []
+  const add = (card: Card, kind: string, label: string, subtitle: string, size: number, color: string, inactive: boolean, details: CircleData['details'], plugin = '') => {
+    const id = idFor(card.id, kind, plugin)
+    nextNodes.push({ id, type: 'circle', position: old.get(id)?.position || { x: 0, y: 0 }, data: { label, subtitle, kind, size, color, inactive, dim: false, cluster: card.id, details }, draggable: true, connectable: false })
+    return id
+  }
+  const internal = (source: string, target: string) => nextEdges.push({ id: JSON.stringify([source,target,'owns']), source, target, type: 'straight', selectable: false, style: { stroke: '#94a3b8', strokeWidth: 1.4 } })
+  for (const c of props.cards) {
+    const unknown = props.uncertain || c.stale
+    const gateway = c.shell ? add(c, 'gateway', c.id, c.id === props.primary ? t('upgrades.primary') : t('observe.gateway'), 106, '#10b981', unknown || !c.shell.enabled, [
+      { label: t('observe.gateway'), value: unknown ? t('observe.unknown') : `${c.shell.mode} · ${t(c.shell.ready ? 'upgrades.serving' : 'upgrades.waiting')}` },
+      { label: 'CPU', value: unknown || c.shell.cpu_percent == null ? '—' : c.shell.cpu_percent.toFixed(1)+'%' },
+      { label: t('observe.offloadState'), value: unknown ? t('observe.unknown') : t(c.shell.offloading ? 'observe.offloading' : 'observe.notOffloading') },
+      { label: t('observe.boot'), value: c.shell.shell_boot_id || '—' }
+    ]) : ''
+    const core = add(c, 'core', t('observe.core'), c.version, 78, '#6366f1', props.uncertain || !c.core || c.coreStale || !!c.shell?.stopped, [
+      { label: t('upgrades.version'), value: c.version },
+      { label: t('upgrades.status'), value: t(c.shell?.stopped ? 'observe.stopped' : c.core && !c.coreStale && !props.uncertain ? 'observe.running' : 'observe.unknown') },
+      { label: t('observe.boot'), value: c.core?.boot_id || '—' },
+      { label: t('observe.address'), value: c.core?.addr || '—' }
+    ])
+    if (gateway) internal(gateway, core)
+    for (const p of c.plugins) {
+      const plugin = add(c, 'plugin', p.key, p.serving || '—', 56, p.fallback || p.error ? '#f59e0b' : '#38bdf8', props.uncertain || c.coreStale || !c.core || !!c.shell?.stopped, [
+        { label: t('upgrades.version'), value: p.serving || '—' },
+        { label: t('upgrades.status'), value: p.state || t('observe.unknown') },
+        { label: t('observe.fallback'), value: p.fallback || '—' },
+        { label: t('observe.standby'), value: p.standby || '—' },
+        { label: t('upgrades.reason'), value: p.error || '—' }
+      ], p.key)
+      internal(core, plugin)
+    }
+  }
+  const valid = new Set(nextNodes.map(n => n.id))
+  for (const e of props.edges) {
+    const source = idFor(e.from, 'gateway'), target = idFor(e.to, 'gateway')
+    if (!valid.has(source) || !valid.has(target)) continue
+    const color = e.kind === 'offload' ? '#f59e0b' : '#8b5cf6'
+    nextEdges.push({ id: JSON.stringify([source,target,e.kind]), source, target, type: 'smoothstep', label: t(`observe.${e.kind}`), selectable: false,
+      markerEnd: { type: MarkerType.ArrowClosed, color }, style: { stroke: color, strokeWidth: 2.5, strokeDasharray: e.kind === 'offload' ? '7 5' : undefined }, labelStyle: { fill: color, fontSize: 11 }, labelBgStyle: { fill: 'var(--topology-label-bg)' } })
+  }
+  nodes.value = nextNodes; links.value = nextEdges
+  if (selectedID.value && !valid.has(selectedID.value)) selectedID.value = ''
+  for (const id of pinned) if (!valid.has(id)) pinned.delete(id)
+  const signature = [...valid].sort().join('|')
+  if (signature !== structure) { structure = signature; layout(false) }
 }
-const gatewayState = (c: typeof props.cards[number]) => props.uncertain || c.stale ? t('observe.unknown') : !c.shell ? t('observe.unknown') : !c.shell.enabled ? t('upgrades.disabled') : `${c.shell.mode} · ${t(c.shell.ready ? 'upgrades.serving' : 'upgrades.waiting')}`
+
+interface Particle extends SimulationNodeDatum { id: string; cluster: string; radius: number; kind: string }
+function layout(reset = true) {
+  if (reset) pinned.clear()
+  const clusters = [...new Set(nodes.value.map(n => n.data.cluster))].sort()
+  const columns = Math.ceil(Math.sqrt(clusters.length))
+  const centers = new Map(clusters.map((id,i) => [id,{x:(i%columns)*430,y:Math.floor(i/columns)*400}]))
+  const particles: Particle[] = nodes.value.map(n => {
+    const center = centers.get(n.data.cluster)!
+    const prior = initialized && !reset
+    return { id:n.id,cluster:n.data.cluster,kind:n.data.kind,radius:n.data.size/2+30,
+      x:prior ? n.position.x+n.data.size/2 : center.x+(n.data.kind==='gateway' ? -90 : n.data.kind==='core' ? 25 : 80),
+      y:prior ? n.position.y+n.data.size/2 : center.y,
+      ...(pinned.has(n.id) ? {fx:n.position.x+n.data.size/2,fy:n.position.y+n.data.size/2} : {}) }
+  })
+  const connections: SimulationLinkDatum<Particle>[] = links.value.map(e=>({source:e.source,target:e.target}))
+  const simulation = forceSimulation(particles)
+    .force('charge',forceManyBody().strength(-650))
+    .force('link',forceLink<Particle,SimulationLinkDatum<Particle>>(connections).id(n=>n.id).distance(l => {
+      const a=l.source as Particle,b=l.target as Particle
+      return a.cluster===b.cluster ? a.kind==='gateway' ? 165 : 126 : 350
+    }).strength(l=>(l.source as Particle).cluster===(l.target as Particle).cluster ? 0.8 : 0.06))
+    .force('collision',forceCollide<Particle>().radius(n=>n.radius).iterations(3))
+    .force('x',forceX<Particle>(n=>centers.get(n.cluster)!.x).strength(0.13))
+    .force('y',forceY<Particle>(n=>centers.get(n.cluster)!.y).strength(0.13))
+    .stop()
+  simulation.tick(220)
+  const positions=new Map(particles.map(n=>[n.id,n]))
+  nodes.value=nodes.value.map(n=>{const p=positions.get(n.id)!;return {...n,position:{x:(p.x||0)-n.data.size/2,y:(p.y||0)-n.data.size/2}}})
+  if (!initialized || reset) void nextTick(()=>fitView({padding:0.15,duration:250}))
+  initialized=true
+}
+function dragged(event: NodeDragEvent) {
+  for (const moved of event.nodes) {
+    const current=nodes.value.find(n=>n.id===moved.id)
+    if (current) current.position={...moved.position}
+    pinned.add(moved.id)
+  }
+  nodes.value = [...nodes.value]
+}
+function select(event: NodeMouseEvent) { selectedID.value=event.node.id }
+let firstDimensions = true
+function firstFit() { if (firstDimensions) { firstDimensions=false; void fitView({padding:0.15}) } }
+watch(()=>[props.cards,props.edges,props.primary,props.uncertain,t('observe.core')],refresh,{deep:true,immediate:true})
 </script>
 
 <template>
   <div class="space-y-3">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <div class="flex flex-wrap gap-x-5 gap-y-2 text-xs text-gray-500 dark:text-dark-300">
-        <span class="flex items-center gap-2"><span class="h-px w-6 bg-slate-400" />{{ t('observe.contains') }}</span>
-        <span class="flex items-center gap-2"><span class="h-0.5 w-6 bg-indigo-500" />{{ t('observe.forwarding') }} →</span>
-        <span class="flex items-center gap-2"><span class="w-6 border-t-2 border-dashed border-amber-500" />{{ t('observe.offload') }} →</span>
+      <div class="flex flex-wrap gap-x-4 gap-y-2 text-xs text-gray-500 dark:text-dark-300">
+        <span><i class="legend-dot bg-emerald-500" />{{ t('observe.gateway') }}</span><span><i class="legend-dot bg-indigo-500" />{{ t('observe.core') }}</span><span><i class="legend-dot bg-sky-400" />{{ t('observe.plugins') }}</span>
       </div>
-      <div class="flex items-center gap-2">
-        <SButton size="sm" :disabled="zoom <= 0.6" :aria-label="t('observe.zoomOut')" @click="zoom = Math.max(0.6, +(zoom - 0.2).toFixed(1))">−</SButton>
-        <span class="w-12 text-center text-xs tabular-nums">{{ Math.round(zoom * 100) }}%</span>
-        <SButton size="sm" :disabled="zoom >= 1.6" :aria-label="t('observe.zoomIn')" @click="zoom = Math.min(1.6, +(zoom + 0.2).toFixed(1))">+</SButton>
-        <SButton size="sm" @click="zoom = 1">{{ t('observe.resetView') }}</SButton>
-      </div>
+      <div class="flex flex-wrap gap-2"><SButton size="sm" :aria-pressed="overview" @click="overview = !overview">{{ t(overview ? 'observe.hideOverview' : 'observe.showOverview') }}</SButton><SButton size="sm" @click="layout(true)">{{ t('observe.relayout') }}</SButton><SButton size="sm" @click="fitView({padding:0.15,duration:250})">{{ t('observe.fitView') }}</SButton></div>
     </div>
-    <div class="graph-scroll overflow-auto rounded-xl border border-gray-200 dark:border-dark-600" tabindex="0" :aria-label="t('observe.topologyView')">
-      <svg :width="width * zoom" :height="height * zoom" :viewBox="`0 0 ${width} ${height}`" role="img" :aria-labelledby="`${uid}-title ${uid}-desc`" class="topology-svg">
-        <title :id="`${uid}-title`">{{ t('observe.topology') }}</title>
-        <desc :id="`${uid}-desc`">{{ t('observe.topologyHint') }} {{ t('observe.graphLegend') }}</desc>
-        <defs>
-          <pattern :id="`${uid}-grid`" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="currentColor" opacity="0.12" /></pattern>
-          <marker v-for="kind in ['forwarding', 'offload']" :id="`${uid}-${kind}`" :key="kind" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10Z" :fill="kind === 'forwarding' ? '#6366f1' : '#f59e0b'" /></marker>
-        </defs>
-        <rect width="100%" height="100%" :fill="`url(#${uid}-grid)`" />
-        <g v-for="card in cards" :key="card.id">
-          <rect :x="x(card.index) - 16" y="20" width="272" :height="height - 40" rx="18" class="node-boundary" />
-          <text :x="x(card.index)" y="48" class="node-name">{{ card.id.length > 24 ? card.id.slice(0, 22) + '…' : card.id }}<title>{{ card.id }}</title></text>
-          <text :x="x(card.index)" y="70" class="caption" :class="{ primary: card.id === primary }">{{ card.id === primary ? t('upgrades.primary') : t('observe.clusterNode') }}</text>
-        </g>
-        <g v-for="edge in edges" :key="`${edge.from}-${edge.to}-${edge.kind}`">
-          <path :d="route(edge.from, edge.to, edge.kind)" fill="none" :stroke="edge.kind === 'forwarding' ? '#6366f1' : '#f59e0b'" stroke-width="2.5" :stroke-dasharray="edge.kind === 'offload' ? '7 5' : undefined" :marker-end="`url(#${uid}-${edge.kind})`"><title>{{ cards[edge.from]?.id }} → {{ cards[edge.to]?.id }} · {{ t(`observe.${edge.kind}`) }}</title></path>
-        </g>
-        <g v-for="card in cards" :key="`components-${card.id}`">
-          <!-- Ownership links are always visible and do not imply live traffic. -->
-          <path v-if="card.shell && card.core" :d="`M ${x(card.index)+120} ${gatewayY+84} V ${coreY}`" class="ownership" />
-          <path v-if="card.plugins.length" :d="`M ${x(card.index)+120} ${coreY+70} V ${coreY+90} H ${x(card.index)+12} V ${pluginY+(card.plugins.length-1)*68+25}`" class="ownership" />
-          <g :transform="`translate(${x(card.index)}, ${gatewayY})`">
-            <rect width="240" height="84" rx="12" class="gateway-box" :class="{ inactive: uncertain || card.stale || !card.shell?.enabled }" />
-            <circle cx="18" cy="22" r="4" :fill="uncertain || card.stale || !card.shell?.ready ? '#94a3b8' : '#10b981'" />
-            <text x="30" y="27" class="component-name">{{ t('observe.gateway') }}</text>
-            <text x="14" y="48" class="caption">{{ gatewayState(card) }}</text>
-            <text x="14" y="68" class="caption">CPU {{ uncertain || card.stale || card.shell?.cpu_percent == null ? '—' : card.shell.cpu_percent.toFixed(1) + '%' }} · {{ t(card.shell?.offloading ? 'observe.offloading' : 'observe.notOffloading') }}</text>
-          </g>
-          <g :transform="`translate(${x(card.index)}, ${coreY})`">
-            <rect width="240" height="70" rx="12" class="core-box" :class="{ inactive: !card.core || card.shell?.stopped || card.coreStale || uncertain }" />
-            <text x="14" y="27" class="component-name">{{ t('observe.core') }} · {{ card.version.length > 20 ? card.version.slice(0,18) + '…' : card.version }}<title>{{ card.version }}</title></text>
-            <text x="14" y="49" class="caption">{{ t(card.shell?.stopped ? 'observe.stopped' : card.core && !card.coreStale && !uncertain ? 'observe.running' : 'observe.unknown') }}</text>
-          </g>
-          <g v-for="(plugin, i) in card.plugins" :key="plugin.key" :transform="`translate(${x(card.index)+32}, ${pluginY+i*68})`">
-            <path d="M -20 25 H 0" class="ownership" />
-            <rect width="208" height="52" rx="10" class="plugin-box" :class="{ problem: plugin.fallback || plugin.error }" />
-            <text x="12" y="21" class="plugin-name">{{ plugin.key.length > 18 ? plugin.key.slice(0,16) + '…' : plugin.key }}</text>
-            <text x="12" y="40" class="caption">{{ (plugin.serving || '—').slice(0,18) }} · {{ plugin.fallback ? t('observe.fallback') : plugin.state || t('observe.unknown') }}</text>
-            <title>{{ plugin.key }} · {{ plugin.serving || '—' }} · {{ plugin.state }}{{ plugin.fallback ? ` · ${t('observe.fallback')}: ${plugin.fallback}` : '' }}{{ plugin.error ? ` · ${plugin.error}` : '' }}</title>
-          </g>
-          <text v-if="!card.plugins.length" :x="x(card.index)+12" :y="pluginY+25" class="caption">{{ t('observe.noReport') }}</text>
-        </g>
-      </svg>
+    <div class="topology-canvas relative overflow-hidden rounded-xl border border-gray-200 dark:border-dark-600" :aria-label="t('observe.topologyView')">
+      <VueFlow :id="flowID" :nodes="visibleNodes" :edges="visibleEdges" :min-zoom="0.15" :max-zoom="3" :nodes-connectable="false" :edges-updatable="false" :delete-key-code="null" :zoom-on-scroll="true" :pan-on-drag="true" :select-nodes-on-drag="false" @node-click="select" @node-drag="dragged" @node-drag-stop="dragged" @pane-click="selectedID = ''" @nodes-initialized="firstFit">
+        <template #node-circle="node"><TopologyCircle :data="node.data" :selected="node.selected" /></template>
+        <Background pattern-color="#94a3b8" :gap="24" :size="1" />
+        <Controls :show-interactive="false" position="bottom-left">
+          <template #control-zoom-in><ControlButton :title="t('observe.zoomIn')" :aria-label="t('observe.zoomIn')" @click="zoomIn()">＋</ControlButton></template>
+          <template #control-zoom-out><ControlButton :title="t('observe.zoomOut')" :aria-label="t('observe.zoomOut')" @click="zoomOut()">−</ControlButton></template>
+          <template #control-fit-view><ControlButton :title="t('observe.fitView')" :aria-label="t('observe.fitView')" @click="fitView({padding:0.15,duration:250})">⤢</ControlButton></template>
+        </Controls>
+        <MiniMap v-if="overview" :node-color="n => n.data.color" :node-stroke-color="n => n.data.color" :node-border-radius="100" pannable zoomable position="bottom-right" />
+      </VueFlow>
+      <aside v-if="chosen" class="absolute right-3 top-3 z-10 max-h-[340px] w-64 max-w-[calc(100%-24px)] overflow-auto rounded-xl border border-gray-200 bg-white/95 p-4 shadow-lg backdrop-blur dark:border-dark-600 dark:bg-dark-900/95">
+        <div class="mb-3 flex items-start justify-between gap-2"><div><div class="break-all text-sm font-semibold">{{ chosen.data.label }}</div><div class="mt-1 break-all text-xs text-gray-500">{{ chosen.data.cluster }} · {{ t(`observe.${chosen.data.kind === 'plugin' ? 'plugins' : chosen.data.kind}`) }}</div></div><button type="button" :aria-label="t('observe.closeDetails')" @click="selectedID=''">×</button></div>
+        <dl class="space-y-2"><div v-for="(detail,i) in chosen.data.details" :key="i"><dt class="text-[11px] text-gray-500">{{ detail.label }}</dt><dd class="break-all text-xs">{{ detail.value }}</dd></div></dl>
+      </aside>
     </div>
-    <SHint size="xs">{{ t('observe.graphLegend') }} {{ !edges.length && !uncertain ? t('observe.noCrossLinks') : '' }}</SHint>
+    <SHint size="xs">{{ t('observe.canvasHelp') }} {{ t('observe.graphLegend') }} {{ !edges.length && !uncertain ? t('observe.noCrossLinks') : '' }}</SHint>
   </div>
 </template>
 
 <style scoped>
-.graph-scroll { max-height: 760px; background: #f8fafc; }
-.topology-svg { display: block; color: #64748b; font-family: inherit; }
-.node-boundary { fill: #ffffffb8; stroke: #cbd5e1; stroke-dasharray: 5 5; }
-.node-name, .component-name, .plugin-name { fill: #0f172a; font-weight: 600; font-size: 14px; }
-.plugin-name { font-size: 13px; }
-.caption { fill: #64748b; font-size: 11px; }
-.primary { fill: #8b5cf6; }
-.ownership { fill: none; stroke: #94a3b8; stroke-width: 1.5; }
-.gateway-box { fill: #ecfdf5; stroke: #34d399; stroke-width: 1.5; }
-.core-box { fill: #eff6ff; stroke: #60a5fa; stroke-width: 1.5; }
-.plugin-box { fill: #fff; stroke: #cbd5e1; }
-.inactive { stroke: #94a3b8; stroke-dasharray: 4 3; }
-.problem { fill: #fffbeb; stroke: #f59e0b; }
-:global(.dark) .graph-scroll { background: #0f172a; }
-:global(.dark) .node-boundary { fill: #1e293bb8; stroke: #475569; }
-:global(.dark) .node-name, :global(.dark) .component-name, :global(.dark) .plugin-name { fill: #e2e8f0; }
-:global(.dark) .caption { fill: #94a3b8; }
-:global(.dark) .gateway-box { fill: #064e3b; }
-:global(.dark) .core-box { fill: #172554; }
-:global(.dark) .plugin-box { fill: #1e293b; stroke: #475569; }
-:global(.dark) .problem { fill: #451a03; stroke: #f59e0b; }
+.topology-canvas { height: 640px; background: #f8fafc; --topology-label-bg: #fff; }
+.legend-dot { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 100%; }
+:global(.dark) .topology-canvas { background: #111827; --topology-label-bg: #172033; }
+.topology-canvas :deep(.vue-flow__node-circle) { border: 0; background: transparent; }
+.topology-canvas :deep(.vue-flow__minimap) { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; }
+:global(.dark) .topology-canvas :deep(.vue-flow__minimap) { background: #1e293b; border-color: #475569; }
+:global(.dark) .topology-canvas :deep(.vue-flow__controls-button) { background: #1e293b; border-color: #475569; fill: #e2e8f0; }
+@media(max-width:640px) { .topology-canvas { height: 560px; } .topology-canvas :deep(.vue-flow__minimap) { width: 120px; height: 80px; } }
 </style>

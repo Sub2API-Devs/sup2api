@@ -67,6 +67,11 @@ function path(from: number, to: number) {
   const x = from * 340 + 170, y = to * 340 + 170, top = 16 + Math.abs(to-from) * 9
   return `M ${x} 100 C ${x} ${top}, ${y} ${top}, ${y} 100`
 }
+const graphEdges = computed(() => edges.value.flatMap(edge => {
+  const from = cards.value.find(card => card.index === edge.from)?.id
+  const to = cards.value.find(card => card.index === edge.to)?.id
+  return from && to ? [{ from, to, kind: edge.kind }] : []
+}))
 onMounted(() => { void load(); timer = setInterval(() => { tick.value = Date.now(); if (document.visibilityState !== 'hidden') void load() }, 5000) })
 onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
 </script>
@@ -80,7 +85,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
     </div>
     <SHint v-if="failed" tone="warning">{{ t('observe.unavailable') }}</SHint>
     <SHint v-if="!shellOK && !shells.length">{{ t('observe.partial') }}</SHint>
-    <NodeTopology v-if="cards.length && view === 'topology'" :cards="cards" :edges="edges" :primary="primary" :uncertain="failed" />
+    <NodeTopology v-if="cards.length && view === 'topology'" :cards="cards" :edges="graphEdges" :primary="primary" :uncertain="failed" />
     <div v-else-if="cards.length" class="overflow-x-auto">
       <SHint>{{ t('observe.legend') }}</SHint>
       <svg :width="cards.length * 340" :height="height" role="img" :aria-label="t('observe.topology')">

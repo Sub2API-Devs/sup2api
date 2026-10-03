@@ -1,6 +1,9 @@
 export default {
+  showOverview: 'Show minimap', hideOverview: 'Hide minimap',
+  relayout: 'Relayout', fitView: 'Fit view', closeDetails: 'Close details', address: 'Core address',
+  canvasHelp: 'Drag circles to arrange nodes, drag the canvas to pan, scroll to zoom, and navigate with the minimap. Select a node to highlight neighbors and inspect details. Clustered by node identity; refresh preserves positions and viewport.',
   nodeView: 'Node views', chartView: 'Chart', topologyView: 'Topology',
-  topologyHint: 'Explore gateway, core and plugin connections. Zoom and scroll to navigate.', chartHint: 'Inspect node versions, instances and runtime details.',
+  topologyHint: 'Explore the gateway, core and plugin network on a free canvas. Drag, pan, zoom and highlight neighboring nodes.', chartHint: 'Inspect node versions, instances and runtime details.',
   contains: 'Component ownership', clusterNode: 'Cluster node', zoomIn: 'Zoom in', zoomOut: 'Zoom out', resetView: 'Reset',
   noCrossLinks: 'No cross-node forwarding or CPU offload candidate links are currently shown.',
   graphLegend: 'Gray links show ownership; purple arrows show forwarding to the primary; dashed orange arrows show eligible receivers inferred from heartbeats and CPU thresholds, not actual request paths.',
