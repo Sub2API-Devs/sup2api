@@ -428,3 +428,11 @@ OVH 从 Git 构建核心 v0.1.13，复用既有网关镜像，未替换网关容
 OVH 已配置到 cc-max 的专用 SSH 私钥，端口转发限定远端 127.0.0.1:8787；私钥及两个容器密钥经管理员 API 加密持久化，不写入账号、审计或本记录。四入口均通过 Docker 连接、容器状态、网关健康与代理读取验证，代理保持 inherit/revision 3。Claude 状态为未授权，未创建生产调度账号，未执行云端模型调用；需要用户在管理页完成 Claude OAuth 后接入账号。
 
 证据：[服务端测试](evidence/ccgateway-next-server-tests.log.txt)、[插件竞态测试](evidence/ccgateway-next-plugin-tests.log.txt)、[插件打包](evidence/ccgateway-next-package.log.txt)、[升级采样](evidence/ovh-upgrade-0.1.15.jsonl.txt)、[升级时间线](evidence/ovh-upgrade-0.1.15-summary.txt)、[四节点验证](evidence/ccgateway-v015-verify.txt)。用户原有 `server/web/dist/index.html` 修改和交接文件继续保留，未纳入提交。
+
+### 24.1 插件显示名称调整
+
+用户澄清：仅 CCGateway 插件名称使用英文，其余界面继续适配多语言；火山插件中文名称改为「字节火山方舟、豆包视频」。CCGateway 原有 name.en/name.zh 均为 CCGateway，已内置并启用，不更改管理页语言。
+
+提交 `e92d0fbae` 将 volcengine 名称改为中文「字节火山方舟、豆包视频」、英文「Volcengine Ark, Doubao Video」，发布 0.11.1。现有清单测试通过，OVH 从 Git 构建签名包并通过管理员 API 升级，四节点 active。包 SHA256 `6902dfcb949456078fe44afb609407368b42282a89afc743bbc18a1b151bf341`。没有更换核心或 gateway。
+
+现有插件升级不会刷新 plugins.name，因此在版本收敛后，使用事务仅将该字段同步为已验签、指定 digest 的 0.11.1 manifest.name，并记录 plugin.name.sync 审计（含旧名与新名）。四入口再次确认新名称与版本，CCGateway 保持 builtin/enabled。见 [四入口名称验证](evidence/plugin-names-0.11.1.jsonl)。
