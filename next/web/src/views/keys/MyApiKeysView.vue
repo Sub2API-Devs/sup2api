@@ -117,6 +117,7 @@ async function submitCreate() {
 
 async function copyPlain() {
   if (await copyText(plaintext.value)) toast(t('common.copied'), 'success')
+  else toast(t('common.copyFailed'), 'error')
 }
 
 function closePlain() {

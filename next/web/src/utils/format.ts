@@ -86,11 +86,5 @@ export function toRFC3339(d: Date | null | undefined): string | undefined {
   return d ? d.toISOString() : undefined
 }
 
-export async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text)
-    return true
-  } catch {
-    return false
-  }
-}
+// Re-export to preserve the shared helper used throughout the console.
+export { copyText } from './clipboard'

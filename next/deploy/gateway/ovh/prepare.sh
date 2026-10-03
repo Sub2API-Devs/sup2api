@@ -135,4 +135,6 @@ release 0.1.16
 release 0.1.17
 # 0.1.18 adds API Key authentication alongside OAuth for CCGateway.
 release 0.1.18
+# 0.1.19 fixes clipboard copying on HTTP origins.
+release 0.1.19
 ls -la publish

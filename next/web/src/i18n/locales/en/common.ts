@@ -27,6 +27,7 @@ export default {
   detail: 'Details',
   view: 'View',
   copy: 'Copy',
+  copyFailed: 'Copy failed. Select the key and copy it manually.',
   copied: 'Copied',
   status: 'Status',
   all: 'All',

@@ -27,6 +27,7 @@ export default {
   detail: '详情',
   view: '查看',
   copy: '复制',
+  copyFailed: '复制失败，请选中密钥后手动复制。',
   copied: '已复制',
   status: '状态',
   all: '全部',
