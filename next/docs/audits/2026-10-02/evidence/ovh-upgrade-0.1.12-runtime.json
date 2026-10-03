@@ -1,0 +1,62 @@
+[
+  {
+    "node": "sup2api-managed-sup2api-1-1",
+    "image": "sha256:6097e75847d14de6402a5aad1b5007b768f3a5b58cdf0de1c439d80a669a7f10",
+    "started": "2026-10-03T09:27:46.119300498Z",
+    "rotation": {
+      "Type": "json-file",
+      "Config": {
+        "max-file": "5",
+        "max-size": "50m"
+      }
+    },
+    "errors": 0,
+    "graph_js_status": 200,
+    "identity_ui_present": true
+  },
+  {
+    "node": "sup2api-managed-sup2api-2-1",
+    "image": "sha256:6097e75847d14de6402a5aad1b5007b768f3a5b58cdf0de1c439d80a669a7f10",
+    "started": "2026-10-03T09:27:26.496934849Z",
+    "rotation": {
+      "Type": "json-file",
+      "Config": {
+        "max-file": "5",
+        "max-size": "50m"
+      }
+    },
+    "errors": 0,
+    "graph_js_status": 200,
+    "identity_ui_present": true
+  },
+  {
+    "node": "sup2api-managed-sup2api-3-1",
+    "image": "sha256:6097e75847d14de6402a5aad1b5007b768f3a5b58cdf0de1c439d80a669a7f10",
+    "started": "2026-10-03T09:27:33.024918972Z",
+    "rotation": {
+      "Type": "json-file",
+      "Config": {
+        "max-file": "5",
+        "max-size": "50m"
+      }
+    },
+    "errors": 0,
+    "graph_js_status": 200,
+    "identity_ui_present": true
+  },
+  {
+    "node": "sup2api-managed-sup2api-4-1",
+    "image": "sha256:6097e75847d14de6402a5aad1b5007b768f3a5b58cdf0de1c439d80a669a7f10",
+    "started": "2026-10-03T09:27:39.614358657Z",
+    "rotation": {
+      "Type": "json-file",
+      "Config": {
+        "max-file": "5",
+        "max-size": "50m"
+      }
+    },
+    "errors": 0,
+    "graph_js_status": 200,
+    "identity_ui_present": true
+  }
+]

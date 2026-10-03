@@ -1,0 +1,3 @@
+Validated image-only replacement: sup2api-gateway:3a2017d (sha256:6097e75847d14de6402a5aad1b5007b768f3a5b58cdf0de1c439d80a669a7f10)
+Order: sup2api-2 -> sup2api-3 -> sup2api-4 -> sup2api-1
+DRY RUN: no managed files or containers changed. Re-run with --apply to execute.

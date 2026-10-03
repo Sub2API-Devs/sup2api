@@ -363,3 +363,11 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 - OVH 私有环境 current-node.VDJUM4 / sub2api-current-vdjum4：gateway proxy/cmd/control 的 vet 与 -race 测试通过，63 顶层通过、6 个需要额外真实核心制品的 RealCore 用例跳过；server app/httpapi 的 vet 与 -race 测试通过，17 顶层通过、无跳过。覆盖真实测试 HTTP 转发、本地/CPU 转移、私有入口、伪造头、鉴权、gzip，并执行现有 WebSocket/SSE 回归。本轮不声称重新跑过真实核心升级故障注入。见 [gateway 测试](evidence/current-node-gateway.log.txt)、[server 测试](evidence/current-node-server.log.txt)。
 - 浏览器四场景通过：local 为入口2/核心2；routing 为入口4/核心1；legacy 无入口头时仅标核心1；failure 503 时两个标记均清空。主从角色保留，核心标记匹配节点 ID 及 boot。前端客户端专项测试还验证 401 刷新、403 二次认证后读取最终响应头，失败不采集身份；执行命令 node scripts/http-headers-test.mjs。
 - 前端类型检查及生产构建通过，产物位于 TEMP，原有未提交 dist 未改写。见 [构建记录](evidence/current-node-web-build.log.txt)。独立代码审查未发现阻断问题。
+
+### 21.1 OVH v0.1.12 上线
+
+- 功能提交 3a2017de8 已推送并通过 OVH Git 工作区构建。备份 ~/sup2api/backups/pre-v0.1.12-20261003T091818Z.sql.gz 已通过 gzip 校验。隔离测试容器及网络已移除，并核对绝对路径后清理 current-node.VDJUM4；本地四个模拟预览进程和浏览器标签已关闭。
+- 网关镜像 sup2api-gateway:3a2017d，ID sha256:6097e75847d14de6402a5aad1b5007b768f3a5b58cdf0de1c439d80a669a7f10。dry-run 验证仅镜像变化，按 2→3→4→1 更新并逐个检查启动身份、核心基线、ready/local 和 401；总耗时 28.67 秒，单入口中断约 5.12–5.22 秒，采样未出现四入口同时不可用。原镜像元数据缺失时使用两个二进制哈希均匹配的 sup2api-gateway:d7c31a7af 回退镜像；回退记录在 gateway-rollbacks/20261003T092722Z-e1c0f76b。见 [dry-run](evidence/ovh-gateway-0.1.12-dryrun.txt)、[滚动记录](evidence/ovh-gateway-0.1.12-roll.txt)、[采样](evidence/ovh-gateway-0.1.12-http.jsonl.txt)、[汇总](evidence/ovh-gateway-0.1.12-summary.json)。
+- 核心 manifest digest 3390359cc782d852e766cca123565a5111aecee7dd7d9ddd2552718bbf752d72；计划 f8c071d5c9717b1f23806861bc6116e1 完成 27 步，从创建到完成约 21.83 秒。各入口核心更新 503 约 4.5–7.3 秒。见 [原始记录](evidence/ovh-upgrade-0.1.12.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.12-summary.txt)。
+- 四核心均为 0.1.12、local/ready，五插件版本保持且全部 active；历史、审计、鉴权、PG 稳态行与 Redis 遥测检查通过。向四个真实入口请求版本接口并附客户端伪造身份头，返回的入口和核心 ID 分别正确匹配 sup2api-1..4，核心 boot 与注册身份一致。生产稳态为本地处理，跨节点转发与 CPU 场景由隔离 HTTP 测试和浏览器 mock 覆盖，没有人为改动生产路由制造转发。见 [上线验证](evidence/ovh-upgrade-0.1.12-verify.txt)。
+- 四入口新节点图 JS 均返回 200 且包含身份逻辑；运行目标镜像，日志轮转保持 50m × 5，新网关与核心升级日志无 ERROR。见 [运行时核验](evidence/ovh-upgrade-0.1.12-runtime.json)。
