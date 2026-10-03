@@ -448,3 +448,25 @@ OVH 已配置到 cc-max 的专用 SSH 私钥，端口转发限定远端 127.0.0.
 四节点 CCGateway 0.1.0 enabled/active，SSH Docker 连接与健康检查通过，代理保持 inherit/revision 3，Claude 仍未授权；未执行模型调用。自本次发布前 13:32 UTC 起的四节点日志 ERROR 计数均为 0。Gateway 镜像保持 `sup2api-gateway:3a2017d`。
 
 证据：[升级采样](evidence/ovh-upgrade-0.1.16.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.16-summary.txt)、[入口与静态文件核验](evidence/plugin-settings-v016-verify.jsonl)、[远程连接验证](evidence/ccgateway-v016-verify.txt)。本轮通过 API 和实际发布文件验证，未新增浏览器交互验收。
+
+### 24.3 账号独立容器与代理出口：OVH v0.1.17
+
+功能提交 `f5bf3db7c`，发布源码 `664446e86`。OVH 和 cc-max 均从已推送 Git 源码构建。核心支持账号 ID 路由、代理版本校验和变更同步；远程 Docker SDK 控制器管理每账号业务容器、数据卷、隔离网络和 sing-box 出口。普通模型请求不写代理配置。此前用户要求取消的 CCGateway 二次密码确认也随本版上线，登录与权限检查保留。完整插件/核心解耦仍未完成。
+
+上线前确认四节点 local/ready、上一计划 completed，生产没有存续 CCGateway 账号，旧共享容器未登录 Claude。数据库备份 `/home/debian/sup2api/backups/pre-v0.1.17-20261003T143517Z.dump` 已通过 pg_restore 目录校验；新旧 schema-contract 相同。
+
+核心 manifest digest `bce6037066046f19c54f064f6ea57a4311390321678bd7702b7c6662b979adde`，bundle digest `61729f587ea26a809ac8de77b985f6f082b1a159e634083e32af43e4e275eadd`。计划 `eb0b71f3019f771d8f589148fca3c7d4` 预检无阻断，完成 27 步，创建至完成约 23.39 秒；四入口采样 503 约 4.6–6.6 秒。
+
+cc-max 控制器先在 18787 验证鉴权，再停止保留旧 `ccgateway` 容器，由 `ccg-controller` 接管 127.0.0.1:8787，未公开 Docker API 或控制器端口。状态目录 `/opt/ccgateway-runtime` 为 0700，私有环境文件为 0600；新控制器密钥经已固定主机指纹的 SSH 读取到内存，再经管理员 API 加密保存，未写入源码或证据。控制器使用固定镜像 ID：
+
+- business: `sha256:f932a297826ee2f3d357fdfe8dbd7bb2d8b51e12e5e4fd975f57adad8f736fbf`
+- egress: `sha256:1b86d28994088831707f7b215dc9a10a1c4ff0f7aadf26a0b159c3c29a6b4eeb`
+- controller: `sha256:aacacfd73160095890ba9e6c4c9c7ddec57872a4736e04ab3d2d810ce90635ac`
+
+四入口 account_runtimes=true，核心版本均 0.1.17，插件 CCGateway 0.1.0 四节点 active；实际页面文件 `CCGatewayView-BGtlswZF.js` 包含账号运行管理。OVH 到控制器的 SSH direct-tcpip HTTP 鉴权验证通过；本次配置 PUT 无 step-up token 成功。四节点 14:37 UTC 以来 ERROR 计数为 0。Gateway 镜像与容器未替换。
+
+旧加密配置备份在 OVH `~/sup2api-managed/ccgateway/pre-v017-config.encrypted.json`，旧远程业务容器及数据卷保留。回退需先恢复控制器端口到旧容器，再恢复原加密连接配置；不要在新账号已投入使用后直接执行旧模式回退。
+
+未创建生产测试账号、未填写真实代理、未完成 Claude OAuth 或发起模型调用。网络隔离、并发、HTTP/SOCKS5、DNS、断代理阻断与恢复已在上一轮隔离环境验证，见 [运行环境验证](../../../../tools/ccgateway/runtime/VALIDATION.md)。本轮验证上线后的版本、配置、页面文件、鉴权和 SSH 转发，不将其描述为真实模型调用成功。
+
+证据：[采样](evidence/ovh-upgrade-0.1.17.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.17-summary.txt)、[四节点与转发验证](evidence/ccgateway-v017-verify.jsonl)。后续使用 `python3 verify-account-runtimes.py` 检查新版；旧 verify-ccgateway.py 针对共享容器，不适用于账号模式。
