@@ -347,6 +347,24 @@ func TestRealCLI(t *testing.T) {
 	mu.Lock()
 	up := requests[len(requests)-1]
 	mu.Unlock()
+	// A restored prefix must match what the CLI actually sent. Request-local
+	// environment/model/date reminders used to move into each new user turn,
+	// invalidating provider caching even when our transcript was a prefix-hit.
+	mu.Lock()
+	toolFirst := requests[1]
+	mu.Unlock()
+	firstMessage := toolFirst["messages"].([]any)[0].(map[string]any)
+	resumedMessage := up["messages"].([]any)[0].(map[string]any)
+	firstBlocks := firstMessage["content"].([]any)
+	resumedBlocks := resumedMessage["content"].([]any)
+	if len(firstBlocks) != 1 || len(resumedBlocks) != 1 || str(firstBlocks[0].(map[string]any), "text") != "CALL_TOOL" || str(resumedBlocks[0].(map[string]any), "text") != "CALL_TOOL" {
+		t.Fatal("CLI changed the cached user-message prefix")
+	}
+	lastMessage := up["messages"].([]any)[2].(map[string]any)
+	resultBlock := lastMessage["content"].([]any)[0].(map[string]any)
+	if str(resultBlock, "content") != "sunny" {
+		t.Fatal("CLI added local context to the client tool result")
+	}
 	b, _ := json.Marshal(up["messages"])
 	if !bytes.Contains(b, []byte("sunny")) || !bytes.Contains(b, []byte("toolu_fixture")) {
 		t.Fatal("tool results lost")
