@@ -1,0 +1,13 @@
+Validated image-only replacement: sup2api-gateway:ae0249fa2 (sha256:097107120158ea3f9eb486e022027fe07ade4071891f8a10e5d9b08ce2eb322a)
+Order: sup2api-2 -> sup2api-3 -> sup2api-4 -> sup2api-1
+Rollback data: /home/debian/sup2api-managed/gateway-rollbacks/20261003T071047Z-0f981add
+Recreating sup2api-2
+Verified sup2api-2: new gateway boot, baseline core ready/local, HTTP 401
+Recreating sup2api-3
+Verified sup2api-3: new gateway boot, baseline core ready/local, HTTP 401
+Recreating sup2api-4
+Verified sup2api-4: new gateway boot, baseline core ready/local, HTTP 401
+Recreating sup2api-1
+Verified sup2api-1: new gateway boot, baseline core ready/local, HTTP 401
+Completed. compose.yml and .env GATEWAY_IMAGE now select the verified image.
+Gateway roll elapsed 31.51

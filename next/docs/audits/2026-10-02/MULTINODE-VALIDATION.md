@@ -282,7 +282,7 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 
 实现规则见 CONTRACTS §39 和多节点规约 §13。组件称呼统一为网关（Gateway），源码与部署目录改为 `next/gateway`、`next/deploy/gateway`，二进制为 `sub2api-gateway`；前端拓扑、升级及 CPU 保护页面同步显示网关。既有 `shell_boot_id`、`shell_protocol`、`shell.json` 保持兼容，历史审计和证据不改名。网关 schema 增加启动身份绑定的遥测能力标记，没有新增核心数据库迁移。
 
-本节记录 2026-10-03 最终源码的隔离验收结果；尚未生产部署，生产仍为 §17.1 的版本。网关改动必须重建网关镜像并逐个替换容器，单发核心包不会生效；前端命名变化另随后续核心发布交付。
+本节记录 2026-10-03 最终源码的隔离验收结果，随后已按 §18.1 部署。网关改动通过重建网关镜像并逐个替换容器交付，单发核心包不会生效；前端命名变化通过 v0.1.8 核心发布交付。
 
 - 隔离环境为 OVH 独立项目 `sub2api-state-cd5brf`，使用私有 PG 16、Redis 7、源码构建 mock，不发布端口、不连接生产数据库。当前验证入口为 `next/deploy/ci/check.sh`，历史 evidence 中的运行脚本保留原样。
 - 六项真实多节点回归最终全部通过，共 **524.597 秒**：升级中断与 Redis 故障、正常升级及基线恢复、CPU 转移、插件包跨节点、Responses WebSocket、网关层 WebSocket。该轮使用完成命名迁移、Redis 时间安全修复后的最终代码，而非用先前一轮代替最终结果。见 [最终真实回归](evidence/gateway-state-realcore.log.txt)。
@@ -292,5 +292,17 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 - 遥测验证 TTL、Redis 清空后恢复、错 boot/控制快照拒绝、迟到序号拒绝，以及纯 CPU/错误观察更新不改变 PG 行的 `xmin`。新鲜度采用 Redis TIME 生成固定截止时间、Lua 写入剩余 TTL、原子读取报告及 PTTL；PG 等待与 Redis 往返计入本地单调时钟预算，读取节点按本地单调时钟折算报告年龄，不依赖跨主机壁钟一致。覆盖时钟偏差、迟到重放不能续期、慢提交过期和 API 拒绝旧序号；报告过期或 Lua 拒绝时返回错误，防止继续启用旧的 CPU 转移目标。见 [遥测专项](evidence/gateway-state-telemetry.log.txt)。
 - 通知测试验证集群隔离、合并、Redis 重启重订阅、通知全部丢失时仍通过轮询完成两节点升级，以及没有状态变化时不触发连续推进。步骤结果先提交 PG，再上报执行后的节点状态并通知；锁丢失不能记完成。测试超时留有 CI 调度余量，不作为升级性能基准。
 - 前端类型检查和生产构建通过，输出到临时目录，保留原有未提交的 `server/web/dist/index.html`。本轮没有新增浏览器视觉验收。见 [前端构建](evidence/gateway-state-web-build.log.txt)。
-- 网关滚动替换工具已做语法与保护条件测试，默认 dry-run，要求无活动核心计划、只改变四节点镜像、保留回退镜像及配置，按从节点先、主节点后的顺序执行。见 [部署保护测试](evidence/gateway-roll-guard.log.txt)。这些检查不代表已经执行生产容器替换；生产部署及隔离环境清理结果另行记录。
+- 网关滚动替换工具通过 15 项保护条件测试，默认 dry-run，要求无活动核心计划、只改变四节点镜像、保留回退镜像及配置，按从节点先、主节点后的顺序执行。持久化配置前再次检查全部四节点的健康、镜像与新启动身份。见 [部署保护测试](evidence/gateway-roll-guard.log.txt)。生产替换记录见 §18.1。
 - 隔离验证完成后已移除独立项目容器、网络、专用 mock 镜像及已核对绝对路径的临时目录；保留 external Go 缓存卷。生产四入口仍返回 401，日志轮转保持 50m × 5，无活动升级计划。见 [清理核验](evidence/gateway-state-cleanup.txt)。
+
+### 18.1 ovh Git 构建部署（gateway + v0.1.8）
+
+用户明确授权通过 `ssh ovh` 同步 Git 后构建更新。功能提交 `ae0249fa2` 已推送，OVH `~/sup2api/src` 快进到该提交；直接运行仓库中的 `next/deploy/gateway/ovh/prepare.sh`，在 OVH 构建网关镜像及签名核心包，没有上传本地产物。生产 PG 备份为 `~/sup2api/backups/pre-v0.1.8-20261003T070557Z.sql.gz`，gzip 校验通过；原配置另备份在 `pre-gateway-20261003T070557Z/`，prepare 前后四节点 JSON 内容一致。
+
+- 网关镜像 `sup2api-gateway:ae0249fa2`，ID `sha256:097107120158ea3f9eb486e022027fe07ade4071891f8a10e5d9b08ce2eb322a`。先 dry-run 验证只有镜像差异，再按 2 → 3 → 4 → 1 替换；逐节点及最终全体复查通过，正式 Compose 与 `.env` 已记录新镜像。入口进程为 `sub2api-gateway`，原有配置、协议字段与旧二进制别名继续兼容。
+- 原运行镜像元数据已不可用，因此显式指定保留的 `sup2api-shell:local` 作为回退镜像；工具逐节点核对 gateway/release 两个二进制哈希一致后才接受，回退镜像及配置记录于 `~/sup2api-managed/gateway-rollbacks/20261003T071047Z-0f981add/`。未删除数据卷、未重建 releases、未运行 single 部署脚本。
+- 网关替换观测总长 31.51 秒，每个入口分别约 5.12 秒不可用（连接失败及 503），四个窗口互不重叠；这是单入口重启中断，不承诺固定连接自动切换。见 [替换记录](evidence/ovh-gateway-0.1.8-roll.txt)、[HTTP 采样](evidence/ovh-gateway-0.1.8-http.jsonl.txt)。
+- 随后导入核心 v0.1.8：manifest digest `16174eaba7803f5724fffcbf1d7b2d60b77cfad6e6fe98b67ac0ac2e6dbcac22`。计划 `52ff082a57cc8da1b7d7473af695c25f` 完成全部 27 步，观测时刻 3.13 秒创建、25.39 秒完成，约 **22.26 秒**。各入口 503 从 15.6 秒开始，分别于 20.1、21.6、20.2、20.8 秒恢复，即约 **4.5–6 秒**；无其他状态异常。相比 §17.1 的约 75 秒流程更短，但这是两次实际发布观测，并非受控性能基准。见 [原始记录](evidence/ovh-upgrade-0.1.8.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.8-summary.txt)。
+- 四核心均为 0.1.8、local/ready；anthropic 0.2.1、gemini 0.2.0、moderation 0.1.6、openai 0.3.0、volcengine 0.10.1 在四节点全部 active，无 standby/fallback。guard 仍独立管理。审计、发布历史、插件历史接口及四节点 HTML 引用的 JS 均通过访问核验；无凭证业务入口返回 401。
+- 生产间隔 8 秒的两次取样确认：四节点 `telemetry_boot_id` 均绑定当前 gateway boot，Redis 序号持续增长且 TTL 有效，而 PG 节点行 `xmin` 与 `last_seen` 不变。证明稳态遥测不再持续改写 PG，不代表网关完全不访问 PG。见 [上线核验](evidence/ovh-upgrade-0.1.8-verify.txt)。
+- 新建升级的 `system.upgrade.create` 审计记录存在。四容器都运行目标镜像，日志轮转仍为 50m × 5；本轮新容器日志无 ERROR，只有既有关闭插件签名验证配置的启动 WARN。见 [运行时核验](evidence/ovh-gateway-0.1.8-runtime.txt)。

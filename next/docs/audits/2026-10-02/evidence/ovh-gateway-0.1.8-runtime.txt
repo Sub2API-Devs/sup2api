@@ -1,0 +1,5 @@
+{"node": 1, "image": "sha256:097107120158ea3f9eb486e022027fe07ade4071891f8a10e5d9b08ce2eb322a", "entrypoint": ["sub2api-gateway"], "running": true, "log_config": {"Type": "json-file", "Config": {"max-file": "5", "max-size": "50m"}}, "log_levels": {"INFO": 23, "WARN": 2}}
+{"node": 2, "image": "sha256:097107120158ea3f9eb486e022027fe07ade4071891f8a10e5d9b08ce2eb322a", "entrypoint": ["sub2api-gateway"], "running": true, "log_config": {"Type": "json-file", "Config": {"max-file": "5", "max-size": "50m"}}, "log_levels": {"INFO": 23, "WARN": 2}}
+{"node": 3, "image": "sha256:097107120158ea3f9eb486e022027fe07ade4071891f8a10e5d9b08ce2eb322a", "entrypoint": ["sub2api-gateway"], "running": true, "log_config": {"Type": "json-file", "Config": {"max-file": "5", "max-size": "50m"}}, "log_levels": {"INFO": 23, "WARN": 2}}
+{"node": 4, "image": "sha256:097107120158ea3f9eb486e022027fe07ade4071891f8a10e5d9b08ce2eb322a", "entrypoint": ["sub2api-gateway"], "running": true, "log_config": {"Type": "json-file", "Config": {"max-file": "5", "max-size": "50m"}}, "log_levels": {"INFO": 23, "WARN": 2}}
+audit_record: system.upgrade.create|upgrade|52ff082a57cc8da1b7d7473af695c25f
