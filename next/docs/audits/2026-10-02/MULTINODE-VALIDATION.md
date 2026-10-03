@@ -406,3 +406,11 @@ OVH 从 Git 构建核心 v0.1.13，复用既有网关镜像，未替换网关容
 - 新建类型支持服务商/类型搜索。编辑窗口扩大并分成接入配置、模型配置、调度与限流；凭证靠前，底部操作固定，窄屏导航横排。分区使用 v-show 保持插件组件与输入状态，验证失败返回相应区域。
 - 原生约束在提交入口显式寻找第一个无效字段，切换到对应分区后显示浏览器提示，避免隐藏字段无法聚焦或多个错误抢焦点；schema、iframe/native 凭证校验和提交 payload 保留。重复插件名称展示已合并。
 - 类型检查和生产构建通过（8.93 秒），产物在 TEMP，保留原 dist 修改。见 [构建](evidence/accounts-web-build.log.txt)。独立代码审查与浏览器验收覆盖类型选择、输入跨区保持、缺少凭证返回接入区、多项无效数字返回首项、搜索及高级条件清除、密度开关和 390px 窄屏；浏览器无 error，没有修改真实账号。
+
+### 23.1 OVH v0.1.14 上线
+
+功能提交 `1a58ab1f4` 已推送，OVH 从 Git 构建签名核心，使用 `SKIP_GATEWAY_BUILD=1` 复用原网关。备份 `~/sup2api/backups/pre-v0.1.14-20261003T110647Z.sql.gz` 通过 gzip 校验。核心 manifest digest `97910a9171a3624f5332cf28ecda81693fed0a5723855cc7d30f1d1fcda38fd9`。首次预检在导入制品前返回 404，登记签名制品后预检无阻断，才创建计划。
+
+计划 `43a058ce02550c2fc77ae411c1cee1e3` 完成全部 27 步，观测创建到完成约 22.45 秒；各入口 503 约 4.5–7.3 秒。四节点核心均为 0.1.14、local/ready，volcengine 保持 0.11.0，其余插件版本不变且 active。鉴权、版本身份、历史与审计 API、PG 稳态与 Redis 遥测检查通过。四入口实际返回 `AccountsView-Be4x68Km.js`，包含新列表与分区校验逻辑。网关镜像及容器启动时间不变，本次日志无 ERROR。
+
+见 [采样](evidence/ovh-upgrade-0.1.14.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.14-summary.txt)、[系统核验](evidence/ovh-upgrade-0.1.14-verify.txt)、[前端与运行时核验](evidence/ovh-upgrade-0.1.14-runtime.jsonl)。另在普通 mock 中编辑已有账号并从模型分区保存成功，原凭证留空保留提示与模型回填正常。本地两个模拟预览已关闭，未修改生产账号。
