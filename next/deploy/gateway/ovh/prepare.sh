@@ -123,4 +123,6 @@ release 0.1.11
 # 0.1.12 identifies the current entry gateway and responding core in topology.
 # Install the matching gateway first to expose the trusted entry response header.
 release 0.1.12
+# 0.1.13 simplifies the displayed primary/follower role labels.
+release 0.1.13
 ls -la publish

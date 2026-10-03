@@ -4,7 +4,7 @@ export default {
   sequence: 'Forward all followers to the primary and stop their cores. Update the primary, then update followers asynchronously after the primary is ready.',
   recovery: 'Fix the cause and resume this update. Database or protocol changes cannot be undone by restoring an old binary; repair the migration or restore from backup.',
   manageNode: 'Node management', disableNode: 'Disable node', enableNode: 'Allow node to rejoin', disabled: 'Disabled', stopped: 'Core stopped',
-  nodes: 'Cluster status', node: 'Node', version: 'Core version', mode: 'Traffic mode', ready: 'Readiness', lastSeen: 'Last report', reason: 'Reason', primary: 'Update primary',
+  nodes: 'Cluster status', node: 'Node', version: 'Core version', mode: 'Traffic mode', ready: 'Readiness', lastSeen: 'Last report', reason: 'Reason', primary: 'Primary node',
   serving: 'Ready', waiting: 'Not ready', stale: 'Connection interrupted. Showing the last known state; refreshing will resume when connected.', unavailable: 'Cannot reach the update service. Check that this node runs under the gateway with an update control socket configured.',
   newPlan: 'Create update', independentPlugins: 'After the core plan finishes, enabled bundled plugins upgrade automatically. Nodes switch independently; disabled plugins and newer manually installed versions are preserved.', target: 'Target version', choose: 'Choose a verified release',
   noReleases: 'No releases available. Import a signed release from a trusted source first.', activePlan: 'The cluster has an unfinished update. Resolve it before creating another.', preflight: 'Check compatibility', start: 'Start update', order: 'Node order', preflightOK: 'Current checks passed. Cluster state will be checked again when starting.',
