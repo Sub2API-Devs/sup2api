@@ -371,3 +371,9 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 - 核心 manifest digest 3390359cc782d852e766cca123565a5111aecee7dd7d9ddd2552718bbf752d72；计划 f8c071d5c9717b1f23806861bc6116e1 完成 27 步，从创建到完成约 21.83 秒。各入口核心更新 503 约 4.5–7.3 秒。见 [原始记录](evidence/ovh-upgrade-0.1.12.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.12-summary.txt)。
 - 四核心均为 0.1.12、local/ready，五插件版本保持且全部 active；历史、审计、鉴权、PG 稳态行与 Redis 遥测检查通过。向四个真实入口请求版本接口并附客户端伪造身份头，返回的入口和核心 ID 分别正确匹配 sup2api-1..4，核心 boot 与注册身份一致。生产稳态为本地处理，跨节点转发与 CPU 场景由隔离 HTTP 测试和浏览器 mock 覆盖，没有人为改动生产路由制造转发。见 [上线验证](evidence/ovh-upgrade-0.1.12-verify.txt)。
 - 四入口新节点图 JS 均返回 200 且包含身份逻辑；运行目标镜像，日志轮转保持 50m × 5，新网关与核心升级日志无 ERROR。见 [运行时核验](evidence/ovh-upgrade-0.1.12-runtime.json)。
+
+### 21.2 主从名称简化与 v0.1.13
+
+用户要求界面直接使用“主节点 / 从节点”。提交 846e2ce6d 统一中文及英文的节点标签、顶部统计、详情角色与升级页标签；协调关系说明保留。前端类型检查与构建通过（7.60 秒），输出到 TEMP，原 dist 修改保持不动。
+
+OVH 从 Git 构建核心 v0.1.13，复用既有网关镜像，未替换网关容器。备份 pre-v0.1.13-20261003T100113Z.sql.gz 校验通过。manifest digest 77600fb9383d16f68ebb3384894dce1dff5fdbe88ca8085ae26a8b63e59a57ba；计划 e82d1e09b36557781934ee9a0fbee607 完成全部 27 步，从创建到完成 22.13 秒，各入口 503 约 4.6–7.5 秒。四核心版本、插件 active、访问身份/boot、接口与 PG/Redis 检查全部通过；四入口实际返回的中文资源均含新标签且不再含“升级主节点”。见 [采样](evidence/ovh-upgrade-0.1.13.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.13-summary.txt)、[上线核验](evidence/ovh-upgrade-0.1.13-verify.txt)、[文案核验](evidence/ovh-upgrade-0.1.13-labels.json)。

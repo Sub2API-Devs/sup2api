@@ -1,0 +1,22 @@
+[
+  {
+    "port": 3130,
+    "status": 200,
+    "labels_verified": true
+  },
+  {
+    "port": 3131,
+    "status": 200,
+    "labels_verified": true
+  },
+  {
+    "port": 3132,
+    "status": 200,
+    "labels_verified": true
+  },
+  {
+    "port": 3133,
+    "status": 200,
+    "labels_verified": true
+  }
+]
