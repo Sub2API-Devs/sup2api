@@ -104,3 +104,22 @@ and `ccg-egress:dev` and cleans up only its own generated resources.
 HTTP CONNECT and authenticated SOCKS5 are covered by the real-network tests.
 HTTPS proxy certificate handling is configured but still needs a dedicated
 real TLS-proxy acceptance test before claiming that protocol verified.
+
+## Account authentication
+
+CCGateway 0.1.1 / core 0.1.18 supports `managed` (OAuth) and `apikey` accounts.
+Both use the same image, independent data volume, network policy and account proxy.
+Create an API Key account in the ordinary account editor, entering `api_key` and
+an optional HTTPS `base_url` (default https://api.anthropic.com). These credentials
+are encrypted by the core; only `api_key` is masked on read. OAuth accounts keep
+an empty credential object and use the existing authorization workflow.
+
+The core sends credentials to the controller only during reconciliation over the
+pinned SSH connection. The controller sets `ANTHROPIC_API_KEY` and
+`ANTHROPIC_BASE_URL` in that account's container. **API credentials are visible to
+that container and Docker administrators; proxy credentials remain outside it.**
+No fake OAuth token is created. API Key accounts reject OAuth management actions.
+A credential change recreates only the account's business container, retaining its
+data volume. Existing requests can be interrupted. Proxy-only changes retain the
+business container. Until the new revision passes readiness, calls fail closed.
+API Key accounts are rejected in legacy shared-container mode.

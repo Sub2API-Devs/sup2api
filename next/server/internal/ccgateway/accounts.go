@@ -19,9 +19,11 @@ import (
 )
 
 type accountDesired struct {
-	Revision string         `json:"revision"`
-	Enabled  bool           `json:"enabled"`
-	Proxy    map[string]any `json:"proxy"`
+	Revision string            `json:"revision"`
+	Enabled  bool              `json:"enabled"`
+	Proxy    map[string]any    `json:"proxy"`
+	Auth     map[string]string `json:"auth,omitempty"`
+	Kind     string            `json:"-"`
 }
 
 // desired reads authoritative state: request forwarding never reconfigures an
@@ -30,20 +32,32 @@ func (s *Service) desired(ctx context.Context, id int64, credentials bool) (acco
 	var d accountDesired
 	var version string
 	var spec core.ProxySpec
-	var password []byte
+	var password, accountCredentials []byte
 	err := s.DB.Pool.QueryRow(ctx, `SELECT
   a.deleted_at IS NULL AND a.status <> 'disabled' AND COALESCE(p.status <> 'disabled',false),
-  concat_ws('|',a.id,a.proxy_id,a.status,a.deleted_at,p.updated_at,p.status),
-  COALESCE(p.protocol,''),COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(p.username,''),p.password_enc
+  concat_ws('|',a.id,a.type,a.proxy_id,a.status,a.deleted_at,p.updated_at,p.status,encode(a.credentials_enc,'hex')),
+  COALESCE(p.protocol,''),COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(p.username,''),p.password_enc,a.type,a.credentials_enc
   FROM accounts a LEFT JOIN proxies p ON p.id=a.proxy_id
-  WHERE a.id=$1 AND a.plugin_key='ccgateway' AND a.type='managed'`, id).
-		Scan(&d.Enabled, &version, &spec.Protocol, &spec.Host, &spec.Port, &spec.Username, &password)
+  WHERE a.id=$1 AND a.plugin_key='ccgateway' AND a.type IN ('managed','apikey')`, id).
+		Scan(&d.Enabled, &version, &spec.Protocol, &spec.Host, &spec.Port, &spec.Username, &password, &d.Kind, &accountCredentials)
 	if err != nil {
 		return d, err
 	}
 	sum := sha256.Sum256([]byte(version))
 	d.Revision = hex.EncodeToString(sum[:])
 	if d.Enabled && credentials {
+		d.Auth = map[string]string{"mode": "oauth"}
+		if d.Kind == "apikey" {
+			plain, err := s.Cipher.Decrypt(accountCredentials, []byte("account:ccgateway"))
+			if err != nil {
+				return d, errors.New("cannot decrypt account credentials")
+			}
+			var auth map[string]string
+			if json.Unmarshal(plain, &auth) != nil || auth["api_key"] == "" {
+				return d, errors.New("invalid account credentials")
+			}
+			d.Auth = map[string]string{"mode": "api_key", "api_key": auth["api_key"], "base_url": auth["base_url"]}
+		}
 		if len(password) > 0 {
 			plain, e := s.Cipher.Decrypt(password, []byte("proxy"))
 			if e != nil {
@@ -148,7 +162,7 @@ func (s *Service) Run(ctx context.Context) {
 			if e != nil || !cfg.AccountRuntimes {
 				continue
 			}
-			rows, e := s.DB.Pool.Query(ctx, `SELECT id FROM accounts WHERE plugin_key='ccgateway' AND type='managed' ORDER BY id`)
+			rows, e := s.DB.Pool.Query(ctx, `SELECT id FROM accounts WHERE plugin_key='ccgateway' AND type IN ('managed','apikey') ORDER BY id`)
 			if e != nil {
 				continue
 			}
@@ -210,6 +224,10 @@ func (s *Service) accountManage(c *gin.Context) {
 	} else if action != "status" {
 		switch action {
 		case "start", "complete", "cancel", "logout":
+			if d.Kind != "managed" {
+				httpapi.Fail(c, core.ErrInvalidArgument)
+				return
+			}
 			path = "admin/auth/" + action
 		default:
 			httpapi.Fail(c, core.ErrNotFound)

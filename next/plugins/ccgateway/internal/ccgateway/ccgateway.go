@@ -8,6 +8,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -15,9 +16,10 @@ import (
 const (
 	PlatformID         = "anthropic"
 	AccountTypeManaged = "managed"
+	AccountTypeAPIKey  = "apikey"
 	ProtocolMessages   = "anthropic.messages"
 	VirtualURL         = "https://ccgateway.internal/v1/messages"
-	DefaultTestModel   = "claude-haiku-4-5"
+	DefaultTestModel   = "claude-haiku-4-5-20251001"
 )
 
 type Plugin struct{ now func() time.Time }
@@ -30,28 +32,64 @@ func emptyObject(raw string) bool {
 	var object map[string]json.RawMessage
 	return json.Unmarshal([]byte(raw), &object) == nil && object != nil && len(object) == 0
 }
-func (p *Plugin) ValidateCredentials(_ context.Context, in *pluginv1.ValidateCredentialsRequest) (*pluginv1.ValidateCredentialsResponse, error) {
+func normalize(kind, raw, settings string) (string, pluginsdk.FieldErrors) {
 	var fields pluginsdk.FieldErrors
-	if in.GetAccountType() != AccountTypeManaged {
-		fields = fields.Add("account_type", "unsupported", "Unsupported account type / 不支持的账号类型")
+	if !emptyObject(settings) {
+		fields = fields.Add("", "unsupported", "Unexpected settings / 不支持额外设置")
 	}
-	if !emptyObject(in.GetCredentialsJson()) {
-		fields = fields.Add("", "unsupported", "Managed accounts use the administrator connection configuration / 托管账号使用管理员配置，无需账号凭证")
+	switch kind {
+	case AccountTypeManaged:
+		if !emptyObject(raw) {
+			fields = fields.Add("", "unsupported", "OAuth accounts do not accept API credentials / OAuth 账号不接受 API 凭证")
+		}
+		return "{}", fields
+	case AccountTypeAPIKey:
+		var values map[string]string
+		if json.Unmarshal([]byte(raw), &values) != nil || values == nil {
+			return "", fields.Add("", "invalid", "Invalid credentials / 凭证格式错误")
+		}
+		for key := range values {
+			if key != "api_key" && key != "base_url" {
+				fields = fields.Add(key, "unsupported", "Unknown field / 未知字段")
+			}
+		}
+		key := strings.TrimSpace(values["api_key"])
+		validKey := len(key) >= 8 && len(key) <= 512
+		for _, c := range key {
+			if c < 33 || c > 126 {
+				validKey = false
+			}
+		}
+		if !validKey {
+			fields = fields.Add("api_key", "invalid", "Invalid API Key / API Key 格式错误")
+		}
+		base := strings.TrimSuffix(strings.TrimRight(strings.TrimSpace(values["base_url"]), "/"), "/v1")
+		if base == "" {
+			base = "https://api.anthropic.com"
+		}
+		u, e := url.Parse(base)
+		if e != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.ContainsAny(base, " \t\r\n#") || len(base) > 2048 {
+			fields = fields.Add("base_url", "invalid", "Use an HTTPS base URL without credentials, query or fragment / 请填写不含认证信息、查询或片段的 HTTPS 地址")
+		}
+		out, _ := json.Marshal(map[string]string{"api_key": key, "base_url": base})
+		return string(out), fields
+	default:
+		return "", fields.Add("account_type", "unsupported", "Unsupported account type / 不支持的账号类型")
 	}
-	if !emptyObject(in.GetSettingsJson()) {
-		fields = fields.Add("", "unsupported", "Managed accounts do not accept a custom upstream / 托管账号不接受自定义上游")
-	}
+}
+func (p *Plugin) ValidateCredentials(_ context.Context, in *pluginv1.ValidateCredentialsRequest) (*pluginv1.ValidateCredentialsResponse, error) {
+	raw, fields := normalize(in.GetAccountType(), in.GetCredentialsJson(), in.GetSettingsJson())
 	if len(fields) > 0 {
 		return &pluginv1.ValidateCredentialsResponse{Errors: fields}, nil
 	}
-	return &pluginv1.ValidateCredentialsResponse{NormalizedCredentialsJson: "{}", NormalizedSettingsJson: "{}"}, nil
+	return &pluginv1.ValidateCredentialsResponse{NormalizedCredentialsJson: raw, NormalizedSettingsJson: "{}"}, nil
 }
 func validateAccount(acc *pluginv1.Account) error {
-	if acc == nil || acc.GetType() != AccountTypeManaged {
-		return status.Error(codes.FailedPrecondition, "CCGateway requires a managed account")
+	if acc == nil {
+		return status.Error(codes.FailedPrecondition, "CCGateway account required")
 	}
-	if !emptyObject(acc.GetCredentialsJson()) || !emptyObject(acc.GetSettingsJson()) {
-		return status.Error(codes.FailedPrecondition, "CCGateway managed account cannot override its connection")
+	if _, fields := normalize(acc.GetType(), acc.GetCredentialsJson(), acc.GetSettingsJson()); len(fields) > 0 {
+		return status.Error(codes.FailedPrecondition, "Invalid CCGateway account credentials")
 	}
 	return nil
 }

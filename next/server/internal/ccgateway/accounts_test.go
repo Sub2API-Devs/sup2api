@@ -115,3 +115,52 @@ func TestAccountProxyReconcileAndRequestIsolation(t *testing.T) {
 		t.Fatalf("calls mutated config: writes=%d calls=%d", writes, calls)
 	}
 }
+
+func TestAPIKeyDesiredRotation(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := context.Background()
+	cipher, _ := secret.New(make([]byte, 32))
+	service := New(db, cipher)
+	var pid, id int64
+	if err := db.Pool.QueryRow(ctx, `INSERT INTO proxies(name,protocol,host,port) VALUES('api-key-test','http','proxy.example',3128) RETURNING id`).Scan(&pid); err != nil {
+		t.Fatal(err)
+	}
+	encrypt := func(key string) []byte {
+		raw, _ := json.Marshal(map[string]string{"api_key": key, "base_url": "https://relay.example"})
+		enc, err := cipher.Encrypt(raw, []byte("account:ccgateway"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return enc
+	}
+	if err := db.Pool.QueryRow(ctx, `INSERT INTO accounts(name,plugin_key,type,credentials_enc,proxy_id) VALUES('ccg-api','ccgateway','apikey',$1,$2) RETURNING id`, encrypt("first-test-key"), pid).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	d, err := service.desired(ctx, id, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Auth["mode"] != "api_key" || d.Auth["api_key"] != "first-test-key" || !d.Enabled {
+		t.Fatal("missing runtime authentication")
+	}
+	requestState, err := service.desired(ctx, id, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requestState.Auth != nil || requestState.Proxy != nil || requestState.Revision != d.Revision {
+		t.Fatal("request path disclosed credentials")
+	}
+	if _, err := db.Pool.Exec(ctx, `UPDATE accounts SET credentials_enc=$1 WHERE id=$2`, encrypt("second-test-key"), id); err != nil {
+		t.Fatal(err)
+	}
+	rotated, err := service.desired(ctx, id, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rotated.Revision == d.Revision || rotated.Auth["api_key"] != "second-test-key" {
+		t.Fatal("key rotation did not invalidate runtime")
+	}
+	if !IsManaged("ccgateway", "apikey", VirtualURL) || IsManaged("other", "apikey", VirtualURL) {
+		t.Fatal("managed routing identity incorrect")
+	}
+}

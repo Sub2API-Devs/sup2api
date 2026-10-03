@@ -9,7 +9,7 @@
     "en": "Managed Claude Code Messages accounts. SSH connections and credentials are managed by the core. Token counting and model discovery are not supported.",
     "zh": "托管 Claude Code Messages 账号，SSH 连接与凭证由核心管理；支持流式响应及用量计费，不支持 token 预估与模型发现。"
   },
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "sub2api",
   "icon": "text:C",
   "runtime": "grpc",
@@ -18,7 +18,7 @@
       "binaries": "runtimes/{os}-{arch}/plugin"
     }
   },
-  "hostCompat": ">=0.1.15 <0.2.0",
+  "hostCompat": ">=0.1.18 <0.2.0",
   "capabilities": [
     {
       "id": "platform.adapter.v1"
@@ -28,12 +28,12 @@
     {
       "id": "managed",
       "label": {
-        "en": "Managed Claude Code",
-        "zh": "托管 Claude Code"
+        "en": "Claude Code (OAuth)",
+        "zh": "Claude Code（OAuth）"
       },
       "description": {
-        "en": "Uses the connection configured by administrators. No account key is required.",
-        "zh": "使用管理员设置的 CCGateway 连接，无需填写账号密钥。"
+        "en": "Authorize Claude Code with OAuth in an isolated account container.",
+        "zh": "在账号独立容器中使用 OAuth 授权 Claude Code。"
       },
       "form": {
         "mode": "schema",
@@ -51,6 +51,37 @@
             "anthropic-beta"
           ]
         }
+      ]
+    },
+    {
+      "id": "apikey",
+      "label": {
+        "en": "Claude Code (API Key)",
+        "zh": "Claude Code（API Key）"
+      },
+      "description": {
+        "en": "Use an API key and Anthropic-compatible base URL in the same isolated runtime.",
+        "zh": "使用 API Key 和 Anthropic 兼容地址，共用独立容器与账号代理。"
+      },
+      "form": {
+        "mode": "schema",
+        "schema": "forms/apikey.schema.json",
+        "uiSchema": "forms/apikey.ui.json"
+      },
+      "platforms": [
+        {
+          "platform": "anthropic",
+          "requestFields": [
+            "model"
+          ],
+          "passHeaders": [
+            "anthropic-version",
+            "anthropic-beta"
+          ]
+        }
+      ],
+      "sensitiveFields": [
+        "api_key"
       ]
     }
   ],
@@ -74,8 +105,8 @@
         "types": "own"
       },
       "reason": {
-        "en": "Validate the empty credential object of managed accounts; connection secrets remain in the core",
-        "zh": "校验托管账号的空凭证对象；连接密钥仍只由核心持有"
+        "en": "Validate OAuth and API key account credentials.",
+        "zh": "校验 OAuth 与 API Key 账号凭证。"
       }
     }
   ]

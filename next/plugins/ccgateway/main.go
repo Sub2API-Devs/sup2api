@@ -1,5 +1,5 @@
-// Command ccgateway is the sub2api-next "CCGateway" plugin: one account type
-// (managed) for Claude Code Messages through the core connection service.
+// Command ccgateway provides OAuth and API Key Claude Code accounts through
+// the core connection service.
 package main
 
 import (

@@ -53,3 +53,22 @@ Known boundaries:
   account runtimes only after installing the matching remote controller.
 - Backend integration and UI remain partly core-hosted; this is not a claim
   that full plugin/core separation has been completed.
+
+## 2026-10-04: OAuth and API Key account modes
+
+Real Docker integration passed with the production business/egress images and
+an isolated resource prefix. API Key creation, credential rotation, persistent
+volume retention, rejection of OAuth operations in API Key mode, removal of API
+environment when returning to OAuth, and proxy-only updates preserving the app
+container all passed. The existing 16-call/two-account isolation, HTTP/SOCKS5,
+DNS, fail-closed and controller-restart checks also passed. This isolated test
+made no model calls and did not modify production containers.
+
+The separate production test account used the user-supplied API relay and HTTP
+proxy through sing-box. Before formal account-mode rollout, its injected test
+credentials completed an account test plus JSON and SSE public gateway calls.
+Both public requests were recorded against account 20 / ccgateway with billed
+usage. The temporary access key was revoked, group disabled/detached, and the
+account removed from scheduling. This is API Key validation, not real OAuth
+login validation. The ten user-specified model names are a configured allowlist;
+only `claude-haiku-4-5-20251001` has been exercised in these calls.

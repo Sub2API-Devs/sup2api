@@ -6,6 +6,8 @@ API is never exposed on a business network. State is root-private on this host.
 import contextlib
 import fcntl
 import hmac
+import hashlib
+from urllib.parse import urlsplit
 import ipaddress
 import json
 import os
@@ -25,6 +27,30 @@ REVISION = re.compile(r'^[a-f0-9]{64}$')
 LABEL = 'io.sup2api.ccgateway.account'
 PROXY_VARS = ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
               'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy')
+
+AUTH_LABEL = 'io.sup2api.ccgateway.auth'
+AUTH_VARS = ('ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR')
+
+
+def authentication(raw):
+    # Missing auth preserves compatibility with existing OAuth controllers.
+    raw = {'mode': 'oauth'} if raw is None else raw
+    if not isinstance(raw, dict):
+        raise ValueError('invalid authentication')
+    if raw == {'mode': 'oauth'}:
+        return raw
+    if raw.get('mode') != 'api_key' or set(raw) - {'mode', 'api_key', 'base_url'}:
+        raise ValueError('invalid authentication')
+    key, base = raw.get('api_key'), raw.get('base_url') or 'https://api.anthropic.com'
+    if not isinstance(key, str) or not 8 <= len(key) <= 512 or any(ord(c) < 33 or ord(c) > 126 for c in key):
+        raise ValueError('invalid API key')
+    if not isinstance(base, str) or len(base) > 2048 or any(c.isspace() for c in base):
+        raise ValueError('invalid base URL')
+    url = urlsplit(base)
+    if url.scheme != 'https' or not url.hostname or url.username is not None or url.password is not None or '?' in base or '#' in base:
+        raise ValueError('invalid base URL')
+    base = base.rstrip('/').removesuffix('/v1')
+    return {'mode': 'api_key', 'api_key': key, 'base_url': base}
 
 
 def write_private(path, value):
@@ -92,14 +118,22 @@ class Manager:
             volumes={str(d / 'app.nft'): {'bind': '/app.nft', 'mode': 'ro'}},
             remove=True)
 
-    def provision(self, aid):
+    def provision(self, aid, auth=None):
+        auth = authentication(auth)
         d = self.root / aid
         d.mkdir(mode=0o700, exist_ok=True)
         state = self.state(aid)
+        # Hash with a private per-account salt; never persist upstream keys in
+        # controller state or expose a credential fingerprint in status.
+        salt = state['admin_key'] if state else secrets.token_urlsafe(32)
+        fingerprint = hmac.new(salt.encode(), json.dumps(auth, sort_keys=True).encode(), hashlib.sha256).hexdigest()
         if state:
             try:
-                self.owned(aid, 'app')
-                return state
+                existing = self.owned(aid, 'app')
+                if existing.labels.get(AUTH_LABEL) == fingerprint:
+                    return state
+                self.online.pop(aid, None)
+                existing.remove(force=True)
             except docker.errors.NotFound:
                 pass
         try:
@@ -115,7 +149,7 @@ class Manager:
         write_private(d / 'resolv.conf', f'nameserver {gateway_ip}\noptions timeout:2 attempts:2\n')
         # resolv.conf contains only the ordinary internal DNS address.
         os.chmod(d / 'resolv.conf', 0o644)
-        state = state or {'api_key': secrets.token_urlsafe(32), 'admin_key': secrets.token_urlsafe(32),
+        state = state or {'api_key': secrets.token_urlsafe(32), 'admin_key': salt,
                  'app_ip': app_ip, 'gateway_ip': gateway_ip, 'revision': '', 'status': 'pending'}
         self.save(aid, state)
         volume = self.docker.volumes.create(self.name(aid, 'data'), labels={LABEL: aid})
@@ -124,14 +158,19 @@ class Manager:
             user='0', network_mode='none', volumes={volume.name: {'bind': '/work', 'mode': 'rw'}}, remove=True)
         env = {}
         image_env = self.docker.images.get(self.app_image).attrs['Config'].get('Env', [])
-        if any(v.split('=', 1)[0] in PROXY_VARS for v in image_env):
-            raise ValueError('business image contains proxy environment variables')
+        if any(v.split('=', 1)[0] in PROXY_VARS + AUTH_VARS for v in image_env):
+            raise ValueError('business image contains account credentials or proxy environment variables')
         env.update(CCG_API_KEY=state['api_key'], CCG_ADMIN_KEY=state['admin_key'], CCG_EXTERNAL_EGRESS='1')
+        if auth['mode'] == 'api_key':
+            env.update(ANTHROPIC_API_KEY=auth['api_key'], ANTHROPIC_BASE_URL=auth['base_url'])
+        options = self.common(aid)
+        options['labels'][AUTH_LABEL] = fingerprint
         app = self.docker.containers.create(self.app_image, name=self.name(aid, 'app'),
             network=network.name, networking_config={network.name: self.docker.api.create_endpoint_config(ipv4_address=app_ip)}, user='1000:1000', environment=env,
             volumes={volume.name: {'bind': '/work', 'mode': 'rw'},
                      str(d / 'resolv.conf'): {'bind': '/etc/resolv.conf', 'mode': 'ro'}},
-            mem_limit='2g', nano_cpus=2000000000, **self.common(aid))
+            mem_limit='2g', nano_cpus=2000000000, **options)
+        state['auth_mode'] = auth['mode']
         self.save(aid, state)
         return state
 
@@ -142,7 +181,7 @@ class Manager:
                 raise ValueError('invalid revision')
             if not desired.get('proxy') or not desired.get('enabled', True):
                 return self.block(aid)
-            state = self.provision(aid)
+            state = self.provision(aid, desired.get('auth'))
             if self.public(aid)['revision'] == revision:
                 app, egress = self.owned(aid, 'app'), self.owned(aid, 'egress')
                 if app.status == 'running' and egress.status == 'running':
@@ -226,7 +265,7 @@ class Manager:
                 self.online.pop(aid, None)
         return {'account_id': aid, 'container': self.name(aid, 'app'),
                 'status': 'ready' if self.online.get(aid) == state.get('revision') and aid in self.online else 'pending',
-                'revision': self.online.get(aid, '')}
+                'revision': self.online.get(aid, ''), 'auth_mode': state.get('auth_mode', 'oauth')}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -287,6 +326,8 @@ class Handler(BaseHTTPRequestHandler):
                 revision = self.headers.get('X-CCG-Revision', '')
                 if not state or not revision or manager.public(aid)['revision'] != revision:
                     return self.reply(409, {'error': 'account proxy not synchronized'})
+                if path.startswith('admin/auth/') and state.get('auth_mode') == 'api_key':
+                    return self.reply(409, {'error': 'API key accounts do not use OAuth authorization'})
                 address = state['app_ip']
                 secret = state['admin_key'] if path.startswith('admin/') else state['api_key']
             # No configuration writes on the request path. Concurrent streams

@@ -37,7 +37,7 @@ func TestManifestAndUsageContract(t *testing.T) {
 	for _, f := range fields {
 		t.Errorf("%s: %s (%s)", f.Field, f.Message, f.Code)
 	}
-	if m.Key != "ccgateway" || len(m.AccountTypes) != 1 || m.AccountTypes[0].ID != "managed" {
+	if m.Key != "ccgateway" || len(m.AccountTypes) != 2 || m.AccountTypes[1].ID != "apikey" || m.AccountTypes[0].ID != "managed" {
 		t.Fatal("invalid managed identity")
 	}
 	if len(m.AccountTypes[0].SensitiveFields) != 0 || len(m.AccountTypes[0].SettingsFields) != 0 || len(m.HostPermissions) != 2 {

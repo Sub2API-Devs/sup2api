@@ -1,16 +1,17 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SButton, SCard, SHint, SInput, SSelect } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { isTrustedAuthorizationURL, sessionExpired } from './validation'
 const { t } = useI18n(), auth = useAuthStore()
-const accounts = ref<Array<{ value: number; label: string }>>([])
+const accounts = ref<Array<{ value: number; label: string; type: string }>>([])
 const selected = ref<number | null>(null), busy = ref(false), error = ref(''), code = ref('')
 const status = ref<{ status: string; container: string } | null>(null)
 const health = ref<{ healthy: boolean; logged_in: boolean } | null>(null)
 const session = ref<{ session_id: string; url: string; expires_at: string } | null>(null)
+const apiKeyMode = computed(() => accounts.value.find(a => a.value === selected.value)?.type === 'apikey')
 let timer: ReturnType<typeof setInterval> | undefined
 let serial = 0
 async function refresh() {
@@ -43,8 +44,8 @@ async function action(name: string) {
 watch(selected, () => { ++serial; status.value = null; health.value = null; session.value = null; code.value = ''; void run(refresh) })
 onMounted(async () => {
   await run(async () => {
-    const r = await api.list<{ id: number; name: string }>('/accounts', { plugin_key: 'ccgateway', page_size: 200 })
-    accounts.value = r.items.map(a => ({ value: a.id, label: `${a.name} #${a.id}` }))
+    const r = await api.list<{ id: number; name: string; type: string }>('/accounts', { plugin_key: 'ccgateway', page_size: 200 })
+    accounts.value = r.items.map(a => ({ value: a.id, label: `${a.name} #${a.id}`, type: a.type }))
     selected.value = accounts.value[0]?.value ?? null
     await refresh()
   })
@@ -63,12 +64,14 @@ onBeforeUnmount(() => { ++serial; clearInterval(timer); code.value = ''; session
       <template v-if="selected">
         <p>{{ t('ccgateway.runtime.state') }}: {{ t(`ccgateway.runtime.${status?.status === 'ready' ? 'ready' : 'pending'}`) }}</p>
         <p v-if="status?.container" class="font-mono text-sm">{{ status.container }}</p>
-        <p v-if="health">{{ t(health.logged_in ? 'ccgateway.auth.loggedIn' : 'ccgateway.auth.loggedOut') }}</p>
+        <p>{{ t(apiKeyMode ? 'ccgateway.auth.apiKeyMode' : 'ccgateway.auth.oauthMode') }}</p>
+        <SHint v-if="apiKeyMode">{{ t('ccgateway.auth.apiKeyHint') }}</SHint>
+        <p v-if="health && !apiKeyMode">{{ t(health.logged_in ? 'ccgateway.auth.loggedIn' : 'ccgateway.auth.loggedOut') }}</p>
         <div v-if="auth.has('settings:manage')" class="flex gap-2">
           <SButton :disabled="busy || !!session" @click="run(() => action('sync'))">{{ t('ccgateway.runtime.retry') }}</SButton>
-          <SButton :disabled="busy || !!session || status?.status !== 'ready'" @click="run(() => action('start'))">{{ t('ccgateway.auth.start') }}</SButton>
+          <SButton v-if="!apiKeyMode" :disabled="busy || !!session || status?.status !== 'ready'" @click="run(() => action('start'))">{{ t('ccgateway.auth.start') }}</SButton>
         </div>
-        <form v-if="session" class="space-y-3" @submit.prevent="run(() => action('complete'))">
+        <form v-if="session && !apiKeyMode" class="space-y-3" @submit.prevent="run(() => action('complete'))">
           <a :href="session.url" target="_blank" rel="noopener noreferrer" class="text-primary-600 underline">{{ t('ccgateway.auth.open') }}</a>
           <SInput v-model="code" type="password" autocomplete="off" :disabled="busy" :placeholder="t('ccgateway.auth.code')" />
           <SButton type="submit" :disabled="busy || !code.trim()">{{ t('ccgateway.auth.complete') }}</SButton>

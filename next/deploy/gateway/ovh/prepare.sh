@@ -133,4 +133,6 @@ release 0.1.15
 release 0.1.16
 # 0.1.17 adds account containers and change-driven external proxy egress.
 release 0.1.17
+# 0.1.18 adds API Key authentication alongside OAuth for CCGateway.
+release 0.1.18
 ls -la publish

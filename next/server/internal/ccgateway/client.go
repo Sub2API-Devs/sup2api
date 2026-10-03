@@ -17,7 +17,7 @@ import (
 const VirtualURL = "https://ccgateway.internal/v1/messages"
 
 func IsManaged(plugin, kind, raw string) bool {
-	return plugin == "ccgateway" && kind == "managed" && raw == VirtualURL
+	return plugin == "ccgateway" && (kind == "managed" || kind == "apikey") && raw == VirtualURL
 }
 func (s *Service) open(ctx context.Context, c Config) (*http.Client, string, func() error, error) {
 	if c.Mode == "ssh" {
@@ -86,6 +86,13 @@ func (t modelTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, e
 	}
 	var revision string
+	if !cfg.AccountRuntimes && t.accountID > 0 {
+		var kind string
+		if err := t.s.DB.Pool.QueryRow(ctx, "SELECT type FROM accounts WHERE id=$1 AND plugin_key='ccgateway'", t.accountID).Scan(&kind); err != nil || kind == "apikey" {
+			cancel()
+			return nil, errors.New("API key accounts require per-account runtimes")
+		}
+	}
 	if t.proxySelected && !cfg.AccountRuntimes {
 		cancel()
 		return nil, errors.New("account proxy requires per-account runtimes")

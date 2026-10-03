@@ -1,0 +1,38 @@
+{
+  "ui:order": [
+    "api_key",
+    "base_url"
+  ],
+  "api_key": {
+    "ui:widget": "secret",
+    "ui:title": {
+      "en": "API key",
+      "zh": "API Key"
+    },
+    "ui:placeholder": "sk-ant-...",
+    "ui:help": {
+      "en": "Stored encrypted. Updating credentials restarts only this account container.",
+      "zh": "加密保存。修改凭证会重建此账号容器，保留数据；正在处理的请求可能中断。"
+    }
+  },
+  "base_url": {
+    "ui:widget": "url-presets",
+    "ui:placeholder": {
+      "en": "Leave empty to use https://api.anthropic.com",
+      "zh": "留空使用默认地址 https://api.anthropic.com"
+    },
+    "ui:title": {
+      "en": "Base URL",
+      "zh": "Base URL"
+    },
+    "ui:options": {
+      "presets": [
+        "https://api.anthropic.com"
+      ]
+    },
+    "ui:help": {
+      "en": "HTTPS Anthropic-compatible endpoint used by Claude Code. A trailing /v1 is removed.",
+      "zh": "Claude Code 使用的 HTTPS Anthropic 兼容地址，末尾 /v1 自动去除。"
+    }
+  }
+}

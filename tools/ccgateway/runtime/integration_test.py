@@ -153,6 +153,37 @@ def main():
         manager.apply('1', desired(0, 'f'))
         assert manager.owned('1', 'app').id == original_app
         assert request('1') == (0, 'proxy-A')
+        # Authentication is control-plane state; proxy updates preserve the app.
+        account_auth = {'mode': 'api_key', 'api_key': 'test-api-key-one', 'base_url': 'https://relay.example'}
+        config = {**desired(0, '1'), 'auth': account_auth}
+        manager.apply('1', config)
+        app = manager.owned('1', 'app')
+        env = app.attrs['Config']['Env']
+        assert 'ANTHROPIC_API_KEY=test-api-key-one' in env
+        assert not any(v.split('=',1)[0].lower().endswith('_proxy') for v in env)
+        assert 'test-api-key-one' not in (root / '1' / 'state.json').read_text()
+        app.exec_run(['sh', '-ec', 'echo retained > /work/data/auth-test'])
+        first_app = app.id
+        other_app = manager.owned('2', 'app').id
+        manager.apply('1', config)
+        assert manager.owned('1', 'app').id == first_app
+        manager.apply('1', {**desired(1, '2'), 'auth': account_auth})
+        assert manager.owned('1', 'app').id == first_app
+        assert request('1') == (0, 'proxy-B')
+        forbidden = requests.post(origin + '/accounts/1/admin/auth/start', json={},
+            headers={**headers, 'X-CCG-Revision': '2' * 64}, timeout=5)
+        assert forbidden.status_code == 409
+        manager.apply('1', {**desired(1, '3'), 'auth': {**account_auth, 'api_key': 'test-api-key-two'}})
+        app = manager.owned('1', 'app')
+        assert app.id != first_app
+        assert 'ANTHROPIC_API_KEY=test-api-key-two' in app.attrs['Config']['Env']
+        assert app.exec_run(['cat', '/work/data/auth-test'])[1].strip() == b'retained'
+        assert manager.owned('2', 'app').id == other_app
+        assert request('1') == (0, 'proxy-B')
+        manager.apply('1', desired(0, '4'))
+        assert not any(v.startswith('ANTHROPIC_') for v in manager.owned('1', 'app').attrs['Config']['Env'])
+        assert request('1') == (0, 'proxy-A')
+        print(json.dumps({'api_key_rotation': 'PASS', 'data_preserved': 'PASS', 'oauth_environment': 'PASS', 'api_key_proxy_switch': 'PASS'}))
         manager.block('1')
         assert manager.owned('1', 'app').status != 'running'
         print(json.dumps({'isolated_accounts': 2, 'concurrent_requests': 16, 'proxy_switch': 'PASS',

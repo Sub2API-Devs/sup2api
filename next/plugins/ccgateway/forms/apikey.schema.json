@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "title": "Claude Code API Key",
+  "required": [
+    "api_key"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "api_key": {
+      "type": "string",
+      "title": "API Key",
+      "minLength": 8,
+      "maxLength": 512,
+      "pattern": "^[!-~]+$",
+      "writeOnly": true
+    },
+    "base_url": {
+      "type": "string",
+      "title": "Base URL",
+      "maxLength": 2048
+    }
+  }
+}

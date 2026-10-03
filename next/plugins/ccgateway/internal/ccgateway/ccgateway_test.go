@@ -70,3 +70,27 @@ func TestErrorsPreserveCoreFailover(t *testing.T) {
 		}
 	}
 }
+
+func TestAPIKeyCredentialsAndVirtualRouting(t *testing.T) {
+	p := New()
+	for _, raw := range []string{`{}`, `{"api_key":"short"}`, `{"api_key":"test-key-123","base_url":"http://example.com"}`, `{"api_key":"test-key-123","base_url":"https://user:pass@example.com"}`, `{"api_key":"test-key-123","base_url":"https://example.com?q=secret"}`, `{"api_key":"test-key-123","base_url":"https://example.com#"}`, `{"api_key":"test-key-123","extra":"bad"}`} {
+		r, err := p.ValidateCredentials(context.Background(), &pluginv1.ValidateCredentialsRequest{AccountType: AccountTypeAPIKey, CredentialsJson: raw})
+		if err != nil || len(r.Errors) == 0 {
+			t.Fatal("invalid API credentials accepted")
+		}
+	}
+	r, err := p.ValidateCredentials(context.Background(), &pluginv1.ValidateCredentialsRequest{AccountType: AccountTypeAPIKey, CredentialsJson: `{"api_key":"test-key-123","base_url":"https://relay.example/v1/"}`})
+	if err != nil || len(r.Errors) != 0 || r.NormalizedCredentialsJson != `{"api_key":"test-key-123","base_url":"https://relay.example"}` {
+		t.Fatal("API key normalization failed")
+	}
+	acc := &pluginv1.Account{Type: AccountTypeAPIKey, CredentialsJson: r.NormalizedCredentialsJson}
+	req, err := p.BuildTestRequest(context.Background(), &pluginv1.BuildTestRequestRequest{Account: acc})
+	if err != nil || req.Url != VirtualURL || len(req.Headers) != 2 {
+		t.Fatal("API key bypassed managed transport")
+	}
+	for _, v := range req.Headers {
+		if v == "test-key-123" {
+			t.Fatal("upstream key leaked to transport")
+		}
+	}
+}
