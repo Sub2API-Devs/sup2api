@@ -41,6 +41,7 @@ const children: RouteRecordRaw[] = [
   { path: 'sticky', component: () => import('@/views/sticky/StickyView.vue'), meta: { perm: 'sticky:read', title: 'nav.items.sticky' } },
   { path: 'settings', component: () => import('@/views/settings/SettingsView.vue'), meta: { perm: ['settings:read', 'sticky:read'], title: 'nav.items.settings' } },
 
+  { path: 'system/ccgateway', component: () => import('@/views/ccgateway/CCGatewayView.vue'), meta: { perm: 'settings:read', title: 'ccgateway.title' } },
   { path: 'plugins', component: () => import('@/views/plugins/PluginsView.vue'), meta: { perm: 'plugin:read', title: 'nav.items.plugins' } },
   {
     path: 'plugins/:key/versions/:version/consent',

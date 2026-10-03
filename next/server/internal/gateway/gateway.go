@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert"
@@ -27,19 +28,20 @@ import (
 // tests: sticky sessions and hook breaker/stats
 // then degrade to no-ops.
 type Deps struct {
-	DB       *store.DB
-	Redis    redis.UniversalClient
-	Bus      core.Bus
-	Node     core.Node
-	Registry core.PluginRegistry
-	Auth     core.APIKeyAuthenticator
-	Pricer   core.Pricer
-	Balance  core.BalanceGate
-	Slots    core.Slots
-	Accounts core.AccountDirectory
-	Proxies  core.ProxyDirectory
-	Settler  core.Settler
-	Tasks    core.AsyncTasks
+	CCGateway *ccgateway.Service
+	DB        *store.DB
+	Redis     redis.UniversalClient
+	Bus       core.Bus
+	Node      core.Node
+	Registry  core.PluginRegistry
+	Auth      core.APIKeyAuthenticator
+	Pricer    core.Pricer
+	Balance   core.BalanceGate
+	Slots     core.Slots
+	Accounts  core.AccountDirectory
+	Proxies   core.ProxyDirectory
+	Settler   core.Settler
+	Tasks     core.AsyncTasks
 	// Limiter enforces per-account rpm/tpm/tpd/spm limits (CONTRACTS §18);
 	// nil = no limits.
 	Limiter core.AccountLimiter

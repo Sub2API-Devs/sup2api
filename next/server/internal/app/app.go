@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"log/slog"
 	"net"
 	"net/http"
@@ -183,8 +184,10 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	converters := convert.Default()
 	// Per-account rpm/tpm/tpd/spm limits (CONTRACTS §18).
 	limiter := account.NewLimiter(rdb)
+	ccg := ccgateway.New(db, cipher)
 	acc := account.New(account.Deps{
-		DB: db, Redis: rdb, Cipher: cipher, Registry: reg, Proxies: prx, Events: events,
+		CCGateway: ccg,
+		DB:        db, Redis: rdb, Cipher: cipher, Registry: reg, Proxies: prx, Events: events,
 		Slots: cl.Slots, Limiter: limiter, Bus: cl.Bus, AllowPrivateUpstream: cfg.AllowPrivateUpstream, Converters: converters,
 		// Ownership checks and proxy_url resolution (CONTRACTS §21).
 		Authorizer: az, Resolver: prx,
@@ -237,7 +240,8 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		gate.stop()
 	}
 	gw := gateway.New(gateway.Deps{
-		DB: db, Redis: rdb, Bus: cl.Bus, Node: cl.Registry, Registry: reg,
+		CCGateway: ccg,
+		DB:        db, Redis: rdb, Bus: cl.Bus, Node: cl.Registry, Registry: reg,
 		Auth: keys, Pricer: bill, Balance: bill, Slots: cl.Slots,
 		Accounts: acc, Proxies: prx, Settler: settler, Tasks: settler, Limiter: limiter, Config: cfg, Converters: converters,
 		Draining: gate.isDraining,
@@ -350,6 +354,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	r := httpapi.NewRouter(engine, idm, az, idm)
 	r.Authed(http.MethodGet, "/system/version", systemVersionHandler(version, cfg.Managed.Enabled, cfg.NodeID, cl.Registry.BootID()))
 	updater.RegisterRoutes(r, cfg.Managed.UpdaterSocket, db)
+	ccg.RegisterRoutes(r)
 	audit.RegisterRoutes(r, db)
 	idm.RegisterRoutes(r)
 	az.RegisterRoutes(r)

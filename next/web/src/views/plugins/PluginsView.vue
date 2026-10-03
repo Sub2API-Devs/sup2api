@@ -113,6 +113,7 @@ onMounted(load)
   <div>
     <SPageHeader :title="t('plugins.list.title')" :description="t('plugins.list.description')">
       <template #actions>
+        <SButton v-if="auth.has('settings:read')" to="/system/ccgateway">{{ t('ccgateway.title') }}</SButton>
         <SButton :loading="loading" @click="load"><SIcon name="refresh" class="h-4 w-4" />{{ t('common.refresh') }}</SButton>
         <SButton v-if="auth.has('plugin:market:read')" to="/market">
           <SIcon name="market" class="h-4 w-4" />{{ t('plugins.market.title') }}

@@ -13,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/sync/singleflight"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
@@ -21,13 +22,14 @@ import (
 
 // Deps are the collaborators of the account service.
 type Deps struct {
-	DB       *store.DB
-	Redis    redis.UniversalClient
-	Cipher   *secret.Cipher
-	Registry core.PluginRegistry
-	Proxies  core.ProxyDirectory
-	Events   core.EventPublisher
-	Slots    core.Slots // optional: in_use column is 0 without it
+	CCGateway *ccgateway.Service
+	DB        *store.DB
+	Redis     redis.UniversalClient
+	Cipher    *secret.Cipher
+	Registry  core.PluginRegistry
+	Proxies   core.ProxyDirectory
+	Events    core.EventPublisher
+	Slots     core.Slots // optional: in_use column is 0 without it
 	// Limiter reports rpm/tpm/tpd usage (rate_usage column); optional.
 	Limiter core.AccountLimiter
 	Bus     core.Bus // optional: single node without it
@@ -98,6 +100,7 @@ func New(d Deps) *Service {
 // accepts the "all" key or its "own" counterpart (CONTRACTS §21.2); handlers
 // narrow their SQL with core.OwnerScope.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
+	r.PermStepUp("POST", "/system/ccgateway/connect", "settings:manage", s.connectCCGateway)
 	browse := []string{"account:read", "account:own:read", "account:own:create"}
 	r.PermAny("GET", "/platforms", s.listPlatforms, browse...)
 	r.Authed("GET", "/me/platforms", s.listMyPlatforms)

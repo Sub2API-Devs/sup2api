@@ -126,11 +126,13 @@ ls -l "$OUT/market"
 # volcengine is install-only: it does nothing until an operator adds an Ark
 # account (per-deployment credentials and base URL), so it ships with every
 # image but is enabled on purpose.
+# ccgateway is also install-only: the operator first configures and authorizes
+# a local/SSH Claude Code gateway, then enables its managed account type.
 #
 # Intentionally NOT built in: relay (a market-only account type), guard (an
 # optional gateway hook).
 BUILTIN_PLUGINS=${BUILTIN_PLUGINS:-anthropic openai gemini moderation}
-BUILTIN_PLUGINS_INSTALL_ONLY=${BUILTIN_PLUGINS_INSTALL_ONLY:-volcengine}
+BUILTIN_PLUGINS_INSTALL_ONLY=${BUILTIN_PLUGINS_INSTALL_ONLY:-volcengine ccgateway}
 for name in $BUILTIN_PLUGINS_INSTALL_ONLY; do
   case " $BUILTIN_PLUGINS " in
     *" $name "*)

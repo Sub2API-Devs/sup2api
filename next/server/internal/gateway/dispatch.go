@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -370,7 +372,14 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	if built.GetUpstreamModel() != "" {
 		c.rec.UpstreamModel = built.GetUpstreamModel()
 	}
-	target, err := c.g.checkUpstreamURL(prepareCtx, built.GetUrl())
+	managedCCG := ccgateway.IsManaged(acc.PluginKey, acc.Type, built.GetUrl()) && c.g.d.CCGateway != nil && acc.ProxyID == nil
+	var target *url.URL
+	var err error
+	if managedCCG {
+		target, err = url.Parse(built.GetUrl())
+	} else {
+		target, err = c.g.checkUpstreamURL(prepareCtx, built.GetUrl())
+	}
 	if err != nil {
 		slog.WarnContext(ctx, "gateway: upstream url rejected", "plugin", rt.binding.Plugin.Key, "account", acc.ID, "err", err)
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrUnavailable.WithMessage("upstream address rejected"), errTypeInternal)}
@@ -379,7 +388,12 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	if err != nil {
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
 	}
-	client, err := c.g.d.Proxies.HTTPClient(prepareCtx, acc.ProxyID)
+	var client *http.Client
+	if managedCCG {
+		client = c.g.d.CCGateway.ModelClient()
+	} else {
+		client, err = c.g.d.Proxies.HTTPClient(prepareCtx, acc.ProxyID)
+	}
 	if err != nil || client == nil {
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrUnavailable.WithCause(err), errTypeInternal)}
 	}

@@ -56,7 +56,7 @@ go vet ./...
 
 ## SSH 远程 Docker 与代理
 
-本功能属于 `backend/` + `frontend/` 的内建 CCGateway，并非 `next` 的 `.s2plugin`；未部署到 next 核心时，next 插件页不会出现这些配置。
+下述桥接地址与环境变量说明针对 `backend/` + `frontend/` 的旧版内建 CCGateway。next 核心从 0.1.15 起提供独立管理页和 `ccgateway` 插件，接入方式见下一节。
 
 远程主机用本仓库 Dockerfile / Compose 部署容器，名称固定为 `ccgateway`，端口只绑定远程 `127.0.0.1:8787`。页面可以检查 Docker/Compose、查询状态、启动、停止、重启、读取日志；安装 Docker、构建镜像与首次创建容器仍使用 Compose。后端和远程容器需配置相同且互不相同的 `CCG_API_KEY`、`CCG_ADMIN_KEY`。
 
@@ -87,3 +87,11 @@ Docker 操作复用原生 Docker CLI；SSH 使用 `golang.org/x/crypto/ssh`，HT
 - 经 SSH 管理接口验证指定代理 → 容器重启后配置与 revision 保留 → 直连 → 继承，最终恢复继承。此项使用不可用的模拟代理地址，仅验证配置，不向它发送模型请求。
 - 容器内 Claude Code 2.1.288 的真实 CLI 测试通过：7 次本地模拟模型请求，覆盖历史、system、工具往返和 SSE，0 次云端模型调用。
 - 尚未完成真实 OAuth 登录、真实出站代理或收费模型调用；未将这套旧版宿主界面部署到 OVH next 核心。
+
+## next 核心 0.1.15
+
+系统设置与插件列表均提供 CCGateway 管理入口，可保存 SSH 连接、管理 Docker、切换代理及完成 Claude OAuth。SSH 身份和 sidecar 的两个密钥用核心既有主密钥加密保存到共享设置，各节点读取同一配置，无需更改 gateway 环境。
+
+随核心分发的 `ccgateway` 插件初始为禁用；启用后提供 `managed` 账号类型。管理员完成 Claude 授权后可在管理页接入账号，再到账号管理配置分组和模型。账号本身不存储 SSH 或 sidecar 密钥，所有托管账号共享当前远程实例。仅支持 Messages；token 预估和模型发现未开放。
+
+模型调用仍经过正常的鉴权、调度、限流及用量计费。插件返回固定虚拟目标，核心仅对匹配的插件、账号类型和目标调用受限 SSH 传输，其余账号继续使用原有上游访问检查。没有额外的公开桥接端口。账号测试使用相同传输。

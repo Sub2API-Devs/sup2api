@@ -4,6 +4,7 @@ use (
 	./deploy/mock-upstream
 	./e2e
 	./plugins/anthropic
+	./plugins/ccgateway
 	./plugins/gemini
 	./plugins/guard
 	./plugins/moderation

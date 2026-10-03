@@ -87,7 +87,7 @@ onMounted(loadBilling)
 
 <template>
   <div class="space-y-5">
-    <SPageHeader :title="t('settings.title')" :description="t('settings.description')" />
+    <SPageHeader :title="t('settings.title')" :description="t('settings.description')"><template #actions><SButton v-if="auth.has('settings:read')" to="/system/ccgateway">{{ t('ccgateway.title') }}</SButton></template></SPageHeader>
     <STabs v-if="tabs.length > 1" v-model="tab" :tabs="tabs" />
 
     <template v-if="tab === 'billing' && auth.has('settings:read')">

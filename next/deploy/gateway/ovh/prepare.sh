@@ -127,4 +127,6 @@ release 0.1.12
 release 0.1.13
 # 0.1.14 reorganizes the account list and editor (same schema).
 release 0.1.14
+# 0.1.15 adds CCGateway remote management and the bundled account plugin (same schema).
+release 0.1.15
 ls -la publish

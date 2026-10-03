@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"io"
 	"log/slog"
 	"net"
@@ -138,9 +139,12 @@ func (s *Service) runTest(ctx context.Context, bt core.AccountTypeBinding, acct 
 		return res
 	}
 	res.Upstream = upstreamAddr(u)
-	if err := s.checkUpstream(ctx, u, proxyID != nil); err != nil {
-		res.Message = err.Error()
-		return res
+	managedCCG := ccgateway.IsManaged(bt.Plugin.Key, bt.Type.ID, tr.GetUrl()) && s.d.CCGateway != nil && proxyID == nil
+	if !managedCCG {
+		if err := s.checkUpstream(ctx, u, proxyID != nil); err != nil {
+			res.Message = err.Error()
+			return res
+		}
 	}
 	method := strings.ToUpper(tr.GetMethod())
 	if method == "" {
@@ -161,7 +165,12 @@ func (s *Service) runTest(ctx context.Context, bt core.AccountTypeBinding, acct 
 	if body != nil && req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	hc, err := s.d.Proxies.HTTPClient(ctx, proxyID)
+	var hc *http.Client
+	if managedCCG {
+		hc = s.d.CCGateway.ModelClient()
+	} else {
+		hc, err = s.d.Proxies.HTTPClient(ctx, proxyID)
+	}
 	if err != nil {
 		res.Message = core.AsError(err).Message
 		return res

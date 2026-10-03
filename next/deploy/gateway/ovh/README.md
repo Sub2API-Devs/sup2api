@@ -28,6 +28,21 @@ releases, applied with a primary-first plan.
 
 ## Shipping a new core version
 
+Core 0.1.15 includes CCGateway management under System settings and the plugin
+list, plus the bundled `ccgateway` managed account plugin. It is initially
+installed disabled. Configure the remote connection and enable the plugin;
+after Claude authorization, create an account and assign its groups/models in
+account management. Connection settings are shared across nodes and encrypted
+with the existing core master key. No gateway image or environment change is
+required for SSH mode.
+
+The OVH-to-cc-max dedicated SSH key and pinned `known_hosts` live in the private
+`~/sup2api-managed/ccgateway/` directory. After deployment,
+`python3 verify-ccgateway.py --configure` installs that identity and the existing
+sidecar keys using the admin API; a run without `--configure` only verifies the
+saved connection and checks all four entrances. Neither run performs Claude
+OAuth login or model generation. The script prints no credentials.
+
 On the server, after the change is committed and pushed:
 
 ```sh
