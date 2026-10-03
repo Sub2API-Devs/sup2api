@@ -1,7 +1,7 @@
 export default {
   plugins: {
     title: '插件管理',
-    description: '安装和管理独立运行的 OAuth 出站传输插件。API Key 流程不受影响。',
+    description: '管理内建 Claude 网关和可安装的 OAuth 出站传输插件。',
     upload: '安装插件',
     uploadHint: '仅接受 .s2plugin 包；默认要求可信发布者签名。',
     runtimeNotice: '插件安装、启用、停用和配置由 Sub2API 宿主动态处理，通常不需要重启宿主实例。只有宿主版本或宿主配置本身变化时，才按部署方式执行重启。',
@@ -44,7 +44,7 @@ export default {
     confirmUntested: '该插件兼容当前版本范围，但未声明已测试当前 Sub2API 版本。确定承担风险并启用吗？',
     fileRequired: '请选择 .s2plugin 文件',
     bridgeRejected: '插件 UI 消息校验失败',
-    onlyOpenAI: '初期能力：仅 OpenAI OAuth 出站传输',
-    noAccountCoupling: '作用域为平台与账号类型，不修改账号数据，也不需要在账号页逐个开启。'
+    onlyOpenAI: '内建：CCGateway · 可安装：OpenAI OAuth 出站传输',
+    noAccountCoupling: 'CCGateway 通过账号调度接入；可安装插件按平台与账号类型生效。'
   }
 }

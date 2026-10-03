@@ -51,6 +51,7 @@ pnpm-debug.log*
 # ===================
 .env
 .env.local
+.env.ccgateway
 .env.*.local
 *.env
 !.env.example

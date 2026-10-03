@@ -758,6 +758,9 @@ func registerTLSFingerprintProfileRoutes(admin *gin.RouterGroup, h *handler.Hand
 
 func registerPluginRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth middleware.StepUpAuthMiddleware) {
 	plugins := admin.Group("/plugins")
+	plugins.GET("/builtin/ccgateway/status", h.Admin.Plugin.CCGateway)
+	plugins.POST("/builtin/ccgateway/auth/:action", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.CCGateway)
+	plugins.POST("/builtin/ccgateway/connect", gin.HandlerFunc(stepUpAuth), h.Admin.Account.ConnectCCGateway)
 	{
 		plugins.GET("", h.Admin.Plugin.List)
 		plugins.GET("/:id", h.Admin.Plugin.Get)
