@@ -2110,19 +2110,19 @@ SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` �
 
 内置 volcengine 已采用该接口：正常运行进度为 PENDING；完整 404/410 为 NOT_FOUND；网络错误、其他非 2xx、截断、无效 JSON、缺失或未知状态均为 POLL_FAILED。调度、连续失败上限和退款均由核心完成。
 
-## 33. 外壳托管与兼容滚动升级（2026-10-01）
+## 33. 网关托管与兼容滚动升级（2026-10-01）
 
 > 本节记录10月1日的已验证方案。10月2日起由 §34 主节点优先流程与 Redis 节点密钥鉴权取代：本节的滚动顺序与 mTLS 节点身份不再是当前行为，其余发布单元、核心状态和管理接口约定仍适用。
 
-独立 Go 模块 `runtime-contract` 定义协议，`shell` 实现 Linux 外壳。外壳保持公共 HTTP 入口、私网 mTLS 入口和本机管理 Unix socket；核心仅监听回环 HTTP 和令牌认证的控制 Unix socket。外壳自身不经该协议在线替换。部署与发布步骤见 [`deploy/shell`](../deploy/shell/README.md)。
+独立 Go 模块 `runtime-contract` 定义协议，`gateway` 实现 Linux 网关。网关保持公共 HTTP 入口、私网 mTLS 入口和本机管理 Unix socket；核心仅监听回环 HTTP 和令牌认证的控制 Unix socket。网关自身不经该协议在线替换。部署与发布步骤见 [`deploy/gateway`](../deploy/gateway/README.md)。
 
 **发布单元。** Ed25519 签名覆盖清单的精确 Payload 字节，清单摘要与压缩包摘要分离；清单包含源提交、构建标识、实际核心版本、目标 OS/架构/运行 ABI、逐文件摘要/大小/权限及协议范围。核心 `version`、`schema-contract` 命令不依赖配置或数据库。后者是嵌入迁移库存的确定性摘要；候选报告的版本及摘要必须等于签名声明。下载来源固定且不跟随重定向，解包拒绝逃逸、链接、特殊文件、未声明内容及超限体积。发布私钥不进入运行节点。
 
 **核心状态。** `candidate → preparing → prepared → serving → draining → drained`。准备失败报告 `failed` 与原因。初始不接收业务或领取后台任务。控制端点为 `/v1/hello`、`/v1/status`、`/v1/prepare`、`/v1/admission`、`/v1/drain`、`/v1/shutdown`。状态绑定 NodeID/BootID/ReleaseDigest；准入还绑定 PG 中的 revision 和 HTTP/后台领取/插件协调三项权限。准备只读检查业务迁移及插件状态；仅显式首次 bootstrap 允许业务迁移和首装。数据库准入被收回或不可验证时关闭新请求与领取并排空。
 
-排空是不可逆状态；再次服务须重启出新的 BootID。必须等 HTTP、计费用量写入、后台任务和插件关闭屏障完成才能报告 `DrainComplete=true`。`ActiveBackground` 是统一执行器的活动槽数，并非所有内部协程计数；`PendingUsageWrites=-1` 表示仍在等待屏障，不能解释为零。外壳不能只凭计数或锁超时强杀核心。
+排空是不可逆状态；再次服务须重启出新的 BootID。必须等 HTTP、计费用量写入、后台任务和插件关闭屏障完成才能报告 `DrainComplete=true`。`ActiveBackground` 是统一执行器的活动槽数，并非所有内部协程计数；`PendingUsageWrites=-1` 表示仍在等待屏障，不能解释为零。网关不能只凭计数或锁超时强杀核心。
 
-**流量。** `local-serving` 转给本机获准核心，`forward-only` 单跳转给已登记、获准服务的对端；维护/候选状态返回 503。对端验证证书 SAN 身份、核心 BootID 和路由 revision，禁止继续转发。公共入口去掉客户端注入的内部头；只信任配置的直接代理网段所传递的客户端地址和单值协议头。请求不自动重放；SSE/WebSocket 按流传输。`/livez` 表示外壳在线，`/readyz` 和 `/healthz` 表示当前路由可服务。
+**流量。** `local-serving` 转给本机获准核心，`forward-only` 单跳转给已登记、获准服务的对端；维护/候选状态返回 503。对端验证证书 SAN 身份、核心 BootID 和路由 revision，禁止继续转发。公共入口去掉客户端注入的内部头；只信任配置的直接代理网段所传递的客户端地址和单值协议头。请求不自动重放；SSE/WebSocket 按流传输。`/livez` 表示网关在线，`/readyz` 和 `/healthz` 表示当前路由可服务。
 
 **协调与恢复。** PG 的独立 `updater` schema 保存集群基线、节点心跳、版本、计划、步骤、准入与事件。指定主节点在 Redis 协调锁内发布下一步，各节点在自己的 Redis 锁内执行；锁续期丢失时取消工作且不登记成功。没有 PostgreSQL 兜底锁命名空间。操作幂等并绑定节点/版本；重启重新取锁，从持久状态恢复。旧核心或进程组仍存活、启动结果无法确认时拒绝另起核心，留待人工核实。
 
@@ -2132,23 +2132,23 @@ SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` �
 
 **管理接口。** `/api/v1/system/releases`、`/system/upgrades` 与计划的详情/事件接口需要 `system:update:read`；创建需要敏感权限 `system:update:execute`，暂停/恢复/取消需要敏感权限 `system:update:recover`，沿用核心 RBAC 与二次验证。创建携带 `release_digest`、预检取得的 `expected_revision` 和 `idempotency_key`，过期预检或同幂等键不同请求被拒绝。核心仅转发认证后的操作到 mode 0600 本机 socket。
 
-当前 v1 仅支持 schema/cluster/task/Host API 契约保持不变的滚动更新。维护迁移、跨协议转换、自动主节点选举、未经校验的任意目标强制回滚、外壳自身更新不在此协议实现范围内。不能用新签名或更改声明绕过这些检查。
+当前 v1 仅支持 schema/cluster/task/Host API 契约保持不变的滚动更新。维护迁移、跨协议转换、自动主节点选举、未经校验的任意目标强制回滚、网关自身更新不在此协议实现范围内。不能用新签名或更改声明绕过这些检查。
 
 ## 34. 主节点优先升级与 Redis 节点密钥（2026-10-02）
 
-依据 [多节点同步规约](MULTINODE-SYNC-PROTOCOL.md)；验收与未覆盖范围见 [验证记录](audits/2026-10-02/MULTINODE-VALIDATION.md)。四个协议号互相独立：shell/core 控制协议 2（`runtime-contract.Protocol`）、业务集群协议 1、任务协议 1、Host API 4；SDK `protocol.HostAPIVersion` 必须等于 `runtime-contract.HostAPIVersion`，有测试约束。
+依据 [多节点同步规约](MULTINODE-SYNC-PROTOCOL.md)；验收与未覆盖范围见 [验证记录](audits/2026-10-02/MULTINODE-VALIDATION.md)。四个协议号互相独立：gateway/core 控制协议 2（`runtime-contract.Protocol`）、业务集群协议 1、任务协议 1、Host API 4；SDK `protocol.HostAPIVersion` 必须等于 `runtime-contract.HostAPIVersion`，有测试约束。
 
-**节点身份。** 每节点一份可复用密钥：配置 `peer_auth_key`，或非空的 `SUB2API_PEER_AUTH_KEY` 覆盖它（空值视为未设置）；都没有时用 32 字节随机值。Redis 键 `s2a:peer:{cluster}:node:<node>` 保存 cluster/node/shell boot/peer 协议/密钥/启用状态，TTL 30 秒、每 10 秒用 Lua 比较后续期，续期不换密钥、不能创建缺失键。登记缺失时所属外壳在登记锁内复核 PG（启用、当前 boot、无其他活实例）后重建：配置模式复用原值，自动模式生成新值；不重启核心、不清除 PG 就绪。外壳启动时登记失败不退出，保持维护态并重试。密钥不进入核心及插件环境，也不发往发布源。
+**节点身份。** 每节点一份可复用密钥：配置 `peer_auth_key`，或非空的 `SUB2API_PEER_AUTH_KEY` 覆盖它（空值视为未设置）；都没有时用 32 字节随机值。Redis 键 `s2a:peer:{cluster}:node:<node>` 保存 cluster/node/gateway boot/peer 协议/密钥/启用状态，TTL 30 秒、每 10 秒用 Lua 比较后续期，续期不换密钥、不能创建缺失键。登记缺失时所属网关在登记锁内复核 PG（启用、当前 boot、无其他活实例）后重建：配置模式复用原值，自动模式生成新值；不重启核心、不清除 PG 就绪。网关启动时登记失败不退出，保持维护态并重试。密钥不进入核心及插件环境，也不发往发布源。
 
-**节点请求。** 发送端只带自身 `X-Sub2api-Peer-Node/Boot/Key`，业务 `Authorization` 原样保留。接收端先认证（头数量/长度/格式、Redis 当前登记、常量时间比较、PG 当前 boot），再按方向、范围和批准制品授权：仅从节点→主节点转发，制品只限基线与活动计划。内部错误 401（来源登记或 boot 无效）、403（操作不允许）、409（目标 boot/路由变化）、503（无法验证或维护），带 `X-Sub2api-Peer-Error`，源外壳统一映射为公网 503；核心自身的 401/403 原样返回，核心伪造的保留头被清除。转发保留原始路径与 query，不跟随重定向，业务请求不重放。
+**节点请求。** 发送端只带自身 `X-Sub2api-Peer-Node/Boot/Key`，业务 `Authorization` 原样保留。接收端先认证（头数量/长度/格式、Redis 当前登记、常量时间比较、PG 当前 boot），再按方向、范围和批准制品授权：仅从节点→主节点转发，制品只限基线与活动计划。内部错误 401（来源登记或 boot 无效）、403（操作不允许）、409（目标 boot/路由变化）、503（无法验证或维护），带 `X-Sub2api-Peer-Error`，源网关统一映射为公网 503；核心自身的 401/403 原样返回，核心伪造的保留头被清除。转发保留原始路径与 query，不跟随重定向，业务请求不重放。
 
-**升级顺序。** 策略 `primary-first-v1`：全部预下载 → 从节点转发并停止核心与插件（真实停止确认绑定计划、步骤与 shell boot）→ 主节点维护并停止 → 仅主节点以 `AllowMigration` 启动目标并迁移 → 主节点准入并本地服务 → 从节点逐个启动、准入、回本地。主节点维护期间入口 503。准入事务内锁计划行与集群行并复核计划，暂停或新建计划与首次准入串行。从节点因主节点不可用退回维护后，心跳在主节点就绪时恢复转发，不启动核心。被禁用节点仍可有界停机并写入当前 boot 的停止确认，但不能借禁用绕过停止屏障。
+**升级顺序。** 策略 `primary-first-v1`：全部预下载 → 从节点转发并停止核心与插件（真实停止确认绑定计划、步骤与 gateway boot）→ 主节点维护并停止 → 仅主节点以 `AllowMigration` 启动目标并迁移 → 主节点准入并本地服务 → 从节点逐个启动、准入、回本地。主节点维护期间入口 503。准入事务内锁计划行与集群行并复核计划，暂停或新建计划与首次准入串行。从节点因主节点不可用退回维护后，心跳在主节点就绪时恢复转发，不启动核心。被禁用节点仍可有界停机并写入当前 boot 的停止确认，但不能借禁用绕过停止屏障。
 
-**插件互斥。** 核心计划与插件安装/批准/启用/升级/停用/卸载通过 Redis 锁 `system:cluster-change` 串行提交（25 秒提交上下文），running/paused 计划存在时插件变更被拒绝；紧急撤权例外。大包解包与哈希在取锁前完成。rollout 进入终态后，每个可能仍有旧实例的 boot 在 `plugin_rollout_cleanup`（迁移 0021）记录清理屏障 `cleanup_pending → cleaned`，`plugin_rollout_nodes` 保留各节点 active/failed 结果；未清理完成会阻止新核心计划；运行中的核心在本机旧实例排空后自行确认，已退出核心的 boot 只有外壳确认进程组退出后才标为 `cleaned`，存活过期不算证据。
+**插件互斥。** 核心计划与插件安装/批准/启用/升级/停用/卸载通过 Redis 锁 `system:cluster-change` 串行提交（25 秒提交上下文），running/paused 计划存在时插件变更被拒绝；紧急撤权例外。大包解包与哈希在取锁前完成。rollout 进入终态后，每个可能仍有旧实例的 boot 在 `plugin_rollout_cleanup`（迁移 0021）记录清理屏障 `cleanup_pending → cleaned`，`plugin_rollout_nodes` 保留各节点 active/failed 结果；未清理完成会阻止新核心计划；运行中的核心在本机旧实例排空后自行确认，已退出核心的 boot 只有网关确认进程组退出后才标为 `cleaned`，存活过期不算证据。
 
-**插件包分发（2026-10-02 补充）。** 插件包字节不再存 PG：迁移 0022 删除 `plugin_versions.package`，新增 `package_url`。市场版本由每个节点按 `package_url` 自行下载；上传和首装的包由主节点外壳保存，从节点经节点网络拉取。核心通过 `blobs.Source` 取包（市场优先，失败或摘要不符时回退到存储），存储在外壳托管下是本机管理 socket 上的 `/system/plugin-blobs/<sha256>`，没有外壳时是本机目录（只支持单节点）。节点间新增两个范围：`plugin-upload`（`PUT /internal/plugin-blobs/`，从节点→主节点）与 `plugin-artifact`（`GET /internal/plugin-blobs/`，摘要须被某个版本引用）。所有写入校验 sha256 与大小上限（外壳 `plugin_max_bytes`，默认 256 MiB）；上传在主节点确认保存后才写入版本行。细节见 [规约 §6.2](MULTINODE-SYNC-PROTOCOL.md)。
+**插件包分发（2026-10-02 补充）。** 插件包字节不再存 PG：迁移 0022 删除 `plugin_versions.package`，新增 `package_url`。市场版本由每个节点按 `package_url` 自行下载；上传和首装的包由主节点网关保存，从节点经节点网络拉取。核心通过 `blobs.Source` 取包（市场优先，失败或摘要不符时回退到存储），存储在网关托管下是本机管理 socket 上的 `/system/plugin-blobs/<sha256>`，没有网关时是本机目录（只支持单节点）。节点间新增两个范围：`plugin-upload`（`PUT /internal/plugin-blobs/`，从节点→主节点）与 `plugin-artifact`（`GET /internal/plugin-blobs/`，摘要须被某个版本引用）。所有写入校验 sha256 与大小上限（网关 `plugin_max_bytes`，默认 256 MiB）；上传在主节点确认保存后才写入版本行。细节见 [规约 §6.2](MULTINODE-SYNC-PROTOCOL.md)。
 
-**CPU 保护（2026-10-02 补充）。** 管理员在系统设置的“CPU 保护”页开关并设定阈值（`GET/PUT /api/v1/system/offload`，`settings:read` / `settings:manage`，经核心转给本机外壳；未托管节点返回 503 `updater_unavailable`）。设置存于 `updater.clusters.offload_enabled/offload_cpu_percent`，默认关闭、阈值 80，取值 50–95。每个外壳每秒采样 CPU，取本节点 cgroup（相对其可用 CPU）与整机两者较高者，按最近 10 秒平均，随心跳写入 `updater.nodes.cpu_percent`（未测得为 NULL）。本地服务的节点平均值达到阈值后，把新的公网请求轮流交给其他节点：目标须启用、本地服务就绪、同一核心版本、心跳 20 秒内、自身未在转移且 CPU 低于阈值减 10；没有目标就留在本节点。低于阈值减 10 才停止。外壳先在 PG 写入 `offloading=true` 再开始转移，先停止转移再清除标记；接收端只接受带标记的来源的 `forward`，因此转移可以从主节点到从节点。转移不续期 10 秒后自动失效。转移的请求走现有 `/internal/forward`，接收端只交给本地核心，不再转发；进行中的请求不迁移，业务请求不重放，目标路由变化时该请求得到 503。细节见 [规约 §5.1](MULTINODE-SYNC-PROTOCOL.md)。
+**CPU 保护（2026-10-02 补充）。** 管理员在系统设置的“CPU 保护”页开关并设定阈值（`GET/PUT /api/v1/system/offload`，`settings:read` / `settings:manage`，经核心转给本机网关；未托管节点返回 503 `updater_unavailable`）。设置存于 `updater.clusters.offload_enabled/offload_cpu_percent`，默认关闭、阈值 80，取值 50–95。每个网关每秒采样 CPU，取本节点 cgroup（相对其可用 CPU）与整机两者较高者，按最近 10 秒平均；实时心跳保存到 Redis，混合旧网关期间兼容写入 `updater.nodes.cpu_percent`（最新规则见 CONTRACTS §39）（未测得为 NULL）。本地服务的节点平均值达到阈值后，把新的公网请求轮流交给其他节点：目标须启用、本地服务就绪、同一核心版本、心跳 20 秒内、自身未在转移且 CPU 低于阈值减 10；没有目标就留在本节点。低于阈值减 10 才停止。网关先在 PG 写入 `offloading=true` 再开始转移，先停止转移再清除标记；接收端只接受带标记的来源的 `forward`，因此转移可以从主节点到从节点。转移不续期 10 秒后自动失效。转移的请求走现有 `/internal/forward`，接收端只交给本地核心，不再转发；进行中的请求不迁移，业务请求不重放，目标路由变化时该请求得到 503。细节见 [规约 §5.1](MULTINODE-SYNC-PROTOCOL.md)。
 
 ## 35. OpenAI Responses WebSocket 模式（2026-10-02）
 
@@ -2179,18 +2179,29 @@ SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` �
 
 用户要求：升级核心时，安装包里的内置插件一起升级，不再单独上传、单独升级。取代 §34/规约 §6.2 中“核心包里的内置插件只用于首装”的规则。
 
-- 外壳托管的核心（非首装启动）在本节点获准协调插件后，读取本核心包 `builtin/` 中各插件的版本。集群中这些插件都已不低于包内版本时（`BuiltinsCommitted`，只看 PG 中的批准与 active 版本），这项工作结束。
+- 网关托管的核心（非首装启动）在本节点获准协调插件后，读取本核心包 `builtin/` 中各插件的版本。集群中这些插件都已不低于包内版本时（`BuiltinsCommitted`，只看 PG 中的批准与 active 版本），这项工作结束。
 - 否则持锁 `plugins:builtin` 执行 `EnsureBuiltin`：上传并批准包内版本（核心自己的包，授予它请求的全部权限，和首装相同），对已启用且版本低于包内的插件发起升级，未见过的内置插件安装并启用（install-only 除外）。被禁用的保持禁用；版本高于包内的（管理员装的）不降级；同版本不同内容保留已存的那份。
 - 核心计划运行或暂停时插件变更被拒绝，所以内置插件升级在计划完成、所有节点都运行新核心之后开始，每 10 秒重试一次。升级按 §36 进行：迁移由核心执行一次，各节点独立切换，落后的节点先用旧版本服务。
 - 回退到旧核心时，旧核心包里的插件版本更低，不会降级已升级的插件。
 - 节点准入不等待这项升级，避免与“计划运行时拒绝插件变更”互相等待。
-- 不经外壳的单机部署原本就按包内版本升级内置插件，不变。
+- 不经网关的单机部署原本就按包内版本升级内置插件，不变。
 ## 38. 升级可观测性与审计（2026-10-03）
 
 - 内置插件自动升级在节点获准协调且不存在 running/paused 核心计划时启动；查询失败则等待。提交插件变更仍在共享锁内复查，不以页面或前置检查代替互斥。
 - 迁移 `0024_plugin_history.sql` 新增无外键的插件历史表，卸载后保留。发布创建、阶段变化、协调者接管和主动交接通过触发器与发布变更一起提交或回滚；续租不写历史。节点状态按 `(state, serving, standby, fallback, rollout, rollout_id)` 去重，成功持久化后才更新内存签名，重启后的首个报告会重新记录。错误文本独自变化不追加记录。每节点每小时最多删除 10,000 条超过 30 天的事件。
 - `GET /plugins/:key/rollouts` 与 `GET /plugins/rollouts?since=<RFC3339>` 返回发布分页；运行中的发布读取实时节点状态，终态返回结束时的节点快照。`GET /plugins/:key/history?rollout_id=<id>` 返回倒序事件分页，也可省略过滤。三个接口均要求 `plugin:read`，`page/page_size` 默认 1/20，最大 200。不补造升级前不存在的事件。
-- 内置插件 enable/upgrade 由发布控制器在创建发布的事务里写审计，actor 为系统，detail 包含 `source=builtin`、版本和 rollout_id。核心管理桥在外壳返回成功后写 `system.upgrade.create/pause/resume/cancel/rollback`、`system.node.enable/disable` 与 `system.offload.update`。外壳操作与核心审计跨进程、非同一事务；若审计写入失败，保留动作成功响应并记录明确 ERROR，避免客户端重复提交已成功的操作。
+- 内置插件 enable/upgrade 由发布控制器在创建发布的事务里写审计，actor 为系统，detail 包含 `source=builtin`、版本和 rollout_id。核心管理桥在网关返回成功后写 `system.upgrade.create/pause/resume/cancel/rollback`、`system.node.enable/disable` 与 `system.offload.update`。网关操作与核心审计跨进程、非同一事务；若审计写入失败，保留动作成功响应并记录明确 ERROR，避免客户端重复提交已成功的操作。
 - `GET /audit-logs?action=<exact action>` 与审计界面要求新权限 `audit:read`，使用同样分页规则。返回现有审计字段，不新增记录凭证的路径。
-- 节点插件状态按真实 `serving/standby/fallback/instances` 契约显示。拓扑按当前 boot 匹配报告，`node:read` 控制插件报告读取，`system:update:read` 控制外壳信息，`settings:read` 控制 CPU 转移阈值读取；权限不足或非托管部署允许部分展示。
+- 节点插件状态按真实 `serving/standby/fallback/instances` 契约显示。拓扑按当前 boot 匹配报告，`node:read` 控制插件报告读取，`system:update:read` 控制网关信息，`settings:read` 控制 CPU 转移阈值读取；权限不足或非托管部署允许部分展示。
 - 拓扑转发实线指向主节点；CPU 虚线表示推算候选，非实际请求路径。升级泳道的耗时依赖已保存的 step/done 事件，缺失时显示未知。关联插件列表仅按核心计划创建时间过滤，可包含手动发布；插件实际版本与 fallback 以当前节点报告为准。
+
+## 39. 网关实时状态与持久控制状态（2026-10-03）
+
+- 组件统一称为网关（Gateway），模块为 `next/gateway`，部署目录为 `next/deploy/gateway`，二进制为 `sub2api-gateway`。已有 JSON 字段 `shell_boot_id`、签名清单字段 `shell_protocol` 和兼容配置文件名 `shell.json` 不改名；核心自身的业务网关包 `server/internal/gateway` 不属于本组件。
+
+- 仍共用现有 PG/Redis，不拆数据库。PG 保存批准版本、计划、步骤、节点启禁与启动身份、准入、停止确认和事件；`mode/ready/stopped/core_boot_id/release_digest/route_revision/offloading` 仍为安全控制快照，只有变化时更新节点行。CPU 转移授权仍先持久标记再转流，Redis 心跳过期绝不是停止证明。
+- 网关节点心跳、CPU 和当前错误观察写入 Redis，key 为 `updater:telemetry:<sha256(cluster_id\x00node_id\x00shell_boot_id)>`，最长有效期 20 秒。写前获取 Redis TIME 形成固定截止时间，并扣除本地单调时钟测得的 PG 等待及请求耗时；Lua 拒绝过期和迟到序号，只设置剩余 TTL，拒绝结果返回错误以阻止陈旧 CPU 决策。读取通过 Lua 原子取得 GET/PTTL，折算为读取节点本地单调时间，不比较不同主机壁钟。报告须与 PG 当前启动身份及全部控制快照匹配；不匹配、缺失、过期或 Redis 不可用时，`last_seen` 为零时间、CPU 为 NULL，不以旧 PG 快照冒充新鲜状态。节点不会因丢失遥测直接重启或排空。
+- 网关 schema 增加 `telemetry_boot_id`，与当前 `shell_boot_id` 相等才启用 Redis 新鲜度。旧网关及回退后的新 boot 继续使用 PG 心跳；集群仍有启用的旧 boot 时，新网关每隔至少 5 秒保留 PG 心跳和 CPU 兼容刷新。全部切换后一次清理兼容 CPU 值，稳态遥测不再改写 PG 行；PG 身份与控制状态检查仍然存在，不声称不再访问 PG。
+- `updater:wakeup:<cluster_id>` Pub/Sub 仅发送提交后的唤醒提示，不承载可执行命令或可靠事件。计划创建、操作、启禁及升级状态变更在 PG 提交后通知；节点步骤完成先提交结果并刷新状态，再通知。通知丢失依靠 1 秒轮询补查，重复通知合并，不重放已完成步骤；Redis 断连恢复后重新订阅。
+- 每轮最多连续推进 16 次，每次重新取得 Redis 执行锁并读取 PG，空提交不算进展；提示驱动的外循环有 50 ms 让出，避免内部自激忙循环。独立 3 秒心跳在长下载或排空时继续运行。PG 事务内的计划与准入校验、租约丢失取消语义不变。
+- 此变化属于网关二进制，单发核心安装包不会生效；需在无 running/paused 核心计划时逐个更换网关，从节点先、主节点最后，保留状态卷与旧镜像。核心版本无需仅为此变更而升级。控制台仍按既有轮询周期刷新，本次不新增浏览器推送。

@@ -1,0 +1,63 @@
+=== RUN   TestRealCoreFaultsDuringPrimaryFirstUpgrade
+    realcore_faults_linux_test.go:289: SSE through forwarding node lasted 13.472s across TTL 3s and a key replacement
+    realcore_faults_linux_test.go:305: video task s2task_404fab0f-ecda-4016-b1ba-c4d0b02655a1 submitted; an upstream observation is held open
+    realcore_faults_linux_test.go:318: primary-first plan 0aaac6924c6acf61ef78db01b8453c66 started
+    realcore_faults_linux_test.go:132: fault: restarted stopped follower shell as c-shell-2
+    realcore_faults_linux_test.go:138: fault: node d joined during the update as d-shell-1
+    realcore_faults_linux_test.go:192: fault: SIGKILL primary core pid 66401 during its migration
+    realcore_faults_linux_test.go:332: fault: plan paused after the interrupted migration: Get "http://core/v1/status": dial unix /tmp/s2-real-2443174932/core.sock: connect: connection refused
+    realcore_faults_linux_test.go:359: fault: Redis partitioned for 9s
+    realcore_faults_linux_test.go:373: plan resumed
+    realcore_faults_linux_test.go:399: update completed; the retried migration applied once; d serves the target
+    realcore_faults_linux_test.go:444: video task settled once on its account: cost=0.00025500, 2 upstream observations (1 canceled by the update), 0 poll failures
+    realcore_faults_linux_test.go:456: fault: Redis partitioned for 9s while serving
+    realcore_faults_linux_test.go:477: Redis partition while serving: every core kept its boot and serves again
+--- PASS: TestRealCoreFaultsDuringPrimaryFirstUpgrade (177.80s)
+=== RUN   TestRealCoreRollingUpgrade
+    realcore_linux_test.go:43: bootstrap primary a prepared and admitted
+    realcore_linux_test.go:50: follower b downloaded, prepared and admitted
+    realcore_linux_test.go:50: follower c downloaded, prepared and admitted
+    realcore_linux_test.go:161: primary-first plan e778fb37b594b287fa0586969a931d4f started across 3 nodes
+    realcore_linux_test.go:264: primary-first completed: requests=3438 planned503=970 forwardedSuccess=516 failures=0 counts=map[a:local-serving:401:824 a:maintenance:503:322 b:forward-only:401:301 b:forward-only:503:2 b:local-serving:401:521 b:maintenance:503:322 c:forward-only:401:216 c:forward-only:503:2 c:local-serving:401:606 c:maintenance:503:322]
+    realcore_linux_test.go:307: bundled anthropic upgraded to 0.3.0-test with the core on all 3 nodes; its migration ran once
+    realcore_linux_test.go:347: primary applied migrations [9999_managed_upgrade_probe.sql] while followers were stopped
+    realcore_linux_test.go:397: node b re-registered after Redis loss; key reused=true; core boot unchanged
+    realcore_linux_test.go:397: node c re-registered after Redis loss; key reused=false; core boot unchanged
+    realcore_linux_test.go:409: killed core b boot=2d9909aa82789f3962112f7c933fded881bb62aa662ddf0e29ea346b5518b7ab; waiting for approved-release recovery
+    realcore_linux_test.go:413: core b recovered with new boot=128d646b485b930e7d561bf5f34aff1fdf9c5a36945c554269bf609e39d1d45f
+    realcore_linux_test.go:442: failed-candidate plan 5292fa75b15f8457d853ac903c7bcca9 started
+    realcore_linux_test.go:449: failed-candidate plan paused safely: candidate exited before handshake
+    realcore_linux_test.go:494: baseline recovery plan 25a0fd21036d2d174a4727455abe071e started; order=[a b c]
+    realcore_linux_test.go:509: recovery: primary serving and all entrances converged
+    realcore_linux_test.go:580: baseline recovery completed; next update 4f3188b77033b19606a43a7a185a84d5 accepted
+    realcore_linux_test.go:581: real R1->R2 primary-first upgrade passed; 3438 business requests, 970 planned 503s; old=db7322b66821340b34c0bbd2a1a4b6216a9a7c99debaa56cab4108a2acaf3940 target=1884df4095b9c5d79c75956f7b5f93342a5492315d183a3ff683c72f3620b46a
+--- PASS: TestRealCoreRollingUpgrade (116.48s)
+=== RUN   TestRealCoreCPUOffloadMovesNewRequests
+2026/10/03 06:54:19 WARN cpu offload started node=a cpu_percent=95 targets="[b c]"
+    realcore_offload_linux_test.go:109: primary a at 95%: 30 requests answered by b (15) and c (15)
+2026/10/03 06:54:23 INFO cpu offload stopped node=a cpu_percent=95
+2026/10/03 06:54:24 WARN cpu offload started node=a cpu_percent=95 targets="[b c]"
+2026/10/03 06:54:28 INFO cpu offload stopped node=a cpu_percent=65
+2026/10/03 06:54:29 WARN cpu offload started node=b cpu_percent=99 targets="[a c]"
+2026/10/03 06:54:30 INFO cpu offload stopped node=b cpu_percent=99
+    realcore_offload_linux_test.go:157: follower b offloaded at 99% and stopped when the setting was turned off
+--- PASS: TestRealCoreCPUOffloadMovesNewRequests (63.93s)
+=== RUN   TestRealCorePluginPackagesTravelBetweenNodes
+    realcore_packages_linux_test.go:131: bundled packages: kept by the primary's shell, pulled by both followers over the node network
+    realcore_packages_linux_test.go:152: upload guard through follower b: stored on the primary before the response, pulled by c
+    realcore_packages_linux_test.go:185: market relay@0.2.0: 4 downloads from the market (install + each node); b never used the node network for it
+    realcore_packages_linux_test.go:193: primary a stopped
+    realcore_packages_linux_test.go:199: follower b restarted with a new core while the primary was down; it serves from its local release and plugin copies
+    realcore_packages_linux_test.go:210: node d cannot start while the primary is down: Get "https://127.0.0.1:37229/internal/blobs/2316249d876b25acc43700172762b28caa12724fb1863548a96921f04b075095": dial tcp 127.0.0.1:37229: connect: connection refused
+    realcore_packages_linux_test.go:224: node d started after the primary returned, pulling bundled and uploaded packages from it and the market package from the market
+--- PASS: TestRealCorePluginPackagesTravelBetweenNodes (75.72s)
+=== RUN   TestRealCoreResponsesWebSocket
+    realcore_responses_ws_linux_test.go:167: session on b: rejected key failed over at the handshake, three turns on one upstream connection, each recorded and billed
+    realcore_responses_ws_linux_test.go:216: draining b closed its session with 1012; the client reconnected through a and continued
+--- PASS: TestRealCoreResponsesWebSocket (53.75s)
+=== RUN   TestRealCoreShellsCarryWebSocketsAcrossNodes
+    realcore_websocket_linux_test.go:117: session through the follower survived 6s and new keys for both nodes
+    realcore_websocket_linux_test.go:165: while a offloads, its new session runs on b; the open and the forwarded sessions stay on a
+--- PASS: TestRealCoreShellsCarryWebSocketsAcrossNodes (35.75s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/gateway/internal/control	524.597s

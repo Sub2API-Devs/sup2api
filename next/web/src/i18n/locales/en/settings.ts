@@ -9,14 +9,14 @@ export default {
   },
   offload: {
     title: 'CPU protection',
-    subtitle: 'A node whose CPU is too busy hands new requests to idle nodes. Available on shell-managed clusters only.',
+    subtitle: 'A node whose CPU is too busy hands new requests to idle nodes. Available on gateway-managed clusters only.',
     enabled: 'Enabled',
     enabledHint: 'When off, every node serves the requests of its own entrance.',
     threshold: 'CPU threshold',
     thresholdHint:
       'A node starts handing off when its CPU averaged over 10 seconds reaches this value, and stops below the threshold minus 10. Requests only go to healthy nodes of the same version below the threshold minus 10; without one they stay local. Requests in progress are not moved.',
     range: 'Range {min}–{max}.',
-    unmanaged: 'This node is not managed by the shell and has no CPU protection. Use the shell for multi-node deployments.',
+    unmanaged: 'This node is not managed by the gateway and has no CPU protection. Use the gateway for multi-node deployments.',
     node: 'Node',
     cpu: 'CPU',
     state: 'State',

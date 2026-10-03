@@ -1,0 +1,7 @@
+=== gateway ===
+gofmt: cmd/sub2api-release/main_test.go
+internal/control/control_test.go
+internal/control/realcore_harness_linux_test.go
+internal/control/runtime.go
+internal/control/runtime_linux_test.go
+internal/control/store.go

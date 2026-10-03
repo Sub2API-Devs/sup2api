@@ -83,7 +83,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
           <div class="rounded-2xl border-2 p-3 text-sm dark:bg-dark-900" :class="card.stale ? 'border-red-300 bg-red-50' : 'border-primary-200 bg-primary-50/40'">
             <div class="flex flex-wrap items-center gap-2"><strong>{{ card.id }}</strong><SBadge v-if="card.id === primary" tone="purple">{{ t('upgrades.primary') }}</SBadge><SBadge v-if="card.stale" tone="danger">{{ t('nodes.stale') }}</SBadge></div>
             <div v-if="card.shell" class="my-2 space-y-1">
-              <div>{{ t('observe.shell') }} · {{ card.shell.mode }} · {{ t(!card.shell.enabled ? 'upgrades.disabled' : card.shell.ready ? 'upgrades.serving' : 'upgrades.waiting') }}</div>
+              <div>{{ t('observe.gateway') }} · {{ card.shell.mode }} · {{ t(!card.shell.enabled ? 'upgrades.disabled' : card.shell.ready ? 'upgrades.serving' : 'upgrades.waiting') }}</div>
               <div>CPU {{ card.shell.cpu_percent == null ? '—' : card.shell.cpu_percent.toFixed(1) + '%' }} <SBadge :tone="card.shell.offloading ? 'warning' : 'gray'">{{ t(card.shell.offloading ? 'observe.offloading' : 'observe.notOffloading') }}</SBadge></div>
               <SHint size="xs">{{ t('observe.boot') }}: {{ card.shell.shell_boot_id?.slice(0,8) || '—' }}</SHint>
             </div>

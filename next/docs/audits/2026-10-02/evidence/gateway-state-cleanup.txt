@@ -1,0 +1,10 @@
+node 1 HTTP 401
+logs {'Type': 'json-file', 'Config': {'max-file': '5', 'max-size': '50m'}}
+node 2 HTTP 401
+logs {'Type': 'json-file', 'Config': {'max-file': '5', 'max-size': '50m'}}
+node 3 HTTP 401
+logs {'Type': 'json-file', 'Config': {'max-file': '5', 'max-size': '50m'}}
+node 4 HTTP 401
+logs {'Type': 'json-file', 'Config': {'max-file': '5', 'max-size': '50m'}}
+active_plans 0
+isolated project removed; unique mock image removed; exact temporary directory removed; external Go cache volumes retained

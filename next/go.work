@@ -13,6 +13,6 @@ use (
 	./runtime-contract
 	./sdk
 	./server
-	./shell
+	./gateway
 	./tools/sub2api-plugin
 )

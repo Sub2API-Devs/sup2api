@@ -1,7 +1,7 @@
 export default {
-  topology: 'Node topology', shell: 'Shell', core: 'Core', plugins: 'Plugins',
+  topology: 'Node topology', gateway: 'Gateway', core: 'Core', plugins: 'Plugins',
   forwarding: 'Forward to primary', offload: 'CPU offload candidates', legend: 'Solid: forward to primary. Dashed: eligible receivers inferred from current heartbeats and CPU threshold, not actual request paths.',
-  partial: 'Shell information unavailable; showing cores and plugins.', unavailable: 'Data temporarily unavailable; showing the last snapshot.', empty: 'No nodes',
+  partial: 'Gateway information unavailable; showing cores and plugins.', unavailable: 'Data temporarily unavailable; showing the last snapshot.', empty: 'No nodes',
   fallback: 'Still serving the previous version', standby: 'Standby', instances: 'Instances', restarts: 'Restarts',
   noReport: 'No plugin report from the current core yet', unknown: 'Unknown', running: 'Running', stopped: 'Stopped',
   progress: 'Overall progress', lanes: 'Node steps', reconnect: 'Connection interrupted during upgrade. Reconnecting automatically; showing the last progress.',

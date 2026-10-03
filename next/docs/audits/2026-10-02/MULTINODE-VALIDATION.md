@@ -277,3 +277,20 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 - 审计列表、发布列表和 anthropic 历史接口均通过认证访问验证；anthropic 已持久化四个节点的状态。CPU 保护开启、阈值 80，各节点未触发转移；四个业务入口无凭证均返回 401。见 [上线核验](evidence/ovh-upgrade-0.1.7-verify.txt)。
 - 生产首页引用的新前端资源已验证：`AuditView-BflBeuok.js`、`NodesView-DnvgxrQ0.js`、`UpgradesView-_igUsw0f.js` 均返回 200。
 - 未出现此前内置升级反复被拒的 ERROR。启动仍有原配置 `SUB2API_PLUGIN_VERIFY_SIGNATURES=false` 的 WARN；此次未改变该配置。此升级计划由旧 v0.1.6 核心创建，不会补写为新管理审计；新审计从 v0.1.7 处理的后续操作开始。
+
+## 18. 网关 PG 控制状态、Redis 遥测与升级唤醒（最终隔离验证）
+
+实现规则见 CONTRACTS §39 和多节点规约 §13。组件称呼统一为网关（Gateway），源码与部署目录改为 `next/gateway`、`next/deploy/gateway`，二进制为 `sub2api-gateway`；前端拓扑、升级及 CPU 保护页面同步显示网关。既有 `shell_boot_id`、`shell_protocol`、`shell.json` 保持兼容，历史审计和证据不改名。网关 schema 增加启动身份绑定的遥测能力标记，没有新增核心数据库迁移。
+
+本节记录 2026-10-03 最终源码的隔离验收结果；尚未生产部署，生产仍为 §17.1 的版本。网关改动必须重建网关镜像并逐个替换容器，单发核心包不会生效；前端命名变化另随后续核心发布交付。
+
+- 隔离环境为 OVH 独立项目 `sub2api-state-cd5brf`，使用私有 PG 16、Redis 7、源码构建 mock，不发布端口、不连接生产数据库。当前验证入口为 `next/deploy/ci/check.sh`，历史 evidence 中的运行脚本保留原样。
+- 六项真实多节点回归最终全部通过，共 **524.597 秒**：升级中断与 Redis 故障、正常升级及基线恢复、CPU 转移、插件包跨节点、Responses WebSocket、网关层 WebSocket。该轮使用完成命名迁移、Redis 时间安全修复后的最终代码，而非用先前一轮代替最终结果。见 [最终真实回归](evidence/gateway-state-realcore.log.txt)。
+- 全模块格式检查、`go vet`、构建与 `go test -race` 最终通过，e2e 仅编译。初次 gateway 模块在 `gofmt` 检查阶段失败，尚未进入该模块后续检查；格式修正后完整重跑 gateway 的格式、vet、build 与 race 测试并通过。其余模块通过。见 [最终汇总](evidence/gateway-state-modules.summary)、[初次汇总](evidence/gateway-state-modules-first.summary)、[gateway 初次日志](evidence/gateway-state-module-gateway-first.log.txt)、[gateway 最终日志](evidence/gateway-state-module-gateway.log.txt)、[server 日志](evidence/gateway-state-module-server.log.txt)。普通模块运行未提供真实核心路径时跳过的 RealCore 用例，由上一项独立真实回归覆盖，不把跳过算作通过。
+- PG/Redis 专项 **30 项通过、0 跳过**，包含迁移幂等、升级创建/暂停/恢复/回退、核心准入并发检查、节点禁用后的停止确认、CPU 转移授权，以及新增状态拆分测试。见 [数据库专项](evidence/gateway-state-db-guard.log.txt)。
+- 混合版本兼容测试按旧网关的 SQL 读写方式验证：新从节点保留低频 PG 心跳与 CPU；回退旧二进制后的新 boot 不读取前 boot 报告；实时停止报告不能代替 PG 的计划绑定停止证明。禁用节点不仅写入停止证据，还必须被协调器确认停止步骤并通过迁移屏障。这些是兼容路径测试，不声称已完成生产新旧二进制混合部署验收。
+- 遥测验证 TTL、Redis 清空后恢复、错 boot/控制快照拒绝、迟到序号拒绝，以及纯 CPU/错误观察更新不改变 PG 行的 `xmin`。新鲜度采用 Redis TIME 生成固定截止时间、Lua 写入剩余 TTL、原子读取报告及 PTTL；PG 等待与 Redis 往返计入本地单调时钟预算，读取节点按本地单调时钟折算报告年龄，不依赖跨主机壁钟一致。覆盖时钟偏差、迟到重放不能续期、慢提交过期和 API 拒绝旧序号；报告过期或 Lua 拒绝时返回错误，防止继续启用旧的 CPU 转移目标。见 [遥测专项](evidence/gateway-state-telemetry.log.txt)。
+- 通知测试验证集群隔离、合并、Redis 重启重订阅、通知全部丢失时仍通过轮询完成两节点升级，以及没有状态变化时不触发连续推进。步骤结果先提交 PG，再上报执行后的节点状态并通知；锁丢失不能记完成。测试超时留有 CI 调度余量，不作为升级性能基准。
+- 前端类型检查和生产构建通过，输出到临时目录，保留原有未提交的 `server/web/dist/index.html`。本轮没有新增浏览器视觉验收。见 [前端构建](evidence/gateway-state-web-build.log.txt)。
+- 网关滚动替换工具已做语法与保护条件测试，默认 dry-run，要求无活动核心计划、只改变四节点镜像、保留回退镜像及配置，按从节点先、主节点后的顺序执行。见 [部署保护测试](evidence/gateway-roll-guard.log.txt)。这些检查不代表已经执行生产容器替换；生产部署及隔离环境清理结果另行记录。
+- 隔离验证完成后已移除独立项目容器、网络、专用 mock 镜像及已核对绝对路径的临时目录；保留 external Go 缓存卷。生产四入口仍返回 401，日志轮转保持 50m × 5，无活动升级计划。见 [清理核验](evidence/gateway-state-cleanup.txt)。

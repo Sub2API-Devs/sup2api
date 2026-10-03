@@ -1,0 +1,20 @@
+test_active_plan_blocks_rollout (test_roll_gateway.ClusterGuardTests.test_active_plan_blocks_rollout) ... ok
+test_baseline_change_is_rejected (test_roll_gateway.ClusterGuardTests.test_baseline_change_is_rejected) ... ok
+test_unchanged_idle_cluster_is_accepted (test_roll_gateway.ClusterGuardTests.test_unchanged_idle_cluster_is_accepted) ... ok
+test_environment_and_volume_changes_are_rejected (test_roll_gateway.ComposeGuardTests.test_environment_and_volume_changes_are_rejected) ... ok
+test_only_gateway_and_anchor_images_may_change (test_roll_gateway.ComposeGuardTests.test_only_gateway_and_anchor_images_may_change) ... ok
+test_other_anchor_changes_are_rejected (test_roll_gateway.ComposeGuardTests.test_other_anchor_changes_are_rejected) ... ok
+test_wrong_target_image_is_rejected (test_roll_gateway.ComposeGuardTests.test_wrong_target_image_is_rejected) ... ok
+test_all_four_healthy_nodes_are_accepted (test_roll_gateway.FinalHealthGuardTests.test_all_four_healthy_nodes_are_accepted) ... ok
+test_failed_entrance_on_any_node_is_rejected (test_roll_gateway.FinalHealthGuardTests.test_failed_entrance_on_any_node_is_rejected) ... ok
+test_previously_verified_follower_failure_is_rejected (test_roll_gateway.FinalHealthGuardTests.test_previously_verified_follower_failure_is_rejected) ... ok
+test_stopped_or_wrong_image_follower_is_rejected (test_roll_gateway.FinalHealthGuardTests.test_stopped_or_wrong_image_follower_is_rejected) ... ok
+test_available_original_image_never_uses_fallback (test_roll_gateway.RollbackImageGuardTests.test_available_original_image_never_uses_fallback) ... ok
+test_matching_fallback_records_hashes_and_uses_isolated_container (test_roll_gateway.RollbackImageGuardTests.test_matching_fallback_records_hashes_and_uses_isolated_container) ... ok
+test_mismatched_fallback_is_rejected (test_roll_gateway.RollbackImageGuardTests.test_mismatched_fallback_is_rejected) ... ok
+test_missing_image_without_explicit_fallback_is_rejected (test_roll_gateway.RollbackImageGuardTests.test_missing_image_without_explicit_fallback_is_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 15 tests in 0.003s
+
+OK

@@ -1,0 +1,69 @@
+=== RUN   TestCoreMigrationsApplyAndAreIdempotent
+--- PASS: TestCoreMigrationsApplyAndAreIdempotent (0.04s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/store	0.058s
+=== RUN   TestPostgresRollingPlanPauseResumeAndIdempotency
+--- PASS: TestPostgresRollingPlanPauseResumeAndIdempotency (0.08s)
+=== RUN   TestPostgresOfflineNodeBlocksAndRestartRecoversPlan
+--- PASS: TestPostgresOfflineNodeBlocksAndRestartRecoversPlan (0.02s)
+=== RUN   TestRedisMutualExclusionRenewalAndLoss
+--- PASS: TestRedisMutualExclusionRenewalAndLoss (0.25s)
+=== RUN   TestPostgresBootstrapFlagCannotReimportPluginsAfterFirstAdmission
+--- PASS: TestPostgresBootstrapFlagCannotReimportPluginsAfterFirstAdmission (0.02s)
+=== RUN   TestPostgresRollbackUsesHealthyAnchorAndPreservesInheritedRoute
+--- PASS: TestPostgresRollbackUsesHealthyAnchorAndPreservesInheritedRoute (0.13s)
+=== RUN   TestPostgresRollbackWaitsForOldNodeWork
+--- PASS: TestPostgresRollbackWaitsForOldNodeWork (0.03s)
+=== RUN   TestPostgresLateOldWorkerCannotResurrectSupersededPlan
+--- PASS: TestPostgresLateOldWorkerCannotResurrectSupersededPlan (0.06s)
+=== RUN   TestPostgresMaintenanceStopBarrierAndRecovery
+--- PASS: TestPostgresMaintenanceStopBarrierAndRecovery (0.08s)
+=== RUN   TestPostgresLegacyPlanAndCrossSchemaRollbackAreRejected
+--- PASS: TestPostgresLegacyPlanAndCrossSchemaRollbackAreRejected (0.02s)
+=== RUN   TestPostgresNodeRegistrationDisableAndBootValidation
+--- PASS: TestPostgresNodeRegistrationDisableAndBootValidation (0.01s)
+=== RUN   TestPostgresUnknownCoreAndOldShellBlockUpgrade
+--- PASS: TestPostgresUnknownCoreAndOldShellBlockUpgrade (0.01s)
+=== RUN   TestPostgresPausedCandidateCannotSelfAdmit
+--- PASS: TestPostgresPausedCandidateCannotSelfAdmit (0.06s)
+=== RUN   TestPostgresPauseBetweenAdmissionCheckAndCommitWins
+--- PASS: TestPostgresPauseBetweenAdmissionCheckAndCommitWins (0.06s)
+=== RUN   TestPostgresPlanCreatedBeforeBaselineAdmissionCommitWins
+--- PASS: TestPostgresPlanCreatedBeforeBaselineAdmissionCommitWins (0.02s)
+=== RUN   TestPostgresPeerAuthorizationClassifiesFailures
+--- PASS: TestPostgresPeerAuthorizationClassifiesFailures (0.01s)
+=== RUN   TestPostgresDisabledWorkerStillStopsAndAcknowledges
+--- PASS: TestPostgresDisabledWorkerStillStopsAndAcknowledges (0.03s)
+=== RUN   TestPostgresFollowerResumesForwardingWhenPrimaryServes
+--- PASS: TestPostgresFollowerResumesForwardingWhenPrimaryServes (0.02s)
+=== RUN   TestPostgresMixedTelemetryKeepsLegacyCoordinatorFresh
+--- PASS: TestPostgresMixedTelemetryKeepsLegacyCoordinatorFresh (0.01s)
+=== RUN   TestPostgresMixedTelemetryDowngradedBootUsesLegacyReport
+--- PASS: TestPostgresMixedTelemetryDowngradedBootUsesLegacyReport (0.01s)
+=== RUN   TestPostgresTelemetryCannotReplaceStopConfirmation
+--- PASS: TestPostgresTelemetryCannotReplaceStopConfirmation (0.03s)
+=== RUN   TestPostgresUpgradeProgressSurvivesLostNotifications
+--- PASS: TestPostgresUpgradeProgressSurvivesLostNotifications (12.04s)
+=== RUN   TestPostgresCoordinateNoopDoesNotCreateProgress
+--- PASS: TestPostgresCoordinateNoopDoesNotCreateProgress (0.02s)
+=== RUN   TestPostgresCPUOffloadIsMarkedBeforeSheddingAndAuthorizesForwards
+2026/10/03 06:47:14 WARN cpu offload started node=updater-test-1791010034671547866a cpu_percent=85 targets=[updater-test-1791010034671547866b]
+2026/10/03 06:47:14 INFO cpu offload stopped node=updater-test-1791010034671547866a cpu_percent=75
+2026/10/03 06:47:14 WARN cpu offload started node=updater-test-1791010034671547866a cpu_percent=80 targets=[updater-test-1791010034671547866b]
+2026/10/03 06:47:14 INFO cpu offload stopped node=updater-test-1791010034671547866a cpu_percent=80
+2026/10/03 06:47:14 WARN cpu offload started node=updater-test-1791010034671547866a cpu_percent=80 targets=[updater-test-1791010034671547866b]
+--- PASS: TestPostgresCPUOffloadIsMarkedBeforeSheddingAndAuthorizesForwards (0.03s)
+=== RUN   TestTelemetryExpiryBootAndControlIsolation
+--- PASS: TestTelemetryExpiryBootAndControlIsolation (0.00s)
+=== RUN   TestTelemetryRejectsDelayedSequence
+--- PASS: TestTelemetryRejectsDelayedSequence (0.00s)
+=== RUN   TestTelemetryFreshnessIgnoresProducerAndConsumerWallClocks
+--- PASS: TestTelemetryFreshnessIgnoresProducerAndConsumerWallClocks (0.00s)
+=== RUN   TestTelemetryDeadlineRejectsReplayAndPreservesRemainingLifetime
+--- PASS: TestTelemetryDeadlineRejectsReplayAndPreservesRemainingLifetime (0.00s)
+=== RUN   TestTelemetryHeartbeatDoesNotRewriteDurableSnapshot
+--- PASS: TestTelemetryHeartbeatDoesNotRewriteDurableSnapshot (0.02s)
+=== RUN   TestTelemetryDoesNotRefreshObservationAfterSlowCommit
+--- PASS: TestTelemetryDoesNotRefreshObservationAfterSlowCommit (0.00s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/gateway/internal/control	13.087s

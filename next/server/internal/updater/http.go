@@ -1,4 +1,4 @@
-// Package updater bridges authenticated console requests to the local shell.
+// Package updater bridges authenticated console requests to the local gateway.
 // Plugins cannot access this bridge through the Host API.
 package updater
 
@@ -26,7 +26,7 @@ func RegisterRoutes(r *httpapi.Router, socketPath string, db *store.DB) {
 	}}}
 	handler := func(c *gin.Context) {
 		if socketPath == "" {
-			c.JSON(503, gin.H{"error": gin.H{"code": "updater_unavailable", "message": "This node is not managed by the update shell"}})
+			c.JSON(503, gin.H{"error": gin.H{"code": "updater_unavailable", "message": "This node is not managed by the gateway"}})
 			return
 		}
 		body := http.MaxBytesReader(c.Writer, c.Request.Body, 32<<10)
@@ -42,7 +42,7 @@ func RegisterRoutes(r *httpapi.Router, socketPath string, db *store.DB) {
 		req.Header.Set("X-Updater-Actor", strconv.FormatInt(uid, 10))
 		response, err := client.Do(req)
 		if err != nil {
-			c.JSON(503, gin.H{"error": gin.H{"code": "updater_unavailable", "message": "Local update shell is unavailable"}})
+			c.JSON(503, gin.H{"error": gin.H{"code": "updater_unavailable", "message": "Local gateway is unavailable"}})
 			return
 		}
 		defer response.Body.Close()
@@ -62,7 +62,7 @@ func RegisterRoutes(r *httpapi.Router, socketPath string, db *store.DB) {
 			if result.Data.ID != "" {
 				id = result.Data.ID
 			}
-			// The shell has committed independently. Never turn an audit-write
+			// The gateway has committed independently. Never turn an audit-write
 			// failure into a failed action response that invites duplicate work.
 			auditCtx, cancel := context.WithTimeout(context.WithoutCancel(audit.Context(c)), 5*time.Second)
 			if err := audit.Audit(auditCtx, db.Pool, uid, action, targetType, id, map[string]any{"source": "console", "request_target": c.Param("id")}); err != nil {

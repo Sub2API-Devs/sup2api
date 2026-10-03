@@ -1,8 +1,8 @@
 # sup2api single-node deployment
 
-> 2026-10-02 起 ovh 的 `sup2api` 栈改为外壳托管四节点（3130–3133），见 [`../shell/ovh`](../shell/ovh/README.md)。不要再在 ovh 上运行本目录的 `deploy.sh`，它会在相同端口重新拉起旧容器。
+> 2026-10-02 起 ovh 的 `sup2api` 栈改为网关托管四节点（3130–3133），见 [`../gateway/ovh`](../gateway/ovh/README.md)。不要再在 ovh 上运行本目录的 `deploy.sh`，它会在相同端口重新拉起旧容器。
 
-> 插件包从 2026-10-02 起不再存 PG（核心迁移 0022），没有外壳的部署只用本机目录保存插件包，所以本栈的两个节点之间无法同步上传的插件；多节点请使用外壳托管部署。
+> 插件包从 2026-10-02 起不再存 PG（核心迁移 0022），没有网关的部署只用本机目录保存插件包，所以本栈的两个节点之间无法同步上传的插件；多节点请使用网关托管部署。
 
 One sub2api-next node with its own PostgreSQL 16, Redis 7 and the signed plugin
 market bundled in the image, all started by docker compose (project `sup2api`).

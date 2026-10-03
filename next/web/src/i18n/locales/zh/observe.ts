@@ -1,7 +1,7 @@
 export default {
-  topology: '节点拓扑', shell: '外壳', core: '核心', plugins: '插件',
+  topology: '节点拓扑', gateway: '网关', core: '核心', plugins: '插件',
   forwarding: '转发至主节点', offload: 'CPU 转移候选', legend: '实线：转发至主节点；虚线：按当前心跳与 CPU 阈值推算的可接收节点，不代表实际请求路径。',
-  partial: '外壳信息不可用，展示核心与插件。', unavailable: '暂时无法读取数据，保留上次快照。', empty: '暂无节点',
+  partial: '网关信息不可用，展示核心与插件。', unavailable: '暂时无法读取数据，保留上次快照。', empty: '暂无节点',
   fallback: '仍以旧版本服务', standby: '准备版本', instances: '实例', restarts: '重启次数',
   noReport: '当前核心尚无插件报告', unknown: '未知', running: '运行', stopped: '停止',
   progress: '总进度', lanes: '节点步骤', reconnect: '升级期间连接暂时中断，正在自动重连；保留上次进度。',

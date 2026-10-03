@@ -1,0 +1,14 @@
+=== RUN   TestTelemetryExpiryBootAndControlIsolation
+--- PASS: TestTelemetryExpiryBootAndControlIsolation (0.01s)
+=== RUN   TestTelemetryRejectsDelayedSequence
+--- PASS: TestTelemetryRejectsDelayedSequence (0.01s)
+=== RUN   TestTelemetryFreshnessIgnoresProducerAndConsumerWallClocks
+--- PASS: TestTelemetryFreshnessIgnoresProducerAndConsumerWallClocks (0.00s)
+=== RUN   TestTelemetryDeadlineRejectsReplayAndPreservesRemainingLifetime
+--- PASS: TestTelemetryDeadlineRejectsReplayAndPreservesRemainingLifetime (0.00s)
+=== RUN   TestTelemetryHeartbeatDoesNotRewriteDurableSnapshot
+--- PASS: TestTelemetryHeartbeatDoesNotRewriteDurableSnapshot (0.03s)
+=== RUN   TestTelemetryDoesNotRefreshObservationAfterSlowCommit
+--- PASS: TestTelemetryDoesNotRefreshObservationAfterSlowCommit (0.00s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/gateway/internal/control	1.086s
