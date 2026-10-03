@@ -1,0 +1,2 @@
+ok  	github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway	1.039s
+ok  	github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/internal/ccgateway	1.040s

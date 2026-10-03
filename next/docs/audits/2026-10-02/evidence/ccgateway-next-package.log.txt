@@ -1,0 +1,10 @@
+key_id:      ccgateway-test
+public_key:  QH9JhlyUefAjtyupWmuYCqwHXOJqRwSJ7Tx/qG1b4I0=
+private_key: /src/checks/keys/ccgateway-test.key
+public_file: /src/checks/keys/ccgateway-test.pub
+building ccgateway 0.1.0 for linux/amd64
+/src/checks/ccgateway-runtime/runtimes/linux-amd64/plugin
+building ccgateway 0.1.0 for linux/arm64
+/src/checks/ccgateway-runtime/runtimes/linux-arm64/plugin
+packed ccgateway 0.1.0: 5 files
+/src/checks/ccgateway/ccgateway-0.1.0.s2plugin

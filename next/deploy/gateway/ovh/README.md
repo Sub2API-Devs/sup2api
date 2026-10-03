@@ -42,6 +42,8 @@ The OVH-to-cc-max dedicated SSH key and pinned `known_hosts` live in the private
 sidecar keys using the admin API; a run without `--configure` only verifies the
 saved connection and checks all four entrances. Neither run performs Claude
 OAuth login or model generation. The script prints no credentials.
+Use `--enable-plugin` explicitly to enable the bundled managed account plugin;
+verification reports its active version and per-node state.
 
 On the server, after the change is committed and pushed:
 

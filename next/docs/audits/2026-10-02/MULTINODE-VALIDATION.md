@@ -414,3 +414,17 @@ OVH 从 Git 构建核心 v0.1.13，复用既有网关镜像，未替换网关容
 计划 `43a058ce02550c2fc77ae411c1cee1e3` 完成全部 27 步，观测创建到完成约 22.45 秒；各入口 503 约 4.5–7.3 秒。四节点核心均为 0.1.14、local/ready，volcengine 保持 0.11.0，其余插件版本不变且 active。鉴权、版本身份、历史与审计 API、PG 稳态与 Redis 遥测检查通过。四入口实际返回 `AccountsView-Be4x68Km.js`，包含新列表与分区校验逻辑。网关镜像及容器启动时间不变，本次日志无 ERROR。
 
 见 [采样](evidence/ovh-upgrade-0.1.14.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.14-summary.txt)、[系统核验](evidence/ovh-upgrade-0.1.14-verify.txt)、[前端与运行时核验](evidence/ovh-upgrade-0.1.14-runtime.jsonl)。另在普通 mock 中编辑已有账号并从模型分区保存成功，原凭证留空保留提示与模型回填正常。本地两个模拟预览已关闭，未修改生产账号。
+
+## 24. CCGateway next 集成与 OVH v0.1.15（2026-10-03）
+
+用户明确要求将旧版 CCGateway 管理功能接入 next 并部署 OVH。功能提交 `e9b6e4f50` 增加 `/system/ccgateway` 管理页（系统设置、插件列表均有入口），加密 SSH/sidecar 配置、Docker 管理、代理及 OAuth 管理；`ccgateway` 0.1.0 插件提供无需账号密钥的 `managed` 类型，仅支持 Messages。模型与账号测试由核心精确匹配插件、类型及虚拟 URL 后转发，其他账号保持原私网访问防护；沿用既有鉴权、调度、限流、JSON/SSE 用量计费。
+
+验证使用 OVH 独立项目 `sup2api-ccgateway-eypkbe` 的 PG/Redis，未连接生产数据库。相关服务端包及插件 `go test -race`、`go vet`、编译通过；数据库加密/审计/模型转发测试与 JSON/SSE 网关入口用例实际执行，未跳过。插件 linux/amd64、linux/arm64 打包通过。前端类型检查、临时目录构建、OAuth 链接与会话校验、双语键检查通过，本地模拟管理页无浏览器错误。
+
+发布在 OVH 从 Git 构建，保留 gateway 镜像 `sup2api-gateway:3a2017d`。数据库备份 `~/sup2api/backups/pre-v0.1.15-20261003T124432Z.dump` 已用 pg_restore 目录读取校验。0.1.14 与 0.1.15 schema-contract 相同。manifest digest `8731191ad7c21e319ffb693fbbc070e5368108a51a1893c7abcabf95f3fb1e7f`，bundle digest `7608a94dc2866ce95eb8458fa73a0da136538148f1b4ef5a7d2becef636ae9ec`。
+
+计划 `86807adfc443bfedb71a6e205020376a` 完成全部 27 步，从创建到观测完成约 22.42 秒；四入口 503 约 4.5–5.7 秒。四核心均为 0.1.15、local/ready，CCGateway 0.1.0 已启用且四节点 active。部署后四入口均实际提供 `CCGatewayView-DJjjpaBe.js`，本次四节点日志 ERROR 计数为 0。
+
+OVH 已配置到 cc-max 的专用 SSH 私钥，端口转发限定远端 127.0.0.1:8787；私钥及两个容器密钥经管理员 API 加密持久化，不写入账号、审计或本记录。四入口均通过 Docker 连接、容器状态、网关健康与代理读取验证，代理保持 inherit/revision 3。Claude 状态为未授权，未创建生产调度账号，未执行云端模型调用；需要用户在管理页完成 Claude OAuth 后接入账号。
+
+证据：[服务端测试](evidence/ccgateway-next-server-tests.log.txt)、[插件竞态测试](evidence/ccgateway-next-plugin-tests.log.txt)、[插件打包](evidence/ccgateway-next-package.log.txt)、[升级采样](evidence/ovh-upgrade-0.1.15.jsonl.txt)、[升级时间线](evidence/ovh-upgrade-0.1.15-summary.txt)、[四节点验证](evidence/ccgateway-v015-verify.txt)。用户原有 `server/web/dist/index.html` 修改和交接文件继续保留，未纳入提交。

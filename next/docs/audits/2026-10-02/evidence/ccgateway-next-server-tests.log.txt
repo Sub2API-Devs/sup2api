@@ -1,0 +1,606 @@
+=== RUN   TestManagementRequiresAuthorizationAndConfirmation
+2026/10/03 12:40:09 ERROR request failed request_id=b368214708c33b803b7db282 path=/api/v1/system/ccgateway/status err="unavailable: 请先配置 CCGateway 管理密钥"
+--- PASS: TestManagementRequiresAuthorizationAndConfirmation (0.00s)
+=== RUN   TestConfigSafety
+--- PASS: TestConfigSafety (0.00s)
+=== RUN   TestResponseAllowlist
+--- PASS: TestResponseAllowlist (0.00s)
+=== RUN   TestManagedBoundary
+--- PASS: TestManagedBoundary (0.00s)
+=== RUN   TestDBEncryptedAuditAndModelForward
+--- PASS: TestDBEncryptedAuditAndModelForward (0.24s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway	1.276s
+=== RUN   TestHTTPForward
+--- PASS: TestHTTPForward (0.01s)
+=== RUN   TestPinnedOperations
+--- PASS: TestPinnedOperations (0.03s)
+=== RUN   TestHTTPStreamLifetime
+--- PASS: TestHTTPStreamLifetime (0.81s)
+=== RUN   TestProbeDoesNotAuthenticateAndPinMismatch
+--- PASS: TestProbeDoesNotAuthenticateAndPinMismatch (0.01s)
+=== RUN   TestPrivateKeys
+--- PASS: TestPrivateKeys (2.71s)
+=== RUN   TestCancellationAndBoundedOutput
+=== RUN   TestCancellationAndBoundedOutput/cancel_running_command
+=== RUN   TestCancellationAndBoundedOutput/bounded_and_redacted
+--- PASS: TestCancellationAndBoundedOutput (0.01s)
+    --- PASS: TestCancellationAndBoundedOutput/cancel_running_command (0.01s)
+    --- PASS: TestCancellationAndBoundedOutput/bounded_and_redacted (0.01s)
+=== RUN   TestInvalidInputs
+--- PASS: TestInvalidInputs (0.00s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/remotedocker	4.619s
+=== RUN   TestTypeViewEndpoints
+--- PASS: TestTypeViewEndpoints (0.00s)
+=== RUN   TestPlatformViews
+--- PASS: TestPlatformViews (0.00s)
+=== RUN   TestPlatformsRoute
+--- PASS: TestPlatformsRoute (0.00s)
+=== RUN   TestCandidatesFilterByType
+--- PASS: TestCandidatesFilterByType (0.00s)
+=== RUN   TestPayloads
+--- PASS: TestPayloads (0.00s)
+=== RUN   TestAccountTypes
+--- PASS: TestAccountTypes (0.07s)
+=== RUN   TestAccountLifecycle
+2026/10/03 12:40:11 ERROR request failed request_id=02dadd12f0c1fe7d51b838c3 path=/api/v1/accounts/:id err="plugin_unavailable: the plugin providing this account type is not enabled; credentials cannot be changed"
+--- PASS: TestAccountLifecycle (0.08s)
+=== RUN   TestAccountTestAction
+2026/10/03 12:40:11 ERROR request failed request_id=38e71a1ffbbc3f27db481523 path=/api/v1/accounts/:id/test err="plugin_unavailable: the plugin providing this account type is not enabled"
+--- PASS: TestAccountTestAction (0.06s)
+=== RUN   TestDirectory
+--- PASS: TestDirectory (0.07s)
+=== RUN   TestCredentialHelpers
+--- PASS: TestCredentialHelpers (0.00s)
+=== RUN   TestLimiterWindows
+--- PASS: TestLimiterWindows (0.01s)
+=== RUN   TestLimiterUsesRedisWindowForEveryOperation
+--- PASS: TestLimiterUsesRedisWindowForEveryOperation (0.00s)
+=== RUN   TestAccountModelsAndLimits
+--- PASS: TestAccountModelsAndLimits (0.07s)
+=== RUN   TestFetchModels
+2026/10/03 12:40:11 ERROR request failed request_id=57d781df6c8c27ed41ddebb0 path=/api/v1/account-types/:plugin_key/:type/models/fetch err="unavailable: upstream returned 401: {\"error\":\"invalid x-api-key\"}"
+2026/10/03 12:40:11 ERROR request failed request_id=c0802918590d97f0bee553f7 path=/api/v1/account-types/:plugin_key/:type/models/fetch err="unsupported: this account type cannot list models from the upstream"
+2026/10/03 12:40:11 ERROR request failed request_id=b9e633af1847ed91d1afe845 path=/api/v1/accounts/:id/models/fetch err="unavailable: upstream returned 401: {\"error\":\"invalid x-api-key\"}"
+--- PASS: TestFetchModels (0.06s)
+=== RUN   TestAtomicAccountAdmissionAndCooldown
+--- PASS: TestAtomicAccountAdmissionAndCooldown (0.12s)
+=== RUN   TestOwnership
+--- PASS: TestOwnership (0.09s)
+=== RUN   TestProxyURL
+--- PASS: TestProxyURL (0.08s)
+=== RUN   TestGuardedSettings
+--- PASS: TestGuardedSettings (0.08s)
+=== RUN   TestGuardNorm
+--- PASS: TestGuardNorm (0.00s)
+=== RUN   TestCheckGuarded
+--- PASS: TestCheckGuarded (0.00s)
+=== RUN   TestGuardForm
+--- PASS: TestGuardForm (0.00s)
+=== RUN   TestInputProxyURL
+--- PASS: TestInputProxyURL (0.00s)
+=== RUN   TestListPluginAccountsOnlyOwnTypes
+--- PASS: TestListPluginAccountsOnlyOwnTypes (0.05s)
+=== RUN   TestListPluginAccountsFilters
+--- PASS: TestListPluginAccountsFilters (0.05s)
+=== RUN   TestReadPluginAccountCredentials
+--- PASS: TestReadPluginAccountCredentials (0.05s)
+=== RUN   TestReadPluginAccountCredentialsAudits
+--- PASS: TestReadPluginAccountCredentialsAudits (0.05s)
+=== RUN   TestMyPlatformViews
+--- PASS: TestMyPlatformViews (0.00s)
+=== RUN   TestMyPlatformsRoute
+--- PASS: TestMyPlatformsRoute (0.00s)
+=== RUN   TestPurgePluginAccounts
+2026/10/03 12:40:12 INFO account: purged plugin accounts plugin_key=anthropic count=2
+--- PASS: TestPurgePluginAccounts (0.06s)
+=== RUN   TestAccountTestResultDetails
+--- PASS: TestAccountTestResultDetails (0.06s)
+=== RUN   TestAccountTestFailureIsClassifiedButHarmless
+--- PASS: TestAccountTestFailureIsClassifiedButHarmless (0.06s)
+=== RUN   TestUpstreamAddrStripsCredentials
+--- PASS: TestUpstreamAddrStripsCredentials (0.00s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/account	2.232s
+=== RUN   TestMixedAccountTypesServeOneEndpoint
+--- PASS: TestMixedAccountTypesServeOneEndpoint (0.01s)
+=== RUN   TestUnsupportedAccountTypeNotScheduled
+--- PASS: TestUnsupportedAccountTypeNotScheduled (0.01s)
+=== RUN   TestPlanRoutes
+--- PASS: TestPlanRoutes (0.00s)
+=== RUN   TestConvertedNonStream
+--- PASS: TestConvertedNonStream (0.00s)
+=== RUN   TestConvertedStream
+2026/10/03 12:40:12 WARN gateway: upstream response shape not declared by the endpoint request_id=e4145dc2e5a9abd1088f08f7 plugin=qplug platform=q protocol=q.chat endpoint=/v1/messages mismatch=sse_not_declared content_type=text/event-stream declared_stream="" declared_non_stream=""
+--- PASS: TestConvertedStream (0.00s)
+=== RUN   TestConvertedErrors
+--- PASS: TestConvertedErrors (0.01s)
+=== RUN   TestConvertRequestFailureSkipsType
+2026/10/03 12:40:12 INFO gateway: request conversion failed from=anthropic.messages to=q.chat err="unsupported block"
+2026/10/03 12:40:12 INFO gateway: request conversion failed from=anthropic.messages to=q.chat err="unsupported block"
+--- PASS: TestConvertRequestFailureSkipsType (0.00s)
+=== RUN   TestConvertResponseFailure
+2026/10/03 12:40:12 WARN gateway: response conversion failed request_id=59c7764148edfd23e7b81274 from=q.chat to=anthropic.messages err="cannot map"
+--- PASS: TestConvertResponseFailure (0.00s)
+=== RUN   TestPluginPlatformEndpoints
+--- PASS: TestPluginPlatformEndpoints (0.11s)
+=== RUN   TestOpenAIChatUsage
+--- PASS: TestOpenAIChatUsage (0.01s)
+=== RUN   TestMixedPluginTypesServeBuiltinEndpoint
+--- PASS: TestMixedPluginTypesServeBuiltinEndpoint (0.01s)
+=== RUN   TestGeminiEndpoints
+--- PASS: TestGeminiEndpoints (0.01s)
+=== RUN   TestGeminiArrayStreamIncremental
+--- PASS: TestGeminiArrayStreamIncremental (0.00s)
+=== RUN   TestCCGatewayManagedGatewayJSONAndSSEUsage
+=== RUN   TestCCGatewayManagedGatewayJSONAndSSEUsage/json
+=== RUN   TestCCGatewayManagedGatewayJSONAndSSEUsage/sse
+--- PASS: TestCCGatewayManagedGatewayJSONAndSSEUsage (0.12s)
+    --- PASS: TestCCGatewayManagedGatewayJSONAndSSEUsage/json (0.07s)
+    --- PASS: TestCCGatewayManagedGatewayJSONAndSSEUsage/sse (0.05s)
+=== RUN   TestCCGatewayManagedGatewayUnconfigured
+--- PASS: TestCCGatewayManagedGatewayUnconfigured (0.05s)
+=== RUN   TestClientErrorCodeFromPlugin
+--- PASS: TestClientErrorCodeFromPlugin (0.00s)
+=== RUN   TestClientErrorCodeDefaultsToUpstreamError
+--- PASS: TestClientErrorCodeDefaultsToUpstreamError (0.01s)
+=== RUN   TestClientErrorCodeRejectsUnusableValues
+=== RUN   TestClientErrorCodeRejectsUnusableValues/space
+2026/10/03 12:40:13 WARN gateway: plugin returned an invalid client_error_code, using the generic one plugin=anthropic code="sensitive content" max_bytes=64 pattern=^[A-Za-z0-9][A-Za-z0-9._:-]*$
+=== RUN   TestClientErrorCodeRejectsUnusableValues/quote
+2026/10/03 12:40:13 WARN gateway: plugin returned an invalid client_error_code, using the generic one plugin=anthropic code="a\"b" max_bytes=64 pattern=^[A-Za-z0-9][A-Za-z0-9._:-]*$
+=== RUN   TestClientErrorCodeRejectsUnusableValues/brace
+2026/10/03 12:40:13 WARN gateway: plugin returned an invalid client_error_code, using the generic one plugin=anthropic code={a} max_bytes=64 pattern=^[A-Za-z0-9][A-Za-z0-9._:-]*$
+=== RUN   TestClientErrorCodeRejectsUnusableValues/empty-ish_
+2026/10/03 12:40:13 WARN gateway: plugin returned an invalid client_error_code, using the generic one plugin=anthropic code=" " max_bytes=64 pattern=^[A-Za-z0-9][A-Za-z0-9._:-]*$
+=== RUN   TestClientErrorCodeRejectsUnusableValues/slash
+2026/10/03 12:40:13 WARN gateway: plugin returned an invalid client_error_code, using the generic one plugin=anthropic code=a/b max_bytes=64 pattern=^[A-Za-z0-9][A-Za-z0-9._:-]*$
+=== RUN   TestClientErrorCodeRejectsUnusableValues/newline
+2026/10/03 12:40:13 WARN gateway: plugin returned an invalid client_error_code, using the generic one plugin=anthropic code="a\nb" max_bytes=64 pattern=^[A-Za-z0-9][A-Za-z0-9._:-]*$
+=== RUN   TestClientErrorCodeRejectsUnusableValues/non_ascii
+2026/10/03 12:40:13 WARN gateway: plugin returned an invalid client_error_code, using the generic one plugin=anthropic code=敏感内容 max_bytes=64 pattern=^[A-Za-z0-9][A-Za-z0-9._:-]*$
+=== RUN   TestClientErrorCodeRejectsUnusableValues/leading_-
+2026/10/03 12:40:13 WARN gateway: plugin returned an invalid client_error_code, using the generic one plugin=anthropic code=-code max_bytes=64 pattern=^[A-Za-z0-9][A-Za-z0-9._:-]*$
+=== RUN   TestClientErrorCodeRejectsUnusableValues/leading_.
+2026/10/03 12:40:13 WARN gateway: plugin returned an invalid client_error_code, using the generic one plugin=anthropic code=.code max_bytes=64 pattern=^[A-Za-z0-9][A-Za-z0-9._:-]*$
+=== RUN   TestClientErrorCodeRejectsUnusableValues/too_long
+2026/10/03 12:40:13 WARN gateway: plugin returned an invalid client_error_code, using the generic one plugin=anthropic code=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa max_bytes=64 pattern=^[A-Za-z0-9][A-Za-z0-9._:-]*$
+--- PASS: TestClientErrorCodeRejectsUnusableValues (0.04s)
+    --- PASS: TestClientErrorCodeRejectsUnusableValues/space (0.00s)
+    --- PASS: TestClientErrorCodeRejectsUnusableValues/quote (0.00s)
+    --- PASS: TestClientErrorCodeRejectsUnusableValues/brace (0.00s)
+    --- PASS: TestClientErrorCodeRejectsUnusableValues/empty-ish_ (0.00s)
+    --- PASS: TestClientErrorCodeRejectsUnusableValues/slash (0.00s)
+    --- PASS: TestClientErrorCodeRejectsUnusableValues/newline (0.00s)
+    --- PASS: TestClientErrorCodeRejectsUnusableValues/non_ascii (0.00s)
+    --- PASS: TestClientErrorCodeRejectsUnusableValues/leading_- (0.00s)
+    --- PASS: TestClientErrorCodeRejectsUnusableValues/leading_. (0.00s)
+    --- PASS: TestClientErrorCodeRejectsUnusableValues/too_long (0.00s)
+=== RUN   TestClientErrorCodeAccepts
+--- PASS: TestClientErrorCodeAccepts (0.00s)
+=== RUN   TestClientErrorCodeSuppressesRawPassthrough
+2026/10/03 12:40:13 WARN gateway: plugin returned an invalid client_error_code, using the generic one plugin=anthropic code="not a code" max_bytes=64 pattern=^[A-Za-z0-9][A-Za-z0-9._:-]*$
+--- PASS: TestClientErrorCodeSuppressesRawPassthrough (0.01s)
+=== RUN   TestStickyRulesAPIAndPluginDefaults
+2026/10/03 12:40:13 WARN gateway: sticky rule name owned by another plugin, skipped source=plugin_default plugin=other rule=second
+--- PASS: TestStickyRulesAPIAndPluginDefaults (0.07s)
+=== RUN   TestStickySettingsAPI
+--- PASS: TestStickySettingsAPI (0.05s)
+=== RUN   TestGatewaySettingsAPIDB
+--- PASS: TestGatewaySettingsAPIDB (0.06s)
+=== RUN   TestStickyRulesFromDBDriveScheduling
+--- PASS: TestStickyRulesFromDBDriveScheduling (0.06s)
+=== RUN   TestBuiltinStickyDefaults
+--- PASS: TestBuiltinStickyDefaults (0.06s)
+=== RUN   TestExecuteGatewayRecordBeforePublishAndAbortUnconfirmedSSE
+=== RUN   TestExecuteGatewayRecordBeforePublishAndAbortUnconfirmedSSE/non_stream_waits_for_commit
+=== RUN   TestExecuteGatewayRecordBeforePublishAndAbortUnconfirmedSSE/unconfirmed_sse_aborts_and_releases_slots
+=== RUN   TestExecuteGatewayRecordBeforePublishAndAbortUnconfirmedSSE/upstream_error_still_classifies_and_fails_over
+--- PASS: TestExecuteGatewayRecordBeforePublishAndAbortUnconfirmedSSE (0.41s)
+    --- PASS: TestExecuteGatewayRecordBeforePublishAndAbortUnconfirmedSSE/non_stream_waits_for_commit (0.15s)
+    --- PASS: TestExecuteGatewayRecordBeforePublishAndAbortUnconfirmedSSE/unconfirmed_sse_aborts_and_releases_slots (0.11s)
+    --- PASS: TestExecuteGatewayRecordBeforePublishAndAbortUnconfirmedSSE/upstream_error_still_classifies_and_fails_over (0.11s)
+=== RUN   TestExecuteGatewayTaskUsesSingleWatchAndSharedSnapshot
+--- PASS: TestExecuteGatewayTaskUsesSingleWatchAndSharedSnapshot (0.16s)
+=== RUN   TestExecuteGatewayLargeCaptureAndRejectedReplayPreserveUsage
+--- PASS: TestExecuteGatewayLargeCaptureAndRejectedReplayPreserveUsage (0.19s)
+=== RUN   TestPluginUsageNonStream
+--- PASS: TestPluginUsageNonStream (0.00s)
+=== RUN   TestPluginUsageStreamCollectsOnlyDeclaredEvents
+--- PASS: TestPluginUsageStreamCollectsOnlyDeclaredEvents (0.01s)
+=== RUN   TestPluginUsageStreamStopsAtByteBudget
+2026/10/03 12:40:14 WARN gateway: stopped collecting usage stream events at the cap request_id=a8679345b3a0f46673027f9d plugin=pu platform=pu protocol=pu.chat events=2 max_events=64
+--- PASS: TestPluginUsageStreamStopsAtByteBudget (0.01s)
+=== RUN   TestUsageCaptureEventCountCap
+--- PASS: TestUsageCaptureEventCountCap (0.00s)
+=== RUN   TestUsageCaptureCopiesEventData
+--- PASS: TestUsageCaptureCopiesEventData (0.00s)
+=== RUN   TestPluginUsageRequestFields
+--- PASS: TestPluginUsageRequestFields (0.01s)
+=== RUN   TestUsageRequestFieldsTotalBudget
+--- PASS: TestUsageRequestFieldsTotalBudget (0.00s)
+=== RUN   TestInvalidUTF8BodyIsRejectedAsInvalidJSON
+--- PASS: TestInvalidUTF8BodyIsRejectedAsInvalidJSON (0.01s)
+=== RUN   TestPluginUsageCannotForgeAttributionOrCost
+2026/10/03 12:40:14 WARN gateway: plugin reported a usage fact the manifest does not declare, dropped request_id=f9fedd87354d74b0e1ec4130 plugin=pu protocol=pu.chat fact=account_id
+2026/10/03 12:40:14 WARN gateway: plugin reported a usage fact that does not fit its declared type, dropped request_id=f9fedd87354d74b0e1ec4130 plugin=pu protocol=pu.chat fact=tier type=enum value=free
+2026/10/03 12:40:14 WARN gateway: plugin reported a usage fact the manifest does not declare, dropped request_id=f9fedd87354d74b0e1ec4130 plugin=pu protocol=pu.chat fact=user_id
+2026/10/03 12:40:14 WARN gateway: plugin reported a usage fact the manifest does not declare, dropped request_id=f9fedd87354d74b0e1ec4130 plugin=pu protocol=pu.chat fact=api_key_id
+2026/10/03 12:40:14 WARN gateway: plugin reported a usage fact the manifest does not declare, dropped request_id=f9fedd87354d74b0e1ec4130 plugin=pu protocol=pu.chat fact=group_id
+2026/10/03 12:40:14 WARN gateway: plugin reported a usage fact the manifest does not declare, dropped request_id=f9fedd87354d74b0e1ec4130 plugin=pu protocol=pu.chat fact=total_cost
+2026/10/03 12:40:14 WARN gateway: plugin reported a usage fact the manifest does not declare, dropped request_id=f9fedd87354d74b0e1ec4130 plugin=pu protocol=pu.chat fact=rate_multiplier
+2026/10/03 12:40:14 WARN gateway: plugin reported a usage fact the manifest does not declare, dropped request_id=f9fedd87354d74b0e1ec4130 plugin=pu protocol=pu.chat fact=price_id
+2026/10/03 12:40:14 WARN gateway: plugin reported a usage fact that does not fit its declared type, dropped request_id=f9fedd87354d74b0e1ec4130 plugin=pu protocol=pu.chat fact=images type=number value=many
+--- PASS: TestPluginUsageCannotForgeAttributionOrCost (0.01s)
+=== RUN   TestPluginUsageDetailJSONLimits
+=== RUN   TestPluginUsageDetailJSONLimits/object
+=== RUN   TestPluginUsageDetailJSONLimits/empty
+=== RUN   TestPluginUsageDetailJSONLimits/too_large
+2026/10/03 12:40:14 WARN gateway: plugin detail_json over the limit, stored as a marker request_id=0a8328adcccbd745cd463fd6 plugin=pu bytes=4106 limit=4096
+=== RUN   TestPluginUsageDetailJSONLimits/not_an_object
+2026/10/03 12:40:14 WARN gateway: plugin detail_json is not a JSON object, dropped request_id=05547e847a175f95ff3c37ce plugin=pu value=[1,2,3]
+=== RUN   TestPluginUsageDetailJSONLimits/invalid
+2026/10/03 12:40:14 WARN gateway: plugin detail_json is not a JSON object, dropped request_id=9a80aa189f3e03cab2bca667 plugin=pu value={nope
+--- PASS: TestPluginUsageDetailJSONLimits (0.05s)
+    --- PASS: TestPluginUsageDetailJSONLimits/object (0.01s)
+    --- PASS: TestPluginUsageDetailJSONLimits/empty (0.01s)
+    --- PASS: TestPluginUsageDetailJSONLimits/too_large (0.01s)
+    --- PASS: TestPluginUsageDetailJSONLimits/not_an_object (0.01s)
+    --- PASS: TestPluginUsageDetailJSONLimits/invalid (0.01s)
+=== RUN   TestPluginUsageFallsBackWhenThePluginFails
+=== RUN   TestPluginUsageFallsBackWhenThePluginFails/unimplemented
+2026/10/03 12:40:14 WARN gateway: plugin usage extraction failed, billing from the declarative rules request_id=2ea9e47f32551d7bf4c055e1 plugin=pu platform=pu protocol=pu.chat endpoint=/pu/v1/chat reason="ExtractUsage failed" err="rpc error: code = Unimplemented desc = no" input_tokens=0 output_tokens=0
+=== RUN   TestPluginUsageFallsBackWhenThePluginFails/error
+2026/10/03 12:40:14 WARN gateway: plugin usage extraction failed, billing from the declarative rules request_id=ee2dd2837df977abb4935c95 plugin=pu platform=pu protocol=pu.chat endpoint=/pu/v1/chat reason="ExtractUsage failed" err=boom input_tokens=0 output_tokens=0
+=== RUN   TestPluginUsageFallsBackWhenThePluginFails/nil_answer
+2026/10/03 12:40:14 WARN gateway: plugin usage extraction failed, billing from the declarative rules request_id=3c14630d0d56d27d384030d3 plugin=pu platform=pu protocol=pu.chat endpoint=/pu/v1/chat reason="ExtractUsage failed" err=<nil> input_tokens=0 output_tokens=0
+=== RUN   TestPluginUsageFallsBackWhenThePluginFails/timeout
+2026/10/03 12:40:14 WARN gateway: plugin usage extraction failed, billing from the declarative rules request_id=7749ecabbac10cba4f8c1fdf plugin=pu platform=pu protocol=pu.chat endpoint=/pu/v1/chat reason="ExtractUsage failed" err="context deadline exceeded" input_tokens=0 output_tokens=0
+--- PASS: TestPluginUsageFallsBackWhenThePluginFails (0.08s)
+    --- PASS: TestPluginUsageFallsBackWhenThePluginFails/unimplemented (0.01s)
+    --- PASS: TestPluginUsageFallsBackWhenThePluginFails/error (0.01s)
+    --- PASS: TestPluginUsageFallsBackWhenThePluginFails/nil_answer (0.01s)
+    --- PASS: TestPluginUsageFallsBackWhenThePluginFails/timeout (0.06s)
+=== RUN   TestPluginUsageFallbackUsesTheDeclarativeRules
+2026/10/03 12:40:14 WARN gateway: plugin usage extraction failed, billing from the declarative rules request_id=ab11e534259784c1bf965dbe plugin=pu platform=pu protocol=pu.chat endpoint=/pu/v1/chat reason="ExtractUsage failed" err="rpc error: code = Unimplemented desc = no" input_tokens=11 output_tokens=22
+--- PASS: TestPluginUsageFallbackUsesTheDeclarativeRules (0.01s)
+=== RUN   TestPluginUsageWithoutPlatformClient
+2026/10/03 12:40:14 WARN gateway: plugin usage extraction failed, billing from the declarative rules request_id=a95b1a68de20a5e106023798 plugin=pu platform=pu protocol=pu.chat endpoint=/pu/v1/chat reason="the platform of this response has no plugin client" err=<nil> input_tokens=0 output_tokens=0
+--- PASS: TestPluginUsageWithoutPlatformClient (0.01s)
+=== RUN   TestExtractUsageNotCalledWithoutDeclaration
+--- PASS: TestExtractUsageNotCalledWithoutDeclaration (0.01s)
+=== RUN   TestExtractUsageRunsAfterTheResponse
+--- PASS: TestExtractUsageRunsAfterTheResponse (0.16s)
+=== RUN   TestHookDenyAndFields
+--- PASS: TestHookDenyAndFields (0.01s)
+=== RUN   TestHookMatchFilter
+--- PASS: TestHookMatchFilter (0.00s)
+=== RUN   TestHookTimeoutOpenAndClosed
+=== RUN   TestHookTimeoutOpenAndClosed/open
+=== RUN   TestHookTimeoutOpenAndClosed/closed
+=== RUN   TestHookTimeoutOpenAndClosed/timeout_capped_at_30s
+=== RUN   TestHookTimeoutOpenAndClosed/manifest_timeout_above_the_old_2s_ceiling
+=== RUN   TestHookTimeoutOpenAndClosed/admin_default_applies_without_timeoutMs
+--- PASS: TestHookTimeoutOpenAndClosed (0.13s)
+    --- PASS: TestHookTimeoutOpenAndClosed/open (0.06s)
+    --- PASS: TestHookTimeoutOpenAndClosed/closed (0.05s)
+    --- PASS: TestHookTimeoutOpenAndClosed/timeout_capped_at_30s (0.00s)
+    --- PASS: TestHookTimeoutOpenAndClosed/manifest_timeout_above_the_old_2s_ceiling (0.00s)
+    --- PASS: TestHookTimeoutOpenAndClosed/admin_default_applies_without_timeoutMs (0.00s)
+=== RUN   TestHookGjsonQueryNeeds
+--- PASS: TestHookGjsonQueryNeeds (0.00s)
+=== RUN   TestHookBreaker
+2026/10/03 12:40:14 WARN gateway: hook breaker opened plugin=guard hook=prompt-rules until=2026-10-03T12:40:44.775Z
+--- PASS: TestHookBreaker (0.02s)
+=== RUN   TestHookStatsCountsDeniesAndTimeouts
+--- PASS: TestHookStatsCountsDeniesAndTimeouts (0.04s)
+=== RUN   TestHookPatches
+=== RUN   TestHookPatches/granted_path_applied
+=== RUN   TestHookPatches/patch_outside_needs_rejected
+2026/10/03 12:40:14 WARN gateway: hook patch rejected plugin=guard hook=prompt-rules err="path \"max_tokens\" is outside the hook's granted fields"
+=== RUN   TestHookPatches/model_patch_re-checked
+--- PASS: TestHookPatches (0.01s)
+    --- PASS: TestHookPatches/granted_path_applied (0.00s)
+    --- PASS: TestHookPatches/patch_outside_needs_rejected (0.00s)
+    --- PASS: TestHookPatches/model_patch_re-checked (0.00s)
+=== RUN   TestHookOrder
+--- PASS: TestHookOrder (0.00s)
+=== RUN   TestNonStreamSuccessAndUsage
+--- PASS: TestNonStreamSuccessAndUsage (0.00s)
+=== RUN   TestStreamFlushesEachEventAndExtractsUsage
+--- PASS: TestStreamFlushesEachEventAndExtractsUsage (0.00s)
+=== RUN   TestFailoverOn429CoolsDown
+--- PASS: TestFailoverOn429CoolsDown (0.00s)
+=== RUN   TestFailoverOn401DisablesAccount
+--- PASS: TestFailoverOn401DisablesAccount (0.00s)
+=== RUN   TestClientErrorReturnedWithoutFailover
+--- PASS: TestClientErrorReturnedWithoutFailover (0.00s)
+=== RUN   TestAllAttemptsFailReturnsLastUpstreamError
+--- PASS: TestAllAttemptsFailReturnsLastUpstreamError (0.01s)
+=== RUN   TestNoAccountReturns503
+--- PASS: TestNoAccountReturns503 (0.00s)
+=== RUN   TestPluginTimeoutTreatsAccountUnavailable
+--- PASS: TestPluginTimeoutTreatsAccountUnavailable (0.10s)
+=== RUN   TestNoFailoverOnceOutputStarted
+2026/10/03 12:40:14 WARN gateway: upstream response interrupted request_id=ec6d6178ec99cc245aa33f18 err="unexpected EOF"
+--- PASS: TestNoFailoverOnceOutputStarted (0.00s)
+=== RUN   TestClientDisconnectCancelsUpstream
+--- PASS: TestClientDisconnectCancelsUpstream (0.01s)
+=== RUN   TestAuthErrors
+--- PASS: TestAuthErrors (0.10s)
+=== RUN   TestModelAllowlist
+--- PASS: TestModelAllowlist (0.00s)
+=== RUN   TestInsufficientBalance402
+--- PASS: TestInsufficientBalance402 (0.00s)
+=== RUN   TestPriceNotConfigured403
+--- PASS: TestPriceNotConfigured403 (0.00s)
+=== RUN   TestFreeEndpointSkipsPricing
+--- PASS: TestFreeEndpointSkipsPricing (0.00s)
+=== RUN   TestPriceInputsCaptured
+--- PASS: TestPriceInputsCaptured (0.00s)
+=== RUN   TestUserConcurrencyLimit
+--- PASS: TestUserConcurrencyLimit (0.00s)
+=== RUN   TestAccountSlotsBusy
+--- PASS: TestAccountSlotsBusy (0.00s)
+=== RUN   TestInvalidBodyAndLimits
+--- PASS: TestInvalidBodyAndLimits (0.00s)
+=== RUN   TestSSRFGuard
+2026/10/03 12:40:15 WARN gateway: upstream url rejected plugin=anthropic account=1 err="upstream address is private, loopback or link-local"
+2026/10/03 12:40:15 WARN gateway: upstream url rejected plugin=anthropic account=2 err="upstream address is private, loopback or link-local"
+2026/10/03 12:40:15 WARN gateway: upstream url rejected plugin=anthropic account=3 err="upstream address is private, loopback or link-local"
+--- PASS: TestSSRFGuard (0.00s)
+=== RUN   TestRouteFallthroughAndGenerationSwitch
+--- PASS: TestRouteFallthroughAndGenerationSwitch (0.10s)
+=== RUN   TestUpstreamPatchesAndFields
+--- PASS: TestUpstreamPatchesAndFields (0.00s)
+=== RUN   TestRankNotCalledOnStickyHit
+--- PASS: TestRankNotCalledOnStickyHit (0.01s)
+=== RUN   TestRankCalledOncePerRequest
+--- PASS: TestRankCalledOncePerRequest (0.00s)
+=== RUN   TestRankWeightChangesTheDraw
+--- PASS: TestRankWeightChangesTheDraw (0.00s)
+=== RUN   TestRankWeightZeroExcludesAccount
+--- PASS: TestRankWeightZeroExcludesAccount (0.01s)
+=== RUN   TestRankExcludingEveryCandidateFallsBack
+2026/10/03 12:40:15 WARN gateway: scheduler.rank excluded every candidate, using the accounts' own priority and weight candidates=3
+--- PASS: TestRankExcludingEveryCandidateFallsBack (0.00s)
+=== RUN   TestRankFailuresFallBack
+=== RUN   TestRankFailuresFallBack/error
+2026/10/03 12:40:15 WARN gateway: rank accounts failed, keeping the current values plugin=guard timeout=200ms err=boom
+=== RUN   TestRankFailuresFallBack/timeout
+2026/10/03 12:40:15 WARN gateway: rank accounts failed, keeping the current values plugin=guard timeout=50ms err="context deadline exceeded"
+--- PASS: TestRankFailuresFallBack (0.06s)
+    --- PASS: TestRankFailuresFallBack/error (0.00s)
+    --- PASS: TestRankFailuresFallBack/timeout (0.05s)
+=== RUN   TestRankPluginsRunSerially
+2026/10/03 12:40:15 WARN gateway: rank accounts failed, keeping the current values plugin=broken timeout=200ms err=boom
+--- PASS: TestRankPluginsRunSerially (0.00s)
+=== RUN   TestRankClampsAndIgnoresUnknownAccounts
+2026/10/03 12:40:15 WARN gateway: rank value out of range, clamped plugin=guard field=priority account=1 value=-5 clamped=0
+2026/10/03 12:40:15 WARN gateway: rank value out of range, clamped plugin=guard field=weight account=1 value=99999 clamped=1000
+2026/10/03 12:40:15 WARN gateway: rank value out of range, clamped plugin=guard field=priority account=2 value=1073741824 clamped=1000000
+2026/10/03 12:40:15 WARN gateway: rank accounts named an account outside the candidates, ignored plugin=guard account=404
+--- PASS: TestRankClampsAndIgnoresUnknownAccounts (0.00s)
+=== RUN   TestRankMatchFiltersRequests
+--- PASS: TestRankMatchFiltersRequests (0.00s)
+=== RUN   TestReservationReachesTheRecord
+--- PASS: TestReservationReachesTheRecord (0.00s)
+=== RUN   TestReservationOnAFreeEndpointIsDroppedLoudly
+--- PASS: TestReservationOnAFreeEndpointIsDroppedLoudly (0.00s)
+=== RUN   TestReservationWithAnEmptyEstimateIsDroppedLoudly
+--- PASS: TestReservationWithAnEmptyEstimateIsDroppedLoudly (0.00s)
+=== RUN   TestNoReservationLeavesNoMarker
+--- PASS: TestNoReservationLeavesNoMarker (0.00s)
+=== RUN   TestReservationWithAnUnusableRefIDIsDropped
+=== RUN   TestReservationWithAnUnusableRefIDIsDropped/#00
+=== RUN   TestReservationWithAnUnusableRefIDIsDropped/__
+=== RUN   TestReservationWithAnUnusableRefIDIsDropped/task_1
+=== RUN   TestReservationWithAnUnusableRefIDIsDropped/task_1#01
+=== RUN   TestReservationWithAnUnusableRefIDIsDropped/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+--- PASS: TestReservationWithAnUnusableRefIDIsDropped (0.02s)
+    --- PASS: TestReservationWithAnUnusableRefIDIsDropped/#00 (0.00s)
+    --- PASS: TestReservationWithAnUnusableRefIDIsDropped/__ (0.00s)
+    --- PASS: TestReservationWithAnUnusableRefIDIsDropped/task_1 (0.00s)
+    --- PASS: TestReservationWithAnUnusableRefIDIsDropped/task_1#01 (0.00s)
+    --- PASS: TestReservationWithAnUnusableRefIDIsDropped/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa (0.00s)
+=== RUN   TestUsageReportWithoutReservation
+--- PASS: TestUsageReportWithoutReservation (0.00s)
+=== RUN   TestResolveModelFromPlugin
+--- PASS: TestResolveModelFromPlugin (0.00s)
+=== RUN   TestResolveModelSetsStream
+--- PASS: TestResolveModelSetsStream (0.00s)
+=== RUN   TestResolveModelCannotTurnStreamOff
+--- PASS: TestResolveModelCannotTurnStreamOff (0.00s)
+=== RUN   TestResolveModelFailuresAre400
+=== RUN   TestResolveModelFailuresAre400/empty_model
+=== RUN   TestResolveModelFailuresAre400/error
+=== RUN   TestResolveModelFailuresAre400/nil_response
+=== RUN   TestResolveModelFailuresAre400/unimplemented
+=== RUN   TestResolveModelFailuresAre400/timeout
+--- PASS: TestResolveModelFailuresAre400 (0.32s)
+    --- PASS: TestResolveModelFailuresAre400/empty_model (0.00s)
+    --- PASS: TestResolveModelFailuresAre400/error (0.00s)
+    --- PASS: TestResolveModelFailuresAre400/nil_response (0.01s)
+    --- PASS: TestResolveModelFailuresAre400/unimplemented (0.00s)
+    --- PASS: TestResolveModelFailuresAre400/timeout (0.30s)
+=== RUN   TestResolveModelWithoutClientIs500
+--- PASS: TestResolveModelWithoutClientIs500 (0.00s)
+=== RUN   TestResolveModelNotCalledWithoutDeclaration
+--- PASS: TestResolveModelNotCalledWithoutDeclaration (0.01s)
+=== RUN   TestResolveModelReaskedOnlyWhenTheBodyChanged
+=== RUN   TestResolveModelReaskedOnlyWhenTheBodyChanged/unchanged_body
+=== RUN   TestResolveModelReaskedOnlyWhenTheBodyChanged/hook_patched_the_body
+--- PASS: TestResolveModelReaskedOnlyWhenTheBodyChanged (0.01s)
+    --- PASS: TestResolveModelReaskedOnlyWhenTheBodyChanged/unchanged_body (0.01s)
+    --- PASS: TestResolveModelReaskedOnlyWhenTheBodyChanged/hook_patched_the_body (0.00s)
+=== RUN   TestResponseMismatchSSENotDeclared
+--- PASS: TestResponseMismatchSSENotDeclared (0.00s)
+=== RUN   TestResponseMismatchJSONWhileStreamDeclared
+--- PASS: TestResponseMismatchJSONWhileStreamDeclared (0.00s)
+=== RUN   TestResponseShapeDeclaredLeavesNoMarker
+--- PASS: TestResponseShapeDeclaredLeavesNoMarker (0.01s)
+=== RUN   TestResponseShapeAlwaysStreamingEndpoint
+--- PASS: TestResponseShapeAlwaysStreamingEndpoint (0.00s)
+=== RUN   TestUsagePathSum
+--- PASS: TestUsagePathSum (0.00s)
+=== RUN   TestGeminiThoughtsCountAsOutput
+--- PASS: TestGeminiThoughtsCountAsOutput (0.00s)
+=== RUN   TestClientRequestIDNormalized
+--- PASS: TestClientRequestIDNormalized (0.00s)
+=== RUN   TestClientRequestIDRecorded
+--- PASS: TestClientRequestIDRecorded (0.00s)
+=== RUN   TestFencedNodeReturns503
+--- PASS: TestFencedNodeReturns503 (0.10s)
+=== RUN   TestHealthSourceFromDeps
+--- PASS: TestHealthSourceFromDeps (0.00s)
+=== RUN   TestGatewaySettingsValidation
+--- PASS: TestGatewaySettingsValidation (0.00s)
+=== RUN   TestGatewaySettingsAPI
+--- PASS: TestGatewaySettingsAPI (0.00s)
+=== RUN   TestModelListFiltersCandidates
+--- PASS: TestModelListFiltersCandidates (0.00s)
+=== RUN   TestModelMappingRewritesUpstreamModel
+--- PASS: TestModelMappingRewritesUpstreamModel (0.00s)
+=== RUN   TestRateLimitedAccountsAreSkipped
+--- PASS: TestRateLimitedAccountsAreSkipped (0.00s)
+=== RUN   TestStickySessionIsTheSPMIdentity
+--- PASS: TestStickySessionIsTheSPMIdentity (0.01s)
+=== RUN   TestWeightedOrder
+--- PASS: TestWeightedOrder (0.01s)
+=== RUN   TestResponseSpoolSpillsAndRemovesPrivateFile
+--- PASS: TestResponseSpoolSpillsAndRemovesPrivateFile (0.01s)
+=== RUN   TestStickyHitAndRebind
+--- PASS: TestStickyHitAndRebind (0.02s)
+=== RUN   TestStickyKeyFormatAndTTL
+--- PASS: TestStickyKeyFormatAndTTL (0.01s)
+=== RUN   TestStickyOnFailureStick
+--- PASS: TestStickyOnFailureStick (0.01s)
+=== RUN   TestStickyBindingDroppedWhenAccountDisabled
+--- PASS: TestStickyBindingDroppedWhenAccountDisabled (0.01s)
+=== RUN   TestStickyKeepOnAccountDisabled
+--- PASS: TestStickyKeepOnAccountDisabled (0.01s)
+=== RUN   TestStickyDisabledGlobally
+--- PASS: TestStickyDisabledGlobally (0.00s)
+=== RUN   TestStickyKeySources
+--- PASS: TestStickyKeySources (0.00s)
+=== RUN   TestStickyRuleMatching
+--- PASS: TestStickyRuleMatching (0.00s)
+=== RUN   TestStickyRuleProtocolValidation
+--- PASS: TestStickyRuleProtocolValidation (0.06s)
+=== RUN   TestTaskFailureDoesNotServeStaleProgress
+=== RUN   TestTaskFailureDoesNotServeStaleProgress/task_timeout
+=== RUN   TestTaskFailureDoesNotServeStaleProgress/task_not_found
+=== RUN   TestTaskFailureDoesNotServeStaleProgress/task_poll_failed
+--- PASS: TestTaskFailureDoesNotServeStaleProgress (0.01s)
+    --- PASS: TestTaskFailureDoesNotServeStaleProgress/task_timeout (0.00s)
+    --- PASS: TestTaskFailureDoesNotServeStaleProgress/task_not_found (0.00s)
+    --- PASS: TestTaskFailureDoesNotServeStaleProgress/task_poll_failed (0.01s)
+=== RUN   TestTaskGatewayCrossNodeSnapshotAndAuthorization
+--- PASS: TestTaskGatewayCrossNodeSnapshotAndAuthorization (0.16s)
+=== RUN   TestTaskGatewayNeverResubmitsAfterSending
+=== RUN   TestTaskGatewayNeverResubmitsAfterSending/parser_failure
+=== RUN   TestTaskGatewayNeverResubmitsAfterSending/transport_eof
+=== RUN   TestTaskGatewayNeverResubmitsAfterSending/header_timeout
+=== RUN   TestTaskGatewayNeverResubmitsAfterSending/upstream_503
+--- PASS: TestTaskGatewayNeverResubmitsAfterSending (0.17s)
+    --- PASS: TestTaskGatewayNeverResubmitsAfterSending/parser_failure (0.01s)
+    --- PASS: TestTaskGatewayNeverResubmitsAfterSending/transport_eof (0.00s)
+    --- PASS: TestTaskGatewayNeverResubmitsAfterSending/header_timeout (0.10s)
+    --- PASS: TestTaskGatewayNeverResubmitsAfterSending/upstream_503 (0.00s)
+=== RUN   TestErrorFormats
+--- PASS: TestErrorFormats (0.00s)
+=== RUN   TestRouteMatching
+--- PASS: TestRouteMatching (0.00s)
+=== RUN   TestExtractPromptText
+--- PASS: TestExtractPromptText (0.00s)
+=== RUN   TestUsageExtraction
+--- PASS: TestUsageExtraction (0.00s)
+=== RUN   TestBuiltinUsageRules
+--- PASS: TestBuiltinUsageRules (0.00s)
+=== RUN   TestBuiltinPromptText
+--- PASS: TestBuiltinPromptText (0.00s)
+=== RUN   TestSSRFCheck
+--- PASS: TestSSRFCheck (0.00s)
+=== RUN   TestGlobAndLists
+--- PASS: TestGlobAndLists (0.00s)
+=== RUN   TestP99
+--- PASS: TestP99 (0.00s)
+=== RUN   TestMetaPathParams
+--- PASS: TestMetaPathParams (0.00s)
+=== RUN   TestMetaMapsBounded
+--- PASS: TestMetaMapsBounded (0.00s)
+=== RUN   TestMetaQueryIsDeclaredOnly
+--- PASS: TestMetaQueryIsDeclaredOnly (0.00s)
+=== RUN   TestMetaMapsDropInvalidUTF8
+--- PASS: TestMetaMapsDropInvalidUTF8 (0.00s)
+=== RUN   TestMetaQueryBounded
+--- PASS: TestMetaQueryBounded (0.00s)
+=== RUN   TestWebSocketTurnsShareOneUpstreamAndAreBilledEach
+--- PASS: TestWebSocketTurnsShareOneUpstreamAndAreBilledEach (0.01s)
+=== RUN   TestWebSocketHandshakeFailoverDisablesTheAccount
+--- PASS: TestWebSocketHandshakeFailoverDisablesTheAccount (0.01s)
+=== RUN   TestWebSocketTurnErrorsKeepTheConnection
+--- PASS: TestWebSocketTurnErrorsKeepTheConnection (0.01s)
+=== RUN   TestWebSocketUpstreamEventsDecideTheTurn
+--- PASS: TestWebSocketUpstreamEventsDecideTheTurn (0.00s)
+=== RUN   TestWebSocketClientLeavingCancelsTheTurn
+--- PASS: TestWebSocketClientLeavingCancelsTheTurn (0.00s)
+=== RUN   TestWebSocketDrainClosesWithServiceRestart
+--- PASS: TestWebSocketDrainClosesWithServiceRestart (0.13s)
+=== RUN   TestWebSocketDrainGraceEndsALongTurn
+--- PASS: TestWebSocketDrainGraceEndsALongTurn (0.22s)
+=== RUN   TestWebSocketConnectionLimits
+--- PASS: TestWebSocketConnectionLimits (0.42s)
+=== RUN   TestWebSocketNeedsAPluginThatBuildsWebSockets
+--- PASS: TestWebSocketNeedsAPluginThatBuildsWebSockets (0.00s)
+=== RUN   TestWebSocketUpstreamOutlivesTheHandshakeAndMapsModels
+--- PASS: TestWebSocketUpstreamOutlivesTheHandshakeAndMapsModels (0.61s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/gateway	6.034s
+=== RUN   TestShutdownWaitsForCanceledHandlerCompletion
+--- PASS: TestShutdownWaitsForCanceledHandlerCompletion (0.02s)
+=== RUN   TestDrainRejectsNewWorkAndKeepsHealthObservable
+--- PASS: TestDrainRejectsNewWorkAndKeepsHealthObservable (0.00s)
+=== RUN   TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory
+=== RUN   TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/missing_source
+=== RUN   TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/wrong_source
+=== RUN   TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/wrong_target
+=== RUN   TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/older_than_source
+=== RUN   TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/unknown_future_migration
+=== RUN   TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/changed_history
+=== RUN   TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/gap
+--- PASS: TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory (0.00s)
+    --- PASS: TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/missing_source (0.00s)
+    --- PASS: TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/wrong_source (0.00s)
+    --- PASS: TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/wrong_target (0.00s)
+    --- PASS: TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/older_than_source (0.00s)
+    --- PASS: TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/unknown_future_migration (0.00s)
+    --- PASS: TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/changed_history (0.00s)
+    --- PASS: TestMigrationPermitOnlyAllowsApprovedAppendOnlyHistory/gap (0.00s)
+=== RUN   TestManagedSchemaRejectsUnknownFutureMigration
+--- PASS: TestManagedSchemaRejectsUnknownFutureMigration (0.06s)
+=== RUN   TestMigrationAndPluginPreparationDoNotAdmitBusiness
+--- PASS: TestMigrationAndPluginPreparationDoNotAdmitBusiness (0.00s)
+=== RUN   TestManagedRuntimeCandidatePrepareAdmitAndDrain
+--- PASS: TestManagedRuntimeCandidatePrepareAdmitAndDrain (4.07s)
+=== RUN   TestManagedRuntimeMigrationDoesNotBootstrap
+--- PASS: TestManagedRuntimeMigrationDoesNotBootstrap (4.09s)
+=== RUN   TestManagedReadinessFollowsIndependentApprovedPlugins
+--- PASS: TestManagedReadinessFollowsIndependentApprovedPlugins (0.06s)
+=== RUN   TestManagedReadinessWaitsForPermissionRevocation
+--- PASS: TestManagedReadinessWaitsForPermissionRevocation (0.05s)
+=== RUN   TestManagedCandidateAuthenticatesAndDoesNoWork
+--- PASS: TestManagedCandidateAuthenticatesAndDoesNoWork (0.00s)
+=== RUN   TestOnlyExplicitBootstrapCanCoordinateBeforeAdmission
+--- PASS: TestOnlyExplicitBootstrapCanCoordinateBeforeAdmission (0.00s)
+=== RUN   TestManagedAdmissionUsesPersistedBootAndRoles
+--- PASS: TestManagedAdmissionUsesPersistedBootAndRoles (0.05s)
+=== RUN   TestManagedSchemaCheckIsReadOnly
+--- PASS: TestManagedSchemaCheckIsReadOnly (0.05s)
+=== RUN   TestManagedHostAPIMatchesRuntimeContract
+--- PASS: TestManagedHostAPIMatchesRuntimeContract (0.00s)
+=== RUN   TestSystemVersionReportsServingCoreOnlyAfterAuthentication
+--- PASS: TestSystemVersionReportsServingCoreOnlyAfterAuthentication (0.00s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/server/internal/app	9.529s

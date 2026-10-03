@@ -1,0 +1,6 @@
+Docker connection and container status: PASS
+{"port": 3130, "core_version": "0.1.15", "core_node_id": "sup2api-1", "mode": "ssh", "healthy": true, "logged_in": false, "proxy_mode": "inherit", "proxy_revision": 3, "frontend_chunk": "CCGatewayView-DJjjpaBe.js"}
+{"port": 3131, "core_version": "0.1.15", "core_node_id": "sup2api-2", "mode": "ssh", "healthy": true, "logged_in": false, "proxy_mode": "inherit", "proxy_revision": 3, "frontend_chunk": "CCGatewayView-DJjjpaBe.js"}
+{"port": 3132, "core_version": "0.1.15", "core_node_id": "sup2api-3", "mode": "ssh", "healthy": true, "logged_in": false, "proxy_mode": "inherit", "proxy_revision": 3, "frontend_chunk": "CCGatewayView-DJjjpaBe.js"}
+{"port": 3133, "core_version": "0.1.15", "core_node_id": "sup2api-4", "mode": "ssh", "healthy": true, "logged_in": false, "proxy_mode": "inherit", "proxy_revision": 3, "frontend_chunk": "CCGatewayView-DJjjpaBe.js"}
+{"key": "ccgateway", "status": "enabled", "active_version": "0.1.0", "desired_version": "0.1.0", "node_summary": {"total": 4, "states": {"active": 4}}}
