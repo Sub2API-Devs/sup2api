@@ -1,0 +1,10 @@
+# Combine with a base deployment and docker-compose.ccgateway.yml.
+services:
+  sub2api:
+    environment:
+      CCGATEWAY_URL: http://ccgateway:8787
+      CCG_API_KEY: ${CCG_API_KEY:?Set a gateway API key}
+      CCG_ADMIN_KEY: ${CCG_ADMIN_KEY:?Set a separate management key}
+  ccgateway:
+    networks:
+      - sub2api-network

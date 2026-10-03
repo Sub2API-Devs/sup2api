@@ -1,7 +1,7 @@
 export default {
   plugins: {
     title: 'Plugin Management',
-    description: 'Install and manage isolated OAuth outbound transport plugins. API Key flows are unchanged.',
+    description: 'Manage the built-in Claude gateway and installable OAuth outbound transport plugins.',
     upload: 'Install plugin',
     uploadHint: 'Only .s2plugin packages are accepted; trusted publisher signatures are required by default.',
     runtimeNotice: 'Plugin installation, enable/disable, and configuration are handled dynamically by the Sub2API host and normally do not require a host restart. Restart only when the host version or host configuration changes according to your deployment process.',
@@ -44,7 +44,7 @@ export default {
     confirmUntested: 'This plugin is compatible but has not declared the current Sub2API version as tested. Enable it anyway?',
     fileRequired: 'Select a .s2plugin file',
     bridgeRejected: 'Plugin UI message validation failed',
-    onlyOpenAI: 'Initial capability: OpenAI OAuth outbound transport only',
-    noAccountCoupling: 'The scope is platform and account type. Account records are not changed and no per-account toggle is required.'
+    onlyOpenAI: 'Built-in: CCGateway · Installable: OpenAI OAuth outbound transport',
+    noAccountCoupling: 'CCGateway connects through account scheduling; installable plugins apply by platform and account type.'
   }
 }

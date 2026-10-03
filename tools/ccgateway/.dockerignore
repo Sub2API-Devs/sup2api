@@ -1,0 +1,4 @@
+.ccgateway
+*.exe
+*_test.go
+.env

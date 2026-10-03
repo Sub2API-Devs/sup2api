@@ -53,6 +53,8 @@
         </div>
       </section>
 
+      <CCGatewayPlugin />
+
       <p class="text-xs text-gray-500 dark:text-gray-400">
         {{ t("admin.plugins.uploadHint") }}
       </p>
@@ -342,6 +344,7 @@ import {
 } from "@/api/admin";
 import { useAppStore } from "@/stores";
 import AppLayout from "@/components/layout/AppLayout.vue";
+import CCGatewayPlugin from "@/components/admin/CCGatewayPlugin.vue";
 import BaseDialog from "@/components/common/BaseDialog.vue";
 import Icon from "@/components/icons/Icon.vue";
 import TotpStepUpDialog from "@/components/auth/TotpStepUpDialog.vue";

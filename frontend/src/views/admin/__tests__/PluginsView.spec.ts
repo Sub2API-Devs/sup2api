@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import PluginsView from '../PluginsView.vue'
 
+vi.mock('@/components/admin/CCGatewayPlugin.vue', () => ({ default: { template: '<div />' } }))
+
 const {
   listPlugins,
   uploadPlugin,
