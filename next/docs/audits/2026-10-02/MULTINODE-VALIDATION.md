@@ -387,3 +387,13 @@ OVH 从 Git 构建核心 v0.1.13，复用既有网关镜像，未替换网关容
 - 本地插件 vet/test、前端类型检查通过；独立安全审查未发现阻断项。
 - OVH 私有测试项目 `sub2api-ark-w3tbrd`：完整 vet 与 race 测试顶层 **106 通过、0 跳过、0 失败**，含数据库任务/素材库回归、HTTP 路径与签名检查。见 [完整测试记录](evidence/volcengine-0.11.0-tests.log.txt)。
 - 浏览器使用 `SUB2API_MOCK_VOLCENGINE=1` 的只读 fixture，直接读取实际 manifest/schema，检查两种账号表单和路径帮助；自定义字段按单行文本输入显示。没有保存真实账号，也未调用付费上游视频生成。
+
+### 22.1 OVH 插件独立上线
+
+功能提交 `6cf124291` 已推送，OVH 快进同步 Git 后以 Docker build 阶段构建，提取签名插件包；没有替换核心包或网关容器。备份 `~/sup2api/backups/pre-volcengine-0.11.0-20261003T104349Z.sql.gz` 通过 gzip 校验。
+
+- 包 `~/sup2api/plugin-releases/volcengine-0.11.0/volcengine-0.11.0.s2plugin`，SHA256 `4e3e73edc2671154693e4e8038c0ad41497eb6cd2697c2472fb4d54150cf5503`。管理 API 校验 official/valid，宿主兼容，无新增/扩大的权限，自动沿用授权。上传首次因未携带二次认证提前断开，按正常密码确认取得 step-up token 后成功；没有绕过认证。见 [安装校验](evidence/volcengine-0.11.0-upload.json)。
+- 发布 **55**：0.10.1 → 0.11.0，2026-10-03 10:46:42.802206 UTC 创建，10:46:44.805092 UTC 完成，约 **2.003 秒**，四节点 active。原采样脚本误等待终态出现在 current 接口（完成后该接口返回 null），因此采样持续到 120 秒超时；另用发布历史只读核验终态通过，未重复发起升级。见 [原采样](evidence/volcengine-0.11.0-roll.jsonl)、[最终核验](evidence/volcengine-0.11.0-final.jsonl)。
+- 每个入口 477 次鉴权探测全部 401，无 503 或连接失败；这证明探测期间入口可用，不代表运行了付费模型请求。四节点 volcengine serving=0.11.0、active，无 standby/fallback；核心仍为 0.1.13，core boot 与升级前一致。四入口均返回新账号类型、官方 Anthropic 平台及新端点表单。
+- 完整只读核验通过，包括历史/审计 API、静态文件、访问身份、PG 稳态行与 Redis 遥测；网关镜像仍为 `sup2api-gateway:3a2017d`，容器启动时间未变化，本次日志无 ERROR。见 [系统核验](evidence/volcengine-0.11.0-verify.txt)、[运行时](evidence/volcengine-0.11.0-runtime.jsonl)。
+- 私有测试容器与网络已清理，核对绝对路径后移除测试工作区，保留共享 Go 缓存。本地表单预览进程与标签已关闭。
