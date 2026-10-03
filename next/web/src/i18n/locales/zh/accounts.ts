@@ -1,4 +1,12 @@
 export default {
+  listUi: {
+    loadFailedEmpty: '账号列表加载失败，请刷新重试',
+    identity: '账号 / 接入类型', filters: '账号筛选', search: '搜索账号名称', advanced: '高级筛选', advancedApplied: '高级筛选条件已生效',
+    clear: '清除筛选（{count}）', compact: '紧凑显示', refresh: '刷新账号列表',
+    resultCount: '筛选结果 {total} 个账号 · 当前页 {page} 个', loadFailed: '刷新失败，正在显示上次加载的数据',
+    emptyFiltered: '没有符合筛选条件的账号，请调整或清除筛选。', empty: '暂无可见账号。', priorityWeight: '优先级 / 权重'
+  },
+  editorUi: { connection: '接入配置', connectionHint: '名称、分组与连接凭证', models: '模型配置', modelsHint: '可用模型与名称映射', scheduling: '调度与限流', schedulingHint: '优先级、并发与用量限制', navigation: '账号配置导航', searchTypes: '搜索服务商或账号类型' },
   title: '账号',
   subtitle: '网关使用的上游账号。账号类型由插件声明，同一分组可以混放不同类型的账号。',
   autoRefresh: '自动刷新',

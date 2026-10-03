@@ -1,4 +1,12 @@
 export default {
+  listUi: {
+    loadFailedEmpty: 'Accounts could not be loaded. Refresh to retry.',
+    identity: 'Account / integration', filters: 'Account filters', search: 'Search account names', advanced: 'More filters', advancedApplied: 'Advanced filters are applied',
+    clear: 'Clear filters ({count})', compact: 'Compact rows', refresh: 'Refresh accounts',
+    resultCount: '{total} matching accounts · {page} on this page', loadFailed: 'Refresh failed; showing the previous results',
+    emptyFiltered: 'No accounts match these filters. Adjust or clear the filters.', empty: 'No visible accounts.', priorityWeight: 'Priority / weight'
+  },
+  editorUi: { connection: 'Connection', connectionHint: 'Name, groups and credentials', models: 'Models', modelsHint: 'Available models and aliases', scheduling: 'Scheduling & limits', schedulingHint: 'Priority, concurrency and usage', navigation: 'Account configuration', searchTypes: 'Search providers or account types' },
   title: 'Accounts',
   subtitle: 'Upstream accounts used by the gateway. Account types are declared by plugins; a group can mix accounts of different types.',
   autoRefresh: 'Auto refresh',

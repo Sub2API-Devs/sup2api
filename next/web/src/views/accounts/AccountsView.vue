@@ -65,14 +65,11 @@ const typeFilter = computed({
 })
 
 const columns = computed<TableColumn[]>(() => [
-  { key: 'id', label: 'ID', width: '64px' },
-  { key: 'name', label: t('common.name') },
-  { key: 'type', label: t('accounts.type') },
+  { key: 'name', label: t('accounts.listUi.identity') },
   { key: 'groups', label: t('accounts.groups') },
   ...(showOwner.value ? [{ key: 'created_by', label: t('accounts.createdBy') }] : []),
   { key: 'status', label: t('common.status') },
-  { key: 'priority', label: t('accounts.scheduling'), align: 'right' },
-  { key: 'concurrency', label: t('accounts.concurrency'), align: 'right' },
+  { key: 'concurrency', label: t('accounts.scheduling') },
   { key: 'limits', label: t('accounts.limits') },
   { key: 'actions', label: t('common.actions'), align: 'right' }
 ])
@@ -362,6 +359,14 @@ const typeOptions = computed<SelectOption[]>(() => [
   }))
 ])
 const groupOptions = computed<SelectOption[]>(() => [{ value: '', label: t('accounts.allGroups') }, ...groups.value.map((g) => ({ value: g.id, label: g.name }))])
+const advancedFilters = ref(false)
+const denseRows = ref(true)
+const filterCount = computed(() => Object.entries(list.filters).filter(([key, value]) => key !== 'plugin_key' && value !== '').length)
+const hasAdvancedFilters = computed(() => !!list.filters.model || !!list.filters.created_by || onlyMine.value || showOrphaned.value)
+function resetFilters() { for (const key of Object.keys(list.filters)) list.filters[key] = '' }
+function groupTags(a: Account) {
+  return (a.group_ids || []).map(id => ({ id, name: a.groups?.find(g => g.id === id)?.name || groups.value.find(g => g.id === id)?.name || `#${id}` }))
+}
 </script>
 
 <template>
@@ -369,42 +374,46 @@ const groupOptions = computed<SelectOption[]>(() => [{ value: '', label: t('acco
     <SPageHeader :title="t('accounts.title')" :description="t('accounts.subtitle')">
       <template #actions>
         <SSwitch v-model="autoRefresh" :label="t('accounts.autoRefresh')" />
-        <SButton @click="list.reload()"><SIcon name="refresh" class="h-4 w-4" /></SButton>
+        <SButton :loading="list.loading.value" :aria-label="t('accounts.listUi.refresh')" :title="t('accounts.listUi.refresh')" @click="list.reload()"><SIcon name="refresh" class="h-4 w-4" /></SButton>
         <SButton v-if="canCreate" variant="primary" data-testid="account-new" @click="openCreate"><SIcon name="plus" class="h-4 w-4" />{{ t('accounts.new') }}</SButton>
-      </template>
-      <template #filters>
-        <SSelect v-model="typeFilter" :options="typeOptions" class="!w-48" />
-        <SSelect v-model="list.filters.group_id" :options="groupOptions" class="!w-40" />
-        <SSelect v-model="list.filters.status" :options="statusSelectOptions" class="!w-36" />
-        <div class="relative w-64">
-          <SIcon name="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <SInput v-model="list.filters.q" class="!pl-9" :placeholder="t('common.searchPlaceholder')" />
-        </div>
-        <SInput v-model="list.filters.model" class="!w-52" mono data-testid="model-filter" :placeholder="t('accounts.modelFilter')" />
-        <SInput
-          v-if="showOwner"
-          v-model="list.filters.created_by"
-          class="!w-32"
-          inputmode="numeric"
-          data-testid="created-by-filter"
-          :placeholder="t('common.createdById')"
-        />
-        <SSwitch v-model="onlyMine" :label="t('common.onlyMine')" data-testid="only-mine" />
-        <SSwitch v-model="showOrphaned" :label="t('accounts.showOrphaned')" data-testid="show-orphaned" />
       </template>
     </SPageHeader>
 
-    <STable :columns="columns" :rows="list.items.value" :loading="list.loading.value">
+    <section class="mb-4 rounded-xl border border-gray-200 bg-white p-3 dark:border-dark-700 dark:bg-dark-900" :aria-label="t('accounts.listUi.filters')">
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="relative min-w-48 flex-1">
+          <SIcon name="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <SInput v-model="list.filters.q" class="!pl-9" :aria-label="t('accounts.listUi.search')" :placeholder="t('accounts.listUi.search')" />
+        </div>
+        <SSelect v-model="typeFilter" :options="typeOptions" class="!w-52" :aria-label="t('accounts.type')" />
+        <SSelect v-model="list.filters.group_id" :options="groupOptions" class="!w-40" :aria-label="t('accounts.groups')" />
+        <SSelect v-model="list.filters.status" :options="statusSelectOptions" class="!w-36" :aria-label="t('common.status')" />
+        <SButton size="sm" :variant="hasAdvancedFilters ? 'primary' : 'secondary'" :aria-expanded="advancedFilters" @click="advancedFilters = !advancedFilters">{{ t('accounts.listUi.advanced') }}</SButton>
+        <SButton v-if="filterCount" size="sm" variant="ghost" @click="resetFilters">{{ t('accounts.listUi.clear', { count: filterCount }) }}</SButton>
+      </div>
+      <div v-if="advancedFilters" class="mt-3 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3 dark:border-dark-700">
+        <SInput v-model="list.filters.model" class="!w-56" mono data-testid="model-filter" :aria-label="t('accounts.modelFilter')" :placeholder="t('accounts.modelFilter')" />
+        <SInput v-if="showOwner" v-model="list.filters.created_by" class="!w-40" inputmode="numeric" data-testid="created-by-filter" :aria-label="t('common.createdById')" :placeholder="t('common.createdById')" />
+        <SSwitch v-model="onlyMine" :label="t('common.onlyMine')" data-testid="only-mine" />
+        <SSwitch v-model="showOrphaned" :label="t('accounts.showOrphaned')" data-testid="show-orphaned" />
+      </div>
+      <p v-else-if="hasAdvancedFilters" class="mt-2 text-xs text-primary-600 dark:text-primary-300">{{ t('accounts.listUi.advancedApplied') }}</p>
+    </section>
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500 dark:text-dark-400">
+      <span v-if="list.error.value" role="alert" class="text-red-600 dark:text-red-400">{{ t(list.items.value.length ? 'accounts.listUi.loadFailed' : 'accounts.listUi.loadFailedEmpty') }}</span>
+      <span v-else-if="list.loading.value">{{ t('common.loading') }}</span>
+      <span v-else>{{ t('accounts.listUi.resultCount', { total: list.total.value, page: list.items.value.length }) }}</span>
+      <SSwitch v-model="denseRows" :label="t('accounts.listUi.compact')" />
+    </div>
+    <STable :columns="columns" :rows="list.items.value" :loading="list.loading.value" :dense="denseRows" :empty-text="t(filterCount ? 'accounts.listUi.emptyFiltered' : 'accounts.listUi.empty')">
       <template #cell-name="{ row }">
-        <SLink as="button" class="font-medium" @click="openDetail(row)">{{ row.name }}</SLink>
-        <div v-if="row.last_used_at" class="text-xs text-gray-400">{{ t('accounts.lastUsed') }} {{ formatRelative(row.last_used_at, t) }}</div>
+        <div class="min-w-48 max-w-xs space-y-1">
+          <div class="flex items-center gap-2"><span class="shrink-0 font-mono text-[11px] text-gray-400">#{{ row.id }}</span><SLink as="button" class="min-w-0 truncate font-semibold" :title="row.name" @click="openDetail(row)">{{ row.name }}</SLink></div>
+          <div class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-gray-500 dark:text-dark-400"><span :title="row.plugin_key">{{ accountTypes.pluginName(row.plugin_key) }}</span><span aria-hidden="true">/</span><span class="truncate" :title="accountTypes.typeLabel(row.plugin_key, row.type, row.type_label)">{{ accountTypes.typeLabel(row.plugin_key, row.type, row.type_label) }}</span></div>
+          <div v-if="row.last_used_at" class="text-[11px] text-gray-400">{{ t('accounts.lastUsed') }} {{ formatRelative(row.last_used_at, t) }}</div>
+        </div>
       </template>
-      <template #cell-type="{ row }">
-        <div class="whitespace-nowrap">{{ accountTypes.typeLabel(row.plugin_key, row.type, row.type_label) }}</div>
-        <SHint size="xs" :title="row.plugin_key">{{ accountTypes.pluginName(row.plugin_key) }}</SHint>
-        <SBadge v-if="row.orphaned" tone="gray" class="ml-1">{{ t('accounts.status.orphaned') }}</SBadge>
-      </template>
-      <template #cell-groups="{ row }">{{ groupNames(row.group_ids, row.groups) }}</template>
+      <template #cell-groups="{ row }"><div class="flex max-w-48 flex-wrap gap-1" :title="groupNames(row.group_ids, row.groups)"><SBadge v-for="group in groupTags(row).slice(0, 2)" :key="group.id" tone="gray" class="max-w-40 truncate">{{ group.name }}</SBadge><SBadge v-if="groupTags(row).length > 2" tone="gray">+{{ groupTags(row).length - 2 }}</SBadge><SHint v-if="!row.group_ids?.length" size="xs">—</SHint></div></template>
       <template #cell-created_by="{ row }">
         <span v-if="row.created_by_email" class="text-xs" :title="row.created_by ? `#${row.created_by}` : ''">{{ row.created_by_email }}</span>
         <SHint v-else-if="row.created_by" inline size="xs">#{{ row.created_by }}</SHint>
@@ -412,24 +421,16 @@ const groupOptions = computed<SelectOption[]>(() => [{ value: '', label: t('acco
       </template>
       <template #cell-status="{ row }">
         <SBadge :tone="statusOf(row).tone" dot>{{ statusOf(row).label }}</SBadge>
-        <SHint v-if="statusOf(row).detail" size="xs" class="mt-0.5 max-w-[16rem] truncate" :title="statusOf(row).detail">
+        <SHint v-if="statusOf(row).detail" size="xs" class="mt-1 line-clamp-2 max-w-[16rem] break-words" :title="statusOf(row).detail">
           {{ statusOf(row).detail }}
         </SHint>
       </template>
-      <template #cell-priority="{ row }">
-        <span class="tabular-nums whitespace-nowrap">
-          {{ row.priority }}
-          <SHint inline size="xs">· w{{ row.weight ?? 1 }}</SHint>
-        </span>
-      </template>
       <template #cell-concurrency="{ row }">
-        <span class="tabular-nums" :class="row.max_concurrency && (row.in_use || 0) >= row.max_concurrency ? 'font-semibold text-amber-600' : ''">
-          {{ row.in_use ?? 0 }}/{{ row.max_concurrency || '∞' }}
-        </span>
+        <div class="min-w-28 space-y-1.5 text-xs tabular-nums"><div class="flex justify-between gap-3"><span class="text-gray-400">{{ t('accounts.concurrency') }}</span><span :class="row.max_concurrency && (row.in_use || 0) >= row.max_concurrency ? 'font-semibold text-amber-600' : ''">{{ row.in_use ?? 0 }}/{{ row.max_concurrency || '∞' }}</span></div><div class="flex justify-between gap-3 text-[11px] text-gray-500"><span>{{ t('accounts.listUi.priorityWeight') }}</span><span>{{ row.priority }} / {{ row.weight ?? 1 }}</span></div></div>
       </template>
       <template #cell-limits="{ row }">
         <div v-if="limitsOf(row).length" class="flex flex-wrap gap-x-2 gap-y-0.5 text-xs tabular-nums">
-          <span v-for="l in limitsOf(row)" :key="l.key" :class="l.hit ? 'font-semibold text-amber-600' : ''">
+          <span v-for="l in limitsOf(row)" :key="l.key" class="inline-flex whitespace-nowrap gap-1" :class="l.hit ? 'font-semibold text-amber-600' : ''">
             <SHint inline size="xs">{{ l.label }}</SHint> {{ l.text }}
           </span>
         </div>
@@ -452,7 +453,7 @@ const groupOptions = computed<SelectOption[]>(() => [{ value: '', label: t('acco
     <SPagination v-model:page="list.page.value" v-model:page-size="list.pageSize.value" :total="list.total.value" />
 
     <!-- create / edit -->
-    <SModal v-model:open="editorOpen" :title="editorTitle" width="xl" persistent>
+    <SModal v-model:open="editorOpen" :title="editorTitle" width="2xl" persistent>
       <div v-if="editorLoading" class="py-10 text-center text-gray-400">{{ t('common.loading') }}</div>
       <AccountTypePicker v-else-if="!editing && step === 1" @pick="pick" />
       <AccountEditor

@@ -56,7 +56,9 @@ export function useAccountTypes() {
 
   /** "Anthropic · API Key" style label; falls back to raw ids. */
   function label(pluginKey: string, type: string, fallback?: LText | null): string {
-    return `${pluginName(pluginKey)} · ${typeLabel(pluginKey, type, fallback)}`
+    const plugin = pluginName(pluginKey)
+    const label = typeLabel(pluginKey, type, fallback)
+    return label === plugin || label.startsWith(plugin + ' · ') ? label : `${plugin} · ${label}`
   }
 
   /** Account types grouped by their plugin, in the server order. */

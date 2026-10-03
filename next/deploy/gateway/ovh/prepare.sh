@@ -125,4 +125,6 @@ release 0.1.11
 release 0.1.12
 # 0.1.13 simplifies the displayed primary/follower role labels.
 release 0.1.13
+# 0.1.14 reorganizes the account list and editor (same schema).
+release 0.1.14
 ls -la publish
