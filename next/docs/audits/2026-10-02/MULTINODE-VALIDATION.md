@@ -350,3 +350,9 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 - 角色来源必须是成功的网关状态报告，且主节点在报告集合中存在；缺失或读取失败时不推断主从。主节点变更计入布局身份，日常刷新仍保持用户位置和视角。
 - prepare 增加 SKIP_GATEWAY_BUILD=1，用于仅更新核心时复用现有网关制品，避免重新构建和改写网关镜像标签；默认仍保留原有构建行为。
 - 主从版浏览器核验：1 个主节点、3 个从节点、3 条升级协调关系；角色摘要明确 sup2api-1，节点详情显示升级角色，标签不折断；类型检查与最终生产构建通过，见 [构建记录](evidence/primary-nodegraph-web-build.log.txt)。
+
+### 20.3 OVH v0.1.11 上线
+
+- 功能提交 854f23350 已推送并在 OVH 从 Git 构建；备份为 ~/sup2api/backups/pre-v0.1.11-20261003T090741Z.sql.gz，gzip 校验通过。本次使用 SKIP_GATEWAY_BUILD=1，复用网关镜像工具，仅升级核心。
+- manifest digest ca2449a463d8f890a4d1e9f05f36b409666d49f26867ac667a147402457a7918；计划 7b51446aa8bc29bf29b934840e1aa475 完成 27 步，从创建到完成约 21.83 秒。各入口 503 约 4.5–5.8 秒，网关容器及启动身份不变。见 [原始记录](evidence/ovh-upgrade-0.1.11.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.11-summary.txt)。
+- 四节点核心 0.1.11、local/ready，插件全部 active；主从版节点图 JS 在四入口返回 200，并包含 primaryRole/coordination 逻辑。版本、历史、审计、鉴权和 PG/Redis 分工检查全部通过，无本次 ERROR。见 [上线核验](evidence/ovh-upgrade-0.1.11-verify.txt)、[运行时核验](evidence/ovh-upgrade-0.1.11-runtime.json)。
