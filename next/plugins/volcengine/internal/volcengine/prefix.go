@@ -7,7 +7,7 @@ package volcengine
 // video tasks under /doubao/api/v3. One fixed prefix cannot express that.
 //
 // Which of the two an account is, is its ACCOUNT TYPE, not a guess: apikey is
-// Ark itself and has no path settings, relay is a relay and has two. An earlier
+// Ark itself and has no path settings, relay has configurable paths. An earlier
 // version had one account type and derived the layout from the host of
 // base_url, which meant the official case and the relay case shared one form
 // and the rule had to special-case BytePlus to avoid treating Ark's own
@@ -28,15 +28,10 @@ import (
 
 // prefixes are the path prefixes of one account, already normalized.
 type prefixes struct {
-	api   string
-	video string
-	// anthropic is where the upstream serves Anthropic Messages, and is empty
-	// for an apikey account: measured on 2026-09-30, Ark's own endpoints do not
-	// serve that protocol at all (/api/v3/messages answers 404 with an empty
-	// body, exactly like a path that was never registered, while a real route
-	// answers 404 with a JSON error). Only the relay account type declares the
-	// anthropic platform, so an empty value here is normally unreachable -
-	// upstreamPath refuses it rather than assuming so.
+	api           string
+	video         string
+	videoEndpoint string
+	// Official Messages uses a separate native Anthropic-compatible surface.
 	anthropic string
 }
 
@@ -53,7 +48,7 @@ type prefixes struct {
 // under /doubao/api/v3 while serving text at the root).
 func prefixesOf(accountType, settingsJSON string) (prefixes, error) {
 	if accountType != AccountTypeRelay {
-		return prefixes{api: APIPrefix, video: APIPrefix}, nil
+		return prefixes{api: APIPrefix, video: APIPrefix, anthropic: "/api/compatible/v1"}, nil
 	}
 	settings, err := decodeJSONObject(settingsJSON)
 	if err != nil {
@@ -94,7 +89,20 @@ func prefixesOf(accountType, settingsJSON string) (prefixes, error) {
 		// common case of one prefix must need one field.
 		video = api
 	}
-	return prefixes{api: api, video: video, anthropic: api}, nil
+	endpoint := ""
+	if value, ok := settings[FieldVideoEndpoint]; ok && value != nil {
+		var valid bool
+		endpoint, valid = value.(string)
+		if !valid {
+			return prefixes{}, fmt.Errorf("%s must be a string", FieldVideoEndpoint)
+		}
+		if endpoint != "" {
+			if _, err := resolveEndpoint("https://endpoint.invalid", endpoint); err != nil {
+				return prefixes{}, fmt.Errorf("%s: %w", FieldVideoEndpoint, err)
+			}
+		}
+	}
+	return prefixes{api: api, video: video, anthropic: api, videoEndpoint: endpoint}, nil
 }
 
 // validateRelayBaseURL refuses a relay base_url that already carries a path
@@ -204,6 +212,15 @@ func validatePrefixFields(errs pluginsdk.FieldErrors, settingsJSON string) plugi
 		if _, err := normalizePrefix(s); err != nil {
 			errs = errs.Add(f, "pattern", fmt.Sprintf(
 				"%s %s / %s 必须是以 / 开头的路径前缀（如 /api/v3），留空表示使用默认值", f, err, f))
+		}
+	}
+	if value, ok := obj[FieldVideoEndpoint]; ok && value != nil {
+		if endpoint, valid := value.(string); !valid {
+			errs = errs.Add(FieldVideoEndpoint, "type", "video_endpoint must be a string")
+		} else if endpoint != "" {
+			if _, err := resolveEndpoint("https://endpoint.invalid", endpoint); err != nil {
+				errs = errs.Add(FieldVideoEndpoint, "format", err.Error())
+			}
 		}
 	}
 	return errs

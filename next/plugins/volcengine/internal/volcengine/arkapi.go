@@ -28,6 +28,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -253,8 +254,15 @@ func contextError(action string, ctx context.Context, last *ArkError) *ArkError 
 
 // attempt sends the Action once.
 func (a *arkAPI) attempt(ctx context.Context, cfg *AssetConfig, action string, payload []byte) (map[string]any, *ArkError) {
-	u := strings.TrimSuffix(cfg.BaseURL, "/") + "/?Action=" + action + "&Version=" + AssetAPIVersion
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(payload))
+	u, err := url.Parse(cfg.BaseURL)
+	if err != nil || u.Scheme == "" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return nil, &ArkError{Action: action, Code: "InvalidEndpoint", Message: "invalid asset endpoint"}
+	}
+	if u.Path == "" {
+		u.Path = "/"
+	}
+	u.RawQuery = url.Values{"Action": {action}, "Version": {AssetAPIVersion}}.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(payload))
 	if err != nil {
 		return nil, &ArkError{Action: action, Code: "InternalError", Message: err.Error()}
 	}

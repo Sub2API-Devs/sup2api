@@ -366,18 +366,11 @@ func upstreamPath(px prefixes, protocol, model string) (string, error) {
 		// converter, so the body reaching us is already Anthropic-shaped and
 		// the only decision is where to send it.
 		//
-		// Only the relay account type declares the anthropic platform, so in
-		// practice px.anthropic is always set when this runs. The refusal is
-		// the defensive half: Ark's own endpoints were measured on 2026-09-30
-		// not to serve this protocol at all (/api/v3/messages answers 404 with
-		// a zero-byte body, exactly like a path that was never registered,
-		// while a real route answers 404 with a JSON error), so if routing ever
-		// does hand an official account an Anthropic request, saying so beats
-		// posting to a path known not to exist.
+		// Official Ark serves /api/compatible/v1/messages. Relays keep their
+		// configured path; neither requires protocol conversion.
 		if px.anthropic == "" {
 			return "", status.Errorf(codes.InvalidArgument,
-				"Ark's own endpoints do not serve Anthropic Messages, so %q needs a %q account pointed at an "+
-					"Ark-compatible relay that does", protocol, AccountTypeRelay)
+				"account has no configured upstream path for %q", protocol)
 		}
 		return px.anthropic + "/messages", nil
 	case ProtocolCountTokens:
@@ -411,11 +404,8 @@ func upstreamTarget(px prefixes, meta *pluginv1.RequestMeta, model string) (meth
 
 // upstreamHeaders builds the upstream request headers for one protocol.
 //
-// Authorization: Bearer for every surface, including Anthropic Messages: Ark
-// authenticates its whole API with the one key, and an Ark-compatible relay
-// accepts the bearer form on the Anthropic route too. Sending x-api-key
-// instead - the way api.anthropic.com wants it - would mean this plugin
-// carried two notions of "the key" for one key.
+// Bearer remains the compatible relay/default authentication form. The
+// official native Messages surface selects x-api-key at request construction.
 //
 // Anthropic requires a version header and rejects a request without one, so an
 // Anthropic-protocol request that the client sent none for gets the default.
@@ -468,6 +458,13 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 		return nil, err
 	}
 	u, err := upstreamURL(cfg.BaseURL, ep)
+	if meta.GetProtocol() == ProtocolVideoSubmit || meta.GetProtocol() == ProtocolVideoQuery {
+		id := ""
+		if meta.GetProtocol() == ProtocolVideoQuery {
+			id = taskIDOf(meta)
+		}
+		u, err = videoTaskURL(cfg.BaseURL, px, id)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -476,6 +473,10 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 		Url:           u,
 		Headers:       upstreamHeaders(meta.GetProtocol(), cfg.APIKey, in.GetInboundHeaders()),
 		UpstreamModel: model,
+	}
+	if meta.GetProtocol() == ProtocolMessages && in.GetAccount().GetType() != AccountTypeRelay {
+		delete(resp.Headers, "authorization")
+		resp.Headers["x-api-key"] = cfg.APIKey
 	}
 	if meta.GetStream() && (meta.GetProtocol() == ProtocolChat || meta.GetProtocol() == "") {
 		resp.Patches = append(resp.Patches, &pluginv1.BodyPatch{Op: pluginv1.BodyPatch_OP_SET, Path: "stream_options.include_usage", ValueJson: "true"})

@@ -377,3 +377,13 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 用户要求界面直接使用“主节点 / 从节点”。提交 846e2ce6d 统一中文及英文的节点标签、顶部统计、详情角色与升级页标签；协调关系说明保留。前端类型检查与构建通过（7.60 秒），输出到 TEMP，原 dist 修改保持不动。
 
 OVH 从 Git 构建核心 v0.1.13，复用既有网关镜像，未替换网关容器。备份 pre-v0.1.13-20261003T100113Z.sql.gz 校验通过。manifest digest 77600fb9383d16f68ebb3384894dce1dff5fdbe88ca8085ae26a8b63e59a57ba；计划 e82d1e09b36557781934ee9a0fbee607 完成全部 27 步，从创建到完成 22.13 秒，各入口 503 约 4.6–7.5 秒。四核心版本、插件 active、访问身份/boot、接口与 PG/Redis 检查全部通过；四入口实际返回的中文资源均含新标签且不再含“升级主节点”。见 [采样](evidence/ovh-upgrade-0.1.13.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.13-summary.txt)、[上线核验](evidence/ovh-upgrade-0.1.13-verify.txt)、[文案核验](evidence/ovh-upgrade-0.1.13-labels.json)。
+
+## 22. 火山方舟插件 0.11.0（2026-10-03）
+
+两种稳定类型 ID 分别显示“字节火山方舟 · 官方通用”和“豆包视频”。官方新增原生 Anthropic Messages，OpenAI/视频仍使用官方路径；豆包视频新增独立视频任务端点与素材库端点，保留旧账号配置与文本兼容能力。素材库不再在 relay 缺少地址时隐式回退到官方，签名使用准确请求路径。权限集合未扩大，核心、网关及数据库结构均无修改。
+
+参考 new-api 的 `plugins/tasks/doubao/plugin.js`、`relaykit/dto/channel_settings.go`、`service/assetlib/upstream.go`、`common/asset_library_key.go`；官方 Messages 路径及认证另核对火山方舟官方文档，未沿用参考项目中经 OpenAI 转换的旧实现。
+
+- 本地插件 vet/test、前端类型检查通过；独立安全审查未发现阻断项。
+- OVH 私有测试项目 `sub2api-ark-w3tbrd`：完整 vet 与 race 测试顶层 **106 通过、0 跳过、0 失败**，含数据库任务/素材库回归、HTTP 路径与签名检查。见 [完整测试记录](evidence/volcengine-0.11.0-tests.log.txt)。
+- 浏览器使用 `SUB2API_MOCK_VOLCENGINE=1` 的只读 fixture，直接读取实际 manifest/schema，检查两种账号表单和路径帮助；自定义字段按单行文本输入显示。没有保存真实账号，也未调用付费上游视频生成。

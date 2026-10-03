@@ -1025,3 +1025,17 @@ new-api 的两个渠道是同一条轴（下表是读代码得到的，不是看
 | 账本 | **只有一条 `-0.40594`，没有补扣也没有退款** |
 
 最后一行第二次独立确认了 0.5.1 的帧数修复（§13.8 是第一次）。
+
+## 15. 官方通用与豆包视频账号（0.11.0，2026-10-03）
+
+本节描述当前行为，覆盖 §14 关于官方账号不支持 Anthropic Messages 的历史结论。账号类型 ID 保持 `apikey` / `relay`，已有账号无需重建。
+
+- **字节火山方舟 · 官方通用**（`apikey`）：OpenAI 与视频请求沿用官方 `/api/v3`；Anthropic Messages 使用官方 `/api/compatible/v1/messages`，上游认证为账号 API Key 的 `x-api-key`。JSON 和 SSE 直接透传，不转为 OpenAI。`count_tokens` 仍明确拒绝，不能据此认为支持全部 Anthropic API。
+- **豆包视频**（`relay`）：可配置 `base_url`、`video_endpoint`、`asset_endpoint`。后两者接受完整 HTTP(S) URL 或以 `/` 开始的路径；路径追加到 Base URL，`/` 表示 Base URL 本身。视频端点填写任务集合地址，创建使用该地址，查询与后台核对统一追加转义后的任务 ID。
+- 新视频端点优先于 `video_api_prefix`，留空保持旧前缀规则。新素材库端点优先于 `asset_base_url`；两个素材库地址均未配置时关闭素材库，不隐式请求官方控制面。素材库使用独立 AK/SK 和区域签名，签名路径与实际请求路径一致。
+- 保留旧 relay 账号的文本、图片和 Anthropic 兼容能力及旧配置字段。新端点没有表单默认值，避免打开旧账号再保存时改变其路由。官方类型不允许设置这两个自定义端点。
+- 端点校验拒绝查询串、片段、URL 用户信息、协议相对地址、空白控制字符及路径穿越；最终网络请求仍受宿主出口策略约束。凭证继续分别加密保存，不引入拼接密钥格式。
+
+参考 `new-api` 的 VolcEngine / DoubaoVideo 类型、任务 URL 拼接和素材库签名实现；官方 Messages 以当前[方舟 Messages API 文档](https://docs.volcengine.com/docs/ark/messages-api?lang=en)为准。OpenAI/视频 API Key 与素材库 AK/SK 的作用不同，不能互换。
+
+验证：本地 vet/test、前端类型检查通过；OVH 私有 PG/Redis 环境完整 `go test -race -p4 -count=1 -v ./...` 顶层 106 项通过、0 跳过、0 失败。覆盖官方与中转认证、流式标记、自定义视频提交/查询/后台核对、配置兼容、素材库真实测试 HTTP 路径及签名。浏览器以只读模拟账号检查两个实际 schema 表单。此次未调用付费上游生成视频，详细记录见 `audits/2026-10-02/MULTINODE-VALIDATION.md` §22。

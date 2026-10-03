@@ -1,69 +1,143 @@
 {
-  "ui:order": ["api_key", "base_url", "api_prefix", "video_api_prefix", "access_key", "secret_key", "asset_base_url", "asset_region"],
+  "ui:order": [
+    "api_key",
+    "base_url",
+    "video_endpoint",
+    "asset_endpoint",
+    "access_key",
+    "secret_key",
+    "asset_region",
+    "api_prefix",
+    "video_api_prefix",
+    "asset_base_url"
+  ],
   "api_key": {
     "ui:widget": "secret",
-    "ui:title": { "en": "API key", "zh": "API Key" },
+    "ui:title": {
+      "en": "API key",
+      "zh": "API Key"
+    },
     "ui:placeholder": "sk-...",
     "ui:help": {
-      "en": "The relay's own key, sent as Authorization: Bearer. Stored encrypted and never shown again. Note that relays commonly authorise models per key group: a key whose group has no Seedance model cannot submit video, and the relay answers 503 rather than 404, so keep one account per group of models the key really covers and narrow it with the account's model list.",
-      "zh": "中转站自己的 Key，以 Authorization: Bearer 发送；加密保存，保存后不再明文显示。注意中转站通常按 Key 的分组授权模型：分组里没有 Seedance 模型的 Key 提交不了视频，而中转站返回的是 503 而不是 404 —— 所以按 Key 实际覆盖的模型分别建账号，并用账号的模型列表收窄。"
+      "en": "The upstream API key, sent as Authorization: Bearer and stored encrypted.",
+      "zh": "上游 API Key，以 Authorization: Bearer 发送，加密保存。"
     }
   },
   "base_url": {
-    "ui:title": { "en": "Base URL", "zh": "Base URL" },
+    "ui:title": {
+      "en": "Base URL",
+      "zh": "Base URL"
+    },
     "ui:placeholder": "https://relay.example.com",
     "ui:help": {
-      "en": "The relay's ROOT address, required - a relay has no default. Do not include /v1 or /api/v3: the paths come from the two prefixes below, which is the whole reason they are separate fields, and a base URL ending in either is refused with this message rather than silently stripped. Unlike the official Ark type, this address is not restricted to an allow-list, so whatever you write here is where the key above is sent.",
-      "zh": "中转站的**根地址**，必填 —— 中转站没有默认地址。不要带 /v1 或 /api/v3：路径由下面两个前缀决定（这正是它们是独立字段的原因），base_url 以这两者结尾会被直接拒绝而不是悄悄去掉。与官方方舟类型不同，这个地址不受白名单限制，所以上面那个 Key 会被发往你在这里填的任何地方。"
+      "en": "Required service root, without a trailing /v1 or /api/v3. Relative endpoints below resolve against this address.",
+      "zh": "必填服务根地址，不带尾部 /v1 或 /api/v3。下面的相对端点按此地址解析。"
     }
   },
   "api_prefix": {
-    "ui:title": { "en": "API path prefix", "zh": "API 路径前缀" },
-    "ui:placeholder": { "en": "Leave empty to use /v1", "zh": "留空使用 /v1" },
+    "ui:title": {
+      "en": "Legacy text API prefix",
+      "zh": "兼容配置：文本 API 前缀"
+    },
+    "ui:placeholder": {
+      "en": "Leave empty to use /v1",
+      "zh": "留空使用 /v1"
+    },
     "ui:help": {
-      "en": "Where the relay serves the text and image surfaces: /v1/chat/completions, /v1/responses, /v1/embeddings, /v1/messages, /v1/images/generations. Every relay measured so far uses /v1, so leave it empty. Set it to /api/v3 for a relay that mirrors Ark's own paths under its own host. It must start with / and can never move the request to another host.",
-      "zh": "中转站提供文本与图片接口的位置：/v1/chat/completions、/v1/responses、/v1/embeddings、/v1/messages、/v1/images/generations。目前实测过的中转站都是 /v1，所以留空即可。如果中转站在自己的域名下原样镜像方舟路径，填 /api/v3。必须以 / 开头，任何情况下都不能把请求导到别的主机。"
+      "en": "Preserves existing text/image relay integrations; defaults to /v1.",
+      "zh": "保留已有文本与图片中转接入，默认 /v1。"
     }
   },
   "video_api_prefix": {
-    "ui:title": { "en": "Video API path prefix", "zh": "视频 API 路径前缀" },
-    "ui:placeholder": { "en": "Leave empty to follow the API path prefix", "zh": "留空则跟随「API 路径前缀」" },
+    "ui:title": {
+      "en": "Legacy video API prefix",
+      "zh": "兼容配置：视频 API 前缀"
+    },
+    "ui:placeholder": {
+      "en": "Leave empty to follow the API path prefix",
+      "zh": "留空则跟随「API 路径前缀」"
+    },
     "ui:help": {
-      "en": "Where the relay serves Ark's NATIVE video task paths, which have no standard location: the one this plugin was verified against keeps them under /doubao/api/v3 while serving text at the root. The task poll that settles the real cost uses this too, so a wrong value means the poll 404s forever, the core reads that as \"still pending\", and every task is charged at its estimate.",
-      "zh": "中转站提供方舟**原生**视频任务路径的位置 —— 这些路径没有标准位置：本插件验证过的那个把它们放在 /doubao/api/v3 下，而文本在根上。按真实用量结算的任务轮询也用这个前缀，**填错会让轮询一直 404、核心读成「仍在进行」，于是每个任务都按预估收费**。"
+      "en": "Used only when the new video endpoint is empty. Appends /contents/generations/tasks. Empty follows the text API prefix.",
+      "zh": "仅在新视频端点留空时使用，自动追加 /contents/generations/tasks。留空跟随文本 API 前缀。"
     }
   },
   "access_key": {
-    "ui:title": { "en": "Asset library access key", "zh": "素材库 Access Key" },
-    "ui:placeholder": { "en": "Leave empty to keep the asset library off", "zh": "留空则不启用素材库" },
+    "ui:title": {
+      "en": "Asset library access key",
+      "zh": "素材库 Access Key"
+    },
+    "ui:placeholder": {
+      "en": "Leave empty to keep the asset library off",
+      "zh": "留空则不启用素材库"
+    },
     "ui:help": {
-      "en": "Volcengine account access key id. Only needed for the asset library, which is signed with the account's AK/SK instead of the API key. Leave this and the secret key empty and the account simply does not take part in the asset library.",
-      "zh": "火山引擎账号的 Access Key ID。只有素材库需要它：素材库用账号的 AK/SK 签名，不用 API Key。它和 Secret Key 都留空，这个账号就不参与素材库。"
+      "en": "Optional asset Access Key. Fill together with Secret Key and an asset endpoint.",
+      "zh": "素材库 Access Key；与 Secret Key、素材库端点一起填写。"
     }
   },
   "secret_key": {
     "ui:widget": "secret",
-    "ui:title": { "en": "Asset library secret key", "zh": "素材库 Secret Key" },
-    "ui:placeholder": { "en": "Required together with the access key", "zh": "填了 Access Key 就必须填" },
+    "ui:title": {
+      "en": "Asset library secret key",
+      "zh": "素材库 Secret Key"
+    },
+    "ui:placeholder": {
+      "en": "Required together with the access key",
+      "zh": "填了 Access Key 就必须填"
+    },
     "ui:help": {
-      "en": "The secret half of the pair. Stored encrypted and never shown again. Filling in only one of the two is refused.",
-      "zh": "AK/SK 中的密钥部分。加密保存，保存后不再明文显示。两者只填一个会被拒绝。"
+      "en": "Asset Secret Key, stored encrypted separately from the API key. Fill together with Access Key.",
+      "zh": "素材库 Secret Key，与 API Key 分开加密保存；须与 Access Key 配对。"
     }
   },
   "asset_base_url": {
-    "ui:title": { "en": "Asset endpoint", "zh": "素材端点" },
+    "ui:title": {
+      "en": "Legacy asset URL",
+      "zh": "兼容配置：旧素材地址"
+    },
     "ui:placeholder": "https://relay.example.com/api/support/v1/asset",
     "ui:help": {
-      "en": "The relay's asset library endpoint, as a FULL address - asset calls are a signed POST with ?Action=..., and a relay mounts them under a path of its own (/api/support/v1/asset on the one verified here) rather than on Ark's control plane. Leave it empty only if the relay really does serve the Ark control-plane API at its root. Unlike the official type, this address is not restricted to an allow-list.",
-      "zh": "中转站的素材库端点，填**完整地址** —— 素材库调用是带签名的 POST、Action 放在查询参数里，而中转站把它挂在自己的某个路径下（这里验证过的那个是 /api/support/v1/asset），不是方舟控制面。只有当中转站确实在根路径上提供方舟控制面接口时才留空。与官方类型不同，这个地址不受白名单限制。"
+      "en": "Existing full asset URL, used only when the new asset endpoint is empty. An empty value does not select the official service.",
+      "zh": "保留已有完整素材 URL，仅在新素材库端点留空时使用；空值不会选择官方服务。"
     }
   },
   "asset_region": {
-    "ui:title": { "en": "Asset region", "zh": "素材库区域" },
-    "ui:placeholder": { "en": "Leave empty to use cn-beijing", "zh": "留空使用 cn-beijing" },
+    "ui:title": {
+      "en": "Asset region",
+      "zh": "素材库区域"
+    },
+    "ui:placeholder": {
+      "en": "Leave empty to use cn-beijing",
+      "zh": "留空使用 cn-beijing"
+    },
     "ui:help": {
       "en": "Signing region of the asset library calls; it is part of the signature, so a wrong value is rejected upstream as a signature error rather than a region error. cn-beijing for a relay in front of Ark in China, ap-southeast-1 for the overseas (BytePlus) stack.",
       "zh": "素材库调用的签名区域；它是签名的一部分，填错了上游报的是签名错误而不是区域错误。中转的是方舟国内就用 cn-beijing，海外（BytePlus）用 ap-southeast-1。"
+    }
+  },
+  "video_endpoint": {
+    "ui:widget": "text",
+    "ui:title": {
+      "en": "Video task collection endpoint",
+      "zh": "视频端点"
+    },
+    "ui:placeholder": "/api/v3/contents/generations/tasks",
+    "ui:help": {
+      "en": "Full task collection path or absolute HTTP(S) URL. Submit uses POST here; polling appends /{task_id}. Do not enter only a path prefix. Leave empty to preserve the legacy video-prefix behavior.",
+      "zh": "填写完整任务集合路径或 http(s) 完整 URL。提交向此地址 POST，查询追加 /{任务ID}；不要只填路径前缀。留空沿用旧视频前缀规则。"
+    }
+  },
+  "asset_endpoint": {
+    "ui:widget": "text",
+    "ui:title": {
+      "en": "Asset library endpoint",
+      "zh": "素材库端点"
+    },
+    "ui:placeholder": "/api/support/v1/asset",
+    "ui:help": {
+      "en": "Full path or absolute HTTP(S) URL. Asset calls append Action and Version query parameters and use the separate AK/SK below. If empty, an explicitly configured legacy asset URL is used; otherwise the asset library is disabled. Never defaults to an official endpoint.",
+      "zh": "填写完整路径或 http(s) 完整 URL。调用自动追加 Action、Version 参数，使用下面独立的 AK/SK。留空仅兼容已显式填写的旧素材地址；两者都未填时不启用素材库，不会默认发送到官方端点。"
     }
   }
 }

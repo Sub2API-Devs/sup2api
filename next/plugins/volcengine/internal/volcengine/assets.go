@@ -33,6 +33,8 @@ const (
 	FieldSecretKey = "secret_key"
 	// FieldAssetBaseURL is the asset OpenAPI endpoint (settings).
 	FieldAssetBaseURL = "asset_base_url"
+	// FieldAssetEndpoint is a relay's complete asset URL or path below base_url.
+	FieldAssetEndpoint = "asset_endpoint"
 	// FieldAssetRegion is the signing region (settings).
 	FieldAssetRegion = "asset_region"
 )
@@ -183,9 +185,12 @@ func AssetConfigOf(acc *pluginsdk.AccountCredentials) (*AssetConfig, error) {
 		// past the form: ValidateCredentials refuses the half-filled pair.
 		return nil, fmt.Errorf("account %d: the asset library needs both access_key and secret_key", acc.ID)
 	}
-	url, err := assetSpec.NormalizeBaseURL(base)
+	url, err := effectiveAssetEndpoint(acc.Type, acc.CredentialsJSON, acc.SettingsJSON, base)
 	if err != nil {
 		return nil, fmt.Errorf("account %d: asset_base_url: %w", acc.ID, err)
+	}
+	if url == "" {
+		return nil, nil
 	}
 	if region == "" {
 		region = DefaultAssetRegion
@@ -204,7 +209,47 @@ func AssetConfigOf(acc *pluginsdk.AccountCredentials) (*AssetConfig, error) {
 // real answer have to read the credentials, which is audited.
 func AssetEnabled(settingsJSON string) bool {
 	_, _, base, region, err := assetFields("", settingsJSON)
-	return err == nil && (base != "" || region != "")
+	endpoint, endpointErr := assetSetting("", settingsJSON, FieldAssetEndpoint)
+	return err == nil && endpointErr == nil && (base != "" || region != "" || endpoint != "")
+}
+
+func assetSetting(credentialsJSON, settingsJSON, field string) (string, error) {
+	for _, raw := range []string{settingsJSON, credentialsJSON} {
+		obj, err := decodeJSONObject(raw)
+		if err != nil {
+			return "", err
+		}
+		if value, exists := obj[field]; exists && value != nil {
+			s, ok := value.(string)
+			if !ok {
+				return "", fmt.Errorf("%s must be a string", field)
+			}
+			return strings.TrimSpace(s), nil
+		}
+	}
+	return "", nil
+}
+
+// Explicit legacy URLs keep their meaning. A relay never silently falls back
+// to the official control plane when no asset endpoint was configured.
+func effectiveAssetEndpoint(accountType, credentialsJSON, settingsJSON, legacyBase string) (string, error) {
+	if accountType == AccountTypeRelay {
+		endpoint, err := assetSetting(credentialsJSON, settingsJSON, FieldAssetEndpoint)
+		if err != nil {
+			return "", err
+		}
+		if endpoint != "" {
+			base, err := assetSetting(credentialsJSON, settingsJSON, "base_url")
+			if err != nil {
+				return "", err
+			}
+			return resolveEndpoint(base, endpoint)
+		}
+		if legacyBase == "" {
+			return "", nil
+		}
+	}
+	return assetSpec.NormalizeBaseURL(legacyBase)
 }
 
 // validateAssetFields adds the asset library field errors to errs: the AK/SK
@@ -265,7 +310,7 @@ func normalizeAssetFields(objJSON string) string {
 		return objJSON
 	}
 	changed := false
-	for _, f := range []string{FieldAccessKey, FieldSecretKey, FieldAssetRegion} {
+	for _, f := range []string{FieldAccessKey, FieldSecretKey, FieldAssetRegion, FieldAssetEndpoint} {
 		if v, ok := obj[f]; ok {
 			if s, isStr := v.(string); isStr {
 				obj[f] = strings.TrimSpace(s)
@@ -321,6 +366,22 @@ func (p *Plugin) validateWithAssets(in *pluginv1.ValidateCredentialsRequest) *pl
 	if in.GetAccountType() == AccountTypeRelay {
 		errs = validateRelayBaseURL(errs, in.GetCredentialsJson(), in.GetSettingsJson())
 		errs = validatePrefixFields(errs, in.GetSettingsJson())
+	}
+	endpoint, endpointErr := assetSetting(in.GetCredentialsJson(), in.GetSettingsJson(), FieldAssetEndpoint)
+	if endpointErr != nil {
+		errs = errs.Add(FieldAssetEndpoint, "type", endpointErr.Error())
+	} else if endpoint != "" {
+		if in.GetAccountType() != AccountTypeRelay {
+			errs = errs.Add(FieldAssetEndpoint, "unsupported", "asset_endpoint is only available for Doubao video accounts / 素材端点自定义仅适用于豆包视频账号")
+		} else {
+			if _, err := effectiveAssetEndpoint(AccountTypeRelay, in.GetCredentialsJson(), in.GetSettingsJson(), ""); err != nil {
+				errs = errs.Add(FieldAssetEndpoint, "format", err.Error())
+			}
+			ak, sk, _, _, _ := assetFields(in.GetCredentialsJson(), in.GetSettingsJson())
+			if ak == "" && sk == "" {
+				errs = errs.Add(FieldAccessKey, "required", "asset_endpoint requires access_key and secret_key / 填写素材端点需要 Access Key 和 Secret Key")
+			}
+		}
 	}
 	if len(errs) > 0 {
 		return &pluginv1.ValidateCredentialsResponse{Errors: errs}

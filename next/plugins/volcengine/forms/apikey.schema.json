@@ -1,8 +1,10 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "title": "Volcengine Ark API key",
-  "required": ["api_key"],
+  "title": "Volcengine Ark official general",
+  "required": [
+    "api_key"
+  ],
   "additionalProperties": false,
   "properties": {
     "api_key": {

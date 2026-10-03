@@ -1,8 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "title": "Doubao relay key",
-  "required": ["api_key", "base_url"],
+  "title": "Doubao video",
+  "required": [
+    "api_key",
+    "base_url"
+  ],
   "additionalProperties": false,
   "properties": {
     "api_key": {
@@ -52,6 +55,18 @@
       "title": "Asset region",
       "maxLength": 64,
       "pattern": "^[a-z0-9-]*$"
+    },
+    "video_endpoint": {
+      "type": "string",
+      "title": "Video task collection endpoint",
+      "maxLength": 2048,
+      "pattern": "^((https?://[^\\s?#]+)|(/[^/\\s?#][^\\s?#]*|/))?$"
+    },
+    "asset_endpoint": {
+      "type": "string",
+      "title": "Asset library endpoint",
+      "maxLength": 2048,
+      "pattern": "^((https?://[^\\s?#]+)|(/[^/\\s?#][^\\s?#]*|/))?$"
     }
   }
 }

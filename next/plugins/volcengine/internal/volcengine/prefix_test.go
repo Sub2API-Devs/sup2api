@@ -1,8 +1,7 @@
 package volcengine
 
 // Tests for the two account types: which upstream path layout each one gets,
-// the path prefixes only the relay type has, and the Anthropic surface only the
-// relay type serves.
+// the path prefixes only the relay type has, and each native Anthropic surface.
 //
 // The security case is first and is the reason this file exists. The apikey
 // type's base_url is restricted to Ark's own endpoints by guardedSettings
@@ -15,6 +14,8 @@ package volcengine
 
 import (
 	"context"
+	"encoding/json"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -123,25 +124,23 @@ func TestLayoutFollowsTheAccountType(t *testing.T) {
 	}
 }
 
-// TestOfficialRefusesAnthropic covers the defensive half of the split. The
-// apikey type does not declare the anthropic platform, so routing should never
-// hand it an Anthropic request; if it ever does, it must say so rather than
-// post to /api/v3/messages, which was measured to answer 404 with an empty body
-// exactly like a path that was never registered.
-func TestOfficialRefusesAnthropic(t *testing.T) {
-	for _, c := range []struct{ name, settings string }{
-		{"official", `{}`},
-		{"byteplus", `{"base_url":"` + BytePlusBaseURL + `"}`},
-	} {
-		r, err := buildFor(t, account(testKey, c.settings), &pluginv1.RequestMeta{Protocol: ProtocolMessages, Model: "m"})
-		if err == nil {
-			t.Errorf("%s: accepted and would have sent %s", c.name, r.GetUrl())
-			continue
+func TestOfficialNativeAnthropicMessages(t *testing.T) {
+	for _, stream := range []bool{false, true} {
+		r, err := New().BuildUpstreamRequest(context.Background(), &pluginv1.BuildUpstreamRequestRequest{
+			Account: account(testKey, `{}`), Meta: &pluginv1.RequestMeta{Protocol: ProtocolMessages, Model: "m", Stream: stream},
+			InboundHeaders: map[string]string{"anthropic-version": "2023-06-01", "anthropic-beta": "test-beta", "x-api-key": "caller-key", "authorization": "Bearer caller"},
+		})
+		if err != nil || r.GetUrl() != DefaultBaseURL+"/api/compatible/v1/messages" {
+			t.Fatalf("stream=%v: %v %v", stream, r, err)
 		}
-		// The error has to name the way out, because "Ark does not do this" is
-		// only useful next to "this account type does".
-		if !strings.Contains(err.Error(), AccountTypeRelay) {
-			t.Errorf("%s: the error should name the %s account type: %v", c.name, AccountTypeRelay, err)
+		if r.Headers["x-api-key"] != "11111111-2222-3333-4444-555555555555" {
+			t.Fatal("wrong upstream API key")
+		}
+		if r.Headers["x-api-key"] == "caller-key" || r.Headers["authorization"] != "" {
+			t.Fatal("caller credential leaked or wrong auth scheme")
+		}
+		if r.Headers["anthropic-version"] != "2023-06-01" || r.Headers["anthropic-beta"] != "test-beta" || len(r.Patches) != 0 {
+			t.Fatalf("Anthropic wire was altered: %+v", r)
 		}
 	}
 }
@@ -151,10 +150,11 @@ func TestOfficialRefusesAnthropic(t *testing.T) {
 // its settings anyway (a row from before the split, a restored backup) must not
 // move an official account's paths.
 func TestOfficialIgnoresPrefixSettings(t *testing.T) {
-	acc := account(testKey, `{"api_prefix":"/v1","video_api_prefix":"/doubao/api/v3"}`)
+	acc := account(testKey, `{"api_prefix":"/v1","video_api_prefix":"/doubao/api/v3","video_endpoint":"https://other.example/tasks"}`)
 	for _, c := range []struct{ protocol, want string }{
 		{ProtocolChat, DefaultBaseURL + "/api/v3/chat/completions"},
 		{ProtocolVideoSubmit, DefaultBaseURL + "/api/v3/contents/generations/tasks"},
+		{ProtocolMessages, DefaultBaseURL + "/api/compatible/v1/messages"},
 	} {
 		r, err := buildFor(t, acc, &pluginv1.RequestMeta{Protocol: c.protocol, Model: "m"})
 		if err != nil || r.GetUrl() != c.want {
@@ -258,6 +258,69 @@ func TestVideoPrefixIsIndependent(t *testing.T) {
 	})
 	if err != nil || rr.GetUrl() != DefaultBaseURL+"/api/v3/contents/generations/tasks/task_1" {
 		t.Fatalf("official reconcile: %q %v", rr.GetUrl(), err)
+	}
+}
+
+func TestVideoEndpointUsedBySubmissionQueryAndPoll(t *testing.T) {
+	for _, endpoint := range []string{"/doubao/api/v3/contents/generations/tasks", "https://video.example/custom/tasks"} {
+		settings, _ := json.Marshal(map[string]any{"base_url": "https://relay.test", "api_prefix": "/v1", "video_api_prefix": "/legacy", "video_endpoint": endpoint})
+		acc := account(testKey, string(settings))
+		acc.Type = AccountTypeRelay
+		want := endpoint
+		if strings.HasPrefix(endpoint, "/") {
+			want = "https://relay.test" + endpoint
+		}
+		created, err := buildFor(t, acc, &pluginv1.RequestMeta{Protocol: ProtocolVideoSubmit, Model: "m"})
+		if err != nil || created.Url != want || created.Method != "POST" {
+			t.Fatalf("submit %s: %+v %v", endpoint, created, err)
+		}
+		id := "task/a?x#y"
+		query, err := buildFor(t, acc, &pluginv1.RequestMeta{Protocol: ProtocolVideoQuery, PathParams: map[string]string{TaskIDParam: id}})
+		if err != nil || query.Url != want+"/"+url.PathEscape(id) || query.Method != "GET" {
+			t.Fatalf("query: %+v %v", query, err)
+		}
+		poll, err := New().BuildReconcileRequest(context.Background(), &pluginv1.BuildReconcileRequestRequest{Account: acc, Entry: &pluginv1.ReconcileEntry{RefId: id}})
+		if err != nil || poll.Url != query.Url || poll.Method != "GET" {
+			t.Fatalf("poll disagrees with query: %+v %v", poll, err)
+		}
+		chat, err := buildFor(t, acc, &pluginv1.RequestMeta{Protocol: ProtocolChat, Model: "m"})
+		if err != nil || chat.Url != "https://relay.test/v1/chat/completions" {
+			t.Fatal("video endpoint changed legacy text surface", chat, err)
+		}
+	}
+}
+
+func TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime(t *testing.T) {
+	for _, endpoint := range []string{"//evil.test/tasks", "https://user:pass@evil.test/tasks", "/tasks?key=x", "/tasks#frag", " /tasks", "/tasks ", "/a/../tasks", "/a/./tasks", "/a/%2e%2e/tasks", "/a/%252e%252e/tasks", "/a%2f..%2ftasks", "/a%20b/tasks", "/a\\b/tasks", "/a%5cb/tasks", "http:/tasks", "ftp://evil.test/tasks", "tasks", strings.Repeat("a", 2049)} {
+		t.Run(endpoint, func(t *testing.T) {
+			if _, err := resolveEndpoint("https://relay.test", endpoint); err == nil {
+				t.Fatal("ambiguous endpoint accepted")
+			}
+			settings, _ := json.Marshal(map[string]any{"base_url": "https://relay.test", "video_endpoint": endpoint})
+			validation := New().validateWithAssets(&pluginv1.ValidateCredentialsRequest{AccountType: AccountTypeRelay, CredentialsJson: testKey, SettingsJson: string(settings)})
+			found := false
+			for _, e := range validation.Errors {
+				found = found || e.Field == FieldVideoEndpoint
+			}
+			if !found {
+				t.Fatalf("no endpoint validation error: %+v", validation)
+			}
+			acc := account(testKey, string(settings))
+			acc.Type = AccountTypeRelay
+			if _, err := buildFor(t, acc, &pluginv1.RequestMeta{Protocol: ProtocolVideoSubmit}); err == nil {
+				t.Fatal("runtime accepted bypassed validation")
+			}
+		})
+	}
+	for _, tc := range []struct{ base, endpoint, want string }{
+		{"https://relay.test", "/", "https://relay.test"},
+		{"https://relay.test/prefix/", "/assets", "https://relay.test/prefix/assets"},
+		{"https://relay.test", "https://asset.test/tasks/", "https://asset.test/tasks"},
+	} {
+		got, err := resolveEndpoint(tc.base, tc.endpoint)
+		if err != nil || got != tc.want {
+			t.Fatalf("%+v: %s %v", tc, got, err)
+		}
 	}
 }
 

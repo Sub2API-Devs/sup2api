@@ -67,6 +67,25 @@ const TaskIDParam = "task_id"
 // upstream this plugin was verified against does exactly that.
 func videoTasksPath(prefix string) string { return prefix + "/contents/generations/tasks" }
 
+// Submission, direct query and background polling resolve the same collection.
+// The endpoint override is populated only for the relay account type.
+func videoTaskURL(base string, px prefixes, id string) (string, error) {
+	var collection string
+	var err error
+	if px.videoEndpoint != "" {
+		collection, err = resolveEndpoint(base, px.videoEndpoint)
+	} else {
+		collection, err = upstreamURL(base, videoTasksPath(px.video))
+	}
+	if err != nil {
+		return "", err
+	}
+	if id != "" {
+		collection += "/" + url.PathEscape(id)
+	}
+	return collection, nil
+}
+
 // Resolution tiers: the vocabulary of the "resolution" fact declared on the
 // video_submit endpoint, and the tiers the token estimate understands.
 const (
@@ -379,7 +398,7 @@ func (p *Plugin) BuildReconcileRequest(_ context.Context, in *pluginv1.BuildReco
 		// without a key there is no poll to build.
 		return nil, status.Errorf(codes.FailedPrecondition, "reconcile needs the account credentials: %v", err)
 	}
-	u, err := upstreamURL(cfg.BaseURL, videoTasksPath(px.video)+"/"+url.PathEscape(ref))
+	u, err := videoTaskURL(cfg.BaseURL, px, ref)
 	if err != nil {
 		return nil, err
 	}

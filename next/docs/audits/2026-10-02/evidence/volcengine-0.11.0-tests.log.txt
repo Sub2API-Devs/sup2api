@@ -1,0 +1,413 @@
+=== RUN   TestManifest
+--- PASS: TestManifest (0.01s)
+=== RUN   TestAssetRoutesAndPages
+--- PASS: TestAssetRoutesAndPages (0.00s)
+=== RUN   TestManifestServes
+--- PASS: TestManifestServes (0.01s)
+=== RUN   TestValidate
+--- PASS: TestValidate (0.01s)
+=== RUN   TestPlatformDeclaration
+--- PASS: TestPlatformDeclaration (0.00s)
+=== RUN   TestVideoEndpoints
+--- PASS: TestVideoEndpoints (0.00s)
+=== RUN   TestImageUsageRules
+--- PASS: TestImageUsageRules (0.00s)
+=== RUN   TestEndpointFormsPreserveLegacyAccounts
+--- PASS: TestEndpointFormsPreserveLegacyAccounts (0.00s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/plugins/volcengine	1.057s
+=== RUN   TestSignedCallShape
+--- PASS: TestSignedCallShape (0.00s)
+=== RUN   TestSignatureBindsSecretRegionAndBody
+--- PASS: TestSignatureBindsSecretRegionAndBody (0.00s)
+=== RUN   TestEveryActionIsSigned
+--- PASS: TestEveryActionIsSigned (0.01s)
+=== RUN   TestUnknownActionNeverReachesUpstream
+--- PASS: TestUnknownActionNeverReachesUpstream (0.00s)
+=== RUN   TestNoDialerNoCall
+--- PASS: TestNoDialerNoCall (0.00s)
+=== RUN   TestUpstreamErrorClassification
+=== RUN   TestUpstreamErrorClassification/not_found_inside_a_200
+=== RUN   TestUpstreamErrorClassification/404
+=== RUN   TestUpstreamErrorClassification/wrong_signature
+=== RUN   TestUpstreamErrorClassification/throttled
+--- PASS: TestUpstreamErrorClassification (0.41s)
+    --- PASS: TestUpstreamErrorClassification/not_found_inside_a_200 (0.00s)
+    --- PASS: TestUpstreamErrorClassification/404 (0.00s)
+    --- PASS: TestUpstreamErrorClassification/wrong_signature (0.00s)
+    --- PASS: TestUpstreamErrorClassification/throttled (0.40s)
+=== RUN   TestCanceledContextNeverDials
+--- PASS: TestCanceledContextNeverDials (0.00s)
+=== RUN   TestCancelAbortsTheCallInFlight
+--- PASS: TestCancelAbortsTheCallInFlight (0.00s)
+=== RUN   TestCreateIsNeverRetried
+=== RUN   TestCreateIsNeverRetried/UpdateAsset
+=== RUN   TestCreateIsNeverRetried/DeleteAsset
+=== RUN   TestCreateIsNeverRetried/CreateAssetGroup
+=== RUN   TestCreateIsNeverRetried/CreateAsset
+=== RUN   TestCreateIsNeverRetried/GetAssetGroup
+=== RUN   TestCreateIsNeverRetried/ListAssets
+--- PASS: TestCreateIsNeverRetried (1.61s)
+    --- PASS: TestCreateIsNeverRetried/UpdateAsset (0.40s)
+    --- PASS: TestCreateIsNeverRetried/DeleteAsset (0.40s)
+    --- PASS: TestCreateIsNeverRetried/CreateAssetGroup (0.00s)
+    --- PASS: TestCreateIsNeverRetried/CreateAsset (0.00s)
+    --- PASS: TestCreateIsNeverRetried/GetAssetGroup (0.40s)
+    --- PASS: TestCreateIsNeverRetried/ListAssets (0.40s)
+=== RUN   TestRetryRecoversAndDoesNotRetryAVerdict
+--- PASS: TestRetryRecoversAndDoesNotRetryAVerdict (0.20s)
+=== RUN   TestNonEnvelopeAnswers
+=== RUN   TestNonEnvelopeAnswers/html_502_from_something_in_between
+=== RUN   TestNonEnvelopeAnswers/empty_500
+=== RUN   TestNonEnvelopeAnswers/a_200_that_is_not_JSON_at_all
+=== RUN   TestNonEnvelopeAnswers/a_200_whose_envelope_is_an_array
+--- PASS: TestNonEnvelopeAnswers (0.00s)
+    --- PASS: TestNonEnvelopeAnswers/html_502_from_something_in_between (0.00s)
+    --- PASS: TestNonEnvelopeAnswers/empty_500 (0.00s)
+    --- PASS: TestNonEnvelopeAnswers/a_200_that_is_not_JSON_at_all (0.00s)
+    --- PASS: TestNonEnvelopeAnswers/a_200_whose_envelope_is_an_array (0.00s)
+=== RUN   TestAnActionWithNoParametersSendsAnObject
+--- PASS: TestAnActionWithNoParametersSendsAnObject (0.00s)
+=== RUN   TestResultItemsAndTotal
+--- PASS: TestResultItemsAndTotal (0.00s)
+=== RUN   TestSignV4MatchesTheOfficialSDK
+=== RUN   TestSignV4MatchesTheOfficialSDK/default_port_absent_from_the_host
+=== RUN   TestSignV4MatchesTheOfficialSDK/explicit_default_port
+--- PASS: TestSignV4MatchesTheOfficialSDK (0.00s)
+    --- PASS: TestSignV4MatchesTheOfficialSDK/default_port_absent_from_the_host (0.00s)
+    --- PASS: TestSignV4MatchesTheOfficialSDK/explicit_default_port (0.00s)
+=== RUN   TestSignV4GoldenIsNotIndifferent
+--- PASS: TestSignV4GoldenIsNotIndifferent (0.00s)
+=== RUN   TestCanonicalHost
+--- PASS: TestCanonicalHost (0.00s)
+=== RUN   TestEncodePathSegmentIsNotPathEscape
+--- PASS: TestEncodePathSegmentIsNotPathEscape (0.00s)
+=== RUN   TestNormalizeQuerySpellsSpacesWithPercent20
+--- PASS: TestNormalizeQuerySpellsSpacesWithPercent20 (0.00s)
+=== RUN   TestSignV4FillsInTheDateWhenTheCallerHasNot
+--- PASS: TestSignV4FillsInTheDateWhenTheCallerHasNot (0.00s)
+=== RUN   TestAssetEndpointSelection
+=== RUN   TestAssetEndpointSelection/official_default
+=== RUN   TestAssetEndpointSelection/relay_disabled_without_endpoint
+=== RUN   TestAssetEndpointSelection/relay_relative
+=== RUN   TestAssetEndpointSelection/relay_explicit_root
+=== RUN   TestAssetEndpointSelection/relay_absolute_override
+=== RUN   TestAssetEndpointSelection/legacy_explicit_preserved
+=== RUN   TestAssetEndpointSelection/official_cannot_bypass_guard_with_relay_field
+--- PASS: TestAssetEndpointSelection (0.00s)
+    --- PASS: TestAssetEndpointSelection/official_default (0.00s)
+    --- PASS: TestAssetEndpointSelection/relay_disabled_without_endpoint (0.00s)
+    --- PASS: TestAssetEndpointSelection/relay_relative (0.00s)
+    --- PASS: TestAssetEndpointSelection/relay_explicit_root (0.00s)
+    --- PASS: TestAssetEndpointSelection/relay_absolute_override (0.00s)
+    --- PASS: TestAssetEndpointSelection/legacy_explicit_preserved (0.00s)
+    --- PASS: TestAssetEndpointSelection/official_cannot_bypass_guard_with_relay_field (0.00s)
+=== RUN   TestAssetEndpointValidation
+=== RUN   TestAssetEndpointValidation/relative_needs_keys
+=== RUN   TestAssetEndpointValidation/type
+=== RUN   TestAssetEndpointValidation/protocol_relative
+=== RUN   TestAssetEndpointValidation/official_relay_endpoint_refused
+--- PASS: TestAssetEndpointValidation (0.00s)
+    --- PASS: TestAssetEndpointValidation/relative_needs_keys (0.00s)
+    --- PASS: TestAssetEndpointValidation/type (0.00s)
+    --- PASS: TestAssetEndpointValidation/protocol_relative (0.00s)
+    --- PASS: TestAssetEndpointValidation/official_relay_endpoint_refused (0.00s)
+=== RUN   TestAssetEndpointSignsExactConfiguredPath
+--- PASS: TestAssetEndpointSignsExactConfiguredPath (0.00s)
+=== RUN   TestAssetFieldsAreOptional
+--- PASS: TestAssetFieldsAreOptional (0.00s)
+=== RUN   TestAssetKeyPairIsIndivisible
+--- PASS: TestAssetKeyPairIsIndivisible (0.00s)
+=== RUN   TestAssetFieldsNormalized
+--- PASS: TestAssetFieldsNormalized (0.00s)
+=== RUN   TestAssetFieldsRejected
+=== RUN   TestAssetFieldsRejected/endpoint_is_not_a_URL
+=== RUN   TestAssetFieldsRejected/endpoint_carries_a_query
+=== RUN   TestAssetFieldsRejected/region_with_a_slash
+=== RUN   TestAssetFieldsRejected/region_with_uppercase
+=== RUN   TestAssetFieldsRejected/access_key_too_short
+=== RUN   TestAssetFieldsRejected/secret_key_with_a_space
+--- PASS: TestAssetFieldsRejected (0.00s)
+    --- PASS: TestAssetFieldsRejected/endpoint_is_not_a_URL (0.00s)
+    --- PASS: TestAssetFieldsRejected/endpoint_carries_a_query (0.00s)
+    --- PASS: TestAssetFieldsRejected/region_with_a_slash (0.00s)
+    --- PASS: TestAssetFieldsRejected/region_with_uppercase (0.00s)
+    --- PASS: TestAssetFieldsRejected/access_key_too_short (0.00s)
+    --- PASS: TestAssetFieldsRejected/secret_key_with_a_space (0.00s)
+=== RUN   TestAssetConfigOf
+--- PASS: TestAssetConfigOf (0.00s)
+=== RUN   TestExecuteSynchronousUsesHostUsage
+--- PASS: TestExecuteSynchronousUsesHostUsage (0.01s)
+=== RUN   TestExecuteVideoReservesAndRegistersOnce
+=== RUN   TestExecuteVideoReservesAndRegistersOnce/accepted
+=== RUN   TestExecuteVideoReservesAndRegistersOnce/registration_failed
+=== RUN   TestExecuteVideoReservesAndRegistersOnce/missing_task_id
+--- PASS: TestExecuteVideoReservesAndRegistersOnce (0.01s)
+    --- PASS: TestExecuteVideoReservesAndRegistersOnce/accepted (0.00s)
+    --- PASS: TestExecuteVideoReservesAndRegistersOnce/registration_failed (0.00s)
+    --- PASS: TestExecuteVideoReservesAndRegistersOnce/missing_task_id (0.00s)
+=== RUN   TestMonitorObservesThenReportsOnce
+=== RUN   TestMonitorObservesThenReportsOnce/running
+=== RUN   TestMonitorObservesThenReportsOnce/succeeded
+=== RUN   TestMonitorObservesThenReportsOnce/failed
+=== RUN   TestMonitorObservesThenReportsOnce/truncated
+=== RUN   TestMonitorObservesThenReportsOnce/poll_rejected
+=== RUN   TestMonitorObservesThenReportsOnce/report_rejected
+--- PASS: TestMonitorObservesThenReportsOnce (0.02s)
+    --- PASS: TestMonitorObservesThenReportsOnce/running (0.00s)
+    --- PASS: TestMonitorObservesThenReportsOnce/succeeded (0.00s)
+    --- PASS: TestMonitorObservesThenReportsOnce/failed (0.00s)
+    --- PASS: TestMonitorObservesThenReportsOnce/truncated (0.00s)
+    --- PASS: TestMonitorObservesThenReportsOnce/poll_rejected (0.00s)
+    --- PASS: TestMonitorObservesThenReportsOnce/report_rejected (0.00s)
+=== RUN   TestIndexOperationsKeepUpstreamOrder
+=== RUN   TestIndexOperationsKeepUpstreamOrder/group/GET
+=== RUN   TestIndexOperationsKeepUpstreamOrder/group/PATCH
+=== RUN   TestIndexOperationsKeepUpstreamOrder/asset/GET
+=== RUN   TestIndexOperationsKeepUpstreamOrder/asset/PATCH
+--- PASS: TestIndexOperationsKeepUpstreamOrder (0.32s)
+    --- PASS: TestIndexOperationsKeepUpstreamOrder/group/GET (0.08s)
+    --- PASS: TestIndexOperationsKeepUpstreamOrder/group/PATCH (0.08s)
+    --- PASS: TestIndexOperationsKeepUpstreamOrder/asset/GET (0.08s)
+    --- PASS: TestIndexOperationsKeepUpstreamOrder/asset/PATCH (0.08s)
+=== RUN   TestRepeatedCreateDoesNotOverwriteExistingIndex
+--- PASS: TestRepeatedCreateDoesNotOverwriteExistingIndex (0.05s)
+=== RUN   TestCreateAssetCompensatesCommitFailure
+--- PASS: TestCreateAssetCompensatesCommitFailure (0.05s)
+=== RUN   TestCapabilities
+--- PASS: TestCapabilities (0.00s)
+=== RUN   TestValidateCredentials
+--- PASS: TestValidateCredentials (0.01s)
+=== RUN   TestBuildUpstreamRequest
+--- PASS: TestBuildUpstreamRequest (0.01s)
+=== RUN   TestBuildUpstreamRequestImages
+--- PASS: TestBuildUpstreamRequestImages (0.01s)
+=== RUN   TestBuildTestRequest
+--- PASS: TestBuildTestRequest (0.00s)
+=== RUN   TestBuildModelsRequestUnimplemented
+--- PASS: TestBuildModelsRequestUnimplemented (0.00s)
+=== RUN   TestClassifyError
+--- PASS: TestClassifyError (0.00s)
+=== RUN   TestPollExecutesOneScopedRequest
+=== RUN   TestPollExecutesOneScopedRequest/official_success
+=== RUN   TestPollExecutesOneScopedRequest/relay_pending
+=== RUN   TestPollExecutesOneScopedRequest/failed
+=== RUN   TestPollExecutesOneScopedRequest/estimate
+=== RUN   TestPollExecutesOneScopedRequest/truncated
+=== RUN   TestPollExecutesOneScopedRequest/malformed
+=== RUN   TestPollExecutesOneScopedRequest/transport_error
+=== RUN   TestPollExecutesOneScopedRequest/http_error
+=== RUN   TestPollExecutesOneScopedRequest/host_rejected
+--- PASS: TestPollExecutesOneScopedRequest (0.04s)
+    --- PASS: TestPollExecutesOneScopedRequest/official_success (0.00s)
+    --- PASS: TestPollExecutesOneScopedRequest/relay_pending (0.00s)
+    --- PASS: TestPollExecutesOneScopedRequest/failed (0.00s)
+    --- PASS: TestPollExecutesOneScopedRequest/estimate (0.00s)
+    --- PASS: TestPollExecutesOneScopedRequest/truncated (0.00s)
+    --- PASS: TestPollExecutesOneScopedRequest/malformed (0.00s)
+    --- PASS: TestPollExecutesOneScopedRequest/transport_error (0.00s)
+    --- PASS: TestPollExecutesOneScopedRequest/http_error (0.00s)
+    --- PASS: TestPollExecutesOneScopedRequest/host_rejected (0.00s)
+=== RUN   TestPollRequiresExecutionContextAndUsableEntry
+--- PASS: TestPollRequiresExecutionContextAndUsableEntry (0.00s)
+=== RUN   TestPollCancellationStopsExecutionWithoutRetry
+--- PASS: TestPollCancellationStopsExecutionWithoutRetry (0.00s)
+=== RUN   TestPrefixCannotLeaveTheHost
+=== RUN   TestPrefixCannotLeaveTheHost/@evil.com/v3
+=== RUN   TestPrefixCannotLeaveTheHost///evil.com/v3
+=== RUN   TestPrefixCannotLeaveTheHost/https://evil.com/v3
+=== RUN   TestPrefixCannotLeaveTheHost/@evil.com
+--- PASS: TestPrefixCannotLeaveTheHost (0.00s)
+    --- PASS: TestPrefixCannotLeaveTheHost/@evil.com/v3 (0.00s)
+    --- PASS: TestPrefixCannotLeaveTheHost///evil.com/v3 (0.00s)
+    --- PASS: TestPrefixCannotLeaveTheHost/https://evil.com/v3 (0.00s)
+    --- PASS: TestPrefixCannotLeaveTheHost/@evil.com (0.00s)
+=== RUN   TestLayoutFollowsTheAccountType
+--- PASS: TestLayoutFollowsTheAccountType (0.00s)
+=== RUN   TestOfficialNativeAnthropicMessages
+--- PASS: TestOfficialNativeAnthropicMessages (0.00s)
+=== RUN   TestOfficialIgnoresPrefixSettings
+--- PASS: TestOfficialIgnoresPrefixSettings (0.00s)
+=== RUN   TestRelayNeedsABaseURL
+--- PASS: TestRelayNeedsABaseURL (0.00s)
+=== RUN   TestRelayMirroringArkPaths
+--- PASS: TestRelayMirroringArkPaths (0.00s)
+=== RUN   TestPrefixAppliesToEveryProtocol
+--- PASS: TestPrefixAppliesToEveryProtocol (0.00s)
+=== RUN   TestVideoPrefixIsIndependent
+--- PASS: TestVideoPrefixIsIndependent (0.00s)
+=== RUN   TestVideoEndpointUsedBySubmissionQueryAndPoll
+--- PASS: TestVideoEndpointUsedBySubmissionQueryAndPoll (0.00s)
+=== RUN   TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime
+=== RUN   TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime///evil.test/tasks
+=== RUN   TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime/https://user:pass@evil.test/tasks
+=== RUN   TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//tasks?key=x
+=== RUN   TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//tasks#frag
+=== RUN   TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime/_/tasks
+=== RUN   TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//tasks_
+=== RUN   TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//a/../tasks
+=== RUN   TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//a/./tasks
+=== RUN   TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//a/%2e%2e/tasks
+=== RUN   TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//a/%252e%252e/tasks
+=== RUN   TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//a%2f..%2ftasks
+=== RUN   TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//a%20b/tasks
+=== RUN   TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//a\b/tasks
+=== RUN   TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//a%5cb/tasks
+=== RUN   TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime/http:/tasks
+=== RUN   TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime/ftp://evil.test/tasks
+=== RUN   TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime/tasks
+=== RUN   TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+--- PASS: TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime (0.00s)
+    --- PASS: TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime///evil.test/tasks (0.00s)
+    --- PASS: TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime/https://user:pass@evil.test/tasks (0.00s)
+    --- PASS: TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//tasks?key=x (0.00s)
+    --- PASS: TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//tasks#frag (0.00s)
+    --- PASS: TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime/_/tasks (0.00s)
+    --- PASS: TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//tasks_ (0.00s)
+    --- PASS: TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//a/../tasks (0.00s)
+    --- PASS: TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//a/./tasks (0.00s)
+    --- PASS: TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//a/%2e%2e/tasks (0.00s)
+    --- PASS: TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//a/%252e%252e/tasks (0.00s)
+    --- PASS: TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//a%2f..%2ftasks (0.00s)
+    --- PASS: TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//a%20b/tasks (0.00s)
+    --- PASS: TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//a\b/tasks (0.00s)
+    --- PASS: TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime//a%5cb/tasks (0.00s)
+    --- PASS: TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime/http:/tasks (0.00s)
+    --- PASS: TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime/ftp://evil.test/tasks (0.00s)
+    --- PASS: TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime/tasks (0.00s)
+    --- PASS: TestEndpointRejectsAmbiguousURLsAtSaveAndRuntime/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa (0.00s)
+=== RUN   TestCountTokensIsRefusedByName
+--- PASS: TestCountTokensIsRefusedByName (0.00s)
+=== RUN   TestUnknownAccountTypeIsRefused
+--- PASS: TestUnknownAccountTypeIsRefused (0.00s)
+=== RUN   TestAnthropicHeaders
+--- PASS: TestAnthropicHeaders (0.00s)
+=== RUN   TestAnthropicErrorVocabulary
+--- PASS: TestAnthropicErrorVocabulary (0.00s)
+=== RUN   TestUpstreamURLRejectsAnotherOrigin
+--- PASS: TestUpstreamURLRejectsAnotherOrigin (0.00s)
+=== RUN   TestNormalizePrefix
+--- PASS: TestNormalizePrefix (0.00s)
+=== RUN   TestValidateRelayBaseURL
+--- PASS: TestValidateRelayBaseURL (0.00s)
+=== RUN   TestGroupAndAssetLifecycle
+--- PASS: TestGroupAndAssetLifecycle (0.06s)
+=== RUN   TestCredentialsAreReadOncePerRequest
+--- PASS: TestCredentialsAreReadOncePerRequest (0.05s)
+=== RUN   TestAssetLibraryOffIsNotAnError
+--- PASS: TestAssetLibraryOffIsNotAnError (0.04s)
+=== RUN   TestUnknownAccountDoesNotLeakExistence
+--- PASS: TestUnknownAccountDoesNotLeakExistence (0.04s)
+=== RUN   TestUpstreamGoneMarksTheIndex
+--- PASS: TestUpstreamGoneMarksTheIndex (0.05s)
+=== RUN   TestDeleteKeepsTheIndexWhenUpstreamFails
+--- PASS: TestDeleteKeepsTheIndexWhenUpstreamFails (0.05s)
+=== RUN   TestCreateWithoutUpstreamIDIsRefused
+--- PASS: TestCreateWithoutUpstreamIDIsRefused (0.05s)
+=== RUN   TestRetriedCreateIsIdempotent
+--- PASS: TestRetriedCreateIsIdempotent (0.05s)
+=== RUN   TestLiveUpstreamListing
+--- PASS: TestLiveUpstreamListing (0.04s)
+=== RUN   TestFieldValidation
+--- PASS: TestFieldValidation (0.04s)
+=== RUN   TestUpdateCanClearAField
+--- PASS: TestUpdateCanClearAField (0.05s)
+=== RUN   TestUnknownRoute
+--- PASS: TestUnknownRoute (0.04s)
+=== RUN   TestAssetSearchQ
+--- PASS: TestAssetSearchQ (0.06s)
+=== RUN   TestLikeTerm
+--- PASS: TestLikeTerm (0.00s)
+=== RUN   TestManagedVideoSubmission
+--- PASS: TestManagedVideoSubmission (0.00s)
+=== RUN   TestManagedVideoRejectsIncompleteSubmission
+2026/10/03 10:31:32 WARN volcengine: video submit response carried no task id, not reserving request_id="" status=200
+2026/10/03 10:31:32 WARN volcengine: video submit response carried no task id, not reserving request_id="" status=200
+2026/10/03 10:31:32 WARN volcengine: video submit response carried no task id, not reserving request_id="" status=200
+--- PASS: TestManagedVideoRejectsIncompleteSubmission (0.00s)
+=== RUN   TestManagedVideoReconcileSnapshot
+2026/10/03 10:31:32 WARN volcengine: succeeded video task reported no usage, settling on the reserved estimate task_id=ark-1
+--- PASS: TestManagedVideoReconcileSnapshot (0.00s)
+=== RUN   TestVideoTruncatedResultCannotSettleOrReplaceSnapshot
+--- PASS: TestVideoTruncatedResultCannotSettleOrReplaceSnapshot (0.00s)
+=== RUN   TestVideoSubmissionDoesNotWritePluginLedger
+--- PASS: TestVideoSubmissionDoesNotWritePluginLedger (0.05s)
+=== RUN   TestLegacyVideoResolveModelChecksOwner
+--- PASS: TestLegacyVideoResolveModelChecksOwner (0.05s)
+=== RUN   TestVideoReconcileEstimateFallback
+--- PASS: TestVideoReconcileEstimateFallback (0.05s)
+=== RUN   TestBuildUpstreamRequestVideo
+--- PASS: TestBuildUpstreamRequestVideo (0.00s)
+=== RUN   TestExtractUsageReservation
+2026/10/03 10:31:32 INFO volcengine: video estimate had to assume part of the request request_id="" task_id=cgt-778 model=doubao-seedance-2-0-260128 assumed=resolution,ratio,duration resolution=720p est_output_tokens=326947 fields_omitted=""
+2026/10/03 10:31:32 WARN volcengine: video submit response carried no task id, not reserving request_id="" status=200
+2026/10/03 10:31:32 WARN volcengine: video submit response carried no task id, not reserving request_id="" status=200
+2026/10/03 10:31:32 WARN volcengine: video submit response carried no task id, not reserving request_id="" status=200
+2026/10/03 10:31:32 WARN volcengine: video submit response carried no task id, not reserving request_id="" status=200
+2026/10/03 10:31:32 WARN volcengine: video submit response carried no task id, not reserving request_id="" status=200
+2026/10/03 10:31:32 INFO volcengine: video estimate had to assume part of the request request_id="" task_id=cgt-wrapped model=m assumed=resolution,ratio,duration resolution=1080p est_output_tokens=1470840 fields_omitted=""
+--- PASS: TestExtractUsageReservation (0.00s)
+=== RUN   TestResolveModelEdges
+2026/10/03 10:31:32 WARN volcengine: ResolveModel cannot reach the database task_id=cgt-1 error="plugin not initialised"
+--- PASS: TestResolveModelEdges (0.00s)
+=== RUN   TestBuildReconcileRequest
+--- PASS: TestBuildReconcileRequest (0.00s)
+=== RUN   TestParseReconcileResponse
+2026/10/03 10:31:32 WARN volcengine: unrecognised video task status task_id=cgt-1 status=""
+2026/10/03 10:31:32 WARN volcengine: unrecognised video task status task_id=cgt-1 status=something-new
+2026/10/03 10:31:32 WARN volcengine: succeeded video task reported no usage, settling on the reserved estimate task_id=cgt-1
+2026/10/03 10:31:32 WARN volcengine: succeeded video task reported no usage, settling on the reserved estimate task_id=cgt-1
+2026/10/03 10:31:32 WARN volcengine: succeeded video task reported no usage, settling on the reserved estimate task_id=cgt-1
+2026/10/03 10:31:32 WARN volcengine: succeeded video task reported no usage, settling on the reserved estimate task_id=cgt-1
+2026/10/03 10:31:32 WARN volcengine: succeeded video task reported no usage, settling on the reserved estimate task_id=cgt-1
+2026/10/03 10:31:32 WARN volcengine: succeeded video task reported no usage, settling on the reserved estimate task_id=cgt-1
+2026/10/03 10:31:32 WARN volcengine: succeeded video task reported no usage, settling on the reserved estimate task_id=cgt-1
+2026/10/03 10:31:32 WARN volcengine: succeeded video task reported no usage, settling on the reserved estimate task_id=cgt-1
+2026/10/03 10:31:32 WARN volcengine: succeeded video task reported no usage, settling on the reserved estimate task_id=cgt-1
+--- PASS: TestParseReconcileResponse (0.00s)
+=== RUN   TestPixelAreasMatchArksTable
+--- PASS: TestPixelAreasMatchArksTable (0.00s)
+=== RUN   TestTierAreaWithoutARatioTakesTheLargest
+--- PASS: TestTierAreaWithoutARatioTakesTheLargest (0.00s)
+=== RUN   TestTheWidestRatioIsNotAlwaysTheDearest
+--- PASS: TestTheWidestRatioIsNotAlwaysTheDearest (0.00s)
+=== RUN   TestProfileOf
+--- PASS: TestProfileOf (0.00s)
+=== RUN   TestReadVideoSpecStructuredFields
+--- PASS: TestReadVideoSpecStructuredFields (0.00s)
+=== RUN   TestReadVideoSpecPromptCommands
+--- PASS: TestReadVideoSpecPromptCommands (0.00s)
+=== RUN   TestTheMoreExpensiveReadingWins
+--- PASS: TestTheMoreExpensiveReadingWins (0.00s)
+=== RUN   TestFieldsOmittedIsNotAbsent
+--- PASS: TestFieldsOmittedIsNotAbsent (0.00s)
+=== RUN   TestEstimateVideoExactNumbers
+=== RUN   TestEstimateVideoExactNumbers/2.0_pro,_everything_stated
+=== RUN   TestEstimateVideoExactNumbers/1.0_pro_at_720p_16:9_is_1248x704,_not_1280x720
+=== RUN   TestEstimateVideoExactNumbers/1.0_pro_at_720p_21:9_is_the_dearest_cell_of_that_row
+=== RUN   TestEstimateVideoExactNumbers/4k,_the_one_model_that_has_it
+=== RUN   TestEstimateVideoExactNumbers/a_stated_ratio_with_no_resolution_takes_the_model's_documented_default_tier
+=== RUN   TestEstimateVideoExactNumbers/a_stated_resolution_with_no_ratio_takes_the_tier's_largest_cell
+=== RUN   TestEstimateVideoExactNumbers/duration_-1_on_2.5_is_the_model's_30s_maximum
+=== RUN   TestEstimateVideoExactNumbers/duration_-1_on_2.0_is_its_15s_maximum,_not_2.5's_30s
+=== RUN   TestEstimateVideoExactNumbers/duration_-1_on_1.0_pro_is_its_12s_maximum
+=== RUN   TestEstimateVideoExactNumbers/the_prompt's_commands_are_read
+--- PASS: TestEstimateVideoExactNumbers (0.00s)
+    --- PASS: TestEstimateVideoExactNumbers/2.0_pro,_everything_stated (0.00s)
+    --- PASS: TestEstimateVideoExactNumbers/1.0_pro_at_720p_16:9_is_1248x704,_not_1280x720 (0.00s)
+    --- PASS: TestEstimateVideoExactNumbers/1.0_pro_at_720p_21:9_is_the_dearest_cell_of_that_row (0.00s)
+    --- PASS: TestEstimateVideoExactNumbers/4k,_the_one_model_that_has_it (0.00s)
+    --- PASS: TestEstimateVideoExactNumbers/a_stated_ratio_with_no_resolution_takes_the_model's_documented_default_tier (0.00s)
+    --- PASS: TestEstimateVideoExactNumbers/a_stated_resolution_with_no_ratio_takes_the_tier's_largest_cell (0.00s)
+    --- PASS: TestEstimateVideoExactNumbers/duration_-1_on_2.5_is_the_model's_30s_maximum (0.00s)
+    --- PASS: TestEstimateVideoExactNumbers/duration_-1_on_2.0_is_its_15s_maximum,_not_2.5's_30s (0.00s)
+    --- PASS: TestEstimateVideoExactNumbers/duration_-1_on_1.0_pro_is_its_12s_maximum (0.00s)
+    --- PASS: TestEstimateVideoExactNumbers/the_prompt's_commands_are_read (0.00s)
+=== RUN   TestEstimateIsNeverZero
+--- PASS: TestEstimateIsNeverZero (0.00s)
+=== RUN   TestFourKAskedOfAModelWithoutIt
+--- PASS: TestFourKAskedOfAModelWithoutIt (0.00s)
+=== RUN   TestEstimateMatchesARealArkTask
+--- PASS: TestEstimateMatchesARealArkTask (0.00s)
+PASS
+ok  	github.com/Sub2API-Devs/sup2api/next/plugins/volcengine/internal/volcengine	4.601s

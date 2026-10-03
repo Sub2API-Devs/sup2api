@@ -308,15 +308,13 @@ func (p *Plugin) listAccounts(ctx context.Context, req *pluginv1.HTTPRequest) (*
 
 func (p *Plugin) accountView(ctx context.Context, c *creds, a pluginsdk.AccountSummary, check bool) AccountView {
 	_, _, base, region, _ := assetFields("", a.SettingsJSON)
+	base, _ = effectiveAssetEndpoint(a.Type, "", a.SettingsJSON, base)
 	v := AccountView{
 		ID: a.ID, Name: a.Name, Status: a.Status, Enabled: a.Enabled,
 		AssetLibrary:         AssetLibraryUnknown,
 		AssetSettingsPresent: AssetEnabled(a.SettingsJSON),
 		AssetBaseURL:         base,
 		AssetRegion:          region,
-	}
-	if v.AssetBaseURL == "" {
-		v.AssetBaseURL = DefaultAssetBaseURL
 	}
 	if v.AssetRegion == "" {
 		v.AssetRegion = DefaultAssetRegion

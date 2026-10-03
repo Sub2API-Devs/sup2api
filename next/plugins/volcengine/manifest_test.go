@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -44,7 +46,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "volcengine" || m.Version != "0.10.1" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "volcengine" || m.Version != "0.11.0" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("identity = %s %s %s", m.Key, m.Version, m.Publisher)
 	}
 	if m.Name["en"] == "" || m.Name["zh"] == "" || m.Description["en"] == "" || m.Description["zh"] == "" {
@@ -73,7 +75,7 @@ func TestManifest(t *testing.T) {
 	}
 
 	// Two account types, split the way the upstreams are: apikey is Ark itself
-	// (address pinned, one path layout, no Anthropic surface) and relay is an
+	// (address pinned, protocol-specific official paths) and relay is an
 	// Ark-compatible relay (address free, paths configurable, Anthropic
 	// served). Looked up by ID, never by index.
 	types := map[string]manifest.AccountType{}
@@ -123,7 +125,7 @@ func TestManifest(t *testing.T) {
 		}
 	}
 
-	// ---- the official type: pinned address, no paths, no Anthropic.
+	// ---- the official type: pinned address, protocol paths fixed by the plugin.
 	if !slices.Equal(official.SettingsFields,
 		[]string{"base_url", volcengine.FieldAssetBaseURL, volcengine.FieldAssetRegion}) {
 		t.Fatalf("apikey settingsFields = %v", official.SettingsFields)
@@ -157,7 +159,7 @@ func TestManifest(t *testing.T) {
 	}
 
 	// ---- the relay type: free address, both paths, Anthropic served.
-	if !slices.Equal(relay.SettingsFields, []string{"base_url", volcengine.FieldAPIPrefix,
+	if !slices.Equal(relay.SettingsFields, []string{"base_url", "video_endpoint", "asset_endpoint", volcengine.FieldAPIPrefix,
 		volcengine.FieldVideoAPIPrefix, volcengine.FieldAssetBaseURL, volcengine.FieldAssetRegion}) {
 		t.Fatalf("relay settingsFields = %v", relay.SettingsFields)
 	}
@@ -206,13 +208,13 @@ func TestManifest(t *testing.T) {
 		{official, []string{"api_key"},
 			[]string{"api_key", "base_url", volcengine.FieldAccessKey, volcengine.FieldSecretKey,
 				volcengine.FieldAssetBaseURL, volcengine.FieldAssetRegion},
-			[]string{volcengine.FieldAPIPrefix, volcengine.FieldVideoAPIPrefix, "model_mapping"}},
+			[]string{volcengine.FieldAPIPrefix, volcengine.FieldVideoAPIPrefix, "video_endpoint", "asset_endpoint", "model_mapping"}},
 		// base_url is required on the relay form because relaySpec has no
 		// default: falling back to Ark's address would send a relay's key to
 		// Ark, which answers 401 - an error that says nothing about the
 		// missing setting.
 		{relay, []string{"api_key", "base_url"},
-			[]string{"api_key", "base_url", volcengine.FieldAPIPrefix, volcengine.FieldVideoAPIPrefix,
+			[]string{"api_key", "base_url", "video_endpoint", "asset_endpoint", volcengine.FieldAPIPrefix, volcengine.FieldVideoAPIPrefix,
 				volcengine.FieldAccessKey, volcengine.FieldSecretKey,
 				volcengine.FieldAssetBaseURL, volcengine.FieldAssetRegion},
 			[]string{"model_mapping"}},
@@ -264,9 +266,8 @@ func TestManifest(t *testing.T) {
 		}
 	}
 
-	// The official type serves two platforms, the relay type three: the extra
-	// one is anthropic, because Ark itself does not serve Anthropic Messages
-	// and a relay does. That difference IS the split.
+	// Official Ark now serves Messages through its compatibility API. Existing
+	// relay text integrations retain their platform declarations.
 	//
 	// Looked up by name, never by index: these lists have grown before, and an
 	// index-based assertion silently starts checking a different platform when
@@ -282,7 +283,7 @@ func TestManifest(t *testing.T) {
 		return byName
 	}
 	officialPlatforms, relayPlatforms := platformsOf(official), platformsOf(relay)
-	for _, want := range []string{volcengine.PlatformID, volcengine.PlatformVolcengine} {
+	for _, want := range []string{volcengine.PlatformID, volcengine.PlatformVolcengine, volcengine.PlatformAnthropic} {
 		for id, byName := range map[string]map[string]manifest.AccountPlatform{
 			volcengine.AccountTypeAPIKey: officialPlatforms, volcengine.AccountTypeRelay: relayPlatforms} {
 			if _, ok := byName[want]; !ok {
@@ -290,16 +291,8 @@ func TestManifest(t *testing.T) {
 			}
 		}
 	}
-	if len(officialPlatforms) != 2 {
-		t.Fatalf("apikey platforms = %+v, want exactly openai and volcengine", official.Platforms)
-	}
-	// This is the assertion that keeps the split honest. Declaring the
-	// anthropic platform here would make every official Ark account a
-	// candidate for /v1/messages, which Ark answers 404 with an empty body -
-	// one failed request plus a failover for every Anthropic call that happens
-	// to land on it.
-	if _, bad := officialPlatforms[volcengine.PlatformAnthropic]; bad {
-		t.Fatalf("the apikey type must not declare the %s platform: Ark does not serve it", volcengine.PlatformAnthropic)
+	if len(officialPlatforms) != 3 {
+		t.Fatalf("apikey platforms = %+v, want openai, anthropic and volcengine", official.Platforms)
 	}
 	if len(relayPlatforms) != 3 {
 		t.Fatalf("relay platforms = %+v, want exactly the three known ones", relay.Platforms)
@@ -324,6 +317,9 @@ func TestManifest(t *testing.T) {
 	// and anthropic-beta are in both because they change how the upstream
 	// reads the body.
 	anth := relayPlatforms[volcengine.PlatformAnthropic]
+	if !reflect.DeepEqual(officialPlatforms[volcengine.PlatformAnthropic], anth) {
+		t.Fatal("official and relay Messages must share exclusive usage and header declarations")
+	}
 	if !slices.Equal(anth.PassHeaders, volcengine.AnthropicForwardHeaders()) || len(anth.RequestFields) != 0 {
 		t.Fatalf("anthropic platform entry = %+v, want passHeaders %v", anth, volcengine.AnthropicForwardHeaders())
 	}
@@ -971,4 +967,46 @@ func union(a, b []string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// New endpoint settings are optional and have no defaults: merely editing an
+// old account must not override its existing video prefix or asset URL.
+func TestEndpointFormsPreserveLegacyAccounts(t *testing.T) {
+	raw := mustJSONFile(t, "forms/relay.schema.json")
+	var schema struct {
+		Properties map[string]struct {
+			Pattern   string          `json:"pattern"`
+			Default   json.RawMessage `json:"default"`
+			MaxLength int             `json:"maxLength"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"video_endpoint", "asset_endpoint"} {
+		property, ok := schema.Properties[field]
+		if !ok || len(property.Default) != 0 || property.MaxLength != 2048 {
+			t.Fatalf("%s needs bounded optional endpoint without a default", field)
+		}
+		pattern, err := regexp.Compile(property.Pattern)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, value := range []string{"", "/api/v3/contents/generations/tasks", "/api/support/v1/asset", "https://relay.example.com/tasks", "http://relay.example.com/assets"} {
+			if !pattern.MatchString(value) {
+				t.Errorf("%s rejected %q", field, value)
+			}
+		}
+		for _, value := range []string{"//other.example.com/tasks", "relative/path", "https://relay.example.com/tasks?query=1", "https://relay.example.com/tasks#fragment", "/a b"} {
+			if pattern.MatchString(value) {
+				t.Errorf("%s accepted malformed endpoint %q", field, value)
+			}
+		}
+	}
+	m := decodeManifest(t)
+	for _, at := range m.AccountTypes {
+		if at.ID == "apikey" && at.Label["zh"] != "字节火山方舟 · 官方通用" || at.ID == "relay" && at.Label["zh"] != "豆包视频" {
+			t.Fatalf("unexpected account label: %+v", at.Label)
+		}
+	}
 }
