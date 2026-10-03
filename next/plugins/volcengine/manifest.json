@@ -2,14 +2,14 @@
   "apiVersion": 1,
   "key": "volcengine",
   "name": {
-    "en": "Volcengine Ark",
-    "zh": "字节火山方舟"
+    "en": "Volcengine Ark, Doubao Video",
+    "zh": "字节火山方舟、豆包视频"
   },
   "description": {
     "en": "Official Volcengine Ark access for OpenAI-compatible APIs, Anthropic Messages, image and video generation, plus configurable Doubao video and asset endpoints. Existing relay text integrations remain compatible. Prices are configured by the administrator.",
     "zh": "提供方舟官方 OpenAI 兼容接口、Anthropic Messages、图片与视频生成，以及可自定义视频和素材端点的豆包视频账号。保留既有中转文本接入兼容，不内置价格。"
   },
-  "version": "0.11.0",
+  "version": "0.11.1",
   "publisher": "sub2api",
   "icon": "text:V",
   "runtime": "grpc",
