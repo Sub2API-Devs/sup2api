@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only OVH v0.1.18 runtime/configuration verification; no model calls."""
+"""Read-only OVH account runtime/configuration verification; no model calls."""
 import json,os,pathlib,re,subprocess,urllib.request
 root=pathlib.Path.home()/'sup2api-managed'
 env=dict(l.split('=',1) for l in (root/'.env').read_text().splitlines() if '=' in l)
@@ -9,7 +9,7 @@ def api(method,path,body=None,token=None,port=3130):
     req=urllib.request.Request(f'http://127.0.0.1:{port}/api/v1'+path,method=method,data=None if body is None else json.dumps(body).encode(),headers=headers)
     with urllib.request.urlopen(req,timeout=65) as r:return json.load(r)['data']
 token=api('POST','/auth/login',{'email':env['SUB2API_BOOTSTRAP_ADMIN_EMAIL'],'password':env['SUB2API_BOOTSTRAP_ADMIN_PASSWORD']})['access_token']
-for port in range(3130,3134):assert api('GET','/system/version',token=token,port=port)['version']==os.getenv('EXPECTED_CORE_VERSION','0.1.18')
+for port in range(3130,3134):assert api('GET','/system/version',token=token,port=port)['version']==os.getenv('EXPECTED_CORE_VERSION','0.1.19')
 keydir=root/'ccgateway'
 ssh=['ssh','-o','BatchMode=yes','-o','IdentitiesOnly=yes','-o','StrictHostKeyChecking=yes','-o','UserKnownHostsFile='+str(keydir/'known_hosts'),'-i',str(keydir/'id_ed25519'),'root@130.94.122.254']
 raw=subprocess.check_output(ssh+['cat /opt/ccgateway-runtime.env'],text=True)

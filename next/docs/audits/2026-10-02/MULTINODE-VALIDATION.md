@@ -488,3 +488,15 @@ cc-max 控制器由同一 Git 源码构建，固定镜像 `sha256:95d00e6d164a8f
 临时平台 API Key 13 已撤销，测试分组 6 已禁用并从用户、账号解除；账号 21 保持 active 但 schedulable=false、无分组，供后续手动测试或配置调度。隔离 PostgreSQL、SSH 隧道和 Docker 测试资源已清理。原有 dist/index.html、.mcp.json 和交接文件未纳入提交。
 
 证据：[升级采样](evidence/ovh-upgrade-0.1.18.jsonl.txt)、[升级时间线](evidence/ovh-upgrade-0.1.18-summary.txt)、[四入口验证](evidence/ccgateway-v018-verify.jsonl)、[正式账号真实调用](evidence/ccg-formal-relay-result.jsonl)、[Docker 认证与代理验证](evidence/ccgateway-auth-runtime-test.txt)。本轮以 API、实际发布静态文件和真实调用验收，未新增浏览器交互验收。
+
+### 24.5 HTTP 页面复制修复与用户密钥调用验证：OVH v0.1.19
+
+2026-10-04（北京时间），源码 `900faa572`。原复制函数仅调用 navigator.clipboard.writeText；HTTP 公网 IP 页面不具备安全上下文，异常被吞掉且弹窗没有失败提示。新增共享剪贴板 helper，优先使用 Clipboard API，不可用或拒绝时在当前弹窗内临时选中文本执行 copy；复制后清空并移除临时元素、恢复焦点/选区。API Key 弹窗增加中英文失败提示，成功时仍显示已复制。真实密钥没有写入源码或证据。
+
+`node scripts/clipboard-test.mjs` 验证安全上下文 API、HTTP 缺失 API、权限拒绝回退、弹窗焦点、原文含换行、失败返回与临时密钥清理；前端类型检查与生产构建通过。测试使用模拟 DOM，未声称在用户浏览器中实际读取剪贴板。四入口实际静态文件均加载 `MyApiKeysView-BbOUoWh_.js` 和 `clipboard-xio_Sz47.js`，包含兼容复制和错误提示。
+
+部署前使用用户提供的平台密钥，从本机访问用户指定的 HTTP 公网入口 3130，测试 `claude-haiku-4-5-20251001`：非流式 HTTP 200、OK、3.97 秒；SSE HTTP 200、OK、完整 message_stop、4.24 秒。非流式用量输入 193、输出 4。没有改动该密钥或账号的调度配置，没有将此结果扩展为十个模型全部可用。
+
+OVH 从 Git 构建 v0.1.19，数据库备份 `/home/debian/sup2api/backups/pre-v0.1.19-20261003T191310Z.dump` 经 pg_restore 校验，schema-contract 不变。manifest `9093ef942953f018c99bc24a22f9738ac55c7d70b0ad810d81ba600743cc2d42`，bundle `1260beae448723053d63b46d17a06e55d837a0d5f18e8489f3766618d286f3e0`。计划 `98adfd0c2267ffa67a9ea8eacf8027ee` 无预检阻断、完成 27 步，创建至完成约 23.15 秒，四入口 503 采样约 4.6–7.3 秒；四节点版本均为 0.1.19。CCGateway 控制器与业务镜像未更新。
+
+证据：[升级采样](evidence/ovh-upgrade-0.1.19.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.19-summary.txt)、[四入口复制代码验收](evidence/clipboard-v019-verify.jsonl)。
