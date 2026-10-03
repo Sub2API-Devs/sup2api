@@ -249,7 +249,7 @@ func run() error {
 		}
 	}()
 	var rt *control.LocalRuntime
-	router = proxy.New(proxy.Config{PeerTLS: clientTLS, PeerTransport: peerTransport, TrustedProxies: trustedProxies, PeerReady: func(route proxy.Route) bool {
+	router = proxy.New(proxy.Config{NodeID: c.NodeID, PeerTLS: clientTLS, PeerTransport: peerTransport, TrustedProxies: trustedProxies, PeerReady: func(route proxy.Route) bool {
 		for _, n := range peerCache.Load().([]control.Node) {
 			if n.Enabled && n.PeerURL == route.PeerURL && n.CoreBootID == route.CoreBootID && n.RouteRevision == route.PeerRevision && n.Ready && n.Mode == "local" && time.Since(n.LastSeen) < 20*time.Second {
 				return true

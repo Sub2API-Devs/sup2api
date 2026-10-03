@@ -120,4 +120,7 @@ release 0.1.9
 release 0.1.10
 # 0.1.11 makes upgrade primary/secondary roles explicit in the node graph.
 release 0.1.11
+# 0.1.12 identifies the current entry gateway and responding core in topology.
+# Install the matching gateway first to expose the trusted entry response header.
+release 0.1.12
 ls -la publish

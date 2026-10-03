@@ -1,9 +1,16 @@
 // Production-sized local UI fixture. Opt in with SUB2API_MOCK_TOPOLOGY=1.
 // Use "routing" to include forwarding and offload candidate relationships.
-import { now, on } from './router'
+import { fail, now, on } from './router'
 
 if (process.env.SUB2API_MOCK_TOPOLOGY) {
   const routing = process.env.SUB2API_MOCK_TOPOLOGY === 'routing'
+  const legacy = process.env.SUB2API_MOCK_TOPOLOGY === 'legacy'
+  const failure = process.env.SUB2API_MOCK_TOPOLOGY === 'failure'
+  on('GET', '/system/version', () => failure ? fail(503, 'unavailable', 'Identity temporarily unavailable') : ({
+    __status: 200,
+    __headers: legacy ? {} : { 'X-Sub2api-Entry-Node': routing ? 'sup2api-4' : 'sup2api-2' },
+    body: { data: { version: '0.1.11', managed: true, core_node_id: routing || legacy ? 'sup2api-1' : 'sup2api-2', core_boot_id: routing || legacy ? 'core-0' : 'core-1' } }
+  }))
   const count = 4
   const versions: Record<string, string> = { anthropic: '0.2.1', gemini: '0.2.0', moderation: '0.1.6', openai: '0.3.0', volcengine: '0.10.1' }
   on('GET', '/nodes', () => Array.from({ length: count }, (_, i) => ({

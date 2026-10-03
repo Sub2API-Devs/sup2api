@@ -92,6 +92,8 @@ export interface RequestOptions {
   anonymous?: boolean
   /** Do not open the step-up dialog on step_up_required. */
   noStepUp?: boolean
+  /** Headers from the final successful response, after auth/step-up retries. */
+  onSuccessHeaders?: (headers: Headers) => void
 }
 
 // ------------------------------------------------------------------ session
@@ -397,12 +399,13 @@ export async function requestRaw(method: string, path: string, opts: RequestOpti
     }
   }
 
-  if (res.status === 204) return null
+  if (res.status === 204) { opts.onSuccessHeaders?.(new Headers(res.headers)); return null }
   const json = await safeJSON(res)
   if (!res.ok) {
     const body: ApiErrorBody = json?.error || { code: statusCode(res.status), message: res.statusText || 'request failed' }
     throw new ApiError(res.status, body)
   }
+  opts.onSuccessHeaders?.(new Headers(res.headers))
   return json
 }
 
@@ -441,6 +444,13 @@ async function safeJSON(res: Response): Promise<any> {
 export async function request<T = any>(method: string, path: string, opts: RequestOptions = {}): Promise<T> {
   const json = await requestRaw(method, path, opts)
   return (json && 'data' in json ? json.data : json) as T
+}
+
+/** Data and headers belong to one final response; authentication stays shared. */
+export async function requestWithHeaders<T>(method: string, path: string, opts: RequestOptions = {}): Promise<{ data: T; headers: Headers }> {
+  let headers = new Headers()
+  const data = await request<T>(method, path, { ...opts, onSuccessHeaders: value => { headers = value; opts.onSuccessHeaders?.(value) } })
+  return { data, headers }
 }
 
 /** List request returning items and page info. */

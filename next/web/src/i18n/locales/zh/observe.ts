@@ -1,4 +1,7 @@
 export default {
+  currentEntry: '当前访问网关', responseCore: '本次响应核心', visitIdentity: '访问身份',
+  entrySummary: '当前访问网关：{node}', responseSummary: '本次响应核心：{node}',
+  visitHint: '蓝色标记来自最近一次版本接口的同一响应：入口网关由响应头确认，核心身份由响应内容确认；转发时两者可能不同，不能代表整个会话的请求路径。缺少入口响应头或检测失败时显示未知。',
   primarySummary: '升级主节点：{node}', followerSummary: '升级从节点：{count}',
   primaryRole: '升级主节点', followerRole: '升级从节点', upgradeRole: '升级角色', coordination: '升级协调关系',
   coordinationHint: '灰紫色点虚线表示升级协调关系（非请求流量），通过共享 PG 状态与 Redis 唤醒协作，不表示网关间直接下发命令；主从节点均可独立处理业务请求。',

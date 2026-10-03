@@ -356,3 +356,10 @@ R1/R2 由同一控制协议 2 源码构建，不证明从历史协议 1 核心�
 - 功能提交 854f23350 已推送并在 OVH 从 Git 构建；备份为 ~/sup2api/backups/pre-v0.1.11-20261003T090741Z.sql.gz，gzip 校验通过。本次使用 SKIP_GATEWAY_BUILD=1，复用网关镜像工具，仅升级核心。
 - manifest digest ca2449a463d8f890a4d1e9f05f36b409666d49f26867ac667a147402457a7918；计划 7b51446aa8bc29bf29b934840e1aa475 完成 27 步，从创建到完成约 21.83 秒。各入口 503 约 4.5–5.8 秒，网关容器及启动身份不变。见 [原始记录](evidence/ovh-upgrade-0.1.11.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.11-summary.txt)。
 - 四节点核心 0.1.11、local/ready，插件全部 active；主从版节点图 JS 在四入口返回 200，并包含 primaryRole/coordination 逻辑。版本、历史、审计、鉴权和 PG/Redis 分工检查全部通过，无本次 ERROR。见 [上线核验](evidence/ovh-upgrade-0.1.11-verify.txt)、[运行时核验](evidence/ovh-upgrade-0.1.11-runtime.json)。
+
+## 21. 当前访问节点标记（2026-10-03）
+
+- 已认证版本接口返回实际核心节点 ID/boot；公网入口网关仅在成功响应覆盖入口身份头。客户端和下游伪造头被清除，私有转发跳不签发公网入口身份，gzip 正文保持不变。前端同次请求读取头与正文，区别当前访问网关和本次响应核心，不猜测缺失身份。
+- OVH 私有环境 current-node.VDJUM4 / sub2api-current-vdjum4：gateway proxy/cmd/control 的 vet 与 -race 测试通过，63 顶层通过、6 个需要额外真实核心制品的 RealCore 用例跳过；server app/httpapi 的 vet 与 -race 测试通过，17 顶层通过、无跳过。覆盖真实测试 HTTP 转发、本地/CPU 转移、私有入口、伪造头、鉴权、gzip，并执行现有 WebSocket/SSE 回归。本轮不声称重新跑过真实核心升级故障注入。见 [gateway 测试](evidence/current-node-gateway.log.txt)、[server 测试](evidence/current-node-server.log.txt)。
+- 浏览器四场景通过：local 为入口2/核心2；routing 为入口4/核心1；legacy 无入口头时仅标核心1；failure 503 时两个标记均清空。主从角色保留，核心标记匹配节点 ID 及 boot。前端客户端专项测试还验证 401 刷新、403 二次认证后读取最终响应头，失败不采集身份；执行命令 node scripts/http-headers-test.mjs。
+- 前端类型检查及生产构建通过，产物位于 TEMP，原有未提交 dist 未改写。见 [构建记录](evidence/current-node-web-build.log.txt)。独立代码审查未发现阻断问题。

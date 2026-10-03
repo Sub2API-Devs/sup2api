@@ -416,7 +416,7 @@ func (c *realCluster) startShell(id string) *realNode {
 	rt.OnStopped = func(ctx context.Context, coreBoot string) error {
 		return store.ConfirmStoppedCore(ctx, id, boot, coreBoot)
 	}
-	router = proxy.New(proxy.Config{PeerTLS: c.clientTLS, PeerTransport: peerTransport, LocalReady: func() bool {
+	router = proxy.New(proxy.Config{NodeID: id, PeerTLS: c.clientTLS, PeerTransport: peerTransport, LocalReady: func() bool {
 		if c.options.standInCores {
 			return true
 		}

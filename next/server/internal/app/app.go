@@ -348,9 +348,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		c.JSON(status, gin.H{"status": text, "version": version, "node": cfg.NodeID, "boot_id": cl.Registry.BootID()})
 	})
 	r := httpapi.NewRouter(engine, idm, az, idm)
-	r.Authed(http.MethodGet, "/system/version", func(c *gin.Context) {
-		httpapi.OK(c, gin.H{"version": version, "managed": cfg.Managed.Enabled})
-	})
+	r.Authed(http.MethodGet, "/system/version", systemVersionHandler(version, cfg.Managed.Enabled, cfg.NodeID, cl.Registry.BootID()))
 	updater.RegisterRoutes(r, cfg.Managed.UpdaterSocket, db)
 	audit.RegisterRoutes(r, db)
 	idm.RegisterRoutes(r)

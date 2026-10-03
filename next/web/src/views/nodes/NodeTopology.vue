@@ -17,9 +17,9 @@ import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
 
 type Card = { id: string; index: number; shell?: ShellNode; core?: NodeInfo; plugins: Array<NodePluginState & { key: string }>; stale: boolean; coreStale: boolean; version: string }
-type CircleData = { label: string; subtitle: string; kind: string; size: number; color: string; dim: boolean; inactive: boolean; cluster: string; role: 'primary' | 'follower' | ''; roleLabel: string; details: Array<{ label: string; value: string }> }
+type CircleData = { label: string; subtitle: string; kind: string; size: number; color: string; dim: boolean; inactive: boolean; cluster: string; role: 'primary' | 'follower' | ''; roleLabel: string; visitLabel: string; details: Array<{ label: string; value: string }> }
 type CircleNode = Node<CircleData> & { data: CircleData }
-const props = defineProps<{ cards: Card[]; edges: Array<{ from: string; to: string; kind: string }>; primary: string; uncertain: boolean }>()
+const props = defineProps<{ cards: Card[]; edges: Array<{ from: string; to: string; kind: string }>; primary: string; uncertain: boolean; visit?: { entry: string; core: string; boot: string } | null }>()
 const { t } = useI18n()
 const flowID = `topology-${useId()}`
 const { fitView, zoomIn, zoomOut } = useVueFlow({ id: flowID })
@@ -46,7 +46,9 @@ function refresh() {
   const add = (card: Card, kind: string, label: string, subtitle: string, size: number, color: string, inactive: boolean, details: CircleData['details'], plugin = '') => {
     const id = idFor(card.id, kind, plugin)
     const role = kind === 'gateway' && knownPrimary.value ? card.id === knownPrimary.value ? 'primary' : 'follower' : ''
-    nextNodes.push({ id, type: 'circle', position: old.get(id)?.position || { x: 0, y: 0 }, data: { label, subtitle, kind, size, color, inactive, dim: false, cluster: card.id, role, roleLabel: role ? t(`observe.${role}Role`) : '', details }, draggable: true, connectable: false })
+    const visitLabel = kind === 'gateway' && card.id === props.visit?.entry ? t('observe.currentEntry') : kind === 'core' && card.id === props.visit?.core && !!props.visit.boot && card.core?.boot_id === props.visit.boot ? t('observe.responseCore') : ''
+    if (visitLabel) details.unshift({ label: t('observe.visitIdentity'), value: visitLabel })
+    nextNodes.push({ id, type: 'circle', position: old.get(id)?.position || { x: 0, y: 0 }, data: { label, subtitle, kind, size, color, inactive, dim: false, cluster: card.id, role, roleLabel: role ? t(`observe.${role}Role`) : '', visitLabel, details }, draggable: true, connectable: false })
     return id
   }
   const internal = (source: string, target: string) => nextEdges.push({ id: JSON.stringify([source,target,'owns']), source, target, type: 'straight', selectable: false, style: { stroke: '#94a3b8', strokeWidth: 1.4 } })
@@ -152,7 +154,7 @@ function dragged(event: NodeDragEvent) {
 function select(event: NodeMouseEvent) { selectedID.value=event.node.id }
 let firstDimensions = true
 function firstFit() { if (firstDimensions) { firstDimensions=false; void fitView({padding:0.15}) } }
-watch(()=>[props.cards,props.edges,props.primary,props.uncertain,t('observe.core')],refresh,{deep:true,immediate:true})
+watch(()=>[props.cards,props.edges,props.primary,props.uncertain,props.visit,t('observe.core')],refresh,{deep:true,immediate:true})
 </script>
 
 <template>
@@ -183,7 +185,7 @@ watch(()=>[props.cards,props.edges,props.primary,props.uncertain,t('observe.core
         <dl class="space-y-2"><div v-for="(detail,i) in chosen.data.details" :key="i"><dt class="text-[11px] text-gray-500">{{ detail.label }}</dt><dd class="break-all text-xs">{{ detail.value }}</dd></div></dl>
       </aside>
     </div>
-    <SHint size="xs">{{ t('observe.canvasHelp') }} {{ t('observe.graphLegend') }} {{ knownPrimary ? t('observe.coordinationHint') : t('observe.primaryUnknown') }} {{ !edges.length && !uncertain ? t('observe.noCrossLinks') : '' }}</SHint>
+    <SHint size="xs">{{ t('observe.visitHint') }} {{ t('observe.canvasHelp') }} {{ t('observe.graphLegend') }} {{ knownPrimary ? t('observe.coordinationHint') : t('observe.primaryUnknown') }} {{ !edges.length && !uncertain ? t('observe.noCrossLinks') : '' }}</SHint>
   </div>
 </template>
 

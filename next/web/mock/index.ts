@@ -116,7 +116,10 @@ async function handle(req: IncomingMessage, res: ServerResponse, next: () => voi
     }
     try {
       const out = await r.handler(mreq)
-      if (out && typeof out === 'object' && '__status' in out) return send(res, (out as any).__status, (out as any).body)
+      if (out && typeof out === 'object' && '__status' in out) {
+        for (const [name, value] of Object.entries((out as any).__headers || {})) res.setHeader(name, String(value))
+        return send(res, (out as any).__status, (out as any).body)
+      }
       return send(res, 200, out && typeof out === 'object' && ('data' in out || 'error' in out) ? out : { data: out })
     } catch (e) {
       return send(res, 500, { error: { code: 'internal', message: String(e) } })

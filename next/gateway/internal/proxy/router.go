@@ -23,6 +23,7 @@ const prefix = "/internal/forward"
 const revisionHeader = "X-Sub2api-Route-Revision"
 const bootHeader = "X-Sub2api-Core-Boot"
 const hopHeader = "X-Sub2api-Hop"
+const entryNodeHeader = "X-Sub2api-Entry-Node"
 
 type Route struct {
 	Mode         string
@@ -33,6 +34,7 @@ type Route struct {
 	CoreBootID   string
 }
 type Config struct {
+	NodeID         string
 	PeerTLS        *tls.Config
 	PeerTransport  http.RoundTripper
 	LocalReady     func() bool
@@ -178,14 +180,14 @@ func (r *Router) Public() http.Handler {
 			q.Header.Set(revisionHeader, strconv.FormatInt(v.PeerRevision, 10))
 			q.Header.Set(bootHeader, v.CoreBootID)
 			q.Header.Set(hopHeader, "1")
-			r.serve(w, q, v.PeerURL, true)
+			r.serve(w, q, v.PeerURL, true, r.config.NodeID)
 		} else if t, ok := r.offloadTarget(); ok {
 			q.Header.Set(revisionHeader, strconv.FormatInt(t.Revision, 10))
 			q.Header.Set(bootHeader, t.CoreBootID)
 			q.Header.Set(hopHeader, "1")
-			r.serve(w, q, t.PeerURL, true)
+			r.serve(w, q, t.PeerURL, true, r.config.NodeID)
 		} else {
-			r.serve(w, q, v.LocalURL, false)
+			r.serve(w, q, v.LocalURL, false, r.config.NodeID)
 		}
 	})
 }
@@ -215,10 +217,11 @@ func (r *Router) Private() http.Handler {
 		q.Header.Del(hopHeader)
 		q.Header.Del(bootHeader)
 		q.Header.Del(revisionHeader)
-		r.serve(w, q, v.LocalURL, false)
+		q.Header.Del(entryNodeHeader)
+		r.serve(w, q, v.LocalURL, false, "")
 	})
 }
-func (r *Router) serve(w http.ResponseWriter, q *http.Request, target string, remote bool) {
+func (r *Router) serve(w http.ResponseWriter, q *http.Request, target string, remote bool, entryNode string) {
 	u, e := url.Parse(target)
 	if e != nil {
 		unavailable(w)
@@ -252,6 +255,14 @@ func (r *Router) serve(w http.ResponseWriter, q *http.Request, target string, re
 	}, ModifyResponse: func(res *http.Response) error {
 		internalFailure := remote && res.Header.Get(peer.ErrorHeader) != ""
 		peer.ScrubResponse(res.Header)
+		// Only the public ingress knows which gateway the browser contacted.
+		// Private hops never claim to be that ingress, including mixed versions.
+		// Override rather than trusting a client or downstream response header.
+		res.Header.Del(entryNodeHeader)
+		if q.Method == http.MethodGet && q.URL.Path == "/api/v1/system/version" && res.StatusCode >= 200 && res.StatusCode < 300 && entryNode != "" && !internalFailure {
+			res.Header.Set(entryNodeHeader, entryNode)
+			res.Header.Set("Cache-Control", "no-store")
+		}
 		if internalFailure {
 			res.StatusCode = 503
 			res.Status = "503 Service Unavailable"

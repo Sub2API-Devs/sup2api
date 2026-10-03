@@ -1,4 +1,7 @@
 export default {
+  currentEntry: 'Current entry gateway', responseCore: 'Response core', visitIdentity: 'Visit identity',
+  entrySummary: 'Current entry gateway: {node}', responseSummary: 'Response core: {node}',
+  visitHint: 'Blue markers identify the latest version response: its header identifies the entry gateway and its body identifies the core. Forwarding may make them different; this does not trace all session requests. A missing entry header or failed check means unknown.',
   primarySummary: 'Upgrade primary: {node}', followerSummary: 'Upgrade followers: {count}',
   primaryRole: 'Upgrade primary', followerRole: 'Upgrade follower', upgradeRole: 'Upgrade role', coordination: 'Upgrade coordination',
   coordinationHint: 'Muted purple dashed arrows show upgrade coordination through shared PG state and Redis wakeups, not request traffic or direct gateway commands. Both roles can serve requests independently.',

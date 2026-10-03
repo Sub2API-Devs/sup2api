@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { api } from '@sub2api/host'
+import { api, requestWithHeaders } from '@sub2api/host'
 import { SBadge, SCard, SHint } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { parseNodePlugin, statusTone } from '@/api/admin'
@@ -14,6 +14,7 @@ const marker = useId().replace(/:/g, '')
 const registered = ref<NodeInfo[]>([]), shells = ref<ShellNode[]>([]), releases = ref<Release[]>([])
 const primary = ref(''), shellOK = ref(false), failed = ref(false), tick = ref(Date.now())
 const offload = ref<{ enabled: boolean; cpu_threshold_percent: number } | null>(null)
+const visit = ref<{ entry: string; core: string; boot: string } | null>(null)
 let timer: ReturnType<typeof setInterval> | undefined, inflight = false, disposed = false
 const fresh = (date?: string, seconds = 30) => !!date && tick.value - Date.parse(date) < seconds * 1000
 async function load() {
@@ -23,11 +24,13 @@ async function load() {
     auth.has('node:read') ? api.list<NodeInfo>('/nodes', { page_size: 200 }) : Promise.resolve(null),
     auth.has('system:update:read') ? api.get<{ nodes: ShellNode[]; primary_node: string }>('/system/upgrades') : Promise.resolve(null),
     auth.has('system:update:read') ? api.get<{ releases: Release[] }>('/system/releases') : Promise.resolve(null),
-    auth.has('settings:read') ? api.get<{ enabled: boolean; cpu_threshold_percent: number }>('/system/offload') : Promise.resolve(null)
+    auth.has('settings:read') ? api.get<{ enabled: boolean; cpu_threshold_percent: number }>('/system/offload') : Promise.resolve(null),
+    requestWithHeaders<{ core_node_id?: string; core_boot_id?: string }>('GET', '/system/version')
   ])
   if (!disposed) {
     tick.value = Date.now()
-    const [n, s, r, o] = results
+    const [n, s, r, o, identity] = results
+    visit.value = identity.status === 'fulfilled' ? { entry: identity.value.headers.get('X-Sub2api-Entry-Node')?.trim() || '', core: identity.value.data?.core_node_id || '', boot: identity.value.data?.core_boot_id || '' } : null
     failed.value = n.status === 'rejected' || s.status === 'rejected'
     if (n.status === 'fulfilled') registered.value = n.value?.items || []
     shellOK.value = s.status === 'fulfilled' && !!s.value
@@ -85,7 +88,8 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
     </div>
     <SHint v-if="failed" tone="warning">{{ t('observe.unavailable') }}</SHint>
     <SHint v-if="!shellOK && !shells.length">{{ t('observe.partial') }}</SHint>
-    <NodeTopology v-if="cards.length && view === 'topology'" :cards="cards" :edges="graphEdges" :primary="primary" :uncertain="failed" />
+    <div class="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-sm" :title="t('observe.visitHint')"><span class="font-medium text-cyan-700 dark:text-cyan-300">{{ t('observe.entrySummary', { node: visit?.entry || t('observe.unknown') }) }}</span><span class="text-gray-600 dark:text-gray-300">{{ t('observe.responseSummary', { node: visit?.core || t('observe.unknown') }) }}</span></div>
+    <NodeTopology v-if="cards.length && view === 'topology'" :cards="cards" :edges="graphEdges" :primary="primary" :uncertain="failed" :visit="visit" />
     <div v-else-if="cards.length" class="overflow-x-auto">
       <SHint>{{ t('observe.legend') }}</SHint>
       <svg :width="cards.length * 340" :height="height" role="img" :aria-label="t('observe.topology')">
