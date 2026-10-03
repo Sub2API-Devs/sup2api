@@ -36,7 +36,12 @@ fi
 chmod 711 certs
 
 # ---- images and release signing key
-docker build -q -f "$SRC/deploy/gateway/Dockerfile" -t "$GATEWAY_IMAGE" "$SRC"
+# Core-only releases can reuse the installed gateway tools without retagging it.
+if [ "${SKIP_GATEWAY_BUILD:-0}" = 1 ]; then
+  docker image inspect "$GATEWAY_IMAGE" >/dev/null
+else
+  docker build -q -f "$SRC/deploy/gateway/Dockerfile" -t "$GATEWAY_IMAGE" "$SRC"
+fi
 if [ ! -f keys/release.key ]; then
   chmod 777 keys
   docker run --rm -v "$M/keys:/keys" --entrypoint sub2api-release "$GATEWAY_IMAGE" keygen --out /keys
@@ -113,4 +118,6 @@ release 0.1.8
 release 0.1.9
 # 0.1.10 replaces the static topology drawing with an interactive node graph.
 release 0.1.10
+# 0.1.11 makes upgrade primary/secondary roles explicit in the node graph.
+release 0.1.11
 ls -la publish

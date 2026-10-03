@@ -1,4 +1,8 @@
 export default {
+  primarySummary: '升级主节点：{node}', followerSummary: '升级从节点：{count}',
+  primaryRole: '升级主节点', followerRole: '升级从节点', upgradeRole: '升级角色', coordination: '升级协调关系',
+  coordinationHint: '灰紫色点虚线表示升级协调关系（非请求流量），通过共享 PG 状态与 Redis 唤醒协作，不表示网关间直接下发命令；主从节点均可独立处理业务请求。',
+  primaryUnknown: '当前未确认升级主节点，不推定主从关系。',
   showOverview: '显示概览', hideOverview: '隐藏概览',
   relayout: '重新布局', fitView: '适应画布', closeDetails: '关闭详情', address: '核心地址',
   canvasHelp: '拖动圆节点调整位置；拖动画布平移，滚轮缩放，小地图定位。点击节点高亮相邻关系并查看详情。按集群节点分簇，实时刷新保留位置与视角。',

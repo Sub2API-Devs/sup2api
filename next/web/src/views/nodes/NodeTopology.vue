@@ -17,7 +17,7 @@ import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
 
 type Card = { id: string; index: number; shell?: ShellNode; core?: NodeInfo; plugins: Array<NodePluginState & { key: string }>; stale: boolean; coreStale: boolean; version: string }
-type CircleData = { label: string; subtitle: string; kind: string; size: number; color: string; dim: boolean; inactive: boolean; cluster: string; details: Array<{ label: string; value: string }> }
+type CircleData = { label: string; subtitle: string; kind: string; size: number; color: string; dim: boolean; inactive: boolean; cluster: string; role: 'primary' | 'follower' | ''; roleLabel: string; details: Array<{ label: string; value: string }> }
 type CircleNode = Node<CircleData> & { data: CircleData }
 const props = defineProps<{ cards: Card[]; edges: Array<{ from: string; to: string; kind: string }>; primary: string; uncertain: boolean }>()
 const { t } = useI18n()
@@ -26,6 +26,8 @@ const { fitView, zoomIn, zoomOut } = useVueFlow({ id: flowID })
 const nodes = shallowRef<CircleNode[]>([]), links = shallowRef<Edge[]>([])
 const selectedID = ref('')
 const overview = ref(false)
+const knownPrimary = computed(() => !props.uncertain && props.primary && props.cards.some(c => c.id === props.primary && c.shell?.node_id === c.id) ? props.primary : '')
+const followerCount = computed(() => knownPrimary.value ? props.cards.filter(c => c.shell && c.id !== knownPrimary.value).length : 0)
 const pinned = new Set<string>()
 let structure = '', initialized = false
 const idFor = (host: string, kind: string, plugin = '') => JSON.stringify([host, kind, plugin])
@@ -43,13 +45,16 @@ function refresh() {
   const nextNodes: CircleNode[] = [], nextEdges: Edge[] = []
   const add = (card: Card, kind: string, label: string, subtitle: string, size: number, color: string, inactive: boolean, details: CircleData['details'], plugin = '') => {
     const id = idFor(card.id, kind, plugin)
-    nextNodes.push({ id, type: 'circle', position: old.get(id)?.position || { x: 0, y: 0 }, data: { label, subtitle, kind, size, color, inactive, dim: false, cluster: card.id, details }, draggable: true, connectable: false })
+    const role = kind === 'gateway' && knownPrimary.value ? card.id === knownPrimary.value ? 'primary' : 'follower' : ''
+    nextNodes.push({ id, type: 'circle', position: old.get(id)?.position || { x: 0, y: 0 }, data: { label, subtitle, kind, size, color, inactive, dim: false, cluster: card.id, role, roleLabel: role ? t(`observe.${role}Role`) : '', details }, draggable: true, connectable: false })
     return id
   }
   const internal = (source: string, target: string) => nextEdges.push({ id: JSON.stringify([source,target,'owns']), source, target, type: 'straight', selectable: false, style: { stroke: '#94a3b8', strokeWidth: 1.4 } })
   for (const c of props.cards) {
     const unknown = props.uncertain || c.stale
-    const gateway = c.shell ? add(c, 'gateway', c.id, c.id === props.primary ? t('upgrades.primary') : t('observe.gateway'), 106, '#10b981', unknown || !c.shell.enabled, [
+    const main = c.id === knownPrimary.value
+    const gateway = c.shell ? add(c, 'gateway', c.id, t('observe.gateway'), main ? 132 : 106, main ? '#8b5cf6' : '#10b981', unknown || !c.shell.enabled, [
+      { label: t('observe.upgradeRole'), value: knownPrimary.value ? t(main ? 'observe.primaryRole' : 'observe.followerRole') : t('observe.unknown') },
       { label: t('observe.gateway'), value: unknown ? t('observe.unknown') : `${c.shell.mode} · ${t(c.shell.ready ? 'upgrades.serving' : 'upgrades.waiting')}` },
       { label: 'CPU', value: unknown || c.shell.cpu_percent == null ? '—' : c.shell.cpu_percent.toFixed(1)+'%' },
       { label: t('observe.offloadState'), value: unknown ? t('observe.unknown') : t(c.shell.offloading ? 'observe.offloading' : 'observe.notOffloading') },
@@ -74,6 +79,16 @@ function refresh() {
     }
   }
   const valid = new Set(nextNodes.map(n => n.id))
+  if (knownPrimary.value) {
+    const source = idFor(knownPrimary.value, 'gateway')
+    for (const c of props.cards) {
+      const target = idFor(c.id, 'gateway')
+      if (source === target || !valid.has(target)) continue
+      nextEdges.push({ id: JSON.stringify([source,target,'coordination']), source, target, type: 'default', label: t('observe.coordination'), selectable: false,
+        markerEnd: { type: MarkerType.ArrowClosed, color: '#887498' }, style: { stroke: '#887498', strokeWidth: 2, strokeDasharray: '3 7' },
+        labelStyle: { fill: '#887498', fontSize: 14 }, labelBgStyle: { fill: 'var(--topology-label-bg)' } })
+    }
+  }
   for (const e of props.edges) {
     const source = idFor(e.from, 'gateway'), target = idFor(e.to, 'gateway')
     if (!valid.has(source) || !valid.has(target)) continue
@@ -84,7 +99,7 @@ function refresh() {
   nodes.value = nextNodes; links.value = nextEdges
   if (selectedID.value && !valid.has(selectedID.value)) selectedID.value = ''
   for (const id of pinned) if (!valid.has(id)) pinned.delete(id)
-  const signature = [...valid].sort().join('|')
+  const signature = knownPrimary.value + '|' + [...valid].sort().join('|')
   if (signature !== structure) { structure = signature; layout(false) }
 }
 
@@ -93,14 +108,21 @@ function layout(reset = true) {
   if (reset) pinned.clear()
   const clusters = [...new Set(nodes.value.map(n => n.data.cluster))].sort()
   const columns = Math.ceil(Math.sqrt(clusters.length))
-  const centers = new Map(clusters.map((id,i) => [id,{x:(i%columns)*430,y:Math.floor(i/columns)*400}]))
+  const followers = clusters.filter(id => id !== knownPrimary.value)
+  const centers = new Map(clusters.map((id,i) => {
+    if (!knownPrimary.value) return [id,{x:(i%columns)*430,y:Math.floor(i/columns)*400}] as const
+    if (id === knownPrimary.value) return [id,{x:0,y:0}] as const
+    const angle = -Math.PI/2 + followers.indexOf(id)*2*Math.PI/followers.length
+    const radius = Math.max(420,followers.length*105)
+    return [id,{x:Math.cos(angle)*radius,y:Math.sin(angle)*radius*0.86}] as const
+  }))
   const particles: Particle[] = nodes.value.map(n => {
     const center = centers.get(n.data.cluster)!
     const prior = initialized && !reset
     return { id:n.id,cluster:n.data.cluster,kind:n.data.kind,radius:n.data.size/2+30,
       x:prior ? n.position.x+n.data.size/2 : center.x+(n.data.kind==='gateway' ? -90 : n.data.kind==='core' ? 25 : 80),
       y:prior ? n.position.y+n.data.size/2 : center.y,
-      ...(pinned.has(n.id) ? {fx:n.position.x+n.data.size/2,fy:n.position.y+n.data.size/2} : {}) }
+      ...(pinned.has(n.id) ? {fx:n.position.x+n.data.size/2,fy:n.position.y+n.data.size/2} : n.data.role === 'primary' ? {fx:0,fy:0} : {}) }
   })
   const connections: SimulationLinkDatum<Particle>[] = links.value.map(e=>({source:e.source,target:e.target}))
   const simulation = forceSimulation(particles)
@@ -135,9 +157,13 @@ watch(()=>[props.cards,props.edges,props.primary,props.uncertain,t('observe.core
 
 <template>
   <div class="space-y-3">
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-violet-50 px-3 py-2 text-sm dark:bg-violet-950/30">
+      <template v-if="knownPrimary"><span class="font-semibold text-violet-700 dark:text-violet-300">★ {{ t('observe.primarySummary', { node: knownPrimary }) }}</span><span class="text-gray-600 dark:text-gray-300">{{ t('observe.followerSummary', { count: followerCount }) }}</span></template>
+      <span v-else class="text-gray-500 dark:text-gray-400">{{ t('observe.primaryUnknown') }}</span>
+    </div>
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div class="flex flex-wrap gap-x-4 gap-y-2 text-xs text-gray-500 dark:text-dark-300">
-        <span><i class="legend-dot bg-emerald-500" />{{ t('observe.gateway') }}</span><span><i class="legend-dot bg-indigo-500" />{{ t('observe.core') }}</span><span><i class="legend-dot bg-sky-400" />{{ t('observe.plugins') }}</span>
+        <span v-if="knownPrimary"><i class="legend-dot bg-violet-500" />{{ t('observe.primaryRole') }}</span><span><i class="legend-dot bg-emerald-500" />{{ knownPrimary ? t('observe.followerRole') : t('observe.gateway') }}</span><span><i class="legend-dot bg-indigo-500" />{{ t('observe.core') }}</span><span><i class="legend-dot bg-sky-400" />{{ t('observe.plugins') }}</span>
       </div>
       <div class="flex flex-wrap gap-2"><SButton size="sm" :aria-pressed="overview" @click="overview = !overview">{{ t(overview ? 'observe.hideOverview' : 'observe.showOverview') }}</SButton><SButton size="sm" @click="layout(true)">{{ t('observe.relayout') }}</SButton><SButton size="sm" @click="fitView({padding:0.15,duration:250})">{{ t('observe.fitView') }}</SButton></div>
     </div>
@@ -157,7 +183,7 @@ watch(()=>[props.cards,props.edges,props.primary,props.uncertain,t('observe.core
         <dl class="space-y-2"><div v-for="(detail,i) in chosen.data.details" :key="i"><dt class="text-[11px] text-gray-500">{{ detail.label }}</dt><dd class="break-all text-xs">{{ detail.value }}</dd></div></dl>
       </aside>
     </div>
-    <SHint size="xs">{{ t('observe.canvasHelp') }} {{ t('observe.graphLegend') }} {{ !edges.length && !uncertain ? t('observe.noCrossLinks') : '' }}</SHint>
+    <SHint size="xs">{{ t('observe.canvasHelp') }} {{ t('observe.graphLegend') }} {{ knownPrimary ? t('observe.coordinationHint') : t('observe.primaryUnknown') }} {{ !edges.length && !uncertain ? t('observe.noCrossLinks') : '' }}</SHint>
   </div>
 </template>
 

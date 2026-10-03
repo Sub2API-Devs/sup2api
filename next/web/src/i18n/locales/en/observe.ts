@@ -1,4 +1,8 @@
 export default {
+  primarySummary: 'Upgrade primary: {node}', followerSummary: 'Upgrade followers: {count}',
+  primaryRole: 'Upgrade primary', followerRole: 'Upgrade follower', upgradeRole: 'Upgrade role', coordination: 'Upgrade coordination',
+  coordinationHint: 'Muted purple dashed arrows show upgrade coordination through shared PG state and Redis wakeups, not request traffic or direct gateway commands. Both roles can serve requests independently.',
+  primaryUnknown: 'The upgrade primary is unknown; no primary/follower relationship is inferred.',
   showOverview: 'Show minimap', hideOverview: 'Hide minimap',
   relayout: 'Relayout', fitView: 'Fit view', closeDetails: 'Close details', address: 'Core address',
   canvasHelp: 'Drag circles to arrange nodes, drag the canvas to pan, scroll to zoom, and navigate with the minimap. Select a node to highlight neighbors and inspect details. Clustered by node identity; refresh preserves positions and viewport.',
