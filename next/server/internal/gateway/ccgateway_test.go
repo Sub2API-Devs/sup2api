@@ -35,6 +35,11 @@ func managedCCGatewayEnv(t *testing.T, configured bool) *env {
 		e.accounts.addTyped(testGroup, 1, 1, "", "ccgateway", "managed")
 		e.accounts.accounts[1].Credentials = json.RawMessage(`{}`)
 	})
+	// The managed transport checks the authoritative account type before
+	// allowing the legacy shared runtime. Match the scheduler fixture in PG.
+	if _, err := db.Pool.Exec(context.Background(), `INSERT INTO accounts(id,name,plugin_key,type,credentials_enc) VALUES(1,'managed-test','ccgateway','managed',''::bytea)`); err != nil {
+		t.Fatal(err)
+	}
 	e.gw.allowPrivate = false // the managed path must not require disabling SSRF.
 	e.gw.d.CCGateway = ccgateway.New(db, cipher)
 	t.Setenv("CCGATEWAY_URL", e.up.srv.URL)
@@ -116,5 +121,18 @@ func TestCCGatewayManagedGatewayUnconfigured(t *testing.T) {
 	}
 	if strings.Contains(string(r.body), "managed-sidecar-secret") {
 		t.Fatal("secret in error")
+	}
+}
+
+func TestCCGatewayAPIKeyRejectsLegacySharedRuntime(t *testing.T) {
+	e := managedCCGatewayEnv(t, true)
+	e.gen.accountTypes[0].Type.ID = "apikey"
+	e.accounts.accounts[1].Type = "apikey"
+	if _, err := e.gw.d.CCGateway.DB.Pool.Exec(context.Background(), `UPDATE accounts SET type='apikey' WHERE id=1`); err != nil {
+		t.Fatal(err)
+	}
+	r := e.messages(body(testModel, false))
+	if r.status < 400 || len(e.up.keys()) != 0 {
+		t.Fatal("API Key account used legacy shared runtime")
 	}
 }
