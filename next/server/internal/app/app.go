@@ -198,6 +198,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	go keys.Run(ctx)
 	go prx.Run(ctx)
 	go acc.Run(ctx)
+	go ccg.Run(ctx)
 
 	// The reconcile loop closes pre-charged usage rows (CONTRACTS §25.4). It
 	// starts here rather than next to settler.Start because it needs the

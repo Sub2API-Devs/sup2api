@@ -1,4 +1,5 @@
 export default {
+ runtime: {"title": "账号容器与出站代理", "hint": "在账号页面创建 CCGateway 账号并选择代理。每个账号独立容器；代理变更后自动同步，普通调用不修改出口。未指定代理时阻断调用。", "switchHint": "切换代理会重启该账号的出口进程，正在使用旧连接的请求可能中断；其他账号不受影响。", "select": "选择账号", "state": "同步状态", "ready": "已生效", "pending": "待同步或同步失败", "retry": "重新同步", "failed": "账号运行环境不可用，请检查远程控制器、代理和容器。", "enable": "启用一账号一容器及外部代理", "setup": "启用前需安装远程账号控制器，监听 127.0.0.1:8787，管理密钥填写控制器密钥。原共享容器不会自动迁移。"},
   title: 'CCGateway 管理', description: '管理本地或 SSH 远程网关、出站代理与 Claude 授权。', readOnly: '当前权限仅允许查看配置。', failed: '操作失败，请检查连接配置后重试。',
   auth: { models: '模型白名单（可选）', modelsHint: '输入模型名称后按回车添加；留空允许网关支持的所有模型。', title: 'Claude 授权与账号接入', hint: '通过 Claude Code 提供 Messages API，每个容器使用独立授权。', healthy: '服务在线', offline: '服务不可用', loggedIn: '已授权', loggedOut: '未授权', unknown: '状态未知', start: '获取授权链接', logout: '退出授权', confirmLogout: '退出授权后，关联账号将无法继续调用模型。确定退出？', open: '打开 Claude 授权页面', expires: '授权链接过期时间：{time}', code: '完整授权码（code#state）', complete: '完成授权', expired: '授权会话已过期，请取消后重新获取。', name: '账号名称', connect: '接入账号调度', connected: '已创建账号 #{id}', accounts: '前往账号管理', connectHint: '创建 CCGateway 托管账号，凭证由核心管理。可在此选择分组；未绑定分组的账号不参与调度。', pending: '授权回调已完成，请刷新状态确认。' },
 

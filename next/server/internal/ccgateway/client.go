@@ -3,6 +3,7 @@ package ccgateway
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/remotedocker"
 	"io"
 	"net/http"
@@ -52,18 +53,56 @@ func (s *Service) OpenClient(ctx context.Context) (*http.Client, string, string,
 
 // ModelClient is used only after the caller checks plugin/type/URL identity.
 // Connection lifetime follows response-body Close, including streaming bodies.
-func (s *Service) ModelClient() *http.Client {
-	return &http.Client{Transport: modelTransport{s: s}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+func (s *Service) ModelClient(accountIDs ...int64) *http.Client {
+	var id int64
+	if len(accountIDs) > 0 {
+		id = accountIDs[0]
+	}
+	return &http.Client{Transport: modelTransport{s: s, accountID: id, proxySelected: len(accountIDs) > 1 && accountIDs[1] > 0}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 }
 
-type modelTransport struct{ s *Service }
+func (s *Service) ModelClientFor(id int64, proxyID *int64) *http.Client {
+	var proxy int64
+	if proxyID != nil {
+		proxy = *proxyID
+	}
+	return s.ModelClient(id, proxy)
+}
+
+type modelTransport struct {
+	s             *Service
+	accountID     int64
+	proxySelected bool
+}
 
 func (t modelTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if req.URL.String() != VirtualURL || req.Method != "POST" {
 		return nil, errors.New("invalid managed CCGateway request")
 	}
 	ctx, cancel := context.WithTimeout(req.Context(), 4*time.Minute)
-	client, base, key, close, e := t.s.OpenClient(ctx)
+	cfg, e := t.s.Load(ctx)
+	if e != nil {
+		cancel()
+		return nil, e
+	}
+	var revision string
+	if t.proxySelected && !cfg.AccountRuntimes {
+		cancel()
+		return nil, errors.New("account proxy requires per-account runtimes")
+	}
+	if cfg.AccountRuntimes {
+		d, err := t.s.desired(ctx, t.accountID, false)
+		if err != nil || !d.Enabled {
+			cancel()
+			return nil, errors.New("account egress unavailable")
+		}
+		revision = d.Revision
+	}
+	if (!cfg.AccountRuntimes && cfg.APIKey == "") || (cfg.AccountRuntimes && cfg.AdminKey == "") {
+		cancel()
+		return nil, errors.New("CCGateway key is not configured")
+	}
+	client, base, close, e := t.s.open(ctx, cfg)
 	if e != nil {
 		cancel()
 		return nil, errors.New("CCGateway is unavailable")
@@ -72,10 +111,19 @@ func (t modelTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	finish := func() { once.Do(func() { _ = close(); cancel() }) }
 	clone := req.Clone(ctx)
 	clone.URL, _ = url.Parse(base + "/v1/messages")
+	if cfg.AccountRuntimes {
+		clone.URL.Path = fmt.Sprintf("/accounts/%d/v1/messages", t.accountID)
+	}
 	clone.Host = ""
 	clone.Header = clone.Header.Clone()
 	clone.Header.Del("Authorization")
-	clone.Header.Set("x-api-key", key)
+	clone.Header.Set("x-api-key", cfg.APIKey)
+	clone.Header.Del("X-CCG-Revision")
+	if cfg.AccountRuntimes {
+		clone.Header.Del("x-api-key")
+		clone.Header.Set("Authorization", "Bearer "+cfg.AdminKey)
+		clone.Header.Set("X-CCG-Revision", revision)
+	}
 	res, e := client.Do(clone)
 	if e != nil {
 		finish()

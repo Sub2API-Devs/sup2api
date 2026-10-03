@@ -139,7 +139,7 @@ func (s *Service) runTest(ctx context.Context, bt core.AccountTypeBinding, acct 
 		return res
 	}
 	res.Upstream = upstreamAddr(u)
-	managedCCG := ccgateway.IsManaged(bt.Plugin.Key, bt.Type.ID, tr.GetUrl()) && s.d.CCGateway != nil && proxyID == nil
+	managedCCG := ccgateway.IsManaged(bt.Plugin.Key, bt.Type.ID, tr.GetUrl()) && s.d.CCGateway != nil
 	if !managedCCG {
 		if err := s.checkUpstream(ctx, u, proxyID != nil); err != nil {
 			res.Message = err.Error()
@@ -167,7 +167,7 @@ func (s *Service) runTest(ctx context.Context, bt core.AccountTypeBinding, acct 
 	}
 	var hc *http.Client
 	if managedCCG {
-		hc = s.d.CCGateway.ModelClient()
+		hc = s.d.CCGateway.ModelClientFor(acct.GetId(), proxyID)
 	} else {
 		hc, err = s.d.Proxies.HTTPClient(ctx, proxyID)
 	}

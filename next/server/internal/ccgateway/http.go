@@ -16,6 +16,8 @@ import (
 )
 
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
+	r.Perm("GET", "/system/ccgateway/accounts/:id/:action", "settings:read", s.accountManage)
+	r.Perm("POST", "/system/ccgateway/accounts/:id/:action", "settings:manage", s.accountManage)
 	r.Perm("GET", "/system/ccgateway/remote-config", "settings:read", func(c *gin.Context) {
 		c.Header("Cache-Control", "no-store")
 		v, e := s.Load(c.Request.Context())
@@ -25,17 +27,17 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 		}
 		httpapi.OK(c, v.Public())
 	})
-	r.PermStepUp("PUT", "/system/ccgateway/remote-config", "settings:manage", s.save)
-	r.PermStepUp("POST", "/system/ccgateway/remote-fingerprint", "settings:manage", s.fingerprint)
+	r.Perm("PUT", "/system/ccgateway/remote-config", "settings:manage", s.save)
+	r.Perm("POST", "/system/ccgateway/remote-fingerprint", "settings:manage", s.fingerprint)
 	for _, path := range []string{"remote-test", "remote-action"} {
-		r.PermStepUp("POST", "/system/ccgateway/"+path, "settings:manage", s.docker)
+		r.Perm("POST", "/system/ccgateway/"+path, "settings:manage", s.docker)
 	}
 	for _, path := range []string{"status", "proxy"} {
 		r.Perm("GET", "/system/ccgateway/"+path, "settings:read", s.manage)
 	}
-	r.PermStepUp("PUT", "/system/ccgateway/proxy", "settings:manage", s.manage)
+	r.Perm("PUT", "/system/ccgateway/proxy", "settings:manage", s.manage)
 	for _, action := range []string{"start", "complete", "cancel", "logout"} {
-		r.PermStepUp("POST", "/system/ccgateway/auth/"+action, "settings:manage", s.manage)
+		r.Perm("POST", "/system/ccgateway/auth/"+action, "settings:manage", s.manage)
 	}
 }
 func (s *Service) record(c *gin.Context, action string) {
@@ -86,6 +88,10 @@ func (s *Service) docker(c *gin.Context) {
 		return
 	}
 	cfg, e := s.Load(c.Request.Context())
+	if e == nil && cfg.AccountRuntimes && action != "test" {
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("请在账号运行环境中管理独立容器"))
+		return
+	}
 	if e != nil || cfg.Mode != "ssh" {
 		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("请先保存 SSH 配置"))
 		return
@@ -103,6 +109,10 @@ func (s *Service) manage(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 50*time.Second)
 	defer cancel()
 	cfg, e := s.Load(ctx)
+	if e == nil && cfg.AccountRuntimes {
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("请使用账号级授权与代理设置"))
+		return
+	}
 	if e != nil || cfg.AdminKey == "" {
 		httpapi.Fail(c, core.ErrUnavailable.WithMessage("请先配置 CCGateway 管理密钥"))
 		return

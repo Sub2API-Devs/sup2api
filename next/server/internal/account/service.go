@@ -100,7 +100,7 @@ func New(d Deps) *Service {
 // accepts the "all" key or its "own" counterpart (CONTRACTS §21.2); handlers
 // narrow their SQL with core.OwnerScope.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
-	r.PermStepUp("POST", "/system/ccgateway/connect", "settings:manage", s.connectCCGateway)
+	r.Perm("POST", "/system/ccgateway/connect", "settings:manage", s.connectCCGateway)
 	browse := []string{"account:read", "account:own:read", "account:own:create"}
 	r.PermAny("GET", "/platforms", s.listPlatforms, browse...)
 	r.Authed("GET", "/me/platforms", s.listMyPlatforms)

@@ -10,6 +10,23 @@ import (
 	"testing"
 )
 
+func TestExternalEgressNeverPassesProxyVariables(t *testing.T) {
+	t.Setenv("CCG_EXTERNAL_EGRESS", "1")
+	s := proxyStore(t)
+	if _, err := s.Update("proxy", "http://alice:test-secret@proxy.example:8080"); err != nil {
+		t.Fatal(err)
+	}
+	got := s.Environment([]string{"HTTP_PROXY=http://secret", "https_proxy=http://secret", "ALL_PROXY=socks5://secret", "NO_PROXY=*", "CCG_EXTERNAL_EGRESS=1", "CCG_API_KEY=secret", "CCG_ADMIN_KEY=secret", "HOME=/work"})
+	if len(got) != 1 || got[0] != "HOME=/work" {
+		t.Fatalf("proxy environment escaped: %v", got)
+	}
+	a := &authManager{key: "admin-secret", proxy: s}
+	w := authRequest(a, "PUT", "/admin/proxy", `{"mode":"direct"}`, "admin-secret")
+	if w.Code != 409 {
+		t.Fatalf("external egress override accepted: %d", w.Code)
+	}
+}
+
 func proxyStore(t *testing.T) *ProxyConfigStore {
 	t.Helper()
 	s, e := NewProxyConfigStore(t.TempDir(), "management-secret")

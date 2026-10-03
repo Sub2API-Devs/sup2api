@@ -29,7 +29,7 @@ func (a ccgRouteAuth) VerifyStepUp(_ context.Context, _ int64, token string) err
 	return nil
 }
 
-func TestManagementRequiresAuthorizationAndConfirmation(t *testing.T) {
+func TestManagementRequiresAuthorizationWithoutConfirmation(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	for _, method := range []string{"PUT", "POST"} {
 		paths := []string{"remote-config", "proxy"}
@@ -48,8 +48,21 @@ func TestManagementRequiresAuthorizationAndConfirmation(t *testing.T) {
 				}
 				w := httptest.NewRecorder()
 				engine.ServeHTTP(w, req)
-				if w.Code != 403 {
+				want := 403
+				if allowed {
+					want = 503 // Authorized request reaches the unconfigured handler.
+					if path == "remote-config" || path == "remote-fingerprint" || path == "remote-action" || path == "remote-test" {
+						want = 400
+					}
+				}
+				if w.Code != want {
 					t.Fatalf("%s %s allowed=%v: %d", method, path, allowed, w.Code)
+				}
+				req = httptest.NewRequest(method, "/api/v1/system/ccgateway/"+path, nil)
+				w = httptest.NewRecorder()
+				engine.ServeHTTP(w, req)
+				if w.Code != 401 {
+					t.Fatalf("anonymous %s %s: %d", method, path, w.Code)
 				}
 			}
 		}

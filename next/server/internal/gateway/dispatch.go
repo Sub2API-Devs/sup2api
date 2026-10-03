@@ -372,7 +372,7 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	if built.GetUpstreamModel() != "" {
 		c.rec.UpstreamModel = built.GetUpstreamModel()
 	}
-	managedCCG := ccgateway.IsManaged(acc.PluginKey, acc.Type, built.GetUrl()) && c.g.d.CCGateway != nil && acc.ProxyID == nil
+	managedCCG := ccgateway.IsManaged(acc.PluginKey, acc.Type, built.GetUrl()) && c.g.d.CCGateway != nil
 	var target *url.URL
 	var err error
 	if managedCCG {
@@ -390,7 +390,7 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	}
 	var client *http.Client
 	if managedCCG {
-		client = c.g.d.CCGateway.ModelClient()
+		client = c.g.d.CCGateway.ModelClientFor(acc.ID, acc.ProxyID)
 	} else {
 		client, err = c.g.d.Proxies.HTTPClient(prepareCtx, acc.ProxyID)
 	}

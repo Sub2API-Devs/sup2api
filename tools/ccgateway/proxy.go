@@ -184,6 +184,18 @@ func (s *ProxyConfigStore) Update(mode, raw string) (Object, error) {
 // Environment snapshots configuration once per new process. NO_PROXY remains
 // inherited in proxy mode; direct mode removes all proxy and bypass variables.
 func (s *ProxyConfigStore) Environment(base []string) []string {
+	if os.Getenv("CCG_EXTERNAL_EGRESS") == "1" {
+		out := make([]string, 0, len(base))
+		for _, item := range base {
+			key, _, _ := strings.Cut(item, "=")
+			switch strings.ToUpper(key) {
+			case "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "CCG_EXTERNAL_EGRESS", "CCG_API_KEY", "CCG_ADMIN_KEY":
+				continue
+			}
+			out = append(out, item)
+		}
+		return out
+	}
 	if s == nil {
 		return append([]string(nil), base...)
 	}
@@ -215,6 +227,10 @@ func (s *ProxyConfigStore) Environment(base []string) []string {
 }
 
 func (s *ProxyConfigStore) serve(w http.ResponseWriter, r *http.Request) {
+	if os.Getenv("CCG_EXTERNAL_EGRESS") == "1" {
+		apiError(w, 409, "invalid_request_error", "Proxy is managed by the account egress controller")
+		return
+	}
 	if s == nil {
 		apiError(w, 503, "api_error", "Dynamic proxy configuration is disabled")
 		return

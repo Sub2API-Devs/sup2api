@@ -6,7 +6,7 @@ import { api } from '@sub2api/host'
 
 
 interface RemoteConfig {
-  mode: 'disabled' | 'local' | 'ssh'; host: string; port: number; user: string; auth_mode: 'password' | 'private_key'
+  account_runtimes: boolean; mode: 'disabled' | 'local' | 'ssh'; host: string; port: number; user: string; auth_mode: 'password' | 'private_key'
   host_key_fingerprint: string; has_password: boolean; has_private_key: boolean; has_passphrase: boolean; has_admin_key: boolean; has_api_key: boolean
 }
 type Action = 'status' | 'start' | 'stop' | 'restart' | 'logs'
@@ -15,8 +15,8 @@ const emit = defineEmits<{ (event: 'saved'): void; (event: 'busy', value: boolea
 const { t } = useI18n()
 const base = '/system/ccgateway/remote-config'
 
-const defaults = { mode: 'local' as const, host: '', port: 22, user: '', auth_mode: 'password' as const, host_key_fingerprint: '' }
-const form = reactive<{ mode: RemoteConfig['mode']; host: string; port: number | string; user: string; auth_mode: RemoteConfig['auth_mode']; host_key_fingerprint: string }>({ ...defaults })
+const defaults = { account_runtimes: false, mode: 'local' as const, host: '', port: 22, user: '', auth_mode: 'password' as const, host_key_fingerprint: '' }
+const form = reactive<{ account_runtimes: boolean; mode: RemoteConfig['mode']; host: string; port: number | string; user: string; auth_mode: RemoteConfig['auth_mode']; host_key_fingerprint: string }>({ ...defaults })
 const secrets = reactive({ password: '', private_key: '', passphrase: '', admin_key: '', api_key: '' })
 const saved = ref<RemoteConfig | null>(null), busy = ref(false), error = ref(''), notice = ref(''), output = ref('')
 const probe = ref<{ fingerprint: string; host: string; port: number } | null>(null)
@@ -95,6 +95,8 @@ onBeforeUnmount(clearSecrets)
     <button v-if="!saved" type="button" class="btn btn-secondary btn-sm" :disabled="disabled" @click="run(load)">{{ t('ccgateway.remote.reload') }}</button>
     <form v-else class="space-y-4" @submit.prevent="run(save)">
       <fieldset :disabled="disabled" class="space-y-4">
+ <label class="flex items-center gap-2"><input v-model="form.account_runtimes" type="checkbox" />{{ t('ccgateway.runtime.enable') }}</label>
+ <p class="text-sm text-gray-500">{{ t('ccgateway.runtime.setup') }}</p>
         <label class="block text-sm">{{ t('ccgateway.remote.mode') }}<select v-model="form.mode" class="input mt-1 w-full" data-testid="remote-mode"><option disabled value="disabled">{{ t('ccgateway.remote.unconfigured') }}</option><option value="local">{{ t('ccgateway.remote.local') }}</option><option value="ssh">{{ t('ccgateway.remote.ssh') }}</option></select></label>
         <template v-if="form.mode === 'ssh'">
           <div class="grid gap-3 sm:grid-cols-3">
@@ -114,12 +116,12 @@ onBeforeUnmount(clearSecrets)
           <button type="button" class="btn btn-secondary btn-sm" data-testid="remote-probe" @click="run(fingerprint)">{{ t('ccgateway.remote.probe') }}</button>
           <div v-if="probe" class="space-y-2 rounded-lg border border-amber-200 p-3 text-sm"><p>{{ t('ccgateway.remote.verifyFingerprint') }}</p><code class="block break-all">{{ probe.fingerprint }}</code><button type="button" class="btn btn-secondary btn-sm" data-testid="use-fingerprint" @click="useFingerprint">{{ t('ccgateway.remote.useFingerprint') }}</button></div>
         </template>
-        <div class="grid gap-3 sm:grid-cols-2"><label v-for="key in (['admin_key','api_key'] as const)" :key="key" class="block text-sm">{{ t(`ccgateway.remote.${key}`) }}<input v-model="secrets[key]" type="password" autocomplete="new-password" class="input mt-1 w-full" :data-testid="key" :placeholder="saved[`has_${key}`] ? t('ccgateway.remote.keepSecret') : ''" /></label></div>
+        <div class="grid gap-3 sm:grid-cols-2"><label v-for="key in (form.account_runtimes ? ['admin_key'] as const : ['admin_key','api_key'] as const)" :key="key" class="block text-sm">{{ t(`ccgateway.remote.${key}`) }}<input v-model="secrets[key]" type="password" autocomplete="new-password" class="input mt-1 w-full" :data-testid="key" :placeholder="saved[`has_${key}`] ? t('ccgateway.remote.keepSecret') : ''" /></label></div>
         <p class="text-xs text-gray-500">{{ t('ccgateway.remote.keysHint') }}</p>
         <div class="flex justify-end"><button class="btn btn-primary" :disabled="!dirty || form.mode === 'disabled'" data-testid="remote-save">{{ t('ccgateway.remote.save') }}</button></div>
       </fieldset>
     </form>
-    <div class="space-y-3 border-t border-gray-200 pt-4 dark:border-dark-700">
+    <div v-if="!saved?.account_runtimes" class="space-y-3 border-t border-gray-200 pt-4 dark:border-dark-700">
       <p class="text-xs text-gray-500">{{ dirty ? t('ccgateway.remote.saveFirst') : t('ccgateway.remote.savedOnly') }}</p>
       <div class="flex flex-wrap gap-2"><button class="btn btn-secondary btn-sm" :disabled="!canOperate" data-testid="remote-test" @click="run(test)">{{ t('ccgateway.remote.test') }}</button><button v-for="action in (['status','start','stop','restart','logs'] as const)" :key="action" class="btn btn-secondary btn-sm" :disabled="!canOperate" :data-testid="`remote-${action}`" @click="choose(action)">{{ t(`ccgateway.remote.actions.${action}`) }}</button></div>
       <div v-if="pending" role="alert" class="space-y-2 text-sm"><p>{{ t('ccgateway.remote.confirmAction', { action: t(`ccgateway.remote.actions.${pending}`) }) }}</p><button class="btn btn-danger btn-sm" :disabled="!canOperate" data-testid="remote-confirm" @click="run(() => execute(pending!))">{{ t('ccgateway.remote.confirm') }}</button><button class="btn btn-secondary btn-sm ml-2" :disabled="disabled" @click="pending = null">{{ t('ccgateway.remote.cancel') }}</button></div>

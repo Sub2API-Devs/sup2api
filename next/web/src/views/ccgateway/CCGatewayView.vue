@@ -6,6 +6,7 @@ import { SBadge, SButton, SCard, SField, SHint, SInput, SPageHeader, STagInput }
 import { useAuthStore } from '@/stores/auth'
 import GroupPicker from '@/components/GroupPicker.vue'
 import RemoteSettings from './RemoteSettings.vue'
+import AccountRuntimes from './AccountRuntimes.vue'
 import ProxySettings from './ProxySettings.vue'
 import { isTrustedAuthorizationURL, sessionExpired } from './validation'
 interface Status { healthy: boolean; logged_in: boolean; auth_method: string }
@@ -13,6 +14,8 @@ interface Session { session_id: string; url: string; expires_at: string }
 defineProps<{ embedded?: boolean }>()
 const { t } = useI18n(), auth = useAuthStore()
 const base = '/system/ccgateway'
+const accountMode = ref(false)
+async function loadMode() { accountMode.value = (await api.get<{ account_runtimes: boolean }>(`${base}/remote-config`)).account_runtimes }
 const manage = computed(() => auth.has('settings:manage'))
 const status = ref<Status | null>(null), session = ref<Session | null>(null)
 const groupIds = ref<number[]>([]), models = ref<string[]>([])
@@ -30,7 +33,7 @@ async function refresh() {
   status.value = null
   status.value = await api.get<Status>(`${base}/status`, undefined, { signal: AbortSignal.timeout(55000) })
 }
-function remoteSaved() { revision.value++; connected.value = null; confirmLogout.value = false; void run(refresh) }
+function remoteSaved() { revision.value++; connected.value = null; confirmLogout.value = false; void run(async () => { await loadMode(); if (!accountMode.value) await refresh() }) }
 async function start() {
   const data = await post<Session>('auth/start')
   if (!isTrustedAuthorizationURL(data.url) || !data.session_id || sessionExpired(data.expires_at)) throw Error('invalid authorization session')
@@ -48,7 +51,7 @@ async function cancel() {
 }
 async function logout() { await post('auth/logout'); session.value = null; code.value = ''; confirmLogout.value = false; connected.value = null; await refresh() }
 async function connect() { const data = await post<{ id: string | number }>('connect', { name: name.value.trim(), group_ids: groupIds.value, models: models.value }); connected.value = data.id }
-onMounted(() => run(refresh))
+onMounted(() => run(async () => { await loadMode(); if (!accountMode.value) await refresh() }))
 onBeforeUnmount(() => { code.value = ''; session.value = null })
 </script>
 <template>
@@ -56,8 +59,9 @@ onBeforeUnmount(() => { code.value = ''; session.value = null })
     <SPageHeader v-if="!embedded" :title="t('ccgateway.title')" :description="t('ccgateway.description')"><template #actions><SButton to="/plugins/ccgateway?tab=settings">{{ t('plugins.detail.tabs.settings') }}</SButton></template></SPageHeader>
     <SHint v-if="!manage">{{ t('ccgateway.readOnly') }}</SHint>
     <RemoteSettings :disabled="!manage || authBusy || proxyBusy || !!session" @busy="remoteBusy = $event" @saved="remoteSaved" />
-    <ProxySettings :disabled="!manage || authBusy || remoteBusy || !!session" :target-revision="revision" @busy="proxyBusy = $event" />
-    <SCard :title="t('ccgateway.auth.title')" :subtitle="t('ccgateway.auth.hint')">
+    <AccountRuntimes v-if="accountMode" :key="revision" />
+    <ProxySettings v-if="!accountMode" :disabled="!manage || authBusy || remoteBusy || !!session" :target-revision="revision" @busy="proxyBusy = $event" />
+    <SCard v-if="!accountMode" :title="t('ccgateway.auth.title')" :subtitle="t('ccgateway.auth.hint')">
       <template #actions><SButton size="sm" :loading="authBusy" :disabled="busy" @click="run(refresh)">{{ t('common.refresh') }}</SButton></template>
       <div class="space-y-4">
         <div class="flex gap-2"><SBadge :tone="status?.healthy ? 'success' : 'gray'">{{ t(!status ? 'ccgateway.auth.unknown' : status.healthy ? 'ccgateway.auth.healthy' : 'ccgateway.auth.offline') }}</SBadge><SBadge v-if="status" :tone="status.logged_in ? 'success' : 'warning'">{{ t(status.logged_in ? 'ccgateway.auth.loggedIn' : 'ccgateway.auth.loggedOut') }}</SBadge></div>
