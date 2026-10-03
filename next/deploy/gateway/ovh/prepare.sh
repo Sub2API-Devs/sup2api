@@ -131,4 +131,6 @@ release 0.1.14
 release 0.1.15
 # 0.1.16 puts plugin settings in each plugin row and detail tab (same schema).
 release 0.1.16
+# 0.1.17 adds account containers and change-driven external proxy egress.
+release 0.1.17
 ls -la publish
