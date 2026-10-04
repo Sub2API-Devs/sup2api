@@ -3,7 +3,7 @@
 -- passively from the gateway's upstream response headers and, for types
 -- whose plugin can ask the upstream, actively at most every 30 seconds.
 -- API-key accounts never get a row.
-CREATE TABLE account_quota_snapshots (
+CREATE TABLE IF NOT EXISTS account_quota_snapshots (
     account_id      bigint      PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
     -- Windows keyed by window key ("5h", "7d", "7d_sonnet", "7d_fable", ...):
     -- {"5h": {"utilization": 42.0, "resets_at": "2026-10-05T12:00:00Z",

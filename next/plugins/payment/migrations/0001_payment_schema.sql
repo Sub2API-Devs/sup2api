@@ -1,5 +1,5 @@
 -- Payment provider instances (payment channels configuration)
-CREATE TABLE payment_provider_instances (
+CREATE TABLE IF NOT EXISTS payment_provider_instances (
     id BIGSERIAL PRIMARY KEY,
     provider_key VARCHAR(50) NOT NULL,
     name VARCHAR(100) NOT NULL,
@@ -13,11 +13,11 @@ CREATE TABLE payment_provider_instances (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_payment_provider_instances_enabled ON payment_provider_instances(enabled, sort_order);
-CREATE INDEX idx_payment_provider_instances_provider_key ON payment_provider_instances(provider_key);
+CREATE INDEX IF NOT EXISTS idx_payment_provider_instances_enabled ON payment_provider_instances(enabled, sort_order);
+CREATE INDEX IF NOT EXISTS idx_payment_provider_instances_provider_key ON payment_provider_instances(provider_key);
 
 -- Payment orders
-CREATE TABLE payment_orders (
+CREATE TABLE IF NOT EXISTS payment_orders (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
     user_email VARCHAR(255) NOT NULL,
@@ -49,14 +49,14 @@ CREATE TABLE payment_orders (
         REFERENCES payment_provider_instances(id) ON DELETE SET NULL
 );
 
-CREATE INDEX idx_payment_orders_user_id ON payment_orders(user_id, created_at DESC);
-CREATE INDEX idx_payment_orders_status ON payment_orders(status, expires_at);
-CREATE INDEX idx_payment_orders_out_trade_no ON payment_orders(out_trade_no);
-CREATE INDEX idx_payment_orders_payment_trade_no ON payment_orders(payment_trade_no) WHERE payment_trade_no IS NOT NULL;
-CREATE INDEX idx_payment_orders_recharge_code ON payment_orders(recharge_code) WHERE recharge_code IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_payment_orders_user_id ON payment_orders(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_payment_orders_status ON payment_orders(status, expires_at);
+CREATE INDEX IF NOT EXISTS idx_payment_orders_out_trade_no ON payment_orders(out_trade_no);
+CREATE INDEX IF NOT EXISTS idx_payment_orders_payment_trade_no ON payment_orders(payment_trade_no) WHERE payment_trade_no IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_payment_orders_recharge_code ON payment_orders(recharge_code) WHERE recharge_code IS NOT NULL;
 
 -- Payment audit logs
-CREATE TABLE payment_audit_logs (
+CREATE TABLE IF NOT EXISTS payment_audit_logs (
     id BIGSERIAL PRIMARY KEY,
     order_id BIGINT NOT NULL,
     event_type VARCHAR(100) NOT NULL,
@@ -67,10 +67,10 @@ CREATE TABLE payment_audit_logs (
         REFERENCES payment_orders(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_payment_audit_logs_order_id ON payment_audit_logs(order_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_payment_audit_logs_order_id ON payment_audit_logs(order_id, created_at);
 
 -- Redeem codes
-CREATE TABLE redeem_codes (
+CREATE TABLE IF NOT EXISTS redeem_codes (
     id BIGSERIAL PRIMARY KEY,
     code VARCHAR(100) NOT NULL UNIQUE,
     code_hash VARCHAR(128) NOT NULL UNIQUE,
@@ -87,12 +87,12 @@ CREATE TABLE redeem_codes (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_redeem_codes_code_hash ON redeem_codes(code_hash);
-CREATE INDEX idx_redeem_codes_status ON redeem_codes(status, expires_at);
-CREATE INDEX idx_redeem_codes_used_by ON redeem_codes(used_by) WHERE used_by IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_redeem_codes_code_hash ON redeem_codes(code_hash);
+CREATE INDEX IF NOT EXISTS idx_redeem_codes_status ON redeem_codes(status, expires_at);
+CREATE INDEX IF NOT EXISTS idx_redeem_codes_used_by ON redeem_codes(used_by) WHERE used_by IS NOT NULL;
 
 -- Promo codes
-CREATE TABLE promo_codes (
+CREATE TABLE IF NOT EXISTS promo_codes (
     id BIGSERIAL PRIMARY KEY,
     code VARCHAR(100) NOT NULL UNIQUE,
     bonus_amount DECIMAL(20, 8) NOT NULL,
@@ -105,11 +105,11 @@ CREATE TABLE promo_codes (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_promo_codes_code ON promo_codes(code);
-CREATE INDEX idx_promo_codes_status ON promo_codes(status, expires_at);
+CREATE INDEX IF NOT EXISTS idx_promo_codes_code ON promo_codes(code);
+CREATE INDEX IF NOT EXISTS idx_promo_codes_status ON promo_codes(status, expires_at);
 
 -- Promo code usage records
-CREATE TABLE promo_code_usage (
+CREATE TABLE IF NOT EXISTS promo_code_usage (
     id BIGSERIAL PRIMARY KEY,
     promo_code_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
@@ -120,11 +120,11 @@ CREATE TABLE promo_code_usage (
     UNIQUE(promo_code_id, user_id)
 );
 
-CREATE INDEX idx_promo_code_usage_user_id ON promo_code_usage(user_id, used_at DESC);
-CREATE INDEX idx_promo_code_usage_promo_code_id ON promo_code_usage(promo_code_id);
+CREATE INDEX IF NOT EXISTS idx_promo_code_usage_user_id ON promo_code_usage(user_id, used_at DESC);
+CREATE INDEX IF NOT EXISTS idx_promo_code_usage_promo_code_id ON promo_code_usage(promo_code_id);
 
 -- Payment configuration settings (single row, id=1)
-CREATE TABLE payment_config (
+CREATE TABLE IF NOT EXISTS payment_config (
     id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
     enabled BOOLEAN NOT NULL DEFAULT true,
     min_amount DECIMAL(20, 8) NOT NULL DEFAULT 1,
@@ -142,4 +142,4 @@ CREATE TABLE payment_config (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-INSERT INTO payment_config (id) VALUES (1);
+INSERT INTO payment_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;

@@ -45,12 +45,15 @@ func testManagedRuntime(t *testing.T, migrate bool) {
 	defer os.RemoveAll(dir)
 	prepare := runtimecontract.PrepareRequest{BootID: "boot", ReleaseDigest: "release"}
 	if migrate {
-		// Replay the suffix from 0023: its function replacement and 0024's
-		// history objects are idempotent. Keep the recorded history a prefix,
-		// rather than removing one row from the middle of the inventory.
+		// Replay the suffix from FirstIdempotentMigration: every migration from
+		// there on can run again (migrations_db_test.go holds them to it).
+		// 0023 and 0024 were replayable too, but 0025 shipped as a plain
+		// CREATE TABLE and is immutable now that it is deployed. Keep the
+		// recorded history a prefix, rather than removing one row from the
+		// middle of the inventory.
 		// This must run the embedded migration without importing the deliberately
 		// invalid bundled plugin or creating the configured bootstrap account.
-		const rewindFrom = "0023_plugin_migration_rerun.sql"
+		const rewindFrom = migrations.FirstIdempotentMigration
 		_, err = db.Pool.Exec(context.Background(), `DELETE FROM schema_migrations WHERE id >= $1`, rewindFrom)
 		if err != nil {
 			t.Fatal(err)
