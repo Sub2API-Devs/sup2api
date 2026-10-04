@@ -117,24 +117,30 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	logical := r.Header.Get("X-CCGateway-Session-ID")
 	if logical == "" {
-		logical = uuid()
+		logical = "auto"
 	}
 	if !sessionName.MatchString(logical) {
 		apiError(w, 400, "invalid_request_error", "Invalid gateway session ID")
 		return
 	}
+	sessionLabel := logical
+	busyKey := digest([]string{r.Header.Get("X-CCGateway-Session-Scope"), logical})
+	if r.Header.Get("X-CCGateway-Session-ID") == "" {
+		busyKey = uuid()
+	}
+	logical = digest([]string{r.Header.Get("X-CCGateway-Session-Scope"), logical})
 	g.mu.Lock()
 	if g.busy == nil {
 		g.busy = map[string]bool{}
 	}
-	if g.busy[logical] {
+	if g.busy[busyKey] {
 		g.mu.Unlock()
 		apiError(w, 409, "invalid_request_error", "Session has an active request; use a different session ID for concurrent branches")
 		return
 	}
-	g.busy[logical] = true
+	g.busy[busyKey] = true
 	g.mu.Unlock()
-	defer func() { g.mu.Lock(); delete(g.busy, logical); g.mu.Unlock() }()
+	defer func() { g.mu.Lock(); delete(g.busy, busyKey); g.mu.Unlock() }()
 	select {
 	case g.Slots <- struct{}{}:
 		defer func() { <-g.Slots }()
@@ -156,10 +162,11 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		apiError(w, 500, "api_error", "Cannot prepare history")
 		return
 	}
+	defer p.release()
 	w.Header().Set("request-id", uuid())
-	w.Header().Set("X-CCGateway-Session-ID", logical)
+	w.Header().Set("X-CCGateway-Session-ID", sessionLabel)
 	w.Header().Set("X-CCGateway-History", p.Mode)
-	w.Header().Set("X-CCGateway-Cache-TTL", fmt.Sprint(int(req.TTL.Seconds())))
+	w.Header().Set("X-CCGateway-Cache-TTL", fmt.Sprint(int((24 * time.Hour).Seconds())))
 	w.Header().Set("X-CCGateway-Cache-Scope", "local-only")
 	streaming := false
 	send := func(event Object) error {
@@ -308,7 +315,7 @@ func serve() error {
 			}
 		}
 	}()
-	log.Printf("ccgateway listening on %s; Claude Code %s; local cache TTL 5m/1h", bind, version)
+	log.Printf("ccgateway listening on %s; Claude Code %s; native session retention 24h", bind, version)
 	e = server.ListenAndServe()
 	if errors.Is(e, http.ErrServerClosed) {
 		<-backgroundDone

@@ -22,7 +22,7 @@ func TestManagedRPCRequests(t *testing.T) {
 		if r.GetUrl() != VirtualURL || r.GetMethod() != "POST" || r.GetUpstreamModel() != "mapped" {
 			t.Fatalf("wrong request %v", r)
 		}
-		if len(r.GetHeaders()) != 3 || r.GetHeaders()["anthropic-beta"] != "test-beta" {
+		if len(r.GetHeaders()) != 4 || r.GetHeaders()["anthropic-beta"] != "test-beta" {
 			t.Fatal("header allowlist changed")
 		}
 	}
@@ -34,6 +34,27 @@ func TestManagedRPCRequests(t *testing.T) {
 	r, e := h.Platform.BuildTestRequest(ctx, &pluginv1.BuildTestRequestRequest{Account: acc})
 	if e != nil || r.GetUrl() != VirtualURL || r.GetUsageProtocol() != ProtocolMessages || r.GetModel() != DefaultTestModel {
 		t.Fatalf("test request %v %v", r, e)
+	}
+}
+
+func TestNativeSessionScopeCannotBeSpoofed(t *testing.T) {
+	p := New()
+	in := &pluginv1.BuildUpstreamRequestRequest{
+		Account:        &pluginv1.Account{Platform: PlatformID, Type: AccountTypeManaged, CredentialsJson: "{}", SettingsJson: "{}"},
+		Meta:           &pluginv1.RequestMeta{Protocol: ProtocolMessages, UserId: 12, ApiKeyId: 34},
+		InboundHeaders: map[string]string{"x-ccgateway-session-id": "conversation-a", "x-ccgateway-session-scope": "attacker"},
+	}
+	r, err := p.BuildUpstreamRequest(context.Background(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Headers["x-ccgateway-session-id"] != "conversation-a" || r.Headers["x-ccgateway-session-scope"] != "user:12:key:34" {
+		t.Fatal("native session scope not owned by host")
+	}
+	in.Meta.ApiKeyId = 35
+	r2, err := p.BuildUpstreamRequest(context.Background(), in)
+	if err != nil || r2.Headers["x-ccgateway-session-scope"] == r.Headers["x-ccgateway-session-scope"] {
+		t.Fatal("API keys share session scope")
 	}
 }
 func TestManagedRejectsCredentialOrTargetOverrides(t *testing.T) {

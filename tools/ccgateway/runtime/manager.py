@@ -32,6 +32,14 @@ AUTH_LABEL = 'io.sup2api.ccgateway.auth'
 AUTH_VARS = ('ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR')
 
 
+def upstream_headers(inbound, secret):
+    headers = {'Authorization': 'Bearer ' + secret, 'Content-Type': 'application/json'}
+    for name in ('anthropic-version', 'anthropic-beta', 'x-ccgateway-session-id', 'x-ccgateway-session-scope'):
+        if name in inbound:
+            headers[name] = inbound[name]
+    return headers
+
+
 def authentication(raw):
     # Missing auth preserves compatibility with existing OAuth controllers.
     raw = {'mode': 'oauth'} if raw is None else raw
@@ -332,10 +340,7 @@ class Handler(BaseHTTPRequestHandler):
                 secret = state['admin_key'] if path.startswith('admin/') else state['api_key']
             # No configuration writes on the request path. Concurrent streams
             # do not hold the account reconciliation lock.
-            headers = {'Authorization': 'Bearer ' + secret, 'Content-Type': 'application/json'}
-            for name in ('anthropic-version', 'anthropic-beta'):
-                if name in self.headers:
-                    headers[name] = self.headers[name]
+            headers = upstream_headers(self.headers, secret)
             with requests.Session() as session:
                 session.trust_env = False
                 with session.request(self.command, f'http://{address}:8787/{path}', data=body,

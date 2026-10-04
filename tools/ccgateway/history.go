@@ -24,14 +24,18 @@ func uuid() string {
 	return s[:8] + "-" + s[8:12] + "-" + s[12:16] + "-" + s[16:20] + "-" + s[20:]
 }
 
-// Snapshots are gateway-owned, complete input/output transcripts. Never cache
-// the CLI's synthetic tool-denial rows as if they were client tool results.
+// Rows are native CLI records. Hashes index the separate client-visible history.
+// Only committed assistant boundaries may be used for continuation or branching.
 type Snapshot struct {
-	Rows      []json.RawMessage `json:"rows"`
-	LastUUID  string            `json:"last_uuid"`
-	SessionID string            `json:"session_id"`
-	Hashes    []string          `json:"hashes"`
-	Expires   time.Time         `json:"expires"`
+	NativeDigest string            `json:"native_digest"`
+	Format       int               `json:"format"`
+	NativePath   string            `json:"native_path"`
+	Work         string            `json:"work"`
+	Rows         []json.RawMessage `json:"rows"`
+	LastUUID     string            `json:"last_uuid"`
+	SessionID    string            `json:"session_id"`
+	Hashes       []string          `json:"hashes"`
+	Expires      time.Time         `json:"expires"`
 }
 type HistoryCache struct {
 	mu      sync.Mutex
@@ -39,13 +43,14 @@ type HistoryCache struct {
 	entries map[string]*Snapshot
 	bytes   int64
 	limit   int64
+	active  map[string]bool
 }
 
 func newCache(dir string, limit int64) (*HistoryCache, error) {
 	if e := os.MkdirAll(dir, 0700); e != nil {
 		return nil, e
 	}
-	c := &HistoryCache{dir: dir, entries: map[string]*Snapshot{}, limit: limit}
+	c := &HistoryCache{dir: dir, entries: map[string]*Snapshot{}, limit: limit, active: map[string]bool{}}
 	files, e := os.ReadDir(dir)
 	if e != nil {
 		return nil, e
@@ -75,7 +80,7 @@ func newCache(dir string, limit int64) (*HistoryCache, error) {
 			return nil, e
 		}
 		var s Snapshot
-		if json.Unmarshal(b, &s) != nil || time.Now().After(s.Expires) || len(s.Rows) != len(s.Hashes) || len(s.Rows) == 0 || s.LastUUID == "" {
+		if json.Unmarshal(b, &s) != nil || time.Now().After(s.Expires) || s.Format != 2 || len(s.Hashes) == 0 || len(s.Rows) == 0 || s.LastUUID == "" {
 			_ = os.Remove(p)
 			continue
 		}
@@ -83,6 +88,7 @@ func newCache(dir string, limit int64) (*HistoryCache, error) {
 		c.bytes += int64(len(b))
 	}
 	c.pruneLocked(time.Now())
+	c.sweepNativeLocked(time.Now())
 	return c, nil
 }
 func snapshotSize(s *Snapshot) int64 { b, _ := json.Marshal(s); return int64(len(b)) }
@@ -112,9 +118,51 @@ func (c *HistoryCache) removeLocked(k string) {
 		c.bytes -= snapshotSize(s)
 		delete(c.entries, k)
 		_ = os.Remove(filepath.Join(c.dir, k+".json"))
+		if !c.active[s.SessionID] {
+			retained := false
+			for _, other := range c.entries {
+				if other.SessionID == s.SessionID {
+					retained = true
+					break
+				}
+			}
+			if !retained && s.NativePath == filepath.Join(c.dir, "native", s.SessionID+".jsonl") {
+				_ = os.Remove(s.NativePath)
+			}
+		}
 	}
 }
-func (c *HistoryCache) prune() { c.mu.Lock(); defer c.mu.Unlock(); c.pruneLocked(time.Now()) }
+func (c *HistoryCache) prune() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := time.Now()
+	c.pruneLocked(now)
+	c.sweepNativeLocked(now)
+}
+
+// Recover orphaned native files after expiry, a crash between transcript and
+// index writes, or an eviction while a session was active. Allow in-flight
+// writes a grace period and only touch gateway-owned UUID files.
+func (c *HistoryCache) sweepNativeLocked(now time.Time) {
+	retained := map[string]bool{}
+	for _, s := range c.entries {
+		retained[s.SessionID] = true
+	}
+	root := filepath.Join(c.dir, "native")
+	files, _ := os.ReadDir(root)
+	for _, f := range files {
+		if f.IsDir() || !strings.HasSuffix(f.Name(), ".jsonl") {
+			continue
+		}
+		sid := strings.TrimSuffix(f.Name(), ".jsonl")
+		if !nativeSessionName.MatchString(sid) || retained[sid] || c.active[sid] {
+			continue
+		}
+		if info, err := f.Info(); err == nil && now.Sub(info.ModTime()) > time.Hour {
+			_ = os.Remove(filepath.Join(root, f.Name()))
+		}
+	}
+}
 func (c *HistoryCache) get(k string) *Snapshot {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -202,71 +250,128 @@ type Prepared struct {
 	Rows                                    []json.RawMessage
 	LastUUID, SessionID, Path, Anchor, Mode string
 	Hashes                                  []string
-	PriorKey                                string
-	Prior                                   *Snapshot
+	Work, NativePath, InputUUID             string
+	Fork                                    bool
+	NativeRows                              []json.RawMessage
+	NativeAnchor                            string
+	cache                                   *HistoryCache
 }
 
+func nativeBytes(rows []json.RawMessage) []byte {
+	var b bytes.Buffer
+	for _, row := range rows {
+		b.Write(row)
+		b.WriteByte('\n')
+	}
+	return b.Bytes()
+}
+
+// Configuration does not select history. System and tools are applied afresh by
+// Runner, while this index compares the entire client message prefix.
 func prepareHistory(r *Request, c *HistoryCache, logical, dir, version string) (*Prepared, error) {
 	hashes := fingerprints(r.Messages)
-	p := &Prepared{SessionID: uuid(), Hashes: hashes, Mode: "rebuild"}
-	parent := ""
+	p := &Prepared{SessionID: uuid(), Hashes: hashes, Mode: "rebuild", InputUUID: uuid(), Work: filepath.Join(c.dir, "workspace"), cache: c}
+	if e := os.MkdirAll(p.Work, 0700); e != nil {
+		return nil, e
+	}
+	var prior *Snapshot
+	for n := len(hashes) - 2; n >= 0; n-- {
+		if r.Messages[n].Role != "assistant" {
+			continue
+		}
+		s := c.get(cacheKey(logical, "", hashes[n]))
+		if s != nil && s.Format == 2 && len(s.Hashes) == n+1 {
+			prior = s
+			break
+		}
+	}
 	start := 0
-	if len(r.Messages) > 1 {
-		key := cacheKey(logical, r.configKey(), hashes[len(hashes)-2])
-		if s := c.get(key); s != nil && len(s.Rows) == len(r.Messages)-1 {
-			p.Rows = append(p.Rows, s.Rows...)
-			p.SessionID = s.SessionID
-			p.Anchor = s.LastUUID
-			parent = s.LastUUID
-			start = len(s.Rows)
+	parent := ""
+	if prior != nil {
+		p.Rows = append(p.Rows, prior.Rows...)
+		p.Work = prior.Work
+		p.Anchor = prior.LastUUID
+		parent = prior.LastUUID
+		start = len(prior.Hashes)
+		p.Fork = true
+		p.Mode = "fork"
+		// A single native session has exactly one writer. Concurrent requests from
+		// the same prefix branch from the immutable checkpoint instead.
+		c.mu.Lock()
+		actual, e := os.ReadFile(prior.NativePath)
+		if start == len(r.Messages)-1 && !c.active[prior.SessionID] && e == nil && digest(string(actual)) == prior.NativeDigest {
+			p.SessionID = prior.SessionID
+			p.NativePath = prior.NativePath
+			p.Path = prior.NativePath
+			p.Fork = false
 			p.Mode = "prefix-hit"
-			p.Prior = s
-			p.PriorKey = key
+			c.active[p.SessionID] = true
+		}
+		c.mu.Unlock()
+		if !p.Fork && !hasToolResults(r.Messages[len(r.Messages)-1]) {
+			p.Anchor = "" // Ordinary native resume: submit only the new user message.
+			return p, nil
 		}
 	}
 	for i := start; i < len(r.Messages); i++ {
-		m := r.wireMessage(r.Messages[i])
-		row, id := transcriptRow(m, parent, p.SessionID, dir, version, r.Model)
+		row, id := transcriptRow(r.wireMessage(r.Messages[i]), parent, p.SessionID, p.Work, version, r.Model)
+		if i == len(r.Messages)-1 {
+			// The recovery loader needs complete tool pairs before resume-at trimming.
+			// Seed only the pending client input, keeping all prior native rows intact.
+			var obj Object
+			_ = json.Unmarshal(row, &obj)
+			obj["uuid"] = p.InputUUID
+			row, _ = json.Marshal(obj)
+			id = p.InputUUID
+		}
 		p.Rows = append(p.Rows, row)
 		parent = id
-		if m.Role == "assistant" {
+		if r.Messages[i].Role == "assistant" {
 			p.Anchor = id
 		}
 	}
 	p.LastUUID = parent
 	if len(r.Messages) > 1 {
 		if p.Anchor == "" {
+			p.release()
 			return nil, fmt.Errorf("missing assistant resume anchor")
 		}
-		var b bytes.Buffer
-		for _, row := range p.Rows {
-			b.Write(row)
-			b.WriteByte('\n')
+		if p.Path == "" {
+			p.Path = filepath.Join(dir, "history.jsonl")
 		}
-		p.Path = filepath.Join(dir, "history.jsonl")
-		if e := os.WriteFile(p.Path, b.Bytes(), 0600); e != nil {
+		if e := writeNative(p.Path, p.Rows); e != nil {
+			p.release()
 			return nil, e
 		}
 	}
 	return p, nil
+}
+func hasToolResults(m Message) bool {
+	for _, b := range m.Content {
+		if str(b, "type") == "tool_result" {
+			return true
+		}
+	}
+	return false
+}
+func (p *Prepared) release() {
+	if p.cache != nil {
+		p.cache.mu.Lock()
+		delete(p.cache.active, p.SessionID)
+		p.cache.mu.Unlock()
+	}
 }
 func (p *Prepared) commit(r *Request, answer Object, c *HistoryCache, logical, dir, version string, started time.Time) error {
 	bs, ok := answer["content"].([]Object)
 	if !ok {
 		return fmt.Errorf("missing assistant content")
 	}
-	m := Message{Role: "assistant", Content: bs}
-	row, id := transcriptRow(r.wireMessage(m), p.LastUUID, p.SessionID, dir, version, r.Model)
-	rows := append(append([]json.RawMessage(nil), p.Rows...), row)
-	hash := digest([]any{p.Hashes[len(p.Hashes)-1], m})
+	if len(p.NativeRows) == 0 || p.NativeAnchor == "" {
+		return fmt.Errorf("missing native CLI checkpoint")
+	}
+	hash := digest([]any{p.Hashes[len(p.Hashes)-1], Message{"assistant", bs}})
 	hashes := append(append([]string(nil), p.Hashes...), hash)
-	s := &Snapshot{Rows: rows, LastUUID: id, SessionID: p.SessionID, Hashes: hashes, Expires: started.Add(r.TTL)}
-	if e := c.put(cacheKey(logical, r.configKey(), hash), s); e != nil {
-		return e
-	}
-	if p.Prior != nil {
-		p.Prior.Expires = started.Add(r.TTL)
-		return c.put(p.PriorKey, p.Prior)
-	}
-	return nil
+	// Native history lifetime is independent of provider prompt-cache TTL.
+	s := &Snapshot{Format: 2, NativeDigest: digest(string(nativeBytes(p.NativeRows))), Rows: p.NativeRows, LastUUID: p.NativeAnchor, SessionID: p.SessionID, NativePath: p.NativePath, Work: p.Work, Hashes: hashes, Expires: started.Add(24 * time.Hour)}
+	return c.put(cacheKey(logical, "", hash), s)
 }

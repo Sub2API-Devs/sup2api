@@ -70,6 +70,13 @@ func TestHistorySnapshotAndToolPair(t *testing.T) {
 	}
 	content := []Object{{"type": "tool_use", "id": "toolu_one", "name": "weather", "input": Object{"city": "Paris"}}}
 	answer := Object{"content": content}
+	row, id := transcriptRow(r.wireMessage(Message{"assistant", content}), p.LastUUID, p.SessionID, p.Work, "2.1.288", r.Model)
+	p.NativeRows = append(p.Rows, row)
+	p.NativeAnchor = id
+	p.NativePath = filepath.Join(dir, "native.jsonl")
+	if e = writeNative(p.NativePath, p.NativeRows); e != nil {
+		t.Fatal(e)
+	}
 	if e = p.commit(r, answer, cache, "logical", dir, "2.1.288", time.Now()); e != nil {
 		t.Fatal(e)
 	}
@@ -80,6 +87,15 @@ func TestHistorySnapshotAndToolPair(t *testing.T) {
 	}
 	if p2.Mode != "prefix-hit" {
 		t.Fatal(p2.Mode)
+	}
+	defer p2.release()
+	concurrent, err := prepareHistory(r, cache, "logical", t.TempDir(), "2.1.288")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer concurrent.release()
+	if !concurrent.Fork || concurrent.SessionID == p2.SessionID {
+		t.Fatal("concurrent branches share a native writer")
 	}
 	b, _ := os.ReadFile(p2.Path)
 	if !bytes.Contains(b, []byte("tool_result")) || !bytes.Contains(b, []byte("mcp__messages__weather")) {
@@ -212,7 +228,7 @@ func TestRealCLI(t *testing.T) {
 		last, _ := ms[len(ms)-1].(map[string]any)
 		raw, _ := json.Marshal(last)
 		content := []Object{{"type": "text", "text": "fixture answer"}}
-		if bytes.Contains(raw, []byte("CALL_TOOL")) && !bytes.Contains(raw, []byte("tool_result")) {
+		if (bytes.Contains(raw, []byte("CALL_TOOL")) || bytes.Contains(raw, []byte("CALL_PARALLEL"))) && !bytes.Contains(raw, []byte("tool_result")) {
 			tools, _ := v["tools"].([]any)
 			name := ""
 			for _, x := range tools {
@@ -231,6 +247,9 @@ func TestRealCLI(t *testing.T) {
 				input = Object{"file_path": filepath.Join(root, "does-not-exist.txt")}
 			}
 			content = []Object{{"type": "tool_use", "id": "toolu_fixture", "name": name, "input": input, "caller": Object{"type": "direct"}}}
+			if bytes.Contains(raw, []byte("CALL_PARALLEL")) {
+				content = append(content, Object{"type": "tool_use", "id": "toolu_parallel", "name": name, "input": input})
+			}
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
 		event := func(v Object) {
@@ -240,7 +259,7 @@ func TestRealCLI(t *testing.T) {
 				f.Flush()
 			}
 		}
-		event(Object{"type": "message_start", "message": Object{"id": "msg_fixture", "type": "message", "role": "assistant", "model": v["model"], "content": []any{}, "stop_reason": nil, "stop_sequence": nil, "usage": Object{"input_tokens": 20, "output_tokens": 0}}})
+		event(Object{"type": "message_start", "message": Object{"id": fmt.Sprintf("msg_fixture_%d", captureIndex), "type": "message", "role": "assistant", "model": v["model"], "content": []any{}, "stop_reason": nil, "stop_sequence": nil, "usage": Object{"input_tokens": 20, "output_tokens": 0}}})
 		stop := "end_turn"
 		for i, b := range content {
 			start := Object{}
@@ -261,6 +280,9 @@ func TestRealCLI(t *testing.T) {
 			event(Object{"type": "content_block_delta", "index": i, "delta": delta})
 			event(Object{"type": "content_block_stop", "index": i})
 		}
+		if bytes.Contains(raw, []byte("OUTPUT_LIMIT")) {
+			stop = "max_tokens"
+		}
 		event(Object{"type": "message_delta", "delta": Object{"stop_reason": stop, "stop_sequence": nil}, "usage": Object{"output_tokens": 8}})
 		event(Object{"type": "message_stop"})
 	}))
@@ -279,6 +301,7 @@ func TestRealCLI(t *testing.T) {
 	}
 	gateway := httptest.NewServer(&Gateway{Runner: runner, Cache: cache, Timeout: 45 * time.Second, Slots: make(chan struct{}, 2), NativeAllowed: map[string]bool{"Read": true}})
 	defer gateway.Close()
+	sessionHeader, scopeHeader := "test-session", ""
 	post := func(v Object, native string) (Object, string, http.Header) {
 		t.Helper()
 		b, _ := json.Marshal(v)
@@ -286,7 +309,8 @@ func TestRealCLI(t *testing.T) {
 		defer cancel()
 		req, _ := http.NewRequestWithContext(ctx, "POST", gateway.URL+"/v1/messages", bytes.NewReader(b))
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-CCGateway-Session-ID", "test-session")
+		req.Header.Set("X-CCGateway-Session-ID", sessionHeader)
+		req.Header.Set("X-CCGateway-Session-Scope", scopeHeader)
 		req.Header.Set("X-CCGateway-Native-Tools", native)
 		resp, e := http.DefaultClient.Do(req)
 		if e != nil {
@@ -347,6 +371,32 @@ func TestRealCLI(t *testing.T) {
 	mu.Lock()
 	up := requests[len(requests)-1]
 	mu.Unlock()
+	// A restored prefix must match what the CLI actually sent. Request-local
+	// environment/model/date reminders used to move into each new user turn,
+	// invalidating provider caching even when our transcript was a prefix-hit.
+	mu.Lock()
+	toolFirst := requests[1]
+	mu.Unlock()
+	firstMessage := toolFirst["messages"].([]any)[0].(map[string]any)
+	resumedMessage := up["messages"].([]any)[0].(map[string]any)
+	firstBlocks := firstMessage["content"].([]any)
+	resumedBlocks := resumedMessage["content"].([]any)
+	for _, b := range firstBlocks {
+		delete(b.(map[string]any), "cache_control")
+	}
+	for _, b := range resumedBlocks {
+		delete(b.(map[string]any), "cache_control")
+	}
+	aPrefix, _ := json.Marshal(firstBlocks)
+	bPrefix, _ := json.Marshal(resumedBlocks)
+	if !bytes.Equal(aPrefix, bPrefix) || !bytes.Contains(aPrefix, []byte("CALL_TOOL")) {
+		t.Fatal("CLI changed the cached user-message prefix")
+	}
+	lastMessage := up["messages"].([]any)[2].(map[string]any)
+	resultBlock := lastMessage["content"].([]any)[0].(map[string]any)
+	if !strings.Contains(str(resultBlock, "content"), "sunny") {
+		t.Fatal("CLI added local context to the client tool result")
+	}
 	b, _ := json.Marshal(up["messages"])
 	if !bytes.Contains(b, []byte("sunny")) || !bytes.Contains(b, []byte("toolu_fixture")) {
 		t.Fatal("tool results lost")
@@ -387,9 +437,172 @@ func TestRealCLI(t *testing.T) {
 	if !bytes.Contains(nativeBody, []byte("CLIENT_FILE_CONTENT")) || bytes.Contains(nativeBody, []byte("execution belongs")) {
 		t.Fatal("native result replaced or polluted")
 	}
+	nativeHistory := append([]any(nil), native["messages"].([]any)...)
 	native["tool_choice"] = Object{"type": "none"}
 	native["messages"] = []any{Object{"role": "user", "content": "No tools"}}
 	post(native, "Read")
+	// Tools must remain correct beyond the immediate result round.
+	v["messages"] = append(v["messages"].([]any), Object{"role": "assistant", "content": []any{Object{"type": "text", "text": "fixture answer"}}}, Object{"role": "user", "content": "AFTER_CLIENT_TOOL"})
+	followAnswer, _, followHeaders := post(v, "")
+	if followHeaders.Get("X-CCGateway-History") != "prefix-hit" {
+		t.Fatal("tool follow-up did not resume")
+	}
+	mu.Lock()
+	followBody, _ := json.Marshal(requests[len(requests)-1]["messages"])
+	mu.Unlock()
+	if !bytes.Contains(followBody, []byte("sunny")) || bytes.Contains(followBody, []byte("execution belongs")) {
+		t.Fatal("old denial returned after tool continuation")
+	}
+	v["messages"] = append(v["messages"].([]any), Object{"role": "assistant", "content": followAnswer["content"]}, Object{"role": "user", "content": "TOOLS_REMOVED"})
+	delete(v, "tools")
+	_, _, removedHeaders := post(v, "")
+	if removedHeaders.Get("X-CCGateway-History") != "prefix-hit" {
+		t.Fatal("removing tools rebuilt history")
+	}
+	mu.Lock()
+	removed := requests[len(requests)-1]
+	mu.Unlock()
+	removedBody, _ := json.Marshal(removed["messages"])
+	if !bytes.Contains(removedBody, []byte("sunny")) || len(removed["tools"].([]any)) != 0 {
+		t.Fatal("removing tools lost history or retained subscriptions")
+	}
+
+	delete(native, "tool_choice")
+	native["messages"] = append(nativeHistory, Object{"role": "assistant", "content": []any{Object{"type": "text", "text": "fixture answer"}}}, Object{"role": "user", "content": "AFTER_NATIVE_TOOL"})
+	_, _, nativeFollow := post(native, "Read")
+	if nativeFollow.Get("X-CCGateway-History") != "prefix-hit" {
+		t.Fatal("native tool follow-up rebuilt")
+	}
+	mu.Lock()
+	nativeFollowBody, _ := json.Marshal(requests[len(requests)-1]["messages"])
+	mu.Unlock()
+	if !bytes.Contains(nativeFollowBody, []byte("CLIENT_FILE_CONTENT")) || bytes.Contains(nativeFollowBody, []byte("execution belongs")) {
+		t.Fatal("native tool result lost on later turn")
+	}
+	parallel := basic()
+	parallel["tools"] = []any{tool}
+	parallel["messages"] = []any{Object{"role": "user", "content": "CALL_PARALLEL"}}
+	parallelAnswer, _, _ := post(parallel, "")
+	if len(parallelAnswer["content"].([]any)) != 2 {
+		t.Fatal("parallel tool calls lost")
+	}
+	parallel["messages"] = append(parallel["messages"].([]any), Object{"role": "assistant", "content": parallelAnswer["content"]}, Object{"role": "user", "content": []any{Object{"type": "tool_result", "tool_use_id": "toolu_fixture", "content": "RESULT_ONE"}, Object{"type": "tool_result", "tool_use_id": "toolu_parallel", "content": "RESULT_TWO"}}})
+	parallelAnswer, _, _ = post(parallel, "")
+	parallel["messages"] = append(parallel["messages"].([]any), Object{"role": "assistant", "content": parallelAnswer["content"]}, Object{"role": "user", "content": "AFTER_PARALLEL"})
+	_, _, _ = post(parallel, "")
+	mu.Lock()
+	parallelBody, _ := json.Marshal(requests[len(requests)-1]["messages"])
+	mu.Unlock()
+	if !bytes.Contains(parallelBody, []byte("RESULT_ONE")) || !bytes.Contains(parallelBody, []byte("RESULT_TWO")) || bytes.Contains(parallelBody, []byte("execution belongs")) {
+		t.Fatalf("parallel results corrupted: %s", parallelBody)
+	}
+	// Changing system and MCP definitions must update the actual upstream request
+	// while retaining the same native session and full client history.
+	configReq := basic()
+	configReq["messages"] = []any{Object{"role": "user", "content": "CONFIG_START"}}
+	configReq["tools"] = []any{tool}
+	configAnswer, _, _ := post(configReq, "")
+	configReq["messages"] = append(configReq["messages"].([]any), Object{"role": "assistant", "content": configAnswer["content"]}, Object{"role": "user", "content": "CONFIG_NEXT"})
+	lookup := func(v Object) *Snapshot {
+		rr := parsed(t, v)
+		hh := fingerprints(rr.Messages)
+		return cache.get(cacheKey(digest([]string{"", "test-session"}), "", hh[len(hh)-2]))
+	}
+	beforeConfig := lookup(configReq)
+	configReq["system"] = "NEW_SYSTEM_BODY"
+	configReq["tools"] = []any{Object{"name": "weather_v2", "description": "new definition", "input_schema": Object{"type": "object", "properties": Object{}}}}
+	configAnswer, _, configHeaders := post(configReq, "")
+	if configHeaders.Get("X-CCGateway-History") != "prefix-hit" {
+		t.Fatal("configuration change rebuilt history")
+	}
+	mu.Lock()
+	changed := requests[len(requests)-1]
+	mu.Unlock()
+	systemJSON, _ := json.Marshal(changed["system"])
+	toolsJSON, _ := json.Marshal(changed["tools"])
+	if !bytes.Contains(systemJSON, []byte("NEW_SYSTEM_BODY")) || bytes.Contains(systemJSON, []byte("Test system body")) || !bytes.Contains(toolsJSON, []byte("weather_v2")) {
+		t.Fatal("resume ignored current system or MCP tools")
+	}
+	parentMessages := append([]any(nil), configReq["messages"].([]any)...)
+	configReq["messages"] = append(configReq["messages"].([]any), Object{"role": "assistant", "content": configAnswer["content"]}, Object{"role": "user", "content": "LATEST_BRANCH"})
+	afterConfig := lookup(configReq)
+	if beforeConfig == nil || afterConfig == nil || beforeConfig.SessionID != afterConfig.SessionID {
+		t.Fatal("normal continuation changed native session")
+	}
+	restarted, err := newCache(cache.dir, 32<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache.mu.Lock()
+	cache.entries = restarted.entries
+	cache.bytes = restarted.bytes
+	cache.mu.Unlock()
+	configAnswer, _, restartHeaders := post(configReq, "")
+	if restartHeaders.Get("X-CCGateway-History") != "prefix-hit" {
+		t.Fatal("restart did not restore native history")
+	}
+	// Branch from the first answer, preserving the existing main transcript.
+	mainFile, _ := os.ReadFile(afterConfig.NativePath)
+	branch := basic()
+	branch["messages"] = append(parentMessages[:2:2], Object{"role": "user", "content": "ALTERNATE_BRANCH"})
+	_, _, branchHeaders := post(branch, "")
+	if branchHeaders.Get("X-CCGateway-History") != "fork" {
+		t.Fatal("older node did not fork")
+	}
+	currentFile, _ := os.ReadFile(afterConfig.NativePath)
+	if !bytes.Equal(mainFile, currentFile) {
+		t.Fatal("fork changed parent transcript")
+	}
+	mu.Lock()
+	branchBody, _ := json.Marshal(requests[len(requests)-1]["messages"])
+	mu.Unlock()
+	if bytes.Contains(branchBody, []byte("CONFIG_NEXT")) || bytes.Contains(branchBody, []byte("LATEST_BRANCH")) {
+		t.Fatal("fork included later parent messages")
+	}
+	// Editing the middle imports only the suffix after the common native node.
+	encoded, _ := json.Marshal(configReq)
+	edited, _ := decodeObject(encoded)
+	edited["messages"].([]any)[2].(map[string]any)["content"] = "EDITED_MIDDLE"
+	_, _, editedHeaders := post(edited, "")
+	if editedHeaders.Get("X-CCGateway-History") != "fork" {
+		t.Fatal("middle edit did not fork")
+	}
+	mu.Lock()
+	editedBody, _ := json.Marshal(requests[len(requests)-1]["messages"])
+	mu.Unlock()
+	if !bytes.Contains(editedBody, []byte("EDITED_MIDDLE")) || bytes.Contains(editedBody, []byte("CONFIG_NEXT")) {
+		t.Fatal("middle edit restored stale history")
+	}
+	edited["messages"].([]any)[0].(map[string]any)["content"] = "FIRST_CHANGED"
+	_, _, rebuiltHeaders := post(edited, "")
+	if rebuiltHeaders.Get("X-CCGateway-History") != "rebuild" {
+		t.Fatal("unrelated history reused old session")
+	}
+	// No custom session header is required, but caller scopes cannot share history.
+	sessionHeader = ""
+	scopeHeader = "caller-a"
+	autoReq := basic()
+	autoReq["messages"] = []any{Object{"role": "user", "content": "AUTOMATIC_SESSION"}}
+	autoAnswer, _, _ := post(autoReq, "")
+	autoReq["messages"] = append(autoReq["messages"].([]any), Object{"role": "assistant", "content": autoAnswer["content"]}, Object{"role": "user", "content": "AUTO_NEXT"})
+	_, _, autoHeaders := post(autoReq, "")
+	if autoHeaders.Get("X-CCGateway-History") != "prefix-hit" {
+		t.Fatal("headerless continuation missed")
+	}
+	scopeHeader = "caller-b"
+	_, _, otherHeaders := post(autoReq, "")
+	if otherHeaders.Get("X-CCGateway-History") != "rebuild" {
+		t.Fatal("caller scopes shared a native transcript")
+	}
+	sessionHeader = "test-session"
+	scopeHeader = ""
+	// Token-limit auto recovery must not make an extra model call.
+	limited := basic()
+	limited["messages"] = []any{Object{"role": "user", "content": "OUTPUT_LIMIT"}}
+	limitedAnswer, _, _ := post(limited, "")
+	if str(limitedAnswer, "stop_reason") != "max_tokens" {
+		t.Fatal("output limit changed")
+	}
 	// A cancelled request must terminate its child without starting inference.
 	dir := t.TempDir()
 	cancelReq := parsed(t, basic())
@@ -403,10 +616,10 @@ func TestRealCLI(t *testing.T) {
 		t.Fatal("cancelled request succeeded")
 	}
 	mu.Lock()
-	if len(requests) != 7 {
-		t.Fatalf("expected 7 model requests, got %d", len(requests))
+	if len(requests) != 23 {
+		t.Fatalf("expected 23 model requests, got %d", len(requests))
 	}
-	last := requests[len(requests)-1]
+	last := requests[6]
 	mu.Unlock()
 	if ts, _ := last["tools"].([]any); len(ts) != 0 {
 		t.Fatalf("tool_choice none exposed tools: %v", ts)
