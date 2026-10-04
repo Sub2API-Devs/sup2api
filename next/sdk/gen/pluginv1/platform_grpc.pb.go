@@ -19,21 +19,22 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PlatformService_EstimateUsage_FullMethodName           = "/sub2api.plugin.v1.PlatformService/EstimateUsage"
-	PlatformService_Execute_FullMethodName                 = "/sub2api.plugin.v1.PlatformService/Execute"
-	PlatformService_Monitor_FullMethodName                 = "/sub2api.plugin.v1.PlatformService/Monitor"
-	PlatformService_ValidateCredentials_FullMethodName     = "/sub2api.plugin.v1.PlatformService/ValidateCredentials"
-	PlatformService_QuerySubscriptionLimits_FullMethodName = "/sub2api.plugin.v1.PlatformService/QuerySubscriptionLimits"
-	PlatformService_BuildUpstreamRequest_FullMethodName    = "/sub2api.plugin.v1.PlatformService/BuildUpstreamRequest"
-	PlatformService_ClassifyError_FullMethodName           = "/sub2api.plugin.v1.PlatformService/ClassifyError"
-	PlatformService_BuildTestRequest_FullMethodName        = "/sub2api.plugin.v1.PlatformService/BuildTestRequest"
-	PlatformService_BuildModelsRequest_FullMethodName      = "/sub2api.plugin.v1.PlatformService/BuildModelsRequest"
-	PlatformService_ResolveModel_FullMethodName            = "/sub2api.plugin.v1.PlatformService/ResolveModel"
-	PlatformService_ExtractUsage_FullMethodName            = "/sub2api.plugin.v1.PlatformService/ExtractUsage"
-	PlatformService_ParseTaskSubmission_FullMethodName     = "/sub2api.plugin.v1.PlatformService/ParseTaskSubmission"
-	PlatformService_Poll_FullMethodName                    = "/sub2api.plugin.v1.PlatformService/Poll"
-	PlatformService_BuildReconcileRequest_FullMethodName   = "/sub2api.plugin.v1.PlatformService/BuildReconcileRequest"
-	PlatformService_ParseReconcileResponse_FullMethodName  = "/sub2api.plugin.v1.PlatformService/ParseReconcileResponse"
+	PlatformService_EstimateUsage_FullMethodName          = "/sub2api.plugin.v1.PlatformService/EstimateUsage"
+	PlatformService_Execute_FullMethodName                = "/sub2api.plugin.v1.PlatformService/Execute"
+	PlatformService_Monitor_FullMethodName                = "/sub2api.plugin.v1.PlatformService/Monitor"
+	PlatformService_ValidateCredentials_FullMethodName    = "/sub2api.plugin.v1.PlatformService/ValidateCredentials"
+	PlatformService_BuildUpstreamRequest_FullMethodName   = "/sub2api.plugin.v1.PlatformService/BuildUpstreamRequest"
+	PlatformService_ClassifyError_FullMethodName          = "/sub2api.plugin.v1.PlatformService/ClassifyError"
+	PlatformService_BuildTestRequest_FullMethodName       = "/sub2api.plugin.v1.PlatformService/BuildTestRequest"
+	PlatformService_BuildModelsRequest_FullMethodName     = "/sub2api.plugin.v1.PlatformService/BuildModelsRequest"
+	PlatformService_ResolveModel_FullMethodName           = "/sub2api.plugin.v1.PlatformService/ResolveModel"
+	PlatformService_ExtractUsage_FullMethodName           = "/sub2api.plugin.v1.PlatformService/ExtractUsage"
+	PlatformService_ParseTaskSubmission_FullMethodName    = "/sub2api.plugin.v1.PlatformService/ParseTaskSubmission"
+	PlatformService_Poll_FullMethodName                   = "/sub2api.plugin.v1.PlatformService/Poll"
+	PlatformService_BuildReconcileRequest_FullMethodName  = "/sub2api.plugin.v1.PlatformService/BuildReconcileRequest"
+	PlatformService_ParseReconcileResponse_FullMethodName = "/sub2api.plugin.v1.PlatformService/ParseReconcileResponse"
+	PlatformService_BuildQuotaRequest_FullMethodName      = "/sub2api.plugin.v1.PlatformService/BuildQuotaRequest"
+	PlatformService_ParseQuotaResponse_FullMethodName     = "/sub2api.plugin.v1.PlatformService/ParseQuotaResponse"
 )
 
 // PlatformServiceClient is the client API for PlatformService service.
@@ -58,11 +59,6 @@ type PlatformServiceClient interface {
 	// Requires platform.monitor.v1 and host API 4.
 	Monitor(ctx context.Context, in *PollRequest, opts ...grpc.CallOption) (*MonitorResponse, error)
 	ValidateCredentials(ctx context.Context, in *ValidateCredentialsRequest, opts ...grpc.CallOption) (*ValidateCredentialsResponse, error)
-	// Query subscription limits for a subscription-type account (not API Key).
-	// Returns usage windows (5h, 1w, daily_fable, etc.) with current usage and
-	// limits. Optional: answer UNIMPLEMENTED when the account type does not
-	// support subscription limits or the upstream has no such API.
-	QuerySubscriptionLimits(ctx context.Context, in *QuerySubscriptionLimitsRequest, opts ...grpc.CallOption) (*QuerySubscriptionLimitsResponse, error)
 	// Hot path: called once per upstream attempt. Keep it fast (< 2s timeout).
 	BuildUpstreamRequest(ctx context.Context, in *BuildUpstreamRequestRequest, opts ...grpc.CallOption) (*BuildUpstreamRequestResponse, error)
 	// Called once per failed upstream attempt.
@@ -169,6 +165,24 @@ type PlatformServiceClient interface {
 	// is no field here for an amount, and the tokens it reports are priced by
 	// the administrator's price table exactly like a live request's.
 	ParseReconcileResponse(ctx context.Context, in *ParseReconcileResponseRequest, opts ...grpc.CallOption) (*ReconcileResult, error)
+	// Builds the request that reads the subscription quota of one account
+	// (5-hour / weekly windows and the like, CONTRACTS §44), for account types
+	// declaring manifest accountTypes[].quota.query. Same division of labour
+	// as BuildTestRequest and BuildReconcileRequest: the plugin DESCRIBES the
+	// request, the host sends it through the account's proxy, behind its SSRF
+	// guard and timeout, and hands the answer to ParseQuotaResponse. The host
+	// decides when to ask - at most once per account every 30 seconds, and
+	// normally only when its snapshot is older than 3 minutes - so the plugin
+	// needs no "net" permission and no cache of its own.
+	//
+	// Called on the plugin declaring the account type; the account carries its
+	// credentials as in BuildTestRequest. Optional: answer UNIMPLEMENTED and
+	// the host keeps the snapshot it samples passively from the gateway's
+	// upstream responses (manifest accountTypes[].quota.headers).
+	BuildQuotaRequest(ctx context.Context, in *BuildQuotaRequestRequest, opts ...grpc.CallOption) (*BuildQuotaRequestResponse, error)
+	// Reads the upstream's answer to the request above into quota windows. It
+	// states upstream facts only; the host stores, merges and serves them.
+	ParseQuotaResponse(ctx context.Context, in *ParseQuotaResponseRequest, opts ...grpc.CallOption) (*QuotaResult, error)
 }
 
 type platformServiceClient struct {
@@ -213,16 +227,6 @@ func (c *platformServiceClient) ValidateCredentials(ctx context.Context, in *Val
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ValidateCredentialsResponse)
 	err := c.cc.Invoke(ctx, PlatformService_ValidateCredentials_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *platformServiceClient) QuerySubscriptionLimits(ctx context.Context, in *QuerySubscriptionLimitsRequest, opts ...grpc.CallOption) (*QuerySubscriptionLimitsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(QuerySubscriptionLimitsResponse)
-	err := c.cc.Invoke(ctx, PlatformService_QuerySubscriptionLimits_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -329,6 +333,26 @@ func (c *platformServiceClient) ParseReconcileResponse(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *platformServiceClient) BuildQuotaRequest(ctx context.Context, in *BuildQuotaRequestRequest, opts ...grpc.CallOption) (*BuildQuotaRequestResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BuildQuotaRequestResponse)
+	err := c.cc.Invoke(ctx, PlatformService_BuildQuotaRequest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformServiceClient) ParseQuotaResponse(ctx context.Context, in *ParseQuotaResponseRequest, opts ...grpc.CallOption) (*QuotaResult, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QuotaResult)
+	err := c.cc.Invoke(ctx, PlatformService_ParseQuotaResponse_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlatformServiceServer is the server API for PlatformService service.
 // All implementations must embed UnimplementedPlatformServiceServer
 // for forward compatibility.
@@ -351,11 +375,6 @@ type PlatformServiceServer interface {
 	// Requires platform.monitor.v1 and host API 4.
 	Monitor(context.Context, *PollRequest) (*MonitorResponse, error)
 	ValidateCredentials(context.Context, *ValidateCredentialsRequest) (*ValidateCredentialsResponse, error)
-	// Query subscription limits for a subscription-type account (not API Key).
-	// Returns usage windows (5h, 1w, daily_fable, etc.) with current usage and
-	// limits. Optional: answer UNIMPLEMENTED when the account type does not
-	// support subscription limits or the upstream has no such API.
-	QuerySubscriptionLimits(context.Context, *QuerySubscriptionLimitsRequest) (*QuerySubscriptionLimitsResponse, error)
 	// Hot path: called once per upstream attempt. Keep it fast (< 2s timeout).
 	BuildUpstreamRequest(context.Context, *BuildUpstreamRequestRequest) (*BuildUpstreamRequestResponse, error)
 	// Called once per failed upstream attempt.
@@ -462,6 +481,24 @@ type PlatformServiceServer interface {
 	// is no field here for an amount, and the tokens it reports are priced by
 	// the administrator's price table exactly like a live request's.
 	ParseReconcileResponse(context.Context, *ParseReconcileResponseRequest) (*ReconcileResult, error)
+	// Builds the request that reads the subscription quota of one account
+	// (5-hour / weekly windows and the like, CONTRACTS §44), for account types
+	// declaring manifest accountTypes[].quota.query. Same division of labour
+	// as BuildTestRequest and BuildReconcileRequest: the plugin DESCRIBES the
+	// request, the host sends it through the account's proxy, behind its SSRF
+	// guard and timeout, and hands the answer to ParseQuotaResponse. The host
+	// decides when to ask - at most once per account every 30 seconds, and
+	// normally only when its snapshot is older than 3 minutes - so the plugin
+	// needs no "net" permission and no cache of its own.
+	//
+	// Called on the plugin declaring the account type; the account carries its
+	// credentials as in BuildTestRequest. Optional: answer UNIMPLEMENTED and
+	// the host keeps the snapshot it samples passively from the gateway's
+	// upstream responses (manifest accountTypes[].quota.headers).
+	BuildQuotaRequest(context.Context, *BuildQuotaRequestRequest) (*BuildQuotaRequestResponse, error)
+	// Reads the upstream's answer to the request above into quota windows. It
+	// states upstream facts only; the host stores, merges and serves them.
+	ParseQuotaResponse(context.Context, *ParseQuotaResponseRequest) (*QuotaResult, error)
 	mustEmbedUnimplementedPlatformServiceServer()
 }
 
@@ -483,9 +520,6 @@ func (UnimplementedPlatformServiceServer) Monitor(context.Context, *PollRequest)
 }
 func (UnimplementedPlatformServiceServer) ValidateCredentials(context.Context, *ValidateCredentialsRequest) (*ValidateCredentialsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ValidateCredentials not implemented")
-}
-func (UnimplementedPlatformServiceServer) QuerySubscriptionLimits(context.Context, *QuerySubscriptionLimitsRequest) (*QuerySubscriptionLimitsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method QuerySubscriptionLimits not implemented")
 }
 func (UnimplementedPlatformServiceServer) BuildUpstreamRequest(context.Context, *BuildUpstreamRequestRequest) (*BuildUpstreamRequestResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method BuildUpstreamRequest not implemented")
@@ -516,6 +550,12 @@ func (UnimplementedPlatformServiceServer) BuildReconcileRequest(context.Context,
 }
 func (UnimplementedPlatformServiceServer) ParseReconcileResponse(context.Context, *ParseReconcileResponseRequest) (*ReconcileResult, error) {
 	return nil, status.Error(codes.Unimplemented, "method ParseReconcileResponse not implemented")
+}
+func (UnimplementedPlatformServiceServer) BuildQuotaRequest(context.Context, *BuildQuotaRequestRequest) (*BuildQuotaRequestResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BuildQuotaRequest not implemented")
+}
+func (UnimplementedPlatformServiceServer) ParseQuotaResponse(context.Context, *ParseQuotaResponseRequest) (*QuotaResult, error) {
+	return nil, status.Error(codes.Unimplemented, "method ParseQuotaResponse not implemented")
 }
 func (UnimplementedPlatformServiceServer) mustEmbedUnimplementedPlatformServiceServer() {}
 func (UnimplementedPlatformServiceServer) testEmbeddedByValue()                         {}
@@ -606,24 +646,6 @@ func _PlatformService_ValidateCredentials_Handler(srv interface{}, ctx context.C
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformServiceServer).ValidateCredentials(ctx, req.(*ValidateCredentialsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _PlatformService_QuerySubscriptionLimits_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QuerySubscriptionLimitsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PlatformServiceServer).QuerySubscriptionLimits(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: PlatformService_QuerySubscriptionLimits_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PlatformServiceServer).QuerySubscriptionLimits(ctx, req.(*QuerySubscriptionLimitsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -808,6 +830,42 @@ func _PlatformService_ParseReconcileResponse_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformService_BuildQuotaRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BuildQuotaRequestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).BuildQuotaRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_BuildQuotaRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).BuildQuotaRequest(ctx, req.(*BuildQuotaRequestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformService_ParseQuotaResponse_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ParseQuotaResponseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).ParseQuotaResponse(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_ParseQuotaResponse_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).ParseQuotaResponse(ctx, req.(*ParseQuotaResponseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlatformService_ServiceDesc is the grpc.ServiceDesc for PlatformService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -830,10 +888,6 @@ var PlatformService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateCredentials",
 			Handler:    _PlatformService_ValidateCredentials_Handler,
-		},
-		{
-			MethodName: "QuerySubscriptionLimits",
-			Handler:    _PlatformService_QuerySubscriptionLimits_Handler,
 		},
 		{
 			MethodName: "BuildUpstreamRequest",
@@ -874,6 +928,14 @@ var PlatformService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ParseReconcileResponse",
 			Handler:    _PlatformService_ParseReconcileResponse_Handler,
+		},
+		{
+			MethodName: "BuildQuotaRequest",
+			Handler:    _PlatformService_BuildQuotaRequest_Handler,
+		},
+		{
+			MethodName: "ParseQuotaResponse",
+			Handler:    _PlatformService_ParseQuotaResponse_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

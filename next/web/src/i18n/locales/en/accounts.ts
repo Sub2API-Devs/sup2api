@@ -134,5 +134,29 @@ export default {
   fetchApplied: 'The model list now has {n} models',
   fetchEmpty: 'The upstream returned no models',
   selectAll: 'Select all',
-  selectNone: 'Select none'
+  selectNone: 'Select none',
+  quota: {
+    column: 'Usage',
+    windows: { '5h': '5 hours', '7d': '7 days', '7d_sonnet': '7 days Sonnet', '7d_fable': '7 days Fable' },
+    windowsShort: { '5h': '5h', '7d': '7d', '7d_sonnet': '7d S', '7d_fable': '7d F' },
+    rejected: 'Limited',
+    rejectedHint: 'The upstream rejects requests in this window until it resets',
+    warningHint: 'The upstream warns that this window is almost used up',
+    resetsAt: 'resets {time}',
+    resetNow: 'reset',
+    resetPending: 'stale',
+    noData: 'No usage data yet',
+    passive: 'Passive',
+    passiveHint: 'Read from the headers of recent responses; the upstream is not queried',
+    refresh: 'Refresh',
+    refreshing: 'Refreshing',
+    refreshHint: 'Query the upstream now (at most once per account every 30 seconds)',
+    refreshThrottled: 'Just refreshed; try again in {n}s',
+    refreshed: 'Usage updated'
+  },
+  resetStatus: 'Reset status',
+  resetStatusHint: 'Clear the cooldown and rate-limit state; the account is scheduled again right away',
+  resetStatusTitle: 'Reset account status',
+  resetStatusConfirm: 'Clear the cooldown / rate-limit state of "{name}"? If the upstream still limits it, the account may cool down again soon.',
+  resetStatusDone: 'Account status reset'
 }

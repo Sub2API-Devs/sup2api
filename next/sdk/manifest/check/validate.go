@@ -795,6 +795,7 @@ func (v *validator) accountTypes() {
 		v.form(f+".form", at.Form, false)
 		v.guardedSettings(f, at)
 		v.defaultModels(f, at)
+		v.quota(f, at.Quota)
 		if len(at.Platforms) == 0 {
 			v.add(f+".platforms", "required", "at least one platform is required")
 		}

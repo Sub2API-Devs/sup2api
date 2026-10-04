@@ -211,6 +211,32 @@ const accountTypeDecls: MockAccountType[] = [
     supports: ['anthropic']
   },
   {
+    plugin_key: 'claude_oauth',
+    plugin_name: { en: 'Claude OAuth Accounts', zh: 'Claude OAuth 账号' },
+    plugin_version: '0.1.0',
+    asset_base: '/plugin-ui/claude_oauth/0.1.0-dev',
+    trust: 'official',
+    type: 'claude_oauth',
+    label: { en: 'Claude OAuth', zh: 'Claude OAuth' },
+    description: { en: 'Claude subscription (Pro / Max) via OAuth; plan windows are tracked', zh: 'Claude 订阅（Pro / Max）OAuth 授权，记录套餐窗口用量' },
+    form: { mode: 'schema' },
+    sensitive_fields: ['access_token', 'refresh_token'],
+    supports: ['anthropic']
+  },
+  {
+    plugin_key: 'claude_oauth',
+    plugin_name: { en: 'Claude OAuth Accounts', zh: 'Claude OAuth 账号' },
+    plugin_version: '0.1.0',
+    asset_base: '/plugin-ui/claude_oauth/0.1.0-dev',
+    trust: 'official',
+    type: 'claude_setup_token',
+    label: { en: 'Claude Setup Token', zh: 'Claude Setup Token' },
+    description: { en: 'Setup token (inference-only scope)', zh: 'Setup token（仅推理范围）' },
+    form: { mode: 'schema' },
+    sensitive_fields: ['access_token', 'refresh_token'],
+    supports: ['anthropic']
+  },
+  {
     plugin_key: 'videogen',
     plugin_name: { en: 'Video generation', zh: '视频生成' },
     plugin_version: '0.2.0',
@@ -282,10 +308,86 @@ const accounts: any[] = [
   { id: 18, name: 'demo-token', plugin_key: 'demo', type: 'token', created_by: 1, group_ids: [1], proxy_id: null, priority: 8, weight: 1, max_concurrency: 2, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-86400), credentials: { token: '******' } },
   { id: 19, name: 'openai-main', plugin_key: 'openai', type: 'apikey', created_by: 1, group_ids: [1, 2], proxy_id: null, priority: 1, weight: 2, max_concurrency: 20, schedulable: true, models: ['gpt-4o', 'gpt-4o-mini'], model_mapping: {}, rpm_limit: 0, tpm_limit: 200000, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 2, cooldown_until: null, orphaned: false, last_used_at: now(-30), created_at: now(-86400 * 2), credentials: { api_key: '******', base_url: 'https://api.openai.com' } },
   { id: 20, name: 'gemini-main', plugin_key: 'gemini', type: 'apikey', created_by: 1, group_ids: [2], proxy_id: null, priority: 1, weight: 1, max_concurrency: 10, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-900), created_at: now(-86400), credentials: { api_key: '******', base_url: 'https://generativelanguage.googleapis.com' } },
+  // Claude subscriptions with plan windows (quota seeds below): healthy, rejected + cooling down, nearly used up, no data yet.
+  { id: 21, name: 'claude-max-1', plugin_key: 'claude_oauth', type: 'claude_oauth', created_by: 1, group_ids: [1, 2], proxy_id: 1, priority: 1, weight: 2, max_concurrency: 5, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 1, cooldown_until: null, orphaned: false, last_used_at: now(-8), created_at: now(-86400 * 12), credentials: { access_token: '******', refresh_token: '******', email_address: 'max1@example.com' } },
+  { id: 22, name: 'claude-max-2', plugin_key: 'claude_oauth', type: 'claude_oauth', created_by: 1, group_ids: [1], proxy_id: null, priority: 1, weight: 1, max_concurrency: 5, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: now(5400), cooldown_reason: '429 rate_limit: 5h window rejected', orphaned: false, last_used_at: now(-600), created_at: now(-86400 * 30), credentials: { access_token: '******', refresh_token: '******', email_address: 'max2@example.com' } },
+  { id: 23, name: 'claude-pro-3', plugin_key: 'claude_oauth', type: 'claude_setup_token', created_by: 6, group_ids: [2], proxy_id: null, priority: 2, weight: 1, max_concurrency: 3, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-95), created_at: now(-86400 * 6), credentials: { access_token: '******' } },
+  { id: 24, name: 'claude-max-new', plugin_key: 'claude_oauth', type: 'claude_oauth', created_by: 1, group_ids: [1], proxy_id: null, priority: 3, weight: 1, max_concurrency: 5, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-600), credentials: { access_token: '******', refresh_token: '******' } },
   // Its plugin was uninstalled without purge_accounts: kept as an orphaned account.
   { id: 15, name: 'legacy-vendor', plugin_key: 'legacy_vendor', type: 'apikey', created_by: null, type_label: { en: 'API key', zh: 'API Key' }, group_ids: [], proxy_id: null, priority: 10, weight: 1, max_concurrency: 5, schedulable: false, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, orphaned: true, created_at: now(-86400 * 90) }
 ]
 for (const a of accounts) a.type_label ??= typeLabel(a.plugin_key, a.type)
+
+// ---------------------------------------------------------------- subscription quota
+// Plan windows of subscription accounts (QuotaSnapshot). Types without plan
+// limits (API keys, relays, ...) report quota = null. A window resets every
+// `period` seconds, first at `firstIn` seconds after the mock started.
+const QUOTA_TYPES = new Set(['claude_oauth/claude_oauth', 'claude_oauth/claude_setup_token'])
+const MOCK_T0 = Date.now()
+const H = 3600
+const D = 86400
+type QuotaSeed = { key: string; utilization: number; status: string; firstIn: number; period: number }
+interface QuotaState {
+  source: 'passive' | 'active' | ''
+  updated_at: string | null
+  error: string
+  windows: QuotaSeed[]
+  /** Last force query (ms), for the 30 s floor. */
+  activeAt: number
+}
+const claudeWindows = (u5h: number, s5h: string, in5h: number, u7d: number, s7d: string, in7d: number, sonnet: number, fable: number): QuotaSeed[] => [
+  { key: '5h', utilization: u5h, status: s5h, firstIn: in5h, period: 5 * H },
+  { key: '7d', utilization: u7d, status: s7d, firstIn: in7d, period: 7 * D },
+  { key: '7d_sonnet', utilization: sonnet, status: 'allowed', firstIn: in7d, period: 7 * D },
+  { key: '7d_fable', utilization: fable, status: 'allowed', firstIn: in7d, period: 7 * D }
+]
+const quotaState = new Map<number, QuotaState>([
+  [21, { source: 'active', updated_at: now(-240), error: '', activeAt: 0, windows: claudeWindows(34, 'allowed', 2 * H + 1500, 61.6, 'allowed', 3 * D + 4 * H, 18, 41) }],
+  // 5h window rejected; the account cools down (see cooldown_until).
+  [22, { source: 'passive', updated_at: now(-600), error: '', activeAt: 0, windows: claudeWindows(100, 'rejected', H + 1800, 81, 'allowed_warning', D + 7 * H, 47, 66) }],
+  // Nearly used up, last active query failed; plus an unknown window key, shown verbatim.
+  [23, {
+    source: 'passive',
+    updated_at: now(-95),
+    error: 'usage query failed: upstream 503',
+    activeAt: 0,
+    windows: [
+      { key: '7d', utilization: 88, status: 'allowed', firstIn: 5 * D, period: 7 * D },
+      { key: '5h', utilization: 93.4, status: 'allowed_warning', firstIn: 2400, period: 5 * H },
+      { key: '7d_opus', utilization: 12, status: '', firstIn: 5 * D, period: 7 * D }
+    ]
+  }],
+  // Never queried yet.
+  [24, { source: '', updated_at: null, error: '', activeAt: 0, windows: [] }]
+])
+
+/** Next reset after now: MOCK_T0 + firstIn + k·period. */
+function nextReset(w: QuotaSeed): string {
+  const first = MOCK_T0 + w.firstIn * 1000
+  const period = w.period * 1000
+  const k = Date.now() <= first ? 0 : Math.ceil((Date.now() - first) / period)
+  return new Date(first + k * period).toISOString()
+}
+
+function quotaStateOf(a: any): QuotaState | null {
+  if (!QUOTA_TYPES.has(`${a.plugin_key}/${a.type}`)) return null
+  let st = quotaState.get(a.id)
+  if (!st) quotaState.set(a.id, (st = { source: '', updated_at: null, error: '', windows: [], activeAt: 0 }))
+  return st
+}
+
+/** QuotaSnapshot of an account, or null for types without plan limits. */
+function quotaOf(a: any) {
+  const st = quotaStateOf(a)
+  if (!st) return null
+  return {
+    supported: true,
+    source: st.source,
+    updated_at: st.updated_at,
+    error: st.error,
+    windows: st.windows.map((w) => ({ key: w.key, utilization: w.utilization, resets_at: nextReset(w), status: w.status }))
+  }
+}
 
 /** Current window counters (CONTRACTS §18.1); mocked as a fraction of the limit. */
 function rateUsage(a: any) {
@@ -301,6 +403,7 @@ const withGroups = (a: any) => ({
   created_by: a.created_by ?? null,
   created_by_email: userEmail(a.created_by),
   rate_usage: rateUsage(a),
+  quota: quotaOf(a),
   groups: (a.group_ids || []).map((id: number) => ({ id, name: id === 1 ? 'default' : id === 2 ? 'vip' : `group-${id}` }))
 })
 
@@ -358,6 +461,15 @@ on('GET', '/account-types/:plugin_key/:type/form', (req) => {
   if (k === 'openai') return guardForm(who, k, openaiForm)
   if (k === 'gemini') return guardForm(who, k, geminiForm)
   if (k === 'ccgateway') return { schema: { type: 'object', properties: {} }, ui_schema: {} }
+  if (k === 'claude_oauth') {
+    // The real plugin form (plugins/claude-oauth/forms).
+    const file = req.params.type === 'claude_setup_token' ? 'setup_token' : 'oauth'
+    try {
+      return { schema: JSON.parse(readFileSync(fileURLToPath(new URL(`../../plugins/claude-oauth/forms/${file}.schema.json`, import.meta.url)), 'utf8')), ui_schema: {} }
+    } catch {
+      return { schema: { type: 'object', required: ['access_token'], properties: { access_token: { type: 'string', title: 'Access Token', writeOnly: true } } }, ui_schema: {} }
+    }
+  }
   return fail(404, 'not_found', 'form not found')
 })
 
@@ -565,6 +677,35 @@ on('POST', '/accounts/:id/models/fetch', (req) => {
   if (!('a' in r)) return r
   const a = r.a
   return fetchUpstreamModels(a.plugin_key, req.body?.credentials || a.credentials)
+})
+// Subscription quota (QuotaSnapshot). force=true queries the "upstream" at
+// most every 30 s per account (sooner gets the cached snapshot back), with some
+// latency and drift; a rejected window stays rejected until it resets.
+on('GET', '/accounts/:id/quota', async (req) => {
+  const r = scopedAccount(req, 'read')
+  if (!('a' in r)) return r
+  const st = quotaStateOf(r.a)
+  if (!st) return { supported: false, source: '', updated_at: null, error: '', windows: [] }
+  if (req.query.force === 'true' && Date.now() - st.activeAt >= 30_000) {
+    await new Promise((ok) => setTimeout(ok, 700))
+    st.activeAt = Date.now()
+    st.source = 'active'
+    st.updated_at = now()
+    st.error = ''
+    if (!st.windows.length) st.windows = claudeWindows(3, 'allowed', 4 * H + 1800, 1, 'allowed', 6 * D, 0, 0)
+    for (const w of st.windows) {
+      if (w.status !== 'rejected') w.utilization = Math.min(100, Math.round((w.utilization + Math.random() * 2) * 10) / 10)
+    }
+  }
+  return quotaOf(r.a)
+})
+// Clears the cooldown / rate-limit state of the account (needs update on it).
+on('POST', '/accounts/:id/reset-status', (req) => {
+  const r = scopedAccount(req, 'update')
+  if (!('a' in r)) return r
+  r.a.cooldown_until = null
+  r.a.cooldown_reason = ''
+  return { ok: true }
 })
 on('POST', '/accounts/:id/credentials/reveal', (req) => {
   const s = needStepUp(req)

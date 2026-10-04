@@ -458,6 +458,7 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		return c.classify(ctx, rt, pacct, 0, nil, nil, msg)
 	}
 	defer resp.Body.Close()
+	c.g.observeQuota(rt, acc.ID, resp.StatusCode, resp.Header)
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		raw, _ := readPrefix(resp.Body, maxErrorBody)
@@ -484,6 +485,19 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		return c.forwardTask(ctx, rt, pacct, resp, upBody)
 	}
 	return c.forward(ctx, rt, pacct, resp, upBody)
+}
+
+// observeQuota hands the response headers to the quota observer when the
+// account type declares quota headers (CONTRACTS §44). The observer reads a
+// few headers and queues the write; types without the declaration (API keys)
+// cost one nil check.
+func (g *Gateway) observeQuota(rt *typeRoute, accountID int64, status int, h http.Header) {
+	if g.d.Quota == nil || rt == nil {
+		return
+	}
+	if q := rt.binding.Type.Quota; q != nil && len(q.Headers) > 0 {
+		g.d.Quota.ObserveQuotaHeaders(accountID, q.Headers, status, h)
+	}
 }
 
 func canceledErr() *gwError {

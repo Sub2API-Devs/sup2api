@@ -72,7 +72,10 @@ type Service struct {
 	touchMu sync.Mutex
 	touched map[int64]time.Time
 
-	limitsDebouncer *limitsDebouncer
+	// quota throttles passive quota writes; quotaFlight merges concurrent
+	// active quota queries of one account (CONTRACTS §44).
+	quota       *quotaRecorder
+	quotaFlight singleflight.Group
 }
 
 type groupSnap struct {
@@ -88,15 +91,18 @@ type accountSnap struct {
 var _ core.AccountDirectory = (*Service)(nil)
 
 // New builds the account service. Call Run to receive account:changed
-// broadcasts and persist last_used_at.
+// broadcasts, persist last_used_at and write passive quota samples.
 func New(d Deps) *Service {
-	return &Service{
-		d:               d,
-		groups:          map[int64]groupSnap{},
-		accounts:        map[int64]accountSnap{},
-		touched:         map[int64]time.Time{},
-		limitsDebouncer: newLimitsDebouncer(),
+	s := &Service{
+		d:        d,
+		groups:   map[int64]groupSnap{},
+		accounts: map[int64]accountSnap{},
+		touched:  map[int64]time.Time{},
 	}
+	s.quota = newQuotaRecorder(func(ctx context.Context, id int64, w map[string]store.QuotaWindow) error {
+		return s.d.DB.SaveAccountQuota(ctx, id, store.QuotaPassive, w)
+	})
+	return s
 }
 
 // RegisterRoutes mounts the account and account type endpoints. Every route
@@ -118,13 +124,15 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.PermAny("POST", "/accounts/:id/models/fetch", s.fetchAccountModels, "account:test", "account:own:test")
 	r.PermAny("POST", "/account-types/:plugin_key/:type/models/fetch", s.fetchTypeModels, "account:create", "account:own:create")
 	r.PermAny("POST", "/accounts/:id/credentials/reveal", s.reveal, "account:credential:view", "account:own:credential:view")
-	r.PermAny("GET", "/accounts/:id/subscription/limits", s.getSubscriptionLimits, "account:read", "account:own:read")
-	r.PermAny("POST", "/accounts/:id/subscription/limits/reset", s.resetSubscriptionLimits, "account:update", "account:own:update")
+	// Subscription quota and runtime state (CONTRACTS §44).
+	r.PermAny("GET", "/accounts/:id/quota", s.getQuota, "account:read", "account:own:read")
+	r.PermAny("POST", "/accounts/:id/reset-status", s.resetStatus, "account:update", "account:own:update")
 }
 
-// Run subscribes to account:changed and flushes last_used_at every 10 s
-// until ctx is done.
+// Run subscribes to account:changed, flushes last_used_at every 10 s and
+// writes passive quota samples until ctx is done.
 func (s *Service) Run(ctx context.Context) {
+	go s.quota.run(ctx)
 	if s.d.Bus != nil {
 		cancel := s.d.Bus.Subscribe(core.ChannelAccountChanged, func([]byte) { s.invalidate() })
 		defer cancel()

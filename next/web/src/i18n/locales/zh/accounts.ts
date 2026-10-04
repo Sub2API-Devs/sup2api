@@ -134,5 +134,29 @@ export default {
   fetchApplied: '模型列表现有 {n} 个模型',
   fetchEmpty: '上游没有返回模型',
   selectAll: '全选',
-  selectNone: '全不选'
+  selectNone: '全不选',
+  quota: {
+    column: '用量',
+    windows: { '5h': '5 小时', '7d': '7 天', '7d_sonnet': '7 天 Sonnet', '7d_fable': '7 天 Fable' },
+    windowsShort: { '5h': '5h', '7d': '7d', '7d_sonnet': '7d S', '7d_fable': '7d F' },
+    rejected: '已限流',
+    rejectedHint: '上游已拒绝该窗口的请求，需等待重置',
+    warningHint: '上游提示该窗口即将用尽',
+    resetsAt: '{time} 重置',
+    resetNow: '已重置',
+    resetPending: '待刷新',
+    noData: '暂无用量数据',
+    passive: '被动采样',
+    passiveHint: '来自最近请求的响应头，不额外查询上游',
+    refresh: '刷新',
+    refreshing: '刷新中',
+    refreshHint: '立即向上游查询用量（每个账号 30 秒内只查询一次）',
+    refreshThrottled: '刚刚刷新过，请 {n} 秒后再试',
+    refreshed: '用量已更新'
+  },
+  resetStatus: '重置状态',
+  resetStatusHint: '清除冷却与限流状态，账号立即恢复调度',
+  resetStatusTitle: '重置账号状态',
+  resetStatusConfirm: '确定清除账号「{name}」的冷却 / 限流状态？如果上游仍在限流，账号可能很快再次进入冷却。',
+  resetStatusDone: '账号状态已重置'
 }

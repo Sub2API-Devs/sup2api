@@ -469,7 +469,11 @@ func (p *fakePlatform) EstimateUsage(_ context.Context, in *pluginv1.EstimateUsa
 	return &pluginv1.UsageReport{Tokens: &pluginv1.UsageTokens{InputTokens: in.GetPreConsumeTokens()}}, nil
 }
 
-func (p *fakePlatform) QuerySubscriptionLimits(context.Context, *pluginv1.QuerySubscriptionLimitsRequest) (*pluginv1.QuerySubscriptionLimitsResponse, error) {
+func (p *fakePlatform) BuildQuotaRequest(context.Context, *pluginv1.BuildQuotaRequestRequest) (*pluginv1.BuildQuotaRequestResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "no")
+}
+
+func (p *fakePlatform) ParseQuotaResponse(context.Context, *pluginv1.ParseQuotaResponseRequest) (*pluginv1.QuotaResult, error) {
 	return nil, status.Error(codes.Unimplemented, "no")
 }
 

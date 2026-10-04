@@ -72,7 +72,11 @@ func (stub) BuildReconcileRequest(context.Context, *pluginv1.BuildReconcileReque
 	return nil, nil
 }
 
-func (stub) QuerySubscriptionLimits(context.Context, *pluginv1.QuerySubscriptionLimitsRequest) (*pluginv1.QuerySubscriptionLimitsResponse, error) {
+func (stub) BuildQuotaRequest(context.Context, *pluginv1.BuildQuotaRequestRequest) (*pluginv1.BuildQuotaRequestResponse, error) {
+	return nil, nil
+}
+
+func (stub) ParseQuotaResponse(context.Context, *pluginv1.ParseQuotaResponseRequest) (*pluginv1.QuotaResult, error) {
 	return nil, nil
 }
 

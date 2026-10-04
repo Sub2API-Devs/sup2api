@@ -244,7 +244,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		CCGateway: ccg,
 		DB:        db, Redis: rdb, Bus: cl.Bus, Node: cl.Registry, Registry: reg,
 		Auth: keys, Pricer: bill, Balance: bill, Slots: cl.Slots,
-		Accounts: acc, Proxies: prx, Settler: settler, Tasks: settler, Limiter: limiter, Config: cfg, Converters: converters,
+		Accounts: acc, Proxies: prx, Settler: settler, Tasks: settler, Limiter: limiter, Quota: acc, Config: cfg, Converters: converters,
 		Draining: gate.isDraining,
 	})
 

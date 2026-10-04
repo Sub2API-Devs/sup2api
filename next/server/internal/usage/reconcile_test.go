@@ -89,7 +89,11 @@ func (p *recPlugin) ParseTaskSubmission(context.Context, *pluginv1.ExtractUsageR
 	return nil, nil
 }
 
-func (p *recPlugin) QuerySubscriptionLimits(context.Context, *pluginv1.QuerySubscriptionLimitsRequest) (*pluginv1.QuerySubscriptionLimitsResponse, error) {
+func (p *recPlugin) BuildQuotaRequest(context.Context, *pluginv1.BuildQuotaRequestRequest) (*pluginv1.BuildQuotaRequestResponse, error) {
+	return nil, nil
+}
+
+func (p *recPlugin) ParseQuotaResponse(context.Context, *pluginv1.ParseQuotaResponseRequest) (*pluginv1.QuotaResult, error) {
 	return nil, nil
 }
 

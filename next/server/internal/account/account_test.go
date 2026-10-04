@@ -43,10 +43,14 @@ type fakePlatform struct {
 	usageProtocol string
 	// classify is the answer of ClassifyError; nil fails the call.
 	classify *pluginv1.ClassifyErrorResponse
-	mu       sync.Mutex
-	calls    []*pluginv1.ValidateCredentialsRequest
-	tests    []*pluginv1.BuildTestRequestRequest
-	classes  []*pluginv1.ClassifyErrorRequest
+	// quotaURL is where BuildQuotaRequest points (empty: Unimplemented);
+	// quotaCalls counts the requests built.
+	quotaURL   string
+	quotaCalls int
+	mu         sync.Mutex
+	calls      []*pluginv1.ValidateCredentialsRequest
+	tests      []*pluginv1.BuildTestRequestRequest
+	classes    []*pluginv1.ClassifyErrorRequest
 }
 
 func (p *fakePlatform) ValidateCredentials(_ context.Context, in *pluginv1.ValidateCredentialsRequest) (*pluginv1.ValidateCredentialsResponse, error) {
@@ -86,8 +90,34 @@ func (*fakePlatform) ParseReconcileResponse(context.Context, *pluginv1.ParseReco
 	return nil, core.ErrInternal
 }
 
-func (*fakePlatform) QuerySubscriptionLimits(context.Context, *pluginv1.QuerySubscriptionLimitsRequest) (*pluginv1.QuerySubscriptionLimitsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "not implemented")
+// BuildQuotaRequest asks the fake upstream's /quota for accounts of a type
+// declaring quota.query; quotaURL empty answers Unimplemented.
+func (p *fakePlatform) BuildQuotaRequest(_ context.Context, in *pluginv1.BuildQuotaRequestRequest) (*pluginv1.BuildQuotaRequestResponse, error) {
+	p.mu.Lock()
+	u := p.quotaURL
+	if u != "" {
+		p.quotaCalls++
+	}
+	p.mu.Unlock()
+	if u == "" {
+		return nil, status.Error(codes.Unimplemented, "not implemented")
+	}
+	key := gjson.Get(in.Account.CredentialsJson, "api_key").String()
+	return &pluginv1.BuildQuotaRequestResponse{Url: u, Headers: map[string]string{"x-api-key": key}}, nil
+}
+
+// ParseQuotaResponse reads {"5h": <percent>, "reset": <unix>} and reports a
+// non-200 answer as transient (401 as auth_rejected).
+func (*fakePlatform) ParseQuotaResponse(_ context.Context, in *pluginv1.ParseQuotaResponseRequest) (*pluginv1.QuotaResult, error) {
+	switch {
+	case in.GetStatus() == http.StatusUnauthorized:
+		return &pluginv1.QuotaResult{ErrorType: pluginv1.QuotaResult_ERROR_TYPE_AUTH_REJECTED, ErrorMessage: "token revoked"}, nil
+	case in.GetStatus() != http.StatusOK:
+		return &pluginv1.QuotaResult{ErrorType: pluginv1.QuotaResult_ERROR_TYPE_TRANSIENT,
+			ErrorMessage: fmt.Sprintf("status %d %s", in.GetStatus(), in.GetTransportError())}, nil
+	}
+	return &pluginv1.QuotaResult{Windows: []*pluginv1.QuotaWindow{{Key: "5h",
+		Utilization: gjson.GetBytes(in.Body, "5h").Float(), ResetsAtUnix: gjson.GetBytes(in.Body, "reset").Int(), Status: "allowed"}}}, nil
 }
 
 func (p *fakePlatform) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequest) (*pluginv1.ClassifyErrorResponse, error) {
@@ -304,7 +334,7 @@ func (a fakeAuthz) Can(_ context.Context, uid int64, key string) (bool, error) {
 func (fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{}, nil
 }
-func (fakeAuthz) IsSensitive(string) bool { return false }
+func (fakeAuthz) IsSensitive(string) bool                         { return false }
 func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
 func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 

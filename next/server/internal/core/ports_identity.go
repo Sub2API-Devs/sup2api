@@ -8,6 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
+
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 )
 
 // ============================================================ identity & authz (owner: A core-data)
@@ -200,6 +202,16 @@ type AccountDirectory interface {
 	// disabling (CONTRACTS §42.3). It reports whether the account is disabled.
 	AutoDisable(ctx context.Context, id int64, reason string) (bool, error)
 	TouchLastUsed(ctx context.Context, id int64)
+}
+
+// QuotaObserver receives the subscription quota headers of the gateway's
+// upstream responses (CONTRACTS §44). The gateway calls it for every
+// response (2xx and 429 matter, the observer ignores the rest) of an account
+// type declaring manifest quota.headers, with that declaration. It must not
+// block: implementations parse the few declared headers and hand the result
+// to an asynchronous, throttled writer.
+type QuotaObserver interface {
+	ObserveQuotaHeaders(accountID int64, headers []manifest.QuotaHeader, status int, h http.Header)
 }
 
 // ProxyDirectory hands out HTTP clients per proxy (nil = direct), cached and

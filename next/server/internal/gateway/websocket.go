@@ -539,6 +539,9 @@ func (s *wsSession) dial(ctx context.Context, cl *call, ref *core.AccountRef) at
 		CompressionMode: websocket.CompressionContextTakeover})
 	stop()
 	dcancel()
+	if resp != nil {
+		s.g.observeQuota(rt, acc.ID, resp.StatusCode, resp.Header)
+	}
 	if err != nil {
 		if ctx.Err() != nil {
 			return attemptResult{kind: attemptCanceled, err: canceledErr()}

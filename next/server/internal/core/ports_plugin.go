@@ -48,12 +48,15 @@ type PlatformPlugin interface {
 	// its entries are retried until their deadline and then abandoned.
 	BuildReconcileRequest(ctx context.Context, in *pluginv1.BuildReconcileRequestRequest) (*pluginv1.BuildReconcileRequestResponse, error)
 	ParseReconcileResponse(ctx context.Context, in *pluginv1.ParseReconcileResponseRequest) (*pluginv1.ReconcileResult, error)
-	// QuerySubscriptionLimits asks the plugin to query the upstream API for
-	// subscription limits (CONTRACTS §25.5). Called on the PlatformBinding.Client
-	// of the account's platform, from the account limits service. Optional for
-	// plugins: one without it answers gRPC Unimplemented, and the gateway returns
-	// 501 Not Implemented for that account type.
-	QuerySubscriptionLimits(ctx context.Context, in *pluginv1.QuerySubscriptionLimitsRequest) (*pluginv1.QuerySubscriptionLimitsResponse, error)
+	// QuotaQuery reads the subscription quota of one account (CONTRACTS
+	// §44): the plugin declaring the account type builds the request and
+	// parses the answer, the account module sends it through the account's
+	// proxy behind netguard. Called on the AccountTypeBinding.Client, only
+	// for types declaring manifest quota.query. Optional for plugins: one
+	// without them answers gRPC Unimplemented, and the account keeps the
+	// snapshot sampled passively from the gateway's upstream responses.
+	BuildQuotaRequest(ctx context.Context, in *pluginv1.BuildQuotaRequestRequest) (*pluginv1.BuildQuotaRequestResponse, error)
+	ParseQuotaResponse(ctx context.Context, in *pluginv1.ParseQuotaResponseRequest) (*pluginv1.QuotaResult, error)
 }
 
 // ExecutionHTTP is the one-request network capability supplied by the current

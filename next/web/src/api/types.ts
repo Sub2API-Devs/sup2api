@@ -289,6 +289,38 @@ export interface Account {
    * proxy_url of the request created a new proxy instead of reusing one.
    */
   proxy_created?: boolean
+  /**
+   * Subscription quota windows (5h / 7d / ...) of the account, from the list
+   * endpoint; null for types without plan limits (API keys) — nothing is shown.
+   */
+  quota?: QuotaSnapshot | null
+}
+
+/** Upstream verdict of one quota window ("" = not reported). */
+export type QuotaWindowStatus = 'allowed' | 'allowed_warning' | 'rejected' | ''
+
+/** One rolling plan window of a subscription account. */
+export interface QuotaWindow {
+  /** "5h", "7d", "7d_sonnet", "7d_fable"; unknown keys are shown as they are. */
+  key: string
+  /** Used share in percent (0–100, may exceed 100). */
+  utilization: number
+  resets_at: string | null
+  status: QuotaWindowStatus
+}
+
+/**
+ * Quota of a subscription account (GET /accounts/:id/quota, `quota` of a list
+ * row). `passive` comes from response headers of served requests, `active`
+ * from an explicit upstream query (force refresh, at most every 30 s).
+ */
+export interface QuotaSnapshot {
+  supported: boolean
+  source: 'passive' | 'active' | ''
+  updated_at: string | null
+  /** Last query error; the windows then hold the previous values. */
+  error: string
+  windows: QuotaWindow[]
 }
 
 /** Token counters the plugin reported for the probe request (all optional). */

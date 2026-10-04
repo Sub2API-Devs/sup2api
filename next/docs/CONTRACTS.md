@@ -2378,3 +2378,92 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 
 - 设置 → 网关页签新增"自动禁用"卡片：全局开关、状态码（文本，示例 `401,403`）、关键词（多行文本，每行一个，显示默认值可一键恢复）。
 - 账号编辑器"调度与限流"块新增开关"允许自动禁用"（默认开），说明关闭后上游报凭证或额度错误时只冷却 60 秒、不禁用。账号列表中关闭了自动禁用的账号在状态旁显示"不自动禁用"标记。
+
+## 44. 订阅账号套餐额度：被动采样、主动查询与重置状态（2026-10-05，用户要求）
+
+用户要求："加上套餐查询功能。如果是 apikey 的话就不管他；如果是订阅，能记录 周限制、5h 限制、周 Fable 限制，然后还能重置状态。关于限额查询参考 sub2api 实现，尽量不要频繁查询。"参考实现是本仓库 sub2api 后端：`backend/internal/service/account_usage_service.go`（缓存与 singleflight、被动/主动两条链路）、`backend/internal/repository/claude_usage_service.go`（`GET /api/oauth/usage`）、`backend/internal/service/ratelimit_service.go`（响应头被动采样、`ClearRateLimit`）。设计说明见 `SUBSCRIPTION_LIMITS_DESIGN.md`。
+
+### 44.1 数据模型
+
+快照 = 每个账号一行（迁移 `0029_account_subscription_limits.sql`，表 `account_quota_snapshots`），窗口按 key 合并：一次采样只覆盖它带来的窗口，其余窗口保留上次的值。
+
+| 列 | 说明 |
+|---|---|
+| `windows` | jsonb 对象，key 为窗口 key：`{"5h": {"utilization": 42.0, "resets_at": "…", "status": "allowed", "used": 0, "limit": 0}}` |
+| `source` | 最新数据来源 `passive` / `active`；只有查询占位、尚无数据时为 `''` |
+| `error` | 最近一次主动查询的错误（`auth_rejected: …` / `transient: …` / `plugin: …`）；任何一次成功写入（被动或主动）清空 |
+| `updated_at` | 窗口最近一次写入时间（数据库时钟）；NULL = 尚无数据 |
+| `last_passive_at` / `last_active_at` | 最近一次被动写入 / 最近一次主动查询**尝试**（成功与否），30 秒下限按后者在 PG 中原子判断，多节点有效 |
+
+窗口 key：`5h`、`7d`、`7d_sonnet`、`7d_fable` 为控制台已知 key（Anthropic 的 `7d_oi` 头 / `seven_day_overage_included` 字段即 Fable 周窗口），其他供应商可用自定义 key（`^[a-z0-9][a-z0-9_]{0,31}$`）。`utilization` 一律为**百分比**（0–100，可因超额超过 100）。
+
+### 44.2 manifest：`accountTypes[].quota`
+
+```json
+"quota": {
+  "query": true,
+  "headers": [
+    {"key": "5h", "utilization": "anthropic-ratelimit-unified-5h-utilization",
+     "reset": "anthropic-ratelimit-unified-5h-reset", "status": "anthropic-ratelimit-unified-5h-status"}
+  ]
+}
+```
+
+| 字段 | 说明 |
+|---|---|
+| `headers[]` | 被动采样声明，最多 `manifest.MaxQuotaHeaders`（16）个窗口。`key` 必填且不重复；`utilization` / `reset` / `status` 是响应头名（大小写不敏感），至少给一个 |
+| `headers[].utilizationUnit` | `ratio`（默认，0–1，乘 100 存储；Anthropic 即此）或 `percent` |
+| `headers[].resetFormat` | `unix`（默认，Unix 秒；大于 1e11 视为毫秒）、`rfc3339`、`delta`（距现在的秒数） |
+| `query` | 插件实现 `BuildQuotaRequest` / `ParseQuotaResponse`（§44.4） |
+
+未声明 `quota`（或两者皆空，校验拒绝）的类型 = 不支持额度（API Key 类），账号视图 `quota` 为 null。状态头取值只认 `allowed` / `allowed_warning` / `rejected`（转小写），其他记为空。校验字段错误：`accountTypes[i].quota`（`required`）、`.quota.headers`（`too_many`）、`.quota.headers[j].key`（`required` / `invalid_format` / `duplicate`）、`.quota.headers[j]`（`required`）、`.quota.headers[j].utilization|reset|status`（`invalid_format`）、`.quota.headers[j].utilizationUnit|resetFormat`（`invalid`；对应头未声明时 `unexpected`）。头解析实现在 `sdk/manifest.ReadQuotaHeaders`，插件可在单测中直接用它验证声明。旧宿主忽略该字段，`hostCompat` 不需要提高。
+
+### 44.3 被动采样（主要数据来源，零额外上游请求）
+
+- 网关在**每次上游响应**返回响应头后（HTTP 转发、插件驱动执行 §31 共用 `forwardBuilt`；WebSocket 握手响应同样处理）对声明了 `quota.headers` 的账号类型调用 `core.QuotaObserver.ObserveQuotaHeaders`；未声明的类型只多一次 nil 判断。观察者只接受 2xx、429 与 101（WebSocket 握手），其余状态码忽略。
+- 解析只读声明的几个头，结果交给账号模块的异步写入器，不阻塞热路径。写库按账号限频：同一节点每账号至少间隔 30 秒（`quotaPassiveInterval`）；任一窗口的 `status` 与上次所见不同（如 `allowed` → `rejected`，或恢复）立即写；间隔内的样本合并，由后台每 5 秒的刷新补写最后一个值，进程退出时全部写出。多节点各自限频（N 个节点最多 N 次 / 30 秒）。
+- 写入 `source = passive`、清空 `error`、更新 `updated_at` 与 `last_passive_at`。
+
+### 44.4 主动查询（插件描述、核心发送）
+
+`PlatformService` 删除 `QuerySubscriptionLimits`（从未发布），新增两个可选 RPC，模式同 `BuildTestRequest` / `BuildReconcileRequest`：
+
+- `BuildQuotaRequest(BuildQuotaRequestRequest{account})` → `{method（默认 GET）, url, headers, body_json}`。账号带解密凭证（调用对象总是账号类型的声明插件）。
+- 核心经账号代理发送（直连时过 netguard，`SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM` 放开同网关），响应体上限 64 KiB，超出置 `truncated`。
+- `ParseQuotaResponse(ParseQuotaResponseRequest{account, status, headers（小写）, body, transport_error, truncated})` → `QuotaResult{windows[], error_type, error_message}`。`QuotaWindow{key, utilization（百分比）, resets_at_unix（0 = 未知）, status, used, limit}`；`utilization` 为 0 且 `limit > 0` 时核心按 `used / limit` 计算。`error_type`：`ERROR_TYPE_UNSPECIFIED`（成功）、`ERROR_TYPE_AUTH_REJECTED`（凭证被拒）、`ERROR_TYPE_TRANSIENT`（其他）。错误只记录到快照（截断 512 字节），**不**冷却、不禁用账号——那是网关分类（§42）的职责。
+- 只有声明了 `quota.query` 的类型才会被调用；插件回 `Unimplemented` 视为只支持被动（不记错误）。SDK：`pluginsdk.QuotaReader` 接口，未实现时自动回 `Unimplemented`。
+
+### 44.5 接口
+
+**`GET /api/v1/accounts/:id/quota[?force=true]`**（`account:read` / `account:own:read`，`OwnerScope` 限定，范围外 404）→ `QuotaSnapshot`：
+
+```
+QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at: string|null, error: string,
+                  windows: [{ key: string, utilization: number, resets_at: string|null,
+                              status: "allowed"|"allowed_warning"|"rejected"|"", used?: number, limit?: number }] }
+```
+
+- 类型不支持额度：`{supported: false, source: "", updated_at: null, error: "", windows: []}`，不访问上游。
+- 是否主动查询（仅 `quota.query` 类型）：快照 `updated_at` 在 3 分钟内（被动或主动都算）→ 直接返回；上次主动查询失败且距 `last_active_at` 不足 1 分钟 → 直接返回（负缓存）；距 `last_active_at` 不足 30 秒 → 直接返回；否则查一次。`force=true` 跳过 3 分钟新鲜度与 1 分钟负缓存，但仍受 30 秒下限约束。同一节点同一账号的并发请求经 singleflight 合并为一次查询；跨节点由 `ClaimAccountQuotaQuery`（`UPDATE … WHERE last_active_at <= now() - 30s`）保证 30 秒内只有一个节点真正发请求，抢不到的直接返回当前快照。
+- 上游或插件失败不让接口失败：返回 200 与旧窗口，`error` 说明原因。
+- 窗口顺序：`5h`、`7d`、`7d_sonnet`、`7d_fable`，然后按类型 `headers` 声明顺序，最后按字母序。`resets_at` 已过的窗口显示为已重置：`utilization = 0`、`resets_at = null`、`status = ""`（同 sub2api `estimateSetupTokenUsage`）。
+
+**`GET /api/v1/accounts`**（以及 `GET /accounts/:id` 等返回账号视图的接口）每项新增 `quota: QuotaSnapshot | null`：一次批量读 PG，**从不**触发上游请求；不支持额度的类型为 null；支持但尚无数据时为 `{supported: true, source: "", updated_at: null, error: "", windows: []}`。
+
+**`POST /api/v1/accounts/:id/reset-status`**（`account:update` / `account:own:update`，`OwnerScope`）→ 200，返回账号视图（同 PATCH 响应）。语义对应 sub2api `RateLimitService.ClearRateLimit`（清 `rate_limited_at` / `rate_limit_reset_at` / `overload_until`、模型级限流、临时不可调度、403 计数，**不改账号状态**）：next 中这些运行时阻断都落在同一个 Redis 冷却键 `cooldown:account:<id>`，因此：
+
+1. 删除冷却键；
+2. 写审计 `account.reset_status`（`detail.cooldown_cleared`）；
+3. 确实清掉了冷却时发 `account.status_changed`（`status` 为账号当前状态，`reason = "status reset by administrator"`），没有冷却时不发；
+4. 广播 `account:changed`。
+
+**不**恢复 §42 自动禁用或管理员禁用的账号（`status = disabled` 不变，需 `PATCH status=active`）——sub2api 的 `ClearRateLimit` 同样不动 `Status`，清错误状态是另一个操作（`ClearError`）。额度快照也不清：它是上游事实，下一次采样自然更新。
+
+旧路由 `GET /accounts/:id/subscription/limits`、`POST /accounts/:id/subscription/limits/reset` 删除（从未发布）。
+
+### 44.6 claude-oauth 插件（0.1.1）
+
+- `claude_oauth` 与 `claude_setup_token` 都声明被动采样：`5h` / `7d` / `7d_fable` ← `anthropic-ratelimit-unified-{5h,7d,7d_oi}-{utilization,reset,status}`（utilization 为 0–1 小数、reset 为 Unix 秒，见 sub2api `ratelimit_service.go` `samplePassiveUsageFromHeaders` 与 `account_usage_service.go` `buildPassiveUsageWindow` 的 `util * 100`）。
+- `claude_oauth` 声明 `query: true`：`GET https://api.anthropic.com/api/oauth/usage`，头部 `Accept: application/json, text/plain, */*`、`Content-Type: application/json`、`Authorization: Bearer <access_token>`、`anthropic-beta: oauth-2025-04-20`、`User-Agent: claude-code/2.1.7`（同 sub2api `claude_usage_service.go`）。响应 `five_hour` → `5h`（总是返回），`seven_day` → `7d`、`seven_day_sonnet` → `7d_sonnet`、`seven_day_overage_included` → `7d_fable`（仅当带 `resets_at` 时返回，同 sub2api `buildUsageInfo`）；`utilization` 已是百分比。401/403 → `auth_rejected`，其他失败 → `transient`。
+- `claude_setup_token` 没有 profile 权限，`BuildQuotaRequest` 回 `Unimplemented`，只靠响应头（同 sub2api `estimateSetupTokenUsage`）。
+- manifest 同时补齐安装校验要求的 `platform.register` 权限与 `accounts.credentials` 的 `{"types": "own"}` scope。

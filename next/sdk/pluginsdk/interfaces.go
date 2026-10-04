@@ -109,6 +109,18 @@ type Reconciler interface {
 	ParseReconcileResponse(context.Context, *pluginv1.ParseReconcileResponseRequest) (*pluginv1.ReconcileResult, error)
 }
 
+// QuotaReader is implemented by account types whose upstream can report the
+// subscription quota of an account (5-hour / weekly windows, CONTRACTS §44)
+// and that declare manifest accountTypes[].quota.query. Like ModelLister the
+// plugin only describes the request and reads the answer; the host sends it
+// through the account's proxy, at most once per account every 30 seconds.
+// Optional: a Platform without it answers both with UNIMPLEMENTED and the
+// host relies on the quota headers it samples from gateway responses.
+type QuotaReader interface {
+	BuildQuotaRequest(context.Context, *pluginv1.BuildQuotaRequestRequest) (*pluginv1.BuildQuotaRequestResponse, error)
+	ParseQuotaResponse(context.Context, *pluginv1.ParseQuotaResponseRequest) (*pluginv1.QuotaResult, error)
+}
+
 // Hook mirrors pluginv1.HookServiceServer ("gateway.hook.v1").
 type Hook interface {
 	OnGatewayRequest(context.Context, *pluginv1.GatewayRequestHookRequest) (*pluginv1.GatewayRequestHookResponse, error)

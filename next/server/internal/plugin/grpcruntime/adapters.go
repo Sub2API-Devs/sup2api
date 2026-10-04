@@ -252,11 +252,15 @@ func (a platformAdapter) ParseReconcileResponse(ctx context.Context, in *pluginv
 	return invoke(a.i, ctx, classBackground, TimeoutPlatformConsole, platformOf, pluginv1.PlatformServiceClient.ParseReconcileResponse, in)
 }
 
-// QuerySubscriptionLimits runs in the account limits service, not in a
-// request, so it gets the console budget: it is user-triggered but not on
-// the hot path.
-func (a platformAdapter) QuerySubscriptionLimits(ctx context.Context, in *pluginv1.QuerySubscriptionLimitsRequest) (*pluginv1.QuerySubscriptionLimitsResponse, error) {
-	return invoke(a.i, ctx, classBackground, TimeoutPlatformConsole, platformOf, pluginv1.PlatformServiceClient.QuerySubscriptionLimits, in)
+// BuildQuotaRequest and ParseQuotaResponse run in the account module when
+// the console asks for a stale quota snapshot (CONTRACTS §44): somebody is
+// waiting, but not a gateway client, so they get the console budget.
+func (a platformAdapter) BuildQuotaRequest(ctx context.Context, in *pluginv1.BuildQuotaRequestRequest) (*pluginv1.BuildQuotaRequestResponse, error) {
+	return invoke(a.i, ctx, classConsole, TimeoutPlatformConsole, platformOf, pluginv1.PlatformServiceClient.BuildQuotaRequest, in)
+}
+
+func (a platformAdapter) ParseQuotaResponse(ctx context.Context, in *pluginv1.ParseQuotaResponseRequest) (*pluginv1.QuotaResult, error) {
+	return invoke(a.i, ctx, classConsole, TimeoutPlatformConsole, platformOf, pluginv1.PlatformServiceClient.ParseQuotaResponse, in)
 }
 
 type hookAdapter struct{ i *Instance }

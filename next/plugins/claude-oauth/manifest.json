@@ -9,7 +9,7 @@
     "en": "OAuth and setup-token authentication for Claude platform accounts",
     "zh": "Claude 平台的 OAuth 与 setup-token 认证"
   },
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "sup2api",
   "icon": "text:CO",
   "runtime": "grpc",
@@ -63,7 +63,30 @@
         "claude-opus-5",
         "claude-sonnet-5",
         "claude-opus-4-8"
-      ]
+      ],
+      "quota": {
+        "query": true,
+        "headers": [
+          {
+            "key": "5h",
+            "utilization": "anthropic-ratelimit-unified-5h-utilization",
+            "reset": "anthropic-ratelimit-unified-5h-reset",
+            "status": "anthropic-ratelimit-unified-5h-status"
+          },
+          {
+            "key": "7d",
+            "utilization": "anthropic-ratelimit-unified-7d-utilization",
+            "reset": "anthropic-ratelimit-unified-7d-reset",
+            "status": "anthropic-ratelimit-unified-7d-status"
+          },
+          {
+            "key": "7d_fable",
+            "utilization": "anthropic-ratelimit-unified-7d_oi-utilization",
+            "reset": "anthropic-ratelimit-unified-7d_oi-reset",
+            "status": "anthropic-ratelimit-unified-7d_oi-status"
+          }
+        ]
+      }
     },
     {
       "id": "claude_setup_token",
@@ -95,7 +118,29 @@
         "claude-opus-5",
         "claude-sonnet-5",
         "claude-opus-4-8"
-      ]
+      ],
+      "quota": {
+        "headers": [
+          {
+            "key": "5h",
+            "utilization": "anthropic-ratelimit-unified-5h-utilization",
+            "reset": "anthropic-ratelimit-unified-5h-reset",
+            "status": "anthropic-ratelimit-unified-5h-status"
+          },
+          {
+            "key": "7d",
+            "utilization": "anthropic-ratelimit-unified-7d-utilization",
+            "reset": "anthropic-ratelimit-unified-7d-reset",
+            "status": "anthropic-ratelimit-unified-7d-status"
+          },
+          {
+            "key": "7d_fable",
+            "utilization": "anthropic-ratelimit-unified-7d_oi-utilization",
+            "reset": "anthropic-ratelimit-unified-7d_oi-reset",
+            "status": "anthropic-ratelimit-unified-7d_oi-status"
+          }
+        ]
+      }
     }
   ],
 
@@ -152,7 +197,17 @@
       }
     },
     {
+      "id": "platform.register",
+      "reason": {
+        "en": "Declare the Claude OAuth and setup-token account types",
+        "zh": "声明 Claude OAuth 与 setup-token 账号类型"
+      }
+    },
+    {
       "id": "accounts.credentials",
+      "scope": {
+        "types": "own"
+      },
       "reason": {
         "en": "Read account credentials to check token expiration and refresh tokens",
         "zh": "读取账号凭证以检查令牌过期并刷新令牌"

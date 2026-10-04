@@ -45,7 +45,11 @@ type Deps struct {
 	// Limiter enforces per-account rpm/tpm/tpd/spm limits (CONTRACTS §18);
 	// nil = no limits.
 	Limiter core.AccountLimiter
-	Config  *config.Config
+	// Quota receives the subscription quota headers of upstream responses
+	// for account types declaring manifest quota.headers (CONTRACTS §44);
+	// nil = not recorded.
+	Quota  core.QuotaObserver
+	Config *config.Config
 	// Converters are the core's protocol converters (ARCHITECTURE 6.6);
 	// nil means convert.Default(). Hand the same registry (or the Gateway,
 	// see Converters/CanConvert) to the account module as

@@ -24,11 +24,6 @@ service PlatformService {
   // Requires platform.monitor.v1 and host API 4.
   rpc Monitor(PollRequest) returns (MonitorResponse);
   rpc ValidateCredentials(ValidateCredentialsRequest) returns (ValidateCredentialsResponse);
-  // Query subscription limits for a subscription-type account (not API Key).
-  // Returns usage windows (5h, 1w, daily_fable, etc.) with current usage and
-  // limits. Optional: answer UNIMPLEMENTED when the account type does not
-  // support subscription limits or the upstream has no such API.
-  rpc QuerySubscriptionLimits(QuerySubscriptionLimitsRequest) returns (QuerySubscriptionLimitsResponse);
   // Hot path: called once per upstream attempt. Keep it fast (< 2s timeout).
   rpc BuildUpstreamRequest(BuildUpstreamRequestRequest) returns (BuildUpstreamRequestResponse);
   // Called once per failed upstream attempt.
@@ -135,6 +130,24 @@ service PlatformService {
   // is no field here for an amount, and the tokens it reports are priced by
   // the administrator's price table exactly like a live request's.
   rpc ParseReconcileResponse(ParseReconcileResponseRequest) returns (ReconcileResult);
+  // Builds the request that reads the subscription quota of one account
+  // (5-hour / weekly windows and the like, CONTRACTS §44), for account types
+  // declaring manifest accountTypes[].quota.query. Same division of labour
+  // as BuildTestRequest and BuildReconcileRequest: the plugin DESCRIBES the
+  // request, the host sends it through the account's proxy, behind its SSRF
+  // guard and timeout, and hands the answer to ParseQuotaResponse. The host
+  // decides when to ask - at most once per account every 30 seconds, and
+  // normally only when its snapshot is older than 3 minutes - so the plugin
+  // needs no "net" permission and no cache of its own.
+  //
+  // Called on the plugin declaring the account type; the account carries its
+  // credentials as in BuildTestRequest. Optional: answer UNIMPLEMENTED and
+  // the host keeps the snapshot it samples passively from the gateway's
+  // upstream responses (manifest accountTypes[].quota.headers).
+  rpc BuildQuotaRequest(BuildQuotaRequestRequest) returns (BuildQuotaRequestResponse);
+  // Reads the upstream's answer to the request above into quota windows. It
+  // states upstream facts only; the host stores, merges and serves them.
+  rpc ParseQuotaResponse(ParseQuotaResponseRequest) returns (QuotaResult);
 }
 
 message EstimateUsageRequest {
@@ -562,37 +575,73 @@ message ReconcileResult {
   string task_snapshot_json = 6;
 }
 
-// QuerySubscriptionLimitsRequest asks the plugin to query the upstream API
-// for the current usage limits of a subscription-type account.
-message QuerySubscriptionLimitsRequest {
-  int64 account_id = 1;
-  string account_name = 2;
-  string account_type = 3;
-  // Decrypted credentials JSON. The host only passes credentials when the
-  // account type belongs to this plugin.
-  string credentials_json = 4;
-  string settings_json = 5;
-  string proxy_url = 6;
+message BuildQuotaRequestRequest {
+  // The account whose quota is asked for, credentials included (the account
+  // type is always this plugin's). platform is empty: no client endpoint is
+  // involved.
+  Account account = 1;
 }
 
-// SubscriptionWindow represents one time-based usage limit window (e.g., 5h, 1w).
-message SubscriptionWindow {
-  string label = 1;          // Display label: "5h", "1w", "daily_fable", etc.
-  int64 seconds = 2;         // Window duration in seconds
-  int64 used = 3;            // Amount used in this window
-  int64 limit = 4;           // Maximum allowed in this window
-  int64 reset_at = 5;        // Unix timestamp when this window resets
+message BuildQuotaRequestResponse {
+  string method = 1;               // default "GET"
+  // Absolute http(s) URL. The host rejects private/loopback/link-local
+  // targets (SSRF guard) unless the account goes through a proxy, and sends
+  // it through the account's proxy.
+  string url = 2;
+  map<string, string> headers = 3;
+  string body_json = 4;            // optional
 }
 
-// QuerySubscriptionLimitsResponse returns the current usage windows.
-message QuerySubscriptionLimitsResponse {
-  repeated SubscriptionWindow windows = 1;
-  // Provider identifier for logging/debugging, e.g. "kimi-coding-plan"
-  string provider = 2;
-  // Error classification:
-  // "" (empty) = success
-  // "auth_rejected" = credentials invalid/expired (401/403)
-  // "transient" = temporary failure (timeout, 500, etc.)
-  string error_type = 3;
-  string error_message = 4;
+message ParseQuotaResponseRequest {
+  Account account = 1;             // as in BuildQuotaRequest
+  // Upstream status, 0 for a transport error (see transport_error).
+  int32 status = 2;
+  map<string, string> headers = 3; // lower-cased
+  bytes body = 4;                  // truncated to the host's body cap (64 KiB)
+  string transport_error = 5;
+  // The response exceeded the host's body cap; do not trust a partial
+  // document.
+  bool truncated = 6;
+}
+
+// QuotaWindow is one usage window of a subscription, e.g. the 5-hour or the
+// weekly limit.
+message QuotaWindow {
+  // Window key. The host and console know "5h", "7d", "7d_sonnet" and
+  // "7d_fable"; other upstreams may use their own keys
+  // (^[a-z0-9][a-z0-9_]{0,31}$). Windows are merged by key with what the
+  // host already knows (a window missing from one answer keeps its last
+  // value).
+  string key = 1;
+  // Share of the window used, in PERCENT (0-100; over 100 when the upstream
+  // allows overage). When 0 and limit > 0 the host derives it from
+  // used / limit.
+  double utilization = 2;
+  // When the window resets, Unix seconds; 0 = unknown.
+  int64 resets_at_unix = 3;
+  // "allowed", "allowed_warning", "rejected" or empty (unknown). Anything
+  // else is stored as empty.
+  string status = 4;
+  // Optional absolute figures, for upstreams that report them.
+  int64 used = 5;
+  int64 limit = 6;
+}
+
+// QuotaResult is what the plugin read out of the quota answer.
+message QuotaResult {
+  enum ErrorType {
+    // Success: windows carries the quota (it may be empty).
+    ERROR_TYPE_UNSPECIFIED = 0;
+    // The upstream rejected the credentials (401/403, revoked token). The
+    // host records the error on the snapshot; it does NOT disable or cool
+    // down the account - the gateway's own classification does that.
+    ERROR_TYPE_AUTH_REJECTED = 1;
+    // Any other failure: transport error, 429, 5xx, unreadable body. The
+    // host records it and does not ask again for a minute.
+    ERROR_TYPE_TRANSIENT = 2;
+  }
+  repeated QuotaWindow windows = 1;
+  ErrorType error_type = 2;
+  // Why, shown with the snapshot. At most 512 bytes are kept.
+  string error_message = 3;
 }

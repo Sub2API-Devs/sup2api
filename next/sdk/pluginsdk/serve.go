@@ -470,6 +470,20 @@ func (s platformServer) ParseReconcileResponse(ctx context.Context, in *pluginv1
 	return nil, status.Error(codes.Unimplemented, "this platform does not reconcile pre-charged entries")
 }
 
+func (s platformServer) BuildQuotaRequest(ctx context.Context, in *pluginv1.BuildQuotaRequestRequest) (*pluginv1.BuildQuotaRequestResponse, error) {
+	if q, ok := s.impl.(QuotaReader); ok {
+		return q.BuildQuotaRequest(ctx, in)
+	}
+	return nil, status.Error(codes.Unimplemented, "this account type cannot query its quota")
+}
+
+func (s platformServer) ParseQuotaResponse(ctx context.Context, in *pluginv1.ParseQuotaResponseRequest) (*pluginv1.QuotaResult, error) {
+	if q, ok := s.impl.(QuotaReader); ok {
+		return q.ParseQuotaResponse(ctx, in)
+	}
+	return nil, status.Error(codes.Unimplemented, "this account type cannot query its quota")
+}
+
 type hookServer struct {
 	pluginv1.UnimplementedHookServiceServer
 	impl Hook

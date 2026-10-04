@@ -284,6 +284,61 @@ type AccountType struct {
 	// could never be scheduled.
 	DefaultModels       []string          `json:"defaultModels,omitempty"`
 	DefaultModelMapping map[string]string `json:"defaultModelMapping,omitempty"`
+	// Quota declares that accounts of this type have subscription quota
+	// windows (5-hour / weekly limits and the like) the host can track
+	// (CONTRACTS §44). nil: the type has no quota (API keys); the console
+	// shows nothing for it.
+	Quota *AccountQuota `json:"quota,omitempty"`
+}
+
+// AccountQuota is how the host learns the subscription quota of an account
+// type (CONTRACTS §44). Headers are read from the gateway's own upstream
+// responses (success and 429) at no extra upstream cost; Query says the
+// plugin also implements BuildQuotaRequest / ParseQuotaResponse, which the
+// host calls when its snapshot is stale. At least one of the two is required.
+type AccountQuota struct {
+	Headers []QuotaHeader `json:"headers,omitempty"`
+	Query   bool          `json:"query,omitempty"`
+}
+
+// MaxQuotaHeaders bounds AccountQuota.Headers.
+const MaxQuotaHeaders = 16
+
+// QuotaHeader maps upstream response headers to one quota window. Header
+// names are matched case-insensitively; a header that is absent or does not
+// parse leaves that value unknown, and a window none of whose headers is
+// present is not reported at all.
+type QuotaHeader struct {
+	// Key names the window (^[a-z0-9][a-z0-9_]{0,31}$). The console knows
+	// "5h", "7d", "7d_sonnet" and "7d_fable"; others are shown as is.
+	Key string `json:"key"`
+	// Utilization is the header carrying the share of the window used.
+	Utilization string `json:"utilization,omitempty"`
+	// UtilizationUnit is "ratio" (default: 0-1, e.g. Anthropic's 0.42) or
+	// "percent" (0-100).
+	UtilizationUnit string `json:"utilizationUnit,omitempty"`
+	// Reset is the header carrying when the window resets.
+	Reset string `json:"reset,omitempty"`
+	// ResetFormat is "unix" (default: Unix seconds, milliseconds detected),
+	// "rfc3339" or "delta" (seconds from now).
+	ResetFormat string `json:"resetFormat,omitempty"`
+	// Status is the header carrying "allowed", "allowed_warning" or
+	// "rejected"; other values are recorded as unknown.
+	Status string `json:"status,omitempty"`
+}
+
+// Values of QuotaHeader.UtilizationUnit and QuotaHeader.ResetFormat.
+const (
+	QuotaUnitRatio    = "ratio"
+	QuotaUnitPercent  = "percent"
+	QuotaResetUnix    = "unix"
+	QuotaResetRFC3339 = "rfc3339"
+	QuotaResetDelta   = "delta"
+)
+
+// Supported reports whether the declaration tracks anything.
+func (q *AccountQuota) Supported() bool {
+	return q != nil && (len(q.Headers) > 0 || q.Query)
 }
 
 // MaxDefaultModels bounds AccountType.DefaultModels and DefaultModelMapping;

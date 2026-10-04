@@ -18,6 +18,8 @@ import AccountTypeEndpoints from './AccountTypeEndpoints.vue'
 import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
 import AccountEditor from './AccountEditor.vue'
 import { sameCreationGroup } from './accountTypeChoices'
+import AccountQuotaCell from './AccountQuotaCell.vue'
+import { hasQuota, resetAccountStatus, useQuotaRefresh } from './accountQuota'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -72,6 +74,8 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'status', label: t('common.status') },
   { key: 'concurrency', label: t('accounts.scheduling') },
   { key: 'limits', label: t('accounts.limits') },
+  // Only when a row of this page has plan windows (subscription accounts).
+  ...(list.items.value.some((a) => hasQuota(a.quota)) ? [{ key: 'quota', label: t('accounts.quota.column') }] : []),
   { key: 'actions', label: t('common.actions'), align: 'right' }
 ])
 
@@ -304,7 +308,36 @@ async function openDetail(a: Account) {
   detail.value = a
   detailOpen.value = true
   try {
-    detail.value = await api.get<Account>(`/accounts/${a.id}`)
+    const full = await api.get<Account>(`/accounts/${a.id}`)
+    // The quota snapshot is a list field; keep the row's when the detail omits it.
+    detail.value = full.quota === undefined ? { ...full, quota: a.quota } : full
+  } catch (e) {
+    notifyError(e)
+  }
+}
+
+// ---------------------------------------------------------------- quota refresh / reset status
+// The snapshot of every row arrives with the list; "refresh" asks the upstream
+// for one account (force) at most every 30 s, never automatically.
+const quotaRefresh = useQuotaRefresh({
+  onSnapshot(id, snapshot) {
+    const row = list.items.value.find((x) => x.id === id)
+    if (row) row.quota = snapshot
+    if (detail.value?.id === id) detail.value.quota = snapshot
+  },
+  onThrottled: (_id, n) => toast(t('accounts.quota.refreshThrottled', { n }), 'info'),
+  onError: (_id, e) => notifyError(e)
+})
+const canResetStatus = (a: Account) => canUpdate(a) && !a.orphaned
+
+async function resetStatus(a: Account) {
+  const ok = await confirm({ title: t('accounts.resetStatusTitle'), message: t('accounts.resetStatusConfirm', { name: a.name }), confirmText: t('accounts.resetStatus') })
+  if (!ok) return
+  try {
+    await resetAccountStatus(a.id)
+    toast(t('accounts.resetStatusDone'), 'success')
+    if (detail.value?.id === a.id) openDetail(a)
+    list.reload()
   } catch (e) {
     notifyError(e)
   }
@@ -335,6 +368,7 @@ function actionsFor(a: Account) {
   return [
     { key: 'detail', label: t('common.detail') },
     { key: 'reveal', label: t('accounts.revealCredentials'), hidden: !canReveal(a) || a.orphaned },
+    { key: 'reset-status', label: t('accounts.resetStatus'), hidden: !canResetStatus(a) },
     { key: 'delete', label: t('common.delete'), danger: true, hidden: !canDelete(a) }
   ]
 }
@@ -342,6 +376,7 @@ function actionsFor(a: Account) {
 function onAction(a: Account, key: string) {
   if (key === 'detail') openDetail(a)
   else if (key === 'reveal') reveal(a)
+  else if (key === 'reset-status') resetStatus(a)
   else if (key === 'delete') remove(a)
 }
 
@@ -426,6 +461,9 @@ function groupTags(a: Account) {
         <SHint v-if="statusOf(row).detail" size="xs" class="mt-1 line-clamp-2 max-w-[16rem] break-words" :title="statusOf(row).detail">
           {{ statusOf(row).detail }}
         </SHint>
+        <SLink v-if="coolingDown(row) && canResetStatus(row)" as="button" class="mt-1 inline-flex items-center gap-1 text-xs" :title="t('accounts.resetStatusHint')" data-testid="account-reset-status" @click="resetStatus(row)">
+          <SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('accounts.resetStatus') }}
+        </SLink>
       </template>
       <template #cell-concurrency="{ row }">
         <div class="min-w-28 space-y-1.5 text-xs tabular-nums"><div class="flex justify-between gap-3"><span class="text-gray-400">{{ t('accounts.concurrency') }}</span><span :class="row.max_concurrency && (row.in_use || 0) >= row.max_concurrency ? 'font-semibold text-amber-600' : ''">{{ row.in_use ?? 0 }}/{{ row.max_concurrency || '∞' }}</span></div><div class="flex justify-between gap-3 text-[11px] text-gray-500"><span>{{ t('accounts.listUi.priorityWeight') }}</span><span>{{ row.priority }} / {{ row.weight ?? 1 }}</span></div></div>
@@ -437,6 +475,11 @@ function groupTags(a: Account) {
           </span>
         </div>
         <SHint v-else inline>—</SHint>
+      </template>
+      <template #cell-quota="{ row }">
+        <AccountQuotaCell v-if="hasQuota(row.quota)" :quota="row.quota" :refreshing="quotaRefresh.refreshing.has(row.id)" @refresh="quotaRefresh.refresh(row.id, row.quota)" />
+        <!-- no plan limits (API keys): show nothing, not even the table's "—" fallback -->
+        <span v-else />
       </template>
       <template #cell-actions="{ row }">
         <div class="flex items-center justify-end gap-1">
@@ -568,6 +611,7 @@ function groupTags(a: Account) {
             <dd>
               <SBadge :tone="statusOf(detail).tone" dot>{{ statusOf(detail).label }}</SBadge>
               <SHint v-if="statusOf(detail).detail" inline size="xs" class="ml-2">{{ statusOf(detail).detail }}</SHint>
+              <SLink v-if="coolingDown(detail) && canResetStatus(detail)" as="button" class="ml-2 text-xs" :title="t('accounts.resetStatusHint')" @click="resetStatus(detail)">{{ t('accounts.resetStatus') }}</SLink>
             </dd>
             <dt>{{ t('accounts.groups') }}</dt>
             <dd>{{ groupNames(detail.group_ids, detail.groups) }}</dd>
@@ -586,6 +630,10 @@ function groupTags(a: Account) {
               </span>
               <SHint v-else inline>—</SHint>
             </dd>
+            <template v-if="hasQuota(detail.quota)">
+              <dt>{{ t('accounts.quota.column') }}</dt>
+              <dd><AccountQuotaCell :quota="detail.quota" :refreshing="quotaRefresh.refreshing.has(detail.id)" @refresh="quotaRefresh.refresh(detail.id, detail.quota)" /></dd>
+            </template>
             <dt>{{ t('accounts.models') }}</dt>
             <dd>
               <span v-if="detail.models?.length" class="flex flex-wrap gap-1">
