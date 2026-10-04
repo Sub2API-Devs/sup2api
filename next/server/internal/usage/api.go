@@ -225,6 +225,11 @@ func (s *Service) myUsage(c *gin.Context) {
 
 func (s *Service) allUsage(c *gin.Context) { s.list(c, nil) }
 
+// list serves the usage lists. By default it pages by number with a total
+// (page, page_size; the console's pager). With a cursor parameter - empty
+// for the first page - it pages by keyset instead: no count(*) and no
+// OFFSET, so deep pages of a large usage_logs stay cheap; the answer carries
+// page.next_cursor while there is more.
 func (s *Service) list(c *gin.Context, self *int64) {
 	ctx := c.Request.Context()
 	f, err := parseFilter(c, self)
@@ -232,41 +237,31 @@ func (s *Service) list(c *gin.Context, self *int64) {
 		httpapi.Fail(c, err)
 		return
 	}
-	_, size := httpapi.Pagination(c)
-
-	// Keyset pagination: cursor format is "created_at,id"
-	cursor := c.Query("cursor")
-	var cursorTime time.Time
-	var cursorID int64
-	if cursor != "" {
-		parts := strings.Split(cursor, ",")
-		if len(parts) == 2 {
-			cursorTime, _ = time.Parse(time.RFC3339Nano, parts[0])
-			cursorID, _ = strconv.ParseInt(parts[1], 10, 64)
+	page, size := httpapi.Pagination(c)
+	cursor, keyset := c.GetQuery("cursor")
+	var total int64
+	if keyset {
+		if cursor != "" {
+			at, id, ok := parseCursor(cursor)
+			if !ok {
+				httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("invalid cursor"))
+				return
+			}
+			f.args = append(f.args, at, id)
+			n := len(f.args)
+			f.where = append(f.where, "(u.created_at, u.id) < ($"+strconv.Itoa(n-1)+", $"+strconv.Itoa(n)+")")
 		}
+	} else if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM usage_logs u`+f.sql(), f.args...).Scan(&total); err != nil {
+		httpapi.Fail(c, err)
+		return
 	}
-
-	// Add cursor condition to filter
-	if !cursorTime.IsZero() {
-		f.add("(u.created_at < ? OR (u.created_at = ? AND u.id < ?))", cursorTime)
-		f.add("", cursorTime)
-		f.add("", cursorID)
+	limit, offset := size, (page-1)*size
+	if keyset {
+		limit, offset = size+1, 0 // one extra row tells whether there is more
 	}
-
-	// Optionally compute total if explicitly requested
-	var totalPtr *int64
-	if c.Query("with_total") == "true" {
-		var total int64
-		if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM usage_logs u`+f.sql(), f.args...).Scan(&total); err != nil {
-			httpapi.Fail(c, err)
-			return
-		}
-		totalPtr = &total
-	}
-
-	args := append(f.args, size+1) // Fetch one extra to detect if there are more results
+	args := append(f.args, limit, offset)
 	rows, err := s.db.Pool.Query(ctx, `SELECT `+recordColumns+recordJoins+f.sql()+
-		` ORDER BY u.created_at DESC, u.id DESC LIMIT $`+strconv.Itoa(len(args)), args...)
+		` ORDER BY u.created_at DESC, u.id DESC LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -288,26 +283,31 @@ func (s *Service) list(c *gin.Context, self *int64) {
 		httpapi.Fail(c, err)
 		return
 	}
-
-	// Check if there are more results and generate next cursor
-	var nextCursor string
+	if !keyset {
+		httpapi.List(c, items, httpapi.Page{Page: page, PageSize: size, Total: total})
+		return
+	}
+	p := gin.H{"page_size": size, "has_more": len(items) > size}
 	if len(items) > size {
 		items = items[:size]
 		last := items[len(items)-1]
-		nextCursor = last.CreatedAt.Format(time.RFC3339Nano) + "," + x.Itoa64(last.ID)
+		p["next_cursor"] = last.CreatedAt.UTC().Format(time.RFC3339Nano) + "," + x.Itoa64(last.ID)
 	}
+	c.JSON(200, gin.H{"data": items, "page": p})
+}
 
-	resp := map[string]any{"items": items, "page_size": size}
-	if nextCursor != "" {
-		resp["next_cursor"] = nextCursor
-		resp["has_more"] = true
-	} else {
-		resp["has_more"] = false
+// parseCursor reads "<created_at RFC 3339>,<id>" (page.next_cursor).
+func parseCursor(s string) (time.Time, int64, bool) {
+	at, id, ok := strings.Cut(s, ",")
+	if !ok {
+		return time.Time{}, 0, false
 	}
-	if totalPtr != nil {
-		resp["total"] = *totalPtr
+	t, err := time.Parse(time.RFC3339Nano, at)
+	if err != nil {
+		return time.Time{}, 0, false
 	}
-	c.JSON(200, resp)
+	n, err := strconv.ParseInt(id, 10, 64)
+	return t, n, err == nil && n > 0
 }
 
 func (s *Service) myUsageDetail(c *gin.Context) {

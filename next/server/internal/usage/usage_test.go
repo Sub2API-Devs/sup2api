@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -592,5 +594,52 @@ func TestPluginDetailRejectsNonObjects(t *testing.T) {
 	big := core.RawJSON(`{"pad":"` + strings.Repeat("x", core.MaxPluginDetailBytes) + `"}`)
 	if got := string(pluginDetailJSON(big)); got != "{}" {
 		t.Errorf("oversized document stored: %d bytes", len(got))
+	}
+}
+
+// With a cursor parameter the list pages by keyset: no total, page.next_cursor
+// while there is more, and the pages neither overlap nor skip rows.
+func TestUsageListKeyset(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	var recs []*core.UsageRecord
+	for i := 0; i < 3; i++ {
+		recs = append(recs, f.record(fmt.Sprintf("req-k%d", i), true))
+	}
+	f.svc.process(ctx, recs)
+
+	seen := map[float64]bool{}
+	cursor, pages := "", 0
+	for {
+		out := f.get(f.user, "/me/usage?page_size=2&cursor="+url.QueryEscape(cursor), 200)
+		page := out["page"].(map[string]any)
+		if _, ok := page["total"]; ok {
+			t.Fatalf("keyset page has a total: %v", page)
+		}
+		for _, it := range out["data"].([]any) {
+			id := it.(map[string]any)["id"].(float64)
+			if seen[id] {
+				t.Fatalf("row %v on two pages", id)
+			}
+			seen[id] = true
+		}
+		pages++
+		next, _ := page["next_cursor"].(string)
+		if page["has_more"] != (next != "") {
+			t.Fatalf("has_more/next_cursor disagree: %v", page)
+		}
+		if next == "" {
+			break
+		}
+		cursor = next
+	}
+	if len(seen) != 3 || pages != 2 {
+		t.Fatalf("saw %d rows on %d pages, want 3 on 2", len(seen), pages)
+	}
+	f.get(f.user, "/me/usage?cursor=not-a-cursor", 400)
+	// Without a cursor the console's numbered pages and total are unchanged.
+	if out := f.get(f.user, "/me/usage?page=2&page_size=2", 200); len(out["data"].([]any)) != 1 ||
+		out["page"].(map[string]any)["total"].(float64) != 3 {
+		t.Fatalf("numbered page 2: %v", out)
 	}
 }
