@@ -390,51 +390,8 @@ func (p *Plugin) validateWithAssets(in *pluginv1.ValidateCredentialsRequest) *pl
 	if len(errs) > 0 {
 		return &pluginv1.ValidateCredentialsResponse{Errors: errs}
 	}
-
-	// apikey.Spec.Validate puts both api_key and base_url in NormalizedCredentialsJson,
-	// but volcengine keeps base_url in settings. We need to reorganize the fields.
-	normalizedCreds, _ := decodeJSONObject(resp.GetNormalizedCredentialsJson())
-	normalizedSettings := make(map[string]any)
-
-	// Move base_url from credentials to settings if present
-	if baseURL, ok := normalizedCreds["base_url"]; ok && baseURL != "" {
-		normalizedSettings["base_url"] = baseURL
-		delete(normalizedCreds, "base_url")
-	}
-
-	// Merge asset credentials (access_key, secret_key) from original input
-	origCreds, _ := decodeJSONObject(in.GetCredentialsJson())
-	for k, v := range origCreds {
-		if k == FieldAccessKey || k == FieldSecretKey {
-			if s, ok := v.(string); ok {
-				normalizedCreds[k] = strings.TrimSpace(s)
-			}
-		}
-	}
-
-	// Merge settings fields from original input
-	origSettings, _ := decodeJSONObject(in.GetSettingsJson())
-	for k, v := range origSettings {
-		if k != "base_url" { // base_url already handled above
-			if s, ok := v.(string); ok {
-				normalizedSettings[k] = strings.TrimSpace(s)
-			} else {
-				normalizedSettings[k] = v
-			}
-		}
-	}
-
-	// Apply asset field normalization (normalize URLs, remove trailing slashes)
-	normalizedCredsJSON := mustMarshalJSON(normalizedCreds)
-	normalizedSettingsJSON := mustMarshalJSON(normalizedSettings)
-
 	return &pluginv1.ValidateCredentialsResponse{
-		NormalizedCredentialsJson: normalizeAssetFields(normalizedCredsJSON),
-		NormalizedSettingsJson:    normalizePrefixFields(normalizeAssetFields(normalizedSettingsJSON)),
+		NormalizedCredentialsJson: normalizeAssetFields(resp.GetNormalizedCredentialsJson()),
+		NormalizedSettingsJson:    normalizePrefixFields(normalizeAssetFields(resp.GetNormalizedSettingsJson())),
 	}
-}
-
-func mustMarshalJSON(v any) string {
-	b, _ := json.Marshal(v)
-	return string(b)
 }

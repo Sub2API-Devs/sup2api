@@ -2,6 +2,8 @@ package apikey
 
 import (
 	"testing"
+
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 )
 
 func TestValidator(t *testing.T) {
@@ -15,10 +17,10 @@ func TestValidator(t *testing.T) {
 		{"sk-live-xyz123456789012", "sk-live-xyz123456789012", false},
 		{"", "", true},
 		{"   ", "", true},
-		{"sk-prod-short", "", true},          // wrong prefix
-		{"sk-test-abc", "", true},            // too short
-		{"sk-test-abc def", "", true},        // whitespace
-		{"sk-test-abc\tdef", "", true},       // tab
+		{"sk-prod-short", "", true},           // wrong prefix
+		{"sk-test-abc", "", true},             // too short
+		{"sk-test-abc def", "", true},         // whitespace
+		{"sk-test-abc\tdef", "", true},        // tab
 		{"sk-test-abc\ndef1234567", "", true}, // newline
 	} {
 		got, err := v.Check(tc.in)
@@ -57,5 +59,48 @@ func TestBuiltinValidators(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Normalization stays in the object each field came from: base_url in
+// settings remains a setting (the core's guardedSettings check and the
+// console form read it there), and keys the validator does not know pass
+// through. The stage 1 refactor once merged everything into the
+// credentials and returned "{}" settings.
+func TestValidateNormalizesInPlace(t *testing.T) {
+	s := Spec{AccountType: "apikey", DefaultBaseURL: "https://api.example.com", StripSuffixes: []string{"/v1"}}
+	r := s.Validate(&pluginv1.ValidateCredentialsRequest{AccountType: "apikey",
+		CredentialsJson: `{"api_key":"  sk-example-123  ","note":"keep"}`,
+		SettingsJson:    `{"base_url":"https://proxy.example.com/v1/","region":"eu"}`})
+	if len(r.GetErrors()) != 0 {
+		t.Fatal(r.GetErrors())
+	}
+	if r.GetNormalizedCredentialsJson() != `{"api_key":"sk-example-123","note":"keep"}` ||
+		r.GetNormalizedSettingsJson() != `{"base_url":"https://proxy.example.com","region":"eu"}` {
+		t.Fatalf("creds=%s settings=%s", r.GetNormalizedCredentialsJson(), r.GetNormalizedSettingsJson())
+	}
+	// Nothing in settings: "" keeps whatever the core has.
+	r = s.Validate(&pluginv1.ValidateCredentialsRequest{AccountType: "apikey", CredentialsJson: `{"api_key":"sk-example-123"}`})
+	if r.GetNormalizedSettingsJson() != "" || r.GetNormalizedCredentialsJson() != `{"api_key":"sk-example-123"}` {
+		t.Fatalf("creds=%s settings=%q", r.GetNormalizedCredentialsJson(), r.GetNormalizedSettingsJson())
+	}
+}
+
+func TestNormalizeBaseURL(t *testing.T) {
+	strip := []string{"/v1beta", "/v1"}
+	for in, want := range map[string]string{
+		" https://proxy.example.com/v1beta/ ":   "https://proxy.example.com",
+		"https://proxy.example.com/x/v1/v1beta": "https://proxy.example.com/x/v1",
+		"https://proxy.example.com/v1":          "https://proxy.example.com",
+		"https://proxy.example.com":             "https://proxy.example.com",
+	} {
+		if got, err := NormalizeBaseURL(in, strip); err != nil || got != want {
+			t.Errorf("%q: %q %v, want %q", in, got, err, want)
+		}
+	}
+	for _, in := range []string{"", "ftp://x.example", "https://u:p@x.example", "https://x.example/?", "https://x.example/?a=1", "https://x.example/#f", "/relative"} {
+		if _, err := NormalizeBaseURL(in, strip); err == nil {
+			t.Errorf("%q accepted", in)
+		}
 	}
 }

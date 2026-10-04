@@ -26,9 +26,9 @@ func account(creds, settings string) *pluginv1.Account {
 const testKey = `{"api_key":"11111111-2222-3333-4444-555555555555"}`
 
 const (
-	transientCooldown         = classify.DefaultTransport
-	defaultRateLimitCooldown  = classify.DefaultRateLimit
-	maxCooldown               = classify.MaxCooldown
+	transientCooldown        = classify.DefaultTransport
+	defaultRateLimitCooldown = classify.DefaultRateLimit
+	maxCooldown              = classify.MaxCooldown
 )
 
 // TestCapabilities: stage three serves the asset library over the plugin's

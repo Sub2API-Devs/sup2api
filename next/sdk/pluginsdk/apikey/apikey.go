@@ -165,11 +165,33 @@ func (s Spec) Validate(in *pluginv1.ValidateCredentialsRequest) *pluginv1.Valida
 		return &pluginv1.ValidateCredentialsResponse{Errors: errs}
 	}
 
-	// Return normalized credentials
-	normalized, _ := json.Marshal(map[string]string{"api_key": key, "base_url": baseURL})
+	// Normalize each object in place: api_key and base_url are rewritten
+	// where they are, every other key passes through untouched (CONTRACTS
+	// §18: a legacy model_mapping, plugin-specific settings). Moving
+	// base_url from settings into credentials would take it out of reach of
+	// the core's guardedSettings check and the console form. An empty object
+	// stays empty: "" tells the core to keep what it has.
+	normalize := func(obj map[string]any) string {
+		if len(obj) == 0 {
+			return ""
+		}
+		out := make(map[string]any, len(obj))
+		for k, v := range obj {
+			switch k {
+			case "api_key":
+				out[k] = key
+			case "base_url":
+				out[k] = baseURL
+			default:
+				out[k] = v
+			}
+		}
+		b, _ := json.Marshal(out)
+		return string(b)
+	}
 	return &pluginv1.ValidateCredentialsResponse{
-		NormalizedCredentialsJson: string(normalized),
-		NormalizedSettingsJson:    "{}",
+		NormalizedCredentialsJson: normalize(creds),
+		NormalizedSettingsJson:    normalize(settings),
 	}
 }
 
@@ -214,7 +236,7 @@ func (s Spec) FromAccount(acc *pluginv1.Account) (*Config, error) {
 }
 
 func (s Spec) normalizeBaseURL(baseStr string) (string, error) {
-	if baseStr == "" {
+	if strings.TrimSpace(baseStr) == "" {
 		if s.RequireBaseURL {
 			return "", fmt.Errorf("is required")
 		}
@@ -226,6 +248,7 @@ func (s Spec) normalizeBaseURL(baseStr string) (string, error) {
 // NormalizeBaseURL validates and normalizes a base URL, stripping the given suffixes.
 // Returns an error if baseStr is empty.
 func NormalizeBaseURL(baseStr string, stripSuffixes []string) (string, error) {
+	baseStr = strings.TrimSpace(baseStr)
 	if baseStr == "" {
 		return "", fmt.Errorf("is required")
 	}
@@ -233,12 +256,17 @@ func NormalizeBaseURL(baseStr string, stripSuffixes []string) (string, error) {
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
 		return "", fmt.Errorf("must be an absolute http(s) URL")
 	}
-	if u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+	if u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.ForceQuery {
 		return "", fmt.Errorf("must not contain credentials, query or fragment")
 	}
 	p := strings.TrimRight(u.Path, "/")
+	// Only the first matching suffix: "/x/v1/v1beta" with /v1beta, /v1 is
+	// "/x/v1", not "/x".
 	for _, suffix := range stripSuffixes {
-		p = strings.TrimSuffix(p, suffix)
+		if strings.HasSuffix(p, suffix) {
+			p = strings.TrimSuffix(p, suffix)
+			break
+		}
 	}
 	u.Path = strings.TrimRight(p, "/")
 	u.RawPath = ""
