@@ -40,6 +40,11 @@ type Config struct {
 
 	// Managed is enabled only when a local supervisor owns process admission.
 	Managed ManagedConfig
+
+	// ShutdownDelay is how long the node reports unhealthy before it stops
+	// accepting connections, so load balancers take it out first
+	// (SUB2API_SHUTDOWN_DELAY, default 3s; `sub2api dev` sets 0).
+	ShutdownDelay time.Duration
 }
 
 type ManagedConfig struct {
@@ -90,6 +95,9 @@ func Load(goos string) (*Config, error) {
 		return nil, err
 	}
 	if c.RefreshTokenTTL, err = durationEnv("SUB2API_REFRESH_TOKEN_TTL", 720*time.Hour); err != nil {
+		return nil, err
+	}
+	if c.ShutdownDelay, err = durationEnv("SUB2API_SHUTDOWN_DELAY", 3*time.Second); err != nil {
 		return nil, err
 	}
 

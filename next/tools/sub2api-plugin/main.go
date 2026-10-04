@@ -1,6 +1,6 @@
 // Command sub2api-plugin is the developer tool for sub2api-next plugins:
 // key generation, cross-compilation, packaging, signing, verification and
-// market index generation.
+// market index generation, and a local core for development (dev).
 package main
 
 import (
@@ -21,6 +21,8 @@ Usage:
   sub2api-plugin verify --pub <public key file|base64> <file.s2plugin>
   sub2api-plugin index  --dir <market dir> --key <private key file> [--base-url <url>]
   sub2api-plugin manifest --dir <plugin dir> [--overlay <dir>]   (print the effective manifest)
+  sub2api-plugin dev    [--dir <plugin dir>] [--with <dir|file.s2plugin>]... [--addr 127.0.0.1:8080] [--core <sub2api>] [--reset] [--no-watch]
+                        (run a local core with the plugin installed; rebuild on change)
 
 Run "sub2api-plugin <command> -h" for the flags of one command.
 `
@@ -42,6 +44,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		"verify":   cmdVerify,
 		"index":    cmdIndex,
 		"manifest": cmdManifest,
+		"dev":      cmdDev,
 	}
 	fn, ok := cmds[args[0]]
 	if !ok {

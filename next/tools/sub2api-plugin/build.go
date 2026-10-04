@@ -75,35 +75,47 @@ func cmdBuild(args []string, stdout, stderr io.Writer) error {
 			targets = append(append([]string{}, targets...), local)
 		}
 	}
-	ldflags := fmt.Sprintf("-s -w -X %s.buildKey=%s -X %s.buildVersion=%s", sdkPkg, m.Key, sdkPkg, m.Version)
+	bins, err := buildRuntimes(absDir, outDir, m.Key, m.Version, targets, splitList(*tags), *pkg, stderr)
+	for _, bin := range bins {
+		fmt.Fprintln(stdout, bin)
+	}
+	return err
+}
+
+// buildRuntimes compiles the main package pkg of dir for every os/arch
+// target into <outDir>/runtimes/{os}-{arch}/, with key and version injected.
+// It returns the binaries built so far.
+func buildRuntimes(dir, outDir, key, version string, targets, tags []string, pkg string, stderr io.Writer) ([]string, error) {
+	ldflags := fmt.Sprintf("-s -w -X %s.buildKey=%s -X %s.buildVersion=%s", sdkPkg, key, sdkPkg, version)
+	var bins []string
 	for _, t := range targets {
 		goos, goarch, ok := strings.Cut(t, "/")
 		if !ok || goos == "" || goarch == "" {
-			return fmt.Errorf("bad platform %q (want os/arch)", t)
+			return bins, fmt.Errorf("bad platform %q (want os/arch)", t)
 		}
 		bin := filepath.Join(outDir, "runtimes", goos+"-"+goarch, binaryName(goos))
 		if err := os.MkdirAll(filepath.Dir(bin), 0o755); err != nil {
-			return err
+			return bins, err
 		}
 		goArgs := []string{"build", "-trimpath", "-ldflags", ldflags, "-o", bin}
-		if *tags != "" {
-			goArgs = append(goArgs, "-tags", strings.Join(splitList(*tags), ","))
+		if len(tags) > 0 {
+			goArgs = append(goArgs, "-tags", strings.Join(tags, ","))
 		}
-		goArgs = append(goArgs, *pkg)
+		goArgs = append(goArgs, pkg)
 		cmd := exec.Command("go", goArgs...)
-		cmd.Dir = absDir
+		cmd.Dir = dir
 		cmd.Env = append(os.Environ(), "GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0")
 		cmd.Stdout = stderr
 		cmd.Stderr = stderr
-		fmt.Fprintf(stderr, "building %s %s for %s/%s\n", m.Key, m.Version, goos, goarch)
+		fmt.Fprintf(stderr, "building %s %s for %s/%s\n", key, version, goos, goarch)
 		if err := cmd.Run(); err != nil {
 			var ee *exec.ExitError
 			if errors.As(err, &ee) {
-				return fmt.Errorf("go build for %s failed", t)
+				return bins, fmt.Errorf("go build for %s failed", t)
 			}
-			return err
+			return bins, err
 		}
-		fmt.Fprintln(stdout, bin)
+		bins = append(bins, bin)
 	}
-	return nil
+	return bins, nil
 }

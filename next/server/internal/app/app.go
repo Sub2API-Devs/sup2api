@@ -426,7 +426,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	// Expose non-readiness before closing the listener, so health-based
 	// balancers can remove this node while existing requests are still alive.
 	gate.stop()
-	time.Sleep(3 * time.Second)
+	time.Sleep(cfg.ShutdownDelay)
 	return shutdownHTTP(srv, gate, cancelRequests, 30*time.Second)
 }
 
