@@ -2,7 +2,7 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCheckbox, SchemaForm, SField, SGrid, SHint, SInput, SKeyValue, SLink, SModal, SSectionTitle, SSpinner, SSwitch, STextarea, toast } from '@sub2api/ui'
+import { SButton, SCheckbox, SchemaForm, SField, SGrid, SHint, SInput, SKeyValue, SLink, SModal, SSectionTitle, SSelect, SSpinner, SSwitch, STextarea, toast } from '@sub2api/ui'
 import type { Account, AccountType, Price } from '@/api/types'
 import { schemaWidgets } from '@/components/schema/widgets'
 import PluginIframe from '@/components/plugin/PluginIframe.vue'
@@ -10,6 +10,7 @@ import PluginSlot from '@/components/plugin/PluginSlot.vue'
 import GroupPicker from '@/components/GroupPicker.vue'
 import ProxyPicker from '@/components/ProxyPicker.vue'
 import { lt } from '@/i18n'
+import { sameCreationGroup } from './accountTypeChoices'
 import { assetURL, usePluginStore } from '@/stores/plugins'
 import { useAuthStore } from '@/stores/auth'
 import { useProxiesLookup } from '@/composables/lookups'
@@ -19,14 +20,19 @@ import { looksLikeProxyURL, parseProxyURL } from '@/utils/proxyUrl'
 
 // Step 2 of "new account" and the edit form (wireframe A.4, CONTRACTS §18.4):
 // 基本信息 / 调度 / 限流 / 模型 / 模型映射 (all core) + the plugin credential form.
-const props = defineProps<{ accountType: AccountType | null; account?: Account | null }>()
-const emit = defineEmits<{ (e: 'saved', a: Account): void; (e: 'cancel'): void; (e: 'back'): void; (e: 'test', a: Account): void }>()
+const props = defineProps<{ accountType: AccountType | null; accountTypeOptions?: AccountType[]; account?: Account | null }>()
+const emit = defineEmits<{ (e: 'change-type', at: AccountType): void; (e: 'saved', a: Account): void; (e: 'cancel'): void; (e: 'back'): void; (e: 'test', a: Account): void }>()
 const { t } = useI18n()
 const plugins = usePluginStore()
 const auth = useAuthStore()
 const own = useOwnership()
 
 const editing = computed(() => !!props.account?.id)
+const authOptions = computed(() => (props.accountTypeOptions || []).map(at => ({ value: at.type, label: lt(at.auth_method_label) || at.type })))
+function changeAuth(value: unknown) {
+  const at = props.accountTypeOptions?.find(at => at.type === value)
+  if (!editing.value && at && at.type !== props.accountType?.type) emit('change-type', at)
+}
 const mode = computed(() => props.accountType?.form.mode || 'schema')
 // Row-level rights (CONTRACTS §21.1): editing an account needs the all-level
 // key or the own-level key on an account the caller created.
@@ -336,9 +342,12 @@ const serverMappingError = computed(() => {
   return ''
 })
 
+let formRequest = 0
 watch(
   () => [props.account, props.accountType] as const,
-  async ([a, at]) => {
+  async ([a, at], previous) => {
+    const request = ++formRequest
+    const switchingAuth = !a && !previous?.[0] && sameCreationGroup(at, previous?.[1])
     activeSection.value = 'connection'
     errors.value = {}
     credErrors.value = {}
@@ -347,38 +356,42 @@ watch(
     modelsTextMode.value = false
     mappingJsonMode.value = false
     modelDraft.value = ''
-    basic.name = a?.name || ''
-    basic.group_ids = [...(a?.group_ids || [])]
-    basic.proxy_id = a?.proxy_id ?? null
-    // Editing defaults to "pick existing" with the current proxy selected.
-    proxyMode.value = 'existing'
-    proxyUrl.value = ''
-    basic.priority = a?.priority ?? 10
-    basic.weight = a?.weight ?? 1
-    basic.max_concurrency = a?.max_concurrency ?? 10
-    basic.schedulable = a?.schedulable ?? true
-    basic.rpm_limit = a?.rpm_limit ?? 0
-    basic.tpm_limit = a?.tpm_limit ?? 0
-    basic.tpd_limit = a?.tpd_limit ?? 0
-    basic.spm_limit = a?.spm_limit ?? 0
-    models.value = [...(a?.models || [])]
-    mapping.value = { ...(a?.model_mapping || {}) }
+    if (!switchingAuth) {
+      basic.name = a?.name || ''
+      basic.group_ids = [...(a?.group_ids || [])]
+      basic.proxy_id = a?.proxy_id ?? null
+      // Editing defaults to "pick existing" with the current proxy selected.
+      proxyMode.value = 'existing'
+      proxyUrl.value = ''
+      basic.priority = a?.priority ?? 10
+      basic.weight = a?.weight ?? 1
+      basic.max_concurrency = a?.max_concurrency ?? 10
+      basic.schedulable = a?.schedulable ?? true
+      basic.rpm_limit = a?.rpm_limit ?? 0
+      basic.tpm_limit = a?.tpm_limit ?? 0
+      basic.tpd_limit = a?.tpd_limit ?? 0
+      basic.spm_limit = a?.spm_limit ?? 0
+      models.value = [...(a?.models || [])]
+      mapping.value = { ...(a?.model_mapping || {}) }
+    }
     credentials.value = { ...(a?.credentials || {}) }
     schema.value = null
     uiSchema.value = null
     formError.value = ''
+    formLoading.value = false
     if (at && at.form.mode === 'schema') {
       formLoading.value = true
       try {
         const f = await api.get<{ schema: Record<string, any>; ui_schema?: Record<string, any> }>(
           `/account-types/${encodeURIComponent(at.plugin_key)}/${encodeURIComponent(at.type)}/form`
         )
+        if (request !== formRequest) return
         schema.value = f.schema
         uiSchema.value = f.ui_schema || null
       } catch (e) {
-        formError.value = errorMessage(e)
+        if (request === formRequest) formError.value = errorMessage(e)
       } finally {
-        formLoading.value = false
+        if (request === formRequest) formLoading.value = false
       }
     }
   },
@@ -573,6 +586,10 @@ async function save(event: Event) {
               </template>
             </SSectionTitle>
 
+            <SField v-if="!editing && authOptions.length > 1" :label="t('accounts.editorUi.authMethod')" class="mb-4">
+              <SSelect :model-value="accountType?.type" :options="authOptions" :disabled="saving" @update:model-value="changeAuth" />
+            </SField>
+            <SHint v-else-if="accountType?.auth_method_label" class="mb-4">{{ t('accounts.editorUi.authMethod') }}: {{ lt(accountType.auth_method_label) }}</SHint>
             <p v-if="account?.orphaned || !accountType" class="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
               {{ t('accounts.orphanedEdit') }}
             </p>

@@ -18,6 +18,11 @@ func TestManifestAndUsageContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	files := map[string][]byte{}
+	icon, err := os.ReadFile(m.Icon)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files[m.Icon] = icon
 	if err := filepath.WalkDir("forms", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -39,6 +44,17 @@ func TestManifestAndUsageContract(t *testing.T) {
 	}
 	if m.Key != "ccgateway" || len(m.AccountTypes) != 2 || m.AccountTypes[1].ID != "apikey" || m.AccountTypes[0].ID != "managed" {
 		t.Fatal("invalid managed identity")
+	}
+	for _, at := range m.AccountTypes {
+		if at.CreationGroup != "claude-code" || at.Label["en"] != "Claude Code" || at.Label["zh"] != "Claude Code" {
+			t.Fatalf("account type %s must share the Claude Code creation entry", at.ID)
+		}
+		if at.AuthMethodLabel["en"] == "" || at.AuthMethodLabel["zh"] == "" {
+			t.Fatalf("account type %s needs localized authentication labels", at.ID)
+		}
+	}
+	if m.AccountTypes[0].AuthMethodLabel["en"] == m.AccountTypes[1].AuthMethodLabel["en"] {
+		t.Fatal("authentication choices must remain distinguishable")
 	}
 	if len(m.AccountTypes[0].SensitiveFields) != 0 || len(m.AccountTypes[0].SettingsFields) != 0 || len(m.HostPermissions) != 2 {
 		t.Fatal("managed adapter must not request connection credentials")

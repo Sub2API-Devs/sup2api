@@ -9,9 +9,9 @@
     "en": "Official Volcengine Ark access for OpenAI-compatible APIs, Anthropic Messages, image and video generation, plus configurable Doubao video and asset endpoints. Existing relay text integrations remain compatible. Prices are configured by the administrator.",
     "zh": "提供方舟官方 OpenAI 兼容接口、Anthropic Messages、图片与视频生成，以及可自定义视频和素材端点的豆包视频账号。保留既有中转文本接入兼容，不内置价格。"
   },
-  "version": "0.12.0",
+  "version": "0.12.1",
   "publisher": "sub2api",
-  "icon": "text:V",
+  "icon": "assets/volcengine-color.svg",
   "runtime": "grpc",
   "entry": {
     "grpc": {
@@ -319,7 +319,8 @@
         {
           "platform": "volcengine"
         }
-      ]
+      ],
+      "icon": "assets/volcengine-color.svg"
     },
     {
       "id": "relay",
@@ -401,7 +402,8 @@
         {
           "platform": "volcengine"
         }
-      ]
+      ],
+      "icon": "assets/doubao-color.svg"
     }
   ],
   "database": {

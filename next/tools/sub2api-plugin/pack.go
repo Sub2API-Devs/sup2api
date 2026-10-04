@@ -25,7 +25,7 @@ const PackageExt = ".s2plugin"
 var zipEpoch = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 // Directories copied verbatim into the package.
-var packDirs = []string{"forms", "migrations", "i18n"}
+var packDirs = []string{"forms", "migrations", "i18n", "assets"}
 
 // cmdPack collects the package files and writes an unsigned .s2plugin.
 func cmdPack(args []string, stdout, stderr io.Writer) error {
@@ -100,12 +100,18 @@ func collectPackage(dir, runtimesDir, overlay string, allowMissingUI bool) (map[
 		return nil, nil, nil, err
 	}
 	// Icon stored in the package.
-	if m.Icon != "" && !strings.HasPrefix(m.Icon, "text:") {
-		b, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(m.Icon)))
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("icon: %w", err)
+	icons := []string{m.Icon}
+	for _, at := range m.AccountTypes {
+		icons = append(icons, at.Icon)
+	}
+	for _, icon := range icons {
+		if icon != "" && !strings.HasPrefix(icon, "text:") {
+			b, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(icon)))
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("icon: %w", err)
+			}
+			files[icon] = b
 		}
-		files[m.Icon] = b
 	}
 	// Overlay files (except the manifest override files) win.
 	if overlay != "" {

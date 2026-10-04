@@ -17,6 +17,7 @@ import AccountTypePicker from './AccountTypePicker.vue'
 import AccountTypeEndpoints from './AccountTypeEndpoints.vue'
 import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
 import AccountEditor from './AccountEditor.vue'
+import { sameCreationGroup } from './accountTypeChoices'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -459,6 +460,8 @@ function groupTags(a: Account) {
       <AccountEditor
         v-else
         :account-type="pickedType"
+        :account-type-options="accountTypes.types.value.filter(at => sameCreationGroup(at, pickedType))"
+        @change-type="pickedType = $event"
         :account="editing"
         @saved="onSaved"
         @cancel="editorOpen = false"

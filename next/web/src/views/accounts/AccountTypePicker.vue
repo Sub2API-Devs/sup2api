@@ -10,6 +10,7 @@ import TrustBadge from '@/views/plugins/parts/TrustBadge.vue'
 import AccountTypeEndpoints from './AccountTypeEndpoints.vue'
 import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
 import { typeKey, useAccountTypes } from './accountTypes'
+import { creationChoices } from './accountTypeChoices'
 
 // Step 1 of "new account" (wireframe A.3 / CONTRACTS §18.4): one flat grid of
 // compact cards, one per account type. Endpoints are collapsed by default.
@@ -25,7 +26,7 @@ const items = computed(() => grouped.value.flatMap((g) => g.types))
 const search = ref('')
 const filteredItems = computed(() => {
   const q = search.value.trim().toLocaleLowerCase()
-  return items.value.filter(at => !q || [lt(at.label), lt(at.plugin_name), at.plugin_key, at.type, lt(at.description)].some(v => v?.toLocaleLowerCase().includes(q)))
+  return creationChoices(items.value.filter(at => !q || [lt(at.label), lt(at.auth_method_label), lt(at.plugin_name), at.plugin_key, at.type, lt(at.description)].some(v => v?.toLocaleLowerCase().includes(q))))
 })
 
 const expanded = ref<Record<string, boolean>>({})
@@ -56,7 +57,7 @@ const isOpen = (at: AccountType) => !!expanded.value[typeKey(at.plugin_key, at.t
         @keydown.space.self.prevent="emit('pick', at)"
       >
         <div class="flex items-start gap-2">
-          <PluginAvatar :name="lt(at.plugin_name) || at.plugin_key" :plugin-key="at.plugin_key" size="sm" />
+          <PluginAvatar :name="lt(at.plugin_name) || at.plugin_key" :plugin-key="at.plugin_key" :icon="at.icon" :asset-base="at.asset_base" size="md" />
           <div class="min-w-0 flex-1">
             <div class="truncate font-medium text-gray-900 dark:text-white">{{ lt(at.label) || at.type }}</div>
             <SHint size="xs" class="truncate">

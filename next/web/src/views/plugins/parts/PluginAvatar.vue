@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { initialOf } from '../pluginUtil'
 
 // icon follows manifest.icon: "text:<label>", or a path inside the package
@@ -28,10 +28,12 @@ const src = computed(() => {
   if (/^(https?:)?\//.test(icon) || icon.startsWith('data:')) return icon
   return props.assetBase ? props.assetBase.replace(/\/$/, '') + '/' + icon.replace(/^\.?\//, '') : ''
 })
+const failed = ref(false)
+watch(src, () => { failed.value = false })
 </script>
 
 <template>
-  <img v-if="src" :src="src" alt="" class="shrink-0 rounded-lg object-cover" :class="sizeCls" />
+  <img v-if="src && !failed" :src="src" alt="" class="shrink-0 rounded-lg bg-white p-1 object-contain ring-1 ring-gray-200/60" :class="sizeCls" @error="failed = true" />
   <span v-else class="inline-flex shrink-0 items-center justify-center rounded-lg font-semibold text-white" :class="[sizeCls, color]">
     {{ label }}
   </span>

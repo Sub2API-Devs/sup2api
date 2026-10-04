@@ -1099,3 +1099,16 @@ func TestCredentialHelpers(t *testing.T) {
 		t.Fatalf("unmask: %s", back)
 	}
 }
+
+func TestTypeViewAccountIcon(t *testing.T) {
+	g := testGen(&fakePlatform{})
+	b := g.types[0]
+	b.Plugin.Manifest.Icon = "assets/provider.svg"
+	if got := typeView(g, b, nil).Icon; got != "assets/provider.svg" {
+		t.Fatalf("fallback icon: %q", got)
+	}
+	b.Type.Icon = "assets/product.svg"
+	if got := typeView(g, b, nil).Icon; got != "assets/product.svg" {
+		t.Fatalf("account icon: %q", got)
+	}
+}

@@ -257,10 +257,14 @@ type EndpointResp struct {
 // serves the endpoints of the platforms it lists (built-in or declared by a
 // plugin), plus endpoints the core can convert to one of those protocols.
 type AccountType struct {
-	ID              string        `json:"id"`
-	Label           LocalizedText `json:"label"`
-	Description     LocalizedText `json:"description,omitempty"`
-	Form            Form          `json:"form"`
+	Icon        string        `json:"icon,omitempty"` // Package asset; falls back to the plugin icon.
+	ID          string        `json:"id"`
+	Label       LocalizedText `json:"label"`
+	Description LocalizedText `json:"description,omitempty"`
+	Form        Form          `json:"form"`
+	// Optional presentation grouping for authentication variants of one product.
+	CreationGroup   string        `json:"creationGroup,omitempty"`
+	AuthMethodLabel LocalizedText `json:"authMethodLabel,omitempty"`
 	SensitiveFields []string      `json:"sensitiveFields,omitempty"`
 	// Top-level credential keys stored as plain settings (not encrypted).
 	SettingsFields []string `json:"settingsFields,omitempty"`

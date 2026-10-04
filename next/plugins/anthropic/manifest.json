@@ -6,9 +6,9 @@
     "en": "Anthropic API key account type and a model catalog. The anthropic platform and its endpoints are built into the core; model prices are set by administrators in the core.",
     "zh": "Anthropic API Key 账号类型与模型目录（anthropic 平台及其端点由核心内置；模型价格由管理员在核心中配置）。"
   },
-  "version": "0.2.2",
+  "version": "0.2.3",
   "publisher": "sub2api",
-  "icon": "text:A",
+  "icon": "assets/anthropic.svg",
   "runtime": "grpc",
   "entry": { "grpc": { "binaries": "runtimes/{os}-{arch}/plugin" } },
   "hostCompat": ">=0.1.0 <0.2.0",
@@ -22,7 +22,7 @@
   "accountTypes": [
     {
       "id": "apikey",
-      "label": { "en": "API Key", "zh": "API Key" },
+      "label": { "en": "Anthropic", "zh": "Anthropic" },
       "description": {
         "en": "An Anthropic Console API key, or a key for an Anthropic-compatible endpoint (set Base URL).",
         "zh": "Anthropic 控制台的 API Key，或 Anthropic 兼容端点的 Key（需填写 Base URL）。"

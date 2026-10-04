@@ -46,7 +46,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "volcengine" || m.Version != "0.12.0" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "volcengine" || m.Version != "0.12.1" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("identity = %s %s %s", m.Key, m.Version, m.Publisher)
 	}
 	if m.Name["en"] == "" || m.Name["zh"] == "" || m.Description["en"] == "" || m.Description["zh"] == "" {
@@ -583,6 +583,9 @@ func TestValidate(t *testing.T) {
 		"forms/asset.ui.json":             mustJSONFile(t, "forms/asset.ui.json"),
 		"migrations/0001_init.sql":        mustFile(t, "migrations/0001_init.sql"),
 		"migrations/0002_video_tasks.sql": mustFile(t, "migrations/0002_video_tasks.sql"),
+	}
+	for _, icon := range []string{"assets/volcengine-color.svg", "assets/doubao-color.svg"} {
+		files[icon] = mustFile(t, icon)
 	}
 	if err := check.Validate(decodeManifest(t), files, check.ValidateOptions{HostVersion: "0.1.0"}); err != nil {
 		t.Fatalf("core manifest validation: %v", err)

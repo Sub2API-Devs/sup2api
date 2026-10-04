@@ -402,8 +402,16 @@ func assetAllowed(info core.PluginInfo, name string) bool {
 			return true
 		}
 	}
-	if m := info.Manifest; m != nil && m.Icon != "" && !strings.HasPrefix(m.Icon, "text:") {
-		return name == strings.TrimPrefix(path.Clean("/"+m.Icon), "/")
+	if m := info.Manifest; m != nil {
+		icons := []string{m.Icon}
+		for _, at := range m.AccountTypes {
+			icons = append(icons, at.Icon)
+		}
+		for _, icon := range icons {
+			if icon != "" && !strings.HasPrefix(icon, "text:") && name == strings.TrimPrefix(path.Clean("/"+icon), "/") {
+				return true
+			}
+		}
 	}
 	return false
 }

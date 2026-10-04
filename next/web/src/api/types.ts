@@ -219,6 +219,7 @@ export interface AccountTypePlatform {
  * account types; each declares the platforms it supports (ARCHITECTURE §6.6).
  */
 export interface AccountType {
+  icon?: string
   plugin_key: string
   plugin_name: LText
   plugin_version?: string
@@ -227,6 +228,8 @@ export interface AccountType {
   type: string
   label: LText
   description?: LText
+  creation_group?: string
+  auth_method_label?: LText
   form: AccountFormRef
   sensitive_fields: string[]
   /** Platforms the type supports (built-in or plugin platforms). */

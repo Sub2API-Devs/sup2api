@@ -15,6 +15,7 @@ import (
 
 // AccountTypeView is one entry of GET /account-types (CONTRACTS §12, §13).
 type AccountTypeView struct {
+	Icon          string                 `json:"icon,omitempty"`
 	PluginKey     string                 `json:"plugin_key"`
 	PluginName    manifest.LocalizedText `json:"plugin_name"`
 	PluginVersion string                 `json:"plugin_version"`
@@ -24,6 +25,8 @@ type AccountTypeView struct {
 	Type            string                 `json:"type"`
 	Label           manifest.LocalizedText `json:"label"`
 	Description     manifest.LocalizedText `json:"description,omitempty"`
+	CreationGroup   string                 `json:"creation_group,omitempty"`
+	AuthMethodLabel manifest.LocalizedText `json:"auth_method_label,omitempty"`
 	Form            FormView               `json:"form"`
 	SensitiveFields []string               `json:"sensitive_fields"`
 	// GuardedSettings are the settings fields restricted to official values
@@ -70,9 +73,12 @@ func typeView(g core.Generation, b core.AccountTypeBinding, conv core.ProtocolCo
 		PluginVersion:   b.Plugin.Version,
 		AssetBase:       b.Plugin.AssetBase,
 		Trust:           b.Plugin.Trust,
+		Icon:            b.Type.Icon,
 		Type:            b.Type.ID,
 		Label:           b.Type.Label,
 		Description:     b.Type.Description,
+		CreationGroup:   b.Type.CreationGroup,
+		AuthMethodLabel: b.Type.AuthMethodLabel,
 		Form:            FormView{Mode: b.Type.Form.Mode, Page: b.Type.Form.Page, Component: b.Type.Form.Component},
 		SensitiveFields: b.Type.SensitiveFields,
 		GuardedSettings: b.Type.GuardedSettings,
@@ -81,6 +87,9 @@ func typeView(g core.Generation, b core.AccountTypeBinding, conv core.ProtocolCo
 	}
 	if b.Plugin.Manifest != nil {
 		v.PluginName = b.Plugin.Manifest.Name
+		if v.Icon == "" {
+			v.Icon = b.Plugin.Manifest.Icon
+		}
 	}
 	if v.PluginName == nil {
 		v.PluginName = manifest.LocalizedText{"en": b.Plugin.Key}

@@ -789,6 +789,9 @@ func (v *validator) accountTypes() {
 		if strings.TrimSpace(at.Label["en"]) == "" {
 			v.add(f+".label", "required", "label.en is required")
 		}
+		if at.Icon != "" && !strings.HasPrefix(at.Icon, "text:") {
+			v.needFile(f+".icon", at.Icon)
+		}
 		v.form(f+".form", at.Form, false)
 		v.guardedSettings(f, at)
 		if len(at.Platforms) == 0 {

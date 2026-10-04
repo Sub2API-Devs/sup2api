@@ -63,6 +63,8 @@ func demoPlugin(t *testing.T) string {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "manifest.json"), demoManifest)
 	writeFile(t, filepath.Join(dir, "forms", "s.json"), `{}`)
+	writeFile(t, filepath.Join(dir, "assets", "brand.svg"), `<svg/>`)
+	writeFile(t, filepath.Join(dir, "assets", "LICENSE.txt"), `license notice`)
 	writeFile(t, filepath.Join(dir, "migrations", "0001_init.sql"), `CREATE TABLE t (id int);`)
 	writeFile(t, filepath.Join(dir, "ui", "native", "src", "main.ts"), `source, not packed`)
 	writeFile(t, filepath.Join(dir, "ui", "native", "dist", "entry.js"), `export function register() {}`)
@@ -98,7 +100,7 @@ func TestPackSignVerifyIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"manifest.json", "forms/s.json", "migrations/0001_init.sql", "ui/native/entry.js",
+	for _, want := range []string{"assets/brand.svg", "assets/LICENSE.txt", "manifest.json", "forms/s.json", "migrations/0001_init.sql", "ui/native/entry.js",
 		"ui/native/assets/a.css", "ui/iframe/index.html", "i18n/en.json", "runtimes/linux-amd64/plugin", "runtimes/linux-arm64/plugin"} {
 		if _, ok := files[want]; !ok {
 			t.Errorf("missing %s", want)
