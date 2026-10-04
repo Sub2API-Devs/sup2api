@@ -469,6 +469,10 @@ func (p *fakePlatform) EstimateUsage(_ context.Context, in *pluginv1.EstimateUsa
 	return &pluginv1.UsageReport{Tokens: &pluginv1.UsageTokens{InputTokens: in.GetPreConsumeTokens()}}, nil
 }
 
+func (p *fakePlatform) QuerySubscriptionLimits(context.Context, *pluginv1.QuerySubscriptionLimitsRequest) (*pluginv1.QuerySubscriptionLimitsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "no")
+}
+
 type fakeBalance struct{ broke map[int64]bool }
 
 func (b *fakeBalance) PreConsumeTokens(context.Context) (int64, error) { return 500, nil }

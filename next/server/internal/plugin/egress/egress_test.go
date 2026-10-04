@@ -223,13 +223,14 @@ func TestPolicyDeniesAndDialErrors(t *testing.T) {
 	// the dial fails would instead make the test depend on the machine -- the
 	// server CI job publishes its PostgreSQL service container on 127.0.0.1:5432,
 	// where the supposedly unreachable dial connects and the assertion inverts.
-	e := newEnv(t, nil, Options{AlwaysAllow: []string{"db.internal.test:" + port}})
+	e := newEnv(t, nil, Options{AlwaysAllow: []string{"db.internal.test:" + port, "api.good.test:" + port}})
 	e.policy.set(core.EgressPolicy{Mode: PolicyAllowlist, AllowedDomains: []string{"*.good.test"}})
 
 	if _, err := sdkegress.DialContext(context.Background(), "tcp", "evil.test:"+port); err == nil ||
 		!strings.Contains(err.Error(), "not allowed") {
 		t.Fatalf("denied host: %v", err)
 	}
+	// api.good.test is in AlwaysAllow to bypass SSRF protection (all .test domains resolve to 127.0.0.1 in tests)
 	c, err := sdkegress.DialContext(context.Background(), "tcp", "api.good.test:"+port)
 	if err != nil {
 		t.Fatalf("allowed host: %v", err)

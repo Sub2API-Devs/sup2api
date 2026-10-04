@@ -55,6 +55,8 @@ func (denyAll) PermissionSet(context.Context, int64) (core.PermissionSet, error)
 	return core.PermissionSet{}, nil
 }
 func (denyAll) IsSensitive(string) bool { return false }
+func (denyAll) CanGrant(context.Context, int64, []string) error { return core.ErrPermissionDenied }
+func (denyAll) CanActOn(context.Context, int64, []string) error { return core.ErrPermissionDenied }
 
 // TestMyPlatformsRoute: /me/platforms only needs a signed-in user.
 func TestMyPlatformsRoute(t *testing.T) {

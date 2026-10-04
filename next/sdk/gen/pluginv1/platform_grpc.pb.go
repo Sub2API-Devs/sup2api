@@ -19,20 +19,21 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PlatformService_EstimateUsage_FullMethodName          = "/sub2api.plugin.v1.PlatformService/EstimateUsage"
-	PlatformService_Execute_FullMethodName                = "/sub2api.plugin.v1.PlatformService/Execute"
-	PlatformService_Monitor_FullMethodName                = "/sub2api.plugin.v1.PlatformService/Monitor"
-	PlatformService_ValidateCredentials_FullMethodName    = "/sub2api.plugin.v1.PlatformService/ValidateCredentials"
-	PlatformService_BuildUpstreamRequest_FullMethodName   = "/sub2api.plugin.v1.PlatformService/BuildUpstreamRequest"
-	PlatformService_ClassifyError_FullMethodName          = "/sub2api.plugin.v1.PlatformService/ClassifyError"
-	PlatformService_BuildTestRequest_FullMethodName       = "/sub2api.plugin.v1.PlatformService/BuildTestRequest"
-	PlatformService_BuildModelsRequest_FullMethodName     = "/sub2api.plugin.v1.PlatformService/BuildModelsRequest"
-	PlatformService_ResolveModel_FullMethodName           = "/sub2api.plugin.v1.PlatformService/ResolveModel"
-	PlatformService_ExtractUsage_FullMethodName           = "/sub2api.plugin.v1.PlatformService/ExtractUsage"
-	PlatformService_ParseTaskSubmission_FullMethodName    = "/sub2api.plugin.v1.PlatformService/ParseTaskSubmission"
-	PlatformService_Poll_FullMethodName                   = "/sub2api.plugin.v1.PlatformService/Poll"
-	PlatformService_BuildReconcileRequest_FullMethodName  = "/sub2api.plugin.v1.PlatformService/BuildReconcileRequest"
-	PlatformService_ParseReconcileResponse_FullMethodName = "/sub2api.plugin.v1.PlatformService/ParseReconcileResponse"
+	PlatformService_EstimateUsage_FullMethodName           = "/sub2api.plugin.v1.PlatformService/EstimateUsage"
+	PlatformService_Execute_FullMethodName                 = "/sub2api.plugin.v1.PlatformService/Execute"
+	PlatformService_Monitor_FullMethodName                 = "/sub2api.plugin.v1.PlatformService/Monitor"
+	PlatformService_ValidateCredentials_FullMethodName     = "/sub2api.plugin.v1.PlatformService/ValidateCredentials"
+	PlatformService_QuerySubscriptionLimits_FullMethodName = "/sub2api.plugin.v1.PlatformService/QuerySubscriptionLimits"
+	PlatformService_BuildUpstreamRequest_FullMethodName    = "/sub2api.plugin.v1.PlatformService/BuildUpstreamRequest"
+	PlatformService_ClassifyError_FullMethodName           = "/sub2api.plugin.v1.PlatformService/ClassifyError"
+	PlatformService_BuildTestRequest_FullMethodName        = "/sub2api.plugin.v1.PlatformService/BuildTestRequest"
+	PlatformService_BuildModelsRequest_FullMethodName      = "/sub2api.plugin.v1.PlatformService/BuildModelsRequest"
+	PlatformService_ResolveModel_FullMethodName            = "/sub2api.plugin.v1.PlatformService/ResolveModel"
+	PlatformService_ExtractUsage_FullMethodName            = "/sub2api.plugin.v1.PlatformService/ExtractUsage"
+	PlatformService_ParseTaskSubmission_FullMethodName     = "/sub2api.plugin.v1.PlatformService/ParseTaskSubmission"
+	PlatformService_Poll_FullMethodName                    = "/sub2api.plugin.v1.PlatformService/Poll"
+	PlatformService_BuildReconcileRequest_FullMethodName   = "/sub2api.plugin.v1.PlatformService/BuildReconcileRequest"
+	PlatformService_ParseReconcileResponse_FullMethodName  = "/sub2api.plugin.v1.PlatformService/ParseReconcileResponse"
 )
 
 // PlatformServiceClient is the client API for PlatformService service.
@@ -57,6 +58,11 @@ type PlatformServiceClient interface {
 	// Requires platform.monitor.v1 and host API 4.
 	Monitor(ctx context.Context, in *PollRequest, opts ...grpc.CallOption) (*MonitorResponse, error)
 	ValidateCredentials(ctx context.Context, in *ValidateCredentialsRequest, opts ...grpc.CallOption) (*ValidateCredentialsResponse, error)
+	// Query subscription limits for a subscription-type account (not API Key).
+	// Returns usage windows (5h, 1w, daily_fable, etc.) with current usage and
+	// limits. Optional: answer UNIMPLEMENTED when the account type does not
+	// support subscription limits or the upstream has no such API.
+	QuerySubscriptionLimits(ctx context.Context, in *QuerySubscriptionLimitsRequest, opts ...grpc.CallOption) (*QuerySubscriptionLimitsResponse, error)
 	// Hot path: called once per upstream attempt. Keep it fast (< 2s timeout).
 	BuildUpstreamRequest(ctx context.Context, in *BuildUpstreamRequestRequest, opts ...grpc.CallOption) (*BuildUpstreamRequestResponse, error)
 	// Called once per failed upstream attempt.
@@ -213,6 +219,16 @@ func (c *platformServiceClient) ValidateCredentials(ctx context.Context, in *Val
 	return out, nil
 }
 
+func (c *platformServiceClient) QuerySubscriptionLimits(ctx context.Context, in *QuerySubscriptionLimitsRequest, opts ...grpc.CallOption) (*QuerySubscriptionLimitsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QuerySubscriptionLimitsResponse)
+	err := c.cc.Invoke(ctx, PlatformService_QuerySubscriptionLimits_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformServiceClient) BuildUpstreamRequest(ctx context.Context, in *BuildUpstreamRequestRequest, opts ...grpc.CallOption) (*BuildUpstreamRequestResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BuildUpstreamRequestResponse)
@@ -335,6 +351,11 @@ type PlatformServiceServer interface {
 	// Requires platform.monitor.v1 and host API 4.
 	Monitor(context.Context, *PollRequest) (*MonitorResponse, error)
 	ValidateCredentials(context.Context, *ValidateCredentialsRequest) (*ValidateCredentialsResponse, error)
+	// Query subscription limits for a subscription-type account (not API Key).
+	// Returns usage windows (5h, 1w, daily_fable, etc.) with current usage and
+	// limits. Optional: answer UNIMPLEMENTED when the account type does not
+	// support subscription limits or the upstream has no such API.
+	QuerySubscriptionLimits(context.Context, *QuerySubscriptionLimitsRequest) (*QuerySubscriptionLimitsResponse, error)
 	// Hot path: called once per upstream attempt. Keep it fast (< 2s timeout).
 	BuildUpstreamRequest(context.Context, *BuildUpstreamRequestRequest) (*BuildUpstreamRequestResponse, error)
 	// Called once per failed upstream attempt.
@@ -463,6 +484,9 @@ func (UnimplementedPlatformServiceServer) Monitor(context.Context, *PollRequest)
 func (UnimplementedPlatformServiceServer) ValidateCredentials(context.Context, *ValidateCredentialsRequest) (*ValidateCredentialsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ValidateCredentials not implemented")
 }
+func (UnimplementedPlatformServiceServer) QuerySubscriptionLimits(context.Context, *QuerySubscriptionLimitsRequest) (*QuerySubscriptionLimitsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method QuerySubscriptionLimits not implemented")
+}
 func (UnimplementedPlatformServiceServer) BuildUpstreamRequest(context.Context, *BuildUpstreamRequestRequest) (*BuildUpstreamRequestResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method BuildUpstreamRequest not implemented")
 }
@@ -582,6 +606,24 @@ func _PlatformService_ValidateCredentials_Handler(srv interface{}, ctx context.C
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformServiceServer).ValidateCredentials(ctx, req.(*ValidateCredentialsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformService_QuerySubscriptionLimits_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QuerySubscriptionLimitsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).QuerySubscriptionLimits(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_QuerySubscriptionLimits_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).QuerySubscriptionLimits(ctx, req.(*QuerySubscriptionLimitsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -788,6 +830,10 @@ var PlatformService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateCredentials",
 			Handler:    _PlatformService_ValidateCredentials_Handler,
+		},
+		{
+			MethodName: "QuerySubscriptionLimits",
+			Handler:    _PlatformService_QuerySubscriptionLimits_Handler,
 		},
 		{
 			MethodName: "BuildUpstreamRequest",

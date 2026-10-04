@@ -108,7 +108,17 @@ func newProvider(st logStore, opts Options) *Provider {
 	}
 	if opts.LookupIP == nil {
 		opts.LookupIP = func(ctx context.Context, host string) ([]netip.Addr, error) {
-			return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+			ips, err := netguard.DefaultLookup(ctx, host)
+			if err != nil {
+				return nil, err
+			}
+			addrs := make([]netip.Addr, 0, len(ips))
+			for _, ip := range ips {
+				if addr, ok := netip.AddrFromSlice(ip); ok {
+					addrs = append(addrs, addr)
+				}
+			}
+			return addrs, nil
 		}
 	}
 	p := &Provider{opts: opts, log: opts.Logger, always: map[string]bool{}}
@@ -205,20 +215,24 @@ func (s *server) Dial(stream pluginv1.EgressService_DialServer) error {
 		// Resolve the host and check that the resolved address is public
 		// (unless the plugin has net permission with allow_all, or it is
 		// reaching the plugin gateway).
-		resolved, err := netguard.DefaultLookup(ctx, host)
-		if err != nil {
-			finish(ResultDialError, "resolve: "+err.Error())
-			return sendResult(stream, false, "egress: resolve "+host+": "+err.Error(), "")
+		var resolved []netip.Addr
+		// If host is already an IP address, use it directly; otherwise resolve via DNS.
+		if addr, err := netip.ParseAddr(host); err == nil {
+			resolved = []netip.Addr{addr}
+		} else {
+			var err error
+			resolved, err = s.p.opts.LookupIP(ctx, host)
+			if err != nil {
+				finish(ResultDialError, "resolve: "+err.Error())
+				return sendResult(stream, false, "egress: resolve "+host+": "+err.Error(), "")
+			}
 		}
-		// Plugin gateway addresses are always allowed (C1 exception).
+		// Plugin gateway addresses and AlwaysAllow entries are always allowed (C1 exception).
 		isPG := s.p.opts.PGAddrs != nil && s.p.opts.PGAddrs(host, port)
-		if !isPG {
+		isAlwaysAllowed := s.p.always[net.JoinHostPort(host, strconv.Itoa(port))]
+		if !isPG && !isAlwaysAllowed {
 			allowPrivate := pol.Mode == PolicyAllowAll
-			for _, ip := range resolved {
-				addr, ok := netip.AddrFromSlice(ip)
-				if !ok {
-					continue
-				}
+			for _, addr := range resolved {
 				if netguard.BlockedAddr(addr) && !allowPrivate {
 					finish(ResultDenied, "resolved to private address")
 					return sendResult(stream, false, "egress: "+host+" resolved to private address "+addr.String()+" and is not allowed", "")

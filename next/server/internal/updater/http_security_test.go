@@ -22,6 +22,8 @@ func (a updateRouteAuth) Can(context.Context, int64, string) (bool, error)      
 func (a updateRouteAuth) IsSensitive(permission string) bool {
 	return permission == "system:update:execute"
 }
+func (a updateRouteAuth) CanGrant(context.Context, int64, []string) error { return nil }
+func (a updateRouteAuth) CanActOn(context.Context, int64, []string) error { return nil }
 func (a updateRouteAuth) VerifyStepUp(_ context.Context, _ int64, token string) error {
 	if token != "confirmed" {
 		return errors.New("password confirmation required")

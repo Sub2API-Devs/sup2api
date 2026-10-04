@@ -252,6 +252,13 @@ func (a platformAdapter) ParseReconcileResponse(ctx context.Context, in *pluginv
 	return invoke(a.i, ctx, classBackground, TimeoutPlatformConsole, platformOf, pluginv1.PlatformServiceClient.ParseReconcileResponse, in)
 }
 
+// QuerySubscriptionLimits runs in the account limits service, not in a
+// request, so it gets the console budget: it is user-triggered but not on
+// the hot path.
+func (a platformAdapter) QuerySubscriptionLimits(ctx context.Context, in *pluginv1.QuerySubscriptionLimitsRequest) (*pluginv1.QuerySubscriptionLimitsResponse, error) {
+	return invoke(a.i, ctx, classBackground, TimeoutPlatformConsole, platformOf, pluginv1.PlatformServiceClient.QuerySubscriptionLimits, in)
+}
+
 type hookAdapter struct{ i *Instance }
 
 func (a hookAdapter) OnGatewayRequest(ctx context.Context, in *pluginv1.GatewayRequestHookRequest) (*pluginv1.GatewayRequestHookResponse, error) {

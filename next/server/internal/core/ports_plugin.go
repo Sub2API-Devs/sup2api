@@ -48,6 +48,12 @@ type PlatformPlugin interface {
 	// its entries are retried until their deadline and then abandoned.
 	BuildReconcileRequest(ctx context.Context, in *pluginv1.BuildReconcileRequestRequest) (*pluginv1.BuildReconcileRequestResponse, error)
 	ParseReconcileResponse(ctx context.Context, in *pluginv1.ParseReconcileResponseRequest) (*pluginv1.ReconcileResult, error)
+	// QuerySubscriptionLimits asks the plugin to query the upstream API for
+	// subscription limits (CONTRACTS §25.5). Called on the PlatformBinding.Client
+	// of the account's platform, from the account limits service. Optional for
+	// plugins: one without it answers gRPC Unimplemented, and the gateway returns
+	// 501 Not Implemented for that account type.
+	QuerySubscriptionLimits(ctx context.Context, in *pluginv1.QuerySubscriptionLimitsRequest) (*pluginv1.QuerySubscriptionLimitsResponse, error)
 }
 
 // ExecutionHTTP is the one-request network capability supplied by the current

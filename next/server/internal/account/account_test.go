@@ -86,6 +86,10 @@ func (*fakePlatform) ParseReconcileResponse(context.Context, *pluginv1.ParseReco
 	return nil, core.ErrInternal
 }
 
+func (*fakePlatform) QuerySubscriptionLimits(context.Context, *pluginv1.QuerySubscriptionLimitsRequest) (*pluginv1.QuerySubscriptionLimitsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "not implemented")
+}
+
 func (p *fakePlatform) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequest) (*pluginv1.ClassifyErrorResponse, error) {
 	p.mu.Lock()
 	p.classes = append(p.classes, in)
@@ -301,6 +305,8 @@ func (fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, erro
 	return core.PermissionSet{}, nil
 }
 func (fakeAuthz) IsSensitive(string) bool { return false }
+func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
+func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 
 type noStepUp struct{}
 

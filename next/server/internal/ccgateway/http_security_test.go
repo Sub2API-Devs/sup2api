@@ -22,6 +22,8 @@ func (a ccgRouteAuth) Can(context.Context, int64, string) (bool, error)         
 func (a ccgRouteAuth) IsSensitive(permission string) bool {
 	return permission == "system:update:execute"
 }
+func (a ccgRouteAuth) CanGrant(context.Context, int64, []string) error { return nil }
+func (a ccgRouteAuth) CanActOn(context.Context, int64, []string) error { return nil }
 func (a ccgRouteAuth) VerifyStepUp(_ context.Context, _ int64, token string) error {
 	if token != "confirmed" {
 		return errors.New("password confirmation required")

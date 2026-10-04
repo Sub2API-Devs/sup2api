@@ -67,7 +67,9 @@ func (authz) Can(_ context.Context, uid int64, perm string) (bool, error) {
 func (authz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{}, nil
 }
-func (authz) IsSensitive(string) bool { return false }
+func (authz) IsSensitive(string) bool                           { return false }
+func (authz) CanGrant(context.Context, int64, []string) error   { return nil }
+func (authz) CanActOn(context.Context, int64, []string) error   { return nil }
 
 func setup(t *testing.T, opts ...routes.Option) (*gin.Engine, *echo, *registry.Registry, *registry.Package) {
 	gin.SetMode(gin.TestMode)

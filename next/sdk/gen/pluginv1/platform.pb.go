@@ -2288,6 +2288,245 @@ func (x *ReconcileResult) GetTaskSnapshotJson() string {
 	return ""
 }
 
+// QuerySubscriptionLimitsRequest asks the plugin to query the upstream API
+// for the current usage limits of a subscription-type account.
+type QuerySubscriptionLimitsRequest struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	AccountId   int64                  `protobuf:"varint,1,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	AccountName string                 `protobuf:"bytes,2,opt,name=account_name,json=accountName,proto3" json:"account_name,omitempty"`
+	AccountType string                 `protobuf:"bytes,3,opt,name=account_type,json=accountType,proto3" json:"account_type,omitempty"`
+	// Decrypted credentials JSON. The host only passes credentials when the
+	// account type belongs to this plugin.
+	CredentialsJson string `protobuf:"bytes,4,opt,name=credentials_json,json=credentialsJson,proto3" json:"credentials_json,omitempty"`
+	SettingsJson    string `protobuf:"bytes,5,opt,name=settings_json,json=settingsJson,proto3" json:"settings_json,omitempty"`
+	ProxyUrl        string `protobuf:"bytes,6,opt,name=proxy_url,json=proxyUrl,proto3" json:"proxy_url,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *QuerySubscriptionLimitsRequest) Reset() {
+	*x = QuerySubscriptionLimitsRequest{}
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QuerySubscriptionLimitsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QuerySubscriptionLimitsRequest) ProtoMessage() {}
+
+func (x *QuerySubscriptionLimitsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QuerySubscriptionLimitsRequest.ProtoReflect.Descriptor instead.
+func (*QuerySubscriptionLimitsRequest) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *QuerySubscriptionLimitsRequest) GetAccountId() int64 {
+	if x != nil {
+		return x.AccountId
+	}
+	return 0
+}
+
+func (x *QuerySubscriptionLimitsRequest) GetAccountName() string {
+	if x != nil {
+		return x.AccountName
+	}
+	return ""
+}
+
+func (x *QuerySubscriptionLimitsRequest) GetAccountType() string {
+	if x != nil {
+		return x.AccountType
+	}
+	return ""
+}
+
+func (x *QuerySubscriptionLimitsRequest) GetCredentialsJson() string {
+	if x != nil {
+		return x.CredentialsJson
+	}
+	return ""
+}
+
+func (x *QuerySubscriptionLimitsRequest) GetSettingsJson() string {
+	if x != nil {
+		return x.SettingsJson
+	}
+	return ""
+}
+
+func (x *QuerySubscriptionLimitsRequest) GetProxyUrl() string {
+	if x != nil {
+		return x.ProxyUrl
+	}
+	return ""
+}
+
+// SubscriptionWindow represents one time-based usage limit window (e.g., 5h, 1w).
+type SubscriptionWindow struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Label         string                 `protobuf:"bytes,1,opt,name=label,proto3" json:"label,omitempty"`                     // Display label: "5h", "1w", "daily_fable", etc.
+	Seconds       int64                  `protobuf:"varint,2,opt,name=seconds,proto3" json:"seconds,omitempty"`                // Window duration in seconds
+	Used          int64                  `protobuf:"varint,3,opt,name=used,proto3" json:"used,omitempty"`                      // Amount used in this window
+	Limit         int64                  `protobuf:"varint,4,opt,name=limit,proto3" json:"limit,omitempty"`                    // Maximum allowed in this window
+	ResetAt       int64                  `protobuf:"varint,5,opt,name=reset_at,json=resetAt,proto3" json:"reset_at,omitempty"` // Unix timestamp when this window resets
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubscriptionWindow) Reset() {
+	*x = SubscriptionWindow{}
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubscriptionWindow) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubscriptionWindow) ProtoMessage() {}
+
+func (x *SubscriptionWindow) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubscriptionWindow.ProtoReflect.Descriptor instead.
+func (*SubscriptionWindow) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *SubscriptionWindow) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *SubscriptionWindow) GetSeconds() int64 {
+	if x != nil {
+		return x.Seconds
+	}
+	return 0
+}
+
+func (x *SubscriptionWindow) GetUsed() int64 {
+	if x != nil {
+		return x.Used
+	}
+	return 0
+}
+
+func (x *SubscriptionWindow) GetLimit() int64 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *SubscriptionWindow) GetResetAt() int64 {
+	if x != nil {
+		return x.ResetAt
+	}
+	return 0
+}
+
+// QuerySubscriptionLimitsResponse returns the current usage windows.
+type QuerySubscriptionLimitsResponse struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Windows []*SubscriptionWindow  `protobuf:"bytes,1,rep,name=windows,proto3" json:"windows,omitempty"`
+	// Provider identifier for logging/debugging, e.g. "kimi-coding-plan"
+	Provider string `protobuf:"bytes,2,opt,name=provider,proto3" json:"provider,omitempty"`
+	// Error classification:
+	// "" (empty) = success
+	// "auth_rejected" = credentials invalid/expired (401/403)
+	// "transient" = temporary failure (timeout, 500, etc.)
+	ErrorType     string `protobuf:"bytes,3,opt,name=error_type,json=errorType,proto3" json:"error_type,omitempty"`
+	ErrorMessage  string `protobuf:"bytes,4,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QuerySubscriptionLimitsResponse) Reset() {
+	*x = QuerySubscriptionLimitsResponse{}
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QuerySubscriptionLimitsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QuerySubscriptionLimitsResponse) ProtoMessage() {}
+
+func (x *QuerySubscriptionLimitsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QuerySubscriptionLimitsResponse.ProtoReflect.Descriptor instead.
+func (*QuerySubscriptionLimitsResponse) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *QuerySubscriptionLimitsResponse) GetWindows() []*SubscriptionWindow {
+	if x != nil {
+		return x.Windows
+	}
+	return nil
+}
+
+func (x *QuerySubscriptionLimitsResponse) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *QuerySubscriptionLimitsResponse) GetErrorType() string {
+	if x != nil {
+		return x.ErrorType
+	}
+	return ""
+}
+
+func (x *QuerySubscriptionLimitsResponse) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
 var File_sub2api_plugin_v1_platform_proto protoreflect.FileDescriptor
 
 const file_sub2api_plugin_v1_platform_proto_rawDesc = "" +
@@ -2506,12 +2745,33 @@ const file_sub2api_plugin_v1_platform_proto_rawDesc = "" +
 	"\x06FAILED\x10\x02\x12\x14\n" +
 	"\x10SETTLED_ESTIMATE\x10\x03\x12\r\n" +
 	"\tNOT_FOUND\x10\x04\x12\x0f\n" +
-	"\vPOLL_FAILED\x10\x052\x92\v\n" +
+	"\vPOLL_FAILED\x10\x05\"\xf2\x01\n" +
+	"\x1eQuerySubscriptionLimitsRequest\x12\x1d\n" +
+	"\n" +
+	"account_id\x18\x01 \x01(\x03R\taccountId\x12!\n" +
+	"\faccount_name\x18\x02 \x01(\tR\vaccountName\x12!\n" +
+	"\faccount_type\x18\x03 \x01(\tR\vaccountType\x12)\n" +
+	"\x10credentials_json\x18\x04 \x01(\tR\x0fcredentialsJson\x12#\n" +
+	"\rsettings_json\x18\x05 \x01(\tR\fsettingsJson\x12\x1b\n" +
+	"\tproxy_url\x18\x06 \x01(\tR\bproxyUrl\"\x89\x01\n" +
+	"\x12SubscriptionWindow\x12\x14\n" +
+	"\x05label\x18\x01 \x01(\tR\x05label\x12\x18\n" +
+	"\aseconds\x18\x02 \x01(\x03R\aseconds\x12\x12\n" +
+	"\x04used\x18\x03 \x01(\x03R\x04used\x12\x14\n" +
+	"\x05limit\x18\x04 \x01(\x03R\x05limit\x12\x19\n" +
+	"\breset_at\x18\x05 \x01(\x03R\aresetAt\"\xc2\x01\n" +
+	"\x1fQuerySubscriptionLimitsResponse\x12?\n" +
+	"\awindows\x18\x01 \x03(\v2%.sub2api.plugin.v1.SubscriptionWindowR\awindows\x12\x1a\n" +
+	"\bprovider\x18\x02 \x01(\tR\bprovider\x12\x1d\n" +
+	"\n" +
+	"error_type\x18\x03 \x01(\tR\terrorType\x12#\n" +
+	"\rerror_message\x18\x04 \x01(\tR\ferrorMessage2\x95\f\n" +
 	"\x0fPlatformService\x12X\n" +
 	"\rEstimateUsage\x12'.sub2api.plugin.v1.EstimateUsageRequest\x1a\x1e.sub2api.plugin.v1.UsageReport\x12P\n" +
 	"\aExecute\x12!.sub2api.plugin.v1.ExecuteRequest\x1a\".sub2api.plugin.v1.ExecuteResponse\x12M\n" +
 	"\aMonitor\x12\x1e.sub2api.plugin.v1.PollRequest\x1a\".sub2api.plugin.v1.MonitorResponse\x12t\n" +
-	"\x13ValidateCredentials\x12-.sub2api.plugin.v1.ValidateCredentialsRequest\x1a..sub2api.plugin.v1.ValidateCredentialsResponse\x12w\n" +
+	"\x13ValidateCredentials\x12-.sub2api.plugin.v1.ValidateCredentialsRequest\x1a..sub2api.plugin.v1.ValidateCredentialsResponse\x12\x80\x01\n" +
+	"\x17QuerySubscriptionLimits\x121.sub2api.plugin.v1.QuerySubscriptionLimitsRequest\x1a2.sub2api.plugin.v1.QuerySubscriptionLimitsResponse\x12w\n" +
 	"\x14BuildUpstreamRequest\x12..sub2api.plugin.v1.BuildUpstreamRequestRequest\x1a/.sub2api.plugin.v1.BuildUpstreamRequestResponse\x12b\n" +
 	"\rClassifyError\x12'.sub2api.plugin.v1.ClassifyErrorRequest\x1a(.sub2api.plugin.v1.ClassifyErrorResponse\x12k\n" +
 	"\x10BuildTestRequest\x12*.sub2api.plugin.v1.BuildTestRequestRequest\x1a+.sub2api.plugin.v1.BuildTestRequestResponse\x12q\n" +
@@ -2536,7 +2796,7 @@ func file_sub2api_plugin_v1_platform_proto_rawDescGZIP() []byte {
 }
 
 var file_sub2api_plugin_v1_platform_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_sub2api_plugin_v1_platform_proto_msgTypes = make([]protoimpl.MessageInfo, 43)
+var file_sub2api_plugin_v1_platform_proto_msgTypes = make([]protoimpl.MessageInfo, 46)
 var file_sub2api_plugin_v1_platform_proto_goTypes = []any{
 	(ClassifyErrorResponse_Action)(0),        // 0: sub2api.plugin.v1.ClassifyErrorResponse.Action
 	(ClassifyErrorResponse_AccountEffect)(0), // 1: sub2api.plugin.v1.ClassifyErrorResponse.AccountEffect
@@ -2568,107 +2828,113 @@ var file_sub2api_plugin_v1_platform_proto_goTypes = []any{
 	(*BuildReconcileRequestResponse)(nil),    // 27: sub2api.plugin.v1.BuildReconcileRequestResponse
 	(*ParseReconcileResponseRequest)(nil),    // 28: sub2api.plugin.v1.ParseReconcileResponseRequest
 	(*ReconcileResult)(nil),                  // 29: sub2api.plugin.v1.ReconcileResult
-	nil,                                      // 30: sub2api.plugin.v1.EstimateUsageRequest.FieldsEntry
-	nil,                                      // 31: sub2api.plugin.v1.BuildUpstreamRequestRequest.FieldsEntry
-	nil,                                      // 32: sub2api.plugin.v1.BuildUpstreamRequestRequest.InboundHeadersEntry
-	nil,                                      // 33: sub2api.plugin.v1.BuildUpstreamRequestResponse.HeadersEntry
-	nil,                                      // 34: sub2api.plugin.v1.ClassifyErrorRequest.HeadersEntry
-	nil,                                      // 35: sub2api.plugin.v1.BuildTestRequestResponse.HeadersEntry
-	nil,                                      // 36: sub2api.plugin.v1.BuildModelsRequestResponse.HeadersEntry
-	nil,                                      // 37: sub2api.plugin.v1.ResolveModelRequest.FieldsEntry
-	nil,                                      // 38: sub2api.plugin.v1.ResolveModelRequest.InboundHeadersEntry
-	nil,                                      // 39: sub2api.plugin.v1.ExtractUsageRequest.HeadersEntry
-	nil,                                      // 40: sub2api.plugin.v1.ExtractUsageRequest.FieldsEntry
-	nil,                                      // 41: sub2api.plugin.v1.UsageReport.FactsEntry
-	nil,                                      // 42: sub2api.plugin.v1.Reservation.FactsEntry
-	nil,                                      // 43: sub2api.plugin.v1.BuildReconcileRequestResponse.HeadersEntry
-	nil,                                      // 44: sub2api.plugin.v1.ParseReconcileResponseRequest.HeadersEntry
-	nil,                                      // 45: sub2api.plugin.v1.ReconcileResult.FactsEntry
-	(*RequestMeta)(nil),                      // 46: sub2api.plugin.v1.RequestMeta
-	(*Account)(nil),                          // 47: sub2api.plugin.v1.Account
-	(*FieldError)(nil),                       // 48: sub2api.plugin.v1.FieldError
-	(*BodyPatch)(nil),                        // 49: sub2api.plugin.v1.BodyPatch
-	(*UsageTokens)(nil),                      // 50: sub2api.plugin.v1.UsageTokens
+	(*QuerySubscriptionLimitsRequest)(nil),   // 30: sub2api.plugin.v1.QuerySubscriptionLimitsRequest
+	(*SubscriptionWindow)(nil),               // 31: sub2api.plugin.v1.SubscriptionWindow
+	(*QuerySubscriptionLimitsResponse)(nil),  // 32: sub2api.plugin.v1.QuerySubscriptionLimitsResponse
+	nil,                                      // 33: sub2api.plugin.v1.EstimateUsageRequest.FieldsEntry
+	nil,                                      // 34: sub2api.plugin.v1.BuildUpstreamRequestRequest.FieldsEntry
+	nil,                                      // 35: sub2api.plugin.v1.BuildUpstreamRequestRequest.InboundHeadersEntry
+	nil,                                      // 36: sub2api.plugin.v1.BuildUpstreamRequestResponse.HeadersEntry
+	nil,                                      // 37: sub2api.plugin.v1.ClassifyErrorRequest.HeadersEntry
+	nil,                                      // 38: sub2api.plugin.v1.BuildTestRequestResponse.HeadersEntry
+	nil,                                      // 39: sub2api.plugin.v1.BuildModelsRequestResponse.HeadersEntry
+	nil,                                      // 40: sub2api.plugin.v1.ResolveModelRequest.FieldsEntry
+	nil,                                      // 41: sub2api.plugin.v1.ResolveModelRequest.InboundHeadersEntry
+	nil,                                      // 42: sub2api.plugin.v1.ExtractUsageRequest.HeadersEntry
+	nil,                                      // 43: sub2api.plugin.v1.ExtractUsageRequest.FieldsEntry
+	nil,                                      // 44: sub2api.plugin.v1.UsageReport.FactsEntry
+	nil,                                      // 45: sub2api.plugin.v1.Reservation.FactsEntry
+	nil,                                      // 46: sub2api.plugin.v1.BuildReconcileRequestResponse.HeadersEntry
+	nil,                                      // 47: sub2api.plugin.v1.ParseReconcileResponseRequest.HeadersEntry
+	nil,                                      // 48: sub2api.plugin.v1.ReconcileResult.FactsEntry
+	(*RequestMeta)(nil),                      // 49: sub2api.plugin.v1.RequestMeta
+	(*Account)(nil),                          // 50: sub2api.plugin.v1.Account
+	(*FieldError)(nil),                       // 51: sub2api.plugin.v1.FieldError
+	(*BodyPatch)(nil),                        // 52: sub2api.plugin.v1.BodyPatch
+	(*UsageTokens)(nil),                      // 53: sub2api.plugin.v1.UsageTokens
 }
 var file_sub2api_plugin_v1_platform_proto_depIdxs = []int32{
-	46, // 0: sub2api.plugin.v1.EstimateUsageRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
-	30, // 1: sub2api.plugin.v1.EstimateUsageRequest.fields:type_name -> sub2api.plugin.v1.EstimateUsageRequest.FieldsEntry
+	49, // 0: sub2api.plugin.v1.EstimateUsageRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	33, // 1: sub2api.plugin.v1.EstimateUsageRequest.fields:type_name -> sub2api.plugin.v1.EstimateUsageRequest.FieldsEntry
 	10, // 2: sub2api.plugin.v1.ExecuteRequest.request:type_name -> sub2api.plugin.v1.BuildUpstreamRequestRequest
 	13, // 3: sub2api.plugin.v1.ExecuteResponse.classification:type_name -> sub2api.plugin.v1.ClassifyErrorResponse
 	25, // 4: sub2api.plugin.v1.PollRequest.entry:type_name -> sub2api.plugin.v1.ReconcileEntry
-	47, // 5: sub2api.plugin.v1.PollRequest.account:type_name -> sub2api.plugin.v1.Account
-	48, // 6: sub2api.plugin.v1.ValidateCredentialsResponse.errors:type_name -> sub2api.plugin.v1.FieldError
-	46, // 7: sub2api.plugin.v1.BuildUpstreamRequestRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
-	47, // 8: sub2api.plugin.v1.BuildUpstreamRequestRequest.account:type_name -> sub2api.plugin.v1.Account
-	31, // 9: sub2api.plugin.v1.BuildUpstreamRequestRequest.fields:type_name -> sub2api.plugin.v1.BuildUpstreamRequestRequest.FieldsEntry
-	32, // 10: sub2api.plugin.v1.BuildUpstreamRequestRequest.inbound_headers:type_name -> sub2api.plugin.v1.BuildUpstreamRequestRequest.InboundHeadersEntry
-	33, // 11: sub2api.plugin.v1.BuildUpstreamRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildUpstreamRequestResponse.HeadersEntry
-	49, // 12: sub2api.plugin.v1.BuildUpstreamRequestResponse.patches:type_name -> sub2api.plugin.v1.BodyPatch
-	46, // 13: sub2api.plugin.v1.ClassifyErrorRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
-	47, // 14: sub2api.plugin.v1.ClassifyErrorRequest.account:type_name -> sub2api.plugin.v1.Account
-	34, // 15: sub2api.plugin.v1.ClassifyErrorRequest.headers:type_name -> sub2api.plugin.v1.ClassifyErrorRequest.HeadersEntry
+	50, // 5: sub2api.plugin.v1.PollRequest.account:type_name -> sub2api.plugin.v1.Account
+	51, // 6: sub2api.plugin.v1.ValidateCredentialsResponse.errors:type_name -> sub2api.plugin.v1.FieldError
+	49, // 7: sub2api.plugin.v1.BuildUpstreamRequestRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	50, // 8: sub2api.plugin.v1.BuildUpstreamRequestRequest.account:type_name -> sub2api.plugin.v1.Account
+	34, // 9: sub2api.plugin.v1.BuildUpstreamRequestRequest.fields:type_name -> sub2api.plugin.v1.BuildUpstreamRequestRequest.FieldsEntry
+	35, // 10: sub2api.plugin.v1.BuildUpstreamRequestRequest.inbound_headers:type_name -> sub2api.plugin.v1.BuildUpstreamRequestRequest.InboundHeadersEntry
+	36, // 11: sub2api.plugin.v1.BuildUpstreamRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildUpstreamRequestResponse.HeadersEntry
+	52, // 12: sub2api.plugin.v1.BuildUpstreamRequestResponse.patches:type_name -> sub2api.plugin.v1.BodyPatch
+	49, // 13: sub2api.plugin.v1.ClassifyErrorRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	50, // 14: sub2api.plugin.v1.ClassifyErrorRequest.account:type_name -> sub2api.plugin.v1.Account
+	37, // 15: sub2api.plugin.v1.ClassifyErrorRequest.headers:type_name -> sub2api.plugin.v1.ClassifyErrorRequest.HeadersEntry
 	0,  // 16: sub2api.plugin.v1.ClassifyErrorResponse.action:type_name -> sub2api.plugin.v1.ClassifyErrorResponse.Action
 	1,  // 17: sub2api.plugin.v1.ClassifyErrorResponse.account_effect:type_name -> sub2api.plugin.v1.ClassifyErrorResponse.AccountEffect
-	47, // 18: sub2api.plugin.v1.BuildTestRequestRequest.account:type_name -> sub2api.plugin.v1.Account
-	35, // 19: sub2api.plugin.v1.BuildTestRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildTestRequestResponse.HeadersEntry
-	47, // 20: sub2api.plugin.v1.BuildModelsRequestRequest.account:type_name -> sub2api.plugin.v1.Account
-	36, // 21: sub2api.plugin.v1.BuildModelsRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildModelsRequestResponse.HeadersEntry
-	46, // 22: sub2api.plugin.v1.ResolveModelRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
-	37, // 23: sub2api.plugin.v1.ResolveModelRequest.fields:type_name -> sub2api.plugin.v1.ResolveModelRequest.FieldsEntry
-	38, // 24: sub2api.plugin.v1.ResolveModelRequest.inbound_headers:type_name -> sub2api.plugin.v1.ResolveModelRequest.InboundHeadersEntry
-	46, // 25: sub2api.plugin.v1.ExtractUsageRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
-	47, // 26: sub2api.plugin.v1.ExtractUsageRequest.account:type_name -> sub2api.plugin.v1.Account
-	39, // 27: sub2api.plugin.v1.ExtractUsageRequest.headers:type_name -> sub2api.plugin.v1.ExtractUsageRequest.HeadersEntry
+	50, // 18: sub2api.plugin.v1.BuildTestRequestRequest.account:type_name -> sub2api.plugin.v1.Account
+	38, // 19: sub2api.plugin.v1.BuildTestRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildTestRequestResponse.HeadersEntry
+	50, // 20: sub2api.plugin.v1.BuildModelsRequestRequest.account:type_name -> sub2api.plugin.v1.Account
+	39, // 21: sub2api.plugin.v1.BuildModelsRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildModelsRequestResponse.HeadersEntry
+	49, // 22: sub2api.plugin.v1.ResolveModelRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	40, // 23: sub2api.plugin.v1.ResolveModelRequest.fields:type_name -> sub2api.plugin.v1.ResolveModelRequest.FieldsEntry
+	41, // 24: sub2api.plugin.v1.ResolveModelRequest.inbound_headers:type_name -> sub2api.plugin.v1.ResolveModelRequest.InboundHeadersEntry
+	49, // 25: sub2api.plugin.v1.ExtractUsageRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	50, // 26: sub2api.plugin.v1.ExtractUsageRequest.account:type_name -> sub2api.plugin.v1.Account
+	42, // 27: sub2api.plugin.v1.ExtractUsageRequest.headers:type_name -> sub2api.plugin.v1.ExtractUsageRequest.HeadersEntry
 	20, // 28: sub2api.plugin.v1.ExtractUsageRequest.events:type_name -> sub2api.plugin.v1.StreamEvent
-	40, // 29: sub2api.plugin.v1.ExtractUsageRequest.fields:type_name -> sub2api.plugin.v1.ExtractUsageRequest.FieldsEntry
-	50, // 30: sub2api.plugin.v1.UsageReport.tokens:type_name -> sub2api.plugin.v1.UsageTokens
-	41, // 31: sub2api.plugin.v1.UsageReport.facts:type_name -> sub2api.plugin.v1.UsageReport.FactsEntry
+	43, // 29: sub2api.plugin.v1.ExtractUsageRequest.fields:type_name -> sub2api.plugin.v1.ExtractUsageRequest.FieldsEntry
+	53, // 30: sub2api.plugin.v1.UsageReport.tokens:type_name -> sub2api.plugin.v1.UsageTokens
+	44, // 31: sub2api.plugin.v1.UsageReport.facts:type_name -> sub2api.plugin.v1.UsageReport.FactsEntry
 	24, // 32: sub2api.plugin.v1.UsageReport.reserve:type_name -> sub2api.plugin.v1.Reservation
 	22, // 33: sub2api.plugin.v1.TaskSubmission.usage:type_name -> sub2api.plugin.v1.UsageReport
-	50, // 34: sub2api.plugin.v1.Reservation.tokens:type_name -> sub2api.plugin.v1.UsageTokens
-	42, // 35: sub2api.plugin.v1.Reservation.facts:type_name -> sub2api.plugin.v1.Reservation.FactsEntry
+	53, // 34: sub2api.plugin.v1.Reservation.tokens:type_name -> sub2api.plugin.v1.UsageTokens
+	45, // 35: sub2api.plugin.v1.Reservation.facts:type_name -> sub2api.plugin.v1.Reservation.FactsEntry
 	25, // 36: sub2api.plugin.v1.BuildReconcileRequestRequest.entry:type_name -> sub2api.plugin.v1.ReconcileEntry
-	47, // 37: sub2api.plugin.v1.BuildReconcileRequestRequest.account:type_name -> sub2api.plugin.v1.Account
-	43, // 38: sub2api.plugin.v1.BuildReconcileRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildReconcileRequestResponse.HeadersEntry
+	50, // 37: sub2api.plugin.v1.BuildReconcileRequestRequest.account:type_name -> sub2api.plugin.v1.Account
+	46, // 38: sub2api.plugin.v1.BuildReconcileRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildReconcileRequestResponse.HeadersEntry
 	25, // 39: sub2api.plugin.v1.ParseReconcileResponseRequest.entry:type_name -> sub2api.plugin.v1.ReconcileEntry
-	47, // 40: sub2api.plugin.v1.ParseReconcileResponseRequest.account:type_name -> sub2api.plugin.v1.Account
-	44, // 41: sub2api.plugin.v1.ParseReconcileResponseRequest.headers:type_name -> sub2api.plugin.v1.ParseReconcileResponseRequest.HeadersEntry
+	50, // 40: sub2api.plugin.v1.ParseReconcileResponseRequest.account:type_name -> sub2api.plugin.v1.Account
+	47, // 41: sub2api.plugin.v1.ParseReconcileResponseRequest.headers:type_name -> sub2api.plugin.v1.ParseReconcileResponseRequest.HeadersEntry
 	2,  // 42: sub2api.plugin.v1.ReconcileResult.state:type_name -> sub2api.plugin.v1.ReconcileResult.State
-	50, // 43: sub2api.plugin.v1.ReconcileResult.tokens:type_name -> sub2api.plugin.v1.UsageTokens
-	45, // 44: sub2api.plugin.v1.ReconcileResult.facts:type_name -> sub2api.plugin.v1.ReconcileResult.FactsEntry
-	3,  // 45: sub2api.plugin.v1.PlatformService.EstimateUsage:input_type -> sub2api.plugin.v1.EstimateUsageRequest
-	4,  // 46: sub2api.plugin.v1.PlatformService.Execute:input_type -> sub2api.plugin.v1.ExecuteRequest
-	7,  // 47: sub2api.plugin.v1.PlatformService.Monitor:input_type -> sub2api.plugin.v1.PollRequest
-	8,  // 48: sub2api.plugin.v1.PlatformService.ValidateCredentials:input_type -> sub2api.plugin.v1.ValidateCredentialsRequest
-	10, // 49: sub2api.plugin.v1.PlatformService.BuildUpstreamRequest:input_type -> sub2api.plugin.v1.BuildUpstreamRequestRequest
-	12, // 50: sub2api.plugin.v1.PlatformService.ClassifyError:input_type -> sub2api.plugin.v1.ClassifyErrorRequest
-	14, // 51: sub2api.plugin.v1.PlatformService.BuildTestRequest:input_type -> sub2api.plugin.v1.BuildTestRequestRequest
-	16, // 52: sub2api.plugin.v1.PlatformService.BuildModelsRequest:input_type -> sub2api.plugin.v1.BuildModelsRequestRequest
-	18, // 53: sub2api.plugin.v1.PlatformService.ResolveModel:input_type -> sub2api.plugin.v1.ResolveModelRequest
-	21, // 54: sub2api.plugin.v1.PlatformService.ExtractUsage:input_type -> sub2api.plugin.v1.ExtractUsageRequest
-	21, // 55: sub2api.plugin.v1.PlatformService.ParseTaskSubmission:input_type -> sub2api.plugin.v1.ExtractUsageRequest
-	7,  // 56: sub2api.plugin.v1.PlatformService.Poll:input_type -> sub2api.plugin.v1.PollRequest
-	26, // 57: sub2api.plugin.v1.PlatformService.BuildReconcileRequest:input_type -> sub2api.plugin.v1.BuildReconcileRequestRequest
-	28, // 58: sub2api.plugin.v1.PlatformService.ParseReconcileResponse:input_type -> sub2api.plugin.v1.ParseReconcileResponseRequest
-	22, // 59: sub2api.plugin.v1.PlatformService.EstimateUsage:output_type -> sub2api.plugin.v1.UsageReport
-	5,  // 60: sub2api.plugin.v1.PlatformService.Execute:output_type -> sub2api.plugin.v1.ExecuteResponse
-	6,  // 61: sub2api.plugin.v1.PlatformService.Monitor:output_type -> sub2api.plugin.v1.MonitorResponse
-	9,  // 62: sub2api.plugin.v1.PlatformService.ValidateCredentials:output_type -> sub2api.plugin.v1.ValidateCredentialsResponse
-	11, // 63: sub2api.plugin.v1.PlatformService.BuildUpstreamRequest:output_type -> sub2api.plugin.v1.BuildUpstreamRequestResponse
-	13, // 64: sub2api.plugin.v1.PlatformService.ClassifyError:output_type -> sub2api.plugin.v1.ClassifyErrorResponse
-	15, // 65: sub2api.plugin.v1.PlatformService.BuildTestRequest:output_type -> sub2api.plugin.v1.BuildTestRequestResponse
-	17, // 66: sub2api.plugin.v1.PlatformService.BuildModelsRequest:output_type -> sub2api.plugin.v1.BuildModelsRequestResponse
-	19, // 67: sub2api.plugin.v1.PlatformService.ResolveModel:output_type -> sub2api.plugin.v1.ResolveModelResponse
-	22, // 68: sub2api.plugin.v1.PlatformService.ExtractUsage:output_type -> sub2api.plugin.v1.UsageReport
-	23, // 69: sub2api.plugin.v1.PlatformService.ParseTaskSubmission:output_type -> sub2api.plugin.v1.TaskSubmission
-	29, // 70: sub2api.plugin.v1.PlatformService.Poll:output_type -> sub2api.plugin.v1.ReconcileResult
-	27, // 71: sub2api.plugin.v1.PlatformService.BuildReconcileRequest:output_type -> sub2api.plugin.v1.BuildReconcileRequestResponse
-	29, // 72: sub2api.plugin.v1.PlatformService.ParseReconcileResponse:output_type -> sub2api.plugin.v1.ReconcileResult
-	59, // [59:73] is the sub-list for method output_type
-	45, // [45:59] is the sub-list for method input_type
-	45, // [45:45] is the sub-list for extension type_name
-	45, // [45:45] is the sub-list for extension extendee
-	0,  // [0:45] is the sub-list for field type_name
+	53, // 43: sub2api.plugin.v1.ReconcileResult.tokens:type_name -> sub2api.plugin.v1.UsageTokens
+	48, // 44: sub2api.plugin.v1.ReconcileResult.facts:type_name -> sub2api.plugin.v1.ReconcileResult.FactsEntry
+	31, // 45: sub2api.plugin.v1.QuerySubscriptionLimitsResponse.windows:type_name -> sub2api.plugin.v1.SubscriptionWindow
+	3,  // 46: sub2api.plugin.v1.PlatformService.EstimateUsage:input_type -> sub2api.plugin.v1.EstimateUsageRequest
+	4,  // 47: sub2api.plugin.v1.PlatformService.Execute:input_type -> sub2api.plugin.v1.ExecuteRequest
+	7,  // 48: sub2api.plugin.v1.PlatformService.Monitor:input_type -> sub2api.plugin.v1.PollRequest
+	8,  // 49: sub2api.plugin.v1.PlatformService.ValidateCredentials:input_type -> sub2api.plugin.v1.ValidateCredentialsRequest
+	30, // 50: sub2api.plugin.v1.PlatformService.QuerySubscriptionLimits:input_type -> sub2api.plugin.v1.QuerySubscriptionLimitsRequest
+	10, // 51: sub2api.plugin.v1.PlatformService.BuildUpstreamRequest:input_type -> sub2api.plugin.v1.BuildUpstreamRequestRequest
+	12, // 52: sub2api.plugin.v1.PlatformService.ClassifyError:input_type -> sub2api.plugin.v1.ClassifyErrorRequest
+	14, // 53: sub2api.plugin.v1.PlatformService.BuildTestRequest:input_type -> sub2api.plugin.v1.BuildTestRequestRequest
+	16, // 54: sub2api.plugin.v1.PlatformService.BuildModelsRequest:input_type -> sub2api.plugin.v1.BuildModelsRequestRequest
+	18, // 55: sub2api.plugin.v1.PlatformService.ResolveModel:input_type -> sub2api.plugin.v1.ResolveModelRequest
+	21, // 56: sub2api.plugin.v1.PlatformService.ExtractUsage:input_type -> sub2api.plugin.v1.ExtractUsageRequest
+	21, // 57: sub2api.plugin.v1.PlatformService.ParseTaskSubmission:input_type -> sub2api.plugin.v1.ExtractUsageRequest
+	7,  // 58: sub2api.plugin.v1.PlatformService.Poll:input_type -> sub2api.plugin.v1.PollRequest
+	26, // 59: sub2api.plugin.v1.PlatformService.BuildReconcileRequest:input_type -> sub2api.plugin.v1.BuildReconcileRequestRequest
+	28, // 60: sub2api.plugin.v1.PlatformService.ParseReconcileResponse:input_type -> sub2api.plugin.v1.ParseReconcileResponseRequest
+	22, // 61: sub2api.plugin.v1.PlatformService.EstimateUsage:output_type -> sub2api.plugin.v1.UsageReport
+	5,  // 62: sub2api.plugin.v1.PlatformService.Execute:output_type -> sub2api.plugin.v1.ExecuteResponse
+	6,  // 63: sub2api.plugin.v1.PlatformService.Monitor:output_type -> sub2api.plugin.v1.MonitorResponse
+	9,  // 64: sub2api.plugin.v1.PlatformService.ValidateCredentials:output_type -> sub2api.plugin.v1.ValidateCredentialsResponse
+	32, // 65: sub2api.plugin.v1.PlatformService.QuerySubscriptionLimits:output_type -> sub2api.plugin.v1.QuerySubscriptionLimitsResponse
+	11, // 66: sub2api.plugin.v1.PlatformService.BuildUpstreamRequest:output_type -> sub2api.plugin.v1.BuildUpstreamRequestResponse
+	13, // 67: sub2api.plugin.v1.PlatformService.ClassifyError:output_type -> sub2api.plugin.v1.ClassifyErrorResponse
+	15, // 68: sub2api.plugin.v1.PlatformService.BuildTestRequest:output_type -> sub2api.plugin.v1.BuildTestRequestResponse
+	17, // 69: sub2api.plugin.v1.PlatformService.BuildModelsRequest:output_type -> sub2api.plugin.v1.BuildModelsRequestResponse
+	19, // 70: sub2api.plugin.v1.PlatformService.ResolveModel:output_type -> sub2api.plugin.v1.ResolveModelResponse
+	22, // 71: sub2api.plugin.v1.PlatformService.ExtractUsage:output_type -> sub2api.plugin.v1.UsageReport
+	23, // 72: sub2api.plugin.v1.PlatformService.ParseTaskSubmission:output_type -> sub2api.plugin.v1.TaskSubmission
+	29, // 73: sub2api.plugin.v1.PlatformService.Poll:output_type -> sub2api.plugin.v1.ReconcileResult
+	27, // 74: sub2api.plugin.v1.PlatformService.BuildReconcileRequest:output_type -> sub2api.plugin.v1.BuildReconcileRequestResponse
+	29, // 75: sub2api.plugin.v1.PlatformService.ParseReconcileResponse:output_type -> sub2api.plugin.v1.ReconcileResult
+	61, // [61:76] is the sub-list for method output_type
+	46, // [46:61] is the sub-list for method input_type
+	46, // [46:46] is the sub-list for extension type_name
+	46, // [46:46] is the sub-list for extension extendee
+	0,  // [0:46] is the sub-list for field type_name
 }
 
 func init() { file_sub2api_plugin_v1_platform_proto_init() }
@@ -2683,7 +2949,7 @@ func file_sub2api_plugin_v1_platform_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sub2api_plugin_v1_platform_proto_rawDesc), len(file_sub2api_plugin_v1_platform_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   43,
+			NumMessages:   46,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -89,6 +89,10 @@ func (p *recPlugin) ParseTaskSubmission(context.Context, *pluginv1.ExtractUsageR
 	return nil, nil
 }
 
+func (p *recPlugin) QuerySubscriptionLimits(context.Context, *pluginv1.QuerySubscriptionLimitsRequest) (*pluginv1.QuerySubscriptionLimitsResponse, error) {
+	return nil, nil
+}
+
 // recGen is a generation holding exactly one plugin platform.
 type recGen struct {
 	info   core.PluginInfo

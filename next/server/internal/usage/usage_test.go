@@ -65,6 +65,8 @@ func (allowAll) PermissionSet(context.Context, int64) (core.PermissionSet, error
 	return core.PermissionSet{Superuser: true}, nil
 }
 func (allowAll) IsSensitive(string) bool                           { return false }
+func (allowAll) CanGrant(context.Context, int64, []string) error   { return nil }
+func (allowAll) CanActOn(context.Context, int64, []string) error   { return nil }
 func (allowAll) VerifyStepUp(context.Context, int64, string) error { return nil }
 
 func newFixture(t *testing.T) *fixture {

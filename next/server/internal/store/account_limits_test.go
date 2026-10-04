@@ -1,4 +1,4 @@
-package store
+package store_test
 
 import (
 	"context"
@@ -7,6 +7,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
 func TestAccountLimits(t *testing.T) {
@@ -15,7 +18,7 @@ func TestAccountLimits(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	db := testDB(t)
+	db := testutil.DB(t)
 
 	// Create a test account first
 	accountID := createTestAccount(t, db)
@@ -27,8 +30,8 @@ func TestAccountLimits(t *testing.T) {
 	})
 
 	t.Run("UpsertAccountLimits_Insert", func(t *testing.T) {
-		snapshot := LimitsSnapshot{
-			Windows: []LimitsWindow{
+		snapshot := store.LimitsSnapshot{
+			Windows: []store.LimitsWindow{
 				{
 					Label:   "5h",
 					Seconds: 18000,
@@ -64,8 +67,8 @@ func TestAccountLimits(t *testing.T) {
 	})
 
 	t.Run("UpsertAccountLimits_Update", func(t *testing.T) {
-		snapshot := LimitsSnapshot{
-			Windows: []LimitsWindow{
+		snapshot := store.LimitsSnapshot{
+			Windows: []store.LimitsWindow{
 				{
 					Label:   "5h",
 					Seconds: 18000,
@@ -91,8 +94,8 @@ func TestAccountLimits(t *testing.T) {
 	})
 
 	t.Run("UpsertAccountLimits_WithError", func(t *testing.T) {
-		snapshot := LimitsSnapshot{
-			Windows:   []LimitsWindow{},
+		snapshot := store.LimitsSnapshot{
+			Windows:   []store.LimitsWindow{},
 			UpdatedAt: time.Now(),
 			Provider:  "kimi-coding-plan",
 		}
@@ -141,8 +144,8 @@ func TestAccountLimits(t *testing.T) {
 	t.Run("ListAccountsDueForResume", func(t *testing.T) {
 		// Create another account with past resume_at
 		accountID2 := createTestAccount(t, db)
-		snapshot := LimitsSnapshot{
-			Windows:   []LimitsWindow{},
+		snapshot := store.LimitsSnapshot{
+			Windows:   []store.LimitsWindow{},
 			UpdatedAt: time.Now(),
 			Provider:  "test",
 		}
@@ -164,13 +167,13 @@ func TestAccountLimits(t *testing.T) {
 		acc1 := createTestAccount(t, db)
 		acc2 := createTestAccount(t, db)
 
-		snapshot1 := LimitsSnapshot{
-			Windows:   []LimitsWindow{{Label: "5h", Seconds: 18000, Used: 1000, Limit: 10000, ResetAt: time.Now()}},
+		snapshot1 := store.LimitsSnapshot{
+			Windows:   []store.LimitsWindow{{Label: "5h", Seconds: 18000, Used: 1000, Limit: 10000, ResetAt: time.Now()}},
 			UpdatedAt: time.Now(),
 			Provider:  "provider1",
 		}
-		snapshot2 := LimitsSnapshot{
-			Windows:   []LimitsWindow{{Label: "1w", Seconds: 604800, Used: 2000, Limit: 50000, ResetAt: time.Now()}},
+		snapshot2 := store.LimitsSnapshot{
+			Windows:   []store.LimitsWindow{{Label: "1w", Seconds: 604800, Used: 2000, Limit: 50000, ResetAt: time.Now()}},
 			UpdatedAt: time.Now(),
 			Provider:  "provider2",
 		}
@@ -196,7 +199,7 @@ func TestAccountLimits(t *testing.T) {
 }
 
 // createTestAccount creates a minimal test account and returns its ID
-func createTestAccount(t *testing.T, db *DB) int64 {
+func createTestAccount(t *testing.T, db *store.DB) int64 {
 	// This is a placeholder - adjust based on your actual account creation logic
 	const query = `
 		INSERT INTO accounts (name, plugin_key, type, cred_enc, settings, status)

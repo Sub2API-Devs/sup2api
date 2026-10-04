@@ -27,6 +27,8 @@ type allowAll struct{ uid int64 }
 
 func (a allowAll) VerifyAccessToken(context.Context, string) (int64, error) { return a.uid, nil }
 func (allowAll) Can(context.Context, int64, string) (bool, error)           { return true, nil }
+func (allowAll) CanActOn(context.Context, int64, []string) error            { return nil }
+func (allowAll) CanGrant(context.Context, int64, []string) error            { return nil }
 func (allowAll) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{Superuser: true}, nil
 }

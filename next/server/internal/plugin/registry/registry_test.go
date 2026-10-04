@@ -72,6 +72,10 @@ func (stub) BuildReconcileRequest(context.Context, *pluginv1.BuildReconcileReque
 	return nil, nil
 }
 
+func (stub) QuerySubscriptionLimits(context.Context, *pluginv1.QuerySubscriptionLimitsRequest) (*pluginv1.QuerySubscriptionLimitsResponse, error) {
+	return nil, nil
+}
+
 func (stub) ParseReconcileResponse(context.Context, *pluginv1.ParseReconcileResponseRequest) (*pluginv1.ReconcileResult, error) {
 	return nil, nil
 }
