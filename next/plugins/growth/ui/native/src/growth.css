@@ -1,0 +1,37 @@
+/* Growth plugin styles */
+.growth-card {
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+  background: var(--color-surface-1);
+}
+
+.growth-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.growth-stat-label {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.growth-stat-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.growth-code {
+  font-family: monospace;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  padding: 0.5rem 1rem;
+  background: var(--color-surface-2);
+  border-radius: 0.375rem;
+}
+
+.growth-checkin-btn {
+  min-width: 120px;
+}

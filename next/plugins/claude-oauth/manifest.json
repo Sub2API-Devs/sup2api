@@ -1,0 +1,189 @@
+{
+  "apiVersion": 1,
+  "key": "claude_oauth",
+  "name": {
+    "en": "Claude OAuth Accounts",
+    "zh": "Claude OAuth 账号"
+  },
+  "description": {
+    "en": "OAuth and setup-token authentication for Claude platform accounts",
+    "zh": "Claude 平台的 OAuth 与 setup-token 认证"
+  },
+  "version": "0.1.0",
+  "publisher": "sup2api",
+  "icon": "text:CO",
+  "runtime": "grpc",
+  "entry": {
+    "grpc": {
+      "binaries": "runtimes/{os}-{arch}/plugin"
+    }
+  },
+  "hostCompat": ">=0.1.0 <0.2.0",
+
+  "capabilities": [
+    {
+      "id": "platform.adapter.v1"
+    },
+    {
+      "id": "app.jobs.v1"
+    },
+    {
+      "id": "http.routes.v1"
+    }
+  ],
+
+  "accountTypes": [
+    {
+      "id": "claude_oauth",
+      "label": {
+        "en": "Claude OAuth",
+        "zh": "Claude OAuth"
+      },
+      "description": {
+        "en": "Full OAuth authorization (org:create_api_key scope)",
+        "zh": "完整 OAuth 授权（org:create_api_key 范围）"
+      },
+      "form": {
+        "mode": "schema",
+        "schema": "forms/oauth.schema.json"
+      },
+      "sensitiveFields": [
+        "access_token",
+        "refresh_token"
+      ],
+      "settingsFields": [
+        "proxy_id"
+      ],
+      "platforms": [
+        {
+          "platform": "anthropic"
+        }
+      ],
+      "defaultModels": [
+        "claude-opus-5",
+        "claude-sonnet-5",
+        "claude-opus-4-8"
+      ]
+    },
+    {
+      "id": "claude_setup_token",
+      "label": {
+        "en": "Claude Setup Token",
+        "zh": "Claude Setup Token"
+      },
+      "description": {
+        "en": "Setup token (inference-only scope)",
+        "zh": "Setup token（仅推理范围）"
+      },
+      "form": {
+        "mode": "schema",
+        "schema": "forms/setup_token.schema.json"
+      },
+      "sensitiveFields": [
+        "access_token",
+        "refresh_token"
+      ],
+      "settingsFields": [
+        "proxy_id"
+      ],
+      "platforms": [
+        {
+          "platform": "anthropic"
+        }
+      ],
+      "defaultModels": [
+        "claude-opus-5",
+        "claude-sonnet-5",
+        "claude-opus-4-8"
+      ]
+    }
+  ],
+
+  "jobs": [
+    {
+      "id": "refresh_tokens",
+      "schedule": "@every 30m",
+      "timeoutSec": 300
+    }
+  ],
+
+  "userPermissions": [
+    {
+      "key": "claude_oauth:manage",
+      "label": {
+        "en": "Manage Claude OAuth accounts",
+        "zh": "管理 Claude OAuth 账号"
+      },
+      "description": {
+        "en": "Create and manage Claude OAuth accounts",
+        "zh": "创建和管理 Claude OAuth 账号"
+      }
+    }
+  ],
+
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/auth/start",
+      "scope": "admin",
+      "permission": "claude_oauth:manage"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/exchange",
+      "scope": "admin",
+      "permission": "claude_oauth:manage"
+    }
+  ],
+
+  "resources": {
+    "memoryMB": 128,
+    "cpu": 0.25,
+    "maxThreads": 64,
+    "maxOpenFiles": 256
+  },
+
+  "hostPermissions": [
+    {
+      "id": "kv",
+      "reason": {
+        "en": "Store OAuth session state and access token cache",
+        "zh": "存储 OAuth 会话状态和访问令牌缓存"
+      }
+    },
+    {
+      "id": "accounts.credentials",
+      "reason": {
+        "en": "Read account credentials to check token expiration and refresh tokens",
+        "zh": "读取账号凭证以检查令牌过期并刷新令牌"
+      }
+    },
+    {
+      "id": "jobs",
+      "reason": {
+        "en": "Periodically refresh expiring OAuth tokens",
+        "zh": "定期刷新即将过期的 OAuth 令牌"
+      }
+    },
+    {
+      "id": "routes.admin",
+      "reason": {
+        "en": "OAuth authorization flow endpoints",
+        "zh": "OAuth 授权流程端点"
+      }
+    },
+    {
+      "id": "net",
+      "scope": {
+        "domains": [
+          "claude.com",
+          "platform.claude.com"
+        ]
+      },
+      "reason": {
+        "en": "Call Claude OAuth endpoints to exchange codes and refresh tokens",
+        "zh": "调用 Claude OAuth 端点交换代码和刷新令牌"
+      }
+    }
+  ]
+}

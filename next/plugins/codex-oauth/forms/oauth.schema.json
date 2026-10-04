@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["access_token"],
+  "properties": {
+    "access_token": {
+      "type": "string",
+      "title": "Access Token",
+      "description": "OAuth access token (obtained via authorization flow)",
+      "minLength": 1
+    },
+    "refresh_token": {
+      "type": "string",
+      "title": "Refresh Token",
+      "description": "OAuth refresh token (for automatic token renewal)"
+    },
+    "id_token": {
+      "type": "string",
+      "title": "ID Token",
+      "description": "OpenID Connect ID token (contains user and org info)"
+    },
+    "expires_at": {
+      "type": "integer",
+      "title": "Token Expiration",
+      "description": "Unix timestamp when the access token expires"
+    },
+    "organization_id": {
+      "type": "string",
+      "title": "Organization ID",
+      "description": "OpenAI organization ID (extracted from ID token or manually set)"
+    },
+    "proxy_id": {
+      "type": "string",
+      "title": "Proxy ID",
+      "description": "Optional proxy for OAuth and API requests"
+    },
+    "client_id": {
+      "type": "string",
+      "title": "OAuth Client ID",
+      "description": "Custom OAuth client ID (defaults to official Codex CLI client)",
+      "default": "app_EMoamEEZ73f0CkXaXp7hrann"
+    },
+    "redirect_uri": {
+      "type": "string",
+      "title": "Redirect URI",
+      "description": "OAuth redirect URI (must match authorization request)",
+      "default": "http://localhost:1455/auth/callback"
+    }
+  }
+}

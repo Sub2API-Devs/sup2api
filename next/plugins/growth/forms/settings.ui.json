@@ -1,0 +1,18 @@
+{
+  "ui:order": [
+    "referral_enabled",
+    "referral_rate_percent",
+    "referral_max_per_invitee",
+    "referral_duration_days",
+    "checkin_enabled",
+    "checkin_min_quota",
+    "checkin_max_quota",
+    "checkin_timezone"
+  ],
+  "referral_enabled": {
+    "ui:widget": "checkbox"
+  },
+  "checkin_enabled": {
+    "ui:widget": "checkbox"
+  }
+}

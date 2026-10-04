@@ -3,9 +3,13 @@ go 1.27
 use (
 	./deploy/mock-upstream
 	./e2e
+	./gateway
 	./plugins/anthropic
 	./plugins/ccgateway
+	./plugins/claude-oauth
+	./plugins/codex-oauth
 	./plugins/gemini
+	./plugins/growth
 	./plugins/guard
 	./plugins/moderation
 	./plugins/openai
@@ -14,6 +18,5 @@ use (
 	./runtime-contract
 	./sdk
 	./server
-	./gateway
 	./tools/sub2api-plugin
 )
