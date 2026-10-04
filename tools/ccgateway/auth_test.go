@@ -26,7 +26,24 @@ func TestRealCLIAuthLink(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer a.session.cancel()
+	defer func() {
+		a.session.cancel()
+		// frames closes after the CLI has exited. Wait before TempDir cleanup
+		// so its final writes cannot race removal of the private config folder.
+		deadline := time.NewTimer(5 * time.Second)
+		defer deadline.Stop()
+		for {
+			select {
+			case _, ok := <-a.session.frames:
+				if !ok {
+					return
+				}
+			case <-deadline.C:
+				t.Error("authorization CLI did not exit after cancellation")
+				return
+			}
+		}
+	}()
 	if result["session_id"] == "" || result["url"] == "" {
 		t.Fatal("missing authorization session")
 	}

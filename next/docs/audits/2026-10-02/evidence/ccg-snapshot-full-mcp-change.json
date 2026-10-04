@@ -1,0 +1,113 @@
+{
+  "test": "matrix-mcp-change",
+  "prompt": [
+    "SAME"
+  ],
+  "tools": [
+    {
+      "name": "Write",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "description": "The absolute path to the file to write (must be absolute, not relative)",
+            "type": "string"
+          },
+          "content": {
+            "description": "The content to write to the file",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_path",
+          "content"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "mcp__messages__probe",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ]
+      },
+      "description": "SCHEMA_string"
+    }
+  ],
+  "system": [
+    {
+      "type": "text",
+      "text": "x-anthropic-billing-header: cc_version=2.1.288.d90; cc_entrypoint=sdk-cli;"
+    },
+    {
+      "type": "text",
+      "text": "You are a Claude agent, built on Anthropic's Claude Agent SDK.",
+      "cache_control": {
+        "type": "ephemeral"
+      }
+    },
+    {
+      "type": "text",
+      "text": "SAME",
+      "cache_control": {
+        "type": "ephemeral"
+      }
+    }
+  ],
+  "snapshots": [
+    {
+      "index": 10,
+      "beforeLastAssistant": true,
+      "system": [
+        "SAME"
+      ],
+      "keys": [
+        "type",
+        "systemPrompt",
+        "reminderFold",
+        "echoWireToolInputs",
+        "contextRendering"
+      ]
+    },
+    {
+      "index": 12,
+      "beforeLastAssistant": true,
+      "system": [
+        "SAME"
+      ],
+      "keys": [
+        "type",
+        "systemPrompt",
+        "tools",
+        "cliPrefix",
+        "reminderFold",
+        "echoWireToolInputs",
+        "contextRendering"
+      ]
+    },
+    {
+      "index": 20,
+      "beforeLastAssistant": false,
+      "system": [
+        "SAME"
+      ],
+      "keys": [
+        "type",
+        "systemPrompt",
+        "tools",
+        "cliPrefix",
+        "reminderFold",
+        "echoWireToolInputs",
+        "contextRendering"
+      ]
+    }
+  ]
+}

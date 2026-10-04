@@ -140,21 +140,34 @@ func cleanToolHandoffs(rows []json.RawMessage, messageID string) []json.RawMessa
 		}
 	}
 	removed := map[string]any{}
+	modified := map[int]bool{}
 	for i, obj := range objects {
 		if i < first || str(obj, "type") != "user" {
 			continue
 		}
 		msg, _ := obj["message"].(map[string]any)
 		blocks, _ := msg["content"].([]any)
+		kept := make([]any, 0, len(blocks))
 		for _, b := range blocks {
 			block, _ := b.(map[string]any)
 			if str(block, "type") == "tool_result" && tools[str(block, "tool_use_id")] {
-				removed[str(obj, "uuid")] = obj["parentUuid"]
-				break
+				continue
 			}
+			kept = append(kept, b)
+		}
+		if len(kept) == len(blocks) {
+			continue
+		}
+		if len(kept) == 0 {
+			removed[str(obj, "uuid")] = obj["parentUuid"]
+		} else {
+			// A native user record may combine a denial with other content.
+			// Preserve those blocks and the record UUID so descendants stay valid.
+			msg["content"] = kept
+			modified[i] = true
 		}
 	}
-	if len(removed) == 0 {
+	if len(removed) == 0 && len(modified) == 0 {
 		return rows
 	}
 	out := make([]json.RawMessage, 0, len(rows))
@@ -162,7 +175,7 @@ func cleanToolHandoffs(rows []json.RawMessage, messageID string) []json.RawMessa
 		if _, drop := removed[str(obj, "uuid")]; drop {
 			continue
 		}
-		changed := false
+		changed := modified[i]
 		for n := 0; n < len(removed); n++ {
 			parent, found := removed[str(obj, "parentUuid")]
 			if !found {

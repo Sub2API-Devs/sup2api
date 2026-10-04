@@ -1,0 +1,75 @@
+{
+  "test": "trim-matrix-fork",
+  "prompt": [
+    "CHANGED"
+  ],
+  "tools": [
+    {
+      "name": "mcp__messages__probe",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "value"
+        ]
+      },
+      "description": "SCHEMA_boolean"
+    }
+  ],
+  "system": [
+    {
+      "type": "text",
+      "text": "x-anthropic-billing-header: cc_version=2.1.288.0f5; cc_entrypoint=sdk-cli;"
+    },
+    {
+      "type": "text",
+      "text": "You are a Claude agent, built on Anthropic's Claude Agent SDK.",
+      "cache_control": {
+        "type": "ephemeral"
+      }
+    },
+    {
+      "type": "text",
+      "text": "SAME",
+      "cache_control": {
+        "type": "ephemeral"
+      }
+    }
+  ],
+  "snapshots": [
+    {
+      "index": 11,
+      "beforeLastAssistant": true,
+      "system": [
+        "SAME"
+      ],
+      "keys": [
+        "type",
+        "systemPrompt",
+        "reminderFold",
+        "echoWireToolInputs",
+        "contextRendering"
+      ]
+    },
+    {
+      "index": 16,
+      "beforeLastAssistant": false,
+      "system": [
+        "SAME"
+      ],
+      "keys": [
+        "type",
+        "systemPrompt",
+        "tools",
+        "cliPrefix",
+        "reminderFold",
+        "echoWireToolInputs",
+        "contextRendering"
+      ]
+    }
+  ]
+}

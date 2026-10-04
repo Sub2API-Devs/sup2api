@@ -92,7 +92,8 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Explicit opt-in, plus server allowlist, plus current client declarations.
-	// A same-named custom tool stays MCP unless this header selects native mode.
+	// Same-named client tools use SDK MCP unless opted in and their complete
+	// definition matches the verified native catalogue below.
 	for _, name := range strings.Split(r.Header.Get("X-CCGateway-Native-Tools"), ",") {
 		name = strings.TrimSpace(name)
 		if name == "" {
@@ -114,6 +115,11 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req.Native[name] = true
+	}
+	matchNativeTools(req, g.Runner.Version)
+	if err := validateToolNames(req); err != nil {
+		apiError(w, 400, "invalid_request_error", err.Error())
+		return
 	}
 	logical := r.Header.Get("X-CCGateway-Session-ID")
 	if logical == "" {

@@ -27,15 +27,16 @@ func uuid() string {
 // Rows are native CLI records. Hashes index the separate client-visible history.
 // Only committed assistant boundaries may be used for continuation or branching.
 type Snapshot struct {
-	NativeDigest string            `json:"native_digest"`
-	Format       int               `json:"format"`
-	NativePath   string            `json:"native_path"`
-	Work         string            `json:"work"`
-	Rows         []json.RawMessage `json:"rows"`
-	LastUUID     string            `json:"last_uuid"`
-	SessionID    string            `json:"session_id"`
-	Hashes       []string          `json:"hashes"`
-	Expires      time.Time         `json:"expires"`
+	NativeDigest   string            `json:"native_digest"`
+	Format         int               `json:"format"`
+	NativePath     string            `json:"native_path"`
+	Work           string            `json:"work"`
+	Rows           []json.RawMessage `json:"rows"`
+	LastUUID       string            `json:"last_uuid"`
+	SessionID      string            `json:"session_id"`
+	Hashes         []string          `json:"hashes"`
+	Expires        time.Time         `json:"expires"`
+	PromptEvidence *PromptEvidence   `json:"prompt_evidence,omitempty"`
 }
 type HistoryCache struct {
 	mu      sync.Mutex
@@ -252,6 +253,7 @@ type Prepared struct {
 	Hashes                                  []string
 	Work, NativePath, InputUUID             string
 	Fork                                    bool
+	SnapshotEnabled                         bool
 	NativeRows                              []json.RawMessage
 	NativeAnchor                            string
 	cache                                   *HistoryCache
@@ -289,6 +291,7 @@ func prepareHistory(r *Request, c *HistoryCache, logical, dir, version string) (
 	parent := ""
 	if prior != nil {
 		p.Rows = append(p.Rows, prior.Rows...)
+		p.SnapshotEnabled = choosePromptSnapshot(prior.Rows, prior.PromptEvidence, r.System, time.Now())
 		p.Work = prior.Work
 		p.Anchor = prior.LastUUID
 		parent = prior.LastUUID
@@ -373,5 +376,6 @@ func (p *Prepared) commit(r *Request, answer Object, c *HistoryCache, logical, d
 	hashes := append(append([]string(nil), p.Hashes...), hash)
 	// Native history lifetime is independent of provider prompt-cache TTL.
 	s := &Snapshot{Format: 2, NativeDigest: digest(string(nativeBytes(p.NativeRows))), Rows: p.NativeRows, LastUUID: p.NativeAnchor, SessionID: p.SessionID, NativePath: p.NativePath, Work: p.Work, Hashes: hashes, Expires: started.Add(24 * time.Hour)}
+	s.PromptEvidence = &PromptEvidence{SystemDigest: digest(r.System), Expires: time.Now().Add(r.TTL)}
 	return c.put(cacheKey(logical, "", hash), s)
 }

@@ -67,3 +67,24 @@ func TestNativeOrphanRetention(t *testing.T) {
 		}
 	}
 }
+
+func TestNativeHandoffPreservesMixedContent(t *testing.T) {
+	rows := []json.RawMessage{
+		json.RawMessage(`{"type":"assistant","uuid":"a","message":{"id":"reply","content":[{"type":"tool_use","id":"one"}]}}`),
+		json.RawMessage(`{"type":"user","uuid":"mixed","parentUuid":"a","message":{"content":[{"type":"text","text":"keep context"},{"type":"tool_result","tool_use_id":"one","content":"internal denial"},{"type":"tool_result","tool_use_id":"earlier","content":"real result"}]}}`),
+		json.RawMessage(`{"type":"assistant","uuid":"b","parentUuid":"mixed","message":{"id":"reply","content":[{"type":"tool_use","id":"two"}]}}`),
+	}
+	cleaned := cleanToolHandoffs(rows, "reply")
+	if len(cleaned) != 3 || string(cleaned[0]) != string(rows[0]) || string(cleaned[2]) != string(rows[2]) {
+		t.Fatal("unrelated rows or parent links changed")
+	}
+	var row Object
+	if err := json.Unmarshal(cleaned[1], &row); err != nil {
+		t.Fatal(err)
+	}
+	msg := row["message"].(map[string]any)
+	blocks := msg["content"].([]any)
+	if len(blocks) != 2 || str(blocks[0].(map[string]any), "text") != "keep context" || str(blocks[1].(map[string]any), "tool_use_id") != "earlier" {
+		t.Fatalf("unrelated content lost: %s", cleaned[1])
+	}
+}

@@ -435,7 +435,10 @@ func (r *Request) wireName(name string) string {
 	if r.Native[name] {
 		return name
 	}
-	return "mcp__messages__" + name
+	if _, _, ok := splitMCPToolName(name); ok {
+		return name
+	}
+	return "mcp__ccgateway__" + name
 }
 func (r *Request) wireMessage(m Message) Message {
 	out := Message{Role: m.Role}

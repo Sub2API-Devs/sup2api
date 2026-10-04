@@ -117,14 +117,18 @@ func envWith(base []string, values map[string]string, remove ...string) []string
 	return out
 }
 func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string, emit func(Object) error) (Object, error) {
-	native := []string{}
+	enabledTools := []string{}
 	if !req.NoTools {
-		for n := range req.Native {
-			native = append(native, n)
+		for _, tool := range req.Tools {
+			enabledTools = append(enabledTools, req.wireName(tool.Name))
 		}
 	}
-	sort.Strings(native)
-	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--tools", strings.Join(native, ","), "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--setting-sources", "", "--settings", `{"disableAllHooks":false}`, "--disable-slash-commands", "--no-chrome", "--max-turns", "1", "--model", req.Model, "--plugin-dir", r.Plugin, "--system-prompt-snapshot", "off"}
+	sort.Strings(enabledTools)
+	snapshotMode := "off"
+	if p.SnapshotEnabled {
+		snapshotMode = "on"
+	}
+	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--tools", strings.Join(enabledTools, ","), "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--setting-sources", "", "--settings", `{"disableAllHooks":false}`, "--disable-slash-commands", "--no-chrome", "--max-turns", "1", "--model", req.Model, "--plugin-dir", r.Plugin, "--system-prompt-snapshot", snapshotMode}
 	if p.Path != "" {
 		args = append(args, "--resume", p.Path)
 		if p.Anchor != "" {
@@ -168,6 +172,11 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 		return nil, fmt.Errorf("cannot start Claude Code")
 	}
 	defer func() { cancel(); stdin.Close(); _ = cmd.Wait() }()
+	// A descendant may inherit stdout and outlive the CLI. Cancellation must
+	// also unblock reads, including the final drain, rather than waiting for
+	// every descendant to close its copy of the pipe.
+	stopReadOnCancel := context.AfterFunc(runctx, func() { _ = stdout.Close() })
+	defer stopReadOnCancel()
 	write := func(v any) error {
 		b, e := json.Marshal(v)
 		if e != nil {
@@ -177,17 +186,9 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 		_, e = stdin.Write(b)
 		return e
 	}
-	servers := []string{}
-	if !req.NoTools {
-		for _, t := range req.Tools {
-			if !req.Native[t.Name] {
-				servers = []string{"messages"}
-				break
-			}
-		}
-	}
+	servers := req.sdkMCPServers()
 	initID := uuid()
-	if e = write(Object{"type": "control_request", "request_id": initID, "request": Object{"subtype": "initialize", "systemPrompt": req.System, "systemPromptSnapshot": false, "sdkMcpServers": servers, "hooks": Object{}, "supportedDialogKinds": []string{}, "promptSuggestions": false, "excludeDynamicSections": true}}); e != nil {
+	if e = write(Object{"type": "control_request", "request_id": initID, "request": Object{"subtype": "initialize", "systemPrompt": req.System, "systemPromptSnapshot": p.SnapshotEnabled, "sdkMcpServers": servers, "hooks": Object{}, "supportedDialogKinds": []string{}, "promptSuggestions": false, "excludeDynamicSections": true}}); e != nil {
 		return nil, fmt.Errorf("cannot initialize CLI")
 	}
 	scan := bufio.NewScanner(stdout)
@@ -258,6 +259,10 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 					p.SessionID = sid
 				}
 				_ = stdin.Close()
+				// result is terminal, but the CLI can still flush notifications to
+				// stdout before exiting. Drain the pipe before Wait, otherwise a
+				// full pipe blocks both the child writer and our process wait.
+				_, _ = io.Copy(io.Discard, stdout)
 				// A tool handoff reaches max-turns and exits nonzero despite a complete response.
 				_ = cmd.Wait()
 				if ctx.Err() != nil {
@@ -287,36 +292,7 @@ func controlReply(f Object, r *Request) Object {
 	case "can_use_tool":
 		payload = Object{"behavior": "deny", "message": "Tools are executed by the API client", "toolUseID": q["tool_use_id"]}
 	case "mcp_message":
-		m, _ := q["message"].(map[string]any)
-		inner := Object{"jsonrpc": "2.0", "id": m["id"]}
-		if str(q, "server_name") != "messages" {
-			inner["error"] = Object{"code": -32601, "message": "Unknown server"}
-		} else {
-			switch str(m, "method") {
-			case "initialize":
-				params, _ := m["params"].(map[string]any)
-				version := str(params, "protocolVersion")
-				if version == "" {
-					version = "2024-11-05"
-				}
-				inner["result"] = Object{"protocolVersion": version, "capabilities": Object{"tools": Object{}}, "serverInfo": Object{"name": "messages", "version": "0.1.0"}}
-			case "tools/list":
-				ts := []Object{}
-				if !r.NoTools {
-					for _, t := range r.Tools {
-						if !r.Native[t.Name] {
-							ts = append(ts, Object{"name": t.Name, "description": t.Description, "inputSchema": t.Schema})
-						}
-					}
-				}
-				inner["result"] = Object{"tools": ts}
-			case "ping", "notifications/initialized":
-				inner["result"] = Object{}
-			default:
-				inner["error"] = Object{"code": -32601, "message": "Tool execution belongs to the API client"}
-			}
-		}
-		payload = Object{"mcp_response": inner}
+		payload = Object{"mcp_response": sdkMCPReply(q, r)}
 	case "request_user_dialog":
 		payload = Object{"behavior": "cancelled"}
 	case "elicitation":

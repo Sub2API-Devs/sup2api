@@ -98,7 +98,7 @@ func TestHistorySnapshotAndToolPair(t *testing.T) {
 		t.Fatal("concurrent branches share a native writer")
 	}
 	b, _ := os.ReadFile(p2.Path)
-	if !bytes.Contains(b, []byte("tool_result")) || !bytes.Contains(b, []byte("mcp__messages__weather")) {
+	if !bytes.Contains(b, []byte("tool_result")) || !bytes.Contains(b, []byte("mcp__ccgateway__weather")) {
 		t.Fatal("complete tool pair missing from recovery file")
 	}
 	if p2.Anchor == p2.LastUUID {
@@ -233,7 +233,7 @@ func TestRealCLI(t *testing.T) {
 			name := ""
 			for _, x := range tools {
 				tool, _ := x.(map[string]any)
-				if str(tool, "name") == "mcp__messages__weather" || str(tool, "name") == "Read" {
+				if str(tool, "name") == "mcp__ccgateway__weather" || str(tool, "name") == "Read" || str(tool, "name") == "mcp__ccgateway__Read" {
 					name = str(tool, "name")
 					break
 				}
@@ -243,12 +243,21 @@ func TestRealCLI(t *testing.T) {
 				return
 			}
 			input := Object{"city": "Paris"}
-			if name == "Read" {
+			if name == "Read" || name == "mcp__ccgateway__Read" {
 				input = Object{"file_path": filepath.Join(root, "does-not-exist.txt")}
 			}
 			content = []Object{{"type": "tool_use", "id": "toolu_fixture", "name": name, "input": input, "caller": Object{"type": "direct"}}}
+			if name == "mcp__ccgateway__Read" {
+				content[0]["id"] = fmt.Sprintf("toolu_custom_read_%d", captureIndex)
+			}
 			if bytes.Contains(raw, []byte("CALL_PARALLEL")) {
 				content = append(content, Object{"type": "tool_use", "id": "toolu_parallel", "name": name, "input": input})
+			}
+		}
+		if bytes.Contains(raw, []byte("SDK_MIXED_CALL")) && !bytes.Contains(raw, []byte("tool_result")) {
+			content = nil
+			for i, name := range []string{"mcp__files__lookup", "mcp__other__lookup", "mcp__ccgateway__foo", "mcp__ccgateway__bar"} {
+				content = append(content, Object{"type": "tool_use", "id": fmt.Sprintf("toolu_sdk_%d_%d", captureIndex, i), "name": name, "input": Object{"query": "fixture"}})
 			}
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
@@ -409,7 +418,8 @@ func TestRealCLI(t *testing.T) {
 	}
 	native := basic()
 	native["messages"] = []any{user}
-	native["tools"] = []any{Object{"name": "Read", "input_schema": Object{"type": "object", "properties": Object{"file_path": Object{"type": "string"}}, "required": []string{"file_path"}}}}
+	verifiedRead := verifiedNativeTools["Read"]
+	native["tools"] = []any{verifiedRead}
 	answer, _, _ = post(native, "Read")
 	if str(answer, "stop_reason") != "tool_use" {
 		t.Fatal(answer)
@@ -420,6 +430,10 @@ func TestRealCLI(t *testing.T) {
 	nativeTools, _ := nativeUp["tools"].([]any)
 	if len(nativeTools) != 1 || str(nativeTools[0].(map[string]any), "name") != "Read" {
 		t.Fatalf("native whitelist leaked tools: %v", nativeTools)
+	}
+	nativeDefinition := nativeTools[0].(map[string]any)
+	if str(nativeDefinition, "description") != verifiedRead.Description || digest(nativeDefinition["input_schema"]) != digest(verifiedRead.Schema) {
+		t.Fatal("actual native Read definition differs from verified catalogue")
 	}
 
 	// Returning a native result on the next HTTP request must restore the
@@ -469,7 +483,7 @@ func TestRealCLI(t *testing.T) {
 
 	delete(native, "tool_choice")
 	native["messages"] = append(nativeHistory, Object{"role": "assistant", "content": []any{Object{"type": "text", "text": "fixture answer"}}}, Object{"role": "user", "content": "AFTER_NATIVE_TOOL"})
-	_, _, nativeFollow := post(native, "Read")
+	nativeFollowAnswer, _, nativeFollow := post(native, "Read")
 	if nativeFollow.Get("X-CCGateway-History") != "prefix-hit" {
 		t.Fatal("native tool follow-up rebuilt")
 	}
@@ -478,6 +492,53 @@ func TestRealCLI(t *testing.T) {
 	mu.Unlock()
 	if !bytes.Contains(nativeFollowBody, []byte("CLIENT_FILE_CONTENT")) || bytes.Contains(nativeFollowBody, []byte("execution belongs")) {
 		t.Fatal("native tool result lost on later turn")
+	}
+	// A same-named declaration is custom if either description or schema
+	// differs, even with explicit native opt-in. Results still belong to the client.
+	for _, scenario := range []string{"description", "native-to-custom-schema"} {
+		fallback := basic()
+		customRead := verifiedRead
+		fallback["messages"] = []any{Object{"role": "user", "content": "CALL_TOOL_CUSTOM_READ"}}
+		if scenario == "description" {
+			customRead.Description = "Client-owned Read implementation"
+		} else {
+			customRead.Schema = Object{"type": "object", "properties": Object{"file_path": Object{"type": "string", "description": "Client filesystem path"}}, "required": []string{"file_path"}}
+			fallback["messages"] = append(append([]any(nil), native["messages"].([]any)...), Object{"role": "assistant", "content": nativeFollowAnswer["content"]}, Object{"role": "user", "content": "CALL_TOOL_CHANGED_SCHEMA"})
+		}
+		fallback["tools"] = []any{customRead}
+		fallbackAnswer, _, fallbackHeaders := post(fallback, "Read")
+		if scenario == "native-to-custom-schema" && fallbackHeaders.Get("X-CCGateway-History") != "prefix-hit" {
+			t.Fatal("native-to-custom transition rebuilt history")
+		}
+		blocks, _ := fallbackAnswer["content"].([]any)
+		if len(blocks) != 1 || str(blocks[0].(map[string]any), "name") != "Read" {
+			t.Fatalf("custom fallback did not restore client tool name: %v", blocks)
+		}
+		mu.Lock()
+		fallbackUpstream := requests[len(requests)-1]
+		mu.Unlock()
+		definitions, _ := fallbackUpstream["tools"].([]any)
+		if len(definitions) != 1 || str(definitions[0].(map[string]any), "name") != "mcp__ccgateway__Read" {
+			t.Fatalf("mismatched native definition did not use SDK tool: %v", definitions)
+		}
+		definition := definitions[0].(map[string]any)
+		if str(definition, "description") != customRead.Description || digest(definition["input_schema"]) != digest(customRead.Schema) {
+			t.Fatal("custom fallback changed the caller's definition")
+		}
+		fallback["messages"] = append(fallback["messages"].([]any), Object{"role": "assistant", "content": fallbackAnswer["content"]}, Object{"role": "user", "content": []any{Object{"type": "tool_result", "tool_use_id": blocks[0].(map[string]any)["id"], "content": "CUSTOM_READ_CLIENT_RESULT"}}})
+		_, _, resultHeaders := post(fallback, "Read")
+		if resultHeaders.Get("X-CCGateway-History") != "prefix-hit" {
+			t.Fatal("custom Read result did not resume")
+		}
+		mu.Lock()
+		resultBody, _ := json.Marshal(requests[len(requests)-1]["messages"])
+		mu.Unlock()
+		if !bytes.Contains(resultBody, []byte("CUSTOM_READ_CLIENT_RESULT")) || bytes.Contains(resultBody, []byte("execution belongs")) {
+			t.Fatal("custom Read result lost or replaced with denial")
+		}
+		if scenario == "native-to-custom-schema" && !bytes.Contains(resultBody, []byte("CLIENT_FILE_CONTENT")) {
+			t.Fatal("native-to-custom transition lost prior native tool result")
+		}
 	}
 	parallel := basic()
 	parallel["tools"] = []any{tool}
@@ -578,6 +639,157 @@ func TestRealCLI(t *testing.T) {
 	if rebuiltHeaders.Get("X-CCGateway-History") != "rebuild" {
 		t.Fatal("unrelated history reused old session")
 	}
+	// Reuse the same MCP name while changing its schema: checking only names
+	// would miss a stale native prompt snapshot restoring the old definition.
+	schemaReq := basic()
+	schemaReq["messages"] = []any{Object{"role": "user", "content": "SCHEMA_START"}}
+	for i, schemaType := range []string{"string", "number", "number"} {
+		schemaReq["tools"] = []any{Object{"name": "weather", "description": "Weather", "input_schema": Object{"type": "object", "properties": Object{"city": Object{"type": schemaType}}, "required": []string{"city"}}}}
+		schemaAnswer, _, schemaHeaders := post(schemaReq, "")
+		if i > 0 && schemaHeaders.Get("X-CCGateway-History") != "prefix-hit" {
+			t.Fatal("MCP schema update rebuilt the native session")
+		}
+		mu.Lock()
+		upstreamTools, _ := requests[len(requests)-1]["tools"].([]any)
+		mu.Unlock()
+		found := false
+		for _, rawTool := range upstreamTools {
+			definition, _ := rawTool.(map[string]any)
+			if str(definition, "name") != "mcp__ccgateway__weather" {
+				continue
+			}
+			found = true
+			schema, _ := definition["input_schema"].(map[string]any)
+			properties, _ := schema["properties"].(map[string]any)
+			city, _ := properties["city"].(map[string]any)
+			if str(city, "type") != schemaType {
+				t.Fatalf("MCP schema turn %d retained stale city type: %v", i, city)
+			}
+		}
+		if !found {
+			t.Fatal("MCP tool disappeared after schema update")
+		}
+		schemaReq["messages"] = append(schemaReq["messages"].([]any), Object{"role": "assistant", "content": schemaAnswer["content"]}, Object{"role": "user", "content": fmt.Sprintf("SCHEMA_NEXT_%d", i)})
+	}
+	// Enabling an unchanged A snapshot must not cause A to reappear on the
+	// second B request. Compare the actual upstream prompt on every turn.
+	promptReq := basic()
+	promptReq["messages"] = []any{Object{"role": "user", "content": "SNAPSHOT_START"}}
+	for i, step := range []struct {
+		system  string
+		enabled bool
+	}{{"SNAPSHOT_SYSTEM_A", false}, {"SNAPSHOT_SYSTEM_A", true}, {"SNAPSHOT_SYSTEM_B", false}, {"SNAPSHOT_SYSTEM_B", false}} {
+		promptReq["system"] = step.system
+		preparedPrompt, err := prepareHistory(parsed(t, promptReq), cache, digest([]string{"", "test-session"}), t.TempDir(), version)
+		if err != nil {
+			t.Fatal(err)
+		}
+		enabled := preparedPrompt.SnapshotEnabled
+		preparedPrompt.release()
+		if enabled != step.enabled {
+			t.Fatalf("prompt turn %d snapshot enabled=%v, want %v", i, enabled, step.enabled)
+		}
+		promptAnswer, _, promptHeaders := post(promptReq, "")
+		if i > 0 && promptHeaders.Get("X-CCGateway-History") != "prefix-hit" {
+			t.Fatal("system update rebuilt the native session")
+		}
+		mu.Lock()
+		actualSystem, _ := json.Marshal(requests[len(requests)-1]["system"])
+		mu.Unlock()
+		other := "SNAPSHOT_SYSTEM_A"
+		if step.system == other {
+			other = "SNAPSHOT_SYSTEM_B"
+		}
+		if !bytes.Contains(actualSystem, []byte(step.system)) || bytes.Contains(actualSystem, []byte(other)) {
+			t.Fatalf("prompt turn %d restored the wrong system: %s", i, actualSystem)
+		}
+		promptReq["messages"] = append(promptReq["messages"].([]any), Object{"role": "assistant", "content": promptAnswer["content"]}, Object{"role": "user", "content": fmt.Sprintf("SNAPSHOT_NEXT_%d", i)})
+	}
+	// Existing MCP names stay intact; two servers may expose the same short
+	// name alongside an ordinary SDK tool. Every result is supplied by the client.
+	sdkReq := basic()
+	sdkReq["messages"] = []any{Object{"role": "user", "content": "SDK_MIXED_CALL"}}
+	sdkDefinition := func(name, typ string) Object {
+		return Object{"name": name, "description": "Client lookup " + name, "input_schema": Object{"type": "object", "properties": Object{"query": Object{"type": typ}}, "required": []string{"query"}}}
+	}
+	for turn := 0; turn < 4; turn++ {
+		queryType := "string"
+		if turn >= 2 {
+			queryType = "number"
+		}
+		declared := []any{sdkDefinition("mcp__other__lookup", "string"), sdkDefinition("foo", "string"), sdkDefinition("mcp__ccgateway__bar", "string")}
+		if turn < 3 {
+			declared = append(declared, sdkDefinition("mcp__files__lookup", queryType))
+		}
+		sdkReq["tools"] = declared
+		sdkAnswer, _, sdkHeaders := post(sdkReq, "")
+		if turn > 0 && sdkHeaders.Get("X-CCGateway-History") != "prefix-hit" {
+			t.Fatal("SDK MCP continuation rebuilt native history")
+		}
+		mu.Lock()
+		sdkUpstream := requests[len(requests)-1]
+		mu.Unlock()
+		actualTools, _ := sdkUpstream["tools"].([]any)
+		if len(actualTools) != len(declared) {
+			t.Fatalf("SDK mixed turn %d exposed wrong tool count: %v", turn, actualTools)
+		}
+		actualByName := map[string]Object{}
+		for _, raw := range actualTools {
+			definition := raw.(map[string]any)
+			actualByName[str(definition, "name")] = definition
+		}
+		for _, raw := range declared {
+			definition := raw.(map[string]any)
+			wire := str(definition, "name")
+			if wire == "foo" {
+				wire = "mcp__ccgateway__foo"
+			}
+			actual := actualByName[wire]
+			if actual == nil || str(actual, "description") != str(definition, "description") || digest(actual["input_schema"]) != digest(definition["input_schema"]) {
+				t.Fatalf("SDK mixed turn %d changed name or definition for %s: %v", turn, wire, actual)
+			}
+		}
+		if turn > 0 {
+			body, _ := json.Marshal(sdkUpstream["messages"])
+			for _, marker := range []string{"SDK_FILES_RESULT", "SDK_OTHER_RESULT", "SDK_ORDINARY_RESULT", "SDK_SHARED_NAMESPACE_RESULT"} {
+				if !bytes.Contains(body, []byte(marker)) {
+					t.Fatalf("SDK mixed turn %d lost %s", turn, marker)
+				}
+			}
+			if bytes.Contains(body, []byte("execution belongs")) {
+				t.Fatal("SDK mixed history contains an internal denial")
+			}
+		}
+		nextContent := any(fmt.Sprintf("SDK_MIXED_NEXT_%d", turn))
+		if turn == 0 {
+			blocks, _ := sdkAnswer["content"].([]any)
+			if len(blocks) != 4 {
+				t.Fatalf("SDK mixed calls missing: %v", blocks)
+			}
+			results := []any{}
+			for i, expected := range []string{"mcp__files__lookup", "mcp__other__lookup", "foo", "mcp__ccgateway__bar"} {
+				block := blocks[i].(map[string]any)
+				if str(block, "name") != expected {
+					t.Fatalf("SDK response name %q, want %q", str(block, "name"), expected)
+				}
+				results = append(results, Object{"type": "tool_result", "tool_use_id": block["id"], "content": []string{"SDK_FILES_RESULT", "SDK_OTHER_RESULT", "SDK_ORDINARY_RESULT", "SDK_SHARED_NAMESPACE_RESULT"}[i]})
+			}
+			nextContent = results
+		}
+		sdkReq["messages"] = append(sdkReq["messages"].([]any), Object{"role": "assistant", "content": sdkAnswer["content"]}, Object{"role": "user", "content": nextContent})
+	}
+	collision := basic()
+	collision["tools"] = []any{sdkDefinition("foo", "string"), sdkDefinition("mcp__ccgateway__foo", "string")}
+	collisionBody, _ := json.Marshal(collision)
+	collisionResponse, err := http.Post(gateway.URL+"/v1/messages", "application/json", bytes.NewReader(collisionBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.Copy(io.Discard, collisionResponse.Body)
+	collisionResponse.Body.Close()
+	if collisionResponse.StatusCode != http.StatusBadRequest {
+		t.Fatalf("colliding SDK name accepted: HTTP %d", collisionResponse.StatusCode)
+	}
 	// No custom session header is required, but caller scopes cannot share history.
 	sessionHeader = ""
 	scopeHeader = "caller-a"
@@ -616,8 +828,8 @@ func TestRealCLI(t *testing.T) {
 		t.Fatal("cancelled request succeeded")
 	}
 	mu.Lock()
-	if len(requests) != 23 {
-		t.Fatalf("expected 23 model requests, got %d", len(requests))
+	if len(requests) != 38 {
+		t.Fatalf("expected 38 model requests, got %d", len(requests))
 	}
 	last := requests[6]
 	mu.Unlock()

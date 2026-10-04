@@ -1,0 +1,62 @@
+{
+  "test": "trim-matrix-multi",
+  "prompt": [
+    "ONE\nalpha",
+    "TWO\nbeta"
+  ],
+  "tools": [],
+  "system": [
+    {
+      "type": "text",
+      "text": "x-anthropic-billing-header: cc_version=2.1.288.0f5; cc_entrypoint=sdk-cli;"
+    },
+    {
+      "type": "text",
+      "text": "You are a Claude agent, built on Anthropic's Claude Agent SDK.",
+      "cache_control": {
+        "type": "ephemeral"
+      }
+    },
+    {
+      "type": "text",
+      "text": "ONE\nalpha\n\nTWO\nbeta",
+      "cache_control": {
+        "type": "ephemeral"
+      }
+    }
+  ],
+  "snapshots": [
+    {
+      "index": 10,
+      "beforeLastAssistant": true,
+      "system": [
+        "ONE\nalpha",
+        "TWO\nbeta"
+      ],
+      "keys": [
+        "type",
+        "systemPrompt",
+        "reminderFold",
+        "echoWireToolInputs",
+        "contextRendering"
+      ]
+    },
+    {
+      "index": 12,
+      "beforeLastAssistant": false,
+      "system": [
+        "ONE\nalpha",
+        "TWO\nbeta"
+      ],
+      "keys": [
+        "type",
+        "systemPrompt",
+        "tools",
+        "cliPrefix",
+        "reminderFold",
+        "echoWireToolInputs",
+        "contextRendering"
+      ]
+    }
+  ]
+}
