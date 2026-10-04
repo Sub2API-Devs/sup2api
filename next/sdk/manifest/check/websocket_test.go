@@ -13,7 +13,7 @@ func webSocketPlatform() manifest.Platform {
 		Auth:        manifest.EndpointAuth{Headers: []string{"authorization"}},
 		Request:     manifest.EndpointRequest{ModelPath: "model"},
 		Response:    manifest.EndpointResp{Stream: manifest.ResponseWebSocket},
-		ErrorFormat: "plain", Billing: "usage",
+		ErrorFormat: "plain", Billing: "usage", BillingTypes: []string{"per_request", "per_token", "expression"},
 	}}
 	return p
 }

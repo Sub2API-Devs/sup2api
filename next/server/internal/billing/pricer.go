@@ -2,6 +2,8 @@ package billing
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
@@ -35,7 +37,7 @@ func (s *Service) snapshot(ctx context.Context) (*priceSnapshot, error) {
 		return snap, nil
 	}
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT id, model, mode, expression, expr_version, expr_hash FROM model_prices WHERE enabled`)
+		SELECT id, model, mode, expression, expr_version, expr_hash, config FROM model_prices WHERE enabled`)
 	if err != nil {
 		return nil, err
 	}
@@ -43,8 +45,20 @@ func (s *Service) snapshot(ctx context.Context) (*priceSnapshot, error) {
 	snap = &priceSnapshot{at: time.Now(), byModel: map[string]core.PriceRule{}}
 	for rows.Next() {
 		var r core.PriceRule
-		if err := rows.Scan(&r.ID, &r.Model, &r.Mode, &r.Expression, &r.ExprVersion, &r.ExprHash); err != nil {
+		var config json.RawMessage
+		if err := rows.Scan(&r.ID, &r.Model, &r.Mode, &r.Expression, &r.ExprVersion, &r.ExprHash, &config); err != nil {
 			return nil, err
+		}
+		var visual expr.ExpressionConfig
+		r.VideoOnly = r.Mode == expr.ModeExpression && json.Unmarshal(config, &visual) == nil && visual.Video != nil
+		// Switching a video template to source mode must not bypass admission.
+		if program, err := expr.CompileCached(r.Expression); err == nil {
+			for _, fact := range program.Facts() {
+				if strings.HasPrefix(fact, "video_") {
+					r.VideoOnly = true
+					break
+				}
+			}
 		}
 		snap.byModel[r.Model] = r
 	}

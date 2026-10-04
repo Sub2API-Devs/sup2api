@@ -11,6 +11,7 @@ func taskPlatform() manifest.Platform {
 	p.Endpoints[0].Task = &manifest.AsyncTaskEndpoint{Action: "submit", Kind: "video", IDPaths: []string{"id", "data.id"}}
 	query := p.Endpoints[0]
 	query.ID, query.Method, query.Path, query.Protocol, query.Billing = "query", "GET", "/video/v1/generations/:id", "video.query", "free"
+	query.BillingTypes = nil
 	query.Request = manifest.EndpointRequest{}
 	query.Task = &manifest.AsyncTaskEndpoint{Action: "query", Kind: "video", IDParam: "id", IDPaths: []string{"id"}}
 	p.Endpoints = append(p.Endpoints, query)
@@ -48,6 +49,7 @@ func TestAsyncTaskManifestSafety(t *testing.T) {
 func TestFreeAsyncTasksCanDescribeSubmissionWithoutReservation(t *testing.T) {
 	p := taskPlatform()
 	p.Endpoints[0].Billing = "free"
+	p.Endpoints[0].BillingTypes = nil
 	p.Endpoints[0].UsageMaxBytes = 65536
 	p.Endpoints[0].UsageRequestFields = []string{"resolution"}
 	if got := platformCodes(p); len(got) != 0 {

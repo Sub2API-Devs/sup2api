@@ -28,7 +28,12 @@
         "nonStream": "json"
       },
       "errorFormat": "openai",
-      "billing": "usage"
+      "billing": "usage",
+      "billingTypes": [
+        "per_request",
+        "per_token",
+        "expression"
+      ]
     },
     {
       "id": "responses",
@@ -85,7 +90,12 @@
             "cache_read_tokens": "usage.input_tokens_details.cached_tokens"
           }
         }
-      }
+      },
+      "billingTypes": [
+        "per_request",
+        "per_token",
+        "expression"
+      ]
     },
     {
       "id": "responses_websocket",
@@ -141,7 +151,12 @@
             }
           }
         ]
-      }
+      },
+      "billingTypes": [
+        "per_request",
+        "per_token",
+        "expression"
+      ]
     },
     {
       "id": "embeddings",
@@ -173,7 +188,12 @@
             "input_tokens": "usage.prompt_tokens"
           }
         }
-      }
+      },
+      "billingTypes": [
+        "per_request",
+        "per_token",
+        "expression"
+      ]
     }
   ],
   "requestFields": [

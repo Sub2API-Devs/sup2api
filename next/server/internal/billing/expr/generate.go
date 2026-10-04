@@ -85,6 +85,7 @@ type RuleConfig struct {
 
 // ExpressionConfig is mode=expression edited visually.
 type ExpressionConfig struct {
+	Video *VideoConfig `json:"video,omitempty"`
 	Tiers []TierConfig `json:"tiers"`
 	Rules []RuleConfig `json:"rules,omitempty"`
 }
@@ -104,7 +105,7 @@ func cfgErr(field, format string, args ...any) *ConfigError {
 // HasVisualConfig reports whether an expression-mode config carries tiers.
 func HasVisualConfig(config json.RawMessage) bool {
 	var c ExpressionConfig
-	return json.Unmarshal(config, &c) == nil && len(c.Tiers) > 0
+	return json.Unmarshal(config, &c) == nil && (len(c.Tiers) > 0 || c.Video != nil)
 }
 
 // Generate builds the expression for a visual configuration. Errors are
@@ -191,6 +192,12 @@ var (
 )
 
 func generateExpression(c ExpressionConfig) (string, error) {
+	if c.Video != nil {
+		if len(c.Tiers) > 0 || len(c.Rules) > 0 {
+			return "", cfgErr("config", "video cannot be combined with tiers or rules; use source mode for custom expressions")
+		}
+		return generateVideo(*c.Video)
+	}
 	if len(c.Tiers) == 0 {
 		return "", cfgErr("config.tiers", "at least one tier is required")
 	}

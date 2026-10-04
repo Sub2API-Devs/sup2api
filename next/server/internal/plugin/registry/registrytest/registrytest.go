@@ -110,7 +110,7 @@ func TestEndpoint(key string) manifest.Endpoint {
 		ID: "test", Method: "POST", Path: "/p_" + key + "/v1/test", Protocol: "p_" + key + ".test", Kind: "proxy",
 		Auth:     manifest.EndpointAuth{Headers: []string{"authorization"}},
 		Request:  manifest.EndpointRequest{ModelPath: "model"},
-		Response: manifest.EndpointResp{NonStream: "json"}, ErrorFormat: "plain", Billing: "usage",
+		Response: manifest.EndpointResp{NonStream: "json"}, ErrorFormat: "plain", Billing: "usage", BillingTypes: []string{"per_request", "per_token", "expression"},
 	}
 }
 

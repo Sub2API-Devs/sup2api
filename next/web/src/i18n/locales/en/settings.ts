@@ -48,6 +48,9 @@ export default {
     notInteger: 'Enter a whole number'
   },
   billing: {
+    preConsumeTokens: 'Request reservation tokens',
+    preConsumeHint: 'Minimum input tokens reserved for text requests, default 500. Larger local estimates take precedence. Zero disables the minimum. Final billing uses actual usage; video uses plugin estimates.',
+    preConsumeInvalid: 'Enter an integer from 0 to 100000000',
     title: 'Billing',
     missingPolicy: 'When a model has no price',
     policy: {

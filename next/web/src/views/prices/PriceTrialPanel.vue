@@ -18,6 +18,11 @@ const props = defineProps<{
 }>()
 const { t } = useI18n()
 const auth = useAuthStore()
+const metrics = ref<Record<string, string>>({})
+function videoSample(estimated: boolean) {
+  Object.assign(usage, { p: 0, c: 100000, cr: 0, cc: 0, cc1h: 0 })
+  metrics.value = { video_seconds: '5', video_width: '1280', video_height: '720', video_pixels: '921600', video_input: 'false', video_estimated: String(estimated) }
+}
 
 const usage = reactive<Record<string, number | '' | null>>({ p: 100000, c: 2000, cr: 80000, cc: 0, cc1h: 0 })
 // SInput emits null for an empty number field (the native input gave '').
@@ -55,6 +60,7 @@ async function run() {
   const body: Record<string, unknown> = {
     ...props.source,
     usage: u,
+    metrics: Object.fromEntries(Object.entries(metrics.value).map(([k, v]) => [k, parseParam(v)])),
     headers: headers.value,
     params: Object.fromEntries(Object.entries(params.value).map(([k, v]) => [k, parseParam(v)]))
   }
@@ -81,7 +87,7 @@ function schedule() {
   timer = setTimeout(run, 700)
 }
 
-watch(() => [props.source, { ...usage }, len.value, headers.value, params.value, at.value, groupId.value], schedule, { deep: true, immediate: true })
+watch(() => [props.source, { ...usage }, len.value, headers.value, params.value, metrics.value, at.value, groupId.value], schedule, { deep: true, immediate: true })
 onBeforeUnmount(() => clearTimeout(timer))
 
 // Extra response fields (B): base_cost, rate_multiplier, expression, expr_hash.
@@ -113,6 +119,13 @@ const resultLen = computed(() => {
         <SKeyValue v-model="params" key-placeholder="service_tier" value-placeholder="priority" />
       </SField>
     </SGrid>
+    <SField :label="t('prices.video.metrics')" :hint="t('prices.video.metricsHint')">
+      <div class="mb-2 flex gap-2">
+        <SButton size="sm" @click="videoSample(true)">{{ t('prices.video.reserveSample') }}</SButton>
+        <SButton size="sm" @click="videoSample(false)">{{ t('prices.video.settleSample') }}</SButton>
+      </div>
+      <SKeyValue v-model="metrics" key-placeholder="video_seconds" value-placeholder="5" />
+    </SField>
     <div class="flex flex-wrap items-end gap-4">
       <SField :label="t('prices.trial.at')">
         <SInput v-model="at" type="datetime-local" class="!w-56" />

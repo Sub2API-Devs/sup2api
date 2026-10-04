@@ -67,7 +67,7 @@ func (x ClassifyErrorResponse_Action) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ClassifyErrorResponse_Action.Descriptor instead.
 func (ClassifyErrorResponse_Action) EnumDescriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{9, 0}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{10, 0}
 }
 
 type ClassifyErrorResponse_AccountEffect int32
@@ -116,7 +116,7 @@ func (x ClassifyErrorResponse_AccountEffect) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ClassifyErrorResponse_AccountEffect.Descriptor instead.
 func (ClassifyErrorResponse_AccountEffect) EnumDescriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{9, 1}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{10, 1}
 }
 
 type ReconcileResult_State int32
@@ -201,7 +201,83 @@ func (x ReconcileResult_State) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ReconcileResult_State.Descriptor instead.
 func (ReconcileResult_State) EnumDescriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{25, 0}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{26, 0}
+}
+
+type EstimateUsageRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Meta             *RequestMeta           `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
+	Fields           map[string]string      `protobuf:"bytes,2,rep,name=fields,proto3" json:"fields,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	FieldsOmitted    []string               `protobuf:"bytes,3,rep,name=fields_omitted,json=fieldsOmitted,proto3" json:"fields_omitted,omitempty"`
+	PreConsumeTokens int64                  `protobuf:"varint,4,opt,name=pre_consume_tokens,json=preConsumeTokens,proto3" json:"pre_consume_tokens,omitempty"`
+	Prompt           string                 `protobuf:"bytes,5,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *EstimateUsageRequest) Reset() {
+	*x = EstimateUsageRequest{}
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EstimateUsageRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EstimateUsageRequest) ProtoMessage() {}
+
+func (x *EstimateUsageRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EstimateUsageRequest.ProtoReflect.Descriptor instead.
+func (*EstimateUsageRequest) Descriptor() ([]byte, []int) {
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *EstimateUsageRequest) GetMeta() *RequestMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+func (x *EstimateUsageRequest) GetFields() map[string]string {
+	if x != nil {
+		return x.Fields
+	}
+	return nil
+}
+
+func (x *EstimateUsageRequest) GetFieldsOmitted() []string {
+	if x != nil {
+		return x.FieldsOmitted
+	}
+	return nil
+}
+
+func (x *EstimateUsageRequest) GetPreConsumeTokens() int64 {
+	if x != nil {
+		return x.PreConsumeTokens
+	}
+	return 0
+}
+
+func (x *EstimateUsageRequest) GetPrompt() string {
+	if x != nil {
+		return x.Prompt
+	}
+	return ""
 }
 
 type ExecuteRequest struct {
@@ -214,7 +290,7 @@ type ExecuteRequest struct {
 
 func (x *ExecuteRequest) Reset() {
 	*x = ExecuteRequest{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[0]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -226,7 +302,7 @@ func (x *ExecuteRequest) String() string {
 func (*ExecuteRequest) ProtoMessage() {}
 
 func (x *ExecuteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[0]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -239,7 +315,7 @@ func (x *ExecuteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecuteRequest.ProtoReflect.Descriptor instead.
 func (*ExecuteRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{0}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *ExecuteRequest) GetRequest() *BuildUpstreamRequestRequest {
@@ -267,7 +343,7 @@ type ExecuteResponse struct {
 
 func (x *ExecuteResponse) Reset() {
 	*x = ExecuteResponse{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[1]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -279,7 +355,7 @@ func (x *ExecuteResponse) String() string {
 func (*ExecuteResponse) ProtoMessage() {}
 
 func (x *ExecuteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[1]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -292,7 +368,7 @@ func (x *ExecuteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecuteResponse.ProtoReflect.Descriptor instead.
 func (*ExecuteResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{1}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ExecuteResponse) GetClassification() *ClassifyErrorResponse {
@@ -310,7 +386,7 @@ type MonitorResponse struct {
 
 func (x *MonitorResponse) Reset() {
 	*x = MonitorResponse{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[2]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -322,7 +398,7 @@ func (x *MonitorResponse) String() string {
 func (*MonitorResponse) ProtoMessage() {}
 
 func (x *MonitorResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[2]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -335,7 +411,7 @@ func (x *MonitorResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MonitorResponse.ProtoReflect.Descriptor instead.
 func (*MonitorResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{2}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{3}
 }
 
 type PollRequest struct {
@@ -351,7 +427,7 @@ type PollRequest struct {
 
 func (x *PollRequest) Reset() {
 	*x = PollRequest{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[3]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -363,7 +439,7 @@ func (x *PollRequest) String() string {
 func (*PollRequest) ProtoMessage() {}
 
 func (x *PollRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[3]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -376,7 +452,7 @@ func (x *PollRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PollRequest.ProtoReflect.Descriptor instead.
 func (*PollRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{3}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *PollRequest) GetEntry() *ReconcileEntry {
@@ -411,7 +487,7 @@ type ValidateCredentialsRequest struct {
 
 func (x *ValidateCredentialsRequest) Reset() {
 	*x = ValidateCredentialsRequest{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[4]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -423,7 +499,7 @@ func (x *ValidateCredentialsRequest) String() string {
 func (*ValidateCredentialsRequest) ProtoMessage() {}
 
 func (x *ValidateCredentialsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[4]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -436,7 +512,7 @@ func (x *ValidateCredentialsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateCredentialsRequest.ProtoReflect.Descriptor instead.
 func (*ValidateCredentialsRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{4}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ValidateCredentialsRequest) GetAccountType() string {
@@ -472,7 +548,7 @@ type ValidateCredentialsResponse struct {
 
 func (x *ValidateCredentialsResponse) Reset() {
 	*x = ValidateCredentialsResponse{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[5]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -484,7 +560,7 @@ func (x *ValidateCredentialsResponse) String() string {
 func (*ValidateCredentialsResponse) ProtoMessage() {}
 
 func (x *ValidateCredentialsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[5]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -497,7 +573,7 @@ func (x *ValidateCredentialsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateCredentialsResponse.ProtoReflect.Descriptor instead.
 func (*ValidateCredentialsResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{5}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ValidateCredentialsResponse) GetErrors() []*FieldError {
@@ -538,7 +614,7 @@ type BuildUpstreamRequestRequest struct {
 
 func (x *BuildUpstreamRequestRequest) Reset() {
 	*x = BuildUpstreamRequestRequest{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[6]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -550,7 +626,7 @@ func (x *BuildUpstreamRequestRequest) String() string {
 func (*BuildUpstreamRequestRequest) ProtoMessage() {}
 
 func (x *BuildUpstreamRequestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[6]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -563,7 +639,7 @@ func (x *BuildUpstreamRequestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuildUpstreamRequestRequest.ProtoReflect.Descriptor instead.
 func (*BuildUpstreamRequestRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{6}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *BuildUpstreamRequestRequest) GetMeta() *RequestMeta {
@@ -617,7 +693,7 @@ type BuildUpstreamRequestResponse struct {
 
 func (x *BuildUpstreamRequestResponse) Reset() {
 	*x = BuildUpstreamRequestResponse{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[7]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -629,7 +705,7 @@ func (x *BuildUpstreamRequestResponse) String() string {
 func (*BuildUpstreamRequestResponse) ProtoMessage() {}
 
 func (x *BuildUpstreamRequestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[7]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -642,7 +718,7 @@ func (x *BuildUpstreamRequestResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuildUpstreamRequestResponse.ProtoReflect.Descriptor instead.
 func (*BuildUpstreamRequestResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{7}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *BuildUpstreamRequestResponse) GetMethod() string {
@@ -694,7 +770,7 @@ type ClassifyErrorRequest struct {
 
 func (x *ClassifyErrorRequest) Reset() {
 	*x = ClassifyErrorRequest{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[8]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -706,7 +782,7 @@ func (x *ClassifyErrorRequest) String() string {
 func (*ClassifyErrorRequest) ProtoMessage() {}
 
 func (x *ClassifyErrorRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[8]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -719,7 +795,7 @@ func (x *ClassifyErrorRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClassifyErrorRequest.ProtoReflect.Descriptor instead.
 func (*ClassifyErrorRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{8}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ClassifyErrorRequest) GetMeta() *RequestMeta {
@@ -794,7 +870,7 @@ type ClassifyErrorResponse struct {
 
 func (x *ClassifyErrorResponse) Reset() {
 	*x = ClassifyErrorResponse{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[9]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -806,7 +882,7 @@ func (x *ClassifyErrorResponse) String() string {
 func (*ClassifyErrorResponse) ProtoMessage() {}
 
 func (x *ClassifyErrorResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[9]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -819,7 +895,7 @@ func (x *ClassifyErrorResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClassifyErrorResponse.ProtoReflect.Descriptor instead.
 func (*ClassifyErrorResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{9}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ClassifyErrorResponse) GetAction() ClassifyErrorResponse_Action {
@@ -888,7 +964,7 @@ type BuildTestRequestRequest struct {
 
 func (x *BuildTestRequestRequest) Reset() {
 	*x = BuildTestRequestRequest{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[10]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -900,7 +976,7 @@ func (x *BuildTestRequestRequest) String() string {
 func (*BuildTestRequestRequest) ProtoMessage() {}
 
 func (x *BuildTestRequestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[10]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -913,7 +989,7 @@ func (x *BuildTestRequestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuildTestRequestRequest.ProtoReflect.Descriptor instead.
 func (*BuildTestRequestRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{10}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *BuildTestRequestRequest) GetAccount() *Account {
@@ -950,7 +1026,7 @@ type BuildTestRequestResponse struct {
 
 func (x *BuildTestRequestResponse) Reset() {
 	*x = BuildTestRequestResponse{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[11]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -962,7 +1038,7 @@ func (x *BuildTestRequestResponse) String() string {
 func (*BuildTestRequestResponse) ProtoMessage() {}
 
 func (x *BuildTestRequestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[11]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -975,7 +1051,7 @@ func (x *BuildTestRequestResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuildTestRequestResponse.ProtoReflect.Descriptor instead.
 func (*BuildTestRequestResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{11}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *BuildTestRequestResponse) GetMethod() string {
@@ -1029,7 +1105,7 @@ type BuildModelsRequestRequest struct {
 
 func (x *BuildModelsRequestRequest) Reset() {
 	*x = BuildModelsRequestRequest{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[12]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1041,7 +1117,7 @@ func (x *BuildModelsRequestRequest) String() string {
 func (*BuildModelsRequestRequest) ProtoMessage() {}
 
 func (x *BuildModelsRequestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[12]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1054,7 +1130,7 @@ func (x *BuildModelsRequestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuildModelsRequestRequest.ProtoReflect.Descriptor instead.
 func (*BuildModelsRequestRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{12}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *BuildModelsRequestRequest) GetAccount() *Account {
@@ -1081,7 +1157,7 @@ type BuildModelsRequestResponse struct {
 
 func (x *BuildModelsRequestResponse) Reset() {
 	*x = BuildModelsRequestResponse{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[13]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1093,7 +1169,7 @@ func (x *BuildModelsRequestResponse) String() string {
 func (*BuildModelsRequestResponse) ProtoMessage() {}
 
 func (x *BuildModelsRequestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[13]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1106,7 +1182,7 @@ func (x *BuildModelsRequestResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuildModelsRequestResponse.ProtoReflect.Descriptor instead.
 func (*BuildModelsRequestResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{13}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *BuildModelsRequestResponse) GetMethod() string {
@@ -1168,7 +1244,7 @@ type ResolveModelRequest struct {
 
 func (x *ResolveModelRequest) Reset() {
 	*x = ResolveModelRequest{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[14]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1180,7 +1256,7 @@ func (x *ResolveModelRequest) String() string {
 func (*ResolveModelRequest) ProtoMessage() {}
 
 func (x *ResolveModelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[14]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1193,7 +1269,7 @@ func (x *ResolveModelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveModelRequest.ProtoReflect.Descriptor instead.
 func (*ResolveModelRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{14}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ResolveModelRequest) GetMeta() *RequestMeta {
@@ -1232,7 +1308,7 @@ type ResolveModelResponse struct {
 
 func (x *ResolveModelResponse) Reset() {
 	*x = ResolveModelResponse{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[15]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1244,7 +1320,7 @@ func (x *ResolveModelResponse) String() string {
 func (*ResolveModelResponse) ProtoMessage() {}
 
 func (x *ResolveModelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[15]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1257,7 +1333,7 @@ func (x *ResolveModelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveModelResponse.ProtoReflect.Descriptor instead.
 func (*ResolveModelResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{15}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ResolveModelResponse) GetModel() string {
@@ -1292,7 +1368,7 @@ type StreamEvent struct {
 
 func (x *StreamEvent) Reset() {
 	*x = StreamEvent{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[16]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1304,7 +1380,7 @@ func (x *StreamEvent) String() string {
 func (*StreamEvent) ProtoMessage() {}
 
 func (x *StreamEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[16]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1317,7 +1393,7 @@ func (x *StreamEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamEvent.ProtoReflect.Descriptor instead.
 func (*StreamEvent) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{16}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *StreamEvent) GetName() string {
@@ -1384,7 +1460,7 @@ type ExtractUsageRequest struct {
 
 func (x *ExtractUsageRequest) Reset() {
 	*x = ExtractUsageRequest{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[17]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1396,7 +1472,7 @@ func (x *ExtractUsageRequest) String() string {
 func (*ExtractUsageRequest) ProtoMessage() {}
 
 func (x *ExtractUsageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[17]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1409,7 +1485,7 @@ func (x *ExtractUsageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExtractUsageRequest.ProtoReflect.Descriptor instead.
 func (*ExtractUsageRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{17}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ExtractUsageRequest) GetMeta() *RequestMeta {
@@ -1522,7 +1598,7 @@ type UsageReport struct {
 
 func (x *UsageReport) Reset() {
 	*x = UsageReport{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[18]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1534,7 +1610,7 @@ func (x *UsageReport) String() string {
 func (*UsageReport) ProtoMessage() {}
 
 func (x *UsageReport) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[18]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1547,7 +1623,7 @@ func (x *UsageReport) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UsageReport.ProtoReflect.Descriptor instead.
 func (*UsageReport) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{18}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *UsageReport) GetTokens() *UsageTokens {
@@ -1619,7 +1695,7 @@ type TaskSubmission struct {
 
 func (x *TaskSubmission) Reset() {
 	*x = TaskSubmission{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[19]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1631,7 +1707,7 @@ func (x *TaskSubmission) String() string {
 func (*TaskSubmission) ProtoMessage() {}
 
 func (x *TaskSubmission) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[19]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1644,7 +1720,7 @@ func (x *TaskSubmission) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskSubmission.ProtoReflect.Descriptor instead.
 func (*TaskSubmission) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{19}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *TaskSubmission) GetUpstreamRefId() string {
@@ -1717,7 +1793,7 @@ type Reservation struct {
 
 func (x *Reservation) Reset() {
 	*x = Reservation{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[20]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1729,7 +1805,7 @@ func (x *Reservation) String() string {
 func (*Reservation) ProtoMessage() {}
 
 func (x *Reservation) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[20]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1742,7 +1818,7 @@ func (x *Reservation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Reservation.ProtoReflect.Descriptor instead.
 func (*Reservation) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{20}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *Reservation) GetRefId() string {
@@ -1804,7 +1880,7 @@ type ReconcileEntry struct {
 
 func (x *ReconcileEntry) Reset() {
 	*x = ReconcileEntry{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[21]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1816,7 +1892,7 @@ func (x *ReconcileEntry) String() string {
 func (*ReconcileEntry) ProtoMessage() {}
 
 func (x *ReconcileEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[21]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1829,7 +1905,7 @@ func (x *ReconcileEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReconcileEntry.ProtoReflect.Descriptor instead.
 func (*ReconcileEntry) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{21}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ReconcileEntry) GetRefId() string {
@@ -1905,7 +1981,7 @@ type BuildReconcileRequestRequest struct {
 
 func (x *BuildReconcileRequestRequest) Reset() {
 	*x = BuildReconcileRequestRequest{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[22]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1917,7 +1993,7 @@ func (x *BuildReconcileRequestRequest) String() string {
 func (*BuildReconcileRequestRequest) ProtoMessage() {}
 
 func (x *BuildReconcileRequestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[22]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1930,7 +2006,7 @@ func (x *BuildReconcileRequestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuildReconcileRequestRequest.ProtoReflect.Descriptor instead.
 func (*BuildReconcileRequestRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{22}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *BuildReconcileRequestRequest) GetEntry() *ReconcileEntry {
@@ -1962,7 +2038,7 @@ type BuildReconcileRequestResponse struct {
 
 func (x *BuildReconcileRequestResponse) Reset() {
 	*x = BuildReconcileRequestResponse{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[23]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1974,7 +2050,7 @@ func (x *BuildReconcileRequestResponse) String() string {
 func (*BuildReconcileRequestResponse) ProtoMessage() {}
 
 func (x *BuildReconcileRequestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[23]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1987,7 +2063,7 @@ func (x *BuildReconcileRequestResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuildReconcileRequestResponse.ProtoReflect.Descriptor instead.
 func (*BuildReconcileRequestResponse) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{23}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *BuildReconcileRequestResponse) GetMethod() string {
@@ -2036,7 +2112,7 @@ type ParseReconcileResponseRequest struct {
 
 func (x *ParseReconcileResponseRequest) Reset() {
 	*x = ParseReconcileResponseRequest{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[24]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2048,7 +2124,7 @@ func (x *ParseReconcileResponseRequest) String() string {
 func (*ParseReconcileResponseRequest) ProtoMessage() {}
 
 func (x *ParseReconcileResponseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[24]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2061,7 +2137,7 @@ func (x *ParseReconcileResponseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ParseReconcileResponseRequest.ProtoReflect.Descriptor instead.
 func (*ParseReconcileResponseRequest) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{24}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ParseReconcileResponseRequest) GetEntry() *ReconcileEntry {
@@ -2142,7 +2218,7 @@ type ReconcileResult struct {
 
 func (x *ReconcileResult) Reset() {
 	*x = ReconcileResult{}
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[25]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2154,7 +2230,7 @@ func (x *ReconcileResult) String() string {
 func (*ReconcileResult) ProtoMessage() {}
 
 func (x *ReconcileResult) ProtoReflect() protoreflect.Message {
-	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[25]
+	mi := &file_sub2api_plugin_v1_platform_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2167,7 +2243,7 @@ func (x *ReconcileResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReconcileResult.ProtoReflect.Descriptor instead.
 func (*ReconcileResult) Descriptor() ([]byte, []int) {
-	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{25}
+	return file_sub2api_plugin_v1_platform_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ReconcileResult) GetState() ReconcileResult_State {
@@ -2216,7 +2292,16 @@ var File_sub2api_plugin_v1_platform_proto protoreflect.FileDescriptor
 
 const file_sub2api_plugin_v1_platform_proto_rawDesc = "" +
 	"\n" +
-	" sub2api/plugin/v1/platform.proto\x12\x11sub2api.plugin.v1\x1a\x1esub2api/plugin/v1/common.proto\"\x83\x01\n" +
+	" sub2api/plugin/v1/platform.proto\x12\x11sub2api.plugin.v1\x1a\x1esub2api/plugin/v1/common.proto\"\xbf\x02\n" +
+	"\x14EstimateUsageRequest\x122\n" +
+	"\x04meta\x18\x01 \x01(\v2\x1e.sub2api.plugin.v1.RequestMetaR\x04meta\x12K\n" +
+	"\x06fields\x18\x02 \x03(\v23.sub2api.plugin.v1.EstimateUsageRequest.FieldsEntryR\x06fields\x12%\n" +
+	"\x0efields_omitted\x18\x03 \x03(\tR\rfieldsOmitted\x12,\n" +
+	"\x12pre_consume_tokens\x18\x04 \x01(\x03R\x10preConsumeTokens\x12\x16\n" +
+	"\x06prompt\x18\x05 \x01(\tR\x06prompt\x1a9\n" +
+	"\vFieldsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x83\x01\n" +
 	"\x0eExecuteRequest\x12H\n" +
 	"\arequest\x18\x01 \x01(\v2..sub2api.plugin.v1.BuildUpstreamRequestRequestR\arequest\x12'\n" +
 	"\x0fexecution_token\x18\x02 \x01(\tR\x0eexecutionToken\"c\n" +
@@ -2421,9 +2506,9 @@ const file_sub2api_plugin_v1_platform_proto_rawDesc = "" +
 	"\x06FAILED\x10\x02\x12\x14\n" +
 	"\x10SETTLED_ESTIMATE\x10\x03\x12\r\n" +
 	"\tNOT_FOUND\x10\x04\x12\x0f\n" +
-	"\vPOLL_FAILED\x10\x052\xb8\n" +
-	"\n" +
-	"\x0fPlatformService\x12P\n" +
+	"\vPOLL_FAILED\x10\x052\x92\v\n" +
+	"\x0fPlatformService\x12X\n" +
+	"\rEstimateUsage\x12'.sub2api.plugin.v1.EstimateUsageRequest\x1a\x1e.sub2api.plugin.v1.UsageReport\x12P\n" +
 	"\aExecute\x12!.sub2api.plugin.v1.ExecuteRequest\x1a\".sub2api.plugin.v1.ExecuteResponse\x12M\n" +
 	"\aMonitor\x12\x1e.sub2api.plugin.v1.PollRequest\x1a\".sub2api.plugin.v1.MonitorResponse\x12t\n" +
 	"\x13ValidateCredentials\x12-.sub2api.plugin.v1.ValidateCredentialsRequest\x1a..sub2api.plugin.v1.ValidateCredentialsResponse\x12w\n" +
@@ -2451,133 +2536,139 @@ func file_sub2api_plugin_v1_platform_proto_rawDescGZIP() []byte {
 }
 
 var file_sub2api_plugin_v1_platform_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_sub2api_plugin_v1_platform_proto_msgTypes = make([]protoimpl.MessageInfo, 41)
+var file_sub2api_plugin_v1_platform_proto_msgTypes = make([]protoimpl.MessageInfo, 43)
 var file_sub2api_plugin_v1_platform_proto_goTypes = []any{
 	(ClassifyErrorResponse_Action)(0),        // 0: sub2api.plugin.v1.ClassifyErrorResponse.Action
 	(ClassifyErrorResponse_AccountEffect)(0), // 1: sub2api.plugin.v1.ClassifyErrorResponse.AccountEffect
 	(ReconcileResult_State)(0),               // 2: sub2api.plugin.v1.ReconcileResult.State
-	(*ExecuteRequest)(nil),                   // 3: sub2api.plugin.v1.ExecuteRequest
-	(*ExecuteResponse)(nil),                  // 4: sub2api.plugin.v1.ExecuteResponse
-	(*MonitorResponse)(nil),                  // 5: sub2api.plugin.v1.MonitorResponse
-	(*PollRequest)(nil),                      // 6: sub2api.plugin.v1.PollRequest
-	(*ValidateCredentialsRequest)(nil),       // 7: sub2api.plugin.v1.ValidateCredentialsRequest
-	(*ValidateCredentialsResponse)(nil),      // 8: sub2api.plugin.v1.ValidateCredentialsResponse
-	(*BuildUpstreamRequestRequest)(nil),      // 9: sub2api.plugin.v1.BuildUpstreamRequestRequest
-	(*BuildUpstreamRequestResponse)(nil),     // 10: sub2api.plugin.v1.BuildUpstreamRequestResponse
-	(*ClassifyErrorRequest)(nil),             // 11: sub2api.plugin.v1.ClassifyErrorRequest
-	(*ClassifyErrorResponse)(nil),            // 12: sub2api.plugin.v1.ClassifyErrorResponse
-	(*BuildTestRequestRequest)(nil),          // 13: sub2api.plugin.v1.BuildTestRequestRequest
-	(*BuildTestRequestResponse)(nil),         // 14: sub2api.plugin.v1.BuildTestRequestResponse
-	(*BuildModelsRequestRequest)(nil),        // 15: sub2api.plugin.v1.BuildModelsRequestRequest
-	(*BuildModelsRequestResponse)(nil),       // 16: sub2api.plugin.v1.BuildModelsRequestResponse
-	(*ResolveModelRequest)(nil),              // 17: sub2api.plugin.v1.ResolveModelRequest
-	(*ResolveModelResponse)(nil),             // 18: sub2api.plugin.v1.ResolveModelResponse
-	(*StreamEvent)(nil),                      // 19: sub2api.plugin.v1.StreamEvent
-	(*ExtractUsageRequest)(nil),              // 20: sub2api.plugin.v1.ExtractUsageRequest
-	(*UsageReport)(nil),                      // 21: sub2api.plugin.v1.UsageReport
-	(*TaskSubmission)(nil),                   // 22: sub2api.plugin.v1.TaskSubmission
-	(*Reservation)(nil),                      // 23: sub2api.plugin.v1.Reservation
-	(*ReconcileEntry)(nil),                   // 24: sub2api.plugin.v1.ReconcileEntry
-	(*BuildReconcileRequestRequest)(nil),     // 25: sub2api.plugin.v1.BuildReconcileRequestRequest
-	(*BuildReconcileRequestResponse)(nil),    // 26: sub2api.plugin.v1.BuildReconcileRequestResponse
-	(*ParseReconcileResponseRequest)(nil),    // 27: sub2api.plugin.v1.ParseReconcileResponseRequest
-	(*ReconcileResult)(nil),                  // 28: sub2api.plugin.v1.ReconcileResult
-	nil,                                      // 29: sub2api.plugin.v1.BuildUpstreamRequestRequest.FieldsEntry
-	nil,                                      // 30: sub2api.plugin.v1.BuildUpstreamRequestRequest.InboundHeadersEntry
-	nil,                                      // 31: sub2api.plugin.v1.BuildUpstreamRequestResponse.HeadersEntry
-	nil,                                      // 32: sub2api.plugin.v1.ClassifyErrorRequest.HeadersEntry
-	nil,                                      // 33: sub2api.plugin.v1.BuildTestRequestResponse.HeadersEntry
-	nil,                                      // 34: sub2api.plugin.v1.BuildModelsRequestResponse.HeadersEntry
-	nil,                                      // 35: sub2api.plugin.v1.ResolveModelRequest.FieldsEntry
-	nil,                                      // 36: sub2api.plugin.v1.ResolveModelRequest.InboundHeadersEntry
-	nil,                                      // 37: sub2api.plugin.v1.ExtractUsageRequest.HeadersEntry
-	nil,                                      // 38: sub2api.plugin.v1.ExtractUsageRequest.FieldsEntry
-	nil,                                      // 39: sub2api.plugin.v1.UsageReport.FactsEntry
-	nil,                                      // 40: sub2api.plugin.v1.Reservation.FactsEntry
-	nil,                                      // 41: sub2api.plugin.v1.BuildReconcileRequestResponse.HeadersEntry
-	nil,                                      // 42: sub2api.plugin.v1.ParseReconcileResponseRequest.HeadersEntry
-	nil,                                      // 43: sub2api.plugin.v1.ReconcileResult.FactsEntry
-	(*Account)(nil),                          // 44: sub2api.plugin.v1.Account
-	(*FieldError)(nil),                       // 45: sub2api.plugin.v1.FieldError
+	(*EstimateUsageRequest)(nil),             // 3: sub2api.plugin.v1.EstimateUsageRequest
+	(*ExecuteRequest)(nil),                   // 4: sub2api.plugin.v1.ExecuteRequest
+	(*ExecuteResponse)(nil),                  // 5: sub2api.plugin.v1.ExecuteResponse
+	(*MonitorResponse)(nil),                  // 6: sub2api.plugin.v1.MonitorResponse
+	(*PollRequest)(nil),                      // 7: sub2api.plugin.v1.PollRequest
+	(*ValidateCredentialsRequest)(nil),       // 8: sub2api.plugin.v1.ValidateCredentialsRequest
+	(*ValidateCredentialsResponse)(nil),      // 9: sub2api.plugin.v1.ValidateCredentialsResponse
+	(*BuildUpstreamRequestRequest)(nil),      // 10: sub2api.plugin.v1.BuildUpstreamRequestRequest
+	(*BuildUpstreamRequestResponse)(nil),     // 11: sub2api.plugin.v1.BuildUpstreamRequestResponse
+	(*ClassifyErrorRequest)(nil),             // 12: sub2api.plugin.v1.ClassifyErrorRequest
+	(*ClassifyErrorResponse)(nil),            // 13: sub2api.plugin.v1.ClassifyErrorResponse
+	(*BuildTestRequestRequest)(nil),          // 14: sub2api.plugin.v1.BuildTestRequestRequest
+	(*BuildTestRequestResponse)(nil),         // 15: sub2api.plugin.v1.BuildTestRequestResponse
+	(*BuildModelsRequestRequest)(nil),        // 16: sub2api.plugin.v1.BuildModelsRequestRequest
+	(*BuildModelsRequestResponse)(nil),       // 17: sub2api.plugin.v1.BuildModelsRequestResponse
+	(*ResolveModelRequest)(nil),              // 18: sub2api.plugin.v1.ResolveModelRequest
+	(*ResolveModelResponse)(nil),             // 19: sub2api.plugin.v1.ResolveModelResponse
+	(*StreamEvent)(nil),                      // 20: sub2api.plugin.v1.StreamEvent
+	(*ExtractUsageRequest)(nil),              // 21: sub2api.plugin.v1.ExtractUsageRequest
+	(*UsageReport)(nil),                      // 22: sub2api.plugin.v1.UsageReport
+	(*TaskSubmission)(nil),                   // 23: sub2api.plugin.v1.TaskSubmission
+	(*Reservation)(nil),                      // 24: sub2api.plugin.v1.Reservation
+	(*ReconcileEntry)(nil),                   // 25: sub2api.plugin.v1.ReconcileEntry
+	(*BuildReconcileRequestRequest)(nil),     // 26: sub2api.plugin.v1.BuildReconcileRequestRequest
+	(*BuildReconcileRequestResponse)(nil),    // 27: sub2api.plugin.v1.BuildReconcileRequestResponse
+	(*ParseReconcileResponseRequest)(nil),    // 28: sub2api.plugin.v1.ParseReconcileResponseRequest
+	(*ReconcileResult)(nil),                  // 29: sub2api.plugin.v1.ReconcileResult
+	nil,                                      // 30: sub2api.plugin.v1.EstimateUsageRequest.FieldsEntry
+	nil,                                      // 31: sub2api.plugin.v1.BuildUpstreamRequestRequest.FieldsEntry
+	nil,                                      // 32: sub2api.plugin.v1.BuildUpstreamRequestRequest.InboundHeadersEntry
+	nil,                                      // 33: sub2api.plugin.v1.BuildUpstreamRequestResponse.HeadersEntry
+	nil,                                      // 34: sub2api.plugin.v1.ClassifyErrorRequest.HeadersEntry
+	nil,                                      // 35: sub2api.plugin.v1.BuildTestRequestResponse.HeadersEntry
+	nil,                                      // 36: sub2api.plugin.v1.BuildModelsRequestResponse.HeadersEntry
+	nil,                                      // 37: sub2api.plugin.v1.ResolveModelRequest.FieldsEntry
+	nil,                                      // 38: sub2api.plugin.v1.ResolveModelRequest.InboundHeadersEntry
+	nil,                                      // 39: sub2api.plugin.v1.ExtractUsageRequest.HeadersEntry
+	nil,                                      // 40: sub2api.plugin.v1.ExtractUsageRequest.FieldsEntry
+	nil,                                      // 41: sub2api.plugin.v1.UsageReport.FactsEntry
+	nil,                                      // 42: sub2api.plugin.v1.Reservation.FactsEntry
+	nil,                                      // 43: sub2api.plugin.v1.BuildReconcileRequestResponse.HeadersEntry
+	nil,                                      // 44: sub2api.plugin.v1.ParseReconcileResponseRequest.HeadersEntry
+	nil,                                      // 45: sub2api.plugin.v1.ReconcileResult.FactsEntry
 	(*RequestMeta)(nil),                      // 46: sub2api.plugin.v1.RequestMeta
-	(*BodyPatch)(nil),                        // 47: sub2api.plugin.v1.BodyPatch
-	(*UsageTokens)(nil),                      // 48: sub2api.plugin.v1.UsageTokens
+	(*Account)(nil),                          // 47: sub2api.plugin.v1.Account
+	(*FieldError)(nil),                       // 48: sub2api.plugin.v1.FieldError
+	(*BodyPatch)(nil),                        // 49: sub2api.plugin.v1.BodyPatch
+	(*UsageTokens)(nil),                      // 50: sub2api.plugin.v1.UsageTokens
 }
 var file_sub2api_plugin_v1_platform_proto_depIdxs = []int32{
-	9,  // 0: sub2api.plugin.v1.ExecuteRequest.request:type_name -> sub2api.plugin.v1.BuildUpstreamRequestRequest
-	12, // 1: sub2api.plugin.v1.ExecuteResponse.classification:type_name -> sub2api.plugin.v1.ClassifyErrorResponse
-	24, // 2: sub2api.plugin.v1.PollRequest.entry:type_name -> sub2api.plugin.v1.ReconcileEntry
-	44, // 3: sub2api.plugin.v1.PollRequest.account:type_name -> sub2api.plugin.v1.Account
-	45, // 4: sub2api.plugin.v1.ValidateCredentialsResponse.errors:type_name -> sub2api.plugin.v1.FieldError
-	46, // 5: sub2api.plugin.v1.BuildUpstreamRequestRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
-	44, // 6: sub2api.plugin.v1.BuildUpstreamRequestRequest.account:type_name -> sub2api.plugin.v1.Account
-	29, // 7: sub2api.plugin.v1.BuildUpstreamRequestRequest.fields:type_name -> sub2api.plugin.v1.BuildUpstreamRequestRequest.FieldsEntry
-	30, // 8: sub2api.plugin.v1.BuildUpstreamRequestRequest.inbound_headers:type_name -> sub2api.plugin.v1.BuildUpstreamRequestRequest.InboundHeadersEntry
-	31, // 9: sub2api.plugin.v1.BuildUpstreamRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildUpstreamRequestResponse.HeadersEntry
-	47, // 10: sub2api.plugin.v1.BuildUpstreamRequestResponse.patches:type_name -> sub2api.plugin.v1.BodyPatch
-	46, // 11: sub2api.plugin.v1.ClassifyErrorRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
-	44, // 12: sub2api.plugin.v1.ClassifyErrorRequest.account:type_name -> sub2api.plugin.v1.Account
-	32, // 13: sub2api.plugin.v1.ClassifyErrorRequest.headers:type_name -> sub2api.plugin.v1.ClassifyErrorRequest.HeadersEntry
-	0,  // 14: sub2api.plugin.v1.ClassifyErrorResponse.action:type_name -> sub2api.plugin.v1.ClassifyErrorResponse.Action
-	1,  // 15: sub2api.plugin.v1.ClassifyErrorResponse.account_effect:type_name -> sub2api.plugin.v1.ClassifyErrorResponse.AccountEffect
-	44, // 16: sub2api.plugin.v1.BuildTestRequestRequest.account:type_name -> sub2api.plugin.v1.Account
-	33, // 17: sub2api.plugin.v1.BuildTestRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildTestRequestResponse.HeadersEntry
-	44, // 18: sub2api.plugin.v1.BuildModelsRequestRequest.account:type_name -> sub2api.plugin.v1.Account
-	34, // 19: sub2api.plugin.v1.BuildModelsRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildModelsRequestResponse.HeadersEntry
-	46, // 20: sub2api.plugin.v1.ResolveModelRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
-	35, // 21: sub2api.plugin.v1.ResolveModelRequest.fields:type_name -> sub2api.plugin.v1.ResolveModelRequest.FieldsEntry
-	36, // 22: sub2api.plugin.v1.ResolveModelRequest.inbound_headers:type_name -> sub2api.plugin.v1.ResolveModelRequest.InboundHeadersEntry
-	46, // 23: sub2api.plugin.v1.ExtractUsageRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
-	44, // 24: sub2api.plugin.v1.ExtractUsageRequest.account:type_name -> sub2api.plugin.v1.Account
-	37, // 25: sub2api.plugin.v1.ExtractUsageRequest.headers:type_name -> sub2api.plugin.v1.ExtractUsageRequest.HeadersEntry
-	19, // 26: sub2api.plugin.v1.ExtractUsageRequest.events:type_name -> sub2api.plugin.v1.StreamEvent
-	38, // 27: sub2api.plugin.v1.ExtractUsageRequest.fields:type_name -> sub2api.plugin.v1.ExtractUsageRequest.FieldsEntry
-	48, // 28: sub2api.plugin.v1.UsageReport.tokens:type_name -> sub2api.plugin.v1.UsageTokens
-	39, // 29: sub2api.plugin.v1.UsageReport.facts:type_name -> sub2api.plugin.v1.UsageReport.FactsEntry
-	23, // 30: sub2api.plugin.v1.UsageReport.reserve:type_name -> sub2api.plugin.v1.Reservation
-	21, // 31: sub2api.plugin.v1.TaskSubmission.usage:type_name -> sub2api.plugin.v1.UsageReport
-	48, // 32: sub2api.plugin.v1.Reservation.tokens:type_name -> sub2api.plugin.v1.UsageTokens
-	40, // 33: sub2api.plugin.v1.Reservation.facts:type_name -> sub2api.plugin.v1.Reservation.FactsEntry
-	24, // 34: sub2api.plugin.v1.BuildReconcileRequestRequest.entry:type_name -> sub2api.plugin.v1.ReconcileEntry
-	44, // 35: sub2api.plugin.v1.BuildReconcileRequestRequest.account:type_name -> sub2api.plugin.v1.Account
-	41, // 36: sub2api.plugin.v1.BuildReconcileRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildReconcileRequestResponse.HeadersEntry
-	24, // 37: sub2api.plugin.v1.ParseReconcileResponseRequest.entry:type_name -> sub2api.plugin.v1.ReconcileEntry
-	44, // 38: sub2api.plugin.v1.ParseReconcileResponseRequest.account:type_name -> sub2api.plugin.v1.Account
-	42, // 39: sub2api.plugin.v1.ParseReconcileResponseRequest.headers:type_name -> sub2api.plugin.v1.ParseReconcileResponseRequest.HeadersEntry
-	2,  // 40: sub2api.plugin.v1.ReconcileResult.state:type_name -> sub2api.plugin.v1.ReconcileResult.State
-	48, // 41: sub2api.plugin.v1.ReconcileResult.tokens:type_name -> sub2api.plugin.v1.UsageTokens
-	43, // 42: sub2api.plugin.v1.ReconcileResult.facts:type_name -> sub2api.plugin.v1.ReconcileResult.FactsEntry
-	3,  // 43: sub2api.plugin.v1.PlatformService.Execute:input_type -> sub2api.plugin.v1.ExecuteRequest
-	6,  // 44: sub2api.plugin.v1.PlatformService.Monitor:input_type -> sub2api.plugin.v1.PollRequest
-	7,  // 45: sub2api.plugin.v1.PlatformService.ValidateCredentials:input_type -> sub2api.plugin.v1.ValidateCredentialsRequest
-	9,  // 46: sub2api.plugin.v1.PlatformService.BuildUpstreamRequest:input_type -> sub2api.plugin.v1.BuildUpstreamRequestRequest
-	11, // 47: sub2api.plugin.v1.PlatformService.ClassifyError:input_type -> sub2api.plugin.v1.ClassifyErrorRequest
-	13, // 48: sub2api.plugin.v1.PlatformService.BuildTestRequest:input_type -> sub2api.plugin.v1.BuildTestRequestRequest
-	15, // 49: sub2api.plugin.v1.PlatformService.BuildModelsRequest:input_type -> sub2api.plugin.v1.BuildModelsRequestRequest
-	17, // 50: sub2api.plugin.v1.PlatformService.ResolveModel:input_type -> sub2api.plugin.v1.ResolveModelRequest
-	20, // 51: sub2api.plugin.v1.PlatformService.ExtractUsage:input_type -> sub2api.plugin.v1.ExtractUsageRequest
-	20, // 52: sub2api.plugin.v1.PlatformService.ParseTaskSubmission:input_type -> sub2api.plugin.v1.ExtractUsageRequest
-	6,  // 53: sub2api.plugin.v1.PlatformService.Poll:input_type -> sub2api.plugin.v1.PollRequest
-	25, // 54: sub2api.plugin.v1.PlatformService.BuildReconcileRequest:input_type -> sub2api.plugin.v1.BuildReconcileRequestRequest
-	27, // 55: sub2api.plugin.v1.PlatformService.ParseReconcileResponse:input_type -> sub2api.plugin.v1.ParseReconcileResponseRequest
-	4,  // 56: sub2api.plugin.v1.PlatformService.Execute:output_type -> sub2api.plugin.v1.ExecuteResponse
-	5,  // 57: sub2api.plugin.v1.PlatformService.Monitor:output_type -> sub2api.plugin.v1.MonitorResponse
-	8,  // 58: sub2api.plugin.v1.PlatformService.ValidateCredentials:output_type -> sub2api.plugin.v1.ValidateCredentialsResponse
-	10, // 59: sub2api.plugin.v1.PlatformService.BuildUpstreamRequest:output_type -> sub2api.plugin.v1.BuildUpstreamRequestResponse
-	12, // 60: sub2api.plugin.v1.PlatformService.ClassifyError:output_type -> sub2api.plugin.v1.ClassifyErrorResponse
-	14, // 61: sub2api.plugin.v1.PlatformService.BuildTestRequest:output_type -> sub2api.plugin.v1.BuildTestRequestResponse
-	16, // 62: sub2api.plugin.v1.PlatformService.BuildModelsRequest:output_type -> sub2api.plugin.v1.BuildModelsRequestResponse
-	18, // 63: sub2api.plugin.v1.PlatformService.ResolveModel:output_type -> sub2api.plugin.v1.ResolveModelResponse
-	21, // 64: sub2api.plugin.v1.PlatformService.ExtractUsage:output_type -> sub2api.plugin.v1.UsageReport
-	22, // 65: sub2api.plugin.v1.PlatformService.ParseTaskSubmission:output_type -> sub2api.plugin.v1.TaskSubmission
-	28, // 66: sub2api.plugin.v1.PlatformService.Poll:output_type -> sub2api.plugin.v1.ReconcileResult
-	26, // 67: sub2api.plugin.v1.PlatformService.BuildReconcileRequest:output_type -> sub2api.plugin.v1.BuildReconcileRequestResponse
-	28, // 68: sub2api.plugin.v1.PlatformService.ParseReconcileResponse:output_type -> sub2api.plugin.v1.ReconcileResult
-	56, // [56:69] is the sub-list for method output_type
-	43, // [43:56] is the sub-list for method input_type
-	43, // [43:43] is the sub-list for extension type_name
-	43, // [43:43] is the sub-list for extension extendee
-	0,  // [0:43] is the sub-list for field type_name
+	46, // 0: sub2api.plugin.v1.EstimateUsageRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	30, // 1: sub2api.plugin.v1.EstimateUsageRequest.fields:type_name -> sub2api.plugin.v1.EstimateUsageRequest.FieldsEntry
+	10, // 2: sub2api.plugin.v1.ExecuteRequest.request:type_name -> sub2api.plugin.v1.BuildUpstreamRequestRequest
+	13, // 3: sub2api.plugin.v1.ExecuteResponse.classification:type_name -> sub2api.plugin.v1.ClassifyErrorResponse
+	25, // 4: sub2api.plugin.v1.PollRequest.entry:type_name -> sub2api.plugin.v1.ReconcileEntry
+	47, // 5: sub2api.plugin.v1.PollRequest.account:type_name -> sub2api.plugin.v1.Account
+	48, // 6: sub2api.plugin.v1.ValidateCredentialsResponse.errors:type_name -> sub2api.plugin.v1.FieldError
+	46, // 7: sub2api.plugin.v1.BuildUpstreamRequestRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	47, // 8: sub2api.plugin.v1.BuildUpstreamRequestRequest.account:type_name -> sub2api.plugin.v1.Account
+	31, // 9: sub2api.plugin.v1.BuildUpstreamRequestRequest.fields:type_name -> sub2api.plugin.v1.BuildUpstreamRequestRequest.FieldsEntry
+	32, // 10: sub2api.plugin.v1.BuildUpstreamRequestRequest.inbound_headers:type_name -> sub2api.plugin.v1.BuildUpstreamRequestRequest.InboundHeadersEntry
+	33, // 11: sub2api.plugin.v1.BuildUpstreamRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildUpstreamRequestResponse.HeadersEntry
+	49, // 12: sub2api.plugin.v1.BuildUpstreamRequestResponse.patches:type_name -> sub2api.plugin.v1.BodyPatch
+	46, // 13: sub2api.plugin.v1.ClassifyErrorRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	47, // 14: sub2api.plugin.v1.ClassifyErrorRequest.account:type_name -> sub2api.plugin.v1.Account
+	34, // 15: sub2api.plugin.v1.ClassifyErrorRequest.headers:type_name -> sub2api.plugin.v1.ClassifyErrorRequest.HeadersEntry
+	0,  // 16: sub2api.plugin.v1.ClassifyErrorResponse.action:type_name -> sub2api.plugin.v1.ClassifyErrorResponse.Action
+	1,  // 17: sub2api.plugin.v1.ClassifyErrorResponse.account_effect:type_name -> sub2api.plugin.v1.ClassifyErrorResponse.AccountEffect
+	47, // 18: sub2api.plugin.v1.BuildTestRequestRequest.account:type_name -> sub2api.plugin.v1.Account
+	35, // 19: sub2api.plugin.v1.BuildTestRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildTestRequestResponse.HeadersEntry
+	47, // 20: sub2api.plugin.v1.BuildModelsRequestRequest.account:type_name -> sub2api.plugin.v1.Account
+	36, // 21: sub2api.plugin.v1.BuildModelsRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildModelsRequestResponse.HeadersEntry
+	46, // 22: sub2api.plugin.v1.ResolveModelRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	37, // 23: sub2api.plugin.v1.ResolveModelRequest.fields:type_name -> sub2api.plugin.v1.ResolveModelRequest.FieldsEntry
+	38, // 24: sub2api.plugin.v1.ResolveModelRequest.inbound_headers:type_name -> sub2api.plugin.v1.ResolveModelRequest.InboundHeadersEntry
+	46, // 25: sub2api.plugin.v1.ExtractUsageRequest.meta:type_name -> sub2api.plugin.v1.RequestMeta
+	47, // 26: sub2api.plugin.v1.ExtractUsageRequest.account:type_name -> sub2api.plugin.v1.Account
+	39, // 27: sub2api.plugin.v1.ExtractUsageRequest.headers:type_name -> sub2api.plugin.v1.ExtractUsageRequest.HeadersEntry
+	20, // 28: sub2api.plugin.v1.ExtractUsageRequest.events:type_name -> sub2api.plugin.v1.StreamEvent
+	40, // 29: sub2api.plugin.v1.ExtractUsageRequest.fields:type_name -> sub2api.plugin.v1.ExtractUsageRequest.FieldsEntry
+	50, // 30: sub2api.plugin.v1.UsageReport.tokens:type_name -> sub2api.plugin.v1.UsageTokens
+	41, // 31: sub2api.plugin.v1.UsageReport.facts:type_name -> sub2api.plugin.v1.UsageReport.FactsEntry
+	24, // 32: sub2api.plugin.v1.UsageReport.reserve:type_name -> sub2api.plugin.v1.Reservation
+	22, // 33: sub2api.plugin.v1.TaskSubmission.usage:type_name -> sub2api.plugin.v1.UsageReport
+	50, // 34: sub2api.plugin.v1.Reservation.tokens:type_name -> sub2api.plugin.v1.UsageTokens
+	42, // 35: sub2api.plugin.v1.Reservation.facts:type_name -> sub2api.plugin.v1.Reservation.FactsEntry
+	25, // 36: sub2api.plugin.v1.BuildReconcileRequestRequest.entry:type_name -> sub2api.plugin.v1.ReconcileEntry
+	47, // 37: sub2api.plugin.v1.BuildReconcileRequestRequest.account:type_name -> sub2api.plugin.v1.Account
+	43, // 38: sub2api.plugin.v1.BuildReconcileRequestResponse.headers:type_name -> sub2api.plugin.v1.BuildReconcileRequestResponse.HeadersEntry
+	25, // 39: sub2api.plugin.v1.ParseReconcileResponseRequest.entry:type_name -> sub2api.plugin.v1.ReconcileEntry
+	47, // 40: sub2api.plugin.v1.ParseReconcileResponseRequest.account:type_name -> sub2api.plugin.v1.Account
+	44, // 41: sub2api.plugin.v1.ParseReconcileResponseRequest.headers:type_name -> sub2api.plugin.v1.ParseReconcileResponseRequest.HeadersEntry
+	2,  // 42: sub2api.plugin.v1.ReconcileResult.state:type_name -> sub2api.plugin.v1.ReconcileResult.State
+	50, // 43: sub2api.plugin.v1.ReconcileResult.tokens:type_name -> sub2api.plugin.v1.UsageTokens
+	45, // 44: sub2api.plugin.v1.ReconcileResult.facts:type_name -> sub2api.plugin.v1.ReconcileResult.FactsEntry
+	3,  // 45: sub2api.plugin.v1.PlatformService.EstimateUsage:input_type -> sub2api.plugin.v1.EstimateUsageRequest
+	4,  // 46: sub2api.plugin.v1.PlatformService.Execute:input_type -> sub2api.plugin.v1.ExecuteRequest
+	7,  // 47: sub2api.plugin.v1.PlatformService.Monitor:input_type -> sub2api.plugin.v1.PollRequest
+	8,  // 48: sub2api.plugin.v1.PlatformService.ValidateCredentials:input_type -> sub2api.plugin.v1.ValidateCredentialsRequest
+	10, // 49: sub2api.plugin.v1.PlatformService.BuildUpstreamRequest:input_type -> sub2api.plugin.v1.BuildUpstreamRequestRequest
+	12, // 50: sub2api.plugin.v1.PlatformService.ClassifyError:input_type -> sub2api.plugin.v1.ClassifyErrorRequest
+	14, // 51: sub2api.plugin.v1.PlatformService.BuildTestRequest:input_type -> sub2api.plugin.v1.BuildTestRequestRequest
+	16, // 52: sub2api.plugin.v1.PlatformService.BuildModelsRequest:input_type -> sub2api.plugin.v1.BuildModelsRequestRequest
+	18, // 53: sub2api.plugin.v1.PlatformService.ResolveModel:input_type -> sub2api.plugin.v1.ResolveModelRequest
+	21, // 54: sub2api.plugin.v1.PlatformService.ExtractUsage:input_type -> sub2api.plugin.v1.ExtractUsageRequest
+	21, // 55: sub2api.plugin.v1.PlatformService.ParseTaskSubmission:input_type -> sub2api.plugin.v1.ExtractUsageRequest
+	7,  // 56: sub2api.plugin.v1.PlatformService.Poll:input_type -> sub2api.plugin.v1.PollRequest
+	26, // 57: sub2api.plugin.v1.PlatformService.BuildReconcileRequest:input_type -> sub2api.plugin.v1.BuildReconcileRequestRequest
+	28, // 58: sub2api.plugin.v1.PlatformService.ParseReconcileResponse:input_type -> sub2api.plugin.v1.ParseReconcileResponseRequest
+	22, // 59: sub2api.plugin.v1.PlatformService.EstimateUsage:output_type -> sub2api.plugin.v1.UsageReport
+	5,  // 60: sub2api.plugin.v1.PlatformService.Execute:output_type -> sub2api.plugin.v1.ExecuteResponse
+	6,  // 61: sub2api.plugin.v1.PlatformService.Monitor:output_type -> sub2api.plugin.v1.MonitorResponse
+	9,  // 62: sub2api.plugin.v1.PlatformService.ValidateCredentials:output_type -> sub2api.plugin.v1.ValidateCredentialsResponse
+	11, // 63: sub2api.plugin.v1.PlatformService.BuildUpstreamRequest:output_type -> sub2api.plugin.v1.BuildUpstreamRequestResponse
+	13, // 64: sub2api.plugin.v1.PlatformService.ClassifyError:output_type -> sub2api.plugin.v1.ClassifyErrorResponse
+	15, // 65: sub2api.plugin.v1.PlatformService.BuildTestRequest:output_type -> sub2api.plugin.v1.BuildTestRequestResponse
+	17, // 66: sub2api.plugin.v1.PlatformService.BuildModelsRequest:output_type -> sub2api.plugin.v1.BuildModelsRequestResponse
+	19, // 67: sub2api.plugin.v1.PlatformService.ResolveModel:output_type -> sub2api.plugin.v1.ResolveModelResponse
+	22, // 68: sub2api.plugin.v1.PlatformService.ExtractUsage:output_type -> sub2api.plugin.v1.UsageReport
+	23, // 69: sub2api.plugin.v1.PlatformService.ParseTaskSubmission:output_type -> sub2api.plugin.v1.TaskSubmission
+	29, // 70: sub2api.plugin.v1.PlatformService.Poll:output_type -> sub2api.plugin.v1.ReconcileResult
+	27, // 71: sub2api.plugin.v1.PlatformService.BuildReconcileRequest:output_type -> sub2api.plugin.v1.BuildReconcileRequestResponse
+	29, // 72: sub2api.plugin.v1.PlatformService.ParseReconcileResponse:output_type -> sub2api.plugin.v1.ReconcileResult
+	59, // [59:73] is the sub-list for method output_type
+	45, // [45:59] is the sub-list for method input_type
+	45, // [45:45] is the sub-list for extension type_name
+	45, // [45:45] is the sub-list for extension extendee
+	0,  // [0:45] is the sub-list for field type_name
 }
 
 func init() { file_sub2api_plugin_v1_platform_proto_init() }
@@ -2592,7 +2683,7 @@ func file_sub2api_plugin_v1_platform_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sub2api_plugin_v1_platform_proto_rawDesc), len(file_sub2api_plugin_v1_platform_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   41,
+			NumMessages:   43,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

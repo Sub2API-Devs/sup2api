@@ -1,4 +1,16 @@
 export default {
+  video: {
+    reserveSample: '载入 5 秒 720p 预扣示例', settleSample: '载入 10 万 Token 结算示例',
+    title: '视频计费',
+    hint: '按输出 Token 结算；可单独设置 720p 基准每秒预扣价。成功但无实际用量时保留预扣，失败退款。价格为美元，最终费用乘分组倍率。',
+    price_per_million_tokens: '每百万输出 Token 单价（必填）',
+    video_input_price_per_million_tokens: '含视频输入时整段输出单价（0 = 基础价）',
+    video_price_per_second: '720p 每秒预扣价（0 = 按 Token 估算）',
+    overridesHint: '尺寸精确匹配且不区分横竖屏；每项价格独立覆盖，0 或留空继承基础配置。',
+    sizes: '尺寸（英文逗号分隔）', add: '添加尺寸覆盖', remove: '移除此覆盖',
+    metrics: '插件计量字段 u()',
+    metricsHint: '支持 JSON 数字和布尔值。视频示例：video_seconds=5、video_pixels=921600、video_width=1280、video_height=720、video_input=true、video_estimated=true（预扣）/false（实际 Token 结算）。',
+  },
   title: '模型价格',
   description: '按模型配置计费表达式。价格由管理员维护：手动填写，或从同步源导入。',
   scopeNote: '价格按模型全局设置，与由哪个端点、哪种账号类型提供服务无关。表达式算出的是基础价格，实际扣费 = 基础价格 × 分组倍率。',

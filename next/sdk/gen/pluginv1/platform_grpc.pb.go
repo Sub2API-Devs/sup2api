@@ -19,6 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	PlatformService_EstimateUsage_FullMethodName          = "/sub2api.plugin.v1.PlatformService/EstimateUsage"
 	PlatformService_Execute_FullMethodName                = "/sub2api.plugin.v1.PlatformService/Execute"
 	PlatformService_Monitor_FullMethodName                = "/sub2api.plugin.v1.PlatformService/Monitor"
 	PlatformService_ValidateCredentials_FullMethodName    = "/sub2api.plugin.v1.PlatformService/ValidateCredentials"
@@ -43,6 +44,9 @@ const (
 // forms, usage extraction rules, default pricing) live in manifest.json; this
 // service only covers behaviour that needs code.
 type PlatformServiceClient interface {
+	// Pre-upstream metering estimate. The host checks endpoint billing types
+	// first and prices the report itself; plugins never specify an amount.
+	EstimateUsage(ctx context.Context, in *EstimateUsageRequest, opts ...grpc.CallOption) (*UsageReport, error)
 	// Plugin-driven request execution. The host selected the account and owns
 	// the request body. The plugin builds and forwards it through the scoped
 	// host API, then records usage or atomically reserves and registers a task.
@@ -167,6 +171,16 @@ type platformServiceClient struct {
 
 func NewPlatformServiceClient(cc grpc.ClientConnInterface) PlatformServiceClient {
 	return &platformServiceClient{cc}
+}
+
+func (c *platformServiceClient) EstimateUsage(ctx context.Context, in *EstimateUsageRequest, opts ...grpc.CallOption) (*UsageReport, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UsageReport)
+	err := c.cc.Invoke(ctx, PlatformService_EstimateUsage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *platformServiceClient) Execute(ctx context.Context, in *ExecuteRequest, opts ...grpc.CallOption) (*ExecuteResponse, error) {
@@ -308,6 +322,9 @@ func (c *platformServiceClient) ParseReconcileResponse(ctx context.Context, in *
 // forms, usage extraction rules, default pricing) live in manifest.json; this
 // service only covers behaviour that needs code.
 type PlatformServiceServer interface {
+	// Pre-upstream metering estimate. The host checks endpoint billing types
+	// first and prices the report itself; plugins never specify an amount.
+	EstimateUsage(context.Context, *EstimateUsageRequest) (*UsageReport, error)
 	// Plugin-driven request execution. The host selected the account and owns
 	// the request body. The plugin builds and forwards it through the scoped
 	// host API, then records usage or atomically reserves and registers a task.
@@ -434,6 +451,9 @@ type PlatformServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedPlatformServiceServer struct{}
 
+func (UnimplementedPlatformServiceServer) EstimateUsage(context.Context, *EstimateUsageRequest) (*UsageReport, error) {
+	return nil, status.Error(codes.Unimplemented, "method EstimateUsage not implemented")
+}
 func (UnimplementedPlatformServiceServer) Execute(context.Context, *ExecuteRequest) (*ExecuteResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Execute not implemented")
 }
@@ -492,6 +512,24 @@ func RegisterPlatformServiceServer(s grpc.ServiceRegistrar, srv PlatformServiceS
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&PlatformService_ServiceDesc, srv)
+}
+
+func _PlatformService_EstimateUsage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EstimateUsageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).EstimateUsage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_EstimateUsage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).EstimateUsage(ctx, req.(*EstimateUsageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _PlatformService_Execute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -735,6 +773,10 @@ var PlatformService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "sub2api.plugin.v1.PlatformService",
 	HandlerType: (*PlatformServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "EstimateUsage",
+			Handler:    _PlatformService_EstimateUsage_Handler,
+		},
 		{
 			MethodName: "Execute",
 			Handler:    _PlatformService_Execute_Handler,

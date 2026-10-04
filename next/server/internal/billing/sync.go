@@ -767,6 +767,24 @@ func scalePrice(p *syncPrice, m decimal.Decimal) error {
 			}
 		}
 	default:
+		if video, ok := cfg["video"].(map[string]any); ok {
+			entries := []map[string]any{video}
+			if rows, ok := video["resolution_prices"].([]any); ok {
+				for _, row := range rows {
+					if r, ok := row.(map[string]any); ok {
+						entries = append(entries, r)
+					}
+				}
+			}
+			for _, entry := range entries {
+				for _, key := range []string{"price_per_million_tokens", "video_input_price_per_million_tokens", "video_price_per_second"} {
+					if value, ok := entry[key]; ok {
+						entry[key] = scale(value)
+					}
+				}
+			}
+			break
+		}
 		if p.Expression == "" {
 			src, err := expressionFor(p.Mode, p.Config, "")
 			if err != nil {

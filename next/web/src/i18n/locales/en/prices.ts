@@ -1,4 +1,16 @@
 export default {
+  video: {
+    reserveSample: 'Load 5-second 720p reservation', settleSample: 'Load 100k-token settlement',
+    title: 'Video billing',
+    hint: 'Settle by output tokens, with an optional 720p per-second reservation rate. Success without usage keeps the reservation; failure refunds it. Prices are USD before the group multiplier.',
+    price_per_million_tokens: 'USD per million output tokens (required)',
+    video_input_price_per_million_tokens: 'Output rate with video input (0 = base rate)',
+    video_price_per_second: '720p reservation USD/second (0 = token estimate)',
+    overridesHint: 'Exact dimensions, independent of orientation. Each positive rate overrides its base field; zero or blank inherits.',
+    sizes: 'Sizes (comma-separated)', add: 'Add size override', remove: 'Remove override',
+    metrics: 'Plugin metering facts u()',
+    metricsHint: 'JSON numbers and booleans. Video example: video_seconds=5, video_pixels=921600, video_width=1280, video_height=720, video_input=true, video_estimated=true (reservation) / false (actual tokens).',
+  },
   title: 'Model prices',
   description: 'Billing expressions per model. Prices are maintained by admins: entered manually or imported from a sync source.',
   scopeNote: 'Prices are set globally per model, whatever endpoint or account type serves the request. The expression gives the base price; the amount charged = base price × group rate multiplier.',

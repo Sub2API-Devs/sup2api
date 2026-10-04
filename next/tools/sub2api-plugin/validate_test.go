@@ -43,7 +43,7 @@ func TestValidateBuiltinEndpointConflict(t *testing.T) {
 			Auth:        manifest.EndpointAuth{Headers: []string{"authorization"}},
 			Request:     manifest.EndpointRequest{ModelPath: "model"},
 			Response:    manifest.EndpointResp{NonStream: "json"},
-			ErrorFormat: "plain", Billing: "usage",
+			ErrorFormat: "plain", Billing: "usage", BillingTypes: []string{"per_request", "per_token", "expression"},
 		}}}}
 	msgs := validateManifest(m, nil)
 	if len(msgs) != 1 || !strings.Contains(msgs[0], "conflicts with built-in platform") {

@@ -180,7 +180,7 @@ async function remove(p: Price) {
           <SHint v-if="row.note" size="xs" class="truncate">{{ row.note }}</SHint>
         </template>
         <template #cell-mode="{ row }">
-          <SBadge :tone="modeTone(row.mode)">{{ t(`prices.mode.${row.mode}`) }}</SBadge>
+          <SBadge :tone="modeTone(row.mode)">{{ row.config?.video ? t('prices.video.title') : t(`prices.mode.${row.mode}`) }}</SBadge>
         </template>
         <template #cell-summary="{ row }">
           <template v-for="s in [summaryOf(row)]" :key="s.kind">

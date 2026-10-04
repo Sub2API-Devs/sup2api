@@ -293,7 +293,7 @@ var ContentTextPaths = []string{"content.0.text", "content.1.text", "content.2.t
 // the manifest does not declare is never delivered, and the estimate would
 // quietly read a default instead of the client's own value.
 var UsageRequestFields = append([]string{
-	PathResolution, PathRatio, PathDuration, PathFrames, PathContentCount,
+	PathResolution, PathRatio, PathDuration, PathFrames, PathContentCount, "content.#.type", "draft",
 }, ContentTextPaths...)
 
 // ---------------------------------------------------------------- reading the request
@@ -576,7 +576,11 @@ const (
 // videoEstimate is the reservation figure and how much of it was read rather
 // than assumed.
 type videoEstimate struct {
-	Tokens int64
+	Tokens  int64
+	Seconds float64
+	Pixels  int64
+	Width   int64
+	Height  int64
 	// Resolution is the tier the estimate priced, reported as the resolution
 	// fact: the requested tier when that was readable, the model's default or
 	// maximum when it was not. So the fact says what was CHARGED FOR, which is
@@ -647,5 +651,18 @@ func estimateVideo(model string, spec videoSpec) videoEstimate {
 	}
 	est.Resolution = tier
 	est.Tokens = frames * area / 1024
+	est.Seconds = float64(frames-1) / videoFPS
+	est.Pixels = area
+	// Recover the exact table dimensions, never dimensions rounded from a
+	// resolution tier. Adaptive output uses the largest table entry above.
+	if ratio == "" {
+		for _, candidate := range VideoRatios {
+			if tierArea(p.gen, tier, candidate) == area {
+				ratio = candidate
+				break
+			}
+		}
+	}
+	est.Width, est.Height = dimensionsForArea(area, ratio)
 	return est
 }

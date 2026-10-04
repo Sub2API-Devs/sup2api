@@ -1039,3 +1039,29 @@ new-api 的两个渠道是同一条轴（下表是读代码得到的，不是看
 参考 `new-api` 的 VolcEngine / DoubaoVideo 类型、任务 URL 拼接和素材库签名实现；官方 Messages 以当前[方舟 Messages API 文档](https://docs.volcengine.com/docs/ark/messages-api?lang=en)为准。OpenAI/视频 API Key 与素材库 AK/SK 的作用不同，不能互换。
 
 验证：本地 vet/test、前端类型检查通过；OVH 私有 PG/Redis 环境完整 `go test -race -p4 -count=1 -v ./...` 顶层 106 项通过、0 跳过、0 失败。覆盖官方与中转认证、流式标记、自定义视频提交/查询/后台核对、配置兼容、素材库真实测试 HTTP 路径及签名。浏览器以只读模拟账号检查两个实际 schema 表单。此次未调用付费上游生成视频，详细记录见 `audits/2026-10-02/MULTINODE-VALIDATION.md` §22。
+
+## 16. 视频计费模板与表达式补充（0.12.0，2026-10-04）
+
+参考 `new-api` 的 codingplus 分支 `video_billing.go` 与任务计费实现，视频定价作为宿主现有 `expression` 模式的 `config.video` 保存。插件只上报计量事实，不提供或修改价格。入口为「模型价格 → 表达式 → 视频计费」。
+
+- `price_per_million_tokens`：必填正数，USD/百万输出 Token。
+- `video_input_price_per_million_tokens`：含视频输入时替换整段输出的 Token 单价；0/留空使用基础价。
+- `video_price_per_second`：可选的 720p 基准每秒预扣价；预扣 = 秒价 × 秒数 × 像素数/921600 × 含视频输入价/基础 Token 价。未配置时沿用插件估算 Token。
+- `resolution_prices`：精确尺寸覆盖，不区分横竖屏，各项正价独立覆盖；0/留空回退基础字段。拒绝重复尺寸、负数、非有限数和空覆盖。
+- 收到实际 Token 后按提交时的表达式快照重新结算，多退少补；成功无用量继续保留预扣，失败继续走宿主退款。查询接口免费，重复查询不重复扣款。视频模板价格只适用于托管视频提交端点。
+
+方舟官方 `apikey` 和豆包视频 `relay` 共用这些计量字段：`resolution`、`video_seconds`、`video_pixels`、`video_width`、`video_height`、`video_input`、`video_draft`、`video_estimated`。提交时 `video_estimated=true`；返回真实 Token 后为 `false`。最终轮询仅覆盖上游实际提供的字段，保留提交时的视频输入与 Draft 标记。若上游给了分辨率但无法确认精确宽高，不沿用旧尺寸覆盖，回退基础价格。
+
+`usageRequestFields` 新增有界数组属性投影，例如 `content.#.type`。只传内容类型，避免长提示词或内联图片挤掉视频输入标记；仍受已有字段数和字节预算约束。插件 0.12.0 需要同时升级本次宿主与 SDK，沿用内置插件随核心打包的升级流程。
+
+管理员可在表达式源码使用 `u("video_draft")` 等字段自定义规则；试算新增插件计量输入及预扣/结算示例。源码表达式的自定义逻辑由管理员维护，视频模板配置则始终由服务器重新生成，防止旧源码覆盖新配置。
+
+计费入口先检查端点显式声明的 `billingTypes`（per_request / per_token / expression / video）。未声明或不支持直接返回 `billing_type_not_supported`，不调用估算插件、不调度账号、不扣款、不请求上游。文本端点不能声明 video。将视频模板切换成读取 `video_*` 计量字段的源码表达式，也不能绕过此检查。
+
+随后执行真正的上游调用前预扣：插件 `EstimateUsage` 返回用量事实，核心计算金额并锁定用户余额，在同一事务里写入预扣账本和 `request_precharges`。并发请求看见的是已经扣减的余额；失败或免费请求退款，正常结算和异步任务注册在各自事务中抵销预扣、写入最终/任务预估费用。事务失败同时回滚抵销，重试不会重复扣款。超过 24 小时且没有待结算用量的孤立预扣由结算重试任务幂等清理。
+
+系统设置 → 计费新增 `pre_consume_tokens`，默认 500、整数范围 0–100000000。文本采用本地分词结果与此下限的较大值；0 只取消下限，不取消实际用量估算。视频由插件按参数估算，固定文本下限不参与视频定价。没有 `PreConsumedQuota` 旧字段，也没有未声明端点类型时的兼容默认。
+
+核心提供离线 `HostService.CountTokens`，SDK 插件通过 `pluginsdk.CountTokens(ctx, host, text, encoding)` 使用；支持 o200k_base 与 cl100k_base、UTF-8 校验和 1 MiB 文本限制，不访问上游。BPE 文本计数是预估，不能替代视频用量或服务商最终 usage。SDK 默认文本估算器使用该能力，火山插件的视频估算器无需已有 task ID。
+
+验证：相关单元测试、前端回读/类型检查/构建通过；另启动独立本地 PostgreSQL 18.3，计费、用量及插件运行时事务测试通过，覆盖并发余额不足、幂等预扣与退款、最终结算、异步任务预扣接续及失败回滚。扩展 registry 测试中的 TestVersionAssetsReadApprovedPackageWithoutLocalProcess 在 Windows 临时文件清理时遇到占用失败，此项未通过。未调用真实付费视频上游，也未部署。

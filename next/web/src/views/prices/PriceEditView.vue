@@ -11,6 +11,8 @@ import { formatDateTime, formatMoney } from '@/utils/format'
 import ExprHistoryModal from './ExprHistoryModal.vue'
 import PriceTrialPanel from './PriceTrialPanel.vue'
 import VisualExprEditor from './VisualExprEditor.vue'
+import VideoPriceEditor from './VideoPriceEditor.vue'
+import { emptyVideoPrice, readVideoPrice, videoExpression } from './videoPrice'
 import { issueText, type Issue } from './issues'
 import {
   CACHE_VARS,
@@ -51,7 +53,8 @@ const mode = ref<PriceMode>('per_token')
 const perRequest = ref<number | ''>(0.01)
 const perToken = reactive<TokenPrices>({ p: 3, c: 15, cr: 0.3, cc: 3.75, cc1h: 6 })
 const visual = ref<VisualConfig>(defaultVisual())
-const exprView = ref<'visual' | 'source'>('visual')
+const video = ref(emptyVideoPrice())
+const exprView = ref<'visual' | 'source' | 'video'>('visual')
 const sourceText = ref('')
 const notVisual = ref(false)
 const errors = ref<Record<string, string>>({})
@@ -79,6 +82,7 @@ function resetForm() {
   perRequest.value = 0.01
   Object.assign(perToken, { p: 3, c: 15, cr: 0.3, cc: 3.75, cc1h: 6 })
   visual.value = defaultVisual()
+  video.value = emptyVideoPrice()
   exprView.value = 'visual'
   sourceText.value = ''
   notVisual.value = false
@@ -101,6 +105,9 @@ function applyPrice(p: Price) {
   } else if (p.mode === 'per_token') {
     const src = TOKEN_VARS.some((k) => cfg[k] !== undefined) ? cfg : parsed?.tiers[0]
     Object.assign(perToken, tokenPricesFrom(src))
+  } else if (cfg.video) {
+    video.value = readVideoPrice(cfg.video)
+    exprView.value = 'video'
   } else if (hasVisualConfig(cfg)) {
     visual.value = normalizeVisual(cfg)
   } else if (parsed) {
@@ -135,6 +142,9 @@ const payload = computed<{ mode: PriceMode; config: Record<string, unknown>; exp
     const cfg = tokenPricesFrom(perToken)
     return { mode: 'per_token', config: compactPrices(cfg), expression: perTokenExpr(cfg) }
   }
+  if (exprView.value === 'video') {
+    return { mode: 'expression', config: { video: video.value }, expression: videoExpression(video.value) }
+  }
   if (exprView.value === 'visual') {
     return { mode: 'expression', config: visualConfigForSave(visual.value), expression: visualExpr(normalizeVisual(visual.value)) }
   }
@@ -153,12 +163,13 @@ const previewSource = computed(() => (localIssues.value.length ? null : { ...pay
 
 function toSource() {
   if (exprView.value === 'source') return
-  sourceText.value = visualExpr(normalizeVisual(visual.value))
+  sourceText.value = payload.value.expression
   exprView.value = 'source'
 }
 
 function toVisual() {
   if (exprView.value === 'visual') return
+  if (exprView.value === 'video') sourceText.value = payload.value.expression
   const parsed = parseExpression(sourceText.value)
   if (!parsed) {
     notVisual.value = true
@@ -377,6 +388,7 @@ const title = computed(() => {
       <SCard :title="t('prices.billingMode')">
         <template #actions>
           <div v-if="mode === 'expression'" class="inline-flex overflow-hidden rounded-lg border border-gray-200 dark:border-dark-600">
+            <button type="button" class="px-3 py-1 text-xs" :class="exprView === 'video' ? 'bg-primary-500 text-white' : 'text-gray-600 dark:text-gray-300'" @click="exprView = 'video'; notVisual = false">{{ t('prices.video.title') }}</button>
             <button
               type="button"
               class="px-3 py-1 text-xs"
@@ -427,7 +439,8 @@ const title = computed(() => {
           <div v-if="notVisual" class="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
             {{ t('prices.notVisual') }}
           </div>
-          <VisualExprEditor v-if="exprView === 'visual'" v-model="visual" :disabled="readonly" />
+          <VideoPriceEditor v-if="exprView === 'video'" v-model="video" :disabled="readonly" />
+          <VisualExprEditor v-else-if="exprView === 'visual'" v-model="visual" :disabled="readonly" />
           <SField v-else :label="t('prices.expression')" :error="errors.expression" :hint="t('prices.sourceHint')">
             <STextarea
               v-model="sourceText"
@@ -440,7 +453,7 @@ const title = computed(() => {
           </SField>
         </template>
 
-        <div v-if="mode !== 'expression' || exprView === 'visual'" class="mt-4">
+        <div v-if="mode !== 'expression' || exprView !== 'source'" class="mt-4">
           <SHint size="xs" class="mb-1">{{ t('prices.generated') }}</SHint>
           <SCode :text="payload.expression" />
           <template v-if="serverExpr && mode !== 'expression'">

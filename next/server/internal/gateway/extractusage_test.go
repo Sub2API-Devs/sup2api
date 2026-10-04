@@ -43,7 +43,7 @@ func pluginUsageEndpoint() manifest.Endpoint {
 	return manifest.Endpoint{ID: "chat", Method: "POST", Path: "/pu/v1/chat", Protocol: "pu.chat", Kind: "proxy",
 		Auth:     manifest.EndpointAuth{Headers: []string{"x-api-key"}},
 		Request:  manifest.EndpointRequest{ModelPath: "model", StreamPath: "stream"},
-		Response: manifest.EndpointResp{Stream: "sse", NonStream: "json"}, ErrorFormat: "plain", Billing: "usage",
+		Response: manifest.EndpointResp{Stream: "sse", NonStream: "json"}, ErrorFormat: "plain", Billing: "usage", BillingTypes: []string{"per_request", "per_token", "expression"},
 		UsageSource:       manifest.UsageSourcePlugin,
 		UsageStreamEvents: []string{"message_delta"},
 	}

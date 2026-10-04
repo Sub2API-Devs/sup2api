@@ -20,6 +20,7 @@ type PriceRule struct {
 	Expression  string
 	ExprVersion int
 	ExprHash    string
+	VideoOnly   bool // video templates and video_* expressions require declared video support
 }
 
 // Pricer resolves price rules and tells the gateway which request inputs an

@@ -12,6 +12,8 @@ import "sub2api/plugin/v1/platform.proto";
 // requires the invocation-local authority issued by the host for Poll.
 // Calls without the required authority fail with PERMISSION_DENIED.
 service HostService {
+  // Pure local tokenization. No upstream traffic and no billing side effects.
+  rpc CountTokens(CountTokensRequest) returns (CountTokensResponse);
   // These callbacks are authorized only by an active Execute/Monitor scope,
   // bound to the calling process, selected account and immutable attribution.
   // No monetary amount, user identity or account selector is accepted.
@@ -136,6 +138,15 @@ service HostService {
   // The host enforces cancellation, the account proxy, limits and SSRF checks.
   // A token permits at most one HTTP request; redirects are not followed.
   rpc ExecuteHTTP(ExecutionHTTPRequest) returns (ExecutionHTTPResponse);
+}
+
+message CountTokensRequest {
+  string text = 1;
+  string encoding = 2; // o200k_base (default) | cl100k_base
+}
+message CountTokensResponse {
+  int64 tokens = 1;
+  string encoding = 2;
 }
 
 message ForwardUpstreamRequest {

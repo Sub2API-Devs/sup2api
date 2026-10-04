@@ -303,10 +303,10 @@ func TestPackPlatforms(t *testing.T) {
     "endpoints": [
       {"id": "gen", "method": "POST", "path": "/v1/video/generations", "protocol": "myvideo.gen", "kind": "proxy",
        "auth": {"headers": ["authorization"]}, "request": {"modelPath": "model"}, "response": {"nonStream": "json"},
-       "errorFormat": "plain", "billing": "usage"},
+       "errorFormat": "plain", "billing":"usage","billingTypes":["per_request","per_token","expression"]},
       {"id": "run", "method": "POST", "path": "/v1/video/models/:model:run", "protocol": "myvideo.run", "kind": "proxy",
        "auth": {"headers": ["authorization"], "query": "key"}, "request": {"modelParam": "model"}, "response": {"nonStream": "json"},
-       "errorFormat": "plain", "billing": "usage"}
+       "errorFormat": "plain", "billing":"usage","billingTypes":["per_request","per_token","expression"]}
     ],
     "usage": {"semantics": "inclusive", "json": {"map": {"input_tokens": "usage.input"}}}}],
   "accountTypes": [{"id": "vkey", "label": {"en": "Key"}, "form": {"mode": "schema", "schema": "forms/v.json"},
@@ -332,11 +332,11 @@ func TestPackPlatforms(t *testing.T) {
 		{`"/v1/video/generations"`, `"/v1/video/models/:id"`, "conflicts with platforms[0].endpoints[0]"},
 		{`"/v1/video/generations"`, `"/v1/video/models/gemini:run"`, "conflicts"},
 		{`"myvideo.gen": {`, `"myvideo.other": {`, "is not a protocol of platform"},
-		{`"errorFormat": "plain", "billing": "usage"},`, `"errorFormat": "xml", "billing": "usage"},`, "errorFormat must be one of"},
+		{`"errorFormat": "plain", "billing":"usage","billingTypes":["per_request","per_token","expression"]},`, `"errorFormat": "xml", "billing":"usage","billingTypes":["per_request","per_token","expression"]},`, "errorFormat must be one of"},
 		{`"response": {"nonStream": "json"},
-       "errorFormat": "plain", "billing": "usage"},`, `"response": {},
-       "errorFormat": "plain", "billing": "usage"},`, "response.nonStream is required"},
-		{`"errorFormat": "plain", "billing": "usage"},`, `"errorFormat": "plain"},`, "billing is required"},
+       "errorFormat": "plain", "billing":"usage","billingTypes":["per_request","per_token","expression"]},`, `"response": {},
+       "errorFormat": "plain", "billing":"usage","billingTypes":["per_request","per_token","expression"]},`, "response.nonStream is required"},
+		{`"errorFormat": "plain", "billing":"usage","billingTypes":["per_request","per_token","expression"]},`, `"errorFormat": "plain"},`, "billing is required"},
 		{`"usage": {"semantics": "inclusive", "json"`, `"usage": {"json"`, "semantics is required"},
 		{`"map": {"input_tokens": "usage.input"}`, `"map": {"total_tokens": "usage.input"}`, "unknown usage field"},
 		{`"map": {"input_tokens": "usage.input"}`, `"map": {"input_tokens": "usage..[["}`, "not a gjson path"},

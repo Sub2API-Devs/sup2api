@@ -457,6 +457,18 @@ func (s *Service) insertAtomic(ctx context.Context, batch []*core.UsageRecord, b
 		if err := br.Close(); err != nil {
 			return err
 		}
+		for _, rec := range inserted {
+			if initialStatus(rec) != StatusFree {
+				continue
+			}
+			lr, err := s.releasePrechargeTx(ctx, tx, rec.UserID, rec.RequestID)
+			if err != nil {
+				return err
+			}
+			if lr != nil && !lr.Duplicate {
+				cached = append(cached, balanceUpdate{userID: rec.UserID, ledgerID: lr.LedgerID, balance: lr.BalanceAfter})
+			}
+		}
 		// Charging the estimate and registering the entry happen in the same
 		// transaction as the row itself: a reserved row that exists without a
 		// ledger entry would be a free request, and one without a
@@ -530,7 +542,10 @@ func (s *Service) reserveTx(ctx context.Context, tx pgx.Tx, r reservedRow) (*cor
 	if err != nil {
 		return nil, fmt.Errorf("price reservation: %w", err)
 	}
-	var res *core.LedgerResult
+	res, err := s.releasePrechargeTx(ctx, tx, p.UserID, p.RequestID)
+	if err != nil {
+		return nil, err
+	}
 	if total.Sign() > 0 {
 		if s.ledger == nil {
 			return nil, errors.New("no ledger configured")
@@ -771,6 +786,11 @@ func (s *Service) RetryPending(ctx context.Context) (int, error) {
 	if s.opts.CanRetry != nil && !s.opts.CanRetry() {
 		return 0, nil
 	}
+	if ledger, ok := s.ledger.(core.PrechargeReleaser); ok {
+		if err := ledger.ReleaseExpiredPrecharges(ctx); err != nil {
+			return 0, err
+		}
+	}
 	if err := s.recoverExecutions(ctx); err != nil {
 		slog.WarnContext(ctx, "usage: recover execution observations", "err", err)
 	}
@@ -843,6 +863,10 @@ func (s *Service) settleTx(ctx context.Context, tx pgx.Tx, p *pending, skipLocke
 	}
 	if status != StatusPending && status != StatusFailed {
 		return nil, errNotPending
+	}
+	ledgerRes, err = s.releasePrechargeTx(ctx, tx, p.UserID, p.RequestID)
+	if err != nil {
+		return nil, err
 	}
 	if total.Sign() > 0 {
 		if s.ledger == nil {
