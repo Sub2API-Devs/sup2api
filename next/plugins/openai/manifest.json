@@ -6,7 +6,7 @@
     "en": "OpenAI API key account type. The openai platform and its endpoints (/v1/chat/completions, /v1/responses including its WebSocket mode, /v1/embeddings) are built into the core; model prices are set by administrators in the core.",
     "zh": "OpenAI API Key 账号类型（openai 平台及其端点 /v1/chat/completions、/v1/responses（含 WebSocket 模式）、/v1/embeddings 由核心内置；模型价格由管理员在核心中配置）。"
   },
-  "version": "0.3.3",
+  "version": "0.3.4",
   "publisher": "sub2api",
   "icon": "assets/openai.svg",
   "runtime": "grpc",
@@ -108,18 +108,8 @@
         "computer-use-preview-2025-03-11",
         "text-embedding-3-small",
         "text-embedding-3-large",
-        "text-embedding-ada-002",
-        "gpt-4.5-preview",
-        "gpt-4.5-preview-2025-02-27",
-        "o1-preview",
-        "o1-mini"
+        "text-embedding-ada-002"
       ],
-      "defaultModelMapping": {
-        "gpt-4.5-preview": "gpt-4.1",
-        "gpt-4.5-preview-2025-02-27": "gpt-4.1-2025-04-14",
-        "o1-preview": "o1",
-        "o1-mini": "o3-mini"
-      },
       "platforms": [
         { "platform": "openai" }
       ]

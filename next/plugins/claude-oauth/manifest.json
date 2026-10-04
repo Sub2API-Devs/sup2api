@@ -9,7 +9,7 @@
     "en": "OAuth and setup-token authentication for Claude platform accounts",
     "zh": "Claude 平台的 OAuth 与 setup-token 认证"
   },
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "sup2api",
   "icon": "text:CO",
   "runtime": "grpc",
@@ -57,9 +57,24 @@
         }
       ],
       "defaultModels": [
+        "claude-fable-5-1",
+        "claude-fable-5",
+        "claude-opus-5-5",
         "claude-opus-5",
+        "claude-opus-4-8",
+        "claude-opus-4-7",
+        "claude-opus-4-6",
+        "claude-opus-4-5",
+        "claude-opus-4-5-20251101",
+        "claude-sonnet-5-5",
         "claude-sonnet-5",
-        "claude-opus-4-8"
+        "claude-sonnet-4-6",
+        "claude-sonnet-4-5",
+        "claude-sonnet-4-5-20250929",
+        "claude-haiku-4-5",
+        "claude-haiku-4-5-20251001",
+        "claude-opus-4-20250514",
+        "claude-sonnet-4-20250514"
       ],
       "refresh": {},
       "quota": {
@@ -113,9 +128,24 @@
         }
       ],
       "defaultModels": [
+        "claude-fable-5-1",
+        "claude-fable-5",
+        "claude-opus-5-5",
         "claude-opus-5",
+        "claude-opus-4-8",
+        "claude-opus-4-7",
+        "claude-opus-4-6",
+        "claude-opus-4-5",
+        "claude-opus-4-5-20251101",
+        "claude-sonnet-5-5",
         "claude-sonnet-5",
-        "claude-opus-4-8"
+        "claude-sonnet-4-6",
+        "claude-sonnet-4-5",
+        "claude-sonnet-4-5-20250929",
+        "claude-haiku-4-5",
+        "claude-haiku-4-5-20251001",
+        "claude-opus-4-20250514",
+        "claude-sonnet-4-20250514"
       ],
       "refresh": {},
       "quota": {
