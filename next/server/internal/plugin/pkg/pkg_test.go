@@ -366,7 +366,7 @@ func TestValidateConsistency(t *testing.T) {
 func guardEndpoint(pid, method, path string) manifest.Endpoint {
 	return manifest.Endpoint{ID: "e", Method: method, Path: path, Protocol: pid + ".call", Kind: "proxy",
 		Auth: manifest.EndpointAuth{Headers: []string{"authorization"}}, Request: manifest.EndpointRequest{ModelPath: "model"},
-		Response: manifest.EndpointResp{NonStream: "json"}, ErrorFormat: "plain", Billing: "usage"}
+		Response: manifest.EndpointResp{NonStream: "json"}, ErrorFormat: "plain", Billing: "usage", BillingTypes: []string{"per_request", "per_token", "expression"}}
 }
 
 func TestValidatePlatformAndAccountTypes(t *testing.T) {

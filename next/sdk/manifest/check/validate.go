@@ -524,6 +524,22 @@ func (v *validator) endpoint(f string, p manifest.Platform, e manifest.Endpoint)
 	default:
 		v.add(f+".billing", "invalid", "billing must be usage or free")
 	}
+	if len(e.BillingTypes) == 0 && e.Billing == "usage" {
+		v.add(f+".billingTypes", "required", "a metered endpoint must support at least one billing type")
+	}
+	seenBilling := map[string]bool{}
+	for _, kind := range e.BillingTypes {
+		if !slices.Contains([]string{"per_request", "per_token", "expression", "video"}, kind) {
+			v.add(f+".billingTypes", "invalid", "unknown billing type %q", kind)
+		}
+		if seenBilling[kind] {
+			v.add(f+".billingTypes", "duplicate", "duplicate billing type %q", kind)
+		}
+		seenBilling[kind] = true
+		if e.Billing == "free" || (kind == "video" && (!e.TaskSubmit() || e.Task.Kind != "video")) {
+			v.add(f+".billingTypes", "conflict", "billing type %q is incompatible with this endpoint", kind)
+		}
+	}
 	if e.Response.NonStream == "" && !e.Request.Stream && !e.WebSocket() {
 		v.add(f+".response.nonStream", "required", "response.nonStream is required unless request.stream is set")
 	}

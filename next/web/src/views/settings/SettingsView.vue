@@ -31,7 +31,7 @@ watch(() => route.query.tab, value => { if (typeof value === 'string' && tabs.va
 // ------------------------------------------------------------------ billing
 
 const canManageBilling = computed(() => auth.has('settings:manage'))
-const billing = reactive<BillingSettings>({ missing_price_policy: 'reject', min_balance: '0', big_cost_warning_usd: '10' })
+const billing = reactive<BillingSettings>({ pre_consume_tokens: 500, missing_price_policy: 'reject', min_balance: '0', big_cost_warning_usd: '10' })
 const billingLoaded = ref<BillingSettings | null>(null)
 const billingLoading = ref(false)
 const billingSaving = ref(false)
@@ -44,6 +44,7 @@ async function loadBilling() {
   try {
     const r = await api.get<BillingSettings>('/settings/billing')
     Object.assign(billing, {
+      pre_consume_tokens: r?.pre_consume_tokens ?? 500,
       missing_price_policy: r?.missing_price_policy === 'free' ? 'free' : 'reject',
       min_balance: String(r?.min_balance ?? '0'),
       big_cost_warning_usd: String(r?.big_cost_warning_usd ?? '10')
@@ -62,12 +63,13 @@ async function saveBilling() {
   errors.value = {}
   const min = billing.min_balance.trim()
   const warn = billing.big_cost_warning_usd.trim()
+  if (!Number.isInteger(billing.pre_consume_tokens) || billing.pre_consume_tokens < 0 || billing.pre_consume_tokens > 100000000) errors.value.pre_consume_tokens = t('settings.billing.preConsumeInvalid')
   if (!DECIMAL.test(min)) errors.value.min_balance = t('settings.billing.decimalInvalid')
   if (!DECIMAL.test(warn) || Number(warn) < 0) errors.value.big_cost_warning_usd = t('settings.billing.decimalInvalid')
   if (Object.keys(errors.value).length) return
   billingSaving.value = true
   try {
-    const r = await api.put<BillingSettings>('/settings/billing', { missing_price_policy: billing.missing_price_policy, min_balance: min, big_cost_warning_usd: warn })
+    const r = await api.put<BillingSettings>('/settings/billing', { pre_consume_tokens: billing.pre_consume_tokens, missing_price_policy: billing.missing_price_policy, min_balance: min, big_cost_warning_usd: warn })
     if (r && typeof r === 'object' && 'missing_price_policy' in r) {
       Object.assign(billing, { ...r, min_balance: String(r.min_balance), big_cost_warning_usd: String(r.big_cost_warning_usd) })
     } else Object.assign(billing, { min_balance: min, big_cost_warning_usd: warn })
@@ -112,6 +114,9 @@ onMounted(loadBilling)
             </SGrid>
           </SField>
           <SGrid :cols="1" :md-cols="2">
+            <SField :label="t('settings.billing.preConsumeTokens')" :hint="t('settings.billing.preConsumeHint')" :error="errors.pre_consume_tokens">
+              <SInput v-model.number="billing.pre_consume_tokens" type="number" min="0" max="100000000" step="1" :disabled="!canManageBilling" />
+            </SField>
             <SField :label="t('settings.billing.minBalance')" :hint="t('settings.billing.minBalanceHint')" :error="errors.min_balance">
               <div class="flex items-center gap-2">
                 <SInput v-model="billing.min_balance" mono inputmode="decimal" :disabled="!canManageBilling" />

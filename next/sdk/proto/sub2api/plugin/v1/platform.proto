@@ -11,6 +11,9 @@ option go_package = "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;plugi
 // forms, usage extraction rules, default pricing) live in manifest.json; this
 // service only covers behaviour that needs code.
 service PlatformService {
+  // Pre-upstream metering estimate. The host checks endpoint billing types
+  // first and prices the report itself; plugins never specify an amount.
+  rpc EstimateUsage(EstimateUsageRequest) returns (UsageReport);
   // Plugin-driven request execution. The host selected the account and owns
   // the request body. The plugin builds and forwards it through the scoped
   // host API, then records usage or atomically reserves and registers a task.
@@ -127,6 +130,14 @@ service PlatformService {
   // is no field here for an amount, and the tokens it reports are priced by
   // the administrator's price table exactly like a live request's.
   rpc ParseReconcileResponse(ParseReconcileResponseRequest) returns (ReconcileResult);
+}
+
+message EstimateUsageRequest {
+  RequestMeta meta = 1;
+  map<string, string> fields = 2;
+  repeated string fields_omitted = 3;
+  int64 pre_consume_tokens = 4;
+  string prompt = 5;
 }
 
 message ExecuteRequest {

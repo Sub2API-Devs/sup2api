@@ -9,7 +9,7 @@
     "en": "Official Volcengine Ark access for OpenAI-compatible APIs, Anthropic Messages, image and video generation, plus configurable Doubao video and asset endpoints. Existing relay text integrations remain compatible. Prices are configured by the administrator.",
     "zh": "提供方舟官方 OpenAI 兼容接口、Anthropic Messages、图片与视频生成，以及可自定义视频和素材端点的豆包视频账号。保留既有中转文本接入兼容，不内置价格。"
   },
-  "version": "0.11.1",
+  "version": "0.12.0",
   "publisher": "sub2api",
   "icon": "text:V",
   "runtime": "grpc",
@@ -97,7 +97,12 @@
                 }
               }
             }
-          }
+          },
+          "billingTypes": [
+            "per_request",
+            "per_token",
+            "expression"
+          ]
         },
         {
           "id": "video_submit",
@@ -138,6 +143,8 @@
             "duration",
             "frames",
             "content.#",
+            "content.#.type",
+            "draft",
             "content.0.text",
             "content.1.text",
             "content.2.text"
@@ -157,9 +164,36 @@
                   "en": "Output tier of the clip: the plugin's estimate while the task runs, the tier Ark really rendered once it is reconciled. For tiered price expressions such as tier(u(\"resolution\"), ...)",
                   "zh": "视频的输出档位：任务进行中是插件的预估值，核对完成后是方舟实际渲染的档位。用于分档价格表达式，如 tier(u(\"resolution\"), …)"
                 }
+              },
+              "video_seconds": {
+                "type": "number"
+              },
+              "video_pixels": {
+                "type": "number"
+              },
+              "video_width": {
+                "type": "number"
+              },
+              "video_height": {
+                "type": "number"
+              },
+              "video_estimated": {
+                "type": "boolean"
+              },
+              "video_input": {
+                "type": "boolean"
+              },
+              "video_draft": {
+                "type": "boolean"
               }
             }
-          }
+          },
+          "billingTypes": [
+            "per_request",
+            "per_token",
+            "expression",
+            "video"
+          ]
         },
         {
           "id": "video_query",

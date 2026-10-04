@@ -329,7 +329,7 @@ func (p *Plugin) ExtractUsage(ctx context.Context, in *pluginv1.ExtractUsageRequ
 			"est_output_tokens", est.Tokens, "fields_omitted", strings.Join(in.GetFieldsOmitted(), ","))
 	}
 	tokens := &pluginv1.UsageTokens{OutputTokens: est.Tokens}
-	facts := map[string]string{FactResolution: est.Resolution}
+	facts := estimatedVideoFacts(est, in.GetFields())
 
 	return &pluginv1.UsageReport{
 		// The report carries the estimate TOO, not only the reservation, and
@@ -462,7 +462,7 @@ func (p *Plugin) ParseReconcileResponse(ctx context.Context, in *pluginv1.ParseR
 		return &pluginv1.ReconcileResult{
 			State:            pluginv1.ReconcileResult_SETTLED,
 			Tokens:           &pluginv1.UsageTokens{OutputTokens: tokens},
-			Facts:            succeededFacts(body),
+			Facts:            completedVideoFacts(body, in.GetEntry().GetModel()),
 			TaskSnapshotJson: snapshot,
 		}, nil
 	case "failed", "expired", "cancelled", "canceled":

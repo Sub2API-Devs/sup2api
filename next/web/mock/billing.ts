@@ -1113,7 +1113,7 @@ on('GET', '/me/ledger', (req) => paginate(ledgerFilter(ledgerRows.filter((l) => 
 
 // ------------------------------------------------------------------ settings
 
-const billingSettings = { missing_price_policy: 'reject', min_balance: '0', big_cost_warning_usd: '10' }
+const billingSettings = { pre_consume_tokens: 500, missing_price_policy: 'reject', min_balance: '0', big_cost_warning_usd: '10' }
 const stickySettings = { enabled: true, default_ttl_seconds: 3600, keep_on_account_disabled: false }
 
 on('GET', '/settings/billing', () => billingSettings)
@@ -1122,7 +1122,10 @@ on('PUT', '/settings/billing', (req) => {
   if (!['reject', 'free'].includes(b.missing_price_policy)) {
     return fail(400, 'invalid_argument', 'invalid', { fields: [{ field: 'missing_price_policy', code: 'enum', message: 'must be reject or free' }] })
   }
-  Object.assign(billingSettings, { missing_price_policy: b.missing_price_policy, min_balance: String(b.min_balance), big_cost_warning_usd: String(b.big_cost_warning_usd) })
+  if (!Number.isInteger(b.pre_consume_tokens) || b.pre_consume_tokens < 0 || b.pre_consume_tokens > 100000000) {
+    return fail(400, 'invalid_argument', 'invalid', { fields: [{ field: 'pre_consume_tokens', code: 'invalid', message: 'must be an integer from 0 to 100000000' }] })
+  }
+  Object.assign(billingSettings, { pre_consume_tokens: b.pre_consume_tokens, missing_price_policy: b.missing_price_policy, min_balance: String(b.min_balance), big_cost_warning_usd: String(b.big_cost_warning_usd) })
   return billingSettings
 })
 on('GET', '/settings/sticky', () => stickySettings)

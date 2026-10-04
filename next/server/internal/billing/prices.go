@@ -590,6 +590,10 @@ func expressionFor(mode string, config json.RawMessage, expression string) (stri
 	case expr.ModePerRequest, expr.ModePerToken:
 		return expr.Generate(mode, config)
 	case expr.ModeExpression:
+		var visual expr.ExpressionConfig
+		if json.Unmarshal(config, &visual) == nil && visual.Video != nil {
+			return expr.Generate(mode, config)
+		}
 		if expression != "" {
 			return expression, nil
 		}

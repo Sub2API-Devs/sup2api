@@ -167,14 +167,16 @@ func (c *call) run(ctx context.Context) {
 		return
 	}
 
-	// 4. Account types serving the protocol, billing gate.
+	// Check the final model against the plugin's billing declaration before
+	// route planning, account scheduling or any upstream request.
+	if e := c.prepareBilling(ctx); e != nil {
+		c.fail(e)
+		return
+	}
+	// 4. Account types serving the protocol.
 	c.planRoutes()
 	if len(c.routeKeys) == 0 {
 		c.fail(fromCore(core.ErrNoAvailableAccount.WithMessage("no enabled account type serves this endpoint"), errTypeNoAccount))
-		return
-	}
-	if e := c.prepareBilling(ctx); e != nil {
-		c.fail(e)
 		return
 	}
 
@@ -394,9 +396,23 @@ func (c *call) prepareBilling(ctx context.Context) *gwError {
 		}
 		return fromCore(e, rt)
 	}
+	if rule != nil {
+		kind := rule.Mode
+		if rule.VideoOnly {
+			kind = "video"
+		}
+		if !c.ep.SupportsBillingType(kind) {
+			return &gwError{Status: http.StatusBadRequest, Code: "billing_type_not_supported",
+				Message:    "endpoint " + c.ep.Protocol + " does not support " + kind + " pricing for model " + c.model,
+				RecordType: errTypeInvalidRequest}
+		}
+	}
 	c.price = rule
 	c.rec.Price = rule
-	c.capturePriceInputs(rule)
+	c.capturePriceInputs(c.price)
+	if c.g.d.Balance == nil {
+		return fromCore(core.AsError(errors.New("billing precharger unavailable")), errTypeInternal)
+	}
 	if err := c.g.d.Balance.CheckBalance(ctx, c.principal.UserID); err != nil {
 		e := core.AsError(err)
 		rt := errTypeInsufficientBalance
@@ -404,6 +420,14 @@ func (c *call) prepareBilling(ctx context.Context) *gwError {
 			rt = errTypeInternal
 		}
 		return fromCore(e, rt)
+	}
+	if err := c.precharge(ctx); err != nil {
+		e := core.AsError(err)
+		kind := errTypeInternal
+		if e.Code == core.ErrInsufficientBalance.Code {
+			kind = errTypeInsufficientBalance
+		}
+		return fromCore(e, kind)
 	}
 	return nil
 }

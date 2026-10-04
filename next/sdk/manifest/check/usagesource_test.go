@@ -151,7 +151,7 @@ func TestStreamingEndpointWithPluginUsageNeedsNoSSERules(t *testing.T) {
 // the plugin source.
 func TestUsageRequestFields(t *testing.T) {
 	p := pluginSourcePlatform()
-	p.Endpoints[0].UsageRequestFields = []string{"resolution", "duration", "content.0.type", "options.ratio"}
+	p.Endpoints[0].UsageRequestFields = []string{"resolution", "duration", "content.0.type", "content.#.type", "options.ratio"}
 	if got := platformCodes(p); len(got) > 0 {
 		t.Fatalf("request fields rejected: %v", got)
 	}
@@ -203,6 +203,7 @@ func TestUsageRequestFields(t *testing.T) {
 func TestPluginUsageSourceRefusesFreeBilling(t *testing.T) {
 	p := pluginSourcePlatform()
 	p.Endpoints[0].Billing = "free"
+	p.Endpoints[0].BillingTypes = nil
 	if got := platformCodes(p); got["endpoints[0].billing"] != "conflict" {
 		t.Fatalf("codes = %v", got)
 	}
@@ -210,6 +211,7 @@ func TestPluginUsageSourceRefusesFreeBilling(t *testing.T) {
 	// accepted exactly as before.
 	p = validPlatform()
 	p.Endpoints[0].Billing = "free"
+	p.Endpoints[0].BillingTypes = nil
 	if got := platformCodes(p); len(got) > 0 {
 		t.Fatalf("free endpoint on the declarative rules rejected: %v", got)
 	}

@@ -19,6 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	HostService_CountTokens_FullMethodName           = "/sub2api.plugin.v1.HostService/CountTokens"
 	HostService_ForwardUpstream_FullMethodName       = "/sub2api.plugin.v1.HostService/ForwardUpstream"
 	HostService_RecordUsage_FullMethodName           = "/sub2api.plugin.v1.HostService/RecordUsage"
 	HostService_ReserveAndWatch_FullMethodName       = "/sub2api.plugin.v1.HostService/ReserveAndWatch"
@@ -51,6 +52,8 @@ const (
 // requires the invocation-local authority issued by the host for Poll.
 // Calls without the required authority fail with PERMISSION_DENIED.
 type HostServiceClient interface {
+	// Pure local tokenization. No upstream traffic and no billing side effects.
+	CountTokens(ctx context.Context, in *CountTokensRequest, opts ...grpc.CallOption) (*CountTokensResponse, error)
 	// These callbacks are authorized only by an active Execute/Monitor scope,
 	// bound to the calling process, selected account and immutable attribution.
 	// No monetary amount, user identity or account selector is accepted.
@@ -152,6 +155,16 @@ type hostServiceClient struct {
 
 func NewHostServiceClient(cc grpc.ClientConnInterface) HostServiceClient {
 	return &hostServiceClient{cc}
+}
+
+func (c *hostServiceClient) CountTokens(ctx context.Context, in *CountTokensRequest, opts ...grpc.CallOption) (*CountTokensResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CountTokensResponse)
+	err := c.cc.Invoke(ctx, HostService_CountTokens_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *hostServiceClient) ForwardUpstream(ctx context.Context, in *ForwardUpstreamRequest, opts ...grpc.CallOption) (*ForwardUpstreamResponse, error) {
@@ -364,6 +377,8 @@ func (c *hostServiceClient) ExecuteHTTP(ctx context.Context, in *ExecutionHTTPRe
 // requires the invocation-local authority issued by the host for Poll.
 // Calls without the required authority fail with PERMISSION_DENIED.
 type HostServiceServer interface {
+	// Pure local tokenization. No upstream traffic and no billing side effects.
+	CountTokens(context.Context, *CountTokensRequest) (*CountTokensResponse, error)
 	// These callbacks are authorized only by an active Execute/Monitor scope,
 	// bound to the calling process, selected account and immutable attribution.
 	// No monetary amount, user identity or account selector is accepted.
@@ -467,6 +482,9 @@ type HostServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedHostServiceServer struct{}
 
+func (UnimplementedHostServiceServer) CountTokens(context.Context, *CountTokensRequest) (*CountTokensResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CountTokens not implemented")
+}
 func (UnimplementedHostServiceServer) ForwardUpstream(context.Context, *ForwardUpstreamRequest) (*ForwardUpstreamResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ForwardUpstream not implemented")
 }
@@ -546,6 +564,24 @@ func RegisterHostServiceServer(s grpc.ServiceRegistrar, srv HostServiceServer) {
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&HostService_ServiceDesc, srv)
+}
+
+func _HostService_CountTokens_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CountTokensRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).CountTokens(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostService_CountTokens_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).CountTokens(ctx, req.(*CountTokensRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _HostService_ForwardUpstream_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -915,6 +951,10 @@ var HostService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "sub2api.plugin.v1.HostService",
 	HandlerType: (*HostServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CountTokens",
+			Handler:    _HostService_CountTokens_Handler,
+		},
 		{
 			MethodName: "ForwardUpstream",
 			Handler:    _HostService_ForwardUpstream_Handler,

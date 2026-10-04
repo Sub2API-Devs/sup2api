@@ -37,29 +37,23 @@ onMounted(async () => {
 const u = computed<UsageRow>(() => ({ ...props.row, ...(detail.value || {}) }))
 const bd = computed<Record<string, any>>(() => (u.value.billing_detail as Record<string, any>) || {})
 const breakdown = computed<Record<string, any>>(() => bd.value.breakdown || {})
-const vars = computed<Record<string, any>>(() => breakdown.value.vars || bd.value.inputs || {})
+const vars = computed<Record<string, any>>(() => breakdown.value.vars || {})
 const tierName = computed(() => u.value.matched_tier || bd.value.tier || '')
 const rules = computed<Array<{ cond: string; multiplier: number | string; matched: boolean }>>(() =>
   Array.isArray(bd.value.rules) ? bd.value.rules : []
 )
 const ledgerId = computed(() => u.value.ledger_id ?? bd.value.ledger_id ?? null)
 const rate = computed(() => bd.value.rate_multiplier ?? u.value.rate_multiplier ?? null)
-const exprVersion = computed(() => bd.value.expr_version ?? 1)
+const exprVersion = computed(() => bd.value.expr_version)
+const billingInputs = computed(() => [
+  ...Object.entries(bd.value.inputs?.params || {}).map(([key, value]) => ({ name: `param("${key}")`, value })),
+  ...Object.entries(bd.value.inputs?.headers || {}).map(([key, value]) => ({ name: `header("${key}")`, value }))
+])
 
-const lenParts = computed(() => {
-  const v = vars.value
-  const parts = ['p', 'cr', 'cc', 'cc1h'].map((k) => Number(v[k]) || 0)
-  return { parts, len: v.len !== undefined ? Number(v.len) : parts.reduce((a, b) => a + b, 0) }
-})
-
-/** Upper bound of the matched tier, if the breakdown lists tier boundaries. */
-const tierBound = computed(() => {
-  const tiers = breakdown.value.tiers
-  if (!Array.isArray(tiers)) return null
-  const tier = tiers.find((x: any) => x && typeof x === 'object' && x.name === tierName.value)
-  const m = tier?.max_len ?? tier?.le ?? tier?.max
-  return m === undefined || m === null ? null : Number(m)
-})
+function factValue(value: unknown): string {
+  if (value === null || value === undefined) return '—'
+  return typeof value === 'object' ? JSON.stringify(value) : String(value)
+}
 
 const hooks = computed(() => u.value.hook_decisions || [])
 
@@ -102,7 +96,7 @@ async function copy(v: string) {
           <template v-if="u.expr_hash">
             <dt>{{ t('prices.expression') }}</dt>
             <dd class="flex flex-wrap items-center gap-2">
-              <span>v{{ exprVersion }}</span>
+              <span v-if="exprVersion !== undefined">v{{ exprVersion }}</span>
               <code class="font-mono text-xs" :title="u.expr_hash">hash {{ u.expr_hash.slice(0, 8) }}…</code>
               <SLink v-if="auth.has('price:read')" as="button" class="text-xs" @click="historyOpen = true">{{ t('prices.viewHistory') }}</SLink>
             </dd>
@@ -117,9 +111,8 @@ async function copy(v: string) {
             <dt>{{ t('usage.billing.tier') }}</dt>
             <dd>
               <span class="font-mono">{{ tierName }}</span>
-              <SHint inline size="xs" class="ml-1">
-                (len = {{ lenParts.parts.map((x) => formatNumber(x)).join(' + ') }} = {{ formatNumber(lenParts.len) }}<template v-if="tierBound !== null">
-                  ≤ {{ formatNumber(tierBound) }}</template>)
+              <SHint v-if="vars.len !== undefined" inline size="xs" class="ml-1">
+                (len = {{ formatNumber(vars.len) }})
               </SHint>
             </dd>
           </template>
@@ -137,6 +130,15 @@ async function copy(v: string) {
             </dd>
           </template>
 
+          <template v-if="billingInputs.length">
+            <dt>{{ t('usage.billing.inputs') }}</dt>
+            <dd class="space-y-1">
+              <div v-for="input in billingInputs" :key="input.name" class="break-all font-mono text-xs">
+                {{ input.name }} = {{ factValue(input.value) }}
+              </div>
+            </dd>
+          </template>
+
           <dt>{{ t('usage.billing.breakdown') }}</dt>
           <dd>
             <BillingBreakdown
@@ -144,6 +146,7 @@ async function copy(v: string) {
               :breakdown="breakdown"
               :rate-multiplier="rate"
               :total="u.total_cost"
+              :rules="rules"
             />
             <SHint v-else inline>—</SHint>
           </dd>
@@ -237,7 +240,7 @@ async function copy(v: string) {
             </template>
             <template v-for="(v, k) in u.metrics || {}" :key="k">
               <dt class="font-mono text-xs">u("{{ k }}")</dt>
-              <dd>{{ formatNumber(v as number) }}</dd>
+              <dd>{{ factValue(v) }}</dd>
             </template>
           </dl>
         </div>

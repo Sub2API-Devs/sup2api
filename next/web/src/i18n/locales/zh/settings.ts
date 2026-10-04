@@ -46,6 +46,9 @@ export default {
     notInteger: '请输入整数'
   },
   billing: {
+    preConsumeTokens: '请求预扣 Token 数',
+    preConsumeHint: '文本请求预占的输入 Token 下限，默认 500；本地估算超过此值时使用估算值。0 表示不设下限，最终仍按实际用量结算。视频使用插件自己的用量估算。',
+    preConsumeInvalid: '请输入 0 到 100000000 之间的整数',
     title: '计费',
     missingPolicy: '模型没有配置价格时',
     policy: {

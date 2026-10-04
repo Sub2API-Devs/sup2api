@@ -120,14 +120,14 @@ func TestUnsupportedAccountTypeNotScheduled(t *testing.T) {
 	}
 	e.record()
 
-	// No account type at all for the protocol: 503 before pricing.
+	// Admission resolves the price once before checking available routes.
 	e.gen.accountTypes = e.gen.accountTypes[1:]
 	calls := e.pricer.calls
 	if r := e.messages(body(testModel, false)); r.status != 503 {
 		t.Fatalf("no type: %d", r.status)
 	}
-	if e.pricer.calls != calls {
-		t.Fatal("priced a request no account type can serve")
+	if e.pricer.calls != calls+1 {
+		t.Fatal("expected one price admission check before route planning")
 	}
 	if rec := e.record(); rec.ErrorType != errTypeNoAccount {
 		t.Fatalf("record %+v", rec)
@@ -345,7 +345,7 @@ func convEnv(t *testing.T, conv *fakeConv) (*env, *qUpstream, *fakePlatform) {
 		e.gen.addPlatform(info, manifest.Platform{ID: "q", Usage: *qUsage, Endpoints: []manifest.Endpoint{{
 			ID: "chat", Method: "POST", Path: "/q/chat", Protocol: "q.chat", Kind: "proxy",
 			Auth: manifest.EndpointAuth{Headers: []string{"x-api-key"}}, Request: manifest.EndpointRequest{ModelPath: "q_model"},
-			ErrorFormat: "plain", Billing: "usage"}}})
+			ErrorFormat: "plain", Billing: "usage", BillingTypes: []string{"per_request", "per_token", "expression"}}}})
 		e.accounts.addTyped(testGroup, 6, 0, "q-6", "qplug", "q_key")
 	})
 	return e, q, qp
@@ -497,7 +497,7 @@ func TestPluginPlatformEndpoints(t *testing.T) {
 	anth := builtinPlatform(t, "anthropic")
 	ep := manifest.Endpoint{ID: "gen", Method: "POST", Path: "/v1/video/generations", Protocol: "myvideo.gen", Kind: "proxy",
 		Auth: manifest.EndpointAuth{Headers: []string{"x-api-key"}}, Request: manifest.EndpointRequest{ModelPath: "model", StreamPath: "stream"},
-		ErrorFormat: "plain", Billing: "usage"}
+		ErrorFormat: "plain", Billing: "usage", BillingTypes: []string{"per_request", "per_token", "expression"}}
 	vp := &fakePlatform{base: e.up.srv.URL}
 	info := e.addAccountType("video", "video_key", vp, manifest.AccountPlatform{Platform: "myvideo", RequestFields: []string{"model"}})
 	e.gen.addPlatform(info, manifest.Platform{ID: "myvideo", Usage: anth.Usage, Endpoints: []manifest.Endpoint{ep}})

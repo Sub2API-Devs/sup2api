@@ -125,7 +125,7 @@ func Platform(key, version, publisher string) *manifest.Manifest {
 			Endpoints: []manifest.Endpoint{
 				{ID: "generate", Method: "POST", Path: "/" + key + "/v1/videos", Protocol: key + ".generate", Kind: "proxy",
 					Auth: manifest.EndpointAuth{Headers: []string{"authorization"}}, Request: manifest.EndpointRequest{ModelPath: "model"},
-					Response: manifest.EndpointResp{NonStream: "json"}, ErrorFormat: "plain", Billing: "usage"},
+					Response: manifest.EndpointResp{NonStream: "json"}, ErrorFormat: "plain", Billing: "usage", BillingTypes: []string{"per_request", "per_token", "expression"}},
 				{ID: "status", Method: "GET", Path: "/" + key + "/v1/models/:model:status", Protocol: key + ".status", Kind: "proxy",
 					Auth: manifest.EndpointAuth{Headers: []string{"authorization"}}, Request: manifest.EndpointRequest{ModelParam: "model"},
 					Response: manifest.EndpointResp{NonStream: "json"}, ErrorFormat: "plain", Billing: "free"},

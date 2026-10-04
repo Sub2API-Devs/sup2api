@@ -936,7 +936,12 @@ func (s *Service) reconciledFacts(ctx context.Context, e *settleEntry, p *pendin
 			"entry", e.id, "protocol", p.UpstreamProtocol)
 		return nil
 	}
-	out := make(map[string]any, len(facts))
+	// A poll often reports only changed facts. Keep request-time facts (such
+	// as video input) when upstream does not echo them in its final response.
+	out := make(map[string]any, len(p.Metrics)+len(facts))
+	for key, value := range p.Metrics {
+		out[key] = value
+	}
 	for key, raw := range facts {
 		f, ok := rules.Facts[key]
 		if !ok {

@@ -25,7 +25,7 @@ func resolveEnv(t *testing.T, req manifest.EndpointRequest, withClient bool) (*e
 		ep := manifest.Endpoint{ID: "gen", Method: "POST", Path: "/rm/v1/tasks", Protocol: "rm.gen", Kind: "proxy",
 			Auth:     manifest.EndpointAuth{Headers: []string{"x-api-key"}, Query: "key"},
 			Request:  req,
-			Response: manifest.EndpointResp{NonStream: "json"}, ErrorFormat: "plain", Billing: "usage"}
+			Response: manifest.EndpointResp{NonStream: "json"}, ErrorFormat: "plain", Billing: "usage", BillingTypes: []string{"per_request", "per_token", "expression"}}
 		pf := manifest.Platform{ID: "rm", Usage: builtinPlatform(t, "anthropic").Usage,
 			RequestFields: []string{"task"}, PassHeaders: []string{"x-rm-hint"},
 			Endpoints: []manifest.Endpoint{ep}}

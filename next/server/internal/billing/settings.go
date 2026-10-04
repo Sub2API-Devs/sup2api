@@ -23,6 +23,7 @@ const settingsKey = "billing"
 
 // Settings is the "billing" row of the settings table (CONTRACTS §8).
 type Settings struct {
+	PreConsumeTokens   int64           `json:"pre_consume_tokens"`
 	MissingPricePolicy string          `json:"missing_price_policy"`
 	MinBalance         decimal.Decimal `json:"min_balance"`
 	BigCostWarningUSD  decimal.Decimal `json:"big_cost_warning_usd"`
@@ -30,7 +31,7 @@ type Settings struct {
 
 // DefaultSettings are used when the row is absent.
 func DefaultSettings() Settings {
-	return Settings{MissingPricePolicy: PolicyReject, MinBalance: decimal.Zero, BigCostWarningUSD: decimal.NewFromInt(10)}
+	return Settings{PreConsumeTokens: 500, MissingPricePolicy: PolicyReject, MinBalance: decimal.Zero, BigCostWarningUSD: decimal.NewFromInt(10)}
 }
 
 type settingsSnapshot struct {
@@ -71,6 +72,7 @@ func loadSettings(ctx context.Context, q store.Querier) (Settings, error) {
 	}
 	// Fields absent from the stored document keep their defaults.
 	var partial struct {
+		PreConsumeTokens   *int64           `json:"pre_consume_tokens"`
 		MissingPricePolicy *string          `json:"missing_price_policy"`
 		MinBalance         *decimal.Decimal `json:"min_balance"`
 		BigCostWarningUSD  *decimal.Decimal `json:"big_cost_warning_usd"`
@@ -80,6 +82,9 @@ func loadSettings(ctx context.Context, q store.Querier) (Settings, error) {
 	}
 	if partial.MissingPricePolicy != nil {
 		v.MissingPricePolicy = *partial.MissingPricePolicy
+	}
+	if partial.PreConsumeTokens != nil {
+		v.PreConsumeTokens = *partial.PreConsumeTokens
 	}
 	if partial.MinBalance != nil {
 		v.MinBalance = *partial.MinBalance
@@ -108,6 +113,7 @@ func (s *Service) putSettings(c *gin.Context) {
 	ctx := c.Request.Context()
 	cur := DefaultSettings()
 	var in struct {
+		PreConsumeTokens   *int64           `json:"pre_consume_tokens"`
 		MissingPricePolicy *string          `json:"missing_price_policy"`
 		MinBalance         *decimal.Decimal `json:"min_balance"`
 		BigCostWarningUSD  *decimal.Decimal `json:"big_cost_warning_usd"`
@@ -116,6 +122,12 @@ func (s *Service) putSettings(c *gin.Context) {
 		return
 	}
 	var fields []core.FieldError
+	if in.PreConsumeTokens != nil {
+		if *in.PreConsumeTokens < 0 || *in.PreConsumeTokens > 100000000 {
+			fields = append(fields, core.FieldError{Field: "pre_consume_tokens", Code: "invalid", Message: "must be an integer from 0 to 100000000"})
+		}
+		cur.PreConsumeTokens = *in.PreConsumeTokens
+	}
 	if in.MissingPricePolicy != nil {
 		if p := *in.MissingPricePolicy; p != PolicyReject && p != PolicyFree {
 			fields = append(fields, core.FieldError{Field: "missing_price_policy", Code: "invalid", Message: "must be reject or free"})

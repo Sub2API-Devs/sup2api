@@ -28,7 +28,12 @@
         "nonStream": "json"
       },
       "errorFormat": "gemini",
-      "billing": "usage"
+      "billing": "usage",
+      "billingTypes": [
+        "per_request",
+        "per_token",
+        "expression"
+      ]
     },
     {
       "id": "stream_generate_content",
@@ -55,7 +60,12 @@
         "nonStream": "json"
       },
       "errorFormat": "gemini",
-      "billing": "usage"
+      "billing": "usage",
+      "billingTypes": [
+        "per_request",
+        "per_token",
+        "expression"
+      ]
     },
     {
       "id": "count_tokens",

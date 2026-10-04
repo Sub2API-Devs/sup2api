@@ -221,13 +221,25 @@ func (v *validator) usageRequestFields(f string, e manifest.Endpoint) {
 		switch {
 		case strings.TrimSpace(p) == "":
 			v.add(pf, "required", "a gjson path is required")
-		case p != strings.TrimSpace(p) || !ValidUsagePath(p):
+		case p != strings.TrimSpace(p) || !ValidUsageRequestPath(p):
 			v.add(pf, "invalid_path", "%q is not a gjson path that reads one value", p)
 		case seen[p]:
 			v.add(pf, "duplicate", "request field %q is declared twice", p)
 		}
 		seen[p] = true
 	}
+}
+
+// Request observations may project one property from an array. This carries
+// content types without handing over large images, URLs or prompt bodies.
+// Values remain subject to the host's existing per-field and total byte caps.
+// Token/fact extraction rules still require the scalar ValidUsagePath syntax.
+func ValidUsageRequestPath(p string) bool {
+	if ValidUsagePath(p) {
+		return true
+	}
+	array, property, ok := strings.Cut(p, ".#.")
+	return ok && ValidUsagePath(array) && ValidUsagePath(property) && !strings.Contains(property, "#") && !strings.Contains(array, "#")
 }
 
 // usageMap validates one "usage field -> path" map of usage.json or usage.sse.

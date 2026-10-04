@@ -465,7 +465,16 @@ func (p *fakePricer) Resolve(_ context.Context, model string) (*core.PriceRule, 
 
 func (p *fakePricer) Inputs(*core.PriceRule) ([]string, []string) { return p.params, p.headers }
 
+func (p *fakePlatform) EstimateUsage(_ context.Context, in *pluginv1.EstimateUsageRequest) (*pluginv1.UsageReport, error) {
+	return &pluginv1.UsageReport{Tokens: &pluginv1.UsageTokens{InputTokens: in.GetPreConsumeTokens()}}, nil
+}
+
 type fakeBalance struct{ broke map[int64]bool }
+
+func (b *fakeBalance) PreConsumeTokens(context.Context) (int64, error) { return 500, nil }
+func (b *fakeBalance) Precharge(ctx context.Context, r *core.UsageRecord) error {
+	return b.CheckBalance(ctx, r.UserID)
+}
 
 func (b *fakeBalance) CheckBalance(_ context.Context, uid int64) error {
 	if b.broke[uid] {

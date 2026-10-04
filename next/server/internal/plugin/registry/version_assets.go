@@ -33,9 +33,13 @@ func (s *Packages) ReadVersionAsset(ctx context.Context, key, vh, name string) (
 	file := filepath.Join(s.dataDir, key, vh, "package.s2plugin")
 	raw, err := os.ReadFile(file)
 	if err != nil || !strings.EqualFold(pluginpkg.SHA256Hex(raw), sum) {
-		if err = s.materialize(ctx, &Package{Key: key, Version: version, SHA256: sum, Dir: filepath.Dir(file)}, func() ([]byte, error) { return s.source.Fetch(ctx, sum, url) }); err != nil {
+		local := &Package{Key: key, Version: version, SHA256: sum, Dir: filepath.Dir(file)}
+		if err = s.materialize(ctx, local, func() ([]byte, error) { return s.source.Fetch(ctx, sum, url) }); err != nil {
 			return core.PluginInfo{}, nil, "", err
 		}
+		// This package is not owned by the cache. Release its file handle
+		// after this read so version cleanup can remove it on Windows too.
+		defer local.Close()
 		if raw, err = os.ReadFile(file); err != nil {
 			return core.PluginInfo{}, nil, "", err
 		}

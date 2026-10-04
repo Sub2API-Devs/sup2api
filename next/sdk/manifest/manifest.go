@@ -135,6 +135,9 @@ type Endpoint struct {
 	Response    EndpointResp    `json:"response"`
 	ErrorFormat string          `json:"errorFormat"` // anthropic | openai | gemini | plain
 	Billing     string          `json:"billing"`     // usage | free
+	// BillingTypes restricts model prices accepted at request admission.
+	// Every metered endpoint must declare its supported types explicitly.
+	BillingTypes []string `json:"billingTypes,omitempty"` // per_request | per_token | expression | video
 	// Task opts into durable host-managed async work. Submission is recorded
 	// before a successful response; queries read the shared, owner-checked
 	// snapshot. Polling and account affinity belong to the host.

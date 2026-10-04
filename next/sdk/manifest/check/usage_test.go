@@ -18,7 +18,7 @@ func validPlatform() manifest.Platform {
 			Auth:        manifest.EndpointAuth{Headers: []string{"authorization"}},
 			Request:     manifest.EndpointRequest{ModelPath: "model"},
 			Response:    manifest.EndpointResp{NonStream: "json"},
-			ErrorFormat: "plain", Billing: "usage",
+			ErrorFormat: "plain", Billing: "usage", BillingTypes: []string{"per_request", "per_token", "expression"},
 		}},
 		Usage: manifest.UsageRules{
 			Semantics: "inclusive",
@@ -237,6 +237,7 @@ func TestStreamingEndpointNeedsSSERules(t *testing.T) {
 	free := validPlatform()
 	free.Endpoints[0].Response = manifest.EndpointResp{Stream: "sse", NonStream: "json"}
 	free.Endpoints[0].Billing = "free"
+	free.Endpoints[0].BillingTypes = nil
 	free.Endpoints[0].Usage = &manifest.UsageRules{JSON: &manifest.UsageMap{Map: map[string]string{"input_tokens": "usage.in"}}}
 	if got := platformCodes(free); len(got) > 0 {
 		t.Fatalf("free streaming endpoint rejected: %v", got)
