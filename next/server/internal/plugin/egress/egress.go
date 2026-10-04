@@ -239,9 +239,23 @@ func (s *server) Dial(stream pluginv1.EgressService_DialServer) error {
 				}
 			}
 		}
-		dctx, cancel := context.WithTimeout(ctx, s.p.opts.DialTimeout)
-		conn, err = s.p.opts.Dial(dctx, open.Network, net.JoinHostPort(host, portStr))
-		cancel()
+		// Dial the addresses that were checked, not the name: resolving it
+		// again at dial time would let a DNS answer that changes between the
+		// two lookups (rebinding) reach a private address. The configured
+		// exceptions keep dialing by name.
+		targets := []string{net.JoinHostPort(host, portStr)}
+		if !isPG && !isAlwaysAllowed {
+			targets = dialTargets(open.Network, resolved, portStr)
+		}
+		err = errors.New("no address of " + host + " matches network " + open.Network)
+		for _, target := range targets {
+			dctx, cancel := context.WithTimeout(ctx, s.p.opts.DialTimeout)
+			conn, err = s.p.opts.Dial(dctx, open.Network, target)
+			cancel()
+			if err == nil {
+				break
+			}
+		}
 		if err != nil {
 			finish(ResultDialError, err.Error())
 			return sendResult(stream, false, "egress: "+err.Error(), "")
@@ -419,4 +433,18 @@ func AllowedHost(pol core.EgressPolicy, host string) bool {
 		}
 	}
 	return false
+}
+
+// dialTargets turns resolved addresses into host:port targets for network
+// ("tcp4" keeps IPv4, "tcp6" IPv6, "tcp" both, in resolver order).
+func dialTargets(network string, addrs []netip.Addr, port string) []string {
+	out := make([]string, 0, len(addrs))
+	for _, a := range addrs {
+		a = a.Unmap()
+		if (network == "tcp4" && !a.Is4()) || (network == "tcp6" && !a.Is6()) {
+			continue
+		}
+		out = append(out, net.JoinHostPort(a.String(), port))
+	}
+	return out
 }

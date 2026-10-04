@@ -257,6 +257,53 @@ func TestPolicyDeniesAndDialErrors(t *testing.T) {
 	}
 }
 
+// TestDialsCheckedAddress: the tunnel dials the address it checked, not the
+// name again, so a DNS answer that changes between the check and the dial
+// (rebinding to a private address) cannot slip through.
+func TestDialsCheckedAddress(t *testing.T) {
+	var mu sync.Mutex
+	var dialed []string
+	lookups := 0
+	newEnv(t, nil, Options{
+		LookupIP: func(context.Context, string) ([]netip.Addr, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			lookups++
+			if lookups == 1 {
+				return []netip.Addr{netip.MustParseAddr("8.8.8.8"), netip.MustParseAddr("2001:4860:4860::8888")}, nil
+			}
+			return []netip.Addr{netip.MustParseAddr("127.0.0.1")}, nil // the rebinding answer
+		},
+		Dial: func(_ context.Context, network, address string) (net.Conn, error) {
+			mu.Lock()
+			dialed = append(dialed, network+" "+address)
+			mu.Unlock()
+			return nil, errors.New("unreachable in tests")
+		},
+	})
+	if _, err := sdkegress.DialContext(context.Background(), "tcp", "rebind.example:443"); err == nil {
+		t.Fatal("dial succeeded")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if lookups != 1 || strings.Join(dialed, ",") != "tcp 8.8.8.8:443,tcp [2001:4860:4860::8888]:443" {
+		t.Fatalf("lookups %d, dialed %v; want one lookup and the checked addresses in order", lookups, dialed)
+	}
+}
+
+func TestDialTargets(t *testing.T) {
+	addrs := []netip.Addr{netip.MustParseAddr("::ffff:1.2.3.4"), netip.MustParseAddr("2001:db8::1")}
+	for network, want := range map[string]string{
+		"tcp":  "1.2.3.4:80,[2001:db8::1]:80",
+		"tcp4": "1.2.3.4:80",
+		"tcp6": "[2001:db8::1]:80",
+	} {
+		if got := strings.Join(dialTargets(network, addrs, "80"), ","); got != want {
+			t.Errorf("%s: %s, want %s", network, got, want)
+		}
+	}
+}
+
 func TestDialTimeout(t *testing.T) {
 	newEnv(t, nil, Options{
 		DialTimeout: 100 * time.Millisecond,
