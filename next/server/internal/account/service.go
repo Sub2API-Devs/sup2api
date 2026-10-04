@@ -71,6 +71,8 @@ type Service struct {
 
 	touchMu sync.Mutex
 	touched map[int64]time.Time
+
+	limitsDebouncer *limitsDebouncer
 }
 
 type groupSnap struct {
@@ -89,10 +91,11 @@ var _ core.AccountDirectory = (*Service)(nil)
 // broadcasts and persist last_used_at.
 func New(d Deps) *Service {
 	return &Service{
-		d:        d,
-		groups:   map[int64]groupSnap{},
-		accounts: map[int64]accountSnap{},
-		touched:  map[int64]time.Time{},
+		d:               d,
+		groups:          map[int64]groupSnap{},
+		accounts:        map[int64]accountSnap{},
+		touched:         map[int64]time.Time{},
+		limitsDebouncer: newLimitsDebouncer(),
 	}
 }
 
@@ -115,6 +118,8 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.PermAny("POST", "/accounts/:id/models/fetch", s.fetchAccountModels, "account:test", "account:own:test")
 	r.PermAny("POST", "/account-types/:plugin_key/:type/models/fetch", s.fetchTypeModels, "account:create", "account:own:create")
 	r.PermAny("POST", "/accounts/:id/credentials/reveal", s.reveal, "account:credential:view", "account:own:credential:view")
+	r.PermAny("GET", "/accounts/:id/subscription/limits", s.getSubscriptionLimits, "account:read", "account:own:read")
+	r.PermAny("POST", "/accounts/:id/subscription/limits/reset", s.resetSubscriptionLimits, "account:update", "account:own:update")
 }
 
 // Run subscribes to account:changed and flushes last_used_at every 10 s

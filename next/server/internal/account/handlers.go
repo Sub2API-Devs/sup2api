@@ -1117,3 +1117,66 @@ func (s *Service) reveal(c *gin.Context) {
 	}
 	httpapi.OK(c, gin.H{"credentials": json.RawMessage(mustJSON(all))})
 }
+
+// getSubscriptionLimits handles GET /accounts/:id/subscription/limits
+// Returns the cached subscription limits for an account with computed percentages.
+func (s *Service) getSubscriptionLimits(c *gin.Context) {
+	ctx := c.Request.Context()
+	id, ok := httpapi.PathID(c, "id")
+	if !ok {
+		return
+	}
+
+	// Check if force refresh is requested
+	force := c.Query("force") == "true"
+
+	// Query limits
+	snapshot, err := s.QueryAccountLimits(ctx, id, force)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+
+	httpapi.OK(c, snapshot)
+}
+
+// resetSubscriptionLimitsRequest is the request body for resetting limits cache.
+type resetSubscriptionLimitsRequest struct {
+	ClearMarkers bool `json:"clear_markers"` // Clear disabled_at/resume_at without deleting cache
+	Refetch      bool `json:"refetch"`       // Immediately query after reset
+}
+
+// resetSubscriptionLimits handles POST /accounts/:id/subscription/limits/reset
+// Clears the cached subscription limits and optionally refetches them.
+func (s *Service) resetSubscriptionLimits(c *gin.Context) {
+	ctx := c.Request.Context()
+	id, ok := httpapi.PathID(c, "id")
+	if !ok {
+		return
+	}
+
+	var req resetSubscriptionLimitsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("invalid request body"))
+		return
+	}
+
+	// Reset limits
+	snapshot, err := s.ResetAccountLimits(ctx, id, req.ClearMarkers, req.Refetch)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+
+	// Audit the reset action
+	uid, _ := core.UserID(ctx)
+	details := map[string]interface{}{
+		"clear_markers": req.ClearMarkers,
+		"refetch":       req.Refetch,
+	}
+	if err := audit.Audit(ctx, s.d.DB.Pool, uid, "account.limits.reset", "account", itoa(id), details); err != nil {
+		slog.WarnContext(ctx, "failed to audit limits reset", "err", err)
+	}
+
+	httpapi.OK(c, snapshot)
+}

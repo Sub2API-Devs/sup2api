@@ -24,6 +24,11 @@ service PlatformService {
   // Requires platform.monitor.v1 and host API 4.
   rpc Monitor(PollRequest) returns (MonitorResponse);
   rpc ValidateCredentials(ValidateCredentialsRequest) returns (ValidateCredentialsResponse);
+  // Query subscription limits for a subscription-type account (not API Key).
+  // Returns usage windows (5h, 1w, daily_fable, etc.) with current usage and
+  // limits. Optional: answer UNIMPLEMENTED when the account type does not
+  // support subscription limits or the upstream has no such API.
+  rpc QuerySubscriptionLimits(QuerySubscriptionLimitsRequest) returns (QuerySubscriptionLimitsResponse);
   // Hot path: called once per upstream attempt. Keep it fast (< 2s timeout).
   rpc BuildUpstreamRequest(BuildUpstreamRequestRequest) returns (BuildUpstreamRequestResponse);
   // Called once per failed upstream attempt.
@@ -555,4 +560,39 @@ message ReconcileResult {
   // errors must never erase an existing result. The host substitutes its
   // public ID and fences every write by the current task claim token.
   string task_snapshot_json = 6;
+}
+
+// QuerySubscriptionLimitsRequest asks the plugin to query the upstream API
+// for the current usage limits of a subscription-type account.
+message QuerySubscriptionLimitsRequest {
+  int64 account_id = 1;
+  string account_name = 2;
+  string account_type = 3;
+  // Decrypted credentials JSON. The host only passes credentials when the
+  // account type belongs to this plugin.
+  string credentials_json = 4;
+  string settings_json = 5;
+  string proxy_url = 6;
+}
+
+// SubscriptionWindow represents one time-based usage limit window (e.g., 5h, 1w).
+message SubscriptionWindow {
+  string label = 1;          // Display label: "5h", "1w", "daily_fable", etc.
+  int64 seconds = 2;         // Window duration in seconds
+  int64 used = 3;            // Amount used in this window
+  int64 limit = 4;           // Maximum allowed in this window
+  int64 reset_at = 5;        // Unix timestamp when this window resets
+}
+
+// QuerySubscriptionLimitsResponse returns the current usage windows.
+message QuerySubscriptionLimitsResponse {
+  repeated SubscriptionWindow windows = 1;
+  // Provider identifier for logging/debugging, e.g. "kimi-coding-plan"
+  string provider = 2;
+  // Error classification:
+  // "" (empty) = success
+  // "auth_rejected" = credentials invalid/expired (401/403)
+  // "transient" = temporary failure (timeout, 500, etc.)
+  string error_type = 3;
+  string error_message = 4;
 }
