@@ -1,0 +1,141 @@
+{
+  "tests": [
+    {
+      "test": "system_1_A",
+      "model": "claude-haiku-4-5-20251001",
+      "pass": true,
+      "http_status": 200,
+      "request_id": "63318f0175410e87a826db3e",
+      "history": null,
+      "stop_reason": "end_turn",
+      "text": "AMBER_cdda0b5a85",
+      "tools": [],
+      "seconds": 3.52,
+      "first_event_s": 3.519388799992157,
+      "ttft_s": 3.519468799990136,
+      "output_tokens_per_generation_s": null,
+      "end_to_end_tokens_per_s": 3.6934909382037917,
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": "not_available",
+        "input_tokens": 255,
+        "output_tokens": 13,
+        "service_tier": "standard"
+      },
+      "assertions": [
+        {
+          "check": "current system applied without old-snapshot rollback",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "test": "system_2_A",
+      "model": "claude-haiku-4-5-20251001",
+      "pass": true,
+      "http_status": 200,
+      "request_id": "c0ef81e77d7346d7e41eb2ec",
+      "history": null,
+      "stop_reason": "end_turn",
+      "text": "AMBER_cdda0b5a85",
+      "tools": [],
+      "seconds": 3.987,
+      "first_event_s": 3.8908255999849644,
+      "ttft_s": 3.890856599988183,
+      "output_tokens_per_generation_s": null,
+      "end_to_end_tokens_per_s": 3.2605660272473376,
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": "not_available",
+        "input_tokens": 307,
+        "output_tokens": 13,
+        "service_tier": "standard"
+      },
+      "assertions": [
+        {
+          "check": "current system applied without old-snapshot rollback",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "test": "system_3_B",
+      "model": "claude-haiku-4-5-20251001",
+      "pass": true,
+      "http_status": 200,
+      "request_id": "3dd8b719427a8beb15c77b2b",
+      "history": null,
+      "stop_reason": "end_turn",
+      "text": "COBALT_cdda0b5a85",
+      "tools": [],
+      "seconds": 3.421,
+      "first_event_s": 3.2704192000092007,
+      "ttft_s": 3.2971623000048567,
+      "output_tokens_per_generation_s": null,
+      "end_to_end_tokens_per_s": 4.092890488415789,
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": "not_available",
+        "input_tokens": 360,
+        "output_tokens": 14,
+        "service_tier": "standard"
+      },
+      "assertions": [
+        {
+          "check": "current system applied without old-snapshot rollback",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "test": "system_4_B",
+      "model": "claude-haiku-4-5-20251001",
+      "pass": true,
+      "http_status": 200,
+      "request_id": "b85f9b49e85fc929affbe87a",
+      "history": null,
+      "stop_reason": "end_turn",
+      "text": "COBALT_cdda0b5a85",
+      "tools": [],
+      "seconds": 3.236,
+      "first_event_s": 3.1236970000027213,
+      "ttft_s": 3.123748500016518,
+      "output_tokens_per_generation_s": null,
+      "end_to_end_tokens_per_s": 4.3260540778422145,
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "inference_geo": "not_available",
+        "input_tokens": 413,
+        "output_tokens": 14,
+        "service_tier": "standard"
+      },
+      "assertions": [
+        {
+          "check": "current system applied without old-snapshot rollback",
+          "pass": true
+        }
+      ]
+    }
+  ],
+  "pass": true
+}

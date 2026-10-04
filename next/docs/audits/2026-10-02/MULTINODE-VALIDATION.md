@@ -524,3 +524,32 @@ cc-max 业务镜像固定为 `sha256:5e3cbd59154dc8f115f2a982083af5a54341badb9e5
 系统提示词快照另做了五次隔离 CLI 对模拟上游的抓包验证：A+on→A，A+on→A，B+off→B，B+on→A，B+off→B。关闭快照不会更新旧快照，因此“只和上一轮比较，变化时 off，下一轮不变再 on”会恢复旧提示词。若后续启用条件快照，必须校验当前配置与实际持久化快照一致，或先安全刷新快照；本次生产继续保持 off，已验证这不妨碍上游缓存命中。
 
 证据：[升级采样](evidence/ovh-upgrade-0.1.20.jsonl.txt)、[升级时间线](evidence/ovh-upgrade-0.1.20-summary.txt)、[四入口验收](evidence/ccgateway-v020-verify.jsonl)、[50k 上下文](evidence/ccg-v020-public-50k.json)、[自定义工具](evidence/ccg-v020-public-tools.jsonl)、[MCP 工具](evidence/ccg-v020-public-mcp.jsonl)、[原生工具摘要](evidence/ccg-v020-native-tools-summary.json)、[分支与回退](evidence/ccg-v020-public-branches.json)、[快照切换](evidence/ccg-v020-snapshot-toggle.json)。
+
+### 24.7 SDK MCP 名称与预扣费：OVH v0.1.21
+
+2026-10-04 15:29–15:30（北京时间），源码 `21c039700` 已推送，并在 OVH、cc-max 从 Git 构建。包含合并提交 `d1ab16d55` 的视频计费、请求预扣费与管理界面，以及 CCGateway SDK MCP 名称保留、条件提示词快照和会话生命周期修复。
+
+四核心均为 0.1.21；内置插件 Anthropic 0.2.2、OpenAI 0.3.1、Gemini 0.2.1、CCGateway 0.1.3、Volcengine 0.12.0 已启用，Moderation 保持 0.1.6。平台插件必须升版本：新核心调用 `EstimateUsage`，同版本重新打包会被内置安装逻辑保留旧二进制。Relay 市场包也升至 0.2.1，生产未安装它。CCGateway 四节点 active，固定指纹 SSH 转发与四个管理页入口通过；验收窗口四节点 ERROR 为 0。未替换 gateway 容器。
+
+新增迁移 `0025_request_precharges.sql`，旧 schema `5698cd713b25a12f8cdb4c9242b9ead9110f16bdae33383907ac787c9abe8f5d`，新 schema `22358faf75ba5b4673da3b2a4a0e900d9efa7992923f2175e928c52381e9617c`。签包显式携带旧 schema，使用维护升级；跨 schema 不能自动回退旧二进制。数据库备份 `/home/debian/sup2api/backups/pre-v0.1.21-20261004T072823Z.dump` 通过 pg_restore 目录校验。
+
+manifest `2274367dbfc17f4519e00233b40e37d757feb385e4293c1e34e3dd5a6703d71d`，bundle `27a8009e0faf544b8739dafd1c3654cca7a403a09da52386438af7cd7ac5860c`。计划 `78e1555c1eaf9093018e5390b2827abe` 完成 27 步，创建至完成约 23.25 秒。四入口 503 采样窗口分别约 4.7、6.3、6.9、7.4 秒；这些窗口不包含内置插件后续升级等待。
+
+cc-max 账号 21 的新运行镜像固定为 `sha256:8974324d0c45b35b5358094128f109bcc9b25d7a5b84f9faa5f6d30d293e8d3a`，容器 `4bc9073f879f` ready。控制器镜像仍为 `sha256:e7f52f7e0f63afba4991b6c8ccbd2ab4ebd8aa7982a02ce93a2006d73bd217ce`，重启加载新应用镜像配置；sing-box 和账号数据卷保留。私有备份 `/opt/ccgateway-runtime/pre-sdk-mcp-20261004T072910Z` 包含原运行配置与数据卷。
+
+自定义工具全部由 SDK MCP 注册。标准 `mcp__server__tool` 保持原名，普通工具归入 `ccgateway` 服务并在客户端响应还原名称；最终 wire 名碰撞返回 400。内置工具只在白名单、显式选择、CLI 版本及完整定义均匹配时启用，否则使用 SDK MCP。Mods 只做执行拦截、就绪确认和单轮控制，不注册工具。重复隔离实验发现同名 SDK 服务与 Mods 注册存在竞态，因此最终实现统一 SDK MCP。
+
+提示词快照优先精确比较所恢复检查点中的 `systemPrompt`；缺失时使用该检查点成功请求的系统摘要，按 5m/1h TTL 失效，不影响 24h 原生历史。旧快照不一致、未知格式或携带旧工具定义时关闭。真实 CLI 对本地模拟上游的 38 次调用通过，覆盖名称保留、并行回传、schema 更新、提示词切换和原有分支/回退。Windows test/vet 与相关 SDK/插件/前端检查通过。
+
+发布前在 OVH 独立测试 PostgreSQL 中实际应用迁移并通过并发预扣、幂等释放、视频配置往返、异步任务预留/失败退款、结算事务回滚等测试。生产视频生成未实调，不能将这些断言作为视频供应商端到端验收。
+
+真实上游验收使用 `claude-haiku-4-5-20251001`：
+
+- 发布前隔离账号经实际 sing-box/代理完成三轮长会话与五轮客户端文件工具；工具缓存读取为 0 / 8,641 / 8,810 / 8,952 / 9,122，文件内容及早期标识正确，测试资源已清理。
+- 公网并行调用 `mcp__files__lookup`、`mcp__other__lookup`、普通 `local_lookup`，客户端执行并回传三个结果；后续 files 工具 schema 改为 number，实际调用参数为数值 7，回传后同时记得新结果与旧 other 服务结果。四轮全部通过。
+- 公网约 9k 长上下文三轮通过，cache_read 为 0 / 9,124 / 9,170，标识与 Record 0007 值 98 正确。
+- 首次系统切换探针第三轮被模型拒答：回复明确引用新 B 值，但未满足精确输出断言；原始失败证据保留，第四轮未执行。改为普通仓库标签后单独复测四轮，结果为 AMBER / AMBER / COBALT / COBALT，全部通过。未将拒答误报为网关回退，也未把原失败计为成功。
+- 共 14 个公网请求 HTTP 200，TTFT 约 3.12–3.89 秒、中位数 3.47 秒。原始报告的 token 到达速率受 SSE 合并影响，尤其短输出不能据此判断模型真实生成 TPS。
+- 按这 14 个 request_id 核对生产账本：均 billed、CCGateway 0.1.3、预扣一次且释放一次、无遗留预扣，总记账 0.02314990。
+
+证据：[升级采样](evidence/ovh-upgrade-0.1.21.jsonl.txt)、[时间线](evidence/v021-upgrade-summary.txt)、[四入口验收](evidence/v021-runtime-verify.jsonl)、[真实 PG 测试](evidence/v021-isolated-db.log)、[隔离上游](evidence/ccg-v021-isolated.jsonl.txt)、[公网原始结果及拒答](evidence/ccg-v021-public-result.json)、[业务标签复测](evidence/ccg-v021-system-business.json)、[账本核对](evidence/v021-ledger-check.json)。

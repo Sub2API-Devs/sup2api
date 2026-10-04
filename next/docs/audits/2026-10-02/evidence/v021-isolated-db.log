@@ -1,0 +1,31 @@
+ISOLATED_DATABASE_TEST billing
+=== RUN   TestPrechargeConcurrentAdmissionAndIdempotentRelease
+--- PASS: TestPrechargeConcurrentAdmissionAndIdempotentRelease (0.25s)
+=== RUN   TestVideoConfigOverridesStaleExpression
+--- PASS: TestVideoConfigOverridesStaleExpression (0.00s)
+=== RUN   TestVideoPriceAPIRoundTrip
+--- PASS: TestVideoPriceAPIRoundTrip (0.05s)
+PASS
+ISOLATED_DATABASE_TEST usage
+=== RUN   TestPrechargeTransitionsToAsyncReservationAndRefund
+2026/10/04 07:27:48 INFO reconcile: upstream work failed, reservation refunded component=reconcile node=node-a entry=1 request_id=precharge-video refunded=0.009 reason="generation failed"
+--- PASS: TestPrechargeTransitionsToAsyncReservationAndRefund (0.07s)
+=== RUN   TestPrechargeSettlesOnceAndRefundsFailures
+--- PASS: TestPrechargeSettlesOnceAndRefundsFailures (0.11s)
+=== RUN   TestPrechargeReleaseRollsBackWithSettlement
+2026/10/04 07:27:48 WARN usage: settlement failed request_id=rollback-precharge attempts=1 err="ledger: ledger unavailable"
+--- PASS: TestPrechargeReleaseRollsBackWithSettlement (0.05s)
+=== RUN   TestReconcilePreservesVideoSubmissionFacts
+--- PASS: TestReconcilePreservesVideoSubmissionFacts (0.00s)
+PASS
+ISOLATED_DATABASE_TEST gateway
+=== RUN   TestPrechargeBeforeUpstream
+--- PASS: TestPrechargeBeforeUpstream (0.01s)
+=== RUN   TestBillingMismatchDoesNotInvokePrecharge
+--- PASS: TestBillingMismatchDoesNotInvokePrecharge (0.00s)
+=== RUN   TestVideoPriceRejectsTextEndpoint
+--- PASS: TestVideoPriceRejectsTextEndpoint (0.00s)
+=== RUN   TestVideoContentTypesSurviveLargeInput
+--- PASS: TestVideoContentTypesSurviveLargeInput (0.00s)
+PASS
+V021_ISOLATED_DATABASE_PASS
