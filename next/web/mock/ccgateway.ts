@@ -26,4 +26,13 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
   on('POST',`${base}/auth/cancel`,()=>({ok:true}))
   on('POST',`${base}/auth/logout`,()=>{logged=false;return {ok:true}})
   on('POST',`${base}/connect`,()=>({id:99001}))
+  // Per-account containers: ready a few seconds after first seen, then the code flow.
+  const born = new Map<string, number>(), authed = new Set<string>()
+  const acc = (id: string) => { if (!born.has(id)) born.set(id, Date.now()); return Date.now() - born.get(id)! > 6000 }
+  on('GET',`${base}/accounts/:id/status`,({params})=>({status:acc(params.id)?'ready':'creating',container:`ccg-account-${params.id}`}))
+  on('GET',`${base}/accounts/:id/health`,({params})=>({healthy:true,logged_in:authed.has(params.id)}))
+  on('POST',`${base}/accounts/:id/sync`,({params})=>{acc(params.id);return {ok:true}})
+  on('POST',`${base}/accounts/:id/start`,()=>({session_id:'fixture-session',url:'https://claude.ai/oauth/authorize?preview=true',expires_at:new Date(Date.now()+600000).toISOString()}))
+  on('POST',`${base}/accounts/:id/complete`,({params})=>{authed.add(params.id);return {ok:true}})
+  on('POST',`${base}/accounts/:id/cancel`,()=>({ok:true}))
 }

@@ -15,6 +15,7 @@ import { lt } from '@/i18n'
 import { sameCreationGroup } from './accountTypeChoices'
 import EditorCard from './EditorCard.vue'
 import ModelMappingEditor from './ModelMappingEditor.vue'
+import CCGatewayAccountAuth from '@/views/ccgateway/CCGatewayAccountAuth.vue'
 import { assetURL, usePluginStore } from '@/stores/plugins'
 import { useAuthStore } from '@/stores/auth'
 import { useProxiesLookup } from '@/composables/lookups'
@@ -40,6 +41,9 @@ function changeAuth(value: unknown) {
   if (!editing.value && at && at.type !== props.accountType?.type) emit('change-type', at)
 }
 const mode = computed(() => props.accountType?.form.mode || 'schema')
+// Claude Code (CCGateway) OAuth keeps its credentials in the account's own
+// container: the editor shows the authorization flow instead of fields.
+const ccgOAuth = computed(() => props.accountType?.plugin_key === 'ccgateway' && props.accountType?.type === 'managed')
 // Row-level rights (CONTRACTS §21.1): editing an account needs the all-level
 // key or the own-level key on an account the caller created.
 const canTestAccount = computed(() => editing.value && own.can(props.account, ACCOUNT_KEYS.test))
@@ -766,7 +770,12 @@ async function save(event: Event) {
               <div v-if="formLoading" class="flex justify-center py-6"><SSpinner /></div>
               <SHint v-else-if="formError" tone="danger">{{ formError }}</SHint>
               <SchemaForm v-else-if="schema" ref="schemaForm" v-model="credentials" :schema="schema" :ui-schema="uiSchema" :errors="credErrors" :widgets="schemaWidgets" />
-              <p v-if="schema && !formLoading && !Object.keys(schema.properties || {}).length" class="rounded-xl bg-gray-50 px-3.5 py-3 text-sm text-gray-500 dark:bg-dark-900/40 dark:text-dark-400">{{ t('accounts.editorUi.noCredentials') }}</p>
+              <template v-if="ccgOAuth">
+                <!-- Claude Code (CCGateway) OAuth: the credentials live in the account's own container; authorize it here. -->
+                <CCGatewayAccountAuth v-if="editing" :account-id="account!.id" />
+                <p v-else class="rounded-xl bg-primary-50/70 px-3.5 py-3 text-sm text-primary-800 dark:bg-primary-900/20 dark:text-primary-200" data-testid="ccgateway-create-hint">{{ t('ccgateway.auth.createHint') }}</p>
+              </template>
+              <p v-else-if="schema && !formLoading && !Object.keys(schema.properties || {}).length" class="rounded-xl bg-gray-50 px-3.5 py-3 text-sm text-gray-500 dark:bg-dark-900/40 dark:text-dark-400">{{ t('accounts.editorUi.noCredentials') }}</p>
             </template>
             <template v-else-if="mode === 'iframe'">
               <PluginIframe

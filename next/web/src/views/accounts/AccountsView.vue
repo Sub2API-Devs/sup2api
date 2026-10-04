@@ -186,9 +186,16 @@ async function openEdit(a: Account) {
   }
 }
 
-function onSaved() {
-  editorOpen.value = false
+function onSaved(saved?: Account) {
   list.reload()
+  // A new Claude Code (CCGateway) OAuth account still has to be authorized:
+  // stay in the editor, now on the saved account, where the flow is shown.
+  if (!editing.value && saved?.id && saved.plugin_key === 'ccgateway' && saved.type === 'managed') {
+    toast(t('common.saved'), 'success')
+    void openEdit(saved)
+    return
+  }
+  editorOpen.value = false
 }
 
 // ---------------------------------------------------------------- test
