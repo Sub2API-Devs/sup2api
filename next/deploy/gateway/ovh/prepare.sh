@@ -137,4 +137,7 @@ release 0.1.17
 release 0.1.18
 # 0.1.19 fixes clipboard copying on HTTP origins.
 release 0.1.19
+# 0.1.23 adds plugin default models and mappings, the redesigned account editor
+# and model mapping on Claude Code connect (same schema).
+release 0.1.23
 ls -la publish

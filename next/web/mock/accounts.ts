@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { fail, needStepUp, nextId, noContent, now, on, paginate, type MockRequest } from './router'
 import { activePlatforms, platformById, platformLabel } from './platforms'
 import { caller, filterOwned, hasPerm, inScope, ownerScope, userEmail, type Identity } from './core'
@@ -196,6 +198,19 @@ const accountTypeDecls: MockAccountType[] = [
     supports: ['anthropic']
   },
   {
+    plugin_key: 'ccgateway',
+    plugin_name: { en: 'Claude Code', zh: 'Claude Code' },
+    plugin_version: '0.1.5',
+    asset_base: '/plugin-ui/ccgateway/0.1.5-dev',
+    trust: 'official',
+    type: 'managed',
+    label: { en: 'Claude Code', zh: 'Claude Code' },
+    description: { en: 'Managed Claude Code account (OAuth); no credential fields', zh: '托管 Claude Code 账号（OAuth），无需填写凭证' },
+    form: { mode: 'schema' },
+    sensitive_fields: [],
+    supports: ['anthropic']
+  },
+  {
     plugin_key: 'videogen',
     plugin_name: { en: 'Video generation', zh: '视频生成' },
     plugin_version: '0.2.0',
@@ -225,6 +240,7 @@ const accountTypeDecls: MockAccountType[] = [
 
 function accountTypeOut(d: MockAccountType) {
   const { supports, converts, ...rest } = d
+  const defaults = pluginDefaults(d.plugin_key, d.type)
   const platforms = supports.map((id) => {
     const p = platformById(id)
     return { id, label: p?.label ?? platformLabel(id), builtin: p?.builtin ?? false, available: !!p }
@@ -237,7 +253,22 @@ function accountTypeOut(d: MockAccountType) {
     const e = platformById(c.platform)?.endpoints.find((x) => x.path === c.path)
     if (e) endpoints.push({ method: e.method, path: e.path, protocol: e.protocol, platform: c.platform, native: false })
   }
-  return { ...rest, platforms, endpoints }
+  return { ...rest, ...defaults, platforms, endpoints }
+}
+
+/**
+ * Default models / mapping (CONTRACTS §41), read from the real plugin
+ * manifest so the mock never drifts from what the plugins ship; types
+ * without a plugin source in this repository get none.
+ */
+function pluginDefaults(pluginKey: string, type: string) {
+  try {
+    const m = JSON.parse(readFileSync(fileURLToPath(new URL(`../../plugins/${pluginKey}/manifest.json`, import.meta.url)), 'utf8'))
+    const at = (m.accountTypes || []).find((x: any) => x.id === type)
+    return { default_models: at?.defaultModels || [], default_model_mapping: at?.defaultModelMapping || {} }
+  } catch {
+    return { default_models: [], default_model_mapping: {} }
+  }
 }
 
 const typeLabel = (pluginKey: string, type: string) => accountTypeDecls.find((x) => x.plugin_key === pluginKey && x.type === type)?.label || type
@@ -326,6 +357,7 @@ on('GET', '/account-types/:plugin_key/:type/form', (req) => {
   if (k === 'videogen') return { schema: videoSchema, ui_schema: { api_key: { 'ui:widget': 'secret' } } }
   if (k === 'openai') return guardForm(who, k, openaiForm)
   if (k === 'gemini') return guardForm(who, k, geminiForm)
+  if (k === 'ccgateway') return { schema: { type: 'object', properties: {} }, ui_schema: {} }
   return fail(404, 'not_found', 'form not found')
 })
 

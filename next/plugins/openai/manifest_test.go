@@ -24,7 +24,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "openai" || m.Version != "0.3.2" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "openai" || m.Version != "0.3.3" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("key/version/publisher = %s %s %s", m.Key, m.Version, m.Publisher)
 	}
 	if m.Name["en"] == "" || m.Name["zh"] == "" || m.Description["en"] == "" || m.Description["zh"] == "" {

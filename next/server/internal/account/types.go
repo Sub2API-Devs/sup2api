@@ -33,6 +33,10 @@ type AccountTypeView struct {
 	// for callers without account:settings:custom (CONTRACTS §21.3); empty
 	// when the type declares none.
 	GuardedSettings []manifest.GuardedSetting `json:"guarded_settings"`
+	// DefaultModels / DefaultModelMapping are the plugin's suggestions the
+	// console prefills into a new account (CONTRACTS §41); never null.
+	DefaultModels       []string          `json:"default_models"`
+	DefaultModelMapping map[string]string `json:"default_model_mapping"`
 	// Platforms the account type declares, in declaration order.
 	Platforms []TypePlatformView `json:"platforms"`
 	// Endpoints lists the gateway endpoints this type can serve now.
@@ -69,21 +73,23 @@ type EndpointView struct {
 
 func typeView(g core.Generation, b core.AccountTypeBinding, conv core.ProtocolConverters) AccountTypeView {
 	v := AccountTypeView{
-		PluginKey:       b.Plugin.Key,
-		PluginVersion:   b.Plugin.Version,
-		AssetBase:       b.Plugin.AssetBase,
-		Trust:           b.Plugin.Trust,
-		Icon:            b.Type.Icon,
-		Type:            b.Type.ID,
-		Label:           b.Type.Label,
-		Description:     b.Type.Description,
-		CreationGroup:   b.Type.CreationGroup,
-		AuthMethodLabel: b.Type.AuthMethodLabel,
-		Form:            FormView{Mode: b.Type.Form.Mode, Page: b.Type.Form.Page, Component: b.Type.Form.Component},
-		SensitiveFields: b.Type.SensitiveFields,
-		GuardedSettings: b.Type.GuardedSettings,
-		Platforms:       typePlatforms(g, b),
-		Endpoints:       servedEndpoints(g, b, conv),
+		PluginKey:           b.Plugin.Key,
+		PluginVersion:       b.Plugin.Version,
+		AssetBase:           b.Plugin.AssetBase,
+		Trust:               b.Plugin.Trust,
+		Icon:                b.Type.Icon,
+		Type:                b.Type.ID,
+		Label:               b.Type.Label,
+		Description:         b.Type.Description,
+		CreationGroup:       b.Type.CreationGroup,
+		AuthMethodLabel:     b.Type.AuthMethodLabel,
+		Form:                FormView{Mode: b.Type.Form.Mode, Page: b.Type.Form.Page, Component: b.Type.Form.Component},
+		SensitiveFields:     b.Type.SensitiveFields,
+		GuardedSettings:     b.Type.GuardedSettings,
+		DefaultModels:       b.Type.DefaultModels,
+		DefaultModelMapping: b.Type.DefaultModelMapping,
+		Platforms:           typePlatforms(g, b),
+		Endpoints:           servedEndpoints(g, b, conv),
 	}
 	if b.Plugin.Manifest != nil {
 		v.PluginName = b.Plugin.Manifest.Name
@@ -99,6 +105,12 @@ func typeView(g core.Generation, b core.AccountTypeBinding, conv core.ProtocolCo
 	}
 	if v.GuardedSettings == nil {
 		v.GuardedSettings = []manifest.GuardedSetting{}
+	}
+	if v.DefaultModels == nil {
+		v.DefaultModels = []string{}
+	}
+	if v.DefaultModelMapping == nil {
+		v.DefaultModelMapping = map[string]string{}
 	}
 	return v
 }

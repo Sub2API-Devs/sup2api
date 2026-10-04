@@ -1209,7 +1209,7 @@ JSON Schema 表单（`schema/`；账号凭据、插件设置、声明式表单�
 
 | 组件 | 用途 | props（默认值） | emits / expose |
 |---|---|---|---|
-| `SchemaForm` | 按 JSON Schema（object）渲染整张表单，`v-model` 为对象值；schema 变化时按 `default` 补齐缺省值 | `schema: JSONSchema`（必填）、`uiSchema: UISchema \| null`（§21.3 的 uiSchema：`ui:order` `ui:widget` `ui:title` `ui:help` `ui:placeholder` `ui:options` `ui:enumNames` `ui:visibleWhen`）、`modelValue: Record<string, any> \| null`（必填）、`errors: Record<string, string>`（服务端字段错误，路径 → 文案，`a.b.0.c` 形式）、`disabled`、`widgets: Record<string, Component>`（宿主提供的 `ui:widget` 名 → 组件，见 `SchemaField`） | emits `update:modelValue`；expose `validate(): boolean`（校验可见字段：required / minLength / maxLength / pattern / minimum / maximum / integer / format uri；文案在 `ui.schema.v.*`，失败时显示在字段下） |
+| `SchemaForm` | 按 JSON Schema（object）渲染整张表单，`v-model` 为对象值；schema 变化时按 `default` 补齐缺省值 | `schema: JSONSchema`（必填）、`uiSchema: UISchema \| null`（§21.3 的 uiSchema：`ui:order` `ui:widget` `ui:title` `ui:help` `ui:placeholder` `ui:options` `ui:enumNames` `ui:visibleWhen` `ui:section`（§41.3））、`modelValue: Record<string, any> \| null`（必填）、`errors: Record<string, string>`（服务端字段错误，路径 → 文案，`a.b.0.c` 形式）、`disabled`、`widgets: Record<string, Component>`（宿主提供的 `ui:widget` 名 → 组件，见 `SchemaField`） | emits `update:modelValue`；expose `validate(): boolean`（校验可见字段：required / minLength / maxLength / pattern / minimum / maximum / integer / format uri；文案在 `ui.schema.v.*`，失败时显示在字段下） |
 | `SchemaField` | 单个字段（`SchemaForm` 内部递归使用；一般不直接用） | `name`、`path`（点号路径，错误按它查 `errors`）、`schema`、`ui`、`modelValue`、`root`（整张表单的值，`ui:visibleWhen` 按它判断）、`errors`（必填）、`required`、`disabled`、`bare`（不画 label：数组项、根对象）、`widgets` | emits `update:modelValue`。内置 widget：`text` `secret`（`******` 表示保留已存值）`textarea` `select` `switch` `number` `url-presets`（`schema.enum` 存在时只能选）`key-value` `model-mapping` `tags` `multi-select` `object-list` `json` `hidden`；`ui:widget` 命中 `widgets` 里的键时改渲染该组件（包在 `SField` 里，传 `modelValue`、`schema`、`ui`、`multiple`（schema 为 array）、`disabled`，组件要 emit `update:modelValue`）——控制台用它注入 `proxy-select` / `group-select`（`@/components/schema/widgets`），插件可注入自己的控件；不认识的 widget 名回退为普通文本框 |
 
 `schema.ts` 的辅助导出：`type JSONSchema` / `UISchema`（都是 `Record<string, any>`）、`EnumOption {value, label}`、`ValidateMessages`、`SECRET_MASK`（`'******'`）、`localizedText(v, locale = 'en')`（`{en, zh}` 或字符串取 `locale`，回退 en；和 `host.i18n.text` 同义但显式传 locale）、`uiGet(ui, key)`（`ui:key` 或 `key`）、`childUI(ui, key)`、`schemaType(s)`、`isSecret(s, ui?)`、`enumOptions(s, ui?, locale?)`、`resolveWidget(s, ui?)`、`fieldLabel(key, s, ui?, locale?)`、`fieldHelp(s, ui?, locale?)`、`orderedKeys(s, ui?)`、`getPath(obj, 'a.b')`、`isVisible(ui, root)`、`schemaWithDefaults(s, value)`（递归补 `default`）、`validateSchema(s, ui, value, msgs) → {path: message}`。文案键 `ui.schema.secretKeep` `ui.schema.presets` `ui.schema.setByAdmin` `ui.schema.mappingFrom` `ui.schema.mappingTo` `ui.schema.invalidJSON` 及 `ui.schema.v.{required,minLength,maxLength,pattern,minimum,maximum,integer,url}` 在 `uiMessages` 里。
@@ -2229,3 +2229,51 @@ SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` �
 - 已认证 `GET /system/version` 返回 `core_node_id`、`core_boot_id`，表示实际生成响应的核心。公网入口网关在此接口成功响应中设置 `X-Sub2api-Entry-Node` 为自身配置的节点 ID；不采用客户端传入的身份，不把上游响应中的同名头当作入口身份。
 - 前端从同一次成功响应读取头和正文，分别标记当前访问网关和本次响应核心；核心标记必须同时匹配节点 ID 与启动身份。主从角色与访问身份是独立维度，身份变化不触发布局重排。
 - 该身份表示最近一次管理接口检测结果，并非整个浏览器会话固定路由。转发或 CPU 转移时入口与响应核心可以不同；旧网关缺少响应头时入口未知，不从核心 ID 或浏览器域名推断。检测失败清除旧身份，避免继续显示陈旧标记。
+
+## 41. 插件预设模型列表与模型映射、账号录入界面（2026-10-04，用户要求）
+
+参考 new-api 渠道类型的默认模型（`relay/channel/*/constants.go` 的 `ModelList`：新建渠道时预填，另有"填入相关模型"按钮）。模型列表与映射仍是**核心账号属性**（§18），插件只提供**预设**：控制台新建账号时预填，之后与账号再无关联。
+
+### 41.1 manifest
+
+`accountTypes[]` 新增两个可选字段：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `defaultModels` | `string[]` | 预设模型列表。每项是完整模型 ID（§16，`manifest.ValidModelID`），不重复，最多 `manifest.MaxDefaultModels`（500，与账号上限一致） |
+| `defaultModelMapping` | `{from: to}` | 预设模型映射。两侧都是完整模型 ID，最多 500 条；`defaultModels` 非空时每个 `from` 都必须在其中（否则账号永远不会因该模型被调度） |
+
+校验（`sdk/manifest/check` 的 `defaultModels`）字段错误：`accountTypes[i].defaultModels`（`too_many`）、`accountTypes[i].defaultModels[j]`（`invalid` / `duplicate`）、`accountTypes[i].defaultModelMapping`（`too_many`）、`accountTypes[i].defaultModelMapping.<from>`（`invalid` / `not_in_models`）。旧宿主忽略这两个字段，`hostCompat` 不需要提高。
+
+核心**不会**自动把预设写进账号：经 API 创建、不带 `models` 的账号仍是"空 = 所有模型"。
+
+### 41.2 接口
+
+`GET /account-types` 每项新增 `default_models: string[]`、`default_model_mapping: {from: to}`；未声明时为 `[]` / `{}`，不为 null。
+
+### 41.3 控制台
+
+- 新建账号进入第 2 步时，用所选账号类型的预设填充模型列表与映射，并提示"已按插件预设填入 N 个模型与 M 条映射"。同一 `creationGroup` 内切换认证方式时，若模型与映射仍与上一类型的预设完全相同（用户没改过），换成新类型的预设；改过则保留。编辑已有账号不预填。
+- 模型区按钮："填入预设模型（N）"（合并，已有的保留）、"从上游获取"（§19）、复制（逗号分隔）、清空（= 所有模型）。配置了映射的模型标签用紫色标出，悬停显示目标模型。
+- 映射区：表格编辑（请求模型 → 上游模型，输入时提示已知模型 ID）或 JSON 编辑；"填入预设映射（N）"合并映射（已有的请求模型不覆盖），模型列表非空时同时把这些请求模型加入列表。模型列表非空、而映射的请求模型不在其中时给出警告和"加入模型列表"。
+- 编辑器仍分"接入配置 / 模型配置 / 调度与限流"三块。左侧导航显示每块摘要（名称；模型与映射数量；优先级 · 权重 · 并发）和错误标记，上方展示账号类型（图标、插件与版本、平台）。同一 `creationGroup` 的认证方式改为单选卡片；限流输入框带单位；没有凭证字段的类型（如 ccgateway `managed`）显示说明，不留空白。切换分块时回到顶部。
+- `SchemaForm` 新增 uiSchema 关键字 `ui:section`：值为 LocalizedText，或 `{title, description?, collapsed?}`。从该字段开始到下一个带 `ui:section` 的字段为一组，组前画标题；`collapsed: true` 的组默认折叠，组内任一字段有值或有错误时自动展开。只认带 `ui:` 前缀的写法（不带前缀的 `section` 可能是同名子字段）。旧控制台忽略该关键字，字段照常显示。
+
+### 41.4 内置插件预设
+
+| 插件（版本） | 账号类型 | 预设模型 | 预设映射 |
+|---|---|---|---|
+| anthropic 0.2.4 | `apikey` | Claude 现行与仍可用的旧模型（别名与带日期 ID） | 已退役模型 → 同系列仍可用的模型（如 `claude-3-5-haiku-20241022` → `claude-haiku-4-5-20251001`，`claude-opus-4-1-20250805` → `claude-opus-4-5-20251101`） |
+| ccgateway 0.1.5 | `managed`、`apikey` | 同 anthropic | 同 anthropic |
+| relay 0.2.2 | `relay_key` | 同 anthropic，不含退役模型 | 无（由中转站自己决定模型） |
+| openai 0.3.3 | `apikey` | new-api OpenAI 列表中走 chat / responses / embeddings 的模型（不含本平台没有端点的音频、图片、实时、视频模型） | `gpt-4.5-preview*` → `gpt-4.1*`、`o1-preview` → `o1`、`o1-mini` → `o3-mini` |
+| gemini 0.2.3 | `apikey` | new-api Gemini 列表中走 generateContent 的模型（不含 imagen、veo、TTS、原生音频） | `gemini-1.5-*` 与旧 2.5 预览版 → 对应稳定版 |
+| volcengine 0.12.2 | `apikey`、`relay` | 豆包 Seed 1.6、Seedream 4.0/4.5、Seedance 1.0/1.5/2.0/2.5、文本向量（方舟没有能用 API Key 调用的模型列表接口，§19 不可用） | 去掉日期后缀的名称 → 带日期的方舟模型 ID（如 `doubao-seedance-2-0` → `doubao-seedance-2-0-260128`） |
+
+volcengine 0.12.2 的两个表单同时用 `ui:section` 把素材库字段归入"素材库（可选）"，`relay` 的旧前缀字段归入默认折叠的"兼容配置"。
+
+计费、分组白名单、粘性会话仍按**映射前**的请求模型（§18）：客户端使用映射里的别名时，需要为别名配置价格。
+
+### 41.5 Claude Code 连接为账号
+
+`POST /system/ccgateway/connect` 新增可选 `model_mapping: {from: to}`，与 `models` 一起原样交给创建账号（校验同 §18）；请求体上限由 8 KiB 提高到 512 KiB，以容纳 500 个模型与 500 条映射。控制台的连接表单在加载时用 ccgateway `managed` 类型的预设填充模型列表与映射，两者都可增删（模型标签输入、"填入预设模型""清空"；映射用与账号编辑器相同的表格和"填入预设映射"）。

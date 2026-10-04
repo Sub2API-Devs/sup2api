@@ -21,6 +21,7 @@ if (process.env.SUB2API_MOCK_VOLCENGINE === '1') {
     asset_base: `/plugin-ui/${manifest.key}/${manifest.version}`, trust: 'official',
     type: type.id, label: type.label, description: type.description, form: type.form,
     sensitive_fields: type.sensitiveFields,
+    default_models: type.defaultModels || [], default_model_mapping: type.defaultModelMapping || {},
     platforms: type.platforms.map((p: any) => { const definition = platforms.find(x => x.id===p.platform); return { id:p.platform,label:definition?.label || p.platform,builtin:definition?.builtin || false,available:!!definition } }),
     endpoints: type.platforms.flatMap((p: any) => (platforms.find(x => x.id===p.platform)?.endpoints || []).map((e: any) => ({ ...e,platform:p.platform,native:true })))
   }))

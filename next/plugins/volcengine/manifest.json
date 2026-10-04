@@ -9,7 +9,7 @@
     "en": "Official Volcengine Ark access for OpenAI-compatible APIs, Anthropic Messages, image and video generation, plus configurable Doubao video and asset endpoints. Existing relay text integrations remain compatible. Prices are configured by the administrator.",
     "zh": "提供方舟官方 OpenAI 兼容接口、Anthropic Messages、图片与视频生成，以及可自定义视频和素材端点的豆包视频账号。保留既有中转文本接入兼容，不内置价格。"
   },
-  "version": "0.12.1",
+  "version": "0.12.2",
   "publisher": "sub2api",
   "icon": "assets/volcengine-color.svg",
   "runtime": "grpc",
@@ -267,6 +267,44 @@
           ]
         }
       ],
+      "defaultModels": [
+        "doubao-seed-1-6",
+        "doubao-seed-1-6-thinking",
+        "doubao-seedream-4-5",
+        "doubao-seedream-4-0",
+        "doubao-seedance-2-5",
+        "doubao-seedance-2-0",
+        "doubao-seedance-2-0-fast",
+        "doubao-seedance-2-0-mini",
+        "doubao-seedance-1-5-pro",
+        "doubao-seedance-1-0-pro",
+        "doubao-seedance-1-0-pro-fast",
+        "doubao-seed-1-6-250615",
+        "doubao-seed-1-6-thinking-250715",
+        "doubao-seedream-4-5-251128",
+        "doubao-seedream-4-0-250828",
+        "doubao-seedance-2-5-260628",
+        "doubao-seedance-2-0-260128",
+        "doubao-seedance-2-0-fast-260128",
+        "doubao-seedance-2-0-mini-260615",
+        "doubao-seedance-1-5-pro-251215",
+        "doubao-seedance-1-0-pro-250528",
+        "doubao-seedance-1-0-pro-fast-251015",
+        "doubao-embedding-text-240715"
+      ],
+      "defaultModelMapping": {
+        "doubao-seed-1-6": "doubao-seed-1-6-250615",
+        "doubao-seed-1-6-thinking": "doubao-seed-1-6-thinking-250715",
+        "doubao-seedream-4-5": "doubao-seedream-4-5-251128",
+        "doubao-seedream-4-0": "doubao-seedream-4-0-250828",
+        "doubao-seedance-2-5": "doubao-seedance-2-5-260628",
+        "doubao-seedance-2-0": "doubao-seedance-2-0-260128",
+        "doubao-seedance-2-0-fast": "doubao-seedance-2-0-fast-260128",
+        "doubao-seedance-2-0-mini": "doubao-seedance-2-0-mini-260615",
+        "doubao-seedance-1-5-pro": "doubao-seedance-1-5-pro-251215",
+        "doubao-seedance-1-0-pro": "doubao-seedance-1-0-pro-250528",
+        "doubao-seedance-1-0-pro-fast": "doubao-seedance-1-0-pro-fast-251015"
+      },
       "platforms": [
         {
           "platform": "openai",
@@ -350,6 +388,44 @@
         "asset_base_url",
         "asset_region"
       ],
+      "defaultModels": [
+        "doubao-seed-1-6",
+        "doubao-seed-1-6-thinking",
+        "doubao-seedream-4-5",
+        "doubao-seedream-4-0",
+        "doubao-seedance-2-5",
+        "doubao-seedance-2-0",
+        "doubao-seedance-2-0-fast",
+        "doubao-seedance-2-0-mini",
+        "doubao-seedance-1-5-pro",
+        "doubao-seedance-1-0-pro",
+        "doubao-seedance-1-0-pro-fast",
+        "doubao-seed-1-6-250615",
+        "doubao-seed-1-6-thinking-250715",
+        "doubao-seedream-4-5-251128",
+        "doubao-seedream-4-0-250828",
+        "doubao-seedance-2-5-260628",
+        "doubao-seedance-2-0-260128",
+        "doubao-seedance-2-0-fast-260128",
+        "doubao-seedance-2-0-mini-260615",
+        "doubao-seedance-1-5-pro-251215",
+        "doubao-seedance-1-0-pro-250528",
+        "doubao-seedance-1-0-pro-fast-251015",
+        "doubao-embedding-text-240715"
+      ],
+      "defaultModelMapping": {
+        "doubao-seed-1-6": "doubao-seed-1-6-250615",
+        "doubao-seed-1-6-thinking": "doubao-seed-1-6-thinking-250715",
+        "doubao-seedream-4-5": "doubao-seedream-4-5-251128",
+        "doubao-seedream-4-0": "doubao-seedream-4-0-250828",
+        "doubao-seedance-2-5": "doubao-seedance-2-5-260628",
+        "doubao-seedance-2-0": "doubao-seedance-2-0-260128",
+        "doubao-seedance-2-0-fast": "doubao-seedance-2-0-fast-260128",
+        "doubao-seedance-2-0-mini": "doubao-seedance-2-0-mini-260615",
+        "doubao-seedance-1-5-pro": "doubao-seedance-1-5-pro-251215",
+        "doubao-seedance-1-0-pro": "doubao-seedance-1-0-pro-250528",
+        "doubao-seedance-1-0-pro-fast": "doubao-seedance-1-0-pro-fast-251015"
+      },
       "platforms": [
         {
           "platform": "openai",

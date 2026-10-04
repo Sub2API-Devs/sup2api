@@ -46,23 +46,28 @@ function single(v: unknown) {
 </script>
 
 <template>
-  <div v-if="multiple" class="flex flex-wrap items-center gap-1.5">
+  <div
+    v-if="multiple"
+    class="input flex min-h-[2.75rem] flex-wrap items-center gap-1.5 !py-1.5"
+    :class="disabled ? 'cursor-not-allowed bg-gray-100 dark:bg-dark-900' : ''"
+  >
     <span
       v-for="id in selected"
       :key="id"
-      class="inline-flex items-center gap-1 rounded-lg bg-primary-50 px-2 py-1 text-xs text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
+      class="inline-flex items-center gap-1 rounded-md border border-primary-100 bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700 dark:border-primary-900 dark:bg-primary-900/30 dark:text-primary-300"
     >
       {{ nameOf(id) }}
-      <button v-if="!disabled" type="button" class="opacity-60 hover:opacity-100" @click="remove(id)">×</button>
+      <button v-if="!disabled" type="button" class="opacity-60 hover:opacity-100" :aria-label="t('ui.remove')" @click="remove(id)">×</button>
     </span>
     <SSelect
       v-if="!disabled && available.length"
       :model-value="null"
       :options="availableOptions"
       :placeholder="`+ ${t('common.group')}`"
-      class="!w-auto !py-1 text-xs"
+      class="!w-auto !border-0 !bg-transparent !py-0.5 !pl-1 text-xs text-gray-500 !shadow-none !ring-0 dark:text-dark-300"
       @update:model-value="add"
     />
+    <span v-else-if="!selected.length" class="px-1 text-sm text-gray-400">—</span>
   </div>
   <SSelect v-else :model-value="selected[0] ?? null" :options="allOptions" placeholder="—" :disabled="disabled" @update:model-value="single" />
 </template>

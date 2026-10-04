@@ -566,3 +566,14 @@ manifest `cf61b44b77f50a98075665b62c3e74cb818a4d5b0097bff06a14d8ece98c955b`，bu
 验证包括前端类型检查和构建、SDK/账号服务/插件资源路由/五个插件测试，以及真实 manifest 打包检查 SVG 和许可入包。上线后四入口均验证账号类型名称、Claude Code 分组与鉴权标签、插件版本；全部图标 HTTP 200、image/svg+xml 且含 SVG 内容。CCGateway 固定 SSH 转发与管理页静态资源验证通过，发布以来四节点 ERROR 均为 0。此次未执行真实 OAuth 登录或模型调用。
 
 证据：`ovh-upgrade-0.1.22.jsonl.txt`、`v022-brand-verify.jsonl`、`v022-runtime-verify.jsonl`。
+
+### 24.9 模型价格从 newapi-codingplus 迁移（数据变更，未发版）
+
+2026-10-04 17:19（北京时间）按用户要求，把 `newapi-codingplus` 实际在用模型的价格写入生产库 `model_prices`。源数据只读取自 codingplus 的 Supabase `options`（`ModelRatio`、`CompletionRatio`、`CacheRatio`、`CreateCacheRatio`、`Price`、`billing_setting.billing_mode/billing_expr`、`video_billing_setting.video_price_table`）与 `abilities`；codingplus 未做任何修改。
+
+- 范围：`abilities` 里的 27 个模型。写入 25 个；`glm-5-3-flash`、`gpt-6-astra` 在 codingplus 没有任何价格，已跳过。
+- 换算：倍率模型按 new-api 口径（倍率 1 = $2/百万 token）生成 `per_token`：`p = 倍率×2`，`c = p×补全倍率`，`cr = p×缓存倍率`，`cc = p×缓存创建倍率`，`cc1h = 2p`。`tiered_expr` 模型原样使用 codingplus 的表达式（`expression` 模式）。Seedance 视频价格表转成 `expression` 模式的 `config.video`：`doubao-*` 是人民币，按 codingplus 的 `Price` 6.75 换成美元；`dreamina-*` 是美元，原值导入。
+- 冲突：以 codingplus 为准。覆盖了 16 条已有价格（14 条 LiteLLM 同步价、2 条手动价），新增 9 条；结果全部为 `source=manual`、启用，备注"从 newapi-codingplus 迁移（2026-10-04）"。
+- 价格与原值明显不同的：`claude-haiku-4-5-20251001` 由 $1/$5 降为 $0.14/$0.71（codingplus 倍率 0.07）；`claude-sonnet-4-6` 缓存读由 $0.3 降为 $0.1；`deepseek-flash` 由 $1/$2 改为 $0.3/$1.2；`doubao-seedance-2-0-mini-260615` 由每百万 token $10 改为约 $3.41。
+- 过程：先用 `pg_dump -t model_prices -t model_price_history` 备份到 `/home/debian/sup2api/backups/pre-codingplus-prices-20261004.sql.gz`；在单个事务中执行 upsert，并写入 `model_price_history`；完成后 25 条的 mode 与表达式和生成报告逐条一致。之后向 Redis `config:changed` 发布 `{"key":"prices"}`，4 个节点收到（各节点价格缓存本身也只有 1 分钟）。
+- 回退：从上述备份恢复两张表。

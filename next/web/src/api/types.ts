@@ -232,6 +232,9 @@ export interface AccountType {
   auth_method_label?: LText
   form: AccountFormRef
   sensitive_fields: string[]
+  /** Plugin suggestions prefilled into a new account's models / model_mapping (CONTRACTS §41). */
+  default_models?: string[]
+  default_model_mapping?: Record<string, string>
   /** Platforms the type supports (built-in or plugin platforms). */
   platforms: AccountTypePlatform[]
   /** Endpoints of available supported platforms (native) plus converted ones. */

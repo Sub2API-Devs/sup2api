@@ -12,6 +12,7 @@ import {
   enumOptions,
   fieldHelp,
   fieldLabel,
+  fieldSection,
   isVisible,
   localizedText,
   orderedKeys,
@@ -19,6 +20,7 @@ import {
   schemaType,
   uiGet,
   withDefaults as fillDefaults,
+  type FieldSection,
   type JSONSchema,
   type UISchema
 } from './schema'
@@ -78,6 +80,45 @@ function setChild(k: string, v: any) {
 function childVisible(k: string) {
   const cu = childUI(props.ui, k)
   return isVisible(cu, props.root) && uiGet(cu, 'widget') !== 'hidden'
+}
+
+// Fields grouped by ui:section: the keys before the first section form an
+// untitled group, then each section runs until the next one.
+interface KeyGroup {
+  id: string
+  section: FieldSection | null
+  keys: string[]
+}
+const keyGroups = computed<KeyGroup[]>(() => {
+  const out: KeyGroup[] = []
+  let cur: KeyGroup = { id: '', section: null, keys: [] }
+  for (const k of keys.value) {
+    const s = fieldSection(childUI(props.ui, k), locale.value)
+    if (s) {
+      if (cur.keys.length) out.push(cur)
+      cur = { id: k, section: s, keys: [] }
+    }
+    cur.keys.push(k)
+  }
+  if (cur.keys.length) out.push(cur)
+  return out
+})
+const openSections = ref<Record<string, boolean>>({})
+const hasValue = (v: unknown) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && !v.length)
+function childPath(k: string) {
+  return props.path ? `${props.path}.${k}` : k
+}
+/** A collapsed section opens by itself while one of its fields holds a value or an error. */
+function groupOpen(g: KeyGroup): boolean {
+  if (!g.section?.collapsed) return true
+  if (openSections.value[g.id] !== undefined) return openSections.value[g.id]
+  return g.keys.some((k) => {
+    const p = childPath(k)
+    return hasValue(props.modelValue?.[k]) || Object.keys(props.errors).some((e) => e === p || e.startsWith(p + '.'))
+  })
+}
+function toggleGroup(g: KeyGroup) {
+  openSections.value = { ...openSections.value, [g.id]: !groupOpen(g) }
 }
 
 // ---------------------------------------------------------------- secret
@@ -185,21 +226,42 @@ const fieldHint = computed(() => restrictedHint.value || help.value)
   <fieldset v-else-if="widget === 'object'" :class="bare ? 'space-y-4' : 'space-y-4 rounded-xl border border-gray-200 p-4 dark:border-dark-700'">
     <legend v-if="!bare" class="px-1 text-sm font-medium text-gray-700 dark:text-gray-300">{{ label }}</legend>
     <p v-if="!bare && help" class="input-hint !mt-0">{{ help }}</p>
-    <template v-for="k in keys" :key="k">
-      <SchemaField
-        v-if="childVisible(k)"
-        :name="k"
-        :path="path ? `${path}.${k}` : k"
-        :schema="schema.properties[k]"
-        :ui="childUI(ui, k)"
-        :model-value="modelValue?.[k]"
-        :root="root"
-        :errors="errors"
-        :required="requiredKeys.includes(k)"
-        :disabled="disabled"
-        :widgets="widgets"
-        @update:model-value="setChild(k, $event)"
-      />
+    <template v-for="g in keyGroups" :key="g.id">
+      <div v-if="g.section && g.keys.some(childVisible)" class="border-t border-gray-100 pt-4 dark:border-dark-700" data-testid="schema-section">
+        <button
+          v-if="g.section.collapsed"
+          type="button"
+          class="flex w-full items-start justify-between gap-3 text-left"
+          :aria-expanded="groupOpen(g)"
+          @click="toggleGroup(g)"
+        >
+          <span class="min-w-0">
+            <span class="block text-sm font-semibold text-gray-800 dark:text-gray-200">{{ g.section.title }}</span>
+            <span v-if="g.section.description" class="mt-0.5 block text-xs text-gray-500 dark:text-dark-400">{{ g.section.description }}</span>
+          </span>
+          <SIcon name="chevron-down" class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 transition-transform" :class="groupOpen(g) ? 'rotate-180' : ''" />
+        </button>
+        <template v-else>
+          <div class="text-sm font-semibold text-gray-800 dark:text-gray-200">{{ g.section.title }}</div>
+          <p v-if="g.section.description" class="mt-0.5 text-xs text-gray-500 dark:text-dark-400">{{ g.section.description }}</p>
+        </template>
+      </div>
+      <template v-for="k in g.keys" :key="k">
+        <SchemaField
+          v-if="groupOpen(g) && childVisible(k)"
+          :name="k"
+          :path="childPath(k)"
+          :schema="schema.properties[k]"
+          :ui="childUI(ui, k)"
+          :model-value="modelValue?.[k]"
+          :root="root"
+          :errors="errors"
+          :required="requiredKeys.includes(k)"
+          :disabled="disabled"
+          :widgets="widgets"
+          @update:model-value="setChild(k, $event)"
+        />
+      </template>
     </template>
   </fieldset>
 

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1110,5 +1111,22 @@ func TestTypeViewAccountIcon(t *testing.T) {
 	b.Type.Icon = "assets/product.svg"
 	if got := typeView(g, b, nil).Icon; got != "assets/product.svg" {
 		t.Fatalf("account icon: %q", got)
+	}
+}
+
+// The plugin's default models reach the console unchanged, and a type that
+// declares none answers [] / {} rather than null (CONTRACTS §41).
+func TestTypeViewDefaultModels(t *testing.T) {
+	g := testGen(&fakePlatform{})
+	b := g.types[0]
+	raw, _ := json.Marshal(typeView(g, b, nil))
+	if !strings.Contains(string(raw), `"default_models":[]`) || !strings.Contains(string(raw), `"default_model_mapping":{}`) {
+		t.Fatalf("empty defaults: %s", raw)
+	}
+	b.Type.DefaultModels = []string{"m-1", "m-2"}
+	b.Type.DefaultModelMapping = map[string]string{"m-1": "m-1-20260101"}
+	v := typeView(g, b, nil)
+	if !slices.Equal(v.DefaultModels, []string{"m-1", "m-2"}) || v.DefaultModelMapping["m-1"] != "m-1-20260101" {
+		t.Fatalf("defaults = %v %v", v.DefaultModels, v.DefaultModelMapping)
 	}
 }

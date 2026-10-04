@@ -794,6 +794,7 @@ func (v *validator) accountTypes() {
 		}
 		v.form(f+".form", at.Form, false)
 		v.guardedSettings(f, at)
+		v.defaultModels(f, at)
 		if len(at.Platforms) == 0 {
 			v.add(f+".platforms", "required", "at least one platform is required")
 		}
@@ -848,6 +849,40 @@ func (v *validator) guardedSettings(f string, at manifest.AccountType) {
 			if !isAbsoluteHTTPURL(raw) {
 				v.add(fmt.Sprintf("%s.allowed[%d]", gf, j), "invalid_url", "%q is not an absolute http(s) URL", raw)
 			}
+		}
+	}
+}
+
+// defaultModels validates accountTypes[].defaultModels and
+// defaultModelMapping (CONTRACTS §41) with the rules the core applies to the
+// account fields they prefill: complete model ids, no duplicates, at most
+// manifest.MaxDefaultModels each. A mapping key missing from a non-empty
+// defaultModels is rejected too: the account would never be scheduled for it.
+func (v *validator) defaultModels(f string, at manifest.AccountType) {
+	if len(at.DefaultModels) > manifest.MaxDefaultModels {
+		v.add(f+".defaultModels", "too_many", "at most %d default models", manifest.MaxDefaultModels)
+	}
+	seen := map[string]bool{}
+	for i, m := range at.DefaultModels {
+		mf := fmt.Sprintf("%s.defaultModels[%d]", f, i)
+		switch {
+		case !manifest.ValidModelID(m):
+			v.add(mf, "invalid", "%q is not a complete model id", m)
+		case seen[m]:
+			v.add(mf, "duplicate", "model %q listed twice", m)
+		}
+		seen[m] = true
+	}
+	if len(at.DefaultModelMapping) > manifest.MaxDefaultModels {
+		v.add(f+".defaultModelMapping", "too_many", "at most %d mapping entries", manifest.MaxDefaultModels)
+	}
+	for _, from := range sortedKeys(at.DefaultModelMapping) {
+		mf := f + ".defaultModelMapping." + from
+		switch to := at.DefaultModelMapping[from]; {
+		case !manifest.ValidModelID(from), !manifest.ValidModelID(to):
+			v.add(mf, "invalid", "%q -> %q: both sides must be complete model ids", from, to)
+		case len(at.DefaultModels) > 0 && !seen[from]:
+			v.add(mf, "not_in_models", "mapped model %q is not in defaultModels", from)
 		}
 	}
 }

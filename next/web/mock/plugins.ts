@@ -195,6 +195,29 @@ for (const key of ['openai', 'gemini'] as const) {
   })
 }
 
+// Claude Code gateway: its settings tab renders the CCGateway console, whose
+// system endpoints mock/ccgateway.ts serves with SUB2API_MOCK_CCGATEWAY=1.
+if (process.env.SUB2API_MOCK_CCGATEWAY) {
+  plugins.set('ccgateway', {
+    key: 'ccgateway',
+    name: { en: 'Claude Code', zh: 'Claude Code' },
+    description: { en: 'Claude Code accounts (fixture)', zh: 'Claude Code 账号（夹具）' },
+    status: 'enabled',
+    status_reason: '',
+    builtin: true,
+    active_version: '0.1.5',
+    desired_version: '0.1.5',
+    publisher: 'sub2api',
+    trust: 'official',
+    egress_policy: 'allow_all',
+    resources: { memory_mb: 128, cpu: 0.5, max_threads: 128, max_open_files: 1024 },
+    versions: [{ version: '0.1.5', consent_status: 'approved' }],
+    grants: [grant('platform.register'), grant('accounts.credentials', { types: 'own' })],
+    manifest: { ...builtinAdapterManifest('openai', '0.1.5'), key: 'ccgateway', account_types: [{ id: 'managed', label: { en: 'Claude Code', zh: 'Claude Code' }, form_mode: 'schema', platforms: ['anthropic'] }] },
+    settings: null
+  })
+}
+
 plugins.set('foo_platform', {
   key: 'foo_platform',
   name: { en: 'Foo Platform', zh: 'Foo 平台' },

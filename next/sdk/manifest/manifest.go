@@ -274,7 +274,21 @@ type AccountType struct {
 	// declare none are unrestricted.
 	GuardedSettings []GuardedSetting  `json:"guardedSettings,omitempty"`
 	Platforms       []AccountPlatform `json:"platforms"`
+	// DefaultModels and DefaultModelMapping prefill the core account fields
+	// models / model_mapping when the console creates an account of this
+	// type (CONTRACTS §41). They are suggestions only: the host never applies
+	// them to an account by itself, and an account created through the API
+	// without models still serves every model. Complete model ids
+	// (ValidModelID), at most MaxDefaultModels each; every mapping key must
+	// be in DefaultModels when that list is not empty, or the mapped model
+	// could never be scheduled.
+	DefaultModels       []string          `json:"defaultModels,omitempty"`
+	DefaultModelMapping map[string]string `json:"defaultModelMapping,omitempty"`
 }
+
+// MaxDefaultModels bounds AccountType.DefaultModels and DefaultModelMapping;
+// it equals the per-account limit of models and model_mapping (CONTRACTS §18).
+const MaxDefaultModels = 500
 
 // GuardedSetting is one restricted settings field of an account type
 // (CONTRACTS §21.3). Field must be one of SettingsFields; Allowed is the

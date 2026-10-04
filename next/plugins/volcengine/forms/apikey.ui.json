@@ -41,6 +41,16 @@
     }
   },
   "access_key": {
+    "ui:section": {
+      "title": {
+        "en": "Asset library (optional)",
+        "zh": "素材库（可选）"
+      },
+      "description": {
+        "en": "Only needed for the Ark asset library; leave these empty and the account does not take part in it.",
+        "zh": "仅在使用方舟素材库时填写；留空则该账号不参与素材库。"
+      }
+    },
     "ui:title": {
       "en": "Asset library access key",
       "zh": "素材库 Access Key"

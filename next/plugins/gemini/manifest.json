@@ -6,7 +6,7 @@
     "en": "Gemini API key account type. The gemini platform and its endpoints (/v1beta/models/{model}:generateContent, :streamGenerateContent, :countTokens) are built into the core; model prices are set by administrators in the core.",
     "zh": "Gemini API Key 账号类型（gemini 平台及其端点 /v1beta/models/{model}:generateContent、:streamGenerateContent、:countTokens 由核心内置；模型价格由管理员在核心中配置）。"
   },
-  "version": "0.2.2",
+  "version": "0.2.3",
   "publisher": "sub2api",
   "icon": "assets/gemini-color.svg",
   "runtime": "grpc",
@@ -36,6 +36,46 @@
       "guardedSettings": [
         { "field": "base_url", "allowed": ["https://generativelanguage.googleapis.com"] }
       ],
+      "defaultModels": [
+        "gemini-3.1-pro-preview",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3-pro-preview",
+        "gemini-3-flash-preview",
+        "gemini-2.5-pro",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash-lite-preview-09-2025",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-001",
+        "gemini-2.0-flash-lite",
+        "gemini-2.0-flash-lite-001",
+        "gemini-pro-latest",
+        "gemini-flash-latest",
+        "gemini-flash-lite-latest",
+        "gemini-2.5-flash-image",
+        "gemini-3-pro-image",
+        "gemini-3-pro-image-preview",
+        "gemini-3.1-flash-image",
+        "gemini-3.1-flash-image-preview",
+        "gemma-3-27b-it",
+        "gemma-3-12b-it",
+        "gemma-3-4b-it",
+        "gemma-3-1b-it",
+        "gemma-3n-e4b-it",
+        "gemma-3n-e2b-it",
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+        "gemini-1.5-flash-8b",
+        "gemini-2.5-pro-preview-06-05",
+        "gemini-2.5-flash-preview-05-20"
+      ],
+      "defaultModelMapping": {
+        "gemini-1.5-pro": "gemini-2.5-pro",
+        "gemini-1.5-flash": "gemini-2.5-flash",
+        "gemini-1.5-flash-8b": "gemini-2.5-flash-lite",
+        "gemini-2.5-pro-preview-06-05": "gemini-2.5-pro",
+        "gemini-2.5-flash-preview-05-20": "gemini-2.5-flash"
+      },
       "platforms": [
         { "platform": "gemini" }
       ]

@@ -11,6 +11,10 @@
 //   ui:enumNames    [LocalizedText...] labels for enum values
 //   ui:visibleWhen  {field: "a.b", equals|notEquals|in|notIn|truthy|falsy}
 //                   or a plain map {"mode": "oauth"} (all must match)
+//   ui:section      LocalizedText, or {title, description?, collapsed?}: starts a
+//                   titled group of the parent object at this field (until the
+//                   next field with a section). collapsed groups open on click,
+//                   and by themselves while they hold a value or an error.
 // Secrets: widget "secret", format "password" or writeOnly: true. Existing
 // values come back as "******" and are sent back unchanged to keep them.
 //
@@ -50,6 +54,22 @@ export function uiGet<T = any>(ui: UISchema | undefined, key: string): T | undef
 
 function isLText(v: unknown): boolean {
   return !!v && typeof v === 'object' && !Array.isArray(v) && Object.values(v as object).every((x) => typeof x === 'string')
+}
+
+export interface FieldSection {
+  title: string
+  description: string
+  collapsed: boolean
+}
+
+/** The ui:section a field starts, or null. Only the prefixed key counts: a bare `section` may be a nested field. */
+export function fieldSection(ui: UISchema | undefined, locale = 'en'): FieldSection | null {
+  const v = ui?.['ui:section']
+  if (!v) return null
+  if (typeof v === 'object' && !Array.isArray(v) && 'title' in v) {
+    return { title: localizedText(v.title, locale), description: localizedText(v.description, locale), collapsed: v.collapsed === true }
+  }
+  return { title: localizedText(v, locale), description: '', collapsed: false }
 }
 
 export function childUI(ui: UISchema | undefined, key: string): UISchema | undefined {

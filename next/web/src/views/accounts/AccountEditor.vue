@@ -2,24 +2,30 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCheckbox, SchemaForm, SField, SGrid, SHint, SInput, SKeyValue, SLink, SModal, SSectionTitle, SSelect, SSpinner, SSwitch, STextarea, toast } from '@sub2api/ui'
+import { SBadge, SButton, SCheckbox, SchemaForm, SField, SHint, SIcon, SInput, SLink, SModal, SSpinner, SSwitch, STextarea, toast } from '@sub2api/ui'
 import type { Account, AccountType, Price } from '@/api/types'
 import { schemaWidgets } from '@/components/schema/widgets'
 import PluginIframe from '@/components/plugin/PluginIframe.vue'
 import PluginSlot from '@/components/plugin/PluginSlot.vue'
 import GroupPicker from '@/components/GroupPicker.vue'
 import ProxyPicker from '@/components/ProxyPicker.vue'
+import PluginAvatar from '@/views/plugins/parts/PluginAvatar.vue'
+import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
 import { lt } from '@/i18n'
 import { sameCreationGroup } from './accountTypeChoices'
+import EditorCard from './EditorCard.vue'
+import ModelMappingEditor from './ModelMappingEditor.vue'
 import { assetURL, usePluginStore } from '@/stores/plugins'
 import { useAuthStore } from '@/stores/auth'
 import { useProxiesLookup } from '@/composables/lookups'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
+import { copyText } from '@/utils/format'
 import { looksLikeProxyURL, parseProxyURL } from '@/utils/proxyUrl'
 
 // Step 2 of "new account" and the edit form (wireframe A.4, CONTRACTS §18.4):
 // 基本信息 / 调度 / 限流 / 模型 / 模型映射 (all core) + the plugin credential form.
+// A new account starts from the plugin's default models and mapping (§41).
 const props = defineProps<{ accountType: AccountType | null; accountTypeOptions?: AccountType[]; account?: Account | null }>()
 const emit = defineEmits<{ (e: 'change-type', at: AccountType): void; (e: 'saved', a: Account): void; (e: 'cancel'): void; (e: 'back'): void; (e: 'test', a: Account): void }>()
 const { t } = useI18n()
@@ -107,11 +113,104 @@ const nativeComponent = computed(() => (props.accountType ? plugins.component(pr
 
 type EditorSection = 'connection' | 'models' | 'scheduling'
 const activeSection = ref<EditorSection>('connection')
+// Each section starts at its top: the modal body keeps the previous scroll
+// offset otherwise. Post-flush, so save() still scrolls to an invalid field.
+const formEl = ref<HTMLFormElement>()
+watch(activeSection, () => formEl.value?.scrollIntoView({ block: 'start' }), { flush: 'post' })
 const editorSections = computed(() => [
-  { key: 'connection' as const, label: t('accounts.editorUi.connection'), hint: t('accounts.editorUi.connectionHint') },
-  { key: 'models' as const, label: t('accounts.editorUi.models'), hint: t('accounts.editorUi.modelsHint') },
-  { key: 'scheduling' as const, label: t('accounts.editorUi.scheduling'), hint: t('accounts.editorUi.schedulingHint') }
+  { key: 'connection' as const, icon: 'key', label: t('accounts.editorUi.connection'), summary: basic.name.trim() || t('accounts.editorUi.unnamed') },
+  {
+    key: 'models' as const,
+    icon: 'cpu',
+    label: t('accounts.editorUi.models'),
+    summary: [
+      models.value.length ? t('accounts.editorUi.modelsSummary', { n: models.value.length }) : t('accounts.editorUi.allModels'),
+      ...(Object.keys(mapping.value).length ? [t('accounts.editorUi.mappingSummary', { n: Object.keys(mapping.value).length })] : [])
+    ].join(' · ')
+  },
+  {
+    key: 'scheduling' as const,
+    icon: 'bolt',
+    label: t('accounts.editorUi.scheduling'),
+    summary: t('accounts.editorUi.schedulingSummary', { p: basic.priority, w: basic.weight, c: basic.max_concurrency || '∞' })
+  }
 ])
+const SCHEDULING_FIELDS = ['priority', 'weight', 'max_concurrency', 'rpm_limit', 'tpm_limit', 'tpd_limit', 'spm_limit']
+type LimitKey = 'rpm_limit' | 'tpm_limit' | 'tpd_limit' | 'spm_limit'
+const limitFields = computed<Array<{ key: LimitKey; label: string; hint: string; unit: string }>>(() => [
+  { key: 'rpm_limit', label: t('accounts.rpmLimit'), hint: t('accounts.zeroUnlimited'), unit: t('accounts.editorUi.unitRpm') },
+  { key: 'tpm_limit', label: t('accounts.tpmLimit'), hint: t('accounts.zeroUnlimited'), unit: t('accounts.editorUi.unitTpm') },
+  { key: 'tpd_limit', label: t('accounts.tpdLimit'), hint: t('accounts.tpdHint'), unit: t('accounts.editorUi.unitTpd') },
+  { key: 'spm_limit', label: t('accounts.spmLimit'), hint: t('accounts.zeroUnlimited'), unit: t('accounts.editorUi.unitSpm') }
+])
+/** Sections holding an error, marked in the navigation. */
+const sectionErrors = computed<Record<EditorSection, boolean>>(() => ({
+  connection: ['name', 'group_ids', 'proxy_id', 'proxy_url'].some((k) => errors.value[k]) || Object.keys(credErrors.value).length > 0,
+  models: !!(modelsError.value || serverModelsError.value || mappingError.value || serverMappingError.value),
+  scheduling: SCHEDULING_FIELDS.some((k) => errors.value[k])
+}))
+
+// ---------------------------------------------------------------- plugin defaults (CONTRACTS §41)
+const defaultModels = computed(() => props.accountType?.default_models || [])
+const defaultMapping = computed(() => props.accountType?.default_model_mapping || {})
+/** The new account was prefilled with the plugin defaults (shows a notice). */
+const prefilled = ref(false)
+const sameDefaults = (at: AccountType | null | undefined) =>
+  JSON.stringify(models.value) === JSON.stringify(at?.default_models || []) &&
+  JSON.stringify(mapping.value) === JSON.stringify(at?.default_model_mapping || {})
+function applyDefaults(at: AccountType | null | undefined) {
+  models.value = [...(at?.default_models || [])]
+  mapping.value = { ...(at?.default_model_mapping || {}) }
+  prefilled.value = models.value.length > 0 || Object.keys(mapping.value).length > 0
+}
+
+/** Merges the default models into the list; existing entries are kept. */
+function fillDefaultModels() {
+  if (modelsTextMode.value && !syncModelsText()) return
+  commitDraft()
+  const added = mergeModels(defaultModels.value)
+  toast(added ? t('accounts.editorUi.defaultsAdded', { n: added }) : t('accounts.editorUi.defaultsNothingNew'), added ? 'success' : 'info')
+}
+
+/** Merges the default mapping (existing keys win) and keeps its request models schedulable. */
+function fillDefaultMapping() {
+  if (mappingJsonMode.value && !syncMappingText()) return
+  const next = { ...mapping.value }
+  let added = 0
+  for (const [from, to] of Object.entries(defaultMapping.value)) {
+    if (from in next) continue
+    next[from] = to
+    added++
+  }
+  mapping.value = next
+  if (mappingJsonMode.value) mappingText.value = JSON.stringify(next, null, 2)
+  if (models.value.length) mergeModels(Object.keys(defaultMapping.value))
+  toast(added ? t('accounts.editorUi.defaultMappingAdded', { n: added }) : t('accounts.editorUi.defaultsNothingNew'), added ? 'success' : 'info')
+}
+
+/** Appends the models missing from the list; returns how many were added. */
+function mergeModels(list: string[]): number {
+  if (modelsTextMode.value && !syncModelsText()) return 0
+  const next = [...models.value]
+  for (const m of list) if (!next.includes(m)) next.push(m)
+  const added = next.length - models.value.length
+  models.value = next
+  if (modelsTextMode.value) modelsText.value = next.join('\n')
+  modelsError.value = ''
+  return added
+}
+
+async function copyModels() {
+  if (modelsTextMode.value && !syncModelsText()) return
+  if (await copyText(models.value.join(','))) toast(t('accounts.editorUi.copied', { n: models.value.length }), 'success')
+}
+
+function clearModels() {
+  models.value = []
+  modelsText.value = ''
+  modelDraft.value = ''
+  modelsError.value = ''
+}
 // ---------------------------------------------------------------- models editor
 const modelDraft = ref('')
 const modelsText = ref('')
@@ -371,8 +470,16 @@ watch(
       basic.tpm_limit = a?.tpm_limit ?? 0
       basic.tpd_limit = a?.tpd_limit ?? 0
       basic.spm_limit = a?.spm_limit ?? 0
-      models.value = [...(a?.models || [])]
-      mapping.value = { ...(a?.model_mapping || {}) }
+      if (a) {
+        models.value = [...(a.models || [])]
+        mapping.value = { ...(a.model_mapping || {}) }
+        prefilled.value = false
+      } else {
+        applyDefaults(at)
+      }
+    } else if (sameDefaults(previous?.[1])) {
+      // Switching the auth method of a new account: untouched defaults follow the type.
+      applyDefaults(at)
     }
     credentials.value = { ...(a?.credentials || {}) }
     schema.value = null
@@ -524,72 +631,131 @@ async function save(event: Event) {
 }
 </script>
 
+
 <template>
-  <form class="space-y-5" novalidate @submit.prevent="save">
-    <div class="grid gap-5 md:grid-cols-[180px_minmax(0,1fr)]">
-      <nav :aria-label="t('accounts.editorUi.navigation')" class="flex gap-2 self-start overflow-x-auto md:sticky md:top-0 md:flex-col md:overflow-visible">
-        <SButton v-for="section in editorSections" :key="section.key" :variant="activeSection === section.key ? 'primary' : 'ghost'" :aria-pressed="activeSection === section.key" :data-testid="`account-section-${section.key}`" class="h-auto shrink-0 !justify-start !whitespace-normal !px-3 !py-3 text-left" @click="activeSection = section.key">
-          <span><span class="block">{{ section.label }}</span><span class="mt-1 hidden text-xs font-normal opacity-75 md:block">{{ section.hint }}</span></span>
-        </SButton>
-      </nav>
-      <div class="min-w-0 md:border-l md:border-gray-100 md:pl-5 dark:md:border-dark-700">
-        <div v-show="activeSection === 'connection'" data-editor-section="connection" class="space-y-5">
-          <!-- 基本信息 -->
-          <section>
-            <SSectionTitle :title="t('accounts.basic')">
-            </SSectionTitle>
-            <SGrid>
+  <form ref="formEl" class="space-y-5" novalidate @submit.prevent="save">
+    <div class="grid gap-5 md:grid-cols-[220px_minmax(0,1fr)]">
+      <aside class="space-y-3 self-start md:sticky md:top-0">
+        <!-- account type identity -->
+        <div v-if="accountType" class="hidden rounded-2xl border border-gray-100 bg-gradient-to-br from-gray-50 to-white p-3 md:block dark:border-dark-700 dark:from-dark-800 dark:to-dark-800/40" data-testid="editor-type-card">
+          <div class="flex items-center gap-2.5">
+            <PluginAvatar :name="lt(accountType.plugin_name) || accountType.plugin_key" :plugin-key="accountType.plugin_key" :icon="accountType.icon" :asset-base="accountType.asset_base" size="md" />
+            <div class="min-w-0">
+              <div class="truncate text-sm font-semibold text-gray-900 dark:text-white">{{ lt(accountType.label) || accountType.type }}</div>
+              <div class="truncate text-xs text-gray-500 dark:text-dark-400">
+                {{ lt(accountType.plugin_name) || accountType.plugin_key }}<span v-if="accountType.plugin_version" class="font-mono"> · v{{ accountType.plugin_version }}</span>
+              </div>
+            </div>
+          </div>
+          <div v-if="accountType.platforms.length" class="mt-2.5 flex flex-wrap gap-1 text-xs">
+            <PlatformBadges :items="accountType.platforms" />
+          </div>
+        </div>
+
+        <nav :aria-label="t('accounts.editorUi.navigation')" class="flex gap-1.5 overflow-x-auto md:flex-col md:overflow-visible">
+          <button
+            v-for="(section, i) in editorSections"
+            :key="section.key"
+            type="button"
+            :aria-pressed="activeSection === section.key"
+            :data-testid="`account-section-${section.key}`"
+            class="group flex min-w-[11rem] shrink-0 items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-colors md:min-w-0"
+            :class="activeSection === section.key ? 'bg-primary-50 ring-1 ring-primary-200 dark:bg-primary-900/20 dark:ring-primary-800' : 'hover:bg-gray-50 dark:hover:bg-dark-700/50'"
+            @click="activeSection = section.key"
+          >
+            <span
+              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors"
+              :class="activeSection === section.key ? 'bg-primary-500 text-white shadow-sm shadow-primary-500/30' : 'bg-gray-100 text-gray-500 group-hover:text-gray-700 dark:bg-dark-700 dark:text-dark-300'"
+            >
+              <SIcon :name="section.icon" class="h-4 w-4" />
+            </span>
+            <span class="min-w-0 flex-1">
+              <span class="flex items-center gap-1.5 text-sm font-medium" :class="activeSection === section.key ? 'text-primary-700 dark:text-primary-300' : 'text-gray-800 dark:text-gray-200'">
+                <span class="text-xs tabular-nums opacity-50">{{ i + 1 }}</span>
+                {{ section.label }}
+                <span v-if="sectionErrors[section.key]" class="h-1.5 w-1.5 rounded-full bg-red-500" :title="t('accounts.editorUi.sectionHasErrors')" />
+              </span>
+              <span class="mt-0.5 block truncate text-xs text-gray-500 dark:text-dark-400" :title="section.summary">{{ section.summary }}</span>
+            </span>
+          </button>
+        </nav>
+      </aside>
+
+      <div class="min-w-0 md:min-h-[30rem]">
+        <!-- ============================================================ 接入配置 -->
+        <div v-show="activeSection === 'connection'" data-editor-section="connection" class="space-y-4">
+          <EditorCard :title="t('accounts.basic')" :description="t('accounts.editorUi.basicHint')">
+            <div class="grid gap-4 md:grid-cols-2">
               <SField :label="t('common.name')" :error="errors.name" required>
-                <SInput v-model="basic.name" :maxlength="100" />
+                <SInput v-model="basic.name" :maxlength="100" :placeholder="t('accounts.editorUi.namePlaceholder')" />
               </SField>
-              <SField :label="t('accounts.groups')" :error="errors.group_ids">
+              <SField :label="t('accounts.groups')" :error="errors.group_ids" :hint="basic.group_ids.length ? '' : t('accounts.editorUi.groupsHint')">
                 <GroupPicker v-model="basic.group_ids as any" multiple />
               </SField>
-              <SField :label="t('accounts.proxy')" :error="proxyMode === 'url' ? errors.proxy_url : errors.proxy_id" :hint="proxyMode === 'url' && !proxyUrlHint ? t('accounts.proxyUrlHint') : ''">
-                <div class="mb-2 inline-flex rounded-lg bg-gray-100 p-0.5 text-xs dark:bg-dark-700" role="tablist" data-testid="proxy-mode">
-                  <button
-                    v-for="tab in proxyModeTabs"
-                    :key="tab.key"
-                    type="button"
-                    role="tab"
-                    :aria-selected="proxyMode === tab.key"
-                    :data-testid="`proxy-mode-${tab.key}`"
-                    class="rounded-md px-2.5 py-1 font-medium transition-colors"
-                    :class="proxyMode === tab.key ? 'bg-white text-gray-900 shadow-sm dark:bg-dark-800 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-dark-400 dark:hover:text-gray-200'"
-                    @click="setProxyMode(tab.key)"
-                  >
-                    {{ tab.label }}
-                  </button>
+              <div class="md:col-span-2">
+                <div class="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                  <label class="input-label !mb-0">{{ t('accounts.proxy') }}</label>
+                  <div class="inline-flex rounded-lg bg-gray-100 p-0.5 text-xs dark:bg-dark-700" role="tablist" data-testid="proxy-mode">
+                    <button
+                      v-for="tab in proxyModeTabs"
+                      :key="tab.key"
+                      type="button"
+                      role="tab"
+                      :aria-selected="proxyMode === tab.key"
+                      :data-testid="`proxy-mode-${tab.key}`"
+                      class="rounded-md px-2.5 py-1 font-medium transition-colors"
+                      :class="proxyMode === tab.key ? 'bg-white text-gray-900 shadow-sm dark:bg-dark-800 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-dark-400 dark:hover:text-gray-200'"
+                      @click="setProxyMode(tab.key)"
+                    >
+                      {{ tab.label }}
+                    </button>
+                  </div>
                 </div>
                 <ProxyPicker v-if="proxyMode === 'existing'" v-model="basic.proxy_id" />
-                <template v-else>
-                  <SInput
-                    v-model="proxyUrl"
-                    mono
-                    :error="!!errors.proxy_url"
-                    autocomplete="off"
-                    spellcheck="false"
-                    data-testid="proxy-url"
-                    placeholder="socks5://user:pass@host:port"
-                  />
-                  <p v-if="proxyUrlHint && !errors.proxy_url" class="mt-1 text-xs text-amber-600 dark:text-amber-400" data-testid="proxy-url-hint">{{ proxyUrlHint }}</p>
-                </template>
-              </SField>
-            </SGrid>
-          </section>
+                <SInput
+                  v-else
+                  v-model="proxyUrl"
+                  mono
+                  :error="!!errors.proxy_url"
+                  autocomplete="off"
+                  spellcheck="false"
+                  data-testid="proxy-url"
+                  placeholder="socks5://user:pass@host:port"
+                />
+                <p v-if="(proxyMode === 'url' ? errors.proxy_url : errors.proxy_id)" class="input-error-text">{{ proxyMode === 'url' ? errors.proxy_url : errors.proxy_id }}</p>
+                <p v-else-if="proxyMode === 'url' && proxyUrlHint" class="mt-1 text-xs text-amber-600 dark:text-amber-400" data-testid="proxy-url-hint">{{ proxyUrlHint }}</p>
+                <p v-else-if="proxyMode === 'url'" class="input-hint">{{ t('accounts.proxyUrlHint') }}</p>
+              </div>
+            </div>
+          </EditorCard>
 
-          <!-- 凭证 -->
-          <section class="border-t border-gray-100 pt-5 dark:border-dark-700">
-            <SSectionTitle :title="t('accounts.credentials')">
-              <template #actions>
-                <span v-if="accountType" class="badge badge-purple">{{ lt(accountType.label) || accountType.type }}</span>
-              </template>
-            </SSectionTitle>
+          <EditorCard :title="t('accounts.credentials')" :description="accountType ? t('accounts.editorUi.credentialsHint', { plugin: lt(accountType.plugin_name) || accountType.plugin_key }) : ''">
+            <template v-if="accountType?.auth_method_label && (editing || authOptions.length <= 1)" #actions>
+              <SBadge tone="purple">{{ lt(accountType.auth_method_label) }}</SBadge>
+            </template>
 
-            <SField v-if="!editing && authOptions.length > 1" :label="t('accounts.editorUi.authMethod')" class="mb-4">
-              <SSelect :model-value="accountType?.type" :options="authOptions" :disabled="saving" @update:model-value="changeAuth" />
-            </SField>
-            <SHint v-else-if="accountType?.auth_method_label" class="mb-4">{{ t('accounts.editorUi.authMethod') }}: {{ lt(accountType.auth_method_label) }}</SHint>
+            <div v-if="!editing && authOptions.length > 1" class="mb-5">
+              <div class="input-label">{{ t('accounts.editorUi.authMethod') }}</div>
+              <div class="grid gap-2 sm:grid-cols-2" role="radiogroup" data-testid="auth-method">
+                <button
+                  v-for="o in authOptions"
+                  :key="String(o.value)"
+                  type="button"
+                  role="radio"
+                  :aria-checked="accountType?.type === o.value"
+                  :disabled="saving"
+                  class="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left text-sm transition-colors"
+                  :class="accountType?.type === o.value ? 'border-primary-400 bg-primary-50/70 text-primary-800 ring-1 ring-primary-200 dark:border-primary-700 dark:bg-primary-900/20 dark:text-primary-200 dark:ring-primary-800' : 'border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50 dark:border-dark-600 dark:text-gray-300 dark:hover:bg-dark-700/50'"
+                  @click="changeAuth(o.value)"
+                >
+                  <span class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border" :class="accountType?.type === o.value ? 'border-primary-500' : 'border-gray-300 dark:border-dark-500'">
+                    <span v-if="accountType?.type === o.value" class="h-2 w-2 rounded-full bg-primary-500" />
+                  </span>
+                  <span class="font-medium">{{ o.label }}</span>
+                </button>
+              </div>
+            </div>
+
             <p v-if="account?.orphaned || !accountType" class="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
               {{ t('accounts.orphanedEdit') }}
             </p>
@@ -597,6 +763,7 @@ async function save(event: Event) {
               <div v-if="formLoading" class="flex justify-center py-6"><SSpinner /></div>
               <SHint v-else-if="formError" tone="danger">{{ formError }}</SHint>
               <SchemaForm v-else-if="schema" ref="schemaForm" v-model="credentials" :schema="schema" :ui-schema="uiSchema" :errors="credErrors" :widgets="schemaWidgets" />
+              <p v-if="schema && !formLoading && !Object.keys(schema.properties || {}).length" class="rounded-xl bg-gray-50 px-3.5 py-3 text-sm text-gray-500 dark:bg-dark-900/40 dark:text-dark-400">{{ t('accounts.editorUi.noCredentials') }}</p>
             </template>
             <template v-else-if="mode === 'iframe'">
               <PluginIframe
@@ -627,109 +794,123 @@ async function save(event: Event) {
               </SHint>
             </template>
 
-            <div class="mt-4 space-y-3">
+            <div class="mt-4 space-y-3 empty:hidden">
               <PluginSlot name="account.form.widgets" :props="{ account, accountType, credentials }" />
             </div>
-          </section>
-
+          </EditorCard>
         </div>
-        <div v-show="activeSection === 'models'" data-editor-section="models" class="space-y-5">
-          <!-- 模型 -->
-          <section >
-            <SSectionTitle :title="t('accounts.models')">
-              <template #actions>
-                <div class="flex items-center gap-3">
-                  <SLink
-                    v-if="canFetch"
-                    as="button"
-                    class="text-xs"
-                    :disabled="fetching"
-                    data-testid="models-fetch"
-                    :title="t('accounts.fetchModelsHint')"
-                    @click="fetchModels"
-                  >
-                    {{ fetching ? t('common.loading') : t('accounts.fetchModels') }}
-                  </SLink>
-                  <SLink as="button" class="text-xs" data-testid="models-text-toggle" @click="toggleModelsText">
-                    {{ modelsTextMode ? t('accounts.tagEdit') : t('accounts.textEdit') }}
-                  </SLink>
-                </div>
-              </template>
-            </SSectionTitle>
 
-            <SField :error="modelsError || serverModelsError" :hint="t('accounts.modelsHint')">
+        <!-- ============================================================ 模型 -->
+        <div v-show="activeSection === 'models'" data-editor-section="models" class="space-y-4">
+          <div v-if="prefilled && !editing" class="flex items-start gap-2 rounded-xl border border-primary-100 bg-primary-50/60 px-3.5 py-2.5 text-xs text-primary-800 dark:border-primary-900/50 dark:bg-primary-900/20 dark:text-primary-200" data-testid="models-prefilled">
+            <SIcon name="info" class="mt-px h-4 w-4 shrink-0" />
+            <span>{{ t('accounts.editorUi.prefilled', { models: defaultModels.length, mapping: Object.keys(defaultMapping).length }) }}</span>
+          </div>
+
+          <EditorCard :title="t('accounts.models')" :description="t('accounts.editorUi.modelsCardHint')">
+            <template #badge>
+              <SBadge :tone="models.length ? 'primary' : 'gray'" data-testid="models-count">{{ models.length ? models.length : t('accounts.editorUi.allModels') }}</SBadge>
+            </template>
+            <template #actions>
+              <SLink as="button" class="text-xs" data-testid="models-text-toggle" @click="toggleModelsText">
+                {{ modelsTextMode ? t('accounts.tagEdit') : t('accounts.textEdit') }}
+              </SLink>
+            </template>
+
+            <div class="mb-3 flex flex-wrap items-center gap-2">
+              <SButton v-if="defaultModels.length" size="sm" data-testid="models-fill-defaults" :title="t('accounts.editorUi.fillDefaultsHint')" @click="fillDefaultModels">
+                <SIcon name="download" class="h-3.5 w-3.5" />{{ t('accounts.editorUi.fillDefaults', { n: defaultModels.length }) }}
+              </SButton>
+              <SButton v-if="canFetch" size="sm" :loading="fetching" data-testid="models-fetch" :title="t('accounts.fetchModelsHint')" @click="fetchModels">
+                <SIcon v-if="!fetching" name="refresh" class="h-3.5 w-3.5" />{{ t('accounts.fetchModels') }}
+              </SButton>
+              <SButton size="sm" variant="ghost" :disabled="!models.length" data-testid="models-copy" @click="copyModels">
+                <SIcon name="copy" class="h-3.5 w-3.5" />{{ t('accounts.editorUi.copyModels') }}
+              </SButton>
+              <SButton size="sm" variant="ghost" :disabled="!models.length && !modelsText.trim()" data-testid="models-clear" @click="clearModels">
+                <SIcon name="trash" class="h-3.5 w-3.5" />{{ t('accounts.editorUi.clearModels') }}
+              </SButton>
+            </div>
+
+            <SField :error="modelsError || serverModelsError">
               <STextarea
                 v-if="modelsTextMode"
                 v-model="modelsText"
                 mono
-                :rows="5"
+                :rows="8"
                 :placeholder="t('accounts.modelsTextPlaceholder')"
                 @blur="syncModelsText()"
               />
               <div
                 v-else
-                class="input flex min-h-[42px] flex-wrap items-center gap-1.5 !py-1.5"
+                class="input flex max-h-64 min-h-[3rem] flex-wrap content-start items-center gap-1.5 overflow-y-auto !py-2"
                 data-testid="models-tags"
               >
                 <span
                   v-for="(m, i) in models"
                   :key="m"
-                  class="inline-flex items-center gap-1 rounded-lg bg-primary-50 px-2 py-0.5 font-mono text-xs text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
+                  class="inline-flex max-w-full items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-xs"
+                  :class="mapping[m] ? 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-300' : 'border-primary-100 bg-primary-50 text-primary-700 dark:border-primary-900 dark:bg-primary-900/30 dark:text-primary-300'"
+                  :title="mapping[m] ? t('accounts.editorUi.mappedTo', { model: mapping[m] }) : m"
                 >
-                  {{ m }}
-                  <button type="button" class="opacity-60 hover:opacity-100" @click="removeModel(i)">×</button>
+                  <span class="truncate">{{ m }}</span>
+                  <SIcon v-if="mapping[m]" name="chevron-right" class="h-3 w-3 shrink-0 opacity-70" />
+                  <button type="button" class="shrink-0 opacity-50 hover:opacity-100" :aria-label="t('ui.remove')" @click="removeModel(i)">
+                    <SIcon name="x" class="h-3 w-3" />
+                  </button>
                 </span>
                 <input
                   v-model="modelDraft"
                   list="account-model-options"
-                  class="min-w-[10rem] flex-1 border-0 bg-transparent p-0.5 text-sm outline-none focus:ring-0"
+                  class="min-w-[12rem] flex-1 border-0 bg-transparent p-0.5 text-sm outline-none focus:ring-0"
                   :placeholder="t('accounts.modelsPlaceholder')"
                   @keydown="onModelKey"
                   @blur="commitDraft"
                 />
-                <datalist id="account-model-options">
-                  <option v-for="o in modelOptions" :key="o" :value="o" />
-                </datalist>
+              </div>
+              <template #hint>
+                <span v-if="!models.length" class="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                  <SIcon name="check" class="h-3.5 w-3.5" />{{ t('accounts.editorUi.unrestricted') }}
+                </span>
+                <span v-else>{{ t('accounts.editorUi.modelsInputHint') }}</span>
+              </template>
+            </SField>
+            <datalist id="account-model-options">
+              <option v-for="o in modelOptions" :key="o" :value="o" />
+            </datalist>
+          </EditorCard>
+
+          <EditorCard :title="t('accounts.modelMapping')" :description="t('accounts.editorUi.mappingCardHint')">
+            <template v-if="Object.keys(mapping).length" #badge>
+              <SBadge tone="purple">{{ Object.keys(mapping).length }}</SBadge>
+            </template>
+            <template #actions>
+              <SButton v-if="Object.keys(defaultMapping).length" size="sm" data-testid="mapping-fill-defaults" @click="fillDefaultMapping">
+                <SIcon name="download" class="h-3.5 w-3.5" />{{ t('accounts.editorUi.fillDefaultMapping', { n: Object.keys(defaultMapping).length }) }}
+              </SButton>
+              <SLink as="button" class="ml-1 text-xs" data-testid="mapping-json-toggle" @click="toggleMappingJSON">
+                {{ mappingJsonMode ? t('accounts.tableEdit') : t('accounts.jsonEdit') }}
+              </SLink>
+            </template>
+
+            <SField :error="mappingError || serverMappingError">
+              <STextarea
+                v-if="mappingJsonMode"
+                v-model="mappingText"
+                mono
+                :rows="8"
+                placeholder="{&quot;claude-3-5-sonnet-latest&quot;: &quot;claude-sonnet-4-5&quot;}"
+                @blur="syncMappingText()"
+              />
+              <ModelMappingEditor v-else v-model="mapping" :models="models" list-id="account-model-options" @add-models="mergeModels" />
+            </SField>
+          </EditorCard>
         </div>
-      </SField>
-    </section>
 
-    <!-- 模型映射 -->
-    <section class="border-t border-gray-100 pt-5 dark:border-dark-700">
-      <SSectionTitle :title="t('accounts.modelMapping')">
-        <template #actions>
-          <SLink as="button" class="text-xs" data-testid="mapping-json-toggle" @click="toggleMappingJSON">
-            {{ mappingJsonMode ? t('accounts.tableEdit') : t('accounts.jsonEdit') }}
-          </SLink>
-        </template>
-      </SSectionTitle>
-
-      <SField :error="mappingError || serverMappingError" :hint="t('accounts.modelMappingHint')">
-        <STextarea
-          v-if="mappingJsonMode"
-          v-model="mappingText"
-          mono
-          :rows="6"
-          placeholder="{&quot;claude-3-5-sonnet-latest&quot;: &quot;claude-sonnet-4-5&quot;}"
-          @blur="syncMappingText()"
-        />
-        <SKeyValue
-          v-else
-          v-model="mapping"
-          :key-label="t('accounts.mappingFrom')"
-          :value-label="t('accounts.mappingTo')"
-          key-placeholder="claude-3-5-sonnet-latest"
-          value-placeholder="claude-sonnet-4-5"
-        />
-      </SField>
-    </section>
-
-        </div>
-        <div v-show="activeSection === 'scheduling'" data-editor-section="scheduling" class="space-y-5">
-          <!-- 调度 -->
-          <section >
-            <SSectionTitle :title="t('accounts.scheduling')" />
-            <SGrid :cols="3">
+        <!-- ============================================================ 调度与限流 -->
+        <div v-show="activeSection === 'scheduling'" data-editor-section="scheduling" class="space-y-4">
+          <EditorCard :title="t('accounts.scheduling')" :description="t('accounts.editorUi.schedulingCardHint')">
+            <div class="grid gap-4 sm:grid-cols-3">
               <SField :label="t('accounts.priority')" :hint="t('accounts.priorityHint')" :error="errors.priority">
                 <SInput v-model.number="basic.priority" type="number" min="0" max="1000000" />
               </SField>
@@ -739,32 +920,27 @@ async function save(event: Event) {
               <SField :label="t('accounts.maxConcurrency')" :hint="t('accounts.zeroUnlimited')" :error="errors.max_concurrency">
                 <SInput v-model.number="basic.max_concurrency" type="number" min="0" />
               </SField>
-            </SGrid>
-            <div class="mt-3">
-              <SSwitch v-model="basic.schedulable" :label="t('accounts.schedulable')" />
             </div>
-          </section>
+            <div class="mt-4 flex items-center justify-between gap-4 rounded-xl border border-gray-100 bg-gray-50/60 px-4 py-3 dark:border-dark-700 dark:bg-dark-900/30">
+              <div class="min-w-0">
+                <div class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ t('accounts.schedulable') }}</div>
+                <div class="text-xs text-gray-500 dark:text-dark-400">{{ t('accounts.editorUi.schedulableHint') }}</div>
+              </div>
+              <SSwitch v-model="basic.schedulable" :aria-label="t('accounts.schedulable')" />
+            </div>
+          </EditorCard>
 
-          <!-- 限流 -->
-          <section class="border-t border-gray-100 pt-5 dark:border-dark-700">
-            <SSectionTitle :title="t('accounts.limits')" />
-            <SGrid :lg-cols="4">
-              <SField :label="t('accounts.rpmLimit')" :hint="errors.rpm_limit ? '' : t('accounts.zeroUnlimited')" :error="errors.rpm_limit">
-                <SInput v-model.number="basic.rpm_limit" type="number" min="0" />
+          <EditorCard :title="t('accounts.limits')" :description="t('accounts.editorUi.limitsHint')">
+            <div class="grid gap-4 sm:grid-cols-2">
+              <SField v-for="f in limitFields" :key="f.key" :label="f.label" :hint="errors[f.key] ? '' : f.hint" :error="errors[f.key]">
+                <div class="relative">
+                  <SInput v-model.number="basic[f.key]" type="number" min="0" class="!pr-24" />
+                  <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400 dark:text-dark-400">{{ f.unit }}</span>
+                </div>
               </SField>
-              <SField :label="t('accounts.tpmLimit')" :hint="errors.tpm_limit ? '' : t('accounts.zeroUnlimited')" :error="errors.tpm_limit">
-                <SInput v-model.number="basic.tpm_limit" type="number" min="0" />
-              </SField>
-              <SField :label="t('accounts.tpdLimit')" :hint="errors.tpd_limit ? '' : t('accounts.tpdHint')" :error="errors.tpd_limit">
-                <SInput v-model.number="basic.tpd_limit" type="number" min="0" />
-              </SField>
-              <SField :label="t('accounts.spmLimit')" :hint="errors.spm_limit ? '' : t('accounts.zeroUnlimited')" :error="errors.spm_limit">
-                <SInput v-model.number="basic.spm_limit" type="number" min="0" />
-              </SField>
-            </SGrid>
-            <SHint size="xs" class="mt-2">{{ t('accounts.spmHint') }}</SHint>
-          </section>
-
+            </div>
+            <SHint size="xs" class="mt-3">{{ t('accounts.spmHint') }}</SHint>
+          </EditorCard>
         </div>
       </div>
     </div>
@@ -796,10 +972,10 @@ async function save(event: Event) {
     </SModal>
 
     <div class="sticky -bottom-5 z-10 flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 bg-white py-4 dark:border-dark-700 dark:bg-dark-800">
-      <SButton v-if="!editing" class="mr-auto" variant="ghost" @click="emit('back')">← {{ t('common.previous') }}</SButton>
-      <SButton v-if="canTestAccount" class="mr-auto" @click="emit('test', account!)">{{ t('accounts.testConnection') }}</SButton>
+      <SButton v-if="!editing" class="mr-auto" variant="ghost" @click="emit('back')"><SIcon name="arrow-left" class="h-4 w-4" />{{ t('common.previous') }}</SButton>
+      <SButton v-if="canTestAccount" class="mr-auto" @click="emit('test', account!)"><SIcon name="play" class="h-4 w-4" />{{ t('accounts.testConnection') }}</SButton>
       <SButton @click="emit('cancel')">{{ t('common.cancel') }}</SButton>
-      <SButton type="submit" variant="primary" :loading="saving" :disabled="formLoading || !!formError">{{ t('common.save') }}</SButton>
+      <SButton type="submit" variant="primary" :loading="saving" :disabled="formLoading || !!formError">{{ editing ? t('common.save') : t('accounts.editorUi.create') }}</SButton>
     </div>
   </form>
 </template>

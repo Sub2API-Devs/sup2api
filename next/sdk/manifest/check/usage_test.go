@@ -1,6 +1,7 @@
 package check
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -321,5 +322,55 @@ func TestValidUsagePath(t *testing.T) {
 		if ValidUsagePath(p) {
 			t.Errorf("ValidUsagePath(%q) = true, want false", p)
 		}
+	}
+}
+
+// Default models and mapping of an account type (CONTRACTS §41) follow the
+// rules of the account fields they prefill.
+func TestAccountTypeDefaultModels(t *testing.T) {
+	m := minimal()
+	m.Capabilities = []manifest.Capability{{ID: manifest.CapPlatformAdapter}}
+	m.HostPermissions = []manifest.HostPermission{
+		{ID: "gateway.endpoint"}, {ID: "platform.register"},
+		{ID: "accounts.credentials", Scope: map[string]any{"types": "own"}},
+	}
+	m.Platforms = []manifest.Platform{validPlatform()}
+	m.AccountTypes = []manifest.AccountType{{
+		ID: "apikey", Label: manifest.LocalizedText{"en": "Key"},
+		Form:                manifest.Form{Mode: "schema", Schema: "forms/k.json"},
+		Platforms:           []manifest.AccountPlatform{{Platform: "video"}},
+		DefaultModels:       []string{"video-2", "video-2-260101"},
+		DefaultModelMapping: map[string]string{"video-2": "video-2-260101"},
+	}}
+	files := map[string][]byte{"forms/k.json": []byte(`{}`)}
+	if err := Validate(m, files, ValidateOptions{Tooling: true}); err != nil {
+		t.Fatalf("valid defaults rejected: %v", codes(err))
+	}
+	// A mapping without a model list is fine: an empty list serves every model.
+	m.AccountTypes[0].DefaultModels = nil
+	if err := Validate(m, files, ValidateOptions{Tooling: true}); err != nil {
+		t.Fatalf("mapping without models rejected: %v", codes(err))
+	}
+	m.AccountTypes[0].DefaultModels = []string{"video-*", "a", "a", "video-3"}
+	m.AccountTypes[0].DefaultModelMapping = map[string]string{"video-2": "video-2-260101", "video-3": "bad id"}
+	got := codes(Validate(m, files, ValidateOptions{Tooling: true}))
+	want := map[string]string{
+		"accountTypes[0].defaultModels[0]":            "invalid",
+		"accountTypes[0].defaultModels[2]":            "duplicate",
+		"accountTypes[0].defaultModelMapping.video-2": "not_in_models",
+		"accountTypes[0].defaultModelMapping.video-3": "invalid",
+	}
+	for f, c := range want {
+		if got[f] != c {
+			t.Errorf("%s = %q, want %q (all: %v)", f, got[f], c, got)
+		}
+	}
+	m.AccountTypes[0].DefaultModelMapping = nil
+	m.AccountTypes[0].DefaultModels = make([]string, manifest.MaxDefaultModels+1)
+	for i := range m.AccountTypes[0].DefaultModels {
+		m.AccountTypes[0].DefaultModels[i] = "m-" + strconv.Itoa(i)
+	}
+	if got := codes(Validate(m, files, ValidateOptions{Tooling: true})); got["accountTypes[0].defaultModels"] != "too_many" {
+		t.Fatalf("codes = %v", got)
 	}
 }
