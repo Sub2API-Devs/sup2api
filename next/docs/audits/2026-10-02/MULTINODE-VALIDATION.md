@@ -577,3 +577,13 @@ manifest `cf61b44b77f50a98075665b62c3e74cb818a4d5b0097bff06a14d8ece98c955b`，bu
 - 价格与原值明显不同的：`claude-haiku-4-5-20251001` 由 $1/$5 降为 $0.14/$0.71（codingplus 倍率 0.07）；`claude-sonnet-4-6` 缓存读由 $0.3 降为 $0.1；`deepseek-flash` 由 $1/$2 改为 $0.3/$1.2；`doubao-seedance-2-0-mini-260615` 由每百万 token $10 改为约 $3.41。
 - 过程：先用 `pg_dump -t model_prices -t model_price_history` 备份到 `/home/debian/sup2api/backups/pre-codingplus-prices-20261004.sql.gz`；在单个事务中执行 upsert，并写入 `model_price_history`；完成后 25 条的 mode 与表达式和生成报告逐条一致。之后向 Redis `config:changed` 发布 `{"key":"prices"}`，4 个节点收到（各节点价格缓存本身也只有 1 分钟）。
 - 回退：从上述备份恢复两张表。
+
+### 24.10 插件预设模型、账号编辑器与 CC 连接映射：OVH v0.1.23
+
+2026-10-04 17:33–17:36（北京时间），源码 `5fc098641` 已推送，OVH 从 Git 构建签名核心（`SKIP_GATEWAY_BUILD=1`，复用运行中的网关镜像 `sup2api-gateway:3a2017d`，网关容器未重建）。内容见 CONTRACTS §41：插件账号类型的预设模型与映射、重做的账号编辑器、SchemaForm `ui:section`、Claude Code 连接为账号支持模型映射。无 schema 变更。
+
+备份 `/home/debian/sup2api/backups/pre-v0.1.23-20261004T093319Z.dump`，pg_restore 列出 480 项。manifest `6cc54346ef23dc4d3db99013e471b6c83a29415a095f68686da96508092fc78f`，bundle `f00099f9f5e9db683b26cb20505f71c70a0354c27672ca61c2cd03a17eec7c59`。升级计划 `147f1065b634455c84c176018a720f18` 预检无阻断，完成 27 步，创建至完成约 23.9 秒；四入口 503 采样跨度分别 4.6、6.4、7.0、7.6 秒。
+
+计划完成后内置插件随核心升级：anthropic 0.2.4、ccgateway 0.1.5、gemini 0.2.3、openai 0.3.3、volcengine 0.12.2，moderation 0.1.6 未变；relay 未安装在生产，0.2.2 只在仓库。四入口均登录验证：核心 0.1.23；`/account-types` 的预设数量（模型/映射）anthropic、ccgateway 两类型 29/11，gemini 31/5，openai 75/4，volcengine 两类型 23/11；§24.9 迁移的 25 条价格均可查询；前端 AccountsView 包含新编辑器。发布以来四节点 ERROR 为 0。此次未执行真实模型调用或 OAuth 登录。
+
+证据：`ovh-upgrade-0.1.23.jsonl.txt`、`ovh-upgrade-0.1.23-summary.txt`、`v023-verify.jsonl`。
