@@ -6,6 +6,7 @@ require (
 	github.com/Sub2API-Devs/sup2api/next/sdk v0.0.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/shopspring/decimal v1.4.0
+	google.golang.org/grpc v1.84.0
 )
 
 require (
@@ -25,7 +26,6 @@ require (
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260706201446-f0a921348800 // indirect
-	google.golang.org/grpc v1.84.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 )
 

@@ -61,6 +61,9 @@ type FakeHost struct {
 	// simulate a second node. PublishErr, when set, fails every Publish.
 	OnPublish  func(PublishedMessage)
 	PublishErr error
+	// LedgerErr, when set, fails every ledger change (set it with SetLedgerErr
+	// while the plugin runs), e.g. UNAVAILABLE for a transient host error.
+	LedgerErr error
 	// Locks backs LockAcquire/LockRenew/LockRelease. Share one table between
 	// two FakeHosts (set it before Start) to simulate two nodes; see
 	// LockTable. LockErr, when set, fails every lock call (e.g. UNAVAILABLE
@@ -258,6 +261,9 @@ func (f *FakeHost) ledgerChange(in *pluginv1.LedgerChangeRequest, credit bool) (
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.LedgerErr != nil {
+		return nil, f.LedgerErr
+	}
 	if e, ok := f.ledgerBy[in.GetIdempotencyKey()]; ok {
 		return &pluginv1.LedgerChangeResponse{LedgerId: e.ID, Duplicate: true}, nil
 	}
@@ -350,4 +356,11 @@ func (f *FakeHost) Dial(stream pluginv1.EgressService_DialServer) error {
 			}
 		}
 	}
+}
+
+// SetLedgerErr sets LedgerErr while the plugin may be calling the host.
+func (f *FakeHost) SetLedgerErr(err error) {
+	f.mu.Lock()
+	f.LedgerErr = err
+	f.mu.Unlock()
 }

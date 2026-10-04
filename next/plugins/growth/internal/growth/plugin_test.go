@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/shopspring/decimal"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
@@ -190,6 +192,22 @@ func TestBindReferralCode(t *testing.T) {
 	}
 }
 
+// TestBindWithoutOwnCode: a user who never opened the referral page has no
+// row yet; binding creates it instead of answering "already bound". Two
+// users cannot invite each other.
+func TestBindWithoutOwnCode(t *testing.T) {
+	p, _, _ := startDB(t, nil)
+	ctx := context.Background()
+	code10, _ := p.ensureCode(ctx, 10)
+	if err := p.bindInviter(ctx, 11, code10); err != nil {
+		t.Fatalf("bind without own code: %v", err)
+	}
+	code11, _ := p.ensureCode(ctx, 11)
+	if err := p.bindInviter(ctx, 10, code11); err == nil {
+		t.Fatal("mutual referral accepted")
+	}
+}
+
 func TestCommissionOnUsage(t *testing.T) {
 	p, h, fh := startDB(t, nil)
 	ctx := context.Background()
@@ -272,6 +290,72 @@ func TestCommissionCapPerInvitee(t *testing.T) {
 	amt2, _ := decimal.NewFromString(ledger[1].Req.GetAmount())
 	if !amt1.Equal(decimal.NewFromFloat(0.15)) || !amt2.Equal(decimal.NewFromFloat(0.05)) {
 		t.Fatalf("amounts = %s, %s", amt1, amt2)
+	}
+}
+
+// TestFailedEventIsRedelivered: a commission that cannot be credited is not
+// acknowledged, so the core delivers it again instead of losing it; a
+// malformed payload is skipped.
+func TestFailedEventIsRedelivered(t *testing.T) {
+	p, h, fh := startDB(t, nil)
+	ctx := context.Background()
+	code1, _ := p.ensureCode(ctx, 1)
+	p.ensureCode(ctx, 2)
+	p.bindInviter(ctx, 2, code1)
+	usage := &pluginv1.Event{Id: 101, Type: "usage.recorded", PayloadJson: `{"user_id":2,"total_cost":"1.00","billing_status":"billed"}`}
+	events := []*pluginv1.Event{
+		{Id: 99, Type: "user.created", PayloadJson: `not json`},
+		{Id: 100, Type: "user.created", PayloadJson: `{"user_id":3}`},
+		usage,
+	}
+	fh.SetLedgerErr(status.Error(codes.Unavailable, "ledger down"))
+	resp, err := h.App.OnEvents(ctx, &pluginv1.OnEventsRequest{Events: events})
+	if err != nil || resp.GetAckedThroughId() != 100 {
+		t.Fatalf("partial batch: acked %d, err %v; want 100 (the events before the failure)", resp.GetAckedThroughId(), err)
+	}
+	if _, err := h.App.OnEvents(ctx, &pluginv1.OnEventsRequest{Events: []*pluginv1.Event{usage}}); err == nil {
+		t.Fatal("failed first event acknowledged")
+	}
+	fh.SetLedgerErr(nil)
+	resp, err = h.App.OnEvents(ctx, &pluginv1.OnEventsRequest{Events: []*pluginv1.Event{usage}})
+	if err != nil || resp.GetAckedThroughId() != 101 {
+		t.Fatalf("redelivery: %v %v", resp, err)
+	}
+	if n := len(fh.Ledger()); n != 1 {
+		t.Fatalf("ledger = %d entries, want 1", n)
+	}
+
+	// A refusal by the grant (maxPerTx, maxPerDay) is skipped, not retried.
+	fh.SetLedgerErr(status.Error(codes.PermissionDenied, "daily credit limit (100) exceeded"))
+	refusedEv := &pluginv1.Event{Id: 102, Type: "usage.recorded", PayloadJson: `{"user_id":2,"total_cost":"2.00","billing_status":"billed"}`}
+	resp, err = h.App.OnEvents(ctx, &pluginv1.OnEventsRequest{Events: []*pluginv1.Event{refusedEv}})
+	if err != nil || resp.GetAckedThroughId() != 102 {
+		t.Fatalf("refused credit: %v %v; want it acknowledged", resp, err)
+	}
+}
+
+// TestDuplicateCreditIsRecorded: when the ledger already holds the credit
+// (an earlier attempt failed after crediting), the commission row is still
+// written so the per-invitee cap counts it.
+func TestDuplicateCreditIsRecorded(t *testing.T) {
+	p, _, fh := startDB(t, nil)
+	ctx := context.Background()
+	code1, _ := p.ensureCode(ctx, 1)
+	p.ensureCode(ctx, 2)
+	p.bindInviter(ctx, 2, code1)
+	if _, err := fh.LedgerCredit(ctx, &pluginv1.LedgerChangeRequest{UserId: 1, Amount: "0.10000000", IdempotencyKey: "commission:usage.recorded:7"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.recordCommission(ctx, 2, "usage.recorded", 7, decimal.NewFromInt(1)); err != nil {
+		t.Fatal(err)
+	}
+	db, _ := p.db(ctx)
+	var n int
+	if err := db.QueryRow(ctx, `SELECT count(*) FROM commissions WHERE event_type = 'usage.recorded' AND event_id = 7`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("commission rows = %d (%v), want 1", n, err)
+	}
+	if len(fh.Ledger()) != 1 {
+		t.Fatal("credited twice")
 	}
 }
 

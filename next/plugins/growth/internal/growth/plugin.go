@@ -223,7 +223,8 @@ func (p *Plugin) bindInviter(ctx context.Context, userID int64, code string) err
 		return err
 	}
 	var inviterID int64
-	err = db.QueryRow(ctx, `SELECT user_id FROM referral_codes WHERE code = $1`, code).Scan(&inviterID)
+	var inviterInviter *int64
+	err = db.QueryRow(ctx, `SELECT user_id, inviter_user_id FROM referral_codes WHERE code = $1`, code).Scan(&inviterID, &inviterInviter)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return errors.New("code not found")
@@ -232,6 +233,15 @@ func (p *Plugin) bindInviter(ctx context.Context, userID int64, code string) err
 	}
 	if inviterID == userID {
 		return errors.New("cannot refer yourself")
+	}
+	// Two users inviting each other would pay each other commission.
+	if inviterInviter != nil && *inviterInviter == userID {
+		return errors.New("cannot bind to a user you invited")
+	}
+	// Users created before the plugin was enabled have no row until they
+	// open their referral page; without one the update below matches nothing.
+	if _, err := p.ensureCode(ctx, userID); err != nil {
+		return err
 	}
 	tag, err := db.Exec(ctx, `UPDATE referral_codes SET inviter_user_id = $2, bound_at = now() WHERE user_id = $1 AND inviter_user_id IS NULL`, userID, inviterID)
 	if err != nil {
@@ -301,7 +311,9 @@ func (p *Plugin) recordCommission(ctx context.Context, inviteeUserID int64, even
 	// Apply cap.
 	if cfg.ReferralMaxPerInvitee.Sign() > 0 {
 		var existing decimal.Decimal
-		db.QueryRow(ctx, `SELECT COALESCE(SUM(commission), 0) FROM commissions WHERE inviter_user_id = $1 AND invitee_user_id = $2`, inviterID, inviteeUserID).Scan(&existing)
+		if err := db.QueryRow(ctx, `SELECT COALESCE(SUM(commission), 0) FROM commissions WHERE inviter_user_id = $1 AND invitee_user_id = $2`, inviterID, inviteeUserID).Scan(&existing); err != nil {
+			return err
+		}
 		remaining := cfg.ReferralMaxPerInvitee.Sub(existing)
 		if commission.GreaterThan(remaining) {
 			commission = remaining.Round(8)
@@ -323,10 +335,9 @@ func (p *Plugin) recordCommission(ctx context.Context, inviteeUserID int64, even
 	if err != nil {
 		return err
 	}
-	if res.Duplicate {
-		return nil
-	}
-	// Record commission.
+	// Record commission. A duplicate means an earlier attempt credited the
+	// ledger and failed before this insert: record it now, or the
+	// per-invitee cap would not count it.
 	_, err = db.Exec(ctx, `INSERT INTO commissions (inviter_user_id, invitee_user_id, event_type, event_id, base_amount, rate_percent, commission, ledger_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (ledger_id) DO NOTHING`,
 		inviterID, inviteeUserID, eventType, eventID, baseAmount, cfg.ReferralRatePercent, commission, res.LedgerID)

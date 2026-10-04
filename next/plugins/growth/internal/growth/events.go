@@ -3,11 +3,14 @@ package growth
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"time"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/shopspring/decimal"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // OnEvents implements pluginsdk.EventHandler.
@@ -16,14 +19,33 @@ func (p *Plugin) OnEvents(ctx context.Context, req *pluginv1.OnEventsRequest) (*
 	if len(events) == 0 {
 		return &pluginv1.OnEventsResponse{AckedThroughId: 0}, nil
 	}
-	var lastID int64
+	// A failed event (database or ledger unavailable) stops the batch:
+	// acknowledging it would lose a commission for good. The core redelivers
+	// from the first unacknowledged event with backoff and dead-letters a
+	// batch that keeps failing. Handling is idempotent (event id + ledger
+	// idempotency key), so a redelivery credits nothing twice.
+	//
+	// A refusal by the ledger grant (amount above maxPerTx, the plugin's
+	// maxPerDay used up) is skipped instead: retrying for the minutes before
+	// the dead letter would not change it and would hold up every later
+	// event. The commission is not paid; the error log says which.
+	var acked int64
 	for _, e := range events {
-		lastID = e.GetId()
 		if err := p.handleEvent(ctx, e); err != nil {
+			if refused(err) {
+				p.log.Error("ledger refused the credit; event skipped", "type", e.GetType(), "id", e.GetId(), "err", err)
+				acked = e.GetId()
+				continue
+			}
 			p.log.Error("handle event", "type", e.GetType(), "id", e.GetId(), "err", err)
+			if acked > 0 {
+				return &pluginv1.OnEventsResponse{AckedThroughId: acked}, nil
+			}
+			return nil, fmt.Errorf("event %d (%s): %w", e.GetId(), e.GetType(), err)
 		}
+		acked = e.GetId()
 	}
-	return &pluginv1.OnEventsResponse{AckedThroughId: lastID}, nil
+	return &pluginv1.OnEventsResponse{AckedThroughId: acked}, nil
 }
 
 func (p *Plugin) handleEvent(ctx context.Context, e *pluginv1.Event) error {
@@ -43,7 +65,8 @@ func (p *Plugin) onUserCreated(ctx context.Context, e *pluginv1.Event) error {
 		UserID int64 `json:"user_id"`
 	}
 	if err := json.Unmarshal([]byte(e.GetPayloadJson()), &payload); err != nil {
-		return err
+		p.log.Warn("skip malformed event", "type", e.GetType(), "id", e.GetId(), "err", err)
+		return nil // a redelivery cannot fix it
 	}
 	if payload.UserID <= 0 {
 		return nil
@@ -60,7 +83,8 @@ func (p *Plugin) onUsageRecorded(ctx context.Context, e *pluginv1.Event) error {
 		BillingStatus string `json:"billing_status"`
 	}
 	if err := json.Unmarshal([]byte(e.GetPayloadJson()), &payload); err != nil {
-		return err
+		p.log.Warn("skip malformed event", "type", e.GetType(), "id", e.GetId(), "err", err)
+		return nil // a redelivery cannot fix it
 	}
 	if payload.UserID <= 0 || payload.BillingStatus != "billed" {
 		return nil
@@ -79,7 +103,8 @@ func (p *Plugin) onBalanceChanged(ctx context.Context, e *pluginv1.Event) error 
 		Kind   string `json:"kind"`
 	}
 	if err := json.Unmarshal([]byte(e.GetPayloadJson()), &payload); err != nil {
-		return err
+		p.log.Warn("skip malformed event", "type", e.GetType(), "id", e.GetId(), "err", err)
+		return nil // a redelivery cannot fix it
 	}
 	// Only credit from admin_adjust and top-ups (kind not usage/plugin_credit/plugin_debit/refund).
 	if payload.UserID <= 0 || payload.Kind == "usage" || payload.Kind == "plugin_credit" || payload.Kind == "plugin_debit" || payload.Kind == "refund" {
@@ -112,4 +137,13 @@ func (p *Plugin) runCleanup(ctx context.Context) (*pluginv1.RunJobResponse, erro
 		return nil, err
 	}
 	return &pluginv1.RunJobResponse{Message: "cleaned " + strconv.FormatInt(tag.RowsAffected(), 10) + " old check-in records"}, nil
+}
+
+// refused reports a ledger refusal that a retry cannot fix.
+func refused(err error) bool {
+	switch status.Code(err) {
+	case codes.PermissionDenied, codes.InvalidArgument:
+		return true
+	}
+	return false
 }
