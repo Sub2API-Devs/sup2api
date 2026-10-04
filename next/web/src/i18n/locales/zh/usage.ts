@@ -61,6 +61,7 @@ export default {
     matched: '命中',
     notMatched: '未命中',
     breakdown: '明细',
+    inputs: '计费条件取值',
     statusLabel: '结算状态',
     ledger: '账本 #{id}',
     freeNote: '被钩子拒绝、上游失败且没有用量的请求不计费。',

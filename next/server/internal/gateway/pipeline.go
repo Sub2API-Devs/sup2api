@@ -410,6 +410,9 @@ func (c *call) prepareBilling(ctx context.Context) *gwError {
 	c.price = rule
 	c.rec.Price = rule
 	c.capturePriceInputs(c.price)
+	if c.g.d.Balance == nil {
+		return fromCore(core.AsError(errors.New("billing precharger unavailable")), errTypeInternal)
+	}
 	if err := c.g.d.Balance.CheckBalance(ctx, c.principal.UserID); err != nil {
 		e := core.AsError(err)
 		rt := errTypeInsufficientBalance

@@ -33,8 +33,10 @@ type Pricer interface {
 	Inputs(rule *PriceRule) (bodyPaths []string, headerNames []string)
 }
 
-// BalanceGate is the pre-request balance check (cached; ErrInsufficientBalance).
+// BalanceGate requires both the cached balance check and atomic precharge;
+// a gateway must never silently run with only the cached check.
 type BalanceGate interface {
+	RequestPrecharger
 	CheckBalance(ctx context.Context, userID int64) error
 }
 

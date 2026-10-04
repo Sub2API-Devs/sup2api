@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/tokenizer"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/usagerules"
 )
@@ -15,9 +14,13 @@ import (
 // precharge runs only after billing type admission and before scheduling.
 // The plugin reports units; the core owns the price snapshot and ledger.
 func (c *call) precharge(ctx context.Context) error {
-	gate, ok := c.g.d.Balance.(core.RequestPrecharger)
-	if !ok || c.price == nil {
+	if c.price == nil {
+		// Resolve returns nil only for the explicit missing_price_policy=free.
 		return nil
+	}
+	gate := c.g.d.Balance
+	if gate == nil {
+		return fmt.Errorf("billing precharger unavailable")
 	}
 	floor, err := gate.PreConsumeTokens(ctx)
 	if err != nil {

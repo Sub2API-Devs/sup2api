@@ -26,6 +26,11 @@ func (s platformServer) EstimateUsage(ctx context.Context, in *pluginv1.Estimate
 	if estimator, ok := s.impl.(UsageEstimator); ok {
 		return estimator.EstimateUsage(ctx, in)
 	}
+	// Task units cannot be inferred from text. Require a plugin estimator
+	// before calling the text tokenizer, even when the requested floor is zero.
+	if s.requiresTaskEstimator(in) {
+		return nil, status.Error(codes.Unimplemented, "task submissions require UsageEstimator")
+	}
 	if s.runtime == nil {
 		return nil, status.Error(codes.FailedPrecondition, "host not initialized")
 	}
@@ -37,4 +42,15 @@ func (s platformServer) EstimateUsage(ctx context.Context, in *pluginv1.Estimate
 		return nil, err
 	}
 	return &pluginv1.UsageReport{Tokens: &pluginv1.UsageTokens{InputTokens: max(count.Tokens, in.GetPreConsumeTokens())}}, nil
+}
+
+func (s platformServer) requiresTaskEstimator(in *pluginv1.EstimateUsageRequest) bool {
+	if s.runtime != nil && s.runtime.taskProtocols != nil {
+		meta := in.GetMeta()
+		return s.runtime.taskProtocols[meta.GetProtocol()] || s.runtime.taskProtocols[meta.GetClientProtocol()]
+	}
+	// Without a manifest there is no way to distinguish a task endpoint from
+	// a text endpoint of the same plugin. Never silently estimate task units.
+	_, task := s.impl.(TaskSubmissionParser)
+	return task
 }

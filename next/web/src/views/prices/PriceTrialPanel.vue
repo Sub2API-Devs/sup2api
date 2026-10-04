@@ -164,7 +164,7 @@ const resultLen = computed(() => {
         </div>
         <div>
           <SHint class="mb-1">{{ t('prices.trial.breakdown') }}</SHint>
-          <BillingBreakdown :breakdown="result.breakdown" :rate-multiplier="extra.rate_multiplier" :total="result.cost" />
+          <BillingBreakdown :breakdown="result.breakdown" :rate-multiplier="extra.rate_multiplier" :total="result.cost" :rules="result.rules" />
         </div>
       </div>
       <div v-else-if="loading" class="text-center"><SSpinner /></div>

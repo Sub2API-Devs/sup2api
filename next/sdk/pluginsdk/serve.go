@@ -215,11 +215,12 @@ func Capabilities(p any) []string {
 type runtime struct {
 	pluginv1.UnimplementedPluginServiceServer
 
-	p            any
-	opts         options
-	dial         HostDialer
-	key, version string
-	capabilities []string
+	p             any
+	opts          options
+	dial          HostDialer
+	key, version  string
+	capabilities  []string
+	taskProtocols map[string]bool
 
 	mu     sync.Mutex
 	host   *host
@@ -239,6 +240,14 @@ func newRuntime(p any, o options, dial HostDialer) (*runtime, error) {
 			return nil, fmt.Errorf("parse embedded manifest: %w", err)
 		}
 		rt.key, rt.version = m.Key, m.Version
+		rt.taskProtocols = map[string]bool{}
+		for _, platform := range m.Platforms {
+			for _, endpoint := range platform.Endpoints {
+				if endpoint.TaskSubmit() {
+					rt.taskProtocols[endpoint.Protocol] = true
+				}
+			}
+		}
 		declared = map[string]bool{}
 		for _, c := range m.Capabilities {
 			declared[c.ID] = true

@@ -53,6 +53,7 @@ const (
 // module's *billing.Service implements it; core.Ledger alone is not enough
 // because the ledger row and the usage row must commit together.
 type TxLedger interface {
+	core.PrechargeReleaser
 	ApplyTx(ctx context.Context, tx pgx.Tx, ch core.LedgerChange) (*core.LedgerResult, error)
 	// CacheBalance refreshes the balance cache after commit.
 	CacheBalance(ctx context.Context, userID, ledgerID int64, balance decimal.Decimal)
@@ -786,10 +787,11 @@ func (s *Service) RetryPending(ctx context.Context) (int, error) {
 	if s.opts.CanRetry != nil && !s.opts.CanRetry() {
 		return 0, nil
 	}
-	if ledger, ok := s.ledger.(core.PrechargeReleaser); ok {
-		if err := ledger.ReleaseExpiredPrecharges(ctx); err != nil {
-			return 0, err
-		}
+	if s.ledger == nil {
+		return 0, errors.New("no ledger configured")
+	}
+	if err := s.ledger.ReleaseExpiredPrecharges(ctx); err != nil {
+		return 0, err
 	}
 	if err := s.recoverExecutions(ctx); err != nil {
 		slog.WarnContext(ctx, "usage: recover execution observations", "err", err)

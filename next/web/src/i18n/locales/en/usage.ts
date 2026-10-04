@@ -61,6 +61,7 @@ export default {
     matched: 'matched',
     notMatched: 'not matched',
     breakdown: 'Breakdown',
+    inputs: 'Billing condition values',
     statusLabel: 'Billing status',
     ledger: 'ledger #{id}',
     freeNote: 'Requests rejected by hooks or failing upstream without usage are not billed.',

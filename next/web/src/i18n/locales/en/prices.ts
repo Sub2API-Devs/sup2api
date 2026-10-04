@@ -104,7 +104,8 @@ export default {
     flat: 'Flat fee',
     other: 'Other',
     subtotal: 'Subtotal',
-    rules: 'markup',
+    rules: 'combined rule multiplier',
+    base: 'Base cost',
     groupRate: 'group rate'
   },
   summary: {
@@ -134,7 +135,7 @@ export default {
     otherwise: 'otherwise',
     always: 'always',
     rules: 'Markup rules',
-    rulesHint: 'Each matching rule multiplies the cost.',
+    rulesHint: 'Matching rules multiply together: ×2 and ×3 apply ×6 to the base cost. Unmatched rules do not change the cost.',
     addRule: 'Rule',
     noRules: 'No markup rules.',
     when: 'When',

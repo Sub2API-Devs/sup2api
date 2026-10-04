@@ -1064,4 +1064,10 @@ new-api 的两个渠道是同一条轴（下表是读代码得到的，不是看
 
 核心提供离线 `HostService.CountTokens`，SDK 插件通过 `pluginsdk.CountTokens(ctx, host, text, encoding)` 使用；支持 o200k_base 与 cl100k_base、UTF-8 校验和 1 MiB 文本限制，不访问上游。BPE 文本计数是预估，不能替代视频用量或服务商最终 usage。SDK 默认文本估算器使用该能力，火山插件的视频估算器无需已有 task ID。
 
+预扣与释放接口为核心依赖的编译期必需能力，不再通过可选接口断言静默跳过。任务提交协议必须有插件显式 `UsageEstimator`，否则 SDK 拒绝；普通文本端点仍可使用默认本地分词。管理员明确配置的 `missing_price_policy=free` 是免费定价策略，不属于旧版兼容。
+
+表达式条件倍率连乘：两条规则分别命中 ×2、×3 时总倍率为 ×6，再乘分组倍率。使用日志保存并展示各条规则、命中状态、请求条件取值、基础费用、条件总倍率及最终费用；界面直接使用结算快照，不再猜测旧字段、缺失倍率或上下文长度。当前普通 `per_token` 模式没有独立规则配置，需使用表达式配置 Token 单价与条件规则；按上游实际 Fast/Ultrafast 档位修正结算尚未实现。
+
+后续清理修复了版本资源读取时未关闭临时插件包句柄的问题，Windows 的 `TestVersionAssetsReadApprovedPackageWithoutLocalProcess` 已在本地 PostgreSQL 下复测通过。
+
 验证：相关单元测试、前端回读/类型检查/构建通过；另启动独立本地 PostgreSQL 18.3，计费、用量及插件运行时事务测试通过，覆盖并发余额不足、幂等预扣与退款、最终结算、异步任务预扣接续及失败回滚。扩展 registry 测试中的 TestVersionAssetsReadApprovedPackageWithoutLocalProcess 在 Windows 临时文件清理时遇到占用失败，此项未通过。未调用真实付费视频上游，也未部署。

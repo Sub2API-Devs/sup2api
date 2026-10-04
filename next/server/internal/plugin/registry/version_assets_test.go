@@ -6,6 +6,8 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry/registrytest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -21,6 +23,9 @@ func TestVersionAssetsReadApprovedPackageWithoutLocalProcess(t *testing.T) {
 	info, data, _, err := packages.ReadVersionAsset(ctx, "assets", vh, "ui/main.js")
 	if err != nil || string(data) != "old version" || info.Version != "1.0.0" {
 		t.Fatal(info, string(data), err)
+	}
+	if err := os.Remove(filepath.Join(packages.DataDir(), "assets", vh, "package.s2plugin")); err != nil {
+		t.Fatalf("version asset read retained a package handle: %v", err)
 	}
 	if _, err := db.Pool.Exec(ctx, `UPDATE plugin_versions SET consent_status='awaiting' WHERE plugin_key='assets'`); err != nil {
 		t.Fatal(err)

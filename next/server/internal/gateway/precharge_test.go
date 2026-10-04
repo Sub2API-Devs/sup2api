@@ -49,3 +49,16 @@ func TestBillingMismatchDoesNotInvokePrecharge(t *testing.T) {
 	}
 	e.record()
 }
+
+func TestMissingBillingGateRejectsBeforeUpstream(t *testing.T) {
+	e := newEnv(t)
+	e.gw.d.Balance = nil
+	r := e.messages(body(testModel, false))
+	if r.status != 500 {
+		t.Fatalf("response %d", r.status)
+	}
+	if len(e.up.keys()) != 0 || e.plat.buildCount() != 0 || len(e.accounts.lastTypes) != 0 {
+		t.Fatal("missing billing gate reached upstream or scheduling")
+	}
+	e.record()
+}

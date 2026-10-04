@@ -104,7 +104,8 @@ export default {
     flat: '固定费',
     other: '其他',
     subtotal: '小计',
-    rules: '加价',
+    rules: '条件总倍率',
+    base: '基础费用',
     groupRate: '分组倍率'
   },
   summary: {
@@ -134,7 +135,7 @@ export default {
     otherwise: '其余',
     always: '始终',
     rules: '加价规则',
-    rulesHint: '每条命中的规则都会乘以倍数。',
+    rulesHint: '所有命中的规则按乘法叠加：例如 ×2 和 ×3 同时命中，基础费用乘以 6；未命中的规则不影响费用。',
     addRule: '规则',
     noRules: '没有加价规则。',
     when: '当',
