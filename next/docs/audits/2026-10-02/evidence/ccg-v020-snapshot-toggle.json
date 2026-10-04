@@ -1,0 +1,37 @@
+[
+  {
+    "case": "snapshot-01-a-on",
+    "cli_version": "2.1.288",
+    "local_fixture_model_calls": 1,
+    "contains_A": true,
+    "contains_B": false
+  },
+  {
+    "case": "snapshot-02-a-on",
+    "cli_version": "2.1.288",
+    "local_fixture_model_calls": 1,
+    "contains_A": true,
+    "contains_B": false
+  },
+  {
+    "case": "snapshot-03-b-off",
+    "cli_version": "2.1.288",
+    "local_fixture_model_calls": 1,
+    "contains_A": false,
+    "contains_B": true
+  },
+  {
+    "case": "snapshot-04-b-on",
+    "cli_version": "2.1.288",
+    "local_fixture_model_calls": 1,
+    "contains_A": true,
+    "contains_B": false
+  },
+  {
+    "case": "snapshot-05-b-off",
+    "cli_version": "2.1.288",
+    "local_fixture_model_calls": 1,
+    "contains_A": false,
+    "contains_B": true
+  }
+]

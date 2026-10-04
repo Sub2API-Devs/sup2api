@@ -1,0 +1,77 @@
+[
+  {
+    "test": "online_long_history_1",
+    "http_status": 200,
+    "seconds": 5.45,
+    "first_event_s": 5.300460800004657,
+    "first_token_s": 5.300495300005423,
+    "last_token_s": 5.300495300005423,
+    "output_tokens_per_generation_s": null,
+    "end_to_end_tokens_per_s": 1.6515203896719377,
+    "text": "ARCHIVE_STORED.",
+    "usage": {
+      "cache_creation": {
+        "ephemeral_5m_input_tokens": 50563
+      },
+      "cache_creation_input_tokens": 50563,
+      "cache_read_input_tokens": 0,
+      "inference_geo": "not_available",
+      "input_tokens": 3,
+      "output_tokens": 9,
+      "service_tier": "standard"
+    },
+    "request_id": "ad1edb635c7d02c61a95c83c",
+    "history": null,
+    "session_returned": false
+  },
+  {
+    "test": "online_long_history_2",
+    "http_status": 200,
+    "seconds": 5.274,
+    "first_event_s": 5.19429789998685,
+    "first_token_s": 5.194339499983471,
+    "last_token_s": 5.194339499983471,
+    "output_tokens_per_generation_s": null,
+    "end_to_end_tokens_per_s": 1.8960244462793203,
+    "text": "LONG50K_5832",
+    "usage": {
+      "cache_creation": {
+        "ephemeral_5m_input_tokens": 47
+      },
+      "cache_creation_input_tokens": 47,
+      "cache_read_input_tokens": 50563,
+      "inference_geo": "not_available",
+      "input_tokens": 3,
+      "output_tokens": 10,
+      "service_tier": "standard"
+    },
+    "request_id": "39315fa54008678e1376f07b",
+    "history": null,
+    "session_returned": false
+  },
+  {
+    "test": "online_long_history_3",
+    "http_status": 200,
+    "seconds": 5.672,
+    "first_event_s": 5.389053499995498,
+    "first_token_s": 5.389079799992032,
+    "last_token_s": 5.389079799992032,
+    "output_tokens_per_generation_s": null,
+    "end_to_end_tokens_per_s": 0.8815243290492533,
+    "text": "98",
+    "usage": {
+      "cache_creation": {
+        "ephemeral_5m_input_tokens": 59
+      },
+      "cache_creation_input_tokens": 59,
+      "cache_read_input_tokens": 50610,
+      "inference_geo": "not_available",
+      "input_tokens": 3,
+      "output_tokens": 5,
+      "service_tier": "standard"
+    },
+    "request_id": "ecebef244871f6cd312ed9c6",
+    "history": null,
+    "session_returned": false
+  }
+]

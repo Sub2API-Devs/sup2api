@@ -9,7 +9,7 @@ def api(method,path,body=None,token=None,port=3130):
     req=urllib.request.Request(f'http://127.0.0.1:{port}/api/v1'+path,method=method,data=None if body is None else json.dumps(body).encode(),headers=headers)
     with urllib.request.urlopen(req,timeout=65) as r:return json.load(r)['data']
 token=api('POST','/auth/login',{'email':env['SUB2API_BOOTSTRAP_ADMIN_EMAIL'],'password':env['SUB2API_BOOTSTRAP_ADMIN_PASSWORD']})['access_token']
-for port in range(3130,3134):assert api('GET','/system/version',token=token,port=port)['version']==os.getenv('EXPECTED_CORE_VERSION','0.1.19')
+for port in range(3130,3134):assert api('GET','/system/version',token=token,port=port)['version']==os.getenv('EXPECTED_CORE_VERSION','0.1.20')
 keydir=root/'ccgateway'
 ssh=['ssh','-o','BatchMode=yes','-o','IdentitiesOnly=yes','-o','StrictHostKeyChecking=yes','-o','UserKnownHostsFile='+str(keydir/'known_hosts'),'-i',str(keydir/'id_ed25519'),'root@130.94.122.254']
 raw=subprocess.check_output(ssh+['cat /opt/ccgateway-runtime.env'],text=True)
@@ -37,7 +37,7 @@ for port in range(3130,3134):
     assert plugin['status']=='enabled' and plugin['node_summary']['states'].get('active')==4
     types=[v for v in api('GET','/account-types',token=token,port=port) if v['plugin_key']=='ccgateway']
     assert {v['type'] for v in types}=={'managed','apikey'}
-    assert all(v['plugin_version']=='0.1.1' for v in types)
+    assert all(v['plugin_version']==os.getenv('EXPECTED_PLUGIN_VERSION','0.1.2') for v in types)
     form=api('GET','/account-types/ccgateway/apikey/form',token=token,port=port)
     assert set(form['schema']['properties'])=={'api_key','base_url'}
     assert form['ui_schema']['api_key']['ui:widget']=='secret'

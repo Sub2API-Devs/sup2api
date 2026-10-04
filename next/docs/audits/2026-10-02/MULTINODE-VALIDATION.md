@@ -500,3 +500,27 @@ cc-max 控制器由同一 Git 源码构建，固定镜像 `sha256:95d00e6d164a8f
 OVH 从 Git 构建 v0.1.19，数据库备份 `/home/debian/sup2api/backups/pre-v0.1.19-20261003T191310Z.dump` 经 pg_restore 校验，schema-contract 不变。manifest `9093ef942953f018c99bc24a22f9738ac55c7d70b0ad810d81ba600743cc2d42`，bundle `1260beae448723053d63b46d17a06e55d837a0d5f18e8489f3766618d286f3e0`。计划 `98adfd0c2267ffa67a9ea8eacf8027ee` 无预检阻断、完成 27 步，创建至完成约 23.15 秒，四入口 503 采样约 4.6–7.3 秒；四节点版本均为 0.1.19。CCGateway 控制器与业务镜像未更新。
 
 证据：[升级采样](evidence/ovh-upgrade-0.1.19.jsonl.txt)、[时间线](evidence/ovh-upgrade-0.1.19-summary.txt)、[四入口复制代码验收](evidence/clipboard-v019-verify.jsonl)。
+
+
+### 24.6 CCGateway 原生持久化会话：OVH v0.1.20
+
+2026-10-04（北京时间），功能源码 `ac714743e`，已推送并从 Git 在两台服务器构建。四核心更新到 0.1.20，内置 CCGateway 0.1.2 自动升级、四节点 active。保留原有账号、分组、API Key 与代理配置；账号 21 保持 active/schedulable。未替换 gateway 容器。
+
+数据库备份 `/home/debian/sup2api/backups/pre-v0.1.20-20261004T052315Z.dump` 通过 pg_restore 目录校验，schema-contract 不变。manifest `3f4d9ce43fab94ae7279ebae86b50a038c30887490375d61588e957149fb04ca`，bundle `90bac013a6f41ff0d83200c676e3af8ab74ecb1932137ffe7986f7bed46c3cc7`。计划 `aed434484151cab0b7150b6ceb8d32e4` 完成 27 步，创建至完成约 23.27 秒，各入口 503 采样约 4.6–7.1 秒。四入口版本、插件、账号类型、固定指纹 SSH 与静态管理页验收通过，验收窗口四节点 ERROR 为 0。
+
+cc-max 业务镜像固定为 `sha256:5e3cbd59154dc8f115f2a982083af5a54341badb9e5dc03df6d3591089887f0f`，控制器为 `sha256:e7f52f7e0f63afba4991b6c8ccbd2ab4ebd8aa7982a02ce93a2006d73bd217ce`。备份 `/opt/ccgateway-runtime/pre-native-session-20261004T052331Z` 包含旧控制器/账号配置、运行环境与账号数据卷归档，权限受限，凭据未进入仓库。业务容器 `f065c739268a` ready；sing-box 与账号数据卷保留。
+
+普通续聊保留 CLI 原生会话 ID；按客户端完整历史指纹寻找最新或共同助手节点，旧节点/中间修改走原生 fork，找不到共同节点则导入历史。system 与工具配置每次重新应用，当前固定关闭 system-prompt snapshot。清理 CLI 内部工具拒绝结果，包括并行工具块间交错记录；客户端真实工具结果保留。Mod 在第二次模型请求发送前阻止 CLI 自动续写，保持一条 API 请求只提交一条助手响应。原生历史保留 24 小时并受容量限制。
+
+验收模型为 `claude-haiku-4-5-20251001`，其他模型没有据此宣称验证通过：
+
+- 公网 3130 长上下文 SSE：约 50,563 tokens，三轮 HTTP 200，缓存读取为 0 / 50,563 / 50,610；首轮标识与 Record 0007 的值均正确。另一个约 9k 的三轮测试缓存读取为 0 / 9,124 / 9,170。
+- 公网自定义工具：240 条预置历史，五轮模型调用，客户端实际写/读/写/读；文件内容和早期标识正确，缓存读取为 0 / 8,664 / 8,858 / 9,015 / 9,198。
+- 公网 MCP 工具：实际使用官方 `@modelcontextprotocol/sdk` 1.32.0 的 stdio 客户端/服务端，工具定义来自 listTools，执行走 callTool。五轮、四次真实文件操作通过，缓存读取为 0 / 8,688 / 8,879 / 9,033 / 9,214。MCP 服务运行在测试客户端，CLI 仍通过网关的 SDK MCP 适配层订阅这些 API 工具。
+- 原生 Read/Write：在同版本隔离账号容器中启用原生白名单，经真实上游与实际代理进行五轮、四次客户端文件操作；执行前文件不存在，证明不是容器内先执行。缓存读取为 0 / 9,441 / 9,612 / 9,746 / 9,907。生产原生工具白名单未更改，不能将这项声称为公网原生工具入口测试。
+- 公网聊天/分支/编辑/回退：11 个请求全部断言通过，覆盖普通续聊、从首个节点开分支、原分支不变、中间历史修改、回退后续聊、首条消息修改重建、再次续接主分支。读取本次测试对应的原生索引，确认 11 个检查点、5 个原生会话；主分支检查点长度为 2/4/6/8/10。回退恢复对话上下文，不撤销客户端文件操作。
+- 源码回归：Go test/vet、23 次真实 CLI 对模拟上游请求、4 个控制器单测通过；覆盖配置变更、工具移除、并行结果、重启恢复、调用者隔离、无自定义会话头及输出上限防自动续写。
+
+系统提示词快照另做了五次隔离 CLI 对模拟上游的抓包验证：A+on→A，A+on→A，B+off→B，B+on→A，B+off→B。关闭快照不会更新旧快照，因此“只和上一轮比较，变化时 off，下一轮不变再 on”会恢复旧提示词。若后续启用条件快照，必须校验当前配置与实际持久化快照一致，或先安全刷新快照；本次生产继续保持 off，已验证这不妨碍上游缓存命中。
+
+证据：[升级采样](evidence/ovh-upgrade-0.1.20.jsonl.txt)、[升级时间线](evidence/ovh-upgrade-0.1.20-summary.txt)、[四入口验收](evidence/ccgateway-v020-verify.jsonl)、[50k 上下文](evidence/ccg-v020-public-50k.json)、[自定义工具](evidence/ccg-v020-public-tools.jsonl)、[MCP 工具](evidence/ccg-v020-public-mcp.jsonl)、[原生工具摘要](evidence/ccg-v020-native-tools-summary.json)、[分支与回退](evidence/ccg-v020-public-branches.json)、[快照切换](evidence/ccg-v020-snapshot-toggle.json)。

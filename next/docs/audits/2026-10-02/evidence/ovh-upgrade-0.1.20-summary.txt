@@ -1,0 +1,182 @@
+== notes
+   0.13s preflight HTTP 200: blockers=[] nodes=['sup2api-1', 'sup2api-2', 'sup2api-3', 'sup2api-4']
+   3.13s create plan HTTP 202: id=aed434484151cab0b7150b6ceb8d32e4 order=['sup2api-1', 'sup2api-2', 'sup2api-3', 'sup2api-4']
+  26.40s plan completed|27
+  30.47s done; log /home/debian/sup2api-managed/upgrade-20261004T052352.log
+== entrance status segments (start-end s: code xN)
+sup2api-1: 0.1-15.6:401x144  15.7-20.3:503x46  20.4-29.3:401x82
+sup2api-2: 0.1-15.6:401x144  15.7-22.2:503x64  22.4-29.3:401x64
+sup2api-3: 0.1-15.6:401x144  15.8-22.9:503x70  23.0-29.3:401x58
+sup2api-4: 0.1-15.6:401x144  15.8-20.6:503x48  20.6-29.3:401x80
+== core/plugin processes inside each container
+   0.16s sup2api-1: container=up core=['40122'] plugins=6
+   0.18s sup2api-2: container=up core=['42538'] plugins=6
+   0.21s sup2api-3: container=up core=['45350'] plugins=6
+   0.24s sup2api-4: container=up core=['48278'] plugins=6
+   9.28s sup2api-2: container=up core=- plugins=0
+  12.96s sup2api-3: container=up core=- plugins=0
+  16.02s sup2api-4: container=up core=- plugins=0
+  18.98s sup2api-1: container=up core=- plugins=0
+  19.58s sup2api-1: container=up core=['1859025'] plugins=0
+  20.79s sup2api-1: container=up core=['1859025'] plugins=6
+  20.82s sup2api-2: container=up core=['1861104'] plugins=0
+  22.03s sup2api-2: container=up core=['1861104', '1863254'] plugins=5
+  22.64s sup2api-2: container=up core=['1861104'] plugins=6
+  22.67s sup2api-3: container=up core=['1864004'] plugins=0
+  23.89s sup2api-3: container=up core=['1864004', '1866225'] plugins=5
+  24.49s sup2api-3: container=up core=['1864004'] plugins=6
+  24.52s sup2api-4: container=up core=['1866883'] plugins=0
+  25.75s sup2api-4: container=up core=['1866883'] plugins=5
+  26.36s sup2api-4: container=up core=['1866883'] plugins=6
+  29.33s sup2api-1: container=up core=['1859025'] plugins=7
+  29.35s sup2api-2: container=up core=['1861104'] plugins=7
+  29.38s sup2api-3: container=up core=['1864004'] plugins=7
+  29.41s sup2api-4: container=up core=['1866883'] plugins=7
+== cluster state changes (node|mode|ready|stopped|release|shell boot|core boot ; plan status|cursor|step)
+   0.26s plan=completed|27|
+          sup2api-1|local|t|f|9093ef94|bd2c210a|364f72e5
+          sup2api-2|local|t|f|9093ef94|2da35cd6|9489104e
+          sup2api-3|local|t|f|9093ef94|d42bbed4|b69bb5ab
+          sup2api-4|local|t|f|9093ef94|1ed50342|7166c0a1
+   3.83s plan=running|1|sup2api-2:prepare:pending
+          sup2api-1|local|t|f|9093ef94|bd2c210a|364f72e5
+          sup2api-2|local|t|f|9093ef94|2da35cd6|9489104e
+          sup2api-3|local|t|f|9093ef94|d42bbed4|b69bb5ab
+          sup2api-4|local|t|f|9093ef94|1ed50342|7166c0a1
+   4.60s plan=running|2|sup2api-3:prepare:pending
+          sup2api-1|local|t|f|9093ef94|bd2c210a|364f72e5
+          sup2api-2|local|t|f|9093ef94|2da35cd6|9489104e
+          sup2api-3|local|t|f|9093ef94|d42bbed4|b69bb5ab
+          sup2api-4|local|t|f|9093ef94|1ed50342|7166c0a1
+   5.38s plan=running|3|sup2api-4:prepare:running
+          sup2api-1|local|t|f|9093ef94|bd2c210a|364f72e5
+          sup2api-2|local|t|f|9093ef94|2da35cd6|9489104e
+          sup2api-3|local|t|f|9093ef94|d42bbed4|b69bb5ab
+          sup2api-4|local|t|f|9093ef94|1ed50342|7166c0a1
+   6.05s plan=running|3|sup2api-4:prepare:done
+          sup2api-1|local|t|f|9093ef94|bd2c210a|364f72e5
+          sup2api-2|local|t|f|9093ef94|2da35cd6|9489104e
+          sup2api-3|local|t|f|9093ef94|d42bbed4|b69bb5ab
+          sup2api-4|local|t|f|9093ef94|1ed50342|7166c0a1
+   6.75s plan=running|5|sup2api-2:stop:running
+          sup2api-1|local|t|f|9093ef94|bd2c210a|364f72e5
+          sup2api-2|forward|f|f|9093ef94|2da35cd6|9489104e
+          sup2api-3|local|t|f|9093ef94|d42bbed4|b69bb5ab
+          sup2api-4|local|t|f|9093ef94|1ed50342|7166c0a1
+   9.45s plan=running|7|sup2api-3:stop:running
+          sup2api-1|local|t|f|9093ef94|bd2c210a|364f72e5
+          sup2api-2|forward|f|t||2da35cd6|
+          sup2api-3|forward|f|f|9093ef94|d42bbed4|b69bb5ab
+          sup2api-4|local|t|f|9093ef94|1ed50342|7166c0a1
+  12.78s plan=running|9|sup2api-4:stop:running
+          sup2api-1|local|t|f|9093ef94|bd2c210a|364f72e5
+          sup2api-2|forward|f|t||2da35cd6|
+          sup2api-3|forward|f|t||d42bbed4|
+          sup2api-4|forward|f|f|9093ef94|1ed50342|7166c0a1
+  16.21s plan=running|11|sup2api-1:stop:running
+          sup2api-1|maintenance|f|f|9093ef94|bd2c210a|364f72e5
+          sup2api-2|maintenance|f|t||2da35cd6|
+          sup2api-3|maintenance|f|t||d42bbed4|
+          sup2api-4|maintenance|f|t||1ed50342|
+  18.88s plan=running|12|sup2api-1:start-primary:running
+          sup2api-1|maintenance|f|f|9093ef94|bd2c210a|364f72e5
+          sup2api-2|maintenance|f|t||2da35cd6|
+          sup2api-3|maintenance|f|t||d42bbed4|
+          sup2api-4|maintenance|f|t||1ed50342|
+  19.56s plan=running|12|sup2api-1:start-primary:running
+          sup2api-1|maintenance|f|t||bd2c210a|
+          sup2api-2|maintenance|f|t||2da35cd6|
+          sup2api-3|maintenance|f|t||d42bbed4|
+          sup2api-4|maintenance|f|t||1ed50342|
+  20.25s plan=running|12|sup2api-1:start-primary:running
+          sup2api-1|maintenance|f|f|3f4d9ce4|bd2c210a|c8842b29
+          sup2api-2|maintenance|f|t||2da35cd6|
+          sup2api-3|maintenance|f|t||d42bbed4|
+          sup2api-4|maintenance|f|t||1ed50342|
+  20.94s plan=running|16|sup2api-2:start:running
+          sup2api-1|local|t|f|3f4d9ce4|bd2c210a|c8842b29
+          sup2api-2|forward|f|f|3f4d9ce4|2da35cd6|4c678c48
+          sup2api-3|forward|f|t||d42bbed4|
+          sup2api-4|forward|f|t||1ed50342|
+  22.33s plan=running|19|sup2api-3:redirect:pending
+          sup2api-1|local|t|f|3f4d9ce4|bd2c210a|c8842b29
+          sup2api-2|forward|f|f|3f4d9ce4|2da35cd6|4c678c48
+          sup2api-3|forward|f|t||d42bbed4|
+          sup2api-4|forward|f|t||1ed50342|
+  23.00s plan=running|20|sup2api-3:start:running
+          sup2api-1|local|t|f|3f4d9ce4|bd2c210a|c8842b29
+          sup2api-2|local|t|f|3f4d9ce4|2da35cd6|4c678c48
+          sup2api-3|forward|f|t||d42bbed4|
+          sup2api-4|forward|f|t||1ed50342|
+  24.37s plan=running|24|sup2api-4:start:running
+          sup2api-1|local|t|f|3f4d9ce4|bd2c210a|c8842b29
+          sup2api-2|local|t|f|3f4d9ce4|2da35cd6|4c678c48
+          sup2api-3|local|t|f|3f4d9ce4|d42bbed4|0425cf56
+          sup2api-4|forward|f|t||1ed50342|
+  25.73s plan=running|24|sup2api-4:start:running
+          sup2api-1|local|t|f|3f4d9ce4|bd2c210a|c8842b29
+          sup2api-2|local|t|f|3f4d9ce4|2da35cd6|4c678c48
+          sup2api-3|local|t|f|3f4d9ce4|d42bbed4|0425cf56
+          sup2api-4|forward|f|f|3f4d9ce4|1ed50342|f83b511e
+  26.40s plan=completed|27|
+          sup2api-1|local|t|f|3f4d9ce4|bd2c210a|c8842b29
+          sup2api-2|local|t|f|3f4d9ce4|2da35cd6|4c678c48
+          sup2api-3|local|t|f|3f4d9ce4|d42bbed4|0425cf56
+          sup2api-4|local|t|f|3f4d9ce4|1ed50342|f83b511e
+== plan events
+  1065|created|primary-first maintenance update approved|2026-10-04 05:23:55.417811+00
+  1066|step|sup2api-1: prepare|2026-10-04 05:23:55.421053+00
+  1067|done|sup2api-1: prepare |2026-10-04 05:23:56.107427+00
+  1068|step|sup2api-2: prepare|2026-10-04 05:23:56.111919+00
+  1069|done|sup2api-2: prepare |2026-10-04 05:23:56.832243+00
+  1070|step|sup2api-3: prepare|2026-10-04 05:23:56.838377+00
+  1071|done|sup2api-3: prepare |2026-10-04 05:23:57.581878+00
+  1072|step|sup2api-4: prepare|2026-10-04 05:23:57.588046+00
+  1073|done|sup2api-4: prepare |2026-10-04 05:23:58.329366+00
+  1074|step|sup2api-2: redirect|2026-10-04 05:23:58.335718+00
+  1075|done|sup2api-2: redirect |2026-10-04 05:23:58.388501+00
+  1076|step|sup2api-2: stop|2026-10-04 05:23:58.391935+00
+  1077|done|sup2api-2: stop |2026-10-04 05:24:01.551096+00
+  1078|step|sup2api-3: redirect|2026-10-04 05:24:01.555089+00
+  1079|done|sup2api-3: redirect |2026-10-04 05:24:01.607366+00
+  1080|step|sup2api-3: stop|2026-10-04 05:24:01.611013+00
+  1081|done|sup2api-3: stop |2026-10-04 05:24:04.770092+00
+  1082|step|sup2api-4: redirect|2026-10-04 05:24:04.777475+00
+  1083|done|sup2api-4: redirect |2026-10-04 05:24:04.826738+00
+  1084|step|sup2api-4: stop|2026-10-04 05:24:04.832193+00
+  1085|done|sup2api-4: stop |2026-10-04 05:24:07.99191+00
+  1086|step|sup2api-1: maintenance|2026-10-04 05:24:07.996358+00
+  1087|done|sup2api-1: maintenance |2026-10-04 05:24:07.999538+00
+  1088|step|sup2api-1: stop|2026-10-04 05:24:08.004069+00
+  1089|done|sup2api-1: stop |2026-10-04 05:24:11.117225+00
+  1090|step|sup2api-1: start-primary|2026-10-04 05:24:11.123875+00
+  1091|done|sup2api-1: start-primary |2026-10-04 05:24:12.704498+00
+  1092|step|sup2api-1: admit|2026-10-04 05:24:12.710461+00
+  1093|done|sup2api-1: admit |2026-10-04 05:24:12.715336+00
+  1094|step|sup2api-1: local|2026-10-04 05:24:12.717785+00
+  1095|done|sup2api-1: local |2026-10-04 05:24:12.718859+00
+  1096|step|sup2api-2: redirect|2026-10-04 05:24:12.720964+00
+  1097|done|sup2api-2: redirect |2026-10-04 05:24:12.761563+00
+  1098|step|sup2api-2: start|2026-10-04 05:24:12.775116+00
+  1099|done|sup2api-2: start |2026-10-04 05:24:14.396546+00
+  1100|step|sup2api-2: admit|2026-10-04 05:24:14.402293+00
+  1101|done|sup2api-2: admit |2026-10-04 05:24:14.457009+00
+  1102|step|sup2api-2: local|2026-10-04 05:24:14.512206+00
+  1103|done|sup2api-2: local |2026-10-04 05:24:14.564893+00
+  1104|step|sup2api-3: redirect|2026-10-04 05:24:14.568037+00
+  1105|done|sup2api-3: redirect |2026-10-04 05:24:14.618039+00
+  1106|step|sup2api-3: start|2026-10-04 05:24:14.62294+00
+  1107|done|sup2api-3: start |2026-10-04 05:24:16.256849+00
+  1108|step|sup2api-3: admit|2026-10-04 05:24:16.26297+00
+  1109|done|sup2api-3: admit |2026-10-04 05:24:16.318034+00
+  1110|step|sup2api-3: local|2026-10-04 05:24:16.37264+00
+  1111|done|sup2api-3: local |2026-10-04 05:24:16.427159+00
+  1112|step|sup2api-4: redirect|2026-10-04 05:24:16.429549+00
+  1113|done|sup2api-4: redirect |2026-10-04 05:24:16.450685+00
+  1114|step|sup2api-4: start|2026-10-04 05:24:16.484591+00
+  1115|done|sup2api-4: start |2026-10-04 05:24:18.08814+00
+  1116|step|sup2api-4: admit|2026-10-04 05:24:18.093567+00
+  1117|done|sup2api-4: admit |2026-10-04 05:24:18.148905+00
+  1118|step|sup2api-4: local|2026-10-04 05:24:18.201291+00
+  1119|done|sup2api-4: local |2026-10-04 05:24:18.204636+00
+  1120|completed|all node steps acknowledged|2026-10-04 05:24:18.25629+00
