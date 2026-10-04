@@ -553,3 +553,16 @@ cc-max 账号 21 的新运行镜像固定为 `sha256:8974324d0c45b35b5358094128f
 - 按这 14 个 request_id 核对生产账本：均 billed、CCGateway 0.1.3、预扣一次且释放一次、无遗留预扣，总记账 0.02314990。
 
 证据：[升级采样](evidence/ovh-upgrade-0.1.21.jsonl.txt)、[时间线](evidence/v021-upgrade-summary.txt)、[四入口验收](evidence/v021-runtime-verify.jsonl)、[真实 PG 测试](evidence/v021-isolated-db.log)、[隔离上游](evidence/ccg-v021-isolated.jsonl.txt)、[公网原始结果及拒答](evidence/ccg-v021-public-result.json)、[业务标签复测](evidence/ccg-v021-system-business.json)、[账本核对](evidence/v021-ledger-check.json)。
+
+
+### 24.8 账号入口与品牌图标：OVH v0.1.22
+
+2026-10-04 16:17–16:18（北京时间），源码 `c2e15c1b9` 已推送并在 OVH 从 Git 构建。创建账号入口使用 Anthropic、OpenAI、Gemini 平台名称；Claude Code 合并为单一入口，进入后选择 OAuth 授权码或 API Key。插件包携带 LobeHub SVG 与 MIT 许可，账号类型可覆盖插件图标，火山方舟与豆包视频分别显示 Logo。
+
+核心四节点均为 0.1.22；anthropic 0.2.3、openai 0.3.2、gemini 0.2.2、ccgateway 0.1.4、volcengine 0.12.1 全部四节点 active。moderation 未变。网关容器及 cc-max 账号容器未重建。数据库 schema-contract 仍为 `22358faf75ba5b4673da3b2a4a0e900d9efa7992923f2175e928c52381e9617c`。备份 `/home/debian/sup2api/backups/pre-v0.1.22-20261004T081623Z.dump` 经 pg_restore 目录校验。
+
+manifest `cf61b44b77f50a98075665b62c3e74cb818a4d5b0097bff06a14d8ece98c955b`，bundle `7509c542d21c145e35a1e367c1347b6e0e8ad1994f6db16be702887dd0ea18f6`。升级计划 `eb89d346aadf71de41c1e11069b4551e` 无预检阻断，完成 27 步，创建至完成约 23.78 秒；四入口 503 采样跨度分别 4.69、6.03、6.45、7.10 秒。
+
+验证包括前端类型检查和构建、SDK/账号服务/插件资源路由/五个插件测试，以及真实 manifest 打包检查 SVG 和许可入包。上线后四入口均验证账号类型名称、Claude Code 分组与鉴权标签、插件版本；全部图标 HTTP 200、image/svg+xml 且含 SVG 内容。CCGateway 固定 SSH 转发与管理页静态资源验证通过，发布以来四节点 ERROR 均为 0。此次未执行真实 OAuth 登录或模型调用。
+
+证据：`ovh-upgrade-0.1.22.jsonl.txt`、`v022-brand-verify.jsonl`、`v022-runtime-verify.jsonl`。
