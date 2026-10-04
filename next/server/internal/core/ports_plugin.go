@@ -57,6 +57,16 @@ type PlatformPlugin interface {
 	// snapshot sampled passively from the gateway's upstream responses.
 	BuildQuotaRequest(ctx context.Context, in *pluginv1.BuildQuotaRequestRequest) (*pluginv1.BuildQuotaRequestResponse, error)
 	ParseQuotaResponse(ctx context.Context, in *pluginv1.ParseQuotaResponseRequest) (*pluginv1.QuotaResult, error)
+	// CredentialRefresh renews the credentials of one account (CONTRACTS
+	// §48): the plugin declaring the account type builds the request and
+	// parses the answer, the account module sends it through the account's
+	// proxy behind netguard, under a cluster lock per account, and saves the
+	// merged credentials only if nobody changed them meanwhile. Called on
+	// the AccountTypeBinding.Client, only for types declaring manifest
+	// refresh. Optional for plugins: one without them answers gRPC
+	// Unimplemented and nothing is refreshed.
+	BuildRefreshRequest(ctx context.Context, in *pluginv1.BuildRefreshRequestRequest) (*pluginv1.BuildRefreshRequestResponse, error)
+	ParseRefreshResponse(ctx context.Context, in *pluginv1.ParseRefreshResponseRequest) (*pluginv1.RefreshResult, error)
 }
 
 // ExecutionHTTP is the one-request network capability supplied by the current

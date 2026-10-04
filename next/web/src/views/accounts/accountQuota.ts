@@ -4,7 +4,7 @@
 // per row — only the "refresh" action asks the upstream (force=true).
 import { onBeforeUnmount, reactive, ref, type Ref } from 'vue'
 import { api } from '@sub2api/host'
-import type { QuotaSnapshot, QuotaWindow } from '@/api/types'
+import type { CredentialRefreshOutcome, QuotaSnapshot, QuotaWindow } from '@/api/types'
 
 /** The server answers force refreshes at most this often per account; the console does not ask sooner. */
 export const QUOTA_REFRESH_MIN_MS = 30_000
@@ -160,4 +160,9 @@ export function useQuotaRefresh(opts: QuotaRefreshOptions) {
   }
 
   return { refreshing, refresh, waitMs }
+}
+
+/** POST /accounts/:id/refresh-credentials — renews the credentials now (CONTRACTS §48). */
+export function refreshAccountCredentials(id: number): Promise<CredentialRefreshOutcome> {
+  return api.post<CredentialRefreshOutcome>(`/accounts/${id}/refresh-credentials`)
 }

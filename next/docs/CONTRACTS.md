@@ -2839,3 +2839,74 @@ sub2api-plugin dev [--with <插件目录|x.s2plugin>]... [--addr 127.0.0.1:8080]
   - 在 `plugins/relay` 下运行，6 秒就绪；
   - 改动源码后自动升级到新开发版本（`builtin plugin upgrading`）；
   - 结束工具进程后核心与插件进程都退出。
+
+## 48. 账号凭证自动刷新：OAuth 令牌由核心续期（2026-10-05）
+
+claude-oauth 插件原来有个每 30 分钟跑一次的 `refresh_tokens` 任务，但它是空壳：插件拿不到要刷新的账号列表，也没办法把新令牌写回去。Claude OAuth 的 access token 只有 8 小时有效期，所以这类账号过期后就一直 401。
+
+现在按"插件描述、核心发送"（同 §44 额度查询）改由核心续期，参考 sub2api 的 `TokenRefreshService` 与 `OAuthRefreshAPI`。插件不需要任务、不需要 `net` 权限，也不需要写账号的权限。
+
+### 48.1 manifest
+
+```json
+"accountTypes": [{ "id": "claude_oauth", "refresh": { "expiresAtField": "expires_at", "beforeExpirySec": 1800 } }]
+```
+
+- `refresh` 存在即表示这个类型的凭证会过期，插件实现了下面两个 RPC。`{}` 使用默认值。
+- `expiresAtField`：凭证里存过期时间的顶层字段，默认 `expires_at`。
+  - 值可以是 Unix 秒的数字，也可以是数字字符串（从 sub2api 导入的账号是字符串）；大于 1e11 时按毫秒处理。
+  - 必须是凭证字段，不能是 `settingsFields` 里的字段，否则校验报 `invalid`。
+- `beforeExpirySec`：提前多少秒续期，60–86400，默认 1800（30 分钟，同 sub2api `refresh_before_expiry_hours: 0.5`）。
+
+### 48.2 插件接口（`PlatformService`）
+
+- `BuildRefreshRequest(account)` → `{method（默认 POST）, url, headers, body_json}`。
+  - 核心经账号代理发送，受 netguard 限制（同 §43.4），响应体最多读 64 KiB。
+  - 凭证根本无法续期（例如没有 refresh token）时返回 `FAILED_PRECONDITION`，核心按 `auth_rejected` 处理。
+  - 返回 `UNIMPLEMENTED` 表示不支持，记为 `transient`。
+- `ParseRefreshResponse(account, status, headers, body, transport_error, truncated)` → `RefreshResult`：
+  - 成功时 `credentials_patch_json` 是要合并进凭证的字段：列出的键覆盖，值为 null 的键删除，没列出的键保留。settings 字段不受影响，出现在补丁里会被忽略并记警告。
+  - `ERROR_TYPE_AUTH_REJECTED`：refresh token 已失效（`invalid_grant`、401、403），重试没有用。
+  - `ERROR_TYPE_TRANSIENT`：其他所有失败，下一轮再试。
+- SDK：实现 `pluginsdk.CredentialRefresher` 即可，没实现时两个 RPC 都回 `UNIMPLEMENTED`。
+
+### 48.3 核心流程（`account/refresh.go`）
+
+1. **定时扫描**：每 5 分钟一次，启动 30 秒后开始第一次。只有一个节点扫描（锁 `account:refresh:sweep`），托管核心要等准入后才扫（`CanWork`）。每次分页读取声明了 `refresh` 的类型下 `status = active` 的账号，每页 200 个，最多 4 个账号同时续期。
+2. **挑选**：过期时间在 `beforeExpirySec` 以内的账号。读不出过期时间的账号不会自动续期，只能手动。
+3. **单个账号续期**：
+   - 先拿账号锁 `account:refresh:<id>`（TTL 1 分钟）。拿不到说明别处正在续期，跳过。
+   - 拿到锁后重新读一遍账号，确认仍然到期。另一个节点可能刚续过，手上的 refresh token 也可能已经用掉了。
+   - 调用插件、发出请求、合并凭证，再用条件更新保存：`UPDATE … WHERE credentials_enc = <开始时的密文>`。如果续期期间管理员改过凭证，以管理员的为准，这次结果丢弃（`skipped: changed`）。
+   - 一旦开始就不受调用方取消影响：上游可能已经轮换了 refresh token，只有把回包存下来才拿得到新的那个。
+   - 保存成功后：在同一事务里写审计 `account.credentials_refresh`（actor 0，detail 含新的 `expires_at`）并发 `account.updated` 事件；然后广播 `account:changed`，各节点的账号缓存随之失效。
+4. **失败处理**：
+   - `auth_rejected`：记下当前凭证密文的 SHA-256。只要凭证没变，扫描就不再尝试，直到管理员重新授权、凭证变了才会再试。**不改账号状态**：下一次网关请求的 401 会由 §42 自动禁用处理，和 sub2api 一样。
+   - `transient`：记录下来，下一轮扫描重试。
+   - 成功后清除错误和"已拒绝"标记。
+
+### 48.4 数据与接口
+
+- 迁移 0030（可重跑）：表 `account_credential_refresh`，字段 `account_id`、`expires_at`、`last_attempt_at`、`last_success_at`、`error_type`（`''` / `auth_rejected` / `transient`）、`error`（最多 512 字节）、`rejected_cred_hash`。
+- `GET /accounts` 等返回账号的接口，每项新增 `refresh`：
+  - 类型没声明 `refresh` 时为 null；
+  - 否则为 `{expires_at, last_attempt_at, last_success_at, error_type, error}`。
+  - 只读数据库，不会触发上游请求。
+- `POST /accounts/:id/refresh-credentials`（`account:update` / `account:own:update`，`OwnerScope`）：立即续期，不看过期时间、"已拒绝"标记和账号状态，只受账号锁限制。
+  - 返回 `{refreshed, skipped?, error_type?, error?, refresh}`，其中 `skipped` 为 `in_progress` 或 `changed`。
+  - 类型不支持时返回 400。
+- 控制台：账号详情新增"令牌"一行，显示过期时间、上次刷新时间和错误（`auth_rejected` 提示重新授权），旁边有"立即刷新令牌"；行操作菜单里也有同一个入口。
+
+### 48.5 claude-oauth 0.2.0
+
+- `claude_oauth` 与 `claude_setup_token` 都声明 `"refresh": {}`。
+- **请求**（同 sub2api `claude_oauth_service.go` `RefreshToken`）：
+  - `POST https://platform.claude.com/v1/oauth/token`；
+  - body `{"grant_type":"refresh_token","refresh_token":…,"client_id":"9d1c250a-…"}`；
+  - `User-Agent: axios/1.13.6`。
+- **保存的字段**：`access_token`、`expires_at`（现在 + `expires_in`）。回包带了 `refresh_token`（轮换）或 `scope` 时一并保存，没带就保留原值。
+- **错误判断**：400 且包含 `invalid_grant`、401、403 记为 `auth_rejected`，其他记为 `transient`。没有 refresh token 的 setup token 返回 `FAILED_PRECONDITION`。
+- **删掉的东西**：空壳任务 `refresh_tokens`、`app.jobs.v1` 能力、`jobs` 权限。`BuildUpstreamRequest` 里只打日志的"即将过期"检查也删了。
+- **兼容**：`credentials.expires_at` 改用 `json.Number`，数字字符串也能解析。
+- 网关请求路径上不做同步续期。sub2api 在请求时剩余不到 3 分钟会先刷新再转发；这里靠 30 分钟提前量的定时扫描兜住，未做同步续期。
+- `net` 权限保留，只用于授权时用授权码换令牌。

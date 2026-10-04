@@ -69,3 +69,45 @@ func TestAccountTypeQuota(t *testing.T) {
 		t.Fatalf("too many: codes = %v", got)
 	}
 }
+
+// Credential refresh declarations of an account type (CONTRACTS §48).
+func TestAccountTypeRefresh(t *testing.T) {
+	m := minimal()
+	m.Capabilities = []manifest.Capability{{ID: manifest.CapPlatformAdapter}}
+	m.HostPermissions = []manifest.HostPermission{
+		{ID: "gateway.endpoint"}, {ID: "platform.register"},
+		{ID: "accounts.credentials", Scope: map[string]any{"types": "own"}},
+	}
+	m.Platforms = []manifest.Platform{validPlatform()}
+	m.AccountTypes = []manifest.AccountType{{
+		ID: "oauth", Label: manifest.LocalizedText{"en": "OAuth"},
+		Form:           manifest.Form{Mode: "schema", Schema: "forms/k.json"},
+		Platforms:      []manifest.AccountPlatform{{Platform: "video"}},
+		SettingsFields: []string{"region"},
+		Refresh:        &manifest.AccountRefresh{},
+	}}
+	files := map[string][]byte{"forms/k.json": []byte(`{}`)}
+	if err := Validate(m, files, ValidateOptions{Tooling: true}); err != nil {
+		t.Fatalf("default refresh rejected: %v", codes(err))
+	}
+	m.AccountTypes[0].Refresh = &manifest.AccountRefresh{ExpiresAtField: "expiry", BeforeExpirySec: 600}
+	if err := Validate(m, files, ValidateOptions{Tooling: true}); err != nil {
+		t.Fatalf("custom refresh rejected: %v", codes(err))
+	}
+	for _, c := range []struct {
+		r     manifest.AccountRefresh
+		field string
+		code  string
+	}{
+		{manifest.AccountRefresh{ExpiresAtField: "a.b"}, "expiresAtField", "invalid_format"},
+		{manifest.AccountRefresh{ExpiresAtField: "region"}, "expiresAtField", "invalid"},
+		{manifest.AccountRefresh{BeforeExpirySec: 59}, "beforeExpirySec", "out_of_range"},
+		{manifest.AccountRefresh{BeforeExpirySec: 86401}, "beforeExpirySec", "out_of_range"},
+	} {
+		r := c.r
+		m.AccountTypes[0].Refresh = &r
+		if got := codes(Validate(m, files, ValidateOptions{Tooling: true})); got["accountTypes[0].refresh."+c.field] != c.code {
+			t.Errorf("%+v: codes = %v, want %s %s", c.r, got, c.field, c.code)
+		}
+	}
+}

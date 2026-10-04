@@ -1022,3 +1022,11 @@ func (f *fixture) post(uid int64, path string, want int) map[string]any {
 	_ = json.Unmarshal(w.Body.Bytes(), &out)
 	return out
 }
+
+func (p *recPlugin) BuildRefreshRequest(context.Context, *pluginv1.BuildRefreshRequestRequest) (*pluginv1.BuildRefreshRequestResponse, error) {
+	return nil, nil
+}
+
+func (p *recPlugin) ParseRefreshResponse(context.Context, *pluginv1.ParseRefreshResponseRequest) (*pluginv1.RefreshResult, error) {
+	return nil, nil
+}

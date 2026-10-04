@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -41,7 +40,9 @@ const (
 type credentials struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
-	ExpiresAt    int64  `json:"expires_at"`
+	// ExpiresAt is Unix seconds; accounts imported from sub2api store it as
+	// a numeric string, which json.Number accepts too.
+	ExpiresAt json.Number `json:"expires_at"`
 }
 
 type Plugin struct {
@@ -89,19 +90,12 @@ func (p *Plugin) BuildUpstreamRequest(ctx context.Context, req *pluginv1.BuildUp
 		return nil, errors.New("missing account")
 	}
 
+	// The host renews the access token before it expires (refresh.go).
 	var creds struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		ExpiresAt    int64  `json:"expires_at"`
+		AccessToken string `json:"access_token"`
 	}
 	if err := json.Unmarshal([]byte(account.GetCredentialsJson()), &creds); err != nil {
 		return nil, fmt.Errorf("parse credentials: %w", err)
-	}
-
-	// 检查令牌是否即将过期（提前 5 分钟）
-	if creds.ExpiresAt > 0 && time.Now().Unix() >= creds.ExpiresAt-300 {
-		slog.InfoContext(ctx, "claude-oauth: token expiring soon", "account", account.GetId(), "expires_at", creds.ExpiresAt)
-		// 实际刷新由 job 处理，这里只记录
 	}
 
 	// 构造 Authorization header
@@ -335,20 +329,6 @@ func (p *Plugin) handleAuthExchange(ctx context.Context, req *pluginv1.HTTPReque
 		"account_uuid":  tokenResp.Account.UUID,
 		"email_address": tokenResp.Account.EmailAddress,
 	}), nil
-}
-
-// ---------------------------------------------------------------- Job (token 刷新)
-
-func (p *Plugin) RunJob(ctx context.Context, req *pluginv1.RunJobRequest) (*pluginv1.RunJobResponse, error) {
-	if req.GetJobId() != "refresh_tokens" {
-		return &pluginv1.RunJobResponse{Message: "unknown job"}, nil
-	}
-
-	// 查询即将过期的账号（通过 accounts.credentials 权限）
-	// 注意：插件 SDK 当前没有直接的"列出账号"接口，需要核心提供
-	// 这里先返回占位，实际需要核心新增接口
-
-	return &pluginv1.RunJobResponse{Message: "token refresh job completed (stub)"}, nil
 }
 
 // ---------------------------------------------------------------- helpers

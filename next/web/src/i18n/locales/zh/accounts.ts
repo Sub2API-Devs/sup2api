@@ -158,5 +158,20 @@ export default {
   resetStatusHint: '清除冷却与限流状态，账号立即恢复调度',
   resetStatusTitle: '重置账号状态',
   resetStatusConfirm: '确定清除账号「{name}」的冷却 / 限流状态？如果上游仍在限流，账号可能很快再次进入冷却。',
-  resetStatusDone: '账号状态已重置'
+  resetStatusDone: '账号状态已重置',
+  credRefresh: {
+    label: '令牌',
+    expiresAt: '{time} 过期',
+    expired: '已过期',
+    unknown: '过期时间未知',
+    lastSuccess: '上次刷新 {time}',
+    authRejected: '刷新令牌已失效，请重新授权账号',
+    transient: '上次刷新失败，将自动重试：{error}',
+    action: '立即刷新令牌',
+    actionHint: '核心会在令牌过期前自动刷新；这里可以马上刷新一次',
+    done: '令牌已刷新',
+    inProgress: '正在刷新中，请稍后再看',
+    changed: '刷新期间账号凭证被修改，本次结果已丢弃',
+    failed: '刷新失败：{error}'
+  }
 }

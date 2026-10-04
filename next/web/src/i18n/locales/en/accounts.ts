@@ -158,5 +158,20 @@ export default {
   resetStatusHint: 'Clear the cooldown and rate-limit state; the account is scheduled again right away',
   resetStatusTitle: 'Reset account status',
   resetStatusConfirm: 'Clear the cooldown / rate-limit state of "{name}"? If the upstream still limits it, the account may cool down again soon.',
-  resetStatusDone: 'Account status reset'
+  resetStatusDone: 'Account status reset',
+  credRefresh: {
+    label: 'Token',
+    expiresAt: 'expires {time}',
+    expired: 'expired',
+    unknown: 'expiry unknown',
+    lastSuccess: 'last refreshed {time}',
+    authRejected: 'The refresh token is no longer valid; authorize the account again',
+    transient: 'Last refresh failed and will be retried: {error}',
+    action: 'Refresh token now',
+    actionHint: 'The core refreshes the token before it expires; this refreshes it right away',
+    done: 'Token refreshed',
+    inProgress: 'A refresh is already running; check again shortly',
+    changed: 'The credentials were changed during the refresh; its result was discarded',
+    failed: 'Refresh failed: {error}'
+  }
 }

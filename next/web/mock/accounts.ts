@@ -389,6 +389,20 @@ function quotaOf(a: any) {
   }
 }
 
+/** Credential refresh state (CONTRACTS §48): OAuth-style types only. */
+function refreshOf(a: any) {
+  if (!QUOTA_TYPES.has(`${a.plugin_key}/${a.type}`)) return null
+  // The list strips credentials: setup tokens are the ones without a refresh token.
+  const renews = a.type === 'claude_oauth'
+  return a.refresh_state || {
+    expires_at: renews ? now(5 * 3600) : null,
+    last_attempt_at: renews ? now(-3 * 3600) : null,
+    last_success_at: renews ? now(-3 * 3600) : null,
+    error_type: '',
+    error: ''
+  }
+}
+
 /** Current window counters (CONTRACTS §18.1); mocked as a fraction of the limit. */
 function rateUsage(a: any) {
   const used = (limit: number, ratio: number) => (limit ? Math.min(limit, Math.round(limit * ratio)) : 0)
@@ -404,6 +418,7 @@ const withGroups = (a: any) => ({
   created_by_email: userEmail(a.created_by),
   rate_usage: rateUsage(a),
   quota: quotaOf(a),
+  refresh: refreshOf(a),
   groups: (a.group_ids || []).map((id: number) => ({ id, name: id === 1 ? 'default' : id === 2 ? 'vip' : `group-${id}` }))
 })
 
@@ -698,6 +713,19 @@ on('GET', '/accounts/:id/quota', async (req) => {
     }
   }
   return quotaOf(r.a)
+})
+// Renews the credentials of an OAuth account now (CONTRACTS §48).
+on('POST', '/accounts/:id/refresh-credentials', (req) => {
+  const r = scopedAccount(req, 'update')
+  if (!('a' in r)) return r
+  const a = r.a
+  if (!refreshOf(a)) return fail(400, 'invalid_argument', 'this account type does not refresh its credentials')
+  if (!a.credentials?.refresh_token) {
+    a.refresh_state = { ...refreshOf(a), last_attempt_at: now(0), error_type: 'auth_rejected', error: 'the account has no refresh_token; authorize it again' }
+    return { refreshed: false, error_type: 'auth_rejected', error: a.refresh_state.error, refresh: refreshOf(a) }
+  }
+  a.refresh_state = { expires_at: now(8 * 3600), last_attempt_at: now(0), last_success_at: now(0), error_type: '', error: '' }
+  return { refreshed: true, refresh: refreshOf(a) }
 })
 // Clears the cooldown / rate-limit state of the account (needs update on it).
 on('POST', '/accounts/:id/reset-status', (req) => {

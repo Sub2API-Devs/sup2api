@@ -19,7 +19,7 @@ import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
 import AccountEditor from './AccountEditor.vue'
 import { sameCreationGroup } from './accountTypeChoices'
 import AccountQuotaCell from './AccountQuotaCell.vue'
-import { hasQuota, resetAccountStatus, useQuotaRefresh } from './accountQuota'
+import { hasQuota, refreshAccountCredentials, resetAccountStatus, useQuotaRefresh } from './accountQuota'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -343,6 +343,43 @@ async function resetStatus(a: Account) {
   }
 }
 
+
+// ---------------------------------------------------------------- credential refresh (CONTRACTS §48)
+// The core renews expiring tokens by itself; the detail shows the state and
+// offers one manual refresh.
+const refreshingCreds = ref(new Set<number>())
+const canRefreshCreds = (a: Account) => !!a.refresh && canUpdate(a) && !a.orphaned
+
+function credRefreshText(a: Account): { text: string; warn: boolean } {
+  const r = a.refresh
+  if (!r) return { text: '', warn: false }
+  if (r.error_type === 'auth_rejected') return { text: t('accounts.credRefresh.authRejected'), warn: true }
+  const parts: string[] = []
+  if (!r.expires_at) parts.push(t('accounts.credRefresh.unknown'))
+  else if (new Date(r.expires_at).getTime() <= Date.now()) parts.push(t('accounts.credRefresh.expired'))
+  else parts.push(t('accounts.credRefresh.expiresAt', { time: formatDateTime(r.expires_at) }))
+  if (r.last_success_at) parts.push(t('accounts.credRefresh.lastSuccess', { time: formatRelative(r.last_success_at, t) }))
+  if (r.error_type === 'transient') parts.push(t('accounts.credRefresh.transient', { error: r.error }))
+  return { text: parts.join(' · '), warn: r.error_type === 'transient' }
+}
+
+async function refreshCreds(a: Account) {
+  if (refreshingCreds.value.has(a.id)) return
+  refreshingCreds.value.add(a.id)
+  try {
+    const out = await refreshAccountCredentials(a.id)
+    a.refresh = out.refresh
+    if (detail.value?.id === a.id) detail.value.refresh = out.refresh
+    if (out.refreshed) toast(t('accounts.credRefresh.done'), 'success')
+    else if (out.skipped === 'in_progress') toast(t('accounts.credRefresh.inProgress'), 'info')
+    else if (out.skipped === 'changed') toast(t('accounts.credRefresh.changed'), 'info')
+    else if (out.error) toast(t('accounts.credRefresh.failed', { error: out.error }), 'error')
+  } catch (e) {
+    notifyError(e)
+  } finally {
+    refreshingCreds.value.delete(a.id)
+  }
+}
 // ---------------------------------------------------------------- row actions
 async function toggleSchedulable(a: Account, v: boolean) {
   try {
@@ -369,6 +406,7 @@ function actionsFor(a: Account) {
     { key: 'detail', label: t('common.detail') },
     { key: 'reveal', label: t('accounts.revealCredentials'), hidden: !canReveal(a) || a.orphaned },
     { key: 'reset-status', label: t('accounts.resetStatus'), hidden: !canResetStatus(a) },
+    { key: 'refresh-credentials', label: t('accounts.credRefresh.action'), hidden: !canRefreshCreds(a) },
     { key: 'delete', label: t('common.delete'), danger: true, hidden: !canDelete(a) }
   ]
 }
@@ -377,6 +415,7 @@ function onAction(a: Account, key: string) {
   if (key === 'detail') openDetail(a)
   else if (key === 'reveal') reveal(a)
   else if (key === 'reset-status') resetStatus(a)
+  else if (key === 'refresh-credentials') refreshCreds(a)
   else if (key === 'delete') remove(a)
 }
 
@@ -630,6 +669,13 @@ function groupTags(a: Account) {
               </span>
               <SHint v-else inline>—</SHint>
             </dd>
+            <template v-if="detail.refresh">
+              <dt>{{ t('accounts.credRefresh.label') }}</dt>
+              <dd data-testid="account-cred-refresh">
+                <span :class="credRefreshText(detail).warn ? 'text-amber-600' : ''" class="text-sm">{{ credRefreshText(detail).text }}</span>
+                <SLink v-if="canRefreshCreds(detail)" as="button" class="ml-2 text-xs" :title="t('accounts.credRefresh.actionHint')" :disabled="refreshingCreds.has(detail.id)" @click="refreshCreds(detail)">{{ t('accounts.credRefresh.action') }}</SLink>
+              </dd>
+            </template>
             <template v-if="hasQuota(detail.quota)">
               <dt>{{ t('accounts.quota.column') }}</dt>
               <dd><AccountQuotaCell :quota="detail.quota" :refreshing="quotaRefresh.refreshing.has(detail.id)" @refresh="quotaRefresh.refresh(detail.id, detail.quota)" /></dd>

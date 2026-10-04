@@ -484,6 +484,20 @@ func (s platformServer) ParseQuotaResponse(ctx context.Context, in *pluginv1.Par
 	return nil, status.Error(codes.Unimplemented, "this account type cannot query its quota")
 }
 
+func (s platformServer) BuildRefreshRequest(ctx context.Context, in *pluginv1.BuildRefreshRequestRequest) (*pluginv1.BuildRefreshRequestResponse, error) {
+	if r, ok := s.impl.(CredentialRefresher); ok {
+		return r.BuildRefreshRequest(ctx, in)
+	}
+	return nil, status.Error(codes.Unimplemented, "this account type cannot refresh its credentials")
+}
+
+func (s platformServer) ParseRefreshResponse(ctx context.Context, in *pluginv1.ParseRefreshResponseRequest) (*pluginv1.RefreshResult, error) {
+	if r, ok := s.impl.(CredentialRefresher); ok {
+		return r.ParseRefreshResponse(ctx, in)
+	}
+	return nil, status.Error(codes.Unimplemented, "this account type cannot refresh its credentials")
+}
+
 type hookServer struct {
 	pluginv1.UnimplementedHookServiceServer
 	impl Hook

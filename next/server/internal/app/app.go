@@ -191,6 +191,9 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		Slots: cl.Slots, Limiter: limiter, Bus: cl.Bus, AllowPrivateUpstream: cfg.AllowPrivateUpstream, Converters: converters,
 		// Ownership checks and proxy_url resolution (CONTRACTS §21).
 		Authorizer: az, Resolver: prx,
+		// Credential refresh: one renewal per account cluster-wide, one
+		// sweeping node, only once admitted (CONTRACTS §48).
+		Locker: cl.Locker, CanWork: canWork,
 	})
 	// Price sync sources (upstream API keys encrypted) and GET /key/prices for
 	// downstream sup2api instances (CONTRACTS §17).

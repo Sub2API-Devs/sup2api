@@ -47,6 +47,8 @@ type fakePlatform struct {
 	// quotaCalls counts the requests built.
 	quotaURL   string
 	quotaCalls int
+	// refreshURL is where BuildRefreshRequest points (empty: Unimplemented).
+	refreshURL string
 	mu         sync.Mutex
 	calls      []*pluginv1.ValidateCredentialsRequest
 	tests      []*pluginv1.BuildTestRequestRequest
@@ -129,6 +131,41 @@ func (p *fakePlatform) ClassifyError(_ context.Context, in *pluginv1.ClassifyErr
 		return nil, core.ErrInternal
 	}
 	return cls, nil
+}
+
+// BuildRefreshRequest posts the account's refresh_token to refreshURL;
+// refreshURL empty answers Unimplemented.
+func (p *fakePlatform) BuildRefreshRequest(_ context.Context, in *pluginv1.BuildRefreshRequestRequest) (*pluginv1.BuildRefreshRequestResponse, error) {
+	p.mu.Lock()
+	u := p.refreshURL
+	p.mu.Unlock()
+	if u == "" {
+		return nil, status.Error(codes.Unimplemented, "not implemented")
+	}
+	rt := gjson.Get(in.Account.CredentialsJson, "refresh_token").String()
+	return &pluginv1.BuildRefreshRequestResponse{Url: u, BodyJson: fmt.Sprintf(`{"refresh_token":%q}`, rt)}, nil
+}
+
+// ParseRefreshResponse reads {"access_token","refresh_token","expires_in"};
+// 400 is auth_rejected (invalid_grant), anything else non-200 transient.
+func (*fakePlatform) ParseRefreshResponse(_ context.Context, in *pluginv1.ParseRefreshResponseRequest) (*pluginv1.RefreshResult, error) {
+	switch {
+	case in.GetStatus() == http.StatusBadRequest:
+		return &pluginv1.RefreshResult{ErrorType: pluginv1.RefreshResult_ERROR_TYPE_AUTH_REJECTED, ErrorMessage: "invalid_grant"}, nil
+	case in.GetStatus() != http.StatusOK:
+		return &pluginv1.RefreshResult{ErrorType: pluginv1.RefreshResult_ERROR_TYPE_TRANSIENT,
+			ErrorMessage: fmt.Sprintf("status %d %s", in.GetStatus(), in.GetTransportError())}, nil
+	}
+	patch := map[string]any{
+		"access_token": gjson.GetBytes(in.Body, "access_token").String(),
+		"expires_at":   time.Now().Unix() + gjson.GetBytes(in.Body, "expires_in").Int(),
+		"scratch":      nil, // removed from the stored credentials
+	}
+	if rt := gjson.GetBytes(in.Body, "refresh_token").String(); rt != "" {
+		patch["refresh_token"] = rt
+	}
+	b, _ := json.Marshal(patch)
+	return &pluginv1.RefreshResult{CredentialsPatchJson: string(b)}, nil
 }
 
 // BuildModelsRequest lists models from the fake upstream's /v1/models; the

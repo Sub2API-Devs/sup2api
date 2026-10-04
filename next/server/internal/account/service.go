@@ -46,6 +46,13 @@ type Deps struct {
 	// Resolver finds or creates the proxy named by proxy_url when an account
 	// is saved (CONTRACTS §21.4); nil rejects proxy_url as unsupported.
 	Resolver core.ProxyResolver
+	// Locker serialises credential refreshes across nodes (CONTRACTS §48):
+	// one lock per account, and one node sweeps at a time. nil: this node
+	// only (single-node tests).
+	Locker core.Locker
+	// CanWork admits the background refresh sweep (managed cores run it only
+	// once admitted); nil always allows.
+	CanWork func() bool
 }
 
 const (
@@ -76,6 +83,10 @@ type Service struct {
 	// active quota queries of one account (CONTRACTS §44).
 	quota       *quotaRecorder
 	quotaFlight singleflight.Group
+
+	// refreshLocal serialises credential refreshes of one account on this
+	// node when there is no cluster Locker (CONTRACTS §48).
+	refreshLocal sync.Map // account id -> *sync.Mutex
 }
 
 type groupSnap struct {
@@ -127,12 +138,15 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	// Subscription quota and runtime state (CONTRACTS §44).
 	r.PermAny("GET", "/accounts/:id/quota", s.getQuota, "account:read", "account:own:read")
 	r.PermAny("POST", "/accounts/:id/reset-status", s.resetStatus, "account:update", "account:own:update")
+	// Credential refresh (CONTRACTS §48).
+	r.PermAny("POST", "/accounts/:id/refresh-credentials", s.refreshCredentials, "account:update", "account:own:update")
 }
 
 // Run subscribes to account:changed, flushes last_used_at every 10 s and
 // writes passive quota samples until ctx is done.
 func (s *Service) Run(ctx context.Context) {
 	go s.quota.run(ctx)
+	go s.runRefreshSweep(ctx)
 	if s.d.Bus != nil {
 		cancel := s.d.Bus.Subscribe(core.ChannelAccountChanged, func([]byte) { s.invalidate() })
 		defer cancel()

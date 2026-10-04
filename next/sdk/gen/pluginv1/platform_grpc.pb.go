@@ -35,6 +35,8 @@ const (
 	PlatformService_ParseReconcileResponse_FullMethodName = "/sub2api.plugin.v1.PlatformService/ParseReconcileResponse"
 	PlatformService_BuildQuotaRequest_FullMethodName      = "/sub2api.plugin.v1.PlatformService/BuildQuotaRequest"
 	PlatformService_ParseQuotaResponse_FullMethodName     = "/sub2api.plugin.v1.PlatformService/ParseQuotaResponse"
+	PlatformService_BuildRefreshRequest_FullMethodName    = "/sub2api.plugin.v1.PlatformService/BuildRefreshRequest"
+	PlatformService_ParseRefreshResponse_FullMethodName   = "/sub2api.plugin.v1.PlatformService/ParseRefreshResponse"
 )
 
 // PlatformServiceClient is the client API for PlatformService service.
@@ -183,6 +185,28 @@ type PlatformServiceClient interface {
 	// Reads the upstream's answer to the request above into quota windows. It
 	// states upstream facts only; the host stores, merges and serves them.
 	ParseQuotaResponse(ctx context.Context, in *ParseQuotaResponseRequest, opts ...grpc.CallOption) (*QuotaResult, error)
+	// Builds the request that renews the credentials of one account (an OAuth
+	// access token from its refresh token, CONTRACTS §48), for account types
+	// declaring manifest accountTypes[].refresh. Same division of labour as
+	// BuildQuotaRequest: the plugin DESCRIBES the request, the host sends it
+	// through the account's proxy, behind its SSRF guard and timeout, and
+	// hands the answer to ParseRefreshResponse. The host decides when: before
+	// the credentials expire (refresh.beforeExpirySec), under a cluster-wide
+	// lock per account so a rotating refresh token is used exactly once, and
+	// when an administrator asks. The plugin needs no "net" permission, no
+	// job and no write access to accounts.
+	//
+	// Called on the plugin declaring the account type, with the credentials
+	// as stored. Optional: answer UNIMPLEMENTED and nothing is refreshed.
+	// Answer FAILED_PRECONDITION when these credentials cannot be renewed at
+	// all (no refresh token): the host records it like ERROR_TYPE_AUTH_REJECTED
+	// and does not ask again until the credentials change.
+	BuildRefreshRequest(ctx context.Context, in *BuildRefreshRequestRequest, opts ...grpc.CallOption) (*BuildRefreshRequestResponse, error)
+	// Reads the upstream's answer to the request above. On success it returns
+	// the credential fields that changed; the host merges them into the stored
+	// credentials (other fields are kept), encrypts and saves them, and only if
+	// nobody changed the account in the meantime.
+	ParseRefreshResponse(ctx context.Context, in *ParseRefreshResponseRequest, opts ...grpc.CallOption) (*RefreshResult, error)
 }
 
 type platformServiceClient struct {
@@ -353,6 +377,26 @@ func (c *platformServiceClient) ParseQuotaResponse(ctx context.Context, in *Pars
 	return out, nil
 }
 
+func (c *platformServiceClient) BuildRefreshRequest(ctx context.Context, in *BuildRefreshRequestRequest, opts ...grpc.CallOption) (*BuildRefreshRequestResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BuildRefreshRequestResponse)
+	err := c.cc.Invoke(ctx, PlatformService_BuildRefreshRequest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformServiceClient) ParseRefreshResponse(ctx context.Context, in *ParseRefreshResponseRequest, opts ...grpc.CallOption) (*RefreshResult, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RefreshResult)
+	err := c.cc.Invoke(ctx, PlatformService_ParseRefreshResponse_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlatformServiceServer is the server API for PlatformService service.
 // All implementations must embed UnimplementedPlatformServiceServer
 // for forward compatibility.
@@ -499,6 +543,28 @@ type PlatformServiceServer interface {
 	// Reads the upstream's answer to the request above into quota windows. It
 	// states upstream facts only; the host stores, merges and serves them.
 	ParseQuotaResponse(context.Context, *ParseQuotaResponseRequest) (*QuotaResult, error)
+	// Builds the request that renews the credentials of one account (an OAuth
+	// access token from its refresh token, CONTRACTS §48), for account types
+	// declaring manifest accountTypes[].refresh. Same division of labour as
+	// BuildQuotaRequest: the plugin DESCRIBES the request, the host sends it
+	// through the account's proxy, behind its SSRF guard and timeout, and
+	// hands the answer to ParseRefreshResponse. The host decides when: before
+	// the credentials expire (refresh.beforeExpirySec), under a cluster-wide
+	// lock per account so a rotating refresh token is used exactly once, and
+	// when an administrator asks. The plugin needs no "net" permission, no
+	// job and no write access to accounts.
+	//
+	// Called on the plugin declaring the account type, with the credentials
+	// as stored. Optional: answer UNIMPLEMENTED and nothing is refreshed.
+	// Answer FAILED_PRECONDITION when these credentials cannot be renewed at
+	// all (no refresh token): the host records it like ERROR_TYPE_AUTH_REJECTED
+	// and does not ask again until the credentials change.
+	BuildRefreshRequest(context.Context, *BuildRefreshRequestRequest) (*BuildRefreshRequestResponse, error)
+	// Reads the upstream's answer to the request above. On success it returns
+	// the credential fields that changed; the host merges them into the stored
+	// credentials (other fields are kept), encrypts and saves them, and only if
+	// nobody changed the account in the meantime.
+	ParseRefreshResponse(context.Context, *ParseRefreshResponseRequest) (*RefreshResult, error)
 	mustEmbedUnimplementedPlatformServiceServer()
 }
 
@@ -556,6 +622,12 @@ func (UnimplementedPlatformServiceServer) BuildQuotaRequest(context.Context, *Bu
 }
 func (UnimplementedPlatformServiceServer) ParseQuotaResponse(context.Context, *ParseQuotaResponseRequest) (*QuotaResult, error) {
 	return nil, status.Error(codes.Unimplemented, "method ParseQuotaResponse not implemented")
+}
+func (UnimplementedPlatformServiceServer) BuildRefreshRequest(context.Context, *BuildRefreshRequestRequest) (*BuildRefreshRequestResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BuildRefreshRequest not implemented")
+}
+func (UnimplementedPlatformServiceServer) ParseRefreshResponse(context.Context, *ParseRefreshResponseRequest) (*RefreshResult, error) {
+	return nil, status.Error(codes.Unimplemented, "method ParseRefreshResponse not implemented")
 }
 func (UnimplementedPlatformServiceServer) mustEmbedUnimplementedPlatformServiceServer() {}
 func (UnimplementedPlatformServiceServer) testEmbeddedByValue()                         {}
@@ -866,6 +938,42 @@ func _PlatformService_ParseQuotaResponse_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformService_BuildRefreshRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BuildRefreshRequestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).BuildRefreshRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_BuildRefreshRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).BuildRefreshRequest(ctx, req.(*BuildRefreshRequestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformService_ParseRefreshResponse_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ParseRefreshResponseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).ParseRefreshResponse(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_ParseRefreshResponse_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).ParseRefreshResponse(ctx, req.(*ParseRefreshResponseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlatformService_ServiceDesc is the grpc.ServiceDesc for PlatformService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -936,6 +1044,14 @@ var PlatformService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ParseQuotaResponse",
 			Handler:    _PlatformService_ParseQuotaResponse_Handler,
+		},
+		{
+			MethodName: "BuildRefreshRequest",
+			Handler:    _PlatformService_BuildRefreshRequest_Handler,
+		},
+		{
+			MethodName: "ParseRefreshResponse",
+			Handler:    _PlatformService_ParseRefreshResponse_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

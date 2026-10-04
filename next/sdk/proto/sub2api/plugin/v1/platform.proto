@@ -148,6 +148,28 @@ service PlatformService {
   // Reads the upstream's answer to the request above into quota windows. It
   // states upstream facts only; the host stores, merges and serves them.
   rpc ParseQuotaResponse(ParseQuotaResponseRequest) returns (QuotaResult);
+  // Builds the request that renews the credentials of one account (an OAuth
+  // access token from its refresh token, CONTRACTS §48), for account types
+  // declaring manifest accountTypes[].refresh. Same division of labour as
+  // BuildQuotaRequest: the plugin DESCRIBES the request, the host sends it
+  // through the account's proxy, behind its SSRF guard and timeout, and
+  // hands the answer to ParseRefreshResponse. The host decides when: before
+  // the credentials expire (refresh.beforeExpirySec), under a cluster-wide
+  // lock per account so a rotating refresh token is used exactly once, and
+  // when an administrator asks. The plugin needs no "net" permission, no
+  // job and no write access to accounts.
+  //
+  // Called on the plugin declaring the account type, with the credentials
+  // as stored. Optional: answer UNIMPLEMENTED and nothing is refreshed.
+  // Answer FAILED_PRECONDITION when these credentials cannot be renewed at
+  // all (no refresh token): the host records it like ERROR_TYPE_AUTH_REJECTED
+  // and does not ask again until the credentials change.
+  rpc BuildRefreshRequest(BuildRefreshRequestRequest) returns (BuildRefreshRequestResponse);
+  // Reads the upstream's answer to the request above. On success it returns
+  // the credential fields that changed; the host merges them into the stored
+  // credentials (other fields are kept), encrypts and saves them, and only if
+  // nobody changed the account in the meantime.
+  rpc ParseRefreshResponse(ParseRefreshResponseRequest) returns (RefreshResult);
 }
 
 message EstimateUsageRequest {
@@ -643,5 +665,59 @@ message QuotaResult {
   repeated QuotaWindow windows = 1;
   ErrorType error_type = 2;
   // Why, shown with the snapshot. At most 512 bytes are kept.
+  string error_message = 3;
+}
+
+message BuildRefreshRequestRequest {
+  // The account to renew, credentials included (the account type is always
+  // this plugin's). platform is empty: no client endpoint is involved.
+  Account account = 1;
+}
+
+message BuildRefreshRequestResponse {
+  string method = 1;               // default "POST"
+  // Absolute http(s) URL. The host rejects private/loopback/link-local
+  // targets (SSRF guard) unless the account goes through a proxy, and sends
+  // it through the account's proxy.
+  string url = 2;
+  map<string, string> headers = 3;
+  string body_json = 4;            // optional; Content-Type defaults to application/json
+}
+
+message ParseRefreshResponseRequest {
+  Account account = 1;             // as in BuildRefreshRequest
+  // Upstream status, 0 for a transport error (see transport_error).
+  int32 status = 2;
+  map<string, string> headers = 3; // lower-cased
+  bytes body = 4;                  // truncated to the host's body cap (64 KiB)
+  string transport_error = 5;
+  // The response exceeded the host's body cap; do not trust a partial
+  // document.
+  bool truncated = 6;
+}
+
+// RefreshResult is what the plugin read out of the refresh answer.
+message RefreshResult {
+  enum ErrorType {
+    // Success: credentials_patch_json carries the renewed fields.
+    ERROR_TYPE_UNSPECIFIED = 0;
+    // The upstream refused the refresh credential for good (invalid_grant,
+    // revoked, 401/403): retrying cannot help. The host records it, stops
+    // refreshing this account until its credentials change, and does not
+    // touch the account's status - the gateway's classification of the
+    // next upstream error does that (§42).
+    ERROR_TYPE_AUTH_REJECTED = 1;
+    // Any other failure: transport error, 429, 5xx, unreadable body. The
+    // host records it and tries again on its next pass.
+    ERROR_TYPE_TRANSIENT = 2;
+  }
+  // JSON object of the credential fields to set, merged into the stored
+  // credentials at the top level: listed keys are replaced, a null value
+  // removes the key, unlisted keys are kept. Typically access_token,
+  // refresh_token (when rotated) and expires_at. Required on success.
+  string credentials_patch_json = 1;
+  ErrorType error_type = 2;
+  // Why, recorded with the account's refresh state. At most 512 bytes are
+  // kept.
   string error_message = 3;
 }

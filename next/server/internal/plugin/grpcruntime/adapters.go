@@ -263,6 +263,17 @@ func (a platformAdapter) ParseQuotaResponse(ctx context.Context, in *pluginv1.Pa
 	return invoke(a.i, ctx, classConsole, TimeoutPlatformConsole, platformOf, pluginv1.PlatformServiceClient.ParseQuotaResponse, in)
 }
 
+// BuildRefreshRequest and ParseRefreshResponse run in the account module's
+// refresh sweep or on an administrator's request (CONTRACTS §48), never on
+// the request path.
+func (a platformAdapter) BuildRefreshRequest(ctx context.Context, in *pluginv1.BuildRefreshRequestRequest) (*pluginv1.BuildRefreshRequestResponse, error) {
+	return invoke(a.i, ctx, classBackground, TimeoutPlatformConsole, platformOf, pluginv1.PlatformServiceClient.BuildRefreshRequest, in)
+}
+
+func (a platformAdapter) ParseRefreshResponse(ctx context.Context, in *pluginv1.ParseRefreshResponseRequest) (*pluginv1.RefreshResult, error) {
+	return invoke(a.i, ctx, classBackground, TimeoutPlatformConsole, platformOf, pluginv1.PlatformServiceClient.ParseRefreshResponse, in)
+}
+
 type hookAdapter struct{ i *Instance }
 
 func (a hookAdapter) OnGatewayRequest(ctx context.Context, in *pluginv1.GatewayRequestHookRequest) (*pluginv1.GatewayRequestHookResponse, error) {

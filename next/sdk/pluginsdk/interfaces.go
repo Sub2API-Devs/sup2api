@@ -121,6 +121,18 @@ type QuotaReader interface {
 	ParseQuotaResponse(context.Context, *pluginv1.ParseQuotaResponseRequest) (*pluginv1.QuotaResult, error)
 }
 
+// CredentialRefresher is implemented by account types whose credentials
+// expire and that declare manifest accountTypes[].refresh (CONTRACTS §48),
+// e.g. an OAuth access token renewed from its refresh token. The plugin only
+// describes the request and reads the answer; the host decides when,
+// sends it through the account's proxy under a cluster-wide lock per account,
+// and merges the returned fields into the stored credentials. Optional: a
+// Platform without it answers both with UNIMPLEMENTED and nothing is renewed.
+type CredentialRefresher interface {
+	BuildRefreshRequest(context.Context, *pluginv1.BuildRefreshRequestRequest) (*pluginv1.BuildRefreshRequestResponse, error)
+	ParseRefreshResponse(context.Context, *pluginv1.ParseRefreshResponseRequest) (*pluginv1.RefreshResult, error)
+}
+
 // Hook mirrors pluginv1.HookServiceServer ("gateway.hook.v1").
 type Hook interface {
 	OnGatewayRequest(context.Context, *pluginv1.GatewayRequestHookRequest) (*pluginv1.GatewayRequestHookResponse, error)

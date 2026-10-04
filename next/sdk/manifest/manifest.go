@@ -289,6 +289,23 @@ type AccountType struct {
 	// (CONTRACTS §44). nil: the type has no quota (API keys); the console
 	// shows nothing for it.
 	Quota *AccountQuota `json:"quota,omitempty"`
+	// Refresh declares that the credentials of this type expire and that the
+	// plugin implements BuildRefreshRequest / ParseRefreshResponse to renew
+	// them (CONTRACTS §48). nil: the host never refreshes them.
+	Refresh *AccountRefresh `json:"refresh,omitempty"`
+}
+
+// AccountRefresh tells the host when to renew the credentials of an
+// account type (CONTRACTS §48).
+type AccountRefresh struct {
+	// ExpiresAtField is the top-level credentials key holding the expiry,
+	// Unix seconds as a number or a numeric string (milliseconds are
+	// detected). Default "expires_at". An account without a readable expiry
+	// is only refreshed on request.
+	ExpiresAtField string `json:"expiresAtField,omitempty"`
+	// BeforeExpirySec is how long before the expiry the host renews the
+	// credentials, 60-86400 (default 1800).
+	BeforeExpirySec int `json:"beforeExpirySec,omitempty"`
 }
 
 // AccountQuota is how the host learns the subscription quota of an account

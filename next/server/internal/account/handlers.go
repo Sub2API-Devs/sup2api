@@ -144,6 +144,9 @@ type View struct {
 	// Quota is the subscription quota snapshot (CONTRACTS §44), read from
 	// the database only; null for account types without quota (API keys).
 	Quota *QuotaSnapshot `json:"quota"`
+	// Refresh is the credential refresh state (CONTRACTS §48); null for
+	// account types whose credentials do not expire.
+	Refresh *RefreshView `json:"refresh"`
 	// Orphaned is true when the plugin declaring the account type is not
 	// enabled (disabled or uninstalled).
 	Orphaned bool            `json:"orphaned"`
@@ -252,6 +255,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 		}
 	}
 	s.fillQuota(ctx, rows, out)
+	s.fillRefresh(ctx, rows, out)
 	return out, nil
 }
 

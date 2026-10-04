@@ -68,3 +68,28 @@ func (v *validator) quota(f string, q *manifest.AccountQuota) {
 		}
 	}
 }
+
+// credKeyRe is the shape of a top-level credentials key.
+var credKeyRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
+
+// refresh validates accountTypes[].refresh (CONTRACTS §48): a credentials
+// key for the expiry (not a settings field: the host reads it from the
+// encrypted credentials) and a renewal lead time within bounds.
+func (v *validator) refresh(f string, at manifest.AccountType) {
+	r := at.Refresh
+	if r == nil {
+		return
+	}
+	f += ".refresh"
+	if r.ExpiresAtField != "" && !credKeyRe.MatchString(r.ExpiresAtField) {
+		v.add(f+".expiresAtField", "invalid_format", "expiresAtField %q must match %s", r.ExpiresAtField, credKeyRe.String())
+	}
+	for _, s := range at.SettingsFields {
+		if s == r.Field() {
+			v.add(f+".expiresAtField", "invalid", "%q is a settings field; the expiry must be a credentials field", s)
+		}
+	}
+	if r.BeforeExpirySec != 0 && (r.BeforeExpirySec < manifest.MinRefreshBeforeExpiry || r.BeforeExpirySec > manifest.MaxRefreshBeforeExpiry) {
+		v.add(f+".beforeExpirySec", "out_of_range", "beforeExpirySec must be %d-%d", manifest.MinRefreshBeforeExpiry, manifest.MaxRefreshBeforeExpiry)
+	}
+}

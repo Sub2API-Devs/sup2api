@@ -986,3 +986,11 @@ func (e *env) noRecord() {
 	case <-time.After(100 * time.Millisecond):
 	}
 }
+
+func (p *fakePlatform) BuildRefreshRequest(context.Context, *pluginv1.BuildRefreshRequestRequest) (*pluginv1.BuildRefreshRequestResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "no")
+}
+
+func (p *fakePlatform) ParseRefreshResponse(context.Context, *pluginv1.ParseRefreshResponseRequest) (*pluginv1.RefreshResult, error) {
+	return nil, status.Error(codes.Unimplemented, "no")
+}

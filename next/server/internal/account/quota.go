@@ -333,30 +333,58 @@ func validQuotaKey(k string) bool {
 // plugin needs to read the answer. A failure is not an error: the plugin is
 // shown the transport error, as ClassifyError is.
 func (s *Service) sendQuotaRequest(ctx context.Context, b *pluginv1.BuildQuotaRequestResponse, proxyID *int64) *pluginv1.ParseQuotaResponseRequest {
-	out := &pluginv1.ParseQuotaResponseRequest{}
-	u, err := url.Parse(b.GetUrl())
+	a := s.sendPluginCall(ctx, pluginCall{what: "quota", method: b.GetMethod(), defaultMethod: http.MethodGet,
+		url: b.GetUrl(), headers: b.GetHeaders(), body: b.GetBodyJson()}, proxyID)
+	return &pluginv1.ParseQuotaResponseRequest{Status: a.status, Headers: a.headers, Body: a.body,
+		TransportError: a.transportError, Truncated: a.truncated}
+}
+
+// pluginCall is an upstream request a plugin described (quota, refresh).
+type pluginCall struct {
+	what                  string // for the invalid-URL message
+	method, defaultMethod string
+	url                   string
+	headers               map[string]string
+	body                  string // JSON; Content-Type defaults to application/json
+}
+
+// pluginAnswer is what the plugin is shown of the upstream's answer.
+type pluginAnswer struct {
+	status         int32
+	headers        map[string]string // lower-cased, first value
+	body           []byte            // at most maxQuotaBody bytes
+	truncated      bool
+	transportError string
+}
+
+// sendPluginCall sends a request a plugin described through the account's
+// proxy (behind netguard for a direct connection). A failure is not an
+// error: the plugin is shown the transport error, as ClassifyError is.
+func (s *Service) sendPluginCall(ctx context.Context, b pluginCall, proxyID *int64) pluginAnswer {
+	var out pluginAnswer
+	u, err := url.Parse(b.url)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		out.TransportError = "plugin built an invalid quota URL"
+		out.transportError = "plugin built an invalid " + b.what + " URL"
 		return out
 	}
 	if err := s.guardUpstream(ctx, u, proxyID != nil); err != nil {
-		out.TransportError = err.Error()
+		out.transportError = err.Error()
 		return out
 	}
-	method := strings.ToUpper(b.GetMethod())
+	method := strings.ToUpper(b.method)
 	if method == "" {
-		method = http.MethodGet
+		method = b.defaultMethod
 	}
 	var body io.Reader
-	if b.GetBodyJson() != "" {
-		body = strings.NewReader(b.GetBodyJson())
+	if b.body != "" {
+		body = strings.NewReader(b.body)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
 	if err != nil {
-		out.TransportError = transportError(upstreamAddr(u), err)
+		out.transportError = transportError(upstreamAddr(u), err)
 		return out
 	}
-	for k, v := range b.GetHeaders() {
+	for k, v := range b.headers {
 		req.Header.Set(k, v)
 	}
 	if body != nil && req.Header.Get("Content-Type") == "" {
@@ -364,24 +392,24 @@ func (s *Service) sendQuotaRequest(ctx context.Context, b *pluginv1.BuildQuotaRe
 	}
 	hc, err := s.d.Proxies.HTTPClient(ctx, proxyID)
 	if err != nil {
-		out.TransportError = core.AsError(err).Message
+		out.transportError = core.AsError(err).Message
 		return out
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
-		out.TransportError = transportError(upstreamAddr(u), err)
+		out.transportError = transportError(upstreamAddr(u), err)
 		return out
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, maxQuotaBody+1))
 	if len(raw) > maxQuotaBody {
-		raw, out.Truncated = raw[:maxQuotaBody], true
+		raw, out.truncated = raw[:maxQuotaBody], true
 	}
-	out.Status, out.Body = int32(resp.StatusCode), raw
-	out.Headers = map[string]string{}
+	out.status, out.body = int32(resp.StatusCode), raw
+	out.headers = map[string]string{}
 	for k, v := range resp.Header {
 		if len(v) > 0 {
-			out.Headers[strings.ToLower(k)] = v[0]
+			out.headers[strings.ToLower(k)] = v[0]
 		}
 	}
 	return out

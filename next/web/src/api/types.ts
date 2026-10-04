@@ -294,8 +294,34 @@ export interface Account {
    * endpoint; null for types without plan limits (API keys) — nothing is shown.
    */
   quota?: QuotaSnapshot | null
+  /**
+   * Credential refresh state (CONTRACTS §48); null for types whose
+   * credentials do not expire. The core renews them before they expire.
+   */
+  refresh?: AccountRefresh | null
 }
 
+
+/** Credential refresh state of an account (CONTRACTS §48). */
+export interface AccountRefresh {
+  /** Expiry read from the credentials at the last attempt. */
+  expires_at: string | null
+  last_attempt_at: string | null
+  last_success_at: string | null
+  /** '' ok, 'auth_rejected' (authorize the account again), 'transient' (retried automatically). */
+  error_type: '' | 'auth_rejected' | 'transient'
+  error: string
+}
+
+/** Answer of POST /accounts/:id/refresh-credentials. */
+export interface CredentialRefreshOutcome {
+  refreshed: boolean
+  /** Why nothing was attempted, e.g. 'in_progress' or 'changed'. */
+  skipped?: string
+  error_type?: '' | 'auth_rejected' | 'transient'
+  error?: string
+  refresh: AccountRefresh
+}
 /** Upstream verdict of one quota window ("" = not reported). */
 export type QuotaWindowStatus = 'allowed' | 'allowed_warning' | 'rejected' | ''
 

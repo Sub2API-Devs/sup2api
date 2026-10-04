@@ -9,7 +9,7 @@
     "en": "OAuth and setup-token authentication for Claude platform accounts",
     "zh": "Claude 平台的 OAuth 与 setup-token 认证"
   },
-  "version": "0.1.1",
+  "version": "0.2.0",
   "publisher": "sup2api",
   "icon": "text:CO",
   "runtime": "grpc",
@@ -23,9 +23,6 @@
   "capabilities": [
     {
       "id": "platform.adapter.v1"
-    },
-    {
-      "id": "app.jobs.v1"
     },
     {
       "id": "http.routes.v1"
@@ -64,6 +61,7 @@
         "claude-sonnet-5",
         "claude-opus-4-8"
       ],
+      "refresh": {},
       "quota": {
         "query": true,
         "headers": [
@@ -119,6 +117,7 @@
         "claude-sonnet-5",
         "claude-opus-4-8"
       ],
+      "refresh": {},
       "quota": {
         "headers": [
           {
@@ -141,14 +140,6 @@
           }
         ]
       }
-    }
-  ],
-
-  "jobs": [
-    {
-      "id": "refresh_tokens",
-      "schedule": "@every 30m",
-      "timeoutSec": 300
     }
   ],
 
@@ -209,15 +200,8 @@
         "types": "own"
       },
       "reason": {
-        "en": "Read account credentials to check token expiration and refresh tokens",
-        "zh": "读取账号凭证以检查令牌过期并刷新令牌"
-      }
-    },
-    {
-      "id": "jobs",
-      "reason": {
-        "en": "Periodically refresh expiring OAuth tokens",
-        "zh": "定期刷新即将过期的 OAuth 令牌"
+        "en": "Receive the account's tokens to build upstream, quota and token refresh requests",
+        "zh": "获取账号令牌，用于构造上游请求、额度查询和令牌刷新请求"
       }
     },
     {
@@ -236,8 +220,8 @@
         ]
       },
       "reason": {
-        "en": "Call Claude OAuth endpoints to exchange codes and refresh tokens",
-        "zh": "调用 Claude OAuth 端点交换代码和刷新令牌"
+        "en": "Exchange the authorization code for tokens when an account is authorized (the host sends token refreshes itself)",
+        "zh": "授权账号时用授权码换取令牌（令牌刷新由核心发送）"
       }
     }
   ]
