@@ -145,7 +145,7 @@ func TestExecArgs(t *testing.T) {
 		BinaryPath: "/p/bin", MemoryMB: 512, MaxOpenFiles: 1024, MaxThreads: 50,
 		StrictNetwork: true, Seccomp: true,
 		Env: []string{"SUB2API_PLUGIN_KEY=x", "SUB2API_CUSTOM=1", "OTHER=2"},
-	}, 10)
+	}, 10, false)
 	want := []string{
 		"plugin-exec", "--mem-mb=512", "--max-open-files=1024", "--max-threads=50",
 		"--strict-network=true", "--seccomp=true", "--nice=10", "--keep-env=SUB2API_CUSTOM", "--", "/p/bin",
@@ -154,8 +154,13 @@ func TestExecArgs(t *testing.T) {
 		t.Fatalf("got %q", args)
 	}
 	o, err := parseExecArgs(args[1:], os.Stderr)
-	if err != nil || o.MemMB != 512 || !o.StrictNetwork || o.Binary != "/p/bin" {
+	if err != nil || o.MemMB != 512 || !o.StrictNetwork || o.Binary != "/p/bin" || o.Landlock {
 		t.Fatalf("round trip %+v %v", o, err)
+	}
+	// Landlock is opt-in (SUB2API_PLUGIN_LANDLOCK).
+	args = execArgs(core.LaunchSpec{BinaryPath: "/p/bin", WorkDir: "/data/p"}, 10, true)
+	if o, err = parseExecArgs(args[1:], os.Stderr); err != nil || !o.Landlock || o.WorkDir != "/data/p" || o.DataDir != "/data/p" {
+		t.Fatalf("landlock round trip %+v %v", o, err)
 	}
 }
 

@@ -210,8 +210,8 @@ func (s *Service) createUserTx(ctx context.Context, tx pgx.Tx, actorID int64, in
 
 	// SEC-M5: audit user creation
 	detail := map[string]any{
-		"email":       email,
-		"roles":       roles,
+		"email":           email,
+		"roles":           roles,
 		"max_concurrency": maxConc,
 	}
 	if err := audit.Audit(ctx, tx, actorID, "user.create", "user", strconv.FormatInt(id, 10), detail); err != nil {

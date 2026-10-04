@@ -13,18 +13,18 @@ import (
 
 type platformRPC struct {
 	pluginv1.PlatformServiceClient
-	validateCreds func(context.Context, *pluginv1.ValidateCredentialsRequest) (*pluginv1.ValidateCredentialsResponse, error)
-	buildUpstream func(context.Context, *pluginv1.BuildUpstreamRequestRequest) (*pluginv1.BuildUpstreamRequestResponse, error)
-	classify      func(context.Context, *pluginv1.ClassifyErrorRequest) (*pluginv1.ClassifyErrorResponse, error)
-	buildTest     func(context.Context, *pluginv1.BuildTestRequestRequest) (*pluginv1.BuildTestRequestResponse, error)
-	buildModels   func(context.Context, *pluginv1.BuildModelsRequestRequest) (*pluginv1.BuildModelsRequestResponse, error)
-	resolve       func(context.Context, *pluginv1.ResolveModelRequest) (*pluginv1.ResolveModelResponse, error)
-	extract       func(context.Context, *pluginv1.ExtractUsageRequest) (*pluginv1.UsageReport, error)
-	parseTask     func(context.Context, *pluginv1.ExtractUsageRequest) (*pluginv1.TaskSubmission, error)
-	estimate      func(context.Context, *pluginv1.EstimateUsageRequest) (*pluginv1.UsageReport, error)
+	validateCreds  func(context.Context, *pluginv1.ValidateCredentialsRequest) (*pluginv1.ValidateCredentialsResponse, error)
+	buildUpstream  func(context.Context, *pluginv1.BuildUpstreamRequestRequest) (*pluginv1.BuildUpstreamRequestResponse, error)
+	classify       func(context.Context, *pluginv1.ClassifyErrorRequest) (*pluginv1.ClassifyErrorResponse, error)
+	buildTest      func(context.Context, *pluginv1.BuildTestRequestRequest) (*pluginv1.BuildTestRequestResponse, error)
+	buildModels    func(context.Context, *pluginv1.BuildModelsRequestRequest) (*pluginv1.BuildModelsRequestResponse, error)
+	resolve        func(context.Context, *pluginv1.ResolveModelRequest) (*pluginv1.ResolveModelResponse, error)
+	extract        func(context.Context, *pluginv1.ExtractUsageRequest) (*pluginv1.UsageReport, error)
+	parseTask      func(context.Context, *pluginv1.ExtractUsageRequest) (*pluginv1.TaskSubmission, error)
+	estimate       func(context.Context, *pluginv1.EstimateUsageRequest) (*pluginv1.UsageReport, error)
 	buildReconcile func(context.Context, *pluginv1.BuildReconcileRequestRequest) (*pluginv1.BuildReconcileRequestResponse, error)
 	parseReconcile func(context.Context, *pluginv1.ParseReconcileResponseRequest) (*pluginv1.ReconcileResult, error)
-	execute       func(context.Context, *pluginv1.ExecuteRequest) (*pluginv1.ExecuteResponse, error)
+	execute        func(context.Context, *pluginv1.ExecuteRequest) (*pluginv1.ExecuteResponse, error)
 }
 
 func (p *platformRPC) ValidateCredentials(ctx context.Context, in *pluginv1.ValidateCredentialsRequest, _ ...grpc.CallOption) (*pluginv1.ValidateCredentialsResponse, error) {

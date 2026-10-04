@@ -58,6 +58,7 @@ type PluginConfig struct {
 	MaxPackageBytes   int64    // SUB2API_PLUGIN_MAX_PACKAGE_BYTES, default 200 MiB
 	MaxMemoryMB       int      // SUB2API_PLUGIN_MAX_MEMORY_MB, global cap, default 1024
 	DBRoleIsolation   bool     // SUB2API_PLUGIN_DB_ROLE_ISOLATION, default true
+	Landlock          bool     // SUB2API_PLUGIN_LANDLOCK: Landlock file system restriction, default false (CONTRACTS §43.8)
 	MarketSourcesJSON string   // SUB2API_MARKET_SOURCES: JSON [{name,url,public_key}] seeded at start
 	// BuiltinDir holds the built-in plugin packages installed at startup
 	// (SUB2API_BUILTIN_PLUGIN_DIR, default "/opt/sub2api/builtin").
@@ -122,6 +123,7 @@ func Load(goos string) (*Config, error) {
 	p.StrictNetwork = boolEnv("SUB2API_PLUGIN_STRICT_NETWORK", linux)
 	p.Seccomp = boolEnv("SUB2API_PLUGIN_SECCOMP", linux)
 	p.DBRoleIsolation = boolEnv("SUB2API_PLUGIN_DB_ROLE_ISOLATION", true)
+	p.Landlock = boolEnv("SUB2API_PLUGIN_LANDLOCK", false)
 	p.MarketSourcesJSON = os.Getenv("SUB2API_MARKET_SOURCES")
 	p.BuiltinDir = env("SUB2API_BUILTIN_PLUGIN_DIR", "/opt/sub2api/builtin")
 	if s := os.Getenv("SUB2API_PLUGIN_OFFICIAL_KEYS"); s != "" {

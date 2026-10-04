@@ -38,7 +38,10 @@ type LauncherOptions struct {
 	WatchInterval time.Duration
 	// DisableWrap starts plugins directly even on Linux (no sandbox).
 	DisableWrap bool
-	Logger      *slog.Logger
+	// Landlock restricts the file system view of wrapped plugins
+	// (SUB2API_PLUGIN_LANDLOCK, off by default; CONTRACTS §43.8).
+	Landlock bool
+	Logger   *slog.Logger
 }
 
 // Launcher implements core.PluginLauncher.
@@ -84,7 +87,7 @@ func (l *Launcher) Command(_ context.Context, spec core.LaunchSpec) (*exec.Cmd, 
 				return nil, fmt.Errorf("sandbox: resolve core executable: %w", err)
 			}
 		}
-		cmd = exec.Command(exe, execArgs(spec, l.opts.Nice)...)
+		cmd = exec.Command(exe, execArgs(spec, l.opts.Nice, l.opts.Landlock)...)
 	} else {
 		cmd = exec.Command(spec.BinaryPath)
 		if spec.MemoryMB > 0 {
@@ -97,7 +100,7 @@ func (l *Launcher) Command(_ context.Context, spec core.LaunchSpec) (*exec.Cmd, 
 }
 
 // execArgs builds the plugin-exec argument list.
-func execArgs(spec core.LaunchSpec, nice int) []string {
+func execArgs(spec core.LaunchSpec, nice int, landlock bool) []string {
 	args := []string{
 		SubcommandName,
 		"--mem-mb=" + strconv.Itoa(max(spec.MemoryMB, 0)),
@@ -109,6 +112,9 @@ func execArgs(spec core.LaunchSpec, nice int) []string {
 	}
 	if spec.WorkDir != "" {
 		args = append(args, "--work-dir="+spec.WorkDir, "--data-dir="+spec.WorkDir)
+	}
+	if landlock {
+		args = append(args, "--landlock")
 	}
 	var keep []string
 	for _, kv := range spec.Env {

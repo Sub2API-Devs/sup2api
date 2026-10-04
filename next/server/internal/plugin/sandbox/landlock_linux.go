@@ -5,97 +5,116 @@ package sandbox
 import (
 	"fmt"
 	"os"
+	"unsafe"
 
 	"golang.org/x/sys/unix"
 )
 
-// applyLandlock restricts file system access using Landlock LSM (PL-P0-4).
-// It allows read-only access to the plugin binary and its directory tree,
-// and read-write access to the plugin's data directory.
-// If Landlock is not available (old kernel), this is a no-op.
+// Landlock (Linux 5.13+) restricts the file system view of the plugin
+// process (PL-P0-4). It is off unless plugin-exec gets --landlock
+// (SUB2API_PLUGIN_LANDLOCK=true): it has not been run against the real
+// plugins yet, and a missing path in the allow list stops every plugin from
+// starting (CONTRACTS §43.8).
+//
+// x/sys has the types and constants but no wrappers for the three system
+// calls, so they are called directly.
+
+// Rights restricted by the ruleset (Landlock ABI 1). What is not listed here
+// (sockets, fifos, symlinks, devices) stays unrestricted.
+const (
+	llRead  = unix.LANDLOCK_ACCESS_FS_READ_FILE | unix.LANDLOCK_ACCESS_FS_READ_DIR
+	llWrite = unix.LANDLOCK_ACCESS_FS_WRITE_FILE | unix.LANDLOCK_ACCESS_FS_MAKE_REG |
+		unix.LANDLOCK_ACCESS_FS_MAKE_DIR | unix.LANDLOCK_ACCESS_FS_REMOVE_FILE | unix.LANDLOCK_ACCESS_FS_REMOVE_DIR
+	llHandled = llRead | llWrite | unix.LANDLOCK_ACCESS_FS_EXECUTE
+	// Rights that apply to a regular file; the others are refused on one.
+	llFileRights = unix.LANDLOCK_ACCESS_FS_READ_FILE | unix.LANDLOCK_ACCESS_FS_WRITE_FILE | unix.LANDLOCK_ACCESS_FS_EXECUTE
+)
+
+// systemReadOnly are read where they exist: CA certificates, time zones and
+// name resolution, which a statically linked Go plugin still reads.
+var systemReadOnly = []string{
+	"/etc/ssl", "/etc/pki", "/etc/ca-certificates", "/usr/share/ca-certificates",
+	"/usr/share/zoneinfo", "/etc/localtime",
+	"/etc/resolv.conf", "/etc/hosts", "/etc/nsswitch.conf", "/etc/services",
+	"/dev/urandom", "/dev/random",
+}
+
 func applyLandlock(o *execOptions) error {
-	// Check if Landlock is available (Linux 5.13+).
-	abi, err := landlockABI()
-	if err != nil || abi == 0 {
-		// Landlock not available or too old; skip silently.
+	if !o.Landlock {
 		return nil
 	}
-
-	// Create a ruleset that denies everything by default.
-	ruleset, err := unix.LandlockCreateRuleset(
-		&unix.LandlockRulesetAttr{
-			HandledAccessFs: unix.LANDLOCK_ACCESS_FS_READ_FILE |
-				unix.LANDLOCK_ACCESS_FS_READ_DIR |
-				unix.LANDLOCK_ACCESS_FS_EXECUTE |
-				unix.LANDLOCK_ACCESS_FS_WRITE_FILE |
-				unix.LANDLOCK_ACCESS_FS_MAKE_REG |
-				unix.LANDLOCK_ACCESS_FS_MAKE_DIR |
-				unix.LANDLOCK_ACCESS_FS_REMOVE_FILE |
-				unix.LANDLOCK_ACCESS_FS_REMOVE_DIR,
-		},
-		0,
-	)
-	if err != nil {
-		return fmt.Errorf("landlock_create_ruleset: %w", err)
+	if abi, err := landlockABI(); err != nil || abi < 1 {
+		return nil // kernel without Landlock: nothing to apply
 	}
+	attr := unix.LandlockRulesetAttr{Access_fs: llHandled}
+	fd, _, errno := unix.Syscall(unix.SYS_LANDLOCK_CREATE_RULESET, uintptr(unsafe.Pointer(&attr)), unsafe.Sizeof(attr), 0)
+	if errno != 0 {
+		return fmt.Errorf("landlock_create_ruleset: %w", errno)
+	}
+	ruleset := int(fd)
 	defer unix.Close(ruleset)
 
-	// Allow read-only access to the plugin binary and its directory tree.
-	if o.Binary != "" {
-		if err := landlockAllowPath(ruleset, o.Binary, unix.LANDLOCK_ACCESS_FS_READ_FILE|unix.LANDLOCK_ACCESS_FS_EXECUTE); err != nil {
+	type rule struct {
+		path   string
+		access uint64
+	}
+	rules := []rule{
+		{o.Binary, unix.LANDLOCK_ACCESS_FS_READ_FILE | unix.LANDLOCK_ACCESS_FS_EXECUTE},
+		{o.WorkDir, llRead | llWrite},
+		{o.DataDir, llRead | llWrite},
+		// go-plugin creates its unix socket under the temporary directory.
+		{os.TempDir(), llRead | llWrite},
+		{"/dev/null", unix.LANDLOCK_ACCESS_FS_READ_FILE | unix.LANDLOCK_ACCESS_FS_WRITE_FILE},
+	}
+	for _, p := range systemReadOnly {
+		rules = append(rules, rule{p, llRead})
+	}
+	for _, r := range rules {
+		if r.path == "" {
+			continue
+		}
+		if err := landlockAllowPath(ruleset, r.path, r.access); err != nil {
 			return err
 		}
 	}
-	if o.WorkDir != "" {
-		if err := landlockAllowPath(ruleset, o.WorkDir, unix.LANDLOCK_ACCESS_FS_READ_FILE|unix.LANDLOCK_ACCESS_FS_READ_DIR); err != nil {
-			return err
-		}
+	// no_new_privs is already set (applyLimits), as Landlock requires.
+	if _, _, errno := unix.Syscall(unix.SYS_LANDLOCK_RESTRICT_SELF, uintptr(ruleset), 0, 0); errno != 0 {
+		return fmt.Errorf("landlock_restrict_self: %w", errno)
 	}
-
-	// Allow read-write access to the plugin's data directory.
-	if o.DataDir != "" {
-		if err := landlockAllowPath(ruleset, o.DataDir, unix.LANDLOCK_ACCESS_FS_READ_FILE|
-			unix.LANDLOCK_ACCESS_FS_READ_DIR|
-			unix.LANDLOCK_ACCESS_FS_WRITE_FILE|
-			unix.LANDLOCK_ACCESS_FS_MAKE_REG|
-			unix.LANDLOCK_ACCESS_FS_MAKE_DIR|
-			unix.LANDLOCK_ACCESS_FS_REMOVE_FILE|
-			unix.LANDLOCK_ACCESS_FS_REMOVE_DIR); err != nil {
-			return err
-		}
-	}
-
-	// Restrict the calling thread to the ruleset.
-	if err := unix.LandlockRestrictSelf(ruleset, 0); err != nil {
-		return fmt.Errorf("landlock_restrict_self: %w", err)
-	}
-
 	return nil
 }
 
-// landlockABI returns the Landlock ABI version, or 0 if not available.
+// landlockABI returns the Landlock ABI version of the kernel.
 func landlockABI() (int, error) {
-	abi, err := unix.LandlockCreateRuleset(nil, 0, unix.LANDLOCK_CREATE_RULESET_VERSION)
-	if err != nil {
-		return 0, err
+	v, _, errno := unix.Syscall(unix.SYS_LANDLOCK_CREATE_RULESET, 0, 0, unix.LANDLOCK_CREATE_RULESET_VERSION)
+	if errno != 0 {
+		return 0, errno
 	}
-	return abi, nil
+	return int(v), nil
 }
 
-// landlockAllowPath adds a rule to allow access to the given path.
+// landlockAllowPath grants access below path. A path that does not exist is
+// skipped; on a regular file only the file rights are granted.
 func landlockAllowPath(ruleset int, path string, access uint64) error {
+	st, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("landlock: stat %s: %w", path, err)
+	}
+	if !st.IsDir() {
+		access &= llFileRights
+	}
 	fd, err := unix.Open(path, unix.O_PATH|unix.O_CLOEXEC, 0)
 	if err != nil {
-		// If the path doesn't exist, skip it (e.g., data dir not yet created).
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("open %s: %w", path, err)
+		return fmt.Errorf("landlock: open %s: %w", path, err)
 	}
 	defer unix.Close(fd)
-
-	return unix.LandlockAddRule(ruleset, unix.LANDLOCK_RULE_PATH_BENEATH, &unix.LandlockPathBeneathAttr{
-		AllowedAccess: access,
-		ParentFd:      fd,
-	}, 0)
+	attr := unix.LandlockPathBeneathAttr{Allowed_access: access, Parent_fd: int32(fd)}
+	if _, _, errno := unix.Syscall6(unix.SYS_LANDLOCK_ADD_RULE, uintptr(ruleset), unix.LANDLOCK_RULE_PATH_BENEATH,
+		uintptr(unsafe.Pointer(&attr)), 0, 0, 0); errno != 0 {
+		return fmt.Errorf("landlock_add_rule %s: %w", path, errno)
+	}
+	return nil
 }

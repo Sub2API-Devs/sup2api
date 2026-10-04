@@ -178,17 +178,17 @@ func newTransport(proxyURL *url.URL) *http.Transport {
 }
 
 type row struct {
-	ID            int64
-	Name          string
-	Protocol      string
-	Host          string
-	Port          int
-	Username      string
-	PasswordEnc   []byte
-	Status        string
-	AllowPrivate  bool
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID           int64
+	Name         string
+	Protocol     string
+	Host         string
+	Port         int
+	Username     string
+	PasswordEnc  []byte
+	Status       string
+	AllowPrivate bool
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 func (s *Service) proxyURL(r *row) (*url.URL, error) {

@@ -220,7 +220,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	}
 	egressP := egress.New(db, egress.Options{NodeID: cfg.NodeID, AlwaysAllow: []string{pgAddr}, Events: events, Logger: log})
 	onClose(func(context.Context) { egressP.Close() })
-	launcher := sandbox.NewLauncher(sandbox.LauncherOptions{DisableWrap: cfg.Plugins.DevMode, Logger: log})
+	launcher := sandbox.NewLauncher(sandbox.LauncherOptions{DisableWrap: cfg.Plugins.DevMode, Landlock: cfg.Plugins.Landlock, Logger: log})
 	schemas := dbschema.New(db, cfg.DatabaseURL, cfg.MasterKey, cfg.Plugins.DBRoleIsolation)
 
 	rt, err := grpcruntime.New(grpcruntime.Options{

@@ -16,20 +16,20 @@ import (
 
 // Ark error codes that need special handling beyond HTTP status.
 const (
-	CodeAccountOverdue  = "AccountOverdueError"               // 403, account in arrears
-	CodeQuotaExceeded   = "QuotaExceeded"                     // 429, free trial quota used up
-	CodeModelLoading    = "ModelLoadingError"                 // 429, model warming up
-	CodeOverloaded      = "ServerOverloaded"                  // 429, upstream saturated
-	CodeBurstTooFast    = "RequestBurstTooFast"               // 429, traffic ramped too fast
-	CodeModelNotOpen    = "ModelNotOpen"                      // 404, model not enabled on account
-	CodeClosedEndpoint  = "InvalidEndpoint.ClosedEndpoint"    // 400, inference endpoint closed
+	CodeAccountOverdue = "AccountOverdueError"            // 403, account in arrears
+	CodeQuotaExceeded  = "QuotaExceeded"                  // 429, free trial quota used up
+	CodeModelLoading   = "ModelLoadingError"              // 429, model warming up
+	CodeOverloaded     = "ServerOverloaded"               // 429, upstream saturated
+	CodeBurstTooFast   = "RequestBurstTooFast"            // 429, traffic ramped too fast
+	CodeModelNotOpen   = "ModelNotOpen"                   // 404, model not enabled on account
+	CodeClosedEndpoint = "InvalidEndpoint.ClosedEndpoint" // 400, inference endpoint closed
 )
 
 // ProtocolMessages and ProtocolCountTokens are Anthropic surface protocols;
 // the other surfaces are OpenAI-shaped.
 const (
-	ProtocolMessages     = "anthropic-messages"
-	ProtocolCountTokens  = "anthropic-count-tokens"
+	ProtocolMessages    = "anthropic-messages"
+	ProtocolCountTokens = "anthropic-count-tokens"
 )
 
 // Policy is the shared Volcengine Ark classify policy for OpenAI surfaces.
