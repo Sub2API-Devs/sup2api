@@ -124,9 +124,15 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 		}
 	}
 	sort.Strings(native)
-	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--tools", strings.Join(native, ","), "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--setting-sources", "", "--settings", `{"disableAllHooks":false}`, "--disable-slash-commands", "--no-session-persistence", "--no-chrome", "--max-turns", "1", "--model", req.Model, "--plugin-dir", r.Plugin, "--system-prompt-snapshot", "off"}
+	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--tools", strings.Join(native, ","), "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--setting-sources", "", "--settings", `{"disableAllHooks":false}`, "--disable-slash-commands", "--no-chrome", "--max-turns", "1", "--model", req.Model, "--plugin-dir", r.Plugin, "--system-prompt-snapshot", "off"}
 	if p.Path != "" {
-		args = append(args, "--resume", p.Path, "--resume-session-at", p.Anchor)
+		args = append(args, "--resume", p.Path)
+		if p.Anchor != "" {
+			args = append(args, "--resume-session-at", p.Anchor)
+		}
+		if p.Fork {
+			args = append(args, "--fork-session", "--session-id", p.SessionID)
+		}
 	} else {
 		args = append(args, "--session-id", p.SessionID)
 	}
@@ -142,13 +148,13 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 	runctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	cmd := exec.CommandContext(runctx, r.CLI, args...)
-	cmd.Dir = dir
+	cmd.Dir = p.Work
 	env := r.Env
 	if env == nil {
 		env = os.Environ()
 	}
 	env = r.Proxy.Environment(env)
-	cmd.Env = envWith(env, map[string]string{"CCGATEWAY_READY_FILE": ready, "CLAUDE_CODE_MAX_OUTPUT_TOKENS": strconv.Itoa(req.MaxTokens), "DISABLE_AUTOUPDATER": "1", "DISABLE_AUTO_COMPACT": "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "CLAUDE_CODE_DISABLE_ATTACHMENTS": "1", "ENABLE_TOOL_SEARCH": "false", "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "0"}, "CLAUDE_CODE_RESUME_INTERRUPTED_TURN", "CLAUDE_CODE_RESUME_FROM_SESSION", "CLAUDE_CODE_PLUGIN_DIRS")
+	cmd.Env = envWith(env, map[string]string{"CCGATEWAY_READY_FILE": ready, "CLAUDE_CODE_MAX_OUTPUT_TOKENS": strconv.Itoa(req.MaxTokens), "DISABLE_AUTOUPDATER": "1", "DISABLE_AUTO_COMPACT": "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "ENABLE_TOOL_SEARCH": "false", "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "0"}, "CLAUDE_CODE_RESUME_INTERRUPTED_TURN", "CLAUDE_CODE_RESUME_FROM_SESSION", "CLAUDE_CODE_PLUGIN_DIRS")
 	stdin, e := cmd.StdinPipe()
 	if e != nil {
 		return nil, e
@@ -213,7 +219,7 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 			}
 			initialized = true
 			last := req.Messages[len(req.Messages)-1]
-			if e = write(Object{"type": "user", "session_id": p.SessionID, "uuid": uuid(), "parent_tool_use_id": nil, "message": last}); e != nil {
+			if e = write(Object{"type": "user", "session_id": p.SessionID, "uuid": p.InputUUID, "parent_tool_use_id": nil, "message": req.wireMessage(last)}); e != nil {
 				return nil, fmt.Errorf("cannot submit input")
 			}
 		case "stream_event":
@@ -233,16 +239,35 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 			if !ok {
 				return nil, fmt.Errorf("missing model event")
 			}
+			if acc.Done {
+				return nil, fmt.Errorf("unexpected post-completion CLI event: %s", str(event, "type"))
+			}
 			if e = acc.push(event, req); e != nil {
 				return nil, e
 			}
 			if acc.Done {
-				return acc.Message, nil
-			} // Do not wait for the agent result or execute another round.
+				continue // Wait for native persistence, with max-turns still bounded to one.
+			}
 			if e = emit(event); e != nil {
 				return nil, e
 			}
 		case "result":
+			if acc.Done {
+				if sid := str(f, "session_id"); sid != "" && p.Mode == "rebuild" {
+					// Importing an external JSONL may assign a fresh native session ID.
+					p.SessionID = sid
+				}
+				_ = stdin.Close()
+				// A tool handoff reaches max-turns and exits nonzero despite a complete response.
+				_ = cmd.Wait()
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+				if e := p.captureNative(cmd.Env, str(acc.Message, "id")); e != nil {
+					return nil, e
+				}
+				return acc.Message, nil
+			}
 			return nil, fmt.Errorf("CLI ended without a complete model message (%s)", str(f, "subtype"))
 		}
 	}

@@ -9,7 +9,7 @@
     "en": "Managed Claude Code Messages accounts. SSH connections and credentials are managed by the core. Token counting and model discovery are not supported.",
     "zh": "托管 Claude Code Messages 账号，SSH 连接与凭证由核心管理；支持流式响应及用量计费，不支持 token 预估与模型发现。"
   },
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "sub2api",
   "icon": "text:C",
   "runtime": "grpc",
@@ -48,7 +48,8 @@
           ],
           "passHeaders": [
             "anthropic-version",
-            "anthropic-beta"
+            "anthropic-beta",
+            "x-ccgateway-session-id"
           ]
         }
       ]
@@ -76,7 +77,8 @@
           ],
           "passHeaders": [
             "anthropic-version",
-            "anthropic-beta"
+            "anthropic-beta",
+            "x-ccgateway-session-id"
           ]
         }
       ],

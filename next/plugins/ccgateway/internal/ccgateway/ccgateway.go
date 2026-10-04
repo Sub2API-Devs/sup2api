@@ -4,6 +4,7 @@ package ccgateway
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 	"google.golang.org/grpc/codes"
@@ -95,7 +96,7 @@ func validateAccount(acc *pluginv1.Account) error {
 }
 func headers(in map[string]string) map[string]string {
 	out := map[string]string{"content-type": "application/json", "anthropic-version": "2023-06-01"}
-	for _, key := range []string{"anthropic-version", "anthropic-beta"} {
+	for _, key := range []string{"anthropic-version", "anthropic-beta", "x-ccgateway-session-id"} {
 		if value := strings.TrimSpace(in[key]); value != "" {
 			out[key] = value
 		}
@@ -119,7 +120,10 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 			model = mapped
 		}
 	}
-	return &pluginv1.BuildUpstreamRequestResponse{Method: "POST", Url: VirtualURL, Headers: headers(in.GetInboundHeaders()), UpstreamModel: model}, nil
+	outHeaders := headers(in.GetInboundHeaders())
+	// Scope is supplied by the authenticated host, never copied from caller headers.
+	outHeaders["x-ccgateway-session-scope"] = fmt.Sprintf("user:%d:key:%d", in.GetMeta().GetUserId(), in.GetMeta().GetApiKeyId())
+	return &pluginv1.BuildUpstreamRequestResponse{Method: "POST", Url: VirtualURL, Headers: outHeaders, UpstreamModel: model}, nil
 }
 func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestRequestRequest) (*pluginv1.BuildTestRequestResponse, error) {
 	if err := validateAccount(in.GetAccount()); err != nil {
