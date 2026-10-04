@@ -1061,12 +1061,11 @@ func TestDirectory(t *testing.T) {
 		t.Fatalf("load missing: %v", err)
 	}
 
-	// Disable removes it from candidates and emits one event.
-	if err := e.svc.Disable(ctx, a2, "401 invalid credentials"); err != nil {
-		t.Fatal(err)
-	}
-	if err := e.svc.Disable(ctx, a2, "again"); err != nil {
-		t.Fatal(err)
+	// AutoDisable removes it from candidates and emits one event.
+	for _, reason := range []string{"401 invalid credentials", "again"} {
+		if ok, err := e.svc.AutoDisable(ctx, a2, reason); err != nil || !ok {
+			t.Fatalf("auto disable: %v %v", ok, err)
+		}
 	}
 	if refs, _ = e.svc.Candidates(ctx, g, apikey); len(refs) != 0 {
 		t.Fatalf("disabled still candidate: %s", ids(refs))
@@ -1086,6 +1085,20 @@ func TestDirectory(t *testing.T) {
 		gjson.Get(payload, "plugin_key").String() != "anthropic" || gjson.Get(payload, "type").String() != "apikey" ||
 		gjson.Get(payload, "name").String() != "a2" || gjson.Get(payload, "platform").Exists() {
 		t.Fatalf("cooldown payload: %s", payload)
+	}
+
+	// An account that opted out of automatic disabling is left alone
+	// (CONTRACTS §42.3).
+	if _, err := e.db.Pool.Exec(ctx, `UPDATE accounts SET auto_disable = false WHERE id = $1`, a1); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := e.svc.AutoDisable(ctx, a1, "401 invalid credentials"); err != nil || ok {
+		t.Fatalf("opted-out account disabled: %v %v", ok, err)
+	}
+	var a1Status string
+	_ = e.db.Pool.QueryRow(ctx, `SELECT status FROM accounts WHERE id = $1`, a1).Scan(&a1Status)
+	if a1Status != "active" {
+		t.Fatalf("opted-out account status %q", a1Status)
 	}
 
 	// TouchLastUsed batching.

@@ -45,6 +45,17 @@ export default {
     range: '范围 {min}–{max}。',
     notInteger: '请输入整数'
   },
+  autoDisable: {
+    title: '自动禁用',
+    subtitle: '上游报错说明账号本身不可用（凭证失效、额度耗尽、组织被封）时自动禁用账号，参考 new-api。插件的判定之外，可按状态码和错误关键词追加规则。',
+    enabled: '启用自动禁用',
+    enabledHint: '关闭后任何账号都不会被自动禁用，只冷却 60 秒。单个账号可在账号编辑器中关闭。',
+    statusCodes: '禁用状态码',
+    statusCodesHint: '上游返回这些状态码时禁用账号。逗号分隔，可写区间，如 401,403,500-503；留空表示不按状态码禁用。',
+    keywords: '禁用关键词',
+    keywordsHint: '上游错误内容包含任一关键词（不区分大小写）时禁用账号。每行一个，最多 100 个。',
+    restoreKeywords: '恢复默认关键词'
+  },
   billing: {
     preConsumeTokens: '请求预扣 Token 数',
     preConsumeHint: '文本请求预占的输入 Token 下限，默认 500；本地估算超过此值时使用估算值。0 表示不设下限，最终仍按实际用量结算。视频使用插件自己的用量估算。',

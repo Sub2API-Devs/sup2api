@@ -422,6 +422,7 @@ function groupTags(a: Account) {
       </template>
       <template #cell-status="{ row }">
         <SBadge :tone="statusOf(row).tone" dot>{{ statusOf(row).label }}</SBadge>
+        <SBadge v-if="row.auto_disable === false" tone="gray" class="ml-1" :title="t('accounts.editorUi.autoDisableHint')">{{ t('accounts.noAutoDisable') }}</SBadge>
         <SHint v-if="statusOf(row).detail" size="xs" class="mt-1 line-clamp-2 max-w-[16rem] break-words" :title="statusOf(row).detail">
           {{ statusOf(row).detail }}
         </SHint>
@@ -461,8 +462,8 @@ function groupTags(a: Account) {
         v-else
         :account-type="pickedType"
         :account-type-options="accountTypes.types.value.filter(at => sameCreationGroup(at, pickedType))"
-        @change-type="pickedType = $event"
         :account="editing"
+        @change-type="pickedType = $event"
         @saved="onSaved"
         @cancel="editorOpen = false"
         @back="step = 1"

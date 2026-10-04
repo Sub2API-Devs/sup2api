@@ -24,6 +24,8 @@ import (
 func (g *Gateway) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("GET", "/settings/gateway", "settings:read", g.getGatewaySettingsHandler)
 	r.Perm("PUT", "/settings/gateway", "settings:manage", g.putGatewaySettingsHandler)
+	r.Perm("GET", "/settings/auto-disable", "settings:read", g.getAutoDisableHandler)
+	r.Perm("PUT", "/settings/auto-disable", "settings:manage", g.putAutoDisableHandler)
 	r.Perm("GET", "/sticky-rules", "sticky:read", g.listRulesHandler)
 	r.Perm("POST", "/sticky-rules", "sticky:manage", g.createRuleHandler)
 	r.Perm("GET", "/sticky-rules/stats", "sticky:read", g.statsHandler)

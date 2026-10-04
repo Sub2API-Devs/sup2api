@@ -525,23 +525,7 @@ func (c *call) classify(ctx context.Context, rt *typeRoute, acct *pluginv1.Accou
 }
 
 func (c *call) applyClassification(ctx context.Context, rt *typeRoute, acct *pluginv1.Account, status int, body []byte, transportErr string, cls *pluginv1.ClassifyErrorResponse) attemptResult {
-	switch cls.GetAccountEffect() {
-	case pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN:
-		until := time.Unix(cls.GetCooldownUntilUnix(), 0)
-		if cls.GetCooldownUntilUnix() <= 0 || !until.After(c.g.now()) {
-			until = c.g.now().Add(defaultCooldown)
-		}
-		if err := c.g.d.Accounts.SetCooldown(context.WithoutCancel(ctx), acct.Id, until, cls.GetReason()); err != nil {
-			slog.WarnContext(ctx, "gateway: set cooldown", "account", acct.Id, "err", err)
-		}
-	case pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE:
-		if err := c.g.d.Accounts.Disable(context.WithoutCancel(ctx), acct.Id, cls.GetReason()); err != nil {
-			slog.WarnContext(ctx, "gateway: disable account", "account", acct.Id, "err", err)
-		}
-		if s := c.sticky; s != nil && s.bound == acct.Id {
-			c.dropBinding(ctx, s)
-		}
-	}
+	reason, failover := c.applyAccountEffect(ctx, acct, status, body, transportErr, cls)
 
 	clientStatus := int(cls.GetClientStatus())
 	if clientStatus == 0 {
@@ -572,11 +556,65 @@ func (c *call) applyClassification(ctx context.Context, rt *typeRoute, acct *plu
 			e.Message = "upstream returned HTTP " + itoa(int64(status))
 		}
 	}
-	c.rec.ErrorMessage = truncateUTF8(firstNonEmpty(cls.GetReason(), transportErr, e.Message), 1000)
-	if cls.GetAction() == pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT {
+	c.rec.ErrorMessage = truncateUTF8(firstNonEmpty(reason, transportErr, e.Message), 1000)
+	if !failover && cls.GetAction() == pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT {
 		return attemptResult{kind: attemptReturn, err: e}
 	}
 	return attemptResult{kind: attemptFailover, err: e}
+}
+
+// applyAccountEffect cools down or disables the account as the plugin and the
+// administrator's auto-disable rules ask (CONTRACTS §42.1). It returns the
+// reason recorded for the attempt and whether the attempt must fail over
+// regardless of the plugin's action (an administrator rule disabled the
+// account).
+func (c *call) applyAccountEffect(ctx context.Context, acct *pluginv1.Account, status int, body []byte,
+	transportErr string, cls *pluginv1.ClassifyErrorResponse) (reason string, failover bool) {
+	ctx = context.WithoutCancel(ctx)
+	effect, reason := cls.GetAccountEffect(), cls.GetReason()
+	if effect != pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE {
+		if rule := c.autoDisable.rule(status, body, transportErr); rule != "" {
+			effect, reason, failover = pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE, rule, true
+		}
+	}
+	switch effect {
+	case pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN:
+		c.cooldown(ctx, acct.Id, time.Unix(cls.GetCooldownUntilUnix(), 0), reason)
+	case pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE:
+		if !c.autoDisableAccount(ctx, acct.Id, reason) {
+			c.cooldown(ctx, acct.Id, time.Time{}, "auto-disable off, cooling down: "+reason)
+		}
+	}
+	return reason, failover
+}
+
+// autoDisableAccount disables the account when both the global switch and
+// the account allow it, dropping a sticky binding to it. It reports whether
+// the account is disabled.
+func (c *call) autoDisableAccount(ctx context.Context, id int64, reason string) bool {
+	if !c.autoDisable.Enabled {
+		return false
+	}
+	disabled, err := c.g.d.Accounts.AutoDisable(ctx, id, reason)
+	if err != nil {
+		slog.WarnContext(ctx, "gateway: disable account", "account", id, "err", err)
+		return false
+	}
+	if s := c.sticky; disabled && s != nil && s.bound == id {
+		c.dropBinding(ctx, s)
+	}
+	return disabled
+}
+
+// cooldown excludes the account until the given time, or for defaultCooldown
+// when it is not in the future.
+func (c *call) cooldown(ctx context.Context, id int64, until time.Time, reason string) {
+	if !until.After(c.g.now()) {
+		until = c.g.now().Add(defaultCooldown)
+	}
+	if err := c.g.d.Accounts.SetCooldown(ctx, id, until, reason); err != nil {
+		slog.WarnContext(ctx, "gateway: set cooldown", "account", id, "err", err)
+	}
 }
 
 // defaultClassification is used when ClassifyError itself fails.

@@ -334,7 +334,7 @@ func TestGatewaySettingsAPI(t *testing.T) {
 	}
 
 	// Warm the cache so the invalidation on PUT is observable.
-	if gw, _ := g.settings.get(context.Background()); gw.MaxAttempts != 3 {
+	if gw := g.settings.get(context.Background()).gateway; gw.MaxAttempts != 3 {
 		t.Fatalf("cache %+v", gw)
 	}
 	g.settings.mu.Lock()

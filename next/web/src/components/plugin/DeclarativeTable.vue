@@ -23,7 +23,7 @@ const { t } = useI18n()
 
 const rows = ref<Record<string, any>[]>([])
 const loading = ref(false)
-const page = ref(1)
+const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
 // Whether the route paginates server-side. This is read off the response
@@ -48,7 +48,7 @@ const columns = computed<TableColumn[]>(() =>
 )
 const formats = computed(() => Object.fromEntries((props.page.columns || []).map((c) => [c.key, c.format || 'text'])))
 
-const visible = computed(() => (serverPaged.value ? rows.value : rows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value)))
+const visible = computed(() => (serverPaged.value ? rows.value : rows.value.slice((currentPage.value - 1) * pageSize.value, currentPage.value * pageSize.value)))
 const shownTotal = computed(() => (serverPaged.value ? total.value : rows.value.length))
 
 // Requests are sequenced: a debounced search fires several loads and the
@@ -62,7 +62,7 @@ async function load() {
   const my = ++seq
   loading.value = true
   try {
-    const query: Record<string, any> = { page: page.value, page_size: pageSize.value }
+    const query: Record<string, any> = { page: currentPage.value, page_size: pageSize.value }
     const term = q.value.trim()
     if (searchParam.value && term) query[searchParam.value] = term
     const res = await api.list<Record<string, any>>(`/p/${props.plugin.key}${target.path}`, query)
@@ -78,7 +78,7 @@ async function load() {
   }
 }
 
-watch([page, pageSize], () => serverPaged.value && load())
+watch([currentPage, pageSize], () => serverPaged.value && load())
 
 // Typing reloads after a pause and goes back to the first page: keeping the
 // page number would ask the route for page 4 of a result set the new term may
@@ -91,8 +91,8 @@ let timer: ReturnType<typeof setTimeout> | undefined
 watch(q, () => {
   clearTimeout(timer)
   timer = setTimeout(() => {
-    const pageWatcherWillReload = serverPaged.value && page.value !== 1
-    page.value = 1
+    const pageWatcherWillReload = serverPaged.value && currentPage.value !== 1
+    currentPage.value = 1
     if (!pageWatcherWillReload) load()
   }, 250)
 })
@@ -121,6 +121,6 @@ onMounted(load)
         <span v-else :class="formats[c.key] === 'number' || formats[c.key] === 'currency' ? 'tabular-nums' : ''">{{ formatCell(value, formats[c.key]) }}</span>
       </template>
     </STable>
-    <SPagination v-model:page="page" v-model:page-size="pageSize" :total="shownTotal" />
+    <SPagination v-model:page="currentPage" v-model:page-size="pageSize" :total="shownTotal" />
   </div>
 </template>

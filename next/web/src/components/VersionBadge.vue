@@ -42,7 +42,8 @@ async function importRelease() {
 
 <template>
   <template v-if="allowed">
-    <button type="button" class="inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium hover:bg-gray-100 dark:hover:bg-dark-700"
+    <button
+type="button" class="inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium hover:bg-gray-100 dark:hover:bg-dark-700"
       :class="newVersion ? 'text-amber-600 dark:text-amber-400' : 'text-gray-500 dark:text-dark-400'"
       :title="`${t('coreUpdates.current')}: ${version || '—'} · ${status}`" :aria-label="`${t('coreUpdates.title')} · ${status}`" @click="open = true">
       <span class="truncate">{{ version ? `v${version}` : compact ? '—' : t('coreUpdates.title') }}</span>

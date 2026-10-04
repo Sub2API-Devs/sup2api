@@ -39,8 +39,9 @@ type call struct {
 	clientRID string
 	start     time.Time
 
-	gw        GatewaySettings
-	stickyCfg StickySettings
+	gw          GatewaySettings
+	stickyCfg   StickySettings
+	autoDisable AutoDisableSettings
 
 	principal *core.APIKeyPrincipal
 	body      []byte
@@ -114,7 +115,8 @@ func (g *Gateway) serve(c *gin.Context, gen core.Generation, b core.EndpointBind
 		writeError(c, cl.format, fromCore(core.ErrUnavailable.WithMessage("node is fenced: not serving requests"), ""))
 		return
 	}
-	cl.gw, cl.stickyCfg = g.settings.get(ctx)
+	set := g.settings.get(ctx)
+	cl.gw, cl.stickyCfg, cl.autoDisable = set.gateway, set.sticky, set.autoDisable
 	if b.Endpoint.WebSocket() {
 		g.serveWebSocket(ctx, cl)
 		return

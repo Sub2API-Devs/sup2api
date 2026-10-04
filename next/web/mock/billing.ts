@@ -114,7 +114,7 @@ function run(part: string, input: EvalInput, tokens: Usage): { value: number; ti
   }
   const names = [...TOKEN_VARS, 'len', ...Object.keys(lib)]
   const values = [...TOKEN_VARS.map((k) => tokens[k]), tokens.len, ...Object.values(lib)]
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+   
   const fn = new Function(...names, `"use strict"; return (${part});`)
   const v = fn(...values)
   return { value: typeof v === 'number' ? v : Number(v), tier }

@@ -111,13 +111,14 @@ func (s GatewaySettings) hotpathTimeout() time.Duration {
 }
 
 type settingsSnapshot struct {
-	at      time.Time
-	gateway GatewaySettings
-	sticky  StickySettings
+	at          time.Time
+	gateway     GatewaySettings
+	sticky      StickySettings
+	autoDisable AutoDisableSettings
 }
 
-// settingsCache reads the gateway and sticky rows with a short TTL; the
-// config:changed broadcast invalidates it immediately.
+// settingsCache reads the gateway, sticky and auto-disable rows with a short
+// TTL; the config:changed broadcast invalidates it immediately.
 type settingsCache struct {
 	db    *store.DB
 	mu    sync.Mutex
@@ -136,37 +137,54 @@ func (c *settingsCache) invalidate() {
 	c.mu.Unlock()
 }
 
-func (c *settingsCache) get(ctx context.Context) (GatewaySettings, StickySettings) {
+func (c *settingsCache) get(ctx context.Context) settingsSnapshot {
 	c.mu.Lock()
 	if c.override != nil {
 		o := *c.override
 		c.mu.Unlock()
-		return o.gateway.normalized(), o.sticky
+		o.gateway = o.gateway.normalized()
+		return o
 	}
 	snap := c.snap
 	epoch := c.epoch
 	c.mu.Unlock()
 	if snap != nil && time.Since(snap.at) < settingsTTL {
-		return snap.gateway, snap.sticky
+		return *snap
 	}
-	gw, st := defaultGatewaySettings(), defaultStickySettings()
-	if c.db != nil {
-		// On read errors keep the defaults (and do not cache them).
-		var err error
-		if gw, err = loadGatewaySettings(ctx, c.db.Pool); err != nil {
-			return defaultGatewaySettings(), defaultStickySettings()
-		}
-		if st, err = loadStickySettings(ctx, c.db.Pool); err != nil {
-			return gw.normalized(), defaultStickySettings()
-		}
-	}
-	gw = gw.normalized()
+	s := c.load(ctx)
 	c.mu.Lock()
-	if c.epoch == epoch {
-		c.snap = &settingsSnapshot{at: time.Now(), gateway: gw, sticky: st}
+	if c.epoch == epoch && s.at != (time.Time{}) {
+		c.snap = &s
 	}
 	c.mu.Unlock()
-	return gw, st
+	return s
+}
+
+// load reads the three rows. On read errors it keeps the defaults of the rows
+// not read and leaves at zero so the result is not cached.
+func (c *settingsCache) load(ctx context.Context) settingsSnapshot {
+	s := settingsSnapshot{gateway: defaultGatewaySettings(), sticky: defaultStickySettings(),
+		autoDisable: defaultAutoDisableSettings()}
+	if c.db == nil {
+		s.at = time.Now()
+		return s
+	}
+	gw, err := loadGatewaySettings(ctx, c.db.Pool)
+	if err != nil {
+		return s
+	}
+	s.gateway = gw.normalized()
+	st, err := loadStickySettings(ctx, c.db.Pool)
+	if err != nil {
+		return s
+	}
+	s.sticky = st
+	ad, err := loadAutoDisableSettings(ctx, c.db.Pool)
+	if err != nil {
+		return s
+	}
+	s.autoDisable, s.at = ad, time.Now()
+	return s
 }
 
 func loadSettingsRow(ctx context.Context, q store.Querier, key string, into any) error {

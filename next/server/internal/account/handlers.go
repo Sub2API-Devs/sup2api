@@ -33,6 +33,7 @@ type row struct {
 	Status         string
 	StatusReason   string
 	Schedulable    bool
+	AutoDisable    bool
 	Priority       int
 	Weight         int
 	MaxConcurrency int
@@ -52,7 +53,7 @@ type row struct {
 // selectRow joins the creator's email (also for soft-deleted users); every
 // statement built on it must qualify account columns with "a.".
 const selectRow = `SELECT a.id, a.name, a.plugin_key, a.type, a.credentials_enc, a.settings, a.proxy_id,
-	a.status, a.status_reason, a.schedulable, a.priority, a.weight, a.max_concurrency,
+	a.status, a.status_reason, a.schedulable, a.auto_disable, a.priority, a.weight, a.max_concurrency,
 	a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.tpd_limit, a.spm_limit, a.last_used_at,
 	a.created_by, u.email, a.created_at, a.updated_at
 	FROM accounts a LEFT JOIN users u ON u.id = a.created_by`
@@ -60,7 +61,7 @@ const selectRow = `SELECT a.id, a.name, a.plugin_key, a.type, a.credentials_enc,
 func scanRow(r pgx.Row) (*row, error) {
 	var a row
 	err := r.Scan(&a.ID, &a.Name, &a.PluginKey, &a.Type, &a.CredEnc, &a.Settings, &a.ProxyID,
-		&a.Status, &a.StatusReason, &a.Schedulable, &a.Priority, &a.Weight, &a.MaxConcurrency,
+		&a.Status, &a.StatusReason, &a.Schedulable, &a.AutoDisable, &a.Priority, &a.Weight, &a.MaxConcurrency,
 		&a.Models, &a.ModelMapping, &a.RPMLimit, &a.TPMLimit, &a.TPDLimit, &a.SPMLimit, &a.LastUsedAt,
 		&a.CreatedBy, &a.CreatedByEmail, &a.CreatedAt, &a.UpdatedAt)
 	return &a, err
@@ -115,16 +116,19 @@ type View struct {
 	Type      string `json:"type"`
 	// TypeLabel is the account type label; null when the type is no longer
 	// registered (plugin disabled or uninstalled).
-	TypeLabel      manifest.LocalizedText `json:"type_label"`
-	GroupIDs       []int64                `json:"group_ids"`
-	Groups         []GroupRef             `json:"groups"`
-	ProxyID        *int64                 `json:"proxy_id"`
-	Status         string                 `json:"status"`
-	StatusReason   string                 `json:"status_reason"`
-	Schedulable    bool                   `json:"schedulable"`
-	Priority       int                    `json:"priority"`
-	Weight         int                    `json:"weight"`
-	MaxConcurrency int                    `json:"max_concurrency"`
+	TypeLabel    manifest.LocalizedText `json:"type_label"`
+	GroupIDs     []int64                `json:"group_ids"`
+	Groups       []GroupRef             `json:"groups"`
+	ProxyID      *int64                 `json:"proxy_id"`
+	Status       string                 `json:"status"`
+	StatusReason string                 `json:"status_reason"`
+	Schedulable  bool                   `json:"schedulable"`
+	// AutoDisable lets the gateway disable the account on credential or quota
+	// failures; false only cools it down (CONTRACTS §42).
+	AutoDisable    bool `json:"auto_disable"`
+	Priority       int  `json:"priority"`
+	Weight         int  `json:"weight"`
+	MaxConcurrency int  `json:"max_concurrency"`
 	// Models the account serves (empty = all) and the client → upstream
 	// model mapping (CONTRACTS §18).
 	Models         []string          `json:"models"`
@@ -173,7 +177,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 		v := &View{
 			ID: a.ID, Name: a.Name, PluginKey: a.PluginKey, Type: a.Type, TypeLabel: s.typeLabel(a.PluginKey, a.Type),
 			GroupIDs: []int64{}, Groups: []GroupRef{}, ProxyID: a.ProxyID, Status: a.Status,
-			StatusReason: a.StatusReason, Schedulable: a.Schedulable, Priority: a.Priority, Weight: a.Weight,
+			StatusReason: a.StatusReason, Schedulable: a.Schedulable, AutoDisable: a.AutoDisable, Priority: a.Priority, Weight: a.Weight,
 			MaxConcurrency: a.MaxConcurrency, Models: models, ModelMapping: a.mapping(),
 			RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit, TPDLimit: a.TPDLimit, SPMLimit: a.SPMLimit,
 			Orphaned: !s.pluginActive(a.PluginKey), Settings: st,
@@ -425,6 +429,7 @@ type input struct {
 	Weight         *int               `json:"weight"`
 	MaxConcurrency *int               `json:"max_concurrency"`
 	Schedulable    *bool              `json:"schedulable"`
+	AutoDisable    *bool              `json:"auto_disable"`
 	Status         *string            `json:"status"`
 	Models         *[]string          `json:"models"`
 	ModelMapping   *map[string]string `json:"model_mapping"`
@@ -459,6 +464,7 @@ func (in *input) changedFields() []string {
 	set("weight", in.Weight != nil)
 	set("max_concurrency", in.MaxConcurrency != nil)
 	set("schedulable", in.Schedulable != nil)
+	set("auto_disable", in.AutoDisable != nil)
 	set("status", in.Status != nil)
 	set("models", in.Models != nil)
 	set("model_mapping", in.ModelMapping != nil)
@@ -790,12 +796,15 @@ func (s *Service) create(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	status, sched, prio, maxc, weight := "active", true, 10, 10, 1
+	status, sched, autoDisable, prio, maxc, weight := "active", true, true, 10, 10, 1
 	if in.Status != nil {
 		status = *in.Status
 	}
 	if in.Schedulable != nil {
 		sched = *in.Schedulable
+	}
+	if in.AutoDisable != nil {
+		autoDisable = *in.AutoDisable
 	}
 	if in.Priority != nil {
 		prio = *in.Priority
@@ -841,12 +850,12 @@ func (s *Service) create(c *gin.Context) {
 		}
 		if err := tx.QueryRow(ctx, `INSERT INTO accounts (name, plugin_key, type, credentials_enc, settings,
 			proxy_id, status, schedulable, priority, max_concurrency, created_by,
-			weight, models, model_mapping, rpm_limit, tpm_limit, tpd_limit, spm_limit)
+			weight, models, model_mapping, rpm_limit, tpm_limit, tpd_limit, spm_limit, auto_disable)
 			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, NULLIF($11::bigint, 0),
-			$12, $13, $14::jsonb, $15, $16, $17, $18) RETURNING id`,
+			$12, $13, $14::jsonb, $15, $16, $17, $18, $19) RETURNING id`,
 			*in.Name, bt.Plugin.Key, bt.Type.ID, p.enc, string(p.settings),
 			proxyID, status, sched, prio, maxc, uid,
-			weight, models, mappingJSON(mapping), rpm, tpm, tpd, spm).Scan(&id); err != nil {
+			weight, models, mappingJSON(mapping), rpm, tpm, tpd, spm, autoDisable).Scan(&id); err != nil {
 			return err
 		}
 		if err := setGroups(ctx, tx, id, groupIDs); err != nil {
@@ -1005,9 +1014,11 @@ func (s *Service) update(c *gin.Context) {
 			tpm_limit = COALESCE($16, tpm_limit),
 			tpd_limit = COALESCE($17, tpd_limit),
 			spm_limit = COALESCE($18, spm_limit),
+			auto_disable = COALESCE($20, auto_disable),
 			updated_at = clock_timestamp()
 			WHERE a.id = $1 AND `+scoped("$19"), id, in.Name, setProxy, proxyID, in.Priority, in.MaxConcurrency, in.Schedulable,
-			in.Status, reason, enc, settings, in.Weight, in.Models, mapping, in.RPMLimit, in.TPMLimit, in.TPDLimit, in.SPMLimit, scope); err != nil {
+			in.Status, reason, enc, settings, in.Weight, in.Models, mapping, in.RPMLimit, in.TPMLimit, in.TPDLimit, in.SPMLimit, scope,
+			in.AutoDisable); err != nil {
 			return err
 		}
 		if in.GroupIDs != nil {

@@ -161,7 +161,7 @@ func (a recAccounts) Load(_ context.Context, id int64) (*core.Account, error) {
 }
 func (a recAccounts) IsCoolingDown(context.Context, int64) (bool, error)          { return false, nil }
 func (a recAccounts) SetCooldown(context.Context, int64, time.Time, string) error { return nil }
-func (a recAccounts) Disable(context.Context, int64, string) error                { return nil }
+func (a recAccounts) AutoDisable(context.Context, int64, string) (bool, error)    { return true, nil }
 func (a recAccounts) TouchLastUsed(context.Context, int64)                        {}
 
 type recProxies struct{}

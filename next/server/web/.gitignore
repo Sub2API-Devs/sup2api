@@ -1,0 +1,5 @@
+# Console UI build output (web/ builds here). Go embed needs at least one file,
+# so index.html acts as the placeholder (shown when the console is not built).
+# Keep it tracked, ignore the rest.
+dist/*
+!dist/index.html

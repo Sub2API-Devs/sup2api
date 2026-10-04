@@ -145,7 +145,7 @@ func TestStickyBindingDroppedWhenAccountDisabled(t *testing.T) {
 		t.Fatalf("binding after disable = %q", v)
 	}
 	// Admin disables account 2 out of band: binding deleted at pick time.
-	e.accounts.Disable(context.Background(), 2, "admin")
+	e.accounts.AutoDisable(context.Background(), 2, "admin")
 	e.messages(sess)
 	e.record()
 	if v, _ := e.mr.Get(key); v != "3" {
@@ -164,7 +164,7 @@ func TestStickyKeepOnAccountDisabled(t *testing.T) {
 	sess := withSession(body(testModel, false), "keep-session")
 	e.messages(sess)
 	e.record()
-	e.accounts.Disable(context.Background(), 1, "admin")
+	e.accounts.AutoDisable(context.Background(), 1, "admin")
 	e.messages(sess)
 	e.record()
 	// Served by another account, which now owns the binding (rebind).

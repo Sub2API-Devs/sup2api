@@ -43,7 +43,7 @@ watch(
   }
 )
 
-const userId = computed<number | null>(() => {
+const targetUserId = computed<number | null>(() => {
   if (selected.value) return selected.value.id
   const q = query.value.trim()
   return /^\d+$/.test(q) ? Number(q) : null
@@ -84,14 +84,14 @@ function uuid(): string {
 
 async function submit() {
   errors.value = {}
-  if (!userId.value) errors.value.user = t('ledger.adjust.userRequired')
+  if (!targetUserId.value) errors.value.user = t('ledger.adjust.userRequired')
   const a = amount.value.trim()
   if (!/^\d+(\.\d{1,8})?$/.test(a) || Number(a) <= 0) errors.value.amount = t('ledger.adjust.amountInvalid')
   if (Object.keys(errors.value).length) return
   busy.value = true
   try {
     const r = await api.post<{ ledger_id?: number; balance_after?: string; duplicate?: boolean }>(
-      `/users/${userId.value}/balance/adjust`,
+      `/users/${targetUserId.value}/balance/adjust`,
       { amount: a, credit: credit.value, note: note.value },
       { headers: { 'Idempotency-Key': uuid() } }
     )
@@ -103,7 +103,7 @@ async function submit() {
           : t('ledger.adjust.done'),
       'success'
     )
-    if (userId.value === auth.me?.id) auth.refreshBalance()
+    if (targetUserId.value === auth.me?.id) auth.refreshBalance()
     emit('done')
     emit('update:open', false)
   } catch (e) {
@@ -129,7 +129,7 @@ async function submit() {
             </div>
           </div>
         </div>
-        <SHint v-if="userId" size="xs" class="mt-1">{{ t('ledger.adjust.target', { id: userId }) }}</SHint>
+        <SHint v-if="targetUserId" size="xs" class="mt-1">{{ t('ledger.adjust.target', { id: targetUserId }) }}</SHint>
       </SField>
       <SField :label="t('ledger.adjust.direction')">
         <SRadioGroup v-model="credit" inline class="pt-1" :options="directionOptions" />

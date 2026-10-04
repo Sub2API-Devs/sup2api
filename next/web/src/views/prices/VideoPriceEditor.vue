@@ -19,7 +19,8 @@ const fields = ['price_per_million_tokens', 'video_input_price_per_million_token
     <SHint>{{ t('prices.video.overridesHint') }}</SHint>
     <div v-for="(row, index) in model.resolution_prices" :key="index" class="space-y-3 rounded-lg border p-3">
       <SField :label="t('prices.video.sizes')">
-        <SInput :model-value="row.sizes.join(', ')" :disabled="disabled" placeholder="1920x1080, 1600x900"
+        <SInput
+:model-value="row.sizes.join(', ')" :disabled="disabled" placeholder="1920x1080, 1600x900"
           @update:model-value="row.sizes = String($event ?? '').split(',').map(s => s.trim()).filter(Boolean)" />
       </SField>
       <SGrid :cols="3" :gap="3">

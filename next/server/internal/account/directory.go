@@ -183,19 +183,30 @@ func (s *Service) SetCooldown(ctx context.Context, id int64, until time.Time, re
 	})
 }
 
-// Disable sets status=disabled with a reason, emits account.status_changed
-// and broadcasts account:changed. Disabling a disabled account is a no-op.
-func (s *Service) Disable(ctx context.Context, id int64, reason string) error {
+// AutoDisable disables an account the gateway judged unusable (CONTRACTS §42):
+// status=disabled with the reason, account.status_changed and account:changed.
+// It reports false, changing nothing, when the account opted out
+// (auto_disable = false) or is gone; an already disabled account reports true.
+func (s *Service) AutoDisable(ctx context.Context, id int64, reason string) (bool, error) {
 	changed := false
+	disabled := false
 	err := s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
-		var pluginKey, typ, name string
-		err := tx.QueryRow(ctx, `UPDATE accounts SET status = 'disabled', status_reason = $2, updated_at = clock_timestamp()
-			WHERE id = $1 AND deleted_at IS NULL AND status <> 'disabled' RETURNING plugin_key, type, name`, id, reason).
-			Scan(&pluginKey, &typ, &name)
-		if store.IsNoRows(err) {
+		var pluginKey, typ, name, status string
+		var allowed bool
+		err := tx.QueryRow(ctx, `SELECT plugin_key, type, name, status, auto_disable FROM accounts
+			WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, id).Scan(&pluginKey, &typ, &name, &status, &allowed)
+		if store.IsNoRows(err) || (err == nil && !allowed) {
 			return nil
 		}
 		if err != nil {
+			return err
+		}
+		disabled = true
+		if status == "disabled" {
+			return nil
+		}
+		if _, err := tx.Exec(ctx, `UPDATE accounts SET status = 'disabled', status_reason = $2, updated_at = clock_timestamp()
+			WHERE id = $1`, id, reason); err != nil {
 			return err
 		}
 		changed = true
@@ -203,12 +214,12 @@ func (s *Service) Disable(ctx context.Context, id int64, reason string) error {
 			Payload: statusPayload(id, pluginKey, typ, name, "disabled", reason, nil)})
 	})
 	if err != nil {
-		return err
+		return false, err
 	}
 	if changed {
 		s.changed(ctx, id)
 	}
-	return nil
+	return disabled, nil
 }
 
 // TouchLastUsed records usage; last_used_at is written in batches by Run.

@@ -56,6 +56,7 @@ const basic = reactive({
   weight: 1,
   max_concurrency: 10,
   schedulable: true,
+  auto_disable: true,
   rpm_limit: 0,
   tpm_limit: 0,
   tpd_limit: 0,
@@ -466,6 +467,7 @@ watch(
       basic.weight = a?.weight ?? 1
       basic.max_concurrency = a?.max_concurrency ?? 10
       basic.schedulable = a?.schedulable ?? true
+      basic.auto_disable = a?.auto_disable ?? true
       basic.rpm_limit = a?.rpm_limit ?? 0
       basic.tpm_limit = a?.tpm_limit ?? 0
       basic.tpd_limit = a?.tpd_limit ?? 0
@@ -580,6 +582,7 @@ async function save(event: Event) {
     weight: Number(basic.weight),
     max_concurrency: Number(basic.max_concurrency),
     schedulable: basic.schedulable,
+    auto_disable: basic.auto_disable,
     models: models.value,
     model_mapping: mapping.value,
     rpm_limit: Number(basic.rpm_limit) || 0,
@@ -927,6 +930,13 @@ async function save(event: Event) {
                 <div class="text-xs text-gray-500 dark:text-dark-400">{{ t('accounts.editorUi.schedulableHint') }}</div>
               </div>
               <SSwitch v-model="basic.schedulable" :aria-label="t('accounts.schedulable')" />
+            </div>
+            <div class="mt-3 flex items-center justify-between gap-4 rounded-xl border border-gray-100 bg-gray-50/60 px-4 py-3 dark:border-dark-700 dark:bg-dark-900/30">
+              <div class="min-w-0">
+                <div class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ t('accounts.autoDisable') }}</div>
+                <div class="text-xs text-gray-500 dark:text-dark-400">{{ t('accounts.editorUi.autoDisableHint') }}</div>
+              </div>
+              <SSwitch v-model="basic.auto_disable" :aria-label="t('accounts.autoDisable')" />
             </div>
           </EditorCard>
 

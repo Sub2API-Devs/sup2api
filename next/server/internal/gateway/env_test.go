@@ -488,19 +488,22 @@ func (b *fakeBalance) CheckBalance(_ context.Context, uid int64) error {
 }
 
 type fakeAccounts struct {
-	mu        sync.Mutex
-	accounts  map[int64]*core.Account
-	groups    map[int64][]int64 // group -> account ids
-	cooldown  map[int64]time.Time
-	disabled  map[int64]string
-	touched   map[int64]int
-	cooldowns []int64
-	lastTypes []core.AccountTypeKey
+	mu       sync.Mutex
+	accounts map[int64]*core.Account
+	groups   map[int64][]int64 // group -> account ids
+	cooldown map[int64]time.Time
+	disabled map[int64]string
+	// noAutoDisable marks accounts with auto_disable = false (CONTRACTS §42.3).
+	noAutoDisable map[int64]bool
+	touched       map[int64]int
+	cooldowns     []int64
+	lastTypes     []core.AccountTypeKey
 }
 
 func newFakeAccounts() *fakeAccounts {
 	return &fakeAccounts{accounts: map[int64]*core.Account{}, groups: map[int64][]int64{},
-		cooldown: map[int64]time.Time{}, disabled: map[int64]string{}, touched: map[int64]int{}}
+		cooldown: map[int64]time.Time{}, disabled: map[int64]string{}, noAutoDisable: map[int64]bool{},
+		touched: map[int64]int{}}
 }
 
 func (a *fakeAccounts) add(group int64, id int64, priority int, key string) {
@@ -565,11 +568,14 @@ func (a *fakeAccounts) SetCooldown(_ context.Context, id int64, until time.Time,
 	return nil
 }
 
-func (a *fakeAccounts) Disable(_ context.Context, id int64, reason string) error {
+func (a *fakeAccounts) AutoDisable(_ context.Context, id int64, reason string) (bool, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if a.noAutoDisable[id] {
+		return false, nil
+	}
 	a.disabled[id] = reason
-	return nil
+	return true, nil
 }
 
 func (a *fakeAccounts) TouchLastUsed(_ context.Context, id int64) {
@@ -871,8 +877,21 @@ func newEnv(t *testing.T, opts ...envOpt) *env {
 
 func (e *env) setSettings(gw GatewaySettings, st StickySettings) {
 	e.gw.settings.mu.Lock()
-	e.gw.settings.override = &settingsSnapshot{gateway: gw, sticky: st}
+	e.gw.settings.override = &settingsSnapshot{gateway: gw, sticky: st, autoDisable: defaultAutoDisableSettings()}
 	e.gw.settings.mu.Unlock()
+}
+
+// setAutoDisable replaces the auto-disable settings, keeping the others
+// (CONTRACTS §42.2).
+func (e *env) setAutoDisable(ad AutoDisableSettings) {
+	e.gw.settings.mu.Lock()
+	defer e.gw.settings.mu.Unlock()
+	o := settingsSnapshot{gateway: defaultGatewaySettings(), sticky: defaultStickySettings()}
+	if e.gw.settings.override != nil {
+		o = *e.gw.settings.override
+	}
+	o.autoDisable = ad.compiled()
+	e.gw.settings.override = &o
 }
 
 // enableSticky turns sticky sessions on with the built-in anthropic default

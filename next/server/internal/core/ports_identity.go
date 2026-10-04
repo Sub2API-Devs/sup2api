@@ -195,8 +195,10 @@ type AccountDirectory interface {
 	Load(ctx context.Context, id int64) (*Account, error)
 	IsCoolingDown(ctx context.Context, id int64) (bool, error)
 	SetCooldown(ctx context.Context, id int64, until time.Time, reason string) error
-	// Disable sets status=disabled with a reason and emits account.status_changed.
-	Disable(ctx context.Context, id int64, reason string) error
+	// AutoDisable sets status=disabled with a reason and emits
+	// account.status_changed, unless the account opted out of automatic
+	// disabling (CONTRACTS §42.3). It reports whether the account is disabled.
+	AutoDisable(ctx context.Context, id int64, reason string) (bool, error)
 	TouchLastUsed(ctx context.Context, id int64)
 }
 

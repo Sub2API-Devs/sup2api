@@ -256,6 +256,8 @@ export interface Account {
   weight: number
   max_concurrency: number
   schedulable: boolean
+  /** Lets the gateway disable the account on credential or quota failures; off only cools it down (CONTRACTS §42). */
+  auto_disable: boolean
   /** Models this account can serve; empty = all models. */
   models: string[]
   /** Client model -> upstream model, rewritten before the plugin builds the request. */
@@ -520,6 +522,16 @@ export const GATEWAY_SETTINGS_RANGES: Record<keyof GatewaySettings, [number, num
   platform_call_timeout_ms: [100, 30000],
   default_hook_timeout_ms: [50, 2000],
   platform_hotpath_timeout_ms: [50, 2000]
+}
+
+/** GET/PUT /settings/auto-disable (CONTRACTS §42.2). */
+export interface AutoDisableSettings {
+  /** Global switch; off cools accounts down instead of disabling them. */
+  enabled: boolean
+  /** Status codes or ranges that disable the account, e.g. "401,403,500-503"; "" = none. */
+  status_codes: string
+  /** Lower-cased substrings of the upstream error that disable the account. */
+  keywords: string[]
 }
 
 // ------------------------------------------------------------------ sticky

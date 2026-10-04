@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/auth'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import StickySettingsCard from '@/views/sticky/StickySettingsCard.vue'
 import GatewaySettingsCard from './GatewaySettingsCard.vue'
+import AutoDisableSettingsCard from './AutoDisableSettingsCard.vue'
 import OffloadSettingsCard from './OffloadSettingsCard.vue'
 import UpdateSourceCard from './UpdateSourceCard.vue'
 
@@ -138,7 +139,10 @@ onMounted(loadBilling)
       </SCard>
     </template>
 
-    <GatewaySettingsCard v-else-if="tab === 'gateway' && auth.has('settings:read')" />
+    <template v-else-if="tab === 'gateway' && auth.has('settings:read')">
+      <GatewaySettingsCard />
+      <AutoDisableSettingsCard />
+    </template>
     <StickySettingsCard v-else-if="tab === 'sticky' && auth.has('sticky:read')" />
     <OffloadSettingsCard v-else-if="tab === 'offload' && auth.has('settings:read')" />
     <UpdateSourceCard v-else-if="tab === 'updates' && auth.has('settings:read')" />

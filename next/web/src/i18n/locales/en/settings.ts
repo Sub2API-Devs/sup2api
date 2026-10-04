@@ -47,6 +47,17 @@ export default {
     range: 'Range {min}–{max}.',
     notInteger: 'Enter a whole number'
   },
+  autoDisable: {
+    title: 'Automatic disabling',
+    subtitle: 'Disable an account when the upstream error shows the account itself is unusable (invalid credentials, exhausted quota, banned organization), as in new-api. Rules by status code and error keyword add to the plugin\'s own judgement.',
+    enabled: 'Enable automatic disabling',
+    enabledHint: 'When off no account is ever disabled automatically; it is cooled down for 60 seconds instead. Single accounts can opt out in the account editor.',
+    statusCodes: 'Disabling status codes',
+    statusCodesHint: 'Disable the account when the upstream returns one of these codes. Comma separated, ranges allowed, e.g. 401,403,500-503; empty means none.',
+    keywords: 'Disabling keywords',
+    keywordsHint: 'Disable the account when the upstream error contains any keyword (case-insensitive). One per line, at most 100.',
+    restoreKeywords: 'Restore default keywords'
+  },
   billing: {
     preConsumeTokens: 'Request reservation tokens',
     preConsumeHint: 'Minimum input tokens reserved for text requests, default 500. Larger local estimates take precedence. Zero disables the minimum. Final billing uses actual usage; video uses plugin estimates.',

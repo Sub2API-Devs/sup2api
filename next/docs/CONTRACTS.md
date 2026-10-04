@@ -142,7 +142,7 @@
 | GET `/account-types` | `account:read` | `[{plugin_key, plugin_name, plugin_version, asset_base, platform, type, label, description, form:{mode, page?, component?}, sensitive_fields, guarded_settings:[{field, allowed[]}]}]`（`guarded_settings` 来自 manifest `guardedSettings`，§21.3；未声明时为 `[]`） |
 | GET `/account-types/:platform/:type/form` | `account:read` | `{schema, ui_schema}` |
 | GET `/accounts`（`?plugin_key=&type=&group_id=&status=&q=&model=&created_by=&mine=&orphaned=`） | `account:read` | 列表含 `in_use`（实时并发）、`cooldown_until`、`orphaned`、`rate_usage`（§18）、`created_by`、`created_by_email`（§21）。**默认不列出孤立账号**（所属插件已禁用/卸载，数据仍在）；`orphaned=true` 只列孤立的，`orphaned=all` 都列；详情 `GET /accounts/:id` 不受影响 |
-| POST `/accounts` | `account:create` | `{name, plugin_key, type, group_ids[], proxy_id \| proxy_url, priority, weight, max_concurrency, schedulable, models[], model_mapping{}, rpm_limit, tpm_limit, tpd_limit, spm_limit, credentials:{...}}`（§18、§21.4）；响应另带 `proxy_created` |
+| POST `/accounts` | `account:create` | `{name, plugin_key, type, group_ids[], proxy_id \| proxy_url, priority, weight, max_concurrency, schedulable, auto_disable, models[], model_mapping{}, rpm_limit, tpm_limit, tpd_limit, spm_limit, credentials:{...}}`（§18、§21.4、§42.3）；响应另带 `proxy_created` |
 | GET/PATCH `/accounts/:id` | `account:read` / `account:update` | 凭证中的敏感字段返回 `"******"`；PATCH 时敏感字段传 `"******"` 表示不修改 |
 | DELETE `/accounts/:id` | `account:delete` | |
 | POST `/accounts/:id/test` | `account:test` | `{model?}` → `{ok, status, latency_ms, message}` |
@@ -281,6 +281,7 @@
 | `billing` | `{missing_price_policy, min_balance, big_cost_warning_usd}` | `reject`、`"0"`、`"10"` |
 | `sticky` | `{enabled, default_ttl_seconds, keep_on_account_disabled}` | `true`、3600、`false` |
 | `gateway` | `{max_attempts, platform_call_timeout_ms, default_hook_timeout_ms}` | 3、2000、300 |
+| `auto_disable` | `{enabled, status_codes, keywords}`（§42.2） | `true`、`"401"`、new-api 的 7 条关键词 |
 
 ## 9. 环境变量
 
@@ -463,7 +464,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 ### 14.4 接口收尾
 
 - **客户端请求 ID**：网关把客户端 `X-Request-Id`（截断到 128 字符）写入 `UsageRecord.ClientRequestID`；`usage_logs.client_request_id`；管理员使用记录列表/详情返回 `client_request_id`，支持 `?client_request_id=` 精确筛选。
-- **`GET/PUT /settings/gateway`**（`settings:read` / `settings:manage`，网关负责）：`{max_attempts, platform_call_timeout_ms, default_hook_timeout_ms}`，校验范围 1–10、100–30000、50–2000。
+- **`GET/PUT /settings/gateway`**（`settings:read` / `settings:manage`，网关负责）：`{max_attempts, platform_call_timeout_ms, default_hook_timeout_ms}`，校验范围 1–10、100–30000、50–2000。自动禁用设置是独立接口 `/settings/auto-disable`，见 §42.2。
 - 前端此前提出的缺失接口说明见 §15（按后端现状整理）。
 
 ## 15. 接口细节补充（按 2026-09-25 代码现状）
@@ -2342,3 +2343,38 @@ volcengine 0.12.2 的两个表单同时用 `ui:section` 把素材库字段归入
 ### 41.5 Claude Code 连接为账号
 
 `POST /system/ccgateway/connect` 新增可选 `model_mapping: {from: to}`，与 `models` 一起原样交给创建账号（校验同 §18）；请求体上限由 8 KiB 提高到 512 KiB，以容纳 500 个模型与 500 条映射。控制台的连接表单在加载时用 ccgateway `managed` 类型的预设填充模型列表与映射，两者都可增删（模型标签输入、"填入预设模型""清空"；映射用与账号编辑器相同的表格和"填入预设映射"）。
+
+## 42. 账号自动禁用：全局开关、管理员规则、账号级开关（2026-10-04，用户要求）
+
+参考 new-api 的渠道自动禁用（`common.AutomaticDisableChannelEnabled`、`operation_setting.AutomaticDisableStatusCodeRanges`、`AutomaticDisableKeywords`，渠道字段 `auto_ban`）。此前插件 `ClassifyError` 返回 `ACCOUNT_EFFECT_DISABLE` 时核心一律禁用账号（如 anthropic 遇 401/403），管理员无法关闭。改为：**插件给默认判定，管理员规则可追加，全局与账号两级开关决定是否真的禁用**。判定只在核心一处执行（`gateway.call.applyClassification`），HTTP、WebSocket、插件驱动执行（§31）三条路径共用。
+
+### 42.1 判定
+
+一次上游失败经 `ClassifyError` 分类后：
+
+1. **是否要求禁用**：插件返回 `ACCOUNT_EFFECT_DISABLE`；或命中管理员规则——上游状态码落在 `status_codes` 内（传输错误 status=0 不参与），或上游响应体前 4 KiB / 传输错误文本（转小写）包含 `keywords` 中任一项。命中管理员规则时原因为 `matched auto-disable rule: status 401` / `matched auto-disable rule: keyword "<kw>"`（插件已要求禁用时沿用插件原因），且本次尝试按 **failover** 处理（即使插件判为返回客户端：账号已不可用，换号重试）。
+2. **是否执行**：全局 `enabled = true` **且**账号 `auto_disable = true` 时禁用：`status = 'disabled'`、`status_reason = 原因`、发 `account.status_changed`、广播 `account:changed`，并解除指向它的粘性绑定（同此前）。已禁用的账号不重复处理。
+3. **不执行时**：改为冷却 60 秒（`gateway.defaultCooldown`），冷却原因 `auto-disable off, cooling down: <原因>`，避免每个请求都打到同一个坏账号；本次尝试仍 failover。
+
+控制台"测试账号"（`POST /accounts/:id/test`）仍只**报告**插件的处置建议（`effect`），不应用任何处置，也不套用管理员规则（同此前，§19）。
+
+### 42.2 设置（`GET/PUT /settings/auto-disable`，`settings:read` / `settings:manage`，网关负责）
+
+存于 `settings` 表 `auto_disable` 行，与网关、粘性设置一起缓存（10 秒 TTL，`config:changed` 立即失效）。
+
+| 字段 | 类型 / 默认 | 说明 |
+|---|---|---|
+| `enabled` | bool，默认 `true` | 全局开关。`false` 时任何来源都不自动禁用（一律降级为冷却） |
+| `status_codes` | string，默认 `"401"` | 逗号分隔的状态码或闭区间，如 `"401,403,500-503"`；每个码 100–599，最多 50 段；空串 = 不按状态码禁用。保存时规范化（去空格、排序、合并相邻与重叠） |
+| `keywords` | string[]，默认 new-api 的 7 条（`your credit balance is too low`、`this organization has been disabled.`、`you exceeded your current quota`、`permission denied`、`the security token included in the request is invalid`、`operation not allowed`、`your account is not authorized`） | 保存时去首尾空格、转小写、去重、丢弃空项；每项 ≤ 200 字符，最多 100 项；`[]` = 不按关键词禁用 |
+
+PUT 是补丁语义（省略的字段不变），响应为保存后的完整设置。字段错误：`status_codes`（`invalid`）、`keywords`（`too_many`）、`keywords[i]`（`invalid`）。
+
+### 42.3 账号字段
+
+迁移 `0026_account_auto_disable.sql`：`accounts.auto_disable boolean NOT NULL DEFAULT true`。`Account` 对象新增 `auto_disable`；POST/PATCH `/accounts` 可选（省略时创建为 `true`，PATCH 不变），写入 `account.update` 审计的 `fields`。
+
+### 42.4 控制台
+
+- 设置 → 网关页签新增"自动禁用"卡片：全局开关、状态码（文本，示例 `401,403`）、关键词（多行文本，每行一个，显示默认值可一键恢复）。
+- 账号编辑器"调度与限流"块新增开关"允许自动禁用"（默认开），说明关闭后上游报凭证或额度错误时只冷却 60 秒、不禁用。账号列表中关闭了自动禁用的账号在状态旁显示"不自动禁用"标记。

@@ -280,7 +280,7 @@ func TestStickySettingsAPI(t *testing.T) {
 		res.Get("data.default_ttl_seconds").Int() != 3600 {
 		t.Fatalf("put: %d %s", code, res.Raw)
 	}
-	_, st := e.gw.settings.get(context.Background())
+	st := e.gw.settings.get(context.Background()).sticky
 	if st.Enabled || !st.KeepOnAccountDisabled {
 		t.Fatalf("settings cache not refreshed: %+v", st)
 	}
@@ -291,7 +291,7 @@ func TestStickySettingsAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.gw.settings.invalidate()
-	gw, _ := e.gw.settings.get(context.Background())
+	gw := e.gw.settings.get(context.Background()).gateway
 	if gw.MaxAttempts != 5 || gw.PlatformCallTimeoutMs != 2000 || gw.DefaultHookTimeoutMs != 300 {
 		t.Fatalf("gateway settings %+v", gw)
 	}
@@ -311,13 +311,41 @@ func TestGatewaySettingsAPIDB(t *testing.T) {
 	if code != 200 || res.Get("data.max_attempts").Int() != 4 || res.Get("data.default_hook_timeout_ms").Int() != 300 {
 		t.Fatalf("put: %d %s", code, res.Raw)
 	}
-	gw, _ := e.gw.settings.get(context.Background())
+	gw := e.gw.settings.get(context.Background()).gateway
 	if gw.MaxAttempts != 4 || gw.PlatformCallTimeoutMs != 5000 {
 		t.Fatalf("settings cache not refreshed: %+v", gw)
 	}
 	var by *int64
 	if err := e.db.Pool.QueryRow(context.Background(), `SELECT updated_by FROM settings WHERE key = 'gateway'`).Scan(&by); err != nil || by == nil || *by != e.uid {
 		t.Fatalf("updated_by %v %v", by, err)
+	}
+}
+
+func TestAutoDisableSettingsAPIDB(t *testing.T) {
+	e := newDBEnv(t)
+	code, res := e.api("GET", "/settings/auto-disable", nil)
+	if code != 200 || !res.Get("data.enabled").Bool() || res.Get("data.status_codes").String() != "401" ||
+		len(res.Get("data.keywords").Array()) != 7 {
+		t.Fatalf("defaults: %d %s", code, res.Raw)
+	}
+	if code, res := e.api("PUT", "/settings/auto-disable", map[string]any{"status_codes": "401,abc"}); code != 400 ||
+		res.Get("error.details.fields.0.field").String() != "status_codes" {
+		t.Fatalf("invalid: %d %s", code, res.Raw)
+	}
+	code, res = e.api("PUT", "/settings/auto-disable", map[string]any{"enabled": false, "status_codes": "403, 401",
+		"keywords": []string{" Quota Exceeded ", ""}})
+	if code != 200 || res.Get("data.enabled").Bool() || res.Get("data.status_codes").String() != "401,403" ||
+		res.Get("data.keywords").Raw != `["quota exceeded"]` {
+		t.Fatalf("put: %d %s", code, res.Raw)
+	}
+	// A partial update keeps the other fields.
+	if code, res = e.api("PUT", "/settings/auto-disable", map[string]any{"enabled": true}); code != 200 ||
+		res.Get("data.status_codes").String() != "401,403" {
+		t.Fatalf("patch: %d %s", code, res.Raw)
+	}
+	ad := e.gw.settings.get(context.Background()).autoDisable
+	if !ad.Enabled || ad.rule(403, nil, "") == "" || ad.rule(500, []byte("QUOTA EXCEEDED"), "") == "" {
+		t.Fatalf("settings cache not refreshed: %+v", ad)
 	}
 }
 
