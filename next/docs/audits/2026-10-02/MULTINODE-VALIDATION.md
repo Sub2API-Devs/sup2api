@@ -587,3 +587,11 @@ manifest `cf61b44b77f50a98075665b62c3e74cb818a4d5b0097bff06a14d8ece98c955b`，bu
 计划完成后内置插件随核心升级：anthropic 0.2.4、ccgateway 0.1.5、gemini 0.2.3、openai 0.3.3、volcengine 0.12.2，moderation 0.1.6 未变；relay 未安装在生产，0.2.2 只在仓库。四入口均登录验证：核心 0.1.23；`/account-types` 的预设数量（模型/映射）anthropic、ccgateway 两类型 29/11，gemini 31/5，openai 75/4，volcengine 两类型 23/11；§24.9 迁移的 25 条价格均可查询；前端 AccountsView 包含新编辑器。发布以来四节点 ERROR 为 0。此次未执行真实模型调用或 OAuth 登录。
 
 证据：`ovh-upgrade-0.1.23.jsonl.txt`、`ovh-upgrade-0.1.23-summary.txt`、`v023-verify.jsonl`。
+
+### 24.11 取消二次验证、账号页 CC 授权、模型测试：OVH v0.1.24
+
+2026-10-05 05:06–05:09（北京时间），源码 `aaec4739a` 已推送，OVH 从 Git 构建签名核心（`SKIP_GATEWAY_BUILD=1`，复用网关镜像 `sup2api-gateway:3a2017d`，网关容器未重建）。这是自 0.1.23 以来的第一个带 schema 变更的版本：迁移 0026–0031（账号自动禁用、安全加固 token_version/proxies.allow_private、索引、订阅限额快照、凭证续期、账号最近测试），均为只加列/表/索引；按 0.1.23 的 `schema-contract` 打包（`release 0.1.24 0.1.23`）。内容见 CONTRACTS §3.3（二次验证取消）、§41、§47–§50。
+
+备份 `/home/debian/sup2api/backups/pre-v0.1.24-20261004T210646Z.dump`（6.9 MB），pg_restore 列出 480 项。manifest `7f5e784f4e7db2557b70599e483859ef31bd03ba0d1c5543fef5d65a00adf1db`，bundle `58b23689207d0ecb9c37509ca23dbe7bccd56825f56c69784c873c7af925d8b7`。升级计划 `9e7148b0e9e735dc2c10975d9e184632` 预检无阻断，完成 27 步，创建至完成约 23.6 秒。运行中的 0.1.23 仍要求 step-up，所以本次用服务器上旧版 `upgrade_observe.py` 建计划；完成后服务器副本已换成仓库版本（旧版留作 `*.pre-v0.1.24`）。
+
+验证：四入口登录后核心均为 0.1.24；`POST /auth/step-up` 均 404；账号列表含 `last_test`；`/account-types` 预设数量（模型/映射）anthropic、ccgateway 两类型 18/0，gemini 26/0，openai 71/0，volcengine 两类型 23/11。内置插件随核心升级：anthropic 0.2.5、ccgateway 0.1.6、gemini 0.2.4、openai 0.3.4，moderation 0.1.6、volcengine 0.12.2 未变；claude-oauth 不是内置插件，生产未安装。`accounts.auto_disable/last_test_at`、`account_credential_refresh`、`account_quota_snapshots` 已存在。升级后 5 分钟内四节点 ERROR 为 0。此次未执行真实模型调用或 Claude OAuth 登录。
