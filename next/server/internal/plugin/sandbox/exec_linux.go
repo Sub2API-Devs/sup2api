@@ -50,9 +50,12 @@ func applyLimits(o *execOptions) error {
 	if err := unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
 		return fmt.Errorf("no_new_privs: %w", err)
 	}
-	// Disable core dumps for plugins (PL-P0-4).
-	if err := unix.Prctl(unix.PR_SET_DUMPABLE, 0, 0, 0, 0); err != nil {
-		return fmt.Errorf("set_dumpable: %w", err)
+	// No core dumps for plugins (PL-P0-4): a dump would hold the
+	// credentials the plugin was handed. RLIMIT_CORE survives execve;
+	// PR_SET_DUMPABLE would not (execve resets it), and setting it here made
+	// /proc/self owned by root, so the oom_score_adj write below failed.
+	if err := syscall.Setrlimit(syscall.RLIMIT_CORE, &syscall.Rlimit{}); err != nil {
+		return fmt.Errorf("setrlimit core: %w", err)
 	}
 	if o.MaxOpenFiles > 0 {
 		var cur syscall.Rlimit

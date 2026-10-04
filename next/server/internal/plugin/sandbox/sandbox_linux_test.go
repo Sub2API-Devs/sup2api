@@ -33,6 +33,10 @@ func fillPlatformReport(r *report) {
 	if syscall.Getrlimit(syscall.RLIMIT_NOFILE, &lim) == nil {
 		r.NoFile = lim.Cur
 	}
+	var core syscall.Rlimit
+	if syscall.Getrlimit(syscall.RLIMIT_CORE, &core) == nil {
+		r.CoreLimit = core.Cur + core.Max
+	}
 	if b, err := os.ReadFile("/proc/self/status"); err == nil {
 		for _, line := range strings.Split(string(b), "\n") {
 			k, v, _ := strings.Cut(line, ":")
@@ -122,6 +126,9 @@ func TestStrictNetworkSeccompBlocksDial(t *testing.T) {
 	}
 	if r.NoFile != 64 {
 		t.Fatalf("nofile %d", r.NoFile)
+	}
+	if r.CoreLimit != 0 {
+		t.Fatalf("core dumps not disabled: RLIMIT_CORE %d", r.CoreLimit)
 	}
 	if r.NoNewPrivs != "1" || r.SeccompMode != "2" {
 		t.Fatalf("no_new_privs=%q seccomp=%q", r.NoNewPrivs, r.SeccompMode)

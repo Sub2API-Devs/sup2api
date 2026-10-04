@@ -41,6 +41,7 @@ type report struct {
 	OOMScoreAdj  string `json:"oom_score_adj"`
 	Nice         int    `json:"nice"`
 	NoFile       uint64 `json:"nofile"`
+	CoreLimit    uint64 `json:"core_limit"`
 	NoNewPrivs   string `json:"no_new_privs"`
 	SeccompMode  string `json:"seccomp_mode"`
 	IOUringErrno string `json:"io_uring_errno"`
