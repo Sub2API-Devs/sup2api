@@ -13,6 +13,7 @@ use (
 	./plugins/guard
 	./plugins/moderation
 	./plugins/openai
+	./plugins/payment
 	./plugins/relay
 	./plugins/volcengine
 	./runtime-contract
