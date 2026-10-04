@@ -40,10 +40,6 @@ func (tokens) VerifyAccessToken(_ context.Context, tok string) (int64, error) {
 	return 0, errors.New("bad token")
 }
 
-type stepUp struct{}
-
-func (stepUp) VerifyStepUp(context.Context, int64, string) error { return nil }
-
 // authz: user 1 is superuser; user 2 only has plugin.guard:stats:read.
 type authz struct{}
 
@@ -56,7 +52,6 @@ func (authz) PermissionSet(_ context.Context, uid int64) (core.PermissionSet, er
 	}
 	return core.PermissionSet{Keys: map[string]struct{}{"plugin.guard:stats:read": {}}}, nil
 }
-func (authz) IsSensitive(string) bool                         { return false }
 func (authz) CanGrant(context.Context, int64, []string) error { return nil }
 func (authz) CanActOn(context.Context, int64, []string) error { return nil }
 
@@ -220,7 +215,7 @@ func newHarness(t *testing.T) (*harness, pkgtest.Key) {
 	a := New(Deps{DB: db, Install: svc, Rollout: rollout{db}, Nodes: nodes{}, Registry: reg, Authz: authz{}, Cipher: cipher, Plugins: cfg})
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	r := httpapi.NewRouter(engine, tokens{}, authz{}, stepUp{})
+	r := httpapi.NewRouter(engine, tokens{}, authz{})
 	a.RegisterRoutes(r)
 	return &harness{t: t, engine: engine, db: db}, root
 }

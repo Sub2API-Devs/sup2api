@@ -4,8 +4,6 @@
 //   success  -> {"data": ...}            list -> {"data": [...], "page": {...}}
 //   failure  -> {"error": {code, message, details}}
 // 401 triggers one refresh attempt (POST /auth/refresh) and a retry.
-// 403 step_up_required asks the registered step-up handler for a token
-// (password dialog -> POST /auth/step-up) and retries with X-Step-Up-Token.
 
 import { API_BASE } from './routes'
 
@@ -90,9 +88,7 @@ export interface RequestOptions {
   signal?: AbortSignal
   /** Do not attach the access token / do not try to refresh. */
   anonymous?: boolean
-  /** Do not open the step-up dialog on step_up_required. */
-  noStepUp?: boolean
-  /** Headers from the final successful response, after auth/step-up retries. */
+  /** Headers from the final successful response, after auth retries. */
   onSuccessHeaders?: (headers: Headers) => void
 }
 
@@ -143,7 +139,6 @@ export const session = {
   },
   clear() {
     session.set(null)
-    stepUpToken = null
   },
   onChange(fn: (s: Session | null) => void): () => void {
     listeners.add(fn)
@@ -174,11 +169,6 @@ export interface HttpConfig {
   baseURL: string
   /** Called when the session is gone (refresh failed). */
   onUnauthenticated?: (reason: UnauthenticatedReason) => void
-  /**
-   * Asks the user to confirm their password and returns a step-up token
-   * (already obtained from POST /auth/step-up), or null when cancelled.
-   */
-  stepUp?: () => Promise<{ token: string; expiresIn: number } | null>
   locale?: () => string
 }
 
@@ -196,9 +186,7 @@ export function apiBase(): string {
   return config.baseURL
 }
 
-let stepUpToken: { token: string; until: number } | null = null
 let refreshing: Promise<RefreshOutcome> | null = null
-let stepUpPending: Promise<{ token: string; expiresIn: number } | null> | null = null
 
 function buildURL(path: string, query?: Query): string {
   const base = /^https?:\/\//.test(path) || path.startsWith(config.baseURL + '/') ? '' : config.baseURL
@@ -335,18 +323,6 @@ function refreshSession(stale: string | undefined): Promise<RefreshOutcome> {
   return refreshing
 }
 
-async function obtainStepUp(): Promise<string | null> {
-  if (!config.stepUp) return null
-  if (!stepUpPending) {
-    stepUpPending = config.stepUp().finally(() => setTimeout(() => (stepUpPending = null), 0))
-  }
-  const r = await stepUpPending
-  if (!r) return null
-  // Keep a small safety margin before server-side expiry.
-  stepUpToken = { token: r.token, until: Date.now() + Math.max(0, r.expiresIn - 10) * 1000 }
-  return r.token
-}
-
 /** Low-level request returning the parsed JSON envelope (or null for 204). */
 export async function requestRaw(method: string, path: string, opts: RequestOptions = {}): Promise<any> {
   /** Access token carried by the last attempt. */
@@ -365,9 +341,6 @@ export async function requestRaw(method: string, path: string, opts: RequestOpti
     const s = session.get()
     sentToken = !opts.anonymous ? s?.access_token : undefined
     if (sentToken) headers['Authorization'] = 'Bearer ' + sentToken
-    if (stepUpToken && stepUpToken.until > Date.now() && !headers['X-Step-Up-Token']) {
-      headers['X-Step-Up-Token'] = stepUpToken.token
-    }
     const loc = config.locale?.()
     if (loc) headers['Accept-Language'] = loc
     return fetch(buildURL(path, opts.query), { method, headers, body, signal: opts.signal })
@@ -384,18 +357,6 @@ export async function requestRaw(method: string, path: string, opts: RequestOpti
     if (res.status === 401 && outcome !== 'error') {
       session.clear()
       config.onUnauthenticated?.(hadSession ? 'expired' : 'unauthenticated')
-    }
-  }
-
-  if (res.status === 403 && !opts.noStepUp) {
-    const peek = await safeJSON(res.clone())
-    if (peek?.error?.code === 'step_up_required') {
-      stepUpToken = null
-      const token = await obtainStepUp()
-      if (token) {
-        opts = { ...opts, headers: { ...(opts.headers || {}), 'X-Step-Up-Token': token } }
-        res = await doFetch()
-      }
     }
   }
 

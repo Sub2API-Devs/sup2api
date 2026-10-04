@@ -25,10 +25,8 @@ func (a bridgeAuth) Can(context.Context, int64, string) (bool, error)         { 
 func (a bridgeAuth) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{Superuser: true}, nil
 }
-func (a bridgeAuth) IsSensitive(string) bool                           { return false }
-func (a bridgeAuth) VerifyStepUp(context.Context, int64, string) error { return nil }
-func (a bridgeAuth) CanGrant(context.Context, int64, []string) error   { return nil }
-func (a bridgeAuth) CanActOn(context.Context, int64, []string) error   { return nil }
+func (a bridgeAuth) CanGrant(context.Context, int64, []string) error { return nil }
+func (a bridgeAuth) CanActOn(context.Context, int64, []string) error { return nil }
 
 func TestBridgeAuditsOnlySuccessfulMutations(t *testing.T) {
 	db := testutil.DB(t)
@@ -59,7 +57,7 @@ func TestBridgeAuditsOnlySuccessfulMutations(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	auth := bridgeAuth{uid}
-	RegisterRoutes(httpapi.NewRouter(engine, auth, auth, auth), socket, db)
+	RegisterRoutes(httpapi.NewRouter(engine, auth, auth), socket, db)
 	cases := []struct{ method, path, action string }{
 		{"POST", "/system/upgrades", "system.upgrade.create"},
 		{"POST", "/system/upgrades/old-plan/pause", "system.upgrade.pause"},

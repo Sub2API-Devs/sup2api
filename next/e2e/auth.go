@@ -16,10 +16,6 @@ type Session struct {
 	Password string
 	UserID   int64
 	Refresh  string
-
-	mu        sync.Mutex
-	stepToken string
-	stepUntil time.Time
 }
 
 // Login performs POST /auth/login and returns a session. Fails the test on
@@ -62,27 +58,6 @@ func (e *Env) Admin() *Session {
 		adminAt = time.Now()
 	}
 	return adminSess
-}
-
-// StepUp returns a ReqOpt carrying a valid X-Step-Up-Token, obtaining a new
-// token via POST /auth/step-up when the cached one is older than 4 minutes.
-func (s *Session) StepUp(t testing.TB) ReqOpt {
-	t.Helper()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.stepToken == "" || time.Now().After(s.stepUntil) {
-		d := s.OK(t, http.MethodPost, "/auth/step-up", map[string]any{"password": s.Password})
-		s.stepToken = d.Get("step_up_token").String()
-		if s.stepToken == "" {
-			t.Fatalf("step-up returned no token: %s", d.Raw)
-		}
-		ttl := time.Duration(d.Get("expires_in").Int()) * time.Second
-		if ttl <= 0 || ttl > 4*time.Minute {
-			ttl = 4 * time.Minute
-		}
-		s.stepUntil = time.Now().Add(ttl - 15*time.Second)
-	}
-	return Header("X-Step-Up-Token", s.stepToken)
 }
 
 // Me returns GET /me.

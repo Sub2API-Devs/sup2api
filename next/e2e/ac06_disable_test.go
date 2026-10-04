@@ -97,7 +97,7 @@ func TestAC06_DisableEnableUninstall(t *testing.T) {
 
 	// Built-in: uninstall is refused even while disabled; data is untouched.
 	e.Disable(admin, "anthropic")
-	r := admin.API(t, http.MethodDelete, "/plugins/anthropic", nil, Query("purge", "false"), admin.StepUp(t))
+	r := admin.API(t, http.MethodDelete, "/plugins/anthropic", nil, Query("purge", "false"))
 	if r.Status != 403 || r.JSON().Get("error.details.reason").String() != "builtin" {
 		t.Fatalf("uninstall of a built-in plugin: %s", r)
 	}

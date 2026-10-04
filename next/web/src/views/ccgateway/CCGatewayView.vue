@@ -39,7 +39,7 @@ const post = <T,>(path: string, body: unknown = {}) => api.post<T>(`${base}/${pa
 async function run(action: () => Promise<void>) {
   if (authBusy.value) return
   authBusy.value = true; error.value = ''; notice.value = ''
-  try { await action() } catch (e) { if ((e as { code?: string }).code !== 'step_up_cancelled') error.value = t('ccgateway.failed') } finally { authBusy.value = false }
+  try { await action() } catch { error.value = t('ccgateway.failed') } finally { authBusy.value = false }
 }
 async function refresh() {
   status.value = null

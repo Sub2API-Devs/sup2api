@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/tidwall/gjson"
@@ -262,6 +263,90 @@ func TestAccountTestFailureIsClassifiedButHarmless(t *testing.T) {
 	}
 	if e.mr.Exists(cooldownKey(id)) {
 		t.Fatal("transport failure put the account into cooldown")
+	}
+}
+
+// TestAccountTestRecordsLastTest checks last_test (CONTRACTS §50): null until
+// the first test, then the outcome of every test, without touching what the
+// gateway uses (updated_at stays).
+func TestAccountTestRecordsLastTest(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	up := testUpstream(t)
+	e.plat.testURL = up.URL + "/v1/messages"
+	id := e.mkAccount("sk-good-key-123")
+	if code, out := e.do("PATCH", fmt.Sprintf("/accounts/%d", id), map[string]any{"model_mapping": map[string]string{"claude-x": "claude-y"}}); code != 200 {
+		t.Fatalf("patch: %d %v", code, out)
+	}
+	lastTest := func() gjson.Result {
+		t.Helper()
+		_, raw := e.doRaw(e.uid, "GET", fmt.Sprintf("/accounts/%d", id), nil)
+		one := gjson.GetBytes(raw, "data.last_test")
+		_, raw = e.doRaw(e.uid, "GET", "/accounts", nil)
+		for _, v := range gjson.GetBytes(raw, "data").Array() {
+			if v.Get("id").Int() == id && v.Get("last_test").Raw != one.Raw {
+				t.Fatalf("list and detail differ: %s vs %s", v.Get("last_test").Raw, one.Raw)
+			}
+		}
+		return one
+	}
+	if lt := lastTest(); !lt.Exists() || lt.Type != gjson.Null {
+		t.Fatalf("untested account: %s", lt.Raw)
+	}
+	var updated time.Time
+	if err := e.db.Pool.QueryRow(ctx, `SELECT updated_at FROM accounts WHERE id = $1`, id).Scan(&updated); err != nil {
+		t.Fatal(err)
+	}
+
+	// Success: requested_model is the caller's choice, model the mapped one.
+	_, raw := e.doRaw(e.uid, "POST", fmt.Sprintf("/accounts/%d/test", id), map[string]any{"model": "claude-x"})
+	d := gjson.GetBytes(raw, "data")
+	if !d.Get("ok").Bool() || d.Get("requested_model").String() != "claude-x" || d.Get("model").String() != "claude-y" {
+		t.Fatalf("result: %s", d)
+	}
+	lt := lastTest()
+	if !lt.Get("ok").Bool() || lt.Get("model").String() != "claude-y" || lt.Get("message").String() != "" ||
+		lt.Get("latency_ms").Int() < 0 || lt.Get("latency_ms").Int() != d.Get("latency_ms").Int() || lt.Get("at").String() == "" {
+		t.Fatalf("last_test after success: %s", lt.Raw)
+	}
+	// No model given: requested_model is present and empty.
+	_, raw = e.doRaw(e.uid, "POST", fmt.Sprintf("/accounts/%d/test", id), nil)
+	if r := gjson.GetBytes(raw, "data.requested_model"); !r.Exists() || r.String() != "" {
+		t.Fatalf("requested_model without a model: %s", raw)
+	}
+
+	// Failure: the plugin's reason wins over the upstream body, cut to 512
+	// bytes on a rune boundary.
+	bad := e.mkAccount("sk-other-key-1")
+	e.plat.classify = &pluginv1.ClassifyErrorResponse{Reason: strings.Repeat("凭证无效", 100)}
+	_, raw = e.doRaw(e.uid, "POST", fmt.Sprintf("/accounts/%d/test", bad), nil)
+	if gjson.GetBytes(raw, "data.ok").Bool() {
+		t.Fatalf("bad key passed: %s", raw)
+	}
+	var ok bool
+	var msg string
+	if err := e.db.Pool.QueryRow(ctx, `SELECT last_test_ok, last_test_message FROM accounts WHERE id = $1`, bad).Scan(&ok, &msg); err != nil {
+		t.Fatal(err)
+	}
+	if ok || len(msg) > maxLastTestMessage || len(msg) < maxLastTestMessage-3 || !utf8.ValidString(msg) || !strings.HasPrefix(msg, "凭证无效") {
+		t.Fatalf("failure record: ok=%v %d bytes %q", ok, len(msg), msg)
+	}
+	// Without a reason the upstream message is kept.
+	e.plat.classify = nil
+	_, _ = e.doRaw(e.uid, "POST", fmt.Sprintf("/accounts/%d/test", bad), nil)
+	if err := e.db.Pool.QueryRow(ctx, `SELECT last_test_message FROM accounts WHERE id = $1`, bad).Scan(&msg); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(msg, "invalid x-api-key") {
+		t.Fatalf("upstream message not recorded: %q", msg)
+	}
+
+	var after time.Time
+	if err := e.db.Pool.QueryRow(ctx, `SELECT updated_at FROM accounts WHERE id = $1`, id).Scan(&after); err != nil {
+		t.Fatal(err)
+	}
+	if !after.Equal(updated) {
+		t.Fatalf("a test changed updated_at: %v -> %v", updated, after)
 	}
 }
 

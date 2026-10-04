@@ -16,8 +16,10 @@ import (
 )
 
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
-	r.Perm("GET", "/system/ccgateway/accounts/:id/:action", "settings:read", s.accountManage)
-	r.Perm("POST", "/system/ccgateway/accounts/:id/:action", "settings:manage", s.accountManage)
+	// Per-account runtime: settings administrators, or whoever may read /
+	// update that account (own level: accounts it created), CONTRACTS §49.5.
+	r.PermAny("GET", "/system/ccgateway/accounts/:id/:action", s.accountManage, "settings:read", "account:read", "account:own:read")
+	r.PermAny("POST", "/system/ccgateway/accounts/:id/:action", s.accountManage, "settings:manage", "account:update", "account:own:update")
 	r.Perm("GET", "/system/ccgateway/remote-config", "settings:read", func(c *gin.Context) {
 		c.Header("Cache-Control", "no-store")
 		v, e := s.Load(c.Request.Context())

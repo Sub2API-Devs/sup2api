@@ -205,44 +205,6 @@ func TestBootstrapLoginRefreshLogout(t *testing.T) {
 	mustLogin(t, s, adminEmail, "new-password-1")
 }
 
-func TestStepUp(t *testing.T) {
-	t.Parallel()
-	e := setup(t)
-	s, ctx := e.svc, context.Background()
-	if err := s.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
-	root := mustLogin(t, s, adminEmail, adminPassword).User.ID
-	other, err := s.CreateUser(ctx, 0, CreateUserInput{Email: "u@example.com", Password: "password-1"})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := s.VerifyStepUp(ctx, root, ""); !isCode(err, "step_up_required") {
-		t.Fatalf("empty token: %v", err)
-	}
-	if _, err := s.StepUp(ctx, root, "wrong"); !isCode(err, "invalid_argument") {
-		t.Fatalf("wrong password: %v", err)
-	}
-	tok, err := s.StepUp(ctx, root, adminPassword)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, _ := e.redis.Get("stepup:" + tok); got != strconv.FormatInt(root, 10) {
-		t.Fatalf("redis value = %q", got)
-	}
-	if err := s.VerifyStepUp(ctx, root, tok); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.VerifyStepUp(ctx, other.ID, tok); !isCode(err, "step_up_required") {
-		t.Fatalf("other user: %v", err)
-	}
-	e.redis.FastForward(StepUpTTL + time.Second)
-	if err := s.VerifyStepUp(ctx, root, tok); !isCode(err, "step_up_required") {
-		t.Fatalf("expired: %v", err)
-	}
-}
-
 func TestUserLifecycle(t *testing.T) {
 	t.Parallel()
 	e := setup(t)
@@ -368,7 +330,7 @@ type client struct {
 	engine *gin.Engine
 }
 
-func (c client) do(method, path, token, stepUp string, body any) (int, map[string]any) {
+func (c client) do(method, path, token string, body any) (int, map[string]any) {
 	c.t.Helper()
 	var buf bytes.Buffer
 	if body != nil {
@@ -379,9 +341,6 @@ func (c client) do(method, path, token, stepUp string, body any) (int, map[strin
 	req.Header.Set("Accept-Language", "zh-CN")
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
-	}
-	if stepUp != "" {
-		req.Header.Set("X-Step-Up-Token", stepUp)
 	}
 	w := httptest.NewRecorder()
 	c.engine.ServeHTTP(w, req)
@@ -405,46 +364,42 @@ func TestHTTP(t *testing.T) {
 	}
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	r := httpapi.NewRouter(engine, e.svc, e.authz, e.svc)
+	r := httpapi.NewRouter(engine, e.svc, e.authz)
 	e.svc.RegisterRoutes(r)
 	e.authz.RegisterRoutes(r)
 	c := client{t, engine}
 
-	code, out := c.do("POST", "/auth/login", "", "", map[string]any{"email": adminEmail, "password": adminPassword})
+	code, out := c.do("POST", "/auth/login", "", map[string]any{"email": adminEmail, "password": adminPassword})
 	if code != 200 {
 		t.Fatalf("login: %d %v", code, out)
 	}
 	data := out["data"].(map[string]any)
 	tok := data["access_token"].(string)
 
-	if code, out = c.do("GET", "/me", "", "", nil); code != 401 {
+	if code, out = c.do("GET", "/me", "", nil); code != 401 {
 		t.Fatalf("me without token: %d", code)
 	}
-	if code, out = c.do("GET", "/me", tok, "", nil); code != 200 || out["data"].(map[string]any)["superuser"] != true {
+	if code, out = c.do("GET", "/me", tok, nil); code != 200 || out["data"].(map[string]any)["superuser"] != true {
 		t.Fatalf("me: %d %v", code, out)
 	}
 	// A superuser sees every core section that still has items: overview,
 	// gateway, system, me. finance lost its last core item when the全站
 	// ledger left the sidebar, and authz.Menus() drops empty sections, so
 	// the count is 4, not 5.
-	if code, out = c.do("GET", "/me/menus", tok, "", nil); code != 200 || len(out["data"].([]any)) != 4 {
+	if code, out = c.do("GET", "/me/menus", tok, nil); code != 200 || len(out["data"].([]any)) != 4 {
 		t.Fatalf("menus: %d %v", code, out)
 	}
-	if code, out = c.do("GET", "/permissions", tok, "", nil); code != 200 {
+	if code, out = c.do("GET", "/permissions", tok, nil); code != 200 {
 		t.Fatalf("permissions: %d %v", code, out)
 	}
 
-	// Choosing roles at creation needs step-up (role:manage is sensitive).
+	// Password confirmation is gone (CONTRACTS §3.3): the endpoint no longer
+	// exists and choosing roles at creation needs only the permissions.
+	if code, _ = c.do("POST", "/auth/step-up", tok, map[string]any{"password": adminPassword}); code != 404 {
+		t.Fatalf("step-up endpoint still mounted: %d", code)
+	}
 	newUser := map[string]any{"email": "ops@example.com", "password": "password-1", "role_keys": []string{"admin"}}
-	if code, out = c.do("POST", "/users", tok, "", newUser); code != 403 || errCode(out) != "step_up_required" {
-		t.Fatalf("create without step-up: %d %v", code, out)
-	}
-	code, out = c.do("POST", "/auth/step-up", tok, "", map[string]any{"password": adminPassword})
-	if code != 200 {
-		t.Fatalf("step-up: %d %v", code, out)
-	}
-	stepUp := out["data"].(map[string]any)["step_up_token"].(string)
-	if code, out = c.do("POST", "/users", tok, stepUp, newUser); code != 201 {
+	if code, out = c.do("POST", "/users", tok, newUser); code != 201 {
 		t.Fatalf("create: %d %v", code, out)
 	}
 	opsID := int64(out["data"].(map[string]any)["id"].(float64))
@@ -453,63 +408,58 @@ func TestHTTP(t *testing.T) {
 	}
 
 	// Plain user: no admin access, own menu only.
-	if code, out = c.do("POST", "/users", tok, "", map[string]any{"email": "joe@example.com", "password": "password-1"}); code != 201 {
+	if code, out = c.do("POST", "/users", tok, map[string]any{"email": "joe@example.com", "password": "password-1"}); code != 201 {
 		t.Fatalf("create default: %d %v", code, out)
 	}
 	joeID := int64(out["data"].(map[string]any)["id"].(float64))
-	_, out = c.do("POST", "/auth/login", "", "", map[string]any{"email": "joe@example.com", "password": "password-1"})
+	_, out = c.do("POST", "/auth/login", "", map[string]any{"email": "joe@example.com", "password": "password-1"})
 	joe := out["data"].(map[string]any)["access_token"].(string)
 	joeRefresh := out["data"].(map[string]any)["refresh_token"].(string)
-	if code, out = c.do("GET", "/users", joe, "", nil); code != 403 || errCode(out) != "permission_denied" {
+	if code, out = c.do("GET", "/users", joe, nil); code != 403 || errCode(out) != "permission_denied" {
 		t.Fatalf("joe lists users: %d %v", code, out)
 	}
-	if code, out = c.do("GET", "/me/menus", joe, "", nil); code != 200 || len(out["data"].([]any)) != 2 {
+	if code, out = c.do("GET", "/me/menus", joe, nil); code != 200 || len(out["data"].([]any)) != 2 {
 		t.Fatalf("joe menus: %d %v", code, out)
 	}
 
 	// Admin (not superuser) lists users; balance hidden? admin has balance:all:read.
-	_, out = c.do("POST", "/auth/login", "", "", map[string]any{"email": "ops@example.com", "password": "password-1"})
+	_, out = c.do("POST", "/auth/login", "", map[string]any{"email": "ops@example.com", "password": "password-1"})
 	ops := out["data"].(map[string]any)["access_token"].(string)
-	if code, out = c.do("GET", "/users?q=example&page_size=2", ops, "", nil); code != 200 || out["page"].(map[string]any)["total"].(float64) != 3 {
+	if code, out = c.do("GET", "/users?q=example&page_size=2", ops, nil); code != 200 || out["page"].(map[string]any)["total"].(float64) != 3 {
 		t.Fatalf("ops lists users: %d %v", code, out)
 	}
-	// Delete is sensitive.
-	if code, out = c.do("DELETE", "/users/"+strconv.FormatInt(joeID, 10), ops, "", nil); code != 403 || errCode(out) != "step_up_required" {
-		t.Fatalf("delete without step-up: %d %v", code, out)
-	}
-	_, out = c.do("POST", "/auth/step-up", ops, "", map[string]any{"password": "password-1"})
-	opsStep := out["data"].(map[string]any)["step_up_token"].(string)
-	if code, out = c.do("DELETE", "/users/"+strconv.FormatInt(joeID, 10), ops, opsStep, nil); code != 204 {
+	// Delete needs only user:delete.
+	if code, out = c.do("DELETE", "/users/"+strconv.FormatInt(joeID, 10), ops, nil); code != 204 {
 		t.Fatalf("delete: %d %v", code, out)
 	}
-	if code, _ = c.do("GET", "/me", joe, "", nil); code != 401 {
+	if code, _ = c.do("GET", "/me", joe, nil); code != 401 {
 		t.Fatalf("deleted user's token: %d", code)
 	}
-	if code, _ = c.do("POST", "/auth/refresh", "", "", map[string]any{"refresh_token": joeRefresh}); code != 401 {
+	if code, _ = c.do("POST", "/auth/refresh", "", map[string]any{"refresh_token": joeRefresh}); code != 401 {
 		t.Fatalf("deleted user's refresh: %d", code)
 	}
 
 	// Roles endpoints.
-	if code, out = c.do("PUT", "/users/"+strconv.FormatInt(opsID, 10)+"/roles", ops, opsStep, map[string]any{"role_keys": []string{"super_admin"}}); code != 403 || errCode(out) != "permission_denied" {
+	if code, out = c.do("PUT", "/users/"+strconv.FormatInt(opsID, 10)+"/roles", ops, map[string]any{"role_keys": []string{"super_admin"}}); code != 403 || errCode(out) != "permission_denied" {
 		t.Fatalf("ops self-promotion: %d %v", code, out)
 	}
-	if code, out = c.do("POST", "/roles", ops, opsStep, map[string]any{"key": "viewer", "name": map[string]string{"en": "Viewer", "zh": "只读"}, "permission_keys": []string{"user:read"}}); code != 201 {
+	if code, out = c.do("POST", "/roles", ops, map[string]any{"key": "viewer", "name": map[string]string{"en": "Viewer", "zh": "只读"}, "permission_keys": []string{"user:read"}}); code != 201 {
 		t.Fatalf("create role: %d %v", code, out)
 	}
-	if code, out = c.do("GET", "/roles", ops, "", nil); code != 200 || len(out["data"].([]any)) != 4 {
+	if code, out = c.do("GET", "/roles", ops, nil); code != 200 || len(out["data"].([]any)) != 4 {
 		t.Fatalf("list roles: %d %v", code, out)
 	}
 
 	// Logout revokes the refresh token.
-	_, out = c.do("POST", "/auth/login", "", "", map[string]any{"email": adminEmail, "password": adminPassword})
+	_, out = c.do("POST", "/auth/login", "", map[string]any{"email": adminEmail, "password": adminPassword})
 	rt := out["data"].(map[string]any)["refresh_token"].(string)
-	if code, _ = c.do("POST", "/auth/logout", tok, "", map[string]any{"refresh_token": rt}); code != 204 {
+	if code, _ = c.do("POST", "/auth/logout", tok, map[string]any{"refresh_token": rt}); code != 204 {
 		t.Fatalf("logout: %d", code)
 	}
-	if code, _ = c.do("POST", "/auth/refresh", "", "", map[string]any{"refresh_token": rt}); code != 401 {
+	if code, _ = c.do("POST", "/auth/refresh", "", map[string]any{"refresh_token": rt}); code != 401 {
 		t.Fatalf("refresh after logout: %d", code)
 	}
-	if code, out = c.do("PUT", "/me/password", tok, "", map[string]any{"old_password": adminPassword, "new_password": "another-pass-1"}); code != 204 {
+	if code, out = c.do("PUT", "/me/password", tok, map[string]any{"old_password": adminPassword, "new_password": "another-pass-1"}); code != 204 {
 		t.Fatalf("change password: %d %v", code, out)
 	}
 }

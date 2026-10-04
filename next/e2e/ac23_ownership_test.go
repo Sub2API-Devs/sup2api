@@ -154,7 +154,7 @@ func TestAC23_OwnershipAndProxyURL(t *testing.T) {
 	ExpectNotFound(t, a.API(t, http.MethodGet, bAcc, nil))
 	ExpectNotFound(t, a.API(t, http.MethodPatch, bAcc, map[string]any{"name": e.Name("hijack")}))
 	ExpectNotFound(t, a.API(t, http.MethodPost, bAcc+"/test", map[string]any{}))
-	ExpectNotFound(t, a.API(t, http.MethodPost, bAcc+"/credentials/reveal", nil, a.StepUp(t)))
+	ExpectNotFound(t, a.API(t, http.MethodPost, bAcc+"/credentials/reveal", nil))
 	ExpectNotFound(t, a.API(t, http.MethodDelete, bAcc, nil))
 	if r := admin.API(t, http.MethodGet, bAcc, nil); r.Status != 200 {
 		t.Fatalf("B's account must survive A's attempts: %s", r)
@@ -252,11 +252,8 @@ func TestAC23_OwnershipAndProxyURL(t *testing.T) {
 	if vpx.Get("created_by").Int() != b.UserID || vpx.Get("password").Exists() {
 		t.Fatalf("viewer's view of B's proxy: %s", vpx.Raw)
 	}
-	// The vendor may reveal its own secret (own:credential:view, step-up).
-	if r := a.API(t, http.MethodPost, acc1Path+"/credentials/reveal", nil); r.Status != 403 || r.ErrCode() != "step_up_required" {
-		t.Fatalf("own reveal without step-up: %s", r)
-	}
-	rev := a.OK(t, http.MethodPost, acc1Path+"/credentials/reveal", nil, a.StepUp(t))
+	// The vendor may reveal its own secret (own:credential:view).
+	rev := a.OK(t, http.MethodPost, acc1Path+"/credentials/reveal", nil)
 	if k := rev.Get("credentials.api_key").String() + rev.Get("api_key").String(); !strings.HasPrefix(k, "sk-ant-mock-") {
 		t.Fatalf("own reveal: %s", rev.Raw)
 	}
@@ -301,15 +298,12 @@ func TestAC23_OwnershipAndProxyURL(t *testing.T) {
 		t.Fatalf("admin mine=true lacks its own account %d", adminAcc)
 	}
 
-	// Delete: own:delete is not sensitive (no step-up); account:delete is.
+	// Delete: own:delete and account:delete both work without confirmation.
 	if r := a.API(t, http.MethodDelete, fmt.Sprintf("/accounts/%d", acc4ID), nil); r.Status != 204 {
 		t.Fatalf("vendor deleting its own account: %s", r)
 	}
 	ExpectNotFound(t, a.API(t, http.MethodGet, fmt.Sprintf("/accounts/%d", acc4ID), nil))
-	if r := admin.API(t, http.MethodDelete, fmt.Sprintf("/accounts/%d", acc3ID), nil); r.Status != 403 || r.ErrCode() != "step_up_required" {
-		t.Fatalf("admin account:delete without step-up: %s", r)
-	}
-	if r := admin.API(t, http.MethodDelete, fmt.Sprintf("/accounts/%d", acc3ID), nil, admin.StepUp(t)); r.Status != 204 {
+	if r := admin.API(t, http.MethodDelete, fmt.Sprintf("/accounts/%d", acc3ID), nil); r.Status != 204 {
 		t.Fatalf("admin deleting A's account: %s", r)
 	}
 	// Proxy still referenced by A's accounts (acc1, acc2) -> 409 for A too,
@@ -318,7 +312,7 @@ func TestAC23_OwnershipAndProxyURL(t *testing.T) {
 		t.Fatalf("deleting a referenced proxy: %s", r)
 	}
 	// acc5 was the only account on proxyID2; after removing the link the
-	// vendor can delete its own proxy without step-up.
+	// vendor can delete its own proxy.
 	a.OK(t, http.MethodPatch, fmt.Sprintf("/accounts/%d", acc5.Get("id").Int()), map[string]any{"proxy_id": nil})
 	if r := a.API(t, http.MethodDelete, fmt.Sprintf("/proxies/%d", proxyID2), nil); r.Status != 204 {
 		t.Fatalf("vendor deleting its own unreferenced proxy: %s", r)

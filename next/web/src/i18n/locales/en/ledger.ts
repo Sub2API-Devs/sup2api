@@ -32,7 +32,6 @@ export default {
     amount: 'Amount',
     amountInvalid: 'Enter a positive amount with at most 8 decimals',
     notePlaceholder: 'e.g. top-up',
-    stepUpHint: 'This is a sensitive operation; you may be asked to confirm your password.',
     done: 'Balance adjusted',
     doneBalance: 'Balance adjusted, new balance {balance}',
     duplicate: 'This adjustment was already applied'

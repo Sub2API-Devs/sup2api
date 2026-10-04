@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { fail, needStepUp, nextId, noContent, now, on, paginate, type MockRequest } from './router'
+import { fail, nextId, noContent, now, on, paginate, type MockRequest } from './router'
 import { activePlatforms, platformById, platformLabel } from './platforms'
 import { caller, filterOwned, hasPerm, inScope, ownerScope, userEmail, type Identity } from './core'
 import { resolveProxyURL, validateProxyURL } from './resources'
@@ -288,19 +288,23 @@ function accountTypeOut(d: MockAccountType) {
  * without a plugin source in this repository get none.
  */
 function pluginDefaults(pluginKey: string, type: string) {
-  try {
-    const m = JSON.parse(readFileSync(fileURLToPath(new URL(`../../plugins/${pluginKey}/manifest.json`, import.meta.url)), 'utf8'))
-    const at = (m.accountTypes || []).find((x: any) => x.id === type)
-    return { default_models: at?.defaultModels || [], default_model_mapping: at?.defaultModelMapping || {} }
-  } catch {
-    return { default_models: [], default_model_mapping: {} }
+  // Plugin directories use dashes where keys use underscores (claude_oauth -> plugins/claude-oauth).
+  for (const dir of new Set([pluginKey, pluginKey.replace(/_/g, '-')])) {
+    try {
+      const m = JSON.parse(readFileSync(fileURLToPath(new URL(`../../plugins/${dir}/manifest.json`, import.meta.url)), 'utf8'))
+      const at = (m.accountTypes || []).find((x: any) => x.id === type)
+      return { default_models: at?.defaultModels || [], default_model_mapping: at?.defaultModelMapping || {} }
+    } catch {
+      // try the next directory name
+    }
   }
+  return { default_models: [], default_model_mapping: {} }
 }
 
 const typeLabel = (pluginKey: string, type: string) => accountTypeDecls.find((x) => x.plugin_key === pluginKey && x.type === type)?.label || type
 
 const accounts: any[] = [
-  { id: 12, name: 'claude-main', plugin_key: 'anthropic', type: 'apikey', created_by: 1, group_ids: [1, 2], proxy_id: null, priority: 1, weight: 3, max_concurrency: 10, schedulable: true, models: ['claude-sonnet-4-5', 'claude-haiku-4-5'], model_mapping: { 'claude-3-5-sonnet-latest': 'claude-sonnet-4-5' }, rpm_limit: 60, tpm_limit: 100000, tpd_limit: 5000000, spm_limit: 20, status: 'active', status_reason: '', in_use: 3, cooldown_until: null, orphaned: false, last_used_at: now(-12), created_at: now(-86400 * 20), credentials: { api_key: '******', base_url: 'https://api.anthropic.com' } },
+  { id: 12, name: 'claude-main', plugin_key: 'anthropic', type: 'apikey', created_by: 1, group_ids: [1, 2], proxy_id: null, priority: 1, weight: 3, max_concurrency: 10, schedulable: true, models: ['claude-sonnet-4-5', 'claude-haiku-4-5', 'claude-opus-4-1'], model_mapping: { 'claude-3-5-sonnet-latest': 'claude-sonnet-4-5' }, rpm_limit: 60, tpm_limit: 100000, tpd_limit: 5000000, spm_limit: 20, status: 'active', status_reason: '', in_use: 3, cooldown_until: null, orphaned: false, last_used_at: now(-12), created_at: now(-86400 * 20), credentials: { api_key: '******', base_url: 'https://api.anthropic.com' } },
   { id: 13, name: 'claude-bak', plugin_key: 'anthropic', type: 'apikey', created_by: 6, group_ids: [1], proxy_id: 1, priority: 2, weight: 1, max_concurrency: 10, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: now(600), cooldown_reason: '429', orphaned: false, last_used_at: now(-300), created_at: now(-86400 * 10), credentials: { api_key: '******', base_url: 'https://api.anthropic.com' } },
   { id: 14, name: 'old-key', plugin_key: 'anthropic', type: 'apikey', created_by: 1, group_ids: [1], proxy_id: null, priority: 5, weight: 1, max_concurrency: 10, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'disabled', status_reason: '401 invalid credentials', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-86400), created_at: now(-86400 * 40), credentials: { api_key: '******' } },
   { id: 16, name: 'relay-1', plugin_key: 'relay', type: 'relay_key', created_by: 6, group_ids: [1], proxy_id: null, priority: 3, weight: 1, max_concurrency: 20, schedulable: true, models: [], model_mapping: { 'claude-opus-4-1': 'claude-sonnet-4-5' }, rpm_limit: 120, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 1, cooldown_until: null, orphaned: false, last_used_at: now(-40), created_at: now(-86400 * 2), credentials: { api_key: '******', base_url: 'https://relay.example.com' } },
@@ -313,10 +317,24 @@ const accounts: any[] = [
   { id: 22, name: 'claude-max-2', plugin_key: 'claude_oauth', type: 'claude_oauth', created_by: 1, group_ids: [1], proxy_id: null, priority: 1, weight: 1, max_concurrency: 5, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: now(5400), cooldown_reason: '429 rate_limit: 5h window rejected', orphaned: false, last_used_at: now(-600), created_at: now(-86400 * 30), credentials: { access_token: '******', refresh_token: '******', email_address: 'max2@example.com' } },
   { id: 23, name: 'claude-pro-3', plugin_key: 'claude_oauth', type: 'claude_setup_token', created_by: 6, group_ids: [2], proxy_id: null, priority: 2, weight: 1, max_concurrency: 3, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-95), created_at: now(-86400 * 6), credentials: { access_token: '******' } },
   { id: 24, name: 'claude-max-new', plugin_key: 'claude_oauth', type: 'claude_oauth', created_by: 1, group_ids: [1], proxy_id: null, priority: 3, weight: 1, max_concurrency: 5, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-600), credentials: { access_token: '******', refresh_token: '******' } },
+  // Claude Code (CCGateway) managed accounts, one container each (mock/ccgateway.ts with SUB2API_MOCK_CCGATEWAY): authorized / not yet.
+  { id: 25, name: 'cc-main', plugin_key: 'ccgateway', type: 'managed', created_by: 1, group_ids: [1], proxy_id: 1, priority: 2, weight: 1, max_concurrency: 4, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-420), created_at: now(-86400 * 4), credentials: {} },
+  { id: 26, name: 'cc-pending', plugin_key: 'ccgateway', type: 'managed', created_by: 1, group_ids: [1], proxy_id: 1, priority: 5, weight: 1, max_concurrency: 4, schedulable: true, models: ['claude-sonnet-4-5'], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-3600), credentials: {} },
+  // Legacy row without a proxy: its container is blocked (no_proxy) until one is picked.
+  { id: 27, name: 'cc-noproxy', plugin_key: 'ccgateway', type: 'managed', created_by: 1, group_ids: [1], proxy_id: null, priority: 6, weight: 1, max_concurrency: 4, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-7200), credentials: {} },
   // Its plugin was uninstalled without purge_accounts: kept as an orphaned account.
   { id: 15, name: 'legacy-vendor', plugin_key: 'legacy_vendor', type: 'apikey', created_by: null, type_label: { en: 'API key', zh: 'API Key' }, group_ids: [], proxy_id: null, priority: 10, weight: 1, max_concurrency: 5, schedulable: false, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, tpd_limit: 0, spm_limit: 0, status: 'active', status_reason: '', in_use: 0, orphaned: true, created_at: now(-86400 * 90) }
 ]
 for (const a of accounts) a.type_label ??= typeLabel(a.plugin_key, a.type)
+// Latest tests (last_test): fast, slow, failed; the others were never tested.
+const seedTest = (id: number, ok: boolean, latency: number, model: string, message: string, ago: number) => {
+  const a = accounts.find((x) => x.id === id)
+  if (a) a.last_test = { at: now(-ago), ok, latency_ms: latency, model, message }
+}
+seedTest(12, true, 640, 'claude-haiku-4-5', 'model claude-haiku-4-5 answered', 1800)
+seedTest(13, true, 3820, 'claude-sonnet-4-5', 'model claude-sonnet-4-5 answered', 7200)
+seedTest(14, false, 212, 'claude-haiku-4-5', 'authentication_error: invalid x-api-key', 86400)
+seedTest(19, true, 1450, 'gpt-4o-mini', 'model gpt-4o-mini answered', 600)
 
 // ---------------------------------------------------------------- subscription quota
 // Plan windows of subscription accounts (QuotaSnapshot). Types without plan
@@ -419,8 +437,14 @@ const withGroups = (a: any) => ({
   rate_usage: rateUsage(a),
   quota: quotaOf(a),
   refresh: refreshOf(a),
+  last_test: a.last_test ?? null,
   groups: (a.group_ids || []).map((id: number) => ({ id, name: id === 1 ? 'default' : id === 2 ? 'vip' : `group-${id}` }))
 })
+
+/** The stored mock account (for other fixtures, e.g. the CCGateway containers); undefined when missing. */
+export function mockAccount(id: number): { status: string; proxy_id: number | null; plugin_key: string; type: string } | undefined {
+  return accounts.find((a) => a.id === id)
+}
 
 /** Accounts in a group (any status). */
 export function groupAccountCount(gid: number): number {
@@ -638,27 +662,47 @@ on('PATCH', '/accounts/:id', (req) => {
   return { ...withGroups(a), proxy_created: !!proxy.proxy_created }
 })
 on('DELETE', '/accounts/:id', (req) => {
-  // account:delete is sensitive, account:own:delete is not (CONTRACTS §21.1).
   const { who, scope } = accountScope(req, 'delete')
-  if (scope === 'all') {
-    const s = needStepUp(req)
-    if (s) return s
-  }
   const i = accounts.findIndex((x) => x.id === Number(req.params.id))
   if (i < 0 || !inScope(scope, who, accounts[i])) return fail(404, 'not_found', 'account not found')
   accounts.splice(i, 1)
   return noContent()
 })
-on('POST', '/accounts/:id/test', (req) => {
+on('POST', '/accounts/:id/test', async (req) => {
   const r = scopedAccount(req, 'test')
   if (!('a' in r)) return r
   const a = r.a
-  // The model goes through the account's model_mapping first (§18.3).
-  const asked = req.body?.model || 'claude-haiku-4-5'
+  // The model goes through the account's model_mapping first (§18.3); no model = the plugin default.
+  const requested = typeof req.body?.model === 'string' ? req.body.model : ''
+  const asked = requested || (a.plugin_key === 'openai' ? 'gpt-4o-mini' : a.plugin_key === 'gemini' ? 'gemini-2.5-flash' : 'claude-haiku-4-5')
   const model = (a.model_mapping || {})[asked] || asked
-  return a.status === 'disabled'
-    ? { ok: false, status: 401, latency_ms: 212, message: 'authentication_error: invalid x-api-key' }
-    : { ok: true, status: 200, latency_ms: 480 + Math.round(Math.random() * 200), message: `model ${model} answered` }
+  const upstream = `${String(a.credentials?.base_url || 'https://api.anthropic.com').replace(/\/+$/, '')}${a.plugin_key === 'openai' ? '/v1/chat/completions' : '/v1/messages'}`
+  // Mocked outcomes: disabled = 401 (would disable), *opus* = 429 (would cool down),
+  // *unknown* / *gpt-5* = 404 model not found, otherwise OK with a random latency.
+  const latency = a.status === 'disabled' ? 212 : 300 + Math.round(Math.random() * (model.includes('pro') ? 6000 : 2500))
+  await new Promise((ok) => setTimeout(ok, Math.min(1500, latency / 3)))
+  let out: Record<string, unknown>
+  if (a.status === 'disabled') {
+    out = { ok: false, status: 401, latency_ms: latency, message: 'authentication_error: invalid x-api-key', reason: 'auth_rejected', effect: 'disable', body: '{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}' }
+  } else if (model.includes('opus')) {
+    out = { ok: false, status: 429, latency_ms: latency, message: 'rate_limit_error: Number of request tokens has exceeded your per-minute rate limit', reason: 'rate_limited', effect: 'cooldown', body: '{"type":"error","error":{"type":"rate_limit_error","message":"Number of request tokens has exceeded your per-minute rate limit"}}' }
+  } else if (model.includes('unknown') || model.startsWith('gpt-5')) {
+    out = { ok: false, status: 404, latency_ms: latency, message: `not_found_error: model: ${model}`, reason: 'model_not_found', effect: '', body: `{"type":"error","error":{"type":"not_found_error","message":"model: ${model}"}}` }
+  } else {
+    out = {
+      ok: true,
+      status: 200,
+      latency_ms: latency,
+      message: `model ${model} answered`,
+      reason: '',
+      effect: '',
+      usage: { input_tokens: 12, output_tokens: 8, cache_read_tokens: 0, cache_creation_tokens: 0 },
+      body: JSON.stringify({ id: 'msg_mock', type: 'message', role: 'assistant', model, content: [{ type: 'text', text: 'pong' }], stop_reason: 'end_turn', usage: { input_tokens: 12, output_tokens: 8 } })
+    }
+  }
+  out = { ...out, model, requested_model: requested, upstream }
+  a.last_test = { at: now(), ok: out.ok, latency_ms: latency, model, message: String(out.message || '') }
+  return out
 })
 // Fetch models from the upstream (CONTRACTS §19). Per plugin a fixed list; a
 // key containing "bad" mimics an upstream 401, gemini lists resource names.
@@ -736,8 +780,6 @@ on('POST', '/accounts/:id/reset-status', (req) => {
   return { ok: true }
 })
 on('POST', '/accounts/:id/credentials/reveal', (req) => {
-  const s = needStepUp(req)
-  if (s) return s
   const r = scopedAccount(req, 'credential:view')
   if (!('a' in r)) return r
   const a = r.a

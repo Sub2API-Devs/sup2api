@@ -19,11 +19,6 @@ type TokenVerifier interface {
 	VerifyAccessToken(ctx context.Context, token string) (userID int64, err error)
 }
 
-// StepUpVerifier validates the X-Step-Up-Token header for sensitive operations.
-type StepUpVerifier interface {
-	VerifyStepUp(ctx context.Context, userID int64, token string) error
-}
-
 // PermissionSet is a user's effective permissions at a given authz version.
 type PermissionSet struct {
 	Superuser bool
@@ -44,8 +39,6 @@ func (s PermissionSet) Has(key string) bool {
 type Authorizer interface {
 	Can(ctx context.Context, userID int64, permission string) (bool, error)
 	PermissionSet(ctx context.Context, userID int64) (PermissionSet, error)
-	// IsSensitive reports whether a permission requires step-up.
-	IsSensitive(permission string) bool
 	// CanGrant validates the actor holds all permissions being granted (CONTRACTS §4.1, SEC-H2).
 	CanGrant(ctx context.Context, actorID int64, perms []string) error
 	// CanActOn validates the actor may act on a target with the given permissions (CONTRACTS §4.1, SEC-H2).

@@ -48,6 +48,12 @@ type row struct {
 	CreatedByEmail *string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	// Last console test (CONTRACTS §50); all NULL until the first test.
+	LastTestAt        *time.Time
+	LastTestOK        *bool
+	LastTestLatencyMs *int64
+	LastTestModel     *string
+	LastTestMessage   *string
 }
 
 // selectRow joins the creator's email (also for soft-deleted users); every
@@ -55,7 +61,8 @@ type row struct {
 const selectRow = `SELECT a.id, a.name, a.plugin_key, a.type, a.credentials_enc, a.settings, a.proxy_id,
 	a.status, a.status_reason, a.schedulable, a.auto_disable, a.priority, a.weight, a.max_concurrency,
 	a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.tpd_limit, a.spm_limit, a.last_used_at,
-	a.created_by, u.email, a.created_at, a.updated_at
+	a.created_by, u.email, a.created_at, a.updated_at,
+	a.last_test_at, a.last_test_ok, a.last_test_latency_ms::bigint, a.last_test_model, a.last_test_message
 	FROM accounts a LEFT JOIN users u ON u.id = a.created_by`
 
 func scanRow(r pgx.Row) (*row, error) {
@@ -63,8 +70,30 @@ func scanRow(r pgx.Row) (*row, error) {
 	err := r.Scan(&a.ID, &a.Name, &a.PluginKey, &a.Type, &a.CredEnc, &a.Settings, &a.ProxyID,
 		&a.Status, &a.StatusReason, &a.Schedulable, &a.AutoDisable, &a.Priority, &a.Weight, &a.MaxConcurrency,
 		&a.Models, &a.ModelMapping, &a.RPMLimit, &a.TPMLimit, &a.TPDLimit, &a.SPMLimit, &a.LastUsedAt,
-		&a.CreatedBy, &a.CreatedByEmail, &a.CreatedAt, &a.UpdatedAt)
+		&a.CreatedBy, &a.CreatedByEmail, &a.CreatedAt, &a.UpdatedAt,
+		&a.LastTestAt, &a.LastTestOK, &a.LastTestLatencyMs, &a.LastTestModel, &a.LastTestMessage)
 	return &a, err
+}
+
+// lastTest is the last_test view of the row; nil when never tested.
+func (a *row) lastTest() *LastTest {
+	if a.LastTestAt == nil {
+		return nil
+	}
+	lt := &LastTest{At: *a.LastTestAt}
+	if a.LastTestOK != nil {
+		lt.OK = *a.LastTestOK
+	}
+	if a.LastTestLatencyMs != nil {
+		lt.LatencyMs = *a.LastTestLatencyMs
+	}
+	if a.LastTestModel != nil {
+		lt.Model = *a.LastTestModel
+	}
+	if a.LastTestMessage != nil {
+		lt.Message = *a.LastTestMessage
+	}
+	return lt
 }
 
 // mapping decodes the model_mapping column.
@@ -147,6 +176,8 @@ type View struct {
 	// Refresh is the credential refresh state (CONTRACTS §48); null for
 	// account types whose credentials do not expire.
 	Refresh *RefreshView `json:"refresh"`
+	// LastTest is the last console test (CONTRACTS §50); null until tested.
+	LastTest *LastTest `json:"last_test"`
 	// Orphaned is true when the plugin declaring the account type is not
 	// enabled (disabled or uninstalled).
 	Orphaned bool            `json:"orphaned"`
@@ -189,6 +220,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 			Orphaned: !s.pluginActive(a.PluginKey), Settings: st,
 			CreatedBy: a.CreatedBy, CreatedByEmail: a.CreatedByEmail,
 			LastUsedAt: a.LastUsedAt, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
+			LastTest: a.lastTest(),
 		}
 		out[i], ids[i], byID[a.ID] = v, a.ID, v
 	}
@@ -886,6 +918,7 @@ func (s *Service) create(c *gin.Context) {
 		return
 	}
 	s.changed(ctx, id)
+	s.kickCCGateway(id, bt.Plugin.Key, bt.Type.ID)
 	// The row was just created by the caller: no scope needed.
 	v, err := s.fullView(ctx, id, nil)
 	if err != nil {
@@ -1060,6 +1093,7 @@ func (s *Service) update(c *gin.Context) {
 		return
 	}
 	s.changed(ctx, id)
+	s.kickCCGateway(id, cur.PluginKey, cur.Type)
 	v, err := s.fullView(ctx, id, scope)
 	if err != nil {
 		httpapi.Fail(c, err)

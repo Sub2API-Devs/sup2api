@@ -27,7 +27,6 @@ type Handler struct {
 	reg    core.PluginRegistry
 	tokens core.TokenVerifier
 	authz  core.Authorizer
-	stepUp core.StepUpVerifier
 	health HealthChecker
 	assets VersionAssets
 }
@@ -55,10 +54,9 @@ func WithHealth(h HealthChecker) Option {
 	return func(x *Handler) { x.health = h }
 }
 
-// New creates the handler. stepUp may be nil (sensitive plugin permissions
-// are then refused).
-func New(reg core.PluginRegistry, tokens core.TokenVerifier, authz core.Authorizer, stepUp core.StepUpVerifier, opts ...Option) *Handler {
-	h := &Handler{reg: reg, tokens: tokens, authz: authz, stepUp: stepUp}
+// New creates the handler.
+func New(reg core.PluginRegistry, tokens core.TokenVerifier, authz core.Authorizer, opts ...Option) *Handler {
+	h := &Handler{reg: reg, tokens: tokens, authz: authz}
 	for _, o := range opts {
 		o(h)
 	}
@@ -87,7 +85,6 @@ var (
 var strippedRequestHeaders = map[string]bool{
 	"authorization":       true,
 	"cookie":              true,
-	"x-step-up-token":     true,
 	"proxy-authorization": true,
 	"connection":          true,
 	"keep-alive":          true,
@@ -186,16 +183,6 @@ func (h *Handler) serveAPI(c *gin.Context) {
 			if !allowed {
 				httpapi.Fail(c, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": full}))
 				return
-			}
-			if h.authz.IsSensitive(full) {
-				if h.stepUp == nil {
-					httpapi.Fail(c, core.ErrStepUpRequired)
-					return
-				}
-				if err := h.stepUp.VerifyStepUp(ctx, uid, c.GetHeader("X-Step-Up-Token")); err != nil {
-					httpapi.Fail(c, core.ErrStepUpRequired.WithCause(err))
-					return
-				}
 			}
 		}
 	case "public", "webhook":

@@ -12,6 +12,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
+	"github.com/redis/go-redis/v9"
 	"net/http"
 	"os"
 	"strings"
@@ -46,9 +47,16 @@ func (c Config) Public() map[string]any {
 type Service struct {
 	DB     *store.DB
 	Cipher *secret.Cipher
+	// Redis keeps the pending OAuth session of each account runtime
+	// (session.go); nil disables resuming a session.
+	Redis redis.UniversalClient
+	// kick feeds Kick; nil (zero Service in tests) disables it.
+	kick chan int64
 }
 
-func New(db *store.DB, cipher *secret.Cipher) *Service { return &Service{DB: db, Cipher: cipher} }
+func New(db *store.DB, cipher *secret.Cipher) *Service {
+	return &Service{DB: db, Cipher: cipher, kick: make(chan int64, 64)}
+}
 func (s *Service) decode(raw []byte) (Config, error) {
 	c := Config{Mode: "disabled", Port: 22}
 	var envelope struct {

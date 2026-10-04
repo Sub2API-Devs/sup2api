@@ -160,21 +160,21 @@ type OwnershipCleanup struct {
 // Run performs the cleanup as admin.
 func (c *OwnershipCleanup) Run(e *Env, admin *Session) {
 	e.T.Helper()
-	del := func(path string, opts ...ReqOpt) {
-		if r := admin.API(e.T, http.MethodDelete, path, nil, opts...); r.Status != 204 && r.Status != 200 && r.Status != 404 {
+	del := func(path string) {
+		if r := admin.API(e.T, http.MethodDelete, path, nil); r.Status != 204 && r.Status != 200 && r.Status != 404 {
 			e.T.Logf("cleanup: %s", r)
 		}
 	}
 	for _, id := range c.Accounts {
-		del(fmt.Sprintf("/accounts/%d", id), admin.StepUp(e.T)) // account:delete is sensitive
+		del(fmt.Sprintf("/accounts/%d", id))
 	}
 	for _, id := range c.Proxies {
 		del(fmt.Sprintf("/proxies/%d", id))
 	}
 	for _, id := range c.Users {
-		del(fmt.Sprintf("/users/%d", id), admin.StepUp(e.T)) // user:delete is sensitive
+		del(fmt.Sprintf("/users/%d", id))
 	}
 	for _, id := range c.Roles {
-		del(fmt.Sprintf("/roles/%d", id), admin.StepUp(e.T)) // role:manage is sensitive
+		del(fmt.Sprintf("/roles/%d", id))
 	}
 }

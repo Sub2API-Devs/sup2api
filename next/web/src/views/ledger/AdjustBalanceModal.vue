@@ -8,7 +8,7 @@ import { useAuthStore } from '@/stores/auth'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import { formatMoney } from '@/utils/format'
 
-// Adjust a user's balance (POST /users/:id/balance/adjust, balance:adjust — step-up is automatic).
+// Adjust a user's balance (POST /users/:id/balance/adjust, balance:adjust).
 const props = defineProps<{ open: boolean; userId?: number | null }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'done'): void }>()
 const { t } = useI18n()
@@ -144,7 +144,6 @@ async function submit() {
       <SField :label="t('common.note')" :error="errors.note">
         <STextarea v-model="note" :rows="2" :placeholder="t('ledger.adjust.notePlaceholder')" />
       </SField>
-      <SHint size="xs">{{ t('ledger.adjust.stepUpHint') }}</SHint>
     </div>
     <template #footer>
       <SButton @click="emit('update:open', false)">{{ t('common.cancel') }}</SButton>

@@ -18,7 +18,7 @@ func (versionTokenVerifier) VerifyAccessToken(context.Context, string) (int64, e
 func TestSystemVersionReportsServingCoreOnlyAfterAuthentication(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	router := httpapi.NewRouter(engine, versionTokenVerifier{}, nil, nil)
+	router := httpapi.NewRouter(engine, versionTokenVerifier{}, nil)
 	router.Authed(http.MethodGet, "/system/version", systemVersionHandler("0.1.9", true, "core-b", "boot-b"))
 	for _, authenticated := range []bool{false, true} {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/system/version", nil)

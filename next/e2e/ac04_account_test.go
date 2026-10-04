@@ -73,14 +73,11 @@ func TestAC04_CreateAnthropicAccount(t *testing.T) {
 		}
 	}
 
-	// PATCH with "******" keeps the secret; reveal needs step-up.
+	// PATCH with "******" keeps the secret; reveal needs only the permission.
 	admin.OK(t, http.MethodPatch, fmt.Sprintf("/accounts/%d", id), map[string]any{
 		"name": e.Name("renamed"), "credentials": map[string]any{"api_key": "******", "base_url": e.MockInternalURL},
 	})
-	if r := admin.API(t, http.MethodPost, fmt.Sprintf("/accounts/%d/credentials/reveal", id), nil); r.Status != 403 || r.ErrCode() != "step_up_required" {
-		t.Fatalf("reveal without step-up: %s", r)
-	}
-	rev := admin.OK(t, http.MethodPost, fmt.Sprintf("/accounts/%d/credentials/reveal", id), nil, admin.StepUp(t))
+	rev := admin.OK(t, http.MethodPost, fmt.Sprintf("/accounts/%d/credentials/reveal", id), nil)
 	if rev.Get("api_key").String() != secret && rev.Get("credentials.api_key").String() != secret {
 		t.Fatalf("revealed credentials: %s", rev.Raw)
 	}

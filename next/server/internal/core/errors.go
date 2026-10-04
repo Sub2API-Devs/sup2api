@@ -63,7 +63,6 @@ func NewError(status int, code, message string) *Error {
 var (
 	ErrInvalidArgument     = NewError(http.StatusBadRequest, "invalid_argument", "invalid argument")
 	ErrUnauthenticated     = NewError(http.StatusUnauthorized, "unauthenticated", "authentication required")
-	ErrStepUpRequired      = NewError(http.StatusForbidden, "step_up_required", "password confirmation required")
 	ErrPermissionDenied    = NewError(http.StatusForbidden, "permission_denied", "permission denied")
 	ErrNotFound            = NewError(http.StatusNotFound, "not_found", "not found")
 	ErrConflict            = NewError(http.StatusConflict, "conflict", "conflict")

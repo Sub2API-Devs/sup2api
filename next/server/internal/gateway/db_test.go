@@ -32,8 +32,6 @@ func (allowAll) CanGrant(context.Context, int64, []string) error            { re
 func (allowAll) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{Superuser: true}, nil
 }
-func (allowAll) IsSensitive(string) bool                           { return false }
-func (allowAll) VerifyStepUp(context.Context, int64, string) error { return nil }
 
 type dbEnv struct {
 	t   *testing.T
@@ -77,7 +75,7 @@ func newDBEnv(t *testing.T, opts ...dbEnvOpt) *dbEnv {
 	t.Cleanup(e.gw.Close)
 	engine := gin.New()
 	auth := allowAll{uid: e.uid}
-	r := httpapi.NewRouter(engine, auth, auth, auth)
+	r := httpapi.NewRouter(engine, auth, auth)
 	e.gw.RegisterRoutes(r)
 	e.srv = httptest.NewServer(engine)
 	t.Cleanup(e.srv.Close)

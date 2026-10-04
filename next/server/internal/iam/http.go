@@ -18,7 +18,6 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Public(http.MethodPost, "/auth/login", s.handleLogin)
 	r.Public(http.MethodPost, "/auth/refresh", s.handleRefresh)
 	r.Authed(http.MethodPost, "/auth/logout", s.handleLogout)
-	r.Authed(http.MethodPost, "/auth/step-up", s.handleStepUp)
 	r.Authed(http.MethodGet, "/me", s.handleMe)
 	r.Authed(http.MethodPut, "/me/password", s.handleChangePassword)
 
@@ -85,21 +84,6 @@ func (s *Service) handleLogout(c *gin.Context) {
 		return
 	}
 	httpapi.NoContent(c)
-}
-
-func (s *Service) handleStepUp(c *gin.Context) {
-	var in struct {
-		Password string `json:"password"`
-	}
-	if !httpapi.BindJSON(c, &in) {
-		return
-	}
-	token, err := s.StepUp(c.Request.Context(), actor(c), in.Password)
-	if err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
-	httpapi.OK(c, gin.H{"step_up_token": token, "expires_in": int64(StepUpTTL.Seconds())})
 }
 
 func (s *Service) handleMe(c *gin.Context) {
@@ -179,7 +163,7 @@ func (s *Service) handleCreateUser(c *gin.Context) {
 	ctx := c.Request.Context()
 	uid := actor(c)
 	// Choosing roles other than the default is a role assignment: it needs
-	// role:manage (a sensitive permission, hence step-up) as well.
+	// role:manage as well.
 	if !IsDefaultRoles(in.RoleKeys) {
 		ok, err := s.authz.Can(ctx, uid, "role:manage")
 		if err != nil {
@@ -188,10 +172,6 @@ func (s *Service) handleCreateUser(c *gin.Context) {
 		}
 		if !ok {
 			httpapi.Fail(c, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": "role:manage"}))
-			return
-		}
-		if err := s.VerifyStepUp(ctx, uid, c.GetHeader("X-Step-Up-Token")); err != nil {
-			httpapi.Fail(c, core.ErrStepUpRequired.WithCause(err))
 			return
 		}
 	}

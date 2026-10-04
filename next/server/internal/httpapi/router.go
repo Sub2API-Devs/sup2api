@@ -18,13 +18,12 @@ type Router struct {
 	api    *gin.RouterGroup
 	tokens core.TokenVerifier
 	authz  core.Authorizer
-	stepUp core.StepUpVerifier
 }
 
 // NewRouter mounts common middleware on engine and returns the /api/v1 router.
-func NewRouter(engine *gin.Engine, tokens core.TokenVerifier, authz core.Authorizer, stepUp core.StepUpVerifier) *Router {
+func NewRouter(engine *gin.Engine, tokens core.TokenVerifier, authz core.Authorizer) *Router {
 	engine.Use(RequestContext(), Recover())
-	return &Router{api: engine.Group("/api/v1"), tokens: tokens, authz: authz, stepUp: stepUp}
+	return &Router{api: engine.Group("/api/v1"), tokens: tokens, authz: authz}
 }
 
 // Public registers an unauthenticated route.
@@ -37,37 +36,16 @@ func (r *Router) Authed(method, path string, h ...gin.HandlerFunc) {
 	r.api.Handle(method, path, append([]gin.HandlerFunc{r.authenticate()}, h...)...)
 }
 
-// Perm registers a route requiring permission; sensitive permissions also
-// require a valid X-Step-Up-Token.
+// Perm registers a route requiring permission.
 func (r *Router) Perm(method, path, permission string, h ...gin.HandlerFunc) {
 	chain := []gin.HandlerFunc{r.authenticate(), r.require(permission)}
-	r.api.Handle(method, path, append(chain, h...)...)
-}
-
-// PermStepUp adds explicit confirmation for a sensitive operation within a
-// permission whose other operations do not require password confirmation.
-func (r *Router) PermStepUp(method, path, permission string, h ...gin.HandlerFunc) {
-	confirm := func(c *gin.Context) {
-		uid, _ := core.UserID(c.Request.Context())
-		if r.stepUp == nil {
-			Fail(c, core.ErrStepUpRequired)
-			return
-		}
-		if err := r.stepUp.VerifyStepUp(c.Request.Context(), uid, c.GetHeader("X-Step-Up-Token")); err != nil {
-			Fail(c, core.ErrStepUpRequired.WithCause(err))
-			return
-		}
-		c.Next()
-	}
-	chain := []gin.HandlerFunc{r.authenticate(), r.require(permission), confirm}
 	r.api.Handle(method, path, append(chain, h...)...)
 }
 
 // PermAny registers a route the caller may use with any one of keys, e.g.
 // the "all" key and its "own" counterpart (CONTRACTS §21.1). Every key the
 // caller holds is recorded in the request context (Granted /
-// core.OwnerScope); if any held key is sensitive a valid X-Step-Up-Token is
-// required. Without a match the response is permission_denied with
+// core.OwnerScope). Without a match the response is permission_denied with
 // details.permission = keys[0].
 func (r *Router) PermAny(method, path string, handler gin.HandlerFunc, keys ...string) {
 	if len(keys) == 0 {
@@ -117,12 +95,6 @@ func (r *Router) require(permission string) gin.HandlerFunc {
 			Fail(c, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": permission}))
 			return
 		}
-		if r.authz.IsSensitive(permission) {
-			if err := r.stepUp.VerifyStepUp(ctx, uid, c.GetHeader("X-Step-Up-Token")); err != nil {
-				Fail(c, core.ErrStepUpRequired.WithCause(err))
-				return
-			}
-		}
 		c.Request = c.Request.WithContext(core.WithGranted(ctx, []string{permission}))
 		c.Next()
 	}
@@ -133,7 +105,6 @@ func (r *Router) requireAny(keys []string) gin.HandlerFunc {
 		ctx := c.Request.Context()
 		uid, _ := core.UserID(ctx)
 		granted := make([]string, 0, len(keys))
-		sensitive := false
 		for _, k := range keys {
 			ok, err := r.authz.Can(ctx, uid, k)
 			if err != nil {
@@ -144,17 +115,10 @@ func (r *Router) requireAny(keys []string) gin.HandlerFunc {
 				continue
 			}
 			granted = append(granted, k)
-			sensitive = sensitive || r.authz.IsSensitive(k)
 		}
 		if len(granted) == 0 {
 			Fail(c, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": keys[0]}))
 			return
-		}
-		if sensitive {
-			if err := r.stepUp.VerifyStepUp(ctx, uid, c.GetHeader("X-Step-Up-Token")); err != nil {
-				Fail(c, core.ErrStepUpRequired.WithCause(err))
-				return
-			}
 		}
 		c.Request = c.Request.WithContext(core.WithGranted(ctx, granted))
 		c.Next()

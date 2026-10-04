@@ -224,7 +224,7 @@ flowchart TD
 
 日志保留 `cluster_id/node_id/shell_boot_id/core_boot_id/upgrade_id/step_id/request_id`，凭证只记录不可用于鉴权的随机诊断 ID 或短摘要。计数区分登记缺失、密钥不匹配、错误启动实例、错误目标、权限不足、Redis 故障与目标未就绪。任何日志都不得输出 token、业务 Authorization、Redis 密码或签名私钥。
 
-核心管理仍经用户 RBAC/二次验证，再访问本机 Unix socket。节点间网络不新增远程 shell、任意升级管理或任意 SQL 执行端点。
+核心管理仍经用户 RBAC 权限检查（二次验证已于 2026-10-05 取消，CONTRACTS §3.3），再访问本机 Unix socket。节点间网络不新增远程 shell、任意升级管理或任意 SQL 执行端点。
 
 ## 10. 实施顺序和验收
 

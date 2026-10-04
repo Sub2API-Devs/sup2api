@@ -363,12 +363,6 @@ func TestPluginCatalog(t *testing.T) {
 	tx(func(tx pgx.Tx) error { return s.SyncPlugin(ctx, tx, "guard", defs, []string{RoleAdmin}) })
 	eventually(t, func() bool { ok, _ := s.Can(ctx, admin, "plugin.guard:stats:read"); return ok })
 	mustCan(t, s, user, "plugin.guard:stats:read", false)
-	if !s.IsSensitive("plugin.guard:rules:manage") || s.IsSensitive("plugin.guard:stats:read") {
-		t.Fatal("IsSensitive for plugin permissions")
-	}
-	if !s.IsSensitive("user:delete") || !s.IsSensitive("user:password:reset") || s.IsSensitive("user:read") {
-		t.Fatal("IsSensitive for core permissions")
-	}
 
 	mods, err := s.ListPermissions(ctx)
 	if err != nil {
@@ -505,7 +499,7 @@ func TestOwnershipCatalog(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s missing from catalog", key)
 		}
-		if d.Sensitive != sensitive || coreSensitive[key] != sensitive {
+		if d.Sensitive != sensitive {
 			t.Fatalf("%s sensitive = %v, want %v", key, d.Sensitive, sensitive)
 		}
 		if d.Label.Get("en") == "" || d.Label.Get("zh") == "" || d.Label.Get("en") == d.Label.Get("zh") {

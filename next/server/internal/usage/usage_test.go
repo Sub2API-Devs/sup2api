@@ -66,10 +66,8 @@ func (allowAll) Can(context.Context, int64, string) (bool, error) { return true,
 func (allowAll) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{Superuser: true}, nil
 }
-func (allowAll) IsSensitive(string) bool                           { return false }
-func (allowAll) CanGrant(context.Context, int64, []string) error   { return nil }
-func (allowAll) CanActOn(context.Context, int64, []string) error   { return nil }
-func (allowAll) VerifyStepUp(context.Context, int64, string) error { return nil }
+func (allowAll) CanGrant(context.Context, int64, []string) error { return nil }
+func (allowAll) CanActOn(context.Context, int64, []string) error { return nil }
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
@@ -116,7 +114,7 @@ func newFixture(t *testing.T) *fixture {
 	}
 	gin.SetMode(gin.TestMode)
 	f.h = gin.New()
-	f.svc.RegisterRoutes(httpapi.NewRouter(f.h, allowAll{}, allowAll{}, allowAll{}))
+	f.svc.RegisterRoutes(httpapi.NewRouter(f.h, allowAll{}, allowAll{}))
 	return f
 }
 

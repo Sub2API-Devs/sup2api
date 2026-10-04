@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -32,6 +33,9 @@ type TestResult struct {
 	// Model actually requested: the model the plugin reported, else the
 	// requested model after the account's mapping.
 	Model string `json:"model,omitempty"`
+	// RequestedModel is the model the caller chose, before the account's
+	// mapping; empty when none was given (the plugin's default).
+	RequestedModel string `json:"requested_model"`
 	// Upstream is the address the test reached, without query or fragment:
 	// they may carry the credential (Gemini style "?key=...").
 	Upstream string `json:"upstream,omitempty"`
@@ -103,7 +107,8 @@ func (s *Service) test(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(ctx, testTimeout)
 	defer cancel()
 	// The account's model mapping applies to test calls too (CONTRACTS §18).
-	model := strings.TrimSpace(in.Model)
+	requested := strings.TrimSpace(in.Model)
+	model := requested
 	if model != "" {
 		ref := core.AccountRef{ModelMapping: a.mapping()}
 		model = ref.MapModel(model)
@@ -117,10 +122,65 @@ func (s *Service) test(c *gin.Context) {
 		Model:   model,
 	})
 	if err != nil {
+		s.recordTest(ctx, a.ID, TestResult{Model: model, Message: core.AsError(err).Message})
 		httpapi.Fail(c, err)
 		return
 	}
-	httpapi.OK(c, s.runTest(ctx, bt, acct, a.ProxyID, model, req))
+	res := s.runTest(ctx, bt, acct, a.ProxyID, model, req)
+	res.RequestedModel = requested
+	s.recordTest(ctx, a.ID, res)
+	httpapi.OK(c, res)
+}
+
+// LastTest is the last console test of an account (CONTRACTS §50), shown
+// as last_test in the account views.
+type LastTest struct {
+	At        time.Time `json:"at"`
+	OK        bool      `json:"ok"`
+	LatencyMs int64     `json:"latency_ms"`
+	// Model actually requested (TestResult.model).
+	Model string `json:"model"`
+	// Message is empty on success; on failure the plugin's reason, else the
+	// upstream message, at most maxLastTestMessage bytes.
+	Message string `json:"message"`
+}
+
+const (
+	maxLastTestMessage = 512
+	recordTestTimeout  = 5 * time.Second
+)
+
+// recordTest stores the outcome as the account's last test. Like the test
+// itself it changes nothing the gateway uses (no updated_at, no account
+// broadcast); a failed write is only logged.
+func (s *Service) recordTest(ctx context.Context, id int64, res TestResult) {
+	msg := ""
+	if !res.OK {
+		msg = res.Reason
+		if msg == "" {
+			msg = res.Message
+		}
+		msg = cutBytes(strings.TrimSpace(msg), maxLastTestMessage)
+	}
+	wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordTestTimeout)
+	defer cancel()
+	if _, err := s.d.DB.Pool.Exec(wctx, `UPDATE accounts SET last_test_at = now(), last_test_ok = $2,
+		last_test_latency_ms = $3, last_test_model = $4, last_test_message = $5 WHERE id = $1`,
+		id, res.OK, min(res.LatencyMs, math.MaxInt32), res.Model, msg); err != nil {
+		slog.WarnContext(ctx, "account: record last test", "account_id", id, "err", err)
+	}
+}
+
+// cutBytes returns at most n bytes of s, cut at a rune boundary.
+func cutBytes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	s = s[:n]
+	for !utf8.ValidString(s) && len(s) > 0 {
+		s = s[:len(s)-1]
+	}
+	return s
 }
 
 // runTest sends the request the plugin built and reports what came back: the

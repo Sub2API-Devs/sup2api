@@ -15,9 +15,9 @@ export function errorMessage(e: unknown): string {
   return String(e)
 }
 
-/** Shows an error toast unless it is a cancelled step-up / auth redirect. */
+/** Shows an error toast unless it is an auth redirect or an aborted request. */
 export function notifyError(e: unknown) {
-  if (isApiError(e) && (e.code === 'unauthenticated' || e.code === 'step_up_required')) return
+  if (isApiError(e) && e.code === 'unauthenticated') return
   if (e instanceof DOMException && e.name === 'AbortError') return
   toast(errorMessage(e), 'error')
 }

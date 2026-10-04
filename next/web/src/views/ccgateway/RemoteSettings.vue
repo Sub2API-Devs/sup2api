@@ -40,10 +40,8 @@ function assign(config: RemoteConfig) {
 async function run(action: () => Promise<void>) {
   if (busy.value) return
   busy.value = true; error.value = ''; notice.value = ''
-  try { await action() } catch (e: unknown) {
-    if ((e as { code?: string }).code !== 'step_up_cancelled') {
-      error.value = t('ccgateway.remote.failed')
-    }
+  try { await action() } catch {
+    error.value = t('ccgateway.remote.failed')
   } finally { busy.value = false }
 }
 async function load() { assign(await api.get<RemoteConfig>(base)) }

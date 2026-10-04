@@ -32,7 +32,6 @@ func (f *fakeAuthz) PermissionSet(_ context.Context, uid int64) (core.Permission
 	}
 	return core.PermissionSet{Keys: ks}, nil
 }
-func (f *fakeAuthz) IsSensitive(string) bool                         { return false }
 func (f *fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
 func (f *fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 

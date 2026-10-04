@@ -16,13 +16,11 @@ import (
 )
 
 // Client is a thin JSON client for the console API (/api/v1) and the
-// gateway. It carries an optional bearer token and step-up token.
+// gateway. It carries an optional bearer token.
 type Client struct {
-	Base   string
-	HTTP   *http.Client
-	Token  string
-	stepUp string
-	stepAt time.Time
+	Base  string
+	HTTP  *http.Client
+	Token string
 }
 
 // NewClient returns an anonymous client for base.

@@ -79,14 +79,14 @@ func (e *Env) InstallFromMarket(admin *Session, key, version string) gjson.Resul
 	e.T.Helper()
 	src := e.MarketSource(admin)
 	d := admin.OK(e.T, http.MethodPost, "/plugins/install-from-market",
-		map[string]any{"source_id": src, "key": key, "version": version}, admin.StepUp(e.T))
+		map[string]any{"source_id": src, "key": key, "version": version})
 	return reviewOf(e, d)
 }
 
 // UploadPlugin uploads a package and returns the raw response.
 func (e *Env) UploadPlugin(admin *Session, filename string, data []byte) *Resp {
 	e.T.Helper()
-	return admin.Upload(e.T, "/plugins/upload", "file", filename, data, admin.StepUp(e.T))
+	return admin.Upload(e.T, "/plugins/upload", "file", filename, data)
 }
 
 func reviewOf(e *Env, d gjson.Result) gjson.Result {
@@ -103,7 +103,7 @@ func reviewOf(e *Env, d gjson.Result) gjson.Result {
 }
 
 // ConsentAll approves every requested host permission and grants new plugin
-// permissions to roleKeys. Critical permissions need a fresh step-up.
+// permissions to roleKeys.
 func (e *Env) ConsentAll(admin *Session, review gjson.Result, roleKeys []string) {
 	e.T.Helper()
 	grants := []map[string]any{}
@@ -119,8 +119,7 @@ func (e *Env) ConsentAll(admin *Session, review gjson.Result, roleKeys []string)
 	}
 	admin.OK(e.T, http.MethodPost,
 		fmt.Sprintf("/plugins/%s/versions/%s/consent", review.Get("plugin_key").String(), review.Get("version").String()),
-		map[string]any{"grants": grants, "denied": []string{}, "role_keys_for_new_permissions": roleKeys},
-		admin.StepUp(e.T))
+		map[string]any{"grants": grants, "denied": []string{}, "role_keys_for_new_permissions": roleKeys})
 }
 
 // Plugin returns GET /plugins/:key, or ok=false on 404.
@@ -183,7 +182,7 @@ func (e *Env) Upgrade(admin *Session, key, version string) {
 // Uninstall removes a plugin (DELETE /plugins/:key?purge=).
 func (e *Env) Uninstall(admin *Session, key string, purge bool) {
 	e.T.Helper()
-	r := admin.API(e.T, http.MethodDelete, "/plugins/"+key, nil, Query("purge", fmt.Sprint(purge)), admin.StepUp(e.T))
+	r := admin.API(e.T, http.MethodDelete, "/plugins/"+key, nil, Query("purge", fmt.Sprint(purge)))
 	if r.Status != 200 && r.Status != 204 {
 		e.T.Fatalf("uninstall: %s", r)
 	}
@@ -201,7 +200,7 @@ func (e *Env) UninstallPurgeAccounts(admin *Session, key string) {
 	// closed; uninstall answers 409 until then.
 	var r *Resp
 	Eventually(e.T, 30*time.Second, time.Second, "uninstall "+key+" with purge_accounts", func() bool {
-		r = admin.API(e.T, http.MethodDelete, "/plugins/"+key, nil, Query("purge", "false", "purge_accounts", "true"), admin.StepUp(e.T))
+		r = admin.API(e.T, http.MethodDelete, "/plugins/"+key, nil, Query("purge", "false", "purge_accounts", "true"))
 		return r.Status != 409
 	})
 	if r.Status != 200 && r.Status != 204 {

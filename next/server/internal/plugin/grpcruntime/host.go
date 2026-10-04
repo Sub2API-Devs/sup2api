@@ -465,7 +465,7 @@ func toStatus(err error) error {
 		code = codes.InvalidArgument
 	case "unauthenticated":
 		code = codes.Unauthenticated
-	case "permission_denied", "step_up_required":
+	case "permission_denied":
 		code = codes.PermissionDenied
 	case "not_found":
 		code = codes.NotFound

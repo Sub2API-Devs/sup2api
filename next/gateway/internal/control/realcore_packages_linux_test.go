@@ -132,7 +132,7 @@ func TestRealCorePluginPackagesTravelBetweenNodes(t *testing.T) {
 
 	// ---- an upload through a follower is stored on the primary first
 	adminB := newAPIClient(t, c.node("b").public.URL).login(adminEmail, adminPassword)
-	review := adminB.upload("/plugins/upload", filepath.Base(uploadPath), uploaded, adminB.stepUp())
+	review := adminB.upload("/plugins/upload", filepath.Base(uploadPath), uploaded, nil)
 	if review.status != 200 && review.status != 201 {
 		t.Fatalf("upload through follower b: %s", review)
 	}
@@ -164,7 +164,7 @@ func TestRealCorePluginPackagesTravelBetweenNodes(t *testing.T) {
 	listing := adminC.ok(http.MethodGet, "/market/plugins?source_id="+strconv.FormatInt(sourceID, 10), nil)
 	marketKey2, marketVersion := firstMarketPlugin(t, listing)
 	before := marketPackageGets.Load()
-	review = adminC.ok(http.MethodPost, "/plugins/install-from-market", map[string]any{"source_id": sourceID, "key": marketKey2, "version": marketVersion}, adminC.stepUp())
+	review = adminC.ok(http.MethodPost, "/plugins/install-from-market", map[string]any{"source_id": sourceID, "key": marketKey2, "version": marketVersion})
 	adminC.consentAll(review)
 	adminC.ok(http.MethodPost, "/plugins/"+marketKey2+"/enable", nil)
 	wait(marketKey2+" enabled on every node", 3*time.Minute, func() bool { return enabledEverywhere(marketKey2) })

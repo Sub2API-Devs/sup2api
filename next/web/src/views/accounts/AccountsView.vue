@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCode, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSwitch, STable, STabs, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
-import type { Account, AccountTestResult, AccountType } from '@/api/types'
+import { SBadge, SButton, SCheckbox, SCode, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSwitch, STable, STabs, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
+import type { Account, AccountLastTest, AccountTestResult, AccountType } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
@@ -19,6 +20,10 @@ import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
 import AccountEditor from './AccountEditor.vue'
 import { sameCreationGroup } from './accountTypeChoices'
 import AccountQuotaCell from './AccountQuotaCell.vue'
+import AccountModelTest from './AccountModelTest.vue'
+import LastTestCell from './AccountLastTest.vue'
+import { TEST_CONCURRENCY, lastTestOf } from './accountTest'
+import { runPool } from './pool'
 import { hasQuota, refreshAccountCredentials, resetAccountStatus, useQuotaRefresh } from './accountQuota'
 
 const { t } = useI18n()
@@ -68,6 +73,8 @@ const typeFilter = computed({
 })
 
 const columns = computed<TableColumn[]>(() => [
+  // Batch test selection (accounts the caller may test).
+  ...(pageTestable.value.length ? [{ key: 'pick', label: '', width: '2rem' }] : []),
   { key: 'name', label: t('accounts.listUi.identity') },
   { key: 'groups', label: t('accounts.groups') },
   ...(showOwner.value ? [{ key: 'created_by', label: t('accounts.createdBy') }] : []),
@@ -76,6 +83,7 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'limits', label: t('accounts.limits') },
   // Only when a row of this page has plan windows (subscription accounts).
   ...(list.items.value.some((a) => hasQuota(a.quota)) ? [{ key: 'quota', label: t('accounts.quota.column') }] : []),
+  { key: 'last_test', label: t('accounts.lastTest.column') },
   { key: 'actions', label: t('common.actions'), align: 'right' }
 ])
 
@@ -150,6 +158,8 @@ const step = ref<1 | 2>(1)
 const pickedType = ref<AccountType | null>(null)
 const editing = ref<Account | null>(null)
 const editorLoading = ref(false)
+/** The edited account was created by the editor a moment ago (Claude Code OAuth: authorize next). */
+const justCreated = ref(false)
 
 const editorTitle = computed(() => {
   if (editing.value) return `${t('accounts.editTitle')} · ${editing.value.name}`
@@ -159,6 +169,7 @@ const editorTitle = computed(() => {
 
 function openCreate() {
   editing.value = null
+  justCreated.value = false
   pickedType.value = null
   step.value = 1
   editorOpen.value = true
@@ -169,7 +180,8 @@ function pick(at: AccountType) {
   step.value = 2
 }
 
-async function openEdit(a: Account) {
+async function openEdit(a: Pick<Account, 'id'>) {
+  justCreated.value = false
   editorLoading.value = true
   editorOpen.value = true
   step.value = 2
@@ -188,96 +200,121 @@ async function openEdit(a: Account) {
 
 function onSaved(saved?: Account) {
   list.reload()
-  // A new Claude Code (CCGateway) OAuth account still has to be authorized:
-  // stay in the editor, now on the saved account, where the flow is shown.
-  if (!editing.value && saved?.id && saved.plugin_key === 'ccgateway' && saved.type === 'managed') {
-    toast(t('common.saved'), 'success')
-    void openEdit(saved)
+  // A new Claude Code (CCGateway) OAuth account is authorized next: the editor
+  // stays open on the saved account, which starts its container right away.
+  // So does an account still in that flow, or one that had no proxy (its
+  // container was blocked): it restarts with the proxy just picked.
+  const ccg = !!saved?.id && saved.plugin_key === 'ccgateway' && saved.type === 'managed'
+  if (ccg && (!editing.value || justCreated.value || editing.value.proxy_id == null)) {
+    justCreated.value = justCreated.value || !editing.value
+    editing.value = saved!
     return
   }
   editorOpen.value = false
 }
 
-// ---------------------------------------------------------------- test
+// Deep link (/accounts?edit=<id>, e.g. from the CCGateway container list): opens the editor.
+const route = useRoute()
+const router = useRouter()
+watch(
+  () => route.query.edit,
+  (raw) => {
+    const id = Number(Array.isArray(raw) ? raw[0] : raw)
+    if (!raw || !Number.isInteger(id) || id <= 0) return
+    void openEdit({ id })
+    const { edit: _e, ...rest } = route.query
+    void router.replace({ query: rest })
+  },
+  { immediate: true }
+)
+
+// ---------------------------------------------------------------- test (model test dialog, CONTRACTS: POST /accounts/:id/test)
 const testOpen = ref(false)
-const testing = ref(false)
 const testTarget = ref<Account | null>(null)
-const testModel = ref('')
-const testResult = ref<AccountTestResult | null>(null)
-const testError = ref('')
+const testTargetType = computed(() => (testTarget.value ? accountTypes.find(testTarget.value.plugin_key, testTarget.value.type) || null : null))
 
 function openTest(a: Account) {
   testTarget.value = a
-  testModel.value = ''
-  testResult.value = null
-  testError.value = ''
   testOpen.value = true
 }
 
-async function runTest() {
-  if (!testTarget.value) return
-  testing.value = true
-  testResult.value = null
-  testError.value = ''
+/** Writes a test outcome onto the list row (the server records it as last_test too). */
+function onTested(id: number, last: AccountLastTest) {
+  const row = list.items.value.find((x) => x.id === id)
+  if (row) row.last_test = last
+  if (detail.value?.id === id) detail.value.last_test = last
+}
+
+function onTestUpdated(saved: Account) {
+  testTarget.value = { ...(testTarget.value || saved), ...saved }
+  const row = list.items.value.find((x) => x.id === saved.id)
+  if (row) Object.assign(row, { models: saved.models, model_mapping: saved.model_mapping })
+  if (editing.value?.id === saved.id) editing.value = { ...editing.value, models: saved.models, model_mapping: saved.model_mapping }
+}
+
+// ---------------------------------------------------------------- batch test (selected rows, plugin default model each)
+const picked = ref(new Set<number>())
+const batchTesting = ref(new Set<number>())
+const batchRunning = ref(false)
+const batchDone = ref(0)
+const batchTotal = ref(0)
+let batchCtrl: AbortController | null = null
+const testable = (a: Account) => canTest(a) && !a.orphaned
+const pageTestable = computed(() => list.items.value.filter(testable))
+const allPicked = computed(() => pageTestable.value.length > 0 && pageTestable.value.every((a) => picked.value.has(a.id)))
+const somePicked = computed(() => !allPicked.value && pageTestable.value.some((a) => picked.value.has(a.id)))
+
+function pickRow(id: number, v: boolean) {
+  const next = new Set(picked.value)
+  if (v) next.add(id)
+  else next.delete(id)
+  picked.value = next
+}
+function pickPage(v: boolean) {
+  const next = new Set(picked.value)
+  for (const a of pageTestable.value) {
+    if (v) next.add(a.id)
+    else next.delete(a.id)
+  }
+  picked.value = next
+}
+
+async function batchTest() {
+  const ids = [...picked.value]
+  if (batchRunning.value || !ids.length) return
+  batchRunning.value = true
+  batchDone.value = 0
+  batchTotal.value = ids.length
+  batchCtrl = new AbortController()
+  let ok = 0
+  let failed = 0
   try {
-    testResult.value = await api.post<AccountTestResult>(`/accounts/${testTarget.value.id}/test`, testModel.value ? { model: testModel.value } : {})
-  } catch (e) {
-    testError.value = errorMessage(e)
+    await runPool(ids, TEST_CONCURRENCY, async (id) => {
+      batchTesting.value = new Set(batchTesting.value).add(id)
+      try {
+        const r = await api.post<AccountTestResult>(`/accounts/${id}/test`, {}, { signal: AbortSignal.timeout(120000) })
+        if (r.ok) ok++
+        else failed++
+        onTested(id, lastTestOf(r, ''))
+      } catch (e) {
+        failed++
+        onTested(id, { at: new Date().toISOString(), ok: false, latency_ms: 0, model: '', message: errorMessage(e) })
+      } finally {
+        const next = new Set(batchTesting.value)
+        next.delete(id)
+        batchTesting.value = next
+        batchDone.value++
+      }
+    }, batchCtrl.signal)
   } finally {
-    testing.value = false
+    batchRunning.value = false
+    batchCtrl = null
   }
+  toast(t('accounts.batchTest.done', { ok, fail: failed }), failed ? 'warning' : 'success')
 }
-
-/**
- * The upstream response snippet, re-indented when it parses as JSON. A snippet
- * is truncated at ~4 KiB, so parsing often fails — then it is shown verbatim.
- */
-const testBody = computed(() => {
-  const raw = testResult.value?.body
-  if (!raw) return ''
-  try {
-    return JSON.stringify(JSON.parse(raw), null, 2)
-  } catch {
-    return raw
-  }
-})
-
-async function copyTestBody() {
-  if (testBody.value && (await copyText(testBody.value))) toast(t('common.copied'), 'success')
+function stopBatch() {
+  batchCtrl?.abort()
 }
-
-/** "input 123 · output 45" (+ cache read / creation when reported). */
-const testUsage = computed(() => {
-  const u = testResult.value?.usage
-  if (!u) return ''
-  const parts: string[] = []
-  const pairs = [
-    ['testUsageInput', u.input_tokens],
-    ['testUsageOutput', u.output_tokens],
-    ['testUsageCacheRead', u.cache_read_tokens],
-    ['testUsageCacheWrite', u.cache_creation_tokens]
-  ] as const
-  for (const [key, v] of pairs) if (v != null) parts.push(`${t(`accounts.${key}`)} ${v}`)
-  return parts.join(' · ')
-})
-
-/**
- * What the plugin *would* do to the account. The server never applies it for a
- * test, so the UI shows it as a diagnosis (see `accounts.testEffectNotApplied`).
- */
-const testEffect = computed<{ tone: 'warning' | 'danger'; label: string } | null>(() => {
-  const e = testResult.value?.effect
-  if (!e) return null
-  if (e === 'cooldown') return { tone: 'warning', label: t('accounts.testEffect.cooldown') }
-  if (e === 'disable') return { tone: 'danger', label: t('accounts.testEffect.disable') }
-  return { tone: 'warning', label: e }
-})
-
-/** Whether the summary block has anything below the status line. */
-const testHasMeta = computed(() => {
-  const r = testResult.value
-  return !!(r && (r.model || r.upstream || r.message || r.reason || testUsage.value || testEffect.value))
-})
 
 // ---------------------------------------------------------------- reveal credentials
 const revealOpen = ref(false)
@@ -485,9 +522,26 @@ function groupTags(a: Account) {
       <span v-if="list.error.value" role="alert" class="text-red-600 dark:text-red-400">{{ t(list.items.value.length ? 'accounts.listUi.loadFailed' : 'accounts.listUi.loadFailedEmpty') }}</span>
       <span v-else-if="list.loading.value">{{ t('common.loading') }}</span>
       <span v-else>{{ t('accounts.listUi.resultCount', { total: list.total.value, page: list.items.value.length }) }}</span>
-      <SSwitch v-model="denseRows" :label="t('accounts.listUi.compact')" />
+      <span v-if="pageTestable.length" class="flex flex-wrap items-center gap-2" data-testid="account-batch-bar">
+        <SCheckbox size="xs" :model-value="allPicked" :indeterminate="somePicked" :disabled="batchRunning" data-testid="account-pick-page" @update:model-value="pickPage">{{ t('accounts.batchTest.pickPage') }}</SCheckbox>
+        <template v-if="picked.size || batchRunning">
+          <SButton size="sm" variant="primary" :loading="batchRunning" :disabled="!picked.size" data-testid="account-batch-test" @click="batchTest">
+            <SIcon v-if="!batchRunning" name="play" class="h-3.5 w-3.5" />{{ batchRunning ? t('accounts.batchTest.progress', { done: batchDone, total: batchTotal }) : t('accounts.batchTest.run', { n: picked.size }) }}
+          </SButton>
+          <SButton v-if="batchRunning" size="sm" variant="danger" @click="stopBatch"><SIcon name="stop" class="h-3.5 w-3.5" />{{ t('accounts.modelTest.stop') }}</SButton>
+          <SLink v-else as="button" class="text-xs" @click="picked = new Set()">{{ t('accounts.batchTest.clear') }}</SLink>
+          <SHint inline size="xs">{{ t('accounts.batchTest.hint') }}</SHint>
+        </template>
+      </span>
+      <SSwitch v-model="denseRows" :label="t('accounts.listUi.compact')" class="ml-auto" />
     </div>
     <STable :columns="columns" :rows="list.items.value" :loading="list.loading.value" :dense="denseRows" :empty-text="t(filterCount ? 'accounts.listUi.emptyFiltered' : 'accounts.listUi.empty')">
+      <template #cell-pick="{ row }">
+        <SCheckbox v-if="testable(row)" bare :model-value="picked.has(row.id)" :disabled="batchRunning" :aria-label="row.name" @update:model-value="pickRow(row.id, $event)" />
+      </template>
+      <template #cell-last_test="{ row }">
+        <LastTestCell :last="row.last_test" :testing="batchTesting.has(row.id)" />
+      </template>
       <template #cell-name="{ row }">
         <div class="min-w-48 max-w-xs space-y-1">
           <div class="flex items-center gap-2"><span class="shrink-0 font-mono text-[11px] text-gray-400">#{{ row.id }}</span><SLink as="button" class="min-w-0 truncate font-semibold" :title="row.name" @click="openDetail(row)">{{ row.name }}</SLink></div>
@@ -552,6 +606,7 @@ function groupTags(a: Account) {
         :account-type="pickedType"
         :account-type-options="accountTypes.types.value.filter(at => sameCreationGroup(at, pickedType))"
         :account="editing"
+        :just-created="justCreated"
         @change-type="pickedType = $event"
         @saved="onSaved"
         @cancel="editorOpen = false"
@@ -561,65 +616,7 @@ function groupTags(a: Account) {
     </SModal>
 
     <!-- test -->
-    <SModal v-model:open="testOpen" :title="`${t('accounts.testConnection')} · ${testTarget?.name || ''}`" width="xl">
-      <div class="space-y-4">
-        <div>
-          <div class="flex gap-2">
-            <SInput v-model="testModel" :placeholder="t('accounts.testModelPlaceholder')" @keydown.enter="runTest" />
-            <SButton variant="primary" :loading="testing" @click="runTest">{{ t('common.test') }}</SButton>
-          </div>
-          <SHint size="xs" class="mt-1.5">{{ t('accounts.testModelHint') }}</SHint>
-        </div>
-        <template v-if="testResult">
-          <div class="rounded-xl p-4 text-sm" :class="testResult.ok ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-red-50 dark:bg-red-900/20'">
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <SBadge :tone="testResult.ok ? 'success' : 'danger'" dot>{{ testResult.ok ? t('accounts.testOk') : t('accounts.testFailed') }}</SBadge>
-              <span class="font-mono text-xs tabular-nums text-gray-700 dark:text-gray-200">HTTP {{ testResult.status }}</span>
-              <SHint inline size="xs">{{ t('accounts.latency') }} {{ testResult.latency_ms }} ms</SHint>
-            </div>
-            <dl v-if="testHasMeta" class="kv mt-3">
-              <template v-if="testResult.model">
-                <dt>{{ t('accounts.testActualModel') }}</dt>
-                <dd class="font-mono text-xs">{{ testResult.model }}</dd>
-              </template>
-              <template v-if="testResult.upstream">
-                <dt>{{ t('accounts.testUpstream') }}</dt>
-                <dd class="break-all font-mono text-xs">{{ testResult.upstream }}</dd>
-              </template>
-              <template v-if="testUsage">
-                <dt>{{ t('accounts.testUsage') }}</dt>
-                <dd class="tabular-nums">{{ testUsage }}</dd>
-              </template>
-              <template v-if="testResult.message">
-                <dt>{{ t('accounts.message') }}</dt>
-                <dd class="break-all">{{ testResult.message }}</dd>
-              </template>
-              <template v-if="testResult.reason">
-                <dt>{{ t('accounts.testReason') }}</dt>
-                <dd class="break-all">{{ testResult.reason }}</dd>
-              </template>
-              <template v-if="testEffect">
-                <dt>{{ t('accounts.testEffectTitle') }}</dt>
-                <dd>
-                  <SBadge :tone="testEffect.tone">{{ testEffect.label }}</SBadge>
-                  <SHint inline size="xs" class="ml-2">{{ t('accounts.testEffectNotApplied') }}</SHint>
-                </dd>
-              </template>
-            </dl>
-          </div>
-          <div v-if="testBody">
-            <SSectionTitle :title="t('accounts.testBody')">
-              <template #actions>
-                <SButton size="sm" @click="copyTestBody"><SIcon name="copy" class="h-4 w-4" />{{ t('common.copy') }}</SButton>
-              </template>
-            </SSectionTitle>
-            <SCode class="max-h-80 overflow-y-auto">{{ testBody }}</SCode>
-          </div>
-          <SHint v-else size="xs">{{ t('accounts.testBodyEmpty') }}</SHint>
-        </template>
-        <SHint v-if="testError" tone="danger">{{ testError }}</SHint>
-      </div>
-    </SModal>
+    <AccountModelTest v-model:open="testOpen" :account="testTarget" :account-type="testTargetType" @tested="onTested" @updated="onTestUpdated" />
 
     <!-- reveal -->
     <SModal v-model:open="revealOpen" :title="t('accounts.revealCredentials')" width="lg" @close="revealed = null">
@@ -707,6 +704,8 @@ function groupTags(a: Account) {
             <dd>{{ detail.schedulable ? t('common.yes') : t('common.no') }}</dd>
             <dt>{{ t('accounts.lastUsed') }}</dt>
             <dd>{{ formatDateTime(detail.last_used_at) }}</dd>
+            <dt>{{ t('accounts.lastTest.column') }}</dt>
+            <dd><LastTestCell :last="detail.last_test" :testing="batchTesting.has(detail.id)" /></dd>
             <template v-if="showOwner">
               <dt>{{ t('accounts.createdBy') }}</dt>
               <dd>{{ detail.created_by_email || (detail.created_by ? `#${detail.created_by}` : '-') }}</dd>

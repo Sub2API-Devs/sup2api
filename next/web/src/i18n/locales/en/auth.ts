@@ -10,16 +10,9 @@ export default {
     rateLimitedNoTime: 'Too many attempts. Please try again later.',
     sessionExpired: 'Your session has expired. Please sign in again.'
   },
-  stepUp: {
-    title: 'Confirm your password',
-    desc: 'This is a sensitive operation. Enter your password to continue (valid for 5 minutes).',
-    password: 'Password',
-    submit: 'Confirm'
-  },
   errors: {
     invalid_argument: 'Invalid input',
     unauthenticated: 'Please sign in again',
-    step_up_required: 'Password confirmation required',
     permission_denied: 'Permission denied',
     not_found: 'Not found',
     conflict: 'Conflict with existing data',

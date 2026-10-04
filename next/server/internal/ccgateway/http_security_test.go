@@ -2,7 +2,6 @@ package ccgateway
 
 import (
 	"context"
-	"errors"
 	"net/http/httptest"
 	"testing"
 
@@ -19,17 +18,8 @@ func (a ccgRouteAuth) PermissionSet(context.Context, int64) (core.PermissionSet,
 
 func (a ccgRouteAuth) VerifyAccessToken(context.Context, string) (int64, error) { return 1, nil }
 func (a ccgRouteAuth) Can(context.Context, int64, string) (bool, error)         { return a.allowed, nil }
-func (a ccgRouteAuth) IsSensitive(permission string) bool {
-	return permission == "system:update:execute"
-}
-func (a ccgRouteAuth) CanGrant(context.Context, int64, []string) error { return nil }
-func (a ccgRouteAuth) CanActOn(context.Context, int64, []string) error { return nil }
-func (a ccgRouteAuth) VerifyStepUp(_ context.Context, _ int64, token string) error {
-	if token != "confirmed" {
-		return errors.New("password confirmation required")
-	}
-	return nil
-}
+func (a ccgRouteAuth) CanGrant(context.Context, int64, []string) error          { return nil }
+func (a ccgRouteAuth) CanActOn(context.Context, int64, []string) error          { return nil }
 
 func TestManagementRequiresAuthorizationWithoutConfirmation(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -42,12 +32,9 @@ func TestManagementRequiresAuthorizationWithoutConfirmation(t *testing.T) {
 			for _, allowed := range []bool{false, true} {
 				engine := gin.New()
 				auth := ccgRouteAuth{allowed}
-				(&Service{}).RegisterRoutes(httpapi.NewRouter(engine, auth, auth, auth))
+				(&Service{}).RegisterRoutes(httpapi.NewRouter(engine, auth, auth))
 				req := httptest.NewRequest(method, "/api/v1/system/ccgateway/"+path, nil)
 				req.Header.Set("Authorization", "Bearer test")
-				if !allowed {
-					req.Header.Set("X-Step-Up-Token", "confirmed")
-				}
 				w := httptest.NewRecorder()
 				engine.ServeHTTP(w, req)
 				want := 403
@@ -71,7 +58,7 @@ func TestManagementRequiresAuthorizationWithoutConfirmation(t *testing.T) {
 	}
 	engine := gin.New()
 	auth := ccgRouteAuth{true}
-	(&Service{}).RegisterRoutes(httpapi.NewRouter(engine, auth, auth, auth))
+	(&Service{}).RegisterRoutes(httpapi.NewRouter(engine, auth, auth))
 	req := httptest.NewRequest("GET", "/api/v1/system/ccgateway/status", nil)
 	w := httptest.NewRecorder()
 	engine.ServeHTTP(w, req)

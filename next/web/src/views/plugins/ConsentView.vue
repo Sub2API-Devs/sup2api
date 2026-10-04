@@ -574,7 +574,6 @@ onMounted(load)
           <p v-else-if="missingRequired.length" class="text-gray-600 dark:text-gray-300">
             {{ t('plugins.consent.stillRequired', { n: missingRequired.length }) }}
           </p>
-          <SHint v-else>{{ t('plugins.consent.stepUpHint') }}</SHint>
         </div>
         <div class="flex gap-2">
           <SButton variant="danger" :loading="rejecting" :disabled="submitting" @click="reject">{{ t('plugins.consent.reject') }}</SButton>

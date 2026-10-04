@@ -54,7 +54,6 @@ func (denyAll) Can(context.Context, int64, string) (bool, error) { return false,
 func (denyAll) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{}, nil
 }
-func (denyAll) IsSensitive(string) bool                         { return false }
 func (denyAll) CanGrant(context.Context, int64, []string) error { return core.ErrPermissionDenied }
 func (denyAll) CanActOn(context.Context, int64, []string) error { return core.ErrPermissionDenied }
 
@@ -65,7 +64,7 @@ func TestMyPlatformsRoute(t *testing.T) {
 	reg.set(testGen(&fakePlatform{}))
 	s := New(Deps{Registry: reg, Converters: fakeConverters{}})
 	engine := gin.New()
-	s.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, denyAll{}, noStepUp{}))
+	s.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, denyAll{}))
 	call := func(path, auth string) (int, string) {
 		req := httptest.NewRequest("GET", path, nil)
 		if auth != "" {

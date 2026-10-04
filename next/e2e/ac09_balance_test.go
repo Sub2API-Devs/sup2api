@@ -30,14 +30,9 @@ func TestAC09_InsufficientBalance(t *testing.T) {
 		t.Fatalf("upstream called despite insufficient balance: %v", used)
 	}
 
-	// Admin adjustment needs step-up.
-	r := admin.API(t, http.MethodPost, "/users/"+itoa(tn.User.UserID)+"/balance/adjust",
-		map[string]any{"amount": "1", "credit": true, "note": "no step-up"})
-	if r.Status != 403 || r.ErrCode() != "step_up_required" {
-		t.Fatalf("adjust without step-up: %s", r)
-	}
-	// A normal user cannot adjust at all.
-	r = tn.User.API(t, http.MethodPost, "/users/"+itoa(tn.User.UserID)+"/balance/adjust",
+	// A normal user cannot adjust at all (admins need no password
+	// confirmation; e.AdjustBalance below sends none).
+	r := tn.User.API(t, http.MethodPost, "/users/"+itoa(tn.User.UserID)+"/balance/adjust",
 		map[string]any{"amount": "100", "credit": true, "note": "self"})
 	if r.Status != 403 {
 		t.Fatalf("self adjust: %s", r)

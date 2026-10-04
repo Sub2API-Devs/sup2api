@@ -15,13 +15,13 @@ import (
 // and registers key for it. Returns the publisher id.
 func (e *Env) RegisterPublisher(admin *Session, key *SigningKey, trust string) int64 {
 	e.T.Helper()
-	d := admin.OK(e.T, http.MethodPost, "/publishers", map[string]any{"name": key.Publisher, "trust_level": trust}, admin.StepUp(e.T))
+	d := admin.OK(e.T, http.MethodPost, "/publishers", map[string]any{"name": key.Publisher, "trust_level": trust})
 	id := d.Get("id").Int()
 	if id == 0 {
 		e.T.Fatalf("POST /publishers returned no id: %s", d.Raw)
 	}
 	admin.OK(e.T, http.MethodPost, fmt.Sprintf("/publishers/%d/keys", id),
-		map[string]any{"key_id": key.KeyID, "public_key": key.PublicB64()}, admin.StepUp(e.T))
+		map[string]any{"key_id": key.KeyID, "public_key": key.PublicB64()})
 	return id
 }
 

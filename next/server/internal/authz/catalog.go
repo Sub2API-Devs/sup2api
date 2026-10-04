@@ -160,7 +160,6 @@ func CorePermissions() []core.PermissionDef {
 }
 
 var (
-	coreSensitive    = map[string]bool{}
 	coreModuleLabels = map[string]core.LocalizedText{}
 	coreModuleOrder  = map[string]int{}
 )
@@ -169,8 +168,5 @@ func init() {
 	for i, m := range coreModules {
 		coreModuleLabels[m.key] = m.label
 		coreModuleOrder[m.key] = i
-		for _, p := range m.perms {
-			coreSensitive[p.key] = p.sensitive
-		}
 	}
 }

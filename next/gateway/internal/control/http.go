@@ -11,7 +11,7 @@ import (
 )
 
 // Handler is for the mode-0600 local Unix socket ONLY. The authenticated core
-// applies RBAC/step-up authentication before forwarding a request to this API.
+// applies authentication and RBAC before forwarding a request to this API.
 func (s *Store) Handler() http.Handler {
 	mux := http.NewServeMux()
 	reply := func(w http.ResponseWriter, v any, err error) {

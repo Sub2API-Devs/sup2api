@@ -299,6 +299,17 @@ export interface Account {
    * credentials do not expire. The core renews them before they expire.
    */
   refresh?: AccountRefresh | null
+  /** Outcome of the latest test of the account (any model); null when never tested. */
+  last_test?: AccountLastTest | null
+}
+
+/** Latest test of an account, kept on the account (POST /accounts/:id/test). */
+export interface AccountLastTest {
+  at: string
+  ok: boolean
+  latency_ms: number
+  model: string
+  message: string
 }
 
 
@@ -365,6 +376,8 @@ export interface AccountTestResult {
   message?: string
   /** Model actually requested, as reported by the plugin (may differ from the input). */
   model?: string
+  /** The model the caller asked for (before the account's model mapping); '' for the plugin default. */
+  requested_model?: string
   /** Upstream address: scheme://host + path (the server strips the query). */
   upstream?: string
   /** Snippet of the upstream response, present on success and failure (~4 KiB max). */

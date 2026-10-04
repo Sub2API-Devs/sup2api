@@ -52,13 +52,8 @@ func (a *fakeAuthz) Can(_ context.Context, uid int64, p string) (bool, error) {
 func (a *fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{}, nil
 }
-func (*fakeAuthz) IsSensitive(string) bool                         { return false }
 func (*fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
 func (*fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
-
-type fakeStepUp struct{}
-
-func (fakeStepUp) VerifyStepUp(context.Context, int64, string) error { return nil }
 
 // fakeGen implements the parts of core.Generation used for key platforms.
 type fakeGen struct {
@@ -167,7 +162,7 @@ func setup(t *testing.T) *env {
 	e.authz = &fakeAuthz{admin: e.admin, noGateway: map[int64]bool{}}
 	e.svc = New(db, rdb, e.authz, fakeRegistry{gen: testGen()})
 	engine := gin.New()
-	r := httpapi.NewRouter(engine, fakeTokens{}, e.authz, fakeStepUp{})
+	r := httpapi.NewRouter(engine, fakeTokens{}, e.authz)
 	e.svc.RegisterRoutes(r)
 	e.h = engine
 	return e

@@ -32,7 +32,6 @@ export default {
     amount: '金额',
     amountInvalid: '请输入正数，最多 8 位小数',
     notePlaceholder: '如：充值',
-    stepUpHint: '这是敏感操作，可能需要再次输入密码确认。',
     done: '余额已调整',
     doneBalance: '余额已调整，当前余额 {balance}',
     duplicate: '该调整已经执行过'

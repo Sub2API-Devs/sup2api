@@ -23,7 +23,7 @@ function assign(data: Config) { saved.value = data; mode.value = data.mode; url.
 async function run(action: () => Promise<void>) {
   if (busy.value) return
   busy.value = true; error.value = ''; notice.value = ''
-  try { await action() } catch (e) { if ((e as { code?: string }).code !== 'step_up_cancelled') error.value = t('ccgateway.proxy.failed') } finally { busy.value = false }
+  try { await action() } catch { error.value = t('ccgateway.proxy.failed') } finally { busy.value = false }
 }
 async function load() { saved.value = null; url.value = ''; show.value = false; assign(await api.get<Config>(base)) }
 async function save() {

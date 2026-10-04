@@ -115,7 +115,7 @@ func RegisterRoutes(r *httpapi.Router, socketPath string, db *store.DB) {
 	r.Perm("GET", "/system/offload", "settings:read", handler)
 	r.Perm("PUT", "/system/offload", "settings:manage", handler)
 	r.Perm("GET", "/system/update-source", "settings:read", handler)
-	r.PermStepUp("PUT", "/system/update-source", "settings:manage", handler)
+	r.Perm("PUT", "/system/update-source", "settings:manage", handler)
 	r.Perm("GET", "/system/update-check", "system:update:read", handler)
 	r.Perm("POST", "/system/releases/import", "system:update:execute", handler)
 }

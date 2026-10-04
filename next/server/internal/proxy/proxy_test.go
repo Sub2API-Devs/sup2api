@@ -50,13 +50,8 @@ func (a fakeAuthz) Can(_ context.Context, uid int64, key string) (bool, error) {
 func (fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{}, nil
 }
-func (fakeAuthz) IsSensitive(string) bool                         { return false }
 func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
 func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
-
-type fakeStepUp struct{}
-
-func (fakeStepUp) VerifyStepUp(context.Context, int64, string) error { return nil }
 
 type fakeBus struct {
 	mu   sync.Mutex
@@ -191,7 +186,7 @@ func TestProxyCRUDTestAndDirectory(t *testing.T) {
 	defer cancel()
 	go svc.Run(runCtx)
 	engine := gin.New()
-	svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, fakeAuthz{}, fakeStepUp{}))
+	svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, fakeAuthz{}))
 	admin := addUser(t, db, "admin@x.com")
 
 	fp, auth, hits := forwardProxy(t)
@@ -388,7 +383,7 @@ func TestOwnership(t *testing.T) {
 		alice:  {"proxy:own:read", "proxy:own:manage"},
 		bob:    {"proxy:own:read", "proxy:own:manage"},
 		reader: {"proxy:read"},
-	}}, fakeStepUp{}))
+	}}))
 
 	create := func(uid int64, name string) int64 {
 		t.Helper()

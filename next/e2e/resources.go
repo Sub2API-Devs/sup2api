@@ -42,15 +42,11 @@ func (e *Env) CreateUser(admin *Session, u UserSpec) *Session {
 	if u.MaxConcurrency == 0 {
 		u.MaxConcurrency = 10
 	}
-	// Assigning a non-default role at creation needs role:manage + step-up.
-	var opts []ReqOpt
-	if len(u.Roles) != 1 || u.Roles[0] != "user" {
-		opts = append(opts, admin.StepUp(e.T))
-	}
+	// Assigning a non-default role at creation needs role:manage.
 	d := admin.OK(e.T, http.MethodPost, "/users", map[string]any{
 		"email": u.Email, "display_name": u.DisplayName, "password": u.Password,
 		"role_keys": u.Roles, "max_concurrency": u.MaxConcurrency,
-	}, opts...)
+	})
 	id := d.Get("id").Int()
 	if id == 0 {
 		e.T.Fatalf("POST /users returned no id: %s", d.Raw)
@@ -71,19 +67,19 @@ func (e *Env) CreateRole(admin *Session, key, name string, perms []string) int64
 		"key":         key,
 		"name":        map[string]string{"en": name, "zh": name},
 		"description": map[string]string{"en": "created by e2e"},
-	}, admin.StepUp(e.T))
+	})
 	id := d.Get("id").Int()
 	if id == 0 {
 		e.T.Fatalf("POST /roles returned no id: %s", d.Raw)
 	}
-	admin.OK(e.T, http.MethodPut, fmt.Sprintf("/roles/%d/permissions", id), map[string]any{"permission_keys": perms}, admin.StepUp(e.T))
+	admin.OK(e.T, http.MethodPut, fmt.Sprintf("/roles/%d/permissions", id), map[string]any{"permission_keys": perms})
 	return id
 }
 
 // SetUserRoles replaces a user's roles.
 func (e *Env) SetUserRoles(admin *Session, userID int64, roles []string) {
 	e.T.Helper()
-	admin.OK(e.T, http.MethodPut, fmt.Sprintf("/users/%d/roles", userID), map[string]any{"role_keys": roles}, admin.StepUp(e.T))
+	admin.OK(e.T, http.MethodPut, fmt.Sprintf("/users/%d/roles", userID), map[string]any{"role_keys": roles})
 }
 
 // SetUserGroups replaces the groups a user may use.
@@ -291,7 +287,7 @@ func (e *Env) CreatePrice(admin *Session, body map[string]any) gjson.Result {
 func (e *Env) AdjustBalance(admin *Session, userID int64, amount string, credit bool, note string) gjson.Result {
 	e.T.Helper()
 	return admin.OK(e.T, http.MethodPost, fmt.Sprintf("/users/%d/balance/adjust", userID),
-		map[string]any{"amount": amount, "credit": credit, "note": note}, admin.StepUp(e.T))
+		map[string]any{"amount": amount, "credit": credit, "note": note})
 }
 
 // Balance returns the user's own balance string.

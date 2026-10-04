@@ -185,6 +185,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	// Per-account rpm/tpm/tpd/spm limits (CONTRACTS §18).
 	limiter := account.NewLimiter(rdb)
 	ccg := ccgateway.New(db, cipher)
+	ccg.Redis = rdb
 	acc := account.New(account.Deps{
 		CCGateway: ccg,
 		DB:        db, Redis: rdb, Cipher: cipher, Registry: reg, Proxies: prx, Events: events,
@@ -355,7 +356,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		}
 		c.JSON(status, gin.H{"status": text, "version": version, "node": cfg.NodeID, "boot_id": cl.Registry.BootID()})
 	})
-	r := httpapi.NewRouter(engine, idm, az, idm)
+	r := httpapi.NewRouter(engine, idm, az)
 	r.Authed(http.MethodGet, "/system/version", systemVersionHandler(version, cfg.Managed.Enabled, cfg.NodeID, cl.Registry.BootID()))
 	updater.RegisterRoutes(r, cfg.Managed.UpdaterSocket, db)
 	ccg.RegisterRoutes(r)
@@ -372,7 +373,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		DB: db, Install: inst, Market: mkt, Rollout: ctl, Nodes: cl.Registry, Registry: reg,
 		Authz: az, Cipher: cipher, Bus: cl.Bus, Jobs: jobs, HookStats: gw, Plugins: cfg.Plugins,
 	}).RegisterRoutes(r)
-	pr := routes.New(reg, idm, az, idm, routes.WithHealth(cl.Registry), routes.WithVersionAssets(pkgs))
+	pr := routes.New(reg, idm, az, routes.WithHealth(cl.Registry), routes.WithVersionAssets(pkgs))
 	pr.RegisterRoutes(r)
 	pr.RegisterAssets(engine)
 	gw.RegisterRoutes(r)

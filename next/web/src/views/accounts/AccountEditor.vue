@@ -13,6 +13,7 @@ import PluginAvatar from '@/views/plugins/parts/PluginAvatar.vue'
 import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
 import { lt } from '@/i18n'
 import { sameCreationGroup } from './accountTypeChoices'
+import { shouldPrefillOnEdit } from './modelDefaults'
 import EditorCard from './EditorCard.vue'
 import ModelMappingEditor from './ModelMappingEditor.vue'
 import CCGatewayAccountAuth from '@/views/ccgateway/CCGatewayAccountAuth.vue'
@@ -26,8 +27,12 @@ import { looksLikeProxyURL, parseProxyURL } from '@/utils/proxyUrl'
 
 // Step 2 of "new account" and the edit form (wireframe A.4, CONTRACTS §18.4):
 // 基本信息 / 调度 / 限流 / 模型 / 模型映射 (all core) + the plugin credential form.
-// A new account starts from the plugin's default models and mapping (§41).
-const props = defineProps<{ accountType: AccountType | null; accountTypeOptions?: AccountType[]; account?: Account | null }>()
+// A new account starts from the plugin's default models and mapping (§41); so
+// does an existing account saved without either (see shouldPrefillOnEdit).
+// `justCreated`: the account was created by this editor a moment ago (the
+// Claude Code OAuth flow keeps the editor open): no second prefill, and the
+// authorization starts by itself.
+const props = defineProps<{ accountType: AccountType | null; accountTypeOptions?: AccountType[]; account?: Account | null; justCreated?: boolean }>()
 const emit = defineEmits<{ (e: 'change-type', at: AccountType): void; (e: 'saved', a: Account): void; (e: 'cancel'): void; (e: 'back'): void; (e: 'test', a: Account): void }>()
 const { t } = useI18n()
 const plugins = usePluginStore()
@@ -44,6 +49,21 @@ const mode = computed(() => props.accountType?.form.mode || 'schema')
 // Claude Code (CCGateway) OAuth keeps its credentials in the account's own
 // container: the editor shows the authorization flow instead of fields.
 const ccgOAuth = computed(() => props.accountType?.plugin_key === 'ccgateway' && props.accountType?.type === 'managed')
+// CCGateway account containers only reach the internet through a proxy (no
+// direct fallback): every ccgateway account (managed and apikey) needs one.
+const needsProxy = computed(() => props.accountType?.plugin_key === 'ccgateway')
+const canEditAccount = computed(() => editing.value && own.can(props.account, ACCOUNT_KEYS.update))
+/** Changes when the saved account changes in a way the container cares about. */
+const ccgSyncKey = computed(() => (props.account ? `${props.account.proxy_id ?? ''}|${props.account.status}` : ''))
+const proxyFieldEl = ref<HTMLElement>()
+/** The authorization panel asks for a proxy: show and focus the proxy field. */
+async function focusProxy() {
+  activeSection.value = 'connection'
+  proxyMode.value = 'existing'
+  await nextTick()
+  proxyFieldEl.value?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  proxyFieldEl.value?.querySelector<HTMLElement>('select, input')?.focus()
+}
 // Row-level rights (CONTRACTS §21.1): editing an account needs the all-level
 // key or the own-level key on an account the caller created.
 const canTestAccount = computed(() => editing.value && own.can(props.account, ACCOUNT_KEYS.test))
@@ -158,8 +178,25 @@ const sectionErrors = computed<Record<EditorSection, boolean>>(() => ({
 // ---------------------------------------------------------------- plugin defaults (CONTRACTS §41)
 const defaultModels = computed(() => props.accountType?.default_models || [])
 const defaultMapping = computed(() => props.accountType?.default_model_mapping || {})
-/** The new account was prefilled with the plugin defaults (shows a notice). */
+/**
+ * The models / mapping were prefilled with the plugin defaults (shows a
+ * notice). When editing, the account was "all models" before: nothing is
+ * stored until it is saved.
+ */
 const prefilled = ref(false)
+/** "12 models" (+ "and 3 mappings" only when the preset has a mapping; most have none). */
+const prefillWhat = computed(() => {
+  const n = Object.keys(defaultMapping.value).length
+  return n ? t('accounts.editorUi.prefillWhatMapping', { models: defaultModels.value.length, mapping: n }) : t('accounts.editorUi.prefillWhat', { models: defaultModels.value.length })
+})
+/** Back to "all models": clears the prefilled list and mapping. */
+function clearPrefill() {
+  clearModels()
+  mapping.value = {}
+  mappingText.value = ''
+  mappingError.value = ''
+  prefilled.value = false
+}
 const sameDefaults = (at: AccountType | null | undefined) =>
   JSON.stringify(models.value) === JSON.stringify(at?.default_models || []) &&
   JSON.stringify(mapping.value) === JSON.stringify(at?.default_model_mapping || {})
@@ -480,6 +517,7 @@ watch(
         models.value = [...(a.models || [])]
         mapping.value = { ...(a.model_mapping || {}) }
         prefilled.value = false
+        if (!props.justCreated && shouldPrefillOnEdit(a, at)) applyDefaults(at)
       } else {
         applyDefaults(at)
       }
@@ -560,6 +598,11 @@ async function save(event: Event) {
   if (!basic.name.trim()) {
     activeSection.value = 'connection'
     errors.value = { name: t('ui.schema.v.required') }
+    return
+  }
+  if (needsProxy.value && !proxyUrlToSend.value && basic.proxy_id == null) {
+    activeSection.value = 'connection'
+    errors.value = { [proxyMode.value === 'url' ? 'proxy_url' : 'proxy_id']: t('ccgateway.accountAuth.proxyRequired') }
     return
   }
   // Pending text-mode / draft edits are committed (and validated) before saving.
@@ -699,9 +742,9 @@ async function save(event: Event) {
               <SField :label="t('accounts.groups')" :error="errors.group_ids" :hint="basic.group_ids.length ? '' : t('accounts.editorUi.groupsHint')">
                 <GroupPicker v-model="basic.group_ids as any" multiple />
               </SField>
-              <div class="md:col-span-2">
+              <div ref="proxyFieldEl" class="md:col-span-2" data-testid="proxy-field">
                 <div class="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                  <label class="input-label !mb-0">{{ t('accounts.proxy') }}</label>
+                  <label class="input-label !mb-0">{{ t('accounts.proxy') }}<span v-if="needsProxy" class="ml-0.5 text-red-500">*</span></label>
                   <div class="inline-flex rounded-lg bg-gray-100 p-0.5 text-xs dark:bg-dark-700" role="tablist" data-testid="proxy-mode">
                     <button
                       v-for="tab in proxyModeTabs"
@@ -732,6 +775,7 @@ async function save(event: Event) {
                 <p v-if="(proxyMode === 'url' ? errors.proxy_url : errors.proxy_id)" class="input-error-text">{{ proxyMode === 'url' ? errors.proxy_url : errors.proxy_id }}</p>
                 <p v-else-if="proxyMode === 'url' && proxyUrlHint" class="mt-1 text-xs text-amber-600 dark:text-amber-400" data-testid="proxy-url-hint">{{ proxyUrlHint }}</p>
                 <p v-else-if="proxyMode === 'url'" class="input-hint">{{ t('accounts.proxyUrlHint') }}</p>
+                <p v-if="needsProxy" class="mt-1 text-xs text-gray-500 dark:text-dark-400" data-testid="proxy-required-hint">{{ t('ccgateway.accountAuth.proxyRequiredHint') }}</p>
               </div>
             </div>
           </EditorCard>
@@ -771,9 +815,8 @@ async function save(event: Event) {
               <SHint v-else-if="formError" tone="danger">{{ formError }}</SHint>
               <SchemaForm v-else-if="schema" ref="schemaForm" v-model="credentials" :schema="schema" :ui-schema="uiSchema" :errors="credErrors" :widgets="schemaWidgets" />
               <template v-if="ccgOAuth">
-                <!-- Claude Code (CCGateway) OAuth: the credentials live in the account's own container; authorize it here. -->
-                <CCGatewayAccountAuth v-if="editing" :account-id="account!.id" />
-                <p v-else class="rounded-xl bg-primary-50/70 px-3.5 py-3 text-sm text-primary-800 dark:bg-primary-900/20 dark:text-primary-200" data-testid="ccgateway-create-hint">{{ t('ccgateway.auth.createHint') }}</p>
+                <!-- Claude Code (CCGateway) OAuth: the credentials live in the account's own container; it is authorized right here. -->
+                <CCGatewayAccountAuth :account-id="editing ? account!.id : null" :auto-start="justCreated" :can-edit="canEditAccount" :sync-key="ccgSyncKey" @close="emit('cancel')" @fix-proxy="focusProxy" />
               </template>
               <p v-else-if="schema && !formLoading && !Object.keys(schema.properties || {}).length" class="rounded-xl bg-gray-50 px-3.5 py-3 text-sm text-gray-500 dark:bg-dark-900/40 dark:text-dark-400">{{ t('accounts.editorUi.noCredentials') }}</p>
             </template>
@@ -816,7 +859,12 @@ async function save(event: Event) {
         <div v-show="activeSection === 'models'" data-editor-section="models" class="space-y-4">
           <div v-if="prefilled && !editing" class="flex items-start gap-2 rounded-xl border border-primary-100 bg-primary-50/60 px-3.5 py-2.5 text-xs text-primary-800 dark:border-primary-900/50 dark:bg-primary-900/20 dark:text-primary-200" data-testid="models-prefilled">
             <SIcon name="info" class="mt-px h-4 w-4 shrink-0" />
-            <span>{{ t('accounts.editorUi.prefilled', { models: defaultModels.length, mapping: Object.keys(defaultMapping).length }) }}</span>
+            <span>{{ t('accounts.editorUi.prefilled', { what: prefillWhat }) }}</span>
+          </div>
+          <div v-else-if="prefilled" class="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200" role="status" data-testid="models-prefilled-edit">
+            <SIcon name="info" class="mt-px h-4 w-4 shrink-0" />
+            <span class="min-w-0 flex-1">{{ t('accounts.editorUi.prefilledEdit', { what: prefillWhat }) }}</span>
+            <SButton size="sm" variant="ghost" class="shrink-0" data-testid="models-prefilled-clear" @click="clearPrefill">{{ t('accounts.editorUi.clearModels') }}</SButton>
           </div>
 
           <EditorCard :title="t('accounts.models')" :description="t('accounts.editorUi.modelsCardHint')">
@@ -993,8 +1041,13 @@ async function save(event: Event) {
     <div class="sticky -bottom-5 z-10 flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 bg-white py-4 dark:border-dark-700 dark:bg-dark-800">
       <SButton v-if="!editing" class="mr-auto" variant="ghost" @click="emit('back')"><SIcon name="arrow-left" class="h-4 w-4" />{{ t('common.previous') }}</SButton>
       <SButton v-if="canTestAccount" class="mr-auto" @click="emit('test', account!)"><SIcon name="play" class="h-4 w-4" />{{ t('accounts.testConnection') }}</SButton>
+      <span v-if="editing && prefilled" class="inline-flex flex-wrap items-center gap-x-2 text-xs text-amber-700 dark:text-amber-300" data-testid="footer-prefilled">
+        <SIcon name="info" class="h-3.5 w-3.5" />{{ t('accounts.editorUi.prefilledFooter') }}
+        <SLink v-if="activeSection !== 'models'" as="button" class="text-xs" @click="activeSection = 'models'">{{ t('accounts.editorUi.prefilledView') }}</SLink>
+        <SLink as="button" class="text-xs" @click="clearPrefill">{{ t('accounts.editorUi.clearModels') }}</SLink>
+      </span>
       <SButton @click="emit('cancel')">{{ t('common.cancel') }}</SButton>
-      <SButton type="submit" variant="primary" :loading="saving" :disabled="formLoading || !!formError">{{ editing ? t('common.save') : t('accounts.editorUi.create') }}</SButton>
+      <SButton type="submit" variant="primary" :loading="saving" :disabled="formLoading || !!formError" data-testid="account-save">{{ editing ? t('common.save') : ccgOAuth ? t('ccgateway.accountAuth.saveAndAuthorize') : t('accounts.editorUi.create') }}</SButton>
     </div>
   </form>
 </template>

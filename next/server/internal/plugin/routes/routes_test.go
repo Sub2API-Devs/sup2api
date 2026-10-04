@@ -67,7 +67,6 @@ func (authz) Can(_ context.Context, uid int64, perm string) (bool, error) {
 func (authz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{}, nil
 }
-func (authz) IsSensitive(string) bool                         { return false }
 func (authz) CanGrant(context.Context, int64, []string) error { return nil }
 func (authz) CanActOn(context.Context, int64, []string) error { return nil }
 
@@ -83,8 +82,8 @@ func setup(t *testing.T, opts ...routes.Option) (*gin.Engine, *echo, *registry.R
 	h := &echo{}
 	reg.Publish([]registry.Extension{ext{pkg: pkg, h: h}})
 	engine := gin.New()
-	r := httpapi.NewRouter(engine, tokens{}, authz{}, nil)
-	rh := routes.New(reg, tokens{}, authz{}, nil, opts...)
+	r := httpapi.NewRouter(engine, tokens{}, authz{})
+	rh := routes.New(reg, tokens{}, authz{}, opts...)
 	rh.RegisterRoutes(r)
 	rh.RegisterAssets(engine)
 	return engine, h, reg, pkg

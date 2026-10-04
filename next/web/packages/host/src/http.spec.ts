@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// http.ts keeps module state (session, config, step-up token): every test
+// http.ts keeps module state (session, config): every test
 // gets a fresh copy. Migrated from scripts/http-headers-test.mjs and extended
-// with refresh / step-up / error-envelope cases.
+// with refresh / error-envelope cases.
 type Http = typeof import('./http')
 let http: Http
 
@@ -74,6 +74,12 @@ describe('envelope', () => {
     stubFetch(() => new Response(null, { status: 204 }))
     expect(await http.api.del('/x')).toBeNull()
   })
+
+  it('surfaces 403 as-is without retrying', async () => {
+    const f = stubFetch(() => json({ code: 'permission_denied', message: 'no' }, 403))
+    await expect(http.api.post('/danger')).rejects.toMatchObject({ status: 403, code: 'permission_denied' })
+    expect(f).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('response headers', () => {
@@ -137,30 +143,5 @@ describe('token refresh', () => {
     await expect(http.api.get('/x')).rejects.toBeInstanceOf(http.ApiError)
     expect(http.session.get()?.refresh_token).toBe('r1')
     expect(onUnauthenticated).not.toHaveBeenCalled()
-  })
-})
-
-describe('step-up', () => {
-  it('asks for a step-up token on step_up_required and retries with it', async () => {
-    const stepUp = vi.fn(async () => ({ token: 'step', expiresIn: 60 }))
-    http.configureHttp({ stepUp })
-    const f = stubFetch((_url, init) =>
-      init.headers['X-Step-Up-Token'] === 'step' ? json({ ok: 1 }) : json({ code: 'step_up_required', message: 'step up' }, 403)
-    )
-    expect(await http.api.post('/danger')).toEqual({ ok: 1 })
-    expect(stepUp).toHaveBeenCalledTimes(1)
-    expect(f).toHaveBeenCalledTimes(2)
-    // The token is reused for later requests while it is valid.
-    await http.api.post('/danger')
-    expect(stepUp).toHaveBeenCalledTimes(1)
-  })
-
-  it('surfaces the 403 when the dialog is cancelled or noStepUp is set', async () => {
-    const stepUp = vi.fn(async () => null)
-    http.configureHttp({ stepUp })
-    stubFetch(() => json({ code: 'step_up_required', message: 'step up' }, 403))
-    await expect(http.api.post('/danger')).rejects.toMatchObject({ code: 'step_up_required' })
-    await expect(http.api.post('/danger', undefined, { noStepUp: true })).rejects.toMatchObject({ code: 'step_up_required' })
-    expect(stepUp).toHaveBeenCalledTimes(1)
   })
 })

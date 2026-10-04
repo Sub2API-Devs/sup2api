@@ -42,8 +42,7 @@ type Service struct {
 }
 
 type permMeta struct {
-	sensitive bool
-	status    string
+	status string
 }
 
 type catalogSnapshot struct {
@@ -323,20 +322,6 @@ WHERE r.key = ANY($1)`, roleKeys)
 	return set, rows.Err()
 }
 
-// IsSensitive covers core and plugin permissions (plugin ones come from the
-// cached catalog, refreshed by every Can/PermissionSet call).
-func (s *Service) IsSensitive(permission string) bool {
-	s.mu.RLock()
-	c := s.catalog
-	s.mu.RUnlock()
-	if c != nil {
-		if m, ok := c.perms[permission]; ok {
-			return m.sensitive
-		}
-	}
-	return coreSensitive[permission]
-}
-
 // ActivePermissionKeys lists every active permission (used for superusers
 // in /me).
 func (s *Service) ActivePermissionKeys(ctx context.Context) ([]string, error) {
@@ -363,7 +348,7 @@ func (s *Service) ensureCatalog(ctx context.Context) error {
 	}
 	snap := &catalogSnapshot{perms: map[string]permMeta{}}
 	v, err := s.readSnapshot(ctx, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT key, sensitive, status FROM permissions`)
+		rows, err := tx.Query(ctx, `SELECT key, status FROM permissions`)
 		if err != nil {
 			return err
 		}
@@ -371,7 +356,7 @@ func (s *Service) ensureCatalog(ctx context.Context) error {
 		for rows.Next() {
 			var k string
 			var m permMeta
-			if err := rows.Scan(&k, &m.sensitive, &m.status); err != nil {
+			if err := rows.Scan(&k, &m.status); err != nil {
 				return err
 			}
 			snap.perms[k] = m

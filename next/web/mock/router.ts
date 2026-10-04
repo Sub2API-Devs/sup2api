@@ -52,8 +52,3 @@ export function nextId() {
 export function now(offsetSec = 0) {
   return new Date(Date.now() + offsetSec * 1000).toISOString()
 }
-
-/** Requires a step-up token for sensitive mock operations. */
-export function needStepUp(req: MockRequest) {
-  return req.headers['x-step-up-token'] ? null : fail(403, 'step_up_required', 'step-up required')
-}

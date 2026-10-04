@@ -19,11 +19,10 @@ import (
 // public listener; the cores reach the mock upstream themselves.
 
 type apiClient struct {
-	t        *testing.T
-	base     string
-	token    string
-	password string
-	http     *http.Client
+	t     *testing.T
+	base  string
+	token string
+	http  *http.Client
 }
 
 type apiResponse struct {
@@ -124,17 +123,11 @@ func (c *apiClient) login(email, password string) *apiClient {
 	c.t.Helper()
 	s := newAPIClient(c.t, c.base)
 	r := s.ok(http.MethodPost, "/auth/login", map[string]any{"email": email, "password": password})
-	s.token, s.password = r.str("data.access_token"), password
+	s.token = r.str("data.access_token")
 	if s.token == "" {
 		c.t.Fatalf("login %s: %s", email, r)
 	}
 	return s
-}
-
-func (c *apiClient) stepUp() map[string]string {
-	c.t.Helper()
-	r := c.ok(http.MethodPost, "/auth/step-up", map[string]any{"password": c.password})
-	return map[string]string{"X-Step-Up-Token": r.str("data.step_up_token")}
 }
 
 // videoTenant is a restricted group with one relay video account on the
@@ -162,7 +155,7 @@ func newVideoTenant(t *testing.T, admin *apiClient, mockURL, suffix string) vide
 	email, password := "video-"+suffix+"@real.test", "Real-"+suffix+"-pass!"
 	tn.userID = admin.ok(http.MethodPost, "/users", map[string]any{"email": email, "display_name": email, "password": password, "role_keys": []string{"user"}, "max_concurrency": 10}).id("data.id")
 	admin.ok(http.MethodPut, fmt.Sprintf("/users/%d/groups", tn.userID), map[string]any{"group_ids": []int64{group}})
-	admin.ok(http.MethodPost, fmt.Sprintf("/users/%d/balance/adjust", tn.userID), map[string]any{"amount": "20", "credit": true, "note": "real-core credit"}, admin.stepUp())
+	admin.ok(http.MethodPost, fmt.Sprintf("/users/%d/balance/adjust", tn.userID), map[string]any{"amount": "20", "credit": true, "note": "real-core credit"})
 	tn.user = admin.login(email, password)
 	tn.apiKey = tn.user.ok(http.MethodPost, "/me/api-keys", map[string]any{"name": "video-" + suffix, "group_id": group}).str("data.key")
 	if !strings.HasPrefix(tn.apiKey, "sk-s2a-") || tn.accountID == 0 || tn.userID == 0 {
@@ -193,7 +186,7 @@ func newStreamTenant(t *testing.T, admin *apiClient, mockURL, suffix string) str
 	email, password := "stream-"+suffix+"@real.test", "Real-"+suffix+"-pass!"
 	user := admin.ok(http.MethodPost, "/users", map[string]any{"email": email, "display_name": email, "password": password, "role_keys": []string{"user"}, "max_concurrency": 10}).id("data.id")
 	admin.ok(http.MethodPut, fmt.Sprintf("/users/%d/groups", user), map[string]any{"group_ids": []int64{group}})
-	admin.ok(http.MethodPost, fmt.Sprintf("/users/%d/balance/adjust", user), map[string]any{"amount": "20", "credit": true, "note": "real-core credit"}, admin.stepUp())
+	admin.ok(http.MethodPost, fmt.Sprintf("/users/%d/balance/adjust", user), map[string]any{"amount": "20", "credit": true, "note": "real-core credit"})
 	tn.apiKey = admin.login(email, password).ok(http.MethodPost, "/me/api-keys", map[string]any{"name": "stream-" + suffix, "group_id": group}).str("data.key")
 	return tn
 }
@@ -307,6 +300,6 @@ func (c *apiClient) consentAll(review apiResponse) (key, version string) {
 		grants = append(grants, g)
 	}
 	c.ok(http.MethodPost, fmt.Sprintf("/plugins/%s/versions/%s/consent", key, version),
-		map[string]any{"grants": grants, "denied": []string{}, "role_keys_for_new_permissions": []string{}}, c.stepUp())
+		map[string]any{"grants": grants, "denied": []string{}, "role_keys_for_new_permissions": []string{}})
 	return key, version
 }

@@ -37,13 +37,8 @@ func (a fakeAuthz) Can(_ context.Context, uid int64, _ string) (bool, error) {
 func (a fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{}, nil
 }
-func (fakeAuthz) IsSensitive(string) bool                         { return false }
 func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
 func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
-
-type fakeStepUp struct{}
-
-func (fakeStepUp) VerifyStepUp(context.Context, int64, string) error { return nil }
 
 type fakeBus struct {
 	mu   sync.Mutex
@@ -184,7 +179,7 @@ func setup(t *testing.T) *env {
 	e.admin = mkUser(t, db, "admin@x.com")
 	e.user = mkUser(t, db, "user@x.com")
 	engine := gin.New()
-	r := httpapi.NewRouter(engine, fakeTokens{}, fakeAuthz{admin: e.admin}, fakeStepUp{})
+	r := httpapi.NewRouter(engine, fakeTokens{}, fakeAuthz{admin: e.admin})
 	New(db, rdb, e.bus, fakeRegistry{gen: testGen()}).RegisterRoutes(r)
 	e.h = engine
 	return e

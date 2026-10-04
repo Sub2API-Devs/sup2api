@@ -33,9 +33,16 @@ from the plugin list row. The old management URL redirects there. Schema-based
 plugin settings also have a row action. CCGateway's backend remains core-hosted;
 this release changes navigation, not the backend plugin boundary.
 The bundled `ccgateway` managed account plugin is initially
-installed disabled. Configure the remote connection and enable the plugin;
-after Claude authorization, create an account and assign its groups/models in
-account management. Connection settings are shared across nodes and encrypted
+installed disabled. Configure the remote connection and enable the plugin.
+With per-account runtimes (the ovh setup) each Claude Code account is
+authorized in account management, not on the plugin page: create or edit the
+CCGateway account there and bind a proxy (required: an account without a usable
+proxy stays `blocked`, there is no direct fallback). Saving starts that
+account's container at once; the editor then fetches the authorization link,
+you sign in to Claude and paste the `code#state` back, and Claude Code inside
+the container completes the login. A reload resumes a pending authorization.
+The plugin page only shows container state and links to the account
+(CONTRACTS §49). Connection settings are shared across nodes and encrypted
 with the existing core master key. No gateway image or environment change is
 required for SSH mode.
 

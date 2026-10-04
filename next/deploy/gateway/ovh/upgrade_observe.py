@@ -70,8 +70,6 @@ code, body = http("POST", f"{base}/auth/login", {"email": env["SUB2API_BOOTSTRAP
 if code != 200:
     sys.exit(f"admin login failed: HTTP {code}")
 auth = {"Authorization": "Bearer " + json.loads(body)["data"]["access_token"]}
-code, body = http("POST", f"{base}/auth/step-up", {"password": env["SUB2API_BOOTSTRAP_ADMIN_PASSWORD"]}, auth)
-step = {**auth, "X-Step-Up-Token": json.loads(body)["data"]["step_up_token"]}
 code, body = http("POST", f"{base}/system/upgrades/preflight", {"release_digest": target}, auth)
 pf = json.loads(body).get("data", {})
 say(f"preflight HTTP {code}: blockers={pf.get('blockers')} nodes={pf.get('nodes')}")
@@ -80,7 +78,7 @@ if code != 200 or pf.get("blockers"):
 for f in (traffic, processes, cluster):
     threading.Thread(target=f, daemon=True).start()
 time.sleep(3)
-code, body = http("POST", f"{base}/system/upgrades", {"release_digest": target, "expected_revision": pf["expected_revision"], "idempotency_key": str(uuid.uuid4())}, step)
+code, body = http("POST", f"{base}/system/upgrades", {"release_digest": target, "expected_revision": pf["expected_revision"], "idempotency_key": str(uuid.uuid4())}, auth)
 plan = json.loads(body).get("data", {})
 say(f"create plan HTTP {code}: id={plan.get('id')} order={plan.get('nodes')}")
 if code not in (200, 202):

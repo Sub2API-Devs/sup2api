@@ -214,7 +214,6 @@ export default {
     missingRequired: 'These permissions are required by the plugin: {list}. Tick them or reject the installation.',
     blockedByPermission: 'You cannot grant required permissions: {list}. Ask an administrator with the needed permission.',
     stillRequired: '{n} required permission(s) still need to be ticked.',
-    stepUpHint: 'You may be asked to confirm your password.',
     approve: 'Approve & install',
     approveUpgrade: 'Approve upgrade',
     approved: 'Permissions for {name} v{version} approved.',

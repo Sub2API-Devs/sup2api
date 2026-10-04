@@ -1,5 +1,11 @@
 # sub2api-next 开发进度与交接记录
 
+> **2026-10-05 取消二次验证、账号测试记录、CC OAuth 在账号页授权、预设映射留空**（未提交时的工作区状态，由主控统一提交）：
+> - **取消二次验证**（用户决定）：删除 `POST /auth/step-up`、`X-Step-Up-Token`、`step_up_required`、`Authorizer.IsSensitive`、`Router.PermStepUp`；调整余额、删除、查看凭证、角色授权、插件安装卸载、系统更新只看登录态 + RBAC。`sensitive` 只剩展示标记。CONTRACTS §3.3。下文历史记录里的 step-up 描述均已失效。
+> - **账号测试**：迁移 0031 给 `accounts` 加 `last_test_*` 可空列；每次 `POST /accounts/:id/test` 后记录，账号 JSON 新增 `last_test`；TestResult 新增 `requested_model`。测试仍不改变账号状态。控制台模型测试弹窗（测试单个/全部/所选模型、批量测试账号）由前端并发调用单模型测试实现。CONTRACTS §15.9、§50。
+> - **CC OAuth（CCGateway 每账号容器）**：授权在"账号管理 → 新建/编辑 CCGateway 账号"里完成：保存即 Kick 立刻准备容器 → 取授权链接 → 登录 Claude → 粘贴 code#state；插件页只显示容器状态并跳到账号页。账号必须绑代理（否则 `blocked`）。核心在 Redis 保存未完成的授权会话（刷新可恢复，`GET .../session`），`start` 在容器刚就绪时短暂重试；每账号接口接受 `settings:*` 或该账号的 `account:read`/`update`（含 own 级）；`/system/ccgateway/connect` 在每账号容器模式下跳过共享状态检查直接建账号。CONTRACTS §49。
+> - **插件预设模型映射一般留空**（用户决定）：anthropic 0.2.5、claude-oauth 0.2.1、ccgateway 0.1.6、gemini 0.2.4、openai 0.3.4 删除 `defaultModelMapping` 和只靠映射才能用的退役模型；volcengine 保留。CONTRACTS §41.4。
+
 > **2026-10-02 主节点优先升级完成验收**：先停所有从核心、主节点停机迁移并恢复、再逐个恢复从节点；节点间用 Redis 中每节点一份的可复用密钥鉴权。实现已在隔离环境通过全部 Go 模块 `-race`、真实 PG/Redis 和真实三节点（真实新增迁移、签名插件、Redis 登记丢失恢复、失败候选与基线恢复）验收，见 [验证记录](audits/2026-10-02/MULTINODE-VALIDATION.md)。规约见 [MULTINODE-SYNC-PROTOCOL.md](MULTINODE-SYNC-PROTOCOL.md)。已提交 `7ad11483c` 并部署到 `single/` 业务栈；外壳托管部署未上线。
 
 > **2026-10-01 补充**：本文件下面保留 09-25 的历史进度。当前多节点整改、统一 Execute / Monitor 调度及实际验收结果以 [整改记录](audits/2026-10-01/REMEDIATION.md) 为准；已新增 [隔离双节点 E2E 环境](../deploy/e2e/README.md)，不再依赖下文已经删除的旧测试拓扑。

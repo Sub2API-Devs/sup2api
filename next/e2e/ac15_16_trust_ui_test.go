@@ -73,7 +73,7 @@ func TestAC15_SignatureAndTrust(t *testing.T) {
 		e.ConsentAll(admin, rev, nil)
 		e.Enable(admin, pk)
 
-		admin.OK(t, http.MethodPost, fmt.Sprintf("/publishers/%d/revoke", pubID), nil, admin.StepUp(t))
+		admin.OK(t, http.MethodPost, fmt.Sprintf("/publishers/%d/revoke", pubID), nil)
 		d := e.WaitPlugin(admin, pk, "disabled", "")
 		if !strings.Contains(strings.ToLower(d.Get("status_reason").String()), "revoked") {
 			t.Fatalf("status_reason: %s", d.Raw)
@@ -85,7 +85,7 @@ func TestAC15_SignatureAndTrust(t *testing.T) {
 		e := e.With(t)
 		key := NewSigningKey(t, "e2e-com-"+e.RunID, "e2e-com-"+e.RunID)
 		pubID := e.RegisterPublisher(admin, key, "community")
-		defer admin.API(t, http.MethodPost, fmt.Sprintf("/publishers/%d/revoke", pubID), nil, admin.StepUp(t))
+		defer admin.API(t, http.MethodPost, fmt.Sprintf("/publishers/%d/revoke", pubID), nil)
 		pkg := e.DerivedGuardPackage("e2e_native", key, true)
 		r := e.UploadPlugin(admin, "e2e_native.s2plugin", pkg.Bytes(t))
 		if r.Status == 200 {
@@ -103,7 +103,7 @@ func TestAC15_SignatureAndTrust(t *testing.T) {
 		if rv := reviewOf(e, r.Data()); rv.Get("trust").String() != "community" {
 			t.Fatalf("trust: %s", rv.Raw)
 		}
-		admin.API(t, http.MethodPost, "/plugins/e2e_native/versions/"+pkg.Manifest(t)["version"].(string)+"/reject", nil, admin.StepUp(t))
+		admin.API(t, http.MethodPost, "/plugins/e2e_native/versions/"+pkg.Manifest(t)["version"].(string)+"/reject", nil)
 		Eventually(t, 10*time.Second, time.Second, "rejected plugin gone", func() bool {
 			d, ok := e.Plugin(admin, "e2e_native")
 			return !ok || d.Get("status").String() != "awaiting_consent"

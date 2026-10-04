@@ -39,8 +39,7 @@ def main():
     token = api("POST", "/auth/login", {"email": env["SUB2API_BOOTSTRAP_ADMIN_EMAIL"],
         "password": env["SUB2API_BOOTSTRAP_ADMIN_PASSWORD"]})["access_token"]
     auth = {"Authorization": "Bearer " + token}
-    step = api("POST", "/auth/step-up", {"password": env["SUB2API_BOOTSTRAP_ADMIN_PASSWORD"]}, auth)
-    write = {**auth, "X-Step-Up-Token": step["step_up_token"]}
+    write = auth
     prefix = "/system/ccgateway"
     if args.configure:
         fingerprint = api("POST", prefix + "/remote-fingerprint", {"host": "130.94.122.254", "port": 22}, write)["fingerprint"]

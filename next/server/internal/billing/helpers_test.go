@@ -61,10 +61,8 @@ func (allowAll) Can(context.Context, int64, string) (bool, error) { return true,
 func (allowAll) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{Superuser: true}, nil
 }
-func (allowAll) IsSensitive(string) bool                           { return false }
-func (allowAll) CanGrant(context.Context, int64, []string) error   { return nil }
-func (allowAll) CanActOn(context.Context, int64, []string) error   { return nil }
-func (allowAll) VerifyStepUp(context.Context, int64, string) error { return nil }
+func (allowAll) CanGrant(context.Context, int64, []string) error { return nil }
+func (allowAll) CanActOn(context.Context, int64, []string) error { return nil }
 
 type env struct {
 	t   *testing.T
@@ -87,7 +85,7 @@ func newEnv(t *testing.T) *env {
 	t.Cleanup(svc.Close)
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	r := httpapi.NewRouter(engine, allowAll{}, allowAll{}, allowAll{})
+	r := httpapi.NewRouter(engine, allowAll{}, allowAll{})
 	svc.RegisterRoutes(r)
 	return &env{t: t, db: db, mr: mr, rdb: rdb, bus: bus, svc: svc, h: engine}
 }

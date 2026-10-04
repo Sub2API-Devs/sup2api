@@ -216,9 +216,6 @@ on('POST', '/auth/logout', (req) => {
   if (f) f.revoked = true
   return {}
 })
-on('POST', '/auth/step-up', (req) =>
-  req.body?.password === 'admin' ? { step_up_token: 'mock-stepup', expires_in: 300 } : fail(401, 'unauthenticated', 'wrong password')
-)
 on('GET', '/me', (req) => whoAmI(req.headers.authorization))
 on('PUT', '/me/password', (req) => (req.body?.old_password === 'admin' ? {} : fail(400, 'invalid_argument', 'wrong password', { fields: [{ field: 'old_password', code: 'mismatch', message: 'Current password is wrong' }] })))
 

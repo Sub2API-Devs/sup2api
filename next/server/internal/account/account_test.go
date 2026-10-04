@@ -371,13 +371,8 @@ func (a fakeAuthz) Can(_ context.Context, uid int64, key string) (bool, error) {
 func (fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{}, nil
 }
-func (fakeAuthz) IsSensitive(string) bool                         { return false }
 func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
 func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
-
-type noStepUp struct{}
-
-func (noStepUp) VerifyStepUp(context.Context, int64, string) error { return nil }
 
 // fakeConverters converts openai.chat requests to anthropic.messages, and
 // (unused, the platform is unavailable) openai.embeddings to ghost.embed.
@@ -570,7 +565,7 @@ func TestPlatformsRoute(t *testing.T) {
 	reg.set(testGen(&fakePlatform{}))
 	s := New(Deps{Registry: reg, Converters: fakeConverters{}})
 	engine := gin.New()
-	s.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, fakeAuthz{}, noStepUp{}))
+	s.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, fakeAuthz{}))
 	for path, n := range map[string]int{"/api/v1/platforms": 3, "/api/v1/account-types": 3} {
 		req := httptest.NewRequest("GET", path, nil)
 		req.Header.Set("Authorization", "Bearer u1")
@@ -705,7 +700,7 @@ func setupWith(t *testing.T, authz fakeAuthz) *env {
 	t.Cleanup(cancel)
 	go e.svc.Run(ctx)
 	engine := gin.New()
-	e.svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, authz, noStepUp{}))
+	e.svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, authz))
 	e.h = engine
 	return e
 }

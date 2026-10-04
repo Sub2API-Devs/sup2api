@@ -305,7 +305,7 @@ func TestGatewaySettingsAPI(t *testing.T) {
 	engine := gin.New()
 	engine.Use(httpapi.RequestContext())
 	auth := allowAll{uid: 7}
-	g.RegisterRoutes(httpapi.NewRouter(engine, auth, auth, auth))
+	g.RegisterRoutes(httpapi.NewRouter(engine, auth, auth))
 	srv := httptest.NewServer(engine)
 	t.Cleanup(srv.Close)
 	api := func(method string, body any) (int, gjson.Result) {

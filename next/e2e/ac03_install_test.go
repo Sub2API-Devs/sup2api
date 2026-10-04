@@ -69,7 +69,7 @@ func TestAC03_InstallAnthropicFromMarket(t *testing.T) {
 	}
 
 	// Built-in: uninstall is refused, the plugin stays.
-	r := admin.API(t, http.MethodDelete, "/plugins/anthropic", nil, Query("purge", "true"), admin.StepUp(t))
+	r := admin.API(t, http.MethodDelete, "/plugins/anthropic", nil, Query("purge", "true"))
 	if r.Status != 403 || r.JSON().Get("error.details.reason").String() != "builtin" {
 		t.Fatalf("uninstall of a built-in plugin: %s", r)
 	}

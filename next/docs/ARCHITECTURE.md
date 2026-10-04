@@ -613,7 +613,7 @@ stateDiagram-v2
 | 🟠 高 | `db.schema`、`net`（白名单模式下）、`routes.public`、`routes.webhook`、`gateway.hook`、`gateway.endpoint`、`platform.register`、`scheduler.affinity`、`scheduler.rank`、`users.read` |
 | 🔴 极高 | `accounts.credentials`、`ledger.credit`、`ledger.debit`、`ui.native`、`users.write`、`db.core_views` |
 
-- 高和极高风险需要逐项勾选；极高风险只能由拥有 `plugin:grant:critical` 的用户批准，并再次输入密码
+- 高和极高风险需要逐项勾选；极高风险只能由拥有 `plugin:grant:critical` 的用户批准（2026-10-05 起不再要求再次输入密码，CONTRACTS §3.3）
 - 批准结果写入 `plugin_permission_grants(plugin_key, permission, scope, status, plugin_version, manifest_hash, granted_by, granted_at)`；管理员可以把范围改得比申请的更小（比如入账上限）
 - 运行时插件每次调用 HostService，核心都在服务端检查授权
 - 升级时新增权限或扩大范围，新版本进入 `awaiting_consent`，旧版本继续运行
@@ -946,7 +946,7 @@ CREATE TABLE balance_ledger (
 ```
 
 - **余额的唯一修改入口是账本**：每次变动在同一个事务里插入账本记录并更新 `user_balances`（`SELECT ... FOR UPDATE`），幂等键保证重复提交不会重复扣款
-- 管理员调整余额需要 `balance:adjust`（敏感权限）
+- 管理员调整余额需要 `balance:adjust`（高危权限，只需权限，无二次验证）
 - 插件通过 `HostService.Ledger.Credit/Debit` 变动余额，需要 🔴 权限，受批准的单笔和每日上限约束，并强制幂等键（为以后的支付插件准备）
 
 ### 7.3 模型价格（独立页面）
@@ -1332,7 +1332,7 @@ flowchart TD
 
 - 权限集合缓存在节点内存，带全局版本号；变更时广播 `authz:changed`，**收回立即生效**
 - JWT 只放用户 ID
-- `sensitive` 权限需要再次输入密码（本期），以后换成 TOTP
+- `sensitive` 只是高危标记（角色编辑器提示用）；**已取消二次验证**（2026-10-05 用户决定，CONTRACTS §3.3），任何操作只看登录态和权限
 
 ### 13.3 内置角色与核心权限
 
@@ -1358,7 +1358,7 @@ flowchart TD
 | 集群 | `node:read` |
 | 网关 | `gateway:use` |
 
-🔐 = 敏感权限，操作时需要再次输入密码。
+🔐 = 敏感（高危）权限，仅作提示；操作时不再要求输入密码（CONTRACTS §3.3）。
 
 **所有权**（CONTRACTS §21）：账号与代理都记录 `created_by`；`*:own:*` 权限只作用于自己创建的资源，同一路由接受全部级或自己级任一 key（`Router.PermAny`），范围条件落在 SQL 里，越权一律 404；`created_by` 为空的历史数据只有全部级可见。所有权只约束控制台 API，不影响网关调度。
 
@@ -1429,7 +1429,7 @@ sequenceDiagram
   API->>API: 校验 manifest：hostCompat、一致性检查、权限冲突、资源申请上限
   API->>PG: 写入 plugin_versions，plugins.status=awaiting_consent
   API-->>A: 确认页（权限分级、账号类型、钩子、任务、订阅、界面、资源、数据库）
-  A->>API: 确认授权（勾选高风险项，极高风险需再次输入密码）
+  A->>API: 确认授权（勾选高风险项）
   API->>PG: 写入授权、注册用户权限、写入默认价格，status=installed
   A->>API: 启用
   API->>API: 进入 5.7 的发布流程
@@ -1633,7 +1633,7 @@ flowchart LR
 | 7 | 找不到模型价格 | 拒绝请求（可配置为免费放行） |
 | 8 | 最低余额和透支 | 最低余额 0，允许短暂透支（受用户并发上限约束） |
 | 9 | 旧系统数据 | 本期不导入 |
-| 10 | 敏感操作的二次验证 | 本期再次输入密码，以后换成 TOTP |
+| 10 | 敏感操作的二次验证 | ~~本期再次输入密码，以后换成 TOTP~~ 已取消（2026-10-05 用户决定）：只看登录态与 RBAC 权限，CONTRACTS §3.3 |
 | 11 | 前端风格 | 沿用旧项目的 Tailwind 风格，组件重新写 |
 | 12 | 计费代码的来源 | 只参考 new-api 的设计，不复制代码（许可证原因） |
 
@@ -1845,7 +1845,7 @@ flowchart LR
 │   🔴 原生界面 —— 插件代码将以你的登录身份在控制台中运行       ☑          │
 │   🟠 外部访问 hooks.example.com（可选，白名单模式下生效）     ☐          │
 │                                                                          │
-│ 需要再次输入密码：[••••••••]              [ 取消 ]   [ 确认并安装 ]      │
+│                                           [ 取消 ]   [ 确认并安装 ]      │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 

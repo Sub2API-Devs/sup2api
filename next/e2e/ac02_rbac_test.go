@@ -100,7 +100,7 @@ func TestAC02_CustomRoleMenusAndForbidden(t *testing.T) {
 		return r.Get("id").Int()
 	}()
 	admin.OK(t, http.MethodPut, "/roles/"+itoa(roleID)+"/permissions",
-		map[string]any{"permission_keys": []string{"account:read"}}, admin.StepUp(t))
+		map[string]any{"permission_keys": []string{"account:read"}})
 	e.OnEachNode(ops, func(n int, c *Client) {
 		if r := c.API(t, http.MethodGet, "/proxies", nil); r.Status != 403 {
 			t.Errorf("node-%d: proxy:read still granted after revoke: %s", n, r)
@@ -111,9 +111,9 @@ func TestAC02_CustomRoleMenusAndForbidden(t *testing.T) {
 	if r := NewClient(e.BaseURL).API(t, http.MethodGet, "/me", nil); r.Status != 401 || r.ErrCode() != "unauthenticated" {
 		t.Errorf("anonymous /me: %s", r)
 	}
-	// Sensitive permission without step-up.
+	// role:manage needs no password confirmation (CONTRACTS §3.3).
 	if r := admin.API(t, http.MethodPut, "/roles/"+itoa(roleID)+"/permissions",
-		map[string]any{"permission_keys": perms}); r.Status != 403 || r.ErrCode() != "step_up_required" {
-		t.Errorf("role:manage without step-up: %s", r)
+		map[string]any{"permission_keys": perms}); r.Status != 200 {
+		t.Errorf("role:manage without confirmation: %s", r)
 	}
 }

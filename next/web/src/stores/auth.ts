@@ -27,7 +27,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function login(email: string, password: string) {
-    const r = await api.post<TokenResponse>('/auth/login', { email, password }, { anonymous: true, noStepUp: true })
+    const r = await api.post<TokenResponse>('/auth/login', { email, password }, { anonymous: true })
     session.fromTokenResponse(r)
     sessionExpired.value = false
     if (r.user && Array.isArray(r.user.permissions)) me.value = r.user
@@ -52,7 +52,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function logout() {
     try {
-      if (session.get()) await api.post('/auth/logout', { refresh_token: session.get()?.refresh_token }, { noStepUp: true })
+      if (session.get()) await api.post('/auth/logout', { refresh_token: session.get()?.refresh_token })
     } catch {
       /* ignore */
     }

@@ -108,7 +108,7 @@ func TestAC14_ResourceLimits(t *testing.T) {
 		e := e.With(t)
 		key := NewSigningKey(t, "e2e-verified-"+e.RunID, "e2e-verified-"+e.RunID)
 		pubID := e.RegisterPublisher(admin, key, "verified")
-		defer admin.API(t, http.MethodPost, fmt.Sprintf("/publishers/%d/revoke", pubID), nil, admin.StepUp(t))
+		defer admin.API(t, http.MethodPost, fmt.Sprintf("/publishers/%d/revoke", pubID), nil)
 		pkg := e.DerivedGuardPackage("e2e_res", key, false)
 		man := pkg.Manifest(t)
 		man["resources"] = map[string]any{"memoryMB": 64 * 1024, "cpu": 0.25, "maxProcs": 64, "maxOpenFiles": 256}

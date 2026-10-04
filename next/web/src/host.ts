@@ -5,7 +5,6 @@ import { confirm, toast } from '@sub2api/ui'
 import { addMessages, currentLocale, i18n, lt } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
-import { requestStepUp } from '@/components/stepUp'
 import { formatDateTime, formatMoney, formatNumber } from '@/utils/format'
 
 /** Wires the HTTP client and publishes the host context for plugins. */
@@ -15,7 +14,6 @@ export function setupHost(router: Router) {
   configureHttp({
     // baseURL stays at @sub2api/host's API_BASE; see packages/host/src/routes.ts.
     locale: () => currentLocale(),
-    stepUp: requestStepUp,
     onUnauthenticated: (reason) => {
       // "expired": the refresh token was rejected (expired, revoked or reused);
       // the login page then asks the user to sign in again.

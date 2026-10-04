@@ -1,6 +1,6 @@
 // Package iam implements console identity: users, login with JWT access
-// tokens and rotating refresh tokens, step-up confirmation and the super
-// admin bootstrap. It implements core.TokenVerifier and core.StepUpVerifier.
+// tokens and rotating refresh tokens and the super
+// admin bootstrap. It implements core.TokenVerifier.
 package iam
 
 import (
@@ -25,9 +25,6 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
-
-// StepUpTTL is the lifetime of a step-up token.
-const StepUpTTL = 5 * time.Minute
 
 // statusCacheTTL bounds how long a disabled user's access token keeps
 // working on a node that missed the authz:changed broadcast.
@@ -69,8 +66,7 @@ type statusEntry struct {
 }
 
 var (
-	_ core.TokenVerifier  = (*Service)(nil)
-	_ core.StepUpVerifier = (*Service)(nil)
+	_ core.TokenVerifier = (*Service)(nil)
 )
 
 // New creates the service. The authz service must be started before
@@ -191,54 +187,6 @@ func randomToken() (string, error) {
 func hashToken(t string) string {
 	h := sha256.Sum256([]byte(t))
 	return hex.EncodeToString(h[:])
-}
-
-// ------------------------------------------------------------ step-up
-
-func stepUpKey(token string) string { return "stepup:" + token }
-
-// StepUp verifies the user's password and returns a step-up token.
-func (s *Service) StepUp(ctx context.Context, userID int64, password string) (string, error) {
-	var hash string
-	err := s.db.Pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id = $1 AND deleted_at IS NULL AND status = 'active'`, userID).Scan(&hash)
-	if store.IsNoRows(err) {
-		return "", core.ErrUnauthenticated
-	}
-	if err != nil {
-		return "", err
-	}
-	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil {
-		return "", core.ErrInvalidArgument.WithMessage("incorrect password").WithDetails(map[string]any{
-			"fields": []core.FieldError{{Field: "password", Code: "incorrect", Message: "incorrect password"}},
-		})
-	}
-	token, err := randomToken()
-	if err != nil {
-		return "", err
-	}
-	if err := s.rdb.Set(ctx, stepUpKey(token), strconv.FormatInt(userID, 10), StepUpTTL).Err(); err != nil {
-		return "", core.ErrUnavailable.WithCause(err)
-	}
-	return token, nil
-}
-
-// VerifyStepUp implements core.StepUpVerifier. A token may be reused by the
-// same user until it expires.
-func (s *Service) VerifyStepUp(ctx context.Context, userID int64, token string) error {
-	if token == "" {
-		return core.ErrStepUpRequired
-	}
-	v, err := s.rdb.Get(ctx, stepUpKey(token)).Result()
-	if err == redis.Nil {
-		return core.ErrStepUpRequired.WithMessage("step-up token expired or invalid")
-	}
-	if err != nil {
-		return core.ErrUnavailable.WithCause(err)
-	}
-	if v != strconv.FormatInt(userID, 10) {
-		return core.ErrStepUpRequired.WithMessage("step-up token belongs to another user")
-	}
-	return nil
 }
 
 // ------------------------------------------------------------ bootstrap

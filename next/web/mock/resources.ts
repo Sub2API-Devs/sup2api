@@ -1,6 +1,6 @@
 // Mock handlers: users, roles, permissions, API keys, groups, proxies, nodes,
 // publishers. (Accounts and account types live in their own mock module.)
-import { fail, needStepUp, nextId, noContent, now, on, paginate, type MockRequest } from './router'
+import { fail, nextId, noContent, now, on, paginate, type MockRequest } from './router'
 import { ALL_PERMISSIONS, caller, filterOwned, hasPerm, inScope, ownerScope, readonlyUser, userEmail, vendorUser } from './core'
 import { groupAccountCount, groupPlatforms, proxyAccountCount } from './accounts'
 
@@ -136,8 +136,6 @@ on('PATCH', '/roles/:id', (req) => {
   const r = roles.find((x) => x.id === Number(req.params.id))
   if (!r) return fail(404, 'not_found', 'role not found')
   if (r.superuser) return fail(403, 'permission_denied', 'superuser role cannot be edited')
-  const su = needStepUp(req)
-  if (su) return su
   if (req.body?.name) r.name = req.body.name
   if (req.body?.description !== undefined) r.description = req.body.description
   r.updated_at = now()
@@ -147,8 +145,6 @@ on('DELETE', '/roles/:id', (req) => {
   const r = roles.find((x) => x.id === Number(req.params.id))
   if (!r) return fail(404, 'not_found', 'role not found')
   if (r.builtin) return fail(409, 'conflict', 'built-in roles cannot be deleted')
-  const su = needStepUp(req)
-  if (su) return su
   roles.splice(roles.indexOf(r), 1)
   users.forEach((u) => (u.roles = u.roles.filter((k) => k !== r.key)))
   return noContent()
@@ -157,8 +153,6 @@ on('PUT', '/roles/:id/permissions', (req) => {
   const r = roles.find((x) => x.id === Number(req.params.id))
   if (!r) return fail(404, 'not_found', 'role not found')
   if (r.superuser) return fail(403, 'permission_denied', 'superuser role cannot be edited')
-  const su = needStepUp(req)
-  if (su) return su
   const known = new Set(MODULES.flatMap((m) => m.permissions.map((p) => p.key)))
   const keys: string[] = Array.isArray(req.body?.permission_keys) ? req.body.permission_keys : []
   const bad = keys.find((k) => !known.has(k))
@@ -289,10 +283,6 @@ on('POST', '/users', (req) => {
   if (users.some((u) => u.email === b.email)) return invalid('email', 'email already registered')
   if (!b.password || String(b.password).length < 8) return invalid('password', 'password must be at least 8 characters')
   const roleKeys: string[] = Array.isArray(b.role_keys) && b.role_keys.length ? b.role_keys : ['user']
-  if (roleKeys.some((k) => k !== 'user')) {
-    const su = needStepUp(req)
-    if (su) return su
-  }
   const u: MockUser = { id: nextId(), email: b.email, display_name: b.display_name || '', status: 'active', max_concurrency: Number(b.max_concurrency) || 0, roles: roleKeys, group_ids: [], balance: '0.00000000', last_login_at: null, created_at: now(), updated_at: now() }
   users.unshift(u)
   return u
@@ -311,8 +301,6 @@ on('PATCH', '/users/:id', (req) => {
 on('DELETE', '/users/:id', (req) => {
   const u = findUser(req)
   if (!u) return fail(404, 'not_found', 'user not found')
-  const su = needStepUp(req)
-  if (su) return su
   if (u.roles.includes('super_admin') && users.filter((x) => x.roles.includes('super_admin')).length <= 1) return fail(409, 'conflict', 'at least one super_admin must remain')
   users.splice(users.indexOf(u), 1)
   return noContent()
@@ -320,8 +308,6 @@ on('DELETE', '/users/:id', (req) => {
 on('PUT', '/users/:id/roles', (req) => {
   const u = findUser(req)
   if (!u) return fail(404, 'not_found', 'user not found')
-  const su = needStepUp(req)
-  if (su) return su
   const keys: string[] = Array.isArray(req.body?.role_keys) ? req.body.role_keys : []
   const bad = keys.find((k) => !roles.some((r) => r.key === k))
   if (bad) return invalid('role_keys', `unknown role ${bad}`)
@@ -337,8 +323,6 @@ on('PUT', '/users/:id/groups', (req) => {
 on('POST', '/users/:id/balance/adjust', (req) => {
   const u = findUser(req)
   if (!u) return fail(404, 'not_found', 'user not found')
-  const su = needStepUp(req)
-  if (su) return su
   const amount = String(req.body?.amount ?? '')
   if (!/^\d+(\.\d{1,8})?$/.test(amount) || Number(amount) <= 0) return invalid('amount', 'amount must be a positive decimal')
   const delta = (req.body?.credit ? 1 : -1) * Number(amount)
@@ -684,8 +668,6 @@ function b64Len(s: string) {
 
 on('GET', '/publishers', (req) => paginate(publishers, req.query))
 on('POST', '/publishers', (req) => {
-  const su = needStepUp(req)
-  if (su) return su
   const b = req.body || {}
   if (!String(b.name || '').trim()) return invalid('name', 'name is required')
   if (!['official', 'verified', 'community'].includes(b.trust_level)) return invalid('trust_level', 'invalid trust level')
@@ -697,8 +679,6 @@ on('POST', '/publishers', (req) => {
 on('POST', '/publishers/:id/keys', (req) => {
   const p = publishers.find((x) => x.id === Number(req.params.id))
   if (!p) return fail(404, 'not_found', 'publisher not found')
-  const su = needStepUp(req)
-  if (su) return su
   const b = req.body || {}
   if (!String(b.key_id || '').trim()) return invalid('key_id', 'key_id is required')
   if (publishers.some((x) => x.keys.some((k) => k.key_id === b.key_id))) return invalid('key_id', 'key_id already exists')
@@ -710,16 +690,12 @@ on('POST', '/publishers/:id/keys', (req) => {
 on('POST', '/publishers/:id/revoke', (req) => {
   const p = publishers.find((x) => x.id === Number(req.params.id))
   if (!p) return fail(404, 'not_found', 'publisher not found')
-  const su = needStepUp(req)
-  if (su) return su
   p.status = 'revoked'
   p.revoked_at = now()
   p.keys.forEach((k) => (k.status = 'revoked'))
   return p
 })
 on('POST', '/publisher-keys/:key_id/revoke', (req) => {
-  const su = needStepUp(req)
-  if (su) return su
   for (const p of publishers) {
     const k = p.keys.find((x) => x.key_id === req.params.key_id)
     if (k) {

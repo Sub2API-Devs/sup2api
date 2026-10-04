@@ -214,7 +214,6 @@ export default {
     missingRequired: '以下权限是插件必需的：{list}。请勾选，或拒绝安装。',
     blockedByPermission: '你无法授予必需的权限：{list}。请联系拥有相应权限的管理员。',
     stillRequired: '还有 {n} 项必需权限未勾选。',
-    stepUpHint: '可能需要再次输入密码。',
     approve: '确认并安装',
     approveUpgrade: '确认升级',
     approved: '已批准 {name} v{version} 的授权。',

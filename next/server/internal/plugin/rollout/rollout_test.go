@@ -282,7 +282,9 @@ func TestTwoNodeRollout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Phase != rollout.PhasePreparing || r.TargetVersion != "1.0.0" || r.Action != "enable" {
+	// Enable returns the rollout as it reads it back; both nodes may already
+	// have prepared by then, so "activating" is as valid as "preparing".
+	if (r.Phase != rollout.PhasePreparing && r.Phase != rollout.PhaseActivating) || r.TargetVersion != "1.0.0" || r.Action != "enable" {
 		t.Fatalf("rollout = %+v", r)
 	}
 	if _, err := b.ctl.Enable(ctx, h.key, 0); core.AsError(err).Code != "conflict" {

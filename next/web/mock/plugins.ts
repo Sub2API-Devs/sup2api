@@ -1,7 +1,7 @@
 // Mock handlers: plugins (list, detail, review/consent, lifecycle, rollouts,
 // grants, settings, resources, egress, jobs, events) and the plugin market.
 // /ui/plugins and /p/<key>/... live in pluginui.ts; publishers are not here.
-import { fail, needStepUp, noContent, now, on, paginate } from './router'
+import { fail, noContent, now, on, paginate } from './router'
 import { pluginPlatforms } from './platforms'
 import { uninstallPluginAccounts } from './accounts'
 
@@ -766,9 +766,7 @@ const notFound = (key: string) => fail(404, 'not_found', `plugin ${key} not foun
 
 on('GET', '/plugins', (req) => paginate([...plugins.values()].map(summary), req.query))
 
-on('POST', '/plugins/upload', (req) => {
-  const s = needStepUp(req)
-  if (s) return s
+on('POST', '/plugins/upload', () => {
   // multipart bodies are not parsed by the mock server: pretend it was guard 0.1.1
   return stageVersion(
     guardReview('0.1.1', { added: [], widened: ['gateway.hook'], removed: [] })
@@ -776,8 +774,6 @@ on('POST', '/plugins/upload', (req) => {
 })
 
 on('POST', '/plugins/install-from-market', (req) => {
-  const s = needStepUp(req)
-  if (s) return s
   const { key, version } = req.body || {}
   if (!key || !version) return fail(400, 'invalid_argument', 'key and version are required')
   return stageVersion(reviewFor(key, version))
@@ -789,8 +785,6 @@ on('GET', '/plugins/:key', (req) => {
 })
 
 on('DELETE', '/plugins/:key', (req) => {
-  const s = needStepUp(req)
-  if (s) return s
   const p = find(req.params.key)
   if (!p) return notFound(req.params.key)
   if (p.builtin) return fail(403, 'permission_denied', 'built-in plugins cannot be uninstalled', { reason: 'builtin' })
@@ -811,13 +805,7 @@ on('GET', '/plugins/:key/versions/:version/review', (req) => {
 on('POST', '/plugins/:key/versions/:version/consent', (req) => {
   const p = find(req.params.key)
   if (!p) return notFound(req.params.key)
-  const review = reviews.get(`${p.key}@${req.params.version}`)
   const grants: Array<{ permission: string; scope?: Any }> = req.body?.grants || []
-  const critical = (review?.host_permissions || []).some((h: Any) => h.risk === 'critical' && grants.some((g) => g.permission === h.id))
-  if (critical) {
-    const s = needStepUp(req)
-    if (s) return s
-  }
   const v = p.versions.find((x) => x.version === req.params.version)
   if (!v) return fail(404, 'not_found', 'version not found')
   v.consent_status = 'approved'

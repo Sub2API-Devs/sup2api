@@ -17,7 +17,7 @@ func TestMarketPluginsHostVersion(t *testing.T) {
 	a := New(Deps{Install: svc})
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	a.RegisterRoutes(httpapi.NewRouter(engine, tokens{}, authz{}, stepUp{}))
+	a.RegisterRoutes(httpapi.NewRouter(engine, tokens{}, authz{}))
 	h := &harness{t: t, engine: engine}
 
 	code, out := h.do("GET", "/market/plugins", "admin", nil)

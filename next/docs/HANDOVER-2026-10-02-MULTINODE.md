@@ -62,7 +62,7 @@
 
 ### 管理入口、配置与发布工具
 
-- `server/internal/updater/http.go`：节点 enable/disable 转发，权限 `system:update:recover` 且要求 step-up。
+- `server/internal/updater/http.go`：节点 enable/disable 转发，权限 `system:update:recover` 且要求 step-up（2026-10-05 起二次验证已取消，只需权限，CONTRACTS §3.3）。
 - `web/src/views/upgrades/UpgradesView.vue` 与中英文 upgrades 文案：节点停用/启用和状态展示。
 - `deploy/shell/config/node-{a,b}.json`：`peer_auth_key` 替换旧 `allowed_peers`。
 - `deploy/shell/compose.yml`、`.env.example`：每节点独立可选密钥变量。
