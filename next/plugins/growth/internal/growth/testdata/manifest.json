@@ -66,7 +66,7 @@
         "id": "my-referral",
         "section": "me",
         "label": { "en": "My Referrals", "zh": "我的邀请" },
-        "icon": "users",
+        "icon": "user",
         "page": "my-referral",
         "permission": "growth:read",
         "order": 110
@@ -75,7 +75,7 @@
         "id": "checkin",
         "section": "me",
         "label": { "en": "Daily Check-in", "zh": "每日签到" },
-        "icon": "calendar",
+        "icon": "clock",
         "page": "checkin",
         "permission": "growth:read",
         "order": 120

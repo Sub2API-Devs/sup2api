@@ -123,7 +123,17 @@
       }
     },
     {
+      "id": "platform.register",
+      "reason": {
+        "en": "Declare the OpenAI Codex OAuth account type",
+        "zh": "声明 OpenAI Codex OAuth 账号类型"
+      }
+    },
+    {
       "id": "accounts.credentials",
+      "scope": {
+        "types": "own"
+      },
       "reason": {
         "en": "Read account credentials to check token expiration and refresh tokens",
         "zh": "读取账号凭证以检查令牌过期并刷新令牌"

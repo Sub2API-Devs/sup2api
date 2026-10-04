@@ -33,6 +33,9 @@ const (
 
 	// 上游端点
 	MessagesURL = "https://api.anthropic.com/v1/messages"
+
+	// 控制台"测试账号"未指定模型时使用（manifest defaultModels 之一）
+	testModel = "claude-sonnet-5"
 )
 
 type credentials struct {
@@ -187,8 +190,12 @@ func (p *Plugin) BuildTestRequest(ctx context.Context, req *pluginv1.BuildTestRe
 		return nil, fmt.Errorf("missing access_token")
 	}
 
+	model := req.GetModel()
+	if model == "" {
+		model = testModel
+	}
 	testBody := map[string]any{
-		"model":      "claude-3-5-sonnet-20241022",
+		"model":      model,
 		"max_tokens": 16,
 		"messages": []map[string]string{
 			{"role": "user", "content": "Hi"},
@@ -196,16 +203,19 @@ func (p *Plugin) BuildTestRequest(ctx context.Context, req *pluginv1.BuildTestRe
 	}
 	bodyBytes, _ := json.Marshal(testBody)
 
+	// Same credentials as BuildUpstreamRequest: an OAuth access token is a
+	// bearer token plus the oauth beta, never an x-api-key.
 	return &pluginv1.BuildTestRequestResponse{
 		Method: "POST",
-		Url:    "https://api.anthropic.com/v1/messages",
+		Url:    MessagesURL,
 		Headers: map[string]string{
+			"authorization":     "Bearer " + creds.AccessToken,
 			"anthropic-version": "2023-06-01",
+			"anthropic-beta":    "oauth-2025-04-20",
 			"content-type":      "application/json",
-			"x-api-key":         creds.AccessToken,
 		},
 		BodyJson:      string(bodyBytes),
-		Model:         "claude-3-5-sonnet-20241022",
+		Model:         model,
 		UsageProtocol: "anthropic.messages",
 	}, nil
 }
