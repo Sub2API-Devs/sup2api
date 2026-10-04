@@ -12,9 +12,9 @@ services:
       retries: 30
     tmpfs: /var/lib/postgresql/data
   redis:
-    image: redis:7-alpine
+    image: ${CACHE_IMAGE:-valkey/valkey:9-alpine}
     healthcheck:
-      test: [CMD, redis-cli, ping]
+      test: [CMD-SHELL, "valkey-cli ping 2>/dev/null || redis-cli ping"]
       interval: 2s
       timeout: 3s
       retries: 30

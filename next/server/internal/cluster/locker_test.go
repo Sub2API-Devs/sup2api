@@ -411,14 +411,15 @@ func TestLockerKeepLock(t *testing.T) {
 	}
 }
 
-// Against a real Redis (CI sets TEST_REDIS_URL; skipped locally): the Lua
-// scripts, real expiry, and the error mapping of a real server.
+// Against a real server (CI sets TEST_REDIS_URL, Valkey or Redis; skipped
+// locally): the Lua scripts, real expiry, and the error mapping of a real
+// server.
 func TestLockerRealRedis(t *testing.T) {
 	url := os.Getenv("TEST_REDIS_URL")
 	if url == "" {
 		t.Skip("TEST_REDIS_URL not set")
 	}
-	opt, err := redis.ParseURL(url)
+	opt, err := ParseRedisURL(url)
 	if err != nil {
 		t.Fatal(err)
 	}

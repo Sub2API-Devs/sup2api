@@ -4,9 +4,13 @@
 
 > 插件包从 2026-10-02 起不再存 PG（核心迁移 0022），没有网关的部署只用本机目录保存插件包，所以本栈的两个节点之间无法同步上传的插件；多节点请使用网关托管部署。
 
-One sub2api-next node with its own PostgreSQL 16, Redis 7 and the signed plugin
+One sub2api-next node with its own PostgreSQL 16, a Valkey 9 cache and the signed plugin
 market bundled in the image, all started by docker compose (project `sup2api`).
-PostgreSQL, Redis and the market are reachable only inside the project network;
+The cache is any Redis-protocol server: set `CACHE_IMAGE=redis:7` to run Redis
+instead (the service keeps the name `redis`, and `SUB2API_REDIS_URL` accepts
+`redis://` as well as `valkey://`). It holds real-time state only, so switching
+images loses nothing.
+PostgreSQL, the cache and the market are reachable only inside the project network;
 the service is published on `127.0.0.1:3130` by default; set
 `SUP2API_BIND=0.0.0.0` in `.env` to expose it on all interfaces.
 

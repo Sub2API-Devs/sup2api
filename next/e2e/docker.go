@@ -90,10 +90,12 @@ func (e *Env) SQL(query string) []string {
 	return rows
 }
 
-// Redis runs redis-cli in the compose Redis and returns trimmed output.
+// Redis runs the cache CLI in the compose cache container (valkey-cli, or
+// redis-cli when E2E_REDIS_IMAGE is a Redis image) and returns trimmed output.
 func (e *Env) Redis(args ...string) string {
 	e.T.Helper()
-	return strings.TrimSpace(e.Docker(append([]string{"exec", e.Container("redis"), "redis-cli", "--raw"}, args...)...))
+	cli := `if command -v valkey-cli >/dev/null 2>&1; then exec valkey-cli --raw "$@"; else exec redis-cli --raw "$@"; fi`
+	return strings.TrimSpace(e.Docker(append([]string{"exec", e.Container("redis"), "sh", "-c", cli, "sh"}, args...)...))
 }
 
 // ------------------------------------------------------------------ nodes

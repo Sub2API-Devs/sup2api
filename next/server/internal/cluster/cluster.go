@@ -1,13 +1,15 @@
 // Package cluster implements the multi-node primitives of the core: node
 // registry and heartbeats, distributed locks, pub/sub bus and concurrency
-// slots. Everything is backed by a single Redis instance (multi-key Lua
-// scripts assume non-cluster Redis); PostgreSQL is only pinged for health.
+// slots. Everything is backed by a single Redis-protocol server, Valkey by
+// default (multi-key Lua scripts assume a non-cluster deployment);
+// PostgreSQL is only pinged for health.
 package cluster
 
 import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -33,9 +35,9 @@ const (
 	DefaultSlotTTL           = 5 * time.Minute
 )
 
-// OpenRedis parses a redis:// URL and pings the server.
+// OpenRedis parses a Redis-protocol URL (ParseRedisURL) and pings the server.
 func OpenRedis(ctx context.Context, url string) (*redis.Client, error) {
-	opt, err := redis.ParseURL(url)
+	opt, err := ParseRedisURL(url)
 	if err != nil {
 		return nil, fmt.Errorf("parse redis url: %w", err)
 	}
@@ -45,6 +47,23 @@ func OpenRedis(ctx context.Context, url string) (*redis.Client, error) {
 		return nil, fmt.Errorf("ping redis: %w", err)
 	}
 	return c, nil
+}
+
+// ParseRedisURL parses the cache server URL. The cache is any server speaking
+// the Redis protocol - Valkey by default, Redis 7+ works the same - so besides
+// go-redis's redis://, rediss:// and unix:// it accepts valkey:// and
+// valkeys:// (TLS), which mean exactly redis:// and rediss://.
+func ParseRedisURL(raw string) (*redis.Options, error) {
+	raw = strings.TrimSpace(raw)
+	if scheme, rest, ok := strings.Cut(raw, "://"); ok {
+		switch strings.ToLower(scheme) {
+		case "valkey":
+			raw = "redis://" + rest
+		case "valkeys":
+			raw = "rediss://" + rest
+		}
+	}
+	return redis.ParseURL(raw)
 }
 
 // Options configures a Cluster.

@@ -101,7 +101,7 @@ flowchart LR
 
 - **节点对等**：任何节点都能处理网关请求和管理请求
 - **PostgreSQL 是期望状态和账本的唯一依据**
-- **Redis 保存实时状态**，数据丢失后几秒内自动恢复；余额缓存丢失时回源 PG
+- **Redis 保存实时状态**，数据丢失后几秒内自动恢复；余额缓存丢失时回源 PG。本文的"Redis"指任何 Redis 协议的服务，默认部署用 Valkey（Redis 7.2 的分支，协议、命令、Lua 均兼容），Redis 7+ 同样可用；`SUB2API_REDIS_URL` 接受 `redis://`、`rediss://`、`valkey://`、`valkeys://`、`unix://`
 - **插件进程运行在每个节点本地**，通过本机 unix socket 与核心通信，所有对外连接经核心的出口隧道
 
 ### 2.2 节点内部架构

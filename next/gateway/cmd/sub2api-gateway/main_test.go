@@ -143,3 +143,25 @@ func TestPublisherClientTrustsClusterCA(t *testing.T) {
 		t.Fatal("missing CA file accepted")
 	}
 }
+
+func TestParseRedisURLAcceptsValkeySchemes(t *testing.T) {
+	for raw, tls := range map[string]bool{
+		"redis://cache:6379/0":    false,
+		"valkey://cache:6379/0":   false,
+		"valkeys://cache:6380/0":  true,
+		"rediss://cache:6380/0":   true,
+		" VALKEY://cache:6379/0 ": false,
+	} {
+		opt, err := parseRedisURL(raw)
+		if err != nil {
+			t.Errorf("%q: %v", raw, err)
+			continue
+		}
+		if (opt.TLSConfig != nil) != tls || !strings.HasPrefix(opt.Addr, "cache:") {
+			t.Errorf("%q: addr=%s tls=%v", raw, opt.Addr, opt.TLSConfig != nil)
+		}
+	}
+	if _, err := parseRedisURL("memcached://cache:11211"); err == nil {
+		t.Error("memcached:// accepted")
+	}
+}

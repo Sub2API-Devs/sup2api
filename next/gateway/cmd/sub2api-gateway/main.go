@@ -205,7 +205,7 @@ func run() error {
 		return errors.New("invalid cluster CA")
 	}
 	clientTLS := &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: ca}
-	opt, err := redis.ParseURL(c.RedisURL)
+	opt, err := parseRedisURL(c.RedisURL)
 	if err != nil {
 		return err
 	}
@@ -532,7 +532,7 @@ func clusterCommand(command string, c config, node string) error {
 		return err
 	}
 	defer db.Close()
-	opt, err := redis.ParseURL(c.RedisURL)
+	opt, err := parseRedisURL(c.RedisURL)
 	if err != nil {
 		return err
 	}
@@ -551,4 +551,22 @@ func clusterCommand(command string, c config, node string) error {
 		return store.RemoveNode(ctx, node)
 	}
 	return errors.New("unknown cluster command")
+}
+
+// parseRedisURL parses the cache server URL: any Redis-protocol server,
+// Valkey by default. Besides go-redis's redis://, rediss:// and unix:// it
+// accepts valkey:// and valkeys:// (TLS), which mean redis:// and rediss://.
+// The URL is handed to the core unchanged, which accepts the same schemes
+// (server/internal/cluster.ParseRedisURL).
+func parseRedisURL(raw string) (*redis.Options, error) {
+	raw = strings.TrimSpace(raw)
+	if scheme, rest, ok := strings.Cut(raw, "://"); ok {
+		switch strings.ToLower(scheme) {
+		case "valkey":
+			raw = "redis://" + rest
+		case "valkeys":
+			raw = "rediss://" + rest
+		}
+	}
+	return redis.ParseURL(raw)
 }

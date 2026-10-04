@@ -15,7 +15,7 @@ type Config struct {
 	HTTPAddr    string // SUB2API_HTTP_ADDR, default ":8080"
 	PublicURL   string // SUB2API_PUBLIC_URL, e.g. "http://127.0.0.1:3120"
 	DatabaseURL string // SUB2API_DATABASE_URL (required)
-	RedisURL    string // SUB2API_REDIS_URL (required), e.g. "redis://redis:6379/0"
+	RedisURL    string // SUB2API_REDIS_URL (required): any Redis-protocol server, Valkey by default; redis://, rediss://, valkey://, valkeys:// or unix:// (cluster.ParseRedisURL)
 	NodeID      string // NODE_ID, default hostname
 	LogLevel    string // SUB2API_LOG_LEVEL: debug | info | warn | error
 

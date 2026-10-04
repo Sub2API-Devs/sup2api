@@ -73,14 +73,16 @@ services:
       retries: 30
 
   redis:
-    image: ${E2E_REDIS_IMAGE:-redis:7}
+    # Any Redis-protocol server; Valkey is the default (Redis 7+ works too).
+    image: ${E2E_REDIS_IMAGE:-valkey/valkey:9}
     restart: "no"
     mem_limit: 256m
-    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "200mb", "--maxmemory-policy", "noeviction"]
+    # Flags only: both images' entrypoints prepend their own server binary.
+    command: ["--save", "", "--appendonly", "no", "--maxmemory", "200mb", "--maxmemory-policy", "noeviction"]
     networks:
       - e2e
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "valkey-cli ping 2>/dev/null || redis-cli ping"]
       interval: 3s
       timeout: 3s
       retries: 30
