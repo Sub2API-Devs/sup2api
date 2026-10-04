@@ -140,10 +140,8 @@ func (s *Service) runTest(ctx context.Context, bt core.AccountTypeBinding, acct 
 	}
 	res.Upstream = upstreamAddr(u)
 	managedCCG := ccgateway.IsManaged(bt.Plugin.Key, bt.Type.ID, tr.GetUrl()) && s.d.CCGateway != nil
-	if !managedCCG && proxyID == nil {
-		// Direct connections are refused for non-public hosts; through a proxy
-		// the proxy decides (it received the name, not the resolved address).
-		if err := netguard.CheckHost(ctx, u.Hostname(), netguard.DefaultLookup); err != nil {
+	if !managedCCG {
+		if err := s.guardUpstream(ctx, u, proxyID != nil); err != nil {
 			res.Message = err.Error()
 			return res
 		}
@@ -320,4 +318,17 @@ func truncate(s string, n int) string {
 		s = s[:len(s)-1]
 	}
 	return s + "…"
+}
+
+// guardUpstream refuses a direct connection to a non-public host for the
+// console's own upstream calls (test account, fetch models, quota query),
+// the way the gateway does. Through a proxy the proxy decides (it receives
+// the name, not the resolved address), and
+// SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM lifts the guard as it does for the
+// gateway.
+func (s *Service) guardUpstream(ctx context.Context, u *url.URL, proxied bool) error {
+	if proxied || s.d.AllowPrivateUpstream {
+		return nil
+	}
+	return netguard.CheckHost(ctx, u.Hostname(), netguard.DefaultLookup)
 }

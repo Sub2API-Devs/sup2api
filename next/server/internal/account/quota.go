@@ -24,7 +24,6 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/netguard"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -340,14 +339,9 @@ func (s *Service) sendQuotaRequest(ctx context.Context, b *pluginv1.BuildQuotaRe
 		out.TransportError = "plugin built an invalid quota URL"
 		return out
 	}
-	if proxyID == nil && !s.d.AllowPrivateUpstream {
-		// Through a proxy the proxy decides (it received the name, not the
-		// resolved address); SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM lifts the
-		// guard as it does for the gateway.
-		if err := netguard.CheckHost(ctx, u.Hostname(), netguard.DefaultLookup); err != nil {
-			out.TransportError = err.Error()
-			return out
-		}
+	if err := s.guardUpstream(ctx, u, proxyID != nil); err != nil {
+		out.TransportError = err.Error()
+		return out
 	}
 	method := strings.ToUpper(b.GetMethod())
 	if method == "" {

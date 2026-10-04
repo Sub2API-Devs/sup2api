@@ -990,7 +990,7 @@ func TestAccountTestAction(t *testing.T) {
 	e.svc.d.AllowPrivateUpstream = false
 	_, out = e.do("POST", fmt.Sprintf("/accounts/%d/test", good), nil)
 	res = out["data"].(map[string]any)
-	if res["ok"] != false || !strings.Contains(res["message"].(string), "not allowed") {
+	if res["ok"] != false || !strings.Contains(res["message"].(string), "private") {
 		t.Fatalf("guard: %v", res)
 	}
 	// Plugin gone.
