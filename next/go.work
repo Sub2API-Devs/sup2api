@@ -7,7 +7,6 @@ use (
 	./plugins/anthropic
 	./plugins/ccgateway
 	./plugins/claude-oauth
-	./plugins/codex-oauth
 	./plugins/gemini
 	./plugins/growth
 	./plugins/guard
