@@ -503,11 +503,18 @@ func TestGuardedSettings(t *testing.T) {
 			t.Fatalf("base_url %v: %d %v", v, code, out)
 		}
 	}
-	// An unguarded type accepts anything; a caller with
-	// account:settings:custom is not restricted.
+	// An unguarded type (relay) accepts any address, so an own-level caller
+	// needs account:relay for it (SEC-H3, CONTRACTS §21.5); with it anything
+	// goes. A caller with account:settings:custom is not restricted.
+	if code, out := post(alice, "relay_key", map[string]any{"api_key": key, "base_url": "https://anything.example"}); code != 403 ||
+		out["error"].(map[string]any)["details"].(map[string]any)["required_permission"] != "account:relay" {
+		t.Fatalf("relay without account:relay: %d %v", code, out)
+	}
+	authz.keys[alice] = append(append([]string{}, supplierKeys...), "account:relay")
 	if code, out := post(alice, "relay_key", map[string]any{"api_key": key, "base_url": "https://anything.example"}); code != 201 {
 		t.Fatalf("relay custom: %d %v", code, out)
 	}
+	authz.keys[alice] = supplierKeys
 	if code, out := post(dave, "apikey", map[string]any{"api_key": key, "base_url": "https://custom.example"}); code != 201 {
 		t.Fatalf("dave custom: %d %v", code, out)
 	}

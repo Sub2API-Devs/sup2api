@@ -254,8 +254,15 @@ func TestProxyCRUDTestAndDirectory(t *testing.T) {
 		t.Fatal("direct client")
 	}
 
-	// A transient client for a spec also goes through the proxy.
-	tc, err := svc.HTTPClientFor(ctx, Spec{Protocol: "http", Host: host, Port: port, Username: "bob", Password: "s3cret"})
+	// A transient client for a spec also goes through the proxy. The test
+	// proxy listens on loopback, which a transient client refuses unless the
+	// deployment allows private addresses (CONTRACTS §21.5).
+	spec := Spec{Protocol: "http", Host: host, Port: port, Username: "bob", Password: "s3cret"}
+	if _, err := svc.HTTPClientFor(ctx, spec); core.AsError(err).Code != "permission_denied" {
+		t.Fatalf("private transient proxy: %v", err)
+	}
+	svc.opts.AllowPrivate = true
+	tc, err := svc.HTTPClientFor(ctx, spec)
 	if err != nil {
 		t.Fatal(err)
 	}

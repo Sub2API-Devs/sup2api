@@ -35,7 +35,7 @@ func (f fakeAuthz) Can(_ context.Context, uid int64, perm string) (bool, error) 
 func (fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{}, nil
 }
-func (fakeAuthz) IsSensitive(string) bool { return false }
+func (fakeAuthz) IsSensitive(string) bool                         { return false }
 func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
 func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 
@@ -136,6 +136,9 @@ func (e *env) runtime(t *testing.T, mod func(*grpcruntime.Options)) *grpcruntime
 		HealthInterval: 200 * time.Millisecond,
 		BackoffBase:    50 * time.Millisecond,
 		DrainTimeout:   5 * time.Second,
+		// Shorter than the slow calls the drain tests keep in flight, so the
+		// instance is still draining - not already stopped - when they look.
+		DrainGrace: 50 * time.Millisecond,
 	}
 	if mod != nil {
 		mod(&o)
