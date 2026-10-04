@@ -16,7 +16,7 @@ func TestTaskCrossNodeRegistrationIdentityAndDebit(t *testing.T) {
 	f := newFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	nodeB := New(f.db, f.ledger, nil, Options{})
+	nodeB := New(f.db, f.ledger, f.ledger, nil, Options{})
 	prepare := func(request, upstream string, account int64) core.TaskRegistration {
 		t.Helper()
 		rec := f.reserved(request, upstream, core.UsageTokens{Input: 1000, Output: 100})

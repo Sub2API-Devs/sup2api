@@ -6,12 +6,15 @@ package billing
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/shopspring/decimal"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/billing/expr"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -43,6 +46,7 @@ var (
 	_ core.Pricer      = (*Service)(nil)
 	_ core.BalanceGate = (*Service)(nil)
 	_ core.Ledger      = (*Service)(nil)
+	_ core.Quoter      = (*Service)(nil)
 )
 
 // New builds the billing service. bus and registry may be nil: without a
@@ -107,4 +111,47 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	s.registerSyncRoutes(r)
 	s.registerBalanceRoutes(r)
 	s.registerSettingsRoutes(r)
+}
+
+// Quote is the single entry point for turning usage into money. It compiles
+// the price expression, normalizes tokens, evaluates the expression, applies
+// the rate multiplier and rounds to 8 decimal places. Precharge, settlement,
+// reserve and reconcile all call this to ensure consistent pricing.
+func (s *Service) Quote(ctx context.Context, in core.QuoteInputs) (decimal.Decimal, error) {
+	if in.Expression == "" {
+		return decimal.Zero, fmt.Errorf("price expression not found")
+	}
+	p, err := expr.CompileCached(in.Expression)
+	if err != nil {
+		return decimal.Zero, fmt.Errorf("compile price expression: %w", err)
+	}
+	t := in.Tokens
+	vars := expr.Normalize(in.UsageSemantics, expr.Tokens{
+		Input:           t.Input,
+		Output:          t.Output,
+		CacheRead:       t.CacheRead,
+		CacheCreation:   t.CacheCreation,
+		CacheCreation1h: t.CacheCreation1h,
+	}, p.Uses)
+	at := in.CreatedAt
+	if at.IsZero() {
+		at = time.Now()
+	}
+	params := make(map[string]string, len(in.PriceParams))
+	for k, v := range in.PriceParams {
+		if s, ok := v.(string); ok {
+			params[k] = s
+		}
+	}
+	result, err := p.Eval(expr.Input{
+		Vars:    vars,
+		Metrics: in.Metrics,
+		Params:  params,
+		Headers: in.PriceHeaders,
+		At:      at,
+	})
+	if err != nil {
+		return decimal.Zero, err
+	}
+	return result.Cost.Mul(in.RateMultiplier).Round(8), nil
 }

@@ -3,11 +3,11 @@ package billing
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/billing/expr"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
@@ -17,21 +17,32 @@ func (s *Service) PreConsumeTokens(ctx context.Context) (int64, error) {
 	return st.PreConsumeTokens, err
 }
 
+func (s *Service) OutputReserveTokens(ctx context.Context) (int64, error) {
+	st, err := s.Settings(ctx)
+	return st.OutputReserveTokens, err
+}
+
 func (s *Service) Precharge(ctx context.Context, r *core.UsageRecord) error {
 	if r.Price == nil {
 		return nil
 	}
-	p, err := expr.CompileCached(r.Price.Expression)
+	params := make(map[string]any, len(r.PriceParams))
+	for k, v := range r.PriceParams {
+		params[k] = v
+	}
+	amount, err := s.Quote(ctx, core.QuoteInputs{
+		Expression:     r.Price.Expression,
+		UsageSemantics: r.UsageSemantics,
+		Tokens:         r.Tokens,
+		Metrics:        r.Metrics,
+		PriceParams:    params,
+		PriceHeaders:   r.PriceHeaders,
+		RateMultiplier: r.RateMultiplier,
+		CreatedAt:      r.CreatedAt,
+	})
 	if err != nil {
 		return err
 	}
-	t := r.Tokens
-	vars := expr.Normalize(r.UsageSemantics, expr.Tokens{Input: t.Input, Output: t.Output, CacheRead: t.CacheRead, CacheCreation: t.CacheCreation, CacheCreation1h: t.CacheCreation1h}, p.Uses)
-	result, err := p.Eval(expr.Input{Vars: vars, Metrics: r.Metrics, Params: r.PriceParams, Headers: r.PriceHeaders, At: r.CreatedAt})
-	if err != nil {
-		return err
-	}
-	amount := result.Cost.Mul(r.RateMultiplier).Round(8)
 	if amount.IsZero() {
 		return nil
 	}
@@ -58,7 +69,7 @@ func (s *Service) Precharge(ctx context.Context, r *core.UsageRecord) error {
 		if exists {
 			return nil
 		}
-		if balance.Sub(amount).LessThan(st.MinBalance) {
+		if !meetsMin(balance.Sub(amount), st.MinBalance) {
 			return core.ErrInsufficientBalance
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO request_precharges(request_id,user_id,amount) VALUES($1,$2,$3)`, r.RequestID, r.UserID, amount); err != nil {
@@ -119,6 +130,7 @@ func (s *Service) ReleaseExpiredPrecharges(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	var failedCount int
 	for _, e := range entries {
 		var lr *core.LedgerResult
 		err := s.db.Tx(ctx, func(tx pgx.Tx) error {
@@ -127,11 +139,16 @@ func (s *Service) ReleaseExpiredPrecharges(ctx context.Context) error {
 			return err
 		})
 		if err != nil {
-			return err
+			slog.WarnContext(ctx, "billing: release expired precharge failed", "request_id", e.id, "user_id", e.user, "err", err)
+			failedCount++
+			continue
 		}
 		if lr != nil {
 			s.CacheBalance(ctx, e.user, lr.LedgerID, lr.BalanceAfter)
 		}
+	}
+	if failedCount > 0 {
+		slog.ErrorContext(ctx, "billing: some expired precharges failed to release", "failed", failedCount, "total", len(entries))
 	}
 	return nil
 }

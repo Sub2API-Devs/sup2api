@@ -20,6 +20,9 @@ func (s *taskTestSlots) Acquire(_ context.Context, kind string, id int64, limit 
 	return func() {}, s.allow, nil
 }
 func (s *taskTestSlots) InUse(context.Context, string, int64) (int, error) { return 0, nil }
+func (s *taskTestSlots) InUseMany(context.Context, string, []int64) (map[int64]int, error) {
+	return nil, nil
+}
 
 func TestManagedTaskFencingFreePollingAndLegacyTransfer(t *testing.T) {
 	rf := reconcileFixtureWith(t, &core.Account{AccountRef: core.AccountRef{ID: 7, PluginKey: "vid", Type: "vid_key"}, Status: "active"})

@@ -94,7 +94,8 @@ func executeFixture(t *testing.T, svc core.Settler) (*env, *executeTestPlatform)
 
 func TestExecuteGatewayRecordBeforePublishAndAbortUnconfirmedSSE(t *testing.T) {
 	db := testutil.DB(t)
-	svc := usage.New(db, billing.New(db, nil, nil, nil, nil), nil, usage.Options{})
+	bill := billing.New(db, nil, nil, nil, nil)
+	svc := usage.New(db, bill, bill, nil, usage.Options{})
 	ctx := context.Background()
 	t.Run("non_stream_waits_for_commit", func(t *testing.T) {
 		e, p := executeFixture(t, svc)
@@ -193,7 +194,8 @@ func TestExecuteGatewayRecordBeforePublishAndAbortUnconfirmedSSE(t *testing.T) {
 
 func TestExecuteGatewayTaskUsesSingleWatchAndSharedSnapshot(t *testing.T) {
 	db := testutil.DB(t)
-	svc := usage.New(db, billing.New(db, nil, nil, nil, nil), nil, usage.Options{})
+	bill := billing.New(db, nil, nil, nil, nil)
+	svc := usage.New(db, bill, bill, nil, usage.Options{})
 	e, original := taskDraftEnv(t, svc, false)
 	p := &executeTestPlatform{PlatformPlugin: original}
 	for i := range e.gen.accountTypes {
@@ -207,7 +209,8 @@ func TestExecuteGatewayTaskUsesSingleWatchAndSharedSnapshot(t *testing.T) {
 	if out.status != 200 || !strings.HasPrefix(out.json().Get("id").String(), "s2task_") || p.calls.Load() != 1 {
 		t.Fatal(out.status, string(out.body), p.calls.Load())
 	}
-	other, _ := taskDraftEnv(t, usage.New(db, billing.New(db, nil, nil, nil, nil), nil, usage.Options{}), true)
+	bill2 := billing.New(db, nil, nil, nil, nil)
+	other, _ := taskDraftEnv(t, usage.New(db, bill2, bill2, nil, usage.Options{}), true)
 	if got := taskDraftGet(t, other, out.json().Get("id").String(), testKey); got.status != 200 {
 		t.Fatal(got.status, string(got.body))
 	}
@@ -216,7 +219,8 @@ func TestExecuteGatewayTaskUsesSingleWatchAndSharedSnapshot(t *testing.T) {
 
 func TestExecuteGatewayLargeCaptureAndRejectedReplayPreserveUsage(t *testing.T) {
 	db := testutil.DB(t)
-	svc := usage.New(db, billing.New(db, nil, nil, nil, nil), nil, usage.Options{})
+	bill := billing.New(db, nil, nil, nil, nil)
+	svc := usage.New(db, bill, bill, nil, usage.Options{})
 	e, original := usageEnvEP(t, pluginUsageRules(), func(ep *manifest.Endpoint) { ep.Billing = "free"; ep.UsageMaxBytes = 1 << 20 })
 	original.extract = func(_ context.Context, in *pluginv1.ExtractUsageRequest) (*pluginv1.UsageReport, error) {
 		if len(in.Body) < 600<<10 {

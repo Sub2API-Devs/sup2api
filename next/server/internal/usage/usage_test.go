@@ -77,7 +77,7 @@ func newFixture(t *testing.T) *fixture {
 	pub := event.NewPublisher(db)
 	bill := billing.New(db, rdb, nil, pub, nil)
 	f := &fixture{t: t, db: db, bill: bill, ledger: &flakyLedger{Service: bill}}
-	f.svc = New(db, f.ledger, pub, Options{FlushInterval: 10 * time.Millisecond, Workers: 2, RetryInterval: time.Hour, RetryAfter: time.Millisecond})
+	f.svc = New(db, f.ledger, bill, pub, Options{FlushInterval: 10 * time.Millisecond, Workers: 2, RetryInterval: time.Hour, RetryAfter: time.Millisecond})
 
 	for _, email := range []string{"u@example.com", "o@example.com"} {
 		var id int64
@@ -302,7 +302,7 @@ func TestRetryPending(t *testing.T) {
 
 func TestSubmitOverflow(t *testing.T) {
 	f := newFixture(t)
-	f.svc = New(f.db, f.ledger, event.NewPublisher(f.db), Options{QueueSize: 1})
+	f.svc = New(f.db, f.ledger, f.ledger, event.NewPublisher(f.db), Options{QueueSize: 1})
 	// Not started: the first record fills the queue, the second overflows
 	// and is persisted directly as pending.
 	f.svc.Submit(f.record("q-1", true))

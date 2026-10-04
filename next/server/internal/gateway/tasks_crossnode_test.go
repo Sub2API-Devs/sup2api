@@ -97,8 +97,10 @@ func taskDraftGet(t *testing.T, e *env, id, key string) result {
 // node deliberately has no eligible upstream account, ruling out hidden dispatch.
 func TestTaskGatewayCrossNodeSnapshotAndAuthorization(t *testing.T) {
 	db := testutil.DB(t)
-	nodeA := usage.New(db, billing.New(db, nil, nil, nil, nil), nil, usage.Options{})
-	nodeB := usage.New(db, billing.New(db, nil, nil, nil, nil), nil, usage.Options{})
+	billA := billing.New(db, nil, nil, nil, nil)
+	nodeA := usage.New(db, billA, billA, nil, usage.Options{})
+	billB := billing.New(db, nil, nil, nil, nil)
+	nodeB := usage.New(db, billB, billB, nil, usage.Options{})
 	a, pa := taskDraftEnv(t, nodeA, false)
 	b, pb := taskDraftEnv(t, nodeB, true)
 	res := a.do("/task-draft/videos", map[string]any{"model": testModel}, nil)
@@ -138,7 +140,8 @@ func TestTaskGatewayNeverResubmitsAfterSending(t *testing.T) {
 	db := testutil.DB(t)
 	for _, mode := range []string{"parser_failure", "transport_eof", "header_timeout", "upstream_503"} {
 		t.Run(mode, func(t *testing.T) {
-			svc := usage.New(db, billing.New(db, nil, nil, nil, nil), nil, usage.Options{})
+			bill := billing.New(db, nil, nil, nil, nil)
+			svc := usage.New(db, bill, bill, nil, usage.Options{})
 			e, pp := taskDraftEnv(t, svc, false)
 			var hits atomic.Int64
 			up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

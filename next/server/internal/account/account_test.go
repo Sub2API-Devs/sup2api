@@ -265,6 +265,16 @@ func (fakeSlots) InUse(_ context.Context, kind string, id int64) (int, error) {
 	}
 	return int(id % 7), nil
 }
+func (fakeSlots) InUseMany(_ context.Context, kind string, ids []int64) (map[int64]int, error) {
+	if kind != "account" {
+		return nil, fmt.Errorf("kind %s", kind)
+	}
+	result := make(map[int64]int, len(ids))
+	for _, id := range ids {
+		result[id] = int(id % 7)
+	}
+	return result, nil
+}
 
 type fakeTokens struct{}
 

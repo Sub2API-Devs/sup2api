@@ -607,6 +607,16 @@ func (s *fakeSlots) InUse(_ context.Context, kind string, id int64) (int, error)
 	return s.inUse[kind+":"+itoa(id)], nil
 }
 
+func (s *fakeSlots) InUseMany(_ context.Context, kind string, ids []int64) (map[int64]int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	result := make(map[int64]int, len(ids))
+	for _, id := range ids {
+		result[id] = s.inUse[kind+":"+itoa(id)]
+	}
+	return result, nil
+}
+
 type fakeProxies struct{}
 
 func (fakeProxies) HTTPClient(context.Context, *int64) (*http.Client, error) {

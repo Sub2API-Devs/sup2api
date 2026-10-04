@@ -40,6 +40,24 @@ type BalanceGate interface {
 	CheckBalance(ctx context.Context, userID int64) error
 }
 
+// QuoteInputs holds the parameters for calculating a price quote.
+type QuoteInputs struct {
+	Expression     string
+	UsageSemantics string
+	Tokens         UsageTokens
+	Metrics        map[string]any
+	PriceParams    map[string]any
+	PriceHeaders   map[string]string
+	RateMultiplier decimal.Decimal
+	CreatedAt      time.Time
+}
+
+// Quoter provides the unified price calculation entry point. Settlement,
+// reserve, reconcile and precharge all call Quote to ensure consistent pricing.
+type Quoter interface {
+	Quote(ctx context.Context, in QuoteInputs) (decimal.Decimal, error)
+}
+
 // LedgerChange is one balance mutation. Amount is always positive; Kind
 // decides the sign (usage/plugin_debit subtract, others add unless noted).
 type LedgerChange struct {
@@ -59,6 +77,10 @@ type LedgerResult struct {
 	LedgerID     int64
 	BalanceAfter decimal.Decimal
 	Duplicate    bool
+	// UserID, Delta, Kind are returned when Duplicate=true to enable conflict detection
+	UserID int64
+	Delta  decimal.Decimal
+	Kind   string
 }
 
 // Ledger is the only way to change balances (admin adjust, plugin

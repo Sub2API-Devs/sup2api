@@ -1798,6 +1798,54 @@ Linux 上 `go test -v ./...`（`next/server`）共 **599 个 `=== RUN`，只有 
 - 列的增删一律新写迁移文件，已应用的一个字节都不能动
 - **迁移文件里不要写「这一列为什么存在」**——那种注释会随语义变化而失效，而且**无法修改**。`0002_video_tasks.sql` 里关于 `est_tokens` 的那段注释就是现存的一处。语义变了只能靠后续迁移的 `COMMENT ON COLUMN` 追平
 
+### 25.8 并发透支防护：输出费用预留与插件 EstimateUsage Unimplemented 处理（2026-10-04）
+
+#### 问题
+
+并发请求场景下，多个用户请求可能同时通过余额检查，但各自的实际输出用量会在请求完成后结算。在输入费用很低、输出费用很高的模型（如 o1 系列）上，用户可能利用并发请求绕过余额门槛，实际消费远超账户余额，造成透支。
+
+#### 解决方案：输出费用预留（2026-10-04 起实现）
+
+预扣时除了输入 token 费用，还预留输出 token 的费用。预留量根据以下规则确定：
+
+1. **请求声明了 `max_tokens`**：按 `max_tokens` 计算输出费用，加入预扣金额。
+2. **未声明 `max_tokens`**：按配置的 `output_reserve_tokens`（默认 4096）计算输出费用预留。
+3. **输出费用预留** = `output_tokens × 该模型的输出价格`。
+
+最终预扣金额 = 输入费用 + 输出费用预留。请求结束后结算实际用量，多扣的退回。
+
+**配置**（`billing.Settings`，`GET`/`PUT /settings/billing`）：
+
+| 字段 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `output_reserve_tokens` | int64 | 4096 | 未声明 `max_tokens` 时，预留的输出 token 数量；0 = 不预留 |
+
+**设计权衡**：
+
+- **不提供「单用户欠费上限」选项**：那会让用户在不知情的情况下产生债务，违反「预扣即上限」的直觉。
+- **预留而非严格限制**：模型实际输出可能超过 `max_tokens`（如 Claude 的 stop reason `max_tokens` 仍返回完整 token），预留确保绝大多数请求不透支，但不保证绝对不透支。
+- **task.submit 端点不受影响**：异步任务已有独立的 `Reservation` 预扣机制（§25.4），在任务提交成功后预扣估算费用。
+
+实现位置：`gateway/precharge.go`、`billing/billing.go` 的 `OutputReserveTokens` 方法。测试覆盖：输出预留生效、max_tokens 优先于配置、预留为 0 时不预留输出费用。
+
+#### 插件 EstimateUsage 返回 Unimplemented 的处理（2026-10-04，与 PL-P1-3 协作）
+
+**背景**：SDK 侧默认 `EstimateUsage` 实现将改为直接返回 `codes.Unimplemented`（不再回调 `CountTokens`）；volcengine 插件的非视频协议也返回 `Unimplemented`。核心必须能在这种情况下继续工作。
+
+**行为**（`gateway/precharge.go`）：
+
+- **非 `task.submit` 端点**（如 `/v1/messages`、`/v1/chat/completions`）：插件返回 `codes.Unimplemented` 时，**改用核心本地 tokenizer** 估算输入 token，行为与 `pb.Client == nil`（无插件客户端）分支相同：`InputTokens = max(实际计数, floor)`，继续预扣流程。
+- **`task.submit` 端点**：插件返回 `Unimplemented` 仍**按错误处理**，拒绝请求。异步任务必须有插件提供的估算（哪怕是保守常量），核心本地 tokenizer 无法准确估算视频、图片等多模态内容的费用。
+
+**判断是否为 task.submit 端点**：检查 `c.Request.URL.Path` 是否以 `/task/submit` 结尾或包含 `/task/submit/`（支持带版本前缀的路径如 `/v1/task/submit`）。
+
+**测试**（`gateway/precharge_test.go`）：
+
+1. `TestEstimateUsageUnimplementedFallbackToLocalTokenizer`：非 task.submit 端点，Unimplemented → 本地估算 → 预扣成功。
+2. `TestEstimateUsageUnimplementedTaskSubmitReturnsError`：task.submit 端点，Unimplemented → 报错，不预扣。
+
+**日志**：Unimplemented 触发本地 tokenizer 回退时，记录 `slog.Info("plugin EstimateUsage unimplemented, using local tokenizer", "plugin", pluginKey)`，方便排查。
+
 ### 26.8 内建插件分两种：安装并启用 / 只安装（2026-09-30）
 
 **用户裁定**：volcengine 随镜像内建安装，但默认不启用。它在运维加上 Ark 账号（每个部署自己的凭证和 base URL）之前什么都做不了，所以「每个镜像都带、默认启用」没有意义；而「只进市场」又要求每个部署自己去市场装一遍。这推翻了此前 `build-go.sh` 里「volcengine 故意不内置」那条决定（HANDOVER §6 旧行），理由正是它原来的理由：启用它才没有意义，安装它有意义。

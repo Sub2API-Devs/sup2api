@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
 )
 
 // Ledger kinds.
@@ -31,7 +31,7 @@ var validKinds = map[string]bool{KindUsage: true, KindAdminAdjust: true, KindPlu
 
 const balanceCacheTTL = 10 * time.Minute
 
-func balanceKey(userID int64) string { return "balance:" + strconv.FormatInt(userID, 10) }
+func balanceKey(userID int64) string { return "balance:" + x.Itoa64(userID) }
 
 // setBalanceScript stores "<ledger_id>:<balance>" unless the cache already
 // holds a newer ledger id, so concurrent writers never regress the value.
@@ -103,8 +103,18 @@ func (s *Service) ApplyTx(ctx context.Context, tx pgx.Tx, ch core.LedgerChange) 
 	if err := tx.QueryRow(ctx, `SELECT balance FROM user_balances WHERE user_id = $1 FOR UPDATE`, ch.UserID).Scan(&balance); err != nil {
 		return nil, err
 	}
-	if dup, err := findLedger(ctx, tx, ch.IdempotencyKey); err != nil || dup != nil {
-		return dup, err
+	if dup, err := findLedger(ctx, tx, ch.IdempotencyKey); err != nil {
+		return nil, err
+	} else if dup != nil {
+		// Idempotency key collision: verify user_id, amount, kind match
+		delta := ch.Amount
+		if !ch.Credit {
+			delta = delta.Neg()
+		}
+		if dup.UserID != ch.UserID || !dup.Delta.Equal(delta) || dup.Kind != ch.Kind {
+			return nil, core.ErrConflict.WithMessage("idempotency key reused with different user, amount or kind")
+		}
+		return dup, nil
 	}
 	delta := ch.Amount
 	if !ch.Credit {
@@ -121,8 +131,18 @@ func (s *Service) ApplyTx(ctx context.Context, tx pgx.Tx, ch core.LedgerChange) 
 		ch.UserID, delta, after, ch.Kind, ch.RefType, ch.RefID, ch.IdempotencyKey,
 		ch.OperatorID, ch.PluginKey, ch.Note).Scan(&id)
 	if store.IsNoRows(err) {
-		// Same key used concurrently for another user.
-		return findLedger(ctx, tx, ch.IdempotencyKey)
+		// Same key used concurrently: re-fetch and verify consistency
+		dup, err := findLedger(ctx, tx, ch.IdempotencyKey)
+		if err != nil {
+			return nil, err
+		}
+		if dup == nil {
+			return nil, core.ErrInternal.WithMessage("idempotency key vanished during insert")
+		}
+		if dup.UserID != ch.UserID || !dup.Delta.Equal(delta) || dup.Kind != ch.Kind {
+			return nil, core.ErrConflict.WithMessage("idempotency key reused with different user, amount or kind")
+		}
+		return dup, nil
 	}
 	if err != nil {
 		return nil, err
@@ -143,13 +163,20 @@ func (s *Service) ApplyTx(ctx context.Context, tx pgx.Tx, ch core.LedgerChange) 
 
 func findLedger(ctx context.Context, q store.Querier, key string) (*core.LedgerResult, error) {
 	r := &core.LedgerResult{Duplicate: true}
-	err := q.QueryRow(ctx, `SELECT id, balance_after FROM balance_ledger WHERE idempotency_key = $1`, key).Scan(&r.LedgerID, &r.BalanceAfter)
+	var userID int64
+	var delta decimal.Decimal
+	var kind string
+	err := q.QueryRow(ctx, `SELECT id, balance_after, user_id, delta, kind FROM balance_ledger WHERE idempotency_key = $1`,
+		key).Scan(&r.LedgerID, &r.BalanceAfter, &userID, &delta, &kind)
 	if store.IsNoRows(err) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	r.UserID = userID
+	r.Delta = delta
+	r.Kind = kind
 	return r, nil
 }
 
@@ -205,10 +232,15 @@ func (s *Service) CheckBalance(ctx context.Context, userID int64) error {
 	if err != nil {
 		return err
 	}
-	if !bal.GreaterThan(st.MinBalance) {
+	if !meetsMin(bal, st.MinBalance) {
 		return core.ErrInsufficientBalance.WithDetails(map[string]any{"balance": bal.String(), "min_balance": st.MinBalance.String()})
 	}
 	return nil
+}
+
+// meetsMin checks if balance meets the minimum threshold: balance > min.
+func meetsMin(balance, min decimal.Decimal) bool {
+	return balance.GreaterThan(min)
 }
 
 func isFKViolation(err error) bool {

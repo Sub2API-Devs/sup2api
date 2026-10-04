@@ -100,6 +100,7 @@ func (o *Options) defaults() {
 type Service struct {
 	db     *store.DB
 	ledger TxLedger
+	quoter core.Quoter
 	events core.EventPublisher
 	opts   Options
 
@@ -120,9 +121,9 @@ type Service struct {
 var _ core.Settler = (*Service)(nil)
 
 // New builds the usage service. Call Start to run the workers.
-func New(db *store.DB, ledger TxLedger, events core.EventPublisher, opts Options) *Service {
+func New(db *store.DB, ledger TxLedger, quoter core.Quoter, events core.EventPublisher, opts Options) *Service {
 	opts.defaults()
-	return &Service{db: db, ledger: ledger, events: events, opts: opts, queue: make(chan *core.UsageRecord, opts.QueueSize)}
+	return &Service{db: db, ledger: ledger, quoter: quoter, events: events, opts: opts, queue: make(chan *core.UsageRecord, opts.QueueSize)}
 }
 
 // Start runs the settlement workers and the retry loop until Stop.
@@ -539,7 +540,7 @@ type balanceUpdate struct {
 func (s *Service) reserveTx(ctx context.Context, tx pgx.Tx, r reservedRow) (*core.LedgerResult, error) {
 	rec := r.rec
 	p := fromRecord(rec)
-	total, detail, _, err := priceOf(p)
+	total, detail, _, err := s.priceOf(ctx, p)
 	if err != nil {
 		return nil, fmt.Errorf("price reservation: %w", err)
 	}
@@ -689,7 +690,51 @@ var errNotPending = errors.New("usage row is not pending")
 // settlement, a plugin's reservation and a reconcile that brings back the
 // real usage all go through it, so none of them can price a request
 // differently from the others.
-func priceOf(p *pending) (total decimal.Decimal, detail BillingDetail, exprHash string, err error) {
+func (s *Service) priceOf(ctx context.Context, p *pending) (total decimal.Decimal, detail BillingDetail, exprHash string, err error) {
+	if p.Expression == "" {
+		return decimal.Zero, BillingDetail{}, "", errors.New("price expression not found")
+	}
+	prog, err := expr.CompileCached(p.Expression)
+	if err != nil {
+		return decimal.Zero, BillingDetail{}, "", fmt.Errorf("compile price expression: %w", err)
+	}
+	params := make(map[string]any, len(p.Inputs.Params))
+	for k, v := range p.Inputs.Params {
+		params[k] = v
+	}
+	amount, err := s.quoter.Quote(ctx, core.QuoteInputs{
+		Expression:     p.Expression,
+		UsageSemantics: p.Inputs.Semantics,
+		Tokens:         core.UsageTokens{Input: p.Tokens.Input, Output: p.Tokens.Output, CacheRead: p.Tokens.CacheRead, CacheCreation: p.Tokens.CacheCreation, CacheCreation1h: p.Tokens.CacheCreation1h},
+		Metrics:        p.Metrics,
+		PriceParams:    params,
+		PriceHeaders:   p.Inputs.Headers,
+		RateMultiplier: p.Rate,
+		CreatedAt:      p.CreatedAt,
+	})
+	if err != nil {
+		return decimal.Zero, BillingDetail{}, "", err
+	}
+
+	// Rebuild detail from the expression evaluation for the response
+	t := p.Tokens
+	vars := expr.Normalize(p.Inputs.Semantics, expr.Tokens{
+		Input: t.Input, Output: t.Output, CacheRead: t.CacheRead,
+		CacheCreation: t.CacheCreation, CacheCreation1h: t.CacheCreation1h,
+	}, prog.Uses)
+	res, err := prog.Eval(expr.Input{Vars: vars, Metrics: p.Metrics, Params: p.Inputs.Params, Headers: p.Inputs.Headers, At: p.CreatedAt})
+	if err != nil {
+		return decimal.Zero, BillingDetail{}, "", err
+	}
+
+	return amount, BillingDetail{
+		ExprVersion: prog.Version(), Tier: res.Tier, Rules: res.Rules, Breakdown: res.Breakdown,
+		Cost: res.Cost, RateMultiplier: p.Rate, TotalCost: amount, Inputs: p.Inputs, Attempts: p.Attempts + 1,
+	}, prog.Hash(), nil
+}
+
+// priceOf is a test helper that prices a pending charge without a database.
+func priceOf(p *pending) (decimal.Decimal, BillingDetail, string, error) {
 	if p.Expression == "" {
 		return decimal.Zero, BillingDetail{}, "", errors.New("price expression not found")
 	}
@@ -706,10 +751,10 @@ func priceOf(p *pending) (total decimal.Decimal, detail BillingDetail, exprHash 
 	if err != nil {
 		return decimal.Zero, BillingDetail{}, "", err
 	}
-	total = res.Cost.Mul(p.Rate).Round(8)
-	return total, BillingDetail{
+	amount := res.Cost.Mul(p.Rate)
+	return amount, BillingDetail{
 		ExprVersion: prog.Version(), Tier: res.Tier, Rules: res.Rules, Breakdown: res.Breakdown,
-		Cost: res.Cost, RateMultiplier: p.Rate, TotalCost: total, Inputs: p.Inputs, Attempts: p.Attempts + 1,
+		Cost: res.Cost, RateMultiplier: p.Rate, TotalCost: amount, Inputs: p.Inputs, Attempts: p.Attempts + 1,
 	}, prog.Hash(), nil
 }
 
@@ -847,7 +892,7 @@ func (s *Service) RetryPending(ctx context.Context) (int, error) {
 }
 
 func (s *Service) settleTx(ctx context.Context, tx pgx.Tx, p *pending, skipLocked bool) (*core.LedgerResult, error) {
-	total, detail, exprHash, err := priceOf(p)
+	total, detail, exprHash, err := s.priceOf(ctx, p)
 	if err != nil {
 		return nil, err
 	}

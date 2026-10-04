@@ -13,6 +13,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
 )
 
 // Record is the list view of a usage_logs row.
@@ -144,6 +145,11 @@ func (r *Record) scanTargets() []any {
 func (r *Record) hideUpstream() {
 	r.AccountID, r.AccountName = nil, ""
 	r.AccountType, r.UpstreamProtocol = "", ""
+	// SEC-L3: Classify and sanitize error messages for self-service views.
+	// Client-side errors (4xx) show the message; server-side errors (5xx) show only the type.
+	if r.ErrorMessage != "" && r.StatusCode >= 500 {
+		r.ErrorMessage = ""
+	}
 }
 
 type filter struct {
@@ -226,15 +232,41 @@ func (s *Service) list(c *gin.Context, self *int64) {
 		httpapi.Fail(c, err)
 		return
 	}
-	page, size := httpapi.Pagination(c)
-	var total int64
-	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM usage_logs u`+f.sql(), f.args...).Scan(&total); err != nil {
-		httpapi.Fail(c, err)
-		return
+	_, size := httpapi.Pagination(c)
+
+	// Keyset pagination: cursor format is "created_at,id"
+	cursor := c.Query("cursor")
+	var cursorTime time.Time
+	var cursorID int64
+	if cursor != "" {
+		parts := strings.Split(cursor, ",")
+		if len(parts) == 2 {
+			cursorTime, _ = time.Parse(time.RFC3339Nano, parts[0])
+			cursorID, _ = strconv.ParseInt(parts[1], 10, 64)
+		}
 	}
-	args := append(f.args, size, (page-1)*size)
+
+	// Add cursor condition to filter
+	if !cursorTime.IsZero() {
+		f.add("(u.created_at < ? OR (u.created_at = ? AND u.id < ?))", cursorTime)
+		f.add("", cursorTime)
+		f.add("", cursorID)
+	}
+
+	// Optionally compute total if explicitly requested
+	var totalPtr *int64
+	if c.Query("with_total") == "true" {
+		var total int64
+		if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM usage_logs u`+f.sql(), f.args...).Scan(&total); err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+		totalPtr = &total
+	}
+
+	args := append(f.args, size+1) // Fetch one extra to detect if there are more results
 	rows, err := s.db.Pool.Query(ctx, `SELECT `+recordColumns+recordJoins+f.sql()+
-		` ORDER BY u.created_at DESC, u.id DESC LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
+		` ORDER BY u.created_at DESC, u.id DESC LIMIT $`+strconv.Itoa(len(args)), args...)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -256,7 +288,26 @@ func (s *Service) list(c *gin.Context, self *int64) {
 		httpapi.Fail(c, err)
 		return
 	}
-	httpapi.List(c, items, httpapi.Page{Page: page, PageSize: size, Total: total})
+
+	// Check if there are more results and generate next cursor
+	var nextCursor string
+	if len(items) > size {
+		items = items[:size]
+		last := items[len(items)-1]
+		nextCursor = last.CreatedAt.Format(time.RFC3339Nano) + "," + x.Itoa64(last.ID)
+	}
+
+	resp := map[string]any{"items": items, "page_size": size}
+	if nextCursor != "" {
+		resp["next_cursor"] = nextCursor
+		resp["has_more"] = true
+	} else {
+		resp["has_more"] = false
+	}
+	if totalPtr != nil {
+		resp["total"] = *totalPtr
+	}
+	c.JSON(200, resp)
 }
 
 func (s *Service) myUsageDetail(c *gin.Context) {

@@ -161,7 +161,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		canCoordinate = managed.coordinateAllowed
 		backgroundWork.Admitted = canWork
 	}
-	settler := usage.New(db, bill, events, usage.Options{CanRetry: canWork})
+	settler := usage.New(db, bill, bill, events, usage.Options{CanRetry: canWork})
 	settler.Start(ctx)
 	onClose(settler.Stop)
 

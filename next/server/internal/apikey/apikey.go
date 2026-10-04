@@ -445,15 +445,6 @@ func (s *Service) createMine(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	ok, err := groupAvailable(ctx, s.db.Pool, uid, in.GroupID)
-	if err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
-	if !ok {
-		httpapi.Fail(c, groupUnavailable(ctx))
-		return
-	}
 	raw, err := generateKey()
 	if err != nil {
 		httpapi.Fail(c, err)
@@ -461,9 +452,19 @@ func (s *Service) createMine(c *gin.Context) {
 	}
 	hash := HashKey(raw)
 	var id int64
-	if err := s.db.Pool.QueryRow(ctx, `INSERT INTO api_keys (user_id, group_id, name, key_prefix, key_hash, expires_at)
-		VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-		uid, in.GroupID, name, raw[:displayPrefix], hash, in.ExpiresAt).Scan(&id); err != nil {
+	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
+		ok, err := groupAvailable(ctx, tx, uid, in.GroupID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return groupUnavailable(ctx)
+		}
+		return tx.QueryRow(ctx, `INSERT INTO api_keys (user_id, group_id, name, key_prefix, key_hash, expires_at)
+			VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+			uid, in.GroupID, name, raw[:displayPrefix], hash, in.ExpiresAt).Scan(&id)
+	})
+	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}

@@ -834,7 +834,7 @@ func TestReconcileRunsOnOneNodeOnly(t *testing.T) {
 	// same Redis - which is what two nodes are.
 	var svcs []*Service
 	for _, node := range []string{"node-a", "node-b"} {
-		s := New(rf.db, rf.ledger, nil, Options{RetryInterval: time.Hour, RetryAfter: time.Hour})
+		s := New(rf.db, rf.ledger, rf.ledger, nil, Options{RetryInterval: time.Hour, RetryAfter: time.Hour})
 		s.StartReconcile(ctx, ReconcileDeps{
 			Locker:               cluster.NewLocker(rdb, nil),
 			Registry:             recRegistry{gen: reconcileGen(rf.plugin)},

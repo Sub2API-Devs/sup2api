@@ -226,13 +226,13 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 		}
 	}
 	if s.d.Slots != nil {
-		for _, v := range out {
-			n, err := s.d.Slots.InUse(ctx, "account", v.ID)
-			if err != nil {
-				slog.WarnContext(ctx, "account: read slots", "err", err)
-				break
+		inUse, err := s.d.Slots.InUseMany(ctx, "account", ids)
+		if err != nil {
+			slog.WarnContext(ctx, "account: read slots", "err", err)
+		} else {
+			for _, v := range out {
+				v.InUse = inUse[v.ID]
 			}
-			v.InUse = n
 		}
 	}
 	if s.d.Limiter != nil {

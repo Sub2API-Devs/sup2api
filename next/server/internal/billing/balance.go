@@ -1,6 +1,7 @@
 package billing
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
 )
 
 // LedgerEntry is the API view of a balance_ledger row.
@@ -29,6 +31,16 @@ type LedgerEntry struct {
 	PluginKey      *string         `json:"plugin_key"`
 	Note           string          `json:"note"`
 	CreatedAt      time.Time       `json:"created_at"`
+}
+
+// LedgerEntrySelf is the simplified DTO for self-service ledger queries.
+type LedgerEntrySelf struct {
+	ID           int64           `json:"id"`
+	Delta        decimal.Decimal `json:"delta"`
+	BalanceAfter decimal.Decimal `json:"balance_after"`
+	Kind         string          `json:"kind"`
+	Note         string          `json:"note"`
+	CreatedAt    time.Time       `json:"created_at"`
 }
 
 func (s *Service) registerBalanceRoutes(r *httpapi.Router) {
@@ -51,8 +63,59 @@ func (s *Service) myBalance(c *gin.Context) {
 }
 
 func (s *Service) myLedger(c *gin.Context) {
-	uid, _ := core.UserID(c.Request.Context())
-	s.listLedger(c, &uid)
+	ctx := c.Request.Context()
+	uid, _ := core.UserID(ctx)
+	page, size := httpapi.Pagination(c)
+	var where []string
+	var args []any
+	add := func(cond string, v any) {
+		args = append(args, v)
+		where = append(where, strings.ReplaceAll(cond, "?", "$"+strconv.Itoa(len(args))))
+	}
+	add("l.user_id = ?", uid)
+	if v := c.Query("kind"); v != "" {
+		add("l.kind = ?", v)
+	}
+	for _, f := range []struct{ q, cond string }{{"from", "l.created_at >= ?"}, {"to", "l.created_at < ?"}} {
+		if v := c.Query(f.q); v != "" {
+			t, err := time.Parse(time.RFC3339, v)
+			if err != nil {
+				httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("invalid "+f.q))
+				return
+			}
+			add(f.cond, t)
+		}
+	}
+	cond := " WHERE " + strings.Join(where, " AND ")
+	var total int64
+	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM balance_ledger l`+cond, args...).Scan(&total); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	args = append(args, size, (page-1)*size)
+	rows, err := s.db.Pool.Query(ctx, `
+		SELECT l.id, l.delta, l.balance_after, l.kind, l.note, l.created_at
+		FROM balance_ledger l`+cond+`
+		ORDER BY l.id DESC LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	defer rows.Close()
+	items := []LedgerEntrySelf{}
+	for rows.Next() {
+		var e LedgerEntrySelf
+		if err := rows.Scan(&e.ID, &e.Delta, &e.BalanceAfter, &e.Kind, &e.Note, &e.CreatedAt); err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+		items = append(items, e)
+	}
+	if err := rows.Err(); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.List(c, items, httpapi.Page{Page: page, PageSize: size, Total: total})
 }
 
 func (s *Service) allLedger(c *gin.Context) {
@@ -147,6 +210,12 @@ func (s *Service) adjustBalance(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
+	// Limit to numeric(20,8) max to prevent database overflow
+	maxAmount := decimal.RequireFromString("999999999999.99999999")
+	if in.Amount.GreaterThan(maxAmount) {
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("amount exceeds maximum allowed"))
+		return
+	}
 	operator, _ := core.UserID(ctx)
 	key := strings.TrimSpace(c.GetHeader("Idempotency-Key"))
 	if key == "" {
@@ -156,14 +225,16 @@ func (s *Service) adjustBalance(c *gin.Context) {
 		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("Idempotency-Key too long"))
 		return
 	}
+	// Scope the idempotency key to target user and operator to prevent cross-user reuse
+	scopedKey := fmt.Sprintf("admin_adjust:%d:%d:%s", id, operator, key)
 	res, err := s.Apply(ctx, core.LedgerChange{
 		UserID:         id,
 		Amount:         in.Amount,
 		Credit:         in.Credit,
 		Kind:           KindAdminAdjust,
 		RefType:        "admin",
-		RefID:          strconv.FormatInt(operator, 10),
-		IdempotencyKey: "admin_adjust:" + key,
+		RefID:          x.Itoa64(operator),
+		IdempotencyKey: scopedKey,
 		OperatorID:     nullID(operator),
 		Note:           in.Note,
 	})

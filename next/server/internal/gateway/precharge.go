@@ -6,6 +6,9 @@ import (
 	"math"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/tokenizer"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/usagerules"
@@ -43,6 +46,23 @@ func (c *call) precharge(ctx context.Context) error {
 		estctx, cancel := context.WithTimeout(ctx, c.gw.hotpathTimeout())
 		defer cancel()
 		report, err = estimator.EstimateUsage(estctx, in)
+		if err != nil {
+			// Handle Unimplemented: non-task.submit endpoints fall back to local tokenizer
+			if st, ok := status.FromError(err); ok && st.Code() == codes.Unimplemented {
+				if c.ep.TaskSubmit() {
+					return fmt.Errorf("task estimator unavailable: %w", err)
+				}
+				// Fall back to local tokenizer for non-task endpoints
+				var n int64
+				n, _, err = tokenizer.Count(ctx, prompt, "")
+				if err != nil {
+					return err
+				}
+				report = &pluginv1.UsageReport{Tokens: &pluginv1.UsageTokens{InputTokens: max(n, floor)}}
+			} else {
+				return err
+			}
+		}
 	} else {
 		if c.ep.TaskSubmit() {
 			return fmt.Errorf("task estimator unavailable")
@@ -63,8 +83,25 @@ func (c *call) precharge(ctx context.Context) error {
 			return fmt.Errorf("invalid estimated token count")
 		}
 	}
+
+	// Reserve output tokens to prevent concurrent overdraft (CONTRACTS §25.8)
+	outputReserve := int64(0)
+	if bg, ok := gate.(interface {
+		OutputReserveTokens(context.Context) (int64, error)
+	}); ok {
+		if reserve, err := bg.OutputReserveTokens(ctx); err == nil && reserve > 0 {
+			outputReserve = reserve
+		}
+	}
+
 	rec := *c.rec
-	rec.Tokens = usagerules.Tokens(t.GetInputTokens(), t.GetOutputTokens(), t.GetCacheReadTokens(), t.GetCacheCreationTokens(), t.GetCacheCreation_1HTokens())
+	rec.Tokens = usagerules.Tokens(
+		t.GetInputTokens(),
+		max(t.GetOutputTokens(), outputReserve),
+		t.GetCacheReadTokens(),
+		t.GetCacheCreationTokens(),
+		t.GetCacheCreation_1HTokens(),
+	)
 	rules := c.pf.Usage
 	if c.ep.Usage != nil {
 		rules = *c.ep.Usage

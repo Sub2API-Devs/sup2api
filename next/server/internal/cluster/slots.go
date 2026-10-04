@@ -180,6 +180,36 @@ func (s *Slots) InUse(ctx context.Context, kind string, id int64) (int, error) {
 	return countSlotsScript.Run(ctx, s.rdb, []string{SlotKey(kind, id)}, sharedClockOverride(s.opts.Now)).Int()
 }
 
+// InUseMany counts unexpired slots for multiple (kind, id) pairs using Redis pipeline.
+func (s *Slots) InUseMany(ctx context.Context, kind string, ids []int64) (map[int64]int, error) {
+	if len(ids) == 0 {
+		return map[int64]int{}, nil
+	}
+	keys := make([]string, len(ids))
+	for i, id := range ids {
+		keys[i] = SlotKey(kind, id)
+	}
+	cmds := make([]*redis.Cmd, len(keys))
+	_, err := s.rdb.Pipelined(ctx, func(p redis.Pipeliner) error {
+		for i, key := range keys {
+			cmds[i] = countSlotsScript.Eval(ctx, p, []string{key}, sharedClockOverride(s.opts.Now))
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[int64]int, len(ids))
+	for i, cmd := range cmds {
+		count, err := cmd.Int()
+		if err != nil {
+			return nil, err
+		}
+		result[ids[i]] = count
+	}
+	return result, nil
+}
+
 // Reclaim removes slots held by nodes that are no longer alive, plus
 // expired members. Slots of live nodes are never touched. It returns the
 // number of removed dead-node members.

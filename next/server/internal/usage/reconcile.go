@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -18,6 +17,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/background"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/usagerules"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
 )
 
 // The reconcile loop closes pre-charged usage rows (CONTRACTS §25.4).
@@ -605,7 +605,7 @@ func (s *Service) settleReconciled(ctx context.Context, e *settleEntry, row *res
 	if m := s.reconciledFacts(ctx, e, p, res.GetFacts()); m != nil {
 		p.Metrics = m
 	}
-	total, detail, exprHash, err := priceOf(p)
+	total, detail, exprHash, err := s.priceOf(ctx, p)
 	if err != nil {
 		if e.monitor != nil {
 			e.monitor.err = err
@@ -764,7 +764,7 @@ func (s *Service) refundFailed(ctx context.Context, e *settleEntry, row *reserve
 func (s *Service) abandon(ctx context.Context, e *settleEntry, row *reservedRowState, reason string) {
 	marker := map[string]string{
 		core.AnomalyReconcile:         core.ReconcileAbandoned,
-		core.AnomalyReconcileAttempts: strconv.Itoa(e.attempts),
+		core.AnomalyReconcileAttempts: x.Itoa64(int64(e.attempts)),
 		core.AnomalyReconcileError:    trunc(reason, 500),
 	}
 	if !s.keepEstimate(ctx, e, row, SettleStateAbandoned, marker, reason, false) {
@@ -804,7 +804,7 @@ func (s *Service) settleEstimate(ctx context.Context, e *settleEntry, row *reser
 	reason := res.GetReason()
 	marker := map[string]string{
 		core.AnomalyReconcile:         core.ReconcileEstimated,
-		core.AnomalyReconcileAttempts: strconv.Itoa(e.attempts + 1),
+		core.AnomalyReconcileAttempts: x.Itoa64(int64(e.attempts + 1)),
 	}
 	if reason != "" {
 		marker[core.AnomalyReconcileError] = trunc(reason, 500)

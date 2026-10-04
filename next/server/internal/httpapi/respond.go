@@ -56,6 +56,10 @@ func Pagination(c *gin.Context) (page, size int) {
 	if page < 1 {
 		page = 1
 	}
+	// Prevent negative OFFSET: cap page to prevent overflow
+	if page > 1000000 {
+		page = 1000000
+	}
 	if size < 1 {
 		size = 20
 	}

@@ -23,15 +23,24 @@ const settingsKey = "billing"
 
 // Settings is the "billing" row of the settings table (CONTRACTS §8).
 type Settings struct {
-	PreConsumeTokens   int64           `json:"pre_consume_tokens"`
-	MissingPricePolicy string          `json:"missing_price_policy"`
-	MinBalance         decimal.Decimal `json:"min_balance"`
-	BigCostWarningUSD  decimal.Decimal `json:"big_cost_warning_usd"`
+	PreConsumeTokens    int64           `json:"pre_consume_tokens"`
+	MissingPricePolicy  string          `json:"missing_price_policy"`
+	MinBalance          decimal.Decimal `json:"min_balance"`
+	BigCostWarningUSD   decimal.Decimal `json:"big_cost_warning_usd"`
+	OutputReserveTokens int64           `json:"output_reserve_tokens"`
+	MaxOverdraftPerUser decimal.Decimal `json:"max_overdraft_per_user"`
 }
 
 // DefaultSettings are used when the row is absent.
 func DefaultSettings() Settings {
-	return Settings{PreConsumeTokens: 500, MissingPricePolicy: PolicyReject, MinBalance: decimal.Zero, BigCostWarningUSD: decimal.NewFromInt(10)}
+	return Settings{
+		PreConsumeTokens:    500,
+		MissingPricePolicy:  PolicyReject,
+		MinBalance:          decimal.Zero,
+		BigCostWarningUSD:   decimal.NewFromInt(10),
+		OutputReserveTokens: 4000,
+		MaxOverdraftPerUser: decimal.NewFromInt(5),
+	}
 }
 
 type settingsSnapshot struct {
@@ -72,10 +81,12 @@ func loadSettings(ctx context.Context, q store.Querier) (Settings, error) {
 	}
 	// Fields absent from the stored document keep their defaults.
 	var partial struct {
-		PreConsumeTokens   *int64           `json:"pre_consume_tokens"`
-		MissingPricePolicy *string          `json:"missing_price_policy"`
-		MinBalance         *decimal.Decimal `json:"min_balance"`
-		BigCostWarningUSD  *decimal.Decimal `json:"big_cost_warning_usd"`
+		PreConsumeTokens    *int64           `json:"pre_consume_tokens"`
+		MissingPricePolicy  *string          `json:"missing_price_policy"`
+		MinBalance          *decimal.Decimal `json:"min_balance"`
+		BigCostWarningUSD   *decimal.Decimal `json:"big_cost_warning_usd"`
+		OutputReserveTokens *int64           `json:"output_reserve_tokens"`
+		MaxOverdraftPerUser *decimal.Decimal `json:"max_overdraft_per_user"`
 	}
 	if err := json.Unmarshal(raw, &partial); err != nil {
 		return v, err
@@ -91,6 +102,12 @@ func loadSettings(ctx context.Context, q store.Querier) (Settings, error) {
 	}
 	if partial.BigCostWarningUSD != nil {
 		v.BigCostWarningUSD = *partial.BigCostWarningUSD
+	}
+	if partial.OutputReserveTokens != nil {
+		v.OutputReserveTokens = *partial.OutputReserveTokens
+	}
+	if partial.MaxOverdraftPerUser != nil {
+		v.MaxOverdraftPerUser = *partial.MaxOverdraftPerUser
 	}
 	return v, nil
 }

@@ -35,7 +35,7 @@ func TestStopWaitsForOverflowBeforeConnectionAcquired(t *testing.T) {
 		}
 		conns = append(conns, conn)
 	}
-	s := New(&store.DB{Pool: pool}, f.ledger, nil, Options{QueueSize: 1})
+	s := New(&store.DB{Pool: pool}, f.ledger, f.ledger, nil, Options{QueueSize: 1})
 	s.Submit(f.record("queued", false))
 	s.Submit(f.record("overflow-stop", false))
 	done := make(chan struct{})

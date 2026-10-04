@@ -116,6 +116,7 @@ type Slots interface {
 	// limit are held (limit <= 0 = unlimited). release is idempotent.
 	Acquire(ctx context.Context, kind string, id int64, limit int, requestID string) (release func(), ok bool, err error)
 	InUse(ctx context.Context, kind string, id int64) (int, error)
+	InUseMany(ctx context.Context, kind string, ids []int64) (map[int64]int, error)
 }
 
 // LeasedSlots additionally cancels the returned context when a held slot is

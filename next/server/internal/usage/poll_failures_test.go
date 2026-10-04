@@ -9,7 +9,14 @@ import (
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/shopspring/decimal"
 )
+
+type fakeQuoter struct{}
+
+func (fakeQuoter) Quote(context.Context, core.QuoteInputs) (decimal.Decimal, error) {
+	return decimal.Zero, nil
+}
 
 func TestManagedPollFailuresPersistResetAndRefundAtomically(t *testing.T) {
 	rf := reconcileFixtureWith(t, &core.Account{AccountRef: core.AccountRef{ID: 7, PluginKey: "vid", Type: "vid_key"}, Status: "active"})
@@ -52,7 +59,7 @@ func TestManagedPollFailuresPersistResetAndRefundAtomically(t *testing.T) {
 		t.Fatal(got)
 	}
 	// A new core instance resumes the same counter; a busy original account does not spend it.
-	nodeB := New(f.db, f.ledger, nil, Options{})
+	nodeB := New(f.db, f.ledger, &fakeQuoter{}, nil, Options{})
 	nodeB.rec = f.svc.rec
 	e := claim(nodeB)
 	row, err := nodeB.loadReserved(ctx, e.usageLogID)
