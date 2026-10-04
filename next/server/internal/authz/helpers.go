@@ -18,7 +18,7 @@ func t(ctx context.Context, en, zh string) string {
 // privilege escalation where a user grants themselves or others permissions
 // they don't have (CONTRACTS §4.1, SEC-H2).
 func (s *Service) CanGrant(ctx context.Context, actorID int64, perms []string) error {
-	if len(perms) == 0 {
+	if actorID == 0 || len(perms) == 0 { // 0 is the system, as everywhere else
 		return nil
 	}
 	set, err := s.permissionSetCached(ctx, actorID)
@@ -47,7 +47,7 @@ func (s *Service) CanGrant(ctx context.Context, actorID int64, perms []string) e
 // CanActOn validates the actor may act on a target with the given permissions (CONTRACTS §4.1, SEC-H2).
 // Returns an error if the target holds any permission the actor doesn't have.
 func (s *Service) CanActOn(ctx context.Context, actorID int64, targetPerms []string) error {
-	if len(targetPerms) == 0 {
+	if actorID == 0 || len(targetPerms) == 0 { // 0 is the system, as everywhere else
 		return nil
 	}
 	actorSet, err := s.permissionSetCached(ctx, actorID)
@@ -82,7 +82,7 @@ func (s *Service) CanActOn(ctx context.Context, actorID int64, targetPerms []str
 // CanActOnUser checks whether the actor can act on the target user by comparing
 // their permission sets. This is a convenience wrapper around CanActOn for user-to-user checks.
 func (s *Service) CanActOnUser(ctx context.Context, actorID, targetID int64) error {
-	if actorID == targetID {
+	if actorID == 0 || actorID == targetID {
 		return nil
 	}
 	targetSet, err := s.permissionSetCached(ctx, targetID)
