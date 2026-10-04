@@ -514,6 +514,105 @@ func (m *Manager) point(name, digest string) error {
 	}
 	return syncDir(m.Root)
 }
+
+// GC removes old releases and blobs that are no longer referenced by current
+// or previous pointers. It keeps the two most recently used releases.
+func (m *Manager) GC(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	current, _ := m.Current()
+	var previous string
+	if p, err := os.Readlink(filepath.Join(m.Root, "previous")); err == nil {
+		if d := filepath.Base(p); ValidDigest(d) {
+			previous = d
+		}
+	}
+
+	keep := make(map[string]bool)
+	if current != "" {
+		keep[current] = true
+	}
+	if previous != "" {
+		keep[previous] = true
+	}
+
+	// Remove old release directories.
+	entries, err := os.ReadDir(filepath.Join(m.Root, "releases"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	for _, e := range entries {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if !e.IsDir() || !ValidDigest(e.Name()) || keep[e.Name()] {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(m.Root, "releases", e.Name())); err != nil {
+			return err
+		}
+	}
+
+	// Remove old manifests.
+	entries, err = os.ReadDir(filepath.Join(m.Root, "manifests"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	for _, e := range entries {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if e.IsDir() || !ValidDigest(e.Name()) || keep[e.Name()] {
+			continue
+		}
+		if err := os.Remove(filepath.Join(m.Root, "manifests", e.Name())); err != nil {
+			return err
+		}
+	}
+
+	// Find which blobs are still needed.
+	keepBlobs := make(map[string]bool)
+	for digest := range keep {
+		b, err := os.ReadFile(filepath.Join(m.Root, "manifests", digest))
+		if err != nil {
+			continue
+		}
+		var s rc.SignedManifest
+		if err := json.Unmarshal(b, &s); err != nil {
+			continue
+		}
+		var v rc.Manifest
+		if err := json.Unmarshal(s.Payload, &v); err != nil {
+			continue
+		}
+		for _, p := range v.Platforms {
+			if ValidDigest(p.BundleDigest) {
+				keepBlobs[p.BundleDigest] = true
+			}
+		}
+	}
+
+	// Remove old blobs.
+	entries, err = os.ReadDir(filepath.Join(m.Root, "blobs", "sha256"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	for _, e := range entries {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if e.IsDir() || !ValidDigest(e.Name()) || keepBlobs[e.Name()] {
+			continue
+		}
+		if err := os.Remove(filepath.Join(m.Root, "blobs", "sha256", e.Name())); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func atomicWrite(p string, b []byte) error {
 	f, e := os.CreateTemp(filepath.Dir(p), ".atomic-")
 	if e != nil {

@@ -73,7 +73,7 @@ func main() {
 }
 func run() error {
 	if len(os.Args) < 2 {
-		return errors.New("usage: sub2api-gateway init|import|serve|status|pause|resume|cancel|rollback|enable-node|disable-node")
+		return errors.New("usage: sub2api-gateway init|import|serve|status|pause|resume|cancel|rollback|enable-node|disable-node|set-primary|remove-node")
 	}
 	command := os.Args[1]
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
@@ -81,6 +81,7 @@ func run() error {
 	manifestURL := fs.String("manifest", "", "signed manifest URL at the configured release origin")
 	socket := fs.String("socket", "", "local management socket")
 	id := fs.String("id", "", "upgrade ID")
+	node := fs.String("node", "", "node ID for set-primary or remove-node")
 	bootstrap := fs.Bool("bootstrap", false, "explicitly initialize the first core database on the primary")
 	if err := fs.Parse(os.Args[2:]); err != nil {
 		return err
@@ -95,17 +96,42 @@ func run() error {
 		}
 		return localCommand(command, *socket, *id)
 	}
+	if command == "set-primary" || command == "remove-node" {
+		if *node == "" {
+			return fmt.Errorf("%s requires -node", command)
+		}
+		c, err := readConfig(*cfgPath)
+		if err != nil {
+			return err
+		}
+		return clusterCommand(command, c, *node)
+	}
 	c, err := readConfig(*cfgPath)
 	if err != nil {
 		return err
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	db, err := pgxpool.New(ctx, c.DatabaseURL)
+	dbcfg, err := pgxpool.ParseConfig(c.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	// Allow environment override for tuning; default to 4-8 per gateway.
+	if maxConns := os.Getenv("SUB2API_GATEWAY_POOL_MAX_CONNS"); maxConns != "" {
+		var n int32
+		if _, err := fmt.Sscanf(maxConns, "%d", &n); err == nil && n > 0 {
+			dbcfg.MaxConns = n
+		}
+	}
+	if dbcfg.MaxConns == 0 {
+		dbcfg.MaxConns = 8
+	}
+	db, err := pgxpool.NewWithConfig(ctx, dbcfg)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
+	slog.Info("gateway database pool", "max_conns", dbcfg.MaxConns)
 	store := &control.Store{DB: db, Cluster: c.ClusterID}
 	keys := map[string]ed25519.PublicKey{}
 	for id, b64 := range c.TrustedKeys {
@@ -190,6 +216,14 @@ func run() error {
 		return err
 	}
 	ownNode := control.Node{ID: c.NodeID, PeerURL: c.PeerURL, ShellBootID: hex.EncodeToString(boot), OS: runtime.GOOS, Arch: runtime.GOARCH, RuntimeABI: c.RuntimeABI, PeerProtocol: peer.Protocol, Strategy: control.PrimaryFirst}
+	// Configure structured logging with cluster context
+	handler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
+	logger := slog.New(handler).With(
+		"cluster_id", c.ClusterID,
+		"node_id", c.NodeID,
+		"shell_boot_id", ownNode.ShellBootID,
+	)
+	slog.SetDefault(logger)
 	locks := control.NewRedisLocks(redisClient)
 	store.Locks = locks
 	store.Redis = redisClient
@@ -475,4 +509,46 @@ func localCommand(command, socket, id string) error {
 		return fmt.Errorf("gateway returned HTTP %d", res.StatusCode)
 	}
 	return nil
+}
+
+func clusterCommand(command string, c config, node string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	dbcfg, err := pgxpool.ParseConfig(c.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	if maxConns := os.Getenv("SUB2API_GATEWAY_POOL_MAX_CONNS"); maxConns != "" {
+		var n int32
+		if _, err := fmt.Sscanf(maxConns, "%d", &n); err == nil && n > 0 {
+			dbcfg.MaxConns = n
+		}
+	}
+	if dbcfg.MaxConns == 0 {
+		dbcfg.MaxConns = 8
+	}
+	db, err := pgxpool.NewWithConfig(ctx, dbcfg)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	opt, err := redis.ParseURL(c.RedisURL)
+	if err != nil {
+		return err
+	}
+	redisClient := redis.NewClient(opt)
+	defer redisClient.Close()
+	store := &control.Store{
+		DB:      db,
+		Cluster: c.ClusterID,
+		Locks:   control.NewRedisLocks(redisClient),
+		Redis:   redisClient,
+	}
+	if command == "set-primary" {
+		return store.SetPrimary(ctx, node)
+	}
+	if command == "remove-node" {
+		return store.RemoveNode(ctx, node)
+	}
+	return errors.New("unknown cluster command")
 }

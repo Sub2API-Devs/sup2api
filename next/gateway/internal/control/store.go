@@ -35,6 +35,7 @@ type Store struct {
 	Locks             LockRunner
 	Redis             redis.UniversalClient
 	RevokePeer        func(context.Context, string) error
+	nodeDirectory     atomic.Pointer[[]Node]
 }
 
 // EnsureSchema installs or extends the shell schema. Shells starting together
@@ -194,6 +195,50 @@ func (s *Store) Nodes(ctx context.Context) ([]Node, error) {
 	return out, s.RefreshTelemetry(ctx, out)
 }
 
+// NodesWithPackage returns enabled nodes that hold the given plugin package.
+func (s *Store) NodesWithPackage(ctx context.Context, sum string) ([]Node, error) {
+	rows, err := s.DB.Query(ctx, `
+		SELECT n.node_id, n.peer_url, n.shell_boot_id, n.core_boot_id, n.ready, n.last_seen, n.enabled
+		FROM updater.nodes n
+		JOIN updater.node_plugin_packages p ON n.cluster_id = p.cluster_id AND n.node_id = p.node_id
+		WHERE n.cluster_id = $1 AND p.digest = $2 AND n.enabled = true
+		ORDER BY n.last_seen DESC
+	`, s.Cluster, sum)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Node
+	for rows.Next() {
+		var n Node
+		if err = rows.Scan(&n.ID, &n.PeerURL, &n.ShellBootID, &n.CoreBootID, &n.Ready, &n.LastSeen, &n.Enabled); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
+}
+
+// NodeDirectory returns the most recent heartbeat snapshot. Only revocation
+// operations (DisableNode) and explicit preflight checks must query PG for
+// strong consistency; authorization and routing use this cached view.
+func (s *Store) NodeDirectory() []Node {
+	if ptr := s.nodeDirectory.Load(); ptr != nil {
+		return *ptr
+	}
+	return nil
+}
+
+// RefreshNodeDirectory updates the cached node snapshot. Called by Heartbeat.
+func (s *Store) RefreshNodeDirectory(ctx context.Context) error {
+	nodes, err := s.Nodes(ctx)
+	if err != nil {
+		return err
+	}
+	s.nodeDirectory.Store(&nodes)
+	return nil
+}
+
 func (s *Store) Preflight(ctx context.Context, digest string) (Preflight, error) {
 	p := Preflight{ReleaseDigest: digest, Nodes: []string{}, Blockers: []string{}, Strategy: PrimaryFirst}
 	primary, base, rev, err := s.ClusterState(ctx)
@@ -232,7 +277,11 @@ func (s *Store) Preflight(ctx context.Context, digest string) (Preflight, error)
 	}
 	for _, n := range nodes {
 		p.Nodes = append(p.Nodes, n.ID)
-		if !n.Enabled || n.PeerProtocol != PeerProtocol || n.Strategy != PrimaryFirst {
+		if !n.Enabled {
+			// Disabled nodes do not block preflight; they are excluded from plans.
+			continue
+		}
+		if n.PeerProtocol != PeerProtocol || n.Strategy != PrimaryFirst {
 			p.Blockers = append(p.Blockers, "node lacks enabled current shell/peer capabilities: "+n.ID)
 		}
 		if !n.Ready || n.Mode != "local" || time.Since(n.LastSeen) > 20*time.Second {
@@ -880,14 +929,19 @@ func (s *Store) AuthorizePeer(ctx context.Context, source, boot, target, scope, 
 
 // AuthorizeTarget decides whether self may send its node key to u: only to
 // the primary, or to a serving node while self offloads because of CPU load.
+// Uses the cached node directory for routing decisions.
 func (s *Store) AuthorizeTarget(ctx context.Context, self string, u *url.URL, offloading bool) error {
 	primary, _, _, err := s.ClusterState(ctx)
 	if err != nil {
 		return peer.ErrUnavailable
 	}
-	nodes, err := s.Nodes(ctx)
-	if err != nil {
-		return peer.ErrUnavailable
+	nodes := s.NodeDirectory()
+	if nodes == nil {
+		var err error
+		nodes, err = s.Nodes(ctx)
+		if err != nil {
+			return peer.ErrUnavailable
+		}
 	}
 	for _, n := range nodes {
 		target, err := url.Parse(n.PeerURL)
@@ -908,9 +962,12 @@ func (s *Store) UnmanagedBlockers(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	nodes, err := s.Nodes(ctx)
-	if err != nil {
-		return nil, err
+	nodes := s.NodeDirectory()
+	if nodes == nil {
+		nodes, err = s.Nodes(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 	known := map[string]string{}
 	for _, n := range nodes {
@@ -1102,4 +1159,145 @@ func (s *Store) PrimaryPeer(ctx context.Context, self string) (bool, string, err
 		}
 	}
 	return false, "", errors.New("primary node is not registered")
+}
+
+// SetPrimary designates a new primary node. Must run under cluster-change lock
+// with no active upgrade plan. Validates that the target node is enabled and
+// has the current baseline artifacts.
+func (s *Store) SetPrimary(ctx context.Context, node string) error {
+	return s.withChange(ctx, func(ctx context.Context) error {
+		tx, err := s.DB.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback(ctx)
+		var active bool
+		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM updater.upgrades WHERE cluster_id=$1 AND status IN ('running','paused'))`, s.Cluster).Scan(&active); err != nil {
+			return err
+		}
+		if active {
+			return errors.New("cannot change primary while an upgrade is active")
+		}
+		baseline, _, _, err := s.ClusterState(ctx)
+		if err != nil {
+			return err
+		}
+		var enabled bool
+		var digest string
+		if err = tx.QueryRow(ctx, `SELECT enabled,release_digest FROM updater.nodes WHERE cluster_id=$1 AND node_id=$2`, s.Cluster, node).Scan(&enabled, &digest); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return fmt.Errorf("node %q is not registered", node)
+			}
+			return err
+		}
+		if !enabled {
+			return fmt.Errorf("node %q is disabled", node)
+		}
+		if digest != baseline {
+			return fmt.Errorf("node %q is not on baseline %s", node, baseline)
+		}
+		// Verify the node has baseline artifacts available
+		var hasArtifacts bool
+		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM updater.node_artifacts WHERE cluster_id=$1 AND node_id=$2 AND release_digest=$3)`, s.Cluster, node, baseline).Scan(&hasArtifacts); err != nil {
+			return err
+		}
+		if !hasArtifacts {
+			return fmt.Errorf("node %q lacks baseline artifacts", node)
+		}
+		// Check plugin packages presence
+		rows, err := tx.Query(ctx, `SELECT DISTINCT lower(package_sha256) FROM plugin_versions WHERE is_enabled`)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		required := []string{}
+		for rows.Next() {
+			var sum string
+			if err = rows.Scan(&sum); err != nil {
+				return err
+			}
+			required = append(required, sum)
+		}
+		rows.Close()
+		for _, sum := range required {
+			var hasPackage bool
+			if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM updater.node_plugin_packages WHERE cluster_id=$1 AND node_id=$2 AND digest=$3)`, s.Cluster, node, sum).Scan(&hasPackage); err != nil {
+				return err
+			}
+			if !hasPackage {
+				return fmt.Errorf("node %q lacks plugin package %s", node, sum)
+			}
+		}
+		if _, err = tx.Exec(ctx, `UPDATE updater.clusters SET primary_node=$1 WHERE cluster_id=$2`, node, s.Cluster); err != nil {
+			return err
+		}
+		if err = tx.Commit(ctx); err != nil {
+			return err
+		}
+		fmt.Printf("primary node changed to %s\n", node)
+		return nil
+	})
+}
+
+// RemoveNode permanently removes a disabled node from the cluster. The node
+// must be disabled, stopped, and explicitly isolated. Audit records are preserved.
+func (s *Store) RemoveNode(ctx context.Context, node string) error {
+	return s.withChange(ctx, func(ctx context.Context) error {
+		tx, err := s.DB.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback(ctx)
+		var enabled, stopped bool
+		var lastSeen time.Time
+		if err = tx.QueryRow(ctx, `SELECT enabled,stopped,last_seen FROM updater.nodes WHERE cluster_id=$1 AND node_id=$2`, s.Cluster, node).Scan(&enabled, &stopped, &lastSeen); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return fmt.Errorf("node %q is not registered", node)
+			}
+			return err
+		}
+		if enabled {
+			return fmt.Errorf("node %q is still enabled; disable it first", node)
+		}
+		if !stopped {
+			return fmt.Errorf("node %q is not marked stopped; wait for confirmation or isolate it", node)
+		}
+		if time.Since(lastSeen) < 5*time.Minute {
+			return fmt.Errorf("node %q was seen recently (%v ago); explicitly isolate it first", node, time.Since(lastSeen).Round(time.Second))
+		}
+		primary, _, _, err := s.ClusterState(ctx)
+		if err != nil {
+			return err
+		}
+		if node == primary {
+			return fmt.Errorf("node %q is the primary; designate a new primary first", node)
+		}
+		// Delete node and related records; audit events are preserved
+		if _, err = tx.Exec(ctx, `DELETE FROM updater.node_admissions WHERE cluster_id=$1 AND node_id=$2`, s.Cluster, node); err != nil {
+			return err
+		}
+		if _, err = tx.Exec(ctx, `DELETE FROM updater.node_artifacts WHERE cluster_id=$1 AND node_id=$2`, s.Cluster, node); err != nil {
+			return err
+		}
+		if _, err = tx.Exec(ctx, `DELETE FROM updater.node_plugin_packages WHERE cluster_id=$1 AND node_id=$2`, s.Cluster, node); err != nil {
+			return err
+		}
+		if _, err = tx.Exec(ctx, `DELETE FROM updater.nodes WHERE cluster_id=$1 AND node_id=$2`, s.Cluster, node); err != nil {
+			return err
+		}
+		if err = tx.Commit(ctx); err != nil {
+			return err
+		}
+		fmt.Printf("node %s removed from cluster\n", node)
+		return nil
+	})
+}
+
+// PlanStatus returns the current upgrade plan status including blocked reason.
+func (s *Store) PlanStatus(ctx context.Context) (id, status, blockedReason string, err error) {
+	err = s.DB.QueryRow(ctx, `SELECT id,status,blocked_reason FROM updater.upgrades WHERE cluster_id=$1 AND status IN ('running','paused') LIMIT 1`, s.Cluster).Scan(&id, &status, &blockedReason)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", "", nil
+	}
+	return
 }

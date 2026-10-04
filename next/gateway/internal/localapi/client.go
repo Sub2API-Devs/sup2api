@@ -19,9 +19,14 @@ type Client struct {
 }
 
 func New(socket, token string) *Client {
-	return &Client{socket: socket, token: token, http: &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-		return (&net.Dialer{}).DialContext(ctx, "unix", socket)
-	}}, Timeout: 30 * time.Second}}
+	return &Client{socket: socket, token: token, http: &http.Client{Transport: &http.Transport{
+		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, "unix", socket)
+		},
+		MaxIdleConns:        10,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
+	}, Timeout: 30 * time.Second}}
 }
 func (c *Client) Call(ctx context.Context, method, path string, in, out any) error {
 	var body io.Reader

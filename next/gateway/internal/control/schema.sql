@@ -68,3 +68,5 @@ ALTER TABLE updater.clusters ADD COLUMN IF NOT EXISTS offload_enabled boolean NO
 ALTER TABLE updater.clusters ADD COLUMN IF NOT EXISTS offload_cpu_percent integer NOT NULL DEFAULT 80;
 ALTER TABLE updater.nodes ADD COLUMN IF NOT EXISTS cpu_percent real;
 ALTER TABLE updater.nodes ADD COLUMN IF NOT EXISTS offloading boolean NOT NULL DEFAULT false;
+-- Blocked reason (2026-10-04): coordinator/worker waiting errors are written here.
+ALTER TABLE updater.upgrades ADD COLUMN IF NOT EXISTS blocked_reason text NOT NULL DEFAULT '';

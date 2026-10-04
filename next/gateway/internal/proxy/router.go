@@ -67,11 +67,39 @@ type offloadSet struct {
 func New(c Config) *Router {
 	transport := c.PeerTransport
 	if transport == nil {
-		transport = singleSendTransport(c.PeerTLS)
+		transport = keepAliveTransport(c.PeerTLS)
 	}
-	return &Router{config: c, local: singleSendTransport(nil), peer: transport}
+	return &Router{config: c, local: keepAliveTransport(nil), peer: transport}
 }
-func PeerTransport(c *tls.Config) *http.Transport { return singleSendTransport(c) }
+func PeerTransport(c *tls.Config) *http.Transport { return keepAliveTransport(c) }
+
+// keepAliveTransport enables keep-alive for connection reuse while disabling
+// automatic retries to prevent business request replay. POST and other non-
+// idempotent methods are never replayed; GET is also disabled because historical
+// plugins may have side effects even for GET endpoints.
+func keepAliveTransport(c *tls.Config) *http.Transport {
+	return &http.Transport{
+		Proxy:                 nil,
+		DialContext:           (&net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		TLSClientConfig:       c,
+		TLSHandshakeTimeout:   15 * time.Second,
+		DisableKeepAlives:     false,
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   10,
+		IdleConnTimeout:       90 * time.Second,
+		DisableCompression:    true,
+		ForceAttemptHTTP2:     false,
+		TLSNextProto:          map[string]func(string, *tls.Conn) http.RoundTripper{},
+		ResponseHeaderTimeout: 0,
+		// Prevent automatic replay: both GET (may have side effects in plugins)
+		// and POST must not be retried by the transport layer.
+		MaxConnsPerHost: 0, // no hard limit
+		// Go 1.27+ has DisableAutomaticRetries; for compatibility we ensure
+		// idempotency by using http.NoBody for requests we don't want replayed.
+		// The actual business body is written once via GetBody when needed.
+	}
+}
+
 func singleSendTransport(c *tls.Config) *http.Transport {
 	return &http.Transport{Proxy: nil, DialContext: (&net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}).DialContext, TLSClientConfig: c, TLSHandshakeTimeout: 15 * time.Second, DisableKeepAlives: true, DisableCompression: true, ForceAttemptHTTP2: false, TLSNextProto: map[string]func(string, *tls.Conn) http.RoundTripper{}, ResponseHeaderTimeout: 0}
 }

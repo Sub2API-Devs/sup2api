@@ -25,9 +25,12 @@ type Engine struct {
 	// CPU reports this node's averaged CPU load; ok is false when unmeasured.
 	CPU func() (percent float64, ok bool)
 
-	heartbeat  sync.Mutex
-	offloading bool
-	progress   atomic.Uint64
+	heartbeat     sync.Mutex
+	offloading    bool
+	progress      atomic.Uint64
+	localReady    atomic.Bool
+	lastBlocked   sync.Mutex
+	lastBlockedAt map[string]time.Time
 }
 
 // Run polls durable state; restart never resumes an in-memory command. Each pass
@@ -95,6 +98,12 @@ func (e *Engine) commitProgress(ctx context.Context, tx pgx.Tx) error {
 	e.Store.NotifyUpgrade(ctx)
 	return nil
 }
+
+// LocalReady reports whether this node is ready to serve requests locally, based
+// on the most recent heartbeat observation. The router calls this for every new
+// request; reading an atomic bool avoids calling the core status API each time.
+func (e *Engine) LocalReady() bool { return e.localReady.Load() }
+
 func (e *Engine) Heartbeat(ctx context.Context) error {
 	e.heartbeat.Lock()
 	defer e.heartbeat.Unlock()
@@ -105,6 +114,8 @@ func (e *Engine) Heartbeat(ctx context.Context) error {
 	}
 	nodes, nodesErr := e.Store.Nodes(ctx)
 	if nodesErr == nil {
+		// Refresh the node directory snapshot for authorization and routing.
+		e.Store.nodeDirectory.Store(&nodes)
 		if refresher, ok := e.Runtime.(interface {
 			RefreshForward(context.Context, []Node) error
 		}); ok {
@@ -123,6 +134,8 @@ func (e *Engine) Heartbeat(ctx context.Context) error {
 	if err != nil {
 		n.Error = err.Error()
 	}
+	// Update atomic ready state for router's LocalReady callback to read.
+	e.localReady.Store(st.Ready && mode == "local")
 	if e.CPU != nil {
 		if cpu, ok := e.CPU(); ok {
 			n.CPUPercent = &cpu
@@ -229,7 +242,9 @@ func (e *Engine) Coordinate(ctx context.Context) error {
 			return err
 		}
 		if verified != len(p.Nodes) {
-			return errors.New("waiting for all planned nodes to verify the target release")
+			reason := "waiting for all planned nodes to verify the target release"
+			_ = e.recordBlockedReason(ctx, p.ID, reason)
+			return errors.New(reason)
 		}
 		_, err = tx.Exec(ctx, `UPDATE updater.clusters SET baseline=$2,revision=revision+1 WHERE cluster_id=$1`, e.Store.Cluster, p.ReleaseDigest)
 		if err != nil {
@@ -248,6 +263,7 @@ func (e *Engine) Coordinate(ctx context.Context) error {
 	st := steps[p.Cursor]
 	if st.Action == "maintenance" || st.Action == "start-primary" {
 		if err = e.followersStopped(ctx); err != nil {
+			_ = e.recordBlockedReason(ctx, p.ID, "waiting for followers to stop: "+err.Error())
 			return err
 		}
 	}
@@ -932,4 +948,23 @@ func (e *Engine) planAuthorizesTx(ctx context.Context, tx pgx.Tx, digest string)
 		return nil
 	}
 	return errors.New("plan changed before admission commit")
+}
+
+// recordBlockedReason writes waiting errors to upgrades.blocked_reason with
+// deduplication and rate limiting (once per minute per reason).
+func (e *Engine) recordBlockedReason(ctx context.Context, upgradeID, reason string) error {
+	e.lastBlocked.Lock()
+	if e.lastBlockedAt == nil {
+		e.lastBlockedAt = make(map[string]time.Time)
+	}
+	key := upgradeID + ":" + reason
+	last := e.lastBlockedAt[key]
+	if time.Since(last) < time.Minute {
+		e.lastBlocked.Unlock()
+		return nil
+	}
+	e.lastBlockedAt[key] = time.Now()
+	e.lastBlocked.Unlock()
+	_, err := e.Store.DB.Exec(ctx, `UPDATE updater.upgrades SET blocked_reason=$2 WHERE id=$1`, upgradeID, reason)
+	return err
 }

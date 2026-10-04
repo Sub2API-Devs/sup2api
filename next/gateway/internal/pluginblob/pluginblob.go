@@ -139,8 +139,16 @@ type Service struct {
 	// Primary reports whether this node is the primary and the primary's
 	// HTTPS peer origin.
 	Primary func(context.Context) (self bool, peerURL string, err error)
+	// NodesWithPackage returns enabled nodes that hold the given package digest.
+	NodesWithPackage func(context.Context, string) ([]NodeRef, error)
 	// Client is the authenticated node client; it only reaches the primary.
 	Client *http.Client
+}
+
+// NodeRef identifies a peer node for package fallback.
+type NodeRef struct {
+	ID      string
+	PeerURL string
 }
 
 func sumFrom(path, prefix string) (string, bool) {
@@ -220,22 +228,52 @@ func (s *Service) pull(ctx context.Context, sum string) error {
 	if self {
 		return errNotFound
 	}
+	// Try the primary first.
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, origin+"/internal/plugin-blobs/"+sum, nil)
 	if err != nil {
 		return err
 	}
 	res, err := s.Client.Do(req)
-	if err != nil {
-		return fmt.Errorf("fetch package from the primary: %w", err)
+	if err == nil {
+		defer res.Body.Close()
+		if res.StatusCode == http.StatusNotFound && res.Header.Get("X-Sub2api-Peer-Error") == "" {
+			// Primary doesn't have it; try fallback nodes.
+		} else if res.StatusCode != http.StatusOK {
+			return fmt.Errorf("fetch package from the primary: HTTP %d", res.StatusCode)
+		} else {
+			return s.Store.Write(sum, res.Body)
+		}
 	}
-	defer res.Body.Close()
-	if res.StatusCode == http.StatusNotFound && res.Header.Get("X-Sub2api-Peer-Error") == "" {
+	// Primary failed or returned 404; try other nodes with the package.
+	if s.NodesWithPackage == nil {
+		if err != nil {
+			return fmt.Errorf("fetch package from the primary: %w", err)
+		}
 		return errNotFound
 	}
-	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("fetch package from the primary: HTTP %d", res.StatusCode)
+	nodes, err := s.NodesWithPackage(ctx, sum)
+	if err != nil || len(nodes) == 0 {
+		if err != nil {
+			return fmt.Errorf("fetch package from the primary: %w; fallback query failed: %w", err, err)
+		}
+		return errNotFound
 	}
-	return s.Store.Write(sum, res.Body)
+	// Try each node in turn.
+	for _, node := range nodes {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, node.PeerURL+"/internal/plugin-blobs/"+sum, nil)
+		if err != nil {
+			continue
+		}
+		res, err := s.Client.Do(req)
+		if err != nil {
+			continue
+		}
+		defer res.Body.Close()
+		if res.StatusCode == http.StatusOK {
+			return s.Store.Write(sum, res.Body)
+		}
+	}
+	return fmt.Errorf("package %s not available from primary or %d fallback nodes", sum, len(nodes))
 }
 
 func (s *Service) push(ctx context.Context, sum string) error {
@@ -246,27 +284,38 @@ func (s *Service) push(ctx context.Context, sum string) error {
 	if self {
 		return nil
 	}
+	// Write locally first, then replicate asynchronously.
 	f, err := os.Open(s.Store.path(sum))
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 	st, err := f.Stat()
 	if err != nil {
+		f.Close()
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, origin+"/internal/plugin-blobs/"+sum, f)
-	if err != nil {
-		return err
-	}
-	req.ContentLength = st.Size()
-	res, err := s.Client.Do(req)
-	if err != nil {
-		return fmt.Errorf("store package on the primary: %w", err)
-	}
-	defer res.Body.Close()
-	if res.StatusCode/100 != 2 {
-		return fmt.Errorf("store package on the primary: HTTP %d", res.StatusCode)
-	}
+	size := st.Size()
+	f.Close()
+
+	// Replicate asynchronously to the primary (best-effort).
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		f, err := os.Open(s.Store.path(sum))
+		if err != nil {
+			return
+		}
+		defer f.Close()
+		req, err := http.NewRequestWithContext(ctx, http.MethodPut, origin+"/internal/plugin-blobs/"+sum, f)
+		if err != nil {
+			return
+		}
+		req.ContentLength = size
+		res, err := s.Client.Do(req)
+		if err != nil {
+			return
+		}
+		res.Body.Close()
+	}()
 	return nil
 }
