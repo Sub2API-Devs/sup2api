@@ -140,4 +140,8 @@ release 0.1.19
 # 0.1.23 adds plugin default models and mappings, the redesigned account editor
 # and model mapping on Claude Code connect (same schema).
 release 0.1.23
+# 0.1.24 adds migrations 0026-0031 (account auto-disable, security hardening,
+# indexes, subscription limits, credential refresh, last account test), drops
+# step-up, and authorizes Claude Code accounts in the account editor.
+release 0.1.24 0.1.23
 ls -la publish
