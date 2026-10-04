@@ -32,7 +32,7 @@ func (f *fakeAuthz) PermissionSet(_ context.Context, uid int64) (core.Permission
 	}
 	return core.PermissionSet{Keys: ks}, nil
 }
-func (f *fakeAuthz) IsSensitive(string) bool { return false }
+func (f *fakeAuthz) IsSensitive(string) bool                         { return false }
 func (f *fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
 func (f *fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 
@@ -249,6 +249,11 @@ func TestInstallConsentUpgradeUninstall(t *testing.T) {
 
 	// Success; net (optional) narrowed then denied is fine: grant with narrower scope.
 	grants := append(explicitGuardGrants(), GrantInput{Permission: "net", Scope: map[string]any{"domains": []any{}}})
+	// Handing the new plugin permissions to roles needs role:manage (SEC-H2).
+	if _, err := e.svc.Consent(ctx, "guard", "0.1.0", ConsentRequest{Grants: grants, RoleKeysForNewPermissions: []string{"admin"}}, e.admin); core.AsError(err).Code != "permission_denied" {
+		t.Fatalf("role grant without role:manage: %v", err)
+	}
+	e.authz.perms[e.admin]["role:manage"] = true
 	res, err := e.svc.Consent(ctx, "guard", "0.1.0", ConsentRequest{Grants: grants, RoleKeysForNewPermissions: []string{"admin"}}, e.admin)
 	if err != nil {
 		t.Fatalf("consent: %v", err)
@@ -316,7 +321,9 @@ func TestInstallConsentUpgradeUninstall(t *testing.T) {
 	if _, err := e.svc.Consent(ctx, "guard", "0.2.0", ConsentRequest{}, e.admin); fieldCode(err, "permission:events") != "consent_required" {
 		t.Fatalf("upgrade consent without events: %v", err)
 	}
-	// Carried-over grants need no critical right; events is medium.
+	// Carried-over grants need no critical right; events is medium. 0.2.0
+	// adds a user permission, and handing it to a role needs role:manage.
+	e.authz.perms[e.limited]["role:manage"] = true
 	res, err = e.svc.Consent(ctx, "guard", "0.2.0", ConsentRequest{Grants: []GrantInput{{Permission: "events"}}, RoleKeysForNewPermissions: []string{"admin"}}, e.limited)
 	if err != nil {
 		t.Fatalf("upgrade consent: %v", err)

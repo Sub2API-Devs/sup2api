@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/jackc/pgx/v5"
@@ -199,7 +200,7 @@ func (s *Service) Consent(ctx context.Context, key, version string, req ConsentR
 		if err := s.checkGrantRights(ctx, actorID, decisions, trust, pubID != nil); err != nil {
 			return err
 		}
-		if err := s.checkRoleGrantRights(ctx, actorID, m, req.RoleKeysForNewPermissions); err != nil {
+		if err := s.checkRoleGrantRights(ctx, tx, actorID, m, req.RoleKeysForNewPermissions); err != nil {
 			return err
 		}
 		for _, d := range decisions {
@@ -328,24 +329,34 @@ func (s *Service) checkGrantRights(ctx context.Context, actorID int64, ds []deci
 	return nil
 }
 
-// checkRoleGrantRights verifies the operator may grant plugin permissions to
-// roles (requires role:manage and holding all permissions being granted).
-func (s *Service) checkRoleGrantRights(ctx context.Context, actorID int64, m *manifest.Manifest, roleKeys []string) error {
-	if isSystem(ctx) || len(roleKeys) == 0 {
+// checkRoleGrantRights verifies the operator may hand the plugin permissions
+// this version adds to roles (SEC-H2): role:manage, and holding each of them.
+// Only permissions the catalog does not have yet are handed out (authz
+// SyncPlugin), so an upgrade adding none needs neither - the console always
+// sends its default role, and carrying a running plugin forward must not
+// require role:manage.
+func (s *Service) checkRoleGrantRights(ctx context.Context, tx pgx.Tx, actorID int64, m *manifest.Manifest, roleKeys []string) error {
+	if isSystem(ctx) || len(roleKeys) == 0 || len(m.UserPermissions) == 0 {
 		return nil
 	}
-	// Require role:manage permission
+	perms := make([]string, 0, len(m.UserPermissions))
+	for _, up := range m.UserPermissions {
+		perms = append(perms, PermissionKey(m.Key, up.Key))
+	}
+	var existing []string
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(array_agg(key), '{}') FROM permissions WHERE key = ANY($1)`, perms).Scan(&existing); err != nil {
+		return err
+	}
+	perms = slices.DeleteFunc(perms, func(p string) bool { return slices.Contains(existing, p) })
+	if len(perms) == 0 {
+		return nil
+	}
 	ok, err := s.d.Authz.Can(ctx, actorID, "role:manage")
 	if err != nil {
 		return err
 	}
 	if !ok {
 		return core.ErrPermissionDenied.WithMessage("granting permissions to roles requires role:manage")
-	}
-	// Collect all plugin user permissions
-	perms := make([]string, 0, len(m.UserPermissions))
-	for _, up := range m.UserPermissions {
-		perms = append(perms, PermissionKey(m.Key, up.Key))
 	}
 	// Actor must hold all permissions being granted to roles
 	if err := s.d.Authz.CanGrant(ctx, actorID, perms); err != nil {
