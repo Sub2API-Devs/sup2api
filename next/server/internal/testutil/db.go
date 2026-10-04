@@ -17,6 +17,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/testpg"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/migrations"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
@@ -30,19 +31,15 @@ var (
 )
 
 // DB returns a fresh, fully migrated database for one test, created inside
-// the server named by TEST_DATABASE_URL (a superuser DSN, e.g. the docker
-// compose "pg" service reached through an SSH tunnel or run on the test
-// server). Skips the test when TEST_DATABASE_URL is unset.
+// the test PostgreSQL (testpg.URL: TEST_DATABASE_URL when set, otherwise a
+// local server started from Go and shared by every test process).
 //
 // Databases are cloned from a template (tpl_<hash of core migrations>) that
 // is built once and shared by every test process, so each test pays for a
 // CREATE DATABASE instead of running all migrations.
 func DB(t testing.TB) *store.DB {
 	t.Helper()
-	base := os.Getenv("TEST_DATABASE_URL")
-	if base == "" {
-		t.Skip("TEST_DATABASE_URL not set")
-	}
+	base := testpg.URL(t)
 	ctx := context.Background()
 	tplOnce.Do(func() { tplName, tplErr = ensureTemplate(ctx, base) })
 	if tplErr != nil {

@@ -12,20 +12,19 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/Sub2API-Devs/sup2api/next/sdk/testpg"
 )
 
 var schemaSeq atomic.Int64
 
-// NewSchema creates a fresh schema in the database named by
-// TEST_DATABASE_URL and returns a DSN whose search_path is pinned to it,
-// mimicking the restricted DSN the host hands out. The schema is dropped on
-// cleanup. Skips the test when TEST_DATABASE_URL is unset.
+// NewSchema creates a fresh schema in the test PostgreSQL (testpg.URL:
+// TEST_DATABASE_URL, or a local server started from Go) and returns a DSN
+// whose search_path is pinned to it, mimicking the restricted DSN the host
+// hands out. The schema is dropped on cleanup.
 func NewSchema(t testing.TB, prefix string) (dsn, schema string) {
 	t.Helper()
-	base := os.Getenv("TEST_DATABASE_URL")
-	if base == "" {
-		t.Skip("TEST_DATABASE_URL not set")
-	}
+	base := testpg.URL(t)
 	if prefix == "" {
 		prefix = "plg_test"
 	}
