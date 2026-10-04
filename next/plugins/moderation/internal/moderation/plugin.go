@@ -22,6 +22,7 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/batch"
 )
 
 // TopicBlocksChanged is broadcast after the blocks table changed; the other
@@ -51,7 +52,7 @@ type Plugin struct {
 	pool   *workerPool
 	closed bool
 
-	events chan eventRec
+	eventWriter *batch.Writer[eventRec]
 
 	// blocked maps user id -> expiry (zero = until unblocked).
 	blocked        atomic.Pointer[map[int64]time.Time]
@@ -79,7 +80,6 @@ func New() *Plugin {
 		now:          time.Now,
 		agent:        newAgent(),
 		cache:        newLRU(cacheEntries),
-		events:       make(chan eventRec, 4096),
 		refreshEvery: 5 * time.Second,
 		refreshNow:   make(chan struct{}, 1),
 	}
@@ -99,8 +99,20 @@ func New() *Plugin {
 func (p *Plugin) Init(_ context.Context, h pluginsdk.Host) error {
 	p.host = h
 	p.log = h.Logger()
-	p.wg.Add(2)
-	go p.eventWriter(p.bg)
+
+	// Start batch writer for events
+	p.eventWriter = batch.New(p.bg, 4096, func(ctx context.Context, evs []eventRec) error {
+		if err := p.writeEvents(ctx, evs); err != nil {
+			p.log.Warn("moderation: write events failed", "error", err.Error(), "events", len(evs))
+			return err
+		}
+		p.applyBans(ctx, evs)
+		return nil
+	}, func(n int) {
+		p.stats.droppedEvents.Add(int64(n))
+	})
+
+	p.wg.Add(1)
 	go p.refreshLoop(p.bg)
 	c := p.cfg.Load()
 	p.resizePool(c.MaxConcurrency, c.QueueSize)
@@ -149,6 +161,12 @@ func (p *Plugin) Health(context.Context) (*pluginv1.HealthResponse, error) {
 // the pending event records.
 func (p *Plugin) Shutdown(ctx context.Context) error {
 	p.cancel()
+
+	// Stop the batch writer (has its own timeout)
+	if err := p.eventWriter.Stop(); err != nil {
+		return err
+	}
+
 	p.poolMu.Lock()
 	p.closed = true
 	var pool *workerPool

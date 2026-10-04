@@ -2,6 +2,7 @@ package pluginsdk
 
 import (
 	"context"
+	"log/slog"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"google.golang.org/grpc/codes"
@@ -144,6 +145,7 @@ func ExecuteDefault(ctx context.Context, p Platform, in *pluginv1.ExecuteRequest
 			if extractor, ok := p.(UsageExtractor); ok && observed.Observation != nil {
 				report, err = extractor.ExtractUsage(ctx, observed.Observation)
 				if err != nil {
+					slog.Default().Warn("plugin usage extraction failed, falling back to host accumulator", "error", err.Error())
 					report = nil
 				}
 			}

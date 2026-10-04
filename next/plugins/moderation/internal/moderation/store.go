@@ -39,51 +39,6 @@ type eventRec struct {
 
 // eventWriter persists records in batches (1 s or 200 rows), then applies
 // the automatic ban rule to the users with block verdicts in the batch.
-func (p *Plugin) eventWriter(ctx context.Context) {
-	defer p.wg.Done()
-	const maxBatch = 200
-	t := time.NewTicker(time.Second)
-	defer t.Stop()
-	var batch []eventRec
-	flush := func() {
-		if len(batch) == 0 {
-			return
-		}
-		fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-		defer cancel()
-		if err := p.writeEvents(fctx, batch); err != nil {
-			p.stats.droppedEvents.Add(int64(len(batch)))
-			p.log.Warn("moderation: write events failed", "error", err.Error(), "events", len(batch))
-		} else {
-			p.applyBans(fctx, batch)
-		}
-		batch = batch[:0]
-	}
-	for {
-		select {
-		case <-ctx.Done():
-			for {
-				select {
-				case ev := <-p.events:
-					batch = append(batch, ev)
-					if len(batch) >= maxBatch {
-						flush()
-					}
-				default:
-					flush()
-					return
-				}
-			}
-		case ev := <-p.events:
-			batch = append(batch, ev)
-			if len(batch) >= maxBatch {
-				flush()
-			}
-		case <-t.C:
-			flush()
-		}
-	}
-}
 
 func (p *Plugin) writeEvents(ctx context.Context, evs []eventRec) error {
 	db, err := p.db(ctx)

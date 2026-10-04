@@ -10,6 +10,7 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/classify"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/pluginsdktest"
 )
 
@@ -23,6 +24,12 @@ func account(creds, settings string) *pluginv1.Account {
 }
 
 const testKey = `{"api_key":"11111111-2222-3333-4444-555555555555"}`
+
+const (
+	transientCooldown         = classify.DefaultTransport
+	defaultRateLimitCooldown  = classify.DefaultRateLimit
+	maxCooldown               = classify.MaxCooldown
+)
 
 // TestCapabilities: stage three serves the asset library over the plugin's
 // own HTTP routes, so the SDK reports http.routes.v1 next to the platform

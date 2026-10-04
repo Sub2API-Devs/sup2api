@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"sync"
-	"time"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
@@ -119,7 +118,7 @@ func (a platformAdapter) Poll(ctx context.Context, in *pluginv1.PollRequest, exe
 	if !a.i.has(manifest.CapPlatformPoll) || in == nil {
 		return nil, errors.New("Poll requires platform.poll.v1 and an input")
 	}
-	err = a.i.call(ctx, 30*time.Second, func(ctx context.Context, p *proc) (callErr error) {
+	err = a.i.call(ctx, classBackground, TimeoutPoll, func(ctx context.Context, p *proc) (callErr error) {
 		token, scope, err := p.polls.open(ctx, execute)
 		if err != nil {
 			return err

@@ -42,9 +42,9 @@ type Instance struct {
 	log     *slog.Logger
 	caps    map[string]bool
 
-	sem      chan struct{}
+	sems     [numClasses]chan struct{}
 	inflight atomic.Int64
-	draining atomic.Bool
+	draining atomic.Bool   // no new calls are admitted
 	idle     chan struct{} // closed once draining and no call in flight
 	idleOnce sync.Once
 
@@ -103,7 +103,7 @@ func newInstance(rt *Runtime, pkg *registry.Package, binPath, sum string, st *se
 		binSum:     sum,
 		log:        rt.log.With("plugin", pkg.Key, "version", pkg.Version),
 		caps:       map[string]bool{},
-		sem:        make(chan struct{}, rt.o.MaxConcurrency),
+		sems:       newSemaphores(rt.o.Concurrency),
 		idle:       make(chan struct{}),
 		state:      StateStarting,
 		restartReq: make(chan string, 1),
@@ -578,17 +578,24 @@ func (i *Instance) MigrateData(ctx context.Context, from, to string) error {
 	if !i.caps[manifest.CapMigrationData] {
 		return nil
 	}
-	return i.call(ctx, 10*time.Minute, func(ctx context.Context, p *proc) error {
+	return i.call(ctx, classBackground, TimeoutMigrateData, func(ctx context.Context, p *proc) error {
 		_, err := p.migration.MigrateData(ctx, &pluginv1.MigrateDataRequest{FromVersion: from, ToVersion: to})
 		return err
 	})
 }
 
-// Drain stops accepting calls, waits for in-flight calls (up to timeout, 0 =
-// runtime default) and stops the process.
+// Drain retires the instance. The caller has already taken it out of the
+// published generation; requests that captured the previous generation may
+// still call in for DrainGrace, after which new calls are refused. Drain then
+// waits for in-flight calls - Execute included, i.e. whole upstream streams -
+// up to timeout (0 = runtime default) and stops the process.
 func (i *Instance) Drain(timeout time.Duration) {
 	if timeout <= 0 {
 		timeout = i.rt.o.DrainTimeout
+	}
+	select {
+	case <-time.After(i.rt.o.DrainGrace):
+	case <-i.stopCh:
 	}
 	i.draining.Store(true)
 	if s, _ := i.State(); s == StateReady {
@@ -600,7 +607,7 @@ func (i *Instance) Drain(timeout time.Duration) {
 	select {
 	case <-i.idle:
 	case <-time.After(timeout):
-		i.log.Warn("plugin drain timed out", "in_flight", i.inflight.Load())
+		i.log.Warn("plugin drain timed out", "in_flight", i.inflight.Load(), "timeout", timeout)
 	}
 	i.Stop()
 }

@@ -9,6 +9,11 @@ import (
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 )
 
+// ErrUnimplemented returns a gRPC Unimplemented status error with the given message.
+func ErrUnimplemented(msg string) error {
+	return status.Error(codes.Unimplemented, msg)
+}
+
 // UsageEstimator reports units before upstream work starts. Core pricing and
 // account balance operations never belong to the estimator.
 type UsageEstimator interface {
@@ -26,31 +31,7 @@ func (s platformServer) EstimateUsage(ctx context.Context, in *pluginv1.Estimate
 	if estimator, ok := s.impl.(UsageEstimator); ok {
 		return estimator.EstimateUsage(ctx, in)
 	}
-	// Task units cannot be inferred from text. Require a plugin estimator
-	// before calling the text tokenizer, even when the requested floor is zero.
-	if s.requiresTaskEstimator(in) {
-		return nil, status.Error(codes.Unimplemented, "task submissions require UsageEstimator")
-	}
-	if s.runtime == nil {
-		return nil, status.Error(codes.FailedPrecondition, "host not initialized")
-	}
-	s.runtime.mu.Lock()
-	h := s.runtime.host
-	s.runtime.mu.Unlock()
-	count, err := CountTokens(ctx, h, in.GetPrompt(), "")
-	if err != nil {
-		return nil, err
-	}
-	return &pluginv1.UsageReport{Tokens: &pluginv1.UsageTokens{InputTokens: max(count.Tokens, in.GetPreConsumeTokens())}}, nil
-}
-
-func (s platformServer) requiresTaskEstimator(in *pluginv1.EstimateUsageRequest) bool {
-	if s.runtime != nil && s.runtime.taskProtocols != nil {
-		meta := in.GetMeta()
-		return s.runtime.taskProtocols[meta.GetProtocol()] || s.runtime.taskProtocols[meta.GetClientProtocol()]
-	}
-	// Without a manifest there is no way to distinguish a task endpoint from
-	// a text endpoint of the same plugin. Never silently estimate task units.
-	_, task := s.impl.(TaskSubmissionParser)
-	return task
+	// Default: return Unimplemented to signal that the plugin does not provide
+	// usage estimation. Core will fall back to its own local tokenizer.
+	return nil, status.Error(codes.Unimplemented, "usage estimation not implemented by plugin")
 }

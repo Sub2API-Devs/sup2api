@@ -18,6 +18,7 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/apikey"
 )
 
 // PlatformID is the built-in platform the apikey account type serves
@@ -69,6 +70,16 @@ var forwardHeaders = []string{
 // (besides anthropic-version, which has a default).
 func ForwardHeaders() []string { return append([]string(nil), forwardHeaders...) }
 
+var spec = apikey.Spec{
+	DefaultBaseURL: DefaultBaseURL,
+	KeyValidator: &apikey.Validator{
+		Prefixes:  []string{"sk-ant-"},
+		MinLength: 20,
+		Field:     "api_key",
+	},
+	StripSuffixes: []string{"/v1"},
+}
+
 // Plugin is the anthropic plugin. It implements pluginsdk.Platform,
 // pluginsdk.HTTP and pluginsdk.Initializer.
 type Plugin struct {
@@ -91,14 +102,6 @@ func (p *Plugin) Init(_ context.Context, h pluginsdk.Host) error {
 }
 
 // ---------------------------------------------------------------- credentials
-
-// accountConfig is the merged view of an account's credentials and settings.
-// Unknown keys (e.g. the legacy "model_mapping", now a core account field)
-// are ignored.
-type accountConfig struct {
-	APIKey  string
-	BaseURL string
-}
 
 // decodeObject parses a JSON object; empty input yields an empty map.
 func decodeObject(raw string) (map[string]any, error) {
@@ -156,29 +159,6 @@ func validAPIKey(k string) bool {
 		}
 	}
 	return true
-}
-
-func parseAccount(credentialsJSON, settingsJSON string) (*accountConfig, error) {
-	creds, err := decodeObject(credentialsJSON)
-	if err != nil {
-		return nil, fmt.Errorf("credentials: %w", err)
-	}
-	settings, err := decodeObject(settingsJSON)
-	if err != nil {
-		return nil, fmt.Errorf("settings: %w", err)
-	}
-	cfg := &accountConfig{}
-	if v, ok := lookup("api_key", creds, settings); ok {
-		cfg.APIKey, _ = v.(string)
-	}
-	base := ""
-	if v, ok := lookup("base_url", settings, creds); ok {
-		base, _ = v.(string)
-	}
-	if cfg.BaseURL, err = normalizeBaseURL(base); err != nil {
-		return nil, fmt.Errorf("base_url: %w", err)
-	}
-	return cfg, nil
 }
 
 // ValidateCredentials implements pluginsdk.Platform.
@@ -293,7 +273,7 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 	if t := acc.GetType(); t != "" && t != AccountTypeAPIKey {
 		return nil, status.Errorf(codes.FailedPrecondition, "account %d: unsupported account type %q", acc.GetId(), t)
 	}
-	cfg, err := parseAccount(acc.GetCredentialsJson(), acc.GetSettingsJson())
+	cfg, err := spec.FromAccount(acc)
 	if err != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "account %d: %v", acc.GetId(), err)
 	}
@@ -324,12 +304,12 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 // the protocol whose usage rules read the token counts.
 func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestRequestRequest) (*pluginv1.BuildTestRequestResponse, error) {
 	acc := in.GetAccount()
-	cfg, err := parseAccount(acc.GetCredentialsJson(), acc.GetSettingsJson())
+	if t := acc.GetType(); t != "" && t != AccountTypeAPIKey {
+		return nil, status.Errorf(codes.FailedPrecondition, "account %d: unsupported account type %q", acc.GetId(), t)
+	}
+	cfg, err := spec.FromAccount(acc)
 	if err != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "account %d: %v", acc.GetId(), err)
-	}
-	if cfg.APIKey == "" {
-		return nil, status.Errorf(codes.FailedPrecondition, "account %d: missing api_key", acc.GetId())
 	}
 	model := strings.TrimSpace(in.GetModel())
 	if model == "" {
@@ -353,12 +333,12 @@ func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestReque
 // BuildModelsRequest implements pluginsdk.ModelLister: GET /v1/models.
 func (p *Plugin) BuildModelsRequest(_ context.Context, in *pluginv1.BuildModelsRequestRequest) (*pluginv1.BuildModelsRequestResponse, error) {
 	acc := in.GetAccount()
-	cfg, err := parseAccount(acc.GetCredentialsJson(), acc.GetSettingsJson())
+	if t := acc.GetType(); t != "" && t != AccountTypeAPIKey {
+		return nil, status.Errorf(codes.FailedPrecondition, "account %d: unsupported account type %q", acc.GetId(), t)
+	}
+	cfg, err := spec.FromAccount(acc)
 	if err != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "account %d: %v", acc.GetId(), err)
-	}
-	if cfg.APIKey == "" {
-		return nil, status.Errorf(codes.FailedPrecondition, "account %d: missing api_key", acc.GetId())
 	}
 	h := upstreamHeaders(cfg.APIKey, nil)
 	delete(h, "content-type")

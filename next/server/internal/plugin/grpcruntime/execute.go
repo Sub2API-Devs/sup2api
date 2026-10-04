@@ -190,7 +190,10 @@ func (a platformAdapter) Execute(ctx context.Context, in *pluginv1.ExecuteReques
 	defer cancel()
 	timer := time.AfterFunc(callbacks.PrepareTimeout, cancel)
 	defer timer.Stop()
-	err = a.i.call(ctx, 0, func(ctx context.Context, p *proc) error {
+	// Execute spans the whole upstream exchange, so it has its own class:
+	// long streams never hold the slots of the request-path RPCs (CONTRACTS
+	// §43.1).
+	err = a.i.call(ctx, classExecute, 0, func(ctx context.Context, p *proc) error {
 		token, sc, err := p.executions.open(ctx, cancel, timer, callbacks)
 		if err != nil {
 			return err

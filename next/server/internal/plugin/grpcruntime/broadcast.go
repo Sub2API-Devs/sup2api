@@ -79,7 +79,7 @@ func (i *Instance) OnBroadcast(ctx context.Context, msg BroadcastMessage) error 
 	if !i.HandlesBroadcast() {
 		return nil
 	}
-	return i.call(ctx, BroadcastTimeout, func(ctx context.Context, p *proc) error {
+	return i.call(ctx, classBackground, BroadcastTimeout, func(ctx context.Context, p *proc) error {
 		_, err := p.app.OnBroadcast(ctx, &pluginv1.OnBroadcastRequest{
 			Topic: msg.Topic, Payload: msg.Payload, SourceNodeId: msg.SourceNodeID,
 		})

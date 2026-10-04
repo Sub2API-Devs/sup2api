@@ -163,7 +163,7 @@ func TestPollDoesNotTrustPluginTerminalOnBadNetworkEvidence(t *testing.T) {
 				}
 				return &pluginv1.ReconcileResult{State: pluginv1.ReconcileResult_SETTLED}, nil
 			}}
-			i := &Instance{caps: map[string]bool{manifest.CapPlatformPoll: true}, sem: make(chan struct{}, 1)}
+			i := &Instance{caps: map[string]bool{manifest.CapPlatformPoll: true}, sems: newSemaphores(Concurrency{}.withDefaults())}
 			i.proc.Store(p)
 			_, err := (platformAdapter{i}).Poll(context.Background(), &pluginv1.PollRequest{}, core.ExecutionHTTP(func(context.Context, *pluginv1.ExecutionHTTPRequest) (*pluginv1.ExecutionHTTPResponse, error) {
 				return tc.response, nil

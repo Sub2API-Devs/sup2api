@@ -14,11 +14,10 @@ import (
 
 func (p *Plugin) EstimateUsage(ctx context.Context, in *pluginv1.EstimateUsageRequest) (*pluginv1.UsageReport, error) {
 	if in.GetMeta().GetProtocol() != ProtocolVideoSubmit {
-		n, err := pluginsdk.CountTokens(ctx, p.host, in.GetPrompt(), "")
-		if err != nil {
-			return nil, err
-		}
-		return &pluginv1.UsageReport{Tokens: &pluginv1.UsageTokens{InputTokens: max(n.Tokens, in.GetPreConsumeTokens())}}, nil
+		// Non-video protocols: return Unimplemented to signal that the plugin
+		// does not provide usage estimation. Core will fall back to its own
+		// local tokenizer for image/text protocols.
+		return nil, pluginsdk.ErrUnimplemented("usage estimation only available for video protocol")
 	}
 	est := estimateVideo(in.GetMeta().GetModel(), readVideoSpec(in.GetFields(), in.GetFieldsOmitted()))
 	return &pluginv1.UsageReport{Tokens: &pluginv1.UsageTokens{OutputTokens: est.Tokens}, Facts: estimatedVideoFacts(est, in.GetFields())}, nil

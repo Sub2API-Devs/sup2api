@@ -4,6 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 )
 
@@ -49,6 +52,21 @@ func TestVideoDimensionsMatchEveryPublishedArea(t *testing.T) {
 					t.Fatalf("%s %d -> %dx%d", ratio, area, w, h)
 				}
 			}
+		}
+	}
+}
+
+func TestEstimateUsageUnimplementedForNonVideo(t *testing.T) {
+	p := New()
+	for _, protocol := range []string{ProtocolMessages, ProtocolCountTokens, ""} {
+		_, err := p.EstimateUsage(context.Background(), &pluginv1.EstimateUsageRequest{
+			Meta: &pluginv1.RequestMeta{Protocol: protocol, Model: "doubao-pro-256k"},
+		})
+		if err == nil {
+			t.Fatalf("protocol %q: expected Unimplemented error, got nil", protocol)
+		}
+		if st, ok := status.FromError(err); !ok || st.Code() != codes.Unimplemented {
+			t.Fatalf("protocol %q: expected Unimplemented, got %v", protocol, err)
 		}
 	}
 }

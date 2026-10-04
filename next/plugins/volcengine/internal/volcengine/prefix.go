@@ -23,7 +23,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
-	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/apikey"
 )
 
 // prefixes are the path prefixes of one account, already normalized.
@@ -128,13 +127,13 @@ func validateRelayBaseURL(errs pluginsdk.FieldErrors, credentialsJSON, settingsJ
 		if err != nil {
 			continue
 		}
-		if s, ok := obj[apikey.FieldBaseURL].(string); ok && strings.TrimSpace(s) != "" {
+		if s, ok := obj["base_url"].(string); ok && strings.TrimSpace(s) != "" {
 			raw = strings.TrimSpace(s)
 			break
 		}
 	}
 	if raw == "" {
-		return errs.Add(apikey.FieldBaseURL, "required",
+		return errs.Add("base_url", "required",
 			"base_url is required for a relay account - there is no default relay address / "+
 				"中转账号必须填写 base_url —— 中转站没有默认地址")
 	}
@@ -148,7 +147,7 @@ func validateRelayBaseURL(errs pluginsdk.FieldErrors, credentialsJSON, settingsJ
 		if !strings.HasSuffix(p, known) {
 			continue
 		}
-		return errs.Add(apikey.FieldBaseURL, "format", fmt.Sprintf(
+		return errs.Add("base_url", "format", fmt.Sprintf(
 			"base_url must be the relay's root address, without %s: put the path in %s instead, so the video paths "+
 				"can differ from the text ones / base_url 要填中转站的根地址，不要带 %s —— 路径请填在 %s 里，"+
 				"视频路径才能与文本路径不同", known, FieldAPIPrefix, known, FieldAPIPrefix))

@@ -17,8 +17,3 @@ func (h *hostServer) CountTokens(ctx context.Context, in *pluginv1.CountTokensRe
 	}
 	return &pluginv1.CountTokensResponse{Tokens: n, Encoding: encoding}, nil
 }
-
-func (a platformAdapter) EstimateUsage(ctx context.Context, in *pluginv1.EstimateUsageRequest) (out *pluginv1.UsageReport, err error) {
-	err = a.i.call(ctx, TimeoutPlatformHot, func(ctx context.Context, p *proc) (e error) { out, e = p.platform.EstimateUsage(ctx, in); return })
-	return
-}

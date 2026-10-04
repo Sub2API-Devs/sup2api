@@ -20,6 +20,7 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/batch"
 )
 
 // Settings is the plugin configuration (forms/settings.schema.json).
@@ -58,9 +59,9 @@ type Plugin struct {
 	// reloadEvery is the rule refresh period (other nodes may change rules).
 	reloadEvery time.Duration
 
-	blocks   chan blockEvent
-	alerts   chan alert
-	throttle alertThrottle
+	blockWriter *batch.Writer[blockEvent]
+	alerts      chan alert
+	throttle    alertThrottle
 
 	stats struct {
 		checked, blocked, droppedBlocks, droppedAlerts, alertErrors, alertsThrottled atomic.Int64
@@ -80,7 +81,6 @@ func New() *Plugin {
 		BroadcastMux: pluginsdk.NewBroadcastMux(),
 		now:          time.Now,
 		reloadEvery:  5 * time.Second,
-		blocks:       make(chan blockEvent, 1024),
 		alerts:       make(chan alert, 256),
 		log:          slog.Default(),
 	}
@@ -107,9 +107,20 @@ func (p *Plugin) Init(ctx context.Context, h pluginsdk.Host) error {
 	}
 	bg, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
-	p.wg.Add(3)
+
+	// Start batch writer for block events
+	p.blockWriter = batch.New(bg, 1024, func(ctx context.Context, events []blockEvent) error {
+		if err := p.writeBlocks(ctx, events); err != nil {
+			p.log.Warn("guard: write block log failed", "error", err.Error(), "events", len(events))
+			return err
+		}
+		return nil
+	}, func(n int) {
+		p.stats.droppedBlocks.Add(int64(n))
+	})
+
+	p.wg.Add(2)
 	go p.refreshLoop(bg)
-	go p.blockWriter(bg)
 	go p.alertSender(bg)
 	return nil
 }
@@ -159,6 +170,13 @@ func (p *Plugin) Shutdown(ctx context.Context) error {
 		return nil
 	}
 	p.cancel()
+
+	// Stop the batch writer (has its own timeout)
+	if err := p.blockWriter.Stop(); err != nil {
+		return err
+	}
+
+	// Wait for other workers (refreshLoop, alertSender)
 	done := make(chan struct{})
 	go func() { p.wg.Wait(); close(done) }()
 	select {

@@ -34,25 +34,8 @@ func (p *Plugin) routes() {
 	p.Handle("GET", "/defaults", p.getDefaults)
 }
 
-func unavailable(err error) *pluginv1.HTTPResponse {
-	return pluginsdk.ErrorResponse(http.StatusServiceUnavailable, "unavailable", err.Error())
-}
-
-// pathParam returns a path parameter, falling back to the last path
-// segment.
-func pathParam(req *pluginv1.HTTPRequest, name string) string {
-	if v, ok := req.GetPathParams()[name]; ok {
-		return v
-	}
-	path := strings.TrimSuffix(req.GetPath(), "/")
-	if i := strings.LastIndexByte(path, '/'); i >= 0 && !strings.HasPrefix(path[i+1:], ":") {
-		return path[i+1:]
-	}
-	return ""
-}
-
 func parseID(req *pluginv1.HTTPRequest, name string) (int64, *pluginv1.HTTPResponse) {
-	id, err := strconv.ParseInt(pathParam(req, name), 10, 64)
+	id, err := strconv.ParseInt(pluginsdk.Param(req, name), 10, 64)
 	if err != nil || id <= 0 {
 		return 0, pluginsdk.FieldErrorResponse("invalid path parameter / 路径参数无效",
 			pluginsdk.FieldErrors{}.Add(name, "invalid", name+" must be a positive integer / "+name+" 必须是正整数"))
@@ -156,7 +139,7 @@ func (p *Plugin) getOverview(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	o.Runtime = p.runtimeState()
 	db, err := p.db(ctx)
 	if err != nil {
-		return unavailable(err), nil
+		return pluginsdk.Unavailable(err.Error()), nil
 	}
 	if err := db.QueryRow(ctx, `SELECT count(*),
 			count(*) FILTER (WHERE verdict = 'pass'), count(*) FILTER (WHERE verdict = 'flag'),
@@ -384,7 +367,7 @@ func (p *Plugin) listEvents(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 	}
 	db, err := p.db(ctx)
 	if err != nil {
-		return unavailable(err), nil
+		return pluginsdk.Unavailable(err.Error()), nil
 	}
 	var total int64
 	if err := db.QueryRow(ctx, `SELECT count(*) FROM events WHERE `+where, args...).Scan(&total); err != nil {
@@ -419,7 +402,7 @@ func (p *Plugin) getEvent(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 	}
 	db, err := p.db(ctx)
 	if err != nil {
-		return unavailable(err), nil
+		return pluginsdk.Unavailable(err.Error()), nil
 	}
 	var d EventDetail
 	err = db.QueryRow(ctx, `SELECT `+eventColumns+`, text FROM events WHERE id = $1`, id).Scan(append(d.scanTargets(), &d.Text)...)
@@ -440,7 +423,7 @@ func (p *Plugin) deleteEvent(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	}
 	db, err := p.db(ctx)
 	if err != nil {
-		return unavailable(err), nil
+		return pluginsdk.Unavailable(err.Error()), nil
 	}
 	tag, err := db.Exec(ctx, `DELETE FROM events WHERE id = $1`, id)
 	if err != nil {
@@ -481,7 +464,7 @@ func scanBlock(r pgx.Row) (Block, error) {
 func (p *Plugin) listBlocks(ctx context.Context, _ *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	db, err := p.db(ctx)
 	if err != nil {
-		return unavailable(err), nil
+		return pluginsdk.Unavailable(err.Error()), nil
 	}
 	rows, err := db.Query(ctx, `SELECT `+blockColumns+` FROM blocks
 		WHERE expires_at IS NULL OR expires_at > $1 ORDER BY created_at DESC, user_id`, p.now().UTC())
@@ -533,7 +516,7 @@ func (p *Plugin) createBlock(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	}
 	db, err := p.db(ctx)
 	if err != nil {
-		return unavailable(err), nil
+		return pluginsdk.Unavailable(err.Error()), nil
 	}
 	now := p.now().UTC()
 	var expires *time.Time
@@ -572,7 +555,7 @@ func (p *Plugin) deleteBlock(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	}
 	db, err := p.db(ctx)
 	if err != nil {
-		return unavailable(err), nil
+		return pluginsdk.Unavailable(err.Error()), nil
 	}
 	var found bool
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {

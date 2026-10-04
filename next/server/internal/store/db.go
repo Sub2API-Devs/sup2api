@@ -6,6 +6,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"os"
+	"strconv"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -29,6 +32,17 @@ func Open(ctx context.Context, dsn string) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse database url: %w", err)
 	}
+	// SUB2API_PG_MAX_CONNS overrides the pool size (AR-P1-2); default 20–30 is
+	// suitable for most deployments. A plugin-heavy or multi-node setup may
+	// need more.
+	if v := os.Getenv("SUB2API_PG_MAX_CONNS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.MaxConns = int32(n)
+		}
+	}
+	if cfg.MaxConns <= 0 {
+		cfg.MaxConns = 20
+	}
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
@@ -37,6 +51,8 @@ func Open(ctx context.Context, dsn string) (*DB, error) {
 		pool.Close()
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
+	slog.Info("database pool opened", "max_conns", cfg.MaxConns, "min_conns", cfg.MinConns,
+		"max_conn_lifetime", cfg.MaxConnLifetime, "max_conn_idle_time", cfg.MaxConnIdleTime)
 	return &DB{Pool: pool}, nil
 }
 

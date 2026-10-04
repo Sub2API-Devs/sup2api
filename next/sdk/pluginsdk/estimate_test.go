@@ -38,12 +38,12 @@ func TestTaskEstimatorCannotFallBackToText(t *testing.T) {
 	}
 }
 
-func TestMixedPlatformTextStillUsesLocalTokenizer(t *testing.T) {
+func TestMixedPlatformTextStillReturnsUnimplemented(t *testing.T) {
 	client := &countClient{count: 12}
 	s := platformServer{impl: taskTestPlatform{}, runtime: &runtime{taskProtocols: map[string]bool{"video.submit": true}, host: &host{client: client}}}
 	report, err := s.EstimateUsage(context.Background(), &pluginv1.EstimateUsageRequest{Meta: &pluginv1.RequestMeta{Protocol: "text.chat"}, Prompt: "hello", PreConsumeTokens: 500})
-	if err != nil || report.GetTokens().GetInputTokens() != 500 || client.seen != "hello" {
-		t.Fatalf("text estimate: %v %v", report, err)
+	if status.Code(err) != codes.Unimplemented || report != nil {
+		t.Fatalf("text estimate should return Unimplemented: %v %v", report, err)
 	}
 }
 
@@ -65,13 +65,11 @@ func (c *countClient) CountTokens(_ context.Context, r *pluginv1.CountTokensRequ
 	c.seen = r.Text
 	return &pluginv1.CountTokensResponse{Tokens: c.count, Encoding: "o200k_base"}, nil
 }
-func TestDefaultEstimatorUsesHostLocalTokenizer(t *testing.T) {
+func TestDefaultEstimatorReturnsUnimplemented(t *testing.T) {
 	client := &countClient{count: 12}
 	s := platformServer{impl: ordinaryTestPlatform{}, runtime: &runtime{host: &host{client: client}}}
-	for _, test := range []struct{ floor, want int64 }{{500, 500}, {0, 12}, {8, 12}} {
-		r, err := s.EstimateUsage(context.Background(), &pluginv1.EstimateUsageRequest{Prompt: "hello", PreConsumeTokens: test.floor})
-		if err != nil || r.GetTokens().GetInputTokens() != test.want || client.seen != "hello" {
-			t.Fatalf("estimate %v %v", r, err)
-		}
+	r, err := s.EstimateUsage(context.Background(), &pluginv1.EstimateUsageRequest{Prompt: "hello", PreConsumeTokens: 500})
+	if status.Code(err) != codes.Unimplemented || r != nil {
+		t.Fatalf("default estimator should return Unimplemented: %v %v", r, err)
 	}
 }

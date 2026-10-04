@@ -73,7 +73,7 @@ func accountsEnv(t *testing.T, grants registry.Grants) (*hostServer, *fakeAccoun
 		},
 		creds: map[int64]string{1: `{"access_key":"AK","secret_key":"SK"}`, 9: `{"api_key":"theirs"}`},
 	}
-	rt := &Runtime{o: Options{Node: staticNode{"n", "b"}, MaxConcurrency: 4, DataDir: t.TempDir(), Accounts: acc},
+	rt := &Runtime{o: Options{Node: staticNode{"n", "b"}, Concurrency: Concurrency{Hot: 4, Console: 4, Background: 4, Execute: 4}, DataDir: t.TempDir(), Accounts: acc},
 		log: slog.Default()}
 	i := newInstance(rt, pkg, "", "", &settings{configJSON: "{}", grants: grants})
 	return &hostServer{i: i}, acc

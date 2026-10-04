@@ -1,12 +1,7 @@
-// Package apikey implements the credential handling shared by API-key
-// account types: an "api_key" (sensitive) and an optional "base_url", each
-// in the credentials or the settings object. Platform plugins use it for
-// ValidateCredentials and to read an account in BuildUpstreamRequest.
-//
-// Model mapping is a core account field (CONTRACTS §18): the core rewrites
-// the request model before calling the plugin. Unknown keys in the
-// credentials or settings (including a legacy "model_mapping") are ignored
-// and passed through untouched by Validate.
+// Package apikey validates API keys in plugin ValidateCredentials: stripping
+// whitespace, checking prefixes and rejecting keys with internal whitespace or
+// obviously wrong shape. anthropic, relay and ccgateway share one validator;
+// openai and gemini have their own prefix lists.
 package apikey
 
 import (
@@ -22,30 +17,251 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 )
 
-// Spec describes one API-key account type.
-type Spec struct {
-	// AccountType is the account type id (manifest accountTypes[].id).
-	AccountType string
-	// DefaultBaseURL is used when an account has no base_url.
-	DefaultBaseURL string
-	// StripSuffixes are path suffixes removed from base_url (after trailing
-	// slashes), e.g. "/v1", so users may paste an SDK base URL.
-	StripSuffixes []string
+// Validator checks one API key format.
+type Validator struct {
+	// Prefixes are the accepted prefixes (e.g. "sk-ant-", "sk-relay-").
+	// Empty = no prefix check.
+	Prefixes []string
+	// MinLength is the minimum total length after trimming (0 = no check).
+	MinLength int
+	// Field is the credentials field name, for error messages.
+	Field string
 }
 
-// Config is the merged view of an account's credentials and settings.
+// Check trims s, checks the prefix and length, and rejects keys containing
+// internal whitespace. Returns the normalized key and an error to add to
+// FieldErrors when invalid.
+func (v Validator) Check(s string) (string, *pluginv1.FieldError) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", &pluginv1.FieldError{Field: v.Field, Code: "required", Message: v.Field + " is required / " + v.Field + " 不能为空"}
+	}
+	if v.MinLength > 0 && len(s) < v.MinLength {
+		return "", &pluginv1.FieldError{Field: v.Field, Code: "too_short", Message: v.Field + " is too short / " + v.Field + " 长度不足"}
+	}
+	if len(v.Prefixes) > 0 {
+		ok := false
+		for _, p := range v.Prefixes {
+			if strings.HasPrefix(s, p) {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			return "", &pluginv1.FieldError{Field: v.Field, Code: "invalid_prefix", Message: v.Field + " must start with a valid prefix / " + v.Field + " 前缀不正确"}
+		}
+	}
+	if strings.ContainsAny(s, " \t\r\n") {
+		return "", &pluginv1.FieldError{Field: v.Field, Code: "whitespace", Message: v.Field + " must not contain whitespace / " + v.Field + " 不能包含空格"}
+	}
+	return s, nil
+}
+
+// Anthropic accepts sk-ant-api03-* and sk-ant-sid01-* (session keys).
+var Anthropic = Validator{
+	Prefixes:  []string{"sk-ant-api03-", "sk-ant-sid01-"},
+	MinLength: 20,
+	Field:     "api_key",
+}
+
+// OpenAI accepts sk-* and sess-* (realtime session tokens).
+var OpenAI = Validator{
+	Prefixes:  []string{"sk-", "sess-"},
+	MinLength: 10,
+	Field:     "api_key",
+}
+
+// Gemini accepts AIza* keys.
+var Gemini = Validator{
+	Prefixes:  []string{"AIza"},
+	MinLength: 20,
+	Field:     "api_key",
+}
+
+// Config is the normalized account configuration extracted from credentials
+// and settings JSON by Spec.FromAccount.
 type Config struct {
 	APIKey  string
-	BaseURL string // normalized, without trailing slash
+	BaseURL string
 }
 
-// Fields of the account form.
-const (
-	FieldAPIKey  = "api_key"
-	FieldBaseURL = "base_url"
-)
+// Spec describes an account type that uses api_key and optional base_url.
+// It validates, normalizes, and extracts these fields from ValidateCredentialsRequest
+// and Account protos.
+type Spec struct {
+	// AccountType is the expected account type (e.g. "apikey", "relay_key").
+	AccountType string
+	// DefaultBaseURL is used when base_url is empty or absent.
+	DefaultBaseURL string
+	// StripSuffixes are removed from the end of base_url (e.g. []string{"/v1"}).
+	StripSuffixes []string
+	// RequireBaseURL = true makes base_url mandatory (for relay).
+	RequireBaseURL bool
+	// KeyValidator checks the api_key. If nil, any 8-512 printable non-space
+	// character string is accepted.
+	KeyValidator *Validator
+}
 
-// decodeObject parses a JSON object; empty input yields an empty map.
+// Validate implements ValidateCredentials for the account type described by s.
+func (s Spec) Validate(in *pluginv1.ValidateCredentialsRequest) *pluginv1.ValidateCredentialsResponse {
+	var errs pluginsdk.FieldErrors
+	if in.GetAccountType() != s.AccountType {
+		errs = errs.Add("account_type", "unsupported", "unsupported account type / 不支持的账号类型")
+		return &pluginv1.ValidateCredentialsResponse{Errors: errs}
+	}
+	creds, err := decodeObject(in.GetCredentialsJson())
+	if err != nil {
+		errs = errs.Add("", "invalid_json", "credentials must be a JSON object / 凭证必须是 JSON 对象")
+		return &pluginv1.ValidateCredentialsResponse{Errors: errs}
+	}
+	settings, err := decodeObject(in.GetSettingsJson())
+	if err != nil {
+		errs = errs.Add("", "invalid_json", "settings must be a JSON object / 设置必须是 JSON 对象")
+		return &pluginv1.ValidateCredentialsResponse{Errors: errs}
+	}
+
+	// api_key
+	rawKey, _ := lookup("api_key", creds, settings)
+	key, isString := rawKey.(string)
+	key = strings.TrimSpace(key)
+	switch {
+	case rawKey == nil || (isString && key == ""):
+		errs = errs.Add("api_key", "required", "API key is required / 请填写 API Key")
+	case !isString:
+		errs = errs.Add("api_key", "type", "api_key must be a string / api_key 必须是字符串")
+	default:
+		if s.KeyValidator != nil {
+			if _, fieldErr := s.KeyValidator.Check(key); fieldErr != nil {
+				errs = append(errs, fieldErr)
+			}
+		} else if !validAPIKey(key) {
+			errs = errs.Add("api_key", "pattern", "API key must be 8-512 printable characters without spaces / API Key 须为 8-512 个不含空格的可见字符")
+		}
+	}
+
+	// base_url
+	var baseURL string
+	rawBase, _ := lookup("base_url", settings, creds)
+	baseStr, isStr := rawBase.(string)
+	baseStr = strings.TrimSpace(baseStr)
+	switch {
+	case rawBase == nil || (isStr && baseStr == ""):
+		if s.RequireBaseURL {
+			errs = errs.Add("base_url", "required", "Base URL is required / 请填写 Base URL")
+		} else {
+			baseURL = s.DefaultBaseURL
+		}
+	case !isStr:
+		errs = errs.Add("base_url", "type", "base_url must be a string / base_url 必须是字符串")
+	default:
+		if normalized, err := s.normalizeBaseURL(baseStr); err != nil {
+			errs = errs.Add("base_url", "format", "base_url "+err.Error()+" / base_url 格式错误")
+		} else {
+			baseURL = normalized
+		}
+	}
+
+	if len(errs) > 0 {
+		return &pluginv1.ValidateCredentialsResponse{Errors: errs}
+	}
+
+	// Return normalized credentials
+	normalized, _ := json.Marshal(map[string]string{"api_key": key, "base_url": baseURL})
+	return &pluginv1.ValidateCredentialsResponse{
+		NormalizedCredentialsJson: string(normalized),
+		NormalizedSettingsJson:    "{}",
+	}
+}
+
+// FromAccount extracts and validates the api_key and base_url from an Account proto.
+func (s Spec) FromAccount(acc *pluginv1.Account) (*Config, error) {
+	if acc == nil {
+		return nil, status.Error(codes.FailedPrecondition, "account required")
+	}
+	creds, err := decodeObject(acc.GetCredentialsJson())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid credentials JSON: %v", err)
+	}
+	settings, err := decodeObject(acc.GetSettingsJson())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid settings JSON: %v", err)
+	}
+
+	cfg := &Config{}
+	if v, ok := lookup("api_key", creds, settings); ok {
+		cfg.APIKey, _ = v.(string)
+	}
+	cfg.APIKey = strings.TrimSpace(cfg.APIKey)
+	if cfg.APIKey == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing api_key")
+	}
+
+	base := ""
+	if v, ok := lookup("base_url", settings, creds); ok {
+		base, _ = v.(string)
+	}
+	if cfg.BaseURL, err = s.normalizeBaseURL(strings.TrimSpace(base)); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid base_url: %v", err)
+	}
+	if cfg.BaseURL == "" && s.RequireBaseURL {
+		return nil, status.Error(codes.InvalidArgument, "base_url is required")
+	}
+	if cfg.BaseURL == "" {
+		cfg.BaseURL = s.DefaultBaseURL
+	}
+
+	return cfg, nil
+}
+
+func (s Spec) normalizeBaseURL(baseStr string) (string, error) {
+	if baseStr == "" {
+		if s.RequireBaseURL {
+			return "", fmt.Errorf("is required")
+		}
+		return s.DefaultBaseURL, nil
+	}
+	return NormalizeBaseURL(baseStr, s.StripSuffixes)
+}
+
+// NormalizeBaseURL validates and normalizes a base URL, stripping the given suffixes.
+// Returns an error if baseStr is empty.
+func NormalizeBaseURL(baseStr string, stripSuffixes []string) (string, error) {
+	if baseStr == "" {
+		return "", fmt.Errorf("is required")
+	}
+	u, err := url.Parse(baseStr)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return "", fmt.Errorf("must be an absolute http(s) URL")
+	}
+	if u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return "", fmt.Errorf("must not contain credentials, query or fragment")
+	}
+	p := strings.TrimRight(u.Path, "/")
+	for _, suffix := range stripSuffixes {
+		p = strings.TrimSuffix(p, suffix)
+	}
+	u.Path = strings.TrimRight(p, "/")
+	u.RawPath = ""
+	return u.String(), nil
+}
+
+// ForwardHeaders copies the specified headers from inbound to out.
+// Header names are case-insensitive (normalized to lower-case).
+func ForwardHeaders(out, inbound map[string]string, headers []string) {
+	for _, key := range headers {
+		if value := strings.TrimSpace(inbound[key]); value != "" {
+			out[key] = value
+		}
+	}
+}
+
+// Helper functions
+
+// DecodeObject parses a JSON string into a map. An empty string yields an empty map.
+func DecodeObject(raw string) (map[string]any, error) {
+	return decodeObject(raw)
+}
+
 func decodeObject(raw string) (map[string]any, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || raw == "null" {
@@ -61,7 +277,11 @@ func decodeObject(raw string) (map[string]any, error) {
 	return m, nil
 }
 
-// lookup returns the first present value of key in the given objects.
+// Lookup searches for a key in the given maps in order and returns the first non-nil value.
+func Lookup(key string, objs ...map[string]any) (any, bool) {
+	return lookup(key, objs...)
+}
+
 func lookup(key string, objs ...map[string]any) (any, bool) {
 	for _, o := range objs {
 		if v, ok := o[key]; ok && v != nil {
@@ -71,35 +291,7 @@ func lookup(key string, objs ...map[string]any) (any, bool) {
 	return nil, false
 }
 
-// NormalizeBaseURL validates base_url and strips trailing slashes and the
-// spec's suffixes. An empty value yields DefaultBaseURL.
-func (s Spec) NormalizeBaseURL(raw string) (string, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return s.DefaultBaseURL, nil
-	}
-	u, err := url.Parse(raw)
-	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
-		return "", fmt.Errorf("must be an absolute http(s) URL")
-	}
-	if u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.ForceQuery {
-		return "", fmt.Errorf("must not contain credentials, query or fragment")
-	}
-	p := strings.TrimRight(u.Path, "/")
-	for _, suf := range s.StripSuffixes {
-		if strings.HasSuffix(p, suf) {
-			p = strings.TrimSuffix(p, suf)
-			break
-		}
-	}
-	u.Path = strings.TrimRight(p, "/")
-	u.RawPath = ""
-	return u.String(), nil
-}
-
-// ValidAPIKey reports whether k is 8-512 printable ASCII characters
-// without spaces.
-func ValidAPIKey(k string) bool {
+func validAPIKey(k string) bool {
 	if len(k) < 8 || len(k) > 512 {
 		return false
 	}
@@ -109,127 +301,4 @@ func ValidAPIKey(k string) bool {
 		}
 	}
 	return true
-}
-
-// Parse merges credentials and settings (api_key is read from the
-// credentials first, base_url from the settings first). Unknown keys are
-// ignored.
-func (s Spec) Parse(credentialsJSON, settingsJSON string) (*Config, error) {
-	creds, err := decodeObject(credentialsJSON)
-	if err != nil {
-		return nil, fmt.Errorf("credentials: %w", err)
-	}
-	settings, err := decodeObject(settingsJSON)
-	if err != nil {
-		return nil, fmt.Errorf("settings: %w", err)
-	}
-	cfg := &Config{}
-	if v, ok := lookup(FieldAPIKey, creds, settings); ok {
-		cfg.APIKey, _ = v.(string)
-		cfg.APIKey = strings.TrimSpace(cfg.APIKey)
-	}
-	base := ""
-	if v, ok := lookup(FieldBaseURL, settings, creds); ok {
-		base, _ = v.(string)
-	}
-	if cfg.BaseURL, err = s.NormalizeBaseURL(base); err != nil {
-		return nil, fmt.Errorf("base_url: %w", err)
-	}
-	return cfg, nil
-}
-
-// FromAccount reads an account for BuildUpstreamRequest/BuildTestRequest.
-// Errors are gRPC FailedPrecondition statuses (foreign account type,
-// unreadable credentials, missing api_key).
-func (s Spec) FromAccount(acc *pluginv1.Account) (*Config, error) {
-	if t := acc.GetType(); t != "" && t != s.AccountType {
-		return nil, status.Errorf(codes.FailedPrecondition, "account %d: unsupported account type %q", acc.GetId(), t)
-	}
-	cfg, err := s.Parse(acc.GetCredentialsJson(), acc.GetSettingsJson())
-	if err != nil {
-		return nil, status.Errorf(codes.FailedPrecondition, "account %d: %v", acc.GetId(), err)
-	}
-	if cfg.APIKey == "" {
-		return nil, status.Errorf(codes.FailedPrecondition, "account %d: missing api_key", acc.GetId())
-	}
-	return cfg, nil
-}
-
-// Validate implements ValidateCredentials: field errors (bilingual
-// messages) or the normalized credentials and settings (each object keeps
-// its key set; api_key trimmed, base_url normalized, other keys untouched).
-func (s Spec) Validate(in *pluginv1.ValidateCredentialsRequest) *pluginv1.ValidateCredentialsResponse {
-	var errs pluginsdk.FieldErrors
-	if in.GetAccountType() != s.AccountType {
-		errs = errs.Add("account_type", "unsupported", fmt.Sprintf("unsupported account type %q / 不支持的账号类型", in.GetAccountType()))
-		return &pluginv1.ValidateCredentialsResponse{Errors: errs}
-	}
-	creds, err := decodeObject(in.GetCredentialsJson())
-	if err != nil {
-		errs = errs.Add("", "invalid_json", "credentials must be a JSON object / 凭证必须是 JSON 对象")
-		return &pluginv1.ValidateCredentialsResponse{Errors: errs}
-	}
-	settings, err := decodeObject(in.GetSettingsJson())
-	if err != nil {
-		errs = errs.Add("", "invalid_json", "settings must be a JSON object / 设置必须是 JSON 对象")
-		return &pluginv1.ValidateCredentialsResponse{Errors: errs}
-	}
-
-	rawKey, _ := lookup(FieldAPIKey, creds, settings)
-	key, isString := rawKey.(string)
-	key = strings.TrimSpace(key)
-	switch {
-	case rawKey == nil || (isString && key == ""):
-		errs = errs.Add(FieldAPIKey, "required", "API key is required / 请填写 API Key")
-	case !isString || !ValidAPIKey(key):
-		errs = errs.Add(FieldAPIKey, "pattern", "API key must be 8-512 printable characters without spaces / API Key 须为 8-512 个不含空格的可见字符")
-	}
-
-	baseURL := s.DefaultBaseURL
-	if v, ok := lookup(FieldBaseURL, settings, creds); ok {
-		str, isStr := v.(string)
-		if !isStr {
-			errs = errs.Add(FieldBaseURL, "type", "base_url must be a string / base_url 必须是字符串")
-		} else if n, err := s.NormalizeBaseURL(str); err != nil {
-			errs = errs.Add(FieldBaseURL, "format", "base_url "+err.Error()+" / base_url 必须是不含账号、查询参数的 http(s) 地址")
-		} else {
-			baseURL = n
-		}
-	}
-	if len(errs) > 0 {
-		return &pluginv1.ValidateCredentialsResponse{Errors: errs}
-	}
-
-	normalize := func(obj map[string]any) string {
-		if len(obj) == 0 {
-			return ""
-		}
-		out := make(map[string]any, len(obj))
-		for k, v := range obj {
-			switch k {
-			case FieldAPIKey:
-				out[k] = key
-			case FieldBaseURL:
-				out[k] = baseURL
-			default:
-				out[k] = v
-			}
-		}
-		b, _ := json.Marshal(out)
-		return string(b)
-	}
-	return &pluginv1.ValidateCredentialsResponse{
-		NormalizedCredentialsJson: normalize(creds),
-		NormalizedSettingsJson:    normalize(settings),
-	}
-}
-
-// ForwardHeaders copies the inbound headers named in names (lower-case)
-// into dst when present and non-empty.
-func ForwardHeaders(dst map[string]string, inbound map[string]string, names []string) {
-	for _, name := range names {
-		if v, ok := inbound[name]; ok && v != "" {
-			dst[name] = v
-		}
-	}
 }

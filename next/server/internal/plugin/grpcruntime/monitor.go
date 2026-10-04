@@ -9,7 +9,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
-	"time"
 )
 
 func (h *hostServer) ReportTaskProgress(ctx context.Context, in *pluginv1.ReportTaskProgressRequest) (out *pluginv1.ExecutionReceipt, err error) {
@@ -69,7 +68,7 @@ func (a platformAdapter) Monitor(ctx context.Context, in *pluginv1.PollRequest, 
 	if !a.i.has(manifest.CapPlatformMonitor) || in == nil || report == nil {
 		return errors.New("Monitor requires platform.monitor.v1")
 	}
-	return a.i.call(ctx, 30*time.Second, func(ctx context.Context, p *proc) error {
+	return a.i.call(ctx, classBackground, TimeoutPoll, func(ctx context.Context, p *proc) error {
 		token, sc, err := p.polls.open(ctx, execute)
 		if err != nil {
 			return err

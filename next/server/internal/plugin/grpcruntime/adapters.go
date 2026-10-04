@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -33,12 +34,34 @@ const (
 	TimeoutScheduler       = 200 * time.Millisecond
 	TimeoutRankDefault     = 200 * time.Millisecond // manifest scheduler.rank.timeoutMs = 0
 	TimeoutRankMax         = time.Second            // pkg.MaxRankTimeout
+	TimeoutPoll            = 30 * time.Second
+	TimeoutMigrateData     = 10 * time.Minute
 )
 
-// call runs fn against the current process with the concurrency limit, the
-// timeout and in-flight accounting. It fails fast with
+// callClass selects the semaphore a call waits for (Options.Concurrency).
+type callClass int
+
+const (
+	classHot callClass = iota
+	classConsole
+	classBackground
+	classExecute
+	numClasses
+)
+
+func newSemaphores(c Concurrency) [numClasses]chan struct{} {
+	return [numClasses]chan struct{}{
+		classHot:        make(chan struct{}, c.Hot),
+		classConsole:    make(chan struct{}, c.Console),
+		classBackground: make(chan struct{}, c.Background),
+		classExecute:    make(chan struct{}, c.Execute),
+	}
+}
+
+// call runs fn against the current process with the concurrency limit of its
+// class, the timeout and in-flight accounting. It fails fast with
 // core.ErrPluginUnavailable when the instance cannot serve calls.
-func (i *Instance) call(ctx context.Context, timeout time.Duration, fn func(ctx context.Context, p *proc) error) error {
+func (i *Instance) call(ctx context.Context, class callClass, timeout time.Duration, fn func(ctx context.Context, p *proc) error) error {
 	if i.draining.Load() {
 		return i.unavailable("draining")
 	}
@@ -57,14 +80,31 @@ func (i *Instance) call(ctx context.Context, timeout time.Duration, fn func(ctx 
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
+	sem := i.sems[class]
 	select {
-	case i.sem <- struct{}{}:
+	case sem <- struct{}{}:
 	case <-ctx.Done():
 		return fmt.Errorf("plugin %s: waiting for a free call slot: %w", i.pkg.Key, ctx.Err())
 	}
-	defer func() { <-i.sem }()
+	defer func() { <-sem }()
 	return i.mapErr(fn(ctx, p))
 }
+
+// invoke is call for one unary RPC of a service client of the process.
+func invoke[C, Req, Resp any](i *Instance, ctx context.Context, class callClass, timeout time.Duration,
+	client func(*proc) C, rpc func(C, context.Context, Req, ...grpc.CallOption) (Resp, error), in Req) (out Resp, err error) {
+	err = i.call(ctx, class, timeout, func(ctx context.Context, p *proc) (e error) {
+		out, e = rpc(client(p), ctx, in)
+		return
+	})
+	return
+}
+
+func platformOf(p *proc) pluginv1.PlatformServiceClient { return p.platform }
+func hookOf(p *proc) pluginv1.HookServiceClient         { return p.hook }
+func appOf(p *proc) pluginv1.AppServiceClient           { return p.app }
+func httpOf(p *proc) pluginv1.HTTPServiceClient         { return p.http }
+func schedOf(p *proc) pluginv1.SchedulerServiceClient   { return p.sched }
 
 func (i *Instance) finish() {
 	if i.inflight.Add(-1) == 0 && i.draining.Load() {
@@ -157,171 +197,105 @@ var _ registry.Extension = (*Instance)(nil)
 
 type platformAdapter struct{ i *Instance }
 
-func (a platformAdapter) ValidateCredentials(ctx context.Context, in *pluginv1.ValidateCredentialsRequest) (out *pluginv1.ValidateCredentialsResponse, err error) {
-	err = a.i.call(ctx, TimeoutPlatformConsole, func(ctx context.Context, p *proc) (e error) {
-		out, e = p.platform.ValidateCredentials(ctx, in)
-		return
-	})
-	return
+func (a platformAdapter) ValidateCredentials(ctx context.Context, in *pluginv1.ValidateCredentialsRequest) (*pluginv1.ValidateCredentialsResponse, error) {
+	return invoke(a.i, ctx, classConsole, TimeoutPlatformConsole, platformOf, pluginv1.PlatformServiceClient.ValidateCredentials, in)
 }
 
-func (a platformAdapter) BuildUpstreamRequest(ctx context.Context, in *pluginv1.BuildUpstreamRequestRequest) (out *pluginv1.BuildUpstreamRequestResponse, err error) {
-	err = a.i.call(ctx, TimeoutPlatformHot, func(ctx context.Context, p *proc) (e error) {
-		out, e = p.platform.BuildUpstreamRequest(ctx, in)
-		return
-	})
-	return
+func (a platformAdapter) BuildUpstreamRequest(ctx context.Context, in *pluginv1.BuildUpstreamRequestRequest) (*pluginv1.BuildUpstreamRequestResponse, error) {
+	return invoke(a.i, ctx, classHot, TimeoutPlatformHot, platformOf, pluginv1.PlatformServiceClient.BuildUpstreamRequest, in)
 }
 
-func (a platformAdapter) ClassifyError(ctx context.Context, in *pluginv1.ClassifyErrorRequest) (out *pluginv1.ClassifyErrorResponse, err error) {
-	err = a.i.call(ctx, TimeoutPlatformHot, func(ctx context.Context, p *proc) (e error) {
-		out, e = p.platform.ClassifyError(ctx, in)
-		return
-	})
-	return
+func (a platformAdapter) ClassifyError(ctx context.Context, in *pluginv1.ClassifyErrorRequest) (*pluginv1.ClassifyErrorResponse, error) {
+	return invoke(a.i, ctx, classHot, TimeoutPlatformHot, platformOf, pluginv1.PlatformServiceClient.ClassifyError, in)
 }
 
-func (a platformAdapter) BuildTestRequest(ctx context.Context, in *pluginv1.BuildTestRequestRequest) (out *pluginv1.BuildTestRequestResponse, err error) {
-	err = a.i.call(ctx, TimeoutPlatformConsole, func(ctx context.Context, p *proc) (e error) {
-		out, e = p.platform.BuildTestRequest(ctx, in)
-		return
-	})
-	return
+func (a platformAdapter) BuildTestRequest(ctx context.Context, in *pluginv1.BuildTestRequestRequest) (*pluginv1.BuildTestRequestResponse, error) {
+	return invoke(a.i, ctx, classConsole, TimeoutPlatformConsole, platformOf, pluginv1.PlatformServiceClient.BuildTestRequest, in)
 }
 
-func (a platformAdapter) BuildModelsRequest(ctx context.Context, in *pluginv1.BuildModelsRequestRequest) (out *pluginv1.BuildModelsRequestResponse, err error) {
-	err = a.i.call(ctx, TimeoutPlatformConsole, func(ctx context.Context, p *proc) (e error) {
-		out, e = p.platform.BuildModelsRequest(ctx, in)
-		return
-	})
-	return
+func (a platformAdapter) BuildModelsRequest(ctx context.Context, in *pluginv1.BuildModelsRequestRequest) (*pluginv1.BuildModelsRequestResponse, error) {
+	return invoke(a.i, ctx, classConsole, TimeoutPlatformConsole, platformOf, pluginv1.PlatformServiceClient.BuildModelsRequest, in)
 }
 
 // ResolveModel runs on the gateway hot path (before scheduling), so it uses
 // the hot-path timeout like BuildUpstreamRequest; the gateway applies its own,
 // shorter deadline on top.
-func (a platformAdapter) ResolveModel(ctx context.Context, in *pluginv1.ResolveModelRequest) (out *pluginv1.ResolveModelResponse, err error) {
-	err = a.i.call(ctx, TimeoutPlatformHot, func(ctx context.Context, p *proc) (e error) {
-		out, e = p.platform.ResolveModel(ctx, in)
-		return
-	})
-	return
+func (a platformAdapter) ResolveModel(ctx context.Context, in *pluginv1.ResolveModelRequest) (*pluginv1.ResolveModelResponse, error) {
+	return invoke(a.i, ctx, classHot, TimeoutPlatformHot, platformOf, pluginv1.PlatformServiceClient.ResolveModel, in)
 }
 
 // ExtractUsage runs after the response reached the client, so it is off the
 // latency path; it still uses the hot-path timeout because it holds a usage
 // record open, and the gateway applies its own, shorter deadline on top.
-func (a platformAdapter) ExtractUsage(ctx context.Context, in *pluginv1.ExtractUsageRequest) (out *pluginv1.UsageReport, err error) {
-	err = a.i.call(ctx, TimeoutPlatformHot, func(ctx context.Context, p *proc) (e error) {
-		out, e = p.platform.ExtractUsage(ctx, in)
-		return
-	})
-	return
+func (a platformAdapter) ExtractUsage(ctx context.Context, in *pluginv1.ExtractUsageRequest) (*pluginv1.UsageReport, error) {
+	return invoke(a.i, ctx, classHot, TimeoutPlatformHot, platformOf, pluginv1.PlatformServiceClient.ExtractUsage, in)
 }
 
-// BuildReconcileRequest and ParseReconcileResponse run in the core's offline
-func (a platformAdapter) ParseTaskSubmission(ctx context.Context, in *pluginv1.ExtractUsageRequest) (out *pluginv1.TaskSubmission, err error) {
-	err = a.i.call(ctx, TimeoutPlatformHot, func(ctx context.Context, p *proc) (e error) {
-		out, e = p.platform.ParseTaskSubmission(ctx, in)
-		return
-	})
-	return
+func (a platformAdapter) ParseTaskSubmission(ctx context.Context, in *pluginv1.ExtractUsageRequest) (*pluginv1.TaskSubmission, error) {
+	return invoke(a.i, ctx, classHot, TimeoutPlatformHot, platformOf, pluginv1.PlatformServiceClient.ParseTaskSubmission, in)
+}
+
+// EstimateUsage runs before the pre-charge of every priced request.
+func (a platformAdapter) EstimateUsage(ctx context.Context, in *pluginv1.EstimateUsageRequest) (*pluginv1.UsageReport, error) {
+	return invoke(a.i, ctx, classHot, TimeoutPlatformHot, platformOf, pluginv1.PlatformServiceClient.EstimateUsage, in)
 }
 
 // BuildReconcileRequest and ParseReconcileResponse run in the core's offline
 // reconcile loop, not in a request, so they get the console budget rather
 // than the hot-path one: nobody is waiting, and being stingy here only
 // burns an attempt of an entry's limited allowance.
-func (a platformAdapter) BuildReconcileRequest(ctx context.Context, in *pluginv1.BuildReconcileRequestRequest) (out *pluginv1.BuildReconcileRequestResponse, err error) {
-	err = a.i.call(ctx, TimeoutPlatformConsole, func(ctx context.Context, p *proc) (e error) {
-		out, e = p.platform.BuildReconcileRequest(ctx, in)
-		return
-	})
-	return
+func (a platformAdapter) BuildReconcileRequest(ctx context.Context, in *pluginv1.BuildReconcileRequestRequest) (*pluginv1.BuildReconcileRequestResponse, error) {
+	return invoke(a.i, ctx, classBackground, TimeoutPlatformConsole, platformOf, pluginv1.PlatformServiceClient.BuildReconcileRequest, in)
 }
 
-func (a platformAdapter) ParseReconcileResponse(ctx context.Context, in *pluginv1.ParseReconcileResponseRequest) (out *pluginv1.ReconcileResult, err error) {
-	err = a.i.call(ctx, TimeoutPlatformConsole, func(ctx context.Context, p *proc) (e error) {
-		out, e = p.platform.ParseReconcileResponse(ctx, in)
-		return
-	})
-	return
+func (a platformAdapter) ParseReconcileResponse(ctx context.Context, in *pluginv1.ParseReconcileResponseRequest) (*pluginv1.ReconcileResult, error) {
+	return invoke(a.i, ctx, classBackground, TimeoutPlatformConsole, platformOf, pluginv1.PlatformServiceClient.ParseReconcileResponse, in)
 }
 
 type hookAdapter struct{ i *Instance }
 
-func (a hookAdapter) OnGatewayRequest(ctx context.Context, in *pluginv1.GatewayRequestHookRequest) (out *pluginv1.GatewayRequestHookResponse, err error) {
+func (a hookAdapter) OnGatewayRequest(ctx context.Context, in *pluginv1.GatewayRequestHookRequest) (*pluginv1.GatewayRequestHookResponse, error) {
 	timeout := TimeoutHookDefault
 	if h, ok := registry.HookByID(a.i.pkg.Manifest, in.GetHookId()); ok && h.TimeoutMs > 0 {
 		timeout = time.Duration(h.TimeoutMs) * time.Millisecond
 	}
-	if timeout > TimeoutHookMax {
-		timeout = TimeoutHookMax
-	}
-	err = a.i.call(ctx, timeout, func(ctx context.Context, p *proc) (e error) {
-		out, e = p.hook.OnGatewayRequest(ctx, in)
-		return
-	})
-	return
+	return invoke(a.i, ctx, classHot, min(timeout, TimeoutHookMax), hookOf, pluginv1.HookServiceClient.OnGatewayRequest, in)
 }
 
 type appAdapter struct{ i *Instance }
 
-func (a appAdapter) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (out *pluginv1.RunJobResponse, err error) {
+func (a appAdapter) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*pluginv1.RunJobResponse, error) {
 	timeout := TimeoutJobDefault
 	for _, j := range a.i.pkg.Manifest.Jobs {
 		if j.ID == in.GetJobId() && j.TimeoutSec > 0 {
 			timeout = time.Duration(j.TimeoutSec) * time.Second
 		}
 	}
-	err = a.i.call(ctx, timeout, func(ctx context.Context, p *proc) (e error) {
-		out, e = p.app.RunJob(ctx, in)
-		return
-	})
-	return
+	return invoke(a.i, ctx, classBackground, timeout, appOf, pluginv1.AppServiceClient.RunJob, in)
 }
 
-func (a appAdapter) OnEvents(ctx context.Context, in *pluginv1.OnEventsRequest) (out *pluginv1.OnEventsResponse, err error) {
-	err = a.i.call(ctx, TimeoutEvents, func(ctx context.Context, p *proc) (e error) {
-		out, e = p.app.OnEvents(ctx, in)
-		return
-	})
-	return
+func (a appAdapter) OnEvents(ctx context.Context, in *pluginv1.OnEventsRequest) (*pluginv1.OnEventsResponse, error) {
+	return invoke(a.i, ctx, classBackground, TimeoutEvents, appOf, pluginv1.AppServiceClient.OnEvents, in)
 }
 
 type httpAdapter struct{ i *Instance }
 
-func (a httpAdapter) HandleHTTP(ctx context.Context, in *pluginv1.HTTPRequest) (out *pluginv1.HTTPResponse, err error) {
-	err = a.i.call(ctx, TimeoutHTTP, func(ctx context.Context, p *proc) (e error) {
-		out, e = p.http.HandleHTTP(ctx, in)
-		return
-	})
-	return
+func (a httpAdapter) HandleHTTP(ctx context.Context, in *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+	return invoke(a.i, ctx, classConsole, TimeoutHTTP, httpOf, pluginv1.HTTPServiceClient.HandleHTTP, in)
 }
 
 type schedAdapter struct{ i *Instance }
 
-func (a schedAdapter) ResolveAffinityKey(ctx context.Context, in *pluginv1.ResolveAffinityKeyRequest) (out *pluginv1.ResolveAffinityKeyResponse, err error) {
-	err = a.i.call(ctx, TimeoutScheduler, func(ctx context.Context, p *proc) (e error) {
-		out, e = p.sched.ResolveAffinityKey(ctx, in)
-		return
-	})
-	return
+func (a schedAdapter) ResolveAffinityKey(ctx context.Context, in *pluginv1.ResolveAffinityKeyRequest) (*pluginv1.ResolveAffinityKeyResponse, error) {
+	return invoke(a.i, ctx, classHot, TimeoutScheduler, schedOf, pluginv1.SchedulerServiceClient.ResolveAffinityKey, in)
 }
 
-func (a schedAdapter) RankAccounts(ctx context.Context, in *pluginv1.RankAccountsRequest) (out *pluginv1.RankAccountsResponse, err error) {
+func (a schedAdapter) RankAccounts(ctx context.Context, in *pluginv1.RankAccountsRequest) (*pluginv1.RankAccountsResponse, error) {
 	timeout := TimeoutRankDefault
 	if s := a.i.pkg.Manifest.Scheduler; s != nil && s.Rank != nil && s.Rank.TimeoutMs > 0 {
 		timeout = time.Duration(s.Rank.TimeoutMs) * time.Millisecond
 	}
-	if timeout > TimeoutRankMax {
-		timeout = TimeoutRankMax
-	}
-	err = a.i.call(ctx, timeout, func(ctx context.Context, p *proc) (e error) {
-		out, e = p.sched.RankAccounts(ctx, in)
-		return
-	})
-	return
+	return invoke(a.i, ctx, classHot, min(timeout, TimeoutRankMax), schedOf, pluginv1.SchedulerServiceClient.RankAccounts, in)
 }
 
 // ------------------------------------------------------------------ helpers

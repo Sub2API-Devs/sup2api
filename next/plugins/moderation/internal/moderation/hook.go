@@ -192,11 +192,7 @@ func (p *Plugin) finishRecord(c *config, rec eventRec, v Verdict, err error, act
 	if rec.Verdict == VerdictPass && !c.RecordPass {
 		return
 	}
-	select {
-	case p.events <- rec:
-	default:
-		p.stats.droppedEvents.Add(1)
-	}
+	p.eventWriter.Send(rec)
 }
 
 // judgeShared runs one moderation per distinct text at a time

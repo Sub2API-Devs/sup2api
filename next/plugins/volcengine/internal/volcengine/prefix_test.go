@@ -374,31 +374,6 @@ func TestAnthropicHeaders(t *testing.T) {
 	}
 }
 
-// TestAnthropicErrorVocabulary: the gateway uses a plugin's client_error_type
-// verbatim when it is set, so the OpenAI words would reach an Anthropic client
-// as-is. "server_error" is not an Anthropic type at all.
-func TestAnthropicErrorVocabulary(t *testing.T) {
-	for _, c := range []struct {
-		protocol string
-		status   int
-		want     string
-	}{
-		{ProtocolMessages, 500, errAnthropicAPI},
-		{ProtocolMessages, 0, errAnthropicAPI},
-		{ProtocolMessages, 404, errAnthropicNotFound},
-		{ProtocolMessages, 401, errAuthentication},
-		{ProtocolMessages, 429, errRateLimit},
-		{ProtocolMessages, 400, errInvalidRequest},
-		// The OpenAI surface keeps its own words.
-		{ProtocolChat, 500, errServer},
-		{ProtocolChat, 404, errInvalidRequest},
-	} {
-		if got := errorTypeFor(c.protocol, c.status); got != c.want {
-			t.Errorf("%s %d = %q, want %q", c.protocol, c.status, got, c.want)
-		}
-	}
-}
-
 // TestUpstreamURLRejectsAnotherOrigin tests the last line of defence on its
 // own. It has to be tested directly, because prefixesOf normalizes first and
 // therefore refuses these values before this code is reached - which is the

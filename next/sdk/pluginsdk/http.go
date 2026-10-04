@@ -36,11 +36,48 @@ func (r *Router) HandleHTTP(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 		if p == "" {
 			continue
 		}
+		// Try exact match first
 		if h, ok := r.routes[method+" "+p]; ok {
 			return h(ctx, req)
 		}
+		// Try pattern match (e.g., /models/:id)
+		for pattern, h := range r.routes {
+			if !strings.HasPrefix(pattern, method+" ") {
+				continue
+			}
+			patternPath := strings.TrimPrefix(pattern, method+" ")
+			if params := matchPath(patternPath, p); params != nil {
+				// Fill path_params for Param() helper
+				if req.PathParams == nil {
+					req.PathParams = make(map[string]string)
+				}
+				for k, v := range params {
+					req.PathParams[k] = v
+				}
+				return h(ctx, req)
+			}
+		}
 	}
 	return ErrorResponse(http.StatusNotFound, "not_found", fmt.Sprintf("no route for %s %s", method, req.GetPath())), nil
+}
+
+// matchPath checks if path matches pattern (e.g., /models/:id matches /models/123).
+// Returns nil if no match, or a map of parameter names to values.
+func matchPath(pattern, path string) map[string]string {
+	patternParts := strings.Split(strings.Trim(pattern, "/"), "/")
+	pathParts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(patternParts) != len(pathParts) {
+		return nil
+	}
+	params := make(map[string]string)
+	for i, pp := range patternParts {
+		if strings.HasPrefix(pp, ":") {
+			params[strings.TrimPrefix(pp, ":")] = pathParts[i]
+		} else if pp != pathParts[i] {
+			return nil
+		}
+	}
+	return params
 }
 
 // ---------------------------------------------------------------- responses (CONTRACTS §3.1)
@@ -133,4 +170,27 @@ func Pagination(req *pluginv1.HTTPRequest, defaultSize int) (page, size int) {
 		size = 200
 	}
 	return page, size
+}
+
+// Param returns a path parameter by name, falling back to the last path segment
+// when path_params is empty (a host that never filled it degrades gracefully).
+func Param(req *pluginv1.HTTPRequest, name string) string {
+	if v, ok := req.GetPathParams()[name]; ok {
+		return v
+	}
+	path := strings.TrimSuffix(req.GetPath(), "/")
+	if i := strings.LastIndexByte(path, '/'); i >= 0 && !strings.HasPrefix(path[i+1:], ":") {
+		return path[i+1:]
+	}
+	return ""
+}
+
+// Unavailable is a 503 for "database unavailable" or similar errors.
+func Unavailable(msg string) *pluginv1.HTTPResponse {
+	return ErrorResponse(http.StatusServiceUnavailable, "unavailable", msg)
+}
+
+// BadRequest is a 400 with one field error.
+func BadRequest(field, code, msg string) *pluginv1.HTTPResponse {
+	return FieldErrorResponse("invalid request / 请求参数不正确", FieldErrors{}.Add(field, code, msg))
 }

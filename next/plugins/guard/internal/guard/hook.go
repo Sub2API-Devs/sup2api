@@ -100,9 +100,7 @@ func (p *Plugin) OnGatewayRequest(_ context.Context, in *pluginv1.GatewayRequest
 		if settings.RecordSnippets {
 			ev.Snippet = snippetAround(text, off, len(r.Pattern))
 		}
-		select {
-		case p.blocks <- ev:
-		default:
+		if !p.blockWriter.Send(ev) {
 			p.stats.droppedBlocks.Add(1)
 		}
 		if settings.WebhookURL != "" {
@@ -129,53 +127,6 @@ func (p *Plugin) OnGatewayRequest(_ context.Context, in *pluginv1.GatewayRequest
 		}, nil
 	}
 	return allow, nil
-}
-
-// blockWriter persists block events in batches: block_log rows plus the
-// blocked counter of stats_minutely.
-func (p *Plugin) blockWriter(ctx context.Context) {
-	defer p.wg.Done()
-	const maxBatch = 200
-	t := time.NewTicker(time.Second)
-	defer t.Stop()
-	var batch []blockEvent
-	flush := func() {
-		if len(batch) == 0 {
-			return
-		}
-		fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
-		if err := p.writeBlocks(fctx, batch); err != nil {
-			p.stats.droppedBlocks.Add(int64(len(batch)))
-			p.log.Warn("guard: write block log failed", "error", err.Error(), "events", len(batch))
-		}
-		batch = batch[:0]
-	}
-	for {
-		select {
-		case <-ctx.Done():
-			// Drain what is already queued, then stop.
-			for {
-				select {
-				case ev := <-p.blocks:
-					batch = append(batch, ev)
-					if len(batch) >= maxBatch {
-						flush()
-					}
-				default:
-					flush()
-					return
-				}
-			}
-		case ev := <-p.blocks:
-			batch = append(batch, ev)
-			if len(batch) >= maxBatch {
-				flush()
-			}
-		case <-t.C:
-			flush()
-		}
-	}
 }
 
 func (p *Plugin) writeBlocks(ctx context.Context, evs []blockEvent) error {

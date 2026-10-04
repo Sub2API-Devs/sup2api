@@ -62,9 +62,10 @@ type Options struct {
 	Seccomp       bool
 	MaxMemoryMB   int // global cap on per-plugin memory (0 = none)
 
-	// MaxConcurrency bounds concurrent calls per plugin instance (default 64).
-	MaxConcurrency int
-	Logger         *slog.Logger
+	// Concurrency bounds concurrent calls per plugin instance, separately for
+	// each call class (CONTRACTS §43.1). Zero fields use the defaults.
+	Concurrency Concurrency
+	Logger      *slog.Logger
 
 	// Timing knobs; zero values use the production defaults.
 	HealthInterval time.Duration // 10s
@@ -74,6 +75,42 @@ type Options struct {
 	BackoffBase    time.Duration // 1s
 	BackoffMax     time.Duration // 60s
 	DrainTimeout   time.Duration // 30s
+	// DrainGrace keeps a draining instance accepting new calls for a moment:
+	// requests that captured the previous generation before the switch still
+	// reach it instead of failing (2s).
+	DrainGrace time.Duration
+}
+
+// Concurrency is the per-instance limit of each call class. A slow class
+// cannot starve another: a console route or a job waits for its own slots,
+// never for the slots of the request path.
+type Concurrency struct {
+	// Hot: RPCs on the gateway request path (resolve, estimate, hooks,
+	// scheduler, build, classify, extract). Default 64.
+	Hot int
+	// Console: credential checks, test and model requests, plugin HTTP
+	// routes. Default 16.
+	Console int
+	// Background: jobs, events, broadcasts, polls, monitors, reconcile and
+	// data migrations. Default 8.
+	Background int
+	// Execute: platform Execute, held for the whole upstream exchange. The
+	// account and user slots of the core bound real concurrency; this is
+	// only a safety cap. Default 1024.
+	Execute int
+}
+
+func (c Concurrency) withDefaults() Concurrency {
+	def := func(v *int, d int) {
+		if *v <= 0 {
+			*v = d
+		}
+	}
+	def(&c.Hot, 64)
+	def(&c.Console, 16)
+	def(&c.Background, 8)
+	def(&c.Execute, 1024)
+	return c
 }
 
 // Runtime starts plugin instances.
@@ -86,9 +123,7 @@ func New(o Options) (*Runtime, error) {
 	if o.DB == nil || o.Redis == nil || o.Cipher == nil || o.Node == nil || o.Launcher == nil {
 		return nil, errors.New("grpcruntime: DB, Redis, Cipher, Node and Launcher are required")
 	}
-	if o.MaxConcurrency <= 0 {
-		o.MaxConcurrency = 64
-	}
+	o.Concurrency = o.Concurrency.withDefaults()
 	if o.Logger == nil {
 		o.Logger = slog.Default()
 	}
@@ -103,6 +138,7 @@ func New(o Options) (*Runtime, error) {
 	def(&o.BackoffBase, time.Second)
 	def(&o.BackoffMax, 60*time.Second)
 	def(&o.DrainTimeout, 30*time.Second)
+	def(&o.DrainGrace, 2*time.Second)
 	if o.MaxRestarts <= 0 {
 		o.MaxRestarts = 5
 	}
