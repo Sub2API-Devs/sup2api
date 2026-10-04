@@ -212,12 +212,13 @@ func TestAuthorizerCacheInvalidation(t *testing.T) {
 	ctx := context.Background()
 
 	uid := addUser(t, a, "u@x.com", RoleUser)
+	admin := addUser(t, a, "admin@x.com", RoleAdmin)
 	mustCan(t, a, uid, "gateway:use", true)
 	mustCan(t, b, uid, "gateway:use", true)
 	mustCan(t, b, uid, "user:read", false) // cached on b
 
 	// Mutation on node a is visible on node b through the bus.
-	if _, err := a.SetRolePermissions(ctx, roleID(t, a, RoleUser), append(append([]string{}, userRolePermissions...), "user:read")); err != nil {
+	if _, err := a.SetRolePermissions(ctx, admin, roleID(t, a, RoleUser), append(append([]string{}, userRolePermissions...), "user:read")); err != nil {
 		t.Fatal(err)
 	}
 	mustCan(t, a, uid, "user:read", true)
@@ -226,7 +227,7 @@ func TestAuthorizerCacheInvalidation(t *testing.T) {
 	// Without a broadcast the poller catches up.
 	c := newService(t, db, nil, nil)
 	mustCan(t, c, uid, "user:read", true)
-	if _, err := a.SetRolePermissions(ctx, roleID(t, a, RoleUser), userRolePermissions); err != nil {
+	if _, err := a.SetRolePermissions(ctx, admin, roleID(t, a, RoleUser), userRolePermissions); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, func() bool { ok, _ := c.Can(ctx, uid, "user:read"); return !ok })
@@ -260,11 +261,12 @@ func TestRoleManagement(t *testing.T) {
 	db := testutil.DB(t)
 	s := newService(t, db, newMemBus(), nil)
 	ctx := context.Background()
+	admin := addUser(t, s, "admin@x.com", RoleAdmin)
 
 	if err := s.DeleteRole(ctx, roleID(t, s, RoleAdmin)); !isCode(err, "conflict") {
 		t.Fatalf("delete builtin: %v", err)
 	}
-	if _, err := s.SetRolePermissions(ctx, roleID(t, s, RoleSuperAdmin), []string{"user:read"}); !isCode(err, "conflict") {
+	if _, err := s.SetRolePermissions(ctx, admin, roleID(t, s, RoleSuperAdmin), []string{"user:read"}); !isCode(err, "conflict") {
 		t.Fatalf("super_admin perms: %v", err)
 	}
 	if _, err := s.CreateRole(ctx, CreateRoleInput{Key: "ops", Name: lt("Ops", "运营"), PermissionKeys: []string{"nope:x"}}); !isCode(err, "invalid_argument") {
@@ -364,7 +366,7 @@ func TestPluginCatalog(t *testing.T) {
 	if !s.IsSensitive("plugin.guard:rules:manage") || s.IsSensitive("plugin.guard:stats:read") {
 		t.Fatal("IsSensitive for plugin permissions")
 	}
-	if !s.IsSensitive("user:delete") || s.IsSensitive("user:read") {
+	if !s.IsSensitive("user:delete") || !s.IsSensitive("user:password:reset") || s.IsSensitive("user:read") {
 		t.Fatal("IsSensitive for core permissions")
 	}
 

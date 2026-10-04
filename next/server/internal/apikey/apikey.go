@@ -514,7 +514,39 @@ func (s *Service) deleteAny(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := s.softDelete(c.Request.Context(), id, nil); err != nil {
+	ctx := c.Request.Context()
+	actorID, _ := core.UserID(ctx)
+
+	// SEC-H1: fetch the API key owner to check CanActOn
+	var ownerID int64
+	err := s.db.Pool.QueryRow(ctx, `SELECT user_id FROM api_keys WHERE id = $1 AND deleted_at IS NULL`, id).Scan(&ownerID)
+	if store.IsNoRows(err) {
+		httpapi.Fail(c, notFound(ctx))
+		return
+	}
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+
+	// SEC-H2: actor must be able to act on the owner
+	if actorID != ownerID {
+		ownerPerms, err := s.authz.PermissionSet(ctx, ownerID)
+		if err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+		ownerKeys := make([]string, 0, len(ownerPerms.Keys))
+		for k := range ownerPerms.Keys {
+			ownerKeys = append(ownerKeys, k)
+		}
+		if err := s.authz.CanActOn(ctx, actorID, ownerKeys); err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+	}
+
+	if err := s.softDelete(ctx, id, nil); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}

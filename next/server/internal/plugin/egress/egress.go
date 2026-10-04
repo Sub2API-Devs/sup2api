@@ -19,6 +19,7 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/netguard"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -53,6 +54,9 @@ type Options struct {
 	// AlwaysAllow lists "host:port" targets allowed regardless of policy,
 	// e.g. the PostgreSQL address handed out by HostService.GetDSN.
 	AlwaysAllow []string
+	// PGAddrs checks if a host:port is a plugin gateway address that should
+	// bypass private address checks.
+	PGAddrs func(host string, port int) bool
 	// Dial overrides the outbound dialer (tests).
 	Dial func(ctx context.Context, network, address string) (net.Conn, error)
 	// LookupIP overrides the resolver used for dns.sub2api (tests).
@@ -197,6 +201,29 @@ func (s *server) Dial(stream pluginv1.EgressService_DialServer) error {
 		if !s.p.allowed(pol, host, port) {
 			finish(ResultDenied, "blocked by egress policy")
 			return sendResult(stream, false, "egress: "+host+" is not allowed by the plugin egress policy", "")
+		}
+		// Resolve the host and check that the resolved address is public
+		// (unless the plugin has net permission with allow_all, or it is
+		// reaching the plugin gateway).
+		resolved, err := netguard.DefaultLookup(ctx, host)
+		if err != nil {
+			finish(ResultDialError, "resolve: "+err.Error())
+			return sendResult(stream, false, "egress: resolve "+host+": "+err.Error(), "")
+		}
+		// Plugin gateway addresses are always allowed (C1 exception).
+		isPG := s.p.opts.PGAddrs != nil && s.p.opts.PGAddrs(host, port)
+		if !isPG {
+			allowPrivate := pol.Mode == PolicyAllowAll
+			for _, ip := range resolved {
+				addr, ok := netip.AddrFromSlice(ip)
+				if !ok {
+					continue
+				}
+				if netguard.BlockedAddr(addr) && !allowPrivate {
+					finish(ResultDenied, "resolved to private address")
+					return sendResult(stream, false, "egress: "+host+" resolved to private address "+addr.String()+" and is not allowed", "")
+				}
+			}
 		}
 		dctx, cancel := context.WithTimeout(ctx, s.p.opts.DialTimeout)
 		conn, err = s.p.opts.Dial(dctx, open.Network, net.JoinHostPort(host, portStr))

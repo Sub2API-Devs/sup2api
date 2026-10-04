@@ -107,6 +107,9 @@ func execArgs(spec core.LaunchSpec, nice int) []string {
 		"--seccomp=" + strconv.FormatBool(spec.Seccomp),
 		"--nice=" + strconv.Itoa(nice),
 	}
+	if spec.WorkDir != "" {
+		args = append(args, "--work-dir="+spec.WorkDir, "--data-dir="+spec.WorkDir)
+	}
 	var keep []string
 	for _, kv := range spec.Env {
 		if k, _, ok := strings.Cut(kv, "="); ok && strings.HasPrefix(k, protectedEnvPrefix) && !pluginEnvAllowed[k] {

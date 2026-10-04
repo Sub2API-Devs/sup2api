@@ -13,6 +13,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/netguard"
 )
 
 var _ core.ProxyResolver = (*Service)(nil)
@@ -27,6 +28,12 @@ var _ core.ProxyResolver = (*Service)(nil)
 func (s *Service) FindOrCreate(ctx context.Context, tx pgx.Tx, spec Spec, ownerID int64, scope *int64) (int64, bool, error) {
 	if err := checkSpec(spec); err != nil {
 		return 0, false, err
+	}
+	// Under proxy:own:manage (scope != nil) a private proxy address is refused
+	// before creating anything (CONTRACTS §21.5).
+	if scope != nil && !s.opts.AllowPrivate && netguard.LiteralPrivate(spec.Host) {
+		return 0, false, core.ErrPermissionDenied.WithMessage("proxy address is private and not allowed").
+			WithDetails(map[string]any{"permission": "proxy:manage"})
 	}
 	// Serialise concurrent saves of the same URL for the rest of the
 	// transaction; the lock key ignores the password on purpose (same key
@@ -72,11 +79,15 @@ func (s *Service) FindOrCreate(ctx context.Context, tx pgx.Tx, spec Spec, ownerI
 	if err != nil {
 		return 0, false, err
 	}
+	// Rows created under proxy:own:manage (scope != nil) must not be private
+	// addresses unless the deployment allows private upstreams (test setup).
+	// Under the full proxy:manage key (scope == nil) every address is allowed.
+	allowPriv := scope == nil || s.opts.AllowPrivate
 	name := autoName(spec)
 	var id int64
-	if err := tx.QueryRow(ctx, `INSERT INTO proxies (name, protocol, host, port, username, password_enc, status, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, 'active', $7) RETURNING id`,
-		name, spec.Protocol, spec.Host, spec.Port, spec.Username, enc, ownerID).Scan(&id); err != nil {
+	if err := tx.QueryRow(ctx, `INSERT INTO proxies (name, protocol, host, port, username, password_enc, status, allow_private, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6, 'active', $7, $8) RETURNING id`,
+		name, spec.Protocol, spec.Host, spec.Port, spec.Username, enc, allowPriv, ownerID).Scan(&id); err != nil {
 		return 0, false, err
 	}
 	return id, true, nil
@@ -107,14 +118,19 @@ func (s *Service) AuditAutoCreate(ctx context.Context, tx pgx.Tx, proxyID, owner
 }
 
 // HTTPClientFor implements core.ProxyDirectory: a transient, uncached client
-// through spec (CONTRACTS §21.4, models/fetch with proxy_url).
+// through spec (CONTRACTS §21.4, models/fetch with proxy_url). A private
+// address is refused here too (the caller could not have saved it via the own
+// key without proxy:manage).
 func (s *Service) HTTPClientFor(_ context.Context, spec Spec) (*http.Client, error) {
 	if err := checkSpec(spec); err != nil {
 		return nil, err
+	}
+	if !s.opts.AllowPrivate && netguard.LiteralPrivate(spec.Host) {
+		return nil, core.ErrPermissionDenied.WithMessage("proxy address is private and not allowed")
 	}
 	u := &url.URL{Scheme: spec.Protocol, Host: net.JoinHostPort(spec.Host, strconv.Itoa(spec.Port))}
 	if spec.Username != "" || spec.Password != "" {
 		u.User = url.UserPassword(spec.Username, spec.Password)
 	}
-	return &http.Client{Transport: newTransport(u, false)}, nil
+	return &http.Client{Transport: newTransport(u)}, nil
 }

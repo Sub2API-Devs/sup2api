@@ -18,6 +18,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/netguard"
 )
 
 // ModelsResult is returned by the "fetch models" endpoints (CONTRACTS §19).
@@ -184,8 +185,12 @@ func (s *Service) fetchModels(ctx context.Context, bt core.AccountTypeBinding, a
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return nil, core.ErrPluginUnavailable.WithMessage("plugin built an invalid models URL")
 	}
-	if err := s.checkUpstream(ctx, u, proxied); err != nil {
-		return nil, core.ErrUnavailable.WithMessage(err.Error())
+	if !proxied {
+		// Direct connections are refused for non-public hosts; through a proxy
+		// the proxy decides (it received the name, not the resolved address).
+		if err := netguard.CheckHost(ctx, u.Hostname(), netguard.DefaultLookup); err != nil {
+			return nil, core.ErrUnavailable.WithMessage(err.Error())
+		}
 	}
 	method := strings.ToUpper(mr.GetMethod())
 	if method == "" {

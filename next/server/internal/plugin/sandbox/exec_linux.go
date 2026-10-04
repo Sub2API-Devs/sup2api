@@ -27,6 +27,10 @@ func runExec(o *execOptions) int {
 		fmt.Fprintln(os.Stderr, "plugin-exec:", err)
 		return exitSetup
 	}
+	if err := applyLandlock(o); err != nil {
+		fmt.Fprintln(os.Stderr, "plugin-exec: landlock:", err)
+		return exitSetup
+	}
 	env := buildEnv(os.Environ(), o)
 	if o.Seccomp || o.StrictNetwork {
 		if err := loadSeccomp(o.StrictNetwork); err != nil {
@@ -45,6 +49,10 @@ func runExec(o *execOptions) int {
 func applyLimits(o *execOptions) error {
 	if err := unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
 		return fmt.Errorf("no_new_privs: %w", err)
+	}
+	// Disable core dumps for plugins (PL-P0-4).
+	if err := unix.Prctl(unix.PR_SET_DUMPABLE, 0, 0, 0, 0); err != nil {
+		return fmt.Errorf("set_dumpable: %w", err)
 	}
 	if o.MaxOpenFiles > 0 {
 		var cur syscall.Rlimit

@@ -33,6 +33,7 @@ var coreModules = []coreModule{
 		{"user:create", "Create users", "新建用户", false},
 		{"user:update", "Edit users", "编辑用户", false},
 		{"user:delete", "Delete users", "删除用户", true},
+		{"user:password:reset", "Reset user passwords", "重置他人密码", true},
 	}},
 	{"role", lt("Roles", "角色"), []corePerm{
 		{"role:read", "View roles and permissions", "查看角色与权限", false},
@@ -63,6 +64,8 @@ var coreModules = []coreModule{
 		{"account:own:test", "Test own accounts", "测试自己创建的账号", false},
 		{"account:own:credential:view", "View own account credentials", "查看自己创建账号的凭证", true},
 		{"account:settings:custom", "Custom guarded settings (e.g. base URL)", "自定义受限设置（如 Base URL）", false},
+		{"account:group:bind", "Bind accounts to groups (own level)", "将账号绑定到分组（own 级）", false},
+		{"account:relay", "Create relay-type accounts with custom upstream", "创建自定义上游的 relay 类账号", false},
 	}},
 	{"proxy", lt("Proxies", "代理"), []corePerm{
 		{"proxy:read", "View proxies", "查看代理", false},
@@ -98,6 +101,7 @@ var coreModules = []coreModule{
 		{"plugin:uninstall", "Uninstall plugins", "卸载插件", true},
 		{"plugin:grant:high", "Grant high-risk plugin permissions", "授予插件高风险权限", false},
 		{"plugin:grant:critical", "Grant critical plugin permissions", "授予插件关键权限", true},
+		{"plugin:grant:db_schema_unconfined", "Grant db.schema to non-official plugins without role isolation", "在无角色隔离时授予非官方插件 db.schema", true},
 		{"plugin:egress:read", "View plugin egress traffic", "查看插件出口流量", false},
 		{"plugin:market:read", "Browse the plugin market", "浏览插件市场", false},
 	}},

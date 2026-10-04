@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,8 +16,10 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/netguard"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/usagerules"
 )
 
@@ -140,8 +140,10 @@ func (s *Service) runTest(ctx context.Context, bt core.AccountTypeBinding, acct 
 	}
 	res.Upstream = upstreamAddr(u)
 	managedCCG := ccgateway.IsManaged(bt.Plugin.Key, bt.Type.ID, tr.GetUrl()) && s.d.CCGateway != nil
-	if !managedCCG {
-		if err := s.checkUpstream(ctx, u, proxyID != nil); err != nil {
+	if !managedCCG && proxyID == nil {
+		// Direct connections are refused for non-public hosts; through a proxy
+		// the proxy decides (it received the name, not the resolved address).
+		if err := netguard.CheckHost(ctx, u.Hostname(), netguard.DefaultLookup); err != nil {
 			res.Message = err.Error()
 			return res
 		}
@@ -318,42 +320,4 @@ func truncate(s string, n int) string {
 		s = s[:len(s)-1]
 	}
 	return s + "…"
-}
-
-// errPrivate is returned when a test URL points at a private address.
-type errPrivate struct{ host string }
-
-func (e errPrivate) Error() string {
-	return "upstream address " + e.host + " is private or loopback and not allowed"
-}
-
-// checkUpstream rejects loopback/private/link-local targets unless allowed.
-// Through a proxy, names that cannot be resolved locally are left to the proxy.
-func (s *Service) checkUpstream(ctx context.Context, u *url.URL, proxied bool) error {
-	if s.d.AllowPrivateUpstream {
-		return nil
-	}
-	host := u.Hostname()
-	var ips []net.IP
-	if ip := net.ParseIP(host); ip != nil {
-		ips = []net.IP{ip}
-	} else {
-		addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
-		if err != nil {
-			if proxied {
-				return nil
-			}
-			return err
-		}
-		for _, a := range addrs {
-			ips = append(ips, a.IP)
-		}
-	}
-	for _, ip := range ips {
-		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-			ip.IsUnspecified() || ip.IsMulticast() || ip.IsInterfaceLocalMulticast() {
-			return errPrivate{host: host}
-		}
-	}
-	return nil
 }

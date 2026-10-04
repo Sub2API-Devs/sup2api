@@ -20,6 +20,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/billing/expr"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/netguard"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
@@ -60,7 +61,7 @@ type SyncDeps struct {
 // SetSyncDeps wires the sync dependencies (app assembly).
 func (s *Service) SetSyncDeps(d SyncDeps) {
 	if d.HTTP == nil {
-		d.HTTP = &http.Client{Timeout: 60 * time.Second}
+		d.HTTP = netguard.NewClient(netguard.ClientOptions{Timeout: 60 * time.Second})
 	}
 	s.sync = d
 }
@@ -402,7 +403,7 @@ func (s *Service) fetchSource(ctx context.Context, src *PriceSource) (*fetched, 
 		return nil, fmt.Errorf("response larger than %d MiB", maxSourceBytes>>20)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s returned HTTP %d: %s", req.URL.Redacted(), resp.StatusCode, truncate(string(body), 200))
+		return nil, fmt.Errorf("%s returned HTTP %d", req.URL.Redacted(), resp.StatusCode)
 	}
 	var out *fetched
 	switch src.Kind {

@@ -74,11 +74,11 @@
 
 | 模块 | 权限 |
 |---|---|
-| user | `user:read` `user:create` `user:update` `user:delete`🔐 |
+| user | `user:read` `user:create` `user:update` `user:delete`🔐 `user:password:reset`🔐 |
 | role | `role:read` `role:manage`🔐 |
 | apikey | `apikey:self:manage` `apikey:all:read` `apikey:all:manage` |
 | group | `group:read` `group:manage` |
-| account | `account:read` `account:create` `account:update` `account:delete`🔐 `account:test` `account:credential:view`🔐；自己创建的：`account:own:read` `account:own:create` `account:own:update` `account:own:delete` `account:own:test` `account:own:credential:view`🔐；`account:settings:custom`（§21） |
+| account | `account:read` `account:create` `account:update` `account:delete`🔐 `account:test` `account:credential:view`🔐；自己创建的：`account:own:read` `account:own:create` `account:own:update` `account:own:delete` `account:own:test` `account:own:credential:view`🔐；`account:settings:custom`（§21）`account:group:bind` `account:relay` |
 | proxy | `proxy:read` `proxy:manage`；自己创建的：`proxy:own:read` `proxy:own:manage`（§21） |
 | price | `price:read` `price:manage` |
 | balance | `balance:self:read` `balance:all:read` `balance:adjust`🔐 |
@@ -113,13 +113,13 @@
 | 方法 路径 | 权限 |
 |---|---|
 | GET `/users`（`?q=&status=&role=`） | `user:read` |
-| POST `/users` `{email, display_name, password, role_keys[], max_concurrency}` | `user:create`；指定非默认角色另需 `role:manage` + step-up |
-| GET/PATCH `/users/:id` | `user:read` / `user:update` |
-| DELETE `/users/:id` | `user:delete` |
-| PUT `/users/:id/roles` `{role_keys[]}` | `role:manage`；只有超级管理员能授予/撤销 `super_admin` |
+| POST `/users` `{email, display_name, password, role_keys[], max_concurrency}` | `user:create`；授予的 role_keys 必须是操作者持有权限的子集；指定非默认角色另需 `role:manage` + step-up |
+| GET/PATCH `/users/:id` | `user:read` / `user:update`；更新他人时目标用户权限集不得超出操作者；修改他人密码需 `user:password:reset`🔐；修改影响认证的字段（密码、status、禁用）会递增 `token_version` 使旧 token 失效 |
+| DELETE `/users/:id` | `user:delete`；目标用户权限集不得超出操作者 |
+| PUT `/users/:id/roles` `{role_keys[]}` | `role:manage`；授予的 role_keys 必须是操作者持有权限的子集；只有超级管理员能授予/撤销 `super_admin` |
 | GET `/users/:id/groups`，PUT `/users/:id/groups` `{group_ids[]}` | `group:read` / `group:manage` |
 | GET `/roles` / GET `/roles/:id` / POST `/roles` / PATCH `/roles/:id` / DELETE `/roles/:id` | `role:read` / `role:manage` |
-| PUT `/roles/:id/permissions` `{permission_keys[]}` | `role:manage` |
+| PUT `/roles/:id/permissions` `{permission_keys[]}` | `role:manage`；授予的 permission_keys 必须是操作者持有权限的子集 |
 | GET `/permissions` | `role:read`；按 module 分组：`[{module, label, source, plugin_key, status, permissions:[{key,label,sensitive,status}]}]` |
 
 ### 5.3 API Key、分组、代理（A）
@@ -1006,6 +1006,8 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 |---|---|---|
 | account | `account:own:read` `account:own:create` `account:own:update` `account:own:delete` `account:own:test` `account:own:credential:view`🔐 | 只作用于 `created_by` = 调用者的账号；`own:delete` **不**敏感（只有 `own:credential:view` 要 step-up） |
 | account | `account:settings:custom` | 允许把受限设置（目前是 base_url，§21.3）改成插件官方值以外的值 |
+| account | `account:group:bind` | 允许 own 级用户绑定账号到分组（与 `group:manage` 二选一即可） |
+| account | `account:relay` | 允许创建和管理不受限制的账号类型（无 guardedSettings 的类型，如 relay） |
 | proxy | `proxy:own:read` `proxy:own:manage` | 只作用于 `created_by` = 调用者的代理 |
 
 - 全部级 key 覆盖自己级 key：同时拥有时按全部处理。
@@ -1051,6 +1053,21 @@ manifest `accountTypes[].guardedSettings`（可选）：`[{field, allowed:[...]}
 **默认地址由插件自己提示**：三个内置账号类型的表单不再给 `base_url` 设 `default`（不预填），`pattern` 允许空串，`ui:placeholder` 写"留空使用默认地址 …"；空值由插件 `ValidateCredentials` 归一化为默认地址。核心不为 base_url 做特判；控制台清空 `url-presets` 输入即不发该键；锁定（只读）时只显示"由管理员设置"，不再拼插件的帮助文案。
 
 `GET /account-types/:p/:t/form`：调用者没有 `account:settings:custom` 时，对每个受限字段把 `schema.properties.<field>.enum` 设为 `allowed`（`properties` 或该字段不存在时创建），`allowed` 只有一项时再加 `ui_schema.<field>["ui:readonly"] = true`（`ui_schema` 为 `null` 时创建对象，已有的其他 `ui:*` 键保留）；改写在解码后的副本上做，缓存的原件不变；前端 `url-presets` 组件遇到 `enum` 只允许从预设里选。iframe/native 表单模式不改写，只靠服务端校验。
+
+### 21.3.1 own 级用户的账号创建限制
+
+own 级用户（只有 `account:own:create` / `account:own:update`，无全部级 key）在创建和修改账号时受以下限制：
+
+1. **分组绑定**：绑定账号到分组（`group_ids` 非空）需要 `group:manage` 或 `account:group:bind` 权限；无权限时返回 403 `permission_denied`（`details.permission = "account:group:bind"`）。
+2. **调度字段限制**：
+   - `priority`：0–100（全部级用户可用 0–1000000）
+   - `weight`：1–100（全部级用户可用任意正整数）
+   - `max_concurrency`：1–1000（全部级用户可用 0–100000）
+   - `schedulable`：无限制（全部级和 own 级相同）
+   超出范围返回 400 `invalid_argument`，`details.fields[{field:"<字段名>", code:"out_of_range"}]`。
+3. **不受限账号类型**：创建或修改不受限账号类型（`guardedSettings` 为空或未声明的类型，如 relay）需要 `account:relay` 权限；无权限时返回 403 `permission_denied`（`details.permission = "account:relay"`）。
+
+全部级用户（有 `account:create` / `account:update`）不受上述限制。
 
 ### 21.4 保存账号时自动关联代理
 

@@ -628,6 +628,43 @@ func checkRefs(ctx context.Context, q store.Querier, proxyID *int64, pr proxyRan
 	return nil
 }
 
+// checkOwnLevelRestrictions enforces H3 restrictions for own-level users (SEC-H3).
+func (s *Service) checkOwnLevelRestrictions(ctx context.Context, scope *int64, in *input, isRelay bool) error {
+	if scope == nil {
+		return nil // "all" level users have no restrictions
+	}
+	// H3.1: Binding to groups requires group:manage or account:group:bind
+	if in.GroupIDs != nil && len(*in.GroupIDs) > 0 {
+		if !s.can(ctx, "group:manage") && !s.can(ctx, "account:group:bind") {
+			return core.ErrPermissionDenied.WithMessage(t(ctx,
+				"binding accounts to groups requires group:manage or account:group:bind permission",
+				"将账号绑定到分组需要 group:manage 或 account:group:bind 权限")).
+				WithDetails(map[string]any{"required_permission": "group:manage or account:group:bind"})
+		}
+	}
+	// H3.2: Scheduling fields restricted for own-level users
+	if in.Priority != nil && (*in.Priority < 0 || *in.Priority > 100) {
+		return core.InvalidFields(core.FieldError{Field: "priority", Code: "restricted",
+			Message: t(ctx, "own-level users can only set priority between 0-100", "own 级用户只能设置 0-100 的优先级")})
+	}
+	if in.Weight != nil && (*in.Weight < 1 || *in.Weight > 100) {
+		return core.InvalidFields(core.FieldError{Field: "weight", Code: "restricted",
+			Message: t(ctx, "own-level users can only set weight between 1-100", "own 级用户只能设置 1-100 的权重")})
+	}
+	if in.MaxConcurrency != nil && (*in.MaxConcurrency < 1 || *in.MaxConcurrency > 1000) {
+		return core.InvalidFields(core.FieldError{Field: "max_concurrency", Code: "restricted",
+			Message: t(ctx, "own-level users can only set max_concurrency between 1-1000", "own 级用户只能设置 1-1000 的最大并发")})
+	}
+	// H3.3: Relay type accounts require account:relay permission
+	if isRelay && !s.can(ctx, "account:relay") {
+		return core.ErrPermissionDenied.WithMessage(t(ctx,
+			"creating or managing relay accounts requires account:relay permission",
+			"创建或管理中继账号需要 account:relay 权限")).
+			WithDetails(map[string]any{"required_permission": "account:relay"})
+	}
+	return nil
+}
+
 func uniqueIDs(in []int64) []int64 {
 	seen := map[int64]struct{}{}
 	out := []int64{}
@@ -745,6 +782,11 @@ func (s *Service) create(c *gin.Context) {
 	}
 	p, err := s.prepare(ctx, bt, in.Credentials, nil, s.customSettings(ctx))
 	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	scope := core.OwnerScope(ctx, "account:create")
+	if err := s.checkOwnLevelRestrictions(ctx, scope, &in, len(bt.Type.GuardedSettings) == 0); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -900,6 +942,12 @@ func (s *Service) update(c *gin.Context) {
 			httpapi.Fail(c, err)
 			return
 		}
+	}
+	bt, _ := s.accountType(cur.PluginKey, cur.Type)
+	isUnguarded := bt.Plugin.Key == "" || len(bt.Type.GuardedSettings) == 0
+	if err := s.checkOwnLevelRestrictions(ctx, scope, &in, isUnguarded); err != nil {
+		httpapi.Fail(c, err)
+		return
 	}
 	statusChanged := in.Status != nil && *in.Status != cur.Status
 	uid, _ := core.UserID(ctx)

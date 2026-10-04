@@ -55,34 +55,54 @@
 
 ---
 
-## 阶段 2：核心修复（4 项）
+## 阶段 2：核心修复（3 项）
 
 ### 状态概览
 - **开始时间**: 未开始（等待阶段 1 完成）
 - **准备子代理**: `prep-stage2` (ad314c49676eae511)
-- **当前状态**: 📝 策略分析中
+- **当前状态**: ✅ 策略分析完成
+
+### 策略文档
+- ✅ **02-STAGE2-MERGE-STRATEGY.md**: 详细合并策略（65 文件，3 个 worktree）
+- ✅ **02-CONFLICT-RESOLUTION.md**: 冲突文件解决方案（代码片段 + 验证清单）
 
 ### 子任务规划
 
 #### 2.1 fix-money-data（资金数据层）
-- **状态**: 📝 分析中
+- **状态**: ✅ 分析完成，等待执行
 - **Worktree**: `agent-ac67c88cd192a58c2`
 - **改动**: 30 个文件
 - **迁移**: `0028_performance_indexes.sql`
-- **冲突**: 与 security-combined 在 `account/handlers.go`、`billing/ledger.go`
+- **冲突**: 与 security-combined 在 `account/handlers.go`、`apikey/apikey.go`（已分析，无直接冲突）
+- **关键改动**:
+  - 账本幂等性核对 user_id/amount/kind（BE-C1-4）
+  - 输出费用预留防透支（BE-C1-5）
+  - 批量查询优化 InUseMany（BE-P1-13）
+  - 新增 billing.Quote 统一计价方法
 
 #### 2.2 fix-security-combined（安全修复合集）
-- **状态**: 📝 分析中
+- **状态**: ✅ 分析完成，等待执行
 - **Worktree**: `agent-a13f229afd3455127`
 - **改动**: 25 个文件（包含 SSRF、权限、审计）
-- **迁移**: `0027_security_hardening.sql`、`0027_token_version.sql`（⚠️ 编号冲突）
-- **冲突**: 多处冲突需手工合并
+- **迁移**: `0027_security_hardening.sql`（已合并 token_version）
+- **冲突**: 2 个文件需手工合并（已提供代码片段）
+  - `account/handlers.go`: 添加 checkOwnLevelRestrictions
+  - `apikey/apikey.go`: 替换 deleteAny 方法
+- **关键改动**:
+  - SSRF 防护统一入口 netguard（SEC-SSRF）
+  - 权限模型加固 CanActOn/CanGrant（SEC-H1/H2）
+  - Token 版本管理（SEC-M1）
+  - own 级用户限制（SEC-H3）
 
 #### 2.3 fix-gateway-shell-v3（外壳网关）
-- **状态**: ⏳ 等待中
+- **状态**: ✅ 分析完成，等待执行
 - **Worktree**: `agent-ad33353fd21f95096`
-- **改动**: 10 个文件（独立仓库）
+- **改动**: 9 个文件（独立仓库）
 - **冲突**: 无
+- **关键改动**:
+  - LocalReady 原子检查（路由器快速判断节点就绪）
+  - blocked_reason 记录（升级等待原因写入数据库）
+  - 节点目录刷新（心跳时更新快照）
 
 ---
 
@@ -125,26 +145,40 @@
 
 | 文件 | 改动者 | 冲突等级 | 处理策略 |
 |------|--------|---------|---------|
-| `account/handlers.go` | money-data + security | 🔴 高 | 分析中 |
-| `billing/ledger.go` | money-data + security | 🟡 中 | 分析中 |
+| `account/handlers.go` | money-data + security | 🟡 中 | ✅ 已分析：不同区域，先应用 money-data 再添加 security 方法 |
+| `apikey/apikey.go` | money-data + security | 🟢 低 | ✅ 已分析：不同方法，先应用 money-data 再替换 deleteAny |
+| `billing/sync.go` | security（独占） | 🟢 低 | ✅ 已分析：直接应用 security 版本 |
+| `billing/ledger.go` | money-data（独占） | 🟢 低 | 直接应用 |
 | `iam/users.go` | security（独占） | 🟢 低 | 直接应用 |
 | `authz/roles.go` | security（独占） | 🟢 低 | 直接应用 |
-| `CONTRACTS.md` | 所有 agent | 🟡 中 | 统一编号 |
+| `CONTRACTS.md` | money-data + security | 🟡 中 | ✅ 已分析：§25.8 + §43，章节独立 |
 | `go.work` | 新插件 | 🟢 低 | 合并去重 |
 
 ---
 
 ## 数据库迁移脚本编号
 
-### 当前编号方案（有冲突）
-- `0028` → performance_indexes.sql (money-data)
-- `0027` → security_hardening.sql (security) ⚠️
-- `0027` → token_version.sql (security) ⚠️
+### 当前编号方案（已解决冲突）
+- `0026` → （保留，如果主分支有）
+- `0027` → security_hardening.sql (security-combined，已合并 token_version) ✅
+- `0028` → performance_indexes.sql (money-data) ✅
 
-### 重新编号方案（待确定）
-- `0028` → performance_indexes.sql
-- `0029` → security_hardening.sql
-- `0030` → token_version.sql
+### 迁移脚本详情
+
+#### 0027_security_hardening.sql（合并版）
+- **来源**: security-combined（合并了 token_version 和 proxies allow_private）
+- **内容**:
+  - `users.token_version` (bigint, default 0) - SEC-M1
+  - `proxies.allow_private` (boolean, default false) - SEC-SSRF
+- **状态**: ✅ 方案已确定
+
+#### 0028_performance_indexes.sql
+- **来源**: money-data
+- **内容**:
+  - `idx_usage_logs_client_request_id` (partial index)
+  - `idx_api_keys_group_id` (partial index)
+  - `idx_audit_logs_action_id`
+- **状态**: ✅ 无冲突
 
 ---
 
@@ -158,8 +192,13 @@
 
 2. **prep-stage2** (ad314c49676eae511)
    - 任务：分析阶段 2 冲突
-   - 状态：🔄 运行中
-   - 预计完成：20-30 分钟
+   - 状态：✅ 已完成
+   - 完成时间：2026-10-04 21:15
+   - 交付物：
+     - ✅ 02-STAGE2-MERGE-STRATEGY.md（28KB，完整策略）
+     - ✅ 02-CONFLICT-RESOLUTION.md（18KB，代码片段参考）
+     - ✅ 冲突矩阵（2 个文件，已提供合并方案）
+     - ✅ 迁移脚本合并方案（0027 合并版）
 
 3. **prep-stage3** (aa17dbcf6e728908a)
    - 任务：检查阶段 3 插件

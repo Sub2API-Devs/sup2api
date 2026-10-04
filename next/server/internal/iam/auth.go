@@ -98,7 +98,11 @@ func newFamilyID() (string, error) {
 // issueTokens issues an access token and a refresh token in familyID (a new
 // family when empty, i.e. on login).
 func (s *Service) issueTokens(ctx context.Context, tx pgx.Tx, userID int64, familyID string) (*TokenPair, error) {
-	access, err := s.issueAccessToken(userID)
+	var tokenVersion int
+	if err := tx.QueryRow(ctx, `SELECT token_version FROM users WHERE id = $1`, userID).Scan(&tokenVersion); err != nil {
+		return nil, err
+	}
+	access, err := s.issueAccessToken(userID, tokenVersion)
 	if err != nil {
 		return nil, err
 	}

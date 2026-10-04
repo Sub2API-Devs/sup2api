@@ -23,6 +23,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/netguard"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
@@ -82,9 +83,19 @@ func New(db *store.DB, cipher *secret.Cipher, bus core.Bus, opts Options) *Servi
 	if opts.RecheckInterval <= 0 {
 		opts.RecheckInterval = 30 * time.Second
 	}
+	dialer := netguard.Dialer(15*time.Second, opts.AllowPrivate)
+	direct := &http.Client{Transport: &http.Transport{
+		DialContext:           dialer.DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          256,
+		MaxIdleConnsPerHost:   32,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   15 * time.Second,
+		ExpectContinueTimeout: time.Second,
+	}}
 	return &Service{
 		db: db, cipher: cipher, bus: bus, opts: opts,
-		direct:  &http.Client{Transport: newTransport(nil, !opts.AllowPrivate)},
+		direct:  direct,
 		clients: map[int64]*entry{},
 	}
 }
@@ -148,14 +159,9 @@ func (s *Service) changed(ctx context.Context, id int64) {
 
 // ---------------------------------------------------------------- directory
 
-// newTransport builds an upstream transport. guard refuses non-public
-// addresses at dial time (direct clients only: through a proxy the dialer
-// only reaches the proxy, which resolves the upstream itself).
-func newTransport(proxy *url.URL, guard bool) *http.Transport {
+// newTransport builds an upstream transport for the given proxy URL.
+func newTransport(proxyURL *url.URL) *http.Transport {
 	dialer := &net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}
-	if guard {
-		dialer.Control = guardControl
-	}
 	tr := &http.Transport{
 		DialContext:           dialer.DialContext,
 		ForceAttemptHTTP2:     true,
@@ -165,23 +171,24 @@ func newTransport(proxy *url.URL, guard bool) *http.Transport {
 		TLSHandshakeTimeout:   15 * time.Second,
 		ExpectContinueTimeout: time.Second,
 	}
-	if proxy != nil {
-		tr.Proxy = http.ProxyURL(proxy)
+	if proxyURL != nil {
+		tr.Proxy = http.ProxyURL(proxyURL)
 	}
 	return tr
 }
 
 type row struct {
-	ID          int64
-	Name        string
-	Protocol    string
-	Host        string
-	Port        int
-	Username    string
-	PasswordEnc []byte
-	Status      string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID            int64
+	Name          string
+	Protocol      string
+	Host          string
+	Port          int
+	Username      string
+	PasswordEnc   []byte
+	Status        string
+	AllowPrivate  bool
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 func (s *Service) proxyURL(r *row) (*url.URL, error) {
@@ -205,7 +212,14 @@ func (s *Service) buildClient(r *row) (*http.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &http.Client{Transport: newTransport(u, false)}, nil
+	// A proxy saved under the own key must not itself be a private address
+	// unless the operator had proxy:manage (CONTRACTS §21.5).
+	if !r.AllowPrivate && !s.opts.AllowPrivate {
+		if netguard.LiteralPrivate(r.Host) {
+			return nil, core.ErrUnavailable.WithMessage("proxy address is private and not allowed")
+		}
+	}
+	return &http.Client{Transport: newTransport(u)}, nil
 }
 
 // HTTPClient returns the client for proxyID; nil means a direct connection.
@@ -224,8 +238,8 @@ func (s *Service) HTTPClient(ctx context.Context, proxyID *int64) (*http.Client,
 		return e.result()
 	}
 	var r row
-	err := s.db.Pool.QueryRow(ctx, `SELECT protocol, host, port, username, password_enc, status, updated_at
-		FROM proxies WHERE id = $1`, id).Scan(&r.Protocol, &r.Host, &r.Port, &r.Username, &r.PasswordEnc, &r.Status, &r.UpdatedAt)
+	err := s.db.Pool.QueryRow(ctx, `SELECT protocol, host, port, username, password_enc, status, allow_private, updated_at
+		FROM proxies WHERE id = $1`, id).Scan(&r.Protocol, &r.Host, &r.Port, &r.Username, &r.PasswordEnc, &r.Status, &r.AllowPrivate, &r.UpdatedAt)
 	if store.IsNoRows(err) {
 		s.Invalidate(id)
 		return nil, core.ErrNotFound.WithMessage("proxy not found")
@@ -520,12 +534,33 @@ func (s *Service) create(c *gin.Context) {
 	if in.Status != nil {
 		status = *in.Status
 	}
+	// Only proxy:manage (not proxy:own:manage) may save a proxy at a private
+	// address (CONTRACTS §21.5).
+	allowPriv := s.opts.AllowPrivate
+	if !allowPriv {
+		granted := httpapi.Granted(c)
+		hasManage := false
+		for _, k := range granted {
+			if k == "proxy:manage" {
+				hasManage = true
+				break
+			}
+		}
+		if !hasManage && netguard.LiteralPrivate(*in.Host) {
+			httpapi.Fail(c, core.ErrPermissionDenied.WithMessage(t(ctx,
+				"saving a proxy at a private address requires proxy:manage",
+				"保存私网地址代理需要 proxy:manage 权限")).
+				WithDetails(map[string]any{"permission": "proxy:manage"}))
+			return
+		}
+		allowPriv = hasManage
+	}
 	uid, _ := core.UserID(ctx)
 	var id int64
 	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
-		if err := tx.QueryRow(ctx, `INSERT INTO proxies (name, protocol, host, port, username, password_enc, status, created_by)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-			*in.Name, *in.Protocol, *in.Host, *in.Port, user, enc, status, uid).Scan(&id); err != nil {
+		if err := tx.QueryRow(ctx, `INSERT INTO proxies (name, protocol, host, port, username, password_enc, status, allow_private, created_by)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+			*in.Name, *in.Protocol, *in.Host, *in.Port, user, enc, status, allowPriv, uid).Scan(&id); err != nil {
 			return err
 		}
 		return audit.Audit(ctx, tx, uid, "proxy.create", "proxy", strconv.FormatInt(id, 10), map[string]any{
@@ -656,9 +691,9 @@ func (s *Service) test(c *gin.Context) {
 		return
 	}
 	var r row
-	err := s.db.Pool.QueryRow(ctx, `SELECT p.protocol, p.host, p.port, p.username, p.password_enc FROM proxies p
+	err := s.db.Pool.QueryRow(ctx, `SELECT p.protocol, p.host, p.port, p.username, p.password_enc, p.allow_private FROM proxies p
 		WHERE p.id = $1 AND `+scoped("$2"), id, core.OwnerScope(ctx, "proxy:manage")).
-		Scan(&r.Protocol, &r.Host, &r.Port, &r.Username, &r.PasswordEnc)
+		Scan(&r.Protocol, &r.Host, &r.Port, &r.Username, &r.PasswordEnc, &r.AllowPrivate)
 	if store.IsNoRows(err) {
 		httpapi.Fail(c, notFound(ctx))
 		return

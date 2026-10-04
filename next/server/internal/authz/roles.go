@@ -188,7 +188,11 @@ func (s *Service) DeleteRole(ctx context.Context, id int64) error {
 }
 
 // SetRolePermissions replaces the permissions of a (non-superuser) role.
-func (s *Service) SetRolePermissions(ctx context.Context, id int64, keys []string) (*Role, error) {
+// The actor must hold all permissions being granted (CONTRACTS §4.1, SEC-H2).
+func (s *Service) SetRolePermissions(ctx context.Context, actorID, id int64, keys []string) (*Role, error) {
+	if err := s.CanGrant(ctx, actorID, keys); err != nil {
+		return nil, err
+	}
 	err := s.mutate(ctx, func(tx pgx.Tx) error {
 		var superuser bool
 		err := tx.QueryRow(ctx, `SELECT superuser FROM roles WHERE id = $1`, id).Scan(&superuser)
@@ -309,6 +313,21 @@ func (s *Service) SetUserRoles(ctx context.Context, tx pgx.Tx, actorID, userID i
 	}
 	if len(unknown) > 0 {
 		return 0, core.InvalidFields(core.FieldError{Field: "role_keys", Code: "unknown", Message: "unknown roles: " + strings.Join(unknown, ", ")})
+	}
+
+	// SEC-H2: Actor must be able to act on the target user (target's permissions must not exceed actor's)
+	if actorID != 0 && actorID != userID {
+		targetPerms, err := s.PermissionSet(ctx, userID)
+		if err != nil {
+			return 0, err
+		}
+		targetKeys := make([]string, 0, len(targetPerms.Keys))
+		for k := range targetPerms.Keys {
+			targetKeys = append(targetKeys, k)
+		}
+		if err := s.CanActOn(ctx, actorID, targetKeys); err != nil {
+			return 0, err
+		}
 	}
 
 	// Current superuser role ids of the user.

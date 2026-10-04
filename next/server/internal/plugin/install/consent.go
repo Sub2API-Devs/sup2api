@@ -196,7 +196,10 @@ func (s *Service) Consent(ctx context.Context, key, version string, req ConsentR
 		if len(ferrs) > 0 {
 			return core.InvalidFields(ferrs...).WithMessage("consent does not match the requested permissions")
 		}
-		if err := s.checkGrantRights(ctx, actorID, decisions); err != nil {
+		if err := s.checkGrantRights(ctx, actorID, decisions, trust, pubID != nil); err != nil {
+			return err
+		}
+		if err := s.checkRoleGrantRights(ctx, actorID, m, req.RoleKeysForNewPermissions); err != nil {
 			return err
 		}
 		for _, d := range decisions {
@@ -271,19 +274,42 @@ func (s *Service) Consent(ctx context.Context, key, version string, req ConsentR
 
 // checkGrantRights verifies the operator may approve every newly granted
 // high/critical permission (carried-over grants were approved before).
-func (s *Service) checkGrantRights(ctx context.Context, actorID int64, ds []decision) error {
+// For db.schema: without role isolation, non-official plugins are rejected
+// unless the operator explicitly has plugin:grant:db_schema_unconfined.
+func (s *Service) checkGrantRights(ctx context.Context, actorID int64, ds []decision, trust string, hasPub bool) error {
 	if isSystem(ctx) {
 		return nil // built-in plugins ship with the image
 	}
 	need := map[string][]string{}
+	var needsDBSchema bool
 	for _, d := range ds {
 		if d.status != GrantGranted || d.carried {
 			continue
+		}
+		if d.permission == "db.schema" {
+			needsDBSchema = true
 		}
 		if p := RequiredGrantPermission(riskOf(d.permission)); p != "" {
 			need[p] = append(need[p], d.permission)
 		}
 	}
+
+	// PL-P0-5: db.schema requires role isolation OR official trust OR explicit override
+	if needsDBSchema && s.d.Schemas != nil {
+		roleIsolation := s.opt.Plugins.DBRoleIsolation
+		isOfficial := hasPub && trust == pkg.TrustOfficial
+		if !roleIsolation && !isOfficial {
+			// Require explicit override permission
+			ok, err := s.d.Authz.Can(ctx, actorID, "plugin:grant:db_schema_unconfined")
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return core.ErrPermissionDenied.WithMessage("granting db.schema to non-official plugins without role isolation requires plugin:grant:db_schema_unconfined")
+			}
+		}
+	}
+
 	perms := make([]string, 0, len(need))
 	for p := range need {
 		perms = append(perms, p)
@@ -298,6 +324,32 @@ func (s *Service) checkGrantRights(ctx context.Context, actorID int64, ds []deci
 			return core.ErrPermissionDenied.WithMessage(fmt.Sprintf("granting %v requires %s", need[p], p)).
 				WithDetails(map[string]any{"permission": p, "host_permissions": need[p]})
 		}
+	}
+	return nil
+}
+
+// checkRoleGrantRights verifies the operator may grant plugin permissions to
+// roles (requires role:manage and holding all permissions being granted).
+func (s *Service) checkRoleGrantRights(ctx context.Context, actorID int64, m *manifest.Manifest, roleKeys []string) error {
+	if isSystem(ctx) || len(roleKeys) == 0 {
+		return nil
+	}
+	// Require role:manage permission
+	ok, err := s.d.Authz.Can(ctx, actorID, "role:manage")
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return core.ErrPermissionDenied.WithMessage("granting permissions to roles requires role:manage")
+	}
+	// Collect all plugin user permissions
+	perms := make([]string, 0, len(m.UserPermissions))
+	for _, up := range m.UserPermissions {
+		perms = append(perms, PermissionKey(m.Key, up.Key))
+	}
+	// Actor must hold all permissions being granted to roles
+	if err := s.d.Authz.CanGrant(ctx, actorID, perms); err != nil {
+		return err
 	}
 	return nil
 }

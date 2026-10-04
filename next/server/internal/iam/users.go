@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/authz"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -166,6 +167,22 @@ func (s *Service) createUserTx(ctx context.Context, tx pgx.Tx, actorID int64, in
 	if len(fields) > 0 {
 		return nil, 0, core.InvalidFields(fields...)
 	}
+
+	// SEC-H1: check authorization to grant the requested roles
+	if actorID != 0 && !IsDefaultRoles(in.RoleKeys) {
+		requestedPerms, err := s.authz.RolesPermissions(ctx, s.db.Pool, in.RoleKeys)
+		if err != nil {
+			return nil, 0, err
+		}
+		var permKeys []string
+		for k := range requestedPerms.Keys {
+			permKeys = append(permKeys, k)
+		}
+		if err := s.authz.CanGrant(ctx, actorID, permKeys); err != nil {
+			return nil, 0, err
+		}
+	}
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), s.cost)
 	if err != nil {
 		return nil, 0, err
@@ -190,6 +207,17 @@ func (s *Service) createUserTx(ctx context.Context, tx pgx.Tx, actorID int64, in
 	if err := s.emit(ctx, tx, "user.created", id, email, StatusActive); err != nil {
 		return nil, 0, err
 	}
+
+	// SEC-M5: audit user creation
+	detail := map[string]any{
+		"email":       email,
+		"roles":       roles,
+		"max_concurrency": maxConc,
+	}
+	if err := audit.Audit(ctx, tx, actorID, "user.create", "user", strconv.FormatInt(id, 10), detail); err != nil {
+		return nil, 0, err
+	}
+
 	u, err := s.getUser(ctx, tx, id)
 	return u, v, err
 }
@@ -260,6 +288,38 @@ func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUs
 	if err := s.guardTarget(ctx, actorID, id); err != nil {
 		return nil, err
 	}
+
+	// SEC-H1: check authorization to modify target user
+	if actorID != id {
+		if err := s.authz.CanActOnUser(ctx, actorID, id); err != nil {
+			return nil, err
+		}
+	}
+
+	// SEC-H1: password reset for others requires user:password:reset
+	changingOthersPassword := in.Password != nil && actorID != id
+	if changingOthersPassword {
+		actor, err := s.authz.PermissionSet(ctx, actorID)
+		if err != nil {
+			return nil, err
+		}
+		if !actor.Has("user:password:reset") {
+			return nil, core.ErrPermissionDenied.WithMessage("missing permission: user:password:reset")
+		}
+		// SEC-H2: target permissions must not exceed actor's
+		target, err := s.authz.PermissionSet(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		targetPerms := make([]string, 0, len(target.Keys))
+		for k := range target.Keys {
+			targetPerms = append(targetPerms, k)
+		}
+		if err := s.authz.CanActOn(ctx, actorID, targetPerms); err != nil {
+			return nil, err
+		}
+	}
+
 	var hash []byte
 	if in.Password != nil {
 		var err error
@@ -294,11 +354,33 @@ func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUs
 				if actorID == id {
 					return errSelfDisable
 				}
+				// SEC-H2: target permissions must not exceed actor's
+				target, err := s.authz.PermissionSet(ctx, id)
+				if err != nil {
+					return err
+				}
+				targetPerms := make([]string, 0, len(target.Keys))
+				for k := range target.Keys {
+					targetPerms = append(targetPerms, k)
+				}
+				if err := s.authz.CanActOn(ctx, actorID, targetPerms); err != nil {
+					return err
+				}
 				if err := s.authz.EnsureNotLastSuperAdmin(ctx, tx, id); err != nil {
 					return err
 				}
 			}
 		}
+
+		// SEC-M1: increment token_version when password changes or user is disabled
+		bumpTokenVersion := hash != nil || (statusChange && *in.Status == StatusDisabled)
+		if bumpTokenVersion {
+			_, err = tx.Exec(ctx, `UPDATE users SET token_version = token_version + 1 WHERE id = $1`, id)
+			if err != nil {
+				return err
+			}
+		}
+
 		_, err = tx.Exec(ctx, `
 UPDATE users SET
     email = COALESCE($2, email),
@@ -322,7 +404,28 @@ WHERE id = $1`, id, nilStr(email), in.DisplayName, in.Status, in.MaxConcurrency,
 		if u, err = s.getUser(ctx, tx, id); err != nil {
 			return err
 		}
-		return s.emit(ctx, tx, "user.updated", id, u.Email, u.Status)
+		if err := s.emit(ctx, tx, "user.updated", id, u.Email, u.Status); err != nil {
+			return err
+		}
+
+		// SEC-M5: audit user changes
+		detail := map[string]any{}
+		if in.Email != nil {
+			detail["email_changed"] = true
+		}
+		if in.DisplayName != nil {
+			detail["display_name_changed"] = true
+		}
+		if in.Status != nil {
+			detail["status"] = *in.Status
+		}
+		if in.MaxConcurrency != nil {
+			detail["max_concurrency"] = *in.MaxConcurrency
+		}
+		if in.Password != nil {
+			detail["password_changed"] = true
+		}
+		return audit.Audit(ctx, tx, actorID, "user.update", "user", strconv.FormatInt(id, 10), detail)
 	})
 	if err != nil {
 		return nil, err
@@ -342,6 +445,12 @@ func (s *Service) DeleteUser(ctx context.Context, actorID, id int64) error {
 	if err := s.guardTarget(ctx, actorID, id); err != nil {
 		return err
 	}
+
+	// SEC-H1: check authorization to delete target user
+	if err := s.authz.CanActOnUser(ctx, actorID, id); err != nil {
+		return err
+	}
+
 	var v int64
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
 		var err error
@@ -370,7 +479,13 @@ func (s *Service) DeleteUser(ctx context.Context, actorID, id int64) error {
 		if _, err := tx.Exec(ctx, `UPDATE api_keys SET deleted_at = now() WHERE user_id = $1 AND deleted_at IS NULL`, id); err != nil {
 			return err
 		}
-		return s.emit(ctx, tx, "user.updated", id, email, "deleted")
+		if err := s.emit(ctx, tx, "user.updated", id, email, "deleted"); err != nil {
+			return err
+		}
+
+		// SEC-M5: audit user deletion
+		detail := map[string]any{"email": email}
+		return audit.Audit(ctx, tx, actorID, "user.delete", "user", strconv.FormatInt(id, 10), detail)
 	})
 	if err != nil {
 		return err

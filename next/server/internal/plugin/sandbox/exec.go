@@ -47,6 +47,8 @@ type execOptions struct {
 	KeepEnv       []string
 	Binary        string
 	Args          []string
+	WorkDir       string // plugin working directory (for Landlock)
+	DataDir       string // plugin data directory (for Landlock)
 }
 
 func parseExecArgs(args []string, stderr io.Writer) (*execOptions, error) {
@@ -61,6 +63,8 @@ func parseExecArgs(args []string, stderr io.Writer) (*execOptions, error) {
 	fs.BoolVar(&o.Seccomp, "seccomp", false, "install the seccomp filter (Linux)")
 	fs.IntVar(&o.Nice, "nice", DefaultNice, "added to the nice value")
 	fs.StringVar(&keep, "keep-env", "", "comma separated SUB2API_* variables passed to the plugin")
+	fs.StringVar(&o.WorkDir, "work-dir", "", "plugin working directory (for Landlock)")
+	fs.StringVar(&o.DataDir, "data-dir", "", "plugin data directory (for Landlock)")
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}

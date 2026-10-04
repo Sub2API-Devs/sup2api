@@ -106,7 +106,8 @@ func (s *Service) handleSetRolePermissions(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	role, err := s.SetRolePermissions(c.Request.Context(), id, in.PermissionKeys)
+	actorID, _ := core.UserID(c.Request.Context())
+	role, err := s.SetRolePermissions(c.Request.Context(), actorID, id, in.PermissionKeys)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return

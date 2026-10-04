@@ -88,7 +88,7 @@ func TestAutoName(t *testing.T) {
 }
 
 func TestHTTPClientFor(t *testing.T) {
-	svc := New(nil, nil, nil, Options{})
+	svc := New(nil, nil, nil, Options{AllowPrivate: true})
 	c, err := svc.HTTPClientFor(t.Context(), Spec{Protocol: "socks5", Host: "127.0.0.1", Port: 1080, Username: "u", Password: "p"})
 	if err != nil {
 		t.Fatal(err)
@@ -99,5 +99,10 @@ func TestHTTPClientFor(t *testing.T) {
 	}
 	if _, err := svc.HTTPClientFor(t.Context(), Spec{Protocol: "ftp", Host: "h", Port: 1}); err == nil {
 		t.Fatal("bad spec accepted")
+	}
+	// Without AllowPrivate, a private proxy address is refused.
+	guarded := New(nil, nil, nil, Options{})
+	if _, err := guarded.HTTPClientFor(t.Context(), Spec{Protocol: "http", Host: "127.0.0.1", Port: 8080}); err == nil {
+		t.Fatal("private proxy allowed without AllowPrivate")
 	}
 }

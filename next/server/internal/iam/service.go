@@ -63,8 +63,9 @@ type Service struct {
 }
 
 type statusEntry struct {
-	active bool
-	at     time.Time
+	active       bool
+	tokenVersion int
+	at           time.Time
 }
 
 var (
@@ -106,20 +107,24 @@ func (s *Service) forgetStatus(userID int64) {
 
 type accessClaims struct {
 	jwt.RegisteredClaims
+	TokenVersion int `json:"tv,omitempty"` // token_version from users table (SEC-M1)
 }
 
-func (s *Service) issueAccessToken(userID int64) (string, error) {
+func (s *Service) issueAccessToken(userID int64, tokenVersion int) (string, error) {
 	now := time.Now()
-	claims := accessClaims{jwt.RegisteredClaims{
-		Subject:   strconv.FormatInt(userID, 10),
-		IssuedAt:  jwt.NewNumericDate(now),
-		ExpiresAt: jwt.NewNumericDate(now.Add(s.cfg.AccessTokenTTL)),
-	}}
+	claims := accessClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   strconv.FormatInt(userID, 10),
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(s.cfg.AccessTokenTTL)),
+		},
+		TokenVersion: tokenVersion,
+	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.cfg.JWTSecret)
 }
 
 // VerifyAccessToken implements core.TokenVerifier: checks signature and
-// expiry, then that the user still exists and is active.
+// expiry, then that the user still exists, is active, and token_version matches.
 func (s *Service) VerifyAccessToken(ctx context.Context, token string) (int64, error) {
 	var claims accessClaims
 	_, err := jwt.ParseWithClaims(token, &claims, func(*jwt.Token) (any, error) { return s.cfg.JWTSecret, nil },
@@ -131,38 +136,48 @@ func (s *Service) VerifyAccessToken(ctx context.Context, token string) (int64, e
 	if err != nil || uid <= 0 {
 		return 0, core.ErrUnauthenticated.WithMessage("invalid token subject")
 	}
-	active, err := s.isActive(ctx, uid)
+	active, currentVersion, err := s.isActiveWithVersion(ctx, uid)
 	if err != nil {
 		return 0, err
 	}
 	if !active {
 		return 0, core.ErrUnauthenticated.WithMessage("user is disabled or deleted")
 	}
+	// SEC-M1: reject tokens from before password change / logout-all / disable
+	if claims.TokenVersion != currentVersion {
+		return 0, core.ErrUnauthenticated.WithMessage("token has been invalidated")
+	}
 	return uid, nil
 }
 
-func (s *Service) isActive(ctx context.Context, uid int64) (bool, error) {
+func (s *Service) isActiveWithVersion(ctx context.Context, uid int64) (bool, int, error) {
 	s.mu.Lock()
 	e, ok := s.status[uid]
 	epoch := s.statusEpoch
 	s.mu.Unlock()
 	if ok && time.Since(e.at) < statusCacheTTL {
-		return e.active, nil
+		return e.active, e.tokenVersion, nil
 	}
 	var active bool
-	err := s.db.Pool.QueryRow(ctx, `SELECT status = 'active' FROM users WHERE id = $1 AND deleted_at IS NULL`, uid).Scan(&active)
+	var version int
+	err := s.db.Pool.QueryRow(ctx, `SELECT status = 'active', token_version FROM users WHERE id = $1 AND deleted_at IS NULL`, uid).Scan(&active, &version)
 	if store.IsNoRows(err) {
 		active, err = false, nil
 	}
 	if err != nil {
-		return false, err
+		return false, 0, err
 	}
 	s.mu.Lock()
 	if epoch == s.statusEpoch {
-		s.status[uid] = statusEntry{active: active, at: time.Now()}
+		s.status[uid] = statusEntry{active: active, tokenVersion: version, at: time.Now()}
 	}
 	s.mu.Unlock()
-	return active, nil
+	return active, version, nil
+}
+
+func (s *Service) isActive(ctx context.Context, uid int64) (bool, error) {
+	active, _, err := s.isActiveWithVersion(ctx, uid)
+	return active, err
 }
 
 func randomToken() (string, error) {

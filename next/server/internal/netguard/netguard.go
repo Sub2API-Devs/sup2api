@@ -1,7 +1,7 @@
-// Package netguard is the core's single answer to "is this URL safe for the
-// server to fetch?" - the SSRF guard applied to every address a plugin hands
-// the core to call: BuildUpstreamRequest on the gateway path, and
-// BuildReconcileRequest in the offline reconcile loop.
+// Package netguard is the core's single answer to "may the server connect
+// there?" - the SSRF guard used by every outbound path: the gateway's
+// upstream requests, the reconcile loop, account tests, proxies, price sync
+// sources and the plugin egress tunnel.
 //
 // It lives in its own package because having two of these is how one of them
 // drifts, and the drift is always silent: the weaker copy keeps working, on
@@ -57,39 +57,83 @@ func CheckURL(ctx context.Context, raw string, allowPrivate bool, lookup Lookup)
 	if allowPrivate {
 		return u, nil
 	}
-	host := u.Hostname()
-	if ip, err := netip.ParseAddr(host); err == nil {
-		if BlockedAddr(ip) {
-			return nil, ErrPrivate
-		}
-		return u, nil
+	if err := CheckHost(ctx, u.Hostname(), lookup); err != nil {
+		return nil, err
 	}
-	if strings.EqualFold(host, "localhost") || strings.HasSuffix(strings.ToLower(host), ".localhost") {
-		return nil, ErrPrivate
+	return u, nil
+}
+
+// CheckHost reports ErrPrivate when host (an IP literal or a name) is or
+// resolves to a non-public address. A name that cannot be resolved is an
+// error too: nothing unverified is let through.
+func CheckHost(ctx context.Context, host string, lookup Lookup) error {
+	host = normalizeHost(host)
+	if LiteralPrivate(host) {
+		return ErrPrivate
+	}
+	if _, err := netip.ParseAddr(host); err == nil {
+		return nil
 	}
 	if lookup == nil {
 		lookup = DefaultLookup
 	}
 	ips, err := lookup(ctx, host)
 	if err != nil {
-		return nil, fmt.Errorf("resolve %s: %w", host, err)
+		return fmt.Errorf("resolve %s: %w", host, err)
 	}
 	if len(ips) == 0 {
-		return nil, fmt.Errorf("resolve %s: no addresses", host)
+		return fmt.Errorf("resolve %s: no addresses", host)
 	}
 	for _, ip := range ips {
 		a, ok := netip.AddrFromSlice(ip)
 		if !ok || BlockedAddr(a) {
-			return nil, ErrPrivate
+			return ErrPrivate
 		}
 	}
-	return u, nil
+	return nil
 }
 
+// LiteralPrivate reports, without resolving anything, whether host is a
+// non-public IP literal or a localhost name (or empty). Use it where a DNS
+// lookup is not wanted (saving a setting); the dial-time DialControl is what
+// catches names that resolve inwards.
+func LiteralPrivate(host string) bool {
+	host = normalizeHost(host)
+	if ip, err := netip.ParseAddr(host); err == nil {
+		return BlockedAddr(ip)
+	}
+	lower := strings.ToLower(host)
+	return lower == "" || lower == "localhost" || strings.HasSuffix(lower, ".localhost")
+}
+
+func normalizeHost(host string) string {
+	return strings.TrimSuffix(strings.Trim(strings.TrimSpace(host), "[]"), ".")
+}
+
+// blockedPrefixes are non-public ranges the netip predicates in BlockedAddr
+// do not cover. It is the union of the two lists that used to exist (this
+// package and proxy/dialguard.go).
 var blockedPrefixes = mustPrefixes(
-	"0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12",
-	"192.0.0.0/24", "192.168.0.0/16", "198.18.0.0/15", "224.0.0.0/4", "240.0.0.0/4",
-	"::/128", "::1/128", "fc00::/7", "fe80::/10", "ff00::/8", "64:ff9b::/96",
+	"0.0.0.0/8",       // "this network"; 0.x reaches local services on Linux
+	"100.64.0.0/10",   // carrier-grade NAT (RFC 6598)
+	"192.0.0.0/24",    // IETF protocol assignments
+	"192.0.2.0/24",    // TEST-NET-1
+	"198.18.0.0/15",   // benchmarking (RFC 2544)
+	"198.51.100.0/24", // TEST-NET-2
+	"203.0.113.0/24",  // TEST-NET-3
+	"224.0.0.0/4",     // multicast
+	"240.0.0.0/4",     // reserved, includes 255.255.255.255
+	"::/96",           // unspecified, loopback and IPv4-compatible (can embed private IPv4)
+	"64:ff9b::/96",    // NAT64 well-known prefix (embeds IPv4)
+	"64:ff9b:1::/48",  // local-use NAT64 (RFC 8215)
+	"100::/64",        // discard-only
+	"2001::/32",       // Teredo (embeds IPv4)
+	"2001:db8::/32",   // documentation
+	"2002::/16",       // 6to4 (embeds IPv4)
+	"fc00::/7",        // unique local
+	"fe80::/10",       // link-local
+	"fec0::/10",       // deprecated site-local
+	"ff00::/8",        // multicast
 )
 
 func mustPrefixes(ss ...string) []netip.Prefix {
@@ -101,9 +145,10 @@ func mustPrefixes(ss ...string) []netip.Prefix {
 }
 
 // BlockedAddr reports whether an address belongs to the deployment's own
-// network rather than the public internet.
+// network (or a reserved range) rather than the public internet. Invalid
+// addresses are blocked.
 func BlockedAddr(a netip.Addr) bool {
-	a = a.Unmap()
+	a = a.Unmap().WithZone("")
 	if !a.IsValid() || a.IsLoopback() || a.IsPrivate() || a.IsUnspecified() || a.IsLinkLocalUnicast() ||
 		a.IsLinkLocalMulticast() || a.IsInterfaceLocalMulticast() || a.IsMulticast() {
 		return true

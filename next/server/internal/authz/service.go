@@ -290,6 +290,39 @@ WHERE ur.user_id = $1`, userID)
 	return set, nil
 }
 
+// RolesPermissions returns the union of all permissions granted by the given
+// role keys. Used for authorization checks when granting roles to others.
+func (s *Service) RolesPermissions(ctx context.Context, q store.Querier, roleKeys []string) (core.PermissionSet, error) {
+	if len(roleKeys) == 0 {
+		return core.PermissionSet{Keys: map[string]struct{}{}}, nil
+	}
+	set := core.PermissionSet{Keys: map[string]struct{}{}}
+	rows, err := q.Query(ctx, `
+SELECT r.superuser, p.key
+FROM roles r
+LEFT JOIN role_permissions rp ON rp.role_id = r.id
+LEFT JOIN permissions p ON p.id = rp.permission_id AND p.status = 'active'
+WHERE r.key = ANY($1)`, roleKeys)
+	if err != nil {
+		return core.PermissionSet{}, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var su bool
+		var key *string
+		if err := rows.Scan(&su, &key); err != nil {
+			return core.PermissionSet{}, err
+		}
+		if su {
+			set.Superuser = true
+		}
+		if key != nil {
+			set.Keys[*key] = struct{}{}
+		}
+	}
+	return set, rows.Err()
+}
+
 // IsSensitive covers core and plugin permissions (plugin ones come from the
 // cached catalog, refreshed by every Can/PermissionSet call).
 func (s *Service) IsSensitive(permission string) bool {

@@ -1,0 +1,47 @@
+阶段 3 准备工作总结
+====================
+
+📋 文档已生成：
+  ✅ 03-STAGE3-PLUGINS.md        - 完整的准备报告（9 章节）
+  ✅ merge-stage3.sh              - 自动化合并脚本
+  ✅ CONTRACTS-section-42.md      - 第 42 章节草稿（OAuth 插件）
+
+📦 可合并插件（4 个）：
+  ✅ claude-oauth    - 编译通过、测试通过
+  ✅ codex-oauth     - 编译通过
+  ✅ growth          - 编译通过、测试通过
+  ⚠️ payment         - 编译需网络依赖（alipay/wechatpay SDK）
+
+❌ 不合并插件（5 个）：
+  ❌ gemini-oauth    - 只有占位 go.mod
+  ❌ openai-oauth    - 只有占位 go.mod
+  ❌ dynamic-weight  - 缺少 go.mod 和实现文件
+  ❌ status-page     - 只有空目录
+  ❌ (其他改动)      - 在阶段 1、2 处理
+
+🔧 核心接口缺口：
+  🔴 P0: UpdateAccountCredentials - OAuth 插件令牌刷新必需
+  🟡 P2: scheduler.rank.v1        - dynamic-weight 插件需要
+  🟢 P3: 用户查询接口              - growth 插件需要（可能已有）
+
+📝 CONTRACTS.md 章节编号：
+  原编号  →  新编号  内容
+  ------     ------  ----
+  (新增)  →  §42     OAuth 插件（claude-oauth、codex-oauth）
+  §44     →  §43     充值支付插件（payment）
+  §45     →  §44     增长运营插件（growth）
+
+📐 go.work 变化：
+  新增 4 个插件路径（按字母顺序）：
+    ./plugins/claude-oauth
+    ./plugins/codex-oauth
+    ./plugins/growth
+    ./plugins/payment
+
+⏭️ 下一步操作：
+  1. 等待阶段 1、2 完成
+  2. 执行 merge-stage3.sh 脚本
+  3. 手动合并 CONTRACTS.md（提取 §43、§44，新增 §42）
+  4. 配置网络代理后编译 payment 插件
+  5. 实现 UpdateAccountCredentials 接口（P0）
+
