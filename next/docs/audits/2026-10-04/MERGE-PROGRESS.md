@@ -1,21 +1,21 @@
 # 第一轮审计修复：合并进度跟踪
 
 **开始时间**: 2026-10-04 20:10  
-**最后更新**: 2026-10-04 20:58  
-**当前阶段**: 阶段 1 执行中（等待子代理完成）
+**最后更新**: 2026-10-04 22:15  
+**当前阶段**: 阶段 2 已完成 ✅
 
 ---
 
 ## 总体进度
 
 ```
-阶段 1: 基础设施        [████████░░] 80% (执行中)
-阶段 2: 核心修复        [██░░░░░░░░] 20% (准备中)
+阶段 1: 基础设施        [██████████] 100% ✅ 已完成
+阶段 2: 核心修复        [██████████] 100% ✅ 已完成
 阶段 3: 新插件          [██░░░░░░░░] 20% (准备中)
 ```
 
 **预计完成时间**: 5-7 小时  
-**已用时间**: 0.5 小时
+**已用时间**: 2 小时
 
 ---
 
@@ -55,12 +55,13 @@
 
 ---
 
-## 阶段 2：核心修复（3 项）
+## 阶段 2：核心修复（3 项）✅
 
 ### 状态概览
-- **开始时间**: 未开始（等待阶段 1 完成）
+- **开始时间**: 2026-10-04 21:30
+- **完成时间**: 2026-10-04 22:15
 - **准备子代理**: `prep-stage2` (ad314c49676eae511)
-- **当前状态**: ✅ 策略分析完成
+- **当前状态**: ✅ 已完成并提交
 
 ### 策略文档
 - ✅ **02-STAGE2-MERGE-STRATEGY.md**: 详细合并策略（65 文件，3 个 worktree）
@@ -69,40 +70,51 @@
 ### 子任务规划
 
 #### 2.1 fix-money-data（资金数据层）
-- **状态**: ✅ 分析完成，等待执行
+- **状态**: ✅ 已完成并提交
 - **Worktree**: `agent-ac67c88cd192a58c2`
 - **改动**: 30 个文件
 - **迁移**: `0028_performance_indexes.sql`
-- **冲突**: 与 security-combined 在 `account/handlers.go`、`apikey/apikey.go`（已分析，无直接冲突）
+- **提交**: `c8a4f92` (2026-10-04 22:00)
 - **关键改动**:
   - 账本幂等性核对 user_id/amount/kind（BE-C1-4）
   - 输出费用预留防透支（BE-C1-5）
   - 批量查询优化 InUseMany（BE-P1-13）
   - 新增 billing.Quote 统一计价方法
+- **验证**: ✅ 所有测试通过
 
 #### 2.2 fix-security-combined（安全修复合集）
-- **状态**: ✅ 分析完成，等待执行
+- **状态**: ✅ 已完成并提交
 - **Worktree**: `agent-a13f229afd3455127`
 - **改动**: 25 个文件（包含 SSRF、权限、审计）
 - **迁移**: `0027_security_hardening.sql`（已合并 token_version）
-- **冲突**: 2 个文件需手工合并（已提供代码片段）
-  - `account/handlers.go`: 添加 checkOwnLevelRestrictions
-  - `apikey/apikey.go`: 替换 deleteAny 方法
+- **提交**: `b7e9626` (2026-10-04 22:10)
+- **冲突处理**: ✅ 已解决
+  - `account/handlers.go`: 手工合并 checkOwnLevelRestrictions
+  - `apikey/apikey.go`: 手工合并 CanActOn 调用
+  - `authz/helpers.go`: 修复接口实现签名不匹配
+  - `users.go`: 添加缺失返回值
+  - `egress.go`: 修复 EgressPolicy 字段访问
+  - `authz_test.go`/`helpers_test.go`: 更新测试调用
 - **关键改动**:
   - SSRF 防护统一入口 netguard（SEC-SSRF）
-  - 权限模型加固 CanActOn/CanGrant（SEC-H1/H2）
-  - Token 版本管理（SEC-M1）
+  - 权限模型加固 CanActOn/CanActOnUser（SEC-H1/H2）
+  - Token 版本管理（SEC-M1，CONTRACTS §43）
   - own 级用户限制（SEC-H3）
+  - Landlock LSM 沙箱支持
+- **验证**: ✅ 所有测试通过
 
 #### 2.3 fix-gateway-shell-v3（外壳网关）
-- **状态**: ✅ 分析完成，等待执行
+- **状态**: ✅ 已完成并提交
 - **Worktree**: `agent-ad33353fd21f95096`
 - **改动**: 9 个文件（独立仓库）
+- **提交**: `5df100e` (2026-10-04 22:12)
 - **冲突**: 无
 - **关键改动**:
   - LocalReady 原子检查（路由器快速判断节点就绪）
   - blocked_reason 记录（升级等待原因写入数据库）
   - 节点目录刷新（心跳时更新快照）
+  - Release GC：自动清理旧版本和未引用 blob
+- **验证**: ✅ 编译通过
 
 ---
 
@@ -215,9 +227,9 @@
 - [ ] 插件：`cd next/plugins/openai && go build ./...`
 
 ### 阶段 2 验证
-- [ ] 资金：`go test -short ./internal/billing ./internal/usage`
-- [ ] 安全：`go test -short ./internal/iam ./internal/authz`
-- [ ] 网关：`cd next/gateway && go build ./...`
+- [x] 资金：`go test -short ./internal/billing ./internal/usage` ✅
+- [x] 安全：`go test -short ./internal/iam ./internal/authz` ✅
+- [x] 网关：`cd next/gateway && go build ./...` ✅
 
 ### 阶段 3 验证
 - [ ] OAuth：`cd next/plugins/claude-oauth && go test ./...`
@@ -229,9 +241,9 @@
 ## 风险点和注意事项
 
 ### 🔴 高风险
-1. **account/handlers.go 三方冲突**：money-data 的批量查询 + security 的权限检查
-2. **迁移脚本编号冲突**：两个 0027 需要重新编号
-3. **security-combined 包含多个修复**：需要仔细验证是否遗漏
+1. ~~**account/handlers.go 三方冲突**：money-data 的批量查询 + security 的权限检查~~ ✅ 已解决
+2. ~~**迁移脚本编号冲突**：两个 0027 需要重新编号~~ ✅ 已合并为 0027_security_hardening.sql
+3. ~~**security-combined 包含多个修复**：需要仔细验证是否遗漏~~ ✅ 已验证并测试通过
 
 ### 🟡 中风险
 1. **fix-web 改动可能不完整**：只有 dist 改动，配置文件需要验证
@@ -247,24 +259,14 @@
 
 ## 下一步行动
 
-### 立即（等待子代理完成）
-1. ⏳ 等待 `merge-stage1` 完成阶段 1 合并
-2. ⏳ 等待 `prep-stage2` 完成冲突分析报告
+### 立即
+1. ✅ 阶段 1 已完成（commit `bdf3fce10`）
+2. ✅ 阶段 2 已完成（commits `c8a4f92`, `b7e9626`, `5df100e`）
 3. ⏳ 等待 `prep-stage3` 完成插件检查报告
+4. 🔄 准备执行阶段 3 合并
 
-### 阶段 1 完成后
-1. 验证编译和测试
-2. 提交阶段 1 改动
-3. 启动阶段 2 合并子代理
-
-### 阶段 2 完成后
-1. 手工解决冲突文件
-2. 重新编号迁移脚本
-3. 验证核心功能测试
-4. 提交阶段 2 改动
-
-### 阶段 3 完成后
-1. 复制新插件目录
+### 阶段 3 待执行
+1. 复制新插件目录（4 个插件）
 2. 更新 go.work 和 CONTRACTS.md
 3. 验证插件编译
 4. 提交阶段 3 改动
@@ -282,12 +284,12 @@
 | 阶段 | 任务 | 预计时间 | 状态 |
 |------|------|---------|------|
 | 准备 | 映射 worktree | 0.5h | ✅ 完成 |
-| 1 | 基础设施合并 | 1-2h | 🔄 进行中 |
-| 2 | 核心修复合并 | 2-3h | 📝 准备中 |
-| 3 | 新插件合并 | 1h | 📝 准备中 |
+| 1 | 基础设施合并 | 1-2h | ✅ 完成 (bdf3fce10) |
+| 2 | 核心修复合并 | 2-3h | ✅ 完成 (c8a4f92, b7e9626, 5df100e) |
+| 3 | 新插件合并 | 1h | 🔄 准备中 |
 | 验证 | 完整测试 | 1h | ⏳ 未开始 |
-| **总计** | | **5.5-7.5h** | |
+| **总计** | | **5.5-7.5h** | **进度: 66%** |
 
 ---
 
-**最后更新**: 2026-10-04 20:10 by 主控 session
+**最后更新**: 2026-10-04 22:15 by 主控 session
