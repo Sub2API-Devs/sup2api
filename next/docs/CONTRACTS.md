@@ -32,7 +32,12 @@
 - 下载依赖：`GOPROXY=https://goproxy.cn,direct`（只在命令里临时设置）；整理依赖用 `GOWORK=off go mod tidy`
 - 重新生成 proto：`cd sdk && buf generate`（工具在 `go env GOBIN`）
 - 每个模块完成时必须通过：`go vet ./...`、`GOOS=linux go build ./...`、本模块的 `go test ./...`
-- **数据库测试**：用 `testutil.DB(t)`，需要环境变量 `TEST_DATABASE_URL`（超级用户 DSN），没有时自动跳过。本机通过 SSH 隧道连接 ovh 上的测试库：`TEST_DATABASE_URL=postgres://postgres:sub2api@127.0.0.1:45432/postgres?sslmode=disable`（隧道：`ssh -N -L 45432:127.0.0.1:45432 -L 36379:127.0.0.1:36379 ovh`，主控已在本机常驻开启）
+- **数据库测试**：核心用 `testutil.DB(t)`，插件用 `pluginsdktest.NewSchema(t, …)`，两者都从 `sdk/testpg` 拿库：
+  - 设置了 `TEST_DATABASE_URL`（超级用户 DSN，如 CI）就用它；
+  - 没设置时由 Go 启动本机的真实 PostgreSQL 16（embedded-postgres）。首次运行从 Maven Central 下载约 25 MB（需要代理时设 `HTTPS_PROXY`），之后使用缓存。
+  - 并行的测试进程通过文件锁共用一个服务器，跑完继续常驻，下次约 1 秒就能用上。停掉：`go run ./sdk/testpg/cmd/testpg stop`（另有 `start`、`status`）。
+  - 环境里有 HTTP 代理变量时要加 `NO_PROXY=127.0.0.1,localhost`。
+  - `SUB2API_TESTPG=off` 时跳过数据库测试（例如首次下载前离线）。正常情况下数据库测试**不应跳过**；报告"测试通过"前确认没有一堆 SKIP。
 - **Redis 测试**：单元测试用 `github.com/alicebob/miniredis/v2`；集成测试可用 `TEST_REDIS_URL=redis://127.0.0.1:36379/0`
 - Linux 专有代码用 `//go:build linux`，并提供非 Linux 的空实现，保证 Windows 上也能编译
 - **测试不许假设「某个端口是空闲的」**。CI 的 `server` job 把 postgres / redis 用 `ports: 5432:5432` / `6379:6379` 发布到 runner 的 `127.0.0.1`（GH runner 上 job 不在容器里，必须如此），所以任何「连这个端口应当失败」的断言都会在那里翻转。要证明「连不上」就用 `net.Listen(":0")` 拿端口再立刻 `Close()`，要证明「连得上」就起自己的监听。见 §26.7
@@ -2379,6 +2384,90 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 - 设置 → 网关页签新增"自动禁用"卡片：全局开关、状态码（文本，示例 `401,403`）、关键词（多行文本，每行一个，显示默认值可一键恢复）。
 - 账号编辑器"调度与限流"块新增开关"允许自动禁用"（默认开），说明关闭后上游报凭证或额度错误时只冷却 60 秒、不禁用。账号列表中关闭了自动禁用的账号在状态旁显示"不自动禁用"标记。
 
+## 43. 第一轮审计合并：插件调用分级并发、令牌失效与越权加固（2026-10-04 合并，2026-10-05 补记）
+
+第一轮审计（`docs/audits/2026-10-04/`）的修复在 2026-10-05 合并进主干，代码里已有 `CONTRACTS §43.1` 的引用，但本节当时没有写进来。下面按合并后的代码补记，只写对外可见的行为。
+
+### 43.1 插件调用分级限并发
+
+每个插件实例按调用类别各有一个并发上限（`grpcruntime.Options.Concurrency`），类别之间互不占用：
+
+| 类别 | 默认上限 | 包含的调用 |
+|---|---|---|
+| Hot | 64 | 网关请求路径：模型解析、预估、钩子、调度、`BuildUpstreamRequest`、`ClassifyError`、用量提取 |
+| Console | 16 | 凭证校验、测试请求、拉取模型、额度查询、插件 HTTP 路由 |
+| Background | 8 | 任务、事件、广播、Poll、监控、对账、数据迁移 |
+| Execute | 1024 | 插件驱动执行（§31）的 `Execute`，整个上游交换期间一直占用；真正的并发由核心的账号与用户槽位限制，这里只是兜底 |
+
+满了的调用排队等待，直到拿到槽位或调用方 ctx 到期，到期时返回 `plugin <key>: waiting for a free call slot: context deadline exceeded`。目的：长流式 `Execute` 和后台任务不会占满请求路径需要的调用槽位。
+
+### 43.2 改密、禁用后旧令牌失效
+
+- 迁移 0027：`users.token_version bigint NOT NULL DEFAULT 0`。
+- 修改密码、把用户禁用时 `token_version + 1`。
+- access token 里带 `tv`（签发时的 `token_version`）；校验时与库里的值不一致即 401 `token has been invalidated`。
+- 校验结果在节点内缓存 30 秒。本节点的修改立即生效；其他节点要等缓存过期，或等权限版本变化把缓存清掉（禁用会触发）。
+
+### 43.3 代理的私网地址
+
+- 迁移 0027：`proxies.allow_private boolean NOT NULL DEFAULT false`。迁移时已有的代理一律置为 `true`，保持升级前行为；迁移带守卫，重跑不会把后来关掉的再打开（`TestSecurityHardeningDoesNotReopenPrivateProxies`）。
+- 只有持 `proxy:manage` 的用户能把代理保存在私网地址（存为 `allow_private = true`）。只持 `proxy:own:manage` 时：
+  - 保存私网地址 → 403，`details.permission = "proxy:manage"`；
+  - 保存账号时自动关联代理（§21.5）遇到私网地址同样拒绝。
+- 使用代理时，`allow_private = false` 的代理指向私网地址 → 不可用。
+- `SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM=true`（只用于测试）关闭以上检查。
+
+### 43.4 出站地址检查统一到 `netguard`
+
+网关上游请求、对账、控制台测试账号、拉取模型、额度查询（§44）、代理、价格同步源、插件出站隧道都用同一个 `netguard` 包判断"能不能连"：
+
+- URL 必须是绝对 http(s)，不能带用户名密码；
+- 不走代理时，主机名解析出的地址不能是私网、回环或链路本地，IP 字面量直接判断；
+- 经代理时不检查目标地址，由代理检查（43.3）兜底；
+- `SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM=true` 时不检查。控制台三处（测试、拉取模型、额度查询）此前忽略了这个开关，2026-10-05 修正（`account.Service.guardUpstream`）。
+
+### 43.5 own 级用户的账号限制
+
+只对 own 级（`account:own:*`）用户生效，all 级不受限：
+
+- 把账号绑定到分组需要 `group:manage` 或 `account:group:bind`；
+- `priority` 只能 0–100，`weight` 只能 1–100，`max_concurrency` 只能 1–1000，超出返回字段错误 `restricted`；
+- 账号类型**没有声明 `guardedSettings`** 时（relay、ccgateway 这类可以自填上游地址的类型；核心内置类型同样算），创建或修改需要 `account:relay`，否则 403，`details.required_permission = "account:relay"`。注意判断条件是"没有声明受限设置"，不是"类型叫 relay"：上游地址固定、不需要受限设置的类型（如 `claude_oauth`）目前也要求这个权限。
+
+### 43.6 授予与操作他人的权限检查
+
+- 授予角色或权限（`CanGrant`）：只能授予自己拥有的权限，否则 403，`details.missing` 列出缺的权限。
+- 修改、禁用、删除其他用户（`CanActOnUser`、`CanActOn`）：目标的权限必须是操作者权限的子集，否则 403（`details.missing_permissions`），因此不能改动权限比自己大的用户；持 `*` 的目标只有持 `*` 的人能改。
+- 持 `*` 的超级用户和系统自身（actor 0：内置插件安装、引导管理员等）不受这些检查限制。2026-10-05 修正：之前系统也被当成没有权限的用户拦下。
+- 插件安装、升级的授权确认（consent）：只有插件声明的权限里**有核心还没有的新权限**时，才需要 `role:manage` 并对这些新权限做 `CanGrant`。升级不新增权限时只需要插件管理权限。2026-10-05 修正：之前每次安装、升级都要求 `role:manage`。
+
+### 43.7 迁移从 0026 起必须可重跑
+
+托管升级可能在迁移中途被打断，然后重新执行（§36）。`migrations.FirstIdempotentMigration = "0026_account_auto_disable.sql"`，从这个文件起，每个迁移文件都必须能在已经执行过的库上再执行一次而不报错：
+
+- `CREATE … IF NOT EXISTS`、`ADD COLUMN IF NOT EXISTS`；
+- 带数据回填的用 `DO $$ … IF NOT EXISTS … $$` 守卫，回填只发生一次。
+
+迁移按文件在一个事务里执行，所以不能用 `CREATE INDEX CONCURRENTLY`、`VACUUM` 这类不能放进事务的语句。`migrations_test.go` 检查这两条规则：不需要数据库；文件编号也不能重复。`migrations_db_test.go` 在真实 PG 上把 0026 起的迁移各跑两遍。
+
+### 43.8 Landlock 文件系统限制（默认关闭）
+
+审计加的 Landlock（`sandbox/landlock_linux.go`）合并时**在 Linux 上编译不过**：它调用了 x/sys 并不存在的包装函数。因为本机是 Windows，CI 又先在 gofmt 一步失败，所以一直没被发现。2026-10-05 改为直接调用三个系统调用。
+
+- 开关：`SUB2API_PLUGIN_LANDLOCK`，**默认 false**。打开后 plugin-exec 带 `--landlock`，只在 Linux 5.13+ 生效；内核不支持时什么也不做。
+- 受限的权限：读文件、读目录、执行、写文件、建文件、建目录、删文件、删目录。socket、fifo、符号链接、设备不受限。
+- 放行的路径：
+
+  | 路径 | 权限 |
+  |---|---|
+  | 插件二进制 | 读、执行 |
+  | 插件工作目录与数据目录 | 读写 |
+  | 临时目录（go-plugin 在这里建 unix socket） | 读写 |
+  | `/dev/null` | 读写 |
+  | CA 证书、`/usr/share/zoneinfo`、`/etc/localtime`、`/etc/resolv.conf`、`/etc/hosts`、`/etc/nsswitch.conf`、`/etc/services`、`/dev/urandom` | 只读，存在时才放行 |
+
+- **默认关闭的原因**：还没有在真实插件上跑过。原稿只放行二进制和工作目录，打开后每个插件都会启动失败（go-plugin 要在 `/tmp` 建文件），也读不到证书和时区。要打开，先在 Linux 上让全部内置插件（含出网和时区相关功能）在开启状态下跑通。
+
 ## 44. 订阅账号套餐额度：被动采样、主动查询与重置状态（2026-10-05，用户要求）
 
 用户要求："加上套餐查询功能。如果是 apikey 的话就不管他；如果是订阅，能记录 周限制、5h 限制、周 Fable 限制，然后还能重置状态。关于限额查询参考 sub2api 实现，尽量不要频繁查询。"参考实现是本仓库 sub2api 后端：`backend/internal/service/account_usage_service.go`（缓存与 singleflight、被动/主动两条链路）、`backend/internal/repository/claude_usage_service.go`（`GET /api/oauth/usage`）、`backend/internal/service/ratelimit_service.go`（响应头被动采样、`ClearRateLimit`）。设计说明见 `SUBSCRIPTION_LIMITS_DESIGN.md`。
@@ -2467,3 +2556,279 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 - `claude_oauth` 声明 `query: true`：`GET https://api.anthropic.com/api/oauth/usage`，头部 `Accept: application/json, text/plain, */*`、`Content-Type: application/json`、`Authorization: Bearer <access_token>`、`anthropic-beta: oauth-2025-04-20`、`User-Agent: claude-code/2.1.7`（同 sub2api `claude_usage_service.go`）。响应 `five_hour` → `5h`（总是返回），`seven_day` → `7d`、`seven_day_sonnet` → `7d_sonnet`、`seven_day_overage_included` → `7d_fable`（仅当带 `resets_at` 时返回，同 sub2api `buildUsageInfo`）；`utilization` 已是百分比。401/403 → `auth_rejected`，其他失败 → `transient`。
 - `claude_setup_token` 没有 profile 权限，`BuildQuotaRequest` 回 `Unimplemented`，只靠响应头（同 sub2api `estimateSetupTokenUsage`）。
 - manifest 同时补齐安装校验要求的 `platform.register` 权限与 `accounts.credentials` 的 `{"types": "own"}` scope。
+
+## 45. 增长插件 growth：邀请返利与每日签到（0.1.0，2026-10-04 合并，2026-10-05 按代码补记）
+
+原稿 `docs/audits/2026-10-04/CONTRACTS-section-growth.md` 与实现有多处不符（路由、权限、表结构、默认值），本节按 `next/plugins/growth/` 重写。余额变动只走核心账本 `ledger.credit`（§25），插件不改核心表。
+
+### 45.1 manifest
+
+- 能力：`app.events.v1`、`app.jobs.v1`、`http.routes.v1`；原生 UI（`ui/native/entry.js`）。
+- 订阅事件：`user.created`、`usage.recorded`、`balance.changed`，每批 50 条。
+- 任务：`cleanup`，`0 3 * * *`，删除 90 天前的签到记录。
+- 数据库：`plg_growth`，迁移 `migrations/0001_init.sql`（全部 `IF NOT EXISTS`）。
+- 用户权限：`growth:read`（我的邀请、签到），`growth:manage`（管理页，`sensitive`）。
+- host 权限：`db.schema`、`events`（scope 同上三种事件）、`jobs`、`routes.user`、`routes.admin`、`ui.menu`、`ui.native`、`ledger.credit`（`{"maxPerTx": "10", "maxPerDay": "100"}`）。
+- 菜单：`me` 区的"我的邀请""每日签到"（`growth:read`），插件自己的 `growth` 区里的"增长管理"（`growth:manage`）。
+
+### 45.2 表
+
+| 表 | 内容 |
+|---|---|
+| `referral_codes` | 每个用户一行：`code`（8 位大写字母数字，唯一）、`inviter_user_id`（NULL = 没有邀请人）、`bound_at` |
+| `commissions` | 每笔返利一行：邀请人、被邀请人、`event_type` + `event_id`（来源事件）、`base_amount`、`rate_percent`、`commission`、`ledger_id`（唯一） |
+| `checkins` | 每人每天一行：`checkin_date`（按配置时区的日期）、`quota_awarded`、`ledger_id`（唯一），`(user_id, checkin_date)` 唯一 |
+
+### 45.3 接口（`/api/v1/p/growth`）
+
+| 方法 | 路径 | 权限 | 说明 |
+|---|---|---|---|
+| GET | `/me/referral` | `growth:read` | 我的邀请码（没有就生成）、邀请人、邀请人数、累计返利、返利最多的被邀请人、最近返利 |
+| POST | `/me/referral/bind` | `growth:read` | `{code}` 绑定邀请人；只能绑一次 |
+| GET | `/me/checkin/status` | `growth:read` | 今天是否已签到、今日奖励、连续天数、累计次数与金额、最近记录 |
+| POST | `/me/checkin` | `growth:read` | 签到 |
+| GET | `/admin/referrals`、`/admin/referrals/:user_id` | `growth:manage` | 邀请关系列表、单个用户详情 |
+| GET | `/admin/commissions`、`/admin/checkins` | `growth:manage` | 返利、签到记录 |
+| GET | `/admin/stats` | `growth:manage` | 汇总 |
+
+绑定的规则：
+- 不能绑自己；
+- 不能绑自己邀请的人，否则两人会互相返利；
+- 已绑定再绑返回 400。
+
+没有自己邀请码的老用户（插件启用前注册、没打开过邀请页）绑定时会先生成一行。2026-10-05 修正：之前这种情况返回"already bound"。
+
+### 45.4 返利
+
+- **来源**：
+  - `usage.recorded` 且 `billing_status = billed`：按 `total_cost` 计算；
+  - `balance.changed` 且 `delta > 0`、`kind` 不是 `usage`、`plugin_credit`、`plugin_debit`、`refund`：按 `delta` 计算。实际上就是管理员调整余额。插件入账（包括 payment 的兑换码，以及 growth 自己的返利和签到）都是 `plugin_credit`，不会触发返利。
+- **金额**：`base × rate_percent / 100`，保留 8 位。
+  - 每个被邀请人累计返利不超过 `referral_max_per_invitee`，超过的部分截掉；
+  - `referral_duration_days > 0` 时，只算**绑定后** N 天内的事件。
+- **入账**：`LedgerCredit`，幂等键 `commission:<event_type>:<event_id>`（核心再加前缀 `plugin:growth:`），`ref_type = referral`。同一事件只记一次：
+  - 先查 `commissions` 里是否已有这个事件；
+  - 账本幂等键兜底；
+  - 账本已有（Duplicate）也补写 `commissions` 行，否则上限会少算。2026-10-05 修正。
+- **失败处理**（2026-10-05 修正：之前不管成败都确认整批，失败的返利就永久丢了）：
+  - 数据库或账本暂时不可用：这一条和之后的事件不确认，前面成功的照常确认，核心按 §6 退避重投，一直失败就进死信。
+  - 账本按授权范围拒绝（`PermissionDenied`、`InvalidArgument`，即单笔超过 `maxPerTx` $10、插件当天入账超过 `maxPerDay` $100）：记错误日志，跳过这一条。重试改变不了结果，还会堵住后面的事件。**这笔返利不发**，见 45.7。
+  - payload 解析不了：记警告，跳过。
+
+### 45.5 签到
+
+- 每人每天一次，日期按 `checkin_timezone`；奖励在 `[checkin_min_quota, checkin_max_quota]` 之间随机。
+- `LedgerCredit`，幂等键 `checkin:<user_id>:<YYYY-MM-DD>`，`ref_type = checkin`。重复签到返回错误。
+- 连续天数从昨天往前数，不含今天（今天签了要到明天才计入），最多查 365 天，每天一次查询。
+
+### 45.6 设置（`forms/settings.schema.json`）
+
+`referral_enabled`、`referral_rate_percent`（0–100）、`referral_max_per_invitee`（0 = 不限）、`referral_duration_days`（0 = 永久）、`checkin_enabled`、`checkin_min_quota`、`checkin_max_quota`（≥ min）、`checkin_timezone`（IANA 名，默认 UTC）。
+
+注意两处默认值不一致：
+- 表单里 `referral_max_per_invitee` 默认 0（不限）；
+- 管理员从没保存过设置时，插件内置默认是返利比例 10%、每个被邀请人上限 $100、签到 $0.01–0.05。
+
+### 45.7 已知缺口
+
+1. **授权上限偏小**：`ledger.credit` 只有单笔 $10、整个插件每天 $100（UTC 日，所有用户合计），超出的返利和签到都不发。用户多了很快就会触顶。需要按运营规模调大 scope，或者把大额返利拆成多笔。
+2. **注册归因**：没有"注册时带邀请码"的入口。任何已登录用户随时都能绑定一次邀请人，不限于新用户。
+3. **默认可见性**：普通用户角色默认没有 `growth:read`，需要管理员授予后才能看到菜单。
+4. 原生 UI 的 `dist/` 不在仓库里，打包前要先构建 `ui/native`。
+
+## 46. 充值支付与兑换码插件 payment（0.1.0，2026-10-04 起草，2026-10-05 按合并后实现修正）
+
+原稿是 feat-payment worktree 的 §44，本节按合并进主干的实现（`next/plugins/payment/`）修正，与原稿不同之处都标了"修正"。
+
+插件 `payment` 提供在线充值订单、兑换码和优惠码。余额变动全部通过核心账本 `ledger.credit`（§25）完成，插件不直接改核心表。
+
+**当前状态（必须先读）**：0.1.0 是**骨架 + 兑换码可用**。
+- 兑换码的生成、兑换、作废是真实实现。
+- 在线支付的渠道下单和回调验签**都没有实现**：`pay_url` 是占位地址，回调解析写死成 mock。所以不能对外开放在线充值。
+- 没有前端，也没有订单过期任务。
+
+用户已决定支付功能暂缓（2026-10-05），缺口见 46.9。
+### 46.1 包结构与 manifest
+
+- 目录：`next/plugins/payment/`，已加入 `next/go.work`。`main.go`（`pluginsdk.Serve`，嵌入 manifest）+ `internal/payment/`（业务）+ `migrations/0001_payment_schema.sql`。
+- 能力：只有 `http.routes.v1`。**修正**：原稿的 `events`（订阅 `user.created`）已删掉，插件没有事件处理器，也用不上这个事件。
+- 数据库：`database.schema = "plg_payment"`（**修正**：原稿写的 `payment` 通不过 SDK 校验，规则要求 `plg_<key>`），`database.migrations = "migrations/"`。表都建在 search_path 指定的插件 schema 里。
+- manifest 能通过 `sdk/manifest/check.Validate`（Tooling 模式），由 `manifest_test.go` 守护。
+
+### 46.2 数据模型
+
+插件 schema 里有这些表：
+
+- `payment_orders`：订单。`out_trade_no` 带 `s2a_` 前缀加 UUID，有唯一索引。金额字段是 `amount`（入账金额）、`pay_amount`（加手续费后的应付金额）、`fee_rate`（百分比），类型都是 `DECIMAL(20,8)`。
+- `payment_provider_instances`：支付渠道实例（`provider_key`、`config` JSONB、`limits` JSONB、启用状态）。**表已建好，但还没有读写代码。**
+- `payment_audit_logs`：**表已建好，但还没有写入代码。**
+- `redeem_codes`：兑换码，同时存明文 `code` 和 `code_hash`（SHA-256），两列都有唯一索引。**修正**：原稿说“哈希后存储”，实际明文也存了，管理员列表接口不返回明文。
+- `promo_codes`：优惠码，明文存储，有唯一索引。`promo_code_usage` 记录每个用户对每个码的使用，有唯一约束 `(promo_code_id, user_id)`。
+- `payment_config`：单行配置表（`id = 1`）。迁移会插入一行默认值：启用、金额范围 1 到 10000、超时 30 分钟、最多 3 个待支付订单、手续费率 0。
+
+### 46.3 路由（全部在 `/api/v1/p/payment` 下）
+
+**修正**：原稿把用户接口声明成 `routes.public`。但核心对 public 路由不做鉴权，`Caller.user_id` 恒为 0，handler 就会一直回 401。现在这些接口改成 `scope: user`，权限为 `recharge:use`。
+
+| 方法 | 路径 | scope / 权限 | 实现状态 |
+|---|---|---|---|
+| POST | `/orders` | user / `recharge:use` | 创建订单：真实；渠道下单：占位 |
+| GET | `/orders` | user / `recharge:use` | 真实（只返回自己的订单） |
+| POST | `/redeem` | user / `recharge:use` | 真实 |
+| GET | `/redeem/history` | user / `recharge:use` | 真实 |
+| POST | `/webhook/:provider` | webhook（不鉴权） | **mock**，见 46.5 |
+| GET / PUT | `/config` | admin / `config:manage` | **stub**：GET 返回写死的值，PUT 不落库 |
+| GET / POST | `/providers` | admin / `config:manage` | **stub**：GET 返回空数组，POST 返回 501 |
+| GET / POST | `/redeem-codes` | admin / `config:manage` | 真实 |
+| DELETE | `/redeem-codes/:id` | admin / `config:manage` | 真实（只能作废 `unused` 的码，状态置为 `expired`） |
+| GET / POST | `/promo-codes` | admin / `config:manage` | 真实 |
+| PATCH / DELETE | `/promo-codes/:id` | admin / `config:manage` | 真实 |
+
+- 用户权限有两个：`recharge:use` 和 `config:manage`。`config:manage` 标了 `sensitive`，核心对每次 admin 调用都要求 step-up（§8）。
+- **修正**：原稿的 `GET /payment-methods` 和 `POST /promo` 都没有 handler，已从 manifest 和本节删掉。优惠码目前**没有任何用户入口**（见 46.6）。
+
+### 46.4 在线充值流程（目标设计；带 ⚠ 的步骤尚未实现）
+
+1. 用户调用 `POST /orders {amount, payment_type, order_type, plan_id?}`。
+2. 插件读取 `payment_config` 并校验：已启用、在金额范围内、待支付订单数未超上限。手续费为 `amount × fee_rate / 100`，四舍五入到分，`pay_amount = amount + 手续费`。然后插入一条 `pending` 订单，过期时间默认 30 分钟。
+   - ⚠ 没有校验 `payment_type` 是否在 `enabled_payment_types` 里，没有执行 `daily_limit`，`order_type` 为空时也没有补默认值。
+   - ⚠ `user_email` 写的是占位值 `user_{id}@example.com`（核心没有用户查询 Host 接口）。
+3. ⚠ 选择渠道实例并调渠道下单：没有实现。现在返回的 `pay_url` 是 `https://pay.example.com/checkout?order=<out_trade_no>`，`qr_code` 为空。
+4. 渠道回调 `POST /webhook/:provider`。
+5. ⚠ 按渠道验签、解析通知：没有实现（见 46.5）。拿到通知后的处理是真实代码：按 `out_trade_no` 找订单，已经 `completed` 或 `refunded` 的直接返回成功；金额与 `pay_amount` 核对，容差 0.01；用条件更新把订单从 `pending` 或 `expired` 改为 `paid`。
+6. 履约：订单从 `paid` 改为 `recharging`，然后调用 `LedgerCredit{user_id, amount = 订单 amount, idempotency_key = "payment_order_<order id>", ref_type = "payment_order", ref_id = <order id>}`。成功后订单改为 `completed`；失败则改为 `failed` 并记录原因。
+   - **修正**：SDK 的 `LedgerChange` 没有 `kind` 字段，核心统一记为 `plugin_credit`。
+   - ⚠ 没有乘 `balance_recharge_multiplier`。`order_type = subscription` 的订单同样按余额入账，订阅开通没有实现。
+7. ⚠ 订单过期：没有实现。manifest 没有声明 `jobs`，没有任何代码会把订单改成 `expired`。原稿里“5 分钟宽限期”的常量定义了，但没有代码使用。
+
+状态机（目标）：`pending → paid → recharging → completed | failed`，另有 `expired`、`cancelled`、`refunding`、`refunded`。目前代码只会写出 `pending / paid / recharging / completed / failed`。
+
+### 46.5 Webhook 安全契约
+
+- 核心不对 webhook 路由做任何鉴权（`server/internal/plugin/routes`），原始 body（上限 1 MiB）和除被剥离头以外的请求头都原样转给插件。**验签、防重放、来源校验必须全部由插件自己完成。**
+- 现状：`HandlePaymentNotification` **不验签，也不解析 body**，用的是写死的通知（`out_trade_no = "mock_out_trade_no"`，金额 100）。真实订单号都带 `s2a_` 前缀，不会命中这个 mock，所以现在调用这个接口不会给任何人入账，只会返回 `200 OK`。也正因为这样，渠道没接通之前不能声称“支持在线充值”。
+- 接入真实渠道时必须满足：
+  1. 按渠道验签（支付宝 RSA2、微信 APIv3 平台证书加 AES-GCM 解密、Stripe `Stripe-Signature` 的 HMAC 与时间戳容差、易支付 MD5 签名），验签失败返回 4xx，并且不能动订单；
+  2. 防重放：校验通知里的时间戳或 nonce。至少要靠“订单状态条件更新 + 账本幂等键”保证同一通知重复投递只入账一次。这一点现在的代码已经满足：重复投递时 `paid` 条件更新影响 0 行，`LedgerCredit` 返回 `Duplicate`；
+  3. 金额以渠道通知为准，与 `pay_amount` 核对，商户号或 app_id 必须与渠道实例配置一致；
+  4. “订单不存在”现在靠匹配错误字符串返回 200，应改成哨兵错误。
+
+### 46.6 兑换码与优惠码
+
+**兑换码**（真实实现）：
+
+- 生成：`POST /redeem-codes {count (1–1000), type, value, group_id?, validity_days?, expires_at?, notes?}`，在一个事务里批量插入，返回明文码。
+- 兑换：`POST /redeem {code}`。先 trim 并转大写，算出 `code_hash`，然后在事务内 `SELECT … FOR UPDATE`，校验状态为 `unused` 且未过期，标记为 `used`。只有 `type = balance` 才调用 `LedgerCredit{idempotency_key = "redeem_code_<code id>", ref_type = "redeem_code"}`。并发兑换由行锁保证只有一次成功。
+  - ⚠ `subscription` 和 `invitation` 类型的码会被标记为已用，但不会产生任何效果。
+  - ⚠ 账本调用发生在事务提交之前。如果入账成功而提交失败，码仍然是 `unused`，别人再兑换时只会拿到 `Duplicate`（余额已经记在第一个人名下）。没有失败计数和锁定（常量 `RedeemMaxFailedAttempts` 定义了但没用上），可以被暴力枚举，只靠 128 位随机码的熵兜底。
+
+**优惠码**：
+
+- 管理员 CRUD 是真实实现。`ApplyPromoCode` 也实现了：行锁，校验状态、过期时间和次数，校验每用户只能用一次，然后调用 `LedgerCredit{idempotency_key = "promo_<promo id>_<user id>", ref_type = "promo_code"}`，写入使用记录，`used_count` 加一。
+- ⚠ **没有任何路由或流程调用 `ApplyPromoCode`**：既没有用户接口，也没有接到充值流程里。原稿的 `POST /promo` 没有实现。
+
+### 46.7 账本幂等键与授权
+
+- 插件传的键会被核心加上前缀 `plugin:payment:`（`grpcruntime/host.go`），所以只要求在插件内部唯一。
+- 键的列表：`payment_order_<orders.id>`、`redeem_code_<redeem_codes.id>`、`promo_<promo_codes.id>_<user_id>`。
+- ⚠ 风险：这三个键都基于插件 schema 里的 BIGSERIAL。如果插件被清除数据后重装（schema 被删了重建），序列从 1 重新开始，新订单会撞上旧的账本幂等键，被当成 `Duplicate`，**不会入账但订单仍会被标成 completed**。建议改成全局唯一值：订单用 `out_trade_no`，兑换码用 `code_hash`。
+- `ledger.credit` 的 scope：`{"maxPerTx": "100000", "maxPerDay": "1000000"}`。**修正**：原稿用的键是 `single_max/daily_max`，核心不认识这两个键，等于没有设上限；现在改成了核心实际读取的 `maxPerTx/maxPerDay`，由 `manifest_test.go` 守护。单日上限在 Redis 里先预占，失败或 Duplicate 时释放。
+
+### 46.8 权限申请（修正后）
+
+| host permission | 风险 | 用途 |
+|---|---|---|
+| `db.schema` | high | 插件 schema |
+| `routes.user` | medium | 用户充值、订单、兑换接口 |
+| `routes.admin` | medium | 配置与码管理 |
+| `routes.webhook` | high | 渠道回调 |
+| `ledger.credit` | critical | 入账，scope 见 46.7 |
+
+**修正**：原稿的 `db.migrations` 不是有效的 host permission，已删除；迁移由核心按 `database.migrations` 执行（§36）。`routes.public` 和 `events` 已删除。`ui.menu` 和 `ui.native` 在前端实现之前暂不申请（`ui.native` 是 critical 风险，没有页面却申请它就是过宽）。
+
+### 46.9 已知缺口（按优先级）
+
+1. 支付渠道（易支付、支付宝、微信、Stripe、Airwallex）下单和回调验签都没有实现。stripe-go、alipay、wechatpay-go 这几个依赖原来写在 go.mod 里但从未被 import，`go mod tidy` 时已移除，真正接入时再加回来。
+2. 渠道选择和负载均衡没有实现（`payment_provider_instances` 没有读写代码，`/providers` 是 stub）。
+3. `/config` 的读写是 stub，`payment_config` 只能直接改数据库。
+4. 订单过期任务没有实现（需要声明 `jobs` + `app.jobs.v1`，并申请 `jobs` 权限）。
+5. 优惠码没有用户入口。
+6. 没有前端。原稿设计的菜单是：用户侧的充值、订单记录、兑换码三项放在核心 `finance` 区；管理侧的支付配置放在 `system` 区。注意插件**不能**声明 id 为 `finance` 的 `ui.sections`，`finance` 是核心保留区，直接把菜单挂到 `section: "finance"` 即可。
+7. 核心缺口：没有用户查询 Host 接口（拿不到 email）；`recharge:use` 需要能默认授予普通用户角色，否则普通用户调不到充值接口（03-feature-gap.md §A4）。
+8. 46.7 的幂等键风险；46.6 里兑换码的提交顺序问题和缺少防爆破。
+
+### 46.10 测试
+
+- `manifest_test.go`（不需要数据库，`-short` 下也会跑）：manifest 通过核心校验；不含未知字段；`ledger.credit` scope 只包含 `maxPerTx/maxPerDay`；manifest 里的每条路由都有对应 handler。
+- `internal/payment/plugin_test.go`：其中 `TestPlugin_AmountPrecision` 不需要数据库。其余的订单履约、兑换码、并发兑换、优惠码测试用真实 PostgreSQL（§2：`TEST_DATABASE_URL` 或 testpg），`-short` 下跳过。这些测试直接调用 service 方法，没有覆盖 webhook 解析（因为那部分还是 mock）。
+
+## 47. 本机一键启动：`sub2api dev` 与 `sub2api-plugin dev`（2026-10-05，用户要求）
+
+用户要求："后续 SDK 提供快速启动应用检查插件的功能"，并且"在 Go 里嵌入运行一个 PG，就和 redis/valkey 一样"。本机不装 PostgreSQL、Redis，也不写配置，就能起一个完整核心，并装上正在开发的插件。
+
+### 47.1 `sub2api dev`（核心）
+
+```bash
+sub2api dev [--addr 127.0.0.1:8080] [--state <dir>] [--builtin-dir <dir>] [--reset] [--log-level info] [--exit-on-stdin-close]
+```
+
+- **PostgreSQL**：`sdk/testpg` 的本机服务器（§2，与测试共用一个进程），库名 `sub2api_dev`。指定了非默认的 `--state` 时，库名是 `sub2api_dev_<状态目录哈希>`：状态目录里的主密钥必须和它加密的数据配套。
+- **Redis**：进程内的 miniredis，退出即清空。插件 KV、限流计数、冷却等不会跨重启保留，PG 里的数据会。
+- **状态目录**：默认 `<用户缓存目录>/sub2api-dev`，存这些内容：
+  - `secrets.json`：主密钥、JWT 密钥、管理员密码，首次运行生成，权限 0600；
+  - `plugins/`：插件数据；
+  - `builtin/`：默认的内建插件目录。
+- **管理员**：`admin@sub2api.localhost`，启动时打印密码。
+- **插件**：
+  - 开发模式（`SUB2API_PLUGIN_DEV_MODE=true`）：任何系统上都直接以子进程运行插件，不用沙箱、网络命名空间、seccomp；
+  - `--builtin-dir` 里的包按内建插件安装：自动同意全部 host 权限、启用，见到新版本就升级（§37）。
+- **其余**：`NODE_ID=dev`，`SUB2API_SHUTDOWN_DELAY=0s`（新增变量，默认 3s：停止前先报告不健康的时长，单机开发不需要）。
+- **已有环境变量优先**：设了 `SUB2API_DATABASE_URL`、`SUB2API_REDIS_URL` 等，就改用那些服务，dev 只补没设的。`--reset` 只能重置本机的 dev 库，设了 `SUB2API_DATABASE_URL` 时拒绝执行。
+- `--reset`：删掉 dev 库和插件数据，保留密钥。
+- `--exit-on-stdin-close`：stdin 关闭时优雅退出。供 `sub2api-plugin dev` 使用：Windows 上没法给子进程发 `os.Interrupt`，父进程意外退出时也能带走核心和插件。
+- 不改变核心逻辑：dev 只决定配置从哪里来，之后照常走 `config.Load` 和 `app.Run`。
+
+### 47.2 `sub2api-plugin dev`（插件开发工具）
+
+```bash
+cd plugins/my-plugin
+sub2api-plugin dev [--with <插件目录|x.s2plugin>]... [--addr 127.0.0.1:8080] [--core <sub2api>] [--state <dir>] [--reset] [--no-watch] [--overlay <dir>] [--tags a,b] [--allow-missing-ui]
+```
+
+1. **找核心**：
+   - 有 `--core` 用 `--core`；
+   - 否则向上找 sup2api 仓库（含 `go.work` 与 `server/cmd/sub2api`），`go build` 到 `<state>/bin/`；
+   - 否则用 PATH 上的 `sub2api`。
+2. **构建**：每个插件目录只编译本机平台（`runtimes/<os>-<arch>/plugin[.exe]`）。版本改成开发版本：
+   - `X.Y.Z` → `X.Y.(Z+1)-dev.<UTC 时间戳>`；
+   - 预发布版本 `X.Y.Z-pre` → `X.Y.Z-pre.dev.<时间戳>`。
+   - 这样每次构建都比上一次新，又低于下一个正式版。核心按内建插件规则升级，不会把它当成"同版本不同内容"而保留旧包。
+   - 改版本时其他数字原样保留。插件自己的 `--overlay` 照常生效。
+3. **签名**：每个发布者一把本地密钥，存在 `<state>/keys/dev-<publisher>.key`，首次使用时生成。原因是核心把一把官方密钥只登记给一个发布者（`pkg.TrustStore.registerOfficial`）。启动核心时把这些公钥通过 `SUB2API_PLUGIN_OFFICIAL_KEYS` 设为官方密钥，走的是和正式内建插件一样的验签与安装路径，不需要关闭验签或允许未签名包。
+   - `--with x.s2plugin` 的包也用对应发布者的本地密钥重签。
+4. **放进内建目录**：先在 `<state>/work/staging` 打好全部包，都成功后才替换 `<state>/builtin/`，同时清掉上一次会话留下的包。
+5. **启动并等就绪**：轮询 `/healthz`，内建插件全部运行在新版本后才返回 200。就绪后打印地址和各插件版本。核心日志里出现内建插件安装失败（`level=ERROR … builtin plugin`）时额外提示；90 秒还没就绪会提示去看日志。
+6. **监听改动**：每 0.7 秒扫描插件目录的文件名、大小、修改时间。改动稳定后重新构建：
+   - 构建失败：打印错误，保留正在运行的核心；
+   - 构建成功：关闭核心 stdin，等它退出，再用新包启动。PG 一直在运行，一次重载约 5 秒，主要是内建插件收敛的 5 秒周期。
+   - 不扫描：以 `.` 开头的文件和目录、`node_modules`、`runtimes`、`*.s2plugin`、`*.exe`，以及 `ui/native/` 下除 `dist/` 以外的源码（只打包 `dist`，改 UI 源码要先自己构建）。
+7. **退出**：Ctrl+C 时先关闭核心 stdin，45 秒内没退出才强杀。
+
+### 47.3 测试
+
+- `server/internal/devenv/devenv_test.go`（真实 PG）：
+  - 环境变量；
+  - 自定义状态目录用自己的库；
+  - 第二次启动复用密钥和数据；
+  - `--reset` 清库；
+  - 调用方设置的变量优先；
+  - 设了外部库时拒绝 `--reset`。
+- `tools/sub2api-plugin/dev_test.go`：
+  - 开发版本号的生成与大小顺序；
+  - 改版本时保留数字写法；
+  - 真实编译 anthropic 插件并和一个现成包一起放进内建目录：每个发布者一把密钥，签名可用核心被告知的公钥验证；再次构建版本更新、密钥不变；
+  - 改动检测忽略构建产物、UI 源码和 `node_modules`。
+- 端到端（2026-10-05 手工）：
+  - 在 `plugins/relay` 下运行，6 秒就绪；
+  - 改动源码后自动升级到新开发版本（`builtin plugin upgrading`）；
+  - 结束工具进程后核心与插件进程都退出。

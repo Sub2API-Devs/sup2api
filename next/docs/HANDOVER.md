@@ -100,32 +100,19 @@
 
 ### 3.2 数据库测试
 
-用 `testutil.DB(t)`，需要环境变量：
+核心测试用 `testutil.DB(t)`，插件测试用 `pluginsdktest.NewSchema`，两者都从 `sdk/testpg` 拿库（2026-10-05 起，CONTRACTS §2）：
 
-```bash
-TEST_DATABASE_URL=postgres://postgres:sub2api@127.0.0.1:45432/postgres?sslmode=disable
-```
-
-`45432` 是**到 ovh 测试库的 SSH 隧道**，主控通常常驻开着：
-
-```bash
-ssh -N -L 45432:127.0.0.1:45432 -L 36379:127.0.0.1:36379 ovh
-```
-
-**先确认隧道活着**（`echo > /dev/tcp/127.0.0.1/45432`）。没有这个变量时数据库测试会**自动跳过**——所以「本地全绿」可能意味着「约 70 条 DB 用例一条没跑」。
+- 设了 `TEST_DATABASE_URL` 就用它，比如 CI，或到 ovh 测试库的隧道 `postgres://postgres:sub2api@127.0.0.1:45432/postgres?sslmode=disable`。
+- 没设时，Go 在本机启动真实的 PostgreSQL 16。首次运行下载约 25 MB，之后缓存起来；多个测试进程共用这一个，跑完常驻，下次约 1 秒就能用。不用开隧道，也没有往返延迟。
+- 停掉：`go run ./sdk/testpg/cmd/testpg stop`。
+- 环境里有代理变量时加 `NO_PROXY=127.0.0.1,localhost`。
+- **数据库测试不应再被跳过**。只有 `SUB2API_TESTPG=off` 时才跳过。报告"全绿"前看一眼有没有成片的 SKIP。
 
 Redis：单测用 `github.com/alicebob/miniredis/v2`；集成测试用 `TEST_REDIS_URL=redis://127.0.0.1:36379/0`。
 
-**注意有两个不同的库，别搞混**：
+查**部署环境**的真实数据时，另开一条隧道到 `sup2api` 栈自己的 pg 容器（如 `ssh -f -N -L 15432:<pg-ip>:5432 ovh`，用 `~/sup2api/.env` 里的 sup2api 用户）。**别拿它跑测试。**
 
-| 库 | 隧道 | 用途 |
-|---|---|---|
-| `sub2api-next-testdb`（compose 项目） | `45432` | **Go 测试用这个**。`testutil` 自己建/删 `t_*` 数据库 |
-| `sup2api` 栈自己的 pg | 另开一条到 pg 容器 IP（如 `ssh -f -N -L 15432:<pg-ip>:5432 ovh`），用 `~/sup2api/.env` 里的 sup2api 用户 | 查**部署环境**的真实数据时用。**别拿它跑测试** |
-
-**耗时注意**：经隧道跑 `internal/usage` 约 **610 秒**，`internal/account` 约 370 秒。`go test` 默认超时 10 分钟，所以 **`next/server` 的完整 `./...` 必须带 `-timeout 30m`**，否则会 `panic: test timed out` 而与代码无关。CI 的门禁脚本已经带了。
-
-（CONTRACTS §2 的脚本注释里写着「usage ~8.5 分钟」——那是隧道往返延迟造成的，数据库同网络时只要 1.1 秒。）
+**耗时注意**：经隧道跑 `internal/usage` 约 610 秒、`internal/account` 约 370 秒，是往返延迟造成的；本机 PG 下 server 全量只要几十秒。经隧道跑 `next/server` 的完整 `./...` 必须带 `-timeout 30m`，CI 的门禁脚本已经带了。
 
 ### 3.3 推送
 
@@ -520,9 +507,19 @@ sub2api-plugin sign     --key <私钥> --key-id <id> <file.s2plugin>
 sub2api-plugin verify   --pub <公钥|base64> <file.s2plugin>
 sub2api-plugin index    --dir <market dir> --key <私钥>    # 生成签名的市场索引
 sub2api-plugin keygen   --key-id <id> --out <dir>
+sub2api-plugin dev      [--with <dir|pkg>]... [--reset]  # 本机起核心并装上插件，改动自动重载
 ```
 
 `<command> -h` 看单个命令的 flag。
+
+**本机试插件**（CONTRACTS §47）：在插件目录里运行 `sub2api-plugin dev`。它会做这些事：
+
+- 起一个完整核心：PostgreSQL 由 Go 启动，Redis 在内存里；
+- 把插件按开发版本号编译、签名，作为内建插件装进去；
+- 打印控制台地址和管理员账号；
+- 文件一改就重新构建并重启核心，约 5 秒。
+
+要带上其他插件用 `--with ../anthropic`。不在仓库里时用 `--core <sub2api>` 指定核心。只要核心不要插件：`go run ./server/cmd/sub2api dev`。
 
 **一个插件包含什么**：`manifest.json` + 编译好的二进制（`runtimes/`，gitignore 的本地产物）+ 可选的 `ui/native/dist`（原生 UI）+ `migrations/*.sql`（插件自己的表，跑在 `plg_<key>` schema 里）。
 
