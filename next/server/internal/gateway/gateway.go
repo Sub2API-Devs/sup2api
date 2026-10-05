@@ -42,7 +42,7 @@ type Deps struct {
 	Proxies   core.ProxyDirectory
 	Settler   core.Settler
 	Tasks     core.AsyncTasks
-	// Limiter enforces per-account rpm/tpm/tpd/spm limits (CONTRACTS §18);
+	// Limiter enforces per-account rpm/tpm limits (CONTRACTS §18);
 	// nil = no limits.
 	Limiter core.AccountLimiter
 	// Quota receives the subscription quota headers of upstream responses

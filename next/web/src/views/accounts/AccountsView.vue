@@ -18,6 +18,7 @@ import AccountTypePicker from './AccountTypePicker.vue'
 import AccountTypeEndpoints from './AccountTypeEndpoints.vue'
 import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
 import AccountEditor from './AccountEditor.vue'
+import AccountSchedulingCell from './AccountSchedulingCell.vue'
 import { sameCreationGroup } from './accountTypeChoices'
 import AccountQuotaCell from './AccountQuotaCell.vue'
 import AccountBalanceCell from './AccountBalanceCell.vue'
@@ -80,7 +81,7 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'groups', label: t('accounts.groups') },
   ...(showOwner.value ? [{ key: 'created_by', label: t('accounts.createdBy') }] : []),
   { key: 'status', label: t('common.status') },
-  { key: 'concurrency', label: t('accounts.scheduling') },
+  { key: 'scheduling', label: t('accounts.listUi.priorityWeight') },
   { key: 'limits', label: t('accounts.limits') },
   // Only when a row of this page has plan windows (subscription accounts).
   ...(list.items.value.some((a) => hasQuota(a.quota)) ? [{ key: 'quota', label: t('accounts.quota.column') }] : []),
@@ -107,15 +108,12 @@ type LimitCell = { key: string; label: string; text: string; hit: boolean }
 function limitsOf(a: Account): LimitCell[] {
   const out: LimitCell[] = []
   const pairs = [
-    ['rpm', a.rpm_limit],
     ['tpm', a.tpm_limit],
-    ['tpd', a.tpd_limit],
-    ['spm', a.spm_limit]
+    ['rpm', a.rpm_limit]
   ] as const
   for (const [key, limit] of pairs) {
-    if (!limit) continue
     const used = a.rate_usage?.[key] ?? 0
-    out.push({ key, label: key, text: `${abbrev(used)}/${abbrev(limit)}`, hit: used >= limit })
+    out.push({ key, label: key.toUpperCase(), text: `${abbrev(used)}/${limit ? abbrev(limit) : '∞'}`, hit: !!limit && used >= limit })
   }
   return out
 }
@@ -576,16 +574,14 @@ function groupTags(a: Account) {
           <SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('accounts.resetStatus') }}
         </SLink>
       </template>
-      <template #cell-concurrency="{ row }">
-        <div class="min-w-28 space-y-1.5 text-xs tabular-nums"><div class="flex justify-between gap-3"><span class="text-gray-400">{{ t('accounts.concurrency') }}</span><span :class="row.max_concurrency && (row.in_use || 0) >= row.max_concurrency ? 'font-semibold text-amber-600' : ''">{{ row.in_use ?? 0 }}/{{ row.max_concurrency || '∞' }}</span></div><div class="flex justify-between gap-3 text-[11px] text-gray-500"><span>{{ t('accounts.listUi.priorityWeight') }}</span><span>{{ row.priority }} / {{ row.weight ?? 1 }}</span></div></div>
+      <template #cell-scheduling="{ row }">
+        <AccountSchedulingCell :account="row" :editable="canUpdate(row) && !row.orphaned" @saved="Object.assign(row, $event)" />
       </template>
       <template #cell-limits="{ row }">
-        <div v-if="limitsOf(row).length" class="flex flex-wrap gap-x-2 gap-y-0.5 text-xs tabular-nums">
-          <span v-for="l in limitsOf(row)" :key="l.key" class="inline-flex whitespace-nowrap gap-1" :class="l.hit ? 'font-semibold text-amber-600' : ''">
-            <SHint inline size="xs">{{ l.label }}</SHint> {{ l.text }}
-          </span>
+        <div class="min-w-28 space-y-1 text-xs tabular-nums" data-testid="account-limits">
+          <div class="flex justify-between gap-3"><SHint inline size="xs">{{ t('accounts.concurrency') }}</SHint><span :class="row.max_concurrency && (row.in_use || 0) >= row.max_concurrency ? 'font-semibold text-amber-600' : ''">{{ row.in_use ?? 0 }}/{{ row.max_concurrency || '∞' }}</span></div>
+          <div v-for="l in limitsOf(row)" :key="l.key" class="flex justify-between gap-3" :class="l.hit ? 'font-semibold text-amber-600' : ''"><SHint inline size="xs">{{ l.label }}</SHint><span>{{ l.text }}</span></div>
         </div>
-        <SHint v-else inline>—</SHint>
       </template>
       <template #cell-quota="{ row }">
         <AccountQuotaCell v-if="hasQuota(row.quota)" :quota="row.quota" :refreshing="quotaRefresh.refreshing.has(row.id)" @refresh="quotaRefresh.refresh(row.id, row.quota)" />

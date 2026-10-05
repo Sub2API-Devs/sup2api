@@ -37,9 +37,9 @@ func TestAccountModelsAndLimits(t *testing.T) {
 	code, out := e.do("POST", "/accounts", mk(map[string]any{
 		"models":        []string{"claude-sonnet-4-5", "claude-*", "claude-sonnet-4-5", ""},
 		"model_mapping": map[string]string{"gpt-4o": "gpt-4.1", "bad*": "x", "ok": ""},
-		"weight":        0, "rpm_limit": -1, "tpm_limit": -5, "tpd_limit": -1, "spm_limit": -2,
+		"weight":        0, "rpm_limit": -1, "tpm_limit": -5,
 	}))
-	if code != 400 || fields(out) != "[model_mapping.bad*:invalid model_mapping.ok:invalid models[1]:invalid models[2]:duplicate models[3]:invalid rpm_limit:invalid spm_limit:invalid tpd_limit:invalid tpm_limit:invalid weight:invalid]" {
+	if code != 400 || fields(out) != "[model_mapping.bad*:invalid model_mapping.ok:invalid models[1]:invalid models[2]:duplicate models[3]:invalid rpm_limit:invalid tpm_limit:invalid weight:invalid]" {
 		t.Fatalf("validation: %d %s", code, fields(out))
 	}
 	if code, out = e.do("POST", "/accounts", mk(map[string]any{"weight": 1001})); code != 400 || fields(out) != "[weight:invalid]" {
@@ -53,10 +53,10 @@ func TestAccountModelsAndLimits(t *testing.T) {
 	}
 	acc := out["data"].(map[string]any)
 	if acc["weight"] != 1.0 || len(acc["models"].([]any)) != 0 || len(acc["model_mapping"].(map[string]any)) != 0 ||
-		acc["rpm_limit"] != 0.0 || acc["tpm_limit"] != 0.0 || acc["tpd_limit"] != 0.0 || acc["spm_limit"] != 0.0 {
+		acc["rpm_limit"] != 0.0 || acc["tpm_limit"] != 0.0 {
 		t.Fatalf("defaults: %v", acc)
 	}
-	if ru := acc["rate_usage"].(map[string]any); ru["rpm"] != 0.0 || ru["spm"] != 0.0 {
+	if ru := acc["rate_usage"].(map[string]any); ru["rpm"] != 0.0 || ru["tpm"] != 0.0 {
 		t.Fatalf("rate_usage: %v", ru)
 	}
 	id1 := int64(acc["id"].(float64))
@@ -66,7 +66,7 @@ func TestAccountModelsAndLimits(t *testing.T) {
 		"name": "limited", "priority": 1, "weight": 7,
 		"models":        []string{" claude-sonnet-4-5 ", "claude-opus-4-1"},
 		"model_mapping": map[string]string{"claude-sonnet-4-5": "claude-sonnet-4-5-20250929"},
-		"rpm_limit":     60, "tpm_limit": 100000, "tpd_limit": 5000000, "spm_limit": 20,
+		"rpm_limit":     60, "tpm_limit": 100000,
 	}))
 	if code != 201 {
 		t.Fatalf("create limited: %d %v", code, out)
@@ -75,7 +75,7 @@ func TestAccountModelsAndLimits(t *testing.T) {
 	id2 := int64(acc["id"].(float64))
 	if fmt.Sprint(acc["models"]) != "[claude-sonnet-4-5 claude-opus-4-1]" || acc["weight"] != 7.0 ||
 		acc["model_mapping"].(map[string]any)["claude-sonnet-4-5"] != "claude-sonnet-4-5-20250929" ||
-		acc["rpm_limit"] != 60.0 || acc["tpm_limit"] != 100000.0 || acc["tpd_limit"] != 5000000.0 || acc["spm_limit"] != 20.0 {
+		acc["rpm_limit"] != 60.0 || acc["tpm_limit"] != 100000.0 {
 		t.Fatalf("limited view: %v", acc)
 	}
 	// settings never carries the mapping.
@@ -109,23 +109,23 @@ func TestAccountModelsAndLimits(t *testing.T) {
 			lim = r
 		}
 	}
-	if lim.Weight != 7 || lim.RPMLimit != 60 || lim.TPMLimit != 100000 || lim.TPDLimit != 5000000 || lim.SPMLimit != 20 ||
+	if lim.Weight != 7 || lim.RPMLimit != 60 || lim.TPMLimit != 100000 ||
 		!lim.ServesModel("claude-opus-4-1") || lim.ServesModel("gpt-4o") ||
 		lim.MapModel("claude-sonnet-4-5") != "claude-sonnet-4-5-20250929" || lim.MapModel("claude-opus-4-1") != "claude-opus-4-1" {
 		t.Fatalf("ref: %+v", lim)
 	}
-	if a, _ := e.svc.Load(ctx, id2); a == nil || a.Weight != 7 || a.SPMLimit != 20 || len(a.Models) != 2 {
+	if a, _ := e.svc.Load(ctx, id2); a == nil || a.Weight != 7 || len(a.Models) != 2 {
 		t.Fatalf("load: %+v", a)
 	}
 
 	// PATCH replaces models / mapping wholesale and keeps the rest.
 	code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id2), map[string]any{
-		"models": []string{}, "model_mapping": map[string]string{"a": "b"}, "spm_limit": 0, "weight": 2})
+		"models": []string{}, "model_mapping": map[string]string{"a": "b"}, "weight": 2})
 	if code != 200 {
 		t.Fatalf("patch: %d %v", code, out)
 	}
 	acc = out["data"].(map[string]any)
-	if len(acc["models"].([]any)) != 0 || fmt.Sprint(acc["model_mapping"]) != "map[a:b]" || acc["spm_limit"] != 0.0 ||
+	if len(acc["models"].([]any)) != 0 || fmt.Sprint(acc["model_mapping"]) != "map[a:b]" ||
 		acc["weight"] != 2.0 || acc["rpm_limit"] != 60.0 {
 		t.Fatalf("patched: %v", acc)
 	}
@@ -139,9 +139,12 @@ func TestAccountModelsAndLimits(t *testing.T) {
 	e.svc.d.Limiter.AddTokens(ctx, id2, 1234)
 	_, out = e.do("GET", fmt.Sprintf("/accounts/%d", id2), nil)
 	raw, _ := json.Marshal(out)
-	if gjson.GetBytes(raw, "data.rate_usage.rpm").Int() != 1 || gjson.GetBytes(raw, "data.rate_usage.tpm").Int() != 1234 ||
-		gjson.GetBytes(raw, "data.rate_usage.tpd").Int() != 1234 || gjson.GetBytes(raw, "data.rate_usage.spm").Int() != 1 {
+	if gjson.GetBytes(raw, "data.rate_usage.rpm").Int() != 1 || gjson.GetBytes(raw, "data.rate_usage.tpm").Int() != 1234 {
 		t.Fatalf("rate usage: %s", gjson.GetBytes(raw, "data.rate_usage").Raw)
+	}
+	if gjson.GetBytes(raw, "data.tpd_limit").Exists() || gjson.GetBytes(raw, "data.spm_limit").Exists() ||
+		gjson.GetBytes(raw, "data.rate_usage.tpd").Exists() || gjson.GetBytes(raw, "data.rate_usage.spm").Exists() {
+		t.Fatal("removed rate limits remain exposed", string(raw))
 	}
 
 	// The test action maps the model before the plugin builds the request.

@@ -182,7 +182,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	// One converter registry for the gateway (conversion) and the account
 	// module (endpoints an account type can serve), ARCHITECTURE 6.6.
 	converters := convert.Default()
-	// Per-account rpm/tpm/tpd/spm limits (CONTRACTS §18).
+	// Per-account rpm/tpm limits (CONTRACTS §18).
 	limiter := account.NewLimiter(rdb)
 	ccg := ccgateway.New(db, cipher)
 	// Draft proxy visibility and the one-node draft sweep (CONTRACTS §49).

@@ -171,7 +171,7 @@ export function refreshAccountCredentials(id: number): Promise<CredentialRefresh
 
 /** Whether a balance snapshot exists and should be shown. */
 export function hasBalance(b: AccountBalance | null | undefined): b is AccountBalance {
-  return !!b && !!b.amount
+  return !!b
 }
 
 /** GET /accounts/:id/balance — returns the cached balance or queries the upstream. */

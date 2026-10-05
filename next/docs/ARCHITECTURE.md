@@ -377,7 +377,7 @@ erDiagram
 | `settings` | 非敏感配置（base_url 等，由账号类型的 `settingsFields` 决定），明文 JSONB |
 | `proxy_id` / `status` / `schedulable` / `priority` / `weight` / `max_concurrency` | 代理、状态、是否参与调度、优先级（越小越优先）、权重（同优先级内加权随机）、最大并发 |
 | `models` / `model_mapping` | 账号可服务的模型列表（完整模型 ID，空 = 全部）与"客户端模型 → 上游模型"映射；都是核心属性，与插件无关（CONTRACTS §18）。核心在调插件 `BuildUpstreamRequest` 前改写模型。模型列表可从上游拉取：插件 `BuildModelsRequest` 构造请求，核心发出并提取 ID（CONTRACTS §19） |
-| `rpm_limit` / `tpm_limit` / `tpd_limit` / `spm_limit` | 每分钟请求数、每分钟 token 数、每天（UTC）token 数、每分钟会话数上限，0 = 不限；计数在 Redis `rl:account:{id}:*` |
+| `rpm_limit` / `tpm_limit` | 每分钟请求数和 token 数上限，0 = 不限；计数在 Redis `rl:account:{id}:*` |
 | 冷却 | Redis `cooldown:account:{id}`，不写 PG |
 
 插件被**禁用**时账号保留、不参与调度；被**卸载**时账号默认保留（标记"所属插件已卸载"），勾选"清除数据"才删除。

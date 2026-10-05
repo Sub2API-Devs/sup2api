@@ -63,7 +63,7 @@ type call struct {
 	// failover attempts reuse the same result. nil = the accounts' own values.
 	ranked   map[int64]rankValues
 	rankDone bool
-	// session identifies the request for the spm limit (sessionIdentity).
+	// session identifies the request for the limiter (sessionIdentity).
 	session string
 	rec     *core.UsageRecord
 

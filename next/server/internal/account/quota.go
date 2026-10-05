@@ -124,6 +124,9 @@ func quotaView(decl *manifest.AccountQuota, snap *store.QuotaSnapshot, now time.
 // type has none or is not registered (plugin disabled).
 func (s *Service) quotaDecl(pluginKey, typ string) (*manifest.AccountQuota, core.AccountTypeBinding) {
 	bt, ok := s.accountType(pluginKey, typ)
+	if ok && pluginKey == "ccgateway" && typ == "managed" && s.d.CCGateway != nil {
+		return &manifest.AccountQuota{Query: true}, bt
+	}
 	if !ok || !bt.Type.Quota.Supported() {
 		return nil, bt
 	}
@@ -189,7 +192,7 @@ func (s *Service) accountQuota(ctx context.Context, a *row, force bool) (*QuotaS
 	if err != nil {
 		return nil, err
 	}
-	if decl.Query && bt.Client != nil && shouldQueryQuota(snap, force, time.Now()) {
+	if decl.Query && (bt.Client != nil || (a.PluginKey == "ccgateway" && s.d.CCGateway != nil)) && shouldQueryQuota(snap, force, time.Now()) {
 		v, err, _ := s.quotaFlight.Do(itoa(a.ID), func() (any, error) {
 			// Not tied to the first caller: the others wait for the same result.
 			qctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), quotaQueryTimeout)
@@ -249,6 +252,20 @@ func (s *Service) queryQuota(ctx context.Context, bt core.AccountTypeBinding, a 
 // the error to record on the snapshot, "" on success or when the plugin does
 // not implement the query after all.
 func (s *Service) runQuotaQuery(ctx context.Context, bt core.AccountTypeBinding, a *row) string {
+	if a.PluginKey == "ccgateway" && a.Type == "managed" && s.d.CCGateway != nil {
+		usage, err := s.d.CCGateway.QueryUsage(ctx, a.ID)
+		if err != nil {
+			return err.Error()
+		}
+		windows := map[string]store.QuotaWindow{}
+		for _, w := range usage {
+			windows[w.Key] = store.QuotaWindow{Utilization: w.Utilization, ResetsAt: w.ResetsAt}
+		}
+		if err := s.d.DB.SaveAccountQuota(ctx, a.ID, store.QuotaActive, windows); err != nil {
+			return "store: " + err.Error()
+		}
+		return ""
+	}
 	plain, err := s.decrypt(a.PluginKey, a.CredEnc)
 	if err != nil {
 		return "credentials: " + err.Error()

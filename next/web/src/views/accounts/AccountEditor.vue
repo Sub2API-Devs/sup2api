@@ -100,8 +100,6 @@ const basic = reactive({
   auto_disable: true,
   rpm_limit: 0,
   tpm_limit: 0,
-  tpd_limit: 0,
-  spm_limit: 0
 })
 
 // ---------------------------------------------------------------- proxy: pick an existing one | paste a URL (CONTRACTS §21.4)
@@ -181,13 +179,11 @@ const editorSections = computed(() => [
     summary: t('accounts.editorUi.schedulingSummary', { p: basic.priority, w: basic.weight, c: basic.max_concurrency || '∞' })
   }
 ])
-const SCHEDULING_FIELDS = ['priority', 'weight', 'max_concurrency', 'rpm_limit', 'tpm_limit', 'tpd_limit', 'spm_limit']
-type LimitKey = 'rpm_limit' | 'tpm_limit' | 'tpd_limit' | 'spm_limit'
+const SCHEDULING_FIELDS = ['priority', 'weight', 'max_concurrency', 'rpm_limit', 'tpm_limit']
+type LimitKey = 'rpm_limit' | 'tpm_limit'
 const limitFields = computed<Array<{ key: LimitKey; label: string; hint: string; unit: string }>>(() => [
   { key: 'rpm_limit', label: t('accounts.rpmLimit'), hint: t('accounts.zeroUnlimited'), unit: t('accounts.editorUi.unitRpm') },
   { key: 'tpm_limit', label: t('accounts.tpmLimit'), hint: t('accounts.zeroUnlimited'), unit: t('accounts.editorUi.unitTpm') },
-  { key: 'tpd_limit', label: t('accounts.tpdLimit'), hint: t('accounts.tpdHint'), unit: t('accounts.editorUi.unitTpd') },
-  { key: 'spm_limit', label: t('accounts.spmLimit'), hint: t('accounts.zeroUnlimited'), unit: t('accounts.editorUi.unitSpm') }
 ])
 /** Sections holding an error, marked in the navigation. */
 const sectionErrors = computed<Record<EditorSection, boolean>>(() => ({
@@ -532,8 +528,6 @@ watch(
       basic.auto_disable = a?.auto_disable ?? true
       basic.rpm_limit = a?.rpm_limit ?? 0
       basic.tpm_limit = a?.tpm_limit ?? 0
-      basic.tpd_limit = a?.tpd_limit ?? 0
-      basic.spm_limit = a?.spm_limit ?? 0
       if (a) {
         models.value = [...(a.models || [])]
         mapping.value = { ...(a.model_mapping || {}) }
@@ -659,8 +653,6 @@ async function save(event: Event) {
     model_mapping: mapping.value,
     rpm_limit: Number(basic.rpm_limit) || 0,
     tpm_limit: Number(basic.tpm_limit) || 0,
-    tpd_limit: Number(basic.tpd_limit) || 0,
-    spm_limit: Number(basic.spm_limit) || 0
   }
   // Exactly one of proxy_id / proxy_url (CONTRACTS §21.4: both is a conflict).
   const withProxyUrl = !!proxyUrlToSend.value
@@ -1053,7 +1045,6 @@ async function save(event: Event) {
                 </div>
               </SField>
             </div>
-            <SHint size="xs" class="mt-3">{{ t('accounts.spmHint') }}</SHint>
           </EditorCard>
         </div>
       </div>

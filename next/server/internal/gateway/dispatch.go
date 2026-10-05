@@ -137,7 +137,7 @@ func (c *call) dispatch(ctx context.Context) {
 	c.finishSticky(ctx, 0, false)
 }
 
-// sessionIdentity is the request's session for the spm limit: the sticky
+// sessionIdentity is the request's session for the limiter: the sticky
 // session key when a rule matched, else a per-request identity.
 func (c *call) sessionIdentity() string {
 	if c.sticky != nil && c.sticky.key != "" {

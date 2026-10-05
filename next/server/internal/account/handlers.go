@@ -42,8 +42,6 @@ type row struct {
 	ModelMapping   []byte
 	RPMLimit       int
 	TPMLimit       int64
-	TPDLimit       int64
-	SPMLimit       int
 	LastUsedAt     *time.Time
 	CreatedBy      *int64
 	CreatedByEmail *string
@@ -61,7 +59,7 @@ type row struct {
 // statement built on it must qualify account columns with "a.".
 const selectRow = `SELECT a.id, a.name, a.plugin_key, a.type, a.credentials_enc, a.settings, a.proxy_id,
 	a.status, a.status_reason, a.schedulable, a.auto_disable, a.priority, a.weight, a.max_concurrency,
-	a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.tpd_limit, a.spm_limit, a.last_used_at,
+	a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.last_used_at,
 	a.created_by, u.email, a.created_at, a.updated_at,
 	a.last_test_at, a.last_test_ok, a.last_test_latency_ms::bigint, a.last_test_model, a.last_test_message
 	FROM accounts a LEFT JOIN users u ON u.id = a.created_by`
@@ -70,7 +68,7 @@ func scanRow(r pgx.Row) (*row, error) {
 	var a row
 	err := r.Scan(&a.ID, &a.Name, &a.PluginKey, &a.Type, &a.CredEnc, &a.Settings, &a.ProxyID,
 		&a.Status, &a.StatusReason, &a.Schedulable, &a.AutoDisable, &a.Priority, &a.Weight, &a.MaxConcurrency,
-		&a.Models, &a.ModelMapping, &a.RPMLimit, &a.TPMLimit, &a.TPDLimit, &a.SPMLimit, &a.LastUsedAt,
+		&a.Models, &a.ModelMapping, &a.RPMLimit, &a.TPMLimit, &a.LastUsedAt,
 		&a.CreatedBy, &a.CreatedByEmail, &a.CreatedAt, &a.UpdatedAt,
 		&a.LastTestAt, &a.LastTestOK, &a.LastTestLatencyMs, &a.LastTestModel, &a.LastTestMessage)
 	return &a, err
@@ -165,8 +163,6 @@ type View struct {
 	ModelMapping   map[string]string `json:"model_mapping"`
 	RPMLimit       int               `json:"rpm_limit"`
 	TPMLimit       int64             `json:"tpm_limit"`
-	TPDLimit       int64             `json:"tpd_limit"`
-	SPMLimit       int               `json:"spm_limit"`
 	RateUsage      core.RateUsage    `json:"rate_usage"`
 	InUse          int               `json:"in_use"`
 	CooldownUntil  *time.Time        `json:"cooldown_until"`
@@ -220,7 +216,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 			GroupIDs: []int64{}, Groups: []GroupRef{}, ProxyID: a.ProxyID, Status: a.Status,
 			StatusReason: a.StatusReason, Schedulable: a.Schedulable, AutoDisable: a.AutoDisable, Priority: a.Priority, Weight: a.Weight,
 			MaxConcurrency: a.MaxConcurrency, Models: models, ModelMapping: a.mapping(),
-			RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit, TPDLimit: a.TPDLimit, SPMLimit: a.SPMLimit,
+			RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit,
 			Orphaned: !s.pluginActive(a.PluginKey), Settings: st,
 			CreatedBy: a.CreatedBy, CreatedByEmail: a.CreatedByEmail,
 			LastUsedAt: a.LastUsedAt, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
@@ -480,8 +476,6 @@ type input struct {
 	ModelMapping   *map[string]string `json:"model_mapping"`
 	RPMLimit       *int               `json:"rpm_limit"`
 	TPMLimit       *int64             `json:"tpm_limit"`
-	TPDLimit       *int64             `json:"tpd_limit"`
-	SPMLimit       *int               `json:"spm_limit"`
 	Credentials    json.RawMessage    `json:"credentials"`
 	// CCGatewayRuntime is the draft runtime key a new ccgateway/managed
 	// account adopts (CONTRACTS §49.10); create only. Blank means absent.
@@ -518,8 +512,6 @@ func (in *input) changedFields() []string {
 	set("model_mapping", in.ModelMapping != nil)
 	set("rpm_limit", in.RPMLimit != nil)
 	set("tpm_limit", in.TPMLimit != nil)
-	set("tpd_limit", in.TPDLimit != nil)
-	set("spm_limit", in.SPMLimit != nil)
 	set("credentials", in.hasCredentials())
 	return out
 }
@@ -564,12 +556,6 @@ func (in *input) validate(ctx context.Context, create bool) []core.FieldError {
 	}
 	if in.TPMLimit != nil && (*in.TPMLimit < 0 || *in.TPMLimit > maxTokenLimit) {
 		add("tpm_limit", "invalid", "tpm limit must be 0-1000000000000 (0 = unlimited)", "每分钟 token 上限必须为 0-1000000000000（0 表示不限）")
-	}
-	if in.TPDLimit != nil && (*in.TPDLimit < 0 || *in.TPDLimit > maxTokenLimit) {
-		add("tpd_limit", "invalid", "tpd limit must be 0-1000000000000 (0 = unlimited)", "每天 token 上限必须为 0-1000000000000（0 表示不限）")
-	}
-	if in.SPMLimit != nil && (*in.SPMLimit < 0 || *in.SPMLimit > maxRPMLimit) {
-		add("spm_limit", "invalid", "spm limit must be 0-10000000 (0 = unlimited)", "每分钟会话数上限必须为 0-10000000（0 表示不限）")
 	}
 	if in.Models != nil {
 		models, errs := normalizeModels(ctx, *in.Models)
@@ -892,19 +878,13 @@ func (s *Service) create(c *gin.Context) {
 	if in.ModelMapping != nil {
 		mapping = *in.ModelMapping
 	}
-	var rpm, spm int
-	var tpm, tpd int64
+	var rpm int
+	var tpm int64
 	if in.RPMLimit != nil {
 		rpm = *in.RPMLimit
 	}
 	if in.TPMLimit != nil {
 		tpm = *in.TPMLimit
-	}
-	if in.TPDLimit != nil {
-		tpd = *in.TPDLimit
-	}
-	if in.SPMLimit != nil {
-		spm = *in.SPMLimit
 	}
 	uid, _ := core.UserID(ctx)
 	var id int64
@@ -920,12 +900,12 @@ func (s *Service) create(c *gin.Context) {
 		}
 		if err := tx.QueryRow(ctx, `INSERT INTO accounts (name, plugin_key, type, credentials_enc, settings,
 			proxy_id, status, schedulable, priority, max_concurrency, created_by,
-			weight, models, model_mapping, rpm_limit, tpm_limit, tpd_limit, spm_limit, auto_disable)
+			weight, models, model_mapping, rpm_limit, tpm_limit, auto_disable)
 			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, NULLIF($11::bigint, 0),
-			$12, $13, $14::jsonb, $15, $16, $17, $18, $19) RETURNING id`,
+			$12, $13, $14::jsonb, $15, $16, $17) RETURNING id`,
 			*in.Name, bt.Plugin.Key, bt.Type.ID, p.enc, string(p.settings),
 			proxyID, status, sched, prio, maxc, uid,
-			weight, models, mappingJSON(mapping), rpm, tpm, tpd, spm, autoDisable).Scan(&id); err != nil {
+			weight, models, mappingJSON(mapping), rpm, tpm, autoDisable).Scan(&id); err != nil {
 			return err
 		}
 		if err := setGroups(ctx, tx, id, groupIDs); err != nil {
@@ -1088,12 +1068,10 @@ func (s *Service) update(c *gin.Context) {
 			model_mapping = COALESCE($14::jsonb, model_mapping),
 			rpm_limit = COALESCE($15, rpm_limit),
 			tpm_limit = COALESCE($16, tpm_limit),
-			tpd_limit = COALESCE($17, tpd_limit),
-			spm_limit = COALESCE($18, spm_limit),
-			auto_disable = COALESCE($20, auto_disable),
+			auto_disable = COALESCE($18, auto_disable),
 			updated_at = clock_timestamp()
-			WHERE a.id = $1 AND `+scoped("$19"), id, in.Name, setProxy, proxyID, in.Priority, in.MaxConcurrency, in.Schedulable,
-			in.Status, reason, enc, settings, in.Weight, in.Models, mapping, in.RPMLimit, in.TPMLimit, in.TPDLimit, in.SPMLimit, scope,
+			WHERE a.id = $1 AND `+scoped("$17"), id, in.Name, setProxy, proxyID, in.Priority, in.MaxConcurrency, in.Schedulable,
+			in.Status, reason, enc, settings, in.Weight, in.Models, mapping, in.RPMLimit, in.TPMLimit, scope,
 			in.AutoDisable); err != nil {
 			return err
 		}

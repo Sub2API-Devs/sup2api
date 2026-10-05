@@ -146,7 +146,7 @@
 | GET `/account-types` | `account:read` | `[{plugin_key, plugin_name, plugin_version, asset_base, platform, type, label, description, form:{mode, page?, component?}, sensitive_fields, guarded_settings:[{field, allowed[]}]}]`（`guarded_settings` 来自 manifest `guardedSettings`，§21.3；未声明时为 `[]`） |
 | GET `/account-types/:platform/:type/form` | `account:read` | `{schema, ui_schema}` |
 | GET `/accounts`（`?plugin_key=&type=&group_id=&status=&q=&model=&created_by=&mine=&orphaned=`） | `account:read` | 列表含 `in_use`（实时并发）、`cooldown_until`、`orphaned`、`rate_usage`（§18）、`created_by`、`created_by_email`（§21）。**默认不列出孤立账号**（所属插件已禁用/卸载，数据仍在）；`orphaned=true` 只列孤立的，`orphaned=all` 都列；详情 `GET /accounts/:id` 不受影响 |
-| POST `/accounts` | `account:create` | `{name, plugin_key, type, group_ids[], proxy_id \| proxy_url, priority, weight, max_concurrency, schedulable, auto_disable, models[], model_mapping{}, rpm_limit, tpm_limit, tpd_limit, spm_limit, credentials:{...}}`（§18、§21.4、§42.3）；响应另带 `proxy_created` |
+| POST `/accounts` | `account:create` | `{name, plugin_key, type, group_ids[], proxy_id \| proxy_url, priority, weight, max_concurrency, schedulable, auto_disable, models[], model_mapping{}, rpm_limit, tpm_limit, credentials:{...}}`（§18、§21.4、§42.3）；响应另带 `proxy_created` |
 | GET/PATCH `/accounts/:id` | `account:read` / `account:update` | 凭证中的敏感字段返回 `"******"`；PATCH 时敏感字段传 `"******"` 表示不修改 |
 | DELETE `/accounts/:id` | `account:delete` | |
 | POST `/accounts/:id/test` | `account:test` | `{model?}` → TestResult `{ok, status, latency_ms, message, model, requested_model, upstream, body, usage, reason, effect}`（§15.9、§50）；结果记入账号的 `last_test` |
@@ -810,7 +810,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 
 同步只能由管理员手动触发（先预览再应用），没有定时自动覆盖。
 
-## 18. 账号的模型列表与模型映射、优先级与权重、RPM/TPM/TPD 限流（2026-09-25，ARCHITECTURE 4.3 / 6.2）
+## 18. 账号的模型列表与模型映射、优先级与权重、RPM/TPM 限流（2026-09-25，ARCHITECTURE 4.3 / 6.2）
 
 本节优先于前文中与之冲突的描述（§5.4、§15.9、ARCHITECTURE A.4 里的"模型映射 [插件]"）。
 
@@ -826,14 +826,11 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 | `weight` | 1–1000，默认 1 | 同一优先级内按权重加权随机排序（不放回的加权抽样：权重 3 的账号被先选中的概率是权重 1 的三倍）。插件可为单次请求临时改写（§24） |
 | `rpm_limit` | 0–10000000，默认 0 | 每分钟请求数上限，0 = 不限。每次在该账号上发起上游尝试计 1 次（失败切换到别的账号时各账号各计各的） |
 | `tpm_limit` | 0–10^12，默认 0 | 每分钟 token 数上限，0 = 不限 |
-| `tpd_limit` | 0–10^12，默认 0 | 每天（UTC 自然日）token 数上限，0 = 不限 |
-| `spm_limit` | 0–10000000，默认 0 | 每分钟**会话**数上限（SPM），0 = 不限。会话身份 = 命中的粘性规则算出的会话键（同一会话的请求只算一个）；没有命中粘性规则的请求每个请求算一个会话。60 秒**滚动**窗口：窗口内已有该会话时总是放行，新会话只有在窗口内会话数小于上限时才放行 |
-| `rate_usage` | 只读：`{rpm, tpm, tpd, spm}` | 当前窗口的计数（列表与详情都有；Redis 不可用时都为 0） |
+| `rate_usage` | 只读：`{rpm, tpm}` | 当前窗口的计数（列表与详情都有；Redis 不可用时都为 0） |
 
 - token 数口径：`input + output + cache_read + cache_creation`（与使用记录一致），在上游响应结束、解析出用量后累加；因此限流是"窗口内已用量达到上限就不再调度"，不预扣，单个大请求可能让窗口略超上限。
-- 窗口是固定窗口：分钟窗口按 `floor(unix/60)`，天窗口按 UTC 日期。
-- rpm/tpm/tpd 是固定窗口，spm 是滚动窗口（ZSET，成员为会话身份、分数为时间戳，每次尝试写入并修剪 60 秒外的成员）。
-- 候选筛选只是预检查；拿到账号并发槽后必须调用 Redis Lua `TryHit`，在一次原子操作中检查并占用 RPM/SPM。共享时间取 Redis `TIME`，Redis 出错则拒绝这次准入。TPM/TPD 检查已记录用量，仍不做 token 预留。
+- 窗口是固定分钟窗口，按 Redis 时间 `floor(unix/60)`。
+- 候选筛选只是预检查；拿到账号并发槽后必须调用 Redis Lua `TryHit`，在一次原子操作中检查并占用 RPM。共享时间取 Redis `TIME`，Redis 出错则拒绝这次准入。TPM/TPD 检查已记录用量，仍不做 token 预留。
 - 达到任一上限的账号在本窗口内不再参与调度（和冷却一样从候选中剔除，不改状态、不发事件）。候选账号都因限流或并发满而不可用时，网关返回 429 `rate_limited`（message：`all accounts are busy or rate limited, please retry later`）；候选为空仍是 503 `no_available_account`。
 - 粘性会话绑定的账号达到限流上限时，视同"没有空闲并发槽位"：`on_failure=failover` 的规则改选别的账号并重新绑定，`stick` 的规则返回 429。
 
@@ -845,12 +842,12 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 
 ### 18.3 接口变化
 
-- `Account` 对象新增 `models`、`model_mapping`、`weight`、`rpm_limit`、`tpm_limit`、`tpd_limit`、`spm_limit`、`rate_usage`；`settings` 不再含 `model_mapping`。
-- POST/PATCH `/accounts`：以上字段都可选；PATCH 时 `models`、`model_mapping` 整体替换。字段错误：`models[i]`（`invalid` / `duplicate` / `too_many`）、`model_mapping.<from>`（`invalid`）、`model_mapping`（`too_many`）、`weight`、`rpm_limit`、`tpm_limit`、`tpd_limit`、`spm_limit`（`invalid`）。
+- `Account` 对象新增 `models`、`model_mapping`、`weight`、`rpm_limit`、`tpm_limit`、`rate_usage`；`settings` 不再含 `model_mapping`。
+- POST/PATCH `/accounts`：以上字段都可选；PATCH 时 `models`、`model_mapping` 整体替换。字段错误：`models[i]`（`invalid` / `duplicate` / `too_many`）、`model_mapping.<from>`（`invalid`）、`model_mapping`（`too_many`）、`weight`、`rpm_limit`、`tpm_limit`（`invalid`）。
 - GET `/accounts` 新增筛选 `?model=<完整模型 ID>`：只列出能服务该模型的账号（`models` 为空或包含它）。列表排序改为 `priority, weight DESC, id`。
 - POST `/accounts/:id/test {model?}`：模型先经该账号的 `model_mapping` 映射再交给插件。
-- Redis key（§7 补充）：`rl:account:{id}:rpm:{minute}`、`rl:account:{id}:tpm:{minute}`（TTL 2 分钟）、`rl:account:{id}:tpd:{yyyymmdd}`（TTL 48 小时），STRING 计数；`rl:account:{id}:spm`（ZSET 会话身份 → 毫秒时间戳，TTL 2 分钟），负责人 A（`account` 模块实现 `core.AccountLimiter`）。
-- `core.AccountRef` 新增 `Models []string`、`ModelMapping map[string]string`、`Weight`、`RPMLimit`、`TPMLimit`、`TPDLimit`、`SPMLimit`；端口 `core.AccountLimiter` 包含 `Exhausted(ctx, refs, session)` 预检查、`TryHit(ctx, ref, session) (bool, error)` 原子准入、`AddTokens(ctx, id, n)` 与 `Usage(ctx, ids)`。保留 `Hit` 兼容计数，网关和托管任务轮询使用 `TryHit`。网关 `Deps.Limiter` 为 nil 时不限流。
+- Redis key（§7 补充）：`rl:account:{id}:rpm:{minute}`、`rl:account:{id}:tpm:{minute}`（TTL 2 分钟），STRING 计数，由 `account` 模块实现 `core.AccountLimiter`。
+- `core.AccountRef` 新增 `Models []string`、`ModelMapping map[string]string`、`Weight`、`RPMLimit`、`TPMLimit`；端口 `core.AccountLimiter` 包含 `Exhausted(ctx, refs, session)` 预检查、`TryHit(ctx, ref, session) (bool, error)` 原子准入、`AddTokens(ctx, id, n)` 与 `Usage(ctx, ids)`。保留 `Hit` 兼容计数，网关和托管任务轮询使用 `TryHit`。网关 `Deps.Limiter` 为 nil 时不限流。
 
 ### 18.4 控制台
 

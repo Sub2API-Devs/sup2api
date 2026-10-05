@@ -119,7 +119,7 @@ func TestRateLimitedAccountsAreSkipped(t *testing.T) {
 	e := newEnv(t, func(e *env) {})
 	e.gw.d.Limiter = lim
 	e.accounts.set(1, func(acc *core.Account) { acc.RPMLimit = 10 })
-	e.accounts.set(2, func(acc *core.Account) { acc.SPMLimit = 5 })
+	e.accounts.set(2, func(acc *core.Account) { acc.RPMLimit = 5 })
 	lim.exhausted[1] = true
 	r := e.messages(body(testModel, false))
 	if r.status != 200 {
@@ -142,7 +142,7 @@ func TestRateLimitedAccountsAreSkipped(t *testing.T) {
 
 	// Every candidate exhausted: 429 rate_limited.
 	lim.exhausted[2], lim.exhausted[3] = true, true
-	e.accounts.set(3, func(acc *core.Account) { acc.TPDLimit = 1 })
+	e.accounts.set(3, func(acc *core.Account) { acc.TPMLimit = 1 })
 	r = e.messages(body(testModel, false))
 	if r.status != 429 || !strings.Contains(string(r.body), "rate limited") {
 		t.Fatalf("status %d %s", r.status, r.body)
@@ -152,12 +152,12 @@ func TestRateLimitedAccountsAreSkipped(t *testing.T) {
 	}
 }
 
-func TestStickySessionIsTheSPMIdentity(t *testing.T) {
+func TestStickySessionIdentityReachesLimiter(t *testing.T) {
 	lim := newFakeLimiter()
 	e := newEnv(t)
 	e.gw.d.Limiter = lim
 	e.enableSticky(onFailureFailover)
-	e.accounts.set(1, func(acc *core.Account) { acc.SPMLimit = 5 })
+	e.accounts.set(1, func(acc *core.Account) { acc.RPMLimit = 5 })
 	e.messages(withSession(body(testModel, false), "sess-A"))
 	e.record()
 	e.messages(withSession(body(testModel, false), "sess-A"))

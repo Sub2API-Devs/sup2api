@@ -30,7 +30,7 @@ type Deps struct {
 	Proxies   core.ProxyDirectory
 	Events    core.EventPublisher
 	Slots     core.Slots // optional: in_use column is 0 without it
-	// Limiter reports rpm/tpm/tpd usage (rate_usage column); optional.
+	// Limiter reports rpm/tpm usage (rate_usage column); optional.
 	Limiter core.AccountLimiter
 	Bus     core.Bus // optional: single node without it
 	// Converters reports the protocol pairs the gateway can convert; optional

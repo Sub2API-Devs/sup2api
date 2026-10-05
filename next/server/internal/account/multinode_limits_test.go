@@ -18,7 +18,7 @@ func TestAtomicAccountAdmissionAndCooldown(t *testing.T) {
 	defer rdb.Close()
 	ctx := context.Background()
 	a, b := NewLimiter(rdb), NewLimiter(rdb)
-	for _, ref := range []core.AccountRef{{ID: 11, RPMLimit: 1}, {ID: 12, SPMLimit: 1}} {
+	for _, ref := range []core.AccountRef{{ID: 11, RPMLimit: 1}, {ID: 12, RPMLimit: 1}} {
 		var wins atomic.Int64
 		var wg sync.WaitGroup
 		for i := range 32 {

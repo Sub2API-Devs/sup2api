@@ -266,11 +266,9 @@ export interface Account {
   rpm_limit: number
   tpm_limit: number
   /** Tokens per UTC day. */
-  tpd_limit: number
   /** Sessions per minute (rolling 60s window). */
-  spm_limit: number
   /** Read-only counters of the current windows (0 when Redis is unavailable). */
-  rate_usage?: { rpm: number; tpm: number; tpd: number; spm: number }
+  rate_usage?: { rpm: number; tpm: number }
   status: string
   status_reason?: string
   credentials?: Record<string, unknown>
