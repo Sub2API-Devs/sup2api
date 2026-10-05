@@ -534,7 +534,7 @@ class HandlerTests(Base):
     def test_health(self):
         self.assertEqual(self.call('GET', '/health', key='wrong' * 8), (401, {'error': 'unauthorized'}))
         self.assertEqual(self.call('GET', '/health'),
-                         (200, {'version': 'dev', 'app_image': 'app:test', 'egress_image': 'egress:test'}))
+                         (200, {'version': 'dev', 'app_image': 'app:test', 'egress_image': 'egress:test', 'network_policy_version': 1}))
         self.m.version = 'abc123def456'
         self.assertEqual(self.call('GET', '/health')[1]['version'], 'abc123def456')
         self.assertEqual(self.call('POST', '/health', ''), (405, {'error': 'method_not_allowed'}))
