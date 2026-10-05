@@ -4,7 +4,7 @@ export default {
   rotated: 'Key regenerated. Copy the new key and update your clients.',
   legacyCopyHint: 'This legacy key is hash-only and cannot be recovered. New keys can be copied at any time.',
   myTitle: 'API keys',
-  myDescription: 'Keys for calling the gateway. Each key is bound to exactly one group, which decides the platforms (endpoints) it can access, the models and the rate multiplier.',
+  myDescription: 'Only your own keys are shown and managed here. Administrators cannot access other users’ keys. Each key belongs to one group that determines platforms, models and rates.',
   allTitle: 'All API keys',
   allDescription: 'API keys of every user.',
   create: 'New API key',

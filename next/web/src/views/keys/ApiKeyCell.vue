@@ -7,7 +7,7 @@ import type { ApiKey } from '@/api/types'
 import { copyText } from '@/utils/format'
 import { notifyError } from '@/utils/errors'
 
-const props = withDefaults(defineProps<{ apiKey: ApiKey; admin?: boolean; allowed?: boolean }>(), { admin: false, allowed: true })
+const props = withDefaults(defineProps<{ apiKey: ApiKey; allowed?: boolean }>(), { allowed: true })
 const { t } = useI18n()
 const copying = ref(false)
 const rotating = ref(false)
@@ -17,7 +17,7 @@ async function rotate() {
   if (!await confirm({ title: t('apikeys.rotate'), message: t('apikeys.rotateConfirm', { name: props.apiKey.name }), danger: true })) return
   rotating.value = true
   try {
-    await api.post(`${props.admin ? '/api-keys' : '/me/api-keys'}/${props.apiKey.id}/rotate`, {})
+    await api.post(`/me/api-keys/${props.apiKey.id}/rotate`, {})
     toast(t('apikeys.rotated'), 'success')
     emit('rotated')
   } catch (e) { notifyError(e) }
@@ -27,7 +27,7 @@ async function copy() {
   if (copying.value || !props.allowed || !props.apiKey.copyable) return
   copying.value = true
   try {
-    const result = await api.post<{ key: string }>(`${props.admin ? '/api-keys' : '/me/api-keys'}/${props.apiKey.id}/reveal`, {})
+    const result = await api.post<{ key: string }>(`/me/api-keys/${props.apiKey.id}/reveal`, {})
     const ok = await copyText(result.key)
     toast(t(ok ? 'common.copied' : 'common.copyFailed'), ok ? 'success' : 'error')
   } catch (e) {

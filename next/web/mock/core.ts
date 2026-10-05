@@ -5,7 +5,7 @@ import { fail, now, on, type MockRequest } from './router'
 export const ALL_PERMISSIONS = [
   'user:read', 'user:create', 'user:update', 'user:delete',
   'role:read', 'role:manage',
-  'apikey:self:manage', 'apikey:all:read', 'apikey:all:manage',
+  'apikey:self:manage',
   'group:read', 'group:manage',
   'account:read', 'account:create', 'account:update', 'account:delete', 'account:test', 'account:credential:view',
   // CONTRACTS §21.1: own-level keys act on rows the caller created; settings:custom lifts the base_url guard.
@@ -230,7 +230,6 @@ const MENU_PERMS: Record<string, string | string[]> = {
   '/ledger': 'balance:all:read',
   '/users': 'user:read',
   '/roles': 'role:read',
-  '/api-keys': 'apikey:all:read',
   '/platforms': ['account:read', 'account:own:read', 'account:own:create'],
   '/plugins': 'plugin:read',
   '/market': 'plugin:market:read',
@@ -268,7 +267,6 @@ const MENUS = [
     items: [
       { id: 'users', label: { en: 'Users', zh: '用户' }, icon: 'user', path: '/users' },
       { id: 'roles', label: { en: 'Roles & permissions', zh: '角色与权限' }, icon: 'role', path: '/roles' },
-      { id: 'api-keys', label: { en: 'All API keys', zh: '全部 API Key' }, icon: 'key', path: '/api-keys' },
       { id: 'plugins', label: { en: 'Plugins', zh: '插件' }, icon: 'plugin', path: '/plugins' },
       { id: 'market', label: { en: 'Plugin market', zh: '插件市场' }, icon: 'market', path: '/market' },
       { id: 'publishers', label: { en: 'Publishers', zh: '发布者' }, icon: 'publisher', path: '/publishers' },

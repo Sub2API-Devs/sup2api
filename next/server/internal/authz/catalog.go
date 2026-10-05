@@ -41,8 +41,6 @@ var coreModules = []coreModule{
 	}},
 	{"apikey", lt("API keys", "API Key"), []corePerm{
 		{"apikey:self:manage", "Manage own API keys", "管理自己的 API Key", false},
-		{"apikey:all:read", "View all API keys", "查看全部 API Key", false},
-		{"apikey:all:manage", "Manage all API keys", "管理全部 API Key", false},
 	}},
 	{"group", lt("Groups", "分组"), []corePerm{
 		{"group:read", "View groups", "查看分组", false},

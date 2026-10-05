@@ -41,8 +41,7 @@ const MODULES: ModuleDef[] = [
   { module: 'role', label: L('Roles', '角色'), source: 'core', status: 'active', permissions: [
     { key: 'role:read', label: L('View', '查看') }, { key: 'role:manage', label: L('Manage', '管理'), sensitive: true }] },
   { module: 'apikey', label: L('API keys', 'API Key'), source: 'core', status: 'active', permissions: [
-    { key: 'apikey:self:manage', label: L('Manage own', '管理自己的') }, { key: 'apikey:all:read', label: L('View all', '查看全部') },
-    { key: 'apikey:all:manage', label: L('Manage all', '管理全部') }] },
+    { key: 'apikey:self:manage', label: L('Manage own', '管理自己的') }] },
   { module: 'group', label: L('Groups', '分组'), source: 'core', status: 'active', permissions: [
     { key: 'group:read', label: L('View', '查看') }, { key: 'group:manage', label: L('Manage', '管理') }] },
   { module: 'account', label: L('Accounts', '账号'), source: 'core', status: 'active', permissions: [
@@ -384,24 +383,6 @@ on('POST', '/me/api-keys', (req) => {
 })
 on('DELETE', '/me/api-keys/:id', (req) => {
   const k = keys.find((x) => x.id === Number(req.params.id) && x.user_id === ME_ID)
-  if (!k) return fail(404, 'not_found', 'api key not found')
-  keys.splice(keys.indexOf(k), 1)
-  return noContent()
-})
-on('GET', '/api-keys', (req) => {
-  const { q, user_id, status } = req.query
-  const items = keys.filter((k) => match(q, k.name, k.key_prefix) && (!user_id || k.user_id === Number(user_id)) && (!status || k.status === status))
-  return paginate(items.map(keyOut), req.query)
-})
-on('PATCH', '/api-keys/:id', (req) => {
-  const k = keys.find((x) => x.id === Number(req.params.id))
-  if (!k) return fail(404, 'not_found', 'api key not found')
-  if (req.body?.status) k.status = req.body.status
-  if (req.body?.name) k.name = req.body.name
-  return keyOut(k)
-})
-on('DELETE', '/api-keys/:id', (req) => {
-  const k = keys.find((x) => x.id === Number(req.params.id))
   if (!k) return fail(404, 'not_found', 'api key not found')
   keys.splice(keys.indexOf(k), 1)
   return noContent()

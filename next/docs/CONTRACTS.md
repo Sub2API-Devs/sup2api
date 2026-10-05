@@ -81,7 +81,6 @@
 |---|---|
 | user | `user:read` `user:create` `user:update` `user:delete`🔐 `user:password:reset`🔐 |
 | role | `role:read` `role:manage`🔐 |
-| apikey | `apikey:self:manage` `apikey:all:read` `apikey:all:manage` |
 | group | `group:read` `group:manage` |
 | account | `account:read` `account:create` `account:update` `account:delete`🔐 `account:test` `account:credential:view`🔐；自己创建的：`account:own:read` `account:own:create` `account:own:update` `account:own:delete` `account:own:test` `account:own:credential:view`🔐；`account:settings:custom`（§21）`account:group:bind` `account:relay` |
 | proxy | `proxy:read` `proxy:manage`；自己创建的：`proxy:own:read` `proxy:own:manage`（§21） |
@@ -132,7 +131,6 @@
 |---|---|
 | GET/POST `/me/api-keys`，DELETE `/me/api-keys/:id` | `apikey:self:manage`；创建返回明文 `key`（`sk-s2a-` 前缀），已加密保存的新 Key 可通过显式 reveal 再复制；不含 `user_email`；普通用户不能修改自己的 Key，只能删除重建 |
 | GET `/me/groups` | auth（当前用户可用的分组） |
-| GET `/api-keys`，PATCH/DELETE `/api-keys/:id` | `apikey:all:read` / `apikey:all:manage` |
 | GET/POST `/groups`，GET/PATCH/DELETE `/groups/:id` | `group:read` / `group:manage` |
 | GET/POST `/proxies`，GET/PATCH/DELETE `/proxies/:id` | `proxy:read` / `proxy:manage`（或 `proxy:own:*`，只作用于自己创建的，§21）；密码省略或 `null` 不改、`""` 清除，没有掩码值（§15.4） |
 | POST `/proxies/:id/test` | `proxy:manage` / `proxy:own:manage`（会发起外部连接） |
@@ -498,18 +496,15 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 | `key` | 明文 Key（`sk-s2a-` + 40 位 base62），只在创建和显式授权的复制响应中出现，列表不返回 |
 | `copyable` | 是否保存了可解密密钥；旧的仅哈希 Key 为 `false`，无法恢复 |
 
-新建 Key 除认证哈希外使用服务器主密钥 AES-GCM 加密保存，AAD 为 `apikey:{id}`。POST `/me/api-keys/:id/reveal` 要求 `apikey:self:manage` 并校验所有权；POST `/api-keys/:id/reveal` 要求 `apikey:all:manage`。响应 `{key}`、`Cache-Control: no-store`，返回前写 `apikey.reveal` 审计（不含密钥）。旧 Key 返回 409，删除或非本人 Key 返回 404。
+新建 Key 除认证哈希外使用服务器主密钥 AES-GCM 加密保存，AAD 为 `apikey:{id}`。POST `/me/api-keys/:id/reveal` 要求 `apikey:self:manage` 并校验所有权，管理员也只可操作自己的 Key。响应 `{key}`、`Cache-Control: no-store`，返回前写 `apikey.reveal` 审计（不含密钥）。旧 Key 返回 409，删除或非本人 Key 返回 404。
 
-POST `/me/api-keys/:id/rotate` 和 `/api-keys/:id/rotate` 使用相同所有权与管理权限规则。原子替换认证哈希、前缀、加密密钥，写 `apikey.rotate` 审计，保留 ID、名称、分组、状态、有效期和历史记录。响应新 `APIKey`（含 `key`），旧密钥立即失效；前端要求用户确认后执行。
+POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理员绕过。原子替换认证哈希、前缀、加密密钥，写 `apikey.rotate` 审计，保留 ID、名称、分组、状态、有效期和历史记录。响应新 `APIKey`（含 `key`），旧密钥立即失效；前端要求用户确认后执行。
 
 | 方法 路径 | 权限 | 请求 | 响应 / 约定 |
 |---|---|---|---|
 | GET `/me/api-keys` | `apikey:self:manage` | 分页；无筛选参数 | 当前用户未删除的 Key，`id` 倒序 |
 | POST `/me/api-keys` | `apikey:self:manage` | `{name, group_id, expires_at?}` | 201 `APIKey`（含 `key`）。`name` 去首尾空格后 1–100 字符；`expires_at` 必须晚于当前时间；`group_id` 须为 `active` 且对该用户可用（`visibility=public` 或已分配给用户），否则 `details.fields[{field:"group_id", code:"not_available"}]` |
 | DELETE `/me/api-keys/:id` | `apikey:self:manage` | | 204；只能删自己的 Key（软删除），他人的 Key 返回 404 |
-| GET `/api-keys` | `apikey:all:read` | 分页；`?user_id=&group_id=&status=&q=` | 全部未删除的 Key，`id` 倒序。`q` 模糊匹配 Key 名称、用户邮箱（ILIKE），或按前缀匹配 `key_prefix`；`user_id`/`group_id` 非整数返回 400 |
-| PATCH `/api-keys/:id` | `apikey:all:manage` | `{name?, status?, group_id?, expires_at?}` | 200 `APIKey`（不含 `key`）。省略的字段不修改；`status` 只能 `active`/`disabled`；`expires_at: null` 清除过期时间，非 null 必须晚于当前时间；改 `group_id` 时按**Key 所有者**校验分组可用性 |
-| DELETE `/api-keys/:id` | `apikey:all:manage` | | 204（软删除） |
 
 - 普通用户**没有**修改自己 Key 的接口（没有 `PATCH /me/api-keys/:id`），只能删除重建。
 - 修改或删除后立即清除该 Key 的 Redis 缓存（`apikey:{sha256}`），网关侧立即生效。
@@ -3464,3 +3459,5 @@ CREATE INDEX IF NOT EXISTS idx_account_balances_updated_at ON account_balances(u
 每个账号保留独立业务网络，并使用独立出口 uplink 网络。默认随机选取无冲突子网及应用、出口 IP；顺序模式选取最低可用子网和主机地址。排除 Docker 已占用网段和主机非默认路由；分配过程串行，修改前先检查新池容量。网络配置参与账号及草稿 revision，保存后触发各运行实例重新同步。重建只替换容器和网络，保留同名数据卷、OAuth 登录、历史和管理密钥；正常重启及镜像升级保留现有 IP。正在进行的请求可能中断。此处配置容器内网地址，公网出口仍由账号代理决定。
 
 控制器 `/health` 报告 `network_policy_version: 1`，运行实例状态包含 `network`、`app_ip`、`gateway_ip`、`uplink_ip`。此功能需要安装支持网络策略的控制器镜像。
+
+API Key 隔离：仅 `/me/api-keys` 自有接口有效；所有全局 `/api-keys` 接口移除，旧前端 `/api-keys` 路径跳转到 `/me/api-keys`。移除全局权限及已存角色授权，列表忽略请求传入的 user_id，始终按会话身份查询。

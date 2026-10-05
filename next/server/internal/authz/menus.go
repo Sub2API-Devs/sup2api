@@ -58,7 +58,6 @@ var coreMenus = []coreMenuSection{
 	{"finance", lt("Finance", "财务"), nil},
 	{"system", lt("System", "系统"), []coreMenuItem{
 		{"users", lt("Users", "用户"), "user", "/users", []string{"user:read"}},
-		{"api-keys", lt("API keys", "API Key"), "key", "/api-keys", []string{"apikey:all:read"}},
 		{"platforms", lt("Platforms", "平台"), "globe", "/platforms", []string{"account:read", "account:own:read", "account:own:create"}},
 		{"roles", lt("Roles & permissions", "角色与权限"), "role", "/roles", []string{"role:read"}},
 		{"plugins", lt("Plugins", "插件"), "plugin", "/plugins", []string{"plugin:read"}},

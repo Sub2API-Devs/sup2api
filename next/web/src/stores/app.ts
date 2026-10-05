@@ -51,7 +51,6 @@ const CORE_MENU: Array<{ key: string; items: Array<NavItem & { perm?: string | s
     items: [
       { id: 'users', labelKey: 'nav.items.users', icon: 'user', path: '/users', perm: 'user:read' },
       { id: 'roles', labelKey: 'nav.items.roles', icon: 'role', path: '/roles', perm: 'role:read' },
-      { id: 'api-keys', labelKey: 'nav.items.apiKeysAll', icon: 'key', path: '/api-keys', perm: 'apikey:all:read' },
       { id: 'platforms', labelKey: 'nav.items.platforms', icon: 'globe', path: '/platforms', perm: ACCOUNT_PAGE_PERMS },
       { id: 'plugins', labelKey: 'nav.items.plugins', icon: 'plugin', path: '/plugins', perm: 'plugin:read' },
       { id: 'market', labelKey: 'nav.items.market', icon: 'market', path: '/market', perm: 'plugin:market:read' },

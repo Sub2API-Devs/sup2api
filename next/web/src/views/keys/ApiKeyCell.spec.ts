@@ -23,11 +23,11 @@ describe('API key copy', () => {
     expect(copyText).toHaveBeenCalledWith('full-secret-for-test')
     expect(w.text()).not.toContain('full-secret-for-test')
   })
-  it('uses the admin endpoint and respects permissions and legacy availability', async () => {
+  it('respects permissions and legacy availability', async () => {
     post.mockResolvedValue({ key: 'test-key' })
-    const w = render({ admin: true })
+    const w = render()
     await w.get('button').trigger('click'); await flushPromises()
-    expect(post).toHaveBeenCalledWith('/api-keys/7/reveal', {})
+    expect(post).toHaveBeenCalledWith('/me/api-keys/7/reveal', {})
     expect(render({ allowed: false }).find('button').exists()).toBe(false)
     expect(render({ apiKey: { id: 8, key_prefix: 'legacy' } as ApiKey }).get('button').attributes('disabled')).toBeDefined()
   })

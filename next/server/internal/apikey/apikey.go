@@ -1,4 +1,4 @@
-// Package apikey implements user API keys: self-service and admin endpoints,
+// Package apikey implements user API keys: owner-only self-service endpoints,
 // and the gateway authenticator (core.APIKeyAuthenticator).
 package apikey
 
@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"log/slog"
 	"math/big"
 	"strconv"
@@ -62,13 +61,8 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("GET", "/me/api-keys", "apikey:self:manage", s.listMine)
 	r.Perm("POST", "/me/api-keys", "apikey:self:manage", s.createMine)
 	r.Perm("POST", "/me/api-keys/:id/reveal", "apikey:self:manage", s.revealMine)
-	r.Perm("POST", "/api-keys/:id/reveal", "apikey:all:manage", s.revealAny)
 	r.Perm("POST", "/me/api-keys/:id/rotate", "apikey:self:manage", s.rotateMine)
-	r.Perm("POST", "/api-keys/:id/rotate", "apikey:all:manage", s.rotateAny)
 	r.Perm("DELETE", "/me/api-keys/:id", "apikey:self:manage", s.deleteMine)
-	r.Perm("GET", "/api-keys", "apikey:all:read", s.listAll)
-	r.Perm("PATCH", "/api-keys/:id", "apikey:all:manage", s.update)
-	r.Perm("DELETE", "/api-keys/:id", "apikey:all:manage", s.deleteAny)
 }
 
 // Run flushes last_used_at every 10 s until ctx is done, then flushes once more.
@@ -355,37 +349,8 @@ func (s *Service) listMine(c *gin.Context) {
 	s.query(c, ` WHERE k.deleted_at IS NULL AND k.user_id = $1`, []any{uid}, true)
 }
 
-func (s *Service) listAll(c *gin.Context) {
-	where := ` WHERE k.deleted_at IS NULL`
-	var args []any
-	add := func(cond string, v any) {
-		args = append(args, v)
-		where += " AND " + strings.ReplaceAll(cond, "?", "$"+itoa(len(args)))
-	}
-	for _, f := range []struct{ param, cond string }{
-		{"user_id", "k.user_id = ?"},
-		{"group_id", "k.group_id = ?"},
-	} {
-		if v := c.Query(f.param); v != "" {
-			id, err := strconv.ParseInt(v, 10, 64)
-			if err != nil {
-				httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("invalid "+f.param))
-				return
-			}
-			add(f.cond, id)
-		}
-	}
-	if v := c.Query("status"); v != "" {
-		add("k.status = ?", v)
-	}
-	if v := strings.TrimSpace(c.Query("q")); v != "" {
-		add("(k.name ILIKE '%' || ? || '%' OR u.email ILIKE '%' || ? || '%' OR k.key_prefix LIKE ? || '%')", v)
-	}
-	s.query(c, where, args, false)
-}
-
-func (s *Service) loadKey(ctx context.Context, id int64) (*APIKey, error) {
-	k, err := scanKey(s.db.Pool.QueryRow(ctx, selectKey+` WHERE k.id = $1 AND k.deleted_at IS NULL`, id))
+func (s *Service) loadKey(ctx context.Context, id, ownerID int64) (*APIKey, error) {
+	k, err := scanKey(s.db.Pool.QueryRow(ctx, selectKey+` WHERE k.id = $1 AND k.user_id = $2 AND k.deleted_at IS NULL`, id, ownerID))
 	if store.IsNoRows(err) {
 		return nil, notFound(ctx)
 	}
@@ -489,7 +454,7 @@ func (s *Service) createMine(c *gin.Context) {
 	// A negative lookup of this hash cannot be cached (the key is new), but
 	// drop it anyway to be safe.
 	s.dropCache(ctx, hash)
-	k, err := s.loadKey(ctx, id)
+	k, err := s.loadKey(ctx, id, uid)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -501,19 +466,15 @@ func (s *Service) createMine(c *gin.Context) {
 
 func (s *Service) revealMine(c *gin.Context) {
 	uid, _ := core.UserID(c.Request.Context())
-	s.reveal(c, &uid)
+	s.reveal(c, uid)
 }
-
-func (s *Service) revealAny(c *gin.Context) { s.reveal(c, nil) }
 
 func (s *Service) rotateMine(c *gin.Context) {
 	uid, _ := core.UserID(c.Request.Context())
-	s.rotate(c, &uid)
+	s.rotate(c, uid)
 }
 
-func (s *Service) rotateAny(c *gin.Context) { s.rotate(c, nil) }
-
-func (s *Service) rotate(c *gin.Context, ownerID *int64) {
+func (s *Service) rotate(c *gin.Context, ownerID int64) {
 	c.Header("Cache-Control", "no-store")
 	id, ok := httpapi.PathID(c, "id")
 	if !ok {
@@ -536,7 +497,7 @@ func (s *Service) rotate(c *gin.Context, ownerID *int64) {
 	}
 	var oldHash string
 	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
-		if err := tx.QueryRow(ctx, `SELECT key_hash FROM api_keys WHERE id=$1 AND deleted_at IS NULL AND ($2::bigint IS NULL OR user_id=$2) FOR UPDATE`, id, ownerID).Scan(&oldHash); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT key_hash FROM api_keys WHERE id=$1 AND deleted_at IS NULL AND user_id=$2 FOR UPDATE`, id, ownerID).Scan(&oldHash); err != nil {
 			if store.IsNoRows(err) {
 				return notFound(ctx)
 			}
@@ -555,19 +516,17 @@ func (s *Service) rotate(c *gin.Context, ownerID *int64) {
 	}
 	s.dropCache(ctx, oldHash)
 	s.dropCache(ctx, HashKey(raw))
-	k, err := s.loadKey(ctx, id)
+	k, err := s.loadKey(ctx, id, ownerID)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	if ownerID != nil {
-		k.UserEmail = ""
-	}
+	k.UserEmail = ""
 	k.Key = raw
 	httpapi.OK(c, k)
 }
 
-func (s *Service) reveal(c *gin.Context, ownerID *int64) {
+func (s *Service) reveal(c *gin.Context, ownerID int64) {
 	c.Header("Cache-Control", "no-store")
 	id, ok := httpapi.PathID(c, "id")
 	if !ok {
@@ -575,7 +534,7 @@ func (s *Service) reveal(c *gin.Context, ownerID *int64) {
 	}
 	ctx := c.Request.Context()
 	var sealed []byte
-	err := s.db.Pool.QueryRow(ctx, `SELECT key_cipher FROM api_keys WHERE id = $1 AND deleted_at IS NULL AND ($2::bigint IS NULL OR user_id = $2)`, id, ownerID).Scan(&sealed)
+	err := s.db.Pool.QueryRow(ctx, `SELECT key_cipher FROM api_keys WHERE id = $1 AND deleted_at IS NULL AND user_id = $2`, id, ownerID).Scan(&sealed)
 	if store.IsNoRows(err) {
 		httpapi.Fail(c, notFound(ctx))
 		return
@@ -601,10 +560,10 @@ func (s *Service) reveal(c *gin.Context, ownerID *int64) {
 	httpapi.OK(c, gin.H{"key": string(raw)})
 }
 
-func (s *Service) softDelete(ctx context.Context, id int64, ownerID *int64) error {
+func (s *Service) softDelete(ctx context.Context, id int64, ownerID int64) error {
 	var hash string
 	err := s.db.Pool.QueryRow(ctx, `UPDATE api_keys SET deleted_at = now()
-		WHERE id = $1 AND deleted_at IS NULL AND ($2::bigint IS NULL OR user_id = $2) RETURNING key_hash`,
+		WHERE id = $1 AND deleted_at IS NULL AND user_id = $2 RETURNING key_hash`,
 		id, ownerID).Scan(&hash)
 	if store.IsNoRows(err) {
 		return notFound(ctx)
@@ -622,148 +581,9 @@ func (s *Service) deleteMine(c *gin.Context) {
 		return
 	}
 	uid, _ := core.UserID(c.Request.Context())
-	if err := s.softDelete(c.Request.Context(), id, &uid); err != nil {
+	if err := s.softDelete(c.Request.Context(), id, uid); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.NoContent(c)
-}
-
-func (s *Service) deleteAny(c *gin.Context) {
-	id, ok := httpapi.PathID(c, "id")
-	if !ok {
-		return
-	}
-	ctx := c.Request.Context()
-	actorID, _ := core.UserID(ctx)
-
-	// SEC-H1: fetch the API key owner to check CanActOn
-	var ownerID int64
-	err := s.db.Pool.QueryRow(ctx, `SELECT user_id FROM api_keys WHERE id = $1 AND deleted_at IS NULL`, id).Scan(&ownerID)
-	if store.IsNoRows(err) {
-		httpapi.Fail(c, notFound(ctx))
-		return
-	}
-	if err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
-
-	// SEC-H2: actor must be able to act on the owner
-	if actorID != ownerID {
-		ownerPerms, err := s.authz.PermissionSet(ctx, ownerID)
-		if err != nil {
-			httpapi.Fail(c, err)
-			return
-		}
-		ownerKeys := make([]string, 0, len(ownerPerms.Keys))
-		for k := range ownerPerms.Keys {
-			ownerKeys = append(ownerKeys, k)
-		}
-		if err := s.authz.CanActOn(ctx, actorID, ownerKeys); err != nil {
-			httpapi.Fail(c, err)
-			return
-		}
-	}
-
-	if err := s.softDelete(ctx, id, nil); err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
-	httpapi.NoContent(c)
-}
-
-// nullable distinguishes an absent JSON field from an explicit null.
-type nullable[T any] struct {
-	Set   bool
-	Valid bool
-	V     T
-}
-
-func (n *nullable[T]) UnmarshalJSON(b []byte) error {
-	n.Set = true
-	if string(b) == "null" {
-		n.Valid = false
-		return nil
-	}
-	n.Valid = true
-	return json.Unmarshal(b, &n.V)
-}
-
-func (s *Service) update(c *gin.Context) {
-	ctx := c.Request.Context()
-	id, ok := httpapi.PathID(c, "id")
-	if !ok {
-		return
-	}
-	var in struct {
-		Name      *string             `json:"name"`
-		Status    *string             `json:"status"`
-		GroupID   *int64              `json:"group_id"`
-		ExpiresAt nullable[time.Time] `json:"expires_at"`
-	}
-	if !httpapi.BindJSON(c, &in) {
-		return
-	}
-	if in.Name != nil {
-		n, err := validName(ctx, *in.Name)
-		if err != nil {
-			httpapi.Fail(c, err)
-			return
-		}
-		in.Name = &n
-	}
-	if in.Status != nil && *in.Status != "active" && *in.Status != "disabled" {
-		httpapi.Fail(c, core.InvalidFields(core.FieldError{Field: "status", Code: "invalid",
-			Message: t(ctx, "status must be active or disabled", "状态必须为 active 或 disabled")}))
-		return
-	}
-	if in.ExpiresAt.Set && in.ExpiresAt.Valid {
-		if err := futureExpiry(ctx, &in.ExpiresAt.V); err != nil {
-			httpapi.Fail(c, err)
-			return
-		}
-	}
-	var hash string
-	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
-		var owner int64
-		if err := tx.QueryRow(ctx, `SELECT user_id, key_hash FROM api_keys WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
-			id).Scan(&owner, &hash); err != nil {
-			if store.IsNoRows(err) {
-				return notFound(ctx)
-			}
-			return err
-		}
-		if in.GroupID != nil {
-			ok, err := groupAvailable(ctx, tx, owner, *in.GroupID)
-			if err != nil {
-				return err
-			}
-			if !ok {
-				return groupUnavailable(ctx)
-			}
-		}
-		var exp *time.Time
-		if in.ExpiresAt.Valid {
-			exp = &in.ExpiresAt.V
-		}
-		_, err := tx.Exec(ctx, `UPDATE api_keys SET
-			name = COALESCE($2, name),
-			status = COALESCE($3, status),
-			group_id = COALESCE($4, group_id),
-			expires_at = CASE WHEN $5 THEN $6 ELSE expires_at END
-			WHERE id = $1`, id, in.Name, in.Status, in.GroupID, in.ExpiresAt.Set, exp)
-		return err
-	})
-	if err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
-	s.dropCache(ctx, hash)
-	k, err := s.loadKey(ctx, id)
-	if err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
-	httpapi.OK(c, k)
 }

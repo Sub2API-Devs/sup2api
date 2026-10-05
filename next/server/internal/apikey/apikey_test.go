@@ -245,6 +245,36 @@ func TestCopyAPIKey(t *testing.T) {
 		t.Fatal("plaintext stored")
 	}
 	path := fmt.Sprintf("/me/api-keys/%d/reveal", id)
+	// Superuser permission must never bypass ownership, even with forged filters.
+	for _, actor := range []int64{e.admin, e.user} {
+		for _, endpoint := range []struct{ method, path string }{
+			{"GET", "/api-keys"}, {"GET", "/api-keys?user_id=1"},
+			{"POST", fmt.Sprintf("/api-keys/%d/reveal", id)},
+			{"POST", fmt.Sprintf("/api-keys/%d/rotate", id)},
+			{"PATCH", fmt.Sprintf("/api-keys/%d", id)},
+			{"DELETE", fmt.Sprintf("/api-keys/%d", id)},
+		} {
+			if code, _ := e.do(actor, endpoint.method, endpoint.path, nil); code != 404 {
+				t.Fatalf("global endpoint accessible: %s %s %d", endpoint.method, endpoint.path, code)
+			}
+		}
+	}
+	for _, methodPath := range []struct{ method, path string }{
+		{"POST", path}, {"POST", fmt.Sprintf("/me/api-keys/%d/rotate", id)},
+		{"DELETE", fmt.Sprintf("/me/api-keys/%d", id)},
+	} {
+		if code, _ := e.do(e.admin, methodPath.method, methodPath.path, nil); code != 404 {
+			t.Fatalf("admin crossed owner boundary: %d", code)
+		}
+	}
+	code, filtered := e.do(e.admin, "GET", fmt.Sprintf("/me/api-keys?user_id=%d&q=copy", e.user), nil)
+	if code != 200 || len(filtered["data"].([]any)) != 0 {
+		t.Fatal("admin leaked another user's list")
+	}
+	code, filtered = e.do(e.user, "GET", fmt.Sprintf("/me/api-keys?user_id=%d", e.admin), nil)
+	if code != 200 || len(filtered["data"].([]any)) != 1 {
+		t.Fatal("query filter changed owner scope")
+	}
 	code, out = e.do(e.user, "POST", path, nil)
 	if code != 200 || out["data"].(map[string]any)["key"] != raw {
 		t.Fatalf("owner reveal: %d", code)
@@ -254,15 +284,15 @@ func TestCopyAPIKey(t *testing.T) {
 		t.Fatalf("cross-owner: %d", code)
 	}
 	adminPath := fmt.Sprintf("/api-keys/%d/reveal", id)
-	if code, _ := e.do(e.user, "POST", adminPath, nil); code != 403 {
+	if code, _ := e.do(e.user, "POST", adminPath, nil); code != 404 {
 		t.Fatalf("unauthorized admin reveal: %d", code)
 	}
-	if code, _ := e.do(e.admin, "POST", adminPath, nil); code != 200 {
+	if code, _ := e.do(e.admin, "POST", adminPath, nil); code != 404 {
 		t.Fatalf("admin reveal: %d", code)
 	}
 	var count int
 	_ = e.db.Pool.QueryRow(context.Background(), `SELECT count(*) FROM audit_logs WHERE action='apikey.reveal' AND target_id=$1`, strconv.FormatInt(id, 10)).Scan(&count)
-	if count != 2 {
+	if count != 1 {
 		t.Fatalf("audit count: %d", count)
 	}
 	e.exec(`UPDATE api_keys SET key_cipher=NULL WHERE id=$1`, id)
@@ -273,7 +303,7 @@ func TestCopyAPIKey(t *testing.T) {
 	if code, _ := e.do(other, "POST", rotatePath, nil); code != 404 {
 		t.Fatalf("cross-owner rotate: %d", code)
 	}
-	if code, _ := e.do(e.user, "POST", fmt.Sprintf("/api-keys/%d/rotate", id), nil); code != 403 {
+	if code, _ := e.do(e.user, "POST", fmt.Sprintf("/api-keys/%d/rotate", id), nil); code != 404 {
 		t.Fatalf("unauthorized rotate: %d", code)
 	}
 	code, out = e.do(e.user, "POST", rotatePath, nil)
@@ -292,7 +322,7 @@ func TestCopyAPIKey(t *testing.T) {
 	if code != 200 || out["data"].(map[string]any)["key"] != newRaw {
 		t.Fatal("rotated key is not recoverable")
 	}
-	if code, _ := e.do(e.admin, "POST", fmt.Sprintf("/api-keys/%d/rotate", id), nil); code != 200 {
+	if code, _ := e.do(e.admin, "POST", fmt.Sprintf("/api-keys/%d/rotate", id), nil); code != 404 {
 		t.Fatalf("admin rotate: %d", code)
 	}
 	e.exec(`UPDATE api_keys SET deleted_at=now() WHERE id=$1`, id)
@@ -337,10 +367,6 @@ func TestAPIKeyLifecycleAndAuth(t *testing.T) {
 		fmt.Sprint(items[0].(map[string]any)["platforms"]) != "[anthropic openai]" {
 		t.Fatalf("list mine: %v", out)
 	}
-	_, out = e.do(e.admin, "GET", "/api-keys", nil)
-	if items = out["data"].([]any); len(items) != 1 || fmt.Sprint(items[0].(map[string]any)["platforms"]) != "[anthropic openai]" {
-		t.Fatalf("list all: %v", out)
-	}
 
 	// Authentication always reads the current principal from PostgreSQL.
 	p, err := e.svc.Authenticate(ctx, raw)
@@ -378,24 +404,14 @@ func TestAPIKeyLifecycleAndAuth(t *testing.T) {
 	}
 	e.authz.noGateway[e.user] = false
 
-	// Admin disables the key: cache dropped, auth fails immediately.
-	code, out = e.do(e.admin, "PATCH", fmt.Sprintf("/api-keys/%d", keyID), map[string]any{"status": "disabled"})
-	if code != 200 || out["data"].(map[string]any)["status"] != "disabled" {
-		t.Fatalf("patch: %d %v", code, out)
-	}
+	// Authentication responds immediately to database state changes.
+	e.exec(`UPDATE api_keys SET status='disabled' WHERE id=$1`, keyID)
 	if _, err := e.svc.Authenticate(ctx, raw); codeOf(err) != "unauthenticated" {
 		t.Fatalf("disabled key: %v", err)
 	}
-	// Re-enable, move to restricted group (not allowed for the owner).
-	if code, _ = e.do(e.admin, "PATCH", fmt.Sprintf("/api-keys/%d", keyID), map[string]any{"status": "active", "group_id": restricted}); code != 400 {
-		t.Fatalf("move to unavailable group: %d", code)
-	}
 	e.exec(`INSERT INTO user_groups (user_id, group_id) VALUES ($1, $2)`, e.user, restricted)
-	past := time.Now().Add(time.Hour)
-	code, out = e.do(e.admin, "PATCH", fmt.Sprintf("/api-keys/%d", keyID), map[string]any{"status": "active", "group_id": restricted, "expires_at": past})
-	if code != 200 {
-		t.Fatalf("move: %d %v", code, out)
-	}
+	e.exec(`UPDATE api_keys SET status='active', group_id=$2, expires_at=$3 WHERE id=$1`, keyID, restricted, time.Now().Add(time.Hour))
+
 	p, err = e.svc.Authenticate(ctx, raw)
 	if err != nil || p.Group.ID != restricted {
 		t.Fatalf("after move: %+v %v", p, err)
@@ -405,11 +421,8 @@ func TestAPIKeyLifecycleAndAuth(t *testing.T) {
 	if _, err := e.svc.Authenticate(ctx, raw); codeOf(err) != "permission_denied" {
 		t.Fatalf("group not available: %v", err)
 	}
-	// Clear expiry explicitly with null, then expire it in the DB.
-	code, out = e.do(e.admin, "PATCH", fmt.Sprintf("/api-keys/%d", keyID), map[string]any{"group_id": pub, "expires_at": nil})
-	if code != 200 || out["data"].(map[string]any)["expires_at"] != nil {
-		t.Fatalf("clear expiry: %d %v", code, out)
-	}
+	e.exec(`UPDATE api_keys SET group_id=$2, expires_at=NULL WHERE id=$1`, keyID, pub)
+
 	e.exec(`UPDATE api_keys SET expires_at = now() - interval '1 minute' WHERE id = $1`, keyID)
 	if _, err := e.svc.Authenticate(ctx, raw); codeOf(err) != "unauthenticated" {
 		t.Fatalf("expired: %v", err)
@@ -420,14 +433,6 @@ func TestAPIKeyLifecycleAndAuth(t *testing.T) {
 		t.Fatalf("disabled user: %v", err)
 	}
 	e.exec(`UPDATE users SET status = 'active' WHERE id = $1`, e.user)
-	// Admin list with filter.
-	_, out = e.do(e.admin, "GET", fmt.Sprintf("/api-keys?user_id=%d&q=main", e.user), nil)
-	if out["page"].(map[string]any)["total"].(float64) != 1 || out["data"].([]any)[0].(map[string]any)["user_email"] != "u@x.com" {
-		t.Fatalf("admin list: %v", out)
-	}
-	if code, _ = e.do(e.user, "GET", "/api-keys", nil); code != 403 {
-		t.Fatalf("user admin list: %d", code)
-	}
 
 	// Another user cannot delete it; the owner can.
 	other := e.exec1(`INSERT INTO users (email, password_hash) VALUES ('o@x.com', 'x') RETURNING id`)

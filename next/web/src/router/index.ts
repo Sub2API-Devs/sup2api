@@ -20,7 +20,7 @@ const children: RouteRecordRaw[] = [
 
   { path: 'users', component: () => import('@/views/users/UsersView.vue'), meta: { perm: 'user:read', title: 'nav.items.users' } },
   { path: 'roles', component: () => import('@/views/roles/RolesView.vue'), meta: { perm: 'role:read', title: 'nav.items.roles' } },
-  { path: 'api-keys', component: () => import('@/views/keys/AllApiKeysView.vue'), meta: { perm: 'apikey:all:read', title: 'nav.items.apiKeysAll' } },
+  { path: 'api-keys', redirect: '/me/api-keys' },
   { path: 'me/api-keys', component: () => import('@/views/keys/MyApiKeysView.vue'), meta: { perm: 'apikey:self:manage', title: 'nav.items.myApiKeys' } },
   { path: 'groups', component: () => import('@/views/groups/GroupsView.vue'), meta: { perm: 'group:read', title: 'nav.items.groups' } },
   { path: 'proxies', component: () => import('@/views/proxies/ProxiesView.vue'), meta: { perm: PROXY_PAGE_PERMS, title: 'nav.items.proxies' } },
