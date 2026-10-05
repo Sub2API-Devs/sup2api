@@ -605,3 +605,11 @@ cc-max：GHCR 包暂未公开，三个镜像在 cc-max 上从 Git 源码 `22cfdb
 OVH：源码 `e40d132`，迁移 0032（`ccgateway_runtimes`），按 0.1.24 schema 打包。备份 `/home/debian/sup2api/backups/pre-v0.1.25-20261005T063004Z.dump`（pg_restore 列出 490 项）。manifest `112b5c39b3fb8bf91f0467dfc6afb2da6ff17c345c0da6a5c373f935df398656`，bundle `a8e6f9858fb1702ca3c919d9e4e5db741471a5d924c0ad65e464ff47e82ffc7a`。计划 `57423145d1d09d517004d3c5781288df` 完成 27 步，约 31.6 秒。内置插件无变化。
 
 验证：四入口核心均 0.1.25；同一 refresh token 60 秒内第二次刷新 200（宽限）；账号 21（API Key）容器 ready、`/accounts/21/test` 用 claude-haiku-4-5-20251001 成功 200、2.6 秒；账号 22（OAuth）ready、未授权。CCGateway 远程设置的 `images` 设为上述本地镜像 ID 后 `GET /system/ccgateway/runtime` 为 up_to_date。生产草稿全流程：创建（4 秒 ready）→ start 拿到授权链接 → 再次 start 返回同一会话 → session 查询一致 → 错误授权码 400 `invalid_code` → 未授权草稿保存账号 400 `draft_not_authorized` → cancel → DELETE 204 → 再查 404 `draft_not_found`；cc-max 上无残留草稿容器、卷、网络。升级后四节点 ERROR 为 0。未执行真实 Claude OAuth 登录。
+
+### 24.13 Claude Code 账号重新授权（清空历史）：OVH v0.1.26 + cc-max 控制器 17574608c
+
+2026-10-05 15:02–15:07（北京时间）。cc-max 上从 Git `17574608c` 只构建了控制器 `sha256:c517bdf335ef…`（app/egress 未变）。首次用控制台接口完成升级：远程设置 `images.controller` 改为新镜像 → `POST /system/ccgateway/runtime/install` 200、13.6 秒，之后 up_to_date、版本 17574608c；控制器重启后账号 21、22 约 30 秒内重新 ready。旧控制器容器 `ccg-controller-v024prev`、`ccg-controller-v017` 已按用户要求删除。
+
+OVH：源码 `36decf6`，迁移 0033（`ccgateway_runtimes.for_account/retired_at`），按 0.1.25 schema 打包。备份 `/home/debian/sup2api/backups/pre-v0.1.26-20261005T070405Z.dump`（495 项）。manifest `d7ea689b432e3c23f0ed7bf90efa3ffe8a84a92c970c9fe512e80335202e73c6`，bundle `4daaefc1a7754be16c1b15ef402d86ba1996dafa23f11670b3aa38a8e3835f8a`。计划 `5d19a683b94db12bd332f34a3a78e751` 完成 27 步，约 32 秒。
+
+验证：四入口 0.1.26；账号 21 测试成功 2.8 秒；账号 22 重新授权：创建草稿 201、再次请求返回同一 key、7 秒 ready、拿到授权链接、未登录提交 400 `draft_not_authorized`、取消 204 后账号仍用原运行环境，cc-max 无残留草稿容器。四节点 ERROR 为 0。未执行真实 Claude 登录。决定：重新授权后已停用的账号保持停用，需手动启用。
