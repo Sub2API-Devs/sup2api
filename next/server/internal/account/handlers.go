@@ -16,6 +16,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -478,6 +479,9 @@ type input struct {
 	TPDLimit       *int64             `json:"tpd_limit"`
 	SPMLimit       *int               `json:"spm_limit"`
 	Credentials    json.RawMessage    `json:"credentials"`
+	// CCGatewayRuntime is the draft runtime key a new ccgateway/managed
+	// account adopts (CONTRACTS §49.10); create only. Blank means absent.
+	CCGatewayRuntime *string `json:"ccgateway_runtime"`
 }
 
 // hasCredentials reports whether the request carries a credentials object
@@ -593,6 +597,19 @@ func (in *input) validate(ctx context.Context, create bool) []core.FieldError {
 	}
 	if create && len(in.Credentials) == 0 {
 		add("credentials", "required", "credentials are required", "凭证必填")
+	}
+	if in.CCGatewayRuntime != nil {
+		k := strings.TrimSpace(*in.CCGatewayRuntime)
+		switch {
+		case k == "":
+			in.CCGatewayRuntime = nil
+		case !create:
+			add("ccgateway_runtime", "invalid", "ccgateway_runtime is only accepted when creating an account", "ccgateway_runtime 只能在新建账号时提供")
+		case in.PluginKey != "ccgateway" || in.Type != "managed":
+			add("ccgateway_runtime", "invalid", "ccgateway_runtime is only for ccgateway managed accounts", "ccgateway_runtime 只用于 ccgateway managed 账号")
+		default:
+			in.CCGatewayRuntime = &k
+		}
 	}
 	return fe
 }
@@ -836,6 +853,15 @@ func (s *Service) create(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
+	// A Claude Code account authorized before saving adopts its draft
+	// runtime in the insert transaction (CONTRACTS §49.10).
+	var draftScope *int64
+	if in.CCGatewayRuntime != nil {
+		if draftScope, err = s.checkCCGatewayRuntime(ctx, *in.CCGatewayRuntime); err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+	}
 	status, sched, autoDisable, prio, maxc, weight := "active", true, true, 10, 10, 1
 	if in.Status != nil {
 		status = *in.Status
@@ -900,6 +926,11 @@ func (s *Service) create(c *gin.Context) {
 		}
 		if err := setGroups(ctx, tx, id, groupIDs); err != nil {
 			return err
+		}
+		if in.CCGatewayRuntime != nil {
+			if err := ccgateway.AdoptDraft(ctx, tx, *in.CCGatewayRuntime, id, draftScope); err != nil {
+				return err
+			}
 		}
 		if proxyID != nil {
 			if err := s.auditProxy(ctx, tx, proxyCreated, *proxyID, uid, id); err != nil {

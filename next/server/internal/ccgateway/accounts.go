@@ -11,14 +11,30 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strconv"
-	"strings"
 	"time"
-	"unicode"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/gin-gonic/gin"
+)
+
+// Runtime keys (CONTRACTS §49.7): an account's runtime is named after the
+// draft key it adopted, else after the account id.
+var (
+	accountKeyPattern = regexp.MustCompile(`^[1-9][0-9]{0,17}$`)
+	draftKeyPattern   = regexp.MustCompile(`^d[0-9a-f]{16}$`)
+)
+
+func isDraftKey(key string) bool { return draftKeyPattern.MatchString(key) }
+
+var (
+	// errNotConfigured: account runtimes are off (or the configuration
+	// cannot be read). errUnreachable: the controller cannot be reached.
+	// Both are reported as details.reason = not_configured.
+	errNotConfigured = errors.New("account runtimes are not configured")
+	errUnreachable   = errors.New("account runtime controller unreachable")
 )
 
 type accountDesired struct {
@@ -30,6 +46,28 @@ type accountDesired struct {
 	// Blocked says why a disabled runtime is blocked: account_disabled,
 	// no_proxy or proxy_disabled (the controller has no direct fallback).
 	Blocked string `json:"-"`
+	// Key is the runtime key: the adopted draft key or the account id.
+	Key string `json:"-"`
+	// AccountID is 0 for a draft that is not adopted yet.
+	AccountID int64 `json:"-"`
+}
+
+// proxyDesired decrypts the proxy password and builds the controller's
+// proxy object.
+func (s *Service) proxyDesired(spec core.ProxySpec, password []byte) (map[string]any, error) {
+	if len(password) > 0 {
+		plain, e := s.Cipher.Decrypt(password, []byte("proxy"))
+		if e != nil {
+			return nil, e
+		}
+		spec.Password = string(plain)
+	}
+	return map[string]any{"protocol": spec.Protocol, "host": spec.Host, "port": spec.Port, "username": spec.Username, "password": spec.Password}, nil
+}
+
+func revisionOf(version string) string {
+	sum := sha256.Sum256([]byte(version))
+	return hex.EncodeToString(sum[:])
 }
 
 // desired reads authoritative state: request forwarding never reconfigures an
@@ -44,15 +82,16 @@ func (s *Service) desired(ctx context.Context, id int64, credentials bool) (acco
   CASE WHEN a.deleted_at IS NOT NULL OR a.status = 'disabled' THEN 'account_disabled'
        WHEN p.id IS NULL THEN 'no_proxy' WHEN p.status = 'disabled' THEN 'proxy_disabled' ELSE '' END,
   concat_ws('|',a.id,a.type,a.proxy_id,a.status,a.deleted_at,p.updated_at,p.status,encode(a.credentials_enc,'hex')),
-  COALESCE(p.protocol,''),COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(p.username,''),p.password_enc,a.type,a.credentials_enc
-  FROM accounts a LEFT JOIN proxies p ON p.id=a.proxy_id
+  COALESCE(p.protocol,''),COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(p.username,''),p.password_enc,a.type,a.credentials_enc,
+  COALESCE(r.key, a.id::text)
+  FROM accounts a LEFT JOIN proxies p ON p.id=a.proxy_id LEFT JOIN ccgateway_runtimes r ON r.account_id=a.id
   WHERE a.id=$1 AND a.plugin_key='ccgateway' AND a.type IN ('managed','apikey')`, id).
-		Scan(&d.Enabled, &d.Blocked, &version, &spec.Protocol, &spec.Host, &spec.Port, &spec.Username, &password, &d.Kind, &accountCredentials)
+		Scan(&d.Enabled, &d.Blocked, &version, &spec.Protocol, &spec.Host, &spec.Port, &spec.Username, &password, &d.Kind, &accountCredentials, &d.Key)
 	if err != nil {
 		return d, err
 	}
-	sum := sha256.Sum256([]byte(version))
-	d.Revision = hex.EncodeToString(sum[:])
+	d.AccountID = id
+	d.Revision = revisionOf(version)
 	if d.Enabled && credentials {
 		d.Auth = map[string]string{"mode": "oauth"}
 		if d.Kind == "apikey" {
@@ -66,28 +105,97 @@ func (s *Service) desired(ctx context.Context, id int64, credentials bool) (acco
 			}
 			d.Auth = map[string]string{"mode": "api_key", "api_key": auth["api_key"], "base_url": auth["base_url"]}
 		}
-		if len(password) > 0 {
-			plain, e := s.Cipher.Decrypt(password, []byte("proxy"))
-			if e != nil {
-				return d, e
-			}
-			spec.Password = string(plain)
+		if d.Proxy, err = s.proxyDesired(spec, password); err != nil {
+			return d, err
 		}
-		d.Proxy = map[string]any{"protocol": spec.Protocol, "host": spec.Host, "port": spec.Port, "username": spec.Username, "password": spec.Password}
 	}
 	return d, nil
 }
 
-func (s *Service) runtimeRequest(ctx context.Context, id int64, method, path string, body []byte, revision string) (*http.Response, func() error, error) {
+// draftDesired is the desired state of a draft that is not adopted yet: a
+// managed (OAuth) runtime egressing through the draft's proxy. The revision
+// only depends on the draft key and the proxy, so every node computes the
+// same one.
+func (s *Service) draftDesired(ctx context.Context, key string, credentials bool) (accountDesired, error) {
+	d := accountDesired{Kind: "managed", Key: key}
+	var version string
+	var spec core.ProxySpec
+	var password []byte
+	err := s.DB.Pool.QueryRow(ctx, `SELECT
+  COALESCE(p.status <> 'disabled',false),
+  CASE WHEN p.id IS NULL THEN 'no_proxy' WHEN p.status = 'disabled' THEN 'proxy_disabled' ELSE '' END,
+  concat_ws('|','draft',r.key,r.proxy_id,p.updated_at,p.status),
+  COALESCE(p.protocol,''),COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(p.username,''),p.password_enc
+  FROM ccgateway_runtimes r LEFT JOIN proxies p ON p.id=r.proxy_id
+  WHERE r.key=$1 AND r.account_id IS NULL`, key).
+		Scan(&d.Enabled, &d.Blocked, &version, &spec.Protocol, &spec.Host, &spec.Port, &spec.Username, &password)
+	if err != nil {
+		return d, err
+	}
+	d.Revision = revisionOf(version)
+	if d.Enabled && credentials {
+		d.Auth = map[string]string{"mode": "oauth"}
+		if d.Proxy, err = s.proxyDesired(spec, password); err != nil {
+			return d, err
+		}
+	}
+	return d, nil
+}
+
+// resolveKey maps an account id to its runtime key (the adopted draft key,
+// else the id itself); a draft key is returned unchanged.
+func (s *Service) resolveKey(ctx context.Context, key string) (string, error) {
+	if isDraftKey(key) {
+		return key, nil
+	}
+	if !accountKeyPattern.MatchString(key) {
+		return "", fmt.Errorf("invalid runtime key %q", key)
+	}
+	id, _ := strconv.ParseInt(key, 10, 64)
+	e := s.DB.Pool.QueryRow(ctx, `SELECT COALESCE((SELECT key FROM ccgateway_runtimes WHERE account_id=$1), $1::bigint::text)`, id).Scan(&key)
+	return key, e
+}
+
+// desiredKey is the desired state of a resolved runtime key: the account
+// that adopted the draft, the draft itself, or the account with that id.
+func (s *Service) desiredKey(ctx context.Context, key string, credentials bool) (accountDesired, error) {
+	if !isDraftKey(key) {
+		id, e := strconv.ParseInt(key, 10, 64)
+		if e != nil {
+			return accountDesired{}, e
+		}
+		d, e := s.desired(ctx, id, credentials)
+		if e == nil && d.Key != key {
+			return d, fmt.Errorf("account %d uses runtime %s", id, d.Key)
+		}
+		return d, e
+	}
+	var accountID *int64
+	if e := s.DB.Pool.QueryRow(ctx, `SELECT account_id FROM ccgateway_runtimes WHERE key=$1`, key).Scan(&accountID); e != nil {
+		return accountDesired{}, e
+	}
+	if accountID != nil {
+		return s.desired(ctx, *accountID, credentials)
+	}
+	return s.draftDesired(ctx, key, credentials)
+}
+
+// runtimeRequest calls /accounts/<key>/<path> on the controller (path ""
+// addresses the runtime itself).
+func (s *Service) runtimeRequest(ctx context.Context, key, method, path string, body []byte, revision string) (*http.Response, func() error, error) {
 	cfg, e := s.Load(ctx)
 	if e != nil || !cfg.AccountRuntimes {
-		return nil, nil, errors.New("account runtimes are not configured")
+		return nil, nil, errNotConfigured
 	}
 	client, base, close, e := s.open(ctx, cfg)
 	if e != nil {
-		return nil, nil, e
+		return nil, nil, fmt.Errorf("%w: %v", errUnreachable, e)
 	}
-	req, e := http.NewRequestWithContext(ctx, method, fmt.Sprintf("%s/accounts/%d/%s", base, id, path), bytes.NewReader(body))
+	target := base + "/accounts/" + key
+	if path != "" {
+		target += "/" + path
+	}
+	req, e := http.NewRequestWithContext(ctx, method, target, bytes.NewReader(body))
 	if e != nil {
 		close()
 		return nil, nil, e
@@ -98,14 +206,28 @@ func (s *Service) runtimeRequest(ctx context.Context, id int64, method, path str
 	res, e := client.Do(req)
 	if e != nil {
 		close()
-		return nil, nil, e
+		return nil, nil, fmt.Errorf("%w: %v", errUnreachable, e)
 	}
 	return res, close, nil
 }
 
-// Reconcile is a control-plane operation. Multiple core nodes serialize via a
-// PG advisory lock held across read/apply, preventing stale writes to Docker.
-func (s *Service) Reconcile(ctx context.Context, id int64) error {
+// lockSQL takes the per-runtime advisory lock of the current transaction.
+// The key text is the account id for runtimes named after their account, as
+// before runtime keys existed, so mixed-version nodes still serialize.
+const (
+	tryLockSQL = `SELECT pg_try_advisory_xact_lock(hashtextextended('ccg-account:' || $1::text,0))`
+	lockSQL    = `SELECT true FROM (SELECT pg_advisory_xact_lock(hashtextextended('ccg-account:' || $1::text,0))) l`
+)
+
+// Reconcile is a control-plane operation for one runtime: key is a runtime
+// key or an account id (resolved to the account's runtime key). Multiple
+// core nodes serialize via a PG advisory lock held across read/apply,
+// preventing stale writes to Docker.
+func (s *Service) Reconcile(ctx context.Context, key string) error {
+	key, e := s.resolveKey(ctx, key)
+	if e != nil {
+		return e
+	}
 	conn, e := s.DB.Pool.Acquire(ctx)
 	if e != nil {
 		return e
@@ -121,18 +243,18 @@ func (s *Service) Reconcile(ctx context.Context, id int64) error {
 		_ = tx.Rollback(cleanup)
 	}()
 	var locked bool
-	if e = tx.QueryRow(ctx, `SELECT pg_try_advisory_xact_lock(hashtextextended('ccg-account:' || $1::text,0))`, strconv.FormatInt(id, 10)).Scan(&locked); e != nil {
+	if e = tx.QueryRow(ctx, tryLockSQL, key).Scan(&locked); e != nil {
 		return e
 	}
 	if !locked {
 		return nil
 	}
-	d, e := s.desired(ctx, id, true)
+	d, e := s.desiredKey(ctx, key, true)
 	if e != nil {
 		return e
 	}
 	// Check remote readiness without rewriting an unchanged configuration.
-	res, close, e := s.runtimeRequest(ctx, id, "GET", "status", nil, "")
+	res, close, e := s.runtimeRequest(ctx, key, "GET", "status", nil, "")
 	if e == nil {
 		var status struct {
 			Status   string `json:"status"`
@@ -146,7 +268,7 @@ func (s *Service) Reconcile(ctx context.Context, id int64) error {
 		}
 	}
 	body, _ := json.Marshal(d)
-	res, close, e = s.runtimeRequest(ctx, id, "PUT", "config", body, "")
+	res, close, e = s.runtimeRequest(ctx, key, "PUT", "config", body, "")
 	if e != nil {
 		return e
 	}
@@ -158,40 +280,65 @@ func (s *Service) Reconcile(ctx context.Context, id int64) error {
 	return nil
 }
 
-// Kick asks this node to reconcile one account now instead of waiting for
-// the next sweep (account create/update). It never blocks; a full queue is
-// dropped because the sweep still covers the account within seconds.
-func (s *Service) Kick(id int64) {
+// Kick asks this node to reconcile one runtime now instead of waiting for
+// the next sweep (account create/update, draft create/update). key is a
+// runtime key or an account id. It never blocks; a full queue is dropped
+// because the sweep still covers the runtime within seconds.
+func (s *Service) Kick(key string) {
 	select {
-	case s.kick <- id:
+	case s.kick <- key:
 	default:
 	}
 }
 
 // reconcileKicked serves Kick on its own goroutine so a long sweep (each
-// account may take up to 90 s) does not delay a freshly created account.
+// runtime may take up to 90 s) does not delay a freshly created one.
 func (s *Service) reconcileKicked(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case id := <-s.kick:
+		case key := <-s.kick:
 			if cfg, e := s.Load(ctx); e != nil || !cfg.AccountRuntimes {
 				continue
 			}
 			c, cancel := context.WithTimeout(ctx, 90*time.Second)
-			if e := s.Reconcile(c, id); e != nil && ctx.Err() == nil {
-				slog.Warn("CCGateway account reconcile failed", "account_id", id, "err", e)
+			if e := s.Reconcile(c, key); e != nil && ctx.Err() == nil {
+				slog.Warn("CCGateway runtime reconcile failed", "key", key, "err", e)
 			}
 			cancel()
 		}
 	}
 }
 
+// runtimeKeys lists every runtime the core wants on the controller: one per
+// ccgateway account (deleted and disabled ones too, so they get blocked) and
+// one per draft that is not adopted yet.
+func (s *Service) runtimeKeys(ctx context.Context) ([]string, error) {
+	rows, e := s.DB.Pool.Query(ctx, `SELECT COALESCE(r.key, a.id::text) FROM accounts a
+  LEFT JOIN ccgateway_runtimes r ON r.account_id=a.id
+  WHERE a.plugin_key='ccgateway' AND a.type IN ('managed','apikey')
+  UNION ALL SELECT key FROM ccgateway_runtimes WHERE account_id IS NULL
+  ORDER BY 1`)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	var keys []string
+	for rows.Next() {
+		var key string
+		if rows.Scan(&key) == nil {
+			keys = append(keys, key)
+		}
+	}
+	return keys, rows.Err()
+}
+
 func (s *Service) Run(ctx context.Context) {
 	if s.kick != nil {
 		go s.reconcileKicked(ctx)
 	}
+	go s.runSweep(ctx)
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -203,21 +350,13 @@ func (s *Service) Run(ctx context.Context) {
 			if e != nil || !cfg.AccountRuntimes {
 				continue
 			}
-			rows, e := s.DB.Pool.Query(ctx, `SELECT id FROM accounts WHERE plugin_key='ccgateway' AND type IN ('managed','apikey') ORDER BY id`)
+			keys, e := s.runtimeKeys(ctx)
 			if e != nil {
 				continue
 			}
-			var ids []int64
-			for rows.Next() {
-				var id int64
-				if rows.Scan(&id) == nil {
-					ids = append(ids, id)
-				}
-			}
-			rows.Close()
-			for _, id := range ids {
+			for _, key := range keys {
 				c, cancel := context.WithTimeout(ctx, 90*time.Second)
-				_ = s.Reconcile(c, id)
+				_ = s.Reconcile(c, key)
 				cancel()
 				if ctx.Err() != nil {
 					return
@@ -227,55 +366,11 @@ func (s *Service) Run(ctx context.Context) {
 	}
 }
 
-// startRetryFor / startRetryEvery bound the "start" retry in accountManage.
+// startRetryFor / startRetryEvery bound the "start" retry in serveRuntime.
 var (
 	startRetryFor   = 30 * time.Second
 	startRetryEvery = 2 * time.Second
 )
-
-// Reasons the business container gives (tools/ccgateway/auth.go). They are
-// matched as text because the controller image is deployed separately from
-// the core and has no error codes.
-const (
-	reasonPending   = "已有待完成的授权"
-	reasonBadFormat = "code#state"
-)
-
-// runtimeReason reads the fixed, user-facing reason of a 400 from the
-// business container ({"error":{"message":...}}) without control
-// characters, at most 200 runes; "" when there is none.
-func runtimeReason(raw []byte) string {
-	var body struct {
-		Error struct {
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	if json.Unmarshal(raw, &body) != nil {
-		return ""
-	}
-	msg := []rune(strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
-			return -1
-		}
-		return r
-	}, body.Error.Message))
-	if len(msg) > 200 {
-		msg = msg[:200]
-	}
-	return string(msg)
-}
-
-// runtimeError maps a non-200 runtime answer. A 400 reason is shown so the
-// administrator knows what to do (e.g. a wrong code#state).
-func runtimeError(status int, reason string) error {
-	if status == http.StatusConflict {
-		return core.ErrUnavailable.WithMessage("账号运行环境尚未同步完成，请稍后重试")
-	}
-	if status != http.StatusBadRequest || reason == "" {
-		return core.ErrUnavailable
-	}
-	return core.ErrInvalidArgument.WithMessage(reason)
-}
 
 // callerScope is nil when the caller holds one of allKeys (it manages every
 // account runtime), otherwise the caller id: only accounts it created
@@ -295,6 +390,7 @@ func callerScope(ctx context.Context, allKeys ...string) *int64 {
 // itself; own-level callers only reach accounts they created, others are 404.
 // Arbitrary remote paths are never accepted.
 func (s *Service) accountManage(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
 	id, e := strconv.ParseInt(c.Param("id"), 10, 64)
 	if e != nil || id <= 0 {
 		httpapi.Fail(c, core.ErrInvalidArgument)
@@ -319,23 +415,27 @@ func (s *Service) accountManage(c *gin.Context) {
 		httpapi.Fail(c, core.ErrNotFound)
 		return
 	}
+	s.serveRuntime(c, ctx, d, false)
+}
+
+// serveRuntime runs one :action on the runtime of d, for an account
+// (accountManage) or a draft (draftAction).
+func (s *Service) serveRuntime(c *gin.Context, ctx context.Context, d accountDesired, draft bool) {
 	action := c.Param("action")
 	read := action == "status" || action == "health" || action == "session"
 	if (c.Request.Method == "GET") != read {
 		httpapi.Fail(c, core.ErrNotFound)
 		return
 	}
-	if action == "session" {
-		if sess := s.loadSession(ctx, id); sess != nil {
-			httpapi.OK(c, sess)
-			return
-		}
-		httpapi.OK(c, nil)
-		return
-	}
-	if action == "sync" {
-		if e = s.Reconcile(ctx, id); e != nil {
-			httpapi.Fail(c, core.ErrUnavailable.WithMessage("账号运行环境同步失败（容器创建或代理连通性检查未通过），请检查代理后重试"))
+	var path string
+	switch action {
+	case "sync":
+		if e := s.Reconcile(ctx, d.Key); e != nil {
+			reason := "sync_failed"
+			if errors.Is(e, errNotConfigured) || errors.Is(e, errUnreachable) {
+				reason = "not_configured"
+			}
+			httpapi.Fail(c, reasonError(core.ErrUnavailable, reason))
 			return
 		}
 		if !d.Enabled {
@@ -346,47 +446,49 @@ func (s *Service) accountManage(c *gin.Context) {
 		}
 		httpapi.OK(c, map[string]any{"synced": true})
 		return
-	}
-	if action == "status" && !d.Enabled {
-		httpapi.OK(c, map[string]string{"account_id": strconv.FormatInt(id, 10), "container": "", "status": "blocked", "revision": "", "reason": d.Blocked})
+	case "status":
+		s.serveStatus(c, ctx, d, draft)
 		return
-	}
-	path := "status"
-	if action == "health" {
+	case "health":
 		path = "admin/status"
-	} else if action != "status" {
-		switch action {
-		case "start", "complete", "cancel", "logout":
-			if d.Kind != "managed" {
-				httpapi.Fail(c, core.ErrInvalidArgument)
-				return
-			}
-			path = "admin/auth/" + action
-		default:
+	case "session":
+		path = "admin/auth/session"
+	case "start", "complete", "cancel", "logout":
+		if draft && action == "logout" {
 			httpapi.Fail(c, core.ErrNotFound)
 			return
 		}
-	}
-	raw, e := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, 8192))
-	if e != nil {
-		httpapi.Fail(c, core.ErrInvalidArgument)
+		if d.Kind != "managed" {
+			httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "api_key_account"))
+			return
+		}
+		path = "admin/auth/" + action
+	default:
+		httpapi.Fail(c, core.ErrNotFound)
 		return
 	}
-	if action == "complete" || action == "cancel" {
-		// A console that lost the session id (reload) uses the saved one.
-		body := map[string]any{}
-		if len(bytes.TrimSpace(raw)) > 0 && json.Unmarshal(raw, &body) != nil {
+	if !d.Enabled {
+		// The controller stopped the runtime: say why instead of a 409.
+		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, d.Blocked))
+		return
+	}
+	var raw []byte
+	if !read {
+		var e error
+		raw, e = io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, 8192))
+		if e != nil {
 			httpapi.Fail(c, core.ErrInvalidArgument)
 			return
 		}
-		if sid, _ := body["session_id"].(string); sid == "" {
-			if sess := s.loadSession(ctx, id); sess != nil {
-				body["session_id"] = sess.SessionID
-			}
+		// Only a JSON object is forwarded (empty means {}).
+		body := map[string]any{}
+		if len(bytes.TrimSpace(raw)) > 0 && json.Unmarshal(raw, &body) != nil {
+			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("The request body must be a JSON object."))
+			return
 		}
 		raw, _ = json.Marshal(body)
 	}
-	res, close, e := s.runtimeRequest(ctx, id, c.Request.Method, path, raw, d.Revision)
+	res, close, e := s.runtimeRequest(ctx, d.Key, c.Request.Method, path, raw, d.Revision)
 	if action == "start" {
 		// Right after the runtime turns ready the controller may still answer
 		// 409 (revision not recorded yet) or 503 (the app's HTTP server is not
@@ -399,83 +501,107 @@ func (s *Service) accountManage(c *gin.Context) {
 			close()
 			select {
 			case <-ctx.Done():
-				httpapi.Fail(c, core.ErrUnavailable)
+				httpapi.Fail(c, reasonError(core.ErrUnavailable, "not_synchronized"))
 				return
 			case <-time.After(startRetryEvery):
 			}
-			res, close, e = s.runtimeRequest(ctx, id, c.Request.Method, path, raw, d.Revision)
+			res, close, e = s.runtimeRequest(ctx, d.Key, c.Request.Method, path, raw, d.Revision)
 		}
 	}
 	if e != nil {
-		httpapi.Fail(c, core.ErrUnavailable)
+		httpapi.Fail(c, transportError(e))
 		return
 	}
 	defer close()
 	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		reason := ""
-		if res.StatusCode == http.StatusBadRequest {
-			msg, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
-			reason = runtimeReason(msg)
-			switch {
-			case action == "start" && strings.Contains(reason, reasonPending):
-				// The container still holds the login started earlier: hand
-				// that one back instead of failing until it expires.
-				if sess := s.loadSession(ctx, id); sess != nil {
-					httpapi.OK(c, sess)
-					return
-				}
-			case action == "complete" && !strings.Contains(reason, reasonBadFormat), action == "cancel":
-				// Except for a malformed code#state the container has ended
-				// (or never knew) the session.
-				s.dropSession(ctx, id)
-			}
-		}
-		httpapi.Fail(c, runtimeError(res.StatusCode, reason))
-		return
-	}
 	raw, e = io.ReadAll(io.LimitReader(res.Body, 65537))
 	if e != nil || len(raw) > 65536 {
-		httpapi.Fail(c, core.ErrUnavailable)
+		httpapi.Fail(c, reasonError(core.ErrUnavailable, "runtime_unavailable"))
 		return
 	}
-	if action == "status" {
-		var status struct {
-			AccountID string `json:"account_id"`
-			Container string `json:"container"`
-			Status    string `json:"status"`
-			Revision  string `json:"revision"`
-		}
-		if json.Unmarshal(raw, &status) != nil {
-			httpapi.Fail(c, core.ErrUnavailable)
+	if res.StatusCode != 200 {
+		if action == "session" && res.StatusCode == http.StatusNotFound {
+			// A business container without GET /admin/auth/session (older
+			// image) has no session to resume.
+			httpapi.OK(c, nil)
 			return
 		}
-		if status.Revision != d.Revision {
-			status.Status = "pending"
-		}
-		httpapi.OK(c, status)
+		httpapi.Fail(c, runtimeError(res.StatusCode, raw))
 		return
 	}
-	safePath := "/auth/" + action
-	if action == "health" {
-		safePath = "/status"
-	}
-	out, e := safeResult(safePath, raw)
-	if e != nil {
-		httpapi.Fail(c, core.ErrUnavailable)
-		return
-	}
+	var out any
 	switch action {
+	case "health":
+		out, e = safeResult("/status", raw)
+	case "session":
+		out, e = sessionResult(raw)
 	case "start":
-		var sess authSession
-		if json.Unmarshal(raw, &sess) == nil {
-			s.saveSession(ctx, id, sess)
-		}
-	case "complete", "cancel", "logout":
-		s.dropSession(ctx, id)
+		out, e = safeResult("/auth/start", raw)
+	default:
+		out, e = safeResult("/auth/"+action, raw)
+	}
+	if e != nil {
+		httpapi.Fail(c, reasonError(core.ErrUnavailable, "runtime_unavailable"))
+		return
 	}
 	if c.Request.Method != "GET" {
-		s.record(c, "account."+strconv.FormatInt(id, 10)+"."+action)
+		if draft {
+			s.record(c, "draft."+d.Key+"."+action)
+		} else {
+			s.record(c, "account."+strconv.FormatInt(d.AccountID, 10)+"."+action)
+		}
 	}
 	httpapi.OK(c, out)
+}
+
+// serveStatus answers GET .../status. Accounts: {account_id, key, container,
+// status: ready|pending|blocked, revision, reason?}. Drafts: {key, container,
+// status: creating|ready|blocked, reason?}.
+func (s *Service) serveStatus(c *gin.Context, ctx context.Context, d accountDesired, draft bool) {
+	accountID := strconv.FormatInt(d.AccountID, 10)
+	if !d.Enabled {
+		if draft {
+			httpapi.OK(c, map[string]string{"key": d.Key, "container": "", "status": "blocked", "reason": d.Blocked})
+			return
+		}
+		httpapi.OK(c, map[string]string{"account_id": accountID, "key": d.Key, "container": "", "status": "blocked", "revision": "", "reason": d.Blocked})
+		return
+	}
+	res, close, e := s.runtimeRequest(ctx, d.Key, "GET", "status", nil, d.Revision)
+	if e != nil {
+		httpapi.Fail(c, transportError(e))
+		return
+	}
+	defer close()
+	defer res.Body.Close()
+	raw, e := io.ReadAll(io.LimitReader(res.Body, 65537))
+	if e != nil || len(raw) > 65536 {
+		httpapi.Fail(c, reasonError(core.ErrUnavailable, "runtime_unavailable"))
+		return
+	}
+	if res.StatusCode != 200 {
+		httpapi.Fail(c, runtimeError(res.StatusCode, raw))
+		return
+	}
+	var status struct {
+		Container string `json:"container"`
+		Status    string `json:"status"`
+		Revision  string `json:"revision"`
+	}
+	if json.Unmarshal(raw, &status) != nil {
+		httpapi.Fail(c, reasonError(core.ErrUnavailable, "runtime_unavailable"))
+		return
+	}
+	if draft {
+		out := "creating"
+		if status.Status == "ready" && status.Revision == d.Revision {
+			out = "ready"
+		}
+		httpapi.OK(c, map[string]string{"key": d.Key, "container": status.Container, "status": out})
+		return
+	}
+	if status.Revision != d.Revision {
+		status.Status = "pending"
+	}
+	httpapi.OK(c, map[string]string{"account_id": accountID, "key": d.Key, "container": status.Container, "status": status.Status, "revision": status.Revision})
 }

@@ -12,10 +12,11 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
-	"github.com/redis/go-redis/v9"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
+	"sync"
 )
 
 const settingKey = "ccgateway_remote"
@@ -35,27 +36,87 @@ type Config struct {
 	HostKeyFingerprint string `json:"host_key_fingerprint"`
 	AdminKey           string `json:"admin_key,omitempty"`
 	APIKey             string `json:"api_key,omitempty"`
+	// Images overrides the pinned runtime images (images.go) per role, e.g.
+	// with tags built on the Docker host itself; empty fields use the
+	// pinned references (CONTRACTS §49.16).
+	Images *RuntimeImages `json:"images,omitempty"`
+}
+
+// RuntimeImages are image references of the per-account runtime.
+type RuntimeImages struct {
+	App        string `json:"app"`
+	Egress     string `json:"egress"`
+	Controller string `json:"controller"`
+}
+
+var (
+	imageRefPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._/-]{0,127}(:[A-Za-z0-9._-]{1,128})?(@sha256:[0-9a-f]{64})?$`)
+	imageIDPattern  = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+)
+
+// validImage reports whether ref may be put into the install script: a
+// repository[:tag][@digest] or a local image id.
+func validImage(ref string) bool {
+	return imageRefPattern.MatchString(ref) || imageIDPattern.MatchString(ref)
+}
+
+// EffectiveImages are the images installed: the configured ones, else the
+// pinned references.
+func (c Config) EffectiveImages() RuntimeImages {
+	out := RuntimeImages{App: AppImage, Egress: EgressImage, Controller: ControllerImage}
+	if c.Images != nil {
+		if c.Images.App != "" {
+			out.App = c.Images.App
+		}
+		if c.Images.Egress != "" {
+			out.Egress = c.Images.Egress
+		}
+		if c.Images.Controller != "" {
+			out.Controller = c.Images.Controller
+		}
+	}
+	return out
+}
+
+func (c Config) publicImages() RuntimeImages {
+	if c.Images == nil {
+		return RuntimeImages{}
+	}
+	return *c.Images
 }
 
 func (c Config) SSH() remotedocker.Config {
 	return remotedocker.Config{Host: c.Host, Port: c.Port, User: c.User, AuthMode: c.AuthMode, Password: c.Password, PrivateKey: c.PrivateKey, Passphrase: c.Passphrase, HostKeyFingerprint: c.HostKeyFingerprint}
 }
 func (c Config) Public() map[string]any {
-	return map[string]any{"account_runtimes": c.AccountRuntimes, "mode": c.Mode, "host": c.Host, "port": c.Port, "user": c.User, "auth_mode": c.AuthMode, "host_key_fingerprint": c.HostKeyFingerprint, "has_password": c.Password != "", "has_private_key": c.PrivateKey != "", "has_passphrase": c.Passphrase != "", "has_admin_key": c.AdminKey != "", "has_api_key": c.APIKey != ""}
+	return map[string]any{"account_runtimes": c.AccountRuntimes, "mode": c.Mode, "host": c.Host, "port": c.Port, "user": c.User, "auth_mode": c.AuthMode, "host_key_fingerprint": c.HostKeyFingerprint, "has_password": c.Password != "", "has_private_key": c.PrivateKey != "", "has_passphrase": c.Passphrase != "", "has_admin_key": c.AdminKey != "", "has_api_key": c.APIKey != "", "images": c.publicImages()}
 }
 
 type Service struct {
 	DB     *store.DB
 	Cipher *secret.Cipher
-	// Redis keeps the pending OAuth session of each account runtime
-	// (session.go); nil disables resuming a session.
-	Redis redis.UniversalClient
+	// Authorizer answers the proxy visibility questions of the draft
+	// endpoints (CONTRACTS §21.4); nil: callers without account:create see
+	// no proxy.
+	Authorizer core.Authorizer
+	// Locker lets one node at a time sweep abandoned drafts (§49.13); nil:
+	// this node only (single-node tests).
+	Locker core.Locker
+	// CanWork admits the draft sweep (managed cores sweep only once
+	// admitted); nil always allows.
+	CanWork func() bool
 	// kick feeds Kick; nil (zero Service in tests) disables it.
-	kick chan int64
+	kick chan string
+	// installMu serializes runtime installs without a Locker.
+	installMu sync.Mutex
+	// runScript / openController replace remotedocker.RunScript and the SSH
+	// tunnel to the controller in tests (nil: the real ones).
+	runScript      scriptRunner
+	openController func(context.Context, Config) (*http.Client, string, func() error, error)
 }
 
 func New(db *store.DB, cipher *secret.Cipher) *Service {
-	return &Service{DB: db, Cipher: cipher, kick: make(chan int64, 64)}
+	return &Service{DB: db, Cipher: cipher, kick: make(chan string, 64)}
 }
 func (s *Service) decode(raw []byte) (Config, error) {
 	c := Config{Mode: "disabled", Port: 22}
@@ -116,6 +177,21 @@ func mergeConfig(c, old Config) (Config, error) {
 	}
 	if c.Mode != "local" && c.Mode != "ssh" {
 		return c, errors.New("invalid mode")
+	}
+	// Images are independent of the target: omitted keeps the saved ones,
+	// {} (empty fields) returns to the pinned references.
+	if c.Images == nil {
+		c.Images = old.Images
+	}
+	if c.Images != nil {
+		for _, ref := range []string{c.Images.App, c.Images.Egress, c.Images.Controller} {
+			if ref != "" && !validImage(ref) {
+				return c, errors.New("invalid runtime image reference")
+			}
+		}
+		if *c.Images == (RuntimeImages{}) {
+			c.Images = nil
+		}
 	}
 	same := c.Mode == old.Mode && (c.Mode == "local" || (c.Host == old.Host && c.Port == old.Port && c.User == old.User && c.AuthMode == old.AuthMode && c.HostKeyFingerprint == old.HostKeyFingerprint))
 	if same {
@@ -202,7 +278,7 @@ func (s *Service) save(c *gin.Context) {
 		return audit.Audit(ctx, tx, uid, "ccgateway.config.update", "system", "ccgateway", nil)
 	})
 	if e != nil {
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("无法保存配置，请检查 SSH 地址、主机指纹及凭据；切换目标后请重新输入凭据"))
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("The configuration could not be saved: check the SSH address, host key fingerprint and credentials (enter the credentials again after changing the target)."))
 		return
 	}
 	httpapi.OK(c, saved.Public())

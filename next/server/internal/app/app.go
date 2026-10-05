@@ -185,7 +185,8 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	// Per-account rpm/tpm/tpd/spm limits (CONTRACTS §18).
 	limiter := account.NewLimiter(rdb)
 	ccg := ccgateway.New(db, cipher)
-	ccg.Redis = rdb
+	// Draft proxy visibility and the one-node draft sweep (CONTRACTS §49).
+	ccg.Authorizer, ccg.Locker, ccg.CanWork = az, cl.Locker, canWork
 	acc := account.New(account.Deps{
 		CCGateway: ccg,
 		DB:        db, Redis: rdb, Cipher: cipher, Registry: reg, Proxies: prx, Events: events,

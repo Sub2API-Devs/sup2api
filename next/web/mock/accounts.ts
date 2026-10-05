@@ -446,6 +446,21 @@ export function mockAccount(id: number): { status: string; proxy_id: number | nu
   return accounts.find((a) => a.id === id)
 }
 
+/**
+ * Draft runtimes of new Claude Code accounts (docs/CCGATEWAY-DRAFT-RUNTIMES.md
+ * §4), provided by mock/ccgateway.ts when SUB2API_MOCK_CCGATEWAY is set:
+ * POST /accounts checks and adopts `ccgateway_runtime` through it.
+ */
+export interface MockCcgDrafts {
+  /** '' when the caller may adopt the draft, else the refusal reason. */
+  check(key: string, who: Identity): '' | 'draft_not_found' | 'draft_not_authorized'
+  adopt(key: string, accountId: number): void
+}
+let ccgDrafts: MockCcgDrafts | null = null
+export function registerCcgDrafts(d: MockCcgDrafts) {
+  ccgDrafts = d
+}
+
 /** Accounts in a group (any status). */
 export function groupAccountCount(gid: number): number {
   return accounts.filter((a) => (a.group_ids || []).includes(gid)).length
@@ -610,11 +625,20 @@ on('POST', '/accounts', (req) => {
   const guarded = checkGuarded(who, b.plugin_key, creds)
   if (guarded) return guarded
   if (accounts.some((a) => a.name === b.name)) return fail(400, 'invalid_argument', 'name taken', { fields: [{ field: 'name', code: 'conflict', message: 'Name already used' }] })
+  // A new Claude Code account adopts its authorized draft runtime (the insert and the adoption are one step).
+  const runtime = b.ccgateway_runtime
+  if (runtime !== undefined) {
+    if (b.plugin_key !== 'ccgateway' || b.type !== 'managed' || typeof runtime !== 'string') {
+      return fail(400, 'invalid_argument', 'ccgateway_runtime only applies to ccgateway managed accounts', { fields: [{ field: 'ccgateway_runtime', code: 'invalid', message: 'Not allowed for this account type' }] })
+    }
+    const reason = ccgDrafts ? ccgDrafts.check(runtime, who) : 'draft_not_found'
+    if (reason) return fail(400, 'invalid_argument', reason === 'draft_not_found' ? 'The draft runtime does not exist' : 'The draft runtime is not signed in to Claude', { reason })
+  }
   const proxy = resolveProxy(req, b)
   if ('__status' in proxy) return proxy
   const masked = { ...creds }
   for (const f of at.sensitive_fields) if (masked[f]) masked[f] = '******'
-  const { proxy_url: _u, ...fields } = b
+  const { proxy_url: _u, ccgateway_runtime: _r, ...fields } = b
   const a = {
     id: nextId(),
     status: 'active',
@@ -639,6 +663,7 @@ on('POST', '/accounts', (req) => {
     credentials: masked
   }
   accounts.unshift(a)
+  if (typeof runtime === 'string') ccgDrafts?.adopt(runtime, a.id)
   return { ...withGroups(a), proxy_created: !!proxy.proxy_created }
 })
 on('PATCH', '/accounts/:id', (req) => {

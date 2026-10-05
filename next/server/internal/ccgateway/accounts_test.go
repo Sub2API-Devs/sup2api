@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -74,10 +75,10 @@ func TestAccountProxyReconcileAndRequestIsolation(t *testing.T) {
 	if _, e := db.Pool.Exec(ctx, `INSERT INTO settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, settingKey, envelope); e != nil {
 		t.Fatal(e)
 	}
-	if e := s.Reconcile(ctx, id); e != nil {
+	if e := s.Reconcile(ctx, strconv.FormatInt(id, 10)); e != nil {
 		t.Fatal(e)
 	}
-	if e := s.Reconcile(ctx, id); e != nil {
+	if e := s.Reconcile(ctx, strconv.FormatInt(id, 10)); e != nil {
 		t.Fatal(e)
 	}
 	call := func() int {
@@ -103,7 +104,7 @@ func TestAccountProxyReconcileAndRequestIsolation(t *testing.T) {
 	if call() != 409 {
 		t.Fatal("unsynchronized proxy accepted")
 	}
-	if e := s.Reconcile(ctx, id); e != nil {
+	if e := s.Reconcile(ctx, strconv.FormatInt(id, 10)); e != nil {
 		t.Fatal(e)
 	}
 	if call() != 200 {

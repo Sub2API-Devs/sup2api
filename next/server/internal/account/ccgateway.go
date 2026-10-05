@@ -2,6 +2,7 @@ package account
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
@@ -14,14 +15,36 @@ import (
 // (500 ids each, CONTRACTS §18): the console prefills the plugin presets (§41).
 const connectMaxBody = 512 << 10
 
+// ccgNotReady: the shared CCGateway is not configured or not authorized.
+var ccgNotReady = core.ErrUnavailable.WithMessage("Configure and authorize CCGateway first.").
+	WithDetails(map[string]any{"reason": "not_configured"})
+
 // kickCCGateway prepares a CCGateway account's runtime (container + egress)
 // right after it is created or changed instead of waiting for the next 3 s
-// sweep, so the editor can start OAuth authorization at once. The ccgateway
-// service ignores the kick unless per-account runtimes are enabled.
+// sweep. The ccgateway service resolves the account's runtime key (adopted
+// draft key or id) and ignores the kick unless per-account runtimes are
+// enabled.
 func (s *Service) kickCCGateway(id int64, pluginKey, typ string) {
 	if s.d.CCGateway != nil && pluginKey == "ccgateway" && (typ == "managed" || typ == "apikey") {
-		s.d.CCGateway.Kick(id)
+		s.d.CCGateway.Kick(itoa(id))
 	}
+}
+
+// checkCCGatewayRuntime is the POST /accounts check of ccgateway_runtime
+// (CONTRACTS §49.10): only for ccgateway/managed; the draft must be the
+// caller's unless it holds settings:manage, unadopted and signed in. It
+// returns the scope AdoptDraft uses in the transaction.
+func (s *Service) checkCCGatewayRuntime(ctx context.Context, key string) (*int64, error) {
+	if s.d.CCGateway == nil {
+		return nil, core.ErrInvalidArgument.WithMessage("Account runtimes are not configured.").
+			WithDetails(map[string]any{"reason": "not_configured"})
+	}
+	var scope *int64
+	if !s.can(ctx, "settings:manage") {
+		uid, _ := core.UserID(ctx)
+		scope = &uid
+	}
+	return scope, s.d.CCGateway.CheckDraft(ctx, key, scope)
 }
 
 func (s *Service) connectCCGateway(c *gin.Context) {
@@ -31,7 +54,7 @@ func (s *Service) connectCCGateway(c *gin.Context) {
 		return
 	}
 	if s.d.CCGateway == nil {
-		httpapi.Fail(c, core.ErrUnavailable.WithMessage("请先配置并授权 CCGateway"))
+		httpapi.Fail(c, ccgNotReady)
 		return
 	}
 	// The shared container must be configured and authorized; per-account
@@ -42,7 +65,7 @@ func (s *Service) connectCCGateway(c *gin.Context) {
 		runtimes = cfg.AccountRuntimes
 	}
 	if !runtimes && s.d.CCGateway.Ready(ctx) != nil {
-		httpapi.Fail(c, core.ErrUnavailable.WithMessage("请先配置并授权 CCGateway"))
+		httpapi.Fail(c, ccgNotReady)
 		return
 	}
 	var in struct {

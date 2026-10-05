@@ -5,25 +5,33 @@ import { api } from '@sub2api/host'
 
 
 
+interface RuntimeImages { app: string; egress: string; controller: string }
 interface RemoteConfig {
   account_runtimes: boolean; mode: 'disabled' | 'local' | 'ssh'; host: string; port: number; user: string; auth_mode: 'password' | 'private_key'
   host_key_fingerprint: string; has_password: boolean; has_private_key: boolean; has_passphrase: boolean; has_admin_key: boolean; has_api_key: boolean
+  images?: Partial<RuntimeImages> | null
 }
 type Action = 'status' | 'start' | 'stop' | 'restart' | 'logs'
 const props = defineProps<{ disabled?: boolean }>()
 const emit = defineEmits<{ (event: 'saved'): void; (event: 'busy', value: boolean): void }>()
 const { t } = useI18n()
 const base = '/system/ccgateway/remote-config'
+const IMAGE_KEYS = ['app', 'egress', 'controller'] as const
+// Same rule as the core: repository[:tag][@sha256:digest], or a local image id.
+const IMAGE_RE = /^(?:[a-z0-9][a-z0-9._/-]{0,127}(?::[A-Za-z0-9._-]{1,128})?(?:@sha256:[0-9a-f]{64})?|sha256:[0-9a-f]{64})$/
+const images = reactive<RuntimeImages>({ app: '', egress: '', controller: '' })
+const imagesPayload = computed<RuntimeImages>(() => ({ app: images.app.trim(), egress: images.egress.trim(), controller: images.controller.trim() }))
+const imagesChanged = computed(() => IMAGE_KEYS.some(k => imagesPayload.value[k] !== (saved.value?.images?.[k] || '')))
 
 const defaults = { account_runtimes: false, mode: 'local' as const, host: '', port: 22, user: '', auth_mode: 'password' as const, host_key_fingerprint: '' }
 const form = reactive<{ account_runtimes: boolean; mode: RemoteConfig['mode']; host: string; port: number | string; user: string; auth_mode: RemoteConfig['auth_mode']; host_key_fingerprint: string }>({ ...defaults })
 const secrets = reactive({ password: '', private_key: '', passphrase: '', admin_key: '', api_key: '' })
-const saved = ref<RemoteConfig | null>(null), busy = ref(false), error = ref(''), notice = ref(''), output = ref('')
+const saved = ref<RemoteConfig | null>(null), busy = ref(false), error = ref(''), notice = ref(''), output = ref(''), imageError = ref('')
 const probe = ref<{ fingerprint: string; host: string; port: number } | null>(null)
 const pending = ref<Action | null>(null)
 const publicConfig = computed(() => ({ ...form, host: form.host.trim(), port: Number(form.port), user: form.user.trim(), host_key_fingerprint: form.host_key_fingerprint.trim() }))
 const targetChanged = computed(() => !!saved.value && (publicConfig.value.host !== saved.value.host || publicConfig.value.port !== saved.value.port || publicConfig.value.user !== saved.value.user))
-const dirty = computed(() => !saved.value || Object.entries(publicConfig.value).some(([key, value]) => saved.value?.[key as keyof RemoteConfig] !== value) || Object.values(secrets).some(Boolean))
+const dirty = computed(() => !saved.value || Object.entries(publicConfig.value).some(([key, value]) => saved.value?.[key as keyof RemoteConfig] !== value) || Object.values(secrets).some(Boolean) || imagesChanged.value)
 const canOperate = computed(() => !busy.value && !props.disabled && saved.value?.mode === 'ssh' && !dirty.value)
 const passwordNeeded = computed(() => targetChanged.value || !saved.value?.has_password)
 const keyNeeded = computed(() => targetChanged.value || !saved.value?.has_private_key)
@@ -35,6 +43,7 @@ function clearSecrets() { secrets.password = ''; secrets.private_key = ''; secre
 function assign(config: RemoteConfig) {
   saved.value = config
   for (const key of Object.keys(defaults) as Array<keyof typeof defaults>) Object.assign(form, { [key]: config[key] ?? defaults[key] })
+  for (const key of IMAGE_KEYS) images[key] = config.images?.[key] || ''
   clearSecrets()
 }
 async function run(action: () => Promise<void>) {
@@ -55,6 +64,10 @@ async function save() {
   }
   const payload: Record<string, unknown> = { ...config }
   for (const [key, value] of Object.entries(secrets)) if (value) payload[key] = value
+  const bad = IMAGE_KEYS.map(k => imagesPayload.value[k]).find(ref => ref && !IMAGE_RE.test(ref))
+  if (bad) { imageError.value = t('ccgateway.remote.imageInvalid', { ref: bad }); return }
+  imageError.value = ''
+  payload.images = imagesPayload.value
   const response = await api.put<RemoteConfig>(base, payload, { signal: AbortSignal.timeout(55000) })
   assign(response); probe.value = null; pending.value = null
   notice.value = t('ccgateway.remote.saved'); emit('saved')
@@ -116,6 +129,14 @@ onBeforeUnmount(clearSecrets)
         </template>
         <div class="grid gap-3 sm:grid-cols-2"><label v-for="key in (form.account_runtimes ? ['admin_key'] as const : ['admin_key','api_key'] as const)" :key="key" class="block text-sm">{{ t(`ccgateway.remote.${key}`) }}<input v-model="secrets[key]" type="password" autocomplete="new-password" class="input mt-1 w-full" :data-testid="key" :placeholder="saved[`has_${key}`] ? t('ccgateway.remote.keepSecret') : ''" /></label></div>
         <p class="text-xs text-gray-500">{{ t('ccgateway.remote.keysHint') }}</p>
+        <div v-if="form.account_runtimes" class="space-y-2" data-testid="remote-images">
+          <p class="text-sm font-medium">{{ t('ccgateway.remote.images') }}</p>
+          <div class="grid gap-3 sm:grid-cols-3">
+            <label v-for="key in IMAGE_KEYS" :key="key" class="block text-sm">{{ t(`ccgateway.remote.image${key[0].toUpperCase()}${key.slice(1)}`) }}<input v-model="images[key]" autocomplete="off" spellcheck="false" class="input mt-1 w-full font-mono text-xs" :data-testid="`image-${key}`" /></label>
+          </div>
+          <p class="text-xs text-gray-500">{{ t('ccgateway.remote.imagesHint') }}</p>
+          <p v-if="imageError" role="alert" class="text-sm text-red-600">{{ imageError }}</p>
+        </div>
         <div class="flex justify-end"><button class="btn btn-primary" :disabled="!dirty || form.mode === 'disabled'" data-testid="remote-save">{{ t('ccgateway.remote.save') }}</button></div>
       </fieldset>
     </form>

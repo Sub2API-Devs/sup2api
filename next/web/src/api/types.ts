@@ -303,6 +303,65 @@ export interface Account {
   last_test?: AccountLastTest | null
 }
 
+// ---------------------------------------------------------------- CCGateway runtimes (docs/CCGATEWAY-DRAFT-RUNTIMES.md)
+
+/**
+ * Extra field of POST /accounts for plugin_key=ccgateway, type=managed: the
+ * key of an authorized draft runtime the new account adopts (§4). Refused
+ * with 400 details.reason = draft_not_found / draft_not_authorized.
+ */
+export interface CcgAccountCreateExtras {
+  ccgateway_runtime?: string
+}
+
+/** POST /system/ccgateway/drafts {proxy_id} → 201; PUT drafts/:key {proxy_id} → the same. */
+export interface CcgDraft {
+  /** `d` + 16 lowercase hex characters. */
+  key: string
+}
+
+/** GET .../status of a draft or account runtime; status and reason are English codes (ccgateway.status.* / ccgateway.reason.*). */
+export interface CcgRuntimeStatus {
+  status: 'creating' | 'ready' | 'blocked' | 'pending' | (string & {})
+  /** Why a blocked runtime is stopped (no_proxy, proxy_disabled, account_disabled, ...). */
+  reason?: string
+  container?: string
+}
+
+/** GET .../health: the Claude login state inside the container. */
+export interface CcgRuntimeHealth {
+  healthy: boolean
+  logged_in: boolean
+}
+
+/** POST .../start and GET .../session (null when no login is pending). */
+export interface CcgAuthSession {
+  session_id: string
+  url: string
+  expires_at: string
+}
+
+/** POST .../sync */
+export interface CcgSyncResult {
+  synced?: boolean
+  status?: string
+  reason?: string
+}
+
+/**
+ * GET /system/ccgateway/runtime: the container images and controller the core
+ * expects (published on GHCR) and what the Docker host runs; POST
+ * .../runtime/install installs or upgrades them over SSH.
+ */
+export interface CcgRuntimeImages {
+  expected: { app: string; egress: string; controller: string }
+  /** null: nothing installed yet. */
+  installed: { controller_image: string; app_image: string; egress_image: string; version?: string } | null
+  up_to_date: boolean
+  /** Why the installed state could not be read (ssh_failed, ...). */
+  reason?: string
+}
+
 /** Latest test of an account, kept on the account (POST /accounts/:id/test). */
 export interface AccountLastTest {
   at: string

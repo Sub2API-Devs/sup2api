@@ -20,6 +20,8 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	// update that account (own level: accounts it created), CONTRACTS §49.5.
 	r.PermAny("GET", "/system/ccgateway/accounts/:id/:action", s.accountManage, "settings:read", "account:read", "account:own:read")
 	r.PermAny("POST", "/system/ccgateway/accounts/:id/:action", s.accountManage, "settings:manage", "account:update", "account:own:update")
+	// Draft runtimes of accounts being created (CONTRACTS §49.9).
+	s.registerDraftRoutes(r)
 	r.Perm("GET", "/system/ccgateway/remote-config", "settings:read", func(c *gin.Context) {
 		c.Header("Cache-Control", "no-store")
 		v, e := s.Load(c.Request.Context())
@@ -31,6 +33,9 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	})
 	r.Perm("PUT", "/system/ccgateway/remote-config", "settings:manage", s.save)
 	r.Perm("POST", "/system/ccgateway/remote-fingerprint", "settings:manage", s.fingerprint)
+	// Runtime installation / upgrade over SSH (CONTRACTS §49.16).
+	r.Perm("GET", "/system/ccgateway/runtime", "settings:read", s.runtimeGet)
+	r.Perm("POST", "/system/ccgateway/runtime/install", "settings:manage", s.runtimeInstall)
 	for _, path := range []string{"remote-test", "remote-action"} {
 		r.Perm("POST", "/system/ccgateway/"+path, "settings:manage", s.docker)
 	}
@@ -66,7 +71,7 @@ func (s *Service) fingerprint(c *gin.Context) {
 	defer cancel()
 	fp, e := remotedocker.ProbeFingerprint(ctx, in.Host, in.Port)
 	if e != nil {
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("无法读取 SSH 指纹"))
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("The SSH host key fingerprint could not be read."))
 		return
 	}
 	httpapi.OK(c, gin.H{"fingerprint": fp, "verified": false})
@@ -91,16 +96,16 @@ func (s *Service) docker(c *gin.Context) {
 	}
 	cfg, e := s.Load(c.Request.Context())
 	if e == nil && cfg.AccountRuntimes && action != "test" {
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("请在账号运行环境中管理独立容器"))
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("With account runtimes on, containers are managed per account."))
 		return
 	}
 	if e != nil || cfg.Mode != "ssh" {
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("请先保存 SSH 配置"))
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("Save the SSH configuration first."))
 		return
 	}
 	out, e := remotedocker.Execute(c.Request.Context(), cfg.SSH(), "ccgateway", action)
 	if e != nil {
-		httpapi.Fail(c, core.ErrUnavailable.WithMessage("远程 Docker 操作失败，请检查 SSH 认证、主机指纹及 Docker 权限"))
+		httpapi.Fail(c, core.ErrUnavailable.WithMessage("The remote Docker operation failed: check SSH authentication, the host key fingerprint and Docker permissions."))
 		return
 	}
 	s.record(c, "docker."+action)
@@ -112,11 +117,11 @@ func (s *Service) manage(c *gin.Context) {
 	defer cancel()
 	cfg, e := s.Load(ctx)
 	if e == nil && cfg.AccountRuntimes {
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("请使用账号级授权与代理设置"))
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("With account runtimes on, authorization and proxies are set per account."))
 		return
 	}
 	if e != nil || cfg.AdminKey == "" {
-		httpapi.Fail(c, core.ErrUnavailable.WithMessage("请先配置 CCGateway 管理密钥"))
+		httpapi.Fail(c, core.ErrUnavailable.WithMessage("Configure the CCGateway management key first."))
 		return
 	}
 	client, base, close, e := s.open(ctx, cfg)
@@ -144,13 +149,13 @@ func (s *Service) manage(c *gin.Context) {
 	req.Header.Set("Content-Type", "application/json")
 	res, e := client.Do(req)
 	if e != nil {
-		httpapi.Fail(c, core.ErrUnavailable.WithMessage("无法连接 CCGateway"))
+		httpapi.Fail(c, core.ErrUnavailable.WithMessage("CCGateway cannot be reached."))
 		return
 	}
 	defer res.Body.Close()
 	raw, e := io.ReadAll(io.LimitReader(res.Body, 65537))
 	if e != nil || len(raw) > 65536 || res.StatusCode != 200 {
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("CCGateway 操作失败，请检查容器或授权状态"))
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("The CCGateway operation failed: check the container and its authorization."))
 		return
 	}
 	out, e := safeResult(path, raw)

@@ -158,8 +158,6 @@ const step = ref<1 | 2>(1)
 const pickedType = ref<AccountType | null>(null)
 const editing = ref<Account | null>(null)
 const editorLoading = ref(false)
-/** The edited account was created by the editor a moment ago (Claude Code OAuth: authorize next). */
-const justCreated = ref(false)
 
 const editorTitle = computed(() => {
   if (editing.value) return `${t('accounts.editTitle')} · ${editing.value.name}`
@@ -169,7 +167,6 @@ const editorTitle = computed(() => {
 
 function openCreate() {
   editing.value = null
-  justCreated.value = false
   pickedType.value = null
   step.value = 1
   editorOpen.value = true
@@ -181,7 +178,6 @@ function pick(at: AccountType) {
 }
 
 async function openEdit(a: Pick<Account, 'id'>) {
-  justCreated.value = false
   editorLoading.value = true
   editorOpen.value = true
   step.value = 2
@@ -200,13 +196,12 @@ async function openEdit(a: Pick<Account, 'id'>) {
 
 function onSaved(saved?: Account) {
   list.reload()
-  // A new Claude Code (CCGateway) OAuth account is authorized next: the editor
-  // stays open on the saved account, which starts its container right away.
-  // So does an account still in that flow, or one that had no proxy (its
-  // container was blocked): it restarts with the proxy just picked.
+  // A new Claude Code (CCGateway) account was authorized before it was saved:
+  // it closes like any other. A saved one that had no proxy (its container was
+  // blocked) stays open on the saved account: the container restarts with the
+  // proxy just picked and can be authorized right away.
   const ccg = !!saved?.id && saved.plugin_key === 'ccgateway' && saved.type === 'managed'
-  if (ccg && (!editing.value || justCreated.value || editing.value.proxy_id == null)) {
-    justCreated.value = justCreated.value || !editing.value
+  if (ccg && editing.value && editing.value.proxy_id == null) {
     editing.value = saved!
     return
   }
@@ -606,7 +601,6 @@ function groupTags(a: Account) {
         :account-type="pickedType"
         :account-type-options="accountTypes.types.value.filter(at => sameCreationGroup(at, pickedType))"
         :account="editing"
-        :just-created="justCreated"
         @change-type="pickedType = $event"
         @saved="onSaved"
         @cancel="editorOpen = false"

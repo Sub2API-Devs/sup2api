@@ -9,7 +9,7 @@ import { api } from '@sub2api/host'
 import { SBadge, SButton, SCard, SHint, SIcon, STable, type TableColumn } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { runPool } from '@/views/accounts/pool'
-import { blockReason, containerPhase, type CcgContainer } from './ccgAuthFlow'
+import { containerPhase, knownReason, type CcgContainer } from './ccgAuthFlow'
 
 interface Row {
   id: number
@@ -78,7 +78,10 @@ onMounted(load)
 function containerBadge(r: Row): { tone: 'success' | 'warning' | 'danger' | 'gray'; label: string } {
   if (r.error) return { tone: 'danger', label: t('ccgateway.runtimes.state.unavailable') }
   if (r.phase === 'ready') return { tone: 'success', label: t('ccgateway.runtimes.state.ready') }
-  if (r.phase === 'blocked') return { tone: 'danger', label: t(`ccgateway.accountAuth.blocked.${blockReason(r.reason)}.title`) }
+  if (r.phase === 'blocked') {
+    const k = knownReason(r.reason)
+    return { tone: 'danger', label: t('ccgateway.accountAuth.blockedTitle', { reason: k ? t(`ccgateway.reason.${k}`) : r.reason || t('ccgateway.accountAuth.blockedUnknown') }) }
+  }
   if (r.phase === 'error') return { tone: 'danger', label: t('ccgateway.runtimes.state.error') }
   if (r.phase === 'preparing') return { tone: 'warning', label: t('ccgateway.runtimes.state.preparing') }
   return { tone: 'gray', label: t('ccgateway.runtimes.state.unknown') }

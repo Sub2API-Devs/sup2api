@@ -24,6 +24,11 @@ type fakeHost struct {
 	commands chan string
 	output   string
 	stall    bool
+	// readStdin makes the host read the session's stdin to EOF (into
+	// stdins) before answering with output and exit status exit.
+	readStdin bool
+	stdins    chan []byte
+	exit      uint32
 }
 
 func newHost(t *testing.T, output string, stall bool) *fakeHost {
@@ -41,7 +46,7 @@ func newHost(t *testing.T, output string, stall bool) *fakeHost {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = l.Close() })
-	f := &fakeHost{output: output, stall: stall, commands: make(chan string, 8)}
+	f := &fakeHost{output: output, stall: stall, commands: make(chan string, 8), stdins: make(chan []byte, 8)}
 	f.cfg = Config{Host: "127.0.0.1", Port: l.Addr().(*net.TCPAddr).Port, User: "tester", AuthMode: "password", Password: "test-secret", HostKeyFingerprint: ssh.FingerprintSHA256(signer.PublicKey())}
 	sc := &ssh.ServerConfig{PasswordCallback: func(_ ssh.ConnMetadata, p []byte) (*ssh.Permissions, error) {
 		f.auth.Add(1)
@@ -112,8 +117,12 @@ func newHost(t *testing.T, output string, stall bool) *fakeHost {
 							if f.stall {
 								continue
 							}
+							if f.readStdin {
+								data, _ := io.ReadAll(ch)
+								f.stdins <- data
+							}
 							_, _ = ch.Write([]byte(f.output))
-							_, _ = ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{0}))
+							_, _ = ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{f.exit}))
 							return
 						}
 					}()

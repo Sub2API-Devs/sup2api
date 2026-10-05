@@ -72,6 +72,22 @@ func safeResult(path string, raw []byte) (any, error) {
 		return v, nil
 	}
 }
+
+// sessionResult reads GET /admin/auth/session ({"session": {...} | null}):
+// the pending login, checked like a start result, or nil.
+func sessionResult(raw []byte) (any, error) {
+	var v struct {
+		Session json.RawMessage `json:"session"`
+	}
+	if json.Unmarshal(raw, &v) != nil {
+		return nil, errors.New("invalid session result")
+	}
+	if len(v.Session) == 0 || string(v.Session) == "null" {
+		return nil, nil
+	}
+	return safeResult("/auth/start", v.Session)
+}
+
 func (s *Service) Ready(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()

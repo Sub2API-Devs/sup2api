@@ -98,6 +98,96 @@ func TestConnectCCGatewayWithAccountRuntimes(t *testing.T) {
 	}
 }
 
+// TestCreateAdoptsAnAuthorizedDraft: POST /accounts with ccgateway_runtime
+// saves only an authorized draft of the caller and adopts it in the same
+// transaction (CONTRACTS §49.10).
+func TestCreateAdoptsAnAuthorizedDraft(t *testing.T) {
+	var mu sync.Mutex
+	loggedIn := map[string]bool{}
+	e := setupWith(t, fakeAuthz{keys: map[int64][]string{}})
+	ctl := func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/accounts/"), "/")
+		if strings.HasSuffix(r.URL.Path, "/admin/status") {
+			_ = json.NewEncoder(w).Encode(map[string]any{"healthy": true, "logged_in": loggedIn[parts[0]]})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "pending"})
+	}
+	e.withCCGateway(true, ctl)
+	authz := e.svc.d.Authorizer.(fakeAuthz)
+	authz.keys[e.uid] = []string{"account:create", "account:update", "proxy:read"}
+	other := e.addUser("other@x.com")
+	authz.keys[other] = []string{"account:create", "proxy:read"}
+	ctx := context.Background()
+	pid := e.exec1(`INSERT INTO proxies(name,protocol,host,port) VALUES('ccg','http','proxy.example',3128) RETURNING id`)
+	draft := func(key string, owner int64) string {
+		if _, err := e.db.Pool.Exec(ctx, `INSERT INTO ccgateway_runtimes(key, proxy_id, created_by) VALUES($1,$2,$3)`, key, pid, owner); err != nil {
+			t.Fatal(err)
+		}
+		return key
+	}
+	mine, notSigned, theirs := draft("d0000000000000001", e.uid), draft("d0000000000000002", e.uid), draft("d0000000000000003", other)
+	mu.Lock()
+	loggedIn[mine], loggedIn[theirs] = true, true
+	mu.Unlock()
+	body := func(key string) map[string]any {
+		return map[string]any{"name": "cc", "plugin_key": "ccgateway", "type": "managed", "credentials": map[string]any{},
+			"proxy_id": pid, "ccgateway_runtime": key}
+	}
+	reasonOf := func(out map[string]any) any {
+		errObj, _ := out["error"].(map[string]any)
+		d, _ := errObj["details"].(map[string]any)
+		return d["reason"]
+	}
+	for _, tc := range []struct {
+		key    string
+		reason string
+	}{
+		{"d00000000000000ff", "draft_not_found"},
+		{"12", "draft_not_found"},
+		{theirs, "draft_not_found"},
+		{notSigned, "draft_not_authorized"},
+	} {
+		code, out := e.do("POST", "/accounts", body(tc.key))
+		if code != 400 || reasonOf(out) != tc.reason {
+			t.Errorf("%s: %d %v, want 400 %s", tc.key, code, out, tc.reason)
+		}
+	}
+	code, out := e.do("POST", "/accounts", map[string]any{"name": "x", "plugin_key": "openai", "type": "apikey",
+		"credentials": map[string]any{"api_key": "sk-good-key-123"}, "ccgateway_runtime": mine})
+	if code != 400 {
+		t.Fatalf("draft on another type: %d %v", code, out)
+	}
+	var n int
+	if err := e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM accounts`).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("accounts created by failed requests: %d %v", n, err)
+	}
+
+	code, out = e.do("POST", "/accounts", body(mine))
+	if code != 201 {
+		t.Fatalf("create with an authorized draft: %d %v", code, out)
+	}
+	id := int64(out["data"].(map[string]any)["id"].(float64))
+	var adopted *int64
+	if err := e.db.Pool.QueryRow(ctx, `SELECT account_id FROM ccgateway_runtimes WHERE key=$1 AND adopted_at IS NOT NULL`, mine).Scan(&adopted); err != nil || adopted == nil || *adopted != id {
+		t.Fatalf("draft not adopted: %v %v", adopted, err)
+	}
+	// The draft cannot be used twice, and PATCH does not take it.
+	if code, out = e.do("POST", "/accounts", body(mine)); code != 400 || reasonOf(out) != "draft_not_found" {
+		t.Fatalf("second adoption: %d %v", code, out)
+	}
+	if code, out = e.do("PATCH", "/accounts/"+itoa(id), map[string]any{"ccgateway_runtime": notSigned}); code != 400 {
+		t.Fatalf("PATCH with a draft: %d %v", code, out)
+	}
+	// A settings administrator may save someone else's draft.
+	authz.keys[e.uid] = append(authz.keys[e.uid], "settings:manage")
+	if code, out = e.do("POST", "/accounts", body(theirs)); code != 201 {
+		t.Fatalf("settings administrator with another user's draft: %d %v", code, out)
+	}
+}
+
 // TestConnectCCGatewaySharedNeedsAuthorization keeps the shared-container
 // behaviour: an unauthorized shared CCGateway refuses to connect.
 func TestConnectCCGatewaySharedNeedsAuthorization(t *testing.T) {

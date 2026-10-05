@@ -17,6 +17,7 @@ import { shouldPrefillOnEdit } from './modelDefaults'
 import EditorCard from './EditorCard.vue'
 import ModelMappingEditor from './ModelMappingEditor.vue'
 import CCGatewayAccountAuth from '@/views/ccgateway/CCGatewayAccountAuth.vue'
+import { reasonOf } from '@/views/ccgateway/ccgAuthFlow'
 import { assetURL, usePluginStore } from '@/stores/plugins'
 import { useAuthStore } from '@/stores/auth'
 import { useProxiesLookup } from '@/composables/lookups'
@@ -29,10 +30,10 @@ import { looksLikeProxyURL, parseProxyURL } from '@/utils/proxyUrl'
 // 基本信息 / 调度 / 限流 / 模型 / 模型映射 (all core) + the plugin credential form.
 // A new account starts from the plugin's default models and mapping (§41); so
 // does an existing account saved without either (see shouldPrefillOnEdit).
-// `justCreated`: the account was created by this editor a moment ago (the
-// Claude Code OAuth flow keeps the editor open): no second prefill, and the
-// authorization starts by itself.
-const props = defineProps<{ accountType: AccountType | null; accountTypeOptions?: AccountType[]; account?: Account | null; justCreated?: boolean }>()
+// A new Claude Code (CCGateway managed) account is authorized before it is
+// saved (docs/CCGATEWAY-DRAFT-RUNTIMES.md §5): the credentials card runs the
+// draft flow and saving sends the authorized draft as `ccgateway_runtime`.
+const props = defineProps<{ accountType: AccountType | null; accountTypeOptions?: AccountType[]; account?: Account | null }>()
 const emit = defineEmits<{ (e: 'change-type', at: AccountType): void; (e: 'saved', a: Account): void; (e: 'cancel'): void; (e: 'back'): void; (e: 'test', a: Account): void }>()
 const { t } = useI18n()
 const plugins = usePluginStore()
@@ -49,6 +50,19 @@ const mode = computed(() => props.accountType?.form.mode || 'schema')
 // Claude Code (CCGateway) OAuth keeps its credentials in the account's own
 // container: the editor shows the authorization flow instead of fields.
 const ccgOAuth = computed(() => props.accountType?.plugin_key === 'ccgateway' && props.accountType?.type === 'managed')
+/** New Claude Code account: authorized in a draft container before it is saved. */
+const ccgDraft = computed(() => ccgOAuth.value && !editing.value)
+/** Draft state reported by the authorization panel: saving waits for `authorized`. */
+const ccgState = ref<{ key: string | null; authorized: boolean }>({ key: null, authorized: false })
+const ccgAuth = ref<InstanceType<typeof CCGatewayAccountAuth>>()
+const ccgSaveBlocked = computed(() => ccgDraft.value && !ccgState.value.authorized)
+const ccgPanelEl = ref<HTMLElement>()
+/** The save button explains itself: show the authorization steps. */
+async function showCcgAuth() {
+  activeSection.value = 'connection'
+  await nextTick()
+  ccgPanelEl.value?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}
 // CCGateway account containers only reach the internet through a proxy (no
 // direct fallback): every ccgateway account (managed and apikey) needs one.
 const needsProxy = computed(() => props.accountType?.plugin_key === 'ccgateway')
@@ -95,7 +109,8 @@ const proxyMode = ref<ProxyMode>('existing')
 const proxyUrl = ref('')
 const proxyModeTabs = computed(() => [
   { key: 'existing', label: t('accounts.proxyPickExisting') },
-  { key: 'url', label: t('accounts.proxyPasteUrl') }
+  // A new Claude Code account starts its draft container with an existing proxy (POST drafts {proxy_id}).
+  ...(ccgDraft.value ? [] : [{ key: 'url', label: t('accounts.proxyPasteUrl') }])
 ])
 /** The proxy_url that will be sent, or '' (existing mode / empty input). */
 const proxyUrlToSend = computed(() => (proxyMode.value === 'url' ? proxyUrl.value.trim() : ''))
@@ -117,6 +132,9 @@ function setProxyMode(m: string) {
     errors.value = rest
   }
 }
+watch(ccgDraft, (v) => {
+  if (v) proxyMode.value = 'existing'
+})
 const models = ref<string[]>([])
 const mapping = ref<Record<string, string>>({})
 const credentials = ref<Record<string, any>>({})
@@ -517,7 +535,7 @@ watch(
         models.value = [...(a.models || [])]
         mapping.value = { ...(a.model_mapping || {}) }
         prefilled.value = false
-        if (!props.justCreated && shouldPrefillOnEdit(a, at)) applyDefaults(at)
+        if (shouldPrefillOnEdit(a, at)) applyDefaults(at)
       } else {
         applyDefaults(at)
       }
@@ -605,6 +623,10 @@ async function save(event: Event) {
     errors.value = { [proxyMode.value === 'url' ? 'proxy_url' : 'proxy_id']: t('ccgateway.accountAuth.proxyRequired') }
     return
   }
+  if (ccgSaveBlocked.value) {
+    void showCcgAuth()
+    return
+  }
   // Pending text-mode / draft edits are committed (and validated) before saving.
   if (modelsTextMode.value) {
     if (!syncModelsText()) { activeSection.value = 'models'; return }
@@ -650,7 +672,10 @@ async function save(event: Event) {
       // The account type is (plugin_key, type); accounts have no platform.
       body.plugin_key = props.accountType!.plugin_key
       body.type = props.accountType!.type
+      // A new Claude Code account adopts its authorized draft container.
+      if (ccgDraft.value && ccgState.value.key) body.ccgateway_runtime = ccgState.value.key
       saved = await api.post<Account>('/accounts', body)
+      if (body.ccgateway_runtime) ccgAuth.value?.adopt()
     }
     toast(editing.value ? t('common.updated') : t('common.created'), 'success')
     if (withProxyUrl) {
@@ -660,6 +685,14 @@ async function save(event: Event) {
     }
     emit('saved', saved)
   } catch (e) {
+    // The draft was refused (gone, or no longer signed in): back to the authorization steps.
+    const ccgReason = ccgDraft.value ? reasonOf(e) : ''
+    if (ccgReason === 'draft_not_found' || ccgReason === 'draft_not_authorized') {
+      ccgAuth.value?.rejected(ccgReason)
+      toast(t(`ccgateway.reason.${ccgReason}`), 'error')
+      void showCcgAuth()
+      return
+    }
     const all = fieldErrors(e)
     const cred: Record<string, string> = {}
     const base: Record<string, string> = {}
@@ -776,6 +809,7 @@ async function save(event: Event) {
                 <p v-else-if="proxyMode === 'url' && proxyUrlHint" class="mt-1 text-xs text-amber-600 dark:text-amber-400" data-testid="proxy-url-hint">{{ proxyUrlHint }}</p>
                 <p v-else-if="proxyMode === 'url'" class="input-hint">{{ t('accounts.proxyUrlHint') }}</p>
                 <p v-if="needsProxy" class="mt-1 text-xs text-gray-500 dark:text-dark-400" data-testid="proxy-required-hint">{{ t('ccgateway.accountAuth.proxyRequiredHint') }}</p>
+                <p v-if="ccgDraft" class="mt-1 text-xs text-gray-500 dark:text-dark-400" data-testid="proxy-draft-hint">{{ t('ccgateway.accountAuth.draftProxyHint') }}</p>
               </div>
             </div>
           </EditorCard>
@@ -815,8 +849,18 @@ async function save(event: Event) {
               <SHint v-else-if="formError" tone="danger">{{ formError }}</SHint>
               <SchemaForm v-else-if="schema" ref="schemaForm" v-model="credentials" :schema="schema" :ui-schema="uiSchema" :errors="credErrors" :widgets="schemaWidgets" />
               <template v-if="ccgOAuth">
-                <!-- Claude Code (CCGateway) OAuth: the credentials live in the account's own container; it is authorized right here. -->
-                <CCGatewayAccountAuth :account-id="editing ? account!.id : null" :auto-start="justCreated" :can-edit="canEditAccount" :sync-key="ccgSyncKey" @close="emit('cancel')" @fix-proxy="focusProxy" />
+                <!-- Claude Code (CCGateway) OAuth: the credentials live in the account's own container; it is authorized right here (new accounts: before saving). -->
+                <div ref="ccgPanelEl">
+                  <CCGatewayAccountAuth
+                    v-if="ccgDraft"
+                    ref="ccgAuth"
+                    draft
+                    :proxy-id="basic.proxy_id"
+                    @state="ccgState = $event"
+                    @fix-proxy="focusProxy"
+                  />
+                  <CCGatewayAccountAuth v-else :account-id="account!.id" :can-edit="canEditAccount" :sync-key="ccgSyncKey" @fix-proxy="focusProxy" />
+                </div>
               </template>
               <p v-else-if="schema && !formLoading && !Object.keys(schema.properties || {}).length" class="rounded-xl bg-gray-50 px-3.5 py-3 text-sm text-gray-500 dark:bg-dark-900/40 dark:text-dark-400">{{ t('accounts.editorUi.noCredentials') }}</p>
             </template>
@@ -1046,8 +1090,12 @@ async function save(event: Event) {
         <SLink v-if="activeSection !== 'models'" as="button" class="text-xs" @click="activeSection = 'models'">{{ t('accounts.editorUi.prefilledView') }}</SLink>
         <SLink as="button" class="text-xs" @click="clearPrefill">{{ t('accounts.editorUi.clearModels') }}</SLink>
       </span>
+      <span v-if="ccgSaveBlocked" class="inline-flex flex-wrap items-center gap-x-2 text-xs text-amber-700 dark:text-amber-300" data-testid="footer-ccg-blocked">
+        <SIcon name="info" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.saveBlocked') }}
+        <SLink as="button" class="text-xs" @click="showCcgAuth">{{ t('ccgateway.accountAuth.saveBlockedFix') }}</SLink>
+      </span>
       <SButton @click="emit('cancel')">{{ t('common.cancel') }}</SButton>
-      <SButton type="submit" variant="primary" :loading="saving" :disabled="formLoading || !!formError" data-testid="account-save">{{ editing ? t('common.save') : ccgOAuth ? t('ccgateway.accountAuth.saveAndAuthorize') : t('accounts.editorUi.create') }}</SButton>
+      <SButton type="submit" variant="primary" :loading="saving" :disabled="formLoading || !!formError || ccgSaveBlocked" data-testid="account-save">{{ editing ? t('common.save') : t('accounts.editorUi.create') }}</SButton>
     </div>
   </form>
 </template>

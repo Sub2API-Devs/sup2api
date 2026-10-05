@@ -34,17 +34,40 @@ plugin settings also have a row action. CCGateway's backend remains core-hosted;
 this release changes navigation, not the backend plugin boundary.
 The bundled `ccgateway` managed account plugin is initially
 installed disabled. Configure the remote connection and enable the plugin.
+
+**CCGateway runtime on the Docker host (cc-max), since 2026-10-05.** Nothing
+is built or started by hand on the host any more. The core installs and
+upgrades the per-account runtime over the saved SSH connection
+(CONTRACTS §49.16): `POST /api/v1/system/ccgateway/runtime/install`
+(settings:manage; the console button is added later) pulls the images that
+are not on the host yet, writes `/opt/ccgateway-runtime.env` (0600, the
+controller key only travels on SSH stdin), replaces the `ccg-controller`
+container (the old one is kept as `ccg-controller-prev` until the new one
+answers `GET /health` within 60 s, otherwise it is restored) and kicks every
+runtime so app containers move to the new image with their logins kept.
+`GET /api/v1/system/ccgateway/runtime` shows the expected and installed
+images, the controller version and `up_to_date`. The images are the pinned
+GHCR references in `server/internal/ccgateway/images.go` (update them from the
+summary of the "CCGateway images" workflow after `tools/ccgateway` changes).
+While the GHCR packages are private, build the images on cc-max from the
+checked-out commit (for example `ccgateway:<sha>`, `ccg-egress:<sha>`,
+`ccg-controller:<sha>` with the Dockerfiles under `tools/ccgateway`) and set
+them in the CCGateway remote configuration as
+`images: {app, egress, controller}` (PUT remote-config; empty fields fall back
+to the pinned references); the installer uses images already present without
+pulling. Upgrade order: controller (this install) before the core release
+that needs it.
+
 With per-account runtimes (the ovh setup) each Claude Code account is
-authorized in account management, not on the plugin page: create or edit the
-CCGateway account there and bind a proxy (required: an account without a usable
-proxy stays `blocked`, there is no direct fallback). Saving starts that
-account's container at once; the editor then fetches the authorization link,
-you sign in to Claude and paste the `code#state` back, and Claude Code inside
-the container completes the login. A reload resumes a pending authorization.
-The plugin page only shows container state and links to the account
-(CONTRACTS §49). Connection settings are shared across nodes and encrypted
-with the existing core master key. No gateway image or environment change is
-required for SSH mode.
+authorized in account management while it is being entered: choose a proxy
+(required; there is no direct fallback), start the container (a draft
+runtime), sign in to Claude, paste the `code#state` back, and only then save
+the account, which adopts the draft's container. Abandoned drafts are removed
+by the core within 15 minutes. Saved accounts can be re-authorized from the
+account editor. The plugin page only shows container state and links to the
+account (CONTRACTS §49). Connection settings are shared across nodes and
+encrypted with the existing core master key. No gateway image or environment
+change is required for SSH mode.
 
 The OVH-to-cc-max dedicated SSH key and pinned `known_hosts` live in the private
 `~/sup2api-managed/ccgateway/` directory. After deployment,

@@ -430,6 +430,11 @@ const proxies: MockProxy[] = [
 ]
 
 // CONTRACTS §15.4: the password is never returned, only has_password.
+/** Status of a mock proxy (active / disabled), undefined when it does not exist (for the CCGateway drafts). */
+export function mockProxyStatus(id: number): string | undefined {
+  return proxies.find((p) => p.id === id)?.status
+}
+
 function proxyOut(p: MockProxy) {
   const { password, ...rest } = p
   return { ...rest, has_password: !!password, created_by_email: userEmail(p.created_by), account_count: proxyAccountCount(p.id) }

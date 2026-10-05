@@ -3,7 +3,6 @@ package ccgateway
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/remotedocker"
 	"io"
 	"net/http"
@@ -85,7 +84,7 @@ func (t modelTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		cancel()
 		return nil, e
 	}
-	var revision string
+	var revision, key string
 	if !cfg.AccountRuntimes && t.accountID > 0 {
 		var kind string
 		if err := t.s.DB.Pool.QueryRow(ctx, "SELECT type FROM accounts WHERE id=$1 AND plugin_key='ccgateway'", t.accountID).Scan(&kind); err != nil || kind == "apikey" {
@@ -103,7 +102,7 @@ func (t modelTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			cancel()
 			return nil, errors.New("account egress unavailable")
 		}
-		revision = d.Revision
+		revision, key = d.Revision, d.Key
 	}
 	if (!cfg.AccountRuntimes && cfg.APIKey == "") || (cfg.AccountRuntimes && cfg.AdminKey == "") {
 		cancel()
@@ -119,7 +118,8 @@ func (t modelTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	clone := req.Clone(ctx)
 	clone.URL, _ = url.Parse(base + "/v1/messages")
 	if cfg.AccountRuntimes {
-		clone.URL.Path = fmt.Sprintf("/accounts/%d/v1/messages", t.accountID)
+		// The account's runtime key: the adopted draft key or the id.
+		clone.URL.Path = "/accounts/" + key + "/v1/messages"
 	}
 	clone.Host = ""
 	clone.Header = clone.Header.Clone()

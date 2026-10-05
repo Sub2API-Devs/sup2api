@@ -2917,16 +2917,18 @@ claude-oauth 插件原来有个每 30 分钟跑一次的 `refresh_tokens` 任务
 - 网关请求路径上不做同步续期。sub2api 在请求时剩余不到 3 分钟会先刷新再转发；这里靠 30 分钟提前量的定时扫描兜住，未做同步续期。
 - `net` 权限保留，只用于授权时用授权码换令牌。
 
-## 49. CCGateway 账号：保存后立即准备容器，录入界面完成 OAuth 授权（2026-10-05，用户要求）
+## 49. CCGateway 账号：录入时启动容器、授权后再保存（2026-10-05，用户要求）
 
-前提：CCGateway 设置里开启了 `account_runtimes`（每账号一个容器，由远端 `tools/ccgateway/runtime/manager.py` 控制器管理）。控制器约定**没有直连兜底**：账号未绑定代理、代理被禁用或账号被禁用时，控制器停掉该账号的容器（blocked）。
+前提：CCGateway 设置里开启了 `account_runtimes`（每个运行环境一组容器，由远端 `tools/ccgateway/runtime/manager.py` 控制器管理）。控制器约定**没有直连兜底**：未绑定代理、代理被禁用或账号被禁用时，控制器停掉该运行环境的容器（blocked）。
 
-### 49.1 流程
+用户决定（同日第二版，取代下面 §49.1–§49.6 的"先保存、再授权"）：Claude Code（`ccgateway/managed`）账号在**录入时**就启动容器、完成授权，授权成功才能保存；失败、取消或放弃的容器由定时清理删除。所有机器可读的状态和错误一律是英文代码，控制台做中英文转换。三条线（容器/控制器、核心、控制台）的共同约定原在 `docs/CCGATEWAY-DRAFT-RUNTIMES.md`，已并入本节 §49.7–§49.15。旧的"先保存再授权"流程仍然可用（编辑已保存账号的重新授权也走它）。
+
+### 49.1 流程（第一版：先保存、再授权；仍适用于已保存账号）
 
 授权在**账号管理 → 新建 / 编辑 CCGateway 账号**里完成；CCGateway 插件页只显示容器状态并跳转到账号页。
 
 1. 控制台保存 ccgateway `managed`（或 `apikey`）账号。**账号必须绑定可用代理**，否则不会起容器（status 为 `blocked`，`reason: "no_proxy"`）。
-2. 核心在账号创建、修改成功后调 `ccgateway.Service.Kick(id)`：非阻塞投递到本节点的 kick 队列（容量 64，满了直接丢，3 秒一轮的扫描仍会覆盖），由 `Run` 里单独的 goroutine 立即 `Reconcile`，不排在全量扫描后面。未开启 `account_runtimes` 时忽略。
+2. 核心在账号创建、修改成功后调 `ccgateway.Service.Kick(key)`（`key` 为账号 id 或运行环境 key，账号 id 会解析成该账号的运行环境 key，§49.7）：非阻塞投递到本节点的 kick 队列（容量 64，满了直接丢，3 秒一轮的扫描仍会覆盖），由 `Run` 里单独的 goroutine 立即 `Reconcile`，不排在全量扫描后面。未开启 `account_runtimes` 时忽略。
 3. 控制台同时可以调 `POST /system/ccgateway/accounts/:id/sync`（同步执行一次 `Reconcile`，最长 90 秒），然后轮询 `GET .../status` / `GET .../health`。
 4. `status = ready` 后调 `POST .../start` 取授权链接，用户登录 Claude 后把 `code#state` 粘贴回来调 `POST .../complete {session_id?, code}`，容器里的 Claude Code 完成授权。页面刷新后先调 `GET .../session` 恢复未完成的授权（49.4）。
 
@@ -2934,32 +2936,26 @@ claude-oauth 插件原来有个每 30 分钟跑一次的 `refresh_tokens` 任务
 
 | 方法 action | 说明 |
 |---|---|
-| GET `status` | `{account_id, container, status, revision}`，`status` 为 `ready` / `pending` / `blocked`。账号被阻断时直接返回 `{account_id, container: "", status: "blocked", revision: "", reason}`，不访问控制器（原来会一直显示 `pending`）；`reason` 取值 `account_disabled` / `no_proxy` / `proxy_disabled` |
+| GET `status` | `{account_id, key, container, status, revision}`，`status` 为 `ready` / `pending` / `blocked`，`key` 为运行环境 key（§49.7）。被阻断时直接返回 `{account_id, key, container: "", status: "blocked", revision: "", reason}`，不访问控制器；`reason` 取值 `account_disabled` / `no_proxy` / `proxy_disabled` |
 | GET `health` | 容器内 Claude Code 授权状态 `{healthy, logged_in, auth_method}` |
-| GET `session` | 当前未完成的授权会话 `{session_id, url, expires_at}`，没有或已过期时 `data: null`（49.4） |
-| POST `sync` | 立即同步。成功 `{synced: true}`；账号被阻断时 `{synced: true, status: "blocked", reason}`。同步失败 503，带说明（容器创建或代理连通性检查未通过） |
-| POST `start` | 取授权链接 `{session_id, url, expires_at}`。控制器刚 ready 时可能先回 409（修订号还没记录）或 503（容器里的 HTTP 服务还没监听），这两种都没到达 CLI，核心在 30 秒内每 2 秒重试；其他回答立即返回。容器里已有未完成的授权时返回保存的那个会话（49.4） |
-| POST `complete` | `{session_id?, code}`，`code` 为 `code#state`；`session_id` 省略时用保存的会话 |
-| POST `cancel` | `{session_id?}`，省略时用保存的会话 |
-| POST `logout` | 退出容器里的 Claude Code 授权 |
+| GET `session` | 透传业务容器 `GET /admin/auth/session`：`{session_id, url, expires_at}`，没有时 `data: null`；容器镜像较旧、没有该端点（404）时也是 `null` |
+| POST `sync` | 立即同步。成功 `{synced: true}`；被阻断时 `{synced: true, status: "blocked", reason}`。失败 503，`details.reason` 为 `sync_failed`（容器创建或代理连通性检查未通过）或 `not_configured` |
+| POST `start` | 取授权链接 `{session_id, url, expires_at}`。控制器刚 ready 时可能先回 409（修订号还没记录）或 503（容器里的 HTTP 服务还没监听），这两种都没到达 CLI，核心在 30 秒内每 2 秒重试；其他回答立即返回。容器里已有未过期的登录时容器返回同一个会话（幂等） |
+| POST `complete` | `{session_id?, code}`，`code` 为 `code#state`；`session_id` 可省略（容器用当前的登录） |
+| POST `cancel` | `{session_id?}`，幂等 |
+| POST `logout` | 退出容器里的 Claude Code 授权（只有账号有，草稿没有） |
 
-`start`/`complete`/`cancel`/`logout` 只对 `managed` 账号可用（`apikey` 账号 400）。业务容器回 400 时（例如"请粘贴完整的 code#state，且必须属于本次授权""授权会话不存在或已过期"）返回 400 `invalid_argument`，`message` 为容器给出的原因（去控制字符、最多 200 字）；控制器 409 返回 503 "账号运行环境尚未同步完成"；其余仍为 503。
+`start`/`complete`/`cancel`/`logout` 只对 `managed` 可用（`apikey` 账号 400，`reason: api_key_account`）。运行环境被阻断时，除 `status`/`sync` 外的动作直接 400，`reason` 为阻断原因。错误一律英文 message + `details.reason`（§49.12），不再返回容器的中文原文。
 
 ### 49.3 已知限制
 
-- 多节点：`sync` / kick 落到任意节点都能工作（每个节点用同一份 SSH 配置连控制器；`Reconcile` 用 PG advisory 锁 `ccg-account:<id>` 串行，控制器内部也按账号加锁）。拿不到锁时 `sync` 立即返回 `synced: true`（另一处正在同步），所以控制台必须以轮询 `status` 为准。
-- `Reconcile` 在整个远程调用期间（最长 90 秒）占着一个数据库连接和事务；所有节点每 3 秒对每个 ccgateway 账号各发一次 `GET status`。账号多时需要关注。
-- 49.4 依赖业务容器的报错文字（`已有待完成的授权`、`code#state`）判断情况，因为控制器镜像与核心分开部署、没有错误码。改 `tools/ccgateway/auth.go` 的文案时要同步改 `ccgateway/accounts.go` 里的常量。
+- 多节点：`sync` / kick 落到任意节点都能工作（每个节点用同一份 SSH 配置连控制器；`Reconcile` 用 PG advisory 锁 `ccg-account:<key>` 串行——数字 key 与旧版的 `ccg-account:<id>` 相同，控制器内部也按 key 加锁）。拿不到锁时 `sync` 立即返回 `synced: true`（另一处正在同步），所以控制台必须以轮询 `status` 为准。
+- `Reconcile` 在整个远程调用期间（最长 90 秒）占着一个数据库连接和事务；所有节点每 3 秒对每个运行环境（账号 + 未认领草稿）各发一次 `GET status`。账号多时需要关注。
+- ~~49.4 依赖业务容器的报错文字~~：已取消。核心不再匹配任何报错文字，只认业务容器 / 控制器的英文错误代码（§49.12）。
 
-### 49.4 授权会话的保存与恢复
+### 49.4 授权会话（已改）
 
-业务容器每个账号只保留一个未完成的登录：未完成时再 `start` 会被拒绝（直到完成、取消或 10 分钟过期），而 `cancel` 又必须带 session_id。控制台刷新后丢了 session_id 就既不能重开也不能取消。因此核心（不改容器镜像）：
-
-- `start` 成功后把 `{session_id, url, expires_at}` 存到 Redis `ccgateway:auth:<accountID>`，TTL 到 `expires_at` 为止。
-- `start` 时容器回"已有待完成的授权"且有保存的未过期会话：直接返回该会话（200）。没有保存的会话（例如 Redis 丢了）时照常返回容器的 400，管理员可用 `logout` 清掉容器里的登录后重来。
-- `complete` / `cancel` 未带 `session_id` 时用保存的会话。
-- `complete` / `cancel` / `logout` 成功后删除保存的会话；`cancel` 失败、或 `complete` 因 code#state 格式以外的原因失败（容器在这些情况下已结束会话）也删除。code#state 格式错误时容器保留会话，核心也保留，可以重新粘贴。
-- `GET .../session` 读保存的会话，供刷新后恢复。
+第一版核心把 `start` 返回的会话存在 Redis `ccgateway:auth:<accountID>`，靠容器的中文报错判断"已有待完成的授权"。**已删除**：业务容器现在自己提供 `GET /admin/auth/session`，`start` 幂等（有未过期登录时返回同一个会话），`complete` / `cancel` 的 `session_id` 可省略，核心只做透传。升级后 Redis 里残留的 `ccgateway:auth:*` 键会自然过期，无需清理。
 
 ### 49.5 权限
 
@@ -2976,6 +2972,163 @@ claude-oauth 插件原来有个每 30 分钟跑一次的 `refresh_tokens` 任务
 - 每账号容器模式：跳过该检查（控制器上没有这个路径，原来总是 503），直接建 `managed` 账号；创建即 Kick（49.1），返回 201 与账号详情（含 `id`）。之后在账号上授权。
 - 请求体新增可选 `proxy_id` / `proxy_url`（同 `POST /accounts`，§21.4），每账号容器模式下应当提供，否则账号是 `blocked`。
 - 路由仍要求 `settings:manage`，处理函数另查 `account:create`。修正：原来 `create` 按路由命中的 `settings:manage` 判定范围，即使调用者持有 `account:create` 也被当作 own 级（受 §21.3.1 限制，绑定分组要 `group:manage` / `account:group:bind`、无受限设置的类型要 `account:relay`）；现在已核对过 `account:create`，按全部级创建。
+- 共享 CCGateway 未配置或未授权时的 503 现在是英文 message，`details.reason: not_configured`。`connect` 不接受 `ccgateway_runtime`（草稿流程用 `POST /accounts`）。
+
+### 49.7 运行环境 key
+
+一个运行环境 = 远端 Docker 主机上的 app 容器 + egress 容器 + 内部网络 + 数据卷，命名 `ccg-<key>-<role>`。
+
+- 已有账号：key = 账号 id（`^[1-9][0-9]{0,17}$`），不变。
+- 草稿（编辑器在账号存在前创建）：key = `d` + 16 位小写十六进制（`^d[0-9a-f]{16}$`），随机。
+- 保存账号时认领草稿：账号此后一直用草稿的 key（容器不改名，OAuth 登录在数据卷里）。
+
+迁移 `0032_ccgateway_runtimes.sql`（只加表，旧核心不读它）：
+
+```sql
+CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
+  key          text PRIMARY KEY,
+  account_id   bigint UNIQUE REFERENCES accounts(id),
+  proxy_id     bigint,
+  created_by   bigint,
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  last_seen_at timestamptz NOT NULL DEFAULT now(),
+  adopted_at   timestamptz
+);
+```
+
+账号的运行环境 key = `ccgateway_runtimes.key`（`account_id` = 该账号），否则账号 id。核心内所有按运行环境的操作都以 key 为单位：`desired`、`Reconcile`（`Reconcile(ctx, key)`，传账号 id 时先解析成该账号的 key）、控制器请求路径 `/accounts/<key>/...`、模型请求 `/accounts/<key>/v1/messages`、`Run` 的 3 秒扫描（每个 ccgateway 账号一个 key + 每个未认领草稿）、`Kick(key)`。
+
+草稿的期望状态：代理取草稿行的 `proxy_id`；`enabled` = 代理存在且未停用（否则 `blocked`，原因 `no_proxy` / `proxy_disabled`）；`auth = {"mode":"oauth"}`；修订号 = sha256(`draft|key|proxy_id|proxy.updated_at|proxy.status`)，任何节点都能算出同一个值。认领后改用账号的期望状态（账号的代理与草稿不同时以账号为准，下一次 reconcile 换出口）。
+
+### 49.8 流程（新建 `ccgateway/managed` 账号）
+
+1. 选代理（必选）→ `POST /system/ccgateway/drafts {proxy_id}` 建草稿，核心立即 Kick。
+2. 轮询 `GET drafts/:key/status` 到 `ready`（可先 `POST drafts/:key/sync`）。
+3. `POST drafts/:key/start` 取授权链接（或 `GET drafts/:key/session` 取已有的），用户粘贴 `code#state` → `POST drafts/:key/complete`。
+4. `GET drafts/:key/health` 报 `logged_in: true` 后保存按钮才可用；保存时 `POST /accounts` 带 `ccgateway_runtime: "<key>"`（§49.10）。
+5. 关闭编辑器、切换账号类型或失败时 `DELETE drafts/:key`（尽力而为，剩下的由清理任务处理，§49.13）。草稿存在期间改代理调 `PUT drafts/:key`。页面刷新会丢掉草稿（由清理任务删除）。
+
+编辑已保存的账号沿用 §49.1/§49.2 的按账号流程（状态、重新授权）。
+
+### 49.9 草稿接口
+
+权限：`settings:manage`、`account:create`、`account:own:create` 任一（`Router.PermAny`）。草稿只对创建者可见；持有 `settings:manage` 的调用者看得到所有草稿；其他人（以及已认领、已删除、不存在的 key、数字 key）一律 404，`details.reason: draft_not_found`。**每次草稿调用（含 GET status/health/session）都更新 `last_seen_at`**——控制台在草稿存在期间每 60 秒发一次 `GET status` 作心跳，用户在授权后填写其他字段时草稿不会被当作闲置清理。
+
+| 方法 | 路径 | 请求 → 结果 |
+|---|---|---|
+| POST | `/system/ccgateway/drafts` | `{proxy_id}` → 201 `{key}`；立即 Kick |
+| PUT | `/system/ccgateway/drafts/:key` | `{proxy_id}` → `{key}`；重新 Kick |
+| DELETE | `/system/ccgateway/drafts/:key` | → 204；在控制器上删除运行环境并删行。控制器删不掉时行保留并标记为过期（`last_seen_at` 提前一天），返回 503 + reason，清理任务下一分钟重试 |
+| GET | `/system/ccgateway/drafts/:key/status` | `{key, status: creating\|ready\|blocked, reason?, container}` |
+| GET | `/system/ccgateway/drafts/:key/health` | `{healthy, logged_in, auth_method}` |
+| GET | `/system/ccgateway/drafts/:key/session` | `{session_id, url, expires_at}` 或 `null` |
+| POST | `/system/ccgateway/drafts/:key/{sync,start,complete,cancel}` | 同账号接口（§49.2）；草稿没有 `logout` |
+
+`proxy_id` 校验（POST / PUT）：缺少或 ≤0 → 400 `no_proxy`；不存在或调用者不可见 → 400 `proxy_not_found`；已停用 → 400 `proxy_disabled`。可见性与 `POST /accounts` 相同（§21.4）：持有 `account:create` 时任何存在的代理都行；否则 `proxy:read` 看全部，`proxy:own:read` / `proxy:own:manage` 只看自己建的，都没有则看不到任何代理。草稿只接受 `proxy_id`，不支持 `proxy_url`。未开启 `account_runtimes` 时 `POST drafts` 返回 503 `not_configured`，不建行。
+
+### 49.10 `POST /accounts` 的 `ccgateway_runtime`
+
+`POST /accounts` 接受 `"ccgateway_runtime": "<draft key>"`（空串等于不传），只用于 `plugin_key=ccgateway, type=managed`，否则 400 字段错误（`field: ccgateway_runtime`）；`PATCH` 带它一律 400。要求：草稿存在、是调用者建的（或调用者持有 `settings:manage`）、未被认领，且其容器 `GET admin/status` 报 `logged_in=true`。否则 400 `invalid_argument`，`details.reason` = `draft_not_found`（不存在 / 不是调用者的 / 已认领 / 已删除）或 `draft_not_authorized`（未登录，或无法确认：容器未就绪、运行环境关闭、控制器不可达、代理停用）。插入账号与认领（`account_id`、`adopted_at`）在同一个事务里提交；事务内认领失败（并发清理或重复认领）整个创建回滚并返回 `draft_not_found`。创建成功后 Kick 该账号（解析为草稿 key）。不带该字段时旧流程（先保存、再在编辑器里授权）照常可用。
+
+### 49.11 状态
+
+- 账号 `status`：`ready` / `pending` / `blocked`（§49.2，不变）。
+- 草稿 `status`：`creating`（控制器尚未按当前修订号就绪，含控制器还没有这个运行环境）/ `ready` / `blocked`（附 `reason`：`no_proxy` / `proxy_disabled`）。注意账号与草稿对"未就绪"用了不同的词（`pending` 与 `creating`），这是本契约的原样定义。
+- `sync`：`{synced: true}` 或 `{synced: true, status: "blocked", reason}`。
+
+### 49.12 错误
+
+所有 ccgateway 运行环境接口（账号、草稿、`POST /accounts` 的草稿校验）由核心自己产生的错误都是英文 message，原因放 `details.reason`：
+
+```json
+{"error":{"code":"invalid_argument","message":"<English sentence>","details":{"reason":"<code>"}}}
+```
+
+| reason | HTTP | 含义 |
+|---|---|---|
+| `not_configured` | 503 | 未开启 `account_runtimes`、读不到配置，或连不上控制器（SSH / Docker 主机） |
+| `not_synchronized` | 503 | 运行环境尚未按当前修订号就绪（控制器 409） |
+| `sync_failed` | 503 | `sync` 失败：容器创建或代理连通性检查未通过 |
+| `runtime_unavailable` | 503 | 控制器 / 容器的其他失败（含控制器没给出代码的 5xx） |
+| `no_proxy` / `proxy_disabled` / `account_disabled` | 400 | 运行环境被阻断；草稿 POST/PUT 的代理校验也用前两个 |
+| `proxy_not_found` | 400 | 草稿的 `proxy_id` 不存在或调用者不可见（契约草案没有这个代码，实现时补的） |
+| `api_key_account` | 400 | `apikey` 账号不做 OAuth 授权 |
+| `draft_not_found` | 404 / 400 | 草稿接口 404；`POST /accounts` 400 |
+| `draft_not_authorized` | 400 | `POST /accounts` 时草稿未登录或无法确认 |
+
+透传规则：
+
+- 业务容器或控制器回 400：其错误代码（业务容器 `{"type":"error","error":{"type":"<code>","message":"..."}}`，或控制器 `{"error":"<code>"}`）原样放进 `details.reason`（**未知代码也原样透传**），message 用容器给的英文（去控制字符、最多 200 字；没有时用核心的英文说明）。不是小写标识符的代码（旧镜像发的是句子）丢弃，只返回 400 和通用英文 message。业务容器的代码见 §49.14。
+- 控制器 409 → 503 `not_synchronized`（代码为 `api_key_account` 时 400 `api_key_account`）。
+- 其他非 200 → 503，`details.reason` 为控制器给出的代码（例如 `image_pull_failed`、`runtime_unavailable`、`unauthorized`），没有代码时 `runtime_unavailable`。
+- `GET session` 遇到 404（旧镜像没有该端点）返回 `null`。
+
+核心不再在 Redis 里存登录会话，也不再匹配任何报错文字。CCGateway 其他接口（`remote-*`、共享容器的 `auth/*`、`proxy`、`connect`）的 message 也改成了英文。
+
+### 49.13 清理任务
+
+每分钟一次，只在 `account_runtimes` 开启时运行，并且（有集群锁时）通过 `Locker.TryLock("ccgateway:drafts:sweep", 2m)` + `KeepLock` 保证同一时刻只有一个节点在扫；托管核心只在获准后台工作（`CanWork`）时扫。
+
+1. `account_id IS NULL` 且（`last_seen_at` 早于 15 分钟前，或 `created_at` 早于 2 小时前）的草稿：在一个事务里拿该 key 的 advisory 锁（`pg_try_advisory_xact_lock`，与 `Reconcile` 同一把；拿不到就跳过，下一轮再试）→ `DELETE ... WHERE key=$1 AND account_id IS NULL` → 控制器 `DELETE /accounts/<key>` → 成功才提交。这样正在 reconcile 的运行环境不会被删到一半又被重建；同时进行的 `POST /accounts` 认领要等这一行的锁，之后找不到草稿而返回 `draft_not_found`；反过来认领先提交时清理的 DELETE 删不到行，也就不碰控制器。控制器失败则回滚，行保留。控制器回 404 视为已删除（没有该端点的旧控制器也不可能建过草稿运行环境）。
+2. 孤儿：先读控制器 `GET /accounts`，再查表；控制器列出的草稿 key（只认 `^d[0-9a-f]{16}$`）在表里**没有任何行**（已认领的也算有）、且 `created_at` 早于 15 分钟前的，在同一把 advisory 锁下再确认一次没有行后删除。`created_at` 解析不了的跳过。控制器没有 `GET /accounts`（404/405）时跳过这一步。
+3. 数字 key 和已认领的运行环境**绝不**被清理任务删除（删除账号数据仍是管理员的显式操作；控制器对数字 key 的 `DELETE` 也返回 405）。
+
+### 49.14 业务容器管理接口（`tools/ccgateway/auth.go`）与控制器接口（`runtime/manager.py`）
+
+业务容器（Bearer 管理密钥）：
+
+- `GET /admin/status` → `{healthy, logged_in, auth_method}`。
+- `GET /admin/auth/session` → `{"session":{session_id,url,expires_at}}` 或 `{"session":null}`。
+- `POST /admin/auth/start` → `{session_id,url,expires_at}`；有未过期登录时返回同一个会话（幂等）。
+- `POST /admin/auth/complete {code, session_id?}` → `{success:true}`。带错 `session_id` 时返回 `session_not_found`，但保留当前会话。
+- `POST /admin/auth/cancel {session_id?}` → `{success:true}`，幂等；带错 `session_id` 也返回成功且不取消当前会话。
+- `POST /admin/auth/logout` → `{success:true}`。
+- 错误 `{"type":"error","error":{"type":"<code>","message":"<English>"}}`：`invalid_request`、`session_not_found`（会话随之没有）、`invalid_code`（会话保留，可重贴）、`auth_rejected`、`auth_process_failed`、`invalid_auth_url`（这三个之后会话结束）、`status_unavailable`、`logout_failed`；401 为 `authentication_error`，未知端点 404 为 `not_found_error`。
+
+控制器（`127.0.0.1:8787`）：
+
+- 所有接受账号 id 的地方都接受 key `^(?:[1-9][0-9]{0,17}|d[0-9a-f]{16})$`，路径仍是 `/accounts/<key>/...`；透传增加 `GET /accounts/<key>/admin/auth/session`。
+- `DELETE /accounts/<key>`：只接受草稿 key，删除 app/egress 容器、网络、数据卷和状态目录；幂等，什么都没有时也 `200 {"deleted":true}`；数字 key 405。
+- `GET /accounts` → `{"runtimes":[{key,status,created_at}]}`，每个状态目录一项（`status` 为 `ready`/`pending`/`blocked`；`created_at` 为首次 provision 时间，旧状态和 provision 中途失败的目录用目录 mtime）。
+- app 镜像变化时重建 app 容器（标签指纹包含镜像 id），数据卷与登录保留。
+- 错误 `{"error":"<code>"}`：`unauthorized`、`not_found`、`invalid_request`（400）、`not_synchronized`（409）、`api_key_account`、`image_pull_failed` / `runtime_unavailable`（503）、`method_not_allowed`。
+
+### 49.15 已知问题与部署顺序
+
+- **先升级控制器，再升级核心。** 旧控制器只认数字 key：草稿运行环境建不起来（草稿一直 `creating`），清理时 `DELETE` 得到 404 被视为已删除（行被删，正确，因为旧控制器不可能建过）。
+- **混合版本集群**：旧核心节点不知道 `ccgateway_runtimes`，会按账号 id 为已认领草稿 key 的账号再建一套数字 key 运行环境（未授权、不会被清理），并且把这些账号的模型请求发到 `/accounts/<id>`。滚动升级期间应尽快完成全部节点升级；升级后多出来的 `ccg-<id>-*` 需要管理员手工删除。
+- 已认领的账号被删除（软删除）后，其草稿 key 运行环境与数字 key 一样被阻断，不会被清理任务删除。
+
+### 49.16 运行环境安装 / 升级（2026-10-05，用户要求）
+
+用户决定：容器镜像与控制器发布到 GHCR（`.github/workflows/ccgateway-images.yml`），由核心经已保存的 SSH 连接在 Docker 主机上直接拉取并启动，不再在主机上构建。GHCR 包暂时不能公开期间，可以在主机上手动构建镜像，再用配置里的 `images` 指向这些本地标签，同样用"一键升级"切换。
+
+**镜像引用。** `server/internal/ccgateway/images.go` 固定三个引用 `ghcr.io/sub2api-devs/ccgateway-{app,egress,controller}@sha256:<64 hex>`（测试保证格式）。更新方法：`tools/ccgateway` 的改动推送后，从 "CCGateway images" workflow 的 summary 取三个 digest 替换。CCGateway 远程配置（`ccgateway_remote`）可选字段 `images: {app, egress, controller}`：经 `PUT /system/ccgateway/remote-config` 保存、`GET` 原样返回（未覆盖的为空串）；某一项为空时用固定引用。非空值必须匹配 `^[a-z0-9][a-z0-9._/-]{0,127}(:[A-Za-z0-9._-]{1,128})?(@sha256:[0-9a-f]{64})?$` 或本地镜像 id `^sha256:[0-9a-f]{64}$`，否则保存失败（400）。PUT 不带 `images` 时保留已保存的值，带 `{}`（全空）时恢复固定引用；`mode: disabled` 清空全部配置。生效引用 = 覆盖值 ∪ 固定引用。
+
+**`GET /system/ccgateway/runtime`**（`settings:read`）→
+
+```json
+{"expected":{"app","egress","controller"},
+ "installed":{"controller_image","app_image","egress_image","version"} | null,
+ "up_to_date":bool, "reason"?: "<code>"}
+```
+
+- `expected` 是生效引用。经 SSH 执行固定命令 `docker inspect --type container ccg-controller`，模板只输出 `Config.Image` 和环境变量，**在主机上**用 `grep` 只留 `CCG_APP_IMAGE=` / `CCG_EGRESS_IMAGE=` 两行——同一环境里的 `CCG_CONTROLLER_KEY` 不离开主机，核心既不返回也不记日志。再经 SSH 隧道调控制器 `GET /health`（Bearer 管理密钥）→ `{version, app_image, egress_image}`，以它报告的镜像为准。
+- `up_to_date` = 控制器镜像、app、egress 三者都等于 `expected`（且 health 成功）。
+- `reason`：`ssh_not_configured`（不是 SSH 模式）、`ssh_failed`（SSH 连接 / 认证 / 命令失败）、`controller_unhealthy`（容器在但 `/health` 不通，`installed` 只有 inspect 得到的镜像）。没有 `ccg-controller` 容器时 `installed: null` 且**没有** `reason`（控制台把"`installed: null` + 有 reason"当作状态未知，把"`installed: null` + 无 reason"当作未安装）。主机报告的镜像 / 版本字符串不符合引用格式时显示为 `unknown`。
+
+**`POST /system/ccgateway/runtime/install`**（`settings:manage`，审计 `ccgateway.runtime.install`）。只在 SSH 模式可用（否则 400 `ssh_not_configured`）；同一时刻集群里只有一个安装（`Locker` 锁 `ccgateway:runtime:install`，无 Locker 时本节点互斥），否则 409 `install_in_progress`。安装不随调用方断开而中止（中途中断会让主机没有控制器），整体上限约 18 分钟。步骤：
+
+1. 控制器密钥：配置里已有管理密钥（`admin_key`）就沿用；否则生成 32 字节随机数（hex）先加密存进配置（审计 `ccgateway.config.update`，`fields: ["admin_key"]`；并发时以先保存者为准）。
+2. 经 SSH 执行**固定脚本**：只拼接常量和通过上面正则的镜像引用（单引号包裹，正则排除了引号、空白和 shell 字符），绝不拼接其他输入；脚本作为 `sh -c '<script>'` 的单个参数执行。脚本对三个镜像各先 `docker image inspect`，本地已有就不拉，没有才 `docker pull`（失败 → `image_pull_failed`）；`mkdir -p /opt/ccgateway-runtime && chmod 700`；从 **stdin** 写 `/opt/ccgateway-runtime.env`（先写 `.tmp`、`chmod 600`、再 `mv`），内容为 `CCG_RUNTIME_ROOT=/opt/ccgateway-runtime`、`CCG_APP_IMAGE`、`CCG_EGRESS_IMAGE`、`CCG_CONTROLLER_KEY`、`CCG_CONTROLLER_PORT=8787`（版本已由镜像内置，不写 `CCG_CONTROLLER_VERSION`）——**密钥只走 stdin**，不出现在脚本、命令行或日志里；上次安装若在改名后中断（只剩 `ccg-controller-prev`）先改回原名；旧容器改名 `ccg-controller-prev` 并停止；按原参数启动新容器 `docker run -d --name ccg-controller --restart unless-stopped --network host --env-file /opt/ccgateway-runtime.env -v /var/run/docker.sock:/var/run/docker.sock -v /opt/ccgateway-runtime:/opt/ccgateway-runtime --log-opt max-size=20m --log-opt max-file=3 <controller>`（启动失败时脚本自己删新容器、把 prev 改回并启动，→ `controller_unhealthy`）。脚本结果用标准输出最后一行 `CCG_RESULT=<code>` 报告；stderr 丢弃。
+3. 经 SSH 隧道轮询 `GET /health`，最多 60 秒（每 2 秒），直到报告的 `app_image` / `egress_image` 等于生效引用。成功 → 固定脚本删除 `ccg-controller-prev`；失败 → 回滚脚本删除新容器并把 prev 改回原名启动，返回 503 `controller_unhealthy`，`details.rollback` 为 `restored` / `removed`（之前没有控制器）/ `restore_failed` / `rollback_failed`。
+4. 成功后对所有运行环境（账号 + 未认领草稿）各 Kick 一次：控制器发现 app 镜像变了会重建 app 容器，数据卷（登录）保留。返回 200 与 `GET runtime` 相同的结构。
+
+安装错误（`details.reason`）：`ssh_not_configured`（400）、`install_in_progress`（409）、`ssh_failed` / `image_pull_failed` / `controller_unhealthy` / `install_failed`（其他脚本失败、密钥保存失败）（503）。
+
+`remotedocker.RunScript(ctx, cfg, script, stdin, limit)` 是新增的"带 stdin 执行固定脚本"能力：返回 stdout（有上限，SSH 凭据被替换为 `[REDACTED]`）和退出码；只有连不上 / 认证失败 / 会话失败才返回 error（→ `ssh_failed`）。调用方负责只传固定脚本。
+
+已知限制：安装是同步请求，首次拉取几百 MB 的 app 镜像可能要几分钟；核心不设写超时，但前面的反向代理（Caddy / nginx）若有 60–100 秒的超时，浏览器会先看到网关错误——安装仍会在核心里跑完，之后刷新 `GET runtime` 看结果即可。
 
 ## 50. 账号测试：记录最近一次结果、requested_model（2026-10-05，用户要求；参考 new-api 渠道测试）
 
