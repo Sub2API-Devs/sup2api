@@ -123,6 +123,9 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 			enabledTools = append(enabledTools, req.wireName(tool.Name))
 		}
 	}
+	if req.ToolSearch != "" && req.ToolSearch != "false" {
+		enabledTools = append(enabledTools, "ToolSearch")
+	}
 	sort.Strings(enabledTools)
 	snapshotMode := "off"
 	if p.SnapshotEnabled {
@@ -148,6 +151,17 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 	default:
 		args = append(args, "--thinking", "disabled")
 	}
+	if req.ToolSearch != "" && req.ToolSearch != "false" {
+		for i, arg := range args {
+			if arg == "--max-turns" {
+				args[i+1] = "4"
+			}
+		}
+	}
+	if req.JSONSchema != nil {
+		schema, _ := json.Marshal(req.JSONSchema)
+		args = append(args, "--json-schema", string(schema))
+	}
 	if req.Effort != "" {
 		args = append(args, "--effort", req.Effort)
 	}
@@ -170,10 +184,43 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 		env = os.Environ()
 	}
 	env = r.Proxy.Environment(env)
-	cmd.Env = envWith(env, map[string]string{"CCGATEWAY_READY_FILE": ready, "CLAUDE_CODE_MAX_OUTPUT_TOKENS": strconv.Itoa(req.MaxTokens), "DISABLE_AUTOUPDATER": "1", "DISABLE_AUTO_COMPACT": "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "ENABLE_TOOL_SEARCH": "false", "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "0"}, "CLAUDE_CODE_RESUME_INTERRUPTED_TURN", "CLAUDE_CODE_RESUME_FROM_SESSION", "CLAUDE_CODE_PLUGIN_DIRS", "ANTHROPIC_BETAS", "CLAUDE_CODE_EXTRA_BODY", "CLAUDE_CODE_EFFORT_LEVEL", "CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING")
-	cmd.Env = envWith(cmd.Env, map[string]string{"ANTHROPIC_BETAS": strings.Join(req.Betas, ",")})
+	cmd.Env = envWith(env, map[string]string{"CCGATEWAY_READY_FILE": ready, "CLAUDE_CODE_MAX_OUTPUT_TOKENS": strconv.Itoa(req.MaxTokens), "DISABLE_AUTOUPDATER": "1", "DISABLE_AUTO_COMPACT": "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "ENABLE_TOOL_SEARCH": "false", "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "0"}, "CLAUDE_CODE_RESUME_INTERRUPTED_TURN", "CLAUDE_CODE_RESUME_FROM_SESSION", "CLAUDE_CODE_PLUGIN_DIRS", "ANTHROPIC_BETAS", "CLAUDE_CODE_EXTRA_BODY", "CLAUDE_CODE_EFFORT_LEVEL", "CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING", "CLAUDE_CODE_PROMPT_CACHE_TTL", "CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL", "FORCE_PROMPT_CACHING_5M", "ENABLE_PROMPT_CACHING_1H", "MAX_THINKING_TOKENS", "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING", "CLAUDE_CODE_DISABLE_THINKING", "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS", "MAX_STRUCTURED_OUTPUT_RETRIES", "CLAUDE_CODE_DISABLE_1M_CONTEXT", "CLAUDE_CODE_MAX_CONTEXT_TOKENS", "CCGATEWAY_TOOL_DEFERRAL_FILE")
+	cmd.Env = envWith(cmd.Env, map[string]string{"ANTHROPIC_BETAS": strings.Join(req.Betas, ","), "MAX_STRUCTURED_OUTPUT_RETRIES": "1", "CCGATEWAY_STRUCTURED_OUTPUT": "0", "CCGATEWAY_TOOL_SEARCH": "0"})
+	if req.JSONSchema != nil {
+		cmd.Env = envWith(cmd.Env, map[string]string{"CCGATEWAY_STRUCTURED_OUTPUT": "1"})
+	}
+	if req.PromptCacheTTL != "" {
+		cmd.Env = envWith(cmd.Env, map[string]string{"CLAUDE_CODE_PROMPT_CACHE_TTL": req.PromptCacheTTL})
+	}
+	switch str(req.Thinking, "type") {
+	case "enabled":
+		cmd.Env = envWith(cmd.Env, map[string]string{"MAX_THINKING_TOKENS": fmt.Sprint(req.Thinking["budget_tokens"]), "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING": "1"})
+	case "adaptive":
+		// Absence of a fixed budget leaves the model in adaptive mode.
+	default:
+		cmd.Env = envWith(cmd.Env, map[string]string{"MAX_THINKING_TOKENS": "0"})
+	}
+	for _, beta := range req.Betas {
+		if beta == "context-1m-2025-08-07" {
+			cmd.Env = envWith(cmd.Env, map[string]string{"CLAUDE_CODE_DISABLE_1M_CONTEXT": "0", "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "1000000"})
+		}
+	}
 	if req.FineGrainedTools {
 		cmd.Env = envWith(cmd.Env, map[string]string{"CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING": "1"})
+	}
+	if req.ToolSearch != "" && req.ToolSearch != "false" {
+		deferred := Object{}
+		for _, tool := range req.Tools {
+			if tool.DeferLoading != nil {
+				deferred[req.wireName(tool.Name)] = *tool.DeferLoading
+			}
+		}
+		data, _ := json.Marshal(deferred)
+		path := filepath.Join(dir, "tool-deferral.json")
+		if err := os.WriteFile(path, data, 0600); err != nil {
+			return nil, err
+		}
+		cmd.Env = envWith(cmd.Env, map[string]string{"ENABLE_TOOL_SEARCH": req.ToolSearch, "CCGATEWAY_TOOL_SEARCH": "1", "CCGATEWAY_TOOL_DEFERRAL_FILE": path})
 	}
 	stdin, e := cmd.StdinPipe()
 	if e != nil {
@@ -202,6 +249,7 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 		_, e = stdin.Write(b)
 		return e
 	}
+
 	servers := req.sdkMCPServers()
 	initID := uuid()
 	if e = write(Object{"type": "control_request", "request_id": initID, "request": Object{"subtype": "initialize", "systemPrompt": req.System, "systemPromptSnapshot": p.SnapshotEnabled, "sdkMcpServers": servers, "hooks": Object{}, "supportedDialogKinds": []string{}, "promptSuggestions": false, "excludeDynamicSections": true}}); e != nil {
@@ -211,6 +259,18 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 	scan.Buffer(make([]byte, 64*1024), 32<<20)
 	initialized := false
 	acc := &Accumulator{}
+	var structuredEvents []Object
+	searchUsage := Object{}
+	searchRounds := 0
+	responseReq := *req
+	if req.ToolSearch != "" && req.ToolSearch != "false" {
+		responseReq.Tools = append(append([]Tool(nil), req.Tools...), Tool{Name: "ToolSearch", Schema: Object{"type": "object"}})
+		responseReq.Native = map[string]bool{}
+		for name, allowed := range req.Native {
+			responseReq.Native[name] = allowed
+		}
+		responseReq.Native["ToolSearch"] = true
+	}
 	for scan.Scan() {
 		line := scan.Bytes()
 		if len(line) == 0 {
@@ -259,17 +319,55 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 			if acc.Done {
 				return nil, fmt.Errorf("unexpected post-completion CLI event: %s", str(event, "type"))
 			}
-			if e = acc.push(event, req); e != nil {
+			searchMessage := isInternalSearch(Object{"content": acc.Blocks})
+			if str(event, "type") == "message_delta" && searchRounds > 0 && !searchMessage {
+				mergeSearchUsage(event, searchUsage, acc.Message)
+			}
+			if e = acc.push(event, &responseReq); e != nil {
 				return nil, e
 			}
 			if acc.Done {
-				continue // Wait for native persistence, with max-turns still bounded to one.
+				if isInternalSearch(acc.Message) {
+					for _, block := range acc.Blocks {
+						if str(block, "type") == "tool_use" && str(block, "name") != "ToolSearch" {
+							return nil, fmt.Errorf("tool discovery cannot execute client tools in the same response")
+						}
+					}
+					searchRounds++
+					if searchRounds > 3 {
+						return nil, fmt.Errorf("tool discovery exceeded 3 rounds")
+					}
+					addSearchUsage(searchUsage, acc.Message)
+					acc = &Accumulator{}
+					structuredEvents = nil
+				}
+				continue // Wait for native persistence; discovery rounds remain bounded.
 			}
-			if e = emit(event); e != nil {
+			if req.JSONSchema != nil || (req.ToolSearch != "" && req.ToolSearch != "false") {
+				structuredEvents = append(structuredEvents, event)
+			} else if e = emit(event); e != nil {
 				return nil, e
 			}
 		case "result":
+			if req.JSONSchema != nil && !acc.Done {
+				if e = acc.finishStructured(f, req); e != nil {
+					return nil, e
+				}
+			}
 			if acc.Done {
+				if req.JSONSchema != nil || (req.ToolSearch != "" && req.ToolSearch != "false") {
+					if len(acc.Structured) > 0 && !acc.HasClientTool {
+						if e = emitStructuredMessage(acc.Message, emit); e != nil {
+							return nil, e
+						}
+					} else {
+						for _, event := range structuredEvents {
+							if e = emit(event); e != nil {
+								return nil, e
+							}
+						}
+					}
+				}
 				if sid := str(f, "session_id"); sid != "" && p.Mode == "rebuild" {
 					// Importing an external JSONL may assign a fresh native session ID.
 					p.SessionID = sid
@@ -307,6 +405,9 @@ func controlReply(f Object, r *Request) Object {
 	switch str(q, "subtype") {
 	case "can_use_tool":
 		payload = Object{"behavior": "deny", "message": "Tools are executed by the API client", "toolUseID": q["tool_use_id"]}
+		if structuredBlock(str(q, "tool_name"), r) || (str(q, "tool_name") == "ToolSearch" && r.ToolSearch != "" && r.ToolSearch != "false") {
+			payload = Object{"behavior": "allow", "updatedInput": q["input"]}
+		}
 	case "mcp_message":
 		payload = Object{"mcp_response": sdkMCPReply(q, r)}
 	case "request_user_dialog":

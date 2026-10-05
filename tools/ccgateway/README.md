@@ -155,3 +155,24 @@ SDK 服务按请求声明分组，不连接客户端实际的 MCP 地址；工�
 本次验证：Go 测试与 vet 通过；Claude Code 2.1.288 对本地模拟上游的 23 次调用覆盖正常续聊、旧节点分支、中间编辑、全量导入、system/MCP 覆盖、移除旧工具、原生/并行工具回传、重启恢复、无自定义会话头、调用者隔离及输出上限的单次推理约束。远程控制器 4 个单元测试通过。
 
 在 cc-max 的隔离账号容器中，经实际 sing-box 和账号代理访问真实上游，五轮客户端工具测试的 cache_read_input_tokens 为 0、8639、8808、8950、9120；四次客户端文件操作全部执行并验证，最终文件内容和早期历史标识正确。此验证未部署至 OVH 公网入口，生产账号镜像未更换。
+
+## API 能力映射（2026-10-06）
+
+插件设置按请求体、Anthropic Beta 请求头和 Claude Code 环境变量/启动参数展示。默认忽略未知 Beta、忽略 speed，未知请求字段按配置拒绝或忽略；不使用 CLAUDE_CODE_EXTRA_BODY，也不接受任意环境变量。默认 15 条 Beta 处理规则与官方 SDK 的 50 项参考目录分开展示，参考目录不代表已经实现全部 API 能力。
+
+| API 参数 | Claude Code 配置 |
+| --- | --- |
+| max_tokens | CLAUDE_CODE_MAX_OUTPUT_TOKENS |
+| thinking.budget_tokens | MAX_THINKING_TOKENS、CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING |
+| cache_control.ttl | CLAUDE_CODE_PROMPT_CACHE_TTL（5m/1h） |
+| output_config.effort | --effort |
+| speed | --settings fastMode（需管理员开启） |
+| output_config.format、旧 output_format | --json-schema、MAX_STRUCTURED_OUTPUT_RETRIES=1 |
+| tools[].defer_loading、advanced-tool-use Beta | ENABLE_TOOL_SEARCH、tool.describe |
+| 已允许的额外 Beta | ANTHROPIC_BETAS |
+| fine-grained-tool-streaming Beta | CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING |
+| context-1m Beta | CLAUDE_CODE_DISABLE_1M_CONTEXT、CLAUDE_CODE_MAX_CONTEXT_TOKENS |
+
+结构化输出使用 CLI 内部纯格式校验工具，成功后再次校验 JSON Schema 并返回 text JSON；禁止外部 schema 引用。此类请求按完整客户端历史重建，不复用含内部格式工具的原生检查点。工具搜索只允许发现已注册的定义，最多 3 次；客户端工具执行仍被拦截，内部 ToolSearch 不对外返回，额外模型调用计入用量。两种模式均缓冲 SSE，验证完后输出标准事件。提示缓存断点由 Claude Code 管理，不保证客户端逐块断点或上游命中。Files、Batch、托管 agents、服务端工具等专用 API 并非通过 Beta 名称就能实现。
+
+官方依据：[环境变量](https://code.claude.com/docs/en/env-vars)、[结构化输出](https://code.claude.com/docs/en/agent-sdk/structured-outputs)、[工具搜索](https://code.claude.com/docs/en/agent-sdk/tool-search)。Claude Code 2.1.288 的隔离回归共 46 次本地模拟模型请求，验证普通/SSE 结构化输出和工具搜索用量；无真实云端模型调用。

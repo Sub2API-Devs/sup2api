@@ -55,7 +55,7 @@ func TestRunnerRequestPolicyMapping(t *testing.T) {
 	capture := filepath.Join(dir, "capture.json")
 	runner := &Runner{CLI: cli, Env: envWith(os.Environ(), map[string]string{
 		"CCG_TEST_CLI_TAIL": "1", "CLAUDE_CONFIG_DIR": filepath.Join(dir, "config"), "CCG_TEST_POLICY_CAPTURE": capture,
-		"ANTHROPIC_BETAS": "inherited-unsupported-beta", "CLAUDE_CODE_EXTRA_BODY": `{"temperature":0.1}`, "CLAUDE_CODE_EFFORT_LEVEL": "max",
+		"ANTHROPIC_BETAS": "inherited-unsupported-beta", "CLAUDE_CODE_EXTRA_BODY": `{"temperature":0.1}`, "CLAUDE_CODE_EFFORT_LEVEL": "max", "CLAUDE_CODE_PROMPT_CACHE_TTL": "1h", "MAX_THINKING_TOKENS": "9999", "CCGATEWAY_TOOL_DEFERRAL_FILE": "inherited-path",
 	})}
 	p := defaultRequestPolicy()
 	p.AllowFast = true
@@ -64,6 +64,9 @@ func TestRunnerRequestPolicyMapping(t *testing.T) {
 	v := basic()
 	v["speed"] = "fast"
 	v["output_config"] = Object{"effort": "low"}
+	v["cache_control"] = Object{"type": "ephemeral", "ttl": "1h"}
+	v["thinking"] = Object{"type": "enabled", "budget_tokens": 1024}
+	v["max_tokens"] = 2048
 	body, _ := json.Marshal(v)
 	req, err := parsePolicyRequest(body, h)
 	if err != nil {
@@ -86,6 +89,9 @@ func TestRunnerRequestPolicyMapping(t *testing.T) {
 	if str(o, "extra") != "" || str(o, "effort_env") != "" || str(o, "streaming") != "1" || str(o, "betas") != "fine-grained-tool-streaming-2025-05-14" {
 		t.Fatal("request environment leaked or ignored policy", o)
 	}
+	if str(o, "cache_ttl") != "1h" || str(o, "thinking_budget") != "1024" || str(o, "structured_retries") != "1" || str(o, "deferral") != "" {
+		t.Fatal("official environment mapping incorrect", o)
+	}
 	args := o["args"].([]any)
 	settingsFound, effortFound := false, false
 	for i, a := range args {
@@ -100,6 +106,22 @@ func TestRunnerRequestPolicyMapping(t *testing.T) {
 	if !effortFound || !settingsFound {
 		t.Fatal("CLI did not receive capability settings")
 	}
+	next := parsed(t, basic())
+	_, err = runner.run(ctx, next, &Prepared{Work: dir, SessionID: uuid(), InputUUID: uuid()}, dir, func(Object) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err = os.ReadFile(capture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clean, err := decodeObject(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if str(clean, "cache_ttl") != "" || str(clean, "thinking_budget") != "0" || str(clean, "streaming") != "" || str(clean, "deferral") != "" {
+		t.Fatal("request settings leaked into the next request", clean)
+	}
 }
 func TestRequestPolicyFields(t *testing.T) {
 	p := defaultRequestPolicy()
@@ -113,7 +135,7 @@ func TestRequestPolicyFields(t *testing.T) {
 	if e != nil || r.Fast == nil || !*r.Fast || r.Effort != "xhigh" {
 		t.Fatal("supported fields not mapped", e)
 	}
-	v["output_config"] = Object{"effort": "low", "format": Object{"type": "json_schema"}}
+	v["output_config"] = Object{"effort": "low", "format": Object{"type": "json_schema", "schema": Object{"type": "object"}}}
 	v["temperature"] = 0.7
 	body, _ = json.Marshal(v)
 	if _, e = parsePolicyRequest(body, h); e == nil {
@@ -182,5 +204,39 @@ func TestRequestPolicyInvalidConfiguration(t *testing.T) {
 		if _, e := parsePolicyRequest([]byte(`{}`), policyHeaders(p)); e == nil {
 			t.Fatal("bad policy accepted")
 		}
+	}
+}
+
+func TestStructuredOutputAndCachePolicy(t *testing.T) {
+	v := basic()
+	v["output_config"] = Object{"format": Object{"type": "json_schema", "schema": Object{"type": "object", "properties": Object{"ok": Object{"type": "boolean"}}, "required": []string{"ok"}, "additionalProperties": false}}}
+	v["cache_control"] = Object{"type": "ephemeral", "ttl": "1h"}
+	raw, _ := json.Marshal(v)
+	req, err := parsePolicyRequest(raw, http.Header{})
+	if err != nil || req.JSONSchema == nil || req.PromptCacheTTL != "1h" {
+		t.Fatalf("missing capability mapping: %+v %v", req, err)
+	}
+	original := req.configKey()
+	req.JSONSchema = Object{"type": "string"}
+	if req.configKey() == original {
+		t.Fatal("structured output schema shared incompatible history")
+	}
+	v["output_format"] = v["output_config"].(Object)["format"]
+	raw, _ = json.Marshal(v)
+	if _, err = parsePolicyRequest(raw, http.Header{}); err == nil {
+		t.Fatal("conflicting schemas accepted")
+	}
+	v = basic()
+	v["output_config"] = Object{"format": Object{"type": "json_schema", "schema": "not-a-schema"}}
+	raw, _ = json.Marshal(v)
+	if _, err = parsePolicyRequest(raw, http.Header{}); err == nil {
+		t.Fatal("invalid schema accepted")
+	}
+	v = basic()
+	v["tools"] = []Object{{"name": "example", "input_schema": Object{"type": "object", "properties": Object{"cache_control": Object{"type": "string"}}}}}
+	raw, _ = json.Marshal(v)
+	req, err = parsePolicyRequest(raw, http.Header{})
+	if err != nil || req.PromptCacheTTL != "" {
+		t.Fatal("schema properties mistaken for cache policy", err)
 	}
 }

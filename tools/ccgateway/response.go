@@ -6,13 +6,15 @@ import (
 )
 
 type Accumulator struct {
-	Message Object
-	Blocks  []Object
-	Inputs  map[int]string
-	Closed  map[int]bool
-	Stopped bool
-	Done    bool
-	Bytes   int
+	Message       Object
+	Blocks        []Object
+	Inputs        map[int]string
+	Closed        map[int]bool
+	Stopped       bool
+	Done          bool
+	Bytes         int
+	Structured    map[int]bool
+	HasClientTool bool
 }
 
 func integer(v any) (int, bool) {
@@ -56,6 +58,7 @@ func (a *Accumulator) push(e Object, r *Request) error {
 			a.Message[k] = v
 		}
 		a.Inputs = map[int]string{}
+		a.Structured = map[int]bool{}
 		a.Closed = map[int]bool{}
 		a.Blocks = []Object{}
 		return nil
@@ -72,6 +75,11 @@ func (a *Accumulator) push(e Object, r *Request) error {
 		}
 		if i > 0 && !a.Closed[i-1] {
 			return fmt.Errorf("overlapping blocks")
+		}
+		if str(block, "type") == "tool_use" && structuredBlock(str(block, "name"), r) {
+			a.Structured[i] = true
+			block = Object{"type": "text", "text": ""}
+			e["content_block"] = block
 		}
 		switch str(block, "type") {
 		case "text", "thinking", "redacted_thinking":
@@ -90,6 +98,7 @@ func (a *Accumulator) push(e Object, r *Request) error {
 				return fmt.Errorf("model requested an undeclared tool")
 			}
 			block["name"] = name
+			a.HasClientTool = true
 		default:
 			return fmt.Errorf("unsupported response block")
 		}
@@ -105,6 +114,10 @@ func (a *Accumulator) push(e Object, r *Request) error {
 			return fmt.Errorf("invalid block delta")
 		}
 		block := a.Blocks[i]
+		if a.Structured[i] && str(d, "type") == "input_json_delta" {
+			d = Object{"type": "text_delta", "text": str(d, "partial_json")}
+			e["delta"] = d
+		}
 		switch str(d, "type") {
 		case "text_delta":
 			if str(block, "type") != "text" {
@@ -149,6 +162,14 @@ func (a *Accumulator) push(e Object, r *Request) error {
 		d, ok := e["delta"].(map[string]any)
 		if !ok || str(d, "stop_reason") == "" {
 			return fmt.Errorf("missing stop reason")
+		}
+		if len(a.Structured) > 0 && !a.HasClientTool && str(d, "stop_reason") == "tool_use" {
+			d["stop_reason"] = "end_turn"
+		}
+		if r.JSONSchema != nil && !a.HasClientTool && str(d, "stop_reason") == "end_turn" {
+			if err := validateStructuredText(r.JSONSchema, a.Blocks); err != nil {
+				return err
+			}
 		}
 		for k, v := range d {
 			a.Message[k] = v

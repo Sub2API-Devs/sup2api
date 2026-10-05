@@ -277,7 +277,7 @@ func prepareHistory(r *Request, c *HistoryCache, logical, dir, version string) (
 		return nil, e
 	}
 	var prior *Snapshot
-	for n := len(hashes) - 2; n >= 0; n-- {
+	for n := len(hashes) - 2; r.JSONSchema == nil && n >= 0; n-- {
 		if r.Messages[n].Role != "assistant" {
 			continue
 		}
@@ -365,6 +365,11 @@ func (p *Prepared) release() {
 	}
 }
 func (p *Prepared) commit(r *Request, answer Object, c *HistoryCache, logical, dir, version string, started time.Time) error {
+	if r.JSONSchema != nil {
+		// API text differs from the CLI synthetic-tool transcript; rebuild from client history next time.
+		_ = os.Remove(p.NativePath)
+		return nil
+	}
 	bs, ok := answer["content"].([]Object)
 	if !ok {
 		return fmt.Errorf("missing assistant content")

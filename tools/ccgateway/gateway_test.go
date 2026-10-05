@@ -230,6 +230,16 @@ func TestRealCLI(t *testing.T) {
 		last, _ := ms[len(ms)-1].(map[string]any)
 		raw, _ := json.Marshal(last)
 		content := []Object{{"type": "text", "text": "fixture answer"}}
+		for _, value := range v["tools"].([]any) {
+			tool, _ := value.(map[string]any)
+			if str(tool, "name") == "StructuredOutput" {
+				content = []Object{{"type": "tool_use", "id": "toolu_format", "name": "StructuredOutput", "input": Object{"ok": true}}}
+				break
+			}
+		}
+		if bytes.Contains(raw, []byte("SEARCH_TOOL")) && !bytes.Contains(raw, []byte("tool_result")) {
+			content = []Object{{"type": "tool_use", "id": "toolu_search", "name": "ToolSearch", "input": Object{"query": "select:mcp__ccgateway__weather"}}}
+		}
 		if (bytes.Contains(raw, []byte("CALL_TOOL")) || bytes.Contains(raw, []byte("CALL_PARALLEL"))) && !bytes.Contains(raw, []byte("tool_result")) {
 			tools, _ := v["tools"].([]any)
 			name := ""
@@ -873,6 +883,50 @@ func TestRealCLI(t *testing.T) {
 	}
 	betaHeader = ""
 	policyJSON = ""
+	sessionHeader = "schema-cache-test"
+	structured := basic()
+	structured["output_config"] = Object{"format": Object{"type": "json_schema", "schema": Object{"type": "object", "properties": Object{"ok": Object{"type": "boolean"}}, "required": []string{"ok"}, "additionalProperties": false}}}
+	structured["cache_control"] = Object{"type": "ephemeral", "ttl": "1h"}
+	formatted, _, _ := post(structured, "")
+	blocks, _ := formatted["content"].([]any)
+	if len(blocks) != 1 || str(blocks[0].(map[string]any), "type") != "text" || str(blocks[0].(map[string]any), "text") != `{"ok":true}` {
+		t.Fatalf("structured response leaked internal tool: %v", formatted)
+	}
+	structured["stream"] = true
+	_, formattedStream, _ := post(structured, "")
+	if strings.Contains(formattedStream, "StructuredOutput") || !strings.Contains(formattedStream, "text_delta") {
+		t.Fatalf("invalid structured SSE: %s", formattedStream)
+	}
+	mu.Lock()
+	actual := requests[len(requests)-1]
+	mu.Unlock()
+	actualConfig, _ := actual["output_config"].(map[string]any)
+	hasSchema := actualConfig["format"] != nil
+	for _, value := range actual["tools"].([]any) {
+		tool, _ := value.(map[string]any)
+		hasSchema = hasSchema || str(tool, "name") == "StructuredOutput"
+	}
+	if !hasSchema {
+		t.Fatal("CLI did not receive structured output schema")
+	}
+	sessionHeader = "tool-search-test"
+	searchRequest := basic()
+	searchRequest["messages"] = []any{Object{"role": "user", "content": "SEARCH_TOOL"}}
+	searchRequest["tools"] = []any{Object{"name": "weather", "description": "weather lookup", "input_schema": Object{"type": "object", "properties": Object{"city": Object{"type": "string"}}}, "defer_loading": true}}
+	searched, _, _ := post(searchRequest, "")
+	encodedSearch, _ := json.Marshal(searched)
+	if bytes.Contains(encodedSearch, []byte("ToolSearch")) || !bytes.Contains(encodedSearch, []byte("fixture answer")) {
+		t.Fatalf("internal discovery leaked: %s", encodedSearch)
+	}
+	searchRequest["stream"] = true
+	_, searchStream, _ := post(searchRequest, "")
+	if strings.Contains(searchStream, "ToolSearch") || !strings.Contains(searchStream, "fixture answer") {
+		t.Fatalf("internal discovery leaked in SSE: %s", searchStream)
+	}
+	searchTokens, _ := searched["usage"].(map[string]any)
+	if tokenCount(searchTokens["input_tokens"]) != 40 || tokenCount(searchTokens["output_tokens"]) != 16 {
+		t.Fatalf("tool discovery usage was lost or double counted: %v", searchTokens)
+	}
 	if os.Getenv("CCG_CAPTURE_DIR") != "" {
 		hi := Object{"model": "claude-sonnet-4-6", "max_tokens": 128, "messages": []any{Object{"role": "user", "content": "hi"}}}
 		post(hi, "")

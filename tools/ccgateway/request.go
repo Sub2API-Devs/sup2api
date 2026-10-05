@@ -17,9 +17,10 @@ type Message struct {
 	Content []Object `json:"content"`
 }
 type Tool struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Schema      Object `json:"input_schema"`
+	Name         string `json:"name"`
+	Description  string `json:"description,omitempty"`
+	Schema       Object `json:"input_schema"`
+	DeferLoading *bool  `json:"defer_loading,omitempty"`
 }
 type Request struct {
 	Model            string
@@ -32,6 +33,9 @@ type Request struct {
 	Thinking         Object
 	Fast             *bool
 	Effort           string
+	JSONSchema       Object
+	PromptCacheTTL   string
+	ToolSearch       string
 	Betas            []string
 	FineGrainedTools bool
 	TTL              time.Duration
@@ -298,7 +302,7 @@ func parseRequest(data []byte) (*Request, error) {
 			if !ok {
 				return nil, fmt.Errorf("invalid tool")
 			}
-			if e = keys(t, "name", "description", "input_schema", "cache_control"); e != nil {
+			if e = keys(t, "name", "description", "input_schema", "cache_control", "defer_loading"); e != nil {
 				return nil, e
 			}
 			n := str(t, "name")
@@ -315,7 +319,15 @@ func parseRequest(data []byte) (*Request, error) {
 			if e = cacheTTL(t["cache_control"], &r.TTL); e != nil {
 				return nil, e
 			}
-			r.Tools = append(r.Tools, Tool{n, str(t, "description"), s})
+			var deferLoading *bool
+			if value, exists := t["defer_loading"]; exists {
+				b, ok := value.(bool)
+				if !ok {
+					return nil, fmt.Errorf("tools.defer_loading must be boolean")
+				}
+				deferLoading = &b
+			}
+			r.Tools = append(r.Tools, Tool{Name: n, Description: str(t, "description"), Schema: s, DeferLoading: deferLoading})
 		}
 	}
 	if v, ok := o["tool_choice"]; ok {
@@ -433,7 +445,7 @@ func fingerprints(ms []Message) []string {
 	return out
 }
 func (r *Request) configKey() string {
-	return digest([]any{r.Model, r.System, r.Tools, r.NoTools, r.Thinking, r.Native, r.Fast, r.Effort, r.Betas, r.FineGrainedTools})
+	return digest([]any{r.Model, r.System, r.Tools, r.NoTools, r.Thinking, r.Native, r.Fast, r.Effort, r.Betas, r.FineGrainedTools, r.JSONSchema, r.PromptCacheTTL, r.ToolSearch})
 }
 func (r *Request) wireName(name string) string {
 	if r.Native[name] {
