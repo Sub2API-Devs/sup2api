@@ -92,11 +92,12 @@ export interface ApiKey {
   group_name?: string // assumed
   name: string
   key_prefix: string
+  copyable?: boolean
   status: string
   expires_at?: string | null
   last_used_at?: string | null
   created_at: string
-  key?: string // plaintext, only in the create response
+  key?: string // plaintext, only in create or authorized reveal responses
   /** Platforms reachable with this key (same as its group's). */
   platforms?: string[]
 }

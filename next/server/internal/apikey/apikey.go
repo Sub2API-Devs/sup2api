@@ -23,6 +23,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -38,10 +39,11 @@ const (
 
 // Service serves API key endpoints and authenticates gateway requests.
 type Service struct {
-	db    *store.DB
-	rdb   redis.UniversalClient // optional cache
-	authz core.Authorizer
-	reg   core.PluginRegistry // optional: platforms are [] without it
+	Cipher *secret.Cipher
+	db     *store.DB
+	rdb    redis.UniversalClient // optional cache
+	authz  core.Authorizer
+	reg    core.PluginRegistry // optional: platforms are [] without it
 
 	mu      sync.Mutex
 	touched map[int64]time.Time
@@ -59,6 +61,8 @@ func New(db *store.DB, rdb redis.UniversalClient, authz core.Authorizer, reg cor
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("GET", "/me/api-keys", "apikey:self:manage", s.listMine)
 	r.Perm("POST", "/me/api-keys", "apikey:self:manage", s.createMine)
+	r.Perm("POST", "/me/api-keys/:id/reveal", "apikey:self:manage", s.revealMine)
+	r.Perm("POST", "/api-keys/:id/reveal", "apikey:all:manage", s.revealAny)
 	r.Perm("DELETE", "/me/api-keys/:id", "apikey:self:manage", s.deleteMine)
 	r.Perm("GET", "/api-keys", "apikey:all:read", s.listAll)
 	r.Perm("PATCH", "/api-keys/:id", "apikey:all:manage", s.update)
@@ -266,6 +270,7 @@ type APIKey struct {
 	UserEmail string `json:"user_email,omitempty"`
 	Name      string `json:"name"`
 	KeyPrefix string `json:"key_prefix"`
+	Copyable  bool   `json:"copyable"`
 	GroupID   int64  `json:"group_id"`
 	GroupName string `json:"group_name"`
 	// Platforms the key can reach: those of its group (CONTRACTS §13).
@@ -274,18 +279,18 @@ type APIKey struct {
 	ExpiresAt  *time.Time `json:"expires_at"`
 	LastUsedAt *time.Time `json:"last_used_at"`
 	CreatedAt  time.Time  `json:"created_at"`
-	// Key is the plaintext key, returned only once by create.
+	// Key is plaintext, returned only by create and explicit authorized reveal.
 	Key string `json:"key,omitempty"`
 }
 
 const selectKey = `SELECT k.id, k.user_id, u.email, k.name, k.key_prefix, k.group_id, g.name, k.status,
-	k.expires_at, k.last_used_at, k.created_at
+		k.expires_at, k.last_used_at, k.created_at, k.key_cipher IS NOT NULL
 	FROM api_keys k JOIN users u ON u.id = k.user_id JOIN groups g ON g.id = k.group_id`
 
 func scanKey(row pgx.Row) (*APIKey, error) {
 	var k APIKey
 	err := row.Scan(&k.ID, &k.UserID, &k.UserEmail, &k.Name, &k.KeyPrefix, &k.GroupID, &k.GroupName,
-		&k.Status, &k.ExpiresAt, &k.LastUsedAt, &k.CreatedAt)
+		&k.Status, &k.ExpiresAt, &k.LastUsedAt, &k.CreatedAt, &k.Copyable)
 	return &k, err
 }
 
@@ -460,9 +465,20 @@ func (s *Service) createMine(c *gin.Context) {
 		if !ok {
 			return groupUnavailable(ctx)
 		}
-		return tx.QueryRow(ctx, `INSERT INTO api_keys (user_id, group_id, name, key_prefix, key_hash, expires_at)
+		if err := tx.QueryRow(ctx, `INSERT INTO api_keys (user_id, group_id, name, key_prefix, key_hash, expires_at)
 			VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-			uid, in.GroupID, name, raw[:displayPrefix], hash, in.ExpiresAt).Scan(&id)
+			uid, in.GroupID, name, raw[:displayPrefix], hash, in.ExpiresAt).Scan(&id); err != nil {
+			return err
+		}
+		if s.Cipher == nil {
+			return nil
+		}
+		sealed, err := s.Cipher.Encrypt([]byte(raw), []byte("apikey:"+strconv.FormatInt(id, 10)))
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `UPDATE api_keys SET key_cipher = $2 WHERE id = $1`, id, sealed)
+		return err
 	})
 	if err != nil {
 		httpapi.Fail(c, err)
@@ -479,6 +495,47 @@ func (s *Service) createMine(c *gin.Context) {
 	k.UserEmail = ""
 	k.Key = raw
 	httpapi.Created(c, k)
+}
+
+func (s *Service) revealMine(c *gin.Context) {
+	uid, _ := core.UserID(c.Request.Context())
+	s.reveal(c, &uid)
+}
+
+func (s *Service) revealAny(c *gin.Context) { s.reveal(c, nil) }
+
+func (s *Service) reveal(c *gin.Context, ownerID *int64) {
+	c.Header("Cache-Control", "no-store")
+	id, ok := httpapi.PathID(c, "id")
+	if !ok {
+		return
+	}
+	ctx := c.Request.Context()
+	var sealed []byte
+	err := s.db.Pool.QueryRow(ctx, `SELECT key_cipher FROM api_keys WHERE id = $1 AND deleted_at IS NULL AND ($2::bigint IS NULL OR user_id = $2)`, id, ownerID).Scan(&sealed)
+	if store.IsNoRows(err) {
+		httpapi.Fail(c, notFound(ctx))
+		return
+	}
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	if len(sealed) == 0 || s.Cipher == nil {
+		httpapi.Fail(c, core.ErrConflict.WithMessage(t(ctx, "This legacy key cannot be recovered. Create a new key to enable copying.", "此旧密钥无法恢复，请新建密钥以启用复制。")))
+		return
+	}
+	raw, err := s.Cipher.Decrypt(sealed, []byte("apikey:"+strconv.FormatInt(id, 10)))
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	uid, _ := core.UserID(ctx)
+	if _, err := s.db.Pool.Exec(ctx, `INSERT INTO audit_logs (user_id, action, target_type, target_id, ip) VALUES ($1, 'apikey.reveal', 'apikey', $2, $3)`, uid, strconv.FormatInt(id, 10), c.ClientIP()); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.OK(c, gin.H{"key": string(raw)})
 }
 
 func (s *Service) softDelete(ctx context.Context, id int64, ownerID *int64) error {

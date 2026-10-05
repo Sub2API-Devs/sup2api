@@ -9,9 +9,9 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <div class="min-w-0" data-testid="key-group">
-    <div class="truncate">{{ name }}</div>
-    <div v-if="platforms" class="mt-0.5">
+  <div class="flex min-w-0 items-center gap-2 whitespace-nowrap" data-testid="key-group">
+    <div class="max-w-64 truncate" :title="name">{{ name }}</div>
+    <div v-if="platforms" class="shrink-0">
       <PlatformBadges v-if="platforms.length" :ids="platforms" />
       <span v-else class="text-[11px] text-amber-600 dark:text-amber-400">{{ t('platforms.keyNoPlatforms') }}</span>
     </div>

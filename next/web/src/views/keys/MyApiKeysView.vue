@@ -13,6 +13,7 @@ import { copyText, formatDateTime, formatRelative } from '@/utils/format'
 import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
 import PlatformEndpointsPreview from '@/views/platforms/PlatformEndpointsPreview.vue'
 import KeyGroupCell from './KeyGroupCell.vue'
+import ApiKeyCell from './ApiKeyCell.vue'
 
 const { t } = useI18n()
 const list = useList<ApiKey>('/me/api-keys')
@@ -148,12 +149,12 @@ async function remove(k: ApiKey) {
       </template>
     </SPageHeader>
 
-    <STable :columns="columns" :rows="list.items.value" :loading="list.loading.value">
+    <STable dense class="api-key-table" :columns="columns" :rows="list.items.value" :loading="list.loading.value">
       <template #cell-name="{ row }">
         <span class="font-medium text-gray-900 dark:text-white">{{ row.name }}</span>
       </template>
       <template #cell-key_prefix="{ row }">
-        <code class="font-mono text-xs">{{ row.key_prefix }}…</code>
+        <ApiKeyCell :api-key="row" />
       </template>
       <template #cell-group="{ row }"><KeyGroupCell :name="groupName(row)" :platforms="keyPlatforms(row)" /></template>
       <template #cell-status="{ row }">

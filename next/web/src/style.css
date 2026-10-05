@@ -216,6 +216,12 @@
   .table-dense th {
     @apply px-3 py-2;
   }
+  .api-key-table td {
+    @apply whitespace-nowrap;
+  }
+  .api-key-table [data-testid='platform-badges'] {
+    @apply flex-nowrap;
+  }
 
   .badge {
     @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium;

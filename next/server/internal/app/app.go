@@ -178,6 +178,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 
 	grp := group.New(db, rdb, cl.Bus, reg)
 	keys := apikey.New(db, rdb, az, reg)
+	keys.Cipher = cipher
 	prx := proxy.New(db, cipher, cl.Bus, proxy.Options{AllowPrivate: cfg.AllowPrivateUpstream, Registry: reg})
 	// One converter registry for the gateway (conversion) and the account
 	// module (endpoints an account type can serve), ARCHITECTURE 6.6.

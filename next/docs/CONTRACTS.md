@@ -130,7 +130,7 @@
 
 | 方法 路径 | 权限 |
 |---|---|
-| GET/POST `/me/api-keys`，DELETE `/me/api-keys/:id` | `apikey:self:manage`；创建返回一次性明文 `key`（`sk-s2a-` 前缀）；不含 `user_email`；普通用户不能修改自己的 Key，只能删除重建 |
+| GET/POST `/me/api-keys`，DELETE `/me/api-keys/:id` | `apikey:self:manage`；创建返回明文 `key`（`sk-s2a-` 前缀），已加密保存的新 Key 可通过显式 reveal 再复制；不含 `user_email`；普通用户不能修改自己的 Key，只能删除重建 |
 | GET `/me/groups` | auth（当前用户可用的分组） |
 | GET `/api-keys`，PATCH/DELETE `/api-keys/:id` | `apikey:all:read` / `apikey:all:manage` |
 | GET/POST `/groups`，GET/PATCH/DELETE `/groups/:id` | `group:read` / `group:manage` |
@@ -495,7 +495,10 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 | `status` | `active` \| `disabled` |
 | `expires_at`、`last_used_at` | 可为 `null`；`last_used_at` 每 10 秒批量落库，有延迟 |
 | `created_at` | |
-| `key` | 明文 Key（`sk-s2a-` + 40 位 base62），**只在创建响应中出现一次** |
+| `key` | 明文 Key（`sk-s2a-` + 40 位 base62），只在创建和显式授权的复制响应中出现，列表不返回 |
+| `copyable` | 是否保存了可解密密钥；旧的仅哈希 Key 为 `false`，无法恢复 |
+
+新建 Key 除认证哈希外使用服务器主密钥 AES-GCM 加密保存，AAD 为 `apikey:{id}`。POST `/me/api-keys/:id/reveal` 要求 `apikey:self:manage` 并校验所有权；POST `/api-keys/:id/reveal` 要求 `apikey:all:manage`。响应 `{key}`、`Cache-Control: no-store`，返回前写 `apikey.reveal` 审计（不含密钥）。旧 Key 返回 409，删除或非本人 Key 返回 404。
 
 | 方法 路径 | 权限 | 请求 | 响应 / 约定 |
 |---|---|---|---|

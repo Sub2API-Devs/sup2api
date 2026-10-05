@@ -20,6 +20,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
@@ -219,6 +220,58 @@ func TestGenerateKey(t *testing.T) {
 		if !strings.ContainsRune(base62, r) {
 			t.Fatalf("non base62 char in %q", k)
 		}
+	}
+}
+
+func TestCopyAPIKey(t *testing.T) {
+	e := setup(t)
+	e.svc.Cipher, _ = secret.New(bytes.Repeat([]byte{42}, 32))
+	g := e.exec1(`INSERT INTO groups (name) VALUES ('copy-test') RETURNING id`)
+	code, out := e.do(e.user, "POST", "/me/api-keys", map[string]any{"name": "copy", "group_id": g})
+	if code != 201 {
+		t.Fatalf("create: %d", code)
+	}
+	data := out["data"].(map[string]any)
+	id := int64(data["id"].(float64))
+	raw := data["key"].(string)
+	if data["copyable"] != true {
+		t.Fatal("new key is not copyable")
+	}
+	var sealed []byte
+	if err := e.db.Pool.QueryRow(context.Background(), `SELECT key_cipher FROM api_keys WHERE id=$1`, id).Scan(&sealed); err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(sealed, []byte(raw)) {
+		t.Fatal("plaintext stored")
+	}
+	path := fmt.Sprintf("/me/api-keys/%d/reveal", id)
+	code, out = e.do(e.user, "POST", path, nil)
+	if code != 200 || out["data"].(map[string]any)["key"] != raw {
+		t.Fatalf("owner reveal: %d", code)
+	}
+	other := e.exec1(`INSERT INTO users (email,password_hash) VALUES ('other@copy.test','x') RETURNING id`)
+	if code, _ := e.do(other, "POST", path, nil); code != 404 {
+		t.Fatalf("cross-owner: %d", code)
+	}
+	adminPath := fmt.Sprintf("/api-keys/%d/reveal", id)
+	if code, _ := e.do(e.user, "POST", adminPath, nil); code != 403 {
+		t.Fatalf("unauthorized admin reveal: %d", code)
+	}
+	if code, _ := e.do(e.admin, "POST", adminPath, nil); code != 200 {
+		t.Fatalf("admin reveal: %d", code)
+	}
+	var count int
+	_ = e.db.Pool.QueryRow(context.Background(), `SELECT count(*) FROM audit_logs WHERE action='apikey.reveal' AND target_id=$1`, strconv.FormatInt(id, 10)).Scan(&count)
+	if count != 2 {
+		t.Fatalf("audit count: %d", count)
+	}
+	e.exec(`UPDATE api_keys SET key_cipher=NULL WHERE id=$1`, id)
+	if code, _ := e.do(e.user, "POST", path, nil); code != 409 {
+		t.Fatalf("legacy: %d", code)
+	}
+	e.exec(`UPDATE api_keys SET deleted_at=now() WHERE id=$1`, id)
+	if code, _ := e.do(e.admin, "POST", adminPath, nil); code != 404 {
+		t.Fatalf("deleted reveal: %d", code)
 	}
 }
 

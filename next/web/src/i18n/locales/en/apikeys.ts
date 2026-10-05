@@ -1,4 +1,5 @@
 export default {
+  legacyCopyHint: 'This legacy key is hash-only and cannot be recovered. New keys can be copied at any time.',
   myTitle: 'API keys',
   myDescription: 'Keys for calling the gateway. Each key is bound to exactly one group, which decides the platforms (endpoints) it can access, the models and the rate multiplier.',
   allTitle: 'All API keys',
@@ -16,7 +17,7 @@ export default {
   groupMultiplier: 'Rate multiplier: ×{n}',
   groupModels: 'Models',
   createdTitle: 'API key created',
-  onceWarning: 'Copy the key now. For security it will not be shown again.',
+  onceWarning: 'Save this key. You can also copy it from the list later.',
   savedIt: 'I have saved it',
   confirmDelete: 'Delete API key "{name}"? Clients using it will stop working immediately.',
   searchPlaceholder: 'Search name or key prefix…',
