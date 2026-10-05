@@ -2,14 +2,18 @@ export function register(on) {
   let requested = false;
   let searchPending = false;
   let searches = 0;
+  let formatSteps = 0;
+  let clientToolDenied = false;
   // CLI recovery can schedule another model request even with max-turns=1.
-  // End that continuation before next() sends it, while allowing native
-  // persistence of the first response to finish normally.
+  // Only bounded discovery and one structured-format continuation may send
+  // another model request. Client tool execution never continues here.
   on('turn.step', async function* ($, e, next) {
-    if (requested && !searchPending) {
+    const formatContinuation = requested && !clientToolDenied && formatSteps < 1 && await $.env.get('CCGATEWAY_STRUCTURED_OUTPUT') === '1';
+    if (requested && !searchPending && !formatContinuation) {
       await $.turn.abort({ turnId: e.turnId });
       return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: null, usage: null };
     }
+    if (formatContinuation && !searchPending) formatSteps++;
     requested = true;
     searchPending = false;
     return yield* next(e);
@@ -32,6 +36,7 @@ export function register(on) {
     // This CLI-owned tool only validates JSON; all client tools remain denied.
     if (e.tool === 'ToolSearch' && await $.env.get('CCGATEWAY_TOOL_SEARCH') === '1' && searches < 3) { searches++; searchPending = true; return next(e); }
     if (e.tool === 'StructuredOutput' && await $.env.get('CCGATEWAY_STRUCTURED_OUTPUT') === '1') return next(e);
+    clientToolDenied = true;
     return { deny: 'ccgateway: execution belongs to the API client.' };
   });
 }

@@ -237,6 +237,9 @@ func TestRealCLI(t *testing.T) {
 				break
 			}
 		}
+		if bytes.Contains(raw, []byte("FORMAT_AFTER_TEXT")) {
+			content = []Object{{"type": "text", "text": "The result is true."}}
+		}
 		if bytes.Contains(raw, []byte("SEARCH_TOOL")) && !bytes.Contains(raw, []byte("tool_result")) {
 			content = []Object{{"type": "tool_use", "id": "toolu_search", "name": "ToolSearch", "input": Object{"query": "select:mcp__ccgateway__weather"}}}
 		}
@@ -908,6 +911,11 @@ func TestRealCLI(t *testing.T) {
 	}
 	if !hasSchema {
 		t.Fatal("CLI did not receive structured output schema")
+	}
+	structured["messages"] = []any{Object{"role": "user", "content": "FORMAT_AFTER_TEXT"}}
+	_, delayedFormat, _ := post(structured, "")
+	if strings.Contains(delayedFormat, "The result is true") || !strings.Contains(delayedFormat, `\"ok\"`) {
+		t.Fatalf("unvalidated prose escaped the format continuation: %s", delayedFormat)
 	}
 	sessionHeader = "tool-search-test"
 	searchRequest := basic()

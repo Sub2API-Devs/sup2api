@@ -166,11 +166,6 @@ func (a *Accumulator) push(e Object, r *Request) error {
 		if len(a.Structured) > 0 && !a.HasClientTool && str(d, "stop_reason") == "tool_use" {
 			d["stop_reason"] = "end_turn"
 		}
-		if r.JSONSchema != nil && !a.HasClientTool && str(d, "stop_reason") == "end_turn" {
-			if err := validateStructuredText(r.JSONSchema, a.Blocks); err != nil {
-				return err
-			}
-		}
 		for k, v := range d {
 			a.Message[k] = v
 		}

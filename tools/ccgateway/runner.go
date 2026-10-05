@@ -159,6 +159,15 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 		}
 	}
 	if req.JSONSchema != nil {
+		for i, arg := range args {
+			if arg == "--max-turns" {
+				if req.ToolSearch != "" && req.ToolSearch != "false" {
+					args[i+1] = "5"
+				} else {
+					args[i+1] = "2"
+				}
+			}
+		}
 		schema, _ := json.Marshal(req.JSONSchema)
 		args = append(args, "--json-schema", string(schema))
 	}
@@ -317,7 +326,12 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 				return nil, fmt.Errorf("missing model event")
 			}
 			if acc.Done {
-				return nil, fmt.Errorf("unexpected post-completion CLI event: %s", str(event, "type"))
+				if req.JSONSchema != nil && !acc.HasClientTool && str(event, "type") == "message_start" {
+					acc = &Accumulator{}
+					structuredEvents = nil
+				} else {
+					return nil, fmt.Errorf("unexpected post-completion CLI event: %s", str(event, "type"))
+				}
 			}
 			searchMessage := isInternalSearch(Object{"content": acc.Blocks})
 			if str(event, "type") == "message_delta" && searchRounds > 0 && !searchMessage {
@@ -349,14 +363,14 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 				return nil, e
 			}
 		case "result":
-			if req.JSONSchema != nil && !acc.Done {
+			if req.JSONSchema != nil && !acc.HasClientTool {
 				if e = acc.finishStructured(f, req); e != nil {
 					return nil, e
 				}
 			}
 			if acc.Done {
 				if req.JSONSchema != nil || (req.ToolSearch != "" && req.ToolSearch != "false") {
-					if len(acc.Structured) > 0 && !acc.HasClientTool {
+					if req.JSONSchema != nil && !acc.HasClientTool {
 						if e = emitStructuredMessage(acc.Message, emit); e != nil {
 							return nil, e
 						}

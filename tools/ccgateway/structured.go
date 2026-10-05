@@ -70,7 +70,7 @@ func (a *Accumulator) finishStructured(result Object, req *Request) error {
 	if err := validateStructuredText(req.JSONSchema, []Object{{"type": "text", "text": text}}); err != nil {
 		return err
 	}
-	if a.Message == nil || len(a.Structured) == 0 || a.HasClientTool {
+	if a.Message == nil || a.HasClientTool {
 		return fmt.Errorf("incomplete structured-output stream")
 	}
 	blocks := []Object{}

@@ -173,6 +173,6 @@ SDK 服务按请求声明分组，不连接客户端实际的 MCP 地址；工�
 | fine-grained-tool-streaming Beta | CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING |
 | context-1m Beta | CLAUDE_CODE_DISABLE_1M_CONTEXT、CLAUDE_CODE_MAX_CONTEXT_TOKENS |
 
-结构化输出使用 CLI 内部纯格式校验工具，成功后再次校验 JSON Schema 并返回 text JSON；禁止外部 schema 引用。此类请求按完整客户端历史重建，不复用含内部格式工具的原生检查点。工具搜索只允许发现已注册的定义，最多 3 次；客户端工具执行仍被拦截，内部 ToolSearch 不对外返回，额外模型调用计入用量。两种模式均缓冲 SSE，验证完后输出标准事件。提示缓存断点由 Claude Code 管理，不保证客户端逐块断点或上游命中。Files、Batch、托管 agents、服务端工具等专用 API 并非通过 Beta 名称就能实现。
+结构化输出使用 CLI 内部纯格式校验工具，必要时允许一次原生格式整理续轮，成功后再次校验 JSON Schema 并返回 text JSON；禁止外部 schema 引用。此类请求按完整客户端历史重建，不复用含内部格式工具的原生检查点。工具搜索只允许发现已注册的定义，最多 3 次；客户端工具执行仍被拦截，内部 ToolSearch 不对外返回，额外模型调用计入用量。两种模式均缓冲 SSE，验证完后输出标准事件。提示缓存断点由 Claude Code 管理，不保证客户端逐块断点或上游命中。Files、Batch、托管 agents、服务端工具等专用 API 并非通过 Beta 名称就能实现。
 
-官方依据：[环境变量](https://code.claude.com/docs/en/env-vars)、[结构化输出](https://code.claude.com/docs/en/agent-sdk/structured-outputs)、[工具搜索](https://code.claude.com/docs/en/agent-sdk/tool-search)。Claude Code 2.1.288 的隔离回归共 46 次本地模拟模型请求，验证普通/SSE 结构化输出和工具搜索用量；无真实云端模型调用。
+官方依据：[环境变量](https://code.claude.com/docs/en/env-vars)、[结构化输出](https://code.claude.com/docs/en/agent-sdk/structured-outputs)、[工具搜索](https://code.claude.com/docs/en/agent-sdk/tool-search)。Claude Code 2.1.288 的隔离回归共 48 次本地模拟模型请求，验证普通/SSE 结构化输出和工具搜索用量；无真实云端模型调用。
