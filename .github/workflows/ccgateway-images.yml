@@ -1,0 +1,95 @@
+name: CCGateway images
+
+# Builds the Claude Code runtime images (business container, sing-box egress,
+# account controller) and publishes them to GHCR. The core pins them by
+# digest (next/server/internal/ccgateway/images.go) and installs or upgrades
+# the remote runtime itself over SSH; nobody builds on the Docker host.
+
+on:
+  push:
+    branches: [main, feat/next-platform]
+    paths:
+      - 'tools/ccgateway/**'
+      - '.github/workflows/ccgateway-images.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ccgateway-images-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: tools/ccgateway/go.mod
+      - name: ccgateway (Go)
+        working-directory: tools/ccgateway
+        run: |
+          test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+          go vet ./...
+          go test ./...
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: controller (Python)
+        working-directory: tools/ccgateway/runtime
+        run: |
+          pip install -r requirements.txt
+          python -m unittest -v test_network test_headers $( [ -f test_manager.py ] && echo test_manager )
+
+  images:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ccgateway-app
+            context: tools/ccgateway
+            file: tools/ccgateway/Dockerfile
+          - name: ccgateway-egress
+            context: tools/ccgateway/runtime
+            file: tools/ccgateway/runtime/Dockerfile.egress
+          - name: ccgateway-controller
+            context: tools/ccgateway/runtime
+            file: tools/ccgateway/runtime/Dockerfile.controller
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "image=ghcr.io/${owner}/${{ matrix.name }}" >> "$GITHUB_OUTPUT"
+          echo "short=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          echo "branch=$(echo "${GITHUB_REF_NAME}" | tr '/' '-')" >> "$GITHUB_OUTPUT"
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          build-args: |
+            VERSION=${{ steps.meta.outputs.short }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.short }}
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.branch }}
+      - name: Digest
+        run: |
+          echo "${{ steps.meta.outputs.image }}@${{ steps.build.outputs.digest }}" | tee -a "$GITHUB_STEP_SUMMARY"

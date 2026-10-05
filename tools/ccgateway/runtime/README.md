@@ -35,9 +35,87 @@ volume survive proxy changes. Missing/disabled proxies block the account;
 there is no direct fallback. Controller restart clears readiness until actual
 container state, network rules, and a proxied HTTP connectivity probe pass.
 
+## Runtime keys and drafts
+
+A runtime is one app container, one egress container, one internal network and
+one data volume, named `<prefix>-<key>-<role>` and labelled with the key. The
+key is either an account id (`^[1-9][0-9]{0,17}$`) or a draft key
+(`^d[0-9a-f]{16}$`). The account editor creates a draft runtime before a
+Claude Code account exists, authorizes it, and the saved account adopts the
+draft key for the rest of its life (containers are not renamed; the OAuth login
+lives in the data volume). Every key is validated against
+`^(?:[1-9][0-9]{0,17}|d[0-9a-f]{16})$` before it is used in a path, container,
+network or volume name. Drafts that fail, are cancelled or abandoned are
+removed by the core's periodic sweep through `DELETE /accounts/<key>`.
+
+## Controller API
+
+Bearer controller key on every request; loopback only.
+
+| Method | Path | Result |
+|---|---|---|
+| GET | `/health` | `{"version","app_image","egress_image"}`; `version` is `CCG_CONTROLLER_VERSION` (default `dev`) |
+| GET | `/accounts` | `{"runtimes":[{"key","status","created_at"}]}` for every state directory |
+| DELETE | `/accounts/<key>` | draft keys only: removes both containers, the network, the data volume and the state directory; `200 {"deleted":true}` also when nothing existed; account ids → 405 |
+| PUT | `/accounts/<key>/config` | reconcile (proxy, enabled, revision, auth) |
+| GET | `/accounts/<key>/status` | `{"account_id","container","status","revision","auth_mode"}` |
+| GET/POST | `/accounts/<key>/v1/messages`, `/accounts/<key>/admin/status`, `/accounts/<key>/admin/auth/{session,start,complete,cancel,logout}` | passed through to the app container; requires `X-CCG-Revision` |
+
+`created_at` (RFC 3339, UTC) is recorded at the first provision; older state
+directories report their modification time. `status` is `ready`, `pending` or
+`blocked`; persisted readiness is never trusted after a controller restart.
+
+Controller errors are `{"error":"<code>"}`: `unauthorized` (401), `not_found`
+(404), `method_not_allowed` (405), `invalid_request` (400: framing, JSON,
+revision, authentication or proxy settings), `not_synchronized` (409),
+`api_key_account` (409: OAuth action on an API key account),
+`image_pull_failed` (503) and `runtime_unavailable` (503). Answers of the app
+container are passed through unchanged; its management errors are
+`{"type":"error","error":{"type":"<code>","message":"..."}}` with the codes
+listed in `../README.md`.
+
+## Images and upgrades
+
+`CCG_APP_IMAGE` and `CCG_EGRESS_IMAGE` are normally digest references
+(`ghcr.io/<owner>/ccgateway-app@sha256:…`) published by
+`.github/workflows/ccgateway-images.yml`. A missing image is pulled during
+reconciliation; a failed pull answers `image_pull_failed`. Status polling never
+pulls.
+
+The app container carries the image id next to the credential fingerprint.
+When the configured app image resolves to a different image id (a new digest
+after an upgrade, or a moved tag), the runtime reports `pending` and the next
+reconciliation recreates **only the app container**. The data volume, and
+therefore the Claude login and native history, is kept. Requests in flight on
+that account are interrupted once.
+
 ## Installation
 
-Build from the repository root on the remote Docker host:
+The core installs and upgrades the remote runtime itself: open the CCGateway
+settings page, configure the pinned SSH connection to the Docker host and use
+the one-click install/upgrade. The core pulls the pinned controller, app and
+egress images from GHCR, writes the controller environment and starts the
+controller; nothing is built on the Docker host. After installation the core
+checks `GET /health` and shows the controller version. Then enable per-account
+runtimes, create Claude Code accounts in the Accounts editor (choose a proxy,
+start the container, authorize, save) and use the plugin's Settings tab to view
+synchronization, retry, and re-authorize saved accounts.
+
+The old shared container is not automatically migrated, overwritten, or deleted.
+Do not point the new mode at the old endpoint. To reuse port 8787, first plan
+the old container's retirement. Existing remote SSH `permitopen` rules must
+allow the configured loopback endpoint.
+
+Account deletion/disable or proxy removal stops its containers; persistent data
+is retained for recovery. Permanent deletion of an account's data is
+deliberately an explicit administrator operation; only draft runtimes can be
+deleted through the controller API. Moving an existing account to a different
+remote host requires stopping its old runtime and migrating its data first.
+
+### Appendix: manual installation
+
+Only for development or hosts the core cannot manage. Build from the repository
+root on the remote Docker host (or pull the published GHCR images instead):
 
 ```sh
 docker build -t ccgateway:accounts tools/ccgateway
@@ -55,6 +133,7 @@ CCG_APP_IMAGE=ccgateway:accounts
 CCG_EGRESS_IMAGE=ccg-egress:1.12.14
 CCG_CONTROLLER_KEY=<generated secret>
 CCG_CONTROLLER_PORT=8787
+CCG_CONTROLLER_VERSION=<optional version or git sha>
 ```
 
 Run one controller per state directory. The root path must be mounted at the
@@ -76,24 +155,21 @@ in production after validating the images on the target host.
 
 In CCGateway settings, configure pinned SSH access to this host, use the
 controller key as the management key, and enable per-account runtimes. The
-legacy API key is unused in this mode. Create accounts through the existing
-Accounts editor and choose a proxy there. Then use the plugin's Settings tab
-to view synchronization, retry, and authorize each account independently.
-
-The old shared container is not automatically migrated, overwritten, or deleted.
-Do not point the new mode at the old endpoint. To reuse port 8787, first plan
-the old container's retirement; alternatively validate the controller using a
-different port locally before making the switch. Existing remote SSH
-`permitopen` rules must allow the configured loopback endpoint.
-
-Account deletion/disable or proxy removal stops its containers; persistent data
-is retained for recovery. Permanent data deletion is deliberately an explicit
-administrator operation. Moving an existing account to a different remote host
-requires stopping its old runtime and migrating its data first.
+legacy API key is unused in this mode.
 
 ## Verification
 
-`test_network.py` tests generated policy/configuration. `integration_test.py`
+`test_network.py` tests generated policy/configuration. `test_manager.py` tests
+the controller with an in-memory Docker client (key validation, draft deletion,
+listing, image-change rebuilds, digest pulls, routing and error codes); it needs
+no Docker. Run on Linux from this directory:
+
+```sh
+pip install -r requirements.txt
+python -m unittest -v test_network test_headers test_manager
+```
+
+`integration_test.py`
 uses disposable real Docker resources and two local CONNECT proxies; it tests
 two independent account exits, concurrent requests, proxy switching, DNS over
 the proxy, private/IPv6 blocking, absence of proxy environment variables, and
@@ -112,7 +188,9 @@ Both use the same image, independent data volume, network policy and account pro
 Create an API Key account in the ordinary account editor, entering `api_key` and
 an optional HTTPS `base_url` (default https://api.anthropic.com). These credentials
 are encrypted by the core; only `api_key` is masked on read. OAuth accounts keep
-an empty credential object and use the existing authorization workflow.
+an empty credential object; a new OAuth account is authorized in a draft runtime
+while it is being entered and saved only once its container reports
+`logged_in` (saved accounts can be re-authorized later).
 
 The core sends credentials to the controller only during reconciliation over the
 pinned SSH connection. The controller sets `ANTHROPIC_API_KEY` and

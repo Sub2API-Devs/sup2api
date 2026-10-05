@@ -45,6 +45,34 @@ docker compose --env-file .env --env-file .env.ccgateway -f docker-compose.local
 
 授权 RPC 是 Claude Code 内部协议：`initialize` → `claude_authenticate` → 同进程 `claude_oauth_callback`。升级 CLI 后需重新验证。登录进程持有 PKCE verifier；服务验证 URL、state、会话 ID 与有效期，回调后销毁进程。授权中间状态仅在内存中，不能将多个副本放在随机负载均衡后。
 
+## 管理接口与错误代码（2026-10-05）
+
+管理端点均需 `Authorization: Bearer <CCG_ADMIN_KEY>`。所有状态与错误都是英文代码，界面按代码做多语言；`message` 只是英文兜底说明，不含中文，也不应被匹配。
+
+- `GET /admin/status` → `{"healthy":true,"logged_in":bool,"auth_method":string}`
+- `GET /admin/auth/session` → `{"session":{"session_id","url","expires_at"}}` 或 `{"session":null}`（登录进程已退出或过期即为 null）
+- `POST /admin/auth/start` → `{"session_id","url","expires_at"}`；已有未过期的待完成授权时直接返回同一会话（幂等）
+- `POST /admin/auth/complete` `{"code","session_id"?}` → `{"success":true}`；`session_id` 可选，给出时必须与当前会话一致
+- `POST /admin/auth/cancel` `{"session_id"?}` → `{"success":true}`；幂等，请求体可为空；`session_id` 与当前会话不同时不影响当前会话
+- `POST /admin/auth/logout` → `{"success":true}`
+
+错误格式：`{"type":"error","error":{"type":"<code>","message":"<English>"}}`，HTTP 400（未知端点 404 `not_found_error`，管理密钥错误 401 `authentication_error`）。
+
+| 代码 | 含义 | 之后的会话 |
+|---|---|---|
+| `invalid_request` | 请求体不是合法 JSON 或缺少 `code` | 不变 |
+| `session_not_found` | 没有待完成授权、已过期，或 `session_id` 不一致 | 无（不一致时原会话保留） |
+| `invalid_code` | 不是 `code#state`，或 state 不属于本次授权 | 保留，可重新粘贴 |
+| `auth_rejected` | Claude Code 拒绝了授权码 | 结束 |
+| `auth_process_failed` | 登录进程无法启动、已退出或超时 | 结束 |
+| `invalid_auth_url` | 登录链接校验失败 | 结束 |
+| `status_unavailable` | 无法读取 `claude auth status` | - |
+| `logout_failed` | `claude auth logout` 失败 | - |
+
+模型接口（`/v1/messages`）返回给 Anthropic 客户端的错误格式不变。
+
+Claude Code 账号改为录入时授权：编辑器先创建草稿运行环境（键为 `d` + 16 位小写十六进制），启动容器、完成上述授权后才保存账号，账号沿用草稿键；失败、取消或放弃的草稿由核心定期经控制器 `DELETE /accounts/<key>` 清理。控制器接口、`GET /accounts` 列表、`GET /health` 以及镜像更新只重建业务容器、保留数据卷与登录，见 `runtime/README.md`。
+
 ## 验证
 
 ```sh

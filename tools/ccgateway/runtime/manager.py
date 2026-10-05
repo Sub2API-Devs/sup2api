@@ -4,6 +4,7 @@ Docker SDK owns container lifecycle; sing-box owns proxy protocols. The control
 API is never exposed on a business network. State is root-private on this host.
 """
 import contextlib
+from datetime import datetime, timezone
 import fcntl
 import hmac
 import hashlib
@@ -14,6 +15,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import shutil
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -22,14 +24,46 @@ import docker
 import requests
 from network import configuration, business_rules
 
-ID = re.compile(r'^[1-9][0-9]{0,17}$')
-REVISION = re.compile(r'^[a-f0-9]{64}$')
+# Runtime keys (CCGATEWAY-DRAFT-RUNTIMES §1): an account id, or a draft key
+# created by the editor before the account exists. Every key that reaches a
+# path, container or volume name passes this pattern first.
+KEY_PATTERN = r'(?:[1-9][0-9]{0,17}|d[0-9a-f]{16})'
+KEY = re.compile(KEY_PATTERN)
+DRAFT = re.compile(r'd[0-9a-f]{16}')
+REVISION = re.compile(r'[a-f0-9]{64}')
 LABEL = 'io.sup2api.ccgateway.account'
 PROXY_VARS = ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
               'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy')
 
 AUTH_LABEL = 'io.sup2api.ccgateway.auth'
+IMAGE_LABEL = 'io.sup2api.ccgateway.image'
 AUTH_VARS = ('ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR')
+IMAGE_CACHE_SECONDS = 30
+
+ROUTE = re.compile(r'/accounts(?:/(' + KEY_PATTERN + r')(?:/(config|status|v1/messages|'
+                   r'admin/(?:status|auth/(?:session|start|complete|cancel|logout))))?)?')
+
+
+class BadRequest(ValueError):
+    """The request itself is invalid (answered 400 invalid_request)."""
+
+
+class NotDraft(ValueError):
+    """Only draft runtimes can be deleted through the API."""
+
+
+class ImagePullFailed(RuntimeError):
+    """A configured image is missing locally and could not be pulled."""
+
+
+def check(aid):
+    if not isinstance(aid, str) or not KEY.fullmatch(aid):
+        raise BadRequest('invalid runtime key')
+    return aid
+
+
+def rfc3339(timestamp):
+    return datetime.fromtimestamp(timestamp, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
 def upstream_headers(inbound, secret):
@@ -44,19 +78,19 @@ def authentication(raw):
     # Missing auth preserves compatibility with existing OAuth controllers.
     raw = {'mode': 'oauth'} if raw is None else raw
     if not isinstance(raw, dict):
-        raise ValueError('invalid authentication')
+        raise BadRequest('invalid authentication')
     if raw == {'mode': 'oauth'}:
         return raw
     if raw.get('mode') != 'api_key' or set(raw) - {'mode', 'api_key', 'base_url'}:
-        raise ValueError('invalid authentication')
+        raise BadRequest('invalid authentication')
     key, base = raw.get('api_key'), raw.get('base_url') or 'https://api.anthropic.com'
     if not isinstance(key, str) or not 8 <= len(key) <= 512 or any(ord(c) < 33 or ord(c) > 126 for c in key):
-        raise ValueError('invalid API key')
+        raise BadRequest('invalid API key')
     if not isinstance(base, str) or len(base) > 2048 or any(c.isspace() for c in base):
-        raise ValueError('invalid base URL')
+        raise BadRequest('invalid base URL')
     url = urlsplit(base)
     if url.scheme != 'https' or not url.hostname or url.username is not None or url.password is not None or '?' in base or '#' in base:
-        raise ValueError('invalid base URL')
+        raise BadRequest('invalid base URL')
     base = base.rstrip('/').removesuffix('/v1')
     return {'mode': 'api_key', 'api_key': key, 'base_url': base}
 
@@ -69,6 +103,12 @@ def write_private(path, value):
         f.flush()
         os.fsync(f.fileno())
     tmp.replace(path)
+
+
+def image_of(container):
+    # Docker's inspect data names the image actually running (also for
+    # containers created before IMAGE_LABEL existed); the label is a fallback.
+    return container.attrs.get('Image') or container.labels.get(IMAGE_LABEL, '')
 
 
 class Manager:
@@ -87,15 +127,22 @@ class Manager:
         self.locks, self.lock = {}, threading.Lock()
         self.online = {}  # Never trust persisted readiness after controller restart.
         self.boots = {}
+        self.image_seen = (0.0, '')  # (monotonic time, app image id)
+        self.version = os.getenv('CCG_CONTROLLER_VERSION') or 'dev'
+
+    def health(self):
+        return {'version': self.version, 'app_image': self.app_image, 'egress_image': self.egress_image}
 
     def guard(self, aid):
-        if not ID.fullmatch(aid):
-            raise ValueError('invalid account')
+        check(aid)
         with self.lock:
             return self.locks.setdefault(aid, threading.RLock())
 
+    def dir(self, aid):
+        return self.root / check(aid)
+
     def name(self, aid, role):
-        return f'{self.prefix}-{aid}-{role}'
+        return f'{self.prefix}-{check(aid)}-{role}'
 
     def owned(self, aid, role):
         c = self.docker.containers.get(self.name(aid, role))
@@ -104,11 +151,33 @@ class Manager:
         return c
 
     def state(self, aid):
-        p = self.root / aid / 'state.json'
+        p = self.dir(aid) / 'state.json'
         return json.loads(p.read_text()) if p.exists() else None
 
     def save(self, aid, state):
-        write_private(self.root / aid / 'state.json', json.dumps(state))
+        write_private(self.dir(aid) / 'state.json', json.dumps(state))
+
+    def app_image_id(self):
+        # Status is polled often; resolve the configured tag at most every 30 s.
+        # Never pulls: a missing image makes the runtime pending and the next
+        # reconciliation (provision) pulls it.
+        seen, image_id = self.image_seen
+        if not image_id or time.monotonic() - seen > IMAGE_CACHE_SECONDS:
+            image_id = self.docker.images.get(self.app_image).id
+            self.image_seen = (time.monotonic(), image_id)
+        return image_id
+
+    def ensure_image(self, ref):
+        """Return the local image for ref (tag or name@sha256:digest), pulling it once if absent."""
+        try:
+            return self.docker.images.get(ref)
+        except docker.errors.NotFound:
+            pass
+        try:
+            self.docker.images.pull(ref)
+            return self.docker.images.get(ref)
+        except (docker.errors.DockerException, requests.exceptions.RequestException) as e:
+            raise ImagePullFailed('image pull failed') from e
 
     def common(self, aid):
         return dict(labels={LABEL: aid}, detach=True, init=True,
@@ -118,7 +187,7 @@ class Manager:
 
     def helper(self, aid, app, script, rules):
         # Fixed helper image, no Docker socket, no host network/PID namespaces.
-        d = self.root / aid
+        d = self.dir(aid)
         write_private(d / 'app.nft', rules)
         self.docker.containers.run(self.egress_image, entrypoint=['sh', '-ec'],
             command=[script], network_mode='container:' + app.id,
@@ -128,25 +197,34 @@ class Manager:
 
     def provision(self, aid, auth=None):
         auth = authentication(auth)
-        d = self.root / aid
+        d = self.dir(aid)
         d.mkdir(mode=0o700, exist_ok=True)
         state = self.state(aid)
+        image = self.ensure_image(self.app_image)
+        self.image_seen = (time.monotonic(), image.id)
         # Hash with a private per-account salt; never persist upstream keys in
         # controller state or expose a credential fingerprint in status.
         salt = state['admin_key'] if state else secrets.token_urlsafe(32)
         fingerprint = hmac.new(salt.encode(), json.dumps(auth, sort_keys=True).encode(), hashlib.sha256).hexdigest()
+        existing = None
         if state:
-            try:
+            with contextlib.suppress(docker.errors.NotFound):
                 existing = self.owned(aid, 'app')
-                if existing.labels.get(AUTH_LABEL) == fingerprint:
-                    return state
-                self.online.pop(aid, None)
+            # A credential or image change recreates only the app container;
+            # the data volume (and the OAuth login inside it) is kept.
+            if existing and existing.labels.get(AUTH_LABEL) == fingerprint and image_of(existing) == image.id:
+                return state
+        # Validate the new image before an existing container is replaced.
+        image_env = image.attrs['Config'].get('Env') or []
+        if any(v.split('=', 1)[0] in PROXY_VARS + AUTH_VARS for v in image_env):
+            raise ValueError('business image contains account credentials or proxy environment variables')
+        if existing:
+            self.online.pop(aid, None)
+            with contextlib.suppress(docker.errors.NotFound):
                 existing.remove(force=True)
-            except docker.errors.NotFound:
-                pass
         try:
             network = self.docker.networks.get(self.name(aid, 'net'))
-            if network.attrs.get('Labels', {}).get(LABEL) != aid:
+            if (network.attrs.get('Labels') or {}).get(LABEL) != aid:
                 raise ValueError('network ownership mismatch')
         except docker.errors.NotFound:
             network = self.docker.networks.create(self.name(aid, 'net'), driver='bridge',
@@ -158,22 +236,21 @@ class Manager:
         # resolv.conf contains only the ordinary internal DNS address.
         os.chmod(d / 'resolv.conf', 0o644)
         state = state or {'api_key': secrets.token_urlsafe(32), 'admin_key': salt,
-                 'app_ip': app_ip, 'gateway_ip': gateway_ip, 'revision': '', 'status': 'pending'}
+                 'app_ip': app_ip, 'gateway_ip': gateway_ip, 'revision': '', 'status': 'pending',
+                 'created_at': rfc3339(time.time())}
         self.save(aid, state)
         volume = self.docker.volumes.create(self.name(aid, 'data'), labels={LABEL: aid})
         self.docker.containers.run(self.app_image, entrypoint=['sh', '-ec'],
             command=['mkdir -p /work/config /work/data; chown -R 1000:1000 /work'],
             user='0', network_mode='none', volumes={volume.name: {'bind': '/work', 'mode': 'rw'}}, remove=True)
         env = {}
-        image_env = self.docker.images.get(self.app_image).attrs['Config'].get('Env', [])
-        if any(v.split('=', 1)[0] in PROXY_VARS + AUTH_VARS for v in image_env):
-            raise ValueError('business image contains account credentials or proxy environment variables')
         env.update(CCG_API_KEY=state['api_key'], CCG_ADMIN_KEY=state['admin_key'], CCG_EXTERNAL_EGRESS='1')
         if auth['mode'] == 'api_key':
             env.update(ANTHROPIC_API_KEY=auth['api_key'], ANTHROPIC_BASE_URL=auth['base_url'])
         options = self.common(aid)
         options['labels'][AUTH_LABEL] = fingerprint
-        app = self.docker.containers.create(self.app_image, name=self.name(aid, 'app'),
+        options['labels'][IMAGE_LABEL] = image.id
+        self.docker.containers.create(self.app_image, name=self.name(aid, 'app'),
             network=network.name, networking_config={network.name: self.docker.api.create_endpoint_config(ipv4_address=app_ip)}, user='1000:1000', environment=env,
             volumes={volume.name: {'bind': '/work', 'mode': 'rw'},
                      str(d / 'resolv.conf'): {'bind': '/etc/resolv.conf', 'mode': 'ro'}},
@@ -184,11 +261,14 @@ class Manager:
 
     def apply(self, aid, desired):
         with self.guard(aid):
+            if not isinstance(desired, dict):
+                raise BadRequest('invalid configuration')
             revision = desired.get('revision', '')
-            if not REVISION.fullmatch(revision):
-                raise ValueError('invalid revision')
+            if not isinstance(revision, str) or not REVISION.fullmatch(revision):
+                raise BadRequest('invalid revision')
             if not desired.get('proxy') or not desired.get('enabled', True):
                 return self.block(aid)
+            self.ensure_image(self.egress_image)
             state = self.provision(aid, desired.get('auth'))
             if self.public(aid)['revision'] == revision:
                 app, egress = self.owned(aid, 'app'), self.owned(aid, 'egress')
@@ -198,8 +278,11 @@ class Manager:
             state['status'] = 'syncing'
             self.save(aid, state)
             # Config validation happens before the old egress is stopped.
-            config, rules = configuration(desired['proxy'], state['app_ip'], state['gateway_ip'])
-            d = self.root / aid
+            try:
+                config, rules = configuration(desired['proxy'], state['app_ip'], state['gateway_ip'])
+            except (ValueError, KeyError, TypeError) as e:
+                raise BadRequest('invalid proxy') from e
+            d = self.dir(aid)
             write_private(d / 'sing-box.json', json.dumps(config))
             write_private(d / 'firewall.nft', rules)
             self.docker.containers.run(self.egress_image,
@@ -262,12 +345,65 @@ class Manager:
             self.save(aid, state)
         return {'account_id': aid, 'status': 'blocked', 'revision': ''}
 
+    def delete(self, aid):
+        """Remove a draft runtime completely; idempotent."""
+        check(aid)
+        if not DRAFT.fullmatch(aid):
+            raise NotDraft('only draft runtimes can be deleted')
+        with self.guard(aid):
+            self.online.pop(aid, None)
+            self.boots.pop(aid, None)
+            # Containers first: the egress is attached to the network and the
+            # app container mounts the volume.
+            for role in ('egress', 'app'):
+                with contextlib.suppress(docker.errors.NotFound):
+                    self.owned(aid, role).remove(force=True)
+            with contextlib.suppress(docker.errors.NotFound):
+                network = self.docker.networks.get(self.name(aid, 'net'))
+                if (network.attrs.get('Labels') or {}).get(LABEL) != aid:
+                    raise ValueError('network ownership mismatch')
+                network.remove()
+            with contextlib.suppress(docker.errors.NotFound):
+                volume = self.docker.volumes.get(self.name(aid, 'data'))
+                if (volume.attrs.get('Labels') or {}).get(LABEL) != aid:
+                    raise ValueError('volume ownership mismatch')
+                volume.remove(force=True)
+            d = self.dir(aid)
+            if d.is_dir() and not d.is_symlink():
+                shutil.rmtree(d)
+        return {'deleted': True}
+
+    def runtimes(self):
+        out = []
+        for entry in sorted(self.root.iterdir()):
+            if not KEY.fullmatch(entry.name) or entry.is_symlink() or not entry.is_dir():
+                continue
+            aid = entry.name
+            try:
+                state = self.state(aid) or {}
+                created = state.get('created_at') or rfc3339(entry.stat().st_mtime)
+            except (OSError, ValueError):
+                continue  # removed concurrently
+            if state.get('status') == 'blocked':
+                status = 'blocked'
+            else:
+                try:
+                    status = self.public(aid)['status']
+                except (docker.errors.DockerException, ValueError):
+                    status = 'pending'
+            out.append({'key': aid, 'status': status, 'created_at': created})
+        return {'runtimes': out}
+
     def public(self, aid):
         state = self.state(aid) or {}
         if aid in self.online:
             try:
                 containers = [self.owned(aid, role) for role in ('app', 'egress')]
                 if any(c.status != 'running' for c in containers) or tuple(c.attrs['State']['StartedAt'] for c in containers) != self.boots.get(aid):
+                    self.online.pop(aid, None)
+                # A new app image makes the runtime pending, so the core's next
+                # reconciliation (PUT config) recreates the app container.
+                elif image_of(containers[0]) != self.app_image_id():
                     self.online.pop(aid, None)
             except docker.errors.NotFound:
                 self.online.pop(aid, None)
@@ -296,31 +432,53 @@ class Handler(BaseHTTPRequestHandler):
         self.response_started = True
         self.wfile.write(raw)
 
+    def fail(self, status, code, close=False):
+        if close:
+            self.close_connection = True
+        return self.reply(status, {'error': code})
+
     def handle_request(self):
         self.response_started = False
         manager = self.server.manager
         key = self.headers.get('Authorization', '').removeprefix('Bearer ')
         if not hmac.compare_digest(key, self.server.key):
-            self.close_connection = True
-            return self.reply(401, {'error': 'unauthorized'})
-        match = re.fullmatch(r'/accounts/([1-9][0-9]{0,17})/(config|status|v1/messages|admin/(?:status|auth/start|auth/complete|auth/cancel|auth/logout))', self.path)
+            return self.fail(401, 'unauthorized', close=True)
+        if self.path == '/health':
+            self.close_connection = True  # any request body is left unread
+            if self.command != 'GET':
+                return self.fail(405, 'method_not_allowed')
+            return self.reply(200, manager.health())
+        match = ROUTE.fullmatch(self.path)
         if not match:
-            self.close_connection = True
-            return self.reply(404, {'error': 'not found'})
+            return self.fail(404, 'not_found', close=True)
         aid, path = match[1], match[2]
         try:
             n = int(self.headers.get('Content-Length', '0'))
         except ValueError:
-            self.close_connection = True
-            return self.reply(400, {'error': 'invalid request framing'})
+            return self.fail(400, 'invalid_request', close=True)
         if n < 0 or n > (32 << 20) or self.headers.get('Transfer-Encoding'):
-            self.close_connection = True
-            return self.reply(400, {'error': 'invalid request framing'})
+            return self.fail(400, 'invalid_request', close=True)
         body = self.rfile.read(n)
         try:
+            if aid is None:
+                if self.command != 'GET':
+                    return self.fail(405, 'method_not_allowed')
+                return self.reply(200, manager.runtimes())
+            if path is None:
+                if self.command != 'DELETE':
+                    return self.fail(405, 'method_not_allowed')
+                try:
+                    return self.reply(200, manager.delete(aid))
+                except NotDraft:
+                    # Deleting an account's data stays an explicit administrator operation.
+                    return self.fail(405, 'method_not_allowed')
             if path == 'config' and self.command == 'PUT':
                 try:
-                    result = manager.apply(aid, json.loads(body))
+                    try:
+                        desired = json.loads(body)
+                    except ValueError as e:
+                        raise BadRequest('invalid JSON') from e
+                    result = manager.apply(aid, desired)
                 except Exception:
                     manager.online.pop(aid, None)
                     raise
@@ -328,14 +486,14 @@ class Handler(BaseHTTPRequestHandler):
             if path == 'status' and self.command == 'GET':
                 return self.reply(200, manager.public(aid))
             if path in ('config', 'status') or self.command not in ('GET', 'POST'):
-                return self.reply(405, {'error': 'method not allowed'})
+                return self.fail(405, 'method_not_allowed')
             with manager.guard(aid):
                 state = manager.state(aid)
                 revision = self.headers.get('X-CCG-Revision', '')
                 if not state or not revision or manager.public(aid)['revision'] != revision:
-                    return self.reply(409, {'error': 'account proxy not synchronized'})
+                    return self.fail(409, 'not_synchronized')
                 if path.startswith('admin/auth/') and state.get('auth_mode') == 'api_key':
-                    return self.reply(409, {'error': 'API key accounts do not use OAuth authorization'})
+                    return self.fail(409, 'api_key_account')
                 address = state['app_ip']
                 secret = state['admin_key'] if path.startswith('admin/') else state['api_key']
             # No configuration writes on the request path. Concurrent streams
@@ -357,12 +515,20 @@ class Handler(BaseHTTPRequestHandler):
                         self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
             self.close_connection = True
+        except BadRequest:
+            self.close_connection = True
+            if not self.response_started:
+                self.fail(400, 'invalid_request')
+        except ImagePullFailed:
+            self.close_connection = True
+            if not self.response_started:
+                self.fail(503, 'image_pull_failed')
         except Exception:
             self.close_connection = True
             if not self.response_started:
-                self.reply(503, {'error': 'account runtime unavailable'})
+                self.fail(503, 'runtime_unavailable')
 
-    do_GET = do_POST = do_PUT = handle_request
+    do_GET = do_POST = do_PUT = do_DELETE = handle_request
 
 
 if __name__ == '__main__':
