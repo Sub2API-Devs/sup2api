@@ -3191,7 +3191,7 @@ new-api 的渠道测试（`controller/channel-test.go`）每次测试后写渠�
 - 迁移 0031（可重跑、只加可空列，旧核心跑在新表上不受影响）：`accounts` 增加 `last_test_at timestamptz`、`last_test_ok boolean`、`last_test_latency_ms integer`、`last_test_model text`、`last_test_message text`。
 - 每次 `POST /accounts/:id/test` 结束后写入（插件 `BuildTestRequest` 报错也记为失败，`latency_ms` 0）：
   - `ok`、`latency_ms` 同 TestResult；`model` 为 TestResult 的 `model`（实际请求的模型，映射后）；
-  - `message`：成功为空串；失败时取插件的 `reason`，没有则取 `message`（上游响应体前缀或错误信息），按字节截到 512（不截断半个字符）。
+  - `message`：成功为空串；失败时为插件的 `reason` 加上游返回（`reason: message`，两者相同或缺一则只取有的那个；只有 reason 会看不到真实原因，2026-10-05 改），按字节截到 512（不截断半个字符）。控制台模型测试的"结果"列同样先显示 reason，再显示上游返回的错误内容。
   - 写入不改 `updated_at`、不发 `account:changed` / 事件、不影响调度；写入失败只记日志，不影响测试响应。
 - 账号 JSON（`GET /accounts` 列表与 `GET /accounts/:id`、创建/修改的响应）新增 `last_test`：从未测试时为 `null`，否则 `{at, ok, latency_ms, model, message}`（`at` 为 RFC 3339）。
 - TestResult 新增 `requested_model`（映射前用户选的模型；未给时为空串，字段总在），`model` 仍为实际请求的模型。

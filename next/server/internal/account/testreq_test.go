@@ -315,7 +315,7 @@ func TestAccountTestRecordsLastTest(t *testing.T) {
 		t.Fatalf("requested_model without a model: %s", raw)
 	}
 
-	// Failure: the plugin's reason wins over the upstream body, cut to 512
+	// Failure: the plugin's reason comes first, the record is cut to 512
 	// bytes on a rune boundary.
 	bad := e.mkAccount("sk-other-key-1")
 	e.plat.classify = &pluginv1.ClassifyErrorResponse{Reason: strings.Repeat("凭证无效", 100)}
@@ -330,6 +330,15 @@ func TestAccountTestRecordsLastTest(t *testing.T) {
 	}
 	if ok || len(msg) > maxLastTestMessage || len(msg) < maxLastTestMessage-3 || !utf8.ValidString(msg) || !strings.HasPrefix(msg, "凭证无效") {
 		t.Fatalf("failure record: ok=%v %d bytes %q", ok, len(msg), msg)
+	}
+	// A short reason is followed by what the upstream answered.
+	e.plat.classify = &pluginv1.ClassifyErrorResponse{Reason: "bad key"}
+	_, _ = e.doRaw(e.uid, "POST", fmt.Sprintf("/accounts/%d/test", bad), nil)
+	if err := e.db.Pool.QueryRow(ctx, `SELECT last_test_message FROM accounts WHERE id = $1`, bad).Scan(&msg); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(msg, "bad key: ") || !strings.Contains(msg, "invalid x-api-key") {
+		t.Fatalf("reason and upstream message: %q", msg)
 	}
 	// Without a reason the upstream message is kept.
 	e.plat.classify = nil

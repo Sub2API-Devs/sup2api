@@ -327,9 +327,13 @@ async function copyBody(r: TestRow) {
         <template #cell-detail="{ row }">
           <div class="max-w-[22rem] space-y-0.5 text-xs">
             <div v-if="row.error" class="line-clamp-2 break-all text-red-600 dark:text-red-400" :title="row.error">{{ row.error }}</div>
-            <div v-else-if="row.result && !row.result.ok && (row.result.reason || row.result.message)" class="line-clamp-2 break-all text-red-600 dark:text-red-400" :title="row.result.message">
-              {{ row.result.reason || row.result.message }}
-            </div>
+            <template v-else-if="row.result && !row.result.ok && (row.result.reason || row.result.message)">
+              <div v-if="row.result.reason" class="line-clamp-2 break-all font-medium text-red-600 dark:text-red-400" :title="row.result.reason">{{ row.result.reason }}</div>
+              <!-- What the upstream answered: the plugin's reason alone hides it. -->
+              <div v-if="row.result.message && row.result.message !== row.result.reason" class="line-clamp-3 break-all font-mono text-[11px] text-red-500/90 dark:text-red-300/90" :title="row.result.message" data-testid="model-test-error-body">
+                {{ row.result.message }}
+              </div>
+            </template>
             <div v-else-if="row.result?.message" class="line-clamp-1 break-all text-gray-500 dark:text-dark-400" :title="row.result.message">{{ row.result.message }}</div>
             <SBadge v-if="effectBadge(row.result?.effect)" :tone="effectBadge(row.result?.effect)!.tone" :title="t('accounts.testEffectNotApplied')">{{ effectBadge(row.result?.effect)!.label }}</SBadge>
           </div>

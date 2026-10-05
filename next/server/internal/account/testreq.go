@@ -156,11 +156,18 @@ const (
 func (s *Service) recordTest(ctx context.Context, id int64, res TestResult) {
 	msg := ""
 	if !res.OK {
-		msg = res.Reason
-		if msg == "" {
-			msg = res.Message
+		// The plugin's reason first, then what the upstream answered: the
+		// reason alone ("upstream server error (502)") hides the cause.
+		reason, upstream := strings.TrimSpace(res.Reason), strings.TrimSpace(res.Message)
+		switch {
+		case reason == "":
+			msg = upstream
+		case upstream == "" || upstream == reason:
+			msg = reason
+		default:
+			msg = reason + ": " + upstream
 		}
-		msg = cutBytes(strings.TrimSpace(msg), maxLastTestMessage)
+		msg = cutBytes(msg, maxLastTestMessage)
 	}
 	wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordTestTimeout)
 	defer cancel()
