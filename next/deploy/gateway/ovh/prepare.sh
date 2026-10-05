@@ -144,4 +144,8 @@ release 0.1.23
 # indexes, subscription limits, credential refresh, last account test), drops
 # step-up, and authorizes Claude Code accounts in the account editor.
 release 0.1.24 0.1.23
+# 0.1.25 adds migration 0032 (CCGateway draft runtimes): Claude Code accounts
+# are authorized before saving, the runtime installs from the console, and a
+# login lasts while it is used. Upgrade the cc-max controller first.
+release 0.1.25 0.1.24
 ls -la publish
