@@ -46,6 +46,13 @@ func TestMain(m *testing.M) {
 }
 
 func cliTailPeer() error {
+	if file := os.Getenv("CCG_TEST_POLICY_CAPTURE"); file != "" {
+		raw, _ := json.Marshal(Object{"args": os.Args[1:], "betas": os.Getenv("ANTHROPIC_BETAS"), "extra": os.Getenv("CLAUDE_CODE_EXTRA_BODY"), "effort_env": os.Getenv("CLAUDE_CODE_EFFORT_LEVEL"), "streaming": os.Getenv("CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING")})
+		if err := os.WriteFile(file, raw, 0600); err != nil {
+			return err
+		}
+	}
+
 	dec, enc := json.NewDecoder(os.Stdin), json.NewEncoder(os.Stdout)
 	var init, user Object
 	if err := dec.Decode(&init); err != nil {

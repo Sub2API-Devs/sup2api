@@ -148,6 +148,18 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 	default:
 		args = append(args, "--thinking", "disabled")
 	}
+	if req.Effort != "" {
+		args = append(args, "--effort", req.Effort)
+	}
+	if req.Fast != nil {
+		settings, _ := json.Marshal(Object{"disableAllHooks": false, "fastMode": *req.Fast})
+		for i := range args {
+			if args[i] == "--settings" {
+				args[i+1] = string(settings)
+				break
+			}
+		}
+	}
 	ready := filepath.Join(dir, "mod-ready")
 	runctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -158,7 +170,11 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 		env = os.Environ()
 	}
 	env = r.Proxy.Environment(env)
-	cmd.Env = envWith(env, map[string]string{"CCGATEWAY_READY_FILE": ready, "CLAUDE_CODE_MAX_OUTPUT_TOKENS": strconv.Itoa(req.MaxTokens), "DISABLE_AUTOUPDATER": "1", "DISABLE_AUTO_COMPACT": "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "ENABLE_TOOL_SEARCH": "false", "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "0"}, "CLAUDE_CODE_RESUME_INTERRUPTED_TURN", "CLAUDE_CODE_RESUME_FROM_SESSION", "CLAUDE_CODE_PLUGIN_DIRS")
+	cmd.Env = envWith(env, map[string]string{"CCGATEWAY_READY_FILE": ready, "CLAUDE_CODE_MAX_OUTPUT_TOKENS": strconv.Itoa(req.MaxTokens), "DISABLE_AUTOUPDATER": "1", "DISABLE_AUTO_COMPACT": "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "ENABLE_TOOL_SEARCH": "false", "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "0"}, "CLAUDE_CODE_RESUME_INTERRUPTED_TURN", "CLAUDE_CODE_RESUME_FROM_SESSION", "CLAUDE_CODE_PLUGIN_DIRS", "ANTHROPIC_BETAS", "CLAUDE_CODE_EXTRA_BODY", "CLAUDE_CODE_EFFORT_LEVEL", "CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING")
+	cmd.Env = envWith(cmd.Env, map[string]string{"ANTHROPIC_BETAS": strings.Join(req.Betas, ",")})
+	if req.FineGrainedTools {
+		cmd.Env = envWith(cmd.Env, map[string]string{"CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING": "1"})
+	}
 	stdin, e := cmd.StdinPipe()
 	if e != nil {
 		return nil, e

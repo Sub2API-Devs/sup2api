@@ -22,16 +22,20 @@ type Tool struct {
 	Schema      Object `json:"input_schema"`
 }
 type Request struct {
-	Model     string
-	MaxTokens int
-	Stream    bool
-	System    []string
-	Messages  []Message
-	Tools     []Tool
-	NoTools   bool
-	Thinking  Object
-	TTL       time.Duration
-	Native    map[string]bool
+	Model            string
+	MaxTokens        int
+	Stream           bool
+	System           []string
+	Messages         []Message
+	Tools            []Tool
+	NoTools          bool
+	Thinking         Object
+	Fast             *bool
+	Effort           string
+	Betas            []string
+	FineGrainedTools bool
+	TTL              time.Duration
+	Native           map[string]bool
 }
 
 var toolName = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
@@ -429,7 +433,7 @@ func fingerprints(ms []Message) []string {
 	return out
 }
 func (r *Request) configKey() string {
-	return digest([]any{r.Model, r.System, r.Tools, r.NoTools, r.Thinking, r.Native})
+	return digest([]any{r.Model, r.System, r.Tools, r.NoTools, r.Thinking, r.Native, r.Fast, r.Effort, r.Betas, r.FineGrainedTools})
 }
 func (r *Request) wireName(name string) string {
 	if r.Native[name] {

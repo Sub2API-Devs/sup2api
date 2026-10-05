@@ -2,6 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
+import RequestPolicySettings from './RequestPolicySettings.vue'
+import { defaultRequestPolicy, validRequestPolicy, type RequestPolicy } from './requestPolicy'
 
 
 
@@ -9,6 +11,7 @@ interface RuntimeImages { app: string; egress: string; controller: string }
 interface RemoteConfig {
   account_runtimes: boolean; mode: 'disabled' | 'local' | 'ssh'; host: string; port: number; user: string; auth_mode: 'password' | 'private_key'
   host_key_fingerprint: string; has_password: boolean; has_private_key: boolean; has_passphrase: boolean; has_admin_key: boolean; has_api_key: boolean
+  request_policy?: RequestPolicy
   images?: Partial<RuntimeImages> | null
   network?: { pool: string; allocation: 'random' | 'sequential' }
 }
@@ -20,6 +23,8 @@ const base = '/system/ccgateway/remote-config'
 const IMAGE_KEYS = ['app', 'egress', 'controller'] as const
 // Same rule as the core: repository[:tag][@sha256:digest], or a local image id.
 const IMAGE_RE = /^(?:[a-z0-9][a-z0-9._/-]{0,127}(?::[A-Za-z0-9._-]{1,128})?(?:@sha256:[0-9a-f]{64})?|sha256:[0-9a-f]{64})$/
+const requestPolicy = ref<RequestPolicy>(defaultRequestPolicy())
+const policyChanged = computed(() => JSON.stringify(requestPolicy.value) !== JSON.stringify(saved.value?.request_policy || defaultRequestPolicy()))
 const images = reactive<RuntimeImages>({ app: '', egress: '', controller: '' })
 const network = reactive({ pool: '10.0.0.0/8', allocation: 'random' as 'random' | 'sequential' })
 const networkChanged = computed(() => network.pool.trim() !== (saved.value?.network?.pool || '10.0.0.0/8') || network.allocation !== (saved.value?.network?.allocation || 'random'))
@@ -34,7 +39,7 @@ const probe = ref<{ fingerprint: string; host: string; port: number } | null>(nu
 const pending = ref<Action | null>(null)
 const publicConfig = computed(() => ({ ...form, host: form.host.trim(), port: Number(form.port), user: form.user.trim(), host_key_fingerprint: form.host_key_fingerprint.trim() }))
 const targetChanged = computed(() => !!saved.value && (publicConfig.value.host !== saved.value.host || publicConfig.value.port !== saved.value.port || publicConfig.value.user !== saved.value.user))
-const dirty = computed(() => !saved.value || Object.entries(publicConfig.value).some(([key, value]) => saved.value?.[key as keyof RemoteConfig] !== value) || Object.values(secrets).some(Boolean) || imagesChanged.value || networkChanged.value)
+const dirty = computed(() => !saved.value || Object.entries(publicConfig.value).some(([key, value]) => saved.value?.[key as keyof RemoteConfig] !== value) || Object.values(secrets).some(Boolean) || imagesChanged.value || networkChanged.value || policyChanged.value)
 const canOperate = computed(() => !busy.value && !props.disabled && saved.value?.mode === 'ssh' && !dirty.value)
 const passwordNeeded = computed(() => targetChanged.value || !saved.value?.has_password)
 const keyNeeded = computed(() => targetChanged.value || !saved.value?.has_private_key)
@@ -45,6 +50,7 @@ watch(dirty, () => { pending.value = null; output.value = '' })
 function clearSecrets() { secrets.password = ''; secrets.private_key = ''; secrets.passphrase = ''; secrets.admin_key = ''; secrets.api_key = '' }
 function assign(config: RemoteConfig) {
   saved.value = config
+  requestPolicy.value = structuredClone(config.request_policy || defaultRequestPolicy())
   for (const key of Object.keys(defaults) as Array<keyof typeof defaults>) Object.assign(form, { [key]: config[key] ?? defaults[key] })
   for (const key of IMAGE_KEYS) images[key] = config.images?.[key] || ''
   network.pool = config.network?.pool || '10.0.0.0/8'
@@ -72,6 +78,8 @@ async function save() {
   const bad = IMAGE_KEYS.map(k => imagesPayload.value[k]).find(ref => ref && !IMAGE_RE.test(ref))
   if (bad) { imageError.value = t('ccgateway.remote.imageInvalid', { ref: bad }); return }
   imageError.value = ''
+  if (!validRequestPolicy(requestPolicy.value)) { imageError.value = t('ccgateway.policy.invalid'); return }
+  payload.request_policy = requestPolicy.value
   payload.images = imagesPayload.value
   const rebuildNetwork = networkChanged.value && config.account_runtimes
   payload.network = { pool: network.pool.trim() || '10.0.0.0/8', allocation: network.allocation }
@@ -136,6 +144,8 @@ onBeforeUnmount(clearSecrets)
         </template>
         <div class="grid gap-3 sm:grid-cols-2"><label v-for="key in (form.account_runtimes ? ['admin_key'] as const : ['admin_key','api_key'] as const)" :key="key" class="block text-sm">{{ t(`ccgateway.remote.${key}`) }}<input v-model="secrets[key]" type="password" autocomplete="new-password" class="input mt-1 w-full" :data-testid="key" :placeholder="saved[`has_${key}`] ? t('ccgateway.remote.keepSecret') : ''" /></label></div>
         <p class="text-xs text-gray-500">{{ t('ccgateway.remote.keysHint') }}</p>
+        <RequestPolicySettings v-model="requestPolicy" />
+        <p v-if="imageError" role="alert" class="text-sm text-red-600">{{ imageError }}</p>
         <div v-if="form.account_runtimes" class="space-y-2" data-testid="remote-images">
           <label class="block text-sm">{{ t('ccgateway.remote.networkPool') }}<input v-model="network.pool" class="input mt-1 w-full font-mono text-xs" placeholder="10.0.0.0/8" autocomplete="off" spellcheck="false" data-testid="network-pool" /></label>
           <label class="block text-sm">{{ t('ccgateway.remote.networkAllocation') }}<select v-model="network.allocation" class="input mt-1 w-full" data-testid="network-allocation"><option value="random">{{ t('ccgateway.remote.networkRandom') }}</option><option value="sequential">{{ t('ccgateway.remote.networkSequential') }}</option></select></label>
@@ -145,7 +155,6 @@ onBeforeUnmount(clearSecrets)
             <label v-for="key in IMAGE_KEYS" :key="key" class="block text-sm">{{ t(`ccgateway.remote.image${key[0].toUpperCase()}${key.slice(1)}`) }}<input v-model="images[key]" autocomplete="off" spellcheck="false" class="input mt-1 w-full font-mono text-xs" :data-testid="`image-${key}`" /></label>
           </div>
           <p class="text-xs text-gray-500">{{ t('ccgateway.remote.imagesHint') }}</p>
-          <p v-if="imageError" role="alert" class="text-sm text-red-600">{{ imageError }}</p>
         </div>
         <div class="flex justify-end"><button class="btn btn-primary" :disabled="!dirty || form.mode === 'disabled'" data-testid="remote-save">{{ t('ccgateway.remote.save') }}</button></div>
       </fieldset>

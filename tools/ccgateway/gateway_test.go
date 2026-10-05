@@ -199,6 +199,7 @@ func TestRealCLI(t *testing.T) {
 	}
 	var mu sync.Mutex
 	var requests []Object
+	var requestBetas []string
 	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" || !strings.HasSuffix(r.URL.Path, "/messages") {
 			w.Header().Set("Content-Type", "application/json")
@@ -213,6 +214,7 @@ func TestRealCLI(t *testing.T) {
 		}
 		mu.Lock()
 		requests = append(requests, v)
+		requestBetas = append(requestBetas, r.Header.Get("anthropic-beta"))
 		captureIndex := len(requests)
 		mu.Unlock()
 		if capture := os.Getenv("CCG_CAPTURE_DIR"); capture != "" {
@@ -311,6 +313,7 @@ func TestRealCLI(t *testing.T) {
 	gateway := httptest.NewServer(&Gateway{Runner: runner, Cache: cache, Timeout: 45 * time.Second, Slots: make(chan struct{}, 2), NativeAllowed: map[string]bool{"Read": true}})
 	defer gateway.Close()
 	sessionHeader, scopeHeader := "test-session", ""
+	betaHeader, policyJSON := "", ""
 	post := func(v Object, native string) (Object, string, http.Header) {
 		t.Helper()
 		b, _ := json.Marshal(v)
@@ -321,6 +324,8 @@ func TestRealCLI(t *testing.T) {
 		req.Header.Set("X-CCGateway-Session-ID", sessionHeader)
 		req.Header.Set("X-CCGateway-Session-Scope", scopeHeader)
 		req.Header.Set("X-CCGateway-Native-Tools", native)
+		req.Header.Set("anthropic-beta", betaHeader)
+		req.Header.Set(policyHeader, policyJSON)
 		resp, e := http.DefaultClient.Do(req)
 		if e != nil {
 			t.Fatal(e)
@@ -836,6 +841,38 @@ func TestRealCLI(t *testing.T) {
 	if ts, _ := last["tools"].([]any); len(ts) != 0 {
 		t.Fatalf("tool_choice none exposed tools: %v", ts)
 	}
+	// Verify the actual model request produced by the installed CLI, using the local fake upstream only.
+	policy := defaultRequestPolicy()
+	policy.AllowFast = true
+	rawPolicy, _ := json.Marshal(policy)
+	policyJSON = string(rawPolicy)
+	betaHeader = "fine-grained-tool-streaming-2025-05-14,ignored-client-beta"
+	sessionHeader = "capability-test"
+	capability := basic()
+	capability["model"] = "claude-opus-5-5"
+	capability["speed"] = "fast"
+	capability["output_config"] = Object{"effort": "low"}
+	post(capability, "")
+	mu.Lock()
+	mapped := requests[len(requests)-1]
+	mappedBetas := requestBetas[len(requestBetas)-1]
+	mu.Unlock()
+	cfg, _ := mapped["output_config"].(map[string]any)
+	if mapped["speed"] != "fast" || cfg["effort"] != "low" || !strings.Contains(mappedBetas, "fine-grained-tool-streaming-2025-05-14") || strings.Contains(mappedBetas, "ignored-client-beta") {
+		t.Fatalf("actual CLI mapping mismatch: speed=%v effort=%v betas=%s", mapped["speed"], cfg["effort"], mappedBetas)
+	}
+	policy.AllowFast = false
+	rawPolicy, _ = json.Marshal(policy)
+	policyJSON = string(rawPolicy)
+	post(capability, "")
+	mu.Lock()
+	standard := requests[len(requests)-1]
+	mu.Unlock()
+	if standard["speed"] == "fast" {
+		t.Fatal("disabled Fast reached upstream")
+	}
+	betaHeader = ""
+	policyJSON = ""
 	if os.Getenv("CCG_CAPTURE_DIR") != "" {
 		hi := Object{"model": "claude-sonnet-4-6", "max_tokens": 128, "messages": []any{Object{"role": "user", "content": "hi"}}}
 		post(hi, "")

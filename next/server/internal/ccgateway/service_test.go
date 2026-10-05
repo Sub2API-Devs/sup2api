@@ -114,6 +114,11 @@ func TestDBEncryptedAuditAndModelForward(t *testing.T) {
 		if r.Header.Get("x-api-key") != "secret-api" || r.Header.Get("Authorization") != "" || r.URL.Path != "/v1/messages" {
 			t.Error("incorrect injected authorization")
 		}
+
+		var policy RequestPolicy
+		if json.Unmarshal([]byte(r.Header.Get("X-CCGateway-Request-Policy")), &policy) != nil || policy.UnknownBeta != "ignore" {
+			t.Error("trusted request policy not injected")
+		}
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = w.Write([]byte("data: ok\n\n"))
 		w.(http.Flusher).Flush()
@@ -127,6 +132,7 @@ func TestDBEncryptedAuditAndModelForward(t *testing.T) {
 	req, _ := http.NewRequestWithContext(ctx, "POST", VirtualURL, strings.NewReader(`{}`))
 	req.Header.Set("x-api-key", "attacker")
 	req.Header.Set("Authorization", "Bearer attacker")
+	req.Header.Set("X-CCGateway-Request-Policy", `{"unknown_beta":"reject"}`)
 	res, e := s.ModelClient().Do(req)
 	if e != nil {
 		t.Fatal(e)

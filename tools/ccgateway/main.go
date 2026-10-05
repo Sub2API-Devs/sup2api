@@ -72,10 +72,6 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		apiError(w, 400, "invalid_request_error", "Unsupported anthropic-version")
 		return
 	}
-	if r.Header.Get("anthropic-beta") != "" {
-		apiError(w, 400, "invalid_request_error", "anthropic-beta is not supported in v0.1")
-		return
-	}
 	body, e := io.ReadAll(http.MaxBytesReader(w, r.Body, 32<<20))
 	if e != nil {
 		var large *http.MaxBytesError
@@ -86,7 +82,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	req, e := parseRequest(body)
+	req, e := parsePolicyRequest(body, r.Header)
 	if e != nil {
 		apiError(w, 400, "invalid_request_error", e.Error())
 		return

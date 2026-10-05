@@ -2,6 +2,7 @@ package ccgateway
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/remotedocker"
 	"io"
@@ -123,6 +124,13 @@ func (t modelTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	clone.Host = ""
 	clone.Header = clone.Header.Clone()
+	policy := cfg.EffectiveRequestPolicy()
+	if err := validateRequestPolicy(policy); err != nil {
+		finish()
+		return nil, err
+	}
+	policyJSON, _ := json.Marshal(policy)
+	clone.Header.Set("X-CCGateway-Request-Policy", string(policyJSON))
 	clone.Header.Del("Authorization")
 	clone.Header.Set("x-api-key", cfg.APIKey)
 	clone.Header.Del("X-CCG-Revision")
