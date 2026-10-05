@@ -151,4 +151,6 @@ release 0.1.25 0.1.24
 # 0.1.26 adds migration 0033: re-authorizing a Claude Code account replaces its
 # runtime and clears its history. Upgrade the cc-max controller first.
 release 0.1.26 0.1.25
+# 0.1.27 aligns right-aligned table headers with their cells (same schema).
+release 0.1.27
 ls -la publish
