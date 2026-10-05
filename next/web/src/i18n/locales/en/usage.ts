@@ -36,7 +36,15 @@ export default {
     daily: 'Daily',
     partial: 'Based on the latest {n} requests'
   },
+  showDetails: 'View details',
+  hideDetails: 'Hide details',
+  errors: {
+    model_not_allowed: 'Model unavailable',
+    no_available_account: 'No available account',
+    rate_limit_exceeded: 'Rate limit exceeded'
+  },
   cols: {
+    route: 'Group / account',
     input: 'Input',
     output: 'Output',
     cost: 'Cost',

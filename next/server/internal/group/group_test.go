@@ -220,7 +220,7 @@ func TestGroupCRUDAndVisibility(t *testing.T) {
 		t.Fatalf("create: %d %v", code, out)
 	}
 	def := out["data"].(map[string]any)
-	if def["rate_multiplier"] != "1" || def["visibility"] != "public" {
+	if def["rate_multiplier"] != "1" || def["visibility"] != "public" || def["model_filter_mode"] != "blacklist" {
 		t.Fatalf("defaults: %v", def)
 	}
 	code, out = e.do(e.admin, "POST", "/groups", map[string]any{"name": "VIP", "visibility": "restricted",
@@ -360,5 +360,34 @@ func TestGroupPlatforms(t *testing.T) {
 		if got := fmt.Sprint(g["platforms"]); got != want[int64(g["id"].(float64))] {
 			t.Fatalf("me/groups %v: %s", g["name"], got)
 		}
+	}
+}
+
+func TestGroupModelPolicyCRUD(t *testing.T) {
+	e := setup(t)
+	code, out := e.do(e.admin, "POST", "/groups", map[string]any{"name": "policy", "model_filter_mode": "blacklist", "model_allowlist": []string{"claude-opus-*"}})
+	if code != 201 {
+		t.Fatalf("create: %d %v", code, out)
+	}
+	g := out["data"].(map[string]any)
+	id := int64(g["id"].(float64))
+	if g["model_filter_mode"] != "blacklist" {
+		t.Fatalf("mode: %v", g)
+	}
+	_, out = e.do(e.user, "GET", "/me/groups", nil)
+	if out["data"].([]any)[0].(map[string]any)["model_filter_mode"] != "blacklist" {
+		t.Fatalf("my groups: %v", out)
+	}
+	code, out = e.do(e.admin, "PATCH", fmt.Sprintf("/groups/%d", id), map[string]any{"model_filter_mode": "whitelist"})
+	if code != 200 || out["data"].(map[string]any)["model_filter_mode"] != "whitelist" || len(out["data"].(map[string]any)["model_allowlist"].([]any)) != 1 {
+		t.Fatalf("patch: %d %v", code, out)
+	}
+	for _, mode := range []string{"invalid", ""} {
+		if code, _ = e.do(e.admin, "PATCH", fmt.Sprintf("/groups/%d", id), map[string]any{"model_filter_mode": mode}); code != 400 {
+			t.Fatalf("invalid mode %q: %d", mode, code)
+		}
+	}
+	if code, _ = e.do(e.user, "PATCH", fmt.Sprintf("/groups/%d", id), map[string]any{"model_filter_mode": "blacklist"}); code != 403 {
+		t.Fatalf("permission: %d", code)
 	}
 }

@@ -123,7 +123,7 @@ func TestTaskGatewayCrossNodeSnapshotAndAuthorization(t *testing.T) {
 			t.Fatalf("unauthorized query key=%s: %d %s", key, got.status, got.body)
 		}
 	}
-	if got := taskDraftGet(t, b, public, "model-denied"); got.status != 403 {
+	if got := taskDraftGet(t, b, public, "model-denied"); got.status != 404 {
 		t.Fatalf("model allowlist bypassed: %d %s", got.status, got.body)
 	}
 	if got := taskDraftGet(t, b, "raw-video-id", testKey); got.status != 404 {

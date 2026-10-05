@@ -1,4 +1,12 @@
 export default {
+  modelRules: 'Model policy',
+  whitelist: 'Whitelist',
+  blacklist: 'Blacklist',
+  whitelistHint: 'Allow only matching models',
+  blacklistHint: 'Block matching models; allow the rest',
+  emptyPolicy: 'Empty list: all models allowed',
+  patternInvalid: 'Each model pattern must be at most 200 characters',
+
   title: 'Groups',
   description: 'A group is a set of accounts (any types mixed) serving together; each API key is bound to one group. The group decides the rate multiplier, allowed models and — through its accounts — the platforms it serves.',
   create: 'New group',

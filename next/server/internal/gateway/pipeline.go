@@ -330,8 +330,8 @@ func (c *call) checkModel(ctx context.Context) *gwError {
 	}
 	c.rec.Model = c.model
 	c.rec.Stream = c.stream
-	if allow := c.principal.Group.ModelAllowlist; len(allow) > 0 && !anyGlob(allow, c.model) {
-		return fromCore(core.ErrModelNotAllowed.WithDetails(map[string]any{"model": c.model}), errTypeModelNotAllowed)
+	if !c.principal.Group.AllowsModel(c.model) {
+		return fromCore(core.ErrModelNotFound.WithDetails(map[string]any{"model": c.model}), errTypeModelNotAllowed)
 	}
 	return nil
 }

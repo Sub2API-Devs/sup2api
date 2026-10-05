@@ -515,7 +515,7 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 |---|---|---|---|---|
 | GET `/users` | 分页 | `q`（邮箱或显示名 ILIKE）、`status`（`active`\|`disabled`）、`role`（角色 key） | `id` 升序 | `iam/users.go` |
 | GET `/groups` | 分页 | `q`（名称 ILIKE）、`status` | `id` 升序 | `group/group.go` |
-| GET `/me/groups` | 不分页 | 无（只返回 `active` 且对当前用户可用的分组；字段 `{id, name, description, rate_multiplier, model_allowlist, platforms}`） | `id` 升序 | `group/group.go` |
+| GET `/me/groups` | 不分页 | 无（只返回 `active` 且对当前用户可用的分组；字段 `{id, name, description, rate_multiplier, model_allowlist, model_filter_mode, platforms}`） | `id` 升序 | `group/group.go` |
 | GET `/accounts` | 分页 | `plugin_key`、`type`、`status`、`group_id`（整数）、`q`（名称 ILIKE） | `priority` 升序，再 `id` 升序 | `account/handlers.go` |
 | GET `/proxies` | 分页 | `q`（名称或主机 ILIKE）、`status` | `id` 升序 | `proxy/proxy.go` |
 | GET `/prices` | 分页 | `mode`（`per_request`\|`per_token`\|`expression`）、`source`（`admin`\|`plugin_default`）、`plugin_key`、`enabled`、`q`（`model` 或 `note` ILIKE） | `model`、`source`、`plugin_key`（NULL 在前）、`id` | `billing/prices.go` |
@@ -3461,3 +3461,9 @@ CREATE INDEX IF NOT EXISTS idx_account_balances_updated_at ON account_balances(u
 控制器 `/health` 报告 `network_policy_version: 1`，运行实例状态包含 `network`、`app_ip`、`gateway_ip`、`uplink_ip`。此功能需要安装支持网络策略的控制器镜像。
 
 API Key 隔离：仅 `/me/api-keys` 自有接口有效；所有全局 `/api-keys` 接口移除，旧前端 `/api-keys` 路径跳转到 `/me/api-keys`。移除全局权限及已存角色授权，列表忽略请求传入的 user_id，始终按会话身份查询。
+
+### 分组模型名单模式
+
+分组 `model_filter_mode` 为 `whitelist` 或 `blacklist`（新建分组默认，空名单不限制）；已有分组迁移后保留 `whitelist`；`model_allowlist` 保存当前模式下的模型匹配规则，支持 `*`、`?`。白名单允许匹配的请求模型，黑名单拒绝匹配的请求模型；两种模式名单为空均不限制。POST/PATCH `/groups` 可配置模式及名单，GET `/groups`、`/groups/:id`、`/me/groups` 返回模式。网关请求准入（包括钩子改写后的再次校验）与 API Key 价格模型列表使用同一策略；模型映射发生在该校验之后。迁移只给旧分组补充白名单模式，不改变原有名单。
+
+名单拦截对客户端统一返回 HTTP 404 / `model_not_found` / `model not found`，Anthropic 类型 `not_found_error`、Gemini `NOT_FOUND`；内部用量记录仍标记 `model_not_allowed`，不计费且不访问上游。

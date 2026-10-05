@@ -171,6 +171,7 @@ interface MockGroup {
   rate_multiplier: string
   visibility: 'public' | 'restricted'
   model_allowlist: string[]
+  model_filter_mode?: 'whitelist' | 'blacklist'
   account_count: number
   created_at: string
 }
@@ -213,6 +214,7 @@ on('POST', '/groups', (req) => {
     rate_multiplier: String(b.rate_multiplier ?? '1'),
     visibility: b.visibility || 'public',
     model_allowlist: b.model_allowlist || [],
+    model_filter_mode: b.model_filter_mode || 'blacklist',
     account_count: 0,
     created_at: now()
   }
@@ -225,7 +227,7 @@ on('PATCH', '/groups/:id', (req) => {
   const err = validateGroup(req.body || {})
   if (err) return err
   const b = req.body || {}
-  for (const k of ['name', 'description', 'status', 'visibility', 'model_allowlist'] as const) if (b[k] !== undefined) (g as any)[k] = b[k]
+  for (const k of ['name', 'description', 'status', 'visibility', 'model_allowlist', 'model_filter_mode'] as const) if (b[k] !== undefined) (g as any)[k] = b[k]
   if (b.rate_multiplier !== undefined) g.rate_multiplier = String(b.rate_multiplier)
   return groupOut(g)
 })

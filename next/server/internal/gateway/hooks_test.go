@@ -382,7 +382,7 @@ func TestHookPatches(t *testing.T) {
 			return &pluginv1.GatewayRequestHookResponse{Patches: []*pluginv1.BodyPatch{
 				{Op: pluginv1.BodyPatch_OP_SET, Path: "model", ValueJson: `"claude-opus-5"`}}}, nil
 		}})
-		if r := e.messages(body(testModel, false)); r.status != 403 {
+		if r := e.messages(body(testModel, false)); r.status != 404 {
 			t.Fatalf("patched model escaped allowlist: %d", r.status)
 		}
 		e.record()

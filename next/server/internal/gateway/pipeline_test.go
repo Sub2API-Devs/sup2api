@@ -333,7 +333,7 @@ func TestModelAllowlist(t *testing.T) {
 		e.auth.keys[testKey].Group.ModelAllowlist = []string{"claude-haiku-*"}
 	})
 	r := e.messages(body(testModel, false))
-	if r.status != 403 || r.json().Get("error.code").String() != "model_not_allowed" || r.json().Get("error.type").String() != "permission_error" {
+	if r.status != 404 || r.json().Get("error.code").String() != "model_not_found" || r.json().Get("error.type").String() != "not_found_error" {
 		t.Fatalf("allowlist: %d %s", r.status, r.body)
 	}
 	if len(e.up.keys()) != 0 {
@@ -512,5 +512,27 @@ func TestUpstreamPatchesAndFields(t *testing.T) {
 	}
 	if _, ok := b.GetInboundHeaders()["x-api-key"]; ok {
 		t.Fatal("non-allowlisted header forwarded to the plugin")
+	}
+}
+
+func TestModelBlacklist(t *testing.T) {
+	e := newEnv(t, func(e *env) {
+		e.auth.keys[testKey].Group.ModelFilterMode = "blacklist"
+		e.auth.keys[testKey].Group.ModelAllowlist = []string{"claude-sonnet-*"}
+	})
+	r := e.messages(body(testModel, false))
+	if r.status != 404 || r.json().Get("error.code").String() != "model_not_found" {
+		t.Fatalf("blacklist: %d %s", r.status, r.body)
+	}
+	if len(e.up.keys()) != 0 {
+		t.Fatal("blocked request reached upstream")
+	}
+	if rec := e.record(); rec.Billable || rec.ErrorType != errTypeModelNotAllowed {
+		t.Fatalf("record: %+v", rec)
+	}
+	e.auth.keys[testKey].Group.ModelAllowlist = []string{"claude-opus-*"}
+	r = e.messages(body(testModel, false))
+	if r.status != 200 {
+		t.Fatalf("unmatched model: %d %s", r.status, r.body)
 	}
 }

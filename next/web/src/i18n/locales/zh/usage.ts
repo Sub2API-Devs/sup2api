@@ -36,7 +36,15 @@ export default {
     daily: '每日',
     partial: '按最近 {n} 条请求统计'
   },
+  showDetails: '查看详情',
+  hideDetails: '收起详情',
+  errors: {
+    model_not_allowed: '模型不可用',
+    no_available_account: '暂无可用账号',
+    rate_limit_exceeded: '超过速率限制'
+  },
   cols: {
+    route: '分组 / 账号',
     input: '输入',
     output: '输出',
     cost: '费用',

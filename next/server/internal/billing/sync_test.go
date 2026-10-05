@@ -127,14 +127,14 @@ func TestParseSup2APIAppliesMultiplier(t *testing.T) {
 }
 
 // fakeKeys authenticates "sk-good" into a group with multiplier 2.
-type fakeKeys struct{}
+type fakeKeys struct{ Mode string }
 
-func (fakeKeys) Authenticate(_ context.Context, raw string) (*core.APIKeyPrincipal, error) {
+func (f fakeKeys) Authenticate(_ context.Context, raw string) (*core.APIKeyPrincipal, error) {
 	if raw != "sk-good" {
 		return nil, core.ErrUnauthenticated
 	}
 	return &core.APIKeyPrincipal{KeyID: 1, UserID: 1, Group: core.GroupInfo{ID: 7, Name: "vip",
-		RateMultiplier: decimal.NewFromInt(2), ModelAllowlist: []string{"claude-*"}}}, nil
+		RateMultiplier: decimal.NewFromInt(2), ModelAllowlist: []string{"claude-*"}, ModelFilterMode: f.Mode}}, nil
 }
 
 func TestPriceSourcesSync(t *testing.T) {
@@ -258,5 +258,27 @@ func TestPriceSourcesSync(t *testing.T) {
 	_ = e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM model_prices WHERE source = 'sync' AND sync_source_id IS NULL`).Scan(&n)
 	if n != 3 {
 		t.Fatalf("orphaned synced prices: %d", n)
+	}
+}
+
+func TestKeyPriceListBlacklist(t *testing.T) {
+	e := newEnv(t)
+	admin := e.user("admin-policy@example.com")
+	e.svc.SetSyncDeps(SyncDeps{Keys: fakeKeys{Mode: "blacklist"}})
+	for _, model := range []string{"claude-opus-5-5", "gpt-5"} {
+		e.mustCall(admin, 201, "POST", "/prices", map[string]any{"model": model, "mode": "per_request", "config": map[string]any{"price": 1}})
+	}
+	code, out := e.call(0, "GET", "/key/prices", nil, "Authorization", "Bearer sk-good")
+	if code != 200 {
+		t.Fatalf("prices: %d %v", code, out)
+	}
+	rows := data(out)["prices"].([]any)
+	for _, row := range rows {
+		if strings.HasPrefix(row.(map[string]any)["model"].(string), "claude-") {
+			t.Fatalf("blacklisted model leaked: %v", rows)
+		}
+	}
+	if len(rows) == 0 {
+		t.Fatal("allowed prices omitted")
 	}
 }

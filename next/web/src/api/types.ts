@@ -110,6 +110,7 @@ export interface Group {
   rate_multiplier: string | number
   visibility: 'public' | 'restricted'
   model_allowlist: string[]
+  model_filter_mode?: 'whitelist' | 'blacklist'
   account_count?: number // assumed
   key_count?: number // assumed
   api_key_count?: number // server spelling of key_count

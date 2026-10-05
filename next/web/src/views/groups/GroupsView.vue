@@ -15,13 +15,12 @@ import {
   SPagination,
   SSelect,
   STable,
-  STagInput,
   STextarea,
   confirm,
   toast,
   type TableColumn
 } from '@sub2api/ui'
-import type { Group } from '@/api/types'
+import type { Group, Price } from '@/api/types'
 import { statusTone } from '@/api/admin'
 import { useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
@@ -30,6 +29,7 @@ import { fieldErrors, notifyError } from '@/utils/errors'
 import { formatNumber } from '@/utils/format'
 import { ACCOUNT_KEYS } from '@/composables/useOwnership'
 import GroupAccountsEditor from './GroupAccountsEditor.vue'
+import GroupModelPolicyEditor from './GroupModelPolicyEditor.vue'
 import GroupPlatforms from '@/views/platforms/GroupPlatforms.vue'
 import PlatformEndpointsPreview from '@/views/platforms/PlatformEndpointsPreview.vue'
 
@@ -41,6 +41,11 @@ const canManage = computed(() => auth.has('group:manage'))
 const canEditAccounts = computed(() => auth.has([...ACCOUNT_KEYS.read]) && auth.has([...ACCOUNT_KEYS.update]))
 const accountsEditor = ref<InstanceType<typeof GroupAccountsEditor>>()
 const list = useList<Group>('/groups')
+const modelPolicyEditor = ref<InstanceType<typeof GroupModelPolicyEditor>>()
+const modelOptions = ref<string[]>([])
+function loadModels() {
+  api.list<Price>('/prices', { page_size: 500 }).then(r => { modelOptions.value = r.items.map(p => p.model) }).catch(() => {})
+}
 
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
@@ -48,7 +53,7 @@ const columns = computed<TableColumn[]>(() => {
     { key: 'platforms', label: t('platforms.served') },
     { key: 'visibility', label: t('groups.visibility') },
     { key: 'rate_multiplier', label: t('groups.rateMultiplier'), align: 'right' },
-    { key: 'model_allowlist', label: t('groups.modelAllowlist') },
+    { key: 'model_allowlist', label: t('groups.modelRules') },
     { key: 'account_count', label: t('groups.accountCount'), align: 'right' },
     { key: 'key_count', label: t('groups.keyCount'), align: 'right' },
     { key: 'status', label: t('common.status') }
@@ -112,7 +117,8 @@ const form = reactive({
   status: 'active',
   rate_multiplier: '1',
   visibility: 'public' as Group['visibility'],
-  model_allowlist: [] as string[]
+  model_allowlist: [] as string[],
+  model_filter_mode: 'blacklist' as 'whitelist' | 'blacklist'
 })
 
 const visibilityOptions = computed(() => [
@@ -125,13 +131,15 @@ const statusOptions = computed(() => [
 ])
 
 function openCreate() {
+  loadModels()
   editing.value = null
-  Object.assign(form, { name: '', description: '', status: 'active', rate_multiplier: '1', visibility: 'public', model_allowlist: [] })
+  Object.assign(form, { name: '', description: '', status: 'active', rate_multiplier: '1', visibility: 'public', model_allowlist: [], model_filter_mode: 'blacklist' })
   errors.value = {}
   open.value = true
 }
 
 function openEdit(g: Group) {
+  loadModels()
   editing.value = g
   Object.assign(form, {
     name: g.name,
@@ -139,13 +147,15 @@ function openEdit(g: Group) {
     status: g.status,
     rate_multiplier: String(g.rate_multiplier ?? '1'),
     visibility: g.visibility,
-    model_allowlist: [...(g.model_allowlist || [])]
+    model_allowlist: [...(g.model_allowlist || [])],
+    model_filter_mode: g.model_filter_mode || 'whitelist'
   })
   errors.value = {}
   open.value = true
 }
 
 async function submit() {
+  if (modelPolicyEditor.value && !modelPolicyEditor.value.commit()) return
   errors.value = {}
   if (!form.name.trim()) errors.value.name = t('common.required')
   const rm = String(form.rate_multiplier).trim()
@@ -158,7 +168,8 @@ async function submit() {
     // Decimal as a string, like money (docs/CONTRACTS.md §3.2).
     rate_multiplier: rm,
     visibility: form.visibility,
-    model_allowlist: form.model_allowlist
+    model_allowlist: form.model_allowlist,
+    model_filter_mode: form.model_filter_mode
   }
   saving.value = true
   try {
@@ -234,7 +245,8 @@ async function onAction(g: Group, key: string) {
         <span class="font-mono">{{ multiplier(row.rate_multiplier) }}</span>
       </template>
       <template #cell-model_allowlist="{ row }">
-        <div v-if="row.model_allowlist && row.model_allowlist.length" class="flex max-w-xs flex-wrap gap-1">
+        <div v-if="row.model_allowlist && row.model_allowlist.length" class="flex max-w-xs flex-wrap items-center gap-1">
+          <SBadge :tone="row.model_filter_mode === 'blacklist' ? 'danger' : 'primary'">{{ t(row.model_filter_mode === 'blacklist' ? 'groups.blacklist' : 'groups.whitelist') }}</SBadge>
           <code
             v-for="m in row.model_allowlist.slice(0, 4)"
             :key="m"
@@ -291,8 +303,8 @@ async function onAction(g: Group, key: string) {
             <SSelect v-model="form.visibility" :options="visibilityOptions" />
           </SField>
         </SGrid>
-        <SField :label="t('groups.modelAllowlist')" :hint="t('groups.allowlistHint')" :error="errors.model_allowlist">
-          <STagInput v-model="form.model_allowlist" :placeholder="t('groups.allowlistPlaceholder')" />
+        <SField :label="t('groups.modelRules')" :hint="t('groups.allowlistHint')" :error="errors.model_allowlist || errors.model_filter_mode">
+          <GroupModelPolicyEditor v-if="open" :key="editing?.id ?? 'new'" ref="modelPolicyEditor" v-model="form.model_allowlist" v-model:mode="form.model_filter_mode" :options="modelOptions" />
         </SField>
         <SField v-if="editing" :label="t('platforms.served')">
           <GroupPlatforms :group="editing" hint />
@@ -323,7 +335,7 @@ async function onAction(g: Group, key: string) {
           <dd>{{ detail.visibility === 'public' ? t('groups.public') : t('groups.restricted') }}</dd>
           <dt>{{ t('groups.rateMultiplier') }}</dt>
           <dd class="font-mono">×{{ multiplier(detail.rate_multiplier) }}</dd>
-          <dt>{{ t('groups.modelAllowlist') }}</dt>
+          <dt>{{ t('groups.modelRules') }} · {{ t(detail.model_filter_mode === 'blacklist' ? 'groups.blacklist' : 'groups.whitelist') }}</dt>
           <dd>{{ detail.model_allowlist?.length ? detail.model_allowlist.join(', ') : t('common.unlimited') }}</dd>
           <dt>{{ t('groups.accountCount') }}</dt>
           <dd>{{ formatNumber(detail.account_count) }}</dd>

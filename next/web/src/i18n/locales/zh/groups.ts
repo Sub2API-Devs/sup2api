@@ -1,4 +1,12 @@
 export default {
+  modelRules: '模型名单',
+  whitelist: '白名单',
+  blacklist: '黑名单',
+  whitelistHint: '仅允许名单内的模型',
+  blacklistHint: '禁止名单内的模型，允许其余模型',
+  emptyPolicy: '名单为空：不限制模型',
+  patternInvalid: '每条模型匹配规则不能超过 200 个字符',
+
   title: '分组',
   description: '分组是一组一起提供服务的账号（可混放不同类型），每个 API Key 只绑定一个分组。分组决定费率倍率、可用模型，并由其账号决定可服务的平台。',
   create: '新建分组',

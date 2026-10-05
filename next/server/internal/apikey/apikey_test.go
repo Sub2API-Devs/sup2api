@@ -387,6 +387,18 @@ func TestAPIKeyLifecycleAndAuth(t *testing.T) {
 		t.Fatalf("malformed key: %v", err)
 	}
 
+	// Group policy changes are visible on the next authentication, without cached principals.
+	if _, err := e.db.Pool.Exec(ctx, `UPDATE groups SET model_filter_mode='blacklist' WHERE id=$1`, pub); err != nil {
+		t.Fatal(err)
+	}
+	p, err = e.svc.Authenticate(ctx, raw)
+	if err != nil || p.Group.ModelFilterMode != "blacklist" || p.Group.AllowsModel("claude-opus-5-5") || !p.Group.AllowsModel("gpt-5") {
+		t.Fatalf("policy principal: %+v %v", p, err)
+	}
+	if _, err := e.db.Pool.Exec(ctx, `UPDATE groups SET model_filter_mode='whitelist' WHERE id=$1`, pub); err != nil {
+		t.Fatal(err)
+	}
+
 	// last_used_at batching.
 	if err := e.svc.FlushLastUsed(ctx); err != nil {
 		t.Fatal(err)

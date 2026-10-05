@@ -71,11 +71,12 @@ type PermissionCatalog interface {
 // ============================================================ api keys & groups (owner: A)
 
 type GroupInfo struct {
-	ID             int64
-	Name           string
-	Status         string
-	RateMultiplier decimal.Decimal
-	ModelAllowlist []string // globs; empty = all
+	ID              int64
+	Name            string
+	Status          string
+	RateMultiplier  decimal.Decimal
+	ModelAllowlist  []string // globs; empty = all
+	ModelFilterMode string   // whitelist (default) or blacklist
 }
 
 // APIKeyPrincipal is the result of gateway authentication.

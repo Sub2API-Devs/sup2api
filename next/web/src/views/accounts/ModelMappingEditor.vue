@@ -68,12 +68,12 @@ const isUnscheduled = (r: Row) => unscheduled.value.includes(r.k.trim())
         <span>{{ t('accounts.mappingTo') }}</span>
         <span />
       </div>
-      <div class="max-h-72 space-y-1.5 overflow-y-auto pr-1">
+      <div class="max-h-80 space-y-1 overflow-y-auto rounded-lg border border-line p-2">
         <div v-for="(r, i) in rows" :key="i">
           <div class="grid grid-cols-[minmax(0,1fr)_1.25rem_minmax(0,1fr)_2rem] items-center gap-2">
             <input
               v-model="r.k"
-              class="input !py-1.5 font-mono text-xs"
+              class="input input-sm !h-8 !rounded-lg font-mono text-xs"
               :class="isUnscheduled(r) ? '!border-amber-400' : ''"
               :list="listId"
               placeholder="claude-3-5-sonnet-latest"
@@ -81,7 +81,7 @@ const isUnscheduled = (r: Row) => unscheduled.value.includes(r.k.trim())
               @input="sync"
             />
             <SIcon name="chevron-right" class="h-4 w-4 text-gray-400" />
-            <input v-model="r.v" class="input !py-1.5 font-mono text-xs" :list="listId" placeholder="claude-sonnet-4-5" spellcheck="false" @input="sync" />
+            <input v-model="r.v" class="input input-sm !h-8 !rounded-lg font-mono text-xs" :list="listId" placeholder="claude-sonnet-4-5" spellcheck="false" @input="sync" />
             <button type="button" class="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20" :title="t('ui.remove')" @click="remove(i)">
               <SIcon name="x" class="h-4 w-4" />
             </button>

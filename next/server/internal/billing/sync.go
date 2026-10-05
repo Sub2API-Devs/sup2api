@@ -1050,7 +1050,7 @@ func (s *Service) keyPrices(c *gin.Context) {
 			httpapi.Fail(c, err)
 			return
 		}
-		if allowed(pr.Group.ModelAllowlist, p.Model) {
+		if pr.Group.AllowsModel(p.Model) {
 			out.Prices = append(out.Prices, p)
 		}
 	}
@@ -1059,44 +1059,4 @@ func (s *Service) keyPrices(c *gin.Context) {
 		return
 	}
 	httpapi.OK(c, out)
-}
-
-// allowed applies a group model allowlist (globs; empty allows all).
-func allowed(list []string, model string) bool {
-	if len(list) == 0 {
-		return true
-	}
-	for _, p := range list {
-		if globMatch(p, model) {
-			return true
-		}
-	}
-	return false
-}
-
-// globMatch matches '*' (any run) and '?' (one byte), as the gateway does
-// for model allowlists.
-func globMatch(pattern, s string) bool {
-	p, i := 0, 0
-	star, mark := -1, 0
-	for i < len(s) {
-		switch {
-		case p < len(pattern) && (pattern[p] == '?' || pattern[p] == s[i]):
-			p++
-			i++
-		case p < len(pattern) && pattern[p] == '*':
-			star, mark = p, i
-			p++
-		case star >= 0:
-			p = star + 1
-			mark++
-			i = mark
-		default:
-			return false
-		}
-	}
-	for p < len(pattern) && pattern[p] == '*' {
-		p++
-	}
-	return p == len(pattern)
 }

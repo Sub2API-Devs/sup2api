@@ -332,7 +332,7 @@ func TestWebSocketTurnErrorsKeepTheConnection(t *testing.T) {
 		record string
 	}{
 		{map[string]any{"type": "response.append", "model": wsModel}, 400, ""},
-		{create("claude-x", "hi"), 403, errTypeModelNotAllowed},
+		{create("claude-x", "hi"), 404, errTypeModelNotAllowed},
 		{create("gpt-unpriced", "hi"), 403, errTypePriceNotConfigured},
 	} {
 		c.send(tc.msg)

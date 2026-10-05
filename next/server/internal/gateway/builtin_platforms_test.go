@@ -396,7 +396,7 @@ func TestGeminiEndpoints(t *testing.T) {
 	// The group allowlist applies to the path model.
 	e.auth.keys[testKey].Group.ModelAllowlist = []string{"gemini-2.5-flash"}
 	r = e.post("/v1beta/models/gemini-2.5-pro:generateContent", gen, map[string]string{"x-goog-api-key": testKey})
-	if j := r.json(); r.status != 403 || j.Get("error.status").String() != "PERMISSION_DENIED" {
+	if j := r.json(); r.status != 404 || j.Get("error.status").String() != "NOT_FOUND" {
 		t.Fatalf("allowlist: %d %s", r.status, r.body)
 	}
 	if rec = e.record(); rec.ErrorType != errTypeModelNotAllowed || rec.Model != "gemini-2.5-pro" {

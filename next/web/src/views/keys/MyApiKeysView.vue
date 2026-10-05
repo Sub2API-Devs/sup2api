@@ -190,7 +190,7 @@ async function remove(k: ApiKey) {
         <div v-if="selectedGroup" class="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:bg-dark-900 dark:text-dark-300">
           <div>{{ t('apikeys.groupMultiplier', { n: selectedGroup.rate_multiplier }) }}</div>
           <div>
-            {{ t('apikeys.groupModels') }}:
+            {{ t('apikeys.groupModels') }} · {{ t(selectedGroup.model_filter_mode === 'blacklist' ? 'groups.blacklist' : 'groups.whitelist') }}:
             {{ selectedGroup.model_allowlist?.length ? selectedGroup.model_allowlist.join(', ') : t('common.unlimited') }}
           </div>
           <div v-if="selectedGroup.description" class="mt-0.5">{{ selectedGroup.description }}</div>

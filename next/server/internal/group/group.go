@@ -48,15 +48,16 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 
 // Group is the API view of a groups row.
 type Group struct {
-	ID             int64    `json:"id"`
-	Name           string   `json:"name"`
-	Description    string   `json:"description"`
-	Status         string   `json:"status"`
-	RateMultiplier string   `json:"rate_multiplier"`
-	Visibility     string   `json:"visibility"`
-	ModelAllowlist []string `json:"model_allowlist"`
-	AccountCount   int64    `json:"account_count"`
-	APIKeyCount    int64    `json:"api_key_count"`
+	ID              int64    `json:"id"`
+	Name            string   `json:"name"`
+	Description     string   `json:"description"`
+	Status          string   `json:"status"`
+	RateMultiplier  string   `json:"rate_multiplier"`
+	Visibility      string   `json:"visibility"`
+	ModelAllowlist  []string `json:"model_allowlist"`
+	ModelFilterMode string   `json:"model_filter_mode"`
+	AccountCount    int64    `json:"account_count"`
+	APIKeyCount     int64    `json:"api_key_count"`
 	// Platforms the group serves: those of its accounts' types (CONTRACTS §13).
 	Platforms []string  `json:"platforms"`
 	CreatedAt time.Time `json:"created_at"`
@@ -65,12 +66,13 @@ type Group struct {
 
 // MyGroup is the reduced view returned by GET /me/groups.
 type MyGroup struct {
-	ID             int64    `json:"id"`
-	Name           string   `json:"name"`
-	Description    string   `json:"description"`
-	RateMultiplier string   `json:"rate_multiplier"`
-	ModelAllowlist []string `json:"model_allowlist"`
-	Platforms      []string `json:"platforms"`
+	ID              int64    `json:"id"`
+	Name            string   `json:"name"`
+	Description     string   `json:"description"`
+	RateMultiplier  string   `json:"rate_multiplier"`
+	ModelAllowlist  []string `json:"model_allowlist"`
+	ModelFilterMode string   `json:"model_filter_mode"`
+	Platforms       []string `json:"platforms"`
 }
 
 // selectGroup lists the group columns; account_count only counts accounts of
@@ -78,7 +80,7 @@ type MyGroup struct {
 // no filter).
 func selectGroup(keys string) string {
 	return `SELECT g.id, g.name, g.description, g.status, g.rate_multiplier::text, g.visibility,
-	g.model_allowlist, g.created_at, g.updated_at,
+	g.model_allowlist, g.model_filter_mode, g.created_at, g.updated_at,
 	(SELECT count(*) FROM account_groups ag JOIN accounts a ON a.id = ag.account_id
 	  WHERE ag.group_id = g.id AND a.deleted_at IS NULL AND (` + keys + `::text[] IS NULL OR a.plugin_key = ANY(` + keys + `))),
 	(SELECT count(*) FROM api_keys k WHERE k.group_id = g.id AND k.deleted_at IS NULL)
@@ -89,7 +91,7 @@ func scanGroup(row pgx.Row) (*Group, error) {
 	var g Group
 	var rate string
 	if err := row.Scan(&g.ID, &g.Name, &g.Description, &g.Status, &rate, &g.Visibility,
-		&g.ModelAllowlist, &g.CreatedAt, &g.UpdatedAt, &g.AccountCount, &g.APIKeyCount); err != nil {
+		&g.ModelAllowlist, &g.ModelFilterMode, &g.CreatedAt, &g.UpdatedAt, &g.AccountCount, &g.APIKeyCount); err != nil {
 		return nil, err
 	}
 	g.RateMultiplier = normRate(rate)
@@ -196,12 +198,13 @@ func (s *Service) get(c *gin.Context) {
 }
 
 type groupInput struct {
-	Name           *string   `json:"name"`
-	Description    *string   `json:"description"`
-	Status         *string   `json:"status"`
-	RateMultiplier *string   `json:"rate_multiplier"`
-	Visibility     *string   `json:"visibility"`
-	ModelAllowlist *[]string `json:"model_allowlist"`
+	Name            *string   `json:"name"`
+	Description     *string   `json:"description"`
+	Status          *string   `json:"status"`
+	RateMultiplier  *string   `json:"rate_multiplier"`
+	Visibility      *string   `json:"visibility"`
+	ModelAllowlist  *[]string `json:"model_allowlist"`
+	ModelFilterMode *string   `json:"model_filter_mode"`
 }
 
 // validate checks the provided fields; create requires name.
@@ -237,6 +240,9 @@ func (in *groupInput) validate(ctx context.Context, create bool) error {
 			v := d.String()
 			in.RateMultiplier = &v
 		}
+	}
+	if in.ModelFilterMode != nil && *in.ModelFilterMode != "whitelist" && *in.ModelFilterMode != "blacklist" {
+		add("model_filter_mode", "invalid", "model filter mode must be whitelist or blacklist", "模型过滤模式必须为白名单或黑名单")
 	}
 	if in.ModelAllowlist != nil {
 		clean := make([]string, 0, len(*in.ModelAllowlist))
@@ -287,11 +293,15 @@ func (s *Service) create(c *gin.Context) {
 	if in.ModelAllowlist != nil {
 		allow = *in.ModelAllowlist
 	}
+	mode := "blacklist"
+	if in.ModelFilterMode != nil {
+		mode = *in.ModelFilterMode
+	}
 	allowJSON, _ := json.Marshal(allow)
 	var id int64
-	err := s.db.Pool.QueryRow(ctx, `INSERT INTO groups (name, description, status, rate_multiplier, visibility, model_allowlist)
-		VALUES ($1, $2, $3, $4::numeric, $5, $6::jsonb) RETURNING id`,
-		*in.Name, desc, status, rate, vis, string(allowJSON)).Scan(&id)
+	err := s.db.Pool.QueryRow(ctx, `INSERT INTO groups (name, description, status, rate_multiplier, visibility, model_allowlist, model_filter_mode)
+		VALUES ($1, $2, $3, $4::numeric, $5, $6::jsonb, $7) RETURNING id`,
+		*in.Name, desc, status, rate, vis, string(allowJSON), mode).Scan(&id)
 	if store.IsUniqueViolation(err, "") {
 		httpapi.Fail(c, dupName(ctx))
 		return
@@ -335,8 +345,9 @@ func (s *Service) update(c *gin.Context) {
 		rate_multiplier = COALESCE($5::numeric, rate_multiplier),
 		visibility = COALESCE($6, visibility),
 		model_allowlist = COALESCE($7::jsonb, model_allowlist),
+		model_filter_mode = COALESCE($8, model_filter_mode),
 		updated_at = now()
-		WHERE id = $1`, id, in.Name, in.Description, in.Status, in.RateMultiplier, in.Visibility, allowJSON)
+		WHERE id = $1`, id, in.Name, in.Description, in.Status, in.RateMultiplier, in.Visibility, allowJSON, in.ModelFilterMode)
 	if store.IsUniqueViolation(err, "") {
 		httpapi.Fail(c, dupName(ctx))
 		return
@@ -406,7 +417,7 @@ func (s *Service) delete(c *gin.Context) {
 func (s *Service) myGroups(c *gin.Context) {
 	ctx := c.Request.Context()
 	uid, _ := core.UserID(ctx)
-	rows, err := s.db.Pool.Query(ctx, `SELECT g.id, g.name, g.description, g.rate_multiplier::text, g.model_allowlist
+	rows, err := s.db.Pool.Query(ctx, `SELECT g.id, g.name, g.description, g.rate_multiplier::text, g.model_allowlist, g.model_filter_mode
 		FROM groups g
 		WHERE g.status = 'active'
 		  AND (g.visibility = 'public' OR EXISTS (SELECT 1 FROM user_groups ug WHERE ug.group_id = g.id AND ug.user_id = $1))
@@ -420,7 +431,7 @@ func (s *Service) myGroups(c *gin.Context) {
 	for rows.Next() {
 		var g MyGroup
 		var rate string
-		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &rate, &g.ModelAllowlist); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &rate, &g.ModelAllowlist, &g.ModelFilterMode); err != nil {
 			httpapi.Fail(c, err)
 			return
 		}

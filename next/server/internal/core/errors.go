@@ -68,7 +68,7 @@ var (
 	ErrConflict            = NewError(http.StatusConflict, "conflict", "conflict")
 	ErrInsufficientBalance = NewError(http.StatusPaymentRequired, "insufficient_balance", "insufficient balance")
 	ErrPriceNotConfigured  = NewError(http.StatusForbidden, "model_price_not_configured", "model price not configured")
-	ErrModelNotAllowed     = NewError(http.StatusForbidden, "model_not_allowed", "model not allowed for this group")
+	ErrModelNotFound       = NewError(http.StatusNotFound, "model_not_found", "model not found")
 	ErrRateLimited         = NewError(http.StatusTooManyRequests, "rate_limited", "too many requests")
 	ErrNoAvailableAccount  = NewError(http.StatusServiceUnavailable, "no_available_account", "no available account")
 	ErrPluginUnavailable   = NewError(http.StatusServiceUnavailable, "plugin_unavailable", "plugin unavailable")

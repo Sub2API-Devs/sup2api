@@ -16,6 +16,7 @@ import { sameCreationGroup } from './accountTypeChoices'
 import { shouldPrefillOnEdit } from './modelDefaults'
 import EditorCard from './EditorCard.vue'
 import ModelMappingEditor from './ModelMappingEditor.vue'
+import ModelListEditor from './ModelListEditor.vue'
 import CCGatewayAccountAuth from '@/views/ccgateway/CCGatewayAccountAuth.vue'
 import CCGatewayAccountReauth from '@/views/ccgateway/CCGatewayAccountReauth.vue'
 import { reasonOf } from '@/views/ccgateway/ccgAuthFlow'
@@ -940,32 +941,12 @@ async function save(event: Event) {
                 :placeholder="t('accounts.modelsTextPlaceholder')"
                 @blur="syncModelsText()"
               />
-              <div
-                v-else
-                class="input flex max-h-64 min-h-[3rem] flex-wrap content-start items-center gap-1.5 overflow-y-auto !py-2"
-                data-testid="models-tags"
-              >
-                <span
-                  v-for="(m, i) in models"
-                  :key="m"
-                  class="inline-flex max-w-full items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-xs"
-                  :class="mapping[m] ? 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-300' : 'border-primary-100 bg-primary-50 text-primary-700 dark:border-primary-900 dark:bg-primary-900/30 dark:text-primary-300'"
-                  :title="mapping[m] ? t('accounts.editorUi.mappedTo', { model: mapping[m] }) : m"
-                >
-                  <span class="truncate">{{ m }}</span>
-                  <SIcon v-if="mapping[m]" name="chevron-right" class="h-3 w-3 shrink-0 opacity-70" />
-                  <button type="button" class="shrink-0 opacity-50 hover:opacity-100" :aria-label="t('ui.remove')" @click="removeModel(i)">
-                    <SIcon name="x" class="h-3 w-3" />
-                  </button>
-                </span>
-                <input
-                  v-model="modelDraft"
-                  list="account-model-options"
-                  class="min-w-[12rem] flex-1 border-0 bg-transparent p-0.5 text-sm outline-none focus:ring-0"
-                  :placeholder="t('accounts.modelsPlaceholder')"
-                  @keydown="onModelKey"
-                  @blur="commitDraft"
-                />
+              <div v-else class="space-y-3">
+                <ModelListEditor v-model="models" :options="[...defaultModels, ...modelOptions]" :mapping="mapping" @update:model-value="modelsError = ''" />
+                <div class="flex items-center gap-2">
+                  <input v-model="modelDraft" list="account-model-options" class="input input-sm min-w-0 flex-1" :placeholder="t('accounts.modelsPlaceholder')" @keydown="onModelKey" @blur="commitDraft" />
+                  <SButton size="sm" :disabled="!modelDraft.trim()" @click="commitDraft"><SIcon name="plus" class="h-3.5 w-3.5" />{{ t('accounts.editorUi.addModels') }}</SButton>
+                </div>
               </div>
               <template #hint>
                 <span v-if="!models.length" class="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
@@ -974,6 +955,7 @@ async function save(event: Event) {
                 <span v-else>{{ t('accounts.editorUi.modelsInputHint') }}</span>
               </template>
             </SField>
+            <p class="mt-3 flex items-start gap-1.5 text-xs text-fg-subtle"><SIcon name="info" class="mt-px h-3.5 w-3.5 shrink-0" />{{ t('accounts.editorUi.groupModelHint') }}</p>
             <datalist id="account-model-options">
               <option v-for="o in modelOptions" :key="o" :value="o" />
             </datalist>
