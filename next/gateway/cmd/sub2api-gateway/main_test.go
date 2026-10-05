@@ -15,7 +15,7 @@ import (
 func TestConfigPropagatesResolvedClusterStoresToCore(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://shell-db/test")
 	t.Setenv("REDIS_URL", "redis://shell-redis/2")
-	c := config{ClusterID: "test", NodeID: "a", PrimaryNode: "a", RuntimeABI: "test", PeerURL: "https://node-a", DatabaseURL: "postgres://old/test", RedisURL: "redis://old", Root: t.TempDir(), CoreEnv: []string{"SUB2API_DATABASE_URL=postgres://wrong/test", "SUB2API_REDIS_URL=redis://wrong/9", "SUB2API_LOG_LEVEL=debug"}}
+	c := config{ClusterID: "test", NodeID: "a", PrimaryNode: "a", RuntimeABI: "test", PeerURL: "https://node-a", DatabaseURL: "postgres://old/test", RedisURL: "redis://old", Root: t.TempDir(), CoreEnv: []string{"DATABASE_URL=postgres://wrong/test", "REDIS_URL=redis://wrong/9", "SUB2API_LOG_LEVEL=debug"}}
 	b, err := json.Marshal(c)
 	if err != nil {
 		t.Fatal(err)
@@ -33,7 +33,7 @@ func TestConfigPropagatesResolvedClusterStoresToCore(t *testing.T) {
 		key, value, _ := strings.Cut(entry, "=")
 		effective[key] = value
 	}
-	if effective["SUB2API_DATABASE_URL"] != "postgres://shell-db/test" || effective["SUB2API_REDIS_URL"] != "redis://shell-redis/2" {
+	if effective["DATABASE_URL"] != "postgres://shell-db/test" || effective["REDIS_URL"] != "redis://shell-redis/2" {
 		t.Fatalf("core stores differ from shell: %+v", effective)
 	}
 	if effective["SUB2API_LOG_LEVEL"] != "debug" {

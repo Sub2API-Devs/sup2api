@@ -10,6 +10,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
 	servermiddleware "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/Wei-Shaw/sub2api/internal/web"
@@ -94,7 +95,7 @@ func newKeyBillingRouteTestRouter(runMode string) (*gin.Engine, *keyBillingRoute
 	}
 	RegisterGatewayRoutes(
 		router,
-		&handler.Handlers{Gateway: gatewayHandler, OpenAIGateway: &handler.OpenAIGatewayHandler{}},
+		&handler.Handlers{Admin: &handler.AdminHandlers{Plugin: &admin.PluginHandler{}}, Gateway: gatewayHandler, OpenAIGateway: &handler.OpenAIGatewayHandler{}},
 		servermiddleware.NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg),
 		apiKeyService,
 		nil,

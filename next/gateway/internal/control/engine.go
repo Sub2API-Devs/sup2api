@@ -243,6 +243,8 @@ func (e *Engine) Coordinate(ctx context.Context) error {
 		}
 		if verified != len(p.Nodes) {
 			reason := "waiting for all planned nodes to verify the target release"
+			// Release the plan row lock before recording diagnostics through the pool.
+			_ = tx.Rollback(ctx)
 			_ = e.recordBlockedReason(ctx, p.ID, reason)
 			return errors.New(reason)
 		}
@@ -263,6 +265,8 @@ func (e *Engine) Coordinate(ctx context.Context) error {
 	st := steps[p.Cursor]
 	if st.Action == "maintenance" || st.Action == "start-primary" {
 		if err = e.followersStopped(ctx); err != nil {
+			// The diagnostic update must not wait on our own FOR UPDATE lock.
+			_ = tx.Rollback(ctx)
 			_ = e.recordBlockedReason(ctx, p.ID, "waiting for followers to stop: "+err.Error())
 			return err
 		}

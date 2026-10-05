@@ -58,12 +58,12 @@ func newHost(t *testing.T, output string, stall bool) *fakeHost {
 				return
 			}
 			go func() {
-				defer raw.Close()
+				defer func() { _ = raw.Close() }()
 				server, channels, requests, e := ssh.NewServerConn(raw, sc)
 				if e != nil {
 					return
 				}
-				defer server.Close()
+				defer func() { _ = server.Close() }()
 				go ssh.DiscardRequests(requests)
 				for channel := range channels {
 					if channel.ChannelType() == "direct-tcpip" {
@@ -84,12 +84,20 @@ func newHost(t *testing.T, output string, stall bool) *fakeHost {
 						}
 						ch, reqs, err := channel.Accept()
 						if err != nil {
-							conn.Close()
+							_ = conn.Close()
 							continue
 						}
 						go ssh.DiscardRequests(reqs)
-						go func() { defer conn.Close(); defer ch.Close(); _, _ = io.Copy(conn, ch) }()
-						go func() { defer conn.Close(); defer ch.Close(); _, _ = io.Copy(ch, conn) }()
+						go func() {
+							defer func() { _ = conn.Close() }()
+							defer func() { _ = ch.Close() }()
+							_, _ = io.Copy(conn, ch)
+						}()
+						go func() {
+							defer func() { _ = conn.Close() }()
+							defer func() { _ = ch.Close() }()
+							_, _ = io.Copy(ch, conn)
+						}()
 						continue
 					}
 					ch, requests, e := channel.Accept()
@@ -97,7 +105,7 @@ func newHost(t *testing.T, output string, stall bool) *fakeHost {
 						return
 					}
 					go func() {
-						defer ch.Close()
+						defer func() { _ = ch.Close() }()
 						for req := range requests {
 							if req.Type != "exec" {
 								_ = req.Reply(false, nil)
@@ -141,18 +149,18 @@ func TestHTTPForward(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer closeClient()
+	defer func() { _ = closeClient() }()
 	res, err := client.Get(upstream.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
 	data, _ := io.ReadAll(res.Body)
-	res.Body.Close()
+	_ = res.Body.Close()
 	if string(data) != "forwarded" {
 		t.Fatalf("body %q", data)
 	}
 	if res, err := client.Get(upstream.URL + "/redirect"); err == nil {
-		res.Body.Close()
+		_ = res.Body.Close()
 		t.Fatal("redirect accepted")
 	}
 	if _, err := client.Get("http://127.0.0.1:1/"); err == nil {
@@ -208,7 +216,7 @@ func TestHTTPStreamLifetime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer closeClient()
+	defer func() { _ = closeClient() }()
 	if client.Timeout != 0 || client.Transport.(fixedTargetTransport).transport.ResponseHeaderTimeout != 0 {
 		t.Fatal("HTTP inherited SSH timeout")
 	}
@@ -216,7 +224,7 @@ func TestHTTPStreamLifetime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	buf := make([]byte, len("data: one\n\ndata: two\n\n"))
 	if _, err := io.ReadFull(resp.Body, buf); err != nil {
 		t.Fatalf("long stream was cut off: %v", err)

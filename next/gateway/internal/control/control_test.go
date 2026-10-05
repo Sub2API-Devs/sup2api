@@ -595,7 +595,8 @@ func TestMaintenanceCompatibilityAndLegacyStrategy(t *testing.T) {
 
 func TestPostgresMaintenanceStopBarrierAndRecovery(t *testing.T) {
 	s, a, b, target := setupEngines(t)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	pf, err := s.Preflight(ctx, target.Digest)
 	if err != nil {
 		t.Fatal(err)
@@ -634,6 +635,13 @@ func TestPostgresMaintenanceStopBarrierAndRecovery(t *testing.T) {
 	} // advance completed stop cursor
 	if err = a.Coordinate(ctx); err == nil {
 		t.Fatal("stale stop ACK permitted primary shutdown")
+	}
+	if ctx.Err() != nil {
+		t.Fatal("coordinator blocked on its own plan row lock:", ctx.Err())
+	}
+	var blockedReason string
+	if err = s.DB.QueryRow(ctx, `SELECT blocked_reason FROM updater.upgrades WHERE id=$1`, p.ID).Scan(&blockedReason); err != nil || !strings.Contains(blockedReason, "waiting for followers to stop") {
+		t.Fatalf("blocked reason was not persisted: %q %v", blockedReason, err)
 	}
 	if err = b.Heartbeat(ctx); err != nil {
 		t.Fatal(err)

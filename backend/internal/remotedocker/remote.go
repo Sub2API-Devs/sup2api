@@ -64,7 +64,7 @@ func ProbeFingerprint(ctx context.Context, host string, port int) (string, error
 	if err != nil {
 		return "", safeError(ctx, "SSH connection failed")
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
 	var fingerprint string
@@ -195,7 +195,7 @@ func Execute(ctx context.Context, cfg Config, container, action string) (string,
 	if err != nil {
 		return "", safeError(ctx, "SSH connection failed")
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
 	cc, chans, reqs, err := ssh.NewClientConn(conn, addr, sshCfg)
@@ -203,12 +203,12 @@ func Execute(ctx context.Context, cfg Config, container, action string) (string,
 		return "", safeError(ctx, "SSH handshake, host key verification, or authentication failed")
 	}
 	client := ssh.NewClient(cc, chans, reqs)
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	session, err := client.NewSession()
 	if err != nil {
 		return "", safeError(ctx, "SSH session failed")
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 	var out boundedOutput
 	session.Stdout = &out
 	// Docker emits container logs on stderr as well; no stderr is returned for
