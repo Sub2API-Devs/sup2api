@@ -42,7 +42,8 @@ func address(host string, port int) (string, error) {
 				return "", errors.New("invalid SSH host")
 			}
 			for _, c := range label {
-				if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-') {
+				valid := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-'
+				if !valid {
 					return "", errors.New("invalid SSH host")
 				}
 			}
@@ -96,7 +97,8 @@ func command(container, action string) (string, error) {
 		return "", errors.New("invalid container name")
 	}
 	for _, c := range container {
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-' || c == '.') {
+		valid := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-' || c == '.'
+		if !valid {
 			return "", errors.New("invalid container name")
 		}
 	}

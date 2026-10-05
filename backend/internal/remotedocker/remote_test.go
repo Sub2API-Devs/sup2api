@@ -41,8 +41,12 @@ func newHost(t *testing.T, output string, stall bool) *fakeHost {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = l.Close() })
+	addr, ok := l.Addr().(*net.TCPAddr)
+	if !ok {
+		t.Fatal("listener did not return a TCP address")
+	}
 	f := &fakeHost{output: output, stall: stall, commands: make(chan string, 8)}
-	f.cfg = Config{Host: "127.0.0.1", Port: l.Addr().(*net.TCPAddr).Port, User: "tester", AuthMode: "password", Password: "test-secret", HostKeyFingerprint: ssh.FingerprintSHA256(signer.PublicKey())}
+	f.cfg = Config{Host: "127.0.0.1", Port: addr.Port, User: "tester", AuthMode: "password", Password: "test-secret", HostKeyFingerprint: ssh.FingerprintSHA256(signer.PublicKey())}
 	sc := &ssh.ServerConfig{PasswordCallback: func(_ ssh.ConnMetadata, p []byte) (*ssh.Permissions, error) {
 		f.auth.Add(1)
 		if string(p) != f.cfg.Password {
@@ -202,10 +206,10 @@ func TestHTTPStreamLifetime(t *testing.T) {
 		time.Sleep(400 * time.Millisecond)
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = w.Write([]byte("data: one\n\n"))
-		w.(http.Flusher).Flush()
+		_ = http.NewResponseController(w).Flush()
 		time.Sleep(400 * time.Millisecond)
 		_, _ = w.Write([]byte("data: two\n\n"))
-		w.(http.Flusher).Flush()
+		_ = http.NewResponseController(w).Flush()
 		<-r.Context().Done()
 		close(upstreamCanceled)
 	}))

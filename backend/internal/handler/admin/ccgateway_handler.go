@@ -56,7 +56,7 @@ func (h *PluginHandler) CCGateway(c *gin.Context) {
 		response.Error(c, 502, "无法连接本地 Docker 网关，请检查容器状态")
 		return
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	var body json.RawMessage
 	if json.NewDecoder(io.LimitReader(res.Body, 65536)).Decode(&body) != nil {
 		response.Error(c, 502, "网关返回无效响应")
@@ -100,7 +100,7 @@ func (h *AccountHandler) connectCCGateway(c *gin.Context, request func(context.C
 		response.BadRequest(c, "网关不可用")
 		return
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	var status struct {
 		LoggedIn bool `json:"logged_in"`
 	}

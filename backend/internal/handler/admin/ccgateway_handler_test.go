@@ -111,7 +111,7 @@ func TestCCGatewayRequiresConfigurationAndRejectsRedirect(t *testing.T) {
 	reached := false
 	destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { reached = true }))
 	defer destination.Close()
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, destination.URL, 302) }))
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, destination.URL, http.StatusFound) }))
 	defer upstream.Close()
 	t.Setenv("CCG_ADMIN_KEY", "secret")
 	t.Setenv("CCGATEWAY_URL", upstream.URL)

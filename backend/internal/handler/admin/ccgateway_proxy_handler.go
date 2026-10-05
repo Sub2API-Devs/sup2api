@@ -43,7 +43,7 @@ func (h *PluginHandler) CCGatewayProxy(c *gin.Context) {
 		response.Error(c, 502, "Cannot reach the remote proxy configuration service")
 		return
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
 		response.BadRequest(c, "Proxy configuration rejected; use an HTTP/HTTPS URL or update the remote CCGateway image")
 		return
