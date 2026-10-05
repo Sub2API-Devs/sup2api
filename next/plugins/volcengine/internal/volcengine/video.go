@@ -4,8 +4,14 @@ package volcengine
 // binds owner/account/model and returns its own public task ID before success.
 // A single claimed core poll supplies both billing and the shared query snapshot.
 //
-//	POST /ark/v3/contents/generations/tasks        video_submit (usageSource plugin)
-//	GET  /ark/v3/contents/generations/tasks/:id    video_query  (core snapshot, billing free)
+//	POST /api/v3/contents/generations/tasks        video_submit (usageSource plugin)
+//	GET  /api/v3/contents/generations/tasks/:id    video_query  (core snapshot, billing free)
+//
+// Both are also served under /doubao/api/v3 (endpoints doubao_video_submit /
+// doubao_video_query, same protocols, task kind "doubao_video"). The plugin
+// sees only the protocol, never the client path, so nothing here depends on
+// which prefix the client used; the response carries the core's public task
+// ID, not a URL, so there is no polling path to keep in step with the prefix.
 //
 //	ParseTaskSubmission    parses the upstream ID, initial snapshot and estimate
 //	ExtractUsage           computes that estimate without storing task identity
@@ -40,13 +46,13 @@ import (
 // Protocol ids of the two video endpoints declared in manifest.json.
 const (
 	// ProtocolVideoSubmit is Seedance task submission, served to clients at
-	// POST /ark/v3/contents/generations/tasks. Its usage is read by the
+	// POST /api/v3/contents/generations/tasks. Its usage is read by the
 	// plugin (usageSource "plugin") because the submit response carries only
 	// the task id: the real usage is not known until the task finishes, so
 	// ExtractUsage returns a Reservation instead of a usage number.
 	ProtocolVideoSubmit = "volcengine.video_submit"
 	// ProtocolVideoQuery is the client's poll of one task, GET
-	// /ark/v3/contents/generations/tasks/:task_id. The request has no model,
+	// /api/v3/contents/generations/tasks/:task_id. The request has no model,
 	// so the core looks it up from the managed task; the endpoint is
 	// billing "free" because charging happens only in the reconcile loop, no
 	// matter how many times a client polls.
@@ -58,8 +64,8 @@ const (
 const TaskIDParam = "task_id"
 
 // videoTasksPath is Ark's own task collection, under the account's video
-// prefix. Note the asymmetry with the client-facing path: clients call
-// /ark/v3/... because "api" is a core-reserved first segment.
+// prefix. It is the upstream path, independent of the client-facing one
+// (/api/v3/... or /doubao/api/v3/...).
 //
 // A function rather than a constant because the prefix is per account: a relay
 // may mount Ark's native video tasks under its own namespace

@@ -6,7 +6,7 @@
 -- extensions (CONTRACTS §25), and two of them need a fact the request itself
 -- does not carry:
 --
---   * the query endpoint GET /ark/v3/contents/generations/tasks/:task_id has
+--   * the query endpoint GET /api/v3/contents/generations/tasks/:task_id has
 --     NO model in the request, so ResolveModel looks the task_id up here to
 --     tell the core which model to price and limit the poll against (it is a
 --     free endpoint, but the core still needs a model for the group

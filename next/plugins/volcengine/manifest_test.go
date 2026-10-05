@@ -46,7 +46,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "volcengine" || m.Version != "0.12.2" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "volcengine" || m.Version != "0.12.3" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("identity = %s %s %s", m.Key, m.Version, m.Publisher)
 	}
 	if m.Name["en"] == "" || m.Name["zh"] == "" || m.Description["en"] == "" || m.Description["zh"] == "" {
@@ -616,22 +616,21 @@ func TestPlatformDeclaration(t *testing.T) {
 	if !slices.Equal(p.Protocols(), volcengine.OwnProtocols) {
 		t.Fatalf("protocols = %v, want %v", p.Protocols(), volcengine.OwnProtocols)
 	}
-	// Stage two's image endpoint plus stage five's two video endpoints.
-	if len(p.Endpoints) != 3 {
-		t.Fatalf("endpoints = %+v, want images, video_submit, video_query", p.Endpoints)
+	// Stage two's image endpoint plus stage five's two video endpoints, plus
+	// the legacy /v1 prefix for video (see TestV1AliasEndpoints).
+	if len(p.Endpoints) != 5 {
+		t.Fatalf("endpoints = %+v, want images, video_submit, video_query and their v1_ aliases", p.Endpoints)
 	}
 	e := p.Endpoints[0]
-	if e.ID != "images" || e.Method != "POST" || e.Path != "/ark/v3/images/generations" {
+	if e.ID != "images" || e.Method != "POST" || e.Path != "/api/v3/images/generations" {
 		t.Fatalf("endpoint = %s %s %s", e.ID, e.Method, e.Path)
 	}
-	// Ark's own prefix is /api/v3, but "api" is a core route segment: the
-	// client points the Ark SDK's base_url at https://<host>/ark/v3 instead.
-	// (BuildUpstreamRequest still sends /api/v3 upstream.)
-	if manifest.ReservedFirstSegment(e.Path) {
-		t.Fatalf("path %q starts with a core route segment %v", e.Path, manifest.CoreRouteSegments)
-	}
-	if strings.HasPrefix(e.Path, volcengine.APIPrefix) {
-		t.Fatalf("path %q must not be Ark's own %s prefix", e.Path, volcengine.APIPrefix)
+	// The client-facing path is Ark's official one, so the Ark SDK works with
+	// base_url https://<host>/api/v3 unchanged. That needs the core to reserve
+	// only /api/v1 rather than the whole "api" first segment; the core
+	// validation in TestManifest is what refuses a reserved path.
+	if !strings.HasPrefix(e.Path, volcengine.APIPrefix+"/") {
+		t.Fatalf("path %q must be under Ark's own %s prefix", e.Path, volcengine.APIPrefix)
 	}
 	// The generic OpenAI image path stays free for a future built-in openai
 	// endpoint; binding it to one vendor's plugin would block that.
@@ -681,7 +680,7 @@ func TestVideoEndpoints(t *testing.T) {
 	if !ok {
 		t.Fatal("no video_submit endpoint")
 	}
-	if submit.Method != "POST" || submit.Path != "/ark/v3/contents/generations/tasks" {
+	if submit.Method != "POST" || submit.Path != "/api/v3/contents/generations/tasks" {
 		t.Fatalf("video_submit = %s %s", submit.Method, submit.Path)
 	}
 	if submit.Protocol != volcengine.ProtocolVideoSubmit || submit.Kind != "proxy" {
@@ -725,11 +724,11 @@ func TestVideoEndpoints(t *testing.T) {
 	if n := len(submit.UsageRequestFields); n > check.MaxUsageRequestFields {
 		t.Fatalf("usageRequestFields declares %d paths, over the SDK cap of %d", n, check.MaxUsageRequestFields)
 	}
-	// Only the submit endpoint declares them: the query endpoint reads no
+	// Only the submit endpoints declare them: the query endpoints read no
 	// usage at all, and the checker refuses the field outside usageSource
 	// "plugin".
 	for _, e := range p.Endpoints {
-		if e.ID != "video_submit" && len(e.UsageRequestFields) != 0 {
+		if e.Protocol != volcengine.ProtocolVideoSubmit && len(e.UsageRequestFields) != 0 {
 			t.Errorf("endpoint %q declares usageRequestFields: %v", e.ID, e.UsageRequestFields)
 		}
 	}
@@ -752,7 +751,7 @@ func TestVideoEndpoints(t *testing.T) {
 	if !ok {
 		t.Fatal("no video_query endpoint")
 	}
-	if query.Method != "GET" || query.Path != "/ark/v3/contents/generations/tasks/:"+volcengine.TaskIDParam {
+	if query.Method != "GET" || query.Path != "/api/v3/contents/generations/tasks/:"+volcengine.TaskIDParam {
 		t.Fatalf("video_query = %s %s", query.Method, query.Path)
 	}
 	if query.Protocol != volcengine.ProtocolVideoQuery {
@@ -783,11 +782,11 @@ func TestVideoEndpoints(t *testing.T) {
 	if params := check.PathParams(query.Path); !slices.Equal(params, []string{volcengine.TaskIDParam}) {
 		t.Fatalf("video_query path params = %v", params)
 	}
-	// Neither video path may be Ark's own /api/v3 prefix or a reserved core
-	// segment.
+	// Both video paths are Ark's official ones, so the Ark SDK's
+	// base_url https://<host>/api/v3 reaches them unchanged.
 	for _, e := range []manifest.Endpoint{submit, query} {
-		if manifest.ReservedFirstSegment(e.Path) || strings.HasPrefix(e.Path, volcengine.APIPrefix) {
-			t.Errorf("video path %q is reserved or uses the /api prefix", e.Path)
+		if !strings.HasPrefix(e.Path, volcengine.APIPrefix+"/") {
+			t.Errorf("video path %q is not under Ark's own %s prefix", e.Path, volcengine.APIPrefix)
 		}
 	}
 }
@@ -1010,6 +1009,58 @@ func TestEndpointFormsPreserveLegacyAccounts(t *testing.T) {
 	for _, at := range m.AccountTypes {
 		if at.ID == "apikey" && at.Label["zh"] != "字节火山方舟 · 官方通用" || at.ID == "relay" && at.Label["zh"] != "豆包视频" {
 			t.Fatalf("unexpected account label: %+v", at.Label)
+		}
+	}
+}
+
+// TestV1AliasEndpoints pins the /v1/contents/... aliases for the legacy Ark
+// video API. The old Ark video endpoint was /v1/contents/generations/tasks;
+// new-api's DoubaoVideoLegacyAPI just replaces /api/v3 with /v1 in the request
+// body (the report formats are identical). These aliases let clients configured
+// for the old endpoint keep working. Like the doubao aliases, billing, metering
+// and polling must be identical to the primary /api/v3 endpoints.
+func TestV1AliasEndpoints(t *testing.T) {
+	p := decodeManifest(t).Platforms[0]
+	byID := map[string]manifest.Endpoint{}
+	for _, e := range p.Endpoints {
+		byID[e.ID] = e
+	}
+	// Only video endpoints have v1_ aliases; images does not.
+	videoIDs := []string{"video_submit", "video_query"}
+	for _, id := range videoIDs {
+		primary, ok := byID[id]
+		if !ok {
+			t.Fatalf("no %s endpoint", id)
+		}
+		alias, ok := byID["v1_"+id]
+		if !ok {
+			t.Fatalf("no v1_%s alias", id)
+		}
+		// The v1 path replaces /api/v3 with /v1.
+		if want := strings.Replace(primary.Path, "/api/v3", "/v1", 1); alias.Path != want {
+			t.Errorf("v1_%s path = %q, want %q", id, alias.Path, want)
+		}
+		if primary.Task != nil {
+			if alias.Task == nil || primary.Task.Kind != "video" || alias.Task.Kind != "v1_video" {
+				t.Fatalf("%s task kinds = %+v / %+v, want video / v1_video", id, primary.Task, alias.Task)
+			}
+		}
+		// Everything else must be identical.
+		norm := func(e manifest.Endpoint) string {
+			e.ID, e.Path = "", ""
+			if e.Task != nil {
+				task := *e.Task
+				task.Kind = ""
+				e.Task = &task
+			}
+			b, err := json.Marshal(e)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return string(b)
+		}
+		if a, b := norm(primary), norm(alias); a != b {
+			t.Errorf("v1_%s differs from %s beyond id, path and task kind:\n primary %s\n alias   %s", id, id, a, b)
 		}
 	}
 }

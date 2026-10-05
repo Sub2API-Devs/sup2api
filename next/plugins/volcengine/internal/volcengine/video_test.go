@@ -23,7 +23,7 @@ func TestBuildUpstreamRequestVideo(t *testing.T) {
 		return p.BuildUpstreamRequest(ctx, &pluginv1.BuildUpstreamRequestRequest{Meta: meta, Account: account(testKey, "")})
 	}
 
-	// Submit: POST to Ark's own /api/v3 task collection (client called /ark/v3).
+	// Submit: POST to Ark's own /api/v3 task collection.
 	r, err := build(&pluginv1.RequestMeta{Protocol: ProtocolVideoSubmit, Model: "doubao-seedance-1-0-pro-250528"})
 	if err != nil || r.GetMethod() != "POST" ||
 		r.GetUrl() != DefaultBaseURL+"/api/v3/contents/generations/tasks" {

@@ -76,7 +76,7 @@ AssetLibraryRegion   string // 签名区域，空 = cn-beijing；BytePlus 海外
 | D | **核心不解析上游响应体来建绑定**，绑定只在请求成功后按「本次请求算出的会话键」写入 | ARCHITECTURE 6.5 第 4 步 | 创建任务时任务 id 在**响应体**里，`task_id → 账号` 的对应关系**没有任何一方能记下来** |
 | E | **没有「同一任务只计费一次」的概念**：幂等键是 `usage:request_id`，每个 HTTP 请求一条 | ARCHITECTURE 7.4 | 客户端反复查询已成功的任务会**重复计费** |
 | F | `kind` 只允许 `"proxy"`，`"custom"`（插件自己处理、复用核心鉴权与计费）是预留未实现 | `sdk/manifest/check/validate.go` | 异步任务类接口没有正式落点 |
-| G | ~~端点路径首段保留~~ **已解决**：`manifest.CoreRouteSegments`（`sdk/manifest/routes.go`）成为唯一真相，`app/app.go`、`webui/webui.go`、`manifest/check` 三处全部从它派生，核心与 CLI 行为一致。保留段是 `api` / `plugin-ui` / `healthz`，首段精确匹配 | `sdk/manifest/routes.go` | 仍**不能**用 Ark 原生的 `/api/v3/...`，但 `/apifoo`、`/healthcheck` 这类不再被误拒 |
+| G | ~~端点路径首段保留~~ **已解决**：`manifest.CoreRouteSegments`（`sdk/manifest/routes.go`）成为唯一真相，`app/app.go`、`webui/webui.go`、`manifest/check` 三处全部从它派生，核心与 CLI 行为一致。2026-10-05 起核心只保留 `/api/v1`（控制台与管理 API 实际所在），不再把整个 `api` 首段占掉，`plugin-ui` / `healthz` 仍按首段精确匹配 | `sdk/manifest/routes.go` | 插件 0.12.3 起直接用 Ark 原生的 `/api/v3/...`，另加 `/doubao/api/v3/...` 别名（与 new-api 的豆包路由一致）；原先的 `/ark/v3/...` 已删除 |
 | H | 网关只代理 HTTP，没有 WebSocket 通道 | 全局 | 豆包语音 TTS 接不了 |
 | I | **`HostService` 没有账号接口**：只有 log / kv / db.schema / authz / ledger / broadcast；`accounts.read` 这个权限在非测试代码里从未被使用 | `sdk/proto/.../host.proto`、全仓检索 | 插件**无法**自己列账号、读凭证，所以「插件完全绕开网关、自己挑账号发请求」这条路走不通 |
 | J | **`HostService` 没有「上报一笔用量」接口**：计费只在网关流水线里发生 | ARCHITECTURE 7.4 | 插件后台完成的任务，没法让核心按价格表结算 |
@@ -142,7 +142,7 @@ AssetLibraryRegion   string // 签名区域，空 = cn-beijing；BytePlus 海外
 
 对话 / responses / 嵌入**不新建平台**，直接服务内置 `openai` 平台——客户端照常打 `/v1/chat/completions`，与别的 OpenAI 账号混在同一个分组里调度。
 
-其余走插件自己的平台 `volcengine`。因为约束 G 不能用 `/api/v3`，改用 `/ark/v3`（Ark 官方 SDK 的 `base_url` 本来就整段可配，客户端填 `https://本站/ark/v3` 即可）：
+其余走插件自己的平台 `volcengine`。端点路径使用 Ark 官方的 `/api/v3/...`（核心保留段已收窄到 `/api/v1`，其余放行），以及 `/v1/contents/...` 别名以兼容旧版 Ark 视频 API（new-api 的 DoubaoVideoLegacyAPI 就是把 `/api/v3` 替换成 `/v1`，报文格式完全相同）：
 
 ```jsonc
 "platforms": [{
@@ -150,7 +150,7 @@ AssetLibraryRegion   string // 签名区域，空 = cn-beijing；BytePlus 海外
   "label": { "en": "Volcengine Ark", "zh": "火山方舟" },
   "usage": { "semantics": "inclusive" },
   "endpoints": [
-    { "id": "images", "method": "POST", "path": "/ark/v3/images/generations",
+    { "id": "images", "method": "POST", "path": "/api/v3/images/generations",
       "protocol": "volcengine.images", "kind": "proxy",
       "auth": { "headers": ["authorization"] },
       "request": { "modelPath": "model" },
@@ -163,12 +163,12 @@ AssetLibraryRegion   string // 签名区域，空 = cn-beijing；BytePlus 海外
     // —— 以下两个端点用到的 request.modelSource / usage.source 是四期才存在的
     //    manifest 字段。四期落地之前，这段 jsonc 抄进 manifest 会被
     //    DisallowUnknownFields 直接打回。 ——
-    { "id": "video_submit", "method": "POST", "path": "/ark/v3/contents/generations/tasks",
+    { "id": "video_submit", "method": "POST", "path": "/api/v3/contents/generations/tasks",
       "protocol": "volcengine.video_submit", "kind": "proxy",
       "request": { "modelPath": "model" },
       "usage": { "source": "plugin" },               // 插件读出任务 id 并返回预扣
       "billing": "usage" },                          // 计的是预估费用
-    { "id": "video_query", "method": "GET", "path": "/ark/v3/contents/generations/tasks/:task_id",
+    { "id": "video_query", "method": "GET", "path": "/api/v3/contents/generations/tasks/:task_id",
       "protocol": "volcengine.video_query", "kind": "proxy",
       "request": { "modelSource": "plugin" },        // 插件拿 task_id 查表得出模型
       "billing": "free" }                            // 客户端查多少次都不计费
@@ -265,14 +265,14 @@ rpc GetAccountCredentials(GetAccountCredentialsRequest) returns (GetAccountCrede
 ### 5.1 跑起来是这样
 
 ```
-提交  POST /ark/v3/contents/generations/tasks
+提交  POST /api/v3/contents/generations/tasks
       核心鉴权 → 调度选本插件账号 → 持久记录提交意图 → 插件 BuildUpstreamRequest → 请求上游
       核心收到有界成功 JSON 后同步调 ParseTaskSubmission：
         插件返回上游 task id、初始 queued 查询快照、按分辨率与时长预估的 Reservation
       核心同事务写任务归属/账号/快照、usage_logs、预扣和 pending_settlements
       核心把提交响应中的上游 ID 换成 s2task_ 公开 ID，再返回客户端
 
-轮询  GET /ark/v3/contents/generations/tasks/:task_id      billing: free
+轮询  GET /api/v3/contents/generations/tasks/:task_id      billing: free
       核心鉴权、校验任务所属用户及当前分组的模型权限
       直接返回共享快照；不选账号、不使用 RankAccounts、不访问上游
 
@@ -318,8 +318,8 @@ rpc GetAccountCredentials(GetAccountCredentialsRequest) returns (GetAccountCrede
 ## 7. 待确认
 
 1. **四期（核心契约扩展）是否现在做**。不做的话一~三期照常能发，视频留到以后；做的话它不只解决豆包视频，是把「插件参与计费与记录」这件事打通。决策点见 [PLUGIN-EXECUTES-CORE-RECORDS.md §8](PLUGIN-EXECUTES-CORE-RECORDS.md)。
-2. **端点路径用 `/ark/v3/...` 是否可接受**（`/api` 被核心占用，改不了）。客户端把 Ark SDK 的 `base_url` 设成 `https://本站/ark/v3` 即可。
-3. **图片端点要不要同时占用通用的 `/v1/images/generations`**。占了对 OpenAI SDK 更友好，但把一个通用路径绑给了单一厂商插件，以后核心要给内置 openai 平台加图片端点会冲突。倾向不占。
+2. ~~**端点路径用 `/ark/v3/...` 是否可接受**（`/api` 被核心占用，改不了）。客户端把 Ark SDK 的 `base_url` 设成 `https://本站/ark/v3` 即可。~~ **已解决**：端点改为官方路径 `/api/v3/...`（图片与视频）+ `/doubao/api/v3/...` 别名 + `/v1/contents/...` 别名（仅视频，兼容旧版 Ark API），核心保留段收窄到 `/api/v1`（2026-10-05）。
+3. **图片端点要不要同时占用通用的 `/v1/images/generations`**。占了对 OpenAI SDK 更友好，但把一个通用路径绑给了单一厂商插件，以后核心要给内置 openai 平台加图片端点会冲突。**倾向不占**，已确认不加。
 4. **素材库是否需要对外 OpenAPI 入口**（new-api 有）。本稿按「只做控制台管理」设计。
 
 ---
@@ -676,6 +676,8 @@ token = **帧数 × 输出宽 × 输出高 / 1024**，固定 24fps。以下每�
 ---
 
 ## 12. 第一次真实上游验证（2026-09-30，0.5.1）
+
+> **注**：本节提到的 `/doubao/api/v3` 别名路径已在后续版本（2026-10-05）移除，现在只保留官方 `/api/v3` 和旧版 `/v1/contents` 两组路径。
 
 §1.1（HANDOVER）说「没有任何东西被真实上游验证过」，这一节是它的第一次例外。**只覆盖视频链路**；图片没跑通（上游的问题），素材库没测（缺凭证）。
 

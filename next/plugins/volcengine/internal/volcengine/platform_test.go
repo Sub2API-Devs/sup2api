@@ -212,8 +212,8 @@ func TestBuildUpstreamRequest(t *testing.T) {
 }
 
 // TestBuildUpstreamRequestImages covers the volcengine platform's own
-// endpoint: the client calls /ark/v3/images/generations (the core reserves
-// the "api" first segment), the upstream stays Ark's /api/v3.
+// endpoint: the client calls /api/v3/images/generations (or the
+// /doubao/api/v3 alias), the upstream is the account's own prefix.
 func TestBuildUpstreamRequestImages(t *testing.T) {
 	h := start(t)
 	ctx := context.Background()

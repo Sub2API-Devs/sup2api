@@ -11,7 +11,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-const videoPath = "/ark/v3/contents/generations/tasks"
+const videoPath = "/api/v3/contents/generations/tasks"
 
 type videoObservation struct {
 	TaskID   string `json:"task_id"`

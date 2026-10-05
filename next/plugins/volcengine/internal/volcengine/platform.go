@@ -11,8 +11,9 @@
 // are scheduled next to plain OpenAI accounts in the same group.
 //
 // Image generation (Seedream) has no built-in platform, so the manifest
-// declares the "volcengine" platform with one endpoint, POST
-// /ark/v3/images/generations. It declares no price: the images fact
+// declares the "volcengine" platform with its endpoint, POST
+// /api/v3/images/generations (Ark's own path; also served under
+// /doubao/api/v3). It declares no price: the images fact
 // (usage.generated_images) and the output tokens are the metering keys an
 // administrator writes a price expression against (ARCHITECTURE 7.3).
 //
@@ -78,7 +79,8 @@ const (
 // Protocol ids of the volcengine platform declared in manifest.json.
 const (
 	// ProtocolImages is synchronous image generation (Seedream), served to
-	// clients at POST /ark/v3/images/generations. Text-to-image and
+	// clients at POST /api/v3/images/generations and its alias
+	// /doubao/api/v3/images/generations. Text-to-image and
 	// image-to-image share this one upstream path.
 	ProtocolImages = "volcengine.images"
 )
@@ -347,10 +349,10 @@ func chatPath(prefix, model string) string {
 // chat completions.
 //
 // The image path is the same for text-to-image and image-to-image: Ark
-// decides from the request body, not the URL. Note the asymmetry with the
-// client-facing path: the gateway endpoint is /ark/v3/images/generations
-// because "api" is a reserved first path segment of the core, while upstream
-// it stays Ark's own <prefix>/images/generations.
+// decides from the request body, not the URL. The client-facing path
+// (/api/v3/images/generations, or the /doubao/api/v3 alias) never reaches
+// this function: upstream it is always the account's own
+// <prefix>/images/generations, whichever prefix the client used.
 func upstreamPath(px prefixes, protocol, model string) (string, error) {
 	switch protocol {
 	case ProtocolChat, "":

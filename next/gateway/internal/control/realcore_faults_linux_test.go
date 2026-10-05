@@ -291,7 +291,7 @@ func TestRealCoreFaultsDuringPrimaryFirstUpgrade(t *testing.T) {
 	// ---- an async video task whose upstream observation is held open
 	video := newVideoTenant(t, admin, mockURL, c.dbname)
 	mock.video(video.accountKey, "running", true)
-	submit := newAPIClient(t, c.node("b").public.URL).do(http.MethodPost, "/ark/v3/contents/generations/tasks", map[string]any{
+	submit := newAPIClient(t, c.node("b").public.URL).do(http.MethodPost, "/api/v3/contents/generations/tasks", map[string]any{
 		"model": video.model, "content": []map[string]string{{"type": "text", "text": "A mock clip"}}, "resolution": "480p", "ratio": "16:9", "duration": 4,
 	}, map[string]string{"Authorization": "Bearer " + video.apiKey})
 	publicID, requestID := submit.str("id"), submit.header.Get("X-Request-Id")
@@ -402,7 +402,7 @@ func TestRealCoreFaultsDuringPrimaryFirstUpgrade(t *testing.T) {
 	mock.video(video.accountKey, "succeeded", false)
 	reader2 := newAPIClient(t, c.node("c").public.URL)
 	wait("video task succeeded", 6*time.Minute, func() bool {
-		r := reader2.do(http.MethodGet, "/ark/v3/contents/generations/tasks/"+publicID, nil, map[string]string{"Authorization": "Bearer " + video.apiKey})
+		r := reader2.do(http.MethodGet, "/api/v3/contents/generations/tasks/"+publicID, nil, map[string]string{"Authorization": "Bearer " + video.apiKey})
 		if r.status != 200 {
 			t.Fatalf("task lookup: %s", r)
 		}

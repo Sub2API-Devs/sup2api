@@ -2,14 +2,14 @@
   "apiVersion": 1,
   "key": "volcengine",
   "name": {
-    "en": "Volcengine Ark, Doubao Video",
-    "zh": "字节火山方舟、豆包视频"
+    "en": "Volcengine Ark",
+    "zh": "字节火山方舟"
   },
   "description": {
-    "en": "Official Volcengine Ark access for OpenAI-compatible APIs, Anthropic Messages, image and video generation, plus configurable Doubao video and asset endpoints. Existing relay text integrations remain compatible. Prices are configured by the administrator.",
-    "zh": "提供方舟官方 OpenAI 兼容接口、Anthropic Messages、图片与视频生成，以及可自定义视频和素材端点的豆包视频账号。保留既有中转文本接入兼容，不内置价格。"
+    "en": "Official Volcengine Ark access for OpenAI-compatible APIs, Anthropic Messages, image and video generation. Existing relay text integrations remain compatible. Prices are configured by the administrator.",
+    "zh": "提供方舟官方 OpenAI 兼容接口、Anthropic Messages、图片与视频生成。保留既有中转文本接入兼容，不内置价格。"
   },
-  "version": "0.12.2",
+  "version": "0.12.3",
   "publisher": "sub2api",
   "icon": "assets/volcengine-color.svg",
   "runtime": "grpc",
@@ -59,7 +59,7 @@
         {
           "id": "images",
           "method": "POST",
-          "path": "/ark/v3/images/generations",
+          "path": "/api/v3/images/generations",
           "protocol": "volcengine.images",
           "kind": "proxy",
           "auth": {
@@ -107,7 +107,7 @@
         {
           "id": "video_submit",
           "method": "POST",
-          "path": "/ark/v3/contents/generations/tasks",
+          "path": "/api/v3/contents/generations/tasks",
           "protocol": "volcengine.video_submit",
           "task": {
             "action": "submit",
@@ -198,11 +198,131 @@
         {
           "id": "video_query",
           "method": "GET",
-          "path": "/ark/v3/contents/generations/tasks/:task_id",
+          "path": "/api/v3/contents/generations/tasks/:task_id",
           "protocol": "volcengine.video_query",
           "task": {
             "action": "query",
             "kind": "video",
+            "idParam": "task_id",
+            "idPaths": [
+              "id",
+              "task_id",
+              "data.id",
+              "result.id"
+            ]
+          },
+          "kind": "proxy",
+          "auth": {
+            "headers": [
+              "authorization"
+            ]
+          },
+          "request": {},
+          "response": {
+            "nonStream": "json"
+          },
+          "errorFormat": "openai",
+          "billing": "free"
+        },
+        {
+          "id": "v1_video_submit",
+          "method": "POST",
+          "path": "/v1/contents/generations/tasks",
+          "protocol": "volcengine.video_submit",
+          "task": {
+            "action": "submit",
+            "kind": "v1_video",
+            "idPaths": [
+              "id",
+              "task_id",
+              "data.id",
+              "result.id"
+            ]
+          },
+          "kind": "proxy",
+          "auth": {
+            "headers": [
+              "authorization"
+            ]
+          },
+          "request": {
+            "modelPath": "model",
+            "promptTextPaths": [
+              "content.#.text"
+            ]
+          },
+          "response": {
+            "nonStream": "json"
+          },
+          "errorFormat": "openai",
+          "billing": "usage",
+          "usageSource": "plugin",
+          "usageRequestFields": [
+            "resolution",
+            "ratio",
+            "duration",
+            "frames",
+            "content.#",
+            "content.#.type",
+            "draft",
+            "content.0.text",
+            "content.1.text",
+            "content.2.text"
+          ],
+          "usage": {
+            "semantics": "inclusive",
+            "facts": {
+              "resolution": {
+                "type": "enum",
+                "enum": [
+                  "480p",
+                  "720p",
+                  "1080p",
+                  "4k"
+                ],
+                "description": {
+                  "en": "Output tier of the clip: the plugin's estimate while the task runs, the tier Ark really rendered once it is reconciled. For tiered price expressions such as tier(u(\"resolution\"), ...)",
+                  "zh": "视频的输出档位：任务进行中是插件的预估值，核对完成后是方舟实际渲染的档位。用于分档价格表达式，如 tier(u(\"resolution\"), …)"
+                }
+              },
+              "video_seconds": {
+                "type": "number"
+              },
+              "video_pixels": {
+                "type": "number"
+              },
+              "video_width": {
+                "type": "number"
+              },
+              "video_height": {
+                "type": "number"
+              },
+              "video_estimated": {
+                "type": "boolean"
+              },
+              "video_input": {
+                "type": "boolean"
+              },
+              "video_draft": {
+                "type": "boolean"
+              }
+            }
+          },
+          "billingTypes": [
+            "per_request",
+            "per_token",
+            "expression",
+            "video"
+          ]
+        },
+        {
+          "id": "v1_video_query",
+          "method": "GET",
+          "path": "/v1/contents/generations/tasks/:task_id",
+          "protocol": "volcengine.video_query",
+          "task": {
+            "action": "query",
+            "kind": "v1_video",
             "idParam": "task_id",
             "idPaths": [
               "id",
@@ -855,8 +975,8 @@
     {
       "id": "gateway.endpoint",
       "reason": {
-        "en": "Serve Ark image generation at POST /ark/v3/images/generations and Doubao Seedance video generation at POST/GET /ark/v3/contents/generations/tasks",
-        "zh": "在 POST /ark/v3/images/generations 上提供方舟图片生成，在 POST/GET /ark/v3/contents/generations/tasks 上提供豆包 Seedance 视频生成"
+        "en": "Serve Ark image generation at POST /api/v3/images/generations and Doubao Seedance video generation at POST/GET /api/v3/contents/generations/tasks, the paths of the official Ark API; the same endpoints are also served under /doubao/api/v3",
+        "zh": "在 POST /api/v3/images/generations 上提供方舟图片生成，在 POST/GET /api/v3/contents/generations/tasks 上提供豆包 Seedance 视频生成，与方舟官方路径一致；同样的端点也在 /doubao/api/v3 下提供"
       }
     },
     {
