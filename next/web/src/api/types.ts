@@ -301,6 +301,8 @@ export interface Account {
   refresh?: AccountRefresh | null
   /** Outcome of the latest test of the account (any model); null when never tested. */
   last_test?: AccountLastTest | null
+  /** Balance of the account (CONTRACTS §52); null when the type does not support balance. */
+  balance?: AccountBalance | null
 }
 
 // ---------------------------------------------------------------- CCGateway runtimes (docs/CCGATEWAY-DRAFT-RUNTIMES.md)
@@ -381,6 +383,20 @@ export interface AccountRefresh {
   /** '' ok, 'auth_rejected' (authorize the account again), 'transient' (retried automatically). */
   error_type: '' | 'auth_rejected' | 'transient'
   error: string
+}
+
+/** Balance snapshot of an account (CONTRACTS §52). */
+export interface AccountBalance {
+  /** Decimal amount as a string (e.g., "1.23"). */
+  amount: Money
+  /** ISO 4217 currency code (e.g., "USD", "CNY"). */
+  currency: string
+  /** When the snapshot was taken. */
+  updated_at: string
+  /** Source of the balance: "active" (explicit query) or "" (passive). */
+  source: 'active' | ''
+  /** Last query error message if any. */
+  error?: string
 }
 
 /** Answer of POST /accounts/:id/refresh-credentials. */

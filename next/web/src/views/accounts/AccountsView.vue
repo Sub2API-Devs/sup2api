@@ -20,11 +20,12 @@ import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
 import AccountEditor from './AccountEditor.vue'
 import { sameCreationGroup } from './accountTypeChoices'
 import AccountQuotaCell from './AccountQuotaCell.vue'
+import AccountBalanceCell from './AccountBalanceCell.vue'
 import AccountModelTest from './AccountModelTest.vue'
 import LastTestCell from './AccountLastTest.vue'
 import { TEST_CONCURRENCY, lastTestOf } from './accountTest'
 import { runPool } from './pool'
-import { hasQuota, refreshAccountCredentials, resetAccountStatus, useQuotaRefresh } from './accountQuota'
+import { hasBalance, hasQuota, refreshAccountCredentials, resetAccountStatus, useBalanceRefresh, useQuotaRefresh } from './accountQuota'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -83,6 +84,8 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'limits', label: t('accounts.limits') },
   // Only when a row of this page has plan windows (subscription accounts).
   ...(list.items.value.some((a) => hasQuota(a.quota)) ? [{ key: 'quota', label: t('accounts.quota.column') }] : []),
+  // Only when a row of this page has balance (balance-enabled account types).
+  ...(list.items.value.some((a) => hasBalance(a.balance)) ? [{ key: 'balance', label: t('accounts.balance.column') }] : []),
   { key: 'last_test', label: t('accounts.lastTest.column') },
   { key: 'actions', label: t('common.actions'), align: 'right' }
 ])
@@ -367,6 +370,19 @@ const quotaRefresh = useQuotaRefresh({
   onThrottled: (_id, n) => toast(t('accounts.quota.refreshThrottled', { n }), 'info'),
   onError: (_id, e) => notifyError(e)
 })
+
+// ---------------------------------------------------------------- balance refresh
+// Similar to quota refresh, but for account balance (CONTRACTS §52).
+const balanceRefresh = useBalanceRefresh({
+  onSnapshot(id, snapshot) {
+    const row = list.items.value.find((x) => x.id === id)
+    if (row) row.balance = snapshot
+    if (detail.value?.id === id) detail.value.balance = snapshot
+  },
+  onThrottled: (_id, n) => toast(t('accounts.balance.refreshThrottled', { n }), 'info'),
+  onError: (_id, e) => notifyError(e)
+})
+
 const canResetStatus = (a: Account) => canUpdate(a) && !a.orphaned
 
 async function resetStatus(a: Account) {
@@ -576,6 +592,11 @@ function groupTags(a: Account) {
         <!-- no plan limits (API keys): show nothing, not even the table's "—" fallback -->
         <span v-else />
       </template>
+      <template #cell-balance="{ row }">
+        <AccountBalanceCell v-if="hasBalance(row.balance)" :balance="row.balance" :refreshing="balanceRefresh.refreshing.has(row.id)" @refresh="balanceRefresh.refresh(row.id, row.balance)" />
+        <!-- no balance (types without balance support): show nothing -->
+        <span v-else />
+      </template>
       <template #cell-actions="{ row }">
         <div class="flex items-center justify-end gap-1">
           <SSwitch
@@ -678,6 +699,10 @@ function groupTags(a: Account) {
             <template v-if="hasQuota(detail.quota)">
               <dt>{{ t('accounts.quota.column') }}</dt>
               <dd><AccountQuotaCell :quota="detail.quota" :refreshing="quotaRefresh.refreshing.has(detail.id)" @refresh="quotaRefresh.refresh(detail.id, detail.quota)" /></dd>
+            </template>
+            <template v-if="hasBalance(detail.balance)">
+              <dt>{{ t('accounts.balance.label') }}</dt>
+              <dd><AccountBalanceCell :balance="detail.balance" :refreshing="balanceRefresh.refreshing.has(detail.id)" @refresh="balanceRefresh.refresh(detail.id, detail.balance)" /></dd>
             </template>
             <dt>{{ t('accounts.models') }}</dt>
             <dd>

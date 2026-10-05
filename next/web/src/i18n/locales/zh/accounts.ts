@@ -191,5 +191,16 @@ export default {
     inProgress: '正在刷新中，请稍后再看',
     changed: '刷新期间账号凭证被修改，本次结果已丢弃',
     failed: '刷新失败：{error}'
+  },
+  balance: {
+    column: '余额',
+    label: '余额',
+    refresh: '刷新余额',
+    refreshHint: '查询账号当前余额',
+    refreshing: '正在查询',
+    refreshDone: '余额已刷新',
+    refreshThrottled: '请求过于频繁，请 {n} 秒后再试',
+    updatedAt: '更新于 {time}',
+    error: '查询失败：{error}'
   }
 }

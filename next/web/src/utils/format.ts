@@ -11,6 +11,28 @@ export function formatMoney(v: string | number | null | undefined, digits = 4): 
   return (n < 0 ? '-$' : '$') + s
 }
 
+/** Formats account balance with currency symbol (CONTRACTS §52). */
+export function formatBalance(amount: string | number | null | undefined, currency: string): string {
+  if (amount === null || amount === undefined || amount === '') return '—'
+  const n = typeof amount === 'number' ? amount : Number(amount)
+  if (!Number.isFinite(n)) return String(amount)
+
+  const abs = Math.abs(n)
+  const digits = abs !== 0 && abs < 0.01 ? 6 : 2
+  const formatted = abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: digits })
+
+  const symbols: Record<string, string> = {
+    'USD': '$',
+    'CNY': '¥',
+    'EUR': '€',
+    'GBP': '£',
+    'JPY': '¥'
+  }
+
+  const symbol = symbols[currency] || currency + ' '
+  return (n < 0 ? '-' : '') + symbol + formatted
+}
+
 /** Signed amount for ledger deltas: +12.3400 / -0.0158. */
 export function formatDelta(v: string | number | null | undefined, digits = 4): string {
   if (v === null || v === undefined || v === '') return '—'

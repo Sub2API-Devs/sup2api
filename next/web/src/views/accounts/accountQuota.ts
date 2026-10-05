@@ -4,7 +4,7 @@
 // per row — only the "refresh" action asks the upstream (force=true).
 import { onBeforeUnmount, reactive, ref, type Ref } from 'vue'
 import { api } from '@sub2api/host'
-import type { CredentialRefreshOutcome, QuotaSnapshot, QuotaWindow } from '@/api/types'
+import type { AccountBalance, CredentialRefreshOutcome, QuotaSnapshot, QuotaWindow } from '@/api/types'
 
 /** The server answers force refreshes at most this often per account; the console does not ask sooner. */
 export const QUOTA_REFRESH_MIN_MS = 30_000
@@ -165,4 +165,73 @@ export function useQuotaRefresh(opts: QuotaRefreshOptions) {
 /** POST /accounts/:id/refresh-credentials — renews the credentials now (CONTRACTS §48). */
 export function refreshAccountCredentials(id: number): Promise<CredentialRefreshOutcome> {
   return api.post<CredentialRefreshOutcome>(`/accounts/${id}/refresh-credentials`)
+}
+
+// ---------------------------------------------------------------- balance (CONTRACTS §52)
+
+/** Whether a balance snapshot exists and should be shown. */
+export function hasBalance(b: AccountBalance | null | undefined): b is AccountBalance {
+  return !!b && !!b.amount
+}
+
+/** GET /accounts/:id/balance — returns the cached balance or queries the upstream. */
+export function fetchAccountBalance(id: number): Promise<AccountBalance> {
+  return api.get<AccountBalance>(`/accounts/${id}/balance`)
+}
+
+/** POST /accounts/:id/refresh-balance — force refresh (ignores freshness, subject to 2s rate limit). */
+export function refreshAccountBalance(id: number): Promise<AccountBalance> {
+  return api.post<AccountBalance>(`/accounts/${id}/refresh-balance`)
+}
+
+export interface BalanceRefreshOptions {
+  /** A fresh balance snapshot for the account. */
+  onSnapshot: (id: number, snapshot: AccountBalance) => void
+  /** Clicked again too soon; nothing was sent. */
+  onThrottled?: (id: number, waitSeconds: number) => void
+  onError?: (id: number, e: unknown) => void
+  /** Injected in tests. */
+  fetcher?: (id: number) => Promise<AccountBalance>
+  now?: () => number
+}
+
+/** Manual "refresh balance" with a 2s floor per account (same logic as quota refresh). */
+export function useBalanceRefresh(opts: BalanceRefreshOptions) {
+  const now = opts.now ?? Date.now
+  const fetcher = opts.fetcher ?? refreshAccountBalance
+  const refreshing = reactive(new Set<number>())
+  const lastAt = new Map<number, number>()
+  const MIN_MS = 2_000
+
+  function waitMs(id: number, current?: AccountBalance | null): number {
+    const t = now()
+    let base = lastAt.get(id) ?? 0
+    if (current?.updated_at) {
+      const at = Date.parse(current.updated_at)
+      if (!Number.isNaN(at)) base = Math.max(base, Math.min(at, t))
+    }
+    return Math.max(0, base + MIN_MS - t)
+  }
+
+  async function refresh(id: number, current?: AccountBalance | null): Promise<RefreshOutcome> {
+    if (refreshing.has(id)) return 'busy'
+    const wait = waitMs(id, current)
+    if (wait > 0) {
+      opts.onThrottled?.(id, Math.ceil(wait / 1000))
+      return 'throttled'
+    }
+    refreshing.add(id)
+    lastAt.set(id, now())
+    try {
+      opts.onSnapshot(id, await fetcher(id))
+      return 'ok'
+    } catch (e) {
+      opts.onError?.(id, e)
+      return 'error'
+    } finally {
+      refreshing.delete(id)
+    }
+  }
+
+  return { refreshing, refresh, waitMs }
 }

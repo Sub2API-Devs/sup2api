@@ -191,5 +191,16 @@ export default {
     inProgress: 'A refresh is already running; check again shortly',
     changed: 'The credentials were changed during the refresh; its result was discarded',
     failed: 'Refresh failed: {error}'
+  },
+  balance: {
+    column: 'Balance',
+    label: 'Balance',
+    refresh: 'Refresh balance',
+    refreshHint: 'Query the current account balance',
+    refreshing: 'Querying',
+    refreshDone: 'Balance refreshed',
+    refreshThrottled: 'Too many requests, try again in {n} seconds',
+    updatedAt: 'updated {time}',
+    error: 'Query failed: {error}'
   }
 }
