@@ -153,4 +153,6 @@ release 0.1.25 0.1.24
 release 0.1.26 0.1.25
 # 0.1.27 aligns right-aligned table headers with their cells (same schema).
 release 0.1.27
+# 0.1.28 makes copying the Claude authorization link the main action (same schema).
+release 0.1.28
 ls -la publish
