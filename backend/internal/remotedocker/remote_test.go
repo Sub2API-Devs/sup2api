@@ -221,7 +221,11 @@ func TestHTTPStreamLifetime(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = closeClient() }()
-	if client.Timeout != 0 || client.Transport.(fixedTargetTransport).transport.ResponseHeaderTimeout != 0 {
+	transport, ok := client.Transport.(fixedTargetTransport)
+	if !ok {
+		t.Fatal("unexpected HTTP transport")
+	}
+	if client.Timeout != 0 || transport.transport.ResponseHeaderTimeout != 0 {
 		t.Fatal("HTTP inherited SSH timeout")
 	}
 	resp, err := client.Get(upstream.URL)

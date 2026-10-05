@@ -136,7 +136,7 @@ func TestCCGatewayBridgeCancelsUpstream(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(200)
-		w.(http.Flusher).Flush()
+		_ = http.NewResponseController(w).Flush()
 		<-r.Context().Done()
 		close(cancelled)
 	}))
@@ -154,7 +154,7 @@ func TestCCGatewayBridgeCancelsUpstream(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	cancel()
 	select {
 	case <-cancelled:
