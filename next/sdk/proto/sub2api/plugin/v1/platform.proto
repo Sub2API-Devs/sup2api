@@ -170,6 +170,19 @@ service PlatformService {
   // credentials (other fields are kept), encrypts and saves them, and only if
   // nobody changed the account in the meantime.
   rpc ParseRefreshResponse(ParseRefreshResponseRequest) returns (RefreshResult);
+  // Builds the request that queries the account balance, for account types
+  // declaring manifest accountTypes[].balance. Same division of labour as
+  // BuildQuotaRequest: the plugin DESCRIBES the request, the host sends it
+  // through the account's proxy, and hands the answer to ParseBalanceResponse.
+  // The host decides when: on demand (GET /accounts/:id/balance) and
+  // periodically if the manifest declares update_interval.
+  //
+  // Called on the plugin declaring the account type; the account carries its
+  // credentials. Optional: answer UNIMPLEMENTED and the host returns
+  // "unsupported".
+  rpc BuildBalanceRequest(BuildBalanceRequestRequest) returns (BuildBalanceRequestResponse);
+  // Reads the upstream's answer to the request above into a balance amount.
+  rpc ParseBalanceResponse(ParseBalanceResponseRequest) returns (ParseBalanceResponseResponse);
 }
 
 message EstimateUsageRequest {
@@ -720,4 +733,61 @@ message RefreshResult {
   // Why, recorded with the account's refresh state. At most 512 bytes are
   // kept.
   string error_message = 3;
+}
+
+message BuildBalanceRequestRequest {
+  // The account whose balance is asked for, credentials included (the account
+  // type is always this plugin's). platform is empty: no client endpoint is
+  // involved.
+  Account account = 1;
+}
+
+message BuildBalanceRequestResponse {
+  string method = 1;               // default "GET"
+  // Absolute http(s) URL. The host rejects private/loopback/link-local
+  // targets (SSRF guard) unless the account goes through a proxy, and sends
+  // it through the account's proxy.
+  string url = 2;
+  map<string, string> headers = 3;
+  string body_json = 4;            // optional
+}
+
+message ParseBalanceResponseRequest {
+  Account account = 1;             // as in BuildBalanceRequest
+  // Upstream status, 0 for a transport error (see transport_error).
+  int32 status = 2;
+  map<string, string> headers = 3; // lower-cased
+  bytes body = 4;                  // truncated to the host's body cap (64 KiB)
+  string transport_error = 5;
+  // The response exceeded the host's body cap; do not trust a partial
+  // document.
+  bool truncated = 6;
+}
+
+message ParseBalanceResponseResponse {
+  BalanceResult result = 1;
+}
+
+// BalanceResult is what the plugin read out of the balance answer.
+message BalanceResult {
+  enum ErrorType {
+    // Success: amount_micros carries the balance.
+    ERROR_TYPE_UNSPECIFIED = 0;
+    // The upstream rejected the credentials (401/403, revoked token). The
+    // host records the error on the snapshot; it does NOT disable or cool
+    // down the account - the gateway's own classification does that.
+    ERROR_TYPE_AUTH_REJECTED = 1;
+    // Any other failure: transport error, 429, 5xx, unreadable body. The
+    // host records it and does not ask again for a minute.
+    ERROR_TYPE_TRANSIENT = 2;
+  }
+  // Balance in micro-units (1,000,000 = 1.00 currency unit). For example,
+  // $1.23 USD = 1230000 micros.
+  int64 amount_micros = 1;
+  // ISO 4217 currency code (3 uppercase letters), must match the manifest
+  // declaration. Required on success.
+  string currency = 2;
+  ErrorType error_type = 3;
+  // Why, shown with the snapshot. At most 512 bytes are kept.
+  string error_message = 4;
 }

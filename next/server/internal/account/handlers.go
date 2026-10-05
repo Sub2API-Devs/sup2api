@@ -174,6 +174,9 @@ type View struct {
 	// Quota is the subscription quota snapshot (CONTRACTS §44), read from
 	// the database only; null for account types without quota (API keys).
 	Quota *QuotaSnapshot `json:"quota"`
+	// Balance is the account balance snapshot (CONTRACTS §51); null for
+	// account types without balance support.
+	Balance *BalanceView `json:"balance,omitempty"`
 	// Refresh is the credential refresh state (CONTRACTS §48); null for
 	// account types whose credentials do not expire.
 	Refresh *RefreshView `json:"refresh"`
@@ -288,6 +291,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 		}
 	}
 	s.fillQuota(ctx, rows, out)
+	s.fillBalance(ctx, rows, out)
 	s.fillRefresh(ctx, rows, out)
 	return out, nil
 }
@@ -1167,6 +1171,8 @@ func (s *Service) delete(c *gin.Context) {
 	if s.d.Redis != nil {
 		_ = s.d.Redis.Del(ctx, cooldownKey(id)).Err()
 	}
+	s.evictQuotaCache(ctx, id)
+	s.evictBalanceCache(ctx, id)
 	s.changed(ctx, id)
 	httpapi.NoContent(c)
 }

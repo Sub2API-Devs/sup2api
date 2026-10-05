@@ -74,6 +74,23 @@ func TestAccountQuota(t *testing.T) {
 	assert.Len(t, all, 1)
 	assert.NotNil(t, all[id])
 
+	// AccountQuotasAt reads the same rows plus the database time of the read.
+	var before time.Time
+	require.NoError(t, db.Pool.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&before))
+	at1, stamp, err := db.AccountQuotasAt(ctx, []int64{id, other})
+	require.NoError(t, err)
+	assert.Len(t, at1, 1)
+	assert.Equal(t, all[id].Windows, at1[id].Windows)
+	assert.Equal(t, id, at1[id].AccountID)
+	assert.False(t, stamp.Before(before), "stamp %v before %v", stamp, before)
+	none, stamp2, err := db.AccountQuotasAt(ctx, []int64{other})
+	require.NoError(t, err)
+	assert.Empty(t, none)
+	assert.True(t, stamp2.After(stamp), "an account without a snapshot still gets the read time")
+	empty, _, err := db.AccountQuotasAt(ctx, nil)
+	require.NoError(t, err)
+	assert.Empty(t, empty)
+
 	// A missing account is skipped, not an error.
 	require.NoError(t, db.SaveAccountQuota(ctx, 1<<40, store.QuotaPassive, map[string]store.QuotaWindow{"5h": {}}))
 	ok, err = db.ClaimAccountQuotaQuery(ctx, 1<<40, 30*time.Second)

@@ -143,11 +143,7 @@ func (s *Service) fillQuota(ctx context.Context, rows []*row, out []*View) {
 	if len(ids) == 0 {
 		return
 	}
-	snaps, err := s.d.DB.AccountQuotas(ctx, ids)
-	if err != nil {
-		slog.WarnContext(ctx, "account: read quota snapshots", "err", err)
-		snaps = nil
-	}
+	snaps := s.cachedAccountQuotas(ctx, ids)
 	now := time.Now()
 	for i, a := range rows {
 		if decls[i] != nil {
@@ -571,6 +567,8 @@ func (s *Service) resetStatus(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
+	s.evictQuotaCache(ctx, id)
+	s.evictBalanceCache(ctx, id)
 	uid, _ := core.UserID(ctx)
 	err = s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
 		if err := audit.Audit(ctx, tx, uid, "account.reset_status", "account", itoa(id),

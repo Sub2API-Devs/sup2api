@@ -99,6 +99,9 @@
             "status": "anthropic-ratelimit-unified-7d_oi-status"
           }
         ]
+      },
+      "balance": {
+        "currency": "USD"
       }
     },
     {

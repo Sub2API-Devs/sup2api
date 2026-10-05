@@ -536,7 +536,7 @@ func (v *validator) endpoint(f string, p manifest.Platform, e manifest.Endpoint)
 			v.add(f+".billingTypes", "duplicate", "duplicate billing type %q", kind)
 		}
 		seenBilling[kind] = true
-		if e.Billing == "free" || (kind == "video" && (!e.TaskSubmit() || e.Task.Kind != "video")) {
+		if e.Billing == "free" || (kind == "video" && (!e.TaskSubmit() || !strings.Contains(e.Task.Kind, "video"))) {
 			v.add(f+".billingTypes", "conflict", "billing type %q is incompatible with this endpoint", kind)
 		}
 	}
@@ -697,8 +697,8 @@ func checkEndpointPath(p string) string {
 	if first == "" || strings.HasPrefix(first, ":") || strings.HasPrefix(first, "*") {
 		return "first path segment must be a literal"
 	}
-	if manifest.ReservedFirstSegment(p) {
-		return fmt.Sprintf("path must not start with /%s", first)
+	if route, ok := manifest.CoreRouteOf(p); ok {
+		return fmt.Sprintf("path must not start with %s (a core route)", route)
 	}
 	for _, s := range segs {
 		if s == "" || s == "." || s == ".." {
@@ -796,6 +796,7 @@ func (v *validator) accountTypes() {
 		v.guardedSettings(f, at)
 		v.defaultModels(f, at)
 		v.quota(f, at.Quota)
+		v.balance(f, at.Balance)
 		v.refresh(f, at)
 		if len(at.Platforms) == 0 {
 			v.add(f+".platforms", "required", "at least one platform is required")

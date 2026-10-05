@@ -63,9 +63,16 @@ func TestAssetsAndReserved(t *testing.T) {
 	if w := get(e, http.MethodGet, "/assets/missing.js"); w.Code != 404 {
 		t.Fatalf("missing asset: %d", w.Code)
 	}
-	for _, p := range []string{"/api/v1/nope", "/plugin-ui/x/y/z.js"} {
+	for _, p := range []string{"/api/v1/nope", "/plugin-ui/x/y/z.js", "/api", "/api/", "/API/V1/x", "/healthz", "/healthz/x"} {
 		w := get(e, http.MethodGet, p)
 		if w.Code != 404 || !strings.Contains(w.Body.String(), "not_found") {
+			t.Fatalf("%s: %d %s", p, w.Code, w.Body.String())
+		}
+	}
+	// The core owns /api/v1, not all of /api: an unmatched /api/v3 path (a
+	// gateway path, e.g. Volcengine Ark's) is treated like any other one.
+	for _, p := range []string{"/api/v3/chat/completions", "/apifoo", "/healthcheck"} {
+		if w := get(e, http.MethodGet, p); w.Code != 200 || !strings.Contains(w.Body.String(), "importmap") {
 			t.Fatalf("%s: %d %s", p, w.Code, w.Body.String())
 		}
 	}

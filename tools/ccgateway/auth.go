@@ -51,6 +51,9 @@ type authManager struct {
 	session  *authSession
 	cli, key string
 	proxy    *ProxyConfigStore
+	// version is the CLI version (usage request user agent); usageURL
+	// overrides the Anthropic usage endpoint in tests.
+	version, usageURL string
 }
 
 // alive reports whether the login can still be completed.
@@ -245,6 +248,10 @@ func (a *authManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/admin/proxy" {
 		a.proxy.serve(w, r)
+		return
+	}
+	if r.URL.Path == "/admin/usage" {
+		a.usage(w, r)
 		return
 	}
 	a.mu.Lock()

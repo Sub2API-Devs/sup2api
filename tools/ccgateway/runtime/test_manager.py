@@ -231,6 +231,7 @@ class KeyTests(unittest.TestCase):
         for key in self.VALID:
             self.assertEqual(ROUTE.fullmatch(f'/accounts/{key}/status')[1], key)
             self.assertEqual(ROUTE.fullmatch(f'/accounts/{key}/admin/auth/session')[2], 'admin/auth/session')
+            self.assertEqual(ROUTE.fullmatch(f'/accounts/{key}/admin/usage')[2], 'admin/usage')
             m = ROUTE.fullmatch(f'/accounts/{key}')
             self.assertEqual((m[1], m[2]), (key, None))
         for key in self.INVALID:
@@ -239,7 +240,8 @@ class KeyTests(unittest.TestCase):
         m = ROUTE.fullmatch('/accounts')
         self.assertEqual((m[1], m[2]), (None, None))
         for path in ('/accounts/', '/accounts/1/', '/accounts/1/admin/auth/other', '/accounts/1/status?x=1',
-                     '/accounts/1/../2/status', '/accounts/1/admin/auth/session/x'):
+                     '/accounts/1/../2/status', '/accounts/1/admin/auth/session/x', '/accounts/1/admin/usage/x',
+                     '/accounts/1/admin/auth/usage'):
             self.assertIsNone(ROUTE.fullmatch(path), path)
 
 
@@ -526,9 +528,25 @@ class HandlerTests(Base):
         self.assertEqual(FakeSession.calls[-1][1], f'http://{state["app_ip"]}:8787/admin/auth/cancel')
         self.assertEqual(self.call('DELETE', path, headers={'X-CCG-Revision': REV}), (405, {'error': 'method_not_allowed'}))
 
+    def test_usage_pass_through(self):
+        self.apply('7')
+        state = self.m.state('7')
+        path = '/accounts/7/admin/usage'
+        self.assertEqual(self.call('GET', path), (409, {'error': 'not_synchronized'}))
+        self.assertEqual(self.call('GET', path, headers={'X-CCG-Revision': REV})[0], 200)
+        method, url, headers = FakeSession.calls[-1]
+        self.assertEqual((method, url), ('GET', f'http://{state["app_ip"]}:8787/admin/usage'))
+        self.assertEqual(headers['Authorization'], 'Bearer ' + state['admin_key'])
+        calls = len(FakeSession.calls)
+        # Read-only: any other method is refused before reaching the container.
+        self.assertEqual(self.call('POST', path, '{}', headers={'X-CCG-Revision': REV}), (405, {'error': 'method_not_allowed'}))
+        self.assertEqual(len(FakeSession.calls), calls)
+
     def test_api_key_accounts_reject_oauth(self):
         self.apply('4', auth={'mode': 'api_key', 'api_key': 'sk-test-key-123'})
         self.assertEqual(self.call('GET', '/accounts/4/admin/auth/session', headers={'X-CCG-Revision': REV}),
+                         (409, {'error': 'api_key_account'}))
+        self.assertEqual(self.call('GET', '/accounts/4/admin/usage', headers={'X-CCG-Revision': REV}),
                          (409, {'error': 'api_key_account'}))
 
 

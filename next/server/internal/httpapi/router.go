@@ -10,8 +10,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
+
+// APIPrefix is the path of the console API group, the core route
+// manifest.CoreRoutePrefixes reserves (/api/v1).
+const APIPrefix = "/" + manifest.RouteAPI + "/" + manifest.RouteAPIVersion
 
 // Router wraps the console API group (/api/v1).
 type Router struct {
@@ -23,7 +28,7 @@ type Router struct {
 // NewRouter mounts common middleware on engine and returns the /api/v1 router.
 func NewRouter(engine *gin.Engine, tokens core.TokenVerifier, authz core.Authorizer) *Router {
 	engine.Use(RequestContext(), Recover())
-	return &Router{api: engine.Group("/api/v1"), tokens: tokens, authz: authz}
+	return &Router{api: engine.Group(APIPrefix), tokens: tokens, authz: authz}
 }
 
 // Public registers an unauthenticated route.

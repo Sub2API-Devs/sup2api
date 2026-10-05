@@ -289,6 +289,10 @@ type AccountType struct {
 	// (CONTRACTS §44). nil: the type has no quota (API keys); the console
 	// shows nothing for it.
 	Quota *AccountQuota `json:"quota,omitempty"`
+	// Balance declares that accounts of this type have a prepaid balance
+	// (credits) the plugin can query (CONTRACTS §51). nil: the type has no
+	// balance or the plugin does not track it; the console shows nothing.
+	Balance *AccountBalance `json:"balance,omitempty"`
 	// Refresh declares that the credentials of this type expire and that the
 	// plugin implements BuildRefreshRequest / ParseRefreshResponse to renew
 	// them (CONTRACTS §48). nil: the host never refreshes them.
@@ -316,6 +320,19 @@ type AccountRefresh struct {
 type AccountQuota struct {
 	Headers []QuotaHeader `json:"headers,omitempty"`
 	Query   bool          `json:"query,omitempty"`
+}
+
+// AccountBalance declares that an account type has a prepaid balance and that
+// the host queries it from the plugin (CONTRACTS §51). The host never reads
+// the balance from headers; the plugin must register a BalanceProvider.
+type AccountBalance struct {
+	// Currency is the ISO 4217 three-letter currency code (e.g. "USD", "EUR").
+	// Required.
+	Currency string `json:"currency"`
+	// UpdateInterval is how often the host queries the balance, in seconds.
+	// 60-86400 (default 180). The host may query sooner when forced or on
+	// state changes.
+	UpdateInterval int `json:"updateInterval,omitempty"`
 }
 
 // MaxQuotaHeaders bounds AccountQuota.Headers.

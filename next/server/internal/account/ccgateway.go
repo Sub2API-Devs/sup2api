@@ -221,6 +221,8 @@ func (s *Service) commitCCGatewayReauth(c *gin.Context) {
 		return
 	}
 	s.quota.forget(id)
+	s.evictQuotaCache(ctx, id)
+	s.evictBalanceCache(ctx, id)
 	s.changed(ctx, id)
 	v, err := s.fullView(ctx, id, scope)
 	if err != nil {
@@ -231,9 +233,11 @@ func (s *Service) commitCCGatewayReauth(c *gin.Context) {
 }
 
 // resetForReauth clears the core's state of a re-authorized account in tx:
-// status error -> active, its reason, the last test, the quota snapshot and
-// the credential refresh state. A disabled account stays disabled (the
-// operator enables it, 2026-10-05). It reports whether the status changed.
+// status error -> active, its reason, the last test, the quota snapshot, the
+// balance snapshot and the credential refresh state. A disabled account stays
+// disabled (the operator enables it, 2026-10-05). It reports whether the
+// status changed. The quota and balance caches are evicted outside this
+// transaction.
 func (s *Service) resetForReauth(ctx context.Context, tx pgx.Tx, a *row) (bool, error) {
 	if _, err := tx.Exec(ctx, `UPDATE accounts SET
 		status = CASE WHEN status = 'error' THEN 'active' ELSE status END,
@@ -244,6 +248,9 @@ func (s *Service) resetForReauth(ctx context.Context, tx pgx.Tx, a *row) (bool, 
 		return false, err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM account_quota_snapshots WHERE account_id = $1`, a.ID); err != nil {
+		return false, err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM account_balances WHERE account_id = $1`, a.ID); err != nil {
 		return false, err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM account_credential_refresh WHERE account_id = $1`, a.ID); err != nil {

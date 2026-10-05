@@ -25,17 +25,18 @@ type QuotaWindow struct {
 	Limit       int64      `json:"limit,omitempty"`
 }
 
-// QuotaSnapshot is one account_quota_snapshots row.
+// QuotaSnapshot is one account_quota_snapshots row. The JSON form is the one
+// the account service caches in Redis (CONTRACTS §44.9).
 type QuotaSnapshot struct {
-	AccountID int64
-	Windows   map[string]QuotaWindow
-	Source    string
-	Error     string
+	AccountID int64                  `json:"account_id"`
+	Windows   map[string]QuotaWindow `json:"windows"`
+	Source    string                 `json:"source"`
+	Error     string                 `json:"error"`
 	// UpdatedAt is when the windows were last written; nil = no data yet
 	// (a row may exist only because an active query was attempted).
-	UpdatedAt     *time.Time
-	LastPassiveAt *time.Time
-	LastActiveAt  *time.Time
+	UpdatedAt     *time.Time `json:"updated_at"`
+	LastPassiveAt *time.Time `json:"last_passive_at"`
+	LastActiveAt  *time.Time `json:"last_active_at"`
 }
 
 const selectQuota = `SELECT account_id, windows, source, error, updated_at, last_passive_at, last_active_at
@@ -85,6 +86,40 @@ func (d *DB) AccountQuotas(ctx context.Context, accountIDs []int64) (map[int64]*
 		out[q.AccountID] = q
 	}
 	return out, rows.Err()
+}
+
+// AccountQuotasAt is AccountQuotas plus the time the read began
+// (statement_timestamp of the one statement, on the database clock): the
+// result reflects at least every write committed before it. Caches order
+// their entries by it (CONTRACTS §44.9).
+func (d *DB) AccountQuotasAt(ctx context.Context, accountIDs []int64) (map[int64]*QuotaSnapshot, time.Time, error) {
+	out := map[int64]*QuotaSnapshot{}
+	var at time.Time
+	rows, err := d.Pool.Query(ctx, `SELECT statement_timestamp(), q.account_id, q.windows, COALESCE(q.source, ''), COALESCE(q.error, ''),
+			q.updated_at, q.last_passive_at, q.last_active_at
+		FROM (SELECT statement_timestamp()) t LEFT JOIN account_quota_snapshots q ON q.account_id = ANY($1)`, accountIDs)
+	if err != nil {
+		return nil, at, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id *int64
+		var q QuotaSnapshot
+		var raw []byte
+		if err := rows.Scan(&at, &id, &raw, &q.Source, &q.Error, &q.UpdatedAt, &q.LastPassiveAt, &q.LastActiveAt); err != nil {
+			return nil, at, err
+		}
+		if id == nil {
+			continue // no snapshot at all: the row only carries the time
+		}
+		q.AccountID = *id
+		q.Windows = map[string]QuotaWindow{}
+		if len(raw) > 0 {
+			_ = json.Unmarshal(raw, &q.Windows)
+		}
+		out[q.AccountID] = &q
+	}
+	return out, at, rows.Err()
 }
 
 // SaveAccountQuota merges windows into the account's snapshot (a window

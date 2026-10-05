@@ -298,7 +298,7 @@ func serve() error {
 	defer stop()
 	mux := http.NewServeMux()
 	mux.Handle("/", g)
-	mux.Handle("/admin/", &authManager{cli: cli, key: os.Getenv("CCG_ADMIN_KEY"), proxy: proxy})
+	mux.Handle("/admin/", &authManager{cli: cli, key: os.Getenv("CCG_ADMIN_KEY"), proxy: proxy, version: version})
 	server := &http.Server{Addr: bind, Handler: mux, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 	done := make(chan struct{})
 	backgroundDone := make(chan struct{})

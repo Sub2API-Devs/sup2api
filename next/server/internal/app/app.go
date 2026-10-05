@@ -197,6 +197,8 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		// sweeping node, only once admitted (CONTRACTS §48).
 		Locker: cl.Locker, CanWork: canWork,
 	})
+	// Register balance providers (CONTRACTS §51).
+	acc.RegisterClaudeOAuthBalanceProvider()
 	// Price sync sources (upstream API keys encrypted) and GET /key/prices for
 	// downstream sup2api instances (CONTRACTS §17).
 	bill.SetSyncDeps(billing.SyncDeps{Cipher: cipher, Keys: keys})
@@ -348,8 +350,11 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	if err := engine.SetTrustedProxies(cfg.TrustedProxies); err != nil {
 		return fmt.Errorf("trusted proxies: %w", err)
 	}
-	// The core owns exactly the route segments of manifest.CoreRouteSegments;
-	// manifest/check rejects plugin endpoints that would shadow them.
+	// The core owns exactly the routes of manifest.CoreRoutePrefixes (/api/v1
+	// through httpapi.Router, /plugin-ui, /healthz) plus the bare /api;
+	// manifest/check rejects plugin endpoints that would shadow them
+	// (manifest.ReservedPath) and the console fallback answers them with a
+	// JSON 404. Other /api/... paths (/api/v3) are gateway paths.
 	engine.GET("/"+manifest.RouteHealthz, func(c *gin.Context) {
 		status, text := http.StatusOK, "ok"
 		if gate.isDraining() || !cl.Registry.Healthy() || !builtinReady.Load() || !sharedAssets.Ready() {

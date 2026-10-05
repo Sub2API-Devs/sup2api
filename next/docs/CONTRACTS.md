@@ -3083,11 +3083,12 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 - `POST /admin/auth/complete {code, session_id?}` → `{success:true}`。带错 `session_id` 时返回 `session_not_found`，但保留当前会话。
 - `POST /admin/auth/cancel {session_id?}` → `{success:true}`，幂等；带错 `session_id` 也返回成功且不取消当前会话。
 - `POST /admin/auth/logout` → `{success:true}`。
-- 错误 `{"type":"error","error":{"type":"<code>","message":"<English>"}}`：`invalid_request`、`session_not_found`（会话随之没有）、`invalid_code`（会话保留，可重贴）、`auth_rejected`、`auth_process_failed`、`invalid_auth_url`（这三个之后会话结束）、`status_unavailable`、`logout_failed`；401 为 `authentication_error`，未知端点 404 为 `not_found_error`。
+- `GET /admin/usage` → `{"windows":[{window,utilization,resets_at?,status?,used?,limit?}]}`。读容器凭证文件的 OAuth access token，调 Anthropic 用量接口（OAuth 模式的订阅限额，与 `claude-oauth` 插件查询同一端点），经容器的账号出口（Proxy SwitchyOmega 代理）。响应体格式：`window` 为窗口 key（如 `5h`、`7d`、`7d_fable`）；`utilization` 为百分比 0–100（供应商返回 0–1，转百分比）；`resets_at` 为 RFC3339 timestamp 或 null（未知）；`status` 为 `allowed`/`allowed_warning`/`rejected` 或空；`used`/`limit` 可选（与控制台"已用 / 总量"显示对应）。未登录 → 400 `not_logged_in`；令牌过期 → 400 `token_expired`（可先尝试用 CLI 刷新令牌再重试一次，不确定就别做）；上游失败 → 502 `upstream_error`。
+- 错误 `{"type":"error","error":{"type":"<code>","message":"<English>"}}`：`invalid_request`、`session_not_found`（会话随之没有）、`invalid_code`（会话保留，可重贴）、`auth_rejected`、`auth_process_failed`、`invalid_auth_url`（这三个之后会话结束）、`status_unavailable`、`logout_failed`、`not_logged_in`、`token_expired`、`upstream_error`；401 为 `authentication_error`，未知端点 404 为 `not_found_error`。
 
 控制器（`127.0.0.1:8787`）：
 
-- 所有接受账号 id 的地方都接受 key `^(?:[1-9][0-9]{0,17}|d[0-9a-f]{16})$`，路径仍是 `/accounts/<key>/...`；透传增加 `GET /accounts/<key>/admin/auth/session`。
+- 所有接受账号 id 的地方都接受 key `^(?:[1-9][0-9]{0,17}|d[0-9a-f]{16})$`，路径仍是 `/accounts/<key>/...`；透传增加 `GET /accounts/<key>/admin/auth/session` 和 `GET /accounts/<key>/admin/usage`。
 - `DELETE /accounts/<key>`：删除 app/egress 容器、网络、数据卷和状态目录；幂等，什么都没有时也 `200 {"deleted":true}`。草稿 key 直接删；数字 key 只在请求头 `X-CCG-Delete-Account: <同一 key>` 时删除（§49.17 退役运行环境），否则 405 `method_not_allowed`。
 - `GET /accounts` → `{"runtimes":[{key,status,created_at}]}`，每个状态目录一项（`status` 为 `ready`/`pending`/`blocked`；`created_at` 为首次 provision 时间，旧状态和 provision 中途失败的目录用目录 mtime）。
 - app 镜像变化时重建 app 容器（标签指纹包含镜像 id），数据卷与登录保留。
@@ -3198,3 +3199,261 @@ new-api 的渠道测试（`controller/channel-test.go`）每次测试后写渠�
 - "测试全部模型""批量测试账号"由控制台并发调用单模型测试实现，后端不提供批量接口；同一账号并发测试时 `last_test` 为最后写入的那次。
 - 控制台（前端实现）：账号的"测试"打开模型测试弹窗，可选一个模型测试，也可"测试全部 / 所选"模型（逐个模型并发调用本接口，显示每个模型的结果、延迟与失败原因）；账号列表可勾选多个账号"批量测试"（每个账号测默认模型）。列表显示 `last_test`（上次测试时间、结果、延迟）。测试不改变账号状态。
 - 流式测试本轮不做：`BuildTestRequest` 没有 stream 参数，加参数要改 proto 并动所有插件。
+
+## 51. CCGateway 订阅用量与配额快照 Redis 缓存（2026-10-05）
+
+用户要求："oauth 账号应该能展示 7d 5h 7d fable 三者使用量才行，然后还要 redis 缓存下来。现在插件不支持在账号列表中展示这些吗？能想办法定制化吗"——指的是 CCGateway（Claude Code）`managed`（OAuth）账号在账号列表里没有订阅用量（5h / 7d / 7d_fable）。Claude OAuth 插件账号（`claude-oauth`）已经有（§44）。
+
+### 51.1 CCGateway 容器 `GET /admin/usage` 接口
+
+CC 账号的 OAuth 令牌在容器凭证文件里（`$CLAUDE_CONFIG_DIR/.credentials.json`，`claudeAiOauth.accessToken`），核心拿不到；模型请求由容器里的 CLI 发出，核心看不到响应头。因此新增容器管理端点（同样的 admin key 鉴权）让核心主动查询。
+
+**容器**（`tools/ccgateway/auth.go`）：`GET /admin/usage` 读凭证文件的 OAuth access token，调 Anthropic 的 OAuth 用量接口（同 `claude-oauth` 插件 §44.6 的 `GET https://api.anthropic.com/api/oauth/usage`，请求头与响应格式完全一致），经容器本身的账号出口（Proxy SwitchyOmega 代理，不设代理环境变量）。返回原始 JSON（与 claude-oauth 响应一致的窗口数组）：
+
+```json
+{"windows":[
+  {"window":"5h","utilization":42.0,"resets_at":"2026-10-05T18:00:00Z","status":"allowed","used":84,"limit":200},
+  {"window":"7d","utilization":15.5,"resets_at":"2026-10-12T00:00:00Z"},
+  {"window":"7d_fable","utilization":10.0}
+]}
+```
+
+- `window` 为窗口 key（`5h`、`7d`、`7d_sonnet`、`7d_fable`）；
+- `utilization` 为百分比 0–100（供应商返回 0–1，转百分比；核心存储的都是百分比）；
+- `resets_at` 为 RFC3339 timestamp 或省略（未知）；
+- `status` 为 `allowed` / `allowed_warning` / `rejected` 或省略；
+- `used` / `limit` 可选（与控制台"已用 / 总量"显示对应）。
+
+错误格式 `{"type":"error","error":{"type":"<code>","message":"<English>"}}`（§49.14）：
+- 未登录 → 400 `not_logged_in`；
+- 令牌过期 / 401 → 400 `token_expired`；
+- 上游失败 → 502 `upstream_error`。
+
+**控制器**（`tools/ccgateway/runtime/manager.py`）：透传路由正则增加 `admin/usage`（GET），代理到业务容器 `GET /admin/usage`。
+
+### 51.2 核心：CCGateway 账号类型支持配额
+
+`ccgateway/managed` 账号的 View.quota 为 supported，窗口 `5h` / `7d` / `7d_fable`（以及上游返回的 `7d_sonnet`），主动查询经现有的 runtime 透传（`/system/ccgateway/accounts/:id/*` 按 account_runtimes 模式走控制器 `GET /accounts/<key>/admin/usage`，按共享容器模式直接走容器 `GET /admin/usage`）。
+
+**quota provider 扩展点**（`server/internal/account/quota_provider.go`）：核心的配额模块不直接判断 `pluginKey == "ccgateway"`，而是定义 `QuotaProvider` 接口（`QueryQuota(ctx, accountID) ([]store.QuotaWindow, error)`），由 ccgateway 模块实现并注册到 account 模块。查询时按插件 key 查表，命中就用 provider，否则走插件 RPC（§44.4）。
+
+ccgateway 的实现（`server/internal/ccgateway/usage.go`）：
+- 只对 `managed` 类型可用，`apikey` 账号返回 `api_key_account`；
+- account_runtimes 模式：`runtimeRequest(ctx, key, "GET", "admin/usage", nil, revision)` → 控制器 `/accounts/<key>/admin/usage`；
+- 共享容器模式：`s.open(ctx, cfg)` → `GET <base>/admin/usage`，`Authorization: Bearer <adminKey>`；
+- 响应体上限 64 KiB，解析成 `[]UsageWindow{Key, Utilization, ResetsAt, Status, Used, Limit}`；
+- 错误映射：容器的 `not_logged_in` / `token_expired` → `auth_rejected`（§44.4，可触发自动禁用 §42）；`upstream_error` / 其他 → `transient`；transport 失败（连不上容器）→ `transient`；旧容器 404 → `unsupported`（提示升级）；账号 409 `not_synchronized` → `transient`；账号 409 `api_key_account` → `api_key_account`。
+
+**manifest 变更**（可选）：`next/plugins/ccgateway/manifest.json` 若需声明 `quota`（让核心识别该类型支持配额），可以只声明空的 `quota: {}`（不声明 headers，不声明 query）——核心通过 provider 扩展点查询，不走 manifest 声明的 RPC。若不改 manifest（保持版本 0.1.6），核心按"插件未实现 quota RPC"处理，provider 注册后同样生效。实际采用第二种：manifest 不变，核心按 provider 优先。
+
+沿用 §44 的新鲜度（3 分钟）、错误间隔（1 分钟）、每账号查询下限（30 秒，跨节点 PG 原子保证）、PG 快照逻辑。账号列表加载时批量读取 quota 快照，显示在列表里（前端 `AccountsView.vue` 已经渲染 `quota`，CC 账号同样显示）。
+
+### 51.3 配额快照 Redis 缓存
+
+在现有 PG 快照（`account_quota_snapshots`）之上加 Redis 写穿缓存，加速账号列表读取（几十个账号一次批量 MGET）。
+
+**写入**（`server/internal/account/quota_cache.go`）：被动采样或主动查询写 PG 快照时，同时 SET Redis `account:quota:<id>` 为 JSON 封装 `{"mtime":<pg_mtime_unix_nano>,"snap":<QuotaSnapshot>}`（TTL 10 分钟）。`mtime` 用于比较新旧：Redis 可能有延迟写入的旧值，PG 的 `updated_at` 是权威时间戳。
+
+**读取**（`cachedAccountQuotas`）：先批量 MGET Redis，未命中的 id 查 PG 并异步回填 Redis；命中但 `mtime` 早于 PG 的行同样以 PG 为准。Redis 不可用时退回 PG，不报错（日志 WARN）。
+
+**一致性**：删除或重置配额的地方（`POST /accounts/:id/reset-status`、重新授权清空 §49.17、删除账号）同时 DEL Redis `account:quota:<id>`。多节点：每个节点各自写 Redis，最后写入的（按 PG `updated_at`）为准；DEL 也是每个节点各自删（收到广播 `account:changed`、`account:deleted`），不会遗漏。
+
+**测试**（`server/internal/account/quota_cache_test.go`）：用 miniredis 或实际 Redis，验证写穿、批量读、回退、eviction。
+
+### 51.4 manifest 路由保留段调整
+
+原来 `next/sdk/manifest/routes.go` 把整个首段 `api` 保留给核心（`reservedFirstSegments`），导致插件网关端点不能用火山方舟官方的 `/api/v3/...`。核心控制台 API 实际只在 `/api/v1`。
+
+**调整**：只保留 `/api/v1`（以及 `/api` 本身），`/api/v3` 等允许作为插件网关端点。`CoreRouteOf(path)` 返回核心保留的首段（`/api/v1`）或空串（不保留）；`manifest/check` 用它判断网关端点是否冲突；`server/internal/app/app.go` 的插件路由挂载、`server/internal/webui/webui.go` 的 SPA fallback 与 JSON 404 都用它过滤（未匹配核心路由时才交给插件或返回 404）。
+
+网关外壳（`next/gateway`）对 `/api/v1/...` 的特殊处理（转发到核心 API）不受影响：`gateway/internal/server/routes.go` 仍然只识别 `/api/v1`。
+
+**测试**（`next/sdk/manifest/routes_test.go`、`manifest/check` 的测试）：验证 `/api/v3/chat` 不再被拒、`/api/v1/test` 仍被保留。
+
+## 52. 账号余额展示与刷新（2026-10-05）
+
+与 §44 订阅配额并行，账号类型可以声明 `balance`（账号余额），插件实现余额查询，核心定期或按需查询并缓存结果（PG + Redis），前端显示余额和"刷新余额"按钮。
+
+### 52.1 manifest 账号类型声明 `balance`
+
+账号类型的 `balance` 字段（可选）：
+
+```json
+{
+  "accountTypes": [{
+    "id": "oauth",
+    "balance": {
+      "currency": "USD"
+    }
+  }]
+}
+```
+
+- `currency`（必需）：货币代码，ISO 4217 三字母大写（USD、CNY、EUR 等）。
+- manifest check（`next/sdk/manifest/check/validate.go`）校验：`currency` 必须是 3 个大写字母，匹配 `^[A-Z]{3}$`。
+
+### 52.2 插件实现余额查询（gRPC）
+
+账号类型声明 `balance` 后，插件必须实现 `BuildBalanceRequest` 和 `ParseBalanceResponse`（与 §44.4 的 quota 查询类似）：
+
+```go
+// BuildBalanceRequest: 核心调用，插件返回查询余额的 HTTP 请求
+func (s *Service) BuildBalanceRequest(
+    ctx context.Context,
+    req *pluginv1.BuildBalanceRequestRequest,
+) (*pluginv1.BuildBalanceRequestResponse, error)
+
+// ParseBalanceResponse: 核心调用，插件解析上游响应并返回余额
+func (s *Service) ParseBalanceResponse(
+    ctx context.Context,
+    req *pluginv1.ParseBalanceResponseRequest,
+) (*pluginv1.ParseBalanceResponseResponse, error)
+```
+
+**请求/响应结构**（`next/sdk/gen/pluginv1/plugin.proto`）：
+
+- `BuildBalanceRequestRequest`：包含 `account_id`、插件凭证 JSON。
+- `BuildBalanceRequestResponse`：返回 `method`、`url`、`headers`、`body`（与 BuildQuotaRequest 相同结构）。
+- `ParseBalanceResponseRequest`：包含 `account_id`、`status_code`、`headers`、`body`。
+- `ParseBalanceResponseResponse`：返回 `result`（oneof）：
+  - `ok`：`amount_micros`（int64，微单位，如美分 × 10000）、`currency`（三字母代码）
+  - `error`：`code`（枚举：`auth_rejected`、`rate_limited`、`transient`、`unsupported`）、`message`
+
+**错误码语义**（与 quota 一致）：
+- `auth_rejected`：凭证失效，核心自动禁用账号（§42.2）。
+- `rate_limited`：查询过于频繁，核心延长下次查询间隔。
+- `transient`：临时失败（网络、上游超时），核心重试。
+- `unsupported`：账号类型不支持余额查询（manifest 声明错误）。
+
+### 52.3 核心：账号余额查询与快照存储
+
+**数据模型**（`next/migrations/0034_account_balances.sql`）：
+
+```sql
+CREATE TABLE IF NOT EXISTS account_balances (
+  account_id       BIGINT PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+  amount_micros    BIGINT NOT NULL,
+  currency         VARCHAR(3) NOT NULL,
+  source           VARCHAR(20) NOT NULL,
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  error            TEXT,
+  error_at         TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_account_balances_updated_at ON account_balances(updated_at);
+```
+
+- `amount_micros`：余额微单位（如 USD: 1.23 → 12300000，即美分 × 10000）。
+- `source`：查询来源（`"active"` 主动查询、`""` 被动查询，目前余额只有主动查询）。
+- `error`：最近一次查询失败时的错误信息（成功时为 NULL）。
+- `error_at`：最近一次查询失败的时间（成功时为 NULL）。
+
+**核心逻辑**（`next/server/internal/account/balance.go`）：
+
+- 账号 View 增加 `Balance *BalanceView` 字段（`view.go`）：
+  ```go
+  type BalanceView struct {
+      Amount    string `json:"amount"`     // "1.23"
+      Currency  string `json:"currency"`   // "USD"
+      UpdatedAt string `json:"updated_at"` // ISO 8601
+      Source    string `json:"source"`     // "active"|""
+      Error     string `json:"error,omitempty"`
+  }
+  ```
+
+- 账号类型声明 `balance` 时，核心调用插件的 `BuildBalanceRequest` 和 `ParseBalanceResponse`，执行 HTTP 请求并解析结果。
+
+- 查询触发时机：
+  - **主动查询**：`GET /api/v1/accounts/:id/balance` 或 `POST /api/v1/accounts/:id/refresh-balance`（前端"刷新余额"按钮）。
+  - **查询间隔**：成功后 3 分钟内不重复查询（快照新鲜度）；失败后根据错误码决定间隔（`auth_rejected` 不再查、`rate_limited` 延长到 10 分钟、`transient` 1 分钟后重试）。
+  - 查询下限：每个账号 2 秒内最多查询一次（防止前端重复点击）。
+
+- 快照写入：查询成功后写入 `account_balances`，同时写穿到 Redis（见 §52.4）。
+
+### 52.4 余额快照 Redis 缓存
+
+与 §51.3 配额缓存并行实现（`next/server/internal/account/balance_cache.go`）：
+
+- **键格式**：`account:balance:<id>`
+- **值**：JSON `{"mtime":<pg_updated_at_nanos>,"snap":<BalanceSnapshot>}`
+  - `mtime`：PG `updated_at` 的 Unix 纳秒（用于判断新旧）
+  - `snap`：`{amount_micros, currency, source, updated_at, error, error_at}`
+- **TTL**：10 分钟（与 quota 一致）
+
+**读取流程**（`cachedAccountBalances(ids []int64)`）：
+1. 批量 MGET Redis 键（`account:balance:1`, `account:balance:2`, ...）
+2. 未命中：查 PG 并异步回填 Redis
+3. 命中但 `mtime` 早于 PG：以 PG 为准（避免延迟写入的旧值覆盖新值）
+4. Redis 不可用：退回 PG（不报错，日志 WARN）
+
+**写入流程**（`writeAccountBalance`）：
+1. 写入 PG `account_balances`（INSERT ... ON CONFLICT UPDATE）
+2. 写穿到 Redis SET `account:balance:<id>`，TTL 10 分钟
+3. Redis 写入失败不影响 PG 写入
+
+**一致性维护**（多节点环境）：
+- `POST /accounts/:id/reset-status`：DEL `account:balance:<id>`
+- 重新授权清空（§49.17）：DEL `account:balance:<id>`
+- 删除账号：DEL `account:balance:<id>`（CASCADE 会删 PG 行）
+- 每个节点独立写/删 Redis，PG `updated_at` 为权威时间戳
+
+**测试**（`balance_cache_test.go`）：写穿、批量读、PG fallback、mtime 排序、驱逐、损坏条目。
+
+### 52.5 路由与前端集成
+
+**核心路由**（`next/server/internal/account/handlers.go`）：
+
+- `GET /api/v1/accounts/:id/balance`：返回余额快照（有缓存返回缓存，否则主动查询）
+- `POST /api/v1/accounts/:id/refresh-balance`：强制刷新（忽略新鲜度，但仍受 2 秒查询下限约束）
+
+**账号列表/详情**：
+- `GET /api/v1/accounts`：列表加载时批量读取 balance 快照（Redis MGET + PG fallback），有数据的账号返回 `balance` 字段。
+- `GET /api/v1/accounts/:id`：详情同样返回 `balance`。
+
+**前端改动**（由主控或 web agent 完成）：
+1. 账号列表（`AccountsView.vue`）：支持 `balance` 的账号显示"余额"列（格式化为 `$1.23` / `¥1.23`）。
+2. 账号详情面板：账号状态区增加"余额"一行、"刷新余额"按钮（或与"刷新配额"合并为"刷新状态"按钮）。
+3. i18n（zh/en）：余额标签、货币格式化。
+4. types.ts：`Account.balance?: Money`（移除 `// assumed` 注释）。
+
+### 52.6 claude-oauth 插件实现（版本 0.2.1）
+
+**manifest 变更**（`next/plugins/claude-oauth/manifest.json`）：
+
+```json
+{
+  "version": "0.2.1",
+  "accountTypes": [{
+    "id": "oauth",
+    "balance": {
+      "currency": "USD"
+    },
+    "quota": { ... }
+  }]
+}
+```
+
+**实现**（`next/plugins/claude-oauth/balance.go`）：
+
+- `BuildBalanceRequest`：返回与 quota 查询相同的请求（`GET https://api.anthropic.com/v1/organization/usage/subscription`，带 OAuth access token）。
+- `ParseBalanceResponse`：解析响应 JSON 的 `account_balance` 字段（与 `usage_windows` 并列）：
+  ```json
+  {
+    "account_balance": {
+      "amount_micros": 12345678,
+      "currency": "USD"
+    },
+    "usage_windows": [...]
+  }
+  ```
+  - `amount_micros` 已经是微单位，直接返回。
+  - 上游未返回 `account_balance` → `unsupported`（旧 API 版本或账号类型不支持）。
+
+**测试**（`balance_test.go`）：解析成功、解析失败、账号余额字段缺失。
+
+### 52.7 测试覆盖
+
+- **SDK**：`manifest/check/balance_test.go`（manifest 校验、货币代码格式）。
+- **核心**：`account/balance_test.go`（查询流程、错误处理、新鲜度）、`account/balance_cache_test.go`（Redis 缓存）。
+- **claude-oauth**：`balance_test.go`（解析响应、错误情况）。
+- **集成**：PG 表迁移幂等性（`0034_account_balances.sql`）、账号列表/详情返回 balance。
+

@@ -25,24 +25,11 @@ import (
 // NoncePlaceholder is written into index.html by the Vite build (web/vite.config.ts).
 const NoncePlaceholder = "__CSP_NONCE__"
 
-// reservedPrefixes never fall back to index.html. The names come from
-// manifest.CoreRouteSegments, the one list of route segments the core owns,
-// but the match here is a path prefix rather than the first-segment match the
-// gateway applies to plugin endpoints: this handler only decides whether a
-// browser path is served index.html, and a prefix keeps the console from
-// swallowing /api/... and /plugin-ui/... without claiming an unrelated path
-// like /apifoo. /healthz has no children, so it is matched whole.
-var reservedPrefixes = func() []string {
-	out := make([]string, 0, len(manifest.CoreRouteSegments))
-	for _, s := range manifest.CoreRouteSegments {
-		if s == manifest.RouteHealthz {
-			out = append(out, "/"+s)
-			continue
-		}
-		out = append(out, "/"+s+"/")
-	}
-	return out
-}()
+// Paths under a core route (manifest.ReservedPath: /api, /api/v1/...,
+// /plugin-ui/..., /healthz) never fall back to index.html: they get a JSON
+// 404. The rule is the one manifest/check applies to plugin endpoints, so the
+// console never swallows a core path, and a path a plugin may serve (such as
+// /api/v3/...) is treated like any other gateway path.
 
 type Handler struct {
 	files  fs.FS
@@ -82,11 +69,9 @@ func (h *Handler) Serve(c *gin.Context) {
 		httpapi.Fail(c, core.ErrNotFound)
 		return
 	}
-	for _, pre := range reservedPrefixes {
-		if strings.HasPrefix(p, pre) {
-			httpapi.Fail(c, core.ErrNotFound)
-			return
-		}
+	if manifest.ReservedPath(p) {
+		httpapi.Fail(c, core.ErrNotFound)
+		return
 	}
 	name := strings.TrimPrefix(path.Clean(p), "/")
 	if name != "" && name != "index.html" {

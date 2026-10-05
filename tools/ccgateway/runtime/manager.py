@@ -41,7 +41,7 @@ AUTH_VARS = ('ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 
 IMAGE_CACHE_SECONDS = 30
 
 ROUTE = re.compile(r'/accounts(?:/(' + KEY_PATTERN + r')(?:/(config|status|v1/messages|'
-                   r'admin/(?:status|auth/(?:session|start|complete|cancel|logout))))?)?')
+                   r'admin/(?:status|usage|auth/(?:session|start|complete|cancel|logout))))?)?')
 
 
 class BadRequest(ValueError):
@@ -491,12 +491,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(200, manager.public(aid))
             if path in ('config', 'status') or self.command not in ('GET', 'POST'):
                 return self.fail(405, 'method_not_allowed')
+            if path == 'admin/usage' and self.command != 'GET':
+                return self.fail(405, 'method_not_allowed')
             with manager.guard(aid):
                 state = manager.state(aid)
                 revision = self.headers.get('X-CCG-Revision', '')
                 if not state or not revision or manager.public(aid)['revision'] != revision:
                     return self.fail(409, 'not_synchronized')
-                if path.startswith('admin/auth/') and state.get('auth_mode') == 'api_key':
+                if (path.startswith('admin/auth/') or path == 'admin/usage') and state.get('auth_mode') == 'api_key':
                     return self.fail(409, 'api_key_account')
                 address = state['app_ip']
                 secret = state['admin_key'] if path.startswith('admin/') else state['api_key']
