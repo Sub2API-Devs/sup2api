@@ -595,3 +595,13 @@ manifest `cf61b44b77f50a98075665b62c3e74cb818a4d5b0097bff06a14d8ece98c955b`，bu
 备份 `/home/debian/sup2api/backups/pre-v0.1.24-20261004T210646Z.dump`（6.9 MB），pg_restore 列出 480 项。manifest `7f5e784f4e7db2557b70599e483859ef31bd03ba0d1c5543fef5d65a00adf1db`，bundle `58b23689207d0ecb9c37509ca23dbe7bccd56825f56c69784c873c7af925d8b7`。升级计划 `9e7148b0e9e735dc2c10975d9e184632` 预检无阻断，完成 27 步，创建至完成约 23.6 秒。运行中的 0.1.23 仍要求 step-up，所以本次用服务器上旧版 `upgrade_observe.py` 建计划；完成后服务器副本已换成仓库版本（旧版留作 `*.pre-v0.1.24`）。
 
 验证：四入口登录后核心均为 0.1.24；`POST /auth/step-up` 均 404；账号列表含 `last_test`；`/account-types` 预设数量（模型/映射）anthropic、ccgateway 两类型 18/0，gemini 26/0，openai 71/0，volcengine 两类型 23/11。内置插件随核心升级：anthropic 0.2.5、ccgateway 0.1.6、gemini 0.2.4、openai 0.3.4，moderation 0.1.6、volcengine 0.12.2 未变；claude-oauth 不是内置插件，生产未安装。`accounts.auto_disable/last_test_at`、`account_credential_refresh`、`account_quota_snapshots` 已存在。升级后 5 分钟内四节点 ERROR 为 0。此次未执行真实模型调用或 Claude OAuth 登录。
+
+### 24.12 Claude Code 账号先授权后保存、运行环境由控制台安装、登录随使用延长：OVH v0.1.25 + cc-max 控制器 22cfdb506
+
+2026-10-05 14:28–14:40（北京时间）。先换 cc-max 控制器，再升级核心（新核心的草稿 key 只有新控制器认识）。
+
+cc-max：GHCR 包暂未公开，三个镜像在 cc-max 上从 Git 源码 `22cfdb506` 构建（`/opt/ccgateway-release-22cfdb506`）：app `sha256:a59d8d162bc2…`、egress `sha256:82664cbb4ecc…`、controller `sha256:e3abd50b6abc…`（`/health` 版本 22cfdb506）。备份 `/opt/ccgateway-runtime/pre-draft-runtimes-<ts>`（环境文件、控制器 inspect、状态目录、账号 21/22 数据卷归档）。环境文件换成新 app/egress 镜像 ID，旧控制器改名 `ccg-controller-v024prev` 并停止保留，新控制器同参数启动。约 1 分钟内运行中的 0.1.24 核心发现镜像变化，账号 21、22 的 app/egress 容器按新镜像重建，数据卷保留，均 ready。
+
+OVH：源码 `e40d132`，迁移 0032（`ccgateway_runtimes`），按 0.1.24 schema 打包。备份 `/home/debian/sup2api/backups/pre-v0.1.25-20261005T063004Z.dump`（pg_restore 列出 490 项）。manifest `112b5c39b3fb8bf91f0467dfc6afb2da6ff17c345c0da6a5c373f935df398656`，bundle `a8e6f9858fb1702ca3c919d9e4e5db741471a5d924c0ad65e464ff47e82ffc7a`。计划 `57423145d1d09d517004d3c5781288df` 完成 27 步，约 31.6 秒。内置插件无变化。
+
+验证：四入口核心均 0.1.25；同一 refresh token 60 秒内第二次刷新 200（宽限）；账号 21（API Key）容器 ready、`/accounts/21/test` 用 claude-haiku-4-5-20251001 成功 200、2.6 秒；账号 22（OAuth）ready、未授权。CCGateway 远程设置的 `images` 设为上述本地镜像 ID 后 `GET /system/ccgateway/runtime` 为 up_to_date。生产草稿全流程：创建（4 秒 ready）→ start 拿到授权链接 → 再次 start 返回同一会话 → session 查询一致 → 错误授权码 400 `invalid_code` → 未授权草稿保存账号 400 `draft_not_authorized` → cancel → DELETE 204 → 再查 404 `draft_not_found`；cc-max 上无残留草稿容器、卷、网络。升级后四节点 ERROR 为 0。未执行真实 Claude OAuth 登录。
