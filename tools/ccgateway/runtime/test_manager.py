@@ -132,9 +132,12 @@ class FakeNetworks:
 
     def create(self, name, labels=None, **kwargs):
         self.count += 1
-        n = FakeNetwork(self, name, labels, f'172.30.{self.count}.0/24')
+        n = FakeNetwork(self, name, labels, kwargs['ipam']['Config'][0]['Subnet'])
         self.items[name] = n
         return n
+
+    def list(self):
+        return list(self.items.values())
 
 
 class FakeVolume:
@@ -246,6 +249,43 @@ class KeyTests(unittest.TestCase):
 
 
 class ManagerTests(Base):
+    def test_network_change_recreates_containers_keeps_volume_and_keys(self):
+        self.apply('7')
+        old_state = self.m.state('7')
+        old_app = self.app('7')
+        old_egress = self.fake.containers.get('ccg-7-egress')
+        old_network = self.fake.networks.get('ccg-7-net')
+        volume = self.fake.volumes.get('ccg-7-data')
+        policy = {'pool': '10.80.0.0/16', 'allocation': 'sequential'}
+        self.apply('7', network=policy)
+        state = self.m.state('7')
+        self.assertTrue(old_app.removed and old_egress.removed and old_network.removed)
+        self.assertIs(self.fake.volumes.get('ccg-7-data'), volume)
+        self.assertFalse(volume.removed)
+        self.assertEqual((state['api_key'], state['admin_key']), (old_state['api_key'], old_state['admin_key']))
+        self.assertEqual((state['gateway_ip'], state['app_ip'], state['uplink_ip']),
+                         ('10.80.0.2', '10.80.0.3', '10.80.1.2'))
+        app = self.app('7')
+        self.apply('7', network=policy)
+        self.assertIs(self.app('7'), app)
+
+    def test_invalid_network_does_not_interrupt_existing_runtime(self):
+        self.apply('7')
+        app = self.app('7')
+        with self.assertRaises(BadRequest):
+            self.apply('7', network={'pool': '8.8.8.0/24'})
+        self.assertIs(self.app('7'), app)
+        self.assertEqual(app.status, 'running')
+
+    def test_exhausted_pool_does_not_interrupt_existing_runtime(self):
+        self.apply('7')
+        self.fake.networks.items['external'] = FakeNetwork(self.fake.networks, 'external', {}, '192.168.50.0/24')
+        app = self.app('7')
+        with self.assertRaises(ValueError):
+            self.apply('7', network={'pool': '192.168.50.0/24'})
+        self.assertIs(self.app('7'), app)
+        self.assertEqual(app.status, 'running')
+
     def test_guard_and_paths_reject_traversal(self):
         for key in ('../x', '..', 'd0123456789abcdef/../../etc', '/etc'):
             with self.assertRaises(BadRequest):

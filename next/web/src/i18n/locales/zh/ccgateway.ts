@@ -121,6 +121,7 @@ export default {
     remote: {
       unconfigured: '未配置',
       admin_key: '容器管理密钥（CCG_ADMIN_KEY）', api_key: '容器模型密钥（CCG_API_KEY）', keysHint: '填写与目标容器一致的密钥，只写不回显；留空保留已有值。',
+      networkPool: '容器 IP 地址池（IPv4 CIDR）', networkAllocation: 'IP 分配方式', networkRandom: '随机分配（默认）', networkSequential: '顺序分配', networkHint: '默认 10.0.0.0/8，可指定 10、172.16–31 或 192.168 内的私有网段（最大前缀 /24）。随机模式会随机选择各账号子网及容器 IP，避开已占用网络。修改后自动重建账号网络和容器，保留 Claude 授权与数据；重建期间请求可能中断。这里配置的是容器内网 IP，上游出口仍由账号代理决定。', networkSaved: '配置已保存，账号网络正在后台按新地址池和分配方式重建。',
       images: '运行环境镜像（可选）', imagesHint: '留空使用核心内置的 GitHub 镜像。也可以填 Docker 主机上已有的本地镜像，例如 ccgateway:22cfdb506；本地已有的镜像安装时不会重新拉取。', imageApp: 'Claude Code 业务镜像', imageEgress: '出口代理镜像', imageController: '控制器镜像', imageInvalid: '镜像引用格式不正确：{ref}',
       title: 'CCGateway Docker 连接', authorization: '内建 · 网关授权', description: '管理已部署的 CCGateway 容器，可选择本机或通过 SSH 连接远程 Docker。不会自动安装 Docker 或部署镜像。',
       routingHint: 'SSH 模式通过加密隧道访问远端 127.0.0.1:8787，支持授权管理与模型请求，无需公开 Docker 或网关 API 端口。本地模式仍使用 CCGATEWAY_URL。下方保存的 CCG_API_KEY、CCG_ADMIN_KEY 必须与目标容器一致。',

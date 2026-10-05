@@ -39,7 +39,8 @@ type Config struct {
 	// Images overrides the pinned runtime images (images.go) per role, e.g.
 	// with tags built on the Docker host itself; empty fields use the
 	// pinned references (CONTRACTS §49.16).
-	Images *RuntimeImages `json:"images,omitempty"`
+	Images  *RuntimeImages  `json:"images,omitempty"`
+	Network *RuntimeNetwork `json:"network,omitempty"`
 }
 
 // RuntimeImages are image references of the per-account runtime.
@@ -89,7 +90,7 @@ func (c Config) SSH() remotedocker.Config {
 	return remotedocker.Config{Host: c.Host, Port: c.Port, User: c.User, AuthMode: c.AuthMode, Password: c.Password, PrivateKey: c.PrivateKey, Passphrase: c.Passphrase, HostKeyFingerprint: c.HostKeyFingerprint}
 }
 func (c Config) Public() map[string]any {
-	return map[string]any{"account_runtimes": c.AccountRuntimes, "mode": c.Mode, "host": c.Host, "port": c.Port, "user": c.User, "auth_mode": c.AuthMode, "host_key_fingerprint": c.HostKeyFingerprint, "has_password": c.Password != "", "has_private_key": c.PrivateKey != "", "has_passphrase": c.Passphrase != "", "has_admin_key": c.AdminKey != "", "has_api_key": c.APIKey != "", "images": c.publicImages()}
+	return map[string]any{"account_runtimes": c.AccountRuntimes, "mode": c.Mode, "host": c.Host, "port": c.Port, "user": c.User, "auth_mode": c.AuthMode, "host_key_fingerprint": c.HostKeyFingerprint, "has_password": c.Password != "", "has_private_key": c.PrivateKey != "", "has_passphrase": c.Passphrase != "", "has_admin_key": c.AdminKey != "", "has_api_key": c.APIKey != "", "images": c.publicImages(), "network": c.EffectiveNetwork()}
 }
 
 type Service struct {
@@ -178,6 +179,14 @@ func mergeConfig(c, old Config) (Config, error) {
 	if c.Mode != "local" && c.Mode != "ssh" {
 		return c, errors.New("invalid mode")
 	}
+	if c.Network == nil {
+		c.Network = old.Network
+	}
+	network, err := validateNetwork(c.EffectiveNetwork())
+	if err != nil {
+		return c, err
+	}
+	c.Network = &network
 	// Images are independent of the target: omitted keeps the saved ones,
 	// {} (empty fields) returns to the pinned references.
 	if c.Images == nil {
@@ -278,8 +287,15 @@ func (s *Service) save(c *gin.Context) {
 		return audit.Audit(ctx, tx, uid, "ccgateway.config.update", "system", "ccgateway", nil)
 	})
 	if e != nil {
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("The configuration could not be saved: check the SSH address, host key fingerprint and credentials (enter the credentials again after changing the target)."))
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("The configuration could not be saved: check the private IPv4 CIDR, IP allocation mode, SSH address, host key fingerprint and credentials."))
 		return
+	}
+	if saved.AccountRuntimes {
+		if keys, err := s.runtimeKeys(ctx); err == nil {
+			for _, key := range keys {
+				s.Kick(key)
+			}
+		}
 	}
 	httpapi.OK(c, saved.Public())
 }

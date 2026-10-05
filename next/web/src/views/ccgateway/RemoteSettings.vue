@@ -10,6 +10,7 @@ interface RemoteConfig {
   account_runtimes: boolean; mode: 'disabled' | 'local' | 'ssh'; host: string; port: number; user: string; auth_mode: 'password' | 'private_key'
   host_key_fingerprint: string; has_password: boolean; has_private_key: boolean; has_passphrase: boolean; has_admin_key: boolean; has_api_key: boolean
   images?: Partial<RuntimeImages> | null
+  network?: { pool: string; allocation: 'random' | 'sequential' }
 }
 type Action = 'status' | 'start' | 'stop' | 'restart' | 'logs'
 const props = defineProps<{ disabled?: boolean }>()
@@ -20,6 +21,8 @@ const IMAGE_KEYS = ['app', 'egress', 'controller'] as const
 // Same rule as the core: repository[:tag][@sha256:digest], or a local image id.
 const IMAGE_RE = /^(?:[a-z0-9][a-z0-9._/-]{0,127}(?::[A-Za-z0-9._-]{1,128})?(?:@sha256:[0-9a-f]{64})?|sha256:[0-9a-f]{64})$/
 const images = reactive<RuntimeImages>({ app: '', egress: '', controller: '' })
+const network = reactive({ pool: '10.0.0.0/8', allocation: 'random' as 'random' | 'sequential' })
+const networkChanged = computed(() => network.pool.trim() !== (saved.value?.network?.pool || '10.0.0.0/8') || network.allocation !== (saved.value?.network?.allocation || 'random'))
 const imagesPayload = computed<RuntimeImages>(() => ({ app: images.app.trim(), egress: images.egress.trim(), controller: images.controller.trim() }))
 const imagesChanged = computed(() => IMAGE_KEYS.some(k => imagesPayload.value[k] !== (saved.value?.images?.[k] || '')))
 
@@ -31,7 +34,7 @@ const probe = ref<{ fingerprint: string; host: string; port: number } | null>(nu
 const pending = ref<Action | null>(null)
 const publicConfig = computed(() => ({ ...form, host: form.host.trim(), port: Number(form.port), user: form.user.trim(), host_key_fingerprint: form.host_key_fingerprint.trim() }))
 const targetChanged = computed(() => !!saved.value && (publicConfig.value.host !== saved.value.host || publicConfig.value.port !== saved.value.port || publicConfig.value.user !== saved.value.user))
-const dirty = computed(() => !saved.value || Object.entries(publicConfig.value).some(([key, value]) => saved.value?.[key as keyof RemoteConfig] !== value) || Object.values(secrets).some(Boolean) || imagesChanged.value)
+const dirty = computed(() => !saved.value || Object.entries(publicConfig.value).some(([key, value]) => saved.value?.[key as keyof RemoteConfig] !== value) || Object.values(secrets).some(Boolean) || imagesChanged.value || networkChanged.value)
 const canOperate = computed(() => !busy.value && !props.disabled && saved.value?.mode === 'ssh' && !dirty.value)
 const passwordNeeded = computed(() => targetChanged.value || !saved.value?.has_password)
 const keyNeeded = computed(() => targetChanged.value || !saved.value?.has_private_key)
@@ -44,6 +47,8 @@ function assign(config: RemoteConfig) {
   saved.value = config
   for (const key of Object.keys(defaults) as Array<keyof typeof defaults>) Object.assign(form, { [key]: config[key] ?? defaults[key] })
   for (const key of IMAGE_KEYS) images[key] = config.images?.[key] || ''
+  network.pool = config.network?.pool || '10.0.0.0/8'
+  network.allocation = config.network?.allocation || 'random'
   clearSecrets()
 }
 async function run(action: () => Promise<void>) {
@@ -68,9 +73,11 @@ async function save() {
   if (bad) { imageError.value = t('ccgateway.remote.imageInvalid', { ref: bad }); return }
   imageError.value = ''
   payload.images = imagesPayload.value
+  const rebuildNetwork = networkChanged.value && config.account_runtimes
+  payload.network = { pool: network.pool.trim() || '10.0.0.0/8', allocation: network.allocation }
   const response = await api.put<RemoteConfig>(base, payload, { signal: AbortSignal.timeout(55000) })
   assign(response); probe.value = null; pending.value = null
-  notice.value = t('ccgateway.remote.saved'); emit('saved')
+  notice.value = t(rebuildNetwork ? 'ccgateway.remote.networkSaved' : 'ccgateway.remote.saved'); emit('saved')
 }
 async function fingerprint() {
   const host = publicConfig.value.host, port = publicConfig.value.port
@@ -130,6 +137,9 @@ onBeforeUnmount(clearSecrets)
         <div class="grid gap-3 sm:grid-cols-2"><label v-for="key in (form.account_runtimes ? ['admin_key'] as const : ['admin_key','api_key'] as const)" :key="key" class="block text-sm">{{ t(`ccgateway.remote.${key}`) }}<input v-model="secrets[key]" type="password" autocomplete="new-password" class="input mt-1 w-full" :data-testid="key" :placeholder="saved[`has_${key}`] ? t('ccgateway.remote.keepSecret') : ''" /></label></div>
         <p class="text-xs text-gray-500">{{ t('ccgateway.remote.keysHint') }}</p>
         <div v-if="form.account_runtimes" class="space-y-2" data-testid="remote-images">
+          <label class="block text-sm">{{ t('ccgateway.remote.networkPool') }}<input v-model="network.pool" class="input mt-1 w-full font-mono text-xs" placeholder="10.0.0.0/8" autocomplete="off" spellcheck="false" data-testid="network-pool" /></label>
+          <label class="block text-sm">{{ t('ccgateway.remote.networkAllocation') }}<select v-model="network.allocation" class="input mt-1 w-full" data-testid="network-allocation"><option value="random">{{ t('ccgateway.remote.networkRandom') }}</option><option value="sequential">{{ t('ccgateway.remote.networkSequential') }}</option></select></label>
+          <p class="text-xs text-gray-500">{{ t('ccgateway.remote.networkHint') }}</p>
           <p class="text-sm font-medium">{{ t('ccgateway.remote.images') }}</p>
           <div class="grid gap-3 sm:grid-cols-3">
             <label v-for="key in IMAGE_KEYS" :key="key" class="block text-sm">{{ t(`ccgateway.remote.image${key[0].toUpperCase()}${key.slice(1)}`) }}<input v-model="images[key]" autocomplete="off" spellcheck="false" class="input mt-1 w-full font-mono text-xs" :data-testid="`image-${key}`" /></label>

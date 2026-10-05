@@ -22,7 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import docker
 import requests
-from network import configuration, business_rules
+from network import configuration, business_rules, network_policy, host_routes, allocate_subnet, allocate_addresses
 
 # Runtime keys (CCGATEWAY-DRAFT-RUNTIMES §1): an account id, or a draft key
 # created by the editor before the account exists. Every key that reaches a
@@ -37,6 +37,7 @@ PROXY_VARS = ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
 
 AUTH_LABEL = 'io.sup2api.ccgateway.auth'
 IMAGE_LABEL = 'io.sup2api.ccgateway.image'
+NETWORK_LABEL = 'io.sup2api.ccgateway.network'
 AUTH_VARS = ('ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR')
 IMAGE_CACHE_SECONDS = 30
 
@@ -125,13 +126,15 @@ class Manager:
         self.app_image, self.egress_image, self.prefix = app_image, egress_image, prefix
         self.probe_url = probe_url
         self.locks, self.lock = {}, threading.Lock()
+        self.network_lock = threading.RLock()
         self.online = {}  # Never trust persisted readiness after controller restart.
         self.boots = {}
         self.image_seen = (0.0, '')  # (monotonic time, app image id)
         self.version = os.getenv('CCG_CONTROLLER_VERSION') or 'dev'
 
     def health(self):
-        return {'version': self.version, 'app_image': self.app_image, 'egress_image': self.egress_image}
+        return {'version': self.version, 'app_image': self.app_image, 'egress_image': self.egress_image,
+                'network_policy_version': 1}
 
     def guard(self, aid):
         check(aid)
@@ -195,7 +198,36 @@ class Manager:
             volumes={str(d / 'app.nft'): {'bind': '/app.nft', 'mode': 'ro'}},
             remove=True)
 
-    def provision(self, aid, auth=None):
+    def ensure_network(self, aid, role, policy, internal):
+        with self.network_lock:
+            try:
+                network = self.docker.networks.get(self.name(aid, role))
+                if (network.attrs.get('Labels') or {}).get(LABEL) != aid:
+                    raise ValueError('network ownership mismatch')
+                return network
+            except docker.errors.NotFound:
+                pass
+            occupied = host_routes()
+            for n in self.docker.networks.list():
+                for cfg in n.attrs.get('IPAM', {}).get('Config') or []:
+                    if cfg.get('Subnet'):
+                        subnet = ipaddress.ip_network(cfg['Subnet'])
+                        if subnet.version == 4:
+                            occupied.append(subnet)
+            subnet = allocate_subnet(policy, occupied)
+            return self.docker.networks.create(self.name(aid, role), driver='bridge',
+                internal=internal, labels={LABEL: aid, NETWORK_LABEL: json.dumps(policy, sort_keys=True)},
+                enable_ipv6=False, ipam=docker.types.IPAMConfig(pool_configs=[
+                    docker.types.IPAMPool(subnet=str(subnet), gateway=str(subnet.network_address + 1))]))
+
+    def provision(self, aid, auth=None, policy=None):
+        # Serialize allocation and replacement across accounts. Otherwise two
+        # parallel reconciliations could select the same still-free subnet.
+        with self.network_lock:
+            return self._provision(aid, auth, policy)
+
+    def _provision(self, aid, auth=None, policy=None):
+        policy = network_policy(policy)
         auth = authentication(auth)
         d = self.dir(aid)
         d.mkdir(mode=0o700, exist_ok=True)
@@ -212,32 +244,58 @@ class Manager:
                 existing = self.owned(aid, 'app')
             # A credential or image change recreates only the app container;
             # the data volume (and the OAuth login inside it) is kept.
-            if existing and existing.labels.get(AUTH_LABEL) == fingerprint and image_of(existing) == image.id:
+            if existing and state.get('network') == policy and existing.labels.get(AUTH_LABEL) == fingerprint and image_of(existing) == image.id:
                 return state
         # Validate the new image before an existing container is replaced.
         image_env = image.attrs['Config'].get('Env') or []
         if any(v.split('=', 1)[0] in PROXY_VARS + AUTH_VARS for v in image_env):
             raise ValueError('business image contains account credentials or proxy environment variables')
+        if not state or state.get('network') != policy:
+            old_subnets, occupied = [], []
+            for n in self.docker.networks.list():
+                for cfg in n.attrs.get('IPAM', {}).get('Config') or []:
+                    if cfg.get('Subnet'):
+                        subnet = ipaddress.ip_network(cfg['Subnet'])
+                        if subnet.version == 4:
+                            (old_subnets if (n.attrs.get('Labels') or {}).get(LABEL) == aid else occupied).append(subnet)
+            occupied.extend(r for r in host_routes() if r not in old_subnets)
+            first = allocate_subnet(policy, occupied)
+            allocate_subnet(policy, occupied + [first])
+            # Validate capacity/conflicts before removing working containers.
         if existing:
             self.online.pop(aid, None)
             with contextlib.suppress(docker.errors.NotFound):
                 existing.remove(force=True)
-        try:
-            network = self.docker.networks.get(self.name(aid, 'net'))
-            if (network.attrs.get('Labels') or {}).get(LABEL) != aid:
-                raise ValueError('network ownership mismatch')
-        except docker.errors.NotFound:
-            network = self.docker.networks.create(self.name(aid, 'net'), driver='bridge',
-                internal=True, labels={LABEL: aid}, enable_ipv6=False)
+        if not state or state.get('network') != policy:
+            self.online.pop(aid, None)
+            self.boots.pop(aid, None)
+            with contextlib.suppress(docker.errors.NotFound):
+                self.owned(aid, 'egress').remove(force=True)
+            for role in ('net', 'uplink'):
+                with contextlib.suppress(docker.errors.NotFound):
+                    old = self.docker.networks.get(self.name(aid, role))
+                    if (old.attrs.get('Labels') or {}).get(LABEL) != aid:
+                        raise ValueError('network ownership mismatch')
+                    old.remove()
+        network = self.ensure_network(aid, 'net', policy, True)
+        uplink = self.ensure_network(aid, 'uplink', policy, False)
         network.reload()
         subnet = ipaddress.ip_network(network.attrs['IPAM']['Config'][0]['Subnet'])
-        gateway_ip, app_ip = str(subnet.network_address + 2), str(subnet.network_address + 3)
+        if state and state.get('network') == policy:
+            gateway_ip, app_ip = state['gateway_ip'], state['app_ip']
+            uplink_ip = state['uplink_ip']
+        else:
+            gateway_ip, app_ip = allocate_addresses(subnet, policy['allocation'])
+            uplink_subnet = ipaddress.ip_network(uplink.attrs['IPAM']['Config'][0]['Subnet'])
+            uplink_ip = allocate_addresses(uplink_subnet, policy['allocation'], 1)[0]
         write_private(d / 'resolv.conf', f'nameserver {gateway_ip}\noptions timeout:2 attempts:2\n')
         # resolv.conf contains only the ordinary internal DNS address.
         os.chmod(d / 'resolv.conf', 0o644)
         state = state or {'api_key': secrets.token_urlsafe(32), 'admin_key': salt,
                  'app_ip': app_ip, 'gateway_ip': gateway_ip, 'revision': '', 'status': 'pending',
                  'created_at': rfc3339(time.time())}
+        state.update(network=policy, gateway_ip=gateway_ip, app_ip=app_ip, uplink_ip=uplink_ip,
+                     revision='', status='pending')
         self.save(aid, state)
         volume = self.docker.volumes.create(self.name(aid, 'data'), labels={LABEL: aid})
         self.docker.containers.run(self.app_image, entrypoint=['sh', '-ec'],
@@ -266,10 +324,14 @@ class Manager:
             revision = desired.get('revision', '')
             if not isinstance(revision, str) or not REVISION.fullmatch(revision):
                 raise BadRequest('invalid revision')
+            try:
+                policy = network_policy(desired.get('network'))
+            except (ValueError, TypeError) as e:
+                raise BadRequest('invalid network policy') from e
             if not desired.get('proxy') or not desired.get('enabled', True):
                 return self.block(aid)
             self.ensure_image(self.egress_image)
-            state = self.provision(aid, desired.get('auth'))
+            state = self.provision(aid, desired.get('auth'), policy)
             if self.public(aid)['revision'] == revision:
                 app, egress = self.owned(aid, 'app'), self.owned(aid, 'egress')
                 if app.status == 'running' and egress.status == 'running':
@@ -295,7 +357,9 @@ class Manager:
             if old:
                 old.remove(force=True)
             egress = self.docker.containers.create(self.egress_image, name=self.name(aid, 'egress'),
-                network='bridge', cap_add=['NET_ADMIN'],
+                network=self.name(aid, 'uplink'),
+                networking_config={self.name(aid, 'uplink'): self.docker.api.create_endpoint_config(ipv4_address=state['uplink_ip'])},
+                cap_add=['NET_ADMIN'],
                 sysctls={'net.ipv4.ip_forward': '0', 'net.ipv6.conf.all.disable_ipv6': '1'},
                 volumes={str(d): {'bind': '/config', 'mode': 'ro'}}, mem_limit='128m',
                 **self.common(aid))
@@ -360,11 +424,12 @@ class Manager:
             for role in ('egress', 'app'):
                 with contextlib.suppress(docker.errors.NotFound):
                     self.owned(aid, role).remove(force=True)
-            with contextlib.suppress(docker.errors.NotFound):
-                network = self.docker.networks.get(self.name(aid, 'net'))
-                if (network.attrs.get('Labels') or {}).get(LABEL) != aid:
-                    raise ValueError('network ownership mismatch')
-                network.remove()
+            for role in ('net', 'uplink'):
+                with contextlib.suppress(docker.errors.NotFound):
+                    network = self.docker.networks.get(self.name(aid, role))
+                    if (network.attrs.get('Labels') or {}).get(LABEL) != aid:
+                        raise ValueError('network ownership mismatch')
+                    network.remove()
             with contextlib.suppress(docker.errors.NotFound):
                 volume = self.docker.volumes.get(self.name(aid, 'data'))
                 if (volume.attrs.get('Labels') or {}).get(LABEL) != aid:
@@ -411,7 +476,9 @@ class Manager:
                 self.online.pop(aid, None)
         return {'account_id': aid, 'container': self.name(aid, 'app'),
                 'status': 'ready' if self.online.get(aid) == state.get('revision') and aid in self.online else 'pending',
-                'revision': self.online.get(aid, ''), 'auth_mode': state.get('auth_mode', 'oauth')}
+                'revision': self.online.get(aid, ''), 'auth_mode': state.get('auth_mode', 'oauth'),
+                'network': state.get('network'), 'app_ip': state.get('app_ip', ''),
+                'gateway_ip': state.get('gateway_ip', ''), 'uplink_ip': state.get('uplink_ip', '')}
 
 
 class Handler(BaseHTTPRequestHandler):

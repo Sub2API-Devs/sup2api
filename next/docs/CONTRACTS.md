@@ -3457,3 +3457,10 @@ CREATE INDEX IF NOT EXISTS idx_account_balances_updated_at ON account_balances(u
 - **claude-oauth**：`balance_test.go`（解析响应、错误情况）。
 - **集成**：PG 表迁移幂等性（`0034_account_balances.sql`）、账号列表/详情返回 balance。
 
+### 49.17 CCGateway 容器地址池（2026-10-05 补充）
+
+`GET/PUT /system/ccgateway/remote-config` 的 `network` 为 `{pool, allocation}`；默认 `10.0.0.0/8`、`random`，`allocation` 也可为 `sequential`。省略保留已存配置，空对象恢复默认。地址池须为 RFC1918 IPv4 CIDR（前缀不大于 /24），规范化后保存。插件配置页允许指定其他私有地址池及顺序分配。
+
+每个账号保留独立业务网络，并使用独立出口 uplink 网络。默认随机选取无冲突子网及应用、出口 IP；顺序模式选取最低可用子网和主机地址。排除 Docker 已占用网段和主机非默认路由；分配过程串行，修改前先检查新池容量。网络配置参与账号及草稿 revision，保存后触发各运行实例重新同步。重建只替换容器和网络，保留同名数据卷、OAuth 登录、历史和管理密钥；正常重启及镜像升级保留现有 IP。正在进行的请求可能中断。此处配置容器内网地址，公网出口仍由账号代理决定。
+
+控制器 `/health` 报告 `network_policy_version: 1`，运行实例状态包含 `network`、`app_ip`、`gateway_ip`、`uplink_ip`。此功能需要安装支持网络策略的控制器镜像。

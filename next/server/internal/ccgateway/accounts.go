@@ -39,6 +39,7 @@ var (
 )
 
 type accountDesired struct {
+	Network  RuntimeNetwork    `json:"network"`
 	Revision string            `json:"revision"`
 	Enabled  bool              `json:"enabled"`
 	Proxy    map[string]any    `json:"proxy"`
@@ -115,7 +116,7 @@ func (s *Service) desiredIn(ctx context.Context, q store.Querier, id int64, cred
 			return d, err
 		}
 	}
-	return d, nil
+	return s.desiredNetwork(ctx, q, d)
 }
 
 // draftDesired is the desired state of a draft that is not adopted (nor
@@ -146,7 +147,7 @@ func (s *Service) draftDesired(ctx context.Context, key string, credentials bool
 			return d, err
 		}
 	}
-	return d, nil
+	return s.desiredNetwork(ctx, s.DB.Pool, d)
 }
 
 // resolveKey maps an account id to its runtime key (the adopted draft key,

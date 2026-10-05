@@ -1,6 +1,64 @@
 """Pure configuration generation. No credentials enter business containers."""
 import ipaddress
 import socket
+import secrets
+from pathlib import Path
+
+PRIVATE_POOLS = tuple(ipaddress.ip_network(c) for c in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'))
+
+
+def network_policy(raw=None):
+    raw = {} if raw is None else raw
+    if not isinstance(raw, dict) or set(raw) - {'pool', 'allocation'}:
+        raise ValueError('invalid network policy')
+    pool = ipaddress.ip_network(raw.get('pool') or '10.0.0.0/8', strict=False)
+    allocation = raw.get('allocation') or 'random'
+    if pool.version != 4 or pool.prefixlen > 24 or not any(pool.subnet_of(p) for p in PRIVATE_POOLS):
+        raise ValueError('network pool must be an RFC1918 IPv4 CIDR with prefix at most /24')
+    if allocation not in ('random', 'sequential'):
+        raise ValueError('invalid IP allocation mode')
+    return {'pool': str(pool), 'allocation': allocation}
+
+
+def host_routes():
+    # Controller uses the host network namespace. Ignore default routes.
+    routes = []
+    for line in Path('/proc/net/route').read_text().splitlines()[1:]:
+        fields = line.split()
+        if len(fields) >= 8 and int(fields[7], 16):
+            address = ipaddress.IPv4Address(int.from_bytes(bytes.fromhex(fields[1]), 'little'))
+            mask = ipaddress.IPv4Address(int.from_bytes(bytes.fromhex(fields[7]), 'little'))
+            routes.append(ipaddress.ip_network(f'{address}/{mask}', strict=False))
+    return routes
+
+
+def allocate_subnet(policy, occupied):
+    pool = ipaddress.ip_network(policy['pool'])
+    prefix = max(24, pool.prefixlen + 1)
+    size = 1 << (32 - prefix)
+    count = pool.num_addresses // size
+    blocked = set()
+    for n in occupied:
+        if n.overlaps(pool):
+            first = max(0, (int(n.network_address) - int(pool.network_address)) // size)
+            last = min(count - 1, (int(n.broadcast_address) - int(pool.network_address)) // size)
+            blocked.update(range(first, last + 1))
+    free = [i for i in range(count) if i not in blocked]
+    if not free:
+        raise ValueError('network pool exhausted or overlaps host routes')
+    index = secrets.choice(free) if policy['allocation'] == 'random' else free[0]
+    return ipaddress.ip_network((int(pool.network_address) + index * size, prefix))
+
+
+def allocate_addresses(subnet, allocation, count=2):
+    # Network address, Docker bridge gateway .1, and broadcast are reserved.
+    offsets = list(range(2, subnet.num_addresses - 1))
+    out = []
+    for _ in range(count):
+        offset = secrets.choice(offsets) if allocation == 'random' else offsets[0]
+        offsets.remove(offset)
+        out.append(str(subnet.network_address + offset))
+    return out
 
 
 def proxy_outbound(proxy):
