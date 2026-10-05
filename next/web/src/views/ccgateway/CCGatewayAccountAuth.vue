@@ -31,6 +31,7 @@ import { useProxiesLookup } from '@/composables/lookups'
 import { ACCOUNT_KEYS } from '@/composables/useOwnership'
 import { isTrustedAuthorizationURL, sessionExpired } from './validation'
 import { useCcgError } from './ccgError'
+import { copyText } from '@/utils/format'
 import {
   blockReason,
   containerPhase,
@@ -91,6 +92,13 @@ const status = ref<Status | null>(null)
 const health = ref<Health | null>(null)
 const session = ref<Session | null>(null)
 const opened = ref(false)
+async function copyLink() {
+  if (!session.value) return
+  if (await copyText(session.value.url)) {
+    opened.value = true
+    toast(t('ccgateway.accountAuth.linkCopied'), 'success')
+  } else toast(t('ccgateway.accountAuth.copyFailed'), 'error')
+}
 const code = ref('')
 /** Which action runs: drives the spinners and disables the buttons. */
 const busy = ref<'' | 'create' | 'proxy' | 'sync' | 'status' | 'start' | 'complete' | 'cancel'>('')
@@ -651,21 +659,35 @@ const settingsLink = '/plugins/ccgateway?tab=settings#ccgateway-runtime'
               <SButton size="sm" :loading="busy === 'start'" data-testid="ccgateway-auth-retry" @click="retry"><SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.regetLink') }}</SButton>
             </div>
             <div v-else-if="session" class="mt-2 space-y-2">
-              <a
-                :href="session.url"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="btn btn-primary btn-md"
-                :class="expired ? 'pointer-events-none opacity-50' : ''"
-                data-testid="ccgateway-auth-open"
-                @click="opened = true"
-              >
-                <SIcon name="external" class="h-4 w-4" />{{ t('ccgateway.accountAuth.openLink') }}
-              </a>
+              <!-- Copy is the main way: the user signs in to Claude in their own
+                   browser (often another machine or profile); opening here is
+                   a fallback. -->
+              <div class="flex items-stretch gap-2" :class="expired ? 'pointer-events-none opacity-50' : ''">
+                <input
+                  :value="session.url"
+                  readonly
+                  class="input min-w-0 flex-1 font-mono text-xs"
+                  :aria-label="t('ccgateway.accountAuth.linkLabel')"
+                  data-testid="ccgateway-auth-link"
+                  @focus="($event.target as HTMLInputElement).select()"
+                />
+                <SButton variant="primary" data-testid="ccgateway-auth-copy" @click="copyLink"><SIcon name="copy" class="h-4 w-4" />{{ t('ccgateway.accountAuth.copyLink') }}</SButton>
+              </div>
               <p class="text-xs text-gray-500 dark:text-dark-400">
                 {{ t('ccgateway.accountAuth.linkHint') }}
                 <span v-if="!expired" class="ml-1 tabular-nums">{{ t('ccgateway.accountAuth.expiresIn', { time: leftText }) }}</span>
               </p>
+              <a
+                :href="session.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex items-center gap-1 text-xs text-gray-500 underline-offset-2 hover:text-primary-600 hover:underline dark:text-dark-400"
+                :class="expired ? 'pointer-events-none opacity-50' : ''"
+                data-testid="ccgateway-auth-open"
+                @click="opened = true"
+              >
+                <SIcon name="external" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.openLink') }}
+              </a>
             </div>
             <div v-else-if="busy === 'start'" class="mt-1 flex items-center gap-2 text-xs text-gray-600 dark:text-dark-300"><SSpinner size="sm" />{{ t('ccgateway.accountAuth.gettingLink') }}</div>
             <div v-else-if="canManage" class="mt-2">
