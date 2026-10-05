@@ -20,7 +20,11 @@ func TestCCGatewayQuotaInListAndRefresh(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"five_hour":{"utilization":12,"resets_at":null},"seven_day":{"utilization":34,"resets_at":null}}`)
 	})
-	id := e.exec1(`INSERT INTO accounts(name,plugin_key,type,credentials_enc) VALUES('quota','ccgateway','managed',''::bytea) RETURNING id`)
+	credentials, err := e.svc.d.Cipher.Encrypt([]byte(`{}`), []byte("account:ccgateway"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := e.exec1(`INSERT INTO accounts(name,plugin_key,type,credentials_enc) VALUES('quota','ccgateway','managed',$1) RETURNING id`, credentials)
 	code, out := e.do("GET", fmt.Sprintf("/accounts/%d", id), nil)
 	if code != 200 {
 		t.Fatal(code, out)

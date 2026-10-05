@@ -269,8 +269,6 @@
 | `hook:statidx:{plugin}` | SET 该插件出现过的钩子 id，TTL 7d | G |
 | `plugin:ledger:{key}:{credit\|debit}:{yyyymmdd}` | STRING 插件当日入账/扣款累计，TTL 48h | C2 |
 | `rl:account:{id}:rpm:{minute}`、`rl:account:{id}:tpm:{minute}` | STRING 账号分钟窗口请求数 / token 数，TTL 2m（§18） | A |
-| `rl:account:{id}:tpd:{yyyymmdd}` | STRING 账号当日（UTC）token 数，TTL 48h | A |
-| `rl:account:{id}:spm` | ZSET 会话身份 → 毫秒时间戳（60s 滚动窗口），TTL 2m | A |
 
 广播频道：`plugin:events`、`authz:changed`、`account:changed`、`config:changed`（`core/ports_cluster.go`）。权限版本以 PG `authz_meta` 为准，Redis 不存。`config:changed` payload：代理 `{"type":"proxy","id":N}`，插件配置 `{"type":"config","plugin_key":k}`。`plugin:events` payload：`{"type":"rollout"|"config","plugin_key","rollout_id"?}`。
 
@@ -836,7 +834,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 
 ### 18.2 调度顺序（ARCHITECTURE 6.2 更新）
 
-候选账号 = 分组内 `active` 且 `schedulable` 的账号 ∩ 账号类型能服务该端点（原生或经转换） ∩ `models` 为空或含请求模型 ∩ 未冷却 ∩ 未达 rpm/tpm/tpd/spm 上限（spm 对窗口内已有的会话不设限）。粘性绑定的账号仍然优先；其余按 `priority` 升序，同优先级按 `weight` 加权随机；逐个获取并发槽位，失败切换时跳过已试过的账号。
+候选账号 = 分组内 `active` 且 `schedulable` 的账号 ∩ 账号类型能服务该端点（原生或经转换） ∩ `models` 为空或含请求模型 ∩ 未冷却 ∩ 未达 rpm/tpm 上限。粘性绑定的账号仍然优先；其余按 `priority` 升序，同优先级按 `weight` 加权随机；逐个获取并发槽位，失败切换时跳过已试过的账号。
 
 排序用的 `priority` / `weight` **可能已被插件为本次请求改写**（§24：未命中粘性绑定的请求会先过一遍 `SchedulerService.RankAccounts`，`weight=0` 的账号本次不用）。候选集合的筛选、并发槽位、限流、冷却仍完全由核心把关，插件改不到。
 
@@ -852,8 +850,8 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 ### 18.4 控制台
 
 - 新建账号第 1 步按线框图 A.3 做成紧凑卡片网格（每个账号类型一张卡：插件头像、类型名、插件名与版本、信任标记、支持的平台徽章、一行描述；端点列表折叠，默认不展开），不再按插件分区块，也不再一张卡占半屏。
-- 第 2 步 / 编辑表单分为：基本信息（名称、分组、代理、状态开关）、调度（优先级、权重、最大并发、参与调度）、限流（rpm/tpm/tpd/spm，0 = 不限）、模型（模型列表：标签输入，候选来自 `GET /prices` 的模型；可切换为文本框逐行/逗号编辑；空 = 全部模型）、模型映射（表格编辑，可切换为 JSON 文本编辑，保存前校验为 `{string: string}` 且都是完整模型 ID）、凭证（插件表单）。
-- 账号列表：优先级列显示 `优先级 · 权重`；新增"限流"列显示 `rpm 12/60 · tpm 3.2K/100K · tpd … · spm 3/20`（未设上限的项不显示，都未设显示 `—`）；详情页展示模型列表、映射、限流与当前用量。
+- 第 2 步 / 编辑表单分为：基本信息（名称、分组、代理、状态开关）、调度（优先级、权重、最大并发、参与调度）、限流（rpm/tpm，0 = 不限）、模型（模型列表：标签输入，候选来自 `GET /prices` 的模型；可切换为文本框逐行/逗号编辑；空 = 全部模型）、模型映射（表格编辑，可切换为 JSON 文本编辑，保存前校验为 `{string: string}` 且都是完整模型 ID）、凭证（插件表单）。
+- 账号列表：优先级与权重在同一列，允许有账号编辑权限的用户直接修改；并发、TPM、RPM 在同一列显示当前值 / 上限，不限额显示 `∞`；详情页展示模型列表、映射及当前限流用量。TPD 和 SPM 已移除，历史数据库列保留供版本回退，不再参与配置、计数或准入。
 
 ## 19. 从上游拉取模型列表（2026-09-25，用户要求）
 
