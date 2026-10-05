@@ -453,7 +453,7 @@ func readConfig(path string) (config, error) {
 // point the child at a different database or lock namespace.
 func (c config) coreEnvironment() []string {
 	env := append([]string(nil), c.CoreEnv...)
-	return append(env, "SUB2API_DATABASE_URL="+c.DatabaseURL, "SUB2API_REDIS_URL="+c.RedisURL)
+	return append(env, "DATABASE_URL="+c.DatabaseURL, "REDIS_URL="+c.RedisURL)
 }
 func importRelease(ctx context.Context, c config, m *release.Manager, raw string) (control.Release, error) {
 	var out control.Release
