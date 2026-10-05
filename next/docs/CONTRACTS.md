@@ -450,7 +450,8 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 ### 14.2 安全加固
 
 - **登录限速**：同一邮箱在同一 IP 15 分钟内失败 5 次、或同一 IP 15 分钟内失败 20 次后，登录返回 429 `rate_limited`，`details.retry_after_seconds`；成功登录清除该邮箱+IP 的计数。Redis key `login:fail:e:{sha256(email|ip)}`、`login:fail:ip:{ip}`（带 TTL）。 客户端 IP 取 `c.ClientIP()`：只有来自 `SUB2API_TRUSTED_PROXIES`（逗号分隔的 IP/CIDR，默认空 = 不信任任何代理）的请求才采用 `X-Forwarded-For`。
-- **refresh token 重放检测**：refresh token 属于一个家族（`refresh_tokens.family_id`，登录时新建）；轮换时旧 token 标记 `replaced_at`；再次出示已轮换或已吊销的 token 时吊销整个家族并返回 401。
+- **refresh token 重放检测**：refresh token 属于一个家族（`refresh_tokens.family_id`，登录时新建）；轮换时旧 token 标记 `replaced_at`；再次出示已轮换或已吊销的 token 时吊销整个家族并返回 401。**例外（2026-10-05）**：轮换后 60 秒内再次出示同一个 token、且家族里还有有效 token 时，视为客户端没收到上次的响应（断网、关页、两个标签页同时刷新），再发一对同家族的新 token，不吊销。登出或已整体吊销的 token 没有这个宽限。
+- **登录时长（2026-10-05 用户要求）**：登录随使用自动延长，闲置最长 30 天。access token 2 小时（`SUB2API_ACCESS_TOKEN_TTL`），refresh token 每次轮换都重新给满 `SUB2API_REFRESH_TOKEN_TTL`（默认 720h = 30 天）。控制台除 401 后刷新外，页面可见时每分钟检查、切回页面或获得焦点时也检查，access token 剩余不足 5 分钟就主动刷新（`@sub2api/host` 的 `startKeepAlive`）。所以连续使用就一直保持登录；30 天没打开过控制台才需要重新登录。改密码、被禁用、被删除、登出仍立即失效。
 - **SSRF 拨号时校验**：`proxy` 模块给**直连**（不经代理）的上游 HTTP 客户端设置拨号检查，拒绝回环、私有、链路本地、未指定地址，防 DNS 重绑定；`SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM=true` 时放行（`proxy.Options.AllowPrivate`）。经代理的连接不检查（由代理解析）。
 - **插件新外部域名告警**：出口隧道每次连接 upsert `plugin_egress_domains`；首次出现的 host 记 WARN 日志并写事件 `plugin.egress_new_domain`。`GET /plugins/:key/egress` 增加 `domains:[{host, first_seen_at, last_seen_at, connections, new}]`（`new` = 24 小时内首次出现）。
 - **出口日志长连接**：连接建立时即写一行（`result='open'`），关闭时更新 `result/duration_ms/bytes/closed_at`，控制台立即可见。

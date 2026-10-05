@@ -41,6 +41,7 @@ func TestAuditRefreshReplayIncludesConcurrentDescendant(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ageRotation(t, s, parent.RefreshToken)
 	ctx, cancel := context.WithTimeout(background, 60*time.Second)
 	defer cancel()
 	barrier, err := s.db.Pool.Begin(ctx)

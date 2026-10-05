@@ -178,6 +178,7 @@ func TestBootstrapLoginRefreshLogout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ageRotation(t, s, p.RefreshToken)
 	if _, err := s.Refresh(ctx, p.RefreshToken); !isCode(err, "unauthenticated") {
 		t.Fatalf("reused refresh token: %v", err)
 	}

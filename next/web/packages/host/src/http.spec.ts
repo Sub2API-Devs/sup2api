@@ -145,3 +145,36 @@ describe('token refresh', () => {
     expect(onUnauthenticated).not.toHaveBeenCalled()
   })
 })
+
+describe('keep-alive', () => {
+  let stop: () => void = () => {}
+  beforeEach(() => {
+    stop = http.startKeepAlive()
+  })
+  afterEach(() => stop())
+  it('is due only within the renewal window of a session with a refresh token', () => {
+    const now = 1_000_000
+    expect(http.renewalDue(null, now)).toBe(false)
+    expect(http.renewalDue({ access_token: 'a', refresh_token: 'r', expires_at: now + 10 * 60_000 }, now)).toBe(false)
+    expect(http.renewalDue({ access_token: 'a', refresh_token: 'r', expires_at: now + 60_000 }, now)).toBe(true)
+    expect(http.renewalDue({ access_token: 'a', refresh_token: '', expires_at: now }, now)).toBe(false)
+  })
+
+  it('renews a token about to expire when the page becomes visible', async () => {
+    http.session.set({ access_token: 'old', refresh_token: 'r1', expires_at: Date.now() + 60_000 })
+    const spy = stubFetch(() => json({ access_token: 'new', refresh_token: 'r2', expires_in: 7200 }))
+    document.dispatchEvent(new Event('visibilitychange'))
+    await vi.waitFor(() => expect(http.session.get()?.access_token).toBe('new'))
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy.mock.calls[0][0]).toContain('/auth/refresh')
+    expect(http.session.get()?.refresh_token).toBe('r2')
+  })
+
+  it('leaves a fresh token alone', async () => {
+    http.session.set({ access_token: 'a', refresh_token: 'r', expires_at: Date.now() + 3600_000 })
+    const spy = stubFetch(() => json({}))
+    document.dispatchEvent(new Event('visibilitychange'))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(spy).not.toHaveBeenCalled()
+  })
+})

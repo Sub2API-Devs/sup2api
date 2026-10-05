@@ -150,6 +150,17 @@ func classifyRefresh(revokedAt, replacedAt *time.Time, expiresAt, now time.Time)
 	return refreshValid
 }
 
+// refreshReuseGrace is how long a rotated refresh token is still accepted
+// (CONTRACTS §14.2): a console that never received the rotation's response
+// presents the old token again moments later.
+const refreshReuseGrace = time.Minute
+
+// rotatedJustNow reports a token that was rotated (not logged out or revoked
+// as a family) less than refreshReuseGrace ago.
+func rotatedJustNow(revokedAt, replacedAt *time.Time, now time.Time) bool {
+	return replacedAt != nil && revokedAt != nil && now.Sub(*replacedAt) < refreshReuseGrace
+}
+
 // Refresh rotates a refresh token: the presented one is marked revoked and
 // replaced, and a new pair is issued in the same family. Presenting a token
 // that was already rotated or revoked revokes every token of its family
@@ -186,7 +197,22 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*TokenPair,
 		if err != nil {
 			return err
 		}
-		switch classifyRefresh(revokedAt, replacedAt, expiresAt, time.Now()) {
+		verdict := classifyRefresh(revokedAt, replacedAt, expiresAt, time.Now())
+		if verdict == refreshReplayed && family != "" && rotatedJustNow(revokedAt, replacedAt, time.Now()) {
+			// The console lost the response of the rotation it just made
+			// (network, closed tab, two tabs without a shared lock): while
+			// the family is still alive, answer with another pair of the
+			// same family instead of signing the user out.
+			var live bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM refresh_tokens
+				WHERE family_id = $1 AND revoked_at IS NULL AND expires_at > now())`, family).Scan(&live); err != nil {
+				return err
+			}
+			if live {
+				verdict = refreshValid
+			}
+		}
+		switch verdict {
 		case refreshReplayed:
 			// Commit the family revocation; the 401 is returned after the tx.
 			// A row without a family (never written by this code) only
@@ -206,7 +232,8 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*TokenPair,
 		case refreshExpired:
 			return errBadRefresh
 		}
-		if _, err := tx.Exec(ctx, `UPDATE refresh_tokens SET revoked_at = now(), replaced_at = now() WHERE id = $1`, id); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE refresh_tokens SET revoked_at = coalesce(revoked_at, now()),
+			replaced_at = coalesce(replaced_at, now()) WHERE id = $1`, id); err != nil {
 			return err
 		}
 		var status string

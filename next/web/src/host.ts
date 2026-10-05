@@ -1,6 +1,6 @@
 import { computed } from 'vue'
 import type { Router } from 'vue-router'
-import { api, configureHttp, provideHost, HOST_UI_VERSION, type HostContext } from '@sub2api/host'
+import { api, configureHttp, provideHost, startKeepAlive, HOST_UI_VERSION, type HostContext } from '@sub2api/host'
 import { confirm, toast } from '@sub2api/ui'
 import { addMessages, currentLocale, i18n, lt } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -22,6 +22,8 @@ export function setupHost(router: Router) {
       if (!cur.meta.public) router.replace({ path: '/login', query: { redirect: cur.fullPath } })
     }
   })
+  // A login lasts while it is used: renew the access token before it expires.
+  startKeepAlive()
 
   const ctx: HostContext = {
     version: HOST_UI_VERSION,

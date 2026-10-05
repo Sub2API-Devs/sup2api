@@ -323,6 +323,50 @@ function refreshSession(stale: string | undefined): Promise<RefreshOutcome> {
   return refreshing
 }
 
+// ------------------------------------------------------------------ keep-alive
+//
+// A login lasts while it is used (CONTRACTS §14.2): every refresh issues a
+// refresh token valid for the full refresh TTL (30 days by default). Besides
+// the refresh after a 401, a visible page renews the access token shortly
+// before it expires, so a page in use never meets an expired token.
+
+/** Renew this long before the access token expires. */
+export const RENEW_BEFORE_MS = 5 * 60_000
+const KEEPALIVE_INTERVAL_MS = 60_000
+
+/** Whether the session's access token is due for renewal at `now`. */
+export function renewalDue(s: Session | null, now: number): boolean {
+  return !!s?.refresh_token && !!s.expires_at && s.expires_at - now <= RENEW_BEFORE_MS
+}
+
+async function keepAlive() {
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+  const s = syncSession()
+  if (!renewalDue(s, Date.now())) return
+  const outcome = await refreshSession(s!.access_token)
+  if (outcome === 'invalid' && session.get()?.refresh_token === s!.refresh_token) {
+    session.clear()
+    config.onUnauthenticated?.('expired')
+  }
+}
+
+/**
+ * Starts renewing the session in the background (the console calls it once);
+ * returns a function that stops it.
+ */
+export function startKeepAlive(): () => void {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return () => {}
+  const run = () => void keepAlive()
+  const timer = setInterval(run, KEEPALIVE_INTERVAL_MS)
+  document.addEventListener('visibilitychange', run)
+  window.addEventListener('focus', run)
+  return () => {
+    clearInterval(timer)
+    document.removeEventListener('visibilitychange', run)
+    window.removeEventListener('focus', run)
+  }
+}
+
 /** Low-level request returning the parsed JSON envelope (or null for 204). */
 export async function requestRaw(method: string, path: string, opts: RequestOptions = {}): Promise<any> {
   /** Access token carried by the last attempt. */
