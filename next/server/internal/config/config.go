@@ -75,8 +75,8 @@ func Load(goos string) (*Config, error) {
 	c := &Config{
 		HTTPAddr:               env("SUB2API_HTTP_ADDR", ":8080"),
 		PublicURL:              env("SUB2API_PUBLIC_URL", ""),
-		DatabaseURL:            os.Getenv("SUB2API_DATABASE_URL"),
-		RedisURL:               os.Getenv("SUB2API_REDIS_URL"),
+		DatabaseURL:            os.Getenv("DATABASE_URL"),
+		RedisURL:               os.Getenv("REDIS_URL"),
 		NodeID:                 os.Getenv("NODE_ID"),
 		LogLevel:               env("SUB2API_LOG_LEVEL", "info"),
 		BootstrapAdminEmail:    os.Getenv("SUB2API_BOOTSTRAP_ADMIN_EMAIL"),
@@ -102,10 +102,10 @@ func Load(goos string) (*Config, error) {
 	}
 
 	if c.DatabaseURL == "" {
-		return nil, fmt.Errorf("SUB2API_DATABASE_URL is required")
+		return nil, fmt.Errorf("DATABASE_URL is required")
 	}
 	if c.RedisURL == "" {
-		return nil, fmt.Errorf("SUB2API_REDIS_URL is required")
+		return nil, fmt.Errorf("REDIS_URL is required")
 	}
 	mk := os.Getenv("SUB2API_MASTER_KEY")
 	if c.MasterKey, err = base64.StdEncoding.DecodeString(mk); err != nil || len(c.MasterKey) != 32 {
