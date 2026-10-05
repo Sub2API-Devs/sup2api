@@ -75,11 +75,11 @@ const someVisibleSelected = computed(() => !allVisibleSelected.value && visible.
 const columns = computed<TableColumn[]>(() => [
   { key: 'select', label: '', width: '2rem' },
   { key: 'model', label: t('accounts.modelTest.model') },
-  { key: 'state', label: t('common.status') },
-  { key: 'latency', label: t('accounts.latency'), align: 'right' },
-  { key: 'http', label: 'HTTP', align: 'right' },
+  { key: 'state', label: t('common.status'), width: '6.5rem' },
+  { key: 'latency', label: t('accounts.latency'), align: 'right', width: '6rem' },
+  { key: 'http', label: 'HTTP', align: 'right', width: '4.5rem' },
   { key: 'detail', label: t('accounts.modelTest.detail') },
-  { key: 'actions', label: '', align: 'right' }
+  { key: 'actions', label: '', align: 'right', width: '5.5rem' }
 ])
 
 function toggle(model: string, v: boolean) {
