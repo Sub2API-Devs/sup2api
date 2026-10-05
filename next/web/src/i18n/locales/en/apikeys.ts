@@ -1,4 +1,7 @@
 export default {
+  rotate: 'Regenerate key',
+  rotateConfirm: 'Regenerate the key for "{name}"? The old key will stop working immediately. Update clients with the new key.',
+  rotated: 'Key regenerated. Copy the new key and update your clients.',
   legacyCopyHint: 'This legacy key is hash-only and cannot be recovered. New keys can be copied at any time.',
   myTitle: 'API keys',
   myDescription: 'Keys for calling the gateway. Each key is bound to exactly one group, which decides the platforms (endpoints) it can access, the models and the rate multiplier.',

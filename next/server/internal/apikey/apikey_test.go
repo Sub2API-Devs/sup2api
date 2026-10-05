@@ -269,6 +269,32 @@ func TestCopyAPIKey(t *testing.T) {
 	if code, _ := e.do(e.user, "POST", path, nil); code != 409 {
 		t.Fatalf("legacy: %d", code)
 	}
+	rotatePath := fmt.Sprintf("/me/api-keys/%d/rotate", id)
+	if code, _ := e.do(other, "POST", rotatePath, nil); code != 404 {
+		t.Fatalf("cross-owner rotate: %d", code)
+	}
+	if code, _ := e.do(e.user, "POST", fmt.Sprintf("/api-keys/%d/rotate", id), nil); code != 403 {
+		t.Fatalf("unauthorized rotate: %d", code)
+	}
+	code, out = e.do(e.user, "POST", rotatePath, nil)
+	if code != 200 {
+		t.Fatalf("rotate: %d", code)
+	}
+	rotated := out["data"].(map[string]any)
+	newRaw := rotated["key"].(string)
+	if newRaw == raw || rotated["copyable"] != true || rotated["group_id"] != data["group_id"] || rotated["name"] != data["name"] {
+		t.Fatal("rotation did not preserve metadata or renew key")
+	}
+	if _, err := e.svc.Authenticate(context.Background(), raw); codeOf(err) != "unauthenticated" {
+		t.Fatal("old key still authenticates")
+	}
+	code, out = e.do(e.user, "POST", path, nil)
+	if code != 200 || out["data"].(map[string]any)["key"] != newRaw {
+		t.Fatal("rotated key is not recoverable")
+	}
+	if code, _ := e.do(e.admin, "POST", fmt.Sprintf("/api-keys/%d/rotate", id), nil); code != 200 {
+		t.Fatalf("admin rotate: %d", code)
+	}
 	e.exec(`UPDATE api_keys SET deleted_at=now() WHERE id=$1`, id)
 	if code, _ := e.do(e.admin, "POST", adminPath, nil); code != 404 {
 		t.Fatalf("deleted reveal: %d", code)

@@ -154,7 +154,7 @@ async function remove(k: ApiKey) {
         <span class="font-medium text-gray-900 dark:text-white">{{ row.name }}</span>
       </template>
       <template #cell-key_prefix="{ row }">
-        <ApiKeyCell :api-key="row" />
+        <ApiKeyCell :api-key="row" @rotated="list.reload()" />
       </template>
       <template #cell-group="{ row }"><KeyGroupCell :name="groupName(row)" :platforms="keyPlatforms(row)" /></template>
       <template #cell-status="{ row }">

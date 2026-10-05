@@ -63,6 +63,8 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("POST", "/me/api-keys", "apikey:self:manage", s.createMine)
 	r.Perm("POST", "/me/api-keys/:id/reveal", "apikey:self:manage", s.revealMine)
 	r.Perm("POST", "/api-keys/:id/reveal", "apikey:all:manage", s.revealAny)
+	r.Perm("POST", "/me/api-keys/:id/rotate", "apikey:self:manage", s.rotateMine)
+	r.Perm("POST", "/api-keys/:id/rotate", "apikey:all:manage", s.rotateAny)
 	r.Perm("DELETE", "/me/api-keys/:id", "apikey:self:manage", s.deleteMine)
 	r.Perm("GET", "/api-keys", "apikey:all:read", s.listAll)
 	r.Perm("PATCH", "/api-keys/:id", "apikey:all:manage", s.update)
@@ -503,6 +505,67 @@ func (s *Service) revealMine(c *gin.Context) {
 }
 
 func (s *Service) revealAny(c *gin.Context) { s.reveal(c, nil) }
+
+func (s *Service) rotateMine(c *gin.Context) {
+	uid, _ := core.UserID(c.Request.Context())
+	s.rotate(c, &uid)
+}
+
+func (s *Service) rotateAny(c *gin.Context) { s.rotate(c, nil) }
+
+func (s *Service) rotate(c *gin.Context, ownerID *int64) {
+	c.Header("Cache-Control", "no-store")
+	id, ok := httpapi.PathID(c, "id")
+	if !ok {
+		return
+	}
+	ctx := c.Request.Context()
+	if s.Cipher == nil {
+		httpapi.Fail(c, core.ErrUnavailable)
+		return
+	}
+	raw, err := generateKey()
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	sealed, err := s.Cipher.Encrypt([]byte(raw), []byte("apikey:"+strconv.FormatInt(id, 10)))
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	var oldHash string
+	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `SELECT key_hash FROM api_keys WHERE id=$1 AND deleted_at IS NULL AND ($2::bigint IS NULL OR user_id=$2) FOR UPDATE`, id, ownerID).Scan(&oldHash); err != nil {
+			if store.IsNoRows(err) {
+				return notFound(ctx)
+			}
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE api_keys SET key_hash=$2, key_prefix=$3, key_cipher=$4 WHERE id=$1`, id, HashKey(raw), raw[:displayPrefix], sealed); err != nil {
+			return err
+		}
+		uid, _ := core.UserID(ctx)
+		_, err := tx.Exec(ctx, `INSERT INTO audit_logs (user_id,action,target_type,target_id,ip) VALUES ($1,'apikey.rotate','apikey',$2,$3)`, uid, strconv.FormatInt(id, 10), c.ClientIP())
+		return err
+	})
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	s.dropCache(ctx, oldHash)
+	s.dropCache(ctx, HashKey(raw))
+	k, err := s.loadKey(ctx, id)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	if ownerID != nil {
+		k.UserEmail = ""
+	}
+	k.Key = raw
+	httpapi.OK(c, k)
+}
 
 func (s *Service) reveal(c *gin.Context, ownerID *int64) {
 	c.Header("Cache-Control", "no-store")

@@ -103,7 +103,7 @@ async function onAction(k: ApiKey, action: string) {
         <span>{{ row.user_email || (row.user_id ? `#${row.user_id}` : '—') }}</span>
       </template>
       <template #cell-key_prefix="{ row }">
-        <ApiKeyCell :api-key="row" admin :allowed="canManage" />
+        <ApiKeyCell :api-key="row" admin :allowed="canManage" @rotated="list.reload()" />
       </template>
       <template #cell-group="{ row }"><KeyGroupCell :name="groupName(row)" :platforms="keyPlatforms(row)" /></template>
       <template #cell-status="{ row }">

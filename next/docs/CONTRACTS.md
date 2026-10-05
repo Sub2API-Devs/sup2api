@@ -500,6 +500,8 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 
 新建 Key 除认证哈希外使用服务器主密钥 AES-GCM 加密保存，AAD 为 `apikey:{id}`。POST `/me/api-keys/:id/reveal` 要求 `apikey:self:manage` 并校验所有权；POST `/api-keys/:id/reveal` 要求 `apikey:all:manage`。响应 `{key}`、`Cache-Control: no-store`，返回前写 `apikey.reveal` 审计（不含密钥）。旧 Key 返回 409，删除或非本人 Key 返回 404。
 
+POST `/me/api-keys/:id/rotate` 和 `/api-keys/:id/rotate` 使用相同所有权与管理权限规则。原子替换认证哈希、前缀、加密密钥，写 `apikey.rotate` 审计，保留 ID、名称、分组、状态、有效期和历史记录。响应新 `APIKey`（含 `key`），旧密钥立即失效；前端要求用户确认后执行。
+
 | 方法 路径 | 权限 | 请求 | 响应 / 约定 |
 |---|---|---|---|
 | GET `/me/api-keys` | `apikey:self:manage` | 分页；无筛选参数 | 当前用户未删除的 Key，`id` 倒序 |
