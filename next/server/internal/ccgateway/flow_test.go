@@ -200,7 +200,11 @@ func (c *fakeController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(401)
 		return
 	}
-	c.calls = append(c.calls, r.Method+" "+r.URL.Path)
+	call := r.Method + " " + r.URL.Path
+	if h := r.Header.Get("X-CCG-Delete-Account"); h != "" {
+		call += " delete-account=" + h
+	}
+	c.calls = append(c.calls, call)
 	if r.URL.Path == "/accounts" && r.Method == "GET" {
 		list := []map[string]string{}
 		for key, at := range c.created {
@@ -224,7 +228,8 @@ func (c *fakeController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	switch {
 	case path == "" && r.Method == "DELETE":
-		if !strings.HasPrefix(key, "d") {
+		// An account-id runtime only with the header naming it (§49.17).
+		if !strings.HasPrefix(key, "d") && r.Header.Get("X-CCG-Delete-Account") != key {
 			w.WriteHeader(405)
 			return
 		}

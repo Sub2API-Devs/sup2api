@@ -372,6 +372,14 @@ class ManagerTests(Base):
         with self.assertRaises(BadRequest):
             self.m.delete('../5')
 
+    def test_delete_account_runtime_when_named_explicitly(self):
+        self.apply('5')
+        self.assertEqual(self.m.delete('5', account=True), {'deleted': True})
+        self.assertNotIn('ccg-5-app', self.fake.containers.items)
+        self.assertNotIn('ccg-5-data', self.fake.volumes.items)
+        self.assertFalse((Path(self.tmp) / '5').exists())
+        self.assertEqual(self.m.delete('5', account=True), {'deleted': True})
+
     def test_delete_refuses_foreign_resources(self):
         self.fake.containers.create('app:test', name=f'ccg-{DRAFT_KEY}-app', labels={LABEL: 'someone-else'})
         with self.assertRaises(ValueError):
@@ -500,6 +508,10 @@ class HandlerTests(Base):
         for _ in range(2):
             self.assertEqual(self.call('DELETE', f'/accounts/{DRAFT_KEY}'), (200, {'deleted': True}))
         self.assertEqual([r['key'] for r in self.call('GET', '/accounts')[1]['runtimes']], ['9'])
+        # An account runtime is deleted only when the header names it.
+        self.assertEqual(self.call('DELETE', '/accounts/9', headers={'X-CCG-Delete-Account': '8'}), (405, {'error': 'method_not_allowed'}))
+        self.assertEqual(self.call('DELETE', '/accounts/9', headers={'X-CCG-Delete-Account': '9'}), (200, {'deleted': True}))
+        self.assertEqual(self.call('GET', '/accounts')[1]['runtimes'], [])
 
     def test_session_pass_through(self):
         self.apply(DRAFT_KEY)

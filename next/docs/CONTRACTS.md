@@ -3012,7 +3012,7 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 
 ### 49.9 草稿接口
 
-权限：`settings:manage`、`account:create`、`account:own:create` 任一（`Router.PermAny`）。草稿只对创建者可见；持有 `settings:manage` 的调用者看得到所有草稿；其他人（以及已认领、已删除、不存在的 key、数字 key）一律 404，`details.reason: draft_not_found`。**每次草稿调用（含 GET status/health/session）都更新 `last_seen_at`**——控制台在草稿存在期间每 60 秒发一次 `GET status` 作心跳，用户在授权后填写其他字段时草稿不会被当作闲置清理。
+权限：`settings:manage`、`account:create`、`account:own:create` 任一（`Router.PermAny`）；按 key 访问的草稿接口（`PUT`/`DELETE drafts/:key`、`drafts/:key/:action`）另外接受 `account:update`、`account:own:update`（驱动重新授权草稿，§49.17），`POST drafts` 不变。草稿只对创建者可见；持有 `settings:manage` 的调用者看得到所有草稿；其他人（以及已认领、已删除、不存在的 key、数字 key）一律 404，`details.reason: draft_not_found`。**每次草稿调用（含 GET status/health/session）都更新 `last_seen_at`**——控制台在草稿存在期间每 60 秒发一次 `GET status` 作心跳，用户在授权后填写其他字段时草稿不会被当作闲置清理。
 
 | 方法 | 路径 | 请求 → 结果 |
 |---|---|---|
@@ -3071,7 +3071,7 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 
 1. `account_id IS NULL` 且（`last_seen_at` 早于 15 分钟前，或 `created_at` 早于 2 小时前）的草稿：在一个事务里拿该 key 的 advisory 锁（`pg_try_advisory_xact_lock`，与 `Reconcile` 同一把；拿不到就跳过，下一轮再试）→ `DELETE ... WHERE key=$1 AND account_id IS NULL` → 控制器 `DELETE /accounts/<key>` → 成功才提交。这样正在 reconcile 的运行环境不会被删到一半又被重建；同时进行的 `POST /accounts` 认领要等这一行的锁，之后找不到草稿而返回 `draft_not_found`；反过来认领先提交时清理的 DELETE 删不到行，也就不碰控制器。控制器失败则回滚，行保留。控制器回 404 视为已删除（没有该端点的旧控制器也不可能建过草稿运行环境）。
 2. 孤儿：先读控制器 `GET /accounts`，再查表；控制器列出的草稿 key（只认 `^d[0-9a-f]{16}$`）在表里**没有任何行**（已认领的也算有）、且 `created_at` 早于 15 分钟前的，在同一把 advisory 锁下再确认一次没有行后删除。`created_at` 解析不了的跳过。控制器没有 `GET /accounts`（404/405）时跳过这一步。
-3. 数字 key 和已认领的运行环境**绝不**被清理任务删除（删除账号数据仍是管理员的显式操作；控制器对数字 key 的 `DELETE` 也返回 405）。
+3. 数字 key 和已认领的运行环境**绝不**被清理任务删除（删除账号数据仍是管理员的显式操作；控制器对数字 key 的 `DELETE` 也返回 405）。例外：重新授权后**已退役**的运行环境（含数字 key）在退役 10 分钟后删除，见 §49.17。
 
 ### 49.14 业务容器管理接口（`tools/ccgateway/auth.go`）与控制器接口（`runtime/manager.py`）
 
@@ -3088,7 +3088,7 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 控制器（`127.0.0.1:8787`）：
 
 - 所有接受账号 id 的地方都接受 key `^(?:[1-9][0-9]{0,17}|d[0-9a-f]{16})$`，路径仍是 `/accounts/<key>/...`；透传增加 `GET /accounts/<key>/admin/auth/session`。
-- `DELETE /accounts/<key>`：只接受草稿 key，删除 app/egress 容器、网络、数据卷和状态目录；幂等，什么都没有时也 `200 {"deleted":true}`；数字 key 405。
+- `DELETE /accounts/<key>`：删除 app/egress 容器、网络、数据卷和状态目录；幂等，什么都没有时也 `200 {"deleted":true}`。草稿 key 直接删；数字 key 只在请求头 `X-CCG-Delete-Account: <同一 key>` 时删除（§49.17 退役运行环境），否则 405 `method_not_allowed`。
 - `GET /accounts` → `{"runtimes":[{key,status,created_at}]}`，每个状态目录一项（`status` 为 `ready`/`pending`/`blocked`；`created_at` 为首次 provision 时间，旧状态和 provision 中途失败的目录用目录 mtime）。
 - app 镜像变化时重建 app 容器（标签指纹包含镜像 id），数据卷与登录保留。
 - 错误 `{"error":"<code>"}`：`unauthorized`、`not_found`、`invalid_request`（400）、`not_synchronized`（409）、`api_key_account`、`image_pull_failed` / `runtime_unavailable`（503）、`method_not_allowed`。
@@ -3129,6 +3129,60 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 `remotedocker.RunScript(ctx, cfg, script, stdin, limit)` 是新增的"带 stdin 执行固定脚本"能力：返回 stdout（有上限，SSH 凭据被替换为 `[REDACTED]`）和退出码；只有连不上 / 认证失败 / 会话失败才返回 error（→ `ssh_failed`）。调用方负责只传固定脚本。
 
 已知限制：安装是同步请求，首次拉取几百 MB 的 app 镜像可能要几分钟；核心不设写超时，但前面的反向代理（Caddy / nginx）若有 60–100 秒的超时，浏览器会先看到网关错误——安装仍会在核心里跑完，之后刷新 `GET runtime` 看结果即可。
+
+### 49.17 已保存账号重新授权：换新运行环境并清空历史（2026-10-05，用户要求）
+
+用户决定："现在是创建账号时就完成授权，然后创建账号后还能重新授权（需要清空所有历史状态）"。原契约文件 `docs/CCGATEWAY-REAUTH.md` 已并入本节，以本节为准。
+
+**做法：先建替换用的运行环境，授权成功后再交换。** 重新授权期间账号继续用旧运行环境服务；取消（删除草稿）什么都不改变。
+
+迁移 `0033_ccgateway_reauth.sql`（只加可空列）：
+
+```sql
+ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS for_account bigint;      -- 该账号的重新授权草稿
+ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz; -- 被重新授权替换下来的时间
+```
+
+`account_id` 仍 UNIQUE：只有账号当前使用的运行环境带它。行的四种状态：未认领草稿（`account_id`、`retired_at` 为空；`for_account` 为空 = 新建账号的草稿，非空 = 该账号的重新授权草稿）、已认领（`account_id` 非空）、已退役（`account_id` 为空、`retired_at` 非空）。
+
+**接口**（由 account 模块注册，与 ccgateway 模块的 `/system/ccgateway/accounts/:id/:action` 并存）。权限 `settings:manage`、`account:update`、`account:own:update` 任一；后者只能操作自己创建的账号（§49.5 规则），别人的账号 404。账号必须是未删除的 `ccgateway` 账号（否则 404）。
+
+| 方法 | 路径 | 结果 |
+|---|---|---|
+| POST | `/system/ccgateway/accounts/:id/reauthorize` | 新建 → 201 `{key}`；已有未过期的重新授权草稿 → 200 `{key}`（同一个） |
+| POST | `/system/ccgateway/accounts/:id/reauthorize/:key/commit` | 200 + 账号视图（同 `GET /accounts/:id`） |
+
+`reauthorize`：
+- 未开启 `account_runtimes` → 503 `not_configured`；`apikey` 账号 → 400 `api_key_account`；账号没有代理 → 400 `no_proxy`；代理已停用 → 400 `proxy_disabled`。
+- 草稿 key 同 §49.9（`d` + 16 hex），`proxy_id` = 账号当前代理，`created_by` = 调用者，`for_account` = 账号 id；建好立即 Kick。审计 `account.ccgateway_reauthorize_start`（只在新建时）。
+- 每个账号最多一个未过期的重新授权草稿（按账号的 PG advisory 锁串行）。已有时返回它，并刷新 `last_seen_at`、把 `proxy_id` 改成账号当前代理。**调用者看不到它时（不是创建者、也没有 `settings:manage`）把 `created_by` 改成调用者（接管）**：能更新这个账号的人总能继续流程，原创建者之后对该草稿得到 `draft_not_found`（控制台按"重新开始"处理，再调 `reauthorize` 会接管回来）。闲置超过 15 分钟或存在超过 2 小时的草稿不再复用（留给清理任务），新建一个。
+- 草稿用 §49.9 的草稿接口驱动（`status/health/session/sync/start/complete/cancel`、`DELETE`），可见性规则不变（创建者或 `settings:manage`）。按 key 的草稿接口为此另外接受 `account:update`、`account:own:update`。重新授权草稿**不能** `PUT drafts/:key` 改代理（404 `draft_not_found`），也**不能**在 `POST /accounts` 的 `ccgateway_runtime` 里使用（400 `draft_not_found`）。
+- 取消 = `DELETE /system/ccgateway/drafts/:key`（§49.9 原接口），账号不受影响。
+
+`commit`：
+- 草稿必须是**该账号**的、未认领、未退役、调用者可见的重新授权草稿，否则 400 `draft_not_found`（含别的账号的重新授权草稿、新建账号用的草稿、数字 key、已提交过的）；容器 `GET admin/status` 必须报 `logged_in=true`，否则 400 `draft_not_authorized`。
+- 在草稿运行环境的 advisory 锁下、**一个事务**里：
+  1. 账号当前运行环境退役：其行 `account_id = NULL, retired_at = now()`；账号还在用数字 key（没有行）时插入 `key = <id>, retired_at = now()`。
+  2. 草稿行 `account_id = id, adopted_at = now()`。
+  3. 清空账号核心状态：`status` 为 `error` 时改回 `active` 并清空 `status_reason`；`disabled`（包括自动禁用）保持不变，由管理员手动启用（2026-10-05 用户决定）；此时新运行环境处于 blocked，登录保存在数据卷里，启用后即用新登录；`last_test_*` 全部置 NULL；删除 `account_quota_snapshots`、`account_credential_refresh` 的行；删除 Redis 冷却键（与 `POST /accounts/:id/reset-status` 同一段代码 `clearCooldown`）。本节点未写入的被动配额样本丢弃。
+  4. 审计 `account.ccgateway_reauthorize`（`detail: {runtime, retired, status_reset, cooldown_cleared}`）；事件 `account.updated`，状态或冷却有变化时另发 `account.status_changed`（`reason: "re-authorized"`）。
+  5. 在事务内读出账号的期望状态（此时已指向新 key），**提交前**对新 key `PUT config`：网关在提交那一刻改走新 key 时，新运行环境已按账号修订号就绪，不会有 409 窗口。控制器失败则整个事务回滚：503 `sync_failed`（连不上控制器为 `not_configured`）。账号已停用 / 代理停用时跳过这一步，由提交后的 Kick 阻断。
+- 提交后：Kick 账号、广播 `account:changed`，返回账号视图。网关新请求立即走新 key；已在旧运行环境上的请求可以继续跑完（旧运行环境 10 分钟后才删）。
+
+**核心对已退役运行环境：** 不在 `Run` 的 3 秒扫描里（`runtimeKeys` 排除 `retired_at`），`Reconcile`/`desired`/草稿期望状态都不会解析到它（账号 id → key 只取 `account_id` 匹配的行；草稿期望状态要求 `retired_at IS NULL`），草稿接口对它 404。
+
+**清理任务（§49.13 扩展）：**
+- `retired_at` 早于 10 分钟前的退役运行环境：advisory 锁下删行 → 控制器 `DELETE /accounts/<key>`（数字 key 带请求头 `X-CCG-Delete-Account: <key>`）→ 成功才提交；控制器失败则行保留下一轮重试（404 视为已删除）。
+- 绝不删账号正在用的运行环境：草稿 key 的退役行没有 `account_id`，不可能在用；数字 key 只有在该账号已有别的行（`account_id = id`）或账号不存在时才删，否则跳过并记 WARN。
+- 重新授权草稿按草稿规则清理（闲置 15 分钟、最长 2 小时），草稿清理不碰退役行。
+
+**与原契约文件的偏差：**
+- 原文写 "`error_message` empty"：`accounts` 没有 `error_message` 列，实现清的是 `status_reason`（只在 `status = 'error'` 时）。另外核心目前不会把账号置为 `error`（自动禁用写的是 `disabled`，§42），所以"error → active"实际很少生效；被自动禁用或管理员停用的账号重新授权后**仍是 `disabled`**，需要 `PATCH status=active` 启用。
+- 原文没处理"已有草稿属于别人"的情况：实现为接管（见上）。
+- 原文让账号只有 `account:update` 的人用草稿接口，但草稿接口原权限只有 `settings:manage` / `account:create` / `account:own:create`：实现为按 key 的草稿接口加上两个 update 权限。
+- 提交前预先 `PUT config`（原文只说提交后 Kick）：避免提交后几秒内网关拿到控制器 409。
+
+**部署：** 控制器须先升级到支持 `X-CCG-Delete-Account` 的版本，否则退役数字 key 的删除每分钟失败一次（行保留、记 WARN），升级后自动删掉。旧核心节点不读新列，会把退役行当成未认领草稿（reconcile 它、草稿 key 的退役行会被旧节点的草稿清理提前删掉）：全部节点升级后再使用重新授权。
 
 ## 50. 账号测试：记录最近一次结果、requested_model（2026-10-05，用户要求；参考 new-api 渠道测试）
 

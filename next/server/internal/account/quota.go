@@ -566,14 +566,10 @@ func (s *Service) resetStatus(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	cleared := false
-	if s.d.Redis != nil {
-		n, err := s.d.Redis.Del(ctx, cooldownKey(id)).Result()
-		if err != nil {
-			httpapi.Fail(c, core.ErrUnavailable.WithCause(err))
-			return
-		}
-		cleared = n > 0
+	cleared, err := s.clearCooldown(ctx, id)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
 	}
 	uid, _ := core.UserID(ctx)
 	err = s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
@@ -600,4 +596,25 @@ func (s *Service) resetStatus(c *gin.Context) {
 		return
 	}
 	httpapi.OK(c, v)
+}
+
+// clearCooldown deletes the account's runtime scheduling block (the Redis
+// cooldown key) and reports whether there was one.
+func (s *Service) clearCooldown(ctx context.Context, id int64) (bool, error) {
+	if s.d.Redis == nil {
+		return false, nil
+	}
+	n, err := s.d.Redis.Del(ctx, cooldownKey(id)).Result()
+	if err != nil {
+		return false, core.ErrUnavailable.WithCause(err)
+	}
+	return n > 0, nil
+}
+
+// forget drops the samples of one account not written yet (its quota
+// snapshot was just cleared).
+func (r *quotaRecorder) forget(accountID int64) {
+	r.mu.Lock()
+	delete(r.entries, accountID)
+	r.mu.Unlock()
 }

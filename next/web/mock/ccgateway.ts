@@ -1,7 +1,7 @@
 // Dev-only CCGateway fixture; never bundled or connected to a real gateway.
 import { createHash, randomBytes } from 'node:crypto'
 import { fail, noContent, on, type MockRequest } from './router'
-import { mockAccount, registerCcgDrafts } from './accounts'
+import { mockAccount, mockCcgReauthAccount, mockClearAccountHistory, registerCcgDrafts } from './accounts'
 import { caller, hasPerm } from './core'
 import { mockProxyStatus } from './resources'
 if (process.env.SUB2API_MOCK_CCGATEWAY) {
@@ -45,10 +45,14 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
   //   (session ended), anything else signs the container in;
   // - drafts are only visible to their creator (or settings:manage); every draft call touches it and
   //   drafts untouched for 15 minutes or older than 2 hours are swept.
+  // Re-authorization (docs/CCGATEWAY-REAUTH.md): POST accounts/:id/reauthorize opens a draft for the
+  // account (with its saved proxy; an open one is returned again with 200), driven through the draft
+  // routes; commit swaps the account to it and clears the account's state (last test, cooldown, …).
+  // The retired runtime is removed at once here (the core waits 10 minutes).
   const READY_MS = 4000
   const born = new Map<string, number>([['25', 0], ['26', 0]]), authed = new Set<string>(['25'])
   const sessions = new Map<string, { session_id: string; url: string; expires_at: string }>()
-  interface Draft { proxy_id: number; created_by: number; created_at: number; last_seen: number; account_id: number | null }
+  interface Draft { proxy_id: number; created_by: number; created_at: number; last_seen: number; account_id: number | null; for_account: number | null }
   const drafts = new Map<string, Draft>()
   /** What a runtime that is not ready yet reports: a first build or a rebuild (proxy switched). */
   const converging = new Map<string, 'creating' | 'pending'>()
@@ -188,7 +192,7 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     sweep()
     const key = 'd' + randomBytes(8).toString('hex')
     const now = Date.now()
-    drafts.set(key, { proxy_id: id, created_by: caller(req).id, created_at: now, last_seen: now, account_id: null })
+    drafts.set(key, { proxy_id: id, created_by: caller(req).id, created_at: now, last_seen: now, account_id: null, for_account: null })
     born.set(key, now)
     converging.set(key, 'creating')
     console.log(`[mock ccgateway] created draft ${key} (proxy #${id})`)
@@ -197,6 +201,8 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
   on('PUT', `${base}/drafts/:key`, async (req) => {
     const r = draftRuntime(req)
     if (!isRuntime(r)) return r
+    // A re-authorization draft always runs with the account's proxy.
+    if (drafts.get(r.key)!.for_account != null) return fault(404, 'draft_not_found', 'The draft runtime does not exist')
     const id = req.body?.proxy_id
     const bad = draftProxyError(id)
     if (bad) return bad
@@ -215,6 +221,59 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     removeRuntime(r.key)
     console.log(`[mock ccgateway] deleted draft ${r.key}`)
     return noContent()
+  })
+
+  /** Open (not adopted) re-authorization draft of an account. */
+  const openReauth = (id: number) => [...drafts].find(([, d]) => d.for_account === id && d.account_id == null)?.[0] || null
+  const isManagedCcg = (a: any) => a.plugin_key === 'ccgateway' && a.type === 'managed'
+  on('POST', `${base}/accounts/:id/reauthorize`, async (req) => {
+    const r = mockCcgReauthAccount(req)
+    if (!('a' in r)) return r
+    const a = r.a
+    if (!isManagedCcg(a)) return fault(400, 'api_key_account', 'Only Claude Code OAuth (managed) accounts are re-authorized')
+    if (!configured()) return notConfigured()
+    sweep()
+    const open = openReauth(a.id)
+    if (open) {
+      const d = drafts.get(open)!
+      const who = caller(req)
+      // Like the core (CONTRACTS §49.17): a caller who cannot see the open draft takes it over;
+      // the draft follows the account's current proxy.
+      if (d.created_by !== who.id && !hasPerm(who, 'settings:manage')) d.created_by = who.id
+      if (d.proxy_id !== a.proxy_id && a.proxy_id != null) { d.proxy_id = a.proxy_id; born.set(open, Date.now()); converging.set(open, 'pending') }
+      d.last_seen = Date.now()
+      console.log(`[mock ccgateway] account #${a.id} re-authorization resumed (${open})`)
+      return { key: open }
+    }
+    const bad = draftProxyError(a.proxy_id)
+    if (bad) return bad
+    await sleep(400)
+    const key = 'd' + randomBytes(8).toString('hex')
+    const now = Date.now()
+    drafts.set(key, { proxy_id: a.proxy_id, created_by: caller(req).id, created_at: now, last_seen: now, account_id: null, for_account: a.id })
+    born.set(key, now)
+    converging.set(key, 'creating')
+    console.log(`[mock ccgateway] account #${a.id} re-authorization draft ${key}`)
+    return { __status: 201, body: { data: { key } } }
+  })
+  on('POST', `${base}/accounts/:id/reauthorize/:key/commit`, async (req) => {
+    const r = mockCcgReauthAccount(req)
+    if (!('a' in r)) return r
+    const a = r.a
+    sweep()
+    const key = req.params.key
+    const d = drafts.get(key)
+    if (!d || d.for_account !== a.id || d.account_id != null) return fault(400, 'draft_not_found', 'The re-authorization draft does not exist')
+    if (!authed.has(key) || !ready(key)) return fault(400, 'draft_not_authorized', 'The re-authorization draft is not signed in to Claude')
+    await sleep(500)
+    const id = String(a.id)
+    const old = adoptedBy.get(id) || id
+    removeRuntime(old)
+    if (old !== id) drafts.delete(old)
+    d.account_id = a.id
+    adoptedBy.set(id, key)
+    console.log(`[mock ccgateway] account #${a.id} re-authorized: ${old} retired, now on ${key}`)
+    return mockClearAccountHistory(a)
   })
 
   // Runtime images on GHCR, installed over SSH by the core. Starts with an older install (update
@@ -250,7 +309,7 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     check(key, who) {
       sweep()
       const d = drafts.get(key)
-      if (!d || d.account_id != null || (d.created_by !== who.id && !hasPerm(who, 'settings:manage'))) return 'draft_not_found'
+      if (!d || d.account_id != null || d.for_account != null || (d.created_by !== who.id && !hasPerm(who, 'settings:manage'))) return 'draft_not_found'
       return authed.has(key) && ready(key) && !proxyBlock(d.proxy_id) ? '' : 'draft_not_authorized'
     },
     adopt(key, accountId) {

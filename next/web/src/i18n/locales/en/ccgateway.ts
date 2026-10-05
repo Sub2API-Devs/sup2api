@@ -17,7 +17,7 @@ export default {
     linkHint: 'Sign in to Claude on the new page and approve; it then shows an authorization code. Copy all of it into the next step.', expiresIn: 'link expires in {time}', expired: 'The authorization link has expired; request a new one.',
     codeLabel: 'Full authorization code (code#state)', codePlaceholder: 'Paste the code, like xxxx#yyyy', codeShape: 'The code normally contains # (code#state); make sure you copied all of it.', submit: 'Complete authorization',
     completeFailed: 'The authorization code was not accepted', notConfirmed: 'The code was accepted, but the container has not confirmed the login yet; retry shortly or request a new link.', regetLink: 'Request a new link', cancel: 'Cancel this authorization',
-    authorized: 'Authorized', loggedOut: 'Not authorized', authorizedToast: 'Claude authorization completed', authorizedHint: 'The account container is signed in to Claude; the account can be scheduled.', authorizedDraftHint: 'The container is signed in to Claude; the account can be saved now.', reauthorize: 'Authorize again',
+    authorized: 'Authorized', loggedOut: 'Not authorized', authorizedToast: 'Claude authorization completed', authorizedDraftHint: 'The container is signed in to Claude; the account can be saved now.', reauthorize: 'Re-authorize',
     readOnly: 'Starting the container and authorizing need the right to edit this account (or settings:manage); ask an administrator.', noRead: 'You may not view the container state of this account.', noCreate: 'Starting the container needs the right to create accounts (or settings:manage); ask an administrator.',
     saveBlocked: 'The account can be saved once Claude is authorized', saveBlockedFix: 'Show the authorization steps',
     blockedTitle: 'Account container stopped: {reason}', blockedUnknown: 'the core stopped this container',
@@ -33,9 +33,33 @@ export default {
         proxy_disabled: 'Pick another proxy under "Proxy" above (the container is rebuilt with it), or enable the proxy again on the Proxies page and synchronize again.',
         unknown: 'Check the proxy, then synchronize again, or delete the container and start over.'
       },
+      fixReauth: {
+        no_proxy: 'The re-authorization container uses the account’s saved proxy. Pick a proxy under "Proxy" above and save, then delete the container and start over.',
+        proxy_disabled: 'The account’s saved proxy is disabled. Pick another proxy under "Proxy" above, save, then delete the container and start over; or enable the proxy again on the Proxies page and synchronize again.',
+        account_disabled: 'The account is disabled, so its container is not running. You can still re-authorize it; the account stays disabled afterwards until you enable it in the list.',
+        unknown: 'Check the account status and its proxy, then synchronize again, or delete the container and start over.'
+      },
       pickProxy: 'Pick a proxy', openProxies: 'Open Proxies'
     },
     proxyRequired: 'Claude Code accounts need a proxy', proxyRequiredHint: 'Claude Code account containers only reach the internet through a proxy, there is no direct fallback; containers of accounts without one are stopped.'
+  },
+  reauth: {
+    container: 'Container', login: 'Claude login', checking: 'Checking…',
+    loginState: { authorized: 'Authorized', notAuthorized: 'Not authorized', unknown: 'Unknown (container not ready)' },
+    hint: 'Re-authorizing replaces the current Claude login with a new one and clears all of this account’s history; until then the account keeps serving with the current login.',
+    hintLoggedOut: 'This account’s container is not signed in to Claude; re-authorize it.',
+    confirmTitle: 'Re-authorize this account?',
+    confirmMessage: 'A new container is started for this account and signed in to Claude again.\n\nOnce the new login succeeds it replaces the old one, and all of the account’s history is cleared: the Claude login, conversation sessions, quota snapshot, last test result, and error / cooldown state.\n\nUntil then the account keeps serving with the old login; cancelling or closing the editor changes nothing.',
+    confirmButton: 'Start re-authorization',
+    startFailed: 'The re-authorization could not be started',
+    flowTitle: 'Re-authorization',
+    inProgress: 'Re-authorization in progress: once the new container is signed in, it replaces the old login and the history is cleared; until then the account keeps the old login. Cancelling or closing the editor deletes the new container.',
+    cancel: 'Cancel re-authorization',
+    signedIn: 'The new container is signed in to Claude; replacing the old login…',
+    committing: 'Configuring the new container for this account and replacing the old login; this may take a few dozen seconds…',
+    commitFailed: 'The new login could not replace the old one (the account still uses the old login)',
+    commitRetry: 'Replace again',
+    done: 'Re-authorized: the account uses the new Claude login, its history was cleared'
   },
   status: { creating: 'creating', ready: 'ready', blocked: 'stopped', pending: 'synchronizing', unknown: 'unknown' },
   runtimeInstall: {

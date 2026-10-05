@@ -9,6 +9,8 @@ const props = withDefaults(
     width?: 'sm' | 'md' | 'lg' | 'xl' | '2xl'
     closable?: boolean
     persistent?: boolean
+    /** Stacks above other open modals (confirmations asked from inside a modal). */
+    top?: boolean
   }>(),
   { width: 'md', closable: true }
 )
@@ -46,7 +48,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 <template>
   <Teleport to="body">
     <Transition name="s-modal">
-      <div v-if="open" class="modal-overlay" @mousedown.self="!persistent && closable && close()">
+      <div v-if="open" class="modal-overlay" :style="top ? { zIndex: 60 } : undefined" @mousedown.self="!persistent && closable && close()">
         <div class="modal-content flex flex-col" :class="widths[width]" role="dialog" aria-modal="true">
           <div v-if="title || $slots.header || closable" class="modal-header">
             <slot name="header">

@@ -17,6 +17,7 @@ import { shouldPrefillOnEdit } from './modelDefaults'
 import EditorCard from './EditorCard.vue'
 import ModelMappingEditor from './ModelMappingEditor.vue'
 import CCGatewayAccountAuth from '@/views/ccgateway/CCGatewayAccountAuth.vue'
+import CCGatewayAccountReauth from '@/views/ccgateway/CCGatewayAccountReauth.vue'
 import { reasonOf } from '@/views/ccgateway/ccgAuthFlow'
 import { assetURL, usePluginStore } from '@/stores/plugins'
 import { useAuthStore } from '@/stores/auth'
@@ -32,9 +33,11 @@ import { looksLikeProxyURL, parseProxyURL } from '@/utils/proxyUrl'
 // does an existing account saved without either (see shouldPrefillOnEdit).
 // A new Claude Code (CCGateway managed) account is authorized before it is
 // saved (docs/CCGATEWAY-DRAFT-RUNTIMES.md §5): the credentials card runs the
-// draft flow and saving sends the authorized draft as `ccgateway_runtime`.
+// draft flow and saving sends the authorized draft as `ccgateway_runtime`. A
+// saved one shows its login and can be re-authorized (docs/CCGATEWAY-REAUTH.md):
+// the swap is committed by itself and reported with `reauthorized`.
 const props = defineProps<{ accountType: AccountType | null; accountTypeOptions?: AccountType[]; account?: Account | null }>()
-const emit = defineEmits<{ (e: 'change-type', at: AccountType): void; (e: 'saved', a: Account): void; (e: 'cancel'): void; (e: 'back'): void; (e: 'test', a: Account): void }>()
+const emit = defineEmits<{ (e: 'change-type', at: AccountType): void; (e: 'saved', a: Account): void; (e: 'cancel'): void; (e: 'back'): void; (e: 'test', a: Account): void; (e: 'reauthorized', a: Account): void }>()
 const { t } = useI18n()
 const plugins = usePluginStore()
 const auth = useAuthStore()
@@ -859,7 +862,7 @@ async function save(event: Event) {
                     @state="ccgState = $event"
                     @fix-proxy="focusProxy"
                   />
-                  <CCGatewayAccountAuth v-else :account-id="account!.id" :can-edit="canEditAccount" :sync-key="ccgSyncKey" @fix-proxy="focusProxy" />
+                  <CCGatewayAccountReauth v-else :key="account!.id" :account-id="account!.id" :can-edit="canEditAccount" :sync-key="ccgSyncKey" @fix-proxy="focusProxy" @reauthorized="emit('reauthorized', $event)" />
                 </div>
               </template>
               <p v-else-if="schema && !formLoading && !Object.keys(schema.properties || {}).length" class="rounded-xl bg-gray-50 px-3.5 py-3 text-sm text-gray-500 dark:bg-dark-900/40 dark:text-dark-400">{{ t('accounts.editorUi.noCredentials') }}</p>

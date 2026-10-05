@@ -603,6 +603,7 @@ function groupTags(a: Account) {
         :account="editing"
         @change-type="pickedType = $event"
         @saved="onSaved"
+        @reauthorized="list.reload()"
         @cancel="editorOpen = false"
         @back="step = 1"
         @test="openTest"

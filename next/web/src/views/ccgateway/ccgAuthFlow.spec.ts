@@ -22,7 +22,7 @@ import {
   type CcgFlow
 } from './ccgAuthFlow'
 
-const flow = (over: Partial<CcgFlow> = {}): CcgFlow => ({ mode: 'account', proxy: true, created: true, container: 'ready', loggedIn: false, hasSession: false, opened: false, ...over })
+const flow = (over: Partial<CcgFlow> = {}): CcgFlow => ({ mode: 'reauth', proxy: true, created: true, container: 'ready', loggedIn: false, hasSession: false, opened: false, ...over })
 const draft = (over: Partial<CcgFlow> = {}): CcgFlow => flow({ mode: 'draft', ...over })
 
 describe('CCGateway authorization flow', () => {
@@ -45,7 +45,7 @@ describe('CCGateway authorization flow', () => {
 
   it('has a step list per target', () => {
     expect(stepsOf('draft')).toEqual(['proxy', 'container', 'login', 'code', 'done'])
-    expect(stepsOf('account')).toEqual(['container', 'login', 'code', 'done'])
+    expect(stepsOf('reauth')).toEqual(['container', 'login', 'code', 'done'])
   })
 
   it('walks a new account: proxy → container → login → code → done', () => {
@@ -60,14 +60,14 @@ describe('CCGateway authorization flow', () => {
     expect(currentStep(draft({ proxy: false, loggedIn: true }))).toBe('proxy')
   })
 
-  it('walks a saved account: container → login → code → done', () => {
+  it('walks a re-authorization draft: container → login → code → done', () => {
     expect(currentStep(flow({ container: 'preparing', loggedIn: null }))).toBe('container')
     expect(currentStep(flow({ container: 'unknown', loggedIn: null }))).toBe('container')
     expect(currentStep(flow())).toBe('login')
     expect(currentStep(flow({ hasSession: true }))).toBe('login')
     expect(currentStep(flow({ hasSession: true, opened: true }))).toBe('code')
     expect(currentStep(flow({ loggedIn: true }))).toBe('done')
-    // re-authorizing an authorized account goes through the link again
+    // a new link on a signed-in draft goes through the link again
     expect(currentStep(flow({ loggedIn: true, hasSession: true }))).toBe('login')
   })
 
@@ -87,16 +87,18 @@ describe('CCGateway authorization flow', () => {
     expect(stepStates(flow({ loggedIn: true }))).toEqual({ proxy: 'done', container: 'done', login: 'done', code: 'done', done: 'done' })
   })
 
-  it('lets a new account be saved only once its draft is signed in', () => {
+  it('a draft is ready (to save / to commit) only once it is signed in', () => {
     expect(readyToSave(draft({ loggedIn: true }))).toBe(true)
     expect(readyToSave(draft())).toBe(false)
     expect(readyToSave(draft({ loggedIn: null, container: 'preparing' }))).toBe(false)
     expect(readyToSave(draft({ loggedIn: true, created: false }))).toBe(false)
     expect(readyToSave(draft({ loggedIn: true, proxy: false }))).toBe(false)
-    // a re-authorization in progress
+    // a new link was requested on the signed-in draft
     expect(readyToSave(draft({ loggedIn: true, hasSession: true }))).toBe(false)
-    // saved accounts are not saved through this
-    expect(readyToSave(flow({ loggedIn: true }))).toBe(false)
+    // a re-authorization draft: committed once signed in, never while the container is not ready
+    expect(readyToSave(flow({ loggedIn: true }))).toBe(true)
+    expect(readyToSave(flow({ loggedIn: false }))).toBe(false)
+    expect(readyToSave(flow({ loggedIn: true, container: 'blocked' }))).toBe(false)
   })
 
   it('accepts only draft keys', () => {

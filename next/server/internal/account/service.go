@@ -121,6 +121,11 @@ func New(d Deps) *Service {
 // narrow their SQL with core.OwnerScope.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("POST", "/system/ccgateway/connect", "settings:manage", s.connectCCGateway)
+	// Re-authorizing a Claude Code account (CONTRACTS §49.17), next to the
+	// ccgateway module's /system/ccgateway/accounts/:id/:action.
+	reauth := []string{"settings:manage", "account:update", "account:own:update"}
+	r.PermAny("POST", "/system/ccgateway/accounts/:id/reauthorize", s.reauthorizeCCGateway, reauth...)
+	r.PermAny("POST", "/system/ccgateway/accounts/:id/reauthorize/:key/commit", s.commitCCGatewayReauth, reauth...)
 	browse := []string{"account:read", "account:own:read", "account:own:create"}
 	r.PermAny("GET", "/platforms", s.listPlatforms, browse...)
 	r.Authed("GET", "/me/platforms", s.listMyPlatforms)

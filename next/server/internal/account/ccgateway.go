@@ -4,11 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
+	"net/http"
+	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/gin-gonic/gin"
-	"io"
-	"net/http"
+	"github.com/jackc/pgx/v5"
 )
 
 // connectMaxBody fits the largest models / model_mapping an account accepts
@@ -100,4 +104,150 @@ func (s *Service) connectCCGateway(c *gin.Context) {
 	// runtime (kickCCGateway).
 	c.Request = c.Request.WithContext(core.WithGranted(ctx, append(append([]string{}, core.Granted(ctx)...), "account:create")))
 	s.create(c)
+}
+
+// ---------------------------------------------------------------- re-authorization (CONTRACTS §49.17)
+
+// ccgReauthScope is the account range of the re-authorization endpoints
+// (the §49.5 rule): settings:manage or account:update reach every account,
+// account:own:update the accounts the caller created.
+func ccgReauthScope(ctx context.Context) *int64 {
+	if core.OwnerScope(ctx, "settings:manage") == nil {
+		return nil
+	}
+	return core.OwnerScope(ctx, "account:update")
+}
+
+// ccgReauthAccount loads the CCGateway account of a re-authorization
+// request; ok=false after the failure was written.
+func (s *Service) ccgReauthAccount(c *gin.Context, ctx context.Context) (id int64, scope *int64, ok bool) {
+	if id, ok = httpapi.PathID(c, "id"); !ok {
+		return 0, nil, false
+	}
+	scope = ccgReauthScope(ctx)
+	a, err := s.loadRow(ctx, s.d.DB.Pool, id, scope, false)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return 0, nil, false
+	}
+	if a.PluginKey != "ccgateway" {
+		httpapi.Fail(c, notFound(ctx))
+		return 0, nil, false
+	}
+	if s.d.CCGateway == nil {
+		httpapi.Fail(c, core.ErrUnavailable.WithMessage("Account runtimes are not configured.").
+			WithDetails(map[string]any{"reason": "not_configured"}))
+		return 0, nil, false
+	}
+	return id, scope, true
+}
+
+// reauthorizeCCGateway serves POST /system/ccgateway/accounts/:id/reauthorize:
+// the open re-authorization draft of the account (200 {key}) or a new one
+// (201 {key}), egressing through the account's proxy. The console drives it
+// with the draft endpoints and commits it.
+func (s *Service) reauthorizeCCGateway(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	ctx := audit.Context(c)
+	id, _, ok := s.ccgReauthAccount(c, ctx)
+	if !ok {
+		return
+	}
+	uid, _ := core.UserID(ctx)
+	key, created, err := s.d.CCGateway.ReauthDraft(ctx, id, uid, core.OwnerScope(ctx, "settings:manage"))
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	if !created {
+		httpapi.OK(c, gin.H{"key": key})
+		return
+	}
+	if err := audit.Audit(ctx, s.d.DB.Pool, uid, "account.ccgateway_reauthorize_start", "account", itoa(id),
+		map[string]any{"runtime": key}); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.Created(c, gin.H{"key": key})
+}
+
+// commitCCGatewayReauth serves POST
+// /system/ccgateway/accounts/:id/reauthorize/:key/commit: the signed-in
+// draft becomes the account's runtime and the account's state starts over
+// (status error -> active, cooldown, quota snapshot, last test, credential
+// refresh state), in the transaction that swaps the runtimes. 200 with the
+// account view.
+func (s *Service) commitCCGatewayReauth(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	ctx := audit.Context(c)
+	id, scope, ok := s.ccgReauthAccount(c, ctx)
+	if !ok {
+		return
+	}
+	key := c.Param("key")
+	uid, _ := core.UserID(ctx)
+	tctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	_, err := s.d.CCGateway.CommitReauth(tctx, id, key, core.OwnerScope(ctx, "settings:manage"), func(tx pgx.Tx, retired string) error {
+		a, err := s.loadRow(tctx, tx, id, scope, true)
+		if err != nil {
+			return err
+		}
+		statusReset, err := s.resetForReauth(tctx, tx, a)
+		if err != nil {
+			return err
+		}
+		cleared, err := s.clearCooldown(tctx, id)
+		if err != nil {
+			return err
+		}
+		if err := audit.Audit(tctx, tx, uid, "account.ccgateway_reauthorize", "account", itoa(id),
+			map[string]any{"runtime": key, "retired": retired, "status_reset": statusReset, "cooldown_cleared": cleared}); err != nil {
+			return err
+		}
+		evs := []core.Event{{Type: core.EventAccountUpdated, Payload: basicPayload(id, a.PluginKey, a.Type, a.Name)}}
+		if statusReset || cleared {
+			status := a.Status
+			if statusReset {
+				status = "active"
+			}
+			evs = append(evs, core.Event{Type: core.EventAccountStatusChanged,
+				Payload: statusPayload(id, a.PluginKey, a.Type, a.Name, status, "re-authorized", nil)})
+		}
+		return s.d.Events.Emit(tctx, tx, evs...)
+	})
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	s.quota.forget(id)
+	s.changed(ctx, id)
+	v, err := s.fullView(ctx, id, scope)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.OK(c, v)
+}
+
+// resetForReauth clears the core's state of a re-authorized account in tx:
+// status error -> active, its reason, the last test, the quota snapshot and
+// the credential refresh state. A disabled account stays disabled (the
+// operator enables it, 2026-10-05). It reports whether the status changed.
+func (s *Service) resetForReauth(ctx context.Context, tx pgx.Tx, a *row) (bool, error) {
+	if _, err := tx.Exec(ctx, `UPDATE accounts SET
+		status = CASE WHEN status = 'error' THEN 'active' ELSE status END,
+		status_reason = CASE WHEN status = 'error' THEN '' ELSE status_reason END,
+		last_test_at = NULL, last_test_ok = NULL, last_test_latency_ms = NULL, last_test_model = NULL, last_test_message = NULL,
+		updated_at = clock_timestamp()
+		WHERE id = $1`, a.ID); err != nil {
+		return false, err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM account_quota_snapshots WHERE account_id = $1`, a.ID); err != nil {
+		return false, err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM account_credential_refresh WHERE account_id = $1`, a.ID); err != nil {
+		return false, err
+	}
+	return a.Status == "error", nil
 }

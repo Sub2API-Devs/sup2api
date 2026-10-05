@@ -17,7 +17,7 @@ export default {
     linkHint: '在新页面登录 Claude 并点击同意，页面会显示一串授权码，完整复制后粘贴到下一步。', expiresIn: '链接 {time} 后过期', expired: '授权链接已过期，请重新获取。',
     codeLabel: '完整授权码（code#state）', codePlaceholder: '粘贴形如 xxxx#yyyy 的授权码', codeShape: '授权码通常包含 #（code#state），请确认已完整复制。', submit: '完成授权',
     completeFailed: '授权码未被接受', notConfirmed: '授权码已提交，但容器尚未确认登录；请稍后重试或重新获取链接。', regetLink: '重新获取链接', cancel: '取消本次授权',
-    authorized: '已授权', loggedOut: '未授权', authorizedToast: 'Claude 授权完成', authorizedHint: '账号容器已登录 Claude，账号可以参与调度。', authorizedDraftHint: '容器已登录 Claude，现在可以保存账号。', reauthorize: '重新授权',
+    authorized: '已授权', loggedOut: '未授权', authorizedToast: 'Claude 授权完成', authorizedDraftHint: '容器已登录 Claude，现在可以保存账号。', reauthorize: '重新授权',
     readOnly: '需要编辑该账号的权限（或 settings:manage）才能启动容器和授权，请联系管理员。', noRead: '没有查看该账号容器状态的权限。', noCreate: '需要创建账号的权限（或 settings:manage）才能启动容器，请联系管理员。',
     saveBlocked: '完成 Claude 授权后才能保存账号', saveBlockedFix: '查看授权步骤',
     blockedTitle: '账号容器已停止：{reason}', blockedUnknown: '核心停止了该容器',
@@ -33,9 +33,33 @@ export default {
         proxy_disabled: '请在上方「代理」换一个可用的代理（容器会自动按新代理重建），或到代理页重新启用该代理后重新同步。',
         unknown: '请检查代理设置后重新同步，或删除容器重新开始。'
       },
+      fixReauth: {
+        no_proxy: '重新授权的容器使用账号已保存的代理。请在上方「代理」选择一个代理并保存，然后删除容器重新开始。',
+        proxy_disabled: '账号已保存的代理已停用。请在上方「代理」换一个可用代理并保存后删除容器重新开始，或到代理页重新启用该代理后重新同步。',
+        account_disabled: '账号已停用，当前容器不运行。仍可重新授权；完成后账号保持停用，需要在账号列表手动启用。',
+        unknown: '请检查账号状态与代理设置后重新同步，或删除容器重新开始。'
+      },
       pickProxy: '去选择代理', openProxies: '打开代理页'
     },
     proxyRequired: 'Claude Code 账号必须绑定代理', proxyRequiredHint: 'Claude Code 账号的容器只能经代理出网，没有直连兜底；未绑定代理的账号容器会被停止。'
+  },
+  reauth: {
+    container: '容器', login: 'Claude 登录', checking: '检查中…',
+    loginState: { authorized: '已授权', notAuthorized: '未授权', unknown: '未知（容器未就绪）' },
+    hint: '重新授权会用新的 Claude 登录替换当前登录，并清空该账号的全部历史；完成前账号继续用当前登录服务。',
+    hintLoggedOut: '该账号的容器尚未登录 Claude，请重新授权。',
+    confirmTitle: '重新授权该账号？',
+    confirmMessage: '将为该账号启动一个新的容器并重新登录 Claude。\n\n新登录成功后会替换旧登录，并清空该账号的全部历史：Claude 登录、对话会话、额度快照、最近测试结果、错误与冷却状态。\n\n完成前账号继续使用旧登录正常服务；中途取消或关闭编辑器不会改变任何内容。',
+    confirmButton: '开始重新授权',
+    startFailed: '无法开始重新授权',
+    flowTitle: '重新授权',
+    inProgress: '重新授权进行中：新容器登录成功后会自动替换旧登录并清空历史；在此之前账号继续使用旧登录。取消或关闭编辑器会删除新容器。',
+    cancel: '取消重新授权',
+    signedIn: '新容器已登录 Claude，正在替换旧登录…',
+    committing: '正在按账号配置新容器并替换旧登录，可能需要几十秒…',
+    commitFailed: '新登录未能替换旧登录（账号仍使用旧登录）',
+    commitRetry: '再次替换',
+    done: '重新授权完成：账号已使用新的 Claude 登录，历史已清空'
   },
   status: { creating: '创建中', ready: '已就绪', blocked: '已停止', pending: '同步中', unknown: '未知' },
   runtimeInstall: {

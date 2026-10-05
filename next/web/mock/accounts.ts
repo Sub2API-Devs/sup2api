@@ -335,6 +335,8 @@ seedTest(12, true, 640, 'claude-haiku-4-5', 'model claude-haiku-4-5 answered', 1
 seedTest(13, true, 3820, 'claude-sonnet-4-5', 'model claude-sonnet-4-5 answered', 7200)
 seedTest(14, false, 212, 'claude-haiku-4-5', 'authentication_error: invalid x-api-key', 86400)
 seedTest(19, true, 1450, 'gpt-4o-mini', 'model gpt-4o-mini answered', 600)
+// Claude Code account with a failed last test: re-authorizing it (mock/ccgateway.ts) clears it.
+seedTest(25, false, 820, 'claude-sonnet-4-5', 'authentication_error: OAuth token has expired', 5400)
 
 // ---------------------------------------------------------------- subscription quota
 // Plan windows of subscription accounts (QuotaSnapshot). Types without plan
@@ -459,6 +461,31 @@ export interface MockCcgDrafts {
 let ccgDrafts: MockCcgDrafts | null = null
 export function registerCcgDrafts(d: MockCcgDrafts) {
   ccgDrafts = d
+}
+
+/**
+ * Re-authorization of a Claude Code account (docs/CCGATEWAY-REAUTH.md): the
+ * account when the caller may re-authorize it (settings:manage, account:update,
+ * or account:own:update on an account it created), else the error response.
+ */
+export function mockCcgReauthAccount(req: MockRequest): { a: any } | { __status: number; body: unknown } {
+  if (hasPerm(caller(req), 'settings:manage')) {
+    const a = accounts.find((x) => x.id === Number(req.params.id))
+    return a ? { a } : fail(404, 'not_found', 'account not found')
+  }
+  return scopedAccount(req, 'update')
+}
+
+/** Commit of a re-authorization: the account's core state starts over; returns the account view. */
+export function mockClearAccountHistory(a: any) {
+  if (a.status === 'error') a.status = 'active'
+  a.status_reason = ''
+  a.cooldown_until = null
+  a.cooldown_reason = ''
+  a.last_test = null
+  delete a.refresh_state
+  quotaState.delete(a.id)
+  return withGroups(a)
 }
 
 /** Accounts in a group (any status). */

@@ -1,22 +1,24 @@
 // State of the Claude Code (CCGateway) authorization flow shown in the account
-// editor (docs/CCGATEWAY-DRAFT-RUNTIMES.md). One state machine, two targets:
+// editor (docs/CCGATEWAY-DRAFT-RUNTIMES.md, docs/CCGATEWAY-REAUTH.md). One
+// state machine, both on a draft runtime:
 //
 // - draft (new account): ① choose a proxy → ② start the container (creates the
 //   draft runtime) → ③ open the Claude link → ④ paste the code → authorized;
 //   only then can the account be saved (it adopts the draft).
-// - account (saved account): ② container → ③ link → ④ code → authorized
-//   (status and re-authorization).
+// - reauth (saved account): the re-authorization draft already exists (POST
+//   accounts/:id/reauthorize) → ② container → ③ link → ④ code → authorized;
+//   then the console commits it (the account swaps to the new runtime).
 //
 // Pure helpers, so the step logic is unit-tested apart from the component.
 
-export type CcgMode = 'draft' | 'account'
+export type CcgMode = 'draft' | 'reauth'
 export type CcgStep = 'proxy' | 'container' | 'login' | 'code' | 'done'
 export type CcgStepState = 'done' | 'current' | 'error' | 'todo'
 export type CcgContainer = 'unknown' | 'preparing' | 'ready' | 'blocked' | 'error'
 
 export const CCG_DRAFT_STEPS: readonly CcgStep[] = ['proxy', 'container', 'login', 'code', 'done']
-export const CCG_ACCOUNT_STEPS: readonly CcgStep[] = ['container', 'login', 'code', 'done']
-export const stepsOf = (mode: CcgMode): readonly CcgStep[] => (mode === 'draft' ? CCG_DRAFT_STEPS : CCG_ACCOUNT_STEPS)
+export const CCG_REAUTH_STEPS: readonly CcgStep[] = ['container', 'login', 'code', 'done']
+export const stepsOf = (mode: CcgMode): readonly CcgStep[] => (mode === 'draft' ? CCG_DRAFT_STEPS : CCG_REAUTH_STEPS)
 
 /** Draft runtime keys (`d` + 16 lowercase hex); anything else is never put into a URL. */
 export const isDraftKey = (key: unknown): key is string => typeof key === 'string' && /^d[0-9a-f]{16}$/.test(key)
@@ -109,9 +111,9 @@ export function reasonDisplay(e: unknown): { key: string } | { message: string }
 
 export interface CcgFlow {
   mode: CcgMode
-  /** Draft: a proxy is chosen in the editor (accounts: always true). */
+  /** New account: a proxy is chosen in the editor (reauth: always true). */
   proxy: boolean
-  /** The runtime exists: the draft was created (accounts: always true). */
+  /** The draft runtime exists (reauth: always true). */
   created: boolean
   container: CcgContainer
   /** Claude login state of the container; null while unknown. */
@@ -144,9 +146,9 @@ export function currentStep(f: CcgFlow): CcgStep {
   return 'login'
 }
 
-/** A new account may be saved: its draft is ready and signed in to Claude. */
+/** The draft is ready and signed in to Claude: a new account may be saved with it, a re-authorization committed. */
 export function readyToSave(f: CcgFlow): boolean {
-  return f.mode === 'draft' && f.loggedIn === true && currentStep(f) === 'done'
+  return f.loggedIn === true && currentStep(f) === 'done'
 }
 
 /** State of every step: earlier ones done, the current one current (or error), later ones todo. Steps of the other mode are done. */

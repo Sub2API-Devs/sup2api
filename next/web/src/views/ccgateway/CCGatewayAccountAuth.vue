@@ -1,7 +1,8 @@
 <script setup lang="ts">
-// Claude authorization of a Claude Code (CCGateway) managed account, shown in
-// the account editor (docs/CCGATEWAY-DRAFT-RUNTIMES.md §5). Same steps and
-// state machine (./ccgAuthFlow) for two targets:
+// Claude authorization of a Claude Code (CCGateway) managed account on a draft
+// runtime, shown in the account editor (docs/CCGATEWAY-DRAFT-RUNTIMES.md §5,
+// docs/CCGATEWAY-REAUTH.md). Same steps and state machine (./ccgAuthFlow) for
+// two cases:
 //
 // - `draft` (new account): ① a proxy is picked in the editor → ② "start the
 //   container" creates a draft runtime (POST /system/ccgateway/drafts) → ③
@@ -10,17 +11,16 @@
 //   then, sending the draft key (`ccgateway_runtime`) and calling adopt().
 //   A proxy change calls PUT drafts/:key; unmounting (editor closed, account
 //   type switched) deletes a draft that was not adopted (best effort, the
-//   core's sweep removes the rest). While the draft exists it is touched
-//   every minute so the sweep does not take it while the form is filled in.
-// - `accountId` (saved account): status and re-authorization through
-//   /system/ccgateway/accounts/:id/...; an unfinished session is resumed.
+//   core's sweep removes the rest).
+// - `reauthKey` (saved account, see CCGatewayAccountReauth): the
+//   re-authorization draft exists already, ② → ③ → ④ run on it; the parent
+//   owns the draft (commits or deletes it), `restart` asks it for a new one.
 //
-// Every state and error is a code (status / details.reason) translated via
-// ccgateway.status.* and ccgateway.reason.*; an unknown reason shows the API's
-// English message.
+// While a draft is shown it is touched every minute so the core's sweep does
+// not take it while the user is busy elsewhere. Every state and error is a
+// code (status / details.reason) translated via ccgateway.status.* and
+// ccgateway.reason.*; an unknown reason shows the API's English message.
 // `canEdit`: the caller may edit this account (account:update / own:update).
-// `syncKey` changes when the saved account changes (proxy, status): the
-// container is synchronized again.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
@@ -46,21 +46,23 @@ import {
   setupProblems,
   stepStates,
   stepsOf,
+  type CcgMode,
   type CcgSetupProblem,
   type CcgStep
 } from './ccgAuthFlow'
 
-const props = defineProps<{ accountId?: number | null; draft?: boolean; proxyId?: number | null; canEdit?: boolean; syncKey?: string }>()
+const props = defineProps<{ draft?: boolean; reauthKey?: string | null; proxyId?: number | null; canEdit?: boolean }>()
 const emit = defineEmits<{
   (e: 'state', s: { key: string | null; authorized: boolean }): void
   (e: 'authorized'): void
   (e: 'fix-proxy'): void
+  /** Re-authorization: the draft is gone (reason draft_not_found) or broken, the parent starts a new one. */
+  (e: 'restart', reason: string): void
 }>()
 const { t } = useI18n()
 const auth = useAuthStore()
 const { proxies } = useProxiesLookup()
 const DRAFTS = '/system/ccgateway/drafts'
-const ACCOUNTS = '/system/ccgateway/accounts'
 const POLL_MS = 2000
 /** Draft keep-alive: the core sweeps drafts untouched for 15 minutes. */
 const HEARTBEAT_MS = 60_000
@@ -71,15 +73,19 @@ type Status = CcgRuntimeStatus
 type Health = CcgRuntimeHealth
 type Session = CcgAuthSession
 
-const mode = computed(() => (props.draft ? 'draft' : 'account') as 'draft' | 'account')
-const canManage = computed(() => auth.has('settings:manage') || (props.draft ? auth.has([...ACCOUNT_KEYS.create]) : !!props.canEdit))
-const canRead = computed(() => canManage.value || (!props.draft && auth.has('settings:read')))
+/** A re-authorization of a saved account (the draft is given); otherwise a new account's draft. */
+const reauth = computed(() => !props.draft && isDraftKey(props.reauthKey))
+const mode = computed<CcgMode>(() => (reauth.value ? 'reauth' : 'draft'))
+const canManage = computed(() => auth.has('settings:manage') || (reauth.value ? !!props.canEdit : auth.has([...ACCOUNT_KEYS.create])))
+const canRead = canManage
 
-/** Draft key once created, and the proxy the draft runs with. */
+/** New account: draft key once created, and the proxy the draft runs with. */
 const draftKey = ref<string | null>(null)
 const draftProxy = ref<number | null>(null)
-/** Base path of the current runtime, '' while there is none. */
-const target = computed(() => (props.draft ? (draftKey.value ? `${DRAFTS}/${draftKey.value}` : '') : props.accountId ? `${ACCOUNTS}/${props.accountId}` : ''))
+/** The draft shown: the new account's, or the re-authorization's. */
+const key = computed(() => (reauth.value ? props.reauthKey! : draftKey.value))
+/** Base path of the draft runtime, '' while there is none. */
+const target = computed(() => (key.value ? `${DRAFTS}/${key.value}` : ''))
 
 const status = ref<Status | null>(null)
 const health = ref<Health | null>(null)
@@ -109,7 +115,7 @@ const phase = computed(() => containerPhase(status.value?.status))
 const blocked = computed(() => (phase.value === 'blocked' ? blockReason(status.value?.reason) : null))
 const flow = computed(() => ({
   mode: mode.value,
-  proxy: !props.draft || props.proxyId != null,
+  proxy: reauth.value || props.proxyId != null,
   created: !!target.value,
   container: failure.value?.step === 'container' ? ('error' as const) : phase.value,
   loggedIn: health.value ? health.value.logged_in : null,
@@ -121,7 +127,7 @@ const steps = computed(() => stepsOf(mode.value))
 const step = computed(() => currentStep(flow.value))
 const states = computed(() => stepStates(flow.value))
 const authorizedDraft = computed(() => readyToSave(flow.value))
-const containerName = computed(() => status.value?.container || (draftKey.value ? `ccg-${draftKey.value}` : props.accountId ? `#${props.accountId}` : ''))
+const containerName = computed(() => status.value?.container || (key.value ? `ccg-${key.value}` : ''))
 const proxyName = computed(() => {
   const id = props.proxyId
   if (id == null) return ''
@@ -157,7 +163,7 @@ function fail(stepKey: CcgStep, titleKey: string, e?: unknown, setup?: CcgSetupP
 /** Container failures: tell "not set up" (link to the settings) apart from a runtime error. */
 async function containerFailure(titleKey: string, e: unknown, stamp: number) {
   if (isApiError(e) && e.status === 403) {
-    fail('container', props.draft ? 'noCreate' : 'noRead', e)
+    fail('container', reauth.value ? 'readOnly' : 'noCreate', e)
     return
   }
   const reason = reasonOf(e)
@@ -234,9 +240,9 @@ async function adoptPendingSession(base: string): Promise<boolean> {
   }
 }
 
-/** A new account's link is requested as soon as its container is ready (once per draft). */
+/** The link is requested as soon as the draft's container is ready (once per draft). */
 function maybeAutoStart() {
-  if (!props.draft || autoStarted || !canManage.value) return
+  if (autoStarted || !canManage.value) return
   if (phase.value !== 'ready' || health.value?.logged_in !== false || session.value || acting.value) return
   autoStarted = true
   void start()
@@ -312,9 +318,14 @@ async function updateProxy() {
   await refresh()
 }
 
-/** Deletes the draft and starts a new one (failed container, or the draft is gone). */
+/** Deletes the draft and starts a new one (failed container, or the draft is gone); a re-authorization asks its parent. */
 async function restartDraft() {
-  if (!props.draft || acting.value) return
+  if (acting.value) return
+  if (reauth.value) {
+    emit('restart', failure.value?.reason || '')
+    return
+  }
+  if (!props.draft) return
   const key = draftKey.value
   resetTarget()
   draftKey.value = null
@@ -424,7 +435,8 @@ async function complete() {
   session.value = null
   code.value = ''
   opened.value = false
-  toast(t('ccgateway.accountAuth.authorizedToast'), 'success')
+  // A re-authorization is announced once committed (by the parent).
+  if (!reauth.value) toast(t('ccgateway.accountAuth.authorizedToast'), 'success')
   emit('authorized')
 }
 
@@ -451,7 +463,7 @@ function retry() {
   const f = failure.value
   if (!f) return
   if (f.step === 'container') {
-    if (props.draft && (!draftKey.value || f.reason === 'draft_not_found')) void restartDraft()
+    if ((props.draft && !draftKey.value) || f.reason === 'draft_not_found') void restartDraft()
     else if (props.draft && props.proxyId != null && props.proxyId !== draftProxy.value) void updateProxy()
     else void (canManage.value ? sync() : refresh())
   } else if (f.step === 'login') void start()
@@ -469,7 +481,7 @@ function tick() {
   // Poll while the container converges (a known login state does not change by
   // itself, a blocked container waits for a change), and keep a draft alive.
   const converging = !session.value && failure.value?.step !== 'container' && phase.value !== 'blocked' && (phase.value !== 'ready' || !health.value)
-  const heartbeat = props.draft && Date.now() - lastCall >= HEARTBEAT_MS
+  const heartbeat = Date.now() - lastCall >= HEARTBEAT_MS
   if (converging || heartbeat) {
     busy.value = 'status'
     void refresh().finally(() => {
@@ -480,26 +492,16 @@ function tick() {
 
 async function boot() {
   resetTarget()
-  if (props.draft || !props.accountId || !canRead.value) return
-  await refresh()
+  if (reauth.value) await refresh()
 }
 
-watch(() => props.accountId, () => void boot())
+watch(() => props.reauthKey, () => void boot())
 watch(() => props.proxyId, () => {
   // Creating the draft failed (e.g. the proxy was refused): another proxy starts over from the button.
   if (props.draft && !draftKey.value && failure.value?.step === 'container' && !acting.value) failure.value = null
   void updateProxy()
 })
-// The saved account changed (e.g. a proxy was picked for a blocked container): synchronize again.
-watch(
-  () => props.syncKey,
-  (cur, before) => {
-    if (props.draft || !props.accountId || before === undefined || cur === before) return
-    failure.value = null
-    void (canManage.value ? sync() : refresh())
-  }
-)
-watch([draftKey, authorizedDraft], () => emit('state', { key: draftKey.value, authorized: !!draftKey.value && authorizedDraft.value }), { immediate: true })
+watch([key, authorizedDraft], () => emit('state', { key: key.value, authorized: !!key.value && authorizedDraft.value }), { immediate: true })
 
 onMounted(() => {
   void boot()
@@ -514,6 +516,7 @@ onBeforeUnmount(() => {
   code.value = ''
   session.value = null
   // Editor closed, account type switched, back to the type picker: the entry is abandoned.
+  // (A re-authorization draft belongs to the parent, which deletes or commits it.)
   if (props.draft && draftKey.value && !adopted) discard(draftKey.value)
 })
 
@@ -522,15 +525,15 @@ defineExpose({
   adopt() {
     adopted = true
   },
-  /** POST /accounts refused the draft (details.reason): start over or re-check the login. */
+  /** POST /accounts (or the re-authorization commit) refused the draft (details.reason): start over or re-check the login. */
   rejected(reason: string) {
-    if (!props.draft) return
-    if (reason === 'draft_not_found') {
+    if (!key.value) return
+    if (reason === 'draft_not_found' && props.draft) {
       resetTarget()
       draftKey.value = null
       draftProxy.value = null
       failure.value = { step: 'container', title: t('ccgateway.accountAuth.createFailed'), detail: t('ccgateway.reason.draft_not_found'), reason }
-    } else {
+    } else if (reason !== 'draft_not_found') {
       health.value = null
       void refresh()
     }
@@ -547,7 +550,7 @@ const settingsLink = '/plugins/ccgateway?tab=settings#ccgateway-runtime'
   <div class="space-y-3 text-sm" data-testid="ccgateway-account-auth" :data-mode="mode">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <div class="flex items-center gap-2 font-medium text-gray-900 dark:text-white">
-        <SIcon name="key" class="h-4 w-4 text-primary-500" />{{ t('ccgateway.accountAuth.title') }}
+        <SIcon name="key" class="h-4 w-4 text-primary-500" />{{ reauth ? t('ccgateway.reauth.flowTitle') : t('ccgateway.accountAuth.title') }}
       </div>
       <span v-if="step === 'done'" class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" data-testid="ccgateway-auth-authorized">
         <SIcon name="check" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.authorized') }}
@@ -557,9 +560,7 @@ const settingsLink = '/plugins/ccgateway?tab=settings#ccgateway-runtime'
       </span>
     </div>
 
-    <SHint v-if="draft && !canManage" tone="warning">{{ t('ccgateway.accountAuth.noCreate') }}</SHint>
-    <SHint v-else-if="!draft && accountId && !canRead" tone="warning">{{ t('ccgateway.accountAuth.noRead') }}</SHint>
-    <SHint v-else-if="!draft && accountId && !canManage" tone="warning">{{ t('ccgateway.accountAuth.readOnly') }}</SHint>
+    <SHint v-if="!canManage" tone="warning">{{ reauth ? t('ccgateway.accountAuth.readOnly') : t('ccgateway.accountAuth.noCreate') }}</SHint>
 
     <ol class="space-y-0" data-testid="ccgateway-auth-steps">
       <li v-for="(s, i) in steps" :key="s" class="relative flex gap-3 pb-4 last:pb-0" :data-step="s" :data-state="states[s]">
@@ -604,7 +605,7 @@ const settingsLink = '/plugins/ccgateway?tab=settings#ccgateway-runtime'
               <div class="flex flex-wrap gap-2">
                 <SButton size="sm" :loading="busy === 'sync' || busy === 'create' || busy === 'proxy'" :disabled="acting || !canManage" data-testid="ccgateway-auth-retry" @click="retry"><SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.retry') }}</SButton>
                 <SButton v-if="failure.reason === 'no_proxy' || failure.reason === 'proxy_disabled' || failure.reason === 'proxy_not_found'" size="sm" variant="ghost" @click="emit('fix-proxy')"><SIcon name="proxy" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.blocked.pickProxy') }}</SButton>
-                <SButton v-if="draft && draftKey" size="sm" variant="ghost" :disabled="acting" data-testid="ccgateway-auth-restart" @click="restartDraft">{{ t('ccgateway.accountAuth.restart') }}</SButton>
+                <SButton v-if="(draft && draftKey) || reauth" size="sm" variant="ghost" :disabled="acting" data-testid="ccgateway-auth-restart" @click="restartDraft">{{ t('ccgateway.accountAuth.restart') }}</SButton>
                 <SButton v-if="failure.setup?.length || failure.reason === 'not_configured'" size="sm" variant="ghost" :to="settingsLink" data-testid="ccgateway-auth-open-settings"><SIcon name="settings" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.openSettings') }}</SButton>
               </div>
             </div>
@@ -618,7 +619,7 @@ const settingsLink = '/plugins/ccgateway?tab=settings#ccgateway-runtime'
             </template>
             <div v-else-if="blocked" class="mt-1.5 space-y-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300" role="alert" data-testid="ccgateway-auth-blocked" :data-reason="blocked">
               <div class="font-medium">{{ t('ccgateway.accountAuth.blockedTitle', { reason: blockedText }) }}</div>
-              <div class="opacity-90">{{ draft && blocked !== 'account_disabled' ? t(`ccgateway.accountAuth.blocked.fixDraft.${blocked}`) : t(`ccgateway.accountAuth.blocked.fix.${blocked}`) }}</div>
+              <div class="opacity-90">{{ reauth ? t(`ccgateway.accountAuth.blocked.fixReauth.${blocked}`) : blocked !== 'account_disabled' ? t(`ccgateway.accountAuth.blocked.fixDraft.${blocked}`) : t(`ccgateway.accountAuth.blocked.fix.${blocked}`) }}</div>
               <div class="flex flex-wrap gap-2">
                 <SButton v-if="blocked === 'no_proxy' || blocked === 'proxy_disabled'" size="sm" variant="primary" data-testid="ccgateway-auth-fix-proxy" @click="emit('fix-proxy')">
                   <SIcon name="proxy" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.blocked.pickProxy') }}
@@ -631,7 +632,7 @@ const settingsLink = '/plugins/ccgateway?tab=settings#ccgateway-runtime'
               <div>{{ t('ccgateway.accountAuth.containerError', { status: statusLabel(status?.status) }) }}</div>
               <div class="flex flex-wrap gap-2">
                 <SButton v-if="canManage" size="sm" :loading="busy === 'sync'" @click="sync"><SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.resync') }}</SButton>
-                <SButton v-if="draft" size="sm" variant="ghost" :disabled="acting" @click="restartDraft">{{ t('ccgateway.accountAuth.restart') }}</SButton>
+                <SButton size="sm" variant="ghost" :disabled="acting" @click="restartDraft">{{ t('ccgateway.accountAuth.restart') }}</SButton>
               </div>
             </div>
             <div v-else-if="states.container === 'current'" class="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-dark-300" data-testid="ccgateway-auth-preparing">
@@ -713,10 +714,7 @@ const settingsLink = '/plugins/ccgateway?tab=settings#ccgateway-runtime'
 
           <!-- done -->
           <template v-else-if="s === 'done' && states.done === 'done'">
-            <p class="mt-0.5 text-xs text-emerald-700 dark:text-emerald-300" data-testid="ccgateway-auth-done-hint">{{ draft ? t('ccgateway.accountAuth.authorizedDraftHint') : t('ccgateway.accountAuth.authorizedHint') }}</p>
-            <div v-if="!draft && canManage" class="mt-2 flex flex-wrap gap-2">
-              <SButton size="sm" :loading="busy === 'start'" data-testid="ccgateway-auth-reauthorize" @click="start"><SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.reauthorize') }}</SButton>
-            </div>
+            <p class="mt-0.5 text-xs text-emerald-700 dark:text-emerald-300" data-testid="ccgateway-auth-done-hint">{{ reauth ? t('ccgateway.reauth.signedIn') : t('ccgateway.accountAuth.authorizedDraftHint') }}</p>
           </template>
         </div>
       </li>

@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -13,12 +14,15 @@ import (
 )
 
 // Draft sweep (CONTRACTS §49.13): abandoned, failed or cancelled drafts are
-// removed every minute by one node at a time.
+// removed every minute by one node at a time, and so are runtimes a
+// re-authorization replaced (§49.17) once requests still running on them had
+// time to finish.
 var (
-	sweepEvery  = time.Minute
-	draftIdle   = 15 * time.Minute // since last_seen_at
-	draftMaxAge = 2 * time.Hour    // since created_at
-	orphanAge   = 15 * time.Minute // controller-only draft runtimes
+	sweepEvery   = time.Minute
+	draftIdle    = 15 * time.Minute // since last_seen_at
+	draftMaxAge  = 2 * time.Hour    // since created_at
+	orphanAge    = 15 * time.Minute // controller-only draft runtimes
+	retiredGrace = 10 * time.Minute // since retired_at
 )
 
 const sweepLockKey = "ccgateway:drafts:sweep"
@@ -46,10 +50,11 @@ func (s *Service) runSweep(ctx context.Context) {
 
 // SweepDrafts removes (1) drafts that are not adopted and were not used for
 // draftIdle or exist longer than draftMaxAge, on the controller and in the
-// table, and (2) draft runtimes the controller lists that the core does not
-// know, older than orphanAge. Adopted runtimes and account-id keys are never
-// touched. It runs only with account runtimes on and, with a Locker, on one
-// node at a time. Returns how many runtimes were removed.
+// table, (2) runtimes retired by a re-authorization more than retiredGrace
+// ago, and (3) draft runtimes the controller lists that the core does not
+// know, older than orphanAge. Runtimes an account uses are never touched. It
+// runs only with account runtimes on and, with a Locker, on one node at a
+// time. Returns how many runtimes were removed.
 func (s *Service) SweepDrafts(ctx context.Context) (int, error) {
 	if !s.runtimesOn(ctx) {
 		return 0, nil
@@ -65,7 +70,7 @@ func (s *Service) SweepDrafts(ctx context.Context) (int, error) {
 		defer cancel()
 	}
 	removed := 0
-	rows, e := s.DB.Pool.Query(ctx, `SELECT key FROM ccgateway_runtimes WHERE account_id IS NULL
+	rows, e := s.DB.Pool.Query(ctx, `SELECT key FROM ccgateway_runtimes WHERE account_id IS NULL AND retired_at IS NULL
 		AND (last_seen_at < now() - $1::bigint * interval '1 second' OR created_at < now() - $2::bigint * interval '1 second')
 		ORDER BY key`, int64(draftIdle/time.Second), int64(draftMaxAge/time.Second))
 	if e != nil {
@@ -100,10 +105,80 @@ func (s *Service) SweepDrafts(ctx context.Context) (int, error) {
 			return removed, ctx.Err()
 		}
 	}
-	n, e := s.sweepOrphans(ctx)
+	n, e := s.sweepRetired(ctx)
 	removed += n
 	if firstErr == nil {
 		firstErr = e
+	}
+	if ctx.Err() != nil {
+		return removed, ctx.Err()
+	}
+	n, e = s.sweepOrphans(ctx)
+	removed += n
+	if firstErr == nil {
+		firstErr = e
+	}
+	return removed, firstErr
+}
+
+// sweepRetired deletes the runtimes retired more than retiredGrace ago: under
+// the runtime's advisory lock the row is deleted, the runtime removed on the
+// controller (an account-id key with X-CCG-Delete-Account) and only then the
+// deletion committed, so a failing controller keeps the row for the next
+// sweep. An account-id runtime the account would still fall back to (it has
+// no other row) is in use and kept.
+func (s *Service) sweepRetired(ctx context.Context) (int, error) {
+	rows, e := s.DB.Pool.Query(ctx, `SELECT key FROM ccgateway_runtimes WHERE account_id IS NULL
+		AND retired_at < now() - $1::bigint * interval '1 second' ORDER BY key`, int64(retiredGrace/time.Second))
+	if e != nil {
+		return 0, e
+	}
+	var keys []string
+	for rows.Next() {
+		var key string
+		if rows.Scan(&key) == nil {
+			keys = append(keys, key)
+		}
+	}
+	rows.Close()
+	if e = rows.Err(); e != nil {
+		return 0, e
+	}
+	removed := 0
+	var firstErr error
+	for _, key := range keys {
+		c, cancel := context.WithTimeout(ctx, time.Minute)
+		e := s.lockedTx(c, key, false, func(tx pgx.Tx) error {
+			if accountKeyPattern.MatchString(key) {
+				id, _ := strconv.ParseInt(key, 10, 64)
+				var used bool
+				if e := tx.QueryRow(c, `SELECT EXISTS(SELECT 1 FROM accounts WHERE id=$1)
+					AND NOT EXISTS(SELECT 1 FROM ccgateway_runtimes WHERE account_id=$1)`, id).Scan(&used); e != nil || used {
+					if used {
+						slog.WarnContext(c, "CCGateway: retired runtime is still the account's runtime, kept", "key", key)
+					}
+					return e
+				}
+			} else if !isDraftKey(key) {
+				return nil
+			}
+			tag, e := tx.Exec(c, `DELETE FROM ccgateway_runtimes WHERE key=$1 AND account_id IS NULL AND retired_at IS NOT NULL`, key)
+			if e != nil || tag.RowsAffected() == 0 {
+				return e
+			}
+			if e = s.deleteRemote(c, key, true); e != nil {
+				return e
+			}
+			removed++
+			return nil
+		})
+		cancel()
+		if e != nil && firstErr == nil {
+			firstErr = e
+		}
+		if ctx.Err() != nil {
+			return removed, ctx.Err()
+		}
 	}
 	return removed, firstErr
 }
@@ -199,7 +274,7 @@ func (s *Service) sweepOrphans(ctx context.Context) (int, error) {
 			if e := tx.QueryRow(c, `SELECT EXISTS(SELECT 1 FROM ccgateway_runtimes WHERE key=$1)`, key).Scan(&exists); e != nil || exists {
 				return e
 			}
-			if e := s.deleteRemote(c, key); e != nil {
+			if e := s.deleteRemote(c, key, false); e != nil {
 				return e
 			}
 			removed++

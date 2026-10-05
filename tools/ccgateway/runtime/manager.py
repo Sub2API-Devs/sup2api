@@ -345,10 +345,12 @@ class Manager:
             self.save(aid, state)
         return {'account_id': aid, 'status': 'blocked', 'revision': ''}
 
-    def delete(self, aid):
-        """Remove a draft runtime completely; idempotent."""
+    def delete(self, aid, account=False):
+        """Remove a runtime completely; idempotent. Drafts always; an account
+        runtime only when the caller says so explicitly (account=True): the
+        core retires it after a re-authorization replaced it."""
         check(aid)
-        if not DRAFT.fullmatch(aid):
+        if not DRAFT.fullmatch(aid) and not account:
             raise NotDraft('only draft runtimes can be deleted')
         with self.guard(aid):
             self.online.pop(aid, None)
@@ -468,9 +470,11 @@ class Handler(BaseHTTPRequestHandler):
                 if self.command != 'DELETE':
                     return self.fail(405, 'method_not_allowed')
                 try:
-                    return self.reply(200, manager.delete(aid))
+                    # Deleting an account's runtime needs the header naming it
+                    # again (a retired runtime after re-authorization).
+                    account = self.headers.get('X-CCG-Delete-Account', '') == aid
+                    return self.reply(200, manager.delete(aid, account=account))
                 except NotDraft:
-                    # Deleting an account's data stays an explicit administrator operation.
                     return self.fail(405, 'method_not_allowed')
             if path == 'config' and self.command == 'PUT':
                 try:

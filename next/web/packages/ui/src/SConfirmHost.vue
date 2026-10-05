@@ -15,7 +15,7 @@ const open = computed({
 </script>
 
 <template>
-  <SModal v-model:open="open" :title="confirmState.current?.title || t('ui.confirmTitle')" width="sm">
+  <SModal v-model:open="open" :title="confirmState.current?.title || t('ui.confirmTitle')" width="sm" top>
     <p class="whitespace-pre-line text-sm text-gray-600 dark:text-gray-300">{{ confirmState.current?.message }}</p>
     <template #footer>
       <SButton @click="settleConfirm(false)">{{ confirmState.current?.cancelText || t('ui.cancel') }}</SButton>

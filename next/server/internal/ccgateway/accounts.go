@@ -17,6 +17,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/gin-gonic/gin"
 )
 
@@ -73,11 +74,16 @@ func revisionOf(version string) string {
 // desired reads authoritative state: request forwarding never reconfigures an
 // egress and never trusts the scheduler's cached proxy binding.
 func (s *Service) desired(ctx context.Context, id int64, credentials bool) (accountDesired, error) {
+	return s.desiredIn(ctx, s.DB.Pool, id, credentials)
+}
+
+// desiredIn is desired read through q (a transaction sees its own changes).
+func (s *Service) desiredIn(ctx context.Context, q store.Querier, id int64, credentials bool) (accountDesired, error) {
 	var d accountDesired
 	var version string
 	var spec core.ProxySpec
 	var password, accountCredentials []byte
-	err := s.DB.Pool.QueryRow(ctx, `SELECT
+	err := q.QueryRow(ctx, `SELECT
   a.deleted_at IS NULL AND a.status <> 'disabled' AND COALESCE(p.status <> 'disabled',false),
   CASE WHEN a.deleted_at IS NOT NULL OR a.status = 'disabled' THEN 'account_disabled'
        WHEN p.id IS NULL THEN 'no_proxy' WHEN p.status = 'disabled' THEN 'proxy_disabled' ELSE '' END,
@@ -112,10 +118,11 @@ func (s *Service) desired(ctx context.Context, id int64, credentials bool) (acco
 	return d, nil
 }
 
-// draftDesired is the desired state of a draft that is not adopted yet: a
-// managed (OAuth) runtime egressing through the draft's proxy. The revision
-// only depends on the draft key and the proxy, so every node computes the
-// same one.
+// draftDesired is the desired state of a draft that is not adopted (nor
+// retired) yet: a managed (OAuth) runtime egressing through the draft's
+// proxy. The revision only depends on the draft key and the proxy, so every
+// node computes the same one. A retired runtime has no desired state: it is
+// never reconfigured, only deleted by the sweep.
 func (s *Service) draftDesired(ctx context.Context, key string, credentials bool) (accountDesired, error) {
 	d := accountDesired{Kind: "managed", Key: key}
 	var version string
@@ -127,7 +134,7 @@ func (s *Service) draftDesired(ctx context.Context, key string, credentials bool
   concat_ws('|','draft',r.key,r.proxy_id,p.updated_at,p.status),
   COALESCE(p.protocol,''),COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(p.username,''),p.password_enc
   FROM ccgateway_runtimes r LEFT JOIN proxies p ON p.id=r.proxy_id
-  WHERE r.key=$1 AND r.account_id IS NULL`, key).
+  WHERE r.key=$1 AND r.account_id IS NULL AND r.retired_at IS NULL`, key).
 		Scan(&d.Enabled, &d.Blocked, &version, &spec.Protocol, &spec.Host, &spec.Port, &spec.Username, &password)
 	if err != nil {
 		return d, err
@@ -143,7 +150,9 @@ func (s *Service) draftDesired(ctx context.Context, key string, credentials bool
 }
 
 // resolveKey maps an account id to its runtime key (the adopted draft key,
-// else the id itself); a draft key is returned unchanged.
+// else the id itself); a draft key is returned unchanged. Only the row the
+// account currently uses counts (account_id): a runtime retired by a
+// re-authorization never resolves.
 func (s *Service) resolveKey(ctx context.Context, key string) (string, error) {
 	if isDraftKey(key) {
 		return key, nil
@@ -181,8 +190,8 @@ func (s *Service) desiredKey(ctx context.Context, key string, credentials bool) 
 }
 
 // runtimeRequest calls /accounts/<key>/<path> on the controller (path ""
-// addresses the runtime itself).
-func (s *Service) runtimeRequest(ctx context.Context, key, method, path string, body []byte, revision string) (*http.Response, func() error, error) {
+// addresses the runtime itself). header holds extra name/value pairs.
+func (s *Service) runtimeRequest(ctx context.Context, key, method, path string, body []byte, revision string, header ...string) (*http.Response, func() error, error) {
 	cfg, e := s.Load(ctx)
 	if e != nil || !cfg.AccountRuntimes {
 		return nil, nil, errNotConfigured
@@ -203,6 +212,9 @@ func (s *Service) runtimeRequest(ctx context.Context, key, method, path string, 
 	req.Header.Set("Authorization", "Bearer "+cfg.AdminKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-CCG-Revision", revision)
+	for i := 0; i+1 < len(header); i += 2 {
+		req.Header.Set(header[i], header[i+1])
+	}
 	res, e := client.Do(req)
 	if e != nil {
 		close()
@@ -267,8 +279,13 @@ func (s *Service) Reconcile(ctx context.Context, key string) error {
 			return nil
 		}
 	}
+	return s.putConfig(ctx, key, d)
+}
+
+// putConfig applies d to the runtime key on the controller (PUT config).
+func (s *Service) putConfig(ctx context.Context, key string, d accountDesired) error {
 	body, _ := json.Marshal(d)
-	res, close, e = s.runtimeRequest(ctx, key, "PUT", "config", body, "")
+	res, close, e := s.runtimeRequest(ctx, key, "PUT", "config", body, "")
 	if e != nil {
 		return e
 	}
@@ -313,12 +330,13 @@ func (s *Service) reconcileKicked(ctx context.Context) {
 
 // runtimeKeys lists every runtime the core wants on the controller: one per
 // ccgateway account (deleted and disabled ones too, so they get blocked) and
-// one per draft that is not adopted yet.
+// one per draft that is not adopted yet (re-authorization drafts included).
+// Retired runtimes are left alone until the sweep deletes them.
 func (s *Service) runtimeKeys(ctx context.Context) ([]string, error) {
 	rows, e := s.DB.Pool.Query(ctx, `SELECT COALESCE(r.key, a.id::text) FROM accounts a
   LEFT JOIN ccgateway_runtimes r ON r.account_id=a.id
   WHERE a.plugin_key='ccgateway' AND a.type IN ('managed','apikey')
-  UNION ALL SELECT key FROM ccgateway_runtimes WHERE account_id IS NULL
+  UNION ALL SELECT key FROM ccgateway_runtimes WHERE account_id IS NULL AND retired_at IS NULL
   ORDER BY 1`)
 	if e != nil {
 		return nil, e
