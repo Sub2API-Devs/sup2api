@@ -155,4 +155,6 @@ release 0.1.26 0.1.25
 release 0.1.27
 # 0.1.28 makes copying the Claude authorization link the main action (same schema).
 release 0.1.28
+# 0.1.29 shows the upstream error of failed account tests (same schema).
+release 0.1.29
 ls -la publish
