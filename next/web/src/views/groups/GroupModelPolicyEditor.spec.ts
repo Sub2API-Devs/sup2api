@@ -5,6 +5,12 @@ import GroupModelPolicyEditor from './GroupModelPolicyEditor.vue'
 
 describe('group model policy editor', () => {
   const render = () => mount(GroupModelPolicyEditor, { props: { modelValue: ['claude-haiku-*'], mode: 'whitelist', options: ['claude-opus-5-5'] }, global: { plugins: [i18n] } })
+  it('fills group IDs without broad wildcard suggestions and preserves existing rules', async () => {
+    const w = render()
+    await w.get('[data-testid="policy-fill-group"]').trigger('click')
+    expect(w.emitted('update:modelValue')?.at(-1)).toEqual([['claude-haiku-*', 'claude-opus-5-5']])
+    expect(w.find('input[aria-label="gpt-*"]').exists()).toBe(false)
+  })
   it('switches policy mode without overwriting the patterns', async () => {
     const w = render()
     await w.get('[data-testid="policy-blacklist"]').trigger('click')

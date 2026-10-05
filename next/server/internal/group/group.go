@@ -40,6 +40,7 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("GET", "/groups", "group:read", s.list)
 	r.Perm("POST", "/groups", "group:manage", s.create)
 	r.Perm("GET", "/groups/:id", "group:read", s.get)
+	r.Perm("GET", "/groups/:id/models", "group:read", s.models)
 	r.Perm("PATCH", "/groups/:id", "group:manage", s.update)
 	r.Perm("DELETE", "/groups/:id", "group:manage", s.delete)
 	r.Perm("GET", "/users/:id/groups", "group:read", s.userGroups)

@@ -2,7 +2,7 @@
 // publishers. (Accounts and account types live in their own mock module.)
 import { fail, nextId, noContent, now, on, paginate, type MockRequest } from './router'
 import { ALL_PERMISSIONS, caller, filterOwned, hasPerm, inScope, ownerScope, readonlyUser, userEmail, vendorUser } from './core'
-import { groupAccountCount, groupPlatforms, proxyAccountCount } from './accounts'
+import { accounts, groupAccountCount, groupPlatforms, proxyAccountCount } from './accounts'
 
 type L = { en: string; zh: string }
 const L = (en: string, zh: string): L => ({ en, zh })
@@ -197,6 +197,12 @@ function validateGroup(b: any) {
 }
 
 on('GET', '/groups', (req) => paginate(groups.filter((g) => match(req.query.q, g.name, g.description)).map(groupOut), req.query))
+on('GET', '/groups/:id/models', req => {
+ const gid = Number(req.params.id)
+ if (!groups.some(g => g.id === gid)) return fail(404, 'not_found', 'group not found')
+ const members = accounts.filter(a => a.group_ids.includes(gid))
+ return { models: [...new Set(members.flatMap(a => a.models || []))].sort(), unrestricted_accounts: members.filter(a => !a.models?.length).length }
+})
 on('GET', '/groups/:id', (req) => {
   const g = groups.find((x) => x.id === Number(req.params.id))
   return g ? groupOut(g) : fail(404, 'not_found', 'group not found')

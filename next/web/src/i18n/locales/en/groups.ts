@@ -1,4 +1,10 @@
 export default {
+  fillWhitelist: 'Fill group models ({n})',
+  fillBlacklist: 'Block all group models ({n})',
+  groupModelSource: 'Model IDs from group accounts, deduplicated. Filling preserves existing rules.',
+  unrestrictedModelsHint: '{n} accounts have unrestricted models and cannot be fully enumerated. Only explicitly configured IDs are listed.',
+  modelsLoadFailed: 'Failed to load group models. Reopen the editor to retry.',
+
   modelRules: 'Model policy',
   whitelist: 'Whitelist',
   blacklist: 'Blacklist',

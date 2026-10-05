@@ -20,7 +20,7 @@ import {
   toast,
   type TableColumn
 } from '@sub2api/ui'
-import type { Group, Price } from '@/api/types'
+import type { Group } from '@/api/types'
 import { statusTone } from '@/api/admin'
 import { useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
@@ -42,9 +42,30 @@ const canEditAccounts = computed(() => auth.has([...ACCOUNT_KEYS.read]) && auth.
 const accountsEditor = ref<InstanceType<typeof GroupAccountsEditor>>()
 const list = useList<Group>('/groups')
 const modelPolicyEditor = ref<InstanceType<typeof GroupModelPolicyEditor>>()
-const modelOptions = ref<string[]>([])
-function loadModels() {
-  api.list<Price>('/prices', { page_size: 500 }).then(r => { modelOptions.value = r.items.map(p => p.model) }).catch(() => {})
+interface ModelSource { models: string[]; unrestricted_accounts: number }
+const modelSource = ref<ModelSource>({ models: [], unrestricted_accounts: 0 })
+const selectedModelSource = ref<ModelSource | null>(null)
+const modelsLoading = ref(false)
+const modelLoadError = ref('')
+let modelRequest = 0
+const currentModelSource = computed(() => canEditAccounts.value && auth.has('account:read') && selectedModelSource.value ? selectedModelSource.value : {
+  models: [...new Set([...modelSource.value.models, ...(selectedModelSource.value?.models || [])])].sort(),
+  unrestricted_accounts: modelSource.value.unrestricted_accounts
+})
+async function loadModels(gid: number | null) {
+  const request = ++modelRequest
+  modelSource.value = { models: [], unrestricted_accounts: 0 }
+  selectedModelSource.value = null
+  modelLoadError.value = ''
+  modelsLoading.value = !!gid
+  if (!gid) return
+  try {
+    const result = await api.get<ModelSource>(`/groups/${gid}/models`)
+    if (request === modelRequest) modelSource.value = result
+  } catch (e) {
+    if (request === modelRequest) modelLoadError.value = t('groups.modelsLoadFailed')
+    notifyError(e)
+  } finally { if (request === modelRequest) modelsLoading.value = false }
 }
 
 const columns = computed<TableColumn[]>(() => {
@@ -131,7 +152,7 @@ const statusOptions = computed(() => [
 ])
 
 function openCreate() {
-  loadModels()
+  loadModels(null)
   editing.value = null
   Object.assign(form, { name: '', description: '', status: 'active', rate_multiplier: '1', visibility: 'public', model_allowlist: [], model_filter_mode: 'blacklist' })
   errors.value = {}
@@ -139,7 +160,7 @@ function openCreate() {
 }
 
 function openEdit(g: Group) {
-  loadModels()
+  loadModels(g.id)
   editing.value = g
   Object.assign(form, {
     name: g.name,
@@ -304,13 +325,14 @@ async function onAction(g: Group, key: string) {
           </SField>
         </SGrid>
         <SField :label="t('groups.modelRules')" :hint="t('groups.allowlistHint')" :error="errors.model_allowlist || errors.model_filter_mode">
-          <GroupModelPolicyEditor v-if="open" :key="editing?.id ?? 'new'" ref="modelPolicyEditor" v-model="form.model_allowlist" v-model:mode="form.model_filter_mode" :options="modelOptions" />
+          <GroupModelPolicyEditor v-if="open" :key="editing?.id ?? 'new'" ref="modelPolicyEditor" v-model="form.model_allowlist" v-model:mode="form.model_filter_mode" :options="currentModelSource.models" :loading="modelsLoading" :unrestricted-accounts="currentModelSource.unrestricted_accounts" />
+          <p v-if="modelLoadError" class="text-xs text-danger-600">{{ modelLoadError }}</p>
         </SField>
         <SField v-if="editing" :label="t('platforms.served')">
           <GroupPlatforms :group="editing" hint />
         </SField>
         <SField v-if="canEditAccounts" :label="t('groups.accounts.title')" :hint="t('groups.accounts.hint')">
-          <GroupAccountsEditor v-if="open" ref="accountsEditor" :group-id="editing?.id ?? null" />
+          <GroupAccountsEditor v-if="open" ref="accountsEditor" :group-id="editing?.id ?? null" @models="selectedModelSource = $event" />
         </SField>
       </form>
       <template #footer>

@@ -1,4 +1,10 @@
 export default {
+  fillWhitelist: '填入分组全部模型（{n}）',
+  fillBlacklist: '将分组全部模型加入黑名单（{n}）',
+  groupModelSource: '从分组账号配置提取模型 ID，合并去重；填充会保留现有规则。',
+  unrestrictedModelsHint: '{n} 个账号未限制模型，无法枚举其全部模型；下方仅列出已明确配置的模型 ID。',
+  modelsLoadFailed: '分组模型加载失败，请重新打开编辑界面重试。',
+
   modelRules: '模型名单',
   whitelist: '白名单',
   blacklist: '黑名单',

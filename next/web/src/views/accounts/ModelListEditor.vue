@@ -3,12 +3,12 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SIcon } from '@sub2api/ui'
 
-const props = defineProps<{ modelValue: string[]; options: string[]; mapping: Record<string, string>; emptyText?: string }>()
+const props = defineProps<{ modelValue: string[]; options: string[]; mapping: Record<string, string>; emptyText?: string; showOptions?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', value: string[]): void }>()
 const { t } = useI18n()
 const search = ref('')
 const category = ref('')
-const browse = ref(false)
+const browse = ref(props.showOptions || false)
 const selected = computed(() => new Set(props.modelValue))
 function family(id: string): string {
   const m = id.toLowerCase()

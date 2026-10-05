@@ -12,6 +12,7 @@ import { typeKey, useAccountTypes } from '@/views/accounts/accountTypes'
 // mix types). Membership lives on the account (group_ids), so save() patches
 // the accounts whose membership changed.
 const props = defineProps<{ groupId: number | null }>()
+const emit = defineEmits<{ (e: 'models', data: { models: string[]; unrestricted_accounts: number }): void }>()
 const { t } = useI18n()
 const accountTypes = useAccountTypes()
 accountTypes.load()
@@ -23,13 +24,14 @@ const accounts = ref<Account[]>([])
 const selected = ref(new Set<number>())
 const initial = ref(new Set<number>())
 const loading = ref(false)
+const loaded = ref(false)
 const q = ref('')
 const typeFilter = ref('')
 const onlySelected = ref(false)
 
 async function loadAll(): Promise<Account[]> {
   const out: Account[] = []
-  for (let page = 1; page <= 20; page++) {
+  for (let page = 1; ; page++) {
     const r = await api.list<Account>('/accounts', { page, page_size: 200 })
     out.push(...r.items)
     if (!r.items.length || out.length >= (r.page.total ?? out.length)) break
@@ -41,11 +43,13 @@ watch(
   () => props.groupId,
   async (gid) => {
     loading.value = true
+    loaded.value = false
     q.value = ''
     typeFilter.value = ''
     onlySelected.value = false
     try {
       accounts.value = await loadAll()
+      loaded.value = true
     } catch {
       accounts.value = []
     } finally {
@@ -57,6 +61,12 @@ watch(
   },
   { immediate: true }
 )
+
+watch([accounts, selected, loading, loaded], () => {
+  if (loading.value || !loaded.value) return
+  const members = accounts.value.filter(a => selected.value.has(a.id))
+  emit('models', { models: [...new Set(members.flatMap(a => a.models || []))].sort(), unrestricted_accounts: members.filter(a => !a.models?.length).length })
+}, { deep: true })
 
 /** Types present among the accounts, for the filter. */
 const typeOptions = computed(() => {

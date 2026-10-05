@@ -4,12 +4,17 @@ import { useI18n } from 'vue-i18n'
 import { SButton } from '@sub2api/ui'
 import ModelListEditor from '@/views/accounts/ModelListEditor.vue'
 
-const props = defineProps<{ modelValue: string[]; mode: 'whitelist' | 'blacklist'; options: string[] }>()
+const props = defineProps<{ modelValue: string[]; mode: 'whitelist' | 'blacklist'; options: string[]; loading?: boolean; unrestrictedAccounts?: number }>()
 const emit = defineEmits<{ (e: 'update:modelValue', value: string[]): void; (e: 'update:mode', value: 'whitelist' | 'blacklist'): void }>()
 const { t } = useI18n()
 const draft = ref('')
 const error = ref('')
-const suggestions = computed(() => [...new Set(['claude-*', 'gpt-*', 'gemini-*', ...props.options])])
+const suggestions = computed(() => [...new Set(props.options)])
+function fillGroupModels() {
+  const pending = draft.value.trim().split(/[\s,]+/).filter(Boolean)
+  if (!commit()) return
+  emit('update:modelValue', [...new Set([...props.modelValue, ...pending, ...suggestions.value])])
+}
 function commit(): boolean {
   const parts = draft.value.trim().split(/[\s,]+/).filter(Boolean)
   if (parts.some(m => m.length > 200)) { error.value = t('groups.patternInvalid'); return false }
@@ -35,7 +40,12 @@ defineExpose({ commit })
         <span class="mt-1 block text-xs text-fg-muted">{{ t(`groups.${value}Hint`) }}</span>
       </button>
     </div>
-    <ModelListEditor :model-value="modelValue" :options="suggestions" :mapping="{}" :empty-text="t('groups.emptyPolicy')" @update:model-value="emit('update:modelValue', $event)" />
+    <div class="flex flex-wrap items-center gap-2">
+      <SButton size="sm" :loading="loading" :disabled="loading || !suggestions.length" data-testid="policy-fill-group" @click="fillGroupModels">{{ t(mode === 'whitelist' ? 'groups.fillWhitelist' : 'groups.fillBlacklist', { n: suggestions.length }) }}</SButton>
+      <span class="text-xs text-fg-subtle">{{ t('groups.groupModelSource') }}</span>
+    </div>
+    <p v-if="unrestrictedAccounts" class="text-xs text-amber-600">{{ t('groups.unrestrictedModelsHint', { n: unrestrictedAccounts }) }}</p>
+    <ModelListEditor show-options :model-value="modelValue" :options="suggestions" :mapping="{}" :empty-text="t('groups.emptyPolicy')" @update:model-value="emit('update:modelValue', $event)" />
     <div class="flex gap-2">
       <input v-model="draft" class="input input-sm min-w-0 flex-1" :aria-label="t('groups.allowlistPlaceholder')" :placeholder="t('groups.allowlistPlaceholder')" data-testid="policy-draft" @keydown.enter.prevent="commit" @paste="paste" @blur="commit" />
       <SButton size="sm" :disabled="!draft.trim()" @click="commit">{{ t('accounts.editorUi.addModels') }}</SButton>

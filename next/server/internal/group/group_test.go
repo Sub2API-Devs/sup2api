@@ -391,3 +391,34 @@ func TestGroupModelPolicyCRUD(t *testing.T) {
 		t.Fatalf("permission: %d", code)
 	}
 }
+
+func TestGroupModelIDs(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	_, out := e.do(e.admin, "POST", "/groups", map[string]any{"name": "model-source"})
+	id := int64(out["data"].(map[string]any)["id"].(float64))
+	for i, models := range [][]string{{"claude-opus-5-5", "gpt-5"}, {"gpt-5"}, {}, {"deleted-model"}} {
+		var aid int64
+		err := e.db.Pool.QueryRow(ctx, `INSERT INTO accounts (name,plugin_key,type,credentials_enc,models,deleted_at) VALUES ('model-source','anthropic','apikey','\x00'::bytea,$1,CASE WHEN $2 THEN now() END) RETURNING id`, models, i == 3).Scan(&aid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = e.db.Pool.Exec(ctx, `INSERT INTO account_groups(account_id,group_id) VALUES ($1,$2)`, aid, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	code, out := e.do(e.admin, "GET", fmt.Sprintf("/groups/%d/models", id), nil)
+	if code != 200 {
+		t.Fatalf("models: %d %v", code, out)
+	}
+	data := out["data"].(map[string]any)
+	if fmt.Sprint(data["models"]) != "[claude-opus-5-5 gpt-5]" || data["unrestricted_accounts"] != float64(1) {
+		t.Fatalf("models: %v", data)
+	}
+	if code, _ = e.do(e.user, "GET", fmt.Sprintf("/groups/%d/models", id), nil); code != 403 {
+		t.Fatalf("permission: %d", code)
+	}
+	if code, _ = e.do(e.admin, "GET", "/groups/999999/models", nil); code != 404 {
+		t.Fatalf("missing group: %d", code)
+	}
+}
