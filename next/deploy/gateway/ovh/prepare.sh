@@ -148,4 +148,7 @@ release 0.1.24 0.1.23
 # are authorized before saving, the runtime installs from the console, and a
 # login lasts while it is used. Upgrade the cc-max controller first.
 release 0.1.25 0.1.24
+# 0.1.26 adds migration 0033: re-authorizing a Claude Code account replaces its
+# runtime and clears its history. Upgrade the cc-max controller first.
+release 0.1.26 0.1.25
 ls -la publish
