@@ -179,7 +179,7 @@ SDK 服务按请求声明分组，不连接客户端实际的 MCP 地址；工�
 
 ### messages 中的 system（2026-10-06）
 
-位置规则与 [Messages API](https://platform.claude.com/docs/en/build-with-claude/mid-conversation-system-messages) 一致：连续的 system 必须紧跟 user（含 tool_result）之后，并位于 assistant 之前或数组末尾，否则返回 400。仅接受文本；`output_config`、`clear_at` 等字段返回 400，不静默丢弃。
+位置规则与 [Messages API](https://platform.claude.com/docs/en/build-with-claude/mid-conversation-system-messages) 一致：连续的 system 必须紧跟 user（含 tool_result）之后，并位于 assistant 之前或数组末尾，否则返回 400。位置、空内容、非文本块等错误的文字与官方 API 实测返回一致（`system_validation.go` 中的模板），序号为客户端原始数组中的位置。仅接受文本；`output_config`、`clear_at` 等字段返回 400，不静默丢弃。
 
 - 已提交历史中的 system 写成 Claude Code 自己为 Mod 上下文落盘的 `hook_additional_context` 附件记录（`renderedRole: system`），放在原位置；同一段连续 system 合为一条记录。
 - 最后一轮（最后一个 assistant 之后）的 system 由 Mod 的 `prompt.submit` context 附加，模型请求前写确认文件，网关核对；完成后还核对原生记录确实多出这条附件，任一缺失即失败。

@@ -25,9 +25,12 @@ const (
 	pendingSystemTotalLimit = 200000
 )
 
-func parseSystemMessage(m Object, ttl *time.Duration) ([]Object, error) {
+// index is the message's position in the client's array, for error messages.
+// Errors the Messages API also returns use its wording; the rest are gateway
+// limits the API itself would accept.
+func parseSystemMessage(m Object, index int, ttl *time.Duration) ([]Object, error) {
 	if _, exists := m["output_config"]; exists {
-		return nil, fmt.Errorf("system output_config is not supported through Claude Code")
+		return nil, fmt.Errorf("messages.%d: system output_config is not supported through Claude Code", index)
 	}
 	if err := keys(m, "role", "content"); err != nil {
 		return nil, err
@@ -36,21 +39,31 @@ func parseSystemMessage(m Object, ttl *time.Duration) ([]Object, error) {
 	switch v := m["content"].(type) {
 	case string:
 		if v == "" {
-			return nil, fmt.Errorf("empty system message")
+			return nil, fmt.Errorf(errSystemEmpty, index)
 		}
 		content = []Object{{"type": "text", "text": v}}
 	case []any:
 		for _, value := range v {
 			b, ok := value.(map[string]any)
-			if !ok || str(b, "type") != "text" {
-				return nil, fmt.Errorf("system supports text only")
+			if !ok {
+				return nil, fmt.Errorf(errSystemBlock, index)
+			}
+			switch str(b, "type") {
+			case "text":
+			case "tool_addition", "tool_removal":
+				return nil, fmt.Errorf("messages.%d: system %s blocks are not supported through Claude Code", index, str(b, "type"))
+			default:
+				return nil, fmt.Errorf(errSystemBlock, index)
 			}
 			if err := keys(b, "type", "text", "cache_control"); err != nil {
 				return nil, err
 			}
 			text, ok := b["text"].(string)
-			if !ok || text == "" {
+			if !ok {
 				return nil, fmt.Errorf("invalid system text")
+			}
+			if text == "" {
+				return nil, fmt.Errorf(errTextEmpty)
 			}
 			if err := cacheTTL(b["cache_control"], ttl); err != nil {
 				return nil, err
@@ -59,10 +72,10 @@ func parseSystemMessage(m Object, ttl *time.Duration) ([]Object, error) {
 			content = append(content, Object{"type": "text", "text": text})
 		}
 	default:
-		return nil, fmt.Errorf("system content must be text or text blocks")
+		return nil, fmt.Errorf(errSystemContent, index)
 	}
 	if len(content) == 0 {
-		return nil, fmt.Errorf("empty system message")
+		return nil, fmt.Errorf(errSystemEmpty, index)
 	}
 	return content, nil
 }

@@ -379,6 +379,7 @@ func parseRequest(data []byte) (*Request, error) {
 	if !ok || len(a) == 0 || len(a) > 100000 {
 		return nil, fmt.Errorf("messages must contain 1..100000 messages")
 	}
+	origin := []int{} // client array index of each parsed message
 	for i, v := range a {
 		m, ok := v.(map[string]any)
 		if !ok {
@@ -386,11 +387,12 @@ func parseRequest(data []byte) (*Request, error) {
 		}
 		role := str(m, "role")
 		if role == "system" {
-			b, err := parseSystemMessage(m, &r.TTL)
+			b, err := parseSystemMessage(m, i, &r.TTL)
 			if err != nil {
-				return nil, fmt.Errorf("messages[%d]: %w", i, err)
+				return nil, err
 			}
 			r.Messages = append(r.Messages, Message{Role: role, Content: b})
+			origin = append(origin, i)
 			continue
 		}
 		if e = keys(m, "role", "content"); e != nil {
@@ -408,10 +410,11 @@ func parseRequest(data []byte) (*Request, error) {
 			r.Messages[n-1].Content = append(r.Messages[n-1].Content, b...)
 		} else {
 			r.Messages = append(r.Messages, Message{role, b})
+			origin = append(origin, i)
 		}
 	}
 	first, last := -1, -1
-	if err := validateSystemPositions(r.Messages); err != nil {
+	if err := validateSystemPositions(r.Messages, origin); err != nil {
 		return nil, err
 	}
 	for i, m := range r.Messages {
