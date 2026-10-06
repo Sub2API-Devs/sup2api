@@ -13,7 +13,8 @@
 - 带 system 的历史现在参与前缀缓存：prefix-hit / fork / rebuild 均覆盖。`output_config`、`clear_at` 等 system 字段改为 400；最后一轮 system 单块 10 万、合计 20 万 UTF-16 字符上限。
 - 验证：`go test ./...`、Linux vet；本地 CLI 2.1.288 + 模拟上游的 `TestRealCLI`、`TestSystemMessagesRealCLI`；容器内真实模型 `TestSystemMessagesLiveE2E` 七项通过；next/server `internal/ccgateway`（33 个测试，PG 正常运行，无跳过）与 `remotedocker` 通过；控制器 25 个单元测试在 ccg-controller 容器内通过；前端类型检查与 ccgateway 相关 33 个测试通过。
 - 旧方案的 `native_system_resume_probe_test.go`、`inline_system_context_test.go` 已删除（被测代码已不存在，失败结论保留在本文下文）。
-- 仍未部署：应用镜像、控制器（1h relay）与核心（61 分钟、功能支持页新增一行）。现场仍是 app 0.1.52 / controller 0.1.44。
+- 已提交 `dcfdbfed3` 并部署（2026-10-06 17:30–17:42）：cc-max 从该提交构建 `ccgateway:0.1.53`、`ccg-controller:0.1.45`，经核心 remote-config + runtime/install 更新，账号 21/22 应用容器均已换新镜像（21 仍不可调度）；OVH 核心 0.1.45（manifest `f8972eab…`）主节点优先升级完成，四节点 ready。服务器 `~/sup2api/src` 原有未提交副本已 `git stash`（`pre-dcfdbfed3 server-side copies`）。
+- 公网验收（本机 CC 的网关入口，路由到账号 22）：最后一轮 system 不泄露、下一轮 prefix-hit 答对、SSE 答对、工具结果后的 system 答对；错误位置与 `output_config` 均返回 400。
 - 发现但未改动：经网关的每个请求都带 Claude Code 的 `session_context` 附件，内含 Claude 账号邮箱，API 客户端可让模型说出它。README 记录过此前决定“不通过 Mod 删除附件”，是否改为删除这一类需用户决定。
 
 ## 接手前先读
