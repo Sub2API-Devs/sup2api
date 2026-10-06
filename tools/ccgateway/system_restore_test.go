@@ -262,7 +262,7 @@ func TestRestoreSystemMessagesAcrossInternalRounds(t *testing.T) {
 	}
 }
 
-// Anything but one exact, whole-attachment occurrence in the right turn fails.
+// A group that is not found as a whole attachment in its own turn fails.
 func TestRestoreSystemMessagesRefusesMismatch(t *testing.T) {
 	r := restoreFixture(t, []any{
 		Object{"role": "user", "content": "U1"},
@@ -273,15 +273,13 @@ func TestRestoreSystemMessagesRefusesMismatch(t *testing.T) {
 	})
 	ok := `{"role":"user","content":"U1"},{"role":"system","content":"first\n\nhalf"},{"role":"assistant","content":"A"},{"role":"user","content":"U2"},`
 	for name, wire := range map[string]string{
-		"missing":          `{"messages":[` + ok + `{"role":"system","content":"env"}]}`,
-		"duplicate":        `{"messages":[` + ok + `{"role":"system","content":"S\n\nenv\n\nS"}]}`,
-		"duplicate across": `{"messages":[` + ok + `{"role":"system","content":"S"},{"role":"system","content":"S"}]}`,
-		"partial text":     `{"messages":[` + ok + `{"role":"system","content":"env\n\nSS"}]}`,
-		"cut at blank":     `{"messages":[{"role":"user","content":"U1"},{"role":"system","content":"first"},{"role":"system","content":"half"},{"role":"assistant","content":"A"},{"role":"user","content":"U2"},{"role":"system","content":"S"}]}`,
-		"wrong turn":       `{"messages":[{"role":"user","content":"U1"},{"role":"assistant","content":"A"},{"role":"user","content":"U2"},{"role":"system","content":"first\n\nhalf\n\nS"}]}`,
-		"user reminder":    `{"messages":[` + ok[:len(ok)-1] + `,{"role":"user","content":[{"type":"text","text":"<system-reminder>\nS\n</system-reminder>"}]}]}`,
-		"turn missing":     `{"messages":[{"role":"user","content":"U1"},{"role":"system","content":"first\n\nhalf"}]}`,
-		"no messages":      `{"model":"m"}`,
+		"missing":       `{"messages":[` + ok + `{"role":"system","content":"env"}]}`,
+		"partial text":  `{"messages":[` + ok + `{"role":"system","content":"env\n\nSS"}]}`,
+		"cut at blank":  `{"messages":[{"role":"user","content":"U1"},{"role":"system","content":"first"},{"role":"system","content":"half"},{"role":"assistant","content":"A"},{"role":"user","content":"U2"},{"role":"system","content":"S"}]}`,
+		"wrong turn":    `{"messages":[{"role":"user","content":"U1"},{"role":"assistant","content":"A"},{"role":"user","content":"U2"},{"role":"system","content":"first\n\nhalf\n\nS"}]}`,
+		"user reminder": `{"messages":[` + ok[:len(ok)-1] + `,{"role":"user","content":[{"type":"text","text":"<system-reminder>\nS\n</system-reminder>"}]}]}`,
+		"turn missing":  `{"messages":[{"role":"user","content":"U1"},{"role":"system","content":"first\n\nhalf"}]}`,
+		"no messages":   `{"model":"m"}`,
 	} {
 		body := wireBody(t, wire)
 		before := canonical(t, body)
@@ -293,6 +291,60 @@ func TestRestoreSystemMessagesRefusesMismatch(t *testing.T) {
 		if canonical(t, body) != before {
 			t.Fatalf("%s: body changed despite the failure", name)
 		}
+	}
+}
+
+// The same whole text more than once in the turn's system messages: every
+// occurrence is the same text, so the last one is taken. The client's messages
+// and their place do not depend on the choice; the same input always gives the
+// same bytes.
+func TestRestoreSystemMessagesTakesLastOccurrence(t *testing.T) {
+	head := `{"role":"user","content":"U1"},{"role":"system","content":"first\n\nhalf"},{"role":"assistant","content":"A"},{"role":"user","content":"U2"},`
+	restoredHead := `{"content":"U1","role":"user"},{"content":[{"text":"first\n\nhalf","type":"text"}],"role":"system"},{"content":"A","role":"assistant"},{"content":"U2","role":"user"},`
+	const tokens = "<total_tokens>15000000 tokens left</total_tokens>"
+	const date = "Today's date is 2026-10-06."
+	for _, c := range []struct {
+		name, client, wire, want string
+	}{
+		{"one message", "S",
+			`{"role":"system","content":"S\n\nenv\n\nS"}`,
+			`{"content":"S\n\nenv","role":"system"},{"content":[{"text":"S","type":"text"}],"role":"system"}`},
+		{"across messages", "S",
+			`{"role":"system","content":"S"},{"role":"system","content":"S"}`,
+			`{"content":"S","role":"system"},{"content":[{"text":"S","type":"text"}],"role":"system"}`},
+		// Claude Code's own token budget and date read exactly like the
+		// client's message (the 502 seen with a Claude Code client).
+		{"cli token budget", tokens,
+			`{"role":"system","content":[{"type":"text","text":"# Environment\nE\n\n` + tokens + `\n\n` + tokens + `\n\n` + date + `","cache_control":{"type":"ephemeral"}}]}`,
+			`{"content":[{"text":"# Environment\nE\n\n` + tokens + `\n\n` + date + `","type":"text"}],"role":"system"},{"content":[{"cache_control":{"type":"ephemeral"},"text":"` + tokens + `","type":"text"}],"role":"system"}`},
+		{"cli date", date,
+			`{"role":"system","content":"# Environment\nE\n\n` + tokens + `\n\n` + date + `\n\n` + date + `"}`,
+			`{"content":"# Environment\nE\n\n` + tokens + `\n\n` + date + `","role":"system"},{"content":[{"text":"` + date + `","type":"text"}],"role":"system"}`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r := restoreFixture(t, []any{
+				Object{"role": "user", "content": "U1"},
+				Object{"role": "system", "content": "first\n\nhalf"},
+				Object{"role": "assistant", "content": "A"},
+				Object{"role": "user", "content": "U2"},
+				Object{"role": "system", "content": c.client},
+			})
+			raw := `{"messages":[` + head + c.wire + `]}`
+			relay := &outboundRelay{}
+			first, err := relay.adapt(r, r.systemGroups(), []byte(raw), false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i := 0; i < 5; i++ {
+				if again, err := relay.adapt(r, r.systemGroups(), []byte(raw), false); err != nil || !bytes.Equal(again, first) {
+					t.Fatalf("restoration is not deterministic: %s", again)
+				}
+			}
+			body := wireBody(t, string(first))
+			if got, want := canonical(t, body["messages"]), "["+restoredHead+c.want+"]"; got != want {
+				t.Fatalf("restored:\n%s\nwant:\n%s", got, want)
+			}
+		})
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -404,7 +405,7 @@ func TestRealCLI(t *testing.T) {
 	}))
 	defer fake.Close()
 	baseEnv := []string{}
-	for _, k := range []string{"PATH", "SystemRoot", "WINDIR", "COMSPEC", "TEMP", "TMP", "PATHEXT", "APPDATA", "LOCALAPPDATA"} {
+	for _, k := range []string{"PATH", "SystemRoot", "WINDIR", "COMSPEC", "TEMP", "TMP", "PATHEXT", "APPDATA", "LOCALAPPDATA", "CCGATEWAY_ATTACHMENT_TRACE"} {
 		if v := os.Getenv(k); v != "" {
 			baseEnv = append(baseEnv, k+"="+v)
 		}
@@ -468,6 +469,12 @@ func TestRealCLI(t *testing.T) {
 	sys, _ := json.Marshal(first["system"])
 	if !bytes.Contains(sys, []byte("Test system body")) {
 		t.Fatal("system body missing")
+	}
+	// CC 自带的附件（environment/model/date/total_tokens 等）被拦截，不出现在上游请求里
+	for _, forbidden := range []string{"# Environment", "You are powered by", "Today's date", "<total_tokens>"} {
+		if bytes.Contains(sys, []byte(forbidden)) {
+			t.Fatalf("upstream request contains CLI attachment text: %s", forbidden)
+		}
 	}
 	user := Object{"role": "user", "content": "CALL_TOOL"}
 	tool := Object{"name": "weather", "description": "Weather", "input_schema": Object{"type": "object", "properties": Object{"city": Object{"type": "string"}}, "required": []string{"city"}}}
@@ -1125,9 +1132,82 @@ func TestRealCLI(t *testing.T) {
 		}
 		// The client's turns: first / prior answer / second + system / final
 		// answer (after the native discovery round) / third + system.
-		want := "user assistant user system system:SYSTEM_SEARCH_TOOL history assistant:ToolSearch user assistant user system system:SYSTEM_AFTER_SEARCH"
-		if got := strings.Join(shape, " "); got != want && got != strings.Replace(want, "assistant:ToolSearch user assistant", "assistant:ToolSearch user system assistant", 1) {
+		// Claude Code's deferred_tools_delta (when ToolSearch fires) precedes
+		// the client's system message as a separate system message.
+		want := "user assistant user system:SYSTEM_SEARCH_TOOL history assistant:ToolSearch user assistant user system:SYSTEM_AFTER_SEARCH"
+		withDeferred := "user assistant user system system:SYSTEM_SEARCH_TOOL history assistant:ToolSearch user assistant user system:SYSTEM_AFTER_SEARCH"
+		got := strings.Join(shape, " ")
+		if got != want && got != strings.Replace(want, "assistant:ToolSearch user assistant", "assistant:ToolSearch user system assistant", 1) && got != withDeferred && got != strings.Replace(withDeferred, "assistant:ToolSearch user assistant", "assistant:ToolSearch user system assistant", 1) {
 			t.Fatalf("wire shape: %s", got)
+		}
+	})
+	// Regression: client system text identical to Claude Code's own attachment
+	// text (the 502 seen with a Claude Code client sending total_tokens).
+	t.Run("client-system-identical-to-engine-attachment", func(t *testing.T) {
+		const tokens = "<total_tokens>15000000 tokens left</total_tokens>"
+		const date = "Today's date is 2026-10-06."
+		request := Object{
+			"model":      "claude-opus-4-20240229",
+			"max_tokens": 100,
+			"messages": []any{
+				Object{"role": "user", "content": "first"},
+				Object{"role": "system", "content": tokens},
+			},
+		}
+		answered, _, _ := post(request, "")
+		followUp := Object{
+			"model":      "claude-opus-4-20240229",
+			"max_tokens": 100,
+			"messages": []any{
+				Object{"role": "user", "content": "first"},
+				Object{"role": "system", "content": tokens},
+				Object{"role": "assistant", "content": answered["content"]},
+				Object{"role": "user", "content": "second"},
+				Object{"role": "system", "content": date},
+			},
+		}
+		mu.Lock()
+		before := len(requests)
+		mu.Unlock()
+		_, _, headers := post(followUp, "")
+		if headers.Get("X-CCGateway-History") != "prefix-hit" {
+			t.Fatalf("history mode %s", headers.Get("X-CCGateway-History"))
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if len(requests)-before != 1 {
+			t.Fatalf("follow-up made %d model requests", len(requests)-before)
+		}
+		wire := requests[len(requests)-1]
+		var clientSystems []string
+		for _, value := range wire["messages"].([]any) {
+			message := value.(Object)
+			if str(message, "role") != "system" {
+				continue
+			}
+			// content can be string or []Object
+			switch c := message["content"].(type) {
+			case string:
+				if strings.Contains(c, tokens) {
+					clientSystems = append(clientSystems, "tokens")
+				} else if strings.Contains(c, date) {
+					clientSystems = append(clientSystems, "date")
+				}
+			case []any:
+				for _, block := range c {
+					if b, ok := block.(Object); ok && str(b, "type") == "text" {
+						text := str(b, "text")
+						if strings.Contains(text, tokens) {
+							clientSystems = append(clientSystems, "tokens")
+						} else if strings.Contains(text, date) {
+							clientSystems = append(clientSystems, "date")
+						}
+					}
+				}
+			}
+		}
+		if want := []string{"tokens", "date"}; !reflect.DeepEqual(clientSystems, want) {
+			t.Fatalf("client system markers: %v, want %v", clientSystems, want)
 		}
 	})
 	// Upstream errors under the pass_upstream_errors policy (opt-in).

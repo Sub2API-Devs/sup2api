@@ -182,9 +182,13 @@ SDK 服务按请求声明分组，不连接客户端实际的 MCP 地址；工�
 位置规则与 [Messages API](https://platform.claude.com/docs/en/build-with-claude/mid-conversation-system-messages) 一致：连续的 system 必须紧跟 user（含 tool_result）之后，并位于 assistant 之前或数组末尾，否则返回 400。位置、空内容、非文本块等错误的文字与官方 API 实测返回一致（`system_validation.go` 中的模板），序号为客户端原始数组中的位置。仅接受文本；`output_config`、`clear_at` 等字段返回 400，不静默丢弃。
 
 - 已提交历史中的每条客户端 system 消息各写成一条 Claude Code 自己为 Mod 上下文落盘的 `hook_additional_context` 附件记录（`renderedRole: system`），放在原位置；记录的 `content` 是该消息的文本块数组，`rendered` 与 Mod 生成的一致（单条、带 `prompt.submit hook additional context:` 标签、块之间换行）。
-- 最后一轮（最后一个 assistant 之后）的 system 由 Mod 的 `prompt.submit` context 附加，模型请求前写确认文件，网关核对；完成后还核对原生记录确实多出这条附件，任一缺失即失败。Claude Code 一次提交只生成一条记录，所以最后一轮的多条 system 在原生记录里是一条（全部文本块按顺序），续聊时由中继按客户端历史还原。
-- Mod 的 `prompt.attachment` 去掉 CLI 加在 Mod 上下文前的 `prompt.submit hook additional context:` 标签。
-- 出站还原：请求含客户端 system 时，Runner 为 CLI 开启 system 轮次（`CLAUDE_CODE_FORCE_MID_CONVERSATION_SYSTEM=1`），模型请求在回环中继（`outbound_relay.go`）里还原。Claude Code 会把同一轮的所有 system 附件（含它自带的环境、模型、日期等）合成一条 system 消息（附件之间空行，同一附件的文本块之间换行）。中继按轮次对齐（客户端 assistant 数；内部 ToolSearch 轮不计），在该轮第一个 assistant 之前的 system 消息里用精确子串定位客户端这一组的整段文本（必须是完整附件，即前后为空行或边界），然后拆成：CLI 自带的剩余内容一条（保留 `output_config` 等字段；为空且无其他字段则省略），之后是客户端原样的各条 `{"role":"system","content":[文本块...]}`。CLI 加在被替换文本上的缓存断点移到客户端最后一个文本块。CLI 自带内容排在前面，因为后出现的 system 优先。
+- 最后一轮（最后一个 assistant 之后）的 system 由 Mod 的 `prompt.submit` context 附加,模型请求前写确认文件，网关核对；完成后还核对原生记录确实多出这条附件，任一缺失即失败。Claude Code 一次提交只生成一条记录，所以最后一轮的多条 system 在原生记录里是一条（全部文本块按顺序），续聊时由中继按客户端历史还原。
+- Mod 的 `prompt.attachment` 钩子根据请求策略 `attachment_source` 字段（"client" / "gateway" / "both"，缺省 "client"）决定保留哪一方的系统附件（环境、日期、token、session_context 等）：
+  - `"client"`（默认）：拦截容器 CC 自己的附件（`origin.kind === 'engine'`），只放行 `deferred_tools_delta`（工具搜索必需）；客户端附件全部保留。
+  - `"gateway"`：拦截客户端附件（`origin.kind === 'plugin'`），只放行 `hook_additional_context`（客户端 system）；容器 CC 附件全部保留。
+  - `"both"`：两边附件都保留。
+  此钩子还去掉 CLI 加在 Mod 上下文前的 `prompt.submit hook additional context:` 标签。
+- 出站还原：请求含客户端 system 时，Runner 为 CLI 开启 system 轮次（`CLAUDE_CODE_FORCE_MID_CONVERSATION_SYSTEM=1`），模型请求在回环中继（`outbound_relay.go`）里还原。Claude Code 会把同一轮未被拦截的 system 附件合成一条 system 消息（附件之间空行，同一附件的文本块之间换行）。由于 environment、model、date、total_tokens、session_context 等容器自带附件已被 Mod 拦截，CLI 合成的 system 消息只包含客户端内容和放行的白名单附件（如 deferred_tools_delta）。中继按轮次对齐（客户端 assistant 数；内部 ToolSearch 轮不计），在该轮第一个 assistant 之前的 system 消息里用精确子串定位客户端这一组的整段文本（必须是完整附件，即前后为空行或边界），然后拆成：白名单附件或其他剩余内容一条（保留 `output_config` 等字段；为空且无其他字段则省略），之后是客户端原样的各条 `{"role":"system","content":[文本块...]}`。CLI 加在被替换文本上的缓存断点移到客户端最后一个文本块。剩余内容排在前面，因为后出现的 system 优先。
 - 任一组找不到、出现多处或不是完整附件，中继拒绝该请求，网关以该原因返回 502；不会放行结构被改过的请求。CLI 未按 system 轮次发送（客户端文本进了 user 提醒）也按此失败。`/v1/messages/count_tokens` 带 messages 时同样还原，失败只拒绝这次计数。中继保留鉴权头、SSE 原样回传、代理选择，只接受回环来源；开启请求日志时把实际转发的请求体存为 `upstream-request-<序号>-<随机>.body`，被拒绝的原始请求体存为 `upstream-refused-*.body`。
 - 上游错误处理由请求策略 `pass_upstream_errors`（`X-CCGateway-Request-Policy` 中的布尔字段，CCGateway 页面配置，缺省 false）决定。所有模型请求都经过回环中继（不带客户端 system 的请求体不改，`thinking.display` 照旧添加）。
   - false（默认）：错误交给 Claude Code 自己处理（重试、退避、刷新令牌、按错误文字改形重发），中继把错误响应和流原样转发给 CLI，不终止、不记录；最终失败时网关按原方式返回（502 等）。带客户端 system 的请求若遇到让 CLI 关闭 system 轮次的 400，CLI 改用 `<system-reminder>` 形状重发，中继无法还原而拒绝转发（上游只收到第一次请求），客户端收到 502，错误信息为 `cannot restore the client's system messages: ...`，不是官方的 400 原文。

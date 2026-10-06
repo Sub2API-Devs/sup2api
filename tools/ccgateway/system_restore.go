@@ -75,6 +75,17 @@ type systemMatch struct {
 	message, block, start, end int
 }
 
+// startsAfter reports whether m starts later than o, in wire order.
+func (m systemMatch) startsAfter(o systemMatch) bool {
+	if m.message != o.message {
+		return m.message > o.message
+	}
+	if m.block != o.block {
+		return m.block > o.block
+	}
+	return m.start > o.start
+}
+
 // Each wire turn's head: from its first message up to the first assistant
 // message, where Claude Code places the turn's system messages.
 func wireTurnHeads(messages []any) ([][2]int, error) {
@@ -122,9 +133,17 @@ func systemBlockTexts(m Object) ([]string, []bool) {
 }
 
 // restoreSystemMessages rewrites a model request body in place. Every client
-// group must be found exactly once, as a whole attachment, among the system
-// messages at the head of its turn; anything else is an error, never a partial
+// group must be found, as a whole attachment, among the system messages at the
+// head of its turn; a group that is missing is an error, never a partial
 // rewrite.
+//
+// The same text can occur more than once there, for instance when Claude
+// Code's own context (a date, a token budget) reads exactly like a client
+// message. Every occurrence is the same text, so whichever is taken, the
+// client's messages and their place come out the same; only the order within
+// Claude Code's remainder can differ. The last occurrence is taken, which keeps
+// the result the same for the same input. (Request validation lets a turn have
+// one group only: system messages must precede an assistant or end the array.)
 func restoreSystemMessages(body Object, groups []systemGroup) error {
 	if len(groups) == 0 {
 		return nil
@@ -142,7 +161,7 @@ func restoreSystemMessages(body Object, groups []systemGroup) error {
 		if g.Turn >= len(heads) {
 			return fmt.Errorf("messages.%d: the system messages' turn is missing from Claude Code's model request", g.Origin)
 		}
-		var found []systemMatch
+		var chosen *systemMatch
 		for mi := heads[g.Turn][0]; mi < heads[g.Turn][1]; mi++ {
 			m := messages[mi].(map[string]any)
 			if str(m, "role") != "system" {
@@ -161,22 +180,20 @@ func restoreSystemMessages(body Object, groups []systemGroup) error {
 						}
 						at := from + n
 						end := at + len(want)
-						if (at == 0 || strings.HasSuffix(text[:at], "\n\n")) && (end == len(text) || strings.HasPrefix(text[end:], "\n\n")) {
-							found = append(found, systemMatch{mi, bi, at, end})
+						found := systemMatch{mi, bi, at, end}
+						whole := (at == 0 || strings.HasSuffix(text[:at], "\n\n")) && (end == len(text) || strings.HasPrefix(text[end:], "\n\n"))
+						if whole && (chosen == nil || found.startsAfter(*chosen)) {
+							chosen = &found
 						}
 						from = at + 1
 					}
 				}
 			}
 		}
-		switch len(found) {
-		case 0:
+		if chosen == nil {
 			return fmt.Errorf("messages.%d: the system text is not an attachment of its turn's system message in Claude Code's model request", g.Origin)
-		case 1:
-			matches[gi] = found[0]
-		default:
-			return fmt.Errorf("messages.%d: the system text occurs more than once in Claude Code's system turn", g.Origin)
 		}
+		matches[gi] = *chosen
 	}
 	// Rewrite from the back so earlier indices stay valid.
 	for gi := len(groups) - 1; gi >= 0; gi-- {
@@ -242,7 +259,8 @@ func splitSystemMessage(m Object, match systemMatch, g systemGroup) []any {
 	case string:
 		empty = c == ""
 	}
-	if !empty || len(remainder) > 2 {
+	// output_config alone (content:[]) is kept; other empty remainder is dropped.
+	if !empty || (len(remainder) > 2 && remainder["output_config"] != nil) {
 		out = append(out, remainder)
 	}
 	for i, blocks := range g.Messages {

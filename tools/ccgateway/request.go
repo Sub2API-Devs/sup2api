@@ -43,7 +43,8 @@ type Request struct {
 	Native           map[string]bool
 	// Set from the request policy; see outboundRelay.
 	PassUpstreamErrors bool
-	origin             []int // client array index of each parsed message
+	AttachmentSource   string // "client", "gateway", or "both"
+	origin             []int  // client array index of each parsed message
 }
 
 var toolName = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)

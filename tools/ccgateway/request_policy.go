@@ -27,10 +27,13 @@ type RequestPolicy struct {
 	// Upstream errors end the run and reach the client as the API sent them,
 	// instead of being handled (retried, backed off) by Claude Code.
 	PassUpstreamErrors bool `json:"pass_upstream_errors"`
+	// Which side's system attachments (environment, date, tokens, session_context)
+	// to keep: "client" (default), "gateway", or "both".
+	AttachmentSource string `json:"attachment_source"`
 }
 
 func defaultRequestPolicy() RequestPolicy {
-	return RequestPolicy{UnknownBeta: "ignore", UnknownField: "reject", AllowFast: false, AllowEffort: true, ToolSearch: "request", Betas: []BetaRule{
+	return RequestPolicy{UnknownBeta: "ignore", UnknownField: "reject", AllowFast: false, AllowEffort: true, ToolSearch: "request", AttachmentSource: "client", Betas: []BetaRule{
 		{"interleaved-thinking-2025-05-14", "forward"}, {"fine-grained-tool-streaming-2025-05-14", "fine_grained_tools"},
 		{"context-1m-2025-08-07", "forward"}, {"fast-mode-2026-02-01", "fast"},
 		{"advanced-tool-use-2025-11-20", "tool_search"},
@@ -53,6 +56,12 @@ func requestPolicy(h http.Header) (RequestPolicy, error) {
 	}
 	if (p.UnknownBeta != "reject" && p.UnknownBeta != "ignore") || (p.UnknownField != "reject" && p.UnknownField != "ignore") {
 		return p, fmt.Errorf("invalid gateway request policy")
+	}
+	if p.AttachmentSource == "" {
+		p.AttachmentSource = "client"
+	}
+	if p.AttachmentSource != "client" && p.AttachmentSource != "gateway" && p.AttachmentSource != "both" {
+		return p, fmt.Errorf("invalid attachment_source: must be client, gateway, or both")
 	}
 	if p.ToolSearch == "" {
 		p.ToolSearch = "request"
@@ -98,6 +107,7 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 	req.Effort = effort
 	req.JSONSchema = schema
 	req.PassUpstreamErrors = p.PassUpstreamErrors
+	req.AttachmentSource = p.AttachmentSource
 	req.ToolSearch = p.toolSearch(req)
 	if cacheRequested {
 		req.PromptCacheTTL = "5m"

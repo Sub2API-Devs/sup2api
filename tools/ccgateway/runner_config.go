@@ -123,7 +123,7 @@ func cliArgs(req *Request, p *Prepared, plugin string) []string {
 	if p.SnapshotEnabled {
 		snapshotMode = "on"
 	}
-	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--tools", strings.Join(req.enabledTools(), ","), "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--setting-sources", "", "--settings", settings, "--disable-slash-commands", "--no-chrome", "--max-turns", req.maxTurns(), "--model", req.Model, "--plugin-dir", plugin, "--system-prompt-snapshot", snapshotMode}
+	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--tools", strings.Join(req.enabledTools(), ","), "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--setting-sources", "", "--settings", settings, "--disable-slash-commands", "--no-chrome", "--max-turns", req.maxTurns(), "--model=" + req.Model, "--plugin-dir", plugin, "--system-prompt-snapshot", snapshotMode}
 	if p.Path != "" {
 		args = append(args, "--resume", p.Path)
 		if p.Anchor != "" {
@@ -160,7 +160,7 @@ func cliArgs(req *Request, p *Prepared, plugin string) []string {
 // and the tool discovery and system message files.
 func cliEnv(req *Request, ready string, systemTurns bool) map[string]string {
 	env := map[string]string{"CCGATEWAY_READY_FILE": ready, "CLAUDE_CODE_MAX_OUTPUT_TOKENS": strconv.Itoa(req.MaxTokens), "DISABLE_AUTOUPDATER": "1", "DISABLE_AUTO_COMPACT": "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "ENABLE_TOOL_SEARCH": "false", "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "0",
-		"ANTHROPIC_BETAS": strings.Join(req.Betas, ","), "MAX_STRUCTURED_OUTPUT_RETRIES": "1", "CCGATEWAY_STRUCTURED_OUTPUT": "0", "CCGATEWAY_TOOL_SEARCH": "0"}
+		"ANTHROPIC_BETAS": strings.Join(req.Betas, ","), "MAX_STRUCTURED_OUTPUT_RETRIES": "1", "CCGATEWAY_STRUCTURED_OUTPUT": "0", "CCGATEWAY_TOOL_SEARCH": "0", "CCGATEWAY_ATTACHMENT_SOURCE": req.AttachmentSource}
 	if systemTurns {
 		// Without system turns the CLI folds system text into user messages and
 		// tool results, which cannot be undone exactly. Whether the model takes

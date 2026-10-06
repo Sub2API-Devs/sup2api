@@ -97,7 +97,7 @@ func TestSystemMessagesRealCLI(t *testing.T) {
 				}))
 				defer fake.Close()
 				base := []string{}
-				for _, k := range []string{"PATH", "SystemRoot", "WINDIR", "COMSPEC", "TEMP", "TMP", "PATHEXT", "APPDATA", "LOCALAPPDATA"} {
+				for _, k := range []string{"PATH", "SystemRoot", "WINDIR", "COMSPEC", "TEMP", "TMP", "PATHEXT", "APPDATA", "LOCALAPPDATA", "CCGATEWAY_ATTACHMENT_TRACE"} {
 					if v := os.Getenv(k); v != "" {
 						base = append(base, k+"="+v)
 					}
@@ -221,5 +221,117 @@ func TestSystemMessagesRealCLI(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// TestAttachmentSourcePolicy verifies that the attachment_source policy
+// controls which side's environment attachments reach the upstream.
+func TestAttachmentSourcePolicy(t *testing.T) {
+	cli := os.Getenv("CCG_REAL_CLI")
+	if cli == "" {
+		t.Skip("set CCG_REAL_CLI for attachment source verification")
+	}
+	version, err := checkVersion(cli)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range []string{"client", "gateway", "both"} {
+		t.Run(source, func(t *testing.T) {
+			root, err := os.MkdirTemp("", "ccg-attachment-test-"+source+"-")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("Test root: %s", root)
+			// Don't defer cleanup so we can inspect files after failure
+			plugin, err := extractMod(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var mu sync.Mutex
+			var captured []byte
+			fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != "POST" || !strings.HasSuffix(r.URL.Path, "/messages") {
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = io.WriteString(w, `{"input_tokens":20}`)
+					return
+				}
+				raw, _ := io.ReadAll(r.Body)
+				mu.Lock()
+				captured = raw
+				mu.Unlock()
+				w.Header().Set("Content-Type", "text/event-stream")
+				event := func(v Object) {
+					b, _ := json.Marshal(v)
+					fmt.Fprintf(w, "event: %s\ndata: %s\n\n", str(v, "type"), b)
+					w.(http.Flusher).Flush()
+				}
+				event(Object{"type": "message_start", "message": Object{"id": "msg_fixture", "type": "message", "role": "assistant", "model": "claude-opus-5-5", "content": []any{}, "stop_reason": nil, "stop_sequence": nil, "usage": Object{"input_tokens": 20, "output_tokens": 0}}})
+				event(Object{"type": "content_block_start", "index": 0, "content_block": Object{"type": "text", "text": ""}})
+				event(Object{"type": "content_block_delta", "index": 0, "delta": Object{"type": "text_delta", "text": "ok"}})
+				event(Object{"type": "content_block_stop", "index": 0})
+				event(Object{"type": "message_delta", "delta": Object{"stop_reason": "end_turn", "stop_sequence": nil}, "usage": Object{"output_tokens": 1}})
+				event(Object{"type": "message_stop"})
+			}))
+			defer fake.Close()
+			base := []string{}
+			for _, k := range []string{"PATH", "SystemRoot", "WINDIR", "COMSPEC", "TEMP", "TMP", "PATHEXT", "APPDATA", "LOCALAPPDATA"} {
+				if v := os.Getenv(k); v != "" {
+					base = append(base, k+"="+v)
+				}
+			}
+			traceDir := filepath.Join(root, "attachment-trace")
+			os.MkdirAll(traceDir, 0700)
+			env := envWith(base, map[string]string{"HOME": root, "USERPROFILE": root, "CLAUDE_CONFIG_DIR": filepath.Join(root, "config"), "ANTHROPIC_API_KEY": "dummy-local-fixture", "ANTHROPIC_BASE_URL": fake.URL, "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "CCGATEWAY_ATTACHMENT_TRACE": traceDir})
+			runner := &Runner{CLI: cli, Version: version, Plugin: plugin, Work: root, Env: env}
+			gateway := httptest.NewServer(&Gateway{})
+			defer gateway.Close()
+			runner.InternalBaseURL = gateway.URL
+			cache, err := newCache(filepath.Join(root, "cache"), 32<<20)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req := parsed(t, Object{"model": "claude-opus-5-5", "max_tokens": 64, "system": "CLIENT_SYSTEM", "messages": []any{Object{"role": "user", "content": "test"}}})
+			req.AttachmentSource = source
+			p, err := prepareHistory(req, cache, "fixture", root, version)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer p.release()
+			ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+			defer cancel()
+			_, err = runner.run(ctx, req, p, root, func(Object) error { return nil })
+			if err != nil {
+				t.Fatal(err)
+			}
+			mu.Lock()
+			wire := string(captured)
+			mu.Unlock()
+			hasClient := strings.Contains(wire, "CLIENT_SYSTEM")
+			hasGateway := strings.Contains(wire, "Today's date is") || strings.Contains(wire, "total_tokens") || strings.Contains(wire, "session_context")
+			switch source {
+			case "client":
+				if !hasClient {
+					t.Fatal("client system missing under attachment_source=client")
+				}
+				if hasGateway {
+					t.Fatal("gateway attachments present under attachment_source=client")
+				}
+			case "gateway":
+				if hasClient {
+					t.Logf("Request body: %s", wire)
+					t.Fatal("client system present under attachment_source=gateway")
+				}
+				if !hasGateway {
+					t.Fatal("gateway attachments missing under attachment_source=gateway")
+				}
+			case "both":
+				if !hasClient {
+					t.Fatal("client system missing under attachment_source=both")
+				}
+				if !hasGateway {
+					t.Fatal("gateway attachments missing under attachment_source=both")
+				}
+			}
+		})
 	}
 }

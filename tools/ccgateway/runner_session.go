@@ -76,7 +76,11 @@ func newCLISession(ctx context.Context, req *Request, p *Prepared, cfg *runConfi
 // run initializes the CLI and reads frames until the result frame or the end
 // of output. Each frame type has its own handler; only result ends the run.
 func (s *cliSession) run() (Object, error) {
-	if e := s.proc.write(Object{"type": "control_request", "request_id": s.initID, "request": Object{"subtype": "initialize", "systemPrompt": s.req.System, "systemPromptSnapshot": s.p.SnapshotEnabled, "sdkMcpServers": s.req.sdkMCPServers(), "hooks": Object{}, "supportedDialogKinds": []string{}, "promptSuggestions": false, "excludeDynamicSections": true}}); e != nil {
+	systemPrompt := s.req.System
+	if s.req.AttachmentSource == "gateway" {
+		systemPrompt = nil
+	}
+	if e := s.proc.write(Object{"type": "control_request", "request_id": s.initID, "request": Object{"subtype": "initialize", "systemPrompt": systemPrompt, "systemPromptSnapshot": s.p.SnapshotEnabled, "sdkMcpServers": s.req.sdkMCPServers(), "hooks": Object{}, "supportedDialogKinds": []string{}, "promptSuggestions": false, "excludeDynamicSections": true}}); e != nil {
 		return nil, fmt.Errorf("cannot initialize CLI")
 	}
 	scan := bufio.NewScanner(s.proc.stdout)
