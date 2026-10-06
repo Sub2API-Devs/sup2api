@@ -371,12 +371,30 @@ func startOutboundRelay(req *Request, env []string, internalBase ...string) (*ou
 	transport.Proxy = proxyFn
 	path := "/ccg-relay/" + uuid()
 	relay := &outboundRelay{path: path, FirstParty: strings.EqualFold(target.Hostname(), "api.anthropic.com"), transport: transport}
+	handler := relay.handler(req, relay.forwarder(target))
+	if len(internalBase) > 0 && internalBase[0] != "" {
+		outboundRelayHandlers.Store(path, handler)
+		relay.URL = internalBase[0] + path
+		return relay, nil
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, fmt.Errorf("cannot start relay")
+	}
+	relay.server = &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
+	go func() { _ = relay.server.Serve(listener) }()
+	relay.URL = "http://" + listener.Addr().String() + path
+	return relay, nil
+}
+
+// forwarder proxies relay requests, without the relay path, to the API.
+func (relay *outboundRelay) forwarder(target *url.URL) *httputil.ReverseProxy {
 	forward := httputil.NewSingleHostReverseProxy(target)
-	forward.Transport = transport
+	forward.Transport = relay.transport
 	forward.FlushInterval = -1
 	director := forward.Director
 	forward.Director = func(r *http.Request) {
-		r.URL.Path = strings.TrimPrefix(r.URL.Path, path)
+		r.URL.Path = strings.TrimPrefix(r.URL.Path, relay.path)
 		r.URL.RawPath = ""
 		director(r)
 		r.Host = target.Host
@@ -392,46 +410,54 @@ func startOutboundRelay(req *Request, env []string, internalBase ...string) (*ou
 	forward.ErrorHandler = func(w http.ResponseWriter, r *http.Request, e error) {
 		apiError(w, 502, "api_error", "Relay upstream unavailable")
 	}
-	// With pass_upstream_errors, any non-2xx answer to a model request goes to
-	// the API client as sent, and the run stops before Claude Code can back
-	// off, refresh credentials, or reshape the request and retry (it reads
-	// many 400 wordings, and any 400 it cannot classify, as such a cue).
-	// Should the CLI still read the answer, it has the same status and
-	// neutral wording. Without it, answers reach the CLI unchanged.
-	forward.ModifyResponse = func(resp *http.Response) error {
-		if pass, _ := resp.Request.Context().Value(modelRequest{}).(bool); !pass {
-			return nil
-		}
-		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
-				resp.Body = &sseWatch{body: resp.Body, relay: relay, request: resp.Request}
-			}
-			return nil
-		}
-		body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-		resp.Body.Close()
-		relay.reject(&upstreamError{Status: resp.StatusCode, ContentType: resp.Header.Get("Content-Type"), Body: body}, resp.Request)
-		if err != nil {
-			return err
-		}
-		kind := "api_error"
-		if decoded, err := decodeObject(body); err == nil {
-			if e, ok := decoded["error"].(Object); ok && str(e, "type") != "" {
-				kind = str(e, "type")
-			}
-		}
-		neutral, _ := json.Marshal(Object{"type": "error", "error": Object{"type": kind, "message": relayUpstreamMessage}})
-		resp.Body = io.NopCloser(bytes.NewReader(neutral))
-		resp.ContentLength = int64(len(neutral))
-		resp.Header.Set("Content-Length", fmt.Sprint(len(neutral)))
-		resp.Header.Set("Content-Type", "application/json")
-		resp.Header.Del("Content-Encoding")
+	forward.ModifyResponse = relay.passUpstreamErrors
+	return forward
+}
+
+// passUpstreamErrors: with pass_upstream_errors, any non-2xx answer to a
+// model request goes to the API client as sent, and the run stops before
+// Claude Code can back off, refresh credentials, or reshape the request and
+// retry (it reads many 400 wordings, and any 400 it cannot classify, as such
+// a cue). Should the CLI still read the answer, it has the same status and
+// neutral wording. Without it, answers reach the CLI unchanged.
+func (relay *outboundRelay) passUpstreamErrors(resp *http.Response) error {
+	if pass, _ := resp.Request.Context().Value(modelRequest{}).(bool); !pass {
 		return nil
 	}
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
+			resp.Body = &sseWatch{body: resp.Body, relay: relay, request: resp.Request}
+		}
+		return nil
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	resp.Body.Close()
+	relay.reject(&upstreamError{Status: resp.StatusCode, ContentType: resp.Header.Get("Content-Type"), Body: body}, resp.Request)
+	if err != nil {
+		return err
+	}
+	kind := "api_error"
+	if decoded, err := decodeObject(body); err == nil {
+		if e, ok := decoded["error"].(Object); ok && str(e, "type") != "" {
+			kind = str(e, "type")
+		}
+	}
+	neutral, _ := json.Marshal(Object{"type": "error", "error": Object{"type": kind, "message": relayUpstreamMessage}})
+	resp.Body = io.NopCloser(bytes.NewReader(neutral))
+	resp.ContentLength = int64(len(neutral))
+	resp.Header.Set("Content-Length", fmt.Sprint(len(neutral)))
+	resp.Header.Set("Content-Type", "application/json")
+	resp.Header.Del("Content-Encoding")
+	return nil
+}
+
+// handler serves the relay path: model requests are refused once the run is
+// stopped, and bodies are adapted where the request needs it.
+func (relay *outboundRelay) handler(req *Request, forward http.Handler) http.Handler {
 	groups := req.systemGroups()
 	display := str(req.Thinking, "display")
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, path+"/") {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, relay.path+"/") {
 			http.NotFound(w, r)
 			return
 		}
@@ -445,59 +471,55 @@ func startOutboundRelay(req *Request, env []string, internalBase ...string) (*ou
 			r = r.WithContext(context.WithValue(r.Context(), modelRequest{}, req.PassUpstreamErrors))
 		}
 		if (model && (len(groups) > 0 || display != "")) || (count && len(groups) > 0) {
-			relay.mu.Lock()
-			relay.sequence++
-			sequence := relay.sequence
-			relay.mu.Unlock()
-			body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<20))
-			var adapted []byte
-			if err == nil {
-				adapted, err = relay.adapt(req, groups, body, count)
-			}
-			if err != nil {
-				// The gateway reports the cause; the CLI is stopped and reads only
-				// neutral text (see ModifyResponse). A refused token count only
-				// fails that estimate, not the run.
-				err = fmt.Errorf("cannot restore the client's system messages: %w", err)
-				if req.diagnostic != nil {
-					req.diagnostic.save(fmt.Sprintf("upstream-refused-%03d-%s.body", sequence, uuid()[:8]), body)
-				}
-				if model {
-					relay.mu.Lock()
-					if relay.failure == nil {
-						relay.failure = err
-					}
-					relay.mu.Unlock()
-					relay.stop(r)
-				}
-				apiError(w, 400, "invalid_request_error", relayRefusedMessage)
+			if !relay.adaptRequest(w, r, req, groups, model, count) {
 				return
 			}
-			if len(groups) > 0 && model {
-				relay.mu.Lock()
-				relay.restored++
-				relay.mu.Unlock()
-			}
-			r.Body = io.NopCloser(bytes.NewReader(adapted))
-			if req.diagnostic != nil {
-				req.diagnostic.save(fmt.Sprintf("upstream-request-%03d-%s.body", sequence, uuid()[:8]), adapted)
-			}
-			r.ContentLength = int64(len(adapted))
-			r.Header.Del("Content-Length")
 		}
 		forward.ServeHTTP(w, r)
 	})
-	if len(internalBase) > 0 && internalBase[0] != "" {
-		outboundRelayHandlers.Store(path, handler)
-		relay.URL = internalBase[0] + path
-		return relay, nil
+}
+
+// adaptRequest replaces the body with its adapted form, or refuses the
+// request and reports false.
+func (relay *outboundRelay) adaptRequest(w http.ResponseWriter, r *http.Request, req *Request, groups []systemGroup, model, count bool) bool {
+	relay.mu.Lock()
+	relay.sequence++
+	sequence := relay.sequence
+	relay.mu.Unlock()
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<20))
+	var adapted []byte
+	if err == nil {
+		adapted, err = relay.adapt(req, groups, body, count)
 	}
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return nil, fmt.Errorf("cannot start relay")
+		// The gateway reports the cause; the CLI is stopped and reads only
+		// neutral text (see passUpstreamErrors). A refused token count only
+		// fails that estimate, not the run.
+		err = fmt.Errorf("cannot restore the client's system messages: %w", err)
+		if req.diagnostic != nil {
+			req.diagnostic.save(fmt.Sprintf("upstream-refused-%03d-%s.body", sequence, uuid()[:8]), body)
+		}
+		if model {
+			relay.mu.Lock()
+			if relay.failure == nil {
+				relay.failure = err
+			}
+			relay.mu.Unlock()
+			relay.stop(r)
+		}
+		apiError(w, 400, "invalid_request_error", relayRefusedMessage)
+		return false
 	}
-	relay.server = &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
-	go func() { _ = relay.server.Serve(listener) }()
-	relay.URL = "http://" + listener.Addr().String() + path
-	return relay, nil
+	if len(groups) > 0 && model {
+		relay.mu.Lock()
+		relay.restored++
+		relay.mu.Unlock()
+	}
+	r.Body = io.NopCloser(bytes.NewReader(adapted))
+	if req.diagnostic != nil {
+		req.diagnostic.save(fmt.Sprintf("upstream-request-%03d-%s.body", sequence, uuid()[:8]), adapted)
+	}
+	r.ContentLength = int64(len(adapted))
+	r.Header.Del("Content-Length")
+	return true
 }

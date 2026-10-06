@@ -65,57 +65,118 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	diagnostic.store = g.RequestLogs
 	w = diagnostic.capture(w, r, g.RequestLogDir)
 	defer diagnostic.finish()
-	fail := func(status int, kind, message string) {
-		diagnostic.fail(status, kind, message)
-		apiError(w, status, kind, message)
-	}
-	if !g.authorized(r) {
-		fail(401, "authentication_error", "Invalid gateway API key")
+	x := &exchange{g: g, w: w, r: r, diagnostic: diagnostic}
+	if !x.admit() {
 		return
+	}
+	label, busyKey, logical, ok := x.session()
+	if !ok {
+		return
+	}
+	if !g.occupy(busyKey) {
+		x.fail(409, "invalid_request_error", "Session has an active request; use a different session ID for concurrent branches")
+		return
+	}
+	defer g.vacate(busyKey)
+	select {
+	case g.Slots <- struct{}{}:
+		defer func() { <-g.Slots }()
+	default:
+		x.fail(429, "rate_limit_error", "Gateway concurrency limit reached")
+		return
+	}
+	x.execute(label, logical)
+}
+
+// exchange is one /v1/messages request: admission, the CLI run, and the
+// response, which turns into an SSE stream once the first event is sent.
+type exchange struct {
+	g          *Gateway
+	w          http.ResponseWriter
+	r          *http.Request
+	diagnostic *requestDiagnostic
+	req        *Request
+	streaming  bool
+}
+
+// fail records and writes an error.
+func (x *exchange) fail(status int, kind, message string) {
+	x.diagnostic.fail(status, kind, message)
+	x.writeError(Object{"type": kind, "message": message}, status)
+}
+
+// writeError writes an error as an SSE error event once streaming has
+// started, otherwise as a JSON error response.
+func (x *exchange) writeError(body Object, status int) {
+	if x.streaming {
+		_ = x.send(Object{"type": "error", "error": body})
+		return
+	}
+	apiError(x.w, status, str(body, "type"), str(body, "message"))
+}
+
+// admit authenticates and parses the request and admits its native tools.
+func (x *exchange) admit() bool {
+	r := x.r
+	if !x.g.authorized(r) {
+		x.fail(401, "authentication_error", "Invalid gateway API key")
+		return false
 	}
 	if r.URL.Path != "/v1/messages" {
-		fail(404, "not_found_error", "Unknown endpoint")
-		return
+		x.fail(404, "not_found_error", "Unknown endpoint")
+		return false
 	}
 	if r.Method != "POST" {
-		fail(405, "invalid_request_error", "Use POST")
-		return
+		x.fail(405, "invalid_request_error", "Use POST")
+		return false
 	}
 	if v := r.Header.Get("anthropic-version"); v != "" && v != "2023-06-01" {
-		fail(400, "invalid_request_error", "Unsupported anthropic-version")
-		return
+		x.fail(400, "invalid_request_error", "Unsupported anthropic-version")
+		return false
 	}
-	diagnostic.stage = "read_body"
-	body, e := io.ReadAll(http.MaxBytesReader(w, r.Body, 32<<20))
+	x.diagnostic.stage = "read_body"
+	body, e := io.ReadAll(http.MaxBytesReader(x.w, r.Body, 32<<20))
 	if e != nil {
 		var large *http.MaxBytesError
 		if errors.As(e, &large) {
-			fail(413, "request_too_large", "Request exceeds 32 MiB")
+			x.fail(413, "request_too_large", "Request exceeds 32 MiB")
 		} else {
-			fail(400, "invalid_request_error", "Cannot read body")
+			x.fail(400, "invalid_request_error", "Cannot read body")
 		}
-		return
+		return false
 	}
-	diagnostic.request(body, r.Header)
-	diagnostic.stage = "parse_request"
+	x.diagnostic.request(body, r.Header)
+	x.diagnostic.stage = "parse_request"
 	req, e := parsePolicyRequest(body, r.Header)
 	if e != nil {
-		fail(400, "invalid_request_error", e.Error())
-		return
+		x.fail(400, "invalid_request_error", e.Error())
+		return false
 	}
-	req.diagnostic = diagnostic
-	diagnostic.stage = "admission"
-	// Explicit opt-in, plus server allowlist, plus current client declarations.
-	// Same-named client tools use SDK MCP unless opted in and their complete
-	// definition matches the verified native catalogue below.
-	for _, name := range strings.Split(r.Header.Get("X-CCGateway-Native-Tools"), ",") {
+	req.diagnostic = x.diagnostic
+	x.req = req
+	x.diagnostic.stage = "admission"
+	if e = x.g.admitNativeTools(req, r.Header.Get("X-CCGateway-Native-Tools")); e == nil {
+		matchNativeTools(req, x.g.Runner.Version)
+		e = validateToolNames(req)
+	}
+	if e != nil {
+		x.fail(400, "invalid_request_error", e.Error())
+		return false
+	}
+	return true
+}
+
+// admitNativeTools takes explicit opt-in, plus server allowlist, plus current
+// client declarations. Same-named client tools use SDK MCP unless opted in
+// and their complete definition matches the verified native catalogue.
+func (g *Gateway) admitNativeTools(req *Request, header string) error {
+	for _, name := range strings.Split(header, ",") {
 		name = strings.TrimSpace(name)
 		if name == "" {
 			continue
 		}
 		if !g.NativeAllowed[name] {
-			fail(400, "invalid_request_error", "Native tool not allowed: "+name)
-			return
+			return fmt.Errorf("Native tool not allowed: %s", name)
 		}
 		found := false
 		for _, t := range req.Tools {
@@ -125,152 +186,160 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !found {
-			fail(400, "invalid_request_error", "Native tool must be declared in tools: "+name)
-			return
+			return fmt.Errorf("Native tool must be declared in tools: %s", name)
 		}
 		req.Native[name] = true
 	}
-	matchNativeTools(req, g.Runner.Version)
-	if err := validateToolNames(req); err != nil {
-		fail(400, "invalid_request_error", err.Error())
-		return
-	}
-	logical := r.Header.Get("X-CCGateway-Session-ID")
+	return nil
+}
+
+// session returns the client's session label, the key that serializes its
+// requests, and the history key. Without a session ID requests never wait
+// for each other.
+func (x *exchange) session() (label, busyKey, logical string, ok bool) {
+	h := x.r.Header
+	logical = h.Get("X-CCGateway-Session-ID")
 	if logical == "" {
 		logical = "auto"
 	}
 	if !sessionName.MatchString(logical) {
-		fail(400, "invalid_request_error", "Invalid gateway session ID")
-		return
+		x.fail(400, "invalid_request_error", "Invalid gateway session ID")
+		return "", "", "", false
 	}
-	sessionLabel := logical
-	busyKey := digest([]string{r.Header.Get("X-CCGateway-Session-Scope"), logical})
-	if r.Header.Get("X-CCGateway-Session-ID") == "" {
+	label = logical
+	logical = digest([]string{h.Get("X-CCGateway-Session-Scope"), logical})
+	busyKey = logical
+	if h.Get("X-CCGateway-Session-ID") == "" {
 		busyKey = uuid()
 	}
-	logical = digest([]string{r.Header.Get("X-CCGateway-Session-Scope"), logical})
+	return label, busyKey, logical, true
+}
+
+// occupy marks a session busy; false when it already has an active request.
+func (g *Gateway) occupy(key string) bool {
 	g.mu.Lock()
+	defer g.mu.Unlock()
 	if g.busy == nil {
 		g.busy = map[string]bool{}
 	}
-	if g.busy[busyKey] {
-		g.mu.Unlock()
-		fail(409, "invalid_request_error", "Session has an active request; use a different session ID for concurrent branches")
-		return
+	if g.busy[key] {
+		return false
 	}
-	g.busy[busyKey] = true
-	g.mu.Unlock()
-	defer func() { g.mu.Lock(); delete(g.busy, busyKey); g.mu.Unlock() }()
-	select {
-	case g.Slots <- struct{}{}:
-		defer func() { <-g.Slots }()
-	default:
-		fail(429, "rate_limit_error", "Gateway concurrency limit reached")
-		return
-	}
+	g.busy[key] = true
+	return true
+}
+func (g *Gateway) vacate(key string) { g.mu.Lock(); delete(g.busy, key); g.mu.Unlock() }
+
+// execute prepares history, runs the CLI, keeps the new history and answers.
+func (x *exchange) execute(sessionLabel, logical string) {
+	g, req := x.g, x.req
 	started := time.Now()
-	ctx, cancel := context.WithTimeout(r.Context(), g.Timeout)
+	ctx, cancel := context.WithTimeout(x.r.Context(), g.Timeout)
 	defer cancel()
 	dir, e := os.MkdirTemp(g.Runner.Work, "request-")
 	if e != nil {
-		fail(500, "api_error", "Cannot create request workspace")
+		x.fail(500, "api_error", "Cannot create request workspace")
 		return
 	}
 	defer os.RemoveAll(dir)
-	diagnostic.stage = "prepare_history"
+	x.diagnostic.stage = "prepare_history"
 	p, e := prepareHistory(req, g.Cache, logical, dir, g.Runner.Version)
 	if e != nil {
-		fail(500, "api_error", "Cannot prepare history")
+		x.fail(500, "api_error", "Cannot prepare history")
 		return
 	}
 	defer p.release()
-	diagnostic.fields["history_mode"] = p.Mode
-	w.Header().Set("X-CCGateway-Session-ID", sessionLabel)
-	w.Header().Set("X-CCGateway-History", p.Mode)
-	w.Header().Set("X-CCGateway-Cache-TTL", fmt.Sprint(int((24 * time.Hour).Seconds())))
-	w.Header().Set("X-CCGateway-Cache-Scope", "local-only")
-	streaming := false
-	send := func(event Object) error {
-		if !req.Stream {
-			return nil
-		}
-		controller := http.NewResponseController(w)
-		_ = controller.SetWriteDeadline(time.Now().Add(15 * time.Second))
-		if !streaming {
-			w.Header().Set("Content-Type", "text/event-stream")
-			w.Header().Set("X-Accel-Buffering", "no")
-			w.WriteHeader(200)
-			streaming = true
-		}
-		b, e := json.Marshal(event)
-		if e != nil {
-			return e
-		}
-		if _, e = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", str(event, "type"), b); e != nil {
-			return e
-		}
-		return controller.Flush()
-	}
-	diagnostic.stage = "claude_code"
-	answer, e := g.Runner.run(ctx, req, p, dir, send)
-	if e == nil {
-		if err := p.commit(req, answer, g.Cache, logical, dir, g.Runner.Version, started); err != nil {
-			log.Print("history cache write failed; future requests will rebuild")
-		}
-	}
+	x.diagnostic.fields["history_mode"] = p.Mode
+	x.w.Header().Set("X-CCGateway-Session-ID", sessionLabel)
+	x.w.Header().Set("X-CCGateway-History", p.Mode)
+	x.w.Header().Set("X-CCGateway-Cache-TTL", fmt.Sprint(int((24 * time.Hour).Seconds())))
+	x.w.Header().Set("X-CCGateway-Cache-Scope", "local-only")
+	x.diagnostic.stage = "claude_code"
+	answer, e := g.Runner.run(ctx, req, p, dir, x.send)
 	if e != nil {
-		diagnostic.fail(502, "api_error", e.Error())
-		if r.Context().Err() != nil {
-			diagnostic.fields["client_canceled"] = true
-			return
-		}
-		status := 502
-		kind := "api_error"
-		message := e.Error()
-		if ctx.Err() != nil {
-			status = 504
-			message = "Claude Code request timed out"
-		}
-		var upstream *upstreamError
-		if errors.As(e, &upstream) {
-			// The API's own error, as a direct client would receive it.
-			status = upstream.Status
-			official := Object{"type": kind, "message": message}
-			if decoded, err := decodeObject(upstream.Body); err == nil {
-				if inner, ok := decoded["error"].(Object); ok {
-					official = inner
-					kind, message = str(inner, "type"), str(inner, "message")
-				}
-			}
-			diagnostic.fail(status, kind, message)
-			if streaming {
-				_ = send(Object{"type": "error", "error": official})
-				return
-			}
-			contentType := upstream.ContentType
-			if contentType == "" {
-				contentType = "application/json"
-			}
-			w.Header().Set("Content-Type", contentType)
-			w.WriteHeader(status)
-			_, _ = w.Write(upstream.Body)
-			return
-		}
-		diagnostic.fail(status, kind, message)
-		if streaming {
-			_ = send(Object{"type": "error", "error": Object{"type": kind, "message": message}})
-		} else {
-			fail(status, kind, message)
-		}
+		x.runFailed(ctx, e)
 		return
 	}
-	diagnostic.stage = "completed"
-	if req.Stream {
-		_ = send(Object{"type": "message_stop"})
-	} else {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(answer)
+	if err := p.commit(req, answer, g.Cache, logical, dir, g.Runner.Version, started); err != nil {
+		log.Print("history cache write failed; future requests will rebuild")
 	}
+	x.diagnostic.stage = "completed"
+	if req.Stream {
+		_ = x.send(Object{"type": "message_stop"})
+	} else {
+		x.w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(x.w).Encode(answer)
+	}
+}
+
+// send writes one SSE event, starting the stream on the first one; it does
+// nothing for a non-streaming request.
+func (x *exchange) send(event Object) error {
+	if !x.req.Stream {
+		return nil
+	}
+	controller := http.NewResponseController(x.w)
+	_ = controller.SetWriteDeadline(time.Now().Add(15 * time.Second))
+	if !x.streaming {
+		x.w.Header().Set("Content-Type", "text/event-stream")
+		x.w.Header().Set("X-Accel-Buffering", "no")
+		x.w.WriteHeader(200)
+		x.streaming = true
+	}
+	b, e := json.Marshal(event)
+	if e != nil {
+		return e
+	}
+	if _, e = fmt.Fprintf(x.w, "event: %s\ndata: %s\n\n", str(event, "type"), b); e != nil {
+		return e
+	}
+	return controller.Flush()
+}
+
+// runFailed maps a failed run to the client's error: 504 on timeout, the
+// API's own error when it was passed through, otherwise 502.
+func (x *exchange) runFailed(ctx context.Context, e error) {
+	x.diagnostic.fail(502, "api_error", e.Error())
+	if x.r.Context().Err() != nil {
+		x.diagnostic.fields["client_canceled"] = true
+		return
+	}
+	status := 502
+	kind := "api_error"
+	message := e.Error()
+	if ctx.Err() != nil {
+		status = 504
+		message = "Claude Code request timed out"
+	}
+	var upstream *upstreamError
+	if errors.As(e, &upstream) {
+		x.passUpstream(upstream, Object{"type": kind, "message": message})
+		return
+	}
+	x.fail(status, kind, message)
+}
+
+// passUpstream returns the API's own error as a direct client would receive
+// it: the body as sent, or its error object as an SSE error event.
+func (x *exchange) passUpstream(upstream *upstreamError, fallback Object) {
+	official := fallback
+	if decoded, err := decodeObject(upstream.Body); err == nil {
+		if inner, ok := decoded["error"].(Object); ok {
+			official = inner
+		}
+	}
+	x.diagnostic.fail(upstream.Status, str(official, "type"), str(official, "message"))
+	if x.streaming {
+		x.writeError(official, upstream.Status)
+		return
+	}
+	contentType := upstream.ContentType
+	if contentType == "" {
+		contentType = "application/json"
+	}
+	x.w.Header().Set("Content-Type", contentType)
+	x.w.WriteHeader(upstream.Status)
+	_, _ = x.w.Write(upstream.Body)
 }
 func envDefault(k, v string) string {
 	if s := os.Getenv(k); s != "" {
@@ -324,15 +393,9 @@ func serve() error {
 	if e != nil || timeout <= 0 {
 		return fmt.Errorf("invalid CCG_TIMEOUT")
 	}
-	native := map[string]bool{}
-	for _, n := range strings.Split(os.Getenv("CCG_NATIVE_TOOLS"), ",") {
-		n = strings.TrimSpace(n)
-		if n != "" {
-			if !toolName.MatchString(n) || n == "default" {
-				return fmt.Errorf("CCG_NATIVE_TOOLS must list exact tool names")
-			}
-			native[n] = true
-		}
+	native, e := nativeAllowlist(os.Getenv("CCG_NATIVE_TOOLS"))
+	if e != nil {
+		return e
 	}
 	proxy, e := NewProxyConfigStore(root, os.Getenv("CCG_ADMIN_KEY"))
 	if e != nil {
@@ -349,43 +412,70 @@ func serve() error {
 		relayHost = ip.String()
 	}
 	g.Runner.InternalBaseURL = "http://" + net.JoinHostPort(relayHost, port)
+	admin := &authManager{cli: cli, key: os.Getenv("CCG_ADMIN_KEY"), proxy: proxy, version: version, requestLogs: g.RequestLogs}
+	return g.listen(bind, admin, logDir)
+}
+
+// listen serves the gateway and its management API until SIGINT or SIGTERM.
+func (g *Gateway) listen(bind string, admin http.Handler, logDir string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	mux := http.NewServeMux()
 	mux.Handle("/", g)
-	mux.Handle("/admin/", &authManager{cli: cli, key: os.Getenv("CCG_ADMIN_KEY"), proxy: proxy, version: version, requestLogs: g.RequestLogs})
+	mux.Handle("/admin/", admin)
 	server := &http.Server{Addr: bind, Handler: mux, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 	done := make(chan struct{})
 	backgroundDone := make(chan struct{})
 	defer close(done)
 	go func() {
 		defer close(backgroundDone)
-		ticker := time.NewTicker(time.Minute)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				cache.prune()
-				if logDir != "" {
-					pruneRequestLogs(logDir)
-				}
-			case <-ctx.Done():
-				shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				_ = server.Shutdown(shutdown)
-				return
-			case <-done:
-				return
-			}
-		}
+		maintain(ctx, done, server, g.Cache, logDir)
 	}()
-	log.Printf("ccgateway listening on %s; Claude Code %s; native session retention 24h", bind, version)
-	e = server.ListenAndServe()
+	log.Printf("ccgateway listening on %s; Claude Code %s; native session retention 24h", bind, g.Runner.Version)
+	e := server.ListenAndServe()
 	if errors.Is(e, http.ErrServerClosed) {
 		<-backgroundDone
 		return nil
 	}
 	return e
+}
+
+// nativeAllowlist parses CCG_NATIVE_TOOLS: exact tool names, comma-separated.
+func nativeAllowlist(list string) (map[string]bool, error) {
+	native := map[string]bool{}
+	for _, n := range strings.Split(list, ",") {
+		n = strings.TrimSpace(n)
+		if n != "" {
+			if !toolName.MatchString(n) || n == "default" {
+				return nil, fmt.Errorf("CCG_NATIVE_TOOLS must list exact tool names")
+			}
+			native[n] = true
+		}
+	}
+	return native, nil
+}
+
+// maintain prunes the history cache and request logs every minute, and shuts
+// the server down when ctx ends; it returns then, or when done closes.
+func maintain(ctx context.Context, done <-chan struct{}, server *http.Server, cache *HistoryCache, logDir string) {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			cache.prune()
+			if logDir != "" {
+				pruneRequestLogs(logDir)
+			}
+		case <-ctx.Done():
+			shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = server.Shutdown(shutdown)
+			return
+		case <-done:
+			return
+		}
+	}
 }
 func main() {
 	if e := serve(); e != nil {

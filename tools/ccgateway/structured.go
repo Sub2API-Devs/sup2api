@@ -55,7 +55,7 @@ func validateStructuredText(schema Object, blocks []Object) error {
 // The CLI's synthetic StructuredOutput tool is returned as API JSON text.
 // The CLI tool never executes on the user's behalf, and never escapes as tool_use.
 func structuredBlock(name string, req *Request) bool {
-	return name == "StructuredOutput" && req.JSONSchema != nil
+	return name == "StructuredOutput" && req.structuredOutput()
 }
 func structuredInputText(input any) string { data, _ := json.Marshal(input); return string(data) }
 

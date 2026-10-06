@@ -36,6 +36,39 @@ func (p *Prepared) captureNative(env []string, messageID string) error {
 	if !nativeSessionName.MatchString(p.SessionID) {
 		return fmt.Errorf("invalid native session ID")
 	}
+	paths, err := filepath.Glob(filepath.Join(cliConfigDir(env), "projects", "*", p.SessionID+".jsonl"))
+	if len(paths) == 0 && p.Path != "" {
+		paths = []string{filepath.Join(filepath.Dir(p.Path), p.SessionID+".jsonl")}
+	}
+	if err != nil || len(paths) != 1 {
+		return fmt.Errorf("native CLI transcript not found")
+	}
+	p.NativePath = paths[0]
+	rows, err := p.readNative(messageID)
+	if err != nil {
+		return err
+	}
+	p.NativeRows = cleanToolHandoffs(rows, messageID)
+	if p.cache != nil {
+		dest := filepath.Join(p.cache.dir, "native", p.SessionID+".jsonl")
+		if err := os.MkdirAll(filepath.Dir(dest), 0700); err != nil {
+			return err
+		}
+		source := p.NativePath
+		p.NativePath = dest
+		if err := writeNative(dest, p.NativeRows); err != nil {
+			return err
+		}
+		if source != dest {
+			_ = os.Remove(source)
+		}
+		return nil
+	}
+	return writeNative(p.NativePath, p.NativeRows)
+}
+
+// cliConfigDir is the CLI's configuration directory under this environment.
+func cliConfigDir(env []string) string {
 	values := map[string]string{}
 	for _, item := range env {
 		if k, v, ok := strings.Cut(item, "="); ok {
@@ -53,22 +86,20 @@ func (p *Prepared) captureNative(env []string, messageID string) error {
 		}
 		config = filepath.Join(home, ".claude")
 	}
-	paths, err := filepath.Glob(filepath.Join(config, "projects", "*", p.SessionID+".jsonl"))
-	if len(paths) == 0 && p.Path != "" {
-		paths = []string{filepath.Join(filepath.Dir(p.Path), p.SessionID+".jsonl")}
-	}
-	if err != nil || len(paths) != 1 {
-		return fmt.Errorf("native CLI transcript not found")
-	}
-	p.NativePath = paths[0]
+	return config
+}
+
+// readNative reads the transcript at NativePath up to the last record of the
+// completed response, which becomes NativeAnchor.
+func (p *Prepared) readNative(messageID string) ([]json.RawMessage, error) {
 	f, err := os.Open(p.NativePath)
 	if err != nil {
-		return fmt.Errorf("cannot read native CLI transcript")
+		return nil, fmt.Errorf("cannot read native CLI transcript")
 	}
+	defer f.Close()
 	info, err := f.Stat()
 	if err != nil || info.Size() > 64<<20 {
-		f.Close()
-		return fmt.Errorf("native transcript exceeds limit")
+		return nil, fmt.Errorf("native transcript exceeds limit")
 	}
 	scan := bufio.NewScanner(f)
 	scan.Buffer(make([]byte, 65536), 32<<20)
@@ -81,8 +112,7 @@ func (p *Prepared) captureNative(env []string, messageID string) error {
 		row := append(json.RawMessage(nil), scan.Bytes()...)
 		var obj Object
 		if json.Unmarshal(row, &obj) != nil {
-			f.Close()
-			return fmt.Errorf("invalid native transcript")
+			return nil, fmt.Errorf("invalid native transcript")
 		}
 		rows = append(rows, row)
 		msg, _ := obj["message"].(map[string]any)
@@ -91,28 +121,10 @@ func (p *Prepared) captureNative(env []string, messageID string) error {
 			p.NativeAnchor = str(obj, "uuid")
 		}
 	}
-	err = scan.Err()
-	f.Close()
-	if err != nil || end == 0 {
-		return fmt.Errorf("native transcript missing completed response")
+	if err = scan.Err(); err != nil || end == 0 {
+		return nil, fmt.Errorf("native transcript missing completed response")
 	}
-	p.NativeRows = cleanToolHandoffs(rows[:end], messageID)
-	if p.cache != nil {
-		dest := filepath.Join(p.cache.dir, "native", p.SessionID+".jsonl")
-		if err := os.MkdirAll(filepath.Dir(dest), 0700); err != nil {
-			return err
-		}
-		source := p.NativePath
-		p.NativePath = dest
-		if err := writeNative(dest, p.NativeRows); err != nil {
-			return err
-		}
-		if source != dest {
-			_ = os.Remove(source)
-		}
-		return nil
-	}
-	return writeNative(p.NativePath, p.NativeRows)
+	return rows[:end], nil
 }
 
 // Parallel tool calls may persist a denial between two assistant blocks of

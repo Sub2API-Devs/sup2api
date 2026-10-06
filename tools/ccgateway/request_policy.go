@@ -73,6 +73,46 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err = p.filterFields(o); err != nil {
+		return nil, err
+	}
+	fast, err := p.speed(o)
+	if err != nil {
+		return nil, err
+	}
+	effort, format, err := p.outputConfig(o)
+	if err != nil {
+		return nil, err
+	}
+	schema, err := outputSchema(format)
+	if err != nil {
+		return nil, err
+	}
+	cacheRequested := hasRequestCacheControl(o)
+	data, _ := json.Marshal(o)
+	req, err := parseRequest(data)
+	if err != nil {
+		return nil, err
+	}
+	req.Fast = fast
+	req.Effort = effort
+	req.JSONSchema = schema
+	req.PassUpstreamErrors = p.PassUpstreamErrors
+	req.ToolSearch = p.toolSearch(req)
+	if cacheRequested {
+		req.PromptCacheTTL = "5m"
+		if req.TTL == time.Hour {
+			req.PromptCacheTTL = "1h"
+		}
+	}
+	if err = p.applyBetas(req, h.Values("anthropic-beta")); err != nil {
+		return nil, err
+	}
+	return req, nil
+}
+
+// filterFields rejects or drops body fields outside the supported set.
+func (p RequestPolicy) filterFields(o Object) error {
 	allowed := map[string]bool{}
 	for _, k := range []string{"model", "max_tokens", "stream", "system", "messages", "tools", "tool_choice", "thinking", "cache_control", "speed", "output_config", "output_format"} {
 		allowed[k] = true
@@ -80,11 +120,17 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 	for k := range o {
 		if !allowed[k] {
 			if p.UnknownField == "reject" {
-				return nil, fmt.Errorf("unsupported request field %q (CCGateway policy)", k)
+				return fmt.Errorf("unsupported request field %q (CCGateway policy)", k)
 			}
 			delete(o, k)
 		}
 	}
+	return nil
+}
+
+// speed takes the speed field out of the body. The result is never nil:
+// without an allowed speed, fast mode is off.
+func (p RequestPolicy) speed(o Object) (*bool, error) {
 	fast := new(bool)
 	if v, ok := o["speed"]; ok {
 		if p.AllowFast {
@@ -97,101 +143,104 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 		}
 		delete(o, "speed")
 	}
-	effort := ""
-	var schema Object
-	format := o["output_format"]
+	return fast, nil
+}
+
+// outputConfig takes output_config and the legacy output_format out of the
+// body, returning the effort and the requested output format.
+func (p RequestPolicy) outputConfig(o Object) (effort string, format any, err error) {
+	format = o["output_format"]
 	delete(o, "output_format")
-	if v, ok := o["output_config"]; ok {
-		cfg, ok := v.(map[string]any)
+	v, ok := o["output_config"]
+	if !ok {
+		return "", format, nil
+	}
+	cfg, ok := v.(map[string]any)
+	if !ok {
+		return "", nil, fmt.Errorf("output_config must be an object")
+	}
+	if current, exists := cfg["format"]; exists {
+		if format != nil {
+			return "", nil, fmt.Errorf("use output_config.format or output_format, not both")
+		}
+		format = current
+	}
+	for k, v := range cfg {
+		if k == "format" {
+			continue
+		}
+		if k != "effort" || !p.AllowEffort {
+			if p.UnknownField == "reject" {
+				return "", nil, fmt.Errorf("unsupported request field output_config.%s (CCGateway policy)", k)
+			}
+			continue
+		}
+		effort, ok = v.(string)
 		if !ok {
-			return nil, fmt.Errorf("output_config must be an object")
+			return "", nil, fmt.Errorf("output_config.effort must be a string")
 		}
-		if current, exists := cfg["format"]; exists {
-			if format != nil {
-				return nil, fmt.Errorf("use output_config.format or output_format, not both")
-			}
-			format = current
-		}
-		for k, v := range cfg {
-			if k == "format" {
-				continue
-			}
-			if k != "effort" || !p.AllowEffort {
-				if p.UnknownField == "reject" {
-					return nil, fmt.Errorf("unsupported request field output_config.%s (CCGateway policy)", k)
-				}
-				continue
-			}
-			effort, ok = v.(string)
-			if !ok {
-				return nil, fmt.Errorf("output_config.effort must be a string")
-			}
-			switch effort {
-			case "low", "medium", "high", "xhigh", "max":
-			default:
-				return nil, fmt.Errorf("invalid output_config.effort")
-			}
-		}
-		delete(o, "output_config")
-	}
-	if format != nil {
-		f, ok := format.(map[string]any)
-		if !ok || str(f, "type") != "json_schema" {
-			return nil, fmt.Errorf("output_config.format must be a json_schema object")
-		}
-		if err := keys(f, "type", "schema"); err != nil {
-			return nil, err
-		}
-		schema, ok = f["schema"].(map[string]any)
-		if !ok || len(schema) == 0 {
-			return nil, fmt.Errorf("output_config.format.schema must be a non-empty JSON Schema object")
-		}
-		encoded, _ := json.Marshal(schema)
-		if len(encoded) > 64<<10 {
-			return nil, fmt.Errorf("output_config.format.schema exceeds 64 KiB")
+		switch effort {
+		case "low", "medium", "high", "xhigh", "max":
+		default:
+			return "", nil, fmt.Errorf("invalid output_config.effort")
 		}
 	}
-	if schema != nil {
-		if _, err := compileOutputSchema(schema); err != nil {
-			return nil, fmt.Errorf("invalid output_config.format.schema: %w", err)
-		}
+	delete(o, "output_config")
+	return effort, format, nil
+}
+
+// outputSchema validates a json_schema output format; nil means none.
+func outputSchema(format any) (Object, error) {
+	if format == nil {
+		return nil, nil
 	}
-	cacheRequested := hasRequestCacheControl(o)
-	data, _ := json.Marshal(o)
-	req, err := parseRequest(data)
-	if err != nil {
+	f, ok := format.(map[string]any)
+	if !ok || str(f, "type") != "json_schema" {
+		return nil, fmt.Errorf("output_config.format must be a json_schema object")
+	}
+	if err := keys(f, "type", "schema"); err != nil {
 		return nil, err
 	}
-	req.Fast = fast
-	req.Effort = effort
-	req.JSONSchema = schema
-	req.PassUpstreamErrors = p.PassUpstreamErrors
-	req.ToolSearch = p.ToolSearch
-	if req.ToolSearch == "request" {
-		req.ToolSearch = "false"
-		for _, tool := range req.Tools {
-			if tool.DeferLoading != nil && *tool.DeferLoading {
-				req.ToolSearch = "true"
-			}
-		}
+	schema, ok := f["schema"].(map[string]any)
+	if !ok || len(schema) == 0 {
+		return nil, fmt.Errorf("output_config.format.schema must be a non-empty JSON Schema object")
 	}
+	encoded, _ := json.Marshal(schema)
+	if len(encoded) > 64<<10 {
+		return nil, fmt.Errorf("output_config.format.schema exceeds 64 KiB")
+	}
+	if _, err := compileOutputSchema(schema); err != nil {
+		return nil, fmt.Errorf("invalid output_config.format.schema: %w", err)
+	}
+	return schema, nil
+}
+
+// toolSearch is the CLI's tool search setting before any beta: "request"
+// enables it when a tool asks for deferred loading; disabled tools disable it.
+func (p RequestPolicy) toolSearch(req *Request) string {
 	if req.NoTools {
-		req.ToolSearch = "false"
+		return "false"
 	}
-	if cacheRequested {
-		req.PromptCacheTTL = "5m"
-		if req.TTL == time.Hour {
-			req.PromptCacheTTL = "1h"
+	if p.ToolSearch != "request" {
+		return p.ToolSearch
+	}
+	for _, tool := range req.Tools {
+		if tool.DeferLoading != nil && *tool.DeferLoading {
+			return "true"
 		}
 	}
+	return "false"
+}
+
+// applyBetas maps the anthropic-beta header through the fixed whitelist.
+func (p RequestPolicy) applyBetas(req *Request, values []string) error {
 	rules := map[string]string{}
 	for _, b := range p.Betas {
 		rules[b.Name] = b.Mapping
 	}
 	seen := map[string]bool{}
-	values := h.Values("anthropic-beta")
 	if len(strings.Join(values, ",")) > 8192 {
-		return nil, fmt.Errorf("anthropic-beta header is too large")
+		return fmt.Errorf("anthropic-beta header is too large")
 	}
 	for _, value := range values {
 		for _, name := range strings.Split(value, ",") {
@@ -200,12 +249,12 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 				continue
 			}
 			if !betaName.MatchString(name) {
-				return nil, fmt.Errorf("invalid anthropic-beta name")
+				return fmt.Errorf("invalid anthropic-beta name")
 			}
 			mapping, ok := rules[name]
 			if !ok {
 				if p.UnknownBeta == "reject" {
-					return nil, fmt.Errorf("unsupported anthropic-beta %q (CCGateway policy)", name)
+					return fmt.Errorf("unsupported anthropic-beta %q (CCGateway policy)", name)
 				}
 				continue
 			}
@@ -213,26 +262,28 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 				continue
 			}
 			seen[name] = true
-			switch mapping {
-			case "fine_grained_tools":
-				req.FineGrainedTools = true
-				req.Betas = append(req.Betas, name)
-			case "tool_search":
-				if p.ToolSearch != "false" && !req.NoTools && len(req.Tools) > 0 {
-					req.ToolSearch = "true"
-					req.Betas = append(req.Betas, name)
-				}
-			case "fast":
-				if !p.AllowFast {
-					continue
-				}
-				req.Betas = append(req.Betas, name)
-			case "forward":
-				req.Betas = append(req.Betas, name)
-			}
+			p.applyBeta(req, name, mapping)
 		}
 	}
-	return req, nil
+	return nil
+}
+func (p RequestPolicy) applyBeta(req *Request, name, mapping string) {
+	switch mapping {
+	case "fine_grained_tools":
+		req.FineGrainedTools = true
+		req.Betas = append(req.Betas, name)
+	case "tool_search":
+		if p.ToolSearch != "false" && !req.NoTools && len(req.Tools) > 0 {
+			req.ToolSearch = "true"
+			req.Betas = append(req.Betas, name)
+		}
+	case "fast":
+		if p.AllowFast {
+			req.Betas = append(req.Betas, name)
+		}
+	case "forward":
+		req.Betas = append(req.Betas, name)
+	}
 }
 
 // Check only protocol locations, never tool schemas or arbitrary tool inputs.

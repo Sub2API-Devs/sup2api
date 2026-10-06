@@ -139,107 +139,131 @@ func blocks(v any, role string, ttl *time.Duration) ([]Object, error) {
 			return nil, e
 		}
 		delete(b, "cache_control")
-		switch str(b, "type") {
-		case "text":
-			if e := keys(b, "type", "text"); e != nil {
-				return nil, e
-			}
-			if _, ok := b["text"].(string); !ok {
-				return nil, fmt.Errorf("text must be a string")
-			}
-		case "tool_use":
-			if e := keys(b, "type", "id", "name", "input", "caller"); e != nil {
-				return nil, e
-			}
-			if v, exists := b["caller"]; exists {
-				caller, ok := v.(map[string]any)
-				if !ok || str(caller, "type") != "direct" {
-					return nil, fmt.Errorf("only direct tool callers are supported")
-				}
-				if e := keys(caller, "type"); e != nil {
-					return nil, e
-				}
-			}
-			if role != "assistant" || str(b, "id") == "" || !toolName.MatchString(str(b, "name")) {
-				return nil, fmt.Errorf("invalid tool_use")
-			}
-			if _, ok := b["input"].(map[string]any); !ok {
-				return nil, fmt.Errorf("tool input must be an object")
-			}
-		case "tool_result":
-			if e := keys(b, "type", "tool_use_id", "content", "is_error"); e != nil {
-				return nil, e
-			}
-			if role != "user" || str(b, "tool_use_id") == "" {
-				return nil, fmt.Errorf("invalid tool_result")
-			}
-			if x, ok := b["is_error"]; ok {
-				if _, ok := x.(bool); !ok {
-					return nil, fmt.Errorf("is_error must be boolean")
-				}
-			}
-			if x, exists := b["content"]; exists {
-				if _, ok := x.(string); !ok {
-					a, ok := x.([]any)
-					if !ok {
-						return nil, fmt.Errorf("invalid tool_result content")
-					}
-					if len(a) > 0 {
-						bs, e := blocks(a, "user", ttl)
-						if e != nil {
-							return nil, e
-						}
-						for _, z := range bs {
-							if str(z, "type") != "text" && str(z, "type") != "image" {
-								return nil, fmt.Errorf("tool_result supports text/image only")
-							}
-						}
-						b["content"] = bs
-					}
-				}
-			}
-		case "image":
-			if e := keys(b, "type", "source"); e != nil {
-				return nil, e
-			}
-			s, ok := b["source"].(map[string]any)
-			if role != "user" || !ok {
-				return nil, fmt.Errorf("image must be user content")
-			}
-			if e := keys(s, "type", "media_type", "data"); e != nil {
-				return nil, e
-			}
-			if str(s, "type") != "base64" || str(s, "data") == "" {
-				return nil, fmt.Errorf("only base64 images are supported")
-			}
-			switch str(s, "media_type") {
-			case "image/png", "image/jpeg", "image/gif", "image/webp":
-			default:
-				return nil, fmt.Errorf("unsupported image media_type")
-			}
-		case "thinking":
-			if e := keys(b, "type", "thinking", "signature"); e != nil {
-				return nil, e
-			}
-			if role != "assistant" || str(b, "signature") == "" {
-				return nil, fmt.Errorf("invalid thinking block")
-			}
-			if _, ok := b["thinking"].(string); !ok {
-				return nil, fmt.Errorf("invalid thinking text")
-			}
-		case "redacted_thinking":
-			if e := keys(b, "type", "data"); e != nil {
-				return nil, e
-			}
-			if role != "assistant" || str(b, "data") == "" {
-				return nil, fmt.Errorf("invalid redacted_thinking")
-			}
-		default:
-			return nil, fmt.Errorf("unsupported content block %q", str(b, "type"))
+		if e := checkBlock(b, role, ttl); e != nil {
+			return nil, e
 		}
 		out = append(out, b)
 	}
 	return out, nil
+}
+
+// checkBlock validates one content block (cache_control already removed);
+// tool_result content is normalized in place.
+func checkBlock(b Object, role string, ttl *time.Duration) error {
+	switch str(b, "type") {
+	case "text":
+		if e := keys(b, "type", "text"); e != nil {
+			return e
+		}
+		if _, ok := b["text"].(string); !ok {
+			return fmt.Errorf("text must be a string")
+		}
+	case "tool_use":
+		return checkToolUse(b, role)
+	case "tool_result":
+		return checkToolResult(b, role, ttl)
+	case "image":
+		return checkImage(b, role)
+	case "thinking":
+		if e := keys(b, "type", "thinking", "signature"); e != nil {
+			return e
+		}
+		if role != "assistant" || str(b, "signature") == "" {
+			return fmt.Errorf("invalid thinking block")
+		}
+		if _, ok := b["thinking"].(string); !ok {
+			return fmt.Errorf("invalid thinking text")
+		}
+	case "redacted_thinking":
+		if e := keys(b, "type", "data"); e != nil {
+			return e
+		}
+		if role != "assistant" || str(b, "data") == "" {
+			return fmt.Errorf("invalid redacted_thinking")
+		}
+	default:
+		return fmt.Errorf("unsupported content block %q", str(b, "type"))
+	}
+	return nil
+}
+func checkToolUse(b Object, role string) error {
+	if e := keys(b, "type", "id", "name", "input", "caller"); e != nil {
+		return e
+	}
+	if v, exists := b["caller"]; exists {
+		caller, ok := v.(map[string]any)
+		if !ok || str(caller, "type") != "direct" {
+			return fmt.Errorf("only direct tool callers are supported")
+		}
+		if e := keys(caller, "type"); e != nil {
+			return e
+		}
+	}
+	if role != "assistant" || str(b, "id") == "" || !toolName.MatchString(str(b, "name")) {
+		return fmt.Errorf("invalid tool_use")
+	}
+	if _, ok := b["input"].(map[string]any); !ok {
+		return fmt.Errorf("tool input must be an object")
+	}
+	return nil
+}
+func checkToolResult(b Object, role string, ttl *time.Duration) error {
+	if e := keys(b, "type", "tool_use_id", "content", "is_error"); e != nil {
+		return e
+	}
+	if role != "user" || str(b, "tool_use_id") == "" {
+		return fmt.Errorf("invalid tool_result")
+	}
+	if x, ok := b["is_error"]; ok {
+		if _, ok := x.(bool); !ok {
+			return fmt.Errorf("is_error must be boolean")
+		}
+	}
+	x, exists := b["content"]
+	if !exists {
+		return nil
+	}
+	if _, ok := x.(string); ok {
+		return nil
+	}
+	a, ok := x.([]any)
+	if !ok {
+		return fmt.Errorf("invalid tool_result content")
+	}
+	if len(a) == 0 {
+		return nil
+	}
+	bs, e := blocks(a, "user", ttl)
+	if e != nil {
+		return e
+	}
+	for _, z := range bs {
+		if str(z, "type") != "text" && str(z, "type") != "image" {
+			return fmt.Errorf("tool_result supports text/image only")
+		}
+	}
+	b["content"] = bs
+	return nil
+}
+func checkImage(b Object, role string) error {
+	if e := keys(b, "type", "source"); e != nil {
+		return e
+	}
+	s, ok := b["source"].(map[string]any)
+	if role != "user" || !ok {
+		return fmt.Errorf("image must be user content")
+	}
+	if e := keys(s, "type", "media_type", "data"); e != nil {
+		return e
+	}
+	if str(s, "type") != "base64" || str(s, "data") == "" {
+		return fmt.Errorf("only base64 images are supported")
+	}
+	switch str(s, "media_type") {
+	case "image/png", "image/jpeg", "image/gif", "image/webp":
+		return nil
+	}
+	return fmt.Errorf("unsupported image media_type")
 }
 func parseRequest(data []byte) (*Request, error) {
 	o, e := decodeObject(data)
@@ -263,18 +287,51 @@ func parseRequest(data []byte) (*Request, error) {
 	if e = cacheTTL(o["cache_control"], &r.TTL); e != nil {
 		return nil, e
 	}
-	switch s := o["system"].(type) {
+	if r.System, e = parseSystem(o["system"], &r.TTL); e != nil {
+		return nil, e
+	}
+	if ts, exists := o["tools"]; exists {
+		if r.Tools, e = parseTools(ts, &r.TTL); e != nil {
+			return nil, e
+		}
+	}
+	if v, ok := o["tool_choice"]; ok {
+		if r.NoTools, e = parseToolChoice(v); e != nil {
+			return nil, e
+		}
+	}
+	if v, ok := o["thinking"]; ok {
+		if r.Thinking, e = parseThinking(v, r.MaxTokens); e != nil {
+			return nil, e
+		}
+	}
+	if r.Messages, r.origin, e = parseMessages(o["messages"], &r.TTL); e != nil {
+		return nil, e
+	}
+	if e = validateConversation(r.Messages, r.origin); e != nil {
+		return nil, e
+	}
+	if err := validatePendingSystems(r); err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+// parseSystem returns the top-level system text blocks; none is one empty block.
+func parseSystem(v any, ttl *time.Duration) ([]string, error) {
+	switch s := v.(type) {
 	case nil:
-		r.System = []string{""}
+		return []string{""}, nil
 	case string:
-		r.System = []string{s}
+		return []string{s}, nil
 	case []any:
+		var out []string
 		for _, v := range s {
 			b, ok := v.(map[string]any)
 			if !ok {
 				return nil, fmt.Errorf("invalid system block")
 			}
-			if e = keys(b, "type", "text", "cache_control"); e != nil {
+			if e := keys(b, "type", "text", "cache_control"); e != nil {
 				return nil, e
 			}
 			if str(b, "type") != "text" {
@@ -284,144 +341,165 @@ func parseRequest(data []byte) (*Request, error) {
 			if !ok {
 				return nil, fmt.Errorf("invalid system text")
 			}
-			if e = cacheTTL(b["cache_control"], &r.TTL); e != nil {
+			if e := cacheTTL(b["cache_control"], ttl); e != nil {
 				return nil, e
 			}
-			r.System = append(r.System, s)
+			out = append(out, s)
 		}
-		if len(r.System) == 0 {
-			r.System = []string{""}
+		if len(out) == 0 {
+			out = []string{""}
 		}
-	default:
-		return nil, fmt.Errorf("system must be a string or text blocks")
+		return out, nil
 	}
-	if ts, exists := o["tools"]; exists {
-		a, ok := ts.([]any)
-		if !ok {
-			return nil, fmt.Errorf("tools must be an array")
-		}
-		seen := map[string]bool{}
-		for _, v := range a {
-			t, ok := v.(map[string]any)
-			if !ok {
-				return nil, fmt.Errorf("invalid tool")
-			}
-			if e = keys(t, "name", "description", "input_schema", "cache_control", "defer_loading"); e != nil {
-				return nil, e
-			}
-			n := str(t, "name")
-			s, ok := t["input_schema"].(map[string]any)
-			if !toolName.MatchString(n) || seen[n] || !ok || str(s, "type") != "object" {
-				return nil, fmt.Errorf("invalid or duplicate tool definition")
-			}
-			if d, exists := t["description"]; exists {
-				if _, ok := d.(string); !ok {
-					return nil, fmt.Errorf("tool description must be text")
-				}
-			}
-			seen[n] = true
-			if e = cacheTTL(t["cache_control"], &r.TTL); e != nil {
-				return nil, e
-			}
-			var deferLoading *bool
-			if value, exists := t["defer_loading"]; exists {
-				b, ok := value.(bool)
-				if !ok {
-					return nil, fmt.Errorf("tools.defer_loading must be boolean")
-				}
-				deferLoading = &b
-			}
-			r.Tools = append(r.Tools, Tool{Name: n, Description: str(t, "description"), Schema: s, DeferLoading: deferLoading})
-		}
+	return nil, fmt.Errorf("system must be a string or text blocks")
+}
+func parseTools(v any, ttl *time.Duration) ([]Tool, error) {
+	a, ok := v.([]any)
+	if !ok {
+		return nil, fmt.Errorf("tools must be an array")
 	}
-	if v, ok := o["tool_choice"]; ok {
-		t, ok := v.(map[string]any)
-		if !ok {
-			return nil, fmt.Errorf("invalid tool_choice")
-		}
-		if e = keys(t, "type"); e != nil {
-			return nil, e
-		}
-		switch str(t, "type") {
-		case "auto":
-		case "none":
-			r.NoTools = true
-		default:
-			return nil, fmt.Errorf("tool_choice supports auto/none only")
-		}
-	}
-	if v, ok := o["thinking"]; ok {
-		t, ok := v.(map[string]any)
-		if !ok {
-			return nil, fmt.Errorf("invalid thinking")
-		}
-		if e = keys(t, "type", "budget_tokens", "display"); e != nil {
-			return nil, e
-		}
-		if display, exists := t["display"]; exists {
-			if display != "omitted" && display != "summarized" {
-				return nil, fmt.Errorf("thinking.display supports omitted/summarized only")
-			}
-		}
-		switch str(t, "type") {
-		case "disabled", "adaptive":
-			if _, ok := t["budget_tokens"]; ok {
-				return nil, fmt.Errorf("unexpected thinking budget")
-			}
-		case "enabled":
-			b := positive(t["budget_tokens"])
-			if b < 1024 || b >= r.MaxTokens {
-				return nil, fmt.Errorf("thinking budget must be >=1024 and <max_tokens")
-			}
-		default:
-			return nil, fmt.Errorf("unsupported thinking type")
-		}
-		r.Thinking = t
-	}
-	a, ok := o["messages"].([]any)
-	if !ok || len(a) == 0 || len(a) > 100000 {
-		return nil, fmt.Errorf("messages must contain 1..100000 messages")
-	}
-	origin := []int{} // client array index of each parsed message
-	for i, v := range a {
-		m, ok := v.(map[string]any)
-		if !ok {
-			return nil, fmt.Errorf("invalid message")
-		}
-		role := str(m, "role")
-		if role == "system" {
-			b, err := parseSystemMessage(m, i, &r.TTL)
-			if err != nil {
-				return nil, err
-			}
-			r.Messages = append(r.Messages, Message{Role: role, Content: b})
-			origin = append(origin, i)
-			continue
-		}
-		if e = keys(m, "role", "content"); e != nil {
-			return nil, e
-		}
-		if role != "user" && role != "assistant" {
-			return nil, fmt.Errorf("messages[%d].role: unsupported role %q; expected user, assistant or system", i, role)
-		}
-		b, e := blocks(m["content"], role, &r.TTL)
+	var tools []Tool
+	seen := map[string]bool{}
+	for _, v := range a {
+		tool, e := parseTool(v, seen, ttl)
 		if e != nil {
 			return nil, e
 		}
-		n := len(r.Messages)
-		if n > 0 && r.Messages[n-1].Role == role {
-			r.Messages[n-1].Content = append(r.Messages[n-1].Content, b...)
+		tools = append(tools, tool)
+	}
+	return tools, nil
+}
+func parseTool(v any, seen map[string]bool, ttl *time.Duration) (Tool, error) {
+	t, ok := v.(map[string]any)
+	if !ok {
+		return Tool{}, fmt.Errorf("invalid tool")
+	}
+	if e := keys(t, "name", "description", "input_schema", "cache_control", "defer_loading"); e != nil {
+		return Tool{}, e
+	}
+	n := str(t, "name")
+	s, ok := t["input_schema"].(map[string]any)
+	if !toolName.MatchString(n) || seen[n] || !ok || str(s, "type") != "object" {
+		return Tool{}, fmt.Errorf("invalid or duplicate tool definition")
+	}
+	if d, exists := t["description"]; exists {
+		if _, ok := d.(string); !ok {
+			return Tool{}, fmt.Errorf("tool description must be text")
+		}
+	}
+	seen[n] = true
+	if e := cacheTTL(t["cache_control"], ttl); e != nil {
+		return Tool{}, e
+	}
+	var deferLoading *bool
+	if value, exists := t["defer_loading"]; exists {
+		b, ok := value.(bool)
+		if !ok {
+			return Tool{}, fmt.Errorf("tools.defer_loading must be boolean")
+		}
+		deferLoading = &b
+	}
+	return Tool{Name: n, Description: str(t, "description"), Schema: s, DeferLoading: deferLoading}, nil
+}
+
+// parseToolChoice reports whether the client disabled tools.
+func parseToolChoice(v any) (bool, error) {
+	t, ok := v.(map[string]any)
+	if !ok {
+		return false, fmt.Errorf("invalid tool_choice")
+	}
+	if e := keys(t, "type"); e != nil {
+		return false, e
+	}
+	switch str(t, "type") {
+	case "auto":
+		return false, nil
+	case "none":
+		return true, nil
+	}
+	return false, fmt.Errorf("tool_choice supports auto/none only")
+}
+func parseThinking(v any, maxTokens int) (Object, error) {
+	t, ok := v.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("invalid thinking")
+	}
+	if e := keys(t, "type", "budget_tokens", "display"); e != nil {
+		return nil, e
+	}
+	if display, exists := t["display"]; exists {
+		if display != "omitted" && display != "summarized" {
+			return nil, fmt.Errorf("thinking.display supports omitted/summarized only")
+		}
+	}
+	switch str(t, "type") {
+	case "disabled", "adaptive":
+		if _, ok := t["budget_tokens"]; ok {
+			return nil, fmt.Errorf("unexpected thinking budget")
+		}
+	case "enabled":
+		b := positive(t["budget_tokens"])
+		if b < 1024 || b >= maxTokens {
+			return nil, fmt.Errorf("thinking budget must be >=1024 and <max_tokens")
+		}
+	default:
+		return nil, fmt.Errorf("unsupported thinking type")
+	}
+	return t, nil
+}
+
+// parseMessages merges consecutive user or assistant messages, as the API
+// does, and returns the client array index of each parsed message.
+func parseMessages(v any, ttl *time.Duration) ([]Message, []int, error) {
+	a, ok := v.([]any)
+	if !ok || len(a) == 0 || len(a) > 100000 {
+		return nil, nil, fmt.Errorf("messages must contain 1..100000 messages")
+	}
+	var messages []Message
+	origin := []int{}
+	for i, v := range a {
+		m, ok := v.(map[string]any)
+		if !ok {
+			return nil, nil, fmt.Errorf("invalid message")
+		}
+		role := str(m, "role")
+		if role == "system" {
+			b, err := parseSystemMessage(m, i, ttl)
+			if err != nil {
+				return nil, nil, err
+			}
+			messages = append(messages, Message{Role: role, Content: b})
+			origin = append(origin, i)
+			continue
+		}
+		if e := keys(m, "role", "content"); e != nil {
+			return nil, nil, e
+		}
+		if role != "user" && role != "assistant" {
+			return nil, nil, fmt.Errorf("messages[%d].role: unsupported role %q; expected user, assistant or system", i, role)
+		}
+		b, e := blocks(m["content"], role, ttl)
+		if e != nil {
+			return nil, nil, e
+		}
+		n := len(messages)
+		if n > 0 && messages[n-1].Role == role {
+			messages[n-1].Content = append(messages[n-1].Content, b...)
 		} else {
-			r.Messages = append(r.Messages, Message{role, b})
+			messages = append(messages, Message{role, b})
 			origin = append(origin, i)
 		}
 	}
-	r.origin = origin
-	first, last := -1, -1
-	if err := validateSystemPositions(r.Messages, origin); err != nil {
-		return nil, err
+	return messages, origin, nil
+}
+
+// validateConversation checks message positions and tool pairing.
+func validateConversation(messages []Message, origin []int) error {
+	if err := validateSystemPositions(messages, origin); err != nil {
+		return err
 	}
-	for i, m := range r.Messages {
+	first, last := -1, -1
+	for i, m := range messages {
 		if m.Role != "system" {
 			if first < 0 {
 				first = i
@@ -429,16 +507,22 @@ func parseRequest(data []byte) (*Request, error) {
 			last = i
 		}
 	}
-	if first < 0 || r.Messages[first].Role != "user" || r.Messages[last].Role != "user" {
-		return nil, fmt.Errorf("first and last message must be user; assistant prefill unsupported")
+	if first < 0 || messages[first].Role != "user" || messages[last].Role != "user" {
+		return fmt.Errorf("first and last message must be user; assistant prefill unsupported")
 	}
+	return validateToolPairing(messages)
+}
+
+// validateToolPairing requires every tool_use to be answered by the next user
+// message, with tool results before any other content.
+func validateToolPairing(messages []Message) error {
 	pending, seen := map[string]bool{}, map[string]bool{}
-	for _, m := range r.Messages {
+	for _, m := range messages {
 		if m.Role == "system" {
 			continue
 		}
 		if m.Role == "assistant" && len(pending) > 0 {
-			return nil, fmt.Errorf("missing tool results")
+			return fmt.Errorf("missing tool results")
 		}
 		other := false
 		for _, b := range m.Content {
@@ -446,14 +530,14 @@ func parseRequest(data []byte) (*Request, error) {
 			case "tool_use":
 				id := str(b, "id")
 				if seen[id] {
-					return nil, fmt.Errorf("duplicate tool_use id")
+					return fmt.Errorf("duplicate tool_use id")
 				}
 				seen[id] = true
 				pending[id] = true
 			case "tool_result":
 				id := str(b, "tool_use_id")
 				if other || !pending[id] {
-					return nil, fmt.Errorf("unpaired or misplaced tool_result")
+					return fmt.Errorf("unpaired or misplaced tool_result")
 				}
 				delete(pending, id)
 			default:
@@ -461,13 +545,10 @@ func parseRequest(data []byte) (*Request, error) {
 			}
 		}
 		if m.Role == "user" && len(pending) > 0 {
-			return nil, fmt.Errorf("all parallel tool results must be supplied")
+			return fmt.Errorf("all parallel tool results must be supplied")
 		}
 	}
-	if err := validatePendingSystems(r); err != nil {
-		return nil, err
-	}
-	return r, nil
+	return nil
 }
 func digest(v any) string {
 	b, _ := json.Marshal(v)

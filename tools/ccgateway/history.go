@@ -279,46 +279,76 @@ func prepareHistory(r *Request, c *HistoryCache, logical, dir, version string) (
 	if e := os.MkdirAll(p.Work, 0700); e != nil {
 		return nil, e
 	}
-	var prior *Snapshot
-	for n := pending - 1; r.JSONSchema == nil && n >= 0; n-- {
-		if r.Messages[n].Role != "assistant" {
-			continue
-		}
-		s := c.get(cacheKey(logical, "", hashes[n]))
-		if s != nil && s.Format == 2 && len(s.Hashes) == n+1 {
-			prior = s
-			break
-		}
-	}
 	start := 0
 	parent := ""
-	if prior != nil {
-		p.Rows = append(p.Rows, prior.Rows...)
-		p.SnapshotEnabled = choosePromptSnapshot(prior.Rows, prior.PromptEvidence, r.System, time.Now())
-		p.Work = prior.Work
-		p.Anchor = prior.LastUUID
+	if prior := findPriorSnapshot(r, c, logical, hashes, pending); prior != nil {
+		p.resumeFrom(prior, r, c, pending)
 		parent = prior.LastUUID
 		start = len(prior.Hashes)
-		p.Fork = true
-		p.Mode = "fork"
-		// A single native session has exactly one writer. Concurrent requests from
-		// the same prefix branch from the immutable checkpoint instead.
-		c.mu.Lock()
-		actual, e := os.ReadFile(prior.NativePath)
-		if start == pending && !c.active[prior.SessionID] && e == nil && digest(string(actual)) == prior.NativeDigest {
-			p.SessionID = prior.SessionID
-			p.NativePath = prior.NativePath
-			p.Path = prior.NativePath
-			p.Fork = false
-			p.Mode = "prefix-hit"
-			c.active[p.SessionID] = true
-		}
-		c.mu.Unlock()
 		if !p.Fork && !hasToolResults(r.Messages[pending]) {
 			p.Anchor = "" // Ordinary native resume: submit only the new user message.
 			return p, nil
 		}
 	}
+	p.LastUUID = p.seedRows(r, start, pending, parent, version)
+	if pending > 0 {
+		if p.Anchor == "" {
+			p.release()
+			return nil, fmt.Errorf("missing assistant resume anchor")
+		}
+		if p.Path == "" {
+			p.Path = filepath.Join(dir, "history.jsonl")
+		}
+		if e := writeNative(p.Path, p.Rows); e != nil {
+			p.release()
+			return nil, e
+		}
+	}
+	return p, nil
+}
+
+// findPriorSnapshot is the cached checkpoint of the longest client prefix
+// that ends with an assistant message before the pending turn.
+func findPriorSnapshot(r *Request, c *HistoryCache, logical string, hashes []string, pending int) *Snapshot {
+	for n := pending - 1; !r.structuredOutput() && n >= 0; n-- {
+		if r.Messages[n].Role != "assistant" {
+			continue
+		}
+		s := c.get(cacheKey(logical, "", hashes[n]))
+		if s != nil && s.Format == 2 && len(s.Hashes) == n+1 {
+			return s
+		}
+	}
+	return nil
+}
+
+// resumeFrom continues from a checkpoint: a fork of it, or the native session
+// itself when it is unchanged, idle, and directly before the pending turn.
+func (p *Prepared) resumeFrom(prior *Snapshot, r *Request, c *HistoryCache, pending int) {
+	p.Rows = append(p.Rows, prior.Rows...)
+	p.SnapshotEnabled = choosePromptSnapshot(prior.Rows, prior.PromptEvidence, r.System, time.Now())
+	p.Work = prior.Work
+	p.Anchor = prior.LastUUID
+	p.Fork = true
+	p.Mode = "fork"
+	// A single native session has exactly one writer. Concurrent requests from
+	// the same prefix branch from the immutable checkpoint instead.
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	actual, e := os.ReadFile(prior.NativePath)
+	if len(prior.Hashes) == pending && !c.active[prior.SessionID] && e == nil && digest(string(actual)) == prior.NativeDigest {
+		p.SessionID = prior.SessionID
+		p.NativePath = prior.NativePath
+		p.Path = prior.NativePath
+		p.Fork = false
+		p.Mode = "prefix-hit"
+		c.active[p.SessionID] = true
+	}
+}
+
+// seedRows appends native records for client messages start..pending and
+// returns the last record's UUID.
+func (p *Prepared) seedRows(r *Request, start, pending int, parent, version string) string {
 	for i := start; i <= pending; i++ {
 		if r.Messages[i].Role == "system" {
 			// One record per client system message, its text blocks as the
@@ -345,21 +375,7 @@ func prepareHistory(r *Request, c *HistoryCache, logical, dir, version string) (
 			p.Anchor = id
 		}
 	}
-	p.LastUUID = parent
-	if pending > 0 {
-		if p.Anchor == "" {
-			p.release()
-			return nil, fmt.Errorf("missing assistant resume anchor")
-		}
-		if p.Path == "" {
-			p.Path = filepath.Join(dir, "history.jsonl")
-		}
-		if e := writeNative(p.Path, p.Rows); e != nil {
-			p.release()
-			return nil, e
-		}
-	}
-	return p, nil
+	return parent
 }
 func hasToolResults(m Message) bool {
 	for _, b := range m.Content {
@@ -377,7 +393,7 @@ func (p *Prepared) release() {
 	}
 }
 func (p *Prepared) commit(r *Request, answer Object, c *HistoryCache, logical, dir, version string, started time.Time) error {
-	if r.JSONSchema != nil {
+	if r.structuredOutput() {
 		// API text differs from the CLI synthetic-tool transcript; rebuild from client history next time.
 		_ = os.Remove(p.NativePath)
 		return nil
