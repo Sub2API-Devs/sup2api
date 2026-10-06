@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  worker-test:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: ccgateway-worker-test
+    environment:
+      # Worker 配置
+      WORKER_ID: test-worker-1
+      WORKER_PORT: 8788
+      LOG_LEVEL: debug
+
+      # CLI 配置
+      WORKER_CLI_PATH: /usr/local/bin/claude
+      WORKER_CLI_VERSION: 2.1.288
+      WORKER_PLUGIN_PATH: /app/mod
+
+      # Claude 配置
+      CLAUDE_CONFIG_DIR: /root/.claude
+      HISTORY_DIR: /root/.claude/sessions
+      CACHE_DIR: /var/lib/worker/cache
+
+      # 超时配置
+      REQUEST_TIMEOUT: 10m
+      CLI_TIMEOUT: 15m
+      HEALTH_TIMEOUT: 5s
+
+      # 缓存配置
+      MAX_CACHE_SIZE: 33554432
+      HISTORY_RETENTION: 24h
+    ports:
+      - "8788:8788"
+    volumes:
+      # 挂载测试数据
+      - ./fixtures:/test/fixtures:ro
+      # 持久化会话数据（测试用）
+      - test-sessions:/root/.claude/sessions
+      - test-cache:/var/lib/worker/cache
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8788/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - test-network
+
+volumes:
+  test-sessions:
+  test-cache:
+
+networks:
+  test-network:
+    driver: bridge
