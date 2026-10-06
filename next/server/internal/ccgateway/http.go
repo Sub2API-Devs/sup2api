@@ -20,6 +20,13 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	// update that account (own level: accounts it created), CONTRACTS §49.5.
 	r.PermAny("GET", "/system/ccgateway/accounts/:id/:action", s.accountManage, "settings:read", "account:read", "account:own:read")
 	r.PermAny("POST", "/system/ccgateway/accounts/:id/:action", s.accountManage, "settings:manage", "account:update", "account:own:update")
+	r.PermAny("PUT", "/system/ccgateway/accounts/:id/:action", func(c *gin.Context) {
+		if c.Param("action") != "request-logs" {
+			httpapi.Fail(c, core.ErrNotFound)
+			return
+		}
+		s.accountManage(c)
+	}, "settings:manage", "account:update", "account:own:update")
 	// Draft runtimes of accounts being created (CONTRACTS §49.9).
 	s.registerDraftRoutes(r)
 	r.Perm("GET", "/system/ccgateway/remote-config", "settings:read", func(c *gin.Context) {

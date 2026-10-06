@@ -27,6 +27,8 @@ type Gateway struct {
 	Timeout       time.Duration
 	Slots         chan struct{}
 	NativeAllowed map[string]bool
+	RequestLogDir string
+	RequestLogs   *requestLogStore
 	mu            sync.Mutex
 	busy          map[string]bool
 }
@@ -50,43 +52,59 @@ func (g *Gateway) authorized(r *http.Request) bool {
 var sessionName = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,128}$`)
 
 func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if serveDisplayRelay(w, r) {
+		return
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	if r.URL.Path == "/healthz" && r.Method == "GET" {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(Object{"status": "ok", "claude_version": g.Runner.Version})
 		return
 	}
+	diagnostic := newRequestDiagnostic(w, r)
+	diagnostic.store = g.RequestLogs
+	w = diagnostic.capture(w, r, g.RequestLogDir)
+	defer diagnostic.finish()
+	fail := func(status int, kind, message string) {
+		diagnostic.fail(status, kind, message)
+		apiError(w, status, kind, message)
+	}
 	if !g.authorized(r) {
-		apiError(w, 401, "authentication_error", "Invalid gateway API key")
+		fail(401, "authentication_error", "Invalid gateway API key")
 		return
 	}
 	if r.URL.Path != "/v1/messages" {
-		apiError(w, 404, "not_found_error", "Unknown endpoint")
+		fail(404, "not_found_error", "Unknown endpoint")
 		return
 	}
 	if r.Method != "POST" {
-		apiError(w, 405, "invalid_request_error", "Use POST")
+		fail(405, "invalid_request_error", "Use POST")
 		return
 	}
 	if v := r.Header.Get("anthropic-version"); v != "" && v != "2023-06-01" {
-		apiError(w, 400, "invalid_request_error", "Unsupported anthropic-version")
+		fail(400, "invalid_request_error", "Unsupported anthropic-version")
 		return
 	}
+	diagnostic.stage = "read_body"
 	body, e := io.ReadAll(http.MaxBytesReader(w, r.Body, 32<<20))
 	if e != nil {
 		var large *http.MaxBytesError
 		if errors.As(e, &large) {
-			apiError(w, 413, "request_too_large", "Request exceeds 32 MiB")
+			fail(413, "request_too_large", "Request exceeds 32 MiB")
 		} else {
-			apiError(w, 400, "invalid_request_error", "Cannot read body")
+			fail(400, "invalid_request_error", "Cannot read body")
 		}
 		return
 	}
+	diagnostic.request(body, r.Header)
+	diagnostic.stage = "parse_request"
 	req, e := parsePolicyRequest(body, r.Header)
 	if e != nil {
-		apiError(w, 400, "invalid_request_error", e.Error())
+		fail(400, "invalid_request_error", e.Error())
 		return
 	}
+	req.diagnostic = diagnostic
+	diagnostic.stage = "admission"
 	// Explicit opt-in, plus server allowlist, plus current client declarations.
 	// Same-named client tools use SDK MCP unless opted in and their complete
 	// definition matches the verified native catalogue below.
@@ -96,7 +114,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if !g.NativeAllowed[name] {
-			apiError(w, 400, "invalid_request_error", "Native tool not allowed: "+name)
+			fail(400, "invalid_request_error", "Native tool not allowed: "+name)
 			return
 		}
 		found := false
@@ -107,14 +125,14 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !found {
-			apiError(w, 400, "invalid_request_error", "Native tool must be declared in tools: "+name)
+			fail(400, "invalid_request_error", "Native tool must be declared in tools: "+name)
 			return
 		}
 		req.Native[name] = true
 	}
 	matchNativeTools(req, g.Runner.Version)
 	if err := validateToolNames(req); err != nil {
-		apiError(w, 400, "invalid_request_error", err.Error())
+		fail(400, "invalid_request_error", err.Error())
 		return
 	}
 	logical := r.Header.Get("X-CCGateway-Session-ID")
@@ -122,7 +140,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		logical = "auto"
 	}
 	if !sessionName.MatchString(logical) {
-		apiError(w, 400, "invalid_request_error", "Invalid gateway session ID")
+		fail(400, "invalid_request_error", "Invalid gateway session ID")
 		return
 	}
 	sessionLabel := logical
@@ -137,7 +155,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if g.busy[busyKey] {
 		g.mu.Unlock()
-		apiError(w, 409, "invalid_request_error", "Session has an active request; use a different session ID for concurrent branches")
+		fail(409, "invalid_request_error", "Session has an active request; use a different session ID for concurrent branches")
 		return
 	}
 	g.busy[busyKey] = true
@@ -147,7 +165,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case g.Slots <- struct{}{}:
 		defer func() { <-g.Slots }()
 	default:
-		apiError(w, 429, "rate_limit_error", "Gateway concurrency limit reached")
+		fail(429, "rate_limit_error", "Gateway concurrency limit reached")
 		return
 	}
 	started := time.Now()
@@ -155,17 +173,18 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	dir, e := os.MkdirTemp(g.Runner.Work, "request-")
 	if e != nil {
-		apiError(w, 500, "api_error", "Cannot create request workspace")
+		fail(500, "api_error", "Cannot create request workspace")
 		return
 	}
 	defer os.RemoveAll(dir)
+	diagnostic.stage = "prepare_history"
 	p, e := prepareHistory(req, g.Cache, logical, dir, g.Runner.Version)
 	if e != nil {
-		apiError(w, 500, "api_error", "Cannot prepare history")
+		fail(500, "api_error", "Cannot prepare history")
 		return
 	}
 	defer p.release()
-	w.Header().Set("request-id", uuid())
+	diagnostic.fields["history_mode"] = p.Mode
 	w.Header().Set("X-CCGateway-Session-ID", sessionLabel)
 	w.Header().Set("X-CCGateway-History", p.Mode)
 	w.Header().Set("X-CCGateway-Cache-TTL", fmt.Sprint(int((24 * time.Hour).Seconds())))
@@ -192,6 +211,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return controller.Flush()
 	}
+	diagnostic.stage = "claude_code"
 	answer, e := g.Runner.run(ctx, req, p, dir, send)
 	if e == nil {
 		if err := p.commit(req, answer, g.Cache, logical, dir, g.Runner.Version, started); err != nil {
@@ -199,7 +219,9 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if e != nil {
+		diagnostic.fail(502, "api_error", e.Error())
 		if r.Context().Err() != nil {
+			diagnostic.fields["client_canceled"] = true
 			return
 		}
 		status := 502
@@ -209,13 +231,15 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			status = 504
 			message = "Claude Code request timed out"
 		}
+		diagnostic.fail(status, kind, message)
 		if streaming {
 			_ = send(Object{"type": "error", "error": Object{"type": kind, "message": message}})
 		} else {
-			apiError(w, status, kind, message)
+			fail(status, kind, message)
 		}
 		return
 	}
+	diagnostic.stage = "completed"
 	if req.Stream {
 		_ = send(Object{"type": "message_stop"})
 	} else {
@@ -235,7 +259,7 @@ func serve() error {
 	if adminKey := os.Getenv("CCG_ADMIN_KEY"); adminKey != "" && (key == "" || adminKey == key) {
 		return fmt.Errorf("management mode requires distinct non-empty CCG_ADMIN_KEY and CCG_API_KEY")
 	}
-	host, _, e := net.SplitHostPort(bind)
+	host, port, e := net.SplitHostPort(bind)
 	if e != nil {
 		return e
 	}
@@ -271,7 +295,7 @@ func serve() error {
 	if e != nil {
 		return e
 	}
-	timeout, e := time.ParseDuration(envDefault("CCG_TIMEOUT", "3m"))
+	timeout, e := time.ParseDuration(envDefault("CCG_TIMEOUT", "1h"))
 	if e != nil || timeout <= 0 {
 		return fmt.Errorf("invalid CCG_TIMEOUT")
 	}
@@ -289,12 +313,22 @@ func serve() error {
 	if e != nil {
 		return e
 	}
-	g := &Gateway{Runner: &Runner{CLI: cli, Version: version, Plugin: plugin, Work: work, Proxy: proxy}, Cache: cache, Key: key, Timeout: timeout, Slots: make(chan struct{}, 4), NativeAllowed: native}
+	logDir, e := configureRequestLogs(root)
+	if e != nil {
+		return e
+	}
+	g := &Gateway{Runner: &Runner{CLI: cli, Version: version, Plugin: plugin, Work: work, Proxy: proxy}, Cache: cache, Key: key, Timeout: timeout, Slots: make(chan struct{}, 4), NativeAllowed: native, RequestLogDir: logDir}
+	g.RequestLogs = &requestLogStore{root: filepath.Join(root, "request-logs"), enabled: logDir != "", active: map[*requestDiagnostic]bool{}}
+	relayHost := "127.0.0.1"
+	if ip != nil && ip.IsLoopback() {
+		relayHost = ip.String()
+	}
+	g.Runner.InternalBaseURL = "http://" + net.JoinHostPort(relayHost, port)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	mux := http.NewServeMux()
 	mux.Handle("/", g)
-	mux.Handle("/admin/", &authManager{cli: cli, key: os.Getenv("CCG_ADMIN_KEY"), proxy: proxy, version: version})
+	mux.Handle("/admin/", &authManager{cli: cli, key: os.Getenv("CCG_ADMIN_KEY"), proxy: proxy, version: version, requestLogs: g.RequestLogs})
 	server := &http.Server{Addr: bind, Handler: mux, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 	done := make(chan struct{})
 	backgroundDone := make(chan struct{})
@@ -307,6 +341,9 @@ func serve() error {
 			select {
 			case <-ticker.C:
 				cache.prune()
+				if logDir != "" {
+					pruneRequestLogs(logDir)
+				}
 			case <-ctx.Done():
 				shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()

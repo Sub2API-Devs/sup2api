@@ -1,0 +1,50 @@
+{
+  "root": "/work/mod-context-probe-macWR1",
+  "sid": "6f84e32a-303d-4786-8869-6f40c4f03dcb",
+  "expected": "BIRCH_2a2adb1044e2",
+  "exit": 0,
+  "stderr": "",
+  "results": [
+    {
+      "result": "```json\n{\"example_language\": \"Java\", \"verification_code\": \"BIRCH_2a2adb1044e2\"}\n```",
+      "is_error": false,
+      "subtype": "success"
+    }
+  ],
+  "transcript": "/work/config/projects/-work-mod-context-probe-macWR1/6f84e32a-303d-4786-8869-6f40c4f03dcb.jsonl",
+  "matches": [
+    {
+      "line": 7,
+      "type": "attachment",
+      "attachment": {
+        "type": "hook_additional_context",
+        "content": [
+          "Application configuration: the example language is Java and the verification code is BIRCH_2a2adb1044e2."
+        ],
+        "hookName": "prompt.submit",
+        "toolUseID": "hook-8686e962-8ada-46bc-b1a5-cfc84579aa0c",
+        "hookEvent": "UserPromptSubmit"
+      },
+      "rendered": [
+        {
+          "content": "<system-reminder>\nprompt.submit hook additional context: Application configuration: the example language is Java and the verification code is BIRCH_2a2adb1044e2.\n</system-reminder>"
+        }
+      ],
+      "renderedRole": "system",
+      "uuid": "358ddb66-ee15-411c-b3e4-3b87472b75f6",
+      "parentUuid": "f596ee2d-44bd-4c97-a34c-d3439d91afeb"
+    },
+    {
+      "line": 14,
+      "type": "assistant",
+      "uuid": "7bf32457-b1cd-4e16-aed9-bdb4c34c5f95",
+      "parentUuid": "aebde449-b744-41a7-b9a1-aea87d6317bf",
+      "assistantText": [
+        {
+          "type": "text",
+          "text": "```json\n{\"example_language\": \"Java\", \"verification_code\": \"BIRCH_2a2adb1044e2\"}\n```"
+        }
+      ]
+    }
+  ]
+}

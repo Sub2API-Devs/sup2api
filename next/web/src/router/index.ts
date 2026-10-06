@@ -38,7 +38,7 @@ const children: RouteRecordRaw[] = [
   { path: 'ledger', component: () => import('@/views/ledger/LedgerView.vue'), meta: { perm: 'balance:all:read', title: 'nav.items.ledger' } },
   { path: 'me/ledger', redirect: { path: '/me/usage', query: { tab: 'ledger' } } },
   { path: 'me/balance', redirect: { path: '/me/usage', query: { tab: 'ledger' } } },
-  { path: 'sticky', component: () => import('@/views/sticky/StickyView.vue'), meta: { perm: 'sticky:read', title: 'nav.items.sticky' } },
+  { path: 'sticky', redirect: { path: '/settings', query: { tab: 'sticky' } } },
   { path: 'settings', component: () => import('@/views/settings/SettingsView.vue'), meta: { perm: ['settings:read', 'sticky:read'], title: 'nav.items.settings' } },
 
   { path: 'system/ccgateway', redirect: '/plugins/ccgateway?tab=settings' },

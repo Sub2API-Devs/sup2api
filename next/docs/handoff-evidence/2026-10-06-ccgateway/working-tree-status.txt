@@ -1,0 +1,48 @@
+ M next/server/internal/authz/menus.go
+ M next/server/internal/ccgateway/accounts.go
+ M next/server/internal/ccgateway/client.go
+ M next/server/internal/ccgateway/http.go
+ M next/server/internal/ccgateway/request_policy.go
+ M next/server/internal/ccgateway/request_policy_test.go
+ M next/server/web/dist/index.html
+ M next/web/packages/ui/src/STable.vue
+ M next/web/src/i18n/locales/en/ccgateway.ts
+ M next/web/src/i18n/locales/en/sticky.ts
+ M next/web/src/i18n/locales/zh/ccgateway.ts
+ M next/web/src/i18n/locales/zh/sticky.ts
+ M next/web/src/router/index.ts
+ M next/web/src/stores/app.ts
+ M next/web/src/views/accounts/AccountQuotaCell.vue
+ M next/web/src/views/accounts/AccountsView.vue
+ M next/web/src/views/ccgateway/AccountRuntimes.vue
+ M next/web/src/views/ccgateway/RequestPolicySettings.vue
+ M next/web/src/views/ccgateway/requestPolicy.spec.ts
+ M next/web/src/views/ccgateway/requestPolicy.ts
+ M next/web/src/views/settings/SettingsView.vue
+ M next/web/src/views/sticky/StickyView.vue
+ M tools/ccgateway/README.md
+ M tools/ccgateway/auth.go
+ M tools/ccgateway/gateway_test.go
+ M tools/ccgateway/history.go
+ M tools/ccgateway/main.go
+ M tools/ccgateway/request.go
+ M tools/ccgateway/request_policy.go
+ M tools/ccgateway/request_policy_test.go
+ M tools/ccgateway/runner.go
+ M tools/ccgateway/runtime/manager.py
+ M tools/ccgateway/runtime/test_manager.py
+?? .mcp.json
+?? next/docs/handoff-evidence/
+?? next/server/internal/ccgateway/request_logs.go
+?? next/server/internal/ccgateway/request_logs_test.go
+?? next/web/src/views/ccgateway/AccountRuntimes.spec.ts
+?? tools/ccgateway/inline_system.go
+?? tools/ccgateway/inline_system_cli_test.go
+?? tools/ccgateway/inline_system_context_test.go
+?? tools/ccgateway/inline_system_history_test.go
+?? tools/ccgateway/inline_system_test.go
+?? tools/ccgateway/native_system_resume_probe_test.go
+?? tools/ccgateway/request_log.go
+?? tools/ccgateway/request_log_test.go
+?? tools/ccgateway/system_validation.go
+?? tools/ccgateway/system_validation_test.go

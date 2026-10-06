@@ -47,10 +47,11 @@ type authSession struct {
 	done           chan struct{} // closed when the login process has exited; nil in tests
 }
 type authManager struct {
-	mu       sync.Mutex
-	session  *authSession
-	cli, key string
-	proxy    *ProxyConfigStore
+	requestLogs *requestLogStore
+	mu          sync.Mutex
+	session     *authSession
+	cli, key    string
+	proxy       *ProxyConfigStore
 	// version is the CLI version (usage request user agent); usageURL
 	// overrides the Anthropic usage endpoint in tests.
 	version, usageURL string
@@ -248,6 +249,10 @@ func (a *authManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/admin/proxy" {
 		a.proxy.serve(w, r)
+		return
+	}
+	if r.URL.Path == "/admin/request-logs" {
+		a.requestLogs.serve(w, r)
 		return
 	}
 	if r.URL.Path == "/admin/usage" {

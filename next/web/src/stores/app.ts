@@ -42,8 +42,7 @@ const CORE_MENU: Array<{ key: string; items: Array<NavItem & { perm?: string | s
       { id: 'accounts', labelKey: 'nav.items.accounts', icon: 'account', path: '/accounts', perm: ACCOUNT_PAGE_PERMS },
       { id: 'proxies', labelKey: 'nav.items.proxies', icon: 'proxy', path: '/proxies', perm: PROXY_PAGE_PERMS },
       { id: 'prices', labelKey: 'nav.items.prices', icon: 'price', path: '/prices', perm: 'price:read' },
-      { id: 'usage', labelKey: 'nav.items.usage', icon: 'usage', path: '/usage', perm: 'usage:all:read' },
-      { id: 'sticky', labelKey: 'nav.items.sticky', icon: 'sticky', path: '/sticky', perm: 'sticky:read' }
+      { id: 'usage', labelKey: 'nav.items.usage', icon: 'usage', path: '/usage', perm: 'usage:all:read' }
     ]
   },
   {
@@ -56,7 +55,7 @@ const CORE_MENU: Array<{ key: string; items: Array<NavItem & { perm?: string | s
       { id: 'market', labelKey: 'nav.items.market', icon: 'market', path: '/market', perm: 'plugin:market:read' },
       { id: 'publishers', labelKey: 'nav.items.publishers', icon: 'publisher', path: '/publishers', perm: 'publisher:read' },
       { id: 'nodes', labelKey: 'nav.items.nodes', icon: 'node', path: '/nodes', perm: 'node:read' },
-      { id: 'settings', labelKey: 'nav.items.settings', icon: 'settings', path: '/settings', perm: 'settings:read' }
+      { id: 'settings', labelKey: 'nav.items.settings', icon: 'settings', path: '/settings', perm: ['settings:read', 'sticky:read'] }
     ]
   },
   {

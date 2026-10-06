@@ -11,7 +11,7 @@ import type { QuotaSnapshot } from '@/api/types'
 import { formatDateTime, formatRelative } from '@/utils/format'
 import { formatPercent, isKnownWindow, quotaCountdown, quotaLevel, sortWindows, useQuotaClock, type QuotaLevel } from './accountQuota'
 
-const props = withDefaults(defineProps<{ quota: QuotaSnapshot; refreshing?: boolean; refreshable?: boolean }>(), {
+const props = withDefaults(defineProps<{ quota: QuotaSnapshot; refreshing?: boolean; refreshable?: boolean; compact?: boolean }>(), {
   refreshing: false,
   refreshable: true
 })
@@ -32,12 +32,19 @@ const CHIP: Record<QuotaLevel, string> = {
 }
 
 const rows = computed(() =>
-  sortWindows(props.quota.windows).map((w) => {
+  sortWindows(props.quota.windows).map(w => {
     const level = quotaLevel(w)
     const known = isKnownWindow(w.key)
     const name = known ? t(`accounts.quota.windows.${w.key}`) : w.key
     const cd = quotaCountdown(w.resets_at, w.utilization, clock.value)
-    const reset = cd.kind === 'in' ? cd.text : cd.kind === 'pending' ? t('accounts.quota.resetPending') : cd.kind === 'now' ? t('accounts.quota.resetNow') : ''
+    const reset =
+      cd.kind === 'in'
+        ? cd.text
+        : cd.kind === 'pending'
+          ? t('accounts.quota.resetPending')
+          : cd.kind === 'now'
+            ? t('accounts.quota.resetNow')
+            : ''
     const percent = formatPercent(w.utilization)
     const title = [
       `${name} ${percent}`,
@@ -69,28 +76,46 @@ const updated = computed(() => {
 
 <template>
   <div class="min-w-44 space-y-1 text-xxs" data-testid="quota-cell">
-    <p v-if="quota.error" class="max-w-[14rem] truncate text-warning-600 dark:text-warning-400" :title="quota.error" data-testid="quota-error">
+    <p
+      v-if="quota.error"
+      class="max-w-[14rem] truncate text-warning-600 dark:text-warning-400"
+      :title="quota.error"
+      data-testid="quota-error"
+    >
       <SIcon name="warning" class="mr-0.5 inline h-3 w-3 align-[-2px]" />{{ quota.error }}
     </p>
-    <div v-for="r in rows" :key="r.key" class="flex items-center gap-1.5" :title="r.title" :data-testid="`quota-window-${r.key}`" :data-level="r.level">
-      <span class="w-9 shrink-0 truncate rounded-chip px-1 text-center font-medium" :class="CHIP[r.level]">{{ r.short }}</span>
+    <div :class="compact ? 'flex items-center gap-4' : 'space-y-1'">
       <div
-        class="h-1.5 w-12 shrink-0 overflow-hidden rounded-full bg-gray-200 dark:bg-dark-700"
-        role="progressbar"
-        aria-valuemin="0"
-        aria-valuemax="100"
-        :aria-valuenow="r.now"
-        :aria-label="r.name"
+        v-for="r in rows"
+        :key="r.key"
+        class="flex items-center gap-1.5"
+        :title="r.title"
+        :data-testid="`quota-window-${r.key}`"
+        :data-level="r.level"
       >
-        <div class="h-full rounded-full transition-all duration-300" :class="BAR[r.level]" :style="{ width: r.width }" />
+        <span class="w-9 shrink-0 truncate rounded-chip px-1 text-center font-medium" :class="CHIP[r.level]">{{ r.short }}</span>
+        <div
+          class="h-1.5 w-12 shrink-0 overflow-hidden rounded-full bg-gray-200 dark:bg-dark-700"
+          role="progressbar"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          :aria-valuenow="r.now"
+          :aria-label="r.name"
+        >
+          <div class="h-full rounded-full transition-all duration-300" :class="BAR[r.level]" :style="{ width: r.width }" />
+        </div>
+        <span class="w-9 shrink-0 text-right font-medium tabular-nums" :class="TEXT[r.level]">{{ r.percent }}</span>
+        <SBadge v-if="r.rejected" tone="danger" class="!px-1.5 !py-0 !text-xxs" data-testid="quota-rejected">{{
+          t('accounts.quota.rejected')
+        }}</SBadge>
+        <span v-if="r.reset" class="shrink-0 whitespace-nowrap tabular-nums text-fg-subtle">{{ r.reset }}</span>
       </div>
-      <span class="w-9 shrink-0 text-right font-medium tabular-nums" :class="TEXT[r.level]">{{ r.percent }}</span>
-      <SBadge v-if="r.rejected" tone="danger" class="!px-1.5 !py-0 !text-xxs" data-testid="quota-rejected">{{ t('accounts.quota.rejected') }}</SBadge>
-      <span v-if="r.reset" class="shrink-0 whitespace-nowrap tabular-nums text-fg-subtle">{{ r.reset }}</span>
     </div>
     <p v-if="!rows.length && !quota.error" class="text-fg-subtle" data-testid="quota-empty">{{ t('accounts.quota.noData') }}</p>
     <div class="flex items-center gap-1.5 text-fg-subtle">
-      <span v-if="quota.source === 'passive'" class="italic" :title="t('accounts.quota.passiveHint')">{{ t('accounts.quota.passive') }}</span>
+      <span v-if="quota.source === 'passive'" class="italic" :title="t('accounts.quota.passiveHint')">{{
+        t('accounts.quota.passive')
+      }}</span>
       <span v-if="updated" class="whitespace-nowrap" :title="formatDateTime(quota.updated_at)">{{ updated }}</span>
       <SLink
         v-if="refreshable"
@@ -101,7 +126,9 @@ const updated = computed(() => {
         data-testid="quota-refresh"
         @click="emit('refresh')"
       >
-        <SIcon name="refresh" class="h-3 w-3" :class="refreshing ? 'animate-spin' : ''" />{{ refreshing ? t('accounts.quota.refreshing') : t('accounts.quota.refresh') }}
+        <SIcon name="refresh" class="h-3 w-3" :class="refreshing ? 'animate-spin' : ''" />{{
+          refreshing ? t('accounts.quota.refreshing') : t('accounts.quota.refresh')
+        }}
       </SLink>
     </div>
   </div>

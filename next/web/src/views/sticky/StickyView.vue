@@ -142,14 +142,14 @@ async function toggle(r: Row, v: boolean) {
 
 <template>
   <div class="space-y-5">
-    <SPageHeader :title="t('sticky.title')" :description="t('sticky.description')">
+    <StickySettingsCard />
+
+    <SPageHeader :title="t('sticky.rulesTitle')" :description="t('sticky.description')">
       <template #actions>
         <SButton @click="load">{{ t('common.refresh') }}</SButton>
         <SButton v-if="canManage" variant="primary" @click="openCreate">+ {{ t('sticky.newRule') }}</SButton>
       </template>
     </SPageHeader>
-
-    <StickySettingsCard />
 
     <div class="card overflow-hidden">
       <STable :columns="columns" :rows="rows" :loading="loading">

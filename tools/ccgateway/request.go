@@ -23,6 +23,7 @@ type Tool struct {
 	DeferLoading *bool  `json:"defer_loading,omitempty"`
 }
 type Request struct {
+	diagnostic       *requestDiagnostic
 	Model            string
 	MaxTokens        int
 	Stream           bool
@@ -351,8 +352,13 @@ func parseRequest(data []byte) (*Request, error) {
 		if !ok {
 			return nil, fmt.Errorf("invalid thinking")
 		}
-		if e = keys(t, "type", "budget_tokens"); e != nil {
+		if e = keys(t, "type", "budget_tokens", "display"); e != nil {
 			return nil, e
+		}
+		if display, exists := t["display"]; exists {
+			if display != "omitted" && display != "summarized" {
+				return nil, fmt.Errorf("thinking.display supports omitted/summarized only")
+			}
 		}
 		switch str(t, "type") {
 		case "disabled", "adaptive":
@@ -373,17 +379,25 @@ func parseRequest(data []byte) (*Request, error) {
 	if !ok || len(a) == 0 || len(a) > 100000 {
 		return nil, fmt.Errorf("messages must contain 1..100000 messages")
 	}
-	for _, v := range a {
+	for i, v := range a {
 		m, ok := v.(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf("invalid message")
 		}
+		role := str(m, "role")
+		if role == "system" {
+			b, err := parseSystemMessage(m, &r.TTL)
+			if err != nil {
+				return nil, fmt.Errorf("messages[%d]: %w", i, err)
+			}
+			r.Messages = append(r.Messages, Message{Role: role, Content: b})
+			continue
+		}
 		if e = keys(m, "role", "content"); e != nil {
 			return nil, e
 		}
-		role := str(m, "role")
 		if role != "user" && role != "assistant" {
-			return nil, fmt.Errorf("unsupported role")
+			return nil, fmt.Errorf("messages[%d].role: unsupported role %q; expected user, assistant or system", i, role)
 		}
 		b, e := blocks(m["content"], role, &r.TTL)
 		if e != nil {
@@ -396,11 +410,26 @@ func parseRequest(data []byte) (*Request, error) {
 			r.Messages = append(r.Messages, Message{role, b})
 		}
 	}
-	if r.Messages[0].Role != "user" || r.Messages[len(r.Messages)-1].Role != "user" {
+	first, last := -1, -1
+	if err := validateSystemPositions(r.Messages); err != nil {
+		return nil, err
+	}
+	for i, m := range r.Messages {
+		if m.Role != "system" {
+			if first < 0 {
+				first = i
+			}
+			last = i
+		}
+	}
+	if first < 0 || r.Messages[first].Role != "user" || r.Messages[last].Role != "user" {
 		return nil, fmt.Errorf("first and last message must be user; assistant prefill unsupported")
 	}
 	pending, seen := map[string]bool{}, map[string]bool{}
 	for _, m := range r.Messages {
+		if m.Role == "system" {
+			continue
+		}
 		if m.Role == "assistant" && len(pending) > 0 {
 			return nil, fmt.Errorf("missing tool results")
 		}
@@ -427,6 +456,9 @@ func parseRequest(data []byte) (*Request, error) {
 		if m.Role == "user" && len(pending) > 0 {
 			return nil, fmt.Errorf("all parallel tool results must be supplied")
 		}
+	}
+	if err := validatePendingSystems(r); err != nil {
+		return nil, err
 	}
 	return r, nil
 }

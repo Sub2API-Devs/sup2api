@@ -22,7 +22,7 @@ func TestRequestPolicyAdmission(t *testing.T) {
 	policy := defaultRequestPolicy()
 	policy.UnknownBeta = "reject"
 	h := policyHeaders(policy)
-	h.Add("anthropic-beta", "claude-code-20250219, fine-grained-tool-streaming-2025-05-14")
+	h.Add("anthropic-beta", "fine-grained-tool-streaming-2025-05-14")
 	h.Add("anthropic-beta", "interleaved-thinking-2025-05-14,interleaved-thinking-2025-05-14")
 	r, e := parsePolicyRequest(body, h)
 	if e != nil || !r.FineGrainedTools || len(r.Betas) != 2 {
@@ -42,8 +42,8 @@ func TestRequestPolicyAdmission(t *testing.T) {
 	p.Betas = []BetaRule{}
 	h = policyHeaders(p)
 	h.Set("anthropic-beta", "interleaved-thinking-2025-05-14")
-	if r, e = parsePolicyRequest(body, h); e != nil || len(r.Betas) != 0 {
-		t.Fatal("empty allowlist not honored", e)
+	if r, e = parsePolicyRequest(body, h); e != nil || len(r.Betas) != 1 {
+		t.Fatal("legacy rules changed the fixed whitelist", e)
 	}
 }
 func TestRunnerRequestPolicyMapping(t *testing.T) {
@@ -238,5 +238,25 @@ func TestStructuredOutputAndCachePolicy(t *testing.T) {
 	req, err = parsePolicyRequest(raw, http.Header{})
 	if err != nil || req.PromptCacheTTL != "" {
 		t.Fatal("schema properties mistaken for cache policy", err)
+	}
+}
+
+func TestFixedBetaWhitelistOverridesLegacyRules(t *testing.T) {
+	body, _ := json.Marshal(basic())
+	p := defaultRequestPolicy()
+	p.Betas = []BetaRule{{"custom-beta", "forward"}, {"fine-grained-tool-streaming-2025-05-14", "forward"}, {"claude-code-20250219", "native"}}
+	h := policyHeaders(p)
+	h.Set("anthropic-beta", "custom-beta,claude-code-20250219,fine-grained-tool-streaming-2025-05-14")
+	r, err := parsePolicyRequest(body, h)
+	if err != nil || !r.FineGrainedTools || len(r.Betas) != 1 || r.Betas[0] != "fine-grained-tool-streaming-2025-05-14" {
+		t.Fatalf("legacy rules changed fixed behavior: %+v %v", r, err)
+	}
+	p.UnknownBeta = "reject"
+	h = policyHeaders(p)
+	for _, name := range []string{"custom-beta", "claude-code-20250219"} {
+		h.Set("anthropic-beta", name)
+		if _, err := parsePolicyRequest(body, h); err == nil || !strings.Contains(err.Error(), name) {
+			t.Fatalf("unsupported beta %s was not rejected: %v", name, err)
+		}
 	}
 }

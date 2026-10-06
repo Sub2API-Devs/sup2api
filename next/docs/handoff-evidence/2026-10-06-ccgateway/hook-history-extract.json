@@ -1,0 +1,284 @@
+{
+  "source": "/work/config/projects/-work-additional-context-probe-gg8pIz/25964bbe-15c3-44fe-b668-be498e785f87.jsonl",
+  "hooks": [
+    {
+      "line": 19,
+      "record": {
+        "parentUuid": "cefef8fb-504e-4110-8bd3-c0c69fcacfaa",
+        "isSidechain": false,
+        "attachment": {
+          "type": "hook_additional_context",
+          "content": [
+            "Application configuration updated: the example language is now Java and the verification code is MAPLE_f1b62262c1. This configuration remains in effect for subsequent turns until another application update."
+          ],
+          "hookName": "UserPromptSubmit",
+          "toolUseID": "hook-c82e66c3-4ef5-4443-b7a2-3ff1ad4b849e",
+          "hookEvent": "UserPromptSubmit"
+        },
+        "type": "attachment",
+        "uuid": "5a0deb5a-99e9-4228-8be4-c97dbbaa0c7b",
+        "timestamp": "2026-10-06T07:11:40.967Z",
+        "rendered": [
+          {
+            "content": "<system-reminder>\nUserPromptSubmit hook additional context: Application configuration updated: the example language is now Java and the verification code is MAPLE_f1b62262c1. This configuration remains in effect for subsequent turns until another application update.\n</system-reminder>"
+          }
+        ],
+        "renderedRole": "system",
+        "userType": "external",
+        "entrypoint": "sdk-ts",
+        "cwd": "/work/additional-context-probe-gg8pIz",
+        "sessionId": "25964bbe-15c3-44fe-b668-be498e785f87",
+        "version": "2.1.288",
+        "gitBranch": "HEAD"
+      }
+    },
+    {
+      "line": 31,
+      "record": {
+        "parentUuid": "412e51ba-a06f-4700-a7bd-ff3bd6379c4e",
+        "isSidechain": false,
+        "attachment": {
+          "type": "hook_additional_context",
+          "content": [
+            "Application configuration updated: the example language is now Python and the verification code is CEDAR_86e5ea71ef. This replaces the previous application configuration for this and subsequent turns."
+          ],
+          "hookName": "UserPromptSubmit",
+          "toolUseID": "hook-644e44d6-f355-4885-bc42-7632d7cf7c41",
+          "hookEvent": "UserPromptSubmit"
+        },
+        "type": "attachment",
+        "uuid": "aa5ecc08-14af-4bd6-952e-853b7fc57d0d",
+        "timestamp": "2026-10-06T07:11:45.706Z",
+        "rendered": [
+          {
+            "content": "<system-reminder>\nUserPromptSubmit hook additional context: Application configuration updated: the example language is now Python and the verification code is CEDAR_86e5ea71ef. This replaces the previous application configuration for this and subsequent turns.\n</system-reminder>"
+          }
+        ],
+        "renderedRole": "system",
+        "userType": "external",
+        "entrypoint": "sdk-ts",
+        "cwd": "/work/additional-context-probe-gg8pIz",
+        "sessionId": "25964bbe-15c3-44fe-b668-be498e785f87",
+        "version": "2.1.288",
+        "gitBranch": "HEAD"
+      }
+    }
+  ],
+  "chain": [
+    {
+      "line": 3,
+      "type": "user",
+      "uuid": "528fbe9b-7a52-480b-92ee-4b4dff4ce19b",
+      "parentUuid": null,
+      "role": "user"
+    },
+    {
+      "line": 4,
+      "type": "attachment",
+      "attachmentType": "environment",
+      "uuid": "fce2137b-2f43-499d-90e6-2104e79958ae",
+      "parentUuid": "528fbe9b-7a52-480b-92ee-4b4dff4ce19b",
+      "renderedRole": "system"
+    },
+    {
+      "line": 5,
+      "type": "attachment",
+      "attachmentType": "model",
+      "uuid": "7143b50f-5a5a-4bda-879d-2a70db30483b",
+      "parentUuid": "fce2137b-2f43-499d-90e6-2104e79958ae",
+      "renderedRole": "system"
+    },
+    {
+      "line": 6,
+      "type": "attachment",
+      "attachmentType": "total_tokens_reminder",
+      "uuid": "6f0282a7-8f0b-4438-9287-31d23d041aa4",
+      "parentUuid": "7143b50f-5a5a-4bda-879d-2a70db30483b",
+      "renderedRole": "system"
+    },
+    {
+      "line": 8,
+      "type": "attachment",
+      "attachmentType": "session_context",
+      "uuid": "6b4ff891-5cf1-4726-9c49-eb0331a7fa39",
+      "parentUuid": "6f0282a7-8f0b-4438-9287-31d23d041aa4",
+      "renderedRole": "user"
+    },
+    {
+      "line": 9,
+      "type": "attachment",
+      "attachmentType": "date",
+      "uuid": "1009f071-1f5a-4ed9-aa33-d623dc0d8670",
+      "parentUuid": "6b4ff891-5cf1-4726-9c49-eb0331a7fa39",
+      "renderedRole": "system"
+    },
+    {
+      "line": 10,
+      "type": "attachment",
+      "attachmentType": "credential_org",
+      "uuid": "d1551fec-b303-4757-b83e-6bbcedd89893",
+      "parentUuid": "1009f071-1f5a-4ed9-aa33-d623dc0d8670"
+    },
+    {
+      "line": 11,
+      "type": "attachment",
+      "attachmentType": "prompt_snapshot",
+      "uuid": "d1792a60-6eb1-4e7b-b254-d7d92886d3a2",
+      "parentUuid": "d1551fec-b303-4757-b83e-6bbcedd89893"
+    },
+    {
+      "line": 12,
+      "type": "assistant",
+      "uuid": "f0e1d147-2fba-4ab7-b195-c49c719fefe7",
+      "parentUuid": "d1792a60-6eb1-4e7b-b254-d7d92886d3a2",
+      "role": "assistant"
+    },
+    {
+      "line": 13,
+      "type": "assistant",
+      "uuid": "cae9c33a-8001-44d5-92a9-cfd04fa1398b",
+      "parentUuid": "f0e1d147-2fba-4ab7-b195-c49c719fefe7",
+      "role": "assistant"
+    },
+    {
+      "line": 14,
+      "type": "attachment",
+      "attachmentType": "prompt_snapshot",
+      "uuid": "c27cf69b-f3da-4c8b-8683-7077a3194a9a",
+      "parentUuid": "cae9c33a-8001-44d5-92a9-cfd04fa1398b"
+    },
+    {
+      "line": 17,
+      "type": "user",
+      "uuid": "aba49dc1-6169-48a7-9662-474f72248fef",
+      "parentUuid": "c27cf69b-f3da-4c8b-8683-7077a3194a9a",
+      "role": "user"
+    },
+    {
+      "line": 18,
+      "type": "attachment",
+      "attachmentType": "total_tokens_reminder",
+      "uuid": "cefef8fb-504e-4110-8bd3-c0c69fcacfaa",
+      "parentUuid": "aba49dc1-6169-48a7-9662-474f72248fef",
+      "renderedRole": "system"
+    },
+    {
+      "line": 19,
+      "type": "attachment",
+      "attachmentType": "hook_additional_context",
+      "uuid": "5a0deb5a-99e9-4228-8be4-c97dbbaa0c7b",
+      "parentUuid": "cefef8fb-504e-4110-8bd3-c0c69fcacfaa",
+      "renderedRole": "system"
+    },
+    {
+      "line": 20,
+      "type": "assistant",
+      "uuid": "85f6479e-2d6a-4a2b-acce-440be5bf6c8e",
+      "parentUuid": "5a0deb5a-99e9-4228-8be4-c97dbbaa0c7b",
+      "role": "assistant"
+    },
+    {
+      "line": 21,
+      "type": "assistant",
+      "uuid": "96ab7542-0a7f-413e-b779-d9eaf15bc0dc",
+      "parentUuid": "85f6479e-2d6a-4a2b-acce-440be5bf6c8e",
+      "role": "assistant"
+    },
+    {
+      "line": 24,
+      "type": "user",
+      "uuid": "2ab370b2-dda7-4317-9136-09268087e9a4",
+      "parentUuid": "96ab7542-0a7f-413e-b779-d9eaf15bc0dc",
+      "role": "user"
+    },
+    {
+      "line": 25,
+      "type": "attachment",
+      "attachmentType": "total_tokens_reminder",
+      "uuid": "0ed9d92a-e379-42d4-adfe-8bcadcea073b",
+      "parentUuid": "2ab370b2-dda7-4317-9136-09268087e9a4",
+      "renderedRole": "system"
+    },
+    {
+      "line": 26,
+      "type": "assistant",
+      "uuid": "e83015aa-629e-4747-bdb9-8fdd003c8ea2",
+      "parentUuid": "0ed9d92a-e379-42d4-adfe-8bcadcea073b",
+      "role": "assistant"
+    },
+    {
+      "line": 29,
+      "type": "user",
+      "uuid": "f96991c9-f84a-4e39-943b-fc526357088d",
+      "parentUuid": "e83015aa-629e-4747-bdb9-8fdd003c8ea2",
+      "role": "user"
+    },
+    {
+      "line": 30,
+      "type": "attachment",
+      "attachmentType": "total_tokens_reminder",
+      "uuid": "412e51ba-a06f-4700-a7bd-ff3bd6379c4e",
+      "parentUuid": "f96991c9-f84a-4e39-943b-fc526357088d",
+      "renderedRole": "system"
+    },
+    {
+      "line": 31,
+      "type": "attachment",
+      "attachmentType": "hook_additional_context",
+      "uuid": "aa5ecc08-14af-4bd6-952e-853b7fc57d0d",
+      "parentUuid": "412e51ba-a06f-4700-a7bd-ff3bd6379c4e",
+      "renderedRole": "system"
+    },
+    {
+      "line": 32,
+      "type": "assistant",
+      "uuid": "dbb42458-587c-42cb-ade6-b58f8f731af9",
+      "parentUuid": "aa5ecc08-14af-4bd6-952e-853b7fc57d0d",
+      "role": "assistant"
+    },
+    {
+      "line": 35,
+      "type": "user",
+      "uuid": "e42ae124-7d61-43d5-bf93-d08dd3a229dd",
+      "parentUuid": "dbb42458-587c-42cb-ade6-b58f8f731af9",
+      "role": "user"
+    },
+    {
+      "line": 36,
+      "type": "attachment",
+      "attachmentType": "total_tokens_reminder",
+      "uuid": "1f7cc20c-e9f7-45ca-89bf-af249b1a2285",
+      "parentUuid": "e42ae124-7d61-43d5-bf93-d08dd3a229dd",
+      "renderedRole": "system"
+    },
+    {
+      "line": 37,
+      "type": "assistant",
+      "uuid": "ed6a6f08-fda0-4441-80b8-0f2e738acddf",
+      "parentUuid": "1f7cc20c-e9f7-45ca-89bf-af249b1a2285",
+      "role": "assistant"
+    },
+    {
+      "line": 42,
+      "type": "user",
+      "uuid": "55e53295-26bb-43e6-81b8-7a6b3b3b7e26",
+      "parentUuid": "ed6a6f08-fda0-4441-80b8-0f2e738acddf",
+      "role": "user"
+    },
+    {
+      "line": 43,
+      "type": "attachment",
+      "attachmentType": "total_tokens_reminder",
+      "uuid": "6c453927-28a8-4516-ae48-464a82403a92",
+      "parentUuid": "55e53295-26bb-43e6-81b8-7a6b3b3b7e26",
+      "renderedRole": "system"
+    },
+    {
+      "line": 44,
+      "type": "assistant",
+      "uuid": "2639b812-3ada-40b7-8274-8d17923371de",
+      "parentUuid": "6c453927-28a8-4516-ae48-464a82403a92",
+      "role": "assistant"
+    }
+  ]
+}

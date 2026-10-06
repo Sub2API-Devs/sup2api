@@ -58,7 +58,12 @@ function display(v: unknown): string {
       <thead>
         <tr>
           <th v-if="expandable" class="w-8" />
-          <th v-for="c in columns" :key="c.key" :style="c.width ? { width: c.width } : undefined" :class="alignCls(c.align)">
+          <th
+            v-for="c in columns"
+            :key="c.key"
+            :style="c.width ? { width: c.width } : undefined"
+            :class="[alignCls(c.align), { 's-table-actions': c.key === 'actions' }]"
+          >
             {{ c.label }}
           </th>
         </tr>
@@ -90,7 +95,7 @@ function display(v: unknown): string {
                 </svg>
               </button>
             </td>
-            <td v-for="c in columns" :key="c.key" :class="[alignCls(c.align), c.class]">
+            <td v-for="c in columns" :key="c.key" :class="[alignCls(c.align), c.class, { 's-table-actions': c.key === 'actions' }]">
               <slot :name="`cell-${c.key}`" :row="row" :value="valueOf(row, c.key)" :index="i">
                 {{ display(valueOf(row, c.key)) }}
               </slot>
@@ -106,3 +111,32 @@ function display(v: unknown): string {
     </table>
   </div>
 </template>
+
+<style scoped>
+.table-container {
+  max-width: 100%;
+  min-width: 0;
+  isolation: isolate;
+}
+.table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.s-table-actions {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  white-space: nowrap;
+  background: rgb(var(--surface, 255 255 255));
+  box-shadow:
+    -1px 0 0 rgb(var(--line, 229 231 235)),
+    -6px 0 8px -8px #64748b;
+}
+.table th.s-table-actions {
+  z-index: 2;
+  background: rgb(var(--surface-2, 249 250 251));
+}
+.table tbody tr:hover > .s-table-actions {
+  background: rgb(var(--surface-2, 249 250 251));
+}
+</style>

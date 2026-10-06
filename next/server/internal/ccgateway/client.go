@@ -79,7 +79,8 @@ func (t modelTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if req.URL.String() != VirtualURL || req.Method != "POST" {
 		return nil, errors.New("invalid managed CCGateway request")
 	}
-	ctx, cancel := context.WithTimeout(req.Context(), 4*time.Minute)
+	// Allow the runtime's one-hour execution deadline to report its result.
+	ctx, cancel := context.WithTimeout(req.Context(), time.Hour+time.Minute)
 	cfg, e := t.s.Load(ctx)
 	if e != nil {
 		cancel()

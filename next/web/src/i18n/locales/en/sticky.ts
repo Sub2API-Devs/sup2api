@@ -1,4 +1,5 @@
 export default {
+  rulesTitle: 'Session binding rules',
   title: 'Sticky sessions',
   description: 'Route consecutive requests of a conversation to the same account to keep upstream caches warm.',
   newRule: 'New rule',

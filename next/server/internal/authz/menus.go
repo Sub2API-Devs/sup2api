@@ -51,7 +51,6 @@ var coreMenus = []coreMenuSection{
 		{"proxies", lt("Proxies", "代理"), "proxy", "/proxies", []string{"proxy:read", "proxy:own:read", "proxy:own:manage"}},
 		{"prices", lt("Model prices", "模型价格"), "price", "/prices", []string{"price:read"}},
 		{"usage", lt("Usage records", "使用记录"), "usage", "/usage", []string{"usage:all:read"}},
-		{"sticky", lt("Sticky sessions", "粘性会话"), "sticky", "/sticky", []string{"sticky:read"}},
 	}},
 	// No core items: the all-user ledger (/ledger) is opened from the users
 	// page. The section stays so plugin menus can still target "finance".
@@ -66,7 +65,7 @@ var coreMenus = []coreMenuSection{
 		{"nodes", lt("Cluster nodes", "集群节点"), "node", "/nodes", []string{"node:read"}},
 		{"upgrades", lt("Core updates", "核心升级"), "refresh", "/system/upgrades", []string{"system:update:read"}},
 		{"audit", lt("Audit logs", "审计日志"), "clock", "/system/audit", []string{"audit:read"}},
-		{"settings", lt("Settings", "设置"), "settings", "/settings", []string{"settings:read"}},
+		{"settings", lt("Settings", "设置"), "settings", "/settings", []string{"settings:read", "sticky:read"}},
 	}},
 	{"me", lt("Mine", "我的"), []coreMenuItem{
 		{"my-api-keys", lt("API keys", "API Key"), "key", "/me/api-keys", []string{"apikey:self:manage"}},

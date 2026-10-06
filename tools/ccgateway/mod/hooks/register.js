@@ -4,6 +4,7 @@ export function register(on) {
   let searches = 0;
   let formatSteps = 0;
   let clientToolDenied = false;
+  let systemsAttached = false;
   // CLI recovery can schedule another model request even with max-turns=1.
   // Only bounded discovery and one structured-format continuation may send
   // another model request. Client tool execution never continues here.
@@ -22,6 +23,26 @@ export function register(on) {
     const path = await $.env.get('CCGATEWAY_READY_FILE');
     if (path) await $.fs.write(path, 'ccgateway-v1');
     return next(e);
+  });
+  // The API client's system messages for the pending turn, in order, once per
+  // process. Claude Code records them as one system-role attachment after the
+  // submitted input; the gateway checks the acknowledgement and the transcript.
+  on('prompt.submit', async ($, e, next) => {
+    const path = await $.env.get('CCGATEWAY_SYSTEM_FILE');
+    if (!path || systemsAttached) return next(e);
+    systemsAttached = true;
+    const systems = JSON.parse(await $.fs.read(path));
+    await $.fs.write(await $.env.get('CCGATEWAY_SYSTEM_ACK_FILE'), 'ccgateway-system-v1:' + systems.length);
+    return next({ ...e, context: [...(e.context ?? []), ...systems] });
+  });
+  // The model reads the client's system text itself, without the label Claude
+  // Code puts before a mod's context. Resumed records are relabelled alike.
+  on('prompt.attachment', async ($, e, next) => {
+    const result = await next(e);
+    const label = 'prompt.submit hook additional context: ';
+    if (e.type !== 'hook_additional_context' || e.origin?.kind !== 'plugin' || e.origin?.event !== 'prompt.submit') return result;
+    if (typeof result?.text !== 'string' || !result.text.startsWith(label)) return result;
+    return { text: result.text.slice(label.length) };
   });
   on('tool.describe', async ($, e, next) => {
     const result = await next(e);

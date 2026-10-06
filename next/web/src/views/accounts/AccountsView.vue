@@ -77,18 +77,20 @@ const typeFilter = computed({
 const columns = computed<TableColumn[]>(() => [
   // Batch test selection (accounts the caller may test).
   ...(pageTestable.value.length ? [{ key: 'pick', label: '', width: '2rem' }] : []),
-  { key: 'name', label: t('accounts.listUi.identity') },
+  { key: 'name', label: t('accounts.listUi.identity'), width: '320px' },
   { key: 'groups', label: t('accounts.groups') },
   ...(showOwner.value ? [{ key: 'created_by', label: t('accounts.createdBy') }] : []),
   { key: 'status', label: t('common.status') },
   { key: 'scheduling', label: t('accounts.listUi.priorityWeight') },
-  { key: 'limits', label: t('accounts.limits') },
+  { key: 'concurrency', label: t('accounts.concurrency'), width: '90px' },
+  { key: 'tpm', label: 'TPM', width: '100px' },
+  { key: 'rpm', label: 'RPM', width: '90px' },
   // Only when a row of this page has plan windows (subscription accounts).
   ...(list.items.value.some((a) => hasQuota(a.quota)) ? [{ key: 'quota', label: t('accounts.quota.column') }] : []),
   // Only when a row of this page has balance (balance-enabled account types).
   ...(list.items.value.some((a) => hasBalance(a.balance)) ? [{ key: 'balance', label: t('accounts.balance.column') }] : []),
   { key: 'last_test', label: t('accounts.lastTest.column') },
-  { key: 'actions', label: t('common.actions'), align: 'right' }
+  { key: 'actions', label: t('common.actions'), align: 'right', width: '210px' }
 ])
 
 /** 1234 -> "1.2K", 3_200_000 -> "3.2M"; small numbers stay as they are. */
@@ -544,7 +546,7 @@ function groupTags(a: Account) {
       </span>
       <SSwitch v-model="denseRows" :label="t('accounts.listUi.compact')" class="ml-auto" />
     </div>
-    <STable :columns="columns" :rows="list.items.value" :loading="list.loading.value" :dense="denseRows" :empty-text="t(filterCount ? 'accounts.listUi.emptyFiltered' : 'accounts.listUi.empty')">
+    <STable class="account-table" :columns="columns" :rows="list.items.value" :loading="list.loading.value" :dense="denseRows" :empty-text="t(filterCount ? 'accounts.listUi.emptyFiltered' : 'accounts.listUi.empty')">
       <template #cell-pick="{ row }">
         <SCheckbox v-if="testable(row)" bare :model-value="picked.has(row.id)" :disabled="batchRunning" :aria-label="row.name" @update:model-value="pickRow(row.id, $event)" />
       </template>
@@ -552,10 +554,9 @@ function groupTags(a: Account) {
         <LastTestCell :last="row.last_test" :testing="batchTesting.has(row.id)" />
       </template>
       <template #cell-name="{ row }">
-        <div class="min-w-48 max-w-xs space-y-1">
+        <div class="min-w-64 max-w-sm space-y-0.5">
           <div class="flex items-center gap-2"><span class="shrink-0 font-mono text-[11px] text-gray-400">#{{ row.id }}</span><SLink as="button" class="min-w-0 truncate font-semibold" :title="row.name" @click="openDetail(row)">{{ row.name }}</SLink></div>
-          <div class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-gray-500 dark:text-dark-400"><span :title="row.plugin_key">{{ accountTypes.pluginName(row.plugin_key) }}</span><span aria-hidden="true">/</span><span class="truncate" :title="accountTypes.typeLabel(row.plugin_key, row.type, row.type_label)">{{ accountTypes.typeLabel(row.plugin_key, row.type, row.type_label) }}</span></div>
-          <div v-if="row.last_used_at" class="text-[11px] text-gray-400">{{ t('accounts.lastUsed') }} {{ formatRelative(row.last_used_at, t) }}</div>
+          <div class="flex items-center gap-1.5 whitespace-nowrap text-xs text-gray-500 dark:text-dark-400"><span :title="row.plugin_key">{{ accountTypes.pluginName(row.plugin_key) }}</span><span aria-hidden="true">/</span><span class="truncate" :title="accountTypes.typeLabel(row.plugin_key, row.type, row.type_label)">{{ accountTypes.typeLabel(row.plugin_key, row.type, row.type_label) }}</span><span v-if="row.last_used_at" class="shrink-0 text-[11px] text-gray-400">· {{ formatRelative(row.last_used_at, t) }}</span></div>
         </div>
       </template>
       <template #cell-groups="{ row }"><div class="flex max-w-48 flex-wrap gap-1" :title="groupNames(row.group_ids, row.groups)"><SBadge v-for="group in groupTags(row).slice(0, 2)" :key="group.id" tone="gray" class="max-w-40 truncate">{{ group.name }}</SBadge><SBadge v-if="groupTags(row).length > 2" tone="gray">+{{ groupTags(row).length - 2 }}</SBadge><SHint v-if="!row.group_ids?.length" size="xs">—</SHint></div></template>
@@ -567,7 +568,7 @@ function groupTags(a: Account) {
       <template #cell-status="{ row }">
         <SBadge :tone="statusOf(row).tone" dot>{{ statusOf(row).label }}</SBadge>
         <SBadge v-if="row.auto_disable === false" tone="gray" class="ml-1" :title="t('accounts.editorUi.autoDisableHint')">{{ t('accounts.noAutoDisable') }}</SBadge>
-        <SHint v-if="statusOf(row).detail" size="xs" class="mt-1 line-clamp-2 max-w-[16rem] break-words" :title="statusOf(row).detail">
+        <SHint v-if="statusOf(row).detail" size="xs" class="mt-0.5 block max-w-48 truncate" :title="statusOf(row).detail">
           {{ statusOf(row).detail }}
         </SHint>
         <SLink v-if="coolingDown(row) && canResetStatus(row)" as="button" class="mt-1 inline-flex items-center gap-1 text-xs" :title="t('accounts.resetStatusHint')" data-testid="account-reset-status" @click="resetStatus(row)">
@@ -577,14 +578,14 @@ function groupTags(a: Account) {
       <template #cell-scheduling="{ row }">
         <AccountSchedulingCell :account="row" :editable="canUpdate(row) && !row.orphaned" @saved="Object.assign(row, $event)" />
       </template>
-      <template #cell-limits="{ row }">
-        <div class="min-w-28 space-y-1 text-xs tabular-nums" data-testid="account-limits">
-          <div class="flex justify-between gap-3"><SHint inline size="xs">{{ t('accounts.concurrency') }}</SHint><span :class="row.max_concurrency && (row.in_use || 0) >= row.max_concurrency ? 'font-semibold text-amber-600' : ''">{{ row.in_use ?? 0 }}/{{ row.max_concurrency || '∞' }}</span></div>
-          <div v-for="l in limitsOf(row)" :key="l.key" class="flex justify-between gap-3" :class="l.hit ? 'font-semibold text-amber-600' : ''"><SHint inline size="xs">{{ l.label }}</SHint><span>{{ l.text }}</span></div>
-        </div>
+      <template #cell-concurrency="{ row }">
+        <span class="whitespace-nowrap text-xs tabular-nums" :class="row.max_concurrency && (row.in_use || 0) >= row.max_concurrency ? 'font-semibold text-amber-600' : ''">{{ row.in_use ?? 0 }}/{{ row.max_concurrency || '∞' }}</span>
+      </template>
+      <template v-for="key in ['tpm', 'rpm']" :key="key" #[`cell-${key}`]="{ row }">
+        <span class="whitespace-nowrap text-xs tabular-nums" :class="limitsOf(row).find(l => l.key === key)?.hit ? 'font-semibold text-amber-600' : ''">{{ limitsOf(row).find(l => l.key === key)?.text }}</span>
       </template>
       <template #cell-quota="{ row }">
-        <AccountQuotaCell v-if="hasQuota(row.quota)" :quota="row.quota" :refreshing="quotaRefresh.refreshing.has(row.id)" @refresh="quotaRefresh.refresh(row.id, row.quota)" />
+        <AccountQuotaCell v-if="hasQuota(row.quota)" :quota="row.quota" :compact="denseRows" :refreshing="quotaRefresh.refreshing.has(row.id)" @refresh="quotaRefresh.refresh(row.id, row.quota)" />
         <!-- no plan limits (API keys): show nothing, not even the table's "—" fallback -->
         <span v-else />
       </template>
@@ -739,3 +740,13 @@ function groupTags(a: Account) {
     </SModal>
   </div>
 </template>
+
+<style scoped>
+.account-table :deep(td) {
+  white-space: nowrap;
+}
+.account-table :deep(.table-dense td) {
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+}
+</style>

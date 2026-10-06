@@ -441,6 +441,14 @@ func (s *Service) accountManage(c *gin.Context) {
 // (accountManage) or a draft (draftAction).
 func (s *Service) serveRuntime(c *gin.Context, ctx context.Context, d accountDesired, draft bool) {
 	action := c.Param("action")
+	if action == "request-logs" {
+		if draft {
+			httpapi.Fail(c, core.ErrNotFound)
+			return
+		}
+		s.serveRequestLogs(c, ctx, d)
+		return
+	}
 	read := action == "status" || action == "health" || action == "session"
 	if (c.Request.Method == "GET") != read {
 		httpapi.Fail(c, core.ErrNotFound)

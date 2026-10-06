@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { defaultRequestPolicy, validRequestPolicy } from './requestPolicy'
 
 describe('CCGateway request policy', () => {
-  it('validates tool-search modes and its exact beta mapping', () => {
+  it('validates tool-search modes and ignores legacy beta rules', () => {
     const p = defaultRequestPolicy()
     expect(p.tool_search).toBe('request')
     expect(validRequestPolicy(p)).toBe(true)
@@ -12,21 +12,23 @@ describe('CCGateway request policy', () => {
     expect(validRequestPolicy(p)).toBe(false)
     p.tool_search = 'request'
     p.betas = [{ name: 'custom-beta', mapping: 'tool_search' }]
-    expect(validRequestPolicy(p)).toBe(false)
-  })
-  it('allows an explicitly empty beta whitelist', () => {
-    const p = defaultRequestPolicy(); p.betas = []
     expect(validRequestPolicy(p)).toBe(true)
   })
-  it('rejects duplicate names and mappings for the wrong beta', () => {
+  it('allows an explicitly empty beta whitelist', () => {
+    const p = defaultRequestPolicy()
+    p.betas = []
+    expect(validRequestPolicy(p)).toBe(true)
+  })
+  it('does not use legacy editable beta rules', () => {
     const p = defaultRequestPolicy()
     p.betas.push({ name: p.betas[0]!.name, mapping: 'forward' })
-    expect(validRequestPolicy(p)).toBe(false)
+    expect(validRequestPolicy(p)).toBe(true)
     p.betas = [{ name: 'custom-beta', mapping: 'fast' }]
-    expect(validRequestPolicy(p)).toBe(false)
+    expect(validRequestPolicy(p)).toBe(true)
   })
   it('does not share mutable defaults between editors', () => {
-    const first = defaultRequestPolicy(); first.betas.splice(0)
+    const first = defaultRequestPolicy()
+    first.betas.splice(0)
     expect(defaultRequestPolicy().betas.length).toBeGreaterThan(0)
   })
 })

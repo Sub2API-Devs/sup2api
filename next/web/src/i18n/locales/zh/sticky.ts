@@ -1,4 +1,5 @@
 export default {
+  rulesTitle: '会话绑定规则',
   title: '粘性会话',
   description: '让同一会话的连续请求尽量落到同一个账号，提高上游缓存命中率。',
   newRule: '新增规则',

@@ -42,7 +42,7 @@ AUTH_VARS = ('ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 
 IMAGE_CACHE_SECONDS = 30
 
 ROUTE = re.compile(r'/accounts(?:/(' + KEY_PATTERN + r')(?:/(config|status|v1/messages|'
-                   r'admin/(?:status|usage|auth/(?:session|start|complete|cancel|logout))))?)?')
+                   r'admin/(?:status|usage|request-logs|auth/(?:session|start|complete|cancel|logout))))?)?')
 
 
 class BadRequest(ValueError):
@@ -556,7 +556,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(200, result)
             if path == 'status' and self.command == 'GET':
                 return self.reply(200, manager.public(aid))
-            if path in ('config', 'status') or self.command not in ('GET', 'POST'):
+            methods = ('GET', 'PUT') if path == 'admin/request-logs' else ('GET', 'POST')
+            if path in ('config', 'status') or self.command not in methods:
                 return self.fail(405, 'method_not_allowed')
             if path == 'admin/usage' and self.command != 'GET':
                 return self.fail(405, 'method_not_allowed')
@@ -572,10 +573,15 @@ class Handler(BaseHTTPRequestHandler):
             # No configuration writes on the request path. Concurrent streams
             # do not hold the account reconciliation lock.
             headers = upstream_headers(self.headers, secret)
+            # Model execution has a one-hour deadline; leave time to relay its
+            # terminal response. Keep management requests on their short limit.
+            relay_timeout = 3660 if path == 'v1/messages' else 240
+            if path == 'v1/messages':
+                self.connection.settimeout(relay_timeout)
             with requests.Session() as session:
                 session.trust_env = False
                 with session.request(self.command, f'http://{address}:8787/{path}', data=body,
-                                     headers=headers, stream=True, timeout=(5, 240), allow_redirects=False) as response:
+                                     headers=headers, stream=True, timeout=(5, relay_timeout), allow_redirects=False) as response:
                     self.send_response(response.status_code)
                     self.send_header('Content-Type', response.headers.get('Content-Type', 'application/json'))
                     self.send_header('Connection', 'close')

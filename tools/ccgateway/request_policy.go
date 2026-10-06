@@ -28,18 +28,11 @@ type RequestPolicy struct {
 
 func defaultRequestPolicy() RequestPolicy {
 	return RequestPolicy{UnknownBeta: "ignore", UnknownField: "reject", AllowFast: false, AllowEffort: true, ToolSearch: "request", Betas: []BetaRule{
-		{"claude-code-20250219", "native"}, {"oauth-2025-04-20", "native"},
 		{"interleaved-thinking-2025-05-14", "forward"}, {"fine-grained-tool-streaming-2025-05-14", "fine_grained_tools"},
 		{"context-1m-2025-08-07", "forward"}, {"fast-mode-2026-02-01", "fast"},
 		{"advanced-tool-use-2025-11-20", "tool_search"},
-		{"prompt-caching-2024-07-31", "native"},
-		{"extended-cache-ttl-2025-04-11", "native"},
-		{"token-efficient-tools-2025-02-19", "native"},
-		{"output-128k-2025-02-19", "native"},
-		{"structured-outputs-2025-11-13", "native"},
 		{"dev-full-thinking-2025-05-14", "forward"},
 		{"model-context-window-exceeded-2025-08-26", "forward"},
-		{"mid-conversation-output-config-2026-07-01", "native"},
 	}}
 }
 
@@ -55,7 +48,7 @@ func requestPolicy(h http.Header) (RequestPolicy, error) {
 			return p, fmt.Errorf("invalid gateway request policy")
 		}
 	}
-	if (p.UnknownBeta != "reject" && p.UnknownBeta != "ignore") || (p.UnknownField != "reject" && p.UnknownField != "ignore") || len(p.Betas) > 64 {
+	if (p.UnknownBeta != "reject" && p.UnknownBeta != "ignore") || (p.UnknownField != "reject" && p.UnknownField != "ignore") {
 		return p, fmt.Errorf("invalid gateway request policy")
 	}
 	if p.ToolSearch == "" {
@@ -64,30 +57,8 @@ func requestPolicy(h http.Header) (RequestPolicy, error) {
 	if !validToolSearch(p.ToolSearch) {
 		return p, fmt.Errorf("invalid tool search policy")
 	}
-	seen := map[string]bool{}
-	for _, b := range p.Betas {
-		if !betaName.MatchString(b.Name) || seen[b.Name] {
-			return p, fmt.Errorf("invalid gateway beta policy")
-		}
-		seen[b.Name] = true
-		switch b.Mapping {
-		case "forward", "native":
-		case "tool_search":
-			if b.Name != "advanced-tool-use-2025-11-20" {
-				return p, fmt.Errorf("invalid tool search beta mapping")
-			}
-		case "fast":
-			if b.Name != "fast-mode-2026-02-01" {
-				return p, fmt.Errorf("invalid gateway beta mapping")
-			}
-		case "fine_grained_tools":
-			if b.Name != "fine-grained-tool-streaming-2025-05-14" {
-				return p, fmt.Errorf("invalid gateway beta mapping")
-			}
-		default:
-			return p, fmt.Errorf("invalid gateway beta mapping")
-		}
-	}
+	// Ignore legacy editable rules; Beta handling is fixed in code.
+	p.Betas = defaultRequestPolicy().Betas
 	return p, nil
 }
 func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
@@ -239,7 +210,6 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 			}
 			seen[name] = true
 			switch mapping {
-			case "native": // CLI owns its authentication and native capability headers.
 			case "fine_grained_tools":
 				req.FineGrainedTools = true
 				req.Betas = append(req.Betas, name)

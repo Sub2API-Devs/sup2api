@@ -57,6 +57,26 @@ func TestValidation(t *testing.T) {
 		t.Fatal("TTL not extracted")
 	}
 }
+func TestUnsupportedRoleReportsMessagePosition(t *testing.T) {
+	for _, role := range []any{"tool", "developer", "", nil, 42} {
+		t.Run(fmt.Sprint(role), func(t *testing.T) {
+			v := basic()
+			messages := v["messages"].([]any)
+			messages[1].(Object)["role"] = role
+			b, _ := json.Marshal(v)
+			_, err := parseRequest(b)
+			expectedRole, _ := role.(string)
+			want := fmt.Sprintf("messages[1].role: unsupported role %q; expected user, assistant or system", expectedRole)
+			if err == nil || err.Error() != want {
+				t.Fatalf("error = %v, want %q", err, want)
+			}
+			if strings.Contains(err.Error(), "Earlier answer") {
+				t.Fatal("error exposes message content")
+			}
+		})
+	}
+}
+
 func TestHistorySnapshotAndToolPair(t *testing.T) {
 	dir := t.TempDir()
 	cache, e := newCache(filepath.Join(dir, "cache"), 8<<20)
@@ -242,6 +262,24 @@ func TestRealCLI(t *testing.T) {
 		}
 		if bytes.Contains(raw, []byte("SEARCH_TOOL")) && !bytes.Contains(raw, []byte("tool_result")) {
 			content = []Object{{"type": "tool_use", "id": "toolu_search", "name": "ToolSearch", "input": Object{"query": "select:mcp__ccgateway__weather"}}}
+		}
+		allMessages, _ := json.Marshal(ms)
+		if bytes.Contains(allMessages, []byte("SYSTEM_SEARCH_TOOL")) && !bytes.Contains(allMessages, []byte("tool_result")) {
+			content = []Object{{"type": "tool_use", "id": "toolu_inline_search", "name": "ToolSearch", "input": Object{"query": "select:mcp__ccgateway__weather"}}}
+		}
+		if bytes.Contains(allMessages, []byte("SYSTEM_FORMAT_AFTER_TEXT")) && !bytes.Contains(allMessages, []byte("tool_result")) {
+			mu.Lock()
+			formatCalls := 0
+			for _, previous := range requests {
+				data, _ := json.Marshal(previous["messages"])
+				if bytes.Contains(data, []byte("SYSTEM_FORMAT_AFTER_TEXT")) {
+					formatCalls++
+				}
+			}
+			mu.Unlock()
+			if formatCalls == 1 {
+				content = []Object{{"type": "text", "text": "The result is true."}}
+			}
 		}
 		if (bytes.Contains(raw, []byte("CALL_TOOL")) || bytes.Contains(raw, []byte("CALL_PARALLEL"))) && !bytes.Contains(raw, []byte("tool_result")) {
 			tools, _ := v["tools"].([]any)
@@ -934,6 +972,57 @@ func TestRealCLI(t *testing.T) {
 	searchTokens, _ := searched["usage"].(map[string]any)
 	if tokenCount(searchTokens["input_tokens"]) != 40 || tokenCount(searchTokens["output_tokens"]) != 16 {
 		t.Fatalf("tool discovery usage was lost or double counted: %v", searchTokens)
+	}
+	for _, kind := range []string{"search", "format"} {
+		t.Run("inline-system-continuation-"+kind, func(t *testing.T) {
+			request := basic()
+			marker := "SYSTEM_SEARCH_TOOL"
+			if kind == "format" {
+				request["output_config"] = structured["output_config"]
+				marker = "SYSTEM_FORMAT_AFTER_TEXT"
+			} else {
+				request["tools"] = searchRequest["tools"]
+			}
+			request["messages"] = []any{Object{"role": "user", "content": "first"}, Object{"role": "assistant", "content": "prior answer"}, Object{"role": "user", "content": "second"}, Object{"role": "system", "content": marker}}
+			request["stream"] = true
+			mu.Lock()
+			before := len(requests)
+			mu.Unlock()
+			_, stream, _ := post(request, "")
+			if !strings.Contains(stream, "text_delta") {
+				t.Fatal("continuation SSE missing")
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if len(requests)-before < 2 {
+				t.Fatal("native continuation was not exercised")
+			}
+			for _, wire := range requests[before:] {
+				found := false
+				for _, value := range wire["messages"].([]any) {
+					message := value.(Object)
+					data, _ := json.Marshal(message["content"])
+					// Without system turns (this mock is no first-party endpoint) the
+					// CLI renders the record as a reminder; the text must still be exact.
+					if str(message, "role") == "system" && bytes.Contains(data, []byte(marker)) {
+						found = true
+					}
+					blocks, _ := message["content"].([]any)
+					for _, block := range blocks {
+						if b, ok := block.(Object); ok && str(b, "text") == "<system-reminder>\n"+marker+"\n</system-reminder>" {
+							found = true
+						}
+					}
+				}
+				if !found {
+					t.Fatal("inline system lost during CLI continuation")
+				}
+				data, _ := json.Marshal(wire)
+				if bytes.Contains(data, []byte("hook additional context")) {
+					t.Fatal("system text relabelled")
+				}
+			}
+		})
 	}
 	if os.Getenv("CCG_CAPTURE_DIR") != "" {
 		hi := Object{"model": "claude-sonnet-4-6", "max_tokens": 128, "messages": []any{Object{"role": "user", "content": "hi"}}}

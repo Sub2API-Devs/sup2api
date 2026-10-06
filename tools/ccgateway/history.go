@@ -269,15 +269,18 @@ func nativeBytes(rows []json.RawMessage) []byte {
 }
 
 // Configuration does not select history. System and tools are applied afresh by
-// Runner, while this index compares the entire client message prefix.
+// Runner, while this index compares the entire client message prefix. Client
+// system messages are part of that prefix; committed ones are native attachment
+// records, and the pending turn's are attached by the Mod.
 func prepareHistory(r *Request, c *HistoryCache, logical, dir, version string) (*Prepared, error) {
 	hashes := fingerprints(r.Messages)
+	pending := r.pendingStart()
 	p := &Prepared{SessionID: uuid(), Hashes: hashes, Mode: "rebuild", InputUUID: uuid(), Work: filepath.Join(c.dir, "workspace"), cache: c}
 	if e := os.MkdirAll(p.Work, 0700); e != nil {
 		return nil, e
 	}
 	var prior *Snapshot
-	for n := len(hashes) - 2; r.JSONSchema == nil && n >= 0; n-- {
+	for n := pending - 1; r.JSONSchema == nil && n >= 0; n-- {
 		if r.Messages[n].Role != "assistant" {
 			continue
 		}
@@ -302,7 +305,7 @@ func prepareHistory(r *Request, c *HistoryCache, logical, dir, version string) (
 		// the same prefix branch from the immutable checkpoint instead.
 		c.mu.Lock()
 		actual, e := os.ReadFile(prior.NativePath)
-		if start == len(r.Messages)-1 && !c.active[prior.SessionID] && e == nil && digest(string(actual)) == prior.NativeDigest {
+		if start == pending && !c.active[prior.SessionID] && e == nil && digest(string(actual)) == prior.NativeDigest {
 			p.SessionID = prior.SessionID
 			p.NativePath = prior.NativePath
 			p.Path = prior.NativePath
@@ -311,14 +314,27 @@ func prepareHistory(r *Request, c *HistoryCache, logical, dir, version string) (
 			c.active[p.SessionID] = true
 		}
 		c.mu.Unlock()
-		if !p.Fork && !hasToolResults(r.Messages[len(r.Messages)-1]) {
+		if !p.Fork && !hasToolResults(r.Messages[pending]) {
 			p.Anchor = "" // Ordinary native resume: submit only the new user message.
 			return p, nil
 		}
 	}
-	for i := start; i < len(r.Messages); i++ {
-		row, id := transcriptRow(r.wireMessage(r.Messages[i]), parent, p.SessionID, p.Work, version, r.Model)
-		if i == len(r.Messages)-1 {
+	for i := start; i <= pending; i++ {
+		if r.Messages[i].Role == "system" {
+			// One record per contiguous group, as one prompt.submit context is.
+			var texts []string
+			for ; i < pending && r.Messages[i].Role == "system"; i++ {
+				texts = append(texts, systemTexts(r.Messages[i])...)
+			}
+			i--
+			row, id := systemRow(texts, parent, p.SessionID, p.Work, version)
+			p.Rows = append(p.Rows, row)
+			parent = id
+			continue
+		}
+		message := r.wireMessage(r.Messages[i])
+		row, id := transcriptRow(message, parent, p.SessionID, p.Work, version, r.Model)
+		if i == pending {
 			// The recovery loader needs complete tool pairs before resume-at trimming.
 			// Seed only the pending client input, keeping all prior native rows intact.
 			var obj Object
@@ -334,7 +350,7 @@ func prepareHistory(r *Request, c *HistoryCache, logical, dir, version string) (
 		}
 	}
 	p.LastUUID = parent
-	if len(r.Messages) > 1 {
+	if pending > 0 {
 		if p.Anchor == "" {
 			p.release()
 			return nil, fmt.Errorf("missing assistant resume anchor")

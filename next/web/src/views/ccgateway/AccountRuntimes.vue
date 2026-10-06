@@ -6,8 +6,9 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SHint, SIcon, STable, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SHint, SIcon, SSwitch, STable, type TableColumn } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
+import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { runPool } from '@/views/accounts/pool'
 import { containerPhase, knownReason, type CcgContainer } from './ccgAuthFlow'
 
@@ -24,10 +25,16 @@ interface Row {
   loggedIn: boolean | null
   checking: boolean
   error: boolean
+  created_by?: number | null
+  logsEnabled: boolean | null
+  logsBusy: boolean
+  logsError: boolean
 }
 
 const { t } = useI18n()
 const auth = useAuthStore()
+const own = useOwnership()
+const canLogs = (r: Row) => auth.has('settings:manage') || own.can(r, ACCOUNT_KEYS.update)
 const rows = ref<Row[]>([])
 const loading = ref(false)
 const error = ref('')
@@ -37,6 +44,7 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'name', label: t('ccgateway.runtimes.account') },
   { key: 'container', label: t('ccgateway.runtimes.container') },
   { key: 'auth', label: t('ccgateway.runtimes.auth') },
+  { key: 'request_logs', label: t('ccgateway.requestLogs.title') },
   { key: 'actions', label: '', align: 'right' }
 ])
 
@@ -51,6 +59,11 @@ async function inspect(r: Row) {
     if (r.phase === 'ready' && r.type === 'managed') {
       r.loggedIn = !!(await api.get<{ logged_in: boolean }>(`/system/ccgateway/accounts/${r.id}/health`)).logged_in
     }
+    if (r.phase === 'ready') {
+      try {
+        r.logsEnabled = (await api.get<{ enabled: boolean }>(`/system/ccgateway/accounts/${r.id}/request-logs`)).enabled
+      } catch { r.logsError = true }
+    }
   } catch {
     r.error = true
   } finally {
@@ -62,8 +75,8 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const list = await api.list<{ id: number; name: string; type: string }>('/accounts', { plugin_key: 'ccgateway', page_size: 200 })
-    rows.value = list.items.map((a) => ({ id: a.id, name: a.name, type: a.type, status: '', reason: '', container: '', phase: 'unknown', loggedIn: null, checking: true, error: false }))
+    const list = await api.list<{ id: number; name: string; type: string; created_by?: number | null }>('/accounts', { plugin_key: 'ccgateway', page_size: 200 })
+    rows.value = list.items.map((a) => ({ id: a.id, name: a.name, type: a.type, created_by: a.created_by, status: '', reason: '', container: '', phase: 'unknown', loggedIn: null, checking: true, error: false, logsEnabled: null, logsBusy: false, logsError: false }))
   } catch {
     error.value = t('ccgateway.runtimes.loadFailed')
     rows.value = []
@@ -74,6 +87,16 @@ async function load() {
   await runPool(rows.value, 4, (r) => inspect(r))
 }
 onMounted(load)
+
+async function setLogs(r: Row, enabled: boolean) {
+  if (r.logsBusy || !canLogs(r)) return
+  r.logsBusy = true
+  r.logsError = false
+  try {
+    r.logsEnabled = (await api.put<{ enabled: boolean }>(`/system/ccgateway/accounts/${r.id}/request-logs`, { enabled })).enabled
+  } catch { r.logsError = true }
+  finally { r.logsBusy = false }
+}
 
 function containerBadge(r: Row): { tone: 'success' | 'warning' | 'danger' | 'gray'; label: string } {
   if (r.error) return { tone: 'danger', label: t('ccgateway.runtimes.state.unavailable') }
@@ -97,6 +120,7 @@ const needsAuth = (r: Row) => r.type === 'managed' && r.loggedIn !== true
     </template>
     <div class="space-y-3">
       <SHint tone="warning">{{ t('ccgateway.runtime.switchHint') }}</SHint>
+      <SHint>{{ t('ccgateway.requestLogs.hint') }}</SHint>
       <SHint v-if="error" tone="danger">{{ error }}</SHint>
       <STable :columns="columns" :rows="rows" :loading="loading" dense :empty-text="t('ccgateway.runtimes.empty')" data-testid="ccgateway-runtimes">
         <template #cell-name="{ row }">
@@ -112,6 +136,11 @@ const needsAuth = (r: Row) => r.type === 'managed' && r.loggedIn !== true
           <SBadge v-else-if="row.loggedIn === true" tone="success">{{ t('ccgateway.runtimes.authorized') }}</SBadge>
           <SBadge v-else-if="row.loggedIn === false" tone="warning">{{ t('ccgateway.runtimes.notAuthorized') }}</SBadge>
           <SHint v-else inline size="xs">—</SHint>
+        </template>
+        <template #cell-request_logs="{ row }">
+          <SSwitch v-if="row.logsEnabled !== null" :model-value="row.logsEnabled" :disabled="!canLogs(row) || row.logsBusy || row.checking || loading" :label="t('ccgateway.requestLogs.title')" :data-testid="`request-logs-${row.id}`" @update:model-value="setLogs(row, $event)" />
+          <SHint v-else inline size="xs">—</SHint>
+          <SHint v-if="row.logsError" tone="danger" size="xs">{{ t('ccgateway.requestLogs.failed') }}</SHint>
         </template>
         <template #cell-actions="{ row }">
           <SButton v-if="canAccounts" size="sm" :variant="needsAuth(row) ? 'primary' : 'ghost'" :to="{ path: '/accounts', query: { edit: String(row.id) } }" data-testid="ccgateway-runtime-edit">

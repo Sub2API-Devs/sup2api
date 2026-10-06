@@ -1,0 +1,117 @@
+[
+  {
+    "mode": "user-control",
+    "sid": "5bcac681-6854-4b74-a354-9b8a79c3f3c5",
+    "expected": "WILLOW_2a75bf8ebe90",
+    "results": [
+      {
+        "result": "READY",
+        "subtype": "success",
+        "is_error": false
+      },
+      {
+        "result": "WILLOW_2a75bf8ebe90",
+        "subtype": "success",
+        "is_error": false
+      }
+    ],
+    "exit": {
+      "status": 0,
+      "signal": null
+    },
+    "timedOut": false,
+    "historyMatches": [
+      {
+        "line": 14,
+        "type": "queue-operation"
+      },
+      {
+        "line": 16,
+        "type": "user",
+        "role": "user"
+      },
+      {
+        "line": 19,
+        "type": "assistant",
+        "role": "assistant"
+      },
+      {
+        "line": 20,
+        "type": "last-prompt"
+      }
+    ],
+    "stderr": ""
+  },
+  {
+    "mode": "attachment-before-user",
+    "sid": "7ff3377e-1aa1-42ac-b544-a29e5f8a8a5e",
+    "expected": "WILLOW_b70012f7a4a6",
+    "results": [
+      {
+        "result": "READY",
+        "subtype": "success",
+        "is_error": false
+      },
+      {
+        "result": "UNKNOWN",
+        "subtype": "success",
+        "is_error": false
+      }
+    ],
+    "exit": {
+      "status": 0,
+      "signal": null
+    },
+    "timedOut": false,
+    "historyMatches": [],
+    "stderr": ""
+  },
+  {
+    "mode": "attachment-after-user",
+    "sid": "eb5af36e-b639-4c04-ba27-d1c07f199870",
+    "expected": "WILLOW_9ecc3633a176",
+    "results": [
+      {
+        "result": "READY",
+        "subtype": "success",
+        "is_error": false
+      },
+      {
+        "result": "UNKNOWN",
+        "subtype": "success",
+        "is_error": false
+      }
+    ],
+    "exit": {
+      "status": 0,
+      "signal": null
+    },
+    "timedOut": false,
+    "historyMatches": [],
+    "stderr": ""
+  },
+  {
+    "mode": "attachment-in-user",
+    "sid": "76e48c3d-6d14-43b9-8af1-badf3f2cde80",
+    "expected": "WILLOW_beaa8e0e333d",
+    "results": [
+      {
+        "result": "READY",
+        "subtype": "success",
+        "is_error": false
+      },
+      {
+        "result": "UNKNOWN",
+        "subtype": "success",
+        "is_error": false
+      }
+    ],
+    "exit": {
+      "status": 0,
+      "signal": null
+    },
+    "timedOut": false,
+    "historyMatches": [],
+    "stderr": ""
+  }
+]

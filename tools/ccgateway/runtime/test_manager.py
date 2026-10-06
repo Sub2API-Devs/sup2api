@@ -568,6 +568,22 @@ class HandlerTests(Base):
         self.assertEqual(FakeSession.calls[-1][1], f'http://{state["app_ip"]}:8787/admin/auth/cancel')
         self.assertEqual(self.call('DELETE', path, headers={'X-CCG-Revision': REV}), (405, {'error': 'method_not_allowed'}))
 
+    def test_request_logs_pass_through(self):
+        self.apply('7', auth={'mode': 'api_key', 'api_key': 'sk-test-key-123'})
+        state = self.m.state('7')
+        path = '/accounts/7/admin/request-logs'
+        self.assertEqual(self.call('GET', path)[0], 409)
+        for method in ('GET', 'PUT'):
+            self.assertEqual(self.call(method, path, '{"enabled":false}', headers={'X-CCG-Revision': REV})[0], 200)
+            actual, url, headers = FakeSession.calls[-1]
+            self.assertEqual((actual, url), (method, f'http://{state["app_ip"]}:8787/admin/request-logs'))
+            self.assertEqual(headers['Authorization'], 'Bearer ' + state['admin_key'])
+        calls = len(FakeSession.calls)
+        self.assertEqual(self.call('POST', path, '{}', headers={'X-CCG-Revision': REV})[0], 405)
+        self.assertEqual(len(FakeSession.calls), calls)
+        # PUT remains forbidden on all other pass-through endpoints.
+        self.assertEqual(self.call('PUT', '/accounts/7/admin/status', '{}', headers={'X-CCG-Revision': REV})[0], 405)
+
     def test_usage_pass_through(self):
         self.apply('7')
         state = self.m.state('7')

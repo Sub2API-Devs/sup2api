@@ -158,7 +158,7 @@ SDK 服务按请求声明分组，不连接客户端实际的 MCP 地址；工�
 
 ## API 能力映射（2026-10-06）
 
-插件设置按请求体、Anthropic Beta 请求头和 Claude Code 环境变量/启动参数展示。默认忽略未知 Beta、忽略 speed，未知请求字段按配置拒绝或忽略；不使用 CLAUDE_CODE_EXTRA_BODY，也不接受任意环境变量。默认 15 条 Beta 处理规则与官方 SDK 的 50 项参考目录分开展示，参考目录不代表已经实现全部 API 能力。
+插件设置展示请求体参数与 Anthropic Beta 请求头。支持的 Beta 名称及处理方式固定，白名单外可选择忽略或返回错误；不使用 CLAUDE_CODE_EXTRA_BODY，也不接受任意环境变量。列出的支持项代表已适配的行为，不能自行添加名称或更改处理方式。
 
 | API 参数 | Claude Code 配置 |
 | --- | --- |
@@ -176,3 +176,24 @@ SDK 服务按请求声明分组，不连接客户端实际的 MCP 地址；工�
 结构化输出使用 CLI 内部纯格式校验工具，必要时允许一次原生格式整理续轮，成功后再次校验 JSON Schema 并返回 text JSON；禁止外部 schema 引用。此类请求按完整客户端历史重建，不复用含内部格式工具的原生检查点。工具搜索只允许发现已注册的定义，最多 3 次；客户端工具执行仍被拦截，内部 ToolSearch 不对外返回，额外模型调用计入用量。两种模式均缓冲 SSE，验证完后输出标准事件。提示缓存断点由 Claude Code 管理，不保证客户端逐块断点或上游命中。Files、Batch、托管 agents、服务端工具等专用 API 并非通过 Beta 名称就能实现。
 
 官方依据：[环境变量](https://code.claude.com/docs/en/env-vars)、[结构化输出](https://code.claude.com/docs/en/agent-sdk/structured-outputs)、[工具搜索](https://code.claude.com/docs/en/agent-sdk/tool-search)。Claude Code 2.1.288 的隔离回归共 48 次本地模拟模型请求，验证普通/SSE 结构化输出和工具搜索用量；无真实云端模型调用。
+
+### messages 中的 system（2026-10-06）
+
+位置规则与 [Messages API](https://platform.claude.com/docs/en/build-with-claude/mid-conversation-system-messages) 一致：连续的 system 必须紧跟 user（含 tool_result）之后，并位于 assistant 之前或数组末尾，否则返回 400。仅接受文本；`output_config`、`clear_at` 等字段返回 400，不静默丢弃。
+
+- 已提交历史中的 system 写成 Claude Code 自己为 Mod 上下文落盘的 `hook_additional_context` 附件记录（`renderedRole: system`），放在原位置；同一段连续 system 合为一条记录。
+- 最后一轮（最后一个 assistant 之后）的 system 由 Mod 的 `prompt.submit` context 附加，模型请求前写确认文件，网关核对；完成后还核对原生记录确实多出这条附件，任一缺失即失败。
+- Mod 的 `prompt.attachment` 去掉 CLI 加在 Mod 上下文前的 `prompt.submit hook additional context:` 标签，模型读到的是客户端原文。
+- 对 Claude Code 判定支持的模型（实测 claude-opus-5-5 首方接口），出站请求是真正的 `role: "system"` 消息，位于对应 user 之后、assistant 之前。差异：同一轮多个文本块以换行连接；同一轮内 CLI 自带的环境、日期等附件会与之合并成一条 system 消息。CLI 不启用 system 轮次的模型上，同样的记录以 `<system-reminder>` 文本进入 user 消息。
+- system 属于历史指纹的一部分：续聊可直接恢复原生会话，从旧节点分支时只继承分支点之前的 system，换账号时按客户端完整历史在原位置重建。重试已提交请求不会重复 system。
+- 最后一轮的单个文本块上限 100,000 字符、合计 200,000 字符（UTF-16 计数）。超过时 CLI 会把 Mod 上下文缩成开头加文件路径，因此直接返回 400。已提交历史不受此限制。
+
+验证（cc-max 账号 22 容器、Claude Code 2.1.288、claude-opus-5-5 真实调用）：手工历史附件与 Mod 上下文都被模型读取；Bun 出站记录确认 system 角色、位置和去标签后的原文。`TestSystemMessagesLiveE2E` 覆盖最后一轮 system、续聊 prefix-hit、分支、分支隔离（被丢弃分支的 system 不出现）、换会话重建、工具结果后的 system 和重试不重复，七项全部通过。本地 `TestSystemMessagesRealCLI`/`TestRealCLI` 用模拟上游检查出站形状。旧的随机标记 + 回环还原 system 的方式已移除；回环中继只保留 `thinking.display`。
+
+### 请求调试日志
+
+管理接口 `GET/PUT /admin/request-logs` 查询或设置 `{"enabled":true|false}`，需要管理密钥。CCGateway 页面按账号控制该设置，状态保存在运行容器的数据卷中。
+
+开启时在 `CCG_DATA_DIR/request-logs/<随机目录>/` 保存原始 `request.body`、`response.body`（含 SSE）、脱敏后的请求/响应头及 `metadata.json`。经过出站适配的请求另保存为 `upstream-request-<随机标识>.body`，受同一开关和容量限制。消息正文仅写入这些可删除的文件，不输出到 Docker 日志。关闭会停止现有请求的记录、删除全部调试日志，并阻止后续请求落盘；不会中断业务响应。
+
+单请求日志超过 64 MiB 时删除整条日志，不保存部分正文。已完成日志保留 24 小时，总量软限制 512 MiB，按时间清理。这里的零保留仅指调试日志，不改变业务会话缓存。
