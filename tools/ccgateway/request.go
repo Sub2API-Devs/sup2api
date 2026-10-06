@@ -41,6 +41,7 @@ type Request struct {
 	FineGrainedTools bool
 	TTL              time.Duration
 	Native           map[string]bool
+	origin           []int // client array index of each parsed message
 }
 
 var toolName = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
@@ -413,6 +414,7 @@ func parseRequest(data []byte) (*Request, error) {
 			origin = append(origin, i)
 		}
 	}
+	r.origin = origin
 	first, last := -1, -1
 	if err := validateSystemPositions(r.Messages, origin); err != nil {
 		return nil, err

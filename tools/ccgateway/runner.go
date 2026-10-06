@@ -118,7 +118,7 @@ func envWith(base []string, values map[string]string, remove ...string) []string
 	}
 	return out
 }
-func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string, emit func(Object) error) (Object, error) {
+func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string, emit func(Object) error) (result Object, err error) {
 	enabledTools := []string{}
 	if !req.NoTools {
 		for _, tool := range req.Tools {
@@ -198,25 +198,52 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 		env = os.Environ()
 	}
 	env = r.Proxy.Environment(env)
-	if str(req.Thinking, "display") != "" {
-		relay, err := startDisplayRelay(req, env, r.InternalBaseURL)
+	// Client system messages and thinking.display need the outbound relay;
+	// a run whose relay refused a model request fails with that cause.
+	groups := req.systemGroups()
+	var relay *outboundRelay
+	if str(req.Thinking, "display") != "" || len(groups) > 0 {
+		// Assign the named results: the deferred check below must set them.
+		relay, err = startOutboundRelay(req, env, r.InternalBaseURL)
 		if err != nil {
 			return nil, err
 		}
+		// A refused or rejected model request ends the run before the CLI
+		// can react to the answer with a reshaped retry.
+		relay.setAbort(cancel)
 		defer relay.Close()
+		defer func() {
+			if failure := relay.Failure(); failure != nil {
+				result, err = nil, failure
+				return
+			}
+			// A failed run reports the API's own error for a restored request;
+			// a later success (the CLI retries 429 and 5xx) wins.
+			if upstream := relay.UpstreamError(); err != nil && upstream != nil && ctx.Err() == nil {
+				result, err = nil, upstream
+			}
+		}()
 		noProxy := environmentValue(env, "NO_PROXY")
 		if noProxy == "" {
 			noProxy = environmentValue(env, "no_proxy")
 		}
 		noProxy += ",127.0.0.1,localhost"
 		env = envWith(env, map[string]string{"ANTHROPIC_BASE_URL": relay.URL, "NO_PROXY": noProxy, "no_proxy": noProxy})
-		// The loopback carrier still terminates at the original first-party API;
-		// retain CLI feature eligibility that is otherwise keyed to the hostname.
+		// The loopback carrier still terminates at the original first-party API.
+		// The CLI keys some first-party behaviour to the base URL's hostname;
+		// this keeps that behaviour. It does not decide system turns, which
+		// follow the model, provider and CLAUDE_CODE_FORCE_MID_CONVERSATION_SYSTEM.
 		if relay.FirstParty {
 			env = envWith(env, map[string]string{"_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL": "1"})
 		}
 	}
 	cmd.Env = envWith(env, map[string]string{"CCGATEWAY_READY_FILE": ready, "CLAUDE_CODE_MAX_OUTPUT_TOKENS": strconv.Itoa(req.MaxTokens), "DISABLE_AUTOUPDATER": "1", "DISABLE_AUTO_COMPACT": "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "ENABLE_TOOL_SEARCH": "false", "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "0"}, "CLAUDE_CODE_RESUME_INTERRUPTED_TURN", "CLAUDE_CODE_RESUME_FROM_SESSION", "CLAUDE_CODE_PLUGIN_DIRS", "ANTHROPIC_BETAS", "CLAUDE_CODE_EXTRA_BODY", "CLAUDE_CODE_EFFORT_LEVEL", "CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING", "CLAUDE_CODE_PROMPT_CACHE_TTL", "CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL", "FORCE_PROMPT_CACHING_5M", "ENABLE_PROMPT_CACHING_1H", "MAX_THINKING_TOKENS", "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING", "CLAUDE_CODE_DISABLE_THINKING", "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS", "MAX_STRUCTURED_OUTPUT_RETRIES", "CLAUDE_CODE_DISABLE_1M_CONTEXT", "CLAUDE_CODE_MAX_CONTEXT_TOKENS", "CCGATEWAY_TOOL_DEFERRAL_FILE", "CCGATEWAY_SYSTEM_FILE", "CCGATEWAY_SYSTEM_ACK_FILE")
+	if len(groups) > 0 {
+		// Without system turns the CLI folds system text into user messages and
+		// tool results, which cannot be undone exactly. Whether the model takes
+		// system messages is then the API's decision, as for a direct client.
+		cmd.Env = envWith(cmd.Env, map[string]string{"CLAUDE_CODE_FORCE_MID_CONVERSATION_SYSTEM": "1"})
+	}
 	cmd.Env = envWith(cmd.Env, map[string]string{"ANTHROPIC_BETAS": strings.Join(req.Betas, ","), "MAX_STRUCTURED_OUTPUT_RETRIES": "1", "CCGATEWAY_STRUCTURED_OUTPUT": "0", "CCGATEWAY_TOOL_SEARCH": "0"})
 	if req.JSONSchema != nil {
 		cmd.Env = envWith(cmd.Env, map[string]string{"CCGATEWAY_STRUCTURED_OUTPUT": "1"})
@@ -365,6 +392,11 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 					return nil, fmt.Errorf("ccgateway Mod did not attach the system messages")
 				}
 				systemAck = ""
+			}
+			// Any model response must come from a request that went through the
+			// relay with the client's system messages restored.
+			if len(groups) > 0 && relay.Restored() == 0 {
+				return nil, fmt.Errorf("model request bypassed the system message relay")
 			}
 			event, ok := f["event"].(map[string]any)
 			if !ok {

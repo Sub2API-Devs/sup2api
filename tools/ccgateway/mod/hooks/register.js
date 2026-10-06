@@ -26,7 +26,8 @@ export function register(on) {
   });
   // The API client's system messages for the pending turn, in order, once per
   // process. Claude Code records them as one system-role attachment after the
-  // submitted input; the gateway checks the acknowledgement and the transcript.
+  // submitted input (one submission, one record); the gateway checks the
+  // acknowledgement and the transcript, and its relay restores the messages.
   on('prompt.submit', async ($, e, next) => {
     const path = await $.env.get('CCGATEWAY_SYSTEM_FILE');
     if (!path || systemsAttached) return next(e);

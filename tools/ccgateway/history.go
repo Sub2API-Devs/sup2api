@@ -321,13 +321,9 @@ func prepareHistory(r *Request, c *HistoryCache, logical, dir, version string) (
 	}
 	for i := start; i <= pending; i++ {
 		if r.Messages[i].Role == "system" {
-			// One record per contiguous group, as one prompt.submit context is.
-			var texts []string
-			for ; i < pending && r.Messages[i].Role == "system"; i++ {
-				texts = append(texts, systemTexts(r.Messages[i])...)
-			}
-			i--
-			row, id := systemRow(texts, parent, p.SessionID, p.Work, version)
+			// One record per client system message, its text blocks as the
+			// record's content entries.
+			row, id := systemRow(systemTexts(r.Messages[i]), parent, p.SessionID, p.Work, version)
 			p.Rows = append(p.Rows, row)
 			parent = id
 			continue

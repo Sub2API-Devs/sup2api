@@ -44,7 +44,7 @@ func TestSystemHistoryRecordsAndPendingToolInput(t *testing.T) {
 	for _, row := range rows {
 		kinds = append(kinds, str(row, "type"))
 	}
-	if strings.Join(kinds, "/") != "user/attachment/assistant/user" {
+	if strings.Join(kinds, "/") != "user/attachment/attachment/assistant/user" {
 		t.Fatalf("rows = %v", kinds)
 	}
 	for i := 1; i < len(rows); i++ {
@@ -52,12 +52,18 @@ func TestSystemHistoryRecordsAndPendingToolInput(t *testing.T) {
 			t.Fatal("history chain broken")
 		}
 	}
-	content, _ := json.Marshal(rows[1]["attachment"].(Object)["content"])
-	if string(content) != `["earlier instruction","second block a","second block b"]` {
-		t.Fatalf("history system record = %s", content)
+	// One record per client system message, keeping its text blocks.
+	first, _ := json.Marshal(rows[1]["attachment"].(Object)["content"])
+	second, _ := json.Marshal(rows[2]["attachment"].(Object)["content"])
+	if string(first) != `["earlier instruction"]` || string(second) != `["second block a","second block b"]` {
+		t.Fatalf("history system records = %s %s", first, second)
+	}
+	rendered := rows[2]["rendered"].([]any)
+	if len(rendered) != 1 || str(rendered[0].(Object), "content") != "<system-reminder>\n"+systemContextPrefix+"second block a\nsecond block b\n</system-reminder>" {
+		t.Fatalf("record rendering differs from the Mod's: %v", rendered)
 	}
 	last := rows[len(rows)-1]
-	if str(last, "uuid") != p.InputUUID || str(last, "parentUuid") != p.Anchor || p.Anchor != str(rows[2], "uuid") {
+	if str(last, "uuid") != p.InputUUID || str(last, "parentUuid") != p.Anchor || p.Anchor != str(rows[3], "uuid") {
 		t.Fatal("pending input identity differs from resume boundary")
 	}
 	pendingRaw, _ := json.Marshal(r.pendingWireMessage())

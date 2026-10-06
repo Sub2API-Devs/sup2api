@@ -10,12 +10,11 @@ import (
 
 // Client system messages travel as Claude Code's own system-role attachment:
 // the record a mod's prompt.submit context produces. Committed history is
-// written as that record at its original position; the pending turn's systems
-// are attached by the Mod. Claude Code sends both as role "system" messages
-// after the user turn they follow, which is where the Messages API requires
-// them. Text is preserved; the block boundaries within one contiguous group of
-// system messages become newlines, and the CLI joins attachments of one turn
-// (its own included) into a single system message.
+// written as one such record per client message at its original position; the
+// pending turn's messages are attached by the Mod as one record (one prompt
+// submission yields one record). Claude Code merges a turn's system records,
+// its own context included, into one system message; the outbound relay
+// (system_restore.go) restores the client's messages before the model request.
 const systemContextPrefix = "prompt.submit hook additional context: "
 
 // Claude Code shortens a prompt.submit context entry beyond these lengths

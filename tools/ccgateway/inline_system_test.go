@@ -100,7 +100,7 @@ func TestSystemRowMatchesModRecord(t *testing.T) {
 	}
 }
 
-func TestDisplayRelayPreservesAuthAndSSE(t *testing.T) {
+func TestOutboundRelayPreservesAuthAndSSE(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/messages" || r.URL.RawQuery != "beta=true" || r.Header.Get("Authorization") != "Bearer fixture" || r.Header.Get("Anthropic-Beta") != "fixture-beta" {
 			t.Errorf("request metadata changed")
@@ -117,7 +117,7 @@ func TestDisplayRelayPreservesAuthAndSSE(t *testing.T) {
 	}))
 	defer upstream.Close()
 	r := &Request{Thinking: Object{"type": "adaptive", "display": "omitted"}}
-	relay, err := startDisplayRelay(r, []string{"ANTHROPIC_BASE_URL=" + upstream.URL + "/api"})
+	relay, err := startOutboundRelay(r, []string{"ANTHROPIC_BASE_URL=" + upstream.URL + "/api"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,20 +161,20 @@ func TestRelayProxyUsesRequestEnvironment(t *testing.T) {
 	}
 }
 
-func TestDisplayRelaySharedRouteRejectsRemoteAndExpires(t *testing.T) {
+func TestOutboundRelaySharedRouteRejectsRemoteAndExpires(t *testing.T) {
 	req := parsed(t, basic())
-	relay, err := startDisplayRelay(req, nil, "http://127.0.0.1:8787")
+	relay, err := startOutboundRelay(req, nil, "http://127.0.0.1:8787")
 	if err != nil {
 		t.Fatal(err)
 	}
 	r := httptest.NewRequest("POST", relay.URL+"/v1/messages", nil)
 	r.RemoteAddr = "203.0.113.1:444"
 	w := httptest.NewRecorder()
-	if !serveDisplayRelay(w, r) || w.Code != http.StatusNotFound {
+	if !serveOutboundRelay(w, r) || w.Code != http.StatusNotFound {
 		t.Fatal("remote relay request allowed")
 	}
 	relay.Close()
-	if serveDisplayRelay(httptest.NewRecorder(), r) {
+	if serveOutboundRelay(httptest.NewRecorder(), r) {
 		t.Fatal("expired relay remains reachable")
 	}
 }

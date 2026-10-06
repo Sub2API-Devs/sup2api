@@ -203,6 +203,8 @@ func TestCacheExpiryAndCanonicalKeys(t *testing.T) {
 
 // Opt in with CCG_REAL_CLI=<absolute executable path>. All inference goes to
 // the local fixture with dummy credentials and a private configuration dir.
+const upstreamRejection = `{"type":"error","error":{"type":"invalid_request_error","message":"messages.1: role 'system' must precede an 'assistant' message or end the array; the directive-only form (content: [] with output_config) is accepted at any position"},"request_id":"req_fixture"}`
+
 func TestRealCLI(t *testing.T) {
 	cli := os.Getenv("CCG_REAL_CLI")
 	if cli == "" {
@@ -237,6 +239,13 @@ func TestRealCLI(t *testing.T) {
 		requestBetas = append(requestBetas, r.Header.Get("anthropic-beta"))
 		captureIndex := len(requests)
 		mu.Unlock()
+		if bytes.Contains(b, []byte("UPSTREAM_REJECT")) {
+			// Wording that Claude Code answers by turning system turns off.
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(400)
+			fmt.Fprint(w, upstreamRejection)
+			return
+		}
 		if capture := os.Getenv("CCG_CAPTURE_DIR"); capture != "" {
 			if err := os.MkdirAll(capture, 0700); err != nil {
 				t.Error(err)
@@ -998,29 +1007,108 @@ func TestRealCLI(t *testing.T) {
 				t.Fatal("native continuation was not exercised")
 			}
 			for _, wire := range requests[before:] {
-				found := false
+				found := 0
 				for _, value := range wire["messages"].([]any) {
 					message := value.(Object)
 					data, _ := json.Marshal(message["content"])
-					// Without system turns (this mock is no first-party endpoint) the
-					// CLI renders the record as a reminder; the text must still be exact.
-					if str(message, "role") == "system" && bytes.Contains(data, []byte(marker)) {
-						found = true
+					if !bytes.Contains(data, []byte(marker)) {
+						continue
 					}
-					blocks, _ := message["content"].([]any)
-					for _, block := range blocks {
-						if b, ok := block.(Object); ok && str(b, "text") == "<system-reminder>\n"+marker+"\n</system-reminder>" {
-							found = true
-						}
+					// The client's message itself, in every continuation round.
+					content, _ := message["content"].([]any)
+					if len(content) == 1 {
+						delete(content[0].(Object), "cache_control")
 					}
+					if str(message, "role") != "system" || canonical(t, message) != canonical(t, Object{"role": "system", "content": []any{Object{"type": "text", "text": marker}}}) {
+						t.Fatalf("client system message changed upstream: %s", canonical(t, message))
+					}
+					found++
 				}
-				if !found {
-					t.Fatal("inline system lost during CLI continuation")
+				if found != 1 {
+					t.Fatalf("inline system sent %d times in a CLI continuation request", found)
 				}
 				data, _ := json.Marshal(wire)
 				if bytes.Contains(data, []byte("hook additional context")) {
 					t.Fatal("system text relabelled")
 				}
+			}
+		})
+	}
+	// A later turn resumes the native session whose history holds the internal
+	// discovery round; the client's systems still align with their turns.
+	t.Run("inline-system-after-search-history", func(t *testing.T) {
+		request := basic()
+		request["tools"] = searchRequest["tools"]
+		first := []any{Object{"role": "user", "content": "first"}, Object{"role": "assistant", "content": "prior answer"}, Object{"role": "user", "content": "second"}, Object{"role": "system", "content": "SYSTEM_SEARCH_TOOL history"}}
+		request["messages"] = first
+		answered, _, _ := post(request, "")
+		request["messages"] = append(append([]any(nil), first...), Object{"role": "assistant", "content": answered["content"]}, Object{"role": "user", "content": "third"}, Object{"role": "system", "content": "SYSTEM_AFTER_SEARCH"})
+		mu.Lock()
+		before := len(requests)
+		mu.Unlock()
+		_, _, headers := post(request, "")
+		if headers.Get("X-CCGateway-History") != "prefix-hit" {
+			t.Fatalf("history mode %s", headers.Get("X-CCGateway-History"))
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		wire := requests[len(requests)-1]
+		if len(requests)-before != 1 {
+			t.Fatalf("follow-up made %d model requests", len(requests)-before)
+		}
+		var shape []string
+		for _, value := range wire["messages"].([]any) {
+			message := value.(Object)
+			label := str(message, "role")
+			data, _ := json.Marshal(message["content"])
+			if str(message, "role") == "assistant" && internalAssistant(message) {
+				label += ":ToolSearch"
+			}
+			for _, marker := range []string{"SYSTEM_SEARCH_TOOL history", "SYSTEM_AFTER_SEARCH"} {
+				if bytes.Contains(data, []byte(marker)) {
+					label += ":" + marker
+					content, _ := message["content"].([]any)
+					if len(content) > 0 {
+						delete(content[len(content)-1].(Object), "cache_control")
+					}
+					if canonical(t, message) != canonical(t, Object{"role": "system", "content": []any{Object{"type": "text", "text": marker}}}) {
+						t.Fatalf("client system message changed upstream: %s", canonical(t, message))
+					}
+				}
+			}
+			shape = append(shape, label)
+		}
+		// The client's turns: first / prior answer / second + system / final
+		// answer (after the native discovery round) / third + system.
+		want := "user assistant user system system:SYSTEM_SEARCH_TOOL history assistant:ToolSearch user assistant user system system:SYSTEM_AFTER_SEARCH"
+		if got := strings.Join(shape, " "); got != want && got != strings.Replace(want, "assistant:ToolSearch user assistant", "assistant:ToolSearch user system assistant", 1) {
+			t.Fatalf("wire shape: %s", got)
+		}
+	})
+	// The API's 400 for a restored request reaches the client as sent, and the
+	// CLI does not answer it with a reshaped retry.
+	for _, stream := range []bool{false, true} {
+		t.Run(fmt.Sprintf("upstream-error-stream=%v", stream), func(t *testing.T) {
+			request := basic()
+			request["messages"] = []any{Object{"role": "user", "content": "q"}, Object{"role": "system", "content": "UPSTREAM_REJECT"}}
+			request["stream"] = stream
+			mu.Lock()
+			before := len(requests)
+			mu.Unlock()
+			b, _ := json.Marshal(request)
+			resp, err := http.Post(gateway.URL+"/v1/messages", "application/json", bytes.NewReader(b))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			out, _ := io.ReadAll(resp.Body)
+			if resp.StatusCode != 400 || string(out) != upstreamRejection || !strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
+				t.Fatalf("client received %d %s", resp.StatusCode, out)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if len(requests)-before != 1 {
+				t.Fatalf("CLI retried the rejected request %d times", len(requests)-before-1)
 			}
 		})
 	}

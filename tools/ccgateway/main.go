@@ -52,7 +52,7 @@ func (g *Gateway) authorized(r *http.Request) bool {
 var sessionName = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,128}$`)
 
 func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if serveDisplayRelay(w, r) {
+	if serveOutboundRelay(w, r) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
@@ -230,6 +230,31 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if ctx.Err() != nil {
 			status = 504
 			message = "Claude Code request timed out"
+		}
+		var upstream *upstreamError
+		if errors.As(e, &upstream) {
+			// The API's own error, as a direct client would receive it.
+			status = upstream.Status
+			official := Object{"type": kind, "message": message}
+			if decoded, err := decodeObject(upstream.Body); err == nil {
+				if inner, ok := decoded["error"].(Object); ok {
+					official = inner
+					kind, message = str(inner, "type"), str(inner, "message")
+				}
+			}
+			diagnostic.fail(status, kind, message)
+			if streaming {
+				_ = send(Object{"type": "error", "error": official})
+				return
+			}
+			contentType := upstream.ContentType
+			if contentType == "" {
+				contentType = "application/json"
+			}
+			w.Header().Set("Content-Type", contentType)
+			w.WriteHeader(status)
+			_, _ = w.Write(upstream.Body)
+			return
 		}
 		diagnostic.fail(status, kind, message)
 		if streaming {

@@ -17,8 +17,9 @@ import (
 
 // Opt-in smoke test against the installed CLI, with synthetic credentials and
 // a local mock upstream only. No live provider or user messages are involved.
-// The mock is no first-party endpoint, so system turns are forced on; on the
-// Claude API the CLI enables them per model.
+// The runner forces system turns for requests with client system messages, so
+// the mock (no first-party endpoint) sees them as on the Claude API; the relay
+// must deliver exactly the client's system messages.
 func TestSystemMessagesRealCLI(t *testing.T) {
 	cli := os.Getenv("CCG_REAL_CLI")
 	if cli == "" {
@@ -101,7 +102,7 @@ func TestSystemMessagesRealCLI(t *testing.T) {
 						base = append(base, k+"="+v)
 					}
 				}
-				env := envWith(base, map[string]string{"HOME": root, "USERPROFILE": root, "CLAUDE_CONFIG_DIR": filepath.Join(root, "config"), auth: "dummy-local-fixture", "ANTHROPIC_BASE_URL": fake.URL, "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "CLAUDE_CODE_FORCE_MID_CONVERSATION_SYSTEM": "1"})
+				env := envWith(base, map[string]string{"HOME": root, "USERPROFILE": root, "CLAUDE_CONFIG_DIR": filepath.Join(root, "config"), auth: "dummy-local-fixture", "ANTHROPIC_BASE_URL": fake.URL, "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"})
 				runner := &Runner{CLI: cli, Version: version, Plugin: plugin, Work: root, Env: env}
 				gateway := httptest.NewServer(&Gateway{})
 				defer gateway.Close()
@@ -110,11 +111,22 @@ func TestSystemMessagesRealCLI(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				// Client system messages as the client wrote them; the second ones
+				// have several blocks, one with a blank line of its own.
+				clientSystems := map[string]string{}
+				system := func(marker string, content any) Object {
+					m := Object{"role": "system", "content": content}
+					if text, ok := content.(string); ok {
+						content = []any{Object{"type": "text", "text": text}}
+					}
+					clientSystems[marker] = canonical(t, content)
+					return m
+				}
 				messages := []any{Object{"role": "user", "content": "USER_FIRST"}}
 				if history {
-					messages = append(messages, Object{"role": "system", "content": "MID_SYSTEM_A"}, Object{"role": "assistant", "content": []any{Object{"type": "thinking", "thinking": "", "signature": strings.Repeat("f", 1616)}, Object{"type": "tool_use", "id": "toolu_fixture", "name": "Bash", "input": Object{"command": "PREVIOUS_ANSWER"}}}}, Object{"role": "user", "content": []any{Object{"type": "tool_result", "tool_use_id": "toolu_fixture", "content": "USER_SECOND"}}})
+					messages = append(messages, system("MID_SYSTEM_A", "MID_SYSTEM_A"), system("HISTORY_SECOND", []any{Object{"type": "text", "text": "HISTORY_SECOND one\n\npara"}, Object{"type": "text", "text": "two"}}), Object{"role": "assistant", "content": []any{Object{"type": "thinking", "thinking": "", "signature": strings.Repeat("f", 1616)}, Object{"type": "tool_use", "id": "toolu_fixture", "name": "Bash", "input": Object{"command": "PREVIOUS_ANSWER"}}}}, Object{"role": "user", "content": []any{Object{"type": "tool_result", "tool_use_id": "toolu_fixture", "content": "USER_SECOND"}}})
 				}
-				messages = append(messages, Object{"role": "system", "content": []any{Object{"type": "text", "text": "MID_SYSTEM_B"}}})
+				messages = append(messages, system("MID_SYSTEM_B", []any{Object{"type": "text", "text": "MID_SYSTEM_B"}}), system("PENDING_SECOND", []any{Object{"type": "text", "text": "PENDING_SECOND a"}, Object{"type": "text", "text": "b\n"}}))
 				req := parsed(t, Object{"model": "claude-opus-5-5", "max_tokens": 64, "thinking": Object{"type": "adaptive", "display": "omitted"}, "system": "TOP_SYSTEM", "messages": messages})
 				if history {
 					req.Native["Bash"] = false
@@ -174,15 +186,27 @@ func TestSystemMessagesRealCLI(t *testing.T) {
 					for _, value := range wire {
 						m := value.(Object)
 						data, _ := json.Marshal(m["content"])
-						for _, marker := range []string{"USER_FIRST", "MID_SYSTEM_A", "PREVIOUS_ANSWER", "USER_SECOND", "MID_SYSTEM_B", "TURN_ANSWER", "NEXT_USER"} {
+						var markers []string
+						for _, marker := range []string{"USER_FIRST", "MID_SYSTEM_A", "HISTORY_SECOND", "PREVIOUS_ANSWER", "USER_SECOND", "MID_SYSTEM_B", "PENDING_SECOND", "TURN_ANSWER", "NEXT_USER"} {
 							if strings.Contains(string(data), marker) {
+								markers = append(markers, marker)
 								found = append(found, str(m, "role")+":"+marker)
 							}
 						}
+						// Each client system message is its own wire message with the
+						// client's blocks; the CLI's own system text carries none of them.
+						if str(m, "role") == "system" && len(markers) > 0 {
+							content := m["content"].([]any)
+							last := content[len(content)-1].(Object)
+							delete(last, "cache_control") // the CLI's breakpoint, kept at the run's end
+							if len(markers) != 1 || canonical(t, content) != clientSystems[markers[0]] || len(m) != 2 {
+								t.Fatalf("system message changed upstream: %s, want %s", canonical(t, m), clientSystems[markers[0]])
+							}
+						}
 					}
-					want := "user:USER_FIRST/system:MID_SYSTEM_B"
+					want := "user:USER_FIRST/system:MID_SYSTEM_B/system:PENDING_SECOND"
 					if history {
-						want = "user:USER_FIRST/system:MID_SYSTEM_A/assistant:PREVIOUS_ANSWER/user:USER_SECOND/system:MID_SYSTEM_B"
+						want = "user:USER_FIRST/system:MID_SYSTEM_A/system:HISTORY_SECOND/assistant:PREVIOUS_ANSWER/user:USER_SECOND/system:MID_SYSTEM_B/system:PENDING_SECOND"
 					}
 					if turn == 1 {
 						want += "/assistant:TURN_ANSWER/user:NEXT_USER"

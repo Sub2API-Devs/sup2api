@@ -181,19 +181,24 @@ SDK 服务按请求声明分组，不连接客户端实际的 MCP 地址；工�
 
 位置规则与 [Messages API](https://platform.claude.com/docs/en/build-with-claude/mid-conversation-system-messages) 一致：连续的 system 必须紧跟 user（含 tool_result）之后，并位于 assistant 之前或数组末尾，否则返回 400。位置、空内容、非文本块等错误的文字与官方 API 实测返回一致（`system_validation.go` 中的模板），序号为客户端原始数组中的位置。仅接受文本；`output_config`、`clear_at` 等字段返回 400，不静默丢弃。
 
-- 已提交历史中的 system 写成 Claude Code 自己为 Mod 上下文落盘的 `hook_additional_context` 附件记录（`renderedRole: system`），放在原位置；同一段连续 system 合为一条记录。
-- 最后一轮（最后一个 assistant 之后）的 system 由 Mod 的 `prompt.submit` context 附加，模型请求前写确认文件，网关核对；完成后还核对原生记录确实多出这条附件，任一缺失即失败。
-- Mod 的 `prompt.attachment` 去掉 CLI 加在 Mod 上下文前的 `prompt.submit hook additional context:` 标签，模型读到的是客户端原文。
-- 对 Claude Code 判定支持的模型（实测 claude-opus-5-5 首方接口），出站请求是真正的 `role: "system"` 消息，位于对应 user 之后、assistant 之前。差异：同一轮多个文本块以换行连接；同一轮内 CLI 自带的环境、日期等附件会与之合并成一条 system 消息。CLI 不启用 system 轮次的模型上，同样的记录以 `<system-reminder>` 文本进入 user 消息。
+- 已提交历史中的每条客户端 system 消息各写成一条 Claude Code 自己为 Mod 上下文落盘的 `hook_additional_context` 附件记录（`renderedRole: system`），放在原位置；记录的 `content` 是该消息的文本块数组，`rendered` 与 Mod 生成的一致（单条、带 `prompt.submit hook additional context:` 标签、块之间换行）。
+- 最后一轮（最后一个 assistant 之后）的 system 由 Mod 的 `prompt.submit` context 附加，模型请求前写确认文件，网关核对；完成后还核对原生记录确实多出这条附件，任一缺失即失败。Claude Code 一次提交只生成一条记录，所以最后一轮的多条 system 在原生记录里是一条（全部文本块按顺序），续聊时由中继按客户端历史还原。
+- Mod 的 `prompt.attachment` 去掉 CLI 加在 Mod 上下文前的 `prompt.submit hook additional context:` 标签。
+- 出站还原：请求含客户端 system 时，Runner 为 CLI 开启 system 轮次（`CLAUDE_CODE_FORCE_MID_CONVERSATION_SYSTEM=1`），并让模型请求经过回环中继（`outbound_relay.go`，同时负责 `thinking.display`）。Claude Code 会把同一轮的所有 system 附件（含它自带的环境、模型、日期等）合成一条 system 消息（附件之间空行，同一附件的文本块之间换行）。中继按轮次对齐（客户端 assistant 数；内部 ToolSearch 轮不计），在该轮第一个 assistant 之前的 system 消息里用精确子串定位客户端这一组的整段文本（必须是完整附件，即前后为空行或边界），然后拆成：CLI 自带的剩余内容一条（保留 `output_config` 等字段；为空且无其他字段则省略），之后是客户端原样的各条 `{"role":"system","content":[文本块...]}`。CLI 加在被替换文本上的缓存断点移到客户端最后一个文本块。CLI 自带内容排在前面，因为后出现的 system 优先。
+- 任一组找不到、出现多处或不是完整附件，中继拒绝该请求，网关以该原因返回 502；不会放行结构被改过的请求。CLI 未按 system 轮次发送（客户端文本进了 user 提醒）也按此失败。`/v1/messages/count_tokens` 带 messages 时同样还原，失败只拒绝这次计数。中继保留鉴权头、SSE 原样回传、代理选择，只接受回环来源；开启请求日志时把实际转发的请求体存为 `upstream-request-<序号>-<随机>.body`，被拒绝的原始请求体存为 `upstream-refused-*.body`。
+- 上游错误保持官方原样：已还原请求被上游以 4xx 拒绝时，网关返回官方的状态码和错误体（流式且已开始输出时发 `error` 事件，内容为官方的 error 对象）。Claude Code 2.1.288 会根据 400 的文字改形重试（关闭 system 轮次并在本会话锁定、去掉 thinking/effort、移动 cache_control 等），对无法分类的 400 也会去掉某个 Beta 头重试一次并在其配置里累计探测失败。因此除 401/403/408/409/429（凭据刷新与退避，不改请求，原样交给 CLI，运行最终失败时返回最后一个）外，中继在中止运行后才回应 CLI，同一运行中的后续模型请求一律拒绝且不转发；万一 CLI 读到回应，也只有中性文字（不含 system、role、cache_control、thinking 等词）。中继自身拒绝时同样处理。
+- 开启 system 轮次与直连官方一致：模型不支持消息中的 system 时由官方返回 400。CLI 自带的环境/日期上下文在这些请求里也以 system 消息发送。
 - system 属于历史指纹的一部分：续聊可直接恢复原生会话，从旧节点分支时只继承分支点之前的 system，换账号时按客户端完整历史在原位置重建。重试已提交请求不会重复 system。
 - 最后一轮的单个文本块上限 100,000 字符、合计 200,000 字符（UTF-16 计数）。超过时 CLI 会把 Mod 上下文缩成开头加文件路径，因此直接返回 400。已提交历史不受此限制。
 
-验证（cc-max 账号 22 容器、Claude Code 2.1.288、claude-opus-5-5 真实调用）：手工历史附件与 Mod 上下文都被模型读取；Bun 出站记录确认 system 角色、位置和去标签后的原文。`TestSystemMessagesLiveE2E` 覆盖最后一轮 system、续聊 prefix-hit、分支、分支隔离（被丢弃分支的 system 不出现）、换会话重建、工具结果后的 system 和重试不重复，七项全部通过。本地 `TestSystemMessagesRealCLI`/`TestRealCLI` 用模拟上游检查出站形状。旧的随机标记 + 回环还原 system 的方式已移除；回环中继只保留 `thinking.display`。
+剩余限制：客户端 system 的 `cache_control` 断点不逐块保留（与其他消息相同，断点由 Claude Code 管理）；中继要求客户端整段文本在 CLI 的 system 消息里恰好出现一次，CLI 自带上下文恰好含有相同完整段落时请求会失败而不是猜测；对齐依赖 CLI 2.1.288 的合并规则，新版本改变渲染时会失败关闭，需要重新验证。
+
+验证：本地 `TestSystemMessagesRealCLI`/`TestRealCLI`（Claude Code 2.1.288、模拟上游）要求出站就是客户端原结构：多条连续 system、多文本块（含空行）、tool_result 之后、续聊恢复 Mod 记录、ToolSearch 与结构化输出续轮、带内部 ToolSearch 历史的续聊；上游以会触发降级的文字返回 400 时，客户端收到原样 400，CLI 不重试。`TestSystemMessagesLiveE2E`（容器内真实模型，主控运行）从请求日志读取中继实际转发的请求体，逐条比对客户端 system 消息；容器防火墙只放行回环 8787 时用 `CCG_E2E_RELAY_ADDR` 指定该地址。2026-10-06 早先的合并形状实测（cc-max 账号 22、claude-opus-5-5）见 next/docs/handoff-evidence/2026-10-06-ccgateway/manual-attachment-results.md。
 
 ### 请求调试日志
 
 管理接口 `GET/PUT /admin/request-logs` 查询或设置 `{"enabled":true|false}`，需要管理密钥。CCGateway 页面按账号控制该设置，状态保存在运行容器的数据卷中。
 
-开启时在 `CCG_DATA_DIR/request-logs/<随机目录>/` 保存原始 `request.body`、`response.body`（含 SSE）、脱敏后的请求/响应头及 `metadata.json`。经过出站适配的请求另保存为 `upstream-request-<随机标识>.body`，受同一开关和容量限制。消息正文仅写入这些可删除的文件，不输出到 Docker 日志。关闭会停止现有请求的记录、删除全部调试日志，并阻止后续请求落盘；不会中断业务响应。
+开启时在 `CCG_DATA_DIR/request-logs/<随机目录>/` 保存原始 `request.body`、`response.body`（含 SSE）、脱敏后的请求/响应头及 `metadata.json`。经过出站适配的请求另保存为 `upstream-request-<序号>-<随机标识>.body`（被拒绝的为 `upstream-refused-*`），受同一开关和容量限制。消息正文仅写入这些可删除的文件，不输出到 Docker 日志。关闭会停止现有请求的记录、删除全部调试日志，并阻止后续请求落盘；不会中断业务响应。
 
 单请求日志超过 64 MiB 时删除整条日志，不保存部分正文。已完成日志保留 24 小时，总量软限制 512 MiB，按时间清理。这里的零保留仅指调试日志，不改变业务会话缓存。
