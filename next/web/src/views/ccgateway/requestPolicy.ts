@@ -6,6 +6,7 @@ export interface RequestPolicy {
   tool_search?: string
   allow_effort: boolean
   pass_upstream_errors: boolean
+  attachment_source: 'client' | 'gateway' | 'both'
   betas: Array<{ name: string; mapping: BetaMapping }>
 }
 export function defaultRequestPolicy(): RequestPolicy {
@@ -15,6 +16,7 @@ export function defaultRequestPolicy(): RequestPolicy {
     allow_fast: false,
     allow_effort: true,
     pass_upstream_errors: false,
+    attachment_source: 'client',
     tool_search: 'request',
     betas: [
       { name: 'interleaved-thinking-2025-05-14', mapping: 'forward' },
@@ -31,6 +33,7 @@ export function validRequestPolicy(p: RequestPolicy): boolean {
   return (
     (!p.tool_search || ['request', 'false', 'true', 'auto'].includes(p.tool_search) || /^auto:([1-9][0-9]?|100)$/.test(p.tool_search)) &&
     ['reject', 'ignore'].includes(p.unknown_beta) &&
-    ['reject', 'ignore'].includes(p.unknown_field)
+    ['reject', 'ignore'].includes(p.unknown_field) &&
+    ['client', 'gateway', 'both'].includes(p.attachment_source)
   )
 }

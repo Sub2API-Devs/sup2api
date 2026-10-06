@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 
 	"github.com/yourusername/ccgateway-worker/pkg/types"
@@ -13,7 +14,7 @@ import (
 
 // Manager CLI 管理器
 type Manager interface {
-	Start(ctx context.Context, args []string) (Process, error)
+	Start(ctx context.Context, args []string, env map[string]string) (Process, error)
 }
 
 // Process CLI 进程接口
@@ -39,8 +40,16 @@ func NewManager(cliPath, cliVersion string) Manager {
 }
 
 // Start 启动 CLI 进程
-func (m *manager) Start(ctx context.Context, args []string) (Process, error) {
+func (m *manager) Start(ctx context.Context, args []string, env map[string]string) (Process, error) {
 	cmd := exec.CommandContext(ctx, m.cliPath, args...)
+
+	// 设置环境变量
+	if len(env) > 0 {
+		cmd.Env = append(cmd.Environ(), envToSlice(env)...)
+	}
+
+	// 捕获 stderr 用于调试
+	cmd.Stderr = os.Stderr
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -84,6 +93,15 @@ func (p *process) Wait() error {
 
 func (p *process) Kill() error {
 	return p.cmd.Process.Kill()
+}
+
+// envToSlice 将环境变量 map 转换为 slice
+func envToSlice(env map[string]string) []string {
+	result := make([]string, 0, len(env))
+	for k, v := range env {
+		result = append(result, fmt.Sprintf("%s=%s", k, v))
+	}
+	return result
 }
 
 // StreamDecoder 流式解码器

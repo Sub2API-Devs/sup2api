@@ -1,12 +1,9 @@
-# 构建阶段
-FROM golang:1.21-alpine AS builder
+# 第一阶段：构建 Go 应用
+FROM golang:1.21-bookworm AS builder
 
 WORKDIR /build
 
-# 安装构建依赖
-RUN apk add --no-cache git make
-
-# 复制依赖文件
+# 复制 go mod 文件
 COPY go.mod go.sum ./
 RUN go mod download
 
@@ -16,27 +13,35 @@ COPY . .
 # 构建二进制文件
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
     -ldflags="-w -s" \
-    -o worker ./cmd/worker
+    -o /tmp/worker ./cmd/worker
 
-# 运行阶段
-FROM alpine:3.18
+# 第二阶段：运行镜像（基于 node，包含 Claude Code CLI）
+FROM node:22-bookworm-slim
 
-# 安装运行时依赖
-RUN apk add --no-cache ca-certificates curl
+# 安装 Claude Code CLI
+ARG CLAUDE_VERSION=2.1.288
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION}
 
-# 创建非 root 用户
-RUN addgroup -g 1000 worker && \
-    adduser -D -u 1000 -G worker worker
+# 创建非 root 用户和工作目录
+RUN mkdir -p /work/config /work/data /work/history && \
+    chown -R node:node /work
 
-# 创建必要的目录
-RUN mkdir -p /root/.claude /var/lib/worker/cache && \
-    chown -R worker:worker /root/.claude /var/lib/worker
-
-# 复制二进制文件
-COPY --from=builder /build/worker /usr/local/bin/worker
+# 复制 Go 二进制文件
+COPY --from=builder /tmp/worker /usr/local/bin/worker
 
 # 切换到非 root 用户
-USER worker
+USER node
+WORKDIR /work
+
+# 环境变量
+ENV CLAUDE_CONFIG_DIR=/work/config \
+    CLAUDE_SECURESTORAGE_CONFIG_DIR=/work/config \
+    DISABLE_AUTOUPDATER=1 \
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
+    HISTORY_DIR=/work/history \
+    CACHE_DIR=/work/data/cache
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
@@ -45,5 +50,5 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
 # 暴露端口
 EXPOSE 8788
 
-# 启动命令
+# 启动服务
 ENTRYPOINT ["/usr/local/bin/worker"]

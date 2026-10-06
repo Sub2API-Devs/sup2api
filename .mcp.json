@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "codegraph": {
+      "type": "http",
+      "url": "http://127.0.0.1:64462/mcp/7df884e6-73c9-43f1-bc7b-db95b9d1a03c",
+      "headers": {
+        "Authorization": "Bearer 51eb0799efe243839944e621975cfd394fa84b1f7df94b378a155e9e2270f0f3"
+      }
+    },
+    "serena": {
+      "type": "http",
+      "url": "http://127.0.0.1:63657/mcp"
+    }
+  }
+}

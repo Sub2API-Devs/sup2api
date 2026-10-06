@@ -167,5 +167,24 @@ const bodyFeatures = [
         <span class="mt-2 block text-xs leading-5 text-gray-500">{{ t('ccgateway.policy.passUpstreamErrorsHint') }}</span>
       </span>
     </label>
+    <h5 class="font-semibold">
+      {{ t('ccgateway.policy.attachmentSourceTitle') }}
+    </h5>
+    <fieldset class="space-y-3 rounded-lg bg-gray-50 p-4 dark:bg-dark-800">
+      <legend class="float-left w-full text-sm font-medium">
+        {{ t('ccgateway.policy.attachmentSourceLegend') }}
+      </legend>
+      <label
+        v-for="source in ['client', 'gateway', 'both'] as const"
+        :key="source"
+        class="flex clear-both cursor-pointer items-center gap-2 text-sm"
+      >
+        <input v-model="policy.attachment_source" type="radio" :value="source" data-testid="attachment-source" />
+        <span class="min-w-0">
+          <span class="block font-medium">{{ t(`ccgateway.policy.attachmentSource_${source}`) }}</span>
+          <span class="block text-xs text-gray-500">{{ t(`ccgateway.policy.attachmentSource_${source}_hint`) }}</span>
+        </span>
+      </label>
+    </fieldset>
   </section>
 </template>

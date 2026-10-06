@@ -45,8 +45,10 @@ type Event struct {
 type Session struct {
 	ID           string // 客户端历史指纹
 	NativeID     string // Claude CLI 原生会话 ID
-	SnapshotPath string // 快照文件路径（rebuild 模式）
-	Mode         string // 模式：prefix-hit | rebuild | new
+	SnapshotPath string // 快照文件路径（JSONL history.jsonl）
+	Anchor       string // 恢复锚点（最后一个 assistant 消息的 UUID）
+	Fork         bool   // 是否需要 fork 会话
+	Mode         string // 模式：prefix-hit | fork | rebuild | new
 }
 
 // HealthStatus 健康状态
