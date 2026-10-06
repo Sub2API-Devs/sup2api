@@ -70,7 +70,14 @@ func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequ
 	now := p.now()
 	code := int(in.GetStatus())
 	msg := upstreamMessage(in.GetBodyPrefix())
-	resp := &pluginv1.ClassifyErrorResponse{ClientErrorType: errorTypeForStatus(code), ClientMessage: msg}
+	resp := &pluginv1.ClassifyErrorResponse{}
+	// An upstream error body reaches the client unchanged: no client type or
+	// message lets the host pass it through instead of rendering its own
+	// envelope. Only bodies that are not Anthropic errors are described.
+	if !gjson.GetBytes(in.GetBodyPrefix(), "error.type").Exists() {
+		resp.ClientErrorType = errorTypeForStatus(code)
+		resp.ClientMessage = msg
+	}
 	cooldown := func(d time.Duration, reason string) {
 		resp.Action = pluginv1.ClassifyErrorResponse_ACTION_FAILOVER
 		resp.AccountEffect = pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN

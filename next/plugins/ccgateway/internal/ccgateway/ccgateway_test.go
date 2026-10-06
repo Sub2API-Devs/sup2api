@@ -92,6 +92,22 @@ func TestErrorsPreserveCoreFailover(t *testing.T) {
 	}
 }
 
+// An Anthropic error body is returned unchanged; only other bodies are
+// described for the host to render.
+func TestUpstreamErrorBodyPassesThrough(t *testing.T) {
+	body := []byte(`{"type":"error","error":{"type":"invalid_request_error","message":"tools.0.custom.input_schema: JSON schema is invalid."}}`)
+	for _, code := range []int32{400, 429, 502, 529} {
+		r, e := New().ClassifyError(context.Background(), &pluginv1.ClassifyErrorRequest{Status: code, BodyPrefix: body})
+		if e != nil || r.GetClientErrorType() != "" || r.GetClientMessage() != "" || r.GetClientErrorCode() != "" || r.GetClientStatus() != 0 {
+			t.Fatalf("error %d rewritten: %v %v", code, r, e)
+		}
+	}
+	r, e := New().ClassifyError(context.Background(), &pluginv1.ClassifyErrorRequest{Status: 502, BodyPrefix: []byte("<html>bad gateway</html>")})
+	if e != nil || r.GetClientErrorType() != "api_error" {
+		t.Fatalf("non-JSON body: %v %v", r, e)
+	}
+}
+
 func TestAPIKeyCredentialsAndVirtualRouting(t *testing.T) {
 	p := New()
 	for _, raw := range []string{`{}`, `{"api_key":"short"}`, `{"api_key":"test-key-123","base_url":"http://example.com"}`, `{"api_key":"test-key-123","base_url":"https://user:pass@example.com"}`, `{"api_key":"test-key-123","base_url":"https://example.com?q=secret"}`, `{"api_key":"test-key-123","base_url":"https://example.com#"}`, `{"api_key":"test-key-123","extra":"bad"}`} {
