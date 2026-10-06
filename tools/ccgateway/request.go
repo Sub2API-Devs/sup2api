@@ -41,7 +41,9 @@ type Request struct {
 	FineGrainedTools bool
 	TTL              time.Duration
 	Native           map[string]bool
-	origin           []int // client array index of each parsed message
+	// Set from the request policy; see outboundRelay.
+	PassUpstreamErrors bool
+	origin             []int // client array index of each parsed message
 }
 
 var toolName = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)

@@ -204,6 +204,15 @@ func TestCacheExpiryAndCanonicalKeys(t *testing.T) {
 // Opt in with CCG_REAL_CLI=<absolute executable path>. All inference goes to
 // the local fixture with dummy credentials and a private configuration dir.
 const upstreamRejection = `{"type":"error","error":{"type":"invalid_request_error","message":"messages.1: role 'system' must precede an 'assistant' message or end the array; the directive-only form (content: [] with output_config) is accepted at any position"},"request_id":"req_fixture"}`
+const upstreamStreamError = `{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"},"request_id":"req_stream_fixture"}`
+
+func upstreamStatusBody(status int) string {
+	kind := "rate_limit_error"
+	if status == 529 {
+		kind = "overloaded_error"
+	}
+	return fmt.Sprintf(`{"type":"error","error":{"type":"%s","message":"fixture %d"},"request_id":"req_%d"}`, kind, status, status)
+}
 
 func TestRealCLI(t *testing.T) {
 	cli := os.Getenv("CCG_REAL_CLI")
@@ -222,6 +231,7 @@ func TestRealCLI(t *testing.T) {
 	var mu sync.Mutex
 	var requests []Object
 	var requestBetas []string
+	rateLimited := map[string]bool{}
 	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" || !strings.HasSuffix(r.URL.Path, "/messages") {
 			w.Header().Set("Content-Type", "application/json")
@@ -244,6 +254,41 @@ func TestRealCLI(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(400)
 			fmt.Fprint(w, upstreamRejection)
+			return
+		}
+		for _, status := range []int{429, 529} {
+			if bytes.Contains(b, []byte(fmt.Sprintf("UPSTREAM_STATUS_%d", status))) {
+				// Claude Code would back off and retry these itself.
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Retry-After", "0")
+				w.WriteHeader(status)
+				fmt.Fprint(w, upstreamStatusBody(status))
+				return
+			}
+		}
+		if at := bytes.Index(b, []byte("UPSTREAM_429_ONCE_")); at >= 0 {
+			marker := string(b[at : at+len("UPSTREAM_429_ONCE_")+5])
+			mu.Lock()
+			first := !rateLimited[marker]
+			rateLimited[marker] = true
+			mu.Unlock()
+			if first {
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Retry-After", "0")
+				w.WriteHeader(429)
+				fmt.Fprint(w, upstreamStatusBody(429))
+				return
+			}
+		}
+		if bytes.Contains(b, []byte("UPSTREAM_SSE_ERROR")) {
+			w.Header().Set("Content-Type", "text/event-stream")
+			start, _ := json.Marshal(Object{"type": "message_start", "message": Object{"id": "msg_sse_error", "type": "message", "role": "assistant", "model": v["model"], "content": []any{}, "stop_reason": nil, "stop_sequence": nil, "usage": Object{"input_tokens": 20, "output_tokens": 0}}})
+			fmt.Fprintf(w, "event: message_start\ndata: %s\n\n", start)
+			fmt.Fprint(w, "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n")
+			fmt.Fprint(w, "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"partial\"}}\n\n")
+			w.(http.Flusher).Flush()
+			time.Sleep(time.Second) // a streaming client has its first events by now
+			fmt.Fprintf(w, "event: error\ndata: %s\n\n", upstreamStreamError)
 			return
 		}
 		if capture := os.Getenv("CCG_CAPTURE_DIR"); capture != "" {
@@ -1085,6 +1130,24 @@ func TestRealCLI(t *testing.T) {
 			t.Fatalf("wire shape: %s", got)
 		}
 	})
+	// Upstream errors under the pass_upstream_errors policy (opt-in).
+	rawPost := func(t *testing.T, request Object, policy string) (*http.Response, []byte) {
+		t.Helper()
+		b, _ := json.Marshal(request)
+		httpRequest, _ := http.NewRequest("POST", gateway.URL+"/v1/messages", bytes.NewReader(b))
+		httpRequest.Header.Set("Content-Type", "application/json")
+		if policy != "" {
+			httpRequest.Header.Set(policyHeader, policy)
+		}
+		resp, err := http.DefaultClient.Do(httpRequest)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		out, _ := io.ReadAll(resp.Body)
+		return resp, out
+	}
+	passing := `{"unknown_beta":"ignore","unknown_field":"reject","allow_effort":true,"pass_upstream_errors":true}`
 	// The API's 400 for a restored request reaches the client as sent, and the
 	// CLI does not answer it with a reshaped retry.
 	for _, stream := range []bool{false, true} {
@@ -1095,13 +1158,7 @@ func TestRealCLI(t *testing.T) {
 			mu.Lock()
 			before := len(requests)
 			mu.Unlock()
-			b, _ := json.Marshal(request)
-			resp, err := http.Post(gateway.URL+"/v1/messages", "application/json", bytes.NewReader(b))
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer resp.Body.Close()
-			out, _ := io.ReadAll(resp.Body)
+			resp, out := rawPost(t, request, passing)
 			if resp.StatusCode != 400 || string(out) != upstreamRejection || !strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
 				t.Fatalf("client received %d %s", resp.StatusCode, out)
 			}
@@ -1112,6 +1169,85 @@ func TestRealCLI(t *testing.T) {
 			}
 		})
 	}
+	// Requests without client system messages: statuses Claude Code would back
+	// off on, and an error event inside a 200 stream, reach the client as the
+	// API sent them, after a single upstream request.
+	type upstreamCase struct {
+		marker, want string
+		status       int
+	}
+	for _, tc := range []upstreamCase{{"UPSTREAM_STATUS_429", upstreamStatusBody(429), 429}, {"UPSTREAM_STATUS_529", upstreamStatusBody(529), 529}, {"UPSTREAM_SSE_ERROR", upstreamStreamError, 529}} {
+		for _, stream := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s-stream=%v", strings.ToLower(tc.marker), stream), func(t *testing.T) {
+				request := basic()
+				request["messages"] = []any{Object{"role": "user", "content": tc.marker}}
+				request["stream"] = stream
+				mu.Lock()
+				before := len(requests)
+				mu.Unlock()
+				resp, out := rawPost(t, request, passing)
+				var official Object
+				_ = json.Unmarshal([]byte(tc.want), &official)
+				switch {
+				case resp.StatusCode == tc.status && string(out) == tc.want && !(stream && tc.marker == "UPSTREAM_SSE_ERROR"):
+					// Not yet streaming: the API's status and body.
+				case stream && resp.StatusCode == 200 && tc.marker == "UPSTREAM_SSE_ERROR":
+					// Streaming had begun: the API's error object as the error event.
+					errorEvent, _ := json.Marshal(Object{"type": "error", "error": official["error"]})
+					if !strings.Contains(string(out), "partial") || !strings.HasSuffix(string(out), "event: error\ndata: "+string(errorEvent)+"\n\n") || strings.Contains(string(out), "message_stop") {
+						t.Fatalf("stream ended with %s", out)
+					}
+				default:
+					t.Fatalf("client received %d %s", resp.StatusCode, out)
+				}
+				mu.Lock()
+				defer mu.Unlock()
+				if len(requests)-before != 1 {
+					t.Fatalf("upstream received %d requests", len(requests)-before)
+				}
+			})
+		}
+	}
+	// Default policy: Claude Code handles upstream errors itself. A 429 is
+	// retried by the CLI and the client gets the later success.
+	for _, stream := range []bool{false, true} {
+		t.Run(fmt.Sprintf("cli-handles-429-stream=%v", stream), func(t *testing.T) {
+			request := basic()
+			request["messages"] = []any{Object{"role": "user", "content": fmt.Sprintf("UPSTREAM_429_ONCE_%v", stream)}}
+			request["stream"] = stream
+			mu.Lock()
+			before := len(requests)
+			mu.Unlock()
+			resp, out := rawPost(t, request, "")
+			if resp.StatusCode != 200 || !strings.Contains(string(out), "fixture answer") {
+				t.Fatalf("client received %d %s", resp.StatusCode, out)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if len(requests)-before != 2 {
+				t.Fatalf("upstream received %d requests, want the 429 and the retry", len(requests)-before)
+			}
+		})
+	}
+	// Default policy, a client system message, and a 400 whose wording makes
+	// Claude Code turn system turns off and resend: the reshaped request
+	// cannot be restored, the relay refuses it and the client gets a 502 that
+	// names the cause, not the API's 400.
+	t.Run("cli-handles-400-with-system", func(t *testing.T) {
+		request := basic()
+		request["messages"] = []any{Object{"role": "user", "content": "q"}, Object{"role": "system", "content": "UPSTREAM_REJECT default"}}
+		mu.Lock()
+		before := len(requests)
+		mu.Unlock()
+		resp, out := rawPost(t, request, "")
+		mu.Lock()
+		forwarded := len(requests) - before
+		mu.Unlock()
+		t.Logf("client received %d %s; upstream received %d", resp.StatusCode, out, forwarded)
+		if resp.StatusCode != 502 || !strings.Contains(string(out), "cannot restore the client's system messages") || forwarded != 1 {
+			t.Fatalf("client received %d %s; upstream received %d", resp.StatusCode, out, forwarded)
+		}
+	})
 	if os.Getenv("CCG_CAPTURE_DIR") != "" {
 		hi := Object{"model": "claude-sonnet-4-6", "max_tokens": 128, "messages": []any{Object{"role": "user", "content": "hi"}}}
 		post(hi, "")

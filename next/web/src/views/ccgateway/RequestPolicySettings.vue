@@ -157,5 +157,15 @@ const bodyFeatures = [
     <p class="text-xs leading-5 text-gray-500">
       {{ t('ccgateway.policy.ignoreHint') }}
     </p>
+    <h5 class="font-semibold">
+      {{ t('ccgateway.policy.upstreamErrorsTitle') }}
+    </h5>
+    <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 p-4 dark:border-dark-700">
+      <input v-model="policy.pass_upstream_errors" type="checkbox" class="mt-1" data-testid="pass-upstream-errors" />
+      <span class="min-w-0"
+        ><span class="block text-sm font-medium">{{ t('ccgateway.policy.passUpstreamErrors') }}</span>
+        <span class="mt-2 block text-xs leading-5 text-gray-500">{{ t('ccgateway.policy.passUpstreamErrorsHint') }}</span>
+      </span>
+    </label>
   </section>
 </template>

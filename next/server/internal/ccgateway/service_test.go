@@ -119,6 +119,9 @@ func TestDBEncryptedAuditAndModelForward(t *testing.T) {
 		if json.Unmarshal([]byte(r.Header.Get("X-CCGateway-Request-Policy")), &policy) != nil || policy.UnknownBeta != "ignore" {
 			t.Error("trusted request policy not injected")
 		}
+		if !strings.Contains(r.Header.Get("X-CCGateway-Request-Policy"), `"pass_upstream_errors":false`) || policy.PassUpstreamErrors {
+			t.Error("request policy header lacks pass_upstream_errors=false")
+		}
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = w.Write([]byte("data: ok\n\n"))
 		w.(http.Flusher).Flush()

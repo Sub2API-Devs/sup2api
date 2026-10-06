@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,103 @@ import (
 func restoreFixture(t *testing.T, messages []any) *Request {
 	t.Helper()
 	return parsed(t, Object{"model": "claude-opus-5-5", "max_tokens": 64, "messages": messages})
+}
+
+// A request whose policy passes upstream errors to the client.
+func passingFixture(t *testing.T, messages []any) *Request {
+	t.Helper()
+	r := restoreFixture(t, messages)
+	r.PassUpstreamErrors = true
+	return r
+}
+
+func TestPassUpstreamErrorsPolicy(t *testing.T) {
+	body, _ := json.Marshal(basic())
+	for header, want := range map[string]bool{
+		"": false, // no policy header
+		`{"unknown_beta":"ignore","unknown_field":"reject","allow_effort":true}`: false, // field absent
+		`{"pass_upstream_errors":false}`:                                         false,
+		`{"pass_upstream_errors":true}`:                                          true,
+	} {
+		h := http.Header{}
+		if header != "" {
+			h.Set(policyHeader, header)
+		}
+		req, err := parsePolicyRequest(body, h)
+		if err != nil || req.PassUpstreamErrors != want {
+			t.Fatalf("%q: pass=%v err=%v", header, req != nil && req.PassUpstreamErrors, err)
+		}
+	}
+	h := http.Header{}
+	h.Set(policyHeader, `{"pass_upstream_errors":"yes"}`)
+	if _, err := parsePolicyRequest(body, h); err == nil {
+		t.Fatal("accepted a non-boolean pass_upstream_errors")
+	}
+	// Unknown policy fields are ignored, as before: an older gateway reads a
+	// newer policy the same way.
+	h.Set(policyHeader, `{"some_future_field":1}`)
+	if _, err := parsePolicyRequest(body, h); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// By default Claude Code handles upstream errors itself: the relay forwards
+// them unchanged, keeps nothing for the client, and does not stop the run.
+func TestOutboundRelayLeavesUpstreamErrorsToCLIByDefault(t *testing.T) {
+	official := `{"type":"error","error":{"type":"rate_limit_error","message":"fixture"}}`
+	streamed := "event: message_start\ndata: {\"type\":\"message_start\"}\n\nevent: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}\n\n"
+	forwarded := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		forwarded++
+		if r.URL.Query().Get("stream") == "1" {
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = io.WriteString(w, streamed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Retry-After", "1")
+		w.WriteHeader(429)
+		_, _ = io.WriteString(w, official)
+	}))
+	defer upstream.Close()
+	for _, system := range []bool{false, true} {
+		messages := []any{Object{"role": "user", "content": "q"}}
+		body := `{"messages":[{"role":"user","content":"q"}]}`
+		if system {
+			messages = append(messages, Object{"role": "system", "content": "s"})
+			body = `{"messages":[{"role":"user","content":"q"},{"role":"system","content":"env\n\ns"}]}`
+		}
+		relay, err := startOutboundRelay(restoreFixture(t, messages), []string{"ANTHROPIC_BASE_URL=" + upstream.URL})
+		if err != nil {
+			t.Fatal(err)
+		}
+		aborted := 0
+		relay.setAbort(func() { aborted++ })
+		for i := 0; i < 2; i++ { // the CLI's own retries are forwarded
+			response, err := http.Post(relay.URL+"/v1/messages", "application/json", strings.NewReader(body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, _ := io.ReadAll(response.Body)
+			response.Body.Close()
+			if response.StatusCode != 429 || string(data) != official || response.Header.Get("Retry-After") != "1" {
+				t.Fatalf("system=%v: CLI received %d %s", system, response.StatusCode, data)
+			}
+		}
+		response, err := http.Post(relay.URL+"/v1/messages?stream=1", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, _ := io.ReadAll(response.Body)
+		response.Body.Close()
+		if string(data) != streamed || aborted != 0 || relay.UpstreamError() != nil || relay.Failure() != nil {
+			t.Fatalf("system=%v: stream %q aborted %d kept %+v", system, data, aborted, relay.UpstreamError())
+		}
+		relay.Close()
+	}
+	if forwarded != 6 {
+		t.Fatalf("upstream received %d requests", forwarded)
+	}
 }
 
 func wireBody(t *testing.T, raw string) Object {
@@ -321,7 +419,6 @@ func TestRelayTextAvoidsCLIRecoveryWording(t *testing.T) {
 
 func TestOutboundRelayKeepsUpstreamErrorForClient(t *testing.T) {
 	official := `{"type":"error","error":{"type":"invalid_request_error","message":"messages.3: role 'system' must precede an 'assistant' message or end the array; the directive-only form (content: [] with output_config) is accepted at any position"},"request_id":"req_fixture"}`
-	limited := `{"type":"error","error":{"type":"rate_limit_error","message":"Number of request tokens has exceeded your per-minute rate limit"}}`
 	forwarded := 0
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		forwarded++
@@ -329,11 +426,6 @@ func TestOutboundRelayKeepsUpstreamErrorForClient(t *testing.T) {
 		case "ok":
 			w.Header().Set("Content-Type", "text/event-stream")
 			_, _ = io.WriteString(w, "event: message_stop\ndata: {}\n\n")
-		case "429":
-			w.Header().Set("Content-Type", "application/json")
-			w.Header().Set("Retry-After", "1")
-			w.WriteHeader(429)
-			_, _ = io.WriteString(w, limited)
 		default:
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Request-Id", "req_fixture")
@@ -342,7 +434,7 @@ func TestOutboundRelayKeepsUpstreamErrorForClient(t *testing.T) {
 		}
 	}))
 	defer upstream.Close()
-	req := restoreFixture(t, []any{Object{"role": "user", "content": "q"}, Object{"role": "system", "content": "s"}})
+	req := passingFixture(t, []any{Object{"role": "user", "content": "q"}, Object{"role": "system", "content": "s"}})
 	// Without an abort hook the relay answers the CLI at once; with one it
 	// stops the CLI (here: cancels the client request) and answers nothing.
 	var cancelClient context.CancelFunc
@@ -410,15 +502,120 @@ func TestOutboundRelayKeepsUpstreamErrorForClient(t *testing.T) {
 	}
 	relay.Close()
 
-	// Rate limits pass through for the CLI's own backoff; the error is kept in
-	// case the run fails, and a success passes through untouched.
+	// A success passes through untouched.
 	relay, aborted = start(true)
 	defer relay.Close()
-	status, cliBody, headers = post(relay, "/v1/messages?status=429", restorable)
-	if status != 429 || cliBody != limited || headers.Get("Retry-After") != "1" || *aborted != 0 || relay.UpstreamError() == nil || relay.UpstreamError().Status != 429 {
-		t.Fatalf("429: %d %s", status, cliBody)
-	}
-	if status, body, _ := post(relay, "/v1/messages?status=ok", restorable); status != 200 || body != "event: message_stop\ndata: {}\n\n" {
+	if status, body, _ := post(relay, "/v1/messages?status=ok", restorable); status != 200 || body != "event: message_stop\ndata: {}\n\n" || *aborted != 0 || relay.UpstreamError() != nil {
 		t.Fatalf("success changed: %d %s", status, body)
+	}
+}
+
+// Every non-2xx answer to a model request, with or without client system
+// messages, ends the run with the API's status and body; the API sees the
+// request once, the CLI never retries through the relay.
+func TestOutboundRelayPassesEveryUpstreamError(t *testing.T) {
+	for _, status := range []int{400, 401, 403, 404, 408, 409, 413, 429, 500, 503, 529} {
+		for _, system := range []bool{false, true} {
+			official := fmt.Sprintf(`{"type":"error","error":{"type":"fixture_%d","message":"fixture %d"},"request_id":"req_%d"}`, status, status, status)
+			forwarded := 0
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				forwarded++
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				w.Header().Set("Retry-After", "1")
+				w.WriteHeader(status)
+				_, _ = io.WriteString(w, official)
+			}))
+			messages := []any{Object{"role": "user", "content": "q"}}
+			body := `{"messages":[{"role":"user","content":"q"}]}`
+			if system {
+				messages = append(messages, Object{"role": "system", "content": "s"})
+				body = `{"messages":[{"role":"user","content":"q"},{"role":"system","content":"s"}]}`
+			}
+			relay, err := startOutboundRelay(passingFixture(t, messages), []string{"ANTHROPIC_BASE_URL=" + upstream.URL})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			aborted := 0
+			relay.setAbort(func() { aborted++; cancel() })
+			request, _ := http.NewRequestWithContext(ctx, "POST", relay.URL+"/v1/messages?beta=true", strings.NewReader(body))
+			if response, err := http.DefaultClient.Do(request); err == nil {
+				response.Body.Close()
+				t.Fatalf("%d: the CLI received an answer before it was stopped", status)
+			}
+			cancel()
+			// A retry the CLI might still attempt is refused, never forwarded.
+			retry, err := http.Post(relay.URL+"/v1/messages", "application/json", strings.NewReader(body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			retry.Body.Close()
+			kept := relay.UpstreamError()
+			if aborted != 1 || forwarded != 1 || retry.StatusCode != 400 || kept == nil || kept.Status != status || string(kept.Body) != official || kept.ContentType != "application/json; charset=utf-8" {
+				t.Fatalf("%d system=%v: aborted %d forwarded %d kept %+v", status, system, aborted, forwarded, kept)
+			}
+			relay.Close()
+			upstream.Close()
+		}
+	}
+}
+
+// An error event inside a 200 stream is kept with the API's status for its
+// type; the events before it reach the CLI, the error event does not.
+func TestOutboundRelayStopsAtStreamErrorEvent(t *testing.T) {
+	start := "event: message_start\ndata: {\"type\":\"message_start\"}\n\n"
+	errorData := `{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"},"request_id":"req_sse"}`
+	for _, tc := range []struct{ name, stream string }{
+		{"named", start + "event: error\ndata: " + errorData + "\n\n"},
+		{"crlf", strings.ReplaceAll(start, "\n", "\r\n") + "event: error\r\ndata: " + errorData + "\r\n\r\n"},
+		{"data-only", start + "data: " + errorData + "\n\n"},
+	} {
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/event-stream")
+			for _, part := range strings.SplitAfter(tc.stream, "\n") {
+				_, _ = io.WriteString(w, part) // split writes cross event boundaries
+				w.(http.Flusher).Flush()
+			}
+		}))
+		relay, err := startOutboundRelay(passingFixture(t, []any{Object{"role": "user", "content": "q"}}), []string{"ANTHROPIC_BASE_URL=" + upstream.URL})
+		if err != nil {
+			t.Fatal(err)
+		}
+		response, err := http.Post(relay.URL+"/v1/messages", "application/json", strings.NewReader(`{"messages":[]}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, _ := io.ReadAll(response.Body)
+		response.Body.Close()
+		kept := relay.UpstreamError()
+		if strings.Contains(string(data), "overloaded") || !strings.HasPrefix(tc.stream, string(data)) || len(data) == 0 || kept == nil || kept.Status != 529 || string(kept.Body) != errorData {
+			t.Fatalf("%s: CLI read %q, kept %+v", tc.name, data, kept)
+		}
+		relay.Close()
+		upstream.Close()
+	}
+	// Ordinary streams are untouched, including a final event without a
+	// trailing blank line.
+	plain := start + "event: message_stop\ndata: {\"type\":\"message_stop\"}"
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, plain)
+	}))
+	defer upstream.Close()
+	relay, _ := startOutboundRelay(passingFixture(t, []any{Object{"role": "user", "content": "q"}}), []string{"ANTHROPIC_BASE_URL=" + upstream.URL})
+	defer relay.Close()
+	response, err := http.Post(relay.URL+"/v1/messages", "application/json", strings.NewReader(`{"messages":[]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := io.ReadAll(response.Body)
+	response.Body.Close()
+	if string(data) != plain || relay.UpstreamError() != nil {
+		t.Fatalf("plain stream changed: %q", data)
+	}
+	for kind, want := range map[string]int{"invalid_request_error": 400, "authentication_error": 401, "billing_error": 402, "permission_error": 403, "not_found_error": 404, "request_too_large": 413, "rate_limit_error": 429, "api_error": 500, "timeout_error": 504, "overloaded_error": 529, "unknown": 500} {
+		if errorTypeStatus(kind) != want {
+			t.Fatalf("%s -> %d", kind, errorTypeStatus(kind))
+		}
 	}
 }

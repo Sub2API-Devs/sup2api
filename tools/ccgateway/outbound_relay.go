@@ -15,14 +15,20 @@ import (
 	"time"
 )
 
-// Outbound adaptation of the CLI's own model requests, on a loopback relay:
+// Every model request of the CLI passes a loopback relay:
 //   - thinking.display has no CLI setting; the relay adds it.
 //   - client system messages: Claude Code merges them with its own context
 //     into one system message per turn; the relay restores the client's
 //     messages (see restoreSystemMessages). A request that cannot be restored
 //     exactly is refused, never forwarded altered.
+//   - upstream errors, with the pass_upstream_errors policy: any non-2xx
+//     answer, or an error event inside a 200 stream, ends the run and goes to
+//     the API client as the API sent it. Claude Code does not get to back
+//     off, refresh, or reshape and retry. Without the policy (the default)
+//     Claude Code handles them as it would talking to the API directly.
 //
-// Every other field stays as the CLI wrote it.
+// Requests without client system messages keep their body (thinking.display
+// aside); every other field stays as the CLI wrote it.
 type outboundRelay struct {
 	path       string
 	URL        string
@@ -45,32 +51,19 @@ func (r *outboundRelay) setAbort(abort func()) {
 	r.abort = abort
 }
 
-// What the CLI reads when the relay refuses a request or the API rejects a
-// restored one. Neither may match Claude Code's 400 classifiers, which retry
-// with an altered request: no "system", "role", "cache_control", "thinking",
-// "effort", "not supported" or similar wording. With a Runner the CLI is
-// stopped before it reads them: Claude Code 2.1.288 also answers any 400 it
-// cannot classify by retrying without a beta header and counting a probe
-// failure in its persistent configuration.
+// What the CLI reads when the relay refuses a request or the API rejects one,
+// should it read anything before it is stopped. Neither may match Claude
+// Code's 400 classifiers, which retry with an altered request: no "system",
+// "role", "cache_control", "thinking", "effort", "not supported" or similar
+// wording.
 const (
 	relayRefusedMessage  = "ccgateway: the gateway refused to forward this request"
 	relayUpstreamMessage = "ccgateway: the upstream API rejected this request; the gateway returns its error"
 )
 
-// Statuses whose handling by Claude Code changes nothing in the request:
-// credential refresh (401/403) and backoff (408/409/429). They pass through;
-// the last one is still the run's error if the run fails.
-func cliHandledStatus(status int) bool {
-	switch status {
-	case 401, 403, 408, 409, 429:
-		return true
-	}
-	return false
-}
+type modelRequest struct{}
 
-type restoredRequest struct{}
-
-// The API's own error for a restored request, returned to the API client as is.
+// The API's own error, returned to the API client as is.
 type upstreamError struct {
 	Status      int
 	ContentType string
@@ -79,14 +72,24 @@ type upstreamError struct {
 
 func (e *upstreamError) Error() string { return fmt.Sprintf("upstream API returned HTTP %d", e.Status) }
 
-// UpstreamError is the API's last 4xx error for a restored request, if any.
+// UpstreamError is the API's error that ended the run, if any.
 func (r *outboundRelay) UpstreamError() *upstreamError {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.upstream
 }
 
-// stop ends the run on the first refusal or rejected request: later model
+// reject records the API's error (the first one ends the run) and stops.
+func (r *outboundRelay) reject(e *upstreamError, request *http.Request) {
+	r.mu.Lock()
+	if r.upstream == nil {
+		r.upstream = e
+	}
+	r.mu.Unlock()
+	r.stop(request)
+}
+
+// stop ends the run on the first refusal or upstream error: later model
 // requests are refused unforwarded, and the CLI is stopped before it can act
 // on the answer. Without a Runner the neutral answer is returned at once.
 func (r *outboundRelay) stop(request *http.Request) {
@@ -108,6 +111,123 @@ func (r *outboundRelay) isStopped() bool {
 	defer r.mu.Unlock()
 	return r.stopped
 }
+
+// HTTP status of the Messages API for an error type, for an error that
+// arrives inside a 200 stream. Unknown types are reported as api_error is.
+func errorTypeStatus(kind string) int {
+	switch kind {
+	case "invalid_request_error":
+		return 400
+	case "authentication_error":
+		return 401
+	case "billing_error":
+		return 402
+	case "permission_error":
+		return 403
+	case "not_found_error":
+		return 404
+	case "request_too_large":
+		return 413
+	case "rate_limit_error":
+		return 429
+	case "timeout_error":
+		return 504
+	case "overloaded_error":
+		return 529
+	}
+	return 500
+}
+
+// sseWatch forwards a model stream event by event and stops at an error
+// event, which is kept for the API client and never reaches the CLI.
+type sseWatch struct {
+	body    io.ReadCloser
+	relay   *outboundRelay
+	request *http.Request
+	pending []byte
+	ready   []byte
+	done    bool
+	err     error
+}
+
+func sseEventEnd(b []byte) (int, int) {
+	end, size := -1, 0
+	for _, sep := range []string{"\n\n", "\r\n\r\n", "\r\r"} {
+		if i := bytes.Index(b, []byte(sep)); i >= 0 && (end < 0 || i < end) {
+			end, size = i, len(sep)
+		}
+	}
+	return end, size
+}
+
+// The data of an error event: the "error" event name, or data whose type is
+// "error" (the Messages API sends both).
+func sseErrorPayload(event []byte) ([]byte, bool) {
+	name := ""
+	var data [][]byte
+	for _, line := range bytes.Split(bytes.ReplaceAll(event, []byte("\r\n"), []byte("\n")), []byte("\n")) {
+		line = bytes.TrimSuffix(line, []byte("\r"))
+		if v, ok := bytes.CutPrefix(line, []byte("event:")); ok {
+			name = string(bytes.TrimSpace(v))
+		} else if v, ok := bytes.CutPrefix(line, []byte("data:")); ok {
+			data = append(data, bytes.TrimPrefix(v, []byte(" ")))
+		}
+	}
+	payload := bytes.Join(data, []byte("\n"))
+	if name == "error" {
+		return payload, true
+	}
+	if decoded, err := decodeObject(payload); err == nil && str(decoded, "type") == "error" {
+		return payload, true
+	}
+	return nil, false
+}
+
+func (s *sseWatch) Read(p []byte) (int, error) {
+	for len(s.ready) == 0 {
+		if s.done {
+			if s.err != nil {
+				return 0, s.err
+			}
+			return 0, io.EOF
+		}
+		buf := make([]byte, 32<<10)
+		n, err := s.body.Read(buf)
+		s.pending = append(s.pending, buf[:n]...)
+		for {
+			end, size := sseEventEnd(s.pending)
+			if end < 0 {
+				break
+			}
+			event := s.pending[:end+size]
+			if payload, failed := sseErrorPayload(event); failed {
+				status := 500
+				if decoded, err := decodeObject(payload); err == nil {
+					inner, _ := decoded["error"].(Object)
+					status = errorTypeStatus(str(inner, "type"))
+				}
+				s.pending, s.done = nil, true
+				s.relay.reject(&upstreamError{Status: status, ContentType: "application/json", Body: append([]byte(nil), payload...)}, s.request)
+				break
+			}
+			s.ready = append(s.ready, event...)
+			s.pending = s.pending[end+size:]
+		}
+		if err != nil && !s.done {
+			s.done = true
+			if err == io.EOF {
+				s.ready = append(s.ready, s.pending...)
+				s.pending = nil
+			} else {
+				s.err = err
+			}
+		}
+	}
+	n := copy(p, s.ready)
+	s.ready = s.ready[n:]
+	return n, nil
+}
+func (s *sseWatch) Close() error { return s.body.Close() }
 
 var outboundRelayHandlers sync.Map
 
@@ -261,42 +381,40 @@ func startOutboundRelay(req *Request, env []string, internalBase ...string) (*ou
 		director(r)
 		r.Host = target.Host
 		r.Header.Del("X-Forwarded-For")
-		if r.Context().Value(restoredRequest{}) != nil {
+		if pass, _ := r.Context().Value(modelRequest{}).(bool); pass {
 			// Let the transport negotiate and decode compression, so an error
-			// body can be read and kept as the API sent it.
+			// body or event can be read and kept as the API sent it.
 			r.Header.Del("Accept-Encoding")
 		}
 	}
+	// Not an answer of the API: the CLI may retry, and if the run fails the
+	// gateway reports 502.
 	forward.ErrorHandler = func(w http.ResponseWriter, r *http.Request, e error) {
 		apiError(w, 502, "api_error", "Relay upstream unavailable")
 	}
-	// The API's error for a restored request goes to the API client as sent.
-	// Claude Code reads many 400 wordings, and any 400 it cannot classify, as
-	// a cue to change the request and retry (system turns, thinking, effort,
-	// cache_control, beta headers ...), which would alter the client's
-	// structure or lock a feature off. The run stops instead; should the CLI
-	// still read the answer, it has the same status and neutral wording.
+	// With pass_upstream_errors, any non-2xx answer to a model request goes to
+	// the API client as sent, and the run stops before Claude Code can back
+	// off, refresh credentials, or reshape the request and retry (it reads
+	// many 400 wordings, and any 400 it cannot classify, as such a cue).
+	// Should the CLI still read the answer, it has the same status and
+	// neutral wording. Without it, answers reach the CLI unchanged.
 	forward.ModifyResponse = func(resp *http.Response) error {
-		if resp.Request.Context().Value(restoredRequest{}) == nil || resp.StatusCode < 400 || resp.StatusCode >= 500 {
+		if pass, _ := resp.Request.Context().Value(modelRequest{}).(bool); !pass {
+			return nil
+		}
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
+				resp.Body = &sseWatch{body: resp.Body, relay: relay, request: resp.Request}
+			}
 			return nil
 		}
 		body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 		resp.Body.Close()
+		relay.reject(&upstreamError{Status: resp.StatusCode, ContentType: resp.Header.Get("Content-Type"), Body: body}, resp.Request)
 		if err != nil {
 			return err
 		}
-		relay.mu.Lock()
-		relay.upstream = &upstreamError{Status: resp.StatusCode, ContentType: resp.Header.Get("Content-Type"), Body: body}
-		relay.mu.Unlock()
-		if cliHandledStatus(resp.StatusCode) {
-			resp.Body = io.NopCloser(bytes.NewReader(body))
-			resp.ContentLength = int64(len(body))
-			resp.Header.Set("Content-Length", fmt.Sprint(len(body)))
-			resp.Header.Del("Content-Encoding")
-			return nil
-		}
-		relay.stop(resp.Request)
-		kind := "invalid_request_error"
+		kind := "api_error"
 		if decoded, err := decodeObject(body); err == nil {
 			if e, ok := decoded["error"].(Object); ok && str(e, "type") != "" {
 				kind = str(e, "type")
@@ -311,18 +429,22 @@ func startOutboundRelay(req *Request, env []string, internalBase ...string) (*ou
 		return nil
 	}
 	groups := req.systemGroups()
+	display := str(req.Thinking, "display")
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.URL.Path, path+"/") {
 			http.NotFound(w, r)
 			return
 		}
-		model := strings.HasSuffix(r.URL.Path, "/messages")
-		count := strings.HasSuffix(r.URL.Path, "/messages/count_tokens")
-		if r.Method == "POST" && model && relay.isStopped() {
+		model := r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/messages")
+		count := r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/messages/count_tokens")
+		if model && relay.isStopped() {
 			apiError(w, 400, "invalid_request_error", relayRefusedMessage)
 			return
 		}
-		if r.Method == "POST" && (model || count) {
+		if model {
+			r = r.WithContext(context.WithValue(r.Context(), modelRequest{}, req.PassUpstreamErrors))
+		}
+		if (model && (len(groups) > 0 || display != "")) || (count && len(groups) > 0) {
 			relay.mu.Lock()
 			relay.sequence++
 			sequence := relay.sequence
@@ -355,7 +477,6 @@ func startOutboundRelay(req *Request, env []string, internalBase ...string) (*ou
 				relay.mu.Lock()
 				relay.restored++
 				relay.mu.Unlock()
-				r = r.WithContext(context.WithValue(r.Context(), restoredRequest{}, true))
 			}
 			r.Body = io.NopCloser(bytes.NewReader(adapted))
 			if req.diagnostic != nil {

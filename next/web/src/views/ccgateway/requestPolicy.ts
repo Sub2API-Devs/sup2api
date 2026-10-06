@@ -5,6 +5,7 @@ export interface RequestPolicy {
   allow_fast: boolean
   tool_search?: string
   allow_effort: boolean
+  pass_upstream_errors: boolean
   betas: Array<{ name: string; mapping: BetaMapping }>
 }
 export function defaultRequestPolicy(): RequestPolicy {
@@ -13,6 +14,7 @@ export function defaultRequestPolicy(): RequestPolicy {
     unknown_field: 'reject',
     allow_fast: false,
     allow_effort: true,
+    pass_upstream_errors: false,
     tool_search: 'request',
     betas: [
       { name: 'interleaved-thinking-2025-05-14', mapping: 'forward' },

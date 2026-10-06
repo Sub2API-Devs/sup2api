@@ -198,31 +198,29 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 		env = os.Environ()
 	}
 	env = r.Proxy.Environment(env)
-	// Client system messages and thinking.display need the outbound relay;
-	// a run whose relay refused a model request fails with that cause.
+	// Every model request passes the outbound relay: it restores client system
+	// messages, adds thinking.display, and with pass_upstream_errors ends the
+	// run on any upstream error, which the gateway returns as the API sent it.
 	groups := req.systemGroups()
-	var relay *outboundRelay
-	if str(req.Thinking, "display") != "" || len(groups) > 0 {
-		// Assign the named results: the deferred check below must set them.
-		relay, err = startOutboundRelay(req, env, r.InternalBaseURL)
-		if err != nil {
-			return nil, err
+	// Assign the named results: the deferred check below must set them.
+	relay, err := startOutboundRelay(req, env, r.InternalBaseURL)
+	if err != nil {
+		return nil, err
+	}
+	// A refusal, or an upstream error passed to the client, ends the run before
+	// the CLI can back off, refresh, or reshape the request and retry.
+	relay.setAbort(cancel)
+	defer relay.Close()
+	defer func() {
+		if failure := relay.Failure(); failure != nil {
+			result, err = nil, failure
+			return
 		}
-		// A refused or rejected model request ends the run before the CLI
-		// can react to the answer with a reshaped retry.
-		relay.setAbort(cancel)
-		defer relay.Close()
-		defer func() {
-			if failure := relay.Failure(); failure != nil {
-				result, err = nil, failure
-				return
-			}
-			// A failed run reports the API's own error for a restored request;
-			// a later success (the CLI retries 429 and 5xx) wins.
-			if upstream := relay.UpstreamError(); err != nil && upstream != nil && ctx.Err() == nil {
-				result, err = nil, upstream
-			}
-		}()
+		if upstream := relay.UpstreamError(); upstream != nil && ctx.Err() == nil {
+			result, err = nil, upstream
+		}
+	}()
+	{
 		noProxy := environmentValue(env, "NO_PROXY")
 		if noProxy == "" {
 			noProxy = environmentValue(env, "no_proxy")

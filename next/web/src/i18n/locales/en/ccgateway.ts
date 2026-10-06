@@ -85,6 +85,10 @@ export default {
     effort: 'Allow clients to set effort',
     effortHint:
       'Maps output_config.effort to Claude Code effort, such as low, medium or high. When disabled, the unsupported-parameter policy applies.',
+    upstreamErrorsTitle: 'Handling upstream errors',
+    passUpstreamErrors: 'Return upstream errors directly to clients',
+    passUpstreamErrorsHint:
+      'When enabled, any error returned by the official API (including 401, 429, 529 and errors in the middle of a stream) is returned to the client immediately with the official status code and error body unchanged; Claude Code no longer retries, backs off or refreshes authorization. When disabled (default), Claude Code handles errors itself and only returns an error after it finally fails. When enabled, the caller or gateway is responsible for retries and account switching.',
     unknownBeta: 'Handling unsupported Beta headers',
     unknownField: 'Unsupported parameters',
     reject: 'Return error (400)',

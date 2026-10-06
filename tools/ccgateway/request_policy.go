@@ -24,6 +24,9 @@ type RequestPolicy struct {
 	ToolSearch   string     `json:"tool_search,omitempty"`
 	AllowEffort  bool       `json:"allow_effort"`
 	Betas        []BetaRule `json:"betas"`
+	// Upstream errors end the run and reach the client as the API sent them,
+	// instead of being handled (retried, backed off) by Claude Code.
+	PassUpstreamErrors bool `json:"pass_upstream_errors"`
 }
 
 func defaultRequestPolicy() RequestPolicy {
@@ -162,6 +165,7 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 	req.Fast = fast
 	req.Effort = effort
 	req.JSONSchema = schema
+	req.PassUpstreamErrors = p.PassUpstreamErrors
 	req.ToolSearch = p.ToolSearch
 	if req.ToolSearch == "request" {
 		req.ToolSearch = "false"

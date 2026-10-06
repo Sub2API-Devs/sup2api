@@ -11,6 +11,7 @@ means no client beta is allowlisted. Missing legacy policy uses these defaults:
   "unknown_field": "reject",
   "allow_fast": false,
   "allow_effort": true,
+  "pass_upstream_errors": false,
   "betas": [
     {"name": "claude-code-20250219", "mapping": "native"},
     {"name": "oauth-2025-04-20", "mapping": "native"},
@@ -47,6 +48,13 @@ Absent `speed` explicitly keeps standard mode, preventing a previous session's F
 setting from leaking into another request. Actual access and pricing remain subject
 to the upstream account/model. `allow_effort` controls `output_config.effort`, mapped
 to `--effort` with `low`, `medium`, `high`, `xhigh`, or `max`.
+
+`pass_upstream_errors` (default `false`) selects who handles upstream errors.
+`false` leaves them to Claude Code (its retries, backoff and credential refresh);
+a request that still fails returns the gateway's error. `true` stops Claude Code
+at the first upstream non-2xx response or stream `error` event and returns the
+upstream status and body to the client unchanged; retries and account switching
+are then the caller's or the host's responsibility.
 
 Arbitrary extra bodies, environment variables, structured-output formats, server
 tools and context-management fields are not exposed by this policy. The runner

@@ -73,6 +73,10 @@ export default {
       '默认关闭：忽略 speed 参数，使用普通速度。开启后，speed: fast 请求快速模式，speed: standard 请求普通模式。仅发送 Fast Beta 不会开启快速模式；可用性与费用由账号和模型决定。',
     effort: '允许客户端调整思考强度',
     effortHint: '将 output_config.effort 转成 Claude Code 的思考强度设置，例如 low、medium、high。关闭后按“不支持的参数”策略处理这个字段。',
+    upstreamErrorsTitle: '上游错误如何处理',
+    passUpstreamErrors: '上游错误直接返回给客户端',
+    passUpstreamErrorsHint:
+      '开启后，官方返回错误（包括 401、429、529 及流式中途的错误）时，立即把官方的状态码和错误内容原样返回给客户端，Claude Code 不再自动重试、退避或刷新授权。关闭（默认）时由 Claude Code 自行处理，最终失败才返回错误。开启后需要由调用方或网关负责重试和换号。',
     unknownBeta: '不支持的 Beta 请求头如何处理',
     unknownField: '遇到不支持的参数',
     reject: '返回错误（400）',
