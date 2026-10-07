@@ -11,8 +11,9 @@ interface RuntimeImages { app: string; egress: string; controller: string }
 interface RemoteConfig {
   account_runtimes: boolean; mode: 'disabled' | 'local' | 'ssh'; host: string; port: number; user: string; auth_mode: 'password' | 'private_key'
   host_key_fingerprint: string; has_password: boolean; has_private_key: boolean; has_passphrase: boolean; has_admin_key: boolean; has_api_key: boolean
-  request_policy?: RequestPolicy
+  request_policy?: Partial<RequestPolicy>
   images?: Partial<RuntimeImages> | null
+  effective_images?: Partial<RuntimeImages>
   network?: { pool: string; allocation: 'random' | 'sequential' }
 }
 type Action = 'status' | 'start' | 'stop' | 'restart' | 'logs'
@@ -24,7 +25,8 @@ const IMAGE_KEYS = ['app', 'egress', 'controller'] as const
 // Same rule as the core: repository[:tag][@sha256:digest], or a local image id.
 const IMAGE_RE = /^(?:[a-z0-9][a-z0-9._/-]{0,127}(?::[A-Za-z0-9._-]{1,128})?(?:@sha256:[0-9a-f]{64})?|sha256:[0-9a-f]{64})$/
 const requestPolicy = ref<RequestPolicy>(defaultRequestPolicy())
-const policyChanged = computed(() => JSON.stringify(requestPolicy.value) !== JSON.stringify(saved.value?.request_policy || defaultRequestPolicy()))
+const normalizePolicy = (policy?: Partial<RequestPolicy>): RequestPolicy => ({ ...defaultRequestPolicy(), ...policy, attachment_source: policy?.attachment_source || 'client', attachment_sources: { ...(policy?.attachment_sources || {}) }, unknown_client_attachment: policy?.unknown_client_attachment || 'pass', unknown_gateway_attachment: policy?.unknown_gateway_attachment || 'pass' })
+const policyChanged = computed(() => JSON.stringify(requestPolicy.value) !== JSON.stringify(normalizePolicy(saved.value?.request_policy)))
 const images = reactive<RuntimeImages>({ app: '', egress: '', controller: '' })
 const network = reactive({ pool: '10.0.0.0/8', allocation: 'random' as 'random' | 'sequential' })
 const networkChanged = computed(() => network.pool.trim() !== (saved.value?.network?.pool || '10.0.0.0/8') || network.allocation !== (saved.value?.network?.allocation || 'random'))
@@ -50,7 +52,7 @@ watch(dirty, () => { pending.value = null; output.value = '' })
 function clearSecrets() { secrets.password = ''; secrets.private_key = ''; secrets.passphrase = ''; secrets.admin_key = ''; secrets.api_key = '' }
 function assign(config: RemoteConfig) {
   saved.value = config
-  requestPolicy.value = structuredClone(config.request_policy || defaultRequestPolicy())
+  requestPolicy.value = structuredClone(normalizePolicy(config.request_policy))
   for (const key of Object.keys(defaults) as Array<keyof typeof defaults>) Object.assign(form, { [key]: config[key] ?? defaults[key] })
   for (const key of IMAGE_KEYS) images[key] = config.images?.[key] || ''
   network.pool = config.network?.pool || '10.0.0.0/8'
@@ -152,7 +154,7 @@ onBeforeUnmount(clearSecrets)
           <p class="text-xs text-gray-500">{{ t('ccgateway.remote.networkHint') }}</p>
           <p class="text-sm font-medium">{{ t('ccgateway.remote.images') }}</p>
           <div class="grid gap-3 sm:grid-cols-3">
-            <label v-for="key in IMAGE_KEYS" :key="key" class="block text-sm">{{ t(`ccgateway.remote.image${key[0].toUpperCase()}${key.slice(1)}`) }}<input v-model="images[key]" autocomplete="off" spellcheck="false" class="input mt-1 w-full font-mono text-xs" :data-testid="`image-${key}`" /></label>
+            <label v-for="key in IMAGE_KEYS" :key="key" class="block min-w-0 text-sm">{{ t(`ccgateway.remote.image${key[0].toUpperCase()}${key.slice(1)}`) }}<input v-model="images[key]" autocomplete="off" spellcheck="false" class="input mt-1 w-full font-mono text-xs" :data-testid="`image-${key}`" /><span v-if="saved.effective_images?.[key]" class="mt-1 block break-all text-xs text-gray-500">{{ t('ccgateway.remote.imageEffective', { image: saved.effective_images[key] }) }}</span></label>
           </div>
           <p class="text-xs text-gray-500">{{ t('ccgateway.remote.imagesHint') }}</p>
         </div>

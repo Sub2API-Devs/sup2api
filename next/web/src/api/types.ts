@@ -324,6 +324,10 @@ export interface CcgDraft {
 
 /** GET .../status of a draft or account runtime; status and reason are English codes (ccgateway.status.* / ccgateway.reason.*). */
 export interface CcgRuntimeStatus {
+	current_image?: string
+	target_image?: string
+	image_update_available?: boolean
+	target_image_available?: boolean
   status: 'creating' | 'ready' | 'blocked' | 'pending' | (string & {})
   /** Why a blocked runtime is stopped (no_proxy, proxy_disabled, account_disabled, ...). */
   reason?: string

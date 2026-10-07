@@ -611,9 +611,13 @@ func (s *Service) serveStatus(c *gin.Context, ctx context.Context, d accountDesi
 		return
 	}
 	var status struct {
-		Container string `json:"container"`
-		Status    string `json:"status"`
-		Revision  string `json:"revision"`
+		Container            string `json:"container"`
+		Status               string `json:"status"`
+		Revision             string `json:"revision"`
+		CurrentImage         string `json:"current_image"`
+		TargetImage          string `json:"target_image"`
+		ImageUpdateAvailable bool   `json:"image_update_available"`
+		TargetImageAvailable bool   `json:"target_image_available"`
 	}
 	if json.Unmarshal(raw, &status) != nil {
 		httpapi.Fail(c, reasonError(core.ErrUnavailable, "runtime_unavailable"))
@@ -630,5 +634,6 @@ func (s *Service) serveStatus(c *gin.Context, ctx context.Context, d accountDesi
 	if status.Revision != d.Revision {
 		status.Status = "pending"
 	}
-	httpapi.OK(c, map[string]string{"account_id": accountID, "key": d.Key, "container": status.Container, "status": status.Status, "revision": status.Revision})
+	httpapi.OK(c, map[string]any{"account_id": accountID, "key": d.Key, "container": status.Container, "status": status.Status, "revision": status.Revision,
+		"current_image": status.CurrentImage, "target_image": status.TargetImage, "image_update_available": status.ImageUpdateAvailable, "target_image_available": status.TargetImageAvailable})
 }

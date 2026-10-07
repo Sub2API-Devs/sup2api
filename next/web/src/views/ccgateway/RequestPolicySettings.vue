@@ -1,8 +1,15 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { defaultRequestPolicy, type RequestPolicy } from './requestPolicy'
+import { attachmentTypes, defaultRequestPolicy, type AttachmentType, type AttachmentSource, type RequestPolicy } from './requestPolicy'
 const policy = defineModel<RequestPolicy>({ required: true })
 const { t } = useI18n()
+function setAttachmentSource(type: AttachmentType, event: Event) {
+ const value = (event.target as HTMLSelectElement).value
+ const sources = { ...policy.value.attachment_sources }
+ if (value) sources[type] = value as AttachmentSource
+ else delete sources[type]
+ policy.value = { ...policy.value, attachment_sources: sources }
+}
 const supportedBetas = defaultRequestPolicy().betas
 const bodyFeatures = [
   { id: 'model', field: 'model' },
@@ -105,6 +112,12 @@ const bodyFeatures = [
         <option v-if="policy.tool_search?.startsWith('auto:')" :value="policy.tool_search">{{ policy.tool_search }}</option>
       </select>
     </label>
+    <label class="block rounded-lg border border-gray-200 p-4 dark:border-dark-700">
+      <span class="block text-sm font-medium">{{ t('ccgateway.policy.customToolPrefix') }}</span>
+      <input v-model="policy.custom_tool_prefix" class="input mt-3 w-full" type="text" maxlength="32" placeholder="ccgateway" data-testid="custom-tool-prefix" />
+      <span class="mt-2 block text-xs leading-5 text-gray-500">{{ t('ccgateway.policy.customToolPrefixHint') }}</span>
+      <code class="mt-2 block text-xs">mcp__{{ policy.custom_tool_prefix || 'ccgateway' }}__lookup</code>
+    </label>
     <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-dark-700">
       <table class="w-full text-left text-sm">
         <thead class="bg-gray-50 text-xs text-gray-500 dark:bg-dark-800">
@@ -186,5 +199,23 @@ const bodyFeatures = [
         </span>
       </label>
     </fieldset>
+    <div class="space-y-3" data-testid="attachment-overrides">
+      <p class="text-xs text-gray-500">{{ t('ccgateway.policy.attachmentRulesHint') }}</p>
+      <label v-for="kind in attachmentTypes" :key="kind" class="flex items-center justify-between gap-4 text-sm">
+        <span>{{ t('ccgateway.policy.attachmentType_' + kind) }}</span>
+        <select :value="policy.attachment_sources?.[kind] || ''" :data-testid="'attachment-' + kind" class="rounded border p-2 dark:bg-dark-800" @change="setAttachmentSource(kind, $event)">
+          <option value="">{{ t('ccgateway.policy.attachmentInherit') }}</option>
+          <option v-for="source in ['client', 'gateway', 'both']" :key="source" :value="source">{{ t('ccgateway.policy.attachmentSource_' + source) }}</option>
+        </select>
+      </label>
+      <label v-for="side in ['client', 'gateway'] as const" :key="side" class="flex items-center justify-between gap-4 text-sm">
+        <span>{{ t('ccgateway.policy.unknownAttachment_' + side) }}</span>
+        <select v-model="policy[side === 'client' ? 'unknown_client_attachment' : 'unknown_gateway_attachment']" :data-testid="'unknown-attachment-' + side" class="rounded border p-2 dark:bg-dark-800">
+          <option value="pass">{{ t('ccgateway.policy.attachmentPass') }}</option>
+          <option value="ignore">{{ t('ccgateway.policy.attachmentIgnore') }}</option>
+        </select>
+      </label>
+      <p class="text-xs text-gray-500">{{ t('ccgateway.policy.attachmentProtectedHint') }}</p>
+    </div>
   </section>
 </template>

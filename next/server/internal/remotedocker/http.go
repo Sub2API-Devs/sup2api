@@ -32,6 +32,26 @@ func newHTTPClient(ctx context.Context, cfg Config, target string, handshakeTime
 	if ip == nil || !ip.IsLoopback() || err != nil || pn < 1 || pn > 65535 {
 		return nil, nil, errors.New("HTTP forwarding requires a fixed loopback target")
 	}
+	return newFixedHTTPClient(ctx, cfg, target, handshakeTimeout)
+}
+
+// NewAccountHTTPClient reaches one controller-selected business endpoint. The
+// general loopback forwarding API remains unchanged. Only private IPv4 port
+// 8787 is accepted; HTTP redirects and any second destination remain rejected.
+func NewAccountHTTPClient(ctx context.Context, cfg Config, target string) (*http.Client, func() error, error) {
+	if !accountHTTPAddress(target) {
+		return nil, nil, errors.New("invalid account HTTP endpoint")
+	}
+	return newFixedHTTPClient(ctx, cfg, target, timeout)
+}
+
+func accountHTTPAddress(target string) bool {
+	host, port, err := net.SplitHostPort(target)
+	ip := net.ParseIP(host)
+	return err == nil && port == "8787" && ip != nil && ip.To4() != nil && ip.IsPrivate()
+}
+
+func newFixedHTTPClient(ctx context.Context, cfg Config, target string, handshakeTimeout time.Duration) (*http.Client, func() error, error) {
 	addr, err := address(cfg.Host, cfg.Port)
 	if err != nil {
 		return nil, nil, err

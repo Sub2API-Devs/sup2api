@@ -10,3 +10,6 @@ deploy/keys
 e2e/.cache
 web/dist
 .git
+# Independently built CCGateway services are not part of the core image.
+# build-go.sh removes these companion modules from its build workspace.
+plugins/ccgateway/companions/

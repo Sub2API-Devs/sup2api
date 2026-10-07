@@ -1,3 +1,6 @@
+export const attachmentTypes = ['environment', 'model', 'total_tokens_reminder', 'session_context', 'date'] as const
+export type AttachmentType = typeof attachmentTypes[number]
+export type AttachmentSource = 'client' | 'gateway' | 'both'
 export type BetaMapping = 'forward' | 'fine_grained_tools' | 'fast' | 'tool_search'
 export interface RequestPolicy {
   unknown_beta: 'reject' | 'ignore'
@@ -7,6 +10,10 @@ export interface RequestPolicy {
   allow_effort: boolean
   pass_upstream_errors: boolean
   attachment_source: 'client' | 'gateway' | 'both'
+  attachment_sources: Partial<Record<AttachmentType, AttachmentSource>>
+  unknown_client_attachment: 'pass' | 'ignore'
+  unknown_gateway_attachment: 'pass' | 'ignore'
+  custom_tool_prefix: string
   betas: Array<{ name: string; mapping: BetaMapping }>
 }
 export function defaultRequestPolicy(): RequestPolicy {
@@ -17,6 +24,10 @@ export function defaultRequestPolicy(): RequestPolicy {
     allow_effort: true,
     pass_upstream_errors: false,
     attachment_source: 'client',
+    attachment_sources: {},
+    unknown_client_attachment: 'pass',
+    unknown_gateway_attachment: 'pass',
+    custom_tool_prefix: 'ccgateway',
     tool_search: 'request',
     betas: [
       { name: 'interleaved-thinking-2025-05-14', mapping: 'forward' },
@@ -31,9 +42,13 @@ export function defaultRequestPolicy(): RequestPolicy {
 }
 export function validRequestPolicy(p: RequestPolicy): boolean {
   return (
+    (!p.custom_tool_prefix || (/^[A-Za-z0-9_-]{1,32}$/.test(p.custom_tool_prefix) && !p.custom_tool_prefix.includes('__'))) &&
     (!p.tool_search || ['request', 'false', 'true', 'auto'].includes(p.tool_search) || /^auto:([1-9][0-9]?|100)$/.test(p.tool_search)) &&
     ['reject', 'ignore'].includes(p.unknown_beta) &&
     ['reject', 'ignore'].includes(p.unknown_field) &&
-    ['client', 'gateway', 'both'].includes(p.attachment_source)
+    ['client', 'gateway', 'both'].includes(p.attachment_source) &&
+    ['pass', 'ignore'].includes(p.unknown_client_attachment) &&
+    ['pass', 'ignore'].includes(p.unknown_gateway_attachment) &&
+    Object.entries(p.attachment_sources).every(([k, v]) => attachmentTypes.includes(k as AttachmentType) && ['client', 'gateway', 'both'].includes(v))
   )
 }

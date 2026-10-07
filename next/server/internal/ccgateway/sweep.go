@@ -22,7 +22,7 @@ var (
 	draftIdle    = 15 * time.Minute // since last_seen_at
 	draftMaxAge  = 2 * time.Hour    // since created_at
 	orphanAge    = 15 * time.Minute // controller-only draft runtimes
-	retiredGrace = 10 * time.Minute // since retired_at
+	retiredGrace = 70 * time.Minute // longer than the one-hour model request deadline
 )
 
 const sweepLockKey = "ccgateway:drafts:sweep"

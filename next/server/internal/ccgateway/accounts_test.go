@@ -54,20 +54,32 @@ func TestAccountProxyReconcileAndRequestIsolation(t *testing.T) {
 			w.Write([]byte(`{}`))
 			return
 		}
-		if r.URL.Path != "/accounts/1/v1/messages" {
-			t.Errorf("wrong account route %s", r.URL.Path)
+		if r.URL.Path != "/accounts/1/connection" || r.Method != "GET" {
+			t.Errorf("wrong control route %s", r.URL.Path)
 		}
 		if r.Header.Get("X-CCG-Revision") != applied {
 			w.WriteHeader(409)
 			return
 		}
-		if r.Header.Get("x-api-key") != "" {
-			t.Error("forwarded caller credential")
-		}
-		calls++
-		w.Write([]byte(`{"ok":true}`))
+		_ = json.NewEncoder(w).Encode(accountConnection{IP: "10.52.74.181", Port: 8787, Key: strings.Repeat("k", 32), Revision: applied})
+
 	}))
 	defer server.Close()
+	s.openAccount = func(_ context.Context, _ Config, target string) (*http.Client, func() error, error) {
+		if target != "10.52.74.181:8787" {
+			t.Error("wrong direct target", target)
+		}
+		return &http.Client{Transport: accountTransportFunc(func(r *http.Request) (*http.Response, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			if r.URL.Path != "/v1/messages" || r.Header.Get("x-api-key") != strings.Repeat("k", 32) || r.Header.Get("Authorization") != "" || r.Header.Get("X-CCG-Revision") != "" {
+				t.Error("direct model authentication or endpoint incorrect")
+			}
+			calls++
+			return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+		})}, func() error { return nil }, nil
+	}
+
 	t.Setenv("CCGATEWAY_URL", server.URL)
 	cfg, _ := json.Marshal(Config{Mode: "local", AccountRuntimes: true, AdminKey: "controller-secret"})
 	encrypted, _ := cipher.Encrypt(cfg, configAAD)

@@ -9,7 +9,7 @@ on:
   push:
     branches: [main, feat/next-platform]
     paths:
-      - 'tools/ccgateway/**'
+      - 'next/plugins/ccgateway/companions/**'
       - '.github/workflows/ccgateway-images.yml'
   workflow_dispatch:
 
@@ -28,18 +28,28 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version-file: tools/ccgateway/go.mod
+          go-version-file: next/plugins/ccgateway/companions/go.mod
       - name: ccgateway (Go)
-        working-directory: tools/ccgateway
+        working-directory: next/plugins/ccgateway/companions
         run: |
           test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
           go vet ./...
           go test ./...
+      - name: account Worker (Go)
+        working-directory: next/plugins/ccgateway/companions/worker
+        run: |
+          go vet ./...
+          go test ./...
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Mod attachment policy
+        run: node --test next/plugins/ccgateway/companions/engine/attachment_policy_mod_test.mjs
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: controller (Python)
-        working-directory: tools/ccgateway/runtime
+        working-directory: next/plugins/ccgateway/companions/controller
         run: |
           pip install -r requirements.txt
           python -m unittest -v test_network test_headers $( [ -f test_manager.py ] && echo test_manager )
@@ -52,14 +62,14 @@ jobs:
       matrix:
         include:
           - name: ccgateway-app
-            context: tools/ccgateway
-            file: tools/ccgateway/Dockerfile
+            context: next/plugins/ccgateway/companions
+            file: next/plugins/ccgateway/companions/worker/Dockerfile
           - name: ccgateway-egress
-            context: tools/ccgateway/runtime
-            file: tools/ccgateway/runtime/Dockerfile.egress
+            context: next/plugins/ccgateway/companions/egress
+            file: next/plugins/ccgateway/companions/egress/Dockerfile
           - name: ccgateway-controller
-            context: tools/ccgateway/runtime
-            file: tools/ccgateway/runtime/Dockerfile.controller
+            context: next/plugins/ccgateway/companions/controller
+            file: next/plugins/ccgateway/companions/controller/Dockerfile
     steps:
       - uses: actions/checkout@v6
       - uses: docker/setup-buildx-action@v3

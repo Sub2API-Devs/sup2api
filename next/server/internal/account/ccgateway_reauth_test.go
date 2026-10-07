@@ -44,6 +44,17 @@ func (c *reauthController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	key, path := m[1], m[2]
 	switch {
+	case path == "migrate-auth" && r.Method == "POST":
+		var body struct {
+			Source string `json:"source"`
+		}
+		if json.NewDecoder(r.Body).Decode(&body) != nil || !c.loggedIn[body.Source] || body.Source == key {
+			w.WriteHeader(400)
+			return
+		}
+		c.calls = append(c.calls, "MIGRATE "+body.Source+" "+key)
+		c.loggedIn[key] = true
+		_, _ = w.Write([]byte(`{"migrated":true}`))
 	case path == "" && r.Method == "DELETE":
 		if !strings.HasPrefix(key, "d") && r.Header.Get("X-CCG-Delete-Account") != key {
 			w.WriteHeader(405)
@@ -71,6 +82,14 @@ func (c *reauthController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": status, "revision": c.revision[key], "container": "ccg-" + key})
 	case path == "admin/status":
 		_ = json.NewEncoder(w).Encode(map[string]any{"healthy": true, "logged_in": c.loggedIn[key]})
+	case path == "connection":
+		// This account lifecycle fixture has no private business endpoint.
+		// Check the requested revision, then explicitly report it unavailable.
+		if r.Header.Get("X-CCG-Revision") == "" || r.Header.Get("X-CCG-Revision") != c.revision[key] {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusConflict)
 	default:
 		_, _ = w.Write([]byte(`{}`))
 	}
@@ -280,8 +299,9 @@ func TestCCGatewayReauthorize(t *testing.T) {
 	if err := e.db.Pool.QueryRow(ctx, `SELECT account_id FROM ccgateway_runtimes WHERE key=$1 AND retired_at IS NOT NULL`, itoa(id)).Scan(&retiredAccount); err != nil || retiredAccount != nil {
 		t.Fatalf("old runtime not retired: %v %v", retiredAccount, err)
 	}
-	// The new runtime was configured as the account's before the commit
-	// returned: model requests go there at once, without a 409 window.
+	// The new runtime was configured before commit returned. Model routing
+	// discovers that runtime's direct endpoint, never the retired account key.
+	// The ccgateway package separately tests the actual data-plane transport.
 	if len(ctl.seen("PUT /accounts/"+key+"/config")) == 0 {
 		t.Fatalf("new runtime not configured: %v", ctl.seen("PUT"))
 	}
@@ -292,8 +312,8 @@ func TestCCGatewayReauthorize(t *testing.T) {
 	}
 	_, _ = io.Copy(io.Discard, res.Body)
 	res.Body.Close()
-	if len(ctl.seen("POST /accounts/"+key+"/v1/messages")) != 1 {
-		t.Fatalf("model request route: %v", ctl.seen("POST /accounts/"))
+	if res.StatusCode != http.StatusConflict || len(ctl.seen("GET /accounts/"+key+"/connection")) != 1 || len(ctl.seen("POST /accounts/")) != 0 {
+		t.Fatalf("model endpoint discovery: status=%d calls=%v", res.StatusCode, ctl.seen("GET /accounts/"))
 	}
 	if code, out = e.doAs(owner, "GET", "/system/ccgateway/accounts/"+itoa(id)+"/status", nil); code != 200 || out["data"].(map[string]any)["key"] != key {
 		t.Fatalf("account status after commit: %d %v", code, out)
@@ -326,7 +346,7 @@ func TestCCGatewayReauthorize(t *testing.T) {
 	if len(ctl.seen("DELETE /accounts/"+itoa(id))) != 0 {
 		t.Fatalf("retired runtime deleted too early: %v", ctl.seen("DELETE"))
 	}
-	if _, err := e.db.Pool.Exec(ctx, `UPDATE ccgateway_runtimes SET retired_at = now() - interval '11 minutes' WHERE retired_at IS NOT NULL`); err != nil {
+	if _, err := e.db.Pool.Exec(ctx, `UPDATE ccgateway_runtimes SET retired_at = now() - interval '71 minutes' WHERE retired_at IS NOT NULL`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := ccg.SweepDrafts(ctx); err != nil {
@@ -363,5 +383,29 @@ func TestCCGatewayReauthorize(t *testing.T) {
 	var retiredAt *time.Time
 	if err := e.db.Pool.QueryRow(ctx, `SELECT retired_at FROM ccgateway_runtimes WHERE key=$1 AND account_id IS NULL`, key).Scan(&retiredAt); err != nil || retiredAt == nil {
 		t.Fatalf("previous draft key not retired: %v %v", retiredAt, err)
+	}
+
+	// Migration resolves the currently adopted runtime, ignores caller-supplied
+	// source keys, and leaves the account binding unchanged until manual commit.
+	code, out = e.doAs(owner, "POST", path, map[string]any{"authorization_mode": "migrate", "source": itoa(other)})
+	if code != 201 {
+		t.Fatalf("migrate: %d %v", code, out)
+	}
+	migrated := out["data"].(map[string]any)["key"].(string)
+	if got := ctl.seen("MIGRATE "); len(got) != 1 || got[0] != "MIGRATE "+third+" "+migrated {
+		t.Fatalf("migration source: %v", got)
+	}
+	var active string
+	if err := e.db.Pool.QueryRow(ctx, `SELECT key FROM ccgateway_runtimes WHERE account_id=$1`, id).Scan(&active); err != nil || active != third {
+		t.Fatalf("migration switched early: %s %v", active, err)
+	}
+	if err := ccg.MigrateReauth(ctx, other, migrated, &owner); err == nil {
+		t.Fatal("cross-account migration accepted")
+	}
+	if code, _ := e.doAs(owner, "POST", path, map[string]any{"authorization_mode": "migrate"}); code != 400 {
+		t.Fatalf("existing draft overwritten: %d", code)
+	}
+	if code, out = commit(owner, id, migrated); code != 200 {
+		t.Fatalf("migration commit: %d %v", code, out)
 	}
 }

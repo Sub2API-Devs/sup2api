@@ -4,8 +4,8 @@
 // login) and "re-authorize". Re-authorizing never touches the running
 // runtime: after a confirmation, POST accounts/:id/reauthorize opens a draft
 // (an open one is returned again), the usual steps run on it
-// (CCGatewayAccountAuth in reauth mode), and once the draft is signed in it is
-// committed by itself — the account switches to the new login and all of its
+// (CCGatewayAccountAuth in reauth mode), and once the draft is signed in the
+// operator explicitly confirms the switch. The account switches and its
 // history (Claude login, sessions, quota snapshot, last test, error/cooldown)
 // is cleared. Cancelling or closing the editor deletes the draft. The draft
 // key is kept in sessionStorage so a page reload resumes it.
@@ -116,10 +116,12 @@ const reauthKey = ref<string | null>(null)
 const flow = ref<CcgFlowState>({ key: null, authorized: false })
 const flowEl = ref<InstanceType<typeof CCGatewayAccountAuth>>()
 const starting = ref(false)
+const authorizationMode = ref<'migrate' | 'fresh'>('migrate')
 const startError = ref<{ detail: string; reason: string } | null>(null)
 const committing = ref(false)
 const failedKey = ref<string | null>(null)
 const commitError = ref<{ detail: string; reason: string } | null>(null)
+const canSwitch = computed(() => shouldCommit({ key: reauthKey.value, flow: flow.value, committing: committing.value, failedKey: failedKey.value }))
 
 function setKey(key: string | null) {
   reauthKey.value = key
@@ -137,9 +139,9 @@ function discard(key: string) {
 async function askReauth() {
   if (!canManage.value || starting.value || reauthKey.value) return
   const ok = await confirm({
-    title: t('ccgateway.reauth.confirmTitle'),
-    message: t('ccgateway.reauth.confirmMessage'),
-    confirmText: t('ccgateway.reauth.confirmButton'),
+    title: t('ccgateway.reauth.replaceTitle'),
+    message: t(authorizationMode.value === 'migrate' ? 'ccgateway.reauth.migrateMessage' : 'ccgateway.reauth.freshMessage'),
+    confirmText: t('ccgateway.reauth.prepare'),
     danger: true
   })
   if (ok && alive) await begin()
@@ -152,7 +154,7 @@ async function begin() {
   startError.value = null
   commitError.value = null
   try {
-    const r = await api.post<CcgDraft>(`${base.value}/reauthorize`, {}, longCall())
+    const r = await api.post<CcgDraft>(`${base.value}/reauthorize`, { authorization_mode: authorizationMode.value }, longCall())
     if (!isDraftKey(r?.key)) throw new Error(t('ccgateway.accountAuth.badDraft'))
     if (!alive) {
       discard(r.key)
@@ -161,6 +163,8 @@ async function begin() {
     setKey(r.key)
   } catch (e) {
     if (alive) startError.value = { detail: describe(e), reason: reasonOf(e) }
+    const failedDraft = (e as { details?: { draft_key?: unknown } })?.details?.draft_key
+    if (typeof failedDraft === 'string' && isDraftKey(failedDraft)) discard(failedDraft)
   } finally {
     starting.value = false
   }
@@ -196,6 +200,7 @@ function onFlowAuthorized() {
 }
 
 async function commit() {
+  if (!canSwitch.value) return
   const key = reauthKey.value
   if (!key) return
   committing.value = true
@@ -231,14 +236,9 @@ async function commit() {
 
 function retryCommit() {
   failedKey.value = null
+  void commit()
 }
 
-watch(
-  () => shouldCommit({ key: reauthKey.value, flow: flow.value, committing: committing.value, failedKey: failedKey.value }),
-  (go) => {
-    if (go) void commit()
-  }
-)
 watch(
   () => props.syncKey,
   (cur, before) => {
@@ -344,10 +344,16 @@ onBeforeUnmount(() => {
 
     <!-- no re-authorization open -->
     <template v-if="!reauthKey">
+      <div v-if="status?.current_image" class="break-all text-xs text-gray-500">
+        <div>{{ t('ccgateway.reauth.currentImage') }}: {{ status.current_image }}</div>
+        <div>{{ t('ccgateway.reauth.targetImage') }}: {{ status.target_image }}</div>
+        <SHint v-if="status.image_update_available">{{ t('ccgateway.reauth.imageMismatch') }}</SHint>
+      </div>
       <div v-if="canManage" class="space-y-2">
-        <p class="text-xs text-gray-600 dark:text-dark-300" data-testid="ccgateway-reauth-hint">{{ summary.login === 'notAuthorized' ? t('ccgateway.reauth.hintLoggedOut') : t('ccgateway.reauth.hint') }}</p>
+        <label class="mr-3 text-xs"><input v-model="authorizationMode" type="radio" value="migrate" /> {{ t('ccgateway.reauth.migrate') }}</label>
+        <label class="text-xs"><input v-model="authorizationMode" type="radio" value="fresh" /> {{ t('ccgateway.accountAuth.reauthorize') }}</label>
         <SButton size="sm" :variant="summary.login === 'notAuthorized' ? 'primary' : 'secondary'" :loading="starting" data-testid="ccgateway-reauth-start" @click="askReauth">
-          <SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('ccgateway.accountAuth.reauthorize') }}
+          <SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('ccgateway.reauth.replaceTitle') }}
         </SButton>
       </div>
       <div v-if="startError" class="space-y-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300" role="alert" data-testid="ccgateway-reauth-start-error" :data-reason="startError.reason">
@@ -374,6 +380,7 @@ onBeforeUnmount(() => {
         @fix-proxy="emit('fix-proxy')"
       />
       <div v-if="committing" class="flex items-center gap-2 text-xs text-gray-600 dark:text-dark-300" data-testid="ccgateway-reauth-committing"><SSpinner size="sm" />{{ t('ccgateway.reauth.committing') }}</div>
+      <SButton v-if="canSwitch" size="sm" data-testid="ccgateway-replace-commit" @click="commit">{{ t('ccgateway.reauth.switchNow') }}</SButton>
     </div>
   </div>
 </template>

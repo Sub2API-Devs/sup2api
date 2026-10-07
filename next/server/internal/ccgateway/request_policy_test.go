@@ -9,6 +9,40 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 )
 
+func TestCustomToolPrefixSaveReload(t *testing.T) {
+	for _, prefix := range []string{"", "ccgateway", "my-tools"} {
+		p := defaultRequestPolicy()
+		p.CustomToolPrefix = prefix
+		saved, err := mergeConfig(Config{Mode: "local", RequestPolicy: &p}, Config{Mode: "local"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, _ := json.Marshal(saved)
+		var loaded Config
+		if err := json.Unmarshal(raw, &loaded); err != nil {
+			t.Fatal(err)
+		}
+		want := prefix
+		if want == "" {
+			want = "ccgateway"
+		}
+		if loaded.EffectiveRequestPolicy().CustomToolPrefix != want {
+			t.Fatal("saved prefix lost")
+		}
+		public, _ := json.Marshal(loaded.Public())
+		if !strings.Contains(string(public), `"custom_tool_prefix":"`+want+`"`) {
+			t.Fatal("prefix missing in settings")
+		}
+	}
+	for _, prefix := range []string{"bad__name", "bad name", strings.Repeat("x", 33)} {
+		p := defaultRequestPolicy()
+		p.CustomToolPrefix = prefix
+		if _, err := mergeConfig(Config{Mode: "local", RequestPolicy: &p}, Config{Mode: "local"}); err == nil {
+			t.Fatal("invalid prefix accepted")
+		}
+	}
+}
+
 func TestPassUpstreamErrorsDefaultAndJSON(t *testing.T) {
 	if defaultRequestPolicy().PassUpstreamErrors {
 		t.Fatal("pass_upstream_errors must default to false")
@@ -117,5 +151,49 @@ func TestRequestPolicyConfig(t *testing.T) {
 		if _, e := mergeConfig(Config{Mode: "local", RequestPolicy: &invalid}, old); e != nil {
 			t.Fatal("legacy rules should be ignored", b, e)
 		}
+	}
+}
+
+func TestAttachmentSourceSaveReload(t *testing.T) {
+	for _, source := range []string{"client", "gateway", "both", ""} {
+		t.Run(source, func(t *testing.T) {
+			var input Config
+			body := `{"mode":"local","request_policy":{"unknown_beta":"ignore","unknown_field":"reject","attachment_source":"` + source + `"}}`
+			if err := json.Unmarshal([]byte(body), &input); err != nil {
+				t.Fatal(err)
+			}
+			saved, err := mergeConfig(input, Config{Mode: "local"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw, err := json.Marshal(saved)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var reloaded Config
+			if err := json.Unmarshal(raw, &reloaded); err != nil {
+				t.Fatal(err)
+			}
+			kept, err := mergeConfig(Config{Mode: "local"}, reloaded)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := source
+			if want == "" {
+				want = "client"
+			}
+			if kept.EffectiveRequestPolicy().AttachmentSource != want {
+				t.Fatal("attachment source lost on save/reload")
+			}
+			public, _ := json.Marshal(kept.Public())
+			if !strings.Contains(string(public), `"attachment_source":"`+want+`"`) {
+				t.Fatal("attachment source missing in public settings")
+			}
+		})
+	}
+	p := defaultRequestPolicy()
+	p.AttachmentSource = "invalid"
+	if _, err := mergeConfig(Config{Mode: "local", RequestPolicy: &p}, Config{Mode: "local"}); err == nil {
+		t.Fatal("invalid attachment source accepted")
 	}
 }

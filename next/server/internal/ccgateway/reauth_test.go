@@ -65,7 +65,7 @@ func TestRetiredRuntimesAreLeftAloneThenDeleted(t *testing.T) {
 	if n, err := f.s.SweepDrafts(ctx); err != nil || n != 0 || len(ctl.seen("DELETE")) != 0 {
 		t.Fatalf("early sweep: %d %v %v", n, err, ctl.seen("DELETE"))
 	}
-	if _, err := f.db.Pool.Exec(ctx, `UPDATE ccgateway_runtimes SET retired_at = now() - interval '11 minutes' WHERE key = ANY($1)`,
+	if _, err := f.db.Pool.Exec(ctx, `UPDATE ccgateway_runtimes SET retired_at = now() - interval '71 minutes' WHERE key = ANY($1)`,
 		[]string{retiredDraft, retiredID}); err != nil {
 		t.Fatal(err)
 	}

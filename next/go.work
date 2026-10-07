@@ -1,6 +1,8 @@
 go 1.27
 
 use (
+	./plugins/ccgateway/companions
+	./plugins/ccgateway/companions/worker
 	./deploy/mock-upstream
 	./e2e
 	./gateway

@@ -26,8 +26,8 @@ export interface CcgReauthState {
 }
 
 /**
- * The draft is signed in: commit it now. Once per login — after a failed
- * commit, only a fresh login (or the retry button, which clears failedKey) commits again.
+ * Eligibility for the manual switch button, not an automatic action.
+ * A failed commit requires an explicit retry or a fresh login.
  */
 export function shouldCommit(s: CcgReauthState): boolean {
   return !!s.key && s.flow.key === s.key && s.flow.authorized && !s.committing && s.failedKey !== s.key

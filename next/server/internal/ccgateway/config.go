@@ -91,7 +91,7 @@ func (c Config) SSH() remotedocker.Config {
 	return remotedocker.Config{Host: c.Host, Port: c.Port, User: c.User, AuthMode: c.AuthMode, Password: c.Password, PrivateKey: c.PrivateKey, Passphrase: c.Passphrase, HostKeyFingerprint: c.HostKeyFingerprint}
 }
 func (c Config) Public() map[string]any {
-	return map[string]any{"account_runtimes": c.AccountRuntimes, "mode": c.Mode, "host": c.Host, "port": c.Port, "user": c.User, "auth_mode": c.AuthMode, "host_key_fingerprint": c.HostKeyFingerprint, "has_password": c.Password != "", "has_private_key": c.PrivateKey != "", "has_passphrase": c.Passphrase != "", "has_admin_key": c.AdminKey != "", "has_api_key": c.APIKey != "", "images": c.publicImages(), "network": c.EffectiveNetwork(), "request_policy": c.EffectiveRequestPolicy()}
+	return map[string]any{"account_runtimes": c.AccountRuntimes, "mode": c.Mode, "host": c.Host, "port": c.Port, "user": c.User, "auth_mode": c.AuthMode, "host_key_fingerprint": c.HostKeyFingerprint, "has_password": c.Password != "", "has_private_key": c.PrivateKey != "", "has_passphrase": c.Passphrase != "", "has_admin_key": c.AdminKey != "", "has_api_key": c.APIKey != "", "images": c.publicImages(), "effective_images": c.EffectiveImages(), "network": c.EffectiveNetwork(), "request_policy": c.EffectiveRequestPolicy()}
 }
 
 type Service struct {
@@ -115,6 +115,7 @@ type Service struct {
 	// tunnel to the controller in tests (nil: the real ones).
 	runScript      scriptRunner
 	openController func(context.Context, Config) (*http.Client, string, func() error, error)
+	openAccount    func(context.Context, Config, string) (*http.Client, func() error, error)
 }
 
 func New(db *store.DB, cipher *secret.Cipher) *Service {

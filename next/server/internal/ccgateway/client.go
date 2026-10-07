@@ -110,19 +110,26 @@ func (t modelTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		cancel()
 		return nil, errors.New("CCGateway key is not configured")
 	}
-	client, base, close, e := t.s.open(ctx, cfg)
+	var client *http.Client
+	var base, modelKey string
+	var close func() error
+	if cfg.AccountRuntimes {
+		client, base, modelKey, close, e = t.s.openAccountModel(ctx, cfg, key, revision)
+	} else {
+		client, base, close, e = t.s.open(ctx, cfg)
+		modelKey = cfg.APIKey
+	}
 	if e != nil {
 		cancel()
+		if errors.Is(e, errAccountNotSynchronized) {
+			return &http.Response{StatusCode: 409, Status: "409 Conflict", Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"error":"not_synchronized"}`)), Request: req}, nil
+		}
 		return nil, errors.New("CCGateway is unavailable")
 	}
 	var once sync.Once
 	finish := func() { once.Do(func() { _ = close(); cancel() }) }
 	clone := req.Clone(ctx)
 	clone.URL, _ = url.Parse(base + "/v1/messages")
-	if cfg.AccountRuntimes {
-		// The account's runtime key: the adopted draft key or the id.
-		clone.URL.Path = "/accounts/" + key + "/v1/messages"
-	}
 	clone.Host = ""
 	clone.Header = clone.Header.Clone()
 	policy := cfg.EffectiveRequestPolicy()
@@ -133,13 +140,8 @@ func (t modelTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	policyJSON, _ := json.Marshal(policy)
 	clone.Header.Set("X-CCGateway-Request-Policy", string(policyJSON))
 	clone.Header.Del("Authorization")
-	clone.Header.Set("x-api-key", cfg.APIKey)
+	clone.Header.Set("x-api-key", modelKey)
 	clone.Header.Del("X-CCG-Revision")
-	if cfg.AccountRuntimes {
-		clone.Header.Del("x-api-key")
-		clone.Header.Set("Authorization", "Bearer "+cfg.AdminKey)
-		clone.Header.Set("X-CCG-Revision", revision)
-	}
 	res, e := client.Do(clone)
 	if e != nil {
 		finish()

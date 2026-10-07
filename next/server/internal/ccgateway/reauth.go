@@ -2,7 +2,10 @@ package ccgateway
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
 	"strconv"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -99,6 +102,9 @@ func (s *Service) CommitReauth(ctx context.Context, accountID int64, key string,
 		return "", e
 	}
 	e := s.lockedTx(ctx, key, true, func(tx pgx.Tx) error {
+		if _, e := tx.Exec(ctx, reauthLockSQL, accountID); e != nil {
+			return e
+		}
 		var open bool
 		if e := tx.QueryRow(ctx, `SELECT true FROM ccgateway_runtimes WHERE key=$1 AND for_account=$2
 			AND account_id IS NULL AND retired_at IS NULL AND ($3::bigint IS NULL OR created_by=$3) FOR UPDATE`,
@@ -150,4 +156,55 @@ func (s *Service) CommitReauth(ctx context.Context, accountID int64, key string,
 	}
 	s.Kick(key)
 	return retired, nil
+}
+
+// MigrateReauth copies the current account's CLI configuration into its new
+// draft. Runtime keys are resolved server-side; callers cannot name a source.
+// Only an explicit account update calls this method, never reconciliation.
+func (s *Service) MigrateReauth(ctx context.Context, accountID int64, key string, scope *int64) error {
+	return s.lockedTx(ctx, key, true, func(tx pgx.Tx) error {
+		if _, e := tx.Exec(ctx, reauthLockSQL, accountID); e != nil {
+			return e
+		}
+		var valid bool
+		if e := tx.QueryRow(ctx, `SELECT true FROM ccgateway_runtimes WHERE key=$1 AND for_account=$2
+			AND account_id IS NULL AND retired_at IS NULL AND ($3::bigint IS NULL OR created_by=$3) FOR UPDATE`, key, accountID, scope).Scan(&valid); e != nil {
+			if store.IsNoRows(e) {
+				return draftNotFound(core.ErrInvalidArgument)
+			}
+			return e
+		}
+		source, e := s.desiredIn(ctx, tx, accountID, false)
+		if e != nil {
+			return e
+		}
+		if source.Kind != "managed" || source.Key == key {
+			return core.ErrInvalidArgument
+		}
+		d, e := s.draftDesired(ctx, key, true)
+		if e != nil {
+			return e
+		}
+		if !d.Enabled {
+			return reasonError(core.ErrInvalidArgument, d.Blocked)
+		}
+		if e = s.putConfig(ctx, key, d); e != nil {
+			return e
+		}
+		body, _ := json.Marshal(map[string]string{"source": source.Key})
+		res, close, e := s.runtimeRequest(ctx, key, http.MethodPost, "migrate-auth", body, d.Revision)
+		if e != nil {
+			return transportError(e)
+		}
+		defer close()
+		defer res.Body.Close()
+		raw, e := io.ReadAll(io.LimitReader(res.Body, 65536))
+		if e != nil {
+			return e
+		}
+		if res.StatusCode != http.StatusOK {
+			return runtimeError(res.StatusCode, raw)
+		}
+		return s.putConfig(ctx, key, d)
+	})
 }

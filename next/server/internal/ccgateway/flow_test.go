@@ -270,6 +270,8 @@ func (c *fakeController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"expires_at": time.Now().Add(10 * time.Minute).UTC()}
 	}
 	switch path {
+	case "connection":
+		_ = json.NewEncoder(w).Encode(accountConnection{IP: "10.52.74.181", Port: 8787, Key: strings.Repeat("k", 32), Revision: c.revision[key]})
 	case "admin/status":
 		_ = json.NewEncoder(w).Encode(map[string]any{"healthy": true, "logged_in": c.loggedIn[key], "auth_method": "oauth"})
 	case "admin/auth/session":

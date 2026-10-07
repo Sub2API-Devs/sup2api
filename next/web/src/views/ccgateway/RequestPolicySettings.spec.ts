@@ -33,12 +33,77 @@ describe('CCGateway pass upstream errors switch', () => {
     return wrapper
   }
 
+  it('saves and reloads the custom tool prefix with a legacy default', async () => {
+    const { custom_tool_prefix: _omit, ...legacy } = defaultRequestPolicy()
+    mocks.get.mockResolvedValue(config(legacy))
+    const w = await render()
+    expect(w.get<HTMLInputElement>('[data-testid="custom-tool-prefix"]').element.value).toBe('ccgateway')
+    mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), custom_tool_prefix: 'mytools' }))
+    await w.get('[data-testid="custom-tool-prefix"]').setValue('mytools')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.put.mock.lastCall?.[1].request_policy.custom_tool_prefix).toBe('mytools')
+    expect(w.get<HTMLInputElement>('[data-testid="custom-tool-prefix"]').element.value).toBe('mytools')
+    expect(w.text()).toContain('mcp__mytools__lookup')
+    w.unmount()
+  })
+
   it('defaults to off and has zh/en copy', () => {
     expect(defaultRequestPolicy().pass_upstream_errors).toBe(false)
     expect(zh.policy.passUpstreamErrors).toBe('上游错误直接返回给客户端')
     expect(zh.policy.passUpstreamErrorsHint).toContain('401、429、529')
     expect(en.policy.passUpstreamErrors).toBeTruthy()
     expect(en.policy.passUpstreamErrorsHint).toContain('401, 429, 529')
+  })
+
+  it('saves and reloads attachment overrides and unknown policies', async () => {
+    mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
+    const w = await render()
+    const next = { ...defaultRequestPolicy(), attachment_sources: { environment: 'both' as const, date: 'gateway' as const }, unknown_client_attachment: 'ignore' as const, unknown_gateway_attachment: 'ignore' as const }
+    mocks.put.mockResolvedValue(config(next))
+    await w.get('[data-testid="attachment-environment"]').setValue('both')
+    await w.get('[data-testid="attachment-date"]').setValue('gateway')
+    await w.get('[data-testid="unknown-attachment-client"]').setValue('ignore')
+    await w.get('[data-testid="unknown-attachment-gateway"]').setValue('ignore')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.put.mock.lastCall?.[1].request_policy).toEqual(next)
+    expect(w.get<HTMLSelectElement>('[data-testid="attachment-environment"]').element.value).toBe('both')
+    expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
+    // Editing the map after loading must not mutate the saved baseline.
+    await w.get('[data-testid="attachment-date"]').setValue('client')
+    expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeUndefined()
+    w.unmount()
+  })
+
+  it('defaults legacy attachment settings and saves each selection', async () => {
+    const { attachment_source: _omit, ...legacy } = defaultRequestPolicy()
+    mocks.get.mockResolvedValue(config(legacy))
+    const w = await render()
+    expect(w.get<HTMLInputElement>('[data-testid="attachment-source"][value="client"]').element.checked).toBe(true)
+    expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
+    for (const source of ['gateway', 'both', 'client'] as const) {
+      mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), attachment_source: source }))
+      await w.get(`[data-testid="attachment-source"][value="${source}"]`).setValue(true)
+      await w.get('form').trigger('submit')
+      await flushPromises()
+      expect(mocks.put.mock.lastCall?.[1].request_policy.attachment_source).toBe(source)
+      expect(w.get<HTMLInputElement>(`[data-testid="attachment-source"][value="${source}"]`).element.checked).toBe(true)
+      expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
+    }
+    w.unmount()
+  })
+
+  it('shows resolved deployment images separately from overrides', async () => {
+    mocks.get.mockResolvedValue({ ...config(defaultRequestPolicy()), account_runtimes: true,
+      images: { app: '', egress: '', controller: '' },
+      effective_images: { app: 'ccgateway:legacy', egress: 'egress:test', controller: 'controller:test' } })
+    const w = await render()
+    expect(w.get<HTMLInputElement>('[data-testid="image-app"]').element.value).toBe('')
+    expect(w.text()).toContain('当前保存配置解析出的镜像：ccgateway:legacy')
+    expect(w.text()).toContain('不代表现有容器内程序的版本')
+    expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
+    w.unmount()
   })
 
   it('shows a legacy policy as off and saves the enabled switch', async () => {

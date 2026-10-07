@@ -122,6 +122,9 @@ func TestDBEncryptedAuditAndModelForward(t *testing.T) {
 		if !strings.Contains(r.Header.Get("X-CCGateway-Request-Policy"), `"pass_upstream_errors":false`) || policy.PassUpstreamErrors {
 			t.Error("request policy header lacks pass_upstream_errors=false")
 		}
+		if policy.AttachmentSource != "client" {
+			t.Error("request policy header lacks attachment_source=client")
+		}
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = w.Write([]byte("data: ok\n\n"))
 		w.(http.Flusher).Flush()

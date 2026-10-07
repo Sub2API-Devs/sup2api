@@ -18,6 +18,13 @@ VERSION=${VERSION:-0.1.0-dev}
 KEY_ID=${SUB2API_DEV_KEY_ID:-sub2api-dev}
 mkdir -p "$OUT/bin" "$OUT/market" "$OUT/builtin"
 cd "$SRC"
+# The core Docker context excludes CCGateway companion container modules.
+# Retain the workspace dependency graph used by the server and plugins.
+if [ -f go.work ]; then
+  sed '/^[[:space:]]*\.\/plugins\/ccgateway\/companions[[:space:]]*$/d; /^[[:space:]]*\.\/plugins\/ccgateway\/companions\/worker[[:space:]]*$/d' go.work > go.build.work
+  if [ -f go.work.sum ]; then cp go.work.sum go.build.work.sum; fi
+  export GOWORK="$PWD/go.build.work"
+fi
 
 echo "==> go version: $(go version)"
 echo "==> building server $VERSION"

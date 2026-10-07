@@ -223,6 +223,13 @@ func TestAdoptedAccountUsesTheDraftKey(t *testing.T) {
 	if code, _ := f.request(1, "GET", "/system/ccgateway/drafts/"+key+"/status", ""); code != 404 {
 		t.Fatalf("adopted draft still a draft: %d", code)
 	}
+	directCalled := false
+	f.s.openAccount = func(_ context.Context, _ Config, target string) (*http.Client, func() error, error) {
+		return &http.Client{Transport: accountTransportFunc(func(r *http.Request) (*http.Response, error) {
+			directCalled = target == "10.52.74.181:8787" && r.URL.Path == "/v1/messages" && r.Header.Get("x-api-key") == strings.Repeat("k", 32)
+			return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+		})}, func() error { return nil }, nil
+	}
 	req, _ := http.NewRequest("POST", VirtualURL, strings.NewReader(`{}`))
 	res, err := f.s.ModelClient(id).Do(req)
 	if err != nil {
@@ -230,8 +237,8 @@ func TestAdoptedAccountUsesTheDraftKey(t *testing.T) {
 	}
 	_, _ = io.Copy(io.Discard, res.Body)
 	res.Body.Close()
-	if len(ctl.seen("POST /accounts/"+key+"/v1/messages")) != 1 {
-		t.Fatalf("model request route: %v", ctl.seen("POST"))
+	if !directCalled || len(ctl.seen("GET /accounts/"+key+"/connection")) != 1 || len(ctl.seen("POST /accounts/"+key+"/v1/messages")) != 0 {
+		t.Fatalf("model request route: %v", ctl.seen(""))
 	}
 	// A second adoption of the same draft fails.
 	tx, _ = f.db.Pool.Begin(ctx)

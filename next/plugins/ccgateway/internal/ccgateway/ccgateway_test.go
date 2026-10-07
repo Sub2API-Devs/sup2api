@@ -2,6 +2,7 @@ package ccgateway
 
 import (
 	"context"
+	"encoding/json"
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/pluginsdktest"
@@ -34,6 +35,12 @@ func TestManagedRPCRequests(t *testing.T) {
 	r, e := h.Platform.BuildTestRequest(ctx, &pluginv1.BuildTestRequestRequest{Account: acc})
 	if e != nil || r.GetUrl() != VirtualURL || r.GetUsageProtocol() != ProtocolMessages || r.GetModel() != DefaultTestModel {
 		t.Fatalf("test request %v %v", r, e)
+	}
+	var probe struct {
+		MaxTokens int `json:"max_tokens"`
+	}
+	if err := json.Unmarshal([]byte(r.GetBodyJson()), &probe); err != nil || probe.MaxTokens < 64 {
+		t.Fatalf("probe can truncate the CLI response before persistence: %s (%v)", r.GetBodyJson(), err)
 	}
 }
 

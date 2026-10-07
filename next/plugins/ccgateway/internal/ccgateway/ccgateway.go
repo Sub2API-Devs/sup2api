@@ -133,6 +133,8 @@ func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestReque
 	if model == "" {
 		model = DefaultTestModel
 	}
-	body, _ := json.Marshal(map[string]any{"model": model, "max_tokens": 1, "messages": []map[string]string{{"role": "user", "content": "ping"}}})
+	// A one-token probe can leave Claude Code without a persisted assistant
+	// response (reproduced with Opus 5), making a working account fail the test.
+	body, _ := json.Marshal(map[string]any{"model": model, "max_tokens": 64, "messages": []map[string]string{{"role": "user", "content": "ping"}}})
 	return &pluginv1.BuildTestRequestResponse{Method: "POST", Url: VirtualURL, Headers: headers(nil), BodyJson: string(body), Model: model, UsageProtocol: ProtocolMessages}, nil
 }

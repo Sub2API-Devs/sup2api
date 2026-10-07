@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  worker-test:
+    build:
+      context: ../../..
+      dockerfile: worker/Dockerfile
+    environment:
+      # Worker 配置
+      WORKER_ID: test-worker-1
+      WORKER_PORT: 8788
+      LOG_LEVEL: debug
+
+      # CLI 配置
+      WORKER_CLI_PATH: /usr/local/bin/claude
+      WORKER_CLI_VERSION: 2.1.288
+      CCG_API_KEY: ${CCG_API_KEY:?set a test-only gateway key}
+      CCG_ADMIN_KEY: ${CCG_ADMIN_KEY:?set a distinct test-only management key}
+
+      # Claude 配置
+      CLAUDE_CONFIG_DIR: /work/config
+      HISTORY_DIR: /work/history
+      CACHE_DIR: /work/data/cache
+
+      # 超时配置
+      REQUEST_TIMEOUT: 10m
+      CLI_TIMEOUT: 15m
+      HEALTH_TIMEOUT: 5s
+
+      # 缓存配置
+      MAX_CACHE_SIZE: 33554432
+      HISTORY_RETENTION: 24h
+    ports:
+      - "127.0.0.1:8788:8788"
+    volumes:
+      # 挂载测试数据
+      - ./fixtures:/test/fixtures:ro
+      # 持久化会话数据（测试用）
+      - test-config:/work/config
+      - test-sessions:/work/history
+      - test-cache:/work/data/cache
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8788/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - test-network
+
+volumes:
+  test-config:
+  test-sessions:
+  test-cache:
+
+networks:
+  test-network:
+    driver: bridge
