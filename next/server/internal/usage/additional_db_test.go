@@ -19,12 +19,10 @@ func TestAdditionalSettlementDBRetriesFrozenFreePrimary(t *testing.T) {
 	if err := f.bill.Precharge(ctx, r); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.svc.insert(ctx, []*core.UsageRecord{r}); err != nil {
-		t.Fatal(err)
-	}
 	f.ledger.fail.Store(1)
-	if err := f.svc.settle(ctx, fromRecord(r), false); err == nil {
-		t.Fatal("expected first ledger failure")
+	f.svc.process(ctx, []*core.UsageRecord{r})
+	if f.ledger.fail.Load() != 0 {
+		t.Fatal("settlement did not reach the failing ledger")
 	}
 	if got := f.scalar(`SELECT billing_status FROM usage_logs WHERE request_id='additional-db'`); got != StatusFailed {
 		t.Fatal(got)

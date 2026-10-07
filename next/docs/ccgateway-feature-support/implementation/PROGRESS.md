@@ -129,3 +129,12 @@
 ## 恢复工作的方法
 
 先读本文件与三个分工进度文件，再检查 git diff/status 与实际测试产物。状态记录不能替代当前代码/运行证据。每批补充命令、结果、commit、部署目标和未解决事项后更新本文件。
+
+### 第二批检查点与第三批启动（2026-10-08）
+
+- 第二批检查点 b52f5fc1c18a364e06b978cec39d29490f4bdd11 已提交并推送，OVH 与 cc-max 通过 Git fetch 新建并核对干净 worktree。没有上传源码，没有更新线上容器。
+- Windows 完整真实 CLI 隔离集首次 FAIL347.123s：旧 TestRealCLI 将 tool_choice:none 断言为删除工具目录、Fast 缺 beta、管理员关闭时期待静默降速。已改为校验原客户端定义+none及明确400/无上游调用；主集单用例67调用PASS50.697s，完整集合重跑中。普通refusal原始完整message_stop阻止隐式继续的race修复4种JSON/SSE组合通过，独立复核通过。
+- OVH 隔离 PostgreSQL 45432 的 Linux race：gateway/convert/usagerules/billing/ccgateway通过；usage新DB回归首次失败。原因是测试直接调用事务settle后错误期待process层markFailed已运行；修正为走完整process并检查ledger故障确实触发，数据库复测待进行。没有改业务结算以迎合测试。
+- cc-max #21/#22容器ID与既有镜像未动，实际CLI为2.1.288；本地主要验证2.1.292。上线前必须核验/原地更新CLI，不能只替换Worker后忽略版本差异。
+- 第三批已开始：共享协议codec机械抽取（root独立AST核对104公开符号签名完全一致）、请求专属PreparedConverter、search_result/图片transformations/错误响应header完整链路。新增文件未混入第二批checkpoint。
+- 所有线上部署、真实提供商推理、资源资格和UI视觉检查仍未完成；隔离假上游与编译成功不能作为这些工作的替代。
