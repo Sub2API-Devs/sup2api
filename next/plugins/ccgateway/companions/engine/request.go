@@ -23,25 +23,27 @@ type Tool struct {
 	DeferLoading *bool  `json:"defer_loading,omitempty"`
 }
 type Request struct {
-	diagnostic       *requestDiagnostic
-	Model            string
-	MaxTokens        int
-	Stream           bool
-	System           []string
-	Messages         []Message
-	Tools            []Tool
-	NoTools          bool
-	Thinking         Object
-	Fast             *bool
-	Effort           string
-	JSONSchema       Object
-	PromptCacheTTL   string
-	ToolSearch       string
-	Betas            []string
-	FineGrainedTools bool
-	TTL              time.Duration
-	Native           map[string]bool
-	CustomToolPrefix string
+	EnvironmentFields       map[string]string
+	ClientEnvironmentFields map[string]bool
+	diagnostic              *requestDiagnostic
+	Model                   string
+	MaxTokens               int
+	Stream                  bool
+	System                  []string
+	Messages                []Message
+	Tools                   []Tool
+	NoTools                 bool
+	Thinking                Object
+	Fast                    *bool
+	Effort                  string
+	JSONSchema              Object
+	PromptCacheTTL          string
+	ToolSearch              string
+	Betas                   []string
+	FineGrainedTools        bool
+	TTL                     time.Duration
+	Native                  map[string]bool
+	CustomToolPrefix        string
 	// Set from the request policy; see outboundRelay.
 	PassUpstreamErrors       bool
 	AttachmentSources        map[string]string

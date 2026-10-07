@@ -9,6 +9,11 @@ import (
 var attachmentTypes = map[string]bool{"environment": true, "model": true, "total_tokens_reminder": true, "session_context": true, "date": true}
 
 func validateAttachmentPolicy(p RequestPolicy) error {
+	for k, v := range p.EnvironmentFields {
+		if (k != "workingDirectory" && k != "platform") || (v != "client" && v != "gateway") {
+			return fmt.Errorf("invalid environment field policy: %s", k)
+		}
+	}
 	for k, v := range p.AttachmentSources {
 		if !attachmentTypes[k] || (v != "client" && v != "gateway" && v != "both") {
 			return fmt.Errorf("invalid attachment source override: %s", k)
@@ -45,6 +50,15 @@ func (r *Request) keepClientAttachment(text string) (keep bool) {
 	if !attachmentTypes[typ] {
 		return r.UnknownClientAttachment != "ignore"
 	}
+	// Field overrides take precedence over the whole environment envelope.
+	if typ == "environment" {
+		for _, line := range strings.Split(strings.ReplaceAll(match[2], "\r\n", "\n"), "\n") {
+			if (r.EnvironmentFields["workingDirectory"] == "client" && environmentDirectory.MatchString(line)) ||
+				(r.EnvironmentFields["platform"] == "client" && environmentPlatform.MatchString(line)) {
+				return true
+			}
+		}
+	}
 	source := r.AttachmentSources[typ]
 	if source == "" {
 		source = r.AttachmentSource
@@ -54,7 +68,8 @@ func (r *Request) keepClientAttachment(text string) (keep bool) {
 func (r *Request) filterClientAttachments() {
 	systems := make([]string, 0, len(r.System))
 	for _, text := range r.System {
-		if r.keepClientAttachment(text) {
+		text = r.filterClientEnvironment(text)
+		if strings.TrimSpace(text) != "" && r.keepClientAttachment(text) {
 			systems = append(systems, text)
 		}
 	}
@@ -65,7 +80,9 @@ func (r *Request) filterClientAttachments() {
 		if m.Role == "system" {
 			blocks := make([]Object, 0, len(m.Content))
 			for _, b := range m.Content {
-				if r.keepClientAttachment(str(b, "text")) {
+				text := r.filterClientEnvironment(str(b, "text"))
+				if strings.TrimSpace(text) != "" && r.keepClientAttachment(text) {
+					b["text"] = text
 					blocks = append(blocks, b)
 				}
 			}
@@ -83,5 +100,5 @@ func (r *Request) filterClientAttachments() {
 	r.origin = origins
 }
 func (r *Request) attachmentConfig() Object {
-	return Object{"default_source": r.AttachmentSource, "sources": r.AttachmentSources, "unknown_client": r.UnknownClientAttachment, "unknown_gateway": r.UnknownGatewayAttachment}
+	return Object{"client_environment_fields": r.ClientEnvironmentFields, "environment_fields": r.EnvironmentFields, "default_source": r.AttachmentSource, "sources": r.AttachmentSources, "unknown_client": r.UnknownClientAttachment, "unknown_gateway": r.UnknownGatewayAttachment}
 }

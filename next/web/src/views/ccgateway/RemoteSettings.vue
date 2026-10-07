@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
+import RuntimeInstall from './RuntimeInstall.vue'
 import RequestPolicySettings from './RequestPolicySettings.vue'
 import { defaultRequestPolicy, validRequestPolicy, type RequestPolicy } from './requestPolicy'
 
@@ -25,8 +26,9 @@ const IMAGE_KEYS = ['app', 'egress', 'controller'] as const
 // Same rule as the core: repository[:tag][@sha256:digest], or a local image id.
 const IMAGE_RE = /^(?:[a-z0-9][a-z0-9._/-]{0,127}(?::[A-Za-z0-9._-]{1,128})?(?:@sha256:[0-9a-f]{64})?|sha256:[0-9a-f]{64})$/
 const requestPolicy = ref<RequestPolicy>(defaultRequestPolicy())
-const normalizePolicy = (policy?: Partial<RequestPolicy>): RequestPolicy => ({ ...defaultRequestPolicy(), ...policy, attachment_source: policy?.attachment_source || 'client', attachment_sources: { ...(policy?.attachment_sources || {}) }, unknown_client_attachment: policy?.unknown_client_attachment || 'pass', unknown_gateway_attachment: policy?.unknown_gateway_attachment || 'pass' })
+const normalizePolicy = (policy?: Partial<RequestPolicy>): RequestPolicy => ({ ...defaultRequestPolicy(), ...policy, attachment_source: policy?.attachment_source || 'client', attachment_sources: { ...(policy?.attachment_sources || {}) }, environment_fields: { ...(policy?.environment_fields || {}) }, unknown_client_attachment: policy?.unknown_client_attachment || 'pass', unknown_gateway_attachment: policy?.unknown_gateway_attachment || 'pass' })
 const policyChanged = computed(() => JSON.stringify(requestPolicy.value) !== JSON.stringify(normalizePolicy(saved.value?.request_policy)))
+const runtimeRevision = ref(0)
 const images = reactive<RuntimeImages>({ app: '', egress: '', controller: '' })
 const network = reactive({ pool: '10.0.0.0/8', allocation: 'random' as 'random' | 'sequential' })
 const networkChanged = computed(() => network.pool.trim() !== (saved.value?.network?.pool || '10.0.0.0/8') || network.allocation !== (saved.value?.network?.allocation || 'random'))
@@ -86,7 +88,7 @@ async function save() {
   const rebuildNetwork = networkChanged.value && config.account_runtimes
   payload.network = { pool: network.pool.trim() || '10.0.0.0/8', allocation: network.allocation }
   const response = await api.put<RemoteConfig>(base, payload, { signal: AbortSignal.timeout(55000) })
-  assign(response); probe.value = null; pending.value = null
+  assign(response); runtimeRevision.value++; probe.value = null; pending.value = null
   notice.value = t(rebuildNetwork ? 'ccgateway.remote.networkSaved' : 'ccgateway.remote.saved'); emit('saved')
 }
 async function fingerprint() {
@@ -152,11 +154,13 @@ onBeforeUnmount(clearSecrets)
           <label class="block text-sm">{{ t('ccgateway.remote.networkPool') }}<input v-model="network.pool" class="input mt-1 w-full font-mono text-xs" placeholder="10.0.0.0/8" autocomplete="off" spellcheck="false" data-testid="network-pool" /></label>
           <label class="block text-sm">{{ t('ccgateway.remote.networkAllocation') }}<select v-model="network.allocation" class="input mt-1 w-full" data-testid="network-allocation"><option value="random">{{ t('ccgateway.remote.networkRandom') }}</option><option value="sequential">{{ t('ccgateway.remote.networkSequential') }}</option></select></label>
           <p class="text-xs text-gray-500">{{ t('ccgateway.remote.networkHint') }}</p>
+          <RuntimeInstall :key="runtimeRevision" :disabled="disabled || dirty">
           <p class="text-sm font-medium">{{ t('ccgateway.remote.images') }}</p>
           <div class="grid gap-3 sm:grid-cols-3">
             <label v-for="key in IMAGE_KEYS" :key="key" class="block min-w-0 text-sm">{{ t(`ccgateway.remote.image${key[0].toUpperCase()}${key.slice(1)}`) }}<input v-model="images[key]" autocomplete="off" spellcheck="false" class="input mt-1 w-full font-mono text-xs" :data-testid="`image-${key}`" /><span v-if="saved.effective_images?.[key]" class="mt-1 block break-all text-xs text-gray-500">{{ t('ccgateway.remote.imageEffective', { image: saved.effective_images[key] }) }}</span></label>
           </div>
           <p class="text-xs text-gray-500">{{ t('ccgateway.remote.imagesHint') }}</p>
+          </RuntimeInstall>
         </div>
         <div class="flex justify-end"><button class="btn btn-primary" :disabled="!dirty || form.mode === 'disabled'" data-testid="remote-save">{{ t('ccgateway.remote.save') }}</button></div>
       </fieldset>

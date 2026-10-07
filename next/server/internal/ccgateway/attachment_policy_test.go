@@ -9,6 +9,7 @@ func TestAttachmentOverridesRoundTrip(t *testing.T) {
 	p := defaultRequestPolicy()
 	p.AttachmentSources = map[string]string{"environment": "both", "date": "gateway"}
 	p.UnknownClientAttachment = "ignore"
+	p.EnvironmentFields = map[string]string{"workingDirectory": "client", "platform": "gateway"}
 	data, err := json.Marshal(Config{RequestPolicy: &p})
 	if err != nil {
 		t.Fatal(err)
@@ -18,6 +19,9 @@ func TestAttachmentOverridesRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := cfg.EffectiveRequestPolicy()
+	if got.EnvironmentFields["workingDirectory"] != "client" || got.EnvironmentFields["platform"] != "gateway" {
+		t.Fatal("environment fields lost")
+	}
 	if got.AttachmentSources["date"] != "gateway" || got.UnknownClientAttachment != "ignore" || got.UnknownGatewayAttachment != "pass" {
 		t.Fatal("attachment policy lost")
 	}

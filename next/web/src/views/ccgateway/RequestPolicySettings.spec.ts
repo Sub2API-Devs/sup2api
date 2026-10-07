@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 import { i18n } from '@/i18n'
 import zh from '@/i18n/locales/zh/ccgateway'
 import en from '@/i18n/locales/en/ccgateway'
@@ -7,6 +8,7 @@ import RemoteSettings from './RemoteSettings.vue'
 import { defaultRequestPolicy, type RequestPolicy } from './requestPolicy'
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), post: vi.fn() }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
 vi.mock('@sub2api/host', () => ({ api: mocks }))
 
 function config(policy: Partial<RequestPolicy> | undefined) {
@@ -28,7 +30,7 @@ describe('CCGateway pass upstream errors switch', () => {
     i18n.global.locale.value = 'zh'
   })
   async function render() {
-    const wrapper = mount(RemoteSettings, { global: { plugins: [i18n] } })
+    const wrapper = mount(RemoteSettings, { global: { plugins: [i18n, createPinia()] } })
     await flushPromises()
     return wrapper
   }
@@ -59,10 +61,12 @@ describe('CCGateway pass upstream errors switch', () => {
   it('saves and reloads attachment overrides and unknown policies', async () => {
     mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
     const w = await render()
-    const next = { ...defaultRequestPolicy(), attachment_sources: { environment: 'both' as const, date: 'gateway' as const }, unknown_client_attachment: 'ignore' as const, unknown_gateway_attachment: 'ignore' as const }
+    const next = { ...defaultRequestPolicy(), attachment_sources: { environment: 'both' as const, date: 'gateway' as const }, environment_fields: { workingDirectory: 'client' as const, platform: 'gateway' as const }, unknown_client_attachment: 'ignore' as const, unknown_gateway_attachment: 'ignore' as const }
     mocks.put.mockResolvedValue(config(next))
     await w.get('[data-testid="attachment-environment"]').setValue('both')
     await w.get('[data-testid="attachment-date"]').setValue('gateway')
+    await w.get('[data-testid="environment-workingDirectory"]').setValue('client')
+    await w.get('[data-testid="environment-platform"]').setValue('gateway')
     await w.get('[data-testid="unknown-attachment-client"]').setValue('ignore')
     await w.get('[data-testid="unknown-attachment-gateway"]').setValue('ignore')
     await w.get('form').trigger('submit')

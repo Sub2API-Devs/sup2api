@@ -18,12 +18,13 @@ type BetaRule struct {
 	Mapping string `json:"mapping"`
 }
 type RequestPolicy struct {
-	UnknownBeta  string     `json:"unknown_beta"`
-	UnknownField string     `json:"unknown_field"`
-	AllowFast    bool       `json:"allow_fast"`
-	ToolSearch   string     `json:"tool_search,omitempty"`
-	AllowEffort  bool       `json:"allow_effort"`
-	Betas        []BetaRule `json:"betas"`
+	EnvironmentFields map[string]string `json:"environment_fields,omitempty"`
+	UnknownBeta       string            `json:"unknown_beta"`
+	UnknownField      string            `json:"unknown_field"`
+	AllowFast         bool              `json:"allow_fast"`
+	ToolSearch        string            `json:"tool_search,omitempty"`
+	AllowEffort       bool              `json:"allow_effort"`
+	Betas             []BetaRule        `json:"betas"`
 	// Upstream errors end the run and reach the client as the API sent them,
 	// instead of being handled (retried, backed off) by Claude Code.
 	PassUpstreamErrors bool `json:"pass_upstream_errors"`
@@ -128,6 +129,7 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 	req.PassUpstreamErrors = p.PassUpstreamErrors
 	req.AttachmentSource = p.AttachmentSource
 	req.AttachmentSources = p.AttachmentSources
+	req.EnvironmentFields = p.EnvironmentFields
 	req.UnknownClientAttachment = p.UnknownClientAttachment
 	req.UnknownGatewayAttachment = p.UnknownGatewayAttachment
 	req.filterClientAttachments()

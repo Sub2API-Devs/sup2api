@@ -9,6 +9,7 @@ export const RUNTIME_COMPONENTS: readonly RuntimeComponent[] = ['controller', 'a
 export function runtimeState(r: CcgRuntimeImages | null | undefined): RuntimeState {
   if (!r) return 'unknown'
   if (!r.installed) return r.reason ? 'unknown' : 'notInstalled'
+  if (RUNTIME_COMPONENTS.some(c => !componentImages(r, c).expected || !componentImages(r, c).installed)) return 'unknown'
   return r.up_to_date ? 'upToDate' : 'outdated'
 }
 
@@ -23,4 +24,8 @@ export function shortDigest(ref: string | null | undefined): string {
 export function componentImages(r: CcgRuntimeImages, c: RuntimeComponent): { expected: string; installed: string } {
   const installed = r.installed ? { controller: r.installed.controller_image, app: r.installed.app_image, egress: r.installed.egress_image }[c] : ''
   return { expected: r.expected?.[c] || '', installed: installed || '' }
+}
+
+export function displayImage(ref: string | null | undefined): string {
+  return shortDigest(ref) || ref || ''
 }

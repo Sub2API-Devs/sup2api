@@ -3,6 +3,11 @@ package ccgateway
 import "fmt"
 
 func validateAttachmentPolicy(p RequestPolicy) error {
+	for k, v := range p.EnvironmentFields {
+		if (k != "workingDirectory" && k != "platform") || (v != "client" && v != "gateway") {
+			return fmt.Errorf("invalid environment field policy: %s", k)
+		}
+	}
 	known := map[string]bool{"environment": true, "model": true, "total_tokens_reminder": true, "session_context": true, "date": true}
 	for k, v := range p.AttachmentSources {
 		if !known[k] || (v != "client" && v != "gateway" && v != "both") {

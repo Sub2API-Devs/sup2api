@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 const source = readFileSync(new URL('../mod/hooks/register.js', import.meta.url), 'utf8');
-const { register } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+const { register, filterEnvironmentFields } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
 async function setup(policy) {
  const hooks={};register((name,fn)=>{hooks[name]=fn});
  const $={env:{get:async key=>key==='CCGATEWAY_ATTACHMENT_SOURCE'?'client':'fixture'},http:{fetch:async(_url,options)=>({ok:true,text:options?.method?'{}':JSON.stringify({attachments:policy})})}};
@@ -29,4 +29,17 @@ test('per-type sources and both unknown origins',async()=>{
    assert.equal((await run({type,origin:{kind:'engine'},text:'required'})).text,'required');
   }
  }
+});
+
+test('environment fields override whole-block source and fall back when absent', () => {
+ const text='# Environment\nYou have been invoked in the following environment: \n - Primary working directory: /work\n - Platform: linux\n - Shell: bash\n';
+ for(const keepDefault of [true,false]) for(const cwd of ['client','gateway']) for(const platform of ['client','gateway']) {
+  const policy={environment_fields:{workingDirectory:cwd,platform},client_environment_fields:{workingDirectory:true,platform:true}};
+  const out=filterEnvironmentFields(text,policy,keepDefault)||'';
+  assert.equal(out.includes('Primary working directory:'),cwd==='gateway');
+  assert.equal(out.includes(' - Platform:'),platform==='gateway');
+  assert.equal(out.includes(' - Shell:'),keepDefault);
+ }
+ const fallback=filterEnvironmentFields(text,{environment_fields:{workingDirectory:'client',platform:'client'}},false);
+ assert.ok(fallback.includes('/work'));assert.ok(fallback.includes('linux'));
 });

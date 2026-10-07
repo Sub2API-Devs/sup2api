@@ -1,5 +1,6 @@
 export default {
   policy: {
+    effectiveSource: '生效来源：{source}',
     betaValuesHint:
       '支持多个 Beta 名称，以逗号分隔，也可重复发送此请求头；网关会去重。白名单内按固定方式处理，白名单外按下方选择忽略或返回 400 错误。',
     description_context: '同时转发 Beta 并设置百万 Token 上下文环境变量；实际可用性与上限由上游账号和模型决定。',
@@ -79,6 +80,9 @@ export default {
     passUpstreamErrors: '上游错误直接返回给客户端',
     passUpstreamErrorsHint:
       '开启后，官方返回错误（包括 401、429、529 及流式中途的错误）时，立即把官方的状态码和错误内容原样返回给客户端，Claude Code 不再自动重试、退避或刷新授权。关闭（默认）时由 Claude Code 自行处理，最终失败才返回错误。开启后需要由调用方或网关负责重试和换号。',
+    environmentFieldsTitle: '环境字段来源（独立覆盖）',
+    environmentInherit: '跟随 environment 整体配置',
+    environmentFieldsHint: '仅控制模型看到的工作目录和平台；不改变容器实际目录。支持已验证的 Windows/Linux 环境块；客户端字段未识别时使用容器字段。独立混用可能与 shell、osVersion 不一致。',
     attachmentRulesHint: "按类型覆盖上方默认来源。容器附件按结构化事件识别；客户端仅对明确标记类型的附件生效，普通 system 文本保留。",
     attachmentInherit: "跟随默认",
     attachmentType_environment: "环境（含 cwd、操作系统）",
@@ -91,8 +95,8 @@ export default {
     attachmentPass: "放行（默认）",
     attachmentIgnore: "忽略",
     attachmentProtectedHint: "工具发现、Hook 上下文及未识别为附件的 system 指令始终保留。环境来源不改变容器进程实际 cwd。",
-    attachmentSourceTitle: '系统附件来源',
-    attachmentSourceLegend: '选择保留哪一方的环境信息（操作系统、日期、Token 余量等）',
+    attachmentSourceTitle: '附件默认来源',
+    attachmentSourceLegend: '以下附件未单独覆盖时使用此默认值；字段设置优先于附件设置。',
     attachmentSource_client: '客户端环境',
     attachmentSource_client_hint: '默认保留客户端已分类环境附件，过滤对应容器环境附件',
     attachmentSource_gateway: '网关容器环境',
@@ -206,14 +210,15 @@ export default {
   },
   status: { creating: '创建中', ready: '已就绪', blocked: '已停止', pending: '同步中', unknown: '未知' },
   runtimeInstall: {
-    title: '运行环境', subtitle: '账号容器使用的镜像和容器控制器发布在 GHCR，由核心通过 SSH 在 Docker 主机上安装或升级。',
-    state: { notInstalled: '未安装', upToDate: '已是最新', outdated: '有新版本', unknown: '状态未知' },
-    component: '组件', expected: '最新版本', installed: '已安装',
-    components: { controller: '容器控制器', app: '应用镜像', egress: '出口镜像' },
-    version: '已安装版本：{version}',
+    title: '容器部署与运行配置', subtitle: '保存默认镜像不会替换现有账号容器。下表核对控制器已加载的镜像配置；各账号实际镜像请查看账号容器状态。',
+    state: { notInstalled: '未安装', upToDate: '部署配置一致', outdated: '部署配置有差异', unknown: '状态未知' },
+    component: '组件', expected: '已保存的目标镜像', installed: '控制器已加载镜像',
+    components: { controller: '容器控制器', app: '账号 Worker 镜像', egress: '出口镜像' },
+    unavailable: '未获取',
+    version: '控制器版本：{version}',
     install: '安装运行环境', upgrade: '升级运行环境', installing: '正在拉取镜像并重启控制器，可能需要几分钟…',
     confirmMessage: '将通过 SSH 在 Docker 主机上拉取镜像并重启容器控制器；现有账号容器不会因镜像差异重建。新镜像仅用于新建容器，已有账号需手动替换。控制器重启期间连接发现可能短暂受影响。',
-    done: '运行环境已安装为最新版本', failed: '运行环境安装失败', loadFailed: '无法读取运行环境状态', reason: '原因：{message}',
+    done: '控制器部署配置已更新', failed: '运行环境安装失败', loadFailed: '无法读取运行环境状态', reason: '原因：{message}',
     readOnly: '安装或升级运行环境需要 settings:manage 权限。'
   },
   reason: {

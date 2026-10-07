@@ -9,7 +9,6 @@ import ModelMappingEditor from '@/views/accounts/ModelMappingEditor.vue'
 import { useAccountTypes } from '@/views/accounts/accountTypes'
 import RemoteSettings from './RemoteSettings.vue'
 import AccountRuntimes from './AccountRuntimes.vue'
-import RuntimeInstall from './RuntimeInstall.vue'
 import ProxySettings from './ProxySettings.vue'
 import { isTrustedAuthorizationURL, sessionExpired } from './validation'
 interface Status { healthy: boolean; logged_in: boolean; auth_method: string }
@@ -73,7 +72,6 @@ onBeforeUnmount(() => { code.value = ''; session.value = null })
     <SPageHeader v-if="!embedded" :title="t('ccgateway.title')" :description="t('ccgateway.description')"><template #actions><SButton to="/plugins/ccgateway?tab=settings">{{ t('plugins.detail.tabs.settings') }}</SButton></template></SPageHeader>
     <SHint v-if="!manage">{{ t('ccgateway.readOnly') }}</SHint>
     <RemoteSettings :disabled="!manage || authBusy || proxyBusy || !!session" @busy="remoteBusy = $event" @saved="remoteSaved" />
-    <RuntimeInstall :key="`runtime-${revision}`" :disabled="!manage || busy" />
     <AccountRuntimes v-if="accountMode" :key="revision" />
     <ProxySettings v-if="!accountMode" :disabled="!manage || authBusy || remoteBusy || !!session" :target-revision="revision" @busy="proxyBusy = $event" />
     <SCard v-if="!accountMode" :title="t('ccgateway.auth.title')" :subtitle="t('ccgateway.auth.hint')">

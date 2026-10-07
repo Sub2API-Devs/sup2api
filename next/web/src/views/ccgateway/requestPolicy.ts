@@ -10,6 +10,7 @@ export interface RequestPolicy {
   allow_effort: boolean
   pass_upstream_errors: boolean
   attachment_source: 'client' | 'gateway' | 'both'
+  environment_fields: Partial<Record<'workingDirectory' | 'platform', 'client' | 'gateway'>>
   attachment_sources: Partial<Record<AttachmentType, AttachmentSource>>
   unknown_client_attachment: 'pass' | 'ignore'
   unknown_gateway_attachment: 'pass' | 'ignore'
@@ -24,6 +25,7 @@ export function defaultRequestPolicy(): RequestPolicy {
     allow_effort: true,
     pass_upstream_errors: false,
     attachment_source: 'client',
+    environment_fields: {},
     attachment_sources: {},
     unknown_client_attachment: 'pass',
     unknown_gateway_attachment: 'pass',
@@ -49,6 +51,7 @@ export function validRequestPolicy(p: RequestPolicy): boolean {
     ['client', 'gateway', 'both'].includes(p.attachment_source) &&
     ['pass', 'ignore'].includes(p.unknown_client_attachment) &&
     ['pass', 'ignore'].includes(p.unknown_gateway_attachment) &&
+    Object.entries(p.environment_fields).every(([k, v]) => ['workingDirectory', 'platform'].includes(k) && ['client', 'gateway'].includes(v)) &&
     Object.entries(p.attachment_sources).every(([k, v]) => attachmentTypes.includes(k as AttachmentType) && ['client', 'gateway', 'both'].includes(v))
   )
 }

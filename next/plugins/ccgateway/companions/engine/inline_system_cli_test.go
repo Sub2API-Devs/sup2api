@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -235,7 +236,7 @@ func TestAttachmentSourcePolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, source := range []string{"client", "gateway", "both"} {
+	for _, source := range []string{"client", "gateway", "both", "fields_cc", "fields_cg", "fields_gc", "fields_gg", "fields_cc_history", "fields_cg_history", "fields_gc_history", "fields_gg_history"} {
 		t.Run(source, func(t *testing.T) {
 			root, err := os.MkdirTemp("", "ccg-attachment-test-"+source+"-")
 			if err != nil {
@@ -292,6 +293,28 @@ func TestAttachmentSourcePolicy(t *testing.T) {
 			}
 			req := parsed(t, Object{"model": "claude-opus-5-5", "max_tokens": 64, "system": "CLIENT_SYSTEM", "messages": []any{Object{"role": "user", "content": "test"}, Object{"role": "system", "content": []any{Object{"type": "text", "text": "INLINE_CLIENT_MARKER"}}}}})
 			req.AttachmentSource = source
+			fieldCase := strings.HasPrefix(source, "fields_")
+			clientPlatform := "linux"
+			if runtime.GOOS == "linux" {
+				clientPlatform = "win32"
+			}
+			if fieldCase {
+				req.AttachmentSource = "both"
+				choices := map[byte]string{'c': "client", 'g': "gateway"}
+				req.EnvironmentFields = map[string]string{"workingDirectory": choices[source[7]], "platform": choices[source[8]]}
+				req.System = append(req.System, "# Environment\nYou have been invoked in the following environment: \n - Primary working directory: /fixture/client-directory\n - Platform: "+clientPlatform+"\n")
+				if strings.HasSuffix(source, "_history") {
+					// A cold Worker must import the client's completed history.
+					environment := req.System[len(req.System)-1]
+					req.System = req.System[:len(req.System)-1]
+					req.Messages = append([]Message{
+						{"user", []Object{{"type": "text", "text": "previous question"}}},
+						{"system", []Object{{"type": "text", "text": environment}}},
+						{"assistant", []Object{{"type": "text", "text": "previous answer"}}},
+					}, req.Messages...)
+				}
+				req.filterClientAttachments()
+			}
 			diagnostic := newRequestDiagnostic(httptest.NewRecorder(), httptest.NewRequest("POST", "/v1/messages", nil))
 			diagnostic.store = &requestLogStore{root: filepath.Join(root, "request-logs"), enabled: true, active: map[*requestDiagnostic]bool{}}
 			diagnostic.capture(httptest.NewRecorder(), httptest.NewRequest("POST", "/v1/messages", nil), "")
@@ -321,6 +344,14 @@ func TestAttachmentSourcePolicy(t *testing.T) {
 			wire := string(captured)
 			mu.Unlock()
 			hasClient := strings.Contains(wire, "CLIENT_SYSTEM")
+			if fieldCase {
+				if strings.Contains(wire, "/fixture/client-directory") != (source[7] == 'c') || strings.Contains(wire, " - Platform: "+clientPlatform) != (source[8] == 'c') {
+					t.Fatalf("field selection mismatch %s: %s", source, wire)
+				}
+				if strings.Count(wire, " - Primary working directory:") != 1 || strings.Count(wire, " - Platform:") != 1 {
+					t.Fatalf("duplicate or missing environment field %s: %s", source, wire)
+				}
+			}
 			hasInline := strings.Contains(wire, "INLINE_CLIENT_MARKER")
 			if !hasInline {
 				t.Fatalf("inline system policy mismatch: source=%s present=%v", source, hasInline)

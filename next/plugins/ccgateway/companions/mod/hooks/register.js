@@ -1,3 +1,25 @@
+// Select native environment fields without changing the process/session cwd.
+export function filterEnvironmentFields(text, policy, keepDefault) {
+  if (typeof text !== 'string') return keepDefault ? text : null;
+  const fields = policy.environment_fields || {};
+  const lines = text.split(/\r?\n/);
+  const cwd = /^[ \t]*- Primary working directory: (.+)$/;
+  const platform = /^[ \t]*- Platform: (linux|win32)$/;
+  if (lines.filter(l => cwd.test(l)).length !== 1 || lines.filter(l => platform.test(l)).length !== 1) return keepDefault ? text : null;
+  let retained = 0;
+  const result = lines.filter(line => {
+    const field = cwd.test(line) ? 'workingDirectory' : platform.test(line) ? 'platform' : null;
+    if (field && fields[field]) {
+      const keep = fields[field] === 'gateway' || !policy.client_environment_fields?.[field];
+      if (keep) retained++;
+      return keep;
+    }
+    if (keepDefault) { if (field) retained++; return true; }
+    return /^(<\/?system-reminder>|# Environment|You have been invoked in the following environment:.*|\s*)$/.test(line);
+  });
+  return !keepDefault && retained === 0 ? null : result.join('\n');
+}
+
 export function register(on) {
   let requested = false;
   let searchPending = false;
@@ -67,6 +89,12 @@ export function register(on) {
       } else {
         keep = (origin === 'engine' ? policy.unknown_gateway : policy.unknown_client) !== 'ignore';
       }
+    }
+    if (origin === 'engine' && e.type === 'environment' && Object.keys(policy.environment_fields || {}).length > 0) {
+      const result = await next(e);
+      const filtered = { ...result, text: filterEnvironmentFields(result?.text, policy, keep) };
+      await trace(filtered.text === null ? 'drop' : 'filter_fields', filtered);
+      return filtered;
     }
     if (!keep) {
       await trace('drop', { text: null });

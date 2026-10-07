@@ -9,6 +9,7 @@ import (
 
 // RequestPolicy is supplied by the authenticated host, never by API callers.
 type RequestPolicy struct {
+	EnvironmentFields        map[string]string `json:"environment_fields,omitempty"`
 	UnknownBeta              string            `json:"unknown_beta"`
 	UnknownField             string            `json:"unknown_field"`
 	AllowFast                bool              `json:"allow_fast"`

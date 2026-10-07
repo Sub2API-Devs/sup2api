@@ -13,7 +13,7 @@ import type { CcgRuntimeImages } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { useCcgError } from './ccgError'
 import { knownReason } from './ccgAuthFlow'
-import { RUNTIME_COMPONENTS, componentImages, runtimeState, shortDigest } from './runtimeInstall'
+import { RUNTIME_COMPONENTS, componentImages, runtimeState, displayImage } from './runtimeInstall'
 
 const props = defineProps<{ disabled?: boolean }>()
 const { t } = useI18n()
@@ -87,9 +87,10 @@ onMounted(async () => {
     <SCard :title="t('ccgateway.runtimeInstall.title')" :subtitle="t('ccgateway.runtimeInstall.subtitle')">
       <template #actions>
         <SBadge v-if="info" :tone="badge" dot data-testid="ccgateway-runtime-state" :data-state="state">{{ t(`ccgateway.runtimeInstall.state.${state}`) }}</SBadge>
-        <SButton size="sm" :loading="loading" :disabled="installing" :title="t('common.refresh')" :aria-label="t('common.refresh')" @click="load"><SIcon name="refresh" class="h-4 w-4" /></SButton>
+        <SButton type="button" size="sm" :loading="loading" :disabled="installing" :title="t('common.refresh')" :aria-label="t('common.refresh')" @click="load"><SIcon name="refresh" class="h-4 w-4" /></SButton>
       </template>
       <div class="space-y-3 text-sm">
+        <slot />
         <SHint v-if="readReason" tone="warning">{{ t('ccgateway.runtimeInstall.reason', { message: readReason }) }}</SHint>
         <div v-if="error" class="space-y-1 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300" role="alert" data-testid="ccgateway-runtime-error">
           <div class="font-medium">{{ error.title }}</div>
@@ -106,16 +107,16 @@ onMounted(async () => {
           <tbody>
             <tr v-for="c in RUNTIME_COMPONENTS" :key="c" class="border-t border-gray-100 dark:border-dark-700" :data-component="c">
               <td class="py-1.5 pr-3 text-gray-700 dark:text-gray-300">{{ t(`ccgateway.runtimeInstall.components.${c}`) }}</td>
-              <td class="py-1.5 pr-3 font-mono" :title="componentImages(info, c).expected">{{ shortDigest(componentImages(info, c).expected) || '—' }}</td>
-              <td class="py-1.5 font-mono" :class="componentImages(info, c).installed && shortDigest(componentImages(info, c).installed) !== shortDigest(componentImages(info, c).expected) ? 'text-amber-600 dark:text-amber-400' : ''" :title="componentImages(info, c).installed">
-                {{ shortDigest(componentImages(info, c).installed) || '—' }}
+              <td class="py-1.5 pr-3 font-mono" :title="componentImages(info, c).expected">{{ displayImage(componentImages(info, c).expected) || t('ccgateway.runtimeInstall.unavailable') }}</td>
+              <td class="py-1.5 font-mono" :class="componentImages(info, c).installed && displayImage(componentImages(info, c).installed) !== displayImage(componentImages(info, c).expected) ? 'text-amber-600 dark:text-amber-400' : ''" :title="componentImages(info, c).installed">
+                {{ displayImage(componentImages(info, c).installed) || t('ccgateway.runtimeInstall.unavailable') }}
               </td>
             </tr>
           </tbody>
         </table>
         <p v-if="info?.installed?.version" class="text-xs text-gray-500 dark:text-dark-400">{{ t('ccgateway.runtimeInstall.version', { version: info.installed.version }) }}</p>
         <div v-if="manage && info && action" class="flex flex-wrap items-center gap-3">
-          <SButton variant="primary" :loading="installing" :disabled="props.disabled || loading" data-testid="ccgateway-runtime-install" @click="install">
+          <SButton type="button" variant="primary" :loading="installing" :disabled="props.disabled || loading" data-testid="ccgateway-runtime-install" @click="install">
             <SIcon v-if="!installing" name="download" class="h-4 w-4" />{{ t(`ccgateway.runtimeInstall.${action}`) }}
           </SButton>
           <span v-if="installing" class="text-xs text-gray-500 dark:text-dark-400">{{ t('ccgateway.runtimeInstall.installing') }}</span>
