@@ -31,6 +31,7 @@ import (
 // Requests without client system messages keep their body (thinking.display
 // aside); every other field stays as the CLI wrote it.
 type outboundRelay struct {
+	scope      *mainRequestScope
 	path       string
 	URL        string
 	FirstParty bool
@@ -337,6 +338,22 @@ func (r *outboundRelay) adapt(req *Request, groups []systemGroup, body []byte, c
 	if err != nil {
 		return nil, fmt.Errorf("model request body is not a JSON object")
 	}
+	main, err := r.scope.identify(message, count)
+	if err != nil {
+		return nil, err
+	}
+	if !main {
+		return body, nil
+	}
+	if !count && req.HasMainRequestFeatures() {
+		if r.scope == nil {
+			return nil, fmt.Errorf("client feature plan requires main request attribution")
+		}
+		if err := req.ApplyMainRequestFeatures(message); err != nil {
+			return nil, err
+		}
+		r.scope.recordApplied()
+	}
 	if !count {
 		if err := verifyNativeWireTools(req, message); err != nil {
 			return nil, err
@@ -501,7 +518,7 @@ func (relay *outboundRelay) handler(req *Request, forward http.Handler) http.Han
 		if model {
 			r = r.WithContext(context.WithValue(r.Context(), modelRequest{}, req.PassUpstreamErrors))
 		}
-		if (model && (len(groups) > 0 || display != "" || len(req.Native) > 0)) || (count && len(groups) > 0) {
+		if (model && (len(groups) > 0 || display != "" || len(req.Native) > 0 || req.HasMainRequestFeatures())) || (count && (len(groups) > 0 || relay.scope != nil)) {
 			if !relay.adaptRequest(w, r, req, groups, model, count) {
 				return
 			}

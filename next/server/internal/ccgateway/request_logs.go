@@ -3,6 +3,7 @@ package ccgateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -12,7 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Only the switch state is exposed; request log contents stay on the runtime.
+// Only switch state and validated limits are exposed; log contents stay on the runtime.
 func (s *Service) serveRequestLogs(c *gin.Context, ctx context.Context, d accountDesired) {
 	method := c.Request.Method
 	if method != http.MethodGet && method != http.MethodPut {
@@ -54,15 +55,41 @@ func (s *Service) serveRequestLogs(c *gin.Context, ctx context.Context, d accoun
 		httpapi.Fail(c, runtimeError(res.StatusCode, raw))
 		return
 	}
-	var out struct {
-		Enabled *bool `json:"enabled"`
-	}
-	if json.Unmarshal(raw, &out) != nil || out.Enabled == nil {
+	out, err := decodeRequestLogState(raw)
+	if err != nil {
 		httpapi.Fail(c, reasonError(core.ErrUnavailable, "runtime_unavailable"))
 		return
 	}
 	if method == http.MethodPut {
 		s.record(c, "account."+strconv.FormatInt(d.AccountID, 10)+".request-logs")
 	}
-	httpapi.OK(c, map[string]bool{"enabled": *out.Enabled})
+	httpapi.OK(c, out)
+}
+
+type requestLogState struct {
+	Enabled              *bool  `json:"enabled"`
+	PerRequestLimitBytes *int64 `json:"per_request_limit_bytes,omitempty"`
+	RetentionHours       *int64 `json:"retention_hours,omitempty"`
+	StorageBudgetBytes   *int64 `json:"storage_budget_bytes,omitempty"`
+	OverflowBehavior     string `json:"overflow_behavior,omitempty"`
+}
+
+func decodeRequestLogState(raw []byte) (requestLogState, error) {
+	var out requestLogState
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return out, err
+	}
+	if out.Enabled == nil {
+		return out, errors.New("request log state has no enabled value")
+	}
+	for _, limit := range []*int64{out.PerRequestLimitBytes, out.RetentionHours, out.StorageBudgetBytes} {
+		if limit != nil && (*limit <= 0 || *limit > 1<<53-1) {
+			return out, errors.New("invalid request log limit")
+		}
+	}
+	// Unknown future behavior is not an assurance that partial logs survive.
+	if out.OverflowBehavior != "retain_partial_with_metadata" {
+		out.OverflowBehavior = ""
+	}
+	return out, nil
 }

@@ -127,6 +127,7 @@ func (r *Runner) baseEnv() []string {
 // request, the outbound relay, the process, then the stream-json session.
 func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string, emit func(Object) error) (result Object, err error) {
 	cfg := newRunConfig(req, p, r.Plugin, dir)
+	req.diagnostic.artifact("feature-decisions.json", req.Plan.FeatureDecisions())
 	req.diagnostic.artifact("client-attachment-decisions.json", req.AttachmentDecisions)
 	// Only gateway-generated options: never dump inherited credentials or the
 	// private relay/Mod URL and token added later.
@@ -145,6 +146,7 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 	// A refusal, or an upstream error passed to the client, ends the run before
 	// the CLI can back off, refresh, or reshape the request and retry.
 	relay.setAbort(cancel)
+	relay.scope = cfg.scope
 	defer relay.Close()
 	// Assign the named results: runs after the process has been waited for.
 	defer func() { result, err = relayOutcome(ctx, relay, result, err) }()

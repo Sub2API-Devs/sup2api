@@ -106,13 +106,32 @@ func (a *Accumulator) finishStructured(result Object, req *Request) error {
 
 // JSON is validated before either ordinary or streaming clients receive it.
 // The API still uses SSE; the first text arrives after schema validation.
-func emitStructuredMessage(message Object, emit func(Object) error) error {
+func emitStructuredMessage(message Object, emit func(Object) error, source ...[]Object) error {
 	start := Object{}
 	for k, v := range message {
 		start[k] = v
 	}
+	// Final observations do not belong in message_start. When replaying a
+	// buffered stream retain each extension's original envelope location.
+	for _, field := range responseEnvelopeExtensions {
+		delete(start, field)
+	}
+	startEvent := Object{"type": "message_start", "message": start}
+	var original []Object
+	if len(source) > 0 {
+		original = source[0]
+	}
+	for _, event := range original {
+		if str(event, "type") == "message_start" {
+			if initial, ok := event["message"].(map[string]any); ok {
+				copyResponseExtensions(start, initial)
+			}
+			copyResponseExtensions(startEvent, event)
+			break
+		}
+	}
 	start["content"], start["stop_reason"] = []Object{}, nil
-	if err := emit(Object{"type": "message_start", "message": start}); err != nil {
+	if err := emit(startEvent); err != nil {
 		return err
 	}
 	blocks, _ := message["content"].([]Object)
@@ -141,5 +160,33 @@ func emitStructuredMessage(message Object, emit func(Object) error) error {
 			return err
 		}
 	}
-	return emit(Object{"type": "message_delta", "delta": Object{"stop_reason": "end_turn", "stop_sequence": nil}, "usage": message["usage"]})
+	terminal := false
+	for _, event := range original {
+		if str(event, "type") != "message_delta" {
+			continue
+		}
+		delta := Object{}
+		out := Object{"type": "message_delta", "delta": delta}
+		originalDelta, _ := event["delta"].(map[string]any)
+		hasExtensions := copyResponseExtensions(delta, originalDelta)
+		hasExtensions = copyResponseExtensions(out, event) || hasExtensions
+		if str(originalDelta, "stop_reason") != "" {
+			delta["stop_reason"], delta["stop_sequence"] = "end_turn", nil
+			out["usage"] = message["usage"]
+			terminal = true
+		} else if !hasExtensions {
+			continue
+		}
+		if err := emit(out); err != nil {
+			return err
+		}
+	}
+	if terminal {
+		return nil
+	}
+	delta := Object{"stop_reason": "end_turn", "stop_sequence": nil}
+	if len(source) == 0 {
+		copyResponseExtensions(delta, message)
+	}
+	return emit(Object{"type": "message_delta", "delta": delta, "usage": message["usage"]})
 }

@@ -14,14 +14,12 @@ func (d *requestDiagnostic) enabled() bool {
 	if d == nil {
 		return false
 	}
-	if d.store != nil {
-		d.store.mu.Lock()
-		defer d.store.mu.Unlock()
-		if !d.store.enabled {
-			return false
-		}
+	unlock := d.lock()
+	defer unlock()
+	if d.store != nil && !d.store.enabled {
+		return false
 	}
-	return d.directory != "" && !d.discarded
+	return d.directory != "" && !d.discarded && !d.finished
 }
 
 func (d *requestDiagnostic) artifact(name string, value any) {
@@ -38,22 +36,23 @@ func (d *requestDiagnostic) appendTrace(name string, b []byte) {
 	if d == nil {
 		return
 	}
-	if d.store != nil {
-		d.store.mu.Lock()
-		defer d.store.mu.Unlock()
-		if !d.store.enabled {
-			return
-		}
+	unlock := d.lock()
+	defer unlock()
+	if d.store != nil && !d.store.enabled {
+		return
 	}
 	if d.directory == "" || !d.reserve(len(b)) {
 		return
 	}
 	f, err := os.OpenFile(filepath.Join(d.directory, name), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
+		d.logFailure(err)
 		return
 	}
 	defer f.Close()
-	_, _ = f.Write(b)
+	if _, err := f.Write(b); err != nil {
+		d.logFailure(err)
+	}
 }
 
 func (d *requestDiagnostic) trace(event string, detail any) {

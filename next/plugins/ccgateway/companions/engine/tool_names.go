@@ -18,6 +18,14 @@ func (r *Request) customToolServer() string {
 // Namespace changes cannot resume a JSONL containing the previous wire names.
 // Preserve the existing default cache keys for backwards compatibility.
 func (r *Request) toolHistoryNamespace() string {
+	base := r.baseToolHistoryNamespace()
+	if len(r.ServerTools) > 0 || len(r.toolMetadataKey()) > 0 {
+		return digest([]any{"api-tool-policy-v1", base, r.ServerTools, r.toolMetadataKey()})
+	}
+	return base
+}
+
+func (r *Request) baseToolHistoryNamespace() string {
 	if r.AttachmentSource == "" && len(r.AttachmentSources) == 0 && r.UnknownClientAttachment == "" && r.UnknownGatewayAttachment == "" {
 		if r.customToolServer() == "ccgateway" {
 			return ""

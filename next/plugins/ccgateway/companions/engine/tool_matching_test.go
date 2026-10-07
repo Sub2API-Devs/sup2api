@@ -113,3 +113,50 @@ func TestNativeDefinitionsCheckedAtWireBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestNative21292CatalogVariantsAndMixedNames(t *testing.T) {
+	catalogue := verifiedNativeToolCatalogues["2.1.292"]
+	for _, name := range []string{"Read", "Bash", "Write", "Edit", "Glob", "Grep"} {
+		variants := catalogue[name]
+		if len(variants) == 0 {
+			t.Fatalf("missing captured %s", name)
+		}
+		for _, known := range variants {
+			data, _ := json.Marshal(known)
+			var client Tool
+			if err := json.Unmarshal(data, &client); err != nil {
+				t.Fatal(err)
+			}
+			client.Description = "Client owns execution and description."
+			r := &Request{Tools: []Tool{client, {Name: "mcp__files__lookup", Schema: Object{"type": "object"}}, {Name: "custom", Schema: Object{"type": "object"}}}}
+			matchNativeTools(r, "2.1.292")
+			if !r.Native[name] || r.wireName(name) != name || r.wireName("mcp__files__lookup") != "mcp__files__lookup" || r.wireName("custom") != "mcp__ccgateway__custom" {
+				t.Fatal("incorrect mixed native mapping", name, r.Native)
+			}
+			client.Schema["x-client-different-definition"] = true
+			r.Tools[0] = client
+			matchNativeTools(r, "2.1.292")
+			if r.Native[name] {
+				t.Fatalf("changed %s schema retained native identity", name)
+			}
+		}
+	}
+	for _, name := range []string{"Agent", "SendMessage"} {
+		if len(catalogue[name]) < 2 {
+			t.Fatal("capture variants collapsed", name)
+		}
+		for _, tool := range catalogue[name] {
+			r := &Request{Tools: []Tool{tool}}
+			matchNativeTools(r, "2.1.292")
+			if !r.Native[name] {
+				t.Fatal("captured variant was not matched", name)
+			}
+		}
+	}
+	read := catalogue["Read"][0]
+	r := &Request{Tools: []Tool{read}}
+	matchNativeTools(r, "2.1.293")
+	if len(r.Native) != 0 {
+		t.Fatal("unverified version reused catalogue")
+	}
+}

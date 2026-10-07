@@ -49,4 +49,27 @@ describe('account runtime debug log switches', () => {
     expect(mocks.put).not.toHaveBeenCalled()
     w.unmount()
   })
+  it('does not invent limits or partial-retention guarantees for legacy Workers', async () => {
+    const w = await render()
+    const limits = w.get('[data-testid="request-log-limits-25"]').text()
+    expect(limits).toContain('未报告完整日志限额')
+    expect(limits).toContain('超限处理尚未报告')
+    expect(limits).not.toContain('64 MiB')
+    expect(limits).not.toContain('保留已有内容')
+    w.unmount()
+  })
+  it('shows each Worker reported limit instead of fixed defaults', async () => {
+    mocks.get.mockImplementation(async (path: string) => path.endsWith('/status') ? { status: 'ready' } : path.endsWith('/health') ? { logged_in: true } : {
+      enabled: true, retention_hours: 12, per_request_limit_bytes: 32 * 1048576,
+      storage_budget_bytes: 128 * 1048576, overflow_behavior: 'retain_partial_with_metadata',
+    })
+    const w = await render()
+    const limits = w.get('[data-testid="request-log-limits-25"]').text()
+    expect(limits).toContain('12 小时')
+    expect(limits).toContain('32 MiB')
+    expect(limits).toContain('128 MiB')
+    expect(limits).toContain('保留已有内容')
+    expect(limits).not.toContain('64 MiB')
+    w.unmount()
+  })
 })

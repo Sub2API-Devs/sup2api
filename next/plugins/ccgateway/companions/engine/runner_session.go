@@ -70,6 +70,7 @@ type cliSession struct {
 }
 
 func newCLISession(ctx context.Context, req *Request, p *Prepared, cfg *runConfig, proc *cliProcess, relay *outboundRelay, emit func(Object) error) *cliSession {
+	p.FinalResponseStop = nil
 	return &cliSession{ctx: ctx, req: req, responseReq: req.responseView(), p: p, cfg: cfg, proc: proc, relay: relay, emit: emit, initID: uuid(), acc: &Accumulator{}, searchUsage: Object{}}
 }
 
@@ -78,7 +79,7 @@ func newCLISession(ctx context.Context, req *Request, p *Prepared, cfg *runConfi
 func (s *cliSession) run() (Object, error) {
 	systemPrompt := s.req.System
 
-	if e := s.proc.write(Object{"type": "control_request", "request_id": s.initID, "request": Object{"subtype": "initialize", "systemPrompt": systemPrompt, "systemPromptSnapshot": s.p.SnapshotEnabled, "sdkMcpServers": s.req.sdkMCPServers(), "hooks": Object{}, "supportedDialogKinds": []string{}, "promptSuggestions": false, "excludeDynamicSections": true}}); e != nil {
+	if e := s.proc.write(Object{"type": "control_request", "request_id": s.initID, "request": Object{"subtype": "initialize", "systemPrompt": systemPrompt, "systemPromptSnapshot": s.p.SnapshotEnabled && s.cfg.scope == nil, "sdkMcpServers": s.req.sdkMCPServers(), "hooks": Object{}, "supportedDialogKinds": []string{}, "promptSuggestions": false, "excludeDynamicSections": true}}); e != nil {
 		return nil, fmt.Errorf("cannot initialize CLI")
 	}
 	scan := bufio.NewScanner(s.proc.stdout)
@@ -163,6 +164,7 @@ func (s *cliSession) onStreamEvent(f Object) error {
 		if s.req.structuredOutput() && !s.acc.HasClientTool && str(event, "type") == "message_start" {
 			s.acc = &Accumulator{}
 			s.buffered = nil
+			s.p.FinalResponseStop = nil
 		} else {
 			return fmt.Errorf("unexpected post-completion CLI event: %s", str(event, "type"))
 		}
@@ -176,6 +178,9 @@ func (s *cliSession) onStreamEvent(f Object) error {
 	}
 	if s.acc.Done {
 		// Wait for native persistence; discovery rounds remain bounded.
+		if !isInternalSearch(s.acc.Message) {
+			s.p.recordFinalResponseStop(event)
+		}
 		return s.endSearchRound()
 	}
 	if s.req.bufferedResponse() {
@@ -194,6 +199,9 @@ func (s *cliSession) checkMod() error {
 		return fmt.Errorf("ccgateway Mod control is unavailable")
 	}
 	if err := s.cfg.control.verify(); err != nil {
+		return err
+	}
+	if err := s.cfg.scope.verify(); err != nil {
 		return err
 	}
 	// Any model response must come from a request that went through the
@@ -226,6 +234,9 @@ func (s *cliSession) endSearchRound() error {
 }
 
 func (s *cliSession) onResult(f Object) (Object, error) {
+	if err := s.checkMod(); err != nil {
+		return nil, err
+	}
 	if s.acc.Done && str(s.acc.Message, "stop_reason") == "refusal" {
 		return s.acc.Message, s.flush()
 	}
@@ -258,7 +269,7 @@ func (s *cliSession) flush() error {
 		return nil
 	}
 	if s.req.structuredOutput() && !s.acc.HasClientTool && str(s.acc.Message, "stop_reason") != "refusal" {
-		return emitStructuredMessage(s.acc.Message, s.emit)
+		return emitStructuredMessage(s.acc.Message, s.emit, s.buffered)
 	}
 	for _, event := range s.buffered {
 		if e := s.emit(event); e != nil {
@@ -283,6 +294,9 @@ func (s *cliSession) finish(f Object) (Object, error) {
 	_ = s.proc.cmd.Wait()
 	if s.ctx.Err() != nil {
 		return nil, s.ctx.Err()
+	}
+	if err := s.checkMod(); err != nil {
+		return nil, err
 	}
 	if e := s.p.captureNative(s.proc.cmd.Env, str(s.acc.Message, "id")); e != nil {
 		return nil, e

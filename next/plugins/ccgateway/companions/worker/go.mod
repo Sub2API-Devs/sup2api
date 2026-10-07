@@ -9,6 +9,10 @@ require (
 
 replace ccgateway => ..
 
+require github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts v0.0.0 // indirect
+
+replace github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts => ../contracts
+
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

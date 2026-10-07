@@ -17,6 +17,7 @@ import (
 var modControls sync.Map
 
 type modControl struct {
+	scope            *mainRequestScope
 	diagnostic       *requestDiagnostic
 	path, URL, token string
 	config           []byte
@@ -33,7 +34,7 @@ func startModControl(cfg *runConfig, internalBase string) (*modControl, error) {
 			return nil, err
 		}
 	}
-	data, err := json.Marshal(Object{"attachments": cfg.attachments, "systems": cfg.systems, "deferred": deferred, "tools": cfg.tools, "trace": cfg.diagnostic.enabled()})
+	data, err := json.Marshal(Object{"attachments": cfg.attachments, "systems": cfg.systems, "deferred": deferred, "tools": cfg.tools, "trace": cfg.diagnostic.enabled(), "main_request_scope": cfg.scope != nil})
 	if err != nil {
 		return nil, err
 	}
@@ -42,6 +43,7 @@ func startModControl(cfg *runConfig, internalBase string) (*modControl, error) {
 	}
 	c := &modControl{path: "/ccg-mod/" + uuid(), token: uuid() + uuid(), config: data, systems: len(cfg.systems)}
 	c.diagnostic = cfg.diagnostic
+	c.scope = cfg.scope
 	c.diagnostic.artifact("mod-config.json", Object{"attachments": cfg.attachments, "systems": cfg.systems, "deferred": deferred, "tools": cfg.tools})
 	if internalBase != "" {
 		modControls.Store(c.path, c)
@@ -105,6 +107,16 @@ func (c *modControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	switch {
+	case ack.Event == "main_request_begin" && c.ready && c.scope != nil:
+		if err := c.scope.enter(); err != nil {
+			w.WriteHeader(409)
+			return
+		}
+	case ack.Event == "main_request_end" && c.ready && c.scope != nil:
+		if err := c.scope.leave(); err != nil {
+			w.WriteHeader(409)
+			return
+		}
 	case ack.Event == "ready" && ack.Version == "ccgateway-v2":
 		c.ready = true
 	case ack.Event == "system" && c.ready && ack.Systems == c.systems:

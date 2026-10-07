@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -85,7 +86,7 @@ func TestRequestLogRetentionSkipsActiveAndUnrelatedDirectories(t *testing.T) {
 	}
 }
 
-func TestRequestLogDisablePurgesAndOverflowRetainsNothing(t *testing.T) {
+func TestRequestLogDisablePurgesAndOverflowRemainsQueryable(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "request-logs")
 	_ = os.MkdirAll(dir, 0700)
@@ -109,8 +110,20 @@ func TestRequestLogDisablePurgesAndOverflowRetainsNothing(t *testing.T) {
 	_, _ = out.Write([]byte("response"))
 	d.finish()
 	entries, _ := os.ReadDir(dir)
-	if len(entries) != 0 || w.Body.String() != "response" {
-		t.Fatal("overflow retained data or broke response")
+	if len(entries) != 1 || w.Body.String() != "response" {
+		t.Fatal("overflow lost record or broke response")
+	}
+	metadata, err := os.ReadFile(filepath.Join(d.directory, "metadata.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var record Object
+	if err := json.Unmarshal(metadata, &record); err != nil || record["log_status"] != "truncated" || record["event"] != "request_finished" {
+		t.Fatalf("incomplete log not identified: %s, %v", metadata, err)
+	}
+	d.save("later.body", []byte("must not extend payloads"))
+	if _, err := os.Stat(filepath.Join(d.directory, "later.body")); !os.IsNotExist(err) {
+		t.Fatal("overflow capture continued")
 	}
 }
 
@@ -142,5 +155,163 @@ func TestRequestLogLiveDisableClearsActiveAndPersists(t *testing.T) {
 	}
 	if w.Body.String() != "beforeafter" {
 		t.Fatal("disable interrupted response")
+	}
+}
+
+func TestRequestLogOverflowStreamAndLimits(t *testing.T) {
+	store := &requestLogStore{root: filepath.Join(t.TempDir(), "request-logs"), enabled: true, active: map[*requestDiagnostic]bool{}}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/v1/messages", nil)
+	d := newRequestDiagnostic(w, r)
+	d.store = store
+	out := d.capture(w, r, "")
+	_, _ = out.Write([]byte("before\n"))
+	d.mu.Lock()
+	d.bytes = 64 << 20
+	d.mu.Unlock()
+	_, _ = out.Write([]byte("after limit\n"))
+	if err := http.NewResponseController(out).Flush(); err != nil || !w.Flushed {
+		t.Fatal("overflow interrupted flush", err)
+	}
+	d.finish()
+	if w.Body.String() != "before\nafter limit\n" || d.bytes != 64<<20 {
+		t.Fatal("capture limit changed transport or grew budget")
+	}
+	b, _ := os.ReadFile(filepath.Join(d.directory, "response.body"))
+	if string(b) != "before\n" {
+		t.Fatal("partial payload lost or extended", string(b))
+	}
+	control := httptest.NewRecorder()
+	store.serve(control, httptest.NewRequest("GET", "/admin/request-logs", nil))
+	var limits Object
+	if json.Unmarshal(control.Body.Bytes(), &limits) != nil || limits["per_request_limit_bytes"] != float64(64<<20) || limits["retention_hours"] != float64(24) || limits["storage_budget_bytes"] != float64(512<<20) || limits["overflow_behavior"] != "retain_partial_with_metadata" {
+		t.Fatal("wrong public log limits", control.Body.String())
+	}
+}
+
+func TestRequestLogDisableThenEnableDoesNotResurrectActiveLog(t *testing.T) {
+	store := &requestLogStore{root: filepath.Join(t.TempDir(), "request-logs"), enabled: true, active: map[*requestDiagnostic]bool{}}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/v1/messages", nil)
+	d := newRequestDiagnostic(w, r)
+	d.store = store
+	d.capture(w, r, "")
+	for _, body := range []string{`{"enabled":false}`, `{"enabled":true}`} {
+		out := httptest.NewRecorder()
+		store.serve(out, httptest.NewRequest("PUT", "/admin/request-logs", strings.NewReader(body)))
+		if out.Code != 200 {
+			t.Fatal(out.Body.String())
+		}
+	}
+	d.finish()
+	if _, err := os.Stat(store.root); !os.IsNotExist(err) {
+		t.Fatal("old completion recreated purged request")
+	}
+}
+
+type blockedLogResponseWriter struct {
+	*httptest.ResponseRecorder
+	started chan struct{}
+	release chan struct{}
+}
+
+func (w *blockedLogResponseWriter) Write(b []byte) (int, error) {
+	close(w.started)
+	<-w.release
+	return w.ResponseRecorder.Write(b)
+}
+
+func TestRequestLogSlowClientDoesNotBlockDisable(t *testing.T) {
+	store := &requestLogStore{root: filepath.Join(t.TempDir(), "request-logs"), enabled: true, active: map[*requestDiagnostic]bool{}}
+	w := &blockedLogResponseWriter{httptest.NewRecorder(), make(chan struct{}), make(chan struct{})}
+	r := httptest.NewRequest("POST", "/v1/messages", nil)
+	d := newRequestDiagnostic(w, r)
+	d.store = store
+	out := d.capture(w, r, "")
+	written := make(chan struct{})
+	go func() { _, _ = out.Write([]byte("client response")); close(written) }()
+	<-w.started
+	disabled := make(chan struct{})
+	go func() {
+		store.serve(httptest.NewRecorder(), httptest.NewRequest("PUT", "/admin/request-logs", strings.NewReader(`{"enabled":false}`)))
+		close(disabled)
+	}()
+	select {
+	case <-disabled:
+	case <-time.After(2 * time.Second):
+		close(w.release)
+		<-written
+		<-disabled
+		t.Fatal("slow client held the logging disable mutex")
+	}
+	close(w.release)
+	<-written
+	d.finish()
+	if w.Body.String() != "client response" {
+		t.Fatal("disable interrupted response")
+	}
+}
+
+func TestRequestDiagnosticConcurrentTraceAndMetadata(t *testing.T) {
+	for _, withStore := range []bool{false, true} {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("POST", "/v1/messages", nil)
+		d := newRequestDiagnostic(w, r)
+		root := t.TempDir()
+		if withStore {
+			d.store = &requestLogStore{root: root, enabled: true, active: map[*requestDiagnostic]bool{}}
+		}
+		d.capture(w, r, root)
+		d.mu.Lock()
+		d.bytes = (64 << 20) - 2048
+		d.mu.Unlock()
+		var wg sync.WaitGroup
+		for i := 0; i < 6; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for j := 0; j < 30; j++ {
+					d.setStage("parallel")
+					d.setField("history_mode", "prefix-hit")
+					d.trace("mod_or_relay", Object{"step": j})
+					d.fail(200, "", "")
+				}
+			}()
+		}
+		wg.Wait()
+		d.finish()
+		b, err := os.ReadFile(filepath.Join(d.directory, "metadata.json"))
+		var record Object
+		if err != nil || json.Unmarshal(b, &record) != nil || record["log_status"] != "truncated" || d.bytes > 64<<20 {
+			t.Fatalf("concurrent completion lost: %v %s", err, b)
+		}
+	}
+}
+
+func TestRequestLogCompletionMetadataIsBounded(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/v1/messages", nil)
+	d := newRequestDiagnostic(w, r)
+	d.capture(w, r, t.TempDir())
+	d.setField("messages", strings.Repeat("x", 300<<10))
+	d.finish()
+	b, err := os.ReadFile(filepath.Join(d.directory, "metadata.json"))
+	if err != nil || len(b) > 256<<10 {
+		t.Fatal("completion metadata exceeded its separate budget", err, len(b))
+	}
+	var record Object
+	if json.Unmarshal(b, &record) != nil || record["metadata_details_truncated"] != true || record["request_id"] == nil {
+		t.Fatal("bounded metadata lost request identity", string(b))
+	}
+	before := d.bytes
+	d.trace("late_mod_event", Object{})
+	d.save("late-payload.body", []byte("after completion"))
+	d.finish()
+	after, err := os.ReadFile(filepath.Join(d.directory, "metadata.json"))
+	if err != nil || !bytes.Equal(b, after) || d.bytes != before {
+		t.Fatal("late producer changed finalized capture", err)
+	}
+	if _, err := os.Stat(filepath.Join(d.directory, "late-payload.body")); !os.IsNotExist(err) {
+		t.Fatal("late producer extended finalized record")
 	}
 }

@@ -1,5 +1,18 @@
 export default {
-  settingsTabs: { accounts: 'Account containers', label: 'Settings categories', connection: 'Connection', network: 'Network', requests: 'Requests & tools', attachments: 'Attachments', deployment: 'Deployment', save: 'Save all settings' },
+  settingsTabs: { accounts: 'Account containers', label: 'Settings categories', connection: 'Connection', network: 'Network', requests: 'API features', attachments: 'CC features', deployment: 'Deployment', save: 'Save all settings' },
+  features: {
+    title: 'API features',
+    baseline: 'Features group related parameters, betas and limitations. This is a code adaptation catalog, not runtime verification of the current account, model or Worker.',
+    loading: 'Loading feature catalog…',
+    loadFailed: 'The feature catalog is unavailable or unsupported by this core. Support cannot be confirmed; existing settings are unchanged.',
+    retry: 'Reload', search: 'Search features, parameters or betas', filter: 'Adaptation status', all: 'All statuses',
+    status: { supported: 'Supported', partial: 'Partial support', unsupported: 'Not supported', unverified: 'Not verified' },
+    body: 'Request parameters', requirements: 'Requirements: ', implementation: 'Implementation and evidence',
+    empty: 'No matching features', version: 'Catalog version: {version}', previous: 'Previous', next: 'Next',
+    ccSettings: 'View CC tool search settings', ccTitle: 'CC features',
+    ccHint: 'Configure tool behavior, error handling and environment attachments for Claude Code inside the Worker.',
+    ccRuntime: 'Tools and error handling',
+  },
   policy: {
     effectiveSource: 'Effective source: {source}',
     betaValuesHint:
@@ -268,7 +281,11 @@ export default {
   },
   requestLogs: {
     title: 'Request debug logs',
-    hint: 'Enable complete request and response logs per account, including headers, bodies and streaming responses. Logs stay in the account runtime. Turning this off stops recording and deletes all request debug logs for that account.',
+    hint: 'Record requests, responses and processing events in each account’s Worker container. Actual retention, limits and overflow behavior are reported by each Worker below. Turning this off stops recording and deletes all request debug logs for that account.',
+    limits: 'Retention: {hours} hours; request payload: {request} MiB; total soft budget: {total} MiB.',
+    overflow: 'Overflow keeps existing content marked as truncated without interrupting the request.',
+    unreportedLimits: 'This Worker has not reported complete log limits; it may be an older version.',
+    unreportedOverflow: 'Overflow behavior has not been reported.',
     failed: 'Could not read or update the log switch. Refresh and try again.',
   },
   runtimes: {

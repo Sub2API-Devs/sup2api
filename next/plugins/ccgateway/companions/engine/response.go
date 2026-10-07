@@ -64,6 +64,14 @@ func (a *Accumulator) push(e Object, r *Request) error {
 		if !a.Stopped || len(a.Closed) != len(a.Blocks) {
 			return fmt.Errorf("incomplete model message")
 		}
+		if len(r.ServerTools) > 0 {
+			view := *r
+			view.Messages = []Message{{Role: "assistant", Content: a.Blocks}}
+			if err := view.validateServerSearchHistory(); err != nil {
+				return err
+			}
+		}
+		copyResponseExtensions(a.Message, e)
 		a.Message["content"] = a.Blocks
 		a.Done = true
 		return nil
@@ -82,6 +90,8 @@ func (a *Accumulator) start(e Object) error {
 	for k, v := range m {
 		a.Message[k] = v
 	}
+	copyResponseExtensions(a.Message, m)
+	copyResponseExtensions(a.Message, e)
 	a.Inputs = map[int]string{}
 	a.Structured = map[int]bool{}
 	a.Closed = map[int]bool{}
@@ -111,6 +121,37 @@ func (a *Accumulator) blockStart(e Object, r *Request) error {
 			return err
 		}
 	case "thinking", "redacted_thinking":
+	case "server_tool_use":
+		if r.NoTools || !r.hasServerSearch(str(block, "name")) || str(block, "id") == "" {
+			return fmt.Errorf("model requested an undeclared server search tool")
+		}
+		for _, previous := range a.Blocks {
+			if str(previous, "type") == "server_tool_use" && str(previous, "id") == str(block, "id") {
+				return fmt.Errorf("duplicate server search call id")
+			}
+		}
+	case "tool_search_tool_result":
+		if err := checkServerSearchBlock(block, "assistant"); err != nil {
+			return err
+		}
+		found := false
+		for _, previous := range a.Blocks {
+			if str(previous, "type") == "server_tool_use" && str(previous, "id") == str(block, "tool_use_id") {
+				found = true
+			}
+			if str(previous, "type") == "tool_search_tool_result" && str(previous, "tool_use_id") == str(block, "tool_use_id") {
+				found = false
+			}
+		}
+		if !found {
+			return fmt.Errorf("server search result has no unmatched call")
+		}
+		var err error
+		block, err = mapSearchReferences(block, func(name string) string { return clientToolName(r, name) })
+		if err != nil {
+			return err
+		}
+		e["content_block"] = block
 	case "tool_use":
 		name := clientToolName(r, str(block, "name"))
 		if name == "" {
@@ -178,7 +219,7 @@ func (a *Accumulator) blockDelta(e Object) error {
 		}
 		block["signature"] = str(block, "signature") + str(d, "signature")
 	case "input_json_delta":
-		if str(block, "type") != "tool_use" {
+		if str(block, "type") != "tool_use" && str(block, "type") != "server_tool_use" {
 			return fmt.Errorf("input delta on wrong block")
 		}
 		a.Inputs[i] += str(d, "partial_json")
@@ -199,21 +240,45 @@ func (a *Accumulator) blockStop(e Object) error {
 		}
 		a.Blocks[i]["input"] = input
 	}
+	if str(a.Blocks[i], "type") == "server_tool_use" {
+		if err := checkServerSearchBlock(a.Blocks[i], "assistant"); err != nil {
+			return err
+		}
+	}
 	a.Closed[i] = true
 	return nil
 }
 func (a *Accumulator) messageDelta(e Object) error {
-	if a.Stopped || len(a.Closed) != len(a.Blocks) {
+	if len(a.Closed) != len(a.Blocks) {
 		return fmt.Errorf("message delta before blocks closed")
 	}
 	d, ok := e["delta"].(map[string]any)
-	if !ok || str(d, "stop_reason") == "" {
-		return fmt.Errorf("missing stop reason")
+	if !ok {
+		return fmt.Errorf("invalid message delta")
+	}
+	stop := str(d, "stop_reason")
+	if a.Stopped && stop != "" {
+		return fmt.Errorf("multiple terminal message deltas")
+	}
+	// Some response observations arrive before or after the terminal stop
+	// reason. Keep them until message_stop instead of cutting off verdicts.
+	extensions := Object{}
+	hasExtensions := copyResponseExtensions(extensions, d)
+	hasExtensions = copyResponseExtensions(extensions, e) || hasExtensions
+	_, hasUsage := e["usage"].(map[string]any)
+	if stop == "" && !hasExtensions && !hasUsage {
+		return fmt.Errorf("message delta has no stop reason, usage or registered extension")
 	}
 	if len(a.Structured) > 0 && !a.HasClientTool && str(d, "stop_reason") == "tool_use" {
 		d["stop_reason"] = "end_turn"
 	}
 	for k, v := range d {
+		if stop == "" && (k == "stop_reason" || k == "stop_sequence") {
+			continue
+		}
+		a.Message[k] = v
+	}
+	for k, v := range extensions {
 		a.Message[k] = v
 	}
 	if u, ok := e["usage"].(map[string]any); ok {
@@ -226,6 +291,8 @@ func (a *Accumulator) messageDelta(e Object) error {
 		}
 		a.Message["usage"] = usage
 	}
-	a.Stopped = true
+	if stop != "" {
+		a.Stopped = true
+	}
 	return nil
 }

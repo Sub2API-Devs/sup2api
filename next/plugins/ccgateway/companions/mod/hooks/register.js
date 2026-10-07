@@ -42,7 +42,17 @@ export function register(on) {
     if (formatContinuation && !searchPending) formatSteps++;
     requested = true;
     searchPending = false;
-    return yield* next(e);
+    if (!configuration?.main_request_scope) return yield* next(e);
+    const lease = async event => {
+      const response = await $.http.fetch(controlURL, { method: 'POST', headers: { Authorization: 'Bearer ' + controlToken, 'content-type': 'application/json' }, body: JSON.stringify({ event }) });
+      if (!response.ok) throw new Error('ccgateway: main request scope rejected');
+    };
+    await lease('main_request_begin');
+    try {
+      return yield* next(e);
+    } finally {
+      await lease('main_request_end');
+    }
   });
   on('session.start', async ($, e, next) => {
     controlURL = await $.env.get('CCGATEWAY_MOD_URL');
@@ -112,7 +122,7 @@ export function register(on) {
   on('tool.describe', async ($, e, next) => {
     let result = await next(e);
     const route = configuration?.tools?.[e.tool];
-    if (route?.native) result = { ...result, description: route.description };
+    if (route) result = { ...result, description: route.description };
     const deferred = configuration.deferred || {};
     return Object.hasOwn(deferred, e.tool) ? { ...result, isDeferred: deferred[e.tool] } : result;
   });

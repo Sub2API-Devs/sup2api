@@ -21,8 +21,10 @@ type Tool struct {
 	Description  string `json:"description,omitempty"`
 	Schema       Object `json:"input_schema"`
 	DeferLoading *bool  `json:"defer_loading,omitempty"`
+	Metadata     Object `json:"-"`
 }
 type Request struct {
+	Plan                    *RequestPlan
 	EnvironmentFields       map[string]string
 	ClientEnvironmentFields map[string]bool
 	diagnostic              *requestDiagnostic
@@ -32,6 +34,7 @@ type Request struct {
 	System                  []string
 	Messages                []Message
 	Tools                   []Tool
+	ServerTools             []Object
 	NoTools                 bool
 	Thinking                Object
 	Fast                    *bool
@@ -171,6 +174,8 @@ func checkBlock(b Object, role string, ttl *time.Duration) error {
 		}
 	case "tool_use":
 		return checkToolUse(b, role)
+	case "server_tool_use", "tool_search_tool_result":
+		return checkServerSearchBlock(b, role)
 	case "tool_result":
 		return checkToolResult(b, role, ttl)
 	case "image":
@@ -302,7 +307,11 @@ func parseRequest(data []byte) (*Request, error) {
 		return nil, e
 	}
 	if ts, exists := o["tools"]; exists {
-		if r.Tools, e = parseTools(ts, &r.TTL); e != nil {
+		var clientTools any
+		if clientTools, r.ServerTools, e = splitServerSearchTools(ts, &r.TTL); e != nil {
+			return nil, e
+		}
+		if r.Tools, e = parseTools(clientTools, &r.TTL); e != nil {
 			return nil, e
 		}
 	}
@@ -320,6 +329,9 @@ func parseRequest(data []byte) (*Request, error) {
 		return nil, e
 	}
 	if e = validateConversation(r.Messages, r.origin); e != nil {
+		return nil, e
+	}
+	if e = r.validateServerSearchHistory(); e != nil {
 		return nil, e
 	}
 	if err := validatePendingSystems(r); err != nil {
@@ -385,7 +397,7 @@ func parseTool(v any, seen map[string]bool, ttl *time.Duration) (Tool, error) {
 	if !ok {
 		return Tool{}, fmt.Errorf("invalid tool")
 	}
-	if e := keys(t, "name", "description", "input_schema", "cache_control", "defer_loading"); e != nil {
+	if e := keys(t, "name", "description", "input_schema", "cache_control", "defer_loading", "type", "strict", "eager_input_streaming", "input_examples", "allowed_callers"); e != nil {
 		return Tool{}, e
 	}
 	n := str(t, "name")
@@ -410,7 +422,11 @@ func parseTool(v any, seen map[string]bool, ttl *time.Duration) (Tool, error) {
 		}
 		deferLoading = &b
 	}
-	return Tool{Name: n, Description: str(t, "description"), Schema: s, DeferLoading: deferLoading}, nil
+	metadata, e := parseToolMetadata(t, true)
+	if e != nil {
+		return Tool{}, e
+	}
+	return Tool{Name: n, Description: str(t, "description"), Schema: s, DeferLoading: deferLoading, Metadata: metadata}, nil
 }
 
 // parseToolChoice reports whether the client disabled tools.
@@ -576,9 +592,19 @@ func fingerprints(ms []Message) []string {
 	return out
 }
 func (r *Request) configKey() string {
-	return digest([]any{r.Model, r.System, r.Tools, r.NoTools, r.Thinking, r.Native, r.Fast, r.Effort, r.Betas, r.FineGrainedTools, r.JSONSchema, r.PromptCacheTTL, r.ToolSearch, r.customToolServer()})
+	parts := []any{r.Model, r.System, r.Tools, r.NoTools, r.Thinking, r.Native, r.Fast, r.Effort, r.Betas, r.FineGrainedTools, r.JSONSchema, r.PromptCacheTTL, r.ToolSearch, r.customToolServer()}
+	if len(r.ServerTools) > 0 {
+		parts = append(parts, r.ServerTools)
+	}
+	if metadata := r.toolMetadataKey(); len(metadata) > 0 {
+		parts = append(parts, metadata)
+	}
+	return digest(parts)
 }
 func (r *Request) wireName(name string) string {
+	if r.hasServerSearch(name) {
+		return name
+	}
 	if r.Native[name] {
 		return name
 	}
@@ -596,6 +622,9 @@ func (r *Request) wireMessage(m Message) Message {
 		}
 		if str(c, "type") == "tool_use" {
 			c["name"] = r.wireName(str(c, "name"))
+		}
+		if str(c, "type") == "tool_search_tool_result" {
+			c, _ = mapSearchReferences(c, r.wireName)
 		}
 		out.Content = append(out.Content, c)
 	}

@@ -137,7 +137,7 @@ func (x *exchange) admit() bool {
 		x.fail(400, "invalid_request_error", "Unsupported anthropic-version")
 		return false
 	}
-	x.diagnostic.stage = "read_body"
+	x.diagnostic.setStage("read_body")
 	body, e := io.ReadAll(http.MaxBytesReader(x.w, r.Body, 32<<20))
 	if e != nil {
 		var large *http.MaxBytesError
@@ -149,7 +149,7 @@ func (x *exchange) admit() bool {
 		return false
 	}
 	x.diagnostic.request(body, r.Header)
-	x.diagnostic.stage = "parse_request"
+	x.diagnostic.setStage("parse_request")
 	req, e := parsePolicyRequest(body, r.Header)
 	if e != nil {
 		x.fail(400, "invalid_request_error", e.Error())
@@ -157,7 +157,7 @@ func (x *exchange) admit() bool {
 	}
 	req.diagnostic = x.diagnostic
 	x.req = req
-	x.diagnostic.stage = "admission"
+	x.diagnostic.setStage("admission")
 	if e = x.g.admitNativeTools(req, r.Header.Get("X-CCGateway-Native-Tools")); e == nil {
 		matchNativeTools(req, x.g.Runner.Version)
 		e = validateToolNames(req)
@@ -247,7 +247,7 @@ func (x *exchange) execute(sessionLabel, logical string) {
 	// A catalogued tool can be disabled by this CLI session's runtime gates.
 	// Rebuild with SDK MCP only before any model request reached the provider.
 	for attempt := 0; ; attempt++ {
-		x.diagnostic.stage = "prepare_history"
+		x.diagnostic.setStage("prepare_history")
 		x.diagnostic.trace("history_prepare_started", nil)
 		p, e := prepareHistory(req, g.Cache, logical, dir, g.Runner.Version)
 		if e != nil {
@@ -255,7 +255,7 @@ func (x *exchange) execute(sessionLabel, logical string) {
 			return
 		}
 		defer p.release()
-		x.diagnostic.fields["history_mode"] = p.Mode
+		x.diagnostic.setField("history_mode", p.Mode)
 		x.diagnostic.artifact("history.json", Object{"mode": p.Mode, "session_id": p.SessionID, "anchor": p.Anchor, "input_uuid": p.InputUUID, "rows": len(p.Rows)})
 		if x.diagnostic.enabled() {
 			x.diagnostic.save("history-prepared.jsonl", nativeBytes(p.Rows))
@@ -265,8 +265,11 @@ func (x *exchange) execute(sessionLabel, logical string) {
 		x.w.Header().Set("X-CCGateway-History", p.Mode)
 		x.w.Header().Set("X-CCGateway-Cache-TTL", fmt.Sprint(int((24 * time.Hour).Seconds())))
 		x.w.Header().Set("X-CCGateway-Cache-Scope", "local-only")
-		x.diagnostic.stage = "claude_code"
+		x.diagnostic.setStage("claude_code")
 		answer, e := g.Runner.run(ctx, req, p, dir, x.send)
+		if e == nil && ctx.Err() != nil {
+			e = ctx.Err()
+		}
 		if e != nil {
 			var unavailable *nativeToolAvailabilityError
 			if attempt == 0 && !x.streaming && ctx.Err() == nil && errors.As(e, &unavailable) && unavailable.RetrySafe {
@@ -295,9 +298,9 @@ func (x *exchange) execute(sessionLabel, logical string) {
 		} else {
 			x.diagnostic.trace("history_committed", Object{"session_id": p.SessionID, "anchor": p.NativeAnchor})
 		}
-		x.diagnostic.stage = "completed"
+		x.diagnostic.setStage("completed")
 		if req.Stream {
-			_ = x.send(Object{"type": "message_stop"})
+			_ = x.send(p.finalResponseStop())
 		} else {
 			x.w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(x.w).Encode(answer)
@@ -335,7 +338,7 @@ func (x *exchange) send(event Object) error {
 func (x *exchange) runFailed(ctx context.Context, e error) {
 	x.diagnostic.fail(502, "api_error", e.Error())
 	if x.r.Context().Err() != nil {
-		x.diagnostic.fields["client_canceled"] = true
+		x.diagnostic.setField("client_canceled", true)
 		return
 	}
 	status := 502

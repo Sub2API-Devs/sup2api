@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { defaultRequestPolicy, validRequestPolicy } from './requestPolicy'
 
 describe('CCGateway request policy', () => {
+  it('accepts every canonical tool search threshold including zero and rejects malformed ranges', () => {
+    for (let threshold = 0; threshold <= 100; threshold++) {
+      expect(validRequestPolicy({ ...defaultRequestPolicy(), tool_search: `auto:${threshold}` })).toBe(true)
+    }
+    for (const mode of ['auto:-1', 'auto:101', 'auto:1.5', 'auto:+1', 'auto:01', 'auto: 1', 'auto:', 'auto:999999999999999999999']) {
+      expect(validRequestPolicy({ ...defaultRequestPolicy(), tool_search: mode })).toBe(false)
+    }
+  })
   it('validates tool-search modes and ignores legacy beta rules', () => {
     const p = defaultRequestPolicy()
     expect(p.tool_search).toBe('request')

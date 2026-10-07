@@ -74,7 +74,7 @@ func TestPromptEvidenceTTLAndCheckpointIsolation(t *testing.T) {
 			row, anchor := transcriptRow(Message{"assistant", answer}, p.LastUUID, p.SessionID, p.Work, "2.1.288", r.Model)
 			p.NativeRows, p.NativeAnchor = append(p.Rows, row), anchor
 			start := time.Now()
-			if err := p.commit(r, Object{"content": answer}, cache, "scope", "", "2.1.288", start); err != nil {
+			if err := p.commit(r, Object{"id": "msg_prompt_snapshot", "role": "assistant", "stop_reason": "end_turn", "content": answer}, cache, "scope", "", "2.1.288", start); err != nil {
 				t.Fatal(err)
 			}
 			hash := digest([]any{p.Hashes[len(p.Hashes)-1], Message{"assistant", answer}})

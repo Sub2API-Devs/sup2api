@@ -6,6 +6,7 @@ WORKDIR /build/worker
 # 复制 go mod 文件
 COPY go.mod go.sum ../
 COPY worker/go.mod worker/go.sum ./
+COPY contracts/go.mod ../contracts/
 RUN go mod download
 
 # 复制源代码

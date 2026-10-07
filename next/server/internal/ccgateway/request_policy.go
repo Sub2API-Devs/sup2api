@@ -2,8 +2,8 @@ package ccgateway
 
 import (
 	"errors"
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -26,21 +26,10 @@ type RequestPolicy struct {
 	PassUpstreamErrors bool       `json:"pass_upstream_errors"`
 	Betas              []BetaRule `json:"betas"`
 }
-type BetaRule struct {
-	Name    string `json:"name"`
-	Mapping string `json:"mapping"`
-}
+type BetaRule = features.BetaRule
 
 func defaultRequestPolicy() RequestPolicy {
-	return RequestPolicy{UnknownClientAttachment: "pass", UnknownGatewayAttachment: "pass", CustomToolPrefix: "ccgateway", UnknownBeta: "ignore", UnknownField: "reject", AllowFast: false, AllowEffort: true, AttachmentSource: "client", PassUpstreamErrors: false, ToolSearch: "request", Betas: []BetaRule{
-		{"interleaved-thinking-2025-05-14", "forward"},
-		{"fine-grained-tool-streaming-2025-05-14", "fine_grained_tools"},
-		{"context-1m-2025-08-07", "forward"},
-		{"fast-mode-2026-02-01", "fast"},
-		{"advanced-tool-use-2025-11-20", "tool_search"},
-		{"dev-full-thinking-2025-05-14", "forward"},
-		{"model-context-window-exceeded-2025-08-26", "forward"},
-	}}
+	return RequestPolicy{UnknownClientAttachment: "pass", UnknownGatewayAttachment: "pass", CustomToolPrefix: "ccgateway", UnknownBeta: "ignore", UnknownField: "reject", AllowFast: false, AllowEffort: true, AttachmentSource: "client", PassUpstreamErrors: false, ToolSearch: "request", Betas: features.BetaRules()}
 }
 func (c Config) EffectiveRequestPolicy() RequestPolicy {
 	if c.RequestPolicy == nil {
@@ -86,14 +75,11 @@ func validateRequestPolicy(p RequestPolicy) error {
 }
 
 var customToolPrefixPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,32}$`)
+var toolSearchThresholdPattern = regexp.MustCompile(`^auto:(0|[1-9][0-9]?|100)$`)
 
 func validToolSearch(value string) bool {
 	if value == "request" || value == "false" || value == "true" || value == "auto" {
 		return true
 	}
-	if strings.HasPrefix(value, "auto:") {
-		n, err := strconv.Atoi(strings.TrimPrefix(value, "auto:"))
-		return err == nil && n >= 1 && n <= 100
-	}
-	return false
+	return toolSearchThresholdPattern.MatchString(value)
 }

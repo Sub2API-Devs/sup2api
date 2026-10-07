@@ -15,6 +15,7 @@ import (
 
 // Full payloads stay only in removable files; metadata describes protocol structure.
 type requestDiagnostic struct {
+	mu        sync.Mutex
 	fields    Object
 	stage     string
 	started   time.Time
@@ -24,7 +25,35 @@ type requestDiagnostic struct {
 	writer    *diagnosticWriter
 	bytes     int64
 	discarded bool
+	finished  bool
 	store     *requestLogStore
+}
+
+// Always acquire the store before the request mutex; disable uses the same
+// order while closing active files. Standalone diagnostics still need a lock.
+func (d *requestDiagnostic) lock() func() {
+	if d.store != nil {
+		d.store.mu.Lock()
+	}
+	d.mu.Lock()
+	return func() {
+		d.mu.Unlock()
+		if d.store != nil {
+			d.store.mu.Unlock()
+		}
+	}
+}
+
+func (d *requestDiagnostic) setStage(stage string) {
+	d.mu.Lock()
+	d.stage = stage
+	d.mu.Unlock()
+}
+
+func (d *requestDiagnostic) setField(key string, value any) {
+	d.mu.Lock()
+	d.fields[key] = value
+	d.mu.Unlock()
 }
 
 type diagnosticWriter struct {
@@ -39,42 +68,48 @@ func (w *diagnosticWriter) WriteHeader(status int) {
 		return
 	}
 	w.written = true
-	w.diagnostic.fields["http_status"] = status
+	w.diagnostic.setField("http_status", status)
 	w.ResponseWriter.WriteHeader(status)
 }
 func (w *diagnosticWriter) Write(b []byte) (int, error) {
-	if w.diagnostic.store != nil {
-		w.diagnostic.store.mu.Lock()
-		defer w.diagnostic.store.mu.Unlock()
-	}
 	if !w.written {
 		w.WriteHeader(http.StatusOK)
 	}
+	unlock := w.diagnostic.lock()
 	if w.diagnostic.response != nil && w.diagnostic.reserve(len(b)) {
 		if _, err := w.diagnostic.response.Write(b); err != nil {
 			w.diagnostic.logFailure(err)
 		}
 	}
+	unlock()
+	// A slow client must not hold the account-wide logging/disable mutex.
 	return w.ResponseWriter.Write(b)
 }
 
 func (d *requestDiagnostic) logFailure(err error) {
+	// Caller holds the request lock.
 	d.fields["log_write_error"] = true
+	if d.fields["log_status"] != "truncated" {
+		d.fields["log_status"] = "partial"
+	}
 	log.Printf("request log write failed for %s: %v", d.fields["request_id"], err)
 }
 
 func (d *requestDiagnostic) save(name string, b []byte) {
-	if d.store != nil {
-		d.store.mu.Lock()
-		defer d.store.mu.Unlock()
-		if !d.store.enabled {
-			return
-		}
+	unlock := d.lock()
+	defer unlock()
+	d.saveLocked(name, b)
+}
+
+func (d *requestDiagnostic) saveLocked(name string, b []byte) {
+	if d.store != nil && !d.store.enabled {
+		return
 	}
 	if d.directory == "" {
 		return
 	}
-	if !d.reserve(len(b)) {
+	// Completion metadata remains queryable even when payload capture overflowed.
+	if name != "metadata.json" && !d.reserve(len(b)) {
 		return
 	}
 	if err := os.WriteFile(filepath.Join(d.directory, name), b, 0600); err != nil {
@@ -82,23 +117,24 @@ func (d *requestDiagnostic) save(name string, b []byte) {
 	}
 }
 
-// Overflow removes the whole diagnostic instead of retaining partial content.
+// Stop payload capture at the request budget, preserving an explicitly partial
+// record and its bounded completion metadata instead of silently losing it.
 func (d *requestDiagnostic) reserve(n int) bool {
-	if d.discarded {
+	if d.discarded || d.finished {
 		return false
 	}
-	d.bytes += int64(n)
-	if d.bytes <= 64<<20 {
+	if d.bytes+int64(n) <= 64<<20 {
+		d.bytes += int64(n)
 		return true
 	}
 	if d.response != nil {
 		_ = d.response.Close()
 		d.response = nil
 	}
-	if err := os.RemoveAll(d.directory); err != nil {
-		d.logFailure(err)
-	}
-	d.directory = ""
+	d.fields["log_status"] = "truncated"
+	d.fields["log_limit_bytes"] = 64 << 20
+	d.fields["log_retained_bytes"] = d.bytes
+	d.fields["log_overflow_stage"] = d.stage
 	d.discarded = true
 	return false
 }
@@ -176,14 +212,13 @@ func pruneRequestLogs(root string) {
 }
 
 func (d *requestDiagnostic) capture(w http.ResponseWriter, r *http.Request, root string) http.ResponseWriter {
+	unlock := d.lock()
+	defer unlock()
 	if d.store != nil {
-		d.store.mu.Lock()
 		if !d.store.enabled {
-			d.store.mu.Unlock()
 			return w
 		}
 		d.store.active[d] = true
-		defer d.store.mu.Unlock()
 		root = d.store.root
 	}
 	if root == "" {
@@ -203,8 +238,10 @@ func (d *requestDiagnostic) capture(w http.ResponseWriter, r *http.Request, root
 	d.directory = directory
 	d.fields["log_directory"] = filepath.Base(directory)
 	b, _ := json.MarshalIndent(safeHeaders(r.Header), "", "  ")
-	if err := os.WriteFile(filepath.Join(directory, "request-headers.json"), b, 0600); err != nil {
-		d.logFailure(err)
+	if d.reserve(len(b)) {
+		if err := os.WriteFile(filepath.Join(directory, "request-headers.json"), b, 0600); err != nil {
+			d.logFailure(err)
+		}
 	}
 	f, err := os.OpenFile(filepath.Join(directory, "response.body"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
@@ -239,6 +276,7 @@ func (d *requestDiagnostic) emit(event string) {
 
 func (d *requestDiagnostic) request(body []byte, h http.Header) {
 	d.save("request.body", body)
+	d.mu.Lock()
 	sum := sha256.Sum256(body)
 	d.fields["body_bytes"] = len(body)
 	d.fields["body_sha256"] = hex.EncodeToString(sum[:])
@@ -292,39 +330,59 @@ func (d *requestDiagnostic) request(body []byte, h http.Header) {
 		d.fields["invalid_json"] = true
 	}
 	d.emit("request_received")
-	d.trace("request_received", Object{"request_id": d.fields["request_id"]})
+	requestID := d.fields["request_id"]
+	d.mu.Unlock()
+	d.trace("request_received", Object{"request_id": requestID})
 }
 
 func (d *requestDiagnostic) fail(status int, kind, message string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	d.status = status
 	d.fields["error_type"] = kind
 	d.fields["error"] = logValue(message)
 }
 
 func (d *requestDiagnostic) finish() {
-	d.trace("request_finished", Object{"stage": d.stage, "status": d.status})
-	if d.store != nil {
-		d.store.mu.Lock()
+	d.mu.Lock()
+	detail := Object{"stage": d.stage, "status": d.status}
+	d.mu.Unlock()
+	d.trace("request_finished", detail)
+	unlock := d.lock()
+	defer unlock()
+	if d.finished {
+		return
 	}
 	d.fields["stage"] = d.stage
 	d.fields["status"] = d.status
 	d.fields["duration_ms"] = time.Since(d.started).Milliseconds()
+	if _, exists := d.fields["log_status"]; !exists {
+		d.fields["log_status"] = "complete"
+	}
 	if d.response != nil {
 		if err := d.response.Close(); err != nil {
 			d.logFailure(err)
 		}
-	}
-	if d.store != nil {
-		delete(d.store.active, d)
-		d.store.mu.Unlock()
+		d.response = nil
 	}
 	if d.writer != nil {
 		b, _ := json.MarshalIndent(safeHeaders(d.writer.Header()), "", "  ")
-		d.save("response-headers.json", b)
+		d.saveLocked("response-headers.json", b)
 	}
 	d.emit("request_finished")
 	b, _ := json.MarshalIndent(d.fields, "", "  ")
-	d.save("metadata.json", b)
+	// Detailed message summaries are bounded independently of the payload
+	// budget. Keep completion/overflow identity even for unusually large input.
+	if len(b) > 256<<10 {
+		delete(d.fields, "messages")
+		d.fields["metadata_details_truncated"] = true
+		b, _ = json.MarshalIndent(d.fields, "", "  ")
+	}
+	d.saveLocked("metadata.json", b)
+	d.finished = true
+	if d.store != nil {
+		delete(d.store.active, d)
+	}
 }
 
 type requestLogStore struct {
@@ -357,12 +415,14 @@ func (s *requestLogStore) serve(w http.ResponseWriter, r *http.Request) {
 			}
 			s.enabled = false
 			for d := range s.active {
+				d.mu.Lock()
 				if d.response != nil {
 					_ = d.response.Close()
 					d.response = nil
 				}
 				d.directory = ""
 				d.discarded = true
+				d.mu.Unlock()
 			}
 			if err := os.RemoveAll(s.root); err != nil {
 				apiError(w, 500, "api_error", "Cannot clear request logs")
@@ -380,5 +440,5 @@ func (s *requestLogStore) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(Object{"enabled": s.enabled})
+	_ = json.NewEncoder(w).Encode(Object{"enabled": s.enabled, "per_request_limit_bytes": 64 << 20, "retention_hours": 24, "storage_budget_bytes": 512 << 20, "overflow_behavior": "retain_partial_with_metadata"})
 }

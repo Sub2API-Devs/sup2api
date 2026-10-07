@@ -12,6 +12,14 @@ import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { runPool } from '@/views/accounts/pool'
 import { containerPhase, knownReason, type CcgContainer } from './ccgAuthFlow'
 
+interface RequestLogState {
+  enabled: boolean
+  per_request_limit_bytes?: number
+  retention_hours?: number
+  storage_budget_bytes?: number
+  overflow_behavior?: string
+}
+
 interface Row {
   id: number
   name: string
@@ -29,6 +37,7 @@ interface Row {
   logsEnabled: boolean | null
   logsBusy: boolean
   logsError: boolean
+  logsLimits: RequestLogState | null
 }
 
 const { t } = useI18n()
@@ -61,7 +70,7 @@ async function inspect(r: Row) {
     }
     if (r.phase === 'ready') {
       try {
-        r.logsEnabled = (await api.get<{ enabled: boolean }>(`/system/ccgateway/accounts/${r.id}/request-logs`)).enabled
+        applyLogs(r, await api.get<RequestLogState>(`/system/ccgateway/accounts/${r.id}/request-logs`))
       } catch { r.logsError = true }
     }
   } catch {
@@ -76,7 +85,7 @@ async function load() {
   error.value = ''
   try {
     const list = await api.list<{ id: number; name: string; type: string; created_by?: number | null }>('/accounts', { plugin_key: 'ccgateway', page_size: 200 })
-    rows.value = list.items.map((a) => ({ id: a.id, name: a.name, type: a.type, created_by: a.created_by, status: '', reason: '', container: '', phase: 'unknown', loggedIn: null, checking: true, error: false, logsEnabled: null, logsBusy: false, logsError: false }))
+    rows.value = list.items.map((a) => ({ id: a.id, name: a.name, type: a.type, created_by: a.created_by, status: '', reason: '', container: '', phase: 'unknown', loggedIn: null, checking: true, error: false, logsEnabled: null, logsBusy: false, logsError: false, logsLimits: null }))
   } catch {
     error.value = t('ccgateway.runtimes.loadFailed')
     rows.value = []
@@ -93,9 +102,26 @@ async function setLogs(r: Row, enabled: boolean) {
   r.logsBusy = true
   r.logsError = false
   try {
-    r.logsEnabled = (await api.put<{ enabled: boolean }>(`/system/ccgateway/accounts/${r.id}/request-logs`, { enabled })).enabled
+    applyLogs(r, await api.put<RequestLogState>(`/system/ccgateway/accounts/${r.id}/request-logs`, { enabled }))
   } catch { r.logsError = true }
   finally { r.logsBusy = false }
+}
+
+function applyLogs(r: Row, state: RequestLogState) {
+  if (typeof state?.enabled !== 'boolean') throw new Error('invalid request log state')
+  r.logsEnabled = state.enabled
+  const values = [state.per_request_limit_bytes, state.retention_hours, state.storage_budget_bytes]
+  r.logsLimits = values.every(value => typeof value === 'number' && Number.isSafeInteger(value) && value > 0) ? state : null
+}
+
+function logLimits(r: Row): string {
+  const limits = r.logsLimits
+  if (!limits) return t('ccgateway.requestLogs.unreportedLimits')
+  return t('ccgateway.requestLogs.limits', {
+    hours: limits.retention_hours,
+    request: Number((limits.per_request_limit_bytes! / 1048576).toFixed(3)),
+    total: Number((limits.storage_budget_bytes! / 1048576).toFixed(3)),
+  })
 }
 
 function containerBadge(r: Row): { tone: 'success' | 'warning' | 'danger' | 'gray'; label: string } {
@@ -140,6 +166,7 @@ const needsAuth = (r: Row) => r.type === 'managed' && r.loggedIn !== true
         <template #cell-request_logs="{ row }">
           <SSwitch v-if="row.logsEnabled !== null" :model-value="row.logsEnabled" :disabled="!canLogs(row) || row.logsBusy || row.checking || loading" :label="t('ccgateway.requestLogs.title')" :data-testid="`request-logs-${row.id}`" @update:model-value="setLogs(row, $event)" />
           <SHint v-else inline size="xs">—</SHint>
+          <p v-if="row.logsEnabled !== null" class="mt-1 max-w-64 text-xs text-gray-500" :data-testid="`request-log-limits-${row.id}`">{{ logLimits(row) }} {{ row.logsLimits?.overflow_behavior === 'retain_partial_with_metadata' ? t('ccgateway.requestLogs.overflow') : t('ccgateway.requestLogs.unreportedOverflow') }}</p>
           <SHint v-if="row.logsError" tone="danger" size="xs">{{ t('ccgateway.requestLogs.failed') }}</SHint>
         </template>
         <template #cell-actions="{ row }">

@@ -26,19 +26,21 @@ func TestMixedNativeHandoffRealCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version != "2.1.288" {
-		t.Skip("native catalogue fixture targets CLI 2.1.288")
+	nativeCatalogue := verifiedNativeToolCatalogues[version]
+	if nativeCatalogue == nil {
+		t.Skip("no captured native catalogue for this CLI version")
 	}
 	root := t.TempDir()
 	// A catalogued tool can be absent under the current CLI's feature gates.
 	missing := Tool{Name: "FixtureNativeMissing", Description: "Unavailable native fixture", Schema: Object{"type": "object", "properties": Object{}}}
-	verifiedNativeTools[missing.Name] = missing
-	defer delete(verifiedNativeTools, missing.Name)
+	nativeCatalogue[missing.Name] = []Tool{missing}
+	defer delete(nativeCatalogue, missing.Name)
 	plugin, err := extractMod(root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	sentinel := filepath.Join(root, "must-not-be-created.txt")
+	shellSentinel := filepath.Join(root, "must-not-be-created-by-shell.txt")
 	var mu sync.Mutex
 	var captures []Object
 	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -71,10 +73,14 @@ func TestMixedNativeHandoffRealCLI(t *testing.T) {
 			event(Object{"type": "content_block_delta", "index": 0, "delta": Object{"type": "text_delta", "text": "RESULT_ACCEPTED"}})
 			event(Object{"type": "content_block_stop", "index": 0})
 		} else {
-			for i, name := range []string{"Write", "mcp__fixture__lookup", "mcp__clienttools__lookup_custom", "mcp__clienttools__FixtureNativeMissing"} {
+			for i, name := range []string{"Write", "Read", "Bash", "mcp__fixture__lookup", "mcp__clienttools__lookup_custom", "mcp__clienttools__FixtureNativeMissing"} {
 				input := Object{"query": "probe"}
 				if i == 0 {
 					input = Object{"file_path": sentinel, "content": "LOCAL_EXECUTION_BUG"}
+				} else if name == "Read" {
+					input = Object{"file_path": sentinel}
+				} else if name == "Bash" {
+					input = Object{"command": fmt.Sprintf("echo LOCAL_EXECUTION_BUG > %q", shellSentinel), "description": "Fixture command must be handed to the API client"}
 				}
 				args, _ := json.Marshal(input)
 				event(Object{"type": "content_block_start", "index": i, "content_block": Object{"type": "tool_use", "id": fmt.Sprintf("toolu_mixed_%d_%d", index, i), "name": name, "input": Object{}}})
@@ -114,15 +120,24 @@ func TestMixedNativeHandoffRealCLI(t *testing.T) {
 		defer resp.Body.Close()
 		out, _ := io.ReadAll(resp.Body)
 		if resp.StatusCode != 200 {
-			t.Fatalf("HTTP %d %s", resp.StatusCode, out)
+			mu.Lock()
+			var names []string
+			if len(captures) > 0 {
+				for _, v := range captures[len(captures)-1]["tools"].([]any) {
+					names = append(names, str(v.(map[string]any), "name"))
+				}
+			}
+			mu.Unlock()
+			t.Fatalf("HTTP %d %s; actual fixture tool names=%v", resp.StatusCode, out, names)
 		}
 		obj, _ := decodeObject(out)
 		return obj, string(out), resp.Header.Get("X-CCGateway-History")
 	}
 	request := basic()
-	writeTool := verifiedNativeTools["Write"]
+	writeTool := nativeCatalogue["Write"][0]
 	writeTool.Description = "Client-owned file writer with a different description."
 	request["tools"] = []any{writeTool, Tool{Name: "mcp__fixture__lookup", Description: "Lookup fixture", Schema: Object{"type": "object", "properties": Object{"query": Object{"type": "string"}}, "required": []any{"query"}}}}
+	request["tools"] = append(request["tools"].([]any), nativeCatalogue["Read"][0], capturedSDKNativeTool(t, version, "Bash"))
 	request["tools"] = append(request["tools"].([]any), Tool{Name: "lookup_custom", Description: "Custom lookup", Schema: Object{"type": "object", "properties": Object{"query": Object{"type": "string"}}, "required": []any{"query"}}})
 	request["tools"] = append(request["tools"].([]any), missing)
 	user := Object{"role": "user", "content": "MIXED_NATIVE_PROBE"}
@@ -132,7 +147,7 @@ func TestMixedNativeHandoffRealCLI(t *testing.T) {
 		t.Fatal(answer)
 	}
 	blocks := answer["content"].([]any)
-	if len(blocks) != 4 || str(blocks[0].(Object), "name") != "Write" || str(blocks[1].(Object), "name") != "mcp__fixture__lookup" || str(blocks[2].(Object), "name") != "lookup_custom" || str(blocks[3].(Object), "name") != missing.Name {
+	if len(blocks) != 6 || str(blocks[0].(Object), "name") != "Write" || str(blocks[1].(Object), "name") != "Read" || str(blocks[2].(Object), "name") != "Bash" || str(blocks[3].(Object), "name") != "mcp__fixture__lookup" || str(blocks[4].(Object), "name") != "lookup_custom" || str(blocks[5].(Object), "name") != missing.Name {
 		t.Fatal("tool names changed", blocks)
 	}
 	results := []any{}
@@ -153,6 +168,9 @@ func TestMixedNativeHandoffRealCLI(t *testing.T) {
 	}
 	if _, err := os.Stat(sentinel); !os.IsNotExist(err) {
 		t.Fatalf("native Write executed: %v", err)
+	}
+	if _, err := os.Stat(shellSentinel); !os.IsNotExist(err) {
+		t.Fatalf("native Bash executed: %v", err)
 	}
 	entries, _ := os.ReadDir(logs)
 	seen := map[string]bool{}
@@ -175,7 +193,7 @@ func TestMixedNativeHandoffRealCLI(t *testing.T) {
 			seen[str(call, "tool")] = true
 		}
 	}
-	if !seen["Write"] || !seen["mcp__fixture__lookup"] || !seen["mcp__clienttools__lookup_custom"] || !seen["mcp__clienttools__FixtureNativeMissing"] {
+	if !seen["Write"] || !seen["Read"] || !seen["Bash"] || !seen["mcp__fixture__lookup"] || !seen["mcp__clienttools__lookup_custom"] || !seen["mcp__clienttools__FixtureNativeMissing"] {
 		t.Fatal("missing unified Mod handoff logs", seen)
 	}
 	if !fallbackSeen {
@@ -198,4 +216,39 @@ func TestMixedNativeHandoffRealCLI(t *testing.T) {
 			t.Fatal("internal denial leaked into history")
 		}
 	}
+}
+
+// A headless -p catalogue can differ from SDK/stdin mode. Select the schema
+// actually captured for the Worker-style mode, not a guessed SDK declaration.
+func capturedSDKNativeTool(t *testing.T, version, name string) Tool {
+	t.Helper()
+	variants := verifiedNativeToolCatalogues[version][name]
+	if len(variants) == 0 {
+		t.Fatalf("missing native %s catalogue for %s", name, version)
+	}
+	if len(variants) == 1 {
+		return variants[0]
+	}
+	data, err := os.ReadFile(filepath.Join("..", "catalog", "claude-"+version+".capture.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence, err := decodeObject(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range evidence["scenarios"].([]any) {
+		scenario := raw.(map[string]any)
+		if str(scenario, "scenario") != "sdk-explicit" {
+			continue
+		}
+		hashes := scenario["schema_hashes"].(map[string]any)
+		for _, variant := range variants {
+			if digest(variant.Schema) == str(hashes, name) {
+				return variant
+			}
+		}
+	}
+	t.Fatalf("no SDK capture for native %s in CLI %s", name, version)
+	return Tool{}
 }

@@ -70,6 +70,7 @@ var inheritedCLIEnv = []string{"CLAUDE_CODE_RESUME_INTERRUPTED_TURN", "CLAUDE_CO
 
 // runConfig is the per-request CLI and Mod configuration, kept in memory.
 type runConfig struct {
+	scope       *mainRequestScope
 	diagnostic  *requestDiagnostic
 	args        []string
 	env         map[string]string
@@ -83,14 +84,15 @@ type runConfig struct {
 
 func newRunConfig(req *Request, p *Prepared, plugin, dir string) *runConfig {
 	c := &runConfig{args: cliArgs(req, p, plugin), systems: req.pendingSystems(), groups: req.systemGroups()}
+	if req.HasMainRequestFeatures() {
+		c.scope = newMainRequestScope()
+		c.args = append(c.args, "--append-system-prompt", c.scope.marker)
+	}
 	c.diagnostic = req.diagnostic
 	c.attachments = req.attachmentConfig()
 	c.tools = Object{}
 	for _, tool := range req.Tools {
-		route := Object{"client_name": tool.Name, "native": req.Native[tool.Name]}
-		if req.Native[tool.Name] {
-			route["description"] = tool.Description
-		}
+		route := Object{"client_name": tool.Name, "native": req.Native[tool.Name], "description": tool.Description}
 		c.tools[req.wireName(tool.Name)] = route
 	}
 	c.diagnostic.artifact("tool-routing.json", c.tools)
@@ -111,7 +113,7 @@ func cliArgs(req *Request, p *Prepared, plugin string) []string {
 		settings = string(b)
 	}
 	snapshotMode := "off"
-	if p.SnapshotEnabled {
+	if p.SnapshotEnabled && !req.HasMainRequestFeatures() {
 		snapshotMode = "on"
 	}
 	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--tools", strings.Join(req.enabledTools(), ","), "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--setting-sources", "", "--settings", settings, "--disable-slash-commands", "--no-chrome", "--max-turns", req.maxTurns(), "--model=" + req.Model, "--plugin-dir", plugin, "--system-prompt-snapshot", snapshotMode}

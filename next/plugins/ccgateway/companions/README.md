@@ -154,7 +154,7 @@ SDK 服务按请求声明分组，不连接客户端实际的 MCP 地址；工�
 
 CCGateway 请求策略的 `custom_tool_prefix` 可配置普通自定义工具的 MCP 服务名，默认/空值为 `ccgateway`。例如设为 `mytools` 后，普通 `lookup` 注册为 `mcp__mytools__lookup`，响应仍恢复为 `lookup`；原生工具和客户端已有 `mcp__server__tool` 名称不变。配置允许 1–32 位 ASCII 字母、数字、下划线、短横线，不允许连续两个下划线。控制台保存后由核心随每次请求下发，外部客户端不能覆盖核心配置。前缀改变后从客户端完整历史重建原生会话，不复用包含旧 wire 名称的 JSONL。
 
-原生工具按所运行 CLI 版本的已验证名称和完整输入 schema 自动匹配，无需额外请求头。工具描述不参与匹配，通过 Mod `tool.describe` 保留客户端描述；`defer_loading` 单独控制发现。不匹配则使用 SDK MCP，保留客户端定义；未验证的新版本或目录外工具也使用 SDK MCP。当前目录来自 CLI 2.1.288 的隔离实际请求。旧 `CCG_NATIVE_TOOLS` / `X-CCGateway-Native-Tools` 的显式选择仍接受原有校验，但不会授权容器执行工具。原生名称和参数还会与 CLI 实际出站请求再次比较。运行时缺失、重复或参数不兼容时，仅在尚未向上游发送模型请求且未开始客户端响应的情况下，允许一次退回 SDK MCP 并重建工具历史，记录 native_tools_mcp_fallback；已开始上游推理的请求不得自动重放。
+原生工具按所运行 CLI 版本的已验证名称和完整输入 schema 自动匹配，无需额外请求头。工具描述不参与匹配，原生和 SDK MCP 路径均通过 Mod `tool.describe` 精确保留客户端描述；`defer_loading` 单独控制发现。不匹配则使用 SDK MCP，保留客户端定义；未验证的新版本或目录外工具也使用 SDK MCP。当前目录来自 CLI 2.1.288、2.1.292 的隔离实际请求；2.1.292包含普通headless和SDK stream-json等模式观测到的29个名称、32个schema变体，不代表所有平台/权限下都可用。旧 `CCG_NATIVE_TOOLS` / `X-CCGateway-Native-Tools` 的显式选择仍接受原有校验，但不会授权容器执行工具。原生名称和参数还会与 CLI 实际出站请求再次比较。运行时缺失、重复或参数不兼容时，仅在尚未向上游发送模型请求且未开始客户端响应的情况下，允许一次退回 SDK MCP 并重建工具历史，记录 native_tools_mcp_fallback；已开始上游推理的请求不得自动重放。
 
 原生和 MCP 客户端工具统一由 Mods 的 `tool.call` 拦截，返回的临时拒绝结果不进入客户端续聊历史；HTTP 返回原始 `tool_use`，下一次请求恢复客户端实际 `tool_result`。只有网关自身的工具发现和结构化输出辅助工具允许在 CLI 内执行。开启 Worker 请求日志后，每个请求目录的 `tool-routing.json` 记录名称和原生匹配结果，`events.jsonl` 的 `mod_tool_call` 记录参数、路由、交接决定及是否在容器执行。关闭日志后不保留这些记录。SDK MCP 负责定义注册，Mods 负责执行拦截，不使用 `$.tool.register` 重新注册原生工具。
 

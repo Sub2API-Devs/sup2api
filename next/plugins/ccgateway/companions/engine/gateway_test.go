@@ -90,7 +90,7 @@ func TestHistorySnapshotAndToolPair(t *testing.T) {
 		t.Fatal(e)
 	}
 	content := []Object{{"type": "tool_use", "id": "toolu_one", "name": "weather", "input": Object{"city": "Paris"}}}
-	answer := Object{"content": content}
+	answer := Object{"id": "msg_tool_checkpoint", "role": "assistant", "stop_reason": "tool_use", "content": content}
 	row, id := transcriptRow(r.wireMessage(Message{"assistant", content}), p.LastUUID, p.SessionID, p.Work, "2.1.288", r.Model)
 	p.NativeRows = append(p.Rows, row)
 	p.NativeAnchor = id
@@ -430,6 +430,23 @@ func TestRealCLI(t *testing.T) {
 	defer gateway.Close()
 	sessionHeader, scopeHeader := "test-session", ""
 	betaHeader, policyJSON := "", ""
+	// Cache inspection must use the same policy normalization and namespace as
+	// the HTTP handler. Bare parseRequest omits the default attachment policy.
+	parseHTTP := func(v Object) *Request {
+		t.Helper()
+		b, err := json.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		h := http.Header{}
+		h.Set("anthropic-beta", betaHeader)
+		h.Set(policyHeader, policyJSON)
+		r, err := parsePolicyRequest(b, h)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
 	post := func(v Object, native string) (Object, string, http.Header) {
 		t.Helper()
 		b, _ := json.Marshal(v)
@@ -546,6 +563,9 @@ func TestRealCLI(t *testing.T) {
 	native := basic()
 	native["messages"] = []any{user}
 	verifiedRead := verifiedNativeTools["Read"]
+	if variants := verifiedNativeToolCatalogues[version]["Read"]; len(variants) > 0 {
+		verifiedRead = variants[0]
+	}
 	native["tools"] = []any{verifiedRead}
 	answer, _, _ = post(native, "") // exact definitions work without legacy opt-in
 	if str(answer, "stop_reason") != "tool_use" {
@@ -556,7 +576,7 @@ func TestRealCLI(t *testing.T) {
 	mu.Unlock()
 	nativeTools, _ := nativeUp["tools"].([]any)
 	wantRead := "Read"
-	if version != "2.1.288" {
+	if len(verifiedNativeToolCatalogues[version]["Read"]) == 0 {
 		wantRead = "mcp__ccgateway__Read"
 	}
 	if len(nativeTools) != 1 || str(nativeTools[0].(map[string]any), "name") != wantRead {
@@ -650,7 +670,7 @@ func TestRealCLI(t *testing.T) {
 		mu.Unlock()
 		definitions, _ := fallbackUpstream["tools"].([]any)
 		wantName := "mcp__ccgateway__Read"
-		if scenario == "description" && version == "2.1.288" {
+		if scenario == "description" && len(verifiedNativeToolCatalogues[version]["Read"]) > 0 {
 			wantName = "Read"
 		}
 		if len(definitions) != 1 || str(definitions[0].(map[string]any), "name") != wantName {
@@ -658,7 +678,7 @@ func TestRealCLI(t *testing.T) {
 		}
 		definition := definitions[0].(map[string]any)
 		if str(definition, "description") != customRead.Description || digest(definition["input_schema"]) != digest(customRead.Schema) {
-			t.Fatal("custom fallback changed the caller's definition")
+			t.Fatalf("custom fallback changed the caller's definition: scenario=%s description_equal=%t schema_equal=%t actual_description_length=%d expected_description_length=%d", scenario, str(definition, "description") == customRead.Description, digest(definition["input_schema"]) == digest(customRead.Schema), len(str(definition, "description")), len(customRead.Description))
 		}
 		fallback["messages"] = append(fallback["messages"].([]any), Object{"role": "assistant", "content": fallbackAnswer["content"]}, Object{"role": "user", "content": []any{Object{"type": "tool_result", "tool_use_id": blocks[0].(map[string]any)["id"], "content": "CUSTOM_READ_CLIENT_RESULT"}}})
 		_, _, resultHeaders := post(fallback, "Read")
@@ -700,11 +720,14 @@ func TestRealCLI(t *testing.T) {
 	configAnswer, _, _ := post(configReq, "")
 	configReq["messages"] = append(configReq["messages"].([]any), Object{"role": "assistant", "content": configAnswer["content"]}, Object{"role": "user", "content": "CONFIG_NEXT"})
 	lookup := func(v Object) *Snapshot {
-		rr := parsed(t, v)
+		rr := parseHTTP(v)
 		hh := fingerprints(rr.Messages)
-		return cache.get(cacheKey(digest([]string{"", "test-session"}), "", hh[len(hh)-2]))
+		return cache.get(cacheKey(digest([]string{scopeHeader, sessionHeader}), rr.toolHistoryNamespace(), hh[len(hh)-2]))
 	}
 	beforeConfig := lookup(configReq)
+	if beforeConfig == nil {
+		t.Fatal("configuration-start snapshot missing from HTTP policy namespace")
+	}
 	configReq["system"] = "NEW_SYSTEM_BODY"
 	configReq["tools"] = []any{Object{"name": "weather_v2", "description": "new definition", "input_schema": Object{"type": "object", "properties": Object{}}}}
 	configAnswer, _, configHeaders := post(configReq, "")
@@ -722,8 +745,11 @@ func TestRealCLI(t *testing.T) {
 	parentMessages := append([]any(nil), configReq["messages"].([]any)...)
 	configReq["messages"] = append(configReq["messages"].([]any), Object{"role": "assistant", "content": configAnswer["content"]}, Object{"role": "user", "content": "LATEST_BRANCH"})
 	afterConfig := lookup(configReq)
-	if beforeConfig == nil || afterConfig == nil || beforeConfig.SessionID != afterConfig.SessionID {
-		t.Fatal("normal continuation changed native session")
+	if afterConfig == nil {
+		t.Fatal("configuration-continuation snapshot missing from HTTP policy namespace")
+	}
+	if beforeConfig.SessionID != afterConfig.SessionID {
+		t.Fatalf("normal continuation changed native session: before=%s after=%s", beforeConfig.SessionID, afterConfig.SessionID)
 	}
 	restarted, err := newCache(cache.dir, 32<<20)
 	if err != nil {
@@ -815,7 +841,7 @@ func TestRealCLI(t *testing.T) {
 		enabled bool
 	}{{"SNAPSHOT_SYSTEM_A", false}, {"SNAPSHOT_SYSTEM_A", true}, {"SNAPSHOT_SYSTEM_B", false}, {"SNAPSHOT_SYSTEM_B", false}} {
 		promptReq["system"] = step.system
-		preparedPrompt, err := prepareHistory(parsed(t, promptReq), cache, digest([]string{"", "test-session"}), t.TempDir(), version)
+		preparedPrompt, err := prepareHistory(parseHTTP(promptReq), cache, digest([]string{scopeHeader, sessionHeader}), t.TempDir(), version)
 		if err != nil {
 			t.Fatal(err)
 		}

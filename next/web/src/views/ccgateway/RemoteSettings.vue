@@ -26,8 +26,25 @@ const IMAGE_KEYS = ['app', 'egress', 'controller'] as const
 // Same rule as the core: repository[:tag][@sha256:digest], or a local image id.
 const IMAGE_RE = /^(?:[a-z0-9][a-z0-9._/-]{0,127}(?::[A-Za-z0-9._-]{1,128})?(?:@sha256:[0-9a-f]{64})?|sha256:[0-9a-f]{64})$/
 const requestPolicy = ref<RequestPolicy>(defaultRequestPolicy())
-const normalizePolicy = (policy?: Partial<RequestPolicy>): RequestPolicy => ({ ...defaultRequestPolicy(), ...policy, attachment_source: policy?.attachment_source || 'client', attachment_sources: { ...(policy?.attachment_sources || {}) }, environment_fields: { ...(policy?.environment_fields || {}) }, unknown_client_attachment: policy?.unknown_client_attachment || 'pass', unknown_gateway_attachment: policy?.unknown_gateway_attachment || 'pass' })
-const policyChanged = computed(() => JSON.stringify(requestPolicy.value) !== JSON.stringify(normalizePolicy(saved.value?.request_policy)))
+const normalizePolicy = (policy?: Partial<RequestPolicy>): RequestPolicy => {
+  const attachment_sources = { ...(policy?.attachment_sources || {}) }
+  const environment_fields = { ...(policy?.environment_fields || {}) }
+  const legacyEnvironment = attachment_sources.environment
+  if (legacyEnvironment === 'client' || legacyEnvironment === 'gateway') {
+    for (const field of ['workingDirectory', 'platform'] as const) {
+      environment_fields[field] ||= legacyEnvironment
+    }
+  }
+  delete attachment_sources.environment
+  for (const kind of Object.keys(attachment_sources) as Array<keyof typeof attachment_sources>) {
+    if (attachment_sources[kind] === 'both') delete attachment_sources[kind]
+  }
+  return { ...defaultRequestPolicy(), ...policy, attachment_source: policy?.attachment_source || 'client', attachment_sources, environment_fields, unknown_client_attachment: policy?.unknown_client_attachment || 'pass', unknown_gateway_attachment: policy?.unknown_gateway_attachment || 'pass' }
+}
+const policyChanged = computed(() => {
+  const sources = saved.value?.request_policy?.attachment_sources
+  return !!sources?.environment || Object.values(sources || {}).includes('both') || JSON.stringify(requestPolicy.value) !== JSON.stringify(normalizePolicy(saved.value?.request_policy))
+})
 const settingsTabs = ['connection', 'network', 'requests', 'attachments', 'deployment', 'accounts'] as const
 const activeTab = ref<typeof settingsTabs[number]>(location.hash === '#ccgateway-runtime' ? 'deployment' : 'connection')
 const runtimeRevision = ref(0)
@@ -157,7 +174,7 @@ onBeforeUnmount(clearSecrets)
         <div class="grid gap-3 sm:grid-cols-2"><label v-for="key in (form.account_runtimes ? ['admin_key'] as const : ['admin_key','api_key'] as const)" :key="key" class="block text-sm">{{ t(`ccgateway.remote.${key}`) }}<input v-model="secrets[key]" type="password" autocomplete="new-password" class="input mt-1 w-full" :data-testid="key" :placeholder="saved[`has_${key}`] ? t('ccgateway.remote.keepSecret') : ''" /></label></div>
         <p class="text-xs text-gray-500">{{ t('ccgateway.remote.keysHint') }}</p>
       </div>
-        <RequestPolicySettings v-show="activeTab === 'requests' || activeTab === 'attachments'" v-model="requestPolicy" :section="activeTab === 'attachments' ? 'attachments' : 'requests'" />
+        <RequestPolicySettings v-show="activeTab === 'requests' || activeTab === 'attachments'" v-model="requestPolicy" :section="activeTab === 'attachments' ? 'attachments' : 'requests'" @cc="activeTab = 'attachments'" />
         <p v-if="imageError" role="alert" class="text-sm text-red-600">{{ imageError }}</p>
         <div v-if="form.account_runtimes" class="space-y-2" data-testid="remote-images">
           <div v-show="activeTab === 'network'" class="space-y-3">

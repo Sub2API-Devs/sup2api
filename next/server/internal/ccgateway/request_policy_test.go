@@ -145,7 +145,7 @@ func TestRequestPolicyConfig(t *testing.T) {
 	if saved.Public()["request_policy"] == nil {
 		t.Fatal("policy missing from public settings")
 	}
-	for _, b := range []BetaRule{{"bad name", "forward"}, {"x", "fast"}, {"x", "environment"}} {
+	for _, b := range []BetaRule{{Name: "bad name", Mapping: "forward"}, {Name: "x", Mapping: "fast"}, {Name: "x", Mapping: "environment"}} {
 		invalid := defaultRequestPolicy()
 		invalid.Betas = []BetaRule{b}
 		if _, e := mergeConfig(Config{Mode: "local", RequestPolicy: &invalid}, old); e != nil {

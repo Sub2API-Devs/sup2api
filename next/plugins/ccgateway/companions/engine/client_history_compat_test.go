@@ -87,7 +87,9 @@ func TestCompleteRefusalIsNormalWithoutNativeHistory(t *testing.T) {
 		if len(events) != 2 || str(events[1], "type") != "message_delta" {
 			t.Fatalf("wrong refusal stream: %#v", events)
 		}
-		if !reflect.DeepEqual(answer["stop_details"], Object{"type": "refusal", "category": "cyber", "explanation": "fixture refusal"}) {
+		detailJSON, _ := json.Marshal(answer["stop_details"])
+		details, detailErr := decodeObject(detailJSON)
+		if detailErr != nil || !reflect.DeepEqual(details, Object{"type": "refusal", "category": "cyber", "explanation": "fixture refusal"}) {
 			t.Fatal("refusal detail lost")
 		}
 	}

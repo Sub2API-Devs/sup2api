@@ -15,18 +15,31 @@ func (e *nativeToolAvailabilityError) Error() string {
 	return fmt.Sprintf("native tools unavailable or incompatible in this CLI session: %v", e.Names)
 }
 
-// Captured from CLI 2.1.288 against an isolated local upstream, with empty
-// settings/MCP configuration. Never guess definitions from tool names.
-var nativeToolsJSON = catalog.NativeTools
-
-var verifiedNativeTools = func() map[string]Tool {
+// Captured from actual CLI requests to an isolated upstream. One version can
+// expose multiple schemas under feature gates, so keep each observed variant.
+// Selection is only provisional: verifyNativeWireTools checks the running CLI.
+func decodeNativeCatalogue(data []byte) map[string][]Tool {
 	var tools []Tool
-	if err := json.Unmarshal(nativeToolsJSON, &tools); err != nil {
+	if err := json.Unmarshal(data, &tools); err != nil {
 		panic("invalid bundled native tool catalogue")
 	}
-	result := make(map[string]Tool, len(tools))
+	result := make(map[string][]Tool, len(tools))
 	for _, tool := range tools {
-		result[tool.Name] = tool
+		result[tool.Name] = append(result[tool.Name], tool)
+	}
+	return result
+}
+
+var verifiedNativeToolCatalogues = map[string]map[string][]Tool{
+	"2.1.288": decodeNativeCatalogue(catalog.NativeTools),
+	"2.1.292": decodeNativeCatalogue(catalog.NativeTools21292),
+}
+
+// Legacy fixtures explicitly test the 2.1.288 definitions.
+var verifiedNativeTools = func() map[string]Tool {
+	result := map[string]Tool{}
+	for name, variants := range verifiedNativeToolCatalogues["2.1.288"] {
+		result[name] = variants[0]
 	}
 	return result
 }()
@@ -36,11 +49,11 @@ var verifiedNativeTools = func() map[string]Tool {
 // Match automatically, without requiring the legacy native opt-in header.
 func matchNativeTools(r *Request, version string) {
 	matched := map[string]bool{}
-	if version == "2.1.288" {
-		for _, tool := range r.Tools {
-			known, ok := verifiedNativeTools[tool.Name]
-			if ok && sameToolDefinition(known, tool) {
+	for _, tool := range r.Tools {
+		for _, known := range verifiedNativeToolCatalogues[version][tool.Name] {
+			if sameToolDefinition(known, tool) {
 				matched[tool.Name] = true
+				break
 			}
 		}
 	}

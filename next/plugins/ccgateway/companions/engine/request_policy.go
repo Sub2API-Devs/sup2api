@@ -3,9 +3,9 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -13,10 +13,7 @@ import (
 // Only the authenticated host/controller can provide this internal header.
 const policyHeader = "X-CCGateway-Request-Policy"
 
-type BetaRule struct {
-	Name    string `json:"name"`
-	Mapping string `json:"mapping"`
-}
+type BetaRule = features.BetaRule
 type RequestPolicy struct {
 	EnvironmentFields map[string]string `json:"environment_fields,omitempty"`
 	UnknownBeta       string            `json:"unknown_beta"`
@@ -38,13 +35,7 @@ type RequestPolicy struct {
 }
 
 func defaultRequestPolicy() RequestPolicy {
-	return RequestPolicy{UnknownClientAttachment: "pass", UnknownGatewayAttachment: "pass", CustomToolPrefix: "ccgateway", UnknownBeta: "ignore", UnknownField: "reject", AllowFast: false, AllowEffort: true, ToolSearch: "request", AttachmentSource: "client", Betas: []BetaRule{
-		{"interleaved-thinking-2025-05-14", "forward"}, {"fine-grained-tool-streaming-2025-05-14", "fine_grained_tools"},
-		{"context-1m-2025-08-07", "forward"}, {"fast-mode-2026-02-01", "fast"},
-		{"advanced-tool-use-2025-11-20", "tool_search"},
-		{"dev-full-thinking-2025-05-14", "forward"},
-		{"model-context-window-exceeded-2025-08-26", "forward"},
-	}}
+	return RequestPolicy{UnknownClientAttachment: "pass", UnknownGatewayAttachment: "pass", CustomToolPrefix: "ccgateway", UnknownBeta: "ignore", UnknownField: "reject", AllowFast: false, AllowEffort: true, ToolSearch: "request", AttachmentSource: "client", Betas: features.BetaRules()}
 }
 
 var betaName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,127}$`)
@@ -102,6 +93,10 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 	if err != nil {
 		return nil, err
 	}
+	plan, err := parseRequestPlan(body, o)
+	if err != nil {
+		return nil, err
+	}
 	if err = p.filterFields(o); err != nil {
 		return nil, err
 	}
@@ -123,6 +118,10 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := plan.validateTools(req); err != nil {
+		return nil, err
+	}
+	req.Plan = plan
 	req.Fast = fast
 	req.Effort = effort
 	req.JSONSchema = schema
@@ -144,11 +143,27 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 	if err = p.applyBetas(req, h.Values("anthropic-beta")); err != nil {
 		return nil, err
 	}
+	// API server search owns deferred discovery. Do not add CC's separate
+	// client ToolSearch loop, even when the global policy enables it.
+	if len(req.ServerTools) > 0 {
+		req.ToolSearch = "false"
+	}
+	if err := plan.validateInternalRounds(req); err != nil {
+		return nil, err
+	}
 	return req, nil
 }
 
 // filterFields rejects or drops body fields outside the supported set.
 func (p RequestPolicy) filterFields(o Object) error {
+	// These are known protocol features, not harmless unknown extensions.
+	// Until their request/response/history path exists, ignore must not turn
+	// an explicit semantic request into a different successful operation.
+	for _, field := range []string{"context_management", "compaction", "container", "mcp_servers", "diagnostics", "inference_geo", "fallbacks", "fallback_credit_token"} {
+		if _, exists := o[field]; exists {
+			return fmt.Errorf("unsupported request feature %q: complete protocol adaptation is required", field)
+		}
+	}
 	allowed := map[string]bool{}
 	for _, k := range []string{"model", "max_tokens", "stream", "system", "messages", "tools", "tool_choice", "thinking", "cache_control", "speed", "output_config", "output_format"} {
 		allowed[k] = true
@@ -202,6 +217,9 @@ func (p RequestPolicy) outputConfig(o Object) (effort string, format any, err er
 		format = current
 	}
 	for k, v := range cfg {
+		if k == "task_budget" {
+			return "", nil, fmt.Errorf("unsupported request feature output_config.task_budget: account capability and budget semantics require validation")
+		}
 		if k == "format" {
 			continue
 		}
@@ -354,13 +372,11 @@ func hasRequestCacheControl(o Object) bool {
 	return false
 }
 
+var toolSearchThresholdPattern = regexp.MustCompile(`^auto:(0|[1-9][0-9]?|100)$`)
+
 func validToolSearch(value string) bool {
 	if value == "request" || value == "false" || value == "true" || value == "auto" {
 		return true
 	}
-	if strings.HasPrefix(value, "auto:") {
-		n, err := strconv.Atoi(strings.TrimPrefix(value, "auto:"))
-		return err == nil && n >= 1 && n <= 100
-	}
-	return false
+	return toolSearchThresholdPattern.MatchString(value)
 }

@@ -93,13 +93,34 @@ describe('CCGateway pass upstream errors switch', () => {
     w.unmount()
   })
 
+  it('separates API support and CC behavior without losing settings across menus', async () => {
+    mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
+    const w = await render()
+    await w.get('[data-testid="settings-tab-requests"]').trigger('click')
+    expect(w.get('[data-testid="settings-tab-requests"]').text()).toBe('通用 API 特性')
+    expect(w.get('[data-testid="feature-support"]').isVisible()).toBe(true)
+    expect(w.get('[data-testid="cc-features"]').isVisible()).toBe(false)
+    await w.get('[data-testid="settings-tab-attachments"]').trigger('click')
+    expect(w.get('[data-testid="settings-tab-attachments"]').text()).toBe('CC 特性')
+    expect(w.get('[data-testid="feature-support"]').isVisible()).toBe(false)
+    expect(w.get('[data-testid="cc-features"]').isVisible()).toBe(true)
+    await w.get('[data-testid="custom-tool-prefix"]').setValue('custom')
+    await w.get('[data-testid="settings-tab-requests"]').trigger('click')
+    await w.get('[data-testid="settings-tab-attachments"]').trigger('click')
+    expect(w.get<HTMLInputElement>('[data-testid="custom-tool-prefix"]').element.value).toBe('custom')
+    expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeUndefined()
+    expect(mocks.put).not.toHaveBeenCalled()
+    expect(mocks.post).not.toHaveBeenCalled()
+    w.unmount()
+  })
+
   it('saves and reloads attachment overrides and unknown policies', async () => {
     mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), attachment_sources: { environment: 'both' } }))
     const w = await render()
-    const next = { ...defaultRequestPolicy(), attachment_sources: { environment: 'both' as const, date: 'gateway' as const }, environment_fields: { workingDirectory: 'client' as const, platform: 'gateway' as const }, unknown_client_attachment: 'ignore' as const, unknown_gateway_attachment: 'ignore' as const }
+    const next = { ...defaultRequestPolicy(), attachment_sources: { date: 'gateway' as const }, environment_fields: { workingDirectory: 'client' as const, platform: 'gateway' as const }, unknown_client_attachment: 'ignore' as const, unknown_gateway_attachment: 'ignore' as const }
     mocks.put.mockResolvedValue(config(next))
     expect(w.find('[data-testid="attachment-environment"]').exists()).toBe(false)
-    expect(w.get('[data-testid="environment-platform"] option[value=""]').text()).toBe('继承：都保留')
+    expect(w.get('[data-testid="environment-platform"] option[value=""]').text()).toBe('跟随默认')
     await w.get('[data-testid="attachment-date"]').setValue('gateway')
     await w.get('[data-testid="environment-workingDirectory"]').setValue('client')
     await w.get('[data-testid="environment-platform"]').setValue('gateway')
@@ -132,6 +153,25 @@ describe('CCGateway pass upstream errors switch', () => {
       expect(w.get<HTMLInputElement>(`[data-testid="attachment-source"][value="${source}"]`).element.checked).toBe(true)
       expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
     }
+    w.unmount()
+  })
+
+  it('uses three choices and saves defaults without the legacy environment override', async () => {
+    mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), attachment_sources: { environment: 'gateway', model: 'both' } }))
+    const w = await render()
+    await w.get('[data-testid="settings-tab-attachments"]').trigger('click')
+    for (const id of ['environment-workingDirectory', 'environment-platform', 'attachment-model', 'attachment-date']) {
+      expect(w.findAll(`[data-testid="${id}"] option`).map(o => o.attributes('value'))).toEqual(['', 'client', 'gateway'])
+    }
+    expect(w.get<HTMLSelectElement>('[data-testid="environment-platform"]').element.value).toBe('gateway')
+    expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeUndefined()
+    await w.get('[data-testid="environment-platform"]').setValue('')
+    const next = { ...defaultRequestPolicy(), environment_fields: { workingDirectory: 'gateway' as const } }
+    mocks.put.mockResolvedValue(config(next))
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.put.mock.lastCall?.[1].request_policy).toEqual(next)
+    expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
     w.unmount()
   })
 

@@ -12,4 +12,7 @@ web/dist
 .git
 # Independently built CCGateway services are not part of the core image.
 # build-go.sh removes these companion modules from its build workspace.
-plugins/ccgateway/companions/
+plugins/ccgateway/companions/*
+# Shared data contracts are linked into the core, unlike the Worker engine.
+!plugins/ccgateway/companions/contracts/
+!plugins/ccgateway/companions/contracts/**

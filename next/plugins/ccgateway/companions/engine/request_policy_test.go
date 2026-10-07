@@ -136,7 +136,7 @@ func TestRequestPolicyFields(t *testing.T) {
 		t.Fatal("supported fields not mapped", e)
 	}
 	v["output_config"] = Object{"effort": "low", "format": Object{"type": "json_schema", "schema": Object{"type": "object"}}}
-	v["temperature"] = 0.7
+	v["fixture_unknown"] = 0.7
 	body, _ = json.Marshal(v)
 	if _, e = parsePolicyRequest(body, h); e == nil {
 		t.Fatal("extra body accepted")
@@ -198,8 +198,8 @@ func TestRequestPolicyHistoryIsolation(t *testing.T) {
 func TestRequestPolicyInvalidConfiguration(t *testing.T) {
 	for _, p := range []RequestPolicy{
 		{UnknownBeta: "forward", UnknownField: "reject"},
-		{UnknownBeta: "reject", UnknownField: "reject", Betas: []BetaRule{{"x", "fast"}}},
-		{UnknownBeta: "reject", UnknownField: "reject", Betas: []BetaRule{{"x", "forward"}, {"x", "native"}}},
+		{UnknownBeta: "reject", UnknownField: "reject", Betas: []BetaRule{{Name: "x", Mapping: "fast"}}},
+		{UnknownBeta: "reject", UnknownField: "reject", Betas: []BetaRule{{Name: "x", Mapping: "forward"}, {Name: "x", Mapping: "native"}}},
 	} {
 		if _, e := parsePolicyRequest([]byte(`{}`), policyHeaders(p)); e == nil {
 			t.Fatal("bad policy accepted")
@@ -244,7 +244,7 @@ func TestStructuredOutputAndCachePolicy(t *testing.T) {
 func TestFixedBetaWhitelistOverridesLegacyRules(t *testing.T) {
 	body, _ := json.Marshal(basic())
 	p := defaultRequestPolicy()
-	p.Betas = []BetaRule{{"custom-beta", "forward"}, {"fine-grained-tool-streaming-2025-05-14", "forward"}, {"claude-code-20250219", "native"}}
+	p.Betas = []BetaRule{{Name: "custom-beta", Mapping: "forward"}, {Name: "fine-grained-tool-streaming-2025-05-14", Mapping: "forward"}, {Name: "claude-code-20250219", Mapping: "native"}}
 	h := policyHeaders(p)
 	h.Set("anthropic-beta", "custom-beta,claude-code-20250219,fine-grained-tool-streaming-2025-05-14")
 	r, err := parsePolicyRequest(body, h)

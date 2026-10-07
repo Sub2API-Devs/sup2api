@@ -16,6 +16,7 @@ import (
 )
 
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
+	r.Perm("GET", "/system/ccgateway/features", "settings:read", s.featuresGet)
 	// Per-account runtime: settings administrators, or whoever may read /
 	// update that account (own level: accounts it created), CONTRACTS §49.5.
 	r.PermAny("GET", "/system/ccgateway/accounts/:id/:action", s.accountManage, "settings:read", "account:read", "account:own:read")

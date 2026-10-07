@@ -33,7 +33,7 @@ func TestNativeInterruptedResumeUsesCommittedCheckpoint(t *testing.T) {
 	if err = writeNative(p.NativePath, p.NativeRows); err != nil {
 		t.Fatal(err)
 	}
-	if err = p.commit(r, Object{"content": content}, c, "logical", "", "2.1.288", time.Now()); err != nil {
+	if err = p.commit(r, Object{"id": "msg_committed", "role": "assistant", "stop_reason": "end_turn", "content": content}, c, "logical", "", "2.1.288", time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	r.Messages = append(r.Messages, Message{"assistant", content}, Message{"user", []Object{{"type": "text", "text": "continue"}}})

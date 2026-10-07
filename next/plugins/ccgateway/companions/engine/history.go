@@ -27,16 +27,17 @@ func uuid() string {
 // Rows are native CLI records. Hashes index the separate client-visible history.
 // Only committed assistant boundaries may be used for continuation or branching.
 type Snapshot struct {
-	NativeDigest   string            `json:"native_digest"`
-	Format         int               `json:"format"`
-	NativePath     string            `json:"native_path"`
-	Work           string            `json:"work"`
-	Rows           []json.RawMessage `json:"rows"`
-	LastUUID       string            `json:"last_uuid"`
-	SessionID      string            `json:"session_id"`
-	Hashes         []string          `json:"hashes"`
-	Expires        time.Time         `json:"expires"`
-	PromptEvidence *PromptEvidence   `json:"prompt_evidence,omitempty"`
+	NativeDigest   string               `json:"native_digest"`
+	Format         int                  `json:"format"`
+	NativePath     string               `json:"native_path"`
+	Work           string               `json:"work"`
+	Rows           []json.RawMessage    `json:"rows"`
+	LastUUID       string               `json:"last_uuid"`
+	SessionID      string               `json:"session_id"`
+	Hashes         []string             `json:"hashes"`
+	Expires        time.Time            `json:"expires"`
+	PromptEvidence *PromptEvidence      `json:"prompt_evidence,omitempty"`
+	Responses      []ResponseCheckpoint `json:"responses,omitempty"`
 }
 type HistoryCache struct {
 	mu      sync.Mutex
@@ -81,7 +82,7 @@ func newCache(dir string, limit int64) (*HistoryCache, error) {
 			return nil, e
 		}
 		var s Snapshot
-		if json.Unmarshal(b, &s) != nil || time.Now().After(s.Expires) || s.Format != 2 || len(s.Hashes) == 0 || len(s.Rows) == 0 || s.LastUUID == "" {
+		if json.Unmarshal(b, &s) != nil || time.Now().After(s.Expires) || s.Format != 2 || len(s.Hashes) == 0 || len(s.Rows) == 0 || s.LastUUID == "" || !validResponseCheckpoints(&s) {
 			_ = os.Remove(p)
 			continue
 		}
@@ -178,6 +179,7 @@ func (c *HistoryCache) get(k string) *Snapshot {
 	copy := *s
 	copy.Rows = append([]json.RawMessage(nil), s.Rows...)
 	copy.Hashes = append([]string(nil), s.Hashes...)
+	copy.Responses = cloneResponseCheckpoints(s.Responses)
 	return &copy
 }
 func (c *HistoryCache) put(k string, s *Snapshot) error {
@@ -215,7 +217,9 @@ func (c *HistoryCache) put(k string, s *Snapshot) error {
 	if old := c.entries[k]; old != nil {
 		c.bytes -= snapshotSize(old)
 	}
-	c.entries[k] = s
+	stored := *s
+	stored.Responses = cloneResponseCheckpoints(s.Responses)
+	c.entries[k] = &stored
 	c.bytes += int64(len(b))
 	c.pruneLocked(time.Now())
 	return nil
@@ -248,6 +252,7 @@ func transcriptRow(m Message, parent, sid, cwd, version, model string) (json.Raw
 }
 
 type Prepared struct {
+	FinalResponseStop                       json.RawMessage // Runtime only; never replayed or embedded in Snapshot.
 	Rows                                    []json.RawMessage
 	LastUUID, SessionID, Path, Anchor, Mode string
 	Hashes                                  []string
@@ -256,6 +261,7 @@ type Prepared struct {
 	SnapshotEnabled                         bool
 	NativeRows                              []json.RawMessage
 	NativeAnchor                            string
+	Responses                               []ResponseCheckpoint
 	cache                                   *HistoryCache
 }
 
@@ -326,6 +332,7 @@ func findPriorSnapshot(r *Request, c *HistoryCache, logical string, hashes []str
 // resumeFrom continues from a checkpoint: a fork of it, or the native session
 // itself when it is unchanged, idle, and directly before the pending turn.
 func (p *Prepared) resumeFrom(prior *Snapshot, r *Request, c *HistoryCache, pending int) {
+	p.Responses = cloneResponseCheckpoints(prior.Responses)
 	p.Rows = append(p.Rows, prior.Rows...)
 	p.SnapshotEnabled = choosePromptSnapshot(prior.Rows, prior.PromptEvidence, r.System, time.Now())
 	p.Work = prior.Work
@@ -394,6 +401,9 @@ func (p *Prepared) release() {
 	}
 }
 func (p *Prepared) commit(r *Request, answer Object, c *HistoryCache, logical, dir, version string, started time.Time) error {
+	if err := completedResponse(answer); err != nil {
+		return err
+	}
 	if r.structuredOutput() {
 		// API text differs from the CLI synthetic-tool transcript; rebuild from client history next time.
 		_ = os.Remove(p.NativePath)
@@ -406,10 +416,18 @@ func (p *Prepared) commit(r *Request, answer Object, c *HistoryCache, logical, d
 	if len(p.NativeRows) == 0 || p.NativeAnchor == "" {
 		return fmt.Errorf("missing native CLI checkpoint")
 	}
+	if len(p.Hashes) == 0 {
+		return fmt.Errorf("missing client history checkpoint")
+	}
 	hash := digest([]any{p.Hashes[len(p.Hashes)-1], Message{"assistant", bs}})
 	hashes := append(append([]string(nil), p.Hashes...), hash)
 	// Native history lifetime is independent of provider prompt-cache TTL.
 	s := &Snapshot{Format: 2, NativeDigest: digest(string(nativeBytes(p.NativeRows))), Rows: p.NativeRows, LastUUID: p.NativeAnchor, SessionID: p.SessionID, NativePath: p.NativePath, Work: p.Work, Hashes: hashes, Expires: started.Add(24 * time.Hour)}
 	s.PromptEvidence = &PromptEvidence{SystemDigest: digest(r.System), Expires: time.Now().Add(r.TTL)}
+	response, err := json.Marshal(answer)
+	if err != nil {
+		return fmt.Errorf("cannot preserve response envelope: %w", err)
+	}
+	s.Responses = append(cloneResponseCheckpoints(p.Responses), ResponseCheckpoint{ClientHash: hash, NativeAnchor: p.NativeAnchor, MessageID: str(answer, "id"), Response: response})
 	return c.put(cacheKey(logical, r.toolHistoryNamespace(), hash), s)
 }

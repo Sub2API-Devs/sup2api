@@ -45,7 +45,7 @@ export function defaultRequestPolicy(): RequestPolicy {
 export function validRequestPolicy(p: RequestPolicy): boolean {
   return (
     (!p.custom_tool_prefix || (/^[A-Za-z0-9_-]{1,32}$/.test(p.custom_tool_prefix) && !p.custom_tool_prefix.includes('__'))) &&
-    (!p.tool_search || ['request', 'false', 'true', 'auto'].includes(p.tool_search) || /^auto:([1-9][0-9]?|100)$/.test(p.tool_search)) &&
+    (!p.tool_search || ['request', 'false', 'true', 'auto'].includes(p.tool_search) || /^auto:(0|[1-9][0-9]?|100)$/.test(p.tool_search)) &&
     ['reject', 'ignore'].includes(p.unknown_beta) &&
     ['reject', 'ignore'].includes(p.unknown_field) &&
     ['client', 'gateway', 'both'].includes(p.attachment_source) &&

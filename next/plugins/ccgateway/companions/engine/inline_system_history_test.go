@@ -116,7 +116,7 @@ func TestSystemHistoryResumesAndBranches(t *testing.T) {
 		if err := writeNative(p.NativePath, native); err != nil {
 			t.Fatal(err)
 		}
-		if err := p.commit(r, Object{"content": []Object{{"type": "text", "text": answer}}}, c, "fixture", "", "2.1.288", time.Now()); err != nil {
+		if err := p.commit(r, Object{"id": "msg_" + answer, "role": "assistant", "stop_reason": "end_turn", "content": []Object{{"type": "text", "text": answer}}}, c, "fixture", "", "2.1.288", time.Now()); err != nil {
 			t.Fatal(err)
 		}
 		p.release()

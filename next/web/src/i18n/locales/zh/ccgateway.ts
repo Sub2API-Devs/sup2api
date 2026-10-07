@@ -1,5 +1,18 @@
 export default {
-  settingsTabs: { accounts: '账号容器', label: '设置分类', connection: '连接与授权', network: '网络配置', requests: '请求与工具', attachments: '附件与环境', deployment: '部署与运行', save: '保存全部配置' },
+  settingsTabs: { accounts: '账号容器', label: '设置分类', connection: '连接与授权', network: '网络配置', requests: '通用 API 特性', attachments: 'CC 特性', deployment: '部署与运行', save: '保存全部配置' },
+  features: {
+    title: '通用 API 特性',
+    baseline: '按功能查看参数、Beta 与处理限制。这里是代码适配目录，不代表当前账号、模型或 Worker 已通过运行时验证。',
+    loading: '正在读取特性目录…',
+    loadFailed: '特性目录暂不可用，或当前核心尚不支持此目录。无法确认支持范围；现有配置不变。',
+    retry: '重新加载', search: '搜索特性、参数或 Beta', filter: '适配状态', all: '全部状态',
+    status: { supported: '自然支持', partial: '有限支持', unsupported: '暂不支持', unverified: '尚未验证' },
+    body: '请求参数', requirements: '适用条件：', implementation: '查看处理机制与证据',
+    empty: '没有匹配的特性', version: '目录版本：{version}', previous: '上一页', next: '下一页',
+    ccSettings: '查看 CC 工具搜索运行配置', ccTitle: 'CC 特性',
+    ccHint: '设置 Worker 内部 Claude Code 的工具行为、错误处理和环境附件来源。',
+    ccRuntime: '工具与错误处理',
+  },
   policy: {
     effectiveSource: '生效来源：{source}',
     betaValuesHint:
@@ -255,7 +268,11 @@ export default {
   },
   requestLogs: {
     title: '请求调试日志',
-    hint: '按账号启用完整请求和响应记录，包含请求头、请求体及流式响应；日志保存在对应运行容器中。关闭开关会停止记录并删除该账号的全部请求调试日志。',
+    hint: '按账号记录请求、响应及处理过程，保存在对应 Worker 容器中；实际保留时间、内容上限和超限行为以下方 Worker 回报为准。关闭开关会停止记录并删除该账号的全部请求调试日志。',
+    limits: '保留 {hours} 小时；单请求内容 {request} MiB；总存储软预算 {total} MiB。',
+    overflow: '超限保留已有内容并标记截断，不中断请求。',
+    unreportedLimits: '此 Worker 未报告完整日志限额（可能为旧版本）。',
+    unreportedOverflow: '超限处理尚未报告。',
     failed: '读取或更新日志开关失败，请刷新后重试。',
   },
   runtimes: {
