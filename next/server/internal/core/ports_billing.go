@@ -106,7 +106,9 @@ type UsageTokens struct {
 // submitted to the Settler, which persists usage_logs, bills and emits
 // usage.recorded asynchronously.
 type UsageRecord struct {
-	RequestID string
+	Additional   []PricedUsage
+	BillingError string
+	RequestID    string
 	// ClientRequestID is the client's X-Request-Id, truncated to 128 chars;
 	// recorded only, never used as an idempotency key.
 	ClientRequestID string
@@ -185,6 +187,28 @@ type UsageRecord struct {
 	UserAgent          string
 	NodeID             string
 	CreatedAt          time.Time // request start; time functions evaluate against it
+}
+
+// AdditionalUsage is an independently metered component, excluding the main
+// response counters. The gateway must authorize its model before pricing it.
+type AdditionalUsage struct {
+	Kind           string
+	Model          string
+	UsageSemantics string
+	Tokens         UsageTokens
+}
+
+// PricedUsage freezes every price input needed for a settlement retry.
+type PricedUsage struct {
+	Kind           string
+	Model          string
+	Price          *PriceRule
+	UsageSemantics string
+	Tokens         UsageTokens
+	Metrics        map[string]any
+	PriceParams    map[string]string
+	PriceHeaders   map[string]string
+	RateMultiplier decimal.Decimal
 }
 
 // Response shape mismatches recorded in usage_logs.anomalies

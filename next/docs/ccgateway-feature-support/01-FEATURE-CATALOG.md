@@ -69,7 +69,7 @@
 ### F-SYSTEM — 顶层、会话中 system 和生命周期
 
 - 当前支持顶层文本及会话中 system 的恢复路径；顶部 system 缓存元数据会被解析成文本/TTL。**已部分适配**。
-- `messages[].clear_at`（`never` / `next_user_message`）需 `mid-conversation-system-clear-at-2026-08-21`；会话内 `output_config.effort` 对应 `mid-conversation-output-config-2026-07-01`。当前 Message DTO 无这些字段，**需适配**。
+- `messages[].clear_at`（`never` / `next_user_message`）需 `mid-conversation-system-clear-at-2026-08-21`；会话内 `output_config.effort` 对应 `mid-conversation-output-config-2026-07-01`。已增加 Message 元字段与历史指纹、按原位置恢复；effort-only 不进入原生文本。真实 CLI 对假上游通过新建、续聊、回退、新 cache 导入与 12 轮重复长历史，**已适配，真实上游语义待验证**。
 - 不得统一搬到顶层或反复附加；clear_at 到期仍保留历史原条目，由对应语义决定是否展示。客户端环境附件策略不得删除普通 system 指令。
 - 方案：每条 system 的内容、位置、生命周期、effort 分开存储；当前模型是否支持 inline system 需要核验，不能沿用所有 Sonnet/Opus通用假设。
 - 来源：[Mid-conversation system messages and tool changes](https://platform.claude.com/docs/en/build-with-claude/mid-conversation-system-messages)。
@@ -96,7 +96,7 @@
 
 - F-SAMPLING：temperature/top_p/top_k 当前不在顶层白名单。候选在允许模型的实际上游请求应用；新模型拒绝非默认采样，不得悄悄删参数让请求成功。**需适配/模型条件**。
 - F-STOP：stop_sequences 当前不支持。必须在生成阶段生效并保留 stop_sequence；下游截断文本不等价（计费、工具JSON、签名、历史会变）。**条件可行**。
-- F-METADATA：metadata.user_id 当前不支持。保留为请求归因元数据，不注入system；客户端用户标识与平台账号/CLI session 元数据分别存放，不能覆盖CC必需元数据。**需适配**。
+- F-METADATA：`metadata.user_id` 是外部 opaque 用户归因值（可 null，最多 512 字符），不是账号鉴权。显式 metadata 在已归属主模型请求中完整替换内层 metadata（含 `{}`）；JSON 形字符串逐字保留，不解析/拼接内部 account/session 字段。缺省保留 CLI 默认值，辅助/count 请求不套用。原“不同 user_id 必须冲突拒绝”没有官方依据，已纠正；HTTP 凭据和 CLI 授权独立保留。真实账号接受性仍待验证。官方：[MetadataParam](https://github.com/anthropics/anthropic-sdk-python/blob/main/src/anthropic/types/metadata_param.py)。
 - 来源：[Messages create](https://platform.claude.com/docs/en/api/messages/create)、[Thinking compatibility](https://platform.claude.com/docs/en/build-with-claude/thinking)。
 
 ### F-CACHE / F-DIAGNOSTICS — 缓存控制与诊断
@@ -104,7 +104,7 @@
 - F-CACHE 当前将顶层、system/tool/content cache_control 收集为TTL，删除原块标记，映射CLI全局cache TTL。**部分支持TTL，不支持断点原位等价**。
 - 需保留具体断点位置、5m/1h各自TTL、自动缓存与显式断点的区别；不要把“本地prefix-hit”“上游cache-read”“计费节省”混为一个状态。
 - 系统首块/工具定义/图片处理/CLI attribution 注入可能改变缓存前缀；审计实际出站首块及插入位置，不能把CLI新增元数据归因成客户端system重复。缓存命中及usage归因需真实证据。
-- F-DIAGNOSTICS：`diagnostics.previous_message_id` 与 `cache-diagnosis-2026-04-07` 的版本要求需要按当前API再核对；当前body不支持。映射客户端 message ID到真正上游ID，避免把网关合成ID传给上游；缓存诊断不是本地transcript命中率。
+- F-DIAGNOSTICS：2026-10-08 已按当前 GA 文档实现主请求 diagnostics 对象/null 与响应保真，无需旧 beta。previous_message_id 只接受同 host 客户端 scope、同 Worker 的实际响应 ID；独立持久索引一小时/4096 条，关闭调试日志不清除，未知、过期、跨账号明确拒绝。隔离真实 CLI JSON/SSE 往返已通过；上游指纹是否存在、可比较仍由 provider 返回，不是本地 transcript 命中率。详见 implementation/FAST-DIAGNOSTICS-PROGRESS.md。
 - 来源：[Prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)、[Cache diagnostics](https://platform.claude.com/docs/en/build-with-claude/cache-diagnostics)。
 
 ## 工具与内容功能
@@ -185,8 +185,8 @@
 
 ### F-FAST / F-TASK-BUDGET / F-FALLBACK / F-ROUTING
 
-- F-FAST：speed fast/standard + fast-mode-2026-02-01。当前AllowFast关时speed被删除，开时转换fastMode；**有映射但实际采用需usage.speed证据**。不应静默忽略显式付费/性能请求。来源：[Fast mode](https://platform.claude.com/docs/en/build-with-claude/fast-mode)。
-- F-TASK-BUDGET：task-budgets-2026-03-13，output_config.task_budget type/tokens total/remaining。当前子字段不支持；不是max_tokens或USD预算。历史压缩后remaining规则特殊，软预算不能保证硬截断。来源：[Task budgets](https://platform.claude.com/docs/en/build-with-claude/task-budgets)。
+- F-FAST：speed fast/standard/null 保真应用到已归属的主请求，缺省删除 CLI speed；fast 需 AllowFast 与 fast-mode-2026-02-01，关闭策略明确拒绝。API 路径不借 CLI fastMode 自动降档。隔离真实 CLI 四种形态与 usage.speed 回传已验证；真实产品资格、容量和管理员价格表达式未由假上游证明。来源：[Fast mode](https://platform.claude.com/docs/en/build-with-claude/fast-mode)。
+- F-TASK-BUDGET：task-budgets-2026-03-13，output_config.task_budget type/tokens total/remaining。已增加主请求计划适配与六种真实 CLI 隔离往返；不是 max_tokens 或 USD 预算，账号上游能力待验证。拒绝无计量的 CLI 内部轮次组合以及 signed compaction/compaction 请求中的非空 remaining。软预算不能保证硬截断。来源：[Task budgets](https://platform.claude.com/docs/en/build-with-claude/task-budgets)。
 - F-TASK-BUDGET限制：官方total最小20000。官方专题当前还说明Claude Code/Cowork surface不支持该功能，而SDK入口/本地CLI隔离捕获确实存在参数路径；这是服务可用性与客户端传输的证据差异，不能推断OAuth订阅可用。记录为条件可行/账号待验证；12000的旧抓包只是非法值仍能发出的传输实验。优先用合法值与获权API渠道验证，不能靠补beta绕过产品限制。
 - F-FALLBACK：fallbacks及fallback_credit_token、server-side-fallback-2026-06-01/2026-07-01、fallback-credit-2026-06-01/2026-07-01。不同代语义需核对；当前顶层不支持，CC本地fallbackModel不等价服务端重试/抵扣。保留fallback块边界、实际模型、累计usage/iterations/credit状态以及thinking绑定。当前缺口不得通过删除refusal或绕过safeguards补齐。来源：[Stop reasons and fallback](https://platform.claude.com/docs/en/build-with-claude/handling-stop-reasons)、[Fallback credit](https://platform.claude.com/docs/en/build-with-claude/fallback-credit)、[Streaming](https://platform.claude.com/docs/en/build-with-claude/streaming)。
 - F-ROUTING：inference_geo/service_tier以及workspace/user-profile headers是上游服务约束/归属，不是模型提示词。当前body不接受；若无满足条件的渠道，应明确不支持，禁止静默当global/standard处理。不能把客户端workspace ID当平台账号授权。来源：[Messages API](https://platform.claude.com/docs/en/api/messages/create)。

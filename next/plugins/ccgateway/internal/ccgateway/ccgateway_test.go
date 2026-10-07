@@ -27,7 +27,11 @@ func TestManagedRPCRequests(t *testing.T) {
 			t.Fatal("header allowlist changed")
 		}
 	}
-	for _, protocol := range []string{"anthropic.count_tokens", "openai.chat", ""} {
+	count, err := h.Platform.BuildUpstreamRequest(ctx, &pluginv1.BuildUpstreamRequestRequest{Account: acc, Meta: &pluginv1.RequestMeta{Protocol: ProtocolCountTokens, Model: "fixture"}})
+	if err != nil || count.GetUrl() != VirtualCountURL {
+		t.Fatal("count protocol not routed to the count endpoint", err, count)
+	}
+	for _, protocol := range []string{"openai.chat", ""} {
 		if _, e := h.Platform.BuildUpstreamRequest(ctx, &pluginv1.BuildUpstreamRequestRequest{Account: acc, Meta: &pluginv1.RequestMeta{Protocol: protocol}}); status.Code(e) != codes.Unimplemented {
 			t.Fatalf("unsupported protocol accepted: %s %v", protocol, e)
 		}

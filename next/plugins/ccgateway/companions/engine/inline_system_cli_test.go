@@ -308,9 +308,9 @@ func TestAttachmentSourcePolicy(t *testing.T) {
 					environment := req.System[len(req.System)-1]
 					req.System = req.System[:len(req.System)-1]
 					req.Messages = append([]Message{
-						{"user", []Object{{"type": "text", "text": "previous question"}}},
-						{"system", []Object{{"type": "text", "text": environment}}},
-						{"assistant", []Object{{"type": "text", "text": "previous answer"}}},
+						{Role: "user", Content: []Object{{"type": "text", "text": "previous question"}}},
+						{Role: "system", Content: []Object{{"type": "text", "text": environment}}},
+						{Role: "assistant", Content: []Object{{"type": "text", "text": "previous answer"}}},
 					}, req.Messages...)
 				}
 				req.filterClientAttachments()

@@ -149,7 +149,12 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 	relay.scope = cfg.scope
 	defer relay.Close()
 	// Assign the named results: runs after the process has been waited for.
-	defer func() { result, err = relayOutcome(ctx, relay, result, err) }()
+	defer func() {
+		result, err = relayOutcome(ctx, relay, result, err)
+		if req.CountTokens && err == nil {
+			err = (&cliSession{cfg: cfg, relay: relay}).checkMod()
+		}
+	}()
 	control, err := startModControl(cfg, r.InternalBaseURL)
 	if err != nil {
 		return nil, err
@@ -171,7 +176,26 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 		req.diagnostic.snapshot("history-native.jsonl", p.NativePath)
 		req.diagnostic.trace("cli_finished", Object{"failed": err != nil})
 	}()
-	defer func() { cancel(); proc.stdin.Close(); _ = proc.cmd.Wait() }()
+	defer func() {
+		cancel()
+		proc.stdin.Close()
+		_ = proc.cmd.Wait()
+		if err == nil && p.APIResponseComplete {
+			captureErr := p.captureNative(proc.cmd.Env, str(result, "id"))
+			if req.InlineTools != nil || req.continuation != "" || req.hasContextControls() || req.hasCompactionHistory() {
+				captureErr = fmt.Errorf("assistant continuation uses response-only checkpoint")
+			}
+			blocks, _ := result["content"].([]Object)
+			if captureErr == nil && (!nativeResponseContentMatches(p.NativeRows, str(result, "id"), req, blocks) || len(cfg.systems) > 0 && !nativeSystemRecorded(p.Rows, p.NativeRows, cfg.systems)) {
+				captureErr = fmt.Errorf("native response content differs from the completed API response")
+			}
+			if captureErr != nil {
+				p.NativeRows = nil
+				p.NativeAnchor = ""
+				req.diagnostic.trace("native_checkpoint_unavailable", Object{"reason": "api_terminal_response", "error": captureErr.Error()})
+			}
+		}
+	}()
 	// A descendant may inherit stdout and outlive the CLI. Cancellation must
 	// also unblock reads, including the final drain, rather than waiting for
 	// every descendant to close its copy of the pipe.
@@ -188,6 +212,9 @@ func relayOutcome(ctx context.Context, relay *outboundRelay, result Object, err 
 	}
 	if upstream := relay.UpstreamError(); upstream != nil && ctx.Err() == nil {
 		return nil, upstream
+	}
+	if result, ok := relay.completedTokenCount(); ok && ctx.Err() == nil {
+		return result, nil
 	}
 	return result, err
 }

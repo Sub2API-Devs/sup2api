@@ -27,6 +27,7 @@ func uuid() string {
 // Rows are native CLI records. Hashes index the separate client-visible history.
 // Only committed assistant boundaries may be used for continuation or branching.
 type Snapshot struct {
+	ResponseOnly   bool                 `json:"response_only,omitempty"`
 	NativeDigest   string               `json:"native_digest"`
 	Format         int                  `json:"format"`
 	NativePath     string               `json:"native_path"`
@@ -82,7 +83,7 @@ func newCache(dir string, limit int64) (*HistoryCache, error) {
 			return nil, e
 		}
 		var s Snapshot
-		if json.Unmarshal(b, &s) != nil || time.Now().After(s.Expires) || s.Format != 2 || len(s.Hashes) == 0 || len(s.Rows) == 0 || s.LastUUID == "" || !validResponseCheckpoints(&s) {
+		if json.Unmarshal(b, &s) != nil || time.Now().After(s.Expires) || s.Format != 2 || len(s.Hashes) == 0 || (!s.ResponseOnly && (len(s.Rows) == 0 || s.LastUUID == "")) || !validResponseCheckpoints(&s) {
 			_ = os.Remove(p)
 			continue
 		}
@@ -252,6 +253,7 @@ func transcriptRow(m Message, parent, sid, cwd, version, model string) (json.Raw
 }
 
 type Prepared struct {
+	APIResponseComplete                     bool
 	FinalResponseStop                       json.RawMessage // Runtime only; never replayed or embedded in Snapshot.
 	Rows                                    []json.RawMessage
 	LastUUID, SessionID, Path, Anchor, Mode string
@@ -292,13 +294,17 @@ func prepareHistory(r *Request, c *HistoryCache, logical, dir, version string) (
 		p.resumeFrom(prior, r, c, pending)
 		parent = prior.LastUUID
 		start = len(prior.Hashes)
-		if !p.Fork && !hasToolResults(r.Messages[pending]) {
+		if !p.Fork && pending < len(r.Messages) && !hasToolResults(r.Messages[pending]) {
 			p.Anchor = "" // Ordinary native resume: submit only the new user message.
 			return p, nil
 		}
 	}
 	p.LastUUID = p.seedRows(r, start, pending, parent, version)
-	if pending > 0 {
+	completedHistory := false
+	for _, message := range r.Messages[:pending] {
+		completedHistory = completedHistory || message.Role == "assistant"
+	}
+	if completedHistory {
 		if p.Anchor == "" {
 			p.release()
 			return nil, fmt.Errorf("missing assistant resume anchor")
@@ -317,12 +323,12 @@ func prepareHistory(r *Request, c *HistoryCache, logical, dir, version string) (
 // findPriorSnapshot is the cached checkpoint of the longest client prefix
 // that ends with an assistant message before the pending turn.
 func findPriorSnapshot(r *Request, c *HistoryCache, logical string, hashes []string, pending int) *Snapshot {
-	for n := pending - 1; !r.structuredOutput() && n >= 0; n-- {
+	for n := pending - 1; r.InlineTools == nil && !r.structuredOutput() && n >= 0; n-- {
 		if r.Messages[n].Role != "assistant" {
 			continue
 		}
 		s := c.get(cacheKey(logical, r.toolHistoryNamespace(), hashes[n]))
-		if s != nil && s.Format == 2 && len(s.Hashes) == n+1 {
+		if s != nil && !s.ResponseOnly && s.Format == 2 && len(s.Hashes) == n+1 {
 			return s
 		}
 	}
@@ -344,7 +350,7 @@ func (p *Prepared) resumeFrom(prior *Snapshot, r *Request, c *HistoryCache, pend
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	actual, e := os.ReadFile(prior.NativePath)
-	if len(prior.Hashes) == pending && !c.active[prior.SessionID] && e == nil && digest(string(actual)) == prior.NativeDigest {
+	if !r.CacheWarmup && !r.CountTokens && !r.needsFreshNativeSession() && len(prior.Hashes) == pending && !c.active[prior.SessionID] && e == nil && digest(string(actual)) == prior.NativeDigest {
 		p.SessionID = prior.SessionID
 		p.NativePath = prior.NativePath
 		p.Path = prior.NativePath
@@ -357,8 +363,11 @@ func (p *Prepared) resumeFrom(prior *Snapshot, r *Request, c *HistoryCache, pend
 // seedRows appends native records for client messages start..pending and
 // returns the last record's UUID.
 func (p *Prepared) seedRows(r *Request, start, pending int, parent, version string) string {
-	for i := start; i <= pending; i++ {
+	for i := start; i <= pending && i < len(r.Messages); i++ {
 		if r.Messages[i].Role == "system" {
+			if r.Messages[i].directiveOnly() {
+				continue
+			}
 			// One record per client system message, its text blocks as the
 			// record's content entries.
 			row, id := systemRow(systemTexts(r.Messages[i]), parent, p.SessionID, p.Work, version)
@@ -367,6 +376,23 @@ func (p *Prepared) seedRows(r *Request, start, pending int, parent, version stri
 			continue
 		}
 		message := r.wireMessage(r.Messages[i])
+		// Empty inline directives are restored at the relay. Native CLI adds a
+		// newline when it joins separate user rows, so serialize their exact
+		// block sequence in one row instead of letting that join alter text.
+		if message.Role == "user" {
+			for i+1 <= pending && i+1 < len(r.Messages) {
+				next := r.Messages[i+1]
+				if next.directiveOnly() {
+					i++
+					continue
+				}
+				if next.Role != "user" {
+					break
+				}
+				message.Content = append(message.Content, r.wireMessage(next).Content...)
+				i++
+			}
+		}
 		row, id := transcriptRow(message, parent, p.SessionID, p.Work, version, r.Model)
 		if i == pending {
 			// The recovery loader needs complete tool pairs before resume-at trimming.
@@ -419,7 +445,7 @@ func (p *Prepared) commit(r *Request, answer Object, c *HistoryCache, logical, d
 	if len(p.Hashes) == 0 {
 		return fmt.Errorf("missing client history checkpoint")
 	}
-	hash := digest([]any{p.Hashes[len(p.Hashes)-1], Message{"assistant", bs}})
+	hash := digest([]any{p.Hashes[len(p.Hashes)-1], Message{Role: "assistant", Content: bs}})
 	hashes := append(append([]string(nil), p.Hashes...), hash)
 	// Native history lifetime is independent of provider prompt-cache TTL.
 	s := &Snapshot{Format: 2, NativeDigest: digest(string(nativeBytes(p.NativeRows))), Rows: p.NativeRows, LastUUID: p.NativeAnchor, SessionID: p.SessionID, NativePath: p.NativePath, Work: p.Work, Hashes: hashes, Expires: started.Add(24 * time.Hour)}

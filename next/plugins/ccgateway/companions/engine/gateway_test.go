@@ -91,7 +91,7 @@ func TestHistorySnapshotAndToolPair(t *testing.T) {
 	}
 	content := []Object{{"type": "tool_use", "id": "toolu_one", "name": "weather", "input": Object{"city": "Paris"}}}
 	answer := Object{"id": "msg_tool_checkpoint", "role": "assistant", "stop_reason": "tool_use", "content": content}
-	row, id := transcriptRow(r.wireMessage(Message{"assistant", content}), p.LastUUID, p.SessionID, p.Work, "2.1.288", r.Model)
+	row, id := transcriptRow(r.wireMessage(Message{Role: "assistant", Content: content}), p.LastUUID, p.SessionID, p.Work, "2.1.288", r.Model)
 	p.NativeRows = append(p.Rows, row)
 	p.NativeAnchor = id
 	p.NativePath = filepath.Join(dir, "native.jsonl")
@@ -101,7 +101,7 @@ func TestHistorySnapshotAndToolPair(t *testing.T) {
 	if e = p.commit(r, answer, cache, "logical", dir, "2.1.288", time.Now()); e != nil {
 		t.Fatal(e)
 	}
-	r.Messages = append(r.Messages, Message{"assistant", content}, Message{"user", []Object{{"type": "tool_result", "tool_use_id": "toolu_one", "content": "sunny"}}})
+	r.Messages = append(r.Messages, Message{Role: "assistant", Content: content}, Message{Role: "user", Content: []Object{{"type": "tool_result", "tool_use_id": "toolu_one", "content": "sunny"}}})
 	p2, e := prepareHistory(r, cache, "logical", dir, "2.1.288")
 	if e != nil {
 		t.Fatal(e)
@@ -193,8 +193,8 @@ func TestHTTPAdmission(t *testing.T) {
 }
 
 func TestCacheExpiryAndCanonicalKeys(t *testing.T) {
-	a := Message{"assistant", []Object{{"type": "tool_use", "id": "x", "name": "test", "input": Object{"a": 1, "b": 2}}}}
-	b := Message{"assistant", []Object{{"input": Object{"b": 2, "a": 1}, "name": "test", "id": "x", "type": "tool_use"}}}
+	a := Message{Role: "assistant", Content: []Object{{"type": "tool_use", "id": "x", "name": "test", "input": Object{"a": 1, "b": 2}}}}
+	b := Message{Role: "assistant", Content: []Object{{"input": Object{"b": 2, "a": 1}, "name": "test", "id": "x", "type": "tool_use"}}}
 	if fingerprints([]Message{a})[0] != fingerprints([]Message{b})[0] {
 		t.Fatal("object key order affected fingerprint")
 	}
@@ -315,6 +315,11 @@ func TestRealCLI(t *testing.T) {
 		last, _ := ms[len(ms)-1].(map[string]any)
 		raw, _ := json.Marshal(last)
 		content := []Object{{"type": "text", "text": "fixture answer"}}
+		output, _ := v["output_config"].(map[string]any)
+		apiFormat := output["format"] != nil
+		if apiFormat {
+			content = []Object{{"type": "text", "text": `{"ok":true}`}}
+		}
 		for _, value := range v["tools"].([]any) {
 			tool, _ := value.(map[string]any)
 			if str(tool, "name") == "StructuredOutput" {
@@ -322,7 +327,7 @@ func TestRealCLI(t *testing.T) {
 				break
 			}
 		}
-		if bytes.Contains(raw, []byte("FORMAT_AFTER_TEXT")) {
+		if !apiFormat && bytes.Contains(raw, []byte("FORMAT_AFTER_TEXT")) {
 			content = []Object{{"type": "text", "text": "The result is true."}}
 		}
 		if bytes.Contains(raw, []byte("SEARCH_TOOL")) && !bytes.Contains(raw, []byte("tool_result")) {
@@ -332,7 +337,7 @@ func TestRealCLI(t *testing.T) {
 		if bytes.Contains(allMessages, []byte("SYSTEM_SEARCH_TOOL")) && !bytes.Contains(allMessages, []byte("tool_result")) {
 			content = []Object{{"type": "tool_use", "id": "toolu_inline_search", "name": "ToolSearch", "input": Object{"query": "select:mcp__ccgateway__weather"}}}
 		}
-		if bytes.Contains(allMessages, []byte("SYSTEM_FORMAT_AFTER_TEXT")) && !bytes.Contains(allMessages, []byte("tool_result")) {
+		if !apiFormat && bytes.Contains(allMessages, []byte("SYSTEM_FORMAT_AFTER_TEXT")) && !bytes.Contains(allMessages, []byte("tool_result")) {
 			mu.Lock()
 			formatCalls := 0
 			for _, previous := range requests {
@@ -606,6 +611,16 @@ func TestRealCLI(t *testing.T) {
 	native["tool_choice"] = Object{"type": "none"}
 	native["messages"] = []any{Object{"role": "user", "content": "No tools"}}
 	post(native, "Read")
+	mu.Lock()
+	noneRequest := requests[len(requests)-1]
+	mu.Unlock()
+	// none disables calls, not the caller's declared catalog or its cache prefix.
+	if digest(noneRequest["tools"]) != digest([]any{Object{"name": wantRead, "description": verifiedRead.Description, "input_schema": verifiedRead.Schema}}) {
+		t.Fatal("tool_choice none changed the explicit native tool catalog")
+	}
+	if digest(noneRequest["tool_choice"]) != digest(Object{"type": "none"}) {
+		t.Fatal("tool_choice none was not preserved")
+	}
 	// Tools must remain correct beyond the immediate result round.
 	v["messages"] = append(v["messages"].([]any), Object{"role": "assistant", "content": []any{Object{"type": "text", "text": "fixture answer"}}}, Object{"role": "user", "content": "AFTER_CLIENT_TOOL"})
 	followAnswer, _, followHeaders := post(v, "")
@@ -832,23 +847,28 @@ func TestRealCLI(t *testing.T) {
 		}
 		schemaReq["messages"] = append(schemaReq["messages"].([]any), Object{"role": "assistant", "content": schemaAnswer["content"]}, Object{"role": "user", "content": fmt.Sprintf("SCHEMA_NEXT_%d", i)})
 	}
-	// Enabling an unchanged A snapshot must not cause A to reappear on the
-	// second B request. Compare the actual upstream prompt on every turn.
+	// A cached A prompt must not reappear after switching to B. Compare the
+	// actual upstream prompt on every turn with scoped snapshots disabled.
 	promptReq := basic()
 	promptReq["messages"] = []any{Object{"role": "user", "content": "SNAPSHOT_START"}}
-	for i, step := range []struct {
-		system  string
-		enabled bool
-	}{{"SNAPSHOT_SYSTEM_A", false}, {"SNAPSHOT_SYSTEM_A", true}, {"SNAPSHOT_SYSTEM_B", false}, {"SNAPSHOT_SYSTEM_B", false}} {
-		promptReq["system"] = step.system
+	for i, system := range []string{"SNAPSHOT_SYSTEM_A", "SNAPSHOT_SYSTEM_A", "SNAPSHOT_SYSTEM_B", "SNAPSHOT_SYSTEM_B"} {
+		promptReq["system"] = system
 		preparedPrompt, err := prepareHistory(parseHTTP(promptReq), cache, digest([]string{scopeHeader, sessionHeader}), t.TempDir(), version)
 		if err != nil {
 			t.Fatal(err)
 		}
-		enabled := preparedPrompt.SnapshotEnabled
+		// Every admitted request preserves max_tokens through a nonce-scoped
+		// plan, so CLI snapshots must remain off regardless of cache metadata.
+		args := cliArgs(parseHTTP(promptReq), preparedPrompt, "fixture")
+		enabled := false
+		for i, arg := range args {
+			if arg == "--system-prompt-snapshot" && i+1 < len(args) {
+				enabled = args[i+1] == "on"
+			}
+		}
 		preparedPrompt.release()
-		if enabled != step.enabled {
-			t.Fatalf("prompt turn %d snapshot enabled=%v, want %v", i, enabled, step.enabled)
+		if enabled {
+			t.Fatalf("prompt turn %d snapshot enabled with a scoped feature plan", i)
 		}
 		promptAnswer, _, promptHeaders := post(promptReq, "")
 		if i > 0 && promptHeaders.Get("X-CCGateway-History") != "prefix-hit" {
@@ -858,10 +878,10 @@ func TestRealCLI(t *testing.T) {
 		actualSystem, _ := json.Marshal(requests[len(requests)-1]["system"])
 		mu.Unlock()
 		other := "SNAPSHOT_SYSTEM_A"
-		if step.system == other {
+		if system == other {
 			other = "SNAPSHOT_SYSTEM_B"
 		}
-		if !bytes.Contains(actualSystem, []byte(step.system)) || bytes.Contains(actualSystem, []byte(other)) {
+		if !bytes.Contains(actualSystem, []byte(system)) || bytes.Contains(actualSystem, []byte(other)) {
 			t.Fatalf("prompt turn %d restored the wrong system: %s", i, actualSystem)
 		}
 		promptReq["messages"] = append(promptReq["messages"].([]any), Object{"role": "assistant", "content": promptAnswer["content"]}, Object{"role": "user", "content": fmt.Sprintf("SNAPSHOT_NEXT_%d", i)})
@@ -992,17 +1012,13 @@ func TestRealCLI(t *testing.T) {
 	if len(requests) != 38 {
 		t.Fatalf("expected 38 model requests, got %d", len(requests))
 	}
-	last := requests[6]
 	mu.Unlock()
-	if ts, _ := last["tools"].([]any); len(ts) != 0 {
-		t.Fatalf("tool_choice none exposed tools: %v", ts)
-	}
 	// Verify the actual model request produced by the installed CLI, using the local fake upstream only.
 	policy := defaultRequestPolicy()
 	policy.AllowFast = true
 	rawPolicy, _ := json.Marshal(policy)
 	policyJSON = string(rawPolicy)
-	betaHeader = "fine-grained-tool-streaming-2025-05-14,ignored-client-beta"
+	betaHeader = "fine-grained-tool-streaming-2025-05-14,fast-mode-2026-02-01,ignored-client-beta"
 	sessionHeader = "capability-test"
 	capability := basic()
 	capability["model"] = "claude-opus-5-5"
@@ -1020,12 +1036,28 @@ func TestRealCLI(t *testing.T) {
 	policy.AllowFast = false
 	rawPolicy, _ = json.Marshal(policy)
 	policyJSON = string(rawPolicy)
-	post(capability, "")
 	mu.Lock()
-	standard := requests[len(requests)-1]
+	beforeDeniedFast := len(requests)
 	mu.Unlock()
-	if standard["speed"] == "fast" {
-		t.Fatal("disabled Fast reached upstream")
+	deniedFastBody, _ := json.Marshal(capability)
+	deniedFastRequest, _ := http.NewRequest("POST", gateway.URL+"/v1/messages", bytes.NewReader(deniedFastBody))
+	deniedFastRequest.Header.Set("Content-Type", "application/json")
+	deniedFastRequest.Header.Set("anthropic-beta", betaHeader)
+	deniedFastRequest.Header.Set(policyHeader, policyJSON)
+	deniedFastResponse, err := http.DefaultClient.Do(deniedFastRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deniedFastResult, _ := io.ReadAll(deniedFastResponse.Body)
+	deniedFastResponse.Body.Close()
+	if deniedFastResponse.StatusCode != http.StatusBadRequest || !bytes.Contains(deniedFastResult, []byte("speed fast is disabled")) {
+		t.Fatalf("disabled Fast silently downgraded: HTTP%d %s", deniedFastResponse.StatusCode, deniedFastResult)
+	}
+	mu.Lock()
+	afterDeniedFast := len(requests)
+	mu.Unlock()
+	if afterDeniedFast != beforeDeniedFast {
+		t.Fatal("disabled Fast made an upstream request")
 	}
 	betaHeader = ""
 	policyJSON = ""
@@ -1050,7 +1082,9 @@ func TestRealCLI(t *testing.T) {
 	hasSchema := actualConfig["format"] != nil
 	for _, value := range actual["tools"].([]any) {
 		tool, _ := value.(map[string]any)
-		hasSchema = hasSchema || str(tool, "name") == "StructuredOutput"
+		if str(tool, "name") == "StructuredOutput" {
+			t.Fatal("API format injected a synthetic tool")
+		}
 	}
 	if !hasSchema {
 		t.Fatal("CLI did not receive structured output schema")
@@ -1099,8 +1133,11 @@ func TestRealCLI(t *testing.T) {
 			}
 			mu.Lock()
 			defer mu.Unlock()
-			if len(requests)-before < 2 {
+			if kind == "search" && len(requests)-before < 2 {
 				t.Fatal("native continuation was not exercised")
+			}
+			if kind == "format" && len(requests)-before != 1 {
+				t.Fatal("API format triggered an implicit continuation")
 			}
 			for _, wire := range requests[before:] {
 				found := 0

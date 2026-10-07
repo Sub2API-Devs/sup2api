@@ -15,9 +15,10 @@ import (
 // messages, so the model request keeps the client's message structure.
 
 type systemGroup struct {
-	Turn     int        // client assistants before the group
-	Origin   int        // client array index of the group's first message
-	Messages [][]string // text blocks of each client system message
+	Turn      int        // client assistants before the group
+	Origin    int        // client array index of the group's first message
+	Messages  [][]string // text blocks of each client system message
+	Originals []Message  // exact client protocol metadata and block boundaries
 }
 
 func (r *Request) systemGroups() []systemGroup {
@@ -33,10 +34,16 @@ func (r *Request) systemGroups() []systemGroup {
 				g.Origin = r.origin[i]
 			}
 			for ; i < len(r.Messages) && r.Messages[i].Role == "system"; i++ {
+				if r.Messages[i].directiveOnly() {
+					continue
+				}
 				g.Messages = append(g.Messages, systemTexts(r.Messages[i]))
+				g.Originals = append(g.Originals, r.Messages[i])
 			}
 			i--
-			out = append(out, g)
+			if len(g.Messages) > 0 {
+				out = append(out, g)
+			}
 		}
 	}
 	return out
@@ -88,7 +95,11 @@ func (m systemMatch) startsAfter(o systemMatch) bool {
 
 // Each wire turn's head: from its first message up to the first assistant
 // message, where Claude Code places the turn's system messages.
-func wireTurnHeads(messages []any) ([][2]int, error) {
+func wireTurnHeads(messages []any, request ...*Request) ([][2]int, error) {
+	r := &Request{ToolSearch: "true"} // Compatibility for standalone restoration fixtures.
+	if len(request) > 0 && request[0] != nil {
+		r = request[0]
+	}
 	var heads [][2]int
 	start, head := 0, -1
 	for i, value := range messages {
@@ -102,7 +113,7 @@ func wireTurnHeads(messages []any) ([][2]int, error) {
 		if head < 0 {
 			head = i
 		}
-		if !internalAssistant(m) {
+		if !internalHistoryAssistant(r, m) {
 			heads = append(heads, [2]int{start, head})
 			start, head = i+1, -1
 		}
@@ -144,7 +155,7 @@ func systemBlockTexts(m Object) ([]string, []bool) {
 // Claude Code's remainder can differ. The last occurrence is taken, which keeps
 // the result the same for the same input. (Request validation lets a turn have
 // one group only: system messages must precede an assistant or end the array.)
-func restoreSystemMessages(body Object, groups []systemGroup) error {
+func restoreSystemMessages(body Object, groups []systemGroup, request ...*Request) error {
 	if len(groups) == 0 {
 		return nil
 	}
@@ -152,7 +163,7 @@ func restoreSystemMessages(body Object, groups []systemGroup) error {
 	if !ok {
 		return fmt.Errorf("model request has no messages")
 	}
-	heads, err := wireTurnHeads(messages)
+	heads, err := wireTurnHeads(messages, request...)
 	if err != nil {
 		return err
 	}
@@ -271,7 +282,16 @@ func splitSystemMessage(m Object, match systemMatch, g systemGroup) []any {
 		if breakpoint != nil && i == len(g.Messages)-1 {
 			content[len(content)-1].(Object)["cache_control"] = breakpoint
 		}
-		out = append(out, Object{"role": "system", "content": content})
+		message := Object{"role": "system", "content": content}
+		if i < len(g.Originals) {
+			original := inlineSystemObject(g.Originals[i])
+			for _, key := range []string{"clear_at", "output_config"} {
+				if value, exists := original[key]; exists {
+					message[key] = value
+				}
+			}
+		}
+		out = append(out, message)
 	}
 	return out
 }

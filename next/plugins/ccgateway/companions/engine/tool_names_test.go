@@ -72,7 +72,7 @@ func TestToolWireNamesPreserveQualifiedHistory(t *testing.T) {
 		"mcp__files__read": "mcp__files__read",
 		"mcp__incomplete":  "mcp__ccgateway__mcp__incomplete",
 	} {
-		m := Message{"assistant", []Object{{"type": "tool_use", "id": "one", "name": name, "input": Object{}}}}
+		m := Message{Role: "assistant", Content: []Object{{"type": "tool_use", "id": "one", "name": name, "input": Object{}}}}
 		mapped := r.wireMessage(m)
 		if got := str(mapped.Content[0], "name"); got != want {
 			t.Fatalf("wire history %q = %q, want %q", name, got, want)

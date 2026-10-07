@@ -1,6 +1,7 @@
 package ccgateway
 
 import (
+	"encoding/json"
 	"errors"
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"regexp"
@@ -9,6 +10,7 @@ import (
 
 // RequestPolicy is supplied by the authenticated host, never by API callers.
 type RequestPolicy struct {
+	SchemaVersion            int               `json:"schema_version"`
 	EnvironmentFields        map[string]string `json:"environment_fields,omitempty"`
 	UnknownBeta              string            `json:"unknown_beta"`
 	UnknownField             string            `json:"unknown_field"`
@@ -28,14 +30,33 @@ type RequestPolicy struct {
 }
 type BetaRule = features.BetaRule
 
+func (p *RequestPolicy) UnmarshalJSON(raw []byte) error {
+	if err := features.ValidatePolicySchemaJSON(raw); err != nil {
+		return err
+	}
+	type plain RequestPolicy
+	value := plain(*p)
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	value.SchemaVersion = features.PolicySchemaVersion
+	*p = RequestPolicy(value)
+	return nil
+}
+
 func defaultRequestPolicy() RequestPolicy {
-	return RequestPolicy{UnknownClientAttachment: "pass", UnknownGatewayAttachment: "pass", CustomToolPrefix: "ccgateway", UnknownBeta: "ignore", UnknownField: "reject", AllowFast: false, AllowEffort: true, AttachmentSource: "client", PassUpstreamErrors: false, ToolSearch: "request", Betas: features.BetaRules()}
+	return RequestPolicy{SchemaVersion: features.PolicySchemaVersion, UnknownClientAttachment: "pass", UnknownGatewayAttachment: "pass", CustomToolPrefix: "ccgateway", UnknownBeta: "ignore", UnknownField: "reject", AllowFast: false, AllowEffort: true, AttachmentSource: "client", PassUpstreamErrors: false, ToolSearch: "request", Betas: features.BetaRules()}
 }
 func (c Config) EffectiveRequestPolicy() RequestPolicy {
 	if c.RequestPolicy == nil {
-		return defaultRequestPolicy()
+		p := defaultRequestPolicy()
+		p.SchemaVersion = features.PolicySchemaVersion
+		return p
 	}
 	p := *c.RequestPolicy
+	if p.SchemaVersion == 0 {
+		p.SchemaVersion = features.PolicySchemaVersion
+	}
 	if p.UnknownClientAttachment == "" {
 		p.UnknownClientAttachment = "pass"
 	}
@@ -56,6 +77,9 @@ func (c Config) EffectiveRequestPolicy() RequestPolicy {
 }
 
 func validateRequestPolicy(p RequestPolicy) error {
+	if p.SchemaVersion != 0 && p.SchemaVersion != features.PolicySchemaVersion {
+		return errors.New("unsupported request policy schema_version")
+	}
 	if err := validateAttachmentPolicy(p); err != nil {
 		return err
 	}

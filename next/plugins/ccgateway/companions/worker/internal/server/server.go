@@ -10,17 +10,22 @@ import (
 )
 
 type Server struct {
-	worker  worker.Worker
-	port    int
-	handler http.Handler
-	srv     *http.Server
+	worker   worker.Worker
+	port     int
+	handler  http.Handler
+	srv      *http.Server
+	adminKey string
 }
 
-func New(w worker.Worker, port int) *Server {
+func New(w worker.Worker, port int, adminKey ...string) *Server {
 	s := &Server{worker: w, port: port}
+	if len(adminKey) > 0 {
+		s.adminKey = adminKey[0]
+	}
 	mux := http.NewServeMux()
 	mux.Handle("/", w)
 	mux.HandleFunc("/health", s.handleHealth)
+	mux.HandleFunc("/admin/features", s.handleFeatures)
 	s.handler = mux
 	// Initialize before Run so Shutdown does not race the server goroutine.
 	s.srv = &http.Server{Addr: fmt.Sprintf(":%d", port), Handler: mux, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: time.Minute}

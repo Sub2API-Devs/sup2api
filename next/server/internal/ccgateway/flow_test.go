@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -274,6 +275,8 @@ func (c *fakeController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(accountConnection{IP: "10.52.74.181", Port: 8787, Key: strings.Repeat("k", 32), Revision: c.revision[key]})
 	case "admin/status":
 		_ = json.NewEncoder(w).Encode(map[string]any{"healthy": true, "logged_in": c.loggedIn[key], "auth_method": "oauth"})
+	case "admin/features":
+		_ = json.NewEncoder(w).Encode(features.RuntimeCapabilities{ProtocolVersion: 1, Build: features.BuildInfo{Version: "test", Revision: "fixture"}, Catalog: features.Catalog(), PolicySchemaVersions: []int{1}, Probes: []features.RuntimeProbe{}, ModelProviderVerification: "not_run"})
 	case "admin/auth/session":
 		if c.pending[key] == "" {
 			_, _ = w.Write([]byte(`{"session":null}`))
@@ -498,6 +501,11 @@ func TestAccountRuntimeOwnership(t *testing.T) {
 	}{
 		{vendor, "GET", "status", mine, 200},
 		{vendor, "GET", "session", mine, 200},
+		{vendor, "GET", "features", mine, 200},
+		{vendor, "GET", "features", other, 404},
+		{reader, "GET", "features", other, 200},
+		{nobody, "GET", "features", mine, 403},
+		{admin, "GET", "features", other, 200},
 		{vendor, "POST", "start", mine, 200},
 		{vendor, "GET", "status", other, 404},
 		{vendor, "POST", "sync", other, 404},

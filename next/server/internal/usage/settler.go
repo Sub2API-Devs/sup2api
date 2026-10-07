@@ -172,6 +172,9 @@ func (s *Service) Submit(rec *core.UsageRecord) {
 	if rec == nil {
 		return
 	}
+	frozen := *rec
+	frozen.Additional = core.ClonePricedUsage(rec.Additional)
+	rec = &frozen
 	persist := func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -297,7 +300,7 @@ func logLost(rec *core.UsageRecord, err error) {
 }
 
 func initialStatus(rec *core.UsageRecord) string {
-	if !rec.Billable || rec.Price == nil {
+	if !rec.Billable || rec.Price == nil && len(rec.Additional) == 0 && rec.BillingError == "" {
 		return StatusFree
 	}
 	// A reservation charges the estimate and then waits: the row is settled
@@ -312,9 +315,11 @@ func initialStatus(rec *core.UsageRecord) string {
 // pendingInputs are stored in billing_detail while a record is unbilled so
 // the retry loop can reproduce the calculation.
 type pendingInputs struct {
-	Semantics string            `json:"semantics"`
-	Params    map[string]string `json:"params,omitempty"`
-	Headers   map[string]string `json:"headers,omitempty"`
+	Additional   []core.PricedUsage `json:"additional,omitempty"`
+	BillingError string             `json:"billing_error,omitempty"`
+	Semantics    string             `json:"semantics"`
+	Params       map[string]string  `json:"params,omitempty"`
+	Headers      map[string]string  `json:"headers,omitempty"`
 }
 
 type pendingDetail struct {
@@ -387,15 +392,17 @@ func (s *Service) insertAtomic(ctx context.Context, batch []*core.UsageRecord, b
 			var exprHash, mode string
 			detail := []byte("{}")
 			if status == StatusPending || status == StatusReserved {
-				exprHash, mode = rec.Price.ExprHash, rec.Price.Mode
-				if rec.Price.ID > 0 {
-					priceID = &rec.Price.ID
-				}
-				if exprHash == "" {
-					exprHash = expr.Hash(rec.Price.Expression)
+				if rec.Price != nil {
+					exprHash, mode = rec.Price.ExprHash, rec.Price.Mode
+					if rec.Price.ID > 0 {
+						priceID = &rec.Price.ID
+					}
+					if exprHash == "" {
+						exprHash = expr.Hash(rec.Price.Expression)
+					}
 				}
 				detail = jsonOr(pendingDetail{Inputs: pendingInputs{
-					Semantics: rec.UsageSemantics, Params: rec.PriceParams, Headers: rec.PriceHeaders}}, "{}")
+					Semantics: rec.UsageSemantics, Params: rec.PriceParams, Headers: rec.PriceHeaders, Additional: rec.Additional, BillingError: rec.BillingError}}, "{}")
 			}
 			// The observability markers have their own column, so they are
 			// written once here and never touched again: settle() rewrites
@@ -653,7 +660,7 @@ func fromRecord(rec *core.UsageRecord) *pending {
 		Model: rec.Model, Success: rec.Success, StatusCode: rec.StatusCode, ErrorType: rec.ErrorType,
 		Tokens: rec.Tokens, Metrics: rec.Metrics, LatencyMs: rec.LatencyMs, CreatedAt: rec.CreatedAt,
 		Rate:   rec.RateMultiplier,
-		Inputs: pendingInputs{Semantics: rec.UsageSemantics, Params: rec.PriceParams, Headers: rec.PriceHeaders},
+		Inputs: pendingInputs{Semantics: rec.UsageSemantics, Params: rec.PriceParams, Headers: rec.PriceHeaders, Additional: core.ClonePricedUsage(rec.Additional), BillingError: rec.BillingError},
 	}
 	if p.CreatedAt.IsZero() {
 		p.CreatedAt = time.Now()
@@ -668,16 +675,17 @@ func fromRecord(rec *core.UsageRecord) *pending {
 // billing inputs and results only: the observability markers that used to
 // share it live in usage_logs.anomalies (core.Anomaly*).
 type BillingDetail struct {
-	ExprVersion    int               `json:"expr_version"`
-	Tier           string            `json:"tier"`
-	Rules          []expr.RuleResult `json:"rules"`
-	Breakdown      expr.Breakdown    `json:"breakdown"`
-	Cost           decimal.Decimal   `json:"cost"` // before the group multiplier
-	RateMultiplier decimal.Decimal   `json:"rate_multiplier"`
-	TotalCost      decimal.Decimal   `json:"total_cost"` // charged
-	LedgerID       *int64            `json:"ledger_id,omitempty"`
-	Inputs         pendingInputs     `json:"inputs"`
-	Attempts       int               `json:"attempts"`
+	Additional     []AdditionalBillingDetail `json:"additional,omitempty"`
+	ExprVersion    int                       `json:"expr_version"`
+	Tier           string                    `json:"tier"`
+	Rules          []expr.RuleResult         `json:"rules"`
+	Breakdown      expr.Breakdown            `json:"breakdown"`
+	Cost           decimal.Decimal           `json:"cost"` // before the group multiplier
+	RateMultiplier decimal.Decimal           `json:"rate_multiplier"`
+	TotalCost      decimal.Decimal           `json:"total_cost"` // charged
+	LedgerID       *int64                    `json:"ledger_id,omitempty"`
+	Inputs         pendingInputs             `json:"inputs"`
+	Attempts       int                       `json:"attempts"`
 }
 
 var errNotPending = errors.New("usage row is not pending")
@@ -690,7 +698,7 @@ var errNotPending = errors.New("usage row is not pending")
 // settlement, a plugin's reservation and a reconcile that brings back the
 // real usage all go through it, so none of them can price a request
 // differently from the others.
-func (s *Service) priceOf(ctx context.Context, p *pending) (total decimal.Decimal, detail BillingDetail, exprHash string, err error) {
+func (s *Service) priceOne(ctx context.Context, p *pending) (total decimal.Decimal, detail BillingDetail, exprHash string, err error) {
 	if p.Expression == "" {
 		return decimal.Zero, BillingDetail{}, "", errors.New("price expression not found")
 	}
@@ -734,7 +742,7 @@ func (s *Service) priceOf(ctx context.Context, p *pending) (total decimal.Decima
 }
 
 // priceOf is a test helper that prices a pending charge without a database.
-func priceOf(p *pending) (decimal.Decimal, BillingDetail, string, error) {
+func priceOne(p *pending) (decimal.Decimal, BillingDetail, string, error) {
 	if p.Expression == "" {
 		return decimal.Zero, BillingDetail{}, "", errors.New("price expression not found")
 	}

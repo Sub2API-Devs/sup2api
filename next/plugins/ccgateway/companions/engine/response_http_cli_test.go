@@ -34,9 +34,8 @@ func writeResponseHTTPFixture(w http.ResponseWriter, model, location string, str
 	send(Object{"type": "message_start", "message": start})
 	stopReason := "end_turn"
 	if structured {
-		stopReason = "tool_use"
-		send(Object{"type": "content_block_start", "index": 0, "content_block": Object{"type": "tool_use", "id": "toolu_format_fixture", "name": "StructuredOutput", "input": Object{}}})
-		send(Object{"type": "content_block_delta", "index": 0, "delta": Object{"type": "input_json_delta", "partial_json": `{"ok":true}`}})
+		send(Object{"type": "content_block_start", "index": 0, "content_block": Object{"type": "text", "text": ""}})
+		send(Object{"type": "content_block_delta", "index": 0, "delta": Object{"type": "text_delta", "text": `{"ok":true}`}})
 	} else {
 		send(Object{"type": "content_block_start", "index": 0, "content_block": Object{"type": "text", "text": ""}})
 		send(Object{"type": "content_block_delta", "index": 0, "delta": Object{"type": "text_delta", "text": "HTTP_ENVELOPE_OK"}})

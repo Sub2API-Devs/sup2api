@@ -23,23 +23,10 @@ func (s *Service) OutputReserveTokens(ctx context.Context) (int64, error) {
 }
 
 func (s *Service) Precharge(ctx context.Context, r *core.UsageRecord) error {
-	if r.Price == nil {
+	if r.Price == nil && len(r.Additional) == 0 && r.BillingError == "" {
 		return nil
 	}
-	params := make(map[string]any, len(r.PriceParams))
-	for k, v := range r.PriceParams {
-		params[k] = v
-	}
-	amount, err := s.Quote(ctx, core.QuoteInputs{
-		Expression:     r.Price.Expression,
-		UsageSemantics: r.UsageSemantics,
-		Tokens:         r.Tokens,
-		Metrics:        r.Metrics,
-		PriceParams:    params,
-		PriceHeaders:   r.PriceHeaders,
-		RateMultiplier: r.RateMultiplier,
-		CreatedAt:      r.CreatedAt,
-	})
+	amount, err := quoteRecord(ctx, s, r)
 	if err != nil {
 		return err
 	}

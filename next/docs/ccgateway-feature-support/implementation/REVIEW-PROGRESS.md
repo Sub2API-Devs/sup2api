@@ -31,7 +31,7 @@ server/: go test ./internal/ccgateway -run '^TestFeatureCatalogAuthorizationAndN
 
 工具选择检查：请求声明名称先校验，forced choice无工具、与手动thinking、内部ToolSearch或结构化续轮组合会拒绝，名称在实际调用时转换为wire名。将来实现续轮阶段处理后才能撤销对应拒绝，不能简单移除校验。自适应thinking不能全局禁止forced工具，见下方规范修正。
 
-metadata检查：客户端user_id只允许string/null且限制字符数，因此正常解析后map断言有类型不变量；null metadata对象与metadata.user_id=null不同。补充各字段的null、boolean、array、object错误输入回归，均返回错误而非panic；explicit null user_id可保留，但与CC已有归属信息冲突仍拒绝。普通metadata参数不能覆盖账号/会话身份。
+metadata检查（首轮审查记录，冲突规则已撤销）：客户端user_id只允许string/null且限制字符数，因此正常解析后map断言有类型不变量；null metadata对象与metadata.user_id=null不同。补充各字段的null、boolean、array、object错误输入回归，均返回错误而非panic。当时接受了“与CC已有归属信息冲突即拒绝”的假设；后续官方协议复核确认缺乏依据并会破坏真实CC客户端接入，已撤销，详见 `REQUEST-PROGRESS.md` 的上线前纠错。当前显式metadata原样用于主请求，HTTP鉴权另层保持不变。
 
 发现并修复数值边界：单纯Float64范围检查会将`-1e-9999`舍入成负零、将`1.00000000000000000001`舍入成1，错误接受范围外值。现保留原始JSON数值，用mantissa排除微小负数，并仅在浮点值等于1的边界用按输入长度选精度的big.Float复核；top_k依旧Int64校验，溢出和非整数拒绝。新增上下界、溢出、极小合法正值和错误类型回归。
 

@@ -24,8 +24,13 @@ func validateSystemPositions(messages []Message, origin []int) error {
 			continue
 		}
 		start := i
+		textual := false
 		for i < len(messages) && messages[i].Role == "system" {
+			textual = textual || !messages[i].directiveOnly()
 			i++
+		}
+		if !textual {
+			continue
 		}
 		switch {
 		case start == 0:

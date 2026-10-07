@@ -13,15 +13,17 @@ RUN go mod download
 COPY . ..
 
 # 构建二进制文件
+ARG WORKER_VERSION=dev
+ARG SOURCE_REVISION=unknown
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
-    -ldflags="-w -s" \
+    -ldflags="-w -s -X ccgateway/worker/internal/server.Version=${WORKER_VERSION} -X ccgateway/worker/internal/server.Revision=${SOURCE_REVISION}" \
     -o /tmp/worker ./cmd/worker
 
 # 第二阶段：运行镜像（基于 node，包含 Claude Code CLI）
 FROM node:22-bookworm-slim
 
 # 安装 Claude Code CLI
-ARG CLAUDE_VERSION=2.1.288
+ARG CLAUDE_VERSION=2.1.292
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \
     && npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION}

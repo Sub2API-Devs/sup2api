@@ -93,6 +93,7 @@ const (
 // in: a UsageRules block on a platform or on an account type override cannot
 // tell on its own.
 func (v *validator) usageRules(field string, u manifest.UsageRules, owner usageOwner, pluginSource bool) {
+	v.additionalUsageRules(field+".additional", u.Additional)
 	switch {
 	case u.Semantics == "":
 		// A platform's own rules are the only place semantics is required:
@@ -104,10 +105,10 @@ func (v *validator) usageRules(field string, u manifest.UsageRules, owner usageO
 		v.add(field+".semantics", "invalid", "semantics must be exclusive or inclusive")
 	}
 	if u.JSON != nil {
-		v.usageMap(field+".json.map", u.JSON.Map)
+		v.usageMap(field+".json.map", u.JSON.Map, u.Facts)
 	}
 	for i, s := range u.SSE {
-		v.usageMap(fmt.Sprintf("%s.sse[%d].map", field, i), s.Map)
+		v.usageMap(fmt.Sprintf("%s.sse[%d].map", field, i), s.Map, u.Facts)
 	}
 	for _, key := range sortedKeys(u.Facts) {
 		v.usageFact(field+".facts."+key, key, u.Facts[key], pluginSource)
@@ -243,10 +244,11 @@ func ValidUsageRequestPath(p string) bool {
 }
 
 // usageMap validates one "usage field -> path" map of usage.json or usage.sse.
-func (v *validator) usageMap(field string, m map[string]string) {
+func (v *validator) usageMap(field string, m map[string]string, facts map[string]manifest.UsageFact) {
 	for _, key := range sortedKeys(m) {
 		f := field + "." + key
-		if !slices.Contains(UsageFields, key) {
+		_, declaredFact := facts[key]
+		if !slices.Contains(UsageFields, key) && !declaredFact {
 			v.add(f, "unknown_field", "unknown usage field %q; one of %s", key, strings.Join(UsageFields, ", "))
 			continue
 		}

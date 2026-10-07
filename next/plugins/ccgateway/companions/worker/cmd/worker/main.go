@@ -24,7 +24,7 @@ func run() error {
 		return fmt.Errorf("create worker: %w", err)
 	}
 	defer w.Close()
-	srv := server.New(w, cfg.Port)
+	srv := server.New(w, cfg.Port, cfg.AdminKey)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	done := make(chan error, 1)

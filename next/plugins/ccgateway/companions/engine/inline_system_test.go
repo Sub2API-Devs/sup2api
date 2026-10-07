@@ -30,8 +30,16 @@ func TestSystemMessageParsingAndPendingTurn(t *testing.T) {
 	if got := strings.Join(r.pendingSystems(), "|"); got != "late one|late two|late three" {
 		t.Fatalf("pending systems = %q", got)
 	}
-	if _, ok := r.Messages[4].Content[0]["cache_control"]; ok {
-		t.Fatal("cache_control kept in the history fingerprint")
+	if r.Messages[4].Content[0]["cache_control"] == nil {
+		t.Fatal("request cache directive lost")
+	}
+	withCache := fingerprints(r.Messages)
+	noCache := append([]Message(nil), r.Messages...)
+	for i := range noCache {
+		noCache[i].Content = withoutProtocolCache(noCache[i].Content)
+	}
+	if digest(withCache) != digest(fingerprints(noCache)) {
+		t.Fatal("cache_control polluted the history fingerprint")
 	}
 	for _, invalid := range []Object{
 		{"role": "system", "content": []any{Object{"type": "image"}}},
@@ -39,8 +47,8 @@ func TestSystemMessageParsingAndPendingTurn(t *testing.T) {
 		{"role": "system", "content": []any{Object{"type": "text", "text": ""}}},
 		{"role": "system", "content": []any{}},
 		{"role": "system", "content": ""},
-		{"role": "system", "content": "x", "output_config": Object{"effort": "high"}},
-		{"role": "system", "content": "x", "clear_at": "next_user_message"},
+		{"role": "system", "content": "x", "output_config": Object{"effort": "invalid"}},
+		{"role": "system", "content": "x", "clear_at": "invalid"},
 	} {
 		v["messages"] = []any{Object{"role": "user", "content": "q"}, invalid}
 		b, _ := json.Marshal(v)

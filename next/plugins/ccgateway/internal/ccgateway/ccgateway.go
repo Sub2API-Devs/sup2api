@@ -15,12 +15,14 @@ import (
 )
 
 const (
-	PlatformID         = "anthropic"
-	AccountTypeManaged = "managed"
-	AccountTypeAPIKey  = "apikey"
-	ProtocolMessages   = "anthropic.messages"
-	VirtualURL         = "https://ccgateway.internal/v1/messages"
-	DefaultTestModel   = "claude-haiku-4-5-20251001"
+	PlatformID          = "anthropic"
+	AccountTypeManaged  = "managed"
+	AccountTypeAPIKey   = "apikey"
+	ProtocolMessages    = "anthropic.messages"
+	ProtocolCountTokens = "anthropic.count_tokens"
+	VirtualURL          = "https://ccgateway.internal/v1/messages"
+	VirtualCountURL     = "https://ccgateway.internal/v1/messages/count_tokens"
+	DefaultTestModel    = "claude-haiku-4-5-20251001"
 )
 
 type Plugin struct{ now func() time.Time }
@@ -110,8 +112,13 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 	if err := validateAccount(in.GetAccount()); err != nil {
 		return nil, err
 	}
-	if in.GetMeta().GetProtocol() != ProtocolMessages {
-		return nil, status.Error(codes.Unimplemented, "CCGateway supports Anthropic Messages only; token counting is unavailable")
+	target := VirtualURL
+	switch in.GetMeta().GetProtocol() {
+	case ProtocolMessages:
+	case ProtocolCountTokens:
+		target = VirtualCountURL
+	default:
+		return nil, status.Error(codes.Unimplemented, "CCGateway supports Anthropic Messages and token counting only")
 	}
 	model := in.GetMeta().GetModel()
 	if raw := in.GetFields()["model"]; raw != "" {
@@ -123,7 +130,7 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 	outHeaders := headers(in.GetInboundHeaders())
 	// Scope is supplied by the authenticated host, never copied from caller headers.
 	outHeaders["x-ccgateway-session-scope"] = fmt.Sprintf("user:%d:key:%d", in.GetMeta().GetUserId(), in.GetMeta().GetApiKeyId())
-	return &pluginv1.BuildUpstreamRequestResponse{Method: "POST", Url: VirtualURL, Headers: outHeaders, UpstreamModel: model}, nil
+	return &pluginv1.BuildUpstreamRequestResponse{Method: "POST", Url: target, Headers: outHeaders, UpstreamModel: model}, nil
 }
 func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestRequestRequest) (*pluginv1.BuildTestRequestResponse, error) {
 	if err := validateAccount(in.GetAccount()); err != nil {

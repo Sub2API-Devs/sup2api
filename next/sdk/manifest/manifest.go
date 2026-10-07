@@ -221,6 +221,9 @@ type EndpointAuth struct {
 
 type EndpointRequest struct {
 	ModelPath string `json:"modelPath,omitempty"` // gjson path in the body
+	// ModelReferences declare additional model invocations in the request.
+	// The host applies group/account admission and snapshots their prices.
+	ModelReferences []RequestModelReference `json:"modelReferences,omitempty"`
 	// ModelParam reads the model from a path parameter instead (e.g. "model").
 	ModelParam string `json:"modelParam,omitempty"`
 	// ModelSource asks a plugin for the model instead of reading it out of the
@@ -418,6 +421,26 @@ type UsageRules struct {
 	JSON      *UsageMap     `json:"json,omitempty"`
 	// Extra metering facts usable in price expressions as u("key").
 	Facts map[string]UsageFact `json:"facts,omitempty"`
+	// Additional meters model usage excluded from the main counters. Each
+	// observed array is a complete snapshot, never a stream delta to sum.
+	Additional []AdditionalUsageRule `json:"additional,omitempty"`
+}
+
+type AdditionalUsageRule struct {
+	// UsePrimaryModel takes the admitted upstream identity supplied by the
+	// host. A conflicting model reported by the response is rejected.
+	UsePrimaryModel bool `json:"usePrimaryModel,omitempty"`
+	// Non-null request fields requiring this contract through account overrides.
+	RequiredBy []string          `json:"requiredBy,omitempty"`
+	Name       string            `json:"name"`
+	JSONPath   string            `json:"jsonPath,omitempty"`
+	SSEPath    string            `json:"ssePath,omitempty"`
+	SSEEvent   string            `json:"sseEvent,omitempty"`
+	TypePath   string            `json:"typePath"`
+	TypeValue  string            `json:"typeValue"`
+	ModelPath  string            `json:"modelPath"`
+	Map        map[string]string `json:"map"`
+	Semantics  string            `json:"semantics"`
 }
 
 // Values of Endpoint.UsageSource.

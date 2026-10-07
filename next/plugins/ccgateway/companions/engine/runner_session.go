@@ -107,11 +107,21 @@ func (s *cliSession) run() (Object, error) {
 		if e != nil {
 			return nil, e
 		}
+		if s.acc.Done && s.req.stopsAtAPITerminal(str(s.acc.Message, "stop_reason")) {
+			return s.completeAPIOutput()
+		}
 		// A complete upstream refusal is terminal even when the CLI would
 		// retry internally or omit it from native history. The runner closes
 		// the process; the HTTP layer emits the single final message_stop.
 		if s.acc.Done && str(s.acc.Message, "stop_reason") == "refusal" {
 			return s.acc.Message, s.flush()
+		}
+		if s.acc.Done && s.req.CacheWarmup {
+			answer, err := s.relay.completedWarmup()
+			if err != nil {
+				return nil, err
+			}
+			return answer, s.flush()
 		}
 	}
 	if s.ctx.Err() != nil {
@@ -169,7 +179,10 @@ func (s *cliSession) onStreamEvent(f Object) error {
 			return fmt.Errorf("unexpected post-completion CLI event: %s", str(event, "type"))
 		}
 	}
-	searchMessage := isInternalSearch(Object{"content": s.acc.Blocks})
+	searchMessage := internalHistoryAssistant(s.req, Object{"content": s.acc.Blocks})
+	if err := s.restoreFallbackEvents(event); err != nil {
+		return err
+	}
 	if str(event, "type") == "message_delta" && s.searchRounds > 0 && !searchMessage {
 		mergeSearchUsage(event, s.searchUsage, s.acc.Message)
 	}
@@ -178,7 +191,7 @@ func (s *cliSession) onStreamEvent(f Object) error {
 	}
 	if s.acc.Done {
 		// Wait for native persistence; discovery rounds remain bounded.
-		if !isInternalSearch(s.acc.Message) {
+		if !internalHistoryAssistant(s.req, s.acc.Message) {
 			s.p.recordFinalResponseStop(event)
 		}
 		return s.endSearchRound()
@@ -215,7 +228,7 @@ func (s *cliSession) checkMod() error {
 // endSearchRound discards a completed tool discovery message, keeping its
 // usage for the final answer.
 func (s *cliSession) endSearchRound() error {
-	if !isInternalSearch(s.acc.Message) {
+	if !internalHistoryAssistant(s.req, s.acc.Message) {
 		return nil
 	}
 	for _, block := range s.acc.Blocks {
@@ -314,7 +327,7 @@ func controlReply(f Object, r *Request) Object {
 	switch str(q, "subtype") {
 	case "can_use_tool":
 		payload = Object{"behavior": "deny", "message": "Tools are executed by the API client", "toolUseID": q["tool_use_id"]}
-		if structuredBlock(str(q, "tool_name"), r) || (str(q, "tool_name") == "ToolSearch" && r.toolSearchEnabled()) {
+		if structuredBlock(str(q, "tool_name"), r) || internalHistoryAssistant(r, Object{"content": []Object{{"type": "tool_use", "name": str(q, "tool_name")}}}) {
 			payload = Object{"behavior": "allow", "updatedInput": q["input"]}
 		}
 	case "mcp_message":

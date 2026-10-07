@@ -92,8 +92,11 @@ func TestBetaRulesAreIndependentAdmissionRules(t *testing.T) {
 	if string(got) != string(want) {
 		t.Fatal("mutable beta rules leaked across callers")
 	}
+	if !seen["inline-tools-2026-09-15"] || !seen["mid-conversation-tool-changes-2026-07-01"] {
+		t.Fatal("implemented inline protocols lack beta admission")
+	}
 	// A documentation-only beta must not become an admitted feature implicitly.
-	if seen["inline-tools-2026-09-15"] {
-		t.Fatal("unimplemented inline tools unexpectedly admitted")
+	if seen["mcp-client-2025-11-20"] {
+		t.Fatal("unimplemented MCP connector unexpectedly admitted")
 	}
 }

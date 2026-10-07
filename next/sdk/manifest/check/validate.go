@@ -571,6 +571,7 @@ func (v *validator) endpoint(f string, p manifest.Platform, e manifest.Endpoint)
 		}
 	}
 	v.queryParams(f, e)
+	v.modelReferences(f, p, e)
 	v.taskEndpoint(f, e)
 	v.usageSource(f, e)
 	if e.Usage != nil {

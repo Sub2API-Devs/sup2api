@@ -1,4 +1,5 @@
 export default {
+  capability: { search: 'Search accounts', inspect: 'Inspect account Worker capabilities', account: 'Select an accessible account', boundary: 'Read only: does not start or update containers or change routing. Binary declarations, CLI version observations and real model verification are separate evidence.', failed: 'Inspection unavailable: an older Worker/controller, missing permission or a connection failure. This does not establish feature support.', build: 'Running Worker version / Git revision', schema: 'Worker catalog / accepted policy schemas', code: 'This Worker’s code declaration', probes: 'Observed local probe scope', provider: 'Account / model / provider inference verification', notRun: 'No inference performed by this endpoint; not verified', unreported: 'Not reported' },
   settingsTabs: { accounts: 'Account containers', label: 'Settings categories', connection: 'Connection', network: 'Network', requests: 'API features', attachments: 'CC features', deployment: 'Deployment', save: 'Save all settings' },
   features: {
     title: 'API features',

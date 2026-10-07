@@ -23,7 +23,7 @@ func TestNativeInterruptedResumeUsesCommittedCheckpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := []Object{{"type": "text", "text": "committed answer"}}
-	row, anchor := transcriptRow(Message{"assistant", content}, p.LastUUID, p.SessionID, p.Work, "2.1.288", r.Model)
+	row, anchor := transcriptRow(Message{Role: "assistant", Content: content}, p.LastUUID, p.SessionID, p.Work, "2.1.288", r.Model)
 	p.NativeRows = append(p.Rows, row)
 	p.NativeAnchor = anchor
 	p.NativePath = filepath.Join(c.dir, "native", p.SessionID+".jsonl")
@@ -36,7 +36,7 @@ func TestNativeInterruptedResumeUsesCommittedCheckpoint(t *testing.T) {
 	if err = p.commit(r, Object{"id": "msg_committed", "role": "assistant", "stop_reason": "end_turn", "content": content}, c, "logical", "", "2.1.288", time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	r.Messages = append(r.Messages, Message{"assistant", content}, Message{"user", []Object{{"type": "text", "text": "continue"}}})
+	r.Messages = append(r.Messages, Message{Role: "assistant", Content: content}, Message{Role: "user", Content: []Object{{"type": "text", "text": "continue"}}})
 	resumed, err := prepareHistory(r, c, "logical", t.TempDir(), "2.1.288")
 	if err != nil || resumed.Mode != "prefix-hit" {
 		t.Fatalf("initial resume: %v, %v", resumed, err)

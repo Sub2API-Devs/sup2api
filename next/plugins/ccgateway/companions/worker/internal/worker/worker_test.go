@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -68,6 +69,49 @@ func peer() error {
 	if ack.StatusCode != 200 {
 		return fmt.Errorf("Mod callback failed")
 	}
+	// The fake CLI must exercise the same attributed relay as a real CLI.
+	// A ready-only peer would bypass the client's feature plan entirely.
+	callback := func(event string) error {
+		r, err := http.NewRequest("POST", os.Getenv("CCGATEWAY_MOD_URL"), strings.NewReader(`{"event":"`+event+`"}`))
+		if err != nil {
+			return err
+		}
+		r.Header.Set("Authorization", "Bearer "+os.Getenv("CCGATEWAY_MOD_TOKEN"))
+		res, err := http.DefaultClient.Do(r)
+		if err != nil {
+			return err
+		}
+		res.Body.Close()
+		if res.StatusCode != 200 {
+			return fmt.Errorf("main scope callback failed")
+		}
+		return nil
+	}
+	if err := callback("main_request_begin"); err != nil {
+		return err
+	}
+	marker := ""
+	for i, arg := range os.Args {
+		if arg == "--append-system-prompt" && i+1 < len(os.Args) {
+			marker = os.Args[i+1]
+		}
+	}
+	if marker == "" {
+		return fmt.Errorf("main request marker missing")
+	}
+	upstream, _ := json.Marshal(map[string]any{"model": "claude-sonnet-4-6", "max_tokens": 1, "stream": true, "system": []any{map[string]any{"type": "text", "text": marker}}, "messages": []any{msg}})
+	res, err := http.Post(os.Getenv("ANTHROPIC_BASE_URL")+"/v1/messages", "application/json", strings.NewReader(string(upstream)))
+	if err != nil {
+		return err
+	}
+	_, _ = io.Copy(io.Discard, res.Body)
+	res.Body.Close()
+	if res.StatusCode != 200 {
+		return fmt.Errorf("fake CLI relay failed")
+	}
+	if err := callback("main_request_end"); err != nil {
+		return err
+	}
 	message := map[string]any{"id": "msg_worker", "role": "assistant", "model": "claude-sonnet-4-6", "content": []any{}, "stop_reason": "end_turn", "usage": map[string]any{"input_tokens": 1, "output_tokens": 1}}
 	dir := filepath.Join(os.Getenv("CLAUDE_CONFIG_DIR"), "projects", "probe")
 	if err := os.MkdirAll(dir, 0700); err != nil {
@@ -92,6 +136,24 @@ func peer() error {
 func fixture(t *testing.T) Worker {
 	t.Helper()
 	t.Setenv("WORKER_TEST_PEER", "1")
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+			http.Error(w, "bad fixture", 400)
+			return
+		}
+		if body["max_tokens"] != float64(128) {
+			t.Error("feature plan did not reach upstream", body["max_tokens"])
+		}
+		raw, _ := json.Marshal(body)
+		if strings.Contains(string(raw), "<ccgateway-request:") {
+			t.Error("marker leaked")
+		}
+		fmt.Fprint(w, `{}`)
+	}))
+	t.Cleanup(upstream.Close)
+	t.Setenv("ANTHROPIC_BASE_URL", upstream.URL)
 	cli, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)

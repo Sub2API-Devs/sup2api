@@ -29,3 +29,10 @@
 - `go test ./engine -count=1`普通测试集通过（4.598s）。
 
 未做生产部署，未使用平台真实API Key，未声称本地交互式CC接入生产后所有原生工具已经验证。需要发布后按账号CLI版本及Linux实际wire验证，同时保留已有账号容器和授权。
+# 2026-10-08 ToolSearch 追加证据
+
+`TestRealCLICaptureInternalToolSearchDefinition` 通过真实 Worker SDK stream-json + deferred MCP discovery，在隔离假上游捕获 CLI 2.1.292 的 ToolSearch 完整定义，无实际工具执行。schema digest 为 `2cbbab2f0a7585db5ac57d4dd479f14d3896134d1a7cb11ad944317e84b36af5`，已附入版本目录和 capture.json。当前为30个不同名称、33个schema变体；此前29/32是未开启此门槛的原探针结果。
+
+`TestRealCLIClientNativeToolSearchStaysClientOwned` 使用此目录原生匹配，不临时修改测试catalog；在deferred门槛可用时真实wire保持ToolSearch名称，Mod将调用交还客户端，tool_result续聊正常，普通模式prefix-hit；带APIformat也正常。门槛不具备时仍保留已有 runtime verification / MCP fallback，不能只凭静态目录保证工具可用。
+
+重新生成整个版本目录时必须同时运行此追加门槛捕获，不能只运行旧的普通capture覆盖掉补充定义。

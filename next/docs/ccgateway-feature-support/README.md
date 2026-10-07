@@ -60,7 +60,7 @@
 - [ ] F-OUTPUT：effort、API格式约束与CC结构化工作流、strict工具区分。
 - [ ] F-SAMPLING：模型允许的采样及非法组合，不静默删除。
 - [ ] F-STOP：生成阶段停止词与stop_sequence完整回传。
-- [ ] F-METADATA：客户端归因与CC会话元数据的隔离/合并。
+- [ ] F-METADATA：显式客户端归因主请求原样透传、缺省保留 CLI；HTTP 授权独立。隔离验证后仍需真实账号确认，不再无依据拒绝不同 user_id。
 - [ ] F-CACHE：逐块断点/混合TTL/顶层缓存，区分本地历史和上游账单。
 - [ ] F-DIAGNOSTICS：实际message ID映射与cache诊断。
 

@@ -20,7 +20,7 @@ func commitResponseFixture(t *testing.T, c *HistoryCache, scope string, r *Reque
 		t.Fatal(err)
 	}
 	content := answer["content"].([]Object)
-	row, anchor := transcriptRow(Message{"assistant", content}, p.LastUUID, p.SessionID, p.Work, "2.1.292", r.Model)
+	row, anchor := transcriptRow(Message{Role: "assistant", Content: content}, p.LastUUID, p.SessionID, p.Work, "2.1.292", r.Model)
 	p.NativeRows = append(append([]json.RawMessage(nil), p.Rows...), row)
 	p.NativeAnchor = anchor
 	if p.NativePath == "" {
@@ -51,13 +51,13 @@ func TestResponseHistorySurvivesRestartBranchAndScopeIsolation(t *testing.T) {
 	r := responseHistoryRequest(t)
 	first := responseHistoryAnswer("msg_first", "first-answer")
 	commitResponseFixture(t, c, "scope-a", r, first)
-	r.Messages = append(r.Messages, Message{"assistant", first["content"].([]Object)}, Message{"user", []Object{{"type": "text", "text": "second"}}})
+	r.Messages = append(r.Messages, Message{Role: "assistant", Content: first["content"].([]Object)}, Message{Role: "user", Content: []Object{{"type": "text", "text": "second"}}})
 	second := responseHistoryAnswer("msg_second", "second-answer")
 	p := commitResponseFixture(t, c, "scope-a", r, second)
 	if len(p.Responses) != 1 || p.Responses[0].MessageID != "msg_first" {
 		t.Fatal("resume lost first envelope")
 	}
-	r.Messages = append(r.Messages, Message{"assistant", second["content"].([]Object)}, Message{"user", []Object{{"type": "text", "text": "third"}}})
+	r.Messages = append(r.Messages, Message{Role: "assistant", Content: second["content"].([]Object)}, Message{Role: "user", Content: []Object{{"type": "text", "text": "third"}}})
 	c, err = newCache(c.dir, 8<<20)
 	if err != nil {
 		t.Fatal(err)
@@ -78,7 +78,7 @@ func TestResponseHistorySurvivesRestartBranchAndScopeIsolation(t *testing.T) {
 	resumed.Responses[0].Response[0] = 'x'
 	resumed.release()
 	branch := responseHistoryRequest(t)
-	branch.Messages = append(branch.Messages, Message{"assistant", first["content"].([]Object)}, Message{"user", []Object{{"type": "text", "text": "alternate"}}})
+	branch.Messages = append(branch.Messages, Message{Role: "assistant", Content: first["content"].([]Object)}, Message{Role: "user", Content: []Object{{"type": "text", "text": "alternate"}}})
 	fork, err := prepareHistory(branch, c, "scope-a", t.TempDir(), "2.1.292")
 	if err != nil {
 		t.Fatal(err)

@@ -237,6 +237,7 @@ class KeyTests(unittest.TestCase):
             self.assertEqual(ROUTE.fullmatch(f'/accounts/{key}/status')[1], key)
             self.assertEqual(ROUTE.fullmatch(f'/accounts/{key}/admin/auth/session')[2], 'admin/auth/session')
             self.assertEqual(ROUTE.fullmatch(f'/accounts/{key}/admin/usage')[2], 'admin/usage')
+            self.assertEqual(ROUTE.fullmatch(f'/accounts/{key}/v1/messages/count_tokens')[2], 'v1/messages/count_tokens')
             m = ROUTE.fullmatch(f'/accounts/{key}')
             self.assertEqual((m[1], m[2]), (key, None))
         for key in self.INVALID:
@@ -645,6 +646,20 @@ class HandlerTests(Base):
         self.assertEqual(len(FakeSession.calls), calls)
         # PUT remains forbidden on all other pass-through endpoints.
         self.assertEqual(self.call('PUT', '/accounts/7/admin/status', '{}', headers={'X-CCG-Revision': REV})[0], 405)
+
+    def test_features_read_only_pass_through(self):
+        self.apply('7', auth={'mode': 'api_key', 'api_key': 'sk-test-key-123'})
+        state = self.m.state('7')
+        path = '/accounts/7/admin/features'
+        self.assertEqual(self.call('GET', path)[0], 409)
+        self.assertEqual(self.call('GET', path, headers={'X-CCG-Revision': REV})[0], 200)
+        actual, url, headers = FakeSession.calls[-1]
+        self.assertEqual((actual, url), ('GET', f'http://{state["app_ip"]}:8787/admin/features'))
+        self.assertEqual(headers['Authorization'], 'Bearer ' + state['admin_key'])
+        calls = len(FakeSession.calls)
+        for method in ('POST', 'PUT', 'DELETE'):
+            self.assertEqual(self.call(method, path, '{}', headers={'X-CCG-Revision': REV})[0], 405)
+        self.assertEqual(len(FakeSession.calls), calls)
 
     def test_usage_pass_through(self):
         self.apply('7')

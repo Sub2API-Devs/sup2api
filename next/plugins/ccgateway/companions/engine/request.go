@@ -13,8 +13,11 @@ import (
 
 type Object = map[string]any
 type Message struct {
-	Role    string   `json:"role"`
-	Content []Object `json:"content"`
+	toolCarrier  string
+	Role         string          `json:"role"`
+	Content      []Object        `json:"content"`
+	ClearAt      json.RawMessage `json:"clear_at,omitempty"`
+	OutputConfig json.RawMessage `json:"output_config,omitempty"`
 }
 type Tool struct {
 	Name         string `json:"name"`
@@ -24,22 +27,29 @@ type Tool struct {
 	Metadata     Object `json:"-"`
 }
 type Request struct {
+	continuation            string
 	Plan                    *RequestPlan
 	EnvironmentFields       map[string]string
 	ClientEnvironmentFields map[string]bool
 	diagnostic              *requestDiagnostic
 	Model                   string
 	MaxTokens               int
+	CacheWarmup             bool
+	CountTokens             bool
 	Stream                  bool
 	System                  []string
 	Messages                []Message
 	Tools                   []Tool
 	ServerTools             []Object
+	APIClientTools          []Object
+	APIToolCatalog          []Object
+	InlineTools             *inlineToolTimeline
 	NoTools                 bool
 	Thinking                Object
 	Fast                    *bool
 	Effort                  string
 	JSONSchema              Object
+	APIOutputFormat         bool
 	PromptCacheTTL          string
 	ToolSearch              string
 	Betas                   []string
@@ -149,9 +159,18 @@ func blocks(v any, role string, ttl *time.Duration) ([]Object, error) {
 		if e := cacheTTL(b["cache_control"], ttl); e != nil {
 			return nil, e
 		}
+		if doc := webFetchedDocument(b); doc != nil {
+			if err := visitProtocolBlocks([]Object{doc}, func(block Object) error { return cacheTTL(block["cache_control"], ttl) }); err != nil {
+				return nil, err
+			}
+		}
+		cache, hasCache := b["cache_control"]
 		delete(b, "cache_control")
 		if e := checkBlock(b, role, ttl); e != nil {
 			return nil, e
+		}
+		if hasCache {
+			b["cache_control"] = cache
 		}
 		out = append(out, b)
 	}
@@ -162,6 +181,8 @@ func blocks(v any, role string, ttl *time.Duration) ([]Object, error) {
 // tool_result content is normalized in place.
 func checkBlock(b Object, role string, ttl *time.Duration) error {
 	switch str(b, "type") {
+	case "fallback":
+		return checkFallbackBlock(b, role)
 	case "text":
 		if e := keys(b, "type", "text", "citations"); e != nil {
 			return e
@@ -174,12 +195,16 @@ func checkBlock(b Object, role string, ttl *time.Duration) error {
 		}
 	case "tool_use":
 		return checkToolUse(b, role)
-	case "server_tool_use", "tool_search_tool_result":
+	case "server_tool_use", "tool_search_tool_result", "web_search_tool_result", "web_fetch_tool_result", "advisor_tool_result":
 		return checkServerSearchBlock(b, role)
 	case "tool_result":
 		return checkToolResult(b, role, ttl)
 	case "image":
 		return checkImage(b, role)
+	case "document":
+		return checkDocument(b, role, ttl)
+	case "compaction":
+		return checkCompactionBlock(b, role, false)
 	case "thinking":
 		if e := keys(b, "type", "thinking", "signature"); e != nil {
 			return e
@@ -203,7 +228,7 @@ func checkBlock(b Object, role string, ttl *time.Duration) error {
 	return nil
 }
 func checkToolUse(b Object, role string) error {
-	if e := keys(b, "type", "id", "name", "input", "caller"); e != nil {
+	if e := keys(b, "type", "id", "name", "input", "caller", "toolset_name"); e != nil {
 		return e
 	}
 	if v, exists := b["caller"]; exists {
@@ -215,6 +240,9 @@ func checkToolUse(b Object, role string) error {
 			return e
 		}
 	}
+	if err := validateToolsetIdentityField(b); err != nil {
+		return err
+	}
 	if role != "assistant" || str(b, "id") == "" || !toolName.MatchString(str(b, "name")) {
 		return fmt.Errorf("invalid tool_use")
 	}
@@ -224,8 +252,11 @@ func checkToolUse(b Object, role string) error {
 	return nil
 }
 func checkToolResult(b Object, role string, ttl *time.Duration) error {
-	if e := keys(b, "type", "tool_use_id", "content", "is_error"); e != nil {
+	if e := keys(b, "type", "tool_use_id", "content", "is_error", "toolset_name"); e != nil {
 		return e
+	}
+	if err := validateToolsetIdentityField(b); err != nil {
+		return err
 	}
 	if role != "user" || str(b, "tool_use_id") == "" {
 		return fmt.Errorf("invalid tool_result")
@@ -249,14 +280,9 @@ func checkToolResult(b Object, role string, ttl *time.Duration) error {
 	if len(a) == 0 {
 		return nil
 	}
-	bs, e := blocks(a, "user", ttl)
+	bs, e := parseToolResultBlocks(a, b, ttl)
 	if e != nil {
 		return e
-	}
-	for _, z := range bs {
-		if str(z, "type") != "text" && str(z, "type") != "image" {
-			return fmt.Errorf("tool_result supports text/image only")
-		}
 	}
 	b["content"] = bs
 	return nil
@@ -269,19 +295,9 @@ func checkImage(b Object, role string) error {
 	if role != "user" || !ok {
 		return fmt.Errorf("image must be user content")
 	}
-	if e := keys(s, "type", "media_type", "data"); e != nil {
-		return e
-	}
-	if str(s, "type") != "base64" || str(s, "data") == "" {
-		return fmt.Errorf("only base64 images are supported")
-	}
-	switch str(s, "media_type") {
-	case "image/png", "image/jpeg", "image/gif", "image/webp":
-		return nil
-	}
-	return fmt.Errorf("unsupported image media_type")
+	return checkImageSource(s)
 }
-func parseRequest(data []byte) (*Request, error) {
+func parseRequest(data []byte, interleaved ...bool) (*Request, error) {
 	o, e := decodeObject(data)
 	if e != nil {
 		return nil, e
@@ -290,8 +306,12 @@ func parseRequest(data []byte) (*Request, error) {
 		return nil, e
 	}
 	r := &Request{Model: str(o, "model"), MaxTokens: positive(o["max_tokens"]), TTL: 5 * time.Minute, Native: map[string]bool{}}
-	if r.Model == "" || len(r.Model) > 200 || r.MaxTokens == 0 {
-		return nil, fmt.Errorf("model and positive integer max_tokens required")
+	if n, ok := o["max_tokens"].(json.Number); ok {
+		i, err := n.Int64()
+		r.CacheWarmup = err == nil && i == 0
+	}
+	if r.Model == "" || len(r.Model) > 200 || r.MaxTokens == 0 && !r.CacheWarmup {
+		return nil, fmt.Errorf("model and nonnegative integer max_tokens required")
 	}
 	if v, ok := o["stream"]; ok {
 		b, ok := v.(bool)
@@ -306,8 +326,23 @@ func parseRequest(data []byte) (*Request, error) {
 	if r.System, e = parseSystem(o["system"], &r.TTL); e != nil {
 		return nil, e
 	}
+	var baseTools []Object
 	if ts, exists := o["tools"]; exists {
+		if items, ok := ts.([]any); ok {
+			for _, item := range items {
+				if tool, ok := item.(map[string]any); ok {
+					copy, err := jsonCopyObject(tool)
+					if err != nil {
+						return nil, err
+					}
+					baseTools = append(baseTools, copy)
+				}
+			}
+		}
 		var clientTools any
+		if ts, r.APIClientTools, r.APIToolCatalog, e = splitAPIClientTools(ts, &r.TTL); e != nil {
+			return nil, e
+		}
 		if clientTools, r.ServerTools, e = splitServerSearchTools(ts, &r.TTL); e != nil {
 			return nil, e
 		}
@@ -321,16 +356,20 @@ func parseRequest(data []byte) (*Request, error) {
 		}
 	}
 	if v, ok := o["thinking"]; ok {
-		if r.Thinking, e = parseThinking(v, r.MaxTokens); e != nil {
+		if r.Thinking, e = parseThinking(v, r.MaxTokens, len(interleaved) > 0 && interleaved[0]); e != nil {
 			return nil, e
 		}
 	}
 	if r.Messages, r.origin, e = parseMessages(o["messages"], &r.TTL); e != nil {
 		return nil, e
 	}
+	if e = r.compileInlineTools(baseTools); e != nil {
+		return nil, e
+	}
 	if e = validateConversation(r.Messages, r.origin); e != nil {
 		return nil, e
 	}
+	r.configureContinuation()
 	if e = r.validateServerSearchHistory(); e != nil {
 		return nil, e
 	}
@@ -446,31 +485,44 @@ func parseToolChoice(v any) (bool, error) {
 	}
 	return false, fmt.Errorf("tool_choice supports auto/none only")
 }
-func parseThinking(v any, maxTokens int) (Object, error) {
+func parseThinking(v any, maxTokens int, interleaved ...bool) (Object, error) {
 	t, ok := v.(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("invalid thinking")
 	}
-	if e := keys(t, "type", "budget_tokens", "display"); e != nil {
+	if e := keys(t, "type", "budget_tokens", "display", "block_binding"); e != nil {
 		return nil, e
 	}
 	if display, exists := t["display"]; exists {
-		if display != "omitted" && display != "summarized" {
-			return nil, fmt.Errorf("thinking.display supports omitted/summarized only")
+		if display != "omitted" && display != "summarized" && display != "updates" {
+			return nil, fmt.Errorf("thinking.display supports omitted, summarized or updates")
 		}
 	}
 	switch str(t, "type") {
+	case "between_tools":
+		if len(t) != 1 {
+			return nil, fmt.Errorf("thinking between_tools accepts only type")
+		}
 	case "disabled", "adaptive":
 		if _, ok := t["budget_tokens"]; ok {
 			return nil, fmt.Errorf("unexpected thinking budget")
 		}
 	case "enabled":
 		b := positive(t["budget_tokens"])
-		if b < 1024 || b >= maxTokens {
+		if b < 1024 || (b >= maxTokens && (len(interleaved) == 0 || !interleaved[0])) {
 			return nil, fmt.Errorf("thinking budget must be >=1024 and <max_tokens")
 		}
 	default:
 		return nil, fmt.Errorf("unsupported thinking type")
+	}
+	if str(t, "type") == "disabled" && len(t) != 1 {
+		return nil, fmt.Errorf("disabled thinking accepts only type")
+	}
+	if binding, exists := t["block_binding"]; exists {
+		b, ok := binding.(map[string]any)
+		if !ok || len(b) != 1 || (str(b, "prefix_mismatch_behavior") != "error" && str(b, "prefix_mismatch_behavior") != "drop_block") {
+			return nil, fmt.Errorf("invalid thinking.block_binding")
+		}
 	}
 	return t, nil
 }
@@ -495,7 +547,14 @@ func parseMessages(v any, ttl *time.Duration) ([]Message, []int, error) {
 			if err != nil {
 				return nil, nil, err
 			}
-			messages = append(messages, Message{Role: role, Content: b})
+			message := Message{Role: role, Content: b}
+			if value, exists := m["clear_at"]; exists {
+				message.ClearAt, _ = json.Marshal(value)
+			}
+			if value, exists := m["output_config"]; exists {
+				message.OutputConfig, _ = json.Marshal(value)
+			}
+			messages = append(messages, message)
 			origin = append(origin, i)
 			continue
 		}
@@ -513,7 +572,7 @@ func parseMessages(v any, ttl *time.Duration) ([]Message, []int, error) {
 		if n > 0 && messages[n-1].Role == role {
 			messages[n-1].Content = append(messages[n-1].Content, b...)
 		} else {
-			messages = append(messages, Message{role, b})
+			messages = append(messages, Message{Role: role, Content: b})
 			origin = append(origin, i)
 		}
 	}
@@ -525,17 +584,16 @@ func validateConversation(messages []Message, origin []int) error {
 	if err := validateSystemPositions(messages, origin); err != nil {
 		return err
 	}
-	first, last := -1, -1
+	first := -1
 	for i, m := range messages {
 		if m.Role != "system" {
 			if first < 0 {
 				first = i
 			}
-			last = i
 		}
 	}
-	if first < 0 || messages[first].Role != "user" || messages[last].Role != "user" {
-		return fmt.Errorf("first and last message must be user; assistant prefill unsupported")
+	if first < 0 || (messages[first].Role != "user" && (len(messages[first].Content) == 0 || str(messages[first].Content[0], "type") != "compaction")) {
+		return fmt.Errorf("first message must be user")
 	}
 	return validateToolPairing(messages)
 }
@@ -543,7 +601,7 @@ func validateConversation(messages []Message, origin []int) error {
 // validateToolPairing requires every tool_use to be answered by the next user
 // message, with tool results before any other content.
 func validateToolPairing(messages []Message) error {
-	pending, seen := map[string]bool{}, map[string]bool{}
+	pending, seen := map[string]ToolIdentity{}, map[string]bool{}
 	for _, m := range messages {
 		if m.Role == "system" {
 			continue
@@ -560,10 +618,11 @@ func validateToolPairing(messages []Message) error {
 					return fmt.Errorf("duplicate tool_use id")
 				}
 				seen[id] = true
-				pending[id] = true
+				pending[id] = ToolIdentity{Toolset: str(b, "toolset_name"), Name: str(b, "name")}
 			case "tool_result":
 				id := str(b, "tool_use_id")
-				if other || !pending[id] {
+				identity, exists := pending[id]
+				if other || !exists || identity.Toolset != str(b, "toolset_name") {
 					return fmt.Errorf("unpaired or misplaced tool_result")
 				}
 				delete(pending, id)
@@ -574,6 +633,9 @@ func validateToolPairing(messages []Message) error {
 		if m.Role == "user" && len(pending) > 0 {
 			return fmt.Errorf("all parallel tool results must be supplied")
 		}
+	}
+	if len(pending) > 0 {
+		return fmt.Errorf("missing client tool results before assistant continuation")
 	}
 	return nil
 }
@@ -586,6 +648,7 @@ func fingerprints(ms []Message) []string {
 	out := make([]string, len(ms))
 	prev := "ccgateway-v1"
 	for i, m := range ms {
+		m.Content = withoutProtocolCache(m.Content)
 		prev = digest([]any{prev, m})
 		out[i] = prev
 	}
@@ -593,6 +656,9 @@ func fingerprints(ms []Message) []string {
 }
 func (r *Request) configKey() string {
 	parts := []any{r.Model, r.System, r.Tools, r.NoTools, r.Thinking, r.Native, r.Fast, r.Effort, r.Betas, r.FineGrainedTools, r.JSONSchema, r.PromptCacheTTL, r.ToolSearch, r.customToolServer()}
+	if len(r.APIClientTools) > 0 {
+		parts = append(parts, r.APIToolCatalog)
+	}
 	if len(r.ServerTools) > 0 {
 		parts = append(parts, r.ServerTools)
 	}
@@ -602,6 +668,9 @@ func (r *Request) configKey() string {
 	return digest(parts)
 }
 func (r *Request) wireName(name string) string {
+	if r.acceptsAPIClientIdentity(ToolIdentity{Name: name}) {
+		return name
+	}
 	if r.hasServerSearch(name) {
 		return name
 	}
@@ -614,17 +683,23 @@ func (r *Request) wireName(name string) string {
 	return "mcp__" + r.customToolServer() + "__" + name
 }
 func (r *Request) wireMessage(m Message) Message {
-	out := Message{Role: m.Role}
-	for _, b := range m.Content {
+	out := Message{Role: m.Role, ClearAt: append(json.RawMessage(nil), m.ClearAt...), OutputConfig: append(json.RawMessage(nil), m.OutputConfig...)}
+	if m.directiveOnly() {
+		out.Content = []Object{}
+	}
+	for _, b := range withoutProtocolCache(m.Content) {
 		c := Object{}
 		for k, v := range b {
 			c[k] = v
 		}
-		if str(c, "type") == "tool_use" {
+		if inlineToolBlock(c) {
+			c = r.wireInlineToolBlock(c)
+		}
+		if str(c, "type") == "tool_use" && str(c, "toolset_name") == "" {
 			c["name"] = r.wireName(str(c, "name"))
 		}
 		if str(c, "type") == "tool_search_tool_result" {
-			c, _ = mapSearchReferences(c, r.wireName)
+			c, _ = mapSearchReferences(c, r.wireSearchReferenceName)
 		}
 		out.Content = append(out.Content, c)
 	}

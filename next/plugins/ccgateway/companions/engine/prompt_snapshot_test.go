@@ -71,13 +71,13 @@ func TestPromptEvidenceTTLAndCheckpointIsolation(t *testing.T) {
 				t.Fatal("first request reused unknown snapshot")
 			}
 			answer := []Object{{"type": "text", "text": "answer"}}
-			row, anchor := transcriptRow(Message{"assistant", answer}, p.LastUUID, p.SessionID, p.Work, "2.1.288", r.Model)
+			row, anchor := transcriptRow(Message{Role: "assistant", Content: answer}, p.LastUUID, p.SessionID, p.Work, "2.1.288", r.Model)
 			p.NativeRows, p.NativeAnchor = append(p.Rows, row), anchor
 			start := time.Now()
 			if err := p.commit(r, Object{"id": "msg_prompt_snapshot", "role": "assistant", "stop_reason": "end_turn", "content": answer}, cache, "scope", "", "2.1.288", start); err != nil {
 				t.Fatal(err)
 			}
-			hash := digest([]any{p.Hashes[len(p.Hashes)-1], Message{"assistant", answer}})
+			hash := digest([]any{p.Hashes[len(p.Hashes)-1], Message{Role: "assistant", Content: answer}})
 			key := cacheKey("scope", "", hash)
 			saved := cache.get(key)
 			duration, _ := time.ParseDuration(ttl)
@@ -93,7 +93,7 @@ func TestPromptEvidenceTTLAndCheckpointIsolation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			r.Messages = append(r.Messages, Message{"assistant", answer}, Message{"user", []Object{{"type": "text", "text": "continue"}}})
+			r.Messages = append(r.Messages, Message{Role: "assistant", Content: answer}, Message{Role: "user", Content: []Object{{"type": "text", "text": "continue"}}})
 			continued, err := prepareHistory(r, cache, "scope", t.TempDir(), "2.1.288")
 			if err != nil {
 				t.Fatal(err)

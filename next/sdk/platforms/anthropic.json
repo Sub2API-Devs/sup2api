@@ -20,6 +20,14 @@
       "request": {
         "modelPath": "model",
         "streamPath": "stream",
+        "modelReferences": [
+          {
+            "name": "advisor",
+            "arrayPath": "tools",
+            "match": {"type": "advisor_20260301"},
+            "modelPath": "model"
+          }
+        ],
         "promptTextPaths": [
           "system",
           "messages.#.content"
@@ -50,7 +58,15 @@
         ]
       },
       "request": {
-        "modelPath": "model"
+        "modelPath": "model",
+        "modelReferences": [
+          {
+            "name": "advisor",
+            "arrayPath": "tools",
+            "match": {"type": "advisor_20260301"},
+            "modelPath": "model"
+          }
+        ]
       },
       "response": {
         "nonStream": "json"
@@ -88,13 +104,72 @@
           "input_tokens": "message.usage.input_tokens",
           "cache_read_tokens": "message.usage.cache_read_input_tokens",
           "cache_creation_tokens": "message.usage.cache_creation_input_tokens",
-          "cache_creation_1h_tokens": "message.usage.cache_creation.ephemeral_1h_input_tokens"
+          "cache_creation_1h_tokens": "message.usage.cache_creation.ephemeral_1h_input_tokens",
+          "speed": "message.usage.speed",
+          "service_tier": "message.usage.service_tier",
+          "inference_geo": "message.usage.inference_geo",
+          "web_search_requests": "message.usage.server_tool_use.web_search_requests",
+          "web_fetch_requests": "message.usage.server_tool_use.web_fetch_requests"
         }
       },
       {
         "event": "message_delta",
         "map": {
-          "output_tokens": "usage.output_tokens"
+          "output_tokens": "usage.output_tokens",
+          "input_tokens": "usage.input_tokens",
+          "cache_read_tokens": "usage.cache_read_input_tokens",
+          "cache_creation_tokens": "usage.cache_creation_input_tokens",
+          "cache_creation_1h_tokens": "usage.cache_creation.ephemeral_1h_input_tokens",
+          "speed": "usage.speed",
+          "service_tier": "usage.service_tier",
+          "inference_geo": "usage.inference_geo",
+          "web_search_requests": "usage.server_tool_use.web_search_requests",
+          "web_fetch_requests": "usage.server_tool_use.web_fetch_requests"
+        }
+      }
+    ],
+    "facts": {
+      "speed": {"type": "enum", "enum": ["standard", "fast"], "path": "usage.speed", "description": {"en": "Actual inference speed", "zh": "实际推理速度"}},
+      "service_tier": {"type": "enum", "enum": ["standard", "priority", "batch"], "path": "usage.service_tier", "description": {"en": "Actual service tier", "zh": "实际服务等级"}},
+      "inference_geo": {"type": "enum", "enum": ["global", "us"], "path": "usage.inference_geo", "description": {"en": "Actual inference geography", "zh": "实际推理地域"}},
+      "web_search_requests": {"type": "number", "unit": "request", "path": "usage.server_tool_use.web_search_requests", "description": {"en": "Server web searches", "zh": "服务端搜索次数"}},
+      "web_fetch_requests": {"type": "number", "unit": "request", "path": "usage.server_tool_use.web_fetch_requests", "description": {"en": "Server web fetches", "zh": "服务端抓取次数"}}
+    },
+    "additional": [
+      {
+        "name": "compaction",
+        "jsonPath": "usage.iterations",
+        "ssePath": "usage.iterations",
+        "sseEvent": "message_delta",
+        "typePath": "type",
+        "typeValue": "compaction",
+        "modelPath": "model",
+        "usePrimaryModel": true,
+        "requiredBy": ["compaction", "context_management"],
+        "semantics": "exclusive",
+        "map": {
+          "input_tokens": "input_tokens",
+          "output_tokens": "output_tokens",
+          "cache_read_tokens": "cache_read_input_tokens",
+          "cache_creation_tokens": "cache_creation_input_tokens",
+          "cache_creation_1h_tokens": "cache_creation.ephemeral_1h_input_tokens"
+        }
+      },
+      {
+        "name": "advisor",
+        "jsonPath": "usage.iterations",
+        "ssePath": "usage.iterations",
+        "sseEvent": "message_delta",
+        "typePath": "type",
+        "typeValue": "advisor_message",
+        "modelPath": "model",
+        "semantics": "exclusive",
+        "map": {
+          "input_tokens": "input_tokens",
+          "output_tokens": "output_tokens",
+          "cache_read_tokens": "cache_read_input_tokens",
+          "cache_creation_tokens": "cache_creation_input_tokens",
+          "cache_creation_1h_tokens": "cache_creation.ephemeral_1h_input_tokens"
         }
       }
     ],

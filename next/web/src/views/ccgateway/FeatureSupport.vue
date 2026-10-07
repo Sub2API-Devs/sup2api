@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { isFeatureCatalog, type FeatureCatalog, type FeatureStatus } from './featureCatalog'
 import type { RequestPolicy } from './requestPolicy'
+import WorkerCapabilities from './WorkerCapabilities.vue'
 
 const policy = defineModel<RequestPolicy>({ required: true })
 const props = withDefaults(defineProps<{ scope?: 'api' | 'cc' }>(), { scope: 'api' })
@@ -60,6 +61,7 @@ onMounted(load)
           </button>
           <div v-if="expanded === feature.id" :id="'feature-detail-' + feature.id" class="space-y-3 px-3 pb-3 text-sm">
             <p>{{ feature.reason }}</p>
+            <WorkerCapabilities :feature-id="feature.id" />
             <dl class="grid gap-2 text-xs sm:grid-cols-2">
               <div><dt class="font-medium">{{ t('ccgateway.features.body') }}</dt><dd class="mt-1 break-all font-mono text-gray-500">{{ feature.body_paths.join(', ') || '—' }}</dd></div>
               <div><dt class="font-medium">anthropic-beta</dt><dd class="mt-1 break-all font-mono text-gray-500">{{ feature.beta_headers.join(', ') || '—' }}</dd></div>

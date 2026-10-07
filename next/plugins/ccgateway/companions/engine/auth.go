@@ -47,12 +47,13 @@ type authSession struct {
 	done           chan struct{} // closed when the login process has exited; nil in tests
 }
 type authManager struct {
-	requestLogs *requestLogStore
-	mu          sync.Mutex
-	session     *authSession
-	cli, key    string
-	env         []string
-	proxy       *ProxyConfigStore
+	requestLogs          *requestLogStore
+	authorizationChanged func() error
+	mu                   sync.Mutex
+	session              *authSession
+	cli, key             string
+	env                  []string
+	proxy                *ProxyConfigStore
 	// version is the CLI version (usage request user agent); usageURL
 	// overrides the Anthropic usage endpoint in tests.
 	version, usageURL string
@@ -228,6 +229,14 @@ func (a *authManager) complete(ctx context.Context, w http.ResponseWriter, r *ht
 	if !ok || code == "" || subtle.ConstantTimeCompare([]byte(state), []byte(s.state)) != 1 {
 		return nil, authFail(codeInvalidCode, "Paste the complete code#state from this authorization.")
 	}
+	// Persist the boundary before mutating credentials. A failed authorization
+	// attempt may conservatively expire diagnostics, but a disk failure must
+	// not let old issuer IDs survive a successful credential replacement.
+	if a.authorizationChanged != nil {
+		if err := a.authorizationChanged(); err != nil {
+			return nil, authFail(codeAuthProcessFailed, "Message ownership storage could not be reset; authorization was not changed.")
+		}
+	}
 	_, err := s.call(ctx, Object{"subtype": "claude_oauth_callback", "authorizationCode": code, "state": state})
 	a.end()
 	if err != nil {
@@ -301,6 +310,11 @@ func (a *authManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		result, err = a.cancelSession(w, r)
 	case "POST /admin/auth/logout":
 		a.end()
+		if a.authorizationChanged != nil {
+			if err = a.authorizationChanged(); err != nil {
+				break
+			}
+		}
 		cmd := exec.CommandContext(ctx, a.cli, "auth", "logout")
 		cmd.Env = a.environment()
 		if cmd.Run() != nil {

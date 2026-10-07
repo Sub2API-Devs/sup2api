@@ -31,21 +31,24 @@ import (
 // Requests without client system messages keep their body (thinking.display
 // aside); every other field stays as the CLI wrote it.
 type outboundRelay struct {
-	scope      *mainRequestScope
-	path       string
-	URL        string
-	FirstParty bool
-	server     *http.Server
-	transport  *http.Transport
+	fallbackEvents map[string]map[int]*fallbackCapture
+	scope          *mainRequestScope
+	path           string
+	URL            string
+	FirstParty     bool
+	server         *http.Server
+	transport      *http.Transport
 
-	mu             sync.Mutex
-	failure        error
-	upstream       *upstreamError
-	stopped        bool
-	restored       int
-	sequence       int
-	modelForwarded bool
-	abort          func() // ends the CLI run; set by the Runner
+	mu                 sync.Mutex
+	failure            error
+	upstream           *upstreamError
+	stopped            bool
+	restored           int
+	sequence           int
+	modelForwarded     bool
+	abort              func() // ends the CLI run; set by the Runner
+	warmupResponse     json.RawMessage
+	tokenCountResponse json.RawMessage
 }
 
 func (r *outboundRelay) setAbort(abort func()) {
@@ -149,13 +152,15 @@ func errorTypeStatus(kind string) int {
 // sseWatch forwards a model stream event by event and stops at an error
 // event, which is kept for the API client and never reaches the CLI.
 type sseWatch struct {
-	body    io.ReadCloser
-	relay   *outboundRelay
-	request *http.Request
-	pending []byte
-	ready   []byte
-	done    bool
-	err     error
+	observe      func([]byte)
+	ignoreErrors bool
+	body         io.ReadCloser
+	relay        *outboundRelay
+	request      *http.Request
+	pending      []byte
+	ready        []byte
+	done         bool
+	err          error
 }
 
 func sseEventEnd(b []byte) (int, int) {
@@ -208,7 +213,7 @@ func (s *sseWatch) Read(p []byte) (int, error) {
 				break
 			}
 			event := s.pending[:end+size]
-			if payload, failed := sseErrorPayload(event); failed {
+			if payload, failed := sseErrorPayload(event); failed && !s.ignoreErrors {
 				status := 500
 				if decoded, err := decodeObject(payload); err == nil {
 					inner, _ := decoded["error"].(Object)
@@ -217,6 +222,9 @@ func (s *sseWatch) Read(p []byte) (int, error) {
 				s.pending, s.done = nil, true
 				s.relay.reject(&upstreamError{Status: status, ContentType: "application/json", Body: append([]byte(nil), payload...)}, s.request)
 				break
+			}
+			if s.observe != nil {
+				s.observe(event)
 			}
 			s.ready = append(s.ready, event...)
 			s.pending = s.pending[end+size:]
@@ -334,36 +342,97 @@ func relayProxy(env []string, target *url.URL) (func(*http.Request) (*url.URL, e
 
 // adapt rewrites one model or token-count request body.
 func (r *outboundRelay) adapt(req *Request, groups []systemGroup, body []byte, count bool) ([]byte, error) {
+	out, _, err := r.adaptAttributed(req, groups, body, count)
+	return out, err
+}
+
+func (r *outboundRelay) adaptAttributed(req *Request, groups []systemGroup, body []byte, count bool) ([]byte, bool, error) {
 	message, err := decodeObject(body)
 	if err != nil {
-		return nil, fmt.Errorf("model request body is not a JSON object")
+		return nil, false, fmt.Errorf("model request body is not a JSON object")
 	}
 	main, err := r.scope.identify(message, count)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if !main {
-		return body, nil
+		return body, false, nil
+	}
+	if req.CountTokens {
+		// The standard count API measures the client's submitted input, not
+		// Claude Code's augmented prompt. CLI is only the authenticated carrier.
+		r.scope.recordApplied()
+		return req.Plan.RawRequest(), true, nil
+	}
+	if err := req.removeContinuation(message); err != nil {
+		return nil, false, err
+	}
+	if !count && req.InlineTools != nil {
+		if err := verifyNativeWireTools(req, message); err != nil {
+			return nil, false, err
+		}
 	}
 	if !count && req.HasMainRequestFeatures() {
 		if r.scope == nil {
-			return nil, fmt.Errorf("client feature plan requires main request attribution")
+			return nil, false, fmt.Errorf("client feature plan requires main request attribution")
 		}
 		if err := req.ApplyMainRequestFeatures(message); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		r.scope.recordApplied()
+		if req.CacheWarmup {
+			message["stream"] = false
+		}
 	}
 	if !count {
-		if err := verifyNativeWireTools(req, message); err != nil {
-			return nil, err
+		if err := req.restoreContinuationTail(message); err != nil {
+			return nil, false, err
+		}
+		if req.InlineTools == nil {
+			if err := verifyNativeWireTools(req, message); err != nil {
+				return nil, false, err
+			}
+		}
+	}
+	// Remove CLI defaults before restoring the client's own system fields.
+	// Client inline effort is inserted afterward at its original position.
+	if !count && (req.Plan != nil && req.Plan.apiGeneration || req.hasInlineSystemMetadata()) {
+		stripCLIInlineEffort(message)
+	}
+	// System position restoration needs the original assistant turns.
+	if !count {
+		if err := restoreProtocolHistory(req, message); err != nil {
+			return nil, false, err
 		}
 	}
 	if len(groups) > 0 {
 		if _, has := message["messages"]; has || !count {
-			if err = restoreSystemMessages(message, groups); err != nil {
-				return nil, fmt.Errorf("cannot restore the client's system messages: %w", err)
+			if err = restoreSystemMessages(message, groups, req); err != nil {
+				return nil, false, fmt.Errorf("cannot restore the client's system messages: %w", err)
 			}
+		}
+	}
+	if !count {
+		if err := req.restoreInlineTools(message); err != nil {
+			return nil, false, err
+		}
+		if err := restoreInlineSystemMetadata(req, message); err != nil {
+			return nil, false, err
+		}
+		if err := restoreHistoryCitations(req, message); err != nil {
+			return nil, false, err
+		}
+		if err := req.applyCachePlan(message); err != nil {
+			return nil, false, err
+		}
+		if err := req.verifyCompactionHistory(message); err != nil {
+			return nil, false, err
+		}
+		if err := req.verifyAPIClientHistory(message); err != nil {
+			return nil, false, err
+		}
+		if err := req.verifyInlineToolHistory(message); err != nil {
+			return nil, false, err
 		}
 	}
 	if display := str(req.Thinking, "display"); display != "" && !count {
@@ -378,12 +447,15 @@ func (r *outboundRelay) adapt(req *Request, groups []systemGroup, body []byte, c
 	encoder := json.NewEncoder(&out)
 	encoder.SetEscapeHTML(false)
 	if err = encoder.Encode(message); err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return bytes.TrimSuffix(out.Bytes(), []byte("\n")), nil
+	return bytes.TrimSuffix(out.Bytes(), []byte("\n")), true, nil
 }
 
 func startOutboundRelay(req *Request, env []string, internalBase ...string) (*outboundRelay, error) {
+	if err := req.validateRoutingProvider(env); err != nil {
+		return nil, err
+	}
 	raw := environmentValue(env, "ANTHROPIC_BASE_URL")
 	if raw == "" {
 		raw = "https://api.anthropic.com"
@@ -428,7 +500,9 @@ func (relay *outboundRelay) forwarder(target *url.URL) *httputil.ReverseProxy {
 		director(r)
 		r.Host = target.Host
 		r.Header.Del("X-Forwarded-For")
-		if pass, _ := r.Context().Value(modelRequest{}).(bool); pass {
+		pass, _ := r.Context().Value(modelRequest{}).(bool)
+		output, _ := r.Context().Value(apiOutputRequestKey{}).(*Request)
+		if pass || output != nil {
 			// Let the transport negotiate and decode compression, so an error
 			// body or event can be read and kept as the API sent it.
 			r.Header.Del("Accept-Encoding")
@@ -447,6 +521,18 @@ func (relay *outboundRelay) forwarder(target *url.URL) *httputil.ReverseProxy {
 			tr.diagnostic.artifact(tr.prefix+"-response.json", Object{"status": resp.StatusCode, "headers": safeHeaders(resp.Header)})
 			tr.diagnostic.trace("upstream_response", Object{"exchange": tr.prefix, "status": resp.StatusCode})
 			resp.Body = &traceReader{ReadCloser: resp.Body, diagnostic: tr.diagnostic, name: tr.prefix + "-response.body"}
+		}
+		if count, _ := resp.Request.Context().Value(tokenCountRequestKey{}).(bool); count {
+			return relay.captureTokenCount(resp)
+		}
+		if warmup, _ := resp.Request.Context().Value(warmupRequestKey{}).(bool); warmup {
+			return relay.bridgeWarmupResponse(resp)
+		}
+		if output, _ := resp.Request.Context().Value(apiOutputRequestKey{}).(*Request); output != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 && strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
+			pass, _ := resp.Request.Context().Value(modelRequest{}).(bool)
+			terminal := &apiTerminalObserver{relay: relay, req: output}
+			resp.Body = &sseWatch{body: resp.Body, relay: relay, request: resp.Request, ignoreErrors: !pass, observe: terminal.observe}
+			return nil
 		}
 		return relay.passUpstreamErrors(resp)
 	}
@@ -504,6 +590,10 @@ func (relay *outboundRelay) handler(req *Request, forward http.Handler) http.Han
 		}
 		model := r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/messages")
 		count := r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/messages/count_tokens")
+		if (req.CountTokens || req.hasInferenceGeo()) && count {
+			apiError(w, 400, "invalid_request_error", "Auxiliary token counting is unavailable for this request mode")
+			return
+		}
 		prefix := ""
 		if (model || count) && req.diagnostic.enabled() {
 			prefix = "upstream-" + uuid()
@@ -540,8 +630,17 @@ func (relay *outboundRelay) adaptRequest(w http.ResponseWriter, r *http.Request,
 	relay.mu.Unlock()
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<20))
 	var adapted []byte
+	var attributed bool
 	if err == nil {
-		adapted, err = relay.adapt(req, groups, body, count)
+		adapted, attributed, err = relay.adaptAttributed(req, groups, body, count)
+	}
+	if err == nil && model {
+		adapted, err = req.applyInferenceGeo(adapted)
+	}
+	if err == nil && model && req.CountTokens {
+		if !attributed {
+			err = fmt.Errorf("auxiliary generation is forbidden during token counting")
+		}
 	}
 	if err != nil {
 		// The gateway reports the cause; the CLI is stopped and reads only
@@ -577,6 +676,18 @@ func (relay *outboundRelay) adaptRequest(w http.ResponseWriter, r *http.Request,
 		relay.mu.Lock()
 		relay.modelForwarded = true
 		relay.mu.Unlock()
+	}
+	if model && req.CacheWarmup && attributed {
+		ctx := context.WithValue(r.Context(), warmupRequestKey{}, true)
+		*r = *r.WithContext(context.WithValue(ctx, modelRequest{}, true))
+	}
+	if model && req.CountTokens && attributed {
+		ctx := context.WithValue(r.Context(), tokenCountRequestKey{}, true)
+		*r = *r.WithContext(context.WithValue(ctx, modelRequest{}, true))
+		r.URL.Path += "/count_tokens"
+	}
+	if model && (req.observesAPITerminal() || req.Plan != nil && req.Plan.apiGeneration) && attributed {
+		*r = *r.WithContext(context.WithValue(r.Context(), apiOutputRequestKey{}, req))
 	}
 	r.Body = io.NopCloser(bytes.NewReader(adapted))
 	if req.diagnostic != nil {

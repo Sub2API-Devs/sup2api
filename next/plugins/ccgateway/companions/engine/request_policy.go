@@ -15,6 +15,7 @@ const policyHeader = "X-CCGateway-Request-Policy"
 
 type BetaRule = features.BetaRule
 type RequestPolicy struct {
+	SchemaVersion     int               `json:"schema_version"`
 	EnvironmentFields map[string]string `json:"environment_fields,omitempty"`
 	UnknownBeta       string            `json:"unknown_beta"`
 	UnknownField      string            `json:"unknown_field"`
@@ -35,16 +36,20 @@ type RequestPolicy struct {
 }
 
 func defaultRequestPolicy() RequestPolicy {
-	return RequestPolicy{UnknownClientAttachment: "pass", UnknownGatewayAttachment: "pass", CustomToolPrefix: "ccgateway", UnknownBeta: "ignore", UnknownField: "reject", AllowFast: false, AllowEffort: true, ToolSearch: "request", AttachmentSource: "client", Betas: features.BetaRules()}
+	return RequestPolicy{SchemaVersion: features.PolicySchemaVersion, UnknownClientAttachment: "pass", UnknownGatewayAttachment: "pass", CustomToolPrefix: "ccgateway", UnknownBeta: "ignore", UnknownField: "reject", AllowFast: false, AllowEffort: true, ToolSearch: "request", AttachmentSource: "client", Betas: features.BetaRules()}
 }
 
 var betaName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,127}$`)
 
 func requestPolicy(h http.Header) (RequestPolicy, error) {
 	p := defaultRequestPolicy()
+	p.SchemaVersion = features.PolicySchemaVersion
 	if raw := h.Get(policyHeader); raw != "" {
 		if len(raw) > 16384 {
 			return p, fmt.Errorf("invalid gateway request policy")
+		}
+		if err := features.ValidatePolicySchemaJSON([]byte(raw)); err != nil {
+			return p, err
 		}
 		if err := json.Unmarshal([]byte(raw), &p); err != nil {
 			return p, fmt.Errorf("invalid gateway request policy")
@@ -97,6 +102,9 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := plan.takeTaskBudget(o); err != nil {
+		return nil, err
+	}
 	if err = p.filterFields(o); err != nil {
 		return nil, err
 	}
@@ -114,7 +122,7 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 	}
 	cacheRequested := hasRequestCacheControl(o)
 	data, _ := json.Marshal(o)
-	req, err := parseRequest(data)
+	req, err := parseRequest(data, hasBetaHeader(h.Values("anthropic-beta"), "interleaved-thinking-2025-05-14"))
 	if err != nil {
 		return nil, err
 	}
@@ -125,6 +133,10 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 	req.Fast = fast
 	req.Effort = effort
 	req.JSONSchema = schema
+	req.APIOutputFormat = schema != nil
+	if err := plan.configureThinkingOutput(req, format, h.Values("anthropic-beta")); err != nil {
+		return nil, err
+	}
 	req.PassUpstreamErrors = p.PassUpstreamErrors
 	req.AttachmentSource = p.AttachmentSource
 	req.AttachmentSources = p.AttachmentSources
@@ -143,12 +155,33 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 	if err = p.applyBetas(req, h.Values("anthropic-beta")); err != nil {
 		return nil, err
 	}
+	if err := plan.configureAPISpeed(req); err != nil {
+		return nil, err
+	}
+	if err = req.validateAdvisorBeta(); err != nil {
+		return nil, err
+	}
+	if err := req.validateInlineSystemBetas(p.AllowEffort); err != nil {
+		return nil, err
+	}
 	// API server search owns deferred discovery. Do not add CC's separate
 	// client ToolSearch loop, even when the global policy enables it.
 	if len(req.ServerTools) > 0 {
 		req.ToolSearch = "false"
 	}
+	if err := req.configureContextCompaction(h.Values("anthropic-beta")); err != nil {
+		return nil, err
+	}
+	if err := req.validateInlineToolConfiguration(); err != nil {
+		return nil, err
+	}
+	if err := req.validateAPIClientConfiguration(); err != nil {
+		return nil, err
+	}
 	if err := plan.validateInternalRounds(req); err != nil {
+		return nil, err
+	}
+	if err := plan.validateTaskBudget(req); err != nil {
 		return nil, err
 	}
 	return req, nil
@@ -156,10 +189,16 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 
 // filterFields rejects or drops body fields outside the supported set.
 func (p RequestPolicy) filterFields(o Object) error {
+	if _, exists := o["fallback_credit_token"]; exists {
+		return fmt.Errorf("fallback_credit_token requires issuing-account affinity, original-body/beta matching and five-minute redemption tracking; cross-account credit redemption is not yet implemented")
+	}
+	if _, exists := o["fallbacks"]; exists {
+		return fmt.Errorf("fallbacks requires core authorization of target models, per-model usage.iterations billing and distinct JSON/SSE response handling; server-side routing is not yet enabled")
+	}
 	// These are known protocol features, not harmless unknown extensions.
 	// Until their request/response/history path exists, ignore must not turn
 	// an explicit semantic request into a different successful operation.
-	for _, field := range []string{"context_management", "compaction", "container", "mcp_servers", "diagnostics", "inference_geo", "fallbacks", "fallback_credit_token"} {
+	for _, field := range []string{"container", "mcp_servers", "diagnostics", "fallbacks", "fallback_credit_token"} {
 		if _, exists := o[field]; exists {
 			return fmt.Errorf("unsupported request feature %q: complete protocol adaptation is required", field)
 		}
@@ -184,12 +223,15 @@ func (p RequestPolicy) filterFields(o Object) error {
 func (p RequestPolicy) speed(o Object) (*bool, error) {
 	fast := new(bool)
 	if v, ok := o["speed"]; ok {
-		if p.AllowFast {
+		if v != nil {
 			speed, ok := v.(string)
 			if !ok || (speed != "fast" && speed != "standard") {
 				return nil, fmt.Errorf("speed must be fast or standard")
 			}
 			b := speed == "fast"
+			if b && !p.AllowFast {
+				return nil, fmt.Errorf("speed fast is disabled by CCGateway policy")
+			}
 			fast = &b
 		}
 		delete(o, "speed")
@@ -222,6 +264,9 @@ func (p RequestPolicy) outputConfig(o Object) (effort string, format any, err er
 		}
 		if k == "format" {
 			continue
+		}
+		if k == "effort" && !p.AllowEffort {
+			return "", nil, fmt.Errorf("output_config.effort is disabled by the gateway policy")
 		}
 		if k != "effort" || !p.AllowEffort {
 			if p.UnknownField == "reject" {

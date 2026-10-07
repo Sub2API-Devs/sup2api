@@ -9,7 +9,7 @@ require (
 
 replace ccgateway => ..
 
-require github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts v0.0.0 // indirect
+require github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts v0.0.0
 
 replace github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts => ../contracts
 

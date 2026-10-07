@@ -28,10 +28,10 @@ const (
 // Errors the Messages API also returns use its wording; the rest are gateway
 // limits the API itself would accept.
 func parseSystemMessage(m Object, index int, ttl *time.Duration) ([]Object, error) {
-	if _, exists := m["output_config"]; exists {
-		return nil, fmt.Errorf("messages.%d: system output_config is not supported through Claude Code", index)
+	if err := validateInlineSystemMetadata(m, index); err != nil {
+		return nil, err
 	}
-	if err := keys(m, "role", "content"); err != nil {
+	if err := keys(m, "role", "content", "clear_at", "output_config"); err != nil {
 		return nil, err
 	}
 	var content []Object
@@ -50,7 +50,14 @@ func parseSystemMessage(m Object, index int, ttl *time.Duration) ([]Object, erro
 			switch str(b, "type") {
 			case "text":
 			case "tool_addition", "tool_removal":
-				return nil, fmt.Errorf("messages.%d: system %s blocks are not supported through Claude Code", index, str(b, "type"))
+				if err := checkInlineToolBlock(b); err != nil {
+					return nil, err
+				}
+				if err := cacheTTL(b["cache_control"], ttl); err != nil {
+					return nil, err
+				}
+				content = append(content, b)
+				continue
 			default:
 				return nil, fmt.Errorf(errSystemBlock, index)
 			}
@@ -67,14 +74,20 @@ func parseSystemMessage(m Object, index int, ttl *time.Duration) ([]Object, erro
 			if err := cacheTTL(b["cache_control"], ttl); err != nil {
 				return nil, err
 			}
-			// Breakpoints move between client requests; keep history hashes stable.
-			content = append(content, Object{"type": "text", "text": text})
+			block := Object{"type": "text", "text": text}
+			if value, exists := b["cache_control"]; exists {
+				block["cache_control"] = value
+			}
+			content = append(content, block)
 		}
 	default:
 		return nil, fmt.Errorf(errSystemContent, index)
 	}
-	if len(content) == 0 {
+	if len(content) == 0 && !validInlineDirective(m) {
 		return nil, fmt.Errorf(errSystemEmpty, index)
+	}
+	if content == nil {
+		content = []Object{}
 	}
 	return content, nil
 }
@@ -88,10 +101,22 @@ func (r *Request) pendingStart() int {
 			start = i + 1
 		}
 	}
+	for start < len(r.Messages) && r.Messages[start].Role == "system" {
+		start++
+	}
 	return start
 }
 func (r *Request) pendingWireMessage() Message {
-	return r.wireMessage(r.Messages[r.pendingStart()])
+	if r.continuation != "" {
+		return Message{Role: "user", Content: []Object{{"type": "text", "text": r.continuation}}}
+	}
+	out := Message{Role: "user"}
+	for _, message := range r.Messages[r.pendingStart():] {
+		if message.Role == "user" {
+			out.Content = append(out.Content, r.wireMessage(message).Content...)
+		}
+	}
+	return out
 }
 func (r *Request) pendingSystems() []string {
 	var out []string
@@ -103,6 +128,9 @@ func (r *Request) pendingSystems() []string {
 	return out
 }
 func systemTexts(m Message) []string {
+	if m.toolCarrier != "" {
+		return []string{m.toolCarrier}
+	}
 	out := make([]string, 0, len(m.Content))
 	for _, b := range m.Content {
 		out = append(out, str(b, "text"))

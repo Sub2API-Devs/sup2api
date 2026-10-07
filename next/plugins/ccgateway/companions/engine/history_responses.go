@@ -48,11 +48,11 @@ func validResponseCheckpoints(s *Snapshot) bool {
 	previous := -1
 	for _, record := range s.Responses {
 		position, exists := positions[record.ClientHash]
-		if !exists || position <= previous || record.NativeAnchor == "" || record.MessageID == "" {
+		if !exists || position <= previous || (!s.ResponseOnly && record.NativeAnchor == "") || record.MessageID == "" {
 			return false
 		}
 		message, err := decodeObject(record.Response)
-		if err != nil || completedResponse(message) != nil || str(message, "id") != record.MessageID {
+		if err != nil || (!s.ResponseOnly && completedResponse(message) != nil) || str(message, "id") != record.MessageID || str(message, "role") != "assistant" || str(message, "stop_reason") == "" || message["error"] != nil {
 			return false
 		}
 		if _, ok := message["content"].([]any); !ok {

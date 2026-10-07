@@ -60,7 +60,7 @@ func TestRunnerRequestPolicyMapping(t *testing.T) {
 	p := defaultRequestPolicy()
 	p.AllowFast = true
 	h := policyHeaders(p)
-	h.Set("anthropic-beta", "fine-grained-tool-streaming-2025-05-14")
+	h.Set("anthropic-beta", "fine-grained-tool-streaming-2025-05-14,fast-mode-2026-02-01")
 	v := basic()
 	v["speed"] = "fast"
 	v["output_config"] = Object{"effort": "low"}
@@ -72,6 +72,10 @@ func TestRunnerRequestPolicyMapping(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// This executable captures argv/environment and emits lifecycle frames;
+	// it never makes an upstream model request. Main-request attribution and
+	// exact max_tokens application are covered by the real CLI HTTP tests.
+	req.Plan = nil
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_, err = runner.run(ctx, req, &Prepared{Work: dir, SessionID: uuid(), InputUUID: uuid()}, dir, func(Object) error { return nil })
@@ -86,7 +90,7 @@ func TestRunnerRequestPolicyMapping(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if str(o, "extra") != "" || str(o, "effort_env") != "" || str(o, "streaming") != "1" || str(o, "betas") != "fine-grained-tool-streaming-2025-05-14" {
+	if str(o, "extra") != "" || str(o, "effort_env") != "" || str(o, "streaming") != "1" || str(o, "betas") != "fine-grained-tool-streaming-2025-05-14,fast-mode-2026-02-01" {
 		t.Fatal("request environment leaked or ignored policy", o)
 	}
 	if str(o, "cache_ttl") != "1h" || str(o, "thinking_budget") != "1024" || str(o, "structured_retries") != "1" || str(o, "deferral") != "" {
@@ -119,7 +123,7 @@ func TestRunnerRequestPolicyMapping(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if str(clean, "cache_ttl") != "" || str(clean, "thinking_budget") != "0" || str(clean, "streaming") != "" || str(clean, "deferral") != "" {
+	if str(clean, "cache_ttl") != "" || str(clean, "thinking_budget") != "" || str(clean, "streaming") != "" || str(clean, "deferral") != "" {
 		t.Fatal("request settings leaked into the next request", clean)
 	}
 }
@@ -127,6 +131,7 @@ func TestRequestPolicyFields(t *testing.T) {
 	p := defaultRequestPolicy()
 	p.AllowFast = true
 	h := policyHeaders(p)
+	h.Set("anthropic-beta", "fast-mode-2026-02-01")
 	v := basic()
 	v["speed"] = "fast"
 	v["output_config"] = Object{"effort": "xhigh"}
@@ -143,17 +148,22 @@ func TestRequestPolicyFields(t *testing.T) {
 	}
 	p.UnknownField = "ignore"
 	h = policyHeaders(p)
+	h.Set("anthropic-beta", "fast-mode-2026-02-01")
 	if r, e = parsePolicyRequest(body, h); e != nil || r.Effort != "low" || !*r.Fast {
 		t.Fatal("ignore changed supported fields", e)
 	}
+	v["speed"] = "standard"
+	body, _ = json.Marshal(v)
 	p.AllowFast = false
 	p.AllowEffort = false
 	h = policyHeaders(p)
-	if r, e = parsePolicyRequest(body, h); e != nil || *r.Fast || r.Effort != "" {
-		t.Fatal("disabled capability applied", e)
+	h.Set("anthropic-beta", "fast-mode-2026-02-01")
+	if _, e = parsePolicyRequest(body, h); e == nil || !strings.Contains(e.Error(), "effort") {
+		t.Fatal("explicit effort was silently removed despite policy denial", e)
 	}
 	p.UnknownField = "reject"
 	h = policyHeaders(p)
+	h.Set("anthropic-beta", "fast-mode-2026-02-01")
 	if _, e = parsePolicyRequest(body, h); e == nil {
 		t.Fatal("disabled capability accepted")
 	}
@@ -163,6 +173,7 @@ func TestRequestPolicyFields(t *testing.T) {
 	p = defaultRequestPolicy()
 	p.AllowFast = true
 	h = policyHeaders(p)
+	h.Set("anthropic-beta", "fast-mode-2026-02-01")
 	if _, e = parsePolicyRequest(body, h); e == nil {
 		t.Fatal("invalid speed accepted")
 	}

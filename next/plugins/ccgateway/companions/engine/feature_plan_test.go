@@ -24,7 +24,7 @@ func plannedRequest(t *testing.T, extra Object) *Request {
 
 func TestGenerationPlanAppliesExactControlsWithoutAliasing(t *testing.T) {
 	r := plannedRequest(t, Object{"temperature": 0.2, "top_p": 0.95, "top_k": 12, "stop_sequences": []any{"END", ""}, "service_tier": "standard_only", "metadata": Object{"user_id": "client-user"}})
-	if !r.HasMainRequestFeatures() || len(r.Plan.FeatureDecisions()) != 6 {
+	if !r.HasMainRequestFeatures() || len(r.Plan.FeatureDecisions()) != 7 {
 		t.Fatal("missing generation decisions")
 	}
 	raw := r.Plan.RawRequest()
@@ -41,7 +41,7 @@ func TestGenerationPlanAppliesExactControlsWithoutAliasing(t *testing.T) {
 	if wire["temperature"] != json.Number("0.2") || wire["top_k"] != json.Number("12") || wire["messages"] != "untouched" {
 		t.Fatal(wire)
 	}
-	if !reflect.DeepEqual(wire["metadata"], Object{"session_id": "cc-session", "user_id": "client-user"}) {
+	if !reflect.DeepEqual(wire["metadata"], Object{"user_id": "client-user"}) {
 		t.Fatal(wire)
 	}
 	wire["stop_sequences"].([]any)[0] = "mutated"
@@ -51,14 +51,12 @@ func TestGenerationPlanAppliesExactControlsWithoutAliasing(t *testing.T) {
 	}
 }
 
-func TestGenerationPlanPreservesCLIIdentityAndRejectsAtomically(t *testing.T) {
+func TestGenerationPlanClientMetadataReplacesCLIAttribution(t *testing.T) {
 	r := plannedRequest(t, Object{"temperature": 0.1, "metadata": Object{"user_id": "client"}})
 	wire := Object{"temperature": 1.0, "metadata": Object{"user_id": `{"account_uuid":"cc-account","session_id":"cc-session"}`}}
-	before, _ := json.Marshal(wire)
 	err := r.ApplyMainRequestFeatures(wire)
-	after, _ := json.Marshal(wire)
-	if err == nil || !strings.Contains(err.Error(), "attribution") || string(before) != string(after) {
-		t.Fatal("identity overwritten or partial update", err, wire)
+	if err != nil || !reflect.DeepEqual(wire["metadata"], Object{"user_id": "client"}) || wire["temperature"] != json.Number("0.1") {
+		t.Fatal("external attribution incorrectly rejected or changed", err, wire)
 	}
 }
 
@@ -167,7 +165,12 @@ func TestForcedToolChoiceInternalRoundConflicts(t *testing.T) {
 		v["tools"] = []any{tool}
 		v["tool_choice"] = Object{"type": "any"}
 		raw, _ := json.Marshal(v)
-		if _, err := parsePolicyRequest(raw, http.Header{}); err == nil || !strings.Contains(err.Error(), "continuation-phase") {
+		_, err := parsePolicyRequest(raw, http.Header{})
+		if structured {
+			if err != nil {
+				t.Fatal("API constrained output has no synthetic continuation", err)
+			}
+		} else if err == nil || !strings.Contains(err.Error(), "continuation-phase") {
 			t.Fatal("internal rounds would change forced semantics", err)
 		}
 	}
@@ -180,7 +183,7 @@ func TestGenerationPlanKeepsIntegerPrecision(t *testing.T) {
 		t.Fatal(err)
 	}
 	raw, _ := json.Marshal(wire)
-	if string(raw) != `{"top_k":9007199254740993}` {
+	if string(raw) != `{"max_tokens":128,"top_k":9007199254740993}` {
 		t.Fatal("JSON number changed", string(raw))
 	}
 }

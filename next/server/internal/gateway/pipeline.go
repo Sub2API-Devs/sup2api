@@ -55,7 +55,10 @@ type call struct {
 	routeKeys []core.AccountTypeKey
 
 	// billing: the model's global price (nil = free policy or free endpoint)
-	price *core.PriceRule
+	price                *core.PriceRule
+	modelRefs            []modelReference
+	upstreamRefs         map[string]core.PricedUsage
+	upstreamPrimaryModel string
 
 	sticky *stickySession
 	// ranked holds the per-request priority/weight the scheduler.rank
@@ -333,7 +336,7 @@ func (c *call) checkModel(ctx context.Context) *gwError {
 	if !c.principal.Group.AllowsModel(c.model) {
 		return fromCore(core.ErrModelNotFound.WithDetails(map[string]any{"model": c.model}), errTypeModelNotAllowed)
 	}
-	return nil
+	return c.checkReferencedModels()
 }
 
 // resolveModelFromPlugin asks PlatformService.ResolveModel of the plugin
@@ -412,6 +415,9 @@ func (c *call) prepareBilling(ctx context.Context) *gwError {
 	c.price = rule
 	c.rec.Price = rule
 	c.capturePriceInputs(c.price)
+	if e := c.prepareReferencedPrices(ctx); e != nil {
+		return e
+	}
 	if c.g.d.Balance == nil {
 		return fromCore(core.AsError(errors.New("billing precharger unavailable")), errTypeInternal)
 	}
@@ -437,26 +443,31 @@ func (c *call) prepareBilling(ctx context.Context) *gwError {
 // capturePriceInputs records the param()/header() values the price
 // expression reads, from the final (post-hook) request.
 func (c *call) capturePriceInputs(rule *core.PriceRule) {
+	c.rec.PriceParams, c.rec.PriceHeaders = c.priceInputs(rule)
+}
+
+func (c *call) priceInputs(rule *core.PriceRule) (params map[string]string, values map[string]string) {
 	if rule == nil {
-		return
+		return nil, nil
 	}
 	paths, headers := c.g.d.Pricer.Inputs(rule)
 	if len(paths) > 0 {
-		c.rec.PriceParams = map[string]string{}
+		params = map[string]string{}
 		for _, p := range paths {
 			if r := gjson.GetBytes(c.body, p); r.Exists() {
-				c.rec.PriceParams[p] = r.Raw
+				params[p] = r.Raw
 			}
 		}
 	}
 	if len(headers) > 0 {
-		c.rec.PriceHeaders = map[string]string{}
+		values = map[string]string{}
 		for _, h := range headers {
 			if v := c.c.GetHeader(h); v != "" {
-				c.rec.PriceHeaders[headerLower(h)] = v
+				values[headerLower(h)] = v
 			}
 		}
 	}
+	return params, values
 }
 
 // meta describes the request to plugins. Protocol is the endpoint protocol;
@@ -673,8 +684,13 @@ func (c *call) finishSubmit(ctx context.Context, rec *core.UsageRecord, billing 
 
 func (c *call) finalizeBillability(ctx context.Context, rec *core.UsageRecord, billing string) {
 	hasUsage := rec.Tokens != (core.UsageTokens{}) || len(rec.Metrics) > 0
-	rec.Billable = !strings.EqualFold(billing, "free") && rec.Price != nil &&
-		(hasUsage || (rec.Success && rec.Price.Mode == "per_request"))
+	priced := rec.Price != nil && (hasUsage || (rec.Success && rec.Price.Mode == "per_request"))
+	for _, item := range rec.Additional {
+		itemUsage := item.Tokens != (core.UsageTokens{}) || len(item.Metrics) > 0
+		hasUsage = hasUsage || itemUsage
+		priced = priced || (item.Price != nil && (itemUsage || (rec.Success && item.Price.Mode == "per_request")))
+	}
+	rec.Billable = !strings.EqualFold(billing, "free") && (priced || rec.BillingError != "")
 	if !rec.Billable {
 		c.dropReservation(ctx, rec, billing, hasUsage)
 		rec.Price = nil
@@ -724,7 +740,11 @@ func (c *call) countTokens(ctx context.Context, accountID int64) {
 	if lim == nil || accountID == 0 {
 		return
 	}
-	if n := c.rec.Tokens.Total(); n > 0 {
+	n := c.rec.Tokens.Total()
+	for _, item := range c.rec.Additional {
+		n += item.Tokens.Total()
+	}
+	if n > 0 {
 		lim.AddTokens(context.WithoutCancel(ctx), accountID, n)
 	}
 }

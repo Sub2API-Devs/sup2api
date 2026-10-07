@@ -13,12 +13,14 @@ import (
 func (r *Request) toolSearchEnabled() bool { return r.ToolSearch != "" && r.ToolSearch != "false" }
 
 // structuredOutput reports whether the client asked for JSON Schema output.
-func (r *Request) structuredOutput() bool { return r.JSONSchema != nil }
+func (r *Request) structuredOutput() bool { return r.JSONSchema != nil && !r.APIOutputFormat }
 
 // bufferedResponse reports whether model events are held back until the
 // result frame: structured output is validated first, and tool discovery
 // rounds never reach the client.
-func (r *Request) bufferedResponse() bool { return r.structuredOutput() || r.toolSearchEnabled() }
+func (r *Request) bufferedResponse() bool {
+	return r.structuredOutput() || r.APIOutputFormat || r.toolSearchEnabled()
+}
 
 // maxTurns bounds the CLI's model calls: one answer, plus up to three tool
 // discovery rounds, plus one structured-output continuation.
@@ -109,7 +111,8 @@ func newRunConfig(req *Request, p *Prepared, plugin, dir string) *runConfig {
 func cliArgs(req *Request, p *Prepared, plugin string) []string {
 	settings := `{"disableAllHooks":false}`
 	if req.Fast != nil {
-		b, _ := json.Marshal(Object{"disableAllHooks": false, "fastMode": *req.Fast})
+		fast := *req.Fast && (req.Plan == nil || !req.Plan.apiGeneration)
+		b, _ := json.Marshal(Object{"disableAllHooks": false, "fastMode": fast})
 		settings = string(b)
 	}
 	snapshotMode := "off"
@@ -133,10 +136,10 @@ func cliArgs(req *Request, p *Prepared, plugin string) []string {
 		args = append(args, "--max-thinking-tokens", fmt.Sprint(req.Thinking["budget_tokens"]))
 	case "adaptive":
 		args = append(args, "--thinking", "adaptive")
-	default:
+	case "disabled":
 		args = append(args, "--thinking", "disabled")
 	}
-	if display := str(req.Thinking, "display"); display != "" {
+	if display := str(req.Thinking, "display"); display == "omitted" || display == "summarized" {
 		args = append(args, "--thinking-display", display)
 	}
 	if req.structuredOutput() {
@@ -172,7 +175,7 @@ func cliEnv(req *Request, systemTurns bool) map[string]string {
 		env["CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING"] = "1"
 	case "adaptive":
 		// Absence of a fixed budget leaves the model in adaptive mode.
-	default:
+	case "disabled":
 		env["MAX_THINKING_TOKENS"] = "0"
 	}
 	for _, beta := range req.Betas {

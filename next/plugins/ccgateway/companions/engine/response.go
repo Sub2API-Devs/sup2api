@@ -15,6 +15,7 @@ type Accumulator struct {
 	Bytes         int
 	Structured    map[int]bool
 	HasClientTool bool
+	serverCalls   *serverToolLedger
 }
 
 func integer(v any) (int, bool) {
@@ -46,6 +47,11 @@ func (a *Accumulator) push(e Object, r *Request) error {
 		return fmt.Errorf("upstream stream error")
 	}
 	if typ == "message_start" {
+		var err error
+		a.serverCalls, err = r.serverHistoryLedger()
+		if err != nil {
+			return err
+		}
 		return a.start(e)
 	}
 	if a.Message == nil {
@@ -64,12 +70,8 @@ func (a *Accumulator) push(e Object, r *Request) error {
 		if !a.Stopped || len(a.Closed) != len(a.Blocks) {
 			return fmt.Errorf("incomplete model message")
 		}
-		if len(r.ServerTools) > 0 {
-			view := *r
-			view.Messages = []Message{{Role: "assistant", Content: a.Blocks}}
-			if err := view.validateServerSearchHistory(); err != nil {
-				return err
-			}
+		if err := a.serverCalls.complete(str(a.Message, "stop_reason"), a.HasClientTool); err != nil {
+			return err
 		}
 		copyResponseExtensions(a.Message, e)
 		a.Message["content"] = a.Blocks
@@ -102,6 +104,13 @@ func (a *Accumulator) start(e Object) error {
 // blockStart turns the CLI's StructuredOutput tool into a text block and a
 // client tool's wire name back into its client name.
 func (a *Accumulator) blockStart(e Object, r *Request) error {
+	if a.serverCalls == nil {
+		var err error
+		a.serverCalls, err = r.serverHistoryLedger()
+		if err != nil {
+			return err
+		}
+	}
 	i, ok := integer(e["index"])
 	block, ok2 := e["content_block"].(map[string]any)
 	if !ok || !ok2 || i != len(a.Blocks) || a.Stopped {
@@ -116,8 +125,19 @@ func (a *Accumulator) blockStart(e Object, r *Request) error {
 		e["content_block"] = block
 	}
 	switch str(block, "type") {
+	case "fallback":
+		if err := checkFallbackBlock(block, "assistant"); err != nil {
+			return err
+		}
+		if err := a.serverCalls.accept(block, r); err != nil {
+			return err
+		}
 	case "text":
 		if err := checkCitations(block["citations"]); err != nil {
+			return err
+		}
+	case "compaction":
+		if err := checkCompactionBlock(block, "assistant", true); err != nil {
 			return err
 		}
 	case "thinking", "redacted_thinking":
@@ -125,35 +145,28 @@ func (a *Accumulator) blockStart(e Object, r *Request) error {
 		if r.NoTools || !r.hasServerSearch(str(block, "name")) || str(block, "id") == "" {
 			return fmt.Errorf("model requested an undeclared server search tool")
 		}
-		for _, previous := range a.Blocks {
-			if str(previous, "type") == "server_tool_use" && str(previous, "id") == str(block, "id") {
-				return fmt.Errorf("duplicate server search call id")
-			}
+		if err := a.serverCalls.accept(block, r); err != nil {
+			return err
 		}
-	case "tool_search_tool_result":
+	case "tool_search_tool_result", "web_search_tool_result", "web_fetch_tool_result", "advisor_tool_result":
 		if err := checkServerSearchBlock(block, "assistant"); err != nil {
 			return err
 		}
-		found := false
-		for _, previous := range a.Blocks {
-			if str(previous, "type") == "server_tool_use" && str(previous, "id") == str(block, "tool_use_id") {
-				found = true
-			}
-			if str(previous, "type") == "tool_search_tool_result" && str(previous, "tool_use_id") == str(block, "tool_use_id") {
-				found = false
-			}
-		}
-		if !found {
-			return fmt.Errorf("server search result has no unmatched call")
-		}
-		var err error
-		block, err = mapSearchReferences(block, func(name string) string { return clientToolName(r, name) })
-		if err != nil {
+		if err := a.serverCalls.accept(block, r); err != nil {
 			return err
+		}
+		if str(block, "type") == "tool_search_tool_result" {
+			var err error
+			block, err = mapSearchReferences(block, func(name string) string {
+				return r.searchReferenceName(name, true)
+			})
+			if err != nil {
+				return err
+			}
 		}
 		e["content_block"] = block
 	case "tool_use":
-		name := clientToolName(r, str(block, "name"))
+		name := r.apiResponseToolName(block)
 		if name == "" {
 			return fmt.Errorf("model requested an undeclared tool")
 		}
@@ -208,6 +221,15 @@ func (a *Accumulator) blockDelta(e Object) error {
 			return fmt.Errorf("text delta on nontext block")
 		}
 		block["text"] = str(block, "text") + str(d, "text")
+	case "compaction_delta":
+		if str(block, "type") != "compaction" || str(block, "signature") != "" {
+			return fmt.Errorf("compaction delta on wrong or signed block")
+		}
+		value, ok := d["content"].(string)
+		if !ok {
+			return fmt.Errorf("invalid compaction delta")
+		}
+		block["content"] = str(block, "content") + value
 	case "thinking_delta":
 		if str(block, "type") != "thinking" {
 			return fmt.Errorf("thinking delta on wrong block")

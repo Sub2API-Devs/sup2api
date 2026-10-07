@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// API server search is executed by the upstream API, never by the SDK MCP
+// API server tools are executed by the upstream API, never by the SDK MCP
 // bridge. Keep its definition and history separate from client tool handoffs.
 func serverSearchName(kind string) string {
 	switch kind {
@@ -44,21 +44,34 @@ func splitServerSearchTools(value any, ttl *time.Duration) (any, []Object, error
 			clients = append(clients, item)
 			continue
 		}
-		canonical := serverSearchName(str(t, "type"))
+		canonical := serverToolName(str(t, "type"))
 		if canonical == "" {
 			return nil, nil, fmt.Errorf("unsupported server tool type %q", str(t, "type"))
 		}
 		if name != canonical {
-			return nil, nil, fmt.Errorf("server search name must be %q", canonical)
+			return nil, nil, fmt.Errorf("server tool name must be %q", canonical)
 		}
-		if err := keys(t, "type", "name", "cache_control", "defer_loading", "strict", "allowed_callers"); err != nil {
-			return nil, nil, err
+		if serverSearchName(str(t, "type")) != "" {
+			if err := keys(t, "type", "name", "cache_control", "defer_loading", "strict", "allowed_callers"); err != nil {
+				return nil, nil, err
+			}
+			if deferred, exists := t["defer_loading"]; exists && deferred != false {
+				return nil, nil, fmt.Errorf("server search cannot be deferred")
+			}
+		} else {
+			check := checkWebTool
+			if canonical == "advisor" {
+				check = checkAdvisorTool
+			}
+			if err := check(t); err != nil {
+				return nil, nil, err
+			}
 		}
 		if _, err := parseToolMetadata(t, false); err != nil {
 			return nil, nil, err
 		}
-		if deferred, exists := t["defer_loading"]; exists && deferred != false {
-			return nil, nil, fmt.Errorf("server search cannot be deferred")
+		if t["defer_loading"] == true && t["cache_control"] != nil {
+			return nil, nil, fmt.Errorf("deferred tools cannot carry cache_control")
 		}
 		if err := cacheTTL(t["cache_control"], ttl); err != nil {
 			return nil, nil, err
@@ -79,13 +92,19 @@ func (r *Request) hasServerSearch(name string) bool {
 
 func checkServerSearchBlock(b Object, role string) error {
 	if role != "assistant" {
-		return fmt.Errorf("server search blocks must be assistant content")
+		return fmt.Errorf("server tool blocks must be assistant content")
 	}
 	if str(b, "type") == "server_tool_use" {
-		if serverSearchName(str(b, "name")) != str(b, "name") || str(b, "id") == "" {
+		if serverResultType(str(b, "name")) == "" || str(b, "id") == "" {
 			return fmt.Errorf("unsupported server tool use")
 		}
 		return checkToolUse(b, role)
+	}
+	if str(b, "type") == "web_search_tool_result" || str(b, "type") == "web_fetch_tool_result" {
+		return checkWebResult(b)
+	}
+	if str(b, "type") == "advisor_tool_result" {
+		return checkAdvisorResult(b)
 	}
 	if err := keys(b, "type", "tool_use_id", "content"); err != nil {
 		return err
@@ -156,48 +175,40 @@ func mapSearchReferences(block Object, rename func(string) string) (Object, erro
 }
 
 func (r *Request) validateServerSearchHistory() error {
-	declared := map[string]bool{}
-	for _, tool := range r.Tools {
-		declared[tool.Name] = true
+	for _, tool := range r.ServerTools {
+		raw, _ := json.Marshal(tool["url_sources"])
+		copy, _ := decodePlannedValue(raw)
+		if err := checkURLSources(copy, r.resolveURLSource); err != nil {
+			return err
+		}
 	}
-	seen := map[string]bool{}
-	for _, message := range r.Messages {
-		pending := map[string]bool{}
+	ledger := newServerToolLedger()
+	for messageIndex, message := range r.Messages {
+		clientTool := false
 		for _, block := range message.Content {
-			switch str(block, "type") {
-			case "server_tool_use":
-				id := str(block, "id")
-				if seen[id] || !r.hasServerSearch(str(block, "name")) {
-					return fmt.Errorf("duplicate or undeclared server search call")
-				}
-				seen[id], pending[id] = true, true
-			case "tool_search_tool_result":
-				id := str(block, "tool_use_id")
-				if !pending[id] {
-					return fmt.Errorf("server search result has no preceding call")
-				}
-				delete(pending, id)
+			clientTool = clientTool || str(block, "type") == "tool_use"
+			if err := ledger.accept(block, r, true); err != nil {
+				return err
+			}
+			if str(block, "type") == "tool_search_tool_result" {
 				if _, err := mapSearchReferences(block, func(name string) string {
-					if declared[name] {
-						return name
-					}
-					return ""
+					return r.searchReferenceName(name, false)
 				}); err != nil {
 					return err
 				}
 			}
 		}
-		if len(pending) > 0 {
-			return fmt.Errorf("server search history is missing its result")
+		if message.Role == "assistant" && len(ledger.pending) > 0 && !clientTool && !(r.continuation != "" && messageIndex == len(r.Messages)-1) {
+			return fmt.Errorf("server tool history is missing its result outside a client handoff")
 		}
 	}
-	return nil
+	return ledger.validatePendingDefinitions(r)
 }
 
 // Invoked only after the relay identifies the main model request. The CLI
 // registers all client tools for dispatch; API defer_loading controls visibility.
 func (r *Request) applyServerSearchTools(message Object) error {
-	if len(r.ServerTools) == 0 && len(r.toolMetadataKey()) == 0 {
+	if len(r.ServerTools) == 0 && len(r.toolMetadataKey()) == 0 && !r.NoTools {
 		return nil
 	}
 	tools, _ := message["tools"].([]any)
@@ -208,7 +219,7 @@ func (r *Request) applyServerSearchTools(message Object) error {
 		}
 	}
 	for _, client := range r.Tools {
-		if len(r.ServerTools) == 0 && len(client.Metadata) == 0 {
+		if len(r.ServerTools) == 0 && len(client.Metadata) == 0 && !r.NoTools {
 			continue
 		}
 		tool := byName[r.wireName(client.Name)]
@@ -266,6 +277,9 @@ func (r *Request) applyServerSearchTools(message Object) error {
 		}
 		copy, err := decodeObject(raw)
 		if err != nil {
+			return err
+		}
+		if err := checkURLSources(copy["url_sources"], r.resolveURLSource); err != nil {
 			return err
 		}
 		tools = append(tools, copy)

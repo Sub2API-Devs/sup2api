@@ -3,6 +3,7 @@ export type AttachmentType = typeof attachmentTypes[number]
 export type AttachmentSource = 'client' | 'gateway' | 'both'
 export type BetaMapping = 'forward' | 'fine_grained_tools' | 'fast' | 'tool_search'
 export interface RequestPolicy {
+	 schema_version?: number
   unknown_beta: 'reject' | 'ignore'
   unknown_field: 'reject' | 'ignore'
   allow_fast: boolean
@@ -44,6 +45,7 @@ export function defaultRequestPolicy(): RequestPolicy {
 }
 export function validRequestPolicy(p: RequestPolicy): boolean {
   return (
+	(p.schema_version === undefined || p.schema_version === 1) &&
     (!p.custom_tool_prefix || (/^[A-Za-z0-9_-]{1,32}$/.test(p.custom_tool_prefix) && !p.custom_tool_prefix.includes('__'))) &&
     (!p.tool_search || ['request', 'false', 'true', 'auto'].includes(p.tool_search) || /^auto:(0|[1-9][0-9]?|100)$/.test(p.tool_search)) &&
     ['reject', 'ignore'].includes(p.unknown_beta) &&

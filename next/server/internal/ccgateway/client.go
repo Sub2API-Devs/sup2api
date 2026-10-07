@@ -15,9 +15,12 @@ import (
 )
 
 const VirtualURL = "https://ccgateway.internal/v1/messages"
+const VirtualCountURL = "https://ccgateway.internal/v1/messages/count_tokens"
+
+func managedURL(raw string) bool { return raw == VirtualURL || raw == VirtualCountURL }
 
 func IsManaged(plugin, kind, raw string) bool {
-	return plugin == "ccgateway" && (kind == "managed" || kind == "apikey") && raw == VirtualURL
+	return plugin == "ccgateway" && (kind == "managed" || kind == "apikey") && managedURL(raw)
 }
 func (s *Service) open(ctx context.Context, c Config) (*http.Client, string, func() error, error) {
 	if c.Mode == "ssh" {
@@ -76,7 +79,7 @@ type modelTransport struct {
 }
 
 func (t modelTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if req.URL.String() != VirtualURL || req.Method != "POST" {
+	if !managedURL(req.URL.String()) || req.Method != "POST" {
 		return nil, errors.New("invalid managed CCGateway request")
 	}
 	// Allow the runtime's one-hour execution deadline to report its result.
@@ -129,7 +132,7 @@ func (t modelTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	var once sync.Once
 	finish := func() { once.Do(func() { _ = close(); cancel() }) }
 	clone := req.Clone(ctx)
-	clone.URL, _ = url.Parse(base + "/v1/messages")
+	clone.URL, _ = url.Parse(base + req.URL.Path)
 	clone.Host = ""
 	clone.Header = clone.Header.Clone()
 	policy := cfg.EffectiveRequestPolicy()

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -96,6 +97,8 @@ func TestCompleteRefusalIsNormalWithoutNativeHistory(t *testing.T) {
 }
 
 func TestHTTPRefusalReturns200WithoutErrorEvent(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(`{}`)) }))
+	defer upstream.Close()
 	cli, err := lifecycleTestExecutable()
 	if err != nil {
 		t.Fatal(err)
@@ -106,7 +109,7 @@ func TestHTTPRefusalReturns200WithoutErrorEvent(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		g := &Gateway{Runner: &Runner{CLI: cli, Env: envWith(os.Environ(), map[string]string{"CCG_TEST_CLI_TAIL": "refusal", "CLAUDE_CONFIG_DIR": filepath.Join(dir, "config")})}, Cache: cache, Timeout: 5 * time.Second, Slots: make(chan struct{}, 1)}
+		g := &Gateway{Runner: &Runner{CLI: cli, Env: envWith(os.Environ(), map[string]string{"CCG_TEST_CLI_TAIL": "refusal", "CLAUDE_CONFIG_DIR": filepath.Join(dir, "config"), "ANTHROPIC_BASE_URL": upstream.URL, "ANTHROPIC_API_KEY": "fixture"})}, Cache: cache, Timeout: 5 * time.Second, Slots: make(chan struct{}, 1)}
 		v := basic()
 		v["stream"] = stream
 		body, _ := json.Marshal(v)

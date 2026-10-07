@@ -360,6 +360,11 @@ func writeSurfaceFixture(w http.ResponseWriter, model string, blocks []Object) {
 		if str(block, "type") == "text" {
 			event(Object{"type": "content_block_start", "index": i, "content_block": Object{"type": "text", "text": ""}})
 			event(Object{"type": "content_block_delta", "index": i, "delta": Object{"type": "text_delta", "text": block["text"]}})
+			if citations, ok := block["citations"].([]any); ok {
+				for _, citation := range citations {
+					event(Object{"type": "content_block_delta", "index": i, "delta": Object{"type": "citations_delta", "citation": citation}})
+				}
+			}
 		} else if str(block, "type") == "tool_use" || str(block, "type") == "server_tool_use" {
 			start := Object{}
 			for key, value := range block {

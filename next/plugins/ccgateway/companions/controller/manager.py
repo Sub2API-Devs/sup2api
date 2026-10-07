@@ -41,8 +41,8 @@ NETWORK_LABEL = 'io.sup2api.ccgateway.network'
 AUTH_VARS = ('ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR')
 IMAGE_CACHE_SECONDS = 30
 
-ROUTE = re.compile(r'/accounts(?:/(' + KEY_PATTERN + r')(?:/(config|status|v1/messages|'
-                   r'connection|migrate-auth|admin/(?:status|usage|request-logs|auth/(?:session|start|complete|cancel|logout))))?)?')
+ROUTE = re.compile(r'/accounts(?:/(' + KEY_PATTERN + r')(?:/(config|status|v1/messages(?:/count_tokens)?|'
+                   r'connection|migrate-auth|admin/(?:status|usage|features|request-logs|auth/(?:session|start|complete|cancel|logout))))?)?')
 
 
 class BadRequest(ValueError):
@@ -656,7 +656,7 @@ class Handler(BaseHTTPRequestHandler):
             methods = ('GET', 'PUT') if path == 'admin/request-logs' else ('GET', 'POST')
             if path in ('config', 'status') or self.command not in methods:
                 return self.fail(405, 'method_not_allowed')
-            if path == 'admin/usage' and self.command != 'GET':
+            if path in ('admin/usage', 'admin/features') and self.command != 'GET':
                 return self.fail(405, 'method_not_allowed')
             with manager.guard(aid):
                 state = manager.state(aid)

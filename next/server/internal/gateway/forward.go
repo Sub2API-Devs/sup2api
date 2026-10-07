@@ -48,6 +48,7 @@ func (e *convertError) Unwrap() error { return e.err }
 func (c *call) forward(ctx context.Context, rt *typeRoute, acct *pluginv1.Account, resp *http.Response, upBody []byte) attemptResult {
 	u := newUsageAcc(rt.usage).WithLog("request_id", c.rid, "plugin", rt.binding.Plugin.Key,
 		"platform", rt.platform, "protocol", rt.upstream)
+	u.WithPrimaryModel(c.upstreamPrimaryModel)
 	cap := newUsageCapture(rt)
 	c.rec.StatusCode = resp.StatusCode
 	c.rec.Success = true
@@ -65,6 +66,7 @@ func (c *call) forward(ctx context.Context, rt *typeRoute, acct *pluginv1.Accoun
 		err = c.forwardJSON(resp, u, cap)
 	}
 	c.rec.Tokens = u.Tokens()
+	c.recordAdditionalUsage(u, rt)
 	if len(u.Metrics) > 0 {
 		c.rec.Metrics = u.Metrics
 	}

@@ -2,7 +2,8 @@
   "arch": "amd64",
   "cli_version": "2.1.292",
   "model": "claude-opus-5-5",
-  "native_definition_variants": 32,
+  "native_definition_variants": 33,
+  "supplemental_tool_search_capture": {"test": "TestRealCLICaptureInternalToolSearchDefinition", "schema_digest": "2cbbab2f0a7585db5ac57d4dd479f14d3896134d1a7cb11ad944317e84b36af5", "condition": "actual Worker SDK stream-json, deferred MCP discovery enabled", "tool_executed": false, "upstream": "isolated fake"},
   "os": "windows",
   "scenarios": [
     {

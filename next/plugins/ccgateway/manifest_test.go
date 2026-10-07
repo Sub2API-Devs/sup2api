@@ -74,20 +74,27 @@ func TestManifestAndUsageContract(t *testing.T) {
 				t.Fatalf("JSON usage %s does not match core rule", name)
 			}
 		}
-		seen := map[string]bool{}
-		for _, rule := range u.SSE {
-			body := `{"message":{"usage":{"input_tokens":12,"cache_read_input_tokens":3,"cache_creation_input_tokens":2}},"usage":{"output_tokens":7}}`
-			for name, want := range map[string]int64{"input_tokens": 12, "output_tokens": 7, "cache_read_tokens": 3, "cache_creation_tokens": 2} {
-				if path := rule.Map[name]; path != "" {
-					if gjson.Get(body, path).Int() != want {
-						t.Fatalf("SSE usage %s", name)
+		actual := map[string]int64{}
+		for _, event := range []struct{ name, body string }{
+			{"message_start", `{"message":{"usage":{"input_tokens":12,"cache_read_input_tokens":3,"cache_creation_input_tokens":2}}}`},
+			{"message_delta", `{"usage":{"input_tokens":20,"output_tokens":7,"cache_read_input_tokens":6,"cache_creation_input_tokens":4}}`},
+			{"message_delta", `{"usage":{"output_tokens":8}}`},
+		} {
+			for _, rule := range u.SSE {
+				if rule.Event != "" && rule.Event != event.name {
+					continue
+				}
+				for name, path := range rule.Map {
+					if value := gjson.Get(event.body, path); value.Exists() {
+						actual[name] = value.Int()
 					}
-					seen[name] = true
 				}
 			}
 		}
-		if len(seen) != 4 {
-			t.Fatal("incomplete SSE billing")
+		for name, want := range map[string]int64{"input_tokens": 20, "output_tokens": 8, "cache_read_tokens": 6, "cache_creation_tokens": 4} {
+			if actual[name] != want {
+				t.Fatalf("SSE cumulative %s=%d, want %d", name, actual[name], want)
+			}
 		}
 		return
 	}

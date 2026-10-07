@@ -44,7 +44,7 @@ func (c *call) dispatch(ctx context.Context) {
 	}
 	cands := make([]core.AccountRef, 0, len(all))
 	for i := range all {
-		if c.route(&all[i]) != nil && all[i].ServesModel(c.model) {
+		if c.route(&all[i]) != nil && c.servesAllModels(&all[i]) {
 			cands = append(cands, all[i])
 		}
 	}
@@ -335,6 +335,10 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	}
 
 	// Build the upstream request (plugin declaring the account type).
+	upBody, err = c.mapReferencedModels(upBody, ref, rt)
+	if err != nil {
+		return attemptResult{kind: attemptFailover, err: invalidModelReference(err.Error())}
+	}
 	fields := map[string]string{}
 	for _, p := range rt.requestFields {
 		if r := getJSON(upBody, p); r != "" {
@@ -387,6 +391,12 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	body, err := applyPatches(upBody, built.GetPatches())
 	if err != nil {
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
+	}
+	if err := c.validatePatchedModelReferences(upBody, body); err != nil {
+		return attemptResult{kind: attemptFailover, err: invalidModelReference(err.Error())}
+	}
+	if c.ep.Billing != "free" && !c.routeHasRequiredPrimaryUsageFor(rt, body) {
+		return attemptResult{kind: attemptFailover, err: invalidModelReference("account usage rules cannot meter the requested operation")}
 	}
 	var client *http.Client
 	if managedCCG {

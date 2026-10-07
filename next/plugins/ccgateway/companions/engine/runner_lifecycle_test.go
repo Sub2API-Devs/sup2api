@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -79,6 +80,41 @@ func cliTailPeer() error {
 		return fmt.Errorf("Mod callback failed")
 	}
 	if os.Getenv("CCG_TEST_CLI_TAIL") == "refusal" {
+		// The HTTP admission fixture now applies max_tokens through the relay.
+		// Exercise a real attributed request instead of bypassing that guard.
+		for i, arg := range os.Args {
+			if arg != "--append-system-prompt" || i+1 >= len(os.Args) {
+				continue
+			}
+			control := func(event string) error {
+				r, _ := http.NewRequest("POST", os.Getenv("CCGATEWAY_MOD_URL"), strings.NewReader(`{"event":"`+event+`"}`))
+				r.Header.Set("Authorization", "Bearer "+os.Getenv("CCGATEWAY_MOD_TOKEN"))
+				res, err := http.DefaultClient.Do(r)
+				if err != nil {
+					return err
+				}
+				res.Body.Close()
+				if res.StatusCode != 200 {
+					return fmt.Errorf("fixture scope %s: %d", event, res.StatusCode)
+				}
+				return nil
+			}
+			if err := control("main_request_begin"); err != nil {
+				return err
+			}
+			raw, _ := json.Marshal(Object{"model": "claude-sonnet-4-6", "max_tokens": 128, "system": []any{Object{"type": "text", "text": os.Args[i+1]}}, "messages": []any{Object{"role": "user", "content": "fixture"}}})
+			res, err := http.Post(os.Getenv("ANTHROPIC_BASE_URL")+"/v1/messages", "application/json", bytes.NewReader(raw))
+			if err != nil {
+				return err
+			}
+			res.Body.Close()
+			if res.StatusCode != 200 {
+				return fmt.Errorf("fixture relay: %d", res.StatusCode)
+			}
+			if err := control("main_request_end"); err != nil {
+				return err
+			}
+		}
 		for _, event := range []Object{
 			{"type": "message_start", "message": Object{"id": "msg_refusal", "role": "assistant", "content": []any{}, "usage": Object{"input_tokens": 2, "output_tokens": 0}}},
 			{"type": "message_delta", "delta": Object{"stop_reason": "refusal", "stop_details": Object{"type": "refusal", "category": "cyber", "explanation": "fixture refusal"}}, "usage": Object{"output_tokens": 0}},

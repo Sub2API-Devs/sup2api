@@ -80,6 +80,10 @@ func (r *Request) filterClientAttachments() {
 		if m.Role == "system" {
 			blocks := make([]Object, 0, len(m.Content))
 			for _, b := range m.Content {
+				if str(b, "type") != "text" {
+					blocks = append(blocks, b)
+					continue
+				}
 				text := r.filterClientEnvironment(str(b, "text"))
 				if strings.TrimSpace(text) != "" && r.keepClientAttachment(text) {
 					b["text"] = text
@@ -87,7 +91,7 @@ func (r *Request) filterClientAttachments() {
 				}
 			}
 			m.Content = blocks
-			if len(blocks) == 0 {
+			if len(blocks) == 0 && !m.directiveOnly() {
 				continue
 			}
 		}

@@ -36,7 +36,10 @@ func For(ap manifest.AccountPlatform, ep *manifest.Endpoint, pf *manifest.Platfo
 // Acc applies the platform's declarative usage rules. Later values win, so
 // cumulative counters (message_delta) override earlier ones.
 type Acc struct {
-	rules manifest.UsageRules
+	primaryModel    string
+	additional      map[string][]core.AdditionalUsage
+	AdditionalError string
+	rules           manifest.UsageRules
 
 	input, output, cacheRead, cacheCreation, cacheCreation1h int64
 
@@ -112,7 +115,11 @@ func (u *Acc) set(field string, r gjson.Result) {
 			u.cacheCreation1h = r.Int()
 		}
 	default:
-		u.setMetric(field, r, nil)
+		if fact, ok := u.rules.Facts[field]; ok {
+			u.setMetric(field, r, &fact)
+		} else {
+			u.setMetric(field, r, nil)
+		}
 	}
 }
 
@@ -245,6 +252,7 @@ func (u *Acc) ApplyJSON(body []byte) {
 func (u *Acc) HasJSON() bool { return u.rules.JSON != nil }
 
 func (u *Acc) applyJSONDoc(body []byte) {
+	u.applyAdditional("", body, false)
 	if m := u.rules.JSON; m != nil {
 		for field, path := range m.Map {
 			u.set(field, Path(body, path))
@@ -259,6 +267,7 @@ func (u *Acc) ApplySSE(event string, data []byte) {
 		return
 	}
 	name := EventName(event, data)
+	u.applyAdditional(name, data, true)
 	// Anthropic/Responses name error events; OpenAI chat and Gemini send an
 	// unnamed {"error": {...}} chunk.
 	if name == "error" || (name == "" && gjson.GetBytes(data, "error").IsObject()) {

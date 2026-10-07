@@ -1,4 +1,5 @@
 export default {
+  capability: { search: '搜索账号', inspect: '查看账号 Worker 能力', account: '选择可访问账号', boundary: '只读查询，不启动或更新容器，也不影响调度。二进制目录、CLI 版本探测和模型实测是三类不同证据。', failed: '无法探测：可能是旧 Worker / 控制器、无权限或连接失败；不能据此判断特性已支持。', build: '运行中 Worker 版本 / Git revision', schema: 'Worker 目录 / 接受的策略版本', code: '此 Worker 的代码适配声明', probes: '实际本地探测范围', provider: '账号 / 模型 / Provider 实际调用验证', notRun: '该接口未进行模型调用，未验证', unreported: '未报告' },
   settingsTabs: { accounts: '账号容器', label: '设置分类', connection: '连接与授权', network: '网络配置', requests: '通用 API 特性', attachments: 'CC 特性', deployment: '部署与运行', save: '保存全部配置' },
   features: {
     title: '通用 API 特性',

@@ -31,6 +31,7 @@ type Gateway struct {
 	RequestLogs   *requestLogStore
 	mu            sync.Mutex
 	busy          map[string]bool
+	messageIDs    *messageOwnership
 }
 
 func apiError(w http.ResponseWriter, status int, kind, msg string) {
@@ -94,12 +95,13 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // exchange is one /v1/messages request: admission, the CLI run, and the
 // response, which turns into an SSE stream once the first event is sent.
 type exchange struct {
-	g          *Gateway
-	w          http.ResponseWriter
-	r          *http.Request
-	diagnostic *requestDiagnostic
-	req        *Request
-	streaming  bool
+	g            *Gateway
+	w            http.ResponseWriter
+	r            *http.Request
+	diagnostic   *requestDiagnostic
+	req          *Request
+	streaming    bool
+	messageScope string
 }
 
 // fail records and writes an error.
@@ -125,7 +127,7 @@ func (x *exchange) admit() bool {
 		x.fail(401, "authentication_error", "Invalid gateway API key")
 		return false
 	}
-	if r.URL.Path != "/v1/messages" {
+	if r.URL.Path != "/v1/messages" && r.URL.Path != "/v1/messages/count_tokens" {
 		x.fail(404, "not_found_error", "Unknown endpoint")
 		return false
 	}
@@ -150,17 +152,29 @@ func (x *exchange) admit() bool {
 	}
 	x.diagnostic.request(body, r.Header)
 	x.diagnostic.setStage("parse_request")
-	req, e := parsePolicyRequest(body, r.Header)
+	parse := parsePolicyRequest
+	if r.URL.Path == "/v1/messages/count_tokens" {
+		parse = parseTokenCountRequest
+	}
+	req, e := parse(body, r.Header)
 	if e != nil {
 		x.fail(400, "invalid_request_error", e.Error())
 		return false
 	}
 	req.diagnostic = x.diagnostic
 	x.req = req
+	x.ownershipScope()
+	if err := x.validateDiagnosticsOwnership(); err != nil {
+		x.fail(400, "invalid_request_error", err.Error())
+		return false
+	}
 	x.diagnostic.setStage("admission")
 	if e = x.g.admitNativeTools(req, r.Header.Get("X-CCGateway-Native-Tools")); e == nil {
 		matchNativeTools(req, x.g.Runner.Version)
 		e = validateToolNames(req)
+		if e == nil {
+			e = req.validateInlineNativeMapping(x.g.Runner.Version)
+		}
 	}
 	if e != nil {
 		x.fail(400, "invalid_request_error", e.Error())
@@ -288,7 +302,19 @@ func (x *exchange) execute(sessionLabel, logical string) {
 			x.runFailed(ctx, e)
 			return
 		}
-		if str(answer, "stop_reason") == "refusal" {
+		if req.CountTokens {
+			x.diagnostic.setStage("completed")
+			x.w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(x.w).Encode(answer)
+			return
+		}
+		if req.CacheWarmup {
+			x.diagnostic.trace("history_commit_skipped", Object{"reason": "cache_warmup"})
+		} else if p.APIResponseComplete && (len(p.NativeRows) == 0 || str(answer, "stop_reason") == "refusal") {
+			if err := p.commitResponseOnly(req, answer, g.Cache, logical, started); err != nil {
+				x.diagnostic.trace("response_checkpoint_failed", Object{"error": err.Error()})
+			}
+		} else if str(answer, "stop_reason") == "refusal" {
 			// No native assistant checkpoint is guaranteed for a refusal.
 			// Preserve prior checkpoints; future turns rebuild from client history.
 			x.diagnostic.trace("history_commit_skipped", Object{"reason": "upstream_refusal"})
@@ -299,6 +325,9 @@ func (x *exchange) execute(sessionLabel, logical string) {
 			x.diagnostic.trace("history_committed", Object{"session_id": p.SessionID, "anchor": p.NativeAnchor})
 		}
 		x.diagnostic.setStage("completed")
+		if !req.Stream {
+			x.rememberMessageID(answer)
+		}
 		if req.Stream {
 			_ = x.send(p.finalResponseStop())
 		} else {
@@ -314,6 +343,11 @@ func (x *exchange) execute(sessionLabel, logical string) {
 func (x *exchange) send(event Object) error {
 	if !x.req.Stream {
 		return nil
+	}
+	if str(event, "type") == "message_start" {
+		if message, ok := event["message"].(map[string]any); ok {
+			x.rememberMessageID(message)
+		}
 	}
 	controller := http.NewResponseController(x.w)
 	_ = controller.SetWriteDeadline(time.Now().Add(15 * time.Second))
@@ -449,7 +483,7 @@ func Serve() error {
 		relayHost = ip.String()
 	}
 	g.Runner.InternalBaseURL = "http://" + net.JoinHostPort(relayHost, port)
-	admin := &authManager{cli: cli, key: os.Getenv("CCG_ADMIN_KEY"), proxy: proxy, version: version, requestLogs: g.RequestLogs}
+	admin := &authManager{cli: cli, key: os.Getenv("CCG_ADMIN_KEY"), proxy: proxy, version: version, requestLogs: g.RequestLogs, authorizationChanged: func() error { return g.ownershipIndex().rotateAuthorization() }}
 	return g.listen(bind, admin, logDir)
 }
 

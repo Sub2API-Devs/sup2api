@@ -17,7 +17,7 @@ import (
 // precharge runs only after billing type admission and before scheduling.
 // The plugin reports units; the core owns the price snapshot and ledger.
 func (c *call) precharge(ctx context.Context) error {
-	if c.price == nil {
+	if c.price == nil && !c.hasReferencedPrice() {
 		// Resolve returns nil only for the explicit missing_price_policy=free.
 		return nil
 	}
@@ -107,6 +107,7 @@ func (c *call) precharge(ctx context.Context) error {
 		rules = *c.ep.Usage
 	}
 	rec.UsageSemantics = rules.Semantics
+	rec.Additional = c.estimatedAdditional(rec.Tokens, rules.Semantics)
 	rec.Metrics = map[string]any{}
 	for key, raw := range report.GetFacts() {
 		fact, ok := rules.Facts[key]
