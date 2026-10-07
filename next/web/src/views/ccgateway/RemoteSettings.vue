@@ -28,7 +28,7 @@ const IMAGE_RE = /^(?:[a-z0-9][a-z0-9._/-]{0,127}(?::[A-Za-z0-9._-]{1,128})?(?:@
 const requestPolicy = ref<RequestPolicy>(defaultRequestPolicy())
 const normalizePolicy = (policy?: Partial<RequestPolicy>): RequestPolicy => ({ ...defaultRequestPolicy(), ...policy, attachment_source: policy?.attachment_source || 'client', attachment_sources: { ...(policy?.attachment_sources || {}) }, environment_fields: { ...(policy?.environment_fields || {}) }, unknown_client_attachment: policy?.unknown_client_attachment || 'pass', unknown_gateway_attachment: policy?.unknown_gateway_attachment || 'pass' })
 const policyChanged = computed(() => JSON.stringify(requestPolicy.value) !== JSON.stringify(normalizePolicy(saved.value?.request_policy)))
-const settingsTabs = ['connection', 'network', 'requests', 'attachments', 'deployment'] as const
+const settingsTabs = ['connection', 'network', 'requests', 'attachments', 'deployment', 'accounts'] as const
 const activeTab = ref<typeof settingsTabs[number]>(location.hash === '#ccgateway-runtime' ? 'deployment' : 'connection')
 const runtimeRevision = ref(0)
 const images = reactive<RuntimeImages>({ app: '', egress: '', controller: '' })
@@ -122,9 +122,9 @@ onBeforeUnmount(clearSecrets)
 <template>
   <section class="space-y-4" :aria-label="t('ccgateway.settingsTabs.label')">
       <nav v-if="saved" class="flex gap-1 overflow-x-auto border-b border-gray-200 pb-2 dark:border-dark-700" :aria-label="t('ccgateway.settingsTabs.label')">
-        <button v-for="tab in settingsTabs.filter(tab => form.account_runtimes || !['network', 'deployment'].includes(tab))" :key="tab" type="button" :data-testid="'settings-tab-' + tab" :aria-current="activeTab === tab ? 'page' : undefined" class="shrink-0 rounded-lg px-4 py-2 text-sm font-medium" :class="activeTab === tab ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-dark-800'" @click="activeTab = tab">{{ t('ccgateway.settingsTabs.' + tab) }}</button>
+        <button v-for="tab in settingsTabs.filter(tab => form.account_runtimes || !['network', 'deployment', 'accounts'].includes(tab))" :key="tab" type="button" :data-testid="'settings-tab-' + tab" :aria-current="activeTab === tab ? 'page' : undefined" class="shrink-0 rounded-lg px-4 py-2 text-sm font-medium" :class="activeTab === tab ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-dark-800'" @click="activeTab = tab">{{ t('ccgateway.settingsTabs.' + tab) }}</button>
       </nav>
-    <div class="card space-y-4 border border-gray-200 p-5 dark:border-dark-700" data-testid="settings-card">
+    <div v-show="activeTab !== 'accounts'" class="card space-y-4 border border-gray-200 p-5 dark:border-dark-700" data-testid="settings-card">
     <div v-show="activeTab === 'connection'"><h3 class="font-semibold">{{ t('ccgateway.remote.title') }}</h3><p class="mt-1 text-sm text-gray-500">{{ t('ccgateway.remote.description') }}</p></div>
     <p v-show="activeTab === 'connection'" class="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">{{ t('ccgateway.remote.routingHint') }}</p>
     <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p><p v-if="notice" role="status" class="text-sm text-emerald-600">{{ notice }}</p>
@@ -183,6 +183,7 @@ onBeforeUnmount(clearSecrets)
       <pre v-if="output" class="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-gray-950 p-3 text-xs text-gray-100" data-testid="remote-output">{{ output }}</pre>
     </div>
     </div>
+    <div v-if="saved?.account_runtimes" v-show="activeTab === 'accounts'" data-testid="settings-accounts"><slot name="accounts" /></div>
   </section>
 
 </template>

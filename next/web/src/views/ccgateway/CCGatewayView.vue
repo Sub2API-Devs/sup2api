@@ -71,8 +71,10 @@ onBeforeUnmount(() => { code.value = ''; session.value = null })
   <div class="space-y-5">
     <SPageHeader v-if="!embedded" :title="t('ccgateway.title')" :description="t('ccgateway.description')"><template #actions><SButton to="/plugins/ccgateway?tab=settings">{{ t('plugins.detail.tabs.settings') }}</SButton></template></SPageHeader>
     <SHint v-if="!manage">{{ t('ccgateway.readOnly') }}</SHint>
-    <RemoteSettings :disabled="!manage || authBusy || proxyBusy || !!session" @busy="remoteBusy = $event" @saved="remoteSaved" />
-    <AccountRuntimes v-if="accountMode" :key="revision" />
+    <RemoteSettings :disabled="!manage || authBusy || proxyBusy || !!session" @busy="remoteBusy = $event" @saved="remoteSaved">
+      <template #accounts><AccountRuntimes v-if="accountMode" :key="revision" /></template>
+    </RemoteSettings>
+
     <ProxySettings v-if="!accountMode" :disabled="!manage || authBusy || remoteBusy || !!session" :target-revision="revision" @busy="proxyBusy = $event" />
     <SCard v-if="!accountMode" :title="t('ccgateway.auth.title')" :subtitle="t('ccgateway.auth.hint')">
       <template #actions><SButton size="sm" :loading="authBusy" :disabled="busy" @click="run(refresh)">{{ t('common.refresh') }}</SButton></template>

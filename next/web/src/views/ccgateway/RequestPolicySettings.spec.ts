@@ -79,6 +79,20 @@ describe('CCGateway pass upstream errors switch', () => {
     w.unmount()
   })
 
+  it('shows account containers only in their own category outside the settings form', async () => {
+    mocks.get.mockResolvedValue({ ...config(defaultRequestPolicy()), account_runtimes: true })
+    const w = mount(RemoteSettings, { attachTo: document.body, slots: { accounts: '<div data-testid="account-content">Accounts</div>' }, global: { plugins: [i18n, createPinia()] } })
+    await flushPromises()
+    expect(w.get('[data-testid="account-content"]').isVisible()).toBe(false)
+    await w.get('[data-testid="settings-tab-accounts"]').trigger('click')
+    expect(w.get('[data-testid="account-content"]').isVisible()).toBe(true)
+    expect(w.get('[data-testid="settings-card"]').isVisible()).toBe(false)
+    expect(w.get('[data-testid="account-content"]').element.closest('form')).toBeNull()
+    await w.get('[data-testid="settings-tab-connection"]').trigger('click')
+    expect(w.get('[data-testid="account-content"]').isVisible()).toBe(false)
+    w.unmount()
+  })
+
   it('saves and reloads attachment overrides and unknown policies', async () => {
     mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), attachment_sources: { environment: 'both' } }))
     const w = await render()

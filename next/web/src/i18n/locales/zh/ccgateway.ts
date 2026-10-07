@@ -1,5 +1,5 @@
 export default {
-  settingsTabs: { label: '设置分类', connection: '连接与授权', network: '网络配置', requests: '请求与工具', attachments: '附件与环境', deployment: '部署与运行', save: '保存全部配置' },
+  settingsTabs: { accounts: '账号容器', label: '设置分类', connection: '连接与授权', network: '网络配置', requests: '请求与工具', attachments: '附件与环境', deployment: '部署与运行', save: '保存全部配置' },
   policy: {
     effectiveSource: '生效来源：{source}',
     betaValuesHint:

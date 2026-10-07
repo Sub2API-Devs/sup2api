@@ -1,5 +1,5 @@
 export default {
-  settingsTabs: { label: 'Settings categories', connection: 'Connection', network: 'Network', requests: 'Requests & tools', attachments: 'Attachments', deployment: 'Deployment', save: 'Save all settings' },
+  settingsTabs: { accounts: 'Account containers', label: 'Settings categories', connection: 'Connection', network: 'Network', requests: 'Requests & tools', attachments: 'Attachments', deployment: 'Deployment', save: 'Save all settings' },
   policy: {
     effectiveSource: 'Effective source: {source}',
     betaValuesHint:
