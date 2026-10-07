@@ -28,6 +28,8 @@ const IMAGE_RE = /^(?:[a-z0-9][a-z0-9._/-]{0,127}(?::[A-Za-z0-9._-]{1,128})?(?:@
 const requestPolicy = ref<RequestPolicy>(defaultRequestPolicy())
 const normalizePolicy = (policy?: Partial<RequestPolicy>): RequestPolicy => ({ ...defaultRequestPolicy(), ...policy, attachment_source: policy?.attachment_source || 'client', attachment_sources: { ...(policy?.attachment_sources || {}) }, environment_fields: { ...(policy?.environment_fields || {}) }, unknown_client_attachment: policy?.unknown_client_attachment || 'pass', unknown_gateway_attachment: policy?.unknown_gateway_attachment || 'pass' })
 const policyChanged = computed(() => JSON.stringify(requestPolicy.value) !== JSON.stringify(normalizePolicy(saved.value?.request_policy)))
+const settingsTabs = ['connection', 'network', 'requests', 'attachments', 'deployment'] as const
+const activeTab = ref<typeof settingsTabs[number]>(location.hash === '#ccgateway-runtime' ? 'deployment' : 'connection')
 const runtimeRevision = ref(0)
 const images = reactive<RuntimeImages>({ app: '', egress: '', controller: '' })
 const network = reactive({ pool: '10.0.0.0/8', allocation: 'random' as 'random' | 'sequential' })
@@ -123,8 +125,12 @@ onBeforeUnmount(clearSecrets)
     <p class="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">{{ t('ccgateway.remote.routingHint') }}</p>
     <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p><p v-if="notice" role="status" class="text-sm text-emerald-600">{{ notice }}</p>
     <button v-if="!saved" type="button" class="btn btn-secondary btn-sm" :disabled="disabled" @click="run(load)">{{ t('ccgateway.remote.reload') }}</button>
-    <form v-else class="space-y-4" @submit.prevent="run(save)">
+    <form v-else novalidate class="space-y-4" @submit.prevent="run(save)">
+      <nav class="flex gap-1 overflow-x-auto border-b border-gray-200 pb-2 dark:border-dark-700" :aria-label="t('ccgateway.settingsTabs.label')">
+        <button v-for="tab in settingsTabs.filter(tab => form.account_runtimes || !['network', 'deployment'].includes(tab))" :key="tab" type="button" :data-testid="'settings-tab-' + tab" :aria-current="activeTab === tab ? 'page' : undefined" class="shrink-0 rounded-lg px-4 py-2 text-sm font-medium" :class="activeTab === tab ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-dark-800'" @click="activeTab = tab">{{ t('ccgateway.settingsTabs.' + tab) }}</button>
+      </nav>
       <fieldset :disabled="disabled" class="space-y-4">
+      <div v-show="activeTab === 'connection'" class="space-y-3" data-testid="settings-connection">
  <label class="flex items-center gap-2"><input v-model="form.account_runtimes" type="checkbox" />{{ t('ccgateway.runtime.enable') }}</label>
  <p class="text-sm text-gray-500">{{ t('ccgateway.runtime.setup') }}</p>
         <label class="block text-sm">{{ t('ccgateway.remote.mode') }}<select v-model="form.mode" class="input mt-1 w-full" data-testid="remote-mode"><option disabled value="disabled">{{ t('ccgateway.remote.unconfigured') }}</option><option value="local">{{ t('ccgateway.remote.local') }}</option><option value="ssh">{{ t('ccgateway.remote.ssh') }}</option></select></label>
@@ -148,13 +154,16 @@ onBeforeUnmount(clearSecrets)
         </template>
         <div class="grid gap-3 sm:grid-cols-2"><label v-for="key in (form.account_runtimes ? ['admin_key'] as const : ['admin_key','api_key'] as const)" :key="key" class="block text-sm">{{ t(`ccgateway.remote.${key}`) }}<input v-model="secrets[key]" type="password" autocomplete="new-password" class="input mt-1 w-full" :data-testid="key" :placeholder="saved[`has_${key}`] ? t('ccgateway.remote.keepSecret') : ''" /></label></div>
         <p class="text-xs text-gray-500">{{ t('ccgateway.remote.keysHint') }}</p>
-        <RequestPolicySettings v-model="requestPolicy" />
+      </div>
+        <RequestPolicySettings v-show="activeTab === 'requests' || activeTab === 'attachments'" v-model="requestPolicy" :section="activeTab === 'attachments' ? 'attachments' : 'requests'" />
         <p v-if="imageError" role="alert" class="text-sm text-red-600">{{ imageError }}</p>
         <div v-if="form.account_runtimes" class="space-y-2" data-testid="remote-images">
+          <div v-show="activeTab === 'network'" class="space-y-3">
           <label class="block text-sm">{{ t('ccgateway.remote.networkPool') }}<input v-model="network.pool" class="input mt-1 w-full font-mono text-xs" placeholder="10.0.0.0/8" autocomplete="off" spellcheck="false" data-testid="network-pool" /></label>
           <label class="block text-sm">{{ t('ccgateway.remote.networkAllocation') }}<select v-model="network.allocation" class="input mt-1 w-full" data-testid="network-allocation"><option value="random">{{ t('ccgateway.remote.networkRandom') }}</option><option value="sequential">{{ t('ccgateway.remote.networkSequential') }}</option></select></label>
           <p class="text-xs text-gray-500">{{ t('ccgateway.remote.networkHint') }}</p>
-          <RuntimeInstall :key="runtimeRevision" :disabled="disabled || dirty">
+          </div>
+          <RuntimeInstall v-show="activeTab === 'deployment'" :key="runtimeRevision" :disabled="disabled || dirty">
           <p class="text-sm font-medium">{{ t('ccgateway.remote.images') }}</p>
           <div class="grid gap-3 sm:grid-cols-3">
             <label v-for="key in IMAGE_KEYS" :key="key" class="block min-w-0 text-sm">{{ t(`ccgateway.remote.image${key[0].toUpperCase()}${key.slice(1)}`) }}<input v-model="images[key]" autocomplete="off" spellcheck="false" class="input mt-1 w-full font-mono text-xs" :data-testid="`image-${key}`" /><span v-if="saved.effective_images?.[key]" class="mt-1 block break-all text-xs text-gray-500">{{ t('ccgateway.remote.imageEffective', { image: saved.effective_images[key] }) }}</span></label>
@@ -162,10 +171,10 @@ onBeforeUnmount(clearSecrets)
           <p class="text-xs text-gray-500">{{ t('ccgateway.remote.imagesHint') }}</p>
           </RuntimeInstall>
         </div>
-        <div class="flex justify-end"><button class="btn btn-primary" :disabled="!dirty || form.mode === 'disabled'" data-testid="remote-save">{{ t('ccgateway.remote.save') }}</button></div>
+        <div class="sticky bottom-0 z-10 flex justify-end border-t border-gray-100 bg-white py-3 dark:border-dark-700 dark:bg-dark-900"><button class="btn btn-primary" :disabled="!dirty || form.mode === 'disabled'" data-testid="remote-save">{{ t('ccgateway.settingsTabs.save') }}</button></div>
       </fieldset>
     </form>
-    <div v-if="!saved?.account_runtimes" class="space-y-3 border-t border-gray-200 pt-4 dark:border-dark-700">
+    <div v-if="!saved?.account_runtimes" v-show="activeTab === 'connection'" class="space-y-3 border-t border-gray-200 pt-4 dark:border-dark-700">
       <p class="text-xs text-gray-500">{{ dirty ? t('ccgateway.remote.saveFirst') : t('ccgateway.remote.savedOnly') }}</p>
       <div class="flex flex-wrap gap-2"><button class="btn btn-secondary btn-sm" :disabled="!canOperate" data-testid="remote-test" @click="run(test)">{{ t('ccgateway.remote.test') }}</button><button v-for="action in (['status','start','stop','restart','logs'] as const)" :key="action" class="btn btn-secondary btn-sm" :disabled="!canOperate" :data-testid="`remote-${action}`" @click="choose(action)">{{ t(`ccgateway.remote.actions.${action}`) }}</button></div>
       <div v-if="pending" role="alert" class="space-y-2 text-sm"><p>{{ t('ccgateway.remote.confirmAction', { action: t(`ccgateway.remote.actions.${pending}`) }) }}</p><button class="btn btn-danger btn-sm" :disabled="!canOperate" data-testid="remote-confirm" @click="run(() => execute(pending!))">{{ t('ccgateway.remote.confirm') }}</button><button class="btn btn-secondary btn-sm ml-2" :disabled="disabled" @click="pending = null">{{ t('ccgateway.remote.cancel') }}</button></div>

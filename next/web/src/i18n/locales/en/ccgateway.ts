@@ -1,4 +1,5 @@
 export default {
+  settingsTabs: { label: 'Settings categories', connection: 'Connection', network: 'Network', requests: 'Requests & tools', attachments: 'Attachments', deployment: 'Deployment', save: 'Save all settings' },
   policy: {
     effectiveSource: 'Effective source: {source}',
     betaValuesHint:
@@ -92,7 +93,7 @@ export default {
     passUpstreamErrors: 'Return upstream errors directly to clients',
     passUpstreamErrorsHint:
       'When enabled, any error returned by the official API (including 401, 429, 529 and errors in the middle of a stream) is returned to the client immediately with the official status code and error body unchanged; Claude Code no longer retries, backs off or refreshes authorization. When disabled (default), Claude Code handles errors itself and only returns an error after it finally fails. When enabled, the caller or gateway is responsible for retries and account switching.',
-    environmentInherit: 'Follow environment source',
+    environmentInherit: 'Inherit: {source}',
     environmentFieldsHint: 'Controls model-visible cwd and platform, not the process cwd. Recognizes verified Windows/Linux blocks; missing client fields fall back to container values. Mixed sources may disagree with shell and osVersion.',
     attachmentRulesHint: "Override the default by attachment type. Container attachments use structured events; client filtering requires an explicit type marker. Ordinary system text is preserved.",
     attachmentInherit: "Use default",

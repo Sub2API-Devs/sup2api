@@ -30,7 +30,7 @@ describe('CCGateway pass upstream errors switch', () => {
     i18n.global.locale.value = 'zh'
   })
   async function render() {
-    const wrapper = mount(RemoteSettings, { global: { plugins: [i18n, createPinia()] } })
+    const wrapper = mount(RemoteSettings, { attachTo: document.body, global: { plugins: [i18n, createPinia()] } })
     await flushPromises()
     return wrapper
   }
@@ -58,12 +58,34 @@ describe('CCGateway pass upstream errors switch', () => {
     expect(en.policy.passUpstreamErrorsHint).toContain('401, 429, 529')
   })
 
-  it('saves and reloads attachment overrides and unknown policies', async () => {
+  it('keeps edits across categories and saves all settings together', async () => {
     mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
+    const w = await render()
+    expect(w.get('[data-testid="settings-connection"]').isVisible()).toBe(true)
+    expect(w.get('[data-testid="custom-tool-prefix"]').isVisible()).toBe(false)
+    await w.get('[data-testid="settings-tab-requests"]').trigger('click')
+    await w.get('[data-testid="custom-tool-prefix"]').setValue('mytools')
+    expect(w.get('[data-testid="environment-platform"]').isVisible()).toBe(false)
+    await w.get('[data-testid="settings-tab-attachments"]').trigger('click')
+    expect(w.get('[data-testid="environment-platform"]').isVisible()).toBe(true)
+    await w.get('[data-testid="environment-platform"]').setValue('client')
+    await w.get('[data-testid="settings-tab-requests"]').trigger('click')
+    expect(w.get<HTMLInputElement>('[data-testid="custom-tool-prefix"]').element.value).toBe('mytools')
+    const next = { ...defaultRequestPolicy(), custom_tool_prefix: 'mytools', environment_fields: { platform: 'client' as const } }
+    mocks.put.mockResolvedValue(config(next))
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.put.mock.lastCall?.[1].request_policy).toEqual(next)
+    w.unmount()
+  })
+
+  it('saves and reloads attachment overrides and unknown policies', async () => {
+    mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), attachment_sources: { environment: 'both' } }))
     const w = await render()
     const next = { ...defaultRequestPolicy(), attachment_sources: { environment: 'both' as const, date: 'gateway' as const }, environment_fields: { workingDirectory: 'client' as const, platform: 'gateway' as const }, unknown_client_attachment: 'ignore' as const, unknown_gateway_attachment: 'ignore' as const }
     mocks.put.mockResolvedValue(config(next))
-    await w.get('[data-testid="attachment-environment"]').setValue('both')
+    expect(w.find('[data-testid="attachment-environment"]').exists()).toBe(false)
+    expect(w.get('[data-testid="environment-platform"] option[value=""]').text()).toBe('继承：都保留')
     await w.get('[data-testid="attachment-date"]').setValue('gateway')
     await w.get('[data-testid="environment-workingDirectory"]').setValue('client')
     await w.get('[data-testid="environment-platform"]').setValue('gateway')
@@ -72,7 +94,8 @@ describe('CCGateway pass upstream errors switch', () => {
     await w.get('form').trigger('submit')
     await flushPromises()
     expect(mocks.put.mock.lastCall?.[1].request_policy).toEqual(next)
-    expect(w.get<HTMLSelectElement>('[data-testid="attachment-environment"]').element.value).toBe('both')
+    expect(w.get<HTMLSelectElement>('[data-testid="environment-workingDirectory"]').element.value).toBe('client')
+    expect(w.get<HTMLSelectElement>('[data-testid="environment-platform"]').element.value).toBe('gateway')
     expect(w.get('[data-testid="remote-save"]').attributes('disabled')).toBeDefined()
     // Editing the map after loading must not mutate the saved baseline.
     await w.get('[data-testid="attachment-date"]').setValue('client')
