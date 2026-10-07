@@ -1,0 +1,388 @@
+{
+  "evidence_type": "real_cli_fake_upstream",
+  "cli_version": "2.1.292",
+  "platform": "Windows",
+  "auth": "isolated dummy API key",
+  "provenance": "Same conversation prior investigation on 2026-10-08; sanitized from temporary captures, not rerun in documentation turn",
+  "limitations": [
+    "No official upstream validation",
+    "No production account validation",
+    "Exit code zero is not feature acceptance"
+  ],
+  "cases": [
+    {
+      "case": "baseline",
+      "cli_exit_code": 0,
+      "timeout": false,
+      "captures": [
+        {
+          "beta": "claude-code-20250219,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01,effort-2025-11-24,dangerous-tool-use-2026-09-03,afk-mode-2026-01-31",
+          "fields": {
+            "model": "claude-opus-5-5",
+            "max_tokens": 128000,
+            "thinking": {
+              "type": "adaptive",
+              "display": "omitted"
+            },
+            "output_config": {
+              "effort": "medium"
+            },
+            "context_management": {
+              "edits": [
+                {
+                  "type": "clear_thinking_20251015",
+                  "keep": "all"
+                }
+              ]
+            },
+            "stream": true
+          },
+          "tool_count": 0
+        }
+      ]
+    },
+    {
+      "case": "extra-beta",
+      "cli_exit_code": 0,
+      "timeout": false,
+      "captures": [
+        {
+          "beta": "claude-code-20250219,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,audit-custom-2026-10-08,context-management-2025-06-27,per-turn-control-2026-07-01,effort-2025-11-24,dangerous-tool-use-2026-09-03,afk-mode-2026-01-31",
+          "fields": {
+            "model": "claude-opus-5-5",
+            "max_tokens": 128000,
+            "thinking": {
+              "type": "adaptive",
+              "display": "omitted"
+            },
+            "output_config": {
+              "effort": "medium"
+            },
+            "context_management": {
+              "edits": [
+                {
+                  "type": "clear_thinking_20251015",
+                  "keep": "all"
+                }
+              ]
+            },
+            "stream": true
+          },
+          "tool_count": 0
+        }
+      ]
+    },
+    {
+      "case": "extra-body",
+      "cli_exit_code": 0,
+      "timeout": false,
+      "captures": [
+        {
+          "beta": "claude-code-20250219,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01,dangerous-tool-use-2026-09-03,afk-mode-2026-01-31",
+          "fields": {
+            "model": "claude-opus-5-5",
+            "max_tokens": 128000,
+            "thinking": {
+              "type": "adaptive",
+              "display": "omitted"
+            },
+            "output_config": {
+              "effort": "low",
+              "audit_nested": "present"
+            },
+            "temperature": 0.3,
+            "top_p": 0.8,
+            "stop_sequences": [
+              "AUDIT_STOP"
+            ],
+            "service_tier": "standard_only",
+            "context_management": {
+              "edits": [
+                {
+                  "type": "clear_thinking_20251015",
+                  "keep": "all"
+                }
+              ]
+            },
+            "stream": true,
+            "metadata": {
+              "user_id": "audit-client"
+            }
+          },
+          "tool_count": 0
+        }
+      ]
+    },
+    {
+      "case": "tokens-thinking",
+      "cli_exit_code": 0,
+      "timeout": false,
+      "captures": [
+        {
+          "beta": "claude-code-20250219,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01,effort-2025-11-24,dangerous-tool-use-2026-09-03,afk-mode-2026-01-31",
+          "fields": {
+            "model": "claude-opus-5-5",
+            "max_tokens": 512,
+            "output_config": {
+              "effort": "low"
+            },
+            "stream": true
+          },
+          "tool_count": 0
+        }
+      ]
+    },
+    {
+      "case": "task-budget",
+      "cli_exit_code": 0,
+      "timeout": false,
+      "captures": [
+        {
+          "beta": "claude-code-20250219,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01,effort-2025-11-24,task-budgets-2026-03-13,dangerous-tool-use-2026-09-03,afk-mode-2026-01-31",
+          "fields": {
+            "model": "claude-opus-5-5",
+            "max_tokens": 128000,
+            "thinking": {
+              "type": "adaptive",
+              "display": "omitted"
+            },
+            "output_config": {
+              "effort": "medium",
+              "task_budget": {
+                "type": "tokens",
+                "total": 12000
+              }
+            },
+            "context_management": {
+              "edits": [
+                {
+                  "type": "clear_thinking_20251015",
+                  "keep": "all"
+                }
+              ]
+            },
+            "stream": true
+          },
+          "tool_count": 0
+        }
+      ]
+    },
+    {
+      "case": "adaptive-display",
+      "cli_exit_code": 0,
+      "timeout": false,
+      "captures": [
+        {
+          "beta": "claude-code-20250219,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01,effort-2025-11-24,dangerous-tool-use-2026-09-03,afk-mode-2026-01-31",
+          "fields": {
+            "model": "claude-opus-5-5",
+            "max_tokens": 128000,
+            "thinking": {
+              "type": "adaptive",
+              "display": "omitted"
+            },
+            "output_config": {
+              "effort": "medium"
+            },
+            "context_management": {
+              "edits": [
+                {
+                  "type": "clear_thinking_20251015",
+                  "keep": "all"
+                }
+              ]
+            },
+            "stream": true
+          },
+          "tool_count": 0
+        }
+      ]
+    },
+    {
+      "case": "extra-nested-merge",
+      "cli_exit_code": 0,
+      "timeout": false,
+      "captures": [
+        {
+          "beta": "claude-code-20250219,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01,effort-2025-11-24,task-budgets-2026-03-13,dangerous-tool-use-2026-09-03,afk-mode-2026-01-31",
+          "fields": {
+            "model": "claude-opus-5-5",
+            "max_tokens": 128000,
+            "thinking": {
+              "type": "adaptive",
+              "display": "omitted"
+            },
+            "output_config": {
+              "audit_nested": "present",
+              "effort": "high",
+              "task_budget": {
+                "type": "tokens",
+                "total": 12000
+              }
+            },
+            "context_management": {
+              "edits": [
+                {
+                  "type": "clear_thinking_20251015",
+                  "keep": "all"
+                }
+              ]
+            },
+            "stream": true
+          },
+          "tool_count": 0
+        }
+      ]
+    },
+    {
+      "case": "max-token-cap",
+      "cli_exit_code": 0,
+      "timeout": false,
+      "captures": [
+        {
+          "beta": "claude-code-20250219,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01,effort-2025-11-24,dangerous-tool-use-2026-09-03,afk-mode-2026-01-31",
+          "fields": {
+            "model": "claude-opus-5-5",
+            "max_tokens": 128000,
+            "thinking": {
+              "type": "adaptive",
+              "display": "omitted"
+            },
+            "output_config": {
+              "effort": "medium"
+            },
+            "context_management": {
+              "edits": [
+                {
+                  "type": "clear_thinking_20251015",
+                  "keep": "all"
+                }
+              ]
+            },
+            "stream": true
+          },
+          "tool_count": 0
+        }
+      ]
+    },
+    {
+      "case": "thinking-budget",
+      "cli_exit_code": 0,
+      "timeout": false,
+      "captures": [
+        {
+          "beta": "claude-code-20250219,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,effort-2025-11-24,dangerous-tool-use-2026-09-03,afk-mode-2026-01-31",
+          "fields": {
+            "model": "claude-sonnet-4-6",
+            "max_tokens": 4096,
+            "thinking": {
+              "budget_tokens": 2048,
+              "type": "enabled",
+              "display": "omitted"
+            },
+            "output_config": {
+              "effort": "high"
+            },
+            "context_management": {
+              "edits": [
+                {
+                  "type": "clear_thinking_20251015",
+                  "keep": "all"
+                }
+              ]
+            },
+            "stream": true
+          },
+          "tool_count": 0
+        }
+      ]
+    },
+    {
+      "case": "fast-setting",
+      "cli_exit_code": 0,
+      "timeout": false,
+      "captures": [
+        {
+          "beta": "claude-code-20250219,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01,effort-2025-11-24,dangerous-tool-use-2026-09-03,fast-mode-2026-02-01,afk-mode-2026-01-31",
+          "fields": {
+            "model": "claude-opus-5-5",
+            "max_tokens": 128000,
+            "thinking": {
+              "type": "adaptive",
+              "display": "omitted"
+            },
+            "output_config": {
+              "effort": "medium"
+            },
+            "context_management": {
+              "edits": [
+                {
+                  "type": "clear_thinking_20251015",
+                  "keep": "all"
+                }
+              ]
+            },
+            "speed": "fast",
+            "stream": true
+          },
+          "tool_count": 0
+        }
+      ]
+    },
+    {
+      "case": "json-schema",
+      "cli_exit_code": 0,
+      "timeout": false,
+      "captures": [
+        {
+          "beta": "claude-code-20250219,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01,effort-2025-11-24,dangerous-tool-use-2026-09-03,afk-mode-2026-01-31",
+          "fields": {
+            "model": "claude-opus-5-5",
+            "max_tokens": 128000,
+            "thinking": {
+              "type": "adaptive",
+              "display": "omitted"
+            },
+            "output_config": {
+              "effort": "medium"
+            },
+            "context_management": {
+              "edits": [
+                {
+                  "type": "clear_thinking_20251015",
+                  "keep": "all"
+                }
+              ]
+            },
+            "stream": true
+          },
+          "tool_count": 1
+        },
+        {
+          "beta": "claude-code-20250219,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01,effort-2025-11-24,dangerous-tool-use-2026-09-03,afk-mode-2026-01-31",
+          "fields": {
+            "model": "claude-opus-5-5",
+            "max_tokens": 128000,
+            "thinking": {
+              "type": "adaptive",
+              "display": "omitted"
+            },
+            "output_config": {
+              "effort": "medium"
+            },
+            "context_management": {
+              "edits": [
+                {
+                  "type": "clear_thinking_20251015",
+                  "keep": "all"
+                }
+              ]
+            },
+            "stream": true
+          },
+          "tool_count": 1
+        }
+      ]
+    }
+  ]
+}
