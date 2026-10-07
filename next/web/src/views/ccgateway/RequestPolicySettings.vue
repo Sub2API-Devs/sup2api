@@ -208,13 +208,25 @@ const bodyFeatures = [
     </fieldset>
     <div class="space-y-3" data-testid="attachment-overrides">
       <p class="text-xs text-gray-500">{{ t('ccgateway.policy.attachmentRulesHint') }}</p>
-      <label v-for="kind in attachmentTypes" :key="kind" class="flex items-center justify-between gap-4 text-sm">
-        <span>{{ t('ccgateway.policy.attachmentType_' + kind) }}<small class="block text-gray-500">{{ t('ccgateway.policy.effectiveSource', { source: t('ccgateway.policy.attachmentSource_' + (policy.attachment_sources?.[kind] || policy.attachment_source)) }) }}</small></span>
-        <select :value="policy.attachment_sources?.[kind] || ''" :data-testid="'attachment-' + kind" class="rounded border p-2 dark:bg-dark-800" @change="setAttachmentSource(kind, $event)">
-          <option value="">{{ t('ccgateway.policy.attachmentInherit') }}</option>
-          <option v-for="source in ['client', 'gateway', 'both']" :key="source" :value="source">{{ t('ccgateway.policy.attachmentSource_' + source) }}</option>
-        </select>
-      </label>
+      <template v-for="kind in attachmentTypes" :key="kind">
+        <label class="flex items-center justify-between gap-4 text-sm">
+          <span>{{ t('ccgateway.policy.attachmentType_' + kind) }}<small class="block text-gray-500">{{ t('ccgateway.policy.effectiveSource', { source: t('ccgateway.policy.attachmentSource_' + (policy.attachment_sources?.[kind] || policy.attachment_source)) }) }}</small></span>
+          <select :value="policy.attachment_sources?.[kind] || ''" :data-testid="'attachment-' + kind" class="rounded border p-2 dark:bg-dark-800" @change="setAttachmentSource(kind, $event)">
+            <option value="">{{ t('ccgateway.policy.attachmentInherit') }}</option>
+            <option v-for="source in ['client', 'gateway', 'both']" :key="source" :value="source">{{ t('ccgateway.policy.attachmentSource_' + source) }}</option>
+          </select>
+        </label>
+        <template v-if="kind === 'environment'">
+          <label v-for="field in ['workingDirectory', 'platform'] as const" :key="field" class="flex items-center justify-between gap-4 text-sm">
+            <span :title="t('ccgateway.policy.environmentFieldsHint')">{{ field }}<small class="block text-gray-500">{{ t('ccgateway.policy.effectiveSource', { source: t('ccgateway.policy.attachmentSource_' + (policy.environment_fields?.[field] || policy.attachment_sources?.environment || policy.attachment_source)) }) }}</small></span>
+            <select :value="policy.environment_fields?.[field] || ''" :data-testid="'environment-' + field" class="rounded border p-2 dark:bg-dark-800" @change="setEnvironmentField(field, $event)">
+              <option value="">{{ t('ccgateway.policy.environmentInherit') }}</option>
+              <option value="client">{{ t('ccgateway.policy.attachmentSource_client') }}</option>
+              <option value="gateway">{{ t('ccgateway.policy.attachmentSource_gateway') }}</option>
+            </select>
+          </label>
+        </template>
+      </template>
       <label v-for="side in ['client', 'gateway'] as const" :key="side" class="flex items-center justify-between gap-4 text-sm">
         <span>{{ t('ccgateway.policy.unknownAttachment_' + side) }}</span>
         <select v-model="policy[side === 'client' ? 'unknown_client_attachment' : 'unknown_gateway_attachment']" :data-testid="'unknown-attachment-' + side" class="rounded border p-2 dark:bg-dark-800">
@@ -222,18 +234,6 @@ const bodyFeatures = [
           <option value="ignore">{{ t('ccgateway.policy.attachmentIgnore') }}</option>
         </select>
       </label>
-      <fieldset class="space-y-3 rounded border p-3" data-testid="environment-fields">
-        <legend>{{ t('ccgateway.policy.environmentFieldsTitle') }}</legend>
-        <label v-for="field in ['workingDirectory', 'platform'] as const" :key="field" class="flex items-center justify-between gap-4 text-sm">
-          <span>{{ field }}<small class="block text-gray-500">{{ t('ccgateway.policy.effectiveSource', { source: t('ccgateway.policy.attachmentSource_' + (policy.environment_fields?.[field] || policy.attachment_sources?.environment || policy.attachment_source)) }) }}</small></span>
-          <select :value="policy.environment_fields?.[field] || ''" :data-testid="'environment-' + field" class="rounded border p-2 dark:bg-dark-800" @change="setEnvironmentField(field, $event)">
-            <option value="">{{ t('ccgateway.policy.environmentInherit') }}</option>
-            <option value="client">{{ t('ccgateway.policy.attachmentSource_client') }}</option>
-            <option value="gateway">{{ t('ccgateway.policy.attachmentSource_gateway') }}</option>
-          </select>
-        </label>
-        <p class="text-xs text-gray-500">{{ t('ccgateway.policy.environmentFieldsHint') }}</p>
-      </fieldset>
       <p class="text-xs text-gray-500">{{ t('ccgateway.policy.attachmentProtectedHint') }}</p>
     </div>
   </section>

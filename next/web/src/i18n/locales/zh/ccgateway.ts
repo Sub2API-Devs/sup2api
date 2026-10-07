@@ -80,8 +80,7 @@ export default {
     passUpstreamErrors: '上游错误直接返回给客户端',
     passUpstreamErrorsHint:
       '开启后，官方返回错误（包括 401、429、529 及流式中途的错误）时，立即把官方的状态码和错误内容原样返回给客户端，Claude Code 不再自动重试、退避或刷新授权。关闭（默认）时由 Claude Code 自行处理，最终失败才返回错误。开启后需要由调用方或网关负责重试和换号。',
-    environmentFieldsTitle: '环境字段来源（独立覆盖）',
-    environmentInherit: '跟随 environment 整体配置',
+    environmentInherit: '跟随环境配置',
     environmentFieldsHint: '仅控制模型看到的工作目录和平台；不改变容器实际目录。支持已验证的 Windows/Linux 环境块；客户端字段未识别时使用容器字段。独立混用可能与 shell、osVersion 不一致。',
     attachmentRulesHint: "按类型覆盖上方默认来源。容器附件按结构化事件识别；客户端仅对明确标记类型的附件生效，普通 system 文本保留。",
     attachmentInherit: "跟随默认",
