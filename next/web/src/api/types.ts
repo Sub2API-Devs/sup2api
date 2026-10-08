@@ -126,6 +126,7 @@ export interface Group {
 
 /** A gateway endpoint declared by a platform. */
 export interface PlatformEndpoint {
+  id?: string
   method: string
   /** Path pattern; segments may be ":param" or ":param:suffix". */
   path: string

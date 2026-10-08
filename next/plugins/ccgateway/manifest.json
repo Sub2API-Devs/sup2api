@@ -44,6 +44,7 @@
       "platforms": [
         {
           "platform": "anthropic",
+          "endpoints": ["messages", "count_tokens"],
           "requestFields": [
             "model"
           ],
@@ -79,6 +80,7 @@
       "platforms": [
         {
           "platform": "anthropic",
+          "endpoints": ["messages", "count_tokens"],
           "requestFields": [
             "model"
           ],

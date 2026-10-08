@@ -559,6 +559,28 @@ func TestPlatformViews(t *testing.T) {
 	}
 }
 
+func TestTypeViewEndpointSubset(t *testing.T) {
+	g := testGen(&fakePlatform{})
+	// Give the fixture platform-local IDs just like the real platform catalog.
+	for i := range g.plats {
+		for j := range g.plats[i].Platform.Endpoints {
+			e := &g.plats[i].Platform.Endpoints[j]
+			e.ID = strings.TrimPrefix(e.Protocol, g.plats[i].Platform.ID+".")
+		}
+	}
+	b := g.types[0]
+	b.Type.Platforms = []manifest.AccountPlatform{{Platform: "anthropic", Endpoints: []string{"count_tokens"}}}
+	got := endpointList(typeView(g, b, fakeConverters{}).Endpoints)
+	if got != "POST /v1/messages/count_tokens anthropic native" {
+		t.Fatalf("excluded native/conversion endpoints leaked: %s", got)
+	}
+	b.Type.Platforms[0].Endpoints = []string{"messages"}
+	got = endpointList(typeView(g, b, fakeConverters{}).Endpoints)
+	if got != "POST /v1/messages anthropic native; POST /v1/chat/completions openai converted" {
+		t.Fatalf("selected endpoint and its conversion: %s", got)
+	}
+}
+
 func TestPlatformsRoute(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	reg := &fakeRegistry{}

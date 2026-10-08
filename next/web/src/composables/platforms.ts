@@ -12,7 +12,7 @@ import { ACCOUNT_PAGE_PERMS } from './useOwnership'
 // fail, the built-in catalog below is used; plugin platforms then show their
 // id only.
 
-const ep = (method: string, path: string, protocol: string, billing = 'usage'): PlatformEndpoint => ({ method, path, protocol, billing })
+const ep = (id: string, method: string, path: string, protocol: string, billing = 'usage'): PlatformEndpoint => ({ id, method, path, protocol, billing })
 
 /** Built-in platforms of the core (server/internal/platforms), used as fallback. */
 export const BUILTIN_PLATFORMS: Platform[] = [
@@ -20,7 +20,7 @@ export const BUILTIN_PLATFORMS: Platform[] = [
     id: 'anthropic',
     label: { en: 'Anthropic', zh: 'Anthropic' },
     builtin: true,
-    endpoints: [ep('POST', '/v1/messages', 'anthropic.messages'), ep('POST', '/v1/messages/count_tokens', 'anthropic.count_tokens', 'free')],
+    endpoints: [ep('messages', 'POST', '/v1/messages', 'anthropic.messages'), ep('count_tokens', 'POST', '/v1/messages/count_tokens', 'anthropic.count_tokens', 'free')],
     account_types: []
   },
   {
@@ -28,9 +28,9 @@ export const BUILTIN_PLATFORMS: Platform[] = [
     label: { en: 'OpenAI', zh: 'OpenAI' },
     builtin: true,
     endpoints: [
-      ep('POST', '/v1/chat/completions', 'openai.chat'),
-      ep('POST', '/v1/responses', 'openai.responses'),
-      ep('POST', '/v1/embeddings', 'openai.embeddings')
+      ep('chat_completions', 'POST', '/v1/chat/completions', 'openai.chat'),
+      ep('responses', 'POST', '/v1/responses', 'openai.responses'),
+      ep('embeddings', 'POST', '/v1/embeddings', 'openai.embeddings')
     ],
     account_types: []
   },
@@ -39,9 +39,9 @@ export const BUILTIN_PLATFORMS: Platform[] = [
     label: { en: 'Gemini', zh: 'Gemini' },
     builtin: true,
     endpoints: [
-      ep('POST', '/v1beta/models/:model:generateContent', 'gemini.generate'),
-      ep('POST', '/v1beta/models/:model:streamGenerateContent', 'gemini.stream_generate'),
-      ep('POST', '/v1beta/models/:model:countTokens', 'gemini.count_tokens', 'free')
+      ep('generate_content', 'POST', '/v1beta/models/:model:generateContent', 'gemini.generate'),
+      ep('stream_generate_content', 'POST', '/v1beta/models/:model:streamGenerateContent', 'gemini.stream_generate'),
+      ep('count_tokens', 'POST', '/v1beta/models/:model:countTokens', 'gemini.count_tokens', 'free')
     ],
     account_types: []
   }

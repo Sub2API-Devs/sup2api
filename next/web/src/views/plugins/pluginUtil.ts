@@ -138,6 +138,7 @@ export interface AccountTypeSummary {
   label: LText | undefined
   /** Supported platform ids (built-in, this plugin's or other plugins'). */
   platforms: string[]
+  platformDeclarations?: Array<{ platform: string; endpoints?: string[] }>
 }
 
 /**
@@ -149,6 +150,10 @@ export function accountTypesOf(o: unknown): AccountTypeSummary[] {
   return asArray<Record<string, any>>(pick(o, 'account_types', 'accountTypes')).map((a) => ({
     id: String(pick(a, 'id', 'type') ?? ''),
     label: pick<LText>(a, 'label'),
+    platformDeclarations: asArray(pick(a, 'platform_declarations') ?? pick(a, 'platforms')).map((p) => ({
+      platform: typeof p === 'string' ? p : String(pick(p, 'platform', 'id') ?? ''),
+      endpoints: typeof p === 'string' || pick(p, 'endpoints') == null ? undefined : asArray<string>(pick(p, 'endpoints'))
+    })),
     platforms: asArray(pick(a, 'platforms'))
       .map((p) => (typeof p === 'string' ? p : String(pick(p, 'platform', 'id') ?? '')))
       .filter(Boolean)
@@ -158,7 +163,7 @@ export function accountTypesOf(o: unknown): AccountTypeSummary[] {
 export interface PlatformSummary {
   id: string
   label: LText | undefined
-  endpoints: Array<{ method: string; path: string; protocol: string; billing: string }>
+  endpoints: Array<{ id?: string; method: string; path: string; protocol: string; billing: string }>
 }
 
 /** New platforms declared by a plugin (review or manifest `platforms`), with their endpoints. */
@@ -167,6 +172,7 @@ export function platformsOf(o: unknown): PlatformSummary[] {
     id: String(pick(p, 'id') ?? ''),
     label: pick<LText>(p, 'label'),
     endpoints: asArray<Record<string, any>>(pick(p, 'endpoints')).map((e) => ({
+      id: String(pick(e, 'id') ?? ''),
       method: String(pick(e, 'method') ?? ''),
       path: String(pick(e, 'path') ?? ''),
       protocol: String(pick(e, 'protocol') ?? ''),
