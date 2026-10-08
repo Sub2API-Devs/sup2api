@@ -1,0 +1,91 @@
+{
+  "model": "claude-opus-5-5",
+  "results": [
+    {
+      "name": "zero-output",
+      "path": "/v1/messages",
+      "status": 200,
+      "stop": "max_tokens",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 556,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 556,
+        "cache_read_input_tokens": 0,
+        "inference_geo": "not_available",
+        "input_tokens": 2,
+        "output_tokens": 0,
+        "service_tier": "standard"
+      },
+      "content_types": [],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 4.48,
+      "request_id_sha256": "619ef1de6a7bd9909466cb2e826508c5a06933e646d0d98a46f3e9048edf600c"
+    },
+    {
+      "name": "one-output-token",
+      "path": "/v1/messages",
+      "status": 200,
+      "stop": "max_tokens",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 556,
+        "inference_geo": "not_available",
+        "input_tokens": 2,
+        "output_tokens": 1,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "text"
+      ],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 5.34,
+      "request_id_sha256": "a1c8d6f4aab0096c20c6ed5686dba2369dcf117b7263b78cf953697ff219dfe4"
+    },
+    {
+      "name": "stream-stop-sequence",
+      "path": "/v1/messages",
+      "status": 200,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "stop": "stop_sequence",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 581,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 581,
+        "cache_read_input_tokens": 0,
+        "inference_geo": "not_available",
+        "input_tokens": 2,
+        "output_tokens": 26,
+        "service_tier": "standard",
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        }
+      },
+      "seconds": 5.117,
+      "request_id_sha256": "fe62774be6ef2d3e39492b134d4d24360fe413bbec07dff0d9952f4a47ab1dd5"
+    }
+  ],
+  "passed": true,
+  "scope": "At most three requests, no retries. Zero-output checks response fidelity only, not cache warming or billing savings. A failed text expectation is not itself a gateway bug. Worker logs must independently verify exact outgoing limits and upstream call count."
+}

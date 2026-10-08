@@ -1,0 +1,9 @@
+# Generation controls首请求只读核对
+
+2026-10-08。root公开probe首个zero-output请求400后停止，原evidence/public-generation-controls-0.1.70.json不变；本复核未重试max0/max1/stop、未改环境。
+
+#22日志e4c0c349-6e39-4e4d-a3fb-2ec2deab5f7d中，客户端claude-opus-5-5/max_tokens0/thinking.disabled；CLI原请求默认128000/streamtrue且无thinking；最终真正upstream request恢复max_tokens0/streamfalse/thinking.disabled。仅一个upstream响应文件，响应元数据status400。
+
+提供商原error与对外response.body一致：invalid_request_error，thinking.type.disabled不受该模型支持，建议adaptive及effort。该结果证明参数恢复及上游错误保真，不证明max_tokens0被模型拒绝或支持；不能把disabled资格400改写为预热失败。无额外上游模型重试。
+
+公开RID哈希d66cca74ff6d9261c8d3811f550d16d91b0a15184d45aff638d5a8b7e5541405尚未在Worker metadata/headers找到直接匹配。本次按唯一最新参数及顺序定位，核心usage精确RID关联待另一代理补核，不能冒充已完成哈希关联。不打印授权/原始提示。

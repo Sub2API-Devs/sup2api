@@ -1,0 +1,38 @@
+{
+  "model": "claude-opus-5-5",
+  "results": [
+    {
+      "name": "completed-retired-history",
+      "path": "/v1/messages",
+      "status": 200,
+      "stop": "refusal",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 809,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 809,
+        "cache_read_input_tokens": 0,
+        "inference_geo": "not_available",
+        "input_tokens": 2,
+        "output_tokens": 0,
+        "service_tier": "standard"
+      },
+      "content_types": [],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "normal_provider_refusal",
+      "seconds": 5.707,
+      "request_id_sha256": "145f75dcb2f546e00dd1cc6107ad5942998c57454ae94abfc0f357a6764d7743"
+    }
+  ],
+  "checks": {
+    "initial_completed": false,
+    "continuation_completed": false
+  },
+  "fixture_sha256": "51b293b03631dcaaa66909647e7d6171f1e6c4cbf110338de0c30915b14ff95d",
+  "passed": false,
+  "scope": "Completed direct client history without current tools; no executable registration or raw OAuth relay."
+}
