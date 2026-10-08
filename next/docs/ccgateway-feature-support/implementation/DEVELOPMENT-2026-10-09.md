@@ -9,7 +9,7 @@
 ### 1. 合并 endpoint-subsets 分支
 
 - **分支**：`codex/plugin-platform-endpoint-subsets`
-- **提交**：c61eab371
+- **提交**：c61eab371 → c6c8bf888
 - **变更**：19 个文件，310 行新增，49 行删除
 - **内容**：插件声明和强制平台端点子集
 - **测试**：manifest 和 account 测试通过
@@ -17,11 +17,31 @@
 
 ### 2. 修复前端 i18n 测试
 
+- **提交**：9fe335f64
 - **问题**：RequestPolicySettings 使用运行时字符串拼接的翻译键
 - **修复**：在测试中排除已知的动态键模式
 - **状态**：✅ 所有测试通过
 
 ### 3. 创建 Agent Team Worktrees
+
+- **提交**：d734f7ad9
+- **Worktrees 创建**：
+  - `wt-single-turn` → agent-single-turn
+  - `wt-account-ui` → agent-account-ui
+  - `wt-cc-params` → agent-cc-params
+  - `wt-tool-mapping` → agent-tool-mapping
+  - `wt-proxy-config` → agent-proxy-config
+  - `wt-panel-connection` → agent-panel-connection
+- **状态**：✅ 所有 agent 已启动并在后台工作
+
+### 4. 测试状态
+
+- ✅ 前端测试：33 个文件，172 个测试全部通过
+- ✅ SDK 测试：所有模块测试通过
+- ✅ CCGateway 插件测试：通过
+- ⚠️ 服务器测试：1 个测试失败（`TestProxyCRUDTestAndDirectory`，外部 API 依赖）
+
+## 进行中
 
 创建了 6 个 worktree 用于并行开发：
 
