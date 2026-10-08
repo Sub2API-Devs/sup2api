@@ -4,6 +4,14 @@
 
 ## 本轮追加证据与限制
 
+OAuth锁根因已由现场仅文件syscall证据确定：identity前置短命 `claude auth status` 创建刷新锁后约4ms就exit_group(0)，未完成刷新/清理；随后的carrier多次EEXIST后锁超时。不是权限或refresh_token被撤销的证据。access已过期，保存的refresh期限尚未到；正在去掉会制造锁的状态子进程，保留同次原生CLI刷新与真实profile身份确认，同时使管理状态查询纯只读。修复尚未部署，不宣称当前自动刷新已恢复；无需用户先重新授权。
+
+位置payload2已有真实Core/Worker/CLI/PG JSON167.188s、SSE169.326s门禁转绿，各7公开8provider/7用量7receipt，原丢目录红保留。旧v1省略协商40CLI联合回归与共享/core独审绿；v1→v2真实PG混合链追加另在跑。Root另补首公开前无法锚定私有system必须拒的独立红1.432s→绿1.394s，未用静默漏记覆盖未知布局。全部仍是候选，不与线上.74混称。
+
+当前实际Worker.74（精确Git2b349c61b6c3627f06c24b3d1954c426a03f90d8）已Git构建并原地部署21/22，原容器/镜像引用/卷/授权保留，独立核程序hash0cb68219fdcdc379aa1b9e7e015e2dcee1dafc4d04b3827c0cf82f9961e91bc4。Core仍.71/plugin.12/catalog.15，默认未来镜像仍.73。首因保留已生效：只读identity明确失败于CLI OAuth refresh lock_timeout，request_prepared=false/response_received=false；不是平台Key错误或模型资格。确认旧锁过期无持锁进程后仅原子备份锁，一次复验仍重新留锁，权限检查正常；正在纯假过期凭据/禁网Linux复现，未重新授权/改token/再发模型。详见Worker.74部署与OAuth锁源码核验记录。
+
+普通custom inline+budget候选被独立真实Core/Worker/CLI/PG红例阻断：续聊丢失user与公开inline之间的内部目录system。作者16CLI绿未覆盖此位置，不能称可发布；catalog.16/plugin.13及相关源码仍未提交。v1完整A/U段不能表达独立system位置，API负责payload2协商/旧链兼容，audit负责Worker按真实锚点捕获恢复，完成合同与独审前不部署、不把红例改断言掩盖。
+
 检查点d8dfa6e66已提交推送：安全预派发分类诊断与两次失败验收记录、部署记录归档；没有部署该核心诊断。资源身份首因调查发现Mod finally和Go result两处原错遮蔽，候选已保留首因并保持scope失败关闭，新增固定派发/响应状态事实；隔离资源载体仍绿，尚不能宣称线上identity已恢复。拟独审后仅Worker.74窄更新，用一次只读身份探针获取真实首因，不发模型重试。另由独立作者推进预算+普通custom inline历史目录/真实system尾锚点保真，尚未提交，不混入本窄发布。
 
 最新线上：精确428164d4756e64163710910224957744554a2011已完成Core.71/plugin.12/catalog.15、Worker.73及Controller.48部署，四核心节点ready；#21/#22原容器ID/镜像引用/卷/授权保留。核心维护503窗口约37.32s，非零中断。下面“正在发布/候选”的段落为较早快照。
