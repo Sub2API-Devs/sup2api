@@ -14,6 +14,7 @@ import (
 // controls. Its maps are private: applying a plan cannot mutate the next run.
 // Only the relay's identified main model request may apply these controls.
 type RequestPlan struct {
+	fallbacks     json.RawMessage
 	taskBudget    json.RawMessage
 	apiGeneration bool
 	cache         *CachePlan
@@ -49,7 +50,7 @@ func decodePlannedValue(raw json.RawMessage) (any, error) {
 }
 
 func (r *Request) HasMainRequestFeatures() bool {
-	return len(requestFallbackBlocks(r)) > 0 || r.continuation != "" || r.hasInlineSystemMetadata() || len(r.ServerTools) > 0 || len(r.toolMetadataKey()) > 0 || r.hasHistoryCitations() || r.Plan != nil && (len(r.Plan.fields) > 0 || r.Plan.cache != nil)
+	return len(r.imageCarriers) > 0 || len(requestFallbackBlocks(r)) > 0 || r.continuation != "" || r.hasInlineSystemMetadata() || len(r.ServerTools) > 0 || len(r.toolMetadataKey()) > 0 || r.hasHistoryCitations() || r.Plan != nil && (len(r.Plan.fields) > 0 || r.Plan.cache != nil)
 }
 
 // FeatureDecisions reports requested controls without including raw user data.
@@ -62,7 +63,7 @@ func (p *RequestPlan) FeatureDecisions() []Object {
 		if p.cache != nil {
 			out = append(out, Object{"field": "cache_control", "action": "restore_exact_protocol_breakpoints", "stage": "outbound_relay"})
 		}
-		for _, field := range []string{"max_tokens", "temperature", "top_p", "top_k", "stop_sequences", "metadata", "service_tier", "inference_geo", "speed", "diagnostics", "tool_choice", "safeguards", "thinking", "output_config", "context_management", "compaction"} {
+		for _, field := range []string{"max_tokens", "temperature", "top_p", "top_k", "stop_sequences", "metadata", "service_tier", "inference_geo", "speed", "diagnostics", "tool_choice", "safeguards", "thinking", "output_config", "context_management", "compaction", "fallbacks"} {
 			if _, exists := p.fields[field]; exists {
 				decision := Object{"field": field, "action": "apply_main_request", "stage": "outbound_relay"}
 				if field == "metadata" {
@@ -80,6 +81,9 @@ func (p *RequestPlan) FeatureDecisions() []Object {
 
 func parseRequestPlan(body []byte, o Object) (*RequestPlan, error) {
 	p := &RequestPlan{raw: append([]byte(nil), body...), fields: map[string]json.RawMessage{}}
+	if err := p.takeFallbacks(o); err != nil {
+		return nil, err
+	}
 	var cacheErr error
 	p.cache, cacheErr = compileCachePlan(o)
 	if cacheErr != nil {
@@ -231,7 +235,7 @@ func (p *RequestPlan) validateTools(req *Request) error {
 	if kind != "any" && kind != "tool" {
 		return nil
 	}
-	if len(req.Tools) == 0 && len(req.ServerTools) == 0 && len(req.APIClientTools) == 0 {
+	if len(req.Tools) == 0 && len(req.ServerTools) == 0 && len(req.APIClientTools) == 0 && req.MCP == nil {
 		return fmt.Errorf("forced tool_choice requires declared tools")
 	}
 	// Manual thinking cannot force tools. Adaptive thinking can, depending on
@@ -323,5 +327,8 @@ func (r *Request) ApplyMainRequestFeatures(message Object) error {
 			}
 		}
 	}
-	return r.applyCompleteToolCatalog(message)
+	if err := r.applyCompleteToolCatalog(message); err != nil {
+		return err
+	}
+	return r.applyMCPConnector(message)
 }

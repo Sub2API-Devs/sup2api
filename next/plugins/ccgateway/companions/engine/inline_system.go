@@ -113,7 +113,7 @@ func (r *Request) pendingWireMessage() Message {
 	out := Message{Role: "user"}
 	for _, message := range r.Messages[r.pendingStart():] {
 		if message.Role == "user" {
-			out.Content = append(out.Content, r.wireMessage(message).Content...)
+			out.Content = append(out.Content, r.cliWireMessage(message).Content...)
 		}
 	}
 	return out

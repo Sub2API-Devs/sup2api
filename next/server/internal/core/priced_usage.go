@@ -7,6 +7,9 @@ import (
 )
 
 func ValidatePricedUsage(item PricedUsage) error {
+	if len(item.BillingReason) > 256 || strings.ContainsAny(item.BillingReason, "\r\n\x00") || item.Free && item.BillingReason == "" {
+		return fmt.Errorf("invalid usage billing disposition")
+	}
 	if item.Kind == "" || len(item.Kind) > 64 || item.Model == "" || len(item.Model) > 256 || strings.ContainsAny(item.Model+item.Kind, "\r\n\x00") {
 		return fmt.Errorf("invalid additional usage identity")
 	}

@@ -22,6 +22,12 @@
         "streamPath": "stream",
         "modelReferences": [
           {
+            "name": "fallback",
+            "arrayPath": "fallbacks",
+            "modelPath": "model",
+            "parameterOverrides": ["max_tokens", "thinking", "output_config", "speed"]
+          },
+          {
             "name": "advisor",
             "arrayPath": "tools",
             "match": {"type": "advisor_20260301"},
@@ -96,6 +102,11 @@
   ],
   "usage": {
     "semantics": "exclusive",
+    "attempts": {
+      "name": "fallback",
+      "adapter": "anthropic_fallback_20260701",
+      "requiredBy": ["fallbacks"]
+    },
     "sse": [
       {
         "event": "message_start",

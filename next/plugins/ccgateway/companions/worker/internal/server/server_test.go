@@ -20,6 +20,16 @@ func (m *mockWorker) Health(context.Context) (*types.HealthStatus, error) {
 }
 func (m *mockWorker) Close() error { return nil }
 
+func TestBindHostKeepsPortAndIPv6Brackets(t *testing.T) {
+	for _, tc := range []struct{ host, want string }{{"", ":8788"}, {"127.0.0.1", "127.0.0.1:8788"}, {"::1", "[::1]:8788"}} {
+		s := New(&mockWorker{}, 8788)
+		s.BindHost(tc.host)
+		if s.srv.Addr != tc.want {
+			t.Fatalf("got %s want %s", s.srv.Addr, tc.want)
+		}
+	}
+}
+
 func TestRoutesForwardWithoutReencoding(t *testing.T) {
 	s := New(&mockWorker{}, 8788)
 	for _, path := range []string{"/v1/messages", "/admin/status", "/admin/auth/start"} {

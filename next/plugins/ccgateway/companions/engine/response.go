@@ -125,6 +125,13 @@ func (a *Accumulator) blockStart(e Object, r *Request) error {
 		e["content_block"] = block
 	}
 	switch str(block, "type") {
+	case "mcp_tool_use", "mcp_tool_result", "mcp_tool_listing":
+		if err := checkMCPBlock(block, "assistant"); err != nil {
+			return err
+		}
+		if err := a.serverCalls.accept(block, r); err != nil {
+			return err
+		}
 	case "fallback":
 		if err := checkFallbackBlock(block, "assistant"); err != nil {
 			return err
@@ -241,7 +248,7 @@ func (a *Accumulator) blockDelta(e Object) error {
 		}
 		block["signature"] = str(block, "signature") + str(d, "signature")
 	case "input_json_delta":
-		if str(block, "type") != "tool_use" && str(block, "type") != "server_tool_use" {
+		if str(block, "type") != "tool_use" && str(block, "type") != "server_tool_use" && str(block, "type") != "mcp_tool_use" {
 			return fmt.Errorf("input delta on wrong block")
 		}
 		a.Inputs[i] += str(d, "partial_json")

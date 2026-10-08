@@ -16,6 +16,14 @@ import (
 	"time"
 )
 
+func TestInternalRelayUsesExplicitListenerHost(t *testing.T) {
+	for _, tc := range []struct{ host, want string }{{"", "http://127.0.0.1:8787"}, {"0.0.0.0", "http://127.0.0.1:8787"}, {"::", "http://127.0.0.1:8787"}, {"::1", "http://[::1]:8787"}, {"127.0.0.1", "http://127.0.0.1:8787"}, {"10.0.0.2", "http://10.0.0.2:8787"}} {
+		if got := workerInternalURL(tc.host, 8787); got != tc.want {
+			t.Fatalf("%s: %s", tc.host, got)
+		}
+	}
+}
+
 // Run an actual subprocess over OS pipes. Reject any plaintext input, early
 // user submission or truncated content, rather than mocking Execute itself.
 func TestMain(m *testing.M) {

@@ -20,6 +20,7 @@ const maxReferencedModels = 64
 type modelReference struct {
 	kind, path, model string
 	priced            core.PricedUsage
+	overrides         map[string]string
 }
 
 // checkReferencedModels runs before and after request hooks, just like the
@@ -50,7 +51,13 @@ func (c *call) checkReferencedModels() *gwError {
 			if len(c.modelRefs) == maxReferencedModels {
 				return invalidModelReference("too many referenced models")
 			}
-			c.modelRefs = append(c.modelRefs, modelReference{kind: rule.Name, path: path, model: value.Str})
+			ref := modelReference{kind: rule.Name, path: path, model: value.Str, overrides: map[string]string{}}
+			for _, field := range rule.ParameterOverrides {
+				if value := item.Get(field); value.Exists() {
+					ref.overrides[field] = value.Raw
+				}
+			}
+			c.modelRefs = append(c.modelRefs, ref)
 		}
 	}
 	return nil
@@ -86,7 +93,11 @@ func (c *call) prepareReferencedPrices(ctx context.Context) *gwError {
 		}
 		ref.priced = core.PricedUsage{Kind: ref.kind, Model: ref.model, Price: clonePriceRule(rule),
 			RateMultiplier: c.rec.RateMultiplier}
-		ref.priced.PriceParams, ref.priced.PriceHeaders = c.priceInputs(rule)
+		body, err := c.referencePriceBody(*ref)
+		if err != nil {
+			return invalidModelReference("cannot prepare referenced model price inputs")
+		}
+		ref.priced.PriceParams, ref.priced.PriceHeaders = c.priceInputsFrom(rule, body)
 	}
 	return nil
 }
@@ -104,6 +115,9 @@ func (c *call) servesAllModels(ref *core.AccountRef) bool {
 		return false
 	}
 	if c.ep.Billing != "free" && !c.routeHasRequiredPrimaryUsage(c.route(ref)) {
+		return false
+	}
+	if c.ep.Billing != "free" && !c.routeHasRequiredAttempts(c.route(ref), c.body) {
 		return false
 	}
 	for _, extra := range c.modelRefs {
@@ -129,6 +143,7 @@ func (c *call) routeHasRequiredPrimaryUsageFor(rt *typeRoute, body []byte) bool 
 	if c.ep.Usage != nil {
 		rules = append(rules, c.ep.Usage.Additional...)
 	}
+	rules = append(rules, rt.requiredUsage...)
 	for _, required := range rules {
 		if !required.UsePrimaryModel {
 			continue
@@ -156,6 +171,9 @@ func routeAccountsFor(rt *typeRoute, kind string) bool {
 	if rt == nil {
 		return false
 	}
+	if rt.usage.Attempts != nil && rt.usage.Attempts.Name == kind {
+		return true
+	}
 	for _, rule := range rt.usage.Additional {
 		if rule.Name == kind {
 			return true
@@ -171,6 +189,15 @@ func routeAccountsFor(rt *typeRoute, kind string) bool {
 func (c *call) mapReferencedModels(body []byte, account *core.AccountRef, rt *typeRoute) ([]byte, error) {
 	c.upstreamPrimaryModel = account.MapModel(c.model)
 	c.upstreamRefs = nil
+	if rt.conv != nil {
+		refs, err := modelReferenceSnapshot(body, rt.modelReferences)
+		if err != nil {
+			return nil, err
+		}
+		if len(refs) != 0 {
+			return nil, fmt.Errorf("conversion introduced model invocations without source authorization")
+		}
+	}
 	if len(c.modelRefs) == 0 {
 		return body, nil
 	}
@@ -180,6 +207,9 @@ func (c *call) mapReferencedModels(body []byte, account *core.AccountRef, rt *ty
 	c.upstreamRefs = map[string]core.PricedUsage{}
 	for _, ref := range c.modelRefs {
 		upModel := account.MapModel(ref.model)
+		if rt.usage.Attempts != nil && ref.kind == rt.usage.Attempts.Name && upModel == c.upstreamPrimaryModel {
+			return nil, fmt.Errorf("attempt candidate maps to the primary model")
+		}
 		key := ref.kind + "\x00" + upModel
 		if old, exists := c.upstreamRefs[key]; exists && old.Model != ref.model {
 			return nil, fmt.Errorf("different referenced models map to the same upstream usage identity")
@@ -250,37 +280,43 @@ func (c *call) hasReferencedPrice() bool {
 // Plugins may shape transport fields, but may not introduce a new billable
 // model invocation after authorization, account selection and price freezing.
 func (c *call) validatePatchedModelReferences(before, after []byte) error {
-	if len(c.ep.Request.ModelReferences) == 0 {
-		return nil
-	}
-	snapshot := func(body []byte) ([]string, error) {
-		var refs []string
-		for _, rule := range c.ep.Request.ModelReferences {
-			array := gjson.GetBytes(body, rule.ArrayPath)
-			if !array.Exists() || array.Type == gjson.Null {
+	return validateModelReferencePatches(before, after, c.ep.Request.ModelReferences)
+}
+
+func modelReferenceSnapshot(body []byte, rules []manifest.RequestModelReference) ([]string, error) {
+	var refs []string
+	for _, rule := range rules {
+		array := gjson.GetBytes(body, rule.ArrayPath)
+		if !array.Exists() || array.Type == gjson.Null {
+			continue
+		}
+		if !array.IsArray() {
+			return nil, fmt.Errorf("plugin changed a model-reference array")
+		}
+		for index, item := range array.Array() {
+			if !matchesModelReference(item, rule.Match) {
 				continue
 			}
-			if !array.IsArray() {
-				return nil, fmt.Errorf("plugin changed a model-reference array")
+			model := item.Get(rule.ModelPath)
+			if model.Type != gjson.String || len(refs) >= maxReferencedModels {
+				return nil, fmt.Errorf("plugin changed model references")
 			}
-			for index, item := range array.Array() {
-				if !matchesModelReference(item, rule.Match) {
-					continue
-				}
-				model := item.Get(rule.ModelPath)
-				if model.Type != gjson.String || len(refs) >= maxReferencedModels {
-					return nil, fmt.Errorf("plugin changed model references")
-				}
-				refs = append(refs, fmt.Sprintf("%s\x00%s.%d.%s\x00%s", rule.Name, rule.ArrayPath, index, rule.ModelPath, model.Str))
+			refs = append(refs, fmt.Sprintf("%s\x00%s.%d.%s\x00%s", rule.Name, rule.ArrayPath, index, rule.ModelPath, model.Str))
+			for _, field := range rule.ParameterOverrides {
+				value := item.Get(field)
+				refs = append(refs, field+"\x00"+value.Raw)
 			}
 		}
-		return refs, nil
 	}
-	want, err := snapshot(before)
+	return refs, nil
+}
+
+func validateModelReferencePatches(before, after []byte, rules []manifest.RequestModelReference) error {
+	want, err := modelReferenceSnapshot(before, rules)
 	if err != nil {
 		return err
 	}
-	got, err := snapshot(after)
+	got, err := modelReferenceSnapshot(after, rules)
 	if err != nil {
 		return err
 	}

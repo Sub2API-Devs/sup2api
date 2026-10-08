@@ -14,6 +14,7 @@ type Config struct {
 	// 基础配置
 	WorkerID    string
 	Port        int
+	BindHost    string
 	LogLevel    string
 	APIKey      string
 	AdminKey    string
@@ -43,8 +44,9 @@ type Config struct {
 func Load() (*Config, error) {
 	workerID, _ := os.Hostname()
 	port := 8788
-	if bind := os.Getenv("CCG_BIND"); bind != "" && os.Getenv("WORKER_PORT") == "" {
-		_, rawPort, err := net.SplitHostPort(bind)
+	bindHost := ""
+	if bind := os.Getenv("CCG_BIND"); bind != "" {
+		host, rawPort, err := net.SplitHostPort(bind)
 		if err != nil {
 			return nil, fmt.Errorf("invalid CCG_BIND")
 		}
@@ -52,11 +54,30 @@ func Load() (*Config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid CCG_BIND port")
 		}
+		if port < 1 || port > 65535 {
+			return nil, fmt.Errorf("invalid CCG_BIND port")
+		}
+		if !validBindHost(host) {
+			return nil, fmt.Errorf("CCG_BIND host must be loopback or unspecified; the internal relay requires loopback")
+		}
+		if host == "localhost" {
+			host = "127.0.0.1"
+		}
+		bindHost = host
+	}
+	// WORKER_PORT overrides only the port; an explicit CCG_BIND host survives.
+	if raw := os.Getenv("WORKER_PORT"); raw != "" {
+		var err error
+		port, err = strconv.Atoi(raw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid WORKER_PORT")
+		}
 	}
 	dataDir := getEnv("CCG_DATA_DIR", "/work/history")
 	cfg := &Config{
 		WorkerID:         getEnv("WORKER_ID", workerID),
-		Port:             getEnvInt("WORKER_PORT", port),
+		Port:             port,
+		BindHost:         bindHost,
 		LogLevel:         getEnv("LOG_LEVEL", "info"),
 		APIKey:           os.Getenv("CCG_API_KEY"),
 		AdminKey:         os.Getenv("CCG_ADMIN_KEY"),
@@ -88,6 +109,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Port < 1 || c.Port > 65535 {
 		return fmt.Errorf("invalid port: %d", c.Port)
+	}
+	if !validBindHost(c.BindHost) {
+		return fmt.Errorf("bind host must be loopback or unspecified; the internal relay requires loopback")
 	}
 	if c.CLIPath == "" {
 		return fmt.Errorf("WORKER_CLI_PATH is required")
@@ -143,4 +167,12 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 		return defaultValue
 	}
 	return d
+}
+
+func validBindHost(host string) bool {
+	if host == "" || host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && (ip.IsLoopback() || ip.IsUnspecified())
 }

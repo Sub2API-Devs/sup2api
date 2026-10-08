@@ -98,12 +98,22 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 	if err != nil {
 		return nil, err
 	}
+	mcp, err := parseMCPConnector(o, h.Values("anthropic-beta"))
+	if err != nil {
+		return nil, err
+	}
+	if mcp != nil {
+		body = mcp.safeRaw(o)
+	}
 	plan, err := parseRequestPlan(body, o)
 	if err != nil {
 		return nil, err
 	}
 	if err := plan.takeTaskBudget(o); err != nil {
 		return nil, err
+	}
+	if mcp != nil {
+		mcp.stripLocalRequest(o)
 	}
 	if err = p.filterFields(o); err != nil {
 		return nil, err
@@ -122,10 +132,11 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 	}
 	cacheRequested := hasRequestCacheControl(o)
 	data, _ := json.Marshal(o)
-	req, err := parseRequest(data, hasBetaHeader(h.Values("anthropic-beta"), "interleaved-thinking-2025-05-14"))
+	req, err := parseRequestWithMCP(data, mcp, hasBetaHeader(h.Values("anthropic-beta"), "interleaved-thinking-2025-05-14"))
 	if err != nil {
 		return nil, err
 	}
+	req.MCP = mcp
 	if err := plan.validateTools(req); err != nil {
 		return nil, err
 	}
@@ -166,7 +177,7 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 	}
 	// API server search owns deferred discovery. Do not add CC's separate
 	// client ToolSearch loop, even when the global policy enables it.
-	if len(req.ServerTools) > 0 {
+	if len(req.ServerTools) > 0 || req.MCP != nil {
 		req.ToolSearch = "false"
 	}
 	if err := req.configureContextCompaction(h.Values("anthropic-beta")); err != nil {
@@ -184,6 +195,12 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 	if err := plan.validateTaskBudget(req); err != nil {
 		return nil, err
 	}
+	if err := req.validateMCPConfiguration(); err != nil {
+		return nil, err
+	}
+	if err := req.configureFallbacks(h); err != nil {
+		return nil, err
+	}
 	return req, nil
 }
 
@@ -193,7 +210,7 @@ func (p RequestPolicy) filterFields(o Object) error {
 		return fmt.Errorf("fallback_credit_token requires issuing-account affinity, original-body/beta matching and five-minute redemption tracking; cross-account credit redemption is not yet implemented")
 	}
 	if _, exists := o["fallbacks"]; exists {
-		return fmt.Errorf("fallbacks requires core authorization of target models, per-model usage.iterations billing and distinct JSON/SSE response handling; server-side routing is not yet enabled")
+		return fmt.Errorf("fallbacks must be admitted by the explicit model-chain plan before field filtering")
 	}
 	// These are known protocol features, not harmless unknown extensions.
 	// Until their request/response/history path exists, ignore must not turn

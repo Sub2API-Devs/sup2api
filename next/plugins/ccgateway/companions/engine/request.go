@@ -27,6 +27,9 @@ type Tool struct {
 	Metadata     Object `json:"-"`
 }
 type Request struct {
+	MCP                     *MCPConnectorPlan
+	imageCarriers           map[string]*imageCarrier
+	responseFacts           *providerResponseFacts
 	continuation            string
 	Plan                    *RequestPlan
 	EnvironmentFields       map[string]string
@@ -197,12 +200,16 @@ func checkBlock(b Object, role string, ttl *time.Duration) error {
 		return checkToolUse(b, role)
 	case "server_tool_use", "tool_search_tool_result", "web_search_tool_result", "web_fetch_tool_result", "advisor_tool_result":
 		return checkServerSearchBlock(b, role)
+	case "mcp_tool_use", "mcp_tool_result", "mcp_tool_listing":
+		return checkMCPBlock(b, role)
 	case "tool_result":
 		return checkToolResult(b, role, ttl)
 	case "image":
 		return checkImage(b, role)
 	case "document":
 		return checkDocument(b, role, ttl)
+	case "search_result":
+		return checkSearchResult(b, role, ttl)
 	case "compaction":
 		return checkCompactionBlock(b, role, false)
 	case "thinking":
@@ -288,16 +295,23 @@ func checkToolResult(b Object, role string, ttl *time.Duration) error {
 	return nil
 }
 func checkImage(b Object, role string) error {
-	if e := keys(b, "type", "source"); e != nil {
+	if e := keys(b, "type", "source", "transformations"); e != nil {
 		return e
 	}
 	s, ok := b["source"].(map[string]any)
 	if role != "user" || !ok {
 		return fmt.Errorf("image must be user content")
 	}
+	if err := checkImageTransformations(b["transformations"]); err != nil {
+		return err
+	}
 	return checkImageSource(s)
 }
 func parseRequest(data []byte, interleaved ...bool) (*Request, error) {
+	return parseRequestWithMCP(data, nil, interleaved...)
+}
+
+func parseRequestWithMCP(data []byte, mcp *MCPConnectorPlan, interleaved ...bool) (*Request, error) {
 	o, e := decodeObject(data)
 	if e != nil {
 		return nil, e
@@ -305,7 +319,7 @@ func parseRequest(data []byte, interleaved ...bool) (*Request, error) {
 	if e = keys(o, "model", "max_tokens", "stream", "system", "messages", "tools", "tool_choice", "thinking", "cache_control"); e != nil {
 		return nil, e
 	}
-	r := &Request{Model: str(o, "model"), MaxTokens: positive(o["max_tokens"]), TTL: 5 * time.Minute, Native: map[string]bool{}}
+	r := &Request{MCP: mcp, Model: str(o, "model"), MaxTokens: positive(o["max_tokens"]), TTL: 5 * time.Minute, Native: map[string]bool{}}
 	if n, ok := o["max_tokens"].(json.Number); ok {
 		i, err := n.Int64()
 		r.CacheWarmup = err == nil && i == 0
@@ -366,6 +380,10 @@ func parseRequest(data []byte, interleaved ...bool) (*Request, error) {
 	if e = r.compileInlineTools(baseTools); e != nil {
 		return nil, e
 	}
+	if e = r.validateSearchResultCitations(); e != nil {
+		return nil, e
+	}
+	r.prepareImageCarriers()
 	if e = validateConversation(r.Messages, r.origin); e != nil {
 		return nil, e
 	}
@@ -656,6 +674,9 @@ func fingerprints(ms []Message) []string {
 }
 func (r *Request) configKey() string {
 	parts := []any{r.Model, r.System, r.Tools, r.NoTools, r.Thinking, r.Native, r.Fast, r.Effort, r.Betas, r.FineGrainedTools, r.JSONSchema, r.PromptCacheTTL, r.ToolSearch, r.customToolServer()}
+	if r.MCP != nil {
+		parts = append(parts, r.MCP.servers, r.MCP.toolsets)
+	}
 	if len(r.APIClientTools) > 0 {
 		parts = append(parts, r.APIToolCatalog)
 	}

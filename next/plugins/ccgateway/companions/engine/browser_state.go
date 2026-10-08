@@ -136,7 +136,7 @@ func parseToolResultBlocks(values []any, parent Object, ttl *time.Duration) ([]O
 			return nil, err
 		}
 		kind := str(parsed[0], "type")
-		if kind != "text" && kind != "image" && kind != "document" {
+		if kind != "text" && kind != "image" && kind != "document" && kind != "search_result" {
 			return nil, fmt.Errorf("unsupported tool_result content")
 		}
 		out = append(out, parsed[0])

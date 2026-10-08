@@ -174,6 +174,7 @@ func (s *Service) Submit(rec *core.UsageRecord) {
 	}
 	frozen := *rec
 	frozen.Additional = core.ClonePricedUsage(rec.Additional)
+	frozen.Replacement = core.ClonePricedUsage(rec.Replacement)
 	rec = &frozen
 	persist := func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -300,7 +301,7 @@ func logLost(rec *core.UsageRecord, err error) {
 }
 
 func initialStatus(rec *core.UsageRecord) string {
-	if !rec.Billable || rec.Price == nil && len(rec.Additional) == 0 && rec.BillingError == "" {
+	if !rec.Billable || rec.Price == nil && len(rec.Additional) == 0 && len(rec.Replacement) == 0 && rec.BillingError == "" {
 		return StatusFree
 	}
 	// A reservation charges the estimate and then waits: the row is settled
@@ -315,6 +316,7 @@ func initialStatus(rec *core.UsageRecord) string {
 // pendingInputs are stored in billing_detail while a record is unbilled so
 // the retry loop can reproduce the calculation.
 type pendingInputs struct {
+	Replacement  []core.PricedUsage `json:"replacement,omitempty"`
 	Additional   []core.PricedUsage `json:"additional,omitempty"`
 	BillingError string             `json:"billing_error,omitempty"`
 	Semantics    string             `json:"semantics"`
@@ -402,7 +404,7 @@ func (s *Service) insertAtomic(ctx context.Context, batch []*core.UsageRecord, b
 					}
 				}
 				detail = jsonOr(pendingDetail{Inputs: pendingInputs{
-					Semantics: rec.UsageSemantics, Params: rec.PriceParams, Headers: rec.PriceHeaders, Additional: rec.Additional, BillingError: rec.BillingError}}, "{}")
+					Semantics: rec.UsageSemantics, Params: rec.PriceParams, Headers: rec.PriceHeaders, Additional: rec.Additional, Replacement: rec.Replacement, BillingError: rec.BillingError}}, "{}")
 			}
 			// The observability markers have their own column, so they are
 			// written once here and never touched again: settle() rewrites
@@ -660,7 +662,7 @@ func fromRecord(rec *core.UsageRecord) *pending {
 		Model: rec.Model, Success: rec.Success, StatusCode: rec.StatusCode, ErrorType: rec.ErrorType,
 		Tokens: rec.Tokens, Metrics: rec.Metrics, LatencyMs: rec.LatencyMs, CreatedAt: rec.CreatedAt,
 		Rate:   rec.RateMultiplier,
-		Inputs: pendingInputs{Semantics: rec.UsageSemantics, Params: rec.PriceParams, Headers: rec.PriceHeaders, Additional: core.ClonePricedUsage(rec.Additional), BillingError: rec.BillingError},
+		Inputs: pendingInputs{Semantics: rec.UsageSemantics, Params: rec.PriceParams, Headers: rec.PriceHeaders, Additional: core.ClonePricedUsage(rec.Additional), Replacement: core.ClonePricedUsage(rec.Replacement), BillingError: rec.BillingError},
 	}
 	if p.CreatedAt.IsZero() {
 		p.CreatedAt = time.Now()
@@ -676,6 +678,7 @@ func fromRecord(rec *core.UsageRecord) *pending {
 // share it live in usage_logs.anomalies (core.Anomaly*).
 type BillingDetail struct {
 	Additional     []AdditionalBillingDetail `json:"additional,omitempty"`
+	Replacement    []AdditionalBillingDetail `json:"replacement,omitempty"`
 	ExprVersion    int                       `json:"expr_version"`
 	Tier           string                    `json:"tier"`
 	Rules          []expr.RuleResult         `json:"rules"`

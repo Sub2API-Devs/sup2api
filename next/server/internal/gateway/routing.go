@@ -51,7 +51,10 @@ type typeRoute struct {
 	respDeclared bool
 	// modelPath is the body path of the model in the upstream protocol
 	// (empty when the model travels in the path).
-	modelPath string
+	modelPath        string
+	modelReferences  []manifest.RequestModelReference
+	requiredUsage    []manifest.AdditionalUsageRule
+	requiredAttempts []*manifest.AttemptUsageRule
 
 	// Lazily converted request body (conversion path only).
 	converted bool
@@ -174,7 +177,14 @@ func (c *call) addRoute(b core.AccountTypeBinding, ap manifest.AccountPlatform, 
 		usageRequestFields: ep.UsageRequestFields,
 		resp:               ep.Response,
 		respDeclared:       ep.Protocol != "",
-		modelPath:          ep.Request.ModelPath}
+		modelPath:          ep.Request.ModelPath,
+		modelReferences:    ep.Request.ModelReferences,
+		requiredUsage:      append([]manifest.AdditionalUsageRule(nil), pf.Usage.Additional...)}
+	if ep.Usage != nil {
+		rt.requiredUsage = append(rt.requiredUsage, ep.Usage.Additional...)
+		rt.requiredAttempts = append(rt.requiredAttempts, ep.Usage.Attempts)
+	}
+	rt.requiredAttempts = append(rt.requiredAttempts, pf.Usage.Attempts)
 	if len(rt.requestFields) == 0 {
 		rt.requestFields = pf.RequestFields
 	}
@@ -205,7 +215,7 @@ func (rt *typeRoute) upstreamBody(body []byte) ([]byte, error) {
 	}
 	if !rt.converted {
 		rt.converted = true
-		rt.body, rt.bodyErr = rt.conv.Request(body)
+		rt.conv, rt.body, rt.bodyErr = convert.Prepare(rt.conv, body)
 	}
 	return rt.body, rt.bodyErr
 }

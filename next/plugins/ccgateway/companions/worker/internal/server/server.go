@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 )
@@ -51,3 +52,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) Run() error                         { return s.srv.ListenAndServe() }
 func (s *Server) Shutdown(ctx context.Context) error { return s.srv.Shutdown(ctx) }
+
+// BindHost must be configured before Run. Empty keeps the historical wildcard
+// listener; loopback/IPv6 hosts are joined without changing the worker port.
+func (s *Server) BindHost(host string) { s.srv.Addr = net.JoinHostPort(host, fmt.Sprint(s.port)) }

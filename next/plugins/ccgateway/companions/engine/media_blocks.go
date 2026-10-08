@@ -144,3 +144,20 @@ func checkImageSource(source Object) error {
 		return fmt.Errorf("unsupported image source %q", str(source, "type"))
 	}
 }
+
+func checkImageTransformations(value any) error {
+	if value == nil {
+		return nil
+	}
+	config, ok := value.(map[string]any)
+	if !ok {
+		return fmt.Errorf("image transformations must be an object or null")
+	}
+	if err := keys(config, "oversized_image"); err != nil {
+		return err
+	}
+	if mode, exists := config["oversized_image"]; exists && mode != "downsize" && mode != "error" {
+		return fmt.Errorf("image transformations.oversized_image must be downsize or error")
+	}
+	return nil
+}

@@ -59,6 +59,7 @@ WORKDIR /app/backend
 
 # Copy go mod files first (better caching)
 COPY backend/go.mod backend/go.sum ./
+COPY next/protocol-codec/ /app/next/protocol-codec/
 RUN go mod download
 
 # Copy backend source first

@@ -3,6 +3,7 @@ package openai
 
 import (
 	_ "embed"
+	"github.com/Sub2API-Devs/sup2api/next/protocol-codec/modelpolicy"
 	"strings"
 )
 
@@ -90,42 +91,7 @@ func latestCodexInstructions() string {
 // CanonicalizeOpenAIModelAliasSpelling normalizes provider prefixes, case,
 // separators, and known compact spellings used by OpenAI model aliases.
 func CanonicalizeOpenAIModelAliasSpelling(model string) string {
-	model = strings.TrimSpace(model)
-	if slash := strings.LastIndexByte(model, '/'); slash >= 0 {
-		model = strings.TrimSpace(model[slash+1:])
-	}
-	model = strings.ToLower(model)
-	if model == "" {
-		return ""
-	}
-
-	normalized := strings.ReplaceAll(model, "_", "-")
-	normalized = strings.Join(strings.Fields(normalized), "-")
-	for strings.Contains(normalized, "--") {
-		normalized = strings.ReplaceAll(normalized, "--", "-")
-	}
-
-	if strings.HasPrefix(normalized, "gpt5") {
-		normalized = "gpt-5" + strings.TrimPrefix(normalized, "gpt5")
-	}
-	if !strings.HasPrefix(normalized, "gpt-") && !strings.Contains(normalized, "codex") {
-		return ""
-	}
-
-	replacements := []struct {
-		from string
-		to   string
-	}{
-		{"gpt-5.4mini", "gpt-5.4-mini"},
-		{"gpt-5.4nano", "gpt-5.4-nano"},
-		{"gpt-5.3-codexspark", "gpt-5.3-codex-spark"},
-		{"gpt-5.3codexspark", "gpt-5.3-codex-spark"},
-		{"gpt-5.3codex", "gpt-5.3-codex"},
-	}
-	for _, replacement := range replacements {
-		normalized = strings.ReplaceAll(normalized, replacement.from, replacement.to)
-	}
-	return normalized
+	return modelpolicy.CanonicalizeOpenAIModelAliasSpelling(model)
 }
 
 // CodexBaseInstructionsForModel 按模型返回最匹配的真实 Codex base instructions：
@@ -162,18 +128,5 @@ func CodexBaseInstructionsForModel(model string) string {
 
 // IsGPT6SolOrLunaModelSpelling recognizes official IDs and existing local effort/compact suffixes.
 func IsGPT6SolOrLunaModelSpelling(model string) bool {
-	canonical := CanonicalizeOpenAIModelAliasSpelling(model)
-	for _, base := range []string{"gpt-6-sol", "gpt-6-luna"} {
-		if canonical == base {
-			return true
-		}
-		suffix, ok := strings.CutPrefix(canonical, base+"-")
-		if ok {
-			switch suffix {
-			case "none", "low", "medium", "high", "xhigh", "max", "openai-compact":
-				return true
-			}
-		}
-	}
-	return false
+	return modelpolicy.IsGPT6SolOrLunaModelSpelling(model)
 }

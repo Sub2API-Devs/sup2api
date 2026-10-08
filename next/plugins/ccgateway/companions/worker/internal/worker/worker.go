@@ -5,9 +5,10 @@ import (
 	"ccgateway/worker/internal/config"
 	"ccgateway/worker/pkg/types"
 	"context"
-	"fmt"
+	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -43,7 +44,7 @@ func New(cfg *config.Config) (Worker, error) {
 		// Account egress only allows loopback connections to the business
 		// HTTP port. Reuse the original relay carrier instead of opening a
 		// random loopback port that the firewall deliberately blocks.
-		internalBaseURL = fmt.Sprintf("http://127.0.0.1:%d", cfg.Port)
+		internalBaseURL = workerInternalURL(cfg.BindHost, cfg.Port)
 	}
 	runtime, err := engine.NewRuntime(engine.Options{
 		InternalBaseURL: internalBaseURL,
@@ -55,6 +56,13 @@ func New(cfg *config.Config) (Worker, error) {
 		return nil, err
 	}
 	return &impl{Runtime: runtime, id: cfg.WorkerID, startTime: time.Now()}, nil
+}
+
+func workerInternalURL(host string, port int) string {
+	if ip := net.ParseIP(host); host == "" || host == "localhost" || ip != nil && ip.IsUnspecified() {
+		host = "127.0.0.1"
+	}
+	return "http://" + net.JoinHostPort(host, strconv.Itoa(port))
 }
 
 func (w *impl) Health(ctx context.Context) (*types.HealthStatus, error) {

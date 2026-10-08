@@ -11,6 +11,7 @@ import (
 
 type apiOutputRequestKey struct{}
 type apiTerminalObserver struct {
+	exactToolMessageID string
 	fallbackMessageID  string
 	relay              *outboundRelay
 	req                *Request
@@ -30,6 +31,7 @@ func (o *apiTerminalObserver) observe(event []byte) {
 		return
 	}
 	o.observeFallback(e)
+	o.observeExactToolInput(e)
 	switch str(e, "type") {
 	case "content_block_start":
 		block, _ := e["content_block"].(map[string]any)

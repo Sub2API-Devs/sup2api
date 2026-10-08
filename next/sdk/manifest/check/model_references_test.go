@@ -27,6 +27,18 @@ func TestModelReferenceDeclarations(t *testing.T) {
 		{"duplicate name", func(p *manifest.Platform) {
 			p.Endpoints[0].Request.ModelReferences = append(p.Endpoints[0].Request.ModelReferences, p.Endpoints[0].Request.ModelReferences[0])
 		}},
+		{"override query", func(p *manifest.Platform) {
+			p.Endpoints[0].Request.ModelReferences[0].ParameterOverrides = []string{`tools.#(name=="x")`}
+		}},
+		{"duplicate override", func(p *manifest.Platform) {
+			p.Endpoints[0].Request.ModelReferences[0].ParameterOverrides = []string{"speed", "speed"}
+		}},
+		{"too many overrides", func(p *manifest.Platform) {
+			p.Endpoints[0].Request.ModelReferences[0].ParameterOverrides = []string{"a", "b", "c", "d", "e", "f", "g", "h", "i"}
+		}},
+		{"empty override", func(p *manifest.Platform) {
+			p.Endpoints[0].Request.ModelReferences[0].ParameterOverrides = []string{""}
+		}},
 		{"missing price extraction", func(p *manifest.Platform) {
 			p.Endpoints[0].Billing, p.Endpoints[0].BillingTypes = "usage", []string{"per_token"}
 		}},

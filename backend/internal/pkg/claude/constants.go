@@ -1,6 +1,8 @@
 // Package claude provides constants and helpers for Claude API integration.
 package claude
 
+import "github.com/Sub2API-Devs/sup2api/next/protocol-codec/modelpolicy"
+
 // Claude Code 客户端相关常量
 
 // Beta header 常量
@@ -234,11 +236,7 @@ var ModelIDOverrides = map[string]string{
 }
 
 // ModelIDReverseOverrides 用于将上游模型 ID 还原为短名
-var ModelIDReverseOverrides = map[string]string{
-	"claude-sonnet-4-5-20250929": "claude-sonnet-4-5",
-	"claude-opus-4-5-20251101":   "claude-opus-4-5",
-	"claude-haiku-4-5-20251001":  "claude-haiku-4-5",
-}
+var ModelIDReverseOverrides = modelpolicy.ModelIDReverseOverrides
 
 // NormalizeModelID 根据 Claude OAuth 规则映射模型
 func NormalizeModelID(id string) string {

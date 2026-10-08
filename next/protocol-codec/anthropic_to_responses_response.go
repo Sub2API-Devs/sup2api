@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
+	claude "github.com/Sub2API-Devs/sup2api/next/protocol-codec/modelpolicy"
 )
 
 // ---------------------------------------------------------------------------

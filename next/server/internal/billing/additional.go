@@ -11,19 +11,21 @@ func quoteRecord(ctx context.Context, q core.Quoter, r *core.UsageRecord) (decim
 	if r.BillingError != "" {
 		return decimal.Zero, fmt.Errorf("usage billing blocked: %s", r.BillingError)
 	}
-	if len(r.Additional) > 128 {
+	if len(r.Additional)+len(r.Replacement) > 128 {
 		return decimal.Zero, fmt.Errorf("additional usage exceeds limit")
 	}
-	items := append([]core.PricedUsage(nil), r.Additional...)
+	items := append(append([]core.PricedUsage(nil), r.Replacement...), r.Additional...)
 	for _, item := range items {
 		if err := core.ValidatePricedUsage(item); err != nil {
 			return decimal.Zero, err
 		}
 	}
-	items = append([]core.PricedUsage{{Price: r.Price, UsageSemantics: r.UsageSemantics, Tokens: r.Tokens, Metrics: r.Metrics, PriceParams: r.PriceParams, PriceHeaders: r.PriceHeaders, RateMultiplier: r.RateMultiplier}}, items...)
+	if len(r.Replacement) == 0 {
+		items = append([]core.PricedUsage{{Price: r.Price, UsageSemantics: r.UsageSemantics, Tokens: r.Tokens, Metrics: r.Metrics, PriceParams: r.PriceParams, PriceHeaders: r.PriceHeaders, RateMultiplier: r.RateMultiplier}}, items...)
+	}
 	total := decimal.Zero
 	for _, item := range items {
-		if item.Price == nil {
+		if item.Price == nil || item.Free {
 			continue
 		}
 		params := map[string]any{}

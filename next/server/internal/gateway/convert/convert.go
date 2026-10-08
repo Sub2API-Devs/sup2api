@@ -5,8 +5,7 @@
 // upstream request, and converts the upstream response (JSON or SSE) Q→P on
 // the way back. Conversion never goes through a plugin.
 //
-// No concrete protocol pair ships yet; pairs are added (see builtins) when an
-// account type with a matching upstream appears.
+// Built-in pairs accept only parameters with a verified target equivalent.
 package convert
 
 import (
@@ -84,9 +83,10 @@ func NewRegistry(cs ...Converter) *Registry {
 	return r
 }
 
-// builtins are the core's built-in converters. Empty for now: no account
-// type needs conversion yet (ARCHITECTURE 6.6).
-var builtins []func() Converter
+var builtins = []func() Converter{
+	func() Converter { return &openAIAnthropic{protocol: "openai.chat"} },
+	func() Converter { return &openAIAnthropic{protocol: "openai.responses"} },
+}
 
 // Default returns a new registry with the built-in converters.
 func Default() *Registry {

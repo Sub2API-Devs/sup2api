@@ -106,6 +106,8 @@ type UsageTokens struct {
 // submitted to the Settler, which persists usage_logs, bills and emits
 // usage.recorded asynchronously.
 type UsageRecord struct {
+	// Nonempty Replacement prices verified attempts instead of top-level tokens.
+	Replacement  []PricedUsage
 	Additional   []PricedUsage
 	BillingError string
 	RequestID    string
@@ -200,6 +202,8 @@ type AdditionalUsage struct {
 
 // PricedUsage freezes every price input needed for a settlement retry.
 type PricedUsage struct {
+	Free           bool
+	BillingReason  string
 	Kind           string
 	Model          string
 	Price          *PriceRule
@@ -209,6 +213,15 @@ type PricedUsage struct {
 	PriceParams    map[string]string
 	PriceHeaders   map[string]string
 	RateMultiplier decimal.Decimal
+}
+
+// AttemptUsage is a host-verified replacement component before price binding.
+type AttemptUsage struct {
+	Kind, Model, UsageSemantics string
+	Tokens                      UsageTokens
+	Free                        bool
+	BillingReason               string
+	Metrics                     map[string]any
 }
 
 // Response shape mismatches recorded in usage_logs.anomalies

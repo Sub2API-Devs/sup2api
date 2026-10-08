@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/httpfacts"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -93,6 +94,7 @@ type gwError struct {
 	// platform plugin gave no client-facing type or message.
 	Raw         []byte
 	ContentType string
+	Headers     http.Header
 	// RecordType is the usage_logs.error_type for this failure.
 	RecordType string
 }
@@ -103,6 +105,9 @@ func fromCore(e *core.Error, recordType string) *gwError {
 
 // writeError renders err in the endpoint's error format.
 func writeError(c *gin.Context, format string, err *gwError) {
+	if !c.Writer.Written() {
+		httpfacts.Apply(c.Writer.Header(), err.Headers)
+	}
 	status := err.Status
 	if status <= 0 {
 		status = http.StatusInternalServerError

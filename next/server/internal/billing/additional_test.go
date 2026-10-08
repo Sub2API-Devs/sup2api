@@ -24,3 +24,16 @@ func TestAdditionalPrechargeQuotesIndependentComponents(t *testing.T) {
 		t.Fatal("invalid count quoted")
 	}
 }
+
+func TestReplacementPrechargeUsesAttemptsWithoutFinalDoubleCount(t *testing.T) {
+	r := &core.UsageRecord{Price: &core.PriceRule{Expression: `tier("wrong-main",p*99)`}, Tokens: core.UsageTokens{Input: 1_000_000}, UsageSemantics: "exclusive", RateMultiplier: decimal.NewFromInt(1)}
+	r.Replacement = []core.PricedUsage{{Kind: "fallback", Model: "primary", Price: r.Price, Tokens: r.Tokens, UsageSemantics: "exclusive", RateMultiplier: decimal.NewFromInt(1), Free: true, BillingReason: "refusal_before_output_free_cyber"}, {Kind: "fallback", Model: "next", Price: &core.PriceRule{Expression: `tier("actual",p*2)`}, Tokens: r.Tokens, UsageSemantics: "exclusive", RateMultiplier: decimal.NewFromInt(1)}}
+	amount, e := quoteRecord(context.Background(), &Service{}, r)
+	if e != nil || !amount.Equal(decimal.NewFromInt(2)) {
+		t.Fatal(amount, e)
+	}
+	r.BillingError = "incomplete chain"
+	if _, e = quoteRecord(context.Background(), &Service{}, r); e == nil {
+		t.Fatal("blocked chain precharged")
+	}
+}

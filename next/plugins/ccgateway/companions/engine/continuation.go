@@ -14,10 +14,10 @@ func (r *Request) configureContinuation() {
 }
 
 func (r *Request) needsAPITerminalControl() bool {
-	return len(r.APIClientTools) > 0 || r.needsFreshNativeSession()
+	return r.MCP != nil || len(r.APIClientTools) > 0 || r.needsFreshNativeSession()
 }
 func (r *Request) needsFreshNativeSession() bool {
-	return r.InlineTools != nil || r.APIOutputFormat || r.continuation != "" || r.hasContextControls() || r.hasCompactionHistory()
+	return r.hasFallbacks() || r.InlineTools != nil || r.APIOutputFormat || r.continuation != "" || r.hasContextControls() || r.hasCompactionHistory()
 }
 
 func (r *Request) observesAPITerminal() bool {
@@ -71,6 +71,9 @@ func (r *Request) restoreContinuationTail(body Object) error {
 	if digest(historySkeleton(expected)) == digest(historySkeleton(actual)) {
 		return nil
 	}
+	if restored, err := r.restorePendingMCPContinuation(body, messages, expected, actual); restored || err != nil {
+		return err
+	}
 	if str(last, "role") != "assistant" || len(actual) != 1 || str(actual[0], "type") != "text" || str(actual[0], "text") != "[Tool use interrupted]" {
 		return fmt.Errorf("assistant continuation history changed")
 	}
@@ -82,7 +85,7 @@ func (r *Request) restoreContinuationTail(body Object) error {
 		return err
 	}
 	for _, block := range expected {
-		if str(block, "type") != "server_tool_use" || ledger.pending[str(block, "id")] == "" {
+		if (str(block, "type") != "server_tool_use" && str(block, "type") != "mcp_tool_use") || ledger.pending[str(block, "id")] == "" {
 			return fmt.Errorf("unrecognized interrupted assistant continuation")
 		}
 	}

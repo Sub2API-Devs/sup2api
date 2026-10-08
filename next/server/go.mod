@@ -6,9 +6,12 @@ replace github.com/Sub2API-Devs/sup2api/next/sdk => ../sdk
 
 replace github.com/Sub2API-Devs/sup2api/next/runtime-contract => ../runtime-contract
 
+replace github.com/Sub2API-Devs/sup2api/next/protocol-codec => ../protocol-codec
+
 replace github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts => ../plugins/ccgateway/companions/contracts
 
 require (
+	github.com/Sub2API-Devs/sup2api/next/protocol-codec v0.0.0
 	github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts v0.0.0
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/Sub2API-Devs/sup2api/next/runtime-contract v0.0.0

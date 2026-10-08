@@ -1,8 +1,8 @@
 package claude
 
 import (
+	"github.com/Sub2API-Devs/sup2api/next/protocol-codec/modelpolicy"
 	"strings"
-	"unicode"
 )
 
 var (
@@ -41,35 +41,6 @@ func EffortLevelsForModel(model string) []string {
 }
 
 // IsOpus55 identifies the fixed Opus 5.5 ID after provider/local suffix normalization.
-func IsOpus55(model string) bool {
-	return normalizeEffortModelID(model) == "claude-opus-5-5"
-}
+func IsOpus55(model string) bool { return modelpolicy.IsOpus55(model) }
 
-func normalizeEffortModelID(model string) string {
-	id := strings.ToLower(strings.TrimSpace(model))
-	id = strings.TrimPrefix(id, "models/")
-	if slash := strings.IndexByte(id, '/'); slash >= 0 {
-		id = strings.TrimPrefix(strings.TrimSpace(id[slash+1:]), "models/")
-	}
-	id = strings.TrimPrefix(id, "anthropic.")
-	id = strings.TrimSuffix(id, "-thinking")
-	if mapped, ok := ModelIDReverseOverrides[id]; ok {
-		id = mapped
-	}
-	if len(id) >= 9 {
-		suffix := id[len(id)-9:]
-		if suffix[0] == '-' {
-			digits := true
-			for _, r := range suffix[1:] {
-				if !unicode.IsDigit(r) {
-					digits = false
-					break
-				}
-			}
-			if digits {
-				id = id[:len(id)-9]
-			}
-		}
-	}
-	return id
-}
+func normalizeEffortModelID(model string) string { return modelpolicy.NormalizeEffortModelID(model) }

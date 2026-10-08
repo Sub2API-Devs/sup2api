@@ -107,6 +107,17 @@ func (s *cliSession) run() (Object, error) {
 		if e != nil {
 			return nil, e
 		}
+		if s.acc.Done && s.req.fallbackJSON() {
+			answer, err := s.relay.completedJSONGeneration()
+			if err != nil {
+				return nil, err
+			}
+			if err = s.checkMod(); err != nil {
+				return nil, err
+			}
+			s.p.APIResponseComplete = true
+			return answer, s.flush()
+		}
 		if s.acc.Done && s.req.stopsAtAPITerminal(str(s.acc.Message, "stop_reason")) {
 			return s.completeAPIOutput()
 		}
@@ -180,6 +191,9 @@ func (s *cliSession) onStreamEvent(f Object) error {
 		}
 	}
 	searchMessage := internalHistoryAssistant(s.req, Object{"content": s.acc.Blocks})
+	if err := s.restoreExactToolStart(event); err != nil {
+		return err
+	}
 	if err := s.restoreFallbackEvents(event); err != nil {
 		return err
 	}

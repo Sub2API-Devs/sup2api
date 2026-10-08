@@ -95,8 +95,11 @@ func TestBetaRulesAreIndependentAdmissionRules(t *testing.T) {
 	if !seen["inline-tools-2026-09-15"] || !seen["mid-conversation-tool-changes-2026-07-01"] {
 		t.Fatal("implemented inline protocols lack beta admission")
 	}
-	// A documentation-only beta must not become an admitted feature implicitly.
-	if seen["mcp-client-2025-11-20"] {
-		t.Fatal("unimplemented MCP connector unexpectedly admitted")
+	if !seen["mcp-client-2025-11-20"] || !seen["mcp-client-2026-09-15"] {
+		t.Fatal("implemented MCP protocols lack shared beta admission")
+	}
+	// The deprecated schema is not silently upgraded to a supported version.
+	if seen["mcp-client-2025-04-04"] {
+		t.Fatal("deprecated MCP protocol unexpectedly admitted")
 	}
 }

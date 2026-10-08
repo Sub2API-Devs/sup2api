@@ -119,7 +119,7 @@ func visitProtocolBlocks(blocks []Object, visit func(Object) error) error {
 		if err := visit(block); err != nil {
 			return err
 		}
-		if str(block, "type") == "tool_result" {
+		if str(block, "type") == "tool_result" || str(block, "type") == "search_result" {
 			nested, err := historyContent(block["content"])
 			if err != nil {
 				return err
@@ -227,7 +227,7 @@ func copyBlockCache(expected, actual []Object) error {
 		if value, exists := b["cache_control"]; exists {
 			actual[i]["cache_control"] = cloneCacheValue(value)
 		}
-		if str(b, "type") == "tool_result" {
+		if str(b, "type") == "tool_result" || str(b, "type") == "search_result" {
 			e, _ := historyContent(b["content"])
 			a, _ := historyContent(actual[i]["content"])
 			if err := copyBlockCache(e, a); err != nil {
@@ -261,6 +261,9 @@ func (r *Request) restoreCacheTools(body Object) error {
 	for _, b := range actual {
 		delete(b, "cache_control")
 		name := apiToolName(b)
+		if str(b, "type") == "mcp_toolset" {
+			name = "mcp:" + str(b, "mcp_server_name")
+		}
 		if byName[name] != nil {
 			return fmt.Errorf("duplicate tools in cache prefix")
 		}
@@ -272,6 +275,9 @@ func (r *Request) restoreCacheTools(body Object) error {
 	ordered := make([]Object, 0, len(actual))
 	for _, want := range r.Plan.cache.Tools {
 		name := r.wireName(str(want, "name"))
+		if str(want, "type") == "mcp_toolset" {
+			name = "mcp:" + str(want, "mcp_server_name")
+		}
 		if serverToolName(str(want, "type")) != "" {
 			name = str(want, "name")
 		}
@@ -280,7 +286,7 @@ func (r *Request) restoreCacheTools(body Object) error {
 		}
 		tool := byName[name]
 		matches := tool != nil && digest(tool["input_schema"]) == digest(want["input_schema"])
-		if apiClientType(str(want, "type")) {
+		if apiClientType(str(want, "type")) || str(want, "type") == "mcp_toolset" {
 			expected, _ := jsonCopyObject(want)
 			delete(expected, "cache_control")
 			matches = digest(tool) == digest(expected)
@@ -404,7 +410,7 @@ func withoutProtocolCache(blocks []Object) []Object {
 			result["content"] = withoutProtocolCache([]Object{doc})[0]
 			copy["content"] = result
 		}
-		if str(block, "type") == "tool_result" {
+		if str(block, "type") == "tool_result" || str(block, "type") == "search_result" {
 			if _, text := block["content"].(string); !text {
 				nested, _ := historyContent(block["content"])
 				copy["content"] = withoutProtocolCache(nested)

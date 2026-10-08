@@ -424,6 +424,8 @@ type UsageRules struct {
 	// Additional meters model usage excluded from the main counters. Each
 	// observed array is a complete snapshot, never a stream delta to sum.
 	Additional []AdditionalUsageRule `json:"additional,omitempty"`
+	// Attempts replaces main-counter pricing with verified per-attempt usage.
+	Attempts *AttemptUsageRule `json:"attempts,omitempty"`
 }
 
 type AdditionalUsageRule struct {

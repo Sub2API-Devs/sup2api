@@ -36,7 +36,7 @@ func alignClientHistory(r *Request, body Object) ([]historyBlockPair, error) {
 	}
 	var out []historyBlockPair
 	at := 0
-	for _, want := range r.Messages {
+	for ordinal, want := range r.Messages {
 		expected := r.wireMessage(want).Content
 		if err := copyBlockCache(want.Content, expected); err != nil {
 			return nil, err
@@ -59,7 +59,7 @@ func alignClientHistory(r *Request, body Object) ([]historyBlockPair, error) {
 			if want.Role == "user" {
 				matched, err = alignUserHistoryBlocks(expected, actual)
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("client user turn %d: %w", ordinal, err)
 				}
 			}
 			if str(message, "role") != want.Role || digest(historySkeleton(matched)) != digest(historySkeleton(expected)) {
@@ -133,7 +133,7 @@ func historyContent(value any) ([]Object, error) {
 func historyDocuments(blocks []Object) []Object {
 	var out []Object
 	for _, block := range blocks {
-		if str(block, "type") == "document" {
+		if str(block, "type") == "document" || str(block, "type") == "search_result" {
 			out = append(out, block)
 		}
 		if str(block, "type") == "tool_result" {
@@ -191,7 +191,7 @@ func historySkeleton(blocks []Object) []Object {
 			target["definition"] = clean
 			copy["tool"] = target
 		}
-		if str(block, "type") == "tool_result" {
+		if str(block, "type") == "tool_result" || str(block, "type") == "search_result" {
 			nested, _ := historyContent(block["content"])
 			copy["content"] = historySkeleton(nested)
 		}

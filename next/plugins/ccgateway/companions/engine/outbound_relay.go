@@ -31,13 +31,14 @@ import (
 // Requests without client system messages keep their body (thinking.display
 // aside); every other field stays as the CLI wrote it.
 type outboundRelay struct {
-	fallbackEvents map[string]map[int]*fallbackCapture
-	scope          *mainRequestScope
-	path           string
-	URL            string
-	FirstParty     bool
-	server         *http.Server
-	transport      *http.Transport
+	exactToolInputs map[string]map[int]exactToolCapture
+	fallbackEvents  map[string]map[int]*fallbackCapture
+	scope           *mainRequestScope
+	path            string
+	URL             string
+	FirstParty      bool
+	server          *http.Server
+	transport       *http.Transport
 
 	mu                 sync.Mutex
 	failure            error
@@ -48,6 +49,7 @@ type outboundRelay struct {
 	modelForwarded     bool
 	abort              func() // ends the CLI run; set by the Runner
 	warmupResponse     json.RawMessage
+	jsonResponse       json.RawMessage
 	tokenCountResponse json.RawMessage
 }
 
@@ -79,6 +81,7 @@ type upstreamError struct {
 	Status      int
 	ContentType string
 	Body        []byte
+	Headers     http.Header
 }
 
 func (e *upstreamError) Error() string { return fmt.Sprintf("upstream API returned HTTP %d", e.Status) }
@@ -152,6 +155,7 @@ func errorTypeStatus(kind string) int {
 // sseWatch forwards a model stream event by event and stops at an error
 // event, which is kept for the API client and never reaches the CLI.
 type sseWatch struct {
+	guard        func([]byte) ([]byte, error)
 	observe      func([]byte)
 	ignoreErrors bool
 	body         io.ReadCloser
@@ -206,6 +210,13 @@ func (s *sseWatch) Read(p []byte) (int, error) {
 		}
 		buf := make([]byte, 32<<10)
 		n, err := s.body.Read(buf)
+		if s.guard != nil && len(s.pending)+n > 16<<20 {
+			s.done = true
+			s.err = fmt.Errorf("guarded provider event exceeds inspection limit")
+			s.pending = nil
+			s.relay.reject(&upstreamError{Status: 502, ContentType: "application/json", Body: []byte(`{"type":"error","error":{"type":"api_error","message":"MCP provider event exceeds credential inspection limit"}}`)}, s.request)
+			continue
+		}
 		s.pending = append(s.pending, buf[:n]...)
 		for {
 			end, size := sseEventEnd(s.pending)
@@ -213,6 +224,16 @@ func (s *sseWatch) Read(p []byte) (int, error) {
 				break
 			}
 			event := s.pending[:end+size]
+			if s.guard != nil {
+				guarded, err := s.guard(event)
+				if err != nil {
+					s.pending = nil
+					s.done = true
+					s.err = err
+					break
+				}
+				event = guarded
+			}
 			if payload, failed := sseErrorPayload(event); failed && !s.ignoreErrors {
 				status := 500
 				if decoded, err := decodeObject(payload); err == nil {
@@ -232,6 +253,11 @@ func (s *sseWatch) Read(p []byte) (int, error) {
 		if err != nil && !s.done {
 			s.done = true
 			if err == io.EOF {
+				if s.guard != nil && len(bytes.TrimSpace(s.pending)) > 0 {
+					s.err = fmt.Errorf("incomplete guarded provider event")
+					s.pending = nil
+					continue
+				}
 				s.ready = append(s.ready, s.pending...)
 				s.pending = nil
 			} else {
@@ -356,6 +382,10 @@ func (r *outboundRelay) adaptAttributed(req *Request, groups []systemGroup, body
 		return nil, false, err
 	}
 	if !main {
+		canonical, _ := json.Marshal(message)
+		if req.containsImageCarrier(canonical) {
+			return nil, false, fmt.Errorf("image carrier is outside the attributed main request")
+		}
 		return body, false, nil
 	}
 	if req.CountTokens {
@@ -363,6 +393,9 @@ func (r *outboundRelay) adaptAttributed(req *Request, groups []systemGroup, body
 		// Claude Code's augmented prompt. CLI is only the authenticated carrier.
 		r.scope.recordApplied()
 		return req.Plan.RawRequest(), true, nil
+	}
+	if err := req.restoreImageCarriers(message); err != nil {
+		return nil, false, err
 	}
 	if err := req.removeContinuation(message); err != nil {
 		return nil, false, err
@@ -380,11 +413,17 @@ func (r *outboundRelay) adaptAttributed(req *Request, groups []systemGroup, body
 			return nil, false, err
 		}
 		r.scope.recordApplied()
-		if req.CacheWarmup {
+		if req.CacheWarmup || req.fallbackJSON() {
 			message["stream"] = false
 		}
 	}
+	exactToolHistoryChanged := false
 	if !count {
+		var repairErr error
+		exactToolHistoryChanged, repairErr = req.restoreExactToolHistoryInputs(message)
+		if repairErr != nil {
+			return nil, false, repairErr
+		}
 		if err := req.restoreContinuationTail(message); err != nil {
 			return nil, false, err
 		}
@@ -419,6 +458,9 @@ func (r *outboundRelay) adaptAttributed(req *Request, groups []systemGroup, body
 		if err := restoreInlineSystemMetadata(req, message); err != nil {
 			return nil, false, err
 		}
+		if err := req.restoreImageTransformations(message); err != nil {
+			return nil, false, err
+		}
 		if err := restoreHistoryCitations(req, message); err != nil {
 			return nil, false, err
 		}
@@ -433,6 +475,11 @@ func (r *outboundRelay) adaptAttributed(req *Request, groups []systemGroup, body
 		}
 		if err := req.verifyInlineToolHistory(message); err != nil {
 			return nil, false, err
+		}
+		if exactToolHistoryChanged {
+			if _, err := alignClientHistory(req, message); err != nil {
+				return nil, false, fmt.Errorf("exact tool history alignment: %w", err)
+			}
 		}
 	}
 	if display := str(req.Thinking, "display"); display != "" && !count {
@@ -517,6 +564,10 @@ func (relay *outboundRelay) forwarder(target *url.URL) *httputil.ReverseProxy {
 		apiError(w, 502, "api_error", "Relay upstream unavailable")
 	}
 	forward.ModifyResponse = func(resp *http.Response) error {
+		captureProviderResponseFacts(resp)
+		if err := relay.protectMCPResponse(resp); err != nil {
+			return err
+		}
 		if tr, ok := resp.Request.Context().Value(traceExchangeKey{}).(traceExchange); ok {
 			tr.diagnostic.artifact(tr.prefix+"-response.json", Object{"status": resp.StatusCode, "headers": safeHeaders(resp.Header)})
 			tr.diagnostic.trace("upstream_response", Object{"exchange": tr.prefix, "status": resp.StatusCode})
@@ -527,6 +578,9 @@ func (relay *outboundRelay) forwarder(target *url.URL) *httputil.ReverseProxy {
 		}
 		if warmup, _ := resp.Request.Context().Value(warmupRequestKey{}).(bool); warmup {
 			return relay.bridgeWarmupResponse(resp)
+		}
+		if request, _ := resp.Request.Context().Value(jsonGenerationRequestKey{}).(*Request); request != nil {
+			return relay.bridgeJSONGeneration(resp, request)
 		}
 		if output, _ := resp.Request.Context().Value(apiOutputRequestKey{}).(*Request); output != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 && strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
 			pass, _ := resp.Request.Context().Value(modelRequest{}).(bool)
@@ -557,7 +611,7 @@ func (relay *outboundRelay) passUpstreamErrors(resp *http.Response) error {
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	resp.Body.Close()
-	relay.reject(&upstreamError{Status: resp.StatusCode, ContentType: resp.Header.Get("Content-Type"), Body: body}, resp.Request)
+	relay.reject(&upstreamError{Status: resp.StatusCode, ContentType: resp.Header.Get("Content-Type"), Body: body, Headers: mainErrorHeaders(resp)}, resp.Request)
 	if err != nil {
 		return err
 	}
@@ -681,6 +735,15 @@ func (relay *outboundRelay) adaptRequest(w http.ResponseWriter, r *http.Request,
 		ctx := context.WithValue(r.Context(), warmupRequestKey{}, true)
 		*r = *r.WithContext(context.WithValue(ctx, modelRequest{}, true))
 	}
+	if model && req.fallbackJSON() && attributed {
+		ctx := context.WithValue(r.Context(), jsonGenerationRequestKey{}, req)
+		*r = *r.WithContext(context.WithValue(ctx, modelRequest{}, true))
+	}
+	if model && req.hasFallbacks() && attributed {
+		// The provider owns this explicit attempt chain. CC must not start a
+		// second chain after a rate limit, transport status, or SSE error.
+		*r = *r.WithContext(context.WithValue(r.Context(), modelRequest{}, true))
+	}
 	if model && req.CountTokens && attributed {
 		ctx := context.WithValue(r.Context(), tokenCountRequestKey{}, true)
 		*r = *r.WithContext(context.WithValue(ctx, modelRequest{}, true))
@@ -688,6 +751,9 @@ func (relay *outboundRelay) adaptRequest(w http.ResponseWriter, r *http.Request,
 	}
 	if model && (req.observesAPITerminal() || req.Plan != nil && req.Plan.apiGeneration) && attributed {
 		*r = *r.WithContext(context.WithValue(r.Context(), apiOutputRequestKey{}, req))
+	}
+	if model && attributed {
+		*r = *r.WithContext(context.WithValue(r.Context(), providerResponseKey{}, req.responseFacts))
 	}
 	r.Body = io.NopCloser(bytes.NewReader(adapted))
 	if req.diagnostic != nil {

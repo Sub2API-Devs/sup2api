@@ -36,6 +36,7 @@ func For(ap manifest.AccountPlatform, ep *manifest.Endpoint, pf *manifest.Platfo
 // Acc applies the platform's declarative usage rules. Later values win, so
 // cumulative counters (message_delta) override earlier ones.
 type Acc struct {
+	attempts        *attemptMeter
 	primaryModel    string
 	additional      map[string][]core.AdditionalUsage
 	AdditionalError string
@@ -252,6 +253,7 @@ func (u *Acc) ApplyJSON(body []byte) {
 func (u *Acc) HasJSON() bool { return u.rules.JSON != nil }
 
 func (u *Acc) applyJSONDoc(body []byte) {
+	u.applyAttempts("", body, false)
 	u.applyAdditional("", body, false)
 	if m := u.rules.JSON; m != nil {
 		for field, path := range m.Map {
@@ -267,6 +269,7 @@ func (u *Acc) ApplySSE(event string, data []byte) {
 		return
 	}
 	name := EventName(event, data)
+	u.applyAttempts(name, data, true)
 	u.applyAdditional(name, data, true)
 	// Anthropic/Responses name error events; OpenAI chat and Gemini send an
 	// unnamed {"error": {...}} chunk.

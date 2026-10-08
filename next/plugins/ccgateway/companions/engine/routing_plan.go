@@ -32,13 +32,13 @@ func (r *Request) applyInferenceGeo(body []byte) ([]byte, error) {
 }
 
 func (r *Request) validateRoutingProvider(env []string) error {
-	if !r.hasInferenceGeo() {
+	if !r.hasInferenceGeo() && !r.hasFallbacks() {
 		return nil
 	}
 	for _, name := range []string{"CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY"} {
 		value := environmentValue(env, name)
 		if value != "" && value != "0" && value != "false" {
-			return fmt.Errorf("inference_geo requires the Anthropic API transport; provider region routing is not interchangeable")
+			return fmt.Errorf("inference_geo/fallbacks require the Anthropic API transport; provider routing is not interchangeable")
 		}
 	}
 	return nil

@@ -38,6 +38,10 @@ func (d *requestDiagnostic) appendTrace(name string, b []byte) {
 	}
 	unlock := d.lock()
 	defer unlock()
+	if d.secretCapture && name != "events.jsonl" {
+		return // Raw transport chunks can split a credential at any byte.
+	}
+	b = d.redactCaptureLocked(b)
 	if d.store != nil && !d.store.enabled {
 		return
 	}

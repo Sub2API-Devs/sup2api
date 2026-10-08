@@ -9,6 +9,10 @@ func advisorHistoryBlock(block Object) bool {
 	return str(block, "type") == "advisor_tool_result" || str(block, "type") == "server_tool_use" && str(block, "name") == "advisor"
 }
 
+func registeredNativeOmission(block Object) bool {
+	return advisorHistoryBlock(block) || str(block, "type") == "mcp_tool_use"
+}
+
 // CLI 2.1.292 strips advisor history when its own local advisor is not enabled.
 // Restore only those registered blocks from the API history after validating
 // every surrounding client turn. Never replace a mismatched ordinary block.
@@ -16,13 +20,13 @@ func restoreAdvisorHistory(r *Request, body Object) error {
 	needed := false
 	for _, message := range r.Messages {
 		for _, block := range message.Content {
-			needed = needed || advisorHistoryBlock(block)
+			needed = needed || registeredNativeOmission(block)
 		}
 	}
 	if !needed {
 		return nil
 	}
-	return restoreAssistantOmissions(r, body, advisorHistoryBlock)
+	return restoreAssistantOmissions(r, body, registeredNativeOmission)
 }
 
 func restoreAssistantOmissions(r *Request, body Object, omitted func(Object) bool) error {

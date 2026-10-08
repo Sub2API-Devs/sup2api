@@ -25,6 +25,7 @@ func run() error {
 	}
 	defer w.Close()
 	srv := server.New(w, cfg.Port, cfg.AdminKey)
+	srv.BindHost(cfg.BindHost)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	done := make(chan error, 1)

@@ -5,18 +5,37 @@ import "fmt"
 // A mixed server/client turn may pause server execution until the client's
 // tool_result arrives. IDs and result kinds remain bound across those turns.
 type serverToolLedger struct {
-	pending   map[string]string
-	seen      map[string]bool
-	names     map[string]string
-	turnCalls map[string]bool
+	pending    map[string]string
+	seen       map[string]bool
+	names      map[string]string
+	turnCalls  map[string]bool
+	mcpServers map[string]string
 }
 
 func newServerToolLedger() *serverToolLedger {
-	return &serverToolLedger{pending: map[string]string{}, seen: map[string]bool{}, names: map[string]string{}, turnCalls: map[string]bool{}}
+	return &serverToolLedger{pending: map[string]string{}, seen: map[string]bool{}, names: map[string]string{}, turnCalls: map[string]bool{}, mcpServers: map[string]string{}}
 }
 
 func (l *serverToolLedger) accept(block Object, r *Request, historical ...bool) error {
 	kind := str(block, "type")
+	past := len(historical) > 0 && historical[0]
+	if kind == "mcp_tool_listing" {
+		if !past && (!r.MCP.hasServer(str(block, "mcp_server_name")) || !hasBetaHeader(r.Betas, mcpListingBeta)) {
+			return fmt.Errorf("undeclared MCP listing server or missing listing beta")
+		}
+		return nil
+	}
+	if kind == "mcp_tool_use" {
+		id, server := str(block, "id"), str(block, "server_name")
+		if id == "" || l.seen[id] || !past && (r.NoTools || !r.MCP.hasServer(server)) {
+			return fmt.Errorf("duplicate or undeclared MCP tool call")
+		}
+		l.seen[id] = true
+		l.mcpServers[id] = server
+		l.pending[id] = "mcp_tool_result"
+		l.turnCalls[id] = true
+		return nil
+	}
 	if kind == "fallback" {
 		// Only calls begun in this response segment are abandoned. A pending
 		// operation carried from an earlier client turn remains outstanding.
@@ -38,7 +57,7 @@ func (l *serverToolLedger) accept(block Object, r *Request, historical ...bool) 
 		l.turnCalls[id] = true
 		return nil
 	}
-	if kind != "tool_search_tool_result" && kind != "web_search_tool_result" && kind != "web_fetch_tool_result" && kind != "advisor_tool_result" {
+	if kind != "tool_search_tool_result" && kind != "web_search_tool_result" && kind != "web_fetch_tool_result" && kind != "advisor_tool_result" && kind != "mcp_tool_result" {
 		return nil
 	}
 	id := str(block, "tool_use_id")
@@ -70,6 +89,12 @@ func (l *serverToolLedger) beginTurn() { l.turnCalls = map[string]bool{} }
 
 func (l *serverToolLedger) validatePendingDefinitions(r *Request) error {
 	for id := range l.pending {
+		if l.pending[id] == "mcp_tool_result" {
+			if !r.MCP.hasServer(l.mcpServers[id]) {
+				return fmt.Errorf("pending MCP tool requires its server definition")
+			}
+			continue
+		}
 		if !r.hasServerSearch(l.names[id]) {
 			return fmt.Errorf("pending server tool requires its definition")
 		}

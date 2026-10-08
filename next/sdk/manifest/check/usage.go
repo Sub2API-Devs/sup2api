@@ -94,6 +94,7 @@ const (
 // tell on its own.
 func (v *validator) usageRules(field string, u manifest.UsageRules, owner usageOwner, pluginSource bool) {
 	v.additionalUsageRules(field+".additional", u.Additional)
+	v.attemptUsageRule(field+".attempts", u.Attempts)
 	switch {
 	case u.Semantics == "":
 		// A platform's own rules are the only place semantics is required:

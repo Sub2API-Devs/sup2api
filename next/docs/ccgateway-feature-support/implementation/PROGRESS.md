@@ -138,3 +138,28 @@
 - cc-max #21/#22容器ID与既有镜像未动，实际CLI为2.1.288；本地主要验证2.1.292。上线前必须核验/原地更新CLI，不能只替换Worker后忽略版本差异。
 - 第三批已开始：共享协议codec机械抽取（root独立AST核对104公开符号签名完全一致）、请求专属PreparedConverter、search_result/图片transformations/错误响应header完整链路。新增文件未混入第二批checkpoint。
 - 所有线上部署、真实提供商推理、资源资格和UI视觉检查仍未完成；隔离假上游与编译成功不能作为这些工作的替代。
+
+### 第二批验证完成、第三/四批集成中（2026-10-08 07:50）
+
+- 第二批 Windows 完整真实 CLI 隔离集 PASS 376.624s；cc-max 从 b52 Git 源码编译的 Linux 完整 CLI 集 PASS。Linux engine/Worker/contracts race 与 vet 通过。控制器在既有 0.1.47 镜像中挂载 Git 源码只读运行，39 项 Python 测试 PASS 6.616s；宿主机缺 docker Python 依赖的失败不计作代码失败。
+- usage DB 测试夹具修复已提交推送 af29d31ecf42366fdc5bffdf9b4993ade9c9c4a0；OVH 测试 worktree 经 Git 更新到该 SHA，隔离 PostgreSQL 45432 全 usage race PASS 5.010s。第三/四批尚未提交或部署。
+- #21/#22 原容器各用原 CLI 2.1.288 完成一次真实 Opus 5.5 简短推理。#22 原授权 Files GET 200，Models 返回 code_execution.supported=true；只是账号资格基线，尚未上传/执行资源，不能证明新代码通过。详见 REAL-ACCOUNT-BASELINE。
+- 第三批共享 codec 已抽取并通过独立复核；next 核心已接 OpenAI Chat Completions/Responses 严格转换。HTTP JSON/SSE/正常拒绝/截断/断流/权限/原始用量检查通过；完整核心→Worker→真实 CLI→假上游 50 次通过（包括 30 轮、回退、冷导入及数值精度）。OpenAI SSE 为确定终态拒绝而有界缓冲，已记录延迟取舍。
+- search_result、图片 transformations、JSON/SSE/count 响应安全 header 已实现；55 次媒体/历史与 4 次成功响应 header 真 CLI 隔离验证通过。不是云端图片识别资格结论。
+- 真实 CLI 揭示工具大整数舍入与初始非空 tool input 原生历史丢失；采用已归属原始输入、严格完整历史对齐和既有 responseOnly 重建修复。缓存键保留精确客户端数值。混合 MCP pending call 丢失另由注册遗漏集合恢复，禁止全局宽松对齐。
+- 第四批显式 fallback 已接模型权限、参数价格快照、每次尝试替代主用量、最终真实 JSON/SSE carrier。8 次真 CLI 隔离调用通过；多次尝试不重复加最终用量，免费拒绝仍计限流。缺 per-attempt 归属的 compaction 组合将具体拒绝；实际 speed 等事实不能复制给前面尝试。DB 新 replacement 测试待下个 Git checkpoint 在隔离 PG 验证。
+- 第四批 MCP connector 的请求/响应/历史与凭据日志隔离已实现，混合工具和跨 SSE 碎片凭据回显保护仍在收尾。Files/container/Code execution/PTC/Skills 资源产品与 fallback default/credit 尚未完成，不把这些记成不可实现。
+- 07:47 本机 gateway 全包测试仍因旧 PostgreSQL 缺 global/pg_control 失败；convert/usagerules/core 通过。将数据库部分放到隔离 Linux PG，不修复或删除本机数据库。
+- 当前分工：root 核心协议/模型授权/账务绑定与资源设计；audit_code_beta fallback/结算及资源预研；research_cc 精度与 Worker 绑定地址后独立复核 fallback；research_api MCP 收尾后独立复核精度。完成第四批后冻结、提交、Git 拉取测试，再推进资源批次。
+
+线上 #21/#22 仍保留原容器与授权，没有更新程序、CLI 或镜像默认值；OVH 四个生产节点未发布本批代码。
+
+### 第三/四批冻结复核（2026-10-08 08:10）
+
+- MCP 完整作者集 24 次真 CLI 隔离调用通过；独立审查额外复现 initial input 与 listing schema 数值舍入，修复已完成。listing 复制 pin、续聊和冷导入 3 次精确上游 wire 检查通过。工具输入恢复现在包括 client/server/MCP 的调用与 MCP listing.tools；非数字字段改变仍拒绝。
+- Worker bind 独立审查揭示指定非回环 IP 会让本机 relay 拒绝。现只接受 loopback/unspecified，localhost 同监听与内部 URL 一起归一 127.0.0.1，默认容器 wildcard 行为保留；未放宽 relay 回环访问要求。
+- 主代理复核修复 MCP 凭据前缀检查的二次复杂度，改为一次预计算的线性前缀匹配；不完整工具 JSON 与未解码内容编码具体拒绝。调试结构化脱敏保留 json.Number，避免日志证据自身舍入。
+- 显式 fallback 独立复核通过；真实终态事实只绑定最后一次采样，先前模型/缺失事实不补零，价格表达式依赖缺失事实时记录 BillingError。新的 gateway API200/计价快照/事实回归通过。
+- catalog 已更新为 2026-10-08.4，MCP 两版 beta 收入统一注册，不再单独在 Worker 硬编码准入。OpenAI 协议/MCP/fallback 的前端介绍反映实际子集与限制。
+- 冻结模块 tests/vet：shared codec、engine、Worker、SDK manifest/platforms/contracts 通过；本机 core/gateway/usage/billing 用 SUB2API_TESTPG=off 运行仅作为非DB检查，数据库将从新 Git checkpoint 去 OVH 45432 验证。
+- 第五批仅新增时间线 helper 与资源设计/新模块，尚未接线。主代理提交时将第五批半成品和原有无关文件排除；不能把未接线 helper 当功能完成。

@@ -15,18 +15,20 @@ import (
 
 // Full payloads stay only in removable files; metadata describes protocol structure.
 type requestDiagnostic struct {
-	mu        sync.Mutex
-	fields    Object
-	stage     string
-	started   time.Time
-	status    int
-	directory string
-	response  *os.File
-	writer    *diagnosticWriter
-	bytes     int64
-	discarded bool
-	finished  bool
-	store     *requestLogStore
+	secretCapture bool
+	secretTokens  []string
+	mu            sync.Mutex
+	fields        Object
+	stage         string
+	started       time.Time
+	status        int
+	directory     string
+	response      *os.File
+	writer        *diagnosticWriter
+	bytes         int64
+	discarded     bool
+	finished      bool
+	store         *requestLogStore
 }
 
 // Always acquire the store before the request mutex; disable uses the same
@@ -76,7 +78,7 @@ func (w *diagnosticWriter) Write(b []byte) (int, error) {
 		w.WriteHeader(http.StatusOK)
 	}
 	unlock := w.diagnostic.lock()
-	if w.diagnostic.response != nil && w.diagnostic.reserve(len(b)) {
+	if !w.diagnostic.secretCapture && w.diagnostic.response != nil && w.diagnostic.reserve(len(b)) {
 		if _, err := w.diagnostic.response.Write(b); err != nil {
 			w.diagnostic.logFailure(err)
 		}
@@ -102,6 +104,7 @@ func (d *requestDiagnostic) save(name string, b []byte) {
 }
 
 func (d *requestDiagnostic) saveLocked(name string, b []byte) {
+	b = d.redactCaptureLocked(b)
 	if d.store != nil && !d.store.enabled {
 		return
 	}

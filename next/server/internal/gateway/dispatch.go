@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/httpfacts"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"io"
 	"log/slog"
@@ -18,6 +19,7 @@ import (
 	"github.com/tidwall/sjson"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert"
 )
 
 type attemptKind int
@@ -318,7 +320,12 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	upBody, err := rt.upstreamBody(c.body)
 	if err != nil {
 		slog.InfoContext(ctx, "gateway: request conversion failed", "from", c.ep.Protocol, "to", rt.upstream, "err", err)
-		return attemptResult{kind: attemptFailover, err: &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code,
+		kind, code := attemptFailover, core.ErrInvalidArgument.Code
+		var admission *convert.RequestError
+		if errors.As(err, &admission) {
+			kind, code = attemptReturn, "unsupported_conversion"
+		}
+		return attemptResult{kind: kind, err: &gwError{Status: http.StatusBadRequest, Code: code,
 			Message: "request cannot be converted to " + rt.upstream + ": " + err.Error(), RecordType: errTypeInvalidRequest}}
 	}
 
@@ -395,8 +402,14 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	if err := c.validatePatchedModelReferences(upBody, body); err != nil {
 		return attemptResult{kind: attemptFailover, err: invalidModelReference(err.Error())}
 	}
+	if err := validateModelReferencePatches(upBody, body, rt.modelReferences); err != nil {
+		return attemptResult{kind: attemptFailover, err: invalidModelReference(err.Error())}
+	}
 	if c.ep.Billing != "free" && !c.routeHasRequiredPrimaryUsageFor(rt, body) {
 		return attemptResult{kind: attemptFailover, err: invalidModelReference("account usage rules cannot meter the requested operation")}
+	}
+	if c.ep.Billing != "free" && !c.routeHasRequiredAttempts(rt, body) {
+		return attemptResult{kind: attemptFailover, err: invalidModelReference("account usage rules cannot meter the requested attempts")}
 	}
 	var client *http.Client
 	if managedCCG {
@@ -485,6 +498,9 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		}
 		if res.err != nil && res.err.Raw != nil {
 			res.err.ContentType = ct
+		}
+		if res.err != nil {
+			res.err.Headers = httpfacts.Select(resp.Header)
 		}
 		return res
 	}

@@ -9,4 +9,7 @@ type RequestModelReference struct {
 	ArrayPath string            `json:"arrayPath"`
 	Match     map[string]string `json:"match,omitempty"`
 	ModelPath string            `json:"modelPath"`
+	// ParameterOverrides identifies request fields overridden by this array
+	// entry for pricing. Missing fields inherit; explicit null stays null.
+	ParameterOverrides []string `json:"parameterOverrides,omitempty"`
 }

@@ -447,6 +447,10 @@ func (c *call) capturePriceInputs(rule *core.PriceRule) {
 }
 
 func (c *call) priceInputs(rule *core.PriceRule) (params map[string]string, values map[string]string) {
+	return c.priceInputsFrom(rule, c.body)
+}
+
+func (c *call) priceInputsFrom(rule *core.PriceRule, body []byte) (params map[string]string, values map[string]string) {
 	if rule == nil {
 		return nil, nil
 	}
@@ -454,7 +458,7 @@ func (c *call) priceInputs(rule *core.PriceRule) (params map[string]string, valu
 	if len(paths) > 0 {
 		params = map[string]string{}
 		for _, p := range paths {
-			if r := gjson.GetBytes(c.body, p); r.Exists() {
+			if r := gjson.GetBytes(body, p); r.Exists() {
 				params[p] = r.Raw
 			}
 		}
@@ -685,7 +689,7 @@ func (c *call) finishSubmit(ctx context.Context, rec *core.UsageRecord, billing 
 func (c *call) finalizeBillability(ctx context.Context, rec *core.UsageRecord, billing string) {
 	hasUsage := rec.Tokens != (core.UsageTokens{}) || len(rec.Metrics) > 0
 	priced := rec.Price != nil && (hasUsage || (rec.Success && rec.Price.Mode == "per_request"))
-	for _, item := range rec.Additional {
+	for _, item := range append(append([]core.PricedUsage(nil), rec.Additional...), rec.Replacement...) {
 		itemUsage := item.Tokens != (core.UsageTokens{}) || len(item.Metrics) > 0
 		hasUsage = hasUsage || itemUsage
 		priced = priced || (item.Price != nil && (itemUsage || (rec.Success && item.Price.Mode == "per_request")))
@@ -741,6 +745,12 @@ func (c *call) countTokens(ctx context.Context, accountID int64) {
 		return
 	}
 	n := c.rec.Tokens.Total()
+	if len(c.rec.Replacement) > 0 {
+		n = 0
+		for _, item := range c.rec.Replacement {
+			n += item.Tokens.Total()
+		}
+	}
 	for _, item := range c.rec.Additional {
 		n += item.Tokens.Total()
 	}

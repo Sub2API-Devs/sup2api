@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
+	openai "github.com/Sub2API-Devs/sup2api/next/protocol-codec/modelpolicy"
 )
 
 type chatMessageContent struct {

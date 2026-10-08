@@ -323,7 +323,7 @@ func prepareHistory(r *Request, c *HistoryCache, logical, dir, version string) (
 // findPriorSnapshot is the cached checkpoint of the longest client prefix
 // that ends with an assistant message before the pending turn.
 func findPriorSnapshot(r *Request, c *HistoryCache, logical string, hashes []string, pending int) *Snapshot {
-	for n := pending - 1; r.InlineTools == nil && !r.structuredOutput() && n >= 0; n-- {
+	for n := pending - 1; r.InlineTools == nil && len(r.imageCarriers) == 0 && !r.structuredOutput() && n >= 0; n-- {
 		if r.Messages[n].Role != "assistant" {
 			continue
 		}
@@ -375,7 +375,7 @@ func (p *Prepared) seedRows(r *Request, start, pending int, parent, version stri
 			parent = id
 			continue
 		}
-		message := r.wireMessage(r.Messages[i])
+		message := r.cliWireMessage(r.Messages[i])
 		// Empty inline directives are restored at the relay. Native CLI adds a
 		// newline when it joins separate user rows, so serialize their exact
 		// block sequence in one row instead of letting that join alter text.
@@ -389,7 +389,7 @@ func (p *Prepared) seedRows(r *Request, start, pending int, parent, version stri
 				if next.Role != "user" {
 					break
 				}
-				message.Content = append(message.Content, r.wireMessage(next).Content...)
+				message.Content = append(message.Content, r.cliWireMessage(next).Content...)
 				i++
 			}
 		}

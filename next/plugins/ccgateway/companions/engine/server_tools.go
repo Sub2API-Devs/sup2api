@@ -208,7 +208,8 @@ func (r *Request) validateServerSearchHistory() error {
 // Invoked only after the relay identifies the main model request. The CLI
 // registers all client tools for dispatch; API defer_loading controls visibility.
 func (r *Request) applyServerSearchTools(message Object) error {
-	if len(r.ServerTools) == 0 && len(r.toolMetadataKey()) == 0 && !r.NoTools {
+	exactSchema := r.hasExactToolSchema()
+	if len(r.ServerTools) == 0 && len(r.toolMetadataKey()) == 0 && !r.NoTools && !exactSchema {
 		return nil
 	}
 	tools, _ := message["tools"].([]any)
@@ -219,7 +220,7 @@ func (r *Request) applyServerSearchTools(message Object) error {
 		}
 	}
 	for _, client := range r.Tools {
-		if len(r.ServerTools) == 0 && len(client.Metadata) == 0 && !r.NoTools {
+		if len(r.ServerTools) == 0 && len(client.Metadata) == 0 && !r.NoTools && !exactSchema {
 			continue
 		}
 		tool := byName[r.wireName(client.Name)]

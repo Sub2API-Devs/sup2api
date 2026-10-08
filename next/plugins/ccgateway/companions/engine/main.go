@@ -150,6 +150,7 @@ func (x *exchange) admit() bool {
 		}
 		return false
 	}
+	x.diagnostic.prepareSecrets(body)
 	x.diagnostic.request(body, r.Header)
 	x.diagnostic.setStage("parse_request")
 	parse := parsePolicyRequest
@@ -162,6 +163,7 @@ func (x *exchange) admit() bool {
 		return false
 	}
 	req.diagnostic = x.diagnostic
+	req.responseFacts = &providerResponseFacts{}
 	x.req = req
 	x.ownershipScope()
 	if err := x.validateDiagnosticsOwnership(); err != nil {
@@ -304,6 +306,7 @@ func (x *exchange) execute(sessionLabel, logical string) {
 		}
 		if req.CountTokens {
 			x.diagnostic.setStage("completed")
+			req.responseFacts.apply(x.w.Header())
 			x.w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(x.w).Encode(answer)
 			return
@@ -331,6 +334,7 @@ func (x *exchange) execute(sessionLabel, logical string) {
 		if req.Stream {
 			_ = x.send(p.finalResponseStop())
 		} else {
+			req.responseFacts.apply(x.w.Header())
 			x.w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(x.w).Encode(answer)
 		}
@@ -352,6 +356,7 @@ func (x *exchange) send(event Object) error {
 	controller := http.NewResponseController(x.w)
 	_ = controller.SetWriteDeadline(time.Now().Add(15 * time.Second))
 	if !x.streaming {
+		x.req.responseFacts.apply(x.w.Header())
 		x.w.Header().Set("Content-Type", "text/event-stream")
 		x.w.Header().Set("X-Accel-Buffering", "no")
 		x.w.WriteHeader(200)
@@ -403,6 +408,9 @@ func (x *exchange) passUpstream(upstream *upstreamError, fallback Object) {
 	if x.streaming {
 		x.writeError(official, upstream.Status)
 		return
+	}
+	for name, values := range upstream.Headers {
+		x.w.Header()[name] = append([]string(nil), values...)
 	}
 	contentType := upstream.ContentType
 	if contentType == "" {

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/httpfacts"
 	"io"
 	"log/slog"
 	"net/http"
@@ -46,9 +47,11 @@ func (e *convertError) Unwrap() error { return e.err }
 // the request as it went upstream; only its declared usageRequestFields are
 // read from it, at the end, and the body itself is not kept.
 func (c *call) forward(ctx context.Context, rt *typeRoute, acct *pluginv1.Account, resp *http.Response, upBody []byte) attemptResult {
+	httpfacts.Apply(c.c.Writer.Header(), resp.Header)
 	u := newUsageAcc(rt.usage).WithLog("request_id", c.rid, "plugin", rt.binding.Plugin.Key,
 		"platform", rt.platform, "protocol", rt.upstream)
 	u.WithPrimaryModel(c.upstreamPrimaryModel)
+	u.WithAttemptAccounting(c.hasRequestedAttemptUsage(rt, upBody))
 	cap := newUsageCapture(rt)
 	c.rec.StatusCode = resp.StatusCode
 	c.rec.Success = true
@@ -67,6 +70,7 @@ func (c *call) forward(ctx context.Context, rt *typeRoute, acct *pluginv1.Accoun
 	}
 	c.rec.Tokens = u.Tokens()
 	c.recordAdditionalUsage(u, rt)
+	c.recordReplacementUsage(u, rt)
 	if len(u.Metrics) > 0 {
 		c.rec.Metrics = u.Metrics
 	}
