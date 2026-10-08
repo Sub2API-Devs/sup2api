@@ -2,6 +2,16 @@
 
 开始日期：2026-10-08（Asia/Shanghai）。状态：已推进至第九批并分阶段部署；当前状态见下节，早期批次中的“待提交/未部署”均为当时快照。原始调研保留为基线；本目录记录实际实现、实验、失败、评审和发布证据。
 
+## 本轮追加证据与限制
+
+A检查点38a2a9d8f已推送但未部署。B纯codec独审已通过，整轮隐藏的text/thinking纳入完整捕获；runtime/carrier仍接线中。C用量consumer新增同事务摘要receipt与原始冻结bytes兼容，尚待全部集成独审，不能将唯一requestID误当异值费用已正确存储。派发前已知prefix跨namespace/过期链必须明确拒绝，不能绕到普通渠道遗失隐藏历史。
+
+前端视觉补验未完成：CUA getState再次15秒超时；按Computer Use技能初始化@oai/sky成功，窗口查询可用，但get_window_state因无法可靠识别当前browser URL而按策略终止本轮Computer Use。没有页面点击、导航或有效截图。仅本地mock预览服务启动成功，随后已停止并删除本次临时web配置/bootstrap文件；没有接触真实账号登录或生产配置，不把组件测试/服务启动当视觉通过。
+
+## 隐藏 helper 历史持久层检查点（未部署）
+
+A存储层及0043迁移已独审真实PG9例通过，并提交推送38a2a9d8fe38435b5bfcd90edad7bc67daa203e8；没有接线或开放general gate，线上仍core.70/Worker.72/plugin.11/catalog.14。B作者research_cc、B独审audit_code_beta，正在补完整被buffer隐藏的text/thinking而非仅tool_use；已修未观测顶层字段可混入的问题。C作者research_api正在补carrier及usage outbox消费者；root发现仅ON CONFLICT成功可能误ACK异值RID，现用同事务摘要receipt，原记录raw/digest与未来字段兼容仍在补。所有B/C代码为本地候选，不混入当前部署证据。
+
 ## 最新真实闭环：Worker .72
 
 精确提交e73b3392c64921c51439e63be5f118c761ae795e已原地部署Worker .72/default image .72，核心.70/plugin.11/catalog.14不重发。Sonnet构造unsigned pending历史一次真实200/end_turn17.584s，结果与pending ID配对、无新call。独立Worker816db358-b8a9-45d2-8d75-c266c652bf69核4roles/tail/system/安全与Token原位置保真，transport重复和marker不外发，默认thinking/context均缺省，实际provider仅1call，原result/终态完整相同。见PUBLIC-ACCEPTANCE-0.1.72；不是捕获真实pause_turn回放，也不宣称所有复杂组合通过。
