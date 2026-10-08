@@ -39,7 +39,11 @@ func startModControl(cfg *runConfig, internalBase string) (*modControl, error) {
 			return nil, err
 		}
 	}
-	data, err := json.Marshal(Object{"attachments": cfg.attachments, "systems": cfg.systems, "deferred": deferred, "tools": cfg.tools, "trace": cfg.diagnostic.enabled(), "main_request_scope": cfg.scope != nil, "continuation_attachment_ack": cfg.reminderMarker != "", "helper_attachment_ack": cfg.helperRequest != nil && cfg.helperRequest.helperHistory != nil})
+	var additionalDirs []string
+	if cfg.helperRequest != nil {
+		additionalDirs = cfg.helperRequest.AdditionalDirectories
+	}
+	data, err := json.Marshal(Object{"attachments": cfg.attachments, "systems": cfg.systems, "deferred": deferred, "tools": cfg.tools, "trace": cfg.diagnostic.enabled(), "main_request_scope": cfg.scope != nil, "continuation_attachment_ack": cfg.reminderMarker != "", "helper_attachment_ack": cfg.helperRequest != nil && cfg.helperRequest.helperHistory != nil, "additional_directories": additionalDirs})
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +56,7 @@ func startModControl(cfg *runConfig, internalBase string) (*modControl, error) {
 	c.diagnostic = cfg.diagnostic
 	c.scope = cfg.scope
 	c.helperRequest = cfg.helperRequest
-	c.diagnostic.artifact("mod-config.json", Object{"attachments": cfg.attachments, "systems": cfg.systems, "deferred": deferred, "tools": cfg.tools})
+	c.diagnostic.artifact("mod-config.json", Object{"attachments": cfg.attachments, "systems": cfg.systems, "deferred": deferred, "tools": cfg.tools, "additional_directories": additionalDirs})
 	if internalBase != "" {
 		modControls.Store(c.path, c)
 		c.URL = strings.TrimRight(internalBase, "/") + c.path

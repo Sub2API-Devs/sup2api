@@ -163,6 +163,9 @@ func cliArgs(req *Request, p *Prepared, plugin string) []string {
 	if req.Effort != "" {
 		args = append(args, "--effort", req.Effort)
 	}
+	for _, dir := range req.AdditionalDirectories {
+		args = append(args, "--add-dir", dir)
+	}
 	return args
 }
 

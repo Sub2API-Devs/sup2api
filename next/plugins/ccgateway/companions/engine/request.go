@@ -73,8 +73,9 @@ type Request struct {
 	AttachmentDecisions      []Object
 	UnknownClientAttachment  string
 	UnknownGatewayAttachment string
-	AttachmentSource         string // "client", "gateway", or "both"
-	origin                   []int  // client array index of each parsed message
+	AttachmentSource         string   // "client", "gateway", or "both"
+	AdditionalDirectories    []string // --add-dir directories for file access
+	origin                   []int    // client array index of each parsed message
 }
 
 var toolName = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
@@ -336,7 +337,7 @@ func parseRequestCreditCandidate(data []byte, mcp *MCPConnectorPlan, access *res
 	if e != nil {
 		return nil, e
 	}
-	if e = keys(o, "model", "max_tokens", "stream", "system", "messages", "tools", "tool_choice", "thinking", "cache_control"); e != nil {
+	if e = keys(o, "model", "max_tokens", "stream", "system", "messages", "tools", "tool_choice", "thinking", "cache_control", "additional_directories"); e != nil {
 		return nil, e
 	}
 	r := &Request{MCP: mcp, resources: access, Model: str(o, "model"), MaxTokens: positive(o["max_tokens"]), TTL: 5 * time.Minute, Native: map[string]bool{}}
@@ -392,6 +393,11 @@ func parseRequestCreditCandidate(data []byte, mcp *MCPConnectorPlan, access *res
 	}
 	if v, ok := o["thinking"]; ok {
 		if r.Thinking, e = parseThinking(v, r.MaxTokens, len(interleaved) > 0 && interleaved[0]); e != nil {
+			return nil, e
+		}
+	}
+	if v, ok := o["additional_directories"]; ok {
+		if r.AdditionalDirectories, e = parseAdditionalDirectories(v); e != nil {
 			return nil, e
 		}
 	}
@@ -573,6 +579,37 @@ func parseThinking(v any, maxTokens int, interleaved ...bool) (Object, error) {
 		}
 	}
 	return t, nil
+}
+
+// parseAdditionalDirectories validates and returns the additional directories.
+func parseAdditionalDirectories(v any) ([]string, error) {
+	a, ok := v.([]any)
+	if !ok {
+		return nil, fmt.Errorf("additional_directories must be an array")
+	}
+	if len(a) > 100 {
+		return nil, fmt.Errorf("additional_directories: too many directories (max 100)")
+	}
+	var dirs []string
+	seen := map[string]bool{}
+	for i, item := range a {
+		dir, ok := item.(string)
+		if !ok {
+			return nil, fmt.Errorf("additional_directories[%d] must be a string", i)
+		}
+		if dir == "" {
+			return nil, fmt.Errorf("additional_directories[%d] cannot be empty", i)
+		}
+		if len(dir) > 4096 {
+			return nil, fmt.Errorf("additional_directories[%d] too long (max 4096 chars)", i)
+		}
+		if seen[dir] {
+			return nil, fmt.Errorf("additional_directories[%d] duplicated: %q", i, dir)
+		}
+		seen[dir] = true
+		dirs = append(dirs, dir)
+	}
+	return dirs, nil
 }
 
 // parseMessages merges consecutive user or assistant messages, as the API
