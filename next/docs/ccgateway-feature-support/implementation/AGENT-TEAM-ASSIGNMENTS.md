@@ -83,41 +83,80 @@
 ### Agent 5: agent-proxy-config
 - **Worktree**: `wt-proxy-config`
 - **任务**: IP 代理展示 + 账号绑定代理配置
-- **状态**: 🔄 进行中
-- **负责人**: agent-proxy-config
+- **状态**: ✅ 已完成并合并
+- **提交**: 9ec537946
+- **分支**: 已合并到 feat/next-platform
 
-#### 实施计划
-1. **IP 代理测试展示真实 IP**
-   - 列表显示代理真实 IP
-   - 每次更新后获取并记录真实 IP
+#### 实施总结
+1. ✅ **IP 代理测试展示真实 IP**
+   - 添加 `real_ip` 和 `real_ip_updated_at` 列到 proxies 表
+   - 测试代理时通过 ipify.org API 获取真实 IP
+   - 自动保存到数据库并在列表中显示
    
-2. **账号绑定代理配置语言/时区**
-   - 代理配置容器包含语言和时区
-   - 部署与运行配置可指定语言/时区
-   - 支持跟随代理或手动指定
+2. ✅ **账号绑定代理配置语言/时区**
+   - accounts.settings 支持 locale 和 timezone 字段
+   - desiredIn 函数解析并传递给容器配置
+   - 前端添加中文翻译（timezone, timezoneHint）
+   - 测试覆盖：TestAccountLocaleAndTimezone
 
 ### Agent 6: agent-panel-connection
-- **Worktree**: `wt-panel-connection`
+- **Worktree**: `wt-controller`
 - **任务**: CCGateway 插件控制面板连接改造
-- **状态**: 🔄 进行中
-- **负责人**: agent-panel-connection
+- **状态**: ✅ 已完成并合并
+- **提交**: 2044b4757 (merge), 6f2d1399c (impl)
+- **分支**: wt-controller (已合并到 feat/next-platform)
 
-#### 实施计划
-1. **初始安装控制面板**
-   - 首次需要 SSH 安装控制面板
-   - 检查 Docker 已安装（不自动安装）
-   - 上传所需镜像（镜像与插件一起打包）
+#### 实施总结
+1. ✅ **HTTP 控制面板模式**
+   - 三种连接模式：local（开发）、ssh（安装/运维）、http（生产）
+   - 两阶段模式：SSH 初始化 → HTTP 日常管理
    
-2. **后续连接控制面板**
-   - 配置插件时检查是否已连接控制面板
-   - 已连接则无需 SSH 信息
-   - 保留控制面板端点（IP、端口）和密钥
-   - 使用 HTTP 加密连接
+2. ✅ **镜像管理 API**
+   - `POST /images/upload`：流式上传 tar，支持 SHA256 校验
+   - `POST /images/load/<upload_id>`：加载镜像到 Docker
+   - `GET /health`：控制面板健康检查
    
-3. **插件更新**
-   - 基于控制面板连接上传新镜像
-   - 控制面板提供自动启动新版本功能
-   - 实现内部更新脚本
+3. ✅ **安装和管理端点**
+   - `GET /system/ccgateway/controller/status`：检查连接状态
+   - `POST /system/ccgateway/controller/install`：SSH 安装控制面板
+   - 自动生成密钥、等待健康检查、切换到 HTTP 模式
+   
+4. ✅ **前端支持**
+   - RemoteSettings.vue 支持 HTTP 模式配置
+   - 安装控制面板按钮和流程
+   
+5. ✅ **文档**
+   - ccgateway-controller-http-mode.md：完整设计文档
+   - CONTROLLER-CONNECTION-DESIGN.md：设计概览
+
+## 完成状态总结
+
+### ✅ 已完成任务（6/6）
+
+所有 agent 任务已完成并合并到 feat/next-platform：
+
+1. **agent-single-turn**: 单轮客户端工具优化 - 测试验证完成
+2. **agent-account-ui**: 账号列表刷新授权按钮 - 插件自定义操作
+3. **agent-cc-params**: CC `--add-dir` 参数支持 - 附加目录访问
+4. **agent-tool-mapping**: 工具映射冲突避免 - 命名空间解析
+5. **agent-proxy-config**: 代理真实 IP + locale/timezone 配置
+6. **agent-panel-connection**: 控制面板 HTTP 连接模式
+
+### 提交记录
+
+- 0e07490ac: 单轮客户端工具文档
+- 9ec537946: 代理真实 IP 和 locale/timezone
+- f4447fae5: 修复格式字符串错误
+- 6183e78f8: --add-dir 参数支持
+- 2044b4757: 控制面板 HTTP 模式合并
+- 75627abb8: 工具命名空间冲突解决合并
+- fa77c4284: 账号自定义操作合并
+
+### 待办事项
+
+- [ ] GitHub Actions CI 验证
+- [ ] 更新 PROGRESS.md 和 HANDOFF 文档
+- [ ] 清理已合并的 worktree 分支
 
 ## 后续任务
 
