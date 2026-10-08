@@ -121,6 +121,15 @@ func helperHTTPFixture(t *testing.T, modes ...string) (*env, *helperMemory, *ato
 		}
 		if len(modes) > 0 {
 			switch modes[0] {
+			case "thinking_estimates", "thinking_unknown", "thinking_refusal":
+				out.ContentType = "text/event-stream"
+				out.Body = helperThinkingEstimateSSE()
+				if modes[0] == "thinking_unknown" {
+					out.Body = []byte(strings.ReplaceAll(string(out.Body), "estimated_tokens", "unknown_display_hint"))
+				}
+				if modes[0] == "thinking_refusal" {
+					out.Body = []byte(strings.ReplaceAll(string(out.Body), "end_turn", "refusal"))
+				}
 			case "issuer":
 				out.Identity.Generation = "changed"
 			case "error":

@@ -104,7 +104,7 @@ func MessageFromEvents(events [][]byte) ([]byte, error) {
 			case "text_delta", "thinking_delta", "signature_delta", "compaction_delta":
 				key := map[string]string{"text_delta": "text", "thinking_delta": "thinking", "signature_delta": "signature", "compaction_delta": "content"}[kind]
 				expected := map[string]string{"text_delta": "text", "thinking_delta": "thinking", "signature_delta": "thinking", "compaction_delta": "compaction"}[kind]
-				if block["type"] != expected || len(delta) != 2 {
+				if block["type"] != expected || !validStringDeltaFields(delta, kind, key) {
 					return fail()
 				}
 				part, ok := delta[key].(string)
@@ -232,6 +232,42 @@ func MessageFromEvents(events [][]byte) ([]byte, error) {
 	}
 	message["content"] = blocks
 	return json.Marshal(message)
+}
+
+// estimated_tokens is a per-frame display hint, never response content or
+// billable usage. Retain a closed field set for every other delta variant.
+func validStringDeltaFields(delta map[string]any, kind, key string) bool {
+	for field, value := range delta {
+		if field == "type" || field == key {
+			continue
+		}
+		if field != "estimated_tokens" || kind != "thinking_delta" {
+			return false
+		}
+		if value == nil {
+			continue
+		}
+		n, ok := value.(json.Number)
+		if !ok || !nonnegativeInteger(n.String()) {
+			return false
+		}
+	}
+	return true
+}
+
+func nonnegativeInteger(value string) bool {
+	if value == "-0" {
+		return true
+	}
+	if value == "" {
+		return false
+	}
+	for _, c := range value {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 func eventIndex(event map[string]any) (int, bool) {
 	value, ok := event["index"].(json.Number)

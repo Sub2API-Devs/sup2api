@@ -392,7 +392,14 @@ func (s *Stream) delta(i int, b *streamBlock, d object) ([]Event, error) {
 	if b.block["type"] != block {
 		return nil, fail("delta", "wrong block type")
 	}
-	if e := keys(d, "delta", "type", field); e != nil {
+	fields := []string{"type", field}
+	if field == "thinking" {
+		fields = append(fields, "estimated_tokens")
+		if !validThinkingEstimate(d["estimated_tokens"]) {
+			return nil, fail("delta.estimated_tokens", "expected null or non-negative integer")
+		}
+	}
+	if e := keys(d, "delta", fields...); e != nil {
 		return nil, e
 	}
 	value, ok := d[field].(string)
@@ -432,6 +439,28 @@ func (s *Stream) delta(i int, b *streamBlock, d object) ([]Event, error) {
 	}
 	return s.partEvent(event, i, f), nil
 }
+
+// This optional Anthropic progress hint has no target-protocol usage meaning.
+// Validate it without converting to a machine integer or retaining it in output.
+func validThinkingEstimate(value any) bool {
+	if value == nil {
+		return true
+	}
+	n, ok := value.(json.Number)
+	if !ok || n == "" {
+		return false
+	}
+	if n == "-0" {
+		return true
+	}
+	for _, c := range n.String() {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 func (s *Stream) stop(i int, b *streamBlock) ([]Event, error) {
 	if s.p.protocol == "openai.chat" {
 		if b.block["type"] == "tool_use" && !b.hasArgs {

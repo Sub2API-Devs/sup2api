@@ -4,6 +4,10 @@
 
 ## 本轮追加证据与限制
 
+最新线上Worker.78（00c5b0d19）已原地更新21/22，Core.73/Plugin.13/Controller.48保持，未来默认镜像.78；原容器ID、镜像引用、挂载、授权保持。公网预算首次工具交接和结果续聊均200，第三普通SSE实际Worker200/end_turn而Core503：共享重组器拒合法thinking_delta.estimated_tokens=50/null。真实已知2input/66output/read883/1h1585有唯一receipt及0.0141846费用，不能称无消耗或OAuth失效；首错即停，未重试或执行回退/inline。
+
+候选已窄修共享credits和strict转换器，仅thinking_delta接受nullable非负整数显示估计，不写入内容/历史/usage，非法字段仍拒；增加Core固定stage/error_kind安全诊断。作者/独审解析器与HTTP拒答200回归绿，Root全protocol-codec测试与vet、Core目标1.065s与vet绿。新增隐藏ToolSearch真实CLI JSON/SSE 7.178s通过，估计不污染40/16真实用量。Core→Worker→CLI→隔离PG 133.786s通过后，独审补原始SSE的50/null原值断言，重跑132.761s转绿；进一步明确每次响应thinking块数首0/后4次各1，负例和Emitter3.042s绿，精确最终代码ABC保留为发布门禁，不把前一版绿当新增计数断言结果。拟Core.74/Worker.79，Plugin实际409依赖包不含两处解析器仍.13；尚未提交部署。详THINKING-ESTIMATE-CUSTODY-REPAIR与两份独审记录。
+
 Worker.77已Git原地部署21/22，Core.73/Plugin.13/Controller.48保持；真实OAuth session_context JSON131.355/SSE128.441及Linux门禁通过。新公网首200但续真实provider400：历史tool_reference已恢复，冷CLI却只有placeholder/ToolSearch缺lookup原定义，session_context已正确通过。停止不重试；见PUBLIC-HELPER-BUDGET-WORKER-0.1.77。目录候选已有精确旧.77真实RED39.787s，新严格fake+OAuth CoreABC JSON131.127/SSE126.791s均GREEN，cold/rollback/完整hash/TAB/124/131/1h1647及唯一receipt不变；Root独立catalog目标0.318s通过。准备只Worker.78 Git发布，不再核心维护；完整公网闭环仍待验收。
 
 session_context组合已取得真正前态RED38.463s（clean cb38旧Worker+dummyOAuth/profile+真实PG，原位置错502），当前hook JSON131.355s转GREEN：可信suffix至少一次且原TAB/同文不丢不重复，5公开6provider/124in131out1h1647/5receipt与cold/rollback/hash通过。独审严格位置/取消否例绿，Root低嵌套整理后定向1.187s通过，Core同组合SSE正在执行。准备冻结提交Worker.77，Core.73/Plugin.13/Controller.48保持，不将正在跑的SSE或候选当部署完成。

@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -234,6 +233,9 @@ func (c *call) finishHelperHistory() {
 	if valid {
 		prefix, err = helperDeliveredPrefix(h.messages, held.body.Bytes(), isSSE(held.header.Get("Content-Type")))
 		valid = err == nil
+		if err != nil {
+			logHelperFinalizationError(ctx, c.rid, h.attempt.Binding.AccountID, "public_prefix", err)
+		}
 	}
 	if c.rec.Success && !valid {
 		c.rec = core.HelperHistoryStorageFailure(c.rec)
@@ -242,6 +244,7 @@ func (c *call) finishHelperHistory() {
 	if valid {
 		_, err = c.g.d.HelperHistory.Commit(ctx, c.resourceOwner(), h.attempt.ID, core.HelperHistoryCompletion{Usage: c.rec, PublicPrefixDigest: prefix, Payload: h.response.Delta})
 		if err != nil {
+			logHelperFinalizationError(ctx, c.rid, h.attempt.Binding.AccountID, "commit", err)
 			c.rec = core.HelperHistoryStorageFailure(c.rec)
 			recoveryCtx, recoveryCancel := context.WithTimeout(context.WithoutCancel(c.c.Request.Context()), 15*time.Second)
 			err = c.g.d.HelperHistory.PersistUncertainUsage(recoveryCtx, c.resourceOwner(), h.attempt.ID, c.rec)
@@ -252,7 +255,7 @@ func (c *call) finishHelperHistory() {
 	}
 	if err != nil {
 		c.rec = core.HelperHistoryStorageFailure(c.rec)
-		slog.ErrorContext(ctx, "gateway: helper usage not durably recorded", "request_id", c.rid, "account", h.attempt.Binding.AccountID, "error", err)
+		logHelperFinalizationError(ctx, c.rid, h.attempt.Binding.AccountID, "persist_uncertain_usage", err)
 	} else {
 		c.helperPersisted = true
 	}

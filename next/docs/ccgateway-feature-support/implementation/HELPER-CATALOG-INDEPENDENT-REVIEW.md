@@ -30,3 +30,24 @@ Worker .77 的公网首请求成功，工具结果续聊由真实 provider 返�
 `TestHelperHistoryABCCatalogRealDBCLI/true` PASS 126.791s，同一严格假上游、真实 OAuth 形态 fixture、真实 Core/Worker/CLI 与隔离 PostgreSQL，5 次公开请求 / 6 次假 provider 调用。与 JSON 相同的目录、原文/TAB/可信后缀、隐藏历史、尾系统 hash、cold/rollback、124/131/1h1647 和唯一账务收据断言全部通过。session 50285 已终态，专用 SSH 隧道在 finally 关闭。
 
 结论：本次目录恢复的独立隔离端到端门禁 GREEN，前态精确 .77 的 RED 保留。元字段/任意大整数/schema 冲突的独立 engine 测试属于其他审查文件，不把本 ABC 普通目录样本夸称涵盖全部工具元字段。真实 provider 修复后验收与部署仍未执行。
+
+## Worker .78 未来默认镜像闭环
+
+2026-10-09（北京时间），作者完成精确 `00c5b0d19760217c1323dc706f3970f1551dfcd6` Worker .78 的原账号 22→21 补丁与健康检查后，本代理才执行 root 已授权的配置更新。
+
+- 已确认 `ccgateway-worker:0.1.78` 存在，镜像 ID `sha256:a74739b06449c50bc570a4f143161c5dc70e266cb9df9ec8119777d89182b648`。
+- 完整 public 配置读取后仅修改 `images.app`；PUT 200、正常 `runtime/install` 200。Controller 保持 `ccg-controller:0.1.48`，其余公开字段和 secret-presence flags 逐项相同；凭据仅内存使用，没有记录。
+- cc-max 0600 文件 `/opt/ccgateway-runtime/default-0.1.78-before.json` 与 `default-0.1.78-after.json` 核原 21/22 的 Id、Image、Mounts、完整 Config、Path、Args 完全一致，均 running；未重建既有账号。
+- OVH 安全事实 `/home/debian/sup2api-managed/default-worker-0.1.78-verification.json` 保存配置/刷新状态，不含凭据。
+- 只读 #22：active、schedulable=true、status_reason 空；Redis cooldown TTL=-2（不存在），未人为清冷却。
+- Core .73 / Plugin .13 没有重新发布。没有 quota/profile/模型调用，后续公网验收由 root 独占；本记录不替代真实 provider 回归结果。
+
+## .78 公网验收后的只读关联
+
+2026-10-08 16:10 UTC（北京时间次日），root 独占请求；本代理未重试模型。
+
+- 首 SHA `4ea8a3452e4378f0e65ec473db3c4f069974d92dfc05568667db92dbad349d80` → RID `ca94d197da9250a4d33937a4`，200，#22/attempt1，48 input /154 output /2524 cache read /1033 cache creation 1h，billed 0.0120408。helper attempt `a753d7d9fd8ab2fe833f219b5000ea70f3d91715fc139ca7` committed，1 record/1 usage receipt/0 outbox。
+- 续 SHA `b8fd89654be748884b8cab40c1dd8a84e820f22ba7c8ad5c02a8888312860a42` → RID `da88efe85e42e8446d0e9405`，200，#22/attempt1，2/20/read883/1h1568，billed 0.0131286。attempt `1fa5403ce5182e3bb46d75bcbdd63226e197e52caf71c81d` committed，parent 精确为首 attempt，同样各1 record/receipt。
+- 第三 ordinary SSE（省略 task_budget）SHA `d5917fd4cb442071ec9b161a0682676fe75cf21d482f3c8b21286df537c9e5fe` → RID `b7f8fa4e34e4238987b723f3`，503，#22/attempt1。真正核心类别是 `gateway_helper_history_storage`；attempt `5e61ffb8d0f6ca6b86cf904bb6f6ec3cdc52f5b00c0589b0` uncertain，parent 精确为第二 attempt，0 record/1 usage receipt/0 outbox。已知真实用量2/66/read883/1h1585，billed 0.0141846，无重复收费。#22仍 active/schedulable，reason空、cooldown TTL=-2。
+
+CC只读关联 Worker `a3033c97-7e35-44af-a2cb-cc9691dff7bc`，1次provider请求，200/end_turn、完整message_stop。真实公共SSE含 thinking_delta 的 `estimated_tokens` 字段。源码 `helperDeliveredPrefix` 调用 `credits.MessageFromEvents`；后者 thinking_delta 固定 `len(delta)==2` 拒绝该三字段事件，使 finishHelperHistory 的 valid=false，返回统一storage503。当前原始重组/Commit错误在恢复持久成功时没有日志，因此不能把泛化storage文案说成数据库失败。该新缺口待独立红例及修复；本次已停止，没有rollback/inline/public重试。

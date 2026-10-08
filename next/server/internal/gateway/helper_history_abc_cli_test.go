@@ -46,6 +46,7 @@ type abcHelperOptions struct {
 	TailReminder         bool
 	SessionContext       bool
 	StrictToolReferences bool
+	ThinkingEstimates    bool
 }
 
 func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, options ...abcHelperOptions) {
@@ -106,6 +107,7 @@ func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, options ...abcHelpe
 			e.gw.d.HelperHistory = durable
 			e.gw.d.EnableHelperHistory = true
 			provider := &abcProvider{t: t, budget: `{"total":20000,"type":"tokens"}`, inline: inline, tailReminder: option.TailReminder, sessionContext: option.SessionContext, strictToolReferences: option.StrictToolReferences}
+			provider.thinkingEstimates = option.ThinkingEstimates
 			upstream := httptest.NewServer(provider)
 			defer upstream.Close()
 			root := t.TempDir()
@@ -179,8 +181,11 @@ func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, options ...abcHelpe
 				initial = append(initial, abcInlineAddition("spare", "9007199254740993"))
 				request["messages"] = initial
 			}
+			expectRefusal := false
+			publicRequestNumber := 0
 			post := func() json.RawMessage {
 				t.Helper()
+				publicRequestNumber++
 				provider.mu.Lock()
 				_, provider.expectBudget = request["output_config"]
 				provider.mu.Unlock()
@@ -211,16 +216,30 @@ func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, options ...abcHelpe
 					for _, ev := range events {
 						frames = append(frames, ev.data)
 					}
+					if option.ThinkingEstimates {
+						expectedThinking := 1
+						if publicRequestNumber == 1 {
+							expectedThinking = 0
+						}
+						verifyABCThinkingProgress(t, frames, expectedThinking)
+					}
 					raw, err = credits.MessageFromEvents(frames)
 					if err != nil {
 						t.Fatal(err)
 					}
 				}
 				var message struct {
-					Content json.RawMessage `json:"content"`
+					Content    json.RawMessage `json:"content"`
+					StopReason string          `json:"stop_reason"`
 				}
 				if json.Unmarshal(raw, &message) != nil || len(message.Content) == 0 {
 					t.Fatal("missing public content")
+				}
+				if expectRefusal && message.StopReason != "refusal" {
+					t.Fatal("provider refusal was changed")
+				}
+				if option.ThinkingEstimates && bytes.Contains(message.Content, []byte("estimated_tokens")) {
+					t.Fatal("display estimate entered public history")
 				}
 				return message.Content
 			}
@@ -278,6 +297,7 @@ func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, options ...abcHelpe
 			post()
 			request["messages"] = continuation
 			request["output_config"] = map[string]any{"task_budget": map[string]any{"type": "tokens", "total": 20000}}
+			expectRefusal = option.ThinkingEstimates
 			post()
 			wantRequests, wantCalls := 5, 6
 			if inline {
@@ -458,6 +478,7 @@ func (w *abcWorker) facts(ctx context.Context) (features.RuntimeCapabilities, re
 }
 
 type abcProvider struct {
+	thinkingEstimates    bool
 	strictToolReferences bool
 	sessionContext       bool
 	embeddedContexts     int
@@ -537,7 +558,7 @@ func (p *abcProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		verifyABCTailReminder(p.t, body.Messages, &p.tailDigest)
 	}
 	if !bytes.Contains(joined, []byte("helper_source_call")) {
-		emitABCResponse(w, body.Model, p.calls, []map[string]any{{"type": "thinking", "thinking": "PRIVATE_ABC_THINKING", "signature": "fixture-original-signature"}, {"type": "text", "text": "PRIVATE_ABC_PLANNING"}, {"type": "tool_use", "id": "helper_source_call", "name": "ToolSearch", "input": map[string]any{"query": "select:mcp__ccgateway__weather"}}}, p.tailReminder)
+		emitABCResponse(w, body.Model, p.calls, []map[string]any{{"type": "thinking", "thinking": "PRIVATE_ABC_THINKING", "signature": "fixture-original-signature"}, {"type": "text", "text": "PRIVATE_ABC_PLANNING"}, {"type": "tool_use", "id": "helper_source_call", "name": "ToolSearch", "input": map[string]any{"query": "select:mcp__ccgateway__weather"}}}, abcResponseOptions{LargeUsage: p.tailReminder})
 		return
 	}
 	for i, msg := range body.Messages {
@@ -629,12 +650,23 @@ func (p *abcProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !bytes.Contains(joined, []byte("PUBLIC_WEATHER_RESULT")) {
-		emitABCResponse(w, body.Model, p.calls, []map[string]any{{"type": "tool_use", "id": "external_weather", "name": "mcp__ccgateway__weather", "input": map[string]any{}}})
+		emitABCResponse(w, body.Model, p.calls, []map[string]any{{"type": "tool_use", "id": "external_weather", "name": "mcp__ccgateway__weather", "input": map[string]any{}}}, abcResponseOptions{})
 		return
 	}
-	emitABCResponse(w, body.Model, p.calls, []map[string]any{{"type": "text", "text": "PUBLIC_DONE"}})
+	blocks := []map[string]any{{"type": "text", "text": "PUBLIC_DONE"}}
+	if p.thinkingEstimates {
+		blocks = append([]map[string]any{{"type": "thinking", "thinking": "", "signature": "fixture-public-signature"}}, blocks...)
+	}
+	emitABCResponse(w, body.Model, p.calls, blocks, abcResponseOptions{ThinkingEstimates: p.thinkingEstimates, Refusal: p.thinkingEstimates && p.calls == 6})
 }
-func emitABCResponse(w http.ResponseWriter, model string, n int, blocks []map[string]any, largeUsage ...bool) {
+
+type abcResponseOptions struct {
+	LargeUsage        bool
+	ThinkingEstimates bool
+	Refusal           bool
+}
+
+func emitABCResponse(w http.ResponseWriter, model string, n int, blocks []map[string]any, option abcResponseOptions) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	emit := func(v map[string]any) {
 		raw, _ := json.Marshal(v)
@@ -642,7 +674,7 @@ func emitABCResponse(w http.ResponseWriter, model string, n int, blocks []map[st
 	}
 	startUsage := map[string]any{"input_tokens": 20, "output_tokens": 0}
 	outputTokens := 8
-	if len(largeUsage) > 0 && largeUsage[0] {
+	if option.LargeUsage {
 		startUsage["input_tokens"] = 24
 		startUsage["cache_creation_input_tokens"] = 1647
 		startUsage["cache_creation"] = map[string]any{"ephemeral_1h_input_tokens": 1647, "ephemeral_5m_input_tokens": 0}
@@ -671,14 +703,29 @@ func emitABCResponse(w http.ResponseWriter, model string, n int, blocks []map[st
 			delta = map[string]any{"type": "input_json_delta", "partial_json": string(input)}
 		}
 		emit(map[string]any{"type": "content_block_start", "index": i, "content_block": start})
-		if delta != nil {
-			emit(map[string]any{"type": "content_block_delta", "index": i, "delta": delta})
-		}
+		emitABCBlockDelta(emit, i, delta, option.ThinkingEstimates)
 		if b["type"] == "thinking" {
 			emit(map[string]any{"type": "content_block_delta", "index": i, "delta": map[string]any{"type": "signature_delta", "signature": b["signature"]}})
 		}
 		emit(map[string]any{"type": "content_block_stop", "index": i})
 	}
+	if option.Refusal {
+		stop = "refusal"
+	}
 	emit(map[string]any{"type": "message_delta", "delta": map[string]any{"stop_reason": stop, "stop_sequence": nil}, "usage": map[string]any{"output_tokens": outputTokens}})
 	emit(map[string]any{"type": "message_stop"})
+}
+
+func emitABCBlockDelta(emit func(map[string]any), index int, delta map[string]any, estimates bool) {
+	if delta == nil {
+		return
+	}
+	withEstimate := estimates && delta["type"] == "thinking_delta"
+	if withEstimate {
+		delta["estimated_tokens"] = 50
+	}
+	emit(map[string]any{"type": "content_block_delta", "index": index, "delta": delta})
+	if withEstimate {
+		emit(map[string]any{"type": "content_block_delta", "index": index, "delta": map[string]any{"type": "thinking_delta", "thinking": "", "estimated_tokens": nil}})
+	}
 }
