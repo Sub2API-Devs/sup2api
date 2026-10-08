@@ -1,0 +1,204 @@
+{
+  "model": "claude-opus-5-5",
+  "inline": true,
+  "results": [
+    {
+      "name": "helper-budget-tool",
+      "path": "/v1/messages",
+      "beta": "task-budgets-2026-03-13,advanced-tool-use-2025-11-20,inline-tools-2026-09-15",
+      "status": 200,
+      "stop": "tool_use",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1055,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 1055,
+        "cache_read_input_tokens": 1766,
+        "inference_geo": "not_available",
+        "input_tokens": 828,
+        "iterations": [
+          {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 883,
+            "input_tokens": 804,
+            "output_tokens": 91,
+            "type": "message"
+          },
+          {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 1055,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 1055,
+            "cache_read_input_tokens": 883,
+            "input_tokens": 24,
+            "output_tokens": 63,
+            "type": "message"
+          }
+        ],
+        "output_tokens": 154,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "tool_use"
+      ],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 14.576,
+      "request_id_sha256": "d2c72a55a087e15dfcacb748a80141ca129d89d5434ed0758e3c4a03c8a76bb6"
+    },
+    {
+      "name": "helper-budget-result",
+      "path": "/v1/messages",
+      "beta": "task-budgets-2026-03-13,advanced-tool-use-2025-11-20,inline-tools-2026-09-15",
+      "status": 200,
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 878,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 878,
+        "cache_read_input_tokens": 883,
+        "inference_geo": "not_available",
+        "input_tokens": 752,
+        "iterations": [
+          {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 878,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 878,
+            "cache_read_input_tokens": 883,
+            "input_tokens": 752,
+            "output_tokens": 20,
+            "type": "message"
+          }
+        ],
+        "output_tokens": 20,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "text"
+      ],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 10.698,
+      "request_id_sha256": "6acf54e35f5d52fae23e07c6f68111e505ec323dcba1d0341cbace154700246c"
+    },
+    {
+      "name": "helper-budget-ordinary-sse",
+      "path": "/v1/messages",
+      "beta": "task-budgets-2026-03-13,advanced-tool-use-2025-11-20,inline-tools-2026-09-15",
+      "status": 200,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1622,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 1622,
+        "cache_read_input_tokens": 883,
+        "inference_geo": "not_available",
+        "input_tokens": 2,
+        "iterations": [
+          {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 1622,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 1622,
+            "cache_read_input_tokens": 883,
+            "input_tokens": 2,
+            "output_tokens": 20,
+            "type": "message"
+          }
+        ],
+        "output_tokens": 20,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard"
+      },
+      "seconds": 11.23,
+      "request_id_sha256": "411a048207197f2daed24a0e97179e7d9a454d5807b2ea6a326e50eb33d464c4"
+    },
+    {
+      "name": "helper-budget-rollback",
+      "path": "/v1/messages",
+      "beta": "task-budgets-2026-03-13,advanced-tool-use-2025-11-20,inline-tools-2026-09-15",
+      "status": 200,
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 730,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 730,
+        "cache_read_input_tokens": 1761,
+        "inference_geo": "not_available",
+        "input_tokens": 2,
+        "iterations": [
+          {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 730,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 730,
+            "cache_read_input_tokens": 1761,
+            "input_tokens": 2,
+            "output_tokens": 21,
+            "type": "message"
+          }
+        ],
+        "output_tokens": 21,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "text"
+      ],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 10.994,
+      "request_id_sha256": "4ea6bcd83d5b568f5c403948254881f72bdc4fd42b52b2081cc098cf52da41c1"
+    }
+  ],
+  "checks": {
+    "external_tool_handoff": true,
+    "result_continuation": true,
+    "ordinary_sse_continuation": true,
+    "rollback": true,
+    "internal_rounds_verified": false,
+    "durable_receipts_verified": false,
+    "tool_call_id_sha256": "b83b1b79943700109f890b28310c8a6d2d7cd810529119b9fe9b376e553ccdff"
+  },
+  "passed": true,
+  "scope": "Public API evidence only. Worker logs and DB receipts must independently prove internal search, hidden-history custody, account binding and single accounting. No forced cold restart or provider billing/cache-savings claim. HTTP200 refusal is a normal protocol result but not fixture completion. Stops on first mismatch."
+}

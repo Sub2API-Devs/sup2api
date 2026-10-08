@@ -1,5 +1,13 @@
 # 最终功能闭环审计（当前快照，非全部生产验收）
 
+## Core .74 / Worker .79 当前状态（优先于以下历史快照）
+
+精确Git7d322abd9已部署Core.74四节点和Worker.79原21/22容器；Plugin.13、Controller.48保持，未来镜像默认.79。OAuth已由此前原生刷新恢复，本次不重新授权。estimated_tokens合法thinking进度不再造成Core托管历史503，显示估计不参与计费；完整真实CLI/隔离PG及独审证据见THINKING-ESTIMATE系列和.74/.79部署记录。
+
+根代理本轮公开API normal与inline各4次全部200：预算工具交接、结果续聊、普通无预算SSE、回退新结果均完成。两组八请求账务逐请求唯一receipt及正确分支绑定已核；Worker隐藏轮/紧后system完整hash、工具目录/inline撤回位置也已核，普通SSE真实50/null进度帧成功。详PUBLIC-HELPER-BUDGET-CORE-0.1.74-WORKER-0.1.79，独立证据不由script的passed推导。生产本轮未强制cold restart或跨账号；隔离ABC有冷恢复验证。这是具体组合的公网成功，不是所有特性/资格完成。
+
+单动态deferred MCP目录候选已按官方listing历史合同实现、隔离CLI/独审通过，尚未提交发布；named eager+无关deferred工具的混合目录正在验证。多动态服务器及强制未发现目标等未经等价实现的组合仍明确限制。浏览器工具连续连接超时，新一轮UI视觉验收未执行。完整目标保持进行中。
+
 ## Core .72 / Worker .75 当前状态
 
 Git2bd328b46已部署Core.72/Plugin.13、Worker.75/catalog.16，Controller.48。位置payload2和v1→v2链已通过真实CLI接隔离上游及真实隔离PG验证。OAuth前置短命状态进程留锁已修复，#22原生自动刷新/profile200和正常额度200通过，旧token_expired清除。两个原账号容器及授权保留。详见本版本部署记录。
