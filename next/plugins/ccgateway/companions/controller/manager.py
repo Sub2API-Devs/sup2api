@@ -80,9 +80,17 @@ def authentication(raw):
     raw = {'mode': 'oauth'} if raw is None else raw
     if not isinstance(raw, dict):
         raise BadRequest('invalid authentication')
-    if raw == {'mode': 'oauth'}:
-        return raw
-    if raw.get('mode') != 'api_key' or set(raw) - {'mode', 'api_key', 'base_url'}:
+    # Extract locale and timezone if present (pass through without validation)
+    locale = raw.get('locale', '')
+    timezone = raw.get('timezone', '')
+    if raw == {'mode': 'oauth'} or (set(raw) <= {'mode', 'locale', 'timezone'} and raw.get('mode') == 'oauth'):
+        result = {'mode': 'oauth'}
+        if locale:
+            result['locale'] = locale
+        if timezone:
+            result['timezone'] = timezone
+        return result
+    if raw.get('mode') != 'api_key' or set(raw) - {'mode', 'api_key', 'base_url', 'locale', 'timezone'}:
         raise BadRequest('invalid authentication')
     key, base = raw.get('api_key'), raw.get('base_url') or 'https://api.anthropic.com'
     if not isinstance(key, str) or not 8 <= len(key) <= 512 or any(ord(c) < 33 or ord(c) > 126 for c in key):
@@ -93,7 +101,12 @@ def authentication(raw):
     if url.scheme != 'https' or not url.hostname or url.username is not None or url.password is not None or '?' in base or '#' in base:
         raise BadRequest('invalid base URL')
     base = base.rstrip('/').removesuffix('/v1')
-    return {'mode': 'api_key', 'api_key': key, 'base_url': base}
+    result = {'mode': 'api_key', 'api_key': key, 'base_url': base}
+    if locale:
+        result['locale'] = locale
+    if timezone:
+        result['timezone'] = timezone
+    return result
 
 
 def write_private(path, value):
@@ -306,6 +319,14 @@ class Manager:
         env.update(CCG_API_KEY=state['api_key'], CCG_ADMIN_KEY=state['admin_key'], CCG_EXTERNAL_EGRESS='1')
         if auth['mode'] == 'api_key':
             env.update(ANTHROPIC_API_KEY=auth['api_key'], ANTHROPIC_BASE_URL=auth['base_url'])
+        # Apply locale and timezone configuration from account settings
+        locale = auth.get('locale', '')
+        timezone = auth.get('timezone', '')
+        if locale:
+            env['LANG'] = locale if '.' in locale else f'{locale}.UTF-8'
+            env['LC_ALL'] = env['LANG']
+        if timezone:
+            env['TZ'] = timezone
         options = self.common(aid)
         options['labels'][AUTH_LABEL] = fingerprint
         options['labels'][IMAGE_LABEL] = image.id
