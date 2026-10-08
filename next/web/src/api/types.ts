@@ -179,6 +179,8 @@ export interface Proxy {
   created_by_email?: string | null
   created_at?: string
   updated_at?: string
+  real_ip?: string | null
+  real_ip_updated_at?: string | null
 }
 
 export interface ProxyTestResult {

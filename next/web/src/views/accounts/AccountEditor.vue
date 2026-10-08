@@ -103,6 +103,12 @@ const basic = reactive({
   tpm_limit: 0,
 })
 
+// CCGateway-specific settings (locale and timezone)
+const ccgSettings = reactive({
+  locale: '',
+  timezone: '',
+})
+
 // ---------------------------------------------------------------- proxy: pick an existing one | paste a URL (CONTRACTS §21.4)
 // "url" sends proxy_url instead of proxy_id; the server parses it, reuses a
 // matching proxy the caller can see or creates one, and answers proxy_created.
@@ -529,6 +535,12 @@ watch(
       basic.auto_disable = a?.auto_disable ?? true
       basic.rpm_limit = a?.rpm_limit ?? 0
       basic.tpm_limit = a?.tpm_limit ?? 0
+      // Load CCGateway-specific settings
+      if (needsProxy.value) {
+        const settings = (a as any)?.settings || {}
+        ccgSettings.locale = settings.locale || ''
+        ccgSettings.timezone = settings.timezone || ''
+      }
       if (a) {
         models.value = [...(a.models || [])]
         mapping.value = { ...(a.model_mapping || {}) }
@@ -654,6 +666,13 @@ async function save(event: Event) {
     model_mapping: mapping.value,
     rpm_limit: Number(basic.rpm_limit) || 0,
     tpm_limit: Number(basic.tpm_limit) || 0,
+  }
+  // Add CCGateway-specific settings (locale and timezone)
+  if (needsProxy.value) {
+    const settings: Record<string, any> = {}
+    if (ccgSettings.locale.trim()) settings.locale = ccgSettings.locale.trim()
+    if (ccgSettings.timezone.trim()) settings.timezone = ccgSettings.timezone.trim()
+    if (Object.keys(settings).length > 0) body.settings = settings
   }
   // Exactly one of proxy_id / proxy_url (CONTRACTS §21.4: both is a conflict).
   const withProxyUrl = !!proxyUrlToSend.value
@@ -807,6 +826,15 @@ async function save(event: Event) {
                 <p v-if="needsProxy" class="mt-1 text-xs text-gray-500 dark:text-dark-400" data-testid="proxy-required-hint">{{ t('ccgateway.accountAuth.proxyRequiredHint') }}</p>
                 <p v-if="ccgDraft" class="mt-1 text-xs text-gray-500 dark:text-dark-400" data-testid="proxy-draft-hint">{{ t('ccgateway.accountAuth.draftProxyHint') }}</p>
               </div>
+              <!-- CCGateway locale and timezone settings -->
+              <template v-if="needsProxy">
+                <SField :label="t('ccgateway.locale')" :hint="t('ccgateway.localeHint')">
+                  <SInput v-model="ccgSettings.locale" placeholder="en-US" :maxlength="10" />
+                </SField>
+                <SField :label="t('ccgateway.timezone')" :hint="t('ccgateway.timezoneHint')">
+                  <SInput v-model="ccgSettings.timezone" placeholder="America/New_York" :maxlength="50" />
+                </SField>
+              </template>
             </div>
           </EditorCard>
 

@@ -319,4 +319,8 @@ export default {
       actions: { status: 'Container status', start: 'Start container', stop: 'Stop container', restart: 'Restart container', logs: 'View logs' },
       confirmAction: 'Run “{action}”? This may interrupt requests handled by the container.', confirm: 'Confirm action', cancel: 'Cancel', failed: 'Operation failed. Please retry.'
     },
+  locale: 'Container locale',
+  localeHint: 'Language and region (e.g., en-US, zh-CN). Leave blank to use the proxy location or container default.',
+  timezone: 'Container timezone',
+  timezoneHint: 'IANA timezone name (e.g., America/New_York, Asia/Shanghai). Leave blank to use the proxy location or container default.',
 }
