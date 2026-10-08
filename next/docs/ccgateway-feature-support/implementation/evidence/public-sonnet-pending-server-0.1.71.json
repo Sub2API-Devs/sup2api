@@ -1,0 +1,35 @@
+{
+  "model": "claude-sonnet-4-6",
+  "history_origin": "constructed_unsigned_fixture",
+  "actual_provider_pause_observed": false,
+  "official_reference": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/server-tools",
+  "request_messages_sha256": "4ff4cbe71df88e2ef0bda28d9a057518a13e7d7b4e75c1097cf6aced36752b35",
+  "request_tail_sha256": "fb48c1022bfe2ed485309430c5c79cd0d99c3441ad3a94f7aea295a69b8d6c05",
+  "pending_tool_id_sha256": "330ea0ae44dd80f53d166fb420df68d4d431cf5ca62f795bbe5d218dd4e299b7",
+  "tools_sha256": "bce391fb5c8a2f788a6de45703f1f40585cd6fb133449c34521a4ee6bed1e808",
+  "allowed_domain": "platform.claude.com",
+  "max_uses": 1,
+  "results": [
+    {
+      "name": "constructed-sonnet-pending-server-history",
+      "path": "/v1/messages",
+      "status": 400,
+      "stop": null,
+      "usage": null,
+      "content_types": [],
+      "error_type": "invalid_request_error",
+      "protocol_passed": false,
+      "content_completed": null,
+      "passed": false,
+      "outcome": "http_error",
+      "seconds": 5.85,
+      "request_id_sha256": "a0d8fe03c52c27468b4e941c5a5995cead6086f62fbd9fcb2e2015e9276d73b5"
+    }
+  ],
+  "checks": {
+    "valid_message": false,
+    "completed_constructed_pending_history": false
+  },
+  "passed": false,
+  "scope": "Exactly one platform API request, no retries or pause continuations. Constructed pending history acceptance is distinct from real provider pause replay. Worker logs must separately verify cold bootstrap, original tail, safety attachment position and zero extra upstream inference; this client cannot attest those facts."
+}

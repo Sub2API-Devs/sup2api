@@ -352,7 +352,7 @@ func (r *Request) ApplyMainRequestFeatures(message Object) error {
 		message[name] = value
 	}
 	if r.Plan.apiGeneration {
-		for _, name := range []string{"thinking", "output_config", "speed", "diagnostics", "container"} {
+		for _, name := range []string{"thinking", "context_management", "output_config", "speed", "diagnostics", "container"} {
 			if _, explicit := patch[name]; !explicit {
 				delete(message, name)
 			}
