@@ -1,10 +1,14 @@
 # 完成度与证据矩阵（不等同全部完成）
 
+后续更新：核心 `.68` / Worker `.69` / catalog `.12` 已部署。原引用空数组续聊 502 修复已真实复验，图片/文档/引用续聊三次均 200，原引用完整恢复；完整 pinned MCP 搜索一次真实 200，精确引用键与调用顺序验证通过。见 `.69` 验收证据。以下表格保留最初盘点时间点，不能再把已关闭的 citation 缺陷当成当前线上失败。后续确认普通 API format+全 eager forced 被旧 synthetic 判断额外拒绝，正在独立修复，仍不得宣称全部完成。
+
 2026-10-08；D:/projects/golang/sup2api。以原01功能目录、02 Worker实施要求、05协议范围及37F+8O当前目录复核。源码与作者/独审记录为实现证据；下表引用既有测试，不是本次重新跑过所有测试。当前core.67/Worker.68，any/catalog.11及pinned/catalog.12、引用空数组修复属于后续候选，未借源码状态冒充部署。
 
 本轮确定普通API阻断：真实document首次成功、原assistant citations续聊502。已定位CLI空数组遗漏，修复及独审均绿，仍必须提交部署和一次受控真实续聊复验。原失败JSON不删除。[媒体记录](PUBLIC-MEDIA-CITATIONS-0.1.68.md)、[引用独审](CITATION-EMPTY-ARRAY-INDEPENDENT-REVIEW.md)。
 
 真实Web/图像/文档首次、同消息5Read、MCP和inline内部发现见[公开验收](PUBLIC-ACCEPTANCE-0.1.68.md)、[Web验收](PUBLIC-WEB-ACCEPTANCE-0.1.68.md)。与现版本未测到的资格/计费效果区分，不能把没有真实资格证据自动叫bug。
+
+本轮补做线上视觉检查时，CUA 创建隐藏站点页 30 秒超时并重置内核；随后一次 `getState` 在 15 秒超时。没有取得 DOM/截图，不能将这两次工具调用称作前端视觉验收；暂按已有组件测试和服务目录证据记录。
 
 ## 逐项证据
 

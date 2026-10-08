@@ -1,0 +1,112 @@
+{
+  "model": "claude-opus-5-5",
+  "results": [
+    {
+      "name": "synthetic-red-image",
+      "path": "/v1/messages",
+      "status": 200,
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 630,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 630,
+        "cache_read_input_tokens": 0,
+        "inference_geo": "not_available",
+        "input_tokens": 2,
+        "output_tokens": 4,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "text"
+      ],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 5.453,
+      "request_id_sha256": "5083920054a1612d66bf3462343440cdcce643899ca5ba37ff3747457fe2af4d"
+    },
+    {
+      "name": "synthetic-document-citations",
+      "path": "/v1/messages",
+      "status": 200,
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 1406,
+        "inference_geo": "not_available",
+        "input_tokens": 2,
+        "output_tokens": 38,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "text"
+      ],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 4.903,
+      "request_id_sha256": "01692d74ace42fed91521d22495d5a6f07cfdddb09bb5dc324a758b8797df517"
+    },
+    {
+      "name": "citation-history-continuation",
+      "path": "/v1/messages",
+      "status": 200,
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 728,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 728,
+        "cache_read_input_tokens": 762,
+        "inference_geo": "not_available",
+        "input_tokens": 2,
+        "output_tokens": 48,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "text",
+        "text"
+      ],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 5.482,
+      "request_id_sha256": "a961790f533c87297020aa1b7ba2a5d13ae09f0d91ed0972a06a0acadab5a9e0"
+    }
+  ],
+  "checks": {
+    "image_color": true,
+    "document_cited_fact": true,
+    "citation_history_continued": true
+  },
+  "fixture_facts": {
+    "png_sha256": "6827568a4be792349d4f76908a4756b48bebe45b9354f7934c61a9c502a4259d",
+    "document_sha256": "43c11b05148a2ee9e50f78baa9384763c1965920fc5fafed25ffdc880473f375",
+    "citation_blocks_sha256": "2104c0b2e194d9e5a9c42da0ae8cb0d3af3bebd0a18b5d789db1311d13ca14f5",
+    "citation_count": 1
+  },
+  "passed": true,
+  "scope": "Synthetic base64 PNG and text document; full assistant citation history reused in memory. No PDF/URL/file-ID inference."
+}
