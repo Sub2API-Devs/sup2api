@@ -25,7 +25,7 @@ var configAAD = []byte("system:ccgateway:v1")
 
 type Config struct {
 	AccountRuntimes    bool   `json:"account_runtimes"`
-	Mode               string `json:"mode"`
+	Mode               string `json:"mode"` // "disabled", "local", "ssh", "http"
 	Host               string `json:"host"`
 	Port               int    `json:"port"`
 	User               string `json:"user"`
@@ -36,6 +36,10 @@ type Config struct {
 	HostKeyFingerprint string `json:"host_key_fingerprint"`
 	AdminKey           string `json:"admin_key,omitempty"`
 	APIKey             string `json:"api_key,omitempty"`
+	// ControllerInstalled 标记控制面板是否已安装（http 模式专用）
+	ControllerInstalled bool `json:"controller_installed,omitempty"`
+	// ControllerURL 控制面板直接连接地址（http 模式）
+	ControllerURL string `json:"controller_url,omitempty"`
 	// Images overrides the pinned runtime images (images.go) per role, e.g.
 	// with tags built on the Docker host itself; empty fields use the
 	// pinned references (CONTRACTS §49.16).
@@ -91,7 +95,26 @@ func (c Config) SSH() remotedocker.Config {
 	return remotedocker.Config{Host: c.Host, Port: c.Port, User: c.User, AuthMode: c.AuthMode, Password: c.Password, PrivateKey: c.PrivateKey, Passphrase: c.Passphrase, HostKeyFingerprint: c.HostKeyFingerprint}
 }
 func (c Config) Public() map[string]any {
-	return map[string]any{"account_runtimes": c.AccountRuntimes, "mode": c.Mode, "host": c.Host, "port": c.Port, "user": c.User, "auth_mode": c.AuthMode, "host_key_fingerprint": c.HostKeyFingerprint, "has_password": c.Password != "", "has_private_key": c.PrivateKey != "", "has_passphrase": c.Passphrase != "", "has_admin_key": c.AdminKey != "", "has_api_key": c.APIKey != "", "images": c.publicImages(), "effective_images": c.EffectiveImages(), "network": c.EffectiveNetwork(), "request_policy": c.EffectiveRequestPolicy()}
+	return map[string]any{
+		"account_runtimes":      c.AccountRuntimes,
+		"mode":                  c.Mode,
+		"host":                  c.Host,
+		"port":                  c.Port,
+		"user":                  c.User,
+		"auth_mode":             c.AuthMode,
+		"host_key_fingerprint":  c.HostKeyFingerprint,
+		"has_password":          c.Password != "",
+		"has_private_key":       c.PrivateKey != "",
+		"has_passphrase":        c.Passphrase != "",
+		"has_admin_key":         c.AdminKey != "",
+		"has_api_key":           c.APIKey != "",
+		"controller_installed":  c.ControllerInstalled,
+		"controller_url":        c.ControllerURL,
+		"images":                c.publicImages(),
+		"effective_images":      c.EffectiveImages(),
+		"network":               c.EffectiveNetwork(),
+		"request_policy":        c.EffectiveRequestPolicy(),
+	}
 }
 
 type Service struct {
@@ -178,7 +201,7 @@ func mergeConfig(c, old Config) (Config, error) {
 	if c.Port == 0 {
 		c.Port = 22
 	}
-	if c.Mode != "local" && c.Mode != "ssh" {
+	if c.Mode != "local" && c.Mode != "ssh" && c.Mode != "http" {
 		return c, errors.New("invalid mode")
 	}
 	if c.Network == nil {
@@ -246,7 +269,30 @@ func mergeConfig(c, old Config) (Config, error) {
 		} else {
 			c.Password = ""
 		}
+		// ssh 模式清除 http 专用字段
+		c.ControllerURL = ""
+	} else if c.Mode == "http" {
+		// http 模式：需要 Host 和 AdminKey
+		if c.Host == "" {
+			return c, errors.New("controller host is required for http mode")
+		}
+		if c.Port == 0 {
+			c.Port = 8787
+		}
+		// 保留 ControllerInstalled 和 ControllerURL
+		if !same {
+			c.ControllerInstalled = false
+			c.ControllerURL = ""
+		}
+		// http 模式清除 SSH 字段
+		c.User = ""
+		c.AuthMode = ""
+		c.Password = ""
+		c.PrivateKey = ""
+		c.Passphrase = ""
+		c.HostKeyFingerprint = ""
 	} else {
+		// local 或 disabled 模式清除所有远程字段
 		c.Host = ""
 		c.User = ""
 		c.AuthMode = ""
@@ -254,6 +300,8 @@ func mergeConfig(c, old Config) (Config, error) {
 		c.PrivateKey = ""
 		c.Passphrase = ""
 		c.HostKeyFingerprint = ""
+		c.ControllerInstalled = false
+		c.ControllerURL = ""
 	}
 	return c, nil
 }

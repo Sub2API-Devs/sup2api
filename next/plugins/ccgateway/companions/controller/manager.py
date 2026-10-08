@@ -23,6 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import docker
 import requests
 from network import configuration, business_rules, network_policy, host_routes, allocate_subnet, allocate_addresses
+from images import ImageManager, ImageUploadError
 
 # Runtime keys (CCGATEWAY-DRAFT-RUNTIMES §1): an account id, or a draft key
 # created by the editor before the account exists. Every key that reaches a
@@ -43,6 +44,7 @@ IMAGE_CACHE_SECONDS = 30
 
 ROUTE = re.compile(r'/accounts(?:/(' + KEY_PATTERN + r')(?:/(config|status|v1/messages(?:/count_tokens)?|'
                    r'connection|migrate-auth|admin/(?:status|usage|features|request-logs|auth/(?:session|start|complete|cancel|logout))))?)?')
+IMAGE_ROUTE = re.compile(r'/images(?:/(upload|load/([a-zA-Z0-9_-]{22})))?')
 
 
 class BadRequest(ValueError):
@@ -128,9 +130,11 @@ class Manager:
         self.locks, self.lock = {}, threading.Lock()
         self.network_lock = threading.RLock()
         self.online = {}  # Never trust persisted readiness after controller restart.
-        self.boots = {}
+        self.boots =
         self.image_seen = (0.0, '')  # (monotonic time, app image id)
         self.version = os.getenv('CCG_CONTROLLER_VERSION') or 'dev'
+        # 镜像管理器
+        self.image_manager = ImageManager(self.docker, self.root / 'uploads')
 
     def health(self):
         return {'version': self.version, 'app_image': self.app_image, 'egress_image': self.egress_image,
@@ -584,6 +588,43 @@ class Handler(BaseHTTPRequestHandler):
             self.close_connection = True
         return self.reply(status, {'error': code})
 
+    def handle_image_upload(self):
+        """处理 POST /images/upload"""
+        try:
+            # 获取镜像名称和可选的 SHA256
+            image_name = self.headers.get('X-Image-Name', 'uploaded-image')
+            expected_sha256 = self.headers.get('X-Image-SHA256')
+
+            # 获取 Content-Length
+            try:
+                content_length = int(self.headers.get('Content-Length', '0'))
+            except ValueError:
+                return self.fail(400, 'invalid_content_length')
+
+            if content_length <= 0 or content_length > (2 * 1024 * 1024 * 1024):
+                return self.fail(400, 'invalid_content_length')
+
+            # 读取镜像数据并上传
+            result = self.server.manager.image_manager.upload_image_data(
+                image_name, self.rfile, expected_sha256
+            )
+            return self.reply(200, result)
+
+        except ImageUploadError as e:
+            return self.fail(400, str(e))
+        except Exception as e:
+            return self.fail(500, 'upload_failed')
+
+    def handle_image_load(self, upload_id):
+        """处理 POST /images/load/<upload_id>"""
+        try:
+            result = self.server.manager.image_manager.load_image(upload_id)
+            return self.reply(200, result)
+        except ImageUploadError as e:
+            return self.fail(400, str(e))
+        except Exception as e:
+            return self.fail(500, 'load_failed')
+
     def handle_request(self):
         self.response_started = False
         manager = self.server.manager
@@ -595,6 +636,20 @@ class Handler(BaseHTTPRequestHandler):
             if self.command != 'GET':
                 return self.fail(405, 'method_not_allowed')
             return self.reply(200, manager.health())
+
+        # 处理镜像上传端点
+        image_match = IMAGE_ROUTE.fullmatch(self.path)
+        if image_match:
+            action, upload_id = image_match[1], image_match[2]
+            if action == 'upload':
+                if self.command != 'POST':
+                    return self.fail(405, 'method_not_allowed')
+                return self.handle_image_upload()
+            elif action and action.startswith('load/'):
+                if self.command != 'POST':
+                    return self.fail(405, 'method_not_allowed')
+                return self.handle_image_load(upload_id)
+
         match = ROUTE.fullmatch(self.path)
         if not match:
             return self.fail(404, 'not_found', close=True)

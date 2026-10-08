@@ -41,6 +41,9 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	})
 	r.Perm("PUT", "/system/ccgateway/remote-config", "settings:manage", s.save)
 	r.Perm("POST", "/system/ccgateway/remote-fingerprint", "settings:manage", s.fingerprint)
+	// 控制面板管理
+	r.Perm("GET", "/system/ccgateway/controller/status", "settings:read", s.controllerStatus)
+	r.Perm("POST", "/system/ccgateway/controller/install", "settings:manage", s.controllerInstall)
 	// Runtime installation / upgrade over SSH (CONTRACTS §49.16).
 	r.Perm("GET", "/system/ccgateway/runtime", "settings:read", s.runtimeGet)
 	r.Perm("POST", "/system/ccgateway/runtime/install", "settings:manage", s.runtimeInstall)
@@ -84,6 +87,50 @@ func (s *Service) fingerprint(c *gin.Context) {
 	}
 	httpapi.OK(c, gin.H{"fingerprint": fp, "verified": false})
 }
+
+// controllerStatus 检查控制面板连接状态
+func (s *Service) controllerStatus(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+	defer cancel()
+
+	cfg, e := s.Load(ctx)
+	if e != nil {
+		httpapi.Fail(c, core.ErrUnavailable)
+		return
+	}
+
+	status := CheckControllerConnection(ctx, cfg)
+	httpapi.OK(c, status)
+}
+
+// controllerInstall 安装控制面板
+func (s *Service) controllerInstall(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Minute)
+	defer cancel()
+
+	cfg, e := s.Load(ctx)
+	if e != nil {
+		httpapi.Fail(c, core.ErrUnavailable)
+		return
+	}
+
+	if cfg.Mode != "ssh" {
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("SSH mode required for controller installation."))
+		return
+	}
+
+	result, e := s.CheckOrInstallController(ctx, cfg)
+	if e != nil {
+		httpapi.Fail(c, core.ErrUnavailable.WithMessage("Controller installation failed: "+e.Error()))
+		return
+	}
+
+	s.record(c, "controller.install")
+	httpapi.OK(c, result)
+}
+
 func (s *Service) docker(c *gin.Context) {
 	action := "test"
 	if strings.HasSuffix(c.Request.URL.Path, "remote-action") {

@@ -10,8 +10,9 @@ import { defaultRequestPolicy, validRequestPolicy, type RequestPolicy } from './
 
 interface RuntimeImages { app: string; egress: string; controller: string }
 interface RemoteConfig {
-  account_runtimes: boolean; mode: 'disabled' | 'local' | 'ssh'; host: string; port: number; user: string; auth_mode: 'password' | 'private_key'
+  account_runtimes: boolean; mode: 'disabled' | 'local' | 'ssh' | 'http'; host: string; port: number; user: string; auth_mode: 'password' | 'private_key'
   host_key_fingerprint: string; has_password: boolean; has_private_key: boolean; has_passphrase: boolean; has_admin_key: boolean; has_api_key: boolean
+  controller_installed?: boolean; controller_url?: string
   request_policy?: Partial<RequestPolicy>
   images?: Partial<RuntimeImages> | null
   effective_images?: Partial<RuntimeImages>
