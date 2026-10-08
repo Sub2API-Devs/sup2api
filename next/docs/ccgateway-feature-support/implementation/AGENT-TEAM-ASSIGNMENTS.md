@@ -43,38 +43,42 @@
 ### Agent 2: agent-account-ui
 - **Worktree**: `wt-account-ui`
 - **任务**: 账号列表手动刷新授权按钮
-- **状态**: 🔄 进行中
-- **负责人**: agent-account-ui
+- **状态**: ✅ 已完成并合并
+- **提交**: fa77c4284
+- **分支**: wt-account-ui (已合并到 feat/next-platform)
 
-#### 实施计划
-1. 核心提供插件自定义菜单脚手架
-2. 插件注册自定义操作按钮
-3. 前端账号列表集成自定义按钮
-4. 测试手动刷新流程
+#### 实施总结
+1. ✅ 核心提供插件自定义操作脚手架（AccountAction 结构和 API）
+2. ✅ CCGateway 插件注册 refresh_auth 操作
+3. ✅ 前端 AccountRuntimes 表格添加刷新授权按钮
+4. ✅ 国际化和类型定义完成
 
 ### Agent 3: agent-cc-params
 - **Worktree**: `wt-cc-params`
 - **任务**: 支持 CC 的 `--add-dir` 参数
-- **状态**: 🔄 进行中
-- **负责人**: agent-cc-params
+- **状态**: ✅ 已完成并合并
+- **提交**: e614751ae
+- **分支**: 已合并到 feat/next-platform (来自 endpoint-subsets)
 
-#### 实施计划
-1. 调研 CC 如何在 API 请求中附带 `--add-dir`
-2. 保留客户端附带的参数
-3. 测试参数传递
-4. 更新 CC 特性文档
+#### 实施总结
+1. ✅ Request 结构添加 AdditionalDirectories 字段
+2. ✅ parseAdditionalDirectories 验证逻辑（最多 100 个目录，每个最长 4096 字符）
+3. ✅ 测试覆盖：additional_directories_test.go 和 cwd_probe_cli_test.go
+4. ✅ CC 特性文档待更新（功能已实现）
 
 ### Agent 4: agent-tool-mapping
 - **Worktree**: `wt-tool-mapping`
 - **任务**: 避免工具映射冲突
-- **状态**: 🔄 进行中
-- **负责人**: agent-tool-mapping
+- **状态**: ✅ 已完成并合并
+- **提交**: 75627abb8
+- **分支**: wt-tool-mapping (已合并到 feat/next-platform)
 
-#### 实施计划
-1. 检测客户端是否已有 ccgateway MCP
-2. 避免映射到已存在的 MCP 服务器
-3. Worker 每次映射时确认 ccgateway MCP 可用性
-4. 测试映射冲突场景
+#### 实施总结
+1. ✅ 自动检测和解决工具命名空间冲突
+2. ✅ 使用备用命名空间（如 ccgateway-mapped）
+3. ✅ 安全敏感场景保持拒绝策略
+4. ✅ 全面的测试覆盖：tool_namespace_test.go（156 行测试）
+5. ✅ 功能文档：TOOL_NAMESPACE_CONFLICT_RESOLUTION.md
 
 ### Agent 5: agent-proxy-config
 - **Worktree**: `wt-proxy-config`
