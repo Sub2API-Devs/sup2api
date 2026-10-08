@@ -1,0 +1,77 @@
+{
+  "model": "claude-opus-5-5",
+  "results": [
+    {
+      "name": "inline-search-tool",
+      "path": "/v1/messages",
+      "beta": "inline-tools-2026-09-15,advanced-tool-use-2025-11-20",
+      "status": 200,
+      "stop": "tool_use",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1015,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 1898,
+        "cache_read_input_tokens": 883,
+        "inference_geo": "not_available",
+        "input_tokens": 768,
+        "output_tokens": 154,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "tool_use"
+      ],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 7.314,
+      "request_id_sha256": "d4a0cae6e10d4584888d3b8dc6941040caa9f75c60b52dedf19b4308f91fd152"
+    },
+    {
+      "name": "inline-search-result",
+      "path": "/v1/messages",
+      "beta": "inline-tools-2026-09-15,advanced-tool-use-2025-11-20",
+      "status": 200,
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 856,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 856,
+        "cache_read_input_tokens": 883,
+        "inference_geo": "not_available",
+        "input_tokens": 2,
+        "output_tokens": 137,
+        "output_tokens_details": {
+          "thinking_tokens": 49
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "thinking",
+        "text"
+      ],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 5.962,
+      "request_id_sha256": "e328411dd77bad1826e1488fa79234e1353b1b34d750e284b9499a8690bfebc0"
+    }
+  ],
+  "checks": {
+    "external_tool_handoff": true,
+    "fixture_completed": true,
+    "internal_search_verified": false,
+    "tool_call_id_sha256": "17d73e829e153219a52091dfc507d934af53f6cd870f1c1703da984ef34f5224"
+  },
+  "scope": "Public JSON tool roundtrip only. Internal search requires correlated Worker logs; public success alone cannot prove helper execution or saved policy. No settings changed."
+}

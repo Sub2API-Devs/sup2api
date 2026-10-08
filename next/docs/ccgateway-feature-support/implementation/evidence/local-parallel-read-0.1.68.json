@@ -1,0 +1,82 @@
+{
+  "passed": true,
+  "fixture_directory": "D:\\projects\\test\\ccg-parallel-read-02009fbbb34440dbb178d56f9d70f95d",
+  "fixture_paths": [
+    "D:\\projects\\test\\ccg-parallel-read-02009fbbb34440dbb178d56f9d70f95d\\fixture-1.txt",
+    "D:\\projects\\test\\ccg-parallel-read-02009fbbb34440dbb178d56f9d70f95d\\fixture-2.txt",
+    "D:\\projects\\test\\ccg-parallel-read-02009fbbb34440dbb178d56f9d70f95d\\fixture-3.txt",
+    "D:\\projects\\test\\ccg-parallel-read-02009fbbb34440dbb178d56f9d70f95d\\fixture-4.txt",
+    "D:\\projects\\test\\ccg-parallel-read-02009fbbb34440dbb178d56f9d70f95d\\fixture-5.txt"
+  ],
+  "fixture_sha256": [
+    "9536afada5f5bdd35d26503af8a624b58e001c79182f546e1eb21480117edfc4",
+    "01ffd66635db871262b248ffc85b4196af5ee30815e985858e9d484822d6826c",
+    "b434a7466e2fb65c14456c833ee4637c3cb940d9284a0d552a90a48107059524",
+    "18896e4019605d867b5c2a272f70643a695a88640bc488f984314c4c5403cb29",
+    "435910fedac1ff543365fab52ff7343d94fc18624bdfd9feb7c29ed0f312090c"
+  ],
+  "model": "claude-opus-5-5",
+  "scope": "Single CLI process; same-message five Read calls, not execution-overlap proof.",
+  "same_assistant_five_reads": true,
+  "paired_results": true,
+  "final_contains_five_markers": true,
+  "normal_provider_refusal": false,
+  "malformed_or_error": false,
+  "read_count": 5,
+  "result_count": 5,
+  "assistant_read_group_sizes": [
+    5
+  ],
+  "terminal_count": 1,
+  "assistant_message_id_sha256": [
+    "d9825c6dc5ba1cd41a9783945c7f24fc46b64f4f78927b679e7a9029a930ffd3"
+  ],
+  "call_id_sha256": [
+    "01b960d60b3b52596e97a4b41f7920a89a7058e20137717b8f6a1a3580e3a8ea",
+    "445b5e9feb0c2a34b2f92ecfc68fa1409713ed1262fd9db361105eec0d3ffeaf",
+    "7901d5f83433dbe1944006fafe57542077074500d3ac9914f7fc10478bc35507",
+    "aba4f5c585d2606e5620b62dbf567593ee48ebdd655c51dbc7cff95a64444608",
+    "b5288fd04ca3f0050a16ea7bce1a8a36068ecfb4231eaeee8de82efe986bb81b"
+  ],
+  "session_id_sha256": [
+    "223a573d69bc935fa2464a6639eea2bc6069ca5204e3dcde384e872c2969cc46"
+  ],
+  "usage": [
+    {
+      "input_tokens": 4,
+      "cache_creation_input_tokens": 6241,
+      "cache_read_input_tokens": 2674,
+      "output_tokens": 806,
+      "output_tokens_details": {
+        "thinking_tokens": 65
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 0,
+        "ephemeral_5m_input_tokens": 6241
+      },
+      "inference_geo": "not_available",
+      "iterations": [
+        {
+          "cache_creation": {
+            "ephemeral_1h_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 2219
+          },
+          "cache_creation_input_tokens": 2219,
+          "cache_read_input_tokens": 2674,
+          "input_tokens": 2,
+          "output_tokens": 343,
+          "type": "message"
+        }
+      ],
+      "speed": "standard",
+      "fallback_credit": null
+    }
+  ],
+  "exit_code": 0,
+  "seconds": 17.038
+}

@@ -1,5 +1,13 @@
 # 最终功能闭环审计（当前快照，非全部生产验收）
 
+## 0.1.68 更新说明（优先于下列历史快照）
+
+2026-10-08：精确 Git 提交 `9ba4b278217f077e39cc4e31bc63f50658382133` 已部署核心 0.1.67/Worker 0.1.68/catalog `.10`，两个原账号容器及授权保留。已加载普通目标的窄 forced 适配、CC per-turn 原名准入及 custom inline+内部搜索均已上线；真实 per-turn 两种 beta 无降级验收见 `.67` 记录。
+
+真实五 Read、公共 MCP 与 inline 内部搜索三项已通过，日志确认五结果尾 TAB 原文恢复、MCP 真实流式参数到终态、内部搜索实际执行及客户端工具交接，见 [PUBLIC-ACCEPTANCE-0.1.68](PUBLIC-ACCEPTANCE-0.1.68.md)。这不是所有云工具、所有组合或计费资格均已验证。
+
+跨 Worker 同 issuer diagnostics 已有持久归属实现与独立测试；剩余是跨 issuer 的可信 workspace 身份证明。下列 O-HISTORY 的旧“必须补跨 Worker”表述不再代表当前实现。内部搜索预算、通用 forced 续轮、动态 fallback/逐 attempt 压缩计费等仍需后续工作；保持显式限制不能算全部兼容完成。下文版本与“尚未发布”等段落保留为历史快照，当前状态以本节和 PROGRESS 顶部为准。
+
 审计时间：2026-10-08；目标 `D:/projects/golang/sup2api`；第七/八批已提交 `747c168a383fd4e6738cb9451a29b1fb84010560`；第九批已推送 `cd4d5e40b2de7c22af7718a3b35d12d9f41e786a`，修正候选 `1186563e47565e938da2cd2b1a9e8be6cd5ac2d5` 已通过Linux门禁。Worker #21/#22已原地升级0.1.66/full56f93858、catalog `2026-10-08.8`；核心0.1.65已发布，四节点及实际插件0.1.10哈希通过；公网基础协议及工具/count已复验。真实本地Claude工具回传追加附件的严格对齐错误已修复，0.1.66两轮Read实测通过；新增高级组合仍另行评审，不宣称全部交付。CodeGraph 使用 projectPath 定位，已知源码通过本机读取。目录 `contracts/features/catalog.go` 共 37 个 F 项（36 API + 1 CC safeguards）和 8 个 O 横切目标；不按 partial 数量推算完成率。
 
 ## 证据口径与结论
