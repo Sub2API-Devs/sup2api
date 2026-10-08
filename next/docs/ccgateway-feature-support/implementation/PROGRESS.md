@@ -4,6 +4,12 @@
 
 ## 本轮追加证据与限制
 
+最新发布已完成：精确Git `2bd328b46b18415ff209ecfaa39e71f27c17407c`，Core.72四节点ready、Plugin.13、Worker.75原地更新21/22、Controller.48。未来默认镜像.75，既有容器ID/镜像引用/挂载/授权保留。核心维护503观测约38.30秒。以下未部署、等待刷新等段落均为较早快照。
+
+OAuth根因修复已得到真实证据：去掉identity前置短命auth status，以一次原生CLI载体自动刷新并取得profile200；#22 access有效期更新至2026-10-09 05:41北京时间，issuer/generation不变，无遗留锁/CLI。随后一次正常额度查询200且token_expired清除，无需重新授权。管理状态为明确的local_snapshot，不将凭据存在等同在线认证通过。详见Worker.75及Core.72部署记录。
+
+新公网预算工具验收首请求502，12.705秒，RID摘要 `72296893f0a03d6a3f676f25d7356c15495102622dc5fabdb6a108db7b8fa010`；已按首错即停，未执行后续续聊/回退/inline，也未重试。证据为 `evidence/public-helper-budget-core-0.1.72.json`。API与CC分别只读核核心账务和Worker首因，自动刷新成功不等于模型特性验收成功。
+
 OAuth锁根因已由现场仅文件syscall证据确定：identity前置短命 `claude auth status` 创建刷新锁后约4ms就exit_group(0)，未完成刷新/清理；随后的carrier多次EEXIST后锁超时。不是权限或refresh_token被撤销的证据。access已过期，保存的refresh期限尚未到；正在去掉会制造锁的状态子进程，保留同次原生CLI刷新与真实profile身份确认，同时使管理状态查询纯只读。修复尚未部署，不宣称当前自动刷新已恢复；无需用户先重新授权。
 
 位置payload2已有真实Core/Worker/CLI/PG JSON167.188s、SSE169.326s门禁转绿，各7公开8provider/7用量7receipt，原丢目录红保留。旧v1省略协商40CLI联合回归与共享/core独审绿；v1→v2真实PG混合链追加另在跑。Root另补首公开前无法锚定私有system必须拒的独立红1.432s→绿1.394s，未用静默漏记覆盖未知布局。全部仍是候选，不与线上.74混称。

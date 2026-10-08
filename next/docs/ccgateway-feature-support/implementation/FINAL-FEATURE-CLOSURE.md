@@ -1,5 +1,11 @@
 # 最终功能闭环审计（当前快照，非全部生产验收）
 
+## Core .72 / Worker .75 当前状态
+
+Git2bd328b46已部署Core.72/Plugin.13、Worker.75/catalog.16，Controller.48。位置payload2和v1→v2链已通过真实CLI接隔离上游及真实隔离PG验证。OAuth前置短命状态进程留锁已修复，#22原生自动刷新/profile200和正常额度200通过，旧token_expired清除。两个原账号容器及授权保留。详见本版本部署记录。
+
+本版本公网预算工具首请求仍502（RID890a39010a218c9e7fbc1dbc，12.705秒），已停止续聊/回退/inline及重试。与前两次预派发503不同，这次存在helper uncertain记录和冻结usage receipt；公开零tokens/pending不能解释为提供商零用量。正在只读核Worker首因及核心账务，不宣称预算真实闭环通过。以下版本段落均为历史快照。
+
 ## Core .71 / Worker .73 最新更正
 
 源码428164d47的隐藏helper历史持久、完整轮次捕获/冷恢复、核心托管和幂等用量收据已实现并部署；签名替换修复也包含其中。Core.71/plugin.12/catalog.15、Worker.73和Controller.48均已核对，见最新部署记录。下文“B/C尚在开发”或“缺持久隐藏历史”是旧快照，不能当当前源码结论。

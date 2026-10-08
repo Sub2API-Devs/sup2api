@@ -23,3 +23,25 @@ OVH 本平台四容器均运行，逐个执行实际 release 二进制 version �
 ## 认证预检禁区
 
 不调用旧 /admin/status、claude auth status 或其它会启动短命授权CLI的状态检查。当前.74只允许现有文件元信息、hash、容器身份与既有诊断事实核对；新status是local_snapshot，不能当在线登录证据。真实资格以独占受控carrier profile/native刷新结果为准，不额外重复探针或模型调用。
+
+## 最终候选门禁启动
+
+最终Git SHA `2bd328b46b18415ff209ecfaa39e71f27c17407c` 已由root提交推送。OVH Git fetch后新建 clean detached `/home/debian/sup2api/release-0.1.72`，未上传本地源码。session22880 开始Linux6包 gateway/ccgateway/helperhistory/usage/app/migrations 的race真实隔离PG门禁，随后core vet及contracts全race/vet串行。2CPU/2GiB/GOMAXPROCS2/GOMEMLIMIT1400MiB、原CI缓存、源码只读挂载，日志 `/home/debian/sub2api-next-test/validation-2bd328b46`。当前尚无终态，不把运行中或skip算通过；尚未构建签名、导入、升级或变更默认镜像。
+
+## Linux 门禁与签名终态
+
+首6包命令误将迁移路径写作 ./migrations（正确为 ./internal/migrations），产生setup fail，保留core-race.log/exit1；其余5包734PASS、5可选CLI skip且零testfail。随后只补正确迁移包race：4PASS含真实迁移幂等双跑；core6包vet0、contracts72PASS/race0、contracts vet0。可选skip为3个ABC CLI与2个OpenAI CLI，普通数据库测试均实际运行；Windows实际CLI/PG的inline JSON/SSE和混合链证据另独立保存，不冒称Linux重跑。
+
+prepare session78264 exit0，仍Git精确2bd328b46，defaultcache/原签名trust未变。签名manifest与payload摘要、tar全部文件mode/size/hash、plugin签名及TLS完整originGET逐字节一致通过。独立验证最初把manifest envelope摘要当payload摘要比较而断言失败；按实际签名协议核payload摘要后通过，不是制品签名失败。
+
+- manifest: 8eeb83269a7732b35a6baa2dc12db7489e055a78f0115abf265445c638fd8111
+- bundle: 7388c16e124e9cdfa51478966df2ccc594499bd4123724175b2294d9252918b0，110181094bytes
+- core binary: ec817c52e21adc09db665f92ce45766d9d7805ad9ca11063bb825ad15340bacf
+- plugin0.1.13 package: 1fc462a95937f6523e3b0224101cc9b9659eeec7ff432f8eef71d5f380b37ac1
+- plugin linux-amd64 binary: 1e5a7cd7726860f59e01663be42154157da4585b71ce630d43b1e9d74277a315
+- trust: e51300373d1ce798114d1b39207dcb0e9dd4b7e9dccaa7e1935f55e334847133，与live相同
+- schema_before/after均e8ec13814e64ced829fe95d94c719afe902eed9d7b50370634d5d129ec321138
+
+新本平台备份 /home/debian/sup2api-managed/backups/core-0.1.72-20261008T134119Z，database.dump20682267bytes、0600，pg_restore --list验证成功；同目录四节点inspect仅私有0600。正常签名manifest import已完成，preflight HTTP200、blockers=[]、expected_revision137、四节点准确。尚未创建升级计划，默认镜像/controller未改。
+
+CC作者随后交付Worker.75同SHA双账号原地更新及#22唯一identity200实证（13:41:39–42UTC）：CLI自身access刷新、原principal/generation保持、锁清理且无CLI残留。该证据来自负责该操作的CC作者，不是本代理重复发起身份请求。本代理已汇报root等待最终发布门禁确认；没有额外模型调用。
