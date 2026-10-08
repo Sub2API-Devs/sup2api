@@ -63,25 +63,33 @@ func Validate(raw []byte) error {
 	}
 	previous := -1
 	for _, s := range p.Segments {
-		if s.AfterMessage < 0 || s.AfterMessage < previous || !ValidDigest(s.PublicAnchorDigest) || !ValidDigest(s.ToolCatalogDigest) || len(s.Messages) == 0 || len(s.Messages)%2 != 0 {
+		if s.AfterMessage < 0 || s.AfterMessage < previous || !ValidDigest(s.PublicAnchorDigest) || !ValidDigest(s.ToolCatalogDigest) || len(s.Messages) == 0 {
 			return fmt.Errorf("invalid helper history segment")
 		}
 		previous = s.AfterMessage
-		for i, m := range s.Messages {
+		pairIndex := 0
+		for _, m := range s.Messages {
 			var v struct {
 				Role    string          `json:"role"`
 				Content json.RawMessage `json:"content"`
 			}
-			if json.Unmarshal(m, &v) != nil || len(v.Content) == 0 || v.Content[0] != '[' {
+			if json.Unmarshal(m, &v) != nil || len(v.Content) == 0 || (v.Content[0] != '[' && !(v.Role == "system" && v.Content[0] == '"')) {
 				return fmt.Errorf("invalid helper message")
 			}
+			if v.Role == "system" && pairIndex == 0 {
+				continue
+			}
 			role := "assistant"
-			if i%2 == 1 {
+			if pairIndex%2 == 1 {
 				role = "user"
 			}
 			if v.Role != role {
 				return fmt.Errorf("invalid helper message order")
 			}
+			pairIndex++
+		}
+		if pairIndex == 0 || pairIndex%2 != 0 {
+			return fmt.Errorf("incomplete helper message pair")
 		}
 	}
 	return nil

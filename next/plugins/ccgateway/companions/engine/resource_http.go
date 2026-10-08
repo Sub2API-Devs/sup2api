@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -109,7 +110,11 @@ func (b *resourceBroker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	id, err := b.identity(ctx)
 	if err != nil {
 		d.trace("resource_identity_failed", Object{"error": err.Error()})
-		apiError(w, 503, "api_error", err.Error())
+		typ := "api_error"
+		if errors.Is(err, errManagedResourceIssuerMissing) {
+			typ = resources.IdentityUnsupportedErrorType
+		}
+		apiError(w, 503, typ, err.Error())
 		return
 	}
 	d.trace("resource_identity_verified", id)

@@ -160,6 +160,8 @@ type sseWatch struct {
 	guard        func([]byte) ([]byte, error)
 	observe      func([]byte)
 	ignoreErrors bool
+	requireStop  bool
+	sawStop      bool
 	body         io.ReadCloser
 	relay        *outboundRelay
 	request      *http.Request
@@ -249,10 +251,20 @@ func (s *sseWatch) Read(p []byte) (int, error) {
 			if s.observe != nil {
 				s.observe(event)
 			}
+			if s.requireStop && sseHasMessageStop(event) {
+				s.sawStop = true
+			}
 			s.ready = append(s.ready, event...)
 			s.pending = s.pending[end+size:]
 		}
 		if err != nil && !s.done {
+			if s.requireStop && !s.sawStop {
+				// Close the dispatch gate before exposing EOF/read failure to
+				// the CLI. Preserve the original stream and error unchanged.
+				s.relay.mu.Lock()
+				s.relay.stopped = true
+				s.relay.mu.Unlock()
+			}
 			s.done = true
 			if err == io.EOF {
 				if s.guard != nil && len(bytes.TrimSpace(s.pending)) > 0 {
@@ -512,6 +524,11 @@ func (r *outboundRelay) adaptAttributed(req *Request, groups []systemGroup, body
 		thinking["display"] = display
 		message["thinking"] = thinking
 	}
+	if !count {
+		if err := req.applyHelperHistory(message); err != nil {
+			return nil, false, err
+		}
+	}
 	if err := restoreContexts(message); err != nil {
 		return nil, false, err
 	}
@@ -613,7 +630,7 @@ func (relay *outboundRelay) forwarder(target *url.URL) *httputil.ReverseProxy {
 		if output, _ := resp.Request.Context().Value(apiOutputRequestKey{}).(*Request); output != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 && strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
 			pass, _ := resp.Request.Context().Value(modelRequest{}).(bool)
 			terminal := &apiTerminalObserver{relay: relay, req: output}
-			resp.Body = &sseWatch{body: resp.Body, relay: relay, request: resp.Request, ignoreErrors: !pass, observe: terminal.observe}
+			resp.Body = &sseWatch{body: resp.Body, relay: relay, request: resp.Request, ignoreErrors: !pass, observe: terminal.observe, requireStop: pass || output.helperHistory != nil}
 			if err := relay.bridgeMCPInputs(resp, output); err != nil {
 				return err
 			}
@@ -636,7 +653,7 @@ func (relay *outboundRelay) passUpstreamErrors(resp *http.Response) error {
 	}
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
-			resp.Body = &sseWatch{body: resp.Body, relay: relay, request: resp.Request}
+			resp.Body = &sseWatch{body: resp.Body, relay: relay, request: resp.Request, requireStop: true}
 		}
 		return nil
 	}

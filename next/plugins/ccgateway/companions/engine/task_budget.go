@@ -82,8 +82,19 @@ func (p *RequestPlan) validateTaskBudget(req *Request) error {
 	if budget["remaining"] != nil && (len(p.fields["compaction"]) > 0 || req.hasCompactionHistory()) {
 		return fmt.Errorf("task_budget.remaining cannot be combined with compaction or signed compaction history")
 	}
-	if req.structuredOutput() || req.toolSearchEnabled() && !req.forcedLoadedClientCatalog() {
-		return fmt.Errorf("task_budget with CLI internal rounds requires durable restoration of hidden helper history across client continuations and cold imports; use API server tools or client tool roundtrips")
+	if req.structuredOutput() {
+		return fmt.Errorf("task_budget with legacy synthetic structured output requires unsupported continuation adaptation")
+	}
+	if req.toolSearchEnabled() && !req.forcedLoadedClientCatalog() && (req.helperHistory == nil || !req.helperHistory.authenticated) {
+		return &helperCustodyRequiredError{}
 	}
 	return nil
+}
+
+// This precise parser result is also used by the read-only decision endpoint.
+// It does not authorize a carrier or bypass ordinary request admission.
+type helperCustodyRequiredError struct{}
+
+func (*helperCustodyRequiredError) Error() string {
+	return "task_budget with CLI internal rounds requires durable restoration of hidden helper history across client continuations and cold imports; use API server tools or client tool roundtrips"
 }

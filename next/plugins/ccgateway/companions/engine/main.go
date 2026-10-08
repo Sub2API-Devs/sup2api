@@ -67,6 +67,12 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(Object{"status": "ok", "claude_version": g.Runner.Version})
 		return
 	}
+	if g.serveHelperRequirement(w, r) {
+		return
+	}
+	if g.serveHelperHistory(w, r) {
+		return
+	}
 	diagnostic := newRequestDiagnostic(w, r)
 	diagnostic.store = g.RequestLogs
 	w = diagnostic.capture(w, r, g.RequestLogDir)
@@ -166,7 +172,10 @@ func (x *exchange) admit() bool {
 		x.resources.applyResponseHeaders(x.w.Header())
 		x.diagnostic.trace("resource_references_verified", x.resources.diagnosticFacts())
 	}
-	parse := parsePolicyRequestWithResources
+	parse := func(body []byte, h http.Header, access *resourceAdmission) (*Request, error) {
+		helper, _ := r.Context().Value(helperHistoryContextKey{}).(*helperHistoryExecution)
+		return parsePolicyRequestWithHelper(body, h, access, helper)
+	}
 	if r.URL.Path == "/v1/messages/count_tokens" {
 		parse = parseTokenCountRequestWithResources
 	}
@@ -207,6 +216,12 @@ func (x *exchange) admit() bool {
 	if e = x.req.finalizeCreditPTCAdmission(); e != nil {
 		x.fail(400, "invalid_request_error", e.Error())
 		return false
+	}
+	if helper, _ := r.Context().Value(helperHistoryContextKey{}).(*helperHistoryExecution); helper != nil {
+		if e = req.admitHelperHistory(helper); e != nil {
+			x.fail(400, "invalid_request_error", e.Error())
+			return false
+		}
 	}
 	return true
 }
@@ -252,6 +267,9 @@ func (x *exchange) session() (label, busyKey, logical string, ok bool) {
 	}
 	label = logical
 	logical = digest([]string{h.Get("X-CCGateway-Session-Scope"), logical})
+	if x.req.helperHistory != nil {
+		logical = digest([]string{logical, x.req.helperHistory.namespace})
+	}
 	if x.resources != nil {
 		logical = digest([]string{logical, x.resources.identity.PrincipalID, x.resources.identity.Generation})
 	}

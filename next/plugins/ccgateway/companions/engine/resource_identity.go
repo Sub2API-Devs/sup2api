@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/resources"
 )
+
+var errManagedResourceIssuerMissing = errors.New("API key resources require managed issuer ID and generation")
 
 func resourceEnv(env []string, key string) string {
 	for _, entry := range env {
@@ -44,7 +47,7 @@ func (b *resourceBroker) identity(ctx context.Context) (resources.Identity, erro
 		issuer := resourceEnv(cmd.Env, "CCG_RESOURCE_ISSUER_ID")
 		managedEpoch := resourceEnv(cmd.Env, "CCG_RESOURCE_ISSUER_GENERATION")
 		if issuer == "" || managedEpoch == "" {
-			return resources.Identity{}, fmt.Errorf("API key resources require managed issuer ID and generation")
+			return resources.Identity{}, errManagedResourceIssuerMissing
 		}
 		id.PrincipalID = digest([]string{"resource-api-issuer-v1", issuer})
 		return b.persistIdentity(id, managedEpoch)

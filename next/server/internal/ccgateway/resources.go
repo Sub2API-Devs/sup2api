@@ -38,6 +38,9 @@ func (t resourceTransport) Identity(ctx context.Context, accountID int64) (core.
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		if verifiedMissingResourceIssuer(resp) {
+			return core.ResourceBinding{}, core.ErrUnsupported.WithMessage("account has no managed resource issuer")
+		}
 		return core.ResourceBinding{}, core.ErrUnavailable.WithMessage("account does not provide a verified resource issuer")
 	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8193))
@@ -46,6 +49,23 @@ func (t resourceTransport) Identity(ctx context.Context, accountID int64) (core.
 		return core.ResourceBinding{}, errors.New("invalid Worker resource identity response")
 	}
 	return core.ResourceBinding{AccountID: accountID, PrincipalID: identity.PrincipalID, Generation: identity.Generation}, nil
+}
+
+func verifiedMissingResourceIssuer(resp *http.Response) bool {
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		return false
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8193))
+	if err != nil || len(raw) > 8192 {
+		return false
+	}
+	var body struct {
+		Type  string `json:"type"`
+		Error struct {
+			Type string `json:"type"`
+		} `json:"error"`
+	}
+	return json.Unmarshal(raw, &body) == nil && body.Type == "error" && body.Error.Type == resourcecontract.IdentityUnsupportedErrorType
 }
 
 func (t resourceTransport) RoundTrip(accountID int64, expected core.ResourceBinding, req *http.Request) (*http.Response, error) {

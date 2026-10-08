@@ -15,6 +15,8 @@ type internalCacheRounds struct {
 	events     [][]byte
 	bytes      int
 	rounds     []Object
+	roundIDs   []string
+	hidden     map[string]string
 	discovered map[string]bool
 	results    map[string]string
 	helpers    map[string]string
@@ -98,6 +100,7 @@ func (r *Request) observeInternalCacheEvent(e Object) {
 		return
 	}
 	state.rounds = append(state.rounds, Object{"role": "assistant", "content": blocks})
+	state.roundIDs = append(state.roundIDs, str(message, "id"))
 }
 
 func (r *Request) alignInternalCacheSuffix(messages []any) error {

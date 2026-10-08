@@ -69,6 +69,8 @@ type call struct {
 	creditRequest        *modelCreditRequest
 	creditAccess         *modelCreditAccess
 	creditDispatched     bool
+	helperHistory        *helperHistoryRequest
+	helperPersisted      bool
 	upstreamRefs         map[string]core.PricedUsage
 	upstreamPrimaryModel string
 
@@ -110,6 +112,7 @@ type call struct {
 
 // serve runs the proxy pipeline (ARCHITECTURE 6.1) for one request.
 func (g *Gateway) serve(c *gin.Context, gen core.Generation, b core.EndpointBinding, params map[string]string) {
+	stripHelperHistoryHeaders(c.Request.Header)
 	// The request id is always generated here: it is the usage_logs key and
 	// the ledger idempotency key, so a client-chosen id could dodge billing.
 	rid := httpapi.NewRequestID()
@@ -159,6 +162,7 @@ func (c *call) run(ctx context.Context) {
 	c.principal = p
 	c.rec = c.newRecord()
 	defer c.submit()
+	defer c.finishHelperHistory()
 
 	// 2. Body, model, stream.
 	if e := c.readBody(); e != nil {
@@ -181,6 +185,10 @@ func (c *call) run(ctx context.Context) {
 	}
 	if c.ep.TaskQuery() {
 		c.serveTaskSnapshot()
+		return
+	}
+	if e := c.discoverHelperHistory(ctx); e != nil {
+		c.fail(e)
 		return
 	}
 
@@ -654,7 +662,7 @@ func (c *call) fail(e *gwError) {
 // settler either way.
 func (c *call) submit() {
 	rec := c.rec
-	if rec == nil || c.g.d.Settler == nil || c.taskPersisted {
+	if rec == nil || c.g.d.Settler == nil || c.taskPersisted || c.helperWasDispatched() {
 		return
 	}
 	rec.LatencyMs = int(c.g.now().Sub(c.start) / time.Millisecond)

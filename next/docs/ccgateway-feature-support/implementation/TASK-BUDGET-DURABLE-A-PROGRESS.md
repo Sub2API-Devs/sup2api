@@ -51,3 +51,11 @@ C需明确歧义Commit失败的最终HTTP状态如何冻结到outbox，不能先
 research_api 在真实隔离PG25.554s复现两个RED：MaxRecords=1仍可Reserve而提交会产生record+outbox两槽；65字节核心RequestID可进入账本但usage持久入口只支持64。作者已窄修：RequestID入口上限64；已有尚未冻结usage的reservation按未来两槽计数，新Reserve也必须剩余两槽；已冻结uncertain按未来record一槽加真实outbox单独计数，ACK后不重占usage槽，aborted仅保留一元数据槽。字节额度同时预留密文开销，记录保存真实ciphertext大小；已冻结usage不重复预留2MiB。作者过期额度例由MaxRecords1改2，仍证明既存墓碑一槽不足以接纳新两槽。新增独审“MaxRecords4仅允许两份并存reservation”测试由reviewer拥有。
 
 本次作者非DB1.360s及vet绿，源码再freeze；不将前一轮全PG结果冒充此修复后的最终结果。独立reviewer将运行真实PG全部测试并补证据。
+
+## 派发前只读发现接口（C协调新增）
+
+按root授权新增 Lookup(ctx, owner, allPublicPrefixes)，不要求尚未选定的account/model/CLI/policy namespace。结果使用core.HelperHistoryLookupState三态：Unknown、KnownReady、KnownUnrestorable；不能依错误文案判断。只有全部前缀没有任何owner记录才Unknown；任一已知但缺边界、过期、密文损坏、原链不完整、跨namespace多链或hidden冲突都不能退化成Unknown。KnownReady返回完整Chain与Namespace/Binding供C固定原账号后再做实际资格/配置校验。DB基础设施错误单独返回error，不能当Unknown路由。
+
+新增lookup.go/lookup_test.go，0045仅加owner/group/public_prefix_digest查询索引；没有改C的0044、FrozenEnvelope、usage编码。复用同owner事务锁和原resolve完整链校验，不另建宽松恢复器。两项真实DB定向验证正在执行；本机SUB2API_TESTPG=off首次明确skip只证明编译，vet通过。最终结果将在下文追加。
+
+Lookup最终真实隔离PG结果：TestHelperHistoryDBLookupBeforeNamespace PASS113.31s（全unknown、ready固定binding、跨owner无披露、部分known未知后缀、冷完整链、丢早期边界、颠倒顺序、跨namespace歧义）；TestHelperHistoryDBLookupExpiryAndCorruptionStayKnown PASS23.19s（损坏/过期清内容仍known-unrestorable）。包136.857s，全部非skip，SSH tunnel和测试DB已清理；无生产访问/源码上传。Lookup增量再次freeze交C接线和独审。

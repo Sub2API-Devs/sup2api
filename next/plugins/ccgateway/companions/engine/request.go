@@ -29,6 +29,7 @@ type Tool struct {
 type Request struct {
 	completedClientHistory  map[string]string
 	internalCache           *internalCacheRounds
+	helperHistory           *helperHistoryExecution
 	credit                  *creditExecution
 	creditPTCDeferred       bool
 	resource                *resourceExchange

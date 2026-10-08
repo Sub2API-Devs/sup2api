@@ -36,6 +36,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/group"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/helperhistory"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/iam"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/job"
@@ -252,8 +253,12 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		gate.stop()
 	}
 	resourceStore := providerresources.New(db, providerresources.Options{})
+	helperStore := helperhistory.New(db, cipher, helperhistory.Options{})
+	stopHelperHistory := startHelperHistoryMaintenance(ctx, settler, helperStore, canWork)
+	onClose(stopHelperHistory)
 	gw := gateway.New(gateway.Deps{
-		CCGateway: ccg,
+		CCGateway:     ccg,
+		HelperHistory: helperStore, EnableHelperHistory: true,
 		Resources: resourceStore, Skills: resourceStore, Credits: fallbackcredits.New(db, 4096), Diagnostics: messagediagnostics.New(db, 4096, 0), ResourceTransport: ccg.ResourceTransport(),
 		DB: db, Redis: rdb, Bus: cl.Bus, Node: cl.Registry, Registry: reg,
 		Auth: keys, Pricer: bill, Balance: bill, Slots: cl.Slots,
@@ -279,6 +284,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	// Polling must stop before plugin instances and their egress. Keep the
 	// earlier cleanup too, for initialization errors before this point.
 	onClose(settler.Stop)
+	onClose(stopHelperHistory)
 
 	inst := install.New(install.Deps{Mutations: mutations,
 		DB: db, Trust: trust, Authz: az, Permissions: az, Defaults: defaults,

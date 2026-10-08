@@ -13,9 +13,6 @@ import (
 // Lookup intentionally ignores the currently proposed account and namespace.
 // A known old chain must not disappear merely because routing/config changed.
 func (s *Service) Lookup(ctx context.Context, owner core.ResourceOwner, prefixes []string) (out core.HelperHistoryLookup, err error) {
-	if len(prefixes) > wire.MaxChainDepth {
-		return out, core.ErrInvalidArgument
-	}
 	seen := map[string]bool{}
 	for _, prefix := range prefixes {
 		if !wire.ValidDigest(prefix) || seen[prefix] {
@@ -33,7 +30,7 @@ func (s *Service) Lookup(ctx context.Context, owner core.ResourceOwner, prefixes
 			return nil
 		}
 		out.State = core.HelperHistoryKnownUnrestorable
-		if len(found) != len(prefixes) || len(namespaces) != 1 {
+		if len(prefixes) > wire.MaxChainDepth || len(found) != len(prefixes) || len(namespaces) != 1 {
 			return nil
 		}
 		namespace := ""

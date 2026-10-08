@@ -11,6 +11,7 @@ interface Capability {
   build: { version: string; revision: string; modified: boolean }
   code_catalog: FeatureCatalog
   policy_schema_versions: number[]
+  helper_history_schema_versions?: number[]
   runtime_probes: Array<{ name: string; status: string; value?: string }>
   model_provider_verification: 'not_run'
 }
@@ -27,6 +28,7 @@ function valid(value: unknown): value is Capability {
   if (!value || typeof value !== 'object') return false
   const v = value as Capability
   return v.protocol_version === 1 && !!v.build && typeof v.build.version === 'string' && typeof v.build.revision === 'string' && typeof v.build.modified === 'boolean' && isFeatureCatalog(v.code_catalog) &&
+    (v.helper_history_schema_versions === undefined || (Array.isArray(v.helper_history_schema_versions) && v.helper_history_schema_versions.length <= 16 && new Set(v.helper_history_schema_versions).size === v.helper_history_schema_versions.length && v.helper_history_schema_versions.every(n => Number.isSafeInteger(n) && n > 0 && n <= 1024))) &&
     Array.isArray(v.policy_schema_versions) && v.policy_schema_versions.every(n => Number.isSafeInteger(n) && n > 0) && Array.isArray(v.runtime_probes) &&
     v.runtime_probes.every(p => p.name === 'cli_version' && ['observed', 'unavailable'].includes(p.status) && (p.value === undefined || typeof p.value === 'string')) && v.model_provider_verification === 'not_run'
 }
@@ -89,6 +91,7 @@ async function inspect() {
       <dl v-if="result" class="grid gap-2 sm:grid-cols-2">
         <div><dt>{{ t('ccgateway.capability.build') }}</dt><dd class="break-all">{{ result.build.version }} · {{ result.build.revision }}{{ result.build.modified ? ' (modified)' : '' }}</dd></div>
         <div><dt>{{ t('ccgateway.capability.schema') }}</dt><dd>{{ result.code_catalog.catalog_version }} / {{ result.policy_schema_versions.join(', ') }}</dd></div>
+        <div class="sm:col-span-2" data-testid="helper-history-capability"><dt>{{ t('ccgateway.capability.helperHistory') }}</dt><dd>{{ result.helper_history_schema_versions?.length ? result.helper_history_schema_versions.join(', ') : t('ccgateway.capability.helperUnreported') }}</dd><p class="mt-1 text-gray-500">{{ t('ccgateway.capability.helperBoundary') }}</p></div>
         <div><dt>{{ t('ccgateway.capability.code') }}</dt><dd>{{ feature ? t('ccgateway.features.status.' + feature.status) : t('ccgateway.capability.unreported') }}</dd></div>
         <div><dt>{{ t('ccgateway.capability.probes') }}</dt><dd v-for="probe in result.runtime_probes" :key="probe.name">{{ probe.name }}: {{ probe.status === 'observed' ? probe.value : t('ccgateway.capability.unreported') }}</dd><dd v-if="!result.runtime_probes.length">{{ t('ccgateway.capability.unreported') }}</dd></div>
         <div class="sm:col-span-2"><dt>{{ t('ccgateway.capability.provider') }}</dt><dd>{{ t('ccgateway.capability.notRun') }}</dd></div>

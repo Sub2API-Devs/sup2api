@@ -29,7 +29,7 @@ func internalHistoryAssistant(r *Request, message Object) bool {
 
 // Align normalized client turns monotonically and exactly. Extra CC system
 // attachments may surround client turns; other unmatched turns are rejected.
-func alignClientHistory(r *Request, body Object) ([]historyBlockPair, error) {
+func alignClientHistory(r *Request, body Object, boundaries ...*[]int) ([]historyBlockPair, error) {
 	wire, ok := body["messages"].([]any)
 	if !ok {
 		return nil, fmt.Errorf("cache history has no outbound messages")
@@ -67,6 +67,9 @@ func alignClientHistory(r *Request, body Object) ([]historyBlockPair, error) {
 			}
 			message["content"] = actual
 			out = append(out, historyBlockPair{expected, matched})
+			if len(boundaries) == 1 {
+				*boundaries[0] = append(*boundaries[0], at-1)
+			}
 			found = true
 			break
 		}

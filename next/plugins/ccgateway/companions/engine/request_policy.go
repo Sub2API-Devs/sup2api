@@ -93,6 +93,13 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 	return parsePolicyRequestWithResources(body, h, nil)
 }
 func parsePolicyRequestWithResources(body []byte, h http.Header, access *resourceAdmission) (*Request, error) {
+	return parsePolicyRequestWithHelper(body, h, access, nil)
+}
+
+func parsePolicyRequestWithHelper(body []byte, h http.Header, access *resourceAdmission, helper *helperHistoryExecution) (*Request, error) {
+	if helper != nil && !helper.authenticated {
+		return nil, fmt.Errorf("helper execution is not authenticated")
+	}
 	p, err := requestPolicy(h)
 	if err != nil {
 		return nil, err
@@ -201,13 +208,14 @@ func parsePolicyRequestWithResources(body []byte, h http.Header, access *resourc
 	if err := plan.validateInternalRounds(req); err != nil {
 		return nil, err
 	}
-	if err := plan.validateTaskBudget(req); err != nil {
-		return nil, err
-	}
 	if err := req.validateMCPConfiguration(); err != nil {
 		return nil, err
 	}
 	if err := req.configureFallbacks(h); err != nil {
+		return nil, err
+	}
+	req.helperHistory = helper
+	if err := plan.validateTaskBudget(req); err != nil {
 		return nil, err
 	}
 	return req, nil

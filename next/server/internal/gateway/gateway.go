@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -28,25 +29,29 @@ import (
 // tests: sticky sessions and hook breaker/stats
 // then degrade to no-ops.
 type Deps struct {
-	CCGateway         *ccgateway.Service
-	DB                *store.DB
-	Redis             redis.UniversalClient
-	Bus               core.Bus
-	Node              core.Node
-	Registry          core.PluginRegistry
-	Auth              core.APIKeyAuthenticator
-	Pricer            core.Pricer
-	Balance           core.BalanceGate
-	Slots             core.Slots
-	Accounts          core.AccountDirectory
-	Proxies           core.ProxyDirectory
-	Settler           core.Settler
-	Tasks             core.AsyncTasks
-	Resources         core.ProviderResources
-	Skills            core.SkillResources
-	Diagnostics       core.MessageDiagnostics
-	Credits           core.FallbackCredits
-	ResourceTransport core.ProviderResourceTransport
+	CCGateway     *ccgateway.Service
+	DB            *store.DB
+	Redis         redis.UniversalClient
+	Bus           core.Bus
+	Node          core.Node
+	Registry      core.PluginRegistry
+	Auth          core.APIKeyAuthenticator
+	Pricer        core.Pricer
+	Balance       core.BalanceGate
+	Slots         core.Slots
+	Accounts      core.AccountDirectory
+	Proxies       core.ProxyDirectory
+	Settler       core.Settler
+	Tasks         core.AsyncTasks
+	Resources     core.ProviderResources
+	Skills        core.SkillResources
+	Diagnostics   core.MessageDiagnostics
+	Credits       core.FallbackCredits
+	HelperHistory core.HelperHistory
+	// Candidate gate remains off in production until the complete custody path
+	// has passed integration review. Existing known chains never bypass custody.
+	EnableHelperHistory bool
+	ResourceTransport   core.ProviderResourceTransport
 	// Limiter enforces per-account rpm/tpm limits (CONTRACTS §18);
 	// nil = no limits.
 	Limiter core.AccountLimiter
@@ -90,9 +95,11 @@ type Gateway struct {
 	health       func() bool
 
 	// Overridable in tests.
-	now        func() time.Time
-	lookupIP   func(ctx context.Context, host string) ([]net.IP, error)
-	headerWait func(stream bool) time.Duration
+	now               func() time.Time
+	lookupIP          func(ctx context.Context, host string) ([]net.IP, error)
+	headerWait        func(stream bool) time.Duration
+	helperRuntime     func(context.Context, int64, string) (string, core.ResourceBinding, error)
+	helperRequirement func(context.Context, int64, *http.Request) (string, error)
 	// randFloat drives the weighted order inside a priority (CONTRACTS §18).
 	randFloat func() float64
 	// ws holds the WebSocket session limits (websocket.go).

@@ -11,6 +11,7 @@ import (
 
 type apiOutputRequestKey struct{}
 type apiTerminalObserver struct {
+	helperAccounting   *helperAccounting
 	exactToolMessageID string
 	fallbackMessageID  string
 	relay              *outboundRelay
@@ -32,6 +33,9 @@ func (o *apiTerminalObserver) observe(event []byte) {
 	}
 	if o.req != nil {
 		o.req.diagnostic.prepareSecrets(bytes.Join(data, []byte("\n")))
+		if o.req.helperHistory != nil {
+			o.req.helperHistory.observeProviderAccounting(&o.helperAccounting, bytes.Join(data, []byte("\n")))
+		}
 	}
 	o.req.observeInternalCacheEvent(e)
 	o.req.observeCreditEvent(e)

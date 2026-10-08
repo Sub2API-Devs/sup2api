@@ -48,7 +48,7 @@ func (c *call) dispatch(ctx context.Context) {
 	creditExcluded := false
 	diagnosticExcluded := false
 	for i := range all {
-		if c.route(&all[i]) == nil || !c.servesAllModels(&all[i]) || !c.resourceAccountAllowed(&all[i]) {
+		if c.route(&all[i]) == nil || !c.servesAllModels(&all[i]) || !c.resourceAccountAllowed(&all[i]) || !c.helperAccountAllowed(&all[i]) {
 			continue
 		}
 		if !c.diagnosticAccountAllowed(&all[i]) {
@@ -133,7 +133,7 @@ func (c *call) dispatch(ctx context.Context) {
 			c.finishSticky(ctx, ref.ID, false)
 			return
 		case attemptFailover:
-			if c.creditDispatched {
+			if c.creditDispatched || c.helperWasDispatched() {
 				c.fail(res.err)
 				c.finishSticky(ctx, ref.ID, false)
 				return
@@ -489,6 +489,17 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	if err := c.applyDiagnosticHeaders(prepareCtx, req, acc, body); err != nil {
 		return c.resourcePreparationFailure(err)
 	}
+	if err := c.wrapHelperHistoryRequest(prepareCtx, req, acc, rt, body); err != nil {
+		var eligibility *resourceEligibilityError
+		if errors.As(err, &eligibility) {
+			return c.resourcePreparationFailure(err)
+		}
+		var typed *core.Error
+		if errors.As(err, &typed) && typed.Code == core.ErrUnavailable.Code {
+			return attemptResult{kind: attemptReturn, err: fromCore(typed, errTypeInternal)}
+		}
+		return attemptResult{kind: attemptReturn, err: invalidModelReference(err.Error())}
+	}
 
 	hc := *client
 	hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
@@ -525,6 +536,9 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		return c.classify(ctx, rt, pacct, 0, nil, nil, msg)
 	}
 	defer resp.Body.Close()
+	if err := c.unwrapHelperHistoryResponse(resp, rt); err != nil {
+		return attemptResult{kind: attemptReturn, err: fromCore(core.ErrUnavailable.WithMessage("helper history response could not be verified").WithCause(err), errTypeInternal)}
+	}
 	c.g.observeQuota(rt, acc.ID, resp.StatusCode, resp.Header)
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {

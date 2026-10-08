@@ -92,7 +92,7 @@ type runConfig struct {
 }
 
 func newRunConfig(req *Request, p *Prepared, plugin, dir string) *runConfig {
-	if req.Plan != nil && (req.Plan.cache != nil || req.InlineTools != nil) && req.toolSearchEnabled() && !req.structuredOutput() {
+	if req.Plan != nil && (req.Plan.cache != nil || req.InlineTools != nil || req.helperHistory != nil) && req.toolSearchEnabled() && !req.structuredOutput() {
 		req.internalCache = &internalCacheRounds{results: map[string]string{}, helpers: map[string]string{}}
 	}
 	c := &runConfig{reminderMarker: req.continuation, nativeReminders: nativeContinuationReminders(req, p), args: cliArgs(req, p, plugin), systems: req.pendingSystems(), groups: req.systemGroups()}

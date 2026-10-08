@@ -2,10 +2,12 @@ package helperhistory
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	wire "github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/helperhistory"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
@@ -45,6 +47,24 @@ func TestHelperHistoryDBLookupBeforeNamespace(t *testing.T) {
 	finish(t, s, r, p1, "one")
 	expect(r.Owner, []string{p1}, core.HelperHistoryKnownUnrestorable)
 	expect(r.Owner, []string{p1, p2}, core.HelperHistoryKnownUnrestorable)
+}
+
+func TestHelperHistoryDBLongUnknownHistoryRemainsOrdinary(t *testing.T) {
+	s, r := fixture(t)
+	ctx := context.Background()
+	prefixes := make([]string, wire.MaxChainDepth+1)
+	for i := range prefixes {
+		prefixes[i] = fmt.Sprintf("%064x", i+1)
+	}
+	unknown, err := s.Lookup(ctx, r.Owner, prefixes)
+	if err != nil || unknown.State != core.HelperHistoryUnknown {
+		t.Fatal("ordinary history hit custody depth bound", unknown.State, err)
+	}
+	finish(t, s, r, prefixes[0], "known first prefix")
+	known, err := s.Lookup(ctx, r.Owner, prefixes)
+	if err != nil || known.State != core.HelperHistoryKnownUnrestorable {
+		t.Fatal("long lookup hid known prefix", known.State, err)
+	}
 }
 func TestHelperHistoryDBLookupExpiryAndCorruptionStayKnown(t *testing.T) {
 	s, r := fixture(t)

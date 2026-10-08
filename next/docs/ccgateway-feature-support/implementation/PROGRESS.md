@@ -4,6 +4,14 @@
 
 ## 本轮追加证据与限制
 
+最终候选门禁已闭环：新真实requirement端点的ABC JSON120.731s通过（5公开请求/6隔离provider calls，强隐藏内容与预算断言、冷恢复/回退/outbox）；直连预检与旧404独立DB14.80s，长unknown20.74s、末第529项known25.37s非skip通过，所有测试隧道已释放。核心候选EnableHelperHistory=true与Worker真实schema1声明已接通，普通旧路径回归已消除；manifest.12/catalog.15。注意这里只是候选源码激活，不是线上部署。
+
+Root最终整包测试engine4.427s、contracts全包、Worker全包、plugin1.638s、codec/strict通过；核心gateway5.836s/ccgateway/usage/core/app等非DB整包与vet通过，SUB2API_TESTPG=off的结果不当DB证据，DB证据以上列专门执行为准。前端20tests/typecheck独审已通过。准备冻结Git候选，由cc-max/OVH Git精确构建做Linuxrace/migration门禁后发布，现线上仍Core.70/Worker.72。
+
+无helper兼容改用Worker真实parser的三态纯准入（ordinary/needs_custody/defer_to_ordinary），不复制工具规则；未知新链才探测，known仍完整恢复，旧Worker404回原plain准入不当能力证明。Worker作者普通预算6次CLI/全engine与vet通过；核心作者三态目标与vet通过，正在独审/最新ABC复测。原资源grant缺失等预检不能判断场景不提前拒绝合法主请求，须由原完整admission裁决。
+
+Root另修长普通会话回归：prefix计算原逐轮重新canonical全历史变成单次canonical加增量hash（不可clone的FIPS实现保真fallback），不把私有32MiB限制套所有公开普通body。Lookup超过512仅在发现已知托管记录后拒绝，未知普通历史保持unknown，不能截前缀隐藏已知链。513轮摘要/精确数字/Unicode匹配目标1.038s及vet通过；长unknown/known首prefix的真实DB新增例正交CC独审，尚未记通过。
+
 Root最新ABC SSE独审121.948s通过，真实Worker/CLI/隔离PG，包含加强后的预算presence、完整hidden assistant三块顺序/签名/工具字段、完整对象摘要、配对结果对象摘要、原位system、冷恢复/回退直接断言。候选Worker已加schema1真实声明，并删除ABC夹具的手工声明覆盖；插件候选升.12避免覆盖旧包，Worker server1.999s/plugin1.431s及vet通过。尚未提交/部署。
 
 准备激活时Root发现旧能力兼容问题：C将任何task_budget新请求纳入custody，会误拦原本零helper/forced eager/关闭内部搜索或服务器工具路径，特别是带合法旧assistant历史或无managed issuer账号。核心Enable立即保持false；API与CC正提取共享精确判定，仅真正需隐藏轮恢复的新链托管，known链仍强制恢复。不是放宽未知隐藏历史，也不能以新happy-path测试绿掩盖旧路径回归。下一候选须追加这些负/正例后才能激活。

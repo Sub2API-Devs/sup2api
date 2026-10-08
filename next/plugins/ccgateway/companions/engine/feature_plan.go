@@ -54,7 +54,7 @@ func decodePlannedValue(raw json.RawMessage) (any, error) {
 }
 
 func (r *Request) HasMainRequestFeatures() bool {
-	return r.credit != nil || len(r.imageCarriers) > 0 || len(requestFallbackBlocks(r)) > 0 || r.continuation != "" || r.hasInlineSystemMetadata() || len(r.ServerTools) > 0 || len(r.toolMetadataKey()) > 0 || r.hasHistoryCitations() || r.Plan != nil && (len(r.Plan.fields) > 0 || r.Plan.cache != nil)
+	return r.helperHistory != nil || r.credit != nil || len(r.imageCarriers) > 0 || len(requestFallbackBlocks(r)) > 0 || r.continuation != "" || r.hasInlineSystemMetadata() || len(r.ServerTools) > 0 || len(r.toolMetadataKey()) > 0 || r.hasHistoryCitations() || r.Plan != nil && (len(r.Plan.fields) > 0 || r.Plan.cache != nil)
 }
 
 // FeatureDecisions reports requested controls without including raw user data.

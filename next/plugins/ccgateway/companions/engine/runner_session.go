@@ -255,6 +255,11 @@ func (s *cliSession) endSearchRound() error {
 		return fmt.Errorf("tool discovery exceeded 3 rounds")
 	}
 	addSearchUsage(s.searchUsage, s.acc.Message)
+	if s.req.helperHistory != nil {
+		if err := s.req.confirmHiddenHelperMessage(s.acc.Message); err != nil {
+			return err
+		}
+	}
 	s.acc = &Accumulator{}
 	s.buffered = nil
 	return nil

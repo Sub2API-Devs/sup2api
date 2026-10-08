@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/helperhistory"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -109,6 +110,9 @@ func TestRealCLITaskBudgetCompatibility(t *testing.T) {
 		}
 		raw, _ := io.ReadAll(r.Body)
 		body, _ := decodeObject(raw)
+		if r.Header.Get(helperhistory.Header) != "" || bytes.Contains(raw, []byte(`"attempt_id"`)) {
+			t.Error("ordinary budget acquired private carrier")
+		}
 		if bytes.Contains(raw, []byte("<ccgateway-request:")) {
 			t.Error("marker leaked")
 		}
@@ -134,7 +138,17 @@ func TestRealCLITaskBudgetCompatibility(t *testing.T) {
 	post := func(label string, g *Gateway) Object {
 		t.Helper()
 		raw, _ := json.Marshal(body)
+		g.Key = "budget-fixture"
+		probe := httptest.NewRequest("POST", helperhistory.RequirementPath, bytes.NewReader(raw))
+		probe.Header.Set("x-api-key", g.Key)
+		probe.Header.Set("anthropic-beta", taskBudgetBeta)
+		planned := httptest.NewRecorder()
+		g.ServeHTTP(planned, probe)
+		if planned.Code != 200 || !strings.Contains(planned.Body.String(), `"decision":"ordinary"`) {
+			t.Fatalf("%s planner %d %s", label, planned.Code, planned.Body.String())
+		}
 		req := httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(raw))
+		req.Header.Set("x-api-key", g.Key)
 		req.Header.Set("anthropic-beta", taskBudgetBeta)
 		req.Header.Set("X-CCGateway-Session-ID", "task-budget-fixture")
 		res := httptest.NewRecorder()

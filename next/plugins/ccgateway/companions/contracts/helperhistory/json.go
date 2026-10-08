@@ -10,15 +10,21 @@ import (
 // CanonicalDigest hashes strict JSON with sorted object keys, ordered arrays and
 // original number lexemes. Object whitespace is insignificant, not string bytes.
 func CanonicalDigest(raw []byte) (string, error) {
-	v, e := strictValue(raw)
-	if e != nil {
-		return "", e
-	}
-	b, e := json.Marshal(v)
+	b, e := CanonicalJSON(raw, MaxPayloadBytes)
 	if e != nil {
 		return "", e
 	}
 	return Digest(b), nil
+}
+
+// CanonicalJSON lets an already size-bounded public request use its ingress
+// limit, independently of the smaller private history storage limit.
+func CanonicalJSON(raw []byte, limit int) ([]byte, error) {
+	v, e := strictValueBound(raw, limit)
+	if e != nil {
+		return nil, e
+	}
+	return json.Marshal(v)
 }
 func strictValue(raw []byte) (any, error) {
 	return strictValueBound(raw, MaxPayloadBytes)

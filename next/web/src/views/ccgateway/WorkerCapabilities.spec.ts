@@ -36,6 +36,23 @@ describe('Worker capability evidence', () => {
     expect(w.find('dl').exists()).toBe(false)
     expect(mock.get).toHaveBeenCalledTimes(1)
   })
+  it.each([undefined, [], [1]])('reports custody schemas %j without inferring core activation', async (schemas) => {
+    vi.clearAllMocks()
+    mock.get.mockResolvedValue({ protocol_version: 1, build: { version: 'candidate', revision: 'fixture', modified: false }, policy_schema_versions: [1], helper_history_schema_versions: schemas, runtime_probes: [], model_provider_verification: 'not_run', code_catalog: { catalog_version: '2026-10-08.15', policy_schema_version: 1, runtime_verified: false, features: [] } })
+    const w = await inspect()
+    const detail = w.get('[data-testid="helper-history-capability"]')
+    expect(detail.get('dd').text()).toBe(schemas?.length ? '1' : '未声明')
+    expect(detail.text()).toContain('需要核心同时启用托管')
+    expect(detail.text()).toContain('不确认核心启用状态或提供商资格')
+    expect(w.findAll('input[type="checkbox"]')).toHaveLength(0)
+  })
+  it.each([[1, 1], [0], [1.5], [1025], '1', null])('rejects malformed custody schema declarations %j', async (schemas) => {
+    vi.clearAllMocks()
+    mock.get.mockResolvedValue({ protocol_version: 1, build: { version: 'candidate', revision: 'fixture', modified: false }, policy_schema_versions: [1], helper_history_schema_versions: schemas, runtime_probes: [], model_provider_verification: 'not_run', code_catalog: { catalog_version: '2026-10-08.15', policy_schema_version: 1, runtime_verified: false, features: [] } })
+    const w = await inspect()
+    expect(w.find('[role="alert"]').exists()).toBe(true)
+    expect(w.find('dl').exists()).toBe(false)
+  })
   it('searches and paginates on the server while retaining only the current page and selection', async () => {
     vi.clearAllMocks()
     mock.list.mockResolvedValueOnce({ items: [{ id: 22, name: 'selected account' }], page: { total: 45 } })
