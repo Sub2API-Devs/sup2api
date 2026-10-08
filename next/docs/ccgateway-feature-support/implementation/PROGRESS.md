@@ -4,6 +4,24 @@
 
 ## 本轮追加证据与限制
 
+Root最新ABC SSE独审121.948s通过，真实Worker/CLI/隔离PG，包含加强后的预算presence、完整hidden assistant三块顺序/签名/工具字段、完整对象摘要、配对结果对象摘要、原位system、冷恢复/回退直接断言。候选Worker已加schema1真实声明，并删除ABC夹具的手工声明覆盖；插件候选升.12避免覆盖旧包，Worker server1.999s/plugin1.431s及vet通过。尚未提交/部署。
+
+准备激活时Root发现旧能力兼容问题：C将任何task_budget新请求纳入custody，会误拦原本零helper/forced eager/关闭内部搜索或服务器工具路径，特别是带合法旧assistant历史或无managed issuer账号。核心Enable立即保持false；API与CC正提取共享精确判定，仅真正需隐藏轮恢复的新链托管，known链仍强制恢复。不是放宽未知隐藏历史，也不能以新happy-path测试绿掩盖旧路径回归。下一候选须追加这些负/正例后才能激活。
+
+ABC首轮完整真实Worker子进程+CLI+隔离PG矩阵已通过226.505s：JSON/SSE各5公开请求、共12假上游调用，包含外部工具result、普通无budget夹轮、新Worker/新CacheDir/新AService冷恢复及回退；每组5冻结outbox，120/48原用量，重复Persist两次后usage/receipt各5且pending0。保留最初35.230s与26.287s两个红灯：真实身份返回AuthType附加事实导致整struct比较误拒，现仅按合同principal/generation核验，独立身份/资格/nilheaders回归1.203s/0.605s通过。根代理发现夹具对预算存在性及完整隐藏签名/规划块需要直接断言，正在加强并重跑，不提前把旧编译结果算新断言通过。
+
+Anchor按位置摘要复用已读源码并独立helper组1.535s通过，严格重复key/边界与数字校验保留。目录.15/Worker schema只读展示由CC完成、audit独审20前端测试2.05s/typecheck/catalog0.265s/vet通过；partial和runtime_verified=false保留。核心Enable及Worker广告尚未开启，候选仍未部署。
+
+计量receipt/冻结原始bytes、三态Lookup、失败延后隔离已独立验证并提交推送 `05fc6852f`，仍未部署。Root四项真实隔离PG169.465s通过，consumer/core定向0.750s/1.145s与三包vet通过；详细范围见 HELPER-HISTORY-ROOT-INCREMENTAL-REVIEW。C空headers合法响应panic已独立先红后修，目标3.060s/vet通过，属于未提交接线候选。
+
+B system保真增量已作者12CLI及独审通过；部分计量偶发额外调用定位为未终态SSE EOF先交给CLI、relay停止晚于重试窗口。新增同步EOF门禁不改原字节/错误、不补终态，Root确定性独审1.205s通过。实际预算原准入早于helper鉴权的问题正以可信execution限定接线，普通伪造头不能授权。ABC真正Worker子进程+CLI+隔离PG测试已启动（作者research_api管理句柄8374），尚未取得最终结果，不能写成通过。
+
+初始thinking桥已独立提交推送 `235559d6d`，未部署。仅暂存outbound响应桥hunk，不包含尚在整改的helper恢复hunk；依赖helper的12调用集成测试独立移至helper_history_initial_thinking_cli_test.go，仍属后续B候选。独立桥测试1.274s通过。根代理新增公开响应→下一请求prefix独立回归2.663s通过，覆盖签名、数字原词法、tool_result及非法终态。
+
+B独审发现真实CLI内部ToolSearch前导非空system被旧提取忽略，不能上线该候选。作者正在基于原始两次出站和runner证明保存原位system；实际观察到单text块含ephemeral转纯string，只允许窄表示来源证明，持久化实际当前对象，不能将cache标记或system位置静默改写。C网关已接线并有作者测试，但一般能力仍关闭。
+
+计量outbox单条永久冲突、或前64条损坏导致后续饥饿已复现并整改为持久延后逐条继续，不ACK坏记录；A新增next_attempt_at/retry_count/failure_code及损坏载荷隔离。C消费者目标测试已通过，A真实DB及根代理增量独审仍待完成，不能记为整体已通过。C收据独立真实PG33.719s通过，覆盖异事实/缺行/普通旧行/旧编码。DB全不可用明确失败，未引入另一个磁盘账本假承诺。
+
 签名四处窄修已独审并提交推送 `f677d2de4`，尚未部署；详见 SIGNATURE-DELTA-REPAIR。initial thinking 桥另经 research_cc 独审，16次隔离CLI调用13.712s通过，包含初始正文/混合后续签名替换以及续聊历史；这部分仍为后续候选。C已开始实际gateway入口、派发、解包及持久接线，尚在补测试；A Lookup及用量receipt增量另交独立DB复核，不以作者测试替代独审。一般组合能力仍未开放。
 
 Root追加复核：SSE `signature_delta` 的官方SDK语义是替换不透明签名，我方两个聚合器原为拼接。新增engine/credits回归均先红（initialfirst / initialfirstfinal），修改后完整engine5.353s、credits1.196s通过；包括空最终签名，思考正文不变。官方依据为anthropics Python SDK `src/anthropic/lib/streaming/_messages.py` accumulate_event及TypeScript `src/lib/MessageStream.ts` signature_delta分支（2026-10-08读取）。窄修尚待独审，未提交/部署。initial thinking桥由独立代理修复并有12次隔离CLI矩阵，不等于真实提供商验收。
