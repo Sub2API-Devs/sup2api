@@ -4,9 +4,11 @@ This controller replaces the shared CCGateway endpoint when `account_runtimes`
 is enabled. Each account owns one business container, one data volume, an
 internal Docker network, and an egress container. Linux Docker is required.
 The core reads account/proxy changes on a three-second control-plane loop and
-retries failed reconciliation. Ordinary model calls only read the authoritative
-proxy revision and forward to `/accounts/<id>/v1/messages`; they never configure
-sing-box. Stale revisions are rejected until synchronization succeeds.
+retries failed reconciliation. Current model traffic uses authenticated
+`/accounts/<key>/connection` discovery followed by core-to-Worker SSH direct HTTP
+on port 8787; the controller does not relay model bodies on this path. The legacy
+forwarding endpoints below remain compatibility surfaces. Stale revisions are
+rejected until synchronization succeeds; requests do not reconfigure sing-box.
 
 The existing SSH management integration still lives in the core. This change
 does not claim a completed extraction of all CCGateway UI/services into plugin

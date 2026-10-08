@@ -1,0 +1,78 @@
+{
+  "recorded_at": "2026-10-09",
+  "scope": "Observed deployment baseline; re-check before operations, not a permanent health or OAuth guarantee",
+  "core": {
+    "version": "0.1.78",
+    "source_commit": "1c35179527a7632f3ea06b9d9014d81854112956",
+    "containers": [
+      "sup2api-1",
+      "sup2api-2",
+      "sup2api-3",
+      "sup2api-4"
+    ],
+    "binary_sha256": "872573c772bd97322fc076b006b34fcc732f47c5dd9aa8f3836ddb36d6d1a689",
+    "manifest_sha256": "300d9c5e3125e72367465e567db6933a8df392482b2ea412276b9beb58f37f78",
+    "bundle_sha256": "a5982dd0cec7625da94a9239299c39d95121e39588ef92d1ef21c3920b194be0",
+    "bundle_bytes": 110172269,
+    "plan_id": "680f3dbec0c9dfaef0d8b199b39079bd",
+    "plan_status": "completed",
+    "sampled_maintenance_503_seconds": 37.87,
+    "release_worktree": "/home/debian/sup2api/release-0.1.78",
+    "release_log": "/home/debian/sup2api-managed/upgrade-20261008T195114.log",
+    "backup_directory": "/home/debian/sup2api-managed/backups/core-0.1.78-20261008T194528Z",
+    "backup_dump_bytes": 21965769,
+    "backup_mode": "0600"
+  },
+  "plugin": {
+    "version": "0.1.14",
+    "catalog_version": "2026-10-09.17",
+    "package_sha256": "a7e0d1f0eea17c32812e03fc9b267e20b8d07d5d75bcae4953b627ccd86ae7cf",
+    "running_binary_sha256": "2f836e52bd5da8c645c1891e834219f87ecda42753a1656f7fe2c0b519d2bede"
+  },
+  "worker": {
+    "version": "0.1.80",
+    "source_commit": "60969149045452a96e5f0b125c912ddf28f8eeba",
+    "cli_validation_version": "2.1.292",
+    "controller_version": "0.1.48",
+    "future_default_image": "ccgateway-worker:0.1.80",
+    "original_container_image": "ccgateway:0.1.56",
+    "image_id": "sha256:aa1cc92e1dcb8accb5abc99b43b43cee010d6ae762f6e713951a6ffe66c56f6a",
+    "installed_binary_path": "/usr/local/bin/ccgateway",
+    "installed_binary_sha256": "e2ab0ee3884ccbf725064f93e23dd48b6f55cdd5967dc8154627a825ea187f79",
+    "image_binary_sha256": "b95bb6bc1b1dbaab70e3d4c1a0b9647e38beb2fd980c0035f135adb88ab01b49",
+    "previous_binary_sha256": "0c44e181c3e60257e3f0668144139dc471529f859148f6f1aa8136b56e897231",
+    "build_worktree": "/root/ccgateway-features-609691490",
+    "validation_directory": "/opt/ccgateway-runtime/feature-validation-609691490",
+    "containers": [
+      {
+        "account": 21,
+        "name": "ccg-21-app",
+        "id": "6b67d1ffb6e65ffd91a07ff43b18c987e454a2ec20342e064bd33dc91543ae2b",
+        "backup_binary": "/opt/ccgateway-runtime/manual-backups/20261009-609691490-21/ccgateway"
+      },
+      {
+        "account": 22,
+        "name": "ccg-d1d2964e14bf728d9-app",
+        "id": "9de9b219210f43379014eb2bb991bc7cb813e2ecd92a9ec0830e232e7f1c8e22",
+        "backup_binary": "/opt/ccgateway-runtime/manual-backups/20261009-609691490-22/ccgateway"
+      }
+    ]
+  },
+  "verification": {
+    "last_public_usage_id": 744,
+    "account": 22,
+    "attempt": 1,
+    "client_request_id": "cache-ttl-77-039d57ff045f4f73",
+    "server_request_id": "f566aacd7141ac2b38c11592",
+    "cache_write_total": 2595,
+    "reported_1h": 1376,
+    "reported_5m": 0,
+    "unclassified": 1219,
+    "completeness": "partial",
+    "fee": "0.02670540",
+    "production_ui_capture_count": 7,
+    "public_forced_cold_restart": false,
+    "public_cross_account_migration_proven": false
+  },
+  "history_commit": "d7cbb814e0f0089aec6ea9e624aa9ebd4033df9e"
+}

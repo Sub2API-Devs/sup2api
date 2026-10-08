@@ -1,4 +1,4 @@
-> 2026-10-09当前状态与接续工作见[接手文档](../../../docs/ccgateway-feature-support/HANDOFF-2026-10-09.md)。下文具体“本次修复/2026-10-07验证”属于对应历史记录；不是当前版本总览。
+> 当前状态见[交接](../../../docs/ccgateway-feature-support/HANDOFF-2026-10-09.md)，访问与操作见[环境指南](../../../docs/ccgateway-feature-support/ENVIRONMENT-RUNBOOK.md)。
 
 # CCGateway 运行组件
 
