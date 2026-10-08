@@ -6,7 +6,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SHint, SIcon, SSwitch, STable, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SHint, SIcon, SSwitch, STable, toast, type TableColumn } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { runPool } from '@/views/accounts/pool'
@@ -57,7 +57,7 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'container', label: t('ccgateway.runtimes.container') },
   { key: 'auth', label: t('ccgateway.runtimes.auth') },
   { key: 'request_logs', label: t('ccgateway.requestLogs.title') },
-  { key: 'actions', label: '', align: 'right' }
+  { key: 'actions', label: '', align: 'right', width: '240px' }
 ])
 
 async function inspect(r: Row) {
@@ -140,6 +140,19 @@ function containerBadge(r: Row): { tone: 'success' | 'warning' | 'danger' | 'gra
   return { tone: 'gray', label: t('ccgateway.runtimes.state.unknown') }
 }
 const needsAuth = (r: Row) => r.type === 'managed' && r.loggedIn !== true
+
+async function refreshAuth(r: Row) {
+  if (!canAccounts.value) return
+  try {
+    const result = await api.post<{ key: string; created: boolean; message: string }>(`/accounts/${r.id}/actions/ccgateway/refresh_auth`)
+    toast.success(result.message || t('ccgateway.runtimes.refreshStarted'))
+    // Navigate to edit page to complete the flow
+    window.location.href = `/accounts?edit=${r.id}`
+  } catch (e) {
+    toast.error(t('ccgateway.runtimes.refreshFailed'))
+  }
+}
+
 </script>
 
 <template>
@@ -175,9 +188,14 @@ const needsAuth = (r: Row) => r.type === 'managed' && r.loggedIn !== true
           <SHint v-if="row.logsError" tone="danger" size="xs">{{ t('ccgateway.requestLogs.failed') }}</SHint>
         </template>
         <template #cell-actions="{ row }">
-          <SButton v-if="canAccounts" size="sm" :variant="needsAuth(row) ? 'primary' : 'ghost'" :to="{ path: '/accounts', query: { edit: String(row.id) } }" data-testid="ccgateway-runtime-edit">
-            {{ needsAuth(row) ? t('ccgateway.runtimes.goAuthorize') : t('ccgateway.runtimes.goEdit') }}
-          </SButton>
+          <div class="flex items-center justify-end gap-2">
+            <SButton v-if="row.type === 'managed' && canAccounts" size="sm" variant="ghost" :title="t('ccgateway.runtimes.refreshAuth')" @click="refreshAuth(row)">
+              <SIcon name="refresh" class="h-3.5 w-3.5" />
+            </SButton>
+            <SButton v-if="canAccounts" size="sm" :variant="needsAuth(row) ? 'primary' : 'ghost'" :to="{ path: '/accounts', query: { edit: String(row.id) } }" data-testid="ccgateway-runtime-edit">
+              {{ needsAuth(row) ? t('ccgateway.runtimes.goAuthorize') : t('ccgateway.runtimes.goEdit') }}
+            </SButton>
+          </div>
         </template>
       </STable>
     </div>

@@ -295,7 +295,10 @@ export default {
     account: 'Account', container: 'Container', auth: 'Claude authorization', typeOAuth: 'OAuth (signed in inside the container)', typeApiKey: 'API Key',
     state: { ready: 'Ready', preparing: 'Preparing', error: 'Error', unavailable: 'Unavailable', unknown: 'Unknown' },
     checking: 'Checking', authorized: 'Credentials saved', notAuthorized: 'No saved credentials', noAuthNeeded: 'No authorization needed',
-    goAuthorize: 'Authorize on the Accounts page', goEdit: 'Open on the Accounts page', openAccounts: 'Create / manage accounts', empty: 'No Claude Code account yet; create one on the Accounts page.', loadFailed: 'Accounts could not be loaded'
+    goAuthorize: 'Authorize on the Accounts page', goEdit: 'Open on the Accounts page', openAccounts: 'Create / manage accounts', empty: 'No Claude Code account yet; create one on the Accounts page.', loadFailed: 'Accounts could not be loaded',
+    refreshAuth: 'Refresh authorization',
+    refreshStarted: 'Re-authorization started. Complete the flow to refresh credentials.',
+    refreshFailed: 'Failed to start re-authorization.',
   },
 
     proxy: {
