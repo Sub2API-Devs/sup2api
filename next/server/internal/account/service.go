@@ -146,6 +146,9 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.PermAny("POST", "/accounts/:id/reset-status", s.resetStatus, "account:update", "account:own:update")
 	// Credential refresh (CONTRACTS §48).
 	r.PermAny("POST", "/accounts/:id/refresh-credentials", s.refreshCredentials, "account:update", "account:own:update")
+	// Account actions (CONTRACTS §52).
+	r.PermAny("GET", "/accounts/:id/actions", s.getAccountActions, "account:read", "account:own:read")
+	r.PermAny("POST", "/accounts/:id/actions/:plugin_key/:action_id", s.executeAccountAction, "account:update", "account:own:update")
 }
 
 // Run subscribes to account:changed, flushes last_used_at every 10 s and

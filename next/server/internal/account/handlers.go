@@ -182,6 +182,8 @@ type View struct {
 	// enabled (disabled or uninstalled).
 	Orphaned bool            `json:"orphaned"`
 	Settings json.RawMessage `json:"settings"`
+	// Actions are the plugin-registered custom actions available for this account (CONTRACTS §52).
+	Actions []AccountAction `json:"actions,omitempty"`
 	// Credentials (settings + secret fields, sensitive ones masked) is only
 	// present on single-account responses.
 	Credentials json.RawMessage `json:"credentials,omitempty"`
@@ -289,6 +291,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 	s.fillQuota(ctx, rows, out)
 	s.fillBalance(ctx, rows, out)
 	s.fillRefresh(ctx, rows, out)
+	s.fillActions(ctx, rows, out)
 	return out, nil
 }
 

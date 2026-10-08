@@ -282,7 +282,10 @@ export default {
     account: '账号', container: '容器', auth: 'Claude 授权', typeOAuth: 'OAuth（容器内登录）', typeApiKey: 'API Key',
     state: { ready: '已就绪', preparing: '准备中', error: '异常', unavailable: '不可用', unknown: '未知' },
     checking: '检查中', authorized: '凭据已保存', notAuthorized: '未保存凭据', noAuthNeeded: '无需授权',
-    goAuthorize: '去账号页授权', goEdit: '在账号页查看', openAccounts: '新建 / 管理账号', empty: '还没有 Claude Code 账号，请在账号页新建。', loadFailed: '账号列表加载失败'
+    goAuthorize: '去账号页授权', goEdit: '在账号页查看', openAccounts: '新建 / 管理账号', empty: '还没有 Claude Code 账号，请在账号页新建。', loadFailed: '账号列表加载失败',
+    refreshAuth: '刷新授权',
+    refreshStarted: '已启动重新授权。完成授权流程以刷新凭证。',
+    refreshFailed: '启动重新授权失败。',
   },
 
     proxy: {

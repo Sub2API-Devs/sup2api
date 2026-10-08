@@ -192,6 +192,15 @@ export interface ProxyTestResult {
 
 // ------------------------------------------------------------------ accounts
 
+export interface AccountAction {
+  id: string
+  label: LText
+  icon?: string
+  plugin_key: string
+  account_type?: string
+  permission?: string
+}
+
 export interface AccountFormRef {
   mode: 'schema' | 'iframe' | 'native'
   page?: string
@@ -306,6 +315,8 @@ export interface Account {
   last_test?: AccountLastTest | null
   /** Balance of the account (CONTRACTS §52); null when the type does not support balance. */
   balance?: AccountBalance | null
+  /** Plugin-registered custom actions available for this account (CONTRACTS §52). */
+  actions?: AccountAction[]
 }
 
 // ---------------------------------------------------------------- CCGateway runtimes (docs/CCGATEWAY-DRAFT-RUNTIMES.md)
