@@ -10,6 +10,12 @@
 
 普通 API format + eager forced 修正已完成作者与独审：唯一业务行复用 `structuredOutput()` 区分旧 synthetic 循环，保留原 format/choice/parallel、单轮及 helper 禁执行；双方各 26 次真实 CLI 隔离调用通过，独审原大整数/边界及 vet 通过。准备仅更新 Worker `.70`，核心 `.68` 与 catalog `.12` 无需变更（既有目录描述为结构化“续轮”限制）；未以 fake provider 冒充 Opus 5.5 强制工具资格。
 
+该修正已提交推送 `3ba9a697dfe35d23719d8f98a67c93ef852fa26f`，暂缓 `.70` 发布以合并后续确证修复。Sonnet 4.6 合法 server pause 的隔离真实 CLI 测试证明：暖路径成功，冷 Worker 导入相同 assistant-tail 在上游前报 `continuation transport input changed`。同一 CLI 安全附件暖时在首 user，冷时附在最后 transport marker 前；不能删除或移动安全块来绕过。CC agent 与 API 独立评估用真实首 user、零模型出站的原生 bootstrap 是否能建立正确 CLI 状态，当前 guard 未放开；尚未证明方案可行或实现完成。普通文字 prefill 的模型限制仍另列。
+
+bootstrap 后续两关隔离探针已通过：真实首 user 能在未获得任何模型响应时留下原生 user/attachment 前缀；同 session 复用该前缀并导入真实客户端 assistant 后，合法续接通过，安全附件仍位于首 user。当前是产品接线阶段，必须补全部 relay 路由零出站、取消 Wait 后读取、身份/大小/超时与复杂组合边界独审，不以探针代替产品完成。
+
+另在核对已撤销客户端工具历史：三次真实 CLI 假上游证明 tools 为空仍可传输完成历史原 name/id/input；当前 reserved typed 名的无定义硬拒绝与未知历史自动加 MCP 前缀需进一步评估。#22 一次受控真实资格尝试 95 秒超时，relay attempted/forwarded 均为 0，没有提供商状态，不是模型拒绝；未重试或改网络/授权，正在只读诊断启动差异。见 RETIRED-CLIENT-TOOL-HISTORY-ASSESSMENT.md，当前未据此放开准入。
+
 ### Worker 0.1.68 阶段快照（以下版本与失败保留为历史）
 
 当前精确部署提交 `9ba4b278217f077e39cc4e31bc63f50658382133`：核心四节点 0.1.67、Worker #21/#22 0.1.68、catalog `.10`，默认新建镜像 `.68`；原账号容器、卷与授权保留。核心发布存在约 36–38 秒维护窗口，不是零中断。
