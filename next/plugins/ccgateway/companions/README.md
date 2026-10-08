@@ -1,3 +1,5 @@
+> 2026-10-09当前状态与接续工作见[接手文档](../../../docs/ccgateway-feature-support/HANDOFF-2026-10-09.md)。下文具体“本次修复/2026-10-07验证”属于对应历史记录；不是当前版本总览。
+
 # CCGateway 运行组件
 
 平台插件代码位于 ..；核心管理与连接发现位于 ../../../server/internal/ccgateway；配置页面位于 ../../../web/src/views/ccgateway。它们不实现 Claude Code 进程交互。

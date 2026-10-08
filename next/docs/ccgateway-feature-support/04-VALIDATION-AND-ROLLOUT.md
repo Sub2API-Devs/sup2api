@@ -1,3 +1,5 @@
+> **2026-10-08 调研/方案快照，非当前状态。** 正文中的“当前缺口/未实现/候选接口/未来菜单”对应当时基线；部分已在后续批次完成。当前架构与实际接口见[实现指南](IMPLEMENTATION-GUIDE.md)，部署/已验证与剩余事项见[接手文档](HANDOFF-2026-10-09.md)、[当前进度](implementation/PROGRESS.md)及[独立审计](implementation/COMPLETION-PROTOCOL-AUDIT-2026-10-09.md)。保留官方调研与设计依据，不据旧状态重复实施。
+
 # 验证矩阵、证据和实施验收
 
 日期：2026-10-08（Asia/Shanghai）。状态：实施计划，不是功能完成报告。

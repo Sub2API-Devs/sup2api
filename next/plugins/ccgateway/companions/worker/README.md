@@ -1,3 +1,5 @@
+> 2026-10-09当前状态与接续工作见[接手文档](../../../../docs/ccgateway-feature-support/HANDOFF-2026-10-09.md)。下文具体“本次修复/2026-10-07验证”属于对应历史记录；不是当前版本总览。
+
 > 当前架构：本模块只提供账号服务入口与生命周期；完整协议实现位于 ../engine，Mod 位于 ../mod。Docker 构建上下文必须是父目录 next/plugins/ccgateway/companions。旧阶段性文档不代表当前能力验证结果。
 
 # CCGateway Worker

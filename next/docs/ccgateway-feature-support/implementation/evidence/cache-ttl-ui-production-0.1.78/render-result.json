@@ -1,0 +1,153 @@
+{
+  "scope": "Real production application via SSH loopback tunnel; no mock responses",
+  "checks": [
+    {
+      "name": "me",
+      "status": 200
+    },
+    {
+      "name": "version",
+      "status": 200
+    },
+    {
+      "name": "usage",
+      "status": 200
+    }
+  ],
+  "captures": [
+    {
+      "name": "usage-1440",
+      "privacyMasked": true,
+      "topbarBalanceMasked": true,
+      "viewport": 1440,
+      "body": 1440,
+      "height": 1780,
+      "bounds": {
+        "detailLeft": 274,
+        "detailRight": 1406,
+        "containerLeft": 273,
+        "containerRight": 1407,
+        "scrollLeft": 0,
+        "clientWidth": 1132,
+        "scrollWidth": 1242,
+        "contentOverflow": false,
+        "pass": true
+      }
+    },
+    {
+      "name": "usage-1440-right",
+      "privacyMasked": true,
+      "topbarBalanceMasked": true,
+      "viewport": 1440,
+      "body": 1440,
+      "height": 1780,
+      "bounds": {
+        "detailLeft": 274,
+        "detailRight": 1406,
+        "containerLeft": 273,
+        "containerRight": 1407,
+        "scrollLeft": 110,
+        "clientWidth": 1132,
+        "scrollWidth": 1242,
+        "contentOverflow": false,
+        "pass": true
+      }
+    },
+    {
+      "name": "features-1440",
+      "privacyMasked": true,
+      "topbarBalanceMasked": true,
+      "viewport": 1440,
+      "body": 1440,
+      "height": 1085,
+      "bounds": {
+        "footerTop": 975,
+        "previousBottom": 975,
+        "footerPosition": "static",
+        "pass": true
+      }
+    },
+    {
+      "name": "features-1440-bottom",
+      "privacyMasked": true,
+      "topbarBalanceMasked": true,
+      "viewport": 1440,
+      "body": 1440,
+      "height": 1085,
+      "bounds": {
+        "footerTop": 890,
+        "previousBottom": 890,
+        "footerPosition": "static",
+        "pass": true
+      }
+    },
+    {
+      "name": "usage-390",
+      "privacyMasked": true,
+      "topbarBalanceMasked": true,
+      "viewport": 390,
+      "body": 390,
+      "height": 3108,
+      "bounds": {
+        "detailLeft": 33,
+        "detailRight": 357,
+        "containerLeft": 0,
+        "containerRight": 390,
+        "scrollLeft": 0,
+        "clientWidth": 390,
+        "scrollWidth": 390,
+        "contentOverflow": false,
+        "pass": true
+      }
+    },
+    {
+      "name": "features-390",
+      "privacyMasked": true,
+      "topbarBalanceMasked": true,
+      "viewport": 390,
+      "body": 390,
+      "height": 1149,
+      "bounds": {
+        "footerTop": 1039,
+        "previousBottom": 1039,
+        "footerPosition": "static",
+        "pass": true
+      }
+    },
+    {
+      "name": "features-390-bottom",
+      "privacyMasked": true,
+      "topbarBalanceMasked": true,
+      "viewport": 390,
+      "body": 390,
+      "height": 1149,
+      "bounds": {
+        "footerTop": 890,
+        "previousBottom": 890,
+        "footerPosition": "static",
+        "pass": true
+      }
+    }
+  ],
+  "blocked": [
+    {
+      "reason": "outside-read-scope",
+      "path": "[restricted]"
+    },
+    {
+      "reason": "outside-read-scope",
+      "path": "[restricted]"
+    },
+    {
+      "reason": "outside-read-scope",
+      "path": "[restricted]"
+    },
+    {
+      "reason": "outside-read-scope",
+      "path": "[restricted]"
+    }
+  ],
+  "pageErrors": 0,
+  "expectedCoreVersion": "0.1.78",
+  "completed": true
+}

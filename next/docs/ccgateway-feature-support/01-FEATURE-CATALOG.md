@@ -1,3 +1,5 @@
+> **2026-10-08 调研/方案快照，非当前状态。** 正文中的“当前缺口/未实现/候选接口/未来菜单”对应当时基线；部分已在后续批次完成。当前架构与实际接口见[实现指南](IMPLEMENTATION-GUIDE.md)，部署/已验证与剩余事项见[接手文档](HANDOFF-2026-10-09.md)、[当前进度](implementation/PROGRESS.md)及[独立审计](implementation/COMPLETION-PROTOCOL-AUDIT-2026-10-09.md)。保留官方调研与设计依据，不据旧状态重复实施。
+
 # CCGateway 功能目录与协议归属
 
 证据日期：2026-10-08。范围：客户端 Anthropic Messages 请求，经平台调度到 Claude Code Worker；本文件是实施设计，不是已上线支持承诺。本轮只查文档、读源码，未改业务代码。官方文档是滚动版本，不能直接证明生产 CLI 或具体账号可用；本轮未重新读取生产 CLI 版本。
