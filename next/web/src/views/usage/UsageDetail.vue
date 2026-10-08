@@ -10,7 +10,8 @@ import { errorMessage } from '@/utils/errors'
 import BillingBreakdown from '@/views/prices/BillingBreakdown.vue'
 import ExprHistoryModal from '@/views/prices/ExprHistoryModal.vue'
 import { useAccountTypes } from '@/views/accounts/accountTypes'
-import { billingTone, isConverted, type UsageRow } from './usage'
+import { billingTone, isConverted, knownUsageRounds, type UsageRow } from './usage'
+import UsageTokenFacts from './UsageTokenFacts.vue'
 
 // Expanded usage record: billing detail (A.14), hooks, sticky, request info.
 const props = defineProps<{ row: UsageRow; path?: string }>()
@@ -37,6 +38,7 @@ onMounted(async () => {
 })
 
 const u = computed<UsageRow>(() => ({ ...props.row, ...(detail.value || {}) }))
+const knownRounds = computed(() => knownUsageRounds(u.value))
 const bd = computed<Record<string, any>>(() => (u.value.billing_detail as Record<string, any>) || {})
 const breakdown = computed<Record<string, any>>(() => bd.value.breakdown || {})
 const vars = computed<Record<string, any>>(() => breakdown.value.vars || {})
@@ -242,19 +244,33 @@ async function copy(v: string) {
 
         <div>
           <SSectionTitle :title="t('usage.tokens.title')" />
-          <dl class="kv">
-            <dt>{{ t('prices.vars.p') }}</dt>
-            <dd>{{ formatNumber(u.input_tokens) }}</dd>
-            <dt>{{ t('prices.vars.c') }}</dt>
-            <dd>{{ formatNumber(u.output_tokens) }}</dd>
-            <dt>{{ t('prices.vars.cr') }}</dt>
-            <dd>{{ formatNumber(u.cache_read_tokens) }}</dd>
-            <dt>{{ t('prices.vars.cc') }}</dt>
-            <dd>{{ formatNumber(u.cache_creation_tokens) }}</dd>
-            <template v-if="u.cache_creation_1h_tokens">
-              <dt>{{ t('prices.vars.cc1h') }}</dt>
-              <dd>{{ formatNumber(u.cache_creation_1h_tokens) }}</dd>
-            </template>
+          <div
+            v-if="knownRounds.length"
+            class="space-y-3"
+            data-testid="known-usage-rounds"
+          >
+            <SHint tone="warning">
+              {{ t('usage.tokens.incompleteRounds') }}
+            </SHint>
+            <div
+              v-for="round in knownRounds"
+              :key="round.round"
+              data-testid="known-usage-round"
+            >
+              <h4 class="mb-2 text-sm font-medium">
+                {{ t('usage.tokens.knownRound', { round: round.round }) }}
+              </h4>
+              <UsageTokenFacts :tokens="round.tokens" />
+            </div>
+          </div>
+          <UsageTokenFacts
+            v-else
+            :tokens="u"
+          />
+          <dl
+            v-if="Object.keys(u.metrics || {}).length"
+            class="kv"
+          >
             <template v-for="(v, k) in u.metrics || {}" :key="k">
               <dt class="font-mono text-xs">u("{{ k }}")</dt>
               <dd>{{ factValue(v) }}</dd>

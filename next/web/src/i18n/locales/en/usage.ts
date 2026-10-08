@@ -94,7 +94,9 @@ export default {
     error: 'Error'
   },
   tokens: {
-    title: 'Tokens'
+    title: 'Tokens',
+    knownRound: 'Known usage for round {round}',
+    incompleteRounds: 'These are recorded per-round counts only. Overall usage is unconfirmed and these counts are not the request total. Missing usage is not estimated; billing status is unchanged.'
   },
   hooks: {
     title: 'Hook decisions'

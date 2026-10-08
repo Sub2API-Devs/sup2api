@@ -8,6 +8,30 @@ export type UsageRow = UsageLog & {
   metrics?: Record<string, number> | null
 }
 
+export type UsageTokenFacts = Partial<Pick<UsageRow, 'input_tokens' | 'output_tokens' | 'cache_read_tokens' | 'cache_creation_tokens' | 'cache_creation_1h_tokens'>>
+
+const replacementTokenFields = {
+  input_tokens: 'Input', output_tokens: 'Output', cache_read_tokens: 'CacheRead',
+  cache_creation_tokens: 'CacheCreation', cache_creation_1h_tokens: 'CacheCreation1h'
+} as const
+
+/** Recorded rounds are partial evidence, never a replacement request total. */
+export function knownUsageRounds(row: UsageRow): Array<{ round: number; tokens: UsageTokenFacts }> {
+  if (row.success || Object.keys(replacementTokenFields).some(key => Number(row[key as keyof UsageTokenFacts]) > 0)) return []
+  const replacement: unknown = row.billing_detail?.inputs?.replacement
+  if (!Array.isArray(replacement)) return []
+  return replacement.flatMap((item, index) => {
+    const facts: unknown = item?.Tokens
+    if (!facts || typeof facts !== 'object') return []
+    const tokens: UsageTokenFacts = {}
+    for (const [field, source] of Object.entries(replacementTokenFields)) {
+      const value = (facts as Record<string, unknown>)[source]
+      if (typeof value === 'number' && Number.isFinite(value) && value >= 0) tokens[field as keyof UsageTokenFacts] = value
+    }
+    return Object.keys(tokens).length ? [{ round: index + 1, tokens }] : []
+  })
+}
+
 /** True when the core converted the request to another upstream protocol. */
 export function isConverted(u: Pick<UsageLog, 'protocol' | 'upstream_protocol'>): boolean {
   return !!u.upstream_protocol && !!u.protocol && u.upstream_protocol !== u.protocol

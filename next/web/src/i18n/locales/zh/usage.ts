@@ -94,7 +94,9 @@ export default {
     error: '错误'
   },
   tokens: {
-    title: 'Token 用量'
+    title: 'Token 用量',
+    knownRound: '第 {round} 轮已知用量',
+    incompleteRounds: '以下仅为已记录的分轮用量，整体用量尚未确认，不能作为本次请求总计。未估算缺失用量，计费状态保持不变。'
   },
   hooks: {
     title: '钩子决策'
