@@ -25,6 +25,7 @@ type resourceExchange struct {
 	mu         sync.Mutex
 	dispatched bool
 	response   *resourceResponse
+	identity   *resourceIdentityProbe
 }
 type resourceResponse struct {
 	status int
@@ -35,7 +36,7 @@ type resourceResponse struct {
 func (op *resourceExchange) completed() bool {
 	op.mu.Lock()
 	defer op.mu.Unlock()
-	return op.response != nil
+	return op.response != nil || (op.identity != nil && op.identity.local != nil)
 }
 
 func (relay *outboundRelay) prepareResourceRequest(w http.ResponseWriter, r *http.Request, op *resourceExchange) bool {
@@ -46,7 +47,25 @@ func (relay *outboundRelay) prepareResourceRequest(w http.ResponseWriter, r *htt
 		return false
 	}
 	op.dispatched = true
-	op.mu.Unlock()
+	if op.identity != nil {
+		local, err := op.identity.classify(r.Header)
+		op.mu.Unlock()
+		if err != nil {
+			relay.mu.Lock()
+			relay.failure = err
+			relay.mu.Unlock()
+			relay.stop(r)
+			apiError(w, 400, "invalid_request_error", "Resource authentication could not be verified")
+			return false
+		}
+		if local {
+			relay.stop(r)
+			w.WriteHeader(http.StatusNoContent)
+			return false
+		}
+	} else {
+		op.mu.Unlock()
+	}
 	r.Method = op.route.method
 	r.URL.Path = relay.path + op.route.path
 	r.URL.RawPath = ""
@@ -168,6 +187,9 @@ func (runner *Runner) runResource(ctx context.Context, op *resourceExchange) (*r
 	op.mu.Lock()
 	defer op.mu.Unlock()
 	if op.response == nil {
+		if op.identity != nil && op.identity.local != nil {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("resource operation did not receive a response")
 	}
 	return op.response, nil

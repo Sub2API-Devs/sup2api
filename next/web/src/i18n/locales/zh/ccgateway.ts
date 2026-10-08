@@ -1,4 +1,5 @@
 export default {
+  credentialStatus: { saved: '本地凭据已保存，在线有效性以实际请求为准。', absent: '未发现可确认的本地凭据，未进行在线验证。', unresolved: '凭据来源尚未确定；不会执行外部凭据程序来检查状态。', expired: '已保存的访问令牌已过期，等待原生 CLI 在实际请求时刷新。' },
   capability: { helperHistory: 'Worker 隐藏历史托管协议', helperUnreported: '未声明', helperBoundary: '这是 Worker 协议声明；需要核心同时启用托管。此查询不确认核心启用状态或提供商资格，不会改变配置。', search: '搜索账号', inspect: '查看账号 Worker 能力', account: '选择可访问账号', boundary: '只读查询，不启动或更新容器，也不影响调度。二进制目录、CLI 版本探测和模型实测是三类不同证据。', failed: '无法探测：可能是旧 Worker / 控制器、无权限或连接失败；不能据此判断特性已支持。', build: '运行中 Worker 版本 / Git revision', schema: 'Worker 目录 / 接受的策略版本', code: '此 Worker 的代码适配声明', probes: '实际本地探测范围', provider: '账号 / 模型 / Provider 实际调用验证', notRun: '该接口未进行模型调用，未验证', unreported: '未报告' },
   settingsTabs: { accounts: '账号容器', label: '设置分类', connection: '连接与授权', network: '网络配置', requests: '通用 API 特性', attachments: 'CC 特性', deployment: '部署与运行', save: '保存全部配置' },
   features: {
@@ -158,10 +159,10 @@ export default {
   },
  runtime: {"switchHint": "切换代理会重启该账号的出口进程，正在使用旧连接的请求可能中断；其他账号不受影响。", "enable": "启用一账号一容器及外部代理", "setup": "启用前需安装远程账号控制器，监听 127.0.0.1:8787，管理密钥填写控制器密钥。原共享容器不会自动迁移。"},
   title: 'CCGateway 管理', description: '管理本地或 SSH 远程网关、出站代理与 Claude 授权。', readOnly: '当前权限仅允许查看配置。', failed: '操作失败，请检查连接配置后重试。',
-  auth: { models: '模型列表', modelsHint: '已按插件预设填入，可增删；输入模型名称后按回车添加，清空表示允许所有模型。', mapping: '模型映射', mappingHint: '请求模型 → 上游模型；计费、分组白名单仍按请求模型。', title: 'Claude 授权与账号接入', hint: '通过 Claude Code 提供 Messages API，每个容器使用独立授权。', healthy: '服务在线', offline: '服务不可用', loggedIn: '已授权', loggedOut: '未授权', unknown: '状态未知', start: '获取授权链接', logout: '退出授权', confirmLogout: '退出授权后，关联账号将无法继续调用模型。确定退出？', open: '打开 Claude 授权页面', expires: '授权链接过期时间：{time}', code: '完整授权码（code#state）', complete: '完成授权', expired: '授权会话已过期，请取消后重新获取。', name: '账号名称', connect: '接入账号调度', connected: '已创建账号 #{id}', accounts: '前往账号管理', connectHint: '创建 CCGateway 托管账号，凭证由核心管理。可在此选择分组；未绑定分组的账号不参与调度。', pending: '授权回调已完成，请刷新状态确认。' },
+  auth: { models: '模型列表', modelsHint: '已按插件预设填入，可增删；输入模型名称后按回车添加，清空表示允许所有模型。', mapping: '模型映射', mappingHint: '请求模型 → 上游模型；计费、分组白名单仍按请求模型。', title: 'Claude 授权与账号接入', hint: '通过 Claude Code 提供 Messages API，每个容器使用独立授权。', healthy: '服务在线', offline: '服务不可用', loggedIn: '凭据已保存', loggedOut: '未保存凭据', unknown: '状态未知', start: '获取授权链接', logout: '退出授权', confirmLogout: '退出授权后，关联账号将无法继续调用模型。确定退出？', open: '打开 Claude 授权页面', expires: '授权链接过期时间：{time}', code: '完整授权码（code#state）', complete: '完成授权', expired: '授权会话已过期，请取消后重新获取。', name: '账号名称', connect: '接入账号调度', connected: '已创建账号 #{id}', accounts: '前往账号管理', connectHint: '创建 CCGateway 托管账号，凭证由核心管理。可在此选择分组；未绑定分组的账号不参与调度。', pending: '授权回调已完成，请刷新状态确认。' },
   accountAuth: {
     title: 'Claude 授权',
-    steps: { proxy: '选择代理', container: '启动账号容器', login: '复制链接登录 Claude', code: '粘贴授权码', done: '授权完成' },
+    steps: { proxy: '选择代理', container: '启动账号容器', login: '复制链接登录 Claude', code: '粘贴授权码', done: '凭据已保存' },
     proxyHint: '先在上方「代理」中选择一个已有代理：账号容器只能经这个代理出网。',
     proxyChosen: '代理：{name}', proxyUpdating: '正在为容器切换代理…', draftProxyHint: '授权前启动容器只能使用已有代理；要用新的代理地址，请先到代理页添加。',
     startContainer: '启动容器', startHint: '会在 Docker 主机上为这个新账号创建独立容器（账号此时尚未保存）。授权完成后才能保存；放弃录入时容器会被删除。',
@@ -174,7 +175,7 @@ export default {
     linkHint: '复制链接，在你登录 Claude 的浏览器里打开并点击同意，页面会显示一串授权码，完整复制后粘贴到下一步。', expiresIn: '链接 {time} 后过期', expired: '授权链接已过期，请重新获取。',
     codeLabel: '完整授权码（code#state）', codePlaceholder: '粘贴形如 xxxx#yyyy 的授权码', codeShape: '授权码通常包含 #（code#state），请确认已完整复制。', submit: '完成授权',
     completeFailed: '授权码未被接受', notConfirmed: '授权码已提交，但容器尚未确认登录；请稍后重试或重新获取链接。', regetLink: '重新获取链接', cancel: '取消本次授权',
-    authorized: '已授权', loggedOut: '未授权', authorizedToast: 'Claude 授权完成', authorizedDraftHint: '容器已登录 Claude，现在可以保存账号。', reauthorize: '重新授权',
+    authorized: '凭据已保存', loggedOut: '未保存凭据', authorizedToast: 'Claude 凭据已保存', authorizedDraftHint: '现在可以保存账号。', reauthorize: '重新授权',
     readOnly: '需要编辑该账号的权限（或 settings:manage）才能启动容器和授权，请联系管理员。', noRead: '没有查看该账号容器状态的权限。', noCreate: '需要创建账号的权限（或 settings:manage）才能启动容器，请联系管理员。',
     saveBlocked: '完成 Claude 授权后才能保存账号', saveBlockedFix: '查看授权步骤',
     blockedTitle: '账号容器已停止：{reason}', blockedUnknown: '核心停止了该容器',
@@ -203,10 +204,10 @@ export default {
   reauth: {
     replaceTitle: '手动替换容器', prepare: '准备新容器', migrate: '迁移授权文件', switchNow: '确认切换到新容器',
     currentImage: '当前容器镜像 ID', targetImage: '新建容器镜像', imageMismatch: '镜像不同，仅提示。保存配置、同步和普通重启不会因镜像差异替换当前容器。',
-    migrateMessage: '创建独立新容器，复制现有 CLI 配置及授权文件。旧容器继续服务，验证登录后由你确认切换。网关请求日志和持久缓存不复制；旧数据卷保留供恢复。',
+    migrateMessage: '创建独立新容器，复制现有 CLI 配置及授权文件。旧容器继续服务，检查本地凭据后由你确认切换；在线有效性以实际请求为准。网关请求日志和持久缓存不复制；旧数据卷保留供恢复。',
     freshMessage: '创建独立新容器并重新授权。旧容器继续服务，授权完成后由你确认切换；旧数据卷保留供恢复。',
     container: '容器', login: 'Claude 登录', checking: '检查中…',
-    loginState: { authorized: '已授权', notAuthorized: '未授权', unknown: '未知（容器未就绪）' },
+    loginState: { authorized: '凭据已保存', notAuthorized: '未保存凭据', unknown: '未知（容器未就绪）' },
     hint: '重新授权会用新的 Claude 登录替换当前登录，并清空该账号的全部历史；完成前账号继续用当前登录服务。',
     hintLoggedOut: '该账号的容器尚未登录 Claude，请重新授权。',
     confirmTitle: '重新授权该账号？',
@@ -214,9 +215,9 @@ export default {
     confirmButton: '开始重新授权',
     startFailed: '无法开始重新授权',
     flowTitle: '重新授权',
-    inProgress: '准备替换容器：登录验证成功后，点击确认切换才会使用新容器。此前账号继续使用旧容器；取消会删除新容器。',
+    inProgress: '准备替换容器：本地凭据保存后，点击确认切换才会使用新容器。此前账号继续使用旧容器；取消会删除新容器。',
     cancel: '取消重新授权',
-    signedIn: '新容器已登录 Claude，等待确认切换。',
+    signedIn: '新容器凭据已保存，等待确认切换。',
     committing: '正在按账号配置新容器并替换旧登录，可能需要几十秒…',
     commitFailed: '新登录未能替换旧登录（账号仍使用旧登录）',
     commitRetry: '再次替换',
@@ -280,7 +281,7 @@ export default {
     title: '账号容器', hint: '每个 Claude Code 账号一个容器。授权在账号页完成：新建账号时会自动启动容器并引导登录；这里只显示状态。',
     account: '账号', container: '容器', auth: 'Claude 授权', typeOAuth: 'OAuth（容器内登录）', typeApiKey: 'API Key',
     state: { ready: '已就绪', preparing: '准备中', error: '异常', unavailable: '不可用', unknown: '未知' },
-    checking: '检查中', authorized: '已授权', notAuthorized: '未授权', noAuthNeeded: '无需授权',
+    checking: '检查中', authorized: '凭据已保存', notAuthorized: '未保存凭据', noAuthNeeded: '无需授权',
     goAuthorize: '去账号页授权', goEdit: '在账号页查看', openAccounts: '新建 / 管理账号', empty: '还没有 Claude Code 账号，请在账号页新建。', loadFailed: '账号列表加载失败'
   },
 

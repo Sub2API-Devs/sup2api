@@ -1,4 +1,5 @@
 export default {
+  credentialStatus: { saved: 'Local credentials are saved. Online validity is determined by actual requests.', absent: 'No confirmed local credentials found. Online validity was not checked.', unresolved: 'Credential selection is unresolved; external credential programs are not run for status checks.', expired: 'The stored access token has expired. The native CLI will attempt refresh during an actual request.' },
   capability: { helperHistory: 'Worker hidden-history custody protocol', helperUnreported: 'Not declared', helperBoundary: 'Worker protocol declaration only; core custody must also be enabled. This query does not verify core activation or provider eligibility and changes no settings.', search: 'Search accounts', inspect: 'Inspect account Worker capabilities', account: 'Select an accessible account', boundary: 'Read only: does not start or update containers or change routing. Binary declarations, CLI version observations and real model verification are separate evidence.', failed: 'Inspection unavailable: an older Worker/controller, missing permission or a connection failure. This does not establish feature support.', build: 'Running Worker version / Git revision', schema: 'Worker catalog / accepted policy schemas', code: 'This Worker’s code declaration', probes: 'Observed local probe scope', provider: 'Account / model / provider inference verification', notRun: 'No inference performed by this endpoint; not verified', unreported: 'Not reported' },
   settingsTabs: { accounts: 'Account containers', label: 'Settings categories', connection: 'Connection', network: 'Network', requests: 'API features', attachments: 'CC features', deployment: 'Deployment', save: 'Save all settings' },
   features: {
@@ -171,10 +172,10 @@ export default {
   },
  runtime: {"switchHint": "Proxy changes restart this account’s egress and may interrupt existing calls. Other accounts are unaffected.", "enable": "Enable per-account containers and external egress", "setup": "Install the remote account controller at 127.0.0.1:8787 first and use its key as the admin key. Shared containers are not automatically migrated."},
   title: 'CCGateway management', description: 'Manage local or SSH gateways, outbound proxies and Claude authorization.', readOnly: 'Your permissions allow viewing configuration only.', failed: 'Operation failed. Check the connection configuration and retry.',
-  auth: { models: 'Models', modelsHint: 'Prefilled with the plugin preset; add or remove freely. Press Enter after a model name; an empty list allows every model.', mapping: 'Model mapping', mappingHint: 'Request model → upstream model; billing and group allowlists still use the request model.', title: 'Claude authorization and account', hint: 'Provide Messages API through Claude Code. Each container has its own authorization.', healthy: 'Service online', offline: 'Service unavailable', loggedIn: 'Authorized', loggedOut: 'Not authorized', unknown: 'Status unknown', start: 'Get authorization link', logout: 'Sign out', confirmLogout: 'Signing out prevents linked accounts from calling models. Continue?', open: 'Open Claude authorization', expires: 'Authorization link expires: {time}', code: 'Full authorization code (code#state)', complete: 'Complete authorization', expired: 'Session expired. Cancel and request a new authorization link.', name: 'Account name', connect: 'Create scheduling account', connected: 'Created account #{id}', accounts: 'Open accounts', connectHint: 'Create a managed CCGateway account with core-managed credentials. Choose groups here; accounts without groups do not participate in scheduling.', pending: 'Authorization callback completed. Refresh status to confirm.' },
+  auth: { models: 'Models', modelsHint: 'Prefilled with the plugin preset; add or remove freely. Press Enter after a model name; an empty list allows every model.', mapping: 'Model mapping', mappingHint: 'Request model → upstream model; billing and group allowlists still use the request model.', title: 'Claude authorization and account', hint: 'Provide Messages API through Claude Code. Each container has its own authorization.', healthy: 'Service online', offline: 'Service unavailable', loggedIn: 'Credentials saved', loggedOut: 'No saved credentials', unknown: 'Status unknown', start: 'Get authorization link', logout: 'Sign out', confirmLogout: 'Signing out prevents linked accounts from calling models. Continue?', open: 'Open Claude authorization', expires: 'Authorization link expires: {time}', code: 'Full authorization code (code#state)', complete: 'Complete authorization', expired: 'Session expired. Cancel and request a new authorization link.', name: 'Account name', connect: 'Create scheduling account', connected: 'Created account #{id}', accounts: 'Open accounts', connectHint: 'Create a managed CCGateway account with core-managed credentials. Choose groups here; accounts without groups do not participate in scheduling.', pending: 'Authorization callback completed. Refresh status to confirm.' },
   accountAuth: {
     title: 'Claude authorization',
-    steps: { proxy: 'Choose a proxy', container: 'Start the account container', login: 'Copy the link and sign in to Claude', code: 'Paste the authorization code', done: 'Authorized' },
+    steps: { proxy: 'Choose a proxy', container: 'Start the account container', login: 'Copy the link and sign in to Claude', code: 'Paste the authorization code', done: 'Credentials saved' },
     proxyHint: 'Pick an existing proxy under "Proxy" above first: the account container reaches the internet only through it.',
     proxyChosen: 'Proxy: {name}', proxyUpdating: 'Switching the container to the new proxy…', draftProxyHint: 'Starting the container before saving needs an existing proxy; to use a new proxy address, add it on the Proxies page first.',
     startContainer: 'Start the container', startHint: 'Creates this new account’s own container on the Docker host (the account is not saved yet). It can be saved once authorized; abandoning the entry deletes the container.',
@@ -187,7 +188,7 @@ export default {
     linkHint: 'Copy the link, open it in the browser where you sign in to Claude and approve; it then shows an authorization code. Copy all of it into the next step.', expiresIn: 'link expires in {time}', expired: 'The authorization link has expired; request a new one.',
     codeLabel: 'Full authorization code (code#state)', codePlaceholder: 'Paste the code, like xxxx#yyyy', codeShape: 'The code normally contains # (code#state); make sure you copied all of it.', submit: 'Complete authorization',
     completeFailed: 'The authorization code was not accepted', notConfirmed: 'The code was accepted, but the container has not confirmed the login yet; retry shortly or request a new link.', regetLink: 'Request a new link', cancel: 'Cancel this authorization',
-    authorized: 'Authorized', loggedOut: 'Not authorized', authorizedToast: 'Claude authorization completed', authorizedDraftHint: 'The container is signed in to Claude; the account can be saved now.', reauthorize: 'Re-authorize',
+    authorized: 'Credentials saved', loggedOut: 'No saved credentials', authorizedToast: 'Claude credentials saved', authorizedDraftHint: 'The account can now be saved.', reauthorize: 'Re-authorize',
     readOnly: 'Starting the container and authorizing need the right to edit this account (or settings:manage); ask an administrator.', noRead: 'You may not view the container state of this account.', noCreate: 'Starting the container needs the right to create accounts (or settings:manage); ask an administrator.',
     saveBlocked: 'The account can be saved once Claude is authorized', saveBlockedFix: 'Show the authorization steps',
     blockedTitle: 'Account container stopped: {reason}', blockedUnknown: 'the core stopped this container',
@@ -216,10 +217,10 @@ export default {
   reauth: {
     replaceTitle: 'Replace container manually', prepare: 'Prepare container', migrate: 'Migrate authorization files', switchNow: 'Confirm switch to new container',
     currentImage: 'Current container image ID', targetImage: 'Image for new containers', imageMismatch: 'Image mismatch is informational. Saving settings, syncing and ordinary restarts do not replace this container because of an image change.',
-    migrateMessage: 'Create an independent container and copy the existing CLI configuration and authorization. Confirm the switch after login validation. Gateway request logs and cache are not copied; the old volume is retained for recovery.',
+    migrateMessage: 'Create an independent container and copy the existing CLI configuration and authorization. Confirm the switch after checking the local credentials; actual requests determine online validity. Gateway request logs and cache are not copied; the old volume is retained for recovery.',
     freshMessage: 'Create an independent container and authorize it again. The old container keeps serving until you confirm the switch. Its data volume is retained for recovery.',
     container: 'Container', login: 'Claude login', checking: 'Checking…',
-    loginState: { authorized: 'Authorized', notAuthorized: 'Not authorized', unknown: 'Unknown (container not ready)' },
+    loginState: { authorized: 'Credentials saved', notAuthorized: 'No saved credentials', unknown: 'Unknown (container not ready)' },
     hint: 'Re-authorizing replaces the current Claude login with a new one and clears all of this account’s history; until then the account keeps serving with the current login.',
     hintLoggedOut: 'This account’s container is not signed in to Claude; re-authorize it.',
     confirmTitle: 'Re-authorize this account?',
@@ -227,9 +228,9 @@ export default {
     confirmButton: 'Start re-authorization',
     startFailed: 'The re-authorization could not be started',
     flowTitle: 'Re-authorization',
-    inProgress: 'Preparing a replacement: confirm the switch manually after login validation. The old container keeps serving until then. Cancelling deletes the new container.',
+    inProgress: 'Preparing a replacement: confirm the switch manually after local credentials are saved. The old container keeps serving until then. Cancelling deletes the new container.',
     cancel: 'Cancel re-authorization',
-    signedIn: 'The new container is signed in to Claude; waiting for confirmation.',
+    signedIn: 'Credentials are saved in the new container; waiting for confirmation.',
     committing: 'Configuring the new container for this account and replacing the old login; this may take a few dozen seconds…',
     commitFailed: 'The new login could not replace the old one (the account still uses the old login)',
     commitRetry: 'Replace again',
@@ -293,7 +294,7 @@ export default {
     title: 'Account containers', hint: 'One container per Claude Code account. Authorization happens on the Accounts page: creating an account starts its container and walks you through the login. This list only shows the state.',
     account: 'Account', container: 'Container', auth: 'Claude authorization', typeOAuth: 'OAuth (signed in inside the container)', typeApiKey: 'API Key',
     state: { ready: 'Ready', preparing: 'Preparing', error: 'Error', unavailable: 'Unavailable', unknown: 'Unknown' },
-    checking: 'Checking', authorized: 'Authorized', notAuthorized: 'Not authorized', noAuthNeeded: 'No authorization needed',
+    checking: 'Checking', authorized: 'Credentials saved', notAuthorized: 'No saved credentials', noAuthNeeded: 'No authorization needed',
     goAuthorize: 'Authorize on the Accounts page', goEdit: 'Open on the Accounts page', openAccounts: 'Create / manage accounts', empty: 'No Claude Code account yet; create one on the Accounts page.', loadFailed: 'Accounts could not be loaded'
   },
 

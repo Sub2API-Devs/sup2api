@@ -34,20 +34,7 @@ func safeResult(path string, raw []byte) (any, error) {
 		}
 		return v, nil
 	case "/status":
-		var v struct {
-			Healthy    bool   `json:"healthy"`
-			LoggedIn   bool   `json:"logged_in"`
-			AuthMethod string `json:"auth_method"`
-		}
-		if json.Unmarshal(raw, &v) != nil {
-			return nil, errors.New("invalid status")
-		}
-		switch v.AuthMethod {
-		case "oauth", "api_key", "claude_ai", "none", "":
-		default:
-			v.AuthMethod = "unknown"
-		}
-		return v, nil
+		return safeAuthStatus(raw)
 	case "/auth/start":
 		var v struct {
 			SessionID string    `json:"session_id"`

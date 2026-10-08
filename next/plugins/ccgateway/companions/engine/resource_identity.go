@@ -8,10 +8,8 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/resources"
 )
@@ -28,43 +26,24 @@ func resourceEnv(env []string, key string) string {
 }
 
 func (b *resourceBroker) identity(ctx context.Context) (resources.Identity, error) {
-	statusCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(statusCtx, b.g.Runner.CLI, "auth", "status", "--json")
-	cmd.Env = b.g.Runner.baseEnv()
-	// Only parsed authentication mode is consumed; identifiers never enter logs.
-	raw, err := cmd.Output()
-	var status struct {
-		LoggedIn    bool   `json:"loggedIn"`
-		AuthMethod  string `json:"authMethod"`
-		APIProvider string `json:"apiProvider"`
+	env := b.g.Runner.baseEnv()
+	if !resourceBackendSupported(env) {
+		return resources.Identity{}, fmt.Errorf("resource authentication backend unsupported")
 	}
-	if err != nil || json.Unmarshal(raw, &status) != nil || !status.LoggedIn || status.APIProvider != "firstParty" {
-		return resources.Identity{}, fmt.Errorf("resource authentication identity unavailable")
-	}
-	id := resources.Identity{AuthType: status.AuthMethod}
-	if status.AuthMethod == "api_key" {
-		issuer := resourceEnv(cmd.Env, "CCG_RESOURCE_ISSUER_ID")
-		managedEpoch := resourceEnv(cmd.Env, "CCG_RESOURCE_ISSUER_GENERATION")
-		if issuer == "" || managedEpoch == "" {
-			return resources.Identity{}, errManagedResourceIssuerMissing
-		}
-		id.PrincipalID = digest([]string{"resource-api-issuer-v1", issuer})
-		return b.persistIdentity(id, managedEpoch)
-	}
-	if status.AuthMethod != "oauth_token" && status.AuthMethod != "claude.ai" {
-		return resources.Identity{}, fmt.Errorf("resource authentication mode unsupported")
-	}
-	op := &resourceExchange{route: resourceRoute{method: "GET", path: "/api/oauth/profile"}, dir: b.dir, limit: 1 << 20, budget: b.budget}
+	probe := &resourceIdentityProbe{issuer: resourceEnv(env, "CCG_RESOURCE_ISSUER_ID"), epoch: resourceEnv(env, "CCG_RESOURCE_ISSUER_GENERATION")}
+	op := &resourceExchange{route: resourceRoute{method: "GET", path: "/api/oauth/profile"}, dir: b.dir, limit: 1 << 20, budget: b.budget, identity: probe}
 	resp, err := b.g.Runner.runResource(ctx, op)
 	if err != nil {
 		return resources.Identity{}, err
+	}
+	if probe.local != nil {
+		return b.persistIdentity(*probe.local, probe.epoch)
 	}
 	defer resp.body.Close()
 	if resp.status != http.StatusOK {
 		return resources.Identity{}, fmt.Errorf("authenticated provider profile unavailable")
 	}
-	raw, err = io.ReadAll(resp.body)
+	raw, err := io.ReadAll(resp.body)
 	if err != nil {
 		return resources.Identity{}, err
 	}
@@ -72,6 +51,7 @@ func (b *resourceBroker) identity(ctx context.Context) (resources.Identity, erro
 	if err != nil {
 		return resources.Identity{}, fmt.Errorf("invalid authenticated provider profile")
 	}
+	id := resources.Identity{AuthType: "oauth"}
 	id.PrincipalID, err = resourceProfilePrincipal(profile)
 	if err != nil {
 		return resources.Identity{}, err

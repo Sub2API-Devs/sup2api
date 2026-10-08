@@ -338,6 +338,14 @@ export interface CcgRuntimeStatus {
 export interface CcgRuntimeHealth {
   healthy: boolean
   logged_in: boolean
+  auth_method?: string
+  status_source?: 'local_snapshot'
+  online_verified?: false
+  selection_verified?: false
+  credential_present?: boolean
+  credential_sources?: Array<'api_key_env' | 'bearer_env' | 'oauth_token_env' | 'stored_oauth' | 'managed_api_key' | 'external_credential_source' | 'credential_helper_configured'>
+  credential_source_unresolved?: boolean
+  access_token_expired?: boolean
 }
 
 /** POST .../start and GET .../session (null when no login is pending). */

@@ -56,13 +56,13 @@ func credentialsPath() string {
 }
 
 func credentialsPathIn(env []string) string {
-	for _, k := range []string{"CLAUDE_SECURESTORAGE_CONFIG_DIR", "CLAUDE_CONFIG_DIR"} {
-		if d := environmentValue(env, k); d != "" {
-			return filepath.Join(d, ".credentials.json")
+	if value, present := environmentEntry(env, "CLAUDE_SECURESTORAGE_CONFIG_DIR"); present {
+		if value != "" {
+			return filepath.Join(value, ".credentials.json")
 		}
+		env = envWith(env, nil, "CLAUDE_CONFIG_DIR", "CLAUDE_SECURESTORAGE_CONFIG_DIR")
 	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".claude", ".credentials.json")
+	return filepath.Join(snapshotConfigDirectory(env), ".credentials.json")
 }
 
 // storedAccessToken reads the OAuth access token Claude Code stored; "" when

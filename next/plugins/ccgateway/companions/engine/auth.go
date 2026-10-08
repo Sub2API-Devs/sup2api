@@ -285,18 +285,7 @@ func (a *authManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var err error
 	switch r.Method + " " + r.URL.Path {
 	case "GET /admin/status":
-		cmd := exec.CommandContext(ctx, a.cli, "auth", "status", "--json")
-		cmd.Env = a.environment()
-		b, runErr := cmd.Output()
-		var status struct {
-			LoggedIn   bool   `json:"loggedIn"`
-			AuthMethod string `json:"authMethod"`
-		}
-		if json.Unmarshal(b, &status) != nil {
-			err = authFail(codeStatusUnavailable, "The Claude Code authorization status could not be read.")
-		} else {
-			result = Object{"healthy": true, "logged_in": status.LoggedIn && runErr == nil, "auth_method": status.AuthMethod}
-		}
+		result, err = localAuthSnapshot(a.environment())
 	case "GET /admin/auth/session":
 		result = Object{"session": nil}
 		if s := a.pending(); s != nil {

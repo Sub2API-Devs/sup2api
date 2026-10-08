@@ -332,6 +332,11 @@ func TestAuthExpiredAndCancel(t *testing.T) {
 
 func TestStatusAndLogout(t *testing.T) {
 	a := peerManager(t, "ok")
+	config := t.TempDir()
+	a.env = envWith(os.Environ(), map[string]string{"CLAUDE_CONFIG_DIR": config, "CLAUDE_SECURESTORAGE_CONFIG_DIR": config, "ANTHROPIC_API_KEY": "", "ANTHROPIC_AUTH_TOKEN": "", "CLAUDE_CODE_OAUTH_TOKEN": ""})
+	if err := os.WriteFile(filepath.Join(config, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"fixture"}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
 	got := okBody(t, authRequest(a, "GET", "/admin/status", "", "admin-key"))
 	if got["healthy"] != true || got["logged_in"] != true || got["auth_method"] != "claude.ai" {
 		t.Fatalf("status %v", got)
@@ -340,6 +345,10 @@ func TestStatusAndLogout(t *testing.T) {
 		t.Fatal("logout failed")
 	}
 	a = peerManager(t, "fail")
+	a.env = envWith(os.Environ(), map[string]string{"CLAUDE_CONFIG_DIR": config, "CLAUDE_SECURESTORAGE_CONFIG_DIR": config})
+	if err := os.WriteFile(filepath.Join(config, ".credentials.json"), []byte(`invalid`), 0600); err != nil {
+		t.Fatal(err)
+	}
 	expectCode(t, authRequest(a, "GET", "/admin/status", "", "admin-key"), 400, codeStatusUnavailable)
 	expectCode(t, authRequest(a, "POST", "/admin/auth/logout", "", "admin-key"), 400, codeLogoutFailed)
 }

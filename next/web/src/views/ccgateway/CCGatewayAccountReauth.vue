@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CredentialStatusNotice from './CredentialStatusNotice.vue'
 // Credentials card of a saved Claude Code (CCGateway managed) account
 // (docs/CCGATEWAY-REAUTH.md): the current runtime's state (container, Claude
 // login) and "re-authorize". Re-authorizing never touches the running
@@ -312,6 +313,7 @@ onBeforeUnmount(() => {
         <span class="w-20 shrink-0 text-gray-500 dark:text-dark-400">{{ t('ccgateway.reauth.login') }}</span>
         <span :class="summary.login === 'authorized' ? 'text-emerald-600 dark:text-emerald-400' : summary.login === 'notAuthorized' ? 'text-amber-600 dark:text-amber-400' : 'text-gray-500 dark:text-dark-400'">{{ t(`ccgateway.reauth.loginState.${summary.login}`) }}</span>
       </div>
+      <CredentialStatusNotice :status="health" />
 
       <div v-if="loadError" class="mt-1.5 space-y-2 rounded-lg bg-red-50 px-3 py-2 text-red-700 dark:bg-red-900/20 dark:text-red-300" role="alert" data-testid="ccgateway-current-error" :data-reason="loadError.reason">
         <div class="font-medium">{{ t('ccgateway.accountAuth.statusFailed') }}</div>

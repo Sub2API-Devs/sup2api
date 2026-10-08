@@ -11,6 +11,8 @@ import { useAuthStore } from '@/stores/auth'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { runPool } from '@/views/accounts/pool'
 import { containerPhase, knownReason, type CcgContainer } from './ccgAuthFlow'
+import CredentialStatusNotice from './CredentialStatusNotice.vue'
+import type { CcgRuntimeHealth } from '@/api/types'
 
 interface RequestLogState {
   enabled: boolean
@@ -31,6 +33,7 @@ interface Row {
   phase: CcgContainer
   /** null: unknown (container not ready, API key accounts, or the check failed) */
   loggedIn: boolean | null
+  health?: CcgRuntimeHealth
   checking: boolean
   error: boolean
   created_by?: number | null
@@ -66,7 +69,8 @@ async function inspect(r: Row) {
     r.container = s.container || ''
     r.phase = containerPhase(s.status)
     if (r.phase === 'ready' && r.type === 'managed') {
-      r.loggedIn = !!(await api.get<{ logged_in: boolean }>(`/system/ccgateway/accounts/${r.id}/health`)).logged_in
+      r.health = await api.get<CcgRuntimeHealth>(`/system/ccgateway/accounts/${r.id}/health`)
+      r.loggedIn = r.health.credential_present ?? r.health.logged_in
     }
     if (r.phase === 'ready') {
       try {
@@ -162,6 +166,7 @@ const needsAuth = (r: Row) => r.type === 'managed' && r.loggedIn !== true
           <SBadge v-else-if="row.loggedIn === true" tone="success">{{ t('ccgateway.runtimes.authorized') }}</SBadge>
           <SBadge v-else-if="row.loggedIn === false" tone="warning">{{ t('ccgateway.runtimes.notAuthorized') }}</SBadge>
           <SHint v-else inline size="xs">—</SHint>
+          <CredentialStatusNotice :status="row.health" />
         </template>
         <template #cell-request_logs="{ row }">
           <SSwitch v-if="row.logsEnabled !== null" :model-value="row.logsEnabled" :disabled="!canLogs(row) || row.logsBusy || row.checking || loading" :label="t('ccgateway.requestLogs.title')" :data-testid="`request-logs-${row.id}`" @update:model-value="setLogs(row, $event)" />

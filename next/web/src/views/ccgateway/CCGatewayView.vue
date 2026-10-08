@@ -10,8 +10,10 @@ import { useAccountTypes } from '@/views/accounts/accountTypes'
 import RemoteSettings from './RemoteSettings.vue'
 import AccountRuntimes from './AccountRuntimes.vue'
 import ProxySettings from './ProxySettings.vue'
+import CredentialStatusNotice from './CredentialStatusNotice.vue'
+import type { CcgRuntimeHealth } from '@/api/types'
 import { isTrustedAuthorizationURL, sessionExpired } from './validation'
-interface Status { healthy: boolean; logged_in: boolean; auth_method: string }
+type Status = CcgRuntimeHealth
 interface Session { session_id: string; url: string; expires_at: string }
 defineProps<{ embedded?: boolean }>()
 const { t } = useI18n(), auth = useAuthStore()
@@ -80,6 +82,7 @@ onBeforeUnmount(() => { code.value = ''; session.value = null })
       <template #actions><SButton size="sm" :loading="authBusy" :disabled="busy" @click="run(refresh)">{{ t('common.refresh') }}</SButton></template>
       <div class="space-y-4">
         <div class="flex gap-2"><SBadge :tone="status?.healthy ? 'success' : 'gray'">{{ t(!status ? 'ccgateway.auth.unknown' : status.healthy ? 'ccgateway.auth.healthy' : 'ccgateway.auth.offline') }}</SBadge><SBadge v-if="status" :tone="status.logged_in ? 'success' : 'warning'">{{ t(status.logged_in ? 'ccgateway.auth.loggedIn' : 'ccgateway.auth.loggedOut') }}</SBadge></div>
+        <CredentialStatusNotice :status="status" />
         <SHint v-if="error" tone="danger" role="alert">{{ error }}</SHint><SHint v-if="notice" tone="success">{{ notice }}</SHint>
         <div v-if="manage" class="flex flex-wrap gap-2"><SButton variant="primary" :disabled="busy || !status?.healthy || !!session" @click="run(start)">{{ t('ccgateway.auth.start') }}</SButton><SButton v-if="status?.logged_in" :disabled="busy" @click="confirmLogout = !confirmLogout">{{ t('ccgateway.auth.logout') }}</SButton></div>
         <div v-if="confirmLogout" class="space-y-2"><SHint tone="warning">{{ t('ccgateway.auth.confirmLogout') }}</SHint><SButton variant="danger" :disabled="busy || !manage" @click="run(logout)">{{ t('common.confirm') }}</SButton><SButton class="ml-2" :disabled="busy" @click="confirmLogout = false">{{ t('common.cancel') }}</SButton></div>

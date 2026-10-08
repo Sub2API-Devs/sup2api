@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import CredentialStatusNotice from './CredentialStatusNotice.vue'
+import { canAutoStartAuthorization } from './credentialStatus'
 // Claude authorization of a Claude Code (CCGateway) managed account on a draft
 // runtime, shown in the account editor (docs/CCGATEWAY-DRAFT-RUNTIMES.md §5,
 // docs/CCGATEWAY-REAUTH.md). Same steps and state machine (./ccgAuthFlow) for
@@ -251,7 +253,7 @@ async function adoptPendingSession(base: string): Promise<boolean> {
 /** The link is requested as soon as the draft's container is ready (once per draft). */
 function maybeAutoStart() {
   if (autoStarted || !canManage.value) return
-  if (phase.value !== 'ready' || health.value?.logged_in !== false || session.value || acting.value) return
+  if (phase.value !== 'ready' || !canAutoStartAuthorization(health.value) || session.value || acting.value) return
   autoStarted = true
   void start()
 }
@@ -568,6 +570,7 @@ const settingsLink = '/plugins/ccgateway?tab=settings#ccgateway-runtime'
       </span>
     </div>
 
+    <CredentialStatusNotice :status="health" />
     <SHint v-if="!canManage" tone="warning">{{ reauth ? t('ccgateway.accountAuth.readOnly') : t('ccgateway.accountAuth.noCreate') }}</SHint>
 
     <ol class="space-y-0" data-testid="ccgateway-auth-steps">
