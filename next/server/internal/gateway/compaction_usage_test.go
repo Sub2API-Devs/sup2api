@@ -16,7 +16,7 @@ func TestCompactionUsageAndActualServiceFacts(t *testing.T) {
 			e := newEnv(t)
 			e.accounts.set(1, func(a *core.Account) { a.ModelMapping = map[string]string{testModel: "mapped-main"} })
 			usage := map[string]any{"input_tokens": 23, "output_tokens": 1, "speed": "fast", "service_tier": "priority", "inference_geo": "us",
-				"server_tool_use": map[string]any{"web_search_requests": 2, "web_fetch_requests": 1},
+				"server_tool_use": map[string]any{"web_search_requests": 2, "web_fetch_requests": 1, "code_execution_requests": 3},
 				"iterations":      []any{map[string]any{"type": "compaction", "input_tokens": 180, "output_tokens": 35}, map[string]any{"type": "message", "input_tokens": 23, "output_tokens": 1}}}
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if !stream {
@@ -45,7 +45,7 @@ func TestCompactionUsageAndActualServiceFacts(t *testing.T) {
 			if part.Kind != "compaction" || part.Model != testModel || part.Price.ID != 9 || part.Tokens != (core.UsageTokens{Input: 180, Output: 35}) {
 				t.Fatalf("compaction model/cost attribution changed: %+v", part)
 			}
-			for key, want := range map[string]any{"speed": "fast", "service_tier": "priority", "inference_geo": "us", "web_search_requests": float64(2), "web_fetch_requests": float64(1)} {
+			for key, want := range map[string]any{"speed": "fast", "service_tier": "priority", "inference_geo": "us", "web_search_requests": float64(2), "web_fetch_requests": float64(1), "code_execution_requests": float64(3)} {
 				if rec.Metrics[key] != want {
 					t.Fatalf("actual %s fact = %v, want %v", key, rec.Metrics[key], want)
 				}

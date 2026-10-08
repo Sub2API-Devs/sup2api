@@ -43,6 +43,7 @@ type Deps struct {
 	Settler           core.Settler
 	Tasks             core.AsyncTasks
 	Resources         core.ProviderResources
+	Skills            core.SkillResources
 	ResourceTransport core.ProviderResourceTransport
 	// Limiter enforces per-account rpm/tpm limits (CONTRACTS §18);
 	// nil = no limits.

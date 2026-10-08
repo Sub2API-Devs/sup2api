@@ -162,7 +162,8 @@ func (x *exchange) admit() bool {
 		return false
 	}
 	if x.resources != nil {
-		x.diagnostic.trace("resource_references_verified", Object{"identity": x.resources.identity, "allowed_file_count": len(x.resources.ids)})
+		x.resources.applyResponseHeaders(x.w.Header())
+		x.diagnostic.trace("resource_references_verified", x.resources.diagnosticFacts())
 	}
 	parse := parsePolicyRequestWithResources
 	if r.URL.Path == "/v1/messages/count_tokens" {

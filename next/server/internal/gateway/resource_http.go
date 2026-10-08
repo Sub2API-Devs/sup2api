@@ -44,7 +44,8 @@ type resourceCall struct {
 
 func (g *Gateway) serveResourceHTTP(c *gin.Context) bool {
 	path := c.Request.URL.Path
-	if path != "/v1/files" && !strings.HasPrefix(path, "/v1/files/") {
+	skills := path == "/v1/skills" || strings.HasPrefix(path, "/v1/skills/")
+	if !skills && path != "/v1/files" && !strings.HasPrefix(path, "/v1/files/") {
 		return false
 	}
 	x := &resourceCall{g: g, c: c, rid: httpapi.NewRequestID()}
@@ -110,6 +111,14 @@ func (g *Gateway) serveResourceHTTP(c *gin.Context) bool {
 	}
 	if len(c.Request.Header.Values("Anthropic-Version")) > 1 {
 		x.fail(core.ErrInvalidArgument.WithMessage("exactly one Anthropic-Version value is allowed"))
+		return true
+	}
+	if skills {
+		if g.d.Skills == nil {
+			x.fail(core.ErrUnavailable)
+		} else {
+			x.skills()
+		}
 		return true
 	}
 	if path == "/v1/files" {

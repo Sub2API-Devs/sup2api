@@ -51,10 +51,16 @@ func queryFilter(owner core.ResourceOwner, q core.ResourceQuery) (string, []any,
 // Query filters inside SQL before pagination. A read-only repeatable snapshot
 // makes cursor eligibility and page membership consistent during concurrent
 // completion/deletion. Public IDs only break ties in provider creation order.
-func (s *Service) Query(ctx context.Context, owner core.ResourceOwner, q core.ResourceQuery) (out core.ResourcePage, err error) {
+func (s *Service) Query(ctx context.Context, owner core.ResourceOwner, q core.ResourceQuery) (core.ResourcePage, error) {
+	return s.query(ctx, owner, q, false)
+}
+func (s *Service) query(ctx context.Context, owner core.ResourceOwner, q core.ResourceQuery, skillVersions bool) (out core.ResourcePage, err error) {
 	where, args, err := queryFilter(owner, q)
 	if err != nil {
 		return out, err
+	}
+	if skillVersions {
+		where += ` AND EXISTS(SELECT 1 FROM provider_skill_versions v WHERE v.parent_id=provider_resources.public_id AND v.state='ready')`
 	}
 	out.Items = []core.ProviderResource{}
 	if len(q.AccountIDs) == 0 {

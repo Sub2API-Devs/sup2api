@@ -208,7 +208,7 @@ func checkBlock(b Object, role string, ttl *time.Duration, access ...*resourceAd
 		}
 	case "tool_use":
 		return checkToolUse(b, role)
-	case "server_tool_use", "tool_search_tool_result", "web_search_tool_result", "web_fetch_tool_result", "advisor_tool_result":
+	case "server_tool_use", "tool_search_tool_result", "web_search_tool_result", "web_fetch_tool_result", "advisor_tool_result", "code_execution_tool_result", "bash_code_execution_tool_result", "text_editor_code_execution_tool_result":
 		return checkServerSearchBlock(b, role)
 	case "mcp_tool_use", "mcp_tool_result", "mcp_tool_listing":
 		return checkMCPBlock(b, role)
@@ -249,11 +249,7 @@ func checkToolUse(b Object, role string) error {
 		return e
 	}
 	if v, exists := b["caller"]; exists {
-		caller, ok := v.(map[string]any)
-		if !ok || str(caller, "type") != "direct" {
-			return fmt.Errorf("only direct tool callers are supported")
-		}
-		if e := keys(caller, "type"); e != nil {
+		if e := checkProviderCaller(v); e != nil {
 			return e
 		}
 	}
@@ -391,6 +387,9 @@ func parseRequestWithResources(data []byte, mcp *MCPConnectorPlan, access *resou
 		return nil, e
 	}
 	if e = r.compileInlineTools(baseTools); e != nil {
+		return nil, e
+	}
+	if e = r.validateExecutionAdmission(); e != nil {
 		return nil, e
 	}
 	if e = r.validateSearchResultCitations(); e != nil {

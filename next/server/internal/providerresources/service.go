@@ -19,6 +19,7 @@ import (
 
 type Options struct {
 	MaxResources               int
+	MaxContexts                int
 	MaxBytes, MaxResourceBytes int64
 	DefaultTTL, MaxTTL         time.Duration
 }
@@ -30,6 +31,9 @@ type Service struct {
 var _ core.ProviderResources = (*Service)(nil)
 
 func New(db *store.DB, opts Options) *Service {
+	if opts.MaxContexts <= 0 {
+		opts.MaxContexts = 100000
+	}
 	if opts.MaxResources <= 0 {
 		opts.MaxResources = 1000
 	}
@@ -93,8 +97,19 @@ func lockOwner(ctx context.Context, tx pgx.Tx, owner core.ResourceOwner) error {
 }
 
 func (s *Service) quota(ctx context.Context, tx pgx.Tx, owner core.ResourceOwner, extraCount int, extraBytes int64) error {
+	return s.quotaAt(ctx, tx, owner, extraCount, extraBytes, time.Now())
+}
+
+func resourceOccupiesQuota(r core.ProviderResource, at time.Time) bool {
+	return r.State != "deleted" && r.State != "failed" && !(r.Kind == "container" && !r.ExpiresAt.IsZero() && !r.ExpiresAt.After(at))
+}
+
+func (s *Service) quotaAt(ctx context.Context, tx pgx.Tx, owner core.ResourceOwner, extraCount int, extraBytes int64, at time.Time) error {
 	var count, bytes int64
-	err := tx.QueryRow(ctx, `SELECT count(*),COALESCE(sum(bytes),0) FROM provider_resources WHERE user_id=$1 AND group_id=$2 AND state NOT IN ('deleted','failed')`, owner.UserID, owner.GroupID).Scan(&count, &bytes)
+	err := tx.QueryRow(ctx, `SELECT count(*),COALESCE(sum(bytes),0) FROM (
+ SELECT bytes FROM provider_resources WHERE user_id=$1 AND group_id=$2 AND state NOT IN ('deleted','failed') AND NOT(kind='container' AND expires_at IS NOT NULL AND expires_at<=$3)
+ UNION ALL SELECT v.bytes FROM provider_skill_versions v JOIN provider_resources p ON p.public_id=v.parent_id WHERE p.user_id=$1 AND p.group_id=$2 AND p.state NOT IN ('deleted','failed') AND v.state NOT IN ('deleted','failed')
+ ) occupied`, owner.UserID, owner.GroupID, at).Scan(&count, &bytes)
 	if err != nil {
 		return err
 	}

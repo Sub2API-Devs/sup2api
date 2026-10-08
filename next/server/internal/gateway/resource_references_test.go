@@ -42,7 +42,7 @@ func TestFileReferenceHTTPAccountPinningAndHeaders(t *testing.T) {
 	if gjson.GetBytes(up.body, "messages.0.content.0.source.file_id").String() != "remote_file_local" {
 		t.Fatal("public ID not mapped")
 	}
-	if up.header.Get(resources.ResourceIDsHeader) != `["remote_file_local"]` || up.header.Get(resources.PrincipalHeader) != "synthetic_issuer" {
+	if up.header.Get(resources.ResourceRefsHeader) != `[{"kind":"file","id":"remote_file_local"}]` || up.header.Get(resources.ResourceIDsHeader) != "" || up.header.Get(resources.PrincipalHeader) != "synthetic_issuer" {
 		t.Fatal("missing trusted resource context", up.header)
 	}
 }

@@ -157,7 +157,7 @@ func (a *Accumulator) blockStart(e Object, r *Request) error {
 		if err := a.serverCalls.accept(block, view); err != nil {
 			return err
 		}
-	case "tool_search_tool_result", "web_search_tool_result", "web_fetch_tool_result", "advisor_tool_result":
+	case "tool_search_tool_result", "web_search_tool_result", "web_fetch_tool_result", "advisor_tool_result", "code_execution_tool_result", "bash_code_execution_tool_result", "text_editor_code_execution_tool_result":
 		if err := checkServerSearchBlock(block, "assistant"); err != nil {
 			return err
 		}
@@ -179,6 +179,12 @@ func (a *Accumulator) blockStart(e Object, r *Request) error {
 		}
 		e["content_block"] = block
 	case "tool_use":
+		if err := checkToolUse(block, "assistant"); err != nil {
+			return err
+		}
+		if err := a.serverCalls.accept(block, r); err != nil {
+			return err
+		}
 		name := a.inlineResponseView(r).apiResponseToolName(block)
 		if name == "" {
 			return fmt.Errorf("model requested an undeclared tool")

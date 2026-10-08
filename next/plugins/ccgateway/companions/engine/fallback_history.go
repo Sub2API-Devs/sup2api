@@ -42,7 +42,9 @@ func restoreProtocolHistory(r *Request, body Object) error {
 			}
 		}
 	}
-	if err := restoreAssistantOmissions(&shadow, copy, func(block Object) bool { return registeredNativeOmission(block) || str(block, "type") == "fallback" }); err != nil {
+	if err := restoreAssistantOmissions(&shadow, copy, func(block Object) bool {
+		return registeredNativeOmission(block) || r.ptcHistoryParent(block) || str(block, "type") == "fallback"
+	}); err != nil {
 		return err
 	}
 	actual = wireFallbackBlocks(copy)

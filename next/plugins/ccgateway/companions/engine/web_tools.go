@@ -10,6 +10,9 @@ import (
 // Server-owned tools retain their API type and are never registered with MCP.
 // Newer web versions default to code execution, which needs its own adapter.
 func serverToolName(kind string) string {
+	if codeExecutionVersion(kind) {
+		return "code_execution"
+	}
 	if name := serverSearchName(kind); name != "" {
 		return name
 	}
@@ -26,6 +29,8 @@ func serverToolName(kind string) string {
 
 func serverResultType(name string) string {
 	switch name {
+	case "code_execution", "bash_code_execution", "text_editor_code_execution":
+		return name + "_tool_result"
 	case "advisor":
 		return "advisor_tool_result"
 	case "tool_search_tool_regex", "tool_search_tool_bm25":
@@ -54,9 +59,6 @@ func checkWebTool(t Object) error {
 	}
 	if err := keys(t, fields...); err != nil {
 		return err
-	}
-	if kind != "web_search_20250305" && kind != "web_fetch_20250910" && t["allowed_callers"] == nil {
-		return fmt.Errorf("%s defaults to code execution; specify allowed_callers:[direct] until programmatic execution is adapted", kind)
 	}
 	if t["allowed_domains"] != nil && t["blocked_domains"] != nil {
 		return fmt.Errorf("allowed_domains and blocked_domains are mutually exclusive")
@@ -208,11 +210,7 @@ func checkWebResult(b Object) error {
 		return fmt.Errorf("server result requires tool_use_id")
 	}
 	if caller, exists := b["caller"]; exists {
-		obj, ok := caller.(map[string]any)
-		if !ok || str(obj, "type") != "direct" {
-			return fmt.Errorf("programmatic server callers require a separate adapter")
-		}
-		if err := keys(obj, "type"); err != nil {
+		if err := checkProviderCaller(caller); err != nil {
 			return err
 		}
 	}

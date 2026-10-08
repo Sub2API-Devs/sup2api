@@ -59,12 +59,17 @@ type ResourcePage struct {
 	HasMore bool
 }
 type ProviderResources interface {
+	RegisterObserved(context.Context, ResourceObservation) (ProviderResource, error)
+	BindContext(context.Context, ResourceContext) error
+	ResolveContext(context.Context, ResourceContext) (ProviderResource, error)
 	Reserve(context.Context, ResourceIntent) (ResourceReservation, error)
 	Finalize(context.Context, ResourceCompletion) (ProviderResource, error)
 	MarkUncertain(context.Context, ResourceOwner, string, string) error
 	// FailCreate requires confirmed provider rejection, never a transport error.
 	FailCreate(context.Context, ResourceOwner, string, string, string) error
 	Get(context.Context, ResourceOwner, string) (ProviderResource, error)
+	// FindOwnedRemote is a trusted response lookup; it never registers unknown IDs.
+	FindOwnedRemote(context.Context, ResourceOwner, ResourceBinding, string, string) (ProviderResource, error)
 	List(context.Context, ResourceOwner, string, int) ([]ProviderResource, error)
 	Query(context.Context, ResourceOwner, ResourceQuery) (ResourcePage, error)
 	BeginDelete(context.Context, ResourceOwner, string, ResourceBinding) (ResourceReservation, error)

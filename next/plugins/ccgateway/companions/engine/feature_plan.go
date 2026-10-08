@@ -14,6 +14,7 @@ import (
 // controls. Its maps are private: applying a plan cannot mutate the next run.
 // Only the relay's identified main model request may apply these controls.
 type RequestPlan struct {
+	container     *providerContainerPlan
 	fallbacks     json.RawMessage
 	taskBudget    json.RawMessage
 	apiGeneration bool
@@ -63,7 +64,7 @@ func (p *RequestPlan) FeatureDecisions() []Object {
 		if p.cache != nil {
 			out = append(out, Object{"field": "cache_control", "action": "restore_exact_protocol_breakpoints", "stage": "outbound_relay"})
 		}
-		for _, field := range []string{"max_tokens", "temperature", "top_p", "top_k", "stop_sequences", "metadata", "service_tier", "inference_geo", "speed", "diagnostics", "tool_choice", "safeguards", "thinking", "output_config", "context_management", "compaction", "fallbacks"} {
+		for _, field := range []string{"max_tokens", "temperature", "top_p", "top_k", "stop_sequences", "metadata", "service_tier", "inference_geo", "speed", "diagnostics", "tool_choice", "safeguards", "thinking", "output_config", "context_management", "compaction", "fallbacks", "container"} {
 			if _, exists := p.fields[field]; exists {
 				decision := Object{"field": field, "action": "apply_main_request", "stage": "outbound_relay"}
 				if field == "metadata" {
@@ -81,6 +82,15 @@ func (p *RequestPlan) FeatureDecisions() []Object {
 
 func parseRequestPlan(body []byte, o Object) (*RequestPlan, error) {
 	p := &RequestPlan{raw: append([]byte(nil), body...), fields: map[string]json.RawMessage{}}
+	if value, exists := o["container"]; exists {
+		var err error
+		p.container, err = parseProviderContainer(value)
+		if err != nil {
+			return nil, err
+		}
+		p.fields["container"], _ = json.Marshal(value)
+		delete(o, "container")
+	}
 	if err := p.takeFallbacks(o); err != nil {
 		return nil, err
 	}
@@ -321,7 +331,7 @@ func (r *Request) ApplyMainRequestFeatures(message Object) error {
 		message[name] = value
 	}
 	if r.Plan.apiGeneration {
-		for _, name := range []string{"thinking", "output_config", "speed", "diagnostics"} {
+		for _, name := range []string{"thinking", "output_config", "speed", "diagnostics", "container"} {
 			if _, explicit := patch[name]; !explicit {
 				delete(message, name)
 			}

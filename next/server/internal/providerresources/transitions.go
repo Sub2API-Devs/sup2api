@@ -59,6 +59,18 @@ func (s *Service) Finalize(ctx context.Context, in core.ResourceCompletion) (out
 		if r.State != "pending" && r.State != "uncertain" {
 			return core.ErrConflict
 		}
+		if e := lockRemote(ctx, tx, r.PluginKey, r.Kind, r.Binding, in.RemoteID); e != nil {
+			return e
+		}
+		known, e := lookupRemote(ctx, tx, r.PluginKey, r.Kind, r.Binding, in.RemoteID)
+		if e != nil {
+			return e
+		}
+		for _, other := range known {
+			if other.PublicID != r.PublicID {
+				return core.ErrConflict.WithMessage("remote resource identity was previously registered")
+			}
+		}
 		if err := s.quota(ctx, tx, in.Owner, 0, in.Bytes-r.Bytes); err != nil {
 			return err
 		}

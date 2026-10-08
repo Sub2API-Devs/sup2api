@@ -61,6 +61,8 @@ func ValidateOperation(op Operation) (bool, error) {
 		case 4:
 			allowed = parts[3] == "versions" && (op.Method == "GET" || op.Method == "POST")
 			upload = allowed && op.Method == "POST"
+		case 6:
+			allowed = parts[3] == "versions" && parts[5] == "content" && op.Method == "GET"
 		case 5:
 			allowed = parts[3] == "versions" && (op.Method == "GET" || op.Method == "DELETE")
 		}
@@ -73,7 +75,10 @@ func ValidateOperation(op Operation) (bool, error) {
 		return false, fmt.Errorf("invalid resource query")
 	}
 	for key := range query {
-		valid := op.Method == "GET" && ((parts[1] == "files" && len(parts) == 2 && (key == "limit" || key == "page" || key == "before_id" || key == "after_id" || key == "ids" || key == "ids[]")) || (parts[1] == "skills" && (len(parts) == 2 || len(parts) == 4) && (key == "limit" || key == "page" || key == "source")))
+		if key == "beta" && parts[1] == "skills" && len(query[key]) == 1 && query.Get(key) == "true" {
+			continue
+		}
+		valid := op.Method == "GET" && ((parts[1] == "files" && len(parts) == 2 && (key == "limit" || key == "page" || key == "before_id" || key == "after_id" || key == "ids" || key == "ids[]")) || (parts[1] == "skills" && ((len(parts) == 2 || len(parts) == 4) && (key == "limit" || key == "page") || len(parts) == 2 && key == "source")))
 		if !valid {
 			return false, fmt.Errorf("unsupported resource query parameter")
 		}

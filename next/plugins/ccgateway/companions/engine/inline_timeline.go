@@ -142,6 +142,18 @@ func (r *Request) compileToolTimeline(base []Object) (*inlineToolTimeline, []int
 				if family := str(block, "toolset_name"); family != "" {
 					name = family
 				}
+				if kind == "server_tool_use" && codeExecutionCall(name) {
+					resolved := ""
+					for _, candidate := range []string{"code_execution", "web_search", "web_fetch"} {
+						if t.Active[candidate] && providerExecutionCallDeclared([]Object{current[candidate]}, name) {
+							resolved = candidate
+							break
+						}
+					}
+					if resolved != "" {
+						name = resolved
+					}
+				}
 				if current[name] == nil || !t.Active[name] {
 					return nil, nil, fmt.Errorf("historical tool call was not available at that position: %s", name)
 				}
@@ -184,6 +196,9 @@ func (r *Request) compileToolTimeline(base []Object) (*inlineToolTimeline, []int
 }
 
 func serverResultTypeForBlock(kind string) bool {
+	if codeExecutionResult(kind) {
+		return true
+	}
 	switch kind {
 	case "tool_search_tool_result", "web_search_tool_result", "web_fetch_tool_result", "advisor_tool_result":
 		return true

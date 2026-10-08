@@ -41,9 +41,9 @@
 - 服务器全局 ReadTimeout=50ms、上传分段延迟 150ms 的真实 HTTP 测试通过，证明资源入口单请求 deadline 生效且全局配置不变。
 - Runtime 授权回调存在并轮换 diagnostics epoch；资源独立同 issuer 重授权 generation 保留、换 issuer 改变。
 - OS lease 测试：第二活实例不会删除第一实例文件，已释放锁的死实例文件可回收。
-- `go vet ./engine` 与资源范围单测已通过。Linux OS 锁 / 大体积 512 MiB 压测 / 生产 OAuth profile 仍待服务器 Git 构建候选版本后验证。
+- `go vet ./engine` 与资源范围单测已通过。主线程补充 Linux engine / Worker race、vet、资源真实 CLI 隔离验证；大体积 512 MiB 压测仍未执行。
 
-线上只读证据：再次核验 #22 容器 ID 后，现有 CLI 2.1.288 `auth status --json` 仅输出 loggedIn=true、authMethod=claude.ai、apiProvider=firstParty。未输出 email、UUID 或凭据。尚未用新 carrier 调用实际 `/api/oauth/profile`，因此其真实账号响应 shape 仍是上线前验证项，未知形态不会退回猜测身份。
+线上补充证据：#21 / #22 已从服务器 Git 提交 78aa07448 原地升级到第五批 Worker 与 CLI 2.1.292，保留原容器 / 镜像 / 挂载 / 授权。#22 实际新 carrier 调用 OAuth profile 后 identity 200；27 字节文本 Files 上传 / metadata 200，真实文档模型短回答 200，DELETE 200 后 metadata 404，spool body 文件为 0。#21 未配置 API key 资源身份，明确 503，未冒充已通过产品资格。详细证据与回滚路径见 DEPLOYMENT-2026-10-08-WORKER-RESOURCES.md。
 
 ## 已接通 Worker 文件引用准入
 

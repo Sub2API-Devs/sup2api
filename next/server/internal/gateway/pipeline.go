@@ -11,6 +11,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/resources"
+
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 
@@ -59,6 +61,9 @@ type call struct {
 	modelRefs            []modelReference
 	resourceRefs         []approvedResource
 	resourceScans        resourceScanCache
+	resourceInfo         resources.RequestInfo
+	resourceVersions     []approvedSkillVersion
+	resourceAccess       *modelResourceAccess
 	upstreamRefs         map[string]core.PricedUsage
 	upstreamPrimaryModel string
 

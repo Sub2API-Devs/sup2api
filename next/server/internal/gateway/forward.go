@@ -61,6 +61,8 @@ func (c *call) forward(ctx context.Context, rt *typeRoute, acct *pluginv1.Accoun
 	sse := isSSE(resp.Header.Get("Content-Type"))
 	c.checkResponseShape(ctx, rt, resp, sse)
 	switch {
+	case c.resourceAccess != nil && c.resourceAccess.outputs:
+		err = c.forwardResourceResponse(ctx, rt, resp, u, cap)
 	case sse:
 		err = c.forwardSSE(ctx, resp, u, rt.conv, cap)
 	case rt.conv != nil:

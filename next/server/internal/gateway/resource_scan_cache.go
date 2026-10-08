@@ -8,7 +8,7 @@ import (
 type resourceScanEntry struct {
 	valid  bool
 	digest [32]byte
-	refs   []resources.Reference
+	info   resources.RequestInfo
 }
 type resourceScanCache struct {
 	entries [2]resourceScanEntry
@@ -19,17 +19,22 @@ type resourceScanCache struct {
 // bytes still detects escaped keys and in-place edits; no caller buffer or
 // parsed tool-input tree is retained. Failed validation is never cached.
 func (s *resourceScanCache) scan(body []byte) ([]resources.Reference, error) {
+	info, err := s.inspect(body)
+	return info.References, err
+}
+
+func (s *resourceScanCache) inspect(body []byte) (resources.RequestInfo, error) {
 	digest := sha256.Sum256(body)
 	for _, entry := range s.entries {
 		if entry.valid && entry.digest == digest {
-			return entry.refs, nil
+			return entry.info, nil
 		}
 	}
-	refs, err := resources.ScanReferences(body)
+	info, err := resources.InspectRequest(body)
 	if err != nil {
-		return nil, err
+		return info, err
 	}
-	s.entries[s.next] = resourceScanEntry{true, digest, refs}
+	s.entries[s.next] = resourceScanEntry{true, digest, info}
 	s.next = (s.next + 1) % len(s.entries)
-	return refs, nil
+	return info, nil
 }

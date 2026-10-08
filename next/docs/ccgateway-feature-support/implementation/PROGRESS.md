@@ -185,3 +185,13 @@
 - 当前本地app/ccgateway/gateway/providerresources测试与vet通过；SUB2API_TESTPG=off明确跳过数据库部分，下一Git检查点再跑隔离Linux数据库。尚未更新21/22程序/CLI或发布OVH核心。
 - 第六批CodeExec/PTC/Skills目前仅独立schema helper/设计，尚未接入现有主链；产物登记、container续期及PTC父调用绑定正设计。第五批提交必须排除这些未接线新文件与原有无关文件。
 - 第五批冻结前主代理发现授权锁与CLI槽位顺序可形成死锁，统一为可取消的authority→slot顺序后，确定性满槽/取消回归20轮通过；第五批完整资源/历史/日志/legacybeta集合重新PASS34.114s、vet通过。root普通engine/companions与SDK检查通过。资源调试日志已接开关及关闭删除，记录原始filename与二进制省略原因。
+
+### 第五批上线与第六批冻结准备（2026-10-08 09:58 CST）
+
+- 第五批已提交推送 `0c96c681aedcb9c45cd64faf73b0ce60fa4df09a`。隔离OVH数据库验证发现测试账号缺少出口代理，夹具修复 `075845cc2abf25316ecdcdd110f84437fd0c458e` 后 ccgateway race/vet 和核心构建通过；gateway/providerresources Linux race此前已通过。没有修改生产数据库。
+- 原地更新 #21/#22 为 `78aa07448e0286da518f994cf2629f802953a756`（兼容原1小时执行超时/128MiB缓存默认值），CLI 2.1.292。容器ID、镜像、挂载与授权均保留，服务器从精确Git提交构建；详见 DEPLOYMENT-2026-10-08-WORKER-RESOURCES。#22实际Files上传/模型读取/删除通过；#21未核验资源issuer，明确拒绝资源操作。尚未发布新OVH核心，因此这些不是公网核心资源闭环证据。
+- 第六批已实现官方CodeExec/PTC、容器与产物登记、Skills端点及版本持久化/精确映射。核心按实际owner+issuer固定资源账号；服务端生成的容器、文件、PTC父调用必须先登记再交客户端。有状态SSE最多32MiB缓冲并先关闭Worker响应再取metadata，避免issuer锁死锁，普通Messages流不增加此缓冲。
+- 三位代理交叉复核修复：嵌套Web/PTC父子因果校验、跨owner父ID占用、过期容器额度回收与重新续期、null容器误触能力、转换新增执行能力绕过、重复PTC父ID覆盖、Skills版本漂移、上传成功后metadata失败丢失受控资源证据。主代理另核对SSE帧/终态边界与原用量独立结算；资源登记失败不重发模型。
+- custom Skills的latest在核心固定为具体已登记版本，Worker私有grant再核对parent/version；provider输出不得换成另一已登记版本。无显式skills的容器续聊，输出仅允许同owner+binding精确查到的已登记skill。输出ID与版本映射保持不可混用public/provider ID。
+- Windows主目标gateway/providerresources/engine/contracts/Worker/app非DB测试与vet通过（本机SUB2API_TESTPG=off，未修坏掉的本机PG）。Skills真实CLI隔离新增2型×5流程共10次调用PASS12.757s；CodeExec/PTC及历史矩阵详见专项记录。当前第六批仍未提交/部署，Linux PostgreSQL、race与真实提供商执行/Skills资格待下一Git候选验证。
+- 第七批credit仅独立contract、持久store、加密registry与测试；runtime hooks暂撤下，源码为 `fallback_credit.go.pending`，重挂patch保存在本机临时目录。第六批提交排除第七批文件，不能把credit称为已接入。当前团队已冻结第六批实现，research_cc收尾catalog与旧beta检查。

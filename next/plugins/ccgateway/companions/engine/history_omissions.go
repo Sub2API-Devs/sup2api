@@ -20,13 +20,13 @@ func restoreAdvisorHistory(r *Request, body Object) error {
 	needed := false
 	for _, message := range r.Messages {
 		for _, block := range message.Content {
-			needed = needed || registeredNativeOmission(block)
+			needed = needed || registeredNativeOmission(block) || r.ptcHistoryParent(block)
 		}
 	}
 	if !needed {
 		return nil
 	}
-	return restoreAssistantOmissions(r, body, registeredNativeOmission)
+	return restoreAssistantOmissions(r, body, func(block Object) bool { return registeredNativeOmission(block) || r.ptcHistoryParent(block) })
 }
 
 func restoreAssistantOmissions(r *Request, body Object, omitted func(Object) bool) error {

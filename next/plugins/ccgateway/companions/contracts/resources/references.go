@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strconv"
 )
 
 const ResourceIDsHeader = "X-CCGateway-Resource-Ids"
@@ -15,6 +14,37 @@ type Reference struct{ Path, ID, Kind string }
 // ScanReferences follows only Anthropic content-block positions. It never
 // interprets arbitrary keys inside tool inputs, tool schemas, or text as IDs.
 func ScanReferences(body []byte) ([]Reference, error) {
+	info, err := InspectRequest(body)
+	return info.References, err
+}
+
+type RequestInfo struct {
+	References        []Reference
+	SkillVersions     []SkillReference
+	Outputs           bool
+	PendingPTCParents []string
+}
+
+func InspectRequest(body []byte) (RequestInfo, error) {
+	var info RequestInfo
+	root, err := referenceObject(body)
+	if err != nil {
+		return info, err
+	}
+	scan := &referenceScanner{}
+	if err := scan.container(root["container"], "container"); err != nil {
+		return info, err
+	}
+	if err := scan.messages(root["messages"]); err != nil {
+		return info, err
+	}
+	info.References = scan.refs
+	info.SkillVersions = scan.versions
+	info.Outputs, info.PendingPTCParents, err = requestResourceCapabilities(root)
+	return info, err
+}
+
+func referenceObject(body []byte) (map[string]any, error) {
 	dec := json.NewDecoder(bytes.NewReader(body))
 	dec.UseNumber()
 	v, err := readJSONValue(dec, 0)
@@ -28,61 +58,7 @@ func ScanReferences(body []byte) ([]Reference, error) {
 	if !ok {
 		return nil, fmt.Errorf("request must be an object")
 	}
-	var refs []Reference
-	var blocks func(any, string, int) error
-	blocks = func(value any, path string, depth int) error {
-		if depth > 32 {
-			return fmt.Errorf("resource content nesting exceeds limit")
-		}
-		items, _ := value.([]any)
-		for i, item := range items {
-			b, _ := item.(map[string]any)
-			p := path + "." + strconv.Itoa(i)
-			kind, _ := b["type"].(string)
-			add := func(id any, where string) error {
-				value, ok := id.(string)
-				if !ok || !segment.MatchString(value) {
-					return fmt.Errorf("invalid file reference at %s", where)
-				}
-				if len(refs) >= 1024 {
-					return fmt.Errorf("too many file references")
-				}
-				refs = append(refs, Reference{where, value, "file"})
-				return nil
-			}
-			switch kind {
-			case "image", "document":
-				source, _ := b["source"].(map[string]any)
-				if source["type"] == "file" {
-					if err := add(source["file_id"], p+".source.file_id"); err != nil {
-						return err
-					}
-				}
-				if kind == "document" && source["type"] == "content" {
-					if err := blocks(source["content"], p+".source.content", depth+1); err != nil {
-						return err
-					}
-				}
-			case "tool_result":
-				if err := blocks(b["content"], p+".content", depth+1); err != nil {
-					return err
-				}
-			case "container_upload":
-				if err := add(b["file_id"], p+".file_id"); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
-	}
-	messages, _ := root["messages"].([]any)
-	for i, item := range messages {
-		m, _ := item.(map[string]any)
-		if err := blocks(m["content"], "messages."+strconv.Itoa(i)+".content", 0); err != nil {
-			return nil, err
-		}
-	}
-	return refs, nil
+	return root, nil
 }
 
 // Duplicate members would let independent JSON parsers disagree about the

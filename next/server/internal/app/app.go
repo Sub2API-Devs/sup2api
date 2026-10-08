@@ -249,9 +249,10 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	if managed != nil {
 		gate.stop()
 	}
+	resourceStore := providerresources.New(db, providerresources.Options{})
 	gw := gateway.New(gateway.Deps{
 		CCGateway: ccg,
-		Resources: providerresources.New(db, providerresources.Options{}), ResourceTransport: ccg.ResourceTransport(),
+		Resources: resourceStore, Skills: resourceStore, ResourceTransport: ccg.ResourceTransport(),
 		DB: db, Redis: rdb, Bus: cl.Bus, Node: cl.Registry, Registry: reg,
 		Auth: keys, Pricer: bill, Balance: bill, Slots: cl.Slots,
 		Accounts: acc, Proxies: prx, Settler: settler, Tasks: settler, Limiter: limiter, Quota: acc, Config: cfg, Converters: converters,

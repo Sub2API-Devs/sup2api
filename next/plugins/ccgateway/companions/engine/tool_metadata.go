@@ -34,8 +34,16 @@ func parseToolMetadata(tool Object, custom bool) (Object, error) {
 	}
 	if value, exists := tool["allowed_callers"]; exists {
 		callers, ok := value.([]any)
-		if !ok || len(callers) != 1 || callers[0] != "direct" {
-			return nil, fmt.Errorf("tools.allowed_callers currently supports only [direct]; programmatic execution requires a separate adapter")
+		if !ok || len(callers) == 0 {
+			return nil, fmt.Errorf("tools.allowed_callers must be a nonempty array")
+		}
+		seen := map[string]bool{}
+		for _, value := range callers {
+			caller, ok := value.(string)
+			if !ok || seen[caller] || (caller != "direct" && caller != "code_execution_20250825" && caller != "code_execution_20260120" && caller != "code_execution_20260521") {
+				return nil, fmt.Errorf("invalid tools.allowed_callers")
+			}
+			seen[caller] = true
 		}
 		metadata["allowed_callers"] = callers
 	}

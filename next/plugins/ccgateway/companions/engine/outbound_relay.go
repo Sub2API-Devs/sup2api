@@ -440,6 +440,11 @@ func (r *outboundRelay) adaptAttributed(req *Request, groups []systemGroup, body
 	}
 	// System position restoration needs the original assistant turns.
 	if !count {
+		if changed, err := req.restorePTCCallers(message); err != nil {
+			return nil, false, err
+		} else {
+			exactToolHistoryChanged = exactToolHistoryChanged || changed
+		}
 		if err := restoreProtocolHistory(req, message); err != nil {
 			return nil, false, err
 		}

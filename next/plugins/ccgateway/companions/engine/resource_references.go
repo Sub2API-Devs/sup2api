@@ -2,9 +2,9 @@ package engine
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,10 +12,15 @@ import (
 )
 
 type resourceAdmission struct {
-	identity resources.Identity
-	ids      map[string]bool
-	unlock   func()
-	once     sync.Once
+	identity      resources.Identity
+	ids           map[string]bool
+	kinds         map[string]map[string]bool
+	outputs       bool
+	contexts      map[string]string
+	skillVersions map[resources.AdmissionSkillVersion]bool
+	references    []resources.Reference
+	unlock        func()
+	once          sync.Once
 }
 
 func (a *resourceAdmission) close() {
@@ -28,10 +33,32 @@ func (a *resourceAdmission) close() {
 	}
 }
 func checkAdmittedFile(id string, access ...*resourceAdmission) error {
-	if id == "" || len(access) == 0 || access[0] == nil || !access[0].ids[id] {
+	if len(access) == 0 || access[0].require(resources.KindFile, id) != nil {
 		return fmt.Errorf("file_id requires verified client-scoped Files API resource mapping")
 	}
 	return nil
+}
+
+func (a *resourceAdmission) require(kind, id string) error {
+	if a != nil && id != "" && (a.kinds[kind][id] || kind == resources.KindFile && a.ids[id]) {
+		return nil
+	}
+	return fmt.Errorf("%s resource requires verified client-scoped ownership", kind)
+}
+func (r *Request) requireResourceKind(kind, id string) error { return r.resources.require(kind, id) }
+
+func (r *Request) requireSkillVersion(id, version string) error {
+	if r.resources == nil || !r.resources.skillVersions[resources.AdmissionSkillVersion{SkillID: id, Version: version}] {
+		return fmt.Errorf("custom skill version requires verified parent-scoped registration")
+	}
+	return r.requireResourceKind(resources.KindSkill, id)
+}
+func (r *Request) resourceOutputsAllowed() bool { return r.resources != nil && r.resources.outputs }
+func (r *Request) checkResourceContext(parent, containerID string) error {
+	if r.resources == nil || parent == "" || containerID == "" || r.resources.contexts[parent] != containerID {
+		return fmt.Errorf("pending programmatic tool parent requires verified container context")
+	}
+	return r.requireResourceKind(resources.KindContainer, containerID)
 }
 func checkFileSource(source Object, access ...*resourceAdmission) error {
 	if err := keys(source, "type", "file_id"); err != nil {
@@ -45,26 +72,18 @@ func (g *Gateway) admitResourceReferences(ctx context.Context, raw []byte, h htt
 	if err != nil {
 		return nil, err
 	}
-	if len(refs) == 0 {
+	grant, err := parseResourceCapabilities(h)
+	if err != nil {
+		return nil, err
+	}
+	if len(refs) == 0 && !grant.outputs {
 		return nil, nil
 	}
 	if g.resources == nil {
 		return nil, fmt.Errorf("resource ownership verification unavailable")
 	}
-	var ids []string
-	encoded := h.Get(resources.ResourceIDsHeader)
-	if len(encoded) > 128<<10 || json.Unmarshal([]byte(encoded), &ids) != nil || len(ids) == 0 || len(ids) > 1024 {
-		return nil, fmt.Errorf("invalid verified resource ID allowlist")
-	}
-	allowed := map[string]bool{}
-	for _, id := range ids {
-		if id == "" || allowed[id] {
-			return nil, fmt.Errorf("invalid verified resource ID allowlist")
-		}
-		allowed[id] = true
-	}
 	for _, ref := range refs {
-		if ref.Kind != "file" || !allowed[ref.ID] {
+		if grant.require(ref.Kind, ref.ID) != nil {
 			return nil, fmt.Errorf("resource reference is not in the verified ID allowlist")
 		}
 	}
@@ -74,7 +93,7 @@ func (g *Gateway) admitResourceReferences(ctx context.Context, raw []byte, h htt
 	if err := lockResourceAuthority(ctx, &b.authority.mu); err != nil {
 		return nil, err
 	}
-	grant := &resourceAdmission{ids: allowed, unlock: b.authority.mu.Unlock}
+	grant.unlock = b.authority.mu.Unlock
 	if err := waitResourceSlot(ctx, g.Slots); err != nil {
 		grant.close()
 		return nil, err
@@ -89,17 +108,29 @@ func (g *Gateway) admitResourceReferences(ctx context.Context, raw []byte, h htt
 		return nil, err
 	}
 	grant.identity = identity
+	grant.references = append([]resources.Reference(nil), refs...)
 	return grant, nil
 }
 
 func (r *Request) validateOutboundResources(raw []byte) error {
-	refs, err := resources.ScanReferences(raw)
+	info, err := resources.InspectRequest(raw)
 	if err != nil {
 		return err
 	}
-	for _, ref := range refs {
-		if err := checkAdmittedFile(ref.ID, r.resources); err != nil {
+	refs := info.References
+	for _, version := range info.SkillVersions {
+		if err := r.requireSkillVersion(version.ParentID, version.Selector); err != nil {
 			return err
+		}
+	}
+	for _, ref := range refs {
+		if err := r.requireResourceKind(ref.Kind, ref.ID); err != nil {
+			return err
+		}
+	}
+	if r.resources != nil && r.resources.references != nil {
+		if digest(topLevelResourceRefs(refs)) != digest(topLevelResourceRefs(r.resources.references)) {
+			return fmt.Errorf("top-level resource identity or position changed")
 		}
 	}
 	body, err := decodeObject(raw)
@@ -145,4 +176,14 @@ func (r *Request) validateOutboundResources(raw []byte) error {
 		return fmt.Errorf("resource history identity changed: %w", err)
 	}
 	return nil
+}
+
+func topLevelResourceRefs(values []resources.Reference) []resources.Reference {
+	var out []resources.Reference
+	for _, ref := range values {
+		if !strings.HasPrefix(ref.Path, "messages.") {
+			out = append(out, ref)
+		}
+	}
+	return out
 }

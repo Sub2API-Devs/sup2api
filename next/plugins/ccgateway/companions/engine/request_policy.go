@@ -144,6 +144,9 @@ func parsePolicyRequestWithResources(body []byte, h http.Header, access *resourc
 		return nil, err
 	}
 	req.Plan = plan
+	if err := req.configureProviderExecution(); err != nil {
+		return nil, err
+	}
 	req.Fast = fast
 	req.Effort = effort
 	req.JSONSchema = schema

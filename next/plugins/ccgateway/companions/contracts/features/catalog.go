@@ -3,7 +3,7 @@
 // entitlement. Runtime evidence must be reported separately.
 package features
 
-const CatalogVersion = "2026-10-08.5"
+const CatalogVersion = "2026-10-08.6"
 const PolicySchemaVersion = 1
 
 type Feature struct {
@@ -50,11 +50,11 @@ func Catalog() Document {
 		entry("F-CITATIONS", "引用", "媒体与资源", "partial", []string{"messages[].content[].citations", "messages[].content[].citations.enabled"}, nil, []string{"文本引用与 citations_delta", "绑定来源的历史引用恢复"}, "保留索引、原文与加密引用；CLI 省略的历史引用仅在完整消息和文档/搜索来源一致时恢复。文档与 Web 来源的隔离往返已验证；实际引用质量由上游决定。"),
 		entry("F-IMAGES", "图片输入", "媒体与资源", "partial", []string{"messages[].content[].source"}, nil, []string{"原生图片块与 URL 来源"}, "保留 base64 PNG/JPEG/GIF/WebP 和 URL 图片，不由 Worker 下载后改写。文件 ID 需独立资源归属，不接受未登记 file_id；真实模型读取 URL 的能力仍由上游决定。"),
 		entry("F-DOCUMENTS", "文档输入", "媒体与资源", "partial", []string{"messages[].content[].type:document", "messages[].content[].source", "messages[].content[].citations"}, nil, []string{"PDF / 文本 / 内容块 / URL 来源", "原始文档与引用回放"}, "保留文档来源、页码/字符索引、引用开关和工具结果文档，不提取成文本模拟 PDF。隔离 CLI 往返已验证；file_id 尚需资源映射，实际模型限制由上游返回。"),
-		entry("F-FILES", "文件与容器资源", "媒体与资源", "partial", []string{"/v1/files", "source.file_id", "container_upload.file_id", "container"}, []string{"files-api-2025-04-14"}, []string{"资源端点与租户归属", "固定账号与实际授权身份", "文件 ID 映射与历史回放"}, "文件上传、列表、元数据、删除和受上游许可的下载使用独立资源端点；已登记文件可用于图片、文档和容器上传块，续聊和历史导入固定原账号。稳定版与旧 beta 分别处理分页和过期语义；容器执行与生成产物仍需后续适配。代码和 CLI 隔离验证不代表所有实际账号具备 Files 资格。"),
-		entry("F-SKILLS", "API 技能", "媒体与资源", "unsupported", []string{"container.skills"}, nil, nil, "API 容器技能不等价于 CC 本地技能；尚无完整资源与执行适配。"),
+		entry("F-FILES", "文件与容器资源", "媒体与资源", "partial", []string{"/v1/files", "source.file_id", "container_upload.file_id", "container"}, []string{"files-api-2025-04-14"}, []string{"资源端点与租户归属", "固定账号与实际授权身份", "生成产物登记与 ID 映射"}, "已实现文件上传、列表、元数据、删除及受上游许可的下载；文件与容器按所有者和实际授权身份固定账号，续聊、回退和历史导入校验归属。生成文件与容器先登记再返回公开 ID；涉及产物的 SSE 有界缓冲后返回。稳定版与旧 beta 区分分页和过期语义。代码与隔离 CLI 验证不代表真实账号已具备提供商资格。"),
+		entry("F-SKILLS", "API 技能", "媒体与资源", "partial", []string{"/v1/skills", "/v1/skills/{id}/versions", "container.skills"}, []string{"skills-2025-10-02"}, []string{"提供商技能与版本管理", "固定账号和具体版本授权", "生成文件登记"}, "已实现提供商技能和版本资源操作、container.skills 转换及具体版本授权；自定义技能固定所属账号与实际授权身份，续聊继续核验版本。执行发生在提供商容器，区别于 CC 本地 Skills；产物先登记，有状态 SSE 有界缓冲。旧 beta 可透传，当前稳定 API 不强加旧 beta。真实账号资格与模型组合仍待提供商验证。"),
 		entry("F-WEB-TOOLS", "服务端搜索与抓取", "工具", "partial", []string{"tools[].type:web_search", "tools[].type:web_fetch", "tools[].url_sources", "server_tool_use", "web_search_tool_result", "web_fetch_tool_result"}, nil, []string{"七个已登记版本的主请求定义", "结果/引用/暂停续接", "服务端用量指标"}, "服务端执行，保持定义、加密来源、工具错误和引用。新版本需显式 direct callers；代码容器/PTC 尚未接入。客户端工具混合、历史分支/冷导入与显式缓存已隔离验证；实际账号能力与模型工具收费需上线验证。"),
-		entry("F-CODE-EXEC", "服务端代码执行", "工具", "unsupported", []string{"tools[].type:code_execution", "container"}, nil, nil, "需要官方容器状态、文件产物及用量，不用 Worker 本地 Bash 模拟。"),
-		entry("F-PTC", "程序化工具调用", "工具", "unsupported", []string{"tools[].allowed_callers", "messages[].content[].caller"}, nil, nil, "执行容器、调用者身份和返回路由尚未完整适配。"),
+		entry("F-CODE-EXEC", "服务端代码执行", "工具", "partial", []string{"tools[].type:code_execution", "container", "messages[].content"}, []string{"code-execution-2025-05-22", "code-execution-2025-08-25"}, []string{"提供商执行协议转换", "容器归属与生命周期", "原始结果和用量保留"}, "已适配 20250522、20250825、20260120、20260521 工具版本及执行结果、续聊和历史回放；由提供商执行，不使用 Worker 本地 Bash 替代。旧 Python 版需相应 beta，20250825 及后续当前版本无需旧 beta。生成产物先登记，有状态 SSE 有界缓冲；保留原始用量与执行次数，不从次数推算容器时长或官方月免费额。真实提供商资格及模型组合待验证。"),
+		entry("F-PTC", "程序化工具调用", "工具", "partial", []string{"tools[].allowed_callers", "messages[].content[].caller", "container"}, nil, []string{"执行父子调用账本", "外部客户端工具交回", "持久容器与执行上下文绑定"}, "已实现提供商执行父调用、客户端工具子调用与结果回传，保留 caller 身份；暂停执行续聊必须匹配所属账号、容器及已登记父调用。支持完整历史导入、回退与嵌套服务端工具链，客户端工具不会在 Worker 本地执行。产物响应先登记，有状态 SSE 有界缓冲；具体模型及执行版本能否使用 PTC 仍由提供商确认。"),
 		entry("F-ADVISOR", "顾问工具", "工具", "partial", []string{"tools[].type:advisor_20260301", "tools[].model", "advisor_tool_result", "usage.iterations"}, []string{"advisor-tool-2026-03-01"}, []string{"原生服务端顾问协议", "精确历史恢复", "关联模型授权与独立计费"}, "保留明文、加密和错误结果及顾问缓存配置；顾问用量不计入主模型总数，由核心独立授权、调度检查和价格快照结算。已完成 CLI 隔离回归；真实模型配对/账号资格仍需上游验证。"),
 		entry("F-CLIENT-TOOLSETS", "客户端工具与工具集", "工具", "partial", []string{"toolset_name", "tools[].type", "tools[].configs", "messages[].content[].content[].type:browser_state"}, nil, []string{"固定 API 类型与联合工具身份", "外部客户端执行"}, "12 种已登记 typed 定义通过真实 CLI 与隔离上游新请求、续聊、回退、新缓存导入及 SSE 验证；工具集身份与 browser_state 保留。内部 CC 搜索、显式 safeguards 组合暂拒；删除普通 typed 定义后的历史身份不明确时拒绝。模型与提供商资格仍以上游为准。"),
 		entry("F-MCP", "MCP 工具与远程连接", "工具", "partial", []string{"tools[].name", "mcp_servers", "tools[].type:mcp_toolset", "mcp_tool_listing", "mcp_tool_use", "mcp_tool_result"}, []string{"mcp-client-2025-11-20", "mcp-client-2026-09-15"}, []string{"客户端 MCP 名称保留", "服务端 connector 主请求", "凭据隔离与历史账本"}, "远程 MCP 由提供商连接，支持两版连接协议、固定工具目录、结果/暂停/混合客户端工具历史；授权令牌只注入对应服务器的已归属主请求，日志结构化脱敏。内联 MCP 变更、API ToolSearch 联用和显式 safeguards 组合暂拒；真实远端资格另行验证。"),
@@ -93,6 +93,9 @@ type BetaRule struct {
 func BetaRules() []BetaRule {
 	return []BetaRule{
 		{"files-api-2025-04-14", "forward"},
+		{"code-execution-2025-05-22", "forward"},
+		{"code-execution-2025-08-25", "forward"},
+		{"skills-2025-10-02", "forward"},
 		{"mcp-client-2025-11-20", "forward"},
 		{"mcp-client-2026-09-15", "forward"},
 		{"server-side-fallback-2026-06-01", "forward"},

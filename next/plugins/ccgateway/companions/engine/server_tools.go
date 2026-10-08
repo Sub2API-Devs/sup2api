@@ -60,6 +60,9 @@ func splitServerSearchTools(value any, ttl *time.Duration) (any, []Object, error
 			}
 		} else {
 			check := checkWebTool
+			if canonical == "code_execution" {
+				check = checkCodeExecutionTool
+			}
 			if canonical == "advisor" {
 				check = checkAdvisorTool
 			}
@@ -82,6 +85,15 @@ func splitServerSearchTools(value any, ttl *time.Duration) (any, []Object, error
 }
 
 func (r *Request) hasServerSearch(name string) bool {
+	if codeExecutionCall(name) {
+		var active []Object
+		for _, tool := range r.ServerTools {
+			if r.InlineTools == nil || r.InlineTools.Active[str(tool, "name")] {
+				active = append(active, tool)
+			}
+		}
+		return providerExecutionCallDeclared(active, name)
+	}
 	if r.InlineTools != nil && !r.InlineTools.Active[name] {
 		return false
 	}
@@ -89,6 +101,9 @@ func (r *Request) hasServerSearch(name string) bool {
 }
 
 func (r *Request) declaresServerTool(name string) bool {
+	if codeExecutionCall(name) {
+		return providerExecutionCallDeclared(r.ServerTools, name)
+	}
 	for _, tool := range r.ServerTools {
 		if str(tool, "name") == name {
 			return true
@@ -109,6 +124,9 @@ func checkServerSearchBlock(b Object, role string) error {
 	}
 	if str(b, "type") == "web_search_tool_result" || str(b, "type") == "web_fetch_tool_result" {
 		return checkWebResult(b)
+	}
+	if codeExecutionResult(str(b, "type")) {
+		return checkCodeExecutionResult(b)
 	}
 	if str(b, "type") == "advisor_tool_result" {
 		return checkAdvisorResult(b)
@@ -191,6 +209,14 @@ func (r *Request) validateServerSearchHistory() error {
 	}
 	ledger := newServerToolLedger()
 	for messageIndex, message := range r.Messages {
+		if message.Role == "assistant" {
+			ledger.beginTurn()
+		}
+		if message.Role == "user" {
+			if err := ledger.ptc.user(message.Content); err != nil {
+				return err
+			}
+		}
 		clientTool := false
 		for _, block := range message.Content {
 			clientTool = clientTool || str(block, "type") == "tool_use"
