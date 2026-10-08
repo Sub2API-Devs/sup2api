@@ -614,7 +614,10 @@ func (relay *outboundRelay) forwarder(target *url.URL) *httputil.ReverseProxy {
 			pass, _ := resp.Request.Context().Value(modelRequest{}).(bool)
 			terminal := &apiTerminalObserver{relay: relay, req: output}
 			resp.Body = &sseWatch{body: resp.Body, relay: relay, request: resp.Request, ignoreErrors: !pass, observe: terminal.observe}
-			return relay.bridgeMCPInputs(resp, output)
+			if err := relay.bridgeMCPInputs(resp, output); err != nil {
+				return err
+			}
+			return relay.bridgeInitialThinking(resp)
 		}
 		return relay.passUpstreamErrors(resp)
 	}
