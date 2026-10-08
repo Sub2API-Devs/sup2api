@@ -6,9 +6,9 @@
 
 - 已推送第七/八批747c168、第九批cd4d5e40b及修正1186563e4。cd4迁移幂等测试3项失败真实保留；118仅按代码修复后Git重检重跑，没有上传源文件或借旧SHA报绿。
 - 1186563 Linux隔离PG45432七包609项、全contracts55项、strict33项，共697项通过，race/vet无错误；2项core可选真实CLI测试skip另列。0042并发/过期同ID拒绝、重复迁移实际通过。见[LINUX-NINTH-BATCH-DB-VALIDATION](LINUX-NINTH-BATCH-DB-VALIDATION.md)。
-- Worker #21/#22现已保留原容器/卷/授权原地升级0.1.66/full56f93858，CLI2.1.292、code_catalog `2026-10-08.8`。两账号各一次READY通过，实际本地Claude原生Read两轮也已通过；system/工具结果原文、附件唯一性及环境字段策略经日志核验。见[Worker部署](DEPLOYMENT-2026-10-08-WORKER-0.1.66.md)与[真实CLI验收](PUBLIC-CLI-ACCEPTANCE-0.1.66.md)，不扩大为所有特性云验证。
-- 核心0.1.65已完成正常发布，四节点local/ready、schema0042及实际插件0.1.10包/二进制哈希已核验；维护503约36–37秒。默认新建Worker镜像现为0.1.66，原21/22容器/卷/镜像引用不变。公开JSON/续聊/回退/SSE/空参工具往返与稳定后count_tokens200；控制器刷新期间一次计数502单列保留。原真实本地Claude工具结果追加CLI附件的严格对齐错误已在Worker0.1.66修复并实测两轮通过，原失败仍保留。见PUBLIC-API-ACCEPTANCE-0.1.65。
-- 当前catalog .8已支持并准确说明：credit字符串/object/null与strict/best_effort托管、指定服务器inline MCP、非defer MCP+client ToolSearch、已登记PTC/代码执行容器账本、跨Worker同issuer诊断归属、内部ToolSearch逐轮缓存。早期“credit拒绝/MCP inline拒绝/PTC未接/诊断只本地”的结论不再代表当前代码。
+- Worker #21/#22现已保留原容器/卷/授权原地升级0.1.67/full779c0630，CLI2.1.292、code_catalog `2026-10-08.9`。两账号各一次READY通过，实际本地Claude原生Read两轮也已通过；system/工具结果原文、附件唯一性及环境字段策略经日志核验。见[Worker部署](DEPLOYMENT-2026-10-08-WORKER-0.1.66.md)与[真实CLI验收](PUBLIC-CLI-ACCEPTANCE-0.1.66.md)，不扩大为所有特性云验证。
+- 核心0.1.66已完成正常发布，四节点local/ready、schema0042及实际插件0.1.10包/二进制哈希已核验；维护503约36–37秒。默认新建Worker镜像现为0.1.67，原21/22容器/卷/镜像引用不变。公开JSON/续聊/回退/SSE/空参工具往返与稳定后count_tokens200；控制器刷新期间一次计数502单列保留。原真实本地Claude工具结果追加CLI附件的严格对齐错误已在Worker0.1.66修复并实测两轮通过，原失败仍保留。见PUBLIC-API-ACCEPTANCE-0.1.65。
+- 当前已部署catalog .9已支持并准确说明：credit字符串/object/null与strict/best_effort托管、指定服务器inline MCP、非defer MCP+client ToolSearch、已登记PTC/代码执行容器账本、跨Worker同issuer诊断归属、内部ToolSearch逐轮缓存。早期“credit拒绝/MCP inline拒绝/PTC未接/诊断只本地”的结论不再代表当前代码。
 - 普通APIformat是上游约束解码；普通forcedchoice/task_budget已有单主请求支持。旧内部CC synthetic格式循环以及forced/budget+内部多轮仍严格gate，不能混为普通API缺失。default动态fallback授权、跨issuer诊断workspace证明、deferred MCP未知服务器编码、独立Batches/Responses持久ID产品仍未闭环；真实提供商资格/计费效果不可用fake测试冒充。
 - 37功能/8横切的当前对照见[FINAL-FEATURE-CLOSURE](FINAL-FEATURE-CLOSURE.md)。以下各批“当前/下一步”文字保留原时间点，以上最新状态优先；不删除失败与未验收事实。
 
@@ -19,6 +19,10 @@
 - Read工具结果追加可信CLI附件的修复已提交推送 `56f93858ca7ab76ef9615baec6addf77e74ff205`，作者与独审各8次隔离真实CLI、engine单测/vet通过；Worker0.1.66已按服务器Git精确提交构建上线，真实本地Read复验18.949秒、exit0、两轮完成；默认镜像与控制器刷新后两个原容器身份均保持。
 - 普通公开JSON/SSE工具往返、count_tokens稳定后均通过；真实diagnostics第二次返回messages_changed538且refusal正常200，持久归属同owner/account/issuer已核验。无cachehit或内容成功的扩大结论。
 - 附件修复与剩余高级组合分开。独审发现“已装载目标的forced named tool+内部搜索开关”存在可缩小的硬限制，已安排后续候选窄适配研究/实现；必须保持原tool_choice且零内部回合，any/deferred/server等未证明组合继续限制。不得把仅未适配写成天然不兼容。当前真实Read问题不归因于此组合。
+- 后续窄适配及CC实测per-turn-control兼容已完成独审并推送 `779c0630d8451ca9ff5840c2a552c5b3568aca0b`。forced目录保真/拒helper实际9次隔离CLI，per-turn两名称分别16次，作者与独审分别通过；engine/vet、目录tests、前端7项及typecheck通过。catalog .9随核心0.1.66候选，Worker候选0.1.67；服务器Git构建发布中，尚未宣称真实provider不再降级。插件未依赖此次features变更，无须功能版本递增，但发布必须核实际0.1.10包哈希与原包一致。
+- 上述779c现已上线：核心0.1.66四节点ready、Worker0.1.67原容器/授权保持、默认镜像.67、catalog.9；本地Read完整会话仅两次200，无先400删字段降级，per-turn和medium原值保留；两beta公开API分别200。见PUBLIC-CLI-ACCEPTANCE-0.1.67。
+- 下一候选三项均已独审：custom inline+内部搜索分离历史与当前可搜索目录（32缓存+8无缓存真实CLI），MCP流式input到CLI的等价桥（修正stale Content-Length、保留真实终态/secret guard），多Read最后结果被CLI trimEnd误判（精确25个JS尾白、恢复原字节，40作者多工具CLI及独立反序/Unicode增量）。root当前整合全engine4.191s/vet通过，catalog.10及前端测试通过；尚未部署该候选。
+- 用户截图的05:03两次502分别触发已记录的22账号冷却到05:03:33/48，覆盖后续503；5工具与5结果齐全，非Key错误。真实MCP首次502另属CLI对参数delta提前abandon，不能把两种原因混用；均保留原失败证据，下一候选上线后分别实测。
 
 - 根据上级目录 36 个 API F-* 特性、1 个 CC safeguards 特性及 8 个 O-* 横向任务完整评估并实施能保持语义的方案。不可等价项必须记录证据、拒绝行为与理由，不能以接收参数但忽略处理宣称兼容。
 - 通用 API 特性放在「请求与工具」对应菜单，按功能聚合头、body、响应、历史；「附件与环境」改为「CC 特性」。自然支持项解释即可。

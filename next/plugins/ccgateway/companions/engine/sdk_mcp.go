@@ -17,7 +17,7 @@ func (r *Request) sdkMCPServers() []string {
 	if !r.NoTools {
 		for _, tool := range r.Tools {
 			server, _ := r.sdkToolName(tool.Name)
-			if !r.Native[tool.Name] && !seen[server] {
+			if r.runtimeToolSearchable(tool.Name) && !r.Native[tool.Name] && !seen[server] {
 				seen[server] = true
 				servers = append(servers, server)
 			}
@@ -54,7 +54,7 @@ func sdkMCPReply(q Object, r *Request) Object {
 		tools := []Object{}
 		for _, tool := range r.Tools {
 			name, short := r.sdkToolName(tool.Name)
-			if name == server && !r.Native[tool.Name] {
+			if r.runtimeToolSearchable(tool.Name) && name == server && !r.Native[tool.Name] {
 				tools = append(tools, Object{"name": short, "description": tool.Description, "inputSchema": tool.Schema})
 			}
 		}

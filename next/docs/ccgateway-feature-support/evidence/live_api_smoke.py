@@ -32,15 +32,20 @@ class Probe:
         return dict(model=self.model, max_tokens=512,
                     output_config={"effort": "low"}, messages=messages, **extra)
 
-    def call(self, name, body, check, path="/v1/messages", *, protocol_only=False):
+    def call(self, name, body, check, path="/v1/messages", *, protocol_only=False, beta=None):
         if self.selected and name not in self.selected:
             return None
+        headers = {"Authorization": "Bearer " + self.key,
+                   "Content-Type": "application/json", "anthropic-version": "2023-06-01"}
+        if beta:
+            headers["anthropic-beta"] = beta
         request = urllib.request.Request(self.base + path,
             data=json.dumps(body, separators=(",", ":")).encode(),
-            headers={"Authorization": "Bearer " + self.key,
-                     "Content-Type": "application/json", "anthropic-version": "2023-06-01"})
+            headers=headers)
         started = time.monotonic()
         row = {"name": name, "path": path}
+        if beta:
+            row["beta"] = beta
         result = None
         try:
             try:
@@ -77,7 +82,7 @@ class Probe:
                     row["outcome"] = "expected_result" if row["passed"] else "expectation_mismatch"
                 if "events" in result:
                     row.update(stop=normalized.get("stop_reason"), usage=normalized.get("usage"))
-        except (OSError, ValueError, KeyError, TypeError) as error:
+        except (OSError, ValueError, KeyError, TypeError, IndexError, AttributeError) as error:
             # No raw network error/body: it can contain remote identities or keys.
             row.update(passed=False, exception_type=type(error).__name__)
         row["seconds"] = round(time.monotonic() - started, 3)
@@ -206,6 +211,12 @@ def streamed_message(result):
 
 def exercise(probe):
     marker = "FIXTURE_" + uuid.uuid4().hex[:12].upper()
+    for name, beta in (("cc-per-turn", "per-turn-control-2026-07-01"),
+                       ("public-per-turn", "mid-conversation-output-config-2026-07-01")):
+        body = probe.body([user("Reply exactly PER_TURN_READY."),
+                           {"role": "system", "content": "Keep the requested brief response.",
+                            "output_config": {"effort": "medium"}}])
+        probe.call(name, body, lambda m: text(m) == "PER_TURN_READY", beta=beta)
     messages = [user("Remember this fixture word: " + marker + ". Reply exactly SAVED.")]
     first = probe.call("json", probe.body(messages), lambda m: text(m) == "SAVED")
     if first:

@@ -8,11 +8,13 @@ import (
 )
 
 type inlineToolTimeline struct {
-	Base      []Object
-	Known     map[string]Object
-	Active    map[string]bool
-	Withdrawn map[string]bool
-	Versions  map[string][]Object
+	Searchable          map[string]bool
+	HistoricalDiscovery bool
+	Base                []Object
+	Known               map[string]Object
+	Active              map[string]bool
+	Withdrawn           map[string]bool
+	Versions            map[string][]Object
 }
 
 func inlineToolBlock(block Object) bool {
@@ -164,8 +166,11 @@ func (r *Request) validateInlineToolConfiguration() error {
 			}
 		}
 	}
-	if r.toolSearchEnabled() {
-		return fmt.Errorf("inline tool changes with internal CC ToolSearch are not yet supported")
+	if err := r.validateInlineInternalSearch(); err != nil {
+		return err
+	}
+	if r.InlineTools.HistoricalDiscovery && !r.toolSearchEnabled() {
+		return fmt.Errorf("historical deferred custom tool requires internal search evidence")
 	}
 	if r.Plan != nil && len(r.Plan.fields["safeguards"]) > 0 {
 		return fmt.Errorf("inline tools with explicit safeguards require timeline context verification")
@@ -183,6 +188,9 @@ func (r *Request) validateInlineToolConfiguration() error {
 }
 
 func (r *Request) validateInlineNativeMapping(version string) error {
+	if err := r.validateInlineInternalSearch(); err != nil {
+		return err
+	}
 	if r.InlineTools == nil {
 		return nil
 	}
@@ -223,10 +231,13 @@ func (r *Request) inlineToolActive(id ToolIdentity) bool {
 		return true
 	}
 	name := id.Name
+	if r.inlineInternalSearch() && name == "ToolSearch" && r.Native[name] {
+		return true
+	}
 	if id.Toolset != "" {
 		name = id.Toolset
 	}
-	return r.InlineTools.Active[name]
+	return r.InlineTools.Active[name] || r.inlineSearchDiscovered(name)
 }
 func (r *Request) applyInlineToolCatalog(body Object) error {
 	if r.InlineTools == nil {
@@ -242,6 +253,11 @@ func (r *Request) applyInlineToolCatalog(body Object) error {
 			tool["name"] = r.wireName(str(tool, "name"))
 		}
 		out = append(out, tool)
+	}
+	var err error
+	out, err = r.appendInlineSearchHelpers(body, out)
+	if err != nil {
+		return err
 	}
 	body["tools"] = out
 	return nil

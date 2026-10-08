@@ -39,10 +39,12 @@ func (r *Request) compileToolTimeline(base []Object) (*inlineToolTimeline, []int
 		current = map[string]Object{}
 		t.Active = map[string]bool{}
 		t.Withdrawn = map[string]bool{}
+		t.Searchable = map[string]bool{}
 		for _, tool := range base {
 			name := apiToolName(tool)
 			current[name] = tool
 			t.Active[name] = tool["defer_loading"] != true
+			t.Searchable[name] = true
 		}
 	}
 	reset()
@@ -84,6 +86,7 @@ func (r *Request) compileToolTimeline(base []Object) (*inlineToolTimeline, []int
 		}
 		t.Active[name] = str(block, "type") == "tool_addition"
 		t.Withdrawn[name] = str(block, "type") == "tool_removal"
+		t.Searchable[name] = str(block, "type") == "tool_addition"
 		return nil
 	}
 	var carriers []int
@@ -157,7 +160,9 @@ func (r *Request) compileToolTimeline(base []Object) (*inlineToolTimeline, []int
 						name = resolved
 					}
 				}
-				if current[name] == nil || !t.Active[name] {
+				if current[name] != nil && !t.Active[name] && t.Searchable[name] && definitionFamily(current[name]) == "custom" && current[name]["defer_loading"] == true {
+					t.HistoricalDiscovery = true
+				} else if current[name] == nil || !t.Active[name] {
 					return nil, nil, fmt.Errorf("historical tool call was not available at that position: %s", name)
 				}
 				server := serverToolName(str(current[name], "type")) != ""

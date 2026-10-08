@@ -15,6 +15,7 @@ type internalCacheRounds struct {
 	events     [][]byte
 	bytes      int
 	rounds     []Object
+	discovered map[string]bool
 	results    map[string]string
 	helpers    map[string]string
 	failed     bool
@@ -166,13 +167,17 @@ func (r *Request) alignInternalCacheSuffix(messages []any) error {
 					name := str(ref, "tool_name")
 					found := false
 					for _, tool := range r.Tools {
-						if r.wireName(tool.Name) == name {
+						if r.runtimeToolSearchable(tool.Name) && r.wireName(tool.Name) == name {
 							found = true
 						}
 					}
 					if !found {
-						return fmt.Errorf("internal search referenced undeclared client tool")
+						return fmt.Errorf("internal search referenced undeclared or withdrawn client tool")
 					}
+					if state.discovered == nil {
+						state.discovered = map[string]bool{}
+					}
+					state.discovered[name] = true
 				}
 			}
 			value := digest(historySkeleton([]Object{b}))

@@ -60,7 +60,8 @@ func normalizeToolResultContexts(req *Request, body Object, control *modControl)
 			if !ok || actual == original {
 				continue
 			}
-			if !strings.HasPrefix(actual, original) || !suffixes[strings.TrimPrefix(actual, original)] {
+			suffix, recognized := toolResultContextSuffix(original, actual, suffixes)
+			if !recognized {
 				continue
 			}
 			view := Object{}
@@ -71,7 +72,7 @@ func normalizeToolResultContexts(req *Request, body Object, control *modControl)
 			if digest(historySkeleton([]Object{view})) != digest(historySkeleton([]Object{want})) {
 				return nil, fmt.Errorf("tool result metadata changed with session attachment")
 			}
-			repairs = append(repairs, toolResultContextRepair{user, index, id, original, actual[len(original):]})
+			repairs = append(repairs, toolResultContextRepair{user, index, id, original, suffix})
 		}
 		user++
 	}
@@ -105,6 +106,24 @@ func normalizeToolResultContexts(req *Request, body Object, control *modControl)
 		}
 		return nil
 	}, nil
+}
+
+// The ECMAScript WhiteSpace + LineTerminator set used by trimEnd, deliberately
+// not unicode.IsSpace: NEL, U+180E and U+200B are not included. The client text
+// is restored in full before the current authenticated suffix is returned.
+const jsTrimEndCharacters = "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+
+func toolResultContextSuffix(original, actual string, trusted map[string]bool) (string, bool) {
+	for _, prefix := range []string{original, strings.TrimRight(original, jsTrimEndCharacters)} {
+		if !strings.HasPrefix(actual, prefix) {
+			continue
+		}
+		suffix := strings.TrimPrefix(actual, prefix)
+		if trusted[suffix] {
+			return suffix, true
+		}
+	}
+	return "", false
 }
 
 type toolResultContextRepair struct {

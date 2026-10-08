@@ -1,0 +1,70 @@
+{
+  "model": "claude-opus-5-5",
+  "results": [
+    {
+      "name": "cc-per-turn",
+      "path": "/v1/messages",
+      "beta": "per-turn-control-2026-07-01",
+      "status": 200,
+      "request_id": "2a43e6f1deb3d9f42ff9972b",
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 571,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 571,
+        "cache_read_input_tokens": 0,
+        "inference_geo": "not_available",
+        "input_tokens": 2,
+        "output_tokens": 11,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "text"
+      ],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": true,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 4.62
+    },
+    {
+      "name": "public-per-turn",
+      "path": "/v1/messages",
+      "beta": "mid-conversation-output-config-2026-07-01",
+      "status": 200,
+      "request_id": "43da1b9f0fc3cdc77e3d73ae",
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 571,
+        "inference_geo": "not_available",
+        "input_tokens": 2,
+        "output_tokens": 11,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "text"
+      ],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": true,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 4.891
+    }
+  ],
+  "scope": "Public HTTP smoke; does not force a particular account or prove all provider features."
+}

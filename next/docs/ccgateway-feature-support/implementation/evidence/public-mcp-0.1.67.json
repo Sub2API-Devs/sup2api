@@ -1,0 +1,35 @@
+{
+  "endpoint": "https://mcp.deepwiki.com/mcp",
+  "public_repository": "modelcontextprotocol/python-sdk",
+  "beta": "mcp-client-2025-11-20",
+  "results": [
+    {
+      "name": "public-mcp",
+      "path": "/v1/messages",
+      "beta": "mcp-client-2025-11-20",
+      "status": 502,
+      "request_id": "5ae8b46af2d3009acc298a3c",
+      "stop": null,
+      "usage": null,
+      "content_types": [],
+      "error_type": "api_error",
+      "error_summary": "incomplete model message",
+      "protocol_passed": false,
+      "content_completed": false,
+      "passed": false,
+      "outcome": "http_error",
+      "seconds": 6.481
+    }
+  ],
+  "mcp_evidence": [],
+  "combined": {
+    "mcp_calls": 0,
+    "mcp_results": 0,
+    "permitted_public_arguments": true,
+    "successful_pairs": 0,
+    "tool_result_errors": 0,
+    "result_hashes": []
+  },
+  "passed": false,
+  "scope": "One public read-only MCP query, optional one protocol pause continuation; no automatic error retry, no account override, no raw response persistence."
+}

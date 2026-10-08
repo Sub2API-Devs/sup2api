@@ -44,7 +44,9 @@ func (r *Request) enabledTools() []string {
 	tools := []string{}
 	if !r.NoTools {
 		for _, tool := range r.Tools {
-			tools = append(tools, r.wireName(tool.Name))
+			if r.runtimeToolSearchable(tool.Name) {
+				tools = append(tools, r.wireName(tool.Name))
+			}
 		}
 	}
 	if r.toolSearchEnabled() {
@@ -88,7 +90,7 @@ type runConfig struct {
 }
 
 func newRunConfig(req *Request, p *Prepared, plugin, dir string) *runConfig {
-	if req.Plan != nil && req.Plan.cache != nil && req.toolSearchEnabled() && !req.structuredOutput() {
+	if req.Plan != nil && (req.Plan.cache != nil || req.InlineTools != nil) && req.toolSearchEnabled() && !req.structuredOutput() {
 		req.internalCache = &internalCacheRounds{results: map[string]string{}, helpers: map[string]string{}}
 	}
 	c := &runConfig{args: cliArgs(req, p, plugin), systems: req.pendingSystems(), groups: req.systemGroups()}
