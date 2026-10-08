@@ -4,6 +4,10 @@
 
 ## 本轮追加证据与限制
 
+精确Git候选 `428164d4756e64163710910224957744554a2011` 已通过服务器门禁：OVH六包race真实DB726pass/3可选CLI skip、contracts64pass及vet；cc-max三个模块race/vet和禁网CLI34调用81.436s通过。签名Core.71/plugin.12制品已验证，核心发布正在进行，尚不能当完成。
+
+Worker.73已按#22→#21原地备份/原子替换/重启完成，无真实推理。Root独立SSH核两个原容器ID和原imageRef.56不变，均running且程序hash为549bd6576d2c403c843a9a29108629ffb3745e76eb2fa018fe47c132e1dbbe31；作者health/features/catalog.15/schema1/授权前后验证已记录。原账号、卷、授权保留。真实最多4次public_helper_budget验收脚本已独审，等Core全部稳定后才发送，不能用已通过隔离测试替代真实提供商结果。
+
 最终候选门禁已闭环：新真实requirement端点的ABC JSON120.731s通过（5公开请求/6隔离provider calls，强隐藏内容与预算断言、冷恢复/回退/outbox）；直连预检与旧404独立DB14.80s，长unknown20.74s、末第529项known25.37s非skip通过，所有测试隧道已释放。核心候选EnableHelperHistory=true与Worker真实schema1声明已接通，普通旧路径回归已消除；manifest.12/catalog.15。注意这里只是候选源码激活，不是线上部署。
 
 Root最终整包测试engine4.427s、contracts全包、Worker全包、plugin1.638s、codec/strict通过；核心gateway5.836s/ccgateway/usage/core/app等非DB整包与vet通过，SUB2API_TESTPG=off的结果不当DB证据，DB证据以上列专门执行为准。前端20tests/typecheck独审已通过。准备冻结Git候选，由cc-max/OVH Git精确构建做Linuxrace/migration门禁后发布，现线上仍Core.70/Worker.72。

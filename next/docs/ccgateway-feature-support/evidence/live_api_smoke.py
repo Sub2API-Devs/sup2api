@@ -179,7 +179,7 @@ def streamed_message(result):
                 expected = "text" if field == "text" else "thinking"
                 if field is None or blocks[index].get("type") != expected or not isinstance(delta.get(field), str):
                     raise ValueError("unexpected fixture delta")
-                blocks[index][field] = blocks[index].get(field, "") + delta[field]
+                blocks[index][field] = delta[field] if field == "signature" else blocks[index].get(field, "") + delta[field]
         elif kind == "content_block_stop":
             if index not in blocks or index in closed:
                 raise ValueError("invalid block stop")
