@@ -307,6 +307,8 @@ export default {
       required: '请填写有效的 SSH 主机、端口、用户和主机指纹。', targetRequired: '请先填写 SSH 主机与有效端口。',
       save: '保存连接配置', saved: '连接配置已保存。', reload: '重新加载配置', test: '测试已保存连接', saveFirst: '请先保存配置，再测试连接或管理容器。', savedOnly: '以下操作仅使用已保存的 SSH 配置；本地模式不提供远程操作。',
       actions: { status: '容器状态', start: '启动容器', stop: '停止容器', restart: '重启容器', logs: '查看日志' },
-      confirmAction: '确定执行“{action}”？这可能中断该容器正在处理的请求。', confirm: '确认执行', cancel: '取消', failed: '操作失败，请重试。'
+      confirmAction: '确定执行”{action}”？这可能中断该容器正在处理的请求。', confirm: '确认执行', cancel: '取消', failed: '操作失败，请重试。'
     },
+  locale: '容器语言环境',
+  localeHint: '语言和地区(例如 en-US、zh-CN)。留空则使用代理位置或容器默认值。',
 }
