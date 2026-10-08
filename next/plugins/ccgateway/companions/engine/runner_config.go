@@ -77,23 +77,25 @@ var inheritedCLIEnv = []string{"CLAUDE_CODE_RESUME_INTERRUPTED_TURN", "CLAUDE_CO
 
 // runConfig is the per-request CLI and Mod configuration, kept in memory.
 type runConfig struct {
-	scope       *mainRequestScope
-	diagnostic  *requestDiagnostic
-	args        []string
-	env         map[string]string
-	systems     []string
-	groups      []systemGroup
-	deferral    []byte
-	control     *modControl
-	attachments Object
-	tools       Object
+	scope           *mainRequestScope
+	diagnostic      *requestDiagnostic
+	args            []string
+	env             map[string]string
+	systems         []string
+	groups          []systemGroup
+	deferral        []byte
+	control         *modControl
+	attachments     Object
+	reminderMarker  string
+	nativeReminders map[string]int
+	tools           Object
 }
 
 func newRunConfig(req *Request, p *Prepared, plugin, dir string) *runConfig {
 	if req.Plan != nil && (req.Plan.cache != nil || req.InlineTools != nil) && req.toolSearchEnabled() && !req.structuredOutput() {
 		req.internalCache = &internalCacheRounds{results: map[string]string{}, helpers: map[string]string{}}
 	}
-	c := &runConfig{args: cliArgs(req, p, plugin), systems: req.pendingSystems(), groups: req.systemGroups()}
+	c := &runConfig{reminderMarker: req.continuation, nativeReminders: nativeContinuationReminders(req, p), args: cliArgs(req, p, plugin), systems: req.pendingSystems(), groups: req.systemGroups()}
 	if req.HasMainRequestFeatures() {
 		c.scope = newMainRequestScope()
 		c.args = append(c.args, "--append-system-prompt", c.scope.marker)

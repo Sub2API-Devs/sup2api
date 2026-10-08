@@ -37,7 +37,7 @@ func extractAttemptFacts(rules map[string]manifest.UsageFact, body []byte) map[s
 		if !value.Exists() || value.Type == gjson.Null {
 			continue
 		}
-		validType := rule.Type == "number" && value.Type == gjson.Number || rule.Type == "boolean" && (value.Type == gjson.True || value.Type == gjson.False) || rule.Type == "enum" && value.Type == gjson.String
+		validType := rule.Type == "number" && value.Type == gjson.Number || rule.Type == "boolean" && (value.Type == gjson.True || value.Type == gjson.False) || (rule.Type == "enum" || rule.Type == "string") && value.Type == gjson.String
 		if !validType {
 			continue
 		}

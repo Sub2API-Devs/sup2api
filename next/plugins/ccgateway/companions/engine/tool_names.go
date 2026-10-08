@@ -20,7 +20,13 @@ func (r *Request) customToolServer() string {
 func (r *Request) toolHistoryNamespace() string {
 	base := r.baseToolHistoryNamespace()
 	if len(r.ServerTools) > 0 || len(r.toolMetadataKey()) > 0 {
-		return digest([]any{"api-tool-policy-v1", base, r.ServerTools, r.toolMetadataKey()})
+		base = digest([]any{"api-tool-policy-v1", base, r.ServerTools, r.toolMetadataKey()})
+	}
+	if len(r.completedClientHistory) > 0 {
+		base = digest([]any{"completed-client-history-v1", base})
+	}
+	if r.Plan != nil && len(r.Plan.taskBudget) > 0 && r.forcedLoadedClientCatalog() {
+		base = digest([]any{"zero-helper-task-budget-v1", base})
 	}
 	return base
 }

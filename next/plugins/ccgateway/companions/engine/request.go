@@ -715,9 +715,6 @@ func (r *Request) configKey() string {
 	if metadata := r.toolMetadataKey(); len(metadata) > 0 {
 		parts = append(parts, metadata)
 	}
-	if len(r.completedClientHistory) > 0 {
-		parts = append(parts, "completed-client-history-v1")
-	}
 	return digest(parts)
 }
 func (r *Request) wireName(name string) string {

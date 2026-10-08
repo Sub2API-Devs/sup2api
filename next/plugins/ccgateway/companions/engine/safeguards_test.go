@@ -180,7 +180,7 @@ func TestSafeguardsHistoricalToolIdentityAfterNativeMatching(t *testing.T) {
 			}
 			wire := Object{"tools": actual, "safeguards": []any{Object{"type": "inner"}}}
 			err = r.ApplyMainRequestFeatures(wire)
-			wantReject := scenario == "schema-changed" || scenario == "removed-native"
+			wantReject := scenario == "schema-changed" // Removed completed history now preserves its original wire name.
 			if (err != nil) != wantReject {
 				t.Fatalf("reject=%t err=%v", wantReject, err)
 			}

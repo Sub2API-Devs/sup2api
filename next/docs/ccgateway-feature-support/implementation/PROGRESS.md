@@ -2,6 +2,18 @@
 
 开始日期：2026-10-08（Asia/Shanghai）。状态：已推进至第九批并分阶段部署；当前状态见下节，早期批次中的“待提交/未部署”均为当时快照。原始调研保留为基线；本目录记录实际实现、实验、失败、评审和发布证据。
 
+## 下一发布候选已通过独审
+
+准备 core .70 / Worker .71 / catalog .14 / plugin .11。Sonnet真实附件位置修复最终通过：长历史24隔离CLI独审；assistant之后附件不得归到前user的新增红例已整改，gateway/both JSON与SSE各8次受影响回归通过。zero-round及真实namespace、inference_geo字符串事实均独审通过。插件主动用新版本.11避免覆写既有.10制品，不表示插件wire不兼容。
+
+主工作区engine全测4.522s/vet、SDKmanifest/check/platforms、核心usagerules/expr通过。补跑core ccgateway时误触本机已知损坏testPG（global/pg_control缺失），如实失败且未修删数据库；显式SUB2API_TESTPG=off后非DB测试1.847s通过，不能声称数据库回归通过。本候选未改SQL schema。待提交推送后服务器精确Git构建，原容器原地升级，稳定后复验Sonnet真实fixture并核地区fact入账。
+
+## 后续候选进度（尚未发布）
+
+准备核心 .70 / Worker .71 / catalog .14；源码尚未提交。两项zero-round窄修与实际toolHistoryNamespace隔离已独审通过；响应inference_geo开放字符串事实合同已独审通过，请求geo仍严格，需新核心支持string且实际检查插件包hash，如变化必须新版本不能覆写.10。catalog .14补零helper eager强制单轮预算说明，features测试通过。
+
+Sonnet重复Token附件候选尚未完成：作者短历史24 CLI曾绿；独审在扩展多轮fixture后复现红灯，提醒可能在较后的真实user而非首user。正补按Prepared原生user实际位置绑定，并保留同请求鉴权Mod证据/实际wire原位三方校验；不同值、未知、安全附件与伪造仍拒。不借先前短矩阵绿宣称解决，不部署未审候选。
+
 ## 实际上线与真实验收（.70）
 
 核心 .69 / Worker .70 / catalog .13 已按 e463222d Git 构建上线，四节点就绪，默认未来镜像 .70，原 #21/#22 容器/卷/授权未变。维护503约36–39秒，详见两份部署记录。

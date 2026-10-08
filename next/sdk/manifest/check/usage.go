@@ -36,7 +36,7 @@ var UsageFields = []string{
 
 // UsageFactTypes are the fact types usagerules.Acc.setMetric distinguishes;
 // anything else would be stored as a string and reach price expressions as one.
-var UsageFactTypes = []string{"number", "boolean", "enum"}
+var UsageFactTypes = []string{"number", "boolean", "enum", "string"}
 
 // UsageSources are the accepted values of endpoint.usageSource ("" means the
 // first).
@@ -281,7 +281,7 @@ func (v *validator) usageFact(field, key string, f manifest.UsageFact, pluginSou
 			key, strings.Join(UsageFields, ", "))
 	}
 	switch f.Type {
-	case "number", "boolean":
+	case "number", "boolean", "string":
 		if len(f.Enum) > 0 {
 			v.add(field+".enum", "unsupported", `enum is only allowed with type "enum"`)
 		}

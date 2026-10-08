@@ -160,6 +160,10 @@ func (u *Acc) setMetric(key string, r gjson.Result, f *manifest.UsageFact) {
 	if f != nil {
 		typ = f.Type
 	}
+	if typ == "string" && r.Type != gjson.String {
+		u.warn("type:"+key, "usagerules: value is not a string, fact not recorded", "fact", key, "json_type", r.Type.String())
+		return
+	}
 	var v any
 	switch {
 	case typ == "boolean" || r.Type == gjson.True || r.Type == gjson.False:

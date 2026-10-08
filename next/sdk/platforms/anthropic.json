@@ -170,7 +170,7 @@
     "facts": {
       "speed": {"type": "enum", "enum": ["standard", "fast"], "path": "usage.speed", "description": {"en": "Actual inference speed", "zh": "实际推理速度"}},
       "service_tier": {"type": "enum", "enum": ["standard", "priority", "batch"], "path": "usage.service_tier", "description": {"en": "Actual service tier", "zh": "实际服务等级"}},
-      "inference_geo": {"type": "enum", "enum": ["global", "us"], "path": "usage.inference_geo", "description": {"en": "Actual inference geography", "zh": "实际推理地域"}},
+      "inference_geo": {"type": "string", "path": "usage.inference_geo", "description": {"en": "Actual inference geography", "zh": "实际推理地域"}},
       "web_search_requests": {"type": "number", "unit": "request", "path": "usage.server_tool_use.web_search_requests", "description": {"en": "Server web searches", "zh": "服务端搜索次数"}},
       "web_fetch_requests": {"type": "number", "unit": "request", "path": "usage.server_tool_use.web_fetch_requests", "description": {"en": "Server web fetches", "zh": "服务端抓取次数"}},
       "code_execution_requests": {"type": "number", "unit": "request", "path": "usage.server_tool_use.code_execution_requests", "description": {"en": "Server code execution calls (not execution time)", "zh": "服务端代码执行次数（非执行时长）"}}

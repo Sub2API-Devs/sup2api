@@ -412,7 +412,7 @@ func (r *outboundRelay) adaptAttributed(req *Request, groups []systemGroup, body
 	if err := req.restoreImageCarriers(message); err != nil {
 		return nil, false, err
 	}
-	if err := req.removeContinuation(message); err != nil {
+	if err := req.removeContinuation(message, r.control); err != nil {
 		return nil, false, err
 	}
 	if !count && req.InlineTools != nil {

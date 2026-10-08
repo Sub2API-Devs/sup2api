@@ -80,13 +80,13 @@ func TestCompletedClientHistoryPairingAndSnapshotScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	original := r.configKey()
+	original := r.toolHistoryNamespace()
 	r.completedClientHistory["another"] = "fingerprint"
-	if original != r.configKey() {
+	if original != r.toolHistoryNamespace() {
 		t.Fatal("growing history invalidated configuration key")
 	}
 	r.completedClientHistory = nil
-	if original == r.configKey() {
+	if original == r.toolHistoryNamespace() {
 		t.Fatal("legacy renamed snapshot not isolated")
 	}
 	r, err = parsePolicyRequest(raw, nil)

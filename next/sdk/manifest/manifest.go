@@ -482,7 +482,7 @@ const (
 )
 
 type UsageFact struct {
-	Type        string        `json:"type"` // number | boolean | enum
+	Type        string        `json:"type"` // number | boolean | enum | string
 	Unit        string        `json:"unit,omitempty"`
 	Enum        []string      `json:"enum,omitempty"`
 	Path        string        `json:"path,omitempty"`

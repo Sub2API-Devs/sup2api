@@ -54,8 +54,9 @@ func (r *Request) validateSafeguardTools(message Object) error {
 	// A removed native tool or a schema change must not quietly rename history
 	// while preserving opaque client classifier references to the old identity.
 	for _, historical := range r.Messages {
-		for _, block := range historical.Content {
-			if str(block, "type") == "tool_use" && r.wireName(str(block, "name")) != str(block, "name") {
+		wire := r.wireMessage(historical)
+		for i, block := range historical.Content {
+			if str(block, "type") == "tool_use" && (i >= len(wire.Content) || str(wire.Content[i], "name") != str(block, "name")) {
 				return fmt.Errorf("client safeguards requires unchanged historical tool names: %s", str(block, "name"))
 			}
 		}

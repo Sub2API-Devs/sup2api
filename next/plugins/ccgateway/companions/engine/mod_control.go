@@ -19,6 +19,9 @@ var modControls sync.Map
 type modControl struct {
 	scope            *mainRequestScope
 	sessionContexts  map[string]bool
+	reminderMarker   string
+	nativeReminders  map[string]int
+	reminderAcks     map[string]int
 	diagnostic       *requestDiagnostic
 	path, URL, token string
 	config           []byte
@@ -35,7 +38,7 @@ func startModControl(cfg *runConfig, internalBase string) (*modControl, error) {
 			return nil, err
 		}
 	}
-	data, err := json.Marshal(Object{"attachments": cfg.attachments, "systems": cfg.systems, "deferred": deferred, "tools": cfg.tools, "trace": cfg.diagnostic.enabled(), "main_request_scope": cfg.scope != nil})
+	data, err := json.Marshal(Object{"attachments": cfg.attachments, "systems": cfg.systems, "deferred": deferred, "tools": cfg.tools, "trace": cfg.diagnostic.enabled(), "main_request_scope": cfg.scope != nil, "continuation_attachment_ack": cfg.reminderMarker != ""})
 	if err != nil {
 		return nil, err
 	}
@@ -43,6 +46,8 @@ func startModControl(cfg *runConfig, internalBase string) (*modControl, error) {
 		return nil, fmt.Errorf("Mod configuration exceeds the CLI HTTP limit")
 	}
 	c := &modControl{path: "/ccg-mod/" + uuid(), token: uuid() + uuid(), config: data, systems: len(cfg.systems)}
+	c.reminderMarker = cfg.reminderMarker
+	c.nativeReminders = cfg.nativeReminders
 	c.diagnostic = cfg.diagnostic
 	c.scope = cfg.scope
 	c.diagnostic.artifact("mod-config.json", Object{"attachments": cfg.attachments, "systems": cfg.systems, "deferred": deferred, "tools": cfg.tools})
@@ -122,6 +127,11 @@ func (c *modControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		c.ready = true
 	case ack.Event == "system" && c.ready && ack.Systems == c.systems:
 		c.attached = true
+	case ack.Event == "continuation_reminder" && c.ready && c.reminderMarker != "":
+		if !c.acknowledgeContinuationReminder(ack.Detail) {
+			w.WriteHeader(400)
+			return
+		}
 	case ack.Event == "session_context" && c.ready:
 		var detail struct {
 			Text string `json:"text"`

@@ -29,7 +29,7 @@ func (r *Request) stopsAtAPITerminal(reason string) bool {
 
 // The trigger must be the sole text of the final user turn. Extra CC user
 // attachments are not silently removed: they would change assistant prefill.
-func (r *Request) removeContinuation(body Object) error {
+func (r *Request) removeContinuation(body Object, controls ...*modControl) error {
 	if r.continuation == "" {
 		return nil
 	}
@@ -40,14 +40,22 @@ func (r *Request) removeContinuation(body Object) error {
 	last, _ := messages[len(messages)-1].(map[string]any)
 	previous, _ := messages[len(messages)-2].(map[string]any)
 	blocks, _ := historyContent(last["content"])
-	if str(last, "role") != "user" || len(blocks) != 1 || str(blocks[0], "type") != "text" || str(blocks[0], "text") != r.continuation || str(previous, "role") != "assistant" {
+	if len(blocks) == 2 && len(controls) == 1 && r.duplicateTransportReminder(messages, blocks[0], controls[0]) {
+		blocks = blocks[1:]
+	}
+	if str(last, "role") != "user" || len(blocks) != 1 || keys(blocks[0], "type", "text", "cache_control") != nil || str(blocks[0], "type") != "text" || str(blocks[0], "text") != r.continuation || str(previous, "role") != "assistant" {
 		return fmt.Errorf("continuation transport input changed; refusing to change assistant-tail semantics")
 	}
-	body["messages"] = messages[:len(messages)-1]
-	raw, _ := json.Marshal(body)
+	view := Object{}
+	for key, value := range body {
+		view[key] = value
+	}
+	view["messages"] = messages[:len(messages)-1]
+	raw, _ := json.Marshal(view)
 	if strings.Contains(string(raw), r.continuation) {
 		return fmt.Errorf("continuation transport marker leaked outside its final input")
 	}
+	body["messages"] = view["messages"]
 	return nil
 }
 
