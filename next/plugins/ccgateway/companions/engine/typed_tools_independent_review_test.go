@@ -2,7 +2,6 @@ package engine
 
 import (
 	"net/http"
-	"strings"
 	"testing"
 )
 
@@ -55,8 +54,12 @@ func TestReviewRemovedToolsetHistoryKeepsIdentity(t *testing.T) {
 	}
 }
 
-func TestReviewInlineAdvisorAndCompactionCannotBypassModelAuthorization(t *testing.T) {
-	definition := Object{"type": "advisor_20260301", "name": "advisor", "model": "unauthorized-review-model"}
+// User/group authorization and price freezing live at the core entry point:
+// TestInlineAdvisorCoreAuthorizationPriceAndMapping exercises actual HTTP
+// denial, mapping, signed identity-only policy, patches and billing. Worker
+// interprets the admitted timeline without altering a referenced model.
+func TestReviewInlineAdvisorAndCompactionPreserveAdmittedModel(t *testing.T) {
+	definition := Object{"type": "advisor_20260301", "name": "advisor", "model": "admitted-review-model"}
 	change := Object{"type": "tool_addition", "tool": Object{"type": "tool_definition", "definition": definition}}
 	for _, message := range []Object{
 		{"role": "system", "content": []any{change}},
@@ -66,8 +69,20 @@ func TestReviewInlineAdvisorAndCompactionCannotBypassModelAuthorization(t *testi
 		if message["role"] == "assistant" {
 			messages = []any{message, Object{"role": "user", "content": "q"}}
 		}
-		if _, err := parseToolFixture(t, []any{}, messages, "inline-tools-2026-09-15,advisor-tool-2026-03-01,compaction-2026-01-12"); err == nil || !strings.Contains(err.Error(), "per-turn server ledger") && !strings.Contains(err.Error(), "replaying compaction tool_changes") {
-			t.Fatal("unscoped secondary model admitted through inline history")
+		r, err := parseToolFixture(t, []any{}, messages, "inline-tools-2026-09-15,advisor-tool-2026-03-01,compact-2026-09-04")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !r.hasServerSearch("advisor") || len(r.ServerTools) != 1 || str(r.ServerTools[0], "model") != "admitted-review-model" {
+			t.Fatal("admitted advisor model or timeline changed")
+		}
+		index := 1
+		if message["role"] == "assistant" {
+			index = 0
+		}
+		original, _ := historyContent(message["content"])
+		if digest(r.Messages[index].Content) != digest(original) {
+			t.Fatal("admitted protocol block changed")
 		}
 	}
 }

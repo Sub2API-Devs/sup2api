@@ -461,6 +461,11 @@ func (r *outboundRelay) adaptAttributed(req *Request, groups []systemGroup, body
 		if err := req.restoreImageTransformations(message); err != nil {
 			return nil, false, err
 		}
+		// Restore known CLI toolset identity omissions before cache's complete
+		// block alignment; its skeleton deliberately ignores only cache fields.
+		if err := req.verifyAPIClientHistory(message); err != nil {
+			return nil, false, err
+		}
 		if err := restoreHistoryCitations(req, message); err != nil {
 			return nil, false, err
 		}
@@ -468,9 +473,6 @@ func (r *outboundRelay) adaptAttributed(req *Request, groups []systemGroup, body
 			return nil, false, err
 		}
 		if err := req.verifyCompactionHistory(message); err != nil {
-			return nil, false, err
-		}
-		if err := req.verifyAPIClientHistory(message); err != nil {
 			return nil, false, err
 		}
 		if err := req.verifyInlineToolHistory(message); err != nil {
@@ -564,6 +566,9 @@ func (relay *outboundRelay) forwarder(target *url.URL) *httputil.ReverseProxy {
 		apiError(w, 502, "api_error", "Relay upstream unavailable")
 	}
 	forward.ModifyResponse = func(resp *http.Response) error {
+		if op, _ := resp.Request.Context().Value(resourceRequestKey{}).(*resourceExchange); op != nil {
+			return relay.captureResourceResponse(resp, op)
+		}
 		captureProviderResponseFacts(resp)
 		if err := relay.protectMCPResponse(resp); err != nil {
 			return err
@@ -644,6 +649,10 @@ func (relay *outboundRelay) handler(req *Request, forward http.Handler) http.Han
 		}
 		model := r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/messages")
 		count := r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/messages/count_tokens")
+		if req.resource != nil && !model {
+			apiError(w, 400, "invalid_request_error", "Only the attributed resource carrier is available")
+			return
+		}
 		if (req.CountTokens || req.hasInferenceGeo()) && count {
 			apiError(w, 400, "invalid_request_error", "Auxiliary token counting is unavailable for this request mode")
 			return
@@ -691,10 +700,16 @@ func (relay *outboundRelay) adaptRequest(w http.ResponseWriter, r *http.Request,
 	if err == nil && model {
 		adapted, err = req.applyInferenceGeo(adapted)
 	}
+	if err == nil && attributed && req.resources != nil {
+		err = req.validateOutboundResources(adapted)
+	}
 	if err == nil && model && req.CountTokens {
 		if !attributed {
 			err = fmt.Errorf("auxiliary generation is forbidden during token counting")
 		}
+	}
+	if err == nil && req.resource != nil && !attributed {
+		err = fmt.Errorf("auxiliary generation is forbidden during resource operations")
 	}
 	if err != nil {
 		// The gateway reports the cause; the CLI is stopped and reads only
@@ -761,5 +776,8 @@ func (relay *outboundRelay) adaptRequest(w http.ResponseWriter, r *http.Request,
 	}
 	r.ContentLength = int64(len(adapted))
 	r.Header.Del("Content-Length")
+	if req.resource != nil {
+		return relay.prepareResourceRequest(w, r, req.resource)
+	}
 	return true
 }

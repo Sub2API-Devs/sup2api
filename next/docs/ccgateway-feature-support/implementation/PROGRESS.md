@@ -163,3 +163,25 @@
 - catalog 已更新为 2026-10-08.4，MCP 两版 beta 收入统一注册，不再单独在 Worker 硬编码准入。OpenAI 协议/MCP/fallback 的前端介绍反映实际子集与限制。
 - 冻结模块 tests/vet：shared codec、engine、Worker、SDK manifest/platforms/contracts 通过；本机 core/gateway/usage/billing 用 SUB2API_TESTPG=off 运行仅作为非DB检查，数据库将从新 Git checkpoint 去 OVH 45432 验证。
 - 第五批仅新增时间线 helper 与资源设计/新模块，尚未接线。主代理提交时将第五批半成品和原有无关文件排除；不能把未接线 helper 当功能完成。
+
+### 第三/四批 Git 与第五批实施（2026-10-08 08:29 CST）
+
+- 第三/四批已提交推送 bfcbc3b4203cb664e53db305da4fadaecda67106（185文件）。OVH `/home/debian/sub2api-next-test/git-features-bfcbc3b42`、cc-max `/root/ccgateway-features-bfcbc3b42` 都经 Git 新建并核验精确 SHA/干净目录；未上传源码。
+- 此 SHA 在 OVH 隔离45432数据库跑 gateway/convert/usagerules/usage/billing/ccgateway 全目标 Linux race+vet通过，含 replacement 冻结重试；cc-max engine/Worker race+vet通过。初次数据库启动脚本未处理镜像默认 POSTGRES_USER 而在执行测试前退出，已采用默认 postgres 后重跑成功。
+- Worker 镜像 ccgateway-worker:features-bfcbc3b42 已由 Git 工作树构建，revision标签为完整SHA。镜像manifest sha256:3d408acbd2a7b4bceaf8aa13ad64ef9d18f935770c1d13af7b59240ab98f720f。完整 Linux CLI 隔离集与 legacy backend Docker 构建仍在进行，不能提前记通过。没有原地更新21/22或发布OVH核心。
+- 第五批 inline/server/compaction 时间线已实现，core 三个已声明 Advisor 路径均鉴权/冻结价格/调度，签名历史 identity-only。核心HTTP 12场景通过。独立复核修复64模型引用把参数facts误计入上限、同模型位置换name重复声明；也修复已撤销工具被ToolSearch重新激活和显式空压缩净变更未reset。独立真CLI时间线40次隔离请求通过。
+- 新 providerresources 服务/0038迁移具备owner(UserID+GroupID)、固定issuer/account generation、quota、reserve/Finalize/uncertain/confirmed failure/delete状态机；默认不主动过期。SQL过滤分页Query正在与Files HTTP接线，DB生命周期/并发/分页测试待下一Git检查点在隔离DB跑。
+- Files核心HTTP五路由及Worker专用认证承载正在接线。Worker首3次真实CLI隔离GET/POST multipart/DELETE证明无收费/messages请求、二进制保真、无历史cache；真实账号profile/schema及完整资源CRUD资格未完成。稳定issuer需真实OAuth profile或显式API key管理身份，不能用token哈希或runtime版本替代。
+- 当前任务归属：root共享账号resource transport/app接线/独立review与部署验证；research_cc Files HTTP/分页/上传；research_api Worker资源操作/issuer/spool/历史验证；audit_code_beta资源持久化及模型file_id ACL/固定账号映射。CodeExec/PTC/Skills、generated resources与credit仍后续依赖项，未误报完成。
+- 前端typecheck通过；第一次定向vitest误写.test.ts导致No test files，正改为实际.spec.ts执行，此错误不算测试通过。
+
+### 第五批独立复核与资源闭环（2026-10-08 08:51 CST）
+
+- 上条前端定向测试已完成：实际4个.spec.ts共25项PASS，typecheck PASS。没有因文件名错误少测后直接记通过。
+- `bfcbc3b42` legacy backend Docker镜像构建PASS；Worker镜像默认8787健康启动PASS（fixture调用Key，CLI 2.1.292）。完整Linux CLI集有2项历史用例在并行Docker构建期间20秒超时，其他项目通过；构建结束后用完全相同测试二进制分别连续3轮复测，两项均PASS。保留原失败日志，不能把原完整集合改记全绿。
+- Files核心HTTP独立审查修复多值beta与显式版本丢失、安全响应头缺失、慢上传占满4个spool槽以及稳定版误用legacy文件名限制。真实TCP验证60秒空闲deadline按每次读重置；不会用总上传时长截断持续有进度的客户端。Worker资源转发另有10分钟总deadline。重复workspace/版本头的歧义也已具体拒绝。
+- Worker独立审查修复CLI默认版本覆盖客户端资源版本，并将resource identity从会话cache移到独立DataDir目录。相同issuer重授权保持资源代际、真正换issuer或显式API key epoch才轮换；缓存替换与重启稳定性回归通过。
+- Worker file_id验证已完成4类输入×6流转共24次真实CLI隔离请求，包含续聊、回退、冷导入、SSE及count；核心只映射已授权文件并固定原账号，Worker再次核验真实issuer和受控ID列表。资源调试日志补充中，二进制内容以明确的metadata/hash记录，不伪称已保存原始binary。
+- 当前本地app/ccgateway/gateway/providerresources测试与vet通过；SUB2API_TESTPG=off明确跳过数据库部分，下一Git检查点再跑隔离Linux数据库。尚未更新21/22程序/CLI或发布OVH核心。
+- 第六批CodeExec/PTC/Skills目前仅独立schema helper/设计，尚未接入现有主链；产物登记、container续期及PTC父调用绑定正设计。第五批提交必须排除这些未接线新文件与原有无关文件。
+- 第五批冻结前主代理发现授权锁与CLI槽位顺序可形成死锁，统一为可取消的authority→slot顺序后，确定性满槽/取消回归20轮通过；第五批完整资源/历史/日志/legacybeta集合重新PASS34.114s、vet通过。root普通engine/companions与SDK检查通过。资源调试日志已接开关及关闭删除，记录原始filename与二进制省略原因。

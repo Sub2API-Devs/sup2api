@@ -82,6 +82,13 @@ func splitServerSearchTools(value any, ttl *time.Duration) (any, []Object, error
 }
 
 func (r *Request) hasServerSearch(name string) bool {
+	if r.InlineTools != nil && !r.InlineTools.Active[name] {
+		return false
+	}
+	return r.declaresServerTool(name)
+}
+
+func (r *Request) declaresServerTool(name string) bool {
 	for _, tool := range r.ServerTools {
 		if str(tool, "name") == name {
 			return true

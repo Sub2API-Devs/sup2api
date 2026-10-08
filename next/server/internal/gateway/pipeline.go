@@ -57,6 +57,8 @@ type call struct {
 	// billing: the model's global price (nil = free policy or free endpoint)
 	price                *core.PriceRule
 	modelRefs            []modelReference
+	resourceRefs         []approvedResource
+	resourceScans        resourceScanCache
 	upstreamRefs         map[string]core.PricedUsage
 	upstreamPrimaryModel string
 
@@ -336,7 +338,10 @@ func (c *call) checkModel(ctx context.Context) *gwError {
 	if !c.principal.Group.AllowsModel(c.model) {
 		return fromCore(core.ErrModelNotFound.WithDetails(map[string]any{"model": c.model}), errTypeModelNotAllowed)
 	}
-	return c.checkReferencedModels()
+	if err := c.checkReferencedModels(); err != nil {
+		return err
+	}
+	return c.checkResourceReferences(ctx)
 }
 
 // resolveModelFromPlugin asks PlatformService.ResolveModel of the plugin

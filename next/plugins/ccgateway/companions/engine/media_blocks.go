@@ -9,7 +9,7 @@ import (
 
 // Media source objects stay in the protocol. URL sources are never fetched by
 // the Worker, and PDF bytes are never converted into text or re-indexed pages.
-func checkDocument(b Object, role string, ttl *time.Duration) error {
+func checkDocument(b Object, role string, ttl *time.Duration, access ...*resourceAdmission) error {
 	if role != "user" {
 		return fmt.Errorf("document must be user content")
 	}
@@ -95,12 +95,12 @@ func checkDocument(b Object, role string, ttl *time.Duration) error {
 					copy[key] = value
 				}
 			}
-			if err := checkBlock(copy, "user", ttl); err != nil {
+			if err := checkBlock(copy, "user", ttl, access...); err != nil {
 				return err
 			}
 		}
 	case "file":
-		return fmt.Errorf("document file_id requires client-scoped Files API resource mapping")
+		return checkFileSource(source, access...)
 	default:
 		return fmt.Errorf("unsupported document source %q", str(source, "type"))
 	}
@@ -119,7 +119,7 @@ func checkMediaURL(value any) error {
 	return nil
 }
 
-func checkImageSource(source Object) error {
+func checkImageSource(source Object, access ...*resourceAdmission) error {
 	switch str(source, "type") {
 	case "url":
 		if err := keys(source, "type", "url"); err != nil {
@@ -127,7 +127,7 @@ func checkImageSource(source Object) error {
 		}
 		return checkMediaURL(source["url"])
 	case "file":
-		return fmt.Errorf("image file_id requires client-scoped Files API resource mapping")
+		return checkFileSource(source, access...)
 	case "base64":
 		if err := keys(source, "type", "media_type", "data"); err != nil {
 			return err

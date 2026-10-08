@@ -82,12 +82,23 @@ func (t modelTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if !managedURL(req.URL.String()) || req.Method != "POST" {
 		return nil, errors.New("invalid managed CCGateway request")
 	}
+	return t.forwardManaged(req, req.URL.Path, false)
+}
+
+// Both callers validate a closed operation surface before entering this
+// shared account discovery and SSH transport. A resource is always tied to
+// one account; the legacy shared gateway is not a resource issuer boundary.
+func (t modelTransport) forwardManaged(req *http.Request, path string, resource bool) (*http.Response, error) {
 	// Allow the runtime's one-hour execution deadline to report its result.
 	ctx, cancel := context.WithTimeout(req.Context(), time.Hour+time.Minute)
 	cfg, e := t.s.Load(ctx)
 	if e != nil {
 		cancel()
 		return nil, e
+	}
+	if resource && (!cfg.AccountRuntimes || t.accountID <= 0) {
+		cancel()
+		return nil, errors.New("provider resources require per-account runtimes")
 	}
 	var revision, key string
 	if !cfg.AccountRuntimes && t.accountID > 0 {
@@ -132,16 +143,19 @@ func (t modelTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	var once sync.Once
 	finish := func() { once.Do(func() { _ = close(); cancel() }) }
 	clone := req.Clone(ctx)
-	clone.URL, _ = url.Parse(base + req.URL.Path)
+	clone.URL, _ = url.Parse(base + path)
+	clone.URL.RawQuery = req.URL.RawQuery
 	clone.Host = ""
 	clone.Header = clone.Header.Clone()
-	policy := cfg.EffectiveRequestPolicy()
-	if err := validateRequestPolicy(policy); err != nil {
-		finish()
-		return nil, err
+	if !resource {
+		policy := cfg.EffectiveRequestPolicy()
+		if err := validateRequestPolicy(policy); err != nil {
+			finish()
+			return nil, err
+		}
+		policyJSON, _ := json.Marshal(policy)
+		clone.Header.Set("X-CCGateway-Request-Policy", string(policyJSON))
 	}
-	policyJSON, _ := json.Marshal(policy)
-	clone.Header.Set("X-CCGateway-Request-Policy", string(policyJSON))
 	clone.Header.Del("Authorization")
 	clone.Header.Set("x-api-key", modelKey)
 	clone.Header.Del("X-CCG-Revision")

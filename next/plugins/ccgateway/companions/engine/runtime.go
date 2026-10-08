@@ -24,18 +24,19 @@ type Options struct {
 // the gateway command and account workers.
 type Runtime struct {
 	http.Handler
-	Version string
-	gateway *Gateway
-	admin   *authManager
-	work    string
-	stop    context.CancelFunc
-	done    chan struct{}
-	life    context.Context
-	mu      sync.Mutex
-	closed  bool
-	active  sync.WaitGroup
-	once    sync.Once
-	err     error
+	Version   string
+	gateway   *Gateway
+	admin     *authManager
+	resources *resourceBroker
+	work      string
+	stop      context.CancelFunc
+	done      chan struct{}
+	life      context.Context
+	mu        sync.Mutex
+	closed    bool
+	active    sync.WaitGroup
+	once      sync.Once
+	err       error
 }
 
 func NewRuntime(o Options) (*Runtime, error) {
@@ -113,11 +114,18 @@ func NewRuntime(o Options) (*Runtime, error) {
 	g := &Gateway{Runner: &Runner{CLI: cli, Version: version, Plugin: plugin, Work: work, Proxy: proxy, Env: o.Env, InternalBaseURL: o.InternalBaseURL}, Cache: cache, Key: o.Key, Timeout: timeout, Slots: make(chan struct{}, 4), NativeAllowed: native, RequestLogDir: logDir}
 	g.RequestLogs = &requestLogStore{root: filepath.Join(root, "request-logs"), enabled: logDir != "", active: map[*requestDiagnostic]bool{}}
 	admin := &authManager{cli: cli, key: o.AdminKey, proxy: proxy, version: version, requestLogs: g.RequestLogs, env: o.Env}
+	admin.authorizationChanged = func() error { return g.ownershipIndex().rotateAuthorization() }
+	resources, err := newResourceBroker(g, admin, root)
+	if err != nil {
+		return nil, err
+	}
+	g.resources = resources
 	mux := http.NewServeMux()
+	mux.Handle(resourcePrefix+"/", resources)
 	mux.Handle("/", g)
 	mux.Handle("/admin/", admin)
 	ctx, stop := context.WithCancel(context.Background())
-	r := &Runtime{Handler: mux, Version: version, gateway: g, admin: admin, work: work, stop: stop, life: ctx, done: make(chan struct{})}
+	r := &Runtime{Handler: mux, Version: version, gateway: g, admin: admin, resources: resources, work: work, stop: stop, life: ctx, done: make(chan struct{})}
 	go func() {
 		defer close(r.done)
 		ticker := time.NewTicker(time.Minute)
@@ -166,6 +174,9 @@ func (r *Runtime) Close() error {
 		r.admin.mu.Lock()
 		r.admin.end()
 		r.admin.mu.Unlock()
+		if r.resources != nil {
+			_ = r.resources.lease.Close()
+		}
 		r.err = os.RemoveAll(r.work)
 	})
 	return r.err

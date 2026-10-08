@@ -267,9 +267,6 @@ func (r *Request) configureContextCompaction(headers []string) error {
 	for mi, m := range r.Messages {
 		for bi, b := range m.Content {
 			if str(b, "type") == "compaction" {
-				if changes, ok := b["tool_changes"].([]any); ok && len(changes) > 0 {
-					return fmt.Errorf("replaying compaction tool_changes requires inline-tool history support")
-				}
 				if str(b, "signature") != "" {
 					signedBlocks++
 					if mi != 0 || bi != 0 {
@@ -372,8 +369,8 @@ func checkCompactionBlock(b Object, role string, partial bool) error {
 			if !ok || (str(entry, "type") != "tool_addition" && str(entry, "type") != "tool_removal") {
 				return fmt.Errorf("invalid compaction tool change")
 			}
-			if _, ok := entry["tool"].(map[string]any); !ok {
-				return fmt.Errorf("compaction tool change requires tool")
+			if err := checkInlineToolBlock(entry); err != nil {
+				return err
 			}
 		}
 	}

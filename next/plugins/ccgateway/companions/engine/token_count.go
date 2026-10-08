@@ -11,6 +11,9 @@ import (
 type tokenCountRequestKey struct{}
 
 func parseTokenCountRequest(raw []byte, headers http.Header) (*Request, error) {
+	return parseTokenCountRequestWithResources(raw, headers, nil)
+}
+func parseTokenCountRequestWithResources(raw []byte, headers http.Header, access *resourceAdmission) (*Request, error) {
 	body, err := decodeObject(raw)
 	if err != nil {
 		return nil, err
@@ -27,7 +30,7 @@ func parseTokenCountRequest(raw []byte, headers http.Header) (*Request, error) {
 	// request, and the count mode never permits any upstream generation call.
 	body["max_tokens"] = json.Number("2147483647")
 	data, _ := json.Marshal(body)
-	req, err := parsePolicyRequest(data, headers)
+	req, err := parsePolicyRequestWithResources(data, headers, access)
 	if err != nil {
 		return nil, err
 	}

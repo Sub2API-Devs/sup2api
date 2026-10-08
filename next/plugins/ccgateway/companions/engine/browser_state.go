@@ -112,7 +112,7 @@ func checkBrowserState(block Object, ttl *time.Duration) error {
 	return nil
 }
 
-func parseToolResultBlocks(values []any, parent Object, ttl *time.Duration) ([]Object, error) {
+func parseToolResultBlocks(values []any, parent Object, ttl *time.Duration, access ...*resourceAdmission) ([]Object, error) {
 	var out []Object
 	states := 0
 	for _, value := range values {
@@ -131,7 +131,7 @@ func parseToolResultBlocks(values []any, parent Object, ttl *time.Duration) ([]O
 			out = append(out, block)
 			continue
 		}
-		parsed, err := blocks([]any{value}, "user", ttl)
+		parsed, err := blocks([]any{value}, "user", ttl, access...)
 		if err != nil {
 			return nil, err
 		}

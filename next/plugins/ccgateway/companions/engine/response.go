@@ -6,16 +6,17 @@ import (
 )
 
 type Accumulator struct {
-	Message       Object
-	Blocks        []Object
-	Inputs        map[int]string
-	Closed        map[int]bool
-	Stopped       bool
-	Done          bool
-	Bytes         int
-	Structured    map[int]bool
-	HasClientTool bool
-	serverCalls   *serverToolLedger
+	Message               Object
+	Blocks                []Object
+	Inputs                map[int]string
+	Closed                map[int]bool
+	Stopped               bool
+	Done                  bool
+	Bytes                 int
+	Structured            map[int]bool
+	HasClientTool         bool
+	serverCalls           *serverToolLedger
+	discoveredInlineTools map[string]bool
 }
 
 func integer(v any) (int, bool) {
@@ -149,10 +150,11 @@ func (a *Accumulator) blockStart(e Object, r *Request) error {
 		}
 	case "thinking", "redacted_thinking":
 	case "server_tool_use":
-		if r.NoTools || !r.hasServerSearch(str(block, "name")) || str(block, "id") == "" {
+		view := a.inlineResponseView(r)
+		if view.NoTools || !view.hasServerSearch(str(block, "name")) || str(block, "id") == "" {
 			return fmt.Errorf("model requested an undeclared server search tool")
 		}
-		if err := a.serverCalls.accept(block, r); err != nil {
+		if err := a.serverCalls.accept(block, view); err != nil {
 			return err
 		}
 	case "tool_search_tool_result", "web_search_tool_result", "web_fetch_tool_result", "advisor_tool_result":
@@ -170,10 +172,14 @@ func (a *Accumulator) blockStart(e Object, r *Request) error {
 			if err != nil {
 				return err
 			}
+			if err := r.validateInlineSearchDiscovery(block); err != nil {
+				return err
+			}
+			a.rememberInlineSearch(block)
 		}
 		e["content_block"] = block
 	case "tool_use":
-		name := r.apiResponseToolName(block)
+		name := a.inlineResponseView(r).apiResponseToolName(block)
 		if name == "" {
 			return fmt.Errorf("model requested an undeclared tool")
 		}

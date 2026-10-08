@@ -90,6 +90,9 @@ func requestPolicy(h http.Header) (RequestPolicy, error) {
 	return p, nil
 }
 func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
+	return parsePolicyRequestWithResources(body, h, nil)
+}
+func parsePolicyRequestWithResources(body []byte, h http.Header, access *resourceAdmission) (*Request, error) {
 	p, err := requestPolicy(h)
 	if err != nil {
 		return nil, err
@@ -132,7 +135,7 @@ func parsePolicyRequest(body []byte, h http.Header) (*Request, error) {
 	}
 	cacheRequested := hasRequestCacheControl(o)
 	data, _ := json.Marshal(o)
-	req, err := parseRequestWithMCP(data, mcp, hasBetaHeader(h.Values("anthropic-beta"), "interleaved-thinking-2025-05-14"))
+	req, err := parseRequestWithResources(data, mcp, access, hasBetaHeader(h.Values("anthropic-beta"), "interleaved-thinking-2025-05-14"))
 	if err != nil {
 		return nil, err
 	}

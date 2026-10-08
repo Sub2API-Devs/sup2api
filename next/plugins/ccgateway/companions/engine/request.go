@@ -27,6 +27,8 @@ type Tool struct {
 	Metadata     Object `json:"-"`
 }
 type Request struct {
+	resource                *resourceExchange
+	resources               *resourceAdmission
 	MCP                     *MCPConnectorPlan
 	imageCarriers           map[string]*imageCarrier
 	responseFacts           *providerResponseFacts
@@ -142,7 +144,7 @@ func cacheTTL(v any, ttl *time.Duration) error {
 	}
 	return nil
 }
-func blocks(v any, role string, ttl *time.Duration) ([]Object, error) {
+func blocks(v any, role string, ttl *time.Duration, access ...*resourceAdmission) ([]Object, error) {
 	if s, ok := v.(string); ok {
 		if s == "" {
 			return nil, fmt.Errorf("empty message")
@@ -169,7 +171,7 @@ func blocks(v any, role string, ttl *time.Duration) ([]Object, error) {
 		}
 		cache, hasCache := b["cache_control"]
 		delete(b, "cache_control")
-		if e := checkBlock(b, role, ttl); e != nil {
+		if e := checkBlock(b, role, ttl, access...); e != nil {
 			return nil, e
 		}
 		if hasCache {
@@ -182,8 +184,16 @@ func blocks(v any, role string, ttl *time.Duration) ([]Object, error) {
 
 // checkBlock validates one content block (cache_control already removed);
 // tool_result content is normalized in place.
-func checkBlock(b Object, role string, ttl *time.Duration) error {
+func checkBlock(b Object, role string, ttl *time.Duration, access ...*resourceAdmission) error {
 	switch str(b, "type") {
+	case "container_upload":
+		if role != "user" {
+			return fmt.Errorf("container_upload must be user content")
+		}
+		if err := keys(b, "type", "file_id"); err != nil {
+			return err
+		}
+		return checkAdmittedFile(str(b, "file_id"), access...)
 	case "fallback":
 		return checkFallbackBlock(b, role)
 	case "text":
@@ -203,11 +213,11 @@ func checkBlock(b Object, role string, ttl *time.Duration) error {
 	case "mcp_tool_use", "mcp_tool_result", "mcp_tool_listing":
 		return checkMCPBlock(b, role)
 	case "tool_result":
-		return checkToolResult(b, role, ttl)
+		return checkToolResult(b, role, ttl, access...)
 	case "image":
-		return checkImage(b, role)
+		return checkImage(b, role, access...)
 	case "document":
-		return checkDocument(b, role, ttl)
+		return checkDocument(b, role, ttl, access...)
 	case "search_result":
 		return checkSearchResult(b, role, ttl)
 	case "compaction":
@@ -258,7 +268,7 @@ func checkToolUse(b Object, role string) error {
 	}
 	return nil
 }
-func checkToolResult(b Object, role string, ttl *time.Duration) error {
+func checkToolResult(b Object, role string, ttl *time.Duration, access ...*resourceAdmission) error {
 	if e := keys(b, "type", "tool_use_id", "content", "is_error", "toolset_name"); e != nil {
 		return e
 	}
@@ -287,14 +297,14 @@ func checkToolResult(b Object, role string, ttl *time.Duration) error {
 	if len(a) == 0 {
 		return nil
 	}
-	bs, e := parseToolResultBlocks(a, b, ttl)
+	bs, e := parseToolResultBlocks(a, b, ttl, access...)
 	if e != nil {
 		return e
 	}
 	b["content"] = bs
 	return nil
 }
-func checkImage(b Object, role string) error {
+func checkImage(b Object, role string, access ...*resourceAdmission) error {
 	if e := keys(b, "type", "source", "transformations"); e != nil {
 		return e
 	}
@@ -305,13 +315,16 @@ func checkImage(b Object, role string) error {
 	if err := checkImageTransformations(b["transformations"]); err != nil {
 		return err
 	}
-	return checkImageSource(s)
+	return checkImageSource(s, access...)
 }
 func parseRequest(data []byte, interleaved ...bool) (*Request, error) {
 	return parseRequestWithMCP(data, nil, interleaved...)
 }
 
 func parseRequestWithMCP(data []byte, mcp *MCPConnectorPlan, interleaved ...bool) (*Request, error) {
+	return parseRequestWithResources(data, mcp, nil, interleaved...)
+}
+func parseRequestWithResources(data []byte, mcp *MCPConnectorPlan, access *resourceAdmission, interleaved ...bool) (*Request, error) {
 	o, e := decodeObject(data)
 	if e != nil {
 		return nil, e
@@ -319,7 +332,7 @@ func parseRequestWithMCP(data []byte, mcp *MCPConnectorPlan, interleaved ...bool
 	if e = keys(o, "model", "max_tokens", "stream", "system", "messages", "tools", "tool_choice", "thinking", "cache_control"); e != nil {
 		return nil, e
 	}
-	r := &Request{MCP: mcp, Model: str(o, "model"), MaxTokens: positive(o["max_tokens"]), TTL: 5 * time.Minute, Native: map[string]bool{}}
+	r := &Request{MCP: mcp, resources: access, Model: str(o, "model"), MaxTokens: positive(o["max_tokens"]), TTL: 5 * time.Minute, Native: map[string]bool{}}
 	if n, ok := o["max_tokens"].(json.Number); ok {
 		i, err := n.Int64()
 		r.CacheWarmup = err == nil && i == 0
@@ -374,7 +387,7 @@ func parseRequestWithMCP(data []byte, mcp *MCPConnectorPlan, interleaved ...bool
 			return nil, e
 		}
 	}
-	if r.Messages, r.origin, e = parseMessages(o["messages"], &r.TTL); e != nil {
+	if r.Messages, r.origin, e = parseMessages(o["messages"], &r.TTL, access); e != nil {
 		return nil, e
 	}
 	if e = r.compileInlineTools(baseTools); e != nil {
@@ -547,7 +560,7 @@ func parseThinking(v any, maxTokens int, interleaved ...bool) (Object, error) {
 
 // parseMessages merges consecutive user or assistant messages, as the API
 // does, and returns the client array index of each parsed message.
-func parseMessages(v any, ttl *time.Duration) ([]Message, []int, error) {
+func parseMessages(v any, ttl *time.Duration, access ...*resourceAdmission) ([]Message, []int, error) {
 	a, ok := v.([]any)
 	if !ok || len(a) == 0 || len(a) > 100000 {
 		return nil, nil, fmt.Errorf("messages must contain 1..100000 messages")
@@ -582,7 +595,7 @@ func parseMessages(v any, ttl *time.Duration) ([]Message, []int, error) {
 		if role != "user" && role != "assistant" {
 			return nil, nil, fmt.Errorf("messages[%d].role: unsupported role %q; expected user, assistant or system", i, role)
 		}
-		b, e := blocks(m["content"], role, ttl)
+		b, e := blocks(m["content"], role, ttl, access...)
 		if e != nil {
 			return nil, nil, e
 		}
@@ -692,7 +705,7 @@ func (r *Request) wireName(name string) string {
 	if r.acceptsAPIClientIdentity(ToolIdentity{Name: name}) {
 		return name
 	}
-	if r.hasServerSearch(name) {
+	if r.declaresServerTool(name) {
 		return name
 	}
 	if r.Native[name] {

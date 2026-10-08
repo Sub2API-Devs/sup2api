@@ -51,6 +51,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/rollout"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/routes"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/sandbox"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/providerresources"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/proxy"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -250,7 +251,8 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	}
 	gw := gateway.New(gateway.Deps{
 		CCGateway: ccg,
-		DB:        db, Redis: rdb, Bus: cl.Bus, Node: cl.Registry, Registry: reg,
+		Resources: providerresources.New(db, providerresources.Options{}), ResourceTransport: ccg.ResourceTransport(),
+		DB: db, Redis: rdb, Bus: cl.Bus, Node: cl.Registry, Registry: reg,
 		Auth: keys, Pricer: bill, Balance: bill, Slots: cl.Slots,
 		Accounts: acc, Proxies: prx, Settler: settler, Tasks: settler, Limiter: limiter, Quota: acc, Config: cfg, Converters: converters,
 		Draining: gate.isDraining,

@@ -127,6 +127,9 @@ func (r *Runner) baseEnv() []string {
 // request, the outbound relay, the process, then the stream-json session.
 func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string, emit func(Object) error) (result Object, err error) {
 	cfg := newRunConfig(req, p, r.Plugin, dir)
+	if req.resource != nil {
+		cfg.args = append(cfg.args, "--no-session-persistence")
+	}
 	req.diagnostic.artifact("feature-decisions.json", req.Plan.FeatureDecisions())
 	req.diagnostic.artifact("client-attachment-decisions.json", req.AttachmentDecisions)
 	// Only gateway-generated options: never dump inherited credentials or the
@@ -151,7 +154,10 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 	// Assign the named results: runs after the process has been waited for.
 	defer func() {
 		result, err = relayOutcome(ctx, relay, result, err)
-		if req.CountTokens && err == nil {
+		if req.resource != nil && ctx.Err() == nil && relay.Failure() == nil && req.resource.completed() {
+			result, err = Object{}, nil
+		}
+		if (req.CountTokens || req.resource != nil) && err == nil {
 			err = (&cliSession{cfg: cfg, relay: relay}).checkMod()
 		}
 	}()

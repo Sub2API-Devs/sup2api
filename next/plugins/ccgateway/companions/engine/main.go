@@ -21,6 +21,7 @@ import (
 )
 
 type Gateway struct {
+	resources     *resourceBroker
 	Runner        *Runner
 	Cache         *HistoryCache
 	Key           string
@@ -70,6 +71,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w = diagnostic.capture(w, r, g.RequestLogDir)
 	defer diagnostic.finish()
 	x := &exchange{g: g, w: w, r: r, diagnostic: diagnostic}
+	defer func() { x.resources.close() }()
 	if !x.admit() {
 		return
 	}
@@ -95,6 +97,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // exchange is one /v1/messages request: admission, the CLI run, and the
 // response, which turns into an SSE stream once the first event is sent.
 type exchange struct {
+	resources    *resourceAdmission
 	g            *Gateway
 	w            http.ResponseWriter
 	r            *http.Request
@@ -153,11 +156,19 @@ func (x *exchange) admit() bool {
 	x.diagnostic.prepareSecrets(body)
 	x.diagnostic.request(body, r.Header)
 	x.diagnostic.setStage("parse_request")
-	parse := parsePolicyRequest
-	if r.URL.Path == "/v1/messages/count_tokens" {
-		parse = parseTokenCountRequest
+	x.resources, e = x.g.admitResourceReferences(r.Context(), body, r.Header)
+	if e != nil {
+		x.fail(400, "invalid_request_error", e.Error())
+		return false
 	}
-	req, e := parse(body, r.Header)
+	if x.resources != nil {
+		x.diagnostic.trace("resource_references_verified", Object{"identity": x.resources.identity, "allowed_file_count": len(x.resources.ids)})
+	}
+	parse := parsePolicyRequestWithResources
+	if r.URL.Path == "/v1/messages/count_tokens" {
+		parse = parseTokenCountRequestWithResources
+	}
+	req, e := parse(body, r.Header, x.resources)
 	if e != nil {
 		x.fail(400, "invalid_request_error", e.Error())
 		return false
@@ -226,6 +237,9 @@ func (x *exchange) session() (label, busyKey, logical string, ok bool) {
 	}
 	label = logical
 	logical = digest([]string{h.Get("X-CCGateway-Session-Scope"), logical})
+	if x.resources != nil {
+		logical = digest([]string{logical, x.resources.identity.PrincipalID, x.resources.identity.Generation})
+	}
 	busyKey = logical
 	if h.Get("X-CCGateway-Session-ID") == "" {
 		busyKey = uuid()

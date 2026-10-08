@@ -3,11 +3,13 @@ package check
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 )
 
 var modelObjectPath = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$`)
+var modelArrayPath = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\[\])?(\.[A-Za-z_][A-Za-z0-9_]*(\[\])?)*$`)
 
 func (v *validator) modelReferences(f string, p manifest.Platform, e manifest.Endpoint) {
 	refs := e.Request.ModelReferences
@@ -28,14 +30,16 @@ func (v *validator) modelReferences(f string, p manifest.Platform, e manifest.En
 	seen := map[string]bool{}
 	for i, ref := range refs {
 		at := fmt.Sprintf("%s[%d]", field, i)
-		if !usageEventRe.MatchString(ref.Name) || seen[ref.Name] {
-			v.add(at+".name", "invalid", "model reference name must be unique and nonempty")
+		key := ref.ArrayPath + "\x00" + ref.ModelPath
+		if !usageEventRe.MatchString(ref.Name) || seen[key] {
+			v.add(at+".name", "invalid", "model reference location must be unique and name nonempty")
 		}
-		seen[ref.Name] = true
-		for key, path := range map[string]string{"arrayPath": ref.ArrayPath, "modelPath": ref.ModelPath} {
-			if len(path) > 200 || !modelObjectPath.MatchString(path) {
-				v.add(at+"."+key, "invalid", "a simple object path is required")
-			}
+		seen[key] = true
+		if len(ref.ArrayPath) > 200 || !modelArrayPath.MatchString(ref.ArrayPath) || strings.HasSuffix(ref.ArrayPath, "[]") {
+			v.add(at+".arrayPath", "invalid", "an array path with only explicit intermediate [] enumeration is required")
+		}
+		if len(ref.ModelPath) > 200 || !modelObjectPath.MatchString(ref.ModelPath) {
+			v.add(at+".modelPath", "invalid", "a simple object path is required")
 		}
 		if len(ref.Match) > 8 {
 			v.add(at+".match", "too_many", "at most 8 exact match fields are supported")

@@ -3,7 +3,7 @@
 // entitlement. Runtime evidence must be reported separately.
 package features
 
-const CatalogVersion = "2026-10-08.4"
+const CatalogVersion = "2026-10-08.5"
 const PolicySchemaVersion = 1
 
 type Feature struct {
@@ -50,7 +50,7 @@ func Catalog() Document {
 		entry("F-CITATIONS", "引用", "媒体与资源", "partial", []string{"messages[].content[].citations", "messages[].content[].citations.enabled"}, nil, []string{"文本引用与 citations_delta", "绑定来源的历史引用恢复"}, "保留索引、原文与加密引用；CLI 省略的历史引用仅在完整消息和文档/搜索来源一致时恢复。文档与 Web 来源的隔离往返已验证；实际引用质量由上游决定。"),
 		entry("F-IMAGES", "图片输入", "媒体与资源", "partial", []string{"messages[].content[].source"}, nil, []string{"原生图片块与 URL 来源"}, "保留 base64 PNG/JPEG/GIF/WebP 和 URL 图片，不由 Worker 下载后改写。文件 ID 需独立资源归属，不接受未登记 file_id；真实模型读取 URL 的能力仍由上游决定。"),
 		entry("F-DOCUMENTS", "文档输入", "媒体与资源", "partial", []string{"messages[].content[].type:document", "messages[].content[].source", "messages[].content[].citations"}, nil, []string{"PDF / 文本 / 内容块 / URL 来源", "原始文档与引用回放"}, "保留文档来源、页码/字符索引、引用开关和工具结果文档，不提取成文本模拟 PDF。隔离 CLI 往返已验证；file_id 尚需资源映射，实际模型限制由上游返回。"),
-		entry("F-FILES", "文件与容器资源", "媒体与资源", "unsupported", []string{"container", "source.file_id"}, nil, nil, "需要独立文件 API、资源归属和跨账号调度；CC 本地文件不等价于 API 文件资源。"),
+		entry("F-FILES", "文件与容器资源", "媒体与资源", "partial", []string{"/v1/files", "source.file_id", "container_upload.file_id", "container"}, []string{"files-api-2025-04-14"}, []string{"资源端点与租户归属", "固定账号与实际授权身份", "文件 ID 映射与历史回放"}, "文件上传、列表、元数据、删除和受上游许可的下载使用独立资源端点；已登记文件可用于图片、文档和容器上传块，续聊和历史导入固定原账号。稳定版与旧 beta 分别处理分页和过期语义；容器执行与生成产物仍需后续适配。代码和 CLI 隔离验证不代表所有实际账号具备 Files 资格。"),
 		entry("F-SKILLS", "API 技能", "媒体与资源", "unsupported", []string{"container.skills"}, nil, nil, "API 容器技能不等价于 CC 本地技能；尚无完整资源与执行适配。"),
 		entry("F-WEB-TOOLS", "服务端搜索与抓取", "工具", "partial", []string{"tools[].type:web_search", "tools[].type:web_fetch", "tools[].url_sources", "server_tool_use", "web_search_tool_result", "web_fetch_tool_result"}, nil, []string{"七个已登记版本的主请求定义", "结果/引用/暂停续接", "服务端用量指标"}, "服务端执行，保持定义、加密来源、工具错误和引用。新版本需显式 direct callers；代码容器/PTC 尚未接入。客户端工具混合、历史分支/冷导入与显式缓存已隔离验证；实际账号能力与模型工具收费需上线验证。"),
 		entry("F-CODE-EXEC", "服务端代码执行", "工具", "unsupported", []string{"tools[].type:code_execution", "container"}, nil, nil, "需要官方容器状态、文件产物及用量，不用 Worker 本地 Bash 模拟。"),
@@ -59,8 +59,8 @@ func Catalog() Document {
 		entry("F-CLIENT-TOOLSETS", "客户端工具与工具集", "工具", "partial", []string{"toolset_name", "tools[].type", "tools[].configs", "messages[].content[].content[].type:browser_state"}, nil, []string{"固定 API 类型与联合工具身份", "外部客户端执行"}, "12 种已登记 typed 定义通过真实 CLI 与隔离上游新请求、续聊、回退、新缓存导入及 SSE 验证；工具集身份与 browser_state 保留。内部 CC 搜索、显式 safeguards 组合暂拒；删除普通 typed 定义后的历史身份不明确时拒绝。模型与提供商资格仍以上游为准。"),
 		entry("F-MCP", "MCP 工具与远程连接", "工具", "partial", []string{"tools[].name", "mcp_servers", "tools[].type:mcp_toolset", "mcp_tool_listing", "mcp_tool_use", "mcp_tool_result"}, []string{"mcp-client-2025-11-20", "mcp-client-2026-09-15"}, []string{"客户端 MCP 名称保留", "服务端 connector 主请求", "凭据隔离与历史账本"}, "远程 MCP 由提供商连接，支持两版连接协议、固定工具目录、结果/暂停/混合客户端工具历史；授权令牌只注入对应服务器的已归属主请求，日志结构化脱敏。内联 MCP 变更、API ToolSearch 联用和显式 safeguards 组合暂拒；真实远端资格另行验证。"),
 		entry("F-CONTEXT", "上下文编辑", "上下文", "partial", []string{"context_management"}, []string{"context-management-2025-06-27"}, []string{"已归属主请求策略保真", "响应 applied_edits 保真"}, "支持已登记 tool/thinking 编辑策略与 null；真实 CLI 配合隔离上游验证请求和响应。内层 CC 自有上下文行为不代表客户端策略的模型支持；未做真实提供商编辑效果验证。"),
-		entry("F-COMPACTION", "上下文压缩", "上下文", "partial", []string{"compaction", "context_management.edits", "messages[].content[].type:compaction"}, []string{"compact-2026-01-12", "compact-2026-09-04"}, []string{"新旧协议分别保真", "空结果 / 签名块 / 终态控制"}, "支持已登记新旧压缩请求、响应块与历史回放；隔离上游验证 JSON/SSE、空 content 及签名字段保留，不验证签名真伪。非空 tool_changes 历史回放明确拒绝，避免工具目录和嵌套模型授权失配。"),
-		entry("F-INLINE-TOOLS", "会话内工具变更", "上下文", "partial", []string{"messages[].content[].type:tool_addition", "messages[].content[].type:tool_removal"}, []string{"inline-tools-2026-09-15", "mid-conversation-tool-changes-2026-07-01"}, []string{"客户端工具时间线", "主请求精确载体移除"}, "客户端工具引用与定义按原历史位置生效，原顶层目录不提前展开；隔离上游验证新请求、移除、工具结果、新缓存、回退、SSE及逐块缓存。含变更的本地历史采用完整重建；服务端工具、内层 CC 搜索与显式 safeguards 组合暂拒。"),
+		entry("F-COMPACTION", "上下文压缩", "上下文", "partial", []string{"compaction", "context_management.edits", "messages[].content[].type:compaction", "messages[].content[].tool_changes"}, []string{"compact-2026-01-12", "compact-2026-09-04"}, []string{"新旧协议分别保真", "空结果 / 签名块 / 终态控制", "工具净变更时间线"}, "保留已登记新旧压缩协议、签名与工具净变更；显式空变更重置目录，null 压缩保持原语义。签名历史内的 Advisor 模型必须通过核心授权与价格检查且不能改名。隔离 CLI 已验证往返，不验证上游签名真伪或账号资格。"),
+		entry("F-INLINE-TOOLS", "会话内工具变更", "上下文", "partial", []string{"messages[].content[].type:tool_addition", "messages[].content[].type:tool_removal"}, []string{"inline-tools-2026-09-15", "mid-conversation-tool-changes-2026-07-01"}, []string{"客户端与已适配服务端工具时间线", "主请求精确载体移除", "嵌套模型授权与计价"}, "工具引用与定义按原历史位置生效；已移除工具不能被搜索重新激活。客户端工具、搜索/抓取和 Advisor 的续聊、回退、冷导入与压缩净变更已完成 CLI 隔离验证。内联 MCP、内层 CC 搜索与显式 safeguards 组合暂拒；实际模型能力以上游为准。"),
 		entry("F-FAST", "快速模式", "生成控制", "partial", []string{"speed"}, []string{"fast-mode-2026-02-01"}, []string{"attributed main request"}, "显式 fast 需管理员允许与 beta；最终主请求保真传 speed，缺省清除 CLI 默认。实际采用以 usage.speed 为准；账号资格、模型和定价仍需验证。"),
 		entry("F-TASK-BUDGET", "任务预算", "生成控制", "partial", []string{"output_config.task_budget"}, []string{"task-budgets-2026-03-13"}, []string{"主请求计划"}, "按 API 原值传递建议预算（total 至少 20000）；拒绝无计量的 CLI 内部轮次组合。官方 CC/Cowork 原生界面不支持，账号上游能力须另验证。"),
 		entry("F-FALLBACK", "模型回退与额度", "服务约束", "partial", []string{"fallbacks", "fallback_credit_token", "messages[].content[].type:fallback", "usage.iterations"}, []string{"server-side-fallback-2026-06-01", "server-side-fallback-2026-07-01"}, []string{"显式模型链与覆盖参数", "模型权限/价格快照", "真实 JSON 与逐次用量"}, "显式候选链交由提供商执行，每个模型单独鉴权与计价；JSON 保留官方舍弃前段输出的语义，SSE 保留原始边界，不自行重试。缺计费归属时记录账务错误，不把正常拒绝改为API错误。default、credit 和压缩组合暂拒；真实资格仍由上游决定。"),
@@ -92,6 +92,7 @@ type BetaRule struct {
 // documentation are not automatically permitted by the runtime.
 func BetaRules() []BetaRule {
 	return []BetaRule{
+		{"files-api-2025-04-14", "forward"},
 		{"mcp-client-2025-11-20", "forward"},
 		{"mcp-client-2026-09-15", "forward"},
 		{"server-side-fallback-2026-06-01", "forward"},

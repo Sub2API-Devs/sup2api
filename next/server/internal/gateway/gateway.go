@@ -28,20 +28,22 @@ import (
 // tests: sticky sessions and hook breaker/stats
 // then degrade to no-ops.
 type Deps struct {
-	CCGateway *ccgateway.Service
-	DB        *store.DB
-	Redis     redis.UniversalClient
-	Bus       core.Bus
-	Node      core.Node
-	Registry  core.PluginRegistry
-	Auth      core.APIKeyAuthenticator
-	Pricer    core.Pricer
-	Balance   core.BalanceGate
-	Slots     core.Slots
-	Accounts  core.AccountDirectory
-	Proxies   core.ProxyDirectory
-	Settler   core.Settler
-	Tasks     core.AsyncTasks
+	CCGateway         *ccgateway.Service
+	DB                *store.DB
+	Redis             redis.UniversalClient
+	Bus               core.Bus
+	Node              core.Node
+	Registry          core.PluginRegistry
+	Auth              core.APIKeyAuthenticator
+	Pricer            core.Pricer
+	Balance           core.BalanceGate
+	Slots             core.Slots
+	Accounts          core.AccountDirectory
+	Proxies           core.ProxyDirectory
+	Settler           core.Settler
+	Tasks             core.AsyncTasks
+	Resources         core.ProviderResources
+	ResourceTransport core.ProviderResourceTransport
 	// Limiter enforces per-account rpm/tpm limits (CONTRACTS §18);
 	// nil = no limits.
 	Limiter core.AccountLimiter
@@ -92,6 +94,8 @@ type Gateway struct {
 	randFloat func() float64
 	// ws holds the WebSocket session limits (websocket.go).
 	ws wsLimits
+	// At most four measured upload spools (2 GiB worst case) per process.
+	resourceSpools chan struct{}
 
 	stop    chan struct{}
 	wg      sync.WaitGroup
@@ -118,13 +122,14 @@ func (g *Gateway) CanConvert(clientProtocol, upstreamProtocol string) bool {
 // Call Close on shutdown.
 func New(d Deps) *Gateway {
 	g := &Gateway{
-		d:          d,
-		now:        time.Now,
-		lookupIP:   defaultLookupIP,
-		headerWait: defaultHeaderWait,
-		randFloat:  rand.Float64,
-		ws:         defaultWSLimits(),
-		stop:       make(chan struct{}),
+		d:              d,
+		now:            time.Now,
+		lookupIP:       defaultLookupIP,
+		headerWait:     defaultHeaderWait,
+		randFloat:      rand.Float64,
+		ws:             defaultWSLimits(),
+		resourceSpools: make(chan struct{}, 4),
+		stop:           make(chan struct{}),
 	}
 	g.conv = d.Converters
 	if g.conv == nil {
@@ -195,6 +200,10 @@ func (g *Gateway) Close() {
 func (g *Gateway) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		method, path := c.Request.Method, c.Request.URL.Path
+		if g.serveResourceHTTP(c) {
+			c.Abort()
+			return
+		}
 		t := g.table.Load()
 		if rt, params := t.match(method, path); rt != nil {
 			g.serve(c, t.gen, rt.binding, params)

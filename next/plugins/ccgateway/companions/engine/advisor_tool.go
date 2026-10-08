@@ -71,6 +71,10 @@ func checkAdvisorResult(block Object) error {
 
 func (r *Request) validateAdvisorBeta() error {
 	needed := r.hasServerSearch("advisor")
+	// Earlier inline definitions remain in the request even after withdrawal.
+	for _, tool := range r.ServerTools {
+		needed = needed || str(tool, "name") == "advisor"
+	}
 	for _, message := range r.Messages {
 		for _, block := range message.Content {
 			needed = needed || str(block, "type") == "advisor_tool_result" || str(block, "type") == "server_tool_use" && str(block, "name") == "advisor"

@@ -106,6 +106,11 @@ func cacheDuration(marker Object) time.Duration {
 // Traverse only Anthropic content containers, never arbitrary tool input/schema.
 func visitProtocolBlocks(blocks []Object, visit func(Object) error) error {
 	for _, block := range blocks {
+		if str(block, "type") == "compaction" {
+			if err := visitProtocolBlocks(timelineChanges(block), visit); err != nil {
+				return err
+			}
+		}
 		if definition := inlineToolDefinition(block); definition != nil {
 			if err := visit(definition); err != nil {
 				return err
@@ -206,6 +211,11 @@ func copyBlockCache(expected, actual []Object) error {
 		return fmt.Errorf("cache block alignment changed")
 	}
 	for i, b := range expected {
+		if str(b, "type") == "compaction" {
+			if err := copyBlockCache(timelineChanges(b), timelineChanges(actual[i])); err != nil {
+				return err
+			}
+		}
 		if definition := inlineToolDefinition(b); definition != nil {
 			out := inlineToolDefinition(actual[i])
 			if out == nil {

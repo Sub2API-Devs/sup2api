@@ -32,6 +32,19 @@
             "arrayPath": "tools",
             "match": {"type": "advisor_20260301"},
             "modelPath": "model"
+          },
+          {
+            "name": "advisor",
+            "arrayPath": "messages[].content",
+            "match": {"type": "tool_addition", "tool.type": "tool_definition", "tool.definition.type": "advisor_20260301"},
+            "modelPath": "tool.definition.model"
+          },
+          {
+            "name": "advisor",
+            "arrayPath": "messages[].content[].tool_changes",
+            "match": {"type": "tool_addition", "tool.type": "tool_definition", "tool.definition.type": "advisor_20260301"},
+            "modelPath": "tool.definition.model",
+            "identityOnly": true
           }
         ],
         "promptTextPaths": [
@@ -71,6 +84,19 @@
             "arrayPath": "tools",
             "match": {"type": "advisor_20260301"},
             "modelPath": "model"
+          },
+          {
+            "name": "advisor",
+            "arrayPath": "messages[].content",
+            "match": {"type": "tool_addition", "tool.type": "tool_definition", "tool.definition.type": "advisor_20260301"},
+            "modelPath": "tool.definition.model"
+          },
+          {
+            "name": "advisor",
+            "arrayPath": "messages[].content[].tool_changes",
+            "match": {"type": "tool_addition", "tool.type": "tool_definition", "tool.definition.type": "advisor_20260301"},
+            "modelPath": "tool.definition.model",
+            "identityOnly": true
           }
         ]
       },

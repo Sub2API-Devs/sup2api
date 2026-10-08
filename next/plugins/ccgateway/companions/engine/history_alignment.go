@@ -191,6 +191,9 @@ func historySkeleton(blocks []Object) []Object {
 			target["definition"] = clean
 			copy["tool"] = target
 		}
+		if str(block, "type") == "compaction" && block["tool_changes"] != nil {
+			copy["tool_changes"] = historySkeleton(timelineChanges(block))
+		}
 		if str(block, "type") == "tool_result" || str(block, "type") == "search_result" {
 			nested, _ := historyContent(block["content"])
 			copy["content"] = historySkeleton(nested)

@@ -46,7 +46,7 @@ func (c *call) dispatch(ctx context.Context) {
 	}
 	cands := make([]core.AccountRef, 0, len(all))
 	for i := range all {
-		if c.route(&all[i]) != nil && c.servesAllModels(&all[i]) {
+		if c.route(&all[i]) != nil && c.servesAllModels(&all[i]) && c.resourceAccountAllowed(&all[i]) {
 			cands = append(cands, all[i])
 		}
 	}
@@ -346,6 +346,10 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	if err != nil {
 		return attemptResult{kind: attemptFailover, err: invalidModelReference(err.Error())}
 	}
+	upBody, err = c.mapResourceReferences(ctx, upBody, ref, rt)
+	if err != nil {
+		return attemptResult{kind: attemptReturn, err: fromCore(core.AsError(err), errTypeInvalidRequest)}
+	}
 	fields := map[string]string{}
 	for _, p := range rt.requestFields {
 		if r := getJSON(upBody, p); r != "" {
@@ -399,6 +403,9 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	if err != nil {
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
 	}
+	if err := c.validateResourceReferencePatches(rt.upstream, upBody, body); err != nil {
+		return attemptResult{kind: attemptReturn, err: invalidModelReference(err.Error())}
+	}
 	if err := c.validatePatchedModelReferences(upBody, body); err != nil {
 		return attemptResult{kind: attemptFailover, err: invalidModelReference(err.Error())}
 	}
@@ -448,6 +455,9 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	}
 	if req.Header.Get("Content-Type") == "" && reqBody != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	if err := c.applyResourceHeaders(prepareCtx, req, acc, body); err != nil {
+		return attemptResult{kind: attemptReturn, err: fromCore(core.AsError(err), errTypeInvalidRequest)}
 	}
 	hc := *client
 	hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }

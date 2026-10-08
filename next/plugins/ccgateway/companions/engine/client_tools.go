@@ -451,7 +451,7 @@ func (r *Request) searchReferenceName(name string, fromWire bool) string {
 			return name
 		}
 	}
-	if r.hasServerSearch(name) {
+	if r.declaresServerTool(name) {
 		return name
 	}
 	if fromWire {

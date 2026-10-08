@@ -21,6 +21,7 @@ type modelReference struct {
 	kind, path, model string
 	priced            core.PricedUsage
 	overrides         map[string]string
+	identityOnly      bool
 }
 
 // checkReferencedModels runs before and after request hooks, just like the
@@ -29,19 +30,17 @@ type modelReference struct {
 func (c *call) checkReferencedModels() *gwError {
 	c.modelRefs = nil
 	for _, rule := range c.ep.Request.ModelReferences {
-		array := gjson.GetBytes(c.body, rule.ArrayPath)
-		if !array.Exists() || array.Type == gjson.Null {
-			continue
+		locations, err := modelReferenceLocations(c.body, rule.ArrayPath)
+		if err != nil {
+			return invalidModelReference(err.Error())
 		}
-		if !array.IsArray() {
-			return invalidModelReference(rule.ArrayPath + " must be an array")
-		}
-		for index, item := range array.Array() {
+		for _, location := range locations {
+			item := location.item
 			if !matchesModelReference(item, rule.Match) {
 				continue
 			}
 			value := item.Get(rule.ModelPath)
-			path := fmt.Sprintf("%s.%d.%s", rule.ArrayPath, index, rule.ModelPath)
+			path := location.path + "." + rule.ModelPath
 			if value.Type != gjson.String || value.Str == "" || len(value.Str) > 200 || strings.TrimSpace(value.Str) != value.Str || strings.ContainsAny(value.Str, "\r\n\x00") {
 				return invalidModelReference(path + " must be a nonempty model identifier up to 200 bytes")
 			}
@@ -51,7 +50,7 @@ func (c *call) checkReferencedModels() *gwError {
 			if len(c.modelRefs) == maxReferencedModels {
 				return invalidModelReference("too many referenced models")
 			}
-			ref := modelReference{kind: rule.Name, path: path, model: value.Str, overrides: map[string]string{}}
+			ref := modelReference{kind: rule.Name, path: path, model: value.Str, overrides: map[string]string{}, identityOnly: rule.IdentityOnly}
 			for _, field := range rule.ParameterOverrides {
 				if value := item.Get(field); value.Exists() {
 					ref.overrides[field] = value.Raw
@@ -207,6 +206,9 @@ func (c *call) mapReferencedModels(body []byte, account *core.AccountRef, rt *ty
 	c.upstreamRefs = map[string]core.PricedUsage{}
 	for _, ref := range c.modelRefs {
 		upModel := account.MapModel(ref.model)
+		if ref.identityOnly && upModel != ref.model {
+			return nil, fmt.Errorf("signed model reference requires identity mapping")
+		}
 		if rt.usage.Attempts != nil && ref.kind == rt.usage.Attempts.Name && upModel == c.upstreamPrimaryModel {
 			return nil, fmt.Errorf("attempt candidate maps to the primary model")
 		}
@@ -215,6 +217,9 @@ func (c *call) mapReferencedModels(body []byte, account *core.AccountRef, rt *ty
 			return nil, fmt.Errorf("different referenced models map to the same upstream usage identity")
 		}
 		c.upstreamRefs[key] = ref.priced
+		if ref.identityOnly {
+			continue
+		}
 		var err error
 		body, err = sjson.SetBytes(body, ref.path, upModel)
 		if err != nil {
@@ -285,23 +290,23 @@ func (c *call) validatePatchedModelReferences(before, after []byte) error {
 
 func modelReferenceSnapshot(body []byte, rules []manifest.RequestModelReference) ([]string, error) {
 	var refs []string
+	modelCount := 0
 	for _, rule := range rules {
-		array := gjson.GetBytes(body, rule.ArrayPath)
-		if !array.Exists() || array.Type == gjson.Null {
-			continue
+		locations, err := modelReferenceLocations(body, rule.ArrayPath)
+		if err != nil {
+			return nil, err
 		}
-		if !array.IsArray() {
-			return nil, fmt.Errorf("plugin changed a model-reference array")
-		}
-		for index, item := range array.Array() {
+		for _, location := range locations {
+			item := location.item
 			if !matchesModelReference(item, rule.Match) {
 				continue
 			}
 			model := item.Get(rule.ModelPath)
-			if model.Type != gjson.String || len(refs) >= maxReferencedModels {
+			if model.Type != gjson.String || modelCount >= maxReferencedModels {
 				return nil, fmt.Errorf("plugin changed model references")
 			}
-			refs = append(refs, fmt.Sprintf("%s\x00%s.%d.%s\x00%s", rule.Name, rule.ArrayPath, index, rule.ModelPath, model.Str))
+			modelCount++
+			refs = append(refs, fmt.Sprintf("%s\x00%s.%s\x00%s", rule.Name, location.path, rule.ModelPath, model.Str))
 			for _, field := range rule.ParameterOverrides {
 				value := item.Get(field)
 				refs = append(refs, field+"\x00"+value.Raw)

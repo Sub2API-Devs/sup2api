@@ -8,10 +8,11 @@ import (
 )
 
 type inlineToolTimeline struct {
-	Base     []Object
-	Known    map[string]Object
-	Active   map[string]bool
-	Versions map[string][]Object
+	Base      []Object
+	Known     map[string]Object
+	Active    map[string]bool
+	Withdrawn map[string]bool
+	Versions  map[string][]Object
 }
 
 func inlineToolBlock(block Object) bool {
@@ -78,63 +79,12 @@ func definitionFamily(tool Object) string {
 	return "unsupported:" + kind
 }
 func (r *Request) compileInlineTools(base []Object) error {
-	found := false
-	for _, message := range r.Messages {
-		for _, block := range message.Content {
-			found = found || inlineToolBlock(block)
-		}
+	timeline, carriers, err := r.compileToolTimeline(base)
+	if err != nil || timeline == nil {
+		return err
 	}
-	if !found {
-		return nil
-	}
-	timeline := &inlineToolTimeline{Base: base, Known: map[string]Object{}, Active: map[string]bool{}, Versions: map[string][]Object{}}
-	for _, tool := range base {
-		name := apiToolName(tool)
-		timeline.Known[name] = tool
-		timeline.Active[name] = tool["defer_loading"] != true
-		timeline.Versions[name] = append(timeline.Versions[name], tool)
-	}
-	for i := range r.Messages {
-		message := &r.Messages[i]
-		hasTools := false
-		for _, block := range message.Content {
-			if str(block, "type") == "tool_use" {
-				name := str(block, "name")
-				if family := str(block, "toolset_name"); family != "" {
-					name = family
-				}
-				if timeline.Known[name] == nil || !timeline.Active[name] {
-					return fmt.Errorf("historical tool call was not available at that position: %s", name)
-				}
-			}
-			if !inlineToolBlock(block) {
-				continue
-			}
-			hasTools = true
-			target := block["tool"].(map[string]any)
-			name := str(target, "name")
-			if str(target, "type") == "tool_definition" {
-				definition := target["definition"].(map[string]any)
-				name = apiToolName(definition)
-				if previous := timeline.Known[name]; previous != nil && definitionFamily(previous) != definitionFamily(definition) {
-					return fmt.Errorf("inline tool definition changes tool family: %s", name)
-				}
-				if err := r.validateInlineDefinition(definition); err != nil {
-					return err
-				}
-				timeline.Known[name] = definition
-				timeline.Versions[name] = append(timeline.Versions[name], definition)
-			} else if timeline.Known[name] == nil {
-				return fmt.Errorf("inline tool reference is unresolved: %s", name)
-			}
-			timeline.Active[name] = str(block, "type") == "tool_addition"
-		}
-		if hasTools {
-			if string(message.ClearAt) == `"next_user_message"` {
-				return fmt.Errorf("turn-scoped system messages cannot contain tool changes")
-			}
-			message.toolCarrier = "ccgateway-inline-tools-" + uuid() + "-" + uuid()
-		}
+	for _, i := range carriers {
+		r.Messages[i].toolCarrier = "ccgateway-inline-tools-" + uuid() + "-" + uuid()
 	}
 	r.InlineTools = timeline
 	// Register known custom identities only for transport/denial. Never put
@@ -194,8 +144,8 @@ func (r *Request) validateInlineToolConfiguration() error {
 	}
 	for _, message := range r.Messages {
 		for _, block := range message.Content {
-			if inlineToolBlock(block) {
-				target := block["tool"].(map[string]any)
+			for _, change := range timelineChanges(block) {
+				target := change["tool"].(map[string]any)
 				if str(target, "type") == "tool_definition" && !newBeta {
 					return fmt.Errorf("inline definitions require inline-tools-2026-09-15")
 				}
@@ -204,9 +154,6 @@ func (r *Request) validateInlineToolConfiguration() error {
 	}
 	if r.toolSearchEnabled() {
 		return fmt.Errorf("inline tool changes with internal CC ToolSearch are not yet supported")
-	}
-	if len(r.ServerTools) > 0 {
-		return fmt.Errorf("inline API server tool changes require per-turn server ledger support")
 	}
 	if r.Plan != nil && len(r.Plan.fields["safeguards"]) > 0 {
 		return fmt.Errorf("inline tools with explicit safeguards require timeline context verification")
@@ -226,6 +173,18 @@ func (r *Request) validateInlineToolConfiguration() error {
 func (r *Request) validateInlineNativeMapping(version string) error {
 	if r.InlineTools == nil {
 		return nil
+	}
+	for _, message := range r.Messages {
+		for _, block := range message.Content {
+			if str(block, "type") != "compaction" {
+				continue
+			}
+			for _, change := range timelineChanges(block) {
+				if digest(change) != digest(r.wireInlineToolBlock(change)) {
+					return fmt.Errorf("compaction tool_changes require original tool identities; mapped names cannot rewrite the signed block")
+				}
+			}
+		}
 	}
 	for name, versions := range r.InlineTools.Versions {
 		matched, unmatched := false, false
