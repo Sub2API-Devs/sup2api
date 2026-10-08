@@ -180,6 +180,9 @@ func (r *Request) compileToolTimeline(base []Object) (*inlineToolTimeline, []int
 				for _, value := range refs {
 					ref, _ := value.(Object)
 					name := str(ref, "tool_name")
+					if _, mcp := r.mcpSearchReference(name); mcp {
+						continue
+					}
 					if current[name] == nil || t.Withdrawn[name] {
 						return nil, nil, fmt.Errorf("tool search referenced an undefined tool at its historical position")
 					}

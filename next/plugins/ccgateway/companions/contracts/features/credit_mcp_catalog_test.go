@@ -47,7 +47,9 @@ func TestCreditMCPSourceCatalogConstraints(t *testing.T) {
 			t.Error("advertised beta is not admitted", beta)
 		}
 	}
-	if !strings.Contains(byID["F-MCP"].Reason, "deferred MCP") || !strings.Contains(byID["F-MCP"].Reason, "尚未确认") {
-		t.Fatal("unverified MCP encoding presented as supported")
+	for _, boundary := range []string{"deferred MCP", "完整 pinned", "未知引用", "命名空间碰撞", "真实提供商组合资格须另验证"} {
+		if !strings.Contains(byID["F-MCP"].Reason, boundary) {
+			t.Error("conditional MCP search boundary missing", boundary)
+		}
 	}
 }

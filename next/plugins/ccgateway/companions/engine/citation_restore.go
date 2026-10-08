@@ -125,7 +125,7 @@ func restoreHistoryCitations(r *Request, body Object) error {
 			if str(block, "type") != "text" || block["citations"] == nil {
 				continue
 			}
-			if existing := actual[i]["citations"]; existing != nil && digest(existing) != digest(block["citations"]) {
+			if existing := actual[i]["citations"]; existing != nil && !emptyCitationArray(existing) && digest(existing) != digest(block["citations"]) {
 				return fmt.Errorf("citation data conflicts at assistant turn %d block %d", at, i)
 			}
 			raw, err := json.Marshal(block["citations"])
@@ -141,4 +141,18 @@ func restoreHistoryCitations(r *Request, body Object) error {
 		assistants[at]["content"] = actual
 	}
 	return nil
+}
+
+// CLI 2.1.292 can retain the empty citations array from content_block_start
+// while dropping later citations_delta entries. This exception is used only
+// after full assistant, preceding user and document-corpus alignment.
+func emptyCitationArray(value any) bool {
+	switch v := value.(type) {
+	case []any:
+		return len(v) == 0
+	case []Object:
+		return len(v) == 0
+	default:
+		return false
+	}
 }

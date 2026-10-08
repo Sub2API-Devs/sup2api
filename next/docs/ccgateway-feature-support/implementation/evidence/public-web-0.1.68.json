@@ -1,0 +1,108 @@
+{
+  "results": [
+    {
+      "name": "web_search",
+      "path": "/v1/messages",
+      "status": 200,
+      "request_id": "7cb0e00d4b2517d8ef3113e4",
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 3302,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 19846,
+        "cache_read_input_tokens": 3302,
+        "inference_geo": "not_available",
+        "input_tokens": 4,
+        "output_tokens": 257,
+        "output_tokens_details": {
+          "thinking_tokens": 30
+        },
+        "server_tool_use": {
+          "web_fetch_requests": 0,
+          "web_search_requests": 1
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "server_tool_use",
+        "web_search_tool_result",
+        "thinking",
+        "text",
+        "text",
+        "text",
+        "text"
+      ],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 8.612
+    },
+    {
+      "name": "web_fetch",
+      "path": "/v1/messages",
+      "beta": "web-fetch-2025-09-10",
+      "status": 200,
+      "request_id": "4bc917c85320d0277b5fbfee",
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2369,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 8706,
+        "cache_read_input_tokens": 2369,
+        "inference_geo": "not_available",
+        "input_tokens": 4,
+        "output_tokens": 149,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "server_tool_use": {
+          "web_fetch_requests": 1,
+          "web_search_requests": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "server_tool_use",
+        "web_fetch_tool_result",
+        "text",
+        "text"
+      ],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 7.386
+    }
+  ],
+  "checks": {
+    "web_search": {
+      "calls": 1,
+      "results": 1,
+      "successful_pairs": 1,
+      "citations": 2,
+      "stop": "end_turn",
+      "result_sha256": [
+        "4eaa2acc433e54eaeb6481b4c496473c607556a5904ae9eb9651cf937be0195f"
+      ]
+    },
+    "web_fetch": {
+      "calls": 1,
+      "results": 1,
+      "successful_pairs": 1,
+      "citations": 1,
+      "stop": "end_turn",
+      "result_sha256": [
+        "1af5549c18ce665d14791eb3eeb55f880710787860f845b1e7bc2ad868e15fdb"
+      ]
+    }
+  },
+  "passed": true,
+  "scope": "Two direct public web tools with citations; no dynamic filtering, retries, or account override."
+}

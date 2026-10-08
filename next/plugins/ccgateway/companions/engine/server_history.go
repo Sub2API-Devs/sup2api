@@ -11,6 +11,7 @@ type serverToolLedger struct {
 	names      map[string]string
 	turnCalls  map[string]bool
 	mcpServers map[string]string
+	mcpLoaded  map[mcpSearchIdentity]bool
 }
 
 func newServerToolLedger() *serverToolLedger {
@@ -31,7 +32,7 @@ func (l *serverToolLedger) accept(block Object, r *Request, historical ...bool) 
 	}
 	if kind == "mcp_tool_use" {
 		id, server := str(block, "id"), str(block, "server_name")
-		if id == "" || l.seen[id] || !past && (r.NoTools || !r.MCP.permitsCall(server, str(block, "name"))) {
+		if id == "" || l.seen[id] || !past && (r.NoTools || !r.MCP.permitsCall(server, str(block, "name")) && !l.mcpLoaded[mcpSearchIdentity{server, str(block, "name")}]) {
 			return fmt.Errorf("duplicate or undeclared MCP tool call")
 		}
 		l.seen[id] = true
@@ -66,6 +67,18 @@ func (l *serverToolLedger) accept(block Object, r *Request, historical ...bool) 
 	id := str(block, "tool_use_id")
 	if l.pending[id] != kind {
 		return fmt.Errorf("server result has no matching outstanding call")
+	}
+	if kind == "tool_search_tool_result" && !past {
+		identities, err := r.mcpSearchDiscoveries(block, r.MCP.searchTimeline())
+		if err != nil {
+			return err
+		}
+		if l.mcpLoaded == nil {
+			l.mcpLoaded = map[mcpSearchIdentity]bool{}
+		}
+		for _, identity := range identities {
+			l.mcpLoaded[identity] = true
+		}
 	}
 	delete(l.pending, id)
 	return nil

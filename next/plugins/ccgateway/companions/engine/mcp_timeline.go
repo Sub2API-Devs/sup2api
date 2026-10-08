@@ -77,17 +77,6 @@ func (r *Request) compileMCPTimeline() error {
 		}
 		return nil
 	}
-	found := false
-	for _, message := range r.Messages {
-		for _, block := range message.Content {
-			for _, change := range timelineChanges(block) {
-				found = found || mcpInlineChange(change)
-			}
-		}
-	}
-	if !found {
-		return nil
-	}
 	timeline := &mcpTimeline{}
 	reset := func() {
 		timeline.current = map[string]*mcpAvailability{}
@@ -174,6 +163,14 @@ func (r *Request) compileMCPTimeline() error {
 				}
 			}
 			switch kind {
+			case "tool_search_tool_result":
+				identities, err := r.mcpSearchDiscoveries(block, timeline)
+				if err != nil {
+					return err
+				}
+				for _, identity := range identities {
+					timeline.current[identity.server].tools[identity.name] = true
+				}
 			case "mcp_tool_use":
 				server, name := str(block, "server_name"), str(block, "name")
 				// Completed history for a server omitted entirely from this request stays

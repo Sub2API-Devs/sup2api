@@ -2,27 +2,14 @@ package engine
 
 import "fmt"
 
-// With no deferred MCP tools the provider searches only declared API/client
-// tool definitions. References still pass the existing exact identity mapper;
-// an unknown reference is never reclassified as a connector tool by prefix.
+// Deferred connector search is admitted only with a complete, unambiguous
+// pinned identity catalog. Unknown references never become MCP tools by prefix.
 func (r *Request) validateMCPClientSearch() error {
 	if r.MCP == nil {
 		return nil
 	}
-	definitions := append([]Object{}, r.MCP.toolsets...)
-	for _, message := range r.Messages {
-		for _, block := range message.Content {
-			for _, change := range timelineChanges(block) {
-				if def := inlineToolDefinition(change); str(def, "type") == "mcp_toolset" {
-					definitions = append(definitions, def)
-				}
-			}
-		}
-	}
-	for _, definition := range definitions {
-		if mcpMayDefer(definition) {
-			return fmt.Errorf("deferred MCP with API tool search requires verified cross-server reference encoding")
-		}
+	if err := r.validateMCPReferenceNames(); err != nil {
+		return err
 	}
 	return r.validateMCPNamespace()
 }
