@@ -58,11 +58,17 @@ func TestRealCLIHelperHistoryTaskBudget(t *testing.T) { runHelperHistoryCarrier(
 func runHelperHistoryCarrier(t *testing.T, budget bool) {
 	runHelperHistoryScenario(t, budget, false)
 }
-func runHelperHistoryScenario(t *testing.T, budget, inline bool) {
+func runHelperHistoryScenario(t *testing.T, budget, inline bool, tailOptions ...bool) {
+	tail := len(tailOptions) > 0 && tailOptions[0]
+	policy := `{}`
+	if tail {
+		policy = `{"attachment_source":"gateway"}`
+	}
 	for _, stream := range []bool{false, true} {
 		t.Run(map[bool]string{false: "json", true: "sse"}[stream], func(t *testing.T) {
 			var calls atomic.Int32
 			var capturedSystem atomic.Value
+			var capturedTail atomic.Value
 			handler := func(w http.ResponseWriter, r *http.Request) {
 				raw, _ := io.ReadAll(r.Body)
 				wire, err := decodeObject(raw)
@@ -87,6 +93,9 @@ func runHelperHistoryScenario(t *testing.T, budget, inline bool) {
 				messages, _ := json.Marshal(wire["messages"])
 				if !bytes.Contains(messages, []byte("helper_source_call")) {
 					emit := writeHelperHistoryFixture
+					if tail {
+						emit = writeHelperTailUsageFixture
+					}
 					if os.Getenv("CCG_PROBE_INITIAL_THINKING") == "1" {
 						emit = writeInternalCacheFixture
 					}
@@ -108,6 +117,22 @@ func runHelperHistoryScenario(t *testing.T, budget, inline bool) {
 							continue
 						}
 						found = true
+						if tail {
+							if i+2 >= len(rows) {
+								t.Error("helper tail system missing")
+							} else {
+								system, _ := rows[i+2].(Object)
+								if str(system, "role") != "system" {
+									t.Error("helper tail system moved")
+								}
+								h := digest(system)
+								if old := capturedTail.Load(); old == nil {
+									capturedTail.Store(h)
+								} else if old.(string) != h {
+									t.Error("helper tail object changed during replay")
+								}
+							}
+						}
 						if i == 0 {
 							t.Error("hidden helper missing preceding system")
 							continue
@@ -141,7 +166,11 @@ func runHelperHistoryScenario(t *testing.T, budget, inline bool) {
 					t.Error("hidden helper missing")
 				}
 				if !bytes.Contains(messages, []byte("PUBLIC_WEATHER_RESULT")) {
-					writeInternalCacheFixture(w, str(wire, "model"), []Object{{"type": "tool_use", "id": "external_weather", "name": "mcp__ccgateway__weather", "input": Object{}}})
+					emit := writeInternalCacheFixture
+					if tail {
+						emit = writeHelperFinalMultiDeltaFixture
+					}
+					emit(w, str(wire, "model"), []Object{{"type": "tool_use", "id": "external_weather", "name": "mcp__ccgateway__weather", "input": Object{}}})
 					return
 				}
 				writeInternalCacheFixture(w, str(wire, "model"), []Object{{"type": "text", "text": "PUBLIC_DONE"}})
@@ -161,18 +190,18 @@ func runHelperHistoryScenario(t *testing.T, budget, inline bool) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				namespace, err := helperhistory.Namespace(str(body, "model"), "2.1.292", json.RawMessage(`{}`))
+				namespace, err := helperhistory.Namespace(str(body, "model"), "2.1.292", json.RawMessage(policy))
 				if err != nil {
 					t.Fatal(err)
 				}
 				env := helperhistory.RequestEnvelope{Version: 1, AttemptID: uuid(), RequestDigest: hash, Namespace: namespace, Identity: id, Request: raw, History: history}
-				if inline {
+				if inline || tail {
 					env.PayloadVersion = helperhistory.PayloadVersion2
 				}
 				data, _ := json.Marshal(env)
 				req, _ := http.NewRequest("POST", endpoint+"/v1/messages", bytes.NewReader(data))
 				req.Header.Set(helperhistory.Header, "1")
-				req.Header.Set("X-CCGateway-Request-Policy", `{}`)
+				req.Header.Set("X-CCGateway-Request-Policy", policy)
 				if budget {
 					req.Header.Set("anthropic-beta", taskBudgetBeta)
 				}
@@ -198,6 +227,9 @@ func runHelperHistoryScenario(t *testing.T, budget, inline bool) {
 				return answer
 			}
 			first := post(nil)
+			if tail && !bytes.Contains(first.Delta, []byte(`system_only`)) {
+				t.Fatal("fixture did not preserve the generated tail system")
+			}
 			if !bytes.Contains(first.Delta, []byte("PRIVATE_PLANNING")) || !bytes.Contains(first.Delta, []byte("fixture-original-signature")) {
 				t.Fatal("whole hidden planning lost")
 			}
@@ -224,6 +256,13 @@ func runHelperHistoryScenario(t *testing.T, budget, inline bool) {
 				return result
 			}
 			toolAnswer := decodePublic(first)
+			if tail {
+				u, _ := toolAnswer["usage"].(Object)
+				cache, _ := u["cache_creation"].(Object)
+				if tokenCount(u["input_tokens"]) != 44 || tokenCount(u["output_tokens"]) != 99 || tokenCount(cache["ephemeral_1h_input_tokens"]) != 1647 {
+					t.Fatalf("multi-delta aggregate incorrect: %v", u)
+				}
+			}
 			resultHistory := append(append([]any{}, body["messages"].([]any)...), Object{"role": "assistant", "content": toolAnswer["content"]}, Object{"role": "user", "content": []Object{{"type": "tool_result", "tool_use_id": "external_weather", "content": "PUBLIC_WEATHER_RESULT"}}})
 			if inline {
 				resultHistory = append(resultHistory, Object{"role": "system", "content": []any{Object{"type": "tool_removal", "tool": Object{"type": "tool_reference", "name": "weather"}}}})

@@ -19,6 +19,8 @@ type helperHistoryExecution struct {
 	payloadVersion                    int
 	systemEvidence                    []any
 	systemObserved                    bool
+	reminders                         map[int]string
+	tailSystems                       map[int][]any
 	err                               error
 	providerAccounting                []*helperAccounting
 	accountingBytes, accountingFrames int
@@ -132,7 +134,11 @@ func (r *Request) applyHelperHistory(body Object) error {
 		}
 	}
 	suffix := messages[boundaries[len(boundaries)-1]+1:]
-	systems, pairs, err := splitHelperSystems(suffix)
+	flat, tails, err := r.helperTailSystemView(suffix)
+	if err != nil {
+		return err
+	}
+	systems, pairs, err := splitHelperSystems(flat)
 	if err != nil {
 		return err
 	}
@@ -154,7 +160,7 @@ func (r *Request) applyHelperHistory(body Object) error {
 		return fmt.Errorf("helper system changed at its public boundary")
 	}
 	if len(pairs) > 0 {
-		segment, err := r.captureHelperHistory(x.public, x.tools, len(r.Messages)-1, suffix)
+		segment, err := r.captureHelperHistory(x.public, x.tools, len(r.Messages)-1, flat)
 		if err != nil {
 			x.err = err
 			return err
@@ -172,7 +178,12 @@ func (r *Request) applyHelperHistory(body Object) error {
 		if x.payloadVersion == helperhistory.PayloadVersion2 {
 			segment.Kind = helperhistory.SegmentWholeRound
 		}
-		x.delta.Segments = append(x.delta.Segments, segment)
+		segments, err := r.helperTailSegments(segment, suffix, tails)
+		if err != nil {
+			return err
+		}
+		x.delta.Segments = append(x.delta.Segments, segments...)
+		x.tailSystems = tails
 	}
 	insertions := make(map[int][]any)
 	skipped := make(map[int]bool)
@@ -191,14 +202,15 @@ func (r *Request) applyHelperHistory(body Object) error {
 		}
 
 		index := boundaries[s.AfterMessage]
-		leading, _, err := splitHelperSystems(segmentMessages)
-		if err != nil {
-			return err
-		}
+		insertions[index] = append(insertions[index], segmentMessages...)
+	}
+	// Match only the leading systems of the complete group. Later systems
+	// belong after their hidden pairs, even when their text equals a prefix.
+	for index, group := range insertions {
+		leading := helperLeadingSystems(group)
 		if err := matchReplayedHelperSystems(messages, publicIndices, skipped, index+1, leading); err != nil {
 			return err
 		}
-		insertions[index] = append(insertions[index], segmentMessages...)
 	}
 	var restored []any
 	for i, message := range messages {

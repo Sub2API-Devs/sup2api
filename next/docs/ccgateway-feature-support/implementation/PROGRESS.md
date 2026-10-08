@@ -4,6 +4,16 @@
 
 ## 本轮追加证据与限制
 
+新尾system真实Core/Worker/CLI/隔离PG JSON132.041s已GREEN：5公开/6provider/5usage5receipt，input124/output131/1h1647原预期精确一致，cold/rollback及完整尾system原位hash通过。同场景Core SSE正在20327运行，未当通过；该ABC每provider单delta，多delta证据来自作者最终真实CLI及独立engine，明确分层。官方BetaUsage的speed分类已沿一致性机制补齐并最终engine5.518s/vet绿。准备Git提交冻结后服务器构建门禁，不提前部署。
+
+本候选计量修复已重新冻结：最终真实CLI12调用/多delta/尾system原位/nullable+必填检查29.391s通过；全engine含新独立10例6.118s、vet通过。新代理从实际runner路由另发现缺input被造0的RED，修复后负例原断言转绿；官方SDK nullable假设及nested partial扩展案例已明确纠正，见HIDDEN-SEARCH-USAGE-FRESH-REVIEW。Core/Worker/CLI/隔离PG按原124/131/1h1647预期重跑中，尚不能作为绿或发布证明。
+
+新增Core/Worker/CLI/隔离PG尾system联调129.149s为真实RED：cold/rollback尾对象hash均通过，6provider/input124/output131正确，但隐藏首轮1h缓存1647未进入成功汇总。进一步独审复现合法多message_delta重复加隐藏输入/缓存：预期input34/1h1647，实际58/3294（1.135s RED）。另核跨轮service_tier/inference_geo分类静默丢失，正统一修正usage聚合。第二次昂贵联调在30.169s主动取消并清理专属测试进程/隧道，不当产品测试失败或通过。下一版发布暂停至这些真实计量缺口闭环，不能只以尾历史绿放行。
+
+尾预算system候选已完成作者真实CLI隔离12调用22.530s（JSON/SSE、结果续聊、普通续、cold、rollback，完整尾对象hash原位），全engine5.815s/vet；独立HTTP ACK及同文不同位置/原对象不变/v1拒绝测试1.257s通过，Root另复跑独立测试1.123s。Core→Worker→CLI→隔离PG新尾场景正在跑，不宣称通过或已部署。失败已知分轮用量UI已独审并Root复跑2文件8tests，通过后推送d5c0b14b7，尚未上线。下一版拟Core.73/Worker.76，Controller.48不变。
+
+Core.72公网502已定位为原生CLI在隐藏ToolSearch完整A/U后追加total_tokens预算system，当前leading-only校验在第二provider发送前拒绝；第一provider200完整返回，真实已知输入24/输出91/1h缓存写1647完整保存在replacement。账务failed/incomplete、0费用，不是零消耗或再次OAuth失效。正由CC补原位捕获恢复红例/API独审协议与集成/UI补失败分轮已知用量展示，禁止删除或重算CLI提示。详细失败及部署证据已推送b0a975d2e。
+
 最新发布已完成：精确Git `2bd328b46b18415ff209ecfaa39e71f27c17407c`，Core.72四节点ready、Plugin.13、Worker.75原地更新21/22、Controller.48。未来默认镜像.75，既有容器ID/镜像引用/挂载/授权保留。核心维护503观测约38.30秒。以下未部署、等待刷新等段落均为较早快照。
 
 OAuth根因修复已得到真实证据：去掉identity前置短命auth status，以一次原生CLI载体自动刷新并取得profile200；#22 access有效期更新至2026-10-09 05:41北京时间，issuer/generation不变，无遗留锁/CLI。随后一次正常额度查询200且token_expired清除，无需重新授权。管理状态为明确的local_snapshot，不将凭据存在等同在线认证通过。详见Worker.75及Core.72部署记录。

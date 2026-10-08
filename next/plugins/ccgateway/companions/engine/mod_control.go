@@ -17,6 +17,7 @@ import (
 var modControls sync.Map
 
 type modControl struct {
+	helperRequest    *Request
 	scope            *mainRequestScope
 	sessionContexts  map[string]bool
 	reminderMarker   string
@@ -38,7 +39,7 @@ func startModControl(cfg *runConfig, internalBase string) (*modControl, error) {
 			return nil, err
 		}
 	}
-	data, err := json.Marshal(Object{"attachments": cfg.attachments, "systems": cfg.systems, "deferred": deferred, "tools": cfg.tools, "trace": cfg.diagnostic.enabled(), "main_request_scope": cfg.scope != nil, "continuation_attachment_ack": cfg.reminderMarker != ""})
+	data, err := json.Marshal(Object{"attachments": cfg.attachments, "systems": cfg.systems, "deferred": deferred, "tools": cfg.tools, "trace": cfg.diagnostic.enabled(), "main_request_scope": cfg.scope != nil, "continuation_attachment_ack": cfg.reminderMarker != "", "helper_attachment_ack": cfg.helperRequest != nil && cfg.helperRequest.helperHistory != nil})
 	if err != nil {
 		return nil, err
 	}
@@ -50,6 +51,7 @@ func startModControl(cfg *runConfig, internalBase string) (*modControl, error) {
 	c.nativeReminders = cfg.nativeReminders
 	c.diagnostic = cfg.diagnostic
 	c.scope = cfg.scope
+	c.helperRequest = cfg.helperRequest
 	c.diagnostic.artifact("mod-config.json", Object{"attachments": cfg.attachments, "systems": cfg.systems, "deferred": deferred, "tools": cfg.tools})
 	if internalBase != "" {
 		modControls.Store(c.path, c)
@@ -127,6 +129,11 @@ func (c *modControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		c.ready = true
 	case ack.Event == "system" && c.ready && ack.Systems == c.systems:
 		c.attached = true
+	case ack.Event == "helper_reminder" && c.ready && c.scope != nil:
+		if !c.acknowledgeHelperReminder(ack.Detail) {
+			w.WriteHeader(400)
+			return
+		}
 	case ack.Event == "continuation_reminder" && c.ready && c.reminderMarker != "":
 		if !c.acknowledgeContinuationReminder(ack.Detail) {
 			w.WriteHeader(400)

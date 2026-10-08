@@ -40,7 +40,13 @@ func TestHelperHistoryABCRealDBCLI(t *testing.T) {
 func TestHelperHistoryABCInlineRealDBCLI(t *testing.T) {
 	runHelperHistoryABCRealDBCLI(t, true)
 }
-func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, upgrade ...bool) {
+
+type abcHelperOptions struct {
+	UpgradePayload bool
+	TailReminder   bool
+}
+
+func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, options ...abcHelperOptions) {
 	cli := os.Getenv("CCG_REAL_CLI")
 	if cli == "" {
 		t.Skip("set CCG_REAL_CLI for isolated Worker integration")
@@ -63,8 +69,16 @@ func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, upgrade ...bool) {
 	}
 	for _, stream := range []bool{false, true} {
 		t.Run(fmt.Sprint(stream), func(t *testing.T) {
-			mixedVersion := len(upgrade) > 0 && upgrade[0]
+			var option abcHelperOptions
+			if len(options) > 0 {
+				option = options[0]
+			}
+			mixedVersion := option.UpgradePayload
 			legacyCapability := mixedVersion
+			policy := json.RawMessage(`{}`)
+			if option.TailReminder {
+				policy = json.RawMessage(`{"schema_version":1,"attachment_source":"gateway"}`)
+			}
 			ctx := context.Background()
 			e, _, _ := resourceTestEnv(t)
 			var userID, groupID int64
@@ -87,7 +101,7 @@ func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, upgrade ...bool) {
 			durable := helperhistory.New(db, cipher, helperhistory.Options{})
 			e.gw.d.HelperHistory = durable
 			e.gw.d.EnableHelperHistory = true
-			provider := &abcProvider{t: t, budget: `{"total":20000,"type":"tokens"}`, inline: inline}
+			provider := &abcProvider{t: t, budget: `{"total":20000,"type":"tokens"}`, inline: inline, tailReminder: option.TailReminder}
 			upstream := httptest.NewServer(provider)
 			defer upstream.Close()
 			root := t.TempDir()
@@ -118,7 +132,7 @@ func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, upgrade ...bool) {
 			}
 			bridge.Director = func(r *http.Request) {
 				originalDirector(r)
-				r.Header.Set("X-CCGateway-Request-Policy", `{}`)
+				r.Header.Set("X-CCGateway-Request-Policy", string(policy))
 				r.Header.Set("X-Api-Key", "worker-fixture")
 			}
 			httpBridge := httptest.NewServer(bridge)
@@ -148,7 +162,7 @@ func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, upgrade ...bool) {
 					return helperRuntimeInfo{}, err
 				}
 				// Use the running Worker's actual declaration, CLI and issuer.
-				ns, err := helperRuntimeNamespace(caps, actual, json.RawMessage(`{}`))
+				ns, err := helperRuntimeNamespace(caps, actual, policy)
 				if legacyCapability {
 					caps.HelperHistoryPayloadVersions = nil
 				}
@@ -246,7 +260,7 @@ func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, upgrade ...bool) {
 			bridge.Director = func(r *http.Request) {
 				r.URL.Scheme = target.Scheme
 				r.URL.Host = target.Host
-				r.Header.Set("X-CCGateway-Request-Policy", `{}`)
+				r.Header.Set("X-CCGateway-Request-Policy", string(policy))
 				r.Header.Set("X-Api-Key", "worker-fixture")
 			}
 			// A new store instance plus new native cache must restore from PostgreSQL.
@@ -269,7 +283,7 @@ func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, upgrade ...bool) {
 			if err != nil || len(pending) != wantRequests {
 				t.Fatalf("durable usage count %d: %v", len(pending), err)
 			}
-			var sumIn, sumOut int64
+			var sumIn, sumOut, sumCache1h int64
 			var account int64
 			consumer := usage.New(db, nil, nil, nil, usage.Options{})
 			for _, item := range pending {
@@ -284,6 +298,7 @@ func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, upgrade ...bool) {
 				}
 				sumIn += item.Record.Tokens.Input
 				sumOut += item.Record.Tokens.Output
+				sumCache1h += item.Record.Tokens.CacheCreation1h
 				// Replaying the same frozen outbox item cannot create a second charge row.
 				for range 2 {
 					if err := consumer.PersistHelperUsage(ctx, item.Record, item.FrozenEnvelope, item.Digest); err != nil {
@@ -301,8 +316,14 @@ func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, upgrade ...bool) {
 			provider.mu.Lock()
 			calls := provider.calls
 			provider.mu.Unlock()
-			if calls != wantCalls || sumIn != int64(wantCalls*20) || sumOut != int64(wantCalls*8) {
-				t.Fatalf("calls=%d actual cumulative usage %d/%d", calls, sumIn, sumOut)
+			wantIn, wantOut, wantCache1h := int64(wantCalls*20), int64(wantCalls*8), int64(0)
+			if option.TailReminder {
+				wantIn += 4
+				wantOut += 83
+				wantCache1h = 1647
+			}
+			if calls != wantCalls || sumIn != wantIn || sumOut != wantOut || sumCache1h != wantCache1h {
+				t.Fatalf("calls=%d actual cumulative usage %d/%d cache1h=%d (expected %d/%d cache1h=%d)", calls, sumIn, sumOut, sumCache1h, wantIn, wantOut, wantCache1h)
 			}
 			var rows, receipts int
 			if err := db.Pool.QueryRow(ctx, `SELECT count(*) FROM usage_logs WHERE user_id=$1`, userID).Scan(&rows); err != nil {
@@ -415,6 +436,8 @@ func (w *abcWorker) facts(ctx context.Context) (features.RuntimeCapabilities, re
 }
 
 type abcProvider struct {
+	tailReminder        bool
+	tailDigest          string
 	inline              bool
 	inlineCatalogDigest string
 	t                   *testing.T
@@ -468,8 +491,11 @@ func (p *abcProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if p.inline {
 		verifyABCInline(p.t, body.Messages, &p.inlineCatalogDigest)
 	}
+	if p.tailReminder {
+		verifyABCTailReminder(p.t, body.Messages, &p.tailDigest)
+	}
 	if !bytes.Contains(joined, []byte("helper_source_call")) {
-		emitABCResponse(w, body.Model, p.calls, []map[string]any{{"type": "thinking", "thinking": "PRIVATE_ABC_THINKING", "signature": "fixture-original-signature"}, {"type": "text", "text": "PRIVATE_ABC_PLANNING"}, {"type": "tool_use", "id": "helper_source_call", "name": "ToolSearch", "input": map[string]any{"query": "select:mcp__ccgateway__weather"}}})
+		emitABCResponse(w, body.Model, p.calls, []map[string]any{{"type": "thinking", "thinking": "PRIVATE_ABC_THINKING", "signature": "fixture-original-signature"}, {"type": "text", "text": "PRIVATE_ABC_PLANNING"}, {"type": "tool_use", "id": "helper_source_call", "name": "ToolSearch", "input": map[string]any{"query": "select:mcp__ccgateway__weather"}}}, p.tailReminder)
 		return
 	}
 	for i, msg := range body.Messages {
@@ -566,13 +592,21 @@ func (p *abcProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	emitABCResponse(w, body.Model, p.calls, []map[string]any{{"type": "text", "text": "PUBLIC_DONE"}})
 }
-func emitABCResponse(w http.ResponseWriter, model string, n int, blocks []map[string]any) {
+func emitABCResponse(w http.ResponseWriter, model string, n int, blocks []map[string]any, largeUsage ...bool) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	emit := func(v map[string]any) {
 		raw, _ := json.Marshal(v)
 		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", v["type"], raw)
 	}
-	emit(map[string]any{"type": "message_start", "message": map[string]any{"id": fmt.Sprintf("msg_abc_%d", n), "type": "message", "role": "assistant", "model": model, "content": []any{}, "stop_reason": nil, "usage": map[string]any{"input_tokens": 20, "output_tokens": 0}}})
+	startUsage := map[string]any{"input_tokens": 20, "output_tokens": 0}
+	outputTokens := 8
+	if len(largeUsage) > 0 && largeUsage[0] {
+		startUsage["input_tokens"] = 24
+		startUsage["cache_creation_input_tokens"] = 1647
+		startUsage["cache_creation"] = map[string]any{"ephemeral_1h_input_tokens": 1647, "ephemeral_5m_input_tokens": 0}
+		outputTokens = 91
+	}
+	emit(map[string]any{"type": "message_start", "message": map[string]any{"id": fmt.Sprintf("msg_abc_%d", n), "type": "message", "role": "assistant", "model": model, "content": []any{}, "stop_reason": nil, "usage": startUsage}})
 	stop := "end_turn"
 	for i, b := range blocks {
 		start := map[string]any{}
@@ -603,6 +637,6 @@ func emitABCResponse(w http.ResponseWriter, model string, n int, blocks []map[st
 		}
 		emit(map[string]any{"type": "content_block_stop", "index": i})
 	}
-	emit(map[string]any{"type": "message_delta", "delta": map[string]any{"stop_reason": stop, "stop_sequence": nil}, "usage": map[string]any{"output_tokens": 8}})
+	emit(map[string]any{"type": "message_delta", "delta": map[string]any{"stop_reason": stop, "stop_sequence": nil}, "usage": map[string]any{"output_tokens": outputTokens}})
 	emit(map[string]any{"type": "message_stop"})
 }

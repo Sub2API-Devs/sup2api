@@ -121,6 +121,10 @@ export function register(on) {
     }
     const result = await next(e);
     await trace('keep', result);
+    if (configuration?.helper_attachment_ack && e.type === 'total_tokens_reminder' && origin === 'engine' && typeof result?.text === 'string' && result.text.length > 0) {
+      const ack = await $.http.fetch(controlURL, { method: 'POST', headers: { Authorization: 'Bearer ' + controlToken, 'content-type': 'application/json' }, body: JSON.stringify({ event: 'helper_reminder', detail: { text: result.text } }) });
+      if (!ack.ok) throw new Error('ccgateway: helper reminder acknowledgement rejected');
+    }
     if (configuration?.continuation_attachment_ack && e.type === 'total_tokens_reminder' && origin === 'engine' && typeof result?.text === 'string' && result.text.length > 0) {
       const ack = await $.http.fetch(controlURL, { method: 'POST', headers: { Authorization: 'Bearer ' + controlToken, 'content-type': 'application/json' }, body: JSON.stringify({ event: 'continuation_reminder', detail: { text: result.text } }) });
       if (!ack.ok) throw new Error('ccgateway: continuation reminder acknowledgement rejected');

@@ -10,6 +10,8 @@ import (
 )
 
 // Runtime-only evidence, never accepted from client history or persisted across requests.
+const maxInternalCacheRounds = 5
+
 type internalCacheRounds struct {
 	mu         sync.Mutex
 	events     [][]byte
@@ -95,7 +97,7 @@ func (r *Request) observeInternalCacheEvent(e Object) {
 	if str(message, "stop_reason") != "tool_use" || calls == 0 {
 		return
 	}
-	if len(state.rounds) >= 5 {
+	if len(state.rounds) >= maxInternalCacheRounds {
 		state.failed = true
 		return
 	}

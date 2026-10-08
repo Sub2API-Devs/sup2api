@@ -22,10 +22,14 @@ func TestStructuredValidationAndLocalReferences(t *testing.T) {
 func TestToolSearchUsageAggregation(t *testing.T) {
 	total := Object{}
 	for range 2 {
-		addSearchUsage(total, Object{"usage": Object{"input_tokens": 20, "output_tokens": 8}})
+		if err := addSearchUsage(total, Object{"usage": Object{"input_tokens": 20, "output_tokens": 8}}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	delta := Object{"usage": Object{"output_tokens": 8}}
-	mergeSearchUsage(delta, total, Object{"usage": Object{"input_tokens": 20, "output_tokens": 0}})
+	if err := mergeSearchUsage(delta, total, Object{"usage": Object{"input_tokens": 20, "output_tokens": 0}}); err != nil {
+		t.Fatal(err)
+	}
 	u := delta["usage"].(map[string]any)
 	if tokenCount(u["input_tokens"]) != 60 || tokenCount(u["output_tokens"]) != 24 {
 		t.Fatal(u)

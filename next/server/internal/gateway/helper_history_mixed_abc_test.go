@@ -11,7 +11,7 @@ import (
 )
 
 func TestHelperHistoryABCMixedPayloadRealDBCLI(t *testing.T) {
-	runHelperHistoryABCRealDBCLI(t, false, true)
+	runHelperHistoryABCRealDBCLI(t, false, abcHelperOptions{UpgradePayload: true})
 }
 
 func abcStoredChain(t *testing.T, store *helperhistory.Service, owner core.ResourceOwner, request map[string]any) core.HelperHistoryChain {

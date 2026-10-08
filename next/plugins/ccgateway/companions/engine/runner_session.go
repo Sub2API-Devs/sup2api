@@ -182,6 +182,10 @@ func (s *cliSession) onStreamEvent(f Object) error {
 	if !ok {
 		return fmt.Errorf("missing model event")
 	}
+	if str(event, "type") == "message_start" {
+		// The unaggregated usage snapshot belongs to one provider message only.
+		delete(s.searchUsage, "_public_usage")
+	}
 	if s.acc.Done {
 		if s.req.structuredOutput() && !s.acc.HasClientTool && str(event, "type") == "message_start" {
 			s.acc = &Accumulator{}
@@ -199,7 +203,14 @@ func (s *cliSession) onStreamEvent(f Object) error {
 		return err
 	}
 	if str(event, "type") == "message_delta" && s.searchRounds > 0 && !searchMessage {
-		mergeSearchUsage(event, s.searchUsage, s.acc.Message)
+		if err := mergeSearchUsage(event, s.searchUsage, s.acc.Message); err != nil {
+			return err
+		}
+	}
+	if str(event, "type") == "message_delta" && searchMessage {
+		if err := mergeHiddenSearchCurrentUsage(event, s.acc.Message); err != nil {
+			return err
+		}
 	}
 	if e := s.acc.push(event, s.responseReq); e != nil {
 		return e
@@ -255,7 +266,9 @@ func (s *cliSession) endSearchRound() error {
 	if s.searchRounds > 3 {
 		return fmt.Errorf("tool discovery exceeded 3 rounds")
 	}
-	addSearchUsage(s.searchUsage, s.acc.Message)
+	if err := addSearchUsage(s.searchUsage, s.acc.Message); err != nil {
+		return err
+	}
 	if s.req.helperHistory != nil {
 		if err := s.req.confirmHiddenHelperMessage(s.acc.Message); err != nil {
 			return err
