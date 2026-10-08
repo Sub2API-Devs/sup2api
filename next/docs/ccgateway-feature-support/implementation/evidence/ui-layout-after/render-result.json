@@ -1,0 +1,157 @@
+{
+  "phase": "after",
+  "scope": "local real components with synthetic sidebar and data; not production",
+  "results": [
+    {
+      "name": "usage-1440-left",
+      "viewport": 1440,
+      "body": 1440,
+      "detailLeft": 274,
+      "detailRight": 1406,
+      "containerLeft": 273,
+      "containerRight": 1407,
+      "scrollLeft": 0,
+      "scrollWidth": 1242,
+      "clientWidth": 1132,
+      "contentOverflow": false,
+      "pass": true
+    },
+    {
+      "name": "usage-1440-right",
+      "viewport": 1440,
+      "body": 1440,
+      "detailLeft": 274,
+      "detailRight": 1406,
+      "containerLeft": 273,
+      "containerRight": 1407,
+      "scrollLeft": 110,
+      "scrollWidth": 1242,
+      "clientWidth": 1132,
+      "contentOverflow": false,
+      "pass": true
+    },
+    {
+      "name": "features-1440-initial",
+      "footerTop": 1013,
+      "previousBottom": 1013,
+      "footerPosition": "static",
+      "overlapsPrevious": false,
+      "viewport": 1440,
+      "body": 1440,
+      "formWidth": 1094,
+      "pass": true
+    },
+    {
+      "name": "features-1440-bottom",
+      "footerTop": 882,
+      "previousBottom": 882,
+      "footerPosition": "static",
+      "overlapsPrevious": false,
+      "viewport": 1440,
+      "body": 1440,
+      "formWidth": 1094,
+      "pass": true
+    },
+    {
+      "name": "errors-1440",
+      "errors": [],
+      "pass": true
+    },
+    {
+      "name": "usage-900-left",
+      "viewport": 900,
+      "body": 900,
+      "detailLeft": 274,
+      "detailRight": 866,
+      "containerLeft": 273,
+      "containerRight": 867,
+      "scrollLeft": 0,
+      "scrollWidth": 1242,
+      "clientWidth": 592,
+      "contentOverflow": false,
+      "pass": true
+    },
+    {
+      "name": "usage-900-right",
+      "viewport": 900,
+      "body": 900,
+      "detailLeft": 274,
+      "detailRight": 866,
+      "containerLeft": 273,
+      "containerRight": 867,
+      "scrollLeft": 650,
+      "scrollWidth": 1242,
+      "clientWidth": 592,
+      "contentOverflow": false,
+      "pass": true
+    },
+    {
+      "name": "features-900-initial",
+      "footerTop": 1029,
+      "previousBottom": 1029,
+      "footerPosition": "static",
+      "overlapsPrevious": false,
+      "viewport": 900,
+      "body": 900,
+      "formWidth": 554,
+      "pass": true
+    },
+    {
+      "name": "features-900-bottom",
+      "footerTop": 882,
+      "previousBottom": 882,
+      "footerPosition": "static",
+      "overlapsPrevious": false,
+      "viewport": 900,
+      "body": 900,
+      "formWidth": 554,
+      "pass": true
+    },
+    {
+      "name": "errors-900",
+      "errors": [],
+      "pass": true
+    },
+    {
+      "name": "usage-390-left",
+      "viewport": 390,
+      "body": 390,
+      "detailLeft": 33,
+      "detailRight": 357,
+      "containerLeft": 0,
+      "containerRight": 390,
+      "scrollLeft": 0,
+      "scrollWidth": 0,
+      "clientWidth": 0,
+      "contentOverflow": false,
+      "pass": true
+    },
+    {
+      "name": "features-390-initial",
+      "footerTop": 1037,
+      "previousBottom": 1037,
+      "footerPosition": "static",
+      "overlapsPrevious": false,
+      "viewport": 390,
+      "body": 390,
+      "formWidth": 316,
+      "pass": true
+    },
+    {
+      "name": "features-390-bottom",
+      "footerTop": 898,
+      "previousBottom": 898,
+      "footerPosition": "static",
+      "overlapsPrevious": false,
+      "viewport": 390,
+      "body": 390,
+      "formWidth": 316,
+      "pass": true
+    },
+    {
+      "name": "errors-390",
+      "errors": [],
+      "pass": true
+    }
+  ]
+}

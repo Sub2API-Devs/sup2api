@@ -1,0 +1,51 @@
+{
+  "core": "0.1.77",
+  "worker": "0.1.80",
+  "client_request_id": "cache-ttl-77-039d57ff045f4f73",
+  "calls": 1,
+  "passed": true,
+  "results": [
+    {
+      "name": "cache-ttl-dynamic-first",
+      "path": "/v1/messages",
+      "beta": "mcp-client-2026-09-15",
+      "status": 200,
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1376,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 2595,
+        "cache_read_input_tokens": 2752,
+        "inference_geo": "global",
+        "input_tokens": 218,
+        "output_tokens": 409,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "server_tool_use": {
+          "web_fetch_requests": 0,
+          "web_search_requests": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "mcp_tool_listing",
+        "server_tool_use",
+        "tool_search_tool_result",
+        "mcp_tool_use",
+        "mcp_tool_result",
+        "text"
+      ],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 24.35,
+      "request_id_sha256": "fd353f61e3d07a53362e51b54ec7cdfccf89a37d41e1fd4076f2af6a3b25286e"
+    }
+  ],
+  "scope": "One dynamic MCP request, no retry; internal TTL and billing facts require independent log verification."
+}

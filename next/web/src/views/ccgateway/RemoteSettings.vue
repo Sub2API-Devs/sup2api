@@ -190,7 +190,7 @@ onBeforeUnmount(clearSecrets)
           <p class="text-xs text-gray-500">{{ t('ccgateway.remote.imagesHint') }}</p>
           </RuntimeInstall>
         </div>
-        <div class="sticky bottom-0 z-10 flex justify-end border-t border-gray-100 bg-white py-3 dark:border-dark-700 dark:bg-dark-900"><button class="btn btn-primary" :disabled="!dirty || form.mode === 'disabled'" data-testid="remote-save">{{ t('ccgateway.settingsTabs.save') }}</button></div>
+        <div class="flex justify-end border-t border-gray-100 bg-white py-3 dark:border-dark-700 dark:bg-dark-900"><button class="btn btn-primary" :disabled="!dirty || form.mode === 'disabled'" data-testid="remote-save">{{ t('ccgateway.settingsTabs.save') }}</button></div>
       </fieldset>
     </form>
     <div v-if="!saved?.account_runtimes" v-show="activeTab === 'connection'" class="space-y-3 border-t border-gray-200 pt-4 dark:border-dark-700">

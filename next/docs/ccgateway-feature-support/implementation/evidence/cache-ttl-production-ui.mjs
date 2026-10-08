@@ -5,7 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 const { chromium } = createRequire(import.meta.url)('C:/Users/16790/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright')
-const output = path.join(path.dirname(fileURLToPath(import.meta.url)), 'cache-ttl-ui-production')
+let output = ''
 let browser, context, stage = 'stdin', fatal = '', input
 let authorizedRequestID = ''
 const report = { scope: 'Real production application via SSH loopback tunnel; no mock responses', checks: [], captures: [], blocked: [], pageErrors: 0 }
@@ -29,6 +29,8 @@ try {
   check(typeof input.usage_client_request_id === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(input.usage_client_request_id), 'an exact public acceptance client request id is required')
   check(Number.isSafeInteger(input.usage_log_id) && input.usage_log_id > 0, 'an exact accepted usage row id is required')
   check(typeof input.expected_core_version === 'string' && /^0\.1\.\d+$/.test(input.expected_core_version), 'expected release version required')
+  output = path.join(path.dirname(fileURLToPath(import.meta.url)), `cache-ttl-ui-production-${input.expected_core_version}`)
+  report.expectedCoreVersion = input.expected_core_version
   fs.mkdirSync(output, { recursive: true })
   stage = 'launch'
   browser = await chromium.launch({ channel: 'msedge', headless: true })
@@ -90,14 +92,29 @@ try {
     }
     report.checks.push({ name, status: response.status() })
   }
-  async function capture(name) {
+  async function capture(name, kind, fullPage = true) {
     healthy()
     const layout = await page.evaluate(() => ({ viewport: innerWidth, body: document.body.scrollWidth, height: document.body.scrollHeight }))
+    let bounds
+    if (kind === 'usage') {
+      bounds = await page.locator('.usage-detail').filter({ visible: true }).evaluate(el => {
+        const d = el.getBoundingClientRect(), c = el.closest('.table-container'), r = c?.getBoundingClientRect()
+        const left = r?.left ?? 0, right = r?.right ?? innerWidth
+        const contentOverflow = [...el.querySelectorAll('section, dt, dd')].some(child => { const b = child.getBoundingClientRect(); return b.left < d.left - 1 || b.right > d.right + 1 })
+        return { detailLeft: d.left, detailRight: d.right, containerLeft: left, containerRight: right, scrollLeft: c?.scrollLeft ?? 0, clientWidth: c?.clientWidth ?? innerWidth, scrollWidth: c?.scrollWidth ?? innerWidth, contentOverflow, pass: d.left >= left - 1 && d.right <= right + 1 && !contentOverflow }
+      })
+    } else {
+      bounds = await page.getByTestId('remote-save').evaluate(button => {
+        const footer = button.parentElement, previous = footer.previousElementSibling, f = footer.getBoundingClientRect(), p = previous.getBoundingClientRect()
+        return { footerTop: f.top, previousBottom: p.bottom, footerPosition: getComputedStyle(footer).position, pass: f.top >= p.bottom - 1 }
+      })
+    }
     // AppTopbar.vue's real RouterLink wraps the balance. Match its destination
     // without reading or retaining the monetary value.
     const masks = [page.locator('input[type="password"]'), page.locator('header a[href="/me/usage?tab=ledger"]'), ...[...privateLabels].map(value => page.getByText(value, { exact: false }))]
-    await page.screenshot({ path: path.join(output, `${name}.png`), fullPage: true, mask: masks, maskColor: '#cbd5e1' })
-    report.captures.push({ name, privacyMasked: true, topbarBalanceMasked: true, ...layout })
+    await page.screenshot({ path: path.join(output, `${name}.png`), fullPage, mask: masks, maskColor: '#cbd5e1' })
+    report.captures.push({ name, privacyMasked: true, topbarBalanceMasked: true, ...layout, bounds })
+    check(bounds.pass, 'internal layout containment or overlap failed')
   }
   const isUsageList = response => new URL(response.url()).pathname === '/api/v1/usage'
   async function verifyUsageList(response) {
@@ -129,12 +146,24 @@ try {
     }
     await page.locator('.usage-detail').filter({ visible: true }).waitFor()
     await page.getByTestId('cache-write-facts').filter({ visible: true }).first().waitFor()
-    await capture(`usage-${width}`)
+    if (width >= 768) {
+      await page.locator('.usage-detail').filter({ visible: true }).evaluate(el => { el.closest('.table-container').scrollLeft = 0 })
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)))
+    }
+    await capture(`usage-${width}`, 'usage')
+    if (width >= 768) {
+      await page.locator('.usage-detail').filter({ visible: true }).evaluate(el => { const c = el.closest('.table-container'); c.scrollLeft = c.scrollWidth })
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)))
+      await capture(`usage-${width}-right`, 'usage')
+    }
     stage = `features-${width}`; healthy()
     await page.goto(base.origin + '/plugins/ccgateway?tab=settings', { waitUntil: 'networkidle' })
     await page.getByTestId('settings-tab-requests').click()
     await page.getByTestId('feature-support').filter({ visible: true }).waitFor()
-    await capture(`features-${width}`)
+    await capture(`features-${width}`, 'features')
+    await page.evaluate(() => scrollTo(0, document.body.scrollHeight))
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)))
+    await capture(`features-${width}-bottom`, 'features', false)
   }
   report.completed = true
 } catch (error) {

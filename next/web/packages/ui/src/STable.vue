@@ -12,6 +12,8 @@ const props = withDefaults(
     rowKey?: string
     /** Show an expand toggle and render the "expand" slot under a row. */
     expandable?: boolean
+    /** Keep expanded content within the visible width of a scrollable table. */
+    fitExpandedToContainer?: boolean
     emptyText?: string
     dense?: boolean
   }>(),
@@ -53,7 +55,7 @@ function display(v: unknown): string {
 </script>
 
 <template>
-  <div class="table-container">
+  <div class="table-container" :class="{ 's-table-fit-expanded': fitExpandedToContainer }">
     <table class="table" :class="dense ? 'table-dense' : ''">
       <thead>
         <tr>
@@ -103,7 +105,10 @@ function display(v: unknown): string {
           </tr>
           <tr v-if="expandable && expanded.has(keyOf(row, i))" class="s-table-expand">
             <td :colspan="columns.length + 1" class="bg-gray-50/60 dark:bg-dark-900/40">
-              <slot name="expand" :row="row" />
+              <div v-if="fitExpandedToContainer" class="s-table-expand-content">
+                <slot name="expand" :row="row" />
+              </div>
+              <slot v-else name="expand" :row="row" />
             </td>
           </tr>
         </template>
@@ -121,6 +126,15 @@ function display(v: unknown): string {
 .table {
   border-collapse: separate;
   border-spacing: 0;
+}
+.s-table-fit-expanded {
+  container-type: inline-size;
+}
+.s-table-expand-content {
+  position: sticky;
+  left: 0;
+  width: 100cqw;
+  max-width: 100%;
 }
 .s-table-actions {
   position: sticky;

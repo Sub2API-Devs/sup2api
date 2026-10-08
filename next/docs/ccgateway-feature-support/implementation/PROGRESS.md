@@ -4,6 +4,10 @@
 
 ## 本轮追加证据与限制
 
+最新实际Core.77已正常发布：精确84fe，四节点Root独立SSH核版本/811c868c程序hash一致且ready，Plugin.14原包保持；维护503窗口38.08s，未动Worker.80/Controller.48/原21/22。Root仅1次dynamic MCP真实请求200/end_turn（脚本第一次import在HTTP前失败，0请求，纠正后未重试模型），usage744/22/attempt1，原SSE与Core2595total/1376reported1h/0reported5m/1219unclassified partial、唯一usage和ledger/费用0.02670540独立对齐；admin与同owner真实接口均200且metrics一致。生产真实Edge四图已执行无mock、凭据仅RAM/SSH隧道已关，揭示desktop展开超出inner scrollport和mobile sticky保存条覆盖两真UI问题，不拿body宽正常当完整视觉通过。
+
+后续纯hostUI布局候选已修复并交叉独审：STable可选fitExpandedToContainer复用scrollport容器宽/sticky-left，仅UsageTable启用；RemoteSettings保存栏正常流。1440/900/390含240sidebar宽表真实本地RED->GREEN，左右横滚内部边界和保存栏initial/end无重叠；98tests/typecheck、作者productionbuild均绿。生产runner补内层bounds/左右滚及遮挡断言，并按版本另存截图，离线独审绿。当前未提交部署这批UI，预计Core.78沿固定Go镜像继续6builtin不可变包核验；复验只读复用usage744，不新增模型调用。
+
 新候选84fe9d0a10b6b770077697c2658ee5319d21f86c已Git精确准备Core.77：固定Go1.27.1四包race/vet及真实隔离PG通过，六个内置不可变包全部与.75逐字相同，签名/trust/schema/完整TLSGET/备份通过，freshpreflight200无blockers。首次测试路径./core笔误日志保留，纠正./internal/core后新44004完整门禁绿，不掩盖失败。Root已独立SSH核core/Plugin.14制品hash并放行正常四节点更新（需重新preflight），尚未记录正式发布完成。原21/22与Worker.80/Controller.48保持。生产只GET Edge验收runner已独立审查整改双ID唯一筛选/余额隐私遮罩，未运行；下一次真实API仅1请求，随后核metrics与页面，不重算旧账。
 
 Core.76准备已被immutable包核验主动阻断，未导入/切服务：浮动golang:1.27-trixie从Go1.27.1漂移到1.27.2，六个builtin原版本包全部摘要变化；不是插件源码变化或VCS元数据。5fc对应Linux四包race/vet与实际PG均绿，已签.76资产保留。Root从旧.75服务器prepare.log独立核原官方index digest8f58fd67ea075142d947a60e0caa4317746a55118d312f027793d382c7741734，决定正式Dockerfile固定原Go1.27.1精确digest，新Git提交后重新准备Core.77并核全部内置包，不改已签.76、不覆盖旧插件版本。

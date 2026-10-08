@@ -48,7 +48,7 @@ function toggleMobile(id: number) {
 
 <template>
   <div class="usage-records">
-    <STable class="hidden md:block" :columns="columns" :rows="rows" :loading="loading" expandable>
+    <STable class="hidden md:block" :columns="columns" :rows="rows" :loading="loading" expandable fit-expanded-to-container>
       <template #cell-created_at="{ row }">
         <div class="space-y-1.5">
           <span class="whitespace-nowrap text-xs tabular-nums" :title="row.created_at">{{ formatTime(row.created_at) }}</span>

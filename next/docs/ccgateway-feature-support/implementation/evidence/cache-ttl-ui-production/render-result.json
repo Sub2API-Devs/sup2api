@@ -1,0 +1,71 @@
+{
+  "scope": "Real production application via SSH loopback tunnel; no mock responses",
+  "checks": [
+    {
+      "name": "me",
+      "status": 200
+    },
+    {
+      "name": "version",
+      "status": 200
+    },
+    {
+      "name": "usage",
+      "status": 200
+    }
+  ],
+  "captures": [
+    {
+      "name": "usage-1440",
+      "privacyMasked": true,
+      "topbarBalanceMasked": true,
+      "viewport": 1440,
+      "body": 1440,
+      "height": 1728
+    },
+    {
+      "name": "features-1440",
+      "privacyMasked": true,
+      "topbarBalanceMasked": true,
+      "viewport": 1440,
+      "body": 1440,
+      "height": 1085
+    },
+    {
+      "name": "usage-390",
+      "privacyMasked": true,
+      "topbarBalanceMasked": true,
+      "viewport": 390,
+      "body": 390,
+      "height": 3108
+    },
+    {
+      "name": "features-390",
+      "privacyMasked": true,
+      "topbarBalanceMasked": true,
+      "viewport": 390,
+      "body": 390,
+      "height": 1149
+    }
+  ],
+  "blocked": [
+    {
+      "reason": "outside-read-scope",
+      "path": "[restricted]"
+    },
+    {
+      "reason": "outside-read-scope",
+      "path": "[restricted]"
+    },
+    {
+      "reason": "outside-read-scope",
+      "path": "[restricted]"
+    },
+    {
+      "reason": "outside-read-scope",
+      "path": "[restricted]"
+    }
+  ],
+  "pageErrors": 0,
+  "completed": true
+}
