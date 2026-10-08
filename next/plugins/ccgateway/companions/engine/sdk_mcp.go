@@ -6,7 +6,7 @@ func (r *Request) sdkToolName(name string) (server, short string) {
 	if server, short, ok := splitMCPToolName(name); ok {
 		return server, short
 	}
-	return r.customToolServer(), name
+	return r.toolServer(), name
 }
 
 // Only names explicitly supplied by this request become SDK servers. This is

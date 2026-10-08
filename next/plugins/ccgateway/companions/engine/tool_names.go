@@ -15,6 +15,15 @@ func (r *Request) customToolServer() string {
 	return r.CustomToolPrefix
 }
 
+// toolServer returns the effective namespace used for mapping non-MCP tools.
+// This may differ from customToolServer() when conflicts are detected.
+func (r *Request) toolServer() string {
+	if r.MCP != nil {
+		return r.effectiveToolServer()
+	}
+	return r.customToolServer()
+}
+
 // Namespace changes cannot resume a JSONL containing the previous wire names.
 // Preserve the existing default cache keys for backwards compatibility.
 func (r *Request) toolHistoryNamespace() string {
@@ -32,13 +41,14 @@ func (r *Request) toolHistoryNamespace() string {
 }
 
 func (r *Request) baseToolHistoryNamespace() string {
+	effective := r.toolServer()
 	if r.AttachmentSource == "" && len(r.AttachmentSources) == 0 && r.UnknownClientAttachment == "" && r.UnknownGatewayAttachment == "" {
-		if r.customToolServer() == "ccgateway" {
+		if effective == "ccgateway" {
 			return ""
 		}
-		return "tools:" + r.customToolServer()
+		return "tools:" + effective
 	}
-	return digest([]any{"attachment-policy-v2", r.customToolServer(), r.attachmentConfig()})
+	return digest([]any{"attachment-policy-v2", effective, r.attachmentConfig()})
 }
 
 // Validate after native-tool selection: a selected native Read stays Read,

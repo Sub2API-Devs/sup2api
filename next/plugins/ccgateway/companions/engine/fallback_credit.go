@@ -130,7 +130,7 @@ func (x *exchange) admitCredit(body []byte) error {
 	if err != nil {
 		return err
 	}
-	state.config = digest([]any{x.g.Runner.Version, resourceEnv(x.g.Runner.baseEnv(), "ANTHROPIC_BASE_URL"), policy, x.req.Native, x.req.customToolServer(), x.req.AttachmentSource, x.req.AttachmentSources, x.req.EnvironmentFields, x.req.UnknownClientAttachment, x.req.UnknownGatewayAttachment})
+	state.config = digest([]any{x.g.Runner.Version, resourceEnv(x.g.Runner.baseEnv(), "ANTHROPIC_BASE_URL"), policy, x.req.Native, x.req.toolServer(), x.req.AttachmentSource, x.req.AttachmentSources, x.req.EnvironmentFields, x.req.UnknownClientAttachment, x.req.UnknownGatewayAttachment})
 	if token != "" {
 		hash, _ := credits.TokenHash(token)
 		if h.Get(credits.AdmissionHeader) != hash {

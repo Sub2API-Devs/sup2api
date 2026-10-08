@@ -1,7 +1,5 @@
 package engine
 
-import "fmt"
-
 // Deferred connector search is admitted only with a complete, unambiguous
 // pinned identity catalog. Unknown references never become MCP tools by prefix.
 func (r *Request) validateMCPClientSearch() error {
@@ -17,14 +15,8 @@ func (r *Request) validateMCPNamespace() error {
 	if r.MCP == nil {
 		return nil
 	}
-	if len(r.Tools) > 0 {
-		for _, server := range r.MCP.servers {
-			if str(server, "name") == r.customToolServer() {
-				return fmt.Errorf("MCP server conflicts with the client tool transport namespace")
-			}
-		}
-	}
-	return nil
+	// Use the new comprehensive namespace validation that handles conflicts
+	return r.validateToolNamespace()
 }
 func mcpMayDefer(definition Object) bool {
 	if pinned, ok := definition["tools"].([]any); ok {
