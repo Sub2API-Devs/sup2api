@@ -43,7 +43,7 @@ func TestResourceTransportDBReusesAccountDiscoveryWithoutControllerBody(t *testi
 		}
 		_ = json.NewEncoder(w).Encode(accountConnection{IP: "10.52.74.181", Port: 8787, Key: strings.Repeat("k", 32), Revision: r.Header.Get("X-CCG-Revision")})
 	})
-	id := f.account(false)
+	id := f.account(true)
 	closed, calls := 0, 0
 	wrongIssuer := false
 	f.s.openAccount = func(_ context.Context, _ Config, target string) (*http.Client, func() error, error) {
