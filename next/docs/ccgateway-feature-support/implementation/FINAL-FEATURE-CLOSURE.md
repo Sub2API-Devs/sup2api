@@ -1,6 +1,6 @@
 # 最终功能闭环审计（当前快照，非全部生产验收）
 
-审计时间：2026-10-08；目标 `D:/projects/golang/sup2api`；第七/八批已提交 `747c168a383fd4e6738cb9451a29b1fb84010560`；第九批已推送 `cd4d5e40b2de7c22af7718a3b35d12d9f41e786a`，修正候选 `1186563e47565e938da2cd2b1a9e8be6cd5ac2d5` 已通过Linux门禁。Worker #21/#22已原地升级0.1.65、catalog `2026-10-08.8`；核心0.1.65已发布，四节点及实际插件0.1.10哈希通过；公网基础协议及工具/count已复验。真实本地Claude工具回传因CLI追加附件触发严格对齐错误，仍在修复，不宣称全部交付。CodeGraph 使用 projectPath 定位，已知源码通过本机读取。目录 `contracts/features/catalog.go` 共 37 个 F 项（36 API + 1 CC safeguards）和 8 个 O 横切目标；不按 partial 数量推算完成率。
+审计时间：2026-10-08；目标 `D:/projects/golang/sup2api`；第七/八批已提交 `747c168a383fd4e6738cb9451a29b1fb84010560`；第九批已推送 `cd4d5e40b2de7c22af7718a3b35d12d9f41e786a`，修正候选 `1186563e47565e938da2cd2b1a9e8be6cd5ac2d5` 已通过Linux门禁。Worker #21/#22已原地升级0.1.66/full56f93858、catalog `2026-10-08.8`；核心0.1.65已发布，四节点及实际插件0.1.10哈希通过；公网基础协议及工具/count已复验。真实本地Claude工具回传追加附件的严格对齐错误已修复，0.1.66两轮Read实测通过；新增高级组合仍另行评审，不宣称全部交付。CodeGraph 使用 projectPath 定位，已知源码通过本机读取。目录 `contracts/features/catalog.go` 共 37 个 F 项（36 API + 1 CC safeguards）和 8 个 O 横切目标；不按 partial 数量推算完成率。
 
 ## 证据口径与结论
 
@@ -9,6 +9,8 @@
 旧 `FEATURE-CLOSURE-AUDIT.md` 的 resource、inline server、compaction changes、MCP、OpenAI codec、credit“尚未实现”已过时。当前catalog .8已修正credit、inline MCP、PTC与跨Worker diagnostics描述；旧目录和早期审计文字只作历史记录，不能作为当前准入结论。保留历史文档日期，不用改掉过去失败证据。
 
 ## 37 项逐项核对
+
+后续候选尚未发布：已实现并独审「全部普通工具显式defer_loading:false时，内部搜索开启下指定已加载目标的强制选择」，保持原目录/参数并禁止helper执行，非通用内部强制续轮；9次隔离真实CLI通过。另对CC2.1.292实测per-turn-control进行独立准入，逐消息effort与header原名保留，两beta分别的16次隔离真实CLI通过，待真实提供商复验无自动降级。目录更新为.9，主前端须随核心发布，不能只更新Worker便声称界面已同步。详细边界见FORCED-LOADED与PER-TURN独立复核记录。
 
 每项列当前路径、已有证据、剩余验收或实现边界。下文 engine 路径均位于 `next/plugins/ccgateway/companions/engine`；core gateway 位于 `next/server/internal/gateway`。
 

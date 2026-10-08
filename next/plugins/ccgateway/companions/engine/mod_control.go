@@ -30,7 +30,7 @@ type modControl struct {
 
 func startModControl(cfg *runConfig, internalBase string) (*modControl, error) {
 	deferred := Object{}
-	if cfg.env["CCGATEWAY_TOOL_SEARCH"] == "1" {
+	if len(cfg.deferral) != 0 {
 		if err := json.Unmarshal(cfg.deferral, &deferred); err != nil {
 			return nil, err
 		}

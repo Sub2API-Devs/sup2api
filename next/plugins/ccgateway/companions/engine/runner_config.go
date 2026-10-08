@@ -25,6 +25,9 @@ func (r *Request) bufferedResponse() bool {
 // maxTurns bounds the CLI's model calls: one answer, plus up to three tool
 // discovery rounds, plus one structured-output continuation.
 func (r *Request) maxTurns() string {
+	if r.forcedLoadedClientTool() != nil {
+		return "1"
+	}
 	switch {
 	case r.structuredOutput() && r.toolSearchEnabled():
 		return "5"
@@ -55,7 +58,7 @@ func (r *Request) enabledTools() []string {
 // with tool discovery, the CLI's own ToolSearch is a declared native tool.
 func (r *Request) responseView() *Request {
 	view := *r
-	if r.toolSearchEnabled() {
+	if r.toolSearchEnabled() && r.forcedLoadedClientTool() == nil {
 		view.Tools = append(append([]Tool(nil), r.Tools...), Tool{Name: "ToolSearch", Schema: Object{"type": "object"}})
 		view.Native = map[string]bool{}
 		for name, allowed := range r.Native {
@@ -107,6 +110,9 @@ func newRunConfig(req *Request, p *Prepared, plugin, dir string) *runConfig {
 		c.deferral = toolDeferral(req)
 		c.env["ENABLE_TOOL_SEARCH"] = req.ToolSearch
 		c.env["CCGATEWAY_TOOL_SEARCH"] = "1"
+		if req.forcedLoadedClientTool() != nil {
+			c.env["CCGATEWAY_TOOL_SEARCH"] = "0"
+		}
 	}
 	return c
 }

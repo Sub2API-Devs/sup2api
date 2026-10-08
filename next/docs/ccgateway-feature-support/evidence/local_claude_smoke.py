@@ -51,6 +51,8 @@ def summarize_cli(stdout, returncode):
             report.update(result_subtype=event.get('subtype'), is_error=event.get('is_error'),
                           usage=event.get('usage'), turns=event.get('num_turns'),
                           has_final_text=isinstance(event.get('result'), str) and bool(event['result'].strip()))
+            if event.get('is_error'):
+                report['error_summary'] = str(event.get('result', ''))[:1000]
     report['paired_fixture_read'] = bool(calls) and returned == set(calls)
     report['passed'] = (returncode == 0 and terminal == 1 and not malformed
                         and report.get('result_subtype') == 'success' and not report.get('is_error')

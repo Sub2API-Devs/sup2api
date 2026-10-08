@@ -94,8 +94,10 @@ func (r *Request) validateInlineSystemBetas(allowEffort bool) error {
 			if !allowEffort {
 				return fmt.Errorf("messages[].output_config is disabled by the effort policy")
 			}
-			if !admitted["mid-conversation-output-config-2026-07-01"] {
-				return fmt.Errorf("messages[].output_config requires admitted mid-conversation-output-config-2026-07-01 beta")
+			// Public API documentation names the first beta. CC 2.1.292 uses
+			// the second for the same inline effort field; retain its wire name.
+			if !admitted["mid-conversation-output-config-2026-07-01"] && !admitted["per-turn-control-2026-07-01"] {
+				return fmt.Errorf("messages[].output_config requires admitted mid-conversation-output-config-2026-07-01 or per-turn-control-2026-07-01 beta")
 			}
 		}
 	}

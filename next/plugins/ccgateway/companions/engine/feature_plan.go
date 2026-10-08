@@ -309,7 +309,7 @@ func (p *RequestPlan) validateInternalRounds(req *Request) error {
 		_ = json.Unmarshal(raw, &choice)
 	}
 	kind := str(choice, "type")
-	if (kind == "tool" || kind == "any") && (req.toolSearchEnabled() || req.structuredOutput()) {
+	if (kind == "tool" || kind == "any") && (req.toolSearchEnabled() || req.structuredOutput()) && req.forcedLoadedClientTool() == nil {
 		return fmt.Errorf("forced tool_choice with internal tool search or structured output requires continuation-phase adaptation")
 	}
 	return nil
@@ -361,5 +361,8 @@ func (r *Request) ApplyMainRequestFeatures(message Object) error {
 	if err := r.applyCompleteToolCatalog(message); err != nil {
 		return err
 	}
-	return r.applyMCPConnector(message)
+	if err := r.applyMCPConnector(message); err != nil {
+		return err
+	}
+	return r.verifyForcedLoadedCatalog(message)
 }

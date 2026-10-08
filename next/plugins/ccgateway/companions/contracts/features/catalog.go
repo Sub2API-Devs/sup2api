@@ -3,7 +3,7 @@
 // entitlement. Runtime evidence must be reported separately.
 package features
 
-const CatalogVersion = "2026-10-08.8"
+const CatalogVersion = "2026-10-08.9"
 const PolicySchemaVersion = 1
 
 type Feature struct {
@@ -34,7 +34,7 @@ func Catalog() Document {
 		entry("F-MODEL", "模型与上下文窗口", "基础请求", "partial", []string{"model"}, []string{"context-1m-2025-08-07"}, []string{"CLI --model", "上下文环境变量"}, "传入请求模型；可用模型、别名和窗口取决于账号与 CLI。"),
 		entry("F-LIMITS", "输出长度", "基础请求", "partial", []string{"max_tokens"}, nil, []string{"主请求输出预算", "零 token 非流预热桥接"}, "正整数最终上游值保持客户端预算；max_tokens:0 使用真实非流预热响应，不生成空答案、不写入会话。已完成真实 CLI 隔离验证，模型上限仍由上游检查。"),
 		entry("F-STREAM", "流式与完整响应", "基础请求", "partial", []string{"stream"}, nil, []string{"JSON / SSE 编解码"}, "已适配文本、推理、客户端工具、引用、已登记 Web/Advisor/MCP/CodeExec/PTC 块及其历史。资源产物与缓存信用响应在登记完成前有界缓冲，不能承诺这些组合逐事件即时外发；未知块或未能保真的组合明确拒绝。"),
-		entry("F-SYSTEM", "系统指令", "上下文", "partial", []string{"system", "messages[].role:system", "messages[].clear_at", "messages[].output_config"}, []string{"mid-conversation-system-clear-at-2026-08-21", "mid-conversation-output-config-2026-07-01"}, []string{"原生历史", "Mod", "上游请求还原"}, "支持文本 system 与已准入 beta 的 clear_at、会话内 effort（含空内容指令）；按原位置保留完整历史，模型与账号实际 beta 支持仍由上游决定。"),
+		entry("F-SYSTEM", "系统指令", "上下文", "partial", []string{"system", "messages[].role:system", "messages[].clear_at", "messages[].output_config"}, []string{"mid-conversation-system-clear-at-2026-08-21", "mid-conversation-output-config-2026-07-01", "per-turn-control-2026-07-01"}, []string{"原生历史", "Mod", "上游请求还原"}, "支持文本 system 与已准入 beta 的 clear_at、会话内 effort（含空内容指令）；公开 mid-conversation-output-config 与 CC 2.1.292 实测 per-turn-control 分别准入、原名转发，不删除消息字段或互换请求头。按原位置保留完整历史，其它 schema/角色限制不放宽，模型与账号实际 beta 支持仍由上游决定。"),
 		entry("F-MESSAGES", "历史与续聊", "上下文", "partial", []string{"messages"}, nil, []string{"原生 JSONL", "前缀命中 / 分支重建", "主请求续接载体剥离"}, "支持已适配块的完整历史、续聊、回退与新账号导入。官方 Claude 4.6 及以后模型不支持末尾 assistant 文字 prefill；pause_turn 回传完整提供商内容以继续服务端执行是另一种受支持语义，不能一并拒绝。隔离 CLI 的尾部恢复测试不证明真实模型接受文字预填；CLI 额外安全附件无法等价保留时仍明确拒绝，可能影响合法暂停续接，不能删除附件或改成 user 绕过。"),
 		entry("F-THINKING", "推理与签名", "生成控制", "partial", []string{"thinking", "messages[].content[].thinking", "messages[].content[].signature"}, []string{"interleaved-thinking-2025-05-14", "dev-full-thinking-2025-05-14", "thinking-display-updates-2026-08-18", "thinking-binding-controls-2026-08-01"}, []string{"主请求完整 thinking 对象", "CLI 推理与签名编解码"}, "区分API缺省与显式disabled；enabled/adaptive/between_tools及display、绑定控制按主请求保真，updates和binding要求对应beta。隔离CLI签名续聊已验证；真实模型限制及跨账户/前缀签名有效性仍由上游校验，网关不删除签名。"),
 		entry("F-OUTPUT", "输出格式与推理强度", "生成控制", "partial", []string{"output_config.effort", "output_config.format", "output_format", "tools[].strict"}, []string{"structured-outputs-2025-11-13"}, []string{"主请求 effort 与 API format", "完成响应与原生/独立响应checkpoint"}, "HTTP API format直接使用上游约束解码，不注册合成格式工具；正常JSON、refusal和截断均单次返回，缺省effort不继承CLI medium。隔离CLI已验证；真实账号支持及约束效果需上游验证。旧output_format需旧beta。"),
@@ -44,8 +44,8 @@ func Catalog() Document {
 		entry("F-CACHE", "提示缓存", "上下文", "partial", []string{"cache_control", "system[].cache_control", "tools[].cache_control", "messages[].content[].cache_control"}, nil, []string{"原位断点与工具顺序", "混合 TTL", "顶层自动缓存", "本地历史缓存"}, "保留客户端断点与 1h/5m 顺序，逐轮校验四个有效断点；服务端工具及内部 CLI ToolSearch 的显式/automatic 缓存已有隔离回归。内部回合仅按真实响应证据续接，helper 不继承显式断点；带断点的客户端工具必须显式 defer_loading:false。automatic 根字段保留，每轮自然覆盖新增内部内容，超过断点上限明确拒绝。此组合暂按完整客户端历史本地重建；legacy synthetic StructuredOutput 仍不支持，API output_config.format 是独立已适配路径。prefix-hit 仅指本地历史，不代表真实上游缓存计费命中。"),
 		entry("F-DIAGNOSTICS", "缓存诊断", "上下文", "partial", []string{"diagnostics"}, nil, []string{"主请求诊断保真", "核心持久归属索引", "原账号与 issuer 亲和", "冷 Worker 可信授权"}, "核心默认按 user+group 保留 24h、最多 4096 条归属记录，固定原账号/issuer/generation；保留实际 issuer 的冷 Worker 可续用。共享 CC 路由对未知、平台保留期外或 issuer 变化的 ID 明确拒绝；普通非 CC 路由保留原协议。提供商 previous_message_not_found 等诊断仍正常 200，不把平台期限当作官方指纹 TTL，也未验证真实指纹命中。旧直连 Worker 无核心授权时兼容原本地 1h 归属校验。SSE 在首 message_start 登记后继续流式；登记失败保留已收到的真实用量并明确报错。"),
 		entry("F-TOOLS", "客户端工具", "工具", "partial", []string{"tools", "tools[].input_schema", "tools[].input_examples", "tools[].strict", "tools[].allowed_callers"}, nil, []string{"原生名称与 schema 匹配", "MCP 注册", "Mod 拦截与客户端回传", "工具元参数保真"}, "客户端执行工具；支持 strict、input_examples、direct 及已登记程序化 allowed_callers，PTC 按父调用和容器归属交回客户端。原生目录已核验CLI 2.1.288/2.1.292，最终仍核对实际工具定义；未知执行版本或身份无法对应的组合明确拒绝。"),
-		entry("F-TOOL-CHOICE", "工具选择与并行", "工具", "partial", []string{"tool_choice.type", "tool_choice.name", "tool_choice.disable_parallel_tool_use"}, nil, []string{"工具可见性", "已归属主模型请求的参数覆盖"}, "支持 auto / none / any / 指定工具及并行约束，工具名按执行路由转换。手动thinking、内部搜索和结构化续轮的强制选择组合暂拒绝；模型条件由上游验证。"),
-		entry("F-TOOL-SEARCH", "工具搜索", "工具", "partial", []string{"tools[].defer_loading", "tools[].type", "tool_reference"}, []string{"advanced-tool-use-2025-11-20"}, []string{"CC 内部 ToolSearch", "API regex / bm25 搜索协议", "准确引用与历史往返"}, "内部搜索在 CC 特性中配置；API 搜索已适配定义、引用及续聊/回退/导入，并关闭内层搜索以避免重复执行。支持与非 defer MCP 目录并用，引用仍须匹配已声明工具；deferred MCP 的跨服务器编码未确认，不能把未知名称猜成 MCP。旧 beta 不是所有 API 搜索的必需项，真实模型与账号资格待验证。"),
+		entry("F-TOOL-CHOICE", "工具选择与并行", "工具", "partial", []string{"tool_choice.type", "tool_choice.name", "tool_choice.disable_parallel_tool_use"}, nil, []string{"工具可见性", "已归属主模型请求的参数覆盖"}, "支持 auto / none / any / 指定工具及并行约束，工具名按执行路由转换。内部搜索开启时，仅全部普通客户端工具显式 defer_loading:false、指定已加载目标的 type:tool 可单轮保真；不改为 auto、不删工具定义，禁止内部 helper 执行。any、deferred、手动thinking、inline、safeguards、服务端工具及结构化续轮组合仍拒绝。实际模型限制由上游验证；Opus 5.5 不支持强制选择，隔离测试不代表其模型资格。"),
+		entry("F-TOOL-SEARCH", "工具搜索", "工具", "partial", []string{"tools[].defer_loading", "tools[].type", "tool_reference"}, []string{"advanced-tool-use-2025-11-20"}, []string{"CC 内部 ToolSearch", "API regex / bm25 搜索协议", "准确引用与历史往返"}, "内部搜索在 CC 特性中配置；指定已加载普通客户端工具的强制选择仅保留目录与原请求参数、禁止 helper 执行，其余强制组合仍受限制。API 搜索已适配定义、引用及续聊/回退/导入，并关闭内层搜索以避免重复执行。支持与非 defer MCP 目录并用，引用仍须匹配已声明工具；deferred MCP 的跨服务器编码未确认，不能把未知名称猜成 MCP。旧 beta 不是所有 API 搜索的必需项，真实模型与账号资格待验证。"),
 		entry("F-TOOL-STREAM", "工具参数流", "工具", "partial", []string{"tools[].eager_input_streaming", "stream"}, []string{"fine-grained-tool-streaming-2025-05-14"}, []string{"CLI 细粒度流环境变量", "每工具参数保真", "SSE input_json_delta"}, "支持全局beta和每工具eager_input_streaming的出站处理，工具JSON片段到块结束后再校验；实际流行为取决于模型与提供商。"),
 		entry("F-CITATIONS", "引用", "媒体与资源", "partial", []string{"messages[].content[].citations", "messages[].content[].citations.enabled"}, nil, []string{"文本引用与 citations_delta", "绑定来源的历史引用恢复"}, "保留索引、原文与加密引用；CLI 省略的历史引用仅在完整消息和文档/搜索来源一致时恢复。文档与 Web 来源的隔离往返已验证；实际引用质量由上游决定。"),
 		entry("F-IMAGES", "图片输入", "媒体与资源", "partial", []string{"messages[].content[].source"}, nil, []string{"原生图片块与 URL 来源"}, "保留 base64 PNG/JPEG/GIF/WebP 和 URL 图片，不由 Worker 下载后改写。文件 ID 需独立资源归属，不接受未登记 file_id；真实模型读取 URL 的能力仍由上游决定。"),
@@ -114,6 +114,9 @@ func BetaRules() []BetaRule {
 		{"advisor-tool-2026-03-01", "forward"},
 		{"mid-conversation-system-clear-at-2026-08-21", "forward"},
 		{"mid-conversation-output-config-2026-07-01", "forward"},
+		// Observed CC 2.1.292 inline-effort beta; preserve independently of
+		// the public API beta above, without renaming either protocol.
+		{"per-turn-control-2026-07-01", "forward"},
 		{"dangerous-tool-use-2026-09-03", "forward"},
 		{"interleaved-thinking-2025-05-14", "forward"},
 		{"thinking-display-updates-2026-08-18", "forward"},

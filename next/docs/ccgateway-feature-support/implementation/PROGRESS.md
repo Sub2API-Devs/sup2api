@@ -6,13 +6,19 @@
 
 - 已推送第七/八批747c168、第九批cd4d5e40b及修正1186563e4。cd4迁移幂等测试3项失败真实保留；118仅按代码修复后Git重检重跑，没有上传源文件或借旧SHA报绿。
 - 1186563 Linux隔离PG45432七包609项、全contracts55项、strict33项，共697项通过，race/vet无错误；2项core可选真实CLI测试skip另列。0042并发/过期同ID拒绝、重复迁移实际通过。见[LINUX-NINTH-BATCH-DB-VALIDATION](LINUX-NINTH-BATCH-DB-VALIDATION.md)。
-- Worker #21/#22已保留原容器/卷/授权原地升级0.1.65/full1186563，CLI2.1.292、code_catalog `2026-10-08.8`；两账号各一次真实短答READY通过。见[Worker部署](DEPLOYMENT-2026-10-08-WORKER-0.1.65.md)。不能由短答推断所有工具/信用/资源资格。
-- 核心0.1.65已完成正常发布，四节点local/ready、schema0042及实际插件0.1.10包/二进制哈希已核验；维护503约36–37秒。默认新建Worker镜像0.1.65已保存，原21/22容器/卷/镜像引用不变。公开JSON/续聊/回退/SSE/空参工具往返与稳定后count_tokens200；控制器刷新期间一次计数502单列保留。真实本地Claude Read成功，但工具结果追加CLI附件触发严格历史对齐错误，正在修复，不宣称客户端整体通过。见PUBLIC-API-ACCEPTANCE-0.1.65。
+- Worker #21/#22现已保留原容器/卷/授权原地升级0.1.66/full56f93858，CLI2.1.292、code_catalog `2026-10-08.8`。两账号各一次READY通过，实际本地Claude原生Read两轮也已通过；system/工具结果原文、附件唯一性及环境字段策略经日志核验。见[Worker部署](DEPLOYMENT-2026-10-08-WORKER-0.1.66.md)与[真实CLI验收](PUBLIC-CLI-ACCEPTANCE-0.1.66.md)，不扩大为所有特性云验证。
+- 核心0.1.65已完成正常发布，四节点local/ready、schema0042及实际插件0.1.10包/二进制哈希已核验；维护503约36–37秒。默认新建Worker镜像现为0.1.66，原21/22容器/卷/镜像引用不变。公开JSON/续聊/回退/SSE/空参工具往返与稳定后count_tokens200；控制器刷新期间一次计数502单列保留。原真实本地Claude工具结果追加CLI附件的严格对齐错误已在Worker0.1.66修复并实测两轮通过，原失败仍保留。见PUBLIC-API-ACCEPTANCE-0.1.65。
 - 当前catalog .8已支持并准确说明：credit字符串/object/null与strict/best_effort托管、指定服务器inline MCP、非defer MCP+client ToolSearch、已登记PTC/代码执行容器账本、跨Worker同issuer诊断归属、内部ToolSearch逐轮缓存。早期“credit拒绝/MCP inline拒绝/PTC未接/诊断只本地”的结论不再代表当前代码。
 - 普通APIformat是上游约束解码；普通forcedchoice/task_budget已有单主请求支持。旧内部CC synthetic格式循环以及forced/budget+内部多轮仍严格gate，不能混为普通API缺失。default动态fallback授权、跨issuer诊断workspace证明、deferred MCP未知服务器编码、独立Batches/Responses持久ID产品仍未闭环；真实提供商资格/计费效果不可用fake测试冒充。
 - 37功能/8横切的当前对照见[FINAL-FEATURE-CLOSURE](FINAL-FEATURE-CLOSURE.md)。以下各批“当前/下一步”文字保留原时间点，以上最新状态优先；不删除失败与未验收事实。
 
 ## 本轮授权与约束
+
+### 恢复后的追加闭环（2026-10-08）
+
+- Read工具结果追加可信CLI附件的修复已提交推送 `56f93858ca7ab76ef9615baec6addf77e74ff205`，作者与独审各8次隔离真实CLI、engine单测/vet通过；Worker0.1.66已按服务器Git精确提交构建上线，真实本地Read复验18.949秒、exit0、两轮完成；默认镜像与控制器刷新后两个原容器身份均保持。
+- 普通公开JSON/SSE工具往返、count_tokens稳定后均通过；真实diagnostics第二次返回messages_changed538且refusal正常200，持久归属同owner/account/issuer已核验。无cachehit或内容成功的扩大结论。
+- 附件修复与剩余高级组合分开。独审发现“已装载目标的forced named tool+内部搜索开关”存在可缩小的硬限制，已安排后续候选窄适配研究/实现；必须保持原tool_choice且零内部回合，any/deferred/server等未证明组合继续限制。不得把仅未适配写成天然不兼容。当前真实Read问题不归因于此组合。
 
 - 根据上级目录 36 个 API F-* 特性、1 个 CC safeguards 特性及 8 个 O-* 横向任务完整评估并实施能保持语义的方案。不可等价项必须记录证据、拒绝行为与理由，不能以接收参数但忽略处理宣称兼容。
 - 通用 API 特性放在「请求与工具」对应菜单，按功能聚合头、body、响应、历史；「附件与环境」改为「CC 特性」。自然支持项解释即可。
