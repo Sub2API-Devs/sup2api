@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS provider_helper_records_owner_prefix ON provider_helper_records(user_id,group_id,public_prefix_digest);

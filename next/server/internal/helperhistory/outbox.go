@@ -1,10 +1,9 @@
 package helperhistory
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	"time"
 
 	wire "github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/helperhistory"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -13,11 +12,6 @@ import (
 )
 
 const maxUsageBytes = 2 << 20
-
-type usageEnvelope struct {
-	Version int
-	Record  *core.UsageRecord
-}
 
 func usageAAD(requestID, attemptID, digest string, o core.ResourceOwner) []byte {
 	b, _ := json.Marshal([]any{"helper-usage-v1", requestID, attemptID, digest, o})
@@ -91,12 +85,13 @@ func (s *Service) PendingUsage(ctx context.Context, limit int) ([]core.HelperHis
 	if limit < 1 || limit > 100 || s.db == nil || s.cipher == nil {
 		return nil, core.ErrInvalidArgument
 	}
-	rows, e := s.db.Pool.Query(ctx, `SELECT request_id,attempt_id,user_id,group_id,digest,payload FROM provider_helper_usage_outbox ORDER BY created_at,request_id LIMIT $1`, limit)
+	rows, e := s.db.Pool.Query(ctx, `SELECT request_id,attempt_id,user_id,group_id,digest,payload FROM provider_helper_usage_outbox WHERE next_attempt_at<=$2 ORDER BY next_attempt_at,created_at,request_id LIMIT $1`, limit, s.now())
 	if e != nil {
 		return nil, e
 	}
 	defer rows.Close()
 	out := []core.HelperHistoryUsage{}
+	var invalid []struct{ id, digest, code string }
 	for rows.Next() {
 		var v core.HelperHistoryUsage
 		var owner core.ResourceOwner
@@ -106,18 +101,48 @@ func (s *Service) PendingUsage(ctx context.Context, limit int) ([]core.HelperHis
 		}
 		raw, e := s.cipher.Decrypt(encrypted, usageAAD(v.RequestID, v.AttemptID, v.Digest, owner))
 		if e != nil || len(raw) > maxUsageBytes || wire.Digest(raw) != v.Digest {
-			return nil, fmt.Errorf("helper usage integrity failure")
+			invalid = append(invalid, struct{ id, digest, code string }{v.RequestID, v.Digest, "integrity"})
+			continue
 		}
-		var envelope usageEnvelope
-		decoder := json.NewDecoder(bytes.NewReader(raw))
-		decoder.UseNumber()
-		if decoder.Decode(&envelope) != nil || envelope.Version != 1 || envelope.Record == nil || envelope.Record.RequestID != v.RequestID || envelope.Record.UserID != owner.UserID || envelope.Record.GroupID != owner.GroupID {
-			return nil, fmt.Errorf("helper usage envelope mismatch")
+		record, _, decodeErr := core.DecodeHelperHistoryUsage(raw)
+		if decodeErr != nil || record.RequestID != v.RequestID || record.UserID != owner.UserID || record.GroupID != owner.GroupID {
+			invalid = append(invalid, struct{ id, digest, code string }{v.RequestID, v.Digest, "envelope"})
+			continue
 		}
-		v.Record = envelope.Record
+		v.Record = record
+		v.FrozenEnvelope = append([]byte(nil), raw...)
 		out = append(out, v)
 	}
-	return out, rows.Err()
+	err := rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range invalid {
+		if err := s.deferUsage(ctx, item.id, item.digest, item.code); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// DeferUsage retains the immutable evidence and frees the next batch to make
+// progress. No error text, payload or credentials are persisted as diagnostics.
+func (s *Service) DeferUsage(ctx context.Context, requestID, digest string) error {
+	if !bounded(requestID) || !wire.ValidDigest(digest) {
+		return core.ErrInvalidArgument
+	}
+	return s.deferUsage(ctx, requestID, digest, "delivery")
+}
+
+func (s *Service) deferUsage(ctx context.Context, requestID, digest, code string) error {
+	// Internal callers use the exact stored identity, even when a corrupted
+	// digest cannot pass the public delivery contract.
+	if s.db == nil {
+		return core.ErrInvalidArgument
+	}
+	_, err := s.db.Pool.Exec(ctx, `UPDATE provider_helper_usage_outbox SET next_attempt_at=GREATEST(next_attempt_at,$3),retry_count=LEAST(retry_count,2147483646)+1,failure_code=$4 WHERE request_id=$1 AND digest=$2`, requestID, digest, s.now().Add(time.Minute), code)
+	return err
 }
 func (s *Service) AckUsage(ctx context.Context, requestID, digest string) error {
 	if !bounded(requestID) || !wire.ValidDigest(digest) {

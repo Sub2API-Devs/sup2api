@@ -48,5 +48,9 @@ CREATE TABLE IF NOT EXISTS provider_helper_usage_outbox (
  created_at timestamptz NOT NULL
 );
 CREATE INDEX IF NOT EXISTS provider_helper_usage_outbox_created ON provider_helper_usage_outbox(created_at,request_id);
+ALTER TABLE provider_helper_usage_outbox ADD COLUMN IF NOT EXISTS next_attempt_at timestamptz NOT NULL DEFAULT '-infinity';
+ALTER TABLE provider_helper_usage_outbox ADD COLUMN IF NOT EXISTS retry_count bigint NOT NULL DEFAULT 0;
+ALTER TABLE provider_helper_usage_outbox ADD COLUMN IF NOT EXISTS failure_code text NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS provider_helper_usage_outbox_due ON provider_helper_usage_outbox(next_attempt_at,created_at,request_id);
 
 CREATE INDEX IF NOT EXISTS provider_helper_records_expiry ON provider_helper_records(expires_at) WHERE payload IS NOT NULL;

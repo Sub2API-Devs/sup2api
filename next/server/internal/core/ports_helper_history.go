@@ -38,9 +38,27 @@ type HelperHistoryChain struct {
 type HelperHistoryUsage struct {
 	AttemptID, RequestID, Digest string
 	Record                       *UsageRecord
+	FrozenEnvelope               []byte // original versioned bytes, not a re-encoding
+}
+
+type HelperHistoryLookupState string
+
+const (
+	HelperHistoryUnknown           HelperHistoryLookupState = "unknown"
+	HelperHistoryKnownReady        HelperHistoryLookupState = "known_ready"
+	HelperHistoryKnownUnrestorable HelperHistoryLookupState = "known_unrestorable"
+)
+
+type HelperHistoryLookup struct {
+	State     HelperHistoryLookupState
+	Chain     HelperHistoryChain
+	Namespace string
 }
 
 type HelperHistory interface {
+	// Lookup discovers ownership before choosing an account or policy namespace.
+	// Unknown is returned only when none of the supplied prefixes is registered.
+	Lookup(context.Context, ResourceOwner, []string) (HelperHistoryLookup, error)
 	Reserve(context.Context, HelperHistoryReservation) (HelperHistoryAttempt, error)
 	MarkDispatched(context.Context, ResourceOwner, string) error
 	// Commit may durably retain ambiguity evidence and usage before returning an error.
@@ -51,6 +69,7 @@ type HelperHistory interface {
 	MarkUncertain(context.Context, ResourceOwner, string) error
 	PersistUncertainUsage(context.Context, ResourceOwner, string, *UsageRecord) error
 	PendingUsage(context.Context, int) ([]HelperHistoryUsage, error)
+	DeferUsage(context.Context, string, string) error
 	AckUsage(context.Context, string, string) error
 	ExpirePayloads(context.Context) error
 	Abort(context.Context, ResourceOwner, string) error

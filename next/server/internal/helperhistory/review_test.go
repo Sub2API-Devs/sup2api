@@ -2,8 +2,11 @@ package helperhistory
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
 func TestReviewHelperHistoryDBReservesCompletionSlots(t *testing.T) {
@@ -11,6 +14,35 @@ func TestReviewHelperHistoryDBReservesCompletionSlots(t *testing.T) {
 	s.options.MaxRecords = 1
 	if _, err := s.Reserve(context.Background(), r); err == nil {
 		t.Fatal("one slot cannot reserve both immutable record and unacknowledged usage")
+	}
+}
+
+func TestReviewHelperHistoryDBFrozenUsageNumberLexemes(t *testing.T) {
+	s, r := fixture(t)
+	ctx := context.Background()
+	a, err := s.Reserve(ctx, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.MarkDispatched(ctx, r.Owner, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	rec := usage(r)
+	rec.Metrics = map[string]any{"big": json.Number("9007199254740993"), "fraction": json.Number("1.2300")}
+	if err = s.PersistUncertainUsage(ctx, r.Owner, a.ID, rec); err != nil {
+		t.Fatal(err)
+	}
+	items, err := s.PendingUsage(ctx, 10)
+	if err != nil || len(items) != 1 {
+		t.Fatal(err)
+	}
+	item := items[0]
+	if item.Record.Metrics["big"] != rec.Metrics["big"] || item.Record.Metrics["fraction"] != rec.Metrics["fraction"] {
+		t.Fatal("numeric spelling changed")
+	}
+	_, digest, err := core.DecodeHelperHistoryUsage(item.FrozenEnvelope)
+	if err != nil || digest != item.Digest {
+		t.Fatal("original frozen bytes lost", err)
 	}
 }
 
