@@ -1,0 +1,182 @@
+{
+  "model": "claude-opus-5-5",
+  "results": [
+    {
+      "name": "json",
+      "path": "/v1/messages",
+      "status": 200,
+      "request_id": "e8e37b4488caa47d72a652c6",
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 580,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 580,
+        "cache_read_input_tokens": 0,
+        "inference_geo": "not_available",
+        "input_tokens": 2,
+        "output_tokens": 6,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "text"
+      ],
+      "error_type": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 5.207
+    },
+    {
+      "name": "continuation",
+      "path": "/v1/messages",
+      "status": 200,
+      "request_id": "9da1089f2de475b86f1aeb8b",
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 623,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 623,
+        "cache_read_input_tokens": 0,
+        "inference_geo": "not_available",
+        "input_tokens": 2,
+        "output_tokens": 38,
+        "output_tokens_details": {
+          "thinking_tokens": 21
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "thinking",
+        "text"
+      ],
+      "error_type": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 5.734
+    },
+    {
+      "name": "rollback-branch",
+      "path": "/v1/messages",
+      "status": 200,
+      "request_id": "f7f8264fcdbe5279826d82d4",
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 631,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 631,
+        "cache_read_input_tokens": 0,
+        "inference_geo": "not_available",
+        "input_tokens": 2,
+        "output_tokens": 10,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "text"
+      ],
+      "error_type": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 4.892
+    },
+    {
+      "name": "sse",
+      "path": "/v1/messages",
+      "status": 200,
+      "request_id": "ecb98e19b33b785a2e32dbcb",
+      "event_types": [
+        "content_block_delta",
+        "content_block_start",
+        "content_block_stop",
+        "message_delta",
+        "message_start",
+        "message_stop"
+      ],
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 5.009
+    },
+    {
+      "name": "client-tool-call",
+      "path": "/v1/messages",
+      "status": 200,
+      "request_id": "22c3ffe64655aa817235b1de",
+      "stop": "tool_use",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 938,
+        "inference_geo": "not_available",
+        "input_tokens": 2,
+        "output_tokens": 40,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "tool_use"
+      ],
+      "error_type": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 5.736
+    },
+    {
+      "name": "client-tool-result",
+      "path": "/v1/messages",
+      "status": 200,
+      "request_id": "53d55d9897840f3d0d278771",
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 84,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 84,
+        "cache_read_input_tokens": 938,
+        "inference_geo": "not_available",
+        "input_tokens": 2,
+        "output_tokens": 35,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "text"
+      ],
+      "error_type": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 5.241
+    },
+    {
+      "name": "count-tokens",
+      "path": "/v1/messages/count_tokens",
+      "status": 502,
+      "request_id": "e5ae85862d01a2220454e972",
+      "stop": null,
+      "usage": null,
+      "content_types": [],
+      "error_type": "api_error",
+      "passed": false,
+      "outcome": "http_error",
+      "seconds": 1.004
+    }
+  ],
+  "scope": "Public HTTP smoke; does not force a particular account or prove all provider features."
+}

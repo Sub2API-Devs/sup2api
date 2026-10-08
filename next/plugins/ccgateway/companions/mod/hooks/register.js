@@ -112,6 +112,10 @@ export function register(on) {
     }
     const result = await next(e);
     await trace('keep', result);
+    if (e.type === 'session_context' && origin === 'engine' && typeof result?.text === 'string' && result.text.length > 0) {
+      const ack = await $.http.fetch(controlURL, { method: 'POST', headers: { Authorization: 'Bearer ' + controlToken, 'content-type': 'application/json' }, body: JSON.stringify({ event: 'session_context', detail: { text: result.text } }) });
+      if (!ack.ok) throw new Error('ccgateway: session context acknowledgement rejected');
+    }
     const label = 'prompt.submit hook additional context: ';
     if (e.type !== 'hook_additional_context' || e.origin?.kind !== 'plugin' || e.origin?.event !== 'prompt.submit') return result;
     if (typeof result?.text !== 'string' || !result.text.startsWith(label)) return result;

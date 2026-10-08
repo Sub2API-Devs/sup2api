@@ -167,6 +167,7 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 	}
 	defer control.Close()
 	cfg.control = control
+	relay.control = control
 	cfg.env["CCGATEWAY_MOD_URL"] = control.URL
 	cfg.env["CCGATEWAY_MOD_TOKEN"] = control.token
 	proc, err := startCLI(runctx, r.CLI, cfg.args, p.Work, cfg.processEnv(base, relay), r.Stderr)

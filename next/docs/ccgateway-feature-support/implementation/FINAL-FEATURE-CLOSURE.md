@@ -1,12 +1,12 @@
 # 最终功能闭环审计（当前快照，非全部生产验收）
 
-审计时间：2026-10-08；目标 `D:/projects/golang/sup2api`；第七/八批已提交 `747c168a383fd4e6738cb9451a29b1fb84010560`；本文已补正到第九批实现与独立审查完成、待提交候选状态。本轮只更新文档。CodeGraph 使用 projectPath 定位，已知源码通过本机读取。目录 `contracts/features/catalog.go` 共 37 个 F 项（36 API + 1 CC safeguards）和 8 个 O 横切目标；不按 partial 数量推算完成率。
+审计时间：2026-10-08；目标 `D:/projects/golang/sup2api`；第七/八批已提交 `747c168a383fd4e6738cb9451a29b1fb84010560`；第九批已推送 `cd4d5e40b2de7c22af7718a3b35d12d9f41e786a`，修正候选 `1186563e47565e938da2cd2b1a9e8be6cd5ac2d5` 已通过Linux门禁。Worker #21/#22已原地升级0.1.65、catalog `2026-10-08.8`；核心0.1.65已发布，四节点及实际插件0.1.10哈希通过；公网基础协议及工具/count已复验。真实本地Claude工具回传因CLI追加附件触发严格对齐错误，仍在修复，不宣称全部交付。CodeGraph 使用 projectPath 定位，已知源码通过本机读取。目录 `contracts/features/catalog.go` 共 37 个 F 项（36 API + 1 CC safeguards）和 8 个 O 横切目标；不按 partial 数量推算完成率。
 
 ## 证据口径与结论
 
-下述“实现”指当前源码路径，“隔离 CLI”指真实 Claude Code 接假提供商，不代表账号有对应官方资格；引用既有进度记录是证据索引，本次没有重跑其全部测试。第六批 Linux 4903994f4 已有 providerresources/gateway/ccgateway/app/store/migrations 六包 race 和 vet，通过 519 tests/subtests，12 个关键数据库测试非 skip；第七/八批747c168六包Linux race/vet已通过563项，0041真实DB非skip，详见LINUX-SEVENTH-BATCH-DB-VALIDATION；第九批0042与最终SHA仍待精确候选验证。真实账号最小基线只证明短答与有限只读资源能力，不能升级为所有工具/计费的真实云闭环。
+下述“实现”指当前源码路径，“隔离 CLI”指真实 Claude Code 接假提供商，不代表账号有对应官方资格；引用既有进度记录是证据索引，本次没有重跑其全部测试。第六批 Linux 4903994f4 已有 providerresources/gateway/ccgateway/app/store/migrations 六包 race 和 vet，通过 519 tests/subtests，12 个关键数据库测试非 skip；第七/八批747c168六包Linux race/vet已通过563项，0041真实DB非skip，详见LINUX-SEVENTH-BATCH-DB-VALIDATION；第九批1186563已通过Linux七包609项、全contracts55项与strict33项，共697项；race/vet均通过，0042真实DB及原三项迁移红灯已修正转绿。2项可选真实CLI跳过与无测试包单列，详见LINUX-NINTH-BATCH-DB-VALIDATION。真实账号最小基线只证明短答与有限只读资源能力，不能升级为所有工具/计费的真实云闭环。
 
-旧 `FEATURE-CLOSURE-AUDIT.md` 的 resource、inline server、compaction changes、MCP、OpenAI codec、credit“尚未实现”已过时。目录仍写 credit 暂拒、MCP 全部 inline 暂拒等，也需在新候选同步。保留历史文档日期，不用改掉过去失败证据。
+旧 `FEATURE-CLOSURE-AUDIT.md` 的 resource、inline server、compaction changes、MCP、OpenAI codec、credit“尚未实现”已过时。当前catalog .8已修正credit、inline MCP、PTC与跨Worker diagnostics描述；旧目录和早期审计文字只作历史记录，不能作为当前准入结论。保留历史文档日期，不用改掉过去失败证据。
 
 ## 37 项逐项核对
 
@@ -24,7 +24,7 @@
 10. **F-STOP**：stop_sequences到主wire，stop_reason/stop_sequence返回。`REQUEST-PROGRESS`多流程；实际模型停词效果未穷举。
 11. **F-METADATA**：显式metadata保真，缺省保留CLI归因，512长度边界及外层真实CC兼容已有回归。它不授予身份；见REQUEST/metadata历史记录，真实上游扩展仍受其schema约束。
 12. **F-CACHE**：`cache_plan.go`保留位置、顺序、TTL、4断点与自动缓存；Web/Advisor/typed等后续组合已有适配。`CACHE-PROGRESS`旧“所有server拒绝”已过时；第九批内部ToolSearch的逐轮见证、断点/目录恢复已实现并独立复核，48次真实CLI隔离调用通过；旧synthetic rounds仍限于不同内部工作流。真实cache账单未由本地命中证明。
-13. **F-DIAGNOSTICS**：第九批核心持久owner/ID-hash/binding索引、可信grant、Worker重核issuer已接，保留standalone本地索引；JSON/SSE冷Worker续用、同owner平台key轮换和错误负例通过。独立审已修失败用量、消息形状、多值头和过期假登记四类问题；0042 DB待Linux。跨issuer未放开，不能无界放行。
+13. **F-DIAGNOSTICS**：第九批核心持久owner/ID-hash/binding索引、可信grant、Worker重核issuer已接，保留standalone本地索引；JSON/SSE冷Worker续用、同owner平台key轮换和错误负例通过。独立审已修失败用量、消息形状、多值头和过期假登记四类问题；0042并发/过期/幂等DB在1186563 Linux实际通过。跨issuer未放开，不能无界放行。
 14. **F-TOOLS**：原生名称+schema匹配、runtime复核、MCP/custom映射、Mod拦截、description恢复、精确整数台账。`NATIVE-TOOLS-PROGRESS`及exact tool tests；目录含2.1.288/292，未知CLI由实际wire校验兜底。不能把名称近似当schema相同。
 15. **F-TOOL-CHOICE**：auto/none/any/named和parallel主wire映射；强制选择与thinking模型条件/内部轮次有明确限制。已有单测和CLI；内部ToolSearch forced首轮与续轮应分阶段计划，可补，不是永远不兼容。
 16. **F-TOOL-SEARCH**：API regex/bm25、tool_reference、typed与客户端发现账本；API模式关内部CC搜索。最新MCP允许非deferred connector + deferred client搜索；未知MCP引用不猜命名。deferred MCP身份编码待规范/捕获，见MCP组合记录。
@@ -34,7 +34,7 @@
 20. **F-DOCUMENTS**：PDF/text/content/URL/file源、工具结果文档与引用保留；CLI媒体/资源回归。扫描只已登记结构，不递归修改任意input，不能文本抽取冒充PDF。
 21. **F-FILES**：核心CRUD/分页/ACL/限额/expiry，固定issuer，Worker鉴权carrier，公开ID映射及产物登记；Files HTTP独立审与Linux真实DB、隔离CLI已过。21第三方资源路由与22官方OAuth只读证据不同，不能合称所有账号可上传下载。
 22. **F-SKILLS**：核心custom CRUD/version/list/delete，builtin目录和container.skills，latest冻结具体已登记版本、两代version映射。SKILLS各进度/独立审、3组新增Skills DB与core资源测试；真实技能执行资格/所有文件格式产出仍待云验证，不能用本地Skill替代。
-23. **F-WEB-TOOLS**：搜索/抓取版本、加密结果、引用、mixed客户端工具、pause与新执行组合已有路径。WEB/CODE-EXEC/PTC证据；catalog仍说PTC未接需更新。实际搜索结果/动态过滤及按用量收费需真实验收。
+23. **F-WEB-TOOLS**：搜索/抓取版本、加密结果、引用、mixed客户端工具、pause与新执行组合已有路径。WEB/CODE-EXEC/PTC证据；catalog .8已准确说明direct/程序化caller、代码执行父子账本和容器归属。实际搜索结果/动态过滤及按用量收费需真实验收。
 24. **F-CODE-EXEC**：四代执行定义/结果，provider容器/文件登记和续期、JSON/SSE有状态缓冲，原始usage保留。CODE-EXECUTION-PTC与资源独立审/DB；不从调用次数猜CPU时长/官方免费月额度，不用Worker Bash冒充云执行。
 25. **F-PTC**：父调用→持久容器→客户端子调用/result账本，跨owner父ID唯一、pending与回退/cold、资源grant。CLI矩阵及Linux并发DB；credit精确echo仅活跃verifiedPrompt豁免，best_effort失配不豁免。无container/未知caller不猜补。
 26. **F-ADVISOR**：原始结果/加密历史，嵌套模型权限、价格快照与独立usage迭代计费。ADVISOR、ADDITIONAL-USAGE与MULTIMODEL review；主usage不含advisor，不重复相加。真实模型配对/费用仍待确认。
@@ -52,14 +52,14 @@
 
 ## 八个横切目标
 
-- **O-REGISTRY**：唯一contracts/features来源、策略schema1、Worker能力握手已实现（CAPABILITY-PROGRESS）。目录Reason须与第九批能力同步（最终候选统一校验）；源码能力与账号资格分层，不能根据镜像tag推断。
+- **O-REGISTRY**：唯一contracts/features来源、策略schema1、Worker能力握手已实现（CAPABILITY-PROGRESS）。catalog .8已与第九批能力对齐，Worker21/22实物目录已核验；源码能力与账号资格分层，不能根据镜像tag推断。
 - **O-HISTORY**：native/response-only/sidecar、原始数字、signature、当前工具时间线和bounded缓存已实现，多feature cold/rollback测试。后续必须补跨Worker诊断，不混入消息history当正文。
 - **O-ATTACHMENTS**：默认与按类型、workingDirectory/platform独立；识别标记附件，普通system保留，未知放行/忽略可配。提示cwd不等于容器真实cwd；Windows/Linux有观察，macOS未充分验证。组合会影响签名前缀不能隐瞒。
 - **O-ERRORS**：HTTP200refusal正常，provider原错误/headers、流内错误、usage完成结算分离；credit存储失败是内部custody故障不冒充refusal。SEARCH-IMAGE-HEADERS/CREDIT独立审。最终候选需取消/超时综合回归。
 - **O-LOGGING**：Worker逐请求日志含plan/恢复/上游，MCP/creditsecret结构化脱敏，debug开关不删ownership运行状态。相关diagnostic tests；完整新secret union加入时仍需检查日志遗漏，不输出真实凭据作证据。
 - **O-UI**：分菜单、字段独立、registry驱动能力状态已有实现/UI测试。需同步最新credit/MCP/执行组合说明，不能把全部partial显示成无功能或已全量云验证。
 - **O-PROTOCOLS**：复用共享codec保持legacy门面，next严格converter已落地；资源是独立公开端点，不靠OpenAI转Messages冒充资源CRUD。持久response/batch需另建状态机。
-- **O-VALIDATION**：第六批精确Git Linux真实DB已通过；第七/八批747c168已获独立Linux563项/race/vet证据，第九批0042与缓存改动不能借用旧SHA证明。下一步候选精确SHA+隔离PG45432/Redis36379+races/vet；随后受控真实推理/资源/MCP，保护21/22现有授权与容器。
+- **O-VALIDATION**：第六批精确Git Linux真实DB已通过；第七/八批747c168已获独立Linux563项/race/vet证据，第九批1186563已取得新的Linux697项/race/vet证据，保留cd4迁移失败与修复链；随后受控真实推理/资源/MCP，保护21/22现有授权与容器。
 
 ## 优先可实施缺口：不是“天然不兼容”
 
@@ -75,7 +75,7 @@
 
 第九批已经实现核心有界持久索引、同owner固定binding调度、可信hash grant和Worker实际issuer复核。JSON先登记再发行，SSE仅首个message_start暂存登记后恢复实时流；正常provider notfound/unavailable不改200。默认24h/4096是平台归属保留策略，不是官方指纹有效期；旧Worker缺确认明确失败，standalone仍受本地索引约束。
 
-[CROSS-WORKER-DIAGNOSTICS-PROGRESS](CROSS-WORKER-DIAGNOSTICS-PROGRESS.md)与[DIAGNOSTICS-INDEPENDENT-REVIEW](DIAGNOSTICS-INDEPENDENT-REVIEW.md)记录双Worker、key轮换、owner/group、issuer变化、信用/资源组合、失败用量等证据。独立审四项修复已完成，0042并发/过期DB需最终Linux候选验证。未知owner不能接触共享CC；非CC原协议透传。PrincipalID不能证明两个账号属于同workspace，故跨issuer仍需要可信workspace身份合同，不能偷换账号或删diagnostics。
+[CROSS-WORKER-DIAGNOSTICS-PROGRESS](CROSS-WORKER-DIAGNOSTICS-PROGRESS.md)与[DIAGNOSTICS-INDEPENDENT-REVIEW](DIAGNOSTICS-INDEPENDENT-REVIEW.md)记录双Worker、key轮换、owner/group、issuer变化、信用/资源组合、失败用量等证据。独立审四项修复已完成，0042并发/过期DB及重复迁移已在1186563 Linux候选通过。未知owner不能接触共享CC；非CC原协议透传。PrincipalID不能证明两个账号属于同workspace，故跨issuer仍需要可信workspace身份合同，不能偷换账号或删diagnostics。
 
 ### Sonnet assistant-tail
 
@@ -95,7 +95,7 @@ CLI Sonnet添加Auto Mode Active安全附件仍是合法pause_turn续接可能�
 
 ## 最终范围与后续验收
 
-第九批缓存和diagnostics已实现并独审，等待精确Git SHA运行Linux0042、engine race和整体集成；第七/八批证据不覆盖这些新代码。catalog/前端仅同步已实现范围，保留原进度文档作为历史证据。
+第九批缓存和diagnostics已实现并独审，cd4/118两次Git候选及门禁证据已记录；1186563 Linux697项通过，Worker21/22已原地更新0.1.65、catalog .8且真实短答READY通过。核心0.1.65与插件0.1.10实际切换仍等发布代理确认，公开API升级后工具/count回归不能提前宣布成功。保留原候选迁移失败、原进度文档和隔离CLI/真实账号两类证据。
 
 普通API必须保真的单请求format/forced/budget路径已有支持；旧CC synthetic格式循环属于额外内部工作流，不阻断这些普通API能力。内部循环的forced/budget合同仍是可做的高级组合，不能假报已完成。
 

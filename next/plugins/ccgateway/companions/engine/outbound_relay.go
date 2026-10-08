@@ -34,6 +34,7 @@ type outboundRelay struct {
 	exactToolInputs map[string]map[int]exactToolCapture
 	fallbackEvents  map[string]map[int]*fallbackCapture
 	scope           *mainRequestScope
+	control         *modControl
 	path            string
 	URL             string
 	FirstParty      bool
@@ -403,6 +404,10 @@ func (r *outboundRelay) adaptAttributed(req *Request, groups []systemGroup, body
 		r.scope.recordApplied()
 		return req.Plan.RawRequest(), true, nil
 	}
+	restoreContexts, err := normalizeToolResultContexts(req, message, r.control)
+	if err != nil {
+		return nil, false, err
+	}
 	if err := req.restoreImageCarriers(message); err != nil {
 		return nil, false, err
 	}
@@ -505,6 +510,9 @@ func (r *outboundRelay) adaptAttributed(req *Request, groups []systemGroup, body
 		}
 		thinking["display"] = display
 		message["thinking"] = thinking
+	}
+	if err := restoreContexts(message); err != nil {
+		return nil, false, err
 	}
 	var out bytes.Buffer
 	encoder := json.NewEncoder(&out)

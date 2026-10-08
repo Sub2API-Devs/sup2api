@@ -18,6 +18,7 @@ var modControls sync.Map
 
 type modControl struct {
 	scope            *mainRequestScope
+	sessionContexts  map[string]bool
 	diagnostic       *requestDiagnostic
 	path, URL, token string
 	config           []byte
@@ -121,6 +122,22 @@ func (c *modControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		c.ready = true
 	case ack.Event == "system" && c.ready && ack.Systems == c.systems:
 		c.attached = true
+	case ack.Event == "session_context" && c.ready:
+		var detail struct {
+			Text string `json:"text"`
+		}
+		if json.Unmarshal(ack.Detail, &detail) != nil || detail.Text == "" || len(detail.Text) > 64<<10 {
+			w.WriteHeader(400)
+			return
+		}
+		if c.sessionContexts == nil {
+			c.sessionContexts = map[string]bool{}
+		}
+		if len(c.sessionContexts) >= 32 && !c.sessionContexts[detail.Text] {
+			w.WriteHeader(400)
+			return
+		}
+		c.sessionContexts[detail.Text] = true
 	case ack.Event == "trace" && c.ready:
 		c.diagnostic.trace("mod_attachment", ack.Detail)
 	case ack.Event == "tool" && c.ready:

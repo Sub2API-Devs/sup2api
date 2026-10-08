@@ -19,3 +19,15 @@
 ## 初候选空delta独立门禁
 
 同精确cd4d5e40b readonly源码：contracts `go test -json -race -p 1 -count=1 ./credits ./diagnostics` 与vet均exit0；credits9tests通过（1.017s），diagnostics包无测试，不能计作功能测试通过。strict `go test -json -race -p 1 -count=1 ./strict` 与vet均exit0，33tests通过（1.086s）。两包 `TestEmptyInputDeltaRetainsInitialObject` 实际PASS，0race；日志分别contracts-race.jsonl/strict-race.jsonl及vet日志、codec-status.txt。此绿门禁不覆盖0042迁移失败，整体仍待修正SHA。
+
+## 修正候选最终门禁：GREEN
+
+精确SHA `1186563e47565e938da2cd2b1a9e8be6cd5ac2d5`，通过Git fetch新增独立clean detached worktree `/home/debian/sub2api-next-test/git-audit-nine-1186563e4`。同隔离PG45432、readonly源码、2CPU/2GiB限制；不在服务器修改源码。该候选包括0042幂等DDL及统一资源身份多值头校验。
+
+七包全部PASS：providerresources2.147s、gateway9.684s、ccgateway3.408s、app3.578s、fallbackcredits1.124s、messagediagnostics1.118s、migrations1.201s。共609tests/subtests PASS，2skip仍仅可选真实CLI用例，0FAIL/0race。`TestDiagnosticsDBOwnershipRetentionAndConcurrentRecords` 实际PG PASS0.11s；此前红灯TestManagedRuntimeMigrationDoesNotBootstrap PASS1.08s、TestMigrationsFromFirstIdempotentRunTwice PASS0.09s、TestSecurityHardeningDoesNotReopenPrivateProxies PASS0.08s。0041及现有资源DB同七包实际执行，不是skip获得绿色。
+
+随后在相同候选串行执行全部contracts `go test -json -race -p 1 -count=1 ./...`：55tests通过，credits/features/httpfacts/resources包分别PASS1.017s/1.044s/1.007s/1.013s，diagnostics包无测试单列，未把它计为功能用例。strict33tests PASS1.083s。两个TestEmptyInputDeltaRetainsInitialObject实跑PASS（strict0.01s），全程0race。
+
+七包、全contracts、strict三组vet均exit0，三个vet日志均0字节。status.txt六项test/vet exit全部0；测试结束Git工作区仍干净。总计697个真实test/subtest通过（609+55+33），另2个core可选CLI skip与1个contracts无测试包。
+
+新完整证据目录 `/home/debian/sub2api-next-test/feature-validation-audit-1186563e4/run1/`：core-db-race.jsonl、contracts-race.jsonl、strict-race.jsonl、对应三个vet日志、status.txt/environment.log。已向父报告OVH DB门禁满足；生产部署由父结合cc-max engine/CLI验收统一控制。原cd4d5e40b红结果保留，不能倒写为曾通过。此文不声称真实提供商全部beta、MCP远程操作或信用计费效果已完成验收。
