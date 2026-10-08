@@ -151,7 +151,7 @@ func (c *call) observeFallbackCredit(ctx context.Context, response *http.Respons
 		return nil
 	}
 	binding := c.creditAccess.binding
-	if response.Header.Get(resources.PrincipalHeader) != binding.PrincipalID || response.Header.Get(resources.GenerationHeader) != binding.Generation {
+	if resources.ValidateIdentityHeaders(response.Header, resources.Identity{PrincipalID: binding.PrincipalID, Generation: binding.Generation}) != nil {
 		return fmt.Errorf("fallback credit issuer evidence mismatch")
 	}
 	if failure := response.Header.Get(credits.FailureHeader); failure != "" {

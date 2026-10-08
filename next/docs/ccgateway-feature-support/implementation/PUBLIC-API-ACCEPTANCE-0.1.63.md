@@ -43,3 +43,9 @@
 独立复核确认核心已选账号22，但实际仍运行2026-10-06安装的CCGateway0.1.9。0.1.63构建虽打包新实现，插件manifest未递增版本；安装器按同版本不可覆盖规则保留旧包，旧二进制明确不提供count_tokens。具体安装SHA/二进制证据见DEPLOYMENT-2026-10-08-CORE-0.1.63后续段落。
 
 已在本地将插件manifest递增至0.1.10，插件全模块单测/vet通过。没有覆盖immutable旧包或修改调度/冷却规则。下一次发布必须核对四节点实际active插件版本与候选包SHA，然后再验公开count调用，不能只看核心版本就称插件更新完成。
+
+## Files 公开资源闭环通过
+
+另以同一客户端Key完成独立Files闭环：上传29字节text/plain→公开IDmetadata→通过公开ID文档请求让模型读取→删除→再次metadata得到404。模型HTTP200/end_turn，准确返回测试词MARIGOLD；只读metadata尺寸/MIME一致，删除确认通过，没有遗留测试文件。公开ID仅以SHA256前16位记录，Key不落盘。完整记录见 [Files公开验收](evidence/public-files-0.1.63.json)。
+
+这次实际走核心租户资源映射及Worker授权，不再只是旧记录的直连容器Files探针。只验证本文text文件路径，不推广为所有文件类型、生成产物下载或Skills执行资格。

@@ -1,0 +1,57 @@
+[
+  {
+    "name": "upload",
+    "status": 200,
+    "request_id": "2ca1c9256f382ca672a6183e",
+    "error_type": null,
+    "type": "file",
+    "public_id_hash": "3e9291de55c97e2a"
+  },
+  {
+    "name": "metadata",
+    "status": 200,
+    "request_id": "5a9ba79f541f3cda110ba63d",
+    "error_type": null,
+    "type": "file",
+    "matches": true
+  },
+  {
+    "name": "document-model-read",
+    "status": 200,
+    "request_id": "0913889723d64261e4bdce5e",
+    "error_type": null,
+    "type": "message",
+    "stop": "end_turn",
+    "matches": true,
+    "usage": {
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 611,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "cache_creation_input_tokens": 611,
+      "cache_read_input_tokens": 0,
+      "inference_geo": "not_available",
+      "input_tokens": 2,
+      "output_tokens": 9,
+      "output_tokens_details": {
+        "thinking_tokens": 0
+      },
+      "service_tier": "standard"
+    }
+  },
+  {
+    "name": "delete",
+    "status": 200,
+    "request_id": "97b64130916048bf5afe999d",
+    "error_type": null,
+    "type": "file_deleted"
+  },
+  {
+    "name": "after-delete",
+    "status": 404,
+    "request_id": "8aec166586aff7b72fed9fc4",
+    "error_type": "not_found_error",
+    "type": "error",
+    "matches": true
+  }
+]

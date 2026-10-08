@@ -39,7 +39,7 @@ func (c *call) prepareDiagnosticResponse(ctx context.Context, resp *http.Respons
 	}()
 	fail := func(err error) error { return &diagnosticStorageError{err} }
 	binding := c.diagnosticAccess.binding
-	if resp.Header.Get(diag.ReadyHeader) != "1" || len(resp.Header.Values(diag.ReadyHeader)) != 1 || len(resp.Header.Values(resources.PrincipalHeader)) != 1 || len(resp.Header.Values(resources.GenerationHeader)) != 1 || resp.Header.Get(resources.PrincipalHeader) != binding.PrincipalID || resp.Header.Get(resources.GenerationHeader) != binding.Generation {
+	if resp.Header.Get(diag.ReadyHeader) != "1" || len(resp.Header.Values(diag.ReadyHeader)) != 1 || resources.ValidateIdentityHeaders(resp.Header, resources.Identity{PrincipalID: binding.PrincipalID, Generation: binding.Generation}) != nil {
 		return fail(fmt.Errorf("Worker diagnostics capability or identity not verified"))
 	}
 	if !isSSE(resp.Header.Get("Content-Type")) {

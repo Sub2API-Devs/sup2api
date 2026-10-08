@@ -238,3 +238,10 @@
 - 空工具input_json_delta修复已在Worker、MCP秘密检查、credits事件聚合与共享strict codec四处处理；初始对象+空串不改内容，非字符串/空白/截断/数组仍拒绝。作者8次真CLI工具往返7.920s、独审6.678s通过，记录EMPTY-TOOL-INPUT-DELTA-REPAIR/EMPTY-TOOL-INPUT-INDEPENDENT-REVIEW。
 - count_tokens503确认是旧插件0.1.9仍活跃：内置同版本新内容不覆盖旧包，新count实现没真正运行。root将CCGateway manifest升0.1.10，完整插件测试/vet通过。源码相较原发行66e9186的插件业务变更仅CCGateway；共享strict转换运行在core，其他插件不导入protocol-codec。正式下一发行须验actual插件active版本和包SHA，不能仅验core版本。
 - 第九批主目标core gateway/messagediagnostics/fallbackcredits/providerresources/app非DB测试与vet通过，engine/Worker/contracts测试与vet通过；空delta加入后共享codec全测试/vet通过。本机数据库仍不可用，0042必走新Git候选隔离Linux。
+
+### 第九批 Linux 门禁修复（未发布0.1.64）
+
+- `cd4d5e40b` 的cc-max全engine/Worker/contracts race与vet通过，diag/空工具/内部缓存真实CLI定向66.208s通过，产物仅留候选目录，未替换线上Worker。
+- OVH新候选实际DB发现0042 DDL缺IF NOT EXISTS，导致重复迁移相关三测试失败；该候选不能发布。只对表/两索引增加幂等保护，独审确认没有其他schema变化，新Git SHA必须重跑真实LinuxDB。0.1.64已构建签名但未导入/升级，保留为未发布候选，不覆盖其artifact。
+- 交付规范复核发现资源/信用与诊断身份头多值校验差异，已统一shared resources.ValidateIdentityHeaders，Worker和核心三响应路径复用。三路径JSON/SSE负例及真实HTTP大小写/重复头独审通过；不更改认证接口或放宽身份。
+- 核心当前仍0.1.63、Worker747c。公开Files租户完整闭环已通过且文件删除/404确认；下一修正候选使用0.1.65，完成新SHA数据库门禁、核心和Worker更新及0.1.10插件实际安装验证，再复测工具与count。

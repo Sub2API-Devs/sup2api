@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	diag "github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/diagnostics"
-	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/resources"
 	"time"
 )
 
@@ -18,9 +17,6 @@ func (x *exchange) trustedDiagnostics(id string) (bool, error) {
 	track, grant := h.Get(diag.TrackingHeader), h.Get(diag.GrantHeader)
 	if track == "" && grant == "" {
 		return false, nil
-	}
-	if len(h.Values(resources.PrincipalHeader)) != 1 || len(h.Values(resources.GenerationHeader)) != 1 {
-		return false, fmt.Errorf("ambiguous diagnostics issuer capability")
 	}
 	if track != "1" || x.req.CountTokens {
 		return false, fmt.Errorf("invalid diagnostics capability")

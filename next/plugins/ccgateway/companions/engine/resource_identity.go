@@ -142,9 +142,5 @@ func resourceProfilePrincipal(profile Object) (string, error) {
 }
 
 func verifyExpectedResourceIdentity(h http.Header, actual resources.Identity) error {
-	principal, generation := h.Get(resources.PrincipalHeader), h.Get(resources.GenerationHeader)
-	if principal == "" || generation == "" || principal != actual.PrincipalID || generation != actual.Generation {
-		return fmt.Errorf("resource issuer or authorization generation does not match")
-	}
-	return nil
+	return resources.ValidateIdentityHeaders(h, actual)
 }

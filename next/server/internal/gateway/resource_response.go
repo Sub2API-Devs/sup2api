@@ -94,7 +94,7 @@ func (c *call) forwardResourceResponse(ctx context.Context, rt *typeRoute, resp 
 
 func (c *call) rewriteResourceEvents(ctx context.Context, header http.Header, events []resourceResponseEvent) ([]resourceResponseEvent, error) {
 	access := c.resourceAccess
-	if access == nil || header.Get(resources.PrincipalHeader) != access.binding.PrincipalID || header.Get(resources.GenerationHeader) != access.binding.Generation {
+	if access == nil || resources.ValidateIdentityHeaders(header, resources.Identity{PrincipalID: access.binding.PrincipalID, Generation: access.binding.Generation}) != nil {
 		return nil, fmt.Errorf("issuer evidence mismatch")
 	}
 	if c.g.d.Resources == nil || c.g.d.ResourceTransport == nil {
