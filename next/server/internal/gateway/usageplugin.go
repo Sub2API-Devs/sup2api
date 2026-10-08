@@ -303,7 +303,7 @@ func (c *call) applyUsageReport(ctx context.Context, rt *typeRoute, platformKey 
 	t := rep.GetTokens()
 	c.rec.Tokens = usagerules.Tokens(t.GetInputTokens(), t.GetOutputTokens(), t.GetCacheReadTokens(),
 		t.GetCacheCreationTokens(), t.GetCacheCreation_1HTokens())
-	c.rec.Metrics = c.reportedFacts(ctx, rt, rep.GetFacts())
+	c.rec.Metrics = preserveHostCacheEvidence(c.rec.Metrics, c.reportedFacts(ctx, rt, rep.GetFacts()))
 	if m := rep.GetUpstreamModel(); m != "" && m != c.model {
 		c.rec.UpstreamModel = truncateUTF8(m, 200)
 	}
@@ -356,7 +356,7 @@ func (c *call) applyReservation(ctx context.Context, rt *typeRoute, platformKey 
 			t.GetCacheCreationTokens(), t.GetCacheCreation_1HTokens())
 	}
 	if f := rv.GetFacts(); len(f) > 0 {
-		c.rec.Metrics = c.reportedFacts(ctx, rt, f)
+		c.rec.Metrics = preserveHostCacheEvidence(c.rec.Metrics, c.reportedFacts(ctx, rt, f))
 	}
 	c.rec.Reservation = &core.UsageReservation{
 		PluginKey:      platformKey,
@@ -379,6 +379,9 @@ func (c *call) reportedFacts(ctx context.Context, rt *typeRoute, facts map[strin
 	}
 	out := make(map[string]any, len(facts))
 	for key, raw := range facts {
+		if key == core.CacheWriteEvidenceKey {
+			continue
+		}
 		f, ok := rt.usage.Facts[key]
 		if !ok {
 			slog.WarnContext(ctx, "gateway: plugin reported a usage fact the manifest does not declare, dropped",

@@ -13,6 +13,7 @@ const props = defineProps<{
   rateMultiplier?: string | number | null
   total?: string | number | null
   rules?: Array<{ multiplier: number | string; matched: boolean }>
+  cacheWriteLabels?: { default: string; oneHour: string }
 }>()
 const { t, te } = useI18n()
 
@@ -30,6 +31,8 @@ const items = computed<Item[]>(() => (Array.isArray(bd.value.items) ? bd.value.i
 
 function labelOf(l?: string): string {
   if (!l) return t('prices.items.other')
+  if (l === 'cc' && props.cacheWriteLabels) return props.cacheWriteLabels.default
+  if (l === 'cc1h' && props.cacheWriteLabels) return props.cacheWriteLabels.oneHour
   if (l.startsWith('u:')) return l.slice(2)
   return te(`prices.items.${l}`) ? t(`prices.items.${l}`) : l
 }

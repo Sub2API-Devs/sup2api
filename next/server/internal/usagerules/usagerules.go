@@ -36,6 +36,7 @@ func For(ap manifest.AccountPlatform, ep *manifest.Endpoint, pf *manifest.Platfo
 // Acc applies the platform's declarative usage rules. Later values win, so
 // cumulative counters (message_delta) override earlier ones.
 type Acc struct {
+	cacheEvidence   *core.CacheWriteEvidence
 	attempts        *attemptMeter
 	primaryModel    string
 	additional      map[string][]core.AdditionalUsage
@@ -86,6 +87,9 @@ func (u *Acc) warn(key, msg string, attrs ...any) {
 }
 
 func (u *Acc) set(field string, r gjson.Result) {
+	if field == core.CacheWriteEvidenceKey {
+		return
+	}
 	if !r.Exists() || r.Type == gjson.Null {
 		return
 	}
@@ -153,6 +157,9 @@ func truncate(s string, n int) string {
 // it, nil for a usage map key that is not a standard usage field (those have
 // no declaration to check against).
 func (u *Acc) setMetric(key string, r gjson.Result, f *manifest.UsageFact) {
+	if key == core.CacheWriteEvidenceKey {
+		return
+	}
 	if !r.Exists() || r.Type == gjson.Null {
 		return
 	}
@@ -265,6 +272,9 @@ func (u *Acc) applyJSONDoc(body []byte) {
 		}
 	}
 	u.applyFacts(body)
+	if u.rules.JSON != nil {
+		u.observeCacheEvidence(body, u.rules.JSON.Map, "json")
+	}
 }
 
 // ApplySSE applies the SSE rules to one upstream event.
@@ -296,10 +306,16 @@ func (u *Acc) ApplySSE(event string, data []byte) {
 		}
 	}
 	u.applyFacts(data)
+	for _, rule := range u.rules.SSE {
+		if rule.Event == "" || rule.Event == name {
+			u.observeCacheEvidence(data, rule.Map, "sse")
+		}
+	}
 }
 
 // Tokens converts to core.UsageTokens. cache_creation_tokens is the total
-// cache write (5 minute + 1 hour); the core counts the two separately.
+// cache write; known 1h writes and the compatibility default-write bucket are
+// charged separately. Missing TTL classification is recorded in Metrics.
 func (u *Acc) Tokens() core.UsageTokens {
 	return Tokens(u.input, u.output, u.cacheRead, u.cacheCreation, u.cacheCreation1h)
 }
@@ -318,7 +334,8 @@ func EventName(event string, data []byte) string {
 
 // Tokens normalises one set of raw upstream counts into core.UsageTokens:
 // cacheCreation is the TOTAL cache write and cacheCreation1h the part of it
-// written with a one hour TTL, so the five minute figure is their difference.
+// explicitly reported with a one hour TTL. The remainder uses the platform
+// default cache-write rate for compatibility; it is not evidence of a 5m TTL.
 // Negative inputs count as 0.
 //
 // It is shared by the declarative accumulator and by the counts a plugin

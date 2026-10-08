@@ -5,7 +5,7 @@ export type UsageRow = UsageLog & {
   api_key_name?: string
   user_name?: string
   price?: { id: number; model: string; source: string } | null
-  metrics?: Record<string, number> | null
+  metrics?: Record<string, unknown> | null
 }
 
 export type UsageTokenFacts = Partial<Pick<UsageRow, 'input_tokens' | 'output_tokens' | 'cache_read_tokens' | 'cache_creation_tokens' | 'cache_creation_1h_tokens'>>
@@ -16,7 +16,7 @@ const replacementTokenFields = {
 } as const
 
 /** Recorded rounds are partial evidence, never a replacement request total. */
-export function knownUsageRounds(row: UsageRow): Array<{ round: number; tokens: UsageTokenFacts }> {
+export function knownUsageRounds(row: UsageRow): Array<{ round: number; tokens: UsageTokenFacts; metrics?: unknown }> {
   if (row.success || Object.keys(replacementTokenFields).some(key => Number(row[key as keyof UsageTokenFacts]) > 0)) return []
   const replacement: unknown = row.billing_detail?.inputs?.replacement
   if (!Array.isArray(replacement)) return []
@@ -28,7 +28,7 @@ export function knownUsageRounds(row: UsageRow): Array<{ round: number; tokens: 
       const value = (facts as Record<string, unknown>)[source]
       if (typeof value === 'number' && Number.isFinite(value) && value >= 0) tokens[field as keyof UsageTokenFacts] = value
     }
-    return Object.keys(tokens).length ? [{ round: index + 1, tokens }] : []
+    return Object.keys(tokens).length ? [{ round: index + 1, tokens, metrics: item.Metrics }] : []
   })
 }
 

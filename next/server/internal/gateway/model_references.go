@@ -244,6 +244,7 @@ func (c *call) recordAdditionalUsage(u *usagerules.Acc, rt *typeRoute) {
 			continue
 		}
 		priced.Tokens, priced.UsageSemantics = actual.Tokens, actual.UsageSemantics
+		priced.Metrics = actual.Metrics
 		c.rec.Additional = append(c.rec.Additional, priced)
 	}
 }

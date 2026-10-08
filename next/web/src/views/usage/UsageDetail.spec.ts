@@ -28,6 +28,20 @@ function render(value = row, path?: string) {
 }
 
 describe('known partial usage in failed request details', () => {
+  it('separates reported TTL facts from compatible billing for successful partial usage', () => {
+    const value = { ...row, success: true, status_code: 200, cache_creation_tokens: 1219, cache_creation_1h_tokens: 1376,
+      metrics: { cache_write_evidence: { version: 1, total: { state: 'value', value: 2595 }, explicit_5m: { state: 'value', value: 0 }, explicit_1h: { state: 'value', value: 1376 }, unclassified_tokens: 1219, completeness: 'partial', source: 'sse', pricing_policy: 'platform_default_cache_write_compat' } }
+    } as unknown as UsageRow
+    const before = JSON.stringify(value)
+    const wrapper = render(value)
+    const facts = wrapper.get('[data-testid="cache-write-facts"]')
+    expect(facts.text()).toContain('已报告的 5 分钟写入')
+    expect(facts.text()).toContain('TTL 未细分')
+    expect(facts.text()).toContain('1,219')
+    expect(facts.text()).toContain('平台默认缓存写入费率')
+    expect(wrapper.text()).not.toContain('u("cache_write_evidence")')
+    expect(JSON.stringify(value)).toBe(before)
+  })
   it('shows recorded rounds and 1h cache separately without inventing totals or missing counts', () => {
     const before = JSON.stringify(row)
     const wrapper = render()
@@ -49,6 +63,20 @@ describe('known partial usage in failed request details', () => {
     await flushPromises()
     expect(get).toHaveBeenCalledWith('/me/usage/1')
     expect(wrapper.findAll('[data-testid="known-usage-round"]')).toHaveLength(2)
+  })
+
+  it('keeps main and billed component cache evidence separate and does not expose debug fields', () => {
+    const evidence = (n: number) => ({ cache_write_evidence: { version: 1, total: { state: 'value', value: n }, explicit_5m: { state: 'absent' }, explicit_1h: { state: 'absent' }, unclassified_tokens: n, completeness: 'unknown', source: 'iteration', pricing_policy: 'platform_default_cache_write_compat', private_debug: 'secret' } })
+    const value = { ...row, success: true, status_code: 200, metrics: evidence(11), billing_detail: { inputs: {
+      additional: [{ Metrics: evidence(22) }], replacement: [{ Metrics: evidence(33) }]
+    } }, plugin_detail: { private_debug: 'secret' } } as unknown as UsageRow
+    const wrapper = render(value)
+    const parts = wrapper.findAll('[data-testid="component-cache-write-facts"]')
+    expect(parts).toHaveLength(2)
+    expect(parts[0]!.findAll('dd').map(node => node.text())).toEqual(['22', '未报告', '未报告', '22'])
+    expect(parts[1]!.findAll('dd').map(node => node.text())).toEqual(['33', '未报告', '未报告', '33'])
+    expect(wrapper.text()).not.toContain('secret')
+    expect(wrapper.findAll('[data-testid="cache-write-facts"]')).toHaveLength(3)
   })
 
   it('keeps ordinary successful or nonzero top-level usage unchanged', () => {

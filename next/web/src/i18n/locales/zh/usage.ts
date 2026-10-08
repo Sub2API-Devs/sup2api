@@ -55,6 +55,23 @@ export default {
   filterByClientRequestId: '{id}（点击按此 ID 筛选）',
   cacheTitle: '缓存读 {r} · 缓存写 {w}',
   cached: '缓存',
+  cacheEvidence: {
+    title: '上游缓存写入观测',
+    total: '已报告的写入总量',
+    five: '已报告的 5 分钟写入',
+    hour: '已报告的 1 小时写入',
+    unclassified: 'TTL 未细分',
+    pricing: '计费桶与 TTL 观测分开记录。未细分部分按平台默认缓存写入费率计价；不据此认定为 5 分钟缓存。原费用保持不变。',
+    missing: '本记录没有可用的 TTL 来源证据。以上为原计费桶，不能据此认定实际 5 分钟用量；原费用保持不变。',
+    counter: { absent: '未报告', null: '报告为空', invalid: '报告值无效' },
+    component: { additional: '附加用量 #{index} 的独立缓存观测', replacement: '替代计费用量 #{index} 的独立缓存观测' },
+    status: {
+      complete: '已报告的 TTL 细分完整。',
+      partial: 'TTL 细分不完整，已报告值可能早于最新总量。',
+      unknown: 'TTL 归属未知，未推算缺失细分。',
+      inconsistent: '已报告的缓存计数不一致，无法确定 TTL 分配。'
+    }
+  },
   converted: '已转换',
   convertedFrom: '由端点协议 {protocol} 转换',
   free: '免费',
@@ -95,6 +112,8 @@ export default {
   },
   tokens: {
     title: 'Token 用量',
+    cacheDefaultBucket: '缓存写入（默认计费桶）',
+    cache1hBucket: '缓存写入（1 小时计费桶）',
     knownRound: '第 {round} 轮已知用量',
     incompleteRounds: '以下仅为已记录的分轮用量，整体用量尚未确认，不能作为本次请求总计。未估算缺失用量，计费状态保持不变。'
   },

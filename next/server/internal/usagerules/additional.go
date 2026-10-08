@@ -20,7 +20,10 @@ func (u *Acc) WithPrimaryModel(model string) *Acc { u.primaryModel = model; retu
 func (u *Acc) Additional() []core.AdditionalUsage {
 	var out []core.AdditionalUsage
 	for _, rule := range u.rules.Additional {
-		out = append(out, u.additional[rule.Name]...)
+		for _, item := range u.additional[rule.Name] {
+			item.Metrics = core.CloneUsageMetrics(item.Metrics)
+			out = append(out, item)
+		}
 	}
 	return out
 }
@@ -97,7 +100,7 @@ func (u *Acc) applyAdditional(event string, body []byte, stream bool) {
 				valid = false
 				break
 			}
-			entries = append(entries, core.AdditionalUsage{Kind: rule.Name, Model: model.Str, UsageSemantics: rule.Semantics, Tokens: Tokens(values["input_tokens"], values["output_tokens"], values["cache_read_tokens"], values["cache_creation_tokens"], values["cache_creation_1h_tokens"])})
+			entries = append(entries, core.AdditionalUsage{Metrics: additionalCacheMetrics(rule.Map, entry), Kind: rule.Name, Model: model.Str, UsageSemantics: rule.Semantics, Tokens: Tokens(values["input_tokens"], values["output_tokens"], values["cache_read_tokens"], values["cache_creation_tokens"], values["cache_creation_1h_tokens"])})
 		}
 		if valid {
 			if u.additional == nil {
@@ -109,4 +112,11 @@ func (u *Acc) applyAdditional(event string, body []byte, stream bool) {
 	if len(u.Additional()) > MaxAdditionalItems {
 		u.AdditionalError = "additional usage total exceeds limit"
 	}
+}
+
+func additionalCacheMetrics(mapping map[string]string, entry gjson.Result) map[string]any {
+	if mapping["cache_creation_tokens"] != "cache_creation_input_tokens" || mapping["cache_creation_1h_tokens"] != "cache_creation.ephemeral_1h_input_tokens" {
+		return nil
+	}
+	return iterationCacheMetrics(entry)
 }

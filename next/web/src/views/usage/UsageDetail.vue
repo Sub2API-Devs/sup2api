@@ -12,6 +12,8 @@ import ExprHistoryModal from '@/views/prices/ExprHistoryModal.vue'
 import { useAccountTypes } from '@/views/accounts/accountTypes'
 import { billingTone, isConverted, knownUsageRounds, type UsageRow } from './usage'
 import UsageTokenFacts from './UsageTokenFacts.vue'
+import CacheWriteFacts from './CacheWriteFacts.vue'
+import { componentCacheWriteMetrics, otherUsageMetrics } from './cacheWriteEvidence'
 
 // Expanded usage record: billing detail (A.14), hooks, sticky, request info.
 const props = defineProps<{ row: UsageRow; path?: string }>()
@@ -39,7 +41,9 @@ onMounted(async () => {
 
 const u = computed<UsageRow>(() => ({ ...props.row, ...(detail.value || {}) }))
 const knownRounds = computed(() => knownUsageRounds(u.value))
+const otherMetrics = computed(() => otherUsageMetrics(u.value.metrics))
 const bd = computed<Record<string, any>>(() => (u.value.billing_detail as Record<string, any>) || {})
+const componentCacheFacts = computed(() => componentCacheWriteMetrics(bd.value).filter(item => !knownRounds.value.length || item.kind !== 'replacement'))
 const breakdown = computed<Record<string, any>>(() => bd.value.breakdown || {})
 const vars = computed<Record<string, any>>(() => breakdown.value.vars || {})
 const tierName = computed(() => u.value.matched_tier || bd.value.tier || '')
@@ -153,6 +157,7 @@ async function copy(v: string) {
               :rate-multiplier="rate"
               :total="u.total_cost"
               :rules="rules"
+              :cache-write-labels="{ default: t('usage.tokens.cacheDefaultBucket'), oneHour: t('usage.tokens.cache1hBucket') }"
             />
             <SHint v-else inline>—</SHint>
           </dd>
@@ -261,17 +266,32 @@ async function copy(v: string) {
                 {{ t('usage.tokens.knownRound', { round: round.round }) }}
               </h4>
               <UsageTokenFacts :tokens="round.tokens" />
+              <CacheWriteFacts :metrics="round.metrics" :has-cache-writes="!!(round.tokens.cache_creation_tokens || round.tokens.cache_creation_1h_tokens)" />
             </div>
           </div>
           <UsageTokenFacts
             v-else
             :tokens="u"
           />
+          <CacheWriteFacts
+            v-if="!knownRounds.length"
+            :metrics="u.metrics"
+            :has-cache-writes="!!(u.cache_creation_tokens || u.cache_creation_1h_tokens)"
+          />
+          <div
+            v-for="item in componentCacheFacts"
+            :key="`${item.kind}:${item.index}`"
+            class="mt-3"
+            data-testid="component-cache-write-facts"
+          >
+            <h4 class="text-sm font-medium">{{ t(`usage.cacheEvidence.component.${item.kind}`, { index: item.index }) }}</h4>
+            <CacheWriteFacts :metrics="item.metrics" />
+          </div>
           <dl
-            v-if="Object.keys(u.metrics || {}).length"
+            v-if="Object.keys(otherMetrics).length"
             class="kv"
           >
-            <template v-for="(v, k) in u.metrics || {}" :key="k">
+            <template v-for="(v, k) in otherMetrics" :key="k">
               <dt class="font-mono text-xs">u("{{ k }}")</dt>
               <dd>{{ factValue(v) }}</dd>
             </template>

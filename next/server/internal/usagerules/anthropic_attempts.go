@@ -67,7 +67,7 @@ func (m *attemptMeter) anthropicFallback(kind, primary string) ([]core.AttemptUs
 		if err != nil {
 			return nil, err
 		}
-		item := core.AttemptUsage{Kind: kind, Model: primary, UsageSemantics: "exclusive", Tokens: tokens, BillingReason: "completed_attempt"}
+		item := core.AttemptUsage{Kind: kind, Model: primary, Metrics: iterationCacheMetrics(m.usage), UsageSemantics: "exclusive", Tokens: tokens, BillingReason: "completed_attempt"}
 		if m.reason == "refusal" {
 			if err = refusalDisposition(&item, m.details); err != nil {
 				return nil, err
@@ -92,7 +92,7 @@ func (m *attemptMeter) anthropicFallback(kind, primary string) ([]core.AttemptUs
 		if err != nil {
 			return nil, err
 		}
-		items = append(items, core.AttemptUsage{Kind: kind, Model: model.Str, UsageSemantics: "exclusive", Tokens: tokens, BillingReason: "completed_attempt"})
+		items = append(items, core.AttemptUsage{Kind: kind, Model: model.Str, Metrics: iterationCacheMetrics(entry), UsageSemantics: "exclusive", Tokens: tokens, BillingReason: "completed_attempt"})
 		if len(groups) == 0 || groups[len(groups)-1].model != model.Str {
 			for _, g := range groups {
 				if g.model == model.Str {

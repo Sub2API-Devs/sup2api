@@ -255,6 +255,13 @@ func cloneUsage(r *core.UsageRecord) *core.UsageRecord {
 	raw, _ := json.Marshal(r)
 	var out core.UsageRecord
 	_ = json.Unmarshal(raw, &out)
+	out.Metrics = preserveHostCacheEvidence(r.Metrics, out.Metrics)
+	for i := range out.Additional {
+		out.Additional[i].Metrics = preserveHostCacheEvidence(r.Additional[i].Metrics, out.Additional[i].Metrics)
+	}
+	for i := range out.Replacement {
+		out.Replacement[i].Metrics = preserveHostCacheEvidence(r.Replacement[i].Metrics, out.Replacement[i].Metrics)
+	}
 	return &out
 }
 func factDigest(m proto.Message) string {

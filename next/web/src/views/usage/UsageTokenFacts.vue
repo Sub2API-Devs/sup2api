@@ -14,7 +14,7 @@ const fields = { input_tokens: 'p', output_tokens: 'c', cache_read_tokens: 'cr',
       v-for="(label, field) in fields"
       :key="field"
     >
-      <dt>{{ t(`prices.vars.${label}`) }}</dt>
+      <dt>{{ label === 'cc' ? t('usage.tokens.cacheDefaultBucket') : label === 'cc1h' ? t('usage.tokens.cache1hBucket') : t(`prices.vars.${label}`) }}</dt>
       <dd>{{ tokens[field] == null ? '—' : formatNumber(tokens[field]!) }}</dd>
     </template>
   </dl>

@@ -660,7 +660,7 @@ func fromRecord(rec *core.UsageRecord) *pending {
 		AccountID: rec.AccountID, PluginKey: rec.PluginKey, Platform: rec.Platform, Protocol: rec.Protocol,
 		AccountType: trunc(rec.AccountType, 50), UpstreamProtocol: trunc(rec.UpstreamProtocol, 100),
 		Model: rec.Model, Success: rec.Success, StatusCode: rec.StatusCode, ErrorType: rec.ErrorType,
-		Tokens: rec.Tokens, Metrics: rec.Metrics, LatencyMs: rec.LatencyMs, CreatedAt: rec.CreatedAt,
+		Tokens: rec.Tokens, Metrics: core.CloneUsageMetrics(rec.Metrics), LatencyMs: rec.LatencyMs, CreatedAt: rec.CreatedAt,
 		Rate:   rec.RateMultiplier,
 		Inputs: pendingInputs{Semantics: rec.UsageSemantics, Params: rec.PriceParams, Headers: rec.PriceHeaders, Additional: core.ClonePricedUsage(rec.Additional), Replacement: core.ClonePricedUsage(rec.Replacement), BillingError: rec.BillingError},
 	}

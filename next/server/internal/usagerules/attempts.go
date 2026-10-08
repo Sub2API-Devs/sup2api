@@ -45,7 +45,15 @@ func (u *Acc) Replacement() ([]core.AttemptUsage, error) {
 	}
 	items, err := m.anthropicFallback(u.rules.Attempts.Name, u.primaryModel)
 	if err == nil && len(items) > 0 {
-		items[len(items)-1].Metrics = cloneAttemptFacts(m.finalFacts)
+		for key, value := range m.finalFacts {
+			if key == core.CacheWriteEvidenceKey {
+				continue
+			}
+			if items[len(items)-1].Metrics == nil {
+				items[len(items)-1].Metrics = map[string]any{}
+			}
+			items[len(items)-1].Metrics[key] = value
+		}
 	}
 	return items, err
 }

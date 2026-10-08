@@ -55,6 +55,23 @@ export default {
   filterByClientRequestId: '{id} (click to filter by this ID)',
   cacheTitle: 'cache read {r} · cache write {w}',
   cached: 'cached',
+  cacheEvidence: {
+    title: 'Observed upstream cache writes',
+    total: 'Reported total writes',
+    five: 'Reported 5-minute writes',
+    hour: 'Reported 1-hour writes',
+    unclassified: 'TTL not classified',
+    pricing: 'Billing buckets are separate from observed TTL facts. Unclassified writes use the platform default cache-write rate; this does not establish a 5-minute TTL. Recorded charges are unchanged.',
+    missing: 'This record has no usable TTL provenance. The values above are the original billing buckets, not proof of actual 5-minute usage. Recorded charges are unchanged.',
+    counter: { absent: 'Not reported', null: 'Reported null', invalid: 'Invalid reported value' },
+    component: { additional: 'Separate cache observations for additional usage #{index}', replacement: 'Separate cache observations for replacement usage #{index}' },
+    status: {
+      complete: 'The reported TTL breakdown is complete.',
+      partial: 'The TTL breakdown is incomplete; reported buckets may precede the latest total.',
+      unknown: 'TTL allocation is unknown. Missing buckets were not inferred.',
+      inconsistent: 'Reported cache counters are inconsistent; TTL allocation cannot be determined.'
+    }
+  },
   converted: 'converted',
   convertedFrom: 'Converted from endpoint protocol {protocol}',
   free: 'Free',
@@ -95,6 +112,8 @@ export default {
   },
   tokens: {
     title: 'Tokens',
+    cacheDefaultBucket: 'Cache writes (default billing bucket)',
+    cache1hBucket: 'Cache writes (1h billing bucket)',
     knownRound: 'Known usage for round {round}',
     incompleteRounds: 'These are recorded per-round counts only. Overall usage is unconfirmed and these counts are not the request total. Missing usage is not estimated; billing status is unchanged.'
   },

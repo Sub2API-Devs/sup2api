@@ -37,7 +37,7 @@ func ClonePricedUsage(items []PricedUsage) []PricedUsage {
 			price := *out[i].Price
 			out[i].Price = &price
 		}
-		out[i].Metrics = maps.Clone(out[i].Metrics)
+		out[i].Metrics = CloneUsageMetrics(out[i].Metrics)
 		out[i].PriceParams = maps.Clone(out[i].PriceParams)
 		out[i].PriceHeaders = maps.Clone(out[i].PriceHeaders)
 	}
