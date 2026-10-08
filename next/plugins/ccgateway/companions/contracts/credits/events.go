@@ -80,6 +80,11 @@ func MessageFromEvents(events [][]byte) ([]byte, error) {
 			if name, ok := block["type"].(string); !ok || name == "" {
 				return fail()
 			}
+			if block["type"] == "tool_use" || block["type"] == "server_tool_use" || block["type"] == "mcp_tool_use" {
+				if input, ok := block["input"].(map[string]any); !ok || input == nil {
+					return fail()
+				}
+			}
 			blocks = append(blocks, block)
 			open = index
 			input = ""
@@ -144,7 +149,7 @@ func MessageFromEvents(events [][]byte) ([]byte, error) {
 					return fail()
 				}
 				input += part
-				hasInput = true
+				hasInput = hasInput || part != ""
 			default:
 				return fail()
 			}

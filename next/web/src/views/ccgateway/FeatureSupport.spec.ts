@@ -50,7 +50,7 @@ describe('CCGateway feature catalog', () => {
       mechanisms: ['同账号与 issuer 的信用托管'],
       reason: 'strict/best_effort 与 null；信用 SSE 有界缓冲，真实提供商退款未验证。',
     }, { ...feature('F-SAFEGUARDS', 'partial'), scope: 'cc' }])
-    source.catalog_version = '2026-10-08.7'
+    source.catalog_version = '2026-10-08.8'
     mocks.get.mockResolvedValue(source)
     const w = await render()
     expect(w.text()).toContain('通用 API 特性')
@@ -61,7 +61,7 @@ describe('CCGateway feature catalog', () => {
     for (const text of ['fallback_credit_token.mode', 'usage.fallback_credit', 'fallback-credit-2026-07-01', 'issuer', '有界缓冲', '未验证']) {
       expect(detail.text()).toContain(text)
     }
-    expect(w.text()).toContain('2026-10-08.7')
+    expect(w.text()).toContain('2026-10-08.8')
     expect(w.findAll('input[type="checkbox"]')).toHaveLength(0)
     expect(w.emitted('update:modelValue')).toBeUndefined()
   })

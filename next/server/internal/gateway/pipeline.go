@@ -64,6 +64,8 @@ type call struct {
 	resourceInfo         resources.RequestInfo
 	resourceVersions     []approvedSkillVersion
 	resourceAccess       *modelResourceAccess
+	diagnosticRequest    *diagnosticRequest
+	diagnosticAccess     *diagnosticAccess
 	creditRequest        *modelCreditRequest
 	creditAccess         *modelCreditAccess
 	creditDispatched     bool
@@ -352,7 +354,10 @@ func (c *call) checkModel(ctx context.Context) *gwError {
 	if err := c.checkResourceReferences(ctx); err != nil {
 		return err
 	}
-	return c.checkFallbackCredit(ctx)
+	if err := c.checkFallbackCredit(ctx); err != nil {
+		return err
+	}
+	return c.checkMessageDiagnostics(ctx)
 }
 
 // resolveModelFromPlugin asks PlatformService.ResolveModel of the plugin

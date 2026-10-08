@@ -93,8 +93,15 @@ func (g *mcpResponseGuard) checkJSON(raw []byte) error {
 	if str(e, "type") == "content_block_delta" {
 		delta, _ := e["delta"].(map[string]any)
 		if str(delta, "type") == "input_json_delta" {
+			part, ok := delta["partial_json"].(string)
+			if !ok {
+				return fmt.Errorf("invalid MCP tool input delta")
+			}
+			if part == "" {
+				return nil
+			}
 			key := fmt.Sprint(e["index"])
-			g.inputs[key] += str(delta, "partial_json")
+			g.inputs[key] += part
 			if len(g.inputs[key]) > 16<<20 {
 				return fmt.Errorf("MCP input response exceeds credential inspection limit")
 			}

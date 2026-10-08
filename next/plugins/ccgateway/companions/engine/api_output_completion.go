@@ -33,6 +33,7 @@ func (o *apiTerminalObserver) observe(event []byte) {
 	if o.req != nil {
 		o.req.diagnostic.prepareSecrets(bytes.Join(data, []byte("\n")))
 	}
+	o.req.observeInternalCacheEvent(e)
 	o.req.observeCreditEvent(e)
 	o.observeFallback(e)
 	o.observeExactToolInput(e)

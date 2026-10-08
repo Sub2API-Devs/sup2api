@@ -400,6 +400,9 @@ func (s *Stream) delta(i int, b *streamBlock, d object) ([]Event, error) {
 		return nil, fail("delta."+field, "expected string")
 	}
 	if field == "partial_json" {
+		if value == "" {
+			return nil, nil
+		}
 		if !b.hasArgs && len(b.block["input"].(object)) > 0 {
 			return nil, fail("tool.input", "initial input conflicts with deltas")
 		}

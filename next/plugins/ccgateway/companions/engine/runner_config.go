@@ -85,6 +85,9 @@ type runConfig struct {
 }
 
 func newRunConfig(req *Request, p *Prepared, plugin, dir string) *runConfig {
+	if req.Plan != nil && req.Plan.cache != nil && req.toolSearchEnabled() && !req.structuredOutput() {
+		req.internalCache = &internalCacheRounds{results: map[string]string{}, helpers: map[string]string{}}
+	}
 	c := &runConfig{args: cliArgs(req, p, plugin), systems: req.pendingSystems(), groups: req.systemGroups()}
 	if req.HasMainRequestFeatures() {
 		c.scope = newMainRequestScope()

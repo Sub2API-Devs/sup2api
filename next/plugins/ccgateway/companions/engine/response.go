@@ -224,6 +224,11 @@ func (a *Accumulator) blockDelta(e Object) error {
 		return fmt.Errorf("invalid block delta")
 	}
 	block := a.Blocks[i]
+	if str(d, "type") == "input_json_delta" {
+		if _, ok := d["partial_json"].(string); !ok {
+			return fmt.Errorf("invalid tool input delta")
+		}
+	}
 	if a.Structured[i] && str(d, "type") == "input_json_delta" {
 		d = Object{"type": "text_delta", "text": str(d, "partial_json")}
 		e["delta"] = d
@@ -266,7 +271,13 @@ func (a *Accumulator) blockDelta(e Object) error {
 		if str(block, "type") != "tool_use" && str(block, "type") != "server_tool_use" && str(block, "type") != "mcp_tool_use" {
 			return fmt.Errorf("input delta on wrong block")
 		}
-		a.Inputs[i] += str(d, "partial_json")
+		part, ok := d["partial_json"].(string)
+		if !ok {
+			return fmt.Errorf("invalid tool input delta")
+		}
+		if part != "" {
+			a.Inputs[i] += part
+		}
 	default:
 		return fmt.Errorf("unsupported response delta")
 	}

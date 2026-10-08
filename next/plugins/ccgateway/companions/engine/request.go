@@ -27,6 +27,7 @@ type Tool struct {
 	Metadata     Object `json:"-"`
 }
 type Request struct {
+	internalCache           *internalCacheRounds
 	credit                  *creditExecution
 	creditPTCDeferred       bool
 	resource                *resourceExchange

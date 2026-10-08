@@ -213,3 +213,28 @@
 - 根代理整体验证：gateway/fallbackcredits/providerresources/app/migrations 非DB单测全部通过，vet通过；engine 5.544s、contracts全包、Worker全包与vet通过。数据库仍等待本候选Git SHA在隔离Linux运行，不借旧SHA结果。目录 .7、前端21项组件测试与typecheck通过。
 - OVH四节点仍0.1.62。新增受控发行准备脚本，不导入/升级服务；用原default builder和签名缓存、明确live source schema，专属2CPU/4GiB临时slice经真实RUN证实。四项隔离负例与shell语法通过；禁止覆盖旧发行，既有密钥缺失或trust变化直接停止。
 - 37功能/8横切新闭环清单见 FINAL-FEATURE-CLOSURE。当前仍需第九批核心diagnostics归属与冷Worker能力、内部工具回合的缓存边界适配，并继续核验安全上下文/续写的等价边界。第七/八批先保存Git检查点；新业务不得混入本批提交。
+
+### 第七/八批已提交与第九批冻结收尾（2026-10-08）
+
+- 第七/八批已提交推送 `747c168a383fd4e6738cb9451a29b1fb84010560`。此前段落记录的是当时状态，不代表当前仍未提交。第九批新增内容仍待主代理提交，并使用新的候选 SHA 进行 Linux 验证。
+- 第九批内部 CLI ToolSearch 的显式与 automatic 缓存已实现：真实响应回合账本、完整客户端前缀与原断点恢复、client/helper 目录区分、逐轮 TTL/四断点校验。48 次新矩阵及旧缓存组合隔离回归通过；automatic 按每次实际主请求自然覆盖新增内部内容。带断点工具要求显式 eager，内部回合暂按客户端全历史本地重建；旧 synthetic StructuredOutput 不开放，公共 API format 直接路径与其不同。信用/强制工具/任务预算门禁未借此放宽。见 INTERNAL-ROUND-CACHE-PROGRESS 及独立复核记录。
+- 核心持久 diagnostics 归属索引及0042已接入：默认 user+group 24h/4096 条，固定账号/issuer/generation，可信授权支持冷 Worker。该期限仅为平台归属保留，不承诺提供商指纹 TTL；上游 not_found 仍正常200。无核心授权的旧直连 Worker 保留本地1h兼容校验。
+- Diagnostics 独立复核修复：SSE登记失败丢输出用量、缺Ready失败丢全部用量、多值issuer歧义、非assistant假ID登记、过期同ID误报成功。新增诊断/信用/资源 JSON/SSE组合确认原11/7仅计一次，正常refusal200、失败不发未登记信用。冷 Worker真实CLI隔离与核心针对性回归通过；本机DB因测试PG缺pg_control失败，0042必须由Linux候选验证，未记为通过。详见 DIAGNOSTICS-INDEPENDENT-REVIEW。
+- 官方模型边界已更正：Claude4.6及以后不接受普通assistant文字prefill；pause_turn的完整提供商内容续接另属合法协议，不能混为一谈。CLI安全附件无法等价保留时仍拒绝，不删附件/改role绕过；Opus假上游传输测试不能证明真实模型接受预填。见 MODEL-PREFILL-BOUNDARY。
+- 目录更新 `.8`，保持源码能力与账号真实验证分离；前端继续按单功能聚合，不新增重复配置或假开关。本段不声称第九批上线、真实provider diagnostics命中或缓存计费命中。
+
+- 目录收尾验证：`go test ./features -count=1` 通过（3.433s）；前端3文件21项针对性组件测试通过，版本夹具同步 .8 后 FeatureSupport 7项再次通过；`npm run typecheck` 通过。
+
+### 当前线上与公开验收（2026-10-08，root）
+
+- #21/#22已从服务器Git747c168源码构建并原地更新，二进制SHA256 `5a9d84063c6dea9214c9aaf058b927cfda68d687cdc696fae2ca74bc35592fd5`，catalog.7；两个原容器ID、image、user、挂载和登录均保持，真实短答READY均200。Linux engine/Worker/contracts race/vet通过，信用/MCP真实CLI定向149.111s通过。备份 `/opt/ccgateway-runtime/manual-backups/20261008-747c168a3-{21,22}`；首轮验证脚本误读catalog而非code_catalog字段，在#22已更新后停止，修正字段后核验#22并继续#21，没有重复覆盖备份或重建容器。
+- OVH核心已发布0.1.63（b786448a业务、747c功能集），四节点local/ready，0041已迁移；签名/完整下载/备份/计划证据见DEPLOYMENT-2026-10-08-CORE-0.1.63。维护503约36.22–38.52秒，不能称零中断。
+- 公网user Key鉴权有效，JSON/续聊/回退/SSE/结构化输出/Chat/Responses真调用通过，显式5m缓存二次上游report读取2738token。40轮外部历史触发正常200refusal，不算内容成功也不算网关错误。空参数工具出现真实502并触发正常十秒冷却，已定位空input_json_delta被误解析，四处聚合器修复+独审通过待提交部署。count_tokens在冷却结束后仍503，另查路由，详见PUBLIC-API-ACCEPTANCE-0.1.63。
+- 前端已做精确部署SHA本地浏览器组件渲染和21项测试，线上API目录.7核对；CUA无法连接，所以不是线上页面视觉验收，截图明确标注本地。root已查看API宽屏与CC窄屏截图；证据在UI-VISUAL-ACCEPTANCE及其evidence目录。
+- 第九批diag/internalcache+catalog.8及空delta补丁均尚未提交/上线。下一步确定count路由原因后完成本批冻结、Git推送、Linux0042/race、.64核心候选与Worker新镜像、原容器原地升级，再做公开工具/count及本地Claude实际任务验证。原无关三项及测试生成__pycache__继续排除提交。
+
+### 第九批提交前最终检查
+
+- 空工具input_json_delta修复已在Worker、MCP秘密检查、credits事件聚合与共享strict codec四处处理；初始对象+空串不改内容，非字符串/空白/截断/数组仍拒绝。作者8次真CLI工具往返7.920s、独审6.678s通过，记录EMPTY-TOOL-INPUT-DELTA-REPAIR/EMPTY-TOOL-INPUT-INDEPENDENT-REVIEW。
+- count_tokens503确认是旧插件0.1.9仍活跃：内置同版本新内容不覆盖旧包，新count实现没真正运行。root将CCGateway manifest升0.1.10，完整插件测试/vet通过。源码相较原发行66e9186的插件业务变更仅CCGateway；共享strict转换运行在core，其他插件不导入protocol-codec。正式下一发行须验actual插件active版本和包SHA，不能仅验core版本。
+- 第九批主目标core gateway/messagediagnostics/fallbackcredits/providerresources/app非DB测试与vet通过，engine/Worker/contracts测试与vet通过；空delta加入后共享codec全测试/vet通过。本机数据库仍不可用，0042必走新Git候选隔离Linux。

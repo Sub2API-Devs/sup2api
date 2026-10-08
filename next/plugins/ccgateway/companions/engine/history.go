@@ -323,7 +323,7 @@ func prepareHistory(r *Request, c *HistoryCache, logical, dir, version string) (
 // findPriorSnapshot is the cached checkpoint of the longest client prefix
 // that ends with an assistant message before the pending turn.
 func findPriorSnapshot(r *Request, c *HistoryCache, logical string, hashes []string, pending int) *Snapshot {
-	for n := pending - 1; r.InlineTools == nil && len(r.imageCarriers) == 0 && !r.structuredOutput() && n >= 0; n-- {
+	for n := pending - 1; r.InlineTools == nil && len(r.imageCarriers) == 0 && !r.structuredOutput() && !(r.Plan != nil && r.Plan.cache != nil && r.toolSearchEnabled()) && n >= 0; n-- {
 		if r.Messages[n].Role != "assistant" {
 			continue
 		}

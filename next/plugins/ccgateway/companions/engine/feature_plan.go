@@ -280,8 +280,20 @@ func (p *RequestPlan) validateTools(req *Request) error {
 }
 
 func (p *RequestPlan) validateInternalRounds(req *Request) error {
-	if p != nil && p.cache != nil && (req.toolSearchEnabled() || req.structuredOutput()) {
-		return fmt.Errorf("explicit cache_control with internal CLI tool rounds requires cache-boundary adaptation")
+	if p != nil && p.cache != nil && req.structuredOutput() {
+		return fmt.Errorf("cache_control with legacy synthetic structured output requires formatting-continuation evidence; use API output_config.format")
+	}
+
+	if p != nil && p.cache != nil && req.toolSearchEnabled() {
+		for _, tool := range p.cache.Tools {
+			if tool["cache_control"] == nil {
+				continue
+			}
+			// A breakpoint on a definition that is absent before discovery cannot be moved.
+			if tool["defer_loading"] != false {
+				return fmt.Errorf("cached tool definitions with internal discovery require explicit defer_loading:false")
+			}
+		}
 	}
 	if req.CacheWarmup && req.JSONSchema != nil {
 		return fmt.Errorf("max_tokens: 0 is incompatible with output_config.format")

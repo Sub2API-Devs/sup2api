@@ -72,3 +72,13 @@ Docker default buildx/BuildKit0.30、systemd257、cgroup v2。官方 [buildx bui
 独立 Python Ed25519 验证签名、payload digest、bundle大小/摘要、全部归档文件路径集合/大小/模式/摘要通过。验证结果落服务器 `stage/0.1.63/verification.json`。最初人工验证命令错误地比较 envelope SHA 与 manifest ID，立即按发布器实际协议改成 payload digest 再全部通过；这是验证命令修正，不是产物篡改。
 
 候选打包后发现 bundle 权限0600（pack使用私有临时文件），manifest0644。新增准备脚本窄修：从本次 pack 的输出严格验证两个64位hex digest，只对这两个公开产物chmod0644，不递归扫描旧publish。该权限修正不改变候选字节/源码SHA；发布源实际HTTP读取核验尚待完成。四个正式节点仍0.1.62，未执行import/升级计划。
+
+## 已导入及 preflight（尚未创建升级计划）
+
+权限修复提交 `20a522669cb435baba0f18ae98788cef787adbb5` 已在服务器 Git fetch，核对受控脚本变更后仅将上述两个产物调为0644。原候选构建工作树保持 b786448a clean，业务包不重建。现有 origin 实际也能读取0600包，但统一0644不再依赖该服务以高权限读取。使用既有 CA 验证 TLS，manifest与110029007 bytes bundle完整GET并分别校验 envelope/bundle SHA256通过。
+
+升级前平台专用备份目录：`/home/debian/sup2api-managed/backups/v0.1.63-20261008T031614Z`。仅 `sup2api` 数据库的 custom-format pg_dump，19755667 bytes，SHA256 `6933e1025cfb4e3ebd843e99d29da0ae1e8b020678d1707c561bddaff4eb7ff9`；`pg_restore --list` 成功（不等于做过实际恢复）。同目录有 `node-facts.json`（四节点 current/previous/image/containerID/version/schema/mounts）、四节点配置、compose及.env私有备份；目录0700、文件0600，未输出任何凭据。恢复必须协调数据库和四节点0.1.62版本，不能只回退binary而忽略迁移后的schema。该备份记录的是这一时点；若发布前继续有写入，应按正式发布窗口考虑更新备份。
+
+已执行 `docker exec sup2api-1 sub2api-gateway import ...`，返回本次 manifest digest。preflight HTTP200，`blockers=[]`，nodes 为 sup2api-1/2/3/4，`expected_revision=121`。完整结果存 `stage/0.1.63/preflight.json`，待执行参数存 `stage/0.1.63/upgrade-plan.pending.json`。未POST `/system/upgrades`、未重启节点；继续等待 root 确认 Worker747c 原地更新。执行前必须重取 preflight/revision，不盲用可能已过期的121。
+
+后续root确认Worker更新后，已重新preflight并完成正式0.1.63升级。以上保留当时准备阶段事实；最终结果及维护503观测见同目录 `DEPLOYMENT-2026-10-08-CORE-0.1.63.md`，计划 `1011ace1691f22206da4f0d18b026194` completed，四节点均0.1.63/local/ready。

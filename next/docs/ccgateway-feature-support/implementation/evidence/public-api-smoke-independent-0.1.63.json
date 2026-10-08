@@ -1,0 +1,144 @@
+{
+  "model": "claude-opus-5-5",
+  "results": [
+    {
+      "name": "structured-output",
+      "path": "/v1/messages",
+      "status": 200,
+      "request_id": "900732afc178ff98d5cc6d77",
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 744,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 744,
+        "cache_read_input_tokens": 0,
+        "inference_geo": "not_available",
+        "input_tokens": 2,
+        "output_tokens": 9,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "text"
+      ],
+      "error_type": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 5.912
+    },
+    {
+      "name": "count-tokens",
+      "path": "/v1/messages/count_tokens",
+      "status": 503,
+      "request_id": "719020712b65d57118d29423",
+      "stop": null,
+      "usage": null,
+      "content_types": [],
+      "error_type": "overloaded_error",
+      "passed": false,
+      "outcome": "http_error",
+      "seconds": 0.581
+    },
+    {
+      "name": "explicit-cache-first",
+      "path": "/v1/messages",
+      "status": 200,
+      "request_id": "b854052d06e15c88d4044f39",
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0,
+          "ephemeral_5m_input_tokens": 2738
+        },
+        "cache_creation_input_tokens": 2738,
+        "cache_read_input_tokens": 0,
+        "inference_geo": "not_available",
+        "input_tokens": 521,
+        "output_tokens": 9,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "text"
+      ],
+      "error_type": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 4.808
+    },
+    {
+      "name": "explicit-cache-repeat",
+      "path": "/v1/messages",
+      "status": 200,
+      "request_id": "a615cf57faa0ef73a16f73c9",
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 2738,
+        "inference_geo": "not_available",
+        "input_tokens": 521,
+        "output_tokens": 9,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "text"
+      ],
+      "error_type": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 5.034
+    },
+    {
+      "name": "chat-completions",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "request_id": "7b80b1e59a30207c319354bf",
+      "stop": null,
+      "usage": {
+        "completion_tokens": 9,
+        "prompt_tokens": 560,
+        "prompt_tokens_details": {
+          "cache_creation_tokens": 558
+        },
+        "total_tokens": 569
+      },
+      "content_types": [],
+      "error_type": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 4.744
+    },
+    {
+      "name": "responses",
+      "path": "/v1/responses",
+      "status": 200,
+      "request_id": "3dcd37a481b158a753e1b908",
+      "stop": null,
+      "usage": {
+        "cache_creation_input_tokens": 560,
+        "input_tokens": 562,
+        "output_tokens": 11,
+        "total_tokens": 573
+      },
+      "content_types": [],
+      "error_type": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 4.745
+    }
+  ],
+  "scope": "Public HTTP smoke; does not force a particular account or prove all provider features."
+}

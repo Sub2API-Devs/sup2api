@@ -37,13 +37,22 @@ func (x *exchange) validateDiagnosticsOwnership() error {
 	}
 	raw, exists := x.req.Plan.fields["diagnostics"]
 	if !exists {
+		if x.r.Header.Get("X-CCGateway-Diagnostics-Track") != "" || x.r.Header.Get("X-CCGateway-Diagnostics-Previous") != "" {
+			return fmt.Errorf("diagnostics capability without request")
+		}
 		return nil
 	}
 	var cfg Object
 	if err := json.Unmarshal(raw, &cfg); err != nil {
 		return err
 	}
+	if cfg == nil && (x.r.Header.Get("X-CCGateway-Diagnostics-Track") != "" || x.r.Header.Get("X-CCGateway-Diagnostics-Previous") != "") {
+		return fmt.Errorf("diagnostics capability requires opt-in object")
+	}
 	id := str(cfg, "previous_message_id")
+	if trusted, err := x.trustedDiagnostics(id); trusted || err != nil {
+		return err
+	}
 	if id == "" {
 		return nil
 	}

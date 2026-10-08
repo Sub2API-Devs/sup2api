@@ -153,8 +153,11 @@ func (r *Request) applyCachePlan(body Object) error {
 	if r.Plan == nil || r.Plan.cache == nil {
 		return nil
 	}
-	if r.toolSearchEnabled() || r.structuredOutput() {
-		return fmt.Errorf("explicit cache_control with internal CLI tool rounds requires cache-boundary adaptation")
+	if r.structuredOutput() {
+		return fmt.Errorf("cache_control with legacy synthetic structured output requires formatting-continuation evidence")
+	}
+	if r.toolSearchEnabled() && r.internalCache == nil {
+		return fmt.Errorf("internal cache evidence unavailable")
 	}
 	// Align everything on a detached copy before committing any mutation.
 	raw, err := json.Marshal(body)
@@ -194,6 +197,11 @@ func (r *Request) applyCachePlan(body Object) error {
 	}
 	if r.Plan.cache.RootPresent {
 		copy["cache_control"] = cloneCacheValue(r.Plan.cache.Root)
+	}
+	if r.internalCache != nil {
+		if _, err := compileCachePlan(copy); err != nil {
+			return fmt.Errorf("internal cache round: %w", err)
+		}
 	}
 	for key := range body {
 		delete(body, key)
@@ -279,7 +287,7 @@ func (r *Request) restoreCacheTools(body Object) error {
 		}
 		byName[name] = b
 	}
-	if len(actual) != len(r.Plan.cache.Tools) {
+	if r.internalCache == nil && len(actual) != len(r.Plan.cache.Tools) {
 		return fmt.Errorf("cache tool prefix differs from client definitions")
 	}
 	ordered := make([]Object, 0, len(actual))
@@ -295,6 +303,18 @@ func (r *Request) restoreCacheTools(body Object) error {
 			name = apiToolName(want)
 		}
 		tool := byName[name]
+		if tool == nil && r.internalCache != nil && want["cache_control"] == nil {
+			// Deferred tools are not hoisted into the model's directory merely for caching.
+			deferred := false
+			for _, client := range r.Tools {
+				if r.wireName(client.Name) == name && client.DeferLoading != nil && *client.DeferLoading {
+					deferred = true
+				}
+			}
+			if deferred {
+				continue
+			}
+		}
 		matches := tool != nil && digest(tool["input_schema"]) == digest(want["input_schema"])
 		if apiClientType(str(want, "type")) || str(want, "type") == "mcp_toolset" {
 			expected, _ := jsonCopyObject(want)
@@ -309,6 +329,17 @@ func (r *Request) restoreCacheTools(body Object) error {
 		}
 		ordered = append(ordered, tool)
 		delete(byName, name)
+	}
+	if r.internalCache != nil {
+		for _, tool := range actual {
+			if byName[apiToolName(tool)] == nil {
+				continue
+			}
+			if err := r.checkInternalCacheHelper(tool); err != nil {
+				return err
+			}
+			ordered = append(ordered, tool)
+		}
 	}
 	if len(ordered) != 0 || body["tools"] != nil {
 		body["tools"] = ordered

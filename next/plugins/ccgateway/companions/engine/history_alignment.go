@@ -74,6 +74,12 @@ func alignClientHistory(r *Request, body Object) ([]historyBlockPair, error) {
 			return nil, fmt.Errorf("cached client history turn missing")
 		}
 	}
+	if r.internalCache != nil {
+		if err := r.alignInternalCacheSuffix(wire[at:]); err != nil {
+			return nil, err
+		}
+		return out, nil
+	}
 	for ; at < len(wire); at++ {
 		message, _ := wire[at].(map[string]any)
 		if str(message, "role") != "system" {

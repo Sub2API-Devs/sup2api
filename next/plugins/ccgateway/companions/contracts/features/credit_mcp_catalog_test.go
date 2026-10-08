@@ -7,7 +7,7 @@ import (
 
 func TestCreditMCPSourceCatalogConstraints(t *testing.T) {
 	doc := Catalog()
-	if doc.CatalogVersion != "2026-10-08.7" || doc.RuntimeVerified {
+	if doc.CatalogVersion != CatalogVersion || doc.RuntimeVerified {
 		t.Fatal("wrong catalog or runtime claim")
 	}
 	byID := map[string]Feature{}

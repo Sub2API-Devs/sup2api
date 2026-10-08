@@ -39,6 +39,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/iam"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/job"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/messagediagnostics"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/migrations"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/api"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/blobs"
@@ -253,7 +254,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	resourceStore := providerresources.New(db, providerresources.Options{})
 	gw := gateway.New(gateway.Deps{
 		CCGateway: ccg,
-		Resources: resourceStore, Skills: resourceStore, Credits: fallbackcredits.New(db, 4096), ResourceTransport: ccg.ResourceTransport(),
+		Resources: resourceStore, Skills: resourceStore, Credits: fallbackcredits.New(db, 4096), Diagnostics: messagediagnostics.New(db, 4096, 0), ResourceTransport: ccg.ResourceTransport(),
 		DB: db, Redis: rdb, Bus: cl.Bus, Node: cl.Registry, Registry: reg,
 		Auth: keys, Pricer: bill, Balance: bill, Slots: cl.Slots,
 		Accounts: acc, Proxies: prx, Settler: settler, Tasks: settler, Limiter: limiter, Quota: acc, Config: cfg, Converters: converters,
