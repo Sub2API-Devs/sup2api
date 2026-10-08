@@ -427,7 +427,7 @@ func (r *outboundRelay) adaptAttributed(req *Request, groups []systemGroup, body
 	if err := req.removeContinuation(message, r.control); err != nil {
 		return nil, false, err
 	}
-	if !count && req.InlineTools != nil {
+	if !count {
 		if err := verifyNativeWireTools(req, message); err != nil {
 			return nil, false, err
 		}

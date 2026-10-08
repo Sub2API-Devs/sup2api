@@ -70,7 +70,7 @@ func sameToolDefinition(a, b Tool) bool {
 // settings can change a native definition even within the same CLI version.
 // Fail before forwarding instead of silently substituting a different tool.
 func verifyNativeWireTools(req *Request, message Object) error {
-	tools, _ := message["tools"].([]any)
+	tools, _ := historyContent(message["tools"])
 	var unavailable []string
 	for _, want := range req.Tools {
 		if req.NoTools || !req.Native[want.Name] {
@@ -78,8 +78,7 @@ func verifyNativeWireTools(req *Request, message Object) error {
 		}
 		found := 0
 		compatible := true
-		for _, value := range tools {
-			obj, _ := value.(map[string]any)
+		for _, obj := range tools {
 			if str(obj, "name") != want.Name {
 				continue
 			}

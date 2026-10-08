@@ -3,6 +3,7 @@ package engine
 import "fmt"
 
 type mcpAvailability struct {
+	listing    *mcpListingCatalog
 	definition Object
 	offered    *bool
 	tools      map[string]bool
@@ -29,7 +30,7 @@ func (s *mcpAvailability) permits(name string) bool {
 	if s == nil || !mcpConfigFlag(s.definition, name, "enabled", true) {
 		return false
 	}
-	if pinned, ok := s.definition["tools"].([]any); ok {
+	if pinned, ok := s.listedTools(); ok {
 		found := false
 		for _, value := range pinned {
 			tool, _ := value.(Object)
@@ -38,6 +39,8 @@ func (s *mcpAvailability) permits(name string) bool {
 		if !found {
 			return false
 		}
+	} else if mcpMayDefer(s.definition) {
+		return false
 	}
 	if active, ok := s.tools[name]; ok {
 		return active
@@ -163,6 +166,10 @@ func (r *Request) compileMCPTimeline() error {
 				}
 			}
 			switch kind {
+			case "mcp_tool_listing":
+				if err := r.acceptMCPListing(block, timeline); err != nil {
+					return err
+				}
 			case "tool_search_tool_result":
 				identities, err := r.mcpSearchDiscoveries(block, timeline)
 				if err != nil {

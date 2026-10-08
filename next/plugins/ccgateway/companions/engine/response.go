@@ -170,7 +170,7 @@ func (a *Accumulator) blockStart(e Object, r *Request) error {
 		if str(block, "type") == "tool_search_tool_result" {
 			var err error
 			block, err = mapSearchReferences(block, func(name string) string {
-				return r.searchReferenceName(name, true)
+				return r.searchReferenceNameAt(name, true, a.serverCalls.mcpSearchTimeline(r))
 			})
 			if err != nil {
 				return err

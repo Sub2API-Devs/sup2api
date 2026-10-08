@@ -16,6 +16,7 @@ const mcpListingBeta = "mcp-client-2026-09-15"
 // MCPConnectorPlan is deliberately not serializable. Public configuration and
 // credentials have separate storage; no CLI configuration receives either.
 type MCPConnectorPlan struct {
+	dynamicListing bool
 	timeline       *mcpTimeline
 	catalogPresent bool
 	catalogNull    bool
@@ -288,6 +289,9 @@ func parseMCPConnector(o Object, betas []string) (*MCPConnectorPlan, error) {
 	}
 	if len(used) != len(seen) {
 		return nil, fmt.Errorf("each MCP server requires exactly one matching toolset")
+	}
+	if err := p.configureDynamicListing(o, listing); err != nil {
+		return nil, err
 	}
 	return p, nil
 }

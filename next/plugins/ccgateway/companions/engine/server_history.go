@@ -5,13 +5,14 @@ import "fmt"
 // A mixed server/client turn may pause server execution until the client's
 // tool_result arrives. IDs and result kinds remain bound across those turns.
 type serverToolLedger struct {
-	ptc        *ptcLedger
-	pending    map[string]string
-	seen       map[string]bool
-	names      map[string]string
-	turnCalls  map[string]bool
-	mcpServers map[string]string
-	mcpLoaded  map[mcpSearchIdentity]bool
+	mcpListingTimeline *mcpTimeline
+	ptc                *ptcLedger
+	pending            map[string]string
+	seen               map[string]bool
+	names              map[string]string
+	turnCalls          map[string]bool
+	mcpServers         map[string]string
+	mcpLoaded          map[mcpSearchIdentity]bool
 }
 
 func newServerToolLedger() *serverToolLedger {
@@ -28,11 +29,16 @@ func (l *serverToolLedger) accept(block Object, r *Request, historical ...bool) 
 		if !past && (!r.MCP.hasServer(str(block, "mcp_server_name")) || !hasBetaHeader(r.Betas, mcpListingBeta)) {
 			return fmt.Errorf("undeclared MCP listing server or missing listing beta")
 		}
-		return nil
+		return r.acceptMCPListing(block, l.mcpSearchTimeline(r))
 	}
 	if kind == "mcp_tool_use" {
 		id, server := str(block, "id"), str(block, "server_name")
-		if id == "" || l.seen[id] || !past && (r.NoTools || !r.MCP.permitsCall(server, str(block, "name")) && !l.mcpLoaded[mcpSearchIdentity{server, str(block, "name")}]) {
+		allowed := r.MCP.permitsCall(server, str(block, "name")) || l.mcpLoaded[mcpSearchIdentity{server, str(block, "name")}]
+		if r.dynamicMCPListing() {
+			state := l.mcpSearchTimeline(r).current[server]
+			allowed = state.permits(str(block, "name")) || state.searchable(str(block, "name")) && l.mcpLoaded[mcpSearchIdentity{server, str(block, "name")}]
+		}
+		if id == "" || l.seen[id] || !past && (r.NoTools || !allowed) {
 			return fmt.Errorf("duplicate or undeclared MCP tool call")
 		}
 		l.seen[id] = true
@@ -69,7 +75,7 @@ func (l *serverToolLedger) accept(block Object, r *Request, historical ...bool) 
 		return fmt.Errorf("server result has no matching outstanding call")
 	}
 	if kind == "tool_search_tool_result" && !past {
-		identities, err := r.mcpSearchDiscoveries(block, r.MCP.searchTimeline())
+		identities, err := r.mcpSearchDiscoveries(block, l.mcpSearchTimeline(r))
 		if err != nil {
 			return err
 		}

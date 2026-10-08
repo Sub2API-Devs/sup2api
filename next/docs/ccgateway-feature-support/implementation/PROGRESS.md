@@ -4,6 +4,8 @@
 
 ## 本轮追加证据与限制
 
+下一候选已整合单动态deferred MCP和named eager目标+无关显式deferred目录，两者均有新/续/cold/rollback真实CLI隔离及交叉独审。Root追加原生wire审查复现两真红（实际native schema先被恢复掩盖；[]Object目录被[]any-only读取误判空），现统一主请求改写前校验、复用historyContent读取，原六case未改且与真实Read完整生命周期独审6.006s转绿。Root全engine5.272s、contracts/plugin/worker全部测试与vet通过，前端3文件31测试2.96s通过。候选catalog2026-10-09.17/Plugin.14，明确transport schema1与payload v1/v2独立协商，当前准备Core.75/Worker.80 Git发布；尚未提交部署，不与线上7d322混淆。公开动态MCP/forced各最多3次脚本已离线作者验证，最终独审中，未发送新生产模型请求。
+
 当前已部署精确7d322：Core.74四节点ready、Plugin.13/Controller.48不变，Worker.79已原地更新21/22；Root独立核原容器ID/imageRef.56和双方程序hash0c44e181c3e60257e3f0668144139dc471529f859148f6f1aa8136b56e897231。未来default.79正常保存刷新，既有容器完整配置不变。核心正常updater completed，维护503观察约37.22s，不是零中断。公网normal4次及inline4次均200且工具交接/结果续聊/无budget普通SSE/回退marker全部精确。两组八RID均22/attempt1/billed/committed，各1history1receipt0outbox，第三parent为第二、回退parent为第一，用量与公开响应逐项一致；Worker每组2/1/1/1真实provider轮，完整隐藏A/U及紧后system跨轮hash一致，普通第三实际50/null帧已200并committed。inline撤回按位置生效、回退不复用未来撤回。脚本falseflags仍代表脚本未自行读取内部证据，独立佐证见PUBLIC-HELPER-BUDGET-CORE-0.1.74-WORKER-0.1.79。此次没有强制生产cold restart/跨账号调度。单dynamic MCP候选已有官方合同、作者8次隔离CLI和CC独审通过，尚未提交部署；forced mixed候选另在开发，均不纳7d322版本。
 
 精确候选7d322abd9已提交推送，cc-max与OVH仅Git clean worktree构建。最终expected-thinking-count真实ABC142.198s通过，Linux核心/credits/codec race和vet、Worker engine race33.278s及定向真实CLI91.945s通过。Worker.79镜像与独立程序、禁网8787 health/features已核，Root已放行21/22顺序原地更新；Core.74签名构建/预检准备中，尚未完成发布。两个浏览器工具调用（创建平台验收tab30秒、只读getState15秒）均连接超时，未进行新页面视觉验收，不把工具超时当平台故障。并行的动态MCP/强制混合目录设计与未来实现不属于本冻结发布。

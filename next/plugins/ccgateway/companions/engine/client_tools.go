@@ -452,7 +452,18 @@ func validateToolsetIdentityField(block Object) error {
 // searchReferenceName resolves a catalog reference, not a toolset member call.
 // Toolsets are deferred and expanded as a whole; their family name stays intact.
 func (r *Request) searchReferenceName(name string, fromWire bool) string {
-	if _, ok := r.mcpSearchReference(name); ok {
+	var timeline *mcpTimeline
+	if r.MCP != nil {
+		timeline = r.MCP.timeline
+	}
+	return r.searchReferenceNameAt(name, fromWire, timeline)
+}
+func (r *Request) searchReferenceNameAt(name string, fromWire bool, timeline *mcpTimeline) string {
+	index, err := r.mcpSearchIdentitiesAt(timeline)
+	if err != nil {
+		return ""
+	}
+	if _, ok := index[name]; ok {
 		return name
 	}
 	for _, tool := range r.APIClientTools {

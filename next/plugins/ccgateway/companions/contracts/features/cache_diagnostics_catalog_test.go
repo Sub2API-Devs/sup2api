@@ -7,7 +7,7 @@ import (
 
 func TestNinthBatchCatalogQualifiesCacheDiagnosticsAndPrefill(t *testing.T) {
 	doc := Catalog()
-	if doc.CatalogVersion != "2026-10-08.16" || doc.RuntimeVerified {
+	if doc.CatalogVersion != CatalogVersion || doc.RuntimeVerified {
 		t.Fatal("catalog version/runtime claim changed")
 	}
 	expected := map[string][]string{

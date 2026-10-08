@@ -24,6 +24,14 @@ func (r *Request) mcpSearchDefinitions() []Object {
 }
 
 func (r *Request) mcpSearchIdentities() (map[string]mcpSearchIdentity, error) {
+	var timeline *mcpTimeline
+	if r.MCP != nil {
+		timeline = r.MCP.timeline
+	}
+	return r.mcpSearchIdentitiesAt(timeline)
+}
+
+func (r *Request) mcpSearchIdentitiesAt(timeline *mcpTimeline) (map[string]mcpSearchIdentity, error) {
 	index := map[string]mcpSearchIdentity{}
 	definitions := r.mcpSearchDefinitions()
 	deferred := false
@@ -33,6 +41,12 @@ func (r *Request) mcpSearchIdentities() (map[string]mcpSearchIdentity, error) {
 	for _, def := range definitions {
 		server := str(def, "mcp_server_name")
 		pinned, ok := def["tools"].([]any)
+		if !ok && r.dynamicMCPListing() {
+			if timeline != nil && timeline.current[server] != nil {
+				pinned, _ = timeline.current[server].listedTools()
+			}
+			ok = true // Admission allows observation, never an unresolved reference.
+		}
 		if !ok && deferred {
 			return nil, fmt.Errorf("deferred MCP search requires a complete pinned tool listing")
 		}
@@ -63,6 +77,10 @@ func (r *Request) validateMCPReferenceNames() error {
 	if err != nil {
 		return err
 	}
+	return r.validateMCPReferenceIndex(index)
+}
+
+func (r *Request) validateMCPReferenceIndex(index map[string]mcpSearchIdentity) error {
 	for name := range index {
 		for _, tool := range r.Tools {
 			if name == tool.Name || name == r.wireName(tool.Name) {
@@ -85,7 +103,7 @@ func (s *mcpAvailability) searchable(name string) bool {
 	if s == nil || !mcpConfigFlag(s.definition, name, "enabled", true) {
 		return false
 	}
-	pinned, ok := s.definition["tools"].([]any)
+	pinned, ok := s.listedTools()
 	if !ok {
 		return false
 	}
@@ -104,13 +122,21 @@ func (s *mcpAvailability) searchable(name string) bool {
 }
 
 func (r *Request) mcpSearchDiscoveries(block Object, timeline *mcpTimeline) ([]mcpSearchIdentity, error) {
+	index, err := r.mcpSearchIdentitiesAt(timeline)
+	if err != nil {
+		return nil, err
+	}
 	content, _ := block["content"].(Object)
 	refs, _ := content["tool_references"].([]any)
 	var identities []mcpSearchIdentity
 	for _, value := range refs {
 		ref, _ := value.(Object)
-		identity, ok := r.mcpSearchReference(str(ref, "tool_name"))
+		name := str(ref, "tool_name")
+		identity, ok := index[name]
 		if !ok {
+			if r.dynamicMCPListing() && r.searchReferenceNameAt(name, false, timeline) == "" && r.searchReferenceNameAt(name, true, timeline) == "" {
+				return nil, fmt.Errorf("dynamic MCP search reference lacks an earlier listing identity")
+			}
 			continue
 		}
 		if timeline == nil || !timeline.current[identity.server].searchable(identity.name) {

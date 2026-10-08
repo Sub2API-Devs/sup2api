@@ -20,8 +20,8 @@ func TestReviewForcedLoadedWholeCatalogBoundary(t *testing.T) {
 		}
 		yes := true
 		r.Tools[1].DeferLoading = &yes
-		if r.forcedLoadedClientCatalog() {
-			t.Fatal("unrelated deferred tool admitted", policy)
+		if !r.forcedLoadedClientCatalog() {
+			t.Fatal("explicit deferred bystander rejected for eager named target", policy)
 		}
 	}
 	for _, raw := range []string{`{"type":"tool","name":"missing"}`, `{"type":"none"}`, `{"type":"auto"}`, `null`} {
@@ -54,8 +54,12 @@ func TestReviewForcedLoadedSchemaAndMetadata(t *testing.T) {
 			if (err == nil) != (mode == "correct") {
 				t.Fatal(mode, err)
 			}
-			if mode == "correct" && (tool["defer_loading"] != false || tool["description"] != "exact description" || digest(tool["cache_control"]) != digest(Object{"type": "ephemeral", "ttl": "1h"})) {
-				t.Fatal("metadata lost")
+			if mode == "correct" {
+				result, _ := historyContent(wire["tools"])
+				tool = result[0]
+				if tool["defer_loading"] != false || tool["description"] != "exact description" || digest(tool["cache_control"]) != digest(Object{"type": "ephemeral", "ttl": "1h"}) {
+					t.Fatal("metadata lost")
+				}
 			}
 		})
 	}
