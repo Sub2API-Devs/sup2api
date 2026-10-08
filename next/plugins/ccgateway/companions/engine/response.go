@@ -266,7 +266,11 @@ func (a *Accumulator) blockDelta(e Object) error {
 		if str(block, "type") != "thinking" {
 			return fmt.Errorf("signature on wrong block")
 		}
-		block["signature"] = str(block, "signature") + str(d, "signature")
+		signature, ok := d["signature"].(string)
+		if !ok {
+			return fmt.Errorf("invalid signature delta")
+		}
+		block["signature"] = signature
 	case "input_json_delta":
 		if str(block, "type") != "tool_use" && str(block, "type") != "server_tool_use" && str(block, "type") != "mcp_tool_use" {
 			return fmt.Errorf("input delta on wrong block")

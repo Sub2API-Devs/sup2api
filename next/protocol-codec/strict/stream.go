@@ -408,6 +408,8 @@ func (s *Stream) delta(i int, b *streamBlock, d object) ([]Event, error) {
 		}
 		b.hasArgs = true
 		b.args += value
+	} else if field == "signature" {
+		b.block[field] = value
 	} else {
 		prior, _ := b.block[field].(string)
 		b.block[field] = prior + value

@@ -123,7 +123,11 @@ func MessageFromEvents(events [][]byte) ([]byte, error) {
 						return fail()
 					}
 				}
-				block[key] = previous + part
+				if kind == "signature_delta" {
+					block[key] = part
+				} else {
+					block[key] = previous + part
+				}
 			case "citations_delta":
 				if block["type"] != "text" || len(delta) != 2 {
 					return fail()
