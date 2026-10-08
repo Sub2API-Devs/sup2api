@@ -1,6 +1,6 @@
 # 当前实现指南
 
-核对基线：产品源码 `1c35179527a7632f3ea06b9d9014d81854112956`，Core .78 / Plugin .14 / Worker .80 / Controller .48。此文说明当前模块职责与接续改动入口；逐项状态、上线与未验证范围分别见 [接手文档](HANDOFF-2026-10-09.md) 和两份 [协议](implementation/COMPLETION-PROTOCOL-AUDIT-2026-10-09.md)、[全栈](implementation/COMPLETION-SCOPE-AUDIT-2026-10-09.md) 审计。原始 01–05 是调研基线，其中建议接口和旧“尚未实现”不优先于源码及本指南。
+产品基线Core .78 / Plugin .14 / Worker .80 / Controller .48。逐项状态见[交接](HANDOFF-2026-10-09.md)，开放组合和验收见[剩余工作](REMAINING-WORK.md)，访问、运行和部署命令见[环境指南](ENVIRONMENT-RUNBOOK.md)。本文件仅说明当前结构和修改入口。
 
 ## 目录与职责
 
@@ -78,36 +78,6 @@ SSH Key 的 `permitopen="*:8787"` 只限制端口，私网池由 Core 校验；K
 - `core` / `usagerules` / `gateway` / `usage` 中 `cache_write_evidence` 固定字段由 host 生成，不能由插件任意 metric 覆盖。事实与平台兼容计费桶分开；保留原金额/冻结字节/幂等键。
 - 已知隐藏用量但后续失败须保留各轮事实并标 incomplete，不能写成 0 消耗；缺可信模型/用量归属不能猜费。`thinking_delta.estimated_tokens` 为可空观测，不参与收费。
 
-## 测试与构建入口
+## 测试与构建
 
-从相应模块工作目录运行，Go workspace 保持现有依赖。以下为接续可用命令，不代表此次文档整理又跑了业务测试：
-
-```powershell
-# next/plugins/ccgateway/companions
-go test ./engine
-go vet ./engine
-# .../companions/contracts
-go test ./...
-# .../companions/worker
-go test ./...
-go vet ./...
-# next/plugins/ccgateway
-go test ./...
-# next/web
-npm run typecheck
-npm test -- src/views/ccgateway src/views/usage
-```
-
-真实 CLI tests 通常通过 `CCG_REAL_CLI` 等环境条件启动，先读该 test 的 skip/fixture/隔离配置再设置。真实 CLI 指向假提供商与真实 OAuth/提供商测试必须分开记录。PG 环境和已通过命令见对应 Linux/DB validation 文档；不要盲目沿用旧端口或生产 DSN。
-
-Docker 构建上下文：
-
-```sh
-docker build -f next/plugins/ccgateway/companions/worker/Dockerfile -t ccgateway-worker:dev next/plugins/ccgateway/companions
-docker build -f next/plugins/ccgateway/companions/controller/Dockerfile -t ccg-controller:dev next/plugins/ccgateway/companions/controller
-docker build -f next/plugins/ccgateway/companions/egress/Dockerfile -t ccg-egress:dev next/plugins/ccgateway/companions/egress
-```
-
-Core `next/Dockerfile` 上下文是 `next/`。`deploy/docker/build-go.sh` 保持 Core/插件/contracts workspace 依赖，排除不在 Core 上下文构建的 companions/worker；不要直接关闭 GOWORK。编译器目前固定 Go1.27.1 官方 digest，保持已发布同版本插件包不可变。
-
-部署步骤、精确程序哈希、账号保留、Git-only 和失败记录集中在 [接手文档](HANDOFF-2026-10-09.md)。下一项功能先补红例和方案，再实现、独立审查、真实隔离计量、Git 发布和受控公网验收。
+实际命令、隔离环境和发布/恢复方式集中在[环境指南](ENVIRONMENT-RUNBOOK.md)。Core的`next/`构建上下文保留Core/插件/contracts workspace，排除独立companions/worker；不要直接关闭GOWORK。新功能先补原wire/历史反例，再验证计量和账号资格。
