@@ -4,6 +4,10 @@
 
 ## 本轮追加证据与限制
 
+最新线上为精确 Git609691490：Core.75/Plugin.14/Worker.80/Controller.48；四核心节点及原21/22容器已核，未来镜像默认.80，既有容器/授权保持。核心维护503采样窗口37.51秒。公开动态MCP和forced mixed各3请求全部通过，新/续/回退六RID均22/attempt1，账务和Worker日志独立核对；生产未强制cold/跨账号。详最新部署记录和PUBLIC-DYNAMIC-FORCED-CORE-0.1.75-WORKER-0.1.80。
+
+新增缓存TTL事实补充正在进行：上游最终total比已报告TTL桶多1219，明确标未细分，不将差额描述成已证实5分钟；收费数学、旧账单、200/SSE不变。Core作者验证隔离PG冷outbox重放/唯一receipt/金额一致，UI作者已冻结17测试和类型检查绿，独立代理开始交叉审查。尚未提交部署，不混入609691490。用户允许替换长期无进展代理；新代理review_release_80已完成发布独审与UI实现，进度分别保存在专门文档。
+
 下一候选已整合单动态deferred MCP和named eager目标+无关显式deferred目录，两者均有新/续/cold/rollback真实CLI隔离及交叉独审。Root追加原生wire审查复现两真红（实际native schema先被恢复掩盖；[]Object目录被[]any-only读取误判空），现统一主请求改写前校验、复用historyContent读取，原六case未改且与真实Read完整生命周期独审6.006s转绿。Root全engine5.272s、contracts/plugin/worker全部测试与vet通过，前端3文件31测试2.96s通过。候选catalog2026-10-09.17/Plugin.14，明确transport schema1与payload v1/v2独立协商，当前准备Core.75/Worker.80 Git发布；尚未提交部署，不与线上7d322混淆。公开动态MCP/forced各最多3次脚本已离线作者验证，最终独审中，未发送新生产模型请求。
 
 当前已部署精确7d322：Core.74四节点ready、Plugin.13/Controller.48不变，Worker.79已原地更新21/22；Root独立核原容器ID/imageRef.56和双方程序hash0c44e181c3e60257e3f0668144139dc471529f859148f6f1aa8136b56e897231。未来default.79正常保存刷新，既有容器完整配置不变。核心正常updater completed，维护503观察约37.22s，不是零中断。公网normal4次及inline4次均200且工具交接/结果续聊/无budget普通SSE/回退marker全部精确。两组八RID均22/attempt1/billed/committed，各1history1receipt0outbox，第三parent为第二、回退parent为第一，用量与公开响应逐项一致；Worker每组2/1/1/1真实provider轮，完整隐藏A/U及紧后system跨轮hash一致，普通第三实际50/null帧已200并committed。inline撤回按位置生效、回退不复用未来撤回。脚本falseflags仍代表脚本未自行读取内部证据，独立佐证见PUBLIC-HELPER-BUDGET-CORE-0.1.74-WORKER-0.1.79。此次没有强制生产cold restart/跨账号调度。单dynamic MCP候选已有官方合同、作者8次隔离CLI和CC独审通过，尚未提交部署；forced mixed候选另在开发，均不纳7d322版本。

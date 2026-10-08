@@ -1,0 +1,211 @@
+{
+  "passed": true,
+  "checks": {
+    "fresh": true,
+    "continuation": true,
+    "rollback": true
+  },
+  "listing_sha256": "d02e326766435eb2072b0d9747089a3fa8523355baa77a752f490ed8914bac10",
+  "summaries": [
+    {
+      "mcp_calls": 1,
+      "mcp_results": 1,
+      "permitted_public_arguments": true,
+      "successful_pairs": 1,
+      "tool_result_errors": 0,
+      "result_hashes": [
+        "4f01e79e151669491c1d141f6155f9fa5f09dd1ffcd3c512929d00abeccceb48"
+      ],
+      "search_calls": 1,
+      "search_results": 1,
+      "reference_count": 1,
+      "search_no_errors": true,
+      "search_inputs_valid": true,
+      "exact_reference": true,
+      "reference_hashes": [
+        "cdc2005081da7cb20acaf1d3f5c54f4e2ab814839556e179f52db009980c6dfa"
+      ],
+      "search_paired": true,
+      "no_client_calls": true,
+      "valid_unique_ids": true,
+      "search_before_mcp": true,
+      "known_blocks": true
+    },
+    {
+      "mcp_calls": 1,
+      "mcp_results": 1,
+      "permitted_public_arguments": true,
+      "successful_pairs": 1,
+      "tool_result_errors": 0,
+      "result_hashes": [
+        "4f01e79e151669491c1d141f6155f9fa5f09dd1ffcd3c512929d00abeccceb48"
+      ],
+      "search_calls": 1,
+      "search_results": 1,
+      "reference_count": 1,
+      "search_no_errors": true,
+      "search_inputs_valid": true,
+      "exact_reference": true,
+      "reference_hashes": [
+        "cdc2005081da7cb20acaf1d3f5c54f4e2ab814839556e179f52db009980c6dfa"
+      ],
+      "search_paired": true,
+      "no_client_calls": true,
+      "valid_unique_ids": true,
+      "search_before_mcp": true,
+      "known_blocks": true
+    },
+    {
+      "mcp_calls": 1,
+      "mcp_results": 1,
+      "permitted_public_arguments": true,
+      "successful_pairs": 1,
+      "tool_result_errors": 0,
+      "result_hashes": [
+        "4f01e79e151669491c1d141f6155f9fa5f09dd1ffcd3c512929d00abeccceb48"
+      ],
+      "search_calls": 1,
+      "search_results": 1,
+      "reference_count": 1,
+      "search_no_errors": true,
+      "search_inputs_valid": true,
+      "exact_reference": true,
+      "reference_hashes": [
+        "cdc2005081da7cb20acaf1d3f5c54f4e2ab814839556e179f52db009980c6dfa"
+      ],
+      "search_paired": true,
+      "no_client_calls": true,
+      "valid_unique_ids": true,
+      "search_before_mcp": true,
+      "known_blocks": true
+    }
+  ],
+  "results": [
+    {
+      "name": "dynamic-mcp-fresh",
+      "path": "/v1/messages",
+      "beta": "mcp-client-2026-09-15",
+      "status": 200,
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1376,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 2595,
+        "cache_read_input_tokens": 2752,
+        "inference_geo": "not_available",
+        "input_tokens": 218,
+        "output_tokens": 380,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "server_tool_use": {
+          "web_fetch_requests": 0,
+          "web_search_requests": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "mcp_tool_listing",
+        "server_tool_use",
+        "tool_search_tool_result",
+        "mcp_tool_use",
+        "mcp_tool_result",
+        "text"
+      ],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 12.139,
+      "request_id_sha256": "e515d6f39739a0a5d31ed3d641477fd43cf8ee2f9e77bb4b8d7189c33415f6ce"
+    },
+    {
+      "name": "dynamic-mcp-continuation",
+      "path": "/v1/messages",
+      "beta": "mcp-client-2026-09-15",
+      "status": 200,
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1534,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 2753,
+        "cache_read_input_tokens": 7196,
+        "inference_geo": "not_available",
+        "input_tokens": 218,
+        "output_tokens": 276,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "server_tool_use": {
+          "web_fetch_requests": 0,
+          "web_search_requests": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "server_tool_use",
+        "tool_search_tool_result",
+        "mcp_tool_use",
+        "mcp_tool_result",
+        "text"
+      ],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 10.506,
+      "request_id_sha256": "c7400c70b3bead346e77bad3ef90a348980942d65352251524d1a4f4eb14a5f1"
+    },
+    {
+      "name": "dynamic-mcp-rollback",
+      "path": "/v1/messages",
+      "beta": "mcp-client-2026-09-15",
+      "status": 200,
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 315,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 1534,
+        "cache_read_input_tokens": 8415,
+        "inference_geo": "not_available",
+        "input_tokens": 218,
+        "output_tokens": 310,
+        "output_tokens_details": {
+          "thinking_tokens": 42
+        },
+        "server_tool_use": {
+          "web_fetch_requests": 0,
+          "web_search_requests": 0
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "server_tool_use",
+        "tool_search_tool_result",
+        "mcp_tool_use",
+        "mcp_tool_result",
+        "thinking",
+        "text"
+      ],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 13.117,
+      "request_id_sha256": "38474deb224e2180222b3dfc032424b0825d2ed8b3d3510a05fe7b8da7aa8e56"
+    }
+  ],
+  "endpoint": "https://mcp.deepwiki.com/mcp",
+  "public_repository": "modelcontextprotocol/python-sdk",
+  "beta": "mcp-client-2026-09-15",
+  "scope": "One anonymous dynamic server, no auth or pinned tools, only public repository input. Three calls maximum; first mismatch/refusal/pause stops, no retry. Exact returned history retained in memory only. Worker history/permission/wire facts require separate log verification."
+}

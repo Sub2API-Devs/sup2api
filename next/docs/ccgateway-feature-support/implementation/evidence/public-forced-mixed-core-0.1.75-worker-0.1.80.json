@@ -1,0 +1,97 @@
+{
+  "passed": true,
+  "checks": {
+    "forced": true,
+    "continuation": true,
+    "rollback": true,
+    "call_id_sha256": "e259c5cbd36a969a569e1d2187281ddacce6c6827926e53164bcf62a024fac84"
+  },
+  "catalog_sha256": "2c87dc028f828b4e2be0f1369b38e55ac23308b6b074e13cbc0049635839c11f",
+  "results": [
+    {
+      "name": "forced-mixed-first",
+      "path": "/v1/messages",
+      "status": 200,
+      "stop": "tool_use",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1360,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 1360,
+        "cache_read_input_tokens": 0,
+        "inference_geo": "not_available",
+        "input_tokens": 33,
+        "output_tokens": 24,
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "tool_use"
+      ],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 5.873,
+      "request_id_sha256": "66361821264dae4499d2c2781602e41b1970c233526f22d3b9ef8d27709e6146"
+    },
+    {
+      "name": "forced-mixed-continuation",
+      "path": "/v1/messages",
+      "status": 200,
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1880,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 1880,
+        "cache_read_input_tokens": 0,
+        "inference_geo": "not_available",
+        "input_tokens": 1,
+        "output_tokens": 14,
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "text"
+      ],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 5.105,
+      "request_id_sha256": "0df6ccbd10d0a4c29a427d305b2428747ca511eec8553598b3e1b7ad6f4eb39d"
+    },
+    {
+      "name": "forced-mixed-rollback",
+      "path": "/v1/messages",
+      "status": 200,
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1880,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "cache_creation_input_tokens": 1880,
+        "cache_read_input_tokens": 0,
+        "inference_geo": "not_available",
+        "input_tokens": 1,
+        "output_tokens": 14,
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "text"
+      ],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 6.219,
+      "request_id_sha256": "69b2555d275f226a1be855ff23b1d66f6f620a16db054f10f1e0dfb111083545"
+    }
+  ],
+  "scope": "At most three calls. Sonnet forced request then exact tool-result auto continuation and rollback. No retry. Worker logs must independently prove original catalog/defer/choice and zero hidden calls; usage is raw reported evidence."
+}
