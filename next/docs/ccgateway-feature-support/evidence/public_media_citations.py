@@ -14,6 +14,9 @@ from live_api_smoke import Probe, assistant, text, user
 from public_inline_search import evidence_rows, valid_message
 
 
+DOCUMENT = "The fictional sample named Lumen has the color violet. Its inventory count is 17."
+TITLE = "Synthetic fixture"
+
 def red_png():
     def chunk(kind, data):
         return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff)
@@ -25,21 +28,40 @@ def red_png():
 def cited_fact(message):
     if not valid_message(message) or message.get("stop_reason") != "end_turn" or "violet" not in text(message).lower():
         return False
-    return any(isinstance(c, dict) and c.get("type") == "char_location" and c.get("document_index") == 0
-               and isinstance(c.get("cited_text"), str) and "violet" in c["cited_text"].lower()
-               for b in message["content"] for c in (b.get("citations") or []))
+    found = False
+    for block in message["content"]:
+        if not isinstance(block, dict):
+            return False
+        citations = block.get("citations")
+        if citations is None:
+            continue
+        if not isinstance(citations, list):
+            return False
+        for citation in citations:
+            if not isinstance(citation, dict):
+                return False
+            start, end = citation.get("start_char_index"), citation.get("end_char_index")
+            index = citation.get("document_index")
+            if (citation.get("type") != "char_location" or type(index) is not int or index != 0
+                    or citation.get("document_title") != TITLE
+                    or type(start) is not int or type(end) is not int
+                    or not 0 <= start < end <= len(DOCUMENT)
+                    or citation.get("cited_text") != DOCUMENT[start:end]):
+                return False
+            found |= "violet" in citation["cited_text"].lower()
+    return found
 
 
 def run(probe):
     png = red_png()
-    document = "The fictional sample named Lumen has the color violet. Its inventory count is 17."
+    document = DOCUMENT
     checks = {"image_color": False, "document_cited_fact": False, "citation_history_continued": False}
     hashes = {"png_sha256": hashlib.sha256(png).hexdigest(), "document_sha256": hashlib.sha256(document.encode()).hexdigest()}
     image = {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": base64.b64encode(png).decode()}}
     first = probe.call("synthetic-red-image", probe.body([user([image, {"type": "text", "text": "What is the single color of this image? Reply with its English color name only."}])]), valid_message, protocol_only=True)
     checks["image_color"] = bool(first and first.get("stop_reason") == "end_turn" and text(first).strip().lower().strip(".!") == "red")
     if checks["image_color"]:
-        messages = [user([{"type": "document", "source": {"type": "text", "media_type": "text/plain", "data": document}, "title": "Synthetic fixture", "citations": {"enabled": True}},
+        messages = [user([{"type": "document", "source": {"type": "text", "media_type": "text/plain", "data": document}, "title": TITLE, "citations": {"enabled": True}},
                           {"type": "text", "text": "What color is Lumen? Answer in English and cite the supplied document."}])]
         second = probe.call("synthetic-document-citations", probe.body(messages), valid_message, protocol_only=True)
         checks["document_cited_fact"] = cited_fact(second)
