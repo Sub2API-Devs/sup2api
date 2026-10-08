@@ -4,6 +4,8 @@
 
 ## 本轮追加证据与限制
 
+新候选84fe9d0a10b6b770077697c2658ee5319d21f86c已Git精确准备Core.77：固定Go1.27.1四包race/vet及真实隔离PG通过，六个内置不可变包全部与.75逐字相同，签名/trust/schema/完整TLSGET/备份通过，freshpreflight200无blockers。首次测试路径./core笔误日志保留，纠正./internal/core后新44004完整门禁绿，不掩盖失败。Root已独立SSH核core/Plugin.14制品hash并放行正常四节点更新（需重新preflight），尚未记录正式发布完成。原21/22与Worker.80/Controller.48保持。生产只GET Edge验收runner已独立审查整改双ID唯一筛选/余额隐私遮罩，未运行；下一次真实API仅1请求，随后核metrics与页面，不重算旧账。
+
 Core.76准备已被immutable包核验主动阻断，未导入/切服务：浮动golang:1.27-trixie从Go1.27.1漂移到1.27.2，六个builtin原版本包全部摘要变化；不是插件源码变化或VCS元数据。5fc对应Linux四包race/vet与实际PG均绿，已签.76资产保留。Root从旧.75服务器prepare.log独立核原官方index digest8f58fd67ea075142d947a60e0caa4317746a55118d312f027793d382c7741734，决定正式Dockerfile固定原Go1.27.1精确digest，新Git提交后重新准备Core.77并核全部内置包，不改已签.76、不覆盖旧插件版本。
 
 缓存TTL候选已冻结提交推送5fc8326f9587a41e69b565364f20a284bd86317e：Core作者四包test/vet及隔离PG39.050s通过，typed/冷decoded同原frozenbytes重复重放唯一usage/receipt且同价、1219partial和200持久；CC非作者nullable/overflow/perattempt/deepclone/原bytes独审绿，UI独审20tests/typecheck，root前端productionbuild10.10s绿，1440/390px六本地真实Edge组件截图无溢出/pageerror。不是生产浏览器验收。OVH仅Git精确新clean release-0.1.76构建，作者handle29841已确认live，受限Linux四包race绿、vet/真实隔离PG/签名准备续行；尚未切服务。Plugin409依赖不含server，本次只Core.76，正式包仍核Plugin.14不可变摘要；Worker.80/Controller.48保持。
