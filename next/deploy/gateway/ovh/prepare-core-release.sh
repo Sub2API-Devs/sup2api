@@ -56,7 +56,7 @@ mkdir -p "$managed/stage" "$publish"
 mkdir "$stage"
 printf 'source_commit=%s\nsource_version=%s\nsource_schema=%s\ntrust_sha256=%s\nslice=%s\n' "$sha" "$source_version" "$source_schema" "$trust_hash" "$slice" > "$stage/preparation.txt"
 docker buildx build --builder default --cgroup-parent "$slice" --target build --load \
-  --build-arg VERSION="$version" --build-arg REQUIRE_EXISTING_DEV_KEY=1 \
+  --build-arg VERSION="$version" --build-arg REQUIRE_EXISTING_DEV_KEY=1 --build-arg BUILD_MAX_PROCS=2 \
   -f "$src/Dockerfile" -t "$tag" "$src"
 cid=$(docker create "$tag")
 docker cp "$cid:/out/bin" "$stage/bin"

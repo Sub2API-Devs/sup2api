@@ -48,3 +48,11 @@ Docker default buildx/BuildKit0.30、systemd257、cgroup v2。官方 [buildx bui
 本机 shell syntax 与四项隔离负例通过（0.700s）：非法版本/SHA、不匹配SHA不产生输出、缺签名缓存密钥在构建/keygen之前拒绝。完整正式准备脚本尚未对新候选执行，因此暂不声称新版本构建/签名/上线已成功。
 
 旧 `prepare.sh` 会改写配置并枚举历史发行；服务器 `build-core.sh` 会删除已有 stage，且未传SOURCE_SCHEMA；本次均不执行。
+
+## 0.1.63 首次准备失败与修正
+
+已在 OVH Git fetch 并建立 clean detached 工作树 `/home/debian/sup2api/release-0.1.63`，精确提交 `747c168a383fd4e6738cb9451a29b1fb84010560`。服务器 sh syntax 和四个隔离负例通过0.013s。
+
+第一次准备日志为 `/home/debian/sup2api-managed/prepare-0.1.63-747c168a.log`。UI 构建成功，Go 阶段因 `fork/exec ... compile: resource temporarily unavailable` / `runtime: failed to create new OS thread` 停止。宿主384核在 BuildKit 子 cgroup 中仍被 Go 当作可用并发数，触及独立 slice 的 TasksMax512；不是业务代码编译不通过，也不是签名密钥问题。未生成发行 manifest、未 import、未升级任何节点，失败 stage 当时仅有 `preparation.txt`。
+
+仓库窄修增加可选 `BUILD_MAX_PROCS`，默认空保持开发行为；正式准备固定2，同时设置 `GOMAXPROCS=2` 和保留原 GOFLAGS 后追加 `-p=2`。本机六项隔离测试通过0.976s，含实际 fake-go 捕获这两个值及非法参数拒绝。修复必须经 root commit/push 后从服务器 Git 获取，不在服务器改源码。失败 stage 只允许核验后改名留证，不能删除或覆盖其他已发行版本。

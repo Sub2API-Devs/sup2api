@@ -16,6 +16,15 @@ OUT=$2
 KEYS=$3
 VERSION=${VERSION:-0.1.0-dev}
 KEY_ID=${SUB2API_DEV_KEY_ID:-sub2api-dev}
+if [ -n "${BUILD_MAX_PROCS:-}" ]; then
+  case "$BUILD_MAX_PROCS" in
+    *[!0-9]*|0) echo 'BUILD_MAX_PROCS must be a positive integer' >&2; exit 1 ;;
+  esac
+  # A BuildKit RUN may see host CPUs while its ancestor slice has the quota.
+  # Limit both each Go process and go-command package compilation concurrency.
+  export GOMAXPROCS="$BUILD_MAX_PROCS"
+  export GOFLAGS="${GOFLAGS:-} -p=$BUILD_MAX_PROCS"
+fi
 if [ "${REQUIRE_EXISTING_DEV_KEY:-0}" = 1 ]; then
   [ -s "$KEYS/$KEY_ID.key" ] && [ -s "$KEYS/$KEY_ID.pub" ] || {
     echo 'release build requires the existing plugin signing key; refusing key generation' >&2
