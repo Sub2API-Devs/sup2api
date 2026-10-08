@@ -79,7 +79,7 @@ echo CCG_RESULT=docker_ok`
 	scriptRes = scriptResult(res.Output)
 	if scriptRes != "started" {
 		result.Error = fmt.Sprintf("install failed: %s", scriptRes)
-		return result, fmt.Errorf(result.Error)
+		return result, fmt.Errorf("install failed: %s", scriptRes)
 	}
 
 	// 4. 等待控制面板健康
