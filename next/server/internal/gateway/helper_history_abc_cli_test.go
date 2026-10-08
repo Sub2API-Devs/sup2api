@@ -42,9 +42,10 @@ func TestHelperHistoryABCInlineRealDBCLI(t *testing.T) {
 }
 
 type abcHelperOptions struct {
-	UpgradePayload bool
-	TailReminder   bool
-	SessionContext bool
+	UpgradePayload       bool
+	TailReminder         bool
+	SessionContext       bool
+	StrictToolReferences bool
 }
 
 func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, options ...abcHelperOptions) {
@@ -104,7 +105,7 @@ func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, options ...abcHelpe
 			durable := helperhistory.New(db, cipher, helperhistory.Options{})
 			e.gw.d.HelperHistory = durable
 			e.gw.d.EnableHelperHistory = true
-			provider := &abcProvider{t: t, budget: `{"total":20000,"type":"tokens"}`, inline: inline, tailReminder: option.TailReminder, sessionContext: option.SessionContext}
+			provider := &abcProvider{t: t, budget: `{"total":20000,"type":"tokens"}`, inline: inline, tailReminder: option.TailReminder, sessionContext: option.SessionContext, strictToolReferences: option.StrictToolReferences}
 			upstream := httptest.NewServer(provider)
 			defer upstream.Close()
 			root := t.TempDir()
@@ -457,20 +458,21 @@ func (w *abcWorker) facts(ctx context.Context) (features.RuntimeCapabilities, re
 }
 
 type abcProvider struct {
-	sessionContext      bool
-	embeddedContexts    int
-	tailReminder        bool
-	tailDigest          string
-	inline              bool
-	inlineCatalogDigest string
-	t                   *testing.T
-	mu                  sync.Mutex
-	calls               int
-	budget              string
-	systemDigest        string
-	resultDigest        string
-	assistantDigest     string
-	expectBudget        bool
+	strictToolReferences bool
+	sessionContext       bool
+	embeddedContexts     int
+	tailReminder         bool
+	tailDigest           string
+	inline               bool
+	inlineCatalogDigest  string
+	t                    *testing.T
+	mu                   sync.Mutex
+	calls                int
+	budget               string
+	systemDigest         string
+	resultDigest         string
+	assistantDigest      string
+	expectBudget         bool
 }
 
 func (p *abcProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -497,12 +499,21 @@ func (p *abcProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	var body struct {
 		Model    string
+		Tools    []json.RawMessage
 		Messages []json.RawMessage
 		Output   map[string]json.RawMessage `json:"output_config"`
 	}
 	if json.Unmarshal(raw, &body) != nil {
 		p.t.Error("invalid wire")
 		return
+	}
+	if p.strictToolReferences {
+		if err := validateABCToolReferences(body.Tools, body.Messages); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]any{"type": "error", "error": map[string]any{"type": "invalid_request_error", "message": err.Error()}})
+			return
+		}
 	}
 	budget := body.Output["task_budget"]
 	if (len(budget) > 0) != p.expectBudget {

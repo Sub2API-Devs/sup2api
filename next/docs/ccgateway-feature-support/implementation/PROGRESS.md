@@ -4,6 +4,8 @@
 
 ## 本轮追加证据与限制
 
+Worker.77已Git原地部署21/22，Core.73/Plugin.13/Controller.48保持；真实OAuth session_context JSON131.355/SSE128.441及Linux门禁通过。新公网首200但续真实provider400：历史tool_reference已恢复，冷CLI却只有placeholder/ToolSearch缺lookup原定义，session_context已正确通过。停止不重试；见PUBLIC-HELPER-BUDGET-WORKER-0.1.77。目录候选已有精确旧.77真实RED39.787s，新严格fake+OAuth CoreABC JSON131.127/SSE126.791s均GREEN，cold/rollback/完整hash/TAB/124/131/1h1647及唯一receipt不变；Root独立catalog目标0.318s通过。准备只Worker.78 Git发布，不再核心维护；完整公网闭环仍待验收。
+
 session_context组合已取得真正前态RED38.463s（clean cb38旧Worker+dummyOAuth/profile+真实PG，原位置错502），当前hook JSON131.355s转GREEN：可信suffix至少一次且原TAB/同文不丢不重复，5公开6provider/124in131out1h1647/5receipt与cold/rollback/hash通过。独审严格位置/取消否例绿，Root低嵌套整理后定向1.187s通过，Core同组合SSE正在执行。准备冻结提交Worker.77，Core.73/Plugin.13/Controller.48保持，不将正在跑的SSE或候选当部署完成。
 
 Core.73/Worker.76已按精确cb38发布，四核心ready，Plugin.13包逐字未变，Controller.48；原21/22容器/卷/凭据保持，Root独立核ID及fec43652程序hash。公开预算首请求已200/tool_use、两真实provider轮48/154/cacheRead1646/1h1921及一次已结算账务/receipt对齐；第二tool_result续聊502后立即停。确证session_context恢复用原public ordinal却发生在hidden插入后，非OAuth或Core丢链。旧Worker+dummyOAuth/profile/真实PG前态38.463s复现原502，新阶段hook独审已绿，真实新场景转绿验证进行中。下一版仅Worker.77不重复核心发布；详PUBLIC-HELPER-BUDGET-CORE-0.1.73。

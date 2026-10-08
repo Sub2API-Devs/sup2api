@@ -359,10 +359,16 @@ func (r *Request) applyCompleteToolCatalog(body Object) error {
 	if r.InlineTools != nil {
 		return r.applyInlineToolCatalog(body)
 	}
+	if err := r.restoreHelperToolCatalog(body); err != nil {
+		return err
+	}
 	if err := r.applyServerSearchTools(body); err != nil {
 		return err
 	}
-	return r.applyAPIClientTools(body)
+	if err := r.applyAPIClientTools(body); err != nil {
+		return err
+	}
+	return r.restoreHelperToolCatalog(body)
 }
 
 func (r *Request) verifyAPIClientHistory(body Object) (err error) {

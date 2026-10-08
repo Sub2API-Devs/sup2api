@@ -77,6 +77,10 @@ func runHelperHistoryScenario(t *testing.T, budget, inline bool, tailOptions ...
 					return
 				}
 				calls.Add(1)
+				if !inline && !helperFixtureReferencesAvailable(wire) {
+					http.Error(w, `{"type":"error","error":{"type":"invalid_request_error","message":"tool reference missing from current catalog"}}`, 400)
+					return
+				}
 				if inline {
 					verifyHelperInlineFixtureWire(t, wire)
 				}
