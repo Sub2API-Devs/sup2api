@@ -4,6 +4,12 @@
 
 ## 本轮追加证据与限制
 
+session_context组合已取得真正前态RED38.463s（clean cb38旧Worker+dummyOAuth/profile+真实PG，原位置错502），当前hook JSON131.355s转GREEN：可信suffix至少一次且原TAB/同文不丢不重复，5公开6provider/124in131out1h1647/5receipt与cold/rollback/hash通过。独审严格位置/取消否例绿，Root低嵌套整理后定向1.187s通过，Core同组合SSE正在执行。准备冻结提交Worker.77，Core.73/Plugin.13/Controller.48保持，不将正在跑的SSE或候选当部署完成。
+
+Core.73/Worker.76已按精确cb38发布，四核心ready，Plugin.13包逐字未变，Controller.48；原21/22容器/卷/凭据保持，Root独立核ID及fec43652程序hash。公开预算首请求已200/tool_use、两真实provider轮48/154/cacheRead1646/1h1921及一次已结算账务/receipt对齐；第二tool_result续聊502后立即停。确证session_context恢复用原public ordinal却发生在hidden插入后，非OAuth或Core丢链。旧Worker+dummyOAuth/profile/真实PG前态38.463s复现原502，新阶段hook独审已绿，真实新场景转绿验证进行中。下一版仅Worker.77不重复核心发布；详PUBLIC-HELPER-BUDGET-CORE-0.1.73。
+
+候选 `cb38d953b554bcd47ed75c9c7ddec9436a4d90d4` 已提交推送。新尾system真实ABC SSE128.800s亦GREEN：5公开/6provider/5usage5receipt，124/131/1h1647及cold/rollback/尾hash均按原断言通过；与JSON132.041s共同构成核心协议/账本证据。该fixture单delta，不冒充多delta，其独立证据为CLI29.391s及engine用例。全部隔离隧道已关闭。服务器正在Git精确构建Worker.76/Core.73，尚未部署；不改Controller.48、不自动重建21/22。
+
 新尾system真实Core/Worker/CLI/隔离PG JSON132.041s已GREEN：5公开/6provider/5usage5receipt，input124/output131/1h1647原预期精确一致，cold/rollback及完整尾system原位hash通过。同场景Core SSE正在20327运行，未当通过；该ABC每provider单delta，多delta证据来自作者最终真实CLI及独立engine，明确分层。官方BetaUsage的speed分类已沿一致性机制补齐并最终engine5.518s/vet绿。准备Git提交冻结后服务器构建门禁，不提前部署。
 
 本候选计量修复已重新冻结：最终真实CLI12调用/多delta/尾system原位/nullable+必填检查29.391s通过；全engine含新独立10例6.118s、vet通过。新代理从实际runner路由另发现缺input被造0的RED，修复后负例原断言转绿；官方SDK nullable假设及nested partial扩展案例已明确纠正，见HIDDEN-SEARCH-USAGE-FRESH-REVIEW。Core/Worker/CLI/隔离PG按原124/131/1h1647预期重跑中，尚不能作为绿或发布证明。

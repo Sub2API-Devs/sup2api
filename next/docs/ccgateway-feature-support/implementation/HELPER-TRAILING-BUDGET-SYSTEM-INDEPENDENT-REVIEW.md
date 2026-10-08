@@ -54,3 +54,5 @@ TTL窄修后独立同anchor/ACK/桶累计目标 PASS1.350s，新增缺省不推�
 作者补完整usage必填、nullable/multiple-delta raw当前轮快照、分类冲突严格处理后，独审正常TTL fixture补明确input/output=0（保留全部桶/否例断言），目标PASS1.201s。没有把非法缺字段fixture改成产品宽松。
 
 再次冻结后单次 `TestHelperHistoryABCTailReminderRealDBCLI/false` 真隔离PG+实际CoreHTTP/Worker/CLI，PASS132.041s（fixture131.02s/子119.59s）。6provider/5公开、5usage/5receipt唯一、累计124input/131output/CacheCreation1h1647全部原预期通过；普通夹轮、冷Worker/nativecache/store恢复、历史回退、尾system完整对象hash与原位均通过。原129.149s真实TTL红与30.169s主动中断记录保留。53762终态，45439隧道已关闭。尚未另跑该Core场景SSE，不把作者SSE12call当本代理CorePG证据；当前无发布。
+
+最终Core SSE子组 `TestHelperHistoryABCTailReminderRealDBCLI/true` PASS128.800s（fixture127.78/子118.02），实际CoreHTTP→Worker→CLI→隔离PG，原124input/131output/1h1647、6provider/5公开/5usage5receipt、cold/rollback/尾systemhash保持。20327终态，45439已关闭。该ABC emitter只有最终单个message_delta；多delta不双累加的证据来自CC最终真实CLI和独立engine测试，不冒称此CorePG夹具覆盖多delta。测试源码保持冻结。

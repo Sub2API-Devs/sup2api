@@ -525,11 +525,10 @@ func (r *outboundRelay) adaptAttributed(req *Request, groups []systemGroup, body
 		message["thinking"] = thinking
 	}
 	if !count {
-		if err := req.applyHelperHistory(message); err != nil {
+		if err := req.applyHelperHistory(message, restoreContexts); err != nil {
 			return nil, false, err
 		}
-	}
-	if err := restoreContexts(message); err != nil {
+	} else if err := restoreContexts(message); err != nil {
 		return nil, false, err
 	}
 	var out bytes.Buffer

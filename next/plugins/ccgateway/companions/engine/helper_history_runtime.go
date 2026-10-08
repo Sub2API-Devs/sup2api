@@ -94,10 +94,10 @@ func (r *Request) admitHelperHistory(x *helperHistoryExecution) error {
 // Runs after ordinary client/cache restoration, before final serialization.
 // The CLI sees its own native transcript; only the authenticated provider view
 // receives earlier whole hidden rounds, at verified public boundaries.
-func (r *Request) applyHelperHistory(body Object) error {
+func (r *Request) applyHelperHistory(body Object, restorePublic ...func(Object) error) error {
 	x := r.helperHistory
 	if x == nil {
-		return nil
+		return restoreHelperPublicView(body, restorePublic)
 	}
 	x.mu.Lock()
 	defer x.mu.Unlock()
@@ -212,6 +212,13 @@ func (r *Request) applyHelperHistory(body Object) error {
 			return err
 		}
 	}
+	// The alignment view has now passed every proof. Restore authenticated
+	// attachments while original public ordinals still identify their rows.
+	// Only then insert private rows; their user messages are not public turns.
+	if err := restoreHelperPublicView(body, restorePublic); err != nil {
+		x.err = err
+		return err
+	}
 	var restored []any
 	for i, message := range messages {
 		if skipped[i] {
@@ -221,6 +228,18 @@ func (r *Request) applyHelperHistory(body Object) error {
 		restored = append(restored, insertions[i]...)
 	}
 	body["messages"] = restored
+	return nil
+}
+
+func restoreHelperPublicView(body Object, callbacks []func(Object) error) error {
+	for _, restore := range callbacks {
+		if restore == nil {
+			continue
+		}
+		if err := restore(body); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

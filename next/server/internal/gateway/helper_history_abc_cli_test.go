@@ -44,6 +44,7 @@ func TestHelperHistoryABCInlineRealDBCLI(t *testing.T) {
 type abcHelperOptions struct {
 	UpgradePayload bool
 	TailReminder   bool
+	SessionContext bool
 }
 
 func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, options ...abcHelperOptions) {
@@ -60,7 +61,9 @@ func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, options ...abcHelpe
 	}
 	build := exec.Command("go", "build", "-o", binary, "./cmd/worker")
 	build.Dir = workerDir
-	if out, err := build.CombinedOutput(); err != nil {
+	if override := os.Getenv("CCG_ABC_WORKER_BINARY"); override != "" {
+		binary = override
+	} else if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build Worker: %v %s", err, out)
 	}
 	cipher, err := secret.New(bytes.Repeat([]byte{0x51}, 32))
@@ -101,11 +104,11 @@ func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, options ...abcHelpe
 			durable := helperhistory.New(db, cipher, helperhistory.Options{})
 			e.gw.d.HelperHistory = durable
 			e.gw.d.EnableHelperHistory = true
-			provider := &abcProvider{t: t, budget: `{"total":20000,"type":"tokens"}`, inline: inline, tailReminder: option.TailReminder}
+			provider := &abcProvider{t: t, budget: `{"total":20000,"type":"tokens"}`, inline: inline, tailReminder: option.TailReminder, sessionContext: option.SessionContext}
 			upstream := httptest.NewServer(provider)
 			defer upstream.Close()
 			root := t.TempDir()
-			worker := startABCWorker(t, binary, cli, root, filepath.Join(root, "cache-1"), upstream.URL)
+			worker := startABCWorker(t, binary, cli, root, filepath.Join(root, "cache-1"), upstream.URL, option.SessionContext)
 			defer func() { worker.stop() }()
 			target, _ := url.Parse(worker.endpoint)
 			bridge := httputil.NewSingleHostReverseProxy(target)
@@ -224,7 +227,11 @@ func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, options ...abcHelpe
 			if !bytes.Contains(one, []byte("external_weather")) {
 				t.Fatal("first external client tool lost")
 			}
-			continuation := append(append([]any(nil), initial...), map[string]any{"role": "assistant", "content": one}, map[string]any{"role": "user", "content": []any{map[string]any{"type": "tool_result", "tool_use_id": "external_weather", "content": "PUBLIC_WEATHER_RESULT"}}})
+			publicResult := "PUBLIC_WEATHER_RESULT"
+			if option.SessionContext {
+				publicResult += "\t"
+			}
+			continuation := append(append([]any(nil), initial...), map[string]any{"role": "assistant", "content": one}, map[string]any{"role": "user", "content": []any{map[string]any{"type": "tool_result", "tool_use_id": "external_weather", "content": publicResult}}})
 			beforeWithdrawal := append([]any(nil), continuation...)
 			if inline {
 				continuation = append(continuation, map[string]any{"role": "system", "content": []any{map[string]any{"type": "tool_removal", "tool": map[string]any{"type": "tool_reference", "name": "weather"}}}})
@@ -255,7 +262,7 @@ func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, options ...abcHelpe
 			}
 			three := post()
 			worker.stop()
-			worker = startABCWorker(t, binary, cli, root, filepath.Join(root, "cache-2"), upstream.URL)
+			worker = startABCWorker(t, binary, cli, root, filepath.Join(root, "cache-2"), upstream.URL, option.SessionContext)
 			target, _ = url.Parse(worker.endpoint)
 			bridge.Director = func(r *http.Request) {
 				r.URL.Scheme = target.Scheme
@@ -315,6 +322,9 @@ func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, options ...abcHelpe
 			}
 			provider.mu.Lock()
 			calls := provider.calls
+			if option.SessionContext && provider.embeddedContexts == 0 {
+				t.Error("real CLI never embedded a session context into the public tool result")
+			}
 			provider.mu.Unlock()
 			wantIn, wantOut, wantCache1h := int64(wantCalls*20), int64(wantCalls*8), int64(0)
 			if option.TailReminder {
@@ -354,7 +364,7 @@ type abcWorker struct {
 }
 
 func (w *abcWorker) stop() { w.once.Do(func() { _ = w.cmd.Process.Kill(); <-w.done }) }
-func startABCWorker(t *testing.T, binary, cli, root, cache, provider string) *abcWorker {
+func startABCWorker(t *testing.T, binary, cli, root, cache, provider string, sessionContext ...bool) *abcWorker {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -369,6 +379,17 @@ func startABCWorker(t *testing.T, binary, cli, root, cache, provider string) *ab
 		}
 	}
 	values := map[string]string{"HOME": root, "USERPROFILE": root, "CLAUDE_CONFIG_DIR": filepath.Join(root, "config"), "SECURESTORAGE_CONFIG_DIR": filepath.Join(root, "config"), "ANTHROPIC_API_KEY": "dummy-abc-fixture", "ANTHROPIC_BASE_URL": provider, "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "DISABLE_AUTOUPDATER": "1", "ENABLE_TOOL_SEARCH": "true", "CCG_API_KEY": "worker-fixture", "CCG_ADMIN_KEY": "admin-fixture", "CCG_DATA_DIR": filepath.Join(root, "data"), "CACHE_DIR": cache, "WORKER_CLI_PATH": cli, "CCG_BIND": address, "CCG_RESOURCE_ISSUER_ID": "abc-fixture", "CCG_RESOURCE_ISSUER_GENERATION": "one", "REQUEST_TIMEOUT": "40s"}
+	if len(sessionContext) > 0 && sessionContext[0] {
+		values["ANTHROPIC_API_KEY"] = ""
+		values["CLAUDE_CODE_OAUTH_TOKEN"] = "dummy-abc-session-context"
+		values["CLAUDE_CODE_USER_EMAIL"] = "fixture@example.invalid"
+		if err := os.MkdirAll(values["CLAUDE_CONFIG_DIR"], 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(values["CLAUDE_CONFIG_DIR"], ".claude.json"), []byte(`{"oauthAccount":{"emailAddress":"fixture@example.invalid","accountUuid":"fixture-account","organizationUuid":"fixture-org"}}`), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	for k, v := range values {
 		env = append(env, k+"="+v)
 	}
@@ -436,6 +457,8 @@ func (w *abcWorker) facts(ctx context.Context) (features.RuntimeCapabilities, re
 }
 
 type abcProvider struct {
+	sessionContext      bool
+	embeddedContexts    int
 	tailReminder        bool
 	tailDigest          string
 	inline              bool
@@ -451,6 +474,11 @@ type abcProvider struct {
 }
 
 func (p *abcProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if p.sessionContext && r.URL.Path == "/api/oauth/profile" {
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"account":{"uuid":"fixture-account"},"organization":{"uuid":"fixture-org"}}`)
+		return
+	}
 	raw, err := io.ReadAll(r.Body)
 	if err != nil {
 		p.t.Error(err)
@@ -488,6 +516,9 @@ func (p *abcProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	joined, _ := json.Marshal(body.Messages)
+	if p.sessionContext {
+		p.embeddedContexts += verifyABCToolResultContext(p.t, body.Messages)
+	}
 	if p.inline {
 		verifyABCInline(p.t, body.Messages, &p.inlineCatalogDigest)
 	}

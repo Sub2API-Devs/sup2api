@@ -1,0 +1,17 @@
+# Core 0.1.73 发布准备
+
+候选Git精确cb38d953b554bcd47ed75c9c7ddec9436a4d90d4，Worker计划.76，Core host用量详情UI新增，plugin保持.13。尚未发布。服务器Git fetch后clean detached /home/debian/sup2api/release-0.1.73，未上传本地源码。
+
+2bd328→cb38d95对plugin本体（排companions）、SDK、manifest、打包工具无差异；plugin go module不依赖Worker engine。预计现已发布.13签名包可逐字节复用，但实际构建后必须核package1fc462a95937f6523e3b0224101cc9b9659eeec7ff432f8eef71d5f380b37ac1、binary1e5a7cd7726860f59e01663be42154157da4585b71ce630d43b1e9d74277a315，不符立即停止，不能覆盖immutable版本。迁移无源码变更，需候选schema再次核对。
+
+Linux定向门禁session84906：gateway/ccgateway受影响协商/status race tests+vet；Git源码只读挂载2CPU2GiB容器。前端用量详情tests、typecheck、build在node24隔离容器内复制Git源码到临时目录执行，不改checkout。日志/home/debian/sub2api-next-test/validation-cb38d953b。Node24此前未导入本地Docker image正常按同Dockerfile版本拉取；不将无镜像inspect误记产品失败。
+
+新尾system Core实际HTTP/Worker/CLI+真实隔离PG JSON132.041s、SSE128.800s已绿，原124/131/1h1647/cold/rollback/5receipt全部保留。多delta语义独立归CC真实CLI及engine测试，不把本Core emitter当多delta测试。无必要重复旧734项真实DB；本次只新增hostUI和Worker修复，SQLschema不变。
+
+Linux定向终态：gateway race1.095s、ccgateway race1.025s，core vet0。UI npm ci/typecheck/UsageDetail.spec 4tests1.52s/build12.91s全部PASS。隔离测试容器完成退出，无宿主源码变更。随后签名prepare session6306启动，固定原defaultcache/key和2CPU4GiB slice，仍未导入或发布。
+
+签名prepare6306 exit0，独立完整校验通过：manifest04dd3605a2e84460f43cc355b838ea8b080c07ce47003dc1fad2a251ecbcbfc3；bundle03c11970ab395627bc7a773936710a5b1ed3366acb790f80d317cfd85bf758e9（110182786bytes）；Core binary7b15e3e79ddcf7db3a7cfa63b426e57d5b0eb2168f542d90296a503cf100ecb1。manifest签名/payload摘要、tar每文件mode/size/hash、全部TLS originGET真完整下载均通过。
+
+Plugin.13 package与binary确实分别仍1fc462a95937f6523e3b0224101cc9b9659eeec7ff432f8eef71d5f380b37ac1及1e5a7cd7726860f59e01663be42154157da4585b71ce630d43b1e9d74277a315，未产生同版本不同内容，无需.14。trust仍e51300373d1ce798114d1b39207dcb0e9dd4b7e9dccaa7e1935f55e334847133，schema_before/after同e8ec13814e64ced829fe95d94c719afe902eed9d7b50370634d5d129ec321138。
+
+新备份/home/debian/sup2api-managed/backups/core-0.1.73-20261008T144419Z/database.dump，21100564bytes/0600，pg_restore --list验证通过；四节点完整inspect私有0600。正常签名manifest import完成，preflight200、blockers=[]、expected_revision139、目标严格四节点。未建升级计划、未改默认镜像或Controller，等待Worker.76与root最终门禁。发布后按root要求仅只读调度冷却存储/时间核#22，不force quota/profile，不人为解锁。
