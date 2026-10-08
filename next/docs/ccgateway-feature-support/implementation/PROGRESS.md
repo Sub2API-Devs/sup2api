@@ -8,6 +8,8 @@
 
 `public-pinned-mcp-search-0.1.69.json` 一次真实请求 200/end_turn：实际 API 搜索→完整名称引用→匿名 MCP 工具→结果顺序及唯一 ID 均通过，验证本次提供商返回名称与 pinned 查表键一致；无 pause 续调或错误重试。此结果不扩大到动态未固定目录、未知编码、全部账号资格。普通 API format 与 eager forced 组合的额外资格限制是新发现的待修正项，下一候选仍独立开发，不称目标已全部完成。
 
+普通 API format + eager forced 修正已完成作者与独审：唯一业务行复用 `structuredOutput()` 区分旧 synthetic 循环，保留原 format/choice/parallel、单轮及 helper 禁执行；双方各 26 次真实 CLI 隔离调用通过，独审原大整数/边界及 vet 通过。准备仅更新 Worker `.70`，核心 `.68` 与 catalog `.12` 无需变更（既有目录描述为结构化“续轮”限制）；未以 fake provider 冒充 Opus 5.5 强制工具资格。
+
 ### Worker 0.1.68 阶段快照（以下版本与失败保留为历史）
 
 当前精确部署提交 `9ba4b278217f077e39cc4e31bc63f50658382133`：核心四节点 0.1.67、Worker #21/#22 0.1.68、catalog `.10`，默认新建镜像 `.68`；原账号容器、卷与授权保留。核心发布存在约 36–38 秒维护窗口，不是零中断。

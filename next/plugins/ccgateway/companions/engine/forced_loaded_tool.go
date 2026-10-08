@@ -5,7 +5,7 @@ import "fmt"
 // A forced choice over an entirely loaded client catalog needs no discovery.
 // Helper execution is denied and helper definitions are absent from the model catalog.
 func (r *Request) forcedLoadedClientCatalog() bool {
-	if r == nil || r.Plan == nil || !r.toolSearchEnabled() || r.JSONSchema != nil || r.InlineTools != nil || len(r.ServerTools) > 0 || len(r.APIClientTools) > 0 || r.MCP != nil || len(r.Plan.fields["safeguards"]) > 0 {
+	if r == nil || r.Plan == nil || !r.toolSearchEnabled() || r.structuredOutput() || r.InlineTools != nil || len(r.ServerTools) > 0 || len(r.APIClientTools) > 0 || r.MCP != nil || len(r.Plan.fields["safeguards"]) > 0 {
 		return false
 	}
 	value, err := decodePlannedValue(r.Plan.fields["tool_choice"])
