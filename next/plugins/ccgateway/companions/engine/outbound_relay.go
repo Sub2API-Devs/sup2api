@@ -31,6 +31,7 @@ import (
 // Requests without client system messages keep their body (thinking.display
 // aside); every other field stays as the CLI wrote it.
 type outboundRelay struct {
+	bootstrap       *continuationBootstrap
 	exactToolInputs map[string]map[int]exactToolCapture
 	fallbackEvents  map[string]map[int]*fallbackCapture
 	scope           *mainRequestScope
@@ -667,6 +668,10 @@ func (relay *outboundRelay) handler(req *Request, forward http.Handler) http.Han
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.URL.Path, relay.path+"/") {
 			http.NotFound(w, r)
+			return
+		}
+		if relay.bootstrap != nil {
+			relay.bootstrap.handle(relay, w, r)
 			return
 		}
 		model := r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/messages")

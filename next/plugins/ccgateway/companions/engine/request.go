@@ -27,6 +27,7 @@ type Tool struct {
 	Metadata     Object `json:"-"`
 }
 type Request struct {
+	completedClientHistory  map[string]string
 	internalCache           *internalCacheRounds
 	credit                  *creditExecution
 	creditPTCDeferred       bool
@@ -412,6 +413,9 @@ func parseRequestCreditCandidate(data []byte, mcp *MCPConnectorPlan, access *res
 	if e = validateConversation(r.Messages, r.origin, creditCandidate); e != nil {
 		return nil, e
 	}
+	if e = r.compileCompletedClientHistory(); e != nil {
+		return nil, e
+	}
 	r.configureContinuation()
 	if e = r.validateServerSearchHistory(); e != nil {
 		return nil, e
@@ -711,6 +715,9 @@ func (r *Request) configKey() string {
 	if metadata := r.toolMetadataKey(); len(metadata) > 0 {
 		parts = append(parts, metadata)
 	}
+	if len(r.completedClientHistory) > 0 {
+		parts = append(parts, "completed-client-history-v1")
+	}
 	return digest(parts)
 }
 func (r *Request) wireName(name string) string {
@@ -741,7 +748,7 @@ func (r *Request) wireMessage(m Message) Message {
 		if inlineToolBlock(c) {
 			c = r.wireInlineToolBlock(c)
 		}
-		if str(c, "type") == "tool_use" && str(c, "toolset_name") == "" {
+		if str(c, "type") == "tool_use" && str(c, "toolset_name") == "" && !r.completedClientHistoryBlock(b) {
 			c["name"] = r.wireName(str(c, "name"))
 		}
 		if str(c, "type") == "tool_search_tool_result" {

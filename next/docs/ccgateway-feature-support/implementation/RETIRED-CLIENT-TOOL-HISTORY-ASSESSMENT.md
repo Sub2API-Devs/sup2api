@@ -65,3 +65,13 @@ retired_tool_history_probe_test.go，CLI2.1.292，独立临时JSONL包含已完�
 root发现另一个具体环境差异。对照runner_config.go:205–219，first-party loopback carrier设置_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1，并以已有NO_PROXY/no_proxy为基础同时给两者追加127.0.0.1,localhost。诊断现已复制这三个非秘密变量，不添加APIkey、不读取OAuth、不改变授权。原探针缺该标记可能影响CLI对自定义base的OAuth行为，但尚无新实验确认，不能把它宣称为已证根因。
 
 冻结文件：evidence/retired_history_setup_diagnostic.cjs、engine/retired_tool_history_probe_test.go、本评估文档。node --check语法通过；本次没有启动CLI。由root提交推送后，服务器从精确Git候选读取脚本，仅做一次零转发诊断并观察总HTTP/path/subtype。
+
+### b83c1534精确Git零转发结果
+
+root提交推送b83c1534c79852020a9b291db391f1acc4cc67f6后，服务器原Git目录fetch并cat-file验证commit，从git show精确读取诊断脚本，pipe给#22 docker exec -i --user1000 node；没有上传本地源码，也未checkout/替换线上程序。执行一次，无真实转发代码。
+
+结果：total_http=0，route_counts={}，attempted=0，forwarded=0，provider_status=null；仅system/init事件，无终态或工具事件，stderr0。20秒硬终止，exit_code=null。此次新增总计确实证明这个relay未收到任何HTTP；此前只能说匹配主path0的统计不追溯升级。first-party标记/NO_PROXY与stdin修正后仍停在init之后、HTTP之前，原因未证实。没有再次启动、真实provider资格调用或环境改动。
+
+### 本机唯一argv变量隔离
+
+原Go成功探针添加可选CCG_PROBE_NO_PERSISTENCE=1开关，仅追加--no-session-persistence，默认原baseline保持不变。只运行retired_fixture子例一次，本机CLI2.1.292接原fakeHTTP，PASS2.444s（子例0.58s），历史原name/id/input保留且tools空。未重现远端init后停滞，故不能将resume/fork/no-persistence组合宣称为通用根因。没有新增远端CLI或真实provider调用。

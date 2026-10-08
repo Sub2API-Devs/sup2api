@@ -17,8 +17,12 @@ func fixtureUser() []any { return []any{Object{"role": "user", "content": "fixtu
 
 func TestRemovedTypedDeclarationCannotSilentlyBecomeMCP(t *testing.T) {
 	messages := []any{Object{"role": "user", "content": "old"}, Object{"role": "assistant", "content": []any{Object{"type": "tool_use", "id": "old", "name": "bash", "input": Object{"command": "fixture"}}}}, Object{"role": "user", "content": []any{Object{"type": "tool_result", "tool_use_id": "old", "content": "done"}}}}
-	if _, err := parseToolFixture(t, []any{}, messages, ""); err == nil {
-		t.Fatal("ambiguous old typed identity was silently accepted")
+	r, err := parseToolFixture(t, []any{}, messages, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if str(r.wireMessage(r.Messages[1]).Content[0], "name") != "bash" || len(r.Tools) != 0 {
+		t.Fatal("completed history renamed or registered")
 	}
 	if _, err := parseToolFixture(t, []any{Object{"name": "bash", "input_schema": Object{"type": "object"}}}, messages, ""); err != nil {
 		t.Fatal("explicit ordinary client identity rejected", err)

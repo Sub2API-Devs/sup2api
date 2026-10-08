@@ -17,6 +17,7 @@ import (
 var modFiles = mod.Files
 
 type Runner struct {
+	bootstrap                  *continuationBootstrap
 	InternalBaseURL            string
 	CLI, Version, Plugin, Work string
 	Env                        []string
@@ -126,6 +127,11 @@ func (r *Runner) baseEnv() []string {
 // run answers one request with one CLI process: configuration from the
 // request, the outbound relay, the process, then the stream-json session.
 func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string, emit func(Object) error) (result Object, err error) {
+	if r.bootstrap == nil && req.needsContinuationBootstrap(p) {
+		if err := r.bootstrapContinuation(ctx, req, p); err != nil {
+			return nil, fmt.Errorf("cannot initialize continuation transcript: %w", err)
+		}
+	}
 	cfg := newRunConfig(req, p, r.Plugin, dir)
 	if req.resource != nil || req.credit != nil {
 		cfg.args = append(cfg.args, "--no-session-persistence")
@@ -150,6 +156,7 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 	// the CLI can back off, refresh, or reshape the request and retry.
 	relay.setAbort(cancel)
 	relay.scope = cfg.scope
+	relay.bootstrap = r.bootstrap
 	defer relay.Close()
 	// Assign the named results: runs after the process has been waited for.
 	defer func() {

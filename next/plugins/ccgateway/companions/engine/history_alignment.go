@@ -19,7 +19,7 @@ func internalHistoryAssistant(r *Request, message Object) bool {
 		if str(block, "type") != "tool_use" {
 			continue
 		}
-		if str(block, "name") != "ToolSearch" {
+		if r.completedClientHistoryBlock(block) || str(block, "name") != "ToolSearch" {
 			return false
 		}
 		found = true

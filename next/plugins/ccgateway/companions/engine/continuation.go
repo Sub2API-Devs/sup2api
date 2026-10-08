@@ -74,6 +74,9 @@ func (r *Request) restoreContinuationTail(body Object) error {
 	if restored, err := r.restorePendingMCPContinuation(body, messages, expected, actual); restored || err != nil {
 		return err
 	}
+	if restored, err := r.restoreMixedPendingContinuation(messages, last, expected, actual); restored || err != nil {
+		return err
+	}
 	if str(last, "role") != "assistant" || len(actual) != 1 || str(actual[0], "type") != "text" || str(actual[0], "text") != "[Tool use interrupted]" {
 		return fmt.Errorf("assistant continuation history changed")
 	}
@@ -107,4 +110,38 @@ func (r *Request) restoreContinuationTail(body Object) error {
 	}
 	last["content"] = expected
 	return nil
+}
+
+// With retained text/results, CLI 2.1.292 omits unresolved server calls instead
+// of inserting the all-tools interruption placeholder. Only a still-pending
+// call may be absent; the surrounding history and all retained blocks anchor it.
+func (r *Request) restoreMixedPendingContinuation(messages []any, last Object, expected, actual []Object) (bool, error) {
+	if str(last, "role") != "assistant" || len(actual) == 0 || len(actual) >= len(expected) {
+		return false, nil
+	}
+	ledger, err := r.serverHistoryLedger()
+	if err != nil {
+		return false, err
+	}
+	if len(ledger.pending) == 0 || !plainServerContinuationHistory(r.Messages, ledger.pending) {
+		return false, nil
+	}
+	for _, block := range actual {
+		if str(block, "type") == "text" && str(block, "text") == "[Tool use interrupted]" {
+			return false, nil
+		}
+	}
+	restored, err := restoreOmittedBlocks(expected, actual, func(block Object) bool {
+		return str(block, "type") == "server_tool_use" && ledger.pending[str(block, "id")] != ""
+	})
+	if err != nil {
+		return false, err
+	}
+	prefix := *r
+	prefix.Messages = r.Messages[:len(r.Messages)-1]
+	if _, err = alignClientHistory(&prefix, Object{"messages": messages[:len(messages)-1]}); err != nil {
+		return false, fmt.Errorf("mixed continuation prefix changed: %w", err)
+	}
+	last["content"] = restored
+	return true, nil
 }

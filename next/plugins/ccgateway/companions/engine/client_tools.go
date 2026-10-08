@@ -302,7 +302,7 @@ func (r *Request) validateAPIClientConfiguration() error {
 	// after the declaration was removed. Do not silently change it into MCP.
 	for _, message := range r.Messages {
 		for _, block := range message.Content {
-			if str(block, "type") != "tool_use" || str(block, "toolset_name") != "" {
+			if str(block, "type") != "tool_use" || str(block, "toolset_name") != "" || r.completedClientHistoryBlock(block) {
 				continue
 			}
 			name := str(block, "name")

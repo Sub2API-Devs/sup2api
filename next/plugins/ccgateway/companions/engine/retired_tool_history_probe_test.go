@@ -71,6 +71,9 @@ func TestRealCLIRetiredToolHistoryProbe(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 			defer cancel()
 			cmd := exec.CommandContext(ctx, cli, "-p", "NEXT_FIXTURE", "--resume", path, "--fork-session", "--model", "claude-opus-5-5", "--output-format", "stream-json", "--verbose", "--tools", "", "--max-turns", "1", "--setting-sources", "")
+			if os.Getenv("CCG_PROBE_NO_PERSISTENCE") == "1" {
+				cmd.Args = append(cmd.Args, "--no-session-persistence")
+			}
 			cmd.Dir = root
 			cmd.Env = messageProbeEnv(root, fake.URL)
 			out, e := cmd.CombinedOutput()
