@@ -21,7 +21,9 @@
 # =============================================================================
 
 ARG NODE_IMAGE=node:24
-ARG GO_IMAGE=golang:1.27-trixie
+# Preserve the compiler used by published immutable plugin packages. A toolchain
+# upgrade requires explicit package versioning and artifact verification.
+ARG GO_IMAGE=golang:1.27.1-trixie@sha256:8f58fd67ea075142d947a60e0caa4317746a55118d312f027793d382c7741734
 ARG RUNTIME_IMAGE=debian:trixie-slim
 
 # -----------------------------------------------------------------------------

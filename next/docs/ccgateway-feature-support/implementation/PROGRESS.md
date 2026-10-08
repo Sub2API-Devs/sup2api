@@ -4,6 +4,10 @@
 
 ## 本轮追加证据与限制
 
+Core.76准备已被immutable包核验主动阻断，未导入/切服务：浮动golang:1.27-trixie从Go1.27.1漂移到1.27.2，六个builtin原版本包全部摘要变化；不是插件源码变化或VCS元数据。5fc对应Linux四包race/vet与实际PG均绿，已签.76资产保留。Root从旧.75服务器prepare.log独立核原官方index digest8f58fd67ea075142d947a60e0caa4317746a55118d312f027793d382c7741734，决定正式Dockerfile固定原Go1.27.1精确digest，新Git提交后重新准备Core.77并核全部内置包，不改已签.76、不覆盖旧插件版本。
+
+缓存TTL候选已冻结提交推送5fc8326f9587a41e69b565364f20a284bd86317e：Core作者四包test/vet及隔离PG39.050s通过，typed/冷decoded同原frozenbytes重复重放唯一usage/receipt且同价、1219partial和200持久；CC非作者nullable/overflow/perattempt/deepclone/原bytes独审绿，UI独审20tests/typecheck，root前端productionbuild10.10s绿，1440/390px六本地真实Edge组件截图无溢出/pageerror。不是生产浏览器验收。OVH仅Git精确新clean release-0.1.76构建，作者handle29841已确认live，受限Linux四包race绿、vet/真实隔离PG/签名准备续行；尚未切服务。Plugin409依赖不含server，本次只Core.76，正式包仍核Plugin.14不可变摘要；Worker.80/Controller.48保持。
+
 最新线上为精确 Git609691490：Core.75/Plugin.14/Worker.80/Controller.48；四核心节点及原21/22容器已核，未来镜像默认.80，既有容器/授权保持。核心维护503采样窗口37.51秒。公开动态MCP和forced mixed各3请求全部通过，新/续/回退六RID均22/attempt1，账务和Worker日志独立核对；生产未强制cold/跨账号。详最新部署记录和PUBLIC-DYNAMIC-FORCED-CORE-0.1.75-WORKER-0.1.80。
 
 新增缓存TTL事实补充正在进行：上游最终total比已报告TTL桶多1219，明确标未细分，不将差额描述成已证实5分钟；收费数学、旧账单、200/SSE不变。Core作者验证隔离PG冷outbox重放/唯一receipt/金额一致，UI作者已冻结17测试和类型检查绿，独立代理开始交叉审查。尚未提交部署，不混入609691490。用户允许替换长期无进展代理；新代理review_release_80已完成发布独审与UI实现，进度分别保存在专门文档。
