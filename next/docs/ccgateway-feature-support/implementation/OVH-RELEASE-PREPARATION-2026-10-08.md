@@ -56,3 +56,19 @@ Docker default buildx/BuildKit0.30、systemd257、cgroup v2。官方 [buildx bui
 第一次准备日志为 `/home/debian/sup2api-managed/prepare-0.1.63-747c168a.log`。UI 构建成功，Go 阶段因 `fork/exec ... compile: resource temporarily unavailable` / `runtime: failed to create new OS thread` 停止。宿主384核在 BuildKit 子 cgroup 中仍被 Go 当作可用并发数，触及独立 slice 的 TasksMax512；不是业务代码编译不通过，也不是签名密钥问题。未生成发行 manifest、未 import、未升级任何节点，失败 stage 当时仅有 `preparation.txt`。
 
 仓库窄修增加可选 `BUILD_MAX_PROCS`，默认空保持开发行为；正式准备固定2，同时设置 `GOMAXPROCS=2` 和保留原 GOFLAGS 后追加 `-p=2`。本机六项隔离测试通过0.976s，含实际 fake-go 捕获这两个值及非法参数拒绝。修复必须经 root commit/push 后从服务器 Git 获取，不在服务器改源码。失败 stage 只允许核验后改名留证，不能删除或覆盖其他已发行版本。
+
+## 0.1.63 成功候选（等待导入授权）
+
+服务器通过 Git 更新到 `b786448a80930802aeaf4130c7987350f39fece6`；旧失败目录核对只有 `preparation.txt` 后改名为 `stage/0.1.63-failed-747c168a`，未删除。新SHA六个脚本测试通过0.017s。日志 `~/sup2api-managed/prepare-0.1.63-b786448a.log`：前端、核心、所有打包插件成功，限额 slice 已自动清理；Git前后clean。
+
+- manifest **payload** digest：`f6567906ab39bafb604f61e31b4a2225d09c2a02e44af17a447ca4d6ef526295`
+- manifest JSON envelope SHA256：`1db8a810844d456e7442b8446e1d338febffbf78f73276cd583ded6a08cc6713`
+- bundle SHA256：`f524bd1a6aafe10dba1b3952cbf11c56681deb3c29aa53cfdc0b320f9edf204d`，110029007 bytes
+- 核心二进制 SHA256：`d5aa1b34e12a345dd8d0223a5838c9a865d857d65a612c0e4322605a1abaa432`
+- source commit：`b786448a80930802aeaf4130c7987350f39fece6`
+- schema_after：`a685e0d83523a7b5a7ee3017a93bd4d7a0a6f82714829374f93c9fcf1586b729`
+- schema_before 保持已核验0.1.62值；strategy=`maintenance`；key_id=`sup2api-ovh-2026`；插件 trust 摘要保持原值。
+
+独立 Python Ed25519 验证签名、payload digest、bundle大小/摘要、全部归档文件路径集合/大小/模式/摘要通过。验证结果落服务器 `stage/0.1.63/verification.json`。最初人工验证命令错误地比较 envelope SHA 与 manifest ID，立即按发布器实际协议改成 payload digest 再全部通过；这是验证命令修正，不是产物篡改。
+
+候选打包后发现 bundle 权限0600（pack使用私有临时文件），manifest0644。新增准备脚本窄修：从本次 pack 的输出严格验证两个64位hex digest，只对这两个公开产物chmod0644，不递归扫描旧publish。该权限修正不改变候选字节/源码SHA；发布源实际HTTP读取核验尚待完成。四个正式节点仍0.1.62，未执行import/升级计划。

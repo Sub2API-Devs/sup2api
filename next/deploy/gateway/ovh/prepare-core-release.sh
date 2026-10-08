@@ -77,6 +77,15 @@ docker run --rm --network none --user "$(id -u):$(id -g)" \
   -v "$src/deploy/gateway/package-release.sh:/package-release.sh:ro" \
   --entrypoint sh "$gateway_image" /package-release.sh /stage /publish /release.key \
   sup2api-ovh-2026 "v$version" "$sha" "$source_schema" > "$stage/digests.pending"
+# pack creates its bundle via a private temporary file. Make only these two
+# newly signed public artifacts readable by the existing release-origin user.
+manifest_digest=$(sed -n 's/^manifest_digest=//p' "$stage/digests.pending")
+bundle_digest=$(sed -n 's/^bundle_digest=//p' "$stage/digests.pending")
+for value in "$manifest_digest" "$bundle_digest"; do
+  [ "${#value}" = 64 ] || { echo 'invalid artifact digest' >&2; exit 1; }
+  case "$value" in *[!0-9a-f]*) echo 'invalid artifact digest' >&2; exit 1 ;; esac
+done
+chmod 644 "$publish/$manifest_digest.json" "$publish/$bundle_digest.tar.gz"
 # noclobber prevents another preparer from replacing an existing release record.
 (set -C; cat "$stage/digests.pending" > "$digests")
 cat "$digests"
