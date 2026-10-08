@@ -67,7 +67,7 @@ func TestGenerationPlanValidationAndSemanticIgnore(t *testing.T) {
 		{"temperature": -1}, {"temperature": 1.1}, {"top_p": "0.5"}, {"top_k": 1.5}, {"top_k": -1},
 		{"stop_sequences": "stop"}, {"stop_sequences": []any{1}}, {"service_tier": "priority"},
 		{"metadata": Object{"session_id": "impersonate"}}, {"metadata": Object{"user_id": strings.Repeat("a", 513)}},
-		{"context_management": Object{}}, {"container": nil}, {"mcp_servers": []any{}},
+		{"context_management": Object{}}, {"container": []any{}}, {"mcp_servers": []any{}},
 		{"output_config": Object{"task_budget": Object{}}},
 	} {
 		v := basic()
