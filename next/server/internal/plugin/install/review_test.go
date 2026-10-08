@@ -81,6 +81,11 @@ func TestBuildReviewPlatforms(t *testing.T) {
 
 	// An account-type-only plugin serving a built-in platform.
 	a := pkgtest.Anthropic("anthropic", "0.1.0", "sub2api")
+	a.AccountTypes[0].Platforms[0].Endpoints = []string{"messages"}
+	declared := buildReview(a, pkgtest.Files(a), &pkg.Verification{}, "0.1.0", nil)
+	if got := declared.AccountTypes[0].PlatformDeclarations; len(got) != 1 || len(got[0].Endpoints) != 1 || got[0].Endpoints[0] != "messages" {
+		t.Fatalf("review lost endpoint subset: %+v", got)
+	}
 	out = review(t, buildReview(a, pkgtest.Files(a), &pkg.Verification{}, "0.1.0", nil))
 	if len(out.Platforms) != 0 || len(out.GatewayEndpoints) != 0 {
 		t.Fatalf("anthropic plugin platforms = %+v %+v", out.Platforms, out.GatewayEndpoints)

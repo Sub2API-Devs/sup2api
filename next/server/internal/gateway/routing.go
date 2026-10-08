@@ -137,25 +137,19 @@ func (c *call) addConvertedRoute(b core.AccountTypeBinding, x string) {
 		if !ok {
 			continue
 		}
-		for _, y := range pb.Platform.Protocols() {
+		for _, ep := range pb.Platform.Endpoints {
+			if !ap.SupportsEndpoint(ep.ID) {
+				continue
+			}
+			y := ep.Protocol
 			conv, ok := c.g.conv.Lookup(x, y)
 			if !ok {
 				continue
 			}
-			c.addRoute(b, ap, ap.Platform, y, endpointFor(&pb.Platform, y), pb.Platform, conv)
+			c.addRoute(b, ap, ap.Platform, y, ep, pb.Platform, conv)
 			return
 		}
 	}
-}
-
-// endpointFor is the first endpoint of pf speaking protocol.
-func endpointFor(pf *manifest.Platform, protocol string) manifest.Endpoint {
-	for _, e := range pf.Endpoints {
-		if e.Protocol == protocol {
-			return e
-		}
-	}
-	return manifest.Endpoint{}
 }
 
 // addRoute records the route of b to upstream protocol y of platform q:
@@ -164,6 +158,9 @@ func endpointFor(pf *manifest.Platform, protocol string) manifest.Endpoint {
 // the endpoint speaking y, else the platform.
 func (c *call) addRoute(b core.AccountTypeBinding, ap manifest.AccountPlatform, q, y string,
 	ep manifest.Endpoint, pf manifest.Platform, conv convert.Converter) {
+	if !ap.SupportsEndpoint(ep.ID) {
+		return
+	}
 	k := b.Key()
 	if _, dup := c.routes[k]; dup {
 		return

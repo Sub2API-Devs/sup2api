@@ -75,6 +75,7 @@ type EndpointOwner struct {
 type PlatformOwner struct {
 	PluginKey string
 	ID        string
+	Endpoints []manifest.Endpoint
 }
 
 // ValidateOptions carries host facts needed by Validate.
@@ -111,7 +112,7 @@ func OthersFromManifests(ms []*manifest.Manifest) ([]PlatformOwner, []EndpointOw
 	var eps []EndpointOwner
 	for _, m := range ms {
 		for _, p := range m.Platforms {
-			pfs = append(pfs, PlatformOwner{PluginKey: m.Key, ID: p.ID})
+			pfs = append(pfs, PlatformOwner{PluginKey: m.Key, ID: p.ID, Endpoints: p.Endpoints})
 			for _, e := range p.Endpoints {
 				eps = append(eps, EndpointOwner{PluginKey: m.Key, Platform: p.ID, Method: e.Method, Path: e.Path})
 			}
@@ -815,6 +816,7 @@ func (v *validator) accountTypes() {
 			}
 			seen[ap.Platform] = true
 			own := ownPlatforms[ap.Platform]
+			v.accountEndpoints(pf, ap, own)
 			for _, proto := range sortedKeys(ap.Usage) {
 				uf := pf + ".usage." + proto
 				if own != nil {
@@ -827,6 +829,42 @@ func (v *validator) accountTypes() {
 				v.usageRules(uf, ap.Usage[proto], ownerAccountType, protocolPluginUsage(own, proto))
 			}
 		}
+	}
+}
+
+func (v *validator) accountEndpoints(field string, ap manifest.AccountPlatform, own *manifest.Platform) {
+	if ap.Endpoints == nil {
+		return
+	}
+	if len(ap.Endpoints) == 0 {
+		v.add(field+".endpoints", "required", "at least one endpoint is required when endpoints is specified")
+	}
+	p := own
+	for _, builtin := range platforms.Builtin() {
+		if builtin.ID == ap.Platform {
+			p = &builtin
+		}
+	}
+	for _, other := range v.opt.OtherPlatforms {
+		if other.ID == ap.Platform {
+			p = &manifest.Platform{ID: other.ID, Endpoints: other.Endpoints}
+		}
+	}
+	if p == nil && !v.opt.Tooling {
+		v.add(field+".endpoints", "unknown_platform", "platform %q must be installed to validate endpoint references", ap.Platform)
+	}
+	seen := map[string]bool{}
+	for i, id := range ap.Endpoints {
+		f := fmt.Sprintf("%s.endpoints[%d]", field, i)
+		switch {
+		case strings.TrimSpace(id) == "":
+			v.add(f, "required", "endpoint id is required")
+		case seen[id]:
+			v.add(f, "duplicate", "endpoint %q listed twice", id)
+		case p != nil && !slices.ContainsFunc(p.Endpoints, func(e manifest.Endpoint) bool { return e.ID == id }):
+			v.add(f, "unknown_endpoint", "endpoint %q does not belong to platform %q", id, ap.Platform)
+		}
+		seen[id] = true
 	}
 }
 

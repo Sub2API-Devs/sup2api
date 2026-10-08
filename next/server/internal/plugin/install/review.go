@@ -69,10 +69,11 @@ type ReviewPlatform struct {
 
 // ReviewAccountType is one top-level account type (ARCHITECTURE 6.6).
 type ReviewAccountType struct {
-	ID        string             `json:"id"`
-	Label     core.LocalizedText `json:"label"`
-	Platforms []string           `json:"platforms"`
-	FormMode  string             `json:"form_mode"`
+	PlatformDeclarations []manifest.AccountPlatform `json:"platform_declarations"`
+	ID                   string                     `json:"id"`
+	Label                core.LocalizedText         `json:"label"`
+	Platforms            []string                   `json:"platforms"`
+	FormMode             string                     `json:"form_mode"`
 }
 
 type ReviewHook struct {
@@ -276,7 +277,7 @@ func buildReview(m *manifest.Manifest, files map[string][]byte, ver *pkg.Verific
 		for _, ap := range at.Platforms {
 			pfs = append(pfs, ap.Platform)
 		}
-		r.AccountTypes = append(r.AccountTypes, ReviewAccountType{ID: at.ID, Label: core.LocalizedText(at.Label), Platforms: pfs, FormMode: at.Form.Mode})
+		r.AccountTypes = append(r.AccountTypes, ReviewAccountType{ID: at.ID, Label: core.LocalizedText(at.Label), Platforms: pfs, PlatformDeclarations: at.Platforms, FormMode: at.Form.Mode})
 	}
 	for _, h := range m.Hooks {
 		failure := h.Failure

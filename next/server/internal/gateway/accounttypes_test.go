@@ -160,6 +160,8 @@ func TestPlanRoutes(t *testing.T) {
 		mk("d", "none", cl, manifest.AccountPlatform{Platform: "openai"}),
 		mk("e", "noclient", nil, manifest.AccountPlatform{Platform: "anthropic"}),
 		mk("f", "gone", cl, manifest.AccountPlatform{Platform: "disabled_plugin_platform"}),
+		mk("restricted", "native", cl, manifest.AccountPlatform{Platform: "anthropic", Endpoints: []string{"count_tokens"}}),
+		mk("restricted", "converted", cl, manifest.AccountPlatform{Platform: "x", Endpoints: []string{"plain"}}),
 		mk("g", "convacct", cl, manifest.AccountPlatform{Platform: "x",
 			Usage: map[string]manifest.UsageRules{"x.up": acctUsage}}),
 	}

@@ -141,13 +141,20 @@ func servedEndpoints(g core.Generation, b core.AccountTypeBinding, conv core.Pro
 	var upstream []string
 	for _, ap := range b.Type.Platforms {
 		if pb, ok := g.Platform(ap.Platform); ok {
-			upstream = append(upstream, pb.Platform.Protocols()...)
+			for _, ep := range pb.Platform.Endpoints {
+				if ap.SupportsEndpoint(ep.ID) {
+					upstream = append(upstream, ep.Protocol)
+				}
+			}
 		}
 	}
 	out := []EndpointView{}
 	for _, e := range g.Endpoints() {
 		proto := e.Endpoint.Protocol
-		_, native := b.Supports(e.Platform)
+		ap, native := b.Supports(e.Platform)
+		if native && !ap.SupportsEndpoint(e.Endpoint.ID) {
+			continue
+		}
 		if !native && !convertible(conv, proto, upstream) {
 			continue
 		}
@@ -216,6 +223,7 @@ type PlatformView struct {
 
 // PlatformEndpointView is a gateway endpoint declared by a platform.
 type PlatformEndpointView struct {
+	ID       string `json:"id"`
 	Method   string `json:"method"`
 	Path     string `json:"path"`
 	Protocol string `json:"protocol"`
@@ -250,7 +258,7 @@ func platformViews(g core.Generation) []PlatformView {
 			}
 		}
 		for _, e := range pb.Platform.Endpoints {
-			v.Endpoints = append(v.Endpoints, PlatformEndpointView{Method: e.Method, Path: e.Path,
+			v.Endpoints = append(v.Endpoints, PlatformEndpointView{ID: e.ID, Method: e.Method, Path: e.Path,
 				Protocol: e.Protocol, Billing: e.Billing})
 		}
 		for _, b := range g.AccountTypesForPlatform(pb.Platform.ID) {

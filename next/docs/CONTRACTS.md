@@ -408,6 +408,8 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 
 ## 13. 平台声明端点、账号类型声明平台、内置平台（2026-09-25，ARCHITECTURE 6.6）
 
+**平台内端点子集（2026-10-08）**：`accountTypes[].platforms[]` 可声明 `endpoints: ["messages", "count_tokens"]`，每项引用所属 `platform` 的端点 ID，不是路径或协议名；不能引用其他平台的端点。省略字段兼容旧插件，表示支持该平台全部端点；显式空数组、重复 ID 和不存在的端点均拒绝。CCGateway 两种账号类型均显式声明 Anthropic 的 `messages` 和 `count_tokens`。安装时根据内置、本插件及其他已安装插件的平台校验；离线打包无法解析外部平台时延后到安装校验。网关原生路由与协议转换目标都受子集约束，账号类型 API 的可服务端点保持一致。安装预览保留 `platforms` ID 数组并新增 `platform_declarations`，控制台按账号类型 → 平台 → 端点展示；平台 API 的端点新增 `id` 用于解析引用。端点子集依赖支持本字段的宿主执行，旧宿主会忽略该约束。
+
 本节优先于 §12 及前文中冲突的描述。§12 中"全局定价""凭证授权""转换失败""插件未启用 404"等仍然有效。
 
 **概念**：平台声明端点；账号类型声明支持的平台；账号属于账号类型；分组是一组账号（可混放类型）；API Key 只绑定一个分组。核心内置平台 `anthropic`、`openai`、`gemini`（`sdk/platforms`，嵌入的 JSON，格式同 manifest `Platform`；任何模块都可以 import，和 `core` 一样）。

@@ -396,11 +396,27 @@ type GuardedSetting struct {
 // AccountPlatform is one platform an account type serves. Empty fields fall
 // back to the platform (and endpoint) defaults.
 type AccountPlatform struct {
-	Platform      string   `json:"platform"`
+	Platform string `json:"platform"`
+	// Endpoints selects endpoint IDs within Platform. Omitted means all endpoints
+	// for compatibility; an explicit empty list is invalid.
+	Endpoints     []string `json:"endpoints,omitempty"`
 	RequestFields []string `json:"requestFields,omitempty"`
 	PassHeaders   []string `json:"passHeaders,omitempty"`
 	// Usage overrides the usage rules per protocol of the platform.
 	Usage map[string]UsageRules `json:"usage,omitempty"`
+}
+
+// SupportsEndpoint checks the platform-local endpoint selection.
+func (a AccountPlatform) SupportsEndpoint(id string) bool {
+	if a.Endpoints == nil {
+		return true
+	}
+	for _, endpoint := range a.Endpoints {
+		if endpoint == id {
+			return true
+		}
+	}
+	return false
 }
 
 // Form describes a console form contributed by a plugin.

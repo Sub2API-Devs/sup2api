@@ -46,6 +46,9 @@ func TestManifestAndUsageContract(t *testing.T) {
 		t.Fatal("invalid managed identity")
 	}
 	for _, at := range m.AccountTypes {
+		if len(at.Platforms) != 1 || at.Platforms[0].Platform != "anthropic" || len(at.Platforms[0].Endpoints) != 2 || !at.Platforms[0].SupportsEndpoint("messages") || !at.Platforms[0].SupportsEndpoint("count_tokens") || at.Platforms[0].SupportsEndpoint("chat_completions") {
+			t.Fatalf("account type %s must explicitly declare only Anthropic Messages and token counting", at.ID)
+		}
 		if at.CreationGroup != "claude-code" || at.Label["en"] != "Claude Code" || at.Label["zh"] != "Claude Code" {
 			t.Fatalf("account type %s must share the Claude Code creation entry", at.ID)
 		}
