@@ -31,3 +31,13 @@ Each retains the old0.1.72 executable/hash, original CLI symlink, full before/af
 - Original imageRef `ccgateway:0.1.56`, imageID `sha256:789f605082fbec34e210d859fac06c9f9603e3ec8f535e249924074a5754b85d` unchanged, including mounts and authorization labels.
 
 Root and API agent received the completed Worker signal. This agent did not update default images, refresh the controller, publish core, or send a real model request. Those remaining coordinated release steps belong to the API agent.
+
+## Controller route compatibility follow-up (read-only review)
+
+The first public helper-budget acceptance returned503 before reservation/dispatch. Independent cc-max review found the runningcontroller0.1.47 ROUTE omitted admin/features; API agent separately confirmed authenticated404 and zero attempt rows. Worker21/22 had no new main-request log or CLI process. This was capability-route deployment mismatch, not provider qualification or helper response parsing.
+
+Live `/app/manager.py` was copied to artifact `controller-live-0.1.47.py` for review. Diff against exactGit428164d candidate has only: add v1/messages/count_tokens, add admin/features, make features GET-only. `_provision` is byte-for-byte unchanged. Existing account + unchanged network + same salted auth fingerprint returns before image lookup/replacement; defaultapp tag differences are not a rebuild condition. Even credential/network changes use the existing image reference rather than incidentally upgrading. Features relay preserves controller authentication, account revision guard and per-account admin key, and does not call provision/ensure/start.
+
+API agent exclusively owns controller tests/build/refresh. Independent post-refresh identity/hash/authorization/features validation is pending at this entry; no model call or controller mutation was performed by this reviewer.
+
+Independent post-controller verification completed: runningcontrollerimage `ccg-controller:0.1.48`, started2026-10-08T12:01:27.445012453Z. Both original account identity/image/mount/labels snapshots are byte-for-byte equal to the saved post-.73 rollout snapshots; program hashes remain549bd6576d2c403c843a9a29108629ffb3745e76eb2fa018fe47c132e1dbbe31. #22 authorization remainsloggedIn=true/claude.ai, #21=true/api_key; noPlugin overrides. Authenticated read-only GET through the controller's own routed admin/features returned200 for both, exactWorker.73/full428revision/catalog.15/schema[1]. Keys were read only inside controller memory for the normal authenticated GET, never printed or exported. No inference, provisioning, restart or configuration write was performed by this independent check.

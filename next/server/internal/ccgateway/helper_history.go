@@ -25,13 +25,16 @@ func (s *Service) HelperHistoryRequirement(ctx context.Context, accountID int64,
 		return wire.RequirementDeferToOrdinary, nil
 	}
 	if res.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Worker requirement probe returned status %d", res.StatusCode)
+		return "", verificationHTTPError("requirement", res, "", fmt.Errorf("Worker requirement probe unavailable"))
 	}
 	raw, err := io.ReadAll(io.LimitReader(res.Body, 4097))
 	if err != nil {
 		return "", err
 	}
 	r, err := wire.DecodeRequirement(raw)
+	if err != nil {
+		return "", verificationHTTPError("requirement", res, "invalid_document", err)
+	}
 	return r.Decision, err
 }
 
@@ -55,11 +58,15 @@ func (s *Service) WorkerCapabilities(ctx context.Context, accountID int64) (feat
 	defer closeConn()
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return zero, fmt.Errorf("Worker capabilities unavailable")
+		return zero, verificationHTTPError("capabilities", res, "", fmt.Errorf("Worker capabilities unavailable"))
 	}
 	raw, err := io.ReadAll(io.LimitReader(res.Body, (128<<10)+1))
 	if err != nil || len(raw) > 128<<10 {
-		return zero, fmt.Errorf("invalid Worker capabilities response")
+		return zero, verificationHTTPError("capabilities", res, "invalid_document", fmt.Errorf("invalid Worker capabilities response"))
 	}
-	return features.DecodeRuntimeCapabilities(raw)
+	doc, err := features.DecodeRuntimeCapabilities(raw)
+	if err != nil {
+		return zero, verificationHTTPError("capabilities", res, "invalid_document", err)
+	}
+	return doc, nil
 }

@@ -1,0 +1,31 @@
+{
+  "model": "claude-opus-5-5",
+  "results": [
+    {
+      "name": "helper-budget-tool",
+      "path": "/v1/messages",
+      "beta": "task-budgets-2026-03-13,advanced-tool-use-2025-11-20",
+      "status": 503,
+      "stop": null,
+      "usage": null,
+      "content_types": [],
+      "error_type": "overloaded_error",
+      "protocol_passed": false,
+      "content_completed": null,
+      "passed": false,
+      "outcome": "http_error",
+      "seconds": 12.187,
+      "request_id_sha256": "d36da34fc9081e849ea00477c2da8187a511627e889648844eed2be3551d9c36"
+    }
+  ],
+  "checks": {
+    "external_tool_handoff": false,
+    "result_continuation": false,
+    "ordinary_sse_continuation": false,
+    "rollback": false,
+    "internal_rounds_verified": false,
+    "durable_receipts_verified": false
+  },
+  "passed": false,
+  "scope": "Public API evidence only. Worker logs and DB receipts must independently prove internal search, hidden-history custody, account binding and single accounting. No forced cold restart or provider billing/cache-savings claim. HTTP200 refusal is a normal protocol result but not fixture completion. Stops on first mismatch."
+}

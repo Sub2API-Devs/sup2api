@@ -1,5 +1,11 @@
 # 最终功能闭环审计（当前快照，非全部生产验收）
 
+## Core .71 / Worker .73 最新更正
+
+源码428164d47的隐藏helper历史持久、完整轮次捕获/冷恢复、核心托管和幂等用量收据已实现并部署；签名替换修复也包含其中。Core.71/plugin.12/catalog.15、Worker.73和Controller.48均已核对，见最新部署记录。下文“B/C尚在开发”或“缺持久隐藏历史”是旧快照，不能当当前源码结论。
+
+但真实公开预算验收仍未闭环：先因Controller.47缺features路由503，升级.48修复后又在OAuth identity CLI载体归属验证失败。两次都未Reserve/Dispatch模型且0用量；正在修复，不能用隔离ABC测试及成功部署宣称真实托管链路可用。详情见PUBLIC-HELPER-BUDGET-CORE-0.1.71。旧Worker.71多Read验收仍独立保留在PUBLIC-ACCEPTANCE-0.1.71。
+
 ## 0.1.72 与当前候选更正（优先于历史快照）
 
 当前已部署证据是核心0.1.70、Worker0.1.72、插件0.1.11、catalog `.14`；见 PROGRESS 顶部及 PUBLIC-ACCEPTANCE-0.1.72。Sonnet构造的unsigned pending服务端工具历史已通过真实单次调用，不能等同捕获真实pause_turn回放。五Read往返和geo原始用量事实已验证。源码签名替换修复检查点 `f677d2de4` 已提交推送，尚未部署。

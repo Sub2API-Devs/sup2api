@@ -1,5 +1,7 @@
 # 完成度与证据矩阵（不等同全部完成）
 
+最新更正：精确428164d47已部署Core.71/plugin.12/catalog.15、Worker.73及Controller.48。F-TASK-BUDGET/O-HISTORY的隐藏helper持久、整轮捕获/冷恢复、核心接线和幂等用量收据已实现并通过真实CLI接隔离假上游及真实隔离PG测试，不再属于“未建”。公开提供商验收仍在身份验证阶段503，未模型派发；已修Controller路由缺失，正在修OAuth identity载体。不能将源码和隔离测试直接算真实云验收。当前状态以PROGRESS与PUBLIC-HELPER-BUDGET-CORE-0.1.71为准，下面逐项表是历史盘点快照。
+
 后续更新：核心 `.68` / Worker `.69` / catalog `.12` 已部署。原引用空数组续聊 502 修复已真实复验，图片/文档/引用续聊三次均 200，原引用完整恢复；完整 pinned MCP 搜索一次真实 200，精确引用键与调用顺序验证通过。见 `.69` 验收证据。以下表格保留最初盘点时间点，不能再把已关闭的 citation 缺陷当成当前线上失败。后续确认普通 API format+全 eager forced 被旧 synthetic 判断额外拒绝，正在独立修复，仍不得宣称全部完成。
 
 2026-10-08；D:/projects/golang/sup2api。以原01功能目录、02 Worker实施要求、05协议范围及37F+8O当前目录复核。源码与作者/独审记录为实现证据；下表引用既有测试，不是本次重新跑过所有测试。当前已确认Worker.69/catalog.12的部署和真实验收；e463222dce5353b5e0bb6e95265bf9886efc0930包含completed历史、Sonnet cold pause和APIformat forced修复，正构建Worker.70/core.69，尚不将该候选视作已部署。

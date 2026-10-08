@@ -4,6 +4,10 @@
 
 ## 本轮追加证据与限制
 
+最新线上：精确428164d4756e64163710910224957744554a2011已完成Core.71/plugin.12/catalog.15、Worker.73及Controller.48部署，四核心节点ready；#21/#22原容器ID/镜像引用/卷/授权保留。核心维护503窗口约37.32s，非零中断。下面“正在发布/候选”的段落为较早快照。
+
+公开helper预算验收两次各首请求503后停止：首次控制器.47缺features路由，已Git构建.48修复；第二次能力检查成功，失败于#22 OAuth identity CLI载体主轮归属校验，原错 `main model turn ended without applying its client feature plan`。两次均无helper Reserve/Dispatch，0用量/费用；还不能称预算真实闭环通过。现由CC隔离复现修复，API补安全分类诊断，独审代理复核；不要求用户处理，不跳过身份校验。详细证据另存 PUBLIC-HELPER-BUDGET-CORE-0.1.71.md，原Worker.71五Read/Sonnet验收文件完整保留。
+
 精确Git候选 `428164d4756e64163710910224957744554a2011` 已通过服务器门禁：OVH六包race真实DB726pass/3可选CLI skip、contracts64pass及vet；cc-max三个模块race/vet和禁网CLI34调用81.436s通过。签名Core.71/plugin.12制品已验证，核心发布正在进行，尚不能当完成。
 
 Worker.73已按#22→#21原地备份/原子替换/重启完成，无真实推理。Root独立SSH核两个原容器ID和原imageRef.56不变，均running且程序hash为549bd6576d2c403c843a9a29108629ffb3745e76eb2fa018fe47c132e1dbbe31；作者health/features/catalog.15/schema1/授权前后验证已记录。原账号、卷、授权保留。真实最多4次public_helper_budget验收脚本已独审，等Core全部稳定后才发送，不能用已通过隔离测试替代真实提供商结果。

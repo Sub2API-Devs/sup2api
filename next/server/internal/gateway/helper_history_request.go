@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"slices"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	wire "github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/helperhistory"
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/resources"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
@@ -133,6 +135,7 @@ func (c *call) wrapHelperHistoryRequest(ctx context.Context, req *http.Request, 
 		clone.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(body)), nil }
 		decision, err := probe(ctx, a.ID, clone)
 		if err != nil {
+			c.logHelperVerification(ctx, a.ID, ccgateway.VerificationStage("requirement", err))
 			return core.ErrUnavailable.WithMessage("Worker requirement probe unavailable").WithCause(err)
 		}
 		switch decision {
@@ -140,6 +143,7 @@ func (c *call) wrapHelperHistoryRequest(ctx context.Context, req *http.Request, 
 			return nil
 		case wire.RequirementNeedsCustody:
 		default:
+			c.logHelperVerification(ctx, a.ID, ccgateway.VerificationStage("requirement", fmt.Errorf("invalid requirement decision")))
 			return core.ErrUnavailable.WithMessage("Worker requirement probe invalid")
 		}
 	}
@@ -172,6 +176,7 @@ func (c *call) wrapHelperHistoryRequest(ctx context.Context, req *http.Request, 
 	}
 	ns, binding, err := runtime(ctx, a.ID, model.Model)
 	if err != nil {
+		c.logHelperVerification(ctx, a.ID, err)
 		return c.helperRuntimeFailure(err)
 	}
 	if binding.AccountID != a.ID {
@@ -235,6 +240,21 @@ func (c *call) helperRuntimeFailure(err error) error {
 	return core.ErrUnavailable.WithMessage("helper history runtime verification unavailable").WithCause(err)
 }
 
+func (c *call) logHelperVerification(ctx context.Context, accountID int64, err error) {
+	var failure *ccgateway.RuntimeVerificationError
+	if !errors.As(err, &failure) {
+		err = ccgateway.VerificationStage("unknown", err)
+		if !errors.As(err, &failure) {
+			return
+		}
+	}
+	attrs := []any{"request_id", c.rid, "account_id", accountID, "stage", failure.Stage, "class", failure.Class, "http_status", failure.Status}
+	if failure.RequestID != "" {
+		attrs = append(attrs, "worker_request_id", failure.RequestID, "worker_request_id_source", "response_header:request-id")
+	}
+	slog.WarnContext(ctx, "gateway helper runtime verification failed", attrs...)
+}
+
 func (g *Gateway) helperHistoryRuntime(ctx context.Context, accountID int64, model string) (string, core.ResourceBinding, error) {
 	var binding core.ResourceBinding
 	if g.d.CCGateway == nil || g.d.ResourceTransport == nil {
@@ -242,20 +262,20 @@ func (g *Gateway) helperHistoryRuntime(ctx context.Context, accountID int64, mod
 	}
 	caps, err := g.d.CCGateway.WorkerCapabilities(ctx, accountID)
 	if err != nil {
-		return "", binding, err
+		return "", binding, ccgateway.VerificationStage("capabilities", err)
 	}
 	cfg, err := g.d.CCGateway.Load(ctx)
 	if err != nil {
-		return "", binding, err
+		return "", binding, ccgateway.VerificationStage("policy", err)
 	}
 	policy, err := json.Marshal(cfg.EffectiveRequestPolicy())
 	if err != nil {
-		return "", binding, err
+		return "", binding, ccgateway.VerificationStage("policy", err)
 	}
 	ns, err := helperRuntimeNamespace(caps, model, policy)
 	if err != nil {
-		return "", binding, err
+		return "", binding, ccgateway.VerificationStage("capabilities", err)
 	}
 	binding, err = g.d.ResourceTransport.Identity(ctx, accountID)
-	return ns, binding, err
+	return ns, binding, ccgateway.VerificationStage("identity", err)
 }

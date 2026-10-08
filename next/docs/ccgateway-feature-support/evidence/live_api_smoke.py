@@ -68,7 +68,7 @@ class Probe:
                                error_type=result.get("error", {}).get("type"))
                     if response.status != 200:
                         detail = str(result.get("error", {}).get("message", "")).replace(self.key, "[REDACTED]")
-                        row["error_summary"] = re.sub(r"(?:sk-[A-Za-z0-9_-]+|Bearer\s+\S+)", "[REDACTED]", detail)[:1000]
+                        row["error_summary"] = re.sub(r"(?:(?<![A-Za-z0-9_])sk-[A-Za-z0-9_-]+|Bearer\s+\S+)", "[REDACTED]", detail)[:1000]
                 normalized = streamed_message(result) if "events" in result else result
                 refused = normalized.get("stop_reason") == "refusal"
                 row["protocol_passed"] = response.status == 200 and bool(check(result))
@@ -110,7 +110,7 @@ def redact_evidence(value, key):
     encoded = json.dumps(value, ensure_ascii=False)
     if key:
         encoded = encoded.replace(key, "[REDACTED]")
-    encoded = re.sub(r"(?:sk-[A-Za-z0-9_-]+|Bearer\s+[^\s\"]+)", "[REDACTED]", encoded)
+    encoded = re.sub(r"(?:(?<![A-Za-z0-9_])sk-[A-Za-z0-9_-]+|Bearer\s+[^\s\"]+)", "[REDACTED]", encoded)
     return json.loads(encoded)
 
 

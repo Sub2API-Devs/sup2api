@@ -38,15 +38,16 @@ func (t resourceTransport) Identity(ctx context.Context, accountID int64) (core.
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		if verifiedMissingResourceIssuer(resp) {
-			return core.ResourceBinding{}, core.ErrUnsupported.WithMessage("account has no managed resource issuer")
+		missing := verifiedMissingResourceIssuer(resp) // One bounded read; never log its contents.
+		if missing {
+			return core.ResourceBinding{}, verificationHTTPError("identity", resp, "issuer_unsupported", core.ErrUnsupported.WithMessage("account has no managed resource issuer"))
 		}
-		return core.ResourceBinding{}, core.ErrUnavailable.WithMessage("account does not provide a verified resource issuer")
+		return core.ResourceBinding{}, verificationHTTPError("identity", resp, "", core.ErrUnavailable.WithMessage("account does not provide a verified resource issuer"))
 	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8193))
 	var identity resourcecontract.Identity
 	if err != nil || len(raw) > 8192 || json.Unmarshal(raw, &identity) != nil || !validResourceIdentity(identity.PrincipalID, identity.Generation) {
-		return core.ResourceBinding{}, errors.New("invalid Worker resource identity response")
+		return core.ResourceBinding{}, verificationHTTPError("identity", resp, "invalid_document", errors.New("invalid Worker resource identity response"))
 	}
 	return core.ResourceBinding{AccountID: accountID, PrincipalID: identity.PrincipalID, Generation: identity.Generation}, nil
 }
