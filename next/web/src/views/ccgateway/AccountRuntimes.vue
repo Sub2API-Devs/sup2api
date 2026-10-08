@@ -145,11 +145,11 @@ async function refreshAuth(r: Row) {
   if (!canAccounts.value) return
   try {
     const result = await api.post<{ key: string; created: boolean; message: string }>(`/accounts/${r.id}/actions/ccgateway/refresh_auth`)
-    toast.success(result.message || t('ccgateway.runtimes.refreshStarted'))
+    toast(result.message || t('ccgateway.runtimes.refreshStarted'), 'success')
     // Navigate to edit page to complete the flow
     window.location.href = `/accounts?edit=${r.id}`
   } catch (e) {
-    toast.error(t('ccgateway.runtimes.refreshFailed'))
+    toast(t('ccgateway.runtimes.refreshFailed'), 'error')
   }
 }
 

@@ -16,6 +16,7 @@ export default {
   passwordNone: 'No password is set. Leave empty to keep it that way.',
   passwordStored: 'Password set (not shown)',
   clearPassword: 'Clear the stored password',
+  realIp: 'Real IP',
   testResult: 'Last test',
   ok: 'OK',
   failed: 'Failed',
