@@ -21,7 +21,7 @@ def normalize(value):
     return streamed_message(value) if value and "events" in value else value
 
 
-def run(probe):
+def run(probe, *, inline=False):
     tool = {"name": TOOL, "description": "Return the supplied test marker for key fixture.",
             "defer_loading": True, "input_schema": {"type": "object", "properties": {
                 "key": {"type": "string", "enum": ["fixture"]}},
@@ -29,6 +29,13 @@ def run(probe):
     initial = [user("Session fixture " + uuid.uuid4().hex + ". Find lookup_fixture and call it once "
                     "with key fixture. Use tool discovery if necessary. After receiving its result, "
                     "reply with that exact marker only. Never guess a tool result.")]
+    beta = BETA
+    if inline:
+        beta += ",inline-tools-2026-09-15"
+        initial.append({"role": "system", "content": [{"type": "tool_addition", "tool": {
+            "type": "tool_definition", "definition": {"name": "spare_fixture",
+                "description": "Unrelated fixture; do not call it for this task.",
+                "defer_loading": True, "input_schema": {"type": "object"}}}}]})
     checks = {"external_tool_handoff": False, "result_continuation": False,
               "ordinary_sse_continuation": False, "rollback": False,
               "internal_rounds_verified": False, "durable_receipts_verified": False}
@@ -39,7 +46,7 @@ def run(probe):
             config["task_budget"] = {"type": "tokens", "total": 20000}
         result = probe.call(name, {"model": probe.model, "max_tokens": 512,
             "output_config": config, "stream": stream, "tools": [tool], "messages": messages},
-            lambda value: valid_message(normalize(value)), protocol_only=True, beta=BETA)
+            lambda value: valid_message(normalize(value)), protocol_only=True, beta=beta)
         return normalize(result)
 
     def completed(message, marker):
@@ -57,6 +64,9 @@ def run(probe):
         checks["tool_call_id_sha256"] = hashlib.sha256(tool_id.encode()).hexdigest()
         history = initial + [assistant(first), user([{"type": "tool_result", "tool_use_id": tool_id,
                                                      "content": MARKER}])]
+        if inline:
+            history.append({"role": "system", "content": [{"type": "tool_removal",
+                "tool": {"type": "tool_reference", "name": TOOL}}]})
         second = call("helper-budget-result", history)
         checks["result_continuation"] = completed(second, MARKER)
         if checks["result_continuation"]:
@@ -70,7 +80,7 @@ def run(probe):
                 checks["rollback"] = completed(fourth, BRANCH)
     passed = all(checks[k] for k in ("external_tool_handoff", "result_continuation",
                                     "ordinary_sse_continuation", "rollback"))
-    return {"model": probe.model, "results": evidence_rows(probe.results), "checks": checks,
+    return {"model": probe.model, "inline": inline, "results": evidence_rows(probe.results), "checks": checks,
             "passed": passed,
             "scope": "Public API evidence only. Worker logs and DB receipts must independently prove "
                      "internal search, hidden-history custody, account binding and single accounting. "
@@ -83,12 +93,13 @@ def main():
     parser.add_argument("--base", required=True)
     parser.add_argument("--model", default="claude-opus-5-5")
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--inline", action="store_true", help="Include inline addition, withdrawal and rollback")
     args = parser.parse_args()
     key = os.environ.get("SUP2API_API_KEY")
     if not key:
         parser.error("SUP2API_API_KEY is required")
     with contextlib.redirect_stdout(io.StringIO()):
-        report = run(Probe(args.base, key, args.model))
+        report = run(Probe(args.base, key, args.model), inline=args.inline)
     encoded = json.dumps(report, ensure_ascii=False, indent=2)
     args.output.write_text(encoded + "\n", encoding="utf-8")
     print(encoded)
