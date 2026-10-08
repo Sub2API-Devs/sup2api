@@ -1,0 +1,74 @@
+{
+  "model": "claude-sonnet-4-6",
+  "history_origin": "constructed_unsigned_fixture",
+  "actual_provider_pause_observed": false,
+  "official_reference": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/server-tools",
+  "request_messages_sha256": "f03b7f5afa172516f09f08d07ffe931c7c96fa4988a0fb6163f44072cb44bc7e",
+  "request_tail_sha256": "86267dc289052c1d0147c0e8c216b4164f1ff932f9a3d164de8a6ef67a525e45",
+  "pending_tool_id_sha256": "c6153ed97c42cacd12b812ca2899c7b2371a444ae52e463406d4a82fe4c86588",
+  "tools_sha256": "bce391fb5c8a2f788a6de45703f1f40585cd6fb133449c34521a4ee6bed1e808",
+  "allowed_domain": "platform.claude.com",
+  "max_uses": 1,
+  "results": [
+    {
+      "name": "constructed-sonnet-pending-server-history",
+      "path": "/v1/messages",
+      "status": 200,
+      "stop": "end_turn",
+      "usage": {
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1952,
+          "ephemeral_5m_input_tokens": 13949
+        },
+        "cache_creation_input_tokens": 15901,
+        "cache_read_input_tokens": 0,
+        "inference_geo": "not_available",
+        "input_tokens": 1,
+        "output_tokens": 464,
+        "server_tool_use": {
+          "web_fetch_requests": 0,
+          "web_search_requests": 1
+        },
+        "service_tier": "standard"
+      },
+      "content_types": [
+        "web_search_tool_result",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text",
+        "text"
+      ],
+      "error_type": null,
+      "protocol_passed": true,
+      "content_completed": null,
+      "passed": true,
+      "outcome": "expected_result",
+      "seconds": 17.584,
+      "request_id_sha256": "28cb5a9a9eb24ba57f68feff9d52e815a8b84834b896fc01a287d5df28373a9d"
+    }
+  ],
+  "checks": {
+    "valid_message": true,
+    "pending_result_paired": true,
+    "server_result_success": true,
+    "known_response_blocks": true,
+    "additional_calls": 0,
+    "result_count": 1,
+    "stop": "end_turn",
+    "nonempty_final_text": true,
+    "result_hashes": [
+      "988787a59f056aee843be36a0958d566a55f9d55b9612f6a2ca2f9f68251556b"
+    ],
+    "actual_provider_pause_observed": false,
+    "completed_constructed_pending_history": true
+  },
+  "passed": true,
+  "scope": "Exactly one platform API request, no retries or pause continuations. Constructed pending history acceptance is distinct from real provider pause replay. Worker logs must separately verify cold bootstrap, original tail, safety attachment position and zero extra upstream inference; this client cannot attest those facts."
+}

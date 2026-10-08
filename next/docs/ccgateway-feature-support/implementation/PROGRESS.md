@@ -2,6 +2,12 @@
 
 开始日期：2026-10-08（Asia/Shanghai）。状态：已推进至第九批并分阶段部署；当前状态见下节，早期批次中的“待提交/未部署”均为当时快照。原始调研保留为基线；本目录记录实际实现、实验、失败、评审和发布证据。
 
+## 最新真实闭环：Worker .72
+
+精确提交e73b3392c64921c51439e63be5f118c761ae795e已原地部署Worker .72/default image .72，核心.70/plugin.11/catalog.14不重发。Sonnet构造unsigned pending历史一次真实200/end_turn17.584s，结果与pending ID配对、无新call。独立Worker816db358-b8a9-45d2-8d75-c266c652bf69核4roles/tail/system/安全与Token原位置保真，transport重复和marker不外发，默认thinking/context均缺省，实际provider仅1call，原result/终态完整相同。见PUBLIC-ACCEPTANCE-0.1.72；不是捕获真实pause_turn回放，也不宣称所有复杂组合通过。
+
+持续目标仍active。通用内部预算持久helper历史A已有作者实现与隔离PG测试，独审发现MaxRecords预留不足和RequestID长度两处阻断正在整改；B已开始Worker捕获恢复设计，C有outbox骨架但未接线。相关代码均未提交/未部署，general gate未开放。不得将当前工作区未来0043等混入已发布SHA证据。
+
 ## 当前上线与下一窄修
 
 aa6b3a905已完成 core .70 / Worker .71 / plugin .11 / catalog .14发布，默认未来镜像.71；原容器授权保留，维护503约36–38秒。五Read真实27.18s通过，Worker证原名/ID/输入/结果/TAB/一次认证上下文保真；核心两200/attempt1，各单用量单扣款，geo not_available事实已入库。

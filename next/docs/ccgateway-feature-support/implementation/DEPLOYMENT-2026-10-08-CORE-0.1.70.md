@@ -47,3 +47,9 @@ Linux 隔离 2 CPU/4 GiB：SDK manifest/check race 1.119s、platforms 1.016s；c
 刷新前后两个原账号的 ID、image ID/引用、mounts、user、entrypoint、command 和包含授权标签的完整 labels 完全相同。快照仅受限存储于 `/opt/ccgateway-runtime/manual-backups/default-image-0.1.71/{before,after}.json`，未打印授权内容。公共配置结果在 `/home/debian/sup2api-managed/worker-default-0.1.71/`。
 
 所有运行态操作完成后已通知根代理开始真实验收。本部署过程0模型调用，health不替代 Sonnet/地域实际响应验收。失败恢复所需原 core release、平台 dump 与原 Worker 备份均保留；未触及其它服务。
+
+## 后续仅 Worker .72 修复
+
+真实 .71 验收随后暴露 CLI 默认 context_management 泄漏导致提供商400；独立审查及修复见 CONTEXT-DEFAULT-INDEPENDENT-REVIEW.md。CC 作者完成精确 e73b3392 的 Worker .72 Linux 门禁和两账号原地更新后，本代理仅将默认 images.app .71→.72 并调用安全 controller refresh。核心 .70、插件 .11、catalog .14 均未重新发布。
+
+最终 controller up_to_date=true，启动 `2026-10-08T09:30:40.825141922Z`，实际 CCG_APP_IMAGE=ccgateway-worker:0.1.72。全部其它 public 配置/秘密存在标记保持；两账号 ID/image/mounts/user/command/授权 labels 完全相同。证据目录对应 `worker-default-0.1.72` 与 `/opt/ccgateway-runtime/manual-backups/default-image-0.1.72`。没有模型调用，已通知根代理开始 Sonnet 实际复验。
