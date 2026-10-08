@@ -30,7 +30,7 @@ import { useProxiesLookup } from '@/composables/lookups'
 import { PROXY_KEYS, useOwnership } from '@/composables/useOwnership'
 import { useAuthStore } from '@/stores/auth'
 import { fieldErrors, notifyError } from '@/utils/errors'
-import { formatDateTime } from '@/utils/format'
+import { formatDateTime, formatRelative } from '@/utils/format'
 import { parseProxyURL } from '@/utils/proxyUrl'
 
 const { t } = useI18n()
@@ -55,6 +55,7 @@ const columns = computed<TableColumn[]>(() => {
     { key: 'protocol', label: t('proxies.protocol') },
     { key: 'address', label: t('proxies.address') },
     { key: 'auth', label: t('proxies.auth') },
+    { key: 'real_ip', label: t('proxies.realIp') },
     { key: 'status', label: t('common.status') },
     { key: 'test', label: t('proxies.testResult') }
   ]
@@ -85,6 +86,8 @@ async function test(p: Proxy) {
   try {
     const r = await api.post<ProxyTestResult>(`/proxies/${p.id}/test`)
     results.value = { ...results.value, [p.id]: r }
+    // Reload the list to show the updated real_ip
+    changed()
   } catch (e) {
     notifyError(e)
     results.value = { ...results.value, [p.id]: { ok: false, message: e instanceof Error ? e.message : String(e) } }
@@ -266,6 +269,13 @@ async function onAction(p: Proxy, key: string) {
         <span v-if="row.username" class="text-xs">{{ row.username }}<SHint v-if="row.has_password" inline size="xs"> / ••••</SHint></span>
         <SHint v-else-if="row.has_password" inline size="xs">••••</SHint>
         <SHint v-else inline>{{ t('common.none') }}</SHint>
+      </template>
+      <template #cell-real_ip="{ row }">
+        <div v-if="row.real_ip" class="text-xs">
+          <code class="font-mono">{{ row.real_ip }}</code>
+          <SHint v-if="row.real_ip_updated_at" size="xs" :title="formatDateTime(row.real_ip_updated_at)">{{ formatRelative(row.real_ip_updated_at, t) }}</SHint>
+        </div>
+        <SHint v-else inline>—</SHint>
       </template>
       <template #cell-status="{ row }">
         <SBadge :tone="statusTone(row.status)" dot>{{ statusLabel(row.status) }}</SBadge>

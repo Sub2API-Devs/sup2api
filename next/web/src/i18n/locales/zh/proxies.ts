@@ -16,6 +16,7 @@ export default {
   passwordNone: '当前未设置密码，留空保持不变。',
   passwordStored: '已设置密码（不显示）',
   clearPassword: '清除已保存的密码',
+  realIp: '真实 IP',
   testResult: '最近测试',
   ok: '正常',
   failed: '失败',
