@@ -147,6 +147,15 @@ func (runner *Runner) runResource(ctx context.Context, op *resourceExchange) (*r
 	req.resource = op
 	p := &Prepared{Work: dir, SessionID: uuid(), InputUUID: uuid()}
 	_, err = runner.run(ctx, req, p, dir, func(Object) error { return fmt.Errorf("resource carrier unexpectedly generated model content") })
+	// Record only lifecycle facts, before failure cleanup clears the response.
+	// In particular, profile response bodies contain account identifiers.
+	op.mu.Lock()
+	facts := Object{"request_prepared": op.dispatched, "response_received": op.response != nil, "runner_failed": err != nil}
+	if op.response != nil {
+		facts["response_status"] = op.response.status
+	}
+	op.mu.Unlock()
+	resourceDiagnostic(ctx).trace("resource_carrier_completed", facts)
 	if err != nil {
 		op.mu.Lock()
 		if op.response != nil {

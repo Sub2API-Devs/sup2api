@@ -4,6 +4,8 @@
 
 ## 本轮追加证据与限制
 
+检查点d8dfa6e66已提交推送：安全预派发分类诊断与两次失败验收记录、部署记录归档；没有部署该核心诊断。资源身份首因调查发现Mod finally和Go result两处原错遮蔽，候选已保留首因并保持scope失败关闭，新增固定派发/响应状态事实；隔离资源载体仍绿，尚不能宣称线上identity已恢复。拟独审后仅Worker.74窄更新，用一次只读身份探针获取真实首因，不发模型重试。另由独立作者推进预算+普通custom inline历史目录/真实system尾锚点保真，尚未提交，不混入本窄发布。
+
 最新线上：精确428164d4756e64163710910224957744554a2011已完成Core.71/plugin.12/catalog.15、Worker.73及Controller.48部署，四核心节点ready；#21/#22原容器ID/镜像引用/卷/授权保留。核心维护503窗口约37.32s，非零中断。下面“正在发布/候选”的段落为较早快照。
 
 公开helper预算验收两次各首请求503后停止：首次控制器.47缺features路由，已Git构建.48修复；第二次能力检查成功，失败于#22 OAuth identity CLI载体主轮归属校验，原错 `main model turn ended without applying its client feature plan`。两次均无helper Reserve/Dispatch，0用量/费用；还不能称预算真实闭环通过。现由CC隔离复现修复，API补安全分类诊断，独审代理复核；不要求用户处理，不跳过身份校验。详细证据另存 PUBLIC-HELPER-BUDGET-CORE-0.1.71.md，原Worker.71五Read/Sonnet验收文件完整保留。

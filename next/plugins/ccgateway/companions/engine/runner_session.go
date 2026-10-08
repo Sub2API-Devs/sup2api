@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os/exec"
@@ -266,19 +267,20 @@ func (s *cliSession) endSearchRound() error {
 }
 
 func (s *cliSession) onResult(f Object) (Object, error) {
-	if err := s.checkMod(); err != nil {
-		return nil, err
+	modErr := s.checkMod()
+	if failed, _ := f["is_error"].(bool); failed && !s.acc.Done {
+		if detail := str(f, "result"); detail != "" {
+			return nil, errors.Join(fmt.Errorf("Claude Code: %s", detail), modErr)
+		}
+		if details, ok := f["errors"].([]any); ok && len(details) > 0 {
+			return nil, errors.Join(fmt.Errorf("Claude Code: %v", details), modErr)
+		}
+	}
+	if modErr != nil {
+		return nil, modErr
 	}
 	if s.acc.Done && str(s.acc.Message, "stop_reason") == "refusal" {
 		return s.acc.Message, s.flush()
-	}
-	if failed, _ := f["is_error"].(bool); failed && !s.acc.Done {
-		if detail := str(f, "result"); detail != "" {
-			return nil, fmt.Errorf("Claude Code: %s", detail)
-		}
-		if errors, ok := f["errors"].([]any); ok && len(errors) > 0 {
-			return nil, fmt.Errorf("Claude Code: %v", errors)
-		}
 	}
 	if s.req.structuredOutput() && !s.acc.HasClientTool {
 		if e := s.acc.finishStructured(f, s.req); e != nil {

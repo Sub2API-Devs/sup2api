@@ -48,10 +48,19 @@ export function register(on) {
       if (!response.ok) throw new Error('ccgateway: main request scope rejected');
     };
     await lease('main_request_begin');
+    let turnFailed = false;
     try {
       return yield* next(e);
+    } catch (error) {
+      turnFailed = true;
+      throw error;
     } finally {
-      await lease('main_request_end');
+      try { await lease('main_request_end'); }
+      catch (error) {
+        // Go retains the failed lease independently. Preserve the original
+        // turn exception instead of replacing it with this cleanup failure.
+        if (!turnFailed) throw error;
+      }
     }
   });
   on('session.start', async ($, e, next) => {
