@@ -74,6 +74,10 @@ func Load() (*Config, error) {
 		}
 	}
 	dataDir := getEnv("CCG_DATA_DIR", "/work/history")
+	// Existing standalone account containers use a one-hour model timeout.
+	// Preserve that behavior during an in-place Worker migration; explicit
+	// Worker settings take precedence over the legacy setting.
+	requestTimeout := getEnvDuration("REQUEST_TIMEOUT", getEnvDuration("CCG_TIMEOUT", time.Hour))
 	cfg := &Config{
 		WorkerID:         getEnv("WORKER_ID", workerID),
 		Port:             port,
@@ -88,10 +92,10 @@ func Load() (*Config, error) {
 		ConfigDir:        getEnv("CLAUDE_CONFIG_DIR", "/root/.claude"),
 		HistoryDir:       getEnv("HISTORY_DIR", dataDir),
 		CacheDir:         getEnv("CACHE_DIR", filepath.Join(dataDir, "cache")),
-		MaxCacheSize:     getEnvInt64("MAX_CACHE_SIZE", 32*1024*1024),
+		MaxCacheSize:     getEnvInt64("MAX_CACHE_SIZE", 128<<20),
 		HistoryRetention: getEnvDuration("HISTORY_RETENTION", 24*time.Hour),
-		RequestTimeout:   getEnvDuration("REQUEST_TIMEOUT", 10*time.Minute),
-		CLITimeout:       getEnvDuration("CLI_TIMEOUT", 15*time.Minute),
+		RequestTimeout:   requestTimeout,
+		CLITimeout:       getEnvDuration("CLI_TIMEOUT", requestTimeout),
 		HealthTimeout:    getEnvDuration("HEALTH_TIMEOUT", 5*time.Second),
 	}
 

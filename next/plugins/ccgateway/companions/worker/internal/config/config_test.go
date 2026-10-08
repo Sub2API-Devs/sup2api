@@ -46,6 +46,32 @@ func TestExistingAccountContainerConfig(t *testing.T) {
 	}
 }
 
+func TestLegacyTimeoutAndCacheSurviveMigration(t *testing.T) {
+	for _, scenario := range []struct {
+		name, legacy, request, cli, cache string
+		wantRequest, wantCLI              time.Duration
+		wantCache                         int64
+	}{
+		{"default", "", "", "", "", time.Hour, time.Hour, 128 << 20},
+		{"legacy", "37m", "", "", "", 37 * time.Minute, 37 * time.Minute, 128 << 20},
+		{"explicit", "37m", "12m", "2m", "67108864", 12 * time.Minute, 2 * time.Minute, 64 << 20},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			t.Setenv("CCG_TIMEOUT", scenario.legacy)
+			t.Setenv("REQUEST_TIMEOUT", scenario.request)
+			t.Setenv("CLI_TIMEOUT", scenario.cli)
+			t.Setenv("MAX_CACHE_SIZE", scenario.cache)
+			cfg, err := Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.RequestTimeout != scenario.wantRequest || cfg.CLITimeout != scenario.wantCLI || cfg.MaxCacheSize != scenario.wantCache {
+				t.Fatal("in-place migration changed execution limits", cfg.RequestTimeout, cfg.CLITimeout, cfg.MaxCacheSize)
+			}
+		})
+	}
+}
+
 func TestExplicitBindHostSurvivesPortOverride(t *testing.T) {
 	for _, tc := range []struct {
 		bind, port, host string
