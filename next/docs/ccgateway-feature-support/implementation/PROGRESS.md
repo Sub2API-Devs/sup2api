@@ -4,6 +4,14 @@
 
 ## 本轮追加证据与限制
 
+签名四处窄修已独审并提交推送 `f677d2de4`，尚未部署；详见 SIGNATURE-DELTA-REPAIR。initial thinking 桥另经 research_cc 独审，16次隔离CLI调用13.712s通过，包含初始正文/混合后续签名替换以及续聊历史；这部分仍为后续候选。C已开始实际gateway入口、派发、解包及持久接线，尚在补测试；A Lookup及用量receipt增量另交独立DB复核，不以作者测试替代独审。一般组合能力仍未开放。
+
+Root追加复核：SSE `signature_delta` 的官方SDK语义是替换不透明签名，我方两个聚合器原为拼接。新增engine/credits回归均先红（initialfirst / initialfirstfinal），修改后完整engine5.353s、credits1.196s通过；包括空最终签名，思考正文不变。官方依据为anthropics Python SDK `src/anthropic/lib/streaming/_messages.py` accumulate_event及TypeScript `src/lib/MessageStream.ts` signature_delta分支（2026-10-08读取）。窄修尚待独审，未提交/部署。initial thinking桥由独立代理修复并有12次隔离CLI矩阵，不等于真实提供商验收。
+
+用量冻结及ACK非DB定向复核core1.034s、usage0.705s通过。首次过宽测试正则误含DB例，本机PG仍缺global/pg_control而失败，未记DB通过且未处理本机数据库；实际DB证据仍以各代理的隔离PG记录为准。B正在补已消费隐藏轮后失败的部分计量，C仍在做网关接线。已知链每个完成公共轮（含无helper普通轮）必须保留收据；未知外部旧历史没有隐藏轮证明时不得猜测恢复。
+
+同轮全next扫描另发现共享protocol-codec普通及strict Anthropic→Responses两处签名拼接，一并先红后修复；完整codec1.748s/strict1.254s及vet通过。因此候选共修四处聚合器，已交独审，不仅Worker端。B随后补齐部分计量：真实CLI隔离JSON/SSE首轮完成、第二轮EOF共4次提供商调用3.843s通过，实际已知用量逐调用记录且整体Complete=false；完整engine4.255s/vet通过，仍待独审和C跨层接线。
+
 A检查点38a2a9d8f已推送但未部署。B纯codec独审已通过，整轮隐藏的text/thinking纳入完整捕获；runtime/carrier仍接线中。C用量consumer新增同事务摘要receipt与原始冻结bytes兼容，尚待全部集成独审，不能将唯一requestID误当异值费用已正确存储。派发前已知prefix跨namespace/过期链必须明确拒绝，不能绕到普通渠道遗失隐藏历史。
 
 前端视觉补验未完成：CUA getState再次15秒超时；按Computer Use技能初始化@oai/sky成功，窗口查询可用，但get_window_state因无法可靠识别当前browser URL而按策略终止本轮Computer Use。没有页面点击、导航或有效截图。仅本地mock预览服务启动成功，随后已停止并删除本次临时web配置/bootstrap文件；没有接触真实账号登录或生产配置，不把组件测试/服务启动当视觉通过。
