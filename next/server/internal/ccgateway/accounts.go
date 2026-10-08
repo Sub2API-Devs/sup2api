@@ -44,6 +44,8 @@ type accountDesired struct {
 	Enabled  bool              `json:"enabled"`
 	Proxy    map[string]any    `json:"proxy"`
 	Auth     map[string]string `json:"auth,omitempty"`
+	Locale   string            `json:"locale,omitempty"`
+	Timezone string            `json:"timezone,omitempty"`
 	Kind     string            `json:"-"`
 	// Blocked says why a disabled runtime is blocked: account_disabled,
 	// no_proxy or proxy_disabled (the controller has no direct fallback).
@@ -84,21 +86,36 @@ func (s *Service) desiredIn(ctx context.Context, q store.Querier, id int64, cred
 	var version string
 	var spec core.ProxySpec
 	var password, accountCredentials []byte
+	var settings []byte
 	err := q.QueryRow(ctx, `SELECT
   a.deleted_at IS NULL AND a.status <> 'disabled' AND COALESCE(p.status <> 'disabled',false),
   CASE WHEN a.deleted_at IS NOT NULL OR a.status = 'disabled' THEN 'account_disabled'
        WHEN p.id IS NULL THEN 'no_proxy' WHEN p.status = 'disabled' THEN 'proxy_disabled' ELSE '' END,
-  concat_ws('|',a.id,a.type,a.proxy_id,a.status,a.deleted_at,p.updated_at,p.status,encode(a.credentials_enc,'hex')),
+  concat_ws('|',a.id,a.type,a.proxy_id,a.status,a.deleted_at,p.updated_at,p.status,encode(a.credentials_enc,'hex'),a.settings::text),
   COALESCE(p.protocol,''),COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(p.username,''),p.password_enc,a.type,a.credentials_enc,
-  COALESCE(r.key, a.id::text)
+  COALESCE(r.key, a.id::text), a.settings
   FROM accounts a LEFT JOIN proxies p ON p.id=a.proxy_id LEFT JOIN ccgateway_runtimes r ON r.account_id=a.id
   WHERE a.id=$1 AND a.plugin_key='ccgateway' AND a.type IN ('managed','apikey')`, id).
-		Scan(&d.Enabled, &d.Blocked, &version, &spec.Protocol, &spec.Host, &spec.Port, &spec.Username, &password, &d.Kind, &accountCredentials, &d.Key)
+		Scan(&d.Enabled, &d.Blocked, &version, &spec.Protocol, &spec.Host, &spec.Port, &spec.Username, &password, &d.Kind, &accountCredentials, &d.Key, &settings)
 	if err != nil {
 		return d, err
 	}
 	d.AccountID = id
 	d.Revision = revisionOf(version)
+
+	// Parse settings for locale and timezone
+	if len(settings) > 0 {
+		var cfg map[string]any
+		if json.Unmarshal(settings, &cfg) == nil {
+			if locale, ok := cfg["locale"].(string); ok && locale != "" {
+				d.Locale = locale
+			}
+			if timezone, ok := cfg["timezone"].(string); ok && timezone != "" {
+				d.Timezone = timezone
+			}
+		}
+	}
+
 	if d.Enabled && credentials {
 		d.Auth = map[string]string{"mode": "oauth"}
 		if d.Kind == "apikey" {

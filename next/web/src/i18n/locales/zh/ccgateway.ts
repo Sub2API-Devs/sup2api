@@ -311,4 +311,6 @@ export default {
     },
   locale: '容器语言环境',
   localeHint: '语言和地区(例如 en-US、zh-CN)。留空则使用代理位置或容器默认值。',
+  timezone: '容器时区',
+  timezoneHint: '时区标识(例如 America/New_York、Asia/Shanghai)。留空则使用代理位置或容器默认值。',
 }

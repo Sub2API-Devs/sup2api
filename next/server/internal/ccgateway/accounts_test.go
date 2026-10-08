@@ -177,3 +177,39 @@ func TestAPIKeyDesiredRotation(t *testing.T) {
 		t.Fatal("managed routing identity incorrect")
 	}
 }
+
+func TestAccountLocaleAndTimezone(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := context.Background()
+	cipher, _ := secret.New(make([]byte, 32))
+	service := New(db, cipher)
+	var pid, id int64
+	if err := db.Pool.QueryRow(ctx, `INSERT INTO proxies(name,protocol,host,port) VALUES('test','http','proxy.example',3128) RETURNING id`).Scan(&pid); err != nil {
+		t.Fatal(err)
+	}
+	settings := `{"locale":"zh-CN","timezone":"Asia/Shanghai"}`
+	if err := db.Pool.QueryRow(ctx, `INSERT INTO accounts(name,plugin_key,type,credentials_enc,proxy_id,settings) VALUES('ccg','ccgateway','managed',''::bytea,$1,$2::jsonb) RETURNING id`, pid, settings).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	d, err := service.desired(ctx, id, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Locale != "zh-CN" {
+		t.Fatalf("expected locale zh-CN, got %s", d.Locale)
+	}
+	if d.Timezone != "Asia/Shanghai" {
+		t.Fatalf("expected timezone Asia/Shanghai, got %s", d.Timezone)
+	}
+	// Test empty settings
+	if _, err := db.Pool.Exec(ctx, `UPDATE accounts SET settings='{}'::jsonb WHERE id=$1`, id); err != nil {
+		t.Fatal(err)
+	}
+	d2, err := service.desired(ctx, id, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d2.Locale != "" || d2.Timezone != "" {
+		t.Fatal("empty settings should result in empty locale and timezone")
+	}
+}

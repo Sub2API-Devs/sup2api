@@ -299,9 +299,11 @@ type Proxy struct {
 	AccountCount int64  `json:"account_count"`
 	CreatedBy    *int64 `json:"created_by"`
 	// CreatedByEmail is the creator's email, also for soft-deleted users.
-	CreatedByEmail *string   `json:"created_by_email"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	CreatedByEmail *string    `json:"created_by_email"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	RealIP         *string    `json:"real_ip,omitempty"`
+	RealIPUpdatedAt *time.Time `json:"real_ip_updated_at,omitempty"`
 }
 
 // selectProxy lists the proxy columns; account_count only counts accounts of
@@ -311,14 +313,15 @@ func selectProxy(keys string) string {
 	return `SELECT p.id, p.name, p.protocol, p.host, p.port, p.username, p.password_enc IS NOT NULL,
 	p.status, (SELECT count(*) FROM accounts a WHERE a.proxy_id = p.id AND a.deleted_at IS NULL
 	  AND (` + keys + `::text[] IS NULL OR a.plugin_key = ANY(` + keys + `))),
-	p.created_by, u.email, p.created_at, p.updated_at
+	p.created_by, u.email, p.created_at, p.updated_at, p.real_ip, p.real_ip_updated_at
 	FROM proxies p LEFT JOIN users u ON u.id = p.created_by`
 }
 
 func scanProxy(r pgx.Row) (*Proxy, error) {
 	var p Proxy
 	err := r.Scan(&p.ID, &p.Name, &p.Protocol, &p.Host, &p.Port, &p.Username, &p.HasPassword,
-		&p.Status, &p.AccountCount, &p.CreatedBy, &p.CreatedByEmail, &p.CreatedAt, &p.UpdatedAt)
+		&p.Status, &p.AccountCount, &p.CreatedBy, &p.CreatedByEmail, &p.CreatedAt, &p.UpdatedAt,
+		&p.RealIP, &p.RealIPUpdatedAt)
 	return &p, err
 }
 
@@ -681,7 +684,8 @@ type TestResult struct {
 	OK        bool   `json:"ok"`
 	Status    int    `json:"status"`
 	LatencyMs int64  `json:"latency_ms"`
-	Message   string `json:"message"`
+	IP        string `json:"ip,omitempty"`
+	Message   string `json:"message,omitempty"`
 }
 
 func (s *Service) test(c *gin.Context) {
@@ -710,13 +714,22 @@ func (s *Service) test(c *gin.Context) {
 		return
 	}
 	defer client.CloseIdleConnections()
-	httpapi.OK(c, s.probe(ctx, client))
+	result := s.probe(ctx, client)
+
+	// Save the real IP to database if probe succeeded
+	if result.OK && result.IP != "" {
+		_, _ = s.db.Pool.Exec(ctx, `UPDATE proxies SET real_ip = $1, real_ip_updated_at = now() WHERE id = $2`, result.IP, id)
+	}
+
+	httpapi.OK(c, result)
 }
 
 func (s *Service) probe(ctx context.Context, client *http.Client) TestResult {
 	ctx, cancel := context.WithTimeout(ctx, s.opts.ProbeTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.opts.ProbeURL, nil)
+
+	// Use a service that returns JSON with the client's IP address
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.ipify.org?format=json", nil)
 	if err != nil {
 		return TestResult{Message: err.Error()}
 	}
@@ -726,11 +739,22 @@ func (s *Service) probe(ctx context.Context, client *http.Client) TestResult {
 	if err != nil {
 		return TestResult{LatencyMs: latency, Message: err.Error()}
 	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
-	_ = resp.Body.Close()
+	defer resp.Body.Close()
+
 	res := TestResult{OK: resp.StatusCode < 400, Status: resp.StatusCode, LatencyMs: latency}
 	if !res.OK {
 		res.Message = resp.Status
+		return res
 	}
+
+	// Parse IP from response
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	var ipResp struct {
+		IP string `json:"ip"`
+	}
+	if json.Unmarshal(body, &ipResp) == nil && ipResp.IP != "" {
+		res.IP = ipResp.IP
+	}
+
 	return res
 }
