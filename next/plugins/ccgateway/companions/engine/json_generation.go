@@ -35,6 +35,10 @@ func (r *outboundRelay) bridgeJSONGeneration(resp *http.Response, req *Request) 
 	var events []Object
 	var mapped Object
 	if err == nil {
+		// This attributed provider JSON reply is the same trusted evidence as
+		// the SSE observer. Record identity before validating interrupted tools.
+		req.observeCreditEvent(Object{"type": "message_start", "message": answer})
+		req.observeCreditEvent(Object{"type": "message_delta", "delta": Object{"stop_reason": answer["stop_reason"], "stop_details": answer["stop_details"]}})
 		events, mapped, err = jsonGenerationEvents(answer, req)
 	}
 	if err != nil {

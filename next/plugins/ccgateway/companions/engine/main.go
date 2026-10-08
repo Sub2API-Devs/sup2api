@@ -21,6 +21,7 @@ import (
 )
 
 type Gateway struct {
+	credits       *creditRegistry
 	resources     *resourceBroker
 	Runner        *Runner
 	Cache         *HistoryCache
@@ -153,7 +154,7 @@ func (x *exchange) admit() bool {
 		}
 		return false
 	}
-	x.diagnostic.prepareSecrets(body)
+	x.diagnostic.prepareSecrets(body, r.Header.Values("Anthropic-Beta")...)
 	x.diagnostic.request(body, r.Header)
 	x.diagnostic.setStage("parse_request")
 	x.resources, e = x.g.admitResourceReferences(r.Context(), body, r.Header)
@@ -191,6 +192,19 @@ func (x *exchange) admit() bool {
 		}
 	}
 	if e != nil {
+		x.fail(400, "invalid_request_error", e.Error())
+		return false
+	}
+	if e = x.admitCredit(body); e != nil {
+		var storage *creditLocalStorageError
+		if errors.As(e, &storage) {
+			x.fail(503, "gateway_credit_storage", storage.Error())
+			return false
+		}
+		x.fail(400, "invalid_request_error", e.Error())
+		return false
+	}
+	if e = x.req.finalizeCreditPTCAdmission(); e != nil {
 		x.fail(400, "invalid_request_error", e.Error())
 		return false
 	}
@@ -319,6 +333,13 @@ func (x *exchange) execute(sessionLabel, logical string) {
 			x.runFailed(ctx, e)
 			return
 		}
+		if err := x.completeCredit(answer); err != nil {
+			x.creditCustodyFailed()
+		}
+		if err := x.flushCreditEvents(); err != nil {
+			x.runFailed(ctx, err)
+			return
+		}
 		if req.CountTokens {
 			x.diagnostic.setStage("completed")
 			req.responseFacts.apply(x.w.Header())
@@ -326,7 +347,9 @@ func (x *exchange) execute(sessionLabel, logical string) {
 			_ = json.NewEncoder(x.w).Encode(answer)
 			return
 		}
-		if req.CacheWarmup {
+		if req.credit != nil {
+			x.diagnostic.trace("history_commit_skipped", Object{"reason": "credential-bearing credit response"})
+		} else if req.CacheWarmup {
 			x.diagnostic.trace("history_commit_skipped", Object{"reason": "cache_warmup"})
 		} else if p.APIResponseComplete && (len(p.NativeRows) == 0 || str(answer, "stop_reason") == "refusal") {
 			if err := p.commitResponseOnly(req, answer, g.Cache, logical, started); err != nil {
@@ -362,6 +385,9 @@ func (x *exchange) execute(sessionLabel, logical string) {
 func (x *exchange) send(event Object) error {
 	if !x.req.Stream {
 		return nil
+	}
+	if buffered, err := x.bufferCreditEvent(event); buffered || err != nil {
+		return err
 	}
 	if str(event, "type") == "message_start" {
 		if message, ok := event["message"].(map[string]any); ok {

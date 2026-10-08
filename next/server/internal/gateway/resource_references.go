@@ -26,6 +26,12 @@ type modelResourceAccess struct {
 	dispatchedAt time.Time
 }
 
+// Only a read-only identity lookup before model dispatch can try another
+// account. References or credit redemption already bind the original account.
+type resourceEligibilityError struct{ error }
+
+func (e *resourceEligibilityError) Unwrap() error { return e.error }
+
 func (c *call) resourceOwner() core.ResourceOwner {
 	return core.ResourceOwner{UserID: c.principal.UserID, GroupID: c.principal.Group.ID}
 }
@@ -207,7 +213,7 @@ func (c *call) applyResourceHeaders(ctx context.Context, req *http.Request, acco
 		var err error
 		binding, err = c.g.d.ResourceTransport.Identity(ctx, account.ID)
 		if err != nil {
-			return err
+			return &resourceEligibilityError{err}
 		}
 	}
 	req.Header.Set(resources.PrincipalHeader, binding.PrincipalID)
@@ -230,6 +236,12 @@ func (c *call) applyResourceHeaders(ctx context.Context, req *http.Request, acco
 
 func (c *call) applyResourceContexts(ctx context.Context, h http.Header, binding core.ResourceBinding) error {
 	if len(c.resourceInfo.PendingPTCParents) == 0 {
+		return nil
+	}
+	if c.creditPromptVerified(binding) {
+		// A verified credit binds this exact refusal echo to its original
+		// provider attempt. Adding a container would change the credit prompt.
+		// Worker rechecks its saved wire and ended-attempt parent ledger.
 		return nil
 	}
 	var container *core.ProviderResource

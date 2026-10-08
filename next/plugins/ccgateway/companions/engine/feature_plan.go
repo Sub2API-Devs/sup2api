@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/credits"
 	"math"
 	"math/big"
 	"strings"
@@ -14,13 +15,15 @@ import (
 // controls. Its maps are private: applying a plan cannot mutate the next run.
 // Only the relay's identified main model request may apply these controls.
 type RequestPlan struct {
-	container     *providerContainerPlan
-	fallbacks     json.RawMessage
-	taskBudget    json.RawMessage
-	apiGeneration bool
-	cache         *CachePlan
-	raw           []byte
-	fields        map[string]json.RawMessage
+	creditToken     string
+	creditParameter credits.Parameter
+	container       *providerContainerPlan
+	fallbacks       json.RawMessage
+	taskBudget      json.RawMessage
+	apiGeneration   bool
+	cache           *CachePlan
+	raw             []byte
+	fields          map[string]json.RawMessage
 }
 
 func (p *RequestPlan) RawRequest() []byte {
@@ -51,13 +54,16 @@ func decodePlannedValue(raw json.RawMessage) (any, error) {
 }
 
 func (r *Request) HasMainRequestFeatures() bool {
-	return len(r.imageCarriers) > 0 || len(requestFallbackBlocks(r)) > 0 || r.continuation != "" || r.hasInlineSystemMetadata() || len(r.ServerTools) > 0 || len(r.toolMetadataKey()) > 0 || r.hasHistoryCitations() || r.Plan != nil && (len(r.Plan.fields) > 0 || r.Plan.cache != nil)
+	return r.credit != nil || len(r.imageCarriers) > 0 || len(requestFallbackBlocks(r)) > 0 || r.continuation != "" || r.hasInlineSystemMetadata() || len(r.ServerTools) > 0 || len(r.toolMetadataKey()) > 0 || r.hasHistoryCitations() || r.Plan != nil && (len(r.Plan.fields) > 0 || r.Plan.cache != nil)
 }
 
 // FeatureDecisions reports requested controls without including raw user data.
 func (p *RequestPlan) FeatureDecisions() []Object {
 	var out []Object
 	if p != nil {
+		if p.creditToken != "" {
+			out = append(out, Object{"field": "fallback_credit_token", "action": "verified_original_wire_redemption", "stage": "outbound_relay"})
+		}
 		if len(p.taskBudget) > 0 {
 			out = append(out, Object{"field": "output_config.task_budget", "action": "apply_main_request_advisory_budget", "stage": "outbound_relay"})
 		}
@@ -82,6 +88,9 @@ func (p *RequestPlan) FeatureDecisions() []Object {
 
 func parseRequestPlan(body []byte, o Object) (*RequestPlan, error) {
 	p := &RequestPlan{raw: append([]byte(nil), body...), fields: map[string]json.RawMessage{}}
+	if err := p.takeCredit(o); err != nil {
+		return nil, err
+	}
 	if value, exists := o["container"]; exists {
 		var err error
 		p.container, err = parseProviderContainer(value)

@@ -34,3 +34,10 @@
 已读取computer-use技能并在系统临时目录建立独立fixture，采用真实RemoteSettings组件、项目样式和Go共享registry输出的36项目录；账号/连接API使用无凭据fixture，本地端口5187，未连接生产或更改已有服务。
 
 Vite服务成功启动。但当前CUA的iab不可用；Chrome/Edge库存读取均返回`nodeRepl.fetch request failed`，单独创建Chrome页同样失败。因此没有得到浏览器截图或视觉验收结论，不能把组件测试当作视觉通过。已停止本次Vite进程，并确认无该preview.mjs进程残留。临时fixture保留在系统Temp的ccgateway-ui-review-20261008目录，不纳入仓库。
+
+## 第七、八批目录与界面收尾（2026-10-08）
+
+- 共享目录版本更新为 `2026-10-08.7`，同步信用字符串/对象 strict/best_effort/null、MCP 时间线/搜索/安全审查组合及既有 CodeExec/PTC/Files 状态。目录持续 `runtime_verified=false`，不把隔离 CLI 测试当成真实提供商资格、退款或收费验证。
+- 信用说明包含对象所需 July beta、固定所有者/账号/issuer、严格匹配和 best_effort 分支、无自动换号或丢 token 重试，以及登记前 SSE 有界缓冲。deferred MCP 跨服务器搜索编码、inline+safeguards 等剩余边界明确列出。
+- 核对当前前端仍以单个功能聚合请求字段、beta、机制与限制，API 和 CC 分别位于「通用 API 特性」「CC 特性」。无需新增业务控件或复制目录；新增信用详情只读聚合测试，保持分页、过滤和草稿行为。
+- 验证：contracts `go test ./features -count=1` 通过；三个组件测试文件共 21 项通过；`npm run typecheck` 通过。未部署，未重新完成浏览器视觉验收。

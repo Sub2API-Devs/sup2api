@@ -17,7 +17,7 @@ func (r *Request) needsAPITerminalControl() bool {
 	return r.MCP != nil || len(r.APIClientTools) > 0 || r.needsFreshNativeSession()
 }
 func (r *Request) needsFreshNativeSession() bool {
-	return r.hasFallbacks() || r.InlineTools != nil || r.APIOutputFormat || r.continuation != "" || r.hasContextControls() || r.hasCompactionHistory()
+	return r.credit != nil || r.hasFallbacks() || r.InlineTools != nil || r.APIOutputFormat || r.continuation != "" || r.hasContextControls() || r.hasCompactionHistory()
 }
 
 func (r *Request) observesAPITerminal() bool {

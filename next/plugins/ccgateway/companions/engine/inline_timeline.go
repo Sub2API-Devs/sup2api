@@ -56,6 +56,9 @@ func (r *Request) compileToolTimeline(base []Object) (*inlineToolTimeline, []int
 		if err := checkInlineToolBlock(block); err != nil {
 			return err
 		}
+		if mcpInlineChange(block) {
+			return nil
+		}
 		target := block["tool"].(map[string]any)
 		name := str(target, "name")
 		definition := inlineToolDefinition(block)

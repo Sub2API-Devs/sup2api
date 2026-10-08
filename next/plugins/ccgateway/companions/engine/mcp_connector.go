@@ -16,15 +16,20 @@ const mcpListingBeta = "mcp-client-2026-09-15"
 // MCPConnectorPlan is deliberately not serializable. Public configuration and
 // credentials have separate storage; no CLI configuration receives either.
 type MCPConnectorPlan struct {
-	servers     []Object
-	toolsets    []Object
-	catalog     []Object
-	credentials map[string]mcpCredential
+	timeline       *mcpTimeline
+	catalogPresent bool
+	catalogNull    bool
+	servers        []Object
+	toolsets       []Object
+	catalog        []Object
+	credentials    map[string]mcpCredential
 }
 
 func (p *MCPConnectorPlan) stripLocalRequest(o Object) {
 	delete(o, "mcp_servers")
 	tools, _ := o["tools"].([]any)
+	_, p.catalogPresent = o["tools"]
+	p.catalogNull = o["tools"] == nil
 	p.catalog, _ = historyContent(o["tools"])
 	var local []any
 	for _, value := range tools {
@@ -87,7 +92,17 @@ func (r *Request) applyMCPConnector(body Object) error {
 	if len(byIdentity) > 0 {
 		return fmt.Errorf("MCP combined catalog contains an unexpected tool")
 	}
-	body["tools"] = ordered
+	if len(ordered) == 0 {
+		if !r.MCP.catalogPresent {
+			delete(body, "tools")
+		} else if r.MCP.catalogNull {
+			body["tools"] = nil
+		} else {
+			body["tools"] = []Object{}
+		}
+	} else {
+		body["tools"] = ordered
+	}
 	return nil
 }
 
@@ -111,16 +126,17 @@ func (p *MCPConnectorPlan) hasServer(name string) bool {
 }
 
 func (r *Request) validateMCPConfiguration() error {
-	if r.MCP != nil && r.InlineTools != nil {
-		return fmt.Errorf("MCP connector with inline tool changes requires a server-scoped secret timeline")
-	}
 	if r.MCP != nil && r.Plan != nil && len(r.Plan.fields["safeguards"]) > 0 {
-		return fmt.Errorf("MCP connector with safeguards requires server-scoped classifier identity adaptation")
+		if err := r.validateMCPNamespace(); err != nil {
+			return err
+		}
 	}
 	if r.MCP != nil {
 		for _, tool := range r.ServerTools {
 			if strings.HasPrefix(str(tool, "type"), "tool_search_tool_") {
-				return fmt.Errorf("MCP connector with tool search requires verified cross-server tool_reference identity encoding")
+				if err := r.validateMCPClientSearch(); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -245,6 +261,30 @@ func parseMCPConnector(o Object, betas []string) (*MCPConnectorPlan, error) {
 		used[name] = true
 		copy, _ := decodeObject(mustMCPJSON(t))
 		p.toolsets = append(p.toolsets, copy)
+	}
+	messages, _ := o["messages"].([]any)
+	for _, value := range messages {
+		message, _ := value.(Object)
+		blocks, _ := historyContent(message["content"])
+		for _, block := range blocks {
+			for _, change := range timelineChanges(block) {
+				def := inlineToolDefinition(change)
+				if str(def, "type") != "mcp_toolset" {
+					continue
+				}
+				if !listing || !hasBetaHeader(betas, "inline-tools-2026-09-15") {
+					return nil, fmt.Errorf("inline MCP definitions require current MCP and inline beta headers")
+				}
+				name := str(def, "mcp_server_name")
+				if !seen[name] {
+					return nil, fmt.Errorf("inline MCP server is undeclared")
+				}
+				if err := checkMCPToolset(def, listing); err != nil {
+					return nil, err
+				}
+				used[name] = true
+			}
+		}
 	}
 	if len(used) != len(seen) {
 		return nil, fmt.Errorf("each MCP server requires exactly one matching toolset")

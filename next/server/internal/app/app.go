@@ -32,6 +32,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/event"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/event/delivery"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/fallbackcredits"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/group"
@@ -252,7 +253,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	resourceStore := providerresources.New(db, providerresources.Options{})
 	gw := gateway.New(gateway.Deps{
 		CCGateway: ccg,
-		Resources: resourceStore, Skills: resourceStore, ResourceTransport: ccg.ResourceTransport(),
+		Resources: resourceStore, Skills: resourceStore, Credits: fallbackcredits.New(db, 4096), ResourceTransport: ccg.ResourceTransport(),
 		DB: db, Redis: rdb, Bus: cl.Bus, Node: cl.Registry, Registry: reg,
 		Auth: keys, Pricer: bill, Balance: bill, Slots: cl.Slots,
 		Accounts: acc, Proxies: prx, Settler: settler, Tasks: settler, Limiter: limiter, Quota: acc, Config: cfg, Converters: converters,

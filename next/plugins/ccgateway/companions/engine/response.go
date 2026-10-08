@@ -71,6 +71,9 @@ func (a *Accumulator) push(e Object, r *Request) error {
 		if !a.Stopped || len(a.Closed) != len(a.Blocks) {
 			return fmt.Errorf("incomplete model message")
 		}
+		if r.verifiedCreditRefusal(a.Message) {
+			a.serverCalls.abandonCurrentTurn()
+		}
 		if err := a.serverCalls.complete(str(a.Message, "stop_reason"), a.HasClientTool); err != nil {
 			return err
 		}

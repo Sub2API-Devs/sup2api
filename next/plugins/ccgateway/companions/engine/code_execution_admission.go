@@ -86,12 +86,42 @@ func (r *Request) configureProviderExecution() error {
 		if !programmaticParents[parent] {
 			continue
 		}
-		if r.Plan == nil || r.Plan.container == nil || r.Plan.container.ID == "" {
-			return fmt.Errorf("programmatic continuation requires its original container")
-		}
-		if err := r.checkResourceContext(parent, r.Plan.container.ID); err != nil {
+		if err := r.checkProgrammaticParentContext(parent); err != nil {
+			if r.Plan != nil && r.Plan.creditToken != "" && (r.credit == nil || r.credit.previous != nil) {
+				r.creditPTCDeferred = true
+				continue
+			}
 			return err
 		}
 	}
+	return nil
+}
+
+func (r *Request) checkProgrammaticParentContext(parent string) error {
+	if r.Plan == nil || r.Plan.container == nil || r.Plan.container.ID == "" {
+		return fmt.Errorf("programmatic continuation requires its original container")
+	}
+	return r.checkResourceContext(parent, r.Plan.container.ID)
+}
+
+func (r *Request) finalizeCreditPTCAdmission() error {
+	if !r.creditPTCDeferred || r.credit != nil && r.credit.previous != nil {
+		return nil
+	}
+	if r.credit == nil || r.Plan == nil || r.Plan.creditParameter.Mode != "best_effort" {
+		return fmt.Errorf("programmatic credit continuation requires verified original wire custody")
+	}
+	// A best-effort token is not proof of a refused execution. Re-run normal
+	// conversation and execution-context gates before any current-wire request.
+	if err := validateConversation(r.Messages, r.origin); err != nil {
+		return err
+	}
+	if err := r.validateServerSearchHistory(); err != nil {
+		return err
+	}
+	if err := r.configureProviderExecution(); err != nil {
+		return err
+	}
+	r.creditPTCDeferred = false
 	return nil
 }

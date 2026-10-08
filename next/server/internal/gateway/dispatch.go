@@ -45,10 +45,20 @@ func (c *call) dispatch(ctx context.Context) {
 		return
 	}
 	cands := make([]core.AccountRef, 0, len(all))
+	creditExcluded := false
 	for i := range all {
-		if c.route(&all[i]) != nil && c.servesAllModels(&all[i]) && c.resourceAccountAllowed(&all[i]) {
-			cands = append(cands, all[i])
+		if c.route(&all[i]) == nil || !c.servesAllModels(&all[i]) || !c.resourceAccountAllowed(&all[i]) {
+			continue
 		}
+		if !c.creditAccountAllowed(&all[i]) {
+			creditExcluded = true
+			continue
+		}
+		cands = append(cands, all[i])
+	}
+	if len(cands) == 0 && creditExcluded && c.creditRequest != nil && c.creditRequest.lookupError != nil {
+		c.fail(c.creditRequest.lookupError)
+		return
 	}
 	c.sticky = c.resolveSticky(ctx)
 	c.session = c.sessionIdentity()
@@ -114,6 +124,11 @@ func (c *call) dispatch(ctx context.Context) {
 			c.finishSticky(ctx, ref.ID, false)
 			return
 		case attemptFailover:
+			if c.creditDispatched {
+				c.fail(res.err)
+				c.finishSticky(ctx, ref.ID, false)
+				return
+			}
 			excluded[ref.ID] = true
 			last = res.err
 			if stickyAttempt && c.sticky.rule.OnFailure == onFailureStick {
@@ -457,7 +472,10 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		req.Header.Set("Content-Type", "application/json")
 	}
 	if err := c.applyResourceHeaders(prepareCtx, req, acc, body); err != nil {
-		return attemptResult{kind: attemptReturn, err: fromCore(core.AsError(err), errTypeInvalidRequest)}
+		return c.resourcePreparationFailure(err)
+	}
+	if err := c.applyCreditHeaders(prepareCtx, req, acc, body); err != nil {
+		return c.resourcePreparationFailure(err)
 	}
 	hc := *client
 	hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
@@ -471,6 +489,9 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	timer := time.AfterFunc(c.g.headerWait(c.stream), ucancel)
 	if execution != nil {
 		execution.sent = true
+	}
+	if c.creditRequest != nil && c.creditRequest.tokenPresent {
+		c.creditDispatched = true
 	}
 	resp, err := hc.Do(req)
 	headerTimedOut := !timer.Stop()

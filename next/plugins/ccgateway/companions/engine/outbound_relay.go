@@ -388,6 +388,15 @@ func (r *outboundRelay) adaptAttributed(req *Request, groups []systemGroup, body
 		}
 		return body, false, nil
 	}
+	if !count && req.credit != nil && req.credit.previous != nil {
+		if r.scope == nil {
+			return nil, false, fmt.Errorf("credit redemption requires main request attribution")
+		}
+		// The verified stored wire prompt is authoritative for redemption.
+		// Fresh CLI history is only an authenticated transport trigger.
+		r.scope.recordApplied()
+		return append([]byte(nil), req.credit.raw...), true, nil
+	}
 	if req.CountTokens {
 		// The standard count API measures the client's submitted input, not
 		// Claude Code's augmented prompt. CLI is only the authenticated carrier.
@@ -705,6 +714,9 @@ func (relay *outboundRelay) adaptRequest(w http.ResponseWriter, r *http.Request,
 	if err == nil && model {
 		adapted, err = req.applyInferenceGeo(adapted)
 	}
+	if err == nil && model && attributed && req.credit != nil {
+		adapted, err = req.bindCreditWire(adapted, r.Header)
+	}
 	if err == nil && attributed && req.resources != nil {
 		err = req.validateOutboundResources(adapted)
 	}
@@ -759,7 +771,7 @@ func (relay *outboundRelay) adaptRequest(w http.ResponseWriter, r *http.Request,
 		ctx := context.WithValue(r.Context(), jsonGenerationRequestKey{}, req)
 		*r = *r.WithContext(context.WithValue(ctx, modelRequest{}, true))
 	}
-	if model && req.hasFallbacks() && attributed {
+	if model && (req.hasFallbacks() || req.credit != nil) && attributed {
 		// The provider owns this explicit attempt chain. CC must not start a
 		// second chain after a rate limit, transport status, or SSE error.
 		*r = *r.WithContext(context.WithValue(r.Context(), modelRequest{}, true))

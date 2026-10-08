@@ -40,6 +40,7 @@ RUN --mount=type=cache,id=sub2api-next-npm,target=/root/.npm \
 FROM ${GO_IMAGE} AS build
 ARG VERSION=0.1.0-dev
 ARG GOPROXY=
+ARG REQUIRE_EXISTING_DEV_KEY=0
 ENV CGO_ENABLED=0 GOFLAGS=-buildvcs=false
 WORKDIR /src
 COPY . .
@@ -48,7 +49,7 @@ RUN --mount=type=cache,id=sub2api-next-gomod,target=/go/pkg/mod \
     --mount=type=cache,id=sub2api-next-gobuild,target=/root/.cache/go-build \
     --mount=type=cache,id=sub2api-next-devkeys,target=/devkeys \
     if [ -n "${GOPROXY}" ]; then export GOPROXY="${GOPROXY}"; fi && \
-    VERSION="${VERSION}" sh deploy/docker/build-go.sh /src /out /devkeys
+    VERSION="${VERSION}" REQUIRE_EXISTING_DEV_KEY="${REQUIRE_EXISTING_DEV_KEY}" sh deploy/docker/build-go.sh /src /out /devkeys
 
 # -----------------------------------------------------------------------------
 FROM ${RUNTIME_IMAGE}

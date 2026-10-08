@@ -8,12 +8,20 @@ import (
 
 // prepareSecrets runs before the first client body is captured, even when
 // admission later fails. Invalid JSON is never safe to retain as a raw body.
-func (d *requestDiagnostic) prepareSecrets(body []byte) {
+func (d *requestDiagnostic) prepareSecrets(body []byte, betaHeaders ...string) {
 	if d == nil {
 		return
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	for _, header := range betaHeaders {
+		for _, beta := range strings.Split(header, ",") {
+			beta = strings.TrimSpace(beta)
+			if strings.HasPrefix(beta, "fallback-credit-") || strings.HasPrefix(beta, "server-side-fallback-") {
+				d.secretCapture = true
+			}
+		}
+	}
 	var value any
 	if json.Unmarshal(body, &value) != nil {
 		d.secretCapture = true
@@ -23,8 +31,13 @@ func (d *requestDiagnostic) prepareSecrets(body []byte) {
 			switch v := v.(type) {
 			case map[string]any:
 				for key, child := range v {
-					if strings.EqualFold(key, "authorization_token") {
+					if strings.EqualFold(key, "authorization_token") || strings.EqualFold(key, "fallback_credit_token") {
 						d.secretCapture = true
+						if object, ok := child.(map[string]any); ok {
+							if text, ok := object["token"].(string); ok && text != "" {
+								d.secretTokens = append(d.secretTokens, text)
+							}
+						}
 						if text, ok := child.(string); ok && text != "" {
 							d.secretTokens = append(d.secretTokens, text)
 						}
@@ -62,7 +75,7 @@ func (d *requestDiagnostic) redactCaptureLocked(raw []byte) []byte {
 		switch v := v.(type) {
 		case map[string]any:
 			for key, child := range v {
-				if strings.EqualFold(key, "authorization_token") {
+				if strings.EqualFold(key, "authorization_token") || strings.EqualFold(key, "fallback_credit_token") {
 					v[key] = "[REDACTED]"
 				} else {
 					v[key] = redact(child)

@@ -4,7 +4,7 @@ import "testing"
 
 func TestExecutionCatalogKeepsSourceEvidenceSeparate(t *testing.T) {
 	doc := Catalog()
-	if doc.CatalogVersion != "2026-10-08.6" || doc.RuntimeVerified {
+	if doc.CatalogVersion != CatalogVersion || doc.RuntimeVerified {
 		t.Fatal("catalog version or source evidence boundary changed")
 	}
 	wanted := map[string]bool{"F-FILES": false, "F-SKILLS": false, "F-CODE-EXEC": false, "F-PTC": false}

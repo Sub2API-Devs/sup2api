@@ -56,40 +56,25 @@ func (c *call) forwardResourceResponse(ctx context.Context, rt *typeRoute, resp 
 	if parseErr != nil {
 		return fail(parseErr)
 	}
-	access := c.resourceAccess
-	if access == nil || resp.Header.Get(resources.PrincipalHeader) != access.binding.PrincipalID || resp.Header.Get(resources.GenerationHeader) != access.binding.Generation {
-		return fail(fmt.Errorf("issuer evidence mismatch"))
-	}
-	if c.g.d.Resources == nil || c.g.d.ResourceTransport == nil {
-		return fail(fmt.Errorf("resource registry unavailable"))
-	}
-	registry := resourceResponseRegistry{c: c, known: map[string]core.ProviderResource{}}
-	for _, ref := range c.resourceRefs {
-		registry.known[ref.resource.Kind+":"+ref.resource.RemoteID] = ref.resource
-		if ref.resource.Kind == resources.KindContainer {
-			registry.container = ref.resource.RemoteID
-		}
-	}
-	// Container facts can arrive after file blocks in SSE; observe them first.
-	for _, ev := range events {
-		if err := registry.observeContainers(ctx, ev.data); err != nil {
-			return fail(err)
-		}
-	}
-	var output bytes.Buffer
-	for _, ev := range events {
-		changed, err := registry.rewrite(ctx, ev.data)
+	if c.resourceAccess != nil && c.resourceAccess.outputs {
+		var err error
+		events, err = c.rewriteResourceEvents(ctx, resp.Header, events)
 		if err != nil {
 			return fail(err)
 		}
+	}
+	if err := c.observeFallbackCredit(ctx, resp, events, sse); err != nil {
+		if _, storage := err.(*creditStorageError); storage {
+			return err
+		}
+		return fail(err)
+	}
+	var output bytes.Buffer
+	for _, ev := range events {
 		if sse {
-			if bytes.Equal(changed, ev.data) {
-				output.Write(ev.raw)
-			} else {
-				output.Write(rewriteResourceEvent(ev.raw, changed))
-			}
+			output.Write(ev.raw)
 		} else {
-			output.Write(changed)
+			output.Write(ev.data)
 		}
 	}
 	resp.Body = io.NopCloser(bytes.NewReader(output.Bytes()))
@@ -105,6 +90,40 @@ func (c *call) forwardResourceResponse(ctx context.Context, rt *typeRoute, resp 
 		return c.forwardJSONConverted(resp, scratch, discard, rt.conv)
 	}
 	return c.forwardJSON(resp, scratch, discard)
+}
+
+func (c *call) rewriteResourceEvents(ctx context.Context, header http.Header, events []resourceResponseEvent) ([]resourceResponseEvent, error) {
+	access := c.resourceAccess
+	if access == nil || header.Get(resources.PrincipalHeader) != access.binding.PrincipalID || header.Get(resources.GenerationHeader) != access.binding.Generation {
+		return nil, fmt.Errorf("issuer evidence mismatch")
+	}
+	if c.g.d.Resources == nil || c.g.d.ResourceTransport == nil {
+		return nil, fmt.Errorf("resource registry unavailable")
+	}
+	registry := resourceResponseRegistry{c: c, known: map[string]core.ProviderResource{}}
+	for _, ref := range c.resourceRefs {
+		registry.known[ref.resource.Kind+":"+ref.resource.RemoteID] = ref.resource
+		if ref.resource.Kind == resources.KindContainer {
+			registry.container = ref.resource.RemoteID
+		}
+	}
+	// Container facts can arrive after file blocks in SSE; observe them first.
+	for _, ev := range events {
+		if err := registry.observeContainers(ctx, ev.data); err != nil {
+			return nil, err
+		}
+	}
+	for i := range events {
+		changed, err := registry.rewrite(ctx, events[i].data)
+		if err != nil {
+			return nil, err
+		}
+		if !bytes.Equal(changed, events[i].data) {
+			events[i].raw = rewriteResourceEvent(events[i].raw, changed)
+			events[i].data = changed
+		}
+	}
+	return events, nil
 }
 
 func resourceResponseEvents(raw []byte, sse bool) ([]resourceResponseEvent, error) {

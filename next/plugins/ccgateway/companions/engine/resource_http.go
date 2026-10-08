@@ -21,6 +21,7 @@ type resourceBroker struct {
 	authority    *authManager
 	dir          string
 	identityPath string
+	creditDir    string
 	limit        int64
 	budget       *resourceSpoolBudget
 	lease        *resourceLease
@@ -52,7 +53,7 @@ func newResourceBroker(g *Gateway, authority *authManager, root string) (*resour
 	if err != nil {
 		return nil, err
 	}
-	return &resourceBroker{g: g, authority: authority, dir: lease.dir, identityPath: filepath.Join(identityDir, "identity-v1.json"), lease: lease, limit: limit, budget: &resourceSpoolBudget{limit: budget}}, nil
+	return &resourceBroker{g: g, authority: authority, dir: lease.dir, identityPath: filepath.Join(identityDir, "identity-v1.json"), creditDir: filepath.Join(root, "fallback-credit"), lease: lease, limit: limit, budget: &resourceSpoolBudget{limit: budget}}, nil
 }
 
 func (b *resourceBroker) ServeHTTP(w http.ResponseWriter, r *http.Request) {

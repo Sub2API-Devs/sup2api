@@ -64,6 +64,9 @@ type call struct {
 	resourceInfo         resources.RequestInfo
 	resourceVersions     []approvedSkillVersion
 	resourceAccess       *modelResourceAccess
+	creditRequest        *modelCreditRequest
+	creditAccess         *modelCreditAccess
+	creditDispatched     bool
 	upstreamRefs         map[string]core.PricedUsage
 	upstreamPrimaryModel string
 
@@ -346,7 +349,10 @@ func (c *call) checkModel(ctx context.Context) *gwError {
 	if err := c.checkReferencedModels(); err != nil {
 		return err
 	}
-	return c.checkResourceReferences(ctx)
+	if err := c.checkResourceReferences(ctx); err != nil {
+		return err
+	}
+	return c.checkFallbackCredit(ctx)
 }
 
 // resolveModelFromPlugin asks PlatformService.ResolveModel of the plugin

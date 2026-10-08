@@ -16,6 +16,12 @@ OUT=$2
 KEYS=$3
 VERSION=${VERSION:-0.1.0-dev}
 KEY_ID=${SUB2API_DEV_KEY_ID:-sub2api-dev}
+if [ "${REQUIRE_EXISTING_DEV_KEY:-0}" = 1 ]; then
+  [ -s "$KEYS/$KEY_ID.key" ] && [ -s "$KEYS/$KEY_ID.pub" ] || {
+    echo 'release build requires the existing plugin signing key; refusing key generation' >&2
+    exit 1
+  }
+fi
 mkdir -p "$OUT/bin" "$OUT/market" "$OUT/builtin"
 cd "$SRC"
 # The core Docker context excludes CCGateway companion container modules.

@@ -27,6 +27,8 @@ type Tool struct {
 	Metadata     Object `json:"-"`
 }
 type Request struct {
+	credit                  *creditExecution
+	creditPTCDeferred       bool
 	resource                *resourceExchange
 	resources               *resourceAdmission
 	MCP                     *MCPConnectorPlan
@@ -321,6 +323,12 @@ func parseRequestWithMCP(data []byte, mcp *MCPConnectorPlan, interleaved ...bool
 	return parseRequestWithResources(data, mcp, nil, interleaved...)
 }
 func parseRequestWithResources(data []byte, mcp *MCPConnectorPlan, access *resourceAdmission, interleaved ...bool) (*Request, error) {
+	return parseRequestCreditCandidate(data, mcp, access, false, interleaved...)
+}
+
+// creditCandidate defers only the final unfinished tool turn. It grants no
+// execution: main admission must subsequently prove the exact stored claim.
+func parseRequestCreditCandidate(data []byte, mcp *MCPConnectorPlan, access *resourceAdmission, creditCandidate bool, interleaved ...bool) (*Request, error) {
 	o, e := decodeObject(data)
 	if e != nil {
 		return nil, e
@@ -329,6 +337,7 @@ func parseRequestWithResources(data []byte, mcp *MCPConnectorPlan, access *resou
 		return nil, e
 	}
 	r := &Request{MCP: mcp, resources: access, Model: str(o, "model"), MaxTokens: positive(o["max_tokens"]), TTL: 5 * time.Minute, Native: map[string]bool{}}
+	r.creditPTCDeferred = creditCandidate
 	if n, ok := o["max_tokens"].(json.Number); ok {
 		i, err := n.Int64()
 		r.CacheWarmup = err == nil && i == 0
@@ -389,6 +398,9 @@ func parseRequestWithResources(data []byte, mcp *MCPConnectorPlan, access *resou
 	if e = r.compileInlineTools(baseTools); e != nil {
 		return nil, e
 	}
+	if e = r.compileMCPTimeline(); e != nil {
+		return nil, e
+	}
 	if e = r.validateExecutionAdmission(); e != nil {
 		return nil, e
 	}
@@ -396,7 +408,7 @@ func parseRequestWithResources(data []byte, mcp *MCPConnectorPlan, access *resou
 		return nil, e
 	}
 	r.prepareImageCarriers()
-	if e = validateConversation(r.Messages, r.origin); e != nil {
+	if e = validateConversation(r.Messages, r.origin, creditCandidate); e != nil {
 		return nil, e
 	}
 	r.configureContinuation()
@@ -610,7 +622,7 @@ func parseMessages(v any, ttl *time.Duration, access ...*resourceAdmission) ([]M
 }
 
 // validateConversation checks message positions and tool pairing.
-func validateConversation(messages []Message, origin []int) error {
+func validateConversation(messages []Message, origin []int, creditCandidate ...bool) error {
 	if err := validateSystemPositions(messages, origin); err != nil {
 		return err
 	}
@@ -625,12 +637,12 @@ func validateConversation(messages []Message, origin []int) error {
 	if first < 0 || (messages[first].Role != "user" && (len(messages[first].Content) == 0 || str(messages[first].Content[0], "type") != "compaction")) {
 		return fmt.Errorf("first message must be user")
 	}
-	return validateToolPairing(messages)
+	return validateToolPairing(messages, creditCandidate...)
 }
 
 // validateToolPairing requires every tool_use to be answered by the next user
 // message, with tool results before any other content.
-func validateToolPairing(messages []Message) error {
+func validateToolPairing(messages []Message, creditCandidate ...bool) error {
 	pending, seen := map[string]ToolIdentity{}, map[string]bool{}
 	for _, m := range messages {
 		if m.Role == "system" {
@@ -664,7 +676,7 @@ func validateToolPairing(messages []Message) error {
 			return fmt.Errorf("all parallel tool results must be supplied")
 		}
 	}
-	if len(pending) > 0 {
+	if len(pending) > 0 && !(len(creditCandidate) > 0 && creditCandidate[0]) {
 		return fmt.Errorf("missing client tool results before assistant continuation")
 	}
 	return nil

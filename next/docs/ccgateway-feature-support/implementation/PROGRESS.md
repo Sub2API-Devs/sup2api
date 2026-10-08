@@ -195,3 +195,21 @@
 - custom Skills的latest在核心固定为具体已登记版本，Worker私有grant再核对parent/version；provider输出不得换成另一已登记版本。无显式skills的容器续聊，输出仅允许同owner+binding精确查到的已登记skill。输出ID与版本映射保持不可混用public/provider ID。
 - Windows主目标gateway/providerresources/engine/contracts/Worker/app非DB测试与vet通过（本机SUB2API_TESTPG=off，未修坏掉的本机PG）。Skills真实CLI隔离新增2型×5流程共10次调用PASS12.757s；CodeExec/PTC及历史矩阵详见专项记录。当前第六批仍未提交/部署，Linux PostgreSQL、race与真实提供商执行/Skills资格待下一Git候选验证。
 - 第七批credit仅独立contract、持久store、加密registry与测试；runtime hooks暂撤下，源码为 `fallback_credit.go.pending`，重挂patch保存在本机临时目录。第六批提交排除第七批文件，不能把credit称为已接入。当前团队已冻结第六批实现，research_cc收尾catalog与旧beta检查。
+
+### 第六批已上线、第七/八批复核（2026-10-08）
+
+- 第六批 `4903994f459cae7959bd6307b602c91e045f0ed6` 已提交推送（104文件，catalog .6）；Linux全engine发现旧测试仍拒绝null container，单行夹具修复 `160f6064ada938e69e84a32797df82fd660d8e6e` 后完整engine/Worker race通过。真实CLI原实现矩阵235.614s通过，测试补丁未改业务，因此未无意义重复该矩阵。
+- OVH 隔离45432使用490399候选六包race/vet通过，519个pass事件、两个可选真实CLI skip，无race/失败；10个providerresources DB与两个ccgateway DB逐名确认实际pass。初始PATH/GOWORK测试启动失败保留，不计通过；见 LINUX-SIXTH-BATCH-DB-VALIDATION。
+- #21/#22现均为原地升级160f6064a，Worker哈希 `9edea7dcc5ba07c57ff9307a7cac710efc2c36c01990145537ad698546d8ba30`，CLI2.1.292，旧78aa程序各有新备份。容器ID/image/user/卷/授权不变；#21真实短答READY通过。#22 CodeExec/PTC服务端工具均返回正常HTTP200中的too_many_requests，未成功执行；builtin pptx成功解析真实版本20261002并返回container，但其工具也受限。没有为得到成功而重试或改变授权。见 DEPLOYMENT-2026-10-08-EXECUTION-SKILLS。核心公网服务仍未发布本轮代码。
+- 第七批core/Worker信用登记与兑换已接线，正常refusal200，记录owner/账号/issuer/原始提示摘要；Worker加密稳定保存原wire，core只存token哈希。JSON/SSE原用量先提取，Worker信用存储故障通过可信内部FailureHeader+原Message通知core，对外gateway_credit_storage而非refusal错误，不丢用量、不发未登记token。已通过本地HTTP和真实CLI隔离矩阵，尚未Git提交/部署/真实兑换。
+- 独立复核又修复信用存储临时instance目录导致重启丢失/跨重启容量失控、跨进程OS锁、身份探针并发槽遗漏、PTC信用合法原样续写被普通账本误拒。所有特殊PTC恢复都要求已证明的原token/snapshot/完整摘要/issuer；不添加原请求没有的container，不放松普通历史义务。core预检无资源身份的候选可在模型派发前跳过；已绑定资源/credit不能换号。
+- core信用准入不再阻断普通非CCGateway Anthropic透传；已知本owner CC token固定原账号，实际携token派发后所有路由都不自动重发。官方SDK额外支持null/object及strict/best_effort：共享Parameter和LookupOwned已补，core对象/期限/提示不匹配语义已有HTTP测试，Worker对象模式及跨层复核仍在收尾，不能据字符串测试声称全部完成。
+- 第八批inline MCP、非defer MCP与客户端API ToolSearch、纯MCP safeguards的等价组合已实现。作者新增14次CLI与旧矩阵联合PASS51.945s；独立复核再次通过CLI及状态/凭据负例。deferred MCP搜索引用的跨server编码尚无足够证据，继续明确拒绝。见 MCP-COMBINATIONS-PROGRESS / MCP-COMBINATIONS-INDEPENDENT-REVIEW。
+- 当前工作区为第七/八批待提交；原无关 artifacts、cwd_probe_cli_test.go、pelican-bicycle.svg未处理。下一步：完成对象信用Worker/独立复核、目录 .7、必要完整测试、新Git候选Linux验证、Git构建核心与Worker镜像、平台公开API/本地CLI和前端视觉验收、汇总逐feature证据与不能等价边界。不得遗漏尚未进行的核心部署。
+
+### 第七/八批冻结与发布准备（2026-10-08）
+
+- 信用 object/null/best_effort 已接线并独立复核。修复精度恢复的方向性漏洞：只允许提供商数字经过 CLI 数值归一，不接受 null、状态文本或数组位置改变。增量负例先红后绿，真实 CLI 定向回归 PASS19.392s；作者新旧信用/PTC联合34.227s证据另记，不当作真实提供商兑换。
+- 根代理整体验证：gateway/fallbackcredits/providerresources/app/migrations 非DB单测全部通过，vet通过；engine 5.544s、contracts全包、Worker全包与vet通过。数据库仍等待本候选Git SHA在隔离Linux运行，不借旧SHA结果。目录 .7、前端21项组件测试与typecheck通过。
+- OVH四节点仍0.1.62。新增受控发行准备脚本，不导入/升级服务；用原default builder和签名缓存、明确live source schema，专属2CPU/4GiB临时slice经真实RUN证实。四项隔离负例与shell语法通过；禁止覆盖旧发行，既有密钥缺失或trust变化直接停止。
+- 37功能/8横切新闭环清单见 FINAL-FEATURE-CLOSURE。当前仍需第九批核心diagnostics归属与冷Worker能力、内部工具回合的缓存边界适配，并继续核验安全上下文/续写的等价边界。第七/八批先保存Git检查点；新业务不得混入本批提交。

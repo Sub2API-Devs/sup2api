@@ -44,6 +44,7 @@ type Deps struct {
 	Tasks             core.AsyncTasks
 	Resources         core.ProviderResources
 	Skills            core.SkillResources
+	Credits           core.FallbackCredits
 	ResourceTransport core.ProviderResourceTransport
 	// Limiter enforces per-account rpm/tpm limits (CONTRACTS §18);
 	// nil = no limits.

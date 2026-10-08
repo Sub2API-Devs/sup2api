@@ -42,6 +42,29 @@ describe('CCGateway feature catalog', () => {
     expect(w.findAll('input[type="checkbox"]')).toHaveLength(0)
     expect(w.emitted('update:modelValue')).toBeUndefined()
   })
+  it('keeps credit forms, beta and qualification in one read-only API feature', async () => {
+    const source = catalog([{
+      ...feature('F-FALLBACK', 'partial'), title: '模型回退与缓存信用',
+      body_paths: ['fallback_credit_token.mode', 'usage.fallback_credit'],
+      beta_headers: ['fallback-credit-2026-07-01'],
+      mechanisms: ['同账号与 issuer 的信用托管'],
+      reason: 'strict/best_effort 与 null；信用 SSE 有界缓冲，真实提供商退款未验证。',
+    }, { ...feature('F-SAFEGUARDS', 'partial'), scope: 'cc' }])
+    source.catalog_version = '2026-10-08.7'
+    mocks.get.mockResolvedValue(source)
+    const w = await render()
+    expect(w.text()).toContain('通用 API 特性')
+    expect(w.find('[data-testid="feature-F-SAFEGUARDS"]').exists()).toBe(false)
+    await w.get('[data-testid="feature-search"]').setValue('best_effort')
+    await w.get('[data-testid="feature-F-FALLBACK"] button').trigger('click')
+    const detail = w.get('#feature-detail-F-FALLBACK')
+    for (const text of ['fallback_credit_token.mode', 'usage.fallback_credit', 'fallback-credit-2026-07-01', 'issuer', '有界缓冲', '未验证']) {
+      expect(detail.text()).toContain(text)
+    }
+    expect(w.text()).toContain('2026-10-08.7')
+    expect(w.findAll('input[type="checkbox"]')).toHaveLength(0)
+    expect(w.emitted('update:modelValue')).toBeUndefined()
+  })
   it('paginates and filters without editing policy, excluding CC-only entries', async () => {
     mocks.get.mockResolvedValue(catalog([
       ...Array.from({ length: 9 }, (_, index) => feature(`F-${index}`)),

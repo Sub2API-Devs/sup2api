@@ -31,7 +31,7 @@ func (l *serverToolLedger) accept(block Object, r *Request, historical ...bool) 
 	}
 	if kind == "mcp_tool_use" {
 		id, server := str(block, "id"), str(block, "server_name")
-		if id == "" || l.seen[id] || !past && (r.NoTools || !r.MCP.hasServer(server)) {
+		if id == "" || l.seen[id] || !past && (r.NoTools || !r.MCP.permitsCall(server, str(block, "name"))) {
 			return fmt.Errorf("duplicate or undeclared MCP tool call")
 		}
 		l.seen[id] = true
@@ -88,9 +88,20 @@ func (r *Request) serverHistoryLedger() (*serverToolLedger, error) {
 			}
 		}
 	}
+	if r.verifiedCreditEcho() {
+		ledger.abandonCurrentTurn()
+	}
 	err := ledger.validatePendingDefinitions(r)
 	ledger.beginTurn()
 	return ledger, err
+}
+
+func (l *serverToolLedger) abandonCurrentTurn() {
+	for id := range l.turnCalls {
+		delete(l.pending, id)
+	}
+	_ = l.ptc.assistant(Object{"type": "fallback"})
+	l.beginTurn()
 }
 
 func (l *serverToolLedger) beginTurn() {

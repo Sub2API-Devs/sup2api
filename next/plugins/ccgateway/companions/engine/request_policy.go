@@ -112,6 +112,9 @@ func parsePolicyRequestWithResources(body []byte, h http.Header, access *resourc
 	if err != nil {
 		return nil, err
 	}
+	if err := plan.creditParameter.ValidateBetas(h.Values("anthropic-beta")); err != nil {
+		return nil, err
+	}
 	if err := plan.takeTaskBudget(o); err != nil {
 		return nil, err
 	}
@@ -135,7 +138,7 @@ func parsePolicyRequestWithResources(body []byte, h http.Header, access *resourc
 	}
 	cacheRequested := hasRequestCacheControl(o)
 	data, _ := json.Marshal(o)
-	req, err := parseRequestWithResources(data, mcp, access, hasBetaHeader(h.Values("anthropic-beta"), "interleaved-thinking-2025-05-14"))
+	req, err := parseRequestCreditCandidate(data, mcp, access, plan.creditToken != "", hasBetaHeader(h.Values("anthropic-beta"), "interleaved-thinking-2025-05-14"))
 	if err != nil {
 		return nil, err
 	}

@@ -55,8 +55,20 @@ func checkInlineToolBlock(block Object) error {
 		if _, ok := tool["definition"].(map[string]any); !ok {
 			return fmt.Errorf("inline tool definition must be an object")
 		}
-	case "mcp_tool_reference", "mcp_toolset_reference":
-		return fmt.Errorf("inline MCP connector changes require the MCP connector adapter")
+	case "mcp_tool_reference":
+		if err := keys(tool, "type", "server_name", "name"); err != nil {
+			return err
+		}
+		if str(tool, "server_name") == "" || str(tool, "name") == "" {
+			return fmt.Errorf("MCP reference requires server_name and name")
+		}
+	case "mcp_toolset_reference":
+		if err := keys(tool, "type", "server_name"); err != nil {
+			return err
+		}
+		if str(tool, "server_name") == "" {
+			return fmt.Errorf("MCP toolset reference requires server_name")
+		}
 	default:
 		return fmt.Errorf("unsupported inline tool change target")
 	}

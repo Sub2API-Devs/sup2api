@@ -61,7 +61,7 @@ func (c *call) forward(ctx context.Context, rt *typeRoute, acct *pluginv1.Accoun
 	sse := isSSE(resp.Header.Get("Content-Type"))
 	c.checkResponseShape(ctx, rt, resp, sse)
 	switch {
-	case c.resourceAccess != nil && c.resourceAccess.outputs:
+	case c.resourceAccess != nil && c.resourceAccess.outputs || c.creditAccess != nil:
 		err = c.forwardResourceResponse(ctx, rt, resp, u, cap)
 	case sse:
 		err = c.forwardSSE(ctx, resp, u, rt.conv, cap)
@@ -80,12 +80,21 @@ func (c *call) forward(ctx context.Context, rt *typeRoute, acct *pluginv1.Accoun
 		c.rec.UpstreamModel = u.Model
 	}
 	var cerr *convertError
+	var creditErr *creditStorageError
 	switch {
 	case err == nil:
 		if u.StreamError != "" {
 			c.rec.Success = false
 			c.rec.ErrorType = errTypeUpstream
 			c.rec.ErrorMessage = truncateUTF8(u.StreamError, 1000)
+		}
+	case errors.As(err, &creditErr):
+		c.rec.Success = false
+		c.rec.ErrorType = "gateway_credit_storage"
+		c.rec.ErrorMessage = creditErr.Error()
+		if !c.c.Writer.Written() {
+			c.rec.StatusCode = http.StatusServiceUnavailable
+			writeError(c.c, c.format, &gwError{Status: http.StatusServiceUnavailable, Code: "gateway_credit_storage", Message: creditErr.Error()})
 		}
 	case errors.As(err, &cerr):
 		c.rec.Success = false

@@ -127,7 +127,7 @@ func (r *Runner) baseEnv() []string {
 // request, the outbound relay, the process, then the stream-json session.
 func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string, emit func(Object) error) (result Object, err error) {
 	cfg := newRunConfig(req, p, r.Plugin, dir)
-	if req.resource != nil {
+	if req.resource != nil || req.credit != nil {
 		cfg.args = append(cfg.args, "--no-session-persistence")
 	}
 	req.diagnostic.artifact("feature-decisions.json", req.Plan.FeatureDecisions())
