@@ -703,7 +703,7 @@ func fingerprints(ms []Message) []string {
 	return out
 }
 func (r *Request) configKey() string {
-	parts := []any{r.Model, r.System, r.Tools, r.NoTools, r.Thinking, r.Native, r.Fast, r.Effort, r.Betas, r.FineGrainedTools, r.JSONSchema, r.PromptCacheTTL, r.ToolSearch, r.customToolServer()}
+	parts := []any{r.Model, r.System, r.Tools, r.NoTools, r.Thinking, r.Native, r.Fast, r.Effort, r.Betas, r.FineGrainedTools, r.JSONSchema, r.PromptCacheTTL, r.ToolSearch, r.toolServer()}
 	if r.MCP != nil {
 		parts = append(parts, r.MCP.servers, r.MCP.toolsets)
 	}
@@ -731,7 +731,7 @@ func (r *Request) wireName(name string) string {
 	if _, _, ok := splitMCPToolName(name); ok {
 		return name
 	}
-	return "mcp__" + r.customToolServer() + "__" + name
+	return "mcp__" + r.toolServer() + "__" + name
 }
 func (r *Request) wireMessage(m Message) Message {
 	out := Message{Role: m.Role, ClearAt: append(json.RawMessage(nil), m.ClearAt...), OutputConfig: append(json.RawMessage(nil), m.OutputConfig...)}
