@@ -79,6 +79,9 @@ func (c *call) unwrapHelperHistoryResponse(resp *http.Response, rt *typeRoute) e
 		return err
 	}
 	expected := h.envelope
+	if e.EffectivePayloadVersion() != expected.EffectivePayloadVersion() {
+		return fmt.Errorf("helper response payload selection changed")
+	}
 	if e.AttemptID != expected.AttemptID || e.RequestDigest != expected.RequestDigest || e.Namespace != expected.Namespace || e.Identity.PrincipalID != expected.Identity.PrincipalID || e.Identity.Generation != expected.Identity.Generation {
 		return fmt.Errorf("helper response identity changed")
 	}

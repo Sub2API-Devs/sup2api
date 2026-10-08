@@ -51,6 +51,7 @@ func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
 	}
 	out := features.RuntimeCapabilities{ProtocolVersion: features.CapabilityProtocolVersion, Build: binaryBuildInfo(), Catalog: features.Catalog(), PolicySchemaVersions: []int{features.PolicySchemaVersion}, Probes: []features.RuntimeProbe{probe}, ModelProviderVerification: "not_run"}
 	out.HelperHistorySchemaVersions = []int{helperhistory.Version}
+	out.HelperHistoryPayloadVersions = []int{helperhistory.PayloadVersion1, helperhistory.PayloadVersion2}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(out)

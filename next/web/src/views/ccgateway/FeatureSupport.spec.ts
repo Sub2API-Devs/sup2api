@@ -81,15 +81,17 @@ describe('CCGateway feature catalog', () => {
     expect(w.emitted('update:modelValue')).toBeUndefined()
   })
   it('keeps conditional custody support within the existing task budget feature', async () => {
-    const source = catalog([{ ...feature('F-TASK-BUDGET', 'partial'), body_paths: ['output_config.task_budget'], beta_headers: ['task-budgets-2026-03-13'], mechanisms: ['核心托管 / Worker 协议 v1'], reason: '核心启用托管且实际 Worker 声明 v1；JSON/SSE 有界缓冲，旧未知历史不能建立托管链。' }])
-    source.catalog_version = '2026-10-08.15'
+    const source = catalog([{ ...feature('F-TASK-BUDGET', 'partial'), body_paths: ['output_config.task_budget'], beta_headers: ['task-budgets-2026-03-13'], mechanisms: ['核心托管 / Worker 协议 v1'], reason: '核心启用托管且实际 Worker 声明 v1；JSON/SSE 有界缓冲，旧未知历史不能建立托管链。普通 custom inline 按历史锚点恢复，撤销不复活；真实云端组合尚未验收。' }])
+    source.catalog_version = '2026-10-08.16'
     mocks.get.mockResolvedValue(source)
     const w = await render()
     await w.get('[data-testid="feature-F-TASK-BUDGET"] button').trigger('click')
-    expect(w.text()).toContain('2026-10-08.15')
+    expect(w.text()).toContain('2026-10-08.16')
     expect(w.text()).toContain('output_config.task_budget')
     expect(w.text()).toContain('task-budgets-2026-03-13')
     expect(w.text()).toContain('旧未知历史')
+    expect(w.text()).toContain('撤销不复活')
+    expect(w.text()).toContain('真实云端组合尚未验收')
     expect(w.findAll('input[type="checkbox"]')).toHaveLength(0)
     expect(w.emitted('update:modelValue')).toBeUndefined()
   })

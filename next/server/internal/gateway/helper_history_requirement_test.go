@@ -24,9 +24,9 @@ func TestHelperRequirementOrdinaryPreservesHistoryAndResources(t *testing.T) {
 				}
 				return decision, nil
 			}
-			g.helperRuntime = func(context.Context, int64, string) (string, core.ResourceBinding, error) {
+			g.helperRuntime = func(context.Context, int64, string) (helperRuntimeInfo, error) {
 				t.Fatal("ordinary probe acquired issuer")
-				return "", core.ResourceBinding{}, nil
+				return helperRuntimeInfo{}, nil
 			}
 			c := &call{g: g, helperHistory: &helperHistoryRequest{prefixes: []string{"old"}, lookup: core.HelperHistoryLookup{State: core.HelperHistoryUnknown}}, resourceAccess: &modelResourceAccess{}}
 			req, _ := http.NewRequest("POST", "http://ccgateway.internal/v1/messages", bytes.NewReader(raw))
@@ -49,9 +49,9 @@ func TestHelperRequirementOversizeUnknownDefersWithoutProbe(t *testing.T) {
 		t.Fatal("oversize request probed")
 		return "", nil
 	}
-	g.helperRuntime = func(context.Context, int64, string) (string, core.ResourceBinding, error) {
+	g.helperRuntime = func(context.Context, int64, string) (helperRuntimeInfo, error) {
 		t.Fatal("oversize request acquired issuer")
-		return "", core.ResourceBinding{}, nil
+		return helperRuntimeInfo{}, nil
 	}
 	c := &call{g: g, helperHistory: &helperHistoryRequest{lookup: core.HelperHistoryLookup{State: core.HelperHistoryUnknown}}}
 	raw := bytes.Repeat([]byte(" "), wire.MaxPayloadBytes+1)

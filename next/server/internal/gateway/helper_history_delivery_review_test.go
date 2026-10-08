@@ -166,7 +166,7 @@ func TestReviewKnownHelperBindingAndNamespaceCannotDrift(t *testing.T) {
 			messages, _, _ := publicHelperPrefixes(raw)
 			b["messages"] = append(messages, json.RawMessage(`{"role":"assistant","content":`+string(answer.Content)+`}`), json.RawMessage(`{"role":"user","content":"next"}`))
 			checks := 0
-			e.gw.helperRuntime = func(_ context.Context, id int64, _ string) (string, core.ResourceBinding, error) {
+			e.gw.helperRuntime = func(_ context.Context, id int64, _ string) (helperRuntimeInfo, error) {
 				checks++
 				ns := "fixture-policy"
 				binding := core.ResourceBinding{AccountID: id, PrincipalID: "issuer", Generation: "epoch"}
@@ -180,7 +180,7 @@ func TestReviewKnownHelperBindingAndNamespaceCannotDrift(t *testing.T) {
 				case "account":
 					binding.AccountID++
 				}
-				return ns, binding, nil
+				return helperRuntimeInfo{Namespace: ns, Binding: binding}, nil
 			}
 			result := e.messages(b)
 			if result.status != 400 || calls.Load() != 1 || checks != 1 {

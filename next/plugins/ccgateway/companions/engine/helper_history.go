@@ -48,9 +48,8 @@ func (index *helperAnchorIndex) at(after int) (string, error) {
 	if after < 0 || after >= len(index.messages) {
 		return "", fmt.Errorf("helper history public boundary is missing")
 	}
-	boundary, err := decodeObject(index.messages[after])
-	if err != nil || str(boundary, "role") != "user" {
-		return "", fmt.Errorf("helper history requires a complete public user boundary")
+	if err := helperPublicTurnBoundary(index.messages, after); err != nil {
+		return "", err
 	}
 	prefix, err := json.Marshal(index.messages[:after+1])
 	if err != nil {
@@ -235,7 +234,11 @@ func (r *Request) replayHelperHistory(public, tools json.RawMessage, payload hel
 		if err != nil || anchor != segment.PublicAnchorDigest || anchors.catalog != segment.ToolCatalogDigest {
 			return nil, fmt.Errorf("helper history public anchor or tool catalog changed")
 		}
-		if err := r.validateReplayedHelperSegment(segment, seen); err != nil {
+		view, err := r.helperInlineHistoryView(segment.AfterMessage)
+		if err != nil {
+			return nil, err
+		}
+		if err := view.validateReplayedHelperSegment(segment, seen); err != nil {
 			return nil, err
 		}
 		insertions[segment.AfterMessage] = append(insertions[segment.AfterMessage], segment.Messages...)
@@ -251,6 +254,24 @@ func (r *Request) replayHelperHistory(public, tools json.RawMessage, payload hel
 }
 
 func (r *Request) validateReplayedHelperSegment(segment helperhistory.Segment, seen map[string]bool) error {
+	if segment.Kind == helperhistory.SegmentSystemOnly {
+		var messages []any
+		for _, raw := range segment.Messages {
+			m, err := decodeObject(raw)
+			if err != nil {
+				return err
+			}
+			messages = append(messages, m)
+		}
+		systems, rest, err := splitHelperSystems(messages)
+		if err != nil {
+			return err
+		}
+		if len(systems) == 0 || len(rest) != 0 {
+			return fmt.Errorf("invalid positional helper system")
+		}
+		return nil
+	}
 	var suffix []any
 	state := &internalCacheRounds{results: map[string]string{}, helpers: map[string]string{}}
 	for _, raw := range segment.Messages {

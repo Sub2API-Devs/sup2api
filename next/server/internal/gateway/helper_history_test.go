@@ -92,8 +92,8 @@ func helperHTTPFixture(t *testing.T, modes ...string) (*env, *helperMemory, *ato
 	e.gw.d.HelperHistory = s
 	e.gw.d.EnableHelperHistory = true
 	e.gw.helperRequirement = func(context.Context, int64, *http.Request) (string, error) { return wire.RequirementNeedsCustody, nil }
-	e.gw.helperRuntime = func(_ context.Context, id int64, _ string) (string, core.ResourceBinding, error) {
-		return "fixture-policy", core.ResourceBinding{AccountID: id, PrincipalID: "issuer", Generation: "epoch"}, nil
+	e.gw.helperRuntime = func(_ context.Context, id int64, _ string) (helperRuntimeInfo, error) {
+		return helperRuntimeInfo{Namespace: "fixture-policy", Binding: core.ResourceBinding{AccountID: id, PrincipalID: "issuer", Generation: "epoch"}}, nil
 	}
 	calls := new(atomic.Int32)
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -107,6 +107,10 @@ func helperHTTPFixture(t *testing.T, modes ...string) (*env, *helperMemory, *ato
 		}
 		public := []byte(`{"id":"message","type":"message","role":"assistant","content":[{"type":"text","text":"answer"}],"model":"` + testModel + `","stop_reason":"end_turn","usage":{"input_tokens":11,"output_tokens":7}}`)
 		out := wire.ResponseEnvelope{Version: 1, AttemptID: in.AttemptID, RequestDigest: in.RequestDigest, Namespace: in.Namespace, Identity: in.Identity, StatusCode: 200, ContentType: "application/json", Headers: http.Header{"Retry-After": []string{"7"}}, Body: public, Delta: json.RawMessage(`{"version":1,"segments":[]}`)}
+		out.PayloadVersion = in.PayloadVersion
+		if in.EffectivePayloadVersion() == 2 {
+			out.Delta = json.RawMessage(`{"version":2,"segments":[]}`)
+		}
 		var requested struct {
 			Stream bool `json:"stream"`
 		}
@@ -287,8 +291,8 @@ func TestHelperCustodyBindingChangeRejectsBeforeProvider(t *testing.T) {
 	messages = append(messages, json.RawMessage(`{"role":"assistant","content":`+string(m.Content)+`}`), json.RawMessage(`{"role":"user","content":"next"}`))
 	b := body(testModel, false)
 	b["messages"] = messages
-	e.gw.helperRuntime = func(_ context.Context, id int64, _ string) (string, core.ResourceBinding, error) {
-		return "fixture-policy", core.ResourceBinding{AccountID: id, PrincipalID: "issuer", Generation: "new-epoch"}, nil
+	e.gw.helperRuntime = func(_ context.Context, id int64, _ string) (helperRuntimeInfo, error) {
+		return helperRuntimeInfo{Namespace: "fixture-policy", Binding: core.ResourceBinding{AccountID: id, PrincipalID: "issuer", Generation: "new-epoch"}}, nil
 	}
 	r = e.messages(b)
 	if r.status != 400 || calls.Load() != 1 {

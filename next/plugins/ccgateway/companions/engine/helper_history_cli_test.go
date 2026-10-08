@@ -56,6 +56,9 @@ func helperHistoryGatewayFixture(t *testing.T, handler http.HandlerFunc) (string
 func TestRealCLIHelperHistoryCarrier(t *testing.T)    { runHelperHistoryCarrier(t, false) }
 func TestRealCLIHelperHistoryTaskBudget(t *testing.T) { runHelperHistoryCarrier(t, true) }
 func runHelperHistoryCarrier(t *testing.T, budget bool) {
+	runHelperHistoryScenario(t, budget, false)
+}
+func runHelperHistoryScenario(t *testing.T, budget, inline bool) {
 	for _, stream := range []bool{false, true} {
 		t.Run(map[bool]string{false: "json", true: "sse"}[stream], func(t *testing.T) {
 			var calls atomic.Int32
@@ -68,6 +71,9 @@ func runHelperHistoryCarrier(t *testing.T, budget bool) {
 					return
 				}
 				calls.Add(1)
+				if inline {
+					verifyHelperInlineFixtureWire(t, wire)
+				}
 				if budget {
 					config, _ := wire["output_config"].(Object)
 					raw, _ := json.Marshal(config["task_budget"])
@@ -106,7 +112,19 @@ func runHelperHistoryCarrier(t *testing.T, budget bool) {
 							t.Error("hidden helper missing preceding system")
 							continue
 						}
-						previous, _ := rows[i-1].(Object)
+						catalogueAt := i - 1
+						if inline {
+							catalogueAt--
+							if catalogueAt < 1 {
+								t.Error("interleaved catalogue missing")
+								continue
+							}
+							user, _ := rows[catalogueAt-1].(Object)
+							if str(user, "role") != "user" {
+								t.Error("catalogue crossed original user boundary")
+							}
+						}
+						previous, _ := rows[catalogueAt].(Object)
 						if str(previous, "role") != "system" {
 							t.Error("hidden system moved across boundary")
 							continue
@@ -130,6 +148,9 @@ func runHelperHistoryCarrier(t *testing.T, budget bool) {
 			}
 			endpoint, id := helperHistoryGatewayFixture(t, handler)
 			body := Object{"model": "claude-opus-5-5", "thinking": Object{"type": "adaptive"}, "max_tokens": 128, "stream": stream, "messages": []any{Object{"role": "user", "content": "public weather fixture"}}, "tools": []any{Object{"name": "weather", "defer_loading": true, "input_schema": Object{"type": "object", "properties": Object{}}}}}
+			if inline {
+				body["messages"] = append(body["messages"].([]any), Object{"role": "system", "content": []any{Object{"type": "tool_addition", "tool": Object{"type": "tool_definition", "definition": Object{"name": "spare", "description": "precise fixture", "defer_loading": true, "input_schema": Object{"type": "object", "properties": Object{"n": Object{"const": json.Number("9007199254740993")}}}}}}}})
+			}
 			if budget {
 				body["output_config"] = Object{"task_budget": Object{"type": "tokens", "total": 20000, "remaining": 11000}}
 			}
@@ -145,12 +166,18 @@ func runHelperHistoryCarrier(t *testing.T, budget bool) {
 					t.Fatal(err)
 				}
 				env := helperhistory.RequestEnvelope{Version: 1, AttemptID: uuid(), RequestDigest: hash, Namespace: namespace, Identity: id, Request: raw, History: history}
+				if inline {
+					env.PayloadVersion = helperhistory.PayloadVersion2
+				}
 				data, _ := json.Marshal(env)
 				req, _ := http.NewRequest("POST", endpoint+"/v1/messages", bytes.NewReader(data))
 				req.Header.Set(helperhistory.Header, "1")
 				req.Header.Set("X-CCGateway-Request-Policy", `{}`)
 				if budget {
 					req.Header.Set("anthropic-beta", taskBudgetBeta)
+				}
+				if inline {
+					req.Header.Set("anthropic-beta", taskBudgetBeta+",inline-tools-2026-09-15")
 				}
 				res, err := http.DefaultClient.Do(req)
 				if err != nil {
@@ -197,8 +224,10 @@ func runHelperHistoryCarrier(t *testing.T, budget bool) {
 				return result
 			}
 			toolAnswer := decodePublic(first)
-			firstUser := body["messages"].([]any)[0]
-			resultHistory := []any{firstUser, Object{"role": "assistant", "content": toolAnswer["content"]}, Object{"role": "user", "content": []Object{{"type": "tool_result", "tool_use_id": "external_weather", "content": "PUBLIC_WEATHER_RESULT"}}}}
+			resultHistory := append(append([]any{}, body["messages"].([]any)...), Object{"role": "assistant", "content": toolAnswer["content"]}, Object{"role": "user", "content": []Object{{"type": "tool_result", "tool_use_id": "external_weather", "content": "PUBLIC_WEATHER_RESULT"}}})
+			if inline {
+				resultHistory = append(resultHistory, Object{"role": "system", "content": []any{Object{"type": "tool_removal", "tool": Object{"type": "tool_reference", "name": "weather"}}}})
+			}
 			body["messages"] = resultHistory
 			second := post([]json.RawMessage{first.Delta})
 			final := decodePublic(second)
@@ -206,15 +235,27 @@ func runHelperHistoryCarrier(t *testing.T, budget bool) {
 			post([]json.RawMessage{first.Delta})
 			endpoint, id = helperHistoryGatewayFixture(t, handler)
 			post([]json.RawMessage{first.Delta})
+			if inline {
+				body["messages"] = append(append([]any{}, resultHistory...), Object{"role": "assistant", "content": final["content"]}, Object{"role": "user", "content": "readd fixture"}, Object{"role": "system", "content": []any{Object{"type": "tool_addition", "tool": Object{"type": "tool_definition", "definition": Object{"name": "weather", "description": "readded fixture", "defer_loading": true, "input_schema": Object{"type": "object", "properties": Object{"n": Object{"const": json.Number("9007199254740995")}}}}}}}})
+				post([]json.RawMessage{first.Delta})
+				body["messages"] = resultHistory[:len(resultHistory)-1]
+				post([]json.RawMessage{first.Delta})
+			}
 			body["messages"] = resultHistory
 			post([]json.RawMessage{first.Delta})
-			if calls.Load() != 6 {
+			wantCalls := int32(6)
+			if inline {
+				wantCalls = 8
+			}
+			if calls.Load() != wantCalls {
 				t.Fatalf("unexpected generation calls %d", calls.Load())
 			}
 
 		})
 	}
 }
+
+func TestRealCLIHelperHistoryInlineBudget(t *testing.T) { runHelperHistoryScenario(t, true, true) }
 
 func writeHelperHistoryFixture(w http.ResponseWriter, model string, blocks []Object) {
 	recorder := httptest.NewRecorder()

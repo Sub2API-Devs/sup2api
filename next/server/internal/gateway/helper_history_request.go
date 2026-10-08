@@ -31,6 +31,28 @@ type helperHistoryRequest struct {
 	rt         *typeRoute
 }
 
+type helperRuntimeInfo struct {
+	Namespace       string
+	Binding         core.ResourceBinding
+	PayloadVersions []int
+}
+
+func (i helperRuntimeInfo) payloadVersion() (int, error) {
+	if len(i.PayloadVersions) == 0 {
+		return wire.PayloadVersion1, nil
+	}
+	selected := 0
+	for _, v := range i.PayloadVersions {
+		if (v == wire.PayloadVersion1 || v == wire.PayloadVersion2) && v > selected {
+			selected = v
+		}
+	}
+	if selected == 0 {
+		return 0, core.ErrUnsupported.WithMessage("Worker has no compatible helper payload version")
+	}
+	return selected, nil
+}
+
 func stripHelperHistoryHeaders(h http.Header) {
 	for name := range h {
 		if strings.HasPrefix(strings.ToLower(name), "x-ccgateway-helper-history") {
@@ -174,9 +196,14 @@ func (c *call) wrapHelperHistoryRequest(ctx context.Context, req *http.Request, 
 	if runtime == nil {
 		runtime = c.g.helperHistoryRuntime
 	}
-	ns, binding, err := runtime(ctx, a.ID, model.Model)
+	info, err := runtime(ctx, a.ID, model.Model)
 	if err != nil {
 		c.logHelperVerification(ctx, a.ID, err)
+		return c.helperRuntimeFailure(err)
+	}
+	ns, binding := info.Namespace, info.Binding
+	payloadVersion, err := info.payloadVersion()
+	if err != nil {
 		return c.helperRuntimeFailure(err)
 	}
 	if binding.AccountID != a.ID {
@@ -190,6 +217,10 @@ func (c *call) wrapHelperHistoryRequest(ctx context.Context, req *http.Request, 
 		return err
 	}
 	h.envelope = wire.RequestEnvelope{Version: wire.Version, RequestDigest: digest, Namespace: ns, Identity: resources.Identity{PrincipalID: binding.PrincipalID, Generation: binding.Generation}, Request: body}
+	// Do not send a new field to an old Worker; omission is exactly v1.
+	if payloadVersion == wire.PayloadVersion2 {
+		h.envelope.PayloadVersion = payloadVersion
+	}
 	for _, r := range h.lookup.Chain.Records {
 		h.envelope.History = append(h.envelope.History, json.RawMessage(r.Payload))
 	}
@@ -255,27 +286,28 @@ func (c *call) logHelperVerification(ctx context.Context, accountID int64, err e
 	slog.WarnContext(ctx, "gateway helper runtime verification failed", attrs...)
 }
 
-func (g *Gateway) helperHistoryRuntime(ctx context.Context, accountID int64, model string) (string, core.ResourceBinding, error) {
-	var binding core.ResourceBinding
+func (g *Gateway) helperHistoryRuntime(ctx context.Context, accountID int64, model string) (helperRuntimeInfo, error) {
+	var info helperRuntimeInfo
 	if g.d.CCGateway == nil || g.d.ResourceTransport == nil {
-		return "", binding, fmt.Errorf("helper history runtime unavailable")
+		return info, fmt.Errorf("helper history runtime unavailable")
 	}
 	caps, err := g.d.CCGateway.WorkerCapabilities(ctx, accountID)
 	if err != nil {
-		return "", binding, ccgateway.VerificationStage("capabilities", err)
+		return info, ccgateway.VerificationStage("capabilities", err)
 	}
 	cfg, err := g.d.CCGateway.Load(ctx)
 	if err != nil {
-		return "", binding, ccgateway.VerificationStage("policy", err)
+		return info, ccgateway.VerificationStage("policy", err)
 	}
 	policy, err := json.Marshal(cfg.EffectiveRequestPolicy())
 	if err != nil {
-		return "", binding, ccgateway.VerificationStage("policy", err)
+		return info, ccgateway.VerificationStage("policy", err)
 	}
 	ns, err := helperRuntimeNamespace(caps, model, policy)
 	if err != nil {
-		return "", binding, ccgateway.VerificationStage("capabilities", err)
+		return info, ccgateway.VerificationStage("capabilities", err)
 	}
-	binding, err = g.d.ResourceTransport.Identity(ctx, accountID)
-	return ns, binding, ccgateway.VerificationStage("identity", err)
+	info.Namespace, info.PayloadVersions = ns, caps.HelperHistoryPayloadVersions
+	info.Binding, err = g.d.ResourceTransport.Identity(ctx, accountID)
+	return info, ccgateway.VerificationStage("identity", err)
 }

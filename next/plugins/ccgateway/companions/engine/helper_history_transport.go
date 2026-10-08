@@ -137,7 +137,7 @@ func (g *Gateway) serveHelperHistory(w http.ResponseWriter, r *http.Request) boo
 	if contentType == "" {
 		contentType = "application/json"
 	}
-	response := helperhistory.ResponseEnvelope{Version: helperhistory.Version, AttemptID: envelope.AttemptID, RequestDigest: envelope.RequestDigest, Namespace: envelope.Namespace, Identity: grant.identity, StatusCode: status, ContentType: contentType, Headers: httpfacts.Select(buffer.header), Body: buffer.body.Bytes(), Delta: delta}
+	response := helperhistory.ResponseEnvelope{Version: helperhistory.Version, PayloadVersion: envelope.PayloadVersion, AttemptID: envelope.AttemptID, RequestDigest: envelope.RequestDigest, Namespace: envelope.Namespace, Identity: grant.identity, StatusCode: status, ContentType: contentType, Headers: httpfacts.Select(buffer.header), Body: buffer.body.Bytes(), Delta: delta}
 	if captureErr != nil {
 		response.Failure = helperhistory.FailureCapture
 		response.Delta = nil

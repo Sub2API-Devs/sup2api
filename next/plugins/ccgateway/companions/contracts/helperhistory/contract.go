@@ -11,17 +11,23 @@ import (
 )
 
 const Version = 1
+const PayloadVersion1 = 1
+const PayloadVersion2 = 2
+const SegmentSystemOnly = "system_only"
+const SegmentWholeRound = "whole_round"
 const MaxPayloadBytes = 32 << 20
 const MaxSegments = 256
 const MaxChainDepth = 512
 
-// Segment inserts complete paired helper messages at an exact public boundary.
+// Segment inserts hidden protocol messages at an exact public boundary.
 // AfterMessage is a zero-based public message index; equal anchors retain array order.
 // PublicAnchorDigest is CanonicalDigest(public messages through that index).
 // ToolCatalogDigest is CanonicalDigest(the original tools array, including order).
-// Only whole hidden rounds are supported, never overlapping visible blocks.
+// Version 1 carries whole hidden rounds; version 2 also permits separately
+// attributed system-only gaps. Neither can overlap visible public messages.
 // The anchor and catalog bind identity; neither is a tool registration.
 type Segment struct {
+	Kind               string            `json:"kind,omitempty"`
 	AfterMessage       int               `json:"after_message"`
 	PublicAnchorDigest string            `json:"public_anchor_digest"`
 	ToolCatalogDigest  string            `json:"tool_catalog_digest"`
@@ -58,11 +64,14 @@ func Validate(raw []byte) error {
 	if err := d.Decode(&p); err != nil {
 		return fmt.Errorf("invalid helper history JSON: %w", err)
 	}
-	if p.Version != Version || len(p.Segments) > MaxSegments {
+	if (p.Version != PayloadVersion1 && p.Version != PayloadVersion2) || len(p.Segments) > MaxSegments {
 		return fmt.Errorf("unsupported helper history framing")
 	}
 	previous := -1
 	for _, s := range p.Segments {
+		if p.Version == PayloadVersion1 && s.Kind != "" || p.Version == PayloadVersion2 && s.Kind != SegmentSystemOnly && s.Kind != SegmentWholeRound {
+			return fmt.Errorf("invalid helper segment kind for payload version")
+		}
 		if s.AfterMessage < 0 || s.AfterMessage < previous || !ValidDigest(s.PublicAnchorDigest) || !ValidDigest(s.ToolCatalogDigest) || len(s.Messages) == 0 {
 			return fmt.Errorf("invalid helper history segment")
 		}
@@ -76,6 +85,26 @@ func Validate(raw []byte) error {
 			if json.Unmarshal(m, &v) != nil || len(v.Content) == 0 || (v.Content[0] != '[' && !(v.Role == "system" && v.Content[0] == '"')) {
 				return fmt.Errorf("invalid helper message")
 			}
+			if s.Kind == SegmentSystemOnly {
+				if v.Role != "system" {
+					return fmt.Errorf("system-only helper segment contains non-system message")
+				}
+				var content any
+				_ = json.Unmarshal(v.Content, &content)
+				switch c := content.(type) {
+				case string:
+					if c == "" {
+						return fmt.Errorf("empty helper system content")
+					}
+				case []any:
+					if len(c) == 0 {
+						return fmt.Errorf("empty helper system content")
+					}
+				default:
+					return fmt.Errorf("invalid helper system content")
+				}
+				continue
+			}
 			if v.Role == "system" && pairIndex == 0 {
 				continue
 			}
@@ -88,7 +117,7 @@ func Validate(raw []byte) error {
 			}
 			pairIndex++
 		}
-		if pairIndex == 0 || pairIndex%2 != 0 {
+		if s.Kind != SegmentSystemOnly && (pairIndex == 0 || pairIndex%2 != 0) {
 			return fmt.Errorf("incomplete helper message pair")
 		}
 	}

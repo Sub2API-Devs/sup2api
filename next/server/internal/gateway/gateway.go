@@ -98,7 +98,7 @@ type Gateway struct {
 	now               func() time.Time
 	lookupIP          func(ctx context.Context, host string) ([]net.IP, error)
 	headerWait        func(stream bool) time.Duration
-	helperRuntime     func(context.Context, int64, string) (string, core.ResourceBinding, error)
+	helperRuntime     func(context.Context, int64, string) (helperRuntimeInfo, error)
 	helperRequirement func(context.Context, int64, *http.Request) (string, error)
 	// randFloat drives the weighted order inside a priority (CONTRACTS §18).
 	randFloat func() float64

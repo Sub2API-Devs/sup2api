@@ -15,6 +15,8 @@ type helperHistoryExecution struct {
 	delta                             helperhistory.Payload
 	namespace                         string
 	authenticated                     bool
+	positionEvidence                  map[int][]any
+	payloadVersion                    int
 	systemEvidence                    []any
 	systemObserved                    bool
 	err                               error
@@ -31,7 +33,8 @@ func newHelperHistoryExecution(envelope helperhistory.RequestEnvelope) (*helperH
 	if err := json.Unmarshal(envelope.Request, &source); err != nil {
 		return nil, err
 	}
-	x := &helperHistoryExecution{public: source["messages"], tools: source["tools"], imported: helperhistory.Payload{Version: helperhistory.Version}, delta: helperhistory.Payload{Version: helperhistory.Version}}
+	selected := envelope.EffectivePayloadVersion()
+	x := &helperHistoryExecution{payloadVersion: selected, public: source["messages"], tools: source["tools"], imported: helperhistory.Payload{Version: selected}, delta: helperhistory.Payload{Version: selected}}
 	if len(x.tools) == 0 {
 		x.tools = json.RawMessage(`[]`)
 	}
@@ -39,6 +42,11 @@ func newHelperHistoryExecution(envelope helperhistory.RequestEnvelope) (*helperH
 		var payload helperhistory.Payload
 		if err := json.Unmarshal(raw, &payload); err != nil {
 			return nil, err
+		}
+		if selected == helperhistory.PayloadVersion2 && payload.Version == helperhistory.PayloadVersion1 {
+			for i := range payload.Segments {
+				payload.Segments[i].Kind = helperhistory.SegmentWholeRound
+			}
 		}
 		x.imported.Segments = append(x.imported.Segments, payload.Segments...)
 	}
@@ -61,8 +69,14 @@ func (r *Request) admitHelperHistory(x *helperHistoryExecution) error {
 	if x == nil {
 		return nil
 	}
-	if r.CountTokens || r.resources != nil || r.credit != nil || r.MCP != nil || r.InlineTools != nil || r.structuredOutput() || r.hasContextControls() || r.hasCompactionHistory() || r.continuation != "" {
-		return fmt.Errorf("helper history requires an ordinary client-tool conversation without resource, credit, MCP, inline or continuation controls")
+	if r.CountTokens || r.resources != nil || r.credit != nil || r.MCP != nil || r.structuredOutput() || r.hasContextControls() || r.hasCompactionHistory() || r.continuation != "" {
+		return fmt.Errorf("helper history requires an ordinary client-tool conversation without resource, credit, MCP or continuation controls")
+	}
+	if r.InlineTools != nil && x.payloadVersion != helperhistory.PayloadVersion2 {
+		return fmt.Errorf("helper inline history requires negotiated positional payload version 2")
+	}
+	if err := r.validateHelperInline(); err != nil {
+		return err
 	}
 	if _, err := r.replayHelperHistory(x.public, x.tools, x.imported); err != nil {
 		return err
@@ -99,17 +113,42 @@ func (r *Request) applyHelperHistory(body Object) error {
 	if len(boundaries) != len(r.Messages) || len(boundaries) == 0 {
 		return fmt.Errorf("helper public message boundary changed")
 	}
+	positions := map[int][]any{}
+	if x.payloadVersion == helperhistory.PayloadVersion2 {
+		var err error
+		positions, err = helperInterleavedSystems(messages, boundaries)
+		if err != nil {
+			return err
+		}
+		for _, segment := range x.imported.Segments {
+			// These systems are checked exactly by replay below, not captured twice.
+			first, err := decodeObject(segment.Messages[0])
+			if err != nil {
+				return err
+			}
+			if str(first, "role") == "system" {
+				delete(positions, segment.AfterMessage)
+			}
+		}
+	}
 	suffix := messages[boundaries[len(boundaries)-1]+1:]
 	systems, pairs, err := splitHelperSystems(suffix)
 	if err != nil {
 		return err
 	}
 	if !x.systemObserved {
-		if len(pairs) > 0 && len(systems) > 0 {
+		if len(pairs) > 0 && (len(systems) > 0 || len(positions) > 0) {
 			return fmt.Errorf("helper system has no prior attributed request evidence")
+		}
+		x.positionEvidence = make(map[int][]any, len(positions))
+		for at, objects := range positions {
+			x.positionEvidence[at] = cloneHelperMessages(objects)
 		}
 		x.systemEvidence = cloneHelperMessages(systems)
 		x.systemObserved = true
+	}
+	if !sameHelperSystemPositions(x.positionEvidence, positions) {
+		return fmt.Errorf("helper system changed its public position")
 	}
 	if !helperSystemsMatchSource(x.systemEvidence, systems) {
 		return fmt.Errorf("helper system changed at its public boundary")
@@ -120,7 +159,20 @@ func (r *Request) applyHelperHistory(body Object) error {
 			x.err = err
 			return err
 		}
-		x.delta.Segments = []helperhistory.Segment{segment}
+		x.delta.Segments = nil
+		for after := range boundaries {
+			if objects := positions[after]; len(objects) > 0 {
+				pos, err := helperSystemSegment(x.public, x.tools, after, objects)
+				if err != nil {
+					return err
+				}
+				x.delta.Segments = append(x.delta.Segments, pos)
+			}
+		}
+		if x.payloadVersion == helperhistory.PayloadVersion2 {
+			segment.Kind = helperhistory.SegmentWholeRound
+		}
+		x.delta.Segments = append(x.delta.Segments, segment)
 	}
 	insertions := make(map[int][]any)
 	skipped := make(map[int]bool)

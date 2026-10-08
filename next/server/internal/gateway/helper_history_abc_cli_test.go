@@ -35,6 +35,12 @@ import (
 // private envelopes, hidden transcripts, encryption, commits and usage receipts
 // run through the product implementations. No production credentials are read.
 func TestHelperHistoryABCRealDBCLI(t *testing.T) {
+	runHelperHistoryABCRealDBCLI(t, false)
+}
+func TestHelperHistoryABCInlineRealDBCLI(t *testing.T) {
+	runHelperHistoryABCRealDBCLI(t, true)
+}
+func runHelperHistoryABCRealDBCLI(t *testing.T, inline bool, upgrade ...bool) {
 	cli := os.Getenv("CCG_REAL_CLI")
 	if cli == "" {
 		t.Skip("set CCG_REAL_CLI for isolated Worker integration")
@@ -57,6 +63,8 @@ func TestHelperHistoryABCRealDBCLI(t *testing.T) {
 	}
 	for _, stream := range []bool{false, true} {
 		t.Run(fmt.Sprint(stream), func(t *testing.T) {
+			mixedVersion := len(upgrade) > 0 && upgrade[0]
+			legacyCapability := mixedVersion
 			ctx := context.Background()
 			e, _, _ := resourceTestEnv(t)
 			var userID, groupID int64
@@ -79,7 +87,7 @@ func TestHelperHistoryABCRealDBCLI(t *testing.T) {
 			durable := helperhistory.New(db, cipher, helperhistory.Options{})
 			e.gw.d.HelperHistory = durable
 			e.gw.d.EnableHelperHistory = true
-			provider := &abcProvider{t: t, budget: `{"total":20000,"type":"tokens"}`}
+			provider := &abcProvider{t: t, budget: `{"total":20000,"type":"tokens"}`, inline: inline}
 			upstream := httptest.NewServer(provider)
 			defer upstream.Close()
 			root := t.TempDir()
@@ -134,23 +142,35 @@ func TestHelperHistoryABCRealDBCLI(t *testing.T) {
 				out, err := wire.DecodeRequirement(raw)
 				return out.Decision, err
 			}
-			e.gw.helperRuntime = func(ctx context.Context, id int64, actual string) (string, core.ResourceBinding, error) {
+			e.gw.helperRuntime = func(ctx context.Context, id int64, actual string) (helperRuntimeInfo, error) {
 				caps, identity, err := worker.facts(ctx)
 				if err != nil {
-					return "", core.ResourceBinding{}, err
+					return helperRuntimeInfo{}, err
 				}
 				// Use the running Worker's actual declaration, CLI and issuer.
 				ns, err := helperRuntimeNamespace(caps, actual, json.RawMessage(`{}`))
-				return ns, core.ResourceBinding{AccountID: id, PrincipalID: identity.PrincipalID, Generation: identity.Generation}, err
+				if legacyCapability {
+					caps.HelperHistoryPayloadVersions = nil
+				}
+				return helperRuntimeInfo{Namespace: ns, Binding: core.ResourceBinding{AccountID: id, PrincipalID: identity.PrincipalID, Generation: identity.Generation}, PayloadVersions: caps.HelperHistoryPayloadVersions}, err
 			}
 			firstUser := map[string]any{"role": "user", "content": fmt.Sprintf("public weather fixture %v", stream)}
 			request := map[string]any{"model": model, "thinking": map[string]any{"type": "adaptive"}, "max_tokens": 128, "stream": stream, "output_config": map[string]any{"task_budget": map[string]any{"type": "tokens", "total": 20000}}, "messages": []any{firstUser}, "tools": []any{map[string]any{"name": "weather", "defer_loading": true, "input_schema": map[string]any{"type": "object", "properties": map[string]any{}}}}}
+			initial := []any{firstUser}
+			if inline {
+				initial = append(initial, abcInlineAddition("spare", "9007199254740993"))
+				request["messages"] = initial
+			}
 			post := func() json.RawMessage {
 				t.Helper()
 				provider.mu.Lock()
 				_, provider.expectBudget = request["output_config"]
 				provider.mu.Unlock()
-				r := e.do("/v1/messages", request, map[string]string{"anthropic-beta": "task-budgets-2026-03-13"})
+				beta := "task-budgets-2026-03-13"
+				if inline {
+					beta += ",inline-tools-2026-09-15"
+				}
+				r := e.do("/v1/messages", request, map[string]string{"anthropic-beta": beta})
 				if r.status != 200 {
 					bridgeMu.Lock()
 					detail := bridgeDiagnostic
@@ -159,6 +179,9 @@ func TestHelperHistoryABCRealDBCLI(t *testing.T) {
 				}
 				if bytes.Contains(r.body, []byte("PRIVATE_ABC")) || bytes.Contains(r.body, []byte("attempt_id")) {
 					t.Fatal("private history exposed")
+				}
+				if t.Failed() {
+					t.FailNow()
 				}
 				raw := r.body
 				if stream {
@@ -187,13 +210,35 @@ func TestHelperHistoryABCRealDBCLI(t *testing.T) {
 			if !bytes.Contains(one, []byte("external_weather")) {
 				t.Fatal("first external client tool lost")
 			}
-			continuation := []any{firstUser, map[string]any{"role": "assistant", "content": one}, map[string]any{"role": "user", "content": []any{map[string]any{"type": "tool_result", "tool_use_id": "external_weather", "content": "PUBLIC_WEATHER_RESULT"}}}}
+			continuation := append(append([]any(nil), initial...), map[string]any{"role": "assistant", "content": one}, map[string]any{"role": "user", "content": []any{map[string]any{"type": "tool_result", "tool_use_id": "external_weather", "content": "PUBLIC_WEATHER_RESULT"}}})
+			beforeWithdrawal := append([]any(nil), continuation...)
+			if inline {
+				continuation = append(continuation, map[string]any{"role": "system", "content": []any{map[string]any{"type": "tool_removal", "tool": map[string]any{"type": "tool_reference", "name": "weather"}}}})
+			}
 			request["messages"] = continuation
+			var legacyRecord core.HelperHistoryRecord
+			owner := core.ResourceOwner{UserID: userID, GroupID: groupID}
+			if mixedVersion {
+				chain := abcStoredChain(t, durable, owner, request)
+				if len(chain.Records) != 1 || abcPayloadVersion(t, chain.Records[0].Payload) != 1 {
+					t.Fatal("first receipt is not a persisted v1 payload")
+				}
+				legacyRecord = chain.Records[0]
+				legacyRecord.Payload = append([]byte(nil), legacyRecord.Payload...)
+				legacyCapability = false
+			}
 			two := post()
 			// Ordinary no-budget round still joins the known immutable receipt chain.
 			delete(request, "output_config")
 			ordinary := append(append([]any(nil), continuation...), map[string]any{"role": "assistant", "content": two}, map[string]any{"role": "user", "content": "ordinary public follow-up"})
 			request["messages"] = ordinary
+			var mixedPrefixes []string
+			if mixedVersion {
+				chain := abcStoredChain(t, durable, owner, request)
+				verifyABCMixedChain(t, chain, legacyRecord)
+				encoded, _ := json.Marshal(request)
+				_, mixedPrefixes, _ = publicHelperPrefixes(encoded)
+			}
 			three := post()
 			worker.stop()
 			worker = startABCWorker(t, binary, cli, root, filepath.Join(root, "cache-2"), upstream.URL)
@@ -212,8 +257,16 @@ func TestHelperHistoryABCRealDBCLI(t *testing.T) {
 			request["messages"] = continuation
 			request["output_config"] = map[string]any{"task_budget": map[string]any{"type": "tokens", "total": 20000}}
 			post()
+			wantRequests, wantCalls := 5, 6
+			if inline {
+				request["messages"] = beforeWithdrawal
+				post()
+				request["messages"] = append(append([]any(nil), continuation...), map[string]any{"role": "assistant", "content": two}, map[string]any{"role": "user", "content": "readd schema"}, abcInlineAddition("weather", "9007199254740995"))
+				post()
+				wantRequests, wantCalls = 7, 8
+			}
 			pending, err := durable.PendingUsage(ctx, 64)
-			if err != nil || len(pending) != 5 {
+			if err != nil || len(pending) != wantRequests {
 				t.Fatalf("durable usage count %d: %v", len(pending), err)
 			}
 			var sumIn, sumOut int64
@@ -248,7 +301,7 @@ func TestHelperHistoryABCRealDBCLI(t *testing.T) {
 			provider.mu.Lock()
 			calls := provider.calls
 			provider.mu.Unlock()
-			if calls != 6 || sumIn != 120 || sumOut != 48 {
+			if calls != wantCalls || sumIn != int64(wantCalls*20) || sumOut != int64(wantCalls*8) {
 				t.Fatalf("calls=%d actual cumulative usage %d/%d", calls, sumIn, sumOut)
 			}
 			var rows, receipts int
@@ -258,8 +311,15 @@ func TestHelperHistoryABCRealDBCLI(t *testing.T) {
 			if err := db.Pool.QueryRow(ctx, `SELECT count(*) FROM provider_helper_usage_receipts p JOIN usage_logs u USING(request_id) WHERE u.user_id=$1`, userID).Scan(&receipts); err != nil {
 				t.Fatal(err)
 			}
-			if rows != 5 || receipts != 5 {
+			if rows != wantRequests || receipts != wantRequests {
 				t.Fatalf("usage replay rows=%d receipts=%d", rows, receipts)
+			}
+			if mixedVersion {
+				found, err := durable.Lookup(ctx, owner, mixedPrefixes)
+				if err != nil || found.State != core.HelperHistoryKnownReady {
+					t.Fatalf("mixed receipt reload: %v state=%s", err, found.State)
+				}
+				verifyABCMixedChain(t, found.Chain, legacyRecord)
 			}
 		})
 	}
@@ -355,14 +415,16 @@ func (w *abcWorker) facts(ctx context.Context) (features.RuntimeCapabilities, re
 }
 
 type abcProvider struct {
-	t               *testing.T
-	mu              sync.Mutex
-	calls           int
-	budget          string
-	systemDigest    string
-	resultDigest    string
-	assistantDigest string
-	expectBudget    bool
+	inline              bool
+	inlineCatalogDigest string
+	t                   *testing.T
+	mu                  sync.Mutex
+	calls               int
+	budget              string
+	systemDigest        string
+	resultDigest        string
+	assistantDigest     string
+	expectBudget        bool
 }
 
 func (p *abcProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -403,6 +465,9 @@ func (p *abcProvider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	joined, _ := json.Marshal(body.Messages)
+	if p.inline {
+		verifyABCInline(p.t, body.Messages, &p.inlineCatalogDigest)
+	}
 	if !bytes.Contains(joined, []byte("helper_source_call")) {
 		emitABCResponse(w, body.Model, p.calls, []map[string]any{{"type": "thinking", "thinking": "PRIVATE_ABC_THINKING", "signature": "fixture-original-signature"}, {"type": "text", "text": "PRIVATE_ABC_PLANNING"}, {"type": "tool_use", "id": "helper_source_call", "name": "ToolSearch", "input": map[string]any{"query": "select:mcp__ccgateway__weather"}}})
 		return

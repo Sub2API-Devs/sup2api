@@ -3,6 +3,7 @@ package features
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 const CapabilityProtocolVersion = 1
@@ -22,17 +23,31 @@ type RuntimeProbe struct {
 // RuntimeCapabilities separates running-binary declarations, local probes and
 // real provider verification. A health check cannot promote any feature.
 type RuntimeCapabilities struct {
-	ProtocolVersion             int            `json:"protocol_version"`
-	Build                       BuildInfo      `json:"build"`
-	Catalog                     Document       `json:"code_catalog"`
-	PolicySchemaVersions        []int          `json:"policy_schema_versions"`
-	HelperHistorySchemaVersions []int          `json:"helper_history_schema_versions,omitempty"`
-	Probes                      []RuntimeProbe `json:"runtime_probes"`
-	ModelProviderVerification   string         `json:"model_provider_verification"`
+	ProtocolVersion              int            `json:"protocol_version"`
+	Build                        BuildInfo      `json:"build"`
+	Catalog                      Document       `json:"code_catalog"`
+	PolicySchemaVersions         []int          `json:"policy_schema_versions"`
+	HelperHistorySchemaVersions  []int          `json:"helper_history_schema_versions,omitempty"`
+	HelperHistoryPayloadVersions []int          `json:"helper_history_payload_versions,omitempty"`
+	Probes                       []RuntimeProbe `json:"runtime_probes"`
+	ModelProviderVerification    string         `json:"model_provider_verification"`
 }
 
 func DecodeRuntimeCapabilities(raw []byte) (RuntimeCapabilities, error) {
 	var out RuntimeCapabilities
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return out, err
+	}
+	for key, value := range fields {
+		if !strings.EqualFold(key, "helper_history_payload_versions") {
+			continue
+		}
+		var versions []int
+		if key != "helper_history_payload_versions" || json.Unmarshal(value, &versions) != nil || len(versions) == 0 {
+			return out, fmt.Errorf("invalid explicit helper payload capabilities")
+		}
+	}
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return out, err
 	}
@@ -61,6 +76,16 @@ func DecodeRuntimeCapabilities(raw []byte) (RuntimeCapabilities, error) {
 			return out, fmt.Errorf("invalid helper history capability")
 		}
 		helperSeen[v] = true
+	}
+	if len(out.HelperHistoryPayloadVersions) > 16 {
+		return out, fmt.Errorf("oversized helper payload capabilities")
+	}
+	payloadSeen := map[int]bool{}
+	for _, v := range out.HelperHistoryPayloadVersions {
+		if v < 1 || v > 1024 || payloadSeen[v] {
+			return out, fmt.Errorf("invalid helper payload capability")
+		}
+		payloadSeen[v] = true
 	}
 	for _, p := range out.Probes {
 		if p.Name != "cli_version" || (p.Status != "observed" && p.Status != "unavailable") || len(p.Value) > 128 {

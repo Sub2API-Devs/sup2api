@@ -38,28 +38,30 @@ type AccountingEvidence struct {
 }
 
 type RequestEnvelope struct {
-	Version       int                `json:"version"`
-	AttemptID     string             `json:"attempt_id"`
-	RequestDigest string             `json:"request_digest"`
-	Namespace     string             `json:"namespace"`
-	Identity      resources.Identity `json:"identity"`
-	Request       json.RawMessage    `json:"request"`
-	History       []json.RawMessage  `json:"history"`
+	PayloadVersion int                `json:"payload_version,omitempty"`
+	Version        int                `json:"version"`
+	AttemptID      string             `json:"attempt_id"`
+	RequestDigest  string             `json:"request_digest"`
+	Namespace      string             `json:"namespace"`
+	Identity       resources.Identity `json:"identity"`
+	Request        json.RawMessage    `json:"request"`
+	History        []json.RawMessage  `json:"history"`
 }
 
 type ResponseEnvelope struct {
-	Version       int                 `json:"version"`
-	AttemptID     string              `json:"attempt_id"`
-	RequestDigest string              `json:"request_digest"`
-	Namespace     string              `json:"namespace"`
-	Identity      resources.Identity  `json:"identity"`
-	StatusCode    int                 `json:"status_code"`
-	ContentType   string              `json:"content_type"`
-	Headers       http.Header         `json:"headers"`
-	Body          []byte              `json:"body"`
-	Delta         json.RawMessage     `json:"delta"`
-	Failure       string              `json:"failure,omitempty"`
-	Accounting    *AccountingEvidence `json:"accounting,omitempty"`
+	PayloadVersion int                 `json:"payload_version,omitempty"`
+	Version        int                 `json:"version"`
+	AttemptID      string              `json:"attempt_id"`
+	RequestDigest  string              `json:"request_digest"`
+	Namespace      string              `json:"namespace"`
+	Identity       resources.Identity  `json:"identity"`
+	StatusCode     int                 `json:"status_code"`
+	ContentType    string              `json:"content_type"`
+	Headers        http.Header         `json:"headers"`
+	Body           []byte              `json:"body"`
+	Delta          json.RawMessage     `json:"delta"`
+	Failure        string              `json:"failure,omitempty"`
+	Accounting     *AccountingEvidence `json:"accounting,omitempty"`
 }
 
 func validTransportIdentity(version int, attempt, digest, namespace string, identity resources.Identity) bool {
@@ -70,6 +72,9 @@ func transportText(s string, n int) bool {
 }
 
 func (e RequestEnvelope) Validate() error {
+	if !validPayloadSelection(e.PayloadVersion) {
+		return fmt.Errorf("unsupported helper payload selection")
+	}
 	if !validTransportIdentity(e.Version, e.AttemptID, e.RequestDigest, e.Namespace, e.Identity) || len(e.Request) == 0 || len(e.Request) > MaxPayloadBytes || len(e.History) > MaxChainDepth {
 		return fmt.Errorf("invalid helper request envelope")
 	}
@@ -86,13 +91,16 @@ func (e RequestEnvelope) Validate() error {
 		if total > MaxPayloadBytes {
 			return fmt.Errorf("helper history exceeds transport limit")
 		}
-		if err := Validate(raw); err != nil {
+		if err := ValidatePayloadSelection(raw, e.EffectivePayloadVersion()); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 func (e ResponseEnvelope) Validate() error {
+	if !validPayloadSelection(e.PayloadVersion) {
+		return fmt.Errorf("unsupported helper payload selection")
+	}
 	if !validTransportIdentity(e.Version, e.AttemptID, e.RequestDigest, e.Namespace, e.Identity) || e.StatusCode < 200 || e.StatusCode > 599 || !transportText(e.ContentType, 256) || len(e.Body) > MaxPayloadBytes {
 		return fmt.Errorf("invalid helper response envelope")
 	}
@@ -108,7 +116,7 @@ func (e ResponseEnvelope) Validate() error {
 		}
 	}
 	if e.Failure == "" {
-		if err := Validate(e.Delta); err != nil {
+		if err := ValidatePayloadSelection(e.Delta, e.EffectivePayloadVersion()); err != nil {
 			return err
 		}
 	} else if len(e.Delta) != 0 && string(e.Delta) != "null" {
@@ -190,6 +198,9 @@ func decodeEnvelope(raw []byte, out any) error {
 }
 func DecodeRequest(raw []byte) (RequestEnvelope, error) {
 	var e RequestEnvelope
+	if err := validateExplicitPayloadVersion(raw); err != nil {
+		return e, err
+	}
 	if err := decodeEnvelope(raw, &e); err != nil {
 		return e, err
 	}
@@ -197,6 +208,9 @@ func DecodeRequest(raw []byte) (RequestEnvelope, error) {
 }
 func DecodeResponse(raw []byte) (ResponseEnvelope, error) {
 	var e ResponseEnvelope
+	if err := validateExplicitPayloadVersion(raw); err != nil {
+		return e, err
+	}
 	if err := decodeEnvelope(raw, &e); err != nil {
 		return e, err
 	}

@@ -20,19 +20,19 @@ func TestHelperCustodyFirstIneligibleIssuerSkipsOnlyBeforeReserve(t *testing.T) 
 			e.accounts.addTyped(testGroup, 21, 1, "acc-21", "ccgateway", "apikey")
 			e.accounts.addTyped(testGroup, 22, 2, "acc-22", "ccgateway", "apikey")
 			var selected []int64
-			e.gw.helperRuntime = func(_ context.Context, id int64, _ string) (string, core.ResourceBinding, error) {
+			e.gw.helperRuntime = func(_ context.Context, id int64, _ string) (helperRuntimeInfo, error) {
 				selected = append(selected, id)
 				if id == 21 {
 					switch mode {
 					case "issuer", "capability":
-						return "", core.ResourceBinding{}, core.ErrUnsupported
+						return helperRuntimeInfo{}, core.ErrUnsupported
 					case "timeout":
-						return "", core.ResourceBinding{}, context.DeadlineExceeded
+						return helperRuntimeInfo{}, context.DeadlineExceeded
 					default:
-						return "", core.ResourceBinding{}, errors.New("DB failed")
+						return helperRuntimeInfo{}, errors.New("DB failed")
 					}
 				}
-				return "fixture-policy", core.ResourceBinding{AccountID: id, PrincipalID: "issuer", Generation: "epoch"}, nil
+				return helperRuntimeInfo{Namespace: "fixture-policy", Binding: core.ResourceBinding{AccountID: id, PrincipalID: "issuer", Generation: "epoch"}}, nil
 			}
 			r := e.messages(helperRequestBody())
 			if mode == "timeout" || mode == "db" {
@@ -70,9 +70,9 @@ func TestHelperCustodyKnownRuntimeFailureNeverChangesAccount(t *testing.T) {
 		return "", nil
 	}
 	checks := 0
-	e.gw.helperRuntime = func(context.Context, int64, string) (string, core.ResourceBinding, error) {
+	e.gw.helperRuntime = func(context.Context, int64, string) (helperRuntimeInfo, error) {
 		checks++
-		return "", core.ResourceBinding{}, core.ErrUnsupported
+		return helperRuntimeInfo{}, core.ErrUnsupported
 	}
 	r = e.messages(b)
 	if r.status != 400 || checks != 1 || calls.Load() != 1 {
