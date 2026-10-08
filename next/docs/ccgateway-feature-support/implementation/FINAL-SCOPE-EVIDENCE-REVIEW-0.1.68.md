@@ -11,7 +11,7 @@
 ## 本轮真实证据允许的结论
 
 - local-parallel-read-0.1.68.json：同一非空assistant message ID下5个不同Read调用、5正确路径、5对应结果及最终5marker均通过。它证明同一响应五调用与回传成功，不证明五次本机IO在时间上重叠。最终TAB/no newline fixture保留便于核对。
-- public-inline-search-0.1.68.json：两次HTTP200，tool_use再end_turn，外部工具往返/marker完成。`internal_search_verified:false`仍在证据中，尚不能凭此称真实内部ToolSearch发生；须由关联Worker日志另证，不能修改原JSON猜成功。
+- public-inline-search-0.1.68.json：两次HTTP200，tool_use再end_turn，外部工具往返/marker完成。原JSON的 `internal_search_verified:false` 保持不动；后续 [PUBLIC-ACCEPTANCE-0.1.68](PUBLIC-ACCEPTANCE-0.1.68.md) 已用账号22关联日志补证：首请求两次上游回合，实际 ToolSearch internal_execute/local_execution=true，随后 lookup_fixture 为 client_handoff/local_execution=false；第二请求完整回传一次上游 end_turn。因此本fixture真实内部发现已验证，不扩大为所有组合。
 - MCP真实通过由本轮PUBLIC-MCP/部署验收代理记录；本审查不重复连接第三方MCP。单次成功不能推广为deferred MCP、所有服务器编码或所有认证协议。
 
 ## 仍可建设，但当前有明确拒绝的功能组合

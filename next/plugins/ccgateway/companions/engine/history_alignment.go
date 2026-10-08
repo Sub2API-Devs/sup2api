@@ -5,7 +5,7 @@ import "fmt"
 // ToolSearch is not an internal round when the client declared that native
 // tool for interception. Nor may a mixed round discard a client tool call.
 func internalHistoryAssistant(r *Request, message Object) bool {
-	if !r.toolSearchEnabled() || r.forcedLoadedClientTool() != nil {
+	if !r.toolSearchEnabled() || r.forcedLoadedClientCatalog() {
 		return false
 	}
 	for _, tool := range r.Tools {

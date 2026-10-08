@@ -21,7 +21,7 @@ func forcedLoadedFixture(t *testing.T) *Request {
 }
 func TestForcedLoadedAdmissionAndExecutionBoundary(t *testing.T) {
 	r := forcedLoadedFixture(t)
-	if r.forcedLoadedClientTool() == nil || r.maxTurns() != "1" {
+	if !r.forcedLoadedClientCatalog() || r.maxTurns() != "1" {
 		t.Fatal("eligible scope missing")
 	}
 	q := Object{"request_id": "fixture", "request": Object{"subtype": "can_use_tool", "tool_name": "ToolSearch", "tool_use_id": "helper"}}
@@ -41,12 +41,10 @@ func TestForcedLoadedAdmissionAndExecutionBoundary(t *testing.T) {
 			t.Fatal("helper accepted by response view")
 		}
 	}
-	for _, mode := range []string{"any", "deferred", "implicit", "server", "typed", "mcp", "inline", "safeguards", "format"} {
+	for _, mode := range []string{"deferred", "implicit", "server", "typed", "mcp", "inline", "safeguards", "format"} {
 		t.Run(mode, func(t *testing.T) {
 			x := forcedLoadedFixture(t)
 			switch mode {
-			case "any":
-				x.Plan.fields["tool_choice"] = json.RawMessage(`{"type":"any"}`)
 			case "deferred":
 				v := true
 				x.Tools[0].DeferLoading = &v
@@ -65,7 +63,7 @@ func TestForcedLoadedAdmissionAndExecutionBoundary(t *testing.T) {
 			case "format":
 				x.JSONSchema = Object{}
 			}
-			if x.forcedLoadedClientTool() != nil {
+			if x.forcedLoadedClientCatalog() {
 				t.Fatal("unsafe combination admitted")
 			}
 		})

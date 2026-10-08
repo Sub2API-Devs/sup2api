@@ -83,7 +83,7 @@ func (p *RequestPlan) validateTaskBudget(req *Request) error {
 		return fmt.Errorf("task_budget.remaining cannot be combined with compaction or signed compaction history")
 	}
 	if req.toolSearchEnabled() || req.structuredOutput() {
-		return fmt.Errorf("task_budget with CLI internal rounds requires cross-request budget accounting; use API server tools or client tool roundtrips")
+		return fmt.Errorf("task_budget with CLI internal rounds requires durable restoration of hidden helper history across client continuations and cold imports; use API server tools or client tool roundtrips")
 	}
 	return nil
 }

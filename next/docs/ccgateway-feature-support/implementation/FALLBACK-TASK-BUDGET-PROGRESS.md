@@ -15,7 +15,7 @@
 
 官方形态为 `output_config.task_budget={type:"tokens",total:int,remaining?:int|null}`，需要 `task-budgets-2026-03-13`。这是建议预算，不是硬输出限制，也不是 Worker 可自行扣减的计费余额。官方明确 Claude Code / Cowork 原生界面不支持；此实现是主请求 API 协议适配，不宣称 CLI 原生提供预算功能。
 
-新增 `task_budget.go`：在旧 output_config 解析前保存独立不可变计划，再与 effort/format 合并到主请求。缺省、显式 null、remaining 缺省/null/零有区别；不改写客户端预算、不计算虚构 remaining。校验 beta、数字类型；CLI 内部 ToolSearch/结构化工具追加请求会重置请求级预算，缺乏跨内部调用预算计量时明确拒绝该组合。API 服务端工具仍在单次请求内，由上游执行预算语义。`remaining` 与 compaction 或 signed compaction 历史组合按官方限制拒绝。
+新增 `task_budget.go`：在旧 output_config 解析前保存独立不可变计划，再与 effort/format 合并到主请求。缺省、显式 null、remaining 缺省/null/零有区别；不改写客户端预算、不计算虚构 remaining。校验 beta、数字类型。早期将 CLI 内部追加请求的拒绝原因解释为“会重置预算、缺跨轮计量”，该解释已由 2026-10-08 后续官方合同复核纠正：完整历史存在时无需逐轮扣减；当前实际缺口是内部隐藏 helper 历史无法跨客户端续聊、冷 Worker 完整恢复，因此组合仍拒绝。详见 [后续完整历史方案](TASK-BUDGET-INTERNAL-SEARCH-PLAN.md)，不是声明此组合天然不可兼容。API 服务端工具由上游执行预算语义。`remaining` 与 compaction 或 signed compaction 历史组合按官方限制拒绝。
 
 `TestTaskBudgetPlan` 覆盖格式、空值、beta、内部轮次限制和不覆盖 effort。`TestRealCLITaskBudgetCompatibility` 六个真实 CLI 假上游请求通过（6.62 秒）：new、prefix-hit、改变 total/remaining、fork、新 cache import、SSE。最终预算和 beta 与客户端一致；本地 prefix-hit 不代表上游预算变化后的缓存计费命中。
 

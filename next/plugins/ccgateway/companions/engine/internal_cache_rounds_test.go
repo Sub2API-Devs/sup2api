@@ -138,7 +138,7 @@ func TestInternalCacheGatesKeepProtocolControls(t *testing.T) {
 				body["fallback_credit_token"] = "not-a-real-token"
 				h.Set("anthropic-beta", "fallback-credit-2026-07-01")
 			case "budget":
-				body["output_config"] = Object{"task_budget": Object{"type": "tokens", "total": 10000}}
+				body["output_config"] = Object{"task_budget": Object{"type": "tokens", "total": 64000}}
 				h.Set("anthropic-beta", taskBudgetBeta)
 			case "legacy-format":
 				r := internalCacheReviewRequest()

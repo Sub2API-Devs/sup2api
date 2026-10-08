@@ -65,7 +65,7 @@ func TestTaskBudgetPlan(t *testing.T) {
 	body["tools"] = []any{Object{"name": "deferred", "input_schema": Object{"type": "object"}, "defer_loading": true}}
 	raw, _ := json.Marshal(body)
 	if _, err := parsePolicyRequest(raw, http.Header{"Anthropic-Beta": []string{taskBudgetBeta}}); err == nil {
-		t.Fatal("internal rounds silently reset task budget")
+		t.Fatal("internal rounds admitted without durable hidden-history restoration")
 	}
 }
 

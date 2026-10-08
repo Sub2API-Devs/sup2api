@@ -12,6 +12,8 @@
 
 ### 前一阶段状态（历史快照，以下版本由上节取代）
 
+2026-10-08 后续 checkpoint：全 eager 普通客户端工具的 `any` 单轮保真扩展已通过作者与独审，原工具选择/并行参数保留，上游工具目录仅含客户工具，helper 执行禁止；19 次 named/any 隔离真实 CLI 与预算边界验证通过。catalog `.11` 为未部署候选。task_budget 门禁保留，原因修正为跨客户端续聊/冷导入的隐藏 helper 历史尚未持久恢复，不能按 usage 猜扣 remaining。另正在实现完整 pinned 目录的 deferred MCP 搜索身份映射；fallback+compaction 因无明确 attempt 归属继续拒绝，相关探针仅证明原始字段传输。总目标仍 active，未按这次 checkpoint 标记完成。
+
 - 已推送第七/八批747c168、第九批cd4d5e40b及修正1186563e4。cd4迁移幂等测试3项失败真实保留；118仅按代码修复后Git重检重跑，没有上传源文件或借旧SHA报绿。
 - 1186563 Linux隔离PG45432七包609项、全contracts55项、strict33项，共697项通过，race/vet无错误；2项core可选真实CLI测试skip另列。0042并发/过期同ID拒绝、重复迁移实际通过。见[LINUX-NINTH-BATCH-DB-VALIDATION](LINUX-NINTH-BATCH-DB-VALIDATION.md)。
 - Worker #21/#22现已保留原容器/卷/授权原地升级0.1.67/full779c0630，CLI2.1.292、code_catalog `2026-10-08.9`。两账号各一次READY通过，实际本地Claude原生Read两轮也已通过；system/工具结果原文、附件唯一性及环境字段策略经日志核验。见[Worker部署](DEPLOYMENT-2026-10-08-WORKER-0.1.66.md)与[真实CLI验收](PUBLIC-CLI-ACCEPTANCE-0.1.66.md)，不扩大为所有特性云验证。

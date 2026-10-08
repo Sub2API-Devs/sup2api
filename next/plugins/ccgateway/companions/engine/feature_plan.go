@@ -309,7 +309,7 @@ func (p *RequestPlan) validateInternalRounds(req *Request) error {
 		_ = json.Unmarshal(raw, &choice)
 	}
 	kind := str(choice, "type")
-	if (kind == "tool" || kind == "any") && (req.toolSearchEnabled() || req.structuredOutput()) && req.forcedLoadedClientTool() == nil {
+	if (kind == "tool" || kind == "any") && (req.toolSearchEnabled() || req.structuredOutput()) && !req.forcedLoadedClientCatalog() {
 		return fmt.Errorf("forced tool_choice with internal tool search or structured output requires continuation-phase adaptation")
 	}
 	return nil
