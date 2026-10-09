@@ -54,22 +54,7 @@ func applyLandlock(o *execOptions) error {
 	ruleset := int(fd)
 	defer unix.Close(ruleset)
 
-	type rule struct {
-		path   string
-		access uint64
-	}
-	rules := []rule{
-		{o.Binary, unix.LANDLOCK_ACCESS_FS_READ_FILE | unix.LANDLOCK_ACCESS_FS_EXECUTE},
-		{o.WorkDir, llRead | llWrite},
-		{o.DataDir, llRead | llWrite},
-		// go-plugin creates its unix socket under the temporary directory.
-		{os.TempDir(), llRead | llWrite},
-		{"/dev/null", unix.LANDLOCK_ACCESS_FS_READ_FILE | unix.LANDLOCK_ACCESS_FS_WRITE_FILE},
-	}
-	for _, p := range systemReadOnly {
-		rules = append(rules, rule{p, llRead})
-	}
-	for _, r := range rules {
+	for _, r := range landlockRules(o) {
 		if r.path == "" {
 			continue
 		}
@@ -82,6 +67,30 @@ func applyLandlock(o *execOptions) error {
 		return fmt.Errorf("landlock_restrict_self: %w", errno)
 	}
 	return nil
+}
+
+type landlockRule struct {
+	path   string
+	access uint64
+}
+
+// landlockRules is the allow list: the plugin binary, its work and data
+// directories, its private run directory, and read-only system files.
+func landlockRules(o *execOptions) []landlockRule {
+	rules := []landlockRule{
+		{o.Binary, unix.LANDLOCK_ACCESS_FS_READ_FILE | unix.LANDLOCK_ACCESS_FS_EXECUTE},
+		{o.WorkDir, llRead | llWrite},
+		{o.DataDir, llRead | llWrite},
+		// The private run directory of this process: go-plugin creates its
+		// unix sockets there (PLUGIN_UNIX_SOCKET_DIR) and TMPDIR points
+		// into it. The shared temporary directory is not granted.
+		{o.RunDir, llRead | llWrite},
+		{"/dev/null", unix.LANDLOCK_ACCESS_FS_READ_FILE | unix.LANDLOCK_ACCESS_FS_WRITE_FILE},
+	}
+	for _, p := range systemReadOnly {
+		rules = append(rules, landlockRule{p, llRead})
+	}
+	return rules
 }
 
 // landlockABI returns the Landlock ABI version of the kernel.

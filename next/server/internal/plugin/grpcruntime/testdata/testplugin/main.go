@@ -198,6 +198,18 @@ func (s *server) HandleHTTP(ctx context.Context, in *pluginv1.HTTPRequest) (*plu
 	if in.GetPath() == "/lock" {
 		lockCall(ctx, s.hostClient(), in.GetBody(), out)
 	}
+	if in.GetPath() == "/env" {
+		// The plugin's own environment: names only, plus where its
+		// temporary directory and sockets are (isolation tests).
+		var names []string
+		for _, kv := range os.Environ() {
+			k, _, _ := strings.Cut(kv, "=")
+			names = append(names, k)
+		}
+		out["env"] = names
+		out["tmpdir"] = os.TempDir()
+		out["socket_dir"] = os.Getenv("PLUGIN_UNIX_SOCKET_DIR")
+	}
 	b, _ := json.Marshal(out)
 	return &pluginv1.HTTPResponse{
 		Status:  200,

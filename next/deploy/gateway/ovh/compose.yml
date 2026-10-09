@@ -20,11 +20,20 @@ x-node: &node
   # node sees all 384 host CPUs and never reaches the threshold.
   cpus: 2
   mem_limit: 2g
+  # The gateway and its core run as UID 1000 and need no capabilities or
+  # privilege gains; plugins set no_new_privs themselves as well.
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
   networks: [sup2api]
   depends_on: [releases]
   environment: &env
     DATABASE_URL: postgres://sup2api:${PG_PASSWORD:?}@pg:5432/sup2api?sslmode=disable
-    REDIS_URL: redis://redis:6379/0
+    # The cache requires a password (requirepass in deploy/single/compose.yml);
+    # REDIS_PASSWORD is hex, so it needs no URL escaping.
+    REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD (hex) in .env}@redis:6379/0
+    # Migration only: serve management requests of cores that do not send the
+    # management token yet. Leave empty once the baseline core sends it.
+    SUB2API_ALLOW_TOKENLESS_MANAGEMENT: ${SUB2API_ALLOW_TOKENLESS_MANAGEMENT:-}
     SUB2API_LOG_LEVEL: info
     SUB2API_MASTER_KEY: ${SUB2API_MASTER_KEY:?}
     SUB2API_JWT_SECRET: ${SUB2API_JWT_SECRET:?}

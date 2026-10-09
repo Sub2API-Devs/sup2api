@@ -12,7 +12,7 @@ mkdir -p certs keys publish stage config
 
 # ---- .env: same database, Redis and secrets as the single stack
 if [ ! -f .env ]; then
-  grep -E '^(PG_PASSWORD|SUB2API_MASTER_KEY|SUB2API_JWT_SECRET|SUB2API_BOOTSTRAP_ADMIN_EMAIL|SUB2API_BOOTSTRAP_ADMIN_PASSWORD)=' "$HOME/sup2api/.env" > .env
+  grep -E '^(PG_PASSWORD|REDIS_PASSWORD|SUB2API_MASTER_KEY|SUB2API_JWT_SECRET|SUB2API_BOOTSTRAP_ADMIN_EMAIL|SUB2API_BOOTSTRAP_ADMIN_PASSWORD)=' "$HOME/sup2api/.env" > .env
   kid=$(docker run --rm --entrypoint cat sup2api:latest /opt/sub2api/market/dev-official.keyid | tr -d ' \r\n')
   pub=$(docker run --rm --entrypoint cat sup2api:latest /opt/sub2api/market/dev-official.pub | tr -d ' \r\n')
   printf "PLUGIN_TRUST_KEY=%s=%s\n" "$kid" "$pub" >> .env

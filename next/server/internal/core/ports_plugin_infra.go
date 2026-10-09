@@ -84,6 +84,10 @@ type LaunchSpec struct {
 	MaxThreads    int
 	StrictNetwork bool // seccomp denies AF_INET/AF_INET6 (Linux only)
 	Seccomp       bool
+	// RunDir is the private 0700 directory of this process: go-plugin
+	// sockets and the plugin's TMPDIR live there. Landlock grants it instead
+	// of the shared temporary directory.
+	RunDir string
 }
 
 // ResourceEvent is reported by the watchdog.
@@ -110,6 +114,12 @@ type PluginLauncher interface {
 type EgressPolicy struct {
 	Mode           string   // allow_all | allowlist
 	AllowedDomains []string // from the approved "net" grant scope
+	// Net: the plugin holds the "net" grant. Without it nothing but the
+	// database (below) is reachable, whatever Mode says.
+	Net bool
+	// Database: the plugin holds "db.schema" and declares a database, so the
+	// PostgreSQL address handed out by HostService.GetDSN is reachable.
+	Database bool
 }
 
 // EgressProvider serves EgressService for one plugin instance; the runtime

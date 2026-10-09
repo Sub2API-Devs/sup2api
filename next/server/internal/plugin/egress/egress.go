@@ -51,12 +51,19 @@ const (
 type Options struct {
 	NodeID      string
 	DialTimeout time.Duration // default 10 s
-	// AlwaysAllow lists "host:port" targets allowed regardless of policy,
-	// e.g. the PostgreSQL address handed out by HostService.GetDSN.
-	AlwaysAllow []string
-	// PGAddrs checks if a host:port is a plugin gateway address that should
-	// bypass private address checks.
-	PGAddrs func(host string, port int) bool
+	// DatabaseAddrs lists the "host:port" of the PostgreSQL server handed out
+	// by HostService.GetDSN. Only a plugin whose policy has Database may
+	// reach it, by exactly this name; it is dialled by name.
+	DatabaseAddrs []string
+	// CoreAddrs lists "host:port" targets no plugin may reach under any
+	// policy, AllowPrivate included: the core's Redis (and PostgreSQL for
+	// plugins without Database). Names are resolved, so an IP literal or
+	// another name of the same address is refused too.
+	CoreAddrs []string
+	// AllowPrivate lets plugins reach private, loopback, link-local and
+	// other non-public addresses (SUB2API_PLUGIN_EGRESS_ALLOW_PRIVATE).
+	// Tests and development only; CoreAddrs stay refused.
+	AllowPrivate bool
 	// Dial overrides the outbound dialer (tests).
 	Dial func(ctx context.Context, network, address string) (net.Conn, error)
 	// LookupIP overrides the resolver used for dns.sub2api (tests).
@@ -77,10 +84,11 @@ type Options struct {
 
 // Provider implements core.EgressProvider.
 type Provider struct {
-	opts   Options
-	log    *slog.Logger
-	logs   *logWriter
-	always map[string]bool
+	opts     Options
+	log      *slog.Logger
+	logs     *logWriter
+	database map[string]bool // normalized host:port
+	core     *coreAddrs
 }
 
 var _ core.EgressProvider = (*Provider)(nil)
@@ -121,12 +129,26 @@ func newProvider(st logStore, opts Options) *Provider {
 			return addrs, nil
 		}
 	}
-	p := &Provider{opts: opts, log: opts.Logger, always: map[string]bool{}}
-	for _, a := range opts.AlwaysAllow {
-		p.always[strings.ToLower(a)] = true
+	p := &Provider{opts: opts, log: opts.Logger, database: map[string]bool{}}
+	for _, a := range opts.DatabaseAddrs {
+		if k, ok := addrKey(a); ok {
+			p.database[k] = true
+		}
 	}
+	// The database is a core service too: reachable only through the
+	// Database exception, by its configured name.
+	p.core = newCoreAddrs(append(append([]string(nil), opts.CoreAddrs...), opts.DatabaseAddrs...), opts.LookupIP)
 	p.logs = newLogWriter(st, opts)
 	return p
+}
+
+// addrKey normalizes "host:port" for comparisons.
+func addrKey(a string) (string, bool) {
+	h, port, err := net.SplitHostPort(strings.TrimSpace(a))
+	if err != nil || h == "" || port == "" {
+		return "", false
+	}
+	return net.JoinHostPort(normalizeHost(h), port), true
 }
 
 // Close stops the log writer after flushing pending entries; rows of
@@ -138,9 +160,10 @@ func (p *Provider) Flush(ctx context.Context) error { return p.logs.flushNow(ctx
 
 // ServerFor returns the EgressService served to one plugin instance.
 // policy is read on every new connection so policy changes apply at once.
+// A nil policy refuses everything.
 func (p *Provider) ServerFor(pluginKey string, policy func() core.EgressPolicy) pluginv1.EgressServiceServer {
 	if policy == nil {
-		policy = func() core.EgressPolicy { return core.EgressPolicy{Mode: PolicyAllowAll} }
+		policy = func() core.EgressPolicy { return core.EgressPolicy{} }
 	}
 	return &server{p: p, key: pluginKey, policy: policy}
 }
@@ -203,51 +226,32 @@ func (s *server) Dial(stream pluginv1.EgressService_DialServer) error {
 
 	var conn net.Conn
 	if isDNS {
+		if !pol.Net {
+			finish(ResultDenied, "no net grant")
+			return sendResult(stream, false, "egress: the plugin has no net permission", "")
+		}
 		// In-process DNS-over-TCP; queries are logged individually.
 		c1, c2 := net.Pipe()
 		go s.p.serveDNS(ctx, c2, s.key, pol)
 		conn = c1
 	} else {
-		if !s.p.allowed(pol, host, port) {
-			finish(ResultDenied, "blocked by egress policy")
-			return sendResult(stream, false, "egress: "+host+" is not allowed by the plugin egress policy", "")
-		}
-		// Resolve the host and check that the resolved address is public
-		// (unless the plugin has net permission with allow_all, or it is
-		// reaching the plugin gateway).
-		var resolved []netip.Addr
-		// If host is already an IP address, use it directly; otherwise resolve via DNS.
-		if addr, err := netip.ParseAddr(host); err == nil {
-			resolved = []netip.Addr{addr}
-		} else {
-			var err error
-			resolved, err = s.p.opts.LookupIP(ctx, host)
-			if err != nil {
-				finish(ResultDialError, "resolve: "+err.Error())
-				return sendResult(stream, false, "egress: resolve "+host+": "+err.Error(), "")
+		resolved, reason, msg := s.p.check(ctx, pol, host, port)
+		if reason != "" {
+			result := ResultDenied
+			if reason == "resolve" {
+				result = ResultDialError
 			}
-		}
-		// Plugin gateway addresses and AlwaysAllow entries are always allowed (C1 exception).
-		isPG := s.p.opts.PGAddrs != nil && s.p.opts.PGAddrs(host, port)
-		isAlwaysAllowed := s.p.always[net.JoinHostPort(host, strconv.Itoa(port))]
-		if !isPG && !isAlwaysAllowed {
-			allowPrivate := pol.Mode == PolicyAllowAll
-			for _, addr := range resolved {
-				if netguard.BlockedAddr(addr) && !allowPrivate {
-					finish(ResultDenied, "resolved to private address")
-					return sendResult(stream, false, "egress: "+host+" resolved to private address "+addr.String()+" and is not allowed", "")
-				}
-			}
-		}
-		// Dial the addresses that were checked, not the name: resolving it
-		// again at dial time would let a DNS answer that changes between the
-		// two lookups (rebinding) reach a private address. The configured
-		// exceptions keep dialing by name.
-		targets := []string{net.JoinHostPort(host, portStr)}
-		if !isPG && !isAlwaysAllowed {
-			targets = dialTargets(open.Network, resolved, portStr)
+			finish(result, msg)
+			return sendResult(stream, false, "egress: "+msg, "")
 		}
 		err = errors.New("no address of " + host + " matches network " + open.Network)
+		var targets []string
+		if resolved == nil {
+			// The configured database address: dialled by its name.
+			targets = []string{net.JoinHostPort(host, portStr)}
+		} else {
+			targets = dialTargets(open.Network, resolved, portStr)
+		}
 		for _, target := range targets {
 			dctx, cancel := context.WithTimeout(ctx, s.p.opts.DialTimeout)
 			conn, err = s.p.opts.Dial(dctx, open.Network, target)
@@ -395,12 +399,51 @@ func truncate(s string, n int) string {
 	return s
 }
 
-// allowed applies the plugin policy plus the provider-wide AlwaysAllow list.
-func (p *Provider) allowed(pol core.EgressPolicy, host string, port int) bool {
-	if p.always[net.JoinHostPort(host, strconv.Itoa(port))] {
-		return true
+// check decides one TCP connection. It returns the addresses to dial (nil
+// with an empty reason: the configured database address, dialled by name),
+// or a reason ("denied" or "resolve") and a message.
+//
+// Order: the database exception (Database policy, exact configured name);
+// the net grant; the domain policy; then the resolved addresses - every one
+// must be public (unless AllowPrivate) and none may be a core service. The
+// addresses that were checked are the ones dialled: resolving the name again
+// at dial time would let a DNS answer that changes in between (rebinding)
+// reach an address that was never checked.
+func (p *Provider) check(ctx context.Context, pol core.EgressPolicy, host string, port int) ([]netip.Addr, string, string) {
+	hp := net.JoinHostPort(host, strconv.Itoa(port))
+	if pol.Database && p.database[hp] {
+		return nil, "", ""
 	}
-	return AllowedHost(pol, host)
+	if !pol.Net {
+		return nil, ResultDenied, "the plugin has no net permission"
+	}
+	if !AllowedHost(pol, host) {
+		return nil, ResultDenied, host + " is not allowed by the plugin egress policy"
+	}
+	if p.core.matchName(hp) {
+		return nil, ResultDenied, hp + " is a core service address"
+	}
+	var resolved []netip.Addr
+	if addr, err := netip.ParseAddr(host); err == nil {
+		resolved = []netip.Addr{addr}
+	} else {
+		var err error
+		if resolved, err = p.opts.LookupIP(ctx, host); err != nil {
+			return nil, "resolve", "resolve " + host + ": " + err.Error()
+		}
+	}
+	if len(resolved) == 0 {
+		return nil, "resolve", "resolve " + host + ": no addresses"
+	}
+	for _, addr := range resolved {
+		if !p.opts.AllowPrivate && netguard.BlockedAddr(addr) {
+			return nil, ResultDenied, host + " resolved to non-public address " + addr.Unmap().String() + " and is not allowed"
+		}
+		if p.core.matchAddr(ctx, addr, port) {
+			return nil, ResultDenied, host + " resolved to a core service address"
+		}
+	}
+	return resolved, "", ""
 }
 
 // AllowedHost reports whether host may be reached under pol. In allowlist

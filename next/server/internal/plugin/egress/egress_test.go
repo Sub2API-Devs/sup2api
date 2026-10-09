@@ -86,7 +86,21 @@ func newEnv(t *testing.T, db *store.DB, opts Options) *env {
 }
 
 // newEnvStore is newEnv with an explicit log store (fakes in unit tests).
+// The servers of these tests listen on 127.0.0.1, so they run with the
+// explicit test switch AllowPrivate; newStrictEnv runs without it.
 func newEnvStore(t *testing.T, st logStore, opts Options) *env {
+	t.Helper()
+	opts.AllowPrivate = true
+	return newEnvRaw(t, st, opts)
+}
+
+// newStrictEnv is the production configuration: no private addresses.
+func newStrictEnv(t *testing.T, opts Options) *env {
+	t.Helper()
+	return newEnvRaw(t, nil, opts)
+}
+
+func newEnvRaw(t *testing.T, st logStore, opts Options) *env {
 	t.Helper()
 	opts.NodeID = "node-1"
 	if opts.FlushInterval == 0 {
@@ -118,7 +132,7 @@ func newEnvStore(t *testing.T, st logStore, opts Options) *env {
 	}
 	p := newProvider(st, opts)
 	t.Cleanup(p.Close)
-	box := &policyBox{pol: core.EgressPolicy{Mode: PolicyAllowAll}}
+	box := &policyBox{pol: core.EgressPolicy{Mode: PolicyAllowAll, Net: true}}
 	lis := bufconn.Listen(1 << 20)
 	srv := grpc.NewServer()
 	pluginv1.RegisterEgressServiceServer(srv, p.ServerFor("demo", box.get))
@@ -217,34 +231,42 @@ func TestHTTPThroughDefaultTransport(t *testing.T) {
 func TestPolicyDeniesAndDialErrors(t *testing.T) {
 	addr := echoTCP(t)
 	_, port, _ := net.SplitHostPort(addr)
-	// AlwaysAllow is an exact "host:port" target, so it is pointed at the echo
-	// server: the bypass is then proven by a dial that succeeds. Naming a port
-	// nothing is expected to listen on ("db.internal.test:5432") and asserting
-	// the dial fails would instead make the test depend on the machine -- the
-	// server CI job publishes its PostgreSQL service container on 127.0.0.1:5432,
-	// where the supposedly unreachable dial connects and the assertion inverts.
-	e := newEnv(t, nil, Options{AlwaysAllow: []string{"db.internal.test:" + port, "api.good.test:" + port}})
-	e.policy.set(core.EgressPolicy{Mode: PolicyAllowlist, AllowedDomains: []string{"*.good.test"}})
+	// The database is a core service: no other name may reach its address,
+	// so it gets its own echo server.
+	_, dbPort, _ := net.SplitHostPort(echoTCP(t))
+	// The database address is an exact "host:port" target, so it is pointed
+	// at an echo server: the exception is then proven by a dial that
+	// succeeds. Naming a port nothing is expected to listen on
+	// ("db.internal.test:5432") and asserting the dial fails would instead
+	// make the test depend on the machine -- the server CI job publishes its
+	// PostgreSQL service container on 127.0.0.1:5432, where the supposedly
+	// unreachable dial connects and the assertion inverts.
+	e := newEnv(t, nil, Options{DatabaseAddrs: []string{"db.internal.test:" + dbPort}})
+	e.policy.set(core.EgressPolicy{Mode: PolicyAllowlist, AllowedDomains: []string{"*.good.test"}, Net: true, Database: true})
 
 	if _, err := sdkegress.DialContext(context.Background(), "tcp", "evil.test:"+port); err == nil ||
 		!strings.Contains(err.Error(), "not allowed") {
 		t.Fatalf("denied host: %v", err)
 	}
-	// api.good.test is in AlwaysAllow to bypass SSRF protection (all .test domains resolve to 127.0.0.1 in tests)
 	c, err := sdkegress.DialContext(context.Background(), "tcp", "api.good.test:"+port)
 	if err != nil {
 		t.Fatalf("allowed host: %v", err)
 	}
 	_ = c.Close()
-	// AlwaysAllow bypasses the policy: db.internal.test matches no allowed
-	// domain (evil.test above, same shape, was denied) yet the dial goes through.
-	c, err = sdkegress.DialContext(context.Background(), "tcp", "db.internal.test:"+port)
+	// The database exception bypasses the domain policy: db.internal.test
+	// matches no allowed domain (evil.test above, same shape, was denied)
+	// yet the dial goes through.
+	c, err = sdkegress.DialContext(context.Background(), "tcp", "db.internal.test:"+dbPort)
 	if err != nil {
-		t.Fatalf("always-allow: %v", err)
+		t.Fatalf("database: %v", err)
 	}
 	_ = c.Close()
+	// Under another name the database address is refused.
+	if _, err := sdkegress.DialContext(context.Background(), "tcp", "api.good.test:"+dbPort); err == nil {
+		t.Fatal("database reached under another name")
+	}
 	// Dial error from the target.
-	e.policy.set(core.EgressPolicy{Mode: PolicyAllowAll})
+	e.policy.set(core.EgressPolicy{Mode: PolicyAllowAll, Net: true})
 	ln, _ := net.Listen("tcp", "127.0.0.1:0")
 	dead := ln.Addr().String()
 	_ = ln.Close()
@@ -381,7 +403,7 @@ func TestDNSOverTunnel(t *testing.T) {
 	if m = rawDNS(t, "svc.test.", dnsmessage.TypeMX); m.Header.RCode != dnsmessage.RCodeNotImplemented {
 		t.Fatalf("MX: %v", m.Header.RCode)
 	}
-	e.policy.set(core.EgressPolicy{Mode: PolicyAllowlist, AllowedDomains: []string{"ok.test"}})
+	e.policy.set(core.EgressPolicy{Mode: PolicyAllowlist, AllowedDomains: []string{"ok.test"}, Net: true})
 	if m = rawDNS(t, "svc.test.", dnsmessage.TypeA); m.Header.RCode != dnsmessage.RCodeRefused {
 		t.Fatalf("policy: %v", m.Header.RCode)
 	}
@@ -422,9 +444,9 @@ func TestEgressLogsWritten(t *testing.T) {
 	_ = c.(interface{ CloseWrite() error }).CloseWrite()
 	_, _ = io.ReadAll(c)
 	_ = c.Close()
-	e.policy.set(core.EgressPolicy{Mode: PolicyAllowlist})
+	e.policy.set(core.EgressPolicy{Mode: PolicyAllowlist, Net: true})
 	_, _ = sdkegress.DialContext(context.Background(), "tcp", "blocked.test:443")
-	e.policy.set(core.EgressPolicy{Mode: PolicyAllowAll})
+	e.policy.set(core.EgressPolicy{Mode: PolicyAllowAll, Net: true})
 	rawDNS(t, "svc.test.", dnsmessage.TypeA)
 
 	ctx := context.Background()

@@ -2,8 +2,6 @@ package grpcruntime
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -75,6 +73,7 @@ type proc struct {
 	sched      pluginv1.SchedulerServiceClient
 	migration  pluginv1.MigrationServiceClient
 	pid        int
+	runDir     string // private run directory (sockets, TMPDIR); removed with the process
 	stopWatch  func()
 	limits     specLimits               // resource limits the process was started with
 	failures   int                      // consecutive health failures
@@ -148,6 +147,15 @@ func (i *Instance) PID() int {
 		return p.pid
 	}
 	return 0
+}
+
+// RunDir is the private run directory of the current process ("" when not
+// running): go-plugin's sockets and the plugin's TMPDIR are below it.
+func (i *Instance) RunDir() string {
+	if p := i.proc.Load(); p != nil {
+		return p.runDir
+	}
+	return ""
 }
 
 func (i *Instance) setState(s, errMsg string) {
@@ -241,27 +249,59 @@ func (i *Instance) startProc(ctx context.Context) (_ *proc, err error) {
 	if err := os.MkdirAll(spec.WorkDir, 0o700); err != nil {
 		return nil, err
 	}
+	runDir, fallback, err := newRunDir(i.rt.o.RunDir, i.pkg.Key)
+	if err != nil {
+		return nil, err
+	}
+	if fallback {
+		i.log.Warn("plugin run directory is too long for unix sockets; using a private directory under /tmp (set SUB2API_PLUGIN_RUN_DIR)",
+			"configured", i.rt.o.RunDir, "dir", runDir)
+	}
+	defer func() {
+		if err != nil {
+			_ = os.RemoveAll(runDir)
+		}
+	}()
+	spec.RunDir = runDir
+	spec.Env = append(spec.Env, runDirEnv(runDir)...)
 	cmd, err := i.rt.o.Launcher.Command(ctx, spec)
 	if err != nil {
 		return nil, fmt.Errorf("launcher: %w", err)
 	}
+	// go-plugin can only checksum the executable it starts; when the
+	// launcher wraps the plugin (sandbox), the binary was verified above.
+	var verify func() error
+	if samePath(cmd.Path, i.binPath) {
+		verify = func() error {
+			if sum, err := fileSum(cmd.Path); err != nil || sum != i.binSum {
+				return plugin.ErrChecksumsDoNotMatch
+			}
+			return nil
+		}
+	}
+	var run *cmdRunner
 	cfg := &plugin.ClientConfig{
 		HandshakeConfig:  protocol.Handshake,
 		Plugins:          protocol.PluginMap(&protocol.GRPCPlugin{}),
-		Cmd:              cmd,
 		AllowedProtocols: []plugin.Protocol{plugin.ProtocolGRPC},
 		SkipHostEnv:      true,
 		StartTimeout:     i.rt.o.StartTimeout,
 		Logger:           newHCLogger(i.log),
-	}
-	// go-plugin can only checksum the executable it starts; when the
-	// launcher wraps the plugin (sandbox), the binary was verified above.
-	if samePath(cmd.Path, i.binPath) {
-		sum, _ := hex.DecodeString(i.binSum)
-		cfg.SecureConfig = &plugin.SecureConfig{Checksum: sum, Hash: sha256.New()}
+		// Every connection between the core and this process - the plugin's
+		// server and the core's broker serving HostService/EgressService -
+		// is mutual TLS with one-time certificates of this process pair, so
+		// no other process (another plugin included) can connect to either
+		// side or impersonate this plugin to HostService.
+		AutoMTLS: true,
+		// Both unix sockets go to a directory go-plugin creates inside the
+		// private run directory (not the shared TMPDIR); it is passed to the
+		// plugin as PLUGIN_UNIX_SOCKET_DIR. go-plugin only does this for a
+		// RunnerFunc, hence cmdRunner.
+		UnixSocketConfig: &plugin.UnixSocketConfig{TempDir: runDir},
+		RunnerFunc:       runnerFunc(cmd, verify, &run),
 	}
 	client := plugin.NewClient(cfg)
-	p := &proc{client: client, limits: limitsOf(spec)}
+	p := &proc{client: client, limits: limitsOf(spec), runDir: runDir}
 	defer func() {
 		if err != nil {
 			i.killProc(p, false)
@@ -287,8 +327,8 @@ func (i *Instance) startProc(ctx context.Context) (_ *proc, err error) {
 	p.http = pluginv1.NewHTTPServiceClient(conn)
 	p.sched = pluginv1.NewSchedulerServiceClient(conn)
 	p.migration = pluginv1.NewMigrationServiceClient(conn)
-	if rc := client.ReattachConfig(); rc != nil {
-		p.pid = rc.Pid
+	if run != nil {
+		p.pid = run.pid
 	}
 
 	info, err := p.plugin.GetInfo(ctx, &pluginv1.GetInfoRequest{})
@@ -313,9 +353,12 @@ func (i *Instance) startProc(ctx context.Context) (_ *proc, err error) {
 	}
 
 	// Serve HostService and EgressService for this instance on the broker.
+	// The tunnel is only registered for a plugin that may use it (the net
+	// grant, or its own database); the policy is still checked on every
+	// connection, so a later revocation applies at once.
 	host := &hostServer{i: i, p: p}
 	var egress pluginv1.EgressServiceServer = pluginv1.UnimplementedEgressServiceServer{}
-	if i.rt.o.Egress != nil {
+	if pol := i.egressPolicy(); i.rt.o.Egress != nil && (pol.Net || pol.Database) {
 		egress = i.rt.o.Egress.ServerFor(i.pkg.Key, i.egressPolicy)
 	}
 	brokerID := pc.Broker.NextId()
@@ -373,11 +416,16 @@ func (i *Instance) configure(ctx context.Context, p *proc, st *settings) error {
 
 func (i *Instance) egressPolicy() core.EgressPolicy {
 	st := i.settings.Load()
-	pol := core.EgressPolicy{Mode: st.egress}
+	pol := core.EgressPolicy{
+		Mode: st.egress,
+		// Without "net" the tunnel refuses every target but the database.
+		Net:      st.grants.Has("net"),
+		Database: st.grants.Has("db.schema") && i.pkg.Manifest != nil && i.pkg.Manifest.Database != nil,
+	}
 	if pol.Mode == "" {
 		pol.Mode = "allow_all"
 	}
-	if st.grants.Has("net") {
+	if pol.Net {
 		pol.AllowedDomains, _ = st.grants.List("net", "domains")
 	}
 	return pol
@@ -414,6 +462,9 @@ func (i *Instance) killProc(p *proc, graceful bool) {
 		cancel()
 	}
 	p.client.Kill()
+	if p.runDir != "" {
+		_ = os.RemoveAll(p.runDir)
+	}
 }
 
 // supervise watches the process: exit detection every second, health checks

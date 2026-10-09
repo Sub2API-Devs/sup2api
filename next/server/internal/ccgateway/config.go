@@ -22,6 +22,13 @@ import (
 
 const settingKey = "ccgateway_remote"
 
+// SensitiveEnv are the legacy local-mode keys. They are read once at program
+// start, before main removes them from the process environment
+// (procguard.ScrubEnv), so plugins and later child processes never see them.
+var SensitiveEnv = []string{"CCG_ADMIN_KEY", "CCG_API_KEY"}
+
+var localAdminKey, localAPIKey = os.Getenv("CCG_ADMIN_KEY"), os.Getenv("CCG_API_KEY")
+
 var configAAD = []byte("system:ccgateway:v1")
 
 type Config struct {
@@ -251,10 +258,10 @@ func (s *Service) loadVersioned(ctx context.Context) (Config, []byte, error) {
 	c, e := s.decode(raw)
 	if c.Mode == "local" {
 		if c.AdminKey == "" {
-			c.AdminKey = os.Getenv("CCG_ADMIN_KEY")
+			c.AdminKey = localAdminKey
 		}
 		if c.APIKey == "" {
-			c.APIKey = os.Getenv("CCG_API_KEY")
+			c.APIKey = localAPIKey
 		}
 	}
 	return c, raw, e

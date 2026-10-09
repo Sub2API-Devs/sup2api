@@ -35,7 +35,8 @@ func PluginBlobs(store *Store, node, root string, client *http.Client, maxBytes 
 }
 
 // ManagementHandler serves the local management socket: the updater API and
-// the plugin packages of this node's core.
+// the plugin packages of this node's core. The caller wraps it in
+// RequireManagementToken.
 func ManagementHandler(store *Store, blobs *pluginblob.Service) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/system/plugin-blobs/", blobs.Local())

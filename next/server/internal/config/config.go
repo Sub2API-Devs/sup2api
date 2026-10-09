@@ -6,10 +6,28 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 )
+
+// SensitiveEnv are the variables Load reads that carry secrets (database and
+// Redis credentials, the master key, the JWT secret, the bootstrap password,
+// the supervisor token). main removes them from the process environment once
+// the configuration is loaded (procguard.ScrubEnv): everything after that
+// reads the loaded Config, never the environment. The SUB2API_DATABASE_URL /
+// SUB2API_REDIS_URL spellings are what `sub2api dev` sets.
+var SensitiveEnv = []string{
+	"DATABASE_URL",
+	"REDIS_URL",
+	"SUB2API_DATABASE_URL",
+	"SUB2API_REDIS_URL",
+	"SUB2API_MASTER_KEY",
+	"SUB2API_JWT_SECRET",
+	"SUB2API_BOOTSTRAP_ADMIN_PASSWORD",
+	"SUB2API_CONTROL_TOKEN",
+}
 
 type Config struct {
 	HTTPAddr    string // SUB2API_HTTP_ADDR, default ":8080"
@@ -50,6 +68,33 @@ type Config struct {
 type ManagedConfig struct {
 	Enabled                                             bool
 	Socket, Token, ReleaseDigest, BootID, UpdaterSocket string
+	// UpdaterToken authenticates the core to the shell's management socket
+	// (UPDATER_SOCKET): read from the file SUB2API_UPDATER_TOKEN_FILE names,
+	// 64 hex characters, kept in memory only. Empty when the variable is not
+	// set (older shells accept requests without it).
+	UpdaterToken string
+}
+
+// readUpdaterToken reads SUB2API_UPDATER_TOKEN_FILE when set.
+func readUpdaterToken() (string, error) {
+	path := os.Getenv("SUB2API_UPDATER_TOKEN_FILE")
+	if path == "" {
+		return "", nil
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("SUB2API_UPDATER_TOKEN_FILE: %w", err)
+	}
+	tok := strings.TrimSpace(string(raw))
+	if len(tok) != 64 {
+		return "", fmt.Errorf("SUB2API_UPDATER_TOKEN_FILE must hold 64 hexadecimal characters")
+	}
+	for _, r := range tok {
+		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f' || r >= 'A' && r <= 'F') {
+			return "", fmt.Errorf("SUB2API_UPDATER_TOKEN_FILE must hold 64 hexadecimal characters")
+		}
+	}
+	return tok, nil
 }
 
 // DefaultPluginMaxPackageBytes is the default plugin package size limit:
@@ -73,6 +118,16 @@ type PluginConfig struct {
 	// BuiltinDir holds the built-in plugin packages installed at startup
 	// (SUB2API_BUILTIN_PLUGIN_DIR, default "/opt/sub2api/builtin").
 	BuiltinDir string
+	// RunDir holds one private 0700 directory per plugin process: the
+	// go-plugin sockets and the plugin's TMPDIR (SUB2API_PLUGIN_RUN_DIR,
+	// default "<DataDir>/.run"). Unix socket paths are limited to ~107
+	// bytes, so it must be short.
+	RunDir string
+	// EgressAllowPrivate lets the plugin egress tunnel reach private,
+	// loopback and link-local addresses (SUB2API_PLUGIN_EGRESS_ALLOW_PRIVATE,
+	// default false). Test and development only; the PostgreSQL and Redis
+	// addresses of the core stay blocked either way.
+	EgressAllowPrivate bool
 }
 
 // Load reads the environment. goos is runtime.GOOS (passed in for tests).
@@ -91,11 +146,14 @@ func Load(goos string) (*Config, error) {
 	if c.Managed.Enabled && (c.Managed.Socket == "" || len(c.Managed.Token) < 32 || c.Managed.ReleaseDigest == "" || c.Managed.BootID == "") {
 		return nil, fmt.Errorf("managed core requires control socket, >=32 byte boot token, release digest and core boot ID")
 	}
+	var err error
+	if c.Managed.UpdaterToken, err = readUpdaterToken(); err != nil {
+		return nil, err
+	}
 	if c.NodeID == "" {
 		h, _ := os.Hostname()
 		c.NodeID = h
 	}
-	var err error
 	if c.AccessTokenTTL, err = durationEnv("SUB2API_ACCESS_TOKEN_TTL", 2*time.Hour); err != nil {
 		return nil, err
 	}
@@ -137,6 +195,8 @@ func Load(goos string) (*Config, error) {
 	p.Seccomp = boolEnv("SUB2API_PLUGIN_SECCOMP", linux)
 	p.DBRoleIsolation = boolEnv("SUB2API_PLUGIN_DB_ROLE_ISOLATION", true)
 	p.Landlock = boolEnv("SUB2API_PLUGIN_LANDLOCK", false)
+	p.RunDir = env("SUB2API_PLUGIN_RUN_DIR", filepath.Join(p.DataDir, ".run"))
+	p.EgressAllowPrivate = boolEnv("SUB2API_PLUGIN_EGRESS_ALLOW_PRIVATE", false)
 	p.MarketSourcesJSON = os.Getenv("SUB2API_MARKET_SOURCES")
 	p.BuiltinDir = env("SUB2API_BUILTIN_PLUGIN_DIR", "/opt/sub2api/builtin")
 	if s := os.Getenv("SUB2API_PLUGIN_OFFICIAL_KEYS"); s != "" {

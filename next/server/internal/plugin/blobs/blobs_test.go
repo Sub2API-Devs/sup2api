@@ -102,7 +102,7 @@ func TestShellStoreSpeaksTheManagementSocket(t *testing.T) {
 	go srv.Serve(ln)
 	t.Cleanup(func() { _ = srv.Close() })
 	ctx := context.Background()
-	s := NewShell(socket, 1<<20)
+	s := NewShell(socket, "", 1<<20)
 	data := []byte("uploaded package")
 	if err = s.Put(ctx, sumOf(data), data); err != nil {
 		t.Fatal(err)

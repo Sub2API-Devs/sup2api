@@ -40,6 +40,12 @@ type LocalRuntime struct {
 	client      *localapi.Client
 	prepared    map[string]release.Prepared
 	revision    atomic.Int64
+	// ManagementTokenFile holds the management socket's bearer token; the
+	// core receives only this path (SUB2API_UPDATER_TOKEN_FILE).
+	ManagementTokenFile string
+	// InheritEnv names further shell variables a core may inherit besides
+	// the supervisor's allowlist.
+	InheritEnv []string
 }
 
 func (r *LocalRuntime) Prepare(ctx context.Context, v Release, base string) error {
@@ -246,11 +252,14 @@ func (r *LocalRuntime) Start(ctx context.Context, digest string, options rc.Prep
 	env := append([]string{}, r.Env...)
 	env = append(env, "PATH="+filepath.Join(p.Directory, "bin")+string(os.PathListSeparator)+os.Getenv("PATH"), "SUB2API_BUILTIN_PLUGIN_DIR="+filepath.Join(p.Directory, "builtin"))
 	env = append(env, "SUB2API_MANAGED=true", "SUB2API_CONTROL_SOCKET="+r.CoreSocket, "SUB2API_CONTROL_TOKEN="+token, "SUB2API_CORE_BOOT_ID="+boot, "SUB2API_RELEASE_DIGEST="+digest, "NODE_ID="+r.NodeID, "UPDATER_SOCKET="+r.ManagementSocket, "SUB2API_HTTP_ADDR="+strings.TrimPrefix(r.CoreURL, "http://"))
+	if r.ManagementTokenFile != "" {
+		env = append(env, "SUB2API_UPDATER_TOKEN_FILE="+r.ManagementTokenFile)
+	}
 	c := localapi.New(r.CoreSocket, token)
 	r.mu.Lock()
 	r.client = c
 	r.mu.Unlock()
-	_, err := r.Supervisor.Start(ctx, supervisor.Spec{Executable: filepath.Join(p.Directory, "bin", "sub2api"), Args: r.Args, Env: env, Dir: r.Root, BootID: boot, Stdout: os.Stdout, Stderr: os.Stderr})
+	_, err := r.Supervisor.Start(ctx, supervisor.Spec{Executable: filepath.Join(p.Directory, "bin", "sub2api"), Args: r.Args, Env: env, InheritEnv: r.InheritEnv, Dir: r.Root, BootID: boot, Stdout: os.Stdout, Stderr: os.Stderr})
 	if err != nil {
 		return rc.Status{}, err
 	}

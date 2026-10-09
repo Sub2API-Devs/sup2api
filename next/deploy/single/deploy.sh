@@ -40,6 +40,7 @@ if [ ! -f "$ENV_FILE" ]; then
   umask 077
   cat > "$ENV_FILE" <<EOF
 PG_PASSWORD=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
+REDIS_PASSWORD=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
 SUB2API_MASTER_KEY=$(head -c 32 /dev/urandom | base64)
 SUB2API_JWT_SECRET=$(head -c 48 /dev/urandom | base64 | tr -d '\n')
 SUB2API_BOOTSTRAP_ADMIN_EMAIL=admin@sup2api.local
@@ -47,6 +48,12 @@ SUB2API_BOOTSTRAP_ADMIN_PASSWORD=$(head -c 18 /dev/urandom | base64 | tr -d '/+=
 SUP2API_PORT=$PORT
 SUP2API_PUBLIC_URL=http://127.0.0.1:$PORT
 EOF
+fi
+# The cache requires a password since 2026-10-10; an older .env gets one.
+# Recreating the cache container empties it (real-time state only).
+if ! grep -q '^REDIS_PASSWORD=' "$ENV_FILE"; then
+  echo "==> adding REDIS_PASSWORD to $ENV_FILE"
+  (umask 077; printf 'REDIS_PASSWORD=%s\n' "$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')" >> "$ENV_FILE")
 fi
 
 COMPOSE=(docker compose -p sup2api -f "$SRC/next/deploy/single/compose.yml" --env-file "$ENV_FILE")

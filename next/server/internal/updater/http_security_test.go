@@ -41,7 +41,7 @@ func TestUpdateSourceAndImportRequireAuthorization(t *testing.T) {
 	} {
 		engine := gin.New()
 		auth := updateRouteAuth{tc.allowed}
-		RegisterRoutes(httpapi.NewRouter(engine, auth, auth), "", nil)
+		RegisterRoutes(httpapi.NewRouter(engine, auth, auth), "", "", nil)
 		req := httptest.NewRequest(tc.method, "/api/v1"+tc.path, nil)
 		if tc.logged {
 			req.Header.Set("Authorization", "Bearer test")

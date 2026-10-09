@@ -49,6 +49,7 @@ type execOptions struct {
 	Args          []string
 	WorkDir       string // plugin working directory (for Landlock)
 	DataDir       string // plugin data directory (for Landlock)
+	RunDir        string // private run directory: sockets and TMPDIR (for Landlock)
 	Landlock      bool   // restrict the file system view with Landlock (Linux)
 }
 
@@ -66,6 +67,7 @@ func parseExecArgs(args []string, stderr io.Writer) (*execOptions, error) {
 	fs.StringVar(&keep, "keep-env", "", "comma separated SUB2API_* variables passed to the plugin")
 	fs.StringVar(&o.WorkDir, "work-dir", "", "plugin working directory (for Landlock)")
 	fs.StringVar(&o.DataDir, "data-dir", "", "plugin data directory (for Landlock)")
+	fs.StringVar(&o.RunDir, "run-dir", "", "private run directory: go-plugin sockets and TMPDIR (for Landlock)")
 	fs.BoolVar(&o.Landlock, "landlock", false, "restrict file system access with Landlock (Linux 5.13+)")
 	if err := fs.Parse(args); err != nil {
 		return nil, err

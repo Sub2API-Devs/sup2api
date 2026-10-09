@@ -57,7 +57,7 @@ func TestBridgeAuditsOnlySuccessfulMutations(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	auth := bridgeAuth{uid}
-	RegisterRoutes(httpapi.NewRouter(engine, auth, auth), socket, db)
+	RegisterRoutes(httpapi.NewRouter(engine, auth, auth), socket, "", db)
 	cases := []struct{ method, path, action string }{
 		{"POST", "/system/upgrades", "system.upgrade.create"},
 		{"POST", "/system/upgrades/old-plan/pause", "system.upgrade.pause"},

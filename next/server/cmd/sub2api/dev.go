@@ -65,6 +65,10 @@ func runDev(args []string) int {
 	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 	slog.SetDefault(log)
+	if err := hardenProcess(log); err != nil {
+		fmt.Fprintln(os.Stderr, "sub2api dev: process hardening:", err)
+		return 2
+	}
 
 	redis := env.RedisURL
 	if env.MemoryRedis {

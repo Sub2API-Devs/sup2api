@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"time"
@@ -61,6 +62,10 @@ type Options struct {
 	StrictNetwork bool
 	Seccomp       bool
 	MaxMemoryMB   int // global cap on per-plugin memory (0 = none)
+	// RunDir holds one private 0700 directory per plugin process (go-plugin
+	// sockets, the plugin's TMPDIR); default DataDir/.run. Keep it short:
+	// unix socket paths are limited to ~107 bytes.
+	RunDir string
 
 	// Concurrency bounds concurrent calls per plugin instance, separately for
 	// each call class (CONTRACTS §43.1). Zero fields use the defaults.
@@ -141,6 +146,9 @@ func New(o Options) (*Runtime, error) {
 	def(&o.DrainGrace, 2*time.Second)
 	if o.MaxRestarts <= 0 {
 		o.MaxRestarts = 5
+	}
+	if o.RunDir == "" {
+		o.RunDir = filepath.Join(o.DataDir, ".run")
 	}
 	return &Runtime{o: o, log: o.Logger.With("component", "plugin-runtime")}, nil
 }

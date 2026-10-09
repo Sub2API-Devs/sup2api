@@ -143,7 +143,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	// downloaded by each node. Without a shell only one node is supported.
 	var packageStore blobs.Store = blobs.Dir(filepath.Join(cfg.Plugins.DataDir, "blobs"))
 	if cfg.Managed.Enabled && cfg.Managed.UpdaterSocket != "" {
-		packageStore = blobs.NewShell(cfg.Managed.UpdaterSocket, cfg.Plugins.MaxPackageBytes)
+		packageStore = blobs.NewShell(cfg.Managed.UpdaterSocket, cfg.Managed.UpdaterToken, cfg.Plugins.MaxPackageBytes)
 	}
 	marketClient := &http.Client{Timeout: 60 * time.Second}
 	// Packages may be 1 GiB (CONTRACTS §53.10): downloads get more time than
@@ -241,7 +241,18 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	if err != nil {
 		return err
 	}
-	egressP := egress.New(db, egress.Options{NodeID: cfg.NodeID, AlwaysAllow: []string{pgAddr}, Events: events, Logger: log})
+	// Plugins reach PostgreSQL only through the address GetDSN hands out
+	// (and only with db.schema); Redis and every private address are never
+	// reachable through the tunnel (audit 2026-10-09 P0-3).
+	var coreAddrs []string
+	if ra, ok := redisAddr(cfg.RedisURL); ok {
+		coreAddrs = append(coreAddrs, ra)
+	}
+	if cfg.Plugins.EgressAllowPrivate {
+		log.Warn("plugins may reach private network addresses (SUB2API_PLUGIN_EGRESS_ALLOW_PRIVATE=true); tests and development only")
+	}
+	egressP := egress.New(db, egress.Options{NodeID: cfg.NodeID, DatabaseAddrs: []string{pgAddr}, CoreAddrs: coreAddrs,
+		AllowPrivate: cfg.Plugins.EgressAllowPrivate, Events: events, Logger: log})
 	onClose(func(context.Context) { egressP.Close() })
 	launcher := sandbox.NewLauncher(sandbox.LauncherOptions{DisableWrap: cfg.Plugins.DevMode, Landlock: cfg.Plugins.Landlock, Logger: log})
 	schemas := dbschema.New(db, cfg.DatabaseURL, cfg.MasterKey, cfg.Plugins.DBRoleIsolation)
@@ -249,7 +260,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	rt, err := grpcruntime.New(grpcruntime.Options{
 		DB: db, Redis: rdb, Bus: cl.Bus, Locker: cl.Locker, Cipher: cipher, Node: cl.Registry, Launcher: launcher,
 		Egress: egressP, Authorizer: az, Ledger: bill, Schemas: schemas, Accounts: acc,
-		HostVersion: version, DataDir: cfg.Plugins.DataDir,
+		HostVersion: version, DataDir: cfg.Plugins.DataDir, RunDir: cfg.Plugins.RunDir,
 		StrictNetwork: cfg.Plugins.StrictNetwork, Seccomp: cfg.Plugins.Seccomp, MaxMemoryMB: cfg.Plugins.MaxMemoryMB,
 		Logger: log,
 	})
@@ -387,7 +398,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	})
 	r := httpapi.NewRouter(engine, idm, az)
 	r.Authed(http.MethodGet, "/system/version", systemVersionHandler(version, cfg.Managed.Enabled, cfg.NodeID, cl.Registry.BootID()))
-	updater.RegisterRoutes(r, cfg.Managed.UpdaterSocket, db)
+	updater.RegisterRoutes(r, cfg.Managed.UpdaterSocket, cfg.Managed.UpdaterToken, db)
 	ccg.RegisterRoutes(r)
 	audit.RegisterRoutes(r, db)
 	idm.RegisterRoutes(r)
@@ -491,4 +502,14 @@ func databaseAddr(dsn string) (string, error) {
 		host = "localhost"
 	}
 	return net.JoinHostPort(host, port), nil
+}
+
+// redisAddr is the TCP "host:port" of the Redis URL (false for a unix
+// socket or an unparsable URL).
+func redisAddr(raw string) (string, bool) {
+	o, err := cluster.ParseRedisURL(raw)
+	if err != nil || o.Network == "unix" || o.Addr == "" {
+		return "", false
+	}
+	return o.Addr, true
 }

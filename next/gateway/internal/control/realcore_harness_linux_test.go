@@ -385,7 +385,7 @@ func (c *realCluster) startShell(id string) *realNode {
 		env = append(env, "SUB2API_PLUGIN_DEV_MODE="+dev)
 	}
 	env = append(env, c.options.coreEnv...)
-	rt := &LocalRuntime{Releases: rm, Supervisor: mgr, NodeID: id, PrimaryNode: "a", CoreSocket: filepath.Join(root, "core.sock"), ManagementSocket: filepath.Join(root, "shell.sock"), CoreURL: "http://" + coreAddr, Root: root, Env: env}
+	rt := &LocalRuntime{Releases: rm, Supervisor: mgr, NodeID: id, PrimaryNode: "a", CoreSocket: filepath.Join(root, "core.sock"), ManagementSocket: filepath.Join(root, "shell.sock"), ManagementTokenFile: filepath.Join(root, "shell.token"), CoreURL: "http://" + coreAddr, Root: root, Env: env}
 	ownNode := Node{ID: id, ShellBootID: boot, OS: "linux", Arch: runtime.GOARCH, RuntimeABI: "test", PeerProtocol: PeerProtocol, Strategy: PrimaryFirst}
 	pm, err := peer.New(peer.Config{Redis: c.rdb, Cluster: c.dbname, NodeID: id, BootID: boot, ConfiguredKey: c.configuredKeys[id], TTL: c.options.peerTTL, Validate: func(ctx context.Context, p peer.Identity) error { return store.ValidateNode(ctx, p.NodeID, p.BootID) }, Register: func(ctx context.Context) error { return store.RegisterLocked(ctx, ownNode) }, WithRegistration: func(ctx context.Context, fn func(context.Context) error) error {
 		return store.WithRegistration(ctx, id, fn)
@@ -402,13 +402,22 @@ func (c *realCluster) startShell(id string) *realNode {
 	blobs := PluginBlobs(store, id, root, rt.PeerArtifactClient, 0)
 	rt.PluginBlobs = blobs.Peer()
 	// The core reaches its plugin packages through this socket, as under
-	// sub2api-gateway serve.
+	// sub2api-gateway serve, with a per-boot token. Cores built before the
+	// token contract send none; TEST_REQUIRE_UPDATER_TOKEN=1 rejects that as
+	// production does without allow_tokenless_management.
+	managementToken, err := NewManagementToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = WriteManagementToken(rt.ManagementTokenFile, managementToken); err != nil {
+		t.Fatal(err)
+	}
 	_ = os.Remove(rt.ManagementSocket)
 	managementListener, err := net.Listen("unix", rt.ManagementSocket)
 	if err != nil {
 		t.Fatal(err)
 	}
-	management := &http.Server{Handler: ManagementHandler(store, blobs), ReadHeaderTimeout: 5 * time.Second}
+	management := &http.Server{Handler: RequireManagementToken(managementToken, os.Getenv("TEST_REQUIRE_UPDATER_TOKEN") != "1", ManagementHandler(store, blobs)), ReadHeaderTimeout: 5 * time.Second}
 	go func() { _ = management.Serve(managementListener) }()
 	rt.AuthorizePeer = func(ctx context.Context, p peer.Identity, scope, digest string) error {
 		return store.AuthorizePeer(ctx, p.NodeID, p.BootID, id, scope, digest)

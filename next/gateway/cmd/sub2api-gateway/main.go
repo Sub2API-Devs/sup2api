@@ -22,6 +22,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -63,6 +64,16 @@ type config struct {
 	CoreSocket       string            `json:"core_socket"`
 	// PluginMaxBytes bounds stored plugin packages (default 1 GiB).
 	PluginMaxBytes int64 `json:"plugin_max_bytes"`
+	// CoreEnvInherit names further shell variables a core may inherit,
+	// besides the supervisor's allowlist (supervisor.inheritedEnv).
+	CoreEnvInherit []string `json:"core_env_inherit"`
+	// ManagementTokenFile holds the per-boot bearer token of the management
+	// socket (default: shell.token beside the socket).
+	ManagementTokenFile string `json:"management_token_file"`
+	// AllowTokenlessManagement serves management requests that carry no
+	// Authorization header. Only for migrating from a core release that does
+	// not send the token yet; a wrong token is rejected either way.
+	AllowTokenlessManagement bool `json:"allow_tokenless_management"`
 }
 
 func main() {
@@ -80,6 +91,7 @@ func run() error {
 	cfgPath := fs.String("config", "/etc/sub2api/shell.json", "gateway configuration")
 	manifestURL := fs.String("manifest", "", "signed manifest URL at the configured release origin")
 	socket := fs.String("socket", "", "local management socket")
+	tokenFile := fs.String("token-file", "", "management token file (default: from -config, or shell.token beside -socket)")
 	id := fs.String("id", "", "upgrade ID")
 	node := fs.String("node", "", "node ID for set-primary or remove-node")
 	bootstrap := fs.Bool("bootstrap", false, "explicitly initialize the first core database on the primary")
@@ -93,8 +105,14 @@ func run() error {
 				return err
 			}
 			*socket = c.ManagementSocket
+			if *tokenFile == "" {
+				*tokenFile = c.ManagementTokenFile
+			}
 		}
-		return localCommand(command, *socket, *id)
+		if *tokenFile == "" {
+			*tokenFile = defaultTokenFile(*socket)
+		}
+		return localCommand(command, *socket, *tokenFile, *id)
 	}
 	if command == "set-primary" || command == "remove-node" {
 		if *node == "" {
@@ -187,11 +205,28 @@ func run() error {
 	if command != "serve" {
 		return errors.New("unknown command")
 	}
+	// Before any core or plugin exists: processes of the same UID can no
+	// longer read this process's environment (it holds every secret) or
+	// memory through /proc.
+	if err = hardenProcess(); err != nil {
+		return err
+	}
 	supervisor, err := supervisor.New(filepath.Join(c.Root, "runtime"))
 	if err != nil {
 		return err
 	}
 	defer supervisor.Close()
+	// A fresh management token per boot, written before any core starts.
+	managementToken, err := control.NewManagementToken()
+	if err != nil {
+		return err
+	}
+	if err = control.WriteManagementToken(c.ManagementTokenFile, managementToken); err != nil {
+		return fmt.Errorf("write management token: %w", err)
+	}
+	if c.AllowTokenlessManagement {
+		slog.Warn("allow_tokenless_management is set: management requests without a token are accepted")
+	}
 	cert, err := tls.LoadX509KeyPair(c.CertFile, c.KeyFile)
 	if err != nil {
 		return err
@@ -208,6 +243,11 @@ func run() error {
 	opt, err := parseRedisURL(c.RedisURL)
 	if err != nil {
 		return err
+	}
+	if opt.Password == "" && opt.Network != "unix" {
+		// Plugins reach the cluster network; a cache without a password
+		// lets them read and write every node's keys, locks and peer keys.
+		slog.Warn("REDIS_URL has no password; enable requirepass on the cache and put the password in the URL")
 	}
 	redisClient := redis.NewClient(opt)
 	defer redisClient.Close()
@@ -299,7 +339,7 @@ func run() error {
 		st, _, err := rt.Status(statusCtx)
 		return err == nil && st.Ready
 	}})
-	rt = &control.LocalRuntime{Releases: releases, Supervisor: supervisor, Router: router, NodeID: c.NodeID, PrimaryNode: c.PrimaryNode, CoreSocket: c.CoreSocket, ManagementSocket: c.ManagementSocket, CoreURL: c.CoreURL, Root: c.Root, Args: c.CoreArgs, Env: c.coreEnvironment()}
+	rt = &control.LocalRuntime{Releases: releases, Supervisor: supervisor, Router: router, NodeID: c.NodeID, PrimaryNode: c.PrimaryNode, CoreSocket: c.CoreSocket, ManagementSocket: c.ManagementSocket, ManagementTokenFile: c.ManagementTokenFile, CoreURL: c.CoreURL, Root: c.Root, Args: c.CoreArgs, Env: c.coreEnvironment(), InheritEnv: c.CoreEnvInherit}
 	rt.OnStopped = func(ctx context.Context, coreBoot string) error {
 		return store.ConfirmStoppedCore(ctx, c.NodeID, ownNode.ShellBootID, coreBoot)
 	}
@@ -335,7 +375,7 @@ func run() error {
 	if err = os.Chmod(c.ManagementSocket, 0600); err != nil {
 		return err
 	}
-	local := &http.Server{Handler: control.ManagementHandler(store, pluginBlobs), ReadHeaderTimeout: 5 * time.Second}
+	local := &http.Server{Handler: control.RequireManagementToken(managementToken, c.AllowTokenlessManagement, control.ManagementHandler(store, pluginBlobs)), ReadHeaderTimeout: 5 * time.Second}
 	public := &http.Server{Addr: c.PublicAddr, Handler: router.Public(), ReadHeaderTimeout: 15 * time.Second}
 	private := &http.Server{Addr: c.PeerAddr, Handler: rt.PrivateHandler(), TLSConfig: proxy.ServerTLS(cert, ca), ReadHeaderTimeout: 15 * time.Second}
 	errs := make(chan error, 3)
@@ -417,6 +457,14 @@ func readConfig(path string) (config, error) {
 	if v := os.Getenv("REDIS_URL"); v != "" {
 		c.RedisURL = v
 	}
+	// Compose renders an unset variable as empty, which keeps the file value.
+	if v := os.Getenv("SUB2API_ALLOW_TOKENLESS_MANAGEMENT"); v != "" {
+		allow, err := strconv.ParseBool(v)
+		if err != nil {
+			return c, fmt.Errorf("SUB2API_ALLOW_TOKENLESS_MANAGEMENT: %w", err)
+		}
+		c.AllowTokenlessManagement = allow
+	}
 	if c.Root == "" {
 		c.Root = "/var/lib/sub2api"
 	}
@@ -435,11 +483,14 @@ func readConfig(path string) (config, error) {
 	if c.CoreSocket == "" {
 		c.CoreSocket = filepath.Join(c.Root, "runtime", "core.sock")
 	}
+	if c.ManagementTokenFile == "" {
+		c.ManagementTokenFile = defaultTokenFile(c.ManagementSocket)
+	}
 	if c.ClusterID == "" || c.NodeID == "" || c.PrimaryNode == "" || c.RuntimeABI == "" || c.DatabaseURL == "" || c.RedisURL == "" {
 		return c, errors.New("cluster_id, node_id, primary_node, runtime_abi, DATABASE_URL and REDIS_URL are required")
 	}
-	if !filepath.IsAbs(c.Root) || !filepath.IsAbs(c.CoreSocket) || !filepath.IsAbs(c.ManagementSocket) {
-		return c, errors.New("root and socket paths must be absolute")
+	if !filepath.IsAbs(c.Root) || !filepath.IsAbs(c.CoreSocket) || !filepath.IsAbs(c.ManagementSocket) || !filepath.IsAbs(c.ManagementTokenFile) {
+		return c, errors.New("root, socket and token paths must be absolute")
 	}
 	u, err := url.Parse(c.PeerURL)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.Path != "" || u.User != nil {
@@ -478,7 +529,14 @@ func importRelease(ctx context.Context, c config, m *release.Manager, raw string
 	}
 	return control.Release{Digest: digest, Manifest: manifest, Signed: signed, BundleBase: strings.TrimRight(c.ReleaseOrigin, "/")}, nil
 }
-func localCommand(command, socket, id string) error {
+
+// defaultTokenFile is where the management token lives unless configured:
+// beside the management socket, in the shell's private runtime directory.
+func defaultTokenFile(socket string) string {
+	return filepath.Join(filepath.Dir(socket), "shell.token")
+}
+
+func localCommand(command, socket, tokenFile, id string) error {
 	method, path := "GET", "/system/upgrades"
 	if command != "status" {
 		if id == "" {
@@ -491,10 +549,15 @@ func localCommand(command, socket, id string) error {
 			path += "/" + url.PathEscape(id) + "/" + command
 		}
 	}
+	token, err := control.ReadManagementToken(tokenFile)
+	if err != nil {
+		return fmt.Errorf("read management token (run as the gateway user while the gateway is serving): %w", err)
+	}
 	client := &http.Client{Timeout: 15 * time.Second, Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", socket)
 	}}}
 	req, _ := http.NewRequest(method, "http://shell"+path, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("X-Updater-Actor", "local-operator")
 	res, err := client.Do(req)
 	if err != nil {

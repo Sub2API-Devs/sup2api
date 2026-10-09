@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io/fs"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
@@ -70,22 +71,80 @@ func (m *Manager) canCreateRole(ctx context.Context) (bool, error) {
 	return ok, err
 }
 
-// Ensure creates the schema and, when possible, the isolated login role.
-// It is idempotent and safe to call on every node.
+// Error codes of the database isolation (audit 2026-10-09 P1-7). Role
+// isolation is never downgraded silently: a plugin that needs db.schema is
+// refused instead.
+var (
+	// ErrIsolationUnavailable: role isolation is on but the core's database
+	// role may not create roles (CREATEROLE), so the plugin would run with
+	// the core's own credentials.
+	ErrIsolationUnavailable = core.NewError(http.StatusConflict, "plugin_db_isolation_unavailable",
+		"the database role of the core cannot create plugin roles (CREATEROLE); grant it, or set SUB2API_PLUGIN_DB_ROLE_ISOLATION=false to run plugin databases without role isolation")
+	// ErrRoleConflict: a role named plg_<key> exists that this core did not
+	// create for this database; it is not taken over.
+	ErrRoleConflict = core.NewError(http.StatusConflict, "plugin_db_role_conflict",
+		"a database role with the plugin's role name already exists and was not created by this core for this database")
+)
+
+// CheckIsolation reports whether plugin schemas get their own role: nil when
+// role isolation is off by configuration (an explicit operator choice) or
+// the core may create roles, ErrIsolationUnavailable otherwise.
+func (m *Manager) CheckIsolation(ctx context.Context) error {
+	if !m.roleIsolation {
+		return nil
+	}
+	ok, err := m.canCreateRole(ctx)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrIsolationUnavailable
+	}
+	return nil
+}
+
+// roleMarker is the comment Ensure puts on the roles it creates. Roles are
+// shared by every database of the PostgreSQL cluster, so it names this
+// database: another database (another deployment) using the same plugin key
+// does not own the role.
+func roleMarker(ctx context.Context, q store.Querier, pluginKey string) (string, error) {
+	var dbname string
+	if err := q.QueryRow(ctx, `SELECT current_database()`).Scan(&dbname); err != nil {
+		return "", err
+	}
+	return "sub2api plugin role; database=" + dbname + "; plugin=" + pluginKey, nil
+}
+
+// roleOwned reports whether the existing role belongs to this plugin of this
+// database: it carries the marker, or (roles created before the marker) it
+// owns the plugin's schema here.
+func roleOwned(ctx context.Context, q store.Querier, role, schema, marker string) (bool, error) {
+	var owned bool
+	err := q.QueryRow(ctx, `
+SELECT COALESCE(shobj_description(r.oid, 'pg_authid') = $2, false)
+    OR EXISTS (SELECT 1 FROM pg_namespace n WHERE n.nspname = $3 AND n.nspowner = r.oid)
+FROM pg_roles r WHERE r.rolname = $1`, role, marker, schema).Scan(&owned)
+	if store.IsNoRows(err) {
+		return false, nil
+	}
+	return owned, err
+}
+
+// Ensure creates the schema and, unless role isolation is off by
+// configuration, the isolated login role. It is idempotent and safe to call
+// on every node. Without the right to create roles it fails with
+// ErrIsolationUnavailable, and a same-named role it did not create fails
+// with ErrRoleConflict.
 func (m *Manager) Ensure(ctx context.Context, pluginKey string) (Status, error) {
 	if !keyRe.MatchString(pluginKey) {
 		return Status{}, fmt.Errorf("invalid plugin key %q", pluginKey)
 	}
 	schema := SchemaName(pluginKey)
 	st := Status{Schema: schema}
-	isolate := false
-	if m.roleIsolation {
-		ok, err := m.canCreateRole(ctx)
-		if err != nil {
-			return st, err
-		}
-		isolate = ok
+	if err := m.CheckIsolation(ctx); err != nil {
+		return st, err
 	}
+	isolate := m.roleIsolation
 	sid := pgx.Identifier{schema}.Sanitize()
 	lockKey := store.PluginMigrationLockKey(pluginKey)
 	err := m.db.Tx(ctx, func(tx pgx.Tx) error {
@@ -93,17 +152,31 @@ func (m *Manager) Ensure(ctx context.Context, pluginKey string) (Status, error) 
 		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, lockKey^0x5a5a); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, "CREATE SCHEMA IF NOT EXISTS "+sid); err != nil {
-			return err
-		}
 		if !isolate {
-			return nil
+			_, err := tx.Exec(ctx, "CREATE SCHEMA IF NOT EXISTS "+sid)
+			return err
 		}
 		role := schema
 		rid := pgx.Identifier{role}.Sanitize()
 		pw := quoteLiteral(m.RolePassword(pluginKey))
+		marker, err := roleMarker(ctx, tx, pluginKey)
+		if err != nil {
+			return err
+		}
 		var exists bool
 		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1)`, role).Scan(&exists); err != nil {
+			return err
+		}
+		if exists {
+			owned, err := roleOwned(ctx, tx, role, schema, marker)
+			if err != nil {
+				return err
+			}
+			if !owned {
+				return ErrRoleConflict
+			}
+		}
+		if _, err := tx.Exec(ctx, "CREATE SCHEMA IF NOT EXISTS "+sid); err != nil {
 			return err
 		}
 		if exists {
@@ -114,6 +187,9 @@ func (m *Manager) Ensure(ctx context.Context, pluginKey string) (Status, error) 
 			if _, err := tx.Exec(ctx, "CREATE ROLE "+rid+" WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 20 PASSWORD "+pw); err != nil {
 				return err
 			}
+		}
+		if _, err := tx.Exec(ctx, "COMMENT ON ROLE "+rid+" IS "+quoteLiteral(marker)); err != nil {
+			return err
 		}
 		// Host membership lets a non-superuser host hand the schema to the role
 		// and DROP OWNED BY it on purge (PG16+ does not grant SET on created
@@ -177,8 +253,10 @@ func (m *Manager) Status(ctx context.Context, pluginKey string) (Status, error) 
 //
 // With role isolation the files run on a connection logged in as the plugin
 // role, so a migration cannot escalate with RESET ROLE; bookkeeping goes
-// through the definer functions of migration 0003. Without isolation (no
-// CREATEROLE) they run as the host role, as the install review warns.
+// through the definer functions of migration 0003. Only when the operator
+// turned role isolation off (SUB2API_PLUGIN_DB_ROLE_ISOLATION=false) do they
+// run as the host role, as the install review warns; a host that merely
+// lacks CREATEROLE fails in Ensure instead.
 func (m *Manager) Migrate(ctx context.Context, pluginKey string, fsys fs.FS) ([]string, error) {
 	st, err := m.Ensure(ctx, pluginKey)
 	if err != nil {
@@ -256,17 +334,24 @@ func (m *Manager) DropTx(ctx context.Context, tx pgx.Tx, pluginKey string) error
 		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, store.PluginMigrationLockKey(pluginKey)); err != nil {
 			return err
 		}
+		// Decide before the schema goes: a role that owns it is ours.
+		marker, err := roleMarker(ctx, tx, pluginKey)
+		if err != nil {
+			return err
+		}
+		owned, err := roleOwned(ctx, tx, schema, schema, marker)
+		if err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, "DROP SCHEMA IF EXISTS "+sid+" CASCADE"); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM plugin_migrations WHERE plugin_key = $1`, pluginKey); err != nil {
 			return err
 		}
-		var exists bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1)`, schema).Scan(&exists); err != nil {
-			return err
-		}
-		if exists {
+		// A same-named role this core did not create (another database of
+		// the cluster, an operator's role) is left alone.
+		if owned {
 			rid := pgx.Identifier{schema}.Sanitize()
 			if _, err := tx.Exec(ctx, "DROP OWNED BY "+rid); err != nil {
 				return err

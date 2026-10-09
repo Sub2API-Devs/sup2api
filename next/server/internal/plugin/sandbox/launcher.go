@@ -113,6 +113,9 @@ func execArgs(spec core.LaunchSpec, nice int, landlock bool) []string {
 	if spec.WorkDir != "" {
 		args = append(args, "--work-dir="+spec.WorkDir, "--data-dir="+spec.WorkDir)
 	}
+	if spec.RunDir != "" {
+		args = append(args, "--run-dir="+spec.RunDir)
+	}
 	if landlock {
 		args = append(args, "--landlock")
 	}
@@ -135,9 +138,17 @@ var baseEnvKeys = []string{
 	"SSL_CERT_FILE", "SSL_CERT_DIR", "SYSTEMROOT", "SystemRoot", "WINDIR", "ComSpec",
 }
 
+// tempEnvKeys name the temporary directory; with a private run directory the
+// shared one of the core is not passed on (the runtime sets them in
+// spec.Env).
+var tempEnvKeys = map[string]bool{"TMPDIR": true, "TEMP": true, "TMP": true}
+
 func (l *Launcher) commandEnv(spec core.LaunchSpec) []string {
 	var env []string
 	for _, k := range baseEnvKeys {
+		if spec.RunDir != "" && tempEnvKeys[k] {
+			continue
+		}
 		if v, ok := os.LookupEnv(k); ok {
 			env = append(env, k+"="+v)
 		}

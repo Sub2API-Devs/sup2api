@@ -278,6 +278,19 @@ func (s *Service) Consent(ctx context.Context, key, version string, req ConsentR
 // For db.schema: without role isolation, non-official plugins are rejected
 // unless the operator explicitly has plugin:grant:db_schema_unconfined.
 func (s *Service) checkGrantRights(ctx context.Context, actorID int64, ds []decision, trust string, hasPub bool) error {
+	// Role isolation cannot be provided (no CREATEROLE): granting db.schema
+	// is refused for every plugin, built-in ones included, instead of
+	// running it with the core's database role (audit 2026-10-09 P1-7).
+	for _, d := range ds {
+		if d.permission == "db.schema" && d.status == GrantGranted {
+			if c, ok := s.d.Schemas.(interface{ CheckIsolation(context.Context) error }); ok {
+				if err := c.CheckIsolation(ctx); err != nil {
+					return err
+				}
+			}
+			break
+		}
+	}
 	if isSystem(ctx) {
 		return nil // built-in plugins ship with the image
 	}

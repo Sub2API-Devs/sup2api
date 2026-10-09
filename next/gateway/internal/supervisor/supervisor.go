@@ -21,8 +21,12 @@ import (
 )
 
 type Spec struct {
-	Executable     string
+	Executable string
+	// Env is passed to the core as given. Of the supervisor's own
+	// environment the core inherits only an allowlist (inheritedEnv) and the
+	// names listed in InheritEnv; SUB2API_PEER_AUTH_KEY never reaches a core.
 	Args, Env      []string
+	InheritEnv     []string
 	Dir            string
 	BootID         string
 	Stdout, Stderr io.Writer
@@ -109,7 +113,7 @@ func (m *Manager) Start(ctx context.Context, s Spec) (State, error) {
 	}
 	cmd := exec.Command(s.Executable, s.Args...)
 	cmd.Dir = s.Dir
-	cmd.Env = coreEnvironment(os.Environ(), s.Env)
+	cmd.Env = coreEnvironment(os.Environ(), s.Env, s.InheritEnv)
 	cmd.Stdout = s.Stdout
 	cmd.Stderr = s.Stderr
 	configureProcess(cmd)
@@ -158,19 +162,63 @@ func (m *Manager) Start(ctx context.Context, s Spec) (State, error) {
 	return m.state, nil
 }
 
-// Shell node credentials must never enter a core or its plugin descendants.
-func coreEnvironment(inherited, explicit []string) []string {
-	out := make([]string, 0, len(inherited)+len(explicit))
-	for _, entries := range [][]string{inherited, explicit} {
-		for _, entry := range entries {
-			key, _, _ := strings.Cut(entry, "=")
-			if !strings.EqualFold(key, "SUB2API_PEER_AUTH_KEY") {
-				out = append(out, entry)
-			}
+// inheritedEnv lists the shell variables a core inherits: process basics and
+// the configuration the core reads (server/internal/config and the few
+// packages that read the environment directly). Anything else in the shell's
+// environment - its own settings, variables an operator or image added for
+// other tools - stays in the shell. The shell passes DATABASE_URL, REDIS_URL
+// and the managed-mode variables explicitly through Spec.Env.
+var inheritedEnv = []string{
+	// Process basics.
+	"PATH", "HOME", "USER", "LANG", "LC_ALL", "TZ", "TMPDIR",
+	"SSL_CERT_FILE", "SSL_CERT_DIR",
+	"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy",
+	"GOMEMLIMIT", "GOMAXPROCS", "GOGC", "GODEBUG", "GOTRACEBACK",
+	// Core configuration (CONTRACTS, server/internal/config).
+	"SUB2API_PUBLIC_URL", "SUB2API_LOG_LEVEL",
+	"SUB2API_MASTER_KEY", "SUB2API_JWT_SECRET",
+	"SUB2API_ACCESS_TOKEN_TTL", "SUB2API_REFRESH_TOKEN_TTL", "SUB2API_SHUTDOWN_DELAY",
+	"SUB2API_BOOTSTRAP_ADMIN_EMAIL", "SUB2API_BOOTSTRAP_ADMIN_PASSWORD",
+	"SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM", "SUB2API_TRUSTED_PROXIES", "SUB2API_PG_MAX_CONNS",
+	"SUB2API_PLUGIN_DIR", "SUB2API_PLUGIN_DEV_MODE", "SUB2API_PLUGIN_ALLOW_UNSIGNED",
+	"SUB2API_PLUGIN_VERIFY_SIGNATURES", "SUB2API_PLUGIN_OFFICIAL_KEYS", "SUB2API_BUILTIN_TRUST_KEY",
+	"SUB2API_PLUGIN_STRICT_NETWORK", "SUB2API_PLUGIN_SECCOMP", "SUB2API_PLUGIN_LANDLOCK",
+	"SUB2API_PLUGIN_DB_ROLE_ISOLATION", "SUB2API_PLUGIN_MAX_PACKAGE_BYTES", "SUB2API_PLUGIN_MAX_MEMORY_MB",
+	"SUB2API_PLUGIN_EGRESS_ALLOW_PRIVATE", "SUB2API_PLUGIN_RUN_DIR", "SUB2API_MARKET_SOURCES",
+	// Legacy CCGateway connection fallbacks and the local Docker client.
+	"CCGATEWAY_URL", "CCG_ADMIN_KEY", "CCG_API_KEY",
+	"DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG", "DOCKER_CERT_PATH", "DOCKER_TLS_VERIFY",
+}
+
+// coreEnvironment builds a core's environment: the allowlisted part of the
+// inherited environment, then the explicit entries (which win, being last).
+// Shell node credentials never enter a core or its plugin descendants, even
+// when listed explicitly.
+func coreEnvironment(inherited, explicit, extra []string) []string {
+	allowed := make(map[string]bool, len(inheritedEnv)+len(extra))
+	for _, name := range inheritedEnv {
+		allowed[name] = true
+	}
+	for _, name := range extra {
+		allowed[name] = true
+	}
+	out := make([]string, 0, len(allowed)+len(explicit))
+	for _, entry := range inherited {
+		key, _, _ := strings.Cut(entry, "=")
+		if allowed[key] && !shellOnly(key) {
+			out = append(out, entry)
+		}
+	}
+	for _, entry := range explicit {
+		key, _, _ := strings.Cut(entry, "=")
+		if !shellOnly(key) {
+			out = append(out, entry)
 		}
 	}
 	return out
 }
+
+func shellOnly(key string) bool  { return strings.EqualFold(key, "SUB2API_PEER_AUTH_KEY") }
 func (m *Manager) Status() State { m.mu.Lock(); defer m.mu.Unlock(); return m.state }
 func (m *Manager) Wait(ctx context.Context) error {
 	m.mu.Lock()

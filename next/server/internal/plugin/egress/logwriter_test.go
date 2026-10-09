@@ -323,9 +323,9 @@ func TestNewDomainDetection(t *testing.T) {
 	}
 
 	// Denied connections count too; DNS queries do not.
-	e.policy.set(core.EgressPolicy{Mode: PolicyAllowlist})
+	e.policy.set(core.EgressPolicy{Mode: PolicyAllowlist, Net: true})
 	dial("blocked.test")
-	e.policy.set(core.EgressPolicy{Mode: PolicyAllowAll})
+	e.policy.set(core.EgressPolicy{Mode: PolicyAllowAll, Net: true})
 	rawDNS(t, "resolved.test.", dnsmessage.TypeA)
 	flushUntil(t, e, "blocked domain", func() bool { return st.domain("blocked.test") != nil })
 	if st.domain(DNSHost) != nil || st.domain("resolved.test") != nil {

@@ -102,6 +102,7 @@ func (d Dir) Get(_ context.Context, sum string) ([]byte, error) {
 // authenticated node network.
 type Shell struct {
 	socket string
+	token  string // management socket token; "" sends none
 	client *http.Client
 	max    int64
 }
@@ -114,17 +115,32 @@ const shellTimeout = 30 * time.Minute
 // default).
 const defaultShellMax = 1 << 30
 
-func NewShell(socket string, maxBytes int64) *Shell {
-	if maxBytes <= 0 {
-		maxBytes = defaultShellMax
-	}
+// NewShell talks to the shell's management socket. token (config
+// Managed.UpdaterToken) is sent as "Authorization: Bearer <token>"; empty
+// sends none (older shells).
+func NewShell(socket, token string, maxBytes int64) *Shell {
 	dial := func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", socket)
 	}
-	return &Shell{socket: socket, max: maxBytes, client: &http.Client{Timeout: shellTimeout, Transport: &http.Transport{DialContext: dial}}}
+	s := newShell(dial, token, maxBytes)
+	s.socket = socket
+	return s
+}
+
+func newShell(dial func(ctx context.Context, network, addr string) (net.Conn, error), token string, maxBytes int64) *Shell {
+	if maxBytes <= 0 {
+		maxBytes = defaultShellMax
+	}
+	return &Shell{token: token, max: maxBytes, client: &http.Client{Timeout: shellTimeout, Transport: &http.Transport{DialContext: dial}}}
 }
 
 func (s *Shell) url(sum string) string { return "http://shell/system/plugin-blobs/" + sum }
+
+func (s *Shell) authorize(req *http.Request) {
+	if s.token != "" {
+		req.Header.Set("Authorization", "Bearer "+s.token)
+	}
+}
 
 func (s *Shell) Put(ctx context.Context, sum string, data []byte) error {
 	if !validSum(sum) {
@@ -137,6 +153,7 @@ func (s *Shell) Put(ctx context.Context, sum string, data []byte) error {
 	if err != nil {
 		return err
 	}
+	s.authorize(req)
 	res, err := s.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("store plugin package through the shell: %w", err)
@@ -157,6 +174,7 @@ func (s *Shell) Get(ctx context.Context, sum string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	s.authorize(req)
 	res, err := s.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch plugin package through the shell: %w", err)

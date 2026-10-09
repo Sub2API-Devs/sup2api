@@ -56,6 +56,17 @@ sh deploy/gateway/package-release.sh ./stage ./publish ./keys/release.key releas
 
 Compose 仅映射两个回环 HTTP 入口，生产反向代理分别指向 8081/8082，检查 `/readyz`。7443 只供容器内网使用；跨机器部署应通过私网连接，核心 18080 不对外开放。外层反向代理的可信网段需要通过网关配置显式设置，不能信任任意客户端转发头。
 
+## 隔离加固（2026-10-10）
+
+插件与网关、核心目前以同一 UID 1000 运行，文件权限无法把它们分开。以下措施各自缩小插件能拿到的东西，彻底解决要靠插件独立 UID（见审查文档 P0-1）。
+
+- **管理 socket 令牌**：网关每次 `serve` 生成 32 字节随机令牌，写入 `management_token_file`（默认管理 socket 旁的 `runtime/shell.token`，0600，目录 0700，原子替换，不跟随符号链接）。管理 socket 上的所有请求（升级 API、插件包、`/metrics`）必须带 `Authorization: Bearer <令牌>`，否则 401。核心只收到令牌文件路径 `SUB2API_UPDATER_TOKEN_FILE`，不收到令牌本身。`status`/`pause`/`resume`/`cancel`/`rollback`/`enable-node`/`disable-node` 自动读同一文件，须以网关用户（UID 1000）在网关运行时执行；`-token-file` 可指定其他路径。令牌每次网关启动更换，旧令牌立即失效。
+- **迁移开关**：核心旧版本不带令牌。`allow_tokenless_management: true`（或环境变量 `SUB2API_ALLOW_TOKENLESS_MANAGEMENT=true`）只放行**完全没有** `Authorization` 头的请求并每分钟记一次警告；带错令牌仍然 401。所有节点的基线核心都支持令牌后清空该开关。
+- **核心环境白名单**：网关不再把自己的整份环境传给核心，只传进程基本变量与核心实际读取的配置（`internal/supervisor` 的 `inheritedEnv`，测试会扫描 `server/` 源码确认没有遗漏），再加上网关显式设置的 `DATABASE_URL`、`REDIS_URL` 与托管变量。`SUB2API_PEER_AUTH_KEY`、`SUB2API_GATEWAY_*` 及其他无关变量留在网关。确需额外变量时，在配置中用 `core_env_inherit` 列名或用 `core_env` 显式给值。
+- **网关进程不可转储**：`serve` 启动时设置 `PR_SET_DUMPABLE=0`，同 UID 的进程（插件）不能再读网关的 `/proc/<pid>/environ`、内存和文件描述符。
+- **Redis 密码**：缓存必须开启 `requirepass`，`REDIS_URL` 写成 `redis://:<密码>@host:6379/0`（`valkey://` 同理）。密码用十六进制（`openssl rand -hex 32`），否则须百分号编码。网关检测到无密码 URL 时记警告。go-redis 用 `HELLO 3 AUTH default <密码>` 认证，对尚未设密码的服务器同样成功，因此可以先改客户端、再给服务器设密码。
+- **容器**：节点 `security_opt: no-new-privileges:true`、`cap_drop: [ALL]`，镜像保持 `USER 1000:1000`。
+
 ## 首次启动
 
 初始化独立的 `updater` schema 并导入已签名基线（命令输出该清单摘要）：

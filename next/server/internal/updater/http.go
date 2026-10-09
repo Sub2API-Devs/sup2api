@@ -21,12 +21,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterRoutes(r *httpapi.Router, socketPath string, db *store.DB) {
+// RegisterRoutes serves the console's update routes by forwarding them to
+// the shell's management socket. token (config Managed.UpdaterToken) is sent
+// as "Authorization: Bearer <token>" on every forwarded request; empty sends
+// none (older shells).
+func RegisterRoutes(r *httpapi.Router, socketPath, token string, db *store.DB) {
 	client := &http.Client{Timeout: 60 * time.Second, Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
 	}}}
+	registerRoutes(r, socketPath != "", client, token, db)
+}
+
+func registerRoutes(r *httpapi.Router, available bool, client *http.Client, token string, db *store.DB) {
 	handler := func(c *gin.Context) {
-		if socketPath == "" {
+		if !available {
 			c.JSON(503, gin.H{"error": gin.H{"code": "updater_unavailable", "message": "This node is not managed by the gateway"}})
 			return
 		}
@@ -54,6 +62,9 @@ func RegisterRoutes(r *httpapi.Router, socketPath string, db *store.DB) {
 		req.Header.Set("Content-Type", "application/json")
 		uid, _ := core.UserID(c.Request.Context())
 		req.Header.Set("X-Updater-Actor", strconv.FormatInt(uid, 10))
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
 		response, err := client.Do(req)
 		if err != nil {
 			c.JSON(503, gin.H{"error": gin.H{"code": "updater_unavailable", "message": "Local gateway is unavailable"}})

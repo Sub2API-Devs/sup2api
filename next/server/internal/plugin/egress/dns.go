@@ -11,6 +11,7 @@ import (
 	"golang.org/x/net/dns/dnsmessage"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/netguard"
 )
 
 const (
@@ -94,8 +95,15 @@ func (p *Provider) answerDNS(ctx context.Context, pluginKey string, pol core.Egr
 			result, errMsg = ResultDialError, err.Error()
 		default:
 			rh := dnsmessage.ResourceHeader{Name: q.Name, Class: dnsmessage.ClassINET, TTL: dnsAnswerTTL}
+			hidden := 0
 			for _, ip := range ips {
 				ip = ip.Unmap()
+				// Non-public answers are not handed out: the tunnel would
+				// refuse them anyway, and they map the internal network.
+				if !p.opts.AllowPrivate && netguard.BlockedAddr(ip) {
+					hidden++
+					continue
+				}
 				switch {
 				case q.Type == dnsmessage.TypeA && ip.Is4():
 					rh.Type = dnsmessage.TypeA
@@ -104,6 +112,9 @@ func (p *Provider) answerDNS(ctx context.Context, pluginKey string, pol core.Egr
 					rh.Type = dnsmessage.TypeAAAA
 					answers = append(answers, dnsmessage.Resource{Header: rh, Body: &dnsmessage.AAAAResource{AAAA: ip.As16()}})
 				}
+			}
+			if hidden > 0 && len(answers) == 0 {
+				result, errMsg = ResultDenied, "resolved to non-public addresses only"
 			}
 			// No address of the requested family: NOERROR with no answers.
 		}

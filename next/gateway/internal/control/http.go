@@ -10,8 +10,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Handler is for the mode-0600 local Unix socket ONLY. The authenticated core
-// applies authentication and RBAC before forwarding a request to this API.
+// Handler is for the mode-0600 local Unix socket ONLY, behind
+// RequireManagementToken. The authenticated core applies user authentication
+// and RBAC before forwarding a request to this API.
 func (s *Store) Handler() http.Handler {
 	mux := http.NewServeMux()
 	reply := func(w http.ResponseWriter, v any, err error) {
