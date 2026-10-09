@@ -38,7 +38,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version-file: next/plugins/ccgateway/companions/go.mod
+          go-version-file: next/go.work
       - name: ccgateway (Go)
         working-directory: next/plugins/ccgateway/companions
         run: |
