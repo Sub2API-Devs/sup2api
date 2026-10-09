@@ -16,7 +16,9 @@
 
 `.env`、keys/certs/stage/publish及私有备份仅留服务器；不要提交或打印鉴权、密码、DSN、完整inspect。更详命令和恢复路径见环境指南。此文替代此前自动踢账号换镜像和tools/ccgateway旧路径说明。
 
-## 隔离加固迁移（2026-10-10 起，尚未在 OVH 执行）
+## 隔离加固迁移（2026-10-10 03:00–03:10 已在 OVH 执行）
+
+实际做法与下面步骤的差异：核心 v0.1.86 起已带令牌支持，所以没开迁移开关；外壳没用 `roll-gateway.py`（它的容器名假定与线上不符），而是重标 `sup2api-gateway:local` 后逐个 `docker compose up -d --no-deps sup2api-N`（2→3→4→1）；Redis 镜像保持 `redis:7`（`~/sup2api/.env` 中 `CACHE_IMAGE=redis:7`）。设密码前清掉了 Redis 内遗留的 `redis-cli monitor` 连接。
 
 内容见[网关 README“隔离加固”](../README.md#隔离加固2026-10-10)：管理 socket 令牌、核心环境白名单、Redis 密码、`no-new-privileges`/`cap_drop`。线上的 Redis 是 `sup2api` 项目（`deploy/single/compose.yml`）的 `sup2api-redis-1`，四个节点由 `~/sup2api-managed/compose.yml` 管理。顺序要求：**先让所有客户端带上密码，再给 Redis 设密码**；**先让核心支持令牌，再换新网关**（或换网关时临时打开迁移开关）。
 

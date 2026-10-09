@@ -1,6 +1,12 @@
 # CCGateway 环境与操作指南
 
-> **2026-10-09 21:00（北京时间）线上版本，优先于下文：**
+> **2026-10-10 03:10（北京时间）线上版本，优先于下文：**
+> - 核心 **v0.1.88**（源码 `062dd8563`，manifest `4e0149cb2d92…`）；ccgateway **0.1.19**：会话改造 §53.12（客户端会话只看 `metadata.user_id`，上游只见哈希会话 U / 子代理 A'，客户端 metadata 不发上游，同会话分支同文件）、分类器 system 形状 502 修复、2.1.292 会话上下文合并的另两种形态（数组 tool_result 追加、tool_result 回合末尾追加；子代理之后的回合曾 502）。控制器 `ccgateway-controller:0.1.19`，#21/#22 worker 原地更新为 `6a8c26b05b79…`（容器 ID 未变）。中间版本 .86/.87 同夜发布后被取代；三次核心升级各约 9–10 秒 503。
+> - **P0 隔离加固已上线（CONTRACTS §54）**：外壳镜像 `sup2api-gateway:local` = `062dd85`（`1fb3138968bd`，旧的保留为 `sup2api-gateway:pre-p0` = d917b8c），03:00 起 2→3→4→1 逐节点换，每节点约 9.4 秒；节点容器 `no-new-privileges` + `cap_drop: ALL`；管理 socket 需令牌（无/错令牌 401）。Redis（仍是 `redis:7`，`~/sup2api/.env` 加了 `CACHE_IMAGE=redis:7` 以免切 Valkey）已 `requirepass`，密码 `REDIS_PASSWORD` 在 `~/sup2api/.env` 与 `~/sup2api-managed/.env`，03:07 用 `deploy/single/compose.yml` 重建固化（实时状态清空一次）。改动前备份 `~/sup2api-managed/backups/p0-20261009T185948/`。清掉了 Redis 里 10-01 遗留的 3 个 `redis-cli monitor` 连接。
+> - 仓库 `deploy/gateway/ovh/roll-gateway.py` 假定容器名 `sup2api-managed-sup2api-N-1`，与线上 `sup2api-N` 不符，**不能直接用**；本次按"重标 `:local` → `docker compose up -d --no-deps sup2api-N`、等节点 ready/local/新 shell boot/入口 401"逐个替换。
+> - `updater.nodes.last_seen` 只在节点状态变化时写，几分钟不变是正常的；活性看 Redis。
+
+> **2026-10-09 21:00（北京时间）线上版本（已被上面替代）：**
 > - OVH 外壳镜像 `sup2api-gateway:local` = `sup2api-gateway:d917b8c`（插件包上限 1 GiB、节点间拉包 30 分钟；20:47 起逐节点换，4→3→2→1，每节点约 10 秒）。
 > - 核心 v0.1.85（manifest `12d3a79e0b4d…`，源码 `bb10f0407`，21:37 设置页精简 §53.11；之前 v0.1.84 `8d34abdc9cec…`）；ccgateway 插件 0.1.16，包内带四个运行环境镜像（约 425 MB）。v0.1.83（`6f5a6b72…`）因核心与打包工具对 `images.json` 的 `file` 字段格式不一致而认不出包内镜像，已被 .84 取代。
 > - 控制器 `ccgateway-controller:0.1.16`、#21/#22 worker = `ccgateway-app:0.1.16` 的程序（`06d0f4f0…`），由"推送并启用内置镜像"完成：控制器自升级、worker 原地替换（容器 ID 不变）、出口代理容器未动。配置里的镜像覆盖值已清空，今后插件升级带来的新镜像自动生效。
