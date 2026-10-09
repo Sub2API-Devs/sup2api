@@ -3692,3 +3692,9 @@ images/gateway.tar.gz      # Caddy 网关
 - 一键升级遇到控制器 `image_pull_failed` 且目标正是包内 ref 时，先推送包内镜像再重试。
 - 超过 64 MiB 的插件包不进核心的解包缓存；外壳节点间拉包超时 30 分钟；插件 rollout 的 PrepareTimeout 仍是 120 秒，慢节点会在提交后自行重试。
 - 核心 Docker 镜像（final 阶段）的 market 与 builtin 各有一份 ccgateway 包；OVH 发布包只带 builtin。
+
+### 53.11 设置页精简（2026-10-09，用户要求）
+
+- 子标签只剩：连接与授权、网络配置、CC 特性、部署与运行。"账号容器"并入"部署与运行"（运行环境与镜像卡片之后）；账号列表显示容器内 Claude Code 版本（`GET /system/ccgateway/accounts/:id/health` 新增可选只读字段 `cli_version`，核心并行读 Worker `admin/features`，3 秒超时，取不到不返回）；请求调试日志一列只放开关，说明悬停/聚焦显示。
+- 删除"通用 API 特性"：官方 API 支持的功能不再是设置。`allow_fast`、`allow_effort` 在发给 Worker 的策略与设置读取中恒为 `true`，保存的 `false` 被忽略（默认值同步改为 true）。
+- "CC 特性"只保留"工具与错误处理"（直接展开）和"不支持的请求如何处理"（unknown_beta / unknown_field）；特性目录与附件默认来源的界面删除，已保存的附件设置继续生效并在保存时原样带回。

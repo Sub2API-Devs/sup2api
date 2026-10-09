@@ -1,5 +1,6 @@
 <script setup lang="ts">
-defineProps<{ modelValue: boolean; disabled?: boolean; label?: string }>()
+// `describedby` names the element describing the switch (aria-describedby of its button).
+defineProps<{ modelValue: boolean; disabled?: boolean; label?: string; describedby?: string }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void }>()
 </script>
 
@@ -9,6 +10,7 @@ const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void }>()
       type="button"
       role="switch"
       :aria-checked="modelValue"
+      :aria-describedby="describedby"
       :disabled="disabled"
       class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500/40"
       :class="modelValue ? 'bg-primary-500' : 'bg-gray-300 dark:bg-dark-600'"

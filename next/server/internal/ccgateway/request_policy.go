@@ -45,8 +45,12 @@ func (p *RequestPolicy) UnmarshalJSON(raw []byte) error {
 }
 
 func defaultRequestPolicy() RequestPolicy {
-	return RequestPolicy{SchemaVersion: features.PolicySchemaVersion, UnknownClientAttachment: "pass", UnknownGatewayAttachment: "pass", CustomToolPrefix: "ccgateway", UnknownBeta: "ignore", UnknownField: "reject", AllowFast: false, AllowEffort: true, AttachmentSource: "client", PassUpstreamErrors: false, ToolSearch: "request", Betas: features.BetaRules()}
+	return RequestPolicy{SchemaVersion: features.PolicySchemaVersion, UnknownClientAttachment: "pass", UnknownGatewayAttachment: "pass", CustomToolPrefix: "ccgateway", UnknownBeta: "ignore", UnknownField: "reject", AllowFast: true, AllowEffort: true, AttachmentSource: "client", PassUpstreamErrors: false, ToolSearch: "request", Betas: features.BetaRules()}
 }
+
+// EffectiveRequestPolicy is the policy sent to the Worker. Features the
+// official API supports are always on: allow_fast (speed) and allow_effort
+// (output_config.effort) are no longer settings, so a saved false is ignored.
 func (c Config) EffectiveRequestPolicy() RequestPolicy {
 	if c.RequestPolicy == nil {
 		p := defaultRequestPolicy()
@@ -54,6 +58,7 @@ func (c Config) EffectiveRequestPolicy() RequestPolicy {
 		return p
 	}
 	p := *c.RequestPolicy
+	p.AllowFast, p.AllowEffort = true, true
 	if p.SchemaVersion == 0 {
 		p.SchemaVersion = features.PolicySchemaVersion
 	}

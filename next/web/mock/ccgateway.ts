@@ -43,6 +43,8 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
   // routes; commit swaps the account to it and clears the account's state (last test, cooldown, …).
   // The retired runtime is removed at once here (the core waits 10 minutes).
   const READY_MS = 4000
+  /** Claude Code version the mock Workers report (GET accounts/:id/health cli_version). */
+  const CLI_VERSION = '2.1.292'
   const born = new Map<string, number>([['25', 0], ['26', 0]]), authed = new Set<string>(['25'])
   const sessions = new Map<string, { session_id: string; url: string; expires_at: string }>()
   interface Draft { proxy_id: number; created_by: number; created_at: number; last_seen: number; account_id: number | null; for_account: number | null }
@@ -112,7 +114,9 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     on('GET', `${prefix}/health`, (req) => {
       const r = resolve(req)
       if (!isRuntime(r)) return r
-      return !r.blocked && ready(r.key) ? { healthy: true, logged_in: authed.has(r.key) } : notSynchronized()
+      if (r.blocked || !ready(r.key)) return notSynchronized()
+      // Accounts also name the Claude Code version their Worker observed (drafts do not, like the core).
+      return { healthy: true, logged_in: authed.has(r.key), ...(prefix.endsWith(':id') ? { cli_version: CLI_VERSION } : {}) }
     })
     on('GET', `${prefix}/session`, (req) => {
       const r = resolve(req)
@@ -166,6 +170,23 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
   }
   runtimeRoutes(`${base}/accounts/:id`, accountRuntime)
   runtimeRoutes(`${base}/drafts/:key`, draftRuntime)
+
+  // Request debug logs of an account's Worker, with the limits a current Worker reports.
+  const requestLogs = new Map<string, boolean>()
+  const requestLogState = (key: string) => ({ enabled: requestLogs.get(key) ?? false, retention_hours: 24, per_request_limit_bytes: 64 << 20, storage_budget_bytes: 512 << 20, overflow_behavior: 'retain_partial_with_metadata' })
+  on('GET', `${base}/accounts/:id/request-logs`, (req) => {
+    const r = accountRuntime(req)
+    if (!isRuntime(r)) return r
+    return r.blocked || !ready(r.key) ? notSynchronized() : requestLogState(r.key)
+  })
+  on('PUT', `${base}/accounts/:id/request-logs`, (req) => {
+    const r = accountRuntime(req)
+    if (!isRuntime(r)) return r
+    if (r.blocked || !ready(r.key)) return notSynchronized()
+    if (typeof req.body?.enabled !== 'boolean') return fail(400, 'invalid_argument', 'enabled must be a boolean.')
+    requestLogs.set(r.key, req.body.enabled)
+    return requestLogState(r.key)
+  })
 
   /** Proxy check of POST / PUT drafts, like the core: missing → no_proxy, unknown → proxy_not_found, disabled → proxy_disabled. */
   const draftProxyError = (id: unknown) => {

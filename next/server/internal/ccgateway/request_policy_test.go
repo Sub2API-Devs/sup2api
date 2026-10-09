@@ -128,6 +128,41 @@ func TestPassUpstreamErrorsSave(t *testing.T) {
 	}
 }
 
+// Fast mode and effort are supported by the official API and are no longer
+// settings: a saved false (or an old default) is ignored and saved back as true.
+func TestOfficialFeaturesIgnoreSavedSwitches(t *testing.T) {
+	if p := defaultRequestPolicy(); !p.AllowFast || !p.AllowEffort {
+		t.Fatalf("defaults must allow fast and effort: %+v", p)
+	}
+	if p := (Config{Mode: "disabled"}).EffectiveRequestPolicy(); !p.AllowFast || !p.AllowEffort {
+		t.Fatalf("missing policy must allow fast and effort: %+v", p)
+	}
+	var in Config
+	if err := json.Unmarshal([]byte(`{"mode":"disabled","request_policy":{"unknown_beta":"reject","unknown_field":"ignore","allow_fast":false,"allow_effort":false,"tool_search":"false","pass_upstream_errors":true}}`), &in); err != nil {
+		t.Fatal(err)
+	}
+	p := in.EffectiveRequestPolicy()
+	if !p.AllowFast || !p.AllowEffort {
+		t.Fatalf("saved false switches were honored: %+v", p)
+	}
+	// The other settings keep their saved values.
+	if p.UnknownBeta != "reject" || p.UnknownField != "ignore" || p.ToolSearch != "false" || !p.PassUpstreamErrors {
+		t.Fatalf("other settings changed: %+v", p)
+	}
+	saved, err := mergeConfig(in, Config{Mode: "disabled"})
+	if err != nil || !saved.RequestPolicy.AllowFast || !saved.RequestPolicy.AllowEffort {
+		t.Fatal("saved policy keeps the switches off", err)
+	}
+	raw, _ := json.Marshal(saved.EffectiveRequestPolicy())
+	if !strings.Contains(string(raw), `"allow_fast":true`) || !strings.Contains(string(raw), `"allow_effort":true`) {
+		t.Fatalf("Worker header lacks the forced switches: %s", raw)
+	}
+	pub, _ := json.Marshal(saved.Public())
+	if !strings.Contains(string(pub), `"allow_fast":true`) || !strings.Contains(string(pub), `"allow_effort":true`) {
+		t.Fatalf("public settings lack the forced switches: %s", pub)
+	}
+}
+
 func TestRequestPolicyConfig(t *testing.T) {
 	old := Config{Mode: "disabled"}
 	p := defaultRequestPolicy()

@@ -168,6 +168,7 @@ type fakeController struct {
 	n          int
 	calls      []string
 	deleteCode int
+	cliVersion string // cli_version probe of admin/features ("" reports none)
 }
 
 func newFakeController(t *testing.T) *fakeController {
@@ -276,7 +277,11 @@ func (c *fakeController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "admin/status":
 		_ = json.NewEncoder(w).Encode(map[string]any{"healthy": true, "logged_in": c.loggedIn[key], "auth_method": "oauth"})
 	case "admin/features":
-		_ = json.NewEncoder(w).Encode(features.RuntimeCapabilities{ProtocolVersion: 1, Build: features.BuildInfo{Version: "test", Revision: "fixture"}, Catalog: features.Catalog(), PolicySchemaVersions: []int{1}, Probes: []features.RuntimeProbe{}, ModelProviderVerification: "not_run"})
+		probes := []features.RuntimeProbe{}
+		if c.cliVersion != "" {
+			probes = append(probes, features.RuntimeProbe{Name: "cli_version", Status: "observed", Value: c.cliVersion})
+		}
+		_ = json.NewEncoder(w).Encode(features.RuntimeCapabilities{ProtocolVersion: 1, Build: features.BuildInfo{Version: "test", Revision: "fixture"}, Catalog: features.Catalog(), PolicySchemaVersions: []int{1}, Probes: probes, ModelProviderVerification: "not_run"})
 	case "admin/auth/session":
 		if c.pending[key] == "" {
 			_, _ = w.Write([]byte(`{"session":null}`))
@@ -469,6 +474,71 @@ func TestSessionComesFromTheContainer(t *testing.T) {
 	})
 	if code, out := old.call("GET", old.account(true), "session", ""); code != 200 || out["data"] != nil {
 		t.Fatalf("session on an older image: %d %v", code, out)
+	}
+}
+
+// TestHealthReportsObservedCLIVersion: GET .../health adds the Claude Code
+// version the Worker observed (admin/features cli_version probe), read only;
+// a Worker reporting none, an older one without the endpoint, or an unsafe
+// value leaves the field out and the login state unchanged.
+func TestHealthReportsObservedCLIVersion(t *testing.T) {
+	ctl := newFakeController(t)
+	f := newRuntimeFixture(t, ctl.ServeHTTP)
+	id := f.account(true)
+	if code, out := f.call("POST", id, "sync", `{}`); code != 200 {
+		t.Fatalf("sync: %d %v", code, out)
+	}
+	code, out := f.call("GET", id, "health", "")
+	if _, has := data(out)["cli_version"]; code != 200 || has || data(out)["healthy"] != true {
+		t.Fatalf("health without a probe: %d %v", code, out)
+	}
+	ctl.cliVersion = "2.1.292"
+	code, out = f.call("GET", id, "health", "")
+	if code != 200 || data(out)["cli_version"] != "2.1.292" || data(out)["healthy"] != true || data(out)["logged_in"] != false {
+		t.Fatalf("health with a probe: %d %v", code, out)
+	}
+	if calls := ctl.seen("GET /accounts/" + strconv.FormatInt(id, 10) + "/admin/features"); len(calls) != 2 {
+		t.Fatalf("admin/features calls: %v", calls)
+	}
+	ctl.cliVersion = "<script>"
+	if code, out = f.call("GET", id, "health", ""); code != 200 || data(out)["cli_version"] != nil {
+		t.Fatalf("unsafe version shown: %d %v", code, out)
+	}
+
+	old := newRuntimeFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/admin/features"):
+			w.WriteHeader(404)
+		case strings.HasSuffix(r.URL.Path, "/admin/status"):
+			_, _ = w.Write([]byte(`{"healthy":true,"logged_in":true,"auth_method":"oauth"}`))
+		default:
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "ready"})
+		}
+	})
+	code, out = old.call("GET", old.account(true), "health", "")
+	if _, has := data(out)["cli_version"]; code != 200 || has || data(out)["logged_in"] != true {
+		t.Fatalf("health on an older Worker: %d %v", code, out)
+	}
+}
+
+func TestCLIVersionOf(t *testing.T) {
+	probe := func(status, value string) features.RuntimeProbe {
+		return features.RuntimeProbe{Name: "cli_version", Status: status, Value: value}
+	}
+	for _, tc := range []struct {
+		probes []features.RuntimeProbe
+		want   string
+	}{
+		{nil, ""},
+		{[]features.RuntimeProbe{probe("unavailable", "")}, ""},
+		{[]features.RuntimeProbe{probe("observed", "2.1.292")}, "2.1.292"},
+		{[]features.RuntimeProbe{probe("observed", "2.1.292"), probe("observed", "2.1.292")}, "2.1.292"},
+		{[]features.RuntimeProbe{probe("observed", "2.1.292"), probe("observed", "2.1.288")}, ""},
+		{[]features.RuntimeProbe{probe("observed", "2.1.292 (Claude Code)")}, ""},
+	} {
+		if got := cliVersionOf(features.RuntimeCapabilities{Probes: tc.probes}); got != tc.want {
+			t.Errorf("%v: got %q, want %q", tc.probes, got, tc.want)
+		}
 	}
 }
 

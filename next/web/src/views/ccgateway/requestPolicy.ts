@@ -22,7 +22,8 @@ export function defaultRequestPolicy(): RequestPolicy {
   return {
     unknown_beta: 'ignore',
     unknown_field: 'reject',
-    allow_fast: false,
+    // Supported by the official API, so always on (no longer settings; the core ignores false).
+    allow_fast: true,
     allow_effort: true,
     pass_upstream_errors: false,
     attachment_source: 'client',

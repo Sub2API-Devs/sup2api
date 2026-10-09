@@ -360,6 +360,8 @@ export interface CcgRuntimeHealth {
   credential_sources?: Array<'api_key_env' | 'bearer_env' | 'oauth_token_env' | 'stored_oauth' | 'managed_api_key' | 'external_credential_source' | 'credential_helper_configured'>
   credential_source_unresolved?: boolean
   access_token_expired?: boolean
+  /** Accounts only: the Claude Code version the Worker observed (e.g. 2.1.292); absent when unknown. */
+  cli_version?: string
 }
 
 /** POST .../start and GET .../session (null when no login is pending). */

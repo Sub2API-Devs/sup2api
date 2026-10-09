@@ -9,7 +9,7 @@ means no client beta is allowlisted. Missing legacy policy uses these defaults:
 {
   "unknown_beta": "ignore",
   "unknown_field": "reject",
-  "allow_fast": false,
+  "allow_fast": true,
   "allow_effort": true,
   "pass_upstream_errors": false,
   "betas": [
@@ -42,7 +42,7 @@ Anthropic-shaped HTTP 400 `invalid_request_error` naming the unsupported paramet
 Ignore removes only unsupported top-level fields and `output_config` subfields;
 known fields and message/tool content still undergo strict validation.
 
-When `allow_fast` is false, `speed` and the mapped fast beta are ignored. Otherwise
+Since 2026-10-09 the core always sends `allow_fast` and `allow_effort` as true (official API features are not settings; a saved false is ignored). With `allow_fast` false (older cores), `speed` and the mapped fast beta are ignored. Otherwise
 `speed` accepts `fast` or `standard`, setting the request-local CLI `fastMode` value.
 Absent `speed` explicitly keeps standard mode, preventing a previous session's Fast
 setting from leaking into another request. Actual access and pricing remain subject

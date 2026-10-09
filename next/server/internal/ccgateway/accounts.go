@@ -540,6 +540,13 @@ func (s *Service) serveRuntime(c *gin.Context, ctx context.Context, d accountDes
 		}
 		raw, _ = json.Marshal(body)
 	}
+	// An account's health also names the Claude Code version its Worker
+	// observed, read concurrently so the login check does not wait for it.
+	var cliVersion chan string
+	if action == "health" && !draft {
+		cliVersion = make(chan string, 1)
+		go func() { cliVersion <- s.observedCLIVersion(ctx, d) }()
+	}
 	res, close, e := s.runtimeRequest(ctx, d.Key, c.Request.Method, path, raw, d.Revision)
 	if action == "start" {
 		// Right after the runtime turns ready the controller may still answer
@@ -585,6 +592,9 @@ func (s *Service) serveRuntime(c *gin.Context, ctx context.Context, d accountDes
 	switch action {
 	case "health":
 		out, e = safeResult("/status", raw)
+		if e == nil && cliVersion != nil {
+			out = withCLIVersion(out, <-cliVersion)
+		}
 	case "session":
 		out, e = sessionResult(raw)
 	case "start":

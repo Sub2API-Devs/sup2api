@@ -1,26 +1,12 @@
 export default {
   credentialStatus: { saved: 'Local credentials are saved. Online validity is determined by actual requests.', absent: 'No confirmed local credentials found. Online validity was not checked.', unresolved: 'Credential selection is unresolved; external credential programs are not run for status checks.', expired: 'The stored access token has expired. The native CLI will attempt refresh during an actual request.' },
-  capability: { helperHistory: 'Worker hidden-history custody protocol', helperUnreported: 'Not declared', helperBoundary: 'Worker protocol declaration only; core custody must also be enabled. This query does not verify core activation or provider eligibility and changes no settings.', search: 'Search accounts', inspect: 'Inspect account Worker capabilities', account: 'Select an accessible account', boundary: 'Read only: does not start or update containers or change routing. Binary declarations, CLI version observations and real model verification are separate evidence.', failed: 'Inspection unavailable: an older Worker/controller, missing permission or a connection failure. This does not establish feature support.', build: 'Running Worker version / Git revision', schema: 'Worker catalog / accepted policy schemas', code: 'This Worker’s code declaration', probes: 'Observed local probe scope', provider: 'Account / model / provider inference verification', notRun: 'No inference performed by this endpoint; not verified', unreported: 'Not reported' },
-  settingsTabs: { accounts: 'Account containers', label: 'Settings categories', connection: 'Connection', network: 'Network', requests: 'API features', attachments: 'CC features', deployment: 'Deployment', save: 'Save all settings' },
+  settingsTabs: { label: 'Settings categories', connection: 'Connection', network: 'Network', cc: 'CC features', deployment: 'Deployment', save: 'Save all settings' },
   features: {
-    title: 'API features',
-    baseline: 'Features group related parameters, betas and limitations. This is a code adaptation catalog, not runtime verification of the current account, model or Worker.',
-    loading: 'Loading feature catalog…',
-    loadFailed: 'The feature catalog is unavailable or unsupported by this core. Support cannot be confirmed; existing settings are unchanged.',
-    retry: 'Reload', search: 'Search features, parameters or betas', filter: 'Adaptation status', all: 'All statuses',
-    status: { supported: 'Supported', partial: 'Partial support', unsupported: 'Not supported', unverified: 'Not verified' },
-    body: 'Request parameters', requirements: 'Requirements: ', implementation: 'Implementation and evidence',
-    empty: 'No matching features', version: 'Catalog version: {version}', previous: 'Previous', next: 'Next',
-    ccSettings: 'View CC tool search settings', ccTitle: 'CC features',
-    ccHint: 'Configure tool behavior, error handling and environment attachments for Claude Code inside the Worker.',
+    ccTitle: 'CC features',
+    ccHint: 'Configure tool behavior and error handling for Claude Code inside the Worker, and how unsupported requests are handled. Features the official API supports are supported directly and need no setting.',
     ccRuntime: 'Tools and error handling',
   },
   policy: {
-    effectiveSource: 'Effective source: {source}',
-    betaValuesHint:
-      'Send comma-separated Beta names or repeated headers; names are deduplicated. Supported Betas use fixed handling. Names outside the whitelist are ignored or rejected with 400 according to the setting below.',
-    description_context:
-      'Forwards the beta and configures the one-million-token context environment. Availability and limits depend on the upstream account and model.',
     toolSearch: 'Tool search and deferred loading',
     customToolPrefix: 'MCP server prefix for custom tools',
     customToolPrefixHint: 'Defaults to ccgateway; leave blank to reset. Saved settings are sent to the Worker on every request. Only ordinary custom tools are affected; native tools and existing MCP names stay unchanged. Use 1–32 letters, digits, underscores or hyphens, without double underscores. Changing the prefix reloads history using the new names.',
@@ -30,145 +16,17 @@ export default {
     search_false: 'Disable tool search',
     search_true: 'Enable tool search',
     search_auto: 'Enable automatically based on context usage',
-    envTitle: 'Claude Code environment and CLI mappings',
-    envHint:
-      'Validated parameters control per-request variables; clients cannot inject arbitrary environment values. JSON is validated before returning. Tool search and structured output buffer streaming responses.',
-    mapping_tool_search: 'Discover tool definitions',
-    description_tool_search: 'Enables Claude Code tool search. API clients still execute their tools.',
-    feature_search: 'Tool search',
-    feature_cache: 'Prompt caching',
-    feature_schema: 'Structured output',
-    feature_output: 'Extended output length',
-    feature_tools: 'Efficient tool use',
-    feature_overflow: 'Context overflow handling',
-    feature_effort: 'Conversation effort',
-
-    bodyTitle: '2. Request body parameters',
-    bodyHint: 'Supported JSON parameters, values and limits, excluding messages conversation content.',
-    headerTitle: '1. Request headers',
-    headerHint:
-      'Supports the anthropic-beta header. The supported Beta whitelist is listed below; each entry uses fixed handling defined in code.',
     fallbackTitle: 'Handling unsupported requests',
-    adapted: 'Adapted',
-    partial: 'Limited support',
-    pending: 'Available in Claude Code; gateway adaptation pending',
-    featureName: 'Capability',
-    requestField: 'Request parameter',
-    effect: 'Behavior and limitations',
-    bodyFeatures: {
-      model: { name: 'Model selection', hint: 'Uses the requested model ID, subject to group policy and account access.' },
-      output: { name: 'Maximum output', hint: 'Required positive integer output Token limit, subject to upstream model limits.' },
-      stream: {
-        name: 'Streaming response',
-        hint: 'true / false, default false. true returns Anthropic SSE. Tool search and structured output buffer streaming responses.'
-      },
-      system: { name: 'System prompt', hint: 'Accepts a string or text blocks for the Claude Code session.' },
-      midSystem: {
-        name: 'System messages in the conversation',
-        hint: 'Text only, right after a user turn and before an assistant turn or at the end. Kept in place as Claude Code system attachments and sent with the system role on models that support it; one turn’s text blocks are joined by newlines and combined with Claude Code’s own environment notes. In the final turn each block is limited to 100,000 characters, 200,000 in total.'
-      },
-      tools: {
-        name: 'Tool calling',
-        hint: 'Supports name, text description, object input_schema and boolean defer_loading. Clients execute tools; deferred loading follows the tool-search policy.'
-      },
-      thinking: {
-        name: 'Extended and adaptive thinking',
-        hint: 'type: disabled / enabled / adaptive. enabled requires an integer budget_tokens >=1024 and <max_tokens. Other modes must omit the budget.'
-      },
-      cache: {
-        name: 'Prompt cache duration',
-        hint: 'type: ephemeral; ttl: 5m / 1h. Accepted at the top level, system text blocks, tools and message content blocks. Configures caching and gateway reuse; upstream cache hits are not guaranteed.'
-      },
-      schema: {
-        name: 'JSON Schema output',
-        hint: 'format.type: json_schema with a non-empty schema up to 64 KiB. Legacy output_format is supported; do not send both. Returns validated JSON text. External schema references are disabled.'
-      },
-      choice: {
-        name: 'Tool choice',
-        hint: 'Supports type: auto / none. any, a named tool and disable_parallel_tool_use are not supported.'
-      },
-      effort: {
-        name: 'Thinking effort',
-        hint: 'Supports low / medium / high / xhigh / max when client effort is allowed. Otherwise the unsupported-field policy applies. Model limits still apply.'
-      },
-      speed: {
-        name: 'Response speed',
-        hint: 'Supports fast / standard when fast mode is allowed. Otherwise speed is ignored. The Fast Beta alone does not enable fast mode.'
-      }
-    },
-    title: 'Supported parameters',
-    hint: 'Review supported request headers and body parameters, and configure client request handling. Changes apply to new requests after saving.',
-    fast: 'Allow clients to request fast mode',
-    fastHint:
-      'Off by default: speed is ignored and standard speed is used. When enabled, speed: fast requests fast mode and speed: standard requests standard mode. A Fast Beta alone does not enable it. Account and model determine availability and pricing.',
-    effort: 'Allow clients to set effort',
-    effortHint:
-      'Maps output_config.effort to Claude Code effort, such as low, medium or high. When disabled, the unsupported-parameter policy applies.',
-    upstreamErrorsTitle: 'Handling upstream errors',
     passUpstreamErrors: 'Return upstream errors directly to clients',
     passUpstreamErrorsHint:
       'When enabled, any error returned by the official API (including 401, 429, 529 and errors in the middle of a stream) is returned to the client immediately with the official status code and error body unchanged; Claude Code no longer retries, backs off or refreshes authorization. When disabled (default), Claude Code handles errors itself and only returns an error after it finally fails. When enabled, the caller or gateway is responsible for retries and account switching.',
-    environmentInherit: 'Inherit: {source}',
-    environmentFieldsHint: 'Controls model-visible cwd and platform, not the process cwd. Recognizes verified Windows/Linux blocks; missing client fields fall back to container values. Mixed sources may disagree with shell and osVersion.',
-    attachmentRulesHint: "Override the default by attachment type. Container attachments use structured events; client filtering requires an explicit type marker. Ordinary system text is preserved.",
-    attachmentInherit: "Use default",
-    attachmentType_environment: "Environment (cwd and OS)",
-    attachmentType_model: "Model information",
-    attachmentType_total_tokens_reminder: "Token budget reminder",
-    attachmentType_session_context: "Session context",
-    attachmentType_date: "Date",
-    unknownAttachment_client: "Unknown client attachments",
-    unknownAttachment_gateway: "Unknown container attachments",
-    attachmentPass: "Pass through (default)",
-    attachmentIgnore: "Ignore",
-    attachmentProtectedHint: "Tool discovery, hook context and system instructions not identified as attachments are always retained. This does not change the container process cwd.",
-    attachmentSourceTitle: 'System attachment source',
-    attachmentSourceLegend: 'Choose which environment information to keep (OS, date, token balance, etc.)',
-    attachmentSource_client: 'Client environment',
-    attachmentSource_client_hint: 'Keep classified client environment attachments and filter the corresponding container attachments',
-    attachmentSource_gateway: 'Gateway container environment',
-    attachmentSource_gateway_hint: 'Keep container environment attachments and filter explicitly typed client attachments; preserve ordinary system text',
-    attachmentSource_both: 'Keep both',
-    attachmentSource_both_hint: 'Keep both client and container environment (may duplicate)',
     unknownBeta: 'Handling unsupported Beta headers',
     unknownField: 'Unsupported parameters',
     reject: 'Return error (400)',
     ignore: 'Ignore',
     ignoreHint:
       'For example, output_config.format is not adapted: ignoring it continues without the requested format; rejecting it returns 400. Model, messages and tools remain validated.',
-    betas: 'Advanced Beta rules',
-    ruleSummary:
-      '{count} rules configured; {catalog} entries in the official API reference. Rule count is not a count of adapted features.',
-    defaults: 'Restore defaults',
-    add: 'Add custom rule',
-    betaName: 'Beta name',
-    mapping: 'Handling',
-    mapping_native: 'Accept marker; use native CLI behavior',
-    mapping_forward: 'Forward the Beta marker only',
-    mapping_fine_grained_tools: 'Enable incremental tool arguments',
-    mapping_fast: 'Use with fast mode',
-    description_native: 'Accepts the marker without forwarding it or enabling a feature. Behavior depends on native Claude Code logic and request body settings.',
-    description_forward: 'Only passes this marker upstream. Does not adapt required request fields or guarantee account access.',
-    description_fine_grained_tools: 'Forwards this Beta and enables Claude Code fine-grained tool streaming so tool arguments arrive incrementally. Does not execute tools or change their definitions.',
-    description_fast: 'Controls fast mode only when allowed above and the request includes speed. Ignored when fast mode is disabled.',
-    empty: 'No Beta rules: all client markers follow the unconfigured-Beta policy.',
-    mappingHint: 'Advanced rules rarely need changes. Adding a name permits handling the marker; it does not implement the API feature.',
-    invalid: 'Duplicate or invalid Beta name, or mismatched mapping. Check the rules.',
-    catalog: 'Official API Beta reference',
-    catalogHint:
-      'Markers from the official SDK, including historical versions. Unconfigured entries still follow the policy above. Files, server-side tools, dedicated endpoints and new request structures need separate adaptation.',
-    catalogSearch: 'Search Beta names',
-    configured: 'Rule configured',
-    unconfigured: 'Unconfigured; compatibility unverified',
-    noResults: 'No matching Beta',
-    feature_native: 'Claude Code authentication and native markers',
-    feature_thinking: 'Thinking between tool calls',
-    feature_streaming: 'Stream tool parameters',
-    feature_context: 'Million-token context',
-    feature_fast: 'Fast mode',
-    feature_custom: 'Custom Beta rule',
-    enabled: 'Client setting allowed',
-    disabled: 'Client setting not accepted'
+    invalid: 'Invalid settings. Check the CC features settings.'
   },
  runtime: {"switchHint": "Proxy changes restart this account’s egress and may interrupt existing calls. Other accounts are unaffected."},
   title: 'CCGateway management', description: 'Connect to the CCGateway controller that runs a separate container for every Claude Code account.', readOnly: 'Your permissions allow viewing configuration only.',
@@ -443,11 +301,12 @@ export default {
     overflow: 'Overflow keeps existing content marked as truncated without interrupting the request.',
     unreportedLimits: 'This Worker has not reported complete log limits; it may be an older version.',
     unreportedOverflow: 'Overflow behavior has not been reported.',
+    details: 'Log retention and limits',
     failed: 'Could not read or update the log switch. Refresh and try again.',
   },
   runtimes: {
     title: 'Account containers', hint: 'One container per Claude Code account. Authorization happens on the Accounts page: creating an account starts its container and walks you through the login. This list only shows the state.',
-    account: 'Account', container: 'Container', auth: 'Claude authorization', typeOAuth: 'OAuth (signed in inside the container)', typeApiKey: 'API Key',
+    account: 'Account', container: 'Container', cliVersion: 'CC version', auth: 'Claude authorization', typeOAuth: 'OAuth (signed in inside the container)', typeApiKey: 'API Key',
     state: { ready: 'Ready', preparing: 'Preparing', error: 'Error', unavailable: 'Unavailable', unknown: 'Unknown' },
     checking: 'Checking', authorized: 'Credentials saved', notAuthorized: 'No saved credentials', noAuthNeeded: 'No authorization needed',
     goAuthorize: 'Authorize on the Accounts page', goEdit: 'Open on the Accounts page', openAccounts: 'Create / manage accounts', empty: 'No Claude Code account yet; create one on the Accounts page.', loadFailed: 'Accounts could not be loaded',

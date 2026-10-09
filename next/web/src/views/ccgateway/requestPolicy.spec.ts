@@ -39,4 +39,9 @@ describe('CCGateway request policy', () => {
     first.betas.splice(0)
     expect(defaultRequestPolicy().betas.length).toBeGreaterThan(0)
   })
+  it('allows fast mode and effort by default: the official API supports them', () => {
+    const p = defaultRequestPolicy()
+    expect(p.allow_fast).toBe(true)
+    expect(p.allow_effort).toBe(true)
+  })
 })

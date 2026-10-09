@@ -3,7 +3,7 @@
 // account). Authorizing happens on the Accounts page: each row links to the
 // account editor (/accounts?edit=<id>), where the container is started and
 // the Claude login is completed.
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SBadge, SButton, SCard, SHint, SIcon, SSwitch, STable, toast, type TableColumn } from '@sub2api/ui'
@@ -34,6 +34,8 @@ interface Row {
   /** null: unknown (container not ready, API key accounts, or the check failed) */
   loggedIn: boolean | null
   health?: CcgRuntimeHealth
+  /** Claude Code version the Worker observed ('' unknown). */
+  cliVersion: string
   checking: boolean
   error: boolean
   created_by?: number | null
@@ -55,10 +57,15 @@ const canAccounts = computed(() => auth.has('account:read') || auth.has('account
 const columns = computed<TableColumn[]>(() => [
   { key: 'name', label: t('ccgateway.runtimes.account') },
   { key: 'container', label: t('ccgateway.runtimes.container') },
+  { key: 'cli_version', label: t('ccgateway.runtimes.cliVersion') },
   { key: 'auth', label: t('ccgateway.runtimes.auth') },
   { key: 'request_logs', label: t('ccgateway.requestLogs.title') },
   { key: 'actions', label: '', align: 'right', width: '240px' }
 ])
+
+// Same shape the core accepts; anything else is not shown.
+const CLI_VERSION_RE = /^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$/
+const cliVersionOf = (h?: CcgRuntimeHealth | null) => (typeof h?.cli_version === 'string' && CLI_VERSION_RE.test(h.cli_version) ? h.cli_version : '')
 
 async function inspect(r: Row) {
   r.checking = true
@@ -71,6 +78,10 @@ async function inspect(r: Row) {
     if (r.phase === 'ready' && r.type === 'managed') {
       r.health = await api.get<CcgRuntimeHealth>(`/system/ccgateway/accounts/${r.id}/health`)
       r.loggedIn = r.health.credential_present ?? r.health.logged_in
+      r.cliVersion = cliVersionOf(r.health)
+    } else if (r.phase === 'ready') {
+      // API key accounts need no login state: only the version, best effort.
+      try { r.cliVersion = cliVersionOf(await api.get<CcgRuntimeHealth>(`/system/ccgateway/accounts/${r.id}/health`)) } catch { /* shown as unknown */ }
     }
     if (r.phase === 'ready') {
       try {
@@ -89,7 +100,7 @@ async function load() {
   error.value = ''
   try {
     const list = await api.list<{ id: number; name: string; type: string; created_by?: number | null }>('/accounts', { plugin_key: 'ccgateway', page_size: 200 })
-    rows.value = list.items.map((a) => ({ id: a.id, name: a.name, type: a.type, created_by: a.created_by, status: '', reason: '', container: '', phase: 'unknown', loggedIn: null, checking: true, error: false, logsEnabled: null, logsBusy: false, logsError: false, logsLimits: null }))
+    rows.value = list.items.map((a) => ({ id: a.id, name: a.name, type: a.type, created_by: a.created_by, status: '', reason: '', container: '', phase: 'unknown', loggedIn: null, cliVersion: '', checking: true, error: false, logsEnabled: null, logsBusy: false, logsError: false, logsLimits: null }))
   } catch {
     error.value = t('ccgateway.runtimes.loadFailed')
     rows.value = []
@@ -127,6 +138,27 @@ function logLimits(r: Row): string {
     total: Number((limits.storage_budget_bytes! / 1048576).toFixed(3)),
   })
 }
+/** Limits and overflow behavior the Worker reported: shown on hover / focus of the switch. */
+function logDetails(r: Row): string {
+  const overflow = r.logsLimits?.overflow_behavior === 'retain_partial_with_metadata' ? t('ccgateway.requestLogs.overflow') : t('ccgateway.requestLogs.unreportedOverflow')
+  return `${logLimits(r)} ${overflow}`
+}
+
+// One floating tip for the hovered / focused log switch. It is fixed to the
+// viewport (the table scrolls and would clip it) and only mirrors the text of the
+// row's hidden description, which assistive technology reads instead.
+const tip = ref<{ id: number; text: string; left: number; top?: number; bottom?: number } | null>(null)
+const TIP_WIDTH = 320
+function showTip(r: Row, event: Event) {
+  const box = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  const left = Math.max(8, Math.min(box.left, window.innerWidth - TIP_WIDTH - 8))
+  tip.value = box.bottom + 96 > window.innerHeight
+    ? { id: r.id, text: logDetails(r), left, bottom: window.innerHeight - box.top + 6 }
+    : { id: r.id, text: logDetails(r), left, top: box.bottom + 6 }
+}
+function hideTip() { tip.value = null }
+onMounted(() => window.addEventListener('scroll', hideTip, true))
+onBeforeUnmount(() => window.removeEventListener('scroll', hideTip, true))
 
 function containerBadge(r: Row): { tone: 'success' | 'warning' | 'danger' | 'gray'; label: string } {
   if (r.error) return { tone: 'danger', label: t('ccgateway.runtimes.state.unavailable') }
@@ -167,12 +199,16 @@ async function refreshAuth(r: Row) {
       <SHint v-if="error" tone="danger">{{ error }}</SHint>
       <STable :columns="columns" :rows="rows" :loading="loading" dense :empty-text="t('ccgateway.runtimes.empty')" data-testid="ccgateway-runtimes">
         <template #cell-name="{ row }">
-          <div class="font-medium">{{ row.name }} <span class="font-mono text-xs text-gray-400">#{{ row.id }}</span></div>
-          <div class="text-xs text-gray-500 dark:text-dark-400">{{ row.type === 'managed' ? t('ccgateway.runtimes.typeOAuth') : t('ccgateway.runtimes.typeApiKey') }}</div>
+          <div class="whitespace-nowrap font-medium">{{ row.name }} <span class="font-mono text-xs text-gray-400">#{{ row.id }}</span></div>
+          <div class="whitespace-nowrap text-xs text-gray-500 dark:text-dark-400">{{ row.type === 'managed' ? t('ccgateway.runtimes.typeOAuth') : t('ccgateway.runtimes.typeApiKey') }}</div>
         </template>
         <template #cell-container="{ row }">
           <SBadge :tone="containerBadge(row).tone" dot>{{ row.checking ? t('ccgateway.runtimes.checking') : containerBadge(row).label }}</SBadge>
           <div v-if="row.container" class="mt-0.5 font-mono text-[11px] text-gray-400">{{ row.container }}</div>
+        </template>
+        <template #cell-cli_version="{ row }">
+          <span v-if="row.cliVersion" class="whitespace-nowrap font-mono text-xs" :data-testid="`cli-version-${row.id}`">{{ row.cliVersion }}</span>
+          <SHint v-else inline size="xs" :data-testid="`cli-version-${row.id}`">—</SHint>
         </template>
         <template #cell-auth="{ row }">
           <SHint v-if="row.type !== 'managed'" inline size="xs">{{ t('ccgateway.runtimes.noAuthNeeded') }}</SHint>
@@ -182,9 +218,12 @@ async function refreshAuth(r: Row) {
           <CredentialStatusNotice :status="row.health" />
         </template>
         <template #cell-request_logs="{ row }">
-          <SSwitch v-if="row.logsEnabled !== null" :model-value="row.logsEnabled" :disabled="!canLogs(row) || row.logsBusy || row.checking || loading" :label="t('ccgateway.requestLogs.title')" :data-testid="`request-logs-${row.id}`" @update:model-value="setLogs(row, $event)" />
+          <div v-if="row.logsEnabled !== null" class="inline-flex items-center gap-1.5 whitespace-nowrap" :data-testid="`request-log-cell-${row.id}`" @mouseenter="showTip(row, $event)" @mouseleave="hideTip" @focusin="showTip(row, $event)" @focusout="hideTip" @keydown.esc="hideTip">
+            <SSwitch :model-value="row.logsEnabled" :disabled="!canLogs(row) || row.logsBusy || row.checking || loading" :describedby="`request-log-limits-${row.id}`" :data-testid="`request-logs-${row.id}`" @update:model-value="setLogs(row, $event)"><span class="sr-only">{{ t('ccgateway.requestLogs.title') }}</span></SSwitch>
+            <button type="button" class="rounded-full text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 dark:hover:text-gray-200" :aria-label="t('ccgateway.requestLogs.details')" :aria-describedby="`request-log-limits-${row.id}`" :data-testid="`request-log-info-${row.id}`"><SIcon name="info" class="h-4 w-4" /></button>
+            <span :id="`request-log-limits-${row.id}`" class="sr-only" :data-testid="`request-log-limits-${row.id}`">{{ logDetails(row) }}</span>
+          </div>
           <SHint v-else inline size="xs">—</SHint>
-          <p v-if="row.logsEnabled !== null" class="mt-1 max-w-64 text-xs text-gray-500" :data-testid="`request-log-limits-${row.id}`">{{ logLimits(row) }} {{ row.logsLimits?.overflow_behavior === 'retain_partial_with_metadata' ? t('ccgateway.requestLogs.overflow') : t('ccgateway.requestLogs.unreportedOverflow') }}</p>
           <SHint v-if="row.logsError" tone="danger" size="xs">{{ t('ccgateway.requestLogs.failed') }}</SHint>
         </template>
         <template #cell-actions="{ row }">
@@ -199,5 +238,8 @@ async function refreshAuth(r: Row) {
         </template>
       </STable>
     </div>
+    <Teleport to="body">
+      <div v-if="tip" aria-hidden="true" class="pointer-events-none fixed z-50 rounded-lg bg-gray-900 px-3 py-2 text-xs leading-5 text-white shadow-lg dark:bg-dark-700" :style="{ left: `${tip.left}px`, top: tip.top === undefined ? undefined : `${tip.top}px`, bottom: tip.bottom === undefined ? undefined : `${tip.bottom}px`, maxWidth: `${TIP_WIDTH}px` }" data-testid="request-log-tooltip">{{ tip.text }}</div>
+    </Teleport>
   </SCard>
 </template>
