@@ -2,7 +2,7 @@
 
 > **2026-10-09 21:00（北京时间）线上版本，优先于下文：**
 > - OVH 外壳镜像 `sup2api-gateway:local` = `sup2api-gateway:d917b8c`（插件包上限 1 GiB、节点间拉包 30 分钟；20:47 起逐节点换，4→3→2→1，每节点约 10 秒）。
-> - 核心 v0.1.84（manifest `8d34abdc9cec…`，源码 `84126d3f7`）；ccgateway 插件 0.1.16，包内带四个运行环境镜像（约 425 MB）。v0.1.83（`6f5a6b72…`）因核心与打包工具对 `images.json` 的 `file` 字段格式不一致而认不出包内镜像，已被 .84 取代。
+> - 核心 v0.1.85（manifest `12d3a79e0b4d…`，源码 `bb10f0407`，21:37 设置页精简 §53.11；之前 v0.1.84 `8d34abdc9cec…`）；ccgateway 插件 0.1.16，包内带四个运行环境镜像（约 425 MB）。v0.1.83（`6f5a6b72…`）因核心与打包工具对 `images.json` 的 `file` 字段格式不一致而认不出包内镜像，已被 .84 取代。
 > - 控制器 `ccgateway-controller:0.1.16`、#21/#22 worker = `ccgateway-app:0.1.16` 的程序（`06d0f4f0…`），由"推送并启用内置镜像"完成：控制器自升级、worker 原地替换（容器 ID 不变）、出口代理容器未动。配置里的镜像覆盖值已清空，今后插件升级带来的新镜像自动生效。
 > - **核心发布**：`~/sup2api-managed/build-core.sh VERSION`（已加入：按插件版本缓存在 `~/sup2api-managed/ccgateway-images/<版本>/`，缺失时先跑 `build-ccgateway-images.sh`，再以 `REQUIRE_CCGATEWAY_IMAGES=1` 构建；原脚本备份 `build-core.sh.bak-20261009`）→ `sub2api-shell import` → `upgrade_observe.py`。改了 companions（worker/controller/egress）必须升 ccgateway 插件版本，否则复用旧缓存镜像。升级后在部署页点"推送并启用内置镜像"。
 >
