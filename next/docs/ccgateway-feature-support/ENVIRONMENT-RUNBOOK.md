@@ -1,5 +1,12 @@
 # CCGateway 环境与操作指南
 
+> **2026-10-09 18:10（北京时间）现状，优先于下文旧描述：**
+> - Core `v0.1.82`（源码 `4d5c666ca`，manifest `91b20df66c49…`）四节点 primary-first 升级完成；插件版本不变（ccgateway 0.1.15 等）。
+> - CCGateway 已切到**控制面板模式**（CONTRACTS §53）：配置 `mode: controller`，`130.94.122.254:443`，**不再保存 SSH 凭据**；cc-max 上 `ccg-gateway`（caddy:2-alpine，host 网络，监听 *:443，Caddy 内置 CA 证书，核心固定信任其根证书）反代到 `ccg-controller`（`ccg-controller:0.1.49`，仍只听 127.0.0.1:8787）。账号模型流量经控制器 `ccg-tunnel` 隧道到账号容器。
+> - #21/#22 **未重建**：切换控制器时容器身份与启动时间完全不变；随后用 §53.7 原地更新把容器内 `/usr/local/bin/ccgateway` 从 `e2ab0ee3…`（.80）换成 `ccgateway-worker:0.1.81` 里的 worker（`ddd30dd1…`，含 Claude Code 2.1.292 tool_result 折叠修复），只重启了这两个容器，旧程序备份在 `/opt/ccgateway-runtime/<key>/worker-backups/`。新账号默认镜像 `ccgateway-worker:0.1.81`。
+> - 以后更新 worker：部署页"上传镜像"（app）或"更新现有账号的 worker"，或 `POST /system/ccgateway/runtime/workers`；**不要**再用一次性 `update-account.sh`。改回 SSH 模式需重新填写 SSH 凭据。
+> - OVH 托管栈只用 `/home/debian/sup2api-managed/compose.yml`（容器名 `sup2api-1..4`、`releases`，卷 `sup2api-managed_sup2api-N-data`）。**不要**在 `release-*/next/deploy/gateway/ovh` 下 `docker compose up`：那份 compose 的卷（`state-N`）、证书路径与线上不同，10-09 07:44 曾因此起了一套错卷的节点（发布服务器崩溃循环、节点不心跳），09:23 恢复原栈时全站 503 约 10 分钟。
+
 本指南供接手 AI 直接定位环境和执行检查。2026-10-09 本轮实际执行了本机工具定位、两台服务器 SSH 只读检查、容器选定字段/程序哈希/健康状态及 Core 节点状态查询；没有读取凭据值、运行 OAuth 探针、调用模型、重启、写数据库或部署。下面测试、构建、更新和恢复命令是后续操作方法，不代表本轮执行结果。当前状态见 [HANDOFF](HANDOFF-2026-10-09.md)，代码结构见 [IMPLEMENTATION-GUIDE](IMPLEMENTATION-GUIDE.md)，未闭环范围见 [REMAINING-WORK](REMAINING-WORK.md)。
 
 ## 1. 本机入口
