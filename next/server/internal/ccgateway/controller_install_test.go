@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -19,18 +20,19 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/remotedocker"
 )
 
-// panelInstall is a control panel installation over a fake SSH host; the
+// panelInstall is a controller installation over a fake Docker host; the
 // gateway is an HTTPS server on 127.0.0.1 whose certificate the fake CA
-// script returns.
+// script returns, or a plain HTTP server for scheme http.
 type panelInstall struct {
-	f        *runtimeFixture
-	host     *fakeHostOps
-	srv      *httptest.Server
-	ip       string
-	port     int
-	ca       string
-	mu       sync.Mutex
-	features []string
+	f         *runtimeFixture
+	host      *fakeHostOps
+	srv       *httptest.Server
+	ip        string
+	port      int
+	ca        string
+	plainPort int
+	mu        sync.Mutex
+	features  []string
 }
 
 func newPanelInstall(t *testing.T) *panelInstall {
@@ -41,27 +43,60 @@ func newPanelInstall(t *testing.T) *panelInstall {
 	p := &panelInstall{f: f, host: host, features: []string{"tunnel", "uploads"}}
 	host.health = controllerHealth{Version: "v2", AppImage: AppImage, EgressImage: EgressImage, ControllerImage: ControllerImage, Features: []string{"tunnel"}}
 	host.gateway = remotedocker.ScriptResult{Output: "CCG_RESULT=started\n"}
-	p.srv, p.ip, p.port, p.ca = tlsPanel(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/health" || r.Header.Get("Authorization") != "Bearer "+panelKey {
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" || r.Header.Get("Authorization") != "Bearer "+p.installedKey() {
 			w.WriteHeader(401)
 			return
 		}
 		p.mu.Lock()
 		defer p.mu.Unlock()
 		_ = json.NewEncoder(w).Encode(map[string]any{"version": "v2", "features": p.features})
-	})
+	}
+	p.srv, p.ip, p.port, p.ca = tlsPanel(t, handler)
+	plain := httptest.NewServer(http.HandlerFunc(handler))
+	t.Cleanup(plain.Close)
+	p.plainPort = plain.Listener.Addr().(*net.TCPAddr).Port
 	host.ca = remotedocker.ScriptResult{Output: p.ca + "CCG_RESULT=ok\n"}
-	// SSH-mode health goes to the fake host; controller mode is real HTTPS.
-	plain := f.s.openController
+	// Health checks of the controller being installed go to the fake host;
+	// controller mode is the real HTTP(S) connection.
+	fake := f.s.openController
 	f.s.openController = func(ctx context.Context, c Config) (*http.Client, string, func() error, error) {
 		if c.Mode == "controller" {
-			return openControllerHTTPS(c)
+			return openControllerPanel(c)
 		}
-		return plain(ctx, c)
+		return fake(ctx, c)
 	}
 	gatewayWait, gatewayEvery = 300*time.Millisecond, 50*time.Millisecond
 	t.Cleanup(func() { gatewayWait, gatewayEvery = 120*time.Second, 3*time.Second })
 	return p
+}
+
+// installedKey is the key of the last controller environment written, else
+// the saved one.
+func (p *panelInstall) installedKey() string {
+	p.host.mu.Lock()
+	defer p.host.mu.Unlock()
+	key := panelKey
+	for _, stdin := range p.host.stdins {
+		for _, line := range strings.Split(string(stdin), "\n") {
+			if k, ok := strings.CutPrefix(line, "CCG_CONTROLLER_KEY="); ok {
+				key = k
+			}
+		}
+	}
+	return key
+}
+
+// stdinOf is the stdin of the last script of kind.
+func (p *panelInstall) stdinOf(kind string) string {
+	p.host.mu.Lock()
+	defer p.host.mu.Unlock()
+	for i := len(p.host.scripts) - 1; i >= 0; i-- {
+		if p.host.scripts[i] == kind {
+			return string(p.host.stdins[i])
+		}
+	}
+	return ""
 }
 
 func (p *panelInstall) install(uid int64, body string) (int, map[string]any) {
@@ -82,37 +117,37 @@ func (p *panelInstall) count(t *testing.T, query string, args ...any) int {
 }
 
 func TestControllerInstallIPMode(t *testing.T) {
+	// Without method: the saved legacy SSH connection (§53.9 compatibility).
 	p := newPanelInstall(t)
 	admin := p.f.user("admin@x")
 	code, out := p.install(admin, p.ipBody())
 	sum := sha256.Sum256(p.srv.Certificate().Raw)
-	if code != 200 || data(out)["mode"] != "controller" || data(out)["host"] != p.ip || data(out)["port"] != float64(p.port) ||
-		data(out)["has_controller_ca"] != true || data(out)["controller_ca_fingerprint"] != hex.EncodeToString(sum[:]) || data(out)["user"] != "" {
+	if code != 200 || data(out)["mode"] != "controller" || data(out)["scheme"] != "https" || data(out)["host"] != p.ip || data(out)["port"] != float64(p.port) ||
+		data(out)["has_controller_ca"] != true || data(out)["controller_ca_fingerprint"] != hex.EncodeToString(sum[:]) || data(out)["user"] != "" || data(out)["warnings"] != nil {
 		t.Fatalf("install: %d %v", code, out)
 	}
-	if got := p.host.kinds(); got != "inspect,install,finish,gateway,ca" {
+	if got := p.host.kinds(); got != "port,inspect,install,finish,gateway,ca" {
 		t.Fatalf("scripts: %s", got)
 	}
 	want, _ := caddyfile(p.ip, p.port, "")
-	p.host.mu.Lock()
-	gatewayStdin := string(p.host.stdins[3])
-	controllerEnvironment := string(p.host.stdins[1])
-	p.host.mu.Unlock()
-	if gatewayStdin != want {
-		t.Fatalf("Caddyfile on stdin:\n%s", gatewayStdin)
+	if got := p.stdinOf("gateway"); got != want {
+		t.Fatalf("Caddyfile on stdin:\n%s", got)
 	}
-	if !strings.Contains(controllerEnvironment, "\nCCG_CONTROLLER_IMAGE="+ControllerImage+"\n") {
-		t.Fatalf("controller environment: %s", controllerEnvironment)
+	if got := p.stdinOf("port"); got != strconv.Itoa(p.port)+" 18443 0\n" {
+		t.Fatalf("port script stdin: %q", got)
+	}
+	if env := p.stdinOf("install"); !strings.Contains(env, "\nCCG_CONTROLLER_IMAGE="+ControllerImage+"\n") || !strings.Contains(env, "\nCCG_CONTROLLER_KEY="+panelKey+"\n") {
+		t.Fatalf("controller environment: %s", env)
 	}
 	saved, err := p.f.s.Load(context.Background())
-	if err != nil || saved.Mode != "controller" || saved.Host != p.ip || saved.Port != p.port || saved.ControllerCA != p.ca || saved.AdminKey != panelKey ||
+	if err != nil || saved.Mode != "controller" || saved.Scheme != "https" || saved.Host != p.ip || saved.Port != p.port || saved.ControllerCA != p.ca || saved.AdminKey != panelKey ||
 		saved.User != "" || saved.AuthMode != "" || saved.Password != "" || saved.PrivateKey != "" || saved.HostKeyFingerprint != "" || !saved.AccountRuntimes {
 		t.Fatalf("saved: %+v %v", saved, err)
 	}
 	if n := p.count(t, `SELECT count(*) FROM audit_logs WHERE action='ccgateway.controller.install'`); n != 1 {
 		t.Fatalf("install audit: %d", n)
 	}
-	if n := p.count(t, `SELECT count(*) FROM audit_logs WHERE action='ccgateway.config.update' AND detail->'fields' = '["mode","host","port","controller_ca","ssh"]'::jsonb`); n != 1 {
+	if n := p.count(t, `SELECT count(*) FROM audit_logs WHERE action='ccgateway.config.update' AND detail->'fields' = '["mode","scheme","host","port","controller_ca","ssh"]'::jsonb`); n != 1 {
 		t.Fatalf("config audit: %d", n)
 	}
 	// Installed: the configuration is not SSH any more.
@@ -124,18 +159,40 @@ func TestControllerInstallIPMode(t *testing.T) {
 	}
 }
 
+func TestControllerInstallLegacyWithoutKey(t *testing.T) {
+	// A saved SSH configuration without a key: the key is saved first, and
+	// that own write is not taken for a concurrent change.
+	p := newPanelInstall(t)
+	p.f.writeConfig(sshConfig)
+	code, out := p.install(p.f.user("admin@x"), p.ipBody())
+	saved, _ := p.f.s.Load(context.Background())
+	if code != 200 || saved.Mode != "controller" || len(saved.AdminKey) != 64 || saved.AdminKey != p.installedKey() || saved.Password != "" {
+		t.Fatalf("%d %v %+v", code, out, saved)
+	}
+	// A shared-container SSH configuration (account_runtimes off) migrates
+	// too: account runtimes are the only mode (§53.9).
+	q := newPanelInstall(t)
+	shared := sshConfig
+	shared.AccountRuntimes, shared.AdminKey = false, panelKey
+	q.f.writeConfig(shared)
+	code, out = q.install(q.f.user("admin@x"), q.ipBody())
+	if saved, _ = q.f.s.Load(context.Background()); code != 200 || saved.Mode != "controller" || !saved.AccountRuntimes || data(out)["account_runtimes"] != true {
+		t.Fatalf("shared ssh: %d %v %+v", code, out, saved)
+	}
+}
+
 func TestControllerInstallSkipsACurrentController(t *testing.T) {
 	p := newPanelInstall(t)
 	admin := p.f.user("admin@x")
 	p.host.inspect = `"` + ControllerImage + `"` + "\nCCG_APP_IMAGE=" + AppImage + "\nCCG_EGRESS_IMAGE=" + EgressImage + "\n"
-	if code, out := p.install(admin, p.ipBody()); code != 200 || p.host.kinds() != "inspect,gateway,ca" {
+	if code, out := p.install(admin, p.ipBody()); code != 200 || p.host.kinds() != "port,inspect,gateway,ca" {
 		t.Fatalf("%d %v %s", code, out, p.host.kinds())
 	}
 	// A current controller without tunnels is replaced.
 	q := newPanelInstall(t)
 	q.host.inspect = p.host.inspect
 	q.host.health.Features = nil
-	if code, out := q.install(q.f.user("admin@x"), q.ipBody()); code != 200 || q.host.kinds() != "inspect,install,finish,gateway,ca" {
+	if code, out := q.install(q.f.user("admin@x"), q.ipBody()); code != 200 || q.host.kinds() != "port,inspect,install,finish,gateway,ca" {
 		t.Fatalf("%d %v %s", code, out, q.host.kinds())
 	}
 }
@@ -148,7 +205,7 @@ func TestControllerInstallDomainMode(t *testing.T) {
 	// checking it uses the system roots.
 	plain := p.f.s.openController
 	p.f.s.openController = func(ctx context.Context, c Config) (*http.Client, string, func() error, error) {
-		if c.Mode == "controller" && (c.Host != "panel.example.com" || c.Port != 443 || c.ControllerCA != "") {
+		if c.Mode == "controller" && (c.Host != "panel.example.com" || c.Port != 18443 || c.ControllerCA != "" || c.Scheme != "https") {
 			t.Errorf("domain panel config: %+v", c)
 		}
 		if c.Mode == "controller" {
@@ -156,16 +213,69 @@ func TestControllerInstallDomainMode(t *testing.T) {
 		}
 		return plain(ctx, c)
 	}
+	// The domain resolves to another address than the SSH host: a warning.
+	var lookups []string
+	p.f.s.lookupIP = func(_ context.Context, host string) ([]net.IPAddr, error) {
+		lookups = append(lookups, host)
+		if host == "panel.example.com" {
+			return []net.IPAddr{{IP: net.ParseIP("198.51.100.9")}}, nil
+		}
+		return []net.IPAddr{{IP: net.ParseIP("203.0.113.7")}}, nil
+	}
+	// Automatic port (§53.9: 18443 for HTTPS).
 	code, out := p.install(admin, `{"host":"Panel.Example.com","email":"ops@example.com"}`)
-	if code != 200 || data(out)["host"] != "panel.example.com" || data(out)["port"] != float64(443) || data(out)["has_controller_ca"] != false {
+	if code != 200 || data(out)["host"] != "panel.example.com" || data(out)["port"] != float64(18443) || data(out)["has_controller_ca"] != false ||
+		fmt.Sprint(data(out)["warnings"]) != "[dns_mismatch]" {
 		t.Fatalf("%d %v", code, out)
 	}
-	if got := p.host.kinds(); got != "inspect,gateway" {
+	if fmt.Sprint(lookups) != "[docker.example panel.example.com]" {
+		t.Fatalf("lookups: %v", lookups)
+	}
+	// No CA script: the certificate is automatic, nothing is pinned.
+	if got := p.host.kinds(); got != "port,inspect,gateway" {
 		t.Fatalf("scripts: %s", got)
 	}
-	want, _ := caddyfile("panel.example.com", 443, "ops@example.com")
-	if string(p.host.stdins[1]) != want {
-		t.Fatalf("Caddyfile:\n%s", p.host.stdins[1])
+	if got := p.stdinOf("port"); got != "0 18443 1\n" {
+		t.Fatalf("port script stdin (ACME check): %q", got)
+	}
+	want, _ := caddyfile("panel.example.com", 18443, "ops@example.com")
+	if got := p.stdinOf("gateway"); got != want || strings.Contains(got, "tls internal") {
+		t.Fatalf("Caddyfile:\n%s", got)
+	}
+	if saved, _ := p.f.s.Load(context.Background()); saved.ControllerCA != "" || saved.Scheme != "https" || saved.Port != 18443 {
+		t.Fatalf("saved: %+v", saved)
+	}
+	if n := p.count(t, `SELECT count(*) FROM settings WHERE key=$1 AND value::text LIKE '%warnings%'`, settingKey); n != 0 {
+		t.Fatal("warning saved")
+	}
+	// A matching record: no warning.
+	q := newPanelInstall(t)
+	q.host.inspect = p.host.inspect
+	q.f.s.openController = p.f.s.openController
+	q.f.s.lookupIP = func(_ context.Context, host string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{IP: net.ParseIP("2001:db8::7")}, {IP: net.ParseIP("203.0.113.7")}}, nil
+	}
+	if code, out := q.install(q.f.user("admin@x"), `{"host":"panel.example.com"}`); code != 200 || data(out)["warnings"] != nil {
+		t.Fatalf("matching DNS: %d %v", code, out)
+	}
+	// A domain that does not resolve: a warning, not a failure.
+	r := newPanelInstall(t)
+	r.host.inspect = p.host.inspect
+	r.f.s.openController = p.f.s.openController
+	r.f.s.lookupIP = func(_ context.Context, host string) ([]net.IPAddr, error) {
+		if host == "panel.example.com" {
+			return nil, errors.New("no such host")
+		}
+		return []net.IPAddr{{IP: net.ParseIP("203.0.113.7")}}, nil
+	}
+	if code, out := r.install(r.f.user("admin@x"), `{"host":"panel.example.com"}`); code != 200 || fmt.Sprint(data(out)["warnings"]) != "[dns_mismatch]" {
+		t.Fatalf("unresolved domain: %d %v", code, out)
+	}
+	// ACME ports taken: 409 before anything is replaced.
+	a := newPanelInstall(t)
+	a.host.port = &remotedocker.ScriptResult{Output: "CCG_RESULT=acme_ports_unavailable\n", ExitStatus: 1}
+	if code, out := a.install(a.f.user("admin@x"), `{"host":"panel.example.com"}`); code != 409 || reason(out) != "acme_ports_unavailable" || a.host.kinds() != "port" {
+		t.Fatalf("acme ports: %d %v %s", code, out, a.host.kinds())
 	}
 }
 
@@ -190,11 +300,6 @@ func TestControllerInstallFailures(t *testing.T) {
 		stage  string
 	}{
 		{name: "not ssh", setup: func(p *panelInstall) { p.f.writeConfig(Config{Mode: "local", AdminKey: "k", AccountRuntimes: true}) }, code: 400, reason: "ssh_not_configured"},
-		{name: "runtimes off", setup: func(p *panelInstall) {
-			c := sshConfig
-			c.AccountRuntimes = false
-			p.f.writeConfig(c)
-		}, code: 400, reason: "runtimes_disabled"},
 		{name: "host", body: func(*panelInstall) string { return `{"host":"bad_host.example.com"}` }, code: 400, reason: "invalid_host"},
 		{name: "saved ssh host as default", setup: func(p *panelInstall) {
 			c := sshConfig
@@ -229,6 +334,33 @@ func TestControllerInstallFailures(t *testing.T) {
 		{name: "changed meanwhile", setup: func(p *panelInstall) {
 			p.host.onGateway = func() { p.f.writeConfig(Config{Mode: "local", AdminKey: panelKey, AccountRuntimes: true}) }
 		}, code: 409, reason: "config_changed"},
+		{name: "saved meanwhile, same content", setup: func(p *panelInstall) {
+			// Rewritten unchanged: still a save by someone else.
+			c := sshConfig
+			c.AdminKey = panelKey
+			p.host.onGateway = func() { p.f.writeConfig(c) }
+		}, code: 409, reason: "config_changed"},
+		{name: "port in use", setup: func(p *panelInstall) {
+			p.host.port = &remotedocker.ScriptResult{Output: "CCG_RESULT=port_in_use\n", ExitStatus: 1}
+		}, code: 409, reason: "port_in_use"},
+		{name: "no free port", setup: func(p *panelInstall) {
+			p.host.port = &remotedocker.ScriptResult{Output: "CCG_RESULT=no_free_port\n", ExitStatus: 1}
+		}, body: func(*panelInstall) string { return `{"host":"127.0.0.1"}` }, code: 409, reason: "no_free_port"},
+		{name: "docker missing", setup: func(p *panelInstall) {
+			p.host.port = &remotedocker.ScriptResult{Output: "CCG_RESULT=docker_not_installed\n", ExitStatus: 1}
+		}, code: 400, reason: "docker_not_installed"},
+		{name: "docker stopped", setup: func(p *panelInstall) {
+			p.host.port = &remotedocker.ScriptResult{Output: "CCG_RESULT=docker_not_running\n", ExitStatus: 1}
+		}, code: 503, reason: "docker_not_running"},
+		{name: "another port reported", setup: func(p *panelInstall) {
+			p.host.port = &remotedocker.ScriptResult{Output: "CCG_PORT=1\nCCG_RESULT=ok\n"}
+		}, code: 503, reason: "install_failed"},
+		{name: "automatic port out of range", setup: func(p *panelInstall) {
+			p.host.port = &remotedocker.ScriptResult{Output: "CCG_PORT=18543\nCCG_RESULT=ok\n"}
+		}, body: func(*panelInstall) string { return `{"host":"127.0.0.1"}` }, code: 503, reason: "install_failed"},
+		{name: "two ports reported", setup: func(p *panelInstall) {
+			p.host.port = &remotedocker.ScriptResult{Output: "CCG_PORT=18443\nCCG_PORT=18444\nCCG_RESULT=ok\n"}
+		}, body: func(*panelInstall) string { return `{"host":"127.0.0.1"}` }, code: 503, reason: "install_failed"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := newPanelInstall(t)
@@ -258,8 +390,10 @@ func TestControllerInstallFailures(t *testing.T) {
 	})
 	t.Run("port", func(t *testing.T) {
 		p := newPanelInstall(t)
-		if code, _ := p.install(1, `{"port":70000}`); code != 400 || p.host.kinds() != "" {
-			t.Fatalf("%d", code)
+		for _, body := range []string{`{"port":70000}`, `{"port":-1}`} {
+			if code, _ := p.install(1, body); code != 400 || p.host.kinds() != "" {
+				t.Fatalf("%s: %d", body, code)
+			}
 		}
 	})
 	t.Run("permission", func(t *testing.T) {
@@ -269,6 +403,207 @@ func TestControllerInstallFailures(t *testing.T) {
 			t.Fatalf("%d", code)
 		}
 	})
+}
+
+// sshBody is an install request over SSH with credentials (§53.9).
+func (p *panelInstall) sshBody(extra string) string {
+	return `{"method":"ssh","ssh":{"host":"docker2.example","port":2222,"user":"root","auth_mode":"password","password":"request-only-secret",` +
+		`"host_key_fingerprint":"SHA256:` + strings.Repeat("B", 43) + `"},"host":"127.0.0.1","port":` + strconv.Itoa(p.port) + extra + `}`
+}
+
+func TestControllerInstallSSHCredentialsAreNeverSaved(t *testing.T) {
+	p := newPanelInstall(t)
+	admin := p.f.user("admin@x")
+	// Not configured yet: the install is the first step.
+	p.f.writeConfig(Config{Mode: "disabled", Images: &RuntimeImages{Gateway: "caddy:2.8-alpine"}})
+	code, out := p.install(admin, p.sshBody(""))
+	if code != 200 || data(out)["mode"] != "controller" || data(out)["host"] != "127.0.0.1" || data(out)["port"] != float64(p.port) || data(out)["has_controller_ca"] != true {
+		t.Fatalf("install: %d %v", code, out)
+	}
+	// Every script ran over the request's SSH connection, none locally; no
+	// state check of an older controller (a new key needs a new one).
+	if got := p.host.kinds(); got != "port,install,finish,gateway,ca" {
+		t.Fatalf("scripts: %s", got)
+	}
+	p.host.mu.Lock()
+	for i, seen := range p.host.sshSeen {
+		if p.host.targets[i] != "ssh" || seen.Host != "docker2.example" || seen.Port != 2222 || seen.User != "root" || seen.Password != "request-only-secret" {
+			t.Errorf("script %d ran over %s %+v", i, p.host.targets[i], seen)
+		}
+	}
+	p.host.mu.Unlock()
+	saved, err := p.f.s.Load(context.Background())
+	key := p.installedKey()
+	if err != nil || saved.Mode != "controller" || saved.Host != "127.0.0.1" || saved.Port != p.port || saved.ControllerCA != p.ca || saved.AdminKey != key || len(key) != 64 ||
+		saved.User != "" || saved.AuthMode != "" || saved.Password != "" || saved.PrivateKey != "" || saved.Passphrase != "" || saved.HostKeyFingerprint != "" ||
+		!saved.AccountRuntimes || saved.Images == nil || saved.Images.Gateway != "caddy:2.8-alpine" {
+		t.Fatalf("saved: %+v %v", saved, err)
+	}
+	// Nothing anywhere holds the SSH credentials or user.
+	var plain []byte
+	var raw []byte
+	if err := p.f.db.Pool.QueryRow(context.Background(), `SELECT value FROM settings WHERE key=$1`, settingKey).Scan(&raw); err != nil {
+		t.Fatal(err)
+	}
+	var envelope struct {
+		Cipher []byte `json:"cipher"`
+	}
+	_ = json.Unmarshal(raw, &envelope)
+	if plain, err = p.f.cipher.Decrypt(envelope.Cipher, configAAD); err != nil {
+		t.Fatal(err)
+	}
+	var audits string
+	_ = p.f.db.Pool.QueryRow(context.Background(), `SELECT coalesce(string_agg(action || ' ' || coalesce(detail::text, ''), ';'), '') FROM audit_logs`).Scan(&audits)
+	response, _ := json.Marshal(out)
+	for name, text := range map[string]string{"configuration": string(plain), "audit": audits, "response": string(response)} {
+		for _, secret := range []string{"request-only-secret", "docker2.example", `"root"`, strings.Repeat("B", 43)} {
+			if strings.Contains(text, secret) {
+				t.Errorf("%s holds %q: %s", name, secret, text)
+			}
+		}
+	}
+	if !strings.Contains(audits, `ccgateway.config.update {"fields": ["mode", "scheme", "host", "port", "controller_ca", "admin_key", "ssh"]}`) || !strings.Contains(audits, "ccgateway.controller.install") {
+		t.Fatalf("audit: %s", audits)
+	}
+	// Installing again elsewhere (now connected): a new key again.
+	if code, out = p.install(admin, p.sshBody("")); code != 200 {
+		t.Fatalf("reinstall: %d %v", code, out)
+	}
+	if again, _ := p.f.s.Load(context.Background()); again.AdminKey == key || again.AdminKey != p.installedKey() {
+		t.Fatal("reinstall kept the old key")
+	}
+}
+
+func TestControllerInstallLocal(t *testing.T) {
+	p := newPanelInstall(t)
+	admin := p.f.user("admin@x")
+	// Reinstalling over a controller behind a path prefix: the installed
+	// gateway serves it at the root.
+	prefixed := testPanelConfig("panel.example.com", 443, "")
+	prefixed.BasePath = "/controller"
+	p.f.writeConfig(prefixed)
+	// Host defaults to 127.0.0.1 (core and controller on one machine).
+	code, out := p.install(admin, `{"method":"local","port":`+strconv.Itoa(p.port)+`}`)
+	if code != 200 || data(out)["host"] != "127.0.0.1" || data(out)["has_controller_ca"] != true || data(out)["base_path"] != "" {
+		t.Fatalf("install: %d %v", code, out)
+	}
+	p.host.mu.Lock()
+	targets := strings.Join(p.host.targets, ",")
+	p.host.mu.Unlock()
+	if got := p.host.kinds(); got != "port,install,finish,gateway,ca" || targets != "local,local,local,local,local" {
+		t.Fatalf("scripts: %s over %s", got, targets)
+	}
+	if saved, _ := p.f.s.Load(context.Background()); saved.Mode != "controller" || saved.AdminKey != p.installedKey() || saved.Host != "127.0.0.1" {
+		t.Fatalf("saved: %+v", saved)
+	}
+	// A local script that cannot run is install_failed, never ssh_failed.
+	q := newPanelInstall(t)
+	q.host.sshErr = true
+	if code, out := q.install(q.f.user("admin@x"), `{"method":"local"}`); code != 503 || reason(out) != "install_failed" {
+		t.Fatalf("local runner failure: %d %v", code, out)
+	}
+	// The local target is never a saved mode, and runs nothing over SSH.
+	if open, _, _, err := (&Service{}).open(context.Background(), Config{Mode: localInstallMode}); err != nil || open == nil {
+		t.Fatalf("local controller client: %v", err)
+	}
+}
+
+func TestControllerInstallHTTP(t *testing.T) {
+	p := newPanelInstall(t)
+	admin := p.f.user("admin@x")
+	code, out := p.install(admin, `{"method":"local","scheme":"http","host":"127.0.0.1","port":`+strconv.Itoa(p.plainPort)+`}`)
+	if code != 200 || data(out)["scheme"] != "http" || data(out)["port"] != float64(p.plainPort) || data(out)["has_controller_ca"] != false {
+		t.Fatalf("install: %d %v", code, out)
+	}
+	// No certificate to fetch; a plain HTTP Caddyfile.
+	if got := p.host.kinds(); got != "port,install,finish,gateway" {
+		t.Fatalf("scripts: %s", got)
+	}
+	want, _ := caddyfileHTTP(p.plainPort)
+	if got := p.stdinOf("gateway"); got != want {
+		t.Fatalf("Caddyfile:\n%s", got)
+	}
+	if got := p.stdinOf("port"); got != strconv.Itoa(p.plainPort)+" 18080 0\n" {
+		t.Fatalf("port stdin: %q", got)
+	}
+	saved, _ := p.f.s.Load(context.Background())
+	if saved.Scheme != "http" || saved.ControllerCA != "" || saved.Port != p.plainPort {
+		t.Fatalf("saved: %+v", saved)
+	}
+	// The saved HTTP connection works.
+	if h, err := p.f.s.health(context.Background(), saved); err != nil || !h.has("tunnel") {
+		t.Fatalf("health over http: %v", err)
+	}
+	// Automatic HTTP ports start at 18080; a domain over HTTP has no ACME check.
+	q := newPanelInstall(t)
+	q.f.s.openController = func(ctx context.Context, c Config) (*http.Client, string, func() error, error) {
+		if c.Mode == "controller" {
+			if c.Port != 18080 || c.Scheme != "http" {
+				t.Errorf("http panel config: %+v", c)
+			}
+			c.Port = q.plainPort
+			return openControllerPanel(c)
+		}
+		return p.f.s.openController(ctx, c)
+	}
+	if code, out := q.install(q.f.user("admin@x"), `{"method":"local","scheme":"http","host":"127.0.0.1"}`); code != 200 || data(out)["port"] != float64(18080) {
+		t.Fatalf("automatic http port: %d %v", code, out)
+	}
+	if got := q.stdinOf("port"); got != "0 18080 0\n" {
+		t.Fatalf("port stdin: %q", got)
+	}
+}
+
+func TestControllerInstallRequestErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		code       int
+		reason     string
+	}{
+		{"ssh without credentials", `{"method":"ssh"}`, 400, "invalid_ssh"},
+		{"ssh without fingerprint", `{"method":"ssh","ssh":{"host":"h.example","user":"u","auth_mode":"password","password":"p"}}`, 400, "invalid_ssh"},
+		{"ssh bad host", `{"method":"ssh","ssh":{"host":"bad host","user":"u","auth_mode":"password","password":"p","host_key_fingerprint":"SHA256:` + strings.Repeat("A", 43) + `"}}`, 400, "invalid_ssh"},
+		{"ssh bad key", `{"method":"ssh","ssh":{"host":"h.example","user":"u","auth_mode":"private_key","private_key":"x","host_key_fingerprint":"SHA256:` + strings.Repeat("A", 43) + `"}}`, 400, "invalid_ssh"},
+		{"ssh host is no panel host", `{"method":"ssh","ssh":{"host":"docker","user":"u","auth_mode":"password","password":"p","host_key_fingerprint":"SHA256:` + strings.Repeat("A", 43) + `"}}`, 400, "invalid_host"},
+		{"method", `{"method":"docker"}`, 400, ""},
+		{"scheme", `{"method":"local","scheme":"ftp"}`, 400, ""},
+		{"host", `{"method":"local","host":"*.example.com"}`, 400, "invalid_host"},
+		{"email", `{"method":"local","host":"panel.example.com","email":"a b@example.com"}`, 400, "invalid_email"},
+		{"body", `{"method":`, 400, ""},
+		{"base path", `{"method":"local","base_path":"/controller"}`, 400, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newPanelInstall(t)
+			code, out := p.install(1, tc.body)
+			var want any = tc.reason
+			if tc.reason == "" {
+				want = nil
+			}
+			if code != tc.code || reason(out) != want || p.host.kinds() != "" {
+				t.Fatalf("%d %v %s", code, out, p.host.kinds())
+			}
+			if strings.Contains(fmt.Sprint(out), `"p"`) {
+				t.Fatal("credentials echoed")
+			}
+		})
+	}
+	// Failures over the request's SSH connection keep the configuration.
+	p := newPanelInstall(t)
+	p.f.writeConfig(Config{Mode: "disabled"})
+	p.host.sshErr = true
+	if code, out := p.install(1, p.sshBody("")); code != 503 || reason(out) != "ssh_failed" {
+		t.Fatalf("ssh failure: %d %v", code, out)
+	}
+	if c, _ := p.f.s.Load(context.Background()); c.Mode != "disabled" || c.AdminKey != "" {
+		t.Fatalf("configuration changed: %+v", c)
+	}
+	// Saved by someone else while installing.
+	q := newPanelInstall(t)
+	q.f.writeConfig(Config{Mode: "disabled"})
+	q.host.onGateway = func() { q.f.writeConfig(Config{Mode: "disabled"}) }
+	if code, out := q.install(1, q.sshBody("")); code != 409 || reason(out) != "config_changed" {
+		t.Fatalf("changed meanwhile: %d %v", code, out)
+	}
 }
 
 // fakePanel mimics the controller API of §53.5 behind HTTPS.
@@ -772,9 +1107,14 @@ func TestControllerRemoteTest(t *testing.T) {
 		!strings.Contains(text, "controller_image "+ControllerImage+"\n") || !strings.Contains(text, "features tunnel, uploads\n") {
 		t.Fatalf("remote-test: %d %v", code, out)
 	}
-	for _, action := range []string{"test", "restart"} {
-		if code, _ = f.request(admin, "POST", "/system/ccgateway/remote-action", `{"action":"`+action+`"}`); code != 400 {
-			t.Fatalf("remote-action %s: %d", action, code)
+	// remote-action is gone (§53.9); remote-test needs a connected controller.
+	if code, _ = f.request(admin, "POST", "/system/ccgateway/remote-action", `{"action":"test"}`); code != 404 {
+		t.Fatalf("remote-action: %d", code)
+	}
+	for _, cfg := range []Config{sshConfig, {Mode: "local", AdminKey: "k"}, {Mode: "disabled"}} {
+		f.writeConfig(cfg)
+		if code, out = f.request(admin, "POST", "/system/ccgateway/remote-test", ""); code != 400 || reason(out) != "controller_not_configured" {
+			t.Fatalf("remote-test in %s mode: %d %v", cfg.Mode, code, out)
 		}
 	}
 }

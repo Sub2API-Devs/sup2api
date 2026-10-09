@@ -148,7 +148,9 @@ describe('CCGateway authorization flow', () => {
     expect(setupProblems({ account_runtimes: true, mode: 'controller', has_admin_key: false })).toEqual(['adminKey'])
     // the abandoned skeleton mode is not a Docker connection
     expect(setupProblems({ account_runtimes: true, mode: 'http', has_admin_key: true })).toEqual(['docker'])
-    expect(setupProblems({ account_runtimes: false, mode: 'disabled', has_admin_key: false })).toEqual(['runtimes', 'docker', 'adminKey'])
+    // per-account containers are the only mode: a configuration saved without them (the removed shared container) is not configured
+    expect(setupProblems({ account_runtimes: false, mode: 'ssh', has_admin_key: true })).toEqual(['docker'])
+    expect(setupProblems({ account_runtimes: false, mode: 'disabled', has_admin_key: false })).toEqual(['docker', 'adminKey'])
   })
 
   it('counts down the session and checks the code shape', () => {

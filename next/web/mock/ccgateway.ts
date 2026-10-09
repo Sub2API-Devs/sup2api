@@ -6,31 +6,24 @@ import { caller, hasPerm } from './core'
 import { mockProxyStatus } from './resources'
 if (process.env.SUB2API_MOCK_CCGATEWAY) {
   const base = '/system/ccgateway'
-  // Per-account containers ("一账号一容器") over SSH, so the account editor flow works out of the box;
-  // switch them off in the CCGateway settings to see the editor's "not set up" path.
-  let config: Record<string, unknown> = {account_runtimes:true,mode:'ssh',host:'docker.example.test',port:22,user:'debian',auth_mode:'password',host_key_fingerprint:'SHA256:previewFingerprintOnly',has_password:true,has_private_key:false,has_passphrase:false,has_admin_key:true,has_api_key:true}
-  let proxy = { mode:'inherit',configured:false,url_redacted:'',revision:1 }
-  let logged = false
+  // Per-account containers ("一账号一容器") behind a controller endpoint (CONTRACTS §53.9).
+  let config: Record<string, unknown> = {account_runtimes:true,mode:'controller',scheme:'https',host:'15.204.107.38',port:18443,base_path:'',has_admin_key:true,has_api_key:false,has_controller_ca:true,controller_ca_fingerprint:'76349628e4eaf86a5a217cf48429af2e5e16f5231f983105cd0d89f2fa08c92a',has_password:false,has_private_key:false,has_passphrase:false,user:'',auth_mode:'',host_key_fingerprint:''}
   on('GET',`${base}/remote-config`,()=>config)
   on('PUT',`${base}/remote-config`,({body})=>{
-    const { password,private_key,passphrase,admin_key,api_key,...publicFields }=body
-    config={...config,...publicFields,has_password:!!password||config.has_password,has_private_key:!!private_key||config.has_private_key,has_passphrase:!!passphrase||config.has_passphrase,has_admin_key:!!admin_key||config.has_admin_key,has_api_key:!!api_key||config.has_api_key}
+    const { password,private_key,passphrase,admin_key,api_key,controller_ca,...publicFields }=body
+    config={...config,...publicFields,account_runtimes:true,has_admin_key:!!admin_key||config.has_admin_key,has_controller_ca:publicFields.scheme==='http'?false:(!!controller_ca||config.has_controller_ca)}
     return config
   })
   on('POST',`${base}/remote-fingerprint`,()=>({fingerprint:'SHA256:previewFingerprintOnly',verified:false}))
-  on('POST',`${base}/remote-test`,()=>({output:'[mock] Docker 28.0.1 / Compose v2.35.1'}))
-  on('POST',`${base}/remote-action`,({body})=>({output:`[mock] ccgateway ${body.action}: completed; no real command executed`}))
-  on('GET',`${base}/proxy`,()=>proxy)
-  on('PUT',`${base}/proxy`,({body})=>{
-    let endpoint=''
-    if(body.mode==='proxy'){try{endpoint=body.url?new URL(body.url).origin:proxy.url_redacted}catch{return fail(400,'invalid','Invalid proxy URL')}}
-    proxy={mode:body.mode,configured:body.mode==='proxy',url_redacted:endpoint,revision:proxy.revision+1};return proxy
+  on('POST',`${base}/remote-test`,()=>config.mode==='controller'?({output:'controller mock\nfeatures tunnel, uploads, runtime-images, self-upgrade, worker-update'}):fail(400,'invalid_argument','Connect a controller first.',{reason:'controller_not_configured'}))
+  on('POST',`${base}/controller/install`,({body})=>{
+    const scheme=body.scheme||'https', port=body.port||(scheme==='https'?18443:18080)
+    const host=body.host||(body.method==='local'?'127.0.0.1':body.ssh?.host||'docker.example.test')
+    const domain=!/^[0-9.:]+$/.test(host)
+    config={...config,mode:'controller',scheme,host,port,base_path:'',has_admin_key:true,has_controller_ca:scheme==='https'&&!domain,
+      controller_ca_fingerprint:scheme==='https'&&!domain?'0f'.repeat(32):'',user:'',auth_mode:'',host_key_fingerprint:'',has_password:false,has_private_key:false,has_passphrase:false}
+    return domain?{...config,warnings:['dns_mismatch']}:config
   })
-  on('GET',`${base}/status`,()=>({healthy:true,logged_in:logged,auth_method:logged?'oauth':'none'}))
-  on('POST',`${base}/auth/start`,()=>({session_id:'fixture-session',url:'https://claude.ai/oauth/authorize?preview=true',expires_at:new Date(Date.now()+600000).toISOString()}))
-  on('POST',`${base}/auth/complete`,()=>{logged=true;return {ok:true}})
-  on('POST',`${base}/auth/cancel`,()=>({ok:true}))
-  on('POST',`${base}/auth/logout`,()=>{logged=false;return {ok:true}})
   on('POST',`${base}/connect`,()=>({id:99001}))
 
   // Per-account containers and drafts (docs/CCGATEWAY-DRAFT-RUNTIMES.md). Runtimes are keyed like
@@ -58,7 +51,7 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
   const converging = new Map<string, 'creating' | 'pending'>()
   /** Runtime key of an account that adopted a draft. */
   const adoptedBy = new Map<string, string>()
-  const configured = () => !!config.account_runtimes && (config.mode === 'ssh' || config.mode === 'local') && !!config.has_admin_key
+  const configured = () => !!config.account_runtimes && config.mode === 'controller' && !!config.has_admin_key
   const fault = (status: number, reason: string, message: string) => fail(status, status === 400 ? 'invalid_argument' : status === 404 ? 'not_found' : 'unavailable', message, { reason })
   const notConfigured = () => fault(503, 'not_configured', 'Per-account runtimes are disabled or no Docker connection is configured')
   const notSynchronized = () => fault(503, 'not_synchronized', 'The runtime is not ready yet')
@@ -295,9 +288,9 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     installed,
     up_to_date: !!installed && installed.controller_image === expected.controller && installed.app_image === expected.app && installed.egress_image === expected.egress
   })
-  on('GET', `${base}/runtime`, () => (config.mode === 'ssh' ? runtimeOut() : { ...runtimeOut(), installed: null, reason: 'ssh_failed' }))
+  on('GET', `${base}/runtime`, () => (config.mode === 'controller' ? runtimeOut() : { ...runtimeOut(), installed: null, reason: 'controller_not_configured' }))
   on('POST', `${base}/runtime/install`, async () => {
-    if (config.mode !== 'ssh') return fault(400, 'ssh_failed', 'No SSH connection is configured')
+    if (config.mode !== 'controller') return fault(400, 'controller_not_configured', 'No controller is connected')
     await sleep(2500)
     if (String(config.host || '').includes('fail')) return fault(503, 'image_pull_failed', 'Pulling ghcr.io/sup2api/ccgateway-app failed: unauthorized')
     installed = { controller_image: expected.controller, app_image: expected.app, egress_image: expected.egress, version: '0.2.0' }

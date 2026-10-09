@@ -11,10 +11,12 @@ const mocks = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), post: vi.fn() }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
 vi.mock('@sub2api/host', () => ({ api: mocks }))
 
+// A connected controller (per-account containers are the only mode, CONTRACTS §53.9): saving
+// other settings sends the endpoint back unchanged.
 function config(policy: Partial<RequestPolicy> | undefined) {
   return {
-    account_runtimes: false, mode: 'local', host: '', port: 22, user: '', auth_mode: 'password', host_key_fingerprint: '',
-    has_password: false, has_private_key: false, has_passphrase: false, has_admin_key: true, has_api_key: true,
+    account_runtimes: true, mode: 'controller', scheme: 'https', host: 'ccg.example.com', port: 443, user: '', auth_mode: '', host_key_fingerprint: '',
+    has_password: false, has_private_key: false, has_passphrase: false, has_admin_key: true, has_api_key: false,
     request_policy: policy, images: null, network: { pool: '10.0.0.0/8', allocation: 'random' }
   }
 }

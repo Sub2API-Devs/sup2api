@@ -9,12 +9,12 @@ import (
 )
 
 func TestRuntimeNetworkConfig(t *testing.T) {
-	old := Config{Mode: "local", Network: &RuntimeNetwork{Pool: "10.80.0.0/16", Allocation: "sequential"}}
-	kept, err := mergeConfig(Config{Mode: "local"}, old)
+	old := Config{Mode: "disabled", Network: &RuntimeNetwork{Pool: "10.80.0.0/16", Allocation: "sequential"}}
+	kept, err := mergeConfig(Config{Mode: "disabled"}, old)
 	if err != nil || kept.EffectiveNetwork() != *old.Network {
 		t.Fatal("omitted network lost saved policy", err)
 	}
-	reset, err := mergeConfig(Config{Mode: "local", Network: &RuntimeNetwork{}}, old)
+	reset, err := mergeConfig(Config{Mode: "disabled", Network: &RuntimeNetwork{}}, old)
 	if err != nil || reset.EffectiveNetwork() != (RuntimeNetwork{Pool: "10.0.0.0/8", Allocation: "random"}) {
 		t.Fatal("defaults", err)
 	}

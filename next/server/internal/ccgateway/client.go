@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/remotedocker"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -28,7 +29,19 @@ func (s *Service) open(ctx context.Context, c Config) (*http.Client, string, fun
 		return client, "http://127.0.0.1:8787", close, e
 	}
 	if c.Mode == "controller" {
-		return openControllerHTTPS(c)
+		return openControllerPanel(c)
+	}
+	if c.Mode == localInstallMode {
+		// A local installation's controller (§53.9): host networking, loopback.
+		tr := &http.Transport{Proxy: nil, MaxResponseHeaderBytes: 64 << 10}
+		tr.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+			if network != "tcp" || address != localControllerAddress {
+				return nil, errors.New("controller destination rejected")
+			}
+			return (&net.Dialer{Timeout: controllerDialTimeout}).DialContext(ctx, network, address)
+		}
+		client := &http.Client{Transport: fixedTarget{rt: tr, scheme: "http", host: localControllerAddress}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+		return client, "http://" + localControllerAddress, func() error { tr.CloseIdleConnections(); return nil }, nil
 	}
 	if c.Mode != "local" {
 		return nil, "", nil, errors.New("CCGateway is not configured")
@@ -44,17 +57,6 @@ func (s *Service) open(ctx context.Context, c Config) (*http.Client, string, fun
 	tr := &http.Transport{Proxy: nil, MaxResponseHeaderBytes: 64 << 10}
 	client := &http.Client{Transport: tr, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	return client, base, func() error { tr.CloseIdleConnections(); return nil }, nil
-}
-func (s *Service) OpenClient(ctx context.Context) (*http.Client, string, string, func() error, error) {
-	c, e := s.Load(ctx)
-	if e != nil {
-		return nil, "", "", nil, errors.New("cannot read CCGateway configuration")
-	}
-	if c.APIKey == "" {
-		return nil, "", "", nil, errors.New("CCGateway API key is not configured")
-	}
-	client, base, close, e := s.open(ctx, c)
-	return client, base, c.APIKey, close, e
 }
 
 // ModelClient is used only after the caller checks plugin/type/URL identity.

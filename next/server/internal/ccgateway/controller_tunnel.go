@@ -33,6 +33,9 @@ func dialTunnel(ctx context.Context, cfg Config, runtimeKey, revision string) (n
 	if err != nil {
 		return nil, err
 	}
+	if p, ok := normalizeBasePath(cfg.BasePath); !ok || p != cfg.BasePath {
+		return nil, errors.New("invalid control panel base path")
+	}
 	ctx, cancel := context.WithTimeout(ctx, tunnelSetupTimeout)
 	defer cancel()
 	conn, err := dialController(ctx, cfg)
@@ -47,7 +50,7 @@ func dialTunnel(ctx context.Context, cfg Config, runtimeKey, revision string) (n
 		_ = conn.Close()
 		return nil, err
 	}
-	request := "GET /accounts/" + runtimeKey + "/tunnel HTTP/1.1\r\n" +
+	request := "GET " + cfg.BasePath + "/accounts/" + runtimeKey + "/tunnel HTTP/1.1\r\n" +
 		"Host: " + addr + "\r\n" +
 		"Authorization: Bearer " + cfg.AdminKey + "\r\n" +
 		"X-CCG-Revision: " + revision + "\r\n" +

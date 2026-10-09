@@ -7,7 +7,9 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -16,7 +18,7 @@ import (
 const controllerDialTimeout = 10 * time.Second
 
 // stageError tells where reaching the control panel failed: "connect" or
-// "tls" (§53.3 details.stage).
+// "tls" (§53.3 details.stage; plain HTTP panels only have "connect").
 type stageError struct {
 	stage string
 	err   error
@@ -29,6 +31,9 @@ func (e *stageError) Unwrap() error { return e.err }
 func controllerAddress(cfg Config) (string, error) {
 	if cfg.Mode != "controller" || !validControllerHost(cfg.Host) || cfg.Port < 1 || cfg.Port > 65535 {
 		return "", errors.New("invalid control panel address")
+	}
+	if cfg.Scheme != "" && cfg.Scheme != "https" && cfg.Scheme != "http" {
+		return "", errors.New("invalid control panel scheme")
 	}
 	return net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port)), nil
 }
@@ -51,21 +56,27 @@ func controllerTLSConfig(cfg Config) (*tls.Config, error) {
 	return tc, nil
 }
 
-// dialController opens one verified TLS connection to the control panel.
-func dialController(ctx context.Context, cfg Config) (*tls.Conn, error) {
+// dialController opens one connection to the control panel: verified TLS,
+// or plain TCP for an "http" panel (§53.9).
+func dialController(ctx context.Context, cfg Config) (net.Conn, error) {
 	addr, err := controllerAddress(cfg)
 	if err != nil {
 		return nil, err
 	}
-	tc, err := controllerTLSConfig(cfg)
-	if err != nil {
-		return nil, err
+	var tc *tls.Config
+	if cfg.panelScheme() == "https" {
+		if tc, err = controllerTLSConfig(cfg); err != nil {
+			return nil, err
+		}
 	}
 	dialCtx, cancel := context.WithTimeout(ctx, controllerDialTimeout)
 	raw, err := (&net.Dialer{}).DialContext(dialCtx, "tcp", addr)
 	cancel()
 	if err != nil {
 		return nil, &stageError{stage: "connect", err: err}
+	}
+	if tc == nil {
+		return raw, nil
 	}
 	handshakeCtx, cancel := context.WithTimeout(ctx, controllerDialTimeout)
 	defer cancel()
@@ -81,41 +92,68 @@ func dialController(ctx context.Context, cfg Config) (*tls.Conn, error) {
 	return conn, nil
 }
 
-// openControllerHTTPS is open() in controller mode: requests go only to
-// https://host:port, without proxies, HTTP/2 or redirects.
-func openControllerHTTPS(cfg Config) (*http.Client, string, func() error, error) {
+// openControllerPanel is open() in controller mode: requests go only to
+// <scheme>://host:port<base_path>/..., without proxies, HTTP/2 or redirects.
+func openControllerPanel(cfg Config) (*http.Client, string, func() error, error) {
 	addr, err := controllerAddress(cfg)
 	if err != nil {
 		return nil, "", nil, err
 	}
-	if _, err = controllerTLSConfig(cfg); err != nil {
-		return nil, "", nil, err
+	if p, ok := normalizeBasePath(cfg.BasePath); !ok || p != cfg.BasePath {
+		return nil, "", nil, errors.New("invalid control panel base path")
+	}
+	scheme := cfg.panelScheme()
+	if scheme == "https" {
+		if _, err = controllerTLSConfig(cfg); err != nil {
+			return nil, "", nil, err
+		}
 	}
 	tr := &http.Transport{Proxy: nil, ForceAttemptHTTP2: false, TLSNextProto: map[string]func(string, *tls.Conn) http.RoundTripper{},
 		MaxResponseHeaderBytes: 64 << 10, MaxIdleConns: 4, MaxIdleConnsPerHost: 4, IdleConnTimeout: 90 * time.Second}
-	tr.DialTLSContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+	dial := func(ctx context.Context, network, address string) (net.Conn, error) {
 		if network != "tcp" || address != addr {
 			return nil, errors.New("control panel destination rejected")
 		}
 		return dialController(ctx, cfg)
 	}
-	client := &http.Client{Transport: fixedTarget{rt: tr, scheme: "https", host: addr}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	return client, "https://" + addr, func() error { tr.CloseIdleConnections(); return nil }, nil
+	if scheme == "https" {
+		tr.DialTLSContext = dial
+		tr.DialContext = func(context.Context, string, string) (net.Conn, error) {
+			return nil, errors.New("control panel destination rejected")
+		}
+	} else {
+		tr.DialContext = dial
+		tr.DialTLSContext = func(context.Context, string, string) (net.Conn, error) {
+			return nil, errors.New("control panel destination rejected")
+		}
+	}
+	client := &http.Client{Transport: fixedTarget{rt: tr, scheme: scheme, host: addr, prefix: cfg.BasePath}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	return client, scheme + "://" + addr + cfg.BasePath, func() error { tr.CloseIdleConnections(); return nil }, nil
 }
 
-// fixedTarget rejects requests to anything but scheme://host.
+// fixedTarget rejects requests to anything but scheme://host, and with a
+// prefix to paths outside prefix/ (no dot segments).
 type fixedTarget struct {
 	rt     http.RoundTripper
 	scheme string
 	host   string
+	prefix string
 }
 
 func (f fixedTarget) RoundTrip(req *http.Request) (*http.Response, error) {
-	if req.URL.Scheme != f.scheme || req.URL.Host != f.host || req.URL.User != nil || (req.Host != "" && req.Host != f.host) {
+	if req.URL.Scheme != f.scheme || req.URL.Host != f.host || req.URL.User != nil || (req.Host != "" && req.Host != f.host) || !f.pathAllowed(req.URL) {
 		if req.Body != nil {
 			_ = req.Body.Close()
 		}
 		return nil, errors.New("control panel destination rejected")
 	}
 	return f.rt.RoundTrip(req)
+}
+
+func (f fixedTarget) pathAllowed(u *url.URL) bool {
+	if f.prefix == "" {
+		return true
+	}
+	p := u.EscapedPath()
+	return strings.HasPrefix(p, f.prefix+"/") && !strings.Contains(p+"/", "/../") && !strings.Contains(p+"/", "/./")
 }

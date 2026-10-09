@@ -10,29 +10,10 @@ import (
 	"time"
 )
 
+// safeResult keeps only the allowed fields of a runtime's admin answer
+// (per-account status and authorization, §49).
 func safeResult(path string, raw []byte) (any, error) {
 	switch path {
-	case "/proxy":
-		var v struct {
-			Mode       string `json:"mode"`
-			Configured bool   `json:"configured"`
-			URL        string `json:"url_redacted"`
-			Revision   uint64 `json:"revision"`
-		}
-		if json.Unmarshal(raw, &v) != nil {
-			return nil, errors.New("invalid proxy result")
-		}
-		if v.Mode != "inherit" && v.Mode != "direct" && v.Mode != "proxy" {
-			return nil, errors.New("invalid proxy mode")
-		}
-		if v.URL != "" {
-			u, e := url.Parse(v.URL)
-			if e != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
-				return nil, errors.New("invalid proxy URL")
-			}
-			v.URL = (&url.URL{Scheme: u.Scheme, Host: u.Host}).String()
-		}
-		return v, nil
 	case "/status":
 		return safeAuthStatus(raw)
 	case "/auth/start":

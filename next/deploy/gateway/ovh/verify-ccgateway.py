@@ -42,32 +42,11 @@ def main():
     write = auth
     prefix = "/system/ccgateway"
     if args.configure:
-        fingerprint = api("POST", prefix + "/remote-fingerprint", {"host": "130.94.122.254", "port": 22}, write)["fingerprint"]
-        trusted = {
-            "SHA256:fQfdDyptvuTcXYpqnA7OUDSaX0sKNIzIDIBYmCD9QT4",
-            "SHA256:AmdZ2g1Wzf+NhCRgTTvUglMtpEbKY/0Yygdim+Ify9w",
-            "SHA256:LuOmJcKkhVzpjMYvuqRA+HObRxTeNWgCWk+JZ8nE16k",
-        }
-        if fingerprint not in trusted:
-            raise RuntimeError("cc-max host key changed")
-        keydir = root / "ccgateway"
-        raw = subprocess.check_output(["ssh", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes",
-            "-o", "StrictHostKeyChecking=yes", "-o", "UserKnownHostsFile=" + str(keydir / "known_hosts"),
-            "-i", str(keydir / "id_ed25519"), "root@130.94.122.254",
-            "cat /opt/ccgateway-test/gateway.env"], text=True)
-        keys = dict(line.split("=", 1) for line in raw.splitlines() if "=" in line)
-        saved = api("PUT", prefix + "/remote-config", {
-            "mode": "ssh", "host": "130.94.122.254", "port": 22, "user": "root",
-            "auth_mode": "private_key", "private_key": (keydir / "id_ed25519").read_text(),
-            "host_key_fingerprint": fingerprint,
-            "admin_key": keys["CCG_ADMIN_KEY"], "api_key": keys["CCG_API_KEY"],
-        }, write)
-        if not saved.get("has_private_key") or not saved.get("has_admin_key") or not saved.get("has_api_key"):
-            raise RuntimeError("configuration was not saved")
-        print("encrypted SSH configuration saved")
+        # The shared-container SSH mode was removed (CONTRACTS §53.9); configure
+        # the controller endpoint or install it from the console instead.
+        raise SystemExit("--configure is obsolete: use Settings → CCGateway → controller endpoint / install")
     api("POST", prefix + "/remote-test", {}, write)
-    api("POST", prefix + "/remote-action", {"action": "status"}, write)
-    print("Docker connection and container status: PASS")
+    print("Controller connection: PASS")
     if args.enable_plugin:
         api("POST", "/plugins/ccgateway/enable", {}, write)
         print("CCGateway plugin enable requested")

@@ -82,6 +82,13 @@ export const CCG_REASONS = [
   'gateway_failed',
   'ca_unavailable',
   'gateway_unreachable',
+  // controller install, local Docker or SSH credentials of the request (§53.9)
+  'invalid_ssh',
+  'port_in_use',
+  'no_free_port',
+  'docker_not_installed',
+  'docker_not_running',
+  'acme_ports_unavailable',
   // control-panel mode: image uploads and runtime images (§53.5, §53.6)
   'controller_not_configured',
   'offset_mismatch',
@@ -189,14 +196,15 @@ export function stepStates(f: CcgFlow): Record<CcgStep, CcgStepState> {
 
 /**
  * Why per-account containers cannot work, from GET /system/ccgateway/remote-config; [] when configured.
- * Local Docker, SSH and the control panel (CONTRACTS §53.2) are configured Docker connections.
+ * Per-account containers are the only mode: the controller connection (CONTRACTS §53.9) and the legacy
+ * local Docker / SSH connections saved with them are configured; a configuration saved without them
+ * (the removed shared container) is not configured.
  */
-export type CcgSetupProblem = 'runtimes' | 'docker' | 'adminKey'
+export type CcgSetupProblem = 'docker' | 'adminKey'
 export function setupProblems(cfg: { account_runtimes?: boolean; mode?: string; has_admin_key?: boolean } | null | undefined): CcgSetupProblem[] {
   if (!cfg) return []
   const out: CcgSetupProblem[] = []
-  if (!cfg.account_runtimes) out.push('runtimes')
-  if (cfg.mode !== 'ssh' && cfg.mode !== 'local' && cfg.mode !== 'controller') out.push('docker')
+  if (!cfg.account_runtimes || (cfg.mode !== 'ssh' && cfg.mode !== 'local' && cfg.mode !== 'controller')) out.push('docker')
   if (!cfg.has_admin_key) out.push('adminKey')
   return out
 }

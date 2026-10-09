@@ -44,18 +44,18 @@ func TestRuntimeImageOverrides(t *testing.T) {
 			t.Errorf("validImage(%q) = %v, want %v", ref, !ok, ok)
 		}
 	}
-	old := Config{Mode: "local", Images: &RuntimeImages{App: "ccgateway:old"}}
-	c, err := mergeConfig(Config{Mode: "local"}, old)
+	old := Config{Mode: "disabled", Images: &RuntimeImages{App: "ccgateway:old"}}
+	c, err := mergeConfig(Config{Mode: "disabled"}, old)
 	if err != nil || c.Images == nil || c.Images.App != "ccgateway:old" {
 		t.Fatalf("omitted images not kept: %+v %v", c.Images, err)
 	}
-	if c, err = mergeConfig(Config{Mode: "local", Images: &RuntimeImages{}}, old); err != nil || c.Images != nil {
+	if c, err = mergeConfig(Config{Mode: "disabled", Images: &RuntimeImages{}}, old); err != nil || c.Images != nil {
 		t.Fatalf("{} did not reset: %+v %v", c.Images, err)
 	}
-	if _, err = mergeConfig(Config{Mode: "local", Images: &RuntimeImages{Egress: "bad image"}}, old); err == nil {
+	if _, err = mergeConfig(Config{Mode: "disabled", Images: &RuntimeImages{Egress: "bad image"}}, old); err == nil {
 		t.Fatal("invalid image accepted")
 	}
-	c, _ = mergeConfig(Config{Mode: "local", Images: &RuntimeImages{Controller: "ccg-controller:abc"}}, Config{})
+	c, _ = mergeConfig(Config{Mode: "disabled", Images: &RuntimeImages{Controller: "ccg-controller:abc"}}, Config{})
 	eff := c.EffectiveImages()
 	if eff.Controller != "ccg-controller:abc" || eff.App != AppImage || eff.Egress != EgressImage {
 		t.Fatalf("effective images: %+v", eff)
@@ -83,6 +83,11 @@ type fakeHostOps struct {
 	gateway   remotedocker.ScriptResult
 	ca        remotedocker.ScriptResult
 	onGateway func()
+	// Port selection (§53.9): nil answers CCG_PORT=<wanted, else start>.
+	port *remotedocker.ScriptResult
+	// SSH connections the scripts ran over ("local" for this machine).
+	targets []string
+	sshSeen []remotedocker.Config
 }
 
 func (h *fakeHostOps) kind(script string) string {
@@ -95,6 +100,8 @@ func (h *fakeHostOps) kind(script string) string {
 		return "rollback"
 	case script == gatewayCAScript:
 		return "ca"
+	case script == portScript:
+		return "port"
 	case strings.Contains(script, "docker run -d --name ccg-controller"):
 		return "install"
 	case strings.Contains(script, "docker run -d --name ccg-gateway"):
@@ -103,11 +110,22 @@ func (h *fakeHostOps) kind(script string) string {
 	return "unknown"
 }
 
-func (h *fakeHostOps) run(_ context.Context, _ remotedocker.Config, script string, stdin []byte, _ time.Duration) (remotedocker.ScriptResult, error) {
+// runLocal is the local script runner (§53.9 local install).
+func (h *fakeHostOps) runLocal(ctx context.Context, script string, stdin []byte, limit time.Duration) (remotedocker.ScriptResult, error) {
+	return h.answer(ctx, "local", remotedocker.Config{}, script, stdin, limit)
+}
+
+func (h *fakeHostOps) run(ctx context.Context, cfg remotedocker.Config, script string, stdin []byte, limit time.Duration) (remotedocker.ScriptResult, error) {
+	return h.answer(ctx, "ssh", cfg, script, stdin, limit)
+}
+
+func (h *fakeHostOps) answer(_ context.Context, target string, cfg remotedocker.Config, script string, stdin []byte, _ time.Duration) (remotedocker.ScriptResult, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.scripts = append(h.scripts, h.kind(script))
 	h.stdins = append(h.stdins, stdin)
+	h.targets = append(h.targets, target)
+	h.sshSeen = append(h.sshSeen, cfg)
 	if h.sshErr {
 		return remotedocker.ScriptResult{}, errors.New("SSH connection failed")
 	}
@@ -127,6 +145,16 @@ func (h *fakeHostOps) run(_ context.Context, _ remotedocker.Config, script strin
 		return h.gateway, nil
 	case "ca":
 		return h.ca, nil
+	case "port":
+		if h.port != nil {
+			return *h.port, nil
+		}
+		fields := strings.Fields(string(stdin))
+		want := fields[0]
+		if want == "0" {
+			want = fields[1]
+		}
+		return remotedocker.ScriptResult{Output: "CCG_PORT=" + want + "\nCCG_RESULT=ok\n"}, nil
 	}
 	h.t.Errorf("unexpected script %q", script)
 	return remotedocker.ScriptResult{ExitStatus: 127}, nil
@@ -155,6 +183,7 @@ func newRuntimeOpsFixture(t *testing.T, cfg Config) (*runtimeFixture, *fakeHostO
 	}))
 	t.Cleanup(srv.Close)
 	f.s.runScript = host.run
+	f.s.runLocalScript = host.runLocal
 	f.s.openController = func(context.Context, Config) (*http.Client, string, func() error, error) {
 		return srv.Client(), srv.URL, func() error { return nil }, nil
 	}

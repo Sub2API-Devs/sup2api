@@ -3,7 +3,7 @@
 > **2026-10-09 18:43（北京时间）起：账号运行环境已从 cc-max 迁到 OVH 本机 Docker，优先于下文所有 cc-max 描述：**
 > - OVH 上 `ccg-controller`（`ccg-controller:0.1.49`，host 网络，只听 127.0.0.1:8787，运行目录 `/opt/ccgateway-runtime`、环境文件 `/opt/ccgateway-runtime.env`，均 root 0700/0600）与 `ccg-gateway`（caddy:2-alpine，`/opt/ccgateway-gateway/Caddyfile`，公网 `15.204.107.38:18443`（443 被本机其他服务占用），Caddy 内置 CA，无密钥请求 401）。核心配置 `mode: controller`、`15.204.107.38:18443`，固定 OVH Caddy 根证书（18:50 由仅网桥 `192.168.96.1:18443` 改为公网，根证书不变）。
 > - #21（`ccg-21-app/-egress`）、#22（`ccg-d1d2964e14bf728d9-app/-egress`）按原配置 1:1 在 OVH 重建：同名、同镜像 ID、同环境变量、同私网 IP 与子网、同标签/挂载/资源限制；容器可写层（换过的 worker `ddd30dd1…`、更新过的 Claude CLI 2.1.292 等）按 overlay upperdir 逐字节搬运并核对属主/权限/内容哈希；数据卷与 `/opt/ccgateway-runtime/<key>`（state、sing-box 代理配置、防火墙规则）同样搬运核对。出口代理不变：#21 `216.173.82.161`，#22 `47.147.29.235`（迁移后在容器内实测）。#20（已禁用）只迁了数据卷与目录，没有建容器（旧网络 172.18.0.0/16 与 OVH 冲突）；重新启用时控制器会按新地址池新建。
-> - cc-max 上原容器、卷、目录全部保留但已停止，`ccg-controller`/`ccg-gateway` 设为 `--restart=no`。**回滚**：OVH 上停 `ccg-controller` 与四个账号容器 → cc-max `docker start ccg-gateway ccg-controller` → OVH 执行 `python3 ~/ccg-migrate/ccg_switch.py 130.94.122.254 443 ~/ccg-migrate/ccmax-root.crt`（核心随即对账并启动 cc-max 账号容器）。迁移之后在 OVH 产生的数据不会自动回到 cc-max。
+> - 19:00 已清理 cc-max 上的账号容器、控制器、Caddy、账号网络、数据卷、`/opt/ccgateway-runtime*`、`/opt/ccgateway-gateway`，**不再有回滚到 cc-max 的路径**。迁移时刻的完整备份（三个账号数据卷、#21/#22 容器可写层、运行目录、环境文件，含凭据）在 OVH `/opt/ccgateway-backups/ccmax-runtime-20261009.tar.gz`（root 0600，约 400 MB）。cc-max 上仍剩旧测试容器 `ccgateway-worker-test`、构建镜像与 `/root/ccgateway-features-*` 等构建目录，未动。
 >
 > **2026-10-09 18:10（北京时间）现状（部分已被上面替代）：**
 > - Core `v0.1.82`（源码 `4d5c666ca`，manifest `91b20df66c49…`）四节点 primary-first 升级完成；插件版本不变（ccgateway 0.1.15 等）。

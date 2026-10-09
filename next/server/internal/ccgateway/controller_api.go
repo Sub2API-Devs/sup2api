@@ -10,10 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
-	"github.com/jackc/pgx/v5"
 )
 
 // Calls to the controller's own API (images, uploads, self-upgrade) in
@@ -133,37 +130,7 @@ func controllerAPIError(status int, raw []byte) *core.Error {
 // updateConfig changes the saved configuration under its row lock and audits
 // ccgateway.config.update with fields.
 func (s *Service) updateConfig(ctx context.Context, uid int64, fields []string, change func(*Config) error) (Config, error) {
-	var updatedBy *int64
-	if uid > 0 {
-		updatedBy = &uid
-	}
-	var saved Config
-	e := s.DB.Tx(ctx, func(tx pgx.Tx) error {
-		_, e := store.UpdateSettingJSONTx(ctx, tx, settingKey, updatedBy, func(raw json.RawMessage) (json.RawMessage, error) {
-			cur, e := s.decode(raw)
-			if e != nil {
-				return nil, e
-			}
-			if e = change(&cur); e != nil {
-				return nil, e
-			}
-			saved = cur
-			plain, _ := json.Marshal(cur)
-			if s.Cipher == nil {
-				return nil, errors.New("encryption unavailable")
-			}
-			enc, e := s.Cipher.Encrypt(plain, configAAD)
-			if e != nil {
-				return nil, e
-			}
-			return json.Marshal(map[string]any{"cipher": enc})
-		})
-		if e != nil {
-			return e
-		}
-		return audit.Audit(ctx, tx, uid, "ccgateway.config.update", "system", "ccgateway", map[string]any{"fields": fields})
-	})
-	return saved, e
+	return s.updateConfigAt(ctx, uid, fields, nil, change)
 }
 
 // panelUpgrade is the one-click upgrade in control panel mode: the

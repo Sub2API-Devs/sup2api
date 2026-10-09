@@ -3604,3 +3604,48 @@ GET `/groups/:id/models`（`group:read`）返回所有未删除成员账号的�
 - Caddy 本身的升级需要回到 SSH 模式重新安装。
 - 同一地址和端口下无法单独清除已固定的根证书（留空即保留）；需要改用系统根证书时先改地址或端口保存一次，或重新安装。
 - 加载 / 安装是同步请求，没有异步任务与结果查询接口；前置代理先断开时只能事后重读状态判断结果。
+
+### 53.9 连接与安装分离：只有一种连接方式，安装是可选前置步骤（2026-10-09，用户要求）
+
+用户纠正：不是"本地 / SSH / 控制面板"三种连接方式。**连接方式只有一种：连控制器端点，协议 HTTPS（默认）或 HTTP**；**安装方式有两种：本机 Docker、远程 SSH**，安装是可选的前置步骤（已有控制器可以不装、直接填连接信息）。安装完成后自动改为连接该端点，SSH 凭据只在安装那一次请求里使用，**从不保存**。
+
+**配置（`ccgateway_remote`）**：
+- `mode` 对一账号一容器只剩 `controller`（已连接）与 `disabled`（未配置）。新增 `scheme`：`"https"`（缺省，空串视同 https）或 `"http"`。`http` 时 `controller_ca` 清空，不做 TLS；`scheme` 改变与改地址 / 端口同样要求重新填写管理密钥（§53.2）。公开视图返回 `scheme`。
+- 旧值兼容：已保存的 `ssh` / `local` 仍能解码，账号流量的旧运行路径暂时保留（不破坏未迁移的部署），界面把它们显示为"旧连接方式"，提示安装控制面板完成迁移；`PUT remote-config` 只接受 `controller` / `disabled`。**一账号一容器是唯一模式**（用户 2026-10-09 确认）：`account_runtimes` 保存时恒为 `true`，界面去掉该复选框；旧"共享容器"模式（关闭一账号一容器时的单容器、`/system/ccgateway/status|proxy|auth/*`、`remote-action`）删除，`remote-test` 只用于控制面板连接。
+
+**连接（`controller` 模式）**：§53.4 不变，只是 `scheme: http` 时管理请求与隧道都走明文 TCP（拨号上限同 10 秒，`stage` 只有 `connect` / `http`），基址 `http://host:port`。
+
+**安装：`POST /system/ccgateway/controller/install`**（权限、审计、锁、不随断开取消同 §53.3）：
+
+```json
+{"method": "ssh" | "local",
+ "ssh": {"host", "port", "user", "auth_mode", "password"?, "private_key"?, "passphrase"?, "host_key_fingerprint"},
+ "scheme": "https" | "http",
+ "host": "<连接地址>", "port": 0 | 1..65535, "email"?: "<ACME>"}
+```
+
+- `method: "ssh"`：`ssh` 必填，按 `remotedocker.Validate` 校验（失败 400 `invalid_ssh`），只用于本次请求的脚本执行，不写配置、不进日志与审计。`host` 缺省为 `ssh.host`。
+- `method: "local"`：在核心所在机器上直接执行同样的固定脚本（`sh -c`，脚本经 stdin 传数据）；要求核心进程能使用 `docker` 命令且有权写 `/opt`，否则脚本报 `docker_not_installed` / `docker_not_running` / `install_failed`（400 / 503）。`host` 缺省 `127.0.0.1`（核心与控制器同机）。核心跑在容器里且没有挂 Docker socket 时本机安装不可用，应改用 SSH。
+- 兼容：请求不带 `method` 且已保存 `mode: ssh` 时，用已保存的 SSH 连接（旧流程），成功后同样清除 SSH 凭据。
+- `port`：`0` 或省略 → 自动选择空闲端口：`https` 从 18443 起、`http` 从 18080 起各试 100 个；指定端口时检查是否被占用（属于当前 `ccg-gateway` 的端口视为可用）。占用检查读 `/proc/net/tcp` 与 `/proc/net/tcp6` 的 LISTEN 项，结果用 `CCG_PORT=<n>` 行报告；指定端口被占 → 409 `port_in_use`，自动范围内都被占 → 409 `no_free_port`。
+- `scheme: http` 的 Caddyfile：
+
+  ```
+  {
+  	admin off
+  	auto_https off
+  }
+  http://:<port> {
+  	reverse_proxy 127.0.0.1:8787 {
+  		flush_interval -1
+  	}
+  }
+  ```
+  不取根证书；健康检查走 HTTP。`https` 同 §53.3（域名自动证书 / IP 用内置 CA 并固定根证书）。
+- **域名自动证书（用户 2026-10-09 确认要保留）**：`scheme: https` 且连接地址是域名时，Caddy 自动向 Let's Encrypt / ZeroSSL 申请并续期证书，核心用系统根证书校验，`controller_ca` 为空，什么证书都不保存。ACME 验证需要该主机的 80 端口（HTTP-01）或 443 端口（TLS-ALPN-01）能被 Caddy 监听并从公网访问；控制面板本身可以在任意端口（如 18443）。因此安装脚本在域名 + https 时额外检查 80 与 443 是否空闲（属于当前 `ccg-gateway` 的视为空闲），两个都被占 → 409 `acme_ports_unavailable`（提示改用 IP、改用 http，或在已有的反向代理上为该域名配置转发）；核心还会解析域名，所有 A/AAAA 记录都不是 SSH 主机地址 / 连接地址时只在返回里给 `warnings: ["dns_mismatch"]`，不拒绝（可能有 CDN / NAT）。域名证书签发失败时健康检查以 `stage: tls` 报 `gateway_unreachable`。DNS-01 验证（需要 DNS 服务商令牌与带插件的 Caddy 镜像）暂不支持。
+- 其余步骤与错误码同 §53.3（控制器安装、网关、取证书、健康检查 120 秒、原子保存）。保存时：`mode: controller`、`scheme`、`host`、`port`、`controller_ca`（https 且 IP）、管理密钥；SSH 字段全部清空。并发保存冲突 409 `config_changed` 的判断改为"配置自读取后被别人改过"（比较 `updated_at` / 行版本），不再要求原模式是 ssh。返回公开视图，含实际使用的 `port`。
+
+**界面**（设置 → 连接与授权，一账号一容器开启时）：
+1. "控制器连接"：**一个端点输入框**（`https://host[:port][/前缀]` 或 `http://host[:port][/前缀]`，端口可写可不写，不写按协议默认 https 443 / http 80；可带路径前缀，用于控制器挂在反向代理子路径下、由代理去掉前缀转发的情况；不允许查询、片段、用户信息；前端解析为 `scheme` / `host` / `port` / `base_path` 保存，显示时拼回 URL）。核心以 `scheme://host:port` + `base_path` 为所有控制器请求（含隧道 `GET <base_path>/accounts/<key>/tunnel`）的基址；`base_path` 为空或 1–8 段 `[A-Za-z0-9._~-]+`，变化同样要求重填管理密钥；安装生成的端点不带前缀。下面是访问密钥；http 时提示密钥明文传输、只用于可信内网；https 时根证书放在默认折叠的"高级：自签名根证书（可选）"（域名正式证书留空）；"测试连接"；"保存"即直接连接已有控制器。顶部显示当前状态（已连接 + 控制器版本 / 未配置 / 旧连接方式）。
+2. "安装控制器"（未配置或旧连接方式时默认展开，已连接时折叠为"重新安装 / 安装到其他主机"）：安装方式（本机 Docker / 远程 SSH）；SSH 时填主机、端口、用户、认证、私钥 / 密码、主机指纹（含探测），这些只随安装请求发送，不保存；端口（留空自动选择）、协议、对外连接地址（SSH 缺省为 SSH 主机，本机缺省 127.0.0.1）、ACME 邮箱（HTTPS + 域名时）。"安装并连接"成功后用返回的配置刷新第 1 部分。
+3. 没有"启用一账号一容器"复选框，也没有共享容器设置（该模式已删除）。

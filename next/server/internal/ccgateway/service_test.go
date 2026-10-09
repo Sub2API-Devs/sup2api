@@ -16,25 +16,25 @@ import (
 )
 
 func TestConfigSafety(t *testing.T) {
-	old := Config{Mode: "ssh", Host: "host", Port: 22, User: "user", AuthMode: "password", Password: "secret", HostKeyFingerprint: "SHA256:" + strings.Repeat("A", 43), AdminKey: "admin", APIKey: "api"}
+	old := Config{Mode: "controller", Scheme: "https", Host: "panel.example.com", Port: 8443, AdminKey: "admin", APIKey: "api", AccountRuntimes: true}
 	c := old
-	c.Password = ""
 	c.AdminKey = ""
 	c.APIKey = ""
 	v, e := mergeConfig(c, old)
-	if e != nil || v.Password != "secret" || v.APIKey != "api" {
+	if e != nil || v.AdminKey != "admin" || v.APIKey != "api" {
 		t.Fatal("same target did not retain credentials", e)
 	}
-	c.Host = "other"
+	c.Host = "other.example.com"
 	if _, e := mergeConfig(c, old); e == nil {
 		t.Fatal("new target retained credentials")
 	}
-	raw, _ := json.Marshal(old.Public())
+	legacy := Config{Mode: "ssh", Host: "host", Port: 22, User: "user", AuthMode: "password", Password: "secret", HostKeyFingerprint: "SHA256:" + strings.Repeat("A", 43), AdminKey: "admin", APIKey: "api"}
+	raw, _ := json.Marshal(legacy.Public())
 	if strings.Contains(string(raw), "secret") || strings.Contains(string(raw), `"admin"`) {
 		t.Fatal("public credentials leaked")
 	}
-	v, e = mergeConfig(Config{Mode: "disabled"}, old)
-	if e != nil || v.Password != "" || v.AdminKey != "" {
+	v, e = mergeConfig(Config{Mode: "disabled"}, legacy)
+	if e != nil || v.Password != "" || v.AdminKey != "" || v.APIKey != "" || v.Host != "" || v.User != "" {
 		t.Fatal("disable retained secret")
 	}
 	s := &Service{}
@@ -47,7 +47,7 @@ func TestConfigSafety(t *testing.T) {
 	}
 }
 func TestResponseAllowlist(t *testing.T) {
-	for _, path := range []string{"/status", "/proxy", "/auth/logout"} {
+	for _, path := range []string{"/status", "/auth/logout"} {
 		raw := []byte(`{"mode":"proxy","url_redacted":"http://u:secret@host:123/path?q=secret","url":"https://evil/secret","admin_key":"secret","healthy":true,"logged_in":true,"success":true}`)
 		v, e := safeResult(path, raw)
 		if e != nil {
@@ -92,8 +92,14 @@ func TestDBEncryptedAuditAndModelForward(t *testing.T) {
 		}
 		return w.Code
 	}
-	if save(`{"mode":"local","admin_key":"secret-admin","api_key":"secret-api"}`) != 200 {
+	if save(`{"mode":"controller","host":"panel.example.com","admin_key":"secret-admin","api_key":"secret-api"}`) != 200 {
 		t.Fatal("save failed")
+	}
+	// Legacy modes are never saved again (§53.9), whatever account_runtimes says.
+	for _, body := range []string{`{"mode":"local","admin_key":"k1","api_key":"k2"}`, `{"mode":"local","account_runtimes":false}`, `{"mode":"ssh","host":"h","user":"u","auth_mode":"password","password":"p","host_key_fingerprint":"SHA256:` + strings.Repeat("A", 43) + `"}`, `{}`} {
+		if code := save(body); code != 400 {
+			t.Fatalf("%s saved: %d", body, code)
+		}
 	}
 	var persisted string
 	if e := db.Pool.QueryRow(context.Background(), "SELECT value::text FROM settings WHERE key=$1", settingKey).Scan(&persisted); e != nil {
@@ -108,6 +114,16 @@ func TestDBEncryptedAuditAndModelForward(t *testing.T) {
 	}
 	if detail != "{}" {
 		t.Fatalf("audit copied sensitive body %s", detail)
+	}
+	if saved, e := s.Load(context.Background()); e != nil || !saved.AccountRuntimes || saved.Mode != "controller" {
+		t.Fatalf("account_runtimes not forced on: %+v %v", saved, e)
+	}
+	// A legacy shared-container configuration saved before §53.9 still runs.
+	plain, _ := json.Marshal(Config{Mode: "local", AdminKey: "secret-admin", APIKey: "secret-api"})
+	encrypted, _ := cipher.Encrypt(plain, configAAD)
+	envelope, _ := json.Marshal(map[string]any{"cipher": encrypted})
+	if _, e := db.Pool.Exec(context.Background(), `UPDATE settings SET value=$2 WHERE key=$1`, settingKey, envelope); e != nil {
+		t.Fatal(e)
 	}
 	upstreamCanceled := make(chan struct{})
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

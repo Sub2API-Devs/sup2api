@@ -315,3 +315,219 @@ func TestControllerTunnel(t *testing.T) {
 		t.Fatal("header injection accepted")
 	}
 }
+
+// TestControllerOpenHTTP: a plain HTTP panel (§53.9) has the same fixed
+// target, no redirects, and only the connect stage.
+func TestControllerOpenHTTP(t *testing.T) {
+	var mu sync.Mutex
+	hosts := []string{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		hosts = append(hosts, r.Host)
+		mu.Unlock()
+		if r.URL.Path == "/moved" {
+			http.Redirect(w, r, "/health", http.StatusFound)
+			return
+		}
+		if r.URL.Path != "/health" || r.Header.Get("Authorization") != "Bearer "+panelKey {
+			w.WriteHeader(401)
+			return
+		}
+		_, _ = w.Write([]byte(`{"version":"v1","features":["tunnel"]}`))
+	}))
+	defer srv.Close()
+	addr := srv.Listener.Addr().(*net.TCPAddr)
+	cfg := testPanelConfig("127.0.0.1", addr.Port, "")
+	cfg.Scheme = "http"
+	s := &Service{}
+	ctx := context.Background()
+	if h, err := s.health(ctx, cfg); err != nil || h.Version != "v1" {
+		t.Fatalf("health: %+v %v", h, err)
+	}
+	client, base, closeFn, err := s.open(ctx, cfg)
+	if err != nil || base != "http://"+addr.String() {
+		t.Fatalf("open: %s %v", base, err)
+	}
+	defer closeFn()
+	for _, target := range []string{"https://" + addr.String() + "/health", "http://example.com/health", "http://127.0.0.2:" + strconv.Itoa(addr.Port) + "/health"} {
+		if _, err := client.Get(target); err == nil {
+			t.Fatalf("%s reached", target)
+		}
+	}
+	res, err := client.Get(base + "/moved")
+	if err != nil || res.StatusCode != http.StatusFound {
+		t.Fatalf("redirect followed: %v", err)
+	}
+	res.Body.Close()
+	// The HTTPS client of the same port does not fall back to plain HTTP.
+	https := cfg
+	https.Scheme = "https"
+	var se *stageError
+	if _, err := s.health(ctx, https); !errors.As(err, &se) || se.stage != "tls" {
+		t.Fatalf("https against an http panel: %v", err)
+	}
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	closed := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+	down := cfg
+	down.Port = closed
+	if _, err := s.health(ctx, down); !errors.As(err, &se) || se.stage != "connect" {
+		t.Fatalf("closed port: %v", err)
+	}
+	bad := cfg
+	bad.Scheme = "ftp"
+	if _, _, _, err := s.open(ctx, bad); err == nil {
+		t.Fatal("unknown scheme opened")
+	}
+}
+
+// TestControllerTunnelHTTP: the tunnel over a plain HTTP panel.
+func TestControllerTunnelHTTP(t *testing.T) {
+	revision := strings.Repeat("a", 64)
+	modelKey := strings.Repeat("k", 32)
+	account := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("x-api-key") != modelKey {
+			w.WriteHeader(401)
+			return
+		}
+		_, _ = w.Write([]byte("hello " + r.URL.Path))
+	}))
+	defer account.Close()
+	panel := &tunnelPanel{accountAddr: account.Listener.Addr().String(), revision: revision,
+		connection: accountConnection{IP: "10.52.74.181", Port: 8787, Key: modelKey, Revision: revision}}
+	srv := httptest.NewServer(panel)
+	defer srv.Close()
+	addr := srv.Listener.Addr().(*net.TCPAddr)
+	cfg := testPanelConfig("127.0.0.1", addr.Port, "")
+	cfg.Scheme = "http"
+	s := &Service{}
+	ctx := context.Background()
+	client, base, key, closeFn, err := s.openAccountModel(ctx, cfg, "21", revision)
+	if err != nil || base != "http://10.52.74.181:8787" || key != modelKey {
+		t.Fatalf("open: %s %v", base, err)
+	}
+	defer closeFn()
+	for i := 0; i < 2; i++ {
+		req, _ := http.NewRequestWithContext(ctx, "POST", base+"/v1/messages", strings.NewReader(`{}`))
+		req.Header.Set("x-api-key", key)
+		req.Close = true // a new tunnel per request
+		res, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+		if string(body) != "hello /v1/messages" {
+			t.Fatalf("answer: %q", body)
+		}
+	}
+	panel.mu.Lock()
+	hdr, reqHost, tunnels := panel.header, panel.host, panel.tunnels
+	panel.mu.Unlock()
+	if tunnels != 2 || reqHost != addr.String() || hdr.Get("Upgrade") != "ccg-tunnel" || hdr.Get("Authorization") != "Bearer "+panelKey {
+		t.Fatalf("tunnel request: %d %s %v", tunnels, reqHost, hdr)
+	}
+	panel.mu.Lock()
+	panel.mode = "409"
+	panel.mu.Unlock()
+	if _, err := dialTunnel(ctx, cfg, "21", revision); !errors.Is(err, errAccountNotSynchronized) {
+		t.Fatalf("409: %v", err)
+	}
+}
+
+// TestControllerBasePath: a controller behind a reverse proxy path prefix
+// (the proxy strips it): management requests and tunnels carry the prefix,
+// nothing outside it can be requested.
+func TestControllerBasePath(t *testing.T) {
+	revision := strings.Repeat("a", 64)
+	modelKey := strings.Repeat("k", 32)
+	account := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("account " + r.URL.Path))
+	}))
+	defer account.Close()
+	panel := &tunnelPanel{accountAddr: account.Listener.Addr().String(), revision: revision,
+		connection: accountConnection{IP: "10.52.74.181", Port: 8787, Key: modelKey, Revision: revision}}
+	var mu sync.Mutex
+	var paths []string
+	mux := http.NewServeMux()
+	mux.Handle("/controller/", http.StripPrefix("/controller", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		paths = append(paths, r.URL.Path)
+		mu.Unlock()
+		if r.URL.Path == "/health" {
+			if r.Header.Get("Authorization") != "Bearer "+panelKey {
+				w.WriteHeader(401)
+				return
+			}
+			_, _ = w.Write([]byte(`{"version":"v9","features":["tunnel"]}`))
+			return
+		}
+		panel.ServeHTTP(w, r)
+	})))
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("request outside the prefix: %s", r.URL.Path)
+		w.WriteHeader(404)
+	})
+	for _, scheme := range []string{"http", "https"} {
+		t.Run(scheme, func(t *testing.T) {
+			var cfg Config
+			if scheme == "https" {
+				_, host, port, ca := tlsPanel(t, mux.ServeHTTP)
+				cfg = testPanelConfig(host, port, ca)
+			} else {
+				srv := httptest.NewServer(mux)
+				t.Cleanup(srv.Close)
+				cfg = testPanelConfig("127.0.0.1", srv.Listener.Addr().(*net.TCPAddr).Port, "")
+			}
+			cfg.Scheme, cfg.BasePath = scheme, "/controller"
+			s := &Service{}
+			ctx := context.Background()
+			if h, err := s.health(ctx, cfg); err != nil || h.Version != "v9" {
+				t.Fatalf("health: %+v %v", h, err)
+			}
+			client, base, closeFn, err := s.open(ctx, cfg)
+			if err != nil || !strings.HasSuffix(base, "/controller") || !strings.HasPrefix(base, scheme+"://") {
+				t.Fatalf("open: %s %v", base, err)
+			}
+			root := strings.TrimSuffix(base, "/controller")
+			for _, target := range []string{root + "/health", root + "/controllerx/health", base + "/../health", base + "/./health", base + "/a/../../health", base} {
+				if res, err := client.Get(target); err == nil {
+					res.Body.Close()
+					t.Fatalf("%s reached", target)
+				}
+			}
+			closeFn()
+			model, modelBase, key, closeModel, err := s.openAccountModel(ctx, cfg, "21", revision)
+			if err != nil || key != modelKey {
+				t.Fatalf("account model: %v", err)
+			}
+			defer closeModel()
+			res, err := model.Get(modelBase + "/v1/models")
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, _ := io.ReadAll(res.Body)
+			res.Body.Close()
+			if string(body) != "account /v1/models" {
+				t.Fatalf("tunnel answer: %q", body)
+			}
+			mu.Lock()
+			got := strings.Join(paths, ",")
+			paths = nil
+			mu.Unlock()
+			if got != "/health,/accounts/21/connection,/accounts/21/tunnel" {
+				t.Fatalf("controller saw: %s", got)
+			}
+		})
+	}
+	bad := testPanelConfig("127.0.0.1", 1, "")
+	for _, p := range []string{"controller", "/a/../b", "/a?x=1", "/a b"} {
+		bad.BasePath = p
+		if _, _, _, err := (&Service{}).open(context.Background(), bad); err == nil {
+			t.Errorf("base path %q opened", p)
+		}
+		if _, err := dialTunnel(context.Background(), bad, "21", revision); err == nil {
+			t.Errorf("base path %q tunneled", p)
+		}
+	}
+}

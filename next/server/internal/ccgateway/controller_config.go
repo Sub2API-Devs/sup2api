@@ -12,15 +12,41 @@ import (
 	"strings"
 )
 
-// Control panel mode (CONTRACTS §53): the core reaches the controller
-// through a Caddy HTTPS gateway on the Docker host instead of SSH.
+// Control panel mode (CONTRACTS §53 / §53.9): the core reaches the
+// controller through a Caddy gateway (HTTPS, or plain HTTP on trusted
+// networks) on the Docker host instead of SSH.
 
 const maxControllerCA = 64 << 10
 
 var (
 	dnsNamePattern   = regexp.MustCompile(`^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$`)
 	acmeEmailPattern = regexp.MustCompile(`^[^@\s]{1,64}@[A-Za-z0-9.-]{1,190}$`)
+	basePathPattern  = regexp.MustCompile(`^(/[A-Za-z0-9._~-]+){1,8}$`)
 )
+
+const maxBasePath = 256
+
+// normalizeBasePath drops trailing slashes and checks the controller's path
+// prefix: "" or 1-8 segments of unreserved characters, no "." / ".."
+// segments, at most 256 bytes.
+func normalizeBasePath(p string) (string, bool) {
+	if len(p) > maxBasePath+8 {
+		return "", false
+	}
+	p = strings.TrimRight(p, "/")
+	if p == "" {
+		return "", true
+	}
+	if len(p) > maxBasePath || !basePathPattern.MatchString(p) {
+		return "", false
+	}
+	for _, seg := range strings.Split(p[1:], "/") {
+		if seg == "." || seg == ".." {
+			return "", false
+		}
+	}
+	return p, true
+}
 
 // validControllerHost accepts an IP literal (IPv6 without brackets) or a DNS
 // name; no underscores, wildcards or single labels.
@@ -116,12 +142,30 @@ func validateControllerConfig(c Config) error {
 	if c.AdminKey == "" {
 		return errors.New("control panel management key required")
 	}
+	if c.Scheme != "" && c.Scheme != "https" && c.Scheme != "http" {
+		return errors.New("invalid control panel scheme")
+	}
+	if p, ok := normalizeBasePath(c.BasePath); !ok || p != c.BasePath {
+		return errors.New("invalid control panel base path")
+	}
 	if c.ControllerCA != "" {
+		if c.Scheme == "http" {
+			return errors.New("plain HTTP control panel with a pinned certificate")
+		}
 		if _, err := controllerCerts(c.ControllerCA); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// caddyfileHTTP is the gateway configuration of a plain HTTP control panel
+// on port (§53.9): no certificates, every interface.
+func caddyfileHTTP(port int) (string, error) {
+	if port < 1 || port > 65535 {
+		return "", errors.New("invalid control panel port")
+	}
+	return "{\n\tadmin off\n\tauto_https off\n}\nhttp://:" + strconv.Itoa(port) + " {\n\treverse_proxy 127.0.0.1:8787 {\n\t\tflush_interval -1\n\t}\n}\n", nil
 }
 
 // caddyfile is the gateway configuration for host:port (validated input

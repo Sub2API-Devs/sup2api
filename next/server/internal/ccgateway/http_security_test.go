@@ -3,6 +3,7 @@ package ccgateway
 import (
 	"context"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -24,9 +25,9 @@ func (a ccgRouteAuth) CanActOn(context.Context, int64, []string) error          
 func TestManagementRequiresAuthorizationWithoutConfirmation(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	for _, method := range []string{"PUT", "POST"} {
-		paths := []string{"remote-config", "proxy"}
+		paths := []string{"remote-config"}
 		if method == "POST" {
-			paths = []string{"remote-fingerprint", "remote-test", "remote-action", "auth/start", "auth/complete", "auth/cancel", "auth/logout"}
+			paths = []string{"remote-fingerprint", "remote-test", "controller/install"}
 		}
 		for _, path := range paths {
 			for _, allowed := range []bool{false, true} {
@@ -39,9 +40,10 @@ func TestManagementRequiresAuthorizationWithoutConfirmation(t *testing.T) {
 				engine.ServeHTTP(w, req)
 				want := 403
 				if allowed {
-					want = 503 // Authorized request reaches the unconfigured handler.
-					if path == "remote-config" || path == "remote-fingerprint" || path == "remote-action" || path == "remote-test" {
-						want = 400
+					// Authorized requests reach the unconfigured handler.
+					want = 400
+					if path == "controller/install" {
+						want = 503
 					}
 				}
 				if w.Code != want {
@@ -56,20 +58,18 @@ func TestManagementRequiresAuthorizationWithoutConfirmation(t *testing.T) {
 			}
 		}
 	}
+	// The shared-container endpoints are gone (§53.9).
 	engine := gin.New()
 	auth := ccgRouteAuth{true}
 	(&Service{}).RegisterRoutes(httpapi.NewRouter(engine, auth, auth))
-	req := httptest.NewRequest("GET", "/api/v1/system/ccgateway/status", nil)
-	w := httptest.NewRecorder()
-	engine.ServeHTTP(w, req)
-	if w.Code != 401 {
-		t.Fatal("anonymous management access accepted")
-	}
-	req = httptest.NewRequest("GET", "/api/v1/system/ccgateway/status", nil)
-	req.Header.Set("Authorization", "Bearer test")
-	w = httptest.NewRecorder()
-	engine.ServeHTTP(w, req)
-	if w.Code != 503 {
-		t.Fatalf("unconfigured status %d", w.Code)
+	for _, route := range []string{"GET status", "GET proxy", "PUT proxy", "POST auth/start", "POST auth/complete", "POST auth/cancel", "POST auth/logout", "POST remote-action"} {
+		method, path, _ := strings.Cut(route, " ")
+		req := httptest.NewRequest(method, "/api/v1/system/ccgateway/"+path, nil)
+		req.Header.Set("Authorization", "Bearer test")
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, req)
+		if w.Code != 404 {
+			t.Fatalf("%s still served: %d", route, w.Code)
+		}
 	}
 }

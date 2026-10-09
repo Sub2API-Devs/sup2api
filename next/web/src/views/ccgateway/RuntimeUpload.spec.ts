@@ -137,7 +137,7 @@ describe('CCGateway runtime card in control panel mode', () => {
   it('translates the control panel reasons of the runtime state', async () => {
     mocks.get.mockResolvedValue(runtime({ installed: null, reason: 'controller_not_configured' }))
     const w = await render('controller')
-    expect(w.text()).toContain('当前连接方式不是控制面板')
+    expect(w.text()).toContain('尚未连接控制器')
     w.unmount()
   })
 })

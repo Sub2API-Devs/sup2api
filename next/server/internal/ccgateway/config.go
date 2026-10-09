@@ -12,6 +12,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
+	"net"
 	"net/http"
 	"os"
 	"regexp"
@@ -24,10 +25,18 @@ const settingKey = "ccgateway_remote"
 var configAAD = []byte("system:ccgateway:v1")
 
 type Config struct {
-	AccountRuntimes    bool   `json:"account_runtimes"`
-	Mode               string `json:"mode"` // "disabled", "local", "ssh", "controller"
-	Host               string `json:"host"`
-	Port               int    `json:"port"`
+	AccountRuntimes bool `json:"account_runtimes"`
+	// Mode: "controller" or "disabled"; "local" / "ssh" are legacy values
+	// that still decode and run but are never saved again (§53.9).
+	Mode string `json:"mode"`
+	Host string `json:"host"`
+	Port int    `json:"port"`
+	// Scheme of the controller endpoint (controller mode): "https" (also
+	// "") or "http" (§53.9).
+	Scheme string `json:"scheme,omitempty"`
+	// BasePath is the path prefix of the controller behind a reverse proxy
+	// that strips it ("" or /seg[/seg...], no trailing slash).
+	BasePath           string `json:"base_path,omitempty"`
 	User               string `json:"user"`
 	AuthMode           string `json:"auth_mode"`
 	Password           string `json:"password,omitempty"`
@@ -99,11 +108,22 @@ func (c Config) publicImages() RuntimeImages {
 func (c Config) SSH() remotedocker.Config {
 	return remotedocker.Config{Host: c.Host, Port: c.Port, User: c.User, AuthMode: c.AuthMode, Password: c.Password, PrivateKey: c.PrivateKey, Passphrase: c.Passphrase, HostKeyFingerprint: c.HostKeyFingerprint}
 }
+
+// panelScheme is the controller endpoint's scheme: "http" or "https".
+func (c Config) panelScheme() string {
+	if c.Scheme == "http" {
+		return "http"
+	}
+	return "https"
+}
+
 func (c Config) Public() map[string]any {
 	_, caFingerprint, _ := parseControllerCA(c.ControllerCA)
 	return map[string]any{
 		"account_runtimes":          c.AccountRuntimes,
 		"mode":                      c.Mode,
+		"scheme":                    c.panelScheme(),
+		"base_path":                 c.BasePath,
 		"host":                      c.Host,
 		"port":                      c.Port,
 		"user":                      c.User,
@@ -140,11 +160,15 @@ type Service struct {
 	kick chan string
 	// installMu serializes runtime installs without a Locker.
 	installMu sync.Mutex
-	// runScript / openController replace remotedocker.RunScript and the SSH
-	// tunnel to the controller in tests (nil: the real ones).
+	// runScript / runLocalScript / openController replace
+	// remotedocker.RunScript, remotedocker.RunLocalScript and the tunnel to
+	// the controller in tests (nil: the real ones).
 	runScript      scriptRunner
+	runLocalScript localScriptRunner
 	openController func(context.Context, Config) (*http.Client, string, func() error, error)
 	openAccount    func(context.Context, Config, string) (*http.Client, func() error, error)
+	// lookupIP replaces net.DefaultResolver.LookupIPAddr in tests.
+	lookupIP func(context.Context, string) ([]net.IPAddr, error)
 }
 
 func New(db *store.DB, cipher *secret.Cipher) *Service {
@@ -175,16 +199,25 @@ func (s *Service) decode(raw []byte) (Config, error) {
 	return c, e
 }
 func (s *Service) Load(ctx context.Context) (Config, error) {
+	c, _, e := s.loadVersioned(ctx)
+	return c, e
+}
+
+// loadVersioned is Load plus the stored value as read: every write changes
+// it (fresh ciphertext), so comparing it later under the row lock tells
+// whether anyone saved meanwhile (§53.9 config_changed).
+func (s *Service) loadVersioned(ctx context.Context) (Config, []byte, error) {
 	if s == nil || s.DB == nil || s.DB.Pool == nil {
-		return Config{}, errors.New("configuration storage unavailable")
+		return Config{}, nil, errors.New("configuration storage unavailable")
 	}
 	var raw []byte
 	e := s.DB.Pool.QueryRow(ctx, "SELECT value FROM settings WHERE key=$1", settingKey).Scan(&raw)
 	if store.IsNoRows(e) {
-		e = nil
+		// The row a later update creates holds {}.
+		raw, e = []byte("{}"), nil
 	}
 	if e != nil {
-		return Config{}, e
+		return Config{}, nil, e
 	}
 	c, e := s.decode(raw)
 	if c.Mode == "local" {
@@ -195,29 +228,29 @@ func (s *Service) Load(ctx context.Context) (Config, error) {
 			c.APIKey = os.Getenv("CCG_API_KEY")
 		}
 	}
-	return c, e
+	return c, raw, e
 }
+
+// mergeConfig applies a PUT remote-config body to the saved configuration
+// (§53.2 / §53.9). Per-account runtimes are the only mode: account_runtimes
+// is always saved as true, and the mode is "controller" (connected) or
+// "disabled" (not configured). A saved legacy "local" / "ssh" configuration
+// keeps working and its other settings can still be saved while mode and
+// target stay the same, but nothing can switch to a legacy mode; installing
+// a controller migrates it.
 func mergeConfig(c, old Config) (Config, error) {
-	if c.Mode == "disabled" {
-		return Config{Mode: "disabled", Port: 22}, nil
+	c.AccountRuntimes = true
+	if c.Mode == "ssh" && c.Port == 0 {
+		c.Port = 22
 	}
-	if c.Mode == "" {
-		c.Mode = "local"
-	}
-	if c.Mode != "local" && c.Mode != "ssh" && c.Mode != "controller" {
+	legacy := (c.Mode == "ssh" || c.Mode == "local") && c.Mode == old.Mode &&
+		(c.Mode == "local" || (c.Host == old.Host && c.Port == old.Port && c.User == old.User && c.AuthMode == old.AuthMode && c.HostKeyFingerprint == old.HostKeyFingerprint))
+	if c.Mode != "disabled" && c.Mode != "controller" && !legacy {
+		// Switching to a legacy mode (or to another legacy target).
 		return c, errors.New("invalid mode")
 	}
-	if c.Port == 0 {
-		c.Port = 22
-		if c.Mode == "controller" {
-			c.Port = 443
-		}
-	}
-	if c.Mode == "controller" {
-		// The control panel is reached over HTTPS only: no SSH credentials.
-		c.clearSSH()
-		c.Host = normalizeControllerHost(c.Host)
-	}
+	// Network, request policy and images are independent of the target and
+	// kept when disconnected too (the install uses the saved images).
 	if c.Network == nil {
 		c.Network = old.Network
 	}
@@ -234,8 +267,8 @@ func mergeConfig(c, old Config) (Config, error) {
 		return c, err
 	}
 	c.RequestPolicy = &policy
-	// Images are independent of the target: omitted keeps the saved ones,
-	// {} (empty fields) returns to the pinned references.
+	// Images: omitted keeps the saved ones, {} (empty fields) returns to the
+	// pinned references.
 	if c.Images == nil {
 		c.Images = old.Images
 	}
@@ -249,35 +282,53 @@ func mergeConfig(c, old Config) (Config, error) {
 			c.Images = nil
 		}
 	}
-	same := c.Mode == old.Mode && (c.Mode == "local" || (c.Host == old.Host && c.Port == old.Port && c.User == old.User && c.AuthMode == old.AuthMode && c.HostKeyFingerprint == old.HostKeyFingerprint))
+	if c.Mode == "disabled" {
+		// Not configured: no target, no keys.
+		return Config{Mode: "disabled", AccountRuntimes: true, Network: c.Network, RequestPolicy: c.RequestPolicy, Images: c.Images}, nil
+	}
+	if legacy {
+		return mergeLegacy(c, old)
+	}
+	// The controller is reached over HTTP(S) only: no SSH credentials.
+	c.clearSSH()
+	c.Host = normalizeControllerHost(c.Host)
+	switch c.Scheme {
+	case "", "https":
+		c.Scheme = "https"
+	case "http":
+	default:
+		return c, errors.New("invalid control panel scheme")
+	}
+	if c.Port == 0 {
+		c.Port = 443
+		if c.Scheme == "http" {
+			c.Port = 80
+		}
+	}
+	basePath, ok := normalizeBasePath(c.BasePath)
+	if !ok {
+		return c, errors.New("invalid control panel base path")
+	}
+	c.BasePath = basePath
+	// The key is kept only for the same saved endpoint (scheme, address,
+	// port, base path) and trust: the panel is public and the key reaches
+	// the accounts, so pointing the core elsewhere (or leaving a legacy
+	// mode) needs it typed again; the install endpoint sets it itself.
+	same := old.Mode == "controller" && c.Host == old.Host && c.Port == old.Port && c.Scheme == old.panelScheme() && c.BasePath == old.BasePath
 	typedKey := c.AdminKey != ""
 	if same {
-		if c.Password == "" {
-			c.Password = old.Password
-		}
-		if c.PrivateKey == "" {
-			c.PrivateKey = old.PrivateKey
-			if c.Passphrase == "" {
-				c.Passphrase = old.Passphrase
-			}
-		}
 		if c.AdminKey == "" {
 			c.AdminKey = old.AdminKey
 		}
 		if c.APIKey == "" {
 			c.APIKey = old.APIKey
 		}
-	}
-	if c.Mode == "controller" {
-		// The key is kept only for the same saved address and trust: the
-		// panel is public and the key reaches the accounts, so pointing the
-		// core at another host or certificate (or switching modes by hand)
-		// needs it typed again; the install endpoint sets it itself.
-		if c.ControllerCA == "" && same {
+		if c.ControllerCA == "" {
 			c.ControllerCA = old.ControllerCA
 		}
-	} else {
-		c.ControllerCA = ""
+	}
+	if c.Scheme == "http" {
+		c.ControllerCA = "" // no TLS, nothing to pin
 	}
 	if len(c.AdminKey) > 8192 || len(c.APIKey) > 8192 || strings.ContainsAny(c.AdminKey+c.APIKey, "\r\n") {
 		return c, errors.New("invalid sidecar keys")
@@ -285,35 +336,60 @@ func mergeConfig(c, old Config) (Config, error) {
 	if c.AdminKey != "" && c.AdminKey == c.APIKey {
 		return c, errors.New("API and management keys must differ")
 	}
-	switch c.Mode {
-	case "ssh":
-		if e := remotedocker.Validate(c.SSH()); e != nil {
+	if c.ControllerCA != "" {
+		normalized, _, e := parseControllerCA(c.ControllerCA)
+		if e != nil {
 			return c, e
 		}
-		if c.AuthMode == "password" {
-			c.PrivateKey = ""
-			c.Passphrase = ""
-		} else {
-			c.Password = ""
+		c.ControllerCA = normalized
+	}
+	if !typedKey && c.ControllerCA != old.ControllerCA {
+		c.AdminKey = "" // new trust anchor: the key must be typed again
+	}
+	if e := validateControllerConfig(c); e != nil {
+		return c, e
+	}
+	return c, nil
+}
+
+// mergeLegacy saves the other settings of a configuration still on a legacy
+// "ssh" / "local" target (same mode and target as saved, §53.9): typed
+// credentials and keys replace the saved ones, omitted ones are kept.
+func mergeLegacy(c, old Config) (Config, error) {
+	c.Scheme, c.BasePath, c.ControllerCA = "", "", ""
+	if c.Password == "" {
+		c.Password = old.Password
+	}
+	if c.PrivateKey == "" {
+		c.PrivateKey = old.PrivateKey
+		if c.Passphrase == "" {
+			c.Passphrase = old.Passphrase
 		}
-	case "controller":
-		if c.ControllerCA != "" {
-			normalized, _, e := parseControllerCA(c.ControllerCA)
-			if e != nil {
-				return c, e
-			}
-			c.ControllerCA = normalized
-		}
-		if !typedKey && c.ControllerCA != old.ControllerCA {
-			c.AdminKey = "" // new trust anchor: the key must be typed again
-		}
-		if e := validateControllerConfig(c); e != nil {
-			return c, e
-		}
-	default:
-		// local: no remote fields.
-		c.Host = ""
+	}
+	if c.AdminKey == "" {
+		c.AdminKey = old.AdminKey
+	}
+	if c.APIKey == "" {
+		c.APIKey = old.APIKey
+	}
+	if len(c.AdminKey) > 8192 || len(c.APIKey) > 8192 || strings.ContainsAny(c.AdminKey+c.APIKey, "\r\n") {
+		return c, errors.New("invalid sidecar keys")
+	}
+	if c.AdminKey != "" && c.AdminKey == c.APIKey {
+		return c, errors.New("API and management keys must differ")
+	}
+	if c.Mode == "local" {
+		c.Host, c.Port = "", old.Port
 		c.clearSSH()
+		return c, nil
+	}
+	if e := remotedocker.Validate(c.SSH()); e != nil {
+		return c, e
+	}
+	if c.AuthMode == "password" {
+		c.PrivateKey, c.Passphrase = "", ""
+	} else {
+		c.Password = ""
 	}
 	return c, nil
 }
@@ -366,7 +442,7 @@ func (s *Service) save(c *gin.Context) {
 		return audit.Audit(ctx, tx, uid, "ccgateway.config.update", "system", "ccgateway", nil)
 	})
 	if e != nil {
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("The configuration could not be saved: check the request policy, beta mappings, private IPv4 CIDR, IP allocation mode, SSH address, host key fingerprint and credentials, or the control panel address, management key and root certificate."))
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("The configuration could not be saved: check the request policy, beta mappings, private IPv4 CIDR, IP allocation mode, the connection mode (controller or disabled), or the control panel scheme, address, management key and root certificate."))
 		return
 	}
 	if saved.AccountRuntimes {

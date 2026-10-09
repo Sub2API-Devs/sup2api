@@ -3,8 +3,6 @@ package ccgateway
 import (
 	"bufio"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -48,7 +46,26 @@ var (
 // scriptRunner is remotedocker.RunScript (replaced in tests).
 type scriptRunner func(ctx context.Context, cfg remotedocker.Config, script string, stdin []byte, limit time.Duration) (remotedocker.ScriptResult, error)
 
+// localScriptRunner is remotedocker.RunLocalScript (replaced in tests).
+type localScriptRunner func(ctx context.Context, script string, stdin []byte, limit time.Duration) (remotedocker.ScriptResult, error)
+
+const (
+	// localInstallMode marks the in-memory configuration of a local
+	// installation (§53.9): scripts run on this machine and the controller
+	// is localControllerAddress. It is never saved (mergeConfig rejects it).
+	localInstallMode       = "install-local"
+	localControllerAddress = "127.0.0.1:8787"
+)
+
+// run executes a fixed script on the Docker host of cfg: this machine for a
+// local installation, else over SSH with cfg's credentials.
 func (s *Service) run(ctx context.Context, cfg Config, script string, stdin []byte, limit time.Duration) (remotedocker.ScriptResult, error) {
+	if cfg.Mode == localInstallMode {
+		if s.runLocalScript != nil {
+			return s.runLocalScript(ctx, script, stdin, limit)
+		}
+		return remotedocker.RunLocalScript(ctx, script, stdin, limit)
+	}
 	if s.runScript != nil {
 		return s.runScript(ctx, cfg.SSH(), script, stdin, limit)
 	}
@@ -356,16 +373,15 @@ func (s *Service) ensureControllerKey(ctx context.Context, cfg Config, uid int64
 		}
 		return cfg.AdminKey, nil
 	}
-	var b [32]byte
-	if _, e := rand.Read(b[:]); e != nil {
+	key, e := newControllerKey()
+	if e != nil {
 		return "", e
 	}
-	key := hex.EncodeToString(b[:])
 	var updatedBy *int64
 	if uid > 0 {
 		updatedBy = &uid
 	}
-	e := s.DB.Tx(ctx, func(tx pgx.Tx) error {
+	e = s.DB.Tx(ctx, func(tx pgx.Tx) error {
 		_, e := store.UpdateSettingJSONTx(ctx, tx, settingKey, updatedBy, func(raw json.RawMessage) (json.RawMessage, error) {
 			cur, e := s.decode(raw)
 			if e != nil {
@@ -472,7 +488,7 @@ func (s *Service) installRuntime(ctx context.Context, cfg Config, uid int64, wor
 	}
 	res, e := s.run(ctx, cfg, script, controllerEnv(key, img), installScriptLimit)
 	if e != nil {
-		return cfg, reasonError(core.ErrUnavailable, "ssh_failed")
+		return cfg, reasonError(core.ErrUnavailable, runFailure(cfg))
 	}
 	if res.ExitStatus != 0 || scriptResult(res.Output) != "started" {
 		reason := scriptResult(res.Output)

@@ -422,8 +422,14 @@ export interface CcgRemoteImages {
  * mode host/port are the control panel's HTTPS address and the SSH fields are empty.
  */
 export interface CcgRemoteConfig {
+  /** Always true for configurations saved by this console: per-account containers are the only mode. */
   account_runtimes: boolean
+  /** controller: connected to a controller endpoint; ssh / local: legacy connections still honored (CONTRACTS §53.9). */
   mode: 'disabled' | 'local' | 'ssh' | 'controller'
+  /** Controller endpoint protocol; '' or absent means https (§53.9). */
+  scheme?: '' | 'https' | 'http'
+  /** Path prefix of the controller behind a reverse proxy: '' (none) or '/seg[/seg…]' (§53.9). */
+  base_path?: string
   host: string
   port: number
   user: string
