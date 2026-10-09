@@ -51,27 +51,47 @@ describe('CCGateway settings categories and CC features', () => {
     w.unmount()
   })
 
-  it('shows only tools and error handling plus unsupported requests, expanded', async () => {
+  it('shows tools and error handling, attachments and unsupported requests, expanded', async () => {
     mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
     const w = await render()
     expect(w.get('[data-testid="request-policy"]').isVisible()).toBe(false)
     await w.get('[data-testid="settings-tab-cc"]').trigger('click')
     const cc = w.get('[data-testid="request-policy"]')
     expect(cc.isVisible()).toBe(true)
-    expect(cc.findAll(':scope > section').map(s => s.attributes('data-testid'))).toEqual(['cc-runtime-settings', 'unsupported-requests'])
+    expect(cc.findAll(':scope > section').map(s => s.attributes('data-testid'))).toEqual(['cc-runtime-settings', 'cc-attachments', 'unsupported-requests'])
     expect(cc.findAll('details')).toHaveLength(0)
-    for (const id of ['tool-search', 'custom-tool-prefix', 'pass-upstream-errors', 'unknown-beta', 'unknown-field']) {
+    for (const id of ['tool-search', 'custom-tool-prefix', 'pass-upstream-errors', 'attachment-source', 'attachment-overrides', 'unknown-beta', 'unknown-field']) {
       expect(cc.get(`[data-testid="${id}"]`).isVisible()).toBe(true)
     }
     expect(cc.text()).toContain('工具与错误处理')
     expect(cc.text()).toContain('不支持的请求如何处理')
-    // No feature catalog, no attachment sources, no switches for features the official API supports.
-    for (const id of ['feature-support', 'attachment-source', 'attachment-overrides', 'allow-fast', 'allow-effort']) {
+    // The attachment settings are back in CC features (user request 2026-10-10).
+    expect(cc.text()).toContain('附件默认来源')
+    // No feature catalog, no switches for features the official API supports.
+    for (const id of ['feature-support', 'allow-fast', 'allow-effort']) {
       expect(w.find(`[data-testid="${id}"]`).exists()).toBe(false)
     }
     expect(cc.text()).not.toContain('查看处理机制与证据')
-    expect(cc.text()).not.toContain('附件默认来源')
     expect(mocks.get.mock.calls.map(call => call[0])).not.toContain('/system/ccgateway/features')
+    w.unmount()
+  })
+
+  it('saves the attachment sources with the other settings', async () => {
+    mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), attachment_source: 'gateway', environment_fields: { workingDirectory: 'client' } }))
+    const w = await render()
+    await w.get('[data-testid="settings-tab-cc"]').trigger('click')
+    expect(w.get<HTMLInputElement>('[data-testid="attachment-source"][value="gateway"]').element.checked).toBe(true)
+    expect(w.get<HTMLSelectElement>('[data-testid="environment-workingDirectory"]').element.value).toBe('client')
+    await w.get('[data-testid="attachment-source"][value="client"]').setValue(true)
+    await w.get('[data-testid="attachment-date"]').setValue('gateway')
+    const next = { ...defaultRequestPolicy(), attachment_source: 'client' as const, attachment_sources: { date: 'gateway' as const }, environment_fields: { workingDirectory: 'client' as const } }
+    mocks.put.mockResolvedValue(config(next))
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    const body = mocks.put.mock.calls.at(-1)?.[1]
+    expect(body.request_policy.attachment_source).toBe('client')
+    expect(body.request_policy.attachment_sources).toEqual({ date: 'gateway' })
+    expect(body.request_policy.environment_fields).toEqual({ workingDirectory: 'client' })
     w.unmount()
   })
 

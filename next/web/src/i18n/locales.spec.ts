@@ -47,7 +47,10 @@ describe('locales', () => {
     const re = /(?<![\w$.])(?:\$?t|te|tm)\(\s*'([a-zA-Z][\w-]*(?:\.[\w-]+)+)'/g
     // Known dynamic key patterns that are concatenated at runtime
     const dynamicPatterns = [
-      /^ccgateway\.policy\.search_$/
+      /^ccgateway\.policy\.search_$/,
+      /^ccgateway\.policy\.attachmentType_$/,
+      /^ccgateway\.policy\.attachmentSource_$/,
+      /^ccgateway\.policy\.unknownAttachment_$/
     ]
     for (const [file, text] of Object.entries(sources)) {
       for (const m of text.matchAll(re)) {
