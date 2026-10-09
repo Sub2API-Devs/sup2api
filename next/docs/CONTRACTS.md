@@ -3698,3 +3698,52 @@ images/gateway.tar.gz      # Caddy 网关
 - 子标签只剩：连接与授权、网络配置、CC 特性、部署与运行。"账号容器"并入"部署与运行"（运行环境与镜像卡片之后）；账号列表显示容器内 Claude Code 版本（`GET /system/ccgateway/accounts/:id/health` 新增可选只读字段 `cli_version`，核心并行读 Worker `admin/features`，3 秒超时，取不到不返回）；请求调试日志一列只放开关，说明悬停/聚焦显示。
 - 删除"通用 API 特性"：官方 API 支持的功能不再是设置。`allow_fast`、`allow_effort` 在发给 Worker 的策略与设置读取中恒为 `true`，保存的 `false` 被忽略（默认值同步改为 true）。
 - "CC 特性"只保留"工具与错误处理"（直接展开）和"不支持的请求如何处理"（unknown_beta / unknown_field）；特性目录与附件默认来源的界面删除，已保存的附件设置继续生效并在保存时原样带回。
+
+### 53.12 Worker 会话：客户端会话 ID 不变则内部会话 ID 不变（2026-10-09，用户要求）
+
+背景（实测，CLI 2.1.292）：原生 CC 同一 sessionId 下主线、子代理、分类器、标题请求都带同一个 `X-Claude-Code-Session-Id` 与 `metadata.user_id.session_id`，子代理另带 `x-claude-code-agent-id`；主线写 `<S>.jsonl`、每个子代理写独立文件，均只追加，回退表现为同文件内分支。`--session-id S` 对已存在会话报错 `already in use`；`--resume S` 追加同一文件；两个 `--resume S` 并发都成功、同文件出现分支点、不损坏；不指定节点时下次续接沿最后写入的分支。旧实现每次 fork / rebuild 都换随机内部会话 ID，且所有请求共用 logical `auto`。
+
+**会话 ID（S）**：
+1. 请求体 `metadata.user_id` 是 JSON 且 `session_id` 为 UUID → S = 该值（与主请求 body 一致）；
+2. 否则 `metadata.user_id` 为非空字符串 → S = `sha256("ccgateway-session-v1" + user_id)` 前 16 字节按 UUID v4 设置版本/变体位；
+3. 否则若有 `X-CCGateway-Session-ID` 头 → 用它（兼容旧调用方）；
+4. 都没有 → **新会话**：随机内部 ID、整段重建、不查也不写会话索引（用户要求"没有会话 id 就当成新会话"）。
+
+**分支与文件**：分支键 `(作用域 X-CCGateway-Session-Scope, S, agentId)`，agentId 取客户端 `x-claude-code-agent-id`（主线为空）。内部 CLI 会话 ID = 由 `sha256("ccgateway-native-v1", 作用域, S, agentId)` 生成的 UUID（确定值；不同作用域不会共用文件）。每个分支一个规范文件 `native/<内部ID>.jsonl`，只追加、按 uuid 去重。会话索引（指纹 → 文件与节点 uuid）的 logical 由分支键得出，取代原来的 `auto`。
+
+**每个请求**：
+- 用客户端历史指纹在该分支索引中找最长的、以 assistant 结尾的已登记前缀 → 得到节点 uuid；
+- 把规范文件复制成本请求私有副本，`--resume <副本> --resume-session-at <节点>` 运行（**不再使用 `--fork-session`**），会话 ID 不变；客户端回退 / 编辑就是从更早节点长出分支；
+- 找不到节点（换账号、过期、容器重建、首次）→ 用同一个确定 ID 把客户端历史写成原生记录后续接（重建），ID 仍不变；
+- 运行结束后在该分支的锁内把新增记录按 uuid 合并回规范文件（原子替换），再登记"本次回复指纹 → 节点"。CLI 运行期间不加锁，同一分支的并发请求互不等待，各自写私有副本，合并后成为同文件内的兄弟分支。
+
+**发往上游**：出站中继把 `X-Claude-Code-Session-Id` 统一改为 S；客户端带了 `x-claude-code-agent-id` 时原样设置。ccgateway 插件透传 `x-claude-code-agent-id`（manifest passHeaders 与插件头白名单），插件 0.1.17。
+
+**清理**：规范文件在没有任何索引条目引用时按原有规则清除；索引仍 24 小时有效。升级后旧快照（logical `auto`）自然过期，首次请求重建一次。
+
+**修复（同版本）**：CC auto 权限模式分类器请求的 system 形如 `[计费头, 大段提示*, 未缓存尾块]`，CLI 发出 `[计费头, SDK 身份块*, 大段提示 + "\n\n" + 尾块 + 请求标记]`，`restoreCacheSystem` 之前无法还原而返回 502（`cached client system boundaries cannot be restored`）。现在按客户端原始分块还原，客户端结构不变（§ 尽量不改客户端结构）。
+
+**上游会话 ID 与 metadata（2026-10-10，用户要求，替换上文"发往上游"一段）**：客户端 `metadata.user_id` 只用于推导 S，**不透传给上游**。发往上游的会话 ID U = UUID(sha256("ccgateway-upstream-v1", 作用域, S))，与客户端 session_id 不同但对同一 S 固定；主线分支的内部 CLI 会话 ID 直接取 U，子代理分支内部 ID 仍按 (作用域, S, agentId) 派生。出站中继对所有上游模型请求：`X-Claude-Code-Session-Id` = U；body `metadata.user_id` 用容器内 CLI 自己生成的那份（容器自己的 device_id / account_uuid），只把 session_id 换成 U；客户端显式 metadata 不再覆盖主请求。没有会话 ID 的请求 U 为每请求随机值。
+（2026-10-10 补充）不再支持客户端 `X-CCGateway-Session-ID` 头：会话 ID 只来自 `metadata.user_id`，没有就是新会话；插件不再透传该头，worker 收到也忽略。`x-claude-code-agent-id`（CC 原生头）与插件按认证身份生成的 `X-CCGateway-Session-Scope` 保留。
+（2026-10-10 补充，子代理）客户端 `x-claude-code-agent-id`（A）只用于内部分支键，不原样发给上游；上游带派生值 A' = 由 sha256("ccgateway-agent-v1", 作用域, S, A) 生成、格式同原生 agentId，主线不带。同一分支内客户端历史与文件公共前缀为 0（内容完全不同的对话、旧客户端不带 agent-id 的子代理）时，作为新根追加进同一规范文件，不覆盖已有分支。
+
+**（2026-10-10 修订，以本段为准）会话部分不再使用作用域**：分支键为 `(S, agentId)`；内部 CLI 会话 ID、索引 logical、上游会话 ID U = 由 sha256("ccgateway-upstream-v2", S) 生成的 UUID（选项 1：哈希而非原样，客户端标识与 metadata 不发往上游）、上游 agent-id A' = 由 (S, A) 派生，摘要前缀均升为 v2（旧快照作废，首次请求重建一次）。理由：续接依赖历史指纹逐字一致，不同用户撞会话 ID 只会在同一文件各成分支，不串话、不泄露；客户端乱发固定 `metadata.user_id` 的后果由客户端承担；同一用户换 Key 也能续接。`X-CCGateway-Session-Scope` 仍由插件按认证身份写入，**只用于消息与资源归属**（message_ownership）。**文件超限拆分**：单个规范文件超过 64 MiB 或 1000 个分支点时不再合并，新请求另起确定 ID 的新文件（摘要带序号），索引记录节点所在文件，超限前已登记的节点仍从旧文件续接。
+
+**实现说明（2026-10-10，ccgateway 0.1.17，以本段为准）**：
+- **私有副本不是整份规范文件**：只含本次要续接的那条链（从根到节点）与无 uuid 的簿记记录，去掉 `last-prompt`。实测 2.1.292 一个文件只加载最后写入的那段对话，对其他根上的节点 `--resume-session-at` 会报 `No message found` 或混入别的分支。
+- **首轮也走 `--resume`**（私有副本里只有一条本地 meta 根记录，实测不发往 API），不用 `--session-id`：同一会话已有并发运行时它会报 `already in use`。原同会话并发的 409 互斥已删除。
+- 续接 Sonnet 引导前缀、把旧代文件记录复制进新一代文件时，会改写记录的 `sessionId` 字段（不发往 API）。
+- 上游 `metadata.user_id` 用 CLI 自己的值，只把 `session_id` 换成 U（其余字节不变）；旧格式 `…_session_<uuid>` 只换会话段；都认不出时按 CLI 字段顺序生成 `{"device_id":"","account_uuid":"","session_id":U}`。A' 的格式为 `a` + 16 位小写十六进制（与 CLI 自己的子代理 ID 同形）。主线请求删除 agent-id 头。
+- 已知：客户端计费头是占位值（如 `cch=00000`）时 CLI 会重算，开头 system 块仍无法还原（改动前即如此）。
+
+## 54. 插件隔离加固 P0（2026-10-10，审查 `docs/audits/2026-10-09-plugin-resources.md` 的 P0）
+
+插件与核心、外壳仍是同一 UID（独立 UID 另行排期），以下措施让同 UID 的插件拿不到核心/外壳的秘密，也连不上别人的接口：
+
+- **私有 run 目录 + 双向 TLS**：每个插件进程一个 `<SUB2API_PLUGIN_RUN_DIR>/<key>-<随机>/`（0700，默认 `<插件数据目录>/.run`；路径对 unix socket 过长时退回 `/tmp/sub2api-<uid>`，须是本用户 0700 的真目录），go-plugin 的两个 socket 和插件的 `TMPDIR` 都在里面，进程结束即删除。核心与插件之间所有连接（插件服务端、核心 broker 上的 HostService/EgressService）都是 go-plugin AutoMTLS，一次性证书，其他进程无法连入或冒充该插件。
+- **核心**：读完配置后从进程环境删除秘密（`DATABASE_URL`、`REDIS_URL`、`SUB2API_MASTER_KEY`、`SUB2API_JWT_SECRET`、引导管理员密码、控制令牌、`CCG_ADMIN_KEY`/`CCG_API_KEY` 等，并清空 `/proc/<pid>/environ` 的初始块），Linux 上 `PR_SET_DUMPABLE=0`。外壳同样 `PR_SET_DUMPABLE=0`。
+- **出站隧道**：没有 `net` 授权的插件什么都连不了，只有声明了 `database` 且获授 `db.schema` 的插件可按配置的名字连 PostgreSQL。任何策略（含 `allow_all`）都拒绝私网/回环/链路本地等非公网地址与核心的 Redis/PostgreSQL（按解析后的地址比对，按检查过的地址拨号防 DNS 重绑定）；`dns.sub2api` 不返回非公网地址。`SUB2API_PLUGIN_EGRESS_ALLOW_PRIVATE=true` 只用于测试/开发，Redis/PG 仍拒绝。没有 `net` 也没有数据库的插件不注册隧道服务。
+- **数据库角色隔离不再降级**：开启隔离（默认）但核心角色没有 CREATEROLE 时，授予 `db.schema` 与 `Ensure` 都失败，`409 plugin_db_isolation_unavailable`（运维可显式 `SUB2API_PLUGIN_DB_ROLE_ISOLATION=false`）；已存在且不是本库为该插件建的同名角色不接管，`409 plugin_db_role_conflict`。角色加注释 `sub2api plugin role; database=<库>; plugin=<key>` 作归属标记，删除插件时只删自己的角色。
+- **外壳管理 socket 令牌**：外壳每次启动生成 32 字节随机令牌写入 `management_token_file`（默认管理 socket 旁的 `shell.token`，0600），所有管理请求须带 `Authorization: Bearer <64 hex>`，否则 `401 updater_unauthorized`。核心只拿到文件路径 `SUB2API_UPDATER_TOKEN_FILE`，转发升级接口与插件包读写时带上；未设置该变量时不带（兼容旧外壳）。迁移开关 `allow_tokenless_management` / `SUB2API_ALLOW_TOKENLESS_MANAGEMENT=true` 允许不带令牌的请求（错误令牌仍拒绝），仅用于旧核心过渡。`sub2api-gateway status/pause/...` 本地命令读同一文件。
+- **核心环境白名单**：外壳只把进程基础变量与核心实际读取的配置变量（`supervisor.inheritedEnv`）传给核心，另加 `core_env_inherit` 列出的名字；`SUB2API_PEER_AUTH_KEY` 无论如何不传。
+- **部署**：Redis/Valkey 必须 `requirepass`，`REDIS_URL` 带密码（建议十六进制密码免转义）；网关容器 `no-new-privileges`、`cap_drop: [ALL]`。迁移顺序见 `deploy/gateway/ovh/README.md`。
