@@ -60,7 +60,7 @@ func makeBundle(t *testing.T, version string, edit func(m map[string]any)) *test
 		data := testImage(ref, size)
 		tb.images[role] = data
 		sum := sha256.Sum256(data)
-		entries[role] = map[string]any{"ref": ref, "file": "images/" + role + ".tar.gz", "sha256": hex.EncodeToString(sum[:]), "size": len(data)}
+		entries[role] = map[string]any{"ref": ref, "file": role + ".tar.gz", "sha256": hex.EncodeToString(sum[:]), "size": len(data)}
 	}
 	m := map[string]any{"version": 1, "images": entries}
 	if edit != nil {
@@ -148,10 +148,13 @@ func TestBundleRead(t *testing.T) {
 			m["images"].(map[string]any)["app"].(map[string]any)["ref"] = "sha256:" + strings.Repeat("a", 64)
 		},
 		"outside images/": func(m map[string]any) {
-			m["images"].(map[string]any)["app"].(map[string]any)["file"] = "bin/../images/app.tar.gz"
+			m["images"].(map[string]any)["app"].(map[string]any)["file"] = "../bin/app.tar.gz"
+		},
+		"path instead of a file name": func(m map[string]any) {
+			m["images"].(map[string]any)["app"].(map[string]any)["file"] = "images/app.tar.gz"
 		},
 		"same file twice": func(m map[string]any) {
-			m["images"].(map[string]any)["app"].(map[string]any)["file"] = "images/egress.tar.gz"
+			m["images"].(map[string]any)["app"].(map[string]any)["file"] = "egress.tar.gz"
 		},
 		"bad sha": func(m map[string]any) {
 			m["images"].(map[string]any)["app"].(map[string]any)["sha256"] = "XYZ"

@@ -43,7 +43,9 @@ const (
 	maxBundleImageBytes = 2 << 30
 )
 
-var bundleFilePattern = regexp.MustCompile(`^images/[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+// bundleFilePattern: images.json names each archive by its bare file name
+// inside images/ (as sub2api-plugin pack writes it).
+var bundleFilePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
 type bundleImage struct {
 	Ref    string `json:"ref"`
@@ -116,6 +118,7 @@ func parseBundle(version, file string, raw []byte) (*bundle, error) {
 			return nil, fmt.Errorf("images.json: invalid %s file", role)
 		}
 		files[img.File] = true
+		img.File = "images/" + img.File
 		if !sha256Pattern.MatchString(img.SHA256) || img.Size < 1 || img.Size > maxBundleImageBytes {
 			return nil, fmt.Errorf("images.json: invalid %s checksum or size", role)
 		}

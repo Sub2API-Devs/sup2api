@@ -3664,7 +3664,7 @@ images/controller.tar.gz   # 控制器
 images/gateway.tar.gz      # Caddy 网关
 ```
 
-`images/images.json`：`{"version": 1, "images": {"app": {"ref", "file", "sha256", "size"}, "egress": {…}, "controller": {…}, "gateway": {…}}}`。`ref` 是镜像加载后的标签：`ccgateway-app:<插件版本>`、`ccgateway-egress:<插件版本>`、`ccgateway-controller:<插件版本>`、`caddy:<固定版本>-alpine`（构建脚本里固定，不用 `latest` / `2-alpine` 浮动标签）；`sha256` 是 `file` 的 SHA-256；整个包由插件签名覆盖。四个角色缺一不可。
+`images/images.json`：`{"version": 1, "images": {"app": {"ref", "file"（images/ 下的裸文件名，如 `app.tar.gz`）, "sha256", "size"}, "egress": {…}, "controller": {…}, "gateway": {…}}}`。`ref` 是镜像加载后的标签：`ccgateway-app:<插件版本>`、`ccgateway-egress:<插件版本>`、`ccgateway-controller:<插件版本>`、`caddy:<固定版本>-alpine`（构建脚本里固定，不用 `latest` / `2-alpine` 浮动标签）；`sha256` 是 `file` 的 SHA-256；整个包由插件签名覆盖。四个角色缺一不可。
 
 **构建**：
 - 新脚本 `next/deploy/docker/build-ccgateway-images.sh <插件版本> <输出目录>` 在**有 Docker 的主机上**运行（Dockerfile 的 build 阶段没有 Docker 守护进程）：用 `companions/worker/Dockerfile`、`egress/Dockerfile`、`controller/Dockerfile` 构建三个镜像（构建参数带源码提交号），拉取固定版本的 Caddy，各自 `docker save | gzip -6` 到输出目录并写 `images.json`。输出目录约定为 `next/plugins/ccgateway/images/`（git 忽略，但要进入核心 Docker 构建上下文）。
