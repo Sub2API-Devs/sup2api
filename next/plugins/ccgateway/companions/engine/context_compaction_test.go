@@ -85,6 +85,32 @@ func TestContextCompactionAdmissionAndOpaqueMapping(t *testing.T) {
 	}
 }
 
+// CLI 2.1.292 sends clear_thinking keep "all" by default and defers tools: that
+// keeps every block, so it is accepted with internal ToolSearch rounds; edits
+// that drop context are still refused.
+func TestKeepAllThinkingWithToolSearch(t *testing.T) {
+	tools := `,"tools":[{"name":"Read","input_schema":{"type":"object"}},{"name":"Bash","input_schema":{"type":"object"},"defer_loading":true}]`
+	for _, keep := range []string{`"all"`, `{"type":"all"}`} {
+		r, err := contextRequest(t, tools+`,"context_management":{"edits":[{"type":"clear_thinking_20251015","keep":`+keep+`}]}`, contextBeta)
+		if err != nil {
+			t.Fatalf("keep %s: %v", keep, err)
+		}
+		if !r.toolSearchEnabled() {
+			t.Fatal("deferred tool did not enable ToolSearch")
+		}
+	}
+	for _, edits := range []string{
+		`{"type":"clear_thinking_20251015"}`,
+		`{"type":"clear_thinking_20251015","keep":{"type":"thinking_turns","value":1}}`,
+		`{"type":"clear_thinking_20251015","keep":"all"},{"type":"clear_tool_uses_20250919"}`,
+		`{"type":"compact_20260112"}`,
+	} {
+		if _, err := contextRequest(t, tools+`,"context_management":{"edits":[`+edits+`]}`, contextBeta+","+thresholdCompactionBeta); err == nil || !strings.Contains(err.Error(), "ToolSearch") {
+			t.Fatalf("%s: %v", edits, err)
+		}
+	}
+}
+
 func TestContinuationTransportAndMergedCheckpoint(t *testing.T) {
 	r := &Request{Messages: []Message{{Role: "user", Content: []Object{{"type": "text", "text": "question"}}}, {Role: "assistant", Content: []Object{{"type": "text", "text": "prefix"}}}}}
 	r.configureContinuation()

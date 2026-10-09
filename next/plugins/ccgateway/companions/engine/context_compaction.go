@@ -233,6 +233,21 @@ func validateContextManagement(o Object) error {
 	return nil
 }
 
+// keepsAllThinking: a thinking-clearing edit that keeps every thinking block
+// ("all" or {"type":"all"}), so the API drops nothing.
+func keepsAllThinking(e map[string]any) bool {
+	if str(e, "type") != "clear_thinking_20251015" {
+		return false
+	}
+	switch v := e["keep"].(type) {
+	case string:
+		return v == "all"
+	case map[string]any:
+		return str(v, "type") == "all"
+	}
+	return false
+}
+
 func (r *Request) hasCompactionHistory() bool {
 	for _, m := range r.Messages {
 		for _, b := range m.Content {
@@ -248,8 +263,12 @@ func (r *Request) configureContextCompaction(headers []string) error {
 		return nil
 	}
 	need := map[string]bool{}
+	// rewrites: the API may drop or replace context. Keeping every thinking
+	// block (CLI 2.1.292 sends it by default) rewrites nothing.
+	rewrites := false
 	if r.Plan.hasObjectField("compaction") {
 		need[signedCompactionBeta] = true
+		rewrites = true
 	}
 	if raw := r.Plan.fields["context_management"]; r.Plan.hasObjectField("context_management") {
 		v, _ := decodePlannedValue(raw)
@@ -261,6 +280,7 @@ func (r *Request) configureContextCompaction(headers []string) error {
 			} else {
 				need[contextBeta] = true
 			}
+			rewrites = rewrites || !keepsAllThinking(e)
 		}
 	}
 	signedBlocks := 0
@@ -278,6 +298,7 @@ func (r *Request) configureContextCompaction(headers []string) error {
 				} else {
 					need[thresholdCompactionBeta] = true
 				}
+				rewrites = true
 			}
 		}
 	}
@@ -295,7 +316,7 @@ func (r *Request) configureContextCompaction(headers []string) error {
 	if need[signedCompactionBeta] && need[thresholdCompactionBeta] {
 		return fmt.Errorf("signed and threshold compaction protocols cannot be mixed")
 	}
-	if (len(need) > 0 || r.continuation != "") && r.toolSearchEnabled() {
+	if (rewrites || r.continuation != "") && r.toolSearchEnabled() {
 		return fmt.Errorf("API context editing/compaction with internal CC ToolSearch rounds is not yet supported")
 	}
 	if r.Plan.hasObjectField("compaction") {
