@@ -26,6 +26,10 @@ const (
 // StatusOverloaded is Anthropic's "overloaded" status code.
 const StatusOverloaded = 529
 
+// errorScopeHeader (lowercase, as the host passes headers) marks a gateway
+// error that belongs to the request alone (companions/engine requestRefusal).
+const errorScopeHeader = "x-ccgateway-error-scope"
+
 // errorTypeForStatus maps an HTTP status to the Anthropic error type.
 func errorTypeForStatus(code int) string {
 	switch {
@@ -86,6 +90,11 @@ func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequ
 	}
 
 	switch {
+	case in.GetHeaders()[errorScopeHeader] == "request":
+		// The gateway refused this request itself (its history or features
+		// could not be carried exactly): another account would refuse it the
+		// same way, and the account is not at fault.
+		resp.Action = pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT
 	case code == 0:
 		cooldown(serverErrorCooldown, "transport error: "+truncate(in.GetTransportError(), 200))
 		resp.ClientStatus = http.StatusBadGateway

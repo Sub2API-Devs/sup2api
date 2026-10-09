@@ -442,6 +442,10 @@ func (x *exchange) runFailed(ctx context.Context, e error) {
 		x.passUpstream(upstream, Object{"type": kind, "message": message})
 		return
 	}
+	var refusal *requestRefusal
+	if errors.As(e, &refusal) && !x.streaming {
+		x.w.Header().Set(errorScopeHeader, "request")
+	}
 	x.fail(status, kind, message)
 }
 
@@ -462,6 +466,8 @@ func (x *exchange) passUpstream(upstream *upstreamError, fallback Object) {
 	for name, values := range upstream.Headers {
 		x.w.Header()[name] = append([]string(nil), values...)
 	}
+	// Only the gateway itself scopes an error to the request.
+	x.w.Header().Del(errorScopeHeader)
 	contentType := upstream.ContentType
 	if contentType == "" {
 		contentType = "application/json"

@@ -37,7 +37,7 @@ func TestOutboundCustomSkillVersionCannotDrift(t *testing.T) {
 	r := &Request{resources: grant}
 	for _, version := range []string{"latest", "version_two"} {
 		body := []byte(`{"container":{"skills":[{"type":"custom","skill_id":"skill_owned","version":"` + version + `"}]},"messages":[]}`)
-		if err := r.validateOutboundResources(body); err == nil {
+		if err := r.validateOutboundResources(body, nil); err == nil {
 			t.Fatalf("outbound changed skill version to %q", version)
 		}
 	}

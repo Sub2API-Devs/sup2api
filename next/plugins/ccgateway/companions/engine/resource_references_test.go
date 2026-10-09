@@ -17,7 +17,7 @@ func TestAdmittedFileParserAndExactHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := req.validateOutboundResources(raw); err != nil {
+	if err := req.validateOutboundResources(raw, nil); err != nil {
 		t.Fatal(err)
 	}
 	for _, change := range []string{"drop", "move", "unapproved", "duplicate"} {
@@ -36,7 +36,7 @@ func TestAdmittedFileParserAndExactHistory(t *testing.T) {
 			m["content"] = append(content, content[1])
 		}
 		modified, _ := json.Marshal(wire)
-		if req.validateOutboundResources(modified) == nil {
+		if req.validateOutboundResources(modified, nil) == nil {
 			t.Fatal("resource history mutation accepted", change)
 		}
 	}

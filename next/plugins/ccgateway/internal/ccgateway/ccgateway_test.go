@@ -108,6 +108,25 @@ func TestErrorsPreserveCoreFailover(t *testing.T) {
 	}
 }
 
+// A gateway refusal of the request itself (history it could not carry) goes
+// back to the client without cooling the account down: every account would
+// refuse it, and the others' sessions must keep working (2026-10-10, a 502
+// that left the group with "no available account").
+func TestRequestScopedGatewayErrorKeepsTheAccount(t *testing.T) {
+	body := []byte(`{"type":"error","error":{"type":"api_error","message":"cannot prepare the upstream request: fixture"}}`)
+	r, e := New().ClassifyError(context.Background(), &pluginv1.ClassifyErrorRequest{Status: 502, BodyPrefix: body,
+		Headers: map[string]string{"x-ccgateway-error-scope": "request"}})
+	if e != nil || r.GetAction() != pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT ||
+		r.GetAccountEffect() != pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_UNSPECIFIED || r.GetCooldownUntilUnix() != 0 {
+		t.Fatalf("request-scoped error: %v %v", r, e)
+	}
+	// Without the mark a 502 is still an upstream failure.
+	r, e = New().ClassifyError(context.Background(), &pluginv1.ClassifyErrorRequest{Status: 502, BodyPrefix: body})
+	if e != nil || r.GetAccountEffect() != pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN {
+		t.Fatalf("unmarked 502: %v %v", r, e)
+	}
+}
+
 // An Anthropic error body is returned unchanged; only other bodies are
 // described for the host to render.
 func TestUpstreamErrorBodyPassesThrough(t *testing.T) {

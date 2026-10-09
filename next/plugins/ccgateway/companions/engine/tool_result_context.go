@@ -26,6 +26,17 @@ import (
 // (to a string, after a blank line; to an array, as its own last text block,
 // so no client block changes).
 func normalizeToolResultContexts(req *Request, body Object, control *modControl) (func(Object) error, error) {
+	return normalizeToolResultContextsOf(req, body, control, false)
+}
+
+// normalizeRestoredToolResultContexts is the alignment view of a body the
+// adaptation already finished: its session contexts are back in place.
+func normalizeRestoredToolResultContexts(req *Request, body Object, control *modControl) error {
+	_, err := normalizeToolResultContextsOf(req, body, control, true)
+	return err
+}
+
+func normalizeToolResultContextsOf(req *Request, body Object, control *modControl, restored bool) (func(Object) error, error) {
 	noop := func(Object) error { return nil }
 	if control == nil {
 		return noop, nil
@@ -88,7 +99,7 @@ func normalizeToolResultContexts(req *Request, body Object, control *modControl)
 			if !exists {
 				continue
 			}
-			original, suffix, recognized, err := toolResultContextFold(want["content"], block["content"], suffixes, reminders)
+			original, suffix, recognized, err := toolResultContextFold(want["content"], block["content"], suffixes, reminders, restored)
 			if err != nil {
 				return nil, err
 			}
@@ -242,8 +253,10 @@ const jsTrimCharacters = "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\
 // toolResultContextFold reports whether actual is the client's content with
 // one trusted reminder folded in by the CLI. It returns the client's content
 // for the alignment view, and what to append to it when sending: the string
-// suffix, or for array content the reminder text of its own last block.
-func toolResultContextFold(want, actual any, suffixes map[string]bool, reminders []string) (any, string, bool, error) {
+// suffix, or for array content the reminder text of its own last block. With
+// restored, the form the adaptation sends (the client's blocks, then the
+// reminder) is recognized too: the outbound resource check reads that body.
+func toolResultContextFold(want, actual any, suffixes map[string]bool, reminders []string, restored bool) (any, string, bool, error) {
 	switch original := want.(type) {
 	case string:
 		text, ok := actual.(string)
@@ -274,7 +287,8 @@ func toolResultContextFold(want, actual any, suffixes map[string]bool, reminders
 		}
 		for _, reminder := range reminders {
 			if digest(historySkeleton(cliFoldedToolResultBlocks(blocks, reminder))) == target ||
-				digest(historySkeleton(cliAppendedToolResultBlocks(blocks, reminder))) == target {
+				digest(historySkeleton(cliAppendedToolResultBlocks(blocks, reminder))) == target ||
+				restored && digest(historySkeleton(append(append([]Object{}, blocks...), Object{"type": "text", "text": reminder}))) == target {
 				return original, reminder, true, nil
 			}
 		}

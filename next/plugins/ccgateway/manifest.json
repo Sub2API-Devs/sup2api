@@ -9,7 +9,7 @@
     "en": "Managed Claude Code Messages accounts. SSH connections and credentials are managed by the core. Token counting uses the account's upstream count endpoint; provider support is required. Model discovery is not supported.",
     "zh": "托管 Claude Code Messages 账号，SSH 连接与凭证由核心管理；支持流式响应及用量计费，token 计数调用账号上游计数接口，需上游支持；不支持模型发现。"
   },
-  "version": "0.1.19",
+  "version": "0.1.20",
   "publisher": "sub2api",
   "icon": "assets/claudecode-color.svg",
   "runtime": "grpc",

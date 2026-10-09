@@ -112,7 +112,7 @@ func (g *Gateway) admitResourceReferences(ctx context.Context, raw []byte, h htt
 	return grant, nil
 }
 
-func (r *Request) validateOutboundResources(raw []byte) error {
+func (r *Request) validateOutboundResources(raw []byte, control *modControl) error {
 	info, err := resources.InspectRequest(raw)
 	if err != nil {
 		return err
@@ -172,6 +172,12 @@ func (r *Request) validateOutboundResources(raw []byte) error {
 		client = append(client, message)
 	}
 	body["messages"] = client
+	// The outbound body carries the CLI's session context again (restored
+	// after the main adaptation); take it out as the adaptation did, or a
+	// trusted reminder would read as a changed client turn.
+	if err := normalizeRestoredToolResultContexts(r, body, control); err != nil {
+		return fmt.Errorf("resource history identity changed: %w", err)
+	}
 	if _, err := alignClientHistory(r, body); err != nil {
 		return fmt.Errorf("resource history identity changed: %w", err)
 	}

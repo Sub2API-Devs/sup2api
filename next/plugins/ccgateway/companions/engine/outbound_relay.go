@@ -748,6 +748,18 @@ func sessionHeaders(req *Request, h http.Header) {
 	}
 }
 
+// requestRefusal is the relay refusing the CLI's request to the API: the
+// failure belongs to this client request (its history or features could not
+// be carried exactly), not to the account or the worker. The gateway marks
+// the error so the host neither cools the account down nor fails over.
+type requestRefusal struct{ err error }
+
+func (e *requestRefusal) Error() string { return e.err.Error() }
+func (e *requestRefusal) Unwrap() error { return e.err }
+
+// errorScopeHeader marks a gateway error that belongs to the request alone.
+const errorScopeHeader = "X-Ccgateway-Error-Scope"
+
 // rewriteSessionBody applies upstreamUserID to a request the relay does not
 // otherwise adapt; false when the request was refused.
 func (relay *outboundRelay) rewriteSessionBody(w http.ResponseWriter, r *http.Request, req *Request) bool {
@@ -762,7 +774,7 @@ func (relay *outboundRelay) rewriteSessionBody(w http.ResponseWriter, r *http.Re
 		if strings.HasSuffix(r.URL.Path, "/messages") {
 			relay.mu.Lock()
 			if relay.failure == nil {
-				relay.failure = fmt.Errorf("cannot prepare the upstream request: %w", err)
+				relay.failure = &requestRefusal{fmt.Errorf("cannot prepare the upstream request: %w", err)}
 			}
 			relay.mu.Unlock()
 			relay.stop(r)
@@ -800,7 +812,7 @@ func (relay *outboundRelay) adaptRequest(w http.ResponseWriter, r *http.Request,
 		adapted, err = upstreamUserID(adapted, req.upstreamSession)
 	}
 	if err == nil && attributed && req.resources != nil {
-		err = req.validateOutboundResources(adapted)
+		err = req.validateOutboundResources(adapted, relay.control)
 	}
 	if err == nil && model && req.CountTokens {
 		if !attributed {
@@ -820,7 +832,7 @@ func (relay *outboundRelay) adaptRequest(w http.ResponseWriter, r *http.Request,
 			unavailable.RetrySafe = !relay.modelForwarded
 			relay.mu.Unlock()
 		}
-		err = fmt.Errorf("cannot prepare the upstream request: %w", err)
+		err = &requestRefusal{fmt.Errorf("cannot prepare the upstream request: %w", err)}
 		if req.diagnostic != nil {
 			req.diagnostic.save(fmt.Sprintf("upstream-refused-%03d-%s.body", sequence, uuid()[:8]), body)
 		}
