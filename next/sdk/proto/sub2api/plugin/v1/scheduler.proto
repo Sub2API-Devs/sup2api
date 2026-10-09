@@ -8,15 +8,9 @@ option go_package = "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;plugi
 
 // SchedulerService lets a plugin take part in gateway scheduling. Each rpc is
 // a separate capability; a plugin implements only the ones it declares.
-//
-// ResolveAffinityKey ("scheduler.affinity.v1", optional) computes a
-// sticky-session value that cannot be expressed declaratively. The host only
-// calls it for sticky rules whose keySources contain {"type": "plugin"}.
-// Hot path: keep it fast; the host applies a 200 ms timeout and falls back to
-// "no sticky value" on error.
+// Plugins take no part in sticky sessions: the core and the administrator
+// own the rules and the session values (CONTRACTS §5.6).
 service SchedulerService {
-  rpc ResolveAffinityKey(ResolveAffinityKeyRequest) returns (ResolveAffinityKeyResponse);
-
   // RankAccounts ("scheduler.rank.v1", optional) lets a plugin rewrite the
   // scheduling parameters of the candidate accounts of one request. The host
   // only calls it for requests that did not hit a sticky binding, and applies
@@ -25,20 +19,6 @@ service SchedulerService {
   // Hot path: the host applies a timeout and falls back to the accounts' own
   // values on error.
   rpc RankAccounts(RankAccountsRequest) returns (RankAccountsResponse);
-}
-
-message ResolveAffinityKeyRequest {
-  RequestMeta meta = 1;
-  string rule_name = 2;
-  // Values for the rule's declared `needs`, JSON-encoded, keyed by path.
-  map<string, string> fields = 3;
-  map<string, string> inbound_headers = 4;
-}
-
-message ResolveAffinityKeyResponse {
-  // Empty = no sticky value for this request. The host hashes the value
-  // before using it in a Redis key.
-  string value = 1;
 }
 
 message RankAccountsRequest {

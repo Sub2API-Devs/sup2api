@@ -22,7 +22,6 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type SchedulerServiceClient interface {
-	ResolveAffinityKey(ctx context.Context, in *ResolveAffinityKeyRequest, opts ...grpc.CallOption) (*ResolveAffinityKeyResponse, error)
 	// RankAccounts ("scheduler.rank.v1", optional) lets a plugin rewrite the
 	// scheduling parameters of the candidate accounts of one request. The host
 	// only calls it for requests that did not hit a sticky binding, and applies
@@ -41,15 +40,6 @@ func NewSchedulerServiceClient(cc grpc.ClientConnInterface) SchedulerServiceClie
 	return &schedulerServiceClient{cc}
 }
 
-func (c *schedulerServiceClient) ResolveAffinityKey(ctx context.Context, in *ResolveAffinityKeyRequest, opts ...grpc.CallOption) (*ResolveAffinityKeyResponse, error) {
-	out := new(ResolveAffinityKeyResponse)
-	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.SchedulerService/ResolveAffinityKey", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *schedulerServiceClient) RankAccounts(ctx context.Context, in *RankAccountsRequest, opts ...grpc.CallOption) (*RankAccountsResponse, error) {
 	out := new(RankAccountsResponse)
 	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.SchedulerService/RankAccounts", in, out, opts...)
@@ -63,7 +53,6 @@ func (c *schedulerServiceClient) RankAccounts(ctx context.Context, in *RankAccou
 // All implementations must embed UnimplementedSchedulerServiceServer
 // for forward compatibility
 type SchedulerServiceServer interface {
-	ResolveAffinityKey(context.Context, *ResolveAffinityKeyRequest) (*ResolveAffinityKeyResponse, error)
 	// RankAccounts ("scheduler.rank.v1", optional) lets a plugin rewrite the
 	// scheduling parameters of the candidate accounts of one request. The host
 	// only calls it for requests that did not hit a sticky binding, and applies
@@ -79,9 +68,6 @@ type SchedulerServiceServer interface {
 type UnimplementedSchedulerServiceServer struct {
 }
 
-func (UnimplementedSchedulerServiceServer) ResolveAffinityKey(context.Context, *ResolveAffinityKeyRequest) (*ResolveAffinityKeyResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ResolveAffinityKey not implemented")
-}
 func (UnimplementedSchedulerServiceServer) RankAccounts(context.Context, *RankAccountsRequest) (*RankAccountsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RankAccounts not implemented")
 }
@@ -96,24 +82,6 @@ type UnsafeSchedulerServiceServer interface {
 
 func RegisterSchedulerServiceServer(s grpc.ServiceRegistrar, srv SchedulerServiceServer) {
 	s.RegisterService(&SchedulerService_ServiceDesc, srv)
-}
-
-func _SchedulerService_ResolveAffinityKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ResolveAffinityKeyRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(SchedulerServiceServer).ResolveAffinityKey(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/sub2api.plugin.v1.SchedulerService/ResolveAffinityKey",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SchedulerServiceServer).ResolveAffinityKey(ctx, req.(*ResolveAffinityKeyRequest))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 func _SchedulerService_RankAccounts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -141,10 +109,6 @@ var SchedulerService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "sub2api.plugin.v1.SchedulerService",
 	HandlerType: (*SchedulerServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "ResolveAffinityKey",
-			Handler:    _SchedulerService_ResolveAffinityKey_Handler,
-		},
 		{
 			MethodName: "RankAccounts",
 			Handler:    _SchedulerService_RankAccounts_Handler,

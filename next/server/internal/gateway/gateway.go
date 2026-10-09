@@ -114,7 +114,6 @@ type Gateway struct {
 }
 
 var (
-	_ core.StickyRuleCatalog  = (*Gateway)(nil)
 	_ core.HookStatsSource    = (*Gateway)(nil)
 	_ core.ProtocolConverters = (*Gateway)(nil)
 )

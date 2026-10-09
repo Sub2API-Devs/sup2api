@@ -210,15 +210,33 @@ func TestAllAttemptsFailReturnsLastUpstreamError(t *testing.T) {
 	}
 }
 
-func TestNoAccountReturns503(t *testing.T) {
+// No available account reads to an Anthropic client as the API's own
+// overload, which its clients retry with backoff; the record keeps the
+// host's reason.
+func TestNoAccountIsOverloaded(t *testing.T) {
 	e := newEnv(t)
 	e.accounts.groups[testGroup] = nil
 	r := e.messages(body(testModel, false))
-	if r.status != 503 || r.json().Get("error.code").String() != "no_available_account" {
+	j := r.json()
+	if r.status != 529 || j.Get("type").String() != "error" || j.Get("error.type").String() != "overloaded_error" ||
+		j.Get("error.message").String() != "Overloaded" || j.Get("error.code").String() != "no_available_account" {
 		t.Fatalf("no account: %d %s", r.status, r.body)
 	}
-	if rec := e.record(); rec.ErrorType != errTypeNoAccount || rec.StatusCode != 503 || rec.AccountID != nil {
+	if rec := e.record(); rec.ErrorType != errTypeNoAccount || rec.StatusCode != 529 || rec.ErrorMessage != "no available account" || rec.AccountID != nil {
 		t.Fatalf("record %+v", rec)
+	}
+}
+
+// Other formats keep 503: 529 is Anthropic's alone.
+func TestNoAccountOtherFormats(t *testing.T) {
+	for _, format := range []string{FormatOpenAI, FormatGemini, FormatPlain} {
+		if got := clientError(format, fromCore(core.ErrNoAvailableAccount, errTypeNoAccount)); got.Status != 503 || got.Message != "no available account" {
+			t.Fatalf("%s: %+v", format, got)
+		}
+	}
+	upstream := &gwError{Status: 503, Code: core.ErrNoAvailableAccount.Code, Raw: []byte(`{"type":"error"}`)}
+	if clientError(FormatAnthropic, upstream) != upstream {
+		t.Fatal("a passed-through body was rewritten")
 	}
 }
 
@@ -236,13 +254,13 @@ func TestPluginTimeoutTreatsAccountUnavailable(t *testing.T) {
 	if r.status != 200 || strings.Join(e.up.keys(), ",") != "acc-2" {
 		t.Fatalf("plugin timeout: %d %v", r.status, e.up.keys())
 	}
-	// Plugin down for every account -> 503 no_available_account.
+	// Plugin down for every account -> 529 no_available_account.
 	e.plat.buildHook = func(context.Context, *pluginv1.BuildUpstreamRequestRequest) error {
 		return core.ErrPluginUnavailable
 	}
 	e.record()
 	r = e.messages(body(testModel, false))
-	if r.status != 503 || r.json().Get("error.code").String() != "no_available_account" {
+	if r.status != 529 || r.json().Get("error.code").String() != "no_available_account" {
 		t.Fatalf("plugin down: %d %s", r.status, r.body)
 	}
 }
@@ -465,9 +483,9 @@ func TestInvalidBodyAndLimits(t *testing.T) {
 func TestSSRFGuard(t *testing.T) {
 	e := newEnv(t)
 	e.gw.allowPrivate = false
-	// httptest listens on 127.0.0.1: rejected, every account, then 503.
+	// httptest listens on 127.0.0.1: rejected, every account, then 529.
 	r := e.messages(body(testModel, false))
-	if r.status != 503 || len(e.up.keys()) != 0 {
+	if r.status != 529 || len(e.up.keys()) != 0 {
 		t.Fatalf("private upstream allowed: %d %v", r.status, e.up.keys())
 	}
 	e.record()

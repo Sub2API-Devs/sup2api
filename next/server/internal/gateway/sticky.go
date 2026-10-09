@@ -14,21 +14,21 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
+// Rule sources: the core's defaults of the built-in platforms and the
+// administrator's rules. Plugins take no part in sticky sessions
+// (CONTRACTS §5.6).
 const (
-	sourcePluginDefault = "plugin_default"
-	sourceBuiltin       = "builtin"
-	sourceAdmin         = "admin"
+	sourceBuiltin = "builtin"
+	sourceAdmin   = "admin"
 
 	onFailureFailover = "failover"
 	onFailureStick    = "stick"
 
 	rulesTTL             = 30 * time.Second
-	affinityTimeout      = 200 * time.Millisecond
 	stickyRedisTimeout   = 200 * time.Millisecond
 	maxStickyValueBytes  = 4 << 10
 	stickyStatsKeyPrefix = "sticky:stats:"
@@ -38,14 +38,10 @@ var defaultKeyIncludes = []string{"group", "model", "rule"}
 
 // sourceRank orders rule sources for same-name shadowing.
 func sourceRank(source string) int {
-	switch source {
-	case sourceAdmin:
-		return 3
-	case sourceBuiltin:
+	if source == sourceAdmin {
 		return 2
-	default:
-		return 1
 	}
+	return 1
 }
 
 // stickyRule is one sticky_rules row.
@@ -53,7 +49,6 @@ type stickyRule struct {
 	ID          int64
 	Name        string
 	Source      string
-	PluginKey   string
 	Enabled     bool
 	Priority    int
 	Match       manifest.StickyMatch
@@ -151,8 +146,8 @@ func (c *ruleCache) invalidate() {
 	c.mu.Unlock()
 }
 
-// get returns the enabled rules in evaluation order. A plugin default rule
-// is shadowed by an admin rule with the same name.
+// get returns the enabled rules in evaluation order. A built-in rule is
+// shadowed by an admin rule with the same name.
 func (c *ruleCache) get(ctx context.Context) []*stickyRule {
 	c.mu.Lock()
 	if c.override != nil {
@@ -186,7 +181,7 @@ func (c *ruleCache) get(ctx context.Context) []*stickyRule {
 
 func activeRules(all []*stickyRule) []*stickyRule {
 	// Among rules with the same name only the highest ranked source is
-	// active: admin, then built-in, then plugin defaults.
+	// active: admin, then built-in.
 	best := map[string]int{}
 	for _, r := range all {
 		if rk := sourceRank(r.Source); rk > best[r.Name] {
@@ -211,13 +206,13 @@ func activeRules(all []*stickyRule) []*stickyRule {
 	return list
 }
 
-const ruleColumns = `id, name, source, COALESCE(plugin_key, ''), enabled, priority, match, key_sources,
+const ruleColumns = `id, name, source, enabled, priority, match, key_sources,
 	value_regex, ttl_seconds, key_includes, on_failure, updated_by, updated_at`
 
 func scanRule(row interface{ Scan(...any) error }) (*stickyRule, error) {
 	var r stickyRule
 	var match, sources, includes []byte
-	if err := row.Scan(&r.ID, &r.Name, &r.Source, &r.PluginKey, &r.Enabled, &r.Priority, &match, &sources,
+	if err := row.Scan(&r.ID, &r.Name, &r.Source, &r.Enabled, &r.Priority, &match, &sources,
 		&r.ValueRegex, &r.TTLSeconds, &includes, &r.OnFailure, &r.UpdatedBy, &r.UpdatedAt); err != nil {
 		return nil, err
 	}
@@ -314,8 +309,6 @@ func (c *call) stickyValue(ctx context.Context, r *stickyRule) string {
 			v = itoa(c.principal.KeyID)
 		case "user":
 			v = itoa(c.principal.UserID)
-		case "plugin":
-			v = c.affinityFromPlugin(ctx, r, src)
 		}
 		v = strings.TrimSpace(v)
 		if v != "" && r.re != nil {
@@ -332,51 +325,6 @@ func (c *call) stickyValue(ctx context.Context, r *stickyRule) string {
 		if v != "" {
 			return truncateUTF8(v, maxStickyValueBytes)
 		}
-	}
-	return ""
-}
-
-// affinityFromPlugin asks SchedulerService.ResolveAffinityKey of the rule's
-// plugin. Rules without a plugin (built-in and admin rules) ask the plugin
-// declaring the endpoint's platform, then the plugins of the account types
-// able to serve the request, in route order; the first implementing it wins.
-func (c *call) affinityFromPlugin(ctx context.Context, r *stickyRule, src manifest.StickyKeySource) string {
-	keys := []string{r.PluginKey}
-	if r.PluginKey == "" {
-		keys = keys[:0]
-		seen := map[string]bool{"": true}
-		add := func(k string) {
-			if !seen[k] {
-				seen[k] = true
-				keys = append(keys, k)
-			}
-		}
-		add(c.plugin.Key)
-		for _, k := range c.routeKeys {
-			add(k.PluginKey)
-		}
-	}
-	for _, key := range keys {
-		sch, ok := c.gen.Scheduler(key)
-		if !ok || sch == nil {
-			continue
-		}
-		fields := map[string]string{}
-		for _, p := range src.Needs {
-			if res := gjson.GetBytes(c.body, p); res.Exists() {
-				fields[p] = res.Raw
-			}
-		}
-		headers := c.passHeaders(c.pf.PassHeaders)
-		actx, cancel := context.WithTimeout(ctx, affinityTimeout)
-		resp, err := sch.ResolveAffinityKey(actx, &pluginv1.ResolveAffinityKeyRequest{
-			Meta: c.meta(), RuleName: r.Name, Fields: fields, InboundHeaders: headers})
-		cancel()
-		if err != nil {
-			slog.DebugContext(ctx, "gateway: resolve affinity key", "plugin", key, "rule", r.Name, "err", err)
-			return ""
-		}
-		return resp.GetValue()
 	}
 	return ""
 }

@@ -61,10 +61,9 @@ type ReviewEndpoint struct {
 
 // ReviewPlatform is a platform declared by the plugin (CONTRACTS §13).
 type ReviewPlatform struct {
-	ID          string             `json:"id"`
-	Label       core.LocalizedText `json:"label,omitempty"`
-	Endpoints   []ReviewEndpoint   `json:"endpoints"`
-	StickyRules []string           `json:"sticky_rules"`
+	ID        string             `json:"id"`
+	Label     core.LocalizedText `json:"label,omitempty"`
+	Endpoints []ReviewEndpoint   `json:"endpoints"`
 }
 
 // ReviewAccountType is one top-level account type (ARCHITECTURE 6.6).
@@ -257,7 +256,7 @@ func buildReview(m *manifest.Manifest, files map[string][]byte, ver *pkg.Verific
 		r.Capabilities = append(r.Capabilities, c.ID)
 	}
 	for _, p := range m.Platforms {
-		rp := ReviewPlatform{ID: p.ID, Label: core.LocalizedText(p.Label), Endpoints: []ReviewEndpoint{}, StickyRules: []string{}}
+		rp := ReviewPlatform{ID: p.ID, Label: core.LocalizedText(p.Label), Endpoints: []ReviewEndpoint{}}
 		for _, e := range p.Endpoints {
 			billing := e.Billing
 			if billing == "" {
@@ -266,9 +265,6 @@ func buildReview(m *manifest.Manifest, files map[string][]byte, ver *pkg.Verific
 			rp.Endpoints = append(rp.Endpoints, ReviewEndpoint{Method: e.Method, Path: e.Path, Protocol: e.Protocol, Billing: billing})
 			r.GatewayEndpoints = append(r.GatewayEndpoints, ReviewEndpoint{ID: e.ID, Platform: p.ID, Method: e.Method, Path: e.Path,
 				Protocol: e.Protocol, Billing: billing})
-		}
-		for _, sr := range p.StickyRules {
-			rp.StickyRules = append(rp.StickyRules, sr.Name)
 		}
 		r.Platforms = append(r.Platforms, rp)
 	}

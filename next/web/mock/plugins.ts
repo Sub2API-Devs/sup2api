@@ -28,6 +28,8 @@ interface MockPlugin {
   grants: Any[]
   manifest: Any
   settings: Any | null
+  /** Exclusive resources the generation did not give the plugin (audit 2026-10-09 P2-2). */
+  resource_conflicts?: Array<{ resource: string; id: string; reason: string }>
 }
 
 interface MockRollout {
@@ -299,6 +301,10 @@ plugins.set('videogen', {
   description: videogenManifest('0.2.0').description,
   status: 'enabled',
   status_reason: '',
+  // A newer core reserved one of its paths: the platform is not served.
+  resource_conflicts: [
+    { resource: 'platform', id: 'videogen', reason: 'endpoint GET /dashboard/videos would replace the console path /dashboard' }
+  ],
   active_version: '0.2.0',
   desired_version: '0.2.0',
   publisher: 'video-labs',
@@ -684,6 +690,7 @@ function summary(p: MockPlugin): Any {
     description: p.description,
     status: p.status,
     status_reason: p.status_reason,
+    resource_conflicts: p.resource_conflicts || [],
     builtin: !!p.builtin,
     active_version: p.active_version,
     desired_version: p.desired_version,

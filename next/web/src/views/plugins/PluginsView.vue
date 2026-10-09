@@ -13,6 +13,7 @@ import PluginAvatar from './parts/PluginAvatar.vue'
 import RetiredKeys from './parts/RetiredKeys.vue'
 import StatusBadge from './parts/StatusBadge.vue'
 import TrustBadge from './parts/TrustBadge.vue'
+import { conflictLines, shownStatus } from './pluginUtil'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -153,7 +154,10 @@ onMounted(load)
       </template>
       <template #cell-status="{ row }">
         <div class="flex flex-col items-start gap-0.5">
-          <StatusBadge :status="row.status" />
+          <StatusBadge :status="shownStatus(row)" />
+          <span v-if="row.resource_conflicts?.length" class="max-w-[16rem] truncate text-xs text-red-500" :title="conflictLines(row).join('\n')" data-testid="plugin-conflicts">
+            {{ t('plugins.conflicts.short', { n: row.resource_conflicts.length }) }}
+          </span>
           <span v-if="row.status_reason" class="max-w-[16rem] truncate text-xs text-red-500" :title="row.status_reason">{{ row.status_reason }}</span>
         </div>
       </template>

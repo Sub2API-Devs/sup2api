@@ -195,8 +195,18 @@ func parseFilter(c *gin.Context, self *int64) (*filter, error) {
 		}
 	}
 	if self == nil {
-		if v := c.Query("account_type"); v != "" {
-			f.add("u.account_type = ?", v)
+		// An account type is identified by (plugin key, type id): two plugins
+		// may both declare "apikey".
+		pk, at := c.Query("plugin_key"), c.Query("account_type")
+		if at != "" && pk == "" {
+			return nil, core.InvalidFields(core.FieldError{Field: "account_type", Code: "requires_plugin_key",
+				Message: "account_type filters by (plugin_key, account_type); pass plugin_key too"})
+		}
+		if pk != "" {
+			f.add("u.plugin_key = ?", pk)
+		}
+		if at != "" {
+			f.add("u.account_type = ?", at)
 		}
 	}
 	if v := c.Query("success"); v != "" {

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
@@ -51,9 +52,6 @@ func (stub) OnEvents(context.Context, *pluginv1.OnEventsRequest) (*pluginv1.OnEv
 	return nil, nil
 }
 func (stub) HandleHTTP(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
-	return nil, nil
-}
-func (stub) ResolveAffinityKey(context.Context, *pluginv1.ResolveAffinityKeyRequest) (*pluginv1.ResolveAffinityKeyResponse, error) {
 	return nil, nil
 }
 func (stub) RankAccounts(context.Context, *pluginv1.RankAccountsRequest) (*pluginv1.RankAccountsResponse, error) {
@@ -517,9 +515,56 @@ func TestPlatformConflictsSkipped(t *testing.T) {
 	if got, want := strings.Join(plugins, " "), "ccc:p_ccc ggg:p_ggg"; got != want {
 		t.Fatalf("plugin endpoints = %s, want %s", got, want)
 	}
-	// Skipped platforms do not affect the rest of the plugin.
+	// Skipped platforms do not affect the rest of the plugin, which is
+	// reported abnormal with the platform it does not hold.
 	if len(g.Plugins()) != 7 {
 		t.Fatalf("plugins = %d", len(g.Plugins()))
+	}
+	for key, platform := range map[string]string{"aaa": manifest.PlatformAnthropic, "bbb": "p_bbb", "ddd": "p_ccc", "eee": "p_eee", "fff": "p_fff", "ggg": "p_ccc"} {
+		info, _ := g.Plugin(key)
+		if len(info.Conflicts) != 1 || info.Conflicts[0].Resource != "platform" || info.Conflicts[0].ID != platform || info.Conflicts[0].Reason == "" {
+			t.Fatalf("%s conflicts = %+v", key, info.Conflicts)
+		}
+	}
+	if info, _ := g.Plugin("ccc"); len(info.Conflicts) != 0 {
+		t.Fatalf("ccc conflicts = %+v", info.Conflicts)
+	}
+}
+
+// The first claimant of a platform keeps it, whatever the keys (audit
+// 2026-10-09 P2-3), and a path a newer core reserves is not given to a
+// plugin (P2-2): the plugin is abnormal instead of taking a console page.
+func TestFirstClaimantWinsAndCoreReservations(t *testing.T) {
+	early := registrytest.Manifest("zzz", "1.0.0")
+	early.Platforms[0].ID = "shared"
+	early.Platforms[0].Endpoints[0].Protocol = "shared.test"
+	late := registrytest.Manifest("aaa", "1.0.0")
+	late.Platforms[0].ID = "shared"
+	late.Platforms[0].Endpoints[0].Protocol = "shared.test"
+	late.Platforms[0].Endpoints[0].Path = "/shared/late"
+	console := registrytest.Manifest("ccc", "1.0.0")
+	console.Platforms[0].Endpoints[0].Method, console.Platforms[0].Endpoints[0].Path = "GET", "/dashboard/x"
+	pe, pl, pc := load(t, early), load(t, late), load(t, console)
+	base := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	pe.ClaimedAt, pl.ClaimedAt, pc.ClaimedAt = base, base.Add(time.Hour), base
+	g := registry.New().Publish([]registry.Extension{ext{pkg: pl}, ext{pkg: pe}, ext{pkg: pc}})
+	if pb, ok := g.Platform("shared"); !ok || pb.Plugin.Key != "zzz" {
+		t.Fatalf("shared = %+v %v", pb.Plugin.Key, ok)
+	}
+	if info, _ := g.Plugin("aaa"); len(info.Conflicts) != 1 || info.Conflicts[0].ID != "shared" {
+		t.Fatalf("aaa conflicts = %+v", info.Conflicts)
+	}
+	if _, ok := g.Platform("p_ccc"); ok {
+		t.Fatal("a console path was given to a plugin")
+	}
+	if info, _ := g.Plugin("ccc"); len(info.Conflicts) != 1 || !strings.Contains(info.Conflicts[0].Reason, "console") {
+		t.Fatalf("ccc conflicts = %+v", info.Conflicts)
+	}
+	// Unknown claim times come after known ones.
+	pe.ClaimedAt = time.Time{}
+	g = registry.New().Publish([]registry.Extension{ext{pkg: pe}, ext{pkg: pl}})
+	if pb, _ := g.Platform("shared"); pb.Plugin.Key != "aaa" {
+		t.Fatalf("unknown claim time won: %s", pb.Plugin.Key)
 	}
 }
 

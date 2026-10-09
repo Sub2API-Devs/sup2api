@@ -92,10 +92,9 @@ type HTTPPlugin interface {
 	HandleHTTP(ctx context.Context, in *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error)
 }
 
+// SchedulerPlugin is a plugin's part in scheduling. Plugins take no part in
+// sticky sessions (CONTRACTS §5.6).
 type SchedulerPlugin interface {
-	ResolveAffinityKey(ctx context.Context, in *pluginv1.ResolveAffinityKeyRequest) (*pluginv1.ResolveAffinityKeyResponse, error)
-	// RankAccounts is optional for plugins: one that does not declare
-	// scheduler.rank answers gRPC Unimplemented.
 	RankAccounts(ctx context.Context, in *pluginv1.RankAccountsRequest) (*pluginv1.RankAccountsResponse, error)
 }
 
@@ -112,6 +111,18 @@ type PluginInfo struct {
 	// AssetBase is the public URL prefix for package assets, e.g.
 	// "/plugin-ui/guard/0.1.0-3fa9c1" (version + package hash for caching).
 	AssetBase string
+	// Conflicts lists the exclusive resources this generation could not give
+	// the plugin (another plugin claimed them first, or the core holds them);
+	// the plugin runs without them and the console shows it as abnormal.
+	Conflicts []ResourceConflict
+}
+
+// ResourceConflict is one exclusive resource a plugin declares but does not
+// hold in a generation.
+type ResourceConflict struct {
+	Resource string `json:"resource"` // platform
+	ID       string `json:"id"`
+	Reason   string `json:"reason"`
 }
 
 // EndpointBinding is one gateway endpoint of an available platform. Plugin

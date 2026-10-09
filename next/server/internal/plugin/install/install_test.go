@@ -59,13 +59,6 @@ func (f *fakePerms) DeletePlugin(_ context.Context, _ pgx.Tx, key string) error 
 	return nil
 }
 
-type fakeSticky struct{ calls int }
-
-func (f *fakeSticky) SyncPluginDefaults(context.Context, pgx.Tx, string, []manifest.StickyRule) error {
-	f.calls++
-	return nil
-}
-
 type fakeRollout struct {
 	db       *store.DB
 	disabled []string
@@ -121,7 +114,6 @@ type env struct {
 	db       *store.DB
 	svc      *Service
 	perms    *fakePerms
-	sticky   *fakeSticky
 	rollout  *fakeRollout
 	schemas  *fakeSchemas
 	accounts *fakeAccounts
@@ -135,7 +127,7 @@ func newEnv(t *testing.T) *env {
 	t.Helper()
 	db := testutil.DB(t)
 	ctx := context.Background()
-	e := &env{db: db, perms: &fakePerms{}, sticky: &fakeSticky{}, schemas: &fakeSchemas{},
+	e := &env{db: db, perms: &fakePerms{}, schemas: &fakeSchemas{},
 		accounts: &fakeAccounts{}, root: pkgtest.NewKey("root-1")}
 	e.rollout = &fakeRollout{db: db}
 	for _, email := range []string{"admin@x", "ops@x"} {
@@ -159,7 +151,7 @@ func newEnv(t *testing.T) *env {
 	}
 	e.svc = New(Deps{
 		DB: db, Trust: ts, Authz: e.authz, Permissions: e.perms,
-		Defaults: NewDefaultsApplier(e.perms, e.sticky),
+		Defaults: NewDefaultsApplier(e.perms),
 		Rollout:  e.rollout, Schemas: e.schemas, Accounts: e.accounts, Nodes: emptyNodes{}, Packages: registrytest.Source(),
 	}, Options{HostVersion: "0.1.0", Plugins: config.PluginConfig{MaxPackageBytes: 10 << 20, MaxMemoryMB: 1024}})
 	return e
@@ -261,8 +253,8 @@ func TestInstallConsentUpgradeUninstall(t *testing.T) {
 		t.Fatalf("result = %+v", res)
 	}
 	if len(e.perms.syncs) != 1 || len(e.perms.syncs[0].defs) != 3 || e.perms.syncs[0].roles[0] != "admin" ||
-		e.perms.syncs[0].defs[0].Key != "plugin.guard:rules:read" || e.sticky.calls != 1 {
-		t.Fatalf("defaults not applied: %+v sticky=%d", e.perms.syncs, e.sticky.calls)
+		e.perms.syncs[0].defs[0].Key != "plugin.guard:rules:read" {
+		t.Fatalf("defaults not applied: %+v", e.perms.syncs)
 	}
 	var status string
 	_ = e.db.Pool.QueryRow(ctx, `SELECT status FROM plugins WHERE key = 'guard'`).Scan(&status)
@@ -364,7 +356,7 @@ func TestInstallConsentUpgradeUninstall(t *testing.T) {
 		t.Fatal("jobs grant removed before activation")
 	}
 	if err := e.db.Tx(ctx, func(tx pgx.Tx) error {
-		return NewDefaultsApplier(nil, nil).ApplyDefaults(ctx, tx, up, nil)
+		return NewDefaultsApplier(nil).ApplyDefaults(ctx, tx, up, nil)
 	}); err != nil {
 		t.Fatal(err)
 	}

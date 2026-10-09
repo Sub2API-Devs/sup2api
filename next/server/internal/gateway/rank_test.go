@@ -8,9 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -22,10 +19,6 @@ type fakeRanker struct {
 	mu    sync.Mutex
 	calls []*pluginv1.RankAccountsRequest
 	fn    func(ctx context.Context, in *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error)
-}
-
-func (r *fakeRanker) ResolveAffinityKey(context.Context, *pluginv1.ResolveAffinityKeyRequest) (*pluginv1.ResolveAffinityKeyResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "no")
 }
 
 func (r *fakeRanker) RankAccounts(ctx context.Context, in *pluginv1.RankAccountsRequest) (*pluginv1.RankAccountsResponse, error) {

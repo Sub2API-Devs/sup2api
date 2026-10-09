@@ -192,7 +192,7 @@ func fileBody(t *testing.T, data []byte) multipartBody {
 	return multipartBody{buf: &buf, ct: mw.FormDataContentType()}
 }
 
-func newHarness(t *testing.T) (*harness, pkgtest.Key) {
+func newHarness(t *testing.T, guardConflicts ...core.ResourceConflict) (*harness, pkgtest.Key) {
 	db := testutil.DB(t)
 	ctx := context.Background()
 	for _, email := range []string{"admin@x", "viewer@x"} {
@@ -207,11 +207,12 @@ func newHarness(t *testing.T) (*harness, pkgtest.Key) {
 	}
 	cfg := config.PluginConfig{MaxPackageBytes: 10 << 20, MaxMemoryMB: 1024}
 	svc := install.New(install.Deps{DB: db, Trust: ts, Authz: authz{}, Permissions: noopPerms{},
-		Defaults: install.NewDefaultsApplier(noopPerms{}, nil), Rollout: rollout{db}, Nodes: emptyLifecycleNodes{}, Packages: registrytest.Source()},
+		Defaults: install.NewDefaultsApplier(noopPerms{}), Rollout: rollout{db}, Nodes: emptyLifecycleNodes{}, Packages: registrytest.Source()},
 		install.Options{HostVersion: "0.1.0", Plugins: cfg})
 	cipher, _ := secret.New(bytes.Repeat([]byte{7}, 32))
 	m := pkgtest.Guard("guard", "0.1.0", "sub2api")
-	reg := registry{gen{plugins: []core.PluginInfo{{Key: "guard", Version: "0.1.0", Manifest: m, Trust: "official", AssetBase: "/plugin-ui/guard/0.1.0-abc"}}}}
+	reg := registry{gen{plugins: []core.PluginInfo{{Key: "guard", Version: "0.1.0", Manifest: m, Trust: "official", AssetBase: "/plugin-ui/guard/0.1.0-abc",
+		Conflicts: guardConflicts}}}}
 	a := New(Deps{DB: db, Install: svc, Rollout: rollout{db}, Nodes: nodes{}, Registry: reg, Authz: authz{}, Cipher: cipher, Plugins: cfg})
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
@@ -257,6 +258,9 @@ func TestAPIFlow(t *testing.T) {
 	item := list[0].(map[string]any)
 	if item["current_version"] != "0.1.0" || item["signature_status"] != "valid" {
 		t.Fatalf("item = %v", item)
+	}
+	if rc, ok := item["resource_conflicts"].([]any); !ok || len(rc) != 0 {
+		t.Fatalf("resource conflicts = %v", item["resource_conflicts"])
 	}
 	// The list and the detail both carry the summary as node_summary.
 	if _, ok := item["node_summary"].(map[string]any); !ok || item["nodes"] != nil {
@@ -402,5 +406,59 @@ func mustExec(t *testing.T, db *store.DB, sql string, args ...any) {
 	t.Helper()
 	if _, err := db.Pool.Exec(context.Background(), sql, args...); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A plugin the generation could not give a resource is reported with it, so
+// the console shows the plugin as abnormal (audit 2026-10-09 P2-2).
+func TestResourceConflictsInSummary(t *testing.T) {
+	conflict := core.ResourceConflict{Resource: "platform", ID: "guardp", Reason: "platform id \"guardp\" is already registered by plugin \"other\""}
+	h, root := newHarness(t, conflict)
+	if code, out := h.do("POST", "/plugins/upload", "admin", fileBody(t, pkgtest.Build(pkgtest.Guard("guard", "0.1.0", "sub2api"), root))); code != 200 {
+		t.Fatalf("upload = %d %v", code, out)
+	}
+	code, out := h.do("GET", "/plugins/guard", "admin", nil)
+	rc, _ := data(out)["resource_conflicts"].([]any)
+	if code != 200 || len(rc) != 1 || rc[0].(map[string]any)["id"] != "guardp" || rc[0].(map[string]any)["resource"] != "platform" {
+		t.Fatalf("detail = %d %v", code, data(out)["resource_conflicts"])
+	}
+}
+
+// Enable and upgrade check the version's resources again: a newer core may
+// have reserved a path since it was approved (audit 2026-10-09 P2-2).
+func TestEnableAndUpgradeRecheckResources(t *testing.T) {
+	h, root := newHarness(t)
+	ctx := context.Background()
+	for _, v := range []string{"0.1.0", "0.2.0"} {
+		if code, out := h.do("POST", "/plugins/upload", "admin", fileBody(t, pkgtest.Build(pkgtest.Platform("video", v, "sub2api"), root))); code != 200 {
+			t.Fatalf("upload %s = %d %v", v, code, out)
+		}
+		if v != "0.1.0" {
+			continue // an upgrade asking for nothing new is approved on upload
+		}
+		consent := install.ConsentRequest{Grants: []install.GrantInput{{Permission: "gateway.endpoint"}, {Permission: "platform.register"}, {Permission: "accounts.credentials"}}}
+		if code, out := h.do("POST", "/plugins/video/versions/"+v+"/consent", "admin", consent); code != 200 {
+			t.Fatalf("consent %s = %d %v", v, code, out)
+		}
+	}
+	var approved int
+	if err := h.db.Pool.QueryRow(ctx, `SELECT count(*) FROM plugin_versions WHERE plugin_key = 'video' AND consent_status = 'approved'`).Scan(&approved); err != nil || approved != 2 {
+		t.Fatalf("approved versions = %d %v", approved, err)
+	}
+	// What a newer core reserving the path of the status endpoint looks like
+	// to the stored manifests.
+	if _, err := h.db.Pool.Exec(ctx, `UPDATE plugin_versions SET manifest = jsonb_set(manifest, '{platforms,0,endpoints,1,path}', '"/dashboard/video"')
+		WHERE plugin_key = 'video'`); err != nil {
+		t.Fatal(err)
+	}
+	for _, call := range []struct {
+		path string
+		body any
+	}{{"/plugins/video/enable", nil}, {"/plugins/video/upgrade", map[string]any{"version": "0.2.0"}}} {
+		code, out := h.do("POST", call.path, "admin", call.body)
+		e, _ := out["error"].(map[string]any)
+		if code != http.StatusConflict || e["code"] != "plugin_resource_conflict" {
+			t.Fatalf("%s = %d %v", call.path, code, out)
+		}
 	}
 }

@@ -44,7 +44,6 @@ var KnownCapabilities = map[string]bool{
 	manifest.CapAppEvents:         true,
 	manifest.CapHTTPRoutes:        true,
 	manifest.CapMigrationData:     true,
-	manifest.CapSchedulerAffinity: true,
 	manifest.CapSchedulerRank:     true,
 	manifest.CapAppBroadcast:      true,
 }
@@ -121,17 +120,21 @@ func OthersFromManifests(ms []*manifest.Manifest) ([]PlatformOwner, []EndpointOw
 	return pfs, eps
 }
 
-// Conflicts reports only the exclusive resources of m that other plugins
-// already hold: platform ids and gateway endpoints (codes platform_conflict
-// and endpoint_conflict). The host runs it again when a version is approved,
-// because versions awaiting approval do not hold exclusive resources.
+// Conflicts reports only the exclusive resources of m that other plugins or
+// the core already hold: platform ids and gateway endpoints of other plugins
+// (platform_conflict, endpoint_conflict), built-in platform ids
+// (builtin_platform) and paths the core reserves (invalid_path). The host
+// runs it again whenever a version starts to hold or use them - approval,
+// enable, upgrade - because versions awaiting approval hold nothing and a
+// newer core may have taken a path or platform since the upload.
 func Conflicts(m *manifest.Manifest, others []PlatformOwner, endpoints []EndpointOwner) []FieldError {
 	v := &validator{m: m, opt: ValidateOptions{OtherPlatforms: others, OtherEndpoints: endpoints, Tooling: true},
 		perms: map[string]*manifest.HostPermission{}}
 	v.platforms()
 	var out []FieldError
 	for _, e := range v.errs {
-		if e.Code == "platform_conflict" || e.Code == "endpoint_conflict" {
+		switch e.Code {
+		case "platform_conflict", "endpoint_conflict", "builtin_platform", "invalid_path":
 			out = append(out, e)
 		}
 	}
@@ -370,7 +373,9 @@ func (v *validator) hostPermissions() {
 	for i := range v.m.HostPermissions {
 		hp := &v.m.HostPermissions[i]
 		f := fmt.Sprintf("hostPermissions[%d]", i)
-		if _, ok := manifest.HostPermissionRisk[hp.ID]; !ok {
+		if hp.ID == removedAffinityPermission {
+			v.add(f+".id", "sticky_not_for_plugins", "host permission %q was removed: plugins take no part in sticky sessions", hp.ID)
+		} else if _, ok := manifest.HostPermissionRisk[hp.ID]; !ok {
 			v.add(f+".id", "unknown", "unknown host permission %q", hp.ID)
 			continue
 		}
@@ -400,7 +405,10 @@ func (v *validator) capabilities() {
 	seen := map[string]bool{}
 	for i, c := range v.m.Capabilities {
 		f := fmt.Sprintf("capabilities[%d]", i)
-		if !KnownCapabilities[c.ID] {
+		switch {
+		case c.ID == removedAffinityCapability:
+			v.add(f, "sticky_not_for_plugins", "capability %q was removed: plugins take no part in sticky sessions", c.ID)
+		case !KnownCapabilities[c.ID]:
 			v.add(f, "unknown", "unknown capability %q", c.ID)
 		}
 		if seen[c.ID] {
@@ -493,7 +501,10 @@ func (v *validator) platforms() {
 			}
 		}
 		v.usageRules(f+".usage", p.Usage, ownerPlatform, anyPluginUsage(p))
-		v.stickyRules(f+".stickyRules", p.StickyRules)
+		if len(p.StickyRules) > 0 {
+			v.add(f+".stickyRules", "sticky_not_for_plugins",
+				"a plugin may not declare sticky rules: the core and the administrator own sticky sessions")
+		}
 	}
 }
 
@@ -751,6 +762,15 @@ func NormalizeRoutePath(p string) string {
 	return strings.TrimSuffix(strings.Join(segs, "/"), "/")
 }
 
+// The scheduler.affinity extension (a plugin computing sticky-session
+// values) was removed; a manifest still naming it gets a precise error.
+const (
+	removedAffinityCapability = "scheduler.affinity.v1"
+	removedAffinityPermission = "scheduler.affinity"
+)
+
+// stickyRules checks the default sticky rules of a built-in platform
+// (CheckPlatform). The session value always comes from the request itself.
 func (v *validator) stickyRules(f0 string, rules []manifest.StickyRule) {
 	names := map[string]bool{}
 	for i, r := range rules {
@@ -767,9 +787,6 @@ func (v *validator) stickyRules(f0 string, rules []manifest.StickyRule) {
 		for j, ks := range r.KeySources {
 			switch ks.Type {
 			case "body", "header", "api_key", "user":
-			case "plugin":
-				v.needPerm(fmt.Sprintf("%s.keySources[%d]", f, j), "scheduler.affinity", "a plugin sticky key source")
-				v.needCap(fmt.Sprintf("%s.keySources[%d]", f, j), manifest.CapSchedulerAffinity)
 			default:
 				v.add(fmt.Sprintf("%s.keySources[%d].type", f, j), "invalid", "unknown key source type %q", ks.Type)
 			}

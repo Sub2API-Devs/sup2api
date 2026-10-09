@@ -65,7 +65,6 @@ function sourcesSummary(r: StickyRule) {
     .map((k) => {
       if (k.type === 'body') return `body:${k.path || ''}`
       if (k.type === 'header') return `header:${k.name || ''}`
-      if (k.type === 'plugin') return k.needs?.length ? `plugin(${k.needs.join(',')})` : 'plugin'
       return k.type
     })
     .join(' → ')
@@ -159,7 +158,6 @@ async function toggle(r: Row, v: boolean) {
             <SBadge :tone="row.source === 'admin' ? 'primary' : 'purple'">
               {{ t(`sticky.source.${row.source}`) }}
             </SBadge>
-            <SHint v-if="row.plugin_key" inline size="xs">{{ row.plugin_key }}</SHint>
           </div>
         </template>
         <template #cell-enabled="{ row }">

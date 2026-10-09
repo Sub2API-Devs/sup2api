@@ -72,7 +72,6 @@ const (
 	CapAppEvents         = "app.events.v1"
 	CapHTTPRoutes        = "http.routes.v1"
 	CapMigrationData     = "migration.data.v1"
-	CapSchedulerAffinity = "scheduler.affinity.v1"
 	CapSchedulerRank     = "scheduler.rank.v1"
 	CapAppBroadcast      = "app.broadcast.v1"
 )
@@ -103,8 +102,11 @@ type Platform struct {
 	// Request body paths sent to BuildUpstreamRequest (never the whole body).
 	RequestFields []string `json:"requestFields,omitempty"`
 	// Client headers the host forwards to BuildUpstreamRequest (lower-case).
-	PassHeaders []string     `json:"passHeaders,omitempty"`
-	Usage       UsageRules   `json:"usage"`
+	PassHeaders []string   `json:"passHeaders,omitempty"`
+	Usage       UsageRules `json:"usage"`
+	// StickyRules are the core's default sticky rules of a built-in platform
+	// (sdk/platforms). A plugin manifest may not declare any: plugins take no
+	// part in sticky sessions (CONTRACTS §5.6).
 	StickyRules []StickyRule `json:"stickyRules,omitempty"`
 }
 
@@ -521,11 +523,12 @@ type StickyMatch struct {
 	UserAgentContains []string `json:"userAgentContains,omitempty"`
 }
 
+// StickyKeySource is where a sticky rule reads the session value from. The
+// core reads it itself; no plugin computes it.
 type StickyKeySource struct {
-	Type  string   `json:"type"` // body | header | api_key | user | plugin
-	Path  string   `json:"path,omitempty"`
-	Name  string   `json:"name,omitempty"`
-	Needs []string `json:"needs,omitempty"` // type=plugin: body paths sent to ResolveAffinityKey
+	Type string `json:"type"` // body | header | api_key | user
+	Path string `json:"path,omitempty"`
+	Name string `json:"name,omitempty"`
 }
 
 // ---------------------------------------------------------------- hooks, events, jobs
@@ -550,8 +553,7 @@ type HookMatch struct {
 // ---------------------------------------------------------------- scheduling
 
 // Scheduler is the plugin's part in gateway scheduling. Sticky sessions are
-// declared per platform (Platform.StickyRules) and need no entry here; this
-// struct carries the extension points that apply to scheduling itself.
+// not part of it: the core and the administrator own them.
 type Scheduler struct {
 	// Rank lets the plugin rewrite the priority/weight of the candidate
 	// accounts of requests that did not hit a sticky binding.
@@ -732,7 +734,6 @@ var HostPermissionRisk = map[string]string{
 	"gateway.hook":         RiskHigh,
 	"gateway.endpoint":     RiskHigh,
 	"platform.register":    RiskHigh,
-	"scheduler.affinity":   RiskHigh,
 	"scheduler.rank":       RiskHigh,
 	"users.read":           RiskHigh,
 	"accounts.credentials": RiskCritical,

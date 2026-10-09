@@ -56,7 +56,7 @@
 | 失败 | HTTP 状态码 + `{"error": {"code": "...", "message": "...", "details": {...}}}` |
 | 字段校验失败 | `invalid_argument`，`details.fields = [{"field","code","message"}]` |
 
-错误码（`core/errors.go`）：`invalid_argument` 400、`unauthenticated` 401、`permission_denied` 403、`not_found` 404、`conflict` 409、`insufficient_balance` 402、`model_price_not_configured` 403、`model_not_allowed` 403、`rate_limited` 429、`no_available_account` 503、`plugin_unavailable` 503、`unavailable` 503、`internal` 500。（原 `step_up_required` 已随二次验证一起删除，§3.3。）
+错误码（`core/errors.go`）：`invalid_argument` 400、`unauthenticated` 401、`permission_denied` 403、`not_found` 404、`conflict` 409、`insufficient_balance` 402、`model_price_not_configured` 403、`model_not_allowed` 403、`rate_limited` 429、`no_available_account` 503（网关 `anthropic` 格式渲染为 529 `overloaded_error`，§11.6）、`plugin_unavailable` 503、`unavailable` 503、`internal` 500。（原 `step_up_required` 已随二次验证一起删除，§3.3。）
 
 ### 3.2 数据格式
 
@@ -354,6 +354,8 @@ Anthropic 的 `cache_creation_input_tokens` 是总量（含 1 小时缓存）。
 - 插件未启用（已禁用或未安装）时，它声明的网关端点不存在，请求返回 404；`plugin_unavailable` 只用于插件已启用但进程暂时不可用（按失败切换处理）
 - 错误格式：`plain` 即核心 REST 格式 `{"error":{code,message}}`；`anthropic` 格式在 `error` 中额外带 `code`（如钩子拒绝时的 `guard_blocked`）
 - 所有尝试都失败时：最后一次是上游错误则返回该错误（按 ClassifyError 的状态码与类型）；是插件或账号问题返回 503 `no_available_account`；有账号但并发槽位全满返回 429
+- **`anthropic` 格式下没有可用账号按官方"过载"返回**（2026-10-10）：HTTP 529，`{"type":"error","error":{"type":"overloaded_error","message":"Overloaded","code":"no_available_account"}}`，与官方 API 的过载一致，Claude Code 与 SDK 会退避重试（`gateway/errors.go` `clientError`）。使用记录的 `status_code` 为 529，`error_type` 仍为 `no_account`，`error_message` 保留核心原因（如 `no available account`）。其他格式（`openai`、`gemini`、`plain`）仍是 503；上游原样透传的错误体不受影响。其余映射：参数错误 400 `invalid_request_error`（上游 4xx 原样透传，不冷却账号）、鉴权 401/403、真正的上游故障 5xx
+- **只属于本请求的网关错误不冷却账号**（2026-10-10）：CCGateway worker 拒绝本次请求（`cannot prepare the upstream request: …`，历史或特性无法原样承载）时响应头带 `X-Ccgateway-Error-Scope: request`；ccgateway 插件的 `ClassifyError` 见此头返回 `RETURN_TO_CLIENT`、不设账号效果（不冷却、不切换），同组其他会话不受影响。上游 API 的响应头里出现该头会被 worker 删掉，上游无法冒用
 - `usage_logs.error_type` 取值另含 `model_not_allowed`、`price_not_configured`、`rate_limited`、`invalid_request`、`plugin_unavailable`、`blocked_by_hook`
 - 钩子熔断按节点计数：同一钩子在本节点连续失败 10 次后熔断 30 秒
 - 测试环境的市场地址为内网 `http://caddy:3120/market/index.json`（市场客户端目前不过滤内网地址；市场源只有 `publisher:manage` 能配置）
@@ -583,17 +585,18 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 
 ### 15.5 粘性会话（`gateway/sticky_api.go`、`gateway/sticky.go`、`gateway/settings.go`）
 
+**插件不参与粘性会话**（2026-10-10，审查 2026-10-09 P2-1 随之关闭）：规则只有核心随内置平台带的默认规则（`builtin`）和管理员规则（`admin`），会话值只从请求本身取（请求体字段、请求头、API Key、用户）。插件 manifest 声明 `platforms[].stickyRules` → 校验错误 `sticky_not_for_plugins`（字段 `platforms[i].stickyRules`）；能力 `scheduler.affinity.v1` 与宿主权限 `scheduler.affinity` 已删除，manifest 仍声明时同样报 `sticky_not_for_plugins`；`SchedulerService.ResolveAffinityKey` 已从 proto 与 SDK 删除（同一服务的 `RankAccounts` 保留，它不碰粘性）。迁移 `0048_sticky_rules_core_only.sql` 删除插件来源规则与引用插件取值的规则，并加约束 `sticky_rules_core_only`：`source IN ('builtin','admin')`、`plugin_key IS NULL`、`key_sources` 不含 `{"type":"plugin"}`（`plugin_key` 列保留到下一次迁移，供滚动升级中的旧核心读取，只能为 NULL）。
+
 规则对象：
 
 | 字段 | 说明 |
 |---|---|
 | `id` | |
 | `name` | `^[A-Za-z0-9][A-Za-z0-9_.\-]{0,99}$`，不能是 `stats`；同一 `source` 内唯一 |
-| `source` | `admin`（管理员创建）\| `plugin_default`（插件 manifest 平台的 `stickyRules`）\| `builtin`（内置平台默认规则） |
-| `plugin_key` | `plugin_default` 为插件 key，其他为 `null` |
-| `enabled`、`priority` | 数字小的先评估；新建默认 `enabled=true`、`priority=100`；默认规则按声明顺序初始为 100、101… |
+| `source` | `admin`（管理员创建）\| `builtin`（内置平台 `sdk/platforms/*.json` 的 `stickyRules`） |
+| `enabled`、`priority` | 数字小的先评估；新建默认 `enabled=true`、`priority=100`；内置规则按声明顺序初始为 100、101… |
 | `match` | `{protocols:[], models:[], user_agent_contains:[]}`（空数组 = 不限；`protocols` 必须是已注册平台端点声明的协议，见下；`models` 为通配；`user_agent_contains` 不区分大小写，任一命中即可） |
-| `key_sources` | `[{type, path?, name?, needs?}]`，`type` 为 `body`（需 `path`）\| `header`（需 `name`）\| `api_key` \| `user` \| `plugin`（`needs` 为交给插件 `ResolveAffinityKey` 的 body 路径）；至少一项 |
+| `key_sources` | `[{type, path?, name?}]`，`type` 为 `body`（需 `path`）\| `header`（需 `name`）\| `api_key` \| `user`；至少一项；其他 `type`（含已删除的 `plugin`）返回 400，字段 `key_sources[i].type`、code `invalid` |
 | `value_regex` | 可空；须能编译 |
 | `ttl_seconds` | 0–2592000，0 表示使用 `/settings/sticky` 的 `default_ttl_seconds` |
 | `key_includes` | `group` \| `model` \| `rule` 的子集，新建默认三项全含 |
@@ -604,22 +607,22 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 |---|---|---|---|
 | GET `/sticky-rules` | `sticky:read` | → `[规则]` | 不分页 |
 | POST `/sticky-rules` | `sticky:manage` | `{name, enabled?, priority?, match?, key_sources, value_regex?, ttl_seconds?, key_includes?, on_failure?}` → 201 规则 | 只能创建 `source=admin`；同名 admin 规则已存在返回 409 |
-| PATCH `/sticky-rules/:id` | `sticky:manage` | 同上字段均可选 → 200 规则 | `admin` 规则可改全部字段；`plugin_default` / `builtin` 规则**只能改 `enabled`、`priority`**，带其他字段返回 400 `invalid_argument`（如需改定义，新建同名 admin 规则覆盖） |
+| PATCH `/sticky-rules/:id` | `sticky:manage` | 同上字段均可选 → 200 规则 | `admin` 规则可改全部字段；`builtin` 规则**只能改 `enabled`、`priority`**，带其他字段返回 400 `invalid_argument`（如需改定义，新建同名 admin 规则覆盖）；控制台编辑内置规则时只提交这两项 |
 | DELETE `/sticky-rules/:id` | `sticky:manage` | 204 | 只能删 `admin` 规则，其他返回 400；已有绑定不删除（等 TTL 过期），若没有其他同名规则则清除统计 |
 | POST `/sticky-rules/:id/flush` | `sticky:manage` | → `{deleted: n}` | 删除该规则名下的全部绑定，`deleted` 为删除的 Redis key 数（无 Redis 时为 0）；Redis 出错返回 503。`key_includes` 不含 `rule` 的规则返回 409 `conflict`：它的绑定 key 是 `sticky:_:…`，与其他同类规则共用，无法单独清除，只能等 TTL 过期 |
 | GET `/sticky-rules/stats` | `sticky:read` | → `[{rule_id, rule, source, hits, misses, rebinds}]` | 每条规则一项，顺序同规则列表；`rule_id` 对应规则 `id`，`rule` 为规则名 |
 | GET `/settings/sticky` | `sticky:read` | → `{enabled, default_ttl_seconds, keep_on_account_disabled}` | 默认 `true`、3600、`false` |
 | PUT `/settings/sticky` | `sticky:manage` | 三个字段均可选（省略的不改）→ 修改后的完整对象 | `default_ttl_seconds` 1–2592000 |
 
-- **同名遮蔽**：同名规则只有来源级别最高的一条参与调度（`admin` > `builtin` > `plugin_default`），级别比较时**不看 `enabled`**，所以停用的同名 admin 规则也会遮蔽默认规则。
+- **同名遮蔽**：同名规则只有来源级别最高的一条参与调度（`admin` > `builtin`），级别比较时**不看 `enabled`**，所以停用的同名 admin 规则也会遮蔽内置规则。
 - **统计与绑定按规则名**（不是 id）：统计 key `sticky:stats:{name}`，绑定 key `sticky:{name}:{group}:{model}:{sha256}`（名称中 `[A-Za-z0-9_.-]` 以外的字符替换为 `_`）。同名规则共享同一份统计，`/stats` 中同名的多项数值相同；flush 任一同名规则都会清除该名称下的全部绑定。
 - `key_includes` 不含 `rule` 的规则，其绑定 key 的规则段为 `_`，与其他同类规则共用；flush 这类规则返回 409，控制台不显示"清除绑定"。
-- 插件安装/升级时覆盖其 `plugin_default` 规则的定义（保留管理员设置的 `enabled`、`priority`），不再声明的规则删除；内置规则在网关启动时同步，语义相同。
+- 内置规则在网关启动时同步：定义跟随代码，保留管理员设置的 `enabled`、`priority`，代码里不再有的内置规则删除。插件安装、升级、卸载都不改规则表。
 - **`match.protocols` 的取值与校验**：协议的权威来源是平台的端点声明 —— 内置平台（`sdk/platforms/{anthropic,openai,gemini}.json` 的 `endpoints[].protocol`）与插件 manifest 的 `platforms[].endpoints[].protocol`；注册表按协议建索引（`Generation.PlatformForProtocol`）。空数组表示不限；含 `*`/`?` 的值按通配与已注册协议集合比较（与运行时 `matchList` 的语义一致），匹配不到任何协议才算无效。
   - 管理员规则（`source=admin`）保存时校验：POST 中每个协议都必须命中，否则 400，`error.details.fields` 含一项 `{field:"match.protocols", code:"invalid"}`，消息点明是哪些协议无效（同一次提交的多个无效协议合并为一条错误）。
   - **PATCH 只校验本次新增的协议**：不在库中原有 `match.protocols` 里的值才校验，原有值一律放行（即使它现在已经无法命中注册表）。控制台提交的是全量 body，这样一条引用了已停用/卸载插件协议的旧规则，改 TTL 或开关不会被锁死，只能删掉重建；而编辑时新加一个拼错的协议仍会被拒。不带 `match` 的 PATCH（只改 `enabled`/`priority`）完全不校验协议。
   - 插件注册表不可用时（未安装插件的最小部署、generation 尚未加载）整体跳过该校验。
-  - `plugin_default` / `builtin` 默认规则的同步不做此校验：插件安装顺序可能让协议暂时还不存在，规则同步不能因此失败；这类规则的定义来自代码与 manifest，出错由插件作者负责。
+  - `builtin` 规则的同步不做此校验：定义来自核心代码（`sdk/manifest/check.CheckPlatform` 在测试里校验内置平台）。
 - 插件 hook 的 `match.protocols` 引用不存在的协议**只记警告日志、不阻止安装**：hook 可以引用别的插件声明的平台，安装顺序决定协议何时出现。注册表构建 generation 时（平台全部注册完、hook 绑定已知后）对每个未命中的协议记一条 `slog.Warn`（含 plugin key、hook id、point、协议名），行为不变 —— 这样的 hook 只是永不匹配。
 
 ### 15.6 发布记录（`plugin/api/plugins.go`、`plugin/rollout/controller.go`、`core/ports_plugin_infra.go`）
@@ -1259,7 +1262,7 @@ JSON Schema 表单（`schema/`；账号凭据、插件设置、声明式表单�
 
 ## 24. 插件改写候选账号的调度参数（priority / weight）（2026-09-29，用户要求）
 
-网关调度新增一个插件扩展点：插件可以为**单次请求**改写候选账号的 `priority` 和 `weight`，核心拿改写后的值跑自己原来的调度算法（§18.2）。这**不是"插件接管调度"**——插件只是临时改写账号本来就有的两个调度参数；候选集怎么筛、按什么顺序试、能不能试，仍然由核心决定。与已有的 `SchedulerService.ResolveAffinityKey`（§15.5，规则里 `{"type":"plugin"}` 的取值）分工：那个决定"怎么粘"，这个决定"未命中粘性时在候选里怎么排"。
+网关调度新增一个插件扩展点：插件可以为**单次请求**改写候选账号的 `priority` 和 `weight`，核心拿改写后的值跑自己原来的调度算法（§18.2）。这**不是"插件接管调度"**——插件只是临时改写账号本来就有的两个调度参数；候选集怎么筛、按什么顺序试、能不能试，仍然由核心决定。它只决定"未命中粘性时在候选里怎么排"；"怎么粘"是核心与管理员的事，插件不参与（§15.5，原 `ResolveAffinityKey` 已于 2026-10-10 删除）。
 
 ### 24.1 manifest 声明
 
@@ -1279,7 +1282,7 @@ JSON Schema 表单（`schema/`；账号凭据、插件设置、声明式表单�
 |---|---|---|
 | `order` | 整数，默认 0 | 多个声明了 `rank` 的插件按 `order` **升序串行**调用，`order` 相同按插件 key 升序。**后一个插件收到的候选是前一个改写后的值**（含钳制后的值） |
 | `match` | 复用钩子的 `HookMatch`：`{protocols:[], models:[], groups:[]}`，空数组 = 不限 | 只对匹配的请求调用；`models` 为通配，语义与 `hooks[].match` 的 `matchList` 完全一致 |
-| `timeoutMs` | 0 或 50–1000（`pkg.MinRankTimeout` / `MaxRankTimeout`），默认 0 | 单次调用超时；0 = 用宿主默认值 `grpcruntime.TimeoutRankDefault`（200 ms，与 `ResolveAffinityKey` 相同），一律再被 `TimeoutRankMax`（1 s）钳住。热路径，上限刻意比钩子（30 s）小得多。超出范围的值在包校验里报 `scheduler.rank.timeoutMs` / `invalid` |
+| `timeoutMs` | 0 或 50–1000（`pkg.MinRankTimeout` / `MaxRankTimeout`），默认 0 | 单次调用超时；0 = 用宿主默认值 `grpcruntime.TimeoutRankDefault`（200 ms），一律再被 `TimeoutRankMax`（1 s）钳住。热路径，上限刻意比钩子（30 s）小得多。超出范围的值在包校验里报 `scheduler.rank.timeoutMs` / `invalid` |
 
 - **没有 `failure` 字段**：该调用固定 **fail open**。为一个算不出来的权重去拒绝请求太激进，所以出错一律退回账号自身的值（见 §24.3）。
 - 需要 capability `scheduler.rank.v1` 和宿主权限 `scheduler.rank`；声明了 `scheduler.rank` 却没申请权限（或反过来）在安装一致性检查里失败，与 `hooks` / `gateway.hook` 的规则相同。
@@ -1288,7 +1291,7 @@ JSON Schema 表单（`schema/`；账号凭据、插件设置、声明式表单�
 
 ### 24.2 gRPC
 
-`SchedulerService` 新增一个方法（`sdk/proto/sub2api/plugin/v1/scheduler.proto`，与 `ResolveAffinityKey` 同一个 service，各自是独立能力，插件只实现自己声明的那个）：
+`SchedulerService` 的方法（`sdk/proto/sub2api/plugin/v1/scheduler.proto`；同一 service 原有的 `ResolveAffinityKey` 已删除，见 §15.5）：
 
 ```proto
 rpc RankAccounts(RankAccountsRequest) returns (RankAccountsResponse);
@@ -1334,8 +1337,8 @@ message RankedAccount {
 
 | 项 | 值 |
 |---|---|
-| capability | `scheduler.rank.v1`（`sdk/manifest`：`CapSchedulerRank`；`ResolveAffinityKey` 是另一条 `scheduler.affinity.v1`） |
-| 宿主权限 | `scheduler.rank`，风险等级 **🟠 高**（同 `gateway.hook`、`platform.register`、`scheduler.affinity`；ARCHITECTURE 5.5 的分级表同步） |
+| capability | `scheduler.rank.v1`（`sdk/manifest`：`CapSchedulerRank`） |
+| 宿主权限 | `scheduler.rank`，风险等级 **🟠 高**（同 `gateway.hook`、`platform.register`；ARCHITECTURE 5.5 的分级表同步） |
 
 定为高风险的理由：拿到它的插件能把流量导向指定账号，管理员在授权确认页（§5.7 的 `review.host_permissions`）必须逐项勾选看见，批准需要 `plugin:grant:high`。插件详情页的 `capabilities` 里也会出现 `scheduler.rank.v1`。
 
@@ -1382,7 +1385,7 @@ message RankedAccount {
 - **非法 UTF-8 一律剔除**（`strings.ToValidUTF8`）：这两个 map 的内容直接来自 URL，客户端可以塞 `%FF`；proto3 的 string 字段强制 UTF-8，不净化的话 `proto.Marshal` 会失败，该请求的每一次插件调用都挂，`BuildUpstreamRequest` 挂了就是 5xx——**一个 curl 就能稳定打出 500**。
   > **通用规则**：今后任何把客户端原始字节放进 proto `string` 字段的地方，都必须过同一道净化。
 
-受益的是**五个已有调用点**，它们本来就带 `RequestMeta`，无需各自改动：`BuildUpstreamRequest`、`ClassifyError`、`OnGatewayRequest`、`ResolveAffinityKey`、`RankAccounts`。
+受益的是**五个已有调用点**，它们本来就带 `RequestMeta`，无需各自改动：`BuildUpstreamRequest`、`ClassifyError`、`OnGatewayRequest`、`RankAccounts`（当时还有 `ResolveAffinityKey`，2026-10-10 已删除）。
 
 **`core.PlatformBinding` 增加 `Client PlatformPlugin`**，覆盖 §13 中「`PlatformBinding{Plugin, Builtin, Platform}`（去掉 `Client`）」的表述。
 
@@ -1464,7 +1467,7 @@ message RankedAccount {
 |---|---|
 | 调用者 | 声明该平台的插件（`PlatformBinding.Client`），不是账号类型所属插件 |
 | 时机 | 钩子匹配 / 分组白名单 / 定价 / 候选账号 `models` 过滤**之前**。未声明 `modelSource` 的端点一次都不调 |
-| `fields` | **平台级 `requestFields` + `passHeaders`**，与 `ResolveAffinityKey` 一致。`Endpoint` 上没有 `requestFields`，且此时还没选账号，账号类型那层的覆盖不可用 |
+| `fields` | **平台级 `requestFields` + `passHeaders`**。`Endpoint` 上没有 `requestFields`，且此时还没选账号，账号类型那层的覆盖不可用 |
 | 每请求次数 | 1 次。`checkModel()` 一次请求跑两次，结果缓存在 `call.modelResolved`；唯一失效点是钩子的 `setBody()`——钩子改了 body 才重问 |
 | 失败 | 超时 / 出错 / `Unimplemented` / nil / 空 model 一律 **400**。模型取不到就没法定价和限额，放行等于免费 |
 | `Client == nil` | **500** + `slog.Error`（带 platform/plugin/endpoint/protocol/builtin）。校验层已要求声明 `platform.adapter.v1`，运行时仍做 nil 检查 |
@@ -3697,7 +3700,7 @@ images/gateway.tar.gz      # Caddy 网关
 
 - 子标签只剩：连接与授权、网络配置、CC 特性、部署与运行。"账号容器"并入"部署与运行"（运行环境与镜像卡片之后）；账号列表显示容器内 Claude Code 版本（`GET /system/ccgateway/accounts/:id/health` 新增可选只读字段 `cli_version`，核心并行读 Worker `admin/features`，3 秒超时，取不到不返回）；请求调试日志一列只放开关，说明悬停/聚焦显示。
 - 删除"通用 API 特性"：官方 API 支持的功能不再是设置。`allow_fast`、`allow_effort` 在发给 Worker 的策略与设置读取中恒为 `true`，保存的 `false` 被忽略（默认值同步改为 true）。
-- "CC 特性"只保留"工具与错误处理"（直接展开）和"不支持的请求如何处理"（unknown_beta / unknown_field）；特性目录与附件默认来源的界面删除，已保存的附件设置继续生效并在保存时原样带回。
+- "CC 特性"包含"工具与错误处理"（直接展开）、"附件默认来源"（2026-10-10 按用户要求恢复：默认来源 client / gateway / both、按附件类型覆盖、环境字段 workingDirectory / platform 覆盖、未知客户端/容器附件放行或忽略）和"不支持的请求如何处理"（unknown_beta / unknown_field）；特性目录界面删除。
 
 ### 53.12 Worker 会话：客户端会话 ID 不变则内部会话 ID 不变（2026-10-09，用户要求）
 

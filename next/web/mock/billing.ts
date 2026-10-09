@@ -1164,39 +1164,33 @@ const stickyRules: any[] = [
   {
     id: 1,
     name: 'claude-code-session',
-    source: 'plugin_default',
-    plugin_key: 'anthropic',
+    source: 'builtin',
     enabled: true,
     priority: 100,
     match: { protocols: ['anthropic.messages'], models: ['claude-*'], userAgentContains: [] },
-    key_sources: [
-      { type: 'body', path: 'metadata.user_id' },
-      { type: 'header', name: 'x-session-id' }
-    ],
-    value_regex: 'session_([a-f0-9-]+)',
+    key_sources: [{ type: 'body', path: 'metadata.user_id' }],
+    value_regex: '',
     ttl_seconds: 3600,
     key_includes: ['group', 'model', 'rule'],
     on_failure: 'failover'
   },
   {
     id: 2,
-    name: 'anthropic-api-key',
-    source: 'plugin_default',
-    plugin_key: 'anthropic',
-    enabled: false,
-    priority: 10,
-    match: { protocols: ['anthropic.messages'], models: [], userAgentContains: [] },
-    key_sources: [{ type: 'api_key' }],
+    name: 'openai-prompt-cache-key',
+    source: 'builtin',
+    enabled: true,
+    priority: 101,
+    match: { protocols: ['openai.chat', 'openai.responses', 'openai.responses_ws'], models: [], userAgentContains: [] },
+    key_sources: [{ type: 'body', path: 'prompt_cache_key' }],
     value_regex: '',
-    ttl_seconds: 0,
-    key_includes: ['group', 'rule'],
+    ttl_seconds: 3600,
+    key_includes: ['group', 'model', 'rule'],
     on_failure: 'failover'
   },
   {
     id: 3,
     name: 'cli-users-stick',
     source: 'admin',
-    plugin_key: null,
     enabled: true,
     priority: 200,
     match: { protocols: [], models: ['claude-sonnet-*'], userAgentContains: ['claude-cli'] },
@@ -1209,7 +1203,7 @@ const stickyRules: any[] = [
 ]
 const stickyStats: Record<string, { hits: number; misses: number; rebinds: number }> = {
   'claude-code-session': { hits: 18234, misses: 2311, rebinds: 142 },
-  'anthropic-api-key': { hits: 0, misses: 0, rebinds: 0 },
+  'openai-prompt-cache-key': { hits: 0, misses: 0, rebinds: 0 },
   'cli-users-stick': { hits: 912, misses: 88, rebinds: 3 }
 }
 
@@ -1219,7 +1213,10 @@ on('POST', '/sticky-rules', (req) => {
   const b = req.body || {}
   if (!b.name) return fail(400, 'invalid_argument', 'invalid', { fields: [{ field: 'name', code: 'required', message: 'Name is required' }] })
   if (stickyRules.some((r) => r.name === b.name)) return fail(400, 'invalid_argument', 'invalid', { fields: [{ field: 'name', code: 'duplicate', message: 'Name already used' }] })
-  const rule = { ...b, id: nextId(), source: 'admin', plugin_key: null }
+  if ((b.key_sources || []).some((k: any) => !['body', 'header', 'api_key', 'user'].includes(k.type))) {
+    return fail(400, 'invalid_argument', 'invalid', { fields: [{ field: 'key_sources[0].type', code: 'invalid', message: 'type must be body, header, api_key or user' }] })
+  }
+  const rule = { ...b, id: nextId(), source: 'admin' }
   stickyRules.push(rule)
   return rule
 })
@@ -1227,8 +1224,8 @@ on('PATCH', '/sticky-rules/:id', (req) => {
   const r = stickyRules.find((x) => x.id === Number(req.params.id))
   if (!r) return fail(404, 'not_found', 'rule not found')
   const b = req.body || {}
-  if (r.source === 'plugin_default' && Object.keys(b).some((k) => !['enabled', 'priority', 'ttl_seconds'].includes(k))) {
-    return fail(409, 'conflict', 'plugin default rules only allow enabled/priority/ttl_seconds')
+  if (r.source !== 'admin' && Object.keys(b).some((k) => !['enabled', 'priority'].includes(k))) {
+    return fail(400, 'invalid_argument', 'built-in rules only accept enabled and priority')
   }
   Object.assign(r, b)
   return r
@@ -1236,7 +1233,7 @@ on('PATCH', '/sticky-rules/:id', (req) => {
 on('DELETE', '/sticky-rules/:id', (req) => {
   const i = stickyRules.findIndex((x) => x.id === Number(req.params.id))
   if (i < 0) return fail(404, 'not_found', 'rule not found')
-  if (stickyRules[i].source !== 'admin') return fail(409, 'conflict', 'plugin default rules cannot be deleted')
+  if (stickyRules[i].source !== 'admin') return fail(400, 'invalid_argument', 'built-in rules cannot be deleted; disable them instead')
   stickyRules.splice(i, 1)
   return noContent()
 })

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"regexp"
 	"strings"
 	"time"
@@ -45,17 +44,15 @@ type ruleMatchDTO struct {
 }
 
 type keySourceDTO struct {
-	Type  string   `json:"type"`
-	Path  string   `json:"path,omitempty"`
-	Name  string   `json:"name,omitempty"`
-	Needs []string `json:"needs,omitempty"`
+	Type string `json:"type"`
+	Path string `json:"path,omitempty"`
+	Name string `json:"name,omitempty"`
 }
 
 type ruleDTO struct {
 	ID          int64          `json:"id"`
 	Name        string         `json:"name"`
 	Source      string         `json:"source"`
-	PluginKey   *string        `json:"plugin_key"`
 	Enabled     bool           `json:"enabled"`
 	Priority    int            `json:"priority"`
 	Match       ruleMatchDTO   `json:"match"`
@@ -83,12 +80,8 @@ func toDTO(r *stickyRule) ruleDTO {
 		KeySources: []keySourceDTO{}, ValueRegex: r.ValueRegex, TTLSeconds: r.TTLSeconds,
 		KeyIncludes: nonNil(r.KeyIncludes), OnFailure: r.OnFailure, UpdatedBy: r.UpdatedBy, UpdatedAt: r.UpdatedAt.UTC(),
 	}
-	if r.PluginKey != "" {
-		pk := r.PluginKey
-		d.PluginKey = &pk
-	}
 	for _, s := range r.KeySources {
-		d.KeySources = append(d.KeySources, keySourceDTO{Type: s.Type, Path: s.Path, Name: s.Name, Needs: s.Needs})
+		d.KeySources = append(d.KeySources, keySourceDTO{Type: s.Type, Path: s.Path, Name: s.Name})
 	}
 	return d
 }
@@ -128,7 +121,7 @@ func (in *ruleInput) applyTo(r *stickyRule) {
 	if in.KeySources != nil {
 		r.KeySources = r.KeySources[:0]
 		for _, s := range *in.KeySources {
-			r.KeySources = append(r.KeySources, manifest.StickyKeySource{Type: s.Type, Path: s.Path, Name: s.Name, Needs: s.Needs})
+			r.KeySources = append(r.KeySources, manifest.StickyKeySource{Type: s.Type, Path: s.Path, Name: s.Name})
 		}
 	}
 	if in.ValueRegex != nil {
@@ -230,10 +223,11 @@ func validateRule(ctx context.Context, r *stickyRule, knownProtocol func(string)
 			if strings.TrimSpace(s.Name) == "" {
 				add(field+".name", "required", "name is required for header sources", "header 来源必须填写 name")
 			}
-		case "api_key", "user", "plugin":
+		case "api_key", "user":
 		default:
-			add(field+".type", "invalid", "type must be body, header, api_key, user or plugin",
-				"type 只能是 body、header、api_key、user 或 plugin")
+			// The session value comes from the request; no plugin computes it.
+			add(field+".type", "invalid", "type must be body, header, api_key or user",
+				"type 只能是 body、header、api_key 或 user")
 		}
 	}
 	if r.ValueRegex != "" {
@@ -384,12 +378,12 @@ func (g *Gateway) updateRuleHandler(c *gin.Context) {
 		return
 	}
 	if r.Source != sourceAdmin && in.definitionChanged() {
-		// Plugin and built-in defaults are rewritten on upgrade; only the
-		// switches an administrator owns survive. Overrides are admin rules
-		// of the same name.
-		msg := "default rules (plugin or built-in) only accept enabled and priority; create an admin rule with the same name to override it"
+		// Built-in defaults follow the core's code; only the switches an
+		// administrator owns survive an upgrade. Overrides are admin rules of
+		// the same name.
+		msg := "built-in rules only accept enabled and priority; create an admin rule with the same name to override it"
 		if core.Locale(ctx) == "zh" {
-			msg = "默认规则（插件或内置）只能修改启用状态和优先级；如需覆盖，请新建同名的管理员规则"
+			msg = "内置规则只能修改启用状态和优先级；如需覆盖，请新建同名的管理员规则"
 		}
 		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage(msg))
 		return
@@ -452,9 +446,9 @@ func (g *Gateway) deleteRuleHandler(c *gin.Context) {
 		return
 	}
 	if r.Source != sourceAdmin {
-		msg := "default rules (plugin or built-in) cannot be deleted; disable them instead"
+		msg := "built-in rules cannot be deleted; disable them instead"
 		if core.Locale(ctx) == "zh" {
-			msg = "默认规则（插件或内置）不能删除，可以停用"
+			msg = "内置规则不能删除，可以停用"
 		}
 		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage(msg))
 		return
@@ -463,7 +457,7 @@ func (g *Gateway) deleteRuleHandler(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	// Bindings under this name may be shared with a plugin default of the
+	// Bindings under this name may be shared with a built-in rule of the
 	// same name, so they are left to expire; only the counters go.
 	if g.d.Redis != nil && !g.ruleNameInUse(ctx, db, r.Name) {
 		_ = g.d.Redis.Del(ctx, stickyStatsKey(r.Name)).Err()
@@ -634,29 +628,10 @@ func (g *Gateway) putStickySettingsHandler(c *gin.Context) {
 
 // ---------------------------------------------------------------- default rules
 
-// SyncPluginDefaults implements core.StickyRuleCatalog: it replaces the
-// plugin's source=plugin_default rules (the stickyRules of every platform the
-// plugin declares, concatenated by the caller) inside the install/upgrade
-// transaction. Admin and built-in rules are untouched; the enabled flag and
-// priority an administrator set on an existing default rule are kept.
-func (g *Gateway) SyncPluginDefaults(ctx context.Context, tx pgx.Tx, pluginKey string, rules []manifest.StickyRule) error {
-	if pluginKey == "" {
-		return errors.New("sync plugin sticky rules: empty plugin key")
-	}
-	if err := syncDefaultRules(ctx, tx, sourcePluginDefault, &pluginKey, rules); err != nil {
-		return err
-	}
-	// Invalidate now and again after the caller commits.
-	g.rules.invalidate()
-	cctx := context.WithoutCancel(ctx)
-	time.AfterFunc(time.Second, func() { g.changed(cctx, "sticky_rules") })
-	return nil
-}
-
 // SyncBuiltinDefaults writes the default sticky rules of the built-in
-// platforms (source=builtin, no plugin key) with the same semantics as
-// plugin defaults: definitions follow the code, administrators only switch
-// them on or off and reorder them. Called when the gateway starts.
+// platforms (source=builtin): definitions follow the code, administrators
+// only switch them on or off and reorder them. Called when the gateway
+// starts.
 func (g *Gateway) SyncBuiltinDefaults(ctx context.Context) error {
 	if g.d.DB == nil {
 		return nil
@@ -666,7 +641,7 @@ func (g *Gateway) SyncBuiltinDefaults(ctx context.Context) error {
 		rules = append(rules, p.StickyRules...)
 	}
 	if err := g.d.DB.Tx(ctx, func(tx pgx.Tx) error {
-		return syncDefaultRules(ctx, tx, sourceBuiltin, nil, rules)
+		return syncBuiltinRules(ctx, tx, rules)
 	}); err != nil {
 		return err
 	}
@@ -674,10 +649,9 @@ func (g *Gateway) SyncBuiltinDefaults(ctx context.Context) error {
 	return nil
 }
 
-// syncDefaultRules upserts rules as defaults of (source, pluginKey) and
-// deletes that owner's defaults no longer listed. A name the same source
-// already uses for another owner is skipped.
-func syncDefaultRules(ctx context.Context, tx pgx.Tx, source string, pluginKey *string, rules []manifest.StickyRule) error {
+// syncBuiltinRules upserts rules as the built-in defaults and deletes the
+// built-in defaults no longer listed.
+func syncBuiltinRules(ctx context.Context, tx pgx.Tx, rules []manifest.StickyRule) error {
 	names := make([]string, 0, len(rules))
 	for i, r := range rules {
 		name := strings.TrimSpace(r.Name)
@@ -692,32 +666,19 @@ func syncDefaultRules(ctx context.Context, tx pgx.Tx, source string, pluginKey *
 		if len(includes) == 0 {
 			includes = defaultKeyIncludes
 		}
-		tag, err := tx.Exec(ctx, `
-			INSERT INTO sticky_rules (name, source, plugin_key, enabled, priority, match, key_sources, value_regex,
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO sticky_rules (name, source, enabled, priority, match, key_sources, value_regex,
 				ttl_seconds, key_includes, on_failure, updated_at)
-			VALUES ($1, $2, $3, true, $4, $5, $6, $7, $8, $9, $10, now())
+			VALUES ($1, 'builtin', true, $2, $3, $4, $5, $6, $7, $8, now())
 			ON CONFLICT (name, source) DO UPDATE SET match = EXCLUDED.match, key_sources = EXCLUDED.key_sources,
 				value_regex = EXCLUDED.value_regex, ttl_seconds = EXCLUDED.ttl_seconds,
-				key_includes = EXCLUDED.key_includes, on_failure = EXCLUDED.on_failure, updated_at = now()
-			WHERE sticky_rules.plugin_key IS NOT DISTINCT FROM EXCLUDED.plugin_key`,
-			name, source, pluginKey, 100+i, mustJSON(r.Match), mustJSON(r.KeySources), r.ValueRegex, max(r.TTLSeconds, 0),
-			mustJSON(includes), onFailure)
-		if err != nil {
+				key_includes = EXCLUDED.key_includes, on_failure = EXCLUDED.on_failure, updated_at = now()`,
+			name, 100+i, mustJSON(r.Match), mustJSON(r.KeySources), r.ValueRegex, max(r.TTLSeconds, 0),
+			mustJSON(includes), onFailure); err != nil {
 			return err
-		}
-		if tag.RowsAffected() == 0 {
-			owner := ""
-			if pluginKey != nil {
-				owner = *pluginKey
-			}
-			slog.WarnContext(ctx, "gateway: sticky rule name owned by another plugin, skipped",
-				"source", source, "plugin", owner, "rule", name)
-			continue
 		}
 		names = append(names, name)
 	}
-	_, err := tx.Exec(ctx, `
-		DELETE FROM sticky_rules WHERE source = $1 AND plugin_key IS NOT DISTINCT FROM $2 AND NOT (name = ANY($3))`,
-		source, pluginKey, names)
+	_, err := tx.Exec(ctx, `DELETE FROM sticky_rules WHERE source = 'builtin' AND NOT (name = ANY($1))`, names)
 	return err
 }

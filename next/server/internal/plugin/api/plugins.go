@@ -38,6 +38,11 @@ type PluginSummary struct {
 	// Builtin plugins ship with the image: they can be disabled, not uninstalled.
 	Builtin     bool `json:"builtin"`
 	HasSettings bool `json:"has_settings"`
+	// ResourceConflicts are the exclusive resources the current generation
+	// of this node could not give the plugin (another plugin claimed them
+	// first, or the core holds them): the console shows the plugin as
+	// abnormal (audit 2026-10-09 P2-2).
+	ResourceConflicts []core.ResourceConflict `json:"resource_conflicts"`
 }
 
 // NodeSummary counts live nodes by reported plugin state.
@@ -64,8 +69,17 @@ func scanSummary(row interface{ Scan(...any) error }) (*PluginSummary, error) {
 	return &s, nil
 }
 
-// fillSummary adds current version, signature status and publisher fallback.
+// fillSummary adds current version, signature status, publisher fallback and
+// the resource conflicts of the current generation.
 func (a *API) fillSummary(ctx context.Context, s *PluginSummary) error {
+	s.ResourceConflicts = []core.ResourceConflict{}
+	if a.d.Registry != nil {
+		if g := a.d.Registry.Current(); g != nil {
+			if info, ok := g.Plugin(s.Key); ok && len(info.Conflicts) > 0 {
+				s.ResourceConflicts = info.Conflicts
+			}
+		}
+	}
 	v, err := install.CurrentVersion(ctx, a.d.DB.Pool, s.Key)
 	if err != nil {
 		return err
@@ -410,6 +424,17 @@ func (a *API) enable(c *gin.Context) {
 		httpapi.Fail(c, core.ErrConflict.WithMessage("the plugin is awaiting consent"))
 		return
 	}
+	// The resources the version holds are checked again: another plugin may
+	// have been approved, or the core upgraded, while it was disabled.
+	if v, err := install.CurrentVersion(c.Request.Context(), a.d.DB.Pool, key); err != nil {
+		httpapi.Fail(c, err)
+		return
+	} else if v != "" {
+		if err := a.d.Install.CheckResources(c.Request.Context(), key, v); err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+	}
 	rc, ok := a.rollout(c)
 	if !ok {
 		return
@@ -479,6 +504,10 @@ func (a *API) upgrade(c *gin.Context) {
 	}
 	if sig == pkg.SigRevoked {
 		httpapi.Fail(c, core.ErrPermissionDenied.WithMessage("the version's signature has been revoked"))
+		return
+	}
+	if err := a.d.Install.CheckResources(c.Request.Context(), key, in.Version); err != nil {
+		httpapi.Fail(c, err)
 		return
 	}
 	rc, ok := a.rollout(c)

@@ -15,7 +15,7 @@ export default {
   statsLine: '{hits} hits · {misses} misses · {rebinds} rebinds',
   source: {
     admin: 'Admin',
-    plugin_default: 'Plugin default'
+    builtin: 'Built-in'
   },
   cols: {
     priority: 'Priority',
@@ -31,8 +31,7 @@ export default {
     body: 'Body field',
     header: 'Header',
     api_key: 'API key',
-    user: 'User',
-    plugin: 'Plugin'
+    user: 'User'
   },
   keyTypeHint: {
     api_key: 'the API key making the request',
@@ -65,7 +64,7 @@ export default {
     createTitle: 'New sticky rule',
     editTitle: 'Edit rule · {name}',
     copyTitle: 'Copy as admin rule',
-    limitedHint: 'Default rule of plugin {plugin}: only enabled, priority and TTL can be changed. Copy it as an admin rule to change the rest.',
+    limitedHint: 'Built-in rule: only enabled and priority can be changed. Copy it as an admin rule (same name) to change the rest; the admin rule then replaces it.',
     priorityHint: 'Higher is checked first',
     match: 'Match',
     protocols: 'Protocols',
@@ -81,7 +80,6 @@ export default {
     emptyAny: 'Empty = any',
     keySources: 'Session key sources',
     keySourcesHint: 'Tried in order; the first non-empty value is used.',
-    needsPlaceholder: 'inputs the plugin needs (body, headers…)',
     valueRegex: 'Value regex',
     valueRegexHint: 'Optional; the first capture group (or whole match) of the value is used',
     ttlHint: '0 = use the default TTL',

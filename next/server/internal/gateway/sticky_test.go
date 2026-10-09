@@ -184,14 +184,8 @@ func TestStickyDisabledGlobally(t *testing.T) {
 }
 
 type fakeScheduler struct {
-	got     *pluginv1.ResolveAffinityKeyRequest
 	gotRank *pluginv1.RankAccountsRequest
 	ranked  []*pluginv1.RankedAccount
-}
-
-func (s *fakeScheduler) ResolveAffinityKey(_ context.Context, in *pluginv1.ResolveAffinityKeyRequest) (*pluginv1.ResolveAffinityKeyResponse, error) {
-	s.got = in
-	return &pluginv1.ResolveAffinityKeyResponse{Value: "conv-" + strings.Trim(in.GetFields()["metadata.conv"], `"`)}, nil
 }
 
 func (s *fakeScheduler) RankAccounts(_ context.Context, in *pluginv1.RankAccountsRequest) (*pluginv1.RankAccountsResponse, error) {
@@ -204,7 +198,7 @@ func TestStickyKeySources(t *testing.T) {
 	sched := &fakeScheduler{}
 	e.gen.scheds["anthropic"] = sched
 	mk := func(src ...manifest.StickyKeySource) *stickyRule {
-		return &stickyRule{Name: "r", PluginKey: "anthropic", KeySources: src}
+		return &stickyRule{Name: "r", KeySources: src}
 	}
 	c := &call{g: e.gw, gen: e.gen, ep: endpointOf(t, builtinPlatform(t, "anthropic"), "anthropic.messages"), model: testModel}
 	c.principal = e.auth.keys[testKey]
@@ -222,15 +216,17 @@ func TestStickyKeySources(t *testing.T) {
 		{mk(manifest.StickyKeySource{Type: "body", Path: "n"}), "5"},
 		{mk(manifest.StickyKeySource{Type: "api_key"}), "5"},
 		{mk(manifest.StickyKeySource{Type: "user"}), strconv.FormatInt(testUser, 10)},
-		{mk(manifest.StickyKeySource{Type: "plugin", Needs: []string{"metadata.conv"}}), "conv-42"},
+		// A "plugin" source (removed, CONTRACTS §5.6) yields nothing even with
+		// a scheduling plugin present: no plugin is ever asked.
+		{mk(manifest.StickyKeySource{Type: "plugin"}), ""},
 	}
 	for i, tc := range cases {
 		if got := c.stickyValue(ctx, tc.rule); got != tc.want {
 			t.Fatalf("case %d: got %q want %q", i, got, tc.want)
 		}
 	}
-	if sched.got.GetRuleName() != "r" || sched.got.GetFields()["metadata.conv"] != `"42"` {
-		t.Fatalf("affinity request %+v", sched.got)
+	if sched.gotRank != nil {
+		t.Fatal("a plugin took part in the session value")
 	}
 	// valueRegex extracts the first group.
 	r := mk(manifest.StickyKeySource{Type: "body", Path: "metadata.user_id"})
@@ -255,17 +251,14 @@ func TestStickyRuleMatching(t *testing.T) {
 		r.matches("anthropic.messages", "claude-x", "curl/8") {
 		t.Fatal("should not match")
 	}
-	// Same-name shadowing: admin over built-in over plugin default;
-	// disabled rules are dropped.
+	// Same-name shadowing: admin over built-in; disabled rules are dropped.
 	list := activeRules([]*stickyRule{
-		{Name: "a", Source: sourcePluginDefault, Enabled: true},
+		{Name: "a", Source: sourceBuiltin, Enabled: true},
 		{Name: "a", Source: sourceAdmin, Enabled: true},
 		{Name: "b", Source: sourceAdmin, Enabled: false},
 		{Name: "c", Source: sourceAdmin, Enabled: true, ValueRegex: "("},
-		{Name: "d", Source: sourcePluginDefault, Enabled: true},
 		{Name: "d", Source: sourceBuiltin, Enabled: true},
 		{Name: "e", Source: sourceBuiltin, Enabled: false},
-		{Name: "e", Source: sourcePluginDefault, Enabled: true},
 	})
 	if len(list) != 2 || list[0].Source != sourceAdmin || list[1].Name != "d" || list[1].Source != sourceBuiltin {
 		t.Fatalf("active rules %+v", list)

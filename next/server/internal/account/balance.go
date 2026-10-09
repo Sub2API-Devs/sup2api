@@ -66,28 +66,30 @@ func formatMoney(micros int64, currency string) string {
 }
 
 // BalanceProvider is the extension point for plugins to provide custom balance
-// query logic (CONTRACTS §51.2). Plugins register their provider at init; the
-// core calls it when manifest declares balance support.
+// query logic (CONTRACTS §51.2). A provider is registered for one account type,
+// identified by (plugin key, type id); the core calls it when the account
+// type declares balance support.
 type BalanceProvider interface {
 	QueryBalance(ctx context.Context, accountID int64) (*store.BalanceSnapshot, error)
 }
 
 var (
 	balanceProvidersMu sync.RWMutex
-	balanceProviders   = map[string]BalanceProvider{}
+	balanceProviders   = map[core.AccountTypeKey]BalanceProvider{}
 )
 
-// RegisterBalanceProvider registers a custom balance provider for a plugin key.
-func RegisterBalanceProvider(pluginKey string, p BalanceProvider) {
+// RegisterBalanceProvider registers a custom balance provider for an account
+// type: other account types of the same plugin do not get it.
+func RegisterBalanceProvider(t core.AccountTypeKey, p BalanceProvider) {
 	balanceProvidersMu.Lock()
 	defer balanceProvidersMu.Unlock()
-	balanceProviders[pluginKey] = p
+	balanceProviders[t] = p
 }
 
-func getBalanceProvider(pluginKey string) BalanceProvider {
+func getBalanceProvider(t core.AccountTypeKey) BalanceProvider {
 	balanceProvidersMu.RLock()
 	defer balanceProvidersMu.RUnlock()
-	return balanceProviders[pluginKey]
+	return balanceProviders[t]
 }
 
 // accountBalance queries the balance of one account when force=true or the
@@ -110,7 +112,7 @@ func (s *Service) accountBalance(ctx context.Context, a *row, force bool) (*Bala
 	}
 
 	// Check provider
-	prov := getBalanceProvider(a.PluginKey)
+	prov := getBalanceProvider(core.AccountTypeKey{PluginKey: a.PluginKey, Type: a.Type})
 	if prov == nil {
 		// No provider registered, return current snapshot
 		return balanceView(snap), nil

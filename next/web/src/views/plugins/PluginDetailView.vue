@@ -11,7 +11,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { usePluginStore } from '@/stores/plugins'
 import { consentPath } from './reviewCache'
-import { compareVersions, isPendingConsent, type PluginDetail, type PluginSettings } from './pluginUtil'
+import { compareVersions, conflictLines, isPendingConsent, shownStatus, type PluginDetail, type PluginSettings } from './pluginUtil'
 import PluginAvatar from './parts/PluginAvatar.vue'
 import StatusBadge from './parts/StatusBadge.vue'
 import TrustBadge from './parts/TrustBadge.vue'
@@ -209,7 +209,7 @@ onMounted(load)
           <span v-if="detail.desired_version && detail.desired_version !== detail.active_version" class="font-mono text-xs text-primary-600 dark:text-primary-400">
             → v{{ detail.desired_version }}
           </span>
-          <StatusBadge :status="detail.status" />
+          <StatusBadge :status="shownStatus(detail)" />
           <TrustBadge :trust="detail.trust" />
           <SBadge v-if="detail.builtin" tone="info" :title="t('plugins.builtinHint')">{{ t('plugins.builtin') }}</SBadge>
         </template>
@@ -238,6 +238,19 @@ onMounted(load)
       </SPageHeader>
 
       <p v-if="detail.status_reason" class="-mt-3 mb-4 text-sm text-red-600 dark:text-red-400">{{ detail.status_reason }}</p>
+
+      <!-- exclusive resources this node's generation could not give the plugin (audit 2026-10-09 P2-2) -->
+      <div
+        v-if="detail.resource_conflicts?.length"
+        class="mb-4 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+        data-testid="plugin-conflicts"
+      >
+        <div class="font-medium">{{ t('plugins.conflicts.title') }}</div>
+        <p class="mt-1 text-xs">{{ t('plugins.conflicts.hint') }}</p>
+        <ul class="mt-2 list-disc space-y-1 pl-5 font-mono text-xs">
+          <li v-for="(line, i) in conflictLines(detail)" :key="i">{{ line }}</li>
+        </ul>
+      </div>
 
       <!-- consent just recorded -->
       <div

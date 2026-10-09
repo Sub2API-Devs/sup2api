@@ -636,7 +636,7 @@ func (c *call) passHeaders(names []string) map[string]string {
 func (c *call) fail(e *gwError) {
 	if c.rec != nil {
 		c.rec.Success = false
-		c.rec.StatusCode = e.Status
+		c.rec.StatusCode = clientError(c.format, e).Status
 		if e.RecordType != "" {
 			c.rec.ErrorType = e.RecordType
 		} else if c.rec.ErrorType == "" {

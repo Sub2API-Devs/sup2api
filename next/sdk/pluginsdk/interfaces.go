@@ -161,17 +161,11 @@ type HTTP interface {
 	HandleHTTP(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error)
 }
 
-// Scheduler supplies a request-affinity policy ("scheduler.affinity.v1").
-// Despite its historical name, it does not run tasks or choose a node: the
-// core invokes it synchronously and retains all execution/scheduling authority.
-type Scheduler interface {
-	ResolveAffinityKey(context.Context, *pluginv1.ResolveAffinityKeyRequest) (*pluginv1.ResolveAffinityKeyResponse, error)
-}
-
 // AccountRanker is a policy extension that rewrites the
 // priority/weight of the candidate accounts of a request
-// ("scheduler.rank.v1", declared in manifest scheduler.rank). Optional: a
-// Scheduler without it answers RankAccounts with UNIMPLEMENTED.
+// ("scheduler.rank.v1", declared in manifest scheduler.rank). Plugins take
+// no part in sticky sessions: the core and the administrator own the rules
+// and the session values.
 type AccountRanker interface {
 	RankAccounts(context.Context, *pluginv1.RankAccountsRequest) (*pluginv1.RankAccountsResponse, error)
 }

@@ -379,6 +379,13 @@ func (s *Service) list(c *gin.Context) {
 			add("a.plugin_key = ANY(?)", keys)
 		}
 	}
+	// An account type is identified by (plugin key, type id): two plugins
+	// may both declare "apikey".
+	if c.Query("type") != "" && c.Query("plugin_key") == "" {
+		httpapi.Fail(c, core.InvalidFields(core.FieldError{Field: "type", Code: "requires_plugin_key",
+			Message: "type filters by (plugin_key, type); pass plugin_key too"}))
+		return
+	}
 	if v := c.Query("plugin_key"); v != "" {
 		add("a.plugin_key = ?", v)
 	}

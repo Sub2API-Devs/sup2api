@@ -132,8 +132,6 @@ func Platform(key, version, publisher string) *manifest.Manifest {
 			},
 			RequestFields: []string{"model"},
 			Usage:         manifest.UsageRules{Semantics: "inclusive"},
-			StickyRules: []manifest.StickyRule{{Name: "session",
-				KeySources: []manifest.StickyKeySource{{Type: "header", Name: "x-session-id"}}}},
 		}},
 		AccountTypes: []manifest.AccountType{{
 			ID: "apikey", Label: manifest.LocalizedText{"en": "API Key"},

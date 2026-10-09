@@ -506,7 +506,7 @@ flowchart LR
     hk["HookService<br/>OnGatewayRequest"]
     ap["AppService<br/>RunJob · OnEvents"]
     hx["HTTPService<br/>HandleHTTP"]
-    sc["SchedulerService（可选）<br/>ResolveAffinityKey · RankAccounts"]
+    sc["SchedulerService（可选）<br/>RankAccounts"]
     ms["MigrationService<br/>MigrateData（可选）"]
   end
   rt --> ps & pf & hk & ap & hx & sc & ms
@@ -610,7 +610,7 @@ stateDiagram-v2
 |---|---|
 | 🟢 低 | `kv`、`config`、`log`、`broadcast` |
 | 🟡 中 | `routes.admin`、`routes.user`、`events`、`jobs`、`ui.menu`、`ui.iframe`、`accounts.read`、`lock`（CONTRACTS §27.3） |
-| 🟠 高 | `db.schema`、`net`（白名单模式下）、`routes.public`、`routes.webhook`、`gateway.hook`、`gateway.endpoint`、`platform.register`、`scheduler.affinity`、`scheduler.rank`、`users.read` |
+| 🟠 高 | `db.schema`、`net`（白名单模式下）、`routes.public`、`routes.webhook`、`gateway.hook`、`gateway.endpoint`、`platform.register`、`scheduler.rank`、`users.read` |
 | 🔴 极高 | `accounts.credentials`、`ledger.credit`、`ledger.debit`、`ui.native`、`users.write`、`db.core_views` |
 
 - 高和极高风险需要逐项勾选；极高风险只能由拥有 `plugin:grant:critical` 的用户批准（2026-10-05 起不再要求再次输入密码，CONTRACTS §3.3）
@@ -795,16 +795,14 @@ sequenceDiagram
 
 同一个会话的连续请求尽量落到同一个账号，以提高上游的缓存命中率。参考 new-api 的 channel affinity 设计，代码自行实现。
 
-**核心负责调度，插件提供默认规则**：
+**粘性会话只由核心和管理员决定，插件不参与**（2026-10-10；粘性与限流身份、failover 耦合，留在核心）：
 
 | 谁 | 负责什么 |
 |---|---|
-| 核心 | 规则匹配、会话 key 计算、绑定的存取（Redis，多节点共享）、账号可用性检查、失败策略、命中统计、管理页面 |
-| 平台插件 | 在 manifest `platform.stickyRules` 里提供默认规则（只有插件知道哪个字段代表会话） |
-| 管理员 | 在控制台覆盖、停用插件规则，或新增规则 |
-| 插件（可选扩展） | 规则取值太复杂、无法声明时，实现 `SchedulerService.ResolveAffinityKey`，规则里用 `{"type": "plugin"}` 引用 |
+| 核心 | 规则匹配、会话 key 计算、绑定的存取（Redis，多节点共享）、账号可用性检查、失败策略、命中统计、管理页面；随内置平台（`sdk/platforms/*.json`）带默认规则 |
+| 管理员 | 在控制台停用、调整内置规则的优先级，用同名管理员规则覆盖，或新增规则 |
 
-`SchedulerService` 的两个方法分工不同，都是独立能力：`ResolveAffinityKey`（`scheduler.affinity.v1`）决定**怎么粘**（会话键怎么算），`RankAccounts`（`scheduler.rank.v1`，见 6.2 与 CONTRACTS §24）决定**未命中粘性时在候选里怎么排**。命中粘性绑定的请求直接用绑定账号，不会调用 `RankAccounts`。
+插件 manifest 不能声明粘性规则，也不能计算会话值（原 `SchedulerService.ResolveAffinityKey` / `scheduler.affinity.v1` 已删除）；会话值只从请求取：请求体字段、请求头、API Key、用户。插件仍可通过 `RankAccounts`（`scheduler.rank.v1`，见 6.2 与 CONTRACTS §24）决定**未命中粘性时在候选里怎么排**；命中粘性绑定的请求直接用绑定账号，不会调用 `RankAccounts`。
 
 **规则**：
 
@@ -836,7 +834,7 @@ sequenceDiagram
 
 - 全局开关、默认 TTL、每条规则的命中率统计（Redis 计数），在控制台"粘性会话"页查看和管理，支持按规则清空绑定
 - 使用记录中记录本次请求是否命中粘性绑定（`sticky_rule`、`sticky_hit`）
-- 规则存在 `sticky_rules` 表：`source=plugin_default` 由插件安装和升级时写入、卸载时删除；`source=admin` 由管理员维护，插件变更不影响
+- 规则存在 `sticky_rules` 表：`source=builtin` 由核心启动时同步，`source=admin` 由管理员维护；插件安装、升级、卸载都不改它（约束 `sticky_rules_core_only`，迁移 0048）
 
 ### 6.6 平台、账号类型、账号、分组与端点
 
@@ -890,7 +888,7 @@ flowchart LR
   "endpoints": [ { "id": "gen", "method": "POST", "path": "/v1/video/generations",
                    "protocol": "myvideo.gen", "auth": {...}, "request": {...}, "response": {...},
                    "errorFormat": "plain", "billing": "usage", "usage": {...} } ],
-  "requestFields": [...], "passHeaders": [...], "usage": {...}, "stickyRules": [...]
+  "requestFields": [...], "passHeaders": [...], "usage": {...}   // 没有 stickyRules：插件不参与粘性会话（6.5）
 } ],
 "accountTypes": [ {
   "id": "relay_key", "label": {...}, "form": {...}, "sensitiveFields": ["api_key"],

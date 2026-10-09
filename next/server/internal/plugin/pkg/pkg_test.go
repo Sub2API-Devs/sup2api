@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io/fs"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -326,12 +327,15 @@ func TestValidateConsistency(t *testing.T) {
 			m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "gateway.endpoint"})
 			m.Platforms = []manifest.Platform{{ID: "guardp", Endpoints: []manifest.Endpoint{guardEndpoint("guardp", "POST", "/v1/guard")}}}
 		}, "platforms", "missing_host_permission"},
-		{"sticky plugin source", func(m *manifest.Manifest, _ map[string][]byte) {
-			m.Capabilities = append(m.Capabilities, manifest.Capability{ID: manifest.CapSchedulerAffinity})
+		// Plugins take no part in sticky sessions (CONTRACTS §5.6).
+		{"sticky rules", func(m *manifest.Manifest, _ map[string][]byte) {
 			m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "gateway.endpoint"}, manifest.HostPermission{ID: "platform.register"})
 			m.Platforms = []manifest.Platform{{ID: "guardp", Endpoints: []manifest.Endpoint{guardEndpoint("guardp", "POST", "/v1/guard")},
-				StickyRules: []manifest.StickyRule{{Name: "s", KeySources: []manifest.StickyKeySource{{Type: "plugin"}}}}}}
-		}, "platforms[0].stickyRules[0].keySources[0]", "missing_host_permission"},
+				StickyRules: []manifest.StickyRule{{Name: "s", KeySources: []manifest.StickyKeySource{{Type: "header", Name: "x"}}}}}}
+		}, "platforms[0].stickyRules", "sticky_not_for_plugins"},
+		{"affinity capability", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.Capabilities = append(m.Capabilities, manifest.Capability{ID: "scheduler.affinity.v1"})
+		}, "capabilities[" + strconv.Itoa(len(pkgtest.Guard("guard", "0.1.0", "sub2api").Capabilities)) + "]", "sticky_not_for_plugins"},
 		{"account types need credentials", func(m *manifest.Manifest, _ map[string][]byte) {
 			m.Capabilities = append(m.Capabilities, manifest.Capability{ID: manifest.CapPlatformAdapter})
 			m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "platform.register"})
@@ -541,9 +545,9 @@ func TestValidatePlatformAndAccountTypes(t *testing.T) {
 			ep(m, 0).Path = "/v1/files/:id"
 			ep(m, 0).Request = manifest.EndpointRequest{ModelParam: "id"}
 		}, "platforms[0].endpoints[0].path", "invalid_path"},
-		{"sticky rule name", func(m *manifest.Manifest, _ map[string][]byte) {
-			m.Platforms[0].StickyRules[0].Name = ""
-		}, "platforms[0].stickyRules[0].name", "required"},
+		{"sticky rules", func(m *manifest.Manifest, _ map[string][]byte) {
+			m.Platforms[0].StickyRules = []manifest.StickyRule{{Name: "session", KeySources: []manifest.StickyKeySource{{Type: "header", Name: "x-session-id"}}}}
+		}, "platforms[0].stickyRules", "sticky_not_for_plugins"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

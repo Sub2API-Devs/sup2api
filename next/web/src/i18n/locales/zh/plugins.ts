@@ -18,6 +18,7 @@ export default {
   },
 
   status: {
+    abnormal: '异常',
     awaiting_consent: '待授权',
     installed: '已安装',
     enabling: '启用中',
@@ -87,7 +88,6 @@ export default {
     gateway_hook: '网关钩子',
     gateway_endpoint: '网关端点',
     platform_register: '注册平台或账号类型',
-    scheduler_affinity: '调度亲和',
     scheduler_rank: '改写账号调度参数',
     users_read: '读取用户',
     accounts_credentials: '账号凭证',
@@ -437,5 +437,10 @@ export default {
       cancelled: '发布已取消，各节点继续运行 v{version}。',
       rolled_back: '发布已回滚到 v{version}。'
     }
+  },
+  conflicts: {
+    short: '{n} 项资源未分配',
+    title: '资源未分配',
+    hint: '这些资源已被先占用的插件或核心持有（例如核心升级后新增了保留路径或内置平台），本插件在没有它们的情况下运行，下列端点不会生效。请停用或卸载冲突的插件，或升级本插件后重新启用。'
   }
 }

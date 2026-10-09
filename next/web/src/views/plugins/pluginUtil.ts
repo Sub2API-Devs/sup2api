@@ -1,7 +1,7 @@
 // Shared helpers and DTOs of the plugin pages (list, consent, detail,
 // rollout, market). Shapes not frozen by CONTRACTS.md are typed loosely and
 // read tolerantly (camelCase or snake_case).
-import type { LText, Trust } from '@/api/types'
+import type { LText, Trust, ResourceConflict } from '@/api/types'
 import type { Tone } from '@sub2api/ui'
 
 export type Risk = 'low' | 'medium' | 'high' | 'critical'
@@ -27,7 +27,6 @@ export const HOST_PERMISSION_RISK: Record<string, Risk> = {
   'gateway.hook': 'high',
   'gateway.endpoint': 'high',
   'platform.register': 'high',
-  'scheduler.affinity': 'high',
   'scheduler.rank': 'high',
   'users.read': 'high',
   'accounts.credentials': 'critical',
@@ -62,6 +61,16 @@ export function riskDotClass(r: string): string {
   }
 }
 
+/** The status a plugin is shown with: "abnormal" while it holds resource conflicts. */
+export function shownStatus(p: { status: string; resource_conflicts?: ResourceConflict[] | null }): string {
+  return p.resource_conflicts?.length ? 'abnormal' : p.status
+}
+
+/** One line per conflict: "platform video: <reason>". */
+export function conflictLines(p: { resource_conflicts?: ResourceConflict[] | null }): string[] {
+  return (p.resource_conflicts || []).map((c) => `${c.resource} ${c.id}: ${c.reason}`)
+}
+
 export function statusTone(s: string | undefined | null): Tone {
   switch (s) {
     case 'enabled':
@@ -90,6 +99,7 @@ export function statusTone(s: string | undefined | null): Tone {
     case 'rejected':
     case 'revoked':
     case 'unavailable':
+    case 'abnormal':
       return 'danger'
     default:
       return 'gray'
@@ -320,6 +330,8 @@ export interface PluginDetail {
   key: string
   name: LText
   status: string
+  /** Non-empty: the plugin is abnormal (see ResourceConflict). */
+  resource_conflicts?: ResourceConflict[]
   /** Ships with the image: can be disabled, not uninstalled. */
   builtin?: boolean
   status_reason?: string

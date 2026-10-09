@@ -11,17 +11,6 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 )
 
-// ============================================================ plugin defaults sinks
-// Called by the plugin runtime (C1) inside the install/upgrade transaction.
-// Rows with source=plugin_default are replaced; admin rows are untouched.
-// Model prices are not plugin defaults: administrators set them (CONTRACTS §17).
-// Uninstall relies on ON DELETE CASCADE from plugins(key).
-
-// StickyRuleCatalog is implemented by the gateway (G).
-type StickyRuleCatalog interface {
-	SyncPluginDefaults(ctx context.Context, tx pgx.Tx, pluginKey string, rules []manifest.StickyRule) error
-}
-
 // ============================================================ lifecycle <-> runtime (C1 <-> C2)
 
 // Rollout is the API view of one plugin_rollouts row plus live node states.

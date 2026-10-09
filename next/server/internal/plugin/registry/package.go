@@ -33,6 +33,10 @@ type Package struct {
 	Manifest  *manifest.Manifest
 	Publisher string
 	Trust     string // official | verified | community | unsigned
+	// ClaimedAt is when the plugin key was first approved (plugins.
+	// installed_at): the first claimant of an exclusive resource keeps it.
+	// Zero when unknown (dev tooling, tests).
+	ClaimedAt time.Time
 	// Dir is DataDir/<key>/<version>-<hash8>; the package file and the
 	// extracted binary live below it.
 	Dir string
@@ -270,12 +274,14 @@ func (s *Packages) load(ctx context.Context, key, version string) (*Package, err
 		sigStatus    string
 		publisher    *string
 		trust        *string
+		claimedAt    *time.Time
 	)
 	err := s.db.Pool.QueryRow(ctx, `
-		SELECT v.manifest, v.package_sha256, v.package_url, v.signature_status, p.name, p.trust_level
+		SELECT v.manifest, v.package_sha256, v.package_url, v.signature_status, p.name, p.trust_level,
+		       (SELECT installed_at FROM plugins WHERE key = v.plugin_key)
 		FROM plugin_versions v LEFT JOIN publishers p ON p.id = v.publisher_id
 		WHERE v.plugin_key = $1 AND v.version = $2`, key, version).
-		Scan(&manifestJSON, &sum, &url, &sigStatus, &publisher, &trust)
+		Scan(&manifestJSON, &sum, &url, &sigStatus, &publisher, &trust, &claimedAt)
 	if err != nil {
 		if store.IsNoRows(err) {
 			return nil, fmt.Errorf("plugin %s@%s: version not found", key, version)
@@ -296,6 +302,9 @@ func (s *Packages) load(ctx context.Context, key, version string) (*Package, err
 	p := &Package{Key: key, Version: version, SHA256: sum, Manifest: &m}
 	if publisher != nil {
 		p.Publisher = *publisher
+	}
+	if claimedAt != nil {
+		p.ClaimedAt = *claimedAt
 	}
 	switch {
 	case sigStatus == "unsigned":

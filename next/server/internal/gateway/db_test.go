@@ -15,7 +15,6 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/tidwall/gjson"
 
-	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/platforms"
@@ -103,16 +102,6 @@ func (e *dbEnv) api(method, path string, body any) (int, gjson.Result) {
 	return resp.StatusCode, gjson.ParseBytes(b)
 }
 
-func (e *dbEnv) sync(plugin string, rules []manifest.StickyRule) {
-	e.t.Helper()
-	err := e.db.Tx(context.Background(), func(tx pgx.Tx) error {
-		return e.gw.SyncPluginDefaults(context.Background(), tx, plugin, rules)
-	})
-	if err != nil {
-		e.t.Fatalf("sync: %v", err)
-	}
-}
-
 func findRule(list gjson.Result, name, source string) gjson.Result {
 	for _, r := range list.Array() {
 		if r.Get("name").String() == name && r.Get("source").String() == source {
@@ -122,53 +111,21 @@ func findRule(list gjson.Result, name, source string) gjson.Result {
 	return gjson.Result{}
 }
 
-func TestStickyRulesAPIAndPluginDefaults(t *testing.T) {
+// The rules are the built-in defaults (written at start) and the
+// administrator's; plugins bring none and compute no values (CONTRACTS §5.6).
+func TestStickyRulesAPI(t *testing.T) {
 	e := newDBEnv(t)
-	// Built-in defaults are covered by TestBuiltinStickyDefaults.
-	if _, err := e.db.Pool.Exec(context.Background(), `DELETE FROM sticky_rules WHERE source = 'builtin'`); err != nil {
-		t.Fatal(err)
-	}
-	def := builtinPlatform(t, "anthropic").StickyRules
-	e.sync("anthropic", def)
-
 	code, res := e.api("GET", "/sticky-rules", nil)
-	r := findRule(res.Get("data"), "claude-code-session", sourcePluginDefault)
-	if code != 200 || !r.Exists() || r.Get("plugin_key").String() != "anthropic" || !r.Get("enabled").Bool() ||
+	r := findRule(res.Get("data"), "claude-code-session", sourceBuiltin)
+	if code != 200 || !r.Exists() || r.Get("plugin_key").Exists() || !r.Get("enabled").Bool() ||
 		r.Get("ttl_seconds").Int() != 3600 || r.Get("key_sources.0.path").String() != "metadata.user_id" ||
 		r.Get("match.models.0").String() != "claude-*" || r.Get("on_failure").String() != "failover" {
 		t.Fatalf("list: %d %s", code, res.Raw)
 	}
 	id := r.Get("id").Int()
-
-	// Plugin defaults: only enabled/priority are editable, and not deletable.
-	if code, res := e.api("PATCH", "/sticky-rules/"+itoa(id), map[string]any{"ttl_seconds": 5}); code != 400 {
-		t.Fatalf("patch definition of default: %d %s", code, res.Raw)
-	}
 	if code, res := e.api("PATCH", "/sticky-rules/"+itoa(id), map[string]any{"enabled": false, "priority": 7}); code != 200 ||
 		res.Get("data.enabled").Bool() || res.Get("data.priority").Int() != 7 || res.Get("data.updated_by").Int() != e.uid {
-		t.Fatalf("disable default: %d %s", code, res.Raw)
-	}
-	if code, _ := e.api("DELETE", "/sticky-rules/"+itoa(id), nil); code != 400 {
-		t.Fatalf("delete default: %d", code)
-	}
-
-	// Upgrade: definition replaced, admin switches kept, new rule added.
-	up := []manifest.StickyRule{def[0], {Name: "second", KeySources: []manifest.StickyKeySource{{Type: "api_key"}}}}
-	up[0].TTLSeconds = 600
-	e.sync("anthropic", up)
-	_, res = e.api("GET", "/sticky-rules", nil)
-	r = findRule(res.Get("data"), "claude-code-session", sourcePluginDefault)
-	if r.Get("ttl_seconds").Int() != 600 || r.Get("enabled").Bool() || r.Get("priority").Int() != 7 || r.Get("id").Int() != id {
-		t.Fatalf("after upgrade: %s", r.Raw)
-	}
-	if s := findRule(res.Get("data"), "second", sourcePluginDefault); !s.Exists() || s.Get("key_includes.#").Int() != 3 {
-		t.Fatalf("second rule: %s", res.Raw)
-	}
-	// Another plugin cannot take over a name.
-	e.sync("other", []manifest.StickyRule{{Name: "second", KeySources: []manifest.StickyKeySource{{Type: "user"}}}})
-	_, res = e.api("GET", "/sticky-rules", nil)
-	if s := findRule(res.Get("data"), "second", sourcePluginDefault); s.Get("plugin_key").String() != "anthropic" {
-		t.Fatalf("name hijacked: %s", s.Raw)
+		t.Fatalf("disable builtin: %d %s", code, res.Raw)
 	}
 
 	// Admin rules: validation, create, conflict, shadowing.
@@ -177,11 +134,17 @@ func TestStickyRulesAPIAndPluginDefaults(t *testing.T) {
 	if code != 400 || res.Get("error.details.fields.#").Int() < 4 {
 		t.Fatalf("validation: %d %s", code, res.Raw)
 	}
+	// No plugin computes a session value.
+	code, res = e.api("POST", "/sticky-rules", map[string]any{"name": "plugin-value",
+		"key_sources": []any{map[string]any{"type": "plugin", "needs": []string{"metadata.conv"}}}})
+	if fe := res.Get(`error.details.fields.#(field=="key_sources[0].type")`); code != 400 || fe.Get("code").String() != "invalid" {
+		t.Fatalf("plugin key source: %d %s", code, res.Raw)
+	}
 	code, res = e.api("POST", "/sticky-rules", map[string]any{"name": "claude-code-session", "priority": 1,
 		"match":       map[string]any{"protocols": []string{"anthropic.messages"}, "user_agent_contains": []string{"claude-cli"}},
 		"key_sources": []any{map[string]any{"type": "header", "name": "x-session-id"}}, "on_failure": "stick"})
 	if code != 201 || res.Get("data.source").String() != sourceAdmin || res.Get("data.match.user_agent_contains.0").String() != "claude-cli" ||
-		res.Get("data.plugin_key").Type != gjson.Null {
+		res.Get("data.plugin_key").Exists() {
 		t.Fatalf("create: %d %s", code, res.Raw)
 	}
 	adminID := res.Get("data.id").Int()
@@ -189,22 +152,25 @@ func TestStickyRulesAPIAndPluginDefaults(t *testing.T) {
 		"key_sources": []any{map[string]any{"type": "user"}}}); code != 409 {
 		t.Fatalf("duplicate: %d", code)
 	}
-	// Re-enable the plugin default: the admin rule of the same name shadows it.
+	// Re-enable the built-in rule: the admin rule of the same name shadows it.
 	e.api("PATCH", "/sticky-rules/"+itoa(id), map[string]any{"enabled": true})
 	e.gw.rules.invalidate()
 	active := e.gw.rules.get(context.Background())
-	if len(active) != 2 || active[0].Source != sourceAdmin || active[0].Name != "claude-code-session" || active[1].Name != "second" {
+	if len(active) != 2 || active[0].Source != sourceAdmin || active[0].Name != "claude-code-session" || active[1].Name != "openai-prompt-cache-key" {
 		t.Fatalf("active rules: %+v", active)
 	}
 	if code, res := e.api("PATCH", "/sticky-rules/"+itoa(adminID), map[string]any{"ttl_seconds": 120, "value_regex": "^(.*)$"}); code != 200 ||
 		res.Get("data.ttl_seconds").Int() != 120 || res.Get("data.on_failure").String() != "stick" {
 		t.Fatalf("patch admin: %d %s", code, res.Raw)
 	}
+	if code, _ := e.api("PATCH", "/sticky-rules/"+itoa(adminID), map[string]any{"key_sources": []any{map[string]any{"type": "plugin"}}}); code != 400 {
+		t.Fatalf("patch to a plugin key source: %d", code)
+	}
 
 	// Stats and flush.
 	ctx := context.Background()
 	e.rdb.HSet(ctx, stickyStatsKey("claude-code-session"), "hits", 4, "misses", 2, "rebinds", 1)
-	for _, k := range []string{"sticky:claude-code-session:3:m:aa", "sticky:claude-code-session:4:m:bb", "sticky:second:3:m:cc"} {
+	for _, k := range []string{"sticky:claude-code-session:3:m:aa", "sticky:claude-code-session:4:m:bb", "sticky:openai-prompt-cache-key:3:m:cc"} {
 		e.rdb.Set(ctx, k, "1", 0)
 	}
 	code, res = e.api("GET", "/sticky-rules/stats", nil)
@@ -221,7 +187,7 @@ func TestStickyRulesAPIAndPluginDefaults(t *testing.T) {
 		t.Fatalf("stats: %d %s", code, res.Raw)
 	}
 	code, res = e.api("POST", "/sticky-rules/"+itoa(adminID)+"/flush", nil)
-	if code != 200 || res.Get("data.deleted").Int() != 2 || !e.mr.Exists("sticky:second:3:m:cc") || e.mr.Exists("sticky:claude-code-session:3:m:aa") {
+	if code != 200 || res.Get("data.deleted").Int() != 2 || !e.mr.Exists("sticky:openai-prompt-cache-key:3:m:cc") || e.mr.Exists("sticky:claude-code-session:3:m:aa") {
 		t.Fatalf("flush: %d %s keys=%v", code, res.Raw, e.mr.Keys())
 	}
 	// A rule whose key has no "rule" segment shares bindings: flush is refused.
@@ -238,7 +204,7 @@ func TestStickyRulesAPIAndPluginDefaults(t *testing.T) {
 		t.Fatalf("delete shared: %d", code)
 	}
 
-	// Delete the admin rule; stats survive because the default still uses the name.
+	// Delete the admin rule; stats survive because the built-in rule still uses the name.
 	if code, _ := e.api("DELETE", "/sticky-rules/"+itoa(adminID), nil); code != 204 {
 		t.Fatalf("delete admin: %d", code)
 	}
@@ -247,19 +213,6 @@ func TestStickyRulesAPIAndPluginDefaults(t *testing.T) {
 	}
 	if code, _ := e.api("DELETE", "/sticky-rules/999999", nil); code != 404 {
 		t.Fatalf("delete missing: %d", code)
-	}
-
-	// Removing a rule from the manifest deletes it; uninstall cascades.
-	e.sync("anthropic", up[1:])
-	_, res = e.api("GET", "/sticky-rules", nil)
-	if findRule(res.Get("data"), "claude-code-session", sourcePluginDefault).Exists() {
-		t.Fatalf("removed default kept: %s", res.Raw)
-	}
-	if _, err := e.db.Pool.Exec(ctx, `DELETE FROM plugins WHERE key = 'anthropic'`); err != nil {
-		t.Fatal(err)
-	}
-	if _, res = e.api("GET", "/sticky-rules", nil); res.Get("data.#").Int() != 0 {
-		t.Fatalf("after uninstall: %s", res.Raw)
 	}
 }
 
@@ -347,18 +300,15 @@ func TestAutoDisableSettingsAPIDB(t *testing.T) {
 	}
 }
 
-// End to end with DB-backed rules: the default rule synced from the
-// manifest drives scheduling.
+// End to end with DB-backed rules: the built-in default rule drives
+// scheduling.
 func TestStickyRulesFromDBDriveScheduling(t *testing.T) {
 	db := testutil.DB(t)
 	ctx := context.Background()
-	if _, err := db.Pool.Exec(ctx, `INSERT INTO plugins (key, name, status) VALUES ('anthropic', '{"en":"x"}', 'enabled')`); err != nil {
-		t.Fatal(err)
-	}
 	e := newEnv(t)
 	e.gw.rules = newRuleCache(db)
 	if err := db.Tx(ctx, func(tx pgx.Tx) error {
-		return e.gw.SyncPluginDefaults(ctx, tx, "anthropic", builtinPlatform(t, "anthropic").StickyRules)
+		return syncBuiltinRules(ctx, tx, builtinPlatform(t, "anthropic").StickyRules)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -376,8 +326,8 @@ func TestStickyRulesFromDBDriveScheduling(t *testing.T) {
 }
 
 // The gateway writes the built-in platforms' default rules at start
-// (source=builtin, no plugin key); administrators only switch and reorder
-// them, and an admin rule of the same name overrides one.
+// (source=builtin); administrators only switch and reorder them, and an
+// admin rule of the same name overrides one.
 func TestBuiltinStickyDefaults(t *testing.T) {
 	e := newDBEnv(t)
 	ctx := context.Background()
@@ -387,7 +337,7 @@ func TestBuiltinStickyDefaults(t *testing.T) {
 		for _, r := range p.StickyRules {
 			want = append(want, r.Name)
 			got := findRule(res.Get("data"), r.Name, sourceBuiltin)
-			if !got.Exists() || got.Get("plugin_key").Type != gjson.Null || !got.Get("enabled").Bool() {
+			if !got.Exists() || got.Get("plugin_key").Exists() || !got.Get("enabled").Bool() {
 				t.Fatalf("builtin rule %s: %s", r.Name, res.Raw)
 			}
 		}
@@ -408,12 +358,11 @@ func TestBuiltinStickyDefaults(t *testing.T) {
 		t.Fatalf("disable builtin: %d %s", code, res.Raw)
 	}
 
-	// A restart keeps the administrator's switches, drops stale built-in
-	// rules and leaves plugin defaults of the same name alone.
+	// A restart keeps the administrator's switches and drops stale built-in
+	// rules.
 	if _, err := e.db.Pool.Exec(ctx, `INSERT INTO sticky_rules (name, source, key_sources) VALUES ('stale', 'builtin', '[]')`); err != nil {
 		t.Fatal(err)
 	}
-	e.sync("anthropic", []manifest.StickyRule{{Name: want[0], KeySources: []manifest.StickyKeySource{{Type: "user"}}}})
 	if err := e.gw.SyncBuiltinDefaults(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -422,15 +371,7 @@ func TestBuiltinStickyDefaults(t *testing.T) {
 	if r.Get("id").Int() != id || r.Get("enabled").Bool() || r.Get("priority").Int() != 3 {
 		t.Fatalf("after restart: %s", r.Raw)
 	}
-	if findRule(res.Get("data"), "stale", sourceBuiltin).Exists() || !findRule(res.Get("data"), want[0], sourcePluginDefault).Exists() {
-		t.Fatalf("stale or plugin rule: %s", res.Raw)
-	}
-	// Re-enabled, the built-in rule shadows the plugin default of the same name.
-	e.api("PATCH", "/sticky-rules/"+itoa(id), map[string]any{"enabled": true})
-	e.gw.rules.invalidate()
-	for _, a := range e.gw.rules.get(ctx) {
-		if a.Name == want[0] && a.Source != sourceBuiltin {
-			t.Fatalf("active %s from %s", a.Name, a.Source)
-		}
+	if findRule(res.Get("data"), "stale", sourceBuiltin).Exists() {
+		t.Fatalf("stale rule: %s", res.Raw)
 	}
 }

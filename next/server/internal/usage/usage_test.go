@@ -364,9 +364,14 @@ func TestUsageAPI(t *testing.T) {
 		all[0].(map[string]any)["account_type"] != "apikey" || all[0].(map[string]any)["upstream_protocol"] != "anthropic.messages" {
 		t.Fatalf("usage filter: %v", all)
 	}
-	if n := len(f.get(f.user, "/usage?account_type=relay_key", 200)["data"].([]any)); n != 1 {
+	// An account type is (plugin key, type id): the filter needs both.
+	if n := len(f.get(f.user, "/usage?plugin_key=anthropic&account_type=relay_key", 200)["data"].([]any)); n != 1 {
 		t.Fatalf("account_type filter: %d", n)
 	}
+	if n := len(f.get(f.user, "/usage?plugin_key=relay&account_type=relay_key", 200)["data"].([]any)); n != 0 {
+		t.Fatalf("account_type of another plugin: %d", n)
+	}
+	f.get(f.user, "/usage?account_type=relay_key", 400)
 	byCRID := f.get(f.user, "/usage?client_request_id=cli-req-1", 200)["data"].([]any)
 	if len(byCRID) != 1 || byCRID[0].(map[string]any)["request_id"] != "req-mine" ||
 		byCRID[0].(map[string]any)["client_request_id"] != "cli-req-1" {

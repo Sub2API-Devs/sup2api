@@ -967,8 +967,12 @@ func TestAccountLifecycle(t *testing.T) {
 	if _, out = e.do("GET", fmt.Sprintf("/accounts?group_id=%d", g1), nil); out["page"].(map[string]any)["total"].(float64) != 0 {
 		t.Fatalf("group filter: %v", out)
 	}
-	if _, out = e.do("GET", "/accounts?type=relay_key", nil); out["page"].(map[string]any)["total"].(float64) != 0 {
+	if _, out = e.do("GET", "/accounts?plugin_key=relay&type=relay_key", nil); out["page"].(map[string]any)["total"].(float64) != 0 {
 		t.Fatalf("type filter: %v", out)
+	}
+	// An account type is (plugin key, type id): type alone is refused.
+	if code, out = e.do("GET", "/accounts?type=apikey", nil); code != 400 {
+		t.Fatalf("type without plugin_key: %d %v", code, out)
 	}
 
 	// Orphaned when the plugin leaves the generation; credentials fully masked

@@ -166,13 +166,28 @@ type asset struct {
 const maxCachedAsset = 4 << 20
 
 // addPlatform registers a platform and its endpoints unless its id, one of
-// its protocols or one of its endpoints is already taken (install-time
-// validation rejects these; this is the fallback for packages installed
-// concurrently or before the check existed). Returns the reason on refusal.
+// its protocols or one of its endpoints is already taken, or a plugin
+// endpoint path is one the core reserves (validation rejects these at
+// upload, approval, enable and upgrade; this is the fallback for a newer core
+// that reserved more, or packages approved concurrently). Returns the reason
+// on refusal.
 func (g *generation) addPlatform(b core.PlatformBinding) string {
 	p := b.Platform
 	if p.ID == "" {
 		return "empty platform id"
+	}
+	if !b.Builtin {
+		for _, e := range p.Endpoints {
+			if route, ok := manifest.CoreRouteOf(e.Path); ok {
+				return fmt.Sprintf("endpoint %s %s is under the core route %s", e.Method, e.Path, route)
+			}
+			if route, ok := manifest.CoreGatewayRouteOf(e.Path); ok {
+				return fmt.Sprintf("endpoint %s %s is under %s, served by the core", e.Method, e.Path, route)
+			}
+			if route, ok := manifest.ConsoleRouteOf(e.Method, e.Path); ok {
+				return fmt.Sprintf("endpoint %s %s would replace the console path %s", e.Method, e.Path, route)
+			}
+		}
 	}
 	if other, taken := g.platByID[p.ID]; taken {
 		return fmt.Sprintf("platform id %q is already registered by %s", p.ID, platformOwner(other))
@@ -254,8 +269,19 @@ func build(number uint64, exts []Extension) *generation {
 			slog.Error("plugin registry: built-in platform skipped", "platform", p.ID, "reason", reason)
 		}
 	}
+	// The first claimant of an exclusive resource keeps it: plugins are added
+	// in the order their keys were first approved (unknown last), then by key.
 	sorted := append([]Extension(nil), exts...)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Package().Key < sorted[j].Package().Key })
+	sort.SliceStable(sorted, func(i, j int) bool {
+		a, b := sorted[i].Package(), sorted[j].Package()
+		if a.ClaimedAt.IsZero() != b.ClaimedAt.IsZero() {
+			return !a.ClaimedAt.IsZero()
+		}
+		if !a.ClaimedAt.Equal(b.ClaimedAt) {
+			return a.ClaimedAt.Before(b.ClaimedAt)
+		}
+		return a.Key < b.Key
+	})
 	for _, ext := range sorted {
 		pkg := ext.Package()
 		if _, dup := g.byKey[pkg.Key]; dup {
@@ -275,14 +301,22 @@ func build(number uint64, exts []Extension) *generation {
 		pf := ext.Platform()
 		// Plugin platforms: ids are unique across built-in and plugin
 		// platforms and endpoints never overlap; a conflicting platform is
-		// skipped as a whole (first plugin by key wins). Client is the
-		// declaring plugin's PlatformService, nil when it does not implement
-		// platform.adapter.v1 (built-in platforms always have nil).
+		// skipped as a whole (the first claimant wins) and the plugin is
+		// abnormal (PluginInfo.Conflicts). Client is the declaring plugin's
+		// PlatformService, nil when it does not implement platform.adapter.v1
+		// (built-in platforms always have nil).
+		var conflicts []core.ResourceConflict
 		for _, p := range m.Platforms {
 			if reason := g.addPlatform(core.PlatformBinding{Plugin: info, Platform: p, Client: pf}); reason != "" {
-				slog.Warn("plugin registry: platform skipped", "plugin", pkg.Key, "version", pkg.Version,
+				slog.Error("plugin registry: platform skipped, the plugin is abnormal", "plugin", pkg.Key, "version", pkg.Version,
 					"platform", p.ID, "reason", reason)
+				conflicts = append(conflicts, core.ResourceConflict{Resource: "platform", ID: p.ID, Reason: reason})
 			}
+		}
+		if len(conflicts) > 0 {
+			info.Conflicts = conflicts
+			g.plugins[len(g.plugins)-1] = info
+			g.byKey[pkg.Key] = info
 		}
 		// Account types are served by the declaring plugin, which must
 		// implement platform.adapter.v1 (ARCHITECTURE 6.6) and hold the

@@ -103,8 +103,25 @@ func fromCore(e *core.Error, recordType string) *gwError {
 	return &gwError{Status: e.Status, Code: e.Code, Message: e.Message, RecordType: recordType}
 }
 
+// statusOverloaded is Anthropic's "overloaded" status.
+const statusOverloaded = 529
+
+// clientError is err as the endpoint's clients receive it. Anthropic clients
+// see "no available account" as the API's own overload (529 overloaded_error
+// "Overloaded"), which Claude Code and the SDKs retry with backoff; the usage
+// record keeps the host's message.
+func clientError(format string, err *gwError) *gwError {
+	if strings.EqualFold(format, FormatAnthropic) && err.Code == core.ErrNoAvailableAccount.Code && len(err.Raw) == 0 {
+		shown := *err
+		shown.Status, shown.Type, shown.Message = statusOverloaded, "overloaded_error", "Overloaded"
+		return &shown
+	}
+	return err
+}
+
 // writeError renders err in the endpoint's error format.
 func writeError(c *gin.Context, format string, err *gwError) {
+	err = clientError(format, err)
 	if !c.Writer.Written() {
 		httpfacts.Apply(c.Writer.Header(), err.Headers)
 	}

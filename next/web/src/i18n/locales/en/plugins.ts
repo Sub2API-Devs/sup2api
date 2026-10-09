@@ -18,6 +18,7 @@ export default {
   },
 
   status: {
+    abnormal: 'Abnormal',
     awaiting_consent: 'Awaiting consent',
     installed: 'Installed',
     enabling: 'Enabling',
@@ -87,7 +88,6 @@ export default {
     gateway_hook: 'Gateway hooks',
     gateway_endpoint: 'Gateway endpoints',
     platform_register: 'Register a platform or account types',
-    scheduler_affinity: 'Scheduler affinity',
     scheduler_rank: 'Rewrite account scheduling',
     users_read: 'Read users',
     accounts_credentials: 'Account credentials',
@@ -437,5 +437,10 @@ export default {
       cancelled: 'Rollout cancelled. Nodes keep running v{version}.',
       rolled_back: 'Rollout rolled back to v{version}.'
     }
+  },
+  conflicts: {
+    short: '{n} resource(s) not granted',
+    title: 'Resources not granted',
+    hint: 'Another plugin claimed these first, or the core holds them now (for example after a core upgrade). The plugin runs without them: its endpoints below are not served. Disable or uninstall the conflicting plugin, or upgrade this one, then re-enable it.'
   }
 }

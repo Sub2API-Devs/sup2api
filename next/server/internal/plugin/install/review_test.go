@@ -21,10 +21,9 @@ type reviewEndpoint struct {
 
 type reviewOut struct {
 	Platforms []struct {
-		ID          string            `json:"id"`
-		Label       map[string]string `json:"label"`
-		Endpoints   []reviewEndpoint  `json:"endpoints"`
-		StickyRules []string          `json:"sticky_rules"`
+		ID        string            `json:"id"`
+		Label     map[string]string `json:"label"`
+		Endpoints []reviewEndpoint  `json:"endpoints"`
 	} `json:"platforms"`
 	GatewayEndpoints []reviewEndpoint `json:"gateway_endpoints"`
 	AccountTypes     []struct {
@@ -59,7 +58,7 @@ func TestBuildReviewPlatforms(t *testing.T) {
 		t.Fatalf("platforms = %+v", out.Platforms)
 	}
 	p := out.Platforms[0]
-	if p.ID != "video" || p.Label["en"] != "Video video" || len(p.Endpoints) != 2 || len(p.StickyRules) != 1 {
+	if p.ID != "video" || p.Label["en"] != "Video video" || len(p.Endpoints) != 2 {
 		t.Fatalf("platform = %+v", p)
 	}
 	if e := p.Endpoints[1]; e.Method != "GET" || e.Path != "/video/v1/models/:model:status" || e.Protocol != "video.status" || e.Billing != "free" {
@@ -106,25 +105,6 @@ func TestBuildReviewPlatforms(t *testing.T) {
 	}
 	if _, ok := gout["platform"]; ok {
 		t.Fatal("the review has no platform field")
-	}
-}
-
-// Default sticky rules of all declared platforms are synced together.
-func TestStickyDefaults(t *testing.T) {
-	m := pkgtest.Platform("video", "0.1.0", "sub2api")
-	second := m.Platforms[0]
-	second.ID = "video2"
-	second.StickyRules = []manifest.StickyRule{{Name: "b"}, {Name: "c"}}
-	m.Platforms = append(m.Platforms, second)
-	var names []string
-	for _, r := range StickyDefaults(m) {
-		names = append(names, r.Name)
-	}
-	if got := strings.Join(names, ","); got != "session,b,c" {
-		t.Fatalf("sticky defaults = %s", got)
-	}
-	if StickyDefaults(pkgtest.Anthropic("anthropic", "0.1.0", "sub2api")) != nil {
-		t.Fatal("no platforms, no sticky rules")
 	}
 }
 

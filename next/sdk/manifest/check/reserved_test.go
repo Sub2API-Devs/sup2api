@@ -60,3 +60,26 @@ func TestConflictsOnlyOtherPlugins(t *testing.T) {
 		t.Fatalf("own versions: %v", got)
 	}
 }
+
+// A stored manifest is checked against what the current core holds: a path
+// a newer core reserved, or a platform id it now ships, is a conflict.
+func TestConflictsWithTheCore(t *testing.T) {
+	ep := validPlatform().Endpoints[0]
+	ep.Method, ep.Path = "GET", "/dashboard/x"
+	got := map[string]string{}
+	for _, e := range Conflicts(pluginPlatformManifest(ep), nil, nil) {
+		got[e.Field] = e.Code
+	}
+	if got["platforms[0].endpoints[0].path"] != "invalid_path" {
+		t.Fatalf("console path: %v", got)
+	}
+	m := pluginPlatformManifest(validPlatform().Endpoints[0])
+	m.Platforms[0].ID = "anthropic"
+	got = map[string]string{}
+	for _, e := range Conflicts(m, nil, nil) {
+		got[e.Field] = e.Code
+	}
+	if got["platforms[0].id"] != "builtin_platform" {
+		t.Fatalf("built-in platform id: %v", got)
+	}
+}

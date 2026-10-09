@@ -14,30 +14,23 @@ import (
 // dependency on the rollout controller so the runtime (C2) can be built
 // with it before the install service exists.
 type DefaultsApplier struct {
-	perms  core.PermissionCatalog
-	sticky core.StickyRuleCatalog
+	perms core.PermissionCatalog
 }
 
 var _ core.PluginDefaultsApplier = (*DefaultsApplier)(nil)
 
-// NewDefaultsApplier wires the catalogs. A nil catalog is skipped.
-func NewDefaultsApplier(perms core.PermissionCatalog, sticky core.StickyRuleCatalog) *DefaultsApplier {
-	return &DefaultsApplier{perms: perms, sticky: sticky}
+// NewDefaultsApplier wires the permission catalog. A nil catalog is skipped.
+func NewDefaultsApplier(perms core.PermissionCatalog) *DefaultsApplier {
+	return &DefaultsApplier{perms: perms}
 }
 
-// ApplyDefaults syncs user permissions and default sticky
-// rules for m, and drops host permission grants the manifest no longer
-// requests. It runs inside the caller's transaction.
+// ApplyDefaults syncs the user permissions of m and drops host permission
+// grants the manifest no longer requests. It runs inside the caller's
+// transaction. Plugins bring no sticky rules (CONTRACTS §5.6).
 func (a *DefaultsApplier) ApplyDefaults(ctx context.Context, tx pgx.Tx, m *manifest.Manifest, grantNewPermissionsToRoleKeys []string) error {
 	if a.perms != nil {
 		if err := a.perms.SyncPlugin(ctx, tx, m.Key, PermissionDefs(m), grantNewPermissionsToRoleKeys); err != nil {
 			return fmt.Errorf("sync plugin permissions: %w", err)
-		}
-	}
-	sticky := StickyDefaults(m)
-	if a.sticky != nil {
-		if err := a.sticky.SyncPluginDefaults(ctx, tx, m.Key, sticky); err != nil {
-			return fmt.Errorf("sync plugin sticky rules: %w", err)
 		}
 	}
 	ids := make([]string, 0, len(m.HostPermissions))
@@ -49,16 +42,6 @@ func (a *DefaultsApplier) ApplyDefaults(ctx context.Context, tx pgx.Tx, m *manif
 		return fmt.Errorf("prune grants: %w", err)
 	}
 	return nil
-}
-
-// StickyDefaults returns the default sticky rules of every platform the
-// plugin declares, in declaration order.
-func StickyDefaults(m *manifest.Manifest) []manifest.StickyRule {
-	var out []manifest.StickyRule
-	for _, p := range m.Platforms {
-		out = append(out, p.StickyRules...)
-	}
-	return out
 }
 
 // PermissionKey returns the RBAC key of a plugin-local permission.

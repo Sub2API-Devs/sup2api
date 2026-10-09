@@ -796,15 +796,15 @@ export interface AutoDisableSettings {
 
 // ------------------------------------------------------------------ sticky
 
+// Built-in rules come with the core; plugins take no part in sticky sessions.
 export interface StickyRule {
   id: number
   name: string
-  source: 'plugin_default' | 'admin'
-  plugin_key?: string | null
+  source: 'builtin' | 'admin'
   enabled: boolean
   priority: number
   match: { protocols?: string[]; models?: string[]; userAgentContains?: string[] }
-  key_sources: Array<{ type: string; path?: string; name?: string; needs?: string[] }>
+  key_sources: Array<{ type: 'body' | 'header' | 'api_key' | 'user'; path?: string; name?: string }>
   value_regex: string
   ttl_seconds: number
   key_includes: string[]
@@ -828,8 +828,17 @@ export interface StickySettings {
 
 export type Trust = 'official' | 'verified' | 'community' | 'unsigned' | string
 
+/** An exclusive resource the plugin declares but this node's generation did not give it. */
+export interface ResourceConflict {
+  resource: string
+  id: string
+  reason: string
+}
+
 export interface PluginSummary {
   has_settings?: boolean
+  /** Non-empty: the plugin is abnormal (another plugin claimed a resource first, or the core holds it). */
+  resource_conflicts?: ResourceConflict[]
   key: string
   name: LText
   status: string

@@ -292,7 +292,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	if managed != nil {
 		mutations.AllowBootstrap = managed.bootstrapAllowed
 	}
-	defaults := install.NewDefaultsApplier(az, gw)
+	defaults := install.NewDefaultsApplier(az)
 	ctl, err := rollout.New(rollout.Options{Mutations: mutations,
 		CanCoordinate: canCoordinate,
 		DB:            db, Node: cl.Registry, Bus: cl.Bus, Packages: pkgs, Registry: reg,

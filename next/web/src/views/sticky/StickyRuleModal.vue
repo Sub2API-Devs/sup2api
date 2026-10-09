@@ -23,15 +23,16 @@ import type { PlatformEndpoint, StickyRule } from '@/api/types'
 import { usePlatforms } from '@/composables/platforms'
 import { fieldErrors, notifyError } from '@/utils/errors'
 
-// Create / edit a sticky rule. Plugin default rules only allow enabled,
-// priority and ttl; "copy" pre-fills a new admin rule from any rule.
+// Create / edit a sticky rule. Built-in rules only allow enabled and
+// priority; "copy" pre-fills a new admin rule from any rule.
 const props = defineProps<{ open: boolean; rule: StickyRule | null; copy?: boolean }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'saved'): void }>()
 const { t } = useI18n()
 
-type KeySource = { type: string; path?: string; name?: string; needs?: string[] }
+type KeySource = { type: string; path?: string; name?: string }
 
-const KEY_TYPES = ['body', 'header', 'api_key', 'user', 'plugin'] as const
+// The session value always comes from the request; no plugin computes it.
+const KEY_TYPES = ['body', 'header', 'api_key', 'user'] as const
 const INCLUDES = ['group', 'model', 'rule'] as const
 const keyTypeOptions = computed(() => KEY_TYPES.map((k) => ({ value: k, label: t(`sticky.keyTypes.${k}`) })))
 
@@ -56,7 +57,7 @@ const busy = ref(false)
 const protocolDraft = ref('')
 
 const isEdit = computed(() => !!props.rule && !props.copy)
-const limited = computed(() => isEdit.value && props.rule?.source === 'plugin_default')
+const limited = computed(() => isEdit.value && props.rule?.source !== 'admin')
 const title = computed(() =>
   props.copy ? t('sticky.modal.copyTitle') : isEdit.value ? t('sticky.modal.editTitle', { name: props.rule?.name || '' }) : t('sticky.modal.createTitle')
 )
@@ -78,7 +79,7 @@ watch(
       protocols: [...(r?.match?.protocols || [])],
       models: [...(r?.match?.models || [])],
       userAgentContains: [...(r?.match?.userAgentContains || [])],
-      key_sources: (r?.key_sources || []).map((k) => ({ ...k, needs: [...(k.needs || [])] })),
+      key_sources: (r?.key_sources || []).map((k) => ({ ...k })),
       value_regex: r?.value_regex || '',
       ttl_seconds: r ? r.ttl_seconds : 3600,
       key_includes: r ? [...(r.key_includes || [])] : ['group', 'model', 'rule'],
@@ -184,10 +185,8 @@ function setType(ks: KeySource, type: string) {
   ks.type = type
   if (type !== 'body') delete ks.path
   if (type !== 'header') delete ks.name
-  if (type !== 'plugin') delete ks.needs
   if (type === 'body' && ks.path === undefined) ks.path = ''
   if (type === 'header' && ks.name === undefined) ks.name = ''
-  if (type === 'plugin' && !ks.needs) ks.needs = []
 }
 
 function toggleInclude(k: string, on: boolean) {
@@ -217,7 +216,6 @@ function body() {
       const o: KeySource = { type: k.type }
       if (k.type === 'body') o.path = (k.path || '').trim()
       if (k.type === 'header') o.name = (k.name || '').trim()
-      if (k.type === 'plugin' && k.needs?.length) o.needs = k.needs
       return o
     }),
     value_regex: form.value_regex,
@@ -245,10 +243,11 @@ async function submit() {
   busy.value = true
   try {
     if (limited.value && props.rule) {
+      // The definition of a built-in rule follows the core: only the
+      // switches are the administrator's.
       await api.patch(`/sticky-rules/${props.rule.id}`, {
         enabled: form.enabled,
-        priority: Number(form.priority) || 0,
-        ttl_seconds: Number(form.ttl_seconds) || 0
+        priority: Number(form.priority) || 0
       })
     } else if (isEdit.value && props.rule) {
       await api.patch(`/sticky-rules/${props.rule.id}`, body())
@@ -272,7 +271,7 @@ async function submit() {
   <SModal :open="open" :title="title" width="xl" @update:open="emit('update:open', $event)">
     <div class="space-y-5">
       <p v-if="limited" class="rounded-lg bg-purple-50 px-3 py-2 text-sm text-purple-800 dark:bg-purple-900/20 dark:text-purple-300">
-        {{ t('sticky.modal.limitedHint', { plugin: rule?.plugin_key || '—' }) }}
+        {{ t('sticky.modal.limitedHint') }}
       </p>
 
       <SGrid :cols="1" md-template="2fr 1fr 1fr">
@@ -359,9 +358,6 @@ async function submit() {
                 <SSelect class="!w-32 !py-1.5" :model-value="ks.type" :options="keyTypeOptions" @update:model-value="setType(ks, String($event))" />
                 <SInput v-if="ks.type === 'body'" v-model="ks.path" class="!w-64 !py-1.5" mono placeholder="metadata.user_id" />
                 <SInput v-else-if="ks.type === 'header'" v-model="ks.name" class="!w-64 !py-1.5" mono placeholder="x-session-id" />
-                <div v-else-if="ks.type === 'plugin'" class="w-80">
-                  <STagInput v-model="ks.needs" :placeholder="t('sticky.modal.needsPlaceholder')" :disabled="limited" />
-                </div>
                 <SHint v-else inline size="xs">{{ t(`sticky.keyTypeHint.${ks.type}`) }}</SHint>
                 <div class="ml-auto flex gap-1">
                   <SButton variant="ghost" size="sm" class="!px-1.5" :disabled="i === 0" @click="move(i, -1)">↑</SButton>
@@ -382,7 +378,7 @@ async function submit() {
       <SGrid :cols="1" :md-cols="2">
         <SField :label="t('sticky.cols.ttl')" :hint="t('sticky.modal.ttlHint')" :error="errors.ttl_seconds">
           <div class="flex items-center gap-2">
-            <SInput v-model.number="form.ttl_seconds" type="number" min="0" />
+            <SInput v-model.number="form.ttl_seconds" type="number" min="0" :disabled="limited" />
             <SHint inline>{{ t('sticky.seconds') }}</SHint>
           </div>
         </SField>

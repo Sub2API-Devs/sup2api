@@ -15,7 +15,7 @@ export default {
   statsLine: '命中 {hits} · 未命中 {misses} · 改绑 {rebinds}',
   source: {
     admin: '管理员',
-    plugin_default: '插件默认'
+    builtin: '内置'
   },
   cols: {
     priority: '优先级',
@@ -31,8 +31,7 @@ export default {
     body: '请求体字段',
     header: '请求头',
     api_key: 'API Key',
-    user: '用户',
-    plugin: '插件'
+    user: '用户'
   },
   keyTypeHint: {
     api_key: '发起请求的 API Key',
@@ -65,7 +64,7 @@ export default {
     createTitle: '新增粘性规则',
     editTitle: '编辑规则 · {name}',
     copyTitle: '复制为管理员规则',
-    limitedHint: '插件 {plugin} 提供的默认规则：只能修改启用状态、优先级和 TTL；如需修改其他内容，请复制为管理员规则。',
+    limitedHint: '内置规则：只能修改启用状态和优先级；如需修改其他内容，请复制为同名的管理员规则，管理员规则会取代它。',
     priorityHint: '数值越大越先匹配',
     match: '匹配条件',
     protocols: '协议',
@@ -81,7 +80,6 @@ export default {
     emptyAny: '为空表示任意',
     keySources: '会话 key 来源',
     keySourcesHint: '按顺序取第一个非空值。',
-    needsPlaceholder: '插件需要的输入（body、headers…）',
     valueRegex: '值正则',
     valueRegexHint: '可选；取第一个捕获组（或整个匹配）作为值',
     ttlHint: '0 表示使用默认 TTL',

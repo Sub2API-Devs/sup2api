@@ -30,6 +30,49 @@ func TestMigrationsFromFirstIdempotentRunTwice(t *testing.T) {
 	}
 }
 
+// 0048 removes what plugins brought into sticky sessions and keeps it out:
+// only built-in and admin rules, never a plugin-computed session value.
+func TestStickyRulesCoreOnly(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := context.Background()
+	if _, err := db.Pool.Exec(ctx, `
+		ALTER TABLE sticky_rules DROP CONSTRAINT sticky_rules_core_only;
+		INSERT INTO plugins (key, name, status) VALUES ('acme_sticky', '{"en":"x"}', 'enabled');
+		INSERT INTO sticky_rules (name, source, plugin_key, key_sources) VALUES
+			('from-plugin', 'plugin_default', 'acme_sticky', '[{"type":"header","name":"x"}]'),
+			('plugin-value', 'admin', NULL, '[{"type":"user"},{"type":"plugin"}]'),
+			('kept', 'admin', NULL, '[{"type":"header","name":"x-session"}]');
+		DELETE FROM schema_migrations WHERE id >= '0048'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Migrate(ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey}); err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	rows, err := db.Pool.Query(ctx, `SELECT name FROM sticky_rules WHERE source = 'admin' OR plugin_key IS NOT NULL ORDER BY name`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var n string
+		_ = rows.Scan(&n)
+		names = append(names, n)
+	}
+	rows.Close()
+	if len(names) != 1 || names[0] != "kept" {
+		t.Fatalf("rules after 0048: %v", names)
+	}
+	for _, bad := range []string{
+		`INSERT INTO sticky_rules (name, source, key_sources) VALUES ('x', 'plugin_default', '[{"type":"user"}]')`,
+		`INSERT INTO sticky_rules (name, source, plugin_key, key_sources) VALUES ('x', 'admin', 'acme_sticky', '[{"type":"user"}]')`,
+		`INSERT INTO sticky_rules (name, source, key_sources) VALUES ('x', 'admin', '[{"type":"plugin"}]')`,
+	} {
+		if _, err := db.Pool.Exec(ctx, bad); err == nil {
+			t.Fatalf("accepted: %s", bad)
+		}
+	}
+}
+
 // 0027 keeps proxies that existed before it working, once: a re-run must not
 // let proxies saved since reach private addresses.
 func TestSecurityHardeningDoesNotReopenPrivateProxies(t *testing.T) {

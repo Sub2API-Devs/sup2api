@@ -11,7 +11,7 @@ import (
 
 // AC 6: disabling a plugin keeps its accounts, greys out its permissions and
 // unregisters its account types. The anthropic endpoints are built into the
-// core, so they stay but answer 503 no_available_account for a group with
+// core, so they stay but answer 529 overloaded (no_available_account) for a group with
 // only anthropic accounts; re-enabling restores it. anthropic is a built-in
 // plugin, so uninstalling it is refused.
 func TestAC06_DisableEnableUninstall(t *testing.T) {
@@ -59,7 +59,7 @@ func TestAC06_DisableEnableUninstall(t *testing.T) {
 	}
 	// Plugin routes are gone on every node. The anthropic endpoints are
 	// built into the core (CONTRACTS 13) and stay, but no account type in
-	// the group serves them any more: 503 no_available_account in the
+	// the group serves them any more: 529 overloaded_error (code no_available_account) in the
 	// anthropic error format.
 	e.OnEachNode(admin, func(n int, c *Client) {
 		if r := c.API(t, http.MethodGet, "/p/anthropic/models", nil); r.Status < 400 {
@@ -68,8 +68,8 @@ func TestAC06_DisableEnableUninstall(t *testing.T) {
 	})
 	for i := 0; i < 4; i++ {
 		g := e.Messages(tn.APIKey, MessagesBody(tn.Model, "while disabled", false), nil)
-		if j := g.JSON(); g.Status != 503 || j.Get("type").String() != "error" || j.Get("error.code").String() != "no_available_account" {
-			t.Fatalf("gateway while disabled: HTTP %d %s (want 503 no_available_account)", g.Status, g.Body)
+		if j := g.JSON(); g.Status != 529 || j.Get("error.type").String() != "overloaded_error" || j.Get("type").String() != "error" || j.Get("error.code").String() != "no_available_account" {
+			t.Fatalf("gateway while disabled: HTTP %d %s (want 529 no_available_account)", g.Status, g.Body)
 		}
 	}
 	// Account types disappear from the registry; the built-in platform stays

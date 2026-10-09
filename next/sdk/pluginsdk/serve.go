@@ -146,10 +146,8 @@ func Register(s grpc.ServiceRegistrar, p any, dial HostDialer, opts ...Option) e
 	if v, ok := p.(HTTP); ok {
 		pluginv1.RegisterHTTPServiceServer(s, httpServer{impl: v})
 	}
-	sk, hasAffinity := p.(Scheduler)
-	rk, hasRank := p.(AccountRanker)
-	if hasAffinity || hasRank {
-		pluginv1.RegisterSchedulerServiceServer(s, schedulerServer{affinity: sk, rank: rk})
+	if rk, ok := p.(AccountRanker); ok {
+		pluginv1.RegisterSchedulerServiceServer(s, schedulerServer{rank: rk})
 	}
 	if v, ok := p.(Migration); ok {
 		pluginv1.RegisterMigrationServiceServer(s, migrationServer{impl: v})
@@ -197,9 +195,6 @@ func Capabilities(p any) []string {
 	}
 	if _, ok := p.(HTTP); ok {
 		caps = append(caps, manifest.CapHTTPRoutes)
-	}
-	if _, ok := p.(Scheduler); ok {
-		caps = append(caps, manifest.CapSchedulerAffinity)
 	}
 	if _, ok := p.(AccountRanker); ok {
 		caps = append(caps, manifest.CapSchedulerRank)
@@ -545,21 +540,10 @@ func (s httpServer) HandleHTTP(ctx context.Context, in *pluginv1.HTTPRequest) (*
 
 type schedulerServer struct {
 	pluginv1.UnimplementedSchedulerServiceServer
-	affinity Scheduler     // nil when the plugin only ranks
-	rank     AccountRanker // nil when the plugin only resolves affinity keys
-}
-
-func (s schedulerServer) ResolveAffinityKey(ctx context.Context, in *pluginv1.ResolveAffinityKeyRequest) (*pluginv1.ResolveAffinityKeyResponse, error) {
-	if s.affinity == nil {
-		return nil, status.Error(codes.Unimplemented, "this plugin does not resolve affinity keys")
-	}
-	return s.affinity.ResolveAffinityKey(ctx, in)
+	rank AccountRanker
 }
 
 func (s schedulerServer) RankAccounts(ctx context.Context, in *pluginv1.RankAccountsRequest) (*pluginv1.RankAccountsResponse, error) {
-	if s.rank == nil {
-		return nil, status.Error(codes.Unimplemented, "this plugin does not rank accounts")
-	}
 	return s.rank.RankAccounts(ctx, in)
 }
 

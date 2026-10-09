@@ -187,7 +187,7 @@ func (i *Instance) HTTP() core.HTTPPlugin {
 }
 
 func (i *Instance) Scheduler() core.SchedulerPlugin {
-	if !i.has(manifest.CapSchedulerAffinity) && !i.has(manifest.CapSchedulerRank) {
+	if !i.has(manifest.CapSchedulerRank) {
 		return nil
 	}
 	return schedAdapter{i}
@@ -307,10 +307,6 @@ func (a httpAdapter) HandleHTTP(ctx context.Context, in *pluginv1.HTTPRequest) (
 }
 
 type schedAdapter struct{ i *Instance }
-
-func (a schedAdapter) ResolveAffinityKey(ctx context.Context, in *pluginv1.ResolveAffinityKeyRequest) (*pluginv1.ResolveAffinityKeyResponse, error) {
-	return invoke(a.i, ctx, classHot, TimeoutScheduler, schedOf, pluginv1.SchedulerServiceClient.ResolveAffinityKey, in)
-}
 
 func (a schedAdapter) RankAccounts(ctx context.Context, in *pluginv1.RankAccountsRequest) (*pluginv1.RankAccountsResponse, error) {
 	timeout := TimeoutRankDefault

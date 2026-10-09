@@ -9,13 +9,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
-// RegisterClaudeOAuthBalanceProvider registers the balance provider for
-// claude_oauth accounts. Call this after creating the Service.
+// RegisterClaudeOAuthBalanceProvider registers the balance provider for the
+// claude_oauth account type of the claude_oauth plugin. Call this after
+// creating the Service.
 func (s *Service) RegisterClaudeOAuthBalanceProvider() {
-	RegisterBalanceProvider("claude_oauth", &claudeOAuthBalanceProvider{s: s})
+	RegisterBalanceProvider(core.AccountTypeKey{PluginKey: "claude_oauth", Type: "claude_oauth"}, &claudeOAuthBalanceProvider{s: s})
 }
 
 const (
