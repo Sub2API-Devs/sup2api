@@ -411,7 +411,6 @@ func TestMaxTurnsLogic(t *testing.T) {
 	}
 }
 
-
 // TestResponseViewIncludesToolSearch verifies responseView adds ToolSearch.
 func TestResponseViewIncludesToolSearch(t *testing.T) {
 	deferTrue := true

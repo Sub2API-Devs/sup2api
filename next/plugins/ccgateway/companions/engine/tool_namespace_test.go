@@ -7,52 +7,52 @@ import (
 
 func TestResolveToolNamespace(t *testing.T) {
 	tests := []struct {
-		name           string
-		customPrefix   string
-		mcpServers     []string
-		hasTools       bool
+		name            string
+		customPrefix    string
+		mcpServers      []string
+		hasTools        bool
 		expectNamespace string
 	}{
 		{
-			name:           "no MCP - default namespace",
-			customPrefix:   "",
-			mcpServers:     nil,
-			hasTools:       true,
+			name:            "no MCP - default namespace",
+			customPrefix:    "",
+			mcpServers:      nil,
+			hasTools:        true,
 			expectNamespace: "ccgateway",
 		},
 		{
-			name:           "no MCP - custom namespace",
-			customPrefix:   "mygateway",
-			mcpServers:     nil,
-			hasTools:       true,
+			name:            "no MCP - custom namespace",
+			customPrefix:    "mygateway",
+			mcpServers:      nil,
+			hasTools:        true,
 			expectNamespace: "mygateway",
 		},
 		{
-			name:           "MCP without conflict",
-			customPrefix:   "",
-			mcpServers:     []string{"filesystem", "database"},
-			hasTools:       true,
+			name:            "MCP without conflict",
+			customPrefix:    "",
+			mcpServers:      []string{"filesystem", "database"},
+			hasTools:        true,
 			expectNamespace: "ccgateway",
 		},
 		{
-			name:           "MCP with default conflict",
-			customPrefix:   "",
-			mcpServers:     []string{"ccgateway", "filesystem"},
-			hasTools:       true,
+			name:            "MCP with default conflict",
+			customPrefix:    "",
+			mcpServers:      []string{"ccgateway", "filesystem"},
+			hasTools:        true,
 			expectNamespace: "ccgateway-mapped",
 		},
 		{
-			name:           "MCP with custom conflict",
-			customPrefix:   "mygateway",
-			mcpServers:     []string{"mygateway", "filesystem"},
-			hasTools:       true,
+			name:            "MCP with custom conflict",
+			customPrefix:    "mygateway",
+			mcpServers:      []string{"mygateway", "filesystem"},
+			hasTools:        true,
 			expectNamespace: "mygateway-mapped",
 		},
 		{
-			name:           "no tools - no conflict check",
-			customPrefix:   "",
-			mcpServers:     []string{"ccgateway"},
-			hasTools:       false,
+			name:            "no tools - no conflict check",
+			customPrefix:    "",
+			mcpServers:      []string{"ccgateway"},
+			hasTools:        false,
 			expectNamespace: "ccgateway",
 		},
 	}
