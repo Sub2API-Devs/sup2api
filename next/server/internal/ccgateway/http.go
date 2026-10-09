@@ -51,6 +51,8 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("GET", "/system/ccgateway/runtime/uploads/:id", "settings:manage", s.uploadGet)
 	r.Perm("DELETE", "/system/ccgateway/runtime/uploads/:id", "settings:manage", s.uploadGet)
 	r.Perm("POST", "/system/ccgateway/runtime/uploads/:id/load", "settings:manage", s.uploadLoad)
+	// The runtime images bundled in the plugin package (§53.10).
+	r.Perm("POST", "/system/ccgateway/runtime/bundled", "settings:manage", s.runtimeBundled)
 	// Worker update in place, never recreating account containers (§53.7).
 	r.Perm("POST", "/system/ccgateway/runtime/workers", "settings:manage", s.runtimeWorkers)
 	// The shared-container endpoints (status, proxy, auth/*, remote-action)

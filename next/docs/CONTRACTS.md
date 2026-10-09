@@ -2215,7 +2215,7 @@ SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` �
 
 **插件互斥。** 核心计划与插件安装/批准/启用/升级/停用/卸载通过 Redis 锁 `system:cluster-change` 串行提交（25 秒提交上下文），running/paused 计划存在时插件变更被拒绝；紧急撤权例外。大包解包与哈希在取锁前完成。rollout 进入终态后，每个可能仍有旧实例的 boot 在 `plugin_rollout_cleanup`（迁移 0021）记录清理屏障 `cleanup_pending → cleaned`，`plugin_rollout_nodes` 保留各节点 active/failed 结果；未清理完成会阻止新核心计划；运行中的核心在本机旧实例排空后自行确认，已退出核心的 boot 只有网关确认进程组退出后才标为 `cleaned`，存活过期不算证据。
 
-**插件包分发（2026-10-02 补充）。** 插件包字节不再存 PG：迁移 0022 删除 `plugin_versions.package`，新增 `package_url`。市场版本由每个节点按 `package_url` 自行下载；上传和首装的包由主节点网关保存，从节点经节点网络拉取。核心通过 `blobs.Source` 取包（市场优先，失败或摘要不符时回退到存储），存储在网关托管下是本机管理 socket 上的 `/system/plugin-blobs/<sha256>`，没有网关时是本机目录（只支持单节点）。节点间新增两个范围：`plugin-upload`（`PUT /internal/plugin-blobs/`，从节点→主节点）与 `plugin-artifact`（`GET /internal/plugin-blobs/`，摘要须被某个版本引用）。所有写入校验 sha256 与大小上限（网关 `plugin_max_bytes`，默认 256 MiB）；上传在主节点确认保存后才写入版本行。细节见 [规约 §6.2](MULTINODE-SYNC-PROTOCOL.md)。
+**插件包分发（2026-10-02 补充）。** 插件包字节不再存 PG：迁移 0022 删除 `plugin_versions.package`，新增 `package_url`。市场版本由每个节点按 `package_url` 自行下载；上传和首装的包由主节点网关保存，从节点经节点网络拉取。核心通过 `blobs.Source` 取包（市场优先，失败或摘要不符时回退到存储），存储在网关托管下是本机管理 socket 上的 `/system/plugin-blobs/<sha256>`，没有网关时是本机目录（只支持单节点）。节点间新增两个范围：`plugin-upload`（`PUT /internal/plugin-blobs/`，从节点→主节点）与 `plugin-artifact`（`GET /internal/plugin-blobs/`，摘要须被某个版本引用）。所有写入校验 sha256 与大小上限（网关 `plugin_max_bytes`，默认 1 GiB，2026-10-09 起，见 §53.10）；上传在主节点确认保存后才写入版本行。细节见 [规约 §6.2](MULTINODE-SYNC-PROTOCOL.md)。
 
 **CPU 保护（2026-10-02 补充）。** 管理员在系统设置的“CPU 保护”页开关并设定阈值（`GET/PUT /api/v1/system/offload`，`settings:read` / `settings:manage`，经核心转给本机网关；未托管节点返回 503 `updater_unavailable`）。设置存于 `updater.clusters.offload_enabled/offload_cpu_percent`，默认关闭、阈值 80，取值 50–95。每个网关每秒采样 CPU，取本节点 cgroup（相对其可用 CPU）与整机两者较高者，按最近 10 秒平均；实时心跳保存到 Redis，混合旧网关期间兼容写入 `updater.nodes.cpu_percent`（最新规则见 CONTRACTS §39）（未测得为 NULL）。本地服务的节点平均值达到阈值后，把新的公网请求轮流交给其他节点：目标须启用、本地服务就绪、同一核心版本、心跳 20 秒内、自身未在转移且 CPU 低于阈值减 10；没有目标就留在本节点。低于阈值减 10 才停止。网关先在 PG 写入 `offloading=true` 再开始转移，先停止转移再清除标记；接收端只接受带标记的来源的 `forward`，因此转移可以从主节点到从节点。转移不续期 10 秒后自动失效。转移的请求走现有 `/internal/forward`，接收端只交给本地核心，不再转发；进行中的请求不迁移，业务请求不重放，目标路由变化时该请求得到 503。细节见 [规约 §5.1](MULTINODE-SYNC-PROTOCOL.md)。
 
@@ -3649,3 +3649,46 @@ GET `/groups/:id/models`（`group:read`）返回所有未删除成员账号的�
 1. "控制器连接"：**一个端点输入框**（`https://host[:port][/前缀]` 或 `http://host[:port][/前缀]`，端口可写可不写，不写按协议默认 https 443 / http 80；可带路径前缀，用于控制器挂在反向代理子路径下、由代理去掉前缀转发的情况；不允许查询、片段、用户信息；前端解析为 `scheme` / `host` / `port` / `base_path` 保存，显示时拼回 URL）。核心以 `scheme://host:port` + `base_path` 为所有控制器请求（含隧道 `GET <base_path>/accounts/<key>/tunnel`）的基址；`base_path` 为空或 1–8 段 `[A-Za-z0-9._~-]+`，变化同样要求重填管理密钥；安装生成的端点不带前缀。下面是访问密钥；http 时提示密钥明文传输、只用于可信内网；https 时根证书放在默认折叠的"高级：自签名根证书（可选）"（域名正式证书留空）；"测试连接"；"保存"即直接连接已有控制器。顶部显示当前状态（已连接 + 控制器版本 / 未配置 / 旧连接方式）。
 2. "安装控制器"（未配置或旧连接方式时默认展开，已连接时折叠为"重新安装 / 安装到其他主机"）：安装方式（本机 Docker / 远程 SSH）；SSH 时填主机、端口、用户、认证、私钥 / 密码、主机指纹（含探测），这些只随安装请求发送，不保存；端口（留空自动选择）、协议、对外连接地址（SSH 缺省为 SSH 主机，本机缺省 127.0.0.1）、ACME 邮箱（HTTPS + 域名时）。"安装并连接"成功后用返回的配置刷新第 1 部分。
 3. 没有"启用一账号一容器"复选框，也没有共享容器设置（该模式已删除）。
+
+### 53.10 运行环境镜像随插件包分发（2026-10-09，用户要求）
+
+用户决定：构建项目时同时构建 CCGateway 运行环境所需的全部镜像，**直接打进 `ccgateway` 插件包（`.s2plugin`）**，插件包大小限制相应放开；以后安装控制器、升级、上传都用包里的镜像，不再依赖 GHCR（私有，拉不到）或手工 `docker save`。
+
+**包内布局**（zip 内，镜像文件用 Store 方式不再压缩）：
+
+```
+images/images.json
+images/app.tar.gz          # 业务容器（worker），docker save | gzip
+images/egress.tar.gz       # 出口代理（sing-box）
+images/controller.tar.gz   # 控制器
+images/gateway.tar.gz      # Caddy 网关
+```
+
+`images/images.json`：`{"version": 1, "images": {"app": {"ref", "file", "sha256", "size"}, "egress": {…}, "controller": {…}, "gateway": {…}}}`。`ref` 是镜像加载后的标签：`ccgateway-app:<插件版本>`、`ccgateway-egress:<插件版本>`、`ccgateway-controller:<插件版本>`、`caddy:<固定版本>-alpine`（构建脚本里固定，不用 `latest` / `2-alpine` 浮动标签）；`sha256` 是 `file` 的 SHA-256；整个包由插件签名覆盖。四个角色缺一不可。
+
+**构建**：
+- 新脚本 `next/deploy/docker/build-ccgateway-images.sh <插件版本> <输出目录>` 在**有 Docker 的主机上**运行（Dockerfile 的 build 阶段没有 Docker 守护进程）：用 `companions/worker/Dockerfile`、`egress/Dockerfile`、`controller/Dockerfile` 构建三个镜像（构建参数带源码提交号），拉取固定版本的 Caddy，各自 `docker save | gzip -6` 到输出目录并写 `images.json`。输出目录约定为 `next/plugins/ccgateway/images/`（git 忽略，但要进入核心 Docker 构建上下文）。
+- `deploy/docker/build-go.sh` 打包 ccgateway 时，若 `plugins/ccgateway/images/images.json` 存在就把 `images/` 整个放进包（校验 sha256 与 ref 里的版本等于插件版本）；不存在时：`REQUIRE_CCGATEWAY_IMAGES=1`（正式发布）构建失败，否则打一个不带镜像的包并打印警告（本地开发）。
+- OVH 的 `~/sup2api-managed/build-core.sh` 在 `docker build` 核心之前先跑镜像脚本；CI 的发布流程同样（或明确说明不支持）。
+- 插件版本号随镜像内容变化而升（ccgateway 0.1.16 起）。
+
+**限制放开**：插件包压缩大小上限 1 GiB、解包总大小 2 GiB；涉及插件包的上传请求体、节点间 / 主节点存储（blobs）读取、市场下载、核心发布包里的内置插件等上限一起调整到不小于此。仍然整包读入内存（用户接受）；ccgateway 包每次处理约占 1 GB 内存。外壳侧：插件存储 `pluginblob.DefaultMaxBytes` 256 MiB → 1 GiB（`plugin_max_bytes` 显式配置的节点需同步调大）；`sub2api-release` 发布包总大小上限 2 GiB → 4 GiB。**外壳的这两处变化要等外壳镜像本身升级后才生效**（核心升级不会换外壳镜像）。
+
+**核心使用包内镜像**（`next/server/internal/ccgateway`）：
+- 核心从本节点当前启用的 ccgateway 插件包读取 `images/images.json` 与镜像文件（实现自定：已解包目录或插件存储），按 sha256 校验后流式发送，不整份读进内存（如插件存储只提供整包字节，可接受一次读取）。
+- 生效镜像（`EffectiveImages`）：配置覆盖值 > 包内 ref > 旧的固定 GHCR 引用。
+- **安装**（§53.9，本机或 SSH）：脚本里对每个角色先 `docker image inspect <ref>`，主机上没有就把包内对应文件经 stdin 流给 `docker load`（SSH 用会话 stdin，本机用进程 stdin）；之后照常启动控制器与网关。没有包内镜像时退回原逻辑（`docker pull`）。
+- **已连接后**：新接口 `POST /system/ccgateway/runtime/bundled`（`settings:manage`，审计 `ccgateway.runtime.bundled`，共用安装锁，不随断开取消，上限 25 分钟），请求 `{"roles"?: ["app","egress","controller"]}`（缺省三者，`gateway` 不经面板推送），对每个角色：控制器上已有该 ref（`GET /runtime/images` / `/health` 判断）则跳过，否则经 §53.6 的分块上传接口把文件传给控制器、`load`，再按 §53.6 / §53.7 的 apply 逻辑启用（app 会对现有账号做 worker 原地更新，controller 走自升级）。返回 `{"results": [{"role","ref","status": "loaded"|"present"|"failed","reason"?}], "workers"?: …, "runtime": <GET runtime>}`。
+- `GET /system/ccgateway/runtime` 增加 `bundled: {"version", "images": {role: ref}} | null`。
+- 一键升级（`POST runtime/install`）在控制器缺少目标镜像时先自动推送包内镜像。
+
+**界面**：部署与运行页显示"插件内置镜像（版本 X）"与各角色是否已在控制器上；按钮"推送并启用内置镜像"（确认框说明 worker 会原地更新、不重建容器）。手动上传保留为高级选项。
+
+**§53.10 实现补充（2026-10-09）**：
+- 镜像构建不可复现，**同一插件版本只构建一次**：`prepare-core-release.sh` 把镜像缓存在发布主机 `~/sup2api-managed/ccgateway-images/<插件版本>/`，已存在就直接复用；在别的机器重建同一版本会得到不同的包（核心保留先存入的那个）。改镜像内容必须升插件版本。
+- Caddy 固定 `caddy:2.11.7-alpine`（构建脚本常量，可用 `CCG_CADDY_IMAGE` 覆盖为其他 x.y.z 标签；核心兜底 `GatewayImage` 同值）。
+- 推送内置镜像（`runtime/bundled`）启用时**清除**该角色的配置覆盖值（不是写入 ref），让以后插件升级带来的新镜像自动生效；手动上传仍写入覆盖值。处理顺序 controller → egress → app（先让控制器升到支持 worker 原地更新的版本）。"已有"只按控制器当前目标判断。
+- 新错误码：安装 `image_load_failed`（503）；`runtime/bundled` 的 `no_bundled_images`（400），结果 `reason`：`bundle_invalid`、`upload_failed`、`image_ref_missing`。
+- 一键升级遇到控制器 `image_pull_failed` 且目标正是包内 ref 时，先推送包内镜像再重试。
+- 超过 64 MiB 的插件包不进核心的解包缓存；外壳节点间拉包超时 30 分钟；插件 rollout 的 PrepareTimeout 仍是 120 秒，慢节点会在提交后自行重试。
+- 核心 Docker 镜像（final 阶段）的 market 与 builtin 各有一份 ccgateway 包；OVH 发布包只带 builtin。

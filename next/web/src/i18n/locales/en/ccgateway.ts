@@ -247,10 +247,33 @@ export default {
     confirmMessage: 'The images are pulled on the Docker host over SSH and the container controller restarts; existing account containers are kept. New images apply to new containers only; update existing accounts in place with “Update the worker of existing accounts”. Connection discovery may be interrupted briefly during the controller restart.',
     done: 'The runtime is installed at the latest version', failed: 'Installing the runtime failed', loadFailed: 'The runtime state could not be read', reason: 'Reason: {message}',
     readOnly: 'Installing or upgrading the runtime needs settings:manage.',
-    subtitleController: 'In control panel mode, images are uploaded through the control panel or pulled by the controller. The table compares the images the controller reports; see each account container for its actual image.',
+    subtitleController: 'In control panel mode, the images ship in the ccgateway plugin package and can be pushed to the controller in one step; they can also be uploaded by hand or pulled by the controller. The table compares the images the controller reports; see each account container for its actual image.',
     confirmMessageController: 'The controller’s target images are set to the saved images through the control panel (the controller tries to pull what it lacks); a different controller image upgrades the controller itself and waits for it to recover. Existing account containers are not recreated; new images apply to new or re-authorized containers.'
   },
+  bundled: {
+    title: 'Images bundled with the plugin (version {version})',
+    hint: 'The runtime images ship in the ccgateway plugin package; no image registry is needed. Pushing uploads only the images the controller does not have yet, in chunks through the core, then loads and applies them.',
+    none: 'The plugin package carries no images: the enabled ccgateway package was built without the runtime images. Upgrade to a package with images, or open “Advanced: upload an image by hand” below.',
+    component: 'Component',
+    image: 'Bundled image',
+    onController: 'On the controller',
+    roles: { app: 'App container (worker)', egress: 'Egress proxy', controller: 'Controller', gateway: 'Gateway (Caddy)' },
+    states: { enabled: 'In use', notEnabled: 'Not in use', unknown: 'Unknown', installOnly: 'Used when installing the controller' },
+    push: 'Push and apply the bundled images',
+    pushing: 'Uploading, loading and applying the images; the controller may upgrade itself. This can take over ten minutes…',
+    allEnabled: 'The controller already uses every bundled image',
+    confirmTitle: 'Push and apply the bundled images?',
+    confirmMessage: 'The bundled images the controller does not have yet (app container, egress proxy, controller) are uploaded to it and applied. Existing account containers are not recreated: the worker program is replaced in place and only that container restarts, sign-ins are kept; an account handling a request is waited for at most 2 minutes, then skipped (retry later). A different controller image makes the controller upgrade itself (about 1–2 minutes); authorization and model requests may be interrupted briefly, and a failed health check rolls back.',
+    done: 'The bundled images are pushed and applied',
+    partial: 'Some bundled images could not be applied; see the results',
+    failed: 'Pushing the bundled images failed',
+    resultTitle: 'Push results',
+    status: 'Result',
+    reason: 'Reason',
+    statuses: { loaded: 'Uploaded and applied', present: 'Already on the controller (skipped)', failed: 'Failed' }
+  },
   imageUpload: {
+    advanced: 'Advanced: upload an image by hand',
     title: 'Upload image',
     hint: 'Upload an image archive written by docker save (.tar / .tar.gz / .tgz, at most 4 GiB). It is sent in 16 MiB chunks through the core to the controller, loaded, and applied right away as the image of the chosen component.',
     role: 'Component',
@@ -406,7 +429,12 @@ export default {
     checksum_mismatch: 'The checksum of the image file does not match; upload it again',
     load_failed: 'The controller could not load the file: make sure it is a tar or tar.gz written by docker save',
     invalid_image: 'Invalid image: the reference is malformed, or the app image carries credential / proxy environment variables',
-    upgrade_in_progress: 'The controller is being upgraded; retry later'
+    upgrade_in_progress: 'The controller is being upgraded; retry later',
+    no_bundled_images: 'The enabled ccgateway plugin package carries no runtime images',
+    bundle_invalid: 'An image in the plugin package does not match its checksum or cannot be read; reinstall the plugin package',
+    image_load_failed: 'The Docker host could not load an image bundled in the plugin package',
+    image_ref_missing: 'The controller loaded the image but reported no image reference',
+    upload_failed: 'Uploading the image to the controller failed; retry later'
   },
   requestLogs: {
     title: 'Request debug logs',

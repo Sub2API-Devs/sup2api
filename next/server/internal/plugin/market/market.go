@@ -36,6 +36,11 @@ const (
 	maxSigBytes   = 4 << 10
 )
 
+// PackageDownloadTimeout bounds one package download: packages may be up to
+// 1 GiB (the ccgateway package carries its runtime images, CONTRACTS
+// §53.10), far more than an index request needs.
+const PackageDownloadTimeout = 30 * time.Minute
+
 // Source is a market_sources row.
 type Source struct {
 	ID        int64     `json:"id"`
@@ -80,6 +85,7 @@ type Service struct {
 	db       *store.DB
 	inst     Installer
 	client   *http.Client
+	pkg      *http.Client // client with at least PackageDownloadTimeout
 	maxBytes int64
 	now      func() time.Time
 
@@ -95,6 +101,7 @@ type cached struct {
 }
 
 // New builds the market client. client nil uses a 60 s timeout client;
+// package downloads use a copy of it with at least PackageDownloadTimeout.
 // maxPackageBytes bounds downloads (config MaxPackageBytes).
 func New(db *store.DB, inst Installer, client *http.Client, maxPackageBytes int64) *Service {
 	if client == nil {
@@ -103,7 +110,11 @@ func New(db *store.DB, inst Installer, client *http.Client, maxPackageBytes int6
 	if maxPackageBytes <= 0 {
 		maxPackageBytes = pkg.DefaultMaxPackageBytes
 	}
-	return &Service{db: db, inst: inst, client: client, maxBytes: maxPackageBytes, now: time.Now, cache: map[int64]cached{}}
+	pkgClient := *client
+	if pkgClient.Timeout != 0 && pkgClient.Timeout < PackageDownloadTimeout {
+		pkgClient.Timeout = PackageDownloadTimeout
+	}
+	return &Service{db: db, inst: inst, client: client, pkg: &pkgClient, maxBytes: maxPackageBytes, now: time.Now, cache: map[int64]cached{}}
 }
 
 // SeedSources upserts sources from SUB2API_MARKET_SOURCES
@@ -479,7 +490,7 @@ func (s *Service) Install(ctx context.Context, sourceID int64, key, version stri
 	if entry.Size > s.maxBytes {
 		return nil, core.ErrInvalidArgument.WithMessage(fmt.Sprintf("package size %d exceeds the limit of %d bytes", entry.Size, s.maxBytes))
 	}
-	data, err := s.fetch(ctx, dl.String(), s.maxBytes)
+	data, err := Fetch(ctx, s.pkg, dl.String(), s.maxBytes)
 	if err != nil {
 		return nil, err
 	}

@@ -61,7 +61,7 @@ type config struct {
 	RuntimeABI       string            `json:"runtime_abi"`
 	ManagementSocket string            `json:"management_socket"`
 	CoreSocket       string            `json:"core_socket"`
-	// PluginMaxBytes bounds stored plugin packages (default 256 MiB).
+	// PluginMaxBytes bounds stored plugin packages (default 1 GiB).
 	PluginMaxBytes int64 `json:"plugin_max_bytes"`
 }
 
@@ -304,7 +304,7 @@ func run() error {
 		return store.ConfirmStoppedCore(ctx, c.NodeID, ownNode.ShellBootID, coreBoot)
 	}
 	rt.Peer = peerManager
-	rt.PeerArtifactClient = peer.NewClient(peerTransport, 10*time.Minute)
+	rt.PeerArtifactClient = peer.NewClient(peerTransport, 30*time.Minute)
 	pluginBlobs := control.PluginBlobs(store, c.NodeID, c.Root, rt.PeerArtifactClient, c.PluginMaxBytes)
 	rt.PluginBlobs = pluginBlobs.Peer()
 	go control.CollectPluginBlobs(ctx, store, pluginBlobs, 10*time.Minute)

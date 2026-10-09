@@ -51,6 +51,21 @@ var reasonMessages = map[string]string{
 	"load_failed":               "The image could not be loaded (expected a docker save tar or gzip tar).",
 	"invalid_image":             "The image reference is invalid or the image is not allowed.",
 	"upgrade_in_progress":       "A controller upgrade is running.",
+	// Runtime images bundled in the plugin package (§53.10).
+	"image_load_failed": "A runtime image bundled in the plugin package could not be loaded on the Docker host.",
+	"no_bundled_images": "The active ccgateway plugin package carries no runtime images.",
+	"bundle_invalid":    "A runtime image bundled in the plugin package does not match its SHA-256 or cannot be read.",
+	"upload_failed":     "The image could not be uploaded to the controller.",
+	"image_ref_missing": "The loaded image does not carry the expected reference.",
+}
+
+// reasonOf is the details.reason of err ("" without).
+func reasonOf(err *core.Error) string {
+	if err == nil {
+		return ""
+	}
+	r, _ := err.Details["reason"].(string)
+	return r
 }
 
 // reasonError is base with the English message of reason and

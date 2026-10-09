@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -222,6 +223,11 @@ func TestGenerationBuildAndSwitch(t *testing.T) {
 	g := reg.Publish([]registry.Extension{ext{pkg: pb, grants: registry.Grants{}}, ext{pkg: pa, grants: grantsA}})
 	if g.Number() != 1 || len(seen) != 1 || reg.Current() != g {
 		t.Fatalf("generation %d, listeners %v", g.Number(), seen)
+	}
+	// The active package of a key (the ccgateway runtime images are read
+	// from it, CONTRACTS §53.10).
+	if p := reg.Package("alpha"); p != pa || p.File() != filepath.Join(pa.Dir, "package.s2plugin") || reg.Package("gamma") != nil {
+		t.Fatalf("package of alpha: %v", p)
 	}
 	if ps := g.Plugins(); len(ps) != 2 || ps[0].Key != "alpha" || ps[1].Key != "beta" {
 		t.Fatalf("plugins = %+v", ps)

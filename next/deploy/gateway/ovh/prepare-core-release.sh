@@ -55,8 +55,27 @@ control=$(sudo systemctl show "$slice" --property=ControlGroup --value)
 mkdir -p "$managed/stage" "$publish"
 mkdir "$stage"
 printf 'source_commit=%s\nsource_version=%s\nsource_schema=%s\ntrust_sha256=%s\nslice=%s\n' "$sha" "$source_version" "$source_schema" "$trust_hash" "$slice" > "$stage/preparation.txt"
+# CCGateway runtime images bundled in the ccgateway plugin package (CONTRACTS
+# §53.10): built here on the Docker host, before the core, and required by the
+# core build (REQUIRE_CCGATEWAY_IMAGES=1). Docker images are not reproducible,
+# so they are built once per ccgateway version and kept in $managed: every
+# later release with the same plugin version packs the very same bytes (the
+# core keeps the first stored package of a version anyway). A new image
+# content needs a new ccgateway version.
+ccg_version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$src/plugins/ccgateway/manifest.json" | head -n1)
+printf '%s\n' "$ccg_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo 'invalid ccgateway plugin version' >&2; exit 1; }
+ccg_cache=$managed/ccgateway-images/$ccg_version
+if [ ! -s "$ccg_cache/images.json" ]; then
+  CCG_CGROUP_PARENT="$slice" sh "$src/deploy/docker/build-ccgateway-images.sh" "$ccg_version" "$ccg_cache"
+fi
+rm -rf "$src/plugins/ccgateway/images"
+mkdir "$src/plugins/ccgateway/images"
+for f in images.json app.tar.gz egress.tar.gz controller.tar.gz gateway.tar.gz; do
+  cp "$ccg_cache/$f" "$src/plugins/ccgateway/images/$f"
+done
+printf 'ccgateway_version=%s\nccgateway_images_sha256=%s\n' "$ccg_version" "$(sha256sum "$ccg_cache/images.json" | cut -d ' ' -f1)" >> "$stage/preparation.txt"
 docker buildx build --builder default --cgroup-parent "$slice" --target build --load \
-  --build-arg VERSION="$version" --build-arg REQUIRE_EXISTING_DEV_KEY=1 --build-arg BUILD_MAX_PROCS=2 \
+  --build-arg VERSION="$version" --build-arg REQUIRE_EXISTING_DEV_KEY=1 --build-arg REQUIRE_CCGATEWAY_IMAGES=1 --build-arg BUILD_MAX_PROCS=2 \
   -f "$src/Dockerfile" -t "$tag" "$src"
 cid=$(docker create "$tag")
 docker cp "$cid:/out/bin" "$stage/bin"

@@ -196,7 +196,7 @@ func bundle(root string, out io.Writer) ([]rc.File, error) {
 			return fmt.Errorf("special file not allowed: %s", p)
 		}
 		total += info.Size()
-		if total > 2<<30 || len(files) >= 10000 {
+		if total > 4<<30 || len(files) >= 10000 {
 			return errors.New("release exceeds size/file limits")
 		}
 		rel, err := filepath.Rel(root, p)

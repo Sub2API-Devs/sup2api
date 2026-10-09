@@ -19,4 +19,4 @@ const (
 
 // GatewayImage is the Caddy image of the control panel's HTTPS gateway
 // (CONTRACTS §53.3), overridable with images.gateway.
-const GatewayImage = "caddy:2-alpine"
+const GatewayImage = "caddy:2.11.7-alpine"

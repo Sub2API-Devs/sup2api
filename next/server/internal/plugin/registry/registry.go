@@ -98,6 +98,11 @@ func New() *Registry {
 
 func (r *Registry) Current() core.Generation { return r.cur.Load() }
 
+// Package returns the package of the plugin key active in the current
+// generation on this node, or nil. The package may be closed by a later
+// rollout; callers needing it for long should open its file themselves.
+func (r *Registry) Package(key string) *Package { return r.cur.Load().packages[key] }
+
 func (r *Registry) OnChange(fn func(core.Generation)) (cancel func()) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

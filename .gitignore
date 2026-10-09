@@ -172,3 +172,9 @@ issues/
 # Shell release verification is source code, not a generated release directory.
 !next/shell/internal/release/
 !next/shell/internal/release/*.go
+
+# CCGateway runtime image archives written by
+# next/deploy/docker/build-ccgateway-images.sh and bundled into the ccgateway
+# plugin package by the core build (CONTRACTS §53.10). Build output, never
+# committed; next/Dockerfile.dockerignore keeps it in the build context.
+/next/plugins/ccgateway/images/

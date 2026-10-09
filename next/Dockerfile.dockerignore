@@ -16,3 +16,7 @@ plugins/ccgateway/companions/*
 # Shared data contracts are linked into the core, unlike the Worker engine.
 !plugins/ccgateway/companions/contracts/
 !plugins/ccgateway/companions/contracts/**
+# plugins/ccgateway/images/ (runtime image archives, git-ignored) MUST stay in
+# the context: build-go.sh packs it into the ccgateway package (§53.10). Only
+# the image script's leftover temporary directories are dropped.
+plugins/ccgateway/images/.build.*

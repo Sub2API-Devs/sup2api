@@ -93,6 +93,10 @@ type cachedPkg struct {
 
 const pkgCacheSize = 8
 
+// maxCachedPackage: larger packages are unpacked again on every use
+// instead of being cached.
+const maxCachedPackage = 64 << 20
+
 // New builds the install service.
 func New(d Deps, opt Options) *Service {
 	if opt.GOOS == "" {
@@ -155,6 +159,11 @@ func (s *Service) Package(ctx context.Context, key, version string) (*pkg.Packag
 	p, err := pkg.Open(raw, lim)
 	if err != nil {
 		return nil, err
+	}
+	if int64(len(raw)) > maxCachedPackage {
+		// A package carrying runtime images (CONTRACTS §53.10) would keep
+		// about twice its size in memory for as long as it stays cached.
+		return p, nil
 	}
 	s.cacheMu.Lock()
 	s.cache = append([]cachedPkg{{key: key, version: version, sha: sha, p: p}}, s.cache...)

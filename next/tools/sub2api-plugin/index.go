@@ -134,11 +134,13 @@ func buildIndex(dir, baseURL string, now time.Time, stderr io.Writer) (*marketIn
 			continue
 		}
 		p := filepath.Join(dir, e.Name())
-		raw, err := os.ReadFile(p)
+		sum, size, err := fileSHA256(p)
 		if err != nil {
 			return nil, err
 		}
-		files, err := readPackage(p)
+		// Only the manifest is needed: a package with bundled images is not
+		// read into memory just to be listed.
+		files, err := readPackageMeta(p)
 		if err != nil {
 			return nil, err
 		}
@@ -157,8 +159,7 @@ func buildIndex(dir, baseURL string, now time.Time, stderr io.Writer) (*marketIn
 				return nil, fmt.Errorf("%s and %s both contain %s %s", other.file, e.Name(), m.Key, m.Version)
 			}
 		}
-		sum := sha256.Sum256(raw)
-		byKey[m.Key] = append(byKey[m.Key], pkgInfo{m: m, file: e.Name(), size: int64(len(raw)), sum: hex.EncodeToString(sum[:])})
+		byKey[m.Key] = append(byKey[m.Key], pkgInfo{m: m, file: e.Name(), size: size, sum: sum})
 	}
 	idx := &marketIndex{Version: 1, GeneratedAt: now.Format(time.RFC3339), Plugins: []indexPlugin{}}
 	keys := make([]string, 0, len(byKey))

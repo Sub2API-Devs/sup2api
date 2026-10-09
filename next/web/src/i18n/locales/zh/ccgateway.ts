@@ -234,10 +234,33 @@ export default {
     confirmMessage: '将通过 SSH 在 Docker 主机上拉取镜像并重启容器控制器；现有账号容器不会因镜像差异重建。新镜像仅用于新建容器，已有账号可用“更新现有账号的 worker”原地更新程序。控制器重启期间连接发现可能短暂受影响。',
     done: '控制器部署配置已更新', failed: '运行环境安装失败', loadFailed: '无法读取运行环境状态', reason: '原因：{message}',
     readOnly: '安装或升级运行环境需要 settings:manage 权限。',
-    subtitleController: '控制面板模式下，镜像经控制面板上传或由控制器拉取。下表核对控制器报告的镜像；各账号实际镜像请查看账号容器状态。',
+    subtitleController: '控制面板模式下，镜像随 ccgateway 插件包分发，可一键推送给控制器；也可手动上传或由控制器拉取。下表核对控制器报告的镜像；各账号实际镜像请查看账号容器状态。',
     confirmMessageController: '将经控制面板把控制器的目标镜像设为已保存的镜像（控制器本地没有会尝试拉取）；控制器镜像不同时会自升级并等待其恢复。现有账号容器不会因此重建，新镜像用于新建或重新授权的容器。'
   },
+  bundled: {
+    title: '插件内置镜像（版本 {version}）',
+    hint: '运行环境镜像随 ccgateway 插件包分发，不需要访问镜像仓库。推送时只上传控制器上还没有的镜像，经核心分块转发给控制器、加载后启用。',
+    none: '插件包未包含镜像：当前启用的 ccgateway 插件包构建时没有打入运行环境镜像。请升级到带镜像的版本，或展开下方“高级：手动上传镜像”。',
+    component: '组件',
+    image: '内置镜像',
+    onController: '控制器上',
+    roles: { app: '业务容器（worker）', egress: '出口代理', controller: '控制器', gateway: '网关（Caddy）' },
+    states: { enabled: '已启用', notEnabled: '未启用', unknown: '未知', installOnly: '安装控制器时使用' },
+    push: '推送并启用内置镜像',
+    pushing: '正在上传、加载并启用镜像，控制器可能会自升级，可能需要十几分钟…',
+    allEnabled: '控制器已在使用全部内置镜像',
+    confirmTitle: '推送并启用内置镜像？',
+    confirmMessage: '将把控制器上还没有的内置镜像（业务容器、出口代理、控制器）上传给控制器并启用。现有账号容器不会重建：worker 程序原地替换并只重启该容器，登录状态不受影响；正在处理请求的账号最多等待 2 分钟，仍忙则跳过，可稍后重试。控制器镜像不同时控制器会自升级（约 1–2 分钟），期间账号授权与模型请求可能短暂中断，健康检查失败会自动回滚。',
+    done: '内置镜像已推送并启用',
+    partial: '部分内置镜像未能启用，请查看结果',
+    failed: '推送内置镜像失败',
+    resultTitle: '推送结果',
+    status: '结果',
+    reason: '原因',
+    statuses: { loaded: '已上传并启用', present: '控制器上已有（跳过）', failed: '失败' }
+  },
   imageUpload: {
+    advanced: '高级：手动上传镜像',
     title: '上传镜像',
     hint: '上传 docker save 导出的镜像文件（.tar / .tar.gz / .tgz，最大 4 GiB）。文件按 16 MiB 分块经核心转发给控制器，加载后立即作为所选组件的镜像生效。',
     role: '组件',
@@ -393,7 +416,12 @@ export default {
     checksum_mismatch: '镜像文件校验和不符，请重新上传',
     load_failed: '控制器无法加载该文件：请确认它是 docker save 导出的 tar 或 tar.gz',
     invalid_image: '镜像无效：引用格式不正确，或业务容器镜像带有凭据 / 代理环境变量',
-    upgrade_in_progress: '控制器正在升级，请稍后再试'
+    upgrade_in_progress: '控制器正在升级，请稍后再试',
+    no_bundled_images: '当前启用的 ccgateway 插件包没有内置镜像',
+    bundle_invalid: '插件包内的镜像文件与校验和不符或无法读取，请重新安装插件包',
+    image_load_failed: 'Docker 主机无法加载插件包内的镜像',
+    image_ref_missing: '控制器加载镜像后没有报告镜像引用',
+    upload_failed: '镜像上传到控制器失败，请稍后重试'
   },
   requestLogs: {
     title: '请求调试日志',

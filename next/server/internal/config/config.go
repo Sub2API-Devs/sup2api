@@ -52,6 +52,11 @@ type ManagedConfig struct {
 	Socket, Token, ReleaseDigest, BootID, UpdaterSocket string
 }
 
+// DefaultPluginMaxPackageBytes is the default plugin package size limit:
+// the ccgateway package carries its runtime images (CONTRACTS §53.10).
+// It equals pkg.DefaultMaxPackageBytes (checked by a pkg test).
+const DefaultPluginMaxPackageBytes = 1 << 30
+
 type PluginConfig struct {
 	DataDir           string   // SUB2API_PLUGIN_DIR, default "/var/lib/sub2api/plugins"
 	DevMode           bool     // SUB2API_PLUGIN_DEV_MODE: allow non-Linux, no sandbox
@@ -60,7 +65,7 @@ type PluginConfig struct {
 	OfficialRootKeys  []string // SUB2API_PLUGIN_OFFICIAL_KEYS: comma separated "keyId=base64pub"
 	StrictNetwork     bool     // SUB2API_PLUGIN_STRICT_NETWORK, default true on linux
 	Seccomp           bool     // SUB2API_PLUGIN_SECCOMP, default true on linux
-	MaxPackageBytes   int64    // SUB2API_PLUGIN_MAX_PACKAGE_BYTES, default 200 MiB
+	MaxPackageBytes   int64    // SUB2API_PLUGIN_MAX_PACKAGE_BYTES, default 1 GiB (DefaultPluginMaxPackageBytes)
 	MaxMemoryMB       int      // SUB2API_PLUGIN_MAX_MEMORY_MB, global cap, default 1024
 	DBRoleIsolation   bool     // SUB2API_PLUGIN_DB_ROLE_ISOLATION, default true
 	Landlock          bool     // SUB2API_PLUGIN_LANDLOCK: Landlock file system restriction, default false (CONTRACTS §43.8)
@@ -156,7 +161,7 @@ func Load(goos string) (*Config, error) {
 			p.OfficialRootKeys = append(p.OfficialRootKeys, k)
 		}
 	}
-	if p.MaxPackageBytes, err = int64Env("SUB2API_PLUGIN_MAX_PACKAGE_BYTES", 200<<20); err != nil {
+	if p.MaxPackageBytes, err = int64Env("SUB2API_PLUGIN_MAX_PACKAGE_BYTES", DefaultPluginMaxPackageBytes); err != nil {
 		return nil, err
 	}
 	mm, err := int64Env("SUB2API_PLUGIN_MAX_MEMORY_MB", 1024)

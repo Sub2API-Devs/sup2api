@@ -316,26 +316,13 @@ func (s *Service) uploadLoad(c *gin.Context) {
 			return
 		}
 		cfg = saved
-		var err *core.Error
-		if in.Role == "controller" {
-			err = s.upgradeController(ctx, cfg, ref)
-		} else {
-			err = s.controllerJSON(ctx, cfg, "PUT", "/runtime/images", map[string]string{in.Role: ref}, nil)
-		}
+		report, err := s.switchImage(ctx, cfg, in.Role, ref)
 		if err != nil {
 			httpapi.Fail(c, err)
 			return
 		}
-		if in.Role == "app" {
-			// Existing account containers keep their image; their worker is
-			// replaced in place (§53.7). The install lock is held already.
-			report, err := s.updateWorkers(ctx, cfg, ref)
-			if err != nil {
-				report.Reason, _ = err.Details["reason"].(string)
-			} else {
-				s.auditWorkers(ctx, report)
-			}
-			workers = &report
+		if report != nil {
+			workers = report
 			// The worker updates may have used up the load's time: what
 			// follows still runs (bounded on its own).
 			var cancelTail context.CancelFunc

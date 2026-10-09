@@ -10,15 +10,19 @@
 // Existing account containers are never recreated for a new app image: their
 // worker program is replaced in place (POST .../runtime/workers, and the
 // `workers` of an applied app upload, §53.7); the per-account results show here.
+// The runtime images also ship inside the ccgateway plugin package (§53.10):
+// in controller mode the card shows them (GET runtime `bundled`) and pushes the
+// ones the controller lacks (POST .../runtime/bundled); the manual upload stays
+// as an advanced option.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SBadge, SButton, SCard, SHint, SIcon, confirm, toast } from '@sub2api/ui'
-import type { CcgRuntimeImages, CcgWorkerResult, CcgWorkersReport } from '@/api/types'
+import type { CcgBundledReport, CcgBundledResult, CcgRuntimeImages, CcgWorkerResult, CcgWorkersReport } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { useCcgError } from './ccgError'
 import { knownReason, reasonOf, setupProblems } from './ccgAuthFlow'
-import { RUNTIME_COMPONENTS, componentImages, runtimeState, displayImage } from './runtimeInstall'
+import { BUNDLED_ROLES, BUNDLED_TIMEOUT_MS, RUNTIME_COMPONENTS, bundledAllEnabled, bundledState, componentImages, runtimeState, displayImage } from './runtimeInstall'
 import { IMAGE_ROLES, WORKERS_TIMEOUT_MS, createUploadTransport, formatMiB, imageFileProblem, isAbort, uploadImage, uploadPercent, type ImageLoadResult, type ImageRole, type UploadPhase, type UploadPosition } from './imageUpload'
 
 const props = defineProps<{ disabled?: boolean; mode?: string; accountRuntimes?: boolean; hasAdminKey?: boolean }>()
@@ -122,6 +126,53 @@ async function updateWorkers() {
     workersError.value = describe(e) || t('ccgateway.workers.failed')
   } finally {
     updatingWorkers.value = false
+  }
+}
+
+// ---------------------------------------------------------------- bundled images (§53.10)
+
+const pushing = ref(false)
+const bundledError = ref('')
+const bundledReport = ref<CcgBundledReport | null>(null)
+const BUNDLED_TONES = { enabled: 'success', notEnabled: 'warning', unknown: 'gray', installOnly: 'gray' } as const
+const RESULT_TONES = { loaded: 'success', present: 'gray', failed: 'danger' } as const
+
+function bundledStatus(r: CcgBundledResult): string {
+  return te(`ccgateway.bundled.statuses.${r.status}`) ? t(`ccgateway.bundled.statuses.${r.status}`) : r.status
+}
+/** A failed role's code: the shared reasons first, then the worker update's, else the code itself. */
+function bundledReason(code?: string): string {
+  if (!code) return ''
+  const k = knownReason(code)
+  if (k) return t(`ccgateway.reason.${k}`)
+  return workerReason(code)
+}
+function roleLabel(role: string): string {
+  return te(`ccgateway.bundled.roles.${role}`) ? t(`ccgateway.bundled.roles.${role}`) : role
+}
+
+async function pushBundled() {
+  if (pushing.value) return
+  const ok = await confirm({ title: t('ccgateway.bundled.confirmTitle'), message: t('ccgateway.bundled.confirmMessage'), confirmText: t('ccgateway.bundled.push') })
+  if (!ok || pushing.value) return
+  pushing.value = true
+  bundledError.value = ''
+  bundledReport.value = null
+  try {
+    // One synchronous request (upload, load and apply per role, the worker update and a controller self-upgrade); the core keeps going if this tab gives up.
+    const report = await api.post<CcgBundledReport>('/system/ccgateway/runtime/bundled', {}, { signal: AbortSignal.timeout(BUNDLED_TIMEOUT_MS) })
+    bundledReport.value = report
+    if (report.workers) workers.value = report.workers
+    const failed = (report.results || []).some(r => r.status === 'failed')
+    toast(t(failed ? 'ccgateway.bundled.partial' : 'ccgateway.bundled.done'), failed ? 'warning' : 'success')
+    // Applied images are written into the saved configuration (images.<role>).
+    emit('changed')
+    if (report.runtime) info.value = report.runtime
+    else await load()
+  } catch (e) {
+    bundledError.value = describe(e) || t('ccgateway.bundled.failed')
+  } finally {
+    pushing.value = false
   }
 }
 
@@ -237,39 +288,96 @@ onMounted(async () => {
         </table>
         <p v-if="info?.installed?.version" class="text-xs text-gray-500 dark:text-dark-400">{{ t('ccgateway.runtimeInstall.version', { version: info.installed.version }) }}</p>
         <div v-if="manage && info && action" class="flex flex-wrap items-center gap-3">
-          <SButton type="button" variant="primary" :loading="installing" :disabled="props.disabled || loading || uploading || updatingWorkers" data-testid="ccgateway-runtime-install" @click="install">
+          <SButton type="button" variant="primary" :loading="installing" :disabled="props.disabled || loading || uploading || updatingWorkers || pushing" data-testid="ccgateway-runtime-install" @click="install">
             <SIcon v-if="!installing" name="download" class="h-4 w-4" />{{ t(`ccgateway.runtimeInstall.${action}`) }}
           </SButton>
           <span v-if="installing" class="text-xs text-gray-500 dark:text-dark-400">{{ t('ccgateway.runtimeInstall.installing') }}</span>
         </div>
         <SHint v-else-if="!manage && action" size="xs">{{ t('ccgateway.runtimeInstall.readOnly') }}</SHint>
-        <div v-if="controller && manage" class="space-y-3 border-t border-gray-100 pt-3 dark:border-dark-700" data-testid="ccgateway-image-upload">
-          <div><p class="text-sm font-medium">{{ t('ccgateway.imageUpload.title') }}</p><p class="mt-1 text-xs text-gray-500">{{ t('ccgateway.imageUpload.hint') }}</p></div>
-          <div class="grid gap-3 sm:grid-cols-3">
-            <label class="block text-sm">{{ t('ccgateway.imageUpload.role') }}<select v-model="role" class="input mt-1 w-full" :disabled="props.disabled || uploading || installing || updatingWorkers" data-testid="image-upload-role"><option v-for="r in IMAGE_ROLES" :key="r" :value="r">{{ t(`ccgateway.imageUpload.roles.${r}`) }}</option></select></label>
-            <label class="block min-w-0 text-sm sm:col-span-2">{{ t('ccgateway.imageUpload.file') }}<input ref="fileInput" type="file" accept=".tar,.tar.gz,.tgz,application/x-tar,application/gzip" class="input mt-1 w-full" :disabled="props.disabled || uploading || installing || updatingWorkers" data-testid="image-upload-file" @change="pick" /></label>
-          </div>
-          <p v-if="role === 'app'" class="text-xs text-gray-500" data-testid="image-upload-app-hint">{{ t('ccgateway.imageUpload.appHint') }}</p>
-          <p v-if="fileProblem" role="alert" class="text-xs text-red-600">{{ t(`ccgateway.imageUpload.problem.${fileProblem}`) }}</p>
-          <div v-if="uploading && progress" class="space-y-1" data-testid="image-upload-progress">
-            <div class="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-dark-700" role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="percent"><div class="h-full bg-teal-500 transition-all" :style="{ width: percent + '%' }" /></div>
-            <p class="text-xs text-gray-500">{{ phase === 'load' ? t('ccgateway.imageUpload.loading') : t('ccgateway.imageUpload.uploading', { percent, done: formatMiB(progress.offset), total: formatMiB(progress.size) }) }}</p>
-          </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <SButton type="button" variant="primary" size="sm" :loading="uploading" :disabled="props.disabled || installing || updatingWorkers || !file || !!fileProblem" data-testid="image-upload-submit" @click="upload"><SIcon v-if="!uploading" name="upload" class="h-4 w-4" />{{ t('ccgateway.imageUpload.submit') }}</SButton>
-            <SButton v-if="phase === 'upload'" type="button" size="sm" data-testid="image-upload-cancel" @click="cancelUpload">{{ t('ccgateway.imageUpload.cancel') }}</SButton>
-          </div>
-          <p v-if="uploadError" role="alert" class="break-all text-xs text-red-600" data-testid="image-upload-error">{{ uploadError }}</p>
-          <div v-if="uploadResult" class="space-y-1 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300" role="status" data-testid="image-upload-result">
-            <div class="font-medium">{{ t('ccgateway.imageUpload.done') }}</div>
-            <div class="break-all font-mono">{{ t('ccgateway.imageUpload.result', { ref: uploadResult.ref }) }}</div>
-            <div class="break-all font-mono">{{ t('ccgateway.imageUpload.sha256', { sha: uploadResult.sha256 }) }}</div>
+        <div v-if="controller && info && info.bundled !== undefined" class="space-y-2 border-t border-gray-100 pt-3 dark:border-dark-700" data-testid="ccgateway-bundled">
+          <template v-if="info.bundled">
+            <div>
+              <p class="text-sm font-medium" data-testid="ccgateway-bundled-title">{{ t('ccgateway.bundled.title', { version: info.bundled.version }) }}</p>
+              <p class="mt-1 text-xs text-gray-500">{{ t('ccgateway.bundled.hint') }}</p>
+            </div>
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="text-left text-gray-500 dark:text-dark-400">
+                  <th class="py-1 pr-3 font-medium">{{ t('ccgateway.bundled.component') }}</th>
+                  <th class="py-1 pr-3 font-medium">{{ t('ccgateway.bundled.image') }}</th>
+                  <th class="py-1 font-medium">{{ t('ccgateway.bundled.onController') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="r in BUNDLED_ROLES" :key="r" class="border-t border-gray-100 dark:border-dark-700" :data-role="r" :data-state="bundledState(info, r)">
+                  <td class="py-1.5 pr-3 text-gray-700 dark:text-gray-300">{{ roleLabel(r) }}</td>
+                  <td class="py-1.5 pr-3 break-all font-mono">{{ info.bundled.images[r] || t('ccgateway.runtimeInstall.unavailable') }}</td>
+                  <td class="py-1.5"><SBadge :tone="BUNDLED_TONES[bundledState(info, r)]">{{ t(`ccgateway.bundled.states.${bundledState(info, r)}`) }}</SBadge></td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-if="manage" class="flex flex-wrap items-center gap-3">
+              <SButton type="button" :variant="bundledAllEnabled(info) ? 'secondary' : 'primary'" size="sm" :loading="pushing" :disabled="props.disabled || loading || installing || uploading || updatingWorkers" data-testid="ccgateway-bundled-push" @click="pushBundled">
+                <SIcon v-if="!pushing" name="upload" class="h-4 w-4" />{{ t('ccgateway.bundled.push') }}
+              </SButton>
+              <span v-if="pushing" class="text-xs text-gray-500 dark:text-dark-400">{{ t('ccgateway.bundled.pushing') }}</span>
+              <span v-else-if="bundledAllEnabled(info)" class="text-xs text-gray-500 dark:text-dark-400" data-testid="ccgateway-bundled-current">{{ t('ccgateway.bundled.allEnabled') }}</span>
+            </div>
+          </template>
+          <SHint v-else tone="warning" data-testid="ccgateway-bundled-none">{{ t('ccgateway.bundled.none') }}</SHint>
+          <p v-if="bundledError" role="alert" class="break-all text-xs text-red-600" data-testid="ccgateway-bundled-error">{{ bundledError }}</p>
+          <div v-if="bundledReport" class="space-y-2 rounded-lg border border-gray-100 px-3 py-2 dark:border-dark-700" role="status" data-testid="ccgateway-bundled-result">
+            <p class="text-sm font-medium">{{ t('ccgateway.bundled.resultTitle') }}</p>
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="text-left text-gray-500 dark:text-dark-400">
+                  <th class="py-1 pr-3 font-medium">{{ t('ccgateway.bundled.component') }}</th>
+                  <th class="py-1 pr-3 font-medium">{{ t('ccgateway.bundled.image') }}</th>
+                  <th class="py-1 pr-3 font-medium">{{ t('ccgateway.bundled.status') }}</th>
+                  <th class="py-1 font-medium">{{ t('ccgateway.bundled.reason') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="r in bundledReport.results" :key="r.role" class="border-t border-gray-100 dark:border-dark-700" :data-role="r.role" :data-status="r.status">
+                  <td class="py-1.5 pr-3">{{ roleLabel(r.role) }}</td>
+                  <td class="py-1.5 pr-3 break-all font-mono">{{ r.ref }}</td>
+                  <td class="py-1.5 pr-3"><SBadge :tone="RESULT_TONES[r.status] || 'gray'">{{ bundledStatus(r) }}</SBadge></td>
+                  <td class="py-1.5 break-all text-gray-600 dark:text-gray-400">{{ bundledReason(r.reason) }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
+        <details v-if="controller && manage" class="border-t border-gray-100 pt-3 dark:border-dark-700" data-testid="ccgateway-image-upload">
+          <summary class="cursor-pointer text-sm font-medium">{{ t('ccgateway.imageUpload.advanced') }}</summary>
+          <div class="mt-3 space-y-3">
+            <div><p class="text-sm font-medium">{{ t('ccgateway.imageUpload.title') }}</p><p class="mt-1 text-xs text-gray-500">{{ t('ccgateway.imageUpload.hint') }}</p></div>
+            <div class="grid gap-3 sm:grid-cols-3">
+              <label class="block text-sm">{{ t('ccgateway.imageUpload.role') }}<select v-model="role" class="input mt-1 w-full" :disabled="props.disabled || uploading || installing || updatingWorkers || pushing" data-testid="image-upload-role"><option v-for="r in IMAGE_ROLES" :key="r" :value="r">{{ t(`ccgateway.imageUpload.roles.${r}`) }}</option></select></label>
+              <label class="block min-w-0 text-sm sm:col-span-2">{{ t('ccgateway.imageUpload.file') }}<input ref="fileInput" type="file" accept=".tar,.tar.gz,.tgz,application/x-tar,application/gzip" class="input mt-1 w-full" :disabled="props.disabled || uploading || installing || updatingWorkers || pushing" data-testid="image-upload-file" @change="pick" /></label>
+            </div>
+            <p v-if="role === 'app'" class="text-xs text-gray-500" data-testid="image-upload-app-hint">{{ t('ccgateway.imageUpload.appHint') }}</p>
+            <p v-if="fileProblem" role="alert" class="text-xs text-red-600">{{ t(`ccgateway.imageUpload.problem.${fileProblem}`) }}</p>
+            <div v-if="uploading && progress" class="space-y-1" data-testid="image-upload-progress">
+              <div class="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-dark-700" role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="percent"><div class="h-full bg-teal-500 transition-all" :style="{ width: percent + '%' }" /></div>
+              <p class="text-xs text-gray-500">{{ phase === 'load' ? t('ccgateway.imageUpload.loading') : t('ccgateway.imageUpload.uploading', { percent, done: formatMiB(progress.offset), total: formatMiB(progress.size) }) }}</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <SButton type="button" variant="primary" size="sm" :loading="uploading" :disabled="props.disabled || installing || updatingWorkers || pushing || !file || !!fileProblem" data-testid="image-upload-submit" @click="upload"><SIcon v-if="!uploading" name="upload" class="h-4 w-4" />{{ t('ccgateway.imageUpload.submit') }}</SButton>
+              <SButton v-if="phase === 'upload'" type="button" size="sm" data-testid="image-upload-cancel" @click="cancelUpload">{{ t('ccgateway.imageUpload.cancel') }}</SButton>
+            </div>
+            <p v-if="uploadError" role="alert" class="break-all text-xs text-red-600" data-testid="image-upload-error">{{ uploadError }}</p>
+            <div v-if="uploadResult" class="space-y-1 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300" role="status" data-testid="image-upload-result">
+              <div class="font-medium">{{ t('ccgateway.imageUpload.done') }}</div>
+              <div class="break-all font-mono">{{ t('ccgateway.imageUpload.result', { ref: uploadResult.ref }) }}</div>
+              <div class="break-all font-mono">{{ t('ccgateway.imageUpload.sha256', { sha: uploadResult.sha256 }) }}</div>
+            </div>
+          </div>
+        </details>
         <div v-if="manage && workersReady" class="space-y-2 border-t border-gray-100 pt-3 dark:border-dark-700" data-testid="ccgateway-workers">
           <p class="text-xs text-gray-500">{{ t('ccgateway.workers.hint') }}</p>
           <div class="flex flex-wrap items-center gap-3">
-            <SButton type="button" size="sm" :loading="updatingWorkers" :disabled="props.disabled || installing || uploading" data-testid="ccgateway-workers-update" @click="updateWorkers">
+            <SButton type="button" size="sm" :loading="updatingWorkers" :disabled="props.disabled || installing || uploading || pushing" data-testid="ccgateway-workers-update" @click="updateWorkers">
               <SIcon v-if="!updatingWorkers" name="refresh" class="h-4 w-4" />{{ t('ccgateway.workers.update') }}
             </SButton>
             <span v-if="updatingWorkers" class="text-xs text-gray-500 dark:text-dark-400">{{ t('ccgateway.workers.updating') }}</span>

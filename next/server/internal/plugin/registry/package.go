@@ -53,6 +53,9 @@ func (p *Package) AssetBase() string { return "/plugin-ui/" + p.Key + "/" + p.Ve
 // FS exposes the package content (zip) as a read-only file system.
 func (p *Package) FS() fs.FS { return p.zr }
 
+// File is the path of the cached .s2plugin file (verified when opened).
+func (p *Package) File() string { return filepath.Join(p.Dir, "package.s2plugin") }
+
 // Has reports whether a file exists in the package.
 func (p *Package) Has(name string) bool {
 	f, err := p.zr.Open(name)

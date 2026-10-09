@@ -88,6 +88,10 @@ type fakeHostOps struct {
 	// SSH connections the scripts ran over ("local" for this machine).
 	targets []string
 	sshSeen []remotedocker.Config
+	// Bundled images (§53.10): the roles the missing script reports, and
+	// the exit status of docker load (0: loaded).
+	missing  []string
+	loadExit int
 }
 
 func (h *fakeHostOps) kind(script string) string {
@@ -102,6 +106,10 @@ func (h *fakeHostOps) kind(script string) string {
 		return "ca"
 	case script == portScript:
 		return "port"
+	case strings.Contains(script, "echo CCG_MISSING="):
+		return "missing"
+	case strings.Contains(script, "docker load -q"):
+		return "load"
 	case strings.Contains(script, "docker run -d --name ccg-controller"):
 		return "install"
 	case strings.Contains(script, "docker run -d --name ccg-gateway"):
@@ -145,6 +153,19 @@ func (h *fakeHostOps) answer(_ context.Context, target string, cfg remotedocker.
 		return h.gateway, nil
 	case "ca":
 		return h.ca, nil
+	case "missing":
+		out := ""
+		for _, role := range h.missing {
+			if strings.Contains(script, "echo CCG_MISSING="+role+"\n") {
+				out += "CCG_MISSING=" + role + "\n"
+			}
+		}
+		return remotedocker.ScriptResult{Output: out + "CCG_RESULT=ok\n"}, nil
+	case "load":
+		if h.loadExit != 0 {
+			return remotedocker.ScriptResult{Output: "CCG_RESULT=image_load_failed\n", ExitStatus: h.loadExit}, nil
+		}
+		return remotedocker.ScriptResult{Output: "CCG_RESULT=loaded\n"}, nil
 	case "port":
 		if h.port != nil {
 			return *h.port, nil

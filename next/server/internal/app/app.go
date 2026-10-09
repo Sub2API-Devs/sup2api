@@ -146,9 +146,12 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		packageStore = blobs.NewShell(cfg.Managed.UpdaterSocket, cfg.Plugins.MaxPackageBytes)
 	}
 	marketClient := &http.Client{Timeout: 60 * time.Second}
+	// Packages may be 1 GiB (CONTRACTS §53.10): downloads get more time than
+	// index requests.
+	packageClient := &http.Client{Timeout: market.PackageDownloadTimeout}
 	packageSource := &blobs.Source{Store: packageStore, MaxBytes: cfg.Plugins.MaxPackageBytes,
 		Download: func(ctx context.Context, url string, limit int64) ([]byte, error) {
-			return market.Fetch(ctx, marketClient, url, limit)
+			return market.Fetch(ctx, packageClient, url, limit)
 		}}
 	// Nodes re-verify package signatures before unpacking, so revoked keys
 	// and publishers stop loading everywhere.
@@ -192,6 +195,14 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	ccg := ccgateway.New(db, cipher)
 	// Draft proxy visibility and the one-node draft sweep (CONTRACTS §49).
 	ccg.Authorizer, ccg.Locker, ccg.CanWork = az, cl.Locker, canWork
+	// The runtime images ship inside the active ccgateway package (§53.10).
+	ccg.Bundle = func() (ccgateway.BundlePackage, bool) {
+		p := reg.Package("ccgateway")
+		if p == nil {
+			return ccgateway.BundlePackage{}, false
+		}
+		return ccgateway.BundlePackage{Version: p.Version, File: p.File(), FS: p.FS()}, true
+	}
 	acc := account.New(account.Deps{
 		CCGateway: ccg,
 		DB:        db, Redis: rdb, Cipher: cipher, Registry: reg, Proxies: prx, Events: events,

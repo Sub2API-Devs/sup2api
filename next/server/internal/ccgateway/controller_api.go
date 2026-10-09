@@ -135,17 +135,46 @@ func (s *Service) updateConfig(ctx context.Context, uid int64, fields []string, 
 
 // panelUpgrade is the one-click upgrade in control panel mode: the
 // controller switches to the effective app / egress images (pulling them if
-// needed), then upgrades itself when its image differs.
+// needed), then upgrades itself when its image differs. An effective image
+// that is the plugin package's bundled one and that the controller cannot
+// pull is pushed from the package first (§53.10).
 func (s *Service) panelUpgrade(ctx context.Context, cfg Config) *core.Error {
 	img := cfg.EffectiveImages()
+	b := s.bundle()
 	var h controllerHealth
-	if err := s.controllerJSON(ctx, cfg, "PUT", "/runtime/images", map[string]string{"app": img.App, "egress": img.Egress}, &h); err != nil {
+	err := s.controllerJSON(ctx, cfg, "PUT", "/runtime/images", map[string]string{"app": img.App, "egress": img.Egress}, &h)
+	if reasonOf(err) == "image_pull_failed" && b != nil {
+		cur, herr := s.health(ctx, cfg)
+		if herr != nil {
+			return reasonError(core.ErrUnavailable, "controller_unhealthy")
+		}
+		pushed := false
+		for _, r := range []struct{ role, want, have string }{{"egress", img.Egress, cur.EgressImage}, {"app", img.App, cur.AppImage}} {
+			if r.want == b.ref(r.role) && r.want != r.have {
+				if perr := s.pushBundled(ctx, cfg, b, r.role); perr != nil {
+					return perr
+				}
+				pushed = true
+			}
+		}
+		if pushed {
+			err = s.controllerJSON(ctx, cfg, "PUT", "/runtime/images", map[string]string{"app": img.App, "egress": img.Egress}, &h)
+		}
+	}
+	if err != nil {
 		return err
 	}
 	if h.ControllerImage == img.Controller {
 		return nil
 	}
-	return s.upgradeController(ctx, cfg, img.Controller)
+	err = s.upgradeController(ctx, cfg, img.Controller)
+	if reasonOf(err) == "image_pull_failed" && b != nil && b.ref("controller") == img.Controller {
+		if perr := s.pushBundled(ctx, cfg, b, "controller"); perr != nil {
+			return perr
+		}
+		err = s.upgradeController(ctx, cfg, img.Controller)
+	}
+	return err
 }
 
 // upgradeController asks the controller to replace itself with image and

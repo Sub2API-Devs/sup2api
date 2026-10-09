@@ -1,7 +1,9 @@
 package remotedocker
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -33,5 +35,18 @@ func TestRunLocalScript(t *testing.T) {
 		if _, err = RunLocalScript(context.Background(), script, nil, time.Second); err == nil || !strings.Contains(err.Error(), "invalid script") {
 			t.Fatalf("script %q: %v", script, err)
 		}
+	}
+}
+
+// TestRunLocalScriptStream: stdin streamed from a reader reaches the script
+// unchanged; a failing reader fails the run although the script exits 0.
+func TestRunLocalScriptStream(t *testing.T) {
+	big := bytes.Repeat([]byte("0123456789abcdef"), 1<<16) // 1 MiB
+	res, err := RunLocalScriptStream(context.Background(), "wc -c | tr -d ' '", bytes.NewReader(big), 30*time.Second)
+	if err != nil || res.ExitStatus != 0 || strings.TrimSpace(res.Output) != "1048576" {
+		t.Fatalf("stream: %+v %v", res, err)
+	}
+	if _, err = RunLocalScriptStream(context.Background(), "cat >/dev/null", &failAfter{r: bytes.NewReader(big[:1000]), err: errors.New("checksum")}, 30*time.Second); err == nil {
+		t.Fatal("failing reader accepted")
 	}
 }

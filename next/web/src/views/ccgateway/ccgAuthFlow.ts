@@ -97,7 +97,13 @@ export const CCG_REASONS = [
   'checksum_mismatch',
   'load_failed',
   'invalid_image',
-  'upgrade_in_progress'
+  'upgrade_in_progress',
+  // runtime images bundled in the plugin package (§53.10)
+  'no_bundled_images',
+  'bundle_invalid',
+  'image_load_failed',
+  'image_ref_missing',
+  'upload_failed'
 ] as const
 export type CcgReason = (typeof CCG_REASONS)[number]
 export function knownReason(code: unknown): CcgReason | null {

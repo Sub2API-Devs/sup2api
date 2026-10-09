@@ -239,7 +239,7 @@ func (s *Service) controllerInstall(c *gin.Context) {
 		}
 		target = Config{Mode: "ssh", AccountRuntimes: true, Images: cfg.Images, Host: in.SSH.Host, Port: in.SSH.Port, User: in.SSH.User,
 			AuthMode: in.SSH.AuthMode, Password: in.SSH.Password, PrivateKey: in.SSH.PrivateKey, Passphrase: in.SSH.Passphrase,
-			HostKeyFingerprint: in.SSH.HostKeyFingerprint}
+			HostKeyFingerprint: in.SSH.HostKeyFingerprint, bundled: cfg.bundled}
 		if target.Port == 0 {
 			target.Port = 22
 		}
@@ -251,7 +251,7 @@ func (s *Service) controllerInstall(c *gin.Context) {
 			host = target.Host
 		}
 	case "local":
-		target = Config{Mode: localInstallMode, AccountRuntimes: true, Images: cfg.Images}
+		target = Config{Mode: localInstallMode, AccountRuntimes: true, Images: cfg.Images, bundled: cfg.bundled}
 		if host == "" {
 			host = "127.0.0.1"
 		}
@@ -352,7 +352,11 @@ func (s *Service) controllerInstall(c *gin.Context) {
 			return
 		}
 	}
-	// 2. The gateway.
+	// 2. The gateway (its bundled Caddy image loaded first, §53.10).
+	if err := s.loadBundledImages(ctx, target, []string{"gateway"}, map[string]bool{"gateway": true}); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
 	res, e := s.run(ctx, target, gateway, []byte(caddy), installScriptLimit)
 	if e != nil {
 		httpapi.Fail(c, reasonError(core.ErrUnavailable, runFailure(target)))

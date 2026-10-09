@@ -64,7 +64,8 @@ describe('CCGateway runtime card in control panel mode', () => {
 
   it('uploads, loads with the chosen role, shows the reference and checksum and refreshes the state', async () => {
     const w = await render('controller')
-    expect(w.text()).toContain('控制面板模式下，镜像经控制面板上传')
+    expect(w.text()).toContain('控制面板模式下，镜像随 ccgateway 插件包分发')
+    expect(w.get('[data-testid="ccgateway-image-upload"] summary').text()).toBe('高级：手动上传镜像')
     expect(w.findAll('[data-testid="image-upload-role"] option').map(o => o.attributes('value'))).toEqual(['app', 'egress', 'controller'])
     await w.get('[data-testid="image-upload-role"]').setValue('controller')
     await choose(w, 'controller.tar.gz')

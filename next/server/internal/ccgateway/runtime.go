@@ -72,6 +72,26 @@ func (s *Service) run(ctx context.Context, cfg Config, script string, stdin []by
 	return remotedocker.RunScript(ctx, cfg.SSH(), script, stdin, limit)
 }
 
+// runStream is run with stdin streamed from a reader (an image archive for
+// docker load, §53.10). The test hooks receive the whole input as bytes.
+func (s *Service) runStream(ctx context.Context, cfg Config, script string, stdin io.Reader, limit time.Duration) (remotedocker.ScriptResult, error) {
+	hooked := s.runScript != nil
+	if cfg.Mode == localInstallMode {
+		hooked = s.runLocalScript != nil
+	}
+	if hooked {
+		data, err := io.ReadAll(stdin)
+		if err != nil {
+			return remotedocker.ScriptResult{}, err
+		}
+		return s.run(ctx, cfg, script, data, limit)
+	}
+	if cfg.Mode == localInstallMode {
+		return remotedocker.RunLocalScriptStream(ctx, script, stdin, limit)
+	}
+	return remotedocker.RunScriptStream(ctx, cfg.SSH(), script, stdin, limit)
+}
+
 func (s *Service) openControllerClient(ctx context.Context, cfg Config) (*http.Client, string, func() error, error) {
 	if s.openController != nil {
 		return s.openController(ctx, cfg)
@@ -199,6 +219,9 @@ type runtimeView struct {
 	Installed *installedRuntime `json:"installed"`
 	UpToDate  bool              `json:"up_to_date"`
 	Reason    string            `json:"reason,omitempty"`
+	// Bundled: the images of the active plugin package (§53.10), null
+	// without.
+	Bundled *bundledView `json:"bundled"`
 }
 
 type controllerHealth struct {
@@ -289,7 +312,7 @@ func (s *Service) runtimeState(ctx context.Context, cfg Config) runtimeView {
 // (zero when the health check failed).
 func (s *Service) runtimeStateHealth(ctx context.Context, cfg Config) (runtimeView, controllerHealth) {
 	img := cfg.EffectiveImages()
-	v := runtimeView{Expected: runtimeImages{App: img.App, Egress: img.Egress, Controller: img.Controller}}
+	v := runtimeView{Expected: runtimeImages{App: img.App, Egress: img.Egress, Controller: img.Controller}, Bundled: s.bundle().view()}
 	if cfg.Mode == "controller" {
 		// Everything comes from the controller's own report (§53.6).
 		h, e := s.health(ctx, cfg)
@@ -485,6 +508,12 @@ func (s *Service) installRuntime(ctx context.Context, cfg Config, uid int64, wor
 	script, e := installScript(img, workloadOptional)
 	if e != nil {
 		return cfg, reasonError(core.ErrInvalidArgument, "install_failed")
+	}
+	// Bundled images first (§53.10), each streamed on its own run; the
+	// controller's is required, app / egress only when the workload is.
+	required := map[string]bool{"controller": true, "app": !workloadOptional, "egress": !workloadOptional}
+	if err := s.loadBundledImages(ctx, cfg, []string{"app", "egress", "controller"}, required); err != nil {
+		return cfg, err
 	}
 	res, e := s.run(ctx, cfg, script, controllerEnv(key, img), installScriptLimit)
 	if e != nil {

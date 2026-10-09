@@ -388,6 +388,33 @@ export interface CcgRuntimeImages {
   up_to_date: boolean
   /** Why the installed state could not be read (ssh_failed, controller_unhealthy, ...). */
   reason?: string
+  /**
+   * Images bundled in the enabled ccgateway plugin package (CONTRACTS §53.10), role -> ref;
+   * null: the package carries none. Absent from cores older than §53.10.
+   */
+  bundled?: CcgBundledImages | null
+}
+
+export type CcgBundledRole = 'app' | 'egress' | 'controller' | 'gateway'
+export interface CcgBundledImages {
+  /** ccgateway plugin version the images were built for. */
+  version: string
+  images: Partial<Record<CcgBundledRole, string>>
+}
+/** loaded: uploaded, loaded and applied; present: the controller already had the ref (skipped). */
+export type CcgBundledStatus = 'loaded' | 'present' | 'failed'
+export interface CcgBundledResult {
+  role: string
+  ref: string
+  status: CcgBundledStatus
+  reason?: string
+}
+/** POST /system/ccgateway/runtime/bundled (CONTRACTS §53.10). */
+export interface CcgBundledReport {
+  results: CcgBundledResult[]
+  /** An applied app image: the in-place worker update of the existing runtimes (§53.7). */
+  workers?: CcgWorkersReport
+  runtime?: CcgRuntimeImages
 }
 
 /** Outcome of one runtime's in-place worker update (CONTRACTS §53.7); `failed` carries the controller's error code, `unreachable` or `timeout` as reason. */

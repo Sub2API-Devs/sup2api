@@ -10,7 +10,9 @@
 #   ui     - builds web/ -> server/web/dist and plugins/*/ui/native -> dist
 #            (skipped when package.json is missing; the placeholder page stays)
 #   build  - builds server, tools/sub2api-plugin and the plugins; packs and
-#            signs plugins with a dev key and writes the market index
+#            signs plugins with a dev key and writes the market index; the
+#            ccgateway package bundles plugins/ccgateway/images/ when present
+#            (built beforehand by deploy/docker/build-ccgateway-images.sh)
 #   final  - debian:trixie-slim runtime
 #
 # The dev signing key is generated on first build and kept in a BuildKit cache
@@ -43,6 +45,11 @@ FROM ${GO_IMAGE} AS build
 ARG VERSION=0.1.0-dev
 ARG GOPROXY=
 ARG REQUIRE_EXISTING_DEV_KEY=0
+# 1 for releases: the ccgateway package must bundle the runtime images from
+# plugins/ccgateway/images/ (CONTRACTS §53.10). The build stage has no Docker
+# daemon, so deploy/docker/build-ccgateway-images.sh writes them there first,
+# on the host, before `docker build`.
+ARG REQUIRE_CCGATEWAY_IMAGES=0
 ARG BUILD_MAX_PROCS=
 ENV CGO_ENABLED=0 GOFLAGS=-buildvcs=false
 WORKDIR /src
@@ -52,7 +59,7 @@ RUN --mount=type=cache,id=sub2api-next-gomod,target=/go/pkg/mod \
     --mount=type=cache,id=sub2api-next-gobuild,target=/root/.cache/go-build \
     --mount=type=cache,id=sub2api-next-devkeys,target=/devkeys \
     if [ -n "${GOPROXY}" ]; then export GOPROXY="${GOPROXY}"; fi && \
-    VERSION="${VERSION}" REQUIRE_EXISTING_DEV_KEY="${REQUIRE_EXISTING_DEV_KEY}" BUILD_MAX_PROCS="${BUILD_MAX_PROCS}" sh deploy/docker/build-go.sh /src /out /devkeys
+    VERSION="${VERSION}" REQUIRE_EXISTING_DEV_KEY="${REQUIRE_EXISTING_DEV_KEY}" REQUIRE_CCGATEWAY_IMAGES="${REQUIRE_CCGATEWAY_IMAGES}" BUILD_MAX_PROCS="${BUILD_MAX_PROCS}" sh deploy/docker/build-go.sh /src /out /devkeys
 
 # -----------------------------------------------------------------------------
 FROM ${RUNTIME_IMAGE}
@@ -71,7 +78,6 @@ RUN apt-get update \
 
 COPY --from=build /out/bin/ /usr/local/bin/
 COPY --from=build /out/market/ /opt/sub2api/market/
-COPY --from=build /out/builtin/ /opt/sub2api/builtin/
 COPY --from=build /out/builtin/ /opt/sub2api/builtin/
 COPY --chmod=0755 deploy/docker/entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 

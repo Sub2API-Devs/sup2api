@@ -31,6 +31,34 @@ if [ "${REQUIRE_EXISTING_DEV_KEY:-0}" = 1 ]; then
     exit 1
   }
 fi
+# CCGateway runtime images bundled in the ccgateway package (CONTRACTS
+# §53.10). deploy/docker/build-ccgateway-images.sh writes them, on a host with
+# Docker, to plugins/ccgateway/images/ (git-ignored, but part of the Docker
+# build context) before the core is built; sub2api-plugin pack checks every
+# archive's sha256 and size, that the ccgateway-* refs carry the manifest
+# version and that exactly these roles are listed.
+#   REQUIRE_CCGATEWAY_IMAGES=1  (releases) no images.json -> the build fails
+#   otherwise                   warn and pack ccgateway without images
+CCG_IMAGE_ROLES=app,egress,controller,gateway
+case "${REQUIRE_CCGATEWAY_IMAGES:-0}" in
+  0|1|'') ;;
+  *) echo 'REQUIRE_CCGATEWAY_IMAGES must be 0 or 1' >&2; exit 1 ;;
+esac
+ccg_images=
+ccg_packaged=
+if [ -f "$SRC/plugins/ccgateway/manifest.json" ]; then
+  case " ${PLUGINS:-ccgateway} " in *" ccgateway "*) ccg_packaged=1 ;; esac
+fi
+if [ -n "$ccg_packaged" ]; then
+  if [ -f "$SRC/plugins/ccgateway/images/images.json" ]; then
+    ccg_images=1
+  elif [ "${REQUIRE_CCGATEWAY_IMAGES:-0}" = 1 ]; then
+    echo '::error::REQUIRE_CCGATEWAY_IMAGES=1 but plugins/ccgateway/images/images.json is missing; run deploy/docker/build-ccgateway-images.sh <ccgateway version> plugins/ccgateway/images on a Docker host first' >&2
+    exit 1
+  else
+    echo '::warning::plugins/ccgateway/images/images.json not found: the ccgateway package is built WITHOUT runtime images (fine for development, not for a release)' >&2
+  fi
+fi
 mkdir -p "$OUT/bin" "$OUT/market" "$OUT/builtin"
 cd "$SRC"
 # The core Docker context excludes CCGateway companion container modules.
@@ -74,6 +102,12 @@ manifest_version() {
   sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1" | head -n1
 }
 
+if [ -n "$ccg_images" ]; then
+  echo "==> ccgateway: bundling plugins/ccgateway/images ($CCG_IMAGE_ROLES)"
+  PACK_IMAGES="${PACK_IMAGES:+$PACK_IMAGES }ccgateway=$CCG_IMAGE_ROLES"
+  export PACK_IMAGES
+fi
+
 if [ -f tools/sub2api-plugin/scripts/build-demo.sh ]; then
   # Owned by the SDK team: builds, packs and signs one package per
   # plugins/<name>/manifest.json (the list is discovered there, so a new plugin
@@ -97,6 +131,9 @@ else
     extra=""
     if grep -q '"native"' "$dir/manifest.json" && [ ! -d "$dir/ui/native/dist" ]; then
       extra="--allow-missing-ui"
+    fi
+    if [ "$name" = ccgateway ] && [ -n "$ccg_images" ]; then
+      extra="$extra --images $dir/images --image-roles $CCG_IMAGE_ROLES"
     fi
     # shellcheck disable=SC2086
     "$CLI" pack --dir "$dir" --runtimes "$TMP/$name" --out "$OUT/market/$name-$ver.s2plugin" $extra

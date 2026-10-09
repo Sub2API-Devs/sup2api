@@ -7,7 +7,7 @@
 ## 更新原则
 
 1. 本地审查、提交、推送；服务器Git fetch精确SHA，clean detached工作树构建，禁止scp/rsync上传源码。
-2. 从仓库内执行`prepare-core-release.sh VERSION FULL_GIT_SHA`。它准备签名制品、备份和预检，不创建升级计划或切服务；版本/制品不可覆盖。
+2. 从仓库内执行`prepare-core-release.sh VERSION FULL_GIT_SHA`。它在Docker主机上构建CCGateway运行环境镜像（缓存在`~/sup2api-managed/ccgateway-images/<插件版本>/`，每版本只构建一次）和核心（REQUIRE_CCGATEWAY_IMAGES=1，镜像随ccgateway插件包分发），准备签名制品、备份和预检，不创建升级计划或切服务；版本/制品不可覆盖。
 3. 核固定Go编译器、六builtin不可变包、签名/hash、原schema、备份和fresh preflight，再由正常primary-first updater升级。四节点独立核版本/hash/ready，真实服务验收另记。
 4. 服务端既有`~/sup2api-managed/upgrade_observe.py`节点映射为`sup2api-*`。仓库同名旧脚本映射不同，**不能直接覆盖服务端脚本或不核映射就运行**；不要传故障注入的第二参数。
 5. CCGateway保存未来镜像配置不替换现有账号。#21/#22保留原容器/数据/授权，Worker需显式备份和原子替换程序；Controller更新另走明确步骤。

@@ -55,6 +55,10 @@ type Config struct {
 	Images        *RuntimeImages  `json:"images,omitempty"`
 	Network       *RuntimeNetwork `json:"network,omitempty"`
 	RequestPolicy *RequestPolicy  `json:"request_policy,omitempty"`
+
+	// bundled holds the image references of the active plugin package
+	// (§53.10), set when the configuration is loaded; never saved.
+	bundled *RuntimeImages
 }
 
 // RuntimeImages are image references of the per-account runtime.
@@ -77,22 +81,26 @@ func validImage(ref string) bool {
 	return imageRefPattern.MatchString(ref) || imageIDPattern.MatchString(ref)
 }
 
-// EffectiveImages are the images installed: the configured ones, else the
-// pinned references.
+// EffectiveImages are the images installed, per role: the configured
+// override, else the reference bundled in the active plugin package
+// (§53.10), else the pinned references.
 func (c Config) EffectiveImages() RuntimeImages {
 	out := RuntimeImages{App: AppImage, Egress: EgressImage, Controller: ControllerImage, Gateway: GatewayImage}
-	if c.Images != nil {
-		if c.Images.App != "" {
-			out.App = c.Images.App
+	for _, img := range []*RuntimeImages{c.bundled, c.Images} {
+		if img == nil {
+			continue
 		}
-		if c.Images.Egress != "" {
-			out.Egress = c.Images.Egress
+		if img.App != "" {
+			out.App = img.App
 		}
-		if c.Images.Controller != "" {
-			out.Controller = c.Images.Controller
+		if img.Egress != "" {
+			out.Egress = img.Egress
 		}
-		if c.Images.Gateway != "" {
-			out.Gateway = c.Images.Gateway
+		if img.Controller != "" {
+			out.Controller = img.Controller
+		}
+		if img.Gateway != "" {
+			out.Gateway = img.Gateway
 		}
 	}
 	return out
@@ -169,12 +177,33 @@ type Service struct {
 	openAccount    func(context.Context, Config, string) (*http.Client, func() error, error)
 	// lookupIP replaces net.DefaultResolver.LookupIPAddr in tests.
 	lookupIP func(context.Context, string) ([]net.IPAddr, error)
+	// Bundle locates the active ccgateway plugin package of this node, whose
+	// images/ carry the runtime images (CONTRACTS §53.10); nil: none.
+	Bundle  func() (BundlePackage, bool)
+	bundles bundleCache
 }
 
 func New(db *store.DB, cipher *secret.Cipher) *Service {
 	return &Service{DB: db, Cipher: cipher, kick: make(chan string, 64)}
 }
 func (s *Service) decode(raw []byte) (Config, error) {
+	c, err := s.decodeStored(raw)
+	c.bundled = s.bundledImages()
+	return c, err
+}
+
+// bundledImages are the references bundled in the active plugin package,
+// nil without one.
+func (s *Service) bundledImages() *RuntimeImages {
+	b := s.bundle()
+	if b == nil {
+		return nil
+	}
+	refs := b.refs()
+	return &refs
+}
+
+func (s *Service) decodeStored(raw []byte) (Config, error) {
 	c := Config{Mode: "disabled", Port: 22}
 	var envelope struct {
 		Cipher []byte `json:"cipher"`
@@ -426,6 +455,7 @@ func (s *Service) save(c *gin.Context) {
 			if e != nil {
 				return nil, e
 			}
+			saved.bundled = old.bundled
 			plain, _ := json.Marshal(saved)
 			if s.Cipher == nil {
 				return nil, errors.New("encryption unavailable")

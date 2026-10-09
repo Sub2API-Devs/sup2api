@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -21,8 +22,17 @@ const localPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 // the core's own (database URL, keys). err is only for failures to start or
 // wait for the shell; a script that ran and failed has a nonzero ExitStatus.
 func RunLocalScript(ctx context.Context, script string, stdin []byte, limit time.Duration) (ScriptResult, error) {
+	return RunLocalScriptStream(ctx, script, bytes.NewReader(stdin), limit)
+}
+
+// RunLocalScriptStream is RunLocalScript with stdin streamed from a reader
+// (RunScriptStream on this machine): a read error of stdin fails the run.
+func RunLocalScriptStream(ctx context.Context, script string, stdin io.Reader, limit time.Duration) (ScriptResult, error) {
 	if script == "" || strings.ContainsRune(script, 0) {
 		return ScriptResult{}, errors.New("invalid script")
+	}
+	if stdin == nil {
+		stdin = bytes.NewReader(nil)
 	}
 	ctx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
@@ -30,12 +40,16 @@ func RunLocalScript(ctx context.Context, script string, stdin []byte, limit time
 	cmd.Env = localEnv()
 	var out boundedOutput
 	cmd.Stdout = &out
-	cmd.Stdin = bytes.NewReader(stdin)
+	in := &trackedInput{r: stdin}
+	cmd.Stdin = in
 	// Children (docker pull) may keep the output open after sh is killed.
 	cmd.WaitDelay = 5 * time.Second
 	err := cmd.Run()
 	if ctx.Err() != nil {
 		return ScriptResult{}, ctx.Err()
+	}
+	if in.failed() != nil {
+		return ScriptResult{}, errors.New("local script input failed")
 	}
 	res := ScriptResult{Output: string(out.data)}
 	var exit *exec.ExitError

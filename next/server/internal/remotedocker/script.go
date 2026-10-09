@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -26,6 +28,14 @@ type ScriptResult struct {
 // authenticate the host or to run the session (a script that ran and failed
 // has a nonzero ExitStatus and a nil error). limit bounds the whole run.
 func RunScript(ctx context.Context, cfg Config, script string, stdin []byte, limit time.Duration) (ScriptResult, error) {
+	return RunScriptStream(ctx, cfg, script, bytes.NewReader(stdin), limit)
+}
+
+// RunScriptStream is RunScript with stdin streamed from a reader (e.g. an
+// image archive for docker load, CONTRACTS §53.10): the session's stdin is
+// closed once stdin returns EOF. A read error of stdin fails the run (err),
+// so the caller can make a reader refuse to finish (checksum mismatch).
+func RunScriptStream(ctx context.Context, cfg Config, script string, stdin io.Reader, limit time.Duration) (ScriptResult, error) {
 	if script == "" || strings.ContainsRune(script, 0) {
 		return ScriptResult{}, errors.New("invalid script")
 	}
@@ -59,12 +69,22 @@ func RunScript(ctx context.Context, cfg Config, script string, stdin []byte, lim
 	defer session.Close()
 	var out boundedOutput
 	session.Stdout = &out
-	session.Stdin = bytes.NewReader(stdin)
+	if stdin == nil {
+		stdin = bytes.NewReader(nil)
+	}
+	// The copy into the session runs in its own goroutine; Run waits for it.
+	// A failing reader fails the run even when the script exited 0 (the
+	// session closes stdin after a read error, which the script sees as EOF).
+	in := &trackedInput{r: stdin}
+	session.Stdin = in
 	// The script is passed as one quoted argument of sh -c so the remote
 	// login shell does not reinterpret it.
 	err = session.Run("sh -c " + shellQuote(script))
 	if ctx.Err() != nil {
 		return ScriptResult{}, ctx.Err()
+	}
+	if in.failed() != nil {
+		return ScriptResult{}, errors.New("remote script input failed")
 	}
 	res := ScriptResult{Output: string(out.data)}
 	for _, secret := range []string{cfg.Password, cfg.PrivateKey, cfg.Passphrase} {
@@ -81,4 +101,30 @@ func RunScript(ctx context.Context, cfg Config, script string, stdin []byte, lim
 		return ScriptResult{}, errors.New("remote script failed to run")
 	}
 	return res, nil
+}
+
+// trackedInput remembers the first read error of a script's stdin other
+// than EOF.
+type trackedInput struct {
+	r   io.Reader
+	mu  sync.Mutex
+	err error
+}
+
+func (t *trackedInput) Read(p []byte) (int, error) {
+	n, err := t.r.Read(p)
+	if err != nil && err != io.EOF {
+		t.mu.Lock()
+		if t.err == nil {
+			t.err = err
+		}
+		t.mu.Unlock()
+	}
+	return n, err
+}
+
+func (t *trackedInput) failed() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.err
 }

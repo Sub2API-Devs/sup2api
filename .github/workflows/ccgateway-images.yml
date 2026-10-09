@@ -1,16 +1,25 @@
 name: CCGateway images
 
 # Builds the Claude Code runtime images (business container, sing-box egress,
-# account controller) and publishes them to GHCR. The core pins them by
-# digest (next/server/internal/ccgateway/images.go) and installs or upgrades
-# the remote runtime itself, over SSH or through the controller panel
-# (CONTRACTS §53); nobody builds on the Docker host.
+# account controller).
+#
+# Since CONTRACTS §53.10 the images ship INSIDE the ccgateway plugin package:
+# the release host runs next/deploy/docker/build-ccgateway-images.sh before
+# building the core (prepare-core-release.sh, REQUIRE_CCGATEWAY_IMAGES=1) and
+# the core installs / pushes the bundled archives itself. The `bundle` job
+# below runs that very script on a GitHub runner and packs ccgateway with its
+# images, so the release path is exercised on every change. The GHCR push
+# (`images`) is kept for anyone pulling the images directly, but nothing
+# depends on it any more (the GHCR packages are private).
 
 on:
   push:
     branches: [main, feat/next-platform]
     paths:
       - 'next/plugins/ccgateway/companions/**'
+      - 'next/plugins/ccgateway/manifest.json'
+      - 'next/deploy/docker/build-ccgateway-images.sh'
+      - 'next/tools/sub2api-plugin/**'
       - '.github/workflows/ccgateway-images.yml'
   workflow_dispatch:
 
@@ -54,6 +63,50 @@ jobs:
         run: |
           pip install -r requirements.txt
           python -m unittest discover -v -p 'test_*.py'
+
+  # The release path of §53.10: build-ccgateway-images.sh on a Docker host,
+  # then `sub2api-plugin pack --images` exactly as deploy/docker/build-go.sh
+  # does with REQUIRE_CCGATEWAY_IMAGES=1. Nothing is published.
+  bundle:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      GOFLAGS: -buildvcs=false
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: next/go.work
+          check-latest: false
+          cache: true
+          cache-dependency-path: |
+            next/go.work.sum
+            next/**/go.sum
+      - name: Build the runtime images (build-ccgateway-images.sh)
+        working-directory: next
+        run: |
+          version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' plugins/ccgateway/manifest.json | head -n1)
+          dash deploy/docker/build-ccgateway-images.sh "$version" plugins/ccgateway/images
+      - name: Pack ccgateway with the bundled images
+        working-directory: next
+        run: |
+          cli="$RUNNER_TEMP/sub2api-plugin"
+          (cd tools/sub2api-plugin && go build -o "$cli" .)
+          "$cli" build --dir plugins/ccgateway --out "$RUNNER_TEMP/ccgateway-runtimes"
+          pkg=$("$cli" pack --dir plugins/ccgateway --runtimes "$RUNNER_TEMP/ccgateway-runtimes" \
+            --images plugins/ccgateway/images --image-roles app,egress,controller,gateway --out-dir "$RUNNER_TEMP/market")
+          ls -l "$pkg"
+          unzip -v "$pkg" | tee "$RUNNER_TEMP/entries.txt"
+          for role in app egress controller gateway; do
+            grep -Eq " Stored .* images/$role\.tar\.gz$" "$RUNNER_TEMP/entries.txt" || { echo "::error::images/$role.tar.gz missing or compressed"; exit 1; }
+          done
+          {
+            echo '### ccgateway package with bundled images'
+            echo '```'
+            ls -l "$pkg"
+            cat plugins/ccgateway/images/images.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   images:
     needs: test

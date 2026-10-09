@@ -272,7 +272,7 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
   // Runtime images on GHCR, installed over SSH by the core. Starts with an older install (update
   // available); an SSH host containing "fail" makes the install fail with image_pull_failed.
   const digest = (seed: string) => createHash('sha256').update(seed).digest('hex')
-  const expected = {
+  let expected = {
     controller: `ghcr.io/sup2api/ccgateway-controller:0.2.0@sha256:${digest('controller-0.2.0')}`,
     app: `ghcr.io/sup2api/ccgateway-app:0.2.0@sha256:${digest('app-0.2.0')}`,
     egress: `ghcr.io/sup2api/ccgateway-egress:0.2.0@sha256:${digest('egress-0.2.0')}`
@@ -283,10 +283,17 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     egress_image: `ghcr.io/sup2api/ccgateway-egress:0.1.9@sha256:${digest('egress-0.1.9')}`,
     version: '0.1.9'
   }
+  // Images bundled in the ccgateway plugin package (§53.10). A controller host containing "nobundle"
+  // stands for a package built without images (bundled: null).
+  const bundled = {
+    version: '0.1.16',
+    images: { app: 'ccgateway-app:0.1.16', egress: 'ccgateway-egress:0.1.16', controller: 'ccgateway-controller:0.1.16', gateway: 'caddy:2.11.7-alpine' }
+  }
   const runtimeOut = () => ({
     expected,
     installed,
-    up_to_date: !!installed && installed.controller_image === expected.controller && installed.app_image === expected.app && installed.egress_image === expected.egress
+    up_to_date: !!installed && installed.controller_image === expected.controller && installed.app_image === expected.app && installed.egress_image === expected.egress,
+    bundled: String(config.host || '').includes('nobundle') ? null : bundled
   })
   on('GET', `${base}/runtime`, () => (config.mode === 'controller' ? runtimeOut() : { ...runtimeOut(), installed: null, reason: 'controller_not_configured' }))
   on('POST', `${base}/runtime/install`, async () => {
@@ -296,6 +303,30 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     installed = { controller_image: expected.controller, app_image: expected.app, egress_image: expected.egress, version: '0.2.0' }
     console.log('[mock ccgateway] runtime installed 0.2.0')
     return runtimeOut()
+  })
+  // Pushes the bundled images the controller lacks, applies them (the app image updates the existing
+  // workers in place) and reports per role. A controller host containing "pushfail" fails the egress image.
+  on('POST', `${base}/runtime/bundled`, async () => {
+    if (config.mode !== 'controller') return fault(400, 'controller_not_configured', 'No controller is connected')
+    if (String(config.host || '').includes('nobundle')) return fault(400, 'no_bundled_images', 'The active ccgateway plugin package carries no runtime images.')
+    if (!installed) return fault(503, 'controller_unhealthy', 'The controller is not healthy')
+    await sleep(3000)
+    const current = { app: installed.app_image, egress: installed.egress_image, controller: installed.controller_image } as Record<string, string>
+    const results = (['app', 'egress', 'controller'] as const).map(role => {
+      const ref = bundled.images[role]
+      if (current[role] === ref) return { role, ref, status: 'present' }
+      if (role === 'egress' && String(config.host || '').includes('pushfail')) return { role, ref, status: 'failed', reason: 'load_failed' }
+      current[role] = ref
+      expected = { ...expected, [role]: ref }
+      return { role, ref, status: 'loaded' }
+    })
+    installed = { controller_image: current.controller, app_image: current.app, egress_image: current.egress, version: '0.1.16' }
+    const appLoaded = results.some(r => r.role === 'app' && r.status === 'loaded')
+    const workers = appLoaded
+      ? { image: bundled.images.app, results: [...adoptedBy.entries()].map(([id, key]) => ({ key, account_id: Number(id), status: 'updated', previous_sha256: digest(`worker-old-${id}`), sha256: digest('worker-0.1.16') })) }
+      : undefined
+    console.log('[mock ccgateway] bundled images pushed', results.map(r => `${r.role}:${r.status}`).join(' '))
+    return { results, ...(workers ? { workers } : {}), runtime: runtimeOut() }
   })
 
   registerCcgDrafts({

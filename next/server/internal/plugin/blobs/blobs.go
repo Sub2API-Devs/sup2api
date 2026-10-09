@@ -106,11 +106,22 @@ type Shell struct {
 	max    int64
 }
 
+// shellTimeout bounds one transfer through the shell, which may fetch the
+// package from the primary first (1 GiB packages, CONTRACTS §53.10).
+const shellTimeout = 30 * time.Minute
+
+// defaultShellMax applies when NewShell or Source gets no limit (pkg's
+// default).
+const defaultShellMax = 1 << 30
+
 func NewShell(socket string, maxBytes int64) *Shell {
+	if maxBytes <= 0 {
+		maxBytes = defaultShellMax
+	}
 	dial := func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", socket)
 	}
-	return &Shell{socket: socket, max: maxBytes, client: &http.Client{Timeout: 10 * time.Minute, Transport: &http.Transport{DialContext: dial}}}
+	return &Shell{socket: socket, max: maxBytes, client: &http.Client{Timeout: shellTimeout, Transport: &http.Transport{DialContext: dial}}}
 }
 
 func (s *Shell) url(sum string) string { return "http://shell/system/plugin-blobs/" + sum }
@@ -161,7 +172,7 @@ func (s *Shell) Get(ctx context.Context, sum string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if s.max > 0 && int64(len(data)) > s.max {
+	if int64(len(data)) > s.max {
 		return nil, fmt.Errorf("plugin package exceeds %d bytes", s.max)
 	}
 	if err = check(sum, data); err != nil {
@@ -185,7 +196,11 @@ func (s *Source) Fetch(ctx context.Context, sum, url string) ([]byte, error) {
 	}
 	sum = strings.ToLower(sum)
 	if url != "" && s.Download != nil {
-		if data, err := s.Download(ctx, url, s.MaxBytes); err == nil && check(sum, data) == nil {
+		limit := s.MaxBytes
+		if limit <= 0 {
+			limit = defaultShellMax
+		}
+		if data, err := s.Download(ctx, url, limit); err == nil && check(sum, data) == nil {
 			return data, nil
 		}
 	}
