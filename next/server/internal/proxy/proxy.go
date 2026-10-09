@@ -299,10 +299,10 @@ type Proxy struct {
 	AccountCount int64  `json:"account_count"`
 	CreatedBy    *int64 `json:"created_by"`
 	// CreatedByEmail is the creator's email, also for soft-deleted users.
-	CreatedByEmail *string    `json:"created_by_email"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-	RealIP         *string    `json:"real_ip,omitempty"`
+	CreatedByEmail  *string    `json:"created_by_email"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+	RealIP          *string    `json:"real_ip,omitempty"`
 	RealIPUpdatedAt *time.Time `json:"real_ip_updated_at,omitempty"`
 }
 

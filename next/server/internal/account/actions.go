@@ -3,9 +3,9 @@ package account
 import (
 	"context"
 
-	"github.com/gin-gonic/gin"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/gin-gonic/gin"
 )
 
 // AccountAction is a plugin-registered custom action on an account (CONTRACTS §52).
@@ -145,4 +145,3 @@ func (s *Service) getAccountActions(c *gin.Context) {
 
 	httpapi.OK(c, gin.H{"actions": filtered})
 }
-
