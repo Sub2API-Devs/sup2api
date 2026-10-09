@@ -513,6 +513,11 @@ export function groupPlatforms(gid: number): string[] {
  * Uninstall hook (CONTRACTS §14.3): with purge, deletes the accounts of the
  * plugin's account types and returns how many; otherwise marks them orphaned.
  */
+/** Accounts still belonging to a plugin key (kept orphaned after an uninstall). */
+export function pluginAccountCount(pluginKey: string): number {
+  return accounts.filter((a) => a.plugin_key === pluginKey).length
+}
+
 export function uninstallPluginAccounts(pluginKey: string, purge: boolean): number {
   let n = 0
   for (let i = accounts.length - 1; i >= 0; i--) {

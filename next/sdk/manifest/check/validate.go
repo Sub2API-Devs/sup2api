@@ -121,6 +121,23 @@ func OthersFromManifests(ms []*manifest.Manifest) ([]PlatformOwner, []EndpointOw
 	return pfs, eps
 }
 
+// Conflicts reports only the exclusive resources of m that other plugins
+// already hold: platform ids and gateway endpoints (codes platform_conflict
+// and endpoint_conflict). The host runs it again when a version is approved,
+// because versions awaiting approval do not hold exclusive resources.
+func Conflicts(m *manifest.Manifest, others []PlatformOwner, endpoints []EndpointOwner) []FieldError {
+	v := &validator{m: m, opt: ValidateOptions{OtherPlatforms: others, OtherEndpoints: endpoints, Tooling: true},
+		perms: map[string]*manifest.HostPermission{}}
+	v.platforms()
+	var out []FieldError
+	for _, e := range v.errs {
+		if e.Code == "platform_conflict" || e.Code == "endpoint_conflict" {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
 type validator struct {
 	m     *manifest.Manifest
 	files map[string][]byte
@@ -492,6 +509,9 @@ func (v *validator) endpoint(f string, p manifest.Platform, e manifest.Endpoint)
 	if msg := checkEndpointPath(e.Path); msg != "" {
 		v.add(f+".path", "invalid_path", "%s", msg)
 		ok = false
+	} else if route, console := manifest.ConsoleRouteOf(e.Method, e.Path); console {
+		v.add(f+".path", "invalid_path", "a %s endpoint must not start with %s (a console path)", strings.ToUpper(e.Method), route)
+		ok = false
 	}
 	name, hasPrefix := strings.CutPrefix(e.Protocol, platformID+".")
 	switch {
@@ -701,6 +721,9 @@ func checkEndpointPath(p string) string {
 	}
 	if route, ok := manifest.CoreRouteOf(p); ok {
 		return fmt.Sprintf("path must not start with %s (a core route)", route)
+	}
+	if route, ok := manifest.CoreGatewayRouteOf(p); ok {
+		return fmt.Sprintf("path must not start with %s (served by the core before plugin endpoints)", route)
 	}
 	for _, s := range segs {
 		if s == "" || s == "." || s == ".." {

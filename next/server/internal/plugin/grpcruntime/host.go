@@ -486,3 +486,27 @@ func toStatus(err error) error {
 }
 
 var _ pluginv1.HostServiceServer = (*hostServer)(nil)
+
+// PurgePluginKV deletes every KV entry of pluginKey (uninstall or key release
+// with purge, install.PluginKVPurger).
+func (r *Runtime) PurgePluginKV(ctx context.Context, pluginKey string) (int, error) {
+	match := globEscape("plugin:kv:"+pluginKey+":") + "*"
+	deleted := 0
+	var cursor uint64
+	for {
+		keys, next, err := r.o.Redis.Scan(ctx, cursor, match, 500).Result()
+		if err != nil {
+			return deleted, err
+		}
+		if len(keys) > 0 {
+			n, err := r.o.Redis.Del(ctx, keys...).Result()
+			deleted += int(n)
+			if err != nil {
+				return deleted, err
+			}
+		}
+		if cursor = next; cursor == 0 {
+			return deleted, nil
+		}
+	}
+}

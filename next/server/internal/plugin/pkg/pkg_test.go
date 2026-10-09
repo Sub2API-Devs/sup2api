@@ -532,9 +532,15 @@ func TestValidatePlatformAndAccountTypes(t *testing.T) {
 				guardEndpoint("video2", "post", "/video/:v/videos")}})
 		}, "platforms[1].endpoints[0].path", "duplicate"},
 		{"built-in endpoint conflict", func(m *manifest.Manifest, _ map[string][]byte) {
-			ep(m, 0).Path = "/v1/:x"
+			// Matches POST /v1/messages/count_tokens; "/v1/:x" would also match
+			// the core's /v1/files and be refused as a core path first.
+			ep(m, 0).Path = "/v1/messages/:x"
 			ep(m, 0).Request = manifest.EndpointRequest{ModelParam: "x"}
 		}, "platforms[0].endpoints[0].path", "endpoint_conflict"},
+		{"core gateway path", func(m *manifest.Manifest, _ map[string][]byte) {
+			ep(m, 0).Path = "/v1/files/:id"
+			ep(m, 0).Request = manifest.EndpointRequest{ModelParam: "id"}
+		}, "platforms[0].endpoints[0].path", "invalid_path"},
 		{"sticky rule name", func(m *manifest.Manifest, _ map[string][]byte) {
 			m.Platforms[0].StickyRules[0].Name = ""
 		}, "platforms[0].stickyRules[0].name", "required"},

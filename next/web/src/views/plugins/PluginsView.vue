@@ -10,6 +10,7 @@ import { notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
 import { consentPath, putReview } from './reviewCache'
 import PluginAvatar from './parts/PluginAvatar.vue'
+import RetiredKeys from './parts/RetiredKeys.vue'
 import StatusBadge from './parts/StatusBadge.vue'
 import TrustBadge from './parts/TrustBadge.vue'
 
@@ -190,5 +191,7 @@ onMounted(load)
         </div>
       </template>
     </STable>
+
+    <RetiredKeys />
   </div>
 </template>

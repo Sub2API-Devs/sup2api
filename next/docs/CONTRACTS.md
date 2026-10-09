@@ -3747,3 +3747,21 @@ images/gateway.tar.gz      # Caddy 网关
 - **外壳管理 socket 令牌**：外壳每次启动生成 32 字节随机令牌写入 `management_token_file`（默认管理 socket 旁的 `shell.token`，0600），所有管理请求须带 `Authorization: Bearer <64 hex>`，否则 `401 updater_unauthorized`。核心只拿到文件路径 `SUB2API_UPDATER_TOKEN_FILE`，转发升级接口与插件包读写时带上；未设置该变量时不带（兼容旧外壳）。迁移开关 `allow_tokenless_management` / `SUB2API_ALLOW_TOKENLESS_MANAGEMENT=true` 允许不带令牌的请求（错误令牌仍拒绝），仅用于旧核心过渡。`sub2api-gateway status/pause/...` 本地命令读同一文件。
 - **核心环境白名单**：外壳只把进程基础变量与核心实际读取的配置变量（`supervisor.inheritedEnv`）传给核心，另加 `core_env_inherit` 列出的名字；`SUB2API_PEER_AUTH_KEY` 无论如何不传。
 - **部署**：Redis/Valkey 必须 `requirepass`，`REDIS_URL` 带密码（建议十六进制密码免转义）；网关容器 `no-new-privileges`、`cap_drop: [ALL]`。迁移顺序见 `deploy/gateway/ovh/README.md`。
+
+## 55. 插件独享资源的分配与归属 P1（2026-10-10，审查 `docs/audits/2026-10-09-plugin-resources.md` 的 P1）
+
+### 55.1 卸载后标识仍归原发布者（P1-4）
+- 卸载时把 `(插件标识, 发布者)` 记入 `plugin_key_retirements`（迁移 0047；未签名插件发布者为 NULL）。账号、`plg_<key>` schema、KV 可能还在，谁装上这个标识谁就能读到。
+- 新安装（该标识当前没有插件行）时：没有退役记录或发布者相同 → 照常；内置插件（`Source: builtin`）→ 收回标识并删除退役记录（镜像说了算，保留表已挡住其他发布者）；否则 `409 plugin_key_retired`。同一发布者重装后退役记录保留，直到管理员释放。
+- `GET /api/v1/plugins/retired-keys`（`plugin:read`）：`{items:[{key, publisher, retired_at, installed, accounts, schema}]}`，`accounts` 为未删除的遗留账号数，`schema` 为 `plg_<key>` 是否还在。
+- `POST /api/v1/plugins/retired-keys/:key/release`（`plugin:uninstall`）body `{purge, purge_accounts}`：删除退役记录，可选删遗留账号、删 schema 与 KV；返回 `{accounts_deleted, kv_deleted}`；该标识当前已安装时 409，未退役 404；审计 `plugin.key.release`。未删除的东西由下一个用这个标识的插件继承（控制台释放对话框明确提示）。
+- 卸载 `purge=true` 现在同时删除插件的 KV（`plugin:kv:<key>:*`，事务外尽力而为，失败只记日志）。
+
+### 55.2 第一方标识与平台保留（P1-5）
+- `install/reserved.go` 保留 `next/plugins` 下全部第一方插件的标识与其声明的平台 ID（测试 `TestReservedCoverRepo` 保证与仓库一致）。手动上传要**新占用**保留标识，须官方签名；内置安装与市场来源（`market:<id>`）是可信渠道；`SUB2API_PLUGIN_DEV_MODE` 下不限制。保留平台 ID 只能由其所属插件声明，任何渠道都一样。违反时 `403 plugin_key_reserved`。
+- **待批准版本不占独享资源**：上传时只与其他插件**已批准**版本的平台/端点比对；批准（Consent）时在同一事务内用 `pkg.Conflicts` 再比对一次，冲突则 `409 plugin_resource_conflict`，`details.fields` 列出冲突字段（`platform_conflict` / `endpoint_conflict`）。
+
+### 55.3 核心路径保留补全（P1-6）
+- `manifest.CoreGatewayPrefixes`：`/v1/files`、`/v1/skills`（核心资源 API，`gateway/resource_http.go` 在插件端点之前处理并改用同一份定义）。插件端点可能匹配它们时 `invalid_path`（含 `/v1/:x` 这类参数段）。
+- `manifest.ConsoleSegments`：控制台静态文件与页面根（`assets`、`index.html`、`favicon.svg`、`login`、`dashboard`、`plugins`、`p`、`system` 等）。GET/HEAD 端点的首段可能匹配它们时 `invalid_path`（其他方法不经过控制台，不限制）。`webui` 测试 `TestConsoleSegmentsCoverConsole` 从 `web/src/router` 与 `web/public` 推出首段，新页面没登记就失败。
+- P1-7（DB 角色隔离不降级）已随 P0 完成，见 §54。

@@ -186,6 +186,15 @@ func (s *Service) Consent(ctx context.Context, key, version string, req ConsentR
 		if err := pkg.CheckTrust(m, trust); err != nil {
 			return err
 		}
+		// Exclusive resources are only held once approved: another plugin
+		// may have been approved for them since this version was uploaded.
+		others, endpoints, err := s.otherPlatforms(ctx, tx, key)
+		if err != nil {
+			return err
+		}
+		if conflicts := pkg.Conflicts(m, others, endpoints); len(conflicts) > 0 {
+			return ErrResourceConflict.WithDetails(map[string]any{"fields": conflicts})
+		}
 		upgrade := status != StatusAwaitingConsent
 		current := map[string]Grant{}
 		if upgrade {

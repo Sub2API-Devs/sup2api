@@ -62,6 +62,9 @@ type Deps struct {
 	// Accounts deletes a plugin's accounts on uninstall with
 	// purge_accounts=true; nil makes such requests fail with unavailable.
 	Accounts core.PluginAccountPurger
+	// KV deletes a plugin key's KV entries on uninstall or key release with
+	// purge; nil leaves them to expire.
+	KV PluginKVPurger
 	// Packages holds the package bytes; PostgreSQL keeps only their sha256.
 	Packages *blobs.Source
 }

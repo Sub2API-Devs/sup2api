@@ -310,7 +310,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 
 	inst := install.New(install.Deps{Mutations: mutations,
 		DB: db, Trust: trust, Authz: az, Permissions: az, Defaults: defaults,
-		Rollout: ctl, Schemas: schemas, Bus: cl.Bus, Accounts: acc, Nodes: cl.Registry, Packages: packageSource,
+		Rollout: ctl, Schemas: schemas, Bus: cl.Bus, Accounts: acc, KV: rt, Nodes: cl.Registry, Packages: packageSource,
 	}, install.Options{HostVersion: version, Plugins: cfg.Plugins})
 	mkt := market.New(db, inst, marketClient, cfg.Plugins.MaxPackageBytes)
 	if managed == nil || managed.prepare.Bootstrap {

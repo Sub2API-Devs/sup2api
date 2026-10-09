@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/httpfacts"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/gin-gonic/gin"
@@ -44,10 +45,11 @@ type resourceCall struct {
 
 func (g *Gateway) serveResourceHTTP(c *gin.Context) bool {
 	path := c.Request.URL.Path
-	skills := path == "/v1/skills" || strings.HasPrefix(path, "/v1/skills/")
-	if !skills && path != "/v1/files" && !strings.HasPrefix(path, "/v1/files/") {
+	// manifest.CoreGatewayPrefixes keeps plugin endpoints off these paths.
+	if !manifest.CoreGatewayPath(path) {
 		return false
 	}
+	skills := path == "/v1/skills" || strings.HasPrefix(path, "/v1/skills/")
 	x := &resourceCall{g: g, c: c, rid: httpapi.NewRequestID()}
 	c.Header("X-Request-Id", x.rid)
 	if !g.healthy() || g.d.Resources == nil || g.d.ResourceTransport == nil || g.d.Auth == nil || g.d.Accounts == nil {

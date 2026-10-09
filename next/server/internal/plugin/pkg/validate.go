@@ -66,6 +66,17 @@ func Validate(m *manifest.Manifest, files map[string][]byte, opt ValidateOptions
 	return core.InvalidFields(fields...).WithMessage("plugin manifest validation failed")
 }
 
+// Conflicts reports the platforms and gateway endpoints of m that other
+// plugins already hold (check.Conflicts).
+func Conflicts(m *manifest.Manifest, others []PlatformOwner, endpoints []EndpointOwner) []core.FieldError {
+	fs := check.Conflicts(m, others, endpoints)
+	out := make([]core.FieldError, len(fs))
+	for i, f := range fs {
+		out[i] = core.FieldError{Field: f.Field, Code: f.Code, Message: f.Message}
+	}
+	return out
+}
+
 // CheckPlatform applies the endpoint, usage and sticky rules of a plugin
 // platform to a single platform definition (used to hold the built-in
 // platforms to the plugin contract).

@@ -29,3 +29,28 @@ func (a *API) confirmStopped(c *gin.Context) {
 	}
 	httpapi.OK(c, out)
 }
+
+func (a *API) listRetiredKeys(c *gin.Context) {
+	out, err := a.d.Install.ListRetiredKeys(ctx(c))
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.OK(c, gin.H{"items": out})
+}
+
+func (a *API) releaseRetiredKey(c *gin.Context) {
+	var in install.ReleaseOptions
+	if c.Request.ContentLength != 0 {
+		if err := c.ShouldBindJSON(&in); err != nil {
+			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("invalid release options"))
+			return
+		}
+	}
+	out, err := a.d.Install.ReleaseRetiredKey(ctx(c), c.Param("key"), in, actor(c))
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.OK(c, out)
+}

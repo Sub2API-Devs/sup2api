@@ -3,7 +3,7 @@
 // /ui/plugins and /p/<key>/... live in pluginui.ts; publishers are not here.
 import { fail, noContent, now, on, paginate } from './router'
 import { pluginPlatforms } from './platforms'
-import { uninstallPluginAccounts } from './accounts'
+import { pluginAccountCount, uninstallPluginAccounts } from './accounts'
 
 type Any = Record<string, any>
 
@@ -766,6 +766,23 @@ const notFound = (key: string) => fail(404, 'not_found', `plugin ${key} not foun
 
 on('GET', '/plugins', (req) => paginate([...plugins.values()].map(summary), req.query))
 
+// CONTRACTS §55.1: an uninstalled plugin's key stays with its publisher.
+interface RetiredKeyRow { key: string; publisher: string; retired_at: string; accounts: number; schema: boolean }
+const retiredKeys = new Map<string, RetiredKeyRow>([
+  ['acme_tool', { key: 'acme_tool', publisher: 'acme', retired_at: '2026-10-08T09:30:00Z', accounts: 2, schema: true }]
+])
+on('GET', '/plugins/retired-keys', () => ({
+  items: [...retiredKeys.values()].map((r) => ({ ...r, installed: plugins.has(r.key) }))
+}))
+on('POST', '/plugins/retired-keys/:key/release', (req) => {
+  const r = retiredKeys.get(req.params.key)
+  if (!r) return fail(404, 'not_found', 'the plugin key is not retired')
+  if (plugins.has(r.key)) return fail(409, 'conflict', 'the plugin key is installed again; uninstall it first')
+  const body = (req.body || {}) as { purge?: boolean; purge_accounts?: boolean }
+  retiredKeys.delete(r.key)
+  return { accounts_deleted: body.purge_accounts ? r.accounts : 0, kv_deleted: body.purge ? 1 : 0 }
+})
+
 on('POST', '/plugins/upload', () => {
   // multipart bodies are not parsed by the mock server: pretend it was guard 0.1.1
   return stageVersion(
@@ -794,6 +811,7 @@ on('DELETE', '/plugins/:key', (req) => {
   // CONTRACTS §14.3: accounts are kept (orphaned) unless purge_accounts=true.
   const purgeAccounts = req.query.purge_accounts === 'true'
   const deleted = uninstallPluginAccounts(p.key, purgeAccounts)
+  retiredKeys.set(p.key, { key: p.key, publisher: p.publisher || '', retired_at: now(), accounts: pluginAccountCount(p.key), schema: req.query.purge !== 'true' })
   return purgeAccounts ? { accounts_deleted: deleted } : noContent()
 })
 

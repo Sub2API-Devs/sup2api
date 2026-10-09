@@ -20,7 +20,7 @@ func running(status string) bool {
 
 // UninstallOptions select what uninstall removes besides the plugin row.
 type UninstallOptions struct {
-	// Purge drops the plugin's database schema.
+	// Purge drops the plugin's database schema and deletes its KV entries.
 	Purge bool
 	// PurgeAccounts deletes the accounts of the plugin's account types
 	// through Deps.Accounts; otherwise they are kept and show up orphaned.
@@ -35,7 +35,8 @@ type UninstallResult struct {
 // Uninstall disables the plugin if needed, optionally drops its schema, and
 // deletes the plugin row (cascading grants, versions, cursors, job runs,
 // rollouts, plugin-default prices and sticky rules) and its egress domains. Accounts are kept and
-// show up as orphaned unless opt.PurgeAccounts is set.
+// show up as orphaned unless opt.PurgeAccounts is set. The key stays with the
+// plugin's publisher (retired.go).
 func (s *Service) Uninstall(ctx context.Context, key string, opt UninstallOptions, actorID int64) (UninstallResult, error) {
 	var res UninstallResult
 	if builtin, err := IsBuiltin(ctx, s.d.DB.Pool, key); err != nil {
@@ -92,6 +93,9 @@ func (s *Service) Uninstall(ctx context.Context, key string, opt UninstallOption
 				return err
 			}
 		}
+		if err := retireKey(ctx, tx, key, actorID); err != nil {
+			return err
+		}
 		if tag, err := tx.Exec(ctx, `DELETE FROM plugins WHERE key = $1 AND NOT builtin`, key); err != nil {
 			return err
 		} else if tag.RowsAffected() == 0 {
@@ -107,6 +111,9 @@ func (s *Service) Uninstall(ctx context.Context, key string, opt UninstallOption
 	})
 	if err != nil {
 		return res, err
+	}
+	if purge {
+		s.purgeKV(ctx, key)
 	}
 	s.Notify(ctx, key)
 	return res, nil

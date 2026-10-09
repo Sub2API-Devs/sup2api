@@ -56,7 +56,7 @@ func (s *Service) Upload(ctx context.Context, data []byte, actorID int64, opt Up
 		return nil, guardErr
 	}
 	defer release()
-	otherPlatforms, otherEndpoints, err := s.otherPlatforms(ctx, m.Key)
+	otherPlatforms, otherEndpoints, err := s.otherPlatforms(ctx, s.d.DB.Pool, m.Key)
 	if err != nil {
 		return nil, err
 	}
@@ -97,6 +97,14 @@ func (s *Service) Upload(ctx context.Context, data []byte, actorID int64, opt Up
 			existing = false
 		} else if err != nil {
 			return err
+		}
+		if err := checkReserved(m, opt.Source, ver.Trust, !existing && !s.opt.Plugins.DevMode); err != nil {
+			return err
+		}
+		if !existing {
+			if err := claimRetiredKey(ctx, tx, m.Key, ver.PublisherID, opt.Source); err != nil {
+				return err
+			}
 		}
 		if existing && !sameID(pubID, ver.PublisherID) {
 			return core.ErrConflict.WithMessage(fmt.Sprintf("plugin %q is owned by another publisher", m.Key))
@@ -184,12 +192,15 @@ func (s *Service) Upload(ctx context.Context, data []byte, actorID int64, opt Up
 }
 
 // otherPlatforms lists the platforms and gateway endpoints declared by every
-// non-rejected version of other plugins.
-func (s *Service) otherPlatforms(ctx context.Context, key string) ([]pkg.PlatformOwner, []pkg.EndpointOwner, error) {
-	rows, err := s.d.DB.Pool.Query(ctx, `
+// approved version of other plugins. A version awaiting approval holds no
+// exclusive resource (audit 2026-10-09 P1-5): it cannot block a later upload,
+// a built-in plugin's above all, and Consent checks it again before it is
+// approved.
+func (s *Service) otherPlatforms(ctx context.Context, q store.Querier, key string) ([]pkg.PlatformOwner, []pkg.EndpointOwner, error) {
+	rows, err := q.Query(ctx, `
 		SELECT plugin_key, manifest->'platforms'
 		FROM plugin_versions
-		WHERE plugin_key <> $1 AND consent_status <> 'rejected' AND jsonb_typeof(manifest->'platforms') = 'array'
+		WHERE plugin_key <> $1 AND consent_status = 'approved' AND jsonb_typeof(manifest->'platforms') = 'array'
 		ORDER BY plugin_key, version`, key)
 	if err != nil {
 		return nil, nil, err

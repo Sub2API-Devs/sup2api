@@ -363,6 +363,24 @@ export default {
     }
   },
 
+  retired: {
+    title: 'Keys kept from uninstalled plugins',
+    description: 'After an uninstall the plugin key stays with its publisher: accounts, plugin data and cache entries may remain, and only that publisher can install the key again. Releasing it lets any publisher use the key, and the next plugin inherits whatever was not deleted.',
+    key: 'Key',
+    left: 'Left behind',
+    retiredAt: 'Uninstalled',
+    unsigned: 'Unsigned',
+    reinstalled: 'Reinstalled by its publisher',
+    accounts: '{n} account(s)',
+    release: 'Release key',
+    releaseTitle: 'Release key {key}',
+    releaseBody: 'Once released, a plugin of any publisher can be installed with this key.',
+    purgeAccounts: 'Also delete the {n} account(s) left behind',
+    purge: 'Also delete plugin data (schema {schema}) and cache entries',
+    inheritWarn: 'Accounts and data not deleted are inherited by the next plugin with this key, credentials included.',
+    released: '{key} released, {n} account(s) deleted'
+  },
+
   uninstall: {
     action: 'Uninstall',
     title: 'Uninstall {name}',

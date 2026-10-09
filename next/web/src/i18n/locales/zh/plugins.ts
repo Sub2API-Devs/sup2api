@@ -363,6 +363,24 @@ export default {
     }
   },
 
+  retired: {
+    title: '已卸载插件保留的标识',
+    description: '插件卸载后，它的标识仍归原发布者所有：账号、插件数据和缓存可能还在，只有原发布者能重新安装。释放后任何发布者都能使用这个标识，没有删除的数据会被新插件继承。',
+    key: '标识',
+    left: '遗留',
+    retiredAt: '卸载时间',
+    unsigned: '未签名',
+    reinstalled: '已由原发布者重新安装',
+    accounts: '{n} 个账号',
+    release: '释放标识',
+    releaseTitle: '释放标识 {key}',
+    releaseBody: '释放后任何发布者都可以安装使用这个标识的插件。',
+    purgeAccounts: '同时删除遗留的 {n} 个账号',
+    purge: '同时删除插件数据（schema {schema}）和缓存',
+    inheritWarn: '没有删除的账号和数据会被下一个使用这个标识的插件继承，包括其中的凭据。',
+    released: '已释放 {key}，删除了 {n} 个账号'
+  },
+
   uninstall: {
     action: '卸载',
     title: '卸载 {name}',

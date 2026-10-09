@@ -1046,6 +1046,26 @@ export interface EgressReport {
   items?: EgressLogRow[]
 }
 
+/** GET /plugins/retired-keys item (CONTRACTS §55.1). */
+export interface RetiredKey {
+  key: string
+  /** Publisher that owned the key; empty for an unsigned plugin. */
+  publisher: string
+  retired_at: string
+  /** The same publisher installed the key again. */
+  installed: boolean
+  /** Accounts left behind (not deleted). */
+  accounts: number
+  /** The plg_<key> schema still exists. */
+  schema: boolean
+}
+
+/** Response of POST /plugins/retired-keys/:key/release. */
+export interface ReleaseRetiredKeyResult {
+  accounts_deleted: number
+  kv_deleted: number
+}
+
 /** Response of DELETE /plugins/:key (CONTRACTS §14.3); 204 on older servers. */
 export interface UninstallResult {
   /** Accounts soft-deleted with purge_accounts=true. */
