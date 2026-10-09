@@ -4,11 +4,12 @@ This controller replaces the shared CCGateway endpoint when `account_runtimes`
 is enabled. Each account owns one business container, one data volume, an
 internal Docker network, and an egress container. Linux Docker is required.
 The core reads account/proxy changes on a three-second control-plane loop and
-retries failed reconciliation. Current model traffic uses authenticated
-`/accounts/<key>/connection` discovery followed by core-to-Worker SSH direct HTTP
-on port 8787; the controller does not relay model bodies on this path. The legacy
-forwarding endpoints below remain compatibility surfaces. Stale revisions are
-rejected until synchronization succeeds; requests do not reconfigure sing-box.
+retries failed reconciliation. Model traffic uses authenticated
+`/accounts/<key>/connection` discovery followed by a direct HTTP connection to
+the account's port 8787: SSH direct-tcpip in SSH mode, or the controller's byte
+tunnel (`/accounts/<key>/tunnel`) in control panel mode (CONTRACTS §53). The
+legacy forwarding endpoints below remain compatibility surfaces. Stale revisions
+are rejected until synchronization succeeds; requests do not reconfigure sing-box.
 
 The existing SSH management integration still lives in the core. This change
 does not claim a completed extraction of all CCGateway UI/services into plugin
@@ -52,16 +53,33 @@ removed by the core's periodic sweep through `DELETE /accounts/<key>`.
 
 ## Controller API
 
-Bearer controller key on every request; loopback only.
+Bearer controller key on every request; loopback only (in control panel mode a
+Caddy container on the same host terminates HTTPS and proxies to it).
 
 | Method | Path | Result |
 |---|---|---|
-| GET | `/health` | `{"version","app_image","egress_image"}`; `version` is `CCG_CONTROLLER_VERSION` (default `dev`) |
+| GET | `/health` | `{"version","app_image","egress_image","controller_image","network_policy_version","features"}`; `version` is `CCG_CONTROLLER_VERSION` (default `dev`), `controller_image` is `CCG_CONTROLLER_IMAGE` |
 | GET | `/accounts` | `{"runtimes":[{"key","status","created_at"}]}` for every state directory |
 | DELETE | `/accounts/<key>` | draft keys only: removes both containers, the network, the data volume and the state directory; `200 {"deleted":true}` also when nothing existed; account ids → 405 |
 | PUT | `/accounts/<key>/config` | reconcile (proxy, enabled, revision, auth) |
 | GET | `/accounts/<key>/status` | `{"account_id","container","status","revision","auth_mode"}` |
+| GET | `/accounts/<key>/connection` | `{"app_ip","port","api_key","revision"}` for the current `X-CCG-Revision` |
+| GET | `/accounts/<key>/tunnel` | `Upgrade: ccg-tunnel` → `101`, then raw bytes to `<app_ip>:8787` (same revision check) |
+| POST | `/accounts/<key>/worker` | `{"image"}` → in-place worker update: `{"status":"updated"\|"unchanged"\|"busy"\|"not_running"\|"rolled_back",…}` (below) |
+| POST | `/images/uploads` | `{"size","sha256"?}` → `{"upload_id","offset","size"}` |
+| PUT/GET/DELETE | `/images/uploads/<id>` | append a chunk at `X-CCG-Offset` (≤ 64 MiB) / progress / discard |
+| POST | `/images/uploads/<id>/load` | verify and `docker load` → `{"sha256","images":[{"id","tags"}]}` |
+| GET/PUT | `/runtime/images` | target `{"app","egress","controller"}` / set app or egress (kept in `<root>/runtime.json`) |
+| POST | `/runtime/controller` | `{"image"}` → `202`; a helper container from that image runs `upgrade.py` |
 | GET/POST | `/accounts/<key>/v1/messages`, `/accounts/<key>/admin/status`, `/accounts/<key>/admin/auth/{session,start,complete,cancel,logout}` | passed through to the app container; requires `X-CCG-Revision` |
+
+Details and error codes of the tunnel, upload, target image and self-upgrade
+endpoints: CONTRACTS §53.5. The self-upgrade replaces only the container named
+`CCG_CONTROLLER_NAME` (default `ccg-controller`; previous one kept as
+`<name>-prev` until the new one reports its image on `/health`, helper
+`<name>-upgrade`), rewrites `CCG_CONTROLLER_IMAGE` in `CCG_RUNTIME_ENV_FILE`
+(default `/opt/ccgateway-runtime.env`; its directory is mounted into the helper)
+and keeps `CCG_RUNTIME_ROOT`, the key and the port from that file.
 
 `created_at` (RFC 3339, UTC) is recorded at the first provision; older state
 directories report their modification time. `status` is `ready`, `pending` or
@@ -71,7 +89,10 @@ Controller errors are `{"error":"<code>"}`: `unauthorized` (401), `not_found`
 (404), `method_not_allowed` (405), `invalid_request` (400: framing, JSON,
 revision, authentication or proxy settings), `not_synchronized` (409),
 `api_key_account` (409: OAuth action on an API key account),
-`image_pull_failed` (503) and `runtime_unavailable` (503). Answers of the app
+`image_pull_failed` (503) and `runtime_unavailable` (503); the §53.5 endpoints
+add `offset_mismatch`, `too_many_uploads`, `incomplete`, `upgrade_in_progress`
+(409), `checksum_mismatch`, `load_failed`, `invalid_image` (400); the worker
+update adds `unsupported_container` (409) and `container_changed` (503). Answers of the app
 container are passed through unchanged; its management errors are
 `{"type":"error","error":{"type":"<code>","message":"..."}}` with the codes
 listed in `../README.md`.
@@ -100,6 +121,46 @@ copies cannot become ready. Worker `/work/data` is not copied. The console waits
 for login validation and an explicit switch click. Retired containers have a
 70-minute grace period; their data volumes and private controller state under
 `backups/<key>.json` are retained for manual recovery, not automatically purged.
+
+### In-place worker update (CONTRACTS §53.7)
+
+`POST /accounts/<key>/worker {"image": ref}` replaces the worker program inside
+the existing account container and restarts only that container. The container
+is never provisioned, created, removed or recreated: its id, image, labels,
+mounts, data volume and authorization stay as they are.
+
+1. The program is taken from `/usr/local/bin/worker` of `ref` through a
+   temporary container that is created (never started) and removed again; it
+   must be the only, regular file of the archive (≤ 256 MiB), else
+   `invalid_image`. A missing image is pulled (`image_pull_failed`).
+2. Under the account lock: no app container of this key → `not_found`; not
+   running → `{"status":"not_running"}`.
+3. The target is the first entry of the container's `Path` + `Args` whose
+   basename is `worker` or `ccgateway`; only the bare name or
+   `/usr/local/bin/<name>` is accepted (`unsupported_container` otherwise, also
+   when the file cannot be read). Same SHA-256 → `{"status":"unchanged","sha256"}`.
+4. Idle: `top -eo pid,comm` shows only `docker-init` and the program itself
+   (anything else is a running CLI request). Rechecked every 2 s for up to
+   120 s, then `{"status":"busy"}` without any change.
+5. The old program is backed up to `<root>/<key>/worker-backups/<UTC>-<sha12>`
+   (0600, newest 5 kept), staged as `<target>.next-<random>` (root, 0755,
+   hash verified), idleness is checked once more (busy → staged file removed),
+   then `mv -f` as root and `restart(timeout=30)` of this container only.
+6. `/health` inside the container must answer 200 within 30 s, and the
+   container must really have restarted. Otherwise the backup is put back
+   (temporary file + `mv`; written directly while the container is stopped,
+   e.g. when the new program exited at once) and the container restarted:
+   `{"status":"rolled_back","reason":"unhealthy"|"rollback_unhealthy","online"}`.
+7. The restart rebuilt the account network namespace (no firewall or default
+   route — the business container cannot reach anything meanwhile). If the
+   account was online, the same steps as reconciliation run again (business
+   firewall and route, egress readiness, proxied probe) and readiness returns
+   at the same revision; a failure only clears readiness and the core's next
+   reconciliation repairs it.
+8. `{"status":"updated","previous_sha256","sha256","path","online"}`. Container
+   `Id`, `Image`, `Config.Image`, `Config.User`, labels, `Mounts`, `Path` and
+   `Args` are compared with their initial values throughout; a difference stops
+   the update with `container_changed`.
 
 ## Installation
 
@@ -191,12 +252,14 @@ legacy API key is unused in this mode.
 `test_network.py` tests generated policy/configuration. `test_manager.py` tests
 the controller with an in-memory Docker client (key validation, draft deletion,
 listing, manual image updates, isolated authorization migration, digest pulls,
-routing and error codes); it needs
-no Docker. Run on Linux from this directory:
+routing and error codes); `test_tunnel.py`, `test_uploads.py`,
+`test_runtime.py` and `test_upgrade.py` cover the control panel endpoints and
+`upgrade.py`; `test_worker.py` covers the in-place worker update. None needs
+Docker. Run on Linux from this directory:
 
 ```sh
 pip install -r requirements.txt
-python -m unittest -v test_network test_headers test_manager
+python -m unittest -v test_network test_headers test_manager test_tunnel test_uploads test_runtime test_upgrade test_worker
 ```
 
 `integration_test.py`

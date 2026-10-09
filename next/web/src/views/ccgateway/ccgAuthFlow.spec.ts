@@ -144,6 +144,10 @@ describe('CCGateway authorization flow', () => {
     expect(setupProblems(null)).toEqual([])
     expect(setupProblems({ account_runtimes: true, mode: 'ssh', has_admin_key: true })).toEqual([])
     expect(setupProblems({ account_runtimes: true, mode: 'local', has_admin_key: true })).toEqual([])
+    expect(setupProblems({ account_runtimes: true, mode: 'controller', has_admin_key: true })).toEqual([])
+    expect(setupProblems({ account_runtimes: true, mode: 'controller', has_admin_key: false })).toEqual(['adminKey'])
+    // the abandoned skeleton mode is not a Docker connection
+    expect(setupProblems({ account_runtimes: true, mode: 'http', has_admin_key: true })).toEqual(['docker'])
     expect(setupProblems({ account_runtimes: false, mode: 'disabled', has_admin_key: false })).toEqual(['runtimes', 'docker', 'adminKey'])
   })
 

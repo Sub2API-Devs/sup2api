@@ -2,7 +2,7 @@
 
 Run on Linux (manager.py uses fcntl) from this directory, as CI does:
     pip install -r requirements.txt
-    python -m unittest -v test_network test_headers test_manager
+    python -m unittest -v test_network test_headers test_manager test_tunnel test_uploads test_runtime test_upgrade
 """
 import http.client
 import json
@@ -252,6 +252,18 @@ class KeyTests(unittest.TestCase):
 
 
 class ManagerTests(Base):
+    def test_oneshot_removes_a_container_that_could_not_start(self):
+        # docker-py's run(remove=True) leaves a container that fails to start
+        # behind in "Created"; every failed reconcile used to add one.
+        def run(image, name=None, **kwargs):
+            self.assertTrue(kwargs.pop('remove'))
+            self.fake.containers.create(image, name=name)
+            raise docker.errors.APIError('cannot join network of a non running container')
+        with patch.object(self.fake.containers, 'run', side_effect=run):
+            with self.assertRaises(docker.errors.APIError):
+                self.m.oneshot('egress:test', entrypoint=['true'])
+        self.assertEqual([n for n in self.fake.containers.items if '-oneshot-' in n and not self.fake.containers.items[n].removed], [])
+
     def test_auth_migration_isolated_idempotent_and_source_readonly(self):
         self.apply('7')
         self.apply(DRAFT_KEY)
@@ -597,7 +609,9 @@ class HandlerTests(Base):
     def test_health(self):
         self.assertEqual(self.call('GET', '/health', key='wrong' * 8), (401, {'error': 'unauthorized'}))
         self.assertEqual(self.call('GET', '/health'),
-                         (200, {'version': 'dev', 'app_image': 'app:test', 'egress_image': 'egress:test', 'network_policy_version': 1}))
+                         (200, {'version': 'dev', 'app_image': 'app:test', 'egress_image': 'egress:test',
+                                'controller_image': '', 'network_policy_version': 1,
+                                'features': ['tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update']}))
         self.m.version = 'abc123def456'
         self.assertEqual(self.call('GET', '/health')[1]['version'], 'abc123def456')
         self.assertEqual(self.call('POST', '/health', ''), (405, {'error': 'method_not_allowed'}))

@@ -3120,7 +3120,7 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 1. 控制器密钥：配置里已有管理密钥（`admin_key`）就沿用；否则生成 32 字节随机数（hex）先加密存进配置（审计 `ccgateway.config.update`，`fields: ["admin_key"]`；并发时以先保存者为准）。
 2. 经 SSH 执行**固定脚本**：只拼接常量和通过上面正则的镜像引用（单引号包裹，正则排除了引号、空白和 shell 字符），绝不拼接其他输入；脚本作为 `sh -c '<script>'` 的单个参数执行。脚本对三个镜像各先 `docker image inspect`，本地已有就不拉，没有才 `docker pull`（失败 → `image_pull_failed`）；`mkdir -p /opt/ccgateway-runtime && chmod 700`；从 **stdin** 写 `/opt/ccgateway-runtime.env`（先写 `.tmp`、`chmod 600`、再 `mv`），内容为 `CCG_RUNTIME_ROOT=/opt/ccgateway-runtime`、`CCG_APP_IMAGE`、`CCG_EGRESS_IMAGE`、`CCG_CONTROLLER_KEY`、`CCG_CONTROLLER_PORT=8787`（版本已由镜像内置，不写 `CCG_CONTROLLER_VERSION`）——**密钥只走 stdin**，不出现在脚本、命令行或日志里；上次安装若在改名后中断（只剩 `ccg-controller-prev`）先改回原名；旧容器改名 `ccg-controller-prev` 并停止；按原参数启动新容器 `docker run -d --name ccg-controller --restart unless-stopped --network host --env-file /opt/ccgateway-runtime.env -v /var/run/docker.sock:/var/run/docker.sock -v /opt/ccgateway-runtime:/opt/ccgateway-runtime --log-opt max-size=20m --log-opt max-file=3 <controller>`（启动失败时脚本自己删新容器、把 prev 改回并启动，→ `controller_unhealthy`）。脚本结果用标准输出最后一行 `CCG_RESULT=<code>` 报告；stderr 丢弃。
 3. 经 SSH 隧道轮询 `GET /health`，最多 60 秒（每 2 秒），直到报告的 `app_image` / `egress_image` 等于生效引用。成功 → 固定脚本删除 `ccg-controller-prev`；失败 → 回滚脚本删除新容器并把 prev 改回原名启动，返回 503 `controller_unhealthy`，`details.rollback` 为 `restored` / `removed`（之前没有控制器）/ `restore_failed` / `rollback_failed`。
-4. 成功后对所有运行环境（账号 + 未认领草稿）各 Kick 一次：控制器发现 app 镜像变了会重建 app 容器，数据卷（登录）保留。返回 200 与 `GET runtime` 相同的结构。
+4. 成功后对所有运行环境（账号 + 未认领草稿）各 Kick 一次，只是重新同步：已有 app 容器**不会**因目标镜像变化而重建（`provision` 只在凭据指纹或网络策略变化时重建，2026-10-09 核对代码更正），新镜像只用于新建的容器；现有容器的 worker 用 §53.7 原地更新。返回 200 与 `GET runtime` 相同的结构。
 
 安装错误（`details.reason`）：`ssh_not_configured`（400）、`install_in_progress`（409）、`ssh_failed` / `image_pull_failed` / `controller_unhealthy` / `install_failed`（其他脚本失败、密钥保存失败）（503）。
 
@@ -3471,3 +3471,136 @@ API Key 隔离：仅 `/me/api-keys` 自有接口有效；所有全局 `/api-keys
 名单拦截对客户端统一返回 HTTP 404 / `model_not_found` / `model not found`，Anthropic 类型 `not_found_error`、Gemini `NOT_FOUND`；内部用量记录仍标记 `model_not_allowed`，不计费且不访问上游。
 
 GET `/groups/:id/models`（`group:read`）返回所有未删除成员账号的显式请求模型 ID 去重排序，以及 `unrestricted_accounts` 数量；不返回凭证或账号详情。分组名单使用此目录，可快捷合并填充名单；账号未限制模型时提示无法完整枚举。编辑界面当前账号选择会更新候选列表。
+
+## 53. CCGateway 控制面板模式：SSH 只用于首次安装，之后经 Caddy HTTPS 连接控制器（2026-10-09，用户要求）
+
+用户决定：配置 CCGateway 时用 SSH 在 Docker 主机上装好控制器，同时装一个 Caddy 容器作为对外 HTTPS 网关（自动证书），反向代理到只监听本机回环的控制器。安装成功后配置切换为"控制面板模式"，**不再保存 SSH 凭据**，只保存控制面板地址、端口、管理密钥（以及 IP 地址时固定信任的根证书）。之后出口代理（egress）、业务容器（app，即 ccgateway-worker）乃至控制器自身的镜像，都经控制面板上传或切换。替代 2026-10-09 提交 6f2d1399c 的"http 模式"骨架（该骨架未完成：无界面、控制器只听回环且无 TLS、安装后不切换配置、账号流量无通路、`manager.py` 语法错误、Dockerfile 漏拷 `images.py`），骨架里的 `mode: "http"`、`controller_installed`、`controller_url`、`/controller/status`、`/images/upload`、`/images/load/*` 全部删除，不做兼容（线上从未保存过该模式）。SSH 模式（§49.16）保持不变，仍可使用。
+
+### 53.1 拓扑
+
+```
+核心 ──HTTPS(TLS 校验)──▶ Caddy 容器 ccg-gateway（--network host，监听 <port>）
+                              └─ reverse_proxy 127.0.0.1:8787 ─▶ 控制器 ccg-controller（仍只听 127.0.0.1:8787）
+                                                                  └─ 账号容器 10.x:8787（私网）
+```
+
+控制器的每个接口仍要求 `Authorization: Bearer <管理密钥>`（常量时间比较）。Caddy 只做 TLS 终止和转发，不加其他鉴权；`admin off`。
+
+### 53.2 配置（`ccgateway_remote`）
+
+- `mode` 取值：`disabled` / `local` / `ssh` / `controller`。
+- `controller` 模式字段：`host`（域名，或 IPv4 / IPv6 字面量）、`port`（HTTPS 端口，1–65535，缺省 443）、`admin_key`（必填，控制器密钥）、`controller_ca`（可选 PEM，一个或多个 `CERTIFICATE` 块，≤ 64 KiB；非空时**只**信任这些根证书，空则用系统根证书）。`account_runtimes` 必须为 `true`（控制面板模式只服务一账号一容器）。SSH 字段（`user`、`auth_mode`、`password`、`private_key`、`passphrase`、`host_key_fingerprint`）一律清空。
+- 保存规则（`PUT remote-config`）：`admin_key` 为空时，只有旧模式也是 `controller` 且 `host`、`port`、`controller_ca`（规范化后）都不变才沿用旧值；手动从其他模式切换、改地址 / 端口、换根证书都必须重新填写（控制面板对公网开放、管理密钥能直达账号容器，否则有设置权限的人改一次地址就能让核心把密钥发到别处）；最终仍为空 → 400。安装接口（§53.3）在核心内部直接写入密钥，不受此限。`controller_ca` 为空时，若 `host`、`port` 未变则沿用旧值，否则为空；非空必须能解析出至少一个证书。
+- `GET remote-config` 公开视图新增 `has_controller_ca`、`controller_ca_fingerprint`（首个证书 DER 的 SHA-256，小写 hex），不返回 PEM。
+- `setupProblems`（前端）把 `controller` 视为已配置的 Docker 连接。
+
+### 53.3 安装：`POST /system/ccgateway/controller/install`
+
+权限 `settings:manage`，审计 `ccgateway.controller.install`。请求体 `{"host"?: string, "port"?: int, "email"?: string}`：`host` 缺省为已保存的 SSH 主机，`port` 缺省 443，`email` 可选（ACME 账号邮箱，须匹配 `^[^@\s]{1,64}@[A-Za-z0-9.-]{1,190}$`）。`host` 必须是 IP 字面量或 DNS 名（`^(?=.{1,253}$)([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$` 风格，不允许下划线、通配符），否则 400 `invalid_host`。
+
+前置：已保存 `mode: ssh` 且 `account_runtimes: true`，否则 400，`details.reason` 为 `ssh_not_configured` / `runtimes_disabled`。与 §49.16 共用安装锁（409 `install_in_progress`），不随调用方断开中止，整体上限约 20 分钟。
+
+1. 控制器：调用 §49.16 的安装流程（密钥、固定脚本、健康检查、回滚、清理 prev），区别是只有控制器镜像必须存在或可拉取，app / egress 镜像本地没有且拉不到时不报错（之后经控制面板上传，§53.6）。环境文件新增一行 `CCG_CONTROLLER_IMAGE=<控制器镜像引用>`（同一固定写法，经 stdin）。若当前 `GET runtime` 已是 `up_to_date` 且健康报告含 `features` 中的 `tunnel`，跳过替换。
+2. 网关：经 SSH 执行固定脚本（只拼接通过镜像正则的 Caddy 镜像引用，缺省 `caddy:2-alpine`，可用 `images.gateway` 覆盖），从 stdin 写 `/opt/ccgateway-gateway/Caddyfile`（目录 700，文件 644），镜像本地没有才 `docker pull`（失败 → `image_pull_failed`），删除旧 `ccg-gateway` 后启动：`docker run -d --name ccg-gateway --restart unless-stopped --network host -v /opt/ccgateway-gateway/Caddyfile:/etc/caddy/Caddyfile:ro -v ccg-gateway-data:/data -v ccg-gateway-config:/config --log-opt max-size=20m --log-opt max-file=3 <caddy>`；启动失败 → `gateway_failed`。Caddyfile 由核心按校验过的输入生成：
+
+   ```
+   {
+   	admin off
+   	auto_https disable_redirects
+   	skip_install_trust
+   	email <email>            # 仅当提供
+   	default_sni <ip>         # 仅 IP 模式
+   }
+   <站点> {
+   	tls internal             # 仅 IP 模式
+   	reverse_proxy 127.0.0.1:8787 {
+   		flush_interval -1
+   	}
+   }
+   ```
+
+   站点：域名 → `<domain>:<port>`（Caddy 自动向 Let's Encrypt / ZeroSSL 申请证书，需要 DNS 指向该主机，且 80 端口可达或 `port` 为 443）；IP → `https://<ip>:<port>`（IPv6 加方括号），用 Caddy 内置 CA 签发。
+3. 仅 IP 模式：经 SSH 固定脚本读取 `docker exec ccg-gateway cat /data/caddy/pki/authorities/local/root.crt`（最多重试 30 秒），解析出证书 → 作为 `controller_ca`；失败 → `ca_unavailable`。
+4. 核心直接经 HTTPS（按第 2/3 步的信任方式校验证书）调 `GET https://<host>:<port>/health`，最多 120 秒（每 3 秒）直到成功且 `features` 含 `tunnel`。失败 → 503 `gateway_unreachable`，`details.stage` 为 `connect` / `tls` / `http`；**配置不变**（仍为 SSH 模式），已启动的网关保留，便于排查防火墙 / DNS 后重试。
+5. 原子保存配置：`mode: controller`、`host`、`port`、`controller_ca`，`admin_key` 不变，清空 SSH 字段（审计 `ccgateway.config.update`，`fields: ["mode","host","port","controller_ca","ssh"]`）。并发保存时若已不是 SSH 模式 → 409 `config_changed`。返回 200 与 `GET remote-config` 相同的公开视图，然后 Kick 所有运行环境。
+
+错误码（`details.reason`）：`ssh_not_configured`、`runtimes_disabled`、`invalid_host`、`invalid_email`（400）；`install_in_progress`、`config_changed`（409）；`ssh_failed`、`image_pull_failed`、`controller_unhealthy`、`install_failed`、`gateway_failed`、`ca_unavailable`、`gateway_unreachable`（503）。
+
+需要重新安装（换主机、修复网关）时，把连接方式改回 SSH 并重新填写 SSH 凭据即可。
+
+### 53.4 核心连接控制器（`controller` 模式）
+
+- 管理请求（`open`）：`https://<host>:<port>`（`net.JoinHostPort`），`http.Transport` 不走代理、只用 HTTP/1.1、TLS ≥ 1.2、`RootCAs` 为 `controller_ca` 证书池（为空用系统根证书）、不跟随重定向，拨号与 TLS 握手各 10 秒上限。其余调用与 SSH 隧道下完全相同（Bearer 管理密钥、同样的路径）。
+- 账号模型 / 资源流量（`openAccountModel`）：先照旧 `GET /accounts/<key>/connection`（`X-CCG-Revision`）取得 `app_ip`、`api_key` 并做同样的校验；再建立**隧道**：TLS 连接网关后发送
+
+  ```
+  GET /accounts/<key>/tunnel HTTP/1.1
+  Host: <host:port>
+  Authorization: Bearer <admin_key>
+  X-CCG-Revision: <revision>
+  Connection: Upgrade
+  Upgrade: ccg-tunnel
+  ```
+
+  只接受 `101` 且 `Upgrade: ccg-tunnel`；`409` → 按 `not_synchronized` 处理，其他 → 连接失败。101 之后该 TLS 连接即为到 `app_ip:8787` 的原始 TCP 字节流，核心在其上照原样跑 HTTP/1.1（`http://<app_ip>:8787/...`，请求头与 SSH direct-tcpip 路径逐字节一致）。`http.Transport.DialContext` 只允许拨这一个目标，每次拨号新建一条隧道。
+- `remote-test`：控制面板模式下调用 `GET /health`，输出 `controller <version>`、三个镜像引用和 `features`；`remote-action` → 400。
+
+### 53.5 控制器接口变化
+
+- `GET /health` 增加 `controller_image`（环境变量 `CCG_CONTROLLER_IMAGE`，未设置为空串）与 `features: ["tunnel", "uploads", "runtime-images", "self-upgrade"]`。
+- **隧道** `GET /accounts/<key>/tunnel`：要求 `Upgrade: ccg-tunnel`（大小写不敏感）且 `Connection` 含 `upgrade`，否则 400。持账号锁检查状态存在且 `X-CCG-Revision` 等于当前在线版本（同 `connection`），否则 409 `not_synchronized`；释放锁后 5 秒内连接 `app_ip:8787`，失败 503 `runtime_unavailable`。回 `101 Switching Protocols`（`Connection: Upgrade`、`Upgrade: ccg-tunnel`），随后双向转发字节直到两侧都关闭（一侧 EOF 时对另一侧 `shutdown(SHUT_WR)`），两侧 socket 各有 3700 秒读超时，任一方向超时或出错即拆掉整条隧道（长流式响应期间客户端→账号方向空闲，所以单条隧道最长约 1 小时，与模型执行上限一致）。不记录内容。
+- **分块上传**（替代旧 `/images/upload`、`/images/load/*`；上传目录 `<root>/uploads`，700）：
+  - `POST /images/uploads` `{"size": 1..4GiB, "sha256"?: "<64 hex>"}` → `{"upload_id": "<22 字符 [A-Za-z0-9_-]>", "offset": 0, "size": n}`。同时最多 4 个未完成上传（超出 409 `too_many_uploads`）；每次创建时清理 1 小时未改动的上传。
+  - `PUT /images/uploads/<id>`：头 `X-CCG-Offset`，原始字节体，`Content-Length` 1..64 MiB（不接受 `Transfer-Encoding`）。偏移不等于当前已收字节 → 409 `{"error":"offset_mismatch","offset":<当前>}`；超过声明大小 → 400 `invalid_request`。成功 → `{"offset": n, "size": total}`。
+  - `GET /images/uploads/<id>` → `{"offset", "size"}`；`DELETE` → `{"deleted": true}`；不存在 → 404 `not_found`。
+  - `POST /images/uploads/<id>/load`：必须已收齐（否则 409 `incomplete`）；计算 SHA-256，声明过且不符 → 400 `checksum_mismatch`；`docker load`（tar 或 gzip tar）→ `{"sha256": "...", "images": [{"id": "sha256:...", "tags": [...]}]}`；加载失败 → 400 `load_failed`。`docker load` 用单独的 1800 秒超时客户端（大镜像加载期间 daemon 可能长时间无输出）。除 409 `incomplete` 外，无论成败都删除上传文件。上传 / 目标镜像 / 自升级接口出错时响应带 `Connection: close`（请求体可能未读完）；请求格式不对统一 400 `invalid_request`，JSON 体上限 64 KiB；PUT 中途断开时丢弃这一块，偏移不前进。
+- **目标镜像** `GET /runtime/images` → `{"app", "egress", "controller"}`。`PUT /runtime/images` `{"app"?, "egress"?}`：引用必须匹配 §49.16 的镜像正则；本地没有则拉取（失败 503 `image_pull_failed`）；app 镜像同 `provision` 一样拒绝带凭据 / 代理环境变量的镜像（400 `invalid_image`）。持久化到 `<root>/runtime.json`（原子写，0600），同时记录保存时进程环境变量里的 `CCG_APP_IMAGE` / `CCG_EGRESS_IMAGE` 原值；启动时只有当前环境变量与记录一致才用它覆盖（不一致说明 SSH 重装改过环境文件，覆盖作废——否则回到 SSH 模式重装会被旧覆盖顶掉而判为不健康并回滚）。`{}` 不落盘。更新内存目标并清掉 30 秒镜像 id 缓存。返回 `/health` 内容。已有账号容器不会因此被替换（同 §49.16，重新授权时用新镜像）。
+- **控制器自升级** `POST /runtime/controller` `{"image": ref}`：确保镜像在本地（同上拉取规则），然后用**该新镜像**启动一次性辅助容器 `<name>-upgrade`（`<name>` 取环境变量 `CCG_CONTROLLER_NAME`，缺省 `ccg-controller`，须匹配 `^[a-z][a-z0-9-]{0,40}$`，prev 为 `<name>-prev`；同一主机上的隔离测试实例因此不会碰到线上控制器；`--rm`、host 网络、挂 Docker socket 与环境文件 `CCG_RUNTIME_ENV_FILE`（缺省 `/opt/ccgateway-runtime.env`）**所在目录**（读写；对单文件 bind mount 做 rename 会 EBUSY，所以挂目录以便原子替换）。新控制器容器的环境里强制写入 `CCG_CONTROLLER_NAME` 与 `CCG_CONTROLLER_PORT`，避免下次自升级找错容器），执行 `python upgrade.py <image>` 后回 202 `{"accepted": true}`（辅助容器可能在 202 写完前就停掉旧控制器，核心把请求发出后的连接中断也当作已受理，继续轮询 `/health`）；辅助容器已在运行 → 409 `upgrade_in_progress`。`upgrade.py` 等价于 §49.16 的安装脚本（名字、端口、环境文件、`CCG_RUNTIME_ROOT` 挂载都取自上述配置，不写死）：环境文件写入 `CCG_CONTROLLER_IMAGE=<image>`（原子替换）→ 删除残留 prev → 旧控制器改名 `ccg-controller-prev` 并停止 → 按原参数创建并启动新控制器 → 60 秒内 `GET http://127.0.0.1:<port>/health` 报告的 `controller_image` 等于 `<image>` 即删除 prev；否则删除新容器、把 prev 改回原名启动、恢复环境文件。
+- 旧的模型转发路径保留（SSH 模式不用），转发改为收到多少写多少（`iter_content(chunk_size=None)`），不再攒满 1 KiB。
+- 修正：`self.boots = {}`；Dockerfile 拷贝 `images.py`、`upgrade.py`。
+
+### 53.6 核心的镜像上传与升级接口（只在 `controller` 模式；其他模式 400 `controller_not_configured`）
+
+全部 `settings:manage`，转发给控制器对应接口，状态码和 `error` 映射为 `details.reason`：
+
+- `POST /system/ccgateway/runtime/uploads` → 控制器 `POST /images/uploads`。
+- `PUT /system/ccgateway/runtime/uploads/:id`（头 `X-CCG-Offset`，请求体 ≤ 64 MiB，流式转发不落盘）→ 控制器 `PUT`；409 时 `details.offset` 为控制器当前偏移。
+- `GET` / `DELETE /system/ccgateway/runtime/uploads/:id`。
+- `POST /system/ccgateway/runtime/uploads/:id/load` `{"role": "app"|"egress"|"controller", "apply": bool}`：控制器加载后取第一个镜像的第一个标签作为引用，没有标签用镜像 id。`apply` 为真时：先把 `images.<role>` 写进配置（审计 `ccgateway.config.update`，`fields: ["images"]`），app / egress 再调 `PUT /runtime/images`；controller 调 `POST /runtime/controller` 并最多等 90 秒健康检查报告新 `controller_image`（失败 503 `controller_unhealthy`，辅助容器已自行回滚）。成功后 Kick 所有运行环境。审计 `ccgateway.runtime.upload`。返回 `{"sha256", "images", "ref", "runtime": <GET runtime 结构>}`。
+- `GET /system/ccgateway/runtime`（控制面板模式）：`installed` 取自 `/health`（`controller_image`、`app_image`、`egress_image`、`version`），健康检查失败 → `installed: null` + `reason: controller_unhealthy`。
+- `POST /system/ccgateway/runtime/install`（控制面板模式的"一键升级"）：`PUT /runtime/images` 设为生效引用（控制器本地没有会尝试拉取），控制器镜像不同再走自升级并等待；成功后 Kick 所有运行环境；返回同 `GET runtime`。
+
+上传在浏览器端按 16 MiB 分块顺序发送（可续传：409 时按返回的偏移继续；网络错误 / 408 / 429 / 5xx 每块最多重试 3 次；取消或失败时 DELETE），每块单独经过核心转发，所以任何一个核心节点都能接收，也不受 Cloudflare 一类 100 MB 单请求上限影响（但前置 nginx 需把 `client_max_body_size` 调到 ≥ 17 MiB）。分块 PUT 用 `fetch` 携带与 `api` 相同的会话令牌（`api` 会把非 FormData 体序列化成 JSON）。创建时前端不发 `sha256`（WebCrypto 不支持增量摘要），以 load 返回的 `sha256` 供人工核对。`load`（含 apply）与 `controller/install` 在核心里不随调用方断开取消（`context.WithoutCancel`，load 上限 25 分钟）：前置代理超时后浏览器重读配置 / 运行状态即可看到结果。
+
+### 53.7 Worker 原地更新：不重建账号容器（2026-10-09，用户要求）
+
+用户要求：账号容器（尤其 #21 / #22）**永远不因 worker 更新而重建**；更新 worker 就是把新程序放进现有容器、只重启该容器。容器 ID、镜像标签、挂载、标签、数据卷、授权都不变。这把此前人工执行的 `update-account.sh` 流程（确认无活动 CLI → 备份旧程序 → 同目录临时文件 → 校验哈希 / 0755 → 再确认无活动 CLI → 原子 mv → 只重启原容器 → 健康检查）做成控制器接口。核对过：控制器的 `provision` 只在凭据指纹或网络策略变化时重建 app 容器，目标镜像变化从不重建（§49.16 安装后"重建 app 容器"的说法是错的，已有容器继续用原镜像）。
+
+**控制器** `POST /accounts/<key>/worker` `{"image": ref}`（ref 匹配镜像正则，本地没有则按 `ensure_image` 拉取，失败 503 `image_pull_failed`）：
+
+1. 从 `image` 取新程序：以该镜像创建一个不启动的临时容器，`get_archive('/usr/local/bin/worker')` 取出唯一的常规文件（≤ 256 MiB），删除临时容器；算 SHA-256。取不到 → 400 `invalid_image`。
+2. 持账号锁；容器必须属于该账号（`owned(aid,'app')`），不存在 → 404 `not_found`；未运行 → 200 `{"status": "not_running"}`（不改动）。
+3. 目标路径：容器 `Path` 与 `Args` 里第一个为裸名 `worker` / `ccgateway` 或 `/usr/local/bin/worker` / `/usr/local/bin/ccgateway` 的条目，映射为 `/usr/local/bin/<基名>`（新镜像 `ENTRYPOINT /usr/local/bin/worker`；旧容器 `docker-entrypoint.sh ccgateway`）；其他路径（如 `/opt/x/worker`）或目标文件读不到 → 409 `unsupported_container`。
+4. 容器内当前程序的 SHA-256（`exec` 以 root 执行 `sha256sum`）。与新程序相同 → 200 `{"status": "unchanged", "sha256"}`，不重启。
+5. 空闲检查：`top` 里除 `docker-init` 和目标程序基名外没有其他进程（有就是正在执行的 CLI 请求）。每 2 秒重查，最多 120 秒；仍忙 → 200 `{"status": "busy"}`（不改动，可稍后重试）。
+6. 备份旧程序到 `<root>/<key>/worker-backups/<UTC 时间>-<旧 sha 前 12 位>`（0600，最多保留 5 份）。
+7. `put_archive` 把新程序以 `<目标>.next-<随机>`（root、0755）放进同目录；`exec` 校验其 SHA-256；再做一次空闲检查（忙 → 删除临时文件，`busy`）；`exec -u 0 mv -f` 原子替换；`restart(timeout=30)` 只重启原容器。
+8. 30 秒内容器 `State.StartedAt` 已变化（确实重启过；否则旧进程仍会答健康）且在容器里 `GET http://127.0.0.1:8787/health` 返回 200 → 继续第 9 步；否则回滚：容器在运行时用备份同样经临时文件 + mv 放回；新程序启动即退出、容器已停止时不能 exec，直接 `put_archive` 覆盖目标文件并 `get_archive` 读回核对哈希，再启动；之后同样等健康，返回 200 `{"status": "rolled_back", "reason": "unhealthy", "online": bool}`（回滚后仍不健康 → `"reason": "rollback_unhealthy"`，`online: false`；回滚本身出错 → 503 `runtime_unavailable`，容器里可能留着新程序）。回滚后原本在线的同样按第 9 步重新激活。
+9. 重启使账号网络命名空间重建（防火墙规则与默认路由丢失）：立即按 `apply` 的同一步骤重新下发业务防火墙与默认路由、等 egress 就绪、经业务命名空间探测连通性；成功则按原 revision 恢复在线（`online` / `boots`），失败则只清掉在线状态（核心下一次对账会再下发，不重建）。
+10. 返回 200 `{"status": "updated", "previous_sha256", "sha256", "path", "online": bool}`。全程校验容器 `Id`、`Image`、`Config.Image`、`Config.User`、`Config.Labels`、`Mounts`、`Path`、`Args` 与开始时相同（人工脚本核对的并集），任何一步发现不同即停止并 503 `container_changed`。容器以 `cap_drop ALL` 运行，容器内 root 靠文件属主为 uid 0 完成 chmod / mv，结果用 `stat` 核对为 `0:0:755`。
+
+控制器 `/health` 的 `features` 增加 `worker-update`；核心调用前先查，没有 → 503 `controller_outdated`（旧控制器对未知路由的 404 与"容器不存在"无法区分），不触碰任何容器。
+
+已知限制：全程持账号锁，最长约 120 秒空闲等待加两轮重启 / 健康检查期间，该账号新的 `connection` / 隧道建立会等待；已建立隧道上的 keep-alive 连接不需要锁，仍可能在第二次空闲检查与 mv 之间开始新的 CLI 请求并被重启打断（窗口很小，不能消除）。worker 镜像的 `HEALTHCHECK`（`sh -c curl`）会短暂出现在进程表里，第二次空闲检查撞上时返回 `busy`，重试即可。单个账号最坏约 260–290 秒，接近核心每个 5 分钟的上限；25 分钟总上限在最坏情况下只能保证约 5 个账号，超出的记为 `failed` + `timeout`，可再点一次更新（已更新的返回 `unchanged`）。
+
+**核心** `POST /system/ccgateway/runtime/workers` `{"image"?: ref}`（`settings:manage`，SSH 与控制面板两种模式都可用；审计 `ccgateway.runtime.workers`；与安装共用锁，409 `install_in_progress`；不随调用方断开取消，上限 25 分钟）：`image` 缺省为生效的 app 镜像；按控制器 `GET /accounts` 的运行环境逐个、串行调用上面的接口（每个上限 5 分钟），返回 `{"image", "results": [{"key", "account_id"?, "status", "sha256"?, "previous_sha256"?, "reason"?}]}`；单个失败不影响其他，`status: "failed"` + `reason`（控制器 error 码；连不上 `unreachable`；超时或总上限用完 `timeout`；200 但无法识别 `invalid_response`）。前置错误：未开启一账号一容器 400 `runtimes_disabled`；列不出运行环境 503 `controller_unhealthy`；控制器不支持 503 `controller_outdated`。状态为 `updated` / `rolled_back` 的账号随后 Kick 一次。load+apply 里列表失败或控制器过旧不让整个请求失败，`workers` 为 `{"image", "results": [], "reason"}`。
+
+`POST .../runtime/uploads/:id/load` 的 `role: "app"` 且 `apply: true`：设置目标镜像后，同样对所有现有运行环境做原地更新，结果放在返回的 `workers` 字段。界面在部署页显示每个账号的结果，并提供"更新现有账号的 worker"按钮（即 `runtime/workers`，用于重试 `busy` / `not_running`）。
+
+### 53.8 已知限制
+
+- 控制面板端口对公网开放，安全性依赖 TLS 与 32 字节随机管理密钥；没有来源 IP 白名单。
+- 域名模式要求 80 端口可达（或端口就是 443）以完成 ACME 验证；IP 模式依赖安装时取回并固定的 Caddy 内置根证书（10 年有效），网关数据卷删除后需要重新安装。
+- Caddy 本身的升级需要回到 SSH 模式重新安装。
+- 同一地址和端口下无法单独清除已固定的根证书（留空即保留）；需要改用系统根证书时先改地址或端口保存一次，或重新安装。
+- 加载 / 安装是同步请求，没有异步任务与结果查询接口；前置代理先断开时只能事后重读状态判断结果。

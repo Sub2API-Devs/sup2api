@@ -2,7 +2,7 @@ FROM python:3.12-slim
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY manager.py network.py ./
+COPY manager.py network.py images.py upgrade.py ./
 # Reported by GET /health; CI passes the source commit. An installer may
 # still override it with CCG_CONTROLLER_VERSION in the environment file.
 ARG VERSION=dev

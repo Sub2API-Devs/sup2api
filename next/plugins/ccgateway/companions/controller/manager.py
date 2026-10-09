@@ -1,21 +1,27 @@
-"""Host-side account runtime controller; bind only to loopback, access over SSH.
+"""Host-side account runtime controller; binds only to loopback.
 
-Docker SDK owns container lifecycle; sing-box owns proxy protocols. The control
-API is never exposed on a business network. State is root-private on this host.
+The core reaches it over an SSH tunnel or through the Caddy HTTPS gateway on
+the same host (CONTRACTS §49.16, §53). Docker SDK owns container lifecycle;
+sing-box owns proxy protocols. The control API is never exposed on a business
+network. State is root-private on this host.
 """
 import contextlib
 from datetime import datetime, timezone
 import fcntl
 import hmac
 import hashlib
+import io
 from urllib.parse import urlsplit
 import ipaddress
 import json
 import os
 from pathlib import Path
+import posixpath
 import re
 import secrets
 import shutil
+import socket
+import tarfile
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -23,7 +29,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import docker
 import requests
 from network import configuration, business_rules, network_policy, host_routes, allocate_subnet, allocate_addresses
-from images import ImageManager, ImageUploadError
+from images import Uploads, UploadError, MAX_CHUNK
 
 # Runtime keys (CCGATEWAY-DRAFT-RUNTIMES §1): an account id, or a draft key
 # created by the editor before the account exists. Every key that reaches a
@@ -41,10 +47,38 @@ IMAGE_LABEL = 'io.sup2api.ccgateway.image'
 NETWORK_LABEL = 'io.sup2api.ccgateway.network'
 AUTH_VARS = ('ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR')
 IMAGE_CACHE_SECONDS = 30
+ACCOUNT_PORT = 8787  # every account container listens here on its private network
+TUNNEL_IDLE_SECONDS = 3700
+LOAD_TIMEOUT = 1800  # docker load of a large archive may stay silent for minutes
+FEATURES = ('tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update')
+# Same reference rules as the core (CONTRACTS §49.16).
+IMAGE_REF = re.compile(r'[a-z0-9][a-z0-9._/-]{0,127}(:[A-Za-z0-9._-]{1,128})?(@sha256:[0-9a-f]{64})?')
+IMAGE_ID = re.compile(r'sha256:[0-9a-f]{64}')
+DEFAULT_ENV_FILE = '/opt/ccgateway-runtime.env'
+DEFAULT_CONTROLLER_NAME = 'ccg-controller'
+CONTROLLER_NAME = re.compile(r'[a-z][a-z0-9-]{0,40}')
+DOCKER_SOCKET = '/var/run/docker.sock'
+
+# In-place worker update (CONTRACTS §53.7). The account container is never
+# recreated: only its program file is replaced and only it is restarted.
+WORKER_SOURCE = '/usr/local/bin/worker'  # the program inside a worker image
+WORKER_DIR = '/usr/local/bin'
+WORKER_NAMES = ('worker', 'ccgateway')  # new images / older `docker-entrypoint.sh ccgateway`
+WORKER_MAX_BYTES = 256 << 20
+WORKER_BACKUPS = 5
+WORKER_BACKUP_NAME = re.compile(r'[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}')
+WORKER_IDLE_WAIT, WORKER_IDLE_INTERVAL = 120, 2
+WORKER_HEALTH_WAIT, WORKER_HEALTH_INTERVAL = 30, 1
+WORKER_RESTART_TIMEOUT = 30
+WORKER_HEALTH_SCRIPT = ("fetch('http://127.0.0.1:8787/health',{signal:AbortSignal.timeout(3000)})"
+                        ".then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))")
+SHA256_HEX = re.compile(r'[0-9a-f]{64}')
 
 ROUTE = re.compile(r'/accounts(?:/(' + KEY_PATTERN + r')(?:/(config|status|v1/messages(?:/count_tokens)?|'
-                   r'connection|migrate-auth|admin/(?:status|usage|features|request-logs|auth/(?:session|start|complete|cancel|logout))))?)?')
-IMAGE_ROUTE = re.compile(r'/images(?:/(upload|load/([a-zA-Z0-9_-]{22})))?')
+                   r'connection|tunnel|worker|migrate-auth|admin/(?:status|usage|features|request-logs|auth/(?:session|start|complete|cancel|logout))))?)?')
+UPLOAD_ROUTE = re.compile(r'/images/uploads(?:/([A-Za-z0-9_-]{22})(/load)?)?')
+RUNTIME_ROUTE = re.compile(r'/runtime/(images|controller)')
+DECIMAL = re.compile(r'[0-9]{1,12}')
 
 
 class BadRequest(ValueError):
@@ -57,6 +91,36 @@ class NotDraft(ValueError):
 
 class ImagePullFailed(RuntimeError):
     """A configured image is missing locally and could not be pulled."""
+
+
+class InvalidImage(ValueError):
+    """A business image carries credential or proxy environment variables."""
+
+
+class UpgradeInProgress(RuntimeError):
+    """The self-upgrade helper container is still running."""
+
+
+class RuntimeNotFound(LookupError):
+    """The runtime has no app container of its own (answered 404 not_found)."""
+
+
+class UnsupportedContainer(RuntimeError):
+    """The worker program of this container cannot be located or replaced (409)."""
+
+
+class ContainerChanged(RuntimeError):
+    """The account container is no longer the one the operation started on (503)."""
+
+
+def valid_image(ref):
+    return isinstance(ref, str) and bool(IMAGE_REF.fullmatch(ref) or IMAGE_ID.fullmatch(ref))
+
+
+def check_business_image(image):
+    env = image.attrs['Config'].get('Env') or []
+    if any(v.split('=', 1)[0] in PROXY_VARS + AUTH_VARS for v in env):
+        raise InvalidImage('business image contains account credentials or proxy environment variables')
 
 
 def check(aid):
@@ -121,16 +185,106 @@ def write_private(path, value):
     tmp.replace(path)
 
 
+def write_private_bytes(path, data):
+    tmp = path.with_suffix(path.suffix + '.tmp')
+    with open(tmp, 'wb') as f:
+        os.chmod(tmp, 0o600)
+        f.write(data)
+        f.flush()
+        os.fsync(f.fileno())
+    tmp.replace(path)
+
+
 def image_of(container):
     # Docker's inspect data names the image actually running (also for
     # containers created before IMAGE_LABEL existed); the label is a fallback.
     return container.attrs.get('Image') or container.labels.get(IMAGE_LABEL, '')
 
 
+def read_single_file(chunks, limit=WORKER_MAX_BYTES):
+    """Content of the only entry of a get_archive tar stream; it must be a regular file."""
+    buf, size = io.BytesIO(), 0
+    for chunk in chunks:
+        size += len(chunk)
+        if size > limit + (1 << 20):  # headers and padding of one entry
+            raise ValueError('archive too large')
+        buf.write(chunk)
+    buf.seek(0)
+    try:
+        with tarfile.open(fileobj=buf, mode='r:') as tar:
+            members = tar.getmembers()
+            if len(members) != 1 or not members[0].isreg() or members[0].size > limit:
+                raise ValueError('not a single regular file')
+            data = tar.extractfile(members[0]).read()
+    except tarfile.TarError as e:
+        raise ValueError('invalid archive') from e
+    if len(data) != members[0].size:
+        raise ValueError('truncated archive')
+    return data
+
+
+def tar_file(name, data):
+    """One root-owned 0755 regular file, for put_archive."""
+    info = tarfile.TarInfo(name)
+    info.size, info.mode, info.uid, info.gid = len(data), 0o755, 0, 0
+    info.uname = info.gname = 'root'
+    info.mtime = int(time.time())
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode='w') as tar:
+        tar.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+def worker_target(container):
+    """(path, basename) of the worker program the container runs (§53.7 step 3).
+
+    The first entry of Path + Args whose basename is a worker name. Only the
+    bare name (resolved through PATH) or /usr/local/bin/<name> are accepted:
+    anything else would make the replaced file differ from the program run.
+    """
+    attrs = container.attrs
+    for entry in [attrs.get('Path')] + list(attrs.get('Args') or []):
+        if not isinstance(entry, str):
+            continue
+        base = posixpath.basename(entry)
+        if base in WORKER_NAMES:
+            if entry not in (base, posixpath.join(WORKER_DIR, base)):
+                raise UnsupportedContainer('worker program outside ' + WORKER_DIR)
+            return posixpath.join(WORKER_DIR, base), base
+    raise UnsupportedContainer('container command runs no worker program')
+
+
+def worker_idle(container, base):
+    """No process besides docker-init and the worker itself (no running CLI request)."""
+    top = container.top(ps_args='-eo pid,comm')
+    titles = top.get('Titles') or []
+    if 'COMMAND' not in titles:
+        raise RuntimeError('unexpected process list')
+    column = titles.index('COMMAND')
+    allowed = {'docker-init', base[:15]}  # Linux truncates comm to 15 characters
+    return all(len(p) > column and p[column] in allowed for p in top.get('Processes') or [])
+
+
+def container_identity(container):
+    """What must not change while the worker is replaced (§53.7 step 10)."""
+    attrs, config = container.attrs, container.attrs.get('Config') or {}
+    return json.dumps({'id': container.id, 'image': attrs.get('Image'), 'config_image': config.get('Image'),
+                       'user': config.get('User'), 'labels': container.labels,
+                       'mounts': sorted(json.dumps(m, sort_keys=True) for m in attrs.get('Mounts') or []),
+                       'path': attrs.get('Path'), 'args': attrs.get('Args')}, sort_keys=True)
+
+
 class Manager:
     def __init__(self, root, app_image, egress_image, prefix='ccg', probe_url='https://www.gstatic.com/generate_204'):
         if not re.fullmatch(r'[a-z][a-z0-9-]{0,24}', prefix):
             raise ValueError('invalid prefix')
+        # Name and port of this controller's own container (an isolated test
+        # instance on the same host uses others; self-upgrade must not touch
+        # the production controller).
+        self.controller_name = os.getenv('CCG_CONTROLLER_NAME') or DEFAULT_CONTROLLER_NAME
+        if not CONTROLLER_NAME.fullmatch(self.controller_name):
+            raise ValueError('invalid controller name')
+        self.controller_port = int(os.getenv('CCG_CONTROLLER_PORT') or '8787')
         self.root = Path(root).resolve()
         self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
         os.chmod(self.root, 0o700)
@@ -143,15 +297,80 @@ class Manager:
         self.locks, self.lock = {}, threading.Lock()
         self.network_lock = threading.RLock()
         self.online = {}  # Never trust persisted readiness after controller restart.
-        self.boots =
+        self.boots = {}
         self.image_seen = (0.0, '')  # (monotonic time, app image id)
         self.version = os.getenv('CCG_CONTROLLER_VERSION') or 'dev'
-        # 镜像管理器
-        self.image_manager = ImageManager(self.docker, self.root / 'uploads')
+        self.controller_image = os.getenv('CCG_CONTROLLER_IMAGE', '')
+        self.env_file = os.getenv('CCG_RUNTIME_ENV_FILE') or DEFAULT_ENV_FILE
+        self.runtime_lock, self.upgrade_lock = threading.Lock(), threading.Lock()
+        # Target images set through PUT /runtime/images override the environment
+        # only while the environment is the one they were saved against: an SSH
+        # (re)install that rewrote CCG_APP_IMAGE / CCG_EGRESS_IMAGE wins.
+        self.env_images = {'app': app_image, 'egress': egress_image}
+        runtime = self.root / 'runtime.json'
+        with contextlib.suppress(FileNotFoundError):
+            try:
+                saved = json.loads(runtime.read_text())
+            except ValueError:
+                saved = None
+            if (isinstance(saved, dict) and saved.get('env') == self.env_images
+                    and valid_image(saved.get('app')) and valid_image(saved.get('egress'))):
+                self.app_image, self.egress_image = saved['app'], saved['egress']
+            else:
+                runtime.unlink()  # stale, old format or damaged: the environment applies
+        self.uploads = Uploads(docker.from_env(timeout=LOAD_TIMEOUT), self.root / 'uploads')
 
     def health(self):
         return {'version': self.version, 'app_image': self.app_image, 'egress_image': self.egress_image,
-                'network_policy_version': 1}
+                'controller_image': self.controller_image, 'network_policy_version': 1,
+                'features': list(FEATURES)}
+
+    def runtime_images(self):
+        return {'app': self.app_image, 'egress': self.egress_image, 'controller': self.controller_image}
+
+    def set_runtime_images(self, desired):
+        if not isinstance(desired, dict) or set(desired) - {'app', 'egress'}:
+            raise BadRequest('invalid runtime images')
+        if not all(valid_image(ref) for ref in desired.values()):
+            raise BadRequest('invalid image reference')
+        if not desired:
+            return self.health()  # nothing to change: nothing is written
+        with self.runtime_lock:
+            for role, ref in desired.items():
+                image = self.ensure_image(ref)
+                if role == 'app':
+                    check_business_image(image)
+            app, egress = desired.get('app', self.app_image), desired.get('egress', self.egress_image)
+            write_private(self.root / 'runtime.json',
+                          json.dumps({'app': app, 'egress': egress, 'env': self.env_images}))
+            self.app_image, self.egress_image = app, egress
+            self.image_seen = (0.0, '')
+        return self.health()
+
+    def upgrade_controller(self, desired):
+        ref = desired.get('image') if isinstance(desired, dict) and set(desired) == {'image'} else None
+        if not valid_image(ref):
+            raise BadRequest('invalid image reference')
+        env_dir = posixpath.dirname(self.env_file)
+        if not posixpath.isabs(self.env_file) or env_dir == '/':
+            raise RuntimeError('invalid runtime environment file path')
+        with self.upgrade_lock:
+            self.ensure_image(ref)
+            helper_name = self.controller_name + '-upgrade'
+            with contextlib.suppress(docker.errors.NotFound):
+                helper = self.docker.containers.get(helper_name)
+                if helper.status == 'running':
+                    raise UpgradeInProgress('controller upgrade in progress')
+                helper.remove(force=True)  # a finished helper that was not auto-removed
+            # The new image runs its own upgrade.py. The environment file's
+            # directory is mounted (not the file) so it can be replaced atomically.
+            self.docker.containers.run(ref, ['python', 'upgrade.py', ref], name=helper_name,
+                remove=True, detach=True, network_mode='host',
+                environment={'CCG_RUNTIME_ENV_FILE': self.env_file, 'CCG_CONTROLLER_NAME': self.controller_name,
+                             'CCG_CONTROLLER_PORT': str(self.controller_port)},
+                volumes={DOCKER_SOCKET: {'bind': DOCKER_SOCKET, 'mode': 'rw'},
+                         env_dir: {'bind': env_dir, 'mode': 'rw'}})
+        return {'accepted': True}
 
     def guard(self, aid):
         check(aid)
@@ -204,16 +423,27 @@ class Manager:
                     pids_limit=256, log_config=docker.types.LogConfig(
                         type='json-file', config={'max-size': '20m', 'max-file': '3'}))
 
+    def oneshot(self, image, **kwargs):
+        """containers.run(..., remove=True) that also removes the container
+        when it cannot start (docker-py leaves it behind in "Created", e.g.
+        a helper joining the namespace of an app container that exited)."""
+        name = f'{self.prefix}-oneshot-{secrets.token_hex(8)}'
+        try:
+            return self.docker.containers.run(image, name=name, remove=True, **kwargs)
+        except BaseException:
+            with contextlib.suppress(docker.errors.DockerException):
+                self.docker.containers.get(name).remove(force=True)
+            raise
+
     def helper(self, aid, app, script, rules):
         # Fixed helper image, no Docker socket, no host network/PID namespaces.
         d = self.dir(aid)
         write_private(d / 'app.nft', rules)
         helper_image = image_of(self.owned(aid, 'egress'))
-        self.docker.containers.run(helper_image, entrypoint=['sh', '-ec'],
+        self.oneshot(helper_image, entrypoint=['sh', '-ec'],
             command=[script], network_mode='container:' + app.id,
             cap_drop=['ALL'], cap_add=['NET_ADMIN'], security_opt=['no-new-privileges:true'],
-            volumes={str(d / 'app.nft'): {'bind': '/app.nft', 'mode': 'ro'}},
-            remove=True)
+            volumes={str(d / 'app.nft'): {'bind': '/app.nft', 'mode': 'ro'}})
 
     def ensure_network(self, aid, role, policy, internal):
         with self.network_lock:
@@ -265,9 +495,7 @@ class Manager:
         image_ref = image_of(existing) if existing else self.app_image
         image = self.ensure_image(image_ref)
         # Validate the new image before an existing container is replaced.
-        image_env = image.attrs['Config'].get('Env') or []
-        if any(v.split('=', 1)[0] in PROXY_VARS + AUTH_VARS for v in image_env):
-            raise ValueError('business image contains account credentials or proxy environment variables')
+        check_business_image(image)
         if not state or state.get('network') != policy:
             old_subnets, occupied = [], []
             for n in self.docker.networks.list():
@@ -316,9 +544,9 @@ class Manager:
                      revision='', status='pending')
         self.save(aid, state)
         volume = self.docker.volumes.create(self.name(aid, 'data'), labels={LABEL: aid})
-        self.docker.containers.run(image_ref, entrypoint=['sh', '-ec'],
+        self.oneshot(image_ref, entrypoint=['sh', '-ec'],
             command=['mkdir -p /work/config /work/data; chown -R 1000:1000 /work'],
-            user='0', network_mode='none', volumes={volume.name: {'bind': '/work', 'mode': 'rw'}}, remove=True)
+            user='0', network_mode='none', volumes={volume.name: {'bind': '/work', 'mode': 'rw'}})
         env = {}
         env.update(CCG_API_KEY=state['api_key'], CCG_ADMIN_KEY=state['admin_key'], CCG_EXTERNAL_EGRESS='1')
         if auth['mode'] == 'api_key':
@@ -380,9 +608,9 @@ class Manager:
             d = self.dir(aid)
             write_private(d / 'sing-box.json', json.dumps(config))
             write_private(d / 'firewall.nft', rules)
-            self.docker.containers.run(egress_image,
+            self.oneshot(egress_image,
                 entrypoint=['sing-box', 'check', '-c', '/config/sing-box.json'],
-                network_mode='none', volumes={str(d): {'bind': '/config', 'mode': 'ro'}}, remove=True)
+                network_mode='none', volumes={str(d): {'bind': '/config', 'mode': 'ro'}})
             try:
                 old = self.owned(aid, 'egress')
             except docker.errors.NotFound:
@@ -404,35 +632,41 @@ class Manager:
             app = self.owned(aid, 'app')
             if app.status != 'running':
                 app.start()
-            # Atomic nft replacement inside the account namespace. Nothing is
-            # configured in the host's default routing table or firewall.
-            script = ('if nft list table inet ccg_app >/dev/null 2>&1; then '
-                      '{ printf "delete table inet ccg_app\\n"; cat /app.nft; } | nft -f -; '
-                      'else nft -f /app.nft; fi; '
-                      f'ip route replace default via {state["gateway_ip"]}')
-            self.helper(aid, app, script, business_rules(state['gateway_ip']))
-            for _ in range(30):
-                egress.reload()
-                if egress.status != 'running':
-                    raise RuntimeError('egress failed')
-                code, _ = egress.exec_run(['sh', '-ec', 'ss -lnt | grep -q :15001'])
-                if code == 0:
-                    break
-                time.sleep(.2)
-            else:
-                raise RuntimeError('egress not ready')
-            # Probe through the business namespace, not through host networking.
-            code, _ = app.exec_run(['node', '-e',
-                'fetch(process.argv[1],{signal:AbortSignal.timeout(10000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))',
-                self.probe_url])
-            if code != 0:
-                raise RuntimeError('account proxy connectivity check failed')
-            state.update(revision=revision, status='ready')
-            self.save(aid, state)
-            app.reload(); egress.reload()
-            self.boots[aid] = tuple(c.attrs['State']['StartedAt'] for c in (app, egress))
-            self.online[aid] = revision
+            self._activate(aid, state, app, egress, revision)
             return self.public(aid)
+
+    def _activate(self, aid, state, app, egress, revision):
+        """Business firewall and default route, egress readiness, proxied probe,
+        then readiness at revision. Shared by apply and the in-place worker
+        update (a container restart rebuilds the account network namespace)."""
+        # Atomic nft replacement inside the account namespace. Nothing is
+        # configured in the host's default routing table or firewall.
+        script = ('if nft list table inet ccg_app >/dev/null 2>&1; then '
+                  '{ printf "delete table inet ccg_app\\n"; cat /app.nft; } | nft -f -; '
+                  'else nft -f /app.nft; fi; '
+                  f'ip route replace default via {state["gateway_ip"]}')
+        self.helper(aid, app, script, business_rules(state['gateway_ip']))
+        for _ in range(30):
+            egress.reload()
+            if egress.status != 'running':
+                raise RuntimeError('egress failed')
+            code, _ = egress.exec_run(['sh', '-ec', 'ss -lnt | grep -q :15001'])
+            if code == 0:
+                break
+            time.sleep(.2)
+        else:
+            raise RuntimeError('egress not ready')
+        # Probe through the business namespace, not through host networking.
+        code, _ = app.exec_run(['node', '-e',
+            'fetch(process.argv[1],{signal:AbortSignal.timeout(10000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))',
+            self.probe_url])
+        if code != 0:
+            raise RuntimeError('account proxy connectivity check failed')
+        state.update(revision=revision, status='ready')
+        self.save(aid, state)
+        app.reload(); egress.reload()
+        self.boots[aid] = tuple(c.attrs['State']['StartedAt'] for c in (app, egress))
+        self.online[aid] = revision
 
     def migrate_auth(self, aid, source):
         """Explicit control-plane operation; only the independent draft is changed."""
@@ -461,14 +695,14 @@ class Manager:
             target.stop(timeout=10)
             self.online.pop(aid, None)
             try:
-                self.docker.containers.run(image_of(target), user='1000:1000',
+                self.oneshot(image_of(target), user='1000:1000',
                     entrypoint=['sh', '-ec'], command=[
                         'test -d /source/config && test ! -L /source/config; '
                         'test -d /target/config && test ! -L /target/config; '
                         'test ! -e /target/config/.credentials.json; '
                         'cp -a /source/config/. /target/config/'],
                     network_mode='none', volumes=volumes, cap_drop=['ALL'],
-                    security_opt=['no-new-privileges:true'], remove=True)
+                    security_opt=['no-new-privileges:true'])
                 target_state['auth_migrated_from'] = source
                 self.save(aid, target_state)
             except Exception:
@@ -574,14 +808,211 @@ class Manager:
 
     def connection(self, aid, revision):
         # Private control-plane response, never a public account/UI payload.
-        # The model body goes straight to this one account over the pinned SSH
-        # transport; the controller no longer relays model traffic.
+        # The same check guards the byte tunnel (GET .../tunnel).
         with self.guard(aid):
             state = self.state(aid)
             if not state or not revision or self.public(aid)['revision'] != revision:
                 return None
-            return {'app_ip': state['app_ip'], 'port': 8787,
+            return {'app_ip': state['app_ip'], 'port': ACCOUNT_PORT,
                     'api_key': state['api_key'], 'revision': revision}
+
+    # In-place worker update (CONTRACTS §53.7). Never provision, create, remove
+    # or recreate the account container: replace one file, restart only it.
+
+    def worker_program(self, ref):
+        """Step 1: the program of image ref (from a never-started temporary container) and its SHA-256."""
+        self.ensure_image(ref)
+        temp = self.docker.containers.create(ref, entrypoint=['true'], network_disabled=True)
+        try:
+            try:
+                chunks, _ = temp.get_archive(WORKER_SOURCE)
+                data = read_single_file(chunks)
+            except (docker.errors.NotFound, ValueError) as e:
+                raise InvalidImage('image has no worker program') from e
+        finally:
+            with contextlib.suppress(docker.errors.DockerException, requests.exceptions.RequestException):
+                temp.remove(force=True)
+        return data, hashlib.sha256(data).hexdigest()
+
+    def _same(self, aid, identity):
+        """The account's app container, provided it is still the one the update started on."""
+        try:
+            container = self.owned(aid, 'app')
+        except (docker.errors.NotFound, ValueError) as e:
+            raise ContainerChanged('account container changed') from e
+        if container_identity(container) != identity:
+            raise ContainerChanged('account container changed')
+        return container
+
+    @staticmethod
+    def _sha256(container, path):
+        code, out = container.exec_run(['sha256sum', path], user='0')
+        digest = (out or b'').decode(errors='replace').split(' ', 1)[0]
+        return digest if code == 0 and SHA256_HEX.fullmatch(digest) else None
+
+    @staticmethod
+    def _discard(container, path):
+        with contextlib.suppress(Exception):
+            container.exec_run(['rm', '-f', path], user='0')
+
+    def _stage(self, container, target, data, digest):
+        """Put data next to target as <target>.next-<random> (root, 0755) and verify it."""
+        tmp = f'{target}.next-{secrets.token_hex(6)}'
+        try:
+            if not container.put_archive(WORKER_DIR, tar_file(posixpath.basename(tmp), data)):
+                raise RuntimeError('copy into container failed')
+            code, _ = container.exec_run(['chmod', '0755', tmp], user='0')
+            if code != 0:
+                raise RuntimeError('chmod failed')
+            code, out = container.exec_run(['stat', '-c', '%u:%g:%a', tmp], user='0')
+            if code != 0 or (out or b'').strip() != b'0:0:755':
+                raise RuntimeError('unexpected owner or mode')
+            if self._sha256(container, tmp) != digest:
+                raise RuntimeError('copied program differs')
+        except BaseException:
+            self._discard(container, tmp)
+            raise
+        return tmp
+
+    def _swap(self, container, tmp, target):
+        code, _ = container.exec_run(['mv', '-f', tmp, target], user='0')
+        if code != 0:
+            self._discard(container, tmp)
+            raise RuntimeError('replace failed')
+
+    def _wait_idle(self, aid, identity, base):
+        deadline = time.monotonic() + WORKER_IDLE_WAIT
+        while True:
+            container = self._same(aid, identity)
+            if worker_idle(container, base):
+                return container
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(WORKER_IDLE_INTERVAL)
+
+    def _backup_worker(self, aid, container, target, digest):
+        """Step 6: <root>/<key>/worker-backups/<UTC time>-<sha[:12]>, 0600, newest 5 kept."""
+        chunks, _ = container.get_archive(target)
+        try:
+            data = read_single_file(chunks)
+        except ValueError as e:
+            raise UnsupportedContainer('worker program is not a regular file') from e
+        if hashlib.sha256(data).hexdigest() != digest:
+            raise RuntimeError('backup differs from the installed program')
+        folder = self.dir(aid) / 'worker-backups'
+        folder.mkdir(mode=0o700, exist_ok=True)
+        os.chmod(folder, 0o700)
+        name = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ') + '-' + digest[:12]
+        write_private_bytes(folder / name, data)
+        backups = sorted(p for p in folder.iterdir()
+                         if WORKER_BACKUP_NAME.fullmatch(p.name) and p.is_file() and not p.is_symlink())
+        for old in backups[:-WORKER_BACKUPS]:
+            old.unlink()
+        return data
+
+    def _worker_healthy(self, aid, identity):
+        deadline = time.monotonic() + WORKER_HEALTH_WAIT
+        while True:
+            container = self._same(aid, identity)
+            if container.status != 'running':
+                return False  # exited: no restart policy brings it back
+            with contextlib.suppress(docker.errors.APIError):
+                code, _ = container.exec_run(['node', '-e', WORKER_HEALTH_SCRIPT])
+                if code == 0:
+                    return True
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(WORKER_HEALTH_INTERVAL)
+
+    def _restart_healthy(self, aid, identity):
+        """Restart only this container; healthy only if it really restarted and answers /health."""
+        container = self._same(aid, identity)
+        before = container.attrs['State'].get('StartedAt')
+        with contextlib.suppress(docker.errors.APIError, requests.exceptions.RequestException):
+            container.restart(timeout=WORKER_RESTART_TIMEOUT)
+        container = self._same(aid, identity)
+        if container.attrs['State'].get('StartedAt') == before:
+            return False  # the old process may still be serving /health
+        return self._worker_healthy(aid, identity)
+
+    def _restore(self, aid, identity, target, data, digest):
+        """Put the backup back: temporary file + mv while running; written
+        directly into a stopped container (exec is impossible there and
+        nothing executes the file)."""
+        container = self._same(aid, identity)
+        if container.status == 'running':
+            self._swap(container, self._stage(container, target, data, digest), target)
+            return
+        if not container.put_archive(WORKER_DIR, tar_file(posixpath.basename(target), data)):
+            raise RuntimeError('restore failed')
+        chunks, _ = container.get_archive(target)
+        if hashlib.sha256(read_single_file(chunks)).hexdigest() != digest:
+            raise RuntimeError('restored program differs')
+
+    def _reactivate(self, aid, identity, revision):
+        """Step 9: firewall, route and probe again; readiness at the old revision or none."""
+        app = self._same(aid, identity)
+        try:
+            state = self.state(aid)
+            if not state or state.get('revision') != revision:
+                raise RuntimeError('revision changed')
+            self._activate(aid, state, app, self.owned(aid, 'egress'), revision)
+            return True
+        except Exception:
+            # The core's next reconciliation applies the configuration again;
+            # nothing is recreated here.
+            self.online.pop(aid, None)
+            return False
+
+    def update_worker(self, aid, desired):
+        """POST /accounts/<key>/worker {"image": ref} (CONTRACTS §53.7)."""
+        check(aid)
+        ref = desired.get('image') if isinstance(desired, dict) and set(desired) == {'image'} else None
+        if not valid_image(ref):
+            raise BadRequest('invalid image reference')
+        data, digest = self.worker_program(ref)
+        with self.guard(aid):
+            try:
+                container = self.owned(aid, 'app')
+            except (docker.errors.NotFound, ValueError) as e:
+                raise RuntimeNotFound('no account container') from e
+            if container.status != 'running':
+                return {'status': 'not_running'}
+            identity = container_identity(container)
+            target, base = worker_target(container)
+            previous = self._sha256(container, target)
+            if previous is None:
+                raise UnsupportedContainer('worker program not readable')
+            if previous == digest:
+                return {'status': 'unchanged', 'sha256': digest}
+            container = self._wait_idle(aid, identity, base)
+            if container is None:
+                return {'status': 'busy'}
+            old = self._backup_worker(aid, container, target, previous)
+            tmp = self._stage(container, target, data, digest)
+            try:
+                container = self._same(aid, identity)
+                idle = worker_idle(container, base)
+            except BaseException:
+                self._discard(container, tmp)
+                raise
+            if not idle:
+                self._discard(container, tmp)
+                return {'status': 'busy'}
+            self.public(aid)  # drops readiness that no longer matches the containers
+            revision = (self.state(aid) or {}).get('revision', '')
+            was_online = bool(revision) and self.online.get(aid) == revision
+            self.online.pop(aid, None)
+            self._swap(container, tmp, target)
+            if self._restart_healthy(aid, identity):
+                result = {'status': 'updated', 'previous_sha256': previous, 'sha256': digest, 'path': target}
+            else:
+                self._restore(aid, identity, target, old, previous)
+                if not self._restart_healthy(aid, identity):
+                    return {'status': 'rolled_back', 'reason': 'rollback_unhealthy', 'online': False}
+                result = {'status': 'rolled_back', 'reason': 'unhealthy'}
+            result['online'] = was_online and self._reactivate(aid, identity, revision)
+            return result
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -600,6 +1031,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(raw)))
         self.send_header('Cache-Control', 'no-store')
+        if self.close_connection:
+            self.send_header('Connection', 'close')  # tell keep-alive clients
         self.end_headers()
         self.response_started = True
         self.wfile.write(raw)
@@ -609,42 +1042,162 @@ class Handler(BaseHTTPRequestHandler):
             self.close_connection = True
         return self.reply(status, {'error': code})
 
-    def handle_image_upload(self):
-        """处理 POST /images/upload"""
+    def read_body(self, limit=64 << 10):
+        """Read a small request body exactly; anything unusual is a bad request."""
+        raw = self.headers.get('Content-Length', '0')
+        if self.headers.get('Transfer-Encoding') or not DECIMAL.fullmatch(raw) or int(raw) > limit:
+            raise BadRequest('invalid body')
+        return self.rfile.read(int(raw))
+
+    def read_json(self):
         try:
-            # 获取镜像名称和可选的 SHA256
-            image_name = self.headers.get('X-Image-Name', 'uploaded-image')
-            expected_sha256 = self.headers.get('X-Image-SHA256')
+            return json.loads(self.read_body())
+        except ValueError as e:
+            raise BadRequest('invalid JSON') from e
 
-            # 获取 Content-Length
-            try:
-                content_length = int(self.headers.get('Content-Length', '0'))
-            except ValueError:
-                return self.fail(400, 'invalid_content_length')
-
-            if content_length <= 0 or content_length > (2 * 1024 * 1024 * 1024):
-                return self.fail(400, 'invalid_content_length')
-
-            # 读取镜像数据并上传
-            result = self.server.manager.image_manager.upload_image_data(
-                image_name, self.rfile, expected_sha256
-            )
-            return self.reply(200, result)
-
-        except ImageUploadError as e:
-            return self.fail(400, str(e))
-        except Exception as e:
-            return self.fail(500, 'upload_failed')
-
-    def handle_image_load(self, upload_id):
-        """处理 POST /images/load/<upload_id>"""
+    def handle_management(self, route):
+        """Uploads (/images/uploads...) and target images (/runtime/...)."""
         try:
-            result = self.server.manager.image_manager.load_image(upload_id)
-            return self.reply(200, result)
-        except ImageUploadError as e:
-            return self.fail(400, str(e))
+            self._management(route)
+        except OSError:
+            self.close_connection = True  # the client went away; nothing to answer
+
+    def _management(self, route):
+        manager = self.server.manager
+        # Whatever fails, the request body may be left unread: never reuse the connection.
+        try:
+            if route.re is RUNTIME_ROUTE:
+                kind = route[1]
+                if kind == 'images' and self.command == 'GET':
+                    self.read_body()
+                    return self.reply(200, manager.runtime_images())
+                if kind == 'images' and self.command == 'PUT':
+                    return self.reply(200, manager.set_runtime_images(self.read_json()))
+                if kind == 'controller' and self.command == 'POST':
+                    return self.reply(202, manager.upgrade_controller(self.read_json()))
+                return self.fail(405, 'method_not_allowed', close=True)
+            uploads, upload_id, load = manager.uploads, route[1], route[2]
+            if upload_id is None:
+                if self.command != 'POST':
+                    return self.fail(405, 'method_not_allowed', close=True)
+                body = self.read_json()
+                if not isinstance(body, dict) or set(body) - {'size', 'sha256'}:
+                    raise BadRequest('invalid upload')
+                return self.reply(200, uploads.create(body.get('size'), body.get('sha256')))
+            if load:
+                if self.command != 'POST':
+                    return self.fail(405, 'method_not_allowed', close=True)
+                self.read_body()
+                return self.reply(200, uploads.load(upload_id))
+            if self.command == 'PUT':
+                raw, offset = self.headers.get('Content-Length', ''), self.headers.get('X-CCG-Offset', '')
+                if (self.headers.get('Transfer-Encoding') or not DECIMAL.fullmatch(raw)
+                        or not 1 <= int(raw) <= MAX_CHUNK or not DECIMAL.fullmatch(offset)):
+                    raise BadRequest('invalid chunk')
+                # Exactly Content-Length bytes: the connection stays usable.
+                return self.reply(200, uploads.write(upload_id, int(offset), int(raw), self.rfile))
+            if self.command in ('GET', 'DELETE'):
+                self.read_body()
+                return self.reply(200, (uploads.status if self.command == 'GET' else uploads.delete)(upload_id))
+            return self.fail(405, 'method_not_allowed', close=True)
+        except UploadError as e:
+            self.close_connection = True
+            if not self.response_started:
+                self.reply(e.status, e.body())
+        except BadRequest:
+            self.close_connection = True
+            if not self.response_started:
+                self.fail(400, 'invalid_request')
+        except InvalidImage:
+            self.close_connection = True
+            self.fail(400, 'invalid_image')
+        except ImagePullFailed:
+            self.close_connection = True
+            self.fail(503, 'image_pull_failed')
+        except UpgradeInProgress:
+            self.close_connection = True
+            self.fail(409, 'upgrade_in_progress')
+        except (BrokenPipeError, ConnectionResetError, TimeoutError):
+            self.close_connection = True
+        except Exception:
+            self.close_connection = True
+            if not self.response_started:
+                self.fail(503, 'runtime_unavailable')
+
+    def handle_tunnel(self, aid):
+        """GET /accounts/<key>/tunnel: raw bytes to <app_ip>:8787 (CONTRACTS §53.5)."""
+        self.close_connection = True  # the connection never returns to HTTP
+        if self.command != 'GET':
+            return self.fail(405, 'method_not_allowed')
+        tokens = {t.strip().lower() for t in self.headers.get('Connection', '').split(',')}
+        if (self.headers.get('Upgrade', '').strip().lower() != 'ccg-tunnel' or 'upgrade' not in tokens
+                or self.headers.get('Transfer-Encoding') or self.headers.get('Content-Length', '0') != '0'):
+            return self.fail(400, 'invalid_request')
+        try:
+            target = self.server.manager.connection(aid, self.headers.get('X-CCG-Revision', ''))
+        except BadRequest:
+            return self.fail(400, 'invalid_request')
+        except Exception:
+            return self.fail(503, 'runtime_unavailable')
+        if target is None:
+            return self.fail(409, 'not_synchronized')
+        try:
+            upstream = socket.create_connection((target['app_ip'], ACCOUNT_PORT), timeout=5)
+        except OSError:
+            return self.fail(503, 'runtime_unavailable')
+        with upstream, contextlib.suppress(OSError):  # the client may already be gone
+            self.send_response(101)
+            self.send_header('Connection', 'Upgrade')
+            self.send_header('Upgrade', 'ccg-tunnel')
+            self.end_headers()
+            self.response_started = True
+            upstream.settimeout(TUNNEL_IDLE_SECONDS)
+            self.connection.settimeout(TUNNEL_IDLE_SECONDS)
+            client = self.connection
+
+            def pump(read, write, peer):
+                # Content is never inspected or logged.
+                try:
+                    while data := read():
+                        write(data)
+                    with contextlib.suppress(OSError):
+                        peer.shutdown(socket.SHUT_WR)
+                except (OSError, ValueError):
+                    # Idle timeout or reset on either side ends the whole tunnel.
+                    for s in (client, upstream):
+                        with contextlib.suppress(OSError):
+                            s.shutdown(socket.SHUT_RDWR)
+
+            # rfile is buffered: read1 also returns bytes it already holds
+            # (a request pipelined right behind the upgrade request).
+            back = threading.Thread(target=pump, daemon=True,
+                                    args=(lambda: upstream.recv(65536), self.wfile.write, client))
+            back.start()
+            pump(lambda: self.rfile.read1(65536), upstream.sendall, upstream)
+            back.join()
+
+    def handle_worker(self, aid):
+        """POST /accounts/<key>/worker: in-place worker update (CONTRACTS §53.7)."""
+        try:
+            if self.command != 'POST':
+                return self.fail(405, 'method_not_allowed', close=True)
+            return self.reply(200, self.server.manager.update_worker(aid, self.read_json()))
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
+            return None
         except Exception as e:
-            return self.fail(500, 'load_failed')
+            # The request body may be left unread: never reuse the connection.
+            self.close_connection = True
+            if self.response_started:
+                return None
+            for kind, status, code in ((BadRequest, 400, 'invalid_request'), (InvalidImage, 400, 'invalid_image'),
+                                       (RuntimeNotFound, 404, 'not_found'),
+                                       (UnsupportedContainer, 409, 'unsupported_container'),
+                                       (ImagePullFailed, 503, 'image_pull_failed'),
+                                       (ContainerChanged, 503, 'container_changed')):
+                if isinstance(e, kind):
+                    return self.fail(status, code)
+            return self.fail(503, 'runtime_unavailable')
 
     def handle_request(self):
         self.response_started = False
@@ -657,24 +1210,18 @@ class Handler(BaseHTTPRequestHandler):
             if self.command != 'GET':
                 return self.fail(405, 'method_not_allowed')
             return self.reply(200, manager.health())
-
-        # 处理镜像上传端点
-        image_match = IMAGE_ROUTE.fullmatch(self.path)
-        if image_match:
-            action, upload_id = image_match[1], image_match[2]
-            if action == 'upload':
-                if self.command != 'POST':
-                    return self.fail(405, 'method_not_allowed')
-                return self.handle_image_upload()
-            elif action and action.startswith('load/'):
-                if self.command != 'POST':
-                    return self.fail(405, 'method_not_allowed')
-                return self.handle_image_load(upload_id)
+        route = UPLOAD_ROUTE.fullmatch(self.path) or RUNTIME_ROUTE.fullmatch(self.path)
+        if route:
+            return self.handle_management(route)
 
         match = ROUTE.fullmatch(self.path)
         if not match:
             return self.fail(404, 'not_found', close=True)
         aid, path = match[1], match[2]
+        if path == 'tunnel':
+            return self.handle_tunnel(aid)  # GET without a body; never read one
+        if path == 'worker':
+            return self.handle_worker(aid)
         try:
             n = int(self.headers.get('Content-Length', '0'))
         except ValueError:
@@ -744,7 +1291,8 @@ class Handler(BaseHTTPRequestHandler):
                 address = state['app_ip']
                 secret = state['admin_key'] if path.startswith('admin/') else state['api_key']
             # No configuration writes on the request path. Concurrent streams
-            # do not hold the account reconciliation lock.
+            # do not hold the account reconciliation lock. (Legacy relay: the
+            # core now talks to the account directly or through the tunnel.)
             headers = upstream_headers(self.headers, secret)
             # Model execution has a one-hour deadline; leave time to relay its
             # terminal response. Keep management requests on their short limit.
@@ -753,7 +1301,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.connection.settimeout(relay_timeout)
             with requests.Session() as session:
                 session.trust_env = False
-                with session.request(self.command, f'http://{address}:8787/{path}', data=body,
+                with session.request(self.command, f'http://{address}:{ACCOUNT_PORT}/{path}', data=body,
                                      headers=headers, stream=True, timeout=(5, relay_timeout), allow_redirects=False) as response:
                     self.send_response(response.status_code)
                     self.send_header('Content-Type', response.headers.get('Content-Type', 'application/json'))
@@ -762,7 +1310,8 @@ class Handler(BaseHTTPRequestHandler):
                     self.end_headers()
                     self.response_started = True
                     self.close_connection = True
-                    for chunk in response.iter_content(chunk_size=1024):
+                    # Write whatever arrives; never wait to fill a buffer.
+                    for chunk in response.iter_content(chunk_size=None):
                         self.wfile.write(chunk)
                         self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
@@ -788,7 +1337,7 @@ if __name__ == '__main__':
     key = os.environ['CCG_CONTROLLER_KEY']
     if len(key) < 32:
         raise SystemExit('controller key must contain at least 32 characters')
-    server = ThreadingHTTPServer(('127.0.0.1', int(os.getenv('CCG_CONTROLLER_PORT', '8787'))), Handler)
+    server = ThreadingHTTPServer(('127.0.0.1', int(os.getenv('CCG_CONTROLLER_PORT') or '8787')), Handler)
     server.daemon_threads = True
     server.key = key
     server.manager = Manager(os.environ['CCG_RUNTIME_ROOT'], os.environ['CCG_APP_IMAGE'],

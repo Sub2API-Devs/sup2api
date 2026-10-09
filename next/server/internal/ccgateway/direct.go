@@ -73,6 +73,8 @@ func (s *Service) openAccountModel(ctx context.Context, cfg Config, runtimeKey, 
 		client, closeController, err = s.openAccount(ctx, cfg, target)
 	} else if cfg.Mode == "ssh" {
 		client, closeController, err = remotedocker.NewAccountHTTPClient(ctx, cfg.SSH(), target)
+	} else if cfg.Mode == "controller" {
+		client, closeController, err = accountTunnelClient(ctx, cfg, runtimeKey, revision, target)
 	} else if cfg.Mode == "local" {
 		transport := &http.Transport{Proxy: nil, MaxResponseHeaderBytes: 64 << 10}
 		client = &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}

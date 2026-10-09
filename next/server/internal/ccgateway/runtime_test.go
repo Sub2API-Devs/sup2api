@@ -79,6 +79,10 @@ type fakeHostOps struct {
 	healthy  bool
 	keySeen  string
 	rollback string
+	// Control panel installation (§53.3).
+	gateway   remotedocker.ScriptResult
+	ca        remotedocker.ScriptResult
+	onGateway func()
 }
 
 func (h *fakeHostOps) kind(script string) string {
@@ -89,8 +93,12 @@ func (h *fakeHostOps) kind(script string) string {
 		return "finish"
 	case script == rollbackScript:
 		return "rollback"
+	case script == gatewayCAScript:
+		return "ca"
 	case strings.Contains(script, "docker run -d --name ccg-controller"):
 		return "install"
+	case strings.Contains(script, "docker run -d --name ccg-gateway"):
+		return "gateway"
 	}
 	return "unknown"
 }
@@ -112,6 +120,13 @@ func (h *fakeHostOps) run(_ context.Context, _ remotedocker.Config, script strin
 		return remotedocker.ScriptResult{Output: "CCG_RESULT=" + h.rollback + "\n"}, nil
 	case "finish":
 		return remotedocker.ScriptResult{Output: "CCG_RESULT=done\n"}, nil
+	case "gateway":
+		if h.onGateway != nil {
+			h.onGateway()
+		}
+		return h.gateway, nil
+	case "ca":
+		return h.ca, nil
 	}
 	h.t.Errorf("unexpected script %q", script)
 	return remotedocker.ScriptResult{ExitStatus: 127}, nil
@@ -183,7 +198,7 @@ func TestRuntimeInstallGeneratesTheKeyAndSendsItOnlyOnStdin(t *testing.T) {
 	keySeen := host.keySeen
 	host.mu.Unlock()
 	want := "CCG_RUNTIME_ROOT=/opt/ccgateway-runtime\nCCG_APP_IMAGE=" + AppImage + "\nCCG_EGRESS_IMAGE=" + EgressImage +
-		"\nCCG_CONTROLLER_KEY=" + saved.AdminKey + "\nCCG_CONTROLLER_PORT=8787\n"
+		"\nCCG_CONTROLLER_IMAGE=" + ControllerImage + "\nCCG_CONTROLLER_KEY=" + saved.AdminKey + "\nCCG_CONTROLLER_PORT=8787\n"
 	if stdin != want {
 		t.Fatalf("environment on stdin:\n%s", stdin)
 	}
@@ -213,13 +228,13 @@ func TestRuntimeInstallGeneratesTheKeyAndSendsItOnlyOnStdin(t *testing.T) {
 
 func TestInstallScriptContainsNoInput(t *testing.T) {
 	img := Config{Images: &RuntimeImages{App: "ccgateway:22cfdb5"}}.EffectiveImages()
-	script, err := installScript(img)
+	script, err := installScript(img, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Everything but the three references is fixed text.
 	fixed := strings.NewReplacer(img.App, "<APP>", img.Egress, "<EGRESS>", img.Controller, "<CTL>").Replace(script)
-	again, _ := installScript(RuntimeImages{App: "a:1", Egress: "b:1", Controller: "c:1"})
+	again, _ := installScript(RuntimeImages{App: "a:1", Egress: "b:1", Controller: "c:1"}, false)
 	if strings.NewReplacer("a:1", "<APP>", "b:1", "<EGRESS>", "c:1", "<CTL>").Replace(again) != fixed {
 		t.Fatal("install script depends on more than the image references")
 	}
@@ -231,7 +246,18 @@ func TestInstallScriptContainsNoInput(t *testing.T) {
 	if !strings.Contains(script, `docker image inspect "$img" >/dev/null 2>&1 || docker pull`) {
 		t.Fatal("present images are pulled again")
 	}
-	if _, err = installScript(RuntimeImages{App: "x'; rm -rf / #", Egress: "b", Controller: "c"}); err == nil {
+	// SSH install: a missing workload image fails; control panel install:
+	// only the controller image is required.
+	pull := `docker pull -q "$img" >/dev/null 2>&1 || { echo CCG_RESULT=image_pull_failed; exit 1; }`
+	if !strings.Contains(script, pull) {
+		t.Fatal("ssh install tolerates a missing workload image")
+	}
+	optional, _ := installScript(img, true)
+	if strings.Contains(optional, pull) || !strings.Contains(optional, `docker pull -q "$img" >/dev/null 2>&1 || true`) ||
+		!strings.Contains(optional, `docker pull -q "$CTL" >/dev/null 2>&1 || { echo CCG_RESULT=image_pull_failed; exit 1; }`) {
+		t.Fatal("control panel install requires workload images or skips the controller image")
+	}
+	if _, err = installScript(RuntimeImages{App: "x'; rm -rf / #", Egress: "b", Controller: "c"}, false); err == nil {
 		t.Fatal("unsafe reference accepted")
 	}
 	if strings.Contains(inspectScript, "CCG_CONTROLLER_KEY") || !strings.Contains(inspectScript, `grep -E '^("|CCG_APP_IMAGE=|CCG_EGRESS_IMAGE=)'`) {

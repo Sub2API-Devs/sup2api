@@ -25,7 +25,7 @@ var configAAD = []byte("system:ccgateway:v1")
 
 type Config struct {
 	AccountRuntimes    bool   `json:"account_runtimes"`
-	Mode               string `json:"mode"` // "disabled", "local", "ssh", "http"
+	Mode               string `json:"mode"` // "disabled", "local", "ssh", "controller"
 	Host               string `json:"host"`
 	Port               int    `json:"port"`
 	User               string `json:"user"`
@@ -36,10 +36,10 @@ type Config struct {
 	HostKeyFingerprint string `json:"host_key_fingerprint"`
 	AdminKey           string `json:"admin_key,omitempty"`
 	APIKey             string `json:"api_key,omitempty"`
-	// ControllerInstalled 标记控制面板是否已安装（http 模式专用）
-	ControllerInstalled bool `json:"controller_installed,omitempty"`
-	// ControllerURL 控制面板直接连接地址（http 模式）
-	ControllerURL string `json:"controller_url,omitempty"`
+	// ControllerCA (controller mode) holds the only root certificates the
+	// control panel's HTTPS certificate may chain to; empty: system roots
+	// (CONTRACTS §53.2).
+	ControllerCA string `json:"controller_ca,omitempty"`
 	// Images overrides the pinned runtime images (images.go) per role, e.g.
 	// with tags built on the Docker host itself; empty fields use the
 	// pinned references (CONTRACTS §49.16).
@@ -53,6 +53,8 @@ type RuntimeImages struct {
 	App        string `json:"app"`
 	Egress     string `json:"egress"`
 	Controller string `json:"controller"`
+	// Gateway is the Caddy image of the control panel (§53.3).
+	Gateway string `json:"gateway"`
 }
 
 var (
@@ -69,7 +71,7 @@ func validImage(ref string) bool {
 // EffectiveImages are the images installed: the configured ones, else the
 // pinned references.
 func (c Config) EffectiveImages() RuntimeImages {
-	out := RuntimeImages{App: AppImage, Egress: EgressImage, Controller: ControllerImage}
+	out := RuntimeImages{App: AppImage, Egress: EgressImage, Controller: ControllerImage, Gateway: GatewayImage}
 	if c.Images != nil {
 		if c.Images.App != "" {
 			out.App = c.Images.App
@@ -79,6 +81,9 @@ func (c Config) EffectiveImages() RuntimeImages {
 		}
 		if c.Images.Controller != "" {
 			out.Controller = c.Images.Controller
+		}
+		if c.Images.Gateway != "" {
+			out.Gateway = c.Images.Gateway
 		}
 	}
 	return out
@@ -95,25 +100,26 @@ func (c Config) SSH() remotedocker.Config {
 	return remotedocker.Config{Host: c.Host, Port: c.Port, User: c.User, AuthMode: c.AuthMode, Password: c.Password, PrivateKey: c.PrivateKey, Passphrase: c.Passphrase, HostKeyFingerprint: c.HostKeyFingerprint}
 }
 func (c Config) Public() map[string]any {
+	_, caFingerprint, _ := parseControllerCA(c.ControllerCA)
 	return map[string]any{
-		"account_runtimes":      c.AccountRuntimes,
-		"mode":                  c.Mode,
-		"host":                  c.Host,
-		"port":                  c.Port,
-		"user":                  c.User,
-		"auth_mode":             c.AuthMode,
-		"host_key_fingerprint":  c.HostKeyFingerprint,
-		"has_password":          c.Password != "",
-		"has_private_key":       c.PrivateKey != "",
-		"has_passphrase":        c.Passphrase != "",
-		"has_admin_key":         c.AdminKey != "",
-		"has_api_key":           c.APIKey != "",
-		"controller_installed":  c.ControllerInstalled,
-		"controller_url":        c.ControllerURL,
-		"images":                c.publicImages(),
-		"effective_images":      c.EffectiveImages(),
-		"network":               c.EffectiveNetwork(),
-		"request_policy":        c.EffectiveRequestPolicy(),
+		"account_runtimes":          c.AccountRuntimes,
+		"mode":                      c.Mode,
+		"host":                      c.Host,
+		"port":                      c.Port,
+		"user":                      c.User,
+		"auth_mode":                 c.AuthMode,
+		"host_key_fingerprint":      c.HostKeyFingerprint,
+		"has_password":              c.Password != "",
+		"has_private_key":           c.PrivateKey != "",
+		"has_passphrase":            c.Passphrase != "",
+		"has_admin_key":             c.AdminKey != "",
+		"has_api_key":               c.APIKey != "",
+		"has_controller_ca":         c.ControllerCA != "",
+		"controller_ca_fingerprint": caFingerprint,
+		"images":                    c.publicImages(),
+		"effective_images":          c.EffectiveImages(),
+		"network":                   c.EffectiveNetwork(),
+		"request_policy":            c.EffectiveRequestPolicy(),
 	}
 }
 
@@ -198,11 +204,19 @@ func mergeConfig(c, old Config) (Config, error) {
 	if c.Mode == "" {
 		c.Mode = "local"
 	}
+	if c.Mode != "local" && c.Mode != "ssh" && c.Mode != "controller" {
+		return c, errors.New("invalid mode")
+	}
 	if c.Port == 0 {
 		c.Port = 22
+		if c.Mode == "controller" {
+			c.Port = 443
+		}
 	}
-	if c.Mode != "local" && c.Mode != "ssh" && c.Mode != "http" {
-		return c, errors.New("invalid mode")
+	if c.Mode == "controller" {
+		// The control panel is reached over HTTPS only: no SSH credentials.
+		c.clearSSH()
+		c.Host = normalizeControllerHost(c.Host)
 	}
 	if c.Network == nil {
 		c.Network = old.Network
@@ -226,7 +240,7 @@ func mergeConfig(c, old Config) (Config, error) {
 		c.Images = old.Images
 	}
 	if c.Images != nil {
-		for _, ref := range []string{c.Images.App, c.Images.Egress, c.Images.Controller} {
+		for _, ref := range []string{c.Images.App, c.Images.Egress, c.Images.Controller, c.Images.Gateway} {
 			if ref != "" && !validImage(ref) {
 				return c, errors.New("invalid runtime image reference")
 			}
@@ -236,6 +250,7 @@ func mergeConfig(c, old Config) (Config, error) {
 		}
 	}
 	same := c.Mode == old.Mode && (c.Mode == "local" || (c.Host == old.Host && c.Port == old.Port && c.User == old.User && c.AuthMode == old.AuthMode && c.HostKeyFingerprint == old.HostKeyFingerprint))
+	typedKey := c.AdminKey != ""
 	if same {
 		if c.Password == "" {
 			c.Password = old.Password
@@ -253,13 +268,25 @@ func mergeConfig(c, old Config) (Config, error) {
 			c.APIKey = old.APIKey
 		}
 	}
+	if c.Mode == "controller" {
+		// The key is kept only for the same saved address and trust: the
+		// panel is public and the key reaches the accounts, so pointing the
+		// core at another host or certificate (or switching modes by hand)
+		// needs it typed again; the install endpoint sets it itself.
+		if c.ControllerCA == "" && same {
+			c.ControllerCA = old.ControllerCA
+		}
+	} else {
+		c.ControllerCA = ""
+	}
 	if len(c.AdminKey) > 8192 || len(c.APIKey) > 8192 || strings.ContainsAny(c.AdminKey+c.APIKey, "\r\n") {
 		return c, errors.New("invalid sidecar keys")
 	}
 	if c.AdminKey != "" && c.AdminKey == c.APIKey {
 		return c, errors.New("API and management keys must differ")
 	}
-	if c.Mode == "ssh" {
+	switch c.Mode {
+	case "ssh":
 		if e := remotedocker.Validate(c.SSH()); e != nil {
 			return c, e
 		}
@@ -269,41 +296,35 @@ func mergeConfig(c, old Config) (Config, error) {
 		} else {
 			c.Password = ""
 		}
-		// ssh 模式清除 http 专用字段
-		c.ControllerURL = ""
-	} else if c.Mode == "http" {
-		// http 模式：需要 Host 和 AdminKey
-		if c.Host == "" {
-			return c, errors.New("controller host is required for http mode")
+	case "controller":
+		if c.ControllerCA != "" {
+			normalized, _, e := parseControllerCA(c.ControllerCA)
+			if e != nil {
+				return c, e
+			}
+			c.ControllerCA = normalized
 		}
-		if c.Port == 0 {
-			c.Port = 8787
+		if !typedKey && c.ControllerCA != old.ControllerCA {
+			c.AdminKey = "" // new trust anchor: the key must be typed again
 		}
-		// 保留 ControllerInstalled 和 ControllerURL
-		if !same {
-			c.ControllerInstalled = false
-			c.ControllerURL = ""
+		if e := validateControllerConfig(c); e != nil {
+			return c, e
 		}
-		// http 模式清除 SSH 字段
-		c.User = ""
-		c.AuthMode = ""
-		c.Password = ""
-		c.PrivateKey = ""
-		c.Passphrase = ""
-		c.HostKeyFingerprint = ""
-	} else {
-		// local 或 disabled 模式清除所有远程字段
+	default:
+		// local: no remote fields.
 		c.Host = ""
-		c.User = ""
-		c.AuthMode = ""
-		c.Password = ""
-		c.PrivateKey = ""
-		c.Passphrase = ""
-		c.HostKeyFingerprint = ""
-		c.ControllerInstalled = false
-		c.ControllerURL = ""
+		c.clearSSH()
 	}
 	return c, nil
+}
+
+func (c *Config) clearSSH() {
+	c.User = ""
+	c.AuthMode = ""
+	c.Password = ""
+	c.PrivateKey = ""
+	c.Passphrase = ""
+	c.HostKeyFingerprint = ""
 }
 func (s *Service) save(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
@@ -345,7 +366,7 @@ func (s *Service) save(c *gin.Context) {
 		return audit.Audit(ctx, tx, uid, "ccgateway.config.update", "system", "ccgateway", nil)
 	})
 	if e != nil {
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("The configuration could not be saved: check the request policy, beta mappings, private IPv4 CIDR, IP allocation mode, SSH address, host key fingerprint and credentials."))
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("The configuration could not be saved: check the request policy, beta mappings, private IPv4 CIDR, IP allocation mode, SSH address, host key fingerprint and credentials, or the control panel address, management key and root certificate."))
 		return
 	}
 	if saved.AccountRuntimes {

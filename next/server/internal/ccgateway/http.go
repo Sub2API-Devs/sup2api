@@ -41,12 +41,19 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	})
 	r.Perm("PUT", "/system/ccgateway/remote-config", "settings:manage", s.save)
 	r.Perm("POST", "/system/ccgateway/remote-fingerprint", "settings:manage", s.fingerprint)
-	// 控制面板管理
-	r.Perm("GET", "/system/ccgateway/controller/status", "settings:read", s.controllerStatus)
+	// Control panel mode (CONTRACTS §53): install over SSH, then HTTPS.
 	r.Perm("POST", "/system/ccgateway/controller/install", "settings:manage", s.controllerInstall)
-	// Runtime installation / upgrade over SSH (CONTRACTS §49.16).
+	// Runtime installation / upgrade over SSH (CONTRACTS §49.16) or through
+	// the control panel (§53.6).
 	r.Perm("GET", "/system/ccgateway/runtime", "settings:read", s.runtimeGet)
 	r.Perm("POST", "/system/ccgateway/runtime/install", "settings:manage", s.runtimeInstall)
+	r.Perm("POST", "/system/ccgateway/runtime/uploads", "settings:manage", s.uploadCreate)
+	r.Perm("PUT", "/system/ccgateway/runtime/uploads/:id", "settings:manage", s.uploadPut)
+	r.Perm("GET", "/system/ccgateway/runtime/uploads/:id", "settings:manage", s.uploadGet)
+	r.Perm("DELETE", "/system/ccgateway/runtime/uploads/:id", "settings:manage", s.uploadGet)
+	r.Perm("POST", "/system/ccgateway/runtime/uploads/:id/load", "settings:manage", s.uploadLoad)
+	// Worker update in place, never recreating account containers (§53.7).
+	r.Perm("POST", "/system/ccgateway/runtime/workers", "settings:manage", s.runtimeWorkers)
 	for _, path := range []string{"remote-test", "remote-action"} {
 		r.Perm("POST", "/system/ccgateway/"+path, "settings:manage", s.docker)
 	}
@@ -88,52 +95,10 @@ func (s *Service) fingerprint(c *gin.Context) {
 	httpapi.OK(c, gin.H{"fingerprint": fp, "verified": false})
 }
 
-// controllerStatus 检查控制面板连接状态
-func (s *Service) controllerStatus(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
-	defer cancel()
-
-	cfg, e := s.Load(ctx)
-	if e != nil {
-		httpapi.Fail(c, core.ErrUnavailable)
-		return
-	}
-
-	status := CheckControllerConnection(ctx, cfg)
-	httpapi.OK(c, status)
-}
-
-// controllerInstall 安装控制面板
-func (s *Service) controllerInstall(c *gin.Context) {
-	c.Header("Cache-Control", "no-store")
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Minute)
-	defer cancel()
-
-	cfg, e := s.Load(ctx)
-	if e != nil {
-		httpapi.Fail(c, core.ErrUnavailable)
-		return
-	}
-
-	if cfg.Mode != "ssh" {
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("SSH mode required for controller installation."))
-		return
-	}
-
-	result, e := s.CheckOrInstallController(ctx, cfg)
-	if e != nil {
-		httpapi.Fail(c, core.ErrUnavailable.WithMessage("Controller installation failed: "+e.Error()))
-		return
-	}
-
-	s.record(c, "controller.install")
-	httpapi.OK(c, result)
-}
-
 func (s *Service) docker(c *gin.Context) {
 	action := "test"
-	if strings.HasSuffix(c.Request.URL.Path, "remote-action") {
+	remoteAction := strings.HasSuffix(c.Request.URL.Path, "remote-action")
+	if remoteAction {
 		var in struct {
 			Action string `json:"action"`
 		}
@@ -150,6 +115,20 @@ func (s *Service) docker(c *gin.Context) {
 		return
 	}
 	cfg, e := s.Load(c.Request.Context())
+	if e == nil && cfg.Mode == "controller" {
+		if remoteAction {
+			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("In control panel mode, containers are managed per account by the controller."))
+			return
+		}
+		h, e := s.health(c.Request.Context(), cfg)
+		if e != nil {
+			httpapi.Fail(c, reasonError(core.ErrUnavailable, "controller_unhealthy"))
+			return
+		}
+		s.record(c, "docker.test")
+		httpapi.OK(c, gin.H{"output": h.describe()})
+		return
+	}
 	if e == nil && cfg.AccountRuntimes && action != "test" {
 		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("With account runtimes on, containers are managed per account."))
 		return

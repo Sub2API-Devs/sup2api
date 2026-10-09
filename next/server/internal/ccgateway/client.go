@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/remotedocker"
 	"io"
 	"net/http"
@@ -28,26 +27,8 @@ func (s *Service) open(ctx context.Context, c Config) (*http.Client, string, fun
 		client, close, e := remotedocker.NewHTTPClient(ctx, c.SSH(), "127.0.0.1:8787")
 		return client, "http://127.0.0.1:8787", close, e
 	}
-	if c.Mode == "http" {
-		// 直接 HTTP 连接到控制面板
-		if c.Host == "" {
-			return nil, "", nil, errors.New("controller host not configured")
-		}
-		port := c.Port
-		if port == 0 {
-			port = 8787
-		}
-		base := c.ControllerURL
-		if base == "" {
-			base = fmt.Sprintf("https://%s:%d", c.Host, port)
-		}
-		u, e := url.Parse(base)
-		if e != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "http" && u.Scheme != "https") || u.Path != "" {
-			return nil, "", nil, errors.New("invalid controller URL")
-		}
-		tr := &http.Transport{Proxy: nil, MaxResponseHeaderBytes: 64 << 10}
-		client := &http.Client{Transport: tr, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-		return client, base, func() error { tr.CloseIdleConnections(); return nil }, nil
+	if c.Mode == "controller" {
+		return openControllerHTTPS(c)
 	}
 	if c.Mode != "local" {
 		return nil, "", nil, errors.New("CCGateway is not configured")

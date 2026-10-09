@@ -78,11 +78,21 @@ echo CCG_RESULT=not_installed
 // one is kept as ccg-controller-prev until the new one is healthy). It
 // contains constants and image references that match validImage only (no
 // quotes, spaces or shell characters), never other input.
-func installScript(img RuntimeImages) (string, error) {
+func installScript(img RuntimeImages, workloadOptional bool) (string, error) {
 	for _, ref := range []string{img.App, img.Egress, img.Controller} {
 		if !validImage(ref) {
 			return "", errors.New("invalid runtime image reference")
 		}
+	}
+	// The control panel install (§53.3) only needs the controller: app and
+	// egress images may be uploaded through the panel afterwards.
+	workload := `for img in "$APP" "$EGRESS"; do
+  docker image inspect "$img" >/dev/null 2>&1 || docker pull -q "$img" >/dev/null 2>&1 || { echo CCG_RESULT=image_pull_failed; exit 1; }
+done`
+	if workloadOptional {
+		workload = `for img in "$APP" "$EGRESS"; do
+  docker image inspect "$img" >/dev/null 2>&1 || docker pull -q "$img" >/dev/null 2>&1 || true
+done`
 	}
 	return `set -u
 umask 077
@@ -91,9 +101,8 @@ EGRESS='` + img.Egress + `'
 CTL='` + img.Controller + `'
 ROOT='` + runtimeRoot + `'
 ENVF='` + runtimeEnvFile + `'
-for img in "$APP" "$EGRESS" "$CTL"; do
-  docker image inspect "$img" >/dev/null 2>&1 || docker pull -q "$img" >/dev/null 2>&1 || { echo CCG_RESULT=image_pull_failed; exit 1; }
-done
+` + workload + `
+docker image inspect "$CTL" >/dev/null 2>&1 || docker pull -q "$CTL" >/dev/null 2>&1 || { echo CCG_RESULT=image_pull_failed; exit 1; }
 mkdir -p "$ROOT" && chmod 700 "$ROOT" || { echo CCG_RESULT=install_failed; exit 1; }
 if ! { cat > "$ENVF.tmp" && chmod 600 "$ENVF.tmp" && mv -f "$ENVF.tmp" "$ENVF"; }; then
   rm -f "$ENVF.tmp"; echo CCG_RESULT=install_failed; exit 1
@@ -142,6 +151,7 @@ func controllerEnv(key string, img RuntimeImages) []byte {
 	return []byte("CCG_RUNTIME_ROOT=" + runtimeRoot + "\n" +
 		"CCG_APP_IMAGE=" + img.App + "\n" +
 		"CCG_EGRESS_IMAGE=" + img.Egress + "\n" +
+		"CCG_CONTROLLER_IMAGE=" + img.Controller + "\n" +
 		"CCG_CONTROLLER_KEY=" + key + "\n" +
 		"CCG_CONTROLLER_PORT=8787\n")
 }
@@ -175,18 +185,51 @@ type runtimeView struct {
 }
 
 type controllerHealth struct {
-	Version     string `json:"version"`
-	AppImage    string `json:"app_image"`
-	EgressImage string `json:"egress_image"`
+	Version         string   `json:"version"`
+	AppImage        string   `json:"app_image"`
+	EgressImage     string   `json:"egress_image"`
+	ControllerImage string   `json:"controller_image"`
+	Features        []string `json:"features"`
 }
 
-// health calls the controller's GET /health through the SSH tunnel.
+var featurePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
+
+func (h controllerHealth) has(feature string) bool {
+	for _, f := range h.Features {
+		if f == feature {
+			return true
+		}
+	}
+	return false
+}
+
+// describe is the remote-test output of a control panel (§53.4).
+func (h controllerHealth) describe() string {
+	features := []string{}
+	for _, f := range h.Features {
+		if featurePattern.MatchString(f) && len(features) < 32 {
+			features = append(features, f)
+		}
+	}
+	return "controller " + clean(h.Version, reportedVersion) + "\n" +
+		"controller_image " + clean(h.ControllerImage, reportedImage) + "\n" +
+		"app_image " + clean(h.AppImage, reportedImage) + "\n" +
+		"egress_image " + clean(h.EgressImage, reportedImage) + "\n" +
+		"features " + strings.Join(features, ", ") + "\n"
+}
+
+// health calls the controller's GET /health (through the SSH tunnel or the
+// control panel).
 func (s *Service) health(ctx context.Context, cfg Config) (controllerHealth, error) {
+	return s.healthWithin(ctx, cfg, 15*time.Second)
+}
+
+func (s *Service) healthWithin(ctx context.Context, cfg Config, limit time.Duration) (controllerHealth, error) {
 	var h controllerHealth
 	if cfg.AdminKey == "" {
 		return h, errors.New("no controller key")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
 	client, base, close, e := s.openControllerClient(ctx, cfg)
 	if e != nil {
@@ -221,21 +264,41 @@ func clean(v string, pattern *regexp.Regexp) string {
 
 // runtimeState inspects the installed controller and checks its health.
 func (s *Service) runtimeState(ctx context.Context, cfg Config) runtimeView {
+	v, _ := s.runtimeStateHealth(ctx, cfg)
+	return v
+}
+
+// runtimeStateHealth is runtimeState plus the health report it is based on
+// (zero when the health check failed).
+func (s *Service) runtimeStateHealth(ctx context.Context, cfg Config) (runtimeView, controllerHealth) {
 	img := cfg.EffectiveImages()
 	v := runtimeView{Expected: runtimeImages{App: img.App, Egress: img.Egress, Controller: img.Controller}}
+	if cfg.Mode == "controller" {
+		// Everything comes from the controller's own report (§53.6).
+		h, e := s.health(ctx, cfg)
+		if e != nil {
+			v.Reason = "controller_unhealthy"
+			return v, controllerHealth{}
+		}
+		in := &installedRuntime{ControllerImage: clean(h.ControllerImage, reportedImage), AppImage: clean(h.AppImage, reportedImage),
+			EgressImage: clean(h.EgressImage, reportedImage), Version: clean(h.Version, reportedVersion)}
+		v.Installed = in
+		v.UpToDate = in.ControllerImage == img.Controller && in.AppImage == img.App && in.EgressImage == img.Egress
+		return v, h
+	}
 	if cfg.Mode != "ssh" {
 		v.Reason = "ssh_not_configured"
-		return v
+		return v, controllerHealth{}
 	}
 	res, e := s.run(ctx, cfg, inspectScript, nil, time.Minute)
 	if e != nil || res.ExitStatus != 0 {
 		v.Reason = "ssh_failed"
-		return v
+		return v, controllerHealth{}
 	}
 	if scriptResult(res.Output) == "not_installed" {
 		// installed: null without a reason is "not installed" (the console
 		// reads a reason with installed null as "state unknown").
-		return v
+		return v, controllerHealth{}
 	}
 	in := &installedRuntime{}
 	sc := bufio.NewScanner(strings.NewReader(res.Output))
@@ -257,7 +320,7 @@ func (s *Service) runtimeState(ctx context.Context, cfg Config) runtimeView {
 	h, e := s.health(ctx, cfg)
 	if e != nil {
 		v.Reason = "controller_unhealthy"
-		return v
+		return v, controllerHealth{}
 	}
 	in.Version = clean(h.Version, reportedVersion)
 	if h.AppImage != "" {
@@ -267,7 +330,7 @@ func (s *Service) runtimeState(ctx context.Context, cfg Config) runtimeView {
 		in.EgressImage = clean(h.EgressImage, reportedImage)
 	}
 	v.UpToDate = in.ControllerImage == img.Controller && in.AppImage == img.App && in.EgressImage == img.Egress
-	return v
+	return v, h
 }
 
 // runtimeGet serves GET /system/ccgateway/runtime.
@@ -360,7 +423,7 @@ func (s *Service) runtimeInstall(c *gin.Context) {
 		httpapi.Fail(c, reasonError(core.ErrUnavailable, "not_configured"))
 		return
 	}
-	if cfg.Mode != "ssh" {
+	if cfg.Mode != "ssh" && cfg.Mode != "controller" {
 		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "ssh_not_configured"))
 		return
 	}
@@ -374,23 +437,42 @@ func (s *Service) runtimeInstall(c *gin.Context) {
 		return
 	}
 	defer release()
-	uid, _ := core.UserID(ctx)
+	if cfg.Mode == "controller" {
+		if err := s.panelUpgrade(ctx, cfg); err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+	} else {
+		uid, _ := core.UserID(ctx)
+		var err *core.Error
+		if cfg, err = s.installRuntime(ctx, cfg, uid, false); err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+	}
+	s.record(c, "runtime.install")
+	s.kickAll(ctx)
+	httpapi.OK(c, s.runtimeState(ctx, cfg))
+}
+
+// installRuntime is the §49.16 installation over SSH: controller key, fixed
+// install script, health check with rollback, removal of the previous
+// controller. It returns cfg with the controller key. workloadOptional: app
+// and egress images missing on the host are not an error (§53.3).
+func (s *Service) installRuntime(ctx context.Context, cfg Config, uid int64, workloadOptional bool) (Config, *core.Error) {
 	key, e := s.ensureControllerKey(ctx, cfg, uid)
 	if e != nil {
-		httpapi.Fail(c, reasonError(core.ErrUnavailable, "install_failed"))
-		return
+		return cfg, reasonError(core.ErrUnavailable, "install_failed")
 	}
 	cfg.AdminKey = key
 	img := cfg.EffectiveImages()
-	script, e := installScript(img)
+	script, e := installScript(img, workloadOptional)
 	if e != nil {
-		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "install_failed"))
-		return
+		return cfg, reasonError(core.ErrInvalidArgument, "install_failed")
 	}
 	res, e := s.run(ctx, cfg, script, controllerEnv(key, img), installScriptLimit)
 	if e != nil {
-		httpapi.Fail(c, reasonError(core.ErrUnavailable, "ssh_failed"))
-		return
+		return cfg, reasonError(core.ErrUnavailable, "ssh_failed")
 	}
 	if res.ExitStatus != 0 || scriptResult(res.Output) != "started" {
 		reason := scriptResult(res.Output)
@@ -400,8 +482,7 @@ func (s *Service) runtimeInstall(c *gin.Context) {
 			reason = "install_failed"
 		}
 		slog.WarnContext(ctx, "CCGateway runtime install failed", "reason", reason, "exit", res.ExitStatus)
-		httpapi.Fail(c, reasonError(core.ErrUnavailable, reason))
-		return
+		return cfg, reasonError(core.ErrUnavailable, reason)
 	}
 	if !s.waitHealthy(ctx, cfg, img) {
 		restored := "rollback_failed"
@@ -409,21 +490,25 @@ func (s *Service) runtimeInstall(c *gin.Context) {
 			restored = scriptResult(r.Output) // restored | removed
 		}
 		slog.WarnContext(ctx, "CCGateway controller unhealthy after install, rolled back", "rollback", restored)
-		httpapi.Fail(c, reasonError(core.ErrUnavailable, "controller_unhealthy").WithDetails(map[string]any{"rollback": restored}))
-		return
+		return cfg, reasonError(core.ErrUnavailable, "controller_unhealthy").WithDetails(map[string]any{"rollback": restored})
 	}
 	if r, e := s.run(ctx, cfg, finishScript, nil, time.Minute); e != nil || r.ExitStatus != 0 {
 		slog.WarnContext(ctx, "CCGateway: removing the previous controller failed")
 	}
-	s.record(c, "runtime.install")
-	// The controller recreates app containers whose image changed on the
-	// next reconcile; do it now instead of waiting for the sweep.
+	return cfg, nil
+}
+
+// kickAll reconciles every runtime now (a resync after an install or image
+// change). It never recreates account containers for a new image: the
+// controller recreates an app container only when its credential
+// fingerprint or network policy changed, so existing containers keep their
+// image; workers are replaced in place instead (§53.7).
+func (s *Service) kickAll(ctx context.Context) {
 	if keys, e := s.runtimeKeys(ctx); e == nil {
 		for _, k := range keys {
 			s.Kick(k)
 		}
 	}
-	httpapi.OK(c, s.runtimeState(ctx, cfg))
 }
 
 // waitHealthy polls GET /health until the new controller answers with the

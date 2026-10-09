@@ -69,7 +69,28 @@ export const CCG_REASONS = [
   // runtime install / upgrade (GET/POST /system/ccgateway/runtime)
   'image_pull_failed',
   'controller_unhealthy',
-  'ssh_failed'
+  'controller_outdated',
+  'ssh_failed',
+  'ssh_not_configured',
+  'install_in_progress',
+  'install_failed',
+  // control-panel install (POST /system/ccgateway/controller/install, CONTRACTS §53.3)
+  'runtimes_disabled',
+  'invalid_host',
+  'invalid_email',
+  'config_changed',
+  'gateway_failed',
+  'ca_unavailable',
+  'gateway_unreachable',
+  // control-panel mode: image uploads and runtime images (§53.5, §53.6)
+  'controller_not_configured',
+  'offset_mismatch',
+  'too_many_uploads',
+  'incomplete',
+  'checksum_mismatch',
+  'load_failed',
+  'invalid_image',
+  'upgrade_in_progress'
 ] as const
 export type CcgReason = (typeof CCG_REASONS)[number]
 export function knownReason(code: unknown): CcgReason | null {
@@ -166,13 +187,16 @@ export function stepStates(f: CcgFlow): Record<CcgStep, CcgStepState> {
   return out
 }
 
-/** Why per-account containers cannot work, from GET /system/ccgateway/remote-config; [] when configured. */
+/**
+ * Why per-account containers cannot work, from GET /system/ccgateway/remote-config; [] when configured.
+ * Local Docker, SSH and the control panel (CONTRACTS §53.2) are configured Docker connections.
+ */
 export type CcgSetupProblem = 'runtimes' | 'docker' | 'adminKey'
 export function setupProblems(cfg: { account_runtimes?: boolean; mode?: string; has_admin_key?: boolean } | null | undefined): CcgSetupProblem[] {
   if (!cfg) return []
   const out: CcgSetupProblem[] = []
   if (!cfg.account_runtimes) out.push('runtimes')
-  if (cfg.mode !== 'ssh' && cfg.mode !== 'local') out.push('docker')
+  if (cfg.mode !== 'ssh' && cfg.mode !== 'local' && cfg.mode !== 'controller') out.push('docker')
   if (!cfg.has_admin_key) out.push('adminKey')
   return out
 }

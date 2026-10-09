@@ -1,185 +1,235 @@
-"""Image management for CCGateway controller.
+"""Resumable chunked image uploads (CONTRACTS §53.5).
 
-Handles Docker image uploads and loading for account runtimes.
+Each upload is `<id>.part` (bytes received so far) plus `<id>.json`
+({"size", "sha256"}) in a root-private directory. The offset is the size of
+the part file; a chunk is written completely or not at all.
 """
-import base64
 import hashlib
-import io
+import json
 import os
-import tarfile
-import tempfile
 from pathlib import Path
-from typing import BinaryIO, Optional
+import re
+import secrets
+import tarfile
+import threading
+import time
 
 import docker
+import requests
+
+MAX_SIZE = 4 << 30
+MAX_CHUNK = 64 << 20
+MAX_PENDING = 4
+STALE_SECONDS = 3600
+UPLOAD_ID = re.compile(r'[A-Za-z0-9_-]{22}')
+SHA256 = re.compile(r'[0-9a-f]{64}')
 
 
-class ImageUploadError(Exception):
-    """镜像上传失败"""
+class UploadError(Exception):
+    """Answered as `status` with {"error": code, **extra}."""
+
+    def __init__(self, status, code, **extra):
+        super().__init__(code)
+        self.status, self.code, self.extra = status, code, extra
+
+    def body(self):
+        return {'error': self.code, **self.extra}
 
 
-def validate_image_name(name: str) -> bool:
-    """验证镜像名称格式"""
-    if not name or len(name) > 256:
-        return False
-    # 简单验证：repository[:tag][@digest]
-    parts = name.split('@')
-    if len(parts) > 2:
-        return False
-    repo_tag = parts[0]
-    if ':' in repo_tag:
-        repo, tag = repo_tag.rsplit(':', 1)
-        if not repo or not tag or len(tag) > 128:
-            return False
-    return True
+def _not_found():
+    return UploadError(404, 'not_found')
 
 
-def calculate_sha256(data: BinaryIO) -> str:
-    """计算数据的 SHA256 哈希"""
-    sha = hashlib.sha256()
-    while chunk := data.read(65536):
-        sha.update(chunk)
-    return sha.hexdigest()
+def _qualified(tag):
+    """docker.io/library/x:t for x:t (containerd names images that way)."""
+    first = tag.split('/', 1)[0]
+    if '/' in tag and ('.' in first or ':' in first or first == 'localhost'):
+        return tag
+    return 'docker.io/' + ('' if '/' in tag else 'library/') + tag
 
 
-class ImageManager:
-    """管理 Docker 镜像的上传和加载"""
+def archive_tags(path):
+    """Image id (hex) -> RepoTags named by the archive (`docker save`).
 
-    def __init__(self, docker_client: docker.DockerClient, upload_dir: Path):
+    The daemon reports every tag an image id has on this host, so a loaded
+    image that is also tagged otherwise here would be reported under an old
+    name; the archive says which names were uploaded. The id is the config
+    digest (manifest.json Config) with the classic image store and the
+    index digest (index.json) with the containerd store. {} when the archive
+    has no readable manifest (the daemon's tags are used then).
+    """
+    try:
+        with tarfile.open(path, 'r:*') as archive:
+            def document(name):
+                try:
+                    member = archive.getmember(name)
+                except KeyError:
+                    return None
+                if not member.isfile() or member.size > (1 << 20):
+                    return None
+                return json.load(archive.extractfile(member))
+            entries, index = document('manifest.json'), document('index.json')
+    except (OSError, ValueError, tarfile.TarError, EOFError):
+        return {}
+    out, repo_tags = {}, []
+    for entry in entries if isinstance(entries, list) else []:
+        config = entry.get('Config') if isinstance(entry, dict) else None
+        found = re.search(r'[0-9a-f]{64}', config) if isinstance(config, str) else None
+        tags = [t for t in (entry.get('RepoTags') or []) if isinstance(t, str)] if isinstance(entry, dict) else []
+        repo_tags.extend(tags)
+        if found:
+            out.setdefault(found.group(0), []).extend(tags)
+    manifests = index.get('manifests') if isinstance(index, dict) else None
+    for entry in manifests if isinstance(manifests, list) else []:
+        digest = entry.get('digest') if isinstance(entry, dict) else None
+        name = ((entry.get('annotations') or {}).get('io.containerd.image.name') if isinstance(entry, dict) else None)
+        if not isinstance(digest, str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', digest) or not isinstance(name, str):
+            continue
+        short = [t for t in repo_tags if _qualified(t) == name]
+        out.setdefault(digest.removeprefix('sha256:'), []).extend(short or [name])
+    return out
+
+
+class Uploads:
+    def __init__(self, docker_client, directory):
         self.docker = docker_client
-        self.upload_dir = upload_dir
-        self.upload_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.dir = Path(directory)
+        self.dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        os.chmod(self.dir, 0o700)
+        self.lock = threading.Lock()  # guards self.busy and create/cleanup
+        self.busy = {}  # upload id -> per-upload lock (long I/O)
 
-    def upload_image_data(self, image_name: str, image_data: BinaryIO, expected_sha256: Optional[str] = None) -> dict:
-        """
-        上传镜像数据到临时目录
+    def _paths(self, upload_id):
+        if not isinstance(upload_id, str) or not UPLOAD_ID.fullmatch(upload_id):
+            raise _not_found()
+        return self.dir / (upload_id + '.part'), self.dir / (upload_id + '.json')
 
-        Args:
-            image_name: 镜像名称（用于标识）
-            image_data: 镜像 tar 数据流
-            expected_sha256: 可选的预期 SHA256 哈希
-
-        Returns:
-            {"upload_id": str, "sha256": str, "size": int}
-
-        Raises:
-            ImageUploadError: 上传失败
-        """
-        if not validate_image_name(image_name):
-            raise ImageUploadError('invalid image name')
-
-        # 生成上传 ID
-        upload_id = base64.urlsafe_b64encode(os.urandom(16)).decode('ascii').rstrip('=')
-        upload_path = self.upload_dir / f"{upload_id}.tar"
-        tmp_path = None
-
+    def _meta(self, upload_id):
+        part, meta = self._paths(upload_id)
         try:
-            # 写入临时文件并计算哈希
-            with tempfile.NamedTemporaryFile(mode='wb', dir=self.upload_dir, delete=False, suffix='.tmp') as tmp:
-                tmp_path = Path(tmp.name)
-                sha = hashlib.sha256()
-                size = 0
+            data = json.loads(meta.read_text())
+            return part, meta, data, part.stat().st_size
+        except (OSError, ValueError) as e:
+            raise _not_found() from e
 
-                while chunk := image_data.read(65536):
-                    sha.update(chunk)
-                    tmp.write(chunk)
-                    size += len(chunk)
-                    # 限制最大上传大小（2GB）
-                    if size > 2 * 1024 * 1024 * 1024:
-                        raise ImageUploadError('image too large')
+    def _guard(self, upload_id):
+        _, meta = self._paths(upload_id)
+        with self.lock:
+            if not meta.exists():
+                raise _not_found()
+            return self.busy.setdefault(upload_id, threading.Lock())
 
-                os.fsync(tmp.fileno())
+    def _remove(self, upload_id):
+        part, meta = self._paths(upload_id)
+        part.unlink(missing_ok=True)
+        meta.unlink(missing_ok=True)
+        with self.lock:
+            self.busy.pop(upload_id, None)
 
-            # 验证哈希（如果提供）
-            actual_sha256 = sha.hexdigest()
-            if expected_sha256 and actual_sha256 != expected_sha256:
-                raise ImageUploadError('checksum mismatch')
+    def _cleanup(self, now):
+        # Caller holds self.lock. Uploads being written or loaded are skipped.
+        for meta in self.dir.glob('*.json'):
+            upload_id = meta.stem
+            if not UPLOAD_ID.fullmatch(upload_id):
+                continue
+            part = meta.with_suffix('.part')
+            try:
+                changed = max(meta.stat().st_mtime, part.stat().st_mtime if part.exists() else 0)
+            except OSError:
+                continue
+            if now - changed <= STALE_SECONDS:
+                continue
+            lock = self.busy.get(upload_id)
+            if lock is not None and not lock.acquire(blocking=False):
+                continue
+            try:
+                part.unlink(missing_ok=True)
+                meta.unlink(missing_ok=True)
+                self.busy.pop(upload_id, None)
+            finally:
+                if lock is not None:
+                    lock.release()
 
-            # 设置权限并移动到最终位置
-            os.chmod(tmp_path, 0o600)
-            tmp_path.replace(upload_path)
-            tmp_path = None  # 已移动，不再需要清理
+    def create(self, size, sha256=None):
+        if isinstance(size, bool) or not isinstance(size, int) or not 1 <= size <= MAX_SIZE:
+            raise UploadError(400, 'invalid_request')
+        if sha256 is not None and (not isinstance(sha256, str) or not SHA256.fullmatch(sha256)):
+            raise UploadError(400, 'invalid_request')
+        with self.lock:
+            self._cleanup(time.time())
+            if sum(1 for m in self.dir.glob('*.json') if UPLOAD_ID.fullmatch(m.stem)) >= MAX_PENDING:
+                raise UploadError(409, 'too_many_uploads')
+            upload_id = secrets.token_urlsafe(16)
+            part, meta = self._paths(upload_id)
+            fd = os.open(part, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            os.close(fd)
+            tmp = meta.with_suffix('.tmp')
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                json.dump({'size': size, 'sha256': sha256}, f)
+            tmp.replace(meta)
+        return {'upload_id': upload_id, 'offset': 0, 'size': size}
 
-            return {
-                'upload_id': upload_id,
-                'sha256': actual_sha256,
-                'size': size,
-                'path': str(upload_path)
-            }
+    def status(self, upload_id):
+        _, _, data, offset = self._meta(upload_id)
+        return {'offset': offset, 'size': data['size']}
 
-        except Exception as e:
-            # 清理
-            if tmp_path and tmp_path.exists():
-                tmp_path.unlink(missing_ok=True)
-            upload_path.unlink(missing_ok=True)
-            if isinstance(e, ImageUploadError):
-                raise
-            raise ImageUploadError(f'upload failed: {e}') from e
+    def delete(self, upload_id):
+        with self._guard(upload_id):
+            self._meta(upload_id)
+            self._remove(upload_id)
+        return {'deleted': True}
 
-    def load_image(self, upload_id: str) -> dict:
-        """
-        从上传的文件加载镜像到 Docker
+    def write(self, upload_id, offset, length, reader):
+        """Append exactly `length` bytes read from `reader` at `offset`."""
+        with self._guard(upload_id):
+            part, _, data, current = self._meta(upload_id)
+            if offset != current:
+                raise UploadError(409, 'offset_mismatch', offset=current)
+            if current + length > data['size']:
+                raise UploadError(400, 'invalid_request')
+            with open(part, 'r+b') as f:
+                f.seek(current)
+                remaining = length
+                try:
+                    while remaining:
+                        chunk = reader.read(min(remaining, 1 << 20))
+                        if not chunk:
+                            raise UploadError(400, 'invalid_request')  # body ended early
+                        f.write(chunk)
+                        remaining -= len(chunk)
+                except BaseException:
+                    f.truncate(current)
+                    raise
+            return {'offset': current + length, 'size': data['size']}
 
-        Args:
-            upload_id: 上传 ID
+    def load(self, upload_id):
+        with self._guard(upload_id):
+            part, _, data, current = self._meta(upload_id)
+            if current != data['size']:
+                raise UploadError(409, 'incomplete')
+            try:
+                digest = hashlib.sha256()
+                with open(part, 'rb') as f:
+                    while chunk := f.read(1 << 20):
+                        digest.update(chunk)
+                digest = digest.hexdigest()
+                if data.get('sha256') and data['sha256'] != digest:
+                    raise UploadError(400, 'checksum_mismatch')
+                try:
+                    with open(part, 'rb') as f:
+                        # The daemon accepts plain and gzip-compressed tars.
+                        images = self.docker.images.load(f)
+                except (docker.errors.DockerException, requests.exceptions.RequestException) as e:
+                    raise UploadError(400, 'load_failed') from e
+                if not images:
+                    raise UploadError(400, 'load_failed')
+                tags = archive_tags(part)
 
-        Returns:
-            {"image_id": str, "tags": list}
-
-        Raises:
-            ImageUploadError: 加载失败
-        """
-        upload_path = self.upload_dir / f"{upload_id}.tar"
-        if not upload_path.exists():
-            raise ImageUploadError('upload not found')
-
-        try:
-            # 加载镜像
-            with open(upload_path, 'rb') as f:
-                result = self.docker.images.load(f)
-
-            # 提取镜像信息
-            if not result:
-                raise ImageUploadError('no image loaded')
-
-            images = list(result)
-            if not images:
-                raise ImageUploadError('no image in archive')
-
-            image = images[0]
-            return {
-                'image_id': image.id,
-                'tags': image.tags,
-                'short_id': image.short_id
-            }
-
-        except docker.errors.DockerException as e:
-            raise ImageUploadError(f'docker load failed: {e}') from e
-        finally:
-            # 清理上传文件
-            upload_path.unlink(missing_ok=True)
-
-    def upload_and_load(self, image_name: str, image_data: BinaryIO, expected_sha256: Optional[str] = None) -> dict:
-        """
-        上传并立即加载镜像（组合操作）
-
-        Returns:
-            {"upload_id": str, "sha256": str, "size": int, "image_id": str, "tags": list}
-        """
-        upload_result = self.upload_image_data(image_name, image_data, expected_sha256)
-        try:
-            load_result = self.load_image(upload_result['upload_id'])
-            return {**upload_result, **load_result}
-        except Exception as e:
-            # 清理失败的上传
-            upload_path = self.upload_dir / f"{upload_result['upload_id']}.tar"
-            upload_path.unlink(missing_ok=True)
-            raise
-
-    def cleanup_old_uploads(self, max_age_seconds: int = 3600):
-        """清理超过指定时间的上传文件"""
-        import time
-        now = time.time()
-        for path in self.upload_dir.glob('*.tar'):
-            if now - path.stat().st_mtime > max_age_seconds:
-                path.unlink(missing_ok=True)
+                def names(image):
+                    if tags:
+                        return tags.get(image.id.removeprefix('sha256:'), [])
+                    return list(image.tags or [])
+                return {'sha256': digest, 'images': [{'id': image.id, 'tags': names(image)} for image in images]}
+            finally:
+                self._remove(upload_id)

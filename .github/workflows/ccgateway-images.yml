@@ -3,7 +3,8 @@ name: CCGateway images
 # Builds the Claude Code runtime images (business container, sing-box egress,
 # account controller) and publishes them to GHCR. The core pins them by
 # digest (next/server/internal/ccgateway/images.go) and installs or upgrades
-# the remote runtime itself over SSH; nobody builds on the Docker host.
+# the remote runtime itself, over SSH or through the controller panel
+# (CONTRACTS §53); nobody builds on the Docker host.
 
 on:
   push:
@@ -52,7 +53,7 @@ jobs:
         working-directory: next/plugins/ccgateway/companions/controller
         run: |
           pip install -r requirements.txt
-          python -m unittest -v test_network test_headers $( [ -f test_manager.py ] && echo test_manager )
+          python -m unittest discover -v -p 'test_*.py'
 
   images:
     needs: test

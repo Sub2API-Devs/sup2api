@@ -2,187 +2,245 @@ package ccgateway
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"strings"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/gin-gonic/gin"
 )
 
-// InstallControllerResult 控制面板安装结果
-type InstallControllerResult struct {
-	Installed      bool   `json:"installed"`
-	ControllerURL  string `json:"controller_url"`
-	ControllerKey  string `json:"controller_key"`
-	Version        string `json:"version"`
-	Error          string `json:"error,omitempty"`
+// Control panel installation (CONTRACTS §53.3): the §49.16 runtime install,
+// then a Caddy gateway in front of the loopback-only controller, then a
+// direct HTTPS check from the core, then the switch to controller mode
+// (which drops the SSH credentials).
+
+const (
+	gatewayDir             = "/opt/ccgateway-gateway"
+	controllerInstallLimit = 20 * time.Minute
+)
+
+var (
+	gatewayWait  = 120 * time.Second
+	gatewayEvery = 3 * time.Second
+)
+
+// gatewayScript writes the Caddyfile from stdin and (re)starts ccg-gateway.
+// It contains constants and an image reference that matches validImage
+// only, never other input.
+func gatewayScript(image string) (string, error) {
+	if !validImage(image) {
+		return "", errors.New("invalid gateway image reference")
+	}
+	return `set -u
+umask 077
+GW='` + image + `'
+DIR='` + gatewayDir + `'
+docker image inspect "$GW" >/dev/null 2>&1 || docker pull -q "$GW" >/dev/null 2>&1 || { echo CCG_RESULT=image_pull_failed; exit 1; }
+mkdir -p "$DIR" && chmod 700 "$DIR" || { echo CCG_RESULT=gateway_failed; exit 1; }
+if ! { cat > "$DIR/Caddyfile.tmp" && chmod 644 "$DIR/Caddyfile.tmp" && mv -f "$DIR/Caddyfile.tmp" "$DIR/Caddyfile"; }; then
+  rm -f "$DIR/Caddyfile.tmp"; echo CCG_RESULT=gateway_failed; exit 1
+fi
+docker rm -f ccg-gateway >/dev/null 2>&1
+if ! docker run -d --name ccg-gateway --restart unless-stopped --network host \
+  -v "$DIR/Caddyfile:/etc/caddy/Caddyfile:ro" -v ccg-gateway-data:/data -v ccg-gateway-config:/config \
+  --log-opt max-size=20m --log-opt max-file=3 "$GW" >/dev/null 2>&1; then
+  docker rm -f ccg-gateway >/dev/null 2>&1; echo CCG_RESULT=gateway_failed; exit 1
+fi
+# A configuration Caddy rejects (or a port in use) stops it at once.
+sleep 3
+if [ "$(docker inspect --type container --format '{{.State.Running}} {{.RestartCount}}' ccg-gateway 2>/dev/null)" != "true 0" ]; then
+  echo CCG_RESULT=gateway_failed; exit 1
+fi
+echo CCG_RESULT=started
+`, nil
 }
 
-// installControllerViaSSH 通过 SSH 安装控制面板
-// 这是首次设置时的流程：
-// 1. 检查 Docker 是否已安装
-// 2. 上传控制面板镜像
-// 3. 启动控制面板容器
-// 4. 验证控制面板健康状态
-func (s *Service) installControllerViaSSH(ctx context.Context, cfg Config) (*InstallControllerResult, error) {
-	result := &InstallControllerResult{
-		Installed: false,
+// gatewayCAScript prints the root certificate of Caddy's internal CA (IP
+// mode), retrying for about 30 seconds while Caddy creates it.
+const gatewayCAScript = `i=0
+while :; do
+  if out=$(docker exec ccg-gateway cat /data/caddy/pki/authorities/local/root.crt 2>/dev/null) && [ -n "$out" ]; then
+    printf '%s\n' "$out"
+    echo CCG_RESULT=ok
+    exit 0
+  fi
+  i=$((i+1))
+  [ "$i" -ge 15 ] && break
+  sleep 2
+done
+echo CCG_RESULT=ca_unavailable
+exit 1
+`
+
+// controllerInstall serves POST /system/ccgateway/controller/install. Like
+// the runtime install it runs to its end when the caller disconnects.
+func (s *Service) controllerInstall(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	var in struct {
+		Host  string `json:"host"`
+		Port  int    `json:"port"`
+		Email string `json:"email"`
 	}
-
-	if cfg.Mode != "ssh" {
-		return result, errors.New("SSH mode required for initial installation")
+	raw, e := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, 4096))
+	if e != nil || (len(strings.TrimSpace(string(raw))) > 0 && json.Unmarshal(raw, &in) != nil) {
+		httpapi.Fail(c, core.ErrInvalidArgument)
+		return
 	}
-
-	// 1. 检查 Docker
-	checkDockerScript := `if ! command -v docker >/dev/null 2>&1; then
-  echo CCG_RESULT=docker_not_installed
-  exit 1
-fi
-if ! docker version >/dev/null 2>&1; then
-  echo CCG_RESULT=docker_not_running
-  exit 1
-fi
-echo CCG_RESULT=docker_ok`
-
-	res, err := s.run(ctx, cfg, checkDockerScript, nil, 30*time.Second)
-	if err != nil || res.ExitStatus != 0 {
-		result.Error = "docker check failed"
-		return result, errors.New(result.Error)
-	}
-
-	scriptRes := scriptResult(res.Output)
-	if scriptRes != "docker_ok" {
-		result.Error = scriptRes
-		return result, fmt.Errorf("docker check failed: %s", scriptRes)
-	}
-
-	// 2. 确保控制面板密钥存在
-	key, err := s.ensureControllerKey(ctx, cfg, 0)
-	if err != nil {
-		result.Error = "failed to generate controller key"
-		return result, err
-	}
-
-	// 3. 安装控制面板
-	img := cfg.EffectiveImages()
-	script, err := installScript(img)
-	if err != nil {
-		result.Error = "invalid image references"
-		return result, err
-	}
-
-	env := controllerEnv(key, img)
-	res, err = s.run(ctx, cfg, script, env, installScriptLimit)
-	if err != nil {
-		result.Error = fmt.Sprintf("install script failed: %v", err)
-		return result, err
-	}
-
-	scriptRes = scriptResult(res.Output)
-	if scriptRes != "started" {
-		result.Error = fmt.Sprintf("install failed: %s", scriptRes)
-		return result, fmt.Errorf("install failed: %s", scriptRes)
-	}
-
-	// 4. 等待控制面板健康
-	healthCtx, cancel := context.WithTimeout(ctx, healthWait)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(audit.Context(c)), controllerInstallLimit)
 	defer cancel()
+	cfg, e := s.Load(ctx)
+	if e != nil {
+		httpapi.Fail(c, reasonError(core.ErrUnavailable, "not_configured"))
+		return
+	}
+	if cfg.Mode != "ssh" {
+		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "ssh_not_configured"))
+		return
+	}
+	if !cfg.AccountRuntimes {
+		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "runtimes_disabled"))
+		return
+	}
+	host := in.Host
+	if host == "" {
+		host = cfg.Host
+	}
+	if !validControllerHost(host) {
+		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_host"))
+		return
+	}
+	host = normalizeControllerHost(host)
+	port := in.Port
+	if port == 0 {
+		port = 443
+	}
+	if port < 1 || port > 65535 {
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("The control panel port must be between 1 and 65535."))
+		return
+	}
+	if in.Email != "" && !validACMEEmail(in.Email) {
+		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_email"))
+		return
+	}
+	caddy, e := caddyfile(host, port, in.Email)
+	if e != nil {
+		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_host"))
+		return
+	}
+	gateway, e := gatewayScript(cfg.EffectiveImages().Gateway)
+	if e != nil {
+		httpapi.Fail(c, reasonError(core.ErrUnavailable, "install_failed"))
+		return
+	}
+	ctx, release, ok, e := s.lockInstall(ctx)
+	if e != nil {
+		httpapi.Fail(c, reasonError(core.ErrUnavailable, "install_failed"))
+		return
+	}
+	if !ok {
+		httpapi.Fail(c, reasonError(core.ErrConflict, "install_in_progress"))
+		return
+	}
+	defer release()
+	uid, _ := core.UserID(ctx)
 
-	ticker := time.NewTicker(healthEvery)
-	defer ticker.Stop()
+	// 1. The controller, unless it is current and can tunnel already.
+	if v, h := s.runtimeStateHealth(ctx, cfg); !v.UpToDate || !h.has("tunnel") {
+		var err *core.Error
+		if cfg, err = s.installRuntime(ctx, cfg, uid, true); err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+	}
+	// 2. The gateway.
+	res, e := s.run(ctx, cfg, gateway, []byte(caddy), installScriptLimit)
+	if e != nil {
+		httpapi.Fail(c, reasonError(core.ErrUnavailable, "ssh_failed"))
+		return
+	}
+	if result := scriptResult(res.Output); res.ExitStatus != 0 || result != "started" {
+		if result != "image_pull_failed" {
+			result = "gateway_failed"
+		}
+		httpapi.Fail(c, reasonError(core.ErrUnavailable, result))
+		return
+	}
+	// 3. IP mode: pin the root of Caddy's internal CA.
+	var ca string
+	if net.ParseIP(host) != nil {
+		res, e = s.run(ctx, cfg, gatewayCAScript, nil, 2*time.Minute)
+		if e != nil {
+			httpapi.Fail(c, reasonError(core.ErrUnavailable, "ssh_failed"))
+			return
+		}
+		if res.ExitStatus != 0 || scriptResult(res.Output) != "ok" {
+			httpapi.Fail(c, reasonError(core.ErrUnavailable, "ca_unavailable"))
+			return
+		}
+		if ca, _, e = parseControllerCA(res.Output); e != nil {
+			httpapi.Fail(c, reasonError(core.ErrUnavailable, "ca_unavailable"))
+			return
+		}
+	}
+	// 4. The core reaches the controller through the gateway itself.
+	panel := cfg
+	panel.Mode, panel.Host, panel.Port, panel.ControllerCA = "controller", host, port, ca
+	panel.clearSSH()
+	if stage, ok := s.waitGateway(ctx, panel); !ok {
+		httpapi.Fail(c, reasonError(core.ErrUnavailable, "gateway_unreachable").WithDetails(map[string]any{"stage": stage}))
+		return
+	}
+	// 5. Switch to controller mode, unless the configuration changed meanwhile.
+	saved, e := s.updateConfig(ctx, uid, []string{"mode", "host", "port", "controller_ca", "ssh"}, func(cur *Config) error {
+		if cur.Mode != "ssh" || !cur.AccountRuntimes || cur.Host != cfg.Host || cur.Port != cfg.Port || cur.User != cfg.User || cur.AdminKey != cfg.AdminKey {
+			return errConfigChanged
+		}
+		cur.Mode, cur.Host, cur.Port, cur.ControllerCA = "controller", host, port, ca
+		cur.clearSSH()
+		return validateControllerConfig(*cur)
+	})
+	if errors.Is(e, errConfigChanged) {
+		httpapi.Fail(c, reasonError(core.ErrConflict, "config_changed"))
+		return
+	}
+	if e != nil {
+		httpapi.Fail(c, reasonError(core.ErrUnavailable, "install_failed"))
+		return
+	}
+	s.record(c, "controller.install")
+	httpapi.OK(c, saved.Public())
+	s.kickAll(ctx)
+}
 
-	var lastErr error
+// waitGateway polls GET /health through the gateway until the controller
+// answers with the tunnel feature; on failure it returns the stage of the
+// last attempt (connect, tls or http).
+func (s *Service) waitGateway(ctx context.Context, panel Config) (string, bool) {
+	deadline := time.Now().Add(gatewayWait)
 	for {
+		h, e := s.healthWithin(ctx, panel, 25*time.Second)
+		if e == nil && h.has("tunnel") {
+			return "", true
+		}
+		stage := "http"
+		var se *stageError
+		if errors.As(e, &se) {
+			stage = se.stage
+		}
+		if !time.Now().Add(gatewayEvery).Before(deadline) {
+			return stage, false
+		}
 		select {
-		case <-healthCtx.Done():
-			result.Error = fmt.Sprintf("controller not healthy: %v", lastErr)
-			// 回滚
-			_, _ = s.run(ctx, cfg, rollbackScript, nil, time.Minute)
-			return result, errors.New(result.Error)
-		case <-ticker.C:
-			// 更新配置中的 AdminKey
-			tempCfg := cfg
-			tempCfg.AdminKey = key
-
-			h, err := s.health(healthCtx, tempCfg)
-			if err == nil {
-				// 健康检查成功
-				result.Installed = true
-				result.ControllerKey = key
-				result.Version = h.Version
-
-				// 构建控制面板 URL
-				port := cfg.Port
-				if port == 0 {
-					port = 8787
-				}
-				result.ControllerURL = fmt.Sprintf("https://%s:%d", cfg.Host, port)
-
-				// 清理旧控制面板
-				_, _ = s.run(ctx, cfg, finishScript, nil, time.Minute)
-
-				return result, nil
-			}
-			lastErr = err
+		case <-ctx.Done():
+			return stage, false
+		case <-time.After(gatewayEvery):
 		}
 	}
-}
-
-// SwitchToHTTPMode 从 SSH 模式切换到 HTTP 模式
-// 安装成功后调用此函数更新配置
-func (s *Service) SwitchToHTTPMode(ctx context.Context, installResult *InstallControllerResult) error {
-	if !installResult.Installed {
-		return errors.New("controller not installed")
-	}
-
-	// 加载当前配置
-	cfg, err := s.Load(ctx)
-	if err != nil {
-		return err
-	}
-
-	// 更新为 HTTP 模式
-	cfg.Mode = "http"
-	cfg.ControllerInstalled = true
-	cfg.ControllerURL = installResult.ControllerURL
-	cfg.AdminKey = installResult.ControllerKey
-
-	// 清除 SSH 凭据（可选，保留以便后续维护）
-	// cfg.Password = ""
-	// cfg.PrivateKey = ""
-	// cfg.Passphrase = ""
-
-	// 保存配置
-	// TODO: 这里需要调用 save 逻辑保存到数据库
-	// 暂时返回 nil，实际需要实现完整的保存逻辑
-
-	return nil
-}
-
-// CheckOrInstallController 检查控制面板状态，如需要则安装
-func (s *Service) CheckOrInstallController(ctx context.Context, cfg Config) (*InstallControllerResult, error) {
-	// 如果已经是 HTTP 模式且标记为已安装，检查健康状态
-	if cfg.Mode == "http" && cfg.ControllerInstalled {
-		status := CheckControllerConnection(ctx, cfg)
-		if status.Healthy {
-			return &InstallControllerResult{
-				Installed:     true,
-				ControllerURL: cfg.ControllerURL,
-				Version:       status.Health.Version,
-			}, nil
-		}
-		// 不健康，可能需要重新安装或切回 SSH
-		return &InstallControllerResult{
-			Installed: false,
-			Error:     "controller not healthy: " + status.Error,
-		}, errors.New(status.Error)
-	}
-
-	// 如果是 SSH 模式，尝试安装
-	if cfg.Mode == "ssh" {
-		return s.installControllerViaSSH(ctx, cfg)
-	}
-
-	return &InstallControllerResult{
-		Installed: false,
-		Error:     "unsupported mode or not configured",
-	}, errors.New("unsupported mode")
 }

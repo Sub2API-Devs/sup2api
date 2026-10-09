@@ -16,3 +16,7 @@ const (
 	EgressImage     = "ghcr.io/sub2api-devs/ccgateway-egress@sha256:034cab04c40a531a783bed20d12cb05acacf3bca75fcf071205868459c502399"
 	ControllerImage = "ghcr.io/sub2api-devs/ccgateway-controller@sha256:640861834c542e8e98542ff76275a641f96ce1dc16a97e7efe093b2d06f5f3f5"
 )
+
+// GatewayImage is the Caddy image of the control panel's HTTPS gateway
+// (CONTRACTS §53.3), overridable with images.gateway.
+const GatewayImage = "caddy:2-alpine"

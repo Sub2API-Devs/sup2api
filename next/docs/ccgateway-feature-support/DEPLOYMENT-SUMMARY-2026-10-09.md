@@ -81,17 +81,10 @@
   - 支持跟随代理或手动指定
   - 部署与运行配置集成
 
-### 8. 控制面板 HTTP 连接模式 ✅
+### 8. 控制面板 HTTP 连接模式 ❌ 未完成（2026-10-09 复核更正）
 - **提交**：2044b4757 (merge), 6f2d1399c (impl)
-- **负责**：agent-panel-connection (wt-controller)
-- **功能**：
-  - 初始状态：SSH 安装控制面板 + 上传镜像
-  - 后续状态：HTTP 连接（IP、端口、密钥）
-  - 控制面板镜像上传 API
-  - 镜像更新后自动启动
-- **文档**：
-  - ccgateway-controller-http-mode.md
-  - CONTROLLER-CONNECTION-DESIGN.md
+- **实际状态**：只是骨架，不可用：前端没有任何入口；控制器只听 127.0.0.1 且无 TLS；安装后不切换配置（`SwitchToHTTPMode` 是 TODO）；账号模型流量在 http 模式下无通路；镜像上传无调用方；`manager.py` 有语法错误、Dockerfile 漏拷 `images.py`（线上 cc-max 控制器为 0.1.48，未受影响）。
+- **后续**：改为 CONTRACTS §53「控制面板模式：SSH 只用于首次安装，之后经 Caddy HTTPS 连接控制器」重新实现；骨架的两份设计文档已删除。
 
 ### 9. GitHub Actions 修复 ✅
 - **提交**：f4447fae5

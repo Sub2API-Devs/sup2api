@@ -386,8 +386,61 @@ export interface CcgRuntimeImages {
   /** null: nothing installed yet. */
   installed: { controller_image: string; app_image: string; egress_image: string; version?: string } | null
   up_to_date: boolean
-  /** Why the installed state could not be read (ssh_failed, ...). */
+  /** Why the installed state could not be read (ssh_failed, controller_unhealthy, ...). */
   reason?: string
+}
+
+/** Outcome of one runtime's in-place worker update (CONTRACTS §53.7); `failed` carries the controller's error code, `unreachable` or `timeout` as reason. */
+export type CcgWorkerStatus = 'updated' | 'unchanged' | 'busy' | 'not_running' | 'rolled_back' | 'failed'
+export interface CcgWorkerResult {
+  key: string
+  /** Absent for a draft runtime no account adopted yet. */
+  account_id?: number
+  status: CcgWorkerStatus
+  sha256?: string
+  previous_sha256?: string
+  reason?: string
+}
+/** POST /system/ccgateway/runtime/workers, and `workers` of an applied app upload; `reason` set (results empty) when the runtimes could not be listed. */
+export interface CcgWorkersReport {
+  image: string
+  results: CcgWorkerResult[]
+  reason?: string
+}
+
+/** Image overrides of the CCGateway connection; '' uses the core's fixed reference. `gateway` is the Caddy image of the control panel (§53.3). */
+export interface CcgRemoteImages {
+  app: string
+  egress: string
+  controller: string
+  gateway?: string
+}
+
+/**
+ * Public view of GET/PUT /system/ccgateway/remote-config (CONTRACTS §49.16,
+ * §53.2). Secrets are write-only: only has_* flags come back. In `controller`
+ * mode host/port are the control panel's HTTPS address and the SSH fields are empty.
+ */
+export interface CcgRemoteConfig {
+  account_runtimes: boolean
+  mode: 'disabled' | 'local' | 'ssh' | 'controller'
+  host: string
+  port: number
+  user: string
+  auth_mode: 'password' | 'private_key'
+  host_key_fingerprint: string
+  has_password: boolean
+  has_private_key: boolean
+  has_passphrase: boolean
+  has_admin_key: boolean
+  has_api_key: boolean
+  /** Control panel mode: root certificates are pinned (controller_ca); the PEM itself is never returned. */
+  has_controller_ca?: boolean
+  /** SHA-256 (lowercase hex) of the DER of the first pinned certificate. */
+  controller_ca_fingerprint?: string
+  images?: Partial<CcgRemoteImages> | null
+  effective_images?: Partial<CcgRemoteImages>
+  network?: { pool: string; allocation: 'random' | 'sequential' }
 }
 
 /** Latest test of an account, kept on the account (POST /accounts/:id/test). */

@@ -46,8 +46,7 @@
 6. **agent-panel-connection** (wt-controller)
    - 任务：控制面板 HTTP 连接模式
    - 提交：2044b4757 (merge), 6f2d1399c (impl)
-   - 状态：✅ 已合并
-   - 文档：ccgateway-controller-http-mode.md
+   - 状态：❌ 2026-10-09 复核：只是骨架、不可用（详见 DEPLOYMENT-SUMMARY 第 8 项），按 CONTRACTS §53 重新实现
 
 ## 关键提交记录
 
