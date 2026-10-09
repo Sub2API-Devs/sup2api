@@ -90,11 +90,10 @@ func TestCompletedHistoryOldIndexCannotResume(t *testing.T) {
 	if findPriorSnapshot(&legacy, c, "fixture", hashes, pending) == nil {
 		t.Fatal("legacy index fixture not readable")
 	}
-	p, e := prepareHistory(r, c, "fixture", t.TempDir(), "2.1.292")
+	p, e := prepareHistory(r, c, testBranch("fixture"), t.TempDir(), "2.1.292")
 	if e != nil {
 		t.Fatal(e)
 	}
-	defer p.release()
 	if p.Mode != "rebuild" {
 		t.Fatalf("old renamed snapshot selected: %s", p.Mode)
 	}

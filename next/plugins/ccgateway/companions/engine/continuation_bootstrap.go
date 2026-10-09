@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -295,12 +296,21 @@ func readBootstrapPrefix(path string, p *Prepared, req *Request, version string)
 
 func installBootstrapPrefix(p *Prepared, prefix []json.RawMessage, sid string, req *Request, version string) error {
 	// Recreate only the imported client suffix with the normal transcript writer.
-	// Preserve generated prefix rows byte-for-byte; original Request is untouched.
+	// Generated prefix rows are kept byte-for-byte, except that they move to
+	// the request's own session ID (§53.12): the CLI appends to the file named
+	// by its records' session, and the branch keeps one ID.
 	next := *p
-	next.SessionID = sid
-	next.Rows = append([]json.RawMessage(nil), prefix...)
+	next.Rows = make([]json.RawMessage, 0, len(prefix))
+	for _, raw := range prefix {
+		if sid != next.SessionID {
+			raw = bytes.ReplaceAll(raw, []byte(`"sessionId":"`+sid+`"`), []byte(`"sessionId":"`+next.SessionID+`"`))
+			if row, err := decodeObject(raw); err != nil || str(row, "sessionId") != "" && str(row, "sessionId") != next.SessionID {
+				return fmt.Errorf("bootstrap native identity mismatch")
+			}
+		}
+		next.Rows = append(next.Rows, raw)
+	}
 	next.Anchor = ""
-	next.Fork = false
 	parent := ""
 	for _, raw := range prefix {
 		row, _ := decodeObject(raw)

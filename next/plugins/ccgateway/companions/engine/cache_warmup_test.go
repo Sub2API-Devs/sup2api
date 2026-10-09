@@ -133,28 +133,27 @@ func TestCacheWarmupNeverWritesTheCachedNativeSession(t *testing.T) {
 	r.Messages = append(r.Messages, Message{Role: "assistant", Content: answer["content"].([]Object)}, Message{Role: "user", Content: []Object{{"type": "text", "text": "next"}}})
 	r.CacheWarmup = true
 	r.MaxTokens = 0
-	warm, err := prepareHistory(r, c, "scope", t.TempDir(), "2.1.292")
+	warm, err := prepareHistory(r, c, testBranch("scope"), t.TempDir(), "2.1.292")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !warm.Fork || warm.Mode != "fork" || warm.SessionID == prior.SessionID || warm.Path == prior.NativePath {
+	// Same branch, same session ID; the CLI only ever writes a private copy.
+	if warm.Mode != "fork" || warm.SessionID != prior.SessionID || warm.Path == prior.NativePath || warm.Path == c.canonicalPath(prior.SessionID) {
 		t.Fatal("warm-up reuses writable native cache")
 	}
 	if err := os.WriteFile(warm.Path, []byte("fixture CLI writes"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	warm.release()
 	after, _ := os.ReadFile(prior.NativePath)
 	if !bytes.Equal(before, after) {
 		t.Fatal("warm-up polluted prior native transcript")
 	}
 	r.CacheWarmup = false
 	r.MaxTokens = 64
-	resumed, err := prepareHistory(r, c, "scope", t.TempDir(), "2.1.292")
+	resumed, err := prepareHistory(r, c, testBranch("scope"), t.TempDir(), "2.1.292")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resumed.release()
 	if resumed.Mode != "prefix-hit" {
 		t.Fatalf("warm-up invalidated next normal cache hit: %s", resumed.Mode)
 	}

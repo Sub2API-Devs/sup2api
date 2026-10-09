@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"net/http"
 	"reflect"
@@ -41,7 +42,8 @@ func TestGenerationPlanAppliesExactControlsWithoutAliasing(t *testing.T) {
 	if wire["temperature"] != json.Number("0.2") || wire["top_k"] != json.Number("12") || wire["messages"] != "untouched" {
 		t.Fatal(wire)
 	}
-	if !reflect.DeepEqual(wire["metadata"], Object{"user_id": "client-user"}) {
+	// The client's metadata only selects the session (§53.12).
+	if !reflect.DeepEqual(wire["metadata"], Object{"session_id": "cc-session"}) {
 		t.Fatal(wire)
 	}
 	wire["stop_sequences"].([]any)[0] = "mutated"
@@ -51,12 +53,20 @@ func TestGenerationPlanAppliesExactControlsWithoutAliasing(t *testing.T) {
 	}
 }
 
-func TestGenerationPlanClientMetadataReplacesCLIAttribution(t *testing.T) {
+// The client's metadata selects the session and is never forwarded (§53.12):
+// the main-request plan leaves the CLI's metadata alone, and the relay later
+// puts the gateway session into it.
+func TestGenerationPlanClientMetadataNeverReplacesCLIAttribution(t *testing.T) {
 	r := plannedRequest(t, Object{"temperature": 0.1, "metadata": Object{"user_id": "client"}})
-	wire := Object{"temperature": 1.0, "metadata": Object{"user_id": `{"account_uuid":"cc-account","session_id":"cc-session"}`}}
+	cli := Object{"user_id": `{"account_uuid":"cc-account","session_id":"cc-session"}`}
+	wire := Object{"temperature": 1.0, "metadata": cli}
 	err := r.ApplyMainRequestFeatures(wire)
-	if err != nil || !reflect.DeepEqual(wire["metadata"], Object{"user_id": "client"}) || wire["temperature"] != json.Number("0.1") {
-		t.Fatal("external attribution incorrectly rejected or changed", err, wire)
+	if err != nil || !reflect.DeepEqual(wire["metadata"], cli) || wire["temperature"] != json.Number("0.1") {
+		t.Fatal("client metadata replaced the CLI's", err, wire)
+	}
+	decisions, _ := json.Marshal(r.Plan.FeatureDecisions())
+	if !strings.Contains(string(decisions), `"action":"select_session_only","field":"metadata"`) || strings.Contains(string(decisions), "replaces_cli_metadata") {
+		t.Fatalf("metadata decision %s", decisions)
 	}
 }
 
@@ -144,8 +154,9 @@ func TestMetadataUserIDOfficialCharacterLimit(t *testing.T) {
 		if err := r.ApplyMainRequestFeatures(wire); err != nil {
 			t.Fatal(err)
 		}
-		if wire["metadata"].(map[string]any)["user_id"] != value {
-			t.Fatal("metadata identifier changed")
+		// Accepted in full, selects the session, never sent upstream (§53.12).
+		if _, exists := wire["metadata"]; exists || clientSessionID(r) != digestUUID(sha256.Sum256([]byte("ccgateway-session-v1"+value))) {
+			t.Fatal("metadata identifier applied or not used for the session")
 		}
 	}
 	if err := validateGenerationField("metadata", Object{"user_id": strings.Repeat("界", 513)}); err == nil {
@@ -222,13 +233,14 @@ func TestGenerationPlanRejectsWrongTypesWithoutPanic(t *testing.T) {
 			}
 		}
 	}
-	// Nullable user_id is different from a null metadata object.
+	// Nullable user_id is accepted and is no session (§53.12); the client's
+	// metadata is never written into the upstream request.
 	r := plannedRequest(t, Object{"metadata": Object{"user_id": nil}})
 	message := Object{}
 	if err := r.ApplyMainRequestFeatures(message); err != nil {
 		t.Fatal(err)
 	}
-	if value, exists := message["metadata"].(map[string]any)["user_id"]; !exists || value != nil {
-		t.Fatal("explicit null user_id was lost", message)
+	if _, exists := message["metadata"]; exists || clientSessionID(r) != "" {
+		t.Fatal("explicit null user_id was applied or selected a session", message)
 	}
 }

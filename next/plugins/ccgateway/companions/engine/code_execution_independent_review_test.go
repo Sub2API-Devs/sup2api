@@ -88,7 +88,7 @@ func TestRealCLIReviewNestedServerCaller(t *testing.T) {
 		req.Header.Set(resources.PrincipalHeader, identity.PrincipalID)
 		req.Header.Set(resources.GenerationHeader, identity.Generation)
 		req.Header.Set(resources.ResourceOutputsHeader, "1")
-		req.Header.Set("X-CCGateway-Session-ID", tc.session)
+		setTestSession(t, req, tc.session)
 		res, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)

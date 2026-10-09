@@ -89,7 +89,7 @@ func TestSystemMessagesLiveE2E(t *testing.T) {
 		}
 		r := httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(data))
 		r.Header.Set("X-CCGateway-Session-Scope", "e2e")
-		r.Header.Set("X-CCGateway-Session-ID", session)
+		setTestSession(t, r, session)
 		w := httptest.NewRecorder()
 		g.ServeHTTP(w, r)
 		out := result{status: w.Code, history: w.Header().Get("X-CCGateway-History")}

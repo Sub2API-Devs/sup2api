@@ -134,13 +134,12 @@ func cliArgs(req *Request, p *Prepared, plugin string) []string {
 		snapshotMode = "on"
 	}
 	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--tools", strings.Join(req.enabledTools(), ","), "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--setting-sources", "", "--settings", settings, "--disable-slash-commands", "--no-chrome", "--max-turns", req.maxTurns(), "--model=" + req.Model, "--plugin-dir", plugin, "--system-prompt-snapshot", snapshotMode}
+	// The session ID never changes within a branch (§53.12): resuming the
+	// private copy keeps it, and the CLI appends to that copy.
 	if p.Path != "" {
 		args = append(args, "--resume", p.Path)
 		if p.Anchor != "" {
 			args = append(args, "--resume-session-at", p.Anchor)
-		}
-		if p.Fork {
-			args = append(args, "--fork-session", "--session-id", p.SessionID)
 		}
 	} else {
 		args = append(args, "--session-id", p.SessionID)

@@ -70,7 +70,7 @@ func TestRealCLIHTTPMaxTokensIsExact(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			g := httptest.NewServer(&Gateway{Runner: &Runner{CLI: cli, Version: version, Plugin: plugin, Work: root, Env: env}, Cache: cache, Timeout: 20 * time.Second, Slots: make(chan struct{}, 1)})
+			g := httptest.NewServer(fixtureClientSession(&Gateway{Runner: &Runner{CLI: cli, Version: version, Plugin: plugin, Work: root, Env: env}, Cache: cache, Timeout: 20 * time.Second, Slots: make(chan struct{}, 1)}, "limits-fixture"))
 			defer g.Close()
 			raw, _ := json.Marshal(Object{"model": "claude-opus-5-5", "max_tokens": limit, "messages": []any{Object{"role": "user", "content": "limit fixture"}}})
 			client := &http.Client{Timeout: 25 * time.Second}

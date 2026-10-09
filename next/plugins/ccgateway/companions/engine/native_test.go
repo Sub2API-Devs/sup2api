@@ -56,7 +56,8 @@ func TestNativeOrphanRetention(t *testing.T) {
 			}
 		}
 	}
-	c.active[active] = true
+	unlock := c.lockBranch(active)
+	defer unlock()
 	c.prune()
 	if _, err = os.Stat(filepath.Join(root, old+".jsonl")); !os.IsNotExist(err) {
 		t.Fatal("orphan retained")

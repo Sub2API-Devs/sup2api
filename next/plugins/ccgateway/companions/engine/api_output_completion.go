@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 )
 
@@ -117,22 +116,19 @@ func (p *nativeCheckpointProbe) changed(path string) bool {
 }
 
 func (s *cliSession) nativeTerminalAvailable(probe *nativeCheckpointProbe) bool {
-	paths, _ := filepath.Glob(filepath.Join(cliConfigDir(s.proc.cmd.Env), "projects", "*", s.p.SessionID+".jsonl"))
-	if len(paths) == 0 && s.p.Path != "" {
-		paths = []string{filepath.Join(filepath.Dir(s.p.Path), s.p.SessionID+".jsonl")}
-	}
-	if len(paths) != 1 {
+	path, ok := s.p.nativeSource(s.proc.cmd.Env)
+	if !ok {
 		return false
 	}
 	// A large transcript need not be reparsed every 10ms while the CLI writer
 	// is idle. A partial write changes size/mtime and will still be retried.
-	if !probe.changed(paths[0]) {
+	if !probe.changed(path) {
 		return false
 	}
 	p := *s.p
-	p.NativePath = paths[0]
+	p.NativePath = path
 	rows, err := p.readNative(str(s.acc.Message, "id"))
-	return err == nil && nativeResponseContentMatches(rows, str(s.acc.Message, "id"), s.req, s.acc.Blocks)
+	return err == nil && nativeResponseContentMatches(nativeChain(rows, p.NativeAnchor), str(s.acc.Message, "id"), s.req, s.acc.Blocks)
 }
 
 func nativeResponseContentMatches(rows []json.RawMessage, id string, req *Request, want []Object) bool {
@@ -210,10 +206,6 @@ func (p *Prepared) commitResponseOnly(r *Request, answer Object, c *HistoryCache
 		}
 	}
 	snapshot := &Snapshot{Format: 2, ResponseOnly: true, Hashes: hashes, Expires: started.Add(24 * time.Hour), Responses: append(previous, ResponseCheckpoint{ClientHash: hash, MessageID: str(answer, "id"), Response: raw})}
-	// Discard this uncommitted run's private native file, never an older shared
-	// prefix. API format runs fork cached sessions before entering this path.
-	if p.NativePath != "" && (p.Fork || p.Mode == "rebuild") {
-		_ = os.Remove(p.NativePath)
-	}
+	// This run's native records stay in its private copy; nothing is merged.
 	return c.put(cacheKey(logical, r.toolHistoryNamespace(), hash), snapshot)
 }

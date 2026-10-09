@@ -98,7 +98,9 @@ func validateAccount(acc *pluginv1.Account) error {
 }
 func headers(in map[string]string) map[string]string {
 	out := map[string]string{"content-type": "application/json", "anthropic-version": "2023-06-01"}
-	for _, key := range []string{"anthropic-version", "anthropic-beta", "x-ccgateway-session-id"} {
+	// The session comes from the body's metadata.user_id (CONTRACTS §53.12);
+	// x-claude-code-agent-id is CC's own subagent header.
+	for _, key := range []string{"anthropic-version", "anthropic-beta", "x-claude-code-agent-id"} {
 		if value := strings.TrimSpace(in[key]); value != "" {
 			out[key] = value
 		}

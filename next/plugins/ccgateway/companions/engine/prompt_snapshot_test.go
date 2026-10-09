@@ -63,7 +63,7 @@ func TestPromptEvidenceTTLAndCheckpointIsolation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			p, err := prepareHistory(r, cache, "scope", t.TempDir(), "2.1.288")
+			p, err := prepareHistory(r, cache, testBranch("scope"), t.TempDir(), "2.1.288")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -73,6 +73,7 @@ func TestPromptEvidenceTTLAndCheckpointIsolation(t *testing.T) {
 			answer := []Object{{"type": "text", "text": "answer"}}
 			row, anchor := transcriptRow(Message{Role: "assistant", Content: answer}, p.LastUUID, p.SessionID, p.Work, "2.1.288", r.Model)
 			p.NativeRows, p.NativeAnchor = append(p.Rows, row), anchor
+			p.NativeAll = p.NativeRows
 			start := time.Now()
 			if err := p.commit(r, Object{"id": "msg_prompt_snapshot", "role": "assistant", "stop_reason": "end_turn", "content": answer}, cache, "scope", "", "2.1.288", start); err != nil {
 				t.Fatal(err)
@@ -94,20 +95,18 @@ func TestPromptEvidenceTTLAndCheckpointIsolation(t *testing.T) {
 				t.Fatal(err)
 			}
 			r.Messages = append(r.Messages, Message{Role: "assistant", Content: answer}, Message{Role: "user", Content: []Object{{"type": "text", "text": "continue"}}})
-			continued, err := prepareHistory(r, cache, "scope", t.TempDir(), "2.1.288")
+			continued, err := prepareHistory(r, cache, testBranch("scope"), t.TempDir(), "2.1.288")
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer continued.release()
 			if !continued.SnapshotEnabled {
 				t.Fatal("fresh checkpoint evidence lost after restart")
 			}
 			r.System = []string{"SYSTEM_B"}
-			branch, err := prepareHistory(r, cache, "scope", t.TempDir(), "2.1.288")
+			branch, err := prepareHistory(r, cache, testBranch("scope"), t.TempDir(), "2.1.288")
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer branch.release()
 			if branch.SnapshotEnabled {
 				t.Fatal("changed system borrowed another branch's evidence")
 			}
@@ -117,11 +116,10 @@ func TestPromptEvidenceTTLAndCheckpointIsolation(t *testing.T) {
 			if err := cache.put(key, expired); err != nil {
 				t.Fatal(err)
 			}
-			after, err := prepareHistory(r, cache, "scope", t.TempDir(), "2.1.288")
+			after, err := prepareHistory(r, cache, testBranch("scope"), t.TempDir(), "2.1.288")
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer after.release()
 			if after.SnapshotEnabled || after.Mode == "rebuild" {
 				t.Fatal("expired prompt evidence must disable snapshot without losing history")
 			}

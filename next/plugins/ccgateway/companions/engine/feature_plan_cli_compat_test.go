@@ -79,7 +79,7 @@ func TestRealCLIFeaturePlanCompatibility(t *testing.T) {
 		t.Helper()
 		data, _ := json.Marshal(body)
 		request := httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(data))
-		request.Header.Set("X-CCGateway-Session-ID", "feature-plan-history")
+		setTestSession(t, request, "feature-plan-history")
 		response := httptest.NewRecorder()
 		g.ServeHTTP(response, request)
 		if response.Code != 200 {

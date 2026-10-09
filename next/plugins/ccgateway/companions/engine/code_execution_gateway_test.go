@@ -97,7 +97,7 @@ func TestRealCLICodeExecutionGateway(t *testing.T) {
 				req.Header.Set(resources.GenerationHeader, identity.Generation)
 				req.Header.Set(resources.ResourceOutputsHeader, "1")
 				req.Header.Set(resources.ResourceRefsHeader, `[{"kind":"container","id":"container_fixture"},{"kind":"file","id":"file_fixture"}]`)
-				req.Header.Set("X-CCGateway-Session-ID", session)
+				setTestSession(t, req, session)
 				res, err := http.DefaultClient.Do(req)
 				if err != nil {
 					t.Fatal(err)

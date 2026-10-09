@@ -24,17 +24,20 @@ func uuid() string {
 	return s[:8] + "-" + s[8:12] + "-" + s[12:16] + "-" + s[16:20] + "-" + s[20:]
 }
 
-// Rows are native CLI records. Hashes index the separate client-visible history.
-// Only committed assistant boundaries may be used for continuation or branching.
+// Hashes index the client-visible history; LastUUID is the native node of its
+// final assistant boundary in the branch file SessionID (NativePath), of
+// branch generation Generation. Only committed assistant boundaries may be
+// used for continuation or branching. Rows is no longer written: the branch
+// file holds the records.
 type Snapshot struct {
 	ResponseOnly   bool                 `json:"response_only,omitempty"`
-	NativeDigest   string               `json:"native_digest"`
 	Format         int                  `json:"format"`
 	NativePath     string               `json:"native_path"`
 	Work           string               `json:"work"`
-	Rows           []json.RawMessage    `json:"rows"`
+	Rows           []json.RawMessage    `json:"rows,omitempty"`
 	LastUUID       string               `json:"last_uuid"`
 	SessionID      string               `json:"session_id"`
+	Generation     int                  `json:"generation,omitempty"`
 	Hashes         []string             `json:"hashes"`
 	Expires        time.Time            `json:"expires"`
 	PromptEvidence *PromptEvidence      `json:"prompt_evidence,omitempty"`
@@ -46,14 +49,14 @@ type HistoryCache struct {
 	entries map[string]*Snapshot
 	bytes   int64
 	limit   int64
-	active  map[string]bool
+	locks   map[string]*branchLock
 }
 
 func newCache(dir string, limit int64) (*HistoryCache, error) {
 	if e := os.MkdirAll(dir, 0700); e != nil {
 		return nil, e
 	}
-	c := &HistoryCache{dir: dir, entries: map[string]*Snapshot{}, limit: limit, active: map[string]bool{}}
+	c := &HistoryCache{dir: dir, entries: map[string]*Snapshot{}, limit: limit, locks: map[string]*branchLock{}}
 	files, e := os.ReadDir(dir)
 	if e != nil {
 		return nil, e
@@ -83,7 +86,7 @@ func newCache(dir string, limit int64) (*HistoryCache, error) {
 			return nil, e
 		}
 		var s Snapshot
-		if json.Unmarshal(b, &s) != nil || time.Now().After(s.Expires) || s.Format != 2 || len(s.Hashes) == 0 || (!s.ResponseOnly && (len(s.Rows) == 0 || s.LastUUID == "")) || !validResponseCheckpoints(&s) {
+		if json.Unmarshal(b, &s) != nil || time.Now().After(s.Expires) || s.Format != 2 || len(s.Hashes) == 0 || (!s.ResponseOnly && s.LastUUID == "") || !validResponseCheckpoints(&s) {
 			_ = os.Remove(p)
 			continue
 		}
@@ -116,22 +119,25 @@ func (c *HistoryCache) pruneLocked(now time.Time) {
 		c.removeLocked(old)
 	}
 }
+
+// removeLocked drops an index entry, and the canonical native file once no
+// entry refers to it. A request that copied the file before restores it from
+// its private copy when it merges.
 func (c *HistoryCache) removeLocked(k string) {
 	if s := c.entries[k]; s != nil {
 		c.bytes -= snapshotSize(s)
 		delete(c.entries, k)
 		_ = os.Remove(filepath.Join(c.dir, k+".json"))
-		if !c.active[s.SessionID] {
-			retained := false
-			for _, other := range c.entries {
-				if other.SessionID == s.SessionID {
-					retained = true
-					break
-				}
+		retained := false
+		for _, other := range c.entries {
+			if other.SessionID == s.SessionID {
+				retained = true
+				break
 			}
-			if !retained && s.NativePath == filepath.Join(c.dir, "native", s.SessionID+".jsonl") {
-				_ = os.Remove(s.NativePath)
-			}
+		}
+		if !retained && c.locks[s.SessionID] == nil && s.NativePath == c.canonicalPath(s.SessionID) {
+			_ = os.Remove(s.NativePath)
+			_ = os.Remove(c.sealPath(s.SessionID))
 		}
 	}
 }
@@ -143,9 +149,9 @@ func (c *HistoryCache) prune() {
 	c.sweepNativeLocked(now)
 }
 
-// Recover orphaned native files after expiry, a crash between transcript and
-// index writes, or an eviction while a session was active. Allow in-flight
-// writes a grace period and only touch gateway-owned UUID files.
+// Recover orphaned native files after expiry or a crash between the merge
+// and the index write. Allow in-flight merges a grace period and only touch
+// gateway-owned UUID files. A seal marker goes with its file.
 func (c *HistoryCache) sweepNativeLocked(now time.Time) {
 	retained := map[string]bool{}
 	for _, s := range c.entries {
@@ -154,11 +160,17 @@ func (c *HistoryCache) sweepNativeLocked(now time.Time) {
 	root := filepath.Join(c.dir, "native")
 	files, _ := os.ReadDir(root)
 	for _, f := range files {
-		if f.IsDir() || !strings.HasSuffix(f.Name(), ".jsonl") {
+		if f.IsDir() || !strings.HasSuffix(f.Name(), ".jsonl") && !strings.HasSuffix(f.Name(), ".sealed") {
 			continue
 		}
-		sid := strings.TrimSuffix(f.Name(), ".jsonl")
-		if !nativeSessionName.MatchString(sid) || retained[sid] || c.active[sid] {
+		sid := strings.TrimSuffix(strings.TrimSuffix(f.Name(), ".jsonl"), ".sealed")
+		if !nativeSessionName.MatchString(sid) || retained[sid] || c.locks[sid] != nil {
+			continue
+		}
+		if strings.HasSuffix(f.Name(), ".sealed") {
+			if _, err := os.Stat(c.canonicalPath(sid)); os.IsNotExist(err) {
+				_ = os.Remove(filepath.Join(root, f.Name()))
+			}
 			continue
 		}
 		if info, err := f.Info(); err == nil && now.Sub(info.ModTime()) > time.Hour {
@@ -178,7 +190,7 @@ func (c *HistoryCache) get(k string) *Snapshot {
 		return nil
 	}
 	copy := *s
-	copy.Rows = append([]json.RawMessage(nil), s.Rows...)
+	copy.Rows = nil
 	copy.Hashes = append([]string(nil), s.Hashes...)
 	copy.Responses = cloneResponseCheckpoints(s.Responses)
 	return &copy
@@ -252,6 +264,11 @@ func transcriptRow(m Message, parent, sid, cwd, version, model string) (json.Raw
 	return b, id
 }
 
+// Prepared is one request's native history. Rows is the conversation the CLI
+// resumes (the canonical chain to the node, then seeded client records), used
+// as evidence; the private copy at Path holds the branch view of the canonical
+// file (base) followed by the seeded records. NativeAll is the private copy
+// after the run, through the response; NativeRows is its chain to NativeAnchor.
 type Prepared struct {
 	APIResponseComplete                     bool
 	FinalResponseStop                       json.RawMessage // Runtime only; never replayed or embedded in Snapshot.
@@ -259,11 +276,15 @@ type Prepared struct {
 	LastUUID, SessionID, Path, Anchor, Mode string
 	Hashes                                  []string
 	Work, NativePath, InputUUID             string
-	Fork                                    bool
 	SnapshotEnabled                         bool
 	NativeRows                              []json.RawMessage
+	NativeAll                               []json.RawMessage
 	NativeAnchor                            string
 	Responses                               []ResponseCheckpoint
+	branch                                  sessionBranch
+	generation                              int
+	base                                    []json.RawMessage
+	dir                                     string
 	cache                                   *HistoryCache
 }
 
@@ -276,46 +297,81 @@ func nativeBytes(rows []json.RawMessage) []byte {
 	return b.Bytes()
 }
 
+// sessionRootRow starts an indexed branch's first conversation by --resume
+// instead of --session-id, which the CLI refuses while another run of the
+// same branch (a title or classifier request) is writing that session. The
+// CLI keeps informational meta records local: none reaches the API.
+func sessionRootRow(sid, cwd, version string) json.RawMessage {
+	row := Object{"type": "system", "subtype": "informational", "content": "ccgateway session root", "isMeta": true, "level": "info", "uuid": uuid(), "parentUuid": nil, "isSidechain": false, "userType": "external", "cwd": cwd, "sessionId": sid, "version": version, "timestamp": time.Now().UTC().Format(time.RFC3339Nano)}
+	b, _ := json.Marshal(row)
+	return b
+}
+
+// writePrivate writes this request's copy of the branch: the resumed
+// conversation of the canonical file, then rows. The file name is the session
+// ID, which makes the CLI append to this file.
+func (p *Prepared) writePrivate(rows []json.RawMessage) error {
+	p.Path = filepath.Join(p.dir, p.SessionID+".jsonl")
+	return writeNative(p.Path, append(append([]json.RawMessage(nil), p.base...), rows...))
+}
+
 // Most configuration does not select history. A custom-tool namespace change
 // uses a separate index because native rows contain wire tool names. System and
 // tools are applied afresh by Runner; this index compares the client prefix. Client
 // system messages are part of that prefix; committed ones are native attachment
 // records, and the pending turn's are attached by the Mod.
-func prepareHistory(r *Request, c *HistoryCache, logical, dir, version string) (*Prepared, error) {
+//
+// An indexed branch always runs under its own session ID (§53.12), that of
+// its current generation file: at a registered node, or rebuilt from client
+// history (a new root of the file when nothing is registered). A new session
+// (no session ID) is rebuilt under a random ID.
+func prepareHistory(r *Request, c *HistoryCache, b sessionBranch, dir, version string) (*Prepared, error) {
 	hashes := fingerprints(r.Messages)
 	pending := r.pendingStart()
-	p := &Prepared{SessionID: uuid(), Hashes: hashes, Mode: "rebuild", InputUUID: uuid(), Work: filepath.Join(c.dir, "workspace"), cache: c}
+	sid, generation := b.ID, 0
+	if b.indexed() {
+		generation = c.currentGeneration(b)
+		sid = b.fileID(generation)
+	}
+	if sid == "" {
+		sid = uuid()
+	}
+	p := &Prepared{SessionID: sid, generation: generation, Hashes: hashes, Mode: "rebuild", InputUUID: uuid(), Work: filepath.Join(c.dir, "workspace"), branch: b, dir: dir, cache: c}
 	if e := os.MkdirAll(p.Work, 0700); e != nil {
 		return nil, e
 	}
 	start := 0
 	parent := ""
-	if prior := findPriorSnapshot(r, c, logical, hashes, pending); prior != nil {
-		p.resumeFrom(prior, r, c, pending)
-		parent = prior.LastUUID
-		start = len(prior.Hashes)
-		if !p.Fork && pending < len(r.Messages) && !hasToolResults(r.Messages[pending]) {
-			p.Anchor = "" // Ordinary native resume: submit only the new user message.
-			return p, nil
+	resumed := false
+	if b.indexed() {
+		// A node is valid only in its own branch's file of its generation.
+		if prior := findPriorSnapshot(r, c, b.Logical, hashes, pending); prior != nil && prior.SessionID == b.fileID(prior.Generation) && p.resumeFrom(prior, r, c, pending) {
+			resumed = true
+			parent = prior.LastUUID
+			start = len(prior.Hashes)
+			if r.directNativeResume(start, pending) && !hasToolResults(r.Messages[pending]) {
+				// Ordinary native resume: submit only the new user message.
+				p.LastUUID = parent
+				return p, p.writePrivate(nil)
+			}
 		}
 	}
+	seeded := len(p.Rows)
 	p.LastUUID = p.seedRows(r, start, pending, parent, version)
 	completedHistory := false
 	for _, message := range r.Messages[:pending] {
 		completedHistory = completedHistory || message.Role == "assistant"
 	}
-	if completedHistory {
+	if resumed || completedHistory {
 		if p.Anchor == "" {
-			p.release()
 			return nil, fmt.Errorf("missing assistant resume anchor")
 		}
-		if p.Path == "" {
-			p.Path = filepath.Join(dir, "history.jsonl")
-		}
-		if e := writeNative(p.Path, p.Rows); e != nil {
-			p.release()
-			return nil, e
-		}
+		return p, p.writePrivate(p.Rows[seeded:])
+	}
+	if b.indexed() {
+		// The pending turn and its system messages are submitted and attached
+		// at run time, as for --session-id.
+		return p, p.writePrivate([]json.RawMessage{sessionRootRow(sid, p.Work, version)})
 	}
 	return p, nil
 }
@@ -335,29 +391,38 @@ func findPriorSnapshot(r *Request, c *HistoryCache, logical string, hashes []str
 	return nil
 }
 
-// resumeFrom continues from a checkpoint: a fork of it, or the native session
-// itself when it is unchanged, idle, and directly before the pending turn.
-func (p *Prepared) resumeFrom(prior *Snapshot, r *Request, c *HistoryCache, pending int) {
+// resumeFrom continues from a registered node, read from the node's own file.
+// It reports false, and the request is rebuilt, when the file or the node is
+// gone. Resuming at a node that already has descendants (a client rewind or
+// edit, or a concurrent request from the same prefix) grows a sibling branch.
+// A node of a sealed generation is copied into the current generation file.
+func (p *Prepared) resumeFrom(prior *Snapshot, r *Request, c *HistoryCache, pending int) bool {
+	base, err := c.readCanonical(prior.SessionID)
+	if err != nil {
+		return false
+	}
+	chain := nativeChain(base, prior.LastUUID)
+	if chain == nil {
+		return false
+	}
+	p.base = moveSession(branchView(base, prior.LastUUID), prior.SessionID, p.SessionID)
+	p.Rows = moveSession(chain, prior.SessionID, p.SessionID)
 	p.Responses = cloneResponseCheckpoints(prior.Responses)
-	p.Rows = append(p.Rows, prior.Rows...)
-	p.SnapshotEnabled = choosePromptSnapshot(prior.Rows, prior.PromptEvidence, r.System, time.Now())
+	p.SnapshotEnabled = choosePromptSnapshot(chain, prior.PromptEvidence, r.System, time.Now())
 	p.Work = prior.Work
 	p.Anchor = prior.LastUUID
-	p.Fork = true
-	p.Mode = "fork"
-	// A single native session has exactly one writer. Concurrent requests from
-	// the same prefix branch from the immutable checkpoint instead.
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	actual, e := os.ReadFile(prior.NativePath)
-	if !r.CacheWarmup && !r.CountTokens && !r.needsFreshNativeSession() && len(prior.Hashes) == pending && !c.active[prior.SessionID] && e == nil && digest(string(actual)) == prior.NativeDigest {
-		p.SessionID = prior.SessionID
-		p.NativePath = prior.NativePath
-		p.Path = prior.NativePath
-		p.Fork = false
-		p.Mode = "prefix-hit"
-		c.active[p.SessionID] = true
+	p.Mode = "prefix-hit"
+	if !r.directNativeResume(len(prior.Hashes), pending) || nativeHasChildren(base, prior.LastUUID) {
+		p.Mode = "fork"
 	}
+	return true
+}
+
+// directNativeResume reports whether the pending turn directly follows the
+// registered node and the request is an ordinary one, so the CLI submits the
+// pending turn itself instead of loading it from seeded records.
+func (r *Request) directNativeResume(registered, pending int) bool {
+	return !r.CacheWarmup && !r.CountTokens && !r.needsFreshNativeSession() && registered == pending && pending < len(r.Messages)
 }
 
 // seedRows appends native records for client messages start..pending and
@@ -419,36 +484,46 @@ func hasToolResults(m Message) bool {
 	}
 	return false
 }
-func (p *Prepared) release() {
-	if p.cache != nil {
-		p.cache.mu.Lock()
-		delete(p.cache.active, p.SessionID)
-		p.cache.mu.Unlock()
-	}
-}
 func (p *Prepared) commit(r *Request, answer Object, c *HistoryCache, logical, dir, version string, started time.Time) error {
 	if err := completedResponse(answer); err != nil {
 		return err
 	}
 	if r.structuredOutput() {
 		// API text differs from the CLI synthetic-tool transcript; rebuild from client history next time.
-		_ = os.Remove(p.NativePath)
 		return nil
 	}
 	bs, ok := answer["content"].([]Object)
 	if !ok {
 		return fmt.Errorf("missing assistant content")
 	}
-	if len(p.NativeRows) == 0 || p.NativeAnchor == "" {
+	if len(p.NativeRows) == 0 || len(p.NativeAll) == 0 || p.NativeAnchor == "" {
 		return fmt.Errorf("missing native CLI checkpoint")
 	}
 	if len(p.Hashes) == 0 {
 		return fmt.Errorf("missing client history checkpoint")
 	}
+	if !p.branch.indexed() || p.SessionID != p.branch.fileID(p.generation) {
+		return fmt.Errorf("request has no session branch")
+	}
 	hash := digest([]any{p.Hashes[len(p.Hashes)-1], Message{Role: "assistant", Content: bs}})
 	hashes := append(append([]string(nil), p.Hashes...), hash)
+	// Merge, then register, under the branch lock: a later request of this
+	// branch that finds the node also finds its records. A file sealed while
+	// this request ran still takes its records: they belong to this file's
+	// session, and its nodes stay resumable.
+	unlock := c.lockBranch(p.SessionID)
+	defer unlock()
+	path, full, err := c.mergeNative(p.SessionID, p.NativeAll, len(p.base))
+	if err != nil {
+		return err
+	}
+	if full && !c.sealed(p.SessionID) {
+		if err := c.seal(p.SessionID); err != nil {
+			return err
+		}
+	}
 	// Native history lifetime is independent of provider prompt-cache TTL.
-	s := &Snapshot{Format: 2, NativeDigest: digest(string(nativeBytes(p.NativeRows))), Rows: p.NativeRows, LastUUID: p.NativeAnchor, SessionID: p.SessionID, NativePath: p.NativePath, Work: p.Work, Hashes: hashes, Expires: started.Add(24 * time.Hour)}
+	s := &Snapshot{Format: 2, LastUUID: p.NativeAnchor, SessionID: p.SessionID, Generation: p.generation, NativePath: path, Work: p.Work, Hashes: hashes, Expires: started.Add(24 * time.Hour)}
 	s.PromptEvidence = &PromptEvidence{SystemDigest: digest(r.System), Expires: time.Now().Add(r.TTL)}
 	response, err := json.Marshal(answer)
 	if err != nil {

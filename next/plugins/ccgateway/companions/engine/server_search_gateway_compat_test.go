@@ -98,7 +98,7 @@ func TestRealCLIServerSearchGatewayCompatibility(t *testing.T) {
 		t.Helper()
 		raw, _ := json.Marshal(body)
 		req := httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(raw))
-		req.Header.Set("X-CCGateway-Session-ID", "api-search-history")
+		setTestSession(t, req, "api-search-history")
 		res := httptest.NewRecorder()
 		g.ServeHTTP(res, req)
 		if res.Code != 200 {

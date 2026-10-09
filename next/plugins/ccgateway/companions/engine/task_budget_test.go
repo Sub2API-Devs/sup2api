@@ -150,7 +150,7 @@ func TestRealCLITaskBudgetCompatibility(t *testing.T) {
 		req := httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(raw))
 		req.Header.Set("x-api-key", g.Key)
 		req.Header.Set("anthropic-beta", taskBudgetBeta)
-		req.Header.Set("X-CCGateway-Session-ID", "task-budget-fixture")
+		setTestSession(t, req, "task-budget-fixture")
 		res := httptest.NewRecorder()
 		g.ServeHTTP(res, req)
 		if res.Code != 200 {

@@ -45,7 +45,7 @@ func TestRealCLIPerTurnControlWireCompatibility(t *testing.T) {
 					request, _ := http.NewRequest("POST", endpoint+"/v1/messages", bytes.NewReader(raw))
 					request.Header.Set("Content-Type", "application/json")
 					request.Header.Set("anthropic-beta", beta)
-					request.Header.Set("X-CCGateway-Session-ID", "per-turn-fixture")
+					setTestSession(t, request, "per-turn-fixture")
 					response, err := http.DefaultClient.Do(request)
 					if err != nil {
 						t.Fatal(err)

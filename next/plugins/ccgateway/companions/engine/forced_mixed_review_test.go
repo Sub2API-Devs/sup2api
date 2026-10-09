@@ -56,7 +56,8 @@ func TestReviewForcedMixedMainRestorationAndIsolation(t *testing.T) {
 		t.Fatal("original field presence, order or numeric schema changed")
 	}
 	choice := wire["tool_choice"].(Object)
-	if str(choice, "name") != r.wireName("chosen") || choice["disable_parallel_tool_use"] != true || digest(wire["metadata"]) != digest(Object{}) {
+	_, metadataApplied := wire["metadata"] // the client's metadata only selects the session (§53.12)
+	if str(choice, "name") != r.wireName("chosen") || choice["disable_parallel_tool_use"] != true || metadataApplied {
 		t.Fatal("main controls changed")
 	}
 	actual, _ := historyContent(wire["tools"])

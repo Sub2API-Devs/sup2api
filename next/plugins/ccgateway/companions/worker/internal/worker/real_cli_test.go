@@ -75,11 +75,11 @@ func TestWorkerRealCLI(t *testing.T) {
 	messages := []map[string]any{{"role": "user", "content": "first question"}}
 	for turn := 0; turn < 3; turn++ {
 		stream := turn == 2
-		request := map[string]any{"model": "claude-sonnet-4-6", "max_tokens": 128, "system": "Client system", "stream": stream, "messages": messages}
+		// The client session is metadata.user_id, as CC sends it (CONTRACTS §53.12).
+		request := map[string]any{"model": "claude-sonnet-4-6", "max_tokens": 128, "system": "Client system", "stream": stream, "messages": messages, "metadata": map[string]any{"user_id": "multi-turn"}}
 		raw, _ := json.Marshal(request)
 		req, _ := http.NewRequest("POST", service.URL+"/v1/messages", bytes.NewReader(raw))
 		req.Header.Set("x-api-key", "test-gateway-key")
-		req.Header.Set("X-CCGateway-Session-ID", "multi-turn")
 		res, err := client.Do(req)
 		if err != nil {
 			t.Fatal(err)

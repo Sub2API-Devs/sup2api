@@ -98,7 +98,9 @@ func TestRealCLIAdmittedFilesHistoryAndCount(t *testing.T) {
 				r.Header.Set(resources.PrincipalHeader, id.PrincipalID)
 				r.Header.Set(resources.GenerationHeader, id.Generation)
 				r.Header.Set(resources.ResourceIDsHeader, `["file_fixture"]`)
-				r.Header.Set("X-CCGateway-Session-ID", session)
+				if !count {
+					setTestSession(t, r, session) // count_tokens takes no metadata
+				}
 				res, err := (&http.Client{Timeout: 25 * time.Second}).Do(r)
 				if err != nil {
 					t.Fatal(err)

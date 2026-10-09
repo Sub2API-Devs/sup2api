@@ -38,6 +38,8 @@ type Request struct {
 	imageCarriers           map[string]*imageCarrier
 	responseFacts           *providerResponseFacts
 	continuation            string
+	upstreamSession         string // U (§53.12): upstream X-Claude-Code-Session-Id and metadata session
+	upstreamAgent           string // A' (§53.12): upstream x-claude-code-agent-id; empty for the main thread
 	Plan                    *RequestPlan
 	EnvironmentFields       map[string]string
 	ClientEnvironmentFields map[string]bool

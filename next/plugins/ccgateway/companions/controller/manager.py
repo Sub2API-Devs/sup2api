@@ -135,7 +135,7 @@ def rfc3339(timestamp):
 
 def upstream_headers(inbound, secret):
     headers = {'Authorization': 'Bearer ' + secret, 'Content-Type': 'application/json'}
-    for name in ('anthropic-version', 'anthropic-beta', 'x-ccgateway-session-id', 'x-ccgateway-session-scope', 'x-ccgateway-request-policy'):
+    for name in ('anthropic-version', 'anthropic-beta', 'x-ccgateway-session-scope', 'x-ccgateway-request-policy', 'x-claude-code-agent-id'):
         if name in inbound:
             headers[name] = inbound[name]
     return headers

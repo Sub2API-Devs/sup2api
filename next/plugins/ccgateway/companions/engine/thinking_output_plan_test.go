@@ -95,7 +95,7 @@ func TestResponseOnlyCheckpointSurvivesRestartWithoutNativeResume(t *testing.T) 
 		t.Fatal(err)
 	}
 	req := responseHistoryRequest(t)
-	p, err := prepareHistory(req, cache, "scope", t.TempDir(), "2.1.292")
+	p, err := prepareHistory(req, cache, testBranch("scope"), t.TempDir(), "2.1.292")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,17 +104,15 @@ func TestResponseOnlyCheckpointSurvivesRestartWithoutNativeResume(t *testing.T) 
 	if err := p.commitResponseOnly(req, answer, cache, "scope", time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	p.release()
 	cache, err = newCache(cache.dir, cache.limit)
 	if err != nil || len(cache.entries) != 1 {
 		t.Fatal("response-only persistence failed", err)
 	}
 	req.Messages = append(req.Messages, Message{Role: "assistant", Content: answer["content"].([]Object)}, Message{Role: "user", Content: []Object{{"type": "text", "text": "continue"}}})
-	next, err := prepareHistory(req, cache, "scope", t.TempDir(), "2.1.292")
+	next, err := prepareHistory(req, cache, testBranch("scope"), t.TempDir(), "2.1.292")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer next.release()
 	count := 0
 	for _, raw := range next.Rows {
 		row, _ := decodeObject(raw)

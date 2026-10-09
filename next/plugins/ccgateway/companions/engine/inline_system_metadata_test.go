@@ -157,7 +157,7 @@ func TestRealCLIInlineMetadataCompatibility(t *testing.T) {
 				raw, _ := json.Marshal(body)
 				req := httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(raw))
 				req.Header.Set("anthropic-beta", inlineMetadataBetas)
-				req.Header.Set("X-CCGateway-Session-ID", "inline-metadata-fixture")
+				setTestSession(t, req, "inline-metadata-fixture")
 				res := httptest.NewRecorder()
 				g.ServeHTTP(res, req)
 				if res.Code != 200 {

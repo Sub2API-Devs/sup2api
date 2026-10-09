@@ -111,7 +111,7 @@ func TestMixedNativeHandoffRealCLI(t *testing.T) {
 		data, _ := json.Marshal(body)
 		r, _ := http.NewRequest("POST", g.URL+"/v1/messages", bytes.NewReader(data))
 		r.Header.Set("Content-Type", "application/json")
-		r.Header.Set("X-CCGateway-Session-ID", "mixed-native")
+		setTestSession(t, r, "mixed-native")
 		r.Header.Set(policyHeader, `{"custom_tool_prefix":"clienttools"}`)
 		resp, err := http.DefaultClient.Do(r)
 		if err != nil {

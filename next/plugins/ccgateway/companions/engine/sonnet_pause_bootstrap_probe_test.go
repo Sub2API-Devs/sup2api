@@ -37,6 +37,9 @@ func TestRealCLISonnetPauseBootstrapNativeProbe(t *testing.T) {
 	}, func(env []string) []string { runtimeEnv = env; return env })
 	body := webTestBody("web_search_20250305")
 	body["model"] = "claude-sonnet-4-6"
+	// No session (§53.12): this probes the CLI's --session-id transcript,
+	// written to its projects directory before the provider responds.
+	body["metadata"] = Object{}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	request, _ := http.NewRequestWithContext(ctx, "POST", endpoint+"/v1/messages", bytes.NewReader(mustMCPJSON(body)))
@@ -123,15 +126,15 @@ func TestRealCLISonnetPauseBootstrapNativeProbe(t *testing.T) {
 		}
 	}
 	body["messages"] = append(body["messages"].([]any), Object{"role": "assistant", "content": []Object{webFixture("web_search")[0]}})
+	delete(body, "metadata") // phase one only: the plain parser takes no generation controls
 	req, err := parseRequest(mustMCPJSON(body))
 	if err != nil {
 		t.Fatal(err)
 	}
-	prepared, err := prepareHistory(req, cache, "bootstrap-probe", t.TempDir(), "2.1.292")
+	prepared, err := prepareHistory(req, cache, testBranch("bootstrap-probe"), t.TempDir(), "2.1.292")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer prepared.release()
 	sid := strings.TrimSuffix(filepath.Base(paths[0]), ".jsonl")
 	for _, record := range prepared.Rows {
 		row, _ := decodeObject(record)
@@ -148,6 +151,8 @@ func TestRealCLISonnetPauseBootstrapNativeProbe(t *testing.T) {
 	prepared.SessionID = sid
 	prepared.Rows = native
 	prepared.LastUUID = parent
+	// The CLI appends to a resumed file named by its records' session.
+	prepared.Path = filepath.Join(filepath.Dir(prepared.Path), sid+".jsonl")
 	if err := writeNative(prepared.Path, native); err != nil {
 		t.Fatal(err)
 	}

@@ -47,7 +47,7 @@ func TestReviewCompactionLongHistoryIsOpaqueAndPositionBound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	prepared, err := prepareHistory(req, cache, "review-scope", t.TempDir(), "2.1.292")
+	prepared, err := prepareHistory(req, cache, testBranch("review-scope"), t.TempDir(), "2.1.292")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,17 +55,15 @@ func TestReviewCompactionLongHistoryIsOpaqueAndPositionBound(t *testing.T) {
 	if err := prepared.commitResponseOnly(req, answer, cache, "review-scope", time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	prepared.release()
 	cache, err = newCache(cache.dir, cache.limit)
 	if err != nil {
 		t.Fatal(err)
 	}
 	req.Messages = append(req.Messages, Message{Role: "assistant", Content: answer["content"].([]Object)}, Message{Role: "user", Content: []Object{{"type": "text", "text": "after restart"}}})
-	next, err := prepareHistory(req, cache, "review-scope", t.TempDir(), "2.1.292")
+	next, err := prepareHistory(req, cache, testBranch("review-scope"), t.TempDir(), "2.1.292")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer next.release()
 	if next.Mode != "rebuild" {
 		t.Fatal("response-only incorrectly resumed native", next.Mode)
 	}

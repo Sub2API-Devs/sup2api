@@ -72,7 +72,7 @@ func TestRealCLIPTCGateway(t *testing.T) {
 		if contextHeader {
 			req.Header.Set(resources.ResourceContextsHeader, `[{"kind":"ptc","parent_id":"srv_exec","resource_id":"container_fixture"}]`)
 		}
-		req.Header.Set("X-CCGateway-Session-ID", session)
+		setTestSession(t, req, session)
 		res, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)

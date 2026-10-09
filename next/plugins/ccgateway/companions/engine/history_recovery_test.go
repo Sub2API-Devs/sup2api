@@ -18,13 +18,14 @@ func TestNativeInterruptedResumeUsesCommittedCheckpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := parsed(t, basic())
-	p, err := prepareHistory(r, c, "logical", t.TempDir(), "2.1.288")
+	p, err := prepareHistory(r, c, testBranch("logical"), t.TempDir(), "2.1.288")
 	if err != nil {
 		t.Fatal(err)
 	}
 	content := []Object{{"type": "text", "text": "committed answer"}}
 	row, anchor := transcriptRow(Message{Role: "assistant", Content: content}, p.LastUUID, p.SessionID, p.Work, "2.1.288", r.Model)
 	p.NativeRows = append(p.Rows, row)
+	p.NativeAll = p.NativeRows
 	p.NativeAnchor = anchor
 	p.NativePath = filepath.Join(c.dir, "native", p.SessionID+".jsonl")
 	if err = os.MkdirAll(filepath.Dir(p.NativePath), 0700); err != nil {
@@ -37,25 +38,24 @@ func TestNativeInterruptedResumeUsesCommittedCheckpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.Messages = append(r.Messages, Message{Role: "assistant", Content: content}, Message{Role: "user", Content: []Object{{"type": "text", "text": "continue"}}})
-	resumed, err := prepareHistory(r, c, "logical", t.TempDir(), "2.1.288")
+	resumed, err := prepareHistory(r, c, testBranch("logical"), t.TempDir(), "2.1.288")
 	if err != nil || resumed.Mode != "prefix-hit" {
 		t.Fatalf("initial resume: %v, %v", resumed, err)
 	}
-	failedBytes := append(nativeBytes(p.NativeRows), []byte("{\"type\":\"user\",\"uuid\":\"uncommitted\"}\n")...)
+	failedBytes := append(nativeBytes(p.NativeRows), []byte("{\"type\":\"user\",\"uuid\":\"uncommitted\",\"parentUuid\":\""+anchor+"\"}\n")...)
 	if err = os.WriteFile(p.NativePath, failedBytes, 0600); err != nil {
 		t.Fatal(err)
 	}
-	resumed.release()
 	c, err = newCache(c.dir, 8<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fork, err := prepareHistory(r, c, "logical", t.TempDir(), "2.1.288")
+	fork, err := prepareHistory(r, c, testBranch("logical"), t.TempDir(), "2.1.288")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer fork.release()
-	if fork.Mode != "fork" || fork.SessionID == p.SessionID || fork.Anchor != anchor {
+	// Same session, at the committed node; the tail becomes a dead sibling.
+	if fork.Mode != "fork" || fork.SessionID != p.SessionID || fork.Anchor != anchor || fork.Path == p.NativePath {
 		t.Fatalf("failed transcript reused: %+v", fork)
 	}
 	for i, row := range p.NativeRows {
@@ -72,6 +72,8 @@ func TestNativeInterruptedResumeUsesCommittedCheckpoint(t *testing.T) {
 	}
 }
 
+// A branch file whose index entries expired is kept while a request of that
+// branch holds the branch lock (merging), and removed afterwards.
 func TestNativeExpiredActiveCheckpointSurvivesUntilRelease(t *testing.T) {
 	c, err := newCache(t.TempDir(), 1<<20)
 	if err != nil {
@@ -89,7 +91,7 @@ func TestNativeExpiredActiveCheckpointSurvivesUntilRelease(t *testing.T) {
 	if err = os.Chtimes(path, past, past); err != nil {
 		t.Fatal(err)
 	}
-	c.active[sid] = true
+	unlock := c.lockBranch(sid)
 	s := &Snapshot{SessionID: sid, NativePath: path, Expires: past}
 	c.entries["expired"] = s
 	c.bytes = snapshotSize(s)
@@ -97,7 +99,7 @@ func TestNativeExpiredActiveCheckpointSurvivesUntilRelease(t *testing.T) {
 	if _, err = os.Stat(path); err != nil {
 		t.Fatal("active transcript removed when its checkpoint expired")
 	}
-	(&Prepared{SessionID: sid, cache: c}).release()
+	unlock()
 	c.prune()
 	if _, err = os.Stat(path); !os.IsNotExist(err) {
 		t.Fatal("released orphan transcript not removed")

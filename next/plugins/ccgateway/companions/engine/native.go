@@ -29,42 +29,51 @@ func writeNative(path string, rows []json.RawMessage) error {
 	return os.Rename(name, path)
 }
 
+// nativeSource is the transcript the CLI writes: the resumed private copy
+// (named by session ID), or for --session-id the CLI's projects file.
+func (p *Prepared) nativeSource(env []string) (string, bool) {
+	if p.Path != "" {
+		return filepath.Join(filepath.Dir(p.Path), p.SessionID+".jsonl"), true
+	}
+	paths, err := filepath.Glob(filepath.Join(cliConfigDir(env), "projects", "*", p.SessionID+".jsonl"))
+	if err != nil || len(paths) != 1 {
+		return "", false
+	}
+	return paths[0], true
+}
+
 // Capture only after the process has exited and its native writer has flushed.
 // Keep the native prefix byte-for-byte. A locally denied tool is a transport
 // detail, not a result from the API client: discard that uncommitted tail.
+// Nothing is shared yet: commit merges NativeAll into the branch's file.
 func (p *Prepared) captureNative(env []string, messageID string) error {
 	if !nativeSessionName.MatchString(p.SessionID) {
 		return fmt.Errorf("invalid native session ID")
 	}
-	paths, err := filepath.Glob(filepath.Join(cliConfigDir(env), "projects", "*", p.SessionID+".jsonl"))
-	if len(paths) == 0 && p.Path != "" {
-		paths = []string{filepath.Join(filepath.Dir(p.Path), p.SessionID+".jsonl")}
-	}
-	if err != nil || len(paths) != 1 {
+	source, ok := p.nativeSource(env)
+	if !ok {
 		return fmt.Errorf("native CLI transcript not found")
 	}
-	p.NativePath = paths[0]
+	p.NativePath = source
 	rows, err := p.readNative(messageID)
+	if p.Path == "" && p.dir != "" {
+		// A --session-id run leaves its file in the CLI's projects directory;
+		// keep the cleaned records with the request instead.
+		_ = os.Remove(source)
+		p.NativePath = filepath.Join(p.dir, p.SessionID+".jsonl")
+	}
 	if err != nil {
 		return err
 	}
-	p.NativeRows = cleanToolHandoffs(rows, messageID)
-	if p.cache != nil {
-		dest := filepath.Join(p.cache.dir, "native", p.SessionID+".jsonl")
-		if err := os.MkdirAll(filepath.Dir(dest), 0700); err != nil {
-			return err
-		}
-		source := p.NativePath
-		p.NativePath = dest
-		if err := writeNative(dest, p.NativeRows); err != nil {
-			return err
-		}
-		if source != dest {
-			_ = os.Remove(source)
-		}
-		return nil
+	// Tool handoffs are cleaned in this run's records only; the copied
+	// canonical records stay byte-for-byte.
+	own := min(len(p.base), len(rows))
+	p.NativeAll = append(rows[:own:own], cleanToolHandoffs(rows[own:], messageID)...)
+	p.NativeRows = nativeChain(p.NativeAll, p.NativeAnchor)
+	if len(p.NativeRows) == 0 {
+		return fmt.Errorf("native transcript missing completed response")
 	}
-	return writeNative(p.NativePath, p.NativeRows)
+	return writeNative(p.NativePath, p.NativeAll)
 }
 
 // cliConfigDir is the CLI's configuration directory under this environment.
@@ -90,7 +99,8 @@ func cliConfigDir(env []string) string {
 }
 
 // readNative reads the transcript at NativePath up to the last record of the
-// completed response, which becomes NativeAnchor.
+// completed response, which becomes NativeAnchor. Only this run's part of the
+// file (after the copied canonical records) can hold the response.
 func (p *Prepared) readNative(messageID string) ([]json.RawMessage, error) {
 	f, err := os.Open(p.NativePath)
 	if err != nil {
@@ -116,7 +126,7 @@ func (p *Prepared) readNative(messageID string) ([]json.RawMessage, error) {
 		}
 		rows = append(rows, row)
 		msg, _ := obj["message"].(map[string]any)
-		if str(obj, "type") == "assistant" && str(msg, "id") == messageID && str(obj, "uuid") != "" {
+		if len(rows) > len(p.base) && str(obj, "type") == "assistant" && str(msg, "id") == messageID && str(obj, "uuid") != "" {
 			end = len(rows)
 			p.NativeAnchor = str(obj, "uuid")
 		}

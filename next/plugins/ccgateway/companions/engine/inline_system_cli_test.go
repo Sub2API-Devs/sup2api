@@ -134,11 +134,10 @@ func TestSystemMessagesRealCLI(t *testing.T) {
 					req.Thinking = Object{"type": "adaptive", "display": "omitted"}
 					req.Tools = []Tool{verifiedNativeTools["Bash"]}
 				}
-				p, err := prepareHistory(req, cache, "fixture", root, version)
+				p, err := prepareHistory(req, cache, testBranch("fixture"), root, version)
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer p.release()
 				ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 				defer cancel()
 				events := 0
@@ -159,11 +158,10 @@ func TestSystemMessagesRealCLI(t *testing.T) {
 					nextReq.Thinking = Object{"type": "adaptive", "display": "omitted"}
 					nextReq.Tools = []Tool{verifiedNativeTools["Bash"]}
 				}
-				nextPrepared, err := prepareHistory(nextReq, cache, "fixture", root, version)
+				nextPrepared, err := prepareHistory(nextReq, cache, testBranch("fixture"), root, version)
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer nextPrepared.release()
 				if nextPrepared.Mode != "prefix-hit" {
 					t.Fatalf("next turn mode %s, want prefix-hit", nextPrepared.Mode)
 				}
@@ -320,11 +318,10 @@ func TestAttachmentSourcePolicy(t *testing.T) {
 			diagnostic.capture(httptest.NewRecorder(), httptest.NewRequest("POST", "/v1/messages", nil), "")
 			req.diagnostic = diagnostic
 			defer diagnostic.finish()
-			p, err := prepareHistory(req, cache, "fixture", root, version)
+			p, err := prepareHistory(req, cache, testBranch("fixture"), root, version)
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer p.release()
 			ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 			defer cancel()
 			_, err = runner.run(ctx, req, p, root, func(Object) error { return nil })

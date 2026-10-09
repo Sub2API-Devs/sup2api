@@ -24,6 +24,9 @@ type RequestPlan struct {
 	cache           *CachePlan
 	raw             []byte
 	fields          map[string]json.RawMessage
+	// The client's validated metadata. It only selects the session (§53.12)
+	// and is never sent upstream.
+	metadata json.RawMessage
 }
 
 func (p *RequestPlan) RawRequest() []byte {
@@ -70,17 +73,17 @@ func (p *RequestPlan) FeatureDecisions() []Object {
 		if p.cache != nil {
 			out = append(out, Object{"field": "cache_control", "action": "restore_exact_protocol_breakpoints", "stage": "outbound_relay"})
 		}
-		for _, field := range []string{"max_tokens", "temperature", "top_p", "top_k", "stop_sequences", "metadata", "service_tier", "inference_geo", "speed", "diagnostics", "tool_choice", "safeguards", "thinking", "output_config", "context_management", "compaction", "fallbacks", "container"} {
+		for _, field := range []string{"max_tokens", "temperature", "top_p", "top_k", "stop_sequences", "service_tier", "inference_geo", "speed", "diagnostics", "tool_choice", "safeguards", "thinking", "output_config", "context_management", "compaction", "fallbacks", "container"} {
 			if _, exists := p.fields[field]; exists {
 				decision := Object{"field": field, "action": "apply_main_request", "stage": "outbound_relay"}
-				if field == "metadata" {
-					decision["mapping"] = "explicit_client_object_replaces_cli_metadata"
-				}
 				if field == "inference_geo" {
 					decision["action"] = "apply_all_model_requests_and_block_auxiliary_count"
 				}
 				out = append(out, decision)
 			}
+		}
+		if len(p.metadata) > 0 {
+			out = append(out, Object{"field": "metadata", "action": "select_session_only", "stage": "admission"})
 		}
 	}
 	return out
@@ -131,7 +134,11 @@ func parseRequestPlan(body []byte, o Object) (*RequestPlan, error) {
 		if err := validateGenerationField(name, value); err != nil {
 			return nil, err
 		}
-		p.fields[name], _ = json.Marshal(value)
+		if name == "metadata" {
+			p.metadata, _ = json.Marshal(value)
+		} else {
+			p.fields[name], _ = json.Marshal(value)
+		}
 		delete(o, name)
 	}
 	if value, exists := o["tool_choice"]; exists {
@@ -333,10 +340,9 @@ func (r *Request) ApplyMainRequestFeatures(message Object) error {
 		if err != nil {
 			return fmt.Errorf("invalid planned field %s", name)
 		}
-		// metadata.user_id is an external opaque attribution value, not an
-		// authentication credential. Explicit metadata follows the client object
-		// exactly (including {} and null user_id); do not decode or merge the
-		// CLI's JSON-shaped user_id string. Missing metadata leaves CLI defaults.
+		// The client's metadata is not among the planned fields: it only
+		// selects the session, and upstream requests carry the CLI's own
+		// metadata with the gateway's session (§53.12, outbound relay).
 		if name == "tool_choice" {
 			choice := value.(map[string]any)
 			if str(choice, "type") == "tool" {

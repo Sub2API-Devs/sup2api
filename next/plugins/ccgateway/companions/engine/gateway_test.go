@@ -85,7 +85,7 @@ func TestHistorySnapshotAndToolPair(t *testing.T) {
 		t.Fatal(e)
 	}
 	r := parsed(t, basic())
-	p, e := prepareHistory(r, cache, "logical", dir, "2.1.288")
+	p, e := prepareHistory(r, cache, testBranch("logical"), dir, "2.1.288")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -93,6 +93,7 @@ func TestHistorySnapshotAndToolPair(t *testing.T) {
 	answer := Object{"id": "msg_tool_checkpoint", "role": "assistant", "stop_reason": "tool_use", "content": content}
 	row, id := transcriptRow(r.wireMessage(Message{Role: "assistant", Content: content}), p.LastUUID, p.SessionID, p.Work, "2.1.288", r.Model)
 	p.NativeRows = append(p.Rows, row)
+	p.NativeAll = p.NativeRows
 	p.NativeAnchor = id
 	p.NativePath = filepath.Join(dir, "native.jsonl")
 	if e = writeNative(p.NativePath, p.NativeRows); e != nil {
@@ -102,20 +103,20 @@ func TestHistorySnapshotAndToolPair(t *testing.T) {
 		t.Fatal(e)
 	}
 	r.Messages = append(r.Messages, Message{Role: "assistant", Content: content}, Message{Role: "user", Content: []Object{{"type": "tool_result", "tool_use_id": "toolu_one", "content": "sunny"}}})
-	p2, e := prepareHistory(r, cache, "logical", dir, "2.1.288")
+	p2, e := prepareHistory(r, cache, testBranch("logical"), t.TempDir(), "2.1.288")
 	if e != nil {
 		t.Fatal(e)
 	}
 	if p2.Mode != "prefix-hit" {
 		t.Fatal(p2.Mode)
 	}
-	defer p2.release()
-	concurrent, err := prepareHistory(r, cache, "logical", t.TempDir(), "2.1.288")
+	// A concurrent request of the same branch does not wait and keeps the
+	// session ID; it runs on its own private copy (§53.12).
+	concurrent, err := prepareHistory(r, cache, testBranch("logical"), t.TempDir(), "2.1.288")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer concurrent.release()
-	if !concurrent.Fork || concurrent.SessionID == p2.SessionID {
+	if concurrent.SessionID != p2.SessionID || concurrent.Path == p2.Path || filepath.Base(concurrent.Path) != concurrent.SessionID+".jsonl" {
 		t.Fatal("concurrent branches share a native writer")
 	}
 	b, _ := os.ReadFile(p2.Path)
@@ -126,17 +127,16 @@ func TestHistorySnapshotAndToolPair(t *testing.T) {
 		t.Fatal("must replay final user after assistant anchor")
 	}
 	r.CustomToolPrefix = "new_namespace"
-	changed, err := prepareHistory(r, cache, "logical", t.TempDir(), "2.1.288")
+	changed, err := prepareHistory(r, cache, testBranch("logical"), t.TempDir(), "2.1.288")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer changed.release()
 	if changed.Mode != "rebuild" || bytes.Contains(nativeBytes(changed.Rows), []byte("mcp__ccgateway__weather")) || !bytes.Contains(nativeBytes(changed.Rows), []byte("mcp__new_namespace__weather")) {
 		t.Fatal("namespace change reused old tool history")
 	}
 	r.CustomToolPrefix = ""
 	r.Messages[0].Content[0]["text"] = "Changed"
-	p3, e := prepareHistory(r, cache, "logical", dir, "2.1.288")
+	p3, e := prepareHistory(r, cache, testBranch("logical"), t.TempDir(), "2.1.288")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -452,6 +452,23 @@ func TestRealCLI(t *testing.T) {
 		}
 		return r
 	}
+	// The session branch the HTTP handler resolves for the current session.
+	branchFor := func(v Object) (*Request, sessionBranch) {
+		t.Helper()
+		if sessionHeader != "" {
+			encoded, _ := json.Marshal(v)
+			v, _ = decodeObject(encoded)
+			v["metadata"] = Object{"user_id": sessionHeader}
+		}
+		r := parseHTTP(v)
+		h := http.Header{}
+		h.Set("X-CCGateway-Session-Scope", scopeHeader)
+		b, err := newSessionBranch(r, h)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r, b
+	}
 	post := func(v Object, native string) (Object, string, http.Header) {
 		t.Helper()
 		b, _ := json.Marshal(v)
@@ -459,7 +476,9 @@ func TestRealCLI(t *testing.T) {
 		defer cancel()
 		req, _ := http.NewRequestWithContext(ctx, "POST", gateway.URL+"/v1/messages", bytes.NewReader(b))
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-CCGateway-Session-ID", sessionHeader)
+		if sessionHeader != "" {
+			setTestSession(t, req, sessionHeader)
+		}
 		req.Header.Set("X-CCGateway-Session-Scope", scopeHeader)
 		req.Header.Set("X-CCGateway-Native-Tools", native)
 		req.Header.Set("anthropic-beta", betaHeader)
@@ -735,9 +754,9 @@ func TestRealCLI(t *testing.T) {
 	configAnswer, _, _ := post(configReq, "")
 	configReq["messages"] = append(configReq["messages"].([]any), Object{"role": "assistant", "content": configAnswer["content"]}, Object{"role": "user", "content": "CONFIG_NEXT"})
 	lookup := func(v Object) *Snapshot {
-		rr := parseHTTP(v)
+		rr, b := branchFor(v)
 		hh := fingerprints(rr.Messages)
-		return cache.get(cacheKey(digest([]string{scopeHeader, sessionHeader}), rr.toolHistoryNamespace(), hh[len(hh)-2]))
+		return cache.get(cacheKey(b.Logical, rr.toolHistoryNamespace(), hh[len(hh)-2]))
 	}
 	beforeConfig := lookup(configReq)
 	if beforeConfig == nil {
@@ -778,7 +797,8 @@ func TestRealCLI(t *testing.T) {
 	if restartHeaders.Get("X-CCGateway-History") != "prefix-hit" {
 		t.Fatal("restart did not restore native history")
 	}
-	// Branch from the first answer, preserving the existing main transcript.
+	// Branch from the first answer: the sibling is appended to the same
+	// canonical file, whose existing records stay byte-for-byte (§53.12).
 	mainFile, _ := os.ReadFile(afterConfig.NativePath)
 	branch := basic()
 	branch["messages"] = append(parentMessages[:2:2], Object{"role": "user", "content": "ALTERNATE_BRANCH"})
@@ -787,8 +807,8 @@ func TestRealCLI(t *testing.T) {
 		t.Fatal("older node did not fork")
 	}
 	currentFile, _ := os.ReadFile(afterConfig.NativePath)
-	if !bytes.Equal(mainFile, currentFile) {
-		t.Fatal("fork changed parent transcript")
+	if !bytes.HasPrefix(currentFile, mainFile) || len(currentFile) == len(mainFile) || !bytes.Contains(currentFile[len(mainFile):], []byte("ALTERNATE_BRANCH")) {
+		t.Fatal("fork rewrote the parent transcript or was not appended as a sibling")
 	}
 	mu.Lock()
 	branchBody, _ := json.Marshal(requests[len(requests)-1]["messages"])
@@ -853,20 +873,20 @@ func TestRealCLI(t *testing.T) {
 	promptReq["messages"] = []any{Object{"role": "user", "content": "SNAPSHOT_START"}}
 	for i, system := range []string{"SNAPSHOT_SYSTEM_A", "SNAPSHOT_SYSTEM_A", "SNAPSHOT_SYSTEM_B", "SNAPSHOT_SYSTEM_B"} {
 		promptReq["system"] = system
-		preparedPrompt, err := prepareHistory(parseHTTP(promptReq), cache, digest([]string{scopeHeader, sessionHeader}), t.TempDir(), version)
+		promptParsed, promptBranch := branchFor(promptReq)
+		preparedPrompt, err := prepareHistory(promptParsed, cache, promptBranch, t.TempDir(), version)
 		if err != nil {
 			t.Fatal(err)
 		}
 		// Every admitted request preserves max_tokens through a nonce-scoped
 		// plan, so CLI snapshots must remain off regardless of cache metadata.
-		args := cliArgs(parseHTTP(promptReq), preparedPrompt, "fixture")
+		args := cliArgs(promptParsed, preparedPrompt, "fixture")
 		enabled := false
 		for i, arg := range args {
 			if arg == "--system-prompt-snapshot" && i+1 < len(args) {
 				enabled = args[i+1] == "on"
 			}
 		}
-		preparedPrompt.release()
 		if enabled {
 			t.Fatalf("prompt turn %d snapshot enabled with a scoped feature plan", i)
 		}
@@ -971,8 +991,10 @@ func TestRealCLI(t *testing.T) {
 	if collisionResponse.StatusCode != http.StatusBadRequest {
 		t.Fatalf("colliding SDK name accepted: HTTP %d", collisionResponse.StatusCode)
 	}
-	// No custom session header is required, but caller scopes cannot share history.
-	sessionHeader = ""
+	// One session's history is never shared across caller scopes. (A request
+	// without any session is a new session every time, §53.12; covered in
+	// session_branch_test.go.)
+	sessionHeader = "scoped-session"
 	scopeHeader = "caller-a"
 	autoReq := basic()
 	autoReq["messages"] = []any{Object{"role": "user", "content": "AUTOMATIC_SESSION"}}
@@ -980,7 +1002,7 @@ func TestRealCLI(t *testing.T) {
 	autoReq["messages"] = append(autoReq["messages"].([]any), Object{"role": "assistant", "content": autoAnswer["content"]}, Object{"role": "user", "content": "AUTO_NEXT"})
 	_, _, autoHeaders := post(autoReq, "")
 	if autoHeaders.Get("X-CCGateway-History") != "prefix-hit" {
-		t.Fatal("headerless continuation missed")
+		t.Fatal("scoped continuation missed")
 	}
 	scopeHeader = "caller-b"
 	_, _, otherHeaders := post(autoReq, "")
@@ -999,7 +1021,7 @@ func TestRealCLI(t *testing.T) {
 	// A cancelled request must terminate its child without starting inference.
 	dir := t.TempDir()
 	cancelReq := parsed(t, basic())
-	prepared, err := prepareHistory(cancelReq, cache, "cancel-test", dir, version)
+	prepared, err := prepareHistory(cancelReq, cache, testBranch("cancel-test"), dir, version)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -117,21 +117,38 @@ func TestRealCLIMetadataGatewayCompatibility(t *testing.T) {
 			actual := wireMetadata[len(wireMetadata)-1]
 			headers := wireHeaders[len(wireHeaders)-1]
 			mu.Unlock()
-			if clientMetadata == nil || digest(clientMetadata) != digest(actual) {
-				t.Fatal("real CLI metadata was rejected or changed")
-			}
-			metadata := clientMetadata.(map[string]any)
+			metadata, _ := clientMetadata.(map[string]any)
 			id, ok := metadata["user_id"].(string)
 			if !ok || id == "" {
 				t.Fatal("outer CLI did not emit user_id")
 			}
-			shape := []string{}
-			if decoded, err := decodeObject([]byte(id)); err == nil {
-				for key := range decoded {
-					shape = append(shape, key)
-				}
-				sort.Strings(shape)
+			// §53.12: the client's user_id selects the session and never reaches
+			// upstream; upstream gets the inner CLI's own user_id with session U.
+			var client map[string]string
+			if err := json.Unmarshal([]byte(id), &client); err != nil || client["session_id"] == "" {
+				t.Fatalf("outer CLI user_id shape changed: %s", id)
 			}
+			u := upstreamSessionID(client["session_id"])
+			checkUpstream := func(label string, got any, headers http.Header) {
+				t.Helper()
+				raw, _ := json.Marshal(got)
+				for _, part := range []string{client["session_id"], client["device_id"]} {
+					if part != "" && strings.Contains(string(raw)+fmt.Sprint(headers), part) {
+						t.Fatalf("%s: client user_id part %s sent upstream", label, part)
+					}
+				}
+				inner, _ := got.(map[string]any)
+				var upstream map[string]string
+				if err := json.Unmarshal([]byte(str(inner, "user_id")), &upstream); err != nil || upstream["session_id"] != u || upstream["device_id"] == "" || headers.Get("X-Claude-Code-Session-Id") != u {
+					t.Fatalf("%s: upstream user_id %v / session %q, want session %s", label, got, headers.Get("X-Claude-Code-Session-Id"), u)
+				}
+			}
+			checkUpstream("real client", actual, headers)
+			shape := []string{}
+			for key := range client {
+				shape = append(shape, key)
+			}
+			sort.Strings(shape)
 			if auth == "oauth" {
 				if headers.Get("Authorization") != "Bearer dummy-inner-oauth-metadata" {
 					t.Fatal("inner OAuth authorization changed")
@@ -141,19 +158,19 @@ func TestRealCLIMetadataGatewayCompatibility(t *testing.T) {
 					t.Fatal("inner API authorization changed")
 				}
 			}
-			if headers.Get("X-Claude-Code-Session-Id") == "" {
-				t.Fatal("inner CLI session header lost")
-			}
-			t.Logf("CLI=%s auth=%s real client user_id bytes=%d JSON keys=%v; exact metadata and independent inner auth preserved", version, auth, len(id), shape)
+			t.Logf("CLI=%s auth=%s real client user_id bytes=%d JSON keys=%v; client metadata kept off the wire, upstream session U, independent inner auth preserved", version, auth, len(id), shape)
+			// Every metadata shape is admitted and none reaches upstream. With one
+			// session (fixed session_id, other fields varying) history continues.
+			const variantSession = "5e551011-0000-4000-8000-00000000000a"
 			messages := []any{Object{"role": "user", "content": "METADATA_OBJECT_CASE"}}
-			for i, metadata := range []Object{{}, {"user_id": nil}, {"user_id": strings.Repeat("界", 512)}, {"user_id": `{ "session_id": "client-opaque-session", "custom": "kept as string" }`}, nil} {
+			for i, metadata := range []Object{
+				{"user_id": `{"device_id":"variant-device-1","account_uuid":"","session_id":"` + variantSession + `"}`},
+				{"user_id": `{ "session_id": "` + variantSession + `", "custom": "kept as string" }`},
+				{"user_id": `{"device_id":"variant-device-2","account_uuid":"variant-account","session_id":"` + variantSession + `"}`},
+			} {
 				body := Object{"model": "claude-sonnet-4-6", "max_tokens": 128, "metadata": metadata, "messages": messages}
-				if metadata == nil {
-					delete(body, "metadata")
-				}
 				raw, _ := json.Marshal(body)
 				req := httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(raw))
-				req.Header.Set("X-CCGateway-Session-ID", "metadata-object-cases")
 				res := httptest.NewRecorder()
 				g.ServeHTTP(res, req)
 				if res.Code != 200 {
@@ -163,14 +180,15 @@ func TestRealCLIMetadataGatewayCompatibility(t *testing.T) {
 				got := wireMetadata[len(wireMetadata)-1]
 				headers := wireHeaders[len(wireHeaders)-1]
 				mu.Unlock()
-				if metadata != nil && digest(got) != digest(metadata) {
-					t.Fatalf("metadata variant %d changed on final wire", i)
-				}
-				if metadata == nil {
-					inner, ok := got.(map[string]any)
-					if !ok || str(inner, "user_id") == "" {
-						t.Fatal("missing client metadata lost inner default attribution")
+				raw, _ = json.Marshal(got)
+				for _, part := range []string{variantSession, "variant-device", "variant-account", "kept as string"} {
+					if strings.Contains(string(raw)+fmt.Sprint(headers), part) {
+						t.Fatalf("metadata variant %d sent %s upstream", i, part)
 					}
+				}
+				inner, _ := got.(map[string]any)
+				if !strings.Contains(str(inner, "user_id"), `"session_id":"`+upstreamSessionID(variantSession)+`"`) {
+					t.Fatalf("metadata variant %d upstream user_id %v", i, got)
 				}
 				if auth == "oauth" && headers.Get("Authorization") != "Bearer dummy-inner-oauth-metadata" {
 					t.Fatal("metadata changed OAuth header")
@@ -179,10 +197,34 @@ func TestRealCLIMetadataGatewayCompatibility(t *testing.T) {
 					t.Fatal("metadata changed API key header")
 				}
 				if i > 0 && res.Header().Get("X-CCGateway-History") != "prefix-hit" {
-					t.Fatal("metadata change discarded history")
+					t.Fatal("same session with other metadata fields discarded history")
 				}
 				answer, _ := decodeObject(res.Body.Bytes())
 				messages = append(messages, Object{"role": "assistant", "content": answer["content"]}, Object{"role": "user", "content": "METADATA_NEXT"})
+			}
+			// Shapes without a session: admitted, new session each, nothing
+			// of the client's upstream.
+			for i, metadata := range []Object{{}, {"user_id": nil}, {"user_id": strings.Repeat("界", 512)}, nil} {
+				body := Object{"model": "claude-sonnet-4-6", "max_tokens": 128, "metadata": metadata, "messages": []any{Object{"role": "user", "content": "METADATA_NO_SESSION"}}}
+				if metadata == nil {
+					delete(body, "metadata")
+				}
+				raw, _ := json.Marshal(body)
+				res := httptest.NewRecorder()
+				g.ServeHTTP(res, httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(raw)))
+				if res.Code != 200 {
+					t.Fatalf("metadata shape %d HTTP%d %s", i, res.Code, res.Body.String())
+				}
+				mu.Lock()
+				got := wireMetadata[len(wireMetadata)-1]
+				mu.Unlock()
+				raw, _ = json.Marshal(got)
+				if strings.Contains(string(raw), "界") {
+					t.Fatalf("metadata shape %d sent the client's user_id upstream", i)
+				}
+				if inner, ok := got.(map[string]any); !ok || str(inner, "user_id") == "" {
+					t.Fatal("missing client metadata lost inner default attribution")
+				}
 			}
 		})
 	}

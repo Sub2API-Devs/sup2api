@@ -388,6 +388,12 @@ func (r *Request) restoreCacheSystem(body Object) error {
 		}
 	}
 	if found < 0 {
+		if restored, ok, err := restoreLeadingSystem(actual, want); err != nil {
+			return err
+		} else if ok {
+			body["system"] = restored
+			return nil
+		}
 		return fmt.Errorf("cached client system boundaries cannot be restored")
 	}
 	replaced := append([]Object{}, actual[:found]...)
@@ -397,6 +403,69 @@ func (r *Request) restoreCacheSystem(body Object) error {
 	replaced = append(replaced, actual[found+1:]...)
 	body["system"] = replaced
 	return nil
+}
+
+// Identity blocks the CLI (2.1.292) puts after a client billing header block
+// when the client's next block is not one of them.
+var cliIdentityBlocks = map[string]bool{
+	"You are Claude Code, Anthropic's official CLI for Claude.":                                      true,
+	"You are Claude Code, Anthropic's official CLI for Claude, running within the Claude Agent SDK.": true,
+	"You are a Claude agent, built on Anthropic's Claude Agent SDK.":                                 true,
+}
+
+// restoreLeadingSystem undoes the CLI's layout of a client system that leads
+// with blocks the CLI keeps as they are (CC's billing header, then possibly an
+// identity block): those stay separate, an identity block is inserted when the
+// client has none, and the remaining client blocks are joined into one. CC's
+// auto mode classifier sends [billing, prompt*, tail]; the CLI sends
+// [billing, SDK identity*, prompt + "\n\n" + tail]. The upstream request gets
+// the client's own blocks (§ preserve client structure): leading blocks
+// matched exactly, the joined block split, the inserted identity block
+// removed. Markers are restored from the client's blocks afterwards.
+func restoreLeadingSystem(actual, want []Object) ([]Object, bool, error) {
+	text := func(b Object) (string, bool) {
+		s, ok := b["text"].(string)
+		return s, ok && str(b, "type") == "text"
+	}
+	start, end := -1, -1
+	for k := 1; k < len(want) && k < len(actual); k++ {
+		leading := true
+		for i := 0; i < k && leading; i++ {
+			got, ok := text(actual[i])
+			leading = ok && got == str(want[i], "text")
+		}
+		if !leading {
+			continue
+		}
+		var rest []string
+		for _, b := range want[k:] {
+			rest = append(rest, str(b, "text"))
+		}
+		joined := strings.Join(rest, "\n\n")
+		at := -1
+		if got, ok := text(actual[k]); ok && got == joined {
+			at = k
+		} else if got, ok := text(actual[k]); ok && cliIdentityBlocks[got] && got != str(want[k], "text") && k+1 < len(actual) {
+			if next, ok := text(actual[k+1]); ok && next == joined {
+				at = k + 1
+			}
+		}
+		if at < 0 {
+			continue
+		}
+		if start >= 0 {
+			return nil, false, fmt.Errorf("ambiguous cached system block")
+		}
+		start, end = k, at
+	}
+	if start < 0 {
+		return nil, false, nil
+	}
+	restored := make([]Object, 0, len(want)+len(actual)-end-1)
+	for _, b := range want {
+		restored = append(restored, Object{"type": "text", "text": str(b, "text")})
+	}
+	return append(restored, actual[end+1:]...), true, nil
 }
 
 func (r *Request) restoreCacheSystemMarkers(body Object) error {

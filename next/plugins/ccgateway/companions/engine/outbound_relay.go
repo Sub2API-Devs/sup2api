@@ -721,13 +721,59 @@ func (relay *outboundRelay) handler(req *Request, forward http.Handler) http.Han
 			if !relay.adaptRequest(w, r, req, groups, model, count) {
 				return
 			}
+		} else if (model || count) && !relay.rewriteSessionBody(w, r, req) {
+			return
 		}
+		sessionHeaders(req, r.Header)
 		if prefix != "" {
 			req.diagnostic.artifact(prefix+"-request-headers.json", safeHeaders(r.Header))
 			r.Body = &traceReader{ReadCloser: r.Body, diagnostic: req.diagnostic, name: prefix + "-request.body"}
 		}
 		forward.ServeHTTP(w, r)
 	})
+}
+
+// sessionHeaders makes every upstream request of the run carry the gateway's
+// session identity (§53.12) instead of the CLI's or the client's:
+// X-Claude-Code-Session-Id is U, and x-claude-code-agent-id is A' for a client
+// subagent and absent for the main thread.
+func sessionHeaders(req *Request, h http.Header) {
+	if req.upstreamSession != "" && h.Get("X-Claude-Code-Session-Id") != "" {
+		h.Set("X-Claude-Code-Session-Id", req.upstreamSession)
+	}
+	if req.upstreamAgent != "" {
+		h.Set("X-Claude-Code-Agent-Id", req.upstreamAgent)
+	} else {
+		h.Del("X-Claude-Code-Agent-Id")
+	}
+}
+
+// rewriteSessionBody applies upstreamUserID to a request the relay does not
+// otherwise adapt; false when the request was refused.
+func (relay *outboundRelay) rewriteSessionBody(w http.ResponseWriter, r *http.Request, req *Request) bool {
+	if req.upstreamSession == "" {
+		return true
+	}
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<20))
+	if err == nil {
+		body, err = upstreamUserID(body, req.upstreamSession)
+	}
+	if err != nil {
+		if strings.HasSuffix(r.URL.Path, "/messages") {
+			relay.mu.Lock()
+			if relay.failure == nil {
+				relay.failure = fmt.Errorf("cannot prepare the upstream request: %w", err)
+			}
+			relay.mu.Unlock()
+			relay.stop(r)
+		}
+		apiError(w, 400, "invalid_request_error", relayRefusedMessage)
+		return false
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	r.ContentLength = int64(len(body))
+	r.Header.Del("Content-Length")
+	return true
 }
 
 // adaptRequest replaces the body with its adapted form, or refuses the
@@ -748,6 +794,10 @@ func (relay *outboundRelay) adaptRequest(w http.ResponseWriter, r *http.Request,
 	}
 	if err == nil && model && attributed && req.credit != nil {
 		adapted, err = req.bindCreditWire(adapted, r.Header)
+	}
+	if err == nil && req.upstreamSession != "" {
+		// After credit binding, which leaves metadata unbound (credits.Prompt).
+		adapted, err = upstreamUserID(adapted, req.upstreamSession)
 	}
 	if err == nil && attributed && req.resources != nil {
 		err = req.validateOutboundResources(adapted)

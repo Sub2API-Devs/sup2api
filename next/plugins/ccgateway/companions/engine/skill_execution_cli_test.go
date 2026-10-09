@@ -77,7 +77,7 @@ func TestRealCLISkillExecutionGateway(t *testing.T) {
 				req.Header.Set(resources.PrincipalHeader, identity.PrincipalID)
 				req.Header.Set(resources.GenerationHeader, identity.Generation)
 				req.Header.Set(resources.ResourceOutputsHeader, "1")
-				req.Header.Set("X-CCGateway-Session-ID", session)
+				setTestSession(t, req, session)
 				refs := []Object{{"kind": "container", "id": "container_fixture"}, {"kind": "file", "id": "file_fixture"}}
 				if kind == "custom" {
 					refs = append(refs, Object{"kind": "skill", "id": "skill_fixture"})

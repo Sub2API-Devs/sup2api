@@ -66,7 +66,7 @@ func TestRealCLICacheHistoryAndNativeToolCompatibility(t *testing.T) {
 		t.Helper()
 		raw, _ := json.Marshal(body)
 		request := httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(raw))
-		request.Header.Set("X-CCGateway-Session-ID", "cache-history-fixture")
+		setTestSession(t, request, "cache-history-fixture")
 		response := httptest.NewRecorder()
 		g.ServeHTTP(response, request)
 		if response.Code != 200 {

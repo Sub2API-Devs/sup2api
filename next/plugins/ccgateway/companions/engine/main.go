@@ -82,15 +82,12 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !x.admit() {
 		return
 	}
-	label, busyKey, logical, ok := x.session()
+	branch, ok := x.session()
 	if !ok {
 		return
 	}
-	if !g.occupy(busyKey) {
-		x.fail(409, "invalid_request_error", "Session has an active request; use a different session ID for concurrent branches")
-		return
-	}
-	defer g.vacate(busyKey)
+	// Requests of one session never wait for each other (§53.12): each runs on
+	// a private copy of its branch.
 	select {
 	case g.Slots <- struct{}{}:
 		defer func() { <-g.Slots }()
@@ -98,7 +95,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		x.fail(429, "rate_limit_error", "Gateway concurrency limit reached")
 		return
 	}
-	x.execute(label, logical)
+	x.execute(branch)
 }
 
 // exchange is one /v1/messages request: admission, the CLI run, and the
@@ -252,32 +249,24 @@ func (g *Gateway) admitNativeTools(req *Request, header string) error {
 	return nil
 }
 
-// session returns the client's session label, the key that serializes its
-// requests, and the history key. Without a session ID requests never wait
-// for each other.
-func (x *exchange) session() (label, busyKey, logical string, ok bool) {
-	h := x.r.Header
-	logical = h.Get("X-CCGateway-Session-ID")
-	if logical == "" {
-		logical = "auto"
-	}
-	if !sessionName.MatchString(logical) {
-		x.fail(400, "invalid_request_error", "Invalid gateway session ID")
-		return "", "", "", false
-	}
-	label = logical
-	logical = digest([]string{h.Get("X-CCGateway-Session-Scope"), logical})
+// session resolves the request's session branch (§53.12). Helper history and
+// resource identities get their own index namespace within the branch.
+func (x *exchange) session() (sessionBranch, bool) {
+	var extra [][]string
 	if x.req.helperHistory != nil {
-		logical = digest([]string{logical, x.req.helperHistory.namespace})
+		extra = append(extra, []string{x.req.helperHistory.namespace})
 	}
 	if x.resources != nil {
-		logical = digest([]string{logical, x.resources.identity.PrincipalID, x.resources.identity.Generation})
+		extra = append(extra, []string{x.resources.identity.PrincipalID, x.resources.identity.Generation})
 	}
-	busyKey = logical
-	if h.Get("X-CCGateway-Session-ID") == "" {
-		busyKey = uuid()
+	branch, err := newSessionBranch(x.req, x.r.Header, extra...)
+	if err != nil {
+		x.fail(400, "invalid_request_error", err.Error())
+		return sessionBranch{}, false
 	}
-	return label, busyKey, logical, true
+	x.req.upstreamSession = branch.Upstream
+	x.req.upstreamAgent = branch.UpstreamAgent
+	return branch, true
 }
 
 // occupy marks a session busy; false when it already has an active request.
@@ -296,7 +285,7 @@ func (g *Gateway) occupy(key string) bool {
 func (g *Gateway) vacate(key string) { g.mu.Lock(); delete(g.busy, key); g.mu.Unlock() }
 
 // execute prepares history, runs the CLI, keeps the new history and answers.
-func (x *exchange) execute(sessionLabel, logical string) {
+func (x *exchange) execute(branch sessionBranch) {
 	g, req := x.g, x.req
 	started := time.Now()
 	ctx, cancel := context.WithTimeout(x.r.Context(), g.Timeout)
@@ -312,19 +301,17 @@ func (x *exchange) execute(sessionLabel, logical string) {
 	for attempt := 0; ; attempt++ {
 		x.diagnostic.setStage("prepare_history")
 		x.diagnostic.trace("history_prepare_started", nil)
-		p, e := prepareHistory(req, g.Cache, logical, dir, g.Runner.Version)
+		p, e := prepareHistory(req, g.Cache, branch, dir, g.Runner.Version)
 		if e != nil {
 			x.fail(500, "api_error", "Cannot prepare history")
 			return
 		}
-		defer p.release()
 		x.diagnostic.setField("history_mode", p.Mode)
-		x.diagnostic.artifact("history.json", Object{"mode": p.Mode, "session_id": p.SessionID, "anchor": p.Anchor, "input_uuid": p.InputUUID, "rows": len(p.Rows)})
+		x.diagnostic.artifact("history.json", Object{"mode": p.Mode, "session_id": p.SessionID, "anchor": p.Anchor, "input_uuid": p.InputUUID, "rows": len(p.Rows), "indexed": branch.indexed(), "agent_id": branch.AgentID != ""})
 		if x.diagnostic.enabled() {
 			x.diagnostic.save("history-prepared.jsonl", nativeBytes(p.Rows))
 		}
 		x.diagnostic.trace("history_prepared", Object{"mode": p.Mode, "rows": len(p.Rows)})
-		x.w.Header().Set("X-CCGateway-Session-ID", sessionLabel)
 		x.w.Header().Set("X-CCGateway-History", p.Mode)
 		x.w.Header().Set("X-CCGateway-Cache-TTL", fmt.Sprint(int((24 * time.Hour).Seconds())))
 		x.w.Header().Set("X-CCGateway-Cache-Scope", "local-only")
@@ -336,7 +323,6 @@ func (x *exchange) execute(sessionLabel, logical string) {
 		if e != nil {
 			var unavailable *nativeToolAvailabilityError
 			if attempt == 0 && !x.streaming && ctx.Err() == nil && errors.As(e, &unavailable) && unavailable.RetrySafe {
-				p.release()
 				for _, name := range unavailable.Names {
 					delete(req.Native, name)
 				}
@@ -344,7 +330,9 @@ func (x *exchange) execute(sessionLabel, logical string) {
 					x.fail(400, "invalid_request_error", err.Error())
 					return
 				}
-				logical = digest([]string{logical, "native-runtime-fallback", digest(req.Native)})
+				if branch.indexed() {
+					branch.Logical = digest([]string{branch.Logical, "native-runtime-fallback", digest(req.Native)})
+				}
 				x.diagnostic.trace("native_tools_mcp_fallback", Object{"tools": unavailable.Names, "reason": unavailable.Error()})
 				continue
 			}
@@ -369,15 +357,18 @@ func (x *exchange) execute(sessionLabel, logical string) {
 			x.diagnostic.trace("history_commit_skipped", Object{"reason": "credential-bearing credit response"})
 		} else if req.CacheWarmup {
 			x.diagnostic.trace("history_commit_skipped", Object{"reason": "cache_warmup"})
+		} else if !branch.indexed() {
+			// No session ID: a new session every time, never registered.
+			x.diagnostic.trace("history_commit_skipped", Object{"reason": "new_session"})
 		} else if p.APIResponseComplete && (len(p.NativeRows) == 0 || str(answer, "stop_reason") == "refusal") {
-			if err := p.commitResponseOnly(req, answer, g.Cache, logical, started); err != nil {
+			if err := p.commitResponseOnly(req, answer, g.Cache, branch.Logical, started); err != nil {
 				x.diagnostic.trace("response_checkpoint_failed", Object{"error": err.Error()})
 			}
 		} else if str(answer, "stop_reason") == "refusal" {
 			// No native assistant checkpoint is guaranteed for a refusal.
 			// Preserve prior checkpoints; future turns rebuild from client history.
 			x.diagnostic.trace("history_commit_skipped", Object{"reason": "upstream_refusal"})
-		} else if err := p.commit(req, answer, g.Cache, logical, dir, g.Runner.Version, started); err != nil {
+		} else if err := p.commit(req, answer, g.Cache, branch.Logical, dir, g.Runner.Version, started); err != nil {
 			x.diagnostic.trace("history_commit_failed", Object{"error": err.Error()})
 			log.Print("history cache write failed; future requests will rebuild")
 		} else {

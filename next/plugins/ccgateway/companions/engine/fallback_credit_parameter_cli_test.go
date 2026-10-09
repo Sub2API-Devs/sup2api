@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/credits"
@@ -22,6 +23,10 @@ import (
 func TestRealCLICreditParameterModes(t *testing.T) {
 	const token = "mode-fixture-token"
 	hash, _ := credits.TokenHash(token)
+	labelOf := map[string]string{}
+	for _, label := range []string{"issue", "strict-object", "mode-less", "best-match", "best-changed", "best-expired", "best-missing", "best-provider400", "best-corrupt", "null", "old-beta"} {
+		labelOf[upstreamSessionID(digestUUID(sha256.Sum256([]byte("ccgateway-session-v1"+label))))] = label
+	}
 	for _, stream := range []bool{false, true} {
 		t.Run(fmt.Sprintf("stream-%v", stream), func(t *testing.T) {
 			var calls atomic.Int32
@@ -35,8 +40,13 @@ func TestRealCLICreditParameterModes(t *testing.T) {
 				calls.Add(1)
 				raw, _ := io.ReadAll(r.Body)
 				wire, _ := decodeObject(raw)
+				// Each case is its own client session (metadata.user_id = label);
+				// upstream sees only its session U, never the label (§53.12).
+				label := labelOf[r.Header.Get("X-Claude-Code-Session-Id")]
 				metadata, _ := wire["metadata"].(Object)
-				label := str(metadata, "user_id")
+				if label == "" || !strings.Contains(str(metadata, "user_id"), `"`+r.Header.Get("X-Claude-Code-Session-Id")+`"`) {
+					t.Errorf("upstream session %q does not identify a case", r.Header.Get("X-Claude-Code-Session-Id"))
+				}
 				if label == "issue" {
 					firstSystem = wire["system"]
 				} else if label == "null" {

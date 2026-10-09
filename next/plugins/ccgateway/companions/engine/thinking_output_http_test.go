@@ -46,7 +46,7 @@ func newThinkingOutputFixture(t *testing.T, handler http.HandlerFunc, tweaks ...
 	if err != nil {
 		t.Fatal(err)
 	}
-	gw := httptest.NewServer(&Gateway{Runner: &Runner{CLI: cli, Version: version, Plugin: plugin, Work: root, Env: env}, Cache: cache, Timeout: 20 * time.Second, Slots: make(chan struct{}, 1), RequestLogDir: filepath.Join(root, "request-logs")})
+	gw := httptest.NewServer(fixtureClientSession(&Gateway{Runner: &Runner{CLI: cli, Version: version, Plugin: plugin, Work: root, Env: env}, Cache: cache, Timeout: 20 * time.Second, Slots: make(chan struct{}, 1), RequestLogDir: filepath.Join(root, "request-logs")}, "thinking-output-fixture"))
 	t.Cleanup(gw.Close)
 	return gw.URL, cache
 }

@@ -111,7 +111,7 @@ func TestRealCLISafeguardsGatewayCompatibility(t *testing.T) {
 				raw, _ := json.Marshal(body)
 				req := httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(raw))
 				req.Header.Set("anthropic-beta", "dangerous-tool-use-2026-09-03")
-				req.Header.Set("X-CCGateway-Session-ID", "safeguards-fixture")
+				setTestSession(t, req, "safeguards-fixture")
 				res := httptest.NewRecorder()
 				g.ServeHTTP(res, req)
 				if res.Code != 200 {

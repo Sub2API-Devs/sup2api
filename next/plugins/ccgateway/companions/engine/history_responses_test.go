@@ -15,13 +15,14 @@ func responseHistoryAnswer(id, text string) Object {
 
 func commitResponseFixture(t *testing.T, c *HistoryCache, scope string, r *Request, answer Object) *Prepared {
 	t.Helper()
-	p, err := prepareHistory(r, c, scope, t.TempDir(), "2.1.292")
+	p, err := prepareHistory(r, c, testBranch(scope), t.TempDir(), "2.1.292")
 	if err != nil {
 		t.Fatal(err)
 	}
 	content := answer["content"].([]Object)
 	row, anchor := transcriptRow(Message{Role: "assistant", Content: content}, p.LastUUID, p.SessionID, p.Work, "2.1.292", r.Model)
 	p.NativeRows = append(append([]json.RawMessage(nil), p.Rows...), row)
+	p.NativeAll = p.NativeRows
 	p.NativeAnchor = anchor
 	if p.NativePath == "" {
 		p.NativePath = filepath.Join(c.dir, "native", p.SessionID+".jsonl")
@@ -35,7 +36,6 @@ func commitResponseFixture(t *testing.T, c *HistoryCache, scope string, r *Reque
 	if err = p.commit(r, answer, c, scope, "", "2.1.292", time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	p.release()
 	return p
 }
 
@@ -62,7 +62,7 @@ func TestResponseHistorySurvivesRestartBranchAndScopeIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resumed, err := prepareHistory(r, c, "scope-a", t.TempDir(), "2.1.292")
+	resumed, err := prepareHistory(r, c, testBranch("scope-a"), t.TempDir(), "2.1.292")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,22 +76,19 @@ func TestResponseHistorySurvivesRestartBranchAndScopeIsolation(t *testing.T) {
 		t.Fatal("envelope injected into replayable JSONL")
 	}
 	resumed.Responses[0].Response[0] = 'x'
-	resumed.release()
 	branch := responseHistoryRequest(t)
 	branch.Messages = append(branch.Messages, Message{Role: "assistant", Content: first["content"].([]Object)}, Message{Role: "user", Content: []Object{{"type": "text", "text": "alternate"}}})
-	fork, err := prepareHistory(branch, c, "scope-a", t.TempDir(), "2.1.292")
+	fork, err := prepareHistory(branch, c, testBranch("scope-a"), t.TempDir(), "2.1.292")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer fork.release()
 	if fork.Mode != "fork" || len(fork.Responses) != 1 || fork.Responses[0].MessageID != "msg_first" || !json.Valid(fork.Responses[0].Response) {
 		t.Fatal("branch has future envelope or alias mutation")
 	}
-	other, err := prepareHistory(r, c, "scope-b", t.TempDir(), "2.1.292")
+	other, err := prepareHistory(r, c, testBranch("scope-b"), t.TempDir(), "2.1.292")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer other.release()
 	if len(other.Responses) != 0 || other.Mode != "rebuild" {
 		t.Fatal("response chain crossed request scope")
 	}
@@ -103,7 +100,7 @@ func TestResponseHistoryRejectsIncompleteAndRefusedCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := responseHistoryRequest(t)
-	p, err := prepareHistory(r, c, "scope", t.TempDir(), "2.1.292")
+	p, err := prepareHistory(r, c, testBranch("scope"), t.TempDir(), "2.1.292")
 	if err != nil {
 		t.Fatal(err)
 	}
