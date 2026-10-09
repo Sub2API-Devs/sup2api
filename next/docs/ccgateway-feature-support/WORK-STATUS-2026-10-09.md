@@ -90,15 +90,31 @@ fa77c4284 - Merge wt-account-ui: add custom actions and refresh auth button
 9. **ccgateway-controller-http-mode.md** - 控制面板 HTTP 模式
 10. **CONTROLLER-CONNECTION-DESIGN.md** - 控制面板连接设计概览
 
+## 部署状态
+
+### OVH 生产环境部署完成 ✅
+
+**部署时间**：2026-10-09 15:13 (UTC+8)
+**部署版本**：v0.1.79
+**Release Digest**：0b64a0535086acbdd9b8058bb4e0217f0961c0645cabd247655e50934bcdd02d
+
+所有四个节点已成功升级：
+- ✅ sup2api-1 (127.0.0.1:3130) - v0.1.79
+- ✅ sup2api-2 (127.0.0.1:3131) - v0.1.79
+- ✅ sup2api-3 (127.0.0.1:3132) - v0.1.79
+- ✅ sup2api-4 (127.0.0.1:3133) - v0.1.79
+
+**升级策略**：primary-first-v1
+**升级日志**：/home/debian/sup2api-managed/upgrade-20261009T071326.log
+
 ## 待办事项
 
 ### 立即
-- [ ] 无待办事项，所有任务已完成
+- [x] 部署到生产环境（OVH 4 节点）✅ 2026-10-09 完成
+- [ ] 验证所有新功能在生产环境工作正常
+- [ ] 更新线上文档
 
 ### 后续
-- [ ] 部署到生产环境（OVH 4 节点）
-- [ ] 验证所有新功能
-- [ ] 更新线上文档
 - [ ] 清理已合并的 worktree 分支（可选）
 
 ## 工作区状态
