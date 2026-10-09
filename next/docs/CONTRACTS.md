@@ -3700,7 +3700,7 @@ images/gateway.tar.gz      # Caddy 网关
 
 - 子标签只剩：连接与授权、网络配置、CC 特性、部署与运行。"账号容器"并入"部署与运行"（运行环境与镜像卡片之后）；账号列表显示容器内 Claude Code 版本（`GET /system/ccgateway/accounts/:id/health` 新增可选只读字段 `cli_version`，核心并行读 Worker `admin/features`，3 秒超时，取不到不返回）；请求调试日志一列只放开关，说明悬停/聚焦显示。
 - 删除"通用 API 特性"：官方 API 支持的功能不再是设置。`allow_fast`、`allow_effort` 在发给 Worker 的策略与设置读取中恒为 `true`，保存的 `false` 被忽略（默认值同步改为 true）。
-- "CC 特性"包含"工具与错误处理"（直接展开）、"附件默认来源"（2026-10-10 按用户要求恢复：默认来源 client / gateway / both、按附件类型覆盖、环境字段 workingDirectory / platform 覆盖、未知客户端/容器附件放行或忽略）和"不支持的请求如何处理"（unknown_beta / unknown_field）；特性目录界面删除。
+- "CC 特性"包含"查看处理机制与证据"（CC 范围的特性目录，2026-10-10 按用户要求恢复：`GET /system/ccgateway/features` 中 `scope: "cc"` 的条目，如 F-ADD-DIR 额外目录访问 / F-SAFEGUARDS，展开时才读取，含"查看账号 Worker 能力"只读查询；目录里不再有 fast/effort 开关）、"工具与错误处理"（直接展开）、"附件默认来源"（2026-10-10 按用户要求恢复：默认来源 client / gateway / both、按附件类型覆盖、环境字段 workingDirectory / platform 覆盖（workingDirectory 含客户端 `--add-dir` 的 "Additional working directories" 及其子项，ccgateway 0.1.22 起）、未知客户端/容器附件放行或忽略）和"不支持的请求如何处理"（unknown_beta / unknown_field）。
 
 ### 53.12 Worker 会话：客户端会话 ID 不变则内部会话 ID 不变（2026-10-09，用户要求）
 

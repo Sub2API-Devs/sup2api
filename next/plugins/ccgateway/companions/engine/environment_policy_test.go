@@ -48,6 +48,29 @@ func TestEnvironmentFieldSelection(t *testing.T) {
 	}
 }
 
+// Claude Code 2.1.292 with --add-dir lists the extra directories as nested
+// bullets; they are client directories and follow the workingDirectory field.
+func TestAdditionalDirectoriesFollowWorkingDirectory(t *testing.T) {
+	env := "# Environment\nYou have been invoked in the following environment: \n - Primary working directory: D:\\client\n - Is a git repository: true\n - Additional working directories:\n  - D:\\client-docs\n  - D:\\client-other\n - Platform: win32\n - Shell: PowerShell\n"
+	for _, cwd := range []string{"client", "gateway"} {
+		r := &Request{AttachmentSource: "gateway", EnvironmentFields: map[string]string{"workingDirectory": cwd}}
+		text := r.filterClientEnvironment(env)
+		for _, want := range []string{"Primary working directory: D:\\client", " - Additional working directories:", "  - D:\\client-docs", "  - D:\\client-other"} {
+			if strings.Contains(text, want) != (cwd == "client") {
+				t.Fatalf("workingDirectory=%s: %q in %q", cwd, want, text)
+			}
+		}
+		if strings.Contains(text, "Platform:") || strings.Contains(text, "Shell:") || strings.Contains(text, "git repository") {
+			t.Fatalf("gateway fields kept: %q", text)
+		}
+	}
+	r := &Request{AttachmentSource: "client", EnvironmentFields: map[string]string{"workingDirectory": "gateway"}}
+	text := r.filterClientEnvironment(env)
+	if strings.Contains(text, "client-docs") || !strings.Contains(text, "Platform: win32") || !strings.Contains(text, "Shell: PowerShell") {
+		t.Fatalf("client source with gateway directories: %q", text)
+	}
+}
+
 func TestEnvironmentEnvelopeFieldOverride(t *testing.T) {
 	r := &Request{AttachmentSource: "gateway", EnvironmentFields: map[string]string{"workingDirectory": "client", "platform": "gateway"}, System: []string{
 		"<ccgateway-attachment type=\"environment\">\n# Environment\nYou have been invoked in the following environment: \n - Primary working directory: /client\n - Platform: linux\n</ccgateway-attachment>",

@@ -51,7 +51,7 @@ describe('CCGateway settings categories and CC features', () => {
     w.unmount()
   })
 
-  it('shows tools and error handling, attachments and unsupported requests, expanded', async () => {
+  it('shows the CC feature catalog, tools and error handling, attachments and unsupported requests', async () => {
     mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
     const w = await render()
     expect(w.get('[data-testid="request-policy"]').isVisible()).toBe(false)
@@ -59,7 +59,6 @@ describe('CCGateway settings categories and CC features', () => {
     const cc = w.get('[data-testid="request-policy"]')
     expect(cc.isVisible()).toBe(true)
     expect(cc.findAll(':scope > section').map(s => s.attributes('data-testid'))).toEqual(['cc-runtime-settings', 'cc-attachments', 'unsupported-requests'])
-    expect(cc.findAll('details')).toHaveLength(0)
     for (const id of ['tool-search', 'custom-tool-prefix', 'pass-upstream-errors', 'attachment-source', 'attachment-overrides', 'unknown-beta', 'unknown-field']) {
       expect(cc.get(`[data-testid="${id}"]`).isVisible()).toBe(true)
     }
@@ -67,12 +66,24 @@ describe('CCGateway settings categories and CC features', () => {
     expect(cc.text()).toContain('不支持的请求如何处理')
     // The attachment settings are back in CC features (user request 2026-10-10).
     expect(cc.text()).toContain('附件默认来源')
-    // No feature catalog, no switches for features the official API supports.
-    for (const id of ['feature-support', 'allow-fast', 'allow-effort']) {
+    // No switches for features the official API supports.
+    for (const id of ['allow-fast', 'allow-effort']) {
       expect(w.find(`[data-testid="${id}"]`).exists()).toBe(false)
     }
-    expect(cc.text()).not.toContain('查看处理机制与证据')
+    // The CC feature catalog (--add-dir, safeguards) is back too (user request 2026-10-10), read when opened.
     expect(mocks.get.mock.calls.map(call => call[0])).not.toContain('/system/ccgateway/features')
+    const details = cc.get('[data-testid="cc-feature-catalog"]')
+    expect(details.text()).toContain('查看处理机制与证据')
+    mocks.get.mockResolvedValue({ catalog_version: 'v', policy_schema_version: 1, runtime_verified: false, features: [
+      { id: 'F-ADD-DIR', title: '额外目录访问', category: 'CC 执行上下文', scope: 'cc', status: 'supported', body_paths: ['additional_directories'], beta_headers: [], mechanisms: ['CLI --add-dir 参数传递'], reason: 'r' },
+      { id: 'F-STREAM', title: '流式响应', category: 'generation', scope: 'api', status: 'supported', body_paths: ['stream'], beta_headers: [], mechanisms: [], reason: 'r' }
+    ] })
+    ;(details.element as HTMLDetailsElement).open = true
+    await details.trigger('toggle')
+    await flushPromises()
+    expect(mocks.get.mock.calls.map(call => call[0])).toContain('/system/ccgateway/features')
+    expect(details.find('[data-testid="feature-F-ADD-DIR"]').exists()).toBe(true)
+    expect(details.find('[data-testid="feature-F-STREAM"]').exists()).toBe(false)
     w.unmount()
   })
 

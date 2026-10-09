@@ -9,6 +9,12 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
   // Per-account containers ("一账号一容器") behind a controller endpoint (CONTRACTS §53.9).
   let config: Record<string, unknown> = {account_runtimes:true,mode:'controller',scheme:'https',host:'15.204.107.38',port:18443,base_path:'',has_admin_key:true,has_api_key:false,has_controller_ca:true,controller_ca_fingerprint:'76349628e4eaf86a5a217cf48429af2e5e16f5231f983105cd0d89f2fa08c92a',has_password:false,has_private_key:false,has_passphrase:false,user:'',auth_mode:'',host_key_fingerprint:''}
   on('GET',`${base}/remote-config`,()=>config)
+  // Code adaptation catalog (the core serves the Worker's catalog); the CC features tab lists the scope "cc" entries.
+  on('GET',`${base}/features`,()=>({catalog_version:'2026-10-09.18',policy_schema_version:1,runtime_verified:false,features:[
+    {id:'F-SAFEGUARDS',title:'工具安全审查',category:'CC 执行上下文',scope:'cc',status:'partial',body_paths:['safeguards'],beta_headers:['dangerous-tool-use-2026-09-03'],mechanisms:['CC 原生安全审查'],reason:'safeguards 由 Worker 内 Claude Code 处理。'},
+    {id:'F-ADD-DIR',title:'额外目录访问',category:'CC 执行上下文',scope:'cc',status:'supported',body_paths:['additional_directories'],beta_headers:[],mechanisms:['CLI --add-dir 参数传递','请求级目录授权','Mod 配置透传'],reason:'支持客户端通过 additional_directories 数组传递额外目录，网关保留并通过 --add-dir 参数传递给 CC CLI。'},
+    {id:'F-STREAM',title:'流式响应',category:'generation',scope:'api',status:'supported',body_paths:['stream'],beta_headers:[],mechanisms:['SSE'],reason:'官方 API 行为。'},
+  ]}))
   on('PUT',`${base}/remote-config`,({body})=>{
     const { password,private_key,passphrase,admin_key,api_key,controller_ca,...publicFields }=body
     config={...config,...publicFields,account_runtimes:true,has_admin_key:!!admin_key||config.has_admin_key,has_controller_ca:publicFields.scheme==='http'?false:(!!controller_ca||config.has_controller_ca)}

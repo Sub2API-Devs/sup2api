@@ -9,6 +9,7 @@ import (
 // The bullet block has stable English labels in verified win32/linux clients.
 var environmentSection = regexp.MustCompile(`(?m)^# Environment\r?\nYou have been invoked in the following environment:[ \t]*\r?\n(?:[ \t]+-[^\r\n]*(?:\r?\n|$))+`)
 var environmentDirectory = regexp.MustCompile(`^[ \t]*- Primary working directory: (.+)$`)
+var environmentAdditionalDirectories = regexp.MustCompile(`^[ \t]*- Additional working directories:[ \t]*$`)
 var environmentPlatform = regexp.MustCompile(`^[ \t]*- Platform: (linux|win32)$`)
 
 func (r *Request) filterClientEnvironment(text string) string {
@@ -38,10 +39,22 @@ func (r *Request) filterClientEnvironment(text string) string {
 		r.ClientEnvironmentFields["platform"] = true
 		result := append([]string(nil), lines[:2]...)
 		changed := false
+		// --add-dir: "Additional working directories:" and the nested bullets
+		// under it are the client's directories, so they go with workingDirectory.
+		additionalIndent := -1
 		for _, line := range lines[2:] {
 			field := ""
+			indent := len(line) - len(strings.TrimLeft(line, " \t"))
+			if additionalIndent >= 0 && indent > additionalIndent {
+				field = "workingDirectory"
+			} else {
+				additionalIndent = -1
+			}
 			if environmentDirectory.MatchString(line) {
 				field = "workingDirectory"
+			}
+			if environmentAdditionalDirectories.MatchString(line) {
+				field, additionalIndent = "workingDirectory", indent
 			}
 			if environmentPlatform.MatchString(line) {
 				field = "platform"
