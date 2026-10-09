@@ -317,3 +317,70 @@ func TestCLI2292SessionContextAppendedToArrayToolResult(t *testing.T) {
 		t.Fatal("session context lost or duplicated")
 	}
 }
+
+// Production shape (2026-10-10): a user turn with a subagent's tool result
+// followed by client text. The CLI cannot put its session context in front of
+// the tool result and does not fold it when the turn ends with text, so it
+// appends it after the client's last block. Only a trusted reminder is
+// accepted there; it is sent after the client's blocks.
+func TestCLI2292SessionContextAppendedAfterToolResultTurn(t *testing.T) {
+	const context = "fixture sibling session context"
+	reminder := "<system-reminder>\n" + context + "\n</system-reminder>"
+	turn := []any{
+		Object{"type": "tool_result", "tool_use_id": "toolu_a", "content": []any{Object{"type": "text", "text": "fixture subagent report"}}},
+		Object{"type": "text", "text": "<system-reminder>\nfixture client reminder\n</system-reminder>"},
+		Object{"type": "text", "text": "fixture follow-up", "cache_control": Object{"type": "ephemeral"}},
+	}
+	client := []any{
+		Object{"role": "user", "content": "U1"},
+		Object{"role": "assistant", "content": []any{Object{"type": "tool_use", "id": "toolu_a", "name": "lookup", "input": Object{}}}},
+		Object{"role": "user", "content": turn},
+	}
+	clientBody, _ := json.Marshal(Object{"model": "claude-opus-5-5", "max_tokens": 64, "system": "client system", "messages": client})
+	r, err := parsePolicyRequest(clientBody, http.Header{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"trusted", "untrusted", "changed", "twice"} {
+		t.Run(mode, func(t *testing.T) {
+			scope := newMainRequestScope()
+			if err := scope.enter(); err != nil {
+				t.Fatal(err)
+			}
+			sent := []any{turn[0], turn[1], Object{"type": "text", "text": "fixture follow-up"}, Object{"type": "text", "text": reminder}}
+			control := &modControl{sessionContexts: map[string]bool{context: true}}
+			switch mode {
+			case "untrusted":
+				control = &modControl{sessionContexts: map[string]bool{"other": true}}
+			case "changed":
+				sent[2] = Object{"type": "text", "text": "FIXTURE follow-up"}
+			case "twice":
+				sent = append(sent, Object{"type": "text", "text": reminder})
+			}
+			wire, _ := json.Marshal(Object{"model": "claude-opus-5-5", "system": []any{Object{"type": "text", "text": "client system\n\n" + scope.marker}}, "messages": []any{
+				Object{"role": "user", "content": []any{Object{"type": "text", "text": "U1"}}},
+				Object{"role": "assistant", "content": []any{Object{"type": "tool_use", "id": "toolu_a", "name": "lookup", "input": Object{}}}},
+				Object{"role": "user", "content": sent},
+			}})
+			out, err := (&outboundRelay{scope: scope, control: control}).adapt(r, r.systemGroups(), wire, false)
+			if mode != "trusted" {
+				if err == nil || !strings.Contains(err.Error(), "client user block sequence changed") {
+					t.Fatalf("accepted: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			body := wireBody(t, string(out))
+			messages := body["messages"].([]any)
+			blocks, _ := historyContent(messages[len(messages)-1].(Object)["content"])
+			if len(blocks) != 4 || str(blocks[2], "text") != "fixture follow-up" || blocks[2]["cache_control"] == nil || str(blocks[3], "text") != reminder {
+				t.Fatalf("sent: %s", canonical(t, blocks))
+			}
+			if strings.Count(string(out), context) != 1 {
+				t.Fatal("session context lost or duplicated")
+			}
+		})
+	}
+}

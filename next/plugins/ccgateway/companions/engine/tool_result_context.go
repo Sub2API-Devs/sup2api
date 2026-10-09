@@ -15,7 +15,9 @@ import (
 // CLI's other merge branch (without its smoosh flag; seen with a subagent
 // result): the blocks are kept, the last one gets a trailing newline when it
 // is text, and the reminder follows as its own text block. Earlier CLIs only
-// trimmed the end of string content.
+// trimmed the end of string content. A turn that starts with a tool result
+// and ends with text gets the reminder appended after its last block instead
+// (sessionContextSibling).
 //
 // Only a fold of a reminder the Mod acknowledged is recognized, compared with
 // the client's own tool result. This request-local view is only for strict
@@ -44,6 +46,12 @@ func normalizeToolResultContexts(req *Request, body Object, control *modControl)
 	if err != nil {
 		return nil, err
 	}
+	trusted := make(map[string]bool, len(reminders))
+	for _, reminder := range reminders {
+		trusted[reminder] = true
+	}
+	turns := clientToolResultTurns(req)
+	var siblings []sessionContextSibling
 	var repairs []toolResultContextRepair
 	seen := map[string]bool{}
 	user := 0
@@ -56,6 +64,16 @@ func normalizeToolResultContexts(req *Request, body Object, control *modControl)
 		blocks, err := historyContent(message["content"])
 		if err != nil {
 			return nil, err
+		}
+		if s, ok := appendedSessionContext(blocks, turns, trusted); ok {
+			s.user = user
+			siblings = append(siblings, s)
+			blocks = blocks[:len(blocks)-1]
+			view := make([]any, len(blocks))
+			for i, b := range blocks {
+				view[i] = b
+			}
+			message["content"] = view
 		}
 		for index, block := range blocks {
 			if str(block, "type") != "tool_result" {
@@ -117,8 +135,102 @@ func normalizeToolResultContexts(req *Request, body Object, control *modControl)
 		for i := range repairs {
 			blocks[i]["content"] = restored[i]
 		}
+		for _, s := range siblings {
+			if err := s.restore(target); err != nil {
+				return err
+			}
+		}
 		return nil
 	}, nil
+}
+
+// sessionContextSibling is the CLI's session context appended after the
+// client's blocks of a user turn that starts with a tool result: the CLI
+// cannot put it in front of the results, and does not fold it into a tool
+// result when the turn ends with text. It is left out of the alignment view
+// and appended again, as the CLI sent it, before encoding.
+type sessionContextSibling struct {
+	user      int
+	id        string // the turn's first tool result
+	clientLen int
+	block     Object
+}
+
+// appendedSessionContext reports whether blocks are the client's turn (found
+// by its first tool result) followed by one trusted reminder text block.
+func appendedSessionContext(blocks []Object, turns map[string][]Object, trusted map[string]bool) (sessionContextSibling, bool) {
+	n := len(blocks)
+	if n < 2 || str(blocks[0], "type") != "tool_result" {
+		return sessionContextSibling{}, false
+	}
+	last := blocks[n-1]
+	for key := range last {
+		if key != "type" && key != "text" && key != "cache_control" {
+			return sessionContextSibling{}, false
+		}
+	}
+	if str(last, "type") != "text" || !trusted[str(last, "text")] {
+		return sessionContextSibling{}, false
+	}
+	id := str(blocks[0], "tool_use_id")
+	want, ok := turns[id]
+	if !ok || len(want) != n-1 || digest(historySkeleton(blocks[:n-1])) != digest(historySkeleton(want)) {
+		return sessionContextSibling{}, false
+	}
+	return sessionContextSibling{id: id, clientLen: n - 1, block: last}, true
+}
+
+func (s sessionContextSibling) restore(target Object) error {
+	ordinal := 0
+	rows, _ := target["messages"].([]any)
+	for _, raw := range rows {
+		m, _ := raw.(Object)
+		if str(m, "role") != "user" {
+			continue
+		}
+		if ordinal != s.user {
+			ordinal++
+			continue
+		}
+		blocks, err := historyContent(m["content"])
+		if err != nil {
+			return err
+		}
+		if len(blocks) == 0 || str(blocks[0], "type") != "tool_result" || str(blocks[0], "tool_use_id") != s.id {
+			break
+		}
+		switch len(blocks) {
+		case s.clientLen:
+			out := make([]any, 0, len(blocks)+1)
+			for _, b := range blocks {
+				out = append(out, b)
+			}
+			m["content"] = append(out, s.block)
+			return nil
+		case s.clientLen + 1:
+			if str(blocks[s.clientLen], "text") == str(s.block, "text") {
+				return nil // already restored
+			}
+		}
+		return fmt.Errorf("session attachment turn content changed")
+	}
+	return fmt.Errorf("session attachment turn position changed")
+}
+
+// clientToolResultTurns maps the first tool result of each client user turn
+// to the turn's blocks.
+func clientToolResultTurns(req *Request) map[string][]Object {
+	turns := map[string][]Object{}
+	for _, message := range req.Messages {
+		if message.Role != "user" {
+			continue
+		}
+		content := req.wireMessage(message).Content
+		if len(content) > 0 && str(content[0], "type") == "tool_result" {
+			turns[str(content[0], "tool_use_id")] = content
+		}
+	}
+	return turns
 }
 
 // The ECMAScript WhiteSpace + LineTerminator set used by trim and trimEnd,
