@@ -1,5 +1,11 @@
 # CCGateway 环境与操作指南
 
+> **2026-10-09 21:00（北京时间）线上版本，优先于下文：**
+> - OVH 外壳镜像 `sup2api-gateway:local` = `sup2api-gateway:d917b8c`（插件包上限 1 GiB、节点间拉包 30 分钟；20:47 起逐节点换，4→3→2→1，每节点约 10 秒）。
+> - 核心 v0.1.84（manifest `8d34abdc9cec…`，源码 `84126d3f7`）；ccgateway 插件 0.1.16，包内带四个运行环境镜像（约 425 MB）。v0.1.83（`6f5a6b72…`）因核心与打包工具对 `images.json` 的 `file` 字段格式不一致而认不出包内镜像，已被 .84 取代。
+> - 控制器 `ccgateway-controller:0.1.16`、#21/#22 worker = `ccgateway-app:0.1.16` 的程序（`06d0f4f0…`），由"推送并启用内置镜像"完成：控制器自升级、worker 原地替换（容器 ID 不变）、出口代理容器未动。配置里的镜像覆盖值已清空，今后插件升级带来的新镜像自动生效。
+> - **核心发布**：`~/sup2api-managed/build-core.sh VERSION`（已加入：按插件版本缓存在 `~/sup2api-managed/ccgateway-images/<版本>/`，缺失时先跑 `build-ccgateway-images.sh`，再以 `REQUIRE_CCGATEWAY_IMAGES=1` 构建；原脚本备份 `build-core.sh.bak-20261009`）→ `sub2api-shell import` → `upgrade_observe.py`。改了 companions（worker/controller/egress）必须升 ccgateway 插件版本，否则复用旧缓存镜像。升级后在部署页点"推送并启用内置镜像"。
+>
 > **2026-10-09 18:43（北京时间）起：账号运行环境已从 cc-max 迁到 OVH 本机 Docker，优先于下文所有 cc-max 描述：**
 > - OVH 上 `ccg-controller`（`ccg-controller:0.1.49`，host 网络，只听 127.0.0.1:8787，运行目录 `/opt/ccgateway-runtime`、环境文件 `/opt/ccgateway-runtime.env`，均 root 0700/0600）。**控制器端点 `https://ccmax.prophey.ai`**（19:45 起）：DNS 在 Cloudflare（仅 DNS，不走代理）A 记录 → `15.204.107.38`；由本机共用的 `caddy` 容器（`/home/debian/caddy/Caddyfile`，host 网络，管 80/443 上的其他站点）新增站点 `ccmax.prophey.ai { reverse_proxy 127.0.0.1:8787 { flush_interval -1 } }`，Let's Encrypt 自动证书；核心配置 `mode: controller`、`ccmax.prophey.ai:443`、不固定证书（系统根证书）。原先的 `ccg-gateway`（18443，Caddy 内置 CA）已删除。注意：OVH 主机的 systemd-resolved 会缓存否定应答，新域名在生效前被查询过时要 `sudo resolvectl flush-caches`，否则核心容器解析不到（19:41 因此回切过一次，约 1 分钟不可用）。
 > - #21（`ccg-21-app/-egress`）、#22（`ccg-d1d2964e14bf728d9-app/-egress`）按原配置 1:1 在 OVH 重建：同名、同镜像 ID、同环境变量、同私网 IP 与子网、同标签/挂载/资源限制；容器可写层（换过的 worker `ddd30dd1…`、更新过的 Claude CLI 2.1.292 等）按 overlay upperdir 逐字节搬运并核对属主/权限/内容哈希；数据卷与 `/opt/ccgateway-runtime/<key>`（state、sing-box 代理配置、防火墙规则）同样搬运核对。出口代理不变：#21 `216.173.82.161`，#22 `47.147.29.235`（迁移后在容器内实测）。#20（已禁用）只迁了数据卷与目录，没有建容器（旧网络 172.18.0.0/16 与 OVH 冲突）；重新启用时控制器会按新地址池新建。

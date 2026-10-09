@@ -1,6 +1,6 @@
 # OVH当前部署入口
 
-2026-10-09 18:43：Core .82四个gateway-managed节点`sup2api-1..4`，3130..3133；管理/主入口3130。CCGateway Controller（0.1.49）与账号Worker已从cc-max迁到本机Docker（`ccg-controller`、端点 `https://ccmax.prophey.ai`（共用 caddy 反代）、`ccg-21-*`、`ccg-d1d2964e14bf728d9-*`），cc-max 上的旧容器停止保留作回滚；详见环境指南顶部。不在OVH重建账号。
+2026-10-09 21:00：Core .84（外壳 d917b8c）四个gateway-managed节点`sup2api-1..4`，3130..3133；管理/主入口3130。CCGateway Controller（0.1.49）与账号Worker已从cc-max迁到本机Docker（`ccg-controller`、端点 `https://ccmax.prophey.ai`（共用 caddy 反代）、`ccg-21-*`、`ccg-d1d2964e14bf728d9-*`），cc-max 上的旧容器停止保留作回滚；详见环境指南顶部。不在OVH重建账号。
 
 完整[当前状态](../../../docs/ccgateway-feature-support/HANDOFF-2026-10-09.md)、[环境/使用指南](../../../docs/ccgateway-feature-support/ENVIRONMENT-RUNBOOK.md)和精确部署基线集中维护于特性文档目录，不再在这里复制逐版本发布流水。
 
