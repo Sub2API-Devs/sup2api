@@ -213,7 +213,10 @@ func TestToolResultContextArrayFold(t *testing.T) {
 		image,
 		Object{"type": "text", "text": "second\n\nthird\n\n" + reminder},
 	}
-	for _, mode := range []string{"trusted", "untrusted", "client-changed", "image-changed", "unfolded"} {
+	// The CLI's other array merge: blocks kept, a newline added to the last
+	// text block, the reminder as its own block.
+	appended := append(append([]any{}, original[:4]...), Object{"type": "text", "text": "third\n\n"}, Object{"type": "text", "text": reminder})
+	for _, mode := range []string{"trusted", "appended", "untrusted", "client-changed", "image-changed", "unfolded", "appended-changed"} {
 		t.Run(mode, func(t *testing.T) {
 			req := &Request{Messages: []Message{{Role: "user", Content: []Object{{"type": "tool_result", "tool_use_id": "one", "content": original}}}}}
 			actual := folded
@@ -227,6 +230,10 @@ func TestToolResultContextArrayFold(t *testing.T) {
 				actual = []any{folded[0], Object{"type": "image", "source": Object{"type": "base64", "media_type": "image/png", "data": "AAAA"}}, folded[2]}
 			case "unfolded":
 				actual = append(append([]any{}, original...), Object{"type": "text", "text": reminder})
+			case "appended":
+				actual = appended
+			case "appended-changed":
+				actual = append(append([]any{}, original[:4]...), Object{"type": "text", "text": "THIRD\n\n"}, Object{"type": "text", "text": reminder})
 			}
 			b := Object{"type": "tool_result", "tool_use_id": "one", "content": actual}
 			body := Object{"messages": []any{Object{"role": "user", "content": []any{b}}}}
@@ -234,7 +241,7 @@ func TestToolResultContextArrayFold(t *testing.T) {
 			if err == nil {
 				_, err = alignClientHistory(req, body)
 			}
-			if mode != "trusted" {
+			if mode != "trusted" && mode != "appended" {
 				if err == nil {
 					t.Fatal("unproven fold accepted")
 				}
@@ -260,5 +267,53 @@ func TestToolResultContextArrayFold(t *testing.T) {
 				t.Fatal("restoration not idempotent", err)
 			}
 		})
+	}
+}
+
+// Production shape (a subagent's result through the MCP fallback, 2026-10-10):
+// a one-block array result whose text the CLI ends with a newline, the
+// session context after it as its own block. The client's result is sent
+// unchanged with the context appended.
+func TestCLI2292SessionContextAppendedToArrayToolResult(t *testing.T) {
+	const context = "fixture subagent session context"
+	reminder := "<system-reminder>\n" + context + "\n</system-reminder>"
+	const report = "  fixture subagent report\n<usage>tool_uses: 2</usage>"
+	client := []any{
+		Object{"role": "user", "content": "U1"},
+		Object{"role": "assistant", "content": []any{Object{"type": "tool_use", "id": "toolu_a", "name": "lookup", "input": Object{}}}},
+		Object{"role": "user", "content": []any{Object{"type": "tool_result", "tool_use_id": "toolu_a", "content": []any{Object{"type": "text", "text": report}}, "cache_control": Object{"type": "ephemeral"}}}},
+	}
+	scope := newMainRequestScope()
+	if err := scope.enter(); err != nil {
+		t.Fatal(err)
+	}
+	wire, _ := json.Marshal(Object{"model": "claude-opus-5-5", "system": []any{Object{"type": "text", "text": "client system\n\n" + scope.marker}}, "messages": []any{
+		Object{"role": "user", "content": []any{Object{"type": "text", "text": "U1"}}},
+		Object{"role": "assistant", "content": []any{Object{"type": "tool_use", "id": "toolu_a", "name": "lookup", "input": Object{}}}},
+		Object{"role": "user", "content": []any{Object{"type": "tool_result", "tool_use_id": "toolu_a", "content": []any{
+			Object{"type": "text", "text": report + "\n"}, Object{"type": "text", "text": reminder}}}}},
+	}})
+	clientBody, _ := json.Marshal(Object{"model": "claude-opus-5-5", "max_tokens": 64, "system": "client system", "messages": client})
+	r, err := parsePolicyRequest(clientBody, http.Header{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&outboundRelay{scope: scope}).adapt(r, r.systemGroups(), wire, false); err == nil || !strings.Contains(err.Error(), "client user block sequence changed") {
+		t.Fatalf("unacknowledged appended fold: %v", err)
+	}
+	relay := &outboundRelay{scope: scope, control: &modControl{sessionContexts: map[string]bool{context: true}}}
+	out, err := relay.adapt(r, r.systemGroups(), wire, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := wireBody(t, string(out))
+	messages := body["messages"].([]any)
+	blocks, _ := historyContent(messages[len(messages)-1].(Object)["content"])
+	got, _ := historyContent(blocks[0]["content"])
+	if len(got) != 2 || str(got[0], "text") != report || str(got[1], "text") != reminder {
+		t.Fatalf("restored: %s", canonical(t, blocks[0]["content"]))
+	}
+	if strings.Count(string(out), context) != 1 {
+		t.Fatal("session context lost or duplicated")
 	}
 }

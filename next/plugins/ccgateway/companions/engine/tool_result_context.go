@@ -11,8 +11,11 @@ import (
 // String content becomes [content.trim(), reminder].filter(Boolean).join("\n\n")
 // (both ends of the client text are trimmed); array content has every text
 // block trimmed, empty ones dropped and adjacent ones joined by a blank line,
-// the reminder joined to the last text block. Earlier CLIs only trimmed the
-// end of string content.
+// the reminder joined to the last text block. Array content can also take the
+// CLI's other merge branch (without its smoosh flag; seen with a subagent
+// result): the blocks are kept, the last one gets a trailing newline when it
+// is text, and the reminder follows as its own text block. Earlier CLIs only
+// trimmed the end of string content.
 //
 // Only a fold of a reminder the Mod acknowledged is recognized, compared with
 // the client's own tool result. This request-local view is only for strict
@@ -158,7 +161,8 @@ func toolResultContextFold(want, actual any, suffixes map[string]bool, reminders
 			return nil, "", false, nil
 		}
 		for _, reminder := range reminders {
-			if digest(historySkeleton(cliFoldedToolResultBlocks(blocks, reminder))) == target {
+			if digest(historySkeleton(cliFoldedToolResultBlocks(blocks, reminder))) == target ||
+				digest(historySkeleton(cliAppendedToolResultBlocks(blocks, reminder))) == target {
 				return original, reminder, true, nil
 			}
 		}
@@ -187,6 +191,22 @@ func cliFoldedToolResultBlocks(blocks []Object, reminder string) []Object {
 		out = append(out, Object{"type": "text", "text": text})
 	}
 	return out
+}
+
+// cliAppendedToolResultBlocks is the CLI's other array merge: the blocks are
+// kept, the last one gets a trailing newline when it is text, and the
+// reminder follows as its own text block.
+func cliAppendedToolResultBlocks(blocks []Object, reminder string) []Object {
+	out := append([]Object{}, blocks...)
+	if last := len(out) - 1; str(out[last], "type") == "text" {
+		block := Object{}
+		for k, v := range out[last] {
+			block[k] = v
+		}
+		block["text"] = str(block, "text") + "\n"
+		out[last] = block
+	}
+	return append(out, Object{"type": "text", "text": reminder})
 }
 
 // A string result is the client text, its trimEnd (earlier CLIs) or its trim
