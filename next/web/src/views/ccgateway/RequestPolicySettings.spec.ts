@@ -22,7 +22,7 @@ function config(policy: Partial<RequestPolicy> | undefined) {
 }
 // A policy saved before pass_upstream_errors and thinking_disabled_compat existed, as an older core returns it.
 function legacyPolicy(): Partial<RequestPolicy> {
-  const { pass_upstream_errors: _omit, thinking_disabled_compat: _compat, ...rest } = defaultRequestPolicy()
+  const { pass_upstream_errors: _omit, thinking_disabled_compat: _compat, relay_mode: _relay, relay_passthrough_accounts: _accounts, ...rest } = defaultRequestPolicy()
   return rest
 }
 
@@ -261,6 +261,34 @@ describe('CCGateway pass upstream errors switch', () => {
     const payload = mocks.put.mock.calls[0]![1] as { request_policy: RequestPolicy }
     expect(payload.request_policy.thinking_disabled_compat).toBe('omit')
     expect(w.get<HTMLInputElement>('[data-testid="thinking-disabled-compat"]').element.checked).toBe(true)
+  })
+
+  it('relay mode defaults to legacy and saves passthrough accounts', async () => {
+    expect(defaultRequestPolicy().relay_mode).toBe('legacy')
+    expect(zh.policy.relayModeHint).toContain('中继不修改请求和响应')
+    expect(en.policy.relayModeHint).toContain('changes neither requests nor responses')
+    mocks.get.mockResolvedValue(config(legacyPolicy()))
+    mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), relay_passthrough_accounts: [23, 24] }))
+    const w = await render()
+    expect(w.get<HTMLSelectElement>('[data-testid="relay-mode"]').element.value).toBe('legacy')
+    await w.get('[data-testid="relay-passthrough-accounts"]').setValue('23, 24 x 23 0')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    const payload = mocks.put.mock.calls[0]![1] as { request_policy: RequestPolicy }
+    expect(payload.request_policy.relay_mode).toBe('legacy')
+    expect(payload.request_policy.relay_passthrough_accounts).toEqual([23, 24])
+  })
+
+  it('saves full passthrough and hides the account list', async () => {
+    mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
+    mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), relay_mode: 'passthrough' }))
+    const w = await render()
+    await w.get('[data-testid="relay-mode"]').setValue('passthrough')
+    expect(w.find('[data-testid="relay-passthrough-accounts"]').exists()).toBe(false)
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    const payload = mocks.put.mock.calls[0]![1] as { request_policy: RequestPolicy }
+    expect(payload.request_policy.relay_mode).toBe('passthrough')
   })
 
   it('saves the compatibility switch turned back off as pass', async () => {

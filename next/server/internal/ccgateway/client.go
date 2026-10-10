@@ -153,7 +153,7 @@ func (t modelTransport) forwardManaged(req *http.Request, path string, resource 
 	clone.Host = ""
 	clone.Header = clone.Header.Clone()
 	if !resource {
-		policy := cfg.EffectiveRequestPolicy()
+		policy := cfg.WorkerRequestPolicy(t.accountID)
 		if err := validateRequestPolicy(policy); err != nil {
 			finish()
 			return nil, err

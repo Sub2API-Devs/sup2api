@@ -265,3 +265,53 @@ func TestThinkingDisabledCompatSave(t *testing.T) {
 		t.Fatal("invalid value accepted")
 	}
 }
+
+// relay_mode defaults to legacy; relay_passthrough_accounts turns single
+// accounts to passthrough, and the Worker never sees the list.
+func TestRelayModeSaveAndWorkerPolicy(t *testing.T) {
+	var legacy Config
+	if err := json.Unmarshal([]byte(`{"mode":"disabled","request_policy":{"unknown_beta":"ignore","unknown_field":"reject","betas":[]}}`), &legacy); err != nil {
+		t.Fatal(err)
+	}
+	if got := legacy.WorkerRequestPolicy(23).RelayMode; got != "legacy" {
+		t.Fatalf("legacy default: %q", got)
+	}
+	var in Config
+	if err := json.Unmarshal([]byte(`{"mode":"disabled","request_policy":{"unknown_beta":"ignore","unknown_field":"reject","relay_passthrough_accounts":[23],"betas":[]}}`), &in); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := mergeConfig(in, Config{Mode: "disabled"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, _ := json.Marshal(saved)
+	var reloaded Config
+	if err := json.Unmarshal(plain, &reloaded); err != nil {
+		t.Fatal(err)
+	}
+	if p := reloaded.WorkerRequestPolicy(23); p.RelayMode != "passthrough" || p.RelayPassthroughAccounts != nil {
+		t.Fatalf("account 23: %+v", p)
+	}
+	if p := reloaded.WorkerRequestPolicy(22); p.RelayMode != "legacy" {
+		t.Fatalf("account 22: %q", p.RelayMode)
+	}
+	if got := reloaded.EffectiveRequestPolicy().RelayPassthroughAccounts; len(got) != 1 || got[0] != 23 {
+		t.Fatalf("console view: %v", got)
+	}
+	all := *reloaded.RequestPolicy
+	all.RelayMode = "passthrough"
+	if p := (Config{RequestPolicy: &all}).WorkerRequestPolicy(22); p.RelayMode != "passthrough" {
+		t.Fatal("global passthrough")
+	}
+	for _, bad := range []func(p *RequestPolicy){
+		func(p *RequestPolicy) { p.RelayMode = "direct" },
+		func(p *RequestPolicy) { p.RelayPassthroughAccounts = []int64{0} },
+		func(p *RequestPolicy) { p.RelayPassthroughAccounts = []int64{23, 23} },
+	} {
+		policy := *reloaded.RequestPolicy
+		bad(&policy)
+		if _, err := mergeConfig(Config{Mode: "disabled", RequestPolicy: &policy}, reloaded); err == nil {
+			t.Fatalf("invalid policy accepted: %+v", policy)
+		}
+	}
+}

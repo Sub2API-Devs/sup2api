@@ -18,6 +18,11 @@ export interface RequestPolicy {
   custom_tool_prefix: string
   // 'pass' (default): thinking.type "disabled" goes upstream as sent; 'omit': dropped for models that reject it.
   thinking_disabled_compat?: 'pass' | 'omit'
+  // 'legacy' (default): the Worker's outbound relay adapts the inner CLI's requests;
+  // 'passthrough': every upstream request is the inner CLI's own, forwarded unchanged.
+  relay_mode?: 'legacy' | 'passthrough'
+  // Accounts already in passthrough while relay_mode is legacy (staged rollout).
+  relay_passthrough_accounts?: number[]
   betas: Array<{ name: string; mapping: BetaMapping }>
 }
 export function defaultRequestPolicy(): RequestPolicy {
@@ -36,6 +41,8 @@ export function defaultRequestPolicy(): RequestPolicy {
     custom_tool_prefix: 'ccgateway',
     tool_search: 'request',
     thinking_disabled_compat: 'pass',
+    relay_mode: 'legacy',
+    relay_passthrough_accounts: [],
     betas: [
       { name: 'interleaved-thinking-2025-05-14', mapping: 'forward' },
       { name: 'fine-grained-tool-streaming-2025-05-14', mapping: 'fine_grained_tools' },
@@ -58,6 +65,9 @@ export function validRequestPolicy(p: RequestPolicy): boolean {
     ['pass', 'ignore'].includes(p.unknown_client_attachment) &&
     ['pass', 'ignore'].includes(p.unknown_gateway_attachment) &&
     (!p.thinking_disabled_compat || ['pass', 'omit'].includes(p.thinking_disabled_compat)) &&
+    (!p.relay_mode || ['legacy', 'passthrough'].includes(p.relay_mode)) &&
+    (p.relay_passthrough_accounts ?? []).every(id => Number.isInteger(id) && id > 0) &&
+    new Set(p.relay_passthrough_accounts ?? []).size === (p.relay_passthrough_accounts ?? []).length &&
     Object.entries(p.environment_fields).every(([k, v]) => ['workingDirectory', 'platform'].includes(k) && ['client', 'gateway'].includes(v)) &&
     Object.entries(p.attachment_sources).every(([k, v]) => attachmentTypes.includes(k as AttachmentType) && ['client', 'gateway', 'both'].includes(v))
   )

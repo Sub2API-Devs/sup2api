@@ -35,10 +35,13 @@ type RequestPolicy struct {
 	CustomToolPrefix         string            `json:"custom_tool_prefix"`
 	// "pass" (default) or "omit": see applyThinkingDisabledCompat.
 	ThinkingDisabledCompat string `json:"thinking_disabled_compat,omitempty"`
+	// "legacy" (default) or "passthrough": every upstream request is the one
+	// the inner CLI built, forwarded unchanged (passthrough.go).
+	RelayMode string `json:"relay_mode,omitempty"`
 }
 
 func defaultRequestPolicy() RequestPolicy {
-	return RequestPolicy{SchemaVersion: features.PolicySchemaVersion, UnknownClientAttachment: "pass", UnknownGatewayAttachment: "pass", CustomToolPrefix: "ccgateway", UnknownBeta: "ignore", UnknownField: "reject", AllowFast: false, AllowEffort: true, ToolSearch: "request", AttachmentSource: "client", ThinkingDisabledCompat: "pass", Betas: features.BetaRules()}
+	return RequestPolicy{SchemaVersion: features.PolicySchemaVersion, UnknownClientAttachment: "pass", UnknownGatewayAttachment: "pass", CustomToolPrefix: "ccgateway", UnknownBeta: "ignore", UnknownField: "reject", AllowFast: false, AllowEffort: true, ToolSearch: "request", AttachmentSource: "client", ThinkingDisabledCompat: "pass", RelayMode: "legacy", Betas: features.BetaRules()}
 }
 
 var betaName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,127}$`)
@@ -92,6 +95,12 @@ func requestPolicy(h http.Header) (RequestPolicy, error) {
 	}
 	if !validThinkingDisabledCompat(p.ThinkingDisabledCompat) {
 		return p, fmt.Errorf("invalid thinking_disabled_compat: must be pass or omit")
+	}
+	if p.RelayMode == "" {
+		p.RelayMode = "legacy"
+	}
+	if p.RelayMode != "legacy" && p.RelayMode != "passthrough" {
+		return p, fmt.Errorf("invalid relay_mode: must be legacy or passthrough")
 	}
 	// Ignore legacy editable rules; Beta handling is fixed in code.
 	p.Betas = defaultRequestPolicy().Betas

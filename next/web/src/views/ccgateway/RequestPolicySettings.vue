@@ -18,6 +18,12 @@ function setAttachmentSource(type: AttachmentType, event: Event) {
   else delete sources[type]
   policy.value = { ...policy.value, attachment_sources: sources }
 }
+// Account IDs typed as "23, 24"; anything that is not a positive integer is kept
+// out, so the saved list is always valid.
+function setPassthroughAccounts(event: Event) {
+  const ids = (event.target as HTMLInputElement).value.split(/[\s,]+/).filter(Boolean).map(Number).filter(id => Number.isInteger(id) && id > 0)
+  policy.value = { ...policy.value, relay_passthrough_accounts: [...new Set(ids)] }
+}
 function setEnvironmentField(field: 'workingDirectory' | 'platform', event: Event) {
   const value = (event.target as HTMLSelectElement).value
   const fields = { ...policy.value.environment_fields }
@@ -41,6 +47,8 @@ function setEnvironmentField(field: 'workingDirectory' | 'platform', event: Even
         <label class="block text-sm"><span class="font-medium">{{ t('ccgateway.policy.customToolPrefix') }}</span><input v-model="policy.custom_tool_prefix" class="input mt-2 w-full" type="text" maxlength="32" placeholder="ccgateway" data-testid="custom-tool-prefix" /><small class="mt-2 block text-gray-500">{{ t('ccgateway.policy.customToolPrefixHint') }}</small><code class="mt-2 block text-xs">mcp__{{ policy.custom_tool_prefix || 'ccgateway' }}__lookup</code></label>
         <label class="flex items-start gap-2 text-sm md:col-span-2"><input v-model="policy.pass_upstream_errors" type="checkbox" class="mt-1" data-testid="pass-upstream-errors" /><span>{{ t('ccgateway.policy.passUpstreamErrors') }}<small class="mt-1 block text-gray-500">{{ t('ccgateway.policy.passUpstreamErrorsHint') }}</small></span></label>
         <label class="flex items-start gap-2 text-sm md:col-span-2"><input :checked="policy.thinking_disabled_compat === 'omit'" type="checkbox" class="mt-1" data-testid="thinking-disabled-compat" @change="policy.thinking_disabled_compat = ($event.target as HTMLInputElement).checked ? 'omit' : 'pass'" /><span>{{ t('ccgateway.policy.thinkingDisabledCompat') }}<small class="mt-1 block text-gray-500">{{ t('ccgateway.policy.thinkingDisabledCompatHint') }}</small></span></label>
+        <label class="block text-sm"><span class="font-medium">{{ t('ccgateway.policy.relayMode') }}</span><select v-model="policy.relay_mode" class="input mt-2 w-full" data-testid="relay-mode"><option value="legacy">{{ t('ccgateway.policy.relayMode_legacy') }}</option><option value="passthrough">{{ t('ccgateway.policy.relayMode_passthrough') }}</option></select><small class="mt-2 block text-gray-500">{{ t('ccgateway.policy.relayModeHint') }}</small></label>
+        <label v-if="policy.relay_mode !== 'passthrough'" class="block text-sm"><span class="font-medium">{{ t('ccgateway.policy.relayPassthroughAccounts') }}</span><input :value="(policy.relay_passthrough_accounts ?? []).join(', ')" class="input mt-2 w-full" type="text" placeholder="23, 24" data-testid="relay-passthrough-accounts" @change="setPassthroughAccounts" /><small class="mt-2 block text-gray-500">{{ t('ccgateway.policy.relayPassthroughAccountsHint') }}</small></label>
       </div>
     </section>
     <section class="space-y-3 rounded-lg border border-gray-200 p-3 dark:border-dark-700" data-testid="cc-attachments">
