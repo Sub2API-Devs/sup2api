@@ -61,7 +61,7 @@ func (r *Request) validateSafeguardTools(message Object) error {
 	for _, historical := range r.Messages {
 		wire := r.wireMessage(historical)
 		for i, block := range historical.Content {
-			if str(block, "type") == "tool_use" && (i >= len(wire.Content) || str(wire.Content[i], "name") != str(block, "name")) {
+			if str(block, "type") == "tool_use" && (i >= len(wire.Content) || str(wire.Content[i], "name") != str(block, "name") && !r.handbackTool(str(block, "name"))) {
 				return fmt.Errorf("client safeguards requires unchanged historical tool names: %s", str(block, "name"))
 			}
 		}
@@ -75,11 +75,12 @@ func (r *Request) validateSafeguardTools(message Object) error {
 				// inner CLI sends it (and ToolSearch) as its search helper.
 				continue
 			}
-			if r.wireName(tool.Name) != tool.Name {
+			name := r.wireName(tool.Name)
+			if name != tool.Name && !r.handbackTool(tool.Name) {
 				return fmt.Errorf("client safeguards requires unchanged tool names: %s", tool.Name)
 			}
-			want[tool.Name] = tool
-			deferred[tool.Name] = r.toolSearchEnabled() && tool.DeferLoading != nil && *tool.DeferLoading
+			want[name] = tool
+			deferred[name] = r.toolSearchEnabled() && tool.DeferLoading != nil && *tool.DeferLoading
 		}
 	}
 	actual, ok := message["tools"].([]any)
@@ -108,6 +109,29 @@ func (r *Request) validateSafeguardTools(message Object) error {
 		}
 	}
 	return nil
+}
+
+// subagentHandbackSchema is the input schema of SubagentHandback, the tool
+// CC 2.1.292 gives every subagent (with safeguards) to deliver its report.
+const subagentHandbackSchema = `{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"message":{"description":"Your full report for your caller","type":"string"}},"required":["message"],"additionalProperties":false}`
+
+// handbackTool reports the client's SubagentHandback with the verified
+// schema. The inner CLI has no such tool, so it travels under the gateway's
+// MCP name like any client tool; its ID, input and schema are unchanged and
+// it only returns the report to the client. Classifier rules govern CC's
+// executing tools by name: every other renamed tool is still refused.
+func (r *Request) handbackTool(name string) bool {
+	if name != "SubagentHandback" {
+		return false
+	}
+	var schema Object
+	_ = json.Unmarshal([]byte(subagentHandbackSchema), &schema)
+	for _, tool := range r.Tools {
+		if tool.Name == name {
+			return digest(tool.Schema) == digest(schema)
+		}
+	}
+	return false
 }
 
 // searchHelper reports the tools the inner CLI adds for internal tool search.

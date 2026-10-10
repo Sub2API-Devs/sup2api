@@ -228,3 +228,25 @@ func TestSafeguardsHistoricalToolIdentityAfterNativeMatching(t *testing.T) {
 		})
 	}
 }
+
+// SubagentHandback, which every CC 2.1.292 subagent request carries with
+// safeguards, may travel under the gateway's MCP name; only with the
+// verified schema, and no other renamed tool is admitted with it.
+func TestSafeguardsSubagentHandback(t *testing.T) {
+	var verified Object
+	_ = json.Unmarshal([]byte(subagentHandbackSchema), &verified)
+	for _, c := range []struct {
+		name   string
+		schema Object
+		ok     bool
+	}{{"SubagentHandback", verified, true}, {"SubagentHandback", Object{"type": "object"}, false}, {"OtherTool", verified, false}} {
+		o, _ := decodeObject([]byte(`{"safeguards":[{"type":"dangerous_tool_use"}]}`))
+		p, _ := parseRequestPlan(nil, o)
+		schema := Object{"type": "object"}
+		r := &Request{Plan: p, Native: map[string]bool{"Bash": true}, Tools: []Tool{{Name: "Bash", Schema: schema}, {Name: c.name, Schema: c.schema}}}
+		m := Object{"tools": []any{Object{"name": "Bash", "input_schema": schema}, Object{"name": "mcp__ccgateway__" + c.name, "input_schema": c.schema}}}
+		if err := r.ApplyMainRequestFeatures(m); (err == nil) != c.ok {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+	}
+}
