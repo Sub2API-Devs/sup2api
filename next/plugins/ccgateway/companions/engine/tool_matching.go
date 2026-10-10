@@ -51,7 +51,7 @@ func matchNativeTools(r *Request, version string) {
 	matched := map[string]bool{}
 	for _, tool := range r.Tools {
 		for _, known := range verifiedNativeToolCatalogues[version][tool.Name] {
-			if sameToolDefinition(known, tool) {
+			if catalogueMatch(known, tool) {
 				matched[tool.Name] = true
 				break
 			}
@@ -85,7 +85,7 @@ func verifyNativeWireTools(req *Request, message Object) error {
 			found++
 			schema, _ := obj["input_schema"].(map[string]any)
 			actual := Tool{Name: want.Name, Description: str(obj, "description"), Schema: schema}
-			if !sameToolDefinition(want, actual) {
+			if !sameToolDefinition(want, actual) && !restoreShellTool(want, obj) {
 				compatible = false
 			}
 		}

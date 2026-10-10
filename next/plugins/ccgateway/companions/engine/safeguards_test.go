@@ -250,3 +250,36 @@ func TestSafeguardsSubagentHandback(t *testing.T) {
 		}
 	}
 }
+
+// Bash and PowerShell match the catalogue with their timeout numbers as
+// parameters; any other difference keeps them off the native path.
+func TestShellToolTimeoutParameters(t *testing.T) {
+	for _, name := range []string{"Bash", "PowerShell"} {
+		known := verifiedNativeToolCatalogues["2.1.292"][name][0]
+		variant := func(from, to string) Tool {
+			raw, _ := json.Marshal(known.Schema)
+			raw = bytes.ReplaceAll(raw, []byte(from), []byte(to))
+			var schema Object
+			_ = json.Unmarshal(raw, &schema)
+			return Tool{Name: name, Schema: schema, Description: "client"}
+		}
+		timeout := variant("max 600000 for a foreground command", "max 1800000 for a foreground command")
+		if !catalogueMatch(known, timeout) || sameToolDefinition(known, timeout) {
+			t.Fatalf("%s timeout variant", name)
+		}
+		if other := variant("Set to true to run this command in the background", "Set to true to run this command elsewhere"); catalogueMatch(known, other) {
+			t.Fatalf("%s other text change matched", name)
+		}
+		wire := Object{"name": name, "input_schema": known.Schema, "description": "inner", "cache_control": Object{"type": "ephemeral"}}
+		if !restoreShellTool(timeout, wire) || str(wire, "description") != "client" || digest(wire["input_schema"]) != digest(timeout.Schema) || wire["cache_control"] == nil {
+			t.Fatalf("%s not restored: %v", name, wire)
+		}
+		if restoreShellTool(Tool{Name: "Read", Schema: known.Schema}, Object{"input_schema": known.Schema}) {
+			t.Fatal("non-shell tool restored")
+		}
+	}
+	r := &Request{Native: map[string]bool{"PowerShell": true}, Tools: []Tool{{Name: "PowerShell"}}}
+	if r.shellToolEnv()["CLAUDE_CODE_USE_POWERSHELL_TOOL"] != "1" {
+		t.Fatal("PowerShell not offered by the inner CLI")
+	}
+}

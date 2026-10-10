@@ -70,7 +70,19 @@
    - 现象：子代理请求同样带 safeguards，并带 CC 给子代理的 `SubagentHandback` 工具。内层 CLI 没有这个工具，只能经 MCP 名转运，于是被拒。用户的提示词下，子代理连续 3 次失败。
    - 修复（0.1.24）：schema 经校验的 `SubagentHandback` 按普通客户端工具转运，ID、输入、schema 都不变。
 5. **agent teams 的 502。** 见第 5 节（0.1.25）。
-6. **--add-dir 目录被去掉。**
+6. **完整工具集的 502 "unchanged tool names: PowerShell / Bash"。**
+   - PowerShell：用户设置开着 `CLAUDE_CODE_USE_POWERSHELL_TOOL`，客户端会提供 PowerShell 工具，已验证的原生目录里原来没有它。
+   - Bash/PowerShell 的定义里带客户端的超时设置：
+     - `BASH_DEFAULT_TIMEOUT_MS`、`BASH_MAX_TIMEOUT_MS`（用户设置里有）；
+     - 后台默认超时：单次 `-p` 会话为 max(600000, 默认值)，其它情况为 max(1800000, 默认值)。
+   - 这些情况下，内层 CLI 提供的定义与客户端不同，工具回退到 MCP 名，有 safeguards 时即被拒。
+   - 修复（0.1.26）：
+     - 原生目录补入 PowerShell（真实 CLI 采集）；
+     - Bash/PowerShell 按"超时数字为参数"匹配目录；
+     - 内层 CLI 按需开 PowerShell；
+     - 内层定义与客户端只差这些数字时，上游收到客户端原定义。
+   - 测试：`TestRealCLISafeguardsWithDeferredLoading/SHELL`，并断言上游收到的就是客户端定义。
+7. **--add-dir 目录被去掉。**
    - 原因：生产策略是 attachment_source=gateway、workingDirectory=client，此前只保留 Primary working directory。
    - 修复：0.1.22 起，"Additional working directories" 及其子项随 workingDirectory 保留。
 

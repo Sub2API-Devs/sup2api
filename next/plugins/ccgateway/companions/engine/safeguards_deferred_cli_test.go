@@ -49,6 +49,21 @@ func TestRealCLISafeguardsWithDeferredLoading(t *testing.T) {
 	if teamsAgent == nil {
 		t.Fatalf("no verified agent teams Agent for CLI %s", version)
 	}
+	// Bash and PowerShell of a client with CLAUDE_CODE_USE_POWERSHELL_TOOL and
+	// BASH_MAX_TIMEOUT_MS=1800000, as CC 2.1.292 renders them.
+	var shellTools []any
+	for _, name := range []string{"Bash", "PowerShell"} {
+		variants := verifiedNativeToolCatalogues[version][name]
+		if len(variants) == 0 {
+			t.Fatalf("no verified %s catalogue for CLI %s", name, version)
+		}
+		raw, _ := json.Marshal(Object{"name": name, "description": variants[0].Description, "input_schema": variants[0].Schema})
+		raw = bytes.ReplaceAll(raw, []byte("max 600000 for a foreground command"), []byte("max 1800000 for a foreground command"))
+		raw = bytes.ReplaceAll(raw, []byte("up to 600000ms / 10 minutes for a foreground command"), []byte("up to 1800000ms / 30 minutes for a foreground command"))
+		var tool Object
+		_ = json.Unmarshal(raw, &tool)
+		shellTools = append(shellTools, tool)
+	}
 	tools = append(tools, Object{"name": "DeferredToolPlaceholder", "description": "Reserved placeholder that keeps deferred tool loading active; never call this tool.", "input_schema": Object{"type": "object", "properties": Object{}}, "defer_loading": true})
 	root := t.TempDir()
 	plugin, err := extractMod(root)
@@ -114,7 +129,7 @@ func TestRealCLISafeguardsWithDeferredLoading(t *testing.T) {
 	}))
 	defer fake.Close()
 	base := []string{}
-	for _, key := range []string{"PATH", "SystemRoot", "WINDIR", "COMSPEC", "TEMP", "TMP", "PATHEXT", "APPDATA", "LOCALAPPDATA"} {
+	for _, key := range []string{"PATH", "SystemRoot", "WINDIR", "COMSPEC", "TEMP", "TMP", "PATHEXT", "APPDATA", "LOCALAPPDATA", "CLAUDE_CODE_GIT_BASH_PATH"} {
 		if value := os.Getenv(key); value != "" {
 			base = append(base, key+"="+value)
 		}
@@ -124,7 +139,7 @@ func TestRealCLISafeguardsWithDeferredLoading(t *testing.T) {
 	for _, c := range []struct {
 		stream bool
 		prompt string
-	}{{true, "READ_SYNTHETIC_FILE"}, {false, "READ_SYNTHETIC_FILE"}, {true, "SEARCH_FIRST"}, {false, "SEARCH_FIRST"}, {true, "HANDBACK"}, {false, "HANDBACK"}, {true, "TEAMS"}, {false, "TEAMS"}} {
+	}{{true, "READ_SYNTHETIC_FILE"}, {false, "READ_SYNTHETIC_FILE"}, {true, "SEARCH_FIRST"}, {false, "SEARCH_FIRST"}, {true, "HANDBACK"}, {false, "HANDBACK"}, {true, "TEAMS"}, {false, "TEAMS"}, {true, "SHELL"}, {false, "SHELL"}} {
 		stream := c.stream
 		t.Run(fmt.Sprintf("stream=%t/%s", stream, c.prompt), func(t *testing.T) {
 			cache, err := newCache(filepath.Join(t.TempDir(), "cache"), 32<<20)
@@ -138,6 +153,9 @@ func TestRealCLISafeguardsWithDeferredLoading(t *testing.T) {
 			if c.prompt == "SEARCH_FIRST" {
 				// A deferred MCP tool, as CC defers them: loaded by ToolSearch first.
 				body["tools"] = append(append([]any{}, tools...), Object{"name": "mcp__fixture__lookup", "description": "Look up a fixture record.", "input_schema": Object{"type": "object", "properties": Object{"key": Object{"type": "string"}}, "required": []any{"key"}}, "defer_loading": true})
+			}
+			if c.prompt == "SHELL" {
+				body["tools"] = append(append([]any{}, shellTools...), tools...)
 			}
 			if c.prompt == "TEAMS" {
 				body["tools"] = append([]any{teamsAgent}, tools...)
@@ -182,6 +200,26 @@ func TestRealCLISafeguardsWithDeferredLoading(t *testing.T) {
 			}
 			if main == 0 {
 				t.Fatal("client safeguards not sent upstream")
+			}
+			if c.prompt == "SHELL" {
+				// Upstream sees the client's own definitions, numbers included.
+				for _, wire := range rounds {
+					if _, ok := wire["safeguards"]; !ok {
+						continue
+					}
+					for _, want := range shellTools {
+						found := false
+						for _, item := range wire["tools"].([]any) {
+							tool := item.(map[string]any)
+							if str(tool, "name") == str(want.(Object), "name") {
+								found = digest(tool["input_schema"]) == digest(want.(Object)["input_schema"]) && str(tool, "description") == str(want.(Object), "description")
+							}
+						}
+						if !found {
+							t.Fatalf("%s definition not the client's", str(want.(Object), "name"))
+						}
+					}
+				}
 			}
 			if c.prompt == "SEARCH_FIRST" {
 				if main < 2 || strings.Contains(first, "toolu_search_fixture") || strings.Contains(first, "ToolSearch") {

@@ -215,7 +215,7 @@ func (r *Request) validateInlineNativeMapping(version string) error {
 			schema, _ := definition["input_schema"].(map[string]any)
 			native := false
 			for _, known := range verifiedNativeToolCatalogues[version][name] {
-				native = native || sameToolDefinition(known, Tool{Name: name, Schema: schema})
+				native = native || catalogueMatch(known, Tool{Name: name, Schema: schema})
 			}
 			matched = matched || native
 			unmatched = unmatched || !native

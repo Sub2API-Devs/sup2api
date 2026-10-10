@@ -38,14 +38,17 @@ func TestCaptureRealCLINativeCatalog(t *testing.T) {
 		name, mode, tools string
 		teams             bool
 		sdk               bool
+		powershell        bool
 	}{
-		{"default", "default", "", false, false},
-		{"plan", "plan", "", false, false},
-		{"dont-ask", "dontAsk", "", false, false},
-		{"team-discovery", "default", "", true, false},
-		{"explicit-catalogued", "default", allNames, true, false},
-		{"sdk-default", "default", "", false, true},
-		{"sdk-explicit", "default", allNames, false, true},
+		{"default", "default", "", false, false, false},
+		{"plan", "plan", "", false, false, false},
+		{"dont-ask", "dontAsk", "", false, false, false},
+		{"team-discovery", "default", "", true, false, false},
+		{"explicit-catalogued", "default", allNames, true, false, false},
+		{"sdk-default", "default", "", false, true, false},
+		{"sdk-explicit", "default", allNames, false, true, false},
+		// Windows clients with CLAUDE_CODE_USE_POWERSHELL_TOOL (2026-10-10).
+		{"powershell", "default", "", false, false, true},
 	} {
 		root := t.TempDir()
 		var mu sync.Mutex
@@ -99,6 +102,9 @@ func TestCaptureRealCLINativeCatalog(t *testing.T) {
 		if scenario.teams {
 			cmd.Env = append(cmd.Env, "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1")
 		}
+		if scenario.powershell {
+			cmd.Env = append(cmd.Env, "CLAUDE_CODE_USE_POWERSHELL_TOOL=1")
+		}
 		out, err := cmd.CombinedOutput()
 		cancel()
 		server.Close()
@@ -132,7 +138,7 @@ func TestCaptureRealCLINativeCatalog(t *testing.T) {
 			ordered = append(ordered, name)
 		}
 		sort.Strings(ordered)
-		evidence = append(evidence, Object{"scenario": scenario.name, "permission_mode": scenario.mode, "agent_teams_requested": scenario.teams, "sdk_stream_input": scenario.sdk, "names": ordered, "schema_hashes": schemas, "count": len(ordered)})
+		evidence = append(evidence, Object{"scenario": scenario.name, "permission_mode": scenario.mode, "agent_teams_requested": scenario.teams, "sdk_stream_input": scenario.sdk, "powershell_tool": scenario.powershell, "names": ordered, "schema_hashes": schemas, "count": len(ordered)})
 		t.Logf("CLI %s scenario=%s count=%d tools=%s", version, scenario.name, len(ordered), strings.Join(ordered, ","))
 	}
 	keys := []string{}
