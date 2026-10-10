@@ -3,7 +3,7 @@
 // entitlement. Runtime evidence must be reported separately.
 package features
 
-const CatalogVersion = "2026-10-10.3"
+const CatalogVersion = "2026-10-10.4"
 const PolicySchemaVersion = 1
 
 type Feature struct {
@@ -30,7 +30,7 @@ type Document struct {
 // feature whitelist, and the host never infers Worker support from image tags.
 func Catalog() Document {
 	return Document{CatalogVersion: CatalogVersion, PolicySchemaVersion: PolicySchemaVersion, Features: []Feature{
-		{ID: "F-SAFEGUARDS", Title: "工具安全审查", Category: "CC 执行上下文", Scope: "cc", Status: "partial", BodyPaths: []string{"safeguards", "safeguard_results", "tool_use.id"}, BetaHeaders: []string{"dangerous-tool-use-2026-09-03"}, Mechanisms: []string{"主请求归属与上下文保真", "客户端工具身份校验", "纯 MCP 提供商上下文保真"}, Reason: "显式 safeguards 数组与响应审查结果原样保留；未传时保留内层 CC 审查。支持身份和 schema 不变的客户端工具，以及 tools/mcp_servers 不变的纯 MCP 请求。内部 ToolSearch 轮（CC 2.1.292 随 safeguards 发送 DeferredToolPlaceholder、延迟加载的 MCP 工具）每轮原样带客户端上下文，搜索轮不返回客户端（2026-10-10 起；此前返回 400 会使 CC 本会话停用服务端审查、auto 模式工具调用全部被拒）。agent teams 的 Agent 变体、PowerShell 工具与带客户端超时设置（BASH_DEFAULT/MAX_TIMEOUT_MS、-p 会话）的 Bash/PowerShell 保持原生名，上游收到客户端原定义；子代理请求自带的 SubagentHandback（校验 schema）与普通客户端工具一样经网关 MCP 名转运，ID/输入不变；其它客户端工具改名、inline 工具变更、结构化输出及服务端工具组合仍拒绝；不修改审查结论或授予本地执行。隔离测试只验证保真，真实提供商审查能力待验证。"},
+		{ID: "F-SAFEGUARDS", Title: "工具安全审查", Category: "CC 执行上下文", Scope: "cc", Status: "partial", BodyPaths: []string{"safeguards", "safeguard_results", "tool_use.id"}, BetaHeaders: []string{"dangerous-tool-use-2026-09-03"}, Mechanisms: []string{"主请求归属与上下文保真", "客户端工具身份校验", "纯 MCP 提供商上下文保真"}, Reason: "显式 safeguards 数组与响应审查结果原样保留；未传时保留内层 CC 审查。支持身份和 schema 不变的客户端工具，以及 tools/mcp_servers 不变的纯 MCP 请求。内部 ToolSearch 轮（CC 2.1.292 随 safeguards 发送 DeferredToolPlaceholder、延迟加载的 MCP 工具）每轮原样带客户端上下文，搜索轮不返回客户端（2026-10-10 起；此前返回 400 会使 CC 本会话停用服务端审查、auto 模式工具调用全部被拒）。agent teams 的 Agent 变体、Skill（内层 CLI 仅在输入不会被当作斜杠命令时开启，且不列出容器自带技能）、PowerShell 工具与带客户端超时设置（BASH_DEFAULT/MAX_TIMEOUT_MS、-p 会话）的 Bash/PowerShell 保持原生名，上游收到客户端原定义；子代理请求自带的 SubagentHandback（校验 schema）与普通客户端工具一样经网关 MCP 名转运，ID/输入不变；其它客户端工具改名、inline 工具变更、结构化输出及服务端工具组合仍拒绝；不修改审查结论或授予本地执行。隔离测试只验证保真，真实提供商审查能力待验证。"},
 		{ID: "F-ADD-DIR", Title: "额外目录访问", Category: "CC 执行上下文", Scope: "cc", Status: "supported", BodyPaths: []string{"additional_directories"}, BetaHeaders: []string{}, Mechanisms: []string{"CLI --add-dir 参数传递", "请求级目录授权", "Mod 配置透传"}, Reason: "支持客户端通过 additional_directories 数组传递额外目录，网关保留并通过 --add-dir 参数传递给 CC CLI。每个请求最多 100 个目录，自动去重并验证非空。目录路径由 CLI 验证和授权，网关不检查路径有效性。客户端 CC 自身的 --add-dir 目录出现在环境附件的 Additional working directories 中，随 workingDirectory 字段来源保留或去除（ccgateway 0.1.22 起）。"},
 		entry("F-MODEL", "模型与上下文窗口", "基础请求", "partial", []string{"model"}, []string{"context-1m-2025-08-07"}, []string{"CLI --model", "上下文环境变量"}, "传入请求模型；可用模型、别名和窗口取决于账号与 CLI。"),
 		entry("F-LIMITS", "输出长度", "基础请求", "partial", []string{"max_tokens"}, nil, []string{"主请求输出预算", "零 token 非流预热桥接"}, "正整数最终上游值保持客户端预算；max_tokens:0 使用真实非流预热响应，不生成空答案、不写入会话。已完成真实 CLI 隔离验证，模型上限仍由上游检查。"),

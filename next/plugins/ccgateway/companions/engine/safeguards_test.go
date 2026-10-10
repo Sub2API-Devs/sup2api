@@ -283,3 +283,31 @@ func TestShellToolTimeoutParameters(t *testing.T) {
 		t.Fatal("PowerShell not offered by the inner CLI")
 	}
 }
+
+// The inner CLI runs with slash commands (and so offers Skill) only for a
+// native client Skill, and never when the input would run as a command.
+func TestOffersSkillGuard(t *testing.T) {
+	message := func(blocks ...Object) []Message { return []Message{{Role: "user", Content: blocks}} }
+	text := func(s string) Object { return Object{"type": "text", "text": s} }
+	for _, c := range []struct {
+		native bool
+		input  []Message
+		want   bool
+	}{
+		{true, message(text("hello")), true},
+		{false, message(text("hello")), false},
+		{true, message(text("/cost")), false},
+		{true, message(text("hello"), text("/compact")), false},
+		{true, message(text(" /cost")), true},
+		{true, message(Object{"type": "tool_result", "tool_use_id": "toolu_x", "content": "/home/x"}), true},
+	} {
+		r := &Request{Native: map[string]bool{"Skill": c.native}, Tools: []Tool{{Name: "Skill"}}, Messages: c.input}
+		if r.offersSkill() != c.want {
+			t.Fatalf("native=%v input=%v: %v", c.native, c.input, !c.want)
+		}
+		args := strings.Join(cliArgs(r, &Prepared{}, "plugin"), " ")
+		if strings.Contains(args, "--disable-slash-commands") == c.want {
+			t.Fatalf("args: %s", args)
+		}
+	}
+}

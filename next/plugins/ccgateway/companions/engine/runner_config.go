@@ -73,7 +73,7 @@ func (r *Request) responseView() *Request {
 
 // Inherited variables that would change the request the CLI sends; the gateway
 // sets the ones it needs from the request itself.
-var inheritedCLIEnv = []string{"CLAUDE_CODE_RESUME_INTERRUPTED_TURN", "CLAUDE_CODE_RESUME_FROM_SESSION", "CLAUDE_CODE_PLUGIN_DIRS", "ANTHROPIC_BETAS", "CLAUDE_CODE_EXTRA_BODY", "CLAUDE_CODE_EFFORT_LEVEL", "CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING", "CLAUDE_CODE_PROMPT_CACHE_TTL", "CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL", "FORCE_PROMPT_CACHING_5M", "ENABLE_PROMPT_CACHING_1H", "MAX_THINKING_TOKENS", "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING", "CLAUDE_CODE_DISABLE_THINKING", "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS", "MAX_STRUCTURED_OUTPUT_RETRIES", "CLAUDE_CODE_DISABLE_1M_CONTEXT", "CLAUDE_CODE_MAX_CONTEXT_TOKENS", "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", "CLAUDE_CODE_USE_POWERSHELL_TOOL", "BASH_DEFAULT_TIMEOUT_MS", "BASH_MAX_TIMEOUT_MS", "CCGATEWAY_TOOL_DEFERRAL_FILE", "CCGATEWAY_SYSTEM_FILE", "CCGATEWAY_SYSTEM_ACK_FILE", "CCGATEWAY_READY_FILE", "CCGATEWAY_DEBUG_FILE", "CCGATEWAY_ATTACHMENT_TRACE", "CCGATEWAY_MOD_URL", "CCGATEWAY_MOD_TOKEN"}
+var inheritedCLIEnv = []string{"CLAUDE_CODE_RESUME_INTERRUPTED_TURN", "CLAUDE_CODE_RESUME_FROM_SESSION", "CLAUDE_CODE_PLUGIN_DIRS", "ANTHROPIC_BETAS", "CLAUDE_CODE_EXTRA_BODY", "CLAUDE_CODE_EFFORT_LEVEL", "CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING", "CLAUDE_CODE_PROMPT_CACHE_TTL", "CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL", "FORCE_PROMPT_CACHING_5M", "ENABLE_PROMPT_CACHING_1H", "MAX_THINKING_TOKENS", "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING", "CLAUDE_CODE_DISABLE_THINKING", "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS", "MAX_STRUCTURED_OUTPUT_RETRIES", "CLAUDE_CODE_DISABLE_1M_CONTEXT", "CLAUDE_CODE_MAX_CONTEXT_TOKENS", "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", "CLAUDE_CODE_USE_POWERSHELL_TOOL", "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS", "BASH_DEFAULT_TIMEOUT_MS", "BASH_MAX_TIMEOUT_MS", "CCGATEWAY_TOOL_DEFERRAL_FILE", "CCGATEWAY_SYSTEM_FILE", "CCGATEWAY_SYSTEM_ACK_FILE", "CCGATEWAY_READY_FILE", "CCGATEWAY_DEBUG_FILE", "CCGATEWAY_ATTACHMENT_TRACE", "CCGATEWAY_MOD_URL", "CCGATEWAY_MOD_TOKEN"}
 
 // runConfig is the per-request CLI and Mod configuration, kept in memory.
 type runConfig struct {
@@ -124,16 +124,28 @@ func newRunConfig(req *Request, p *Prepared, plugin, dir string) *runConfig {
 
 func cliArgs(req *Request, p *Prepared, plugin string) []string {
 	settings := `{"disableAllHooks":false}`
+	values := Object{"disableAllHooks": false}
 	if req.Fast != nil {
-		fast := *req.Fast && (req.Plan == nil || !req.Plan.apiGeneration)
-		b, _ := json.Marshal(Object{"disableAllHooks": false, "fastMode": fast})
+		values["fastMode"] = *req.Fast && (req.Plan == nil || !req.Plan.apiGeneration)
+	}
+	if req.offersSkill() {
+		// With slash commands the CLI lists its skills to the model; the
+		// container's own (bundled ones are off by environment, and this
+		// built-in plugin's) must not reach the client's conversation.
+		values["enabledPlugins"] = Object{"plugin-authoring@builtin": false}
+	}
+	if len(values) > 1 {
+		b, _ := json.Marshal(values)
 		settings = string(b)
 	}
 	snapshotMode := "off"
 	if p.SnapshotEnabled && !req.HasMainRequestFeatures() {
 		snapshotMode = "on"
 	}
-	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--tools", strings.Join(req.enabledTools(), ","), "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--setting-sources", "", "--settings", settings, "--disable-slash-commands", "--no-chrome", "--max-turns", req.maxTurns(), "--model=" + req.Model, "--plugin-dir", plugin, "--system-prompt-snapshot", snapshotMode}
+	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--tools", strings.Join(req.enabledTools(), ","), "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--setting-sources", "", "--settings", settings, "--no-chrome", "--max-turns", req.maxTurns(), "--model=" + req.Model, "--plugin-dir", plugin, "--system-prompt-snapshot", snapshotMode}
+	if !req.offersSkill() {
+		args = append(args, "--disable-slash-commands")
+	}
 	// The session ID never changes within a branch (§53.12): resuming the
 	// private copy keeps it, and the CLI appends to that copy.
 	if p.Path != "" {
@@ -206,10 +218,32 @@ func cliEnv(req *Request, systemTurns bool) map[string]string {
 	if req.agentTeamsVariant() {
 		env["CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"] = "1"
 	}
+	if req.offersSkill() {
+		// The container's own skills must not be listed to the model.
+		env["CLAUDE_CODE_DISABLE_BUNDLED_SKILLS"] = "1"
+	}
 	for k, v := range req.shellToolEnv() {
 		env[k] = v
 	}
 	return env
+}
+
+// offersSkill reports whether the inner CLI runs with slash commands, which
+// is what makes it offer the Skill tool: only when the client's Skill is
+// native (client safeguards refuse it under the gateway's MCP name), and
+// never when a top-level text block of the input starts with "/", which the
+// CLI would run as a command (2.1.292 checks those blocks, not tool results
+// nor text after leading whitespace).
+func (r *Request) offersSkill() bool {
+	if r.NoTools || !r.Native["Skill"] {
+		return false
+	}
+	for _, block := range r.pendingWireMessage().Content {
+		if str(block, "type") == "text" && strings.HasPrefix(str(block, "text"), "/") {
+			return false
+		}
+	}
+	return true
 }
 
 // agentTeamsVariant reports a native Agent tool with the agent teams schema

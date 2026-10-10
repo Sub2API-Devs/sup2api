@@ -64,6 +64,13 @@ func TestRealCLISafeguardsWithDeferredLoading(t *testing.T) {
 		_ = json.Unmarshal(raw, &tool)
 		shellTools = append(shellTools, tool)
 	}
+	skill := verifiedNativeToolCatalogues[version]["Skill"]
+	if len(skill) == 0 {
+		t.Fatalf("no verified Skill catalogue for CLI %s", version)
+	}
+	skillTool := Object{"name": "Skill", "description": skill[0].Description, "input_schema": skill[0].Schema}
+	// Upstream system and message shape of the first round, per variant.
+	shapes := map[string]string{}
 	tools = append(tools, Object{"name": "DeferredToolPlaceholder", "description": "Reserved placeholder that keeps deferred tool loading active; never call this tool.", "input_schema": Object{"type": "object", "properties": Object{}}, "defer_loading": true})
 	root := t.TempDir()
 	plugin, err := extractMod(root)
@@ -139,7 +146,7 @@ func TestRealCLISafeguardsWithDeferredLoading(t *testing.T) {
 	for _, c := range []struct {
 		stream bool
 		prompt string
-	}{{true, "READ_SYNTHETIC_FILE"}, {false, "READ_SYNTHETIC_FILE"}, {true, "SEARCH_FIRST"}, {false, "SEARCH_FIRST"}, {true, "HANDBACK"}, {false, "HANDBACK"}, {true, "TEAMS"}, {false, "TEAMS"}, {true, "SHELL"}, {false, "SHELL"}} {
+	}{{true, "READ_SYNTHETIC_FILE"}, {false, "READ_SYNTHETIC_FILE"}, {true, "SEARCH_FIRST"}, {false, "SEARCH_FIRST"}, {true, "HANDBACK"}, {false, "HANDBACK"}, {true, "TEAMS"}, {false, "TEAMS"}, {true, "SHELL"}, {false, "SHELL"}, {true, "SKILL"}, {false, "SKILL"}} {
 		stream := c.stream
 		t.Run(fmt.Sprintf("stream=%t/%s", stream, c.prompt), func(t *testing.T) {
 			cache, err := newCache(filepath.Join(t.TempDir(), "cache"), 32<<20)
@@ -153,6 +160,11 @@ func TestRealCLISafeguardsWithDeferredLoading(t *testing.T) {
 			if c.prompt == "SEARCH_FIRST" {
 				// A deferred MCP tool, as CC defers them: loaded by ToolSearch first.
 				body["tools"] = append(append([]any{}, tools...), Object{"name": "mcp__fixture__lookup", "description": "Look up a fixture record.", "input_schema": Object{"type": "object", "properties": Object{"key": Object{"type": "string"}}, "required": []any{"key"}}, "defer_loading": true})
+			}
+			if c.prompt == "SKILL" {
+				// Skill needs the inner CLI's slash commands; nothing else of
+				// them may reach upstream.
+				body["tools"] = append([]any{skillTool}, tools...)
 			}
 			if c.prompt == "SHELL" {
 				body["tools"] = append(append([]any{}, shellTools...), tools...)
@@ -200,6 +212,37 @@ func TestRealCLISafeguardsWithDeferredLoading(t *testing.T) {
 			}
 			if main == 0 {
 				t.Fatal("client safeguards not sent upstream")
+			}
+			for _, wire := range rounds {
+				if _, ok := wire["safeguards"]; !ok {
+					continue
+				}
+				var blocks []string
+				for _, message := range wire["messages"].([]any) {
+					content, _ := message.(map[string]any)["content"].([]any)
+					blocks = append(blocks, fmt.Sprint(len(content)))
+				}
+				// The billing header's cc_version suffix follows the prompt text.
+				var system []any
+				for _, block := range wire["system"].([]any) {
+					if !strings.HasPrefix(str(block.(map[string]any), "text"), "x-anthropic-billing-header:") {
+						system = append(system, block)
+					}
+				}
+				shapes[fmt.Sprintf("%t/%s", stream, c.prompt)] = digest(system) + strings.Join(blocks, ",")
+				break
+			}
+			if c.prompt == "SKILL" {
+				if shapes[fmt.Sprintf("%t/SKILL", stream)] != shapes[fmt.Sprintf("%t/READ_SYNTHETIC_FILE", stream)] {
+					t.Fatal("slash commands changed the upstream system or messages")
+				}
+				found := false
+				for _, item := range rounds[len(rounds)-1]["tools"].([]any) {
+					found = found || str(item.(map[string]any), "name") == "Skill"
+				}
+				if !found {
+					t.Fatal("Skill not offered under its own name")
+				}
 			}
 			if c.prompt == "SHELL" {
 				// Upstream sees the client's own definitions, numbers included.

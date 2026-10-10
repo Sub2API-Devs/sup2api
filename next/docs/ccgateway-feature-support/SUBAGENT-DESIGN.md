@@ -82,6 +82,10 @@
      - 内层 CLI 按需开 PowerShell；
      - 内层定义与客户端只差这些数字时，上游收到客户端原定义。
    - 测试：`TestRealCLISafeguardsWithDeferredLoading/SHELL`，并断言上游收到的就是客户端定义。
+   - 同一场景的下一个工具是 `Skill`：内层 CLI 以 `--disable-slash-commands` 运行，这个参数会去掉 Skill 工具。修复（0.1.27）：
+     - 只有客户端 Skill 为原生定义、且本次输入没有以 "/" 开头的顶层文本块时，才去掉该参数。2.1.292 只把这类文本当作命令执行，tool_result 和前导空白都不会触发。
+     - 同时以 `CLAUDE_CODE_DISABLE_BUNDLED_SKILLS=1` 并关闭内置插件 `plugin-authoring@builtin` 运行，容器自带的技能清单不会进入客户端对话（Linux 镜像实测）。
+     - 测试：真实 CLI 用例 `SKILL`，断言上游的 system 与消息结构和不带 Skill 时完全一致（只排除随提示词变化的 billing 头）。
 7. **--add-dir 目录被去掉。**
    - 原因：生产策略是 attachment_source=gateway、workingDirectory=client，此前只保留 Primary working directory。
    - 修复：0.1.22 起，"Additional working directories" 及其子项随 workingDirectory 保留。
@@ -102,3 +106,29 @@
 ## 6. 端到端结果（2026-10-10）
 
 见 ENVIRONMENT-RUNBOOK.md 顶部的"2026-10-10 下午"一节。
+
+## 7. 用户本机 cc-switch 环境下子代理被拒（2026-10-10 实测）
+
+用户本机设置（经 cc-switch 走本网关）下，用原提示词测试时，每次 `Agent` 调用都返回：
+
+> claude-opus-5[1M] is temporarily unavailable, so auto mode cannot determine the safety of Agent right now.
+
+结果是子代理全部被拒，主线程只能自己读代码。原因链：
+
+1. `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` 关掉了服务端审查，auto 模式改用本地分类器。
+2. 本地分类器调用 `ANTHROPIC_DEFAULT_OPUS_MODEL` = `claude-opus-5[1M]`。CLI 按 claude-opus-5 的能力发送 `thinking: disabled`。
+3. cc-switch 把模型改写成 `claude-opus-5-5`，该模型不接受 disabled，上游返回 400。
+4. 分类器因此"不可用"，auto 模式拒绝 Agent。
+
+假上游实测对比：
+
+- 映射为 `claude-opus-5[1M]` 时，分类器请求是 `model: claude-opus-5`、`thinking: disabled`；
+- 把 `ANTHROPIC_DEFAULT_OPUS_MODEL` 设为真实的 `claude-opus-5-5` 后，CLI 不发 thinking，分类器可用。
+
+sonnet 别名也有同样问题：`claude-sonnet-5` 发出 disabled，被 cc-switch 转成 opus-5-5 后同样 400。
+
+网关原样返回上游 400，不冷却账号，这是正确行为。修复办法是让本机别名与 cc-switch 实际路由的模型一致：
+
+- `ANTHROPIC_DEFAULT_OPUS_MODEL=claude-opus-5-5`；
+- `ANTHROPIC_DEFAULT_SONNET_MODEL` 也设为实际路由到的模型；
+- 或者去掉 `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`，改用服务端审查（0.1.23–0.1.27 已支持）。

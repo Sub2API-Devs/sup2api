@@ -1,6 +1,27 @@
 # CCGateway 环境与操作指南
 
-> **2026-10-10 03:10（北京时间）线上版本，优先于下文：**
+> **2026-10-10 14:25（北京时间）线上版本，优先于下文：**
+> - 核心 **v0.1.97**（源码 `1b58e622c`，manifest `0184d432ad66…`），ccgateway **0.1.26**。#21/#22/#23 worker 原地更新，容器 ID 不变。
+> - 同日先后发布、已被取代的版本：
+>   - .94：Fable 周窗口改读 usage 应答 `limits[]`；safeguards 随内部 ToolSearch 轮发送。
+>   - .95：子代理的 SubagentHandback。
+>   - .96：agent teams 的 Agent。
+> - 本机 CC 2.1.292 端到端测试暴露了四类 worker 拒绝，现在全部处理，详见 `SUBAGENT-DESIGN.md` 第 4 节。根源都是 auto 模式下的服务端审查 safeguards：
+>   - 主线程首个请求；
+>   - 子代理；
+>   - teams 的 Agent；
+>   - PowerShell，以及带超时设置的 Bash。
+> - 新账号 #23（Max 20x，分组 6）已可调度。
+> - `artifacts/subagent_e2e.py` 的 `TOOLS` 已加入 ToolSearch：客户端会延迟加载 Bash，缺了 ToolSearch 子代理就没有 shell。
+> - `-p` 加后台子代理时会输出多条 result 事件，脚本取最后一条非空结果。
+
+> **2026-10-10 06:20（北京时间）线上版本（已被上面替代）：**
+> - 核心 **v0.1.93**（源码 `69e3e7009`，manifest `a210b1f067c9…`）；ccgateway **0.1.22**；控制器 `ccgateway-controller:0.1.22`，#21/#22 worker 原地更新为 `2f53ce05537a…`（容器 ID 未变）。同夜 .91（`97f7f25d…`，P1 + 粘性会话核心化 + P2 + 无账号 529）、.92（ccgateway 0.1.21）先后发布后被取代；.90 的发布包（P1 单独）从未导入。迁移 0047/0048 已应用，`sticky_rules_core_only` 约束在。发布前备份 `~/sup2api-managed/backups/pg-before-0.1.91-20261009T214500.dump`。
+> - 本轮修复：资源检查对已还原会话上下文的误判（502）、请求级错误不再冷却账号（`X-Ccgateway-Error-Scope: request`）、Anthropic 格式无可用账号返回 529 overloaded_error；CLI 2.1.292 默认的 `context_management` clear_thinking keep all + 延迟工具不再 400；`--add-dir` 的 "Additional working directories" 随 workingDirectory 字段来源；CC 特性页恢复附件来源与 CC 特性目录。
+> - 本机子代理端到端：`artifacts/subagent_e2e.py`（本机 CLI 2.1.292 在 new-api 目录直连 :3130，临时 key 用完即删）。22:01Z 起账号 22 的 5 小时窗口 100%（上游 429，重置 23:19:59Z），期间所有请求正确返回 529，属真实容量不足而非故障。
+> - `/tmp/ccg_api.py`（OVH 上的管理员 API 小工具，从 `.env` 读引导管理员登录，不打印密钥）用后删除。
+
+> **2026-10-10 03:10（北京时间）线上版本（已被上面替代）：**
 > - 核心 **v0.1.88**（源码 `062dd8563`，manifest `4e0149cb2d92…`）；ccgateway **0.1.19**：会话改造 §53.12（客户端会话只看 `metadata.user_id`，上游只见哈希会话 U / 子代理 A'，客户端 metadata 不发上游，同会话分支同文件）、分类器 system 形状 502 修复、2.1.292 会话上下文合并的另两种形态（数组 tool_result 追加、tool_result 回合末尾追加；子代理之后的回合曾 502）。控制器 `ccgateway-controller:0.1.19`，#21/#22 worker 原地更新为 `6a8c26b05b79…`（容器 ID 未变）。中间版本 .86/.87 同夜发布后被取代；三次核心升级各约 9–10 秒 503。
 > - **P0 隔离加固已上线（CONTRACTS §54）**：外壳镜像 `sup2api-gateway:local` = `062dd85`（`1fb3138968bd`，旧的保留为 `sup2api-gateway:pre-p0` = d917b8c），03:00 起 2→3→4→1 逐节点换，每节点约 9.4 秒；节点容器 `no-new-privileges` + `cap_drop: ALL`；管理 socket 需令牌（无/错令牌 401）。Redis（仍是 `redis:7`，`~/sup2api/.env` 加了 `CACHE_IMAGE=redis:7` 以免切 Valkey）已 `requirepass`，密码 `REDIS_PASSWORD` 在 `~/sup2api/.env` 与 `~/sup2api-managed/.env`，03:07 用 `deploy/single/compose.yml` 重建固化（实时状态清空一次）。改动前备份 `~/sup2api-managed/backups/p0-20261009T185948/`。清掉了 Redis 里 10-01 遗留的 3 个 `redis-cli monitor` 连接。
 > - 仓库 `deploy/gateway/ovh/roll-gateway.py` 假定容器名 `sup2api-managed-sup2api-N-1`，与线上 `sup2api-N` 不符，**不能直接用**；本次按"重标 `:local` → `docker compose up -d --no-deps sup2api-N`、等节点 ready/local/新 shell boot/入口 401"逐个替换。
