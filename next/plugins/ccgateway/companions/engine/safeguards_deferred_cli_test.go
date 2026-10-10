@@ -39,6 +39,16 @@ func TestRealCLISafeguardsWithDeferredLoading(t *testing.T) {
 		}
 		tools = append(tools, Object{"name": variants[0].Name, "description": variants[0].Description, "input_schema": variants[0].Schema})
 	}
+	// The agent teams Agent (CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS on the client).
+	var teamsAgent Object
+	for _, variant := range verifiedNativeToolCatalogues[version]["Agent"] {
+		if properties, _ := variant.Schema["properties"].(map[string]any); properties["team_name"] != nil {
+			teamsAgent = Object{"name": variant.Name, "description": variant.Description, "input_schema": variant.Schema}
+		}
+	}
+	if teamsAgent == nil {
+		t.Fatalf("no verified agent teams Agent for CLI %s", version)
+	}
 	tools = append(tools, Object{"name": "DeferredToolPlaceholder", "description": "Reserved placeholder that keeps deferred tool loading active; never call this tool.", "input_schema": Object{"type": "object", "properties": Object{}}, "defer_loading": true})
 	root := t.TempDir()
 	plugin, err := extractMod(root)
@@ -114,7 +124,7 @@ func TestRealCLISafeguardsWithDeferredLoading(t *testing.T) {
 	for _, c := range []struct {
 		stream bool
 		prompt string
-	}{{true, "READ_SYNTHETIC_FILE"}, {false, "READ_SYNTHETIC_FILE"}, {true, "SEARCH_FIRST"}, {false, "SEARCH_FIRST"}, {true, "HANDBACK"}, {false, "HANDBACK"}} {
+	}{{true, "READ_SYNTHETIC_FILE"}, {false, "READ_SYNTHETIC_FILE"}, {true, "SEARCH_FIRST"}, {false, "SEARCH_FIRST"}, {true, "HANDBACK"}, {false, "HANDBACK"}, {true, "TEAMS"}, {false, "TEAMS"}} {
 		stream := c.stream
 		t.Run(fmt.Sprintf("stream=%t/%s", stream, c.prompt), func(t *testing.T) {
 			cache, err := newCache(filepath.Join(t.TempDir(), "cache"), 32<<20)
@@ -128,6 +138,9 @@ func TestRealCLISafeguardsWithDeferredLoading(t *testing.T) {
 			if c.prompt == "SEARCH_FIRST" {
 				// A deferred MCP tool, as CC defers them: loaded by ToolSearch first.
 				body["tools"] = append(append([]any{}, tools...), Object{"name": "mcp__fixture__lookup", "description": "Look up a fixture record.", "input_schema": Object{"type": "object", "properties": Object{"key": Object{"type": "string"}}, "required": []any{"key"}}, "defer_loading": true})
+			}
+			if c.prompt == "TEAMS" {
+				body["tools"] = append([]any{teamsAgent}, tools...)
 			}
 			if c.prompt == "HANDBACK" {
 				// A subagent request: CC 2.1.292 adds SubagentHandback and

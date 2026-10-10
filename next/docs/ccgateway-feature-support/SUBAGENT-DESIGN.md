@@ -66,13 +66,26 @@
    - 后果：CLI 日志说明，此后整个会话"每个 auto 模式工具调用都会因服务端审查不可用而被拒"。
    - 修复（0.1.23）：内部 ToolSearch 轮每轮原样带客户端 safeguards，搜索轮不返回客户端，审查结果原样转发。结构化输出、服务端工具与 safeguards 的组合仍然拒绝。
    - 测试：真实 CLI 测试 `TestRealCLISafeguardsWithDeferredLoading`，覆盖含隐藏搜索轮的情况。
-4. **--add-dir 目录被去掉。**
+4. **502 "client safeguards requires unchanged tool names: SubagentHandback"。**
+   - 现象：子代理请求同样带 safeguards，并带 CC 给子代理的 `SubagentHandback` 工具。内层 CLI 没有这个工具，只能经 MCP 名转运，于是被拒。用户的提示词下，子代理连续 3 次失败。
+   - 修复（0.1.24）：schema 经校验的 `SubagentHandback` 按普通客户端工具转运，ID、输入、schema 都不变。
+5. **agent teams 的 502。** 见第 5 节（0.1.25）。
+6. **--add-dir 目录被去掉。**
    - 原因：生产策略是 attachment_source=gateway、workingDirectory=client，此前只保留 Primary working directory。
    - 修复：0.1.22 起，"Additional working directories" 及其子项随 workingDirectory 保留。
 
 ## 5. Agent Teams
 
-见第 6 节的测试结果。teams 场景使用 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`，用户本机设置也开着它。
+- 客户端开了 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`（用户本机设置即如此）时，`Agent` 工具多出 `team_name`、`name`、`mode` 三个参数。这个变体已在 2.1.292 的已验证原生目录里。
+- 此前内层 CLI 不开 teams，提供的是普通 `Agent`。原生定义对不上，Worker 就回退成网关 MCP 名转运。
+  - 没有 safeguards 时，这样可以工作。
+  - 有 safeguards 时会被拒：502 "client safeguards requires unchanged tool names: Agent"。2026-10-10 线上 teams 场景每次都是这个错误。
+- 0.1.25 起，当客户端 `Agent` 是 teams 变体时，内层 CLI 以 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` 运行，提供完全相同的定义，`Agent` 保持原生名。
+  - Agent 调用仍然只返回给客户端，内层不会启动队友。
+  - 队友（teammate）的请求和子代理一样，带自己的 agent id，进入各自的分支。
+- 测试：真实 CLI 测试 `TestRealCLISafeguardsWithDeferredLoading/TEAMS`。不带修复时，它复现线上的 502。
+
+（`5h`/`7d` 之外，Max 20x 账号 #23 的 Fable 周窗口改从 usage 应答 `limits[]` 的 `weekly_scoped` 读取，见 CONTRACTS §44。）
 
 ## 6. 端到端结果（2026-10-10）
 

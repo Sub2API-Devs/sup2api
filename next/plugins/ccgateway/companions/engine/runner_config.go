@@ -73,7 +73,7 @@ func (r *Request) responseView() *Request {
 
 // Inherited variables that would change the request the CLI sends; the gateway
 // sets the ones it needs from the request itself.
-var inheritedCLIEnv = []string{"CLAUDE_CODE_RESUME_INTERRUPTED_TURN", "CLAUDE_CODE_RESUME_FROM_SESSION", "CLAUDE_CODE_PLUGIN_DIRS", "ANTHROPIC_BETAS", "CLAUDE_CODE_EXTRA_BODY", "CLAUDE_CODE_EFFORT_LEVEL", "CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING", "CLAUDE_CODE_PROMPT_CACHE_TTL", "CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL", "FORCE_PROMPT_CACHING_5M", "ENABLE_PROMPT_CACHING_1H", "MAX_THINKING_TOKENS", "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING", "CLAUDE_CODE_DISABLE_THINKING", "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS", "MAX_STRUCTURED_OUTPUT_RETRIES", "CLAUDE_CODE_DISABLE_1M_CONTEXT", "CLAUDE_CODE_MAX_CONTEXT_TOKENS", "CCGATEWAY_TOOL_DEFERRAL_FILE", "CCGATEWAY_SYSTEM_FILE", "CCGATEWAY_SYSTEM_ACK_FILE", "CCGATEWAY_READY_FILE", "CCGATEWAY_DEBUG_FILE", "CCGATEWAY_ATTACHMENT_TRACE", "CCGATEWAY_MOD_URL", "CCGATEWAY_MOD_TOKEN"}
+var inheritedCLIEnv = []string{"CLAUDE_CODE_RESUME_INTERRUPTED_TURN", "CLAUDE_CODE_RESUME_FROM_SESSION", "CLAUDE_CODE_PLUGIN_DIRS", "ANTHROPIC_BETAS", "CLAUDE_CODE_EXTRA_BODY", "CLAUDE_CODE_EFFORT_LEVEL", "CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING", "CLAUDE_CODE_PROMPT_CACHE_TTL", "CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL", "FORCE_PROMPT_CACHING_5M", "ENABLE_PROMPT_CACHING_1H", "MAX_THINKING_TOKENS", "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING", "CLAUDE_CODE_DISABLE_THINKING", "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS", "MAX_STRUCTURED_OUTPUT_RETRIES", "CLAUDE_CODE_DISABLE_1M_CONTEXT", "CLAUDE_CODE_MAX_CONTEXT_TOKENS", "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", "CCGATEWAY_TOOL_DEFERRAL_FILE", "CCGATEWAY_SYSTEM_FILE", "CCGATEWAY_SYSTEM_ACK_FILE", "CCGATEWAY_READY_FILE", "CCGATEWAY_DEBUG_FILE", "CCGATEWAY_ATTACHMENT_TRACE", "CCGATEWAY_MOD_URL", "CCGATEWAY_MOD_TOKEN"}
 
 // runConfig is the per-request CLI and Mod configuration, kept in memory.
 type runConfig struct {
@@ -203,7 +203,30 @@ func cliEnv(req *Request, systemTurns bool) map[string]string {
 	if req.FineGrainedTools {
 		env["CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING"] = "1"
 	}
+	if req.agentTeamsVariant() {
+		env["CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"] = "1"
+	}
 	return env
+}
+
+// agentTeamsVariant reports a native Agent tool with the agent teams schema
+// (team_name, name, mode), which a client CLI offers with
+// CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS. The inner CLI then offers the same
+// definition, so Agent stays native instead of falling back to the gateway's
+// MCP name (which client safeguards refuse). Agent calls still return to the
+// client: the inner CLI never runs a teammate.
+func (r *Request) agentTeamsVariant() bool {
+	if r.NoTools || !r.Native["Agent"] {
+		return false
+	}
+	for _, tool := range r.Tools {
+		if tool.Name == "Agent" {
+			properties, _ := tool.Schema["properties"].(map[string]any)
+			_, teams := properties["team_name"]
+			return teams
+		}
+	}
+	return false
 }
 
 // relayEnv points the CLI at the outbound relay.
