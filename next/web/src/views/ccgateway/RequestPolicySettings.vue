@@ -1,11 +1,10 @@
 <script setup lang="ts">
-// CC features: the catalog of Claude Code execution features (--add-dir, ...),
-// Claude Code's tools and error handling inside the Worker, which system
-// attachments (environment, model, date...) the model sees and from where, and
-// how unsupported client requests are handled. Features the official API
-// supports need no setting.
+// CC features: Claude Code's tools and error handling inside the Worker, which
+// system attachments (environment, model, date...) the model sees and from
+// where, and how unsupported client requests are handled. Features the official
+// API supports need no setting, and what each feature supports is documented in
+// the Worker's catalog, not here.
 import { useI18n } from 'vue-i18n'
-import FeatureSupport from './FeatureSupport.vue'
 import { attachmentTypes, type AttachmentType, type AttachmentSource, type RequestPolicy } from './requestPolicy'
 const policy = defineModel<RequestPolicy>({ required: true })
 const { t } = useI18n()
@@ -33,8 +32,6 @@ function setEnvironmentField(field: 'workingDirectory' | 'platform', event: Even
 <template>
   <section class="space-y-4" data-testid="request-policy">
     <div><h4 class="font-semibold">{{ t('ccgateway.features.ccTitle') }}</h4><p class="mt-1 text-xs text-gray-500">{{ t('ccgateway.features.ccHint') }}</p></div>
-    <!-- The CC feature catalog (safeguards, ...) is shown in full; fully supported features are left to the Worker's catalog. -->
-    <FeatureSupport scope="cc" class="rounded-lg border border-gray-200 p-3 dark:border-dark-700" data-testid="cc-feature-catalog" />
     <section class="space-y-3 rounded-lg border border-gray-200 p-3 dark:border-dark-700" data-testid="cc-runtime-settings">
       <h5 class="text-sm font-medium">{{ t('ccgateway.features.ccRuntime') }}</h5>
       <div class="grid gap-3 md:grid-cols-2">

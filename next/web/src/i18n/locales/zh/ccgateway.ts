@@ -1,19 +1,9 @@
 export default {
   credentialStatus: { saved: '本地凭据已保存，在线有效性以实际请求为准。', absent: '未发现可确认的本地凭据，未进行在线验证。', unresolved: '凭据来源尚未确定；不会执行外部凭据程序来检查状态。', expired: '已保存的访问令牌已过期，等待原生 CLI 在实际请求时刷新。' },
   settingsTabs: { label: '设置分类', connection: '连接与授权', network: '网络配置', cc: 'CC 特性', deployment: '部署与运行', save: '保存全部配置' },
-  capability: { helperHistory: 'Worker 隐藏历史托管协议', helperUnreported: '未声明', helperBoundary: '这是 Worker 协议声明；需要核心同时启用托管。此查询不确认核心启用状态或提供商资格，不会改变配置。', search: '搜索账号', inspect: '查看账号 Worker 能力', account: '选择可访问账号', boundary: '只读查询，不启动或更新容器，也不影响调度。二进制目录、CLI 版本探测和模型实测是三类不同证据。', failed: '无法探测：可能是旧 Worker / 控制器、无权限或连接失败；不能据此判断特性已支持。', build: '运行中 Worker 版本 / Git revision', schema: 'Worker 目录 / 接受的策略版本', code: '此 Worker 的代码适配声明', probes: '实际本地探测范围', provider: '账号 / 模型 / Provider 实际调用验证', notRun: '该接口未进行模型调用，未验证', unreported: '未报告' },
   features: {
-    title: '通用 API 特性',
-    baseline: '列出有限制、不支持或未验证的特性，按功能查看参数、Beta 与处理限制；完全支持的特性不在此列出。这里是代码适配目录，不代表当前账号、模型或 Worker 已通过运行时验证。',
-    loading: '正在读取特性目录…',
-    loadFailed: '特性目录暂不可用，或当前核心尚不支持此目录。无法确认支持范围；现有配置不变。',
-    retry: '重新加载', search: '搜索特性、参数或 Beta', filter: '适配状态', all: '全部状态',
-    status: { supported: '自然支持', partial: '有限支持', unsupported: '暂不支持', unverified: '尚未验证' },
-    body: '请求参数', requirements: '适用条件：', implementation: '查看处理机制与证据', mechanisms: '处理机制与证据',
-    empty: '没有匹配的特性', version: '目录版本：{version}', previous: '上一页', next: '下一页',
-    ccSettings: '查看 CC 工具搜索运行配置',
     ccTitle: 'CC 特性',
-    ccHint: '设置 Worker 内部 Claude Code 的工具行为、错误处理和环境附件来源，以及不支持的请求如何处理。下方列出有限制或不支持的 CC 执行功能，完全支持的不在此列出；这是代码适配目录，不代表当前账号、模型或 Worker 已通过运行时验证。',
+    ccHint: '设置 Worker 内部 Claude Code 的工具行为、错误处理和环境附件来源，以及不支持的请求如何处理。官方 API 本身支持的功能不需要设置；各特性的支持情况写在 Worker 的特性目录代码里，不在这里展示。',
     ccRuntime: '工具与错误处理',
   },
   policy: {
@@ -52,7 +42,7 @@ export default {
     passUpstreamErrors: '上游错误直接返回给客户端',
     thinkingDisabledCompat: '兼容不支持 thinking disabled 的模型',
     thinkingDisabledCompatHint:
-      '仅在模型被改写、客户端仍发送 disabled 时使用：例如 cc-switch 把 claude-opus-5 改写成 claude-opus-5-5，Claude Code 的 auto 模式分类器等请求仍带 thinking.type: disabled，而已验证的 claude-opus-5-5、claude-fable-5-1 不接受。开启后对这些模型不传 thinking（与官方 CLI 对它们的请求一致，不改成 adaptive）。默认关闭：与官方 API 一致返回 400。更彻底的办法是在本机把模型别名改成实际模型。',
+      '仅在模型被改写、客户端仍发送 disabled 时使用：例如 cc-switch 把 claude-opus-5 改写成 claude-opus-5-5，Claude Code 的 auto 模式分类器等请求仍带 thinking.type: disabled，而已验证的 claude-opus-5-5、claude-fable-5-1 不接受。开启后对这些模型不传 thinking（与官方 CLI 对它们的请求一致，不改成 adaptive），完全透传和适配两种中继模式下都生效。默认关闭：与官方 API 一致返回 400。更彻底的办法是在本机把模型别名改成实际模型。',
     relayMode: '出站中继模式',
     relayMode_legacy: '适配（原有方式）',
     relayMode_passthrough: '完全透传',

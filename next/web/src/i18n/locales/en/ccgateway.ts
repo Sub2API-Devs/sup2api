@@ -1,19 +1,9 @@
 export default {
   credentialStatus: { saved: 'Local credentials are saved. Online validity is determined by actual requests.', absent: 'No confirmed local credentials found. Online validity was not checked.', unresolved: 'Credential selection is unresolved; external credential programs are not run for status checks.', expired: 'The stored access token has expired. The native CLI will attempt refresh during an actual request.' },
   settingsTabs: { label: 'Settings categories', connection: 'Connection', network: 'Network', cc: 'CC features', deployment: 'Deployment', save: 'Save all settings' },
-  capability: { helperHistory: 'Worker hidden-history custody protocol', helperUnreported: 'Not declared', helperBoundary: 'Worker protocol declaration only; core custody must also be enabled. This query does not verify core activation or provider eligibility and changes no settings.', search: 'Search accounts', inspect: 'Inspect account Worker capabilities', account: 'Select an accessible account', boundary: 'Read only: does not start or update containers or change routing. Binary declarations, CLI version observations and real model verification are separate evidence.', failed: 'Inspection unavailable: an older Worker/controller, missing permission or a connection failure. This does not establish feature support.', build: 'Running Worker version / Git revision', schema: 'Worker catalog / accepted policy schemas', code: 'This Worker’s code declaration', probes: 'Observed local probe scope', provider: 'Account / model / provider inference verification', notRun: 'No inference performed by this endpoint; not verified', unreported: 'Not reported' },
   features: {
-    title: 'API features',
-    baseline: 'Lists limited, unsupported or unverified features with their parameters, betas and limitations; fully supported features are not listed. This is a code adaptation catalog, not runtime verification of the current account, model or Worker.',
-    loading: 'Loading feature catalog…',
-    loadFailed: 'The feature catalog is unavailable or unsupported by this core. Support cannot be confirmed; existing settings are unchanged.',
-    retry: 'Reload', search: 'Search features, parameters or betas', filter: 'Adaptation status', all: 'All statuses',
-    status: { supported: 'Supported', partial: 'Partial support', unsupported: 'Not supported', unverified: 'Not verified' },
-    body: 'Request parameters', requirements: 'Requirements: ', implementation: 'Implementation and evidence', mechanisms: 'Implementation and evidence',
-    empty: 'No matching features', version: 'Catalog version: {version}', previous: 'Previous', next: 'Next',
-    ccSettings: 'View CC tool search settings',
     ccTitle: 'CC features',
-    ccHint: 'Configure tool behavior, error handling and environment attachments for Claude Code inside the Worker, and how unsupported requests are handled. The list below shows CC execution features that are limited or unsupported; fully supported ones are not listed. This is a code adaptation catalog, not runtime verification of the current account, model or Worker.',
+    ccHint: 'Configure tool behavior, error handling and environment attachments for Claude Code inside the Worker, and how unsupported requests are handled. Features the official API supports need no setting; what each feature supports is documented in the Worker feature catalog, not shown here.',
     ccRuntime: 'Tools and error handling',
   },
   policy: {
@@ -52,7 +42,7 @@ export default {
     passUpstreamErrors: 'Return upstream errors directly to clients',
     thinkingDisabledCompat: 'Compatibility for models that reject thinking disabled',
     thinkingDisabledCompatHint:
-      'Use only when the model is rewritten and the client still sends disabled: for example cc-switch rewrites claude-opus-5 to claude-opus-5-5, and requests such as the Claude Code auto-mode classifier still carry thinking.type: disabled, which the verified models claude-opus-5-5 and claude-fable-5-1 reject. When enabled, thinking is omitted for these models (as the official CLI sends them; it is not changed to adaptive). Off by default: like the official API, such requests return 400. The more thorough fix is to set the local model alias to the actual model.',
+      'Use only when the model is rewritten and the client still sends disabled: for example cc-switch rewrites claude-opus-5 to claude-opus-5-5, and requests such as the Claude Code auto-mode classifier still carry thinking.type: disabled, which the verified models claude-opus-5-5 and claude-fable-5-1 reject. When enabled, thinking is omitted for these models (as the official CLI sends them; it is not changed to adaptive), in both relay modes. Off by default: like the official API, such requests return 400. The more thorough fix is to set the local model alias to the actual model.',
     relayMode: 'Outbound relay mode',
     relayMode_legacy: 'Adapt (existing behavior)',
     relayMode_passthrough: 'Full passthrough',
