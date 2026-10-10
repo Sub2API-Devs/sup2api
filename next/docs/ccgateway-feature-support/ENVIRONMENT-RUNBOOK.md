@@ -1,6 +1,20 @@
 # CCGateway 环境与操作指南
 
-> **2026-10-10 14:25（北京时间）线上版本，优先于下文：**
+> **2026-10-10 16:00（北京时间）线上版本，优先于下文：**
+> - 核心 **v0.1.99**（源码 `7fa0cb9df`，manifest `ac827a88a667…`），ccgateway **0.1.28**。#21/#22/#23 worker 原地更新，容器 ID 不变。
+> - 同日先后发布、已被取代的版本：
+>   - .97：PowerShell 与 Bash 超时设置；
+>   - .98：Skill。
+> - **CC 特性中的 `thinking_disabled_compat` 已在线上打开（`omit`）**，按用户要求。原因：用户本机经 cc-switch 把 claude-opus-5 改写成 claude-opus-5-5，分类器请求仍带 thinking disabled。
+>   - 打开后实测：用户本机原提示词下 Agent 被批准，子代理经 SubagentHandback 交回报告；该时段用量日志 18 条全部 200，其中 claude-opus-5-5 的 5 条是分类器等请求。
+>   - 要恢复默认，在控制台取消勾选即可。
+> - 完整工具集场景（PowerShell、Skill、延迟工具与子代理同时出现）已通过：24 条请求全部 200。
+> - 已知、未改动：生产策略为 `attachment_source=gateway`，环境字段只有 `workingDirectory=client`。因此模型同时看到两段环境说明：
+>   - 客户端的工作目录；
+>   - 容器的 Linux 平台与"不是 git 仓库"。
+>   - 两段的顺序在请求间不固定，模型偶尔会说"环境中途变了"。要避免这种情况，需在"附件默认来源"里调整平台等字段的来源。
+
+> **2026-10-10 14:25（北京时间）线上版本（已被上面替代）：**
 > - 核心 **v0.1.97**（源码 `1b58e622c`，manifest `0184d432ad66…`），ccgateway **0.1.26**。#21/#22/#23 worker 原地更新，容器 ID 不变。
 > - 同日先后发布、已被取代的版本：
 >   - .94：Fable 周窗口改读 usage 应答 `limits[]`；safeguards 随内部 ToolSearch 轮发送。
