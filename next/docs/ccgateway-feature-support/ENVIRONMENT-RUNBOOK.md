@@ -1,6 +1,13 @@
 # CCGateway 环境与操作指南
 
-> **2026-10-10 23:50（北京时间）线上版本，优先于下文：**
+> **2026-10-11 00:30（北京时间）线上版本，优先于下文：**
+> - 核心 **v0.1.105**（源码 `ca619f802`，manifest `1f4dc9ed302d…`），ccgateway **0.1.33**。#21/#22/#23 worker 原地更新，容器 ID 不变。推送内置镜像时 #20 显示 failed：它在 10-03 已停用，没有容器，属正常。
+> - **CCGateway 不支持 count_tokens**（用户决定）。透传模式下 `POST /v1/messages/count_tokens` 立即返回 400 `invalid_request_error`："count_tokens is not supported by this gateway"，不会发到上游；Claude Code 收到后在本地估算。特性目录 F-COUNT-TOKENS 标为"不支持"。
+>   - manifest 仍声明这个端点。如果不声明，核心找不到路由，会返回 529，SDK 会反复重试。
+>   - 旧模式下仍能计数（借 CLI 的鉴权转发客户端原始请求），删除旧代码时一起删除。
+>   - 线上验证：临时 key（id 28，已删）调用两次都在 0.6 秒内返回 400，消息原样；同一个 key 的 `/v1/messages` 返回 200。
+>
+> **2026-10-10 23:50（北京时间）线上版本（只有 count_tokens 已被上面替代）：**
 > - 核心 **v0.1.104**（源码 `f785d15c3`，manifest `d99810501197…`），ccgateway **0.1.32**。#21/#22/#23 worker 原地更新，容器 ID 不变；#20 已停用，没有容器。
 > - **出站中继已全量切到透传**（23:02，`relay_mode=passthrough`，`relay_passthrough_accounts` 为空）。请求由内层 CLI 构造，中继不改请求和响应。设计与实测见 `PASSTHROUGH-DESIGN.md` 第 15 节。
 >   - 切换后验证：#21（API Key 账号，用账号测试）、#22、#23 都走透传并返回 200。
