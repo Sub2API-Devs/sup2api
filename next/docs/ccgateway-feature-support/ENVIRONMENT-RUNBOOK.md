@@ -1,6 +1,11 @@
 # CCGateway 环境与操作指南
 
-> **2026-10-11 01:05（北京时间）线上版本，优先于下文：**
+> **2026-10-11 02:10（北京时间）线上版本，优先于下文：**
+> - 核心 **v0.1.107**（源码 `7ba179d03`，manifest `38355b0475c3…`），ccgateway **0.1.35**。#21/#22/#23 worker 原地更新，三个二进制 sha256 前缀都是 `85d3a6f118cbced2`。
+> - **`thinking_disabled_compat=omit` 在透传下也生效**（用户决定）。CC 的会话标题请求（opus-5-5/fable-5-1 加 `thinking: disabled`）以前在透传下返回 400，现在返回 200。worker 日志里有 `thinking_disabled_omitted`，传给 CLI 的字段只有 `max_tokens`，上游请求不带 thinking。临时 key 30、31 已删除。
+> - **升级时出过一次暂停**：所有从节点停止后，主节点的 maintenance 步骤报 "waiting for fresh follower observations"，计划变成 paused。原因是检查在第 4 个节点停止后 3 毫秒就运行了，有节点的心跳超过了 20 秒，是一次时序竞争。处理：先只读查询 `updater.nodes`，确认从节点心跳都在 1 秒内，再执行 `docker exec sup2api-1 sub2api-gateway resume -config /etc/sub2api/shell.json -id <计划 ID>`，计划随即 completed。暂停期间主节点仍是旧版本，从节点把请求转发给它，服务没有中断。
+>
+> **2026-10-11 01:05（北京时间）线上版本（只有 thinking 那条"待决定"已被上面替代）：**
 > - 核心 **v0.1.106**（源码 `f2b067fa6`，manifest `72bdb1e8f9ba…`），ccgateway **0.1.34**。#21/#22/#23 worker 原地更新（三个二进制 sha256 前缀均为 `e96a6973c0094457`）。#20 已停用、没有容器，推送时显示 failed 属正常。
 > - **key 14 的 502 已定位并修复**。worker 在上游已经返回 200 之后，又把结果改成 502 "native transcript missing completed response"，核心再按上游故障冷却账号。核心 WARN 日志和 worker 请求日志都能对上。两种情况：
 >   - 带 `fallback-credit` beta 的请求（核心会加跟踪头）：CLI 不写会话记录，网关却去读。10-10 #22/#23 上 61 条这种 502 全是这一类。
