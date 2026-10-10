@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"testing"
+	"time"
 )
 
 func TestManagedRPCRequests(t *testing.T) {
@@ -124,6 +125,23 @@ func TestRequestScopedGatewayErrorKeepsTheAccount(t *testing.T) {
 	r, e = New().ClassifyError(context.Background(), &pluginv1.ClassifyErrorRequest{Status: 502, BodyPrefix: body})
 	if e != nil || r.GetAccountEffect() != pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN {
 		t.Fatalf("unmarked 502: %v %v", r, e)
+	}
+}
+
+// A full Worker answers 429 with Retry-After: 1: the account pauses for a
+// second and the request fails over, instead of a minute of cooldown that
+// left the group with "no available account" (2026-10-10).
+func TestFullWorkerPausesTheAccountBriefly(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0)
+	p := &Plugin{now: func() time.Time { return now }}
+	body := []byte(`{"type":"error","error":{"type":"rate_limit_error","message":"Gateway concurrency limit reached"}}`)
+	r, e := p.ClassifyError(context.Background(), &pluginv1.ClassifyErrorRequest{Status: 429, BodyPrefix: body, Headers: map[string]string{"retry-after": "1"}})
+	if e != nil || r.GetAction() != pluginv1.ClassifyErrorResponse_ACTION_FAILOVER || r.GetCooldownUntilUnix() != now.Add(time.Second).Unix() {
+		t.Fatalf("full worker: %v %v", r, e)
+	}
+	r, _ = p.ClassifyError(context.Background(), &pluginv1.ClassifyErrorRequest{Status: 429, BodyPrefix: body})
+	if r.GetCooldownUntilUnix() != now.Add(time.Minute).Unix() {
+		t.Fatalf("without Retry-After: %v", r)
 	}
 }
 
