@@ -418,11 +418,25 @@ func (s *cliSession) finish(f Object) (Object, error) {
 	if err := s.checkMod(); err != nil {
 		return nil, err
 	}
-	if e := s.p.captureNative(s.proc.cmd.Env, str(s.acc.Message, "id")); e != nil {
-		return nil, e
+	if !s.req.persistsSession() {
+		// No transcript was written; the turn is not committed and the next
+		// request rebuilds from the client's history.
+		return s.acc.Message, nil
 	}
-	if len(s.cfg.systems) > 0 && !nativeSystemRecorded(s.p.Rows, s.p.NativeRows, s.cfg.systems) {
-		return nil, fmt.Errorf("native transcript is missing the system messages")
+	err := s.p.captureNative(s.proc.cmd.Env, str(s.acc.Message, "id"))
+	if err == nil && len(s.cfg.systems) > 0 && !nativeSystemRecorded(s.p.Rows, s.p.NativeRows, s.cfg.systems) {
+		err = fmt.Errorf("native transcript is missing the system messages")
+	}
+	if err != nil && s.req.Passthrough {
+		// The response is the upstream's own and complete; without a
+		// checkpoint the next turn rebuilds from the client's history. The CLI
+		// does not record a response without content (max_tokens 1).
+		s.p.NativeRows, s.p.NativeAnchor = nil, ""
+		s.req.diagnostic.trace("native_checkpoint_unavailable", Object{"reason": "passthrough", "error": err.Error()})
+		return s.acc.Message, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	return s.acc.Message, nil
 }

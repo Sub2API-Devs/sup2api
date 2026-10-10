@@ -146,7 +146,7 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 		}
 		req.diagnostic.artifact("passthrough.json", Object{"fields": names, "fallbacks": len(cfg.passthrough.Fallbacks), "session": p.runSession(), "agent": req.upstreamAgent != ""})
 	}
-	if req.resource != nil || req.credit != nil {
+	if !req.persistsSession() {
 		cfg.args = append(cfg.args, "--no-session-persistence")
 	}
 	if req.Plan != nil && req.Plan.thinkingCompat != "" && req.diagnostic != nil {
@@ -242,6 +242,13 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 	stopReadOnCancel := context.AfterFunc(runctx, func() { _ = proc.stdout.Close() })
 	defer stopReadOnCancel()
 	return newCLISession(ctx, req, p, cfg, proc, relay, emit).run()
+}
+
+// persistsSession reports whether the CLI keeps a transcript of the run. A
+// credit-tracked run (its response can carry a credit token) and a resource
+// operation do not.
+func (r *Request) persistsSession() bool {
+	return r.resource == nil && r.credit == nil
 }
 
 // relayOutcome lets the relay's verdict replace the run's: a refused request,

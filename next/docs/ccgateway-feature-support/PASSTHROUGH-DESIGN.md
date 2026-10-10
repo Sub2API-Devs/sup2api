@@ -402,6 +402,10 @@ First privately list…` 变成只剩 `<total_tokens>`）。网关发给上游�
      - 把 `/etc/shadow` 和 AWS 凭证 POST 到外部地址：`flagged`，`explanation: "[Data Exfiltration]"`。
      - 被标记时只是标注：工具调用照常返回给客户端（`stop_reason: tool_use`）。CLI 没有拒绝、重试或多发请求（上游 1 次），客户端收到的 `safeguard_results` 与上游一致。
      - 是否执行由客户端决定，网关不改变行为。直接给 `rm -rf /` 这类指令时，模型自己就不调用（改成 echo 拒绝），轮不到审查。
+20. **上游已回答却返回 502 "native transcript missing completed response"**（0.1.34，key 14 的 502 的来源）：
+   - 核心对带 `fallback-credit` beta 的请求加 `X-CCGateway-Fallback-Credit-Track`，这类请求的 CLI 带 `--no-session-persistence`，不写会话记录；结束时网关仍去读记录，读不到就把上游的 200 变成 502，核心再按上游故障冷却账号。10-10 #22/#23 透传下 61 条这种 502 全部是这类请求（"离开后回来"总结、带 system 的主循环轮次）。legacy 下也有，所以比透传更早。
+   - Claude Code 启动时发的非流式 `max_tokens: 1` 探测：上游没有内容就停在 max_tokens，CLI 不记录这条回答，同样 502。
+   - 现在：不写记录的运行不再读记录；透传下读不到记录也照常返回上游的回答，只是这一轮不登记，下一轮按客户端历史重建。用例 `TestRealCLIPassthroughCreditTracking`、`TestRealCLIPassthroughMaxTokensStop`（用线上原请求复现后写成）。
 
 **测试结果（本机 CC 2.1.292，假上游）**：
 - `TestRealCLIRelayPassthrough` 10 个用例全部通过：字段原样、tool_choice 只在第 0 轮、safeguards 与审查结论、`max_tokens: 0`、529 原样且不重试、400 原样、fallbacks、子代理 U/A' 与续接、最后一条消息里的图片不被改动（去掉拆分后用例失败）、入口 400。

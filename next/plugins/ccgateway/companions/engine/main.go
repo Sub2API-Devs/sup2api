@@ -384,6 +384,8 @@ func (x *exchange) execute(branch sessionBranch) {
 			// No native assistant checkpoint is guaranteed for a refusal.
 			// Preserve prior checkpoints; future turns rebuild from client history.
 			x.diagnostic.trace("history_commit_skipped", Object{"reason": "upstream_refusal"})
+		} else if req.Passthrough && len(p.NativeRows) == 0 {
+			x.diagnostic.trace("history_commit_skipped", Object{"reason": "no_native_checkpoint"})
 		} else if err := p.commit(req, answer, g.Cache, branch.Logical, dir, g.Runner.Version, started); err != nil {
 			x.diagnostic.trace("history_commit_failed", Object{"error": err.Error()})
 			log.Print("history cache write failed; future requests will rebuild")
