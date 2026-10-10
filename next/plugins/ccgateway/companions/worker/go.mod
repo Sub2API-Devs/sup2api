@@ -14,7 +14,9 @@ require github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contra
 replace github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts => ../contracts
 
 require (
+	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/klauspost/compress v1.18.3 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
 	golang.org/x/text v0.14.0 // indirect
