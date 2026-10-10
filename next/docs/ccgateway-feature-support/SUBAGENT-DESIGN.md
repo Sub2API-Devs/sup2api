@@ -69,6 +69,7 @@
 4. **502 "client safeguards requires unchanged tool names: SubagentHandback"。**
    - 现象：子代理请求同样带 safeguards，并带 CC 给子代理的 `SubagentHandback` 工具。内层 CLI 没有这个工具，只能经 MCP 名转运，于是被拒。用户的提示词下，子代理连续 3 次失败。
    - 修复（0.1.24）：schema 经校验的 `SubagentHandback` 按普通客户端工具转运，ID、输入、schema 都不变。
+   - 客户端带延迟工具（完整工具集，内部 ToolSearch 开启）时，内层 CLI 会把经 MCP 名转运的 SubagentHandback 也延迟加载，于是被判"缺少客户端工具"，子代理全部 502。0.1.28 起它总是不延迟加载，官方 CLI 也从不延迟这个工具。测试用例为 `HANDBACK_SEARCH`。
 5. **agent teams 的 502。** 见第 5 节（0.1.25）。
 6. **完整工具集的 502 "unchanged tool names: PowerShell / Bash"。**
    - PowerShell：用户设置开着 `CLAUDE_CODE_USE_POWERSHELL_TOOL`，客户端会提供 PowerShell 工具，已验证的原生目录里原来没有它。
@@ -132,3 +133,10 @@ sonnet 别名也有同样问题：`claude-sonnet-5` 发出 disabled，被 cc-swi
 - `ANTHROPIC_DEFAULT_OPUS_MODEL=claude-opus-5-5`；
 - `ANTHROPIC_DEFAULT_SONNET_MODEL` 也设为实际路由到的模型；
 - 或者去掉 `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`，改用服务端审查（0.1.23–0.1.27 已支持）。
+
+**网关兜底（ccgateway 0.1.28 起）**：CC 特性里新增兼容开关 `thinking_disabled_compat`，默认关闭（`pass`）。
+
+- 打开（`omit`）后，对已验证不接受 disabled 的模型（`claude-opus-5-5`、`claude-fable-5-1`），Worker 不传 thinking，与官方 CLI 对这些模型的请求一致。分类器和标题等请求就不再 400，Agent 也不会因分类器不可用而被拒。
+- 它只补救 thinking 这一处：CLI 仍然按别名推断模型的其它能力。把本机别名改成实际模型（如 `ANTHROPIC_DEFAULT_OPUS_MODEL=claude-opus-5-5`）仍是更彻底的办法，两者可以同时做。
+- 改写会写入决策记录。模型若返回 thinking 块，原样透传。
+- 细节见 CONTRACTS §53.11。

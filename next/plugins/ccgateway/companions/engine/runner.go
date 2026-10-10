@@ -136,6 +136,10 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 	if req.resource != nil || req.credit != nil {
 		cfg.args = append(cfg.args, "--no-session-persistence")
 	}
+	if req.Plan != nil && req.Plan.thinkingCompat != "" && req.diagnostic != nil {
+		req.diagnostic.setField("thinking_compat", "omit_disabled")
+		req.diagnostic.trace("thinking_disabled_omitted", Object{"model": req.Plan.thinkingCompat})
+	}
 	req.diagnostic.artifact("feature-decisions.json", req.Plan.FeatureDecisions())
 	req.diagnostic.artifact("client-attachment-decisions.json", req.AttachmentDecisions)
 	// Only gateway-generated options: never dump inherited credentials or the

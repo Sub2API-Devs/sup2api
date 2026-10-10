@@ -146,7 +146,7 @@ func TestRealCLISafeguardsWithDeferredLoading(t *testing.T) {
 	for _, c := range []struct {
 		stream bool
 		prompt string
-	}{{true, "READ_SYNTHETIC_FILE"}, {false, "READ_SYNTHETIC_FILE"}, {true, "SEARCH_FIRST"}, {false, "SEARCH_FIRST"}, {true, "HANDBACK"}, {false, "HANDBACK"}, {true, "TEAMS"}, {false, "TEAMS"}, {true, "SHELL"}, {false, "SHELL"}, {true, "SKILL"}, {false, "SKILL"}} {
+	}{{true, "READ_SYNTHETIC_FILE"}, {false, "READ_SYNTHETIC_FILE"}, {true, "SEARCH_FIRST"}, {false, "SEARCH_FIRST"}, {true, "HANDBACK"}, {false, "HANDBACK"}, {true, "TEAMS"}, {false, "TEAMS"}, {true, "SHELL"}, {false, "SHELL"}, {true, "SKILL"}, {false, "SKILL"}, {true, "HANDBACK_SEARCH"}, {false, "HANDBACK_SEARCH"}} {
 		stream := c.stream
 		t.Run(fmt.Sprintf("stream=%t/%s", stream, c.prompt), func(t *testing.T) {
 			cache, err := newCache(filepath.Join(t.TempDir(), "cache"), 32<<20)
@@ -172,6 +172,13 @@ func TestRealCLISafeguardsWithDeferredLoading(t *testing.T) {
 			if c.prompt == "TEAMS" {
 				body["tools"] = append([]any{teamsAgent}, tools...)
 			}
+			if c.prompt == "HANDBACK_SEARCH" {
+				// A subagent of a client with deferred tools (2026-10-10, full
+				// tool set): the inner CLI must not defer SubagentHandback.
+				var handbackSchema Object
+				_ = json.Unmarshal([]byte(subagentHandbackSchema), &handbackSchema)
+				body["tools"] = append(append([]any{}, tools...), Object{"name": "SubagentHandback", "description": "Deliver your final report to the agent that spawned you (your caller).", "input_schema": handbackSchema})
+			}
 			if c.prompt == "HANDBACK" {
 				// A subagent request: CC 2.1.292 adds SubagentHandback and
 				// sends the safeguards of the conversation too.
@@ -184,7 +191,7 @@ func TestRealCLISafeguardsWithDeferredLoading(t *testing.T) {
 				req := httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(raw))
 				req.Header.Set("anthropic-beta", "context-management-2025-06-27,dangerous-tool-use-2026-09-03")
 				setTestSession(t, req, fmt.Sprintf("safeguards-deferred-%t-%s", stream, c.prompt))
-				if c.prompt == "HANDBACK" {
+				if strings.HasPrefix(c.prompt, "HANDBACK") {
 					req.Header.Set("X-Claude-Code-Agent-Id", "a0123456789abcdef")
 				}
 				res := httptest.NewRecorder()
@@ -275,7 +282,7 @@ func TestRealCLISafeguardsWithDeferredLoading(t *testing.T) {
 			if !strings.Contains(next, "SAFE_RESULT_USED") {
 				t.Fatalf("continuation: %s", next)
 			}
-			if c.prompt == "HANDBACK" && (!strings.Contains(next, `"name":"SubagentHandback"`) || !strings.Contains(next, "toolu_handback_fixture") || strings.Contains(next, "mcp__")) {
+			if strings.HasPrefix(c.prompt, "HANDBACK") && (!strings.Contains(next, `"name":"SubagentHandback"`) || !strings.Contains(next, "toolu_handback_fixture") || strings.Contains(next, "mcp__")) {
 				t.Fatalf("handback identity: %s", next)
 			}
 		})

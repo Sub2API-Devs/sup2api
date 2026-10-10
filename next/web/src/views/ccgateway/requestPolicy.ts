@@ -16,6 +16,8 @@ export interface RequestPolicy {
   unknown_client_attachment: 'pass' | 'ignore'
   unknown_gateway_attachment: 'pass' | 'ignore'
   custom_tool_prefix: string
+  // 'pass' (default): thinking.type "disabled" goes upstream as sent; 'omit': dropped for models that reject it.
+  thinking_disabled_compat?: 'pass' | 'omit'
   betas: Array<{ name: string; mapping: BetaMapping }>
 }
 export function defaultRequestPolicy(): RequestPolicy {
@@ -33,6 +35,7 @@ export function defaultRequestPolicy(): RequestPolicy {
     unknown_gateway_attachment: 'pass',
     custom_tool_prefix: 'ccgateway',
     tool_search: 'request',
+    thinking_disabled_compat: 'pass',
     betas: [
       { name: 'interleaved-thinking-2025-05-14', mapping: 'forward' },
       { name: 'fine-grained-tool-streaming-2025-05-14', mapping: 'fine_grained_tools' },
@@ -54,6 +57,7 @@ export function validRequestPolicy(p: RequestPolicy): boolean {
     ['client', 'gateway', 'both'].includes(p.attachment_source) &&
     ['pass', 'ignore'].includes(p.unknown_client_attachment) &&
     ['pass', 'ignore'].includes(p.unknown_gateway_attachment) &&
+    (!p.thinking_disabled_compat || ['pass', 'omit'].includes(p.thinking_disabled_compat)) &&
     Object.entries(p.environment_fields).every(([k, v]) => ['workingDirectory', 'platform'].includes(k) && ['client', 'gateway'].includes(v)) &&
     Object.entries(p.attachment_sources).every(([k, v]) => attachmentTypes.includes(k as AttachmentType) && ['client', 'gateway', 'both'].includes(v))
   )

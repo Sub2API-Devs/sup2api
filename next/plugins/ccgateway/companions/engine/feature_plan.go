@@ -21,6 +21,7 @@ type RequestPlan struct {
 	fallbacks       json.RawMessage
 	taskBudget      json.RawMessage
 	apiGeneration   bool
+	thinkingCompat  string // model whose disabled thinking was omitted
 	cache           *CachePlan
 	raw             []byte
 	fields          map[string]json.RawMessage
@@ -64,6 +65,9 @@ func (r *Request) HasMainRequestFeatures() bool {
 func (p *RequestPlan) FeatureDecisions() []Object {
 	var out []Object
 	if p != nil {
+		if p.thinkingCompat != "" {
+			out = append(out, thinkingCompatDecision(p.thinkingCompat))
+		}
 		if p.creditToken != "" {
 			out = append(out, Object{"field": "fallback_credit_token", "action": "verified_original_wire_redemption", "stage": "outbound_relay"})
 		}

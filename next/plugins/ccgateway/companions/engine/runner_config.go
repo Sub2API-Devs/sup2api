@@ -299,6 +299,10 @@ func toolDeferral(req *Request) []byte {
 	for _, tool := range req.Tools {
 		if tool.DeferLoading != nil {
 			deferred[req.wireName(tool.Name)] = *tool.DeferLoading
+		} else if req.handbackTool(tool.Name) {
+			// The subagent's only way to report back: the official CLI never
+			// defers it, while the inner CLI would defer it as an MCP tool.
+			deferred[req.wireName(tool.Name)] = false
 		}
 	}
 	data, _ := json.Marshal(deferred)

@@ -33,10 +33,12 @@ type RequestPolicy struct {
 	UnknownClientAttachment  string            `json:"unknown_client_attachment"`
 	UnknownGatewayAttachment string            `json:"unknown_gateway_attachment"`
 	CustomToolPrefix         string            `json:"custom_tool_prefix"`
+	// "pass" (default) or "omit": see applyThinkingDisabledCompat.
+	ThinkingDisabledCompat string `json:"thinking_disabled_compat,omitempty"`
 }
 
 func defaultRequestPolicy() RequestPolicy {
-	return RequestPolicy{SchemaVersion: features.PolicySchemaVersion, UnknownClientAttachment: "pass", UnknownGatewayAttachment: "pass", CustomToolPrefix: "ccgateway", UnknownBeta: "ignore", UnknownField: "reject", AllowFast: false, AllowEffort: true, ToolSearch: "request", AttachmentSource: "client", Betas: features.BetaRules()}
+	return RequestPolicy{SchemaVersion: features.PolicySchemaVersion, UnknownClientAttachment: "pass", UnknownGatewayAttachment: "pass", CustomToolPrefix: "ccgateway", UnknownBeta: "ignore", UnknownField: "reject", AllowFast: false, AllowEffort: true, ToolSearch: "request", AttachmentSource: "client", ThinkingDisabledCompat: "pass", Betas: features.BetaRules()}
 }
 
 var betaName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,127}$`)
@@ -84,6 +86,12 @@ func requestPolicy(h http.Header) (RequestPolicy, error) {
 	}
 	if !validToolSearch(p.ToolSearch) {
 		return p, fmt.Errorf("invalid tool search policy")
+	}
+	if p.ThinkingDisabledCompat == "" {
+		p.ThinkingDisabledCompat = "pass"
+	}
+	if !validThinkingDisabledCompat(p.ThinkingDisabledCompat) {
+		return p, fmt.Errorf("invalid thinking_disabled_compat: must be pass or omit")
 	}
 	// Ignore legacy editable rules; Beta handling is fixed in code.
 	p.Betas = defaultRequestPolicy().Betas
@@ -161,6 +169,7 @@ func parsePolicyRequestWithHelper(body []byte, h http.Header, access *resourceAd
 	req.Effort = effort
 	req.JSONSchema = schema
 	req.APIOutputFormat = schema != nil
+	p.applyThinkingDisabledCompat(req)
 	if err := plan.configureThinkingOutput(req, format, h.Values("anthropic-beta")); err != nil {
 		return nil, err
 	}

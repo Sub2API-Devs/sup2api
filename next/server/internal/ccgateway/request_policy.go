@@ -25,8 +25,13 @@ type RequestPolicy struct {
 	// PassUpstreamErrors makes the application return the first upstream error
 	// as-is instead of letting Claude Code retry, back off or refresh auth.
 	// Defaults to false; configurations saved before it existed decode as false.
-	PassUpstreamErrors bool       `json:"pass_upstream_errors"`
-	Betas              []BetaRule `json:"betas"`
+	PassUpstreamErrors bool `json:"pass_upstream_errors"`
+	// ThinkingDisabledCompat is "pass" (default: thinking "disabled" goes
+	// upstream as sent, so a model that rejects it answers 400 as the official
+	// API does) or "omit" (the Worker drops it for the models it knows reject
+	// it, e.g. when a client proxy rewrote claude-opus-5 to claude-opus-5-5).
+	ThinkingDisabledCompat string     `json:"thinking_disabled_compat,omitempty"`
+	Betas                  []BetaRule `json:"betas"`
 }
 type BetaRule = features.BetaRule
 
@@ -45,7 +50,7 @@ func (p *RequestPolicy) UnmarshalJSON(raw []byte) error {
 }
 
 func defaultRequestPolicy() RequestPolicy {
-	return RequestPolicy{SchemaVersion: features.PolicySchemaVersion, UnknownClientAttachment: "pass", UnknownGatewayAttachment: "pass", CustomToolPrefix: "ccgateway", UnknownBeta: "ignore", UnknownField: "reject", AllowFast: true, AllowEffort: true, AttachmentSource: "client", PassUpstreamErrors: false, ToolSearch: "request", Betas: features.BetaRules()}
+	return RequestPolicy{SchemaVersion: features.PolicySchemaVersion, UnknownClientAttachment: "pass", UnknownGatewayAttachment: "pass", CustomToolPrefix: "ccgateway", UnknownBeta: "ignore", UnknownField: "reject", AllowFast: true, AllowEffort: true, AttachmentSource: "client", PassUpstreamErrors: false, ToolSearch: "request", ThinkingDisabledCompat: "pass", Betas: features.BetaRules()}
 }
 
 // EffectiveRequestPolicy is the policy sent to the Worker. Features the
@@ -77,6 +82,9 @@ func (c Config) EffectiveRequestPolicy() RequestPolicy {
 	if p.ToolSearch == "" {
 		p.ToolSearch = "request"
 	}
+	if p.ThinkingDisabledCompat == "" {
+		p.ThinkingDisabledCompat = "pass"
+	}
 	p.Betas = defaultRequestPolicy().Betas
 	return p
 }
@@ -99,6 +107,9 @@ func validateRequestPolicy(p RequestPolicy) error {
 	}
 	if p.ToolSearch != "" && !validToolSearch(p.ToolSearch) {
 		return errors.New("invalid tool search policy")
+	}
+	if p.ThinkingDisabledCompat != "" && p.ThinkingDisabledCompat != "pass" && p.ThinkingDisabledCompat != "omit" {
+		return errors.New("invalid thinking_disabled_compat: must be pass or omit")
 	}
 	return nil
 }

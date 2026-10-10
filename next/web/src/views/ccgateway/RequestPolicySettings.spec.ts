@@ -20,9 +20,9 @@ function config(policy: Partial<RequestPolicy> | undefined) {
     request_policy: policy, images: null, network: { pool: '10.0.0.0/8', allocation: 'random' }
   }
 }
-// A policy saved before pass_upstream_errors existed, as an older core returns it.
+// A policy saved before pass_upstream_errors and thinking_disabled_compat existed, as an older core returns it.
 function legacyPolicy(): Partial<RequestPolicy> {
-  const { pass_upstream_errors: _omit, ...rest } = defaultRequestPolicy()
+  const { pass_upstream_errors: _omit, thinking_disabled_compat: _compat, ...rest } = defaultRequestPolicy()
   return rest
 }
 
@@ -243,5 +243,36 @@ describe('CCGateway pass upstream errors switch', () => {
     const payload = mocks.put.mock.calls[0]![1] as { request_policy: RequestPolicy }
     expect(payload.request_policy.pass_upstream_errors).toBe(false)
     expect(w.get<HTMLInputElement>('[data-testid="pass-upstream-errors"]').element.checked).toBe(false)
+  })
+
+  it('thinking disabled compatibility defaults to off, has zh/en copy and saves omit', async () => {
+    expect(defaultRequestPolicy().thinking_disabled_compat).toBe('pass')
+    expect(zh.policy.thinkingDisabledCompatHint).toContain('默认关闭：与官方 API 一致返回 400')
+    expect(zh.policy.thinkingDisabledCompatHint).toContain('仅在模型被改写、客户端仍发送 disabled 时使用')
+    expect(en.policy.thinkingDisabledCompatHint).toContain('return 400')
+    mocks.get.mockResolvedValue(config(legacyPolicy()))
+    mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), thinking_disabled_compat: 'omit' }))
+    const w = await render()
+    const box = w.get<HTMLInputElement>('[data-testid="thinking-disabled-compat"]')
+    expect(box.element.checked).toBe(false)
+    await box.setValue(true)
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    const payload = mocks.put.mock.calls[0]![1] as { request_policy: RequestPolicy }
+    expect(payload.request_policy.thinking_disabled_compat).toBe('omit')
+    expect(w.get<HTMLInputElement>('[data-testid="thinking-disabled-compat"]').element.checked).toBe(true)
+  })
+
+  it('saves the compatibility switch turned back off as pass', async () => {
+    mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), thinking_disabled_compat: 'omit' }))
+    mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), thinking_disabled_compat: 'pass' }))
+    const w = await render()
+    const box = w.get<HTMLInputElement>('[data-testid="thinking-disabled-compat"]')
+    expect(box.element.checked).toBe(true)
+    await box.setValue(false)
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    const payload = mocks.put.mock.calls[0]![1] as { request_policy: RequestPolicy }
+    expect(payload.request_policy.thinking_disabled_compat).toBe('pass')
   })
 })

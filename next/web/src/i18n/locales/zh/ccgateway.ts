@@ -50,6 +50,9 @@ export default {
     search_auto: '根据工具占用上下文自动启用',
     fallbackTitle: '不支持的请求如何处理',
     passUpstreamErrors: '上游错误直接返回给客户端',
+    thinkingDisabledCompat: '兼容不支持 thinking disabled 的模型',
+    thinkingDisabledCompatHint:
+      '仅在模型被改写、客户端仍发送 disabled 时使用：例如 cc-switch 把 claude-opus-5 改写成 claude-opus-5-5，Claude Code 的 auto 模式分类器等请求仍带 thinking.type: disabled，而已验证的 claude-opus-5-5、claude-fable-5-1 不接受。开启后对这些模型不传 thinking（与官方 CLI 对它们的请求一致，不改成 adaptive）。默认关闭：与官方 API 一致返回 400。更彻底的办法是在本机把模型别名改成实际模型。',
     passUpstreamErrorsHint:
       '开启后，官方返回错误（包括 401、429、529 及流式中途的错误）时，立即把官方的状态码和错误内容原样返回给客户端，Claude Code 不再自动重试、退避或刷新授权。关闭（默认）时由 Claude Code 自行处理，最终失败才返回错误。开启后需要由调用方或网关负责重试和换号。',
     unknownBeta: '不支持的 Beta 请求头如何处理',

@@ -232,3 +232,36 @@ func TestAttachmentSourceSaveReload(t *testing.T) {
 		t.Fatal("invalid attachment source accepted")
 	}
 }
+
+// thinking_disabled_compat defaults to pass (legacy configurations too),
+// saves and reloads omit, and rejects other values.
+func TestThinkingDisabledCompatSave(t *testing.T) {
+	if p := defaultRequestPolicy(); p.ThinkingDisabledCompat != "pass" {
+		t.Fatalf("default: %q", p.ThinkingDisabledCompat)
+	}
+	var legacy Config
+	if err := json.Unmarshal([]byte(`{"mode":"disabled","request_policy":{"unknown_beta":"ignore","unknown_field":"reject","betas":[]}}`), &legacy); err != nil {
+		t.Fatal(err)
+	}
+	if got := legacy.EffectiveRequestPolicy().ThinkingDisabledCompat; got != "pass" {
+		t.Fatalf("legacy: %q", got)
+	}
+	var in Config
+	if err := json.Unmarshal([]byte(`{"mode":"disabled","request_policy":{"unknown_beta":"ignore","unknown_field":"reject","thinking_disabled_compat":"omit","betas":[]}}`), &in); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := mergeConfig(in, Config{Mode: "disabled"})
+	if err != nil || saved.EffectiveRequestPolicy().ThinkingDisabledCompat != "omit" {
+		t.Fatal("omit not saved", err)
+	}
+	plain, _ := json.Marshal(saved)
+	var reloaded Config
+	if err := json.Unmarshal(plain, &reloaded); err != nil || reloaded.EffectiveRequestPolicy().ThinkingDisabledCompat != "omit" {
+		t.Fatal("omit lost on reload", err)
+	}
+	bad := *saved.RequestPolicy
+	bad.ThinkingDisabledCompat = "adaptive"
+	if _, err := mergeConfig(Config{Mode: "disabled", RequestPolicy: &bad}, reloaded); err == nil {
+		t.Fatal("invalid value accepted")
+	}
+}

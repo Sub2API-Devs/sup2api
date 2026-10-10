@@ -3701,6 +3701,19 @@ images/gateway.tar.gz      # Caddy 网关
 - 子标签只剩：连接与授权、网络配置、CC 特性、部署与运行。"账号容器"并入"部署与运行"（运行环境与镜像卡片之后）；账号列表显示容器内 Claude Code 版本（`GET /system/ccgateway/accounts/:id/health` 新增可选只读字段 `cli_version`，核心并行读 Worker `admin/features`，3 秒超时，取不到不返回）；请求调试日志一列只放开关，说明悬停/聚焦显示。
 - 删除"通用 API 特性"：官方 API 支持的功能不再是设置。`allow_fast`、`allow_effort` 在发给 Worker 的策略与设置读取中恒为 `true`，保存的 `false` 被忽略（默认值同步改为 true）。
 - "CC 特性"包含"查看处理机制与证据"（CC 范围的特性目录，2026-10-10 按用户要求恢复：`GET /system/ccgateway/features` 中 `scope: "cc"` 的条目，如 F-ADD-DIR 额外目录访问 / F-SAFEGUARDS，展开时才读取，含"查看账号 Worker 能力"只读查询；目录里不再有 fast/effort 开关）、"工具与错误处理"（直接展开）、"附件默认来源"（2026-10-10 按用户要求恢复：默认来源 client / gateway / both、按附件类型覆盖、环境字段 workingDirectory / platform 覆盖（workingDirectory 含客户端 `--add-dir` 的 "Additional working directories" 及其子项，ccgateway 0.1.22 起）、未知客户端/容器附件放行或忽略）和"不支持的请求如何处理"（unknown_beta / unknown_field）。
+- "工具与错误处理"中的兼容开关 `thinking_disabled_compat`（2026-10-10，用户要求；ccgateway 0.1.28 起）：
+  - 取值 `"pass"`（默认）或 `"omit"`。核心与 Worker 都校验取值，旧配置缺省按 `pass` 处理。字段可选、旧 Worker 忽略它，所以 `schema_version` 不升（仍为 1）。
+  - `omit` 只在三个条件同时满足时生效：
+    1. 客户端 `thinking.type` 为 `"disabled"`；
+    2. 模型在"不支持 disabled"的已验证清单里，目前是 `claude-opus-5-5` 和 `claude-fable-5-1`；2026-10-10 真实上游实测两者都对 disabled 返回 400 "thinking.type.disabled is not supported for this model"；
+    3. 开关为 `omit`。
+  - 生效时的处理：
+    - Worker 去掉 thinking：内层 CLI 不传 `--thinking`，上游请求不带 `thinking` 字段（apiGeneration 删除客户端没设的字段），与官方 CLI 对这些模型的请求一致；
+    - 不改成 adaptive，其余结构不变（真实 CLI 测试断言与"客户端本来就不带 thinking"的上游请求逐字段相同）；
+    - 改写记录在 `feature-decisions.json`（`action: omit_unsupported_disabled`）、请求日志元数据 `thinking_compat: omit_disabled` 和诊断事件 `thinking_disabled_omitted`。
+  - 响应原样透传：模型若仍返回 thinking 块，与直连 API 不带 thinking 时一致，签名保持完整。实测 `max_tokens: 64` 时只返回文本，4 个输出 token，不会被思考耗尽。
+  - `pass` 时 disabled 原样转发，上游 400 原样返回（与官方 API 一致），这类错误不冷却账号。
+  - 典型场景：cc-switch 把 `claude-opus-5` 改写成 `claude-opus-5-5`，客户端 auto 模式分类器和标题等请求仍发 disabled。见 `ccgateway-feature-support/SUBAGENT-DESIGN.md` 第 7 节。
 
 ### 53.12 Worker 会话：客户端会话 ID 不变则内部会话 ID 不变（2026-10-09，用户要求）
 

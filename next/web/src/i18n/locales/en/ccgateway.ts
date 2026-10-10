@@ -50,6 +50,9 @@ export default {
     search_auto: 'Enable automatically based on context usage',
     fallbackTitle: 'Handling unsupported requests',
     passUpstreamErrors: 'Return upstream errors directly to clients',
+    thinkingDisabledCompat: 'Compatibility for models that reject thinking disabled',
+    thinkingDisabledCompatHint:
+      'Use only when the model is rewritten and the client still sends disabled: for example cc-switch rewrites claude-opus-5 to claude-opus-5-5, and requests such as the Claude Code auto-mode classifier still carry thinking.type: disabled, which the verified models claude-opus-5-5 and claude-fable-5-1 reject. When enabled, thinking is omitted for these models (as the official CLI sends them; it is not changed to adaptive). Off by default: like the official API, such requests return 400. The more thorough fix is to set the local model alias to the actual model.',
     passUpstreamErrorsHint:
       'When enabled, any error returned by the official API (including 401, 429, 529 and errors in the middle of a stream) is returned to the client immediately with the official status code and error body unchanged; Claude Code no longer retries, backs off or refreshes authorization. When disabled (default), Claude Code handles errors itself and only returns an error after it finally fails. When enabled, the caller or gateway is responsible for retries and account switching.',
     unknownBeta: 'Handling unsupported Beta headers',
