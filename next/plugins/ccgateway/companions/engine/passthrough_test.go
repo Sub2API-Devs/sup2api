@@ -98,6 +98,25 @@ func TestPassthroughDefaults(t *testing.T) {
 	}
 }
 
+// The attachment policies are legacy's: in passthrough the client's
+// attachments go as sent and Claude Code adds none of its own.
+func TestPassthroughAttachments(t *testing.T) {
+	h := http.Header{}
+	h.Set(policyHeader, `{"relay_mode":"passthrough","attachment_source":"gateway","attachment_sources":{"date":"both"},"environment_fields":{"platform":"gateway"},"unknown_client_attachment":"ignore","unknown_gateway_attachment":"pass"}`)
+	body := `{"model":"m","max_tokens":9,"messages":[{"role":"user","content":"a"},{"role":"system","content":"<ccgateway-attachment type=\"custom\">client</ccgateway-attachment>"}]}`
+	req, err := parsePolicyRequest([]byte(body), h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := req.attachmentConfig()
+	if req.AttachmentSource != "client" || req.UnknownClientAttachment != "pass" || req.UnknownGatewayAttachment != "ignore" || len(req.AttachmentSources) != 0 || len(req.EnvironmentFields) != 0 {
+		t.Fatalf("attachment config %v", config)
+	}
+	if last := req.Messages[len(req.Messages)-1]; last.Role != "system" || !strings.Contains(str(last.Content[0], "text"), "client") {
+		t.Fatalf("client attachment dropped: %v", req.Messages)
+	}
+}
+
 // What Claude Code cannot express is refused with the reason.
 func TestPassthroughRefusals(t *testing.T) {
 	for name, body := range map[string]string{
@@ -109,10 +128,17 @@ func TestPassthroughRefusals(t *testing.T) {
 		"credit":          `{"model":"m","max_tokens":9,"fallback_credit_token":"x","messages":[{"role":"user","content":"a"}]}`,
 		"transformations": `{"model":"m","max_tokens":9,"messages":[{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgo="},"transformations":[{"type":"resize","max_dimension":64}]},{"type":"text","text":"a"}]}]}`,
 		"server history":  `{"model":"m","max_tokens":9,"messages":[{"role":"user","content":"a"},{"role":"assistant","content":[{"type":"server_tool_use","id":"srvtoolu_1","name":"web_search","input":{"query":"q"}}]},{"role":"user","content":"b"}]}`,
+		"code caller":     `{"model":"m","max_tokens":9,"tools":[{"name":"t","input_schema":{"type":"object"}}],"messages":[{"role":"user","content":"a"},{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"t","input":{},"caller":{"type":"code_execution_20250825","tool_id":"srvtoolu_1"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"r"}]}]}`,
 	} {
 		if _, err := parsePolicyRequest([]byte(body), passthroughHeader()); err == nil {
 			t.Errorf("%s admitted", name)
 		}
+	}
+	// The API marks the calls it answers with a direct caller; a client
+	// replays them as received.
+	direct := `{"model":"m","max_tokens":9,"tools":[{"name":"t","input_schema":{"type":"object"}}],"messages":[{"role":"user","content":"a"},{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"t","input":{},"caller":{"type":"direct"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"r"}]}]}`
+	if _, err := parsePolicyRequest([]byte(direct), passthroughHeader()); err != nil {
+		t.Errorf("direct caller refused: %v", err)
 	}
 }
 
@@ -287,7 +313,7 @@ func TestNativeWebSearchTurns(t *testing.T) {
 
 // The client's blocks of a search round, and the stream of a whole message.
 func TestWebSearchBlocksAndEvents(t *testing.T) {
-	plan := &webSearchPlan{records: map[string]*webSearchRecord{"toolu_a": {Input: Object{"query": "q"}, Result: Object{"results": []any{Object{"tool_use_id": "srvtoolu_side", "content": []any{Object{"title": "T", "url": "https://e.com"}}}, "note"}}, Text: "read"}}, usage: Object{"input_tokens": int64(5)}}
+	plan := &webSearchPlan{records: map[string]*webSearchRecord{"toolu_a": {Input: Object{"query": "q"}, Result: Object{"results": []any{Object{"tool_use_id": "srvtoolu_side", "content": []any{Object{"title": "T", "url": "https://e.com"}}}, "note"}}, Text: "read"}}, usage: Object{"input_tokens": int64(5), "cache_creation": Object{"ephemeral_1h_input_tokens": int64(4)}}}
 	blocks, internal := plan.convertBlocks([]Object{{"type": "text", "text": "x"}, {"type": "tool_use", "id": "toolu_a", "name": "WebSearch", "input": Object{"query": "q"}}}, "tool_use")
 	if !internal || len(blocks) != 3 || str(blocks[1], "id") != "srvtoolu_a" || str(blocks[2], "tool_use_id") != "srvtoolu_a" {
 		t.Fatalf("blocks %v %t", blocks, internal)
@@ -299,8 +325,8 @@ func TestWebSearchBlocksAndEvents(t *testing.T) {
 	if _, internal := plan.convertBlocks([]Object{{"type": "tool_use", "id": "toolu_b", "name": "WebSearch", "input": Object{}}}, "tool_use"); internal {
 		t.Fatal("an unanswered search continued")
 	}
-	usage := plan.webSearchUsage(Object{"input_tokens": json.Number("10"), "output_tokens": json.Number("3")})
-	if fmt.Sprint(usage["input_tokens"]) != "15" || fmt.Sprint(usage["server_tool_use"].(Object)["web_search_requests"]) != "1" {
+	usage := plan.webSearchUsage(Object{"input_tokens": json.Number("10"), "output_tokens": json.Number("3"), "cache_creation": Object{"ephemeral_1h_input_tokens": json.Number("6"), "ephemeral_5m_input_tokens": json.Number("1")}})
+	if fmt.Sprint(usage["input_tokens"]) != "15" || fmt.Sprint(usage["cache_creation"]) != "map[ephemeral_1h_input_tokens:10 ephemeral_5m_input_tokens:1]" || fmt.Sprint(usage["server_tool_use"].(Object)["web_search_requests"]) != "1" {
 		t.Fatalf("usage %v", usage)
 	}
 	events := messageEvents(Object{"id": "msg_1", "type": "message", "role": "assistant", "model": "m", "content": blocks, "stop_reason": "end_turn", "stop_sequence": nil, "usage": usage, "safeguard_results": []any{"v"}})

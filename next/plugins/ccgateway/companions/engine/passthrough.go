@@ -93,12 +93,12 @@ func parsePassthroughRequest(body []byte, h http.Header, p RequestPolicy, access
 	}
 	req.Fast = fast
 	req.Effort = effort
-	req.AttachmentSource = p.AttachmentSource
-	req.AttachmentSources = p.AttachmentSources
-	req.EnvironmentFields = p.EnvironmentFields
-	req.UnknownClientAttachment = p.UnknownClientAttachment
-	req.UnknownGatewayAttachment = p.UnknownGatewayAttachment
-	req.filterClientAttachments()
+	// The client's attachments go upstream as sent, and none of Claude Code's
+	// own are added: the next request's history would not hold them, so the
+	// prompt cache would break at every turn (attachment policies are legacy's).
+	req.AttachmentSource = "client"
+	req.UnknownClientAttachment = "pass"
+	req.UnknownGatewayAttachment = "ignore"
 	req.CustomToolPrefix = p.CustomToolPrefix
 	req.ToolSearch = p.toolSearch(req)
 	if cacheRequested {
@@ -160,6 +160,11 @@ func (r *Request) refusePassthroughUnsupported() error {
 	if r.continuation != "" {
 		return passthroughRefusal("an assistant prefill (a final assistant message)", "Claude Code always sends a user turn last")
 	}
+	// The API takes max_tokens 0 only without streaming, and Claude Code
+	// always streams; a streamed request gets the API's own answer.
+	if r.CacheWarmup && !r.Stream {
+		return passthroughRefusal("max_tokens: 0", "Claude Code always streams, and the API takes max_tokens 0 only without streaming")
+	}
 	if r.hasFallbacks() {
 		var entries []Object
 		_ = json.Unmarshal(r.Plan.fallbacks, &entries)
@@ -184,8 +189,12 @@ func (r *Request) refusePassthroughUnsupported() error {
 			case "tool_search_tool_result", "web_fetch_tool_result", "advisor_tool_result", "code_execution_tool_result", "bash_code_execution_tool_result", "text_editor_code_execution_tool_result", "mcp_tool_use", "mcp_tool_result", "mcp_tool_listing", "container_upload", "fallback", "compaction":
 				return passthroughRefusal(fmt.Sprintf("history block %q", kind), "Claude Code cannot replay it")
 			case "tool_use":
-				if _, exists := block["caller"]; exists {
-					return passthroughRefusal("programmatic tool calls (tool_use.caller)", "they need code execution")
+				// The API marks every call it answers with a caller; only a
+				// call made from code execution cannot be replayed.
+				if caller, exists := block["caller"]; exists {
+					if fields, _ := caller.(map[string]any); fields == nil || str(fields, "type") != "direct" {
+						return passthroughRefusal("programmatic tool calls (tool_use.caller)", "they need code execution")
+					}
 				}
 				if _, exists := block["toolset_name"]; exists {
 					return passthroughRefusal("tool_use.toolset_name", "Claude Code cannot declare typed tool sets")

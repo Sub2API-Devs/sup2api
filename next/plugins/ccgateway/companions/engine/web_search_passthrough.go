@@ -489,6 +489,7 @@ func addStreamUsage(total, event Object) {
 		for _, key := range []string{"input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"} {
 			addNumber(total, key, usage[key])
 		}
+		addCacheCreation(total, usage)
 	case "message_delta":
 		usage, _ := event["usage"].(map[string]any)
 		addNumber(total, "output_tokens", usage["output_tokens"])
@@ -498,6 +499,24 @@ func addStreamUsage(total, event Object) {
 func addUsageTotals(total, usage Object) {
 	for _, key := range []string{"input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens"} {
 		addNumber(total, key, usage[key])
+	}
+	addCacheCreation(total, usage)
+}
+
+// addCacheCreation adds the split of cache writes by lifetime, which prices
+// them.
+func addCacheCreation(total, usage Object) {
+	split, _ := usage["cache_creation"].(Object)
+	if split == nil {
+		return
+	}
+	sum, _ := total["cache_creation"].(Object)
+	if sum == nil {
+		sum = Object{}
+		total["cache_creation"] = sum
+	}
+	for key, value := range split {
+		addNumber(sum, key, value)
 	}
 }
 

@@ -381,6 +381,10 @@ worker 先把工具名换成内层 CLI 里的名字，再把 tool_choice 原样�
 11. **助手历史托管**（helper history）：passthrough 下不再需要，收到托管请求返回 400。之前在 legacy 下登记过托管链的会话，切到 passthrough 后这类请求会 400，需要客户端开新会话。
 12. **Mod 校验**：CLI 对 `claude plugin validate` 不通过的 hooks 模块不报错、直接不加载（例如把 `$` 传给非顶层函数），表现为 "Mod did not acknowledge loading"。真实 CLI 测试开头先校验两个 Mod。
 13. **响应压缩**（0.1.30，#23 实测发现）：CLI 请求带 `Accept-Encoding: gzip, deflate, br, zstd`，中继原样发出，真实 API 的错误体用 br、流用 gzip。0.1.29 只解 gzip/deflate 的错误体，br 错误体没解开，核心认不出官方错误，客户端收到通用的 "upstream returned HTTP 400"；流式响应带编码时也跳过了错误事件与用量观察。现在模型请求的响应先按 gzip/deflate/br/zstd 解码再观察，CLI 收到解码后的同一内容（去掉 Content-Encoding/Content-Length）；请求头不改。
+14. **附件只用客户端的**（0.1.31，#23 子代理实测发现）：内层 CLI 会在待发的这一轮加自己的附件（提交署名提醒 `remote_session_change`、`agent_listing_delta`、`batching_reminder`、`auto_mode` 等），旧的 `unknown_gateway: pass` 策略让它们留在上游请求里。下一个请求把这一轮当历史按客户端原样重建时没有这些块，上游前缀从这一轮起就对不上，每轮只能读到系统提示的缓存：一个 40 轮的子代理任务缓存读 0.35M、写 1.42M。passthrough 下不再用附件策略：客户端附件原样保留，内层 CLI 自己的附件一律去掉（`hook_additional_context`、`deferred_tools_delta` 两种功能性附件照旧保留）。
+15. **历史里的 `caller: direct`**（0.1.31）：上游给每个工具调用标 `"caller":{"type":"direct"}`，客户端下一轮会原样带回。0.1.30 把任何 `caller` 都当程序化调用拒绝，导致带工具的第二轮全部 400；现在只拒绝非 direct 的调用方。
+16. **非流式 `max_tokens: 0`**（0.1.31）：API 只接受非流式的 `max_tokens: 0`（流式返回 "stream cannot be true when max_tokens is 0"），而 CLI 总是流式，所以入口 400；客户端自己用流式发的照常交给上游，由上游原样回错。
+17. **web_search 用量**（0.1.31）：合并各轮和一次性进程的用量时，`cache_creation` 的 5m/1h 拆分也一起相加（之前只加了总数，按时长计价会不准）。
 
 **测试结果（本机 CC 2.1.292，假上游）**：
 - `TestRealCLIRelayPassthrough` 10 个用例全部通过：字段原样、tool_choice 只在第 0 轮、safeguards 与审查结论、`max_tokens: 0`、529 原样且不重试、400 原样、fallbacks、子代理 U/A' 与续接、最后一条消息里的图片不被改动（去掉拆分后用例失败）、入口 400。

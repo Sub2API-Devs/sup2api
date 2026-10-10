@@ -243,12 +243,19 @@ func TestRealCLIRelayPassthrough(t *testing.T) {
 		n := start(func(w http.ResponseWriter, body Object, _ int) {
 			writeSurfaceFixture(w, str(body, "model"), nil)
 		})
+		// The API takes max_tokens 0 only without streaming; Claude Code
+		// always streams, so the request is refused before any run.
 		res := post(t, Object{"model": "claude-sonnet-4-6", "max_tokens": 0, "messages": []any{Object{"role": "user", "content": "WARM"}}}, "", "")
-		if res.Code != 200 || !strings.Contains(res.Body.String(), `"content":[]`) {
+		if res.Code != 400 || !strings.Contains(res.Body.String(), "max_tokens: 0") {
 			t.Fatalf("HTTP%d %s", res.Code, res.Body.String())
 		}
-		if got := since(n); len(got) != 1 || fmt.Sprint(got[0].body["max_tokens"]) != "0" {
+		if got := since(n); len(got) != 0 {
 			t.Fatalf("%d upstream requests", len(got))
+		}
+		// Streamed, it reaches the API, which answers as it does.
+		res = post(t, Object{"model": "claude-sonnet-4-6", "max_tokens": 0, "stream": true, "messages": []any{Object{"role": "user", "content": "WARM"}}}, "", "")
+		if got := since(n); len(got) != 1 || fmt.Sprint(got[0].body["max_tokens"]) != "0" {
+			t.Fatalf("%d upstream requests: HTTP%d %s", len(got), res.Code, res.Body.String())
 		}
 	})
 
@@ -393,6 +400,62 @@ func TestRealCLIRelayPassthrough(t *testing.T) {
 			if strings.Join(kinds, ",") != want {
 				t.Fatalf("%s: last user message blocks %v, want %s", c.name, kinds, want)
 			}
+		}
+	})
+
+	// The pending turn reaches upstream as the client sent it, without Claude
+	// Code's own attachments, so the next request (which carries that turn as
+	// history) repeats the earlier request's messages and reads its cache.
+	t.Run("history repeats the earlier request", func(t *testing.T) {
+		n := start(func(w http.ResponseWriter, body Object, _ int) {
+			history, _ := json.Marshal(body["messages"])
+			if bytes.Contains(history, []byte("STABLE_RESULT")) {
+				writeSurfaceFixture(w, str(body, "model"), []Object{{"type": "text", "text": "PASSTHROUGH_OK"}})
+				return
+			}
+			writeSurfaceFixture(w, str(body, "model"), []Object{{"type": "tool_use", "id": "toolu_stable", "name": "mcp__ccgateway__lookup", "input": Object{"key": "k"}}})
+		})
+		body := Object{"model": "claude-sonnet-4-6", "max_tokens": 512, "tools": []any{lookup}, "messages": []any{
+			Object{"role": "user", "content": "STABLE"},
+			Object{"role": "system", "content": "<total_tokens>900 tokens left</total_tokens>\n\nCLIENT_CONTEXT_ONE"}}}
+		if res := post(t, body, "passthrough-stable", ""); res.Code != 200 || !strings.Contains(res.Body.String(), "toolu_stable") {
+			t.Fatalf("HTTP%d %s", res.Code, res.Body.String())
+		}
+		body["messages"] = append(body["messages"].([]any),
+			Object{"role": "assistant", "content": []any{Object{"type": "tool_use", "id": "toolu_stable", "name": "lookup", "input": Object{"key": "k"}}}},
+			Object{"role": "user", "content": []any{Object{"type": "tool_result", "tool_use_id": "toolu_stable", "content": "STABLE_RESULT"}}},
+			Object{"role": "system", "content": "CLIENT_CONTEXT_TWO"})
+		if res := post(t, body, "passthrough-stable", ""); res.Code != 200 || !strings.Contains(res.Body.String(), "PASSTHROUGH_OK") {
+			t.Fatalf("HTTP%d %s", res.Code, res.Body.String())
+		}
+		got := since(n)
+		if len(got) != 2 {
+			t.Fatalf("%d upstream requests", len(got))
+		}
+		// Breakpoints are Claude Code's to move; the content must not change.
+		plain := func(messages any) []string {
+			var out []string
+			for _, message := range messages.([]any) {
+				m := message.(map[string]any)
+				content, ok := m["content"].([]any)
+				if !ok {
+					content = []any{Object{"type": "text", "text": m["content"]}}
+				}
+				for _, block := range content {
+					b := block.(map[string]any)
+					delete(b, "cache_control")
+					raw, _ := json.Marshal(b)
+					out = append(out, str(m, "role")+" "+string(raw))
+				}
+			}
+			return out
+		}
+		first, second := plain(got[0].body["messages"]), plain(got[1].body["messages"])
+		if len(second) < len(first) || strings.Join(second[:len(first)], "\n") != strings.Join(first, "\n") {
+			t.Fatalf("the second request does not repeat the first\nfirst:\n%s\nsecond:\n%s", strings.Join(first, "\n"), strings.Join(second, "\n"))
+		}
+		if last := first[len(first)-1]; !strings.Contains(last, "CLIENT_CONTEXT_ONE") {
+			t.Fatalf("pending turn %s", strings.Join(first, "\n"))
 		}
 	})
 
