@@ -1,6 +1,15 @@
 # CCGateway 环境与操作指南
 
-> **2026-10-11 00:30（北京时间）线上版本，优先于下文：**
+> **2026-10-11 01:05（北京时间）线上版本，优先于下文：**
+> - 核心 **v0.1.106**（源码 `f2b067fa6`，manifest `72bdb1e8f9ba…`），ccgateway **0.1.34**。#21/#22/#23 worker 原地更新（三个二进制 sha256 前缀均为 `e96a6973c0094457`）。#20 已停用、没有容器，推送时显示 failed 属正常。
+> - **key 14 的 502 已定位并修复**。worker 在上游已经返回 200 之后，又把结果改成 502 "native transcript missing completed response"，核心再按上游故障冷却账号。核心 WARN 日志和 worker 请求日志都能对上。两种情况：
+>   - 带 `fallback-credit` beta 的请求（核心会加跟踪头）：CLI 不写会话记录，网关却去读。10-10 #22/#23 上 61 条这种 502 全是这一类。
+>   - CC 启动时发的非流式 `max_tokens: 1` 探测：CLI 不记录空回答。
+>   - 修复后这两种情况都原样返回上游的回答，只是这一轮不登记，下一轮按客户端历史重建。见 PASSTHROUGH-DESIGN §15 第 20 条。
+>   - 线上验证：临时 key 29（已删）发 fable/opus 非流式 `max_tokens: 1` 都返回 200（`stop_reason: max_tokens`）；带 fallback-credit beta 的两轮流式请求都返回 200，worker 日志确认带了跟踪头。
+> - **未处理，待用户决定**：key 14 的标题生成请求（"naming a coding session"，opus-5-5，`thinking: disabled`）在透传下返回上游原样的 400。控制台的 `thinking_disabled_compat=omit` 只对旧模式生效；按设计，透传不做这项转换。
+>
+> **2026-10-11 00:30（北京时间）线上版本（只有 count_tokens 部分仍然有效）：**
 > - 核心 **v0.1.105**（源码 `ca619f802`，manifest `1f4dc9ed302d…`），ccgateway **0.1.33**。#21/#22/#23 worker 原地更新，容器 ID 不变。推送内置镜像时 #20 显示 failed：它在 10-03 已停用，没有容器，属正常。
 > - **CCGateway 不支持 count_tokens**（用户决定）。透传模式下 `POST /v1/messages/count_tokens` 立即返回 400 `invalid_request_error`："count_tokens is not supported by this gateway"，不会发到上游；Claude Code 收到后在本地估算。特性目录 F-COUNT-TOKENS 标为"不支持"。
 >   - manifest 仍声明这个端点。如果不声明，核心找不到路由，会返回 529，SDK 会反复重试。
