@@ -1,6 +1,12 @@
 # CCGateway 环境与操作指南
 
-> **2026-10-11 02:10（北京时间）线上版本，优先于下文：**
+> **2026-10-11 02:45（北京时间）线上版本，优先于下文：**
+> - 核心 **v0.1.108**（源码 `d6cf130ee`，manifest `96a620ccc0a0…`），ccgateway **0.1.36**。#21/#22/#23 的 worker 原地更新。这次升级一次完成，没有暂停。
+> - **插件不再声明 count_tokens**（用户决定）。核心不会把计数请求调度到 CCGateway 账号，核心的托管传输也只放行 `/v1/messages`。分组里没有其他能计数的账号时，核心直接返回 529 `overloaded_error`（`no_available_account`），不会发到 worker。
+>   - 线上验证：临时 key 32（已删）调用 count_tokens 返回 529，耗时 0.6 秒；用量记录里没有分配账号，两个 worker 的日志里也没有这条请求。同一个 key 调用 `/v1/messages` 返回 200。
+>   - worker 透传入口的 400 "count_tokens is not supported by this gateway" 只作为兜底。
+>
+> **2026-10-11 02:10（北京时间）线上版本（count_tokens 部分已被上面替代）：**
 > - 核心 **v0.1.107**（源码 `7ba179d03`，manifest `38355b0475c3…`），ccgateway **0.1.35**。#21/#22/#23 worker 原地更新，三个二进制 sha256 前缀都是 `85d3a6f118cbced2`。
 > - **`thinking_disabled_compat=omit` 在透传下也生效**（用户决定）。CC 的会话标题请求（opus-5-5/fable-5-1 加 `thinking: disabled`）以前在透传下返回 400，现在返回 200。worker 日志里有 `thinking_disabled_omitted`，传给 CLI 的字段只有 `max_tokens`，上游请求不带 thinking。临时 key 30、31 已删除。
 > - **升级时出过一次暂停**：所有从节点停止后，主节点的 maintenance 步骤报 "waiting for fresh follower observations"，计划变成 paused。原因是检查在第 4 个节点停止后 3 毫秒就运行了，有节点的心跳超过了 20 秒，是一次时序竞争。处理：先只读查询 `updater.nodes`，确认从节点心跳都在 1 秒内，再执行 `docker exec sup2api-1 sub2api-gateway resume -config /etc/sub2api/shell.json -id <计划 ID>`，计划随即 completed。暂停期间主节点仍是旧版本，从节点把请求转发给它，服务没有中断。
