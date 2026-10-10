@@ -13,8 +13,10 @@ const loading = ref(false), failed = ref(false), query = ref(''), status = ref('
 const pageSize = 8
 // CC features are few and shown in full: no pages, every detail open.
 const flat = computed(() => props.scope === 'cc')
-const statuses: FeatureStatus[] = ['supported', 'partial', 'unsupported', 'unverified']
-const filtered = computed(() => (catalog.value?.features || []).filter(feature => feature.scope === props.scope &&
+// Fully supported features are documented in the Worker's catalog only; the
+// page lists what is limited, unsupported or unverified.
+const statuses: FeatureStatus[] = ['partial', 'unsupported', 'unverified']
+const filtered = computed(() => (catalog.value?.features || []).filter(feature => feature.scope === props.scope && feature.status !== 'supported' &&
   (!status.value || feature.status === status.value) &&
   [feature.title, feature.id, feature.reason, ...feature.body_paths, ...feature.beta_headers].join(' ').toLowerCase().includes(query.value.trim().toLowerCase())))
 const pages = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize)))
@@ -37,8 +39,9 @@ onMounted(load)
 
 <template>
   <div class="space-y-3" data-testid="feature-support">
-    <div>
-      <h4 class="font-semibold">{{ t(props.scope === 'cc' ? 'ccgateway.features.ccTitle' : 'ccgateway.features.title') }}</h4>
+    <!-- The CC catalog sits under the CC features heading, which already explains it. -->
+    <div v-if="!flat">
+      <h4 class="font-semibold">{{ t('ccgateway.features.title') }}</h4>
       <p class="mt-1 text-xs text-gray-500">{{ t('ccgateway.features.baseline') }}</p>
     </div>
     <p v-if="loading" role="status" class="text-sm text-gray-500">{{ t('ccgateway.features.loading') }}</p>

@@ -33,7 +33,7 @@ function setEnvironmentField(field: 'workingDirectory' | 'platform', event: Even
 <template>
   <section class="space-y-4" data-testid="request-policy">
     <div><h4 class="font-semibold">{{ t('ccgateway.features.ccTitle') }}</h4><p class="mt-1 text-xs text-gray-500">{{ t('ccgateway.features.ccHint') }}</p></div>
-    <!-- The CC feature catalog (--add-dir, safeguards, ...) is shown in full. -->
+    <!-- The CC feature catalog (safeguards, ...) is shown in full; fully supported features are left to the Worker's catalog. -->
     <FeatureSupport scope="cc" class="rounded-lg border border-gray-200 p-3 dark:border-dark-700" data-testid="cc-feature-catalog" />
     <section class="space-y-3 rounded-lg border border-gray-200 p-3 dark:border-dark-700" data-testid="cc-runtime-settings">
       <h5 class="text-sm font-medium">{{ t('ccgateway.features.ccRuntime') }}</h5>

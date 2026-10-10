@@ -54,6 +54,7 @@ describe('CCGateway settings categories and CC features', () => {
   it('shows the CC feature catalog, tools and error handling, attachments and unsupported requests', async () => {
     const features = { catalog_version: 'v', policy_schema_version: 1, runtime_verified: false, features: [
       { id: 'F-ADD-DIR', title: '额外目录访问', category: 'CC 执行上下文', scope: 'cc', status: 'supported', body_paths: ['additional_directories'], beta_headers: [], mechanisms: ['CLI --add-dir 参数传递'], reason: 'r' },
+      { id: 'F-SAFEGUARDS', title: '工具安全审查', category: 'CC 执行上下文', scope: 'cc', status: 'partial', body_paths: ['safeguards'], beta_headers: [], mechanisms: ['主请求归属与上下文保真'], reason: 'r' },
       { id: 'F-STREAM', title: '流式响应', category: 'generation', scope: 'api', status: 'supported', body_paths: ['stream'], beta_headers: [], mechanisms: [], reason: 'r' }
     ] }
     mocks.get.mockImplementation(async (path: string) => path === '/system/ccgateway/features' ? features : config(defaultRequestPolicy()))
@@ -74,13 +75,17 @@ describe('CCGateway settings categories and CC features', () => {
     for (const id of ['allow-fast', 'allow-effort']) {
       expect(w.find(`[data-testid="${id}"]`).exists()).toBe(false)
     }
-    // The CC feature catalog (--add-dir, safeguards) is shown in full, not folded (user request 2026-10-10).
+    // The CC feature catalog is shown in full, not folded (user request 2026-10-10),
+    // under one CC features heading; fully supported features stay in the Worker's
+    // catalog only (user request 2026-10-11).
     expect(mocks.get.mock.calls.map(call => call[0])).toContain('/system/ccgateway/features')
+    expect(cc.findAll('h4').filter(h => h.text() === 'CC 特性')).toHaveLength(1)
     const details = cc.get('[data-testid="cc-feature-catalog"]')
     expect(details.element.tagName).not.toBe('DETAILS')
-    expect(details.find('[data-testid="feature-F-ADD-DIR"]').exists()).toBe(true)
+    expect(details.find('[data-testid="feature-F-ADD-DIR"]').exists()).toBe(false)
     expect(details.find('[data-testid="feature-F-STREAM"]').exists()).toBe(false)
-    expect(details.text()).toContain('CLI --add-dir 参数传递')
+    expect(details.find('[data-testid="feature-F-SAFEGUARDS"]').exists()).toBe(true)
+    expect(details.text()).toContain('主请求归属与上下文保真')
     w.unmount()
   })
 

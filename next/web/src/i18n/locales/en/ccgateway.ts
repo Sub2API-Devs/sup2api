@@ -4,7 +4,7 @@ export default {
   capability: { helperHistory: 'Worker hidden-history custody protocol', helperUnreported: 'Not declared', helperBoundary: 'Worker protocol declaration only; core custody must also be enabled. This query does not verify core activation or provider eligibility and changes no settings.', search: 'Search accounts', inspect: 'Inspect account Worker capabilities', account: 'Select an accessible account', boundary: 'Read only: does not start or update containers or change routing. Binary declarations, CLI version observations and real model verification are separate evidence.', failed: 'Inspection unavailable: an older Worker/controller, missing permission or a connection failure. This does not establish feature support.', build: 'Running Worker version / Git revision', schema: 'Worker catalog / accepted policy schemas', code: 'This Worker’s code declaration', probes: 'Observed local probe scope', provider: 'Account / model / provider inference verification', notRun: 'No inference performed by this endpoint; not verified', unreported: 'Not reported' },
   features: {
     title: 'API features',
-    baseline: 'Features group related parameters, betas and limitations. This is a code adaptation catalog, not runtime verification of the current account, model or Worker.',
+    baseline: 'Lists limited, unsupported or unverified features with their parameters, betas and limitations; fully supported features are not listed. This is a code adaptation catalog, not runtime verification of the current account, model or Worker.',
     loading: 'Loading feature catalog…',
     loadFailed: 'The feature catalog is unavailable or unsupported by this core. Support cannot be confirmed; existing settings are unchanged.',
     retry: 'Reload', search: 'Search features, parameters or betas', filter: 'Adaptation status', all: 'All statuses',
@@ -13,7 +13,7 @@ export default {
     empty: 'No matching features', version: 'Catalog version: {version}', previous: 'Previous', next: 'Next',
     ccSettings: 'View CC tool search settings',
     ccTitle: 'CC features',
-    ccHint: 'Configure tool behavior, error handling and environment attachments for Claude Code inside the Worker, and how unsupported requests are handled. The feature catalog below lists how CC execution features (such as --add-dir additional directories) are adapted.',
+    ccHint: 'Configure tool behavior, error handling and environment attachments for Claude Code inside the Worker, and how unsupported requests are handled. The list below shows CC execution features that are limited or unsupported; fully supported ones are not listed. This is a code adaptation catalog, not runtime verification of the current account, model or Worker.',
     ccRuntime: 'Tools and error handling',
   },
   policy: {

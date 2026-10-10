@@ -7,7 +7,7 @@ import { isFeatureCatalog, type FeatureCatalog, type GatewayFeature } from './fe
 
 const mocks = vi.hoisted(() => ({ get: vi.fn() }))
 vi.mock('@sub2api/host', () => ({ api: mocks }))
-const feature = (id: string, status: GatewayFeature['status'] = 'supported'): GatewayFeature => ({
+const feature = (id: string, status: GatewayFeature['status'] = 'partial'): GatewayFeature => ({
   id, title: id, scope: 'api', category: 'generation', status, body_paths: ['output_config'],
   beta_headers: ['example-beta'], mechanisms: ['cli_env'], reason: 'Source-level support only',
 })
@@ -34,6 +34,21 @@ describe('CCGateway feature catalog', () => {
     expect(w.findAll('[data-testid^="feature-F-CC-"]')).toHaveLength(12)
     expect(w.findAll('[id^="feature-detail-"]')).toHaveLength(12)
     expect(w.text()).not.toContain('下一页')
+  })
+  it('leaves fully supported features to the Worker catalog and the CC heading to the settings page', async () => {
+    mocks.get.mockResolvedValue(catalog([
+      { ...feature('F-ADD-DIR', 'supported'), scope: 'cc' }, { ...feature('F-SAFEGUARDS'), scope: 'cc' },
+      feature('F-STREAM', 'supported'), feature('F-FALLBACK', 'unsupported'),
+    ]))
+    const cc = mount(FeatureSupport, { props: { scope: 'cc' }, global: { plugins: [i18n] } })
+    await flushPromises()
+    expect(cc.find('[data-testid="feature-F-ADD-DIR"]').exists()).toBe(false)
+    expect(cc.find('[data-testid="feature-F-SAFEGUARDS"]').exists()).toBe(true)
+    expect(cc.find('h4').exists()).toBe(false)
+    const api = await render()
+    expect(api.find('[data-testid="feature-F-STREAM"]').exists()).toBe(false)
+    expect(api.find('[data-testid="feature-F-FALLBACK"]').exists()).toBe(true)
+    expect(api.findAll('[data-testid="feature-filter"] option').map(option => option.attributes('value'))).not.toContain('supported')
   })
   beforeEach(() => { vi.clearAllMocks(); i18n.global.locale.value = 'zh' })
   async function render() {
