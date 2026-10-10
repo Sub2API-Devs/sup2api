@@ -164,6 +164,16 @@ func TestParseQuotaResponse(t *testing.T) {
 	if len(r.GetWindows()) != 1 || r.GetWindows()[0].GetKey() != "5h" || r.GetWindows()[0].GetResetsAtUnix() != 0 {
 		t.Fatalf("empty body: %v", r)
 	}
+	// October 2026 shape: the Fable weekly window is only in limits.
+	r, _ = p.ParseQuotaResponse(ctx, &pluginv1.ParseQuotaResponseRequest{Status: 200, Body: []byte(`{
+	  "five_hour": {"utilization": 0, "resets_at": "2026-10-10T03:20:00.6+00:00"},
+	  "seven_day": {"utilization": 4, "resets_at": "2026-10-10T07:00:00.6+00:00"},
+	  "seven_day_sonnet": null,
+	  "limits": [{"kind": "weekly_scoped", "group": "weekly", "percent": 12, "resets_at": "2026-10-10T07:00:00.6+00:00", "scope": {"model": {"id": null, "display_name": "Fable"}, "surface": null}}]
+	}`)})
+	if ws := r.GetWindows(); len(ws) != 3 || ws[2].GetKey() != "7d_fable" || ws[2].GetUtilization() != 12 || ws[2].GetResetsAtUnix() != time.Date(2026, 10, 10, 7, 0, 0, 0, time.UTC).Unix() {
+		t.Fatalf("limits: %v", ws)
+	}
 
 	for _, c := range []struct {
 		in   *pluginv1.ParseQuotaResponseRequest

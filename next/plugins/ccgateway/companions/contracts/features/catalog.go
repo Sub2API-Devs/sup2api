@@ -3,7 +3,7 @@
 // entitlement. Runtime evidence must be reported separately.
 package features
 
-const CatalogVersion = "2026-10-09.18"
+const CatalogVersion = "2026-10-10.1"
 const PolicySchemaVersion = 1
 
 type Feature struct {
@@ -30,8 +30,8 @@ type Document struct {
 // feature whitelist, and the host never infers Worker support from image tags.
 func Catalog() Document {
 	return Document{CatalogVersion: CatalogVersion, PolicySchemaVersion: PolicySchemaVersion, Features: []Feature{
-		{ID: "F-SAFEGUARDS", Title: "工具安全审查", Category: "CC 执行上下文", Scope: "cc", Status: "partial", BodyPaths: []string{"safeguards", "safeguard_results", "tool_use.id"}, BetaHeaders: []string{"dangerous-tool-use-2026-09-03"}, Mechanisms: []string{"主请求归属与上下文保真", "客户端工具身份校验", "纯 MCP 提供商上下文保真"}, Reason: "显式 safeguards 数组与响应审查结果原样保留；未传时保留内层 CC 审查。支持身份和 schema 不变的客户端工具，以及 tools/mcp_servers 不变的纯 MCP 请求。客户端工具改名、inline 工具变更、内部搜索及其它服务端工具组合仍拒绝；不修改审查结论或授予本地执行。隔离测试只验证保真，真实提供商审查能力待验证。"},
-		{ID: "F-ADD-DIR", Title: "额外目录访问", Category: "CC 执行上下文", Scope: "cc", Status: "supported", BodyPaths: []string{"additional_directories"}, BetaHeaders: []string{}, Mechanisms: []string{"CLI --add-dir 参数传递", "请求级目录授权", "Mod 配置透传"}, Reason: "支持客户端通过 additional_directories 数组传递额外目录，网关保留并通过 --add-dir 参数传递给 CC CLI。每个请求最多 100 个目录，自动去重并验证非空。目录路径由 CLI 验证和授权，网关不检查路径有效性。"},
+		{ID: "F-SAFEGUARDS", Title: "工具安全审查", Category: "CC 执行上下文", Scope: "cc", Status: "partial", BodyPaths: []string{"safeguards", "safeguard_results", "tool_use.id"}, BetaHeaders: []string{"dangerous-tool-use-2026-09-03"}, Mechanisms: []string{"主请求归属与上下文保真", "客户端工具身份校验", "纯 MCP 提供商上下文保真"}, Reason: "显式 safeguards 数组与响应审查结果原样保留；未传时保留内层 CC 审查。支持身份和 schema 不变的客户端工具，以及 tools/mcp_servers 不变的纯 MCP 请求。内部 ToolSearch 轮（CC 2.1.292 随 safeguards 发送 DeferredToolPlaceholder、延迟加载的 MCP 工具）每轮原样带客户端上下文，搜索轮不返回客户端（2026-10-10 起；此前返回 400 会使 CC 本会话停用服务端审查、auto 模式工具调用全部被拒）。客户端工具改名、inline 工具变更、结构化输出及服务端工具组合仍拒绝；不修改审查结论或授予本地执行。隔离测试只验证保真，真实提供商审查能力待验证。"},
+		{ID: "F-ADD-DIR", Title: "额外目录访问", Category: "CC 执行上下文", Scope: "cc", Status: "supported", BodyPaths: []string{"additional_directories"}, BetaHeaders: []string{}, Mechanisms: []string{"CLI --add-dir 参数传递", "请求级目录授权", "Mod 配置透传"}, Reason: "支持客户端通过 additional_directories 数组传递额外目录，网关保留并通过 --add-dir 参数传递给 CC CLI。每个请求最多 100 个目录，自动去重并验证非空。目录路径由 CLI 验证和授权，网关不检查路径有效性。客户端 CC 自身的 --add-dir 目录出现在环境附件的 Additional working directories 中，随 workingDirectory 字段来源保留或去除（ccgateway 0.1.22 起）。"},
 		entry("F-MODEL", "模型与上下文窗口", "基础请求", "partial", []string{"model"}, []string{"context-1m-2025-08-07"}, []string{"CLI --model", "上下文环境变量"}, "传入请求模型；可用模型、别名和窗口取决于账号与 CLI。"),
 		entry("F-LIMITS", "输出长度", "基础请求", "partial", []string{"max_tokens"}, nil, []string{"主请求输出预算", "零 token 非流预热桥接"}, "正整数最终上游值保持客户端预算；max_tokens:0 使用真实非流预热响应，不生成空答案、不写入会话。已完成真实 CLI 隔离验证，模型上限仍由上游检查。"),
 		entry("F-STREAM", "流式与完整响应", "基础请求", "partial", []string{"stream"}, nil, []string{"JSON / SSE 编解码"}, "已适配文本、推理、客户端工具、引用、已登记 Web/Advisor/MCP/CodeExec/PTC 块及其历史。资源产物、缓存信用及核心托管隐藏历史的响应在登记完成前有界缓冲，不能承诺这些组合逐事件即时外发；未知块或未能保真的组合明确拒绝。"),

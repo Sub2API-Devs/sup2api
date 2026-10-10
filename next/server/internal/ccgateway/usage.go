@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -133,21 +134,59 @@ type usageWindow struct {
 	ResetsAt    *string `json:"resets_at"`
 }
 
+// usageLimit is one entry of the answer's limits list. Since October 2026
+// Anthropic reports the model-scoped weekly windows only there: kind
+// weekly_scoped with scope.model.display_name "Fable" (or "Sonnet") and
+// percent instead of utilization; seven_day_overage_included is not sent.
+type usageLimit struct {
+	Kind     string   `json:"kind"`
+	Percent  *float64 `json:"percent"`
+	ResetsAt *string  `json:"resets_at"`
+	Scope    *struct {
+		Model *struct {
+			DisplayName string `json:"display_name"`
+		} `json:"model"`
+	} `json:"scope"`
+}
+
+// scopedWeekly returns the weekly_scoped limit of a model as a window, nil
+// when the answer has none.
+func scopedWeekly(limits []usageLimit, model string) *usageWindow {
+	for _, l := range limits {
+		if l.Kind == "weekly_scoped" && l.Scope != nil && l.Scope.Model != nil && strings.EqualFold(l.Scope.Model.DisplayName, model) {
+			w := &usageWindow{ResetsAt: l.ResetsAt}
+			if l.Percent != nil {
+				w.Utilization = *l.Percent
+			}
+			return w
+		}
+	}
+	return nil
+}
+
 // ParseUsage reads Anthropic's usage answer into the 5h, 7d, 7d_sonnet and
 // 7d_fable windows (the keys and the source fields of the claude-oauth
-// plugin; seven_day_overage_included is the Fable weekly window). The 5-hour,
-// weekly and Fable weekly windows are reported whenever Anthropic sends them,
-// a window that has not started yet as 0 % without a reset time; the Sonnet
-// weekly window only when it has started (as the claude-oauth plugin).
+// plugin; seven_day_overage_included, or else the Fable weekly_scoped limit,
+// is the Fable weekly window). The 5-hour, weekly and Fable weekly windows
+// are reported whenever Anthropic sends them, a window that has not started
+// yet as 0 % without a reset time; the Sonnet weekly window only when it has
+// started (as the claude-oauth plugin).
 func ParseUsage(raw []byte) ([]UsageWindow, error) {
 	var u struct {
 		FiveHour                *usageWindow `json:"five_hour"`
 		SevenDay                *usageWindow `json:"seven_day"`
 		SevenDaySonnet          *usageWindow `json:"seven_day_sonnet"`
 		SevenDayOverageIncluded *usageWindow `json:"seven_day_overage_included"`
+		Limits                  []usageLimit `json:"limits"`
 	}
 	if err := json.Unmarshal(raw, &u); err != nil {
 		return nil, errors.New("the usage answer is not valid JSON")
+	}
+	if u.SevenDaySonnet == nil {
+		u.SevenDaySonnet = scopedWeekly(u.Limits, "Sonnet")
+	}
+	if u.SevenDayOverageIncluded == nil {
+		u.SevenDayOverageIncluded = scopedWeekly(u.Limits, "Fable")
 	}
 	five := u.FiveHour
 	if five == nil {

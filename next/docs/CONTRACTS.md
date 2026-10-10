@@ -2497,7 +2497,7 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 | `updated_at` | 窗口最近一次写入时间（数据库时钟）；NULL = 尚无数据 |
 | `last_passive_at` / `last_active_at` | 最近一次被动写入 / 最近一次主动查询**尝试**（成功与否），30 秒下限按后者在 PG 中原子判断，多节点有效 |
 
-窗口 key：`5h`、`7d`、`7d_sonnet`、`7d_fable` 为控制台已知 key（Anthropic 的 `7d_oi` 头 / `seven_day_overage_included` 字段即 Fable 周窗口），其他供应商可用自定义 key（`^[a-z0-9][a-z0-9_]{0,31}$`）。`utilization` 一律为**百分比**（0–100，可因超额超过 100）。
+窗口 key：`5h`、`7d`、`7d_sonnet`、`7d_fable` 为控制台已知 key（Anthropic 的 `7d_oi` 头 / `seven_day_overage_included` 字段即 Fable 周窗口；2026-10 起 usage 应答不再给该字段，改在 `limits[]` 中以 `kind: "weekly_scoped"`、`scope.model.display_name: "Fable"`、`percent` 给出，旧字段缺失时取它；Sonnet 同理），其他供应商可用自定义 key（`^[a-z0-9][a-z0-9_]{0,31}$`）。`utilization` 一律为**百分比**（0–100，可因超额超过 100）。
 
 ### 44.2 manifest：`accountTypes[].quota`
 
@@ -2566,7 +2566,7 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 ### 44.6 claude-oauth 插件（0.1.1）
 
 - `claude_oauth` 与 `claude_setup_token` 都声明被动采样：`5h` / `7d` / `7d_fable` ← `anthropic-ratelimit-unified-{5h,7d,7d_oi}-{utilization,reset,status}`（utilization 为 0–1 小数、reset 为 Unix 秒，见 sub2api `ratelimit_service.go` `samplePassiveUsageFromHeaders` 与 `account_usage_service.go` `buildPassiveUsageWindow` 的 `util * 100`）。
-- `claude_oauth` 声明 `query: true`：`GET https://api.anthropic.com/api/oauth/usage`，头部 `Accept: application/json, text/plain, */*`、`Content-Type: application/json`、`Authorization: Bearer <access_token>`、`anthropic-beta: oauth-2025-04-20`、`User-Agent: claude-code/2.1.7`（同 sub2api `claude_usage_service.go`）。响应 `five_hour` → `5h`（总是返回），`seven_day` → `7d`、`seven_day_sonnet` → `7d_sonnet`、`seven_day_overage_included` → `7d_fable`（仅当带 `resets_at` 时返回，同 sub2api `buildUsageInfo`）；`utilization` 已是百分比。401/403 → `auth_rejected`，其他失败 → `transient`。
+- `claude_oauth` 声明 `query: true`：`GET https://api.anthropic.com/api/oauth/usage`，头部 `Accept: application/json, text/plain, */*`、`Content-Type: application/json`、`Authorization: Bearer <access_token>`、`anthropic-beta: oauth-2025-04-20`、`User-Agent: claude-code/2.1.7`（同 sub2api `claude_usage_service.go`）。响应 `five_hour` → `5h`（总是返回），`seven_day` → `7d`、`seven_day_sonnet` → `7d_sonnet`、`seven_day_overage_included`（缺失时取 `limits[]` 中 Fable 的 `weekly_scoped`）→ `7d_fable`（仅当带 `resets_at` 时返回，同 sub2api `buildUsageInfo`）；`utilization` 已是百分比。401/403 → `auth_rejected`，其他失败 → `transient`。
 - `claude_setup_token` 没有 profile 权限，`BuildQuotaRequest` 回 `Unimplemented`，只靠响应头（同 sub2api `estimateSetupTokenUsage`）。
 - manifest 同时补齐安装校验要求的 `platform.register` 权限与 `accounts.credentials` 的 `{"types": "own"}` scope。
 

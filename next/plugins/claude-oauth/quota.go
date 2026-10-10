@@ -46,12 +46,41 @@ type usageWindow struct {
 }
 
 // usageResponse is the body of GET /api/oauth/usage. seven_day_overage_included
-// is the Fable-only weekly window (header prefix 7d_oi).
+// is the Fable-only weekly window (header prefix 7d_oi). Since October 2026
+// Anthropic sends the model-scoped weekly windows only in limits (kind
+// weekly_scoped, scope.model.display_name "Fable" or "Sonnet", percent).
 type usageResponse struct {
 	FiveHour                *usageWindow `json:"five_hour"`
 	SevenDay                *usageWindow `json:"seven_day"`
 	SevenDaySonnet          *usageWindow `json:"seven_day_sonnet"`
 	SevenDayOverageIncluded *usageWindow `json:"seven_day_overage_included"`
+	Limits                  []usageLimit `json:"limits"`
+}
+
+type usageLimit struct {
+	Kind     string   `json:"kind"`
+	Percent  *float64 `json:"percent"`
+	ResetsAt *string  `json:"resets_at"`
+	Scope    *struct {
+		Model *struct {
+			DisplayName string `json:"display_name"`
+		} `json:"model"`
+	} `json:"scope"`
+}
+
+// scopedWeekly returns the weekly_scoped limit of a model as a window, nil
+// when the answer has none.
+func scopedWeekly(limits []usageLimit, model string) *usageWindow {
+	for _, l := range limits {
+		if l.Kind == "weekly_scoped" && l.Scope != nil && l.Scope.Model != nil && strings.EqualFold(l.Scope.Model.DisplayName, model) {
+			w := &usageWindow{ResetsAt: l.ResetsAt}
+			if l.Percent != nil {
+				w.Utilization = *l.Percent
+			}
+			return w
+		}
+	}
+	return nil
 }
 
 // BuildQuotaRequest describes GET /api/oauth/usage for a claude_oauth
@@ -103,6 +132,12 @@ func (p *Plugin) ParseQuotaResponse(_ context.Context, req *pluginv1.ParseQuotaR
 	var u usageResponse
 	if err := json.Unmarshal(req.GetBody(), &u); err != nil {
 		return quotaError(pluginv1.QuotaResult_ERROR_TYPE_TRANSIENT, "decode usage response: "+err.Error()), nil
+	}
+	if u.SevenDaySonnet == nil {
+		u.SevenDaySonnet = scopedWeekly(u.Limits, "Sonnet")
+	}
+	if u.SevenDayOverageIncluded == nil {
+		u.SevenDayOverageIncluded = scopedWeekly(u.Limits, "Fable")
 	}
 	res := &pluginv1.QuotaResult{}
 	five := u.FiveHour

@@ -117,7 +117,7 @@ func TestSafeguardsClientExecutionContextPreserved(t *testing.T) {
 }
 
 func TestSafeguardsRejectDifferentToolExecutionScope(t *testing.T) {
-	for _, mode := range []string{"mapped", "schema", "extra", "missing", "duplicate", "search"} {
+	for _, mode := range []string{"mapped", "schema", "extra", "missing", "duplicate", "search-extra", "search-missing", "structured"} {
 		t.Run(mode, func(t *testing.T) {
 			o, _ := decodeObject([]byte(`{"safeguards":[{"type":"dangerous_tool_use"}]}`))
 			p, _ := parseRequestPlan(nil, o)
@@ -135,8 +135,15 @@ func TestSafeguardsRejectDifferentToolExecutionScope(t *testing.T) {
 				actual = nil
 			case "duplicate":
 				actual = append(actual, actual[0])
-			case "search":
+			case "search-extra":
 				r.ToolSearch = "true"
+				actual = append(actual, Object{"name": "Extra", "input_schema": schema})
+			case "search-missing":
+				// Only deferred client tools may wait for ToolSearch.
+				r.ToolSearch = "true"
+				actual = []any{Object{"name": "ToolSearch", "input_schema": schema}}
+			case "structured":
+				r.JSONSchema = Object{"type": "object"}
 			}
 			m := Object{"tools": actual, "safeguards": "unchanged"}
 			if err := r.ApplyMainRequestFeatures(m); err == nil {
@@ -146,6 +153,37 @@ func TestSafeguardsRejectDifferentToolExecutionScope(t *testing.T) {
 				t.Fatal("rejection mutated inner protections")
 			}
 		})
+	}
+}
+
+// Internal ToolSearch rounds keep the client's context (CC 2.1.292 sends it
+// with DeferredToolPlaceholder): the search helpers may join the outbound
+// tools and deferred client tools may be absent until they are loaded.
+func TestSafeguardsWithInternalToolSearch(t *testing.T) {
+	o, _ := decodeObject([]byte(`{"safeguards":[{"type":"dangerous_tool_use"}]}`))
+	p, _ := parseRequestPlan(nil, o)
+	schema := Object{"type": "object"}
+	yes := true
+	r := &Request{Plan: p, ToolSearch: "true", Native: map[string]bool{"Bash": true}, Tools: []Tool{
+		{Name: "Bash", Schema: schema},
+		{Name: "DeferredToolPlaceholder", Schema: schema, DeferLoading: &yes},
+		{Name: "mcp__fixture__lookup", Schema: schema, DeferLoading: &yes},
+	}}
+	for _, actual := range [][]any{
+		{Object{"name": "Bash", "input_schema": schema}, Object{"name": "ToolSearch", "input_schema": schema}, Object{"name": "DeferredToolPlaceholder", "input_schema": schema}},
+		{Object{"name": "Bash", "input_schema": schema}, Object{"name": "ToolSearch", "input_schema": schema}, Object{"name": "mcp__fixture__lookup", "input_schema": schema}},
+	} {
+		m := Object{"tools": actual}
+		if err := r.ApplyMainRequestFeatures(m); err != nil {
+			t.Fatal(err)
+		}
+		if m["safeguards"] == nil {
+			t.Fatal("client safeguards not applied")
+		}
+	}
+	r.ToolSearch = "false"
+	if err := r.ApplyMainRequestFeatures(Object{"tools": []any{Object{"name": "Bash", "input_schema": schema}, Object{"name": "ToolSearch", "input_schema": schema}}}); err == nil {
+		t.Fatal("search helper accepted without internal search")
 	}
 }
 

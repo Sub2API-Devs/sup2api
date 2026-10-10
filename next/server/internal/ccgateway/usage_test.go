@@ -81,6 +81,27 @@ func TestParseUsage(t *testing.T) {
 	if err != nil || len(windows) != 1 || windows[0].Utilization != 0 {
 		t.Fatalf("empty: %v %v", err, windows)
 	}
+
+	// October 2026 shape (Max 20x): the Fable weekly window is only in limits.
+	limits := fmt.Sprintf(`{
+		"five_hour": {"utilization": 0, "resets_at": %q},
+		"seven_day": {"utilization": 4, "resets_at": %q},
+		"seven_day_sonnet": null, "seven_day_opus": null,
+		"limits": [
+			{"kind": "session", "group": "session", "percent": 0, "resets_at": %q, "scope": null},
+			{"kind": "weekly_all", "group": "weekly", "percent": 4, "resets_at": %q, "scope": null},
+			{"kind": "weekly_scoped", "group": "weekly", "percent": 12, "resets_at": %q, "scope": {"model": {"id": null, "display_name": "Fable"}, "surface": null}}
+		]
+	}`, fiveReset, weekReset, fiveReset, weekReset, fableReset)
+	windows, err = ParseUsage([]byte(limits))
+	if err != nil || len(windows) != 3 || windows[2].Key != "7d_fable" || windows[2].Utilization != 12 || windows[2].ResetsAt == nil {
+		t.Fatalf("limits: %v %+v", err, windows)
+	}
+	// The legacy field wins when both are sent.
+	both := fmt.Sprintf(`{"seven_day_overage_included": {"utilization": 3, "resets_at": %q}, "limits": [{"kind": "weekly_scoped", "percent": 12, "resets_at": %q, "scope": {"model": {"display_name": "Fable"}}}]}`, fableReset, fableReset)
+	if windows, err = ParseUsage([]byte(both)); err != nil || len(windows) != 2 || windows[1].Utilization != 3 {
+		t.Fatalf("both: %v %+v", err, windows)
+	}
 }
 
 func TestQueryUsage(t *testing.T) {
