@@ -385,6 +385,17 @@ worker 先把工具名换成内层 CLI 里的名字，再把 tool_choice 原样�
 15. **历史里的 `caller: direct`**（0.1.31）：上游给每个工具调用标 `"caller":{"type":"direct"}`，客户端下一轮会原样带回。0.1.30 把任何 `caller` 都当程序化调用拒绝，导致带工具的第二轮全部 400；现在只拒绝非 direct 的调用方。
 16. **非流式 `max_tokens: 0`**（0.1.31）：API 只接受非流式的 `max_tokens: 0`（流式返回 "stream cannot be true when max_tokens is 0"），而 CLI 总是流式，所以入口 400；客户端自己用流式发的照常交给上游，由上游原样回错。
 17. **web_search 用量**（0.1.31）：合并各轮和一次性进程的用量时，`cache_creation` 的 5m/1h 拆分也一起相加（之前只加了总数，按时长计价会不准）。
+18. **0.1.31 复测（本机 CC → #23）**：
+   - opus-5-5 子代理（21 次工具调用）每轮缓存读取逐轮增长，读 1.10M、写 0.13M，约 $1.12。修复前 fable 同类任务读 0.35M、写 1.42M，约 $19.9。
+   - fable 复测仍有断点。原因在客户端：本机 CC 下一轮会把上一轮的 `batching_reminder` 从历史里去掉（`<total_tokens>…
+
+First privately list…` 变成只剩 `<total_tokens>`）。网关发给上游的就是客户端发来的内容，直连官方 API 也会在这里断。
+   - WebSearch（客户端快速路径）正常，答案带来源。
+19. **仍存在的结构差异（属于"请求由 CLI 构造"本身）**：
+   - **beta 头**：CLI 的 beta 头比客户端多出 `oauth`、`per-turn-control`、`dangerous-tool-use`、`cache-diagnosis`、`afk-mode` 等，并有重复项。
+   - **per-turn effort**：`per-turn-control` 让 CLI 在第一条 system 消息上加 `output_config.effort`，值与顶层相同。
+   - **响应多出的字段**：同样因为这些 beta，响应里多出 `safeguard_results`、`context_management`、`diagnostics`、`stop_details`、`caller`。
+   - 本机客户端设置了 `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1`，所以它自己的 beta 头很短。内层 CLI 是否也这样设、是否剥掉客户端没请求的响应字段，待定。
 
 **测试结果（本机 CC 2.1.292，假上游）**：
 - `TestRealCLIRelayPassthrough` 10 个用例全部通过：字段原样、tool_choice 只在第 0 轮、safeguards 与审查结论、`max_tokens: 0`、529 原样且不重试、400 原样、fallbacks、子代理 U/A' 与续接、最后一条消息里的图片不被改动（去掉拆分后用例失败）、入口 400。
