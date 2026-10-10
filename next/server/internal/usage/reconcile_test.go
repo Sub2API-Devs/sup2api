@@ -157,6 +157,9 @@ type recAccounts struct{ acc *core.Account }
 func (a recAccounts) Candidates(context.Context, int64, []core.AccountTypeKey) ([]core.AccountRef, error) {
 	return nil, nil
 }
+func (a recAccounts) GroupHasType(context.Context, int64, []core.AccountTypeKey) (bool, error) {
+	return a.acc != nil, nil
+}
 func (a recAccounts) Load(_ context.Context, id int64) (*core.Account, error) {
 	if a.acc == nil || a.acc.ID != id {
 		return nil, core.ErrNotFound

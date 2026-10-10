@@ -1100,6 +1100,24 @@ func TestDirectory(t *testing.T) {
 	if refs, _ = e.svc.Candidates(ctx, g, nil); len(refs) != 3 {
 		t.Fatalf("all types: %d", len(refs))
 	}
+	// GroupHasType: any account of the types, whatever its status.
+	if _, err := e.db.Pool.Exec(ctx, `UPDATE accounts SET status = 'disabled' WHERE id = $1`, a3); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		types []core.AccountTypeKey
+		want  bool
+	}{{apikey, true}, {[]core.AccountTypeKey{{PluginKey: "relay", Type: "relay_key"}}, true}, {[]core.AccountTypeKey{{PluginKey: "ccgateway", Type: "managed"}}, false}, {nil, false}} {
+		if got, err := e.svc.GroupHasType(ctx, g, c.types); err != nil || got != c.want {
+			t.Fatalf("GroupHasType %v = %v %v", c.types, got, err)
+		}
+	}
+	if got, _ := e.svc.GroupHasType(ctx, g+1000, apikey); got {
+		t.Fatal("GroupHasType: another group")
+	}
+	if _, err := e.db.Pool.Exec(ctx, `UPDATE accounts SET status = 'active' WHERE id = $1`, a3); err != nil {
+		t.Fatal(err)
+	}
 
 	// Cooldown excludes; expiry restores.
 	if err := e.svc.SetCooldown(ctx, a2, time.Now().Add(2*time.Second), "rate limited"); err != nil {

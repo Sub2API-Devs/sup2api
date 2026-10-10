@@ -525,6 +525,20 @@ func (a *fakeAccounts) addTyped(group int64, id int64, priority int, key, plugin
 	a.groups[group] = append(a.groups[group], id)
 }
 
+func (a *fakeAccounts) GroupHasType(_ context.Context, group int64, types []core.AccountTypeKey) (bool, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, id := range a.groups[group] {
+		acc := a.accounts[id]
+		for _, k := range types {
+			if k.PluginKey == acc.PluginKey && k.Type == acc.Type {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 func (a *fakeAccounts) Candidates(_ context.Context, group int64, types []core.AccountTypeKey) ([]core.AccountRef, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

@@ -354,7 +354,8 @@ Anthropic 的 `cache_creation_input_tokens` 是总量（含 1 小时缓存）。
 - 插件未启用（已禁用或未安装）时，它声明的网关端点不存在，请求返回 404；`plugin_unavailable` 只用于插件已启用但进程暂时不可用（按失败切换处理）
 - 错误格式：`plain` 即核心 REST 格式 `{"error":{code,message}}`；`anthropic` 格式在 `error` 中额外带 `code`（如钩子拒绝时的 `guard_blocked`）
 - 所有尝试都失败时：最后一次是上游错误则返回该错误（按 ClassifyError 的状态码与类型）；是插件或账号问题返回 503 `no_available_account`；有账号但并发槽位全满返回 429
-- **`anthropic` 格式下没有可用账号按官方"过载"返回**（2026-10-10）：HTTP 529，`{"type":"error","error":{"type":"overloaded_error","message":"Overloaded","code":"no_available_account"}}`，与官方 API 的过载一致，Claude Code 与 SDK 会退避重试（`gateway/errors.go` `clientError`）。使用记录的 `status_code` 为 529，`error_type` 仍为 `no_account`，`error_message` 保留核心原因（如 `no available account`）。其他格式（`openai`、`gemini`、`plain`）仍是 503；上游原样透传的错误体不受影响。其余映射：参数错误 400 `invalid_request_error`（上游 4xx 原样透传，不冷却账号）、鉴权 401/403、真正的上游故障 5xx
+- **`anthropic` 格式下没有可用账号按官方"过载"返回**（2026-10-10）：HTTP 529，`{"type":"error","error":{"type":"overloaded_error","message":"Overloaded","code":"no_available_account"}}`，与官方 API 的过载一致，Claude Code 与 SDK 会退避重试（`gateway/errors.go` `clientError`）。使用记录的 `status_code` 为 529，`error_type` 仍为 `no_account`，`error_message` 保留核心原因（如 `no available account`）。其他格式（`openai`、`gemini`、`plain`）仍是 503；上游原样透传的错误体不受影响。
+- **分组里根本没有能服务该端点的账号时返回 404**（2026-10-11，用户决定）：没有任何已启用的账号类型声明该端点，或调用方分组里没有这些类型的账号（不论账号状态，已删除的除外；`AccountDirectory.GroupHasType`），返回 404 `not_found_error`「no account in this group serves this endpoint」，`code` 为 `not_found`。客户端不会重试 404。使用记录的 `error_type` 为 `no_account`，`status_code` 为 404。分组里有这种账号、只是全部被禁用、冷却或占满时，仍按上一条返回 529/503。例：CCGateway 不声明 `count_tokens`，只有 CCGateway 账号的分组调计数接口会得到 404。其余映射：参数错误 400 `invalid_request_error`（上游 4xx 原样透传，不冷却账号）、鉴权 401/403、真正的上游故障 5xx
 - **只属于本请求的网关错误不冷却账号**（2026-10-10）：CCGateway worker 拒绝本次请求（`cannot prepare the upstream request: …`，历史或特性无法原样承载）时响应头带 `X-Ccgateway-Error-Scope: request`；ccgateway 插件的 `ClassifyError` 见此头返回 `RETURN_TO_CLIENT`、不设账号效果（不冷却、不切换），同组其他会话不受影响。上游 API 的响应头里出现该头会被 worker 删掉，上游无法冒用
 - `usage_logs.error_type` 取值另含 `model_not_allowed`、`price_not_configured`、`rate_limited`、`invalid_request`、`plugin_unavailable`、`blocked_by_hook`
 - 钩子熔断按节点计数：同一钩子在本节点连续失败 10 次后熔断 30 秒
@@ -410,7 +411,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 
 ## 13. 平台声明端点、账号类型声明平台、内置平台（2026-09-25，ARCHITECTURE 6.6）
 
-**平台内端点子集（2026-10-08）**：`accountTypes[].platforms[]` 可声明 `endpoints: ["messages", "count_tokens"]`，每项引用所属 `platform` 的端点 ID，不是路径或协议名；不能引用其他平台的端点。省略字段兼容旧插件，表示支持该平台全部端点；显式空数组、重复 ID 和不存在的端点均拒绝。CCGateway 两种账号类型只声明 Anthropic 的 `messages`（0.1.36 起不再声明 `count_tokens`，CCGateway 不提供计数，见 §53.13）；核心不会把计数请求调度到 CCGateway 账号，分组里没有其他能计数的账号时按"没有可服务的账号类型"返回。安装时根据内置、本插件及其他已安装插件的平台校验；离线打包无法解析外部平台时延后到安装校验。网关原生路由与协议转换目标都受子集约束，账号类型 API 的可服务端点保持一致。安装预览保留 `platforms` ID 数组并新增 `platform_declarations`，控制台按账号类型 → 平台 → 端点展示；平台 API 的端点新增 `id` 用于解析引用。端点子集依赖支持本字段的宿主执行，旧宿主会忽略该约束。
+**平台内端点子集（2026-10-08）**：`accountTypes[].platforms[]` 可声明 `endpoints: ["messages", "count_tokens"]`，每项引用所属 `platform` 的端点 ID，不是路径或协议名；不能引用其他平台的端点。省略字段兼容旧插件，表示支持该平台全部端点；显式空数组、重复 ID 和不存在的端点均拒绝。CCGateway 两种账号类型只声明 Anthropic 的 `messages`（0.1.36 起不再声明 `count_tokens`，CCGateway 不提供计数，见 §53.13）；核心不会把计数请求调度到 CCGateway 账号，分组里没有其他能计数的账号时返回 404（§11.6）。安装时根据内置、本插件及其他已安装插件的平台校验；离线打包无法解析外部平台时延后到安装校验。网关原生路由与协议转换目标都受子集约束，账号类型 API 的可服务端点保持一致。安装预览保留 `platforms` ID 数组并新增 `platform_declarations`，控制台按账号类型 → 平台 → 端点展示；平台 API 的端点新增 `id` 用于解析引用。端点子集依赖支持本字段的宿主执行，旧宿主会忽略该约束。
 
 本节优先于 §12 及前文中冲突的描述。§12 中"全局定价""凭证授权""转换失败""插件未启用 404"等仍然有效。
 
@@ -3771,7 +3772,7 @@ images/gateway.tar.gz      # Caddy 网关
 - `fallbacks`：Mod 依次换模型，条目里的 `max_tokens`、`thinking`、`output_config` 叠加到该次尝试的 EXTRA_BODY；条目带 `speed` 返回 400。
 - 最后一条用户消息有 base64 图片且以文本结尾：前面的块写进会话文件，只把末尾文本交给 CLI，图片原样发出。
 - `web_search`（20250305/20260209/20260318）：主 CLI 提供 WebSearch，模型调用时 Worker 在同账号起一次性 CLI 进程搜索一次（`mod/search`），结果回到同一轮继续生成；客户端收到 `server_tool_use` + `web_search_tool_result`，`encrypted_content` 为网关格式 `ccgws1.<payload>.<mac>`（含模型读到的结果文字，任何账号都能还原成 WebSearch 的调用与结果）。`max_uses` 由 Worker 计数，超出给 `max_uses_exceeded`；每个请求最多 8 轮搜索；`usage.server_tool_use.web_search_requests` 为实际搜索次数，一次性进程的 token 计入 usage。Claude Code 客户端自己的搜索请求（只有 web_search、消息为 "Perform a web search for the query: …"）只起一次性进程，上游 1 个请求，账号级错误原样返回。
-- `count_tokens`：CCGateway 不提供计数（2026-10-11 决定）。0.1.36 起插件不声明这个端点，核心不调度，核心的托管传输也只放行 `/v1/messages`；worker 透传入口的 400 `count_tokens is not supported by this gateway` 只作兜底。
+- `count_tokens`：CCGateway 不提供计数（2026-10-11 决定）。0.1.36 起插件不声明这个端点，核心不调度（分组里没有其他能计数的账号时返回 404 `not_found_error`），核心的托管传输也只放行 `/v1/messages`；worker 透传入口的 400 `count_tokens is not supported by this gateway` 只作兜底。
 - 入口 400（错误文字写明原因）：assistant 预填充、`fallback_credit_token`、`container`、`mcp_servers`、code_execution / web_fetch / tool_search_tool_* / advisor 等服务端工具、typed 工具集、inline 工具定义、图片 transformations、`tool_use.caller`、`toolset_name`、非本网关签发的搜索结果与其它服务端工具历史块、web_search 的 `user_location` / `response_inclusion` / `allowed_callers` / 延迟加载、web_search 与客户端 WebSearch 工具同时出现、助手历史托管请求。
 
 **测试**：`TestRealCLIRelayPassthrough`、`TestRealCLIPassthroughWebSearch`（需 `CCG_REAL_CLI`，开头先用 `claude plugin validate` 校验两个 Mod：CLI 对校验不通过的 hooks 模块不报错、直接不加载）；单元测试 `TestPassthrough*`、`TestWebSearch*`、`TestNativeWebSearchTurns`；核心 `TestRelayModeSaveAndWorkerPolicy`；控制台 `RequestPolicySettings.spec.ts`。

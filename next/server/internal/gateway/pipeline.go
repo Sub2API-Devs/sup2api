@@ -201,7 +201,7 @@ func (c *call) run(ctx context.Context) {
 	// 4. Account types serving the protocol.
 	c.planRoutes()
 	if len(c.routeKeys) == 0 {
-		c.fail(fromCore(core.ErrNoAvailableAccount.WithMessage("no enabled account type serves this endpoint"), errTypeNoAccount))
+		c.fail(errEndpointNotServed)
 		return
 	}
 

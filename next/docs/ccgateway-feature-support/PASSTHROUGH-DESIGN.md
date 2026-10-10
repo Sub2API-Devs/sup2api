@@ -178,7 +178,7 @@ worker 先把工具名换成内层 CLI 里的名字，再把 tool_choice 原样�
 **仍然做不到，入口返回 400：**
 
 - **assistant 预填充**：CLI 发出的请求总以用户消息结尾。会话文件以 assistant 结尾时，`RESUME_INTERRUPTED_TURN` 不会发出请求（已实测）。
-- **count_tokens**：CCGateway 不提供（2026-10-11 用户决定）。订阅账号本身支持计数，legacy 曾借 CLI 的认证、把请求体换成客户端原文来计数；透传下不做，入口返回 400「count_tokens is not supported by this gateway」，Claude Code 客户端收到后改用本地估算。0.1.36 起插件不再声明这个端点（用户决定），核心不调度到 CCGateway 账号；worker 的 400 只作兜底。
+- **count_tokens**：CCGateway 不提供（2026-10-11 用户决定）。订阅账号本身支持计数，legacy 曾借 CLI 的认证、把请求体换成客户端原文来计数；透传下不做，入口返回 400「count_tokens is not supported by this gateway」，Claude Code 客户端收到后改用本地估算。0.1.36 起插件不再声明这个端点（用户决定），核心不调度到 CCGateway 账号，分组里没有能计数的账号时核心返回 404（v0.1.109 起；之前是会被重试的 529）；worker 的 400 只作兜底。
 - **fallback credit**：需要替换整个请求体。
 - **需要在 `tools` 里加定义的功能**：
   - code_execution、web_fetch、tool_search_tool_*；

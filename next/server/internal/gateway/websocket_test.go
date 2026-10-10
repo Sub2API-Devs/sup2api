@@ -506,7 +506,7 @@ func TestWebSocketNeedsAPluginThatBuildsWebSockets(t *testing.T) {
 	e := newWSEnv(t, manifest.CapPlatformAdapter)
 	c := e.mustDial()
 	c.send(create(wsModel, "hi"))
-	if ev := c.until("error"); ev[0].Get("status").Int() != 503 {
+	if ev := c.until("error"); ev[0].Get("status").Int() != 404 {
 		t.Fatalf("no websocket-capable account type: %v", ev)
 	}
 	if r := e.record(); r.ErrorType != errTypeNoAccount {

@@ -112,10 +112,11 @@ func TestUnsupportedAccountTypeNotScheduled(t *testing.T) {
 	}
 	e.record()
 
-	// Only the unsupported account left in the group: overloaded (529).
+	// Only the unsupported account left in the group: nothing serves the
+	// endpoint (404).
 	e.accounts.groups[testGroup] = []int64{5}
 	r := e.messages(body(testModel, false))
-	if r.status != 529 || r.json().Get("error.code").String() != "no_available_account" || other.buildCount() != 0 {
+	if r.status != 404 || r.json().Get("error.type").String() != "not_found_error" || other.buildCount() != 0 {
 		t.Fatalf("unsupported only: %d %s", r.status, r.body)
 	}
 	e.record()
@@ -123,7 +124,7 @@ func TestUnsupportedAccountTypeNotScheduled(t *testing.T) {
 	// Admission resolves the price once before checking available routes.
 	e.gen.accountTypes = e.gen.accountTypes[1:]
 	calls := e.pricer.calls
-	if r := e.messages(body(testModel, false)); r.status != 529 {
+	if r := e.messages(body(testModel, false)); r.status != 404 {
 		t.Fatalf("no type: %d", r.status)
 	}
 	if e.pricer.calls != calls+1 {

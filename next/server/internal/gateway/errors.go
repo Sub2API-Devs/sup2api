@@ -103,6 +103,12 @@ func fromCore(e *core.Error, recordType string) *gwError {
 	return &gwError{Status: e.Status, Code: e.Code, Message: e.Message, RecordType: recordType}
 }
 
+// errEndpointNotServed: no account of the caller's group (or no enabled
+// account type at all) serves this endpoint (2026-10-11: CCGateway offers no
+// count_tokens). A 404, which clients do not retry, unlike "no available
+// account", which is a passing shortage.
+var errEndpointNotServed = fromCore(core.ErrNotFound.WithMessage("no account in this group serves this endpoint"), errTypeNoAccount)
+
 // statusOverloaded is Anthropic's "overloaded" status.
 const statusOverloaded = 529
 

@@ -177,6 +177,10 @@ type AccountDirectory interface {
 	// Candidates returns active, schedulable accounts of the group whose
 	// account type is in types, excluding cooling-down ones.
 	Candidates(ctx context.Context, groupID int64, types []AccountTypeKey) ([]AccountRef, error)
+	// GroupHasType reports whether the group holds any account (not deleted,
+	// whatever its status) of one of types: without one the group cannot serve
+	// the endpoint at all, which is not a passing shortage.
+	GroupHasType(ctx context.Context, groupID int64, types []AccountTypeKey) (bool, error)
 	// Load returns one account with decrypted credentials.
 	Load(ctx context.Context, id int64) (*Account, error)
 	IsCoolingDown(ctx context.Context, id int64) (bool, error)

@@ -212,10 +212,12 @@ func TestAllAttemptsFailReturnsLastUpstreamError(t *testing.T) {
 
 // No available account reads to an Anthropic client as the API's own
 // overload, which its clients retry with backoff; the record keeps the
-// host's reason.
+// host's reason. Disabled and cooling accounts are a passing shortage.
 func TestNoAccountIsOverloaded(t *testing.T) {
 	e := newEnv(t)
-	e.accounts.groups[testGroup] = nil
+	for _, id := range e.accounts.groups[testGroup] {
+		e.accounts.cooldown[id] = time.Now().Add(time.Minute)
+	}
 	r := e.messages(body(testModel, false))
 	j := r.json()
 	if r.status != 529 || j.Get("type").String() != "error" || j.Get("error.type").String() != "overloaded_error" ||
@@ -223,6 +225,31 @@ func TestNoAccountIsOverloaded(t *testing.T) {
 		t.Fatalf("no account: %d %s", r.status, r.body)
 	}
 	if rec := e.record(); rec.ErrorType != errTypeNoAccount || rec.StatusCode != 529 || rec.ErrorMessage != "no available account" || rec.AccountID != nil {
+		t.Fatalf("record %+v", rec)
+	}
+	for _, id := range e.accounts.groups[testGroup] {
+		delete(e.accounts.cooldown, id)
+		e.accounts.disabled[id] = "fixture"
+	}
+	if r := e.messages(body(testModel, false)); r.status != 529 {
+		t.Fatalf("disabled accounts: %d %s", r.status, r.body)
+	}
+	e.record()
+}
+
+// A group with no account of a type serving the endpoint, in any status,
+// cannot serve it: 404, which clients do not retry (2026-10-11: CCGateway
+// offers no count_tokens).
+func TestEndpointNoAccountServesIsNotFound(t *testing.T) {
+	e := newEnv(t)
+	e.accounts.groups[testGroup] = nil
+	r := e.messages(body(testModel, false))
+	j := r.json()
+	if r.status != 404 || j.Get("type").String() != "error" || j.Get("error.type").String() != "not_found_error" ||
+		j.Get("error.message").String() != "no account in this group serves this endpoint" {
+		t.Fatalf("no serving account: %d %s", r.status, r.body)
+	}
+	if rec := e.record(); rec.ErrorType != errTypeNoAccount || rec.StatusCode != 404 || rec.AccountID != nil {
 		t.Fatalf("record %+v", rec)
 	}
 }

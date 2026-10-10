@@ -3,7 +3,7 @@
 // entitlement. Runtime evidence must be reported separately.
 package features
 
-const CatalogVersion = "2026-10-11.5"
+const CatalogVersion = "2026-10-11.6"
 const PolicySchemaVersion = 1
 
 type Feature struct {
@@ -68,7 +68,7 @@ func Catalog() Document {
 		entry("F-TASK-BUDGET", "任务预算", "生成控制", "partial", []string{"output_config.task_budget"}, []string{"task-budgets-2026-03-13"}, []string{"主请求计划", "核心持久托管 / transport schema 1 / payload v1/v2 协商", "响应与隐藏载体各 32MiB 上限；默认用户/组存储预算 4096 项、256MiB、保留 24h"}, "按 API 原值传递建议预算（total 至少 20000）；全量显式 eager，或指定 eager 目标加无关显式 deferred 普通工具的强制单轮可保真传递预算，此路径禁止内部 helper。核心启用托管且实际 Worker 已协商托管 transport schema 1 与适用的 payload v1/v2 时，允许普通客户端工具的内部 ToolSearch 轮次，完整隐藏消息、原签名与原位系统说明随已登记链恢复；不自行扣减 remaining。JSON/SSE 在历史与用量提交前有界缓冲，链绑定用户/分组、账号/issuer、模型、CLI 与有效策略；过期、歧义或绑定变化拒绝，派发后不换号重试。独立 system_only 位置和普通 custom inline 托管恢复要求 payload v2：按每段真实公开锚点验证当时目录，保留 user 后的 system 指令位置；撤销不复活，同名重加使用对应 schema，旧发现不进入当前目录。已完成 JSON/SSE 新会话、续聊、冷恢复及回退的隔离 CLI 验证；Opus 5.5 的普通与 custom inline 云端往返、SSE及回退已验收，用量已核对。生产跨账号冷迁移未实测，不能据此承诺所有账号资格。native、server、typed、MCP、safeguards 与此 inline 组合仍拒绝；资源、信用、context/compaction、assistant-tail 与 legacy synthetic 混用仍未开放；通用 deferred 强制选择仍受限制。官方 CC/Cowork 原生界面不支持，账号上游能力须另验证。"),
 		entry("F-FALLBACK", "模型回退与缓存信用", "服务约束", "partial", []string{"fallbacks", "fallback_credit_token", "fallback_credit_token.mode", "stop_details.fallback_credit_token", "messages[].content[].type:fallback", "usage.iterations", "usage.fallback_credit"}, []string{"server-side-fallback-2026-06-01", "server-side-fallback-2026-07-01", "fallback-credit-2026-06-01", "fallback-credit-2026-07-01"}, []string{"候选模型授权与计价", "同账号与 issuer 的信用托管", "原始 wire 绑定与受控兑换"}, "显式候选链交由提供商执行；信用支持字符串、对象 strict/best_effort 与 null，对象需要 July credit beta。兑换固定原所有者、账号和 issuer；strict 要求有效匹配，best_effort 仅在完整证明匹配时复用原 wire，否则原样携 token/mode 走当前请求，由提供商判定。网关不自动重试、换号或丢 token。信用 SSE 有界缓冲至登记完成，托管失败保留真实用量并返回 gateway_credit_storage；正常 refusal 仍是 200。default 与压缩组合仍拒绝，真实信用资格和退款未验证。"),
 		entry("F-ROUTING", "服务等级与地域", "服务约束", "partial", []string{"service_tier", "inference_geo"}, nil, []string{"主模型服务等级", "全部模型调用推理地域"}, "service_tier 按主请求精确映射；inference_geo 同时约束辅助模型请求并阻断无法携带地域的辅助计数。CLI 2.1.292 假上游验证通过；真实账户地域/等级支持由上游决定，不代表存储驻留。非 Anthropic transport 区域不可等价转换。"),
-		entry("F-COUNT-TOKENS", "Token 计数", "其他端点", "unsupported", nil, nil, []string{"anthropic.count_tokens"}, "CCGateway 不提供 token 计数（2026-10-11 决定）：插件不声明 count_tokens 端点，核心不会把计数请求调度到 CCGateway 账号；Claude Code 客户端计数失败后改用本地估算。"),
+		entry("F-COUNT-TOKENS", "Token 计数", "其他端点", "unsupported", nil, nil, []string{"anthropic.count_tokens"}, "CCGateway 不提供 token 计数（2026-10-11 决定）：插件不声明 count_tokens 端点，核心不会把计数请求调度到 CCGateway 账号，分组里没有能计数的账号时返回 404 not_found_error（客户端不重试）；Claude Code 计数失败后改用本地估算。"),
 		entry("F-OTHER-APIS", "兼容协议与其他端点", "其他端点", "partial", []string{"/v1/chat/completions", "/v1/responses"}, nil, []string{"共享严格协议转换", "请求专属状态", "原始 Anthropic 用量结算"}, "支持可等价表达的文本、初始指令、函数工具/结果、结构化输出和正常拒绝；必须显式提供输出预算，不能等价的字段明确拒绝。Responses 支持不透明签名推理回传；OpenAI SSE 为判断终态拒绝有界缓冲。资源、存储式 response ID、后台任务与 Batches 尚需独立端点，不能据协议转换推导支持。"),
 	}}
 }

@@ -44,6 +44,14 @@ func (c *call) dispatch(ctx context.Context) {
 		c.fail(fromCore(core.ErrUnavailable.WithCause(err), errTypeInternal))
 		return
 	}
+	if len(all) == 0 {
+		// No account of the group serves the endpoint, now or after any
+		// cooldown: answer 404 rather than an overload the client retries.
+		if has, err := c.g.d.Accounts.GroupHasType(ctx, c.principal.Group.ID, c.routeKeys); err == nil && !has {
+			c.fail(errEndpointNotServed)
+			return
+		}
+	}
 	cands := make([]core.AccountRef, 0, len(all))
 	creditExcluded := false
 	diagnosticExcluded := false

@@ -51,6 +51,23 @@ func (s *Service) Candidates(ctx context.Context, groupID int64, types []core.Ac
 	return kept, nil
 }
 
+// GroupHasType reports whether the group holds an account of one of types,
+// disabled or not; only failed dispatches ask, so it is not cached.
+func (s *Service) GroupHasType(ctx context.Context, groupID int64, types []core.AccountTypeKey) (bool, error) {
+	if len(types) == 0 {
+		return false, nil
+	}
+	plugins, kinds := make([]string, len(types)), make([]string, len(types))
+	for i, t := range types {
+		plugins[i], kinds[i] = t.PluginKey, t.Type
+	}
+	var ok bool
+	err := s.d.DB.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM accounts a JOIN account_groups ag ON ag.account_id = a.id
+		JOIN unnest($2::text[], $3::text[]) AS t(plugin_key, type) ON t.plugin_key = a.plugin_key AND t.type = a.type
+		WHERE ag.group_id = $1 AND a.deleted_at IS NULL)`, groupID, plugins, kinds).Scan(&ok)
+	return ok, err
+}
+
 func (s *Service) groupSnapshot(ctx context.Context, groupID int64) ([]core.AccountRef, error) {
 	now := time.Now()
 	s.cacheMu.Lock()

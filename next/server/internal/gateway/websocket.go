@@ -394,7 +394,7 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 func (s *wsSession) connect(ctx context.Context, cl *call) (func(), *gwError) {
 	cl.planRoutes()
 	if len(cl.routeKeys) == 0 {
-		return nil, fromCore(core.ErrNoAvailableAccount.WithMessage("no enabled account type serves this endpoint"), errTypeNoAccount)
+		return nil, errEndpointNotServed
 	}
 	all, err := s.g.d.Accounts.Candidates(ctx, cl.principal.Group.ID, cl.routeKeys)
 	if err != nil {
