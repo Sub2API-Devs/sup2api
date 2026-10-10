@@ -107,6 +107,9 @@ func (r *Request) pendingStart() int {
 	return start
 }
 func (r *Request) pendingWireMessage() Message {
+	if _, input, split := r.passthroughImageSplit(); split {
+		return input
+	}
 	if r.continuation != "" {
 		return Message{Role: "user", Content: []Object{{"type": "text", "text": r.continuation}}}
 	}

@@ -3752,6 +3752,29 @@ images/gateway.tar.gz      # Caddy 网关
 - 上游 `metadata.user_id` 用 CLI 自己的值，只把 `session_id` 换成 U（其余字节不变）；旧格式 `…_session_<uuid>` 只换会话段；都认不出时按 CLI 字段顺序生成 `{"device_id":"","account_uuid":"","session_id":U}`。A' 的格式为 `a` + 16 位小写十六进制（与 CLI 自己的子代理 ID 同形）。主线请求删除 agent-id 头。
 - 已知：客户端计费头是占位值（如 `cch=00000`）时 CLI 会重算，开头 system 块仍无法还原（改动前即如此）。
 
+### 53.13 出站中继完全透传 `relay_mode`（2026-10-11，用户要求；ccgateway 0.1.29 起）
+
+设计与逐项结论见 `ccgateway-feature-support/PASSTHROUGH-DESIGN.md`，本节只写接口。
+
+**策略字段**（请求策略，可选，`schema_version` 不升）：
+- `relay_mode`：`"legacy"`（默认，原有的中继适配）或 `"passthrough"`。
+- `relay_passthrough_accounts`：账号 ID 列表，`relay_mode` 为 legacy 时这些账号已按 passthrough 运行（逐个账号验证用）。正整数、不重复、最多 1000 个。
+- 核心按账号算出生效值后发给 Worker（`Config.WorkerRequestPolicy(accountID)`），Worker 只收到 `relay_mode`，看不到账号列表。助手历史探测（helper requirement）用同一份策略。
+- 控制台"CC 特性 → 工具与错误处理"：中继模式下拉框；适配模式下显示账号列表输入框（逗号分隔）。
+
+**passthrough 下 Worker 的行为**：
+- 每个上游请求都由内层 CLI 构造，中继原样转发（不加 `X-Forwarded-For`，不改 `Accept-Encoding`），只读：状态码、上游错误体（gzip/deflate 会解开）、流内 error 事件、请求 ID 等提供方事实。账号开启请求日志时记录 CLI 发出的原始请求（`upstream-request-NNN-*.body`）。
+- 客户端字段：`model` → `--model`；`max_tokens`、`thinking`、`temperature`、`top_p`、`top_k`、`stop_sequences`、`service_tier`、`inference_geo`、`output_config`（含 format、effort、task_budget）、`output_format`、`safeguards`、`diagnostics` 原样放进 `CLAUDE_CODE_EXTRA_BODY`；`tool_choice`（强制工具名换成内层名）只在每次请求的第 0 轮。Mod 在每轮 `turn.step` 设置该变量。thinking 未写时 `--thinking disabled`，effort 未写时 `--effort high`；`anthropic-beta` 全部原样进 `ANTHROPIC_BETAS`；`speed` → settings `fastMode`；有 cache_control 时保留其 TTL（`CLAUDE_CODE_PROMPT_CACHE_TTL`），断点由 CLI 放。`context_management`、`compaction`、`metadata`、内嵌 system/effort 不发往上游（metadata 只选会话）。
+- 内层 CLI：`CLAUDE_CODE_MAX_RETRIES=0`、`CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS=1`；会话 ID 一律为 U（分支文件按 U 运行，结束后记录移回分支文件的 ID）；子代理 `ANTHROPIC_CUSTOM_HEADERS=x-claude-code-agent-id: A'`。
+- 上游错误：状态码与错误体原样返回（流已开始则为 SSE error 事件），CLI 不重试；之后同一请求的模型请求不再转发，除非 Mod 换到下一个 fallbacks 模型（仅 429、500、502、503、504、529 之后）。
+- 订阅限额头 `anthropic-ratelimit-unified-*` 不返回给客户端；请求 ID、`retry-after` 等照常返回。核心对 ccgateway 账号的额度仍用用量查询（§44），不读这些头。
+- `fallbacks`：Mod 依次换模型，条目里的 `max_tokens`、`thinking`、`output_config` 叠加到该次尝试的 EXTRA_BODY；条目带 `speed` 返回 400。
+- 最后一条用户消息有 base64 图片且以文本结尾：前面的块写进会话文件，只把末尾文本交给 CLI，图片原样发出。
+- `web_search`（20250305/20260209/20260318）：主 CLI 提供 WebSearch，模型调用时 Worker 在同账号起一次性 CLI 进程搜索一次（`mod/search`），结果回到同一轮继续生成；客户端收到 `server_tool_use` + `web_search_tool_result`，`encrypted_content` 为网关格式 `ccgws1.<payload>.<mac>`（含模型读到的结果文字，任何账号都能还原成 WebSearch 的调用与结果）。`max_uses` 由 Worker 计数，超出给 `max_uses_exceeded`；每个请求最多 8 轮搜索；`usage.server_tool_use.web_search_requests` 为实际搜索次数，一次性进程的 token 计入 usage。Claude Code 客户端自己的搜索请求（只有 web_search、消息为 "Perform a web search for the query: …"）只起一次性进程，上游 1 个请求，账号级错误原样返回。
+- 入口 400（错误文字写明原因）：`count_tokens`、assistant 预填充、`fallback_credit_token`、`container`、`mcp_servers`、code_execution / web_fetch / tool_search_tool_* / advisor 等服务端工具、typed 工具集、inline 工具定义、图片 transformations、`tool_use.caller`、`toolset_name`、非本网关签发的搜索结果与其它服务端工具历史块、web_search 的 `user_location` / `response_inclusion` / `allowed_callers` / 延迟加载、web_search 与客户端 WebSearch 工具同时出现、助手历史托管请求。
+
+**测试**：`TestRealCLIRelayPassthrough`、`TestRealCLIPassthroughWebSearch`（需 `CCG_REAL_CLI`，开头先用 `claude plugin validate` 校验两个 Mod：CLI 对校验不通过的 hooks 模块不报错、直接不加载）；单元测试 `TestPassthrough*`、`TestWebSearch*`、`TestNativeWebSearchTurns`；核心 `TestRelayModeSaveAndWorkerPolicy`；控制台 `RequestPolicySettings.spec.ts`。
+
 ## 54. 插件隔离加固 P0（2026-10-10，审查 `docs/audits/2026-10-09-plugin-resources.md` 的 P0）
 
 插件与核心、外壳仍是同一 UID（独立 UID 另行排期），以下措施让同 UID 的插件拿不到核心/外壳的秘密，也连不上别人的接口：

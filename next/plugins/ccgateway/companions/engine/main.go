@@ -174,6 +174,10 @@ func (x *exchange) admit() bool {
 		return parsePolicyRequestWithHelper(body, h, access, helper)
 	}
 	if r.URL.Path == "/v1/messages/count_tokens" {
+		if policy, err := requestPolicy(r.Header); err == nil && policy.RelayMode == "passthrough" {
+			x.fail(400, "invalid_request_error", passthroughRefusal("count_tokens", "Claude Code has no token counting of its own").Error())
+			return false
+		}
 		parse = parseTokenCountRequestWithResources
 	}
 	req, e := parse(body, r.Header, x.resources)
@@ -296,6 +300,10 @@ func (x *exchange) execute(branch sessionBranch) {
 		return
 	}
 	defer os.RemoveAll(dir)
+	if query, ok := req.webSearchFastQuery(); ok {
+		x.serveWebSearchFast(ctx, dir, query)
+		return
+	}
 	// A catalogued tool can be disabled by this CLI session's runtime gates.
 	// Rebuild with SDK MCP only before any model request reached the provider.
 	for attempt := 0; ; attempt++ {

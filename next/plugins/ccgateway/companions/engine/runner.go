@@ -133,6 +133,19 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 		}
 	}
 	cfg := newRunConfig(req, p, r.Plugin, dir)
+	if req.Passthrough {
+		if cfg.passthrough, err = req.passthroughBodies(); err != nil {
+			return nil, err
+		}
+		names := map[string][]string{}
+		for name := range cfg.passthrough.First {
+			names["first"] = append(names["first"], name)
+		}
+		for name := range cfg.passthrough.Rest {
+			names["rest"] = append(names["rest"], name)
+		}
+		req.diagnostic.artifact("passthrough.json", Object{"fields": names, "fallbacks": len(cfg.passthrough.Fallbacks), "session": p.runSession(), "agent": req.upstreamAgent != ""})
+	}
 	if req.resource != nil || req.credit != nil {
 		cfg.args = append(cfg.args, "--no-session-persistence")
 	}
@@ -179,6 +192,15 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 	defer control.Close()
 	cfg.control = control
 	relay.control = control
+	control.relay = relay
+	if req.webSearch != nil {
+		control.webSearch = func(id string, input Object) Object {
+			return req.webSearch.search(runctx, func(ctx context.Context, input Object) (*webSearchRecord, error) {
+				record, _, err := r.runWebSearch(ctx, req, dir, input)
+				return record, err
+			}, id, input)
+		}
+	}
 	cfg.env["CCGATEWAY_MOD_URL"] = control.URL
 	cfg.env["CCGATEWAY_MOD_TOKEN"] = control.token
 	proc, err := startCLI(runctx, r.CLI, cfg.args, p.Work, cfg.processEnv(base, relay), r.Stderr)
@@ -228,7 +250,9 @@ func relayOutcome(ctx context.Context, relay *outboundRelay, result Object, err 
 	if failure := relay.Failure(); failure != nil {
 		return nil, failure
 	}
-	if upstream := relay.UpstreamError(); upstream != nil && ctx.Err() == nil {
+	// In passthrough a failed attempt followed by a successful fallback model
+	// leaves an error behind; only a failed run returns it.
+	if upstream := relay.UpstreamError(); upstream != nil && ctx.Err() == nil && (!relay.passthrough || err != nil) {
 		return nil, upstream
 	}
 	if result, ok := relay.completedTokenCount(); ok && ctx.Err() == nil {

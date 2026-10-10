@@ -276,6 +276,7 @@ type Prepared struct {
 	LastUUID, SessionID, Path, Anchor, Mode string
 	Hashes                                  []string
 	Work, NativePath, InputUUID             string
+	WireSession                             string // relay passthrough: U, see runSession
 	SnapshotEnabled                         bool
 	NativeRows                              []json.RawMessage
 	NativeAll                               []json.RawMessage
@@ -311,8 +312,19 @@ func sessionRootRow(sid, cwd, version string) json.RawMessage {
 // conversation of the canonical file, then rows. The file name is the session
 // ID, which makes the CLI append to this file.
 func (p *Prepared) writePrivate(rows []json.RawMessage) error {
-	p.Path = filepath.Join(p.dir, p.SessionID+".jsonl")
-	return writeNative(p.Path, append(append([]json.RawMessage(nil), p.base...), rows...))
+	p.Path = filepath.Join(p.dir, p.runSession()+".jsonl")
+	return writeNative(p.Path, moveSession(append(append([]json.RawMessage(nil), p.base...), rows...), p.SessionID, p.runSession()))
+}
+
+// runSession is the session ID the CLI runs under. In relay passthrough it is
+// U for every branch and generation (the upstream sees the CLI's own session
+// header and metadata); the private copy carries it and captureNative moves
+// the records back to the branch file's SessionID.
+func (p *Prepared) runSession() string {
+	if p.WireSession != "" {
+		return p.WireSession
+	}
+	return p.SessionID
 }
 
 // Most configuration does not select history. A custom-tool namespace change
@@ -337,6 +349,9 @@ func prepareHistory(r *Request, c *HistoryCache, b sessionBranch, dir, version s
 		sid = uuid()
 	}
 	p := &Prepared{SessionID: sid, generation: generation, Hashes: hashes, Mode: "rebuild", InputUUID: uuid(), Work: filepath.Join(c.dir, "workspace"), branch: b, dir: dir, cache: c}
+	if r.Passthrough && b.Upstream != "" {
+		p.WireSession = b.Upstream
+	}
 	if e := os.MkdirAll(p.Work, 0700); e != nil {
 		return nil, e
 	}
@@ -352,7 +367,7 @@ func prepareHistory(r *Request, c *HistoryCache, b sessionBranch, dir, version s
 			if r.directNativeResume(start, pending) && !hasToolResults(r.Messages[pending]) {
 				// Ordinary native resume: submit only the new user message.
 				p.LastUUID = parent
-				return p, p.writePrivate(nil)
+				return p, p.writePrivate(p.withImageSeed(r, nil, version))
 			}
 		}
 	}
@@ -366,14 +381,46 @@ func prepareHistory(r *Request, c *HistoryCache, b sessionBranch, dir, version s
 		if p.Anchor == "" {
 			return nil, fmt.Errorf("missing assistant resume anchor")
 		}
-		return p, p.writePrivate(p.Rows[seeded:])
+		return p, p.writePrivate(p.withImageSeed(r, p.Rows[seeded:], version))
 	}
 	if b.indexed() {
 		// The pending turn and its system messages are submitted and attached
 		// at run time, as for --session-id.
-		return p, p.writePrivate([]json.RawMessage{sessionRootRow(sid, p.Work, version)})
+		return p, p.writePrivate(p.withImageSeed(r, []json.RawMessage{sessionRootRow(sid, p.Work, version)}, version))
+	}
+	if _, _, split := r.passthroughImageSplit(); split {
+		return p, p.writePrivate(p.withImageSeed(r, nil, version))
 	}
 	return p, nil
+}
+
+// withImageSeed keeps the CLI's input processing away from the pending turn's
+// images in relay passthrough: as input, a base64 image gets an extra
+// "[Image: source: <path>]" text and a large one is re-encoded, while an image
+// of a native record goes upstream as written. So the blocks before the
+// turn's final text become a user record the CLI resumes at, and only that
+// text is the new input; the CLI sends the two as one user message, blocks in
+// order. rows end with the pending turn's record when it was seeded.
+func (p *Prepared) withImageSeed(r *Request, rows []json.RawMessage, version string) []json.RawMessage {
+	seed, _, ok := r.passthroughImageSplit()
+	if !ok {
+		return rows
+	}
+	parent := p.Anchor
+	if n := len(rows); n > 0 {
+		id, last, _ := rowIdentity(rows[n-1])
+		if id == p.InputUUID {
+			// The seeded pending record gives way to the leading blocks.
+			parent, rows = last, rows[:n-1]
+			p.Rows = p.Rows[:len(p.Rows)-1]
+		} else {
+			parent = id
+		}
+	}
+	row, id := transcriptRow(seed, parent, p.SessionID, p.Work, version, r.Model)
+	p.Rows = append(p.Rows, row)
+	p.Anchor, p.LastUUID = id, id
+	return append(rows, row)
 }
 
 // findPriorSnapshot is the cached checkpoint of the longest client prefix
@@ -456,6 +503,18 @@ func (p *Prepared) seedRows(r *Request, start, pending int, parent, version stri
 				}
 				message.Content = append(message.Content, r.cliWireMessage(next).Content...)
 				i++
+			}
+		}
+		if r.Passthrough && message.Role == "assistant" {
+			// A search of client history is Claude Code's WebSearch call
+			// and result in the native transcript.
+			if turns, err := nativeWebSearchTurns(message); err == nil && len(turns) > 1 {
+				for _, turn := range turns[:len(turns)-1] {
+					row, id := transcriptRow(turn, parent, p.SessionID, p.Work, version, r.Model)
+					p.Rows = append(p.Rows, row)
+					parent = id
+				}
+				message = turns[len(turns)-1]
 			}
 		}
 		row, id := transcriptRow(message, parent, p.SessionID, p.Work, version, r.Model)

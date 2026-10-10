@@ -33,9 +33,9 @@ func writeNative(path string, rows []json.RawMessage) error {
 // (named by session ID), or for --session-id the CLI's projects file.
 func (p *Prepared) nativeSource(env []string) (string, bool) {
 	if p.Path != "" {
-		return filepath.Join(filepath.Dir(p.Path), p.SessionID+".jsonl"), true
+		return filepath.Join(filepath.Dir(p.Path), p.runSession()+".jsonl"), true
 	}
-	paths, err := filepath.Glob(filepath.Join(cliConfigDir(env), "projects", "*", p.SessionID+".jsonl"))
+	paths, err := filepath.Glob(filepath.Join(cliConfigDir(env), "projects", "*", p.runSession()+".jsonl"))
 	if err != nil || len(paths) != 1 {
 		return "", false
 	}
@@ -47,7 +47,7 @@ func (p *Prepared) nativeSource(env []string) (string, bool) {
 // detail, not a result from the API client: discard that uncommitted tail.
 // Nothing is shared yet: commit merges NativeAll into the branch's file.
 func (p *Prepared) captureNative(env []string, messageID string) error {
-	if !nativeSessionName.MatchString(p.SessionID) {
+	if !nativeSessionName.MatchString(p.SessionID) || !nativeSessionName.MatchString(p.runSession()) {
 		return fmt.Errorf("invalid native session ID")
 	}
 	source, ok := p.nativeSource(env)
@@ -65,6 +65,9 @@ func (p *Prepared) captureNative(env []string, messageID string) error {
 	if err != nil {
 		return err
 	}
+	// The branch file keeps its own session ID; the run's (U) was only the
+	// CLI's view of it.
+	rows = moveSession(rows, p.runSession(), p.SessionID)
 	// Tool handoffs are cleaned in this run's records only; the copied
 	// canonical records stay byte-for-byte.
 	own := min(len(p.base), len(rows))

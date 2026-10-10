@@ -44,7 +44,9 @@ func (p *RequestPlan) takeFallbacks(o Object) error {
 	return nil
 }
 func (r *Request) hasFallbacks() bool { return r.Plan != nil && len(r.Plan.fallbacks) > 0 }
-func (r *Request) fallbackJSON() bool { return (r.hasFallbacks() || r.credit != nil) && !r.Stream }
+func (r *Request) fallbackJSON() bool {
+	return (r.hasFallbacks() || r.credit != nil) && !r.Stream && !r.Passthrough
+}
 func (r *Request) configureFallbacks(h http.Header) error {
 	if !r.hasFallbacks() {
 		return nil

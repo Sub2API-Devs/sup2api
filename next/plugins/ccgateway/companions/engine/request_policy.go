@@ -121,6 +121,12 @@ func parsePolicyRequestWithHelper(body []byte, h http.Header, access *resourceAd
 	if err != nil {
 		return nil, err
 	}
+	if p.RelayMode == "passthrough" {
+		if helper != nil {
+			return nil, passthroughRefusal("helper history", "every upstream request is Claude Code's own")
+		}
+		return parsePassthroughRequest(body, h, p, access)
+	}
 	o, err := decodeObject(body)
 	if err != nil {
 		return nil, err

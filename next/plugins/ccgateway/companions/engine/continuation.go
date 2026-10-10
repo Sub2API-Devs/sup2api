@@ -13,14 +13,24 @@ func (r *Request) configureContinuation() {
 	}
 }
 
+// In passthrough the CLI's own answer is the API's: no terminal observation.
 func (r *Request) needsAPITerminalControl() bool {
+	if r.Passthrough {
+		return false
+	}
 	return r.MCP != nil || len(r.APIClientTools) > 0 || r.needsFreshNativeSession()
 }
 func (r *Request) needsFreshNativeSession() bool {
+	if r.Passthrough {
+		return false
+	}
 	return r.credit != nil || r.hasFallbacks() || r.InlineTools != nil || r.APIOutputFormat || r.continuation != "" || r.hasContextControls() || r.hasCompactionHistory()
 }
 
 func (r *Request) observesAPITerminal() bool {
+	if r.Passthrough {
+		return false
+	}
 	return r.needsAPITerminalControl() || len(r.ServerTools) > 0
 }
 func (r *Request) stopsAtAPITerminal(reason string) bool {

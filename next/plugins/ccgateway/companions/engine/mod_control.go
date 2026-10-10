@@ -18,6 +18,10 @@ var modControls sync.Map
 
 type modControl struct {
 	helperRequest    *Request
+	relay            *outboundRelay                       // set by the Runner; answers the Mod's fallback question
+	webSearch        func(id string, input Object) Object // passthrough web search, set by the Runner
+	searchOnly       bool                                 // the one-shot web search process's control
+	searchResult     Object
 	scope            *mainRequestScope
 	sessionContexts  map[string]bool
 	reminderMarker   string
@@ -43,7 +47,11 @@ func startModControl(cfg *runConfig, internalBase string) (*modControl, error) {
 	if cfg.helperRequest != nil {
 		additionalDirs = cfg.helperRequest.AdditionalDirectories
 	}
-	data, err := json.Marshal(Object{"attachments": cfg.attachments, "systems": cfg.systems, "deferred": deferred, "tools": cfg.tools, "trace": cfg.diagnostic.enabled(), "main_request_scope": cfg.scope != nil, "continuation_attachment_ack": cfg.reminderMarker != "", "helper_attachment_ack": cfg.helperRequest != nil && cfg.helperRequest.helperHistory != nil, "additional_directories": additionalDirs})
+	var webSearch any
+	if cfg.helperRequest != nil && cfg.helperRequest.webSearch != nil {
+		webSearch = true
+	}
+	data, err := json.Marshal(Object{"web_search": webSearch, "attachments": cfg.attachments, "systems": cfg.systems, "deferred": deferred, "tools": cfg.tools, "trace": cfg.diagnostic.enabled(), "main_request_scope": cfg.scope != nil, "continuation_attachment_ack": cfg.reminderMarker != "", "helper_attachment_ack": cfg.helperRequest != nil && cfg.helperRequest.helperHistory != nil, "additional_directories": additionalDirs, "passthrough": cfg.passthrough})
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +114,7 @@ func (c *modControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Systems int             `json:"systems"`
 		Detail  json.RawMessage `json:"detail"`
 	}
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20))
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<20))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&ack); err != nil {
 		w.WriteHeader(400)
@@ -114,6 +122,9 @@ func (c *modControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
 		w.WriteHeader(400)
+		return
+	}
+	if c.serveWebSearch(w, ack.Event, ack.Detail) {
 		return
 	}
 	c.mu.Lock()
@@ -126,6 +137,11 @@ func (c *modControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	case ack.Event == "main_request_end" && c.ready && c.scope != nil:
 		if err := c.scope.leave(); err != nil {
+			w.WriteHeader(409)
+			return
+		}
+	case ack.Event == "fallback" && c.ready && c.relay != nil:
+		if !c.relay.allowFallback() {
 			w.WriteHeader(409)
 			return
 		}
@@ -171,6 +187,46 @@ func (c *modControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		c.diagnostic.trace("mod_"+ack.Event, Object{"systems": ack.Systems, "version": ack.Version})
 	}
 	_, _ = w.Write([]byte(`{"ok":true}`))
+}
+
+// serveWebSearch answers the passthrough web search events, outside the
+// lock: a search runs for seconds while other hooks keep reporting.
+func (c *modControl) serveWebSearch(w http.ResponseWriter, event string, detail json.RawMessage) bool {
+	switch {
+	case event == "web_search" && c.webSearch != nil && !c.searchOnly:
+		var call struct {
+			ID    string `json:"tool_use_id"`
+			Input Object `json:"input"`
+		}
+		if json.Unmarshal(detail, &call) != nil || call.ID == "" || str(call.Input, "query") == "" {
+			w.WriteHeader(400)
+			return true
+		}
+		answer, _ := marshalPlain(c.webSearch(call.ID, call.Input))
+		_, _ = w.Write(answer)
+	case event == "search_result" && c.searchOnly:
+		var answer Object
+		if json.Unmarshal(detail, &answer) != nil || answer == nil {
+			w.WriteHeader(400)
+			return true
+		}
+		c.mu.Lock()
+		if c.searchResult == nil {
+			c.searchResult = answer
+		}
+		c.mu.Unlock()
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	default:
+		return false
+	}
+	return true
+}
+
+// searchAnswer is what the search Mod reported, if anything.
+func (c *modControl) searchAnswer() Object {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.searchResult
 }
 
 func (c *modControl) verify() error {

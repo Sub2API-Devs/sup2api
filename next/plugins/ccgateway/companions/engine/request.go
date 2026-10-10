@@ -70,7 +70,11 @@ type Request struct {
 	Native                  map[string]bool
 	CustomToolPrefix        string
 	// Set from the request policy; see outboundRelay.
-	PassUpstreamErrors       bool
+	PassUpstreamErrors bool
+	// Relay passthrough (passthrough.go): the outbound relay forwards the
+	// inner CLI's requests unchanged.
+	Passthrough              bool
+	webSearch                *webSearchPlan // passthrough web_search (web_search_passthrough.go)
 	AttachmentSources        map[string]string
 	AttachmentDecisions      []Object
 	UnknownClientAttachment  string

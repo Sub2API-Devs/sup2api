@@ -43,6 +43,9 @@ type outboundRelay struct {
 	transport       *http.Transport
 
 	mu                 sync.Mutex
+	passthrough        bool         // relay passthrough: forward unchanged (passthrough_relay.go)
+	observeEvent       func(Object) // passthrough: reads each model stream event (web search usage)
+	blocked            bool         // passthrough: an upstream error holds further model requests
 	failure            error
 	upstream           *upstreamError
 	stopped            bool
@@ -559,7 +562,7 @@ func startOutboundRelay(req *Request, env []string, internalBase ...string) (*ou
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.Proxy = proxyFn
 	path := "/ccg-relay/" + uuid()
-	relay := &outboundRelay{path: path, FirstParty: strings.EqualFold(target.Hostname(), "api.anthropic.com"), transport: transport}
+	relay := &outboundRelay{path: path, FirstParty: strings.EqualFold(target.Hostname(), "api.anthropic.com"), transport: transport, passthrough: req.Passthrough}
 	handler := relay.handler(req, relay.forwarder(target))
 	if len(internalBase) > 0 && internalBase[0] != "" {
 		outboundRelayHandlers.Store(path, handler)
@@ -587,7 +590,9 @@ func (relay *outboundRelay) forwarder(target *url.URL) *httputil.ReverseProxy {
 		r.URL.RawPath = ""
 		director(r)
 		r.Host = target.Host
-		r.Header.Del("X-Forwarded-For")
+		// A nil value keeps the proxy from adding X-Forwarded-For: the API
+		// sees the CLI's headers, not a forwarding hop.
+		r.Header["X-Forwarded-For"] = nil
 		pass, _ := r.Context().Value(modelRequest{}).(bool)
 		output, _ := r.Context().Value(apiOutputRequestKey{}).(*Request)
 		if pass || output != nil {
@@ -605,6 +610,9 @@ func (relay *outboundRelay) forwarder(target *url.URL) *httputil.ReverseProxy {
 		apiError(w, 502, "api_error", "Relay upstream unavailable")
 	}
 	forward.ModifyResponse = func(resp *http.Response) error {
+		if exchange, _ := resp.Request.Context().Value(passthroughKey{}).(*passthroughExchange); exchange != nil {
+			return relay.observePassthrough(resp, exchange)
+		}
 		if op, _ := resp.Request.Context().Value(resourceRequestKey{}).(*resourceExchange); op != nil {
 			return relay.captureResourceResponse(resp, op)
 		}
@@ -691,6 +699,10 @@ func (relay *outboundRelay) handler(req *Request, forward http.Handler) http.Han
 		}
 		if relay.bootstrap != nil {
 			relay.bootstrap.handle(relay, w, r)
+			return
+		}
+		if req.Passthrough {
+			relay.servePassthrough(w, r, req, forward)
 			return
 		}
 		model := r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/messages")

@@ -20,6 +20,23 @@ export function filterEnvironmentFields(text, policy, keepDefault) {
   return !keepDefault && retained === 0 ? null : result.join('\n');
 }
 
+// Relay passthrough: the client's fields reach every model request through
+// CLAUDE_CODE_EXTRA_BODY, which the CLI reads per request; tool_choice is in
+// the first round's fields only. A failed attempt moves to the next fallback
+// model when the gateway confirms the upstream error allows it.
+async function* passthroughStep($, e, next, passthrough, firstRound, controlURL, controlToken) {
+  const fields = firstRound ? passthrough.first : passthrough.rest;
+  const attempts = [null, ...(passthrough.fallbacks || [])];
+  for (let i = 0; ; i++) {
+    const attempt = attempts[i];
+    await $.env.set('CLAUDE_CODE_EXTRA_BODY', JSON.stringify({ ...fields, ...(attempt?.body || {}) }));
+    const result = yield* next(attempt ? { ...e, model: attempt.model } : e);
+    if (result?.stopReason !== null || i + 1 >= attempts.length) return result;
+    const allowed = await $.http.fetch(controlURL, { method: 'POST', headers: { Authorization: 'Bearer ' + controlToken, 'content-type': 'application/json' }, body: JSON.stringify({ event: 'fallback' }) });
+    if (!allowed.ok) return result;
+  }
+}
+
 export function register(on) {
   let requested = false;
   let searchPending = false;
@@ -30,18 +47,23 @@ export function register(on) {
   let controlURL;
   let controlToken;
   let configuration;
+  let passthroughRounds = 0;
   // CLI recovery can schedule another model request even with max-turns=1.
   // Only bounded discovery and one structured-format continuation may send
   // another model request. Client tool execution never continues here.
   on('turn.step', async function* ($, e, next) {
     const formatContinuation = requested && !clientToolDenied && formatSteps < 1 && await $.env.get('CCGATEWAY_STRUCTURED_OUTPUT') === '1';
-    if (requested && !searchPending && !formatContinuation) {
+    // In passthrough a round that also called a client tool ends the run, even
+    // when a web search of the same round was answered.
+    const handedOff = configuration?.passthrough && clientToolDenied;
+    if (requested && (!searchPending || handedOff) && !formatContinuation) {
       await $.turn.abort({ turnId: e.turnId });
       return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: null, usage: null };
     }
     if (formatContinuation && !searchPending) formatSteps++;
     requested = true;
     searchPending = false;
+    if (configuration?.passthrough) return yield* passthroughStep($, e, next, configuration.passthrough, passthroughRounds++ === 0, controlURL, controlToken);
     if (!configuration?.main_request_scope) return yield* next(e);
     const lease = async event => {
       const response = await $.http.fetch(controlURL, { method: 'POST', headers: { Authorization: 'Bearer ' + controlToken, 'content-type': 'application/json' }, body: JSON.stringify({ event }) });
@@ -160,6 +182,16 @@ export function register(on) {
       } catch { /* Logging failure never grants local tool execution. */ }
     }
     if (search) { searches++; searchPending = true; return next(e); }
+    // Passthrough web_search: the Worker runs the search in a one-shot process
+    // of this account; the model reads the result as WebSearch's own.
+    if (!route && e.tool === 'WebSearch' && configuration?.web_search) {
+      const response = await $.http.fetch(controlURL, { method: 'POST', headers: { Authorization: 'Bearer ' + controlToken, 'content-type': 'application/json' }, body: JSON.stringify({ event: 'web_search', detail: { tool_use_id: e.tool_use_id, input: { query: e.query, allowed_domains: e.allowed_domains, blocked_domains: e.blocked_domains } } }) });
+      if (!response.ok) throw new Error('ccgateway: web search unavailable');
+      const answer = JSON.parse(response.text);
+      searchPending = true;
+      if (answer.error) return { deny: answer.error };
+      return { result: answer.result };
+    }
     if (structured) return next(e);
     clientToolDenied = true;
     return { deny: 'ccgateway: execution belongs to the API client.' };

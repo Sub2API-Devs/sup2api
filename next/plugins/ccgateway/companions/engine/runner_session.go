@@ -66,6 +66,9 @@ type cliSession struct {
 	initialized  bool
 	acc          *Accumulator
 	buffered     []Object // events held until the result frame
+	webBlocks    []Object // passthrough web search: the blocks of finished rounds
+	webUsage     Object   // and their usage
+	webAssembled bool
 	searchUsage  Object
 	searchRounds int
 }
@@ -128,6 +131,11 @@ func (s *cliSession) run() (Object, error) {
 		if s.acc.Done && str(s.acc.Message, "stop_reason") == "refusal" {
 			return s.acc.Message, s.flush()
 		}
+		if s.acc.Done && s.req.CacheWarmup && s.req.Passthrough {
+			// max_tokens 0: the API's answer as the CLI streamed it; nothing
+			// to keep in the native history.
+			return s.acc.Message, s.flush()
+		}
 		if s.acc.Done && s.req.CacheWarmup {
 			answer, err := s.relay.completedWarmup()
 			if err != nil {
@@ -162,7 +170,7 @@ func (s *cliSession) onControlResponse(f Object) error {
 		return fmt.Errorf("CLI rejected initialize")
 	}
 	s.initialized = true
-	if e := s.proc.write(Object{"type": "user", "session_id": s.p.SessionID, "uuid": s.p.InputUUID, "parent_tool_use_id": nil, "message": s.req.pendingWireMessage()}); e != nil {
+	if e := s.proc.write(Object{"type": "user", "session_id": s.p.runSession(), "uuid": s.p.InputUUID, "parent_tool_use_id": nil, "message": s.req.pendingWireMessage()}); e != nil {
 		return fmt.Errorf("cannot submit input")
 	}
 	return nil
@@ -216,6 +224,9 @@ func (s *cliSession) onStreamEvent(f Object) error {
 		return e
 	}
 	if s.acc.Done {
+		if s.req.webSearch != nil && !internalHistoryAssistant(s.req, s.acc.Message) {
+			return s.endWebSearchRound(event)
+		}
 		// Wait for native persistence; discovery rounds remain bounded.
 		if !internalHistoryAssistant(s.req, s.acc.Message) {
 			s.p.recordFinalResponseStop(event)
@@ -245,10 +256,59 @@ func (s *cliSession) checkMod() error {
 	}
 	// Any model response must come from a request that went through the
 	// relay with the client's system messages restored.
-	if len(s.cfg.groups) > 0 && s.relay.Restored() == 0 {
+	if len(s.cfg.groups) > 0 && s.relay.Restored() == 0 && !s.req.Passthrough {
 		return fmt.Errorf("model request bypassed the system message relay")
 	}
 	return nil
+}
+
+// endWebSearchRound ends a round of a passthrough web search request: its
+// WebSearch calls become the client's search blocks; a round whose searches
+// the Worker answered continues in the next one, and the last round's message
+// carries every round's blocks and usage.
+func (s *cliSession) endWebSearchRound(event Object) error {
+	if s.webUsage == nil {
+		s.webUsage = Object{}
+	}
+	// The searches run after the round's message ends: a round of WebSearch
+	// calls only continues; its blocks are converted once all have run.
+	internal := str(s.acc.Message, "stop_reason") == "tool_use"
+	searched := false
+	for _, block := range s.acc.Blocks {
+		if str(block, "type") == "tool_use" {
+			searched = searched || str(block, "name") == "WebSearch"
+			internal = internal && str(block, "name") == "WebSearch"
+		}
+	}
+	if internal && searched {
+		if len(s.webBlocks)+len(s.acc.Blocks) > 4096 {
+			return fmt.Errorf("web search response exceeds the block limit")
+		}
+		usage, _ := s.acc.Message["usage"].(Object)
+		addUsageTotals(s.webUsage, usage)
+		s.webBlocks = append(s.webBlocks, s.acc.Blocks...)
+		s.acc = &Accumulator{}
+		s.buffered = nil
+		return nil
+	}
+	s.p.recordFinalResponseStop(event)
+	return nil
+}
+
+// assembleWebSearch makes the last round's message the client's: every
+// round's blocks, WebSearch calls as search blocks, and all the usage.
+func (s *cliSession) assembleWebSearch() {
+	if s.webAssembled || !s.acc.Done {
+		return
+	}
+	s.webAssembled = true
+	blocks, _ := s.req.webSearch.convertBlocks(append(append([]Object(nil), s.webBlocks...), s.acc.Blocks...), "")
+	usage, _ := s.acc.Message["usage"].(Object)
+	total := copySearchUsage(usage)
+	addUsageTotals(total, s.webUsage)
+	s.acc.Blocks = blocks
+	s.acc.Message["content"] = blocks
+	s.acc.Message["usage"] = s.req.webSearch.webSearchUsage(total)
 }
 
 // endSearchRound discards a completed tool discovery message, keeping its
@@ -315,6 +375,19 @@ func (s *cliSession) flush() error {
 	if !s.req.bufferedResponse() {
 		return nil
 	}
+	if s.req.webSearch != nil {
+		// The client's message, built from every round.
+		if !s.acc.Done {
+			return nil
+		}
+		s.assembleWebSearch()
+		for _, event := range messageEvents(s.acc.Message) {
+			if e := s.emit(event); e != nil {
+				return e
+			}
+		}
+		return nil
+	}
 	if s.req.structuredOutput() && !s.acc.HasClientTool && str(s.acc.Message, "stop_reason") != "refusal" {
 		return emitStructuredMessage(s.acc.Message, s.emit, s.buffered)
 	}
@@ -328,7 +401,7 @@ func (s *cliSession) flush() error {
 
 // finish lets the CLI exit, then reads and checks its native transcript.
 func (s *cliSession) finish(f Object) (Object, error) {
-	if sid := str(f, "session_id"); sid != "" && s.p.Mode == "rebuild" {
+	if sid := str(f, "session_id"); sid != "" && s.p.Mode == "rebuild" && s.p.WireSession == "" {
 		// Importing an external JSONL may assign a fresh native session ID.
 		s.p.SessionID = sid
 	}
@@ -361,7 +434,8 @@ func controlReply(f Object, r *Request) Object {
 	switch str(q, "subtype") {
 	case "can_use_tool":
 		payload = Object{"behavior": "deny", "message": "Tools are executed by the API client", "toolUseID": q["tool_use_id"]}
-		if structuredBlock(str(q, "tool_name"), r) || internalHistoryAssistant(r, Object{"content": []Object{{"type": "tool_use", "name": str(q, "tool_name")}}}) {
+		webSearch := r.webSearch != nil && str(q, "tool_name") == "WebSearch"
+		if webSearch || structuredBlock(str(q, "tool_name"), r) || internalHistoryAssistant(r, Object{"content": []Object{{"type": "tool_use", "name": str(q, "tool_name")}}}) {
 			payload = Object{"behavior": "allow", "updatedInput": q["input"]}
 		}
 	case "mcp_message":
