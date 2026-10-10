@@ -21,7 +21,6 @@ const (
 	ProtocolMessages    = "anthropic.messages"
 	ProtocolCountTokens = "anthropic.count_tokens"
 	VirtualURL          = "https://ccgateway.internal/v1/messages"
-	VirtualCountURL     = "https://ccgateway.internal/v1/messages/count_tokens"
 	DefaultTestModel    = "claude-haiku-4-5-20251001"
 )
 
@@ -114,14 +113,12 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 	if err := validateAccount(in.GetAccount()); err != nil {
 		return nil, err
 	}
-	target := VirtualURL
-	switch in.GetMeta().GetProtocol() {
-	case ProtocolMessages:
-	case ProtocolCountTokens:
-		target = VirtualCountURL
-	default:
-		return nil, status.Error(codes.Unimplemented, "CCGateway supports Anthropic Messages and token counting only")
+	// CCGateway offers no token counting (2026-10-11): the manifest does not
+	// declare count_tokens, so the core never routes it here.
+	if in.GetMeta().GetProtocol() != ProtocolMessages {
+		return nil, status.Error(codes.Unimplemented, "CCGateway supports Anthropic Messages only")
 	}
+	target := VirtualURL
 	model := in.GetMeta().GetModel()
 	if raw := in.GetFields()["model"]; raw != "" {
 		var mapped string

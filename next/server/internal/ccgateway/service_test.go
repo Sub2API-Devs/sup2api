@@ -66,7 +66,7 @@ func TestManagedBoundary(t *testing.T) {
 	for _, tc := range []struct {
 		p, k, u string
 		ok      bool
-	}{{"ccgateway", "managed", VirtualURL, true}, {"ccgateway", "managed", VirtualCountURL, true}, {"ccgateway", "apikey", VirtualCountURL, true}, {"ccgateway", "managed", VirtualCountURL + "?x=1", false}, {"ccgateway", "managed", VirtualCountURL + "/extra", false}, {"other", "managed", VirtualURL, false}, {"ccgateway", "other", VirtualURL, false}, {"ccgateway", "managed", VirtualURL + "?x=1", false}, {"ccgateway", "managed", "http://127.0.0.1/v1/messages", false}} {
+	}{{"ccgateway", "managed", VirtualURL, true}, {"ccgateway", "apikey", VirtualURL, true}, {"ccgateway", "managed", VirtualURL + "/count_tokens", false}, {"ccgateway", "apikey", VirtualURL + "/count_tokens", false}, {"ccgateway", "managed", VirtualURL + "/extra", false}, {"other", "managed", VirtualURL, false}, {"ccgateway", "other", VirtualURL, false}, {"ccgateway", "managed", VirtualURL + "?x=1", false}, {"ccgateway", "managed", "http://127.0.0.1/v1/messages", false}} {
 		if IsManaged(tc.p, tc.k, tc.u) != tc.ok {
 			t.Fatal(tc)
 		}
@@ -127,7 +127,7 @@ func TestDBEncryptedAuditAndModelForward(t *testing.T) {
 	}
 	upstreamCanceled := make(chan struct{})
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("x-api-key") != "secret-api" || r.Header.Get("Authorization") != "" || (r.URL.Path != "/v1/messages" && r.URL.Path != "/v1/messages/count_tokens") {
+		if r.Header.Get("x-api-key") != "secret-api" || r.Header.Get("Authorization") != "" || r.URL.Path != "/v1/messages" {
 			t.Error("incorrect injected authorization")
 		}
 
@@ -140,11 +140,6 @@ func TestDBEncryptedAuditAndModelForward(t *testing.T) {
 		}
 		if policy.AttachmentSource != "client" {
 			t.Error("request policy header lacks attachment_source=client")
-		}
-		if r.URL.Path == "/v1/messages/count_tokens" {
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"input_tokens":42}`))
-			return
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = w.Write([]byte("data: ok\n\n"))
@@ -174,15 +169,10 @@ func TestDBEncryptedAuditAndModelForward(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("body close did not cancel upstream")
 	}
-	countReq, _ := http.NewRequest("POST", VirtualCountURL, strings.NewReader(`{"model":"fixture","messages":[]}`))
-	countReq.Header.Set("Authorization", "Bearer attacker")
-	countRes, err := s.ModelClient().Do(countReq)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer countRes.Body.Close()
-	countBody, err := io.ReadAll(countRes.Body)
-	if err != nil || countRes.StatusCode != 200 || string(countBody) != `{"input_tokens":42}` {
-		t.Fatal("count route/auth/response changed", err, countRes.StatusCode, string(countBody))
+	// No token counting: the transport refuses the count target.
+	countReq, _ := http.NewRequest("POST", VirtualURL+"/count_tokens", strings.NewReader(`{"model":"fixture","messages":[]}`))
+	if countRes, err := s.ModelClient().Do(countReq); err == nil {
+		countRes.Body.Close()
+		t.Fatal("count target forwarded", countRes.StatusCode)
 	}
 }

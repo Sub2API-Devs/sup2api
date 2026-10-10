@@ -16,9 +16,10 @@ import (
 )
 
 const VirtualURL = "https://ccgateway.internal/v1/messages"
-const VirtualCountURL = "https://ccgateway.internal/v1/messages/count_tokens"
 
-func managedURL(raw string) bool { return raw == VirtualURL || raw == VirtualCountURL }
+// managedURL is the one model target: CCGateway offers no token counting
+// (2026-10-11), and its plugin does not declare the endpoint.
+func managedURL(raw string) bool { return raw == VirtualURL }
 
 func IsManaged(plugin, kind, raw string) bool {
 	return plugin == "ccgateway" && (kind == "managed" || kind == "apikey") && managedURL(raw)
