@@ -92,6 +92,10 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case g.Slots <- struct{}{}:
 		defer func() { <-g.Slots }()
 	default:
+		// The Worker is full for a moment, not the account rate limited: the
+		// core then pauses the account for a second and tries another,
+		// instead of its default minute of cooldown.
+		x.w.Header().Set("Retry-After", "1")
 		x.fail(429, "rate_limit_error", "Gateway concurrency limit reached")
 		return
 	}

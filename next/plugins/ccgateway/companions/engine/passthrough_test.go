@@ -9,8 +9,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
@@ -264,6 +266,23 @@ func TestPassthroughContentCodings(t *testing.T) {
 	}
 	if upstream := relay.UpstreamError(); string(upstream.Body) != "LZW" || upstream.Headers.Get("Content-Encoding") != "compress" {
 		t.Fatalf("unread coding %+v", upstream)
+	}
+}
+
+// A full Worker asks the core to wait a second, not to cool the account down
+// for its default minute (no Retry-After means 60 s).
+func TestWorkerFullRetryAfter(t *testing.T) {
+	dir := t.TempDir()
+	cache, err := newCache(filepath.Join(dir, "cache"), 8<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := &Gateway{Runner: &Runner{CLI: "unused"}, Cache: cache, Timeout: 5 * time.Second, Slots: make(chan struct{}, 1)}
+	g.Slots <- struct{}{}
+	w := httptest.NewRecorder()
+	g.ServeHTTP(w, httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"claude-sonnet-4-6","max_tokens":16,"messages":[{"role":"user","content":"hi"}]}`)))
+	if w.Code != 429 || w.Header().Get("Retry-After") != "1" || !strings.Contains(w.Body.String(), "Gateway concurrency limit reached") {
+		t.Fatalf("HTTP%d Retry-After %q %s", w.Code, w.Header().Get("Retry-After"), w.Body.String())
 	}
 }
 
