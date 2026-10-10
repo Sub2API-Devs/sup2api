@@ -83,6 +83,10 @@ func parsePassthroughRequest(body []byte, h http.Header, p RequestPolicy, access
 	}
 	req.Plan = plan
 	req.Passthrough = true
+	// The one generation field the gateway may drop: disabled thinking for a
+	// model that rejects it, when the policy says omit (a client whose model
+	// alias a proxy rewrote sends it on its title and classifier requests).
+	p.applyThinkingDisabledCompat(req)
 	// tool_choice none still offers the tools: the choice itself goes upstream.
 	req.NoTools = false
 	if err := req.configureWebSearch(); err != nil {
@@ -265,6 +269,9 @@ func (r *Request) passthroughBodies() (*passthroughConfig, error) {
 	}
 	cfg := &passthroughConfig{First: map[string]json.RawMessage{}, Rest: map[string]json.RawMessage{}}
 	for _, name := range passthroughBodyFields {
+		if name == "thinking" && r.Plan.thinkingCompat != "" {
+			continue
+		}
 		if raw, exists := fields[name]; exists {
 			cfg.First[name] = compactRaw(raw)
 			cfg.Rest[name] = cfg.First[name]

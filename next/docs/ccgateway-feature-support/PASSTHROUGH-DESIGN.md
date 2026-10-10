@@ -223,7 +223,7 @@ worker 先把工具名换成内层 CLI 里的名字，再把 tool_choice 原样�
     - assistant 预填充 CLI 无法表达（CLI 的请求总以用户输入结尾），返回 400。
   - **新发现**：`CLAUDE_CODE_RESUME_INTERRUPTED_TURN=1` 加 `--resume` 一个以用户消息结尾的会话，CLI 会直接发出请求，不需要任何新输入（`resume_reason: interrupted_turn`）。这可以作为"最后一条消息不经 CLI 输入处理"的通用办法，但图片仍会附加来源文字，见上。
 - **历史**：worker 把客户端历史写成 CLI 的原生会话文件。citations、文档（含 `file_id`）、图片原样保留，CLI 照原样发出（第 9 节已实测）。连续的 system 消息按 CLI 的方式合并，内容不变。
-- **删除** `thinking_disabled_compat` 开关。CLI 对 opus-5-5 不会发 disabled，第 3 节的做法本身就和官方一致。
+- ~~删除 `thinking_disabled_compat` 开关~~：**保留，透传下同样生效**（2026-10-11，用户决定）。当初的理由是"CLI 对 opus-5-5 不会发 disabled"，但发 disabled 的是客户端：cc-switch 把模型名改成 opus-5-5 后，CC 的标题、分类器请求仍带 `thinking: disabled`，透传下得到上游原样的 400。开 `omit` 时，透传在入口去掉这个字段（不放进 EXTRA_BODY，CLI 用 `--thinking disabled`，对这些模型不发 thinking），这是透传下网关唯一会去掉的生成字段。
 
 ## 12. 上线
 
@@ -338,7 +338,6 @@ worker 先把工具名换成内层 CLI 里的名字，再把 tool_choice 原样�
 3. 没问题后改成 `relay_mode=passthrough`，全量切换。
 4. 稳定后另起一个提交删除 legacy：
    - 中继改写和桥接；
-   - `thinking_disabled_compat`；
    - `pass_upstream_errors`；
    - 载体还原、主请求标记。
 5. 同步更新 CONTRACTS、特性目录、SUBAGENT-DESIGN、RUNBOOK。
@@ -406,6 +405,7 @@ First privately list…` 变成只剩 `<total_tokens>`）。网关发给上游�
    - 核心对带 `fallback-credit` beta 的请求加 `X-CCGateway-Fallback-Credit-Track`，这类请求的 CLI 带 `--no-session-persistence`，不写会话记录；结束时网关仍去读记录，读不到就把上游的 200 变成 502，核心再按上游故障冷却账号。10-10 #22/#23 透传下 61 条这种 502 全部是这类请求（"离开后回来"总结、带 system 的主循环轮次）。legacy 下也有，所以比透传更早。
    - Claude Code 启动时发的非流式 `max_tokens: 1` 探测：上游没有内容就停在 max_tokens，CLI 不记录这条回答，同样 502。
    - 现在：不写记录的运行不再读记录；透传下读不到记录也照常返回上游的回答，只是这一轮不登记，下一轮按客户端历史重建。用例 `TestRealCLIPassthroughCreditTracking`、`TestRealCLIPassthroughMaxTokensStop`（用线上原请求复现后写成）。
+21. **`thinking_disabled_compat` 在透传下生效**（0.1.35，用户决定）：见第 11 节。10-10 透传后用户本机 CC 的会话标题请求（opus-5-5 + `thinking: disabled`）全部 400。`TestRealCLIThinkingDisabledCompat` 分 legacy/passthrough 两种跑，去掉修复后 passthrough 子用例失败。
 
 **测试结果（本机 CC 2.1.292，假上游）**：
 - `TestRealCLIRelayPassthrough` 10 个用例全部通过：字段原样、tool_choice 只在第 0 轮、safeguards 与审查结论、`max_tokens: 0`、529 原样且不重试、400 原样、fallbacks、子代理 U/A' 与续接、最后一条消息里的图片不被改动（去掉拆分后用例失败）、入口 400。

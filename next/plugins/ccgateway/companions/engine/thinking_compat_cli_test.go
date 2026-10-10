@@ -17,8 +17,15 @@ import (
 
 // thinking_disabled_compat omit: the upstream request carries no thinking,
 // exactly as for a client that sent none, and nothing else changes; pass
-// forwards disabled as sent.
+// forwards disabled as sent. The same in relay passthrough (2026-10-11: Claude
+// Code's title requests got the API's 400 there).
 func TestRealCLIThinkingDisabledCompat(t *testing.T) {
+	for _, mode := range []string{"legacy", "passthrough"} {
+		t.Run(mode, func(t *testing.T) { testRealCLIThinkingDisabledCompat(t, mode) })
+	}
+}
+
+func testRealCLIThinkingDisabledCompat(t *testing.T, mode string) {
 	cli := os.Getenv("CCG_REAL_CLI")
 	if cli == "" {
 		t.Skip("set CCG_REAL_CLI for the thinking compatibility test")
@@ -67,6 +74,7 @@ func TestRealCLIThinkingDisabledCompat(t *testing.T) {
 	send := func(label, compat string, thinking Object) Object {
 		p := defaultRequestPolicy()
 		p.ThinkingDisabledCompat = compat
+		p.RelayMode = mode
 		body := Object{"model": "claude-opus-5-5", "max_tokens": 64, "messages": []any{Object{"role": "user", "content": "Answer yes or no: is 1 < 2?"}}}
 		if thinking != nil {
 			body["thinking"] = thinking
@@ -75,7 +83,7 @@ func TestRealCLIThinkingDisabledCompat(t *testing.T) {
 		req := httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(raw))
 		req.Header = policyHeaders(p)
 		req.Header.Set("Content-Type", "application/json")
-		setTestSession(t, req, "thinking-compat-"+label)
+		setTestSession(t, req, "thinking-compat-"+mode+"-"+label)
 		res := httptest.NewRecorder()
 		mu.Lock()
 		before := len(captured)
