@@ -380,6 +380,7 @@ worker 先把工具名换成内层 CLI 里的名字，再把 tool_choice 原样�
 10. **流式**：有 web_search 时整条回答在最后一轮结束后一次发出（各轮内容要合并），其余请求照常边收边发。
 11. **助手历史托管**（helper history）：passthrough 下不再需要，收到托管请求返回 400。之前在 legacy 下登记过托管链的会话，切到 passthrough 后这类请求会 400，需要客户端开新会话。
 12. **Mod 校验**：CLI 对 `claude plugin validate` 不通过的 hooks 模块不报错、直接不加载（例如把 `$` 传给非顶层函数），表现为 "Mod did not acknowledge loading"。真实 CLI 测试开头先校验两个 Mod。
+13. **响应压缩**（0.1.30，#23 实测发现）：CLI 请求带 `Accept-Encoding: gzip, deflate, br, zstd`，中继原样发出，真实 API 的错误体用 br、流用 gzip。0.1.29 只解 gzip/deflate 的错误体，br 错误体没解开，核心认不出官方错误，客户端收到通用的 "upstream returned HTTP 400"；流式响应带编码时也跳过了错误事件与用量观察。现在模型请求的响应先按 gzip/deflate/br/zstd 解码再观察，CLI 收到解码后的同一内容（去掉 Content-Encoding/Content-Length）；请求头不改。
 
 **测试结果（本机 CC 2.1.292，假上游）**：
 - `TestRealCLIRelayPassthrough` 10 个用例全部通过：字段原样、tool_choice 只在第 0 轮、safeguards 与审查结论、`max_tokens: 0`、529 原样且不重试、400 原样、fallbacks、子代理 U/A' 与续接、最后一条消息里的图片不被改动（去掉拆分后用例失败）、入口 400。

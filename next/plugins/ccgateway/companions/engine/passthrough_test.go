@@ -1,11 +1,19 @@
 package engine
 
 import (
+	"bytes"
+	"compress/gzip"
+	"compress/zlib"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/andybalholm/brotli"
+	"github.com/klauspost/compress/zstd"
 )
 
 func passthroughHeader(betas ...string) http.Header {
@@ -154,6 +162,82 @@ func TestPassthroughFallbackGate(t *testing.T) {
 	}
 	if (&outboundRelay{}).allowFallback() {
 		t.Error("fallback without an upstream error")
+	}
+}
+
+// The API codes errors and streams in whatever the CLI accepts; the relay
+// reads them decoded and the CLI receives them uncoded.
+func TestPassthroughContentCodings(t *testing.T) {
+	official := `{"type":"error","error":{"type":"invalid_request_error","message":"temperature is not supported"}}`
+	stream := "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":3}}}\n\n" +
+		"event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}\n\n"
+	encode := map[string]func([]byte) []byte{
+		"gzip": func(b []byte) []byte {
+			var out bytes.Buffer
+			w := gzip.NewWriter(&out)
+			w.Write(b)
+			w.Close()
+			return out.Bytes()
+		},
+		"deflate": func(b []byte) []byte {
+			var out bytes.Buffer
+			w := zlib.NewWriter(&out)
+			w.Write(b)
+			w.Close()
+			return out.Bytes()
+		},
+		"br": func(b []byte) []byte {
+			var out bytes.Buffer
+			w := brotli.NewWriter(&out)
+			w.Write(b)
+			w.Close()
+			return out.Bytes()
+		},
+		"zstd": func(b []byte) []byte {
+			w, _ := zstd.NewWriter(nil)
+			return w.EncodeAll(b, nil)
+		},
+	}
+	respond := func(status int, contentType, coding string, body []byte) *http.Response {
+		request := httptest.NewRequest("POST", "/v1/messages", nil)
+		return &http.Response{StatusCode: status, Request: request, ContentLength: int64(len(body)), Body: io.NopCloser(bytes.NewReader(body)),
+			Header: http.Header{"Content-Type": {contentType}, "Content-Encoding": {coding}, "Content-Length": {fmt.Sprint(len(body))}, "Request-Id": {"req_1"}}}
+	}
+	for coding, enc := range encode {
+		relay := &outboundRelay{passthrough: true}
+		resp := respond(400, "application/json", coding, enc([]byte(official)))
+		if err := relay.observePassthrough(resp, &passthroughExchange{model: true}); err != nil {
+			t.Fatal(err)
+		}
+		got, _ := io.ReadAll(resp.Body)
+		upstream := relay.UpstreamError()
+		if upstream == nil || string(upstream.Body) != official || string(got) != official || upstream.Headers.Get("Content-Encoding") != "" || resp.Header.Get("Content-Encoding") != "" || resp.Header.Get("Content-Length") != "" {
+			t.Fatalf("%s error: %+v, CLI read %q", coding, upstream, got)
+		}
+
+		relay = &outboundRelay{passthrough: true}
+		var events []string
+		relay.observeEvent = func(event Object) { events = append(events, str(event, "type")) }
+		resp = respond(200, "text/event-stream; charset=utf-8", coding, enc([]byte(stream)))
+		if err := relay.observePassthrough(resp, &passthroughExchange{model: true}); err != nil {
+			t.Fatal(err)
+		}
+		got, _ = io.ReadAll(resp.Body)
+		if string(got) != stream || strings.Join(events, ",") != "message_start" {
+			t.Fatalf("%s stream: events %v, CLI read %q", coding, events, got)
+		}
+		if upstream := relay.UpstreamError(); upstream == nil || upstream.Status != 529 || !strings.Contains(string(upstream.Body), "Overloaded") {
+			t.Fatalf("%s stream error %+v", coding, upstream)
+		}
+	}
+
+	// A coding the relay does not read reaches the client with its bytes.
+	relay := &outboundRelay{passthrough: true}
+	if err := relay.observePassthrough(respond(400, "application/json", "compress", []byte("LZW")), &passthroughExchange{model: true}); err != nil {
+		t.Fatal(err)
+	}
+	if upstream := relay.UpstreamError(); string(upstream.Body) != "LZW" || upstream.Headers.Get("Content-Encoding") != "compress" {
+		t.Fatalf("unread coding %+v", upstream)
 	}
 }
 

@@ -4,7 +4,11 @@ go 1.24
 
 require github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 
-require github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts v0.0.0
+require (
+	github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts v0.0.0
+	github.com/andybalholm/brotli v1.2.0
+	github.com/klauspost/compress v1.18.3
+)
 
 replace github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts => ./contracts
 

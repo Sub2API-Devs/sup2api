@@ -2,8 +2,8 @@ package engine
 
 import (
 	"bytes"
-	"compress/flate"
 	"compress/gzip"
+	"compress/zlib"
 	"context"
 	"errors"
 	"fmt"
@@ -11,11 +11,15 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/andybalholm/brotli"
+	"github.com/klauspost/compress/zstd"
+
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/httpfacts"
 )
 
 // The outbound relay in passthrough: requests and responses go through as the
-// CLI and the API wrote them. The relay only reads, for the gateway:
+// CLI and the API wrote them (a model response without its content coding).
+// The relay only reads, for the gateway:
 //   - the status, the provider facts (rate-limit headers, request ID) and the
 //     body of an upstream error, which the client receives as sent;
 //   - the CLI's request, for the request log when the account keeps one, and
@@ -98,16 +102,23 @@ func (relay *outboundRelay) checkPassthroughTools(req *Request, body []byte) err
 	return nil
 }
 
-// observePassthrough reads an upstream answer without changing it.
+// observePassthrough reads an upstream answer without changing its content.
 func (relay *outboundRelay) observePassthrough(resp *http.Response, exchange *passthroughExchange) error {
 	if tr, ok := resp.Request.Context().Value(traceExchangeKey{}).(traceExchange); ok {
+		// The headers as the API sent them; the body as the CLI receives it.
 		tr.diagnostic.artifact(tr.prefix+"-response.json", Object{"status": resp.StatusCode, "headers": safeHeaders(resp.Header)})
 		tr.diagnostic.trace("upstream_response", Object{"exchange": tr.prefix, "status": resp.StatusCode})
-		resp.Body = &traceReader{ReadCloser: resp.Body, diagnostic: tr.diagnostic, name: tr.prefix + "-response.body"}
+		defer func() {
+			resp.Body = &traceReader{ReadCloser: resp.Body, diagnostic: tr.diagnostic, name: tr.prefix + "-response.body"}
+		}()
 	}
 	if !exchange.model {
 		return nil
 	}
+	// The CLI asks for gzip, deflate, br and zstd, and the API uses them for
+	// errors and streams alike; the relay removes the coding so it can read
+	// what it observes. The CLI receives the same content uncoded.
+	decodeResponse(resp)
 	if facts, _ := resp.Request.Context().Value(providerResponseKey{}).(*providerResponseFacts); facts != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		facts.mu.Lock()
 		facts.header = clientFacts(resp.Header)
@@ -120,12 +131,11 @@ func (relay *outboundRelay) observePassthrough(resp *http.Response, exchange *pa
 		if err != nil {
 			return err
 		}
-		upstream := &upstreamError{Status: resp.StatusCode, ContentType: resp.Header.Get("Content-Type"), Headers: clientFacts(resp.Header)}
-		encoding := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Encoding")))
-		if upstream.Body = decodeContent(raw, encoding); upstream.Body == nil {
-			// Not decodable here: the client gets the bytes with their encoding.
-			upstream.Body = raw
-			upstream.Headers.Set("Content-Encoding", resp.Header.Get("Content-Encoding"))
+		upstream := &upstreamError{Status: resp.StatusCode, ContentType: resp.Header.Get("Content-Type"), Headers: clientFacts(resp.Header), Body: raw}
+		if encoding := resp.Header.Get("Content-Encoding"); encoding != "" {
+			// A coding the relay does not read: the client gets the bytes
+			// with their encoding.
+			upstream.Headers.Set("Content-Encoding", encoding)
 		}
 		relay.recordUpstream(upstream)
 		return nil
@@ -158,29 +168,64 @@ func clientFacts(h http.Header) http.Header {
 	return out
 }
 
-// decodeContent is the body without its content coding; nil when the coding
-// is not one the relay reads.
-func decodeContent(raw []byte, encoding string) []byte {
-	var reader io.Reader
+// decodeResponse replaces a body in one content coding the relay reads with
+// its decoded stream, and drops the coding from the headers. Other bodies are
+// left as they are.
+func decodeResponse(resp *http.Response) {
+	encoding := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Encoding")))
+	var open func(io.Reader) (io.ReadCloser, error)
 	switch encoding {
 	case "", "identity":
-		return raw
+		resp.Header.Del("Content-Encoding")
+		return
 	case "gzip", "x-gzip":
-		gz, err := gzip.NewReader(bytes.NewReader(raw))
-		if err != nil {
-			return nil
-		}
-		reader = gz
+		open = func(r io.Reader) (io.ReadCloser, error) { return gzip.NewReader(r) }
 	case "deflate":
-		reader = flate.NewReader(bytes.NewReader(raw))
+		open = func(r io.Reader) (io.ReadCloser, error) { return zlib.NewReader(r) }
+	case "br":
+		open = func(r io.Reader) (io.ReadCloser, error) { return io.NopCloser(brotli.NewReader(r)), nil }
+	case "zstd":
+		open = func(r io.Reader) (io.ReadCloser, error) {
+			d, err := zstd.NewReader(r, zstd.WithDecoderConcurrency(1))
+			if err != nil {
+				return nil, err
+			}
+			return d.IOReadCloser(), nil
+		}
 	default:
-		return nil
+		return
 	}
-	out, err := io.ReadAll(io.LimitReader(reader, 32<<20))
-	if err != nil {
-		return nil
+	resp.Body = &decodedBody{body: resp.Body, open: open}
+	resp.Header.Del("Content-Encoding")
+	resp.Header.Del("Content-Length")
+	resp.ContentLength = -1
+	resp.Uncompressed = true
+}
+
+// decodedBody opens its decoder on the first read, so a stream's headers
+// reach the CLI before its first event.
+type decodedBody struct {
+	body    io.ReadCloser
+	open    func(io.Reader) (io.ReadCloser, error)
+	decoder io.ReadCloser
+	err     error
+}
+
+func (d *decodedBody) Read(p []byte) (int, error) {
+	if d.decoder == nil && d.err == nil {
+		d.decoder, d.err = d.open(d.body)
 	}
-	return out
+	if d.err != nil {
+		return 0, d.err
+	}
+	return d.decoder.Read(p)
+}
+
+func (d *decodedBody) Close() error {
+	if d.decoder != nil {
+		_ = d.decoder.Close()
+	}
+	return d.body.Close()
 }
 
 // recordUpstream keeps the latest upstream error of the run (a fallback
