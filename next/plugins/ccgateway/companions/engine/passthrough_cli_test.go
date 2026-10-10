@@ -475,8 +475,8 @@ func TestRealCLIRelayPassthrough(t *testing.T) {
 		req.Header.Set(policyHeader, `{"relay_mode":"passthrough"}`)
 		res := httptest.NewRecorder()
 		g.ServeHTTP(res, req)
-		if res.Code != 400 {
-			t.Errorf("count_tokens: HTTP%d", res.Code)
+		if res.Code != 400 || !strings.Contains(res.Body.String(), `"message":"count_tokens is not supported by this gateway"`) {
+			t.Errorf("count_tokens: HTTP%d %s", res.Code, res.Body.String())
 		}
 		if got := since(n); len(got) != 0 {
 			t.Fatalf("%d upstream requests for refused requests", len(got))

@@ -178,8 +178,12 @@ func (x *exchange) admit() bool {
 		return parsePolicyRequestWithHelper(body, h, access, helper)
 	}
 	if r.URL.Path == "/v1/messages/count_tokens" {
+		// CCGateway offers no token counting (user decision, 2026-10-11). The
+		// endpoint stays declared so a client gets this 400 at once; with no
+		// route it would get a 529, which SDKs retry. Claude Code then
+		// estimates locally.
 		if policy, err := requestPolicy(r.Header); err == nil && policy.RelayMode == "passthrough" {
-			x.fail(400, "invalid_request_error", passthroughRefusal("count_tokens", "Claude Code has no token counting of its own").Error())
+			x.fail(400, "invalid_request_error", "count_tokens is not supported by this gateway")
 			return false
 		}
 		parse = parseTokenCountRequestWithResources
