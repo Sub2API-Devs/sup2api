@@ -9,7 +9,7 @@ export default {
     loadFailed: 'The feature catalog is unavailable or unsupported by this core. Support cannot be confirmed; existing settings are unchanged.',
     retry: 'Reload', search: 'Search features, parameters or betas', filter: 'Adaptation status', all: 'All statuses',
     status: { supported: 'Supported', partial: 'Partial support', unsupported: 'Not supported', unverified: 'Not verified' },
-    body: 'Request parameters', requirements: 'Requirements: ', implementation: 'Implementation and evidence',
+    body: 'Request parameters', requirements: 'Requirements: ', implementation: 'Implementation and evidence', mechanisms: 'Implementation and evidence',
     empty: 'No matching features', version: 'Catalog version: {version}', previous: 'Previous', next: 'Next',
     ccSettings: 'View CC tool search settings',
     ccTitle: 'CC features',

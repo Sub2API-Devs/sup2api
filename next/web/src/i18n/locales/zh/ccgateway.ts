@@ -9,7 +9,7 @@ export default {
     loadFailed: '特性目录暂不可用，或当前核心尚不支持此目录。无法确认支持范围；现有配置不变。',
     retry: '重新加载', search: '搜索特性、参数或 Beta', filter: '适配状态', all: '全部状态',
     status: { supported: '自然支持', partial: '有限支持', unsupported: '暂不支持', unverified: '尚未验证' },
-    body: '请求参数', requirements: '适用条件：', implementation: '查看处理机制与证据',
+    body: '请求参数', requirements: '适用条件：', implementation: '查看处理机制与证据', mechanisms: '处理机制与证据',
     empty: '没有匹配的特性', version: '目录版本：{version}', previous: '上一页', next: '下一页',
     ccSettings: '查看 CC 工具搜索运行配置',
     ccTitle: 'CC 特性',

@@ -19,10 +19,21 @@ describe('CCGateway feature catalog', () => {
     const w = mount(FeatureSupport, { props: { scope: 'cc' }, global: { plugins: [i18n] } })
     await flushPromises()
     expect(w.find('[data-testid="feature-F-STREAM"]').exists()).toBe(false)
-    await w.get('[data-testid="feature-F-SAFEGUARDS"] button').trigger('click')
+    // CC features are shown in full: no toggle, no folded mechanisms.
+    expect(w.find('[data-testid="feature-F-SAFEGUARDS"] button[aria-expanded]').exists()).toBe(false)
+    expect(w.find('details').exists()).toBe(false)
     expect(w.text()).toContain('dangerous-tool-use-2026-09-03')
+    expect(w.text()).toContain('cli_env')
     expect(w.findAll('input[type="checkbox"]')).toHaveLength(0)
     expect(w.emitted('update:modelValue')).toBeUndefined()
+  })
+  it('lists every CC feature on one page', async () => {
+    mocks.get.mockResolvedValue(catalog(Array.from({ length: 12 }, (_, index) => ({ ...feature(`F-CC-${index}`), scope: 'cc' as const }))))
+    const w = mount(FeatureSupport, { props: { scope: 'cc' }, global: { plugins: [i18n] } })
+    await flushPromises()
+    expect(w.findAll('[data-testid^="feature-F-CC-"]')).toHaveLength(12)
+    expect(w.findAll('[id^="feature-detail-"]')).toHaveLength(12)
+    expect(w.text()).not.toContain('下一页')
   })
   beforeEach(() => { vi.clearAllMocks(); i18n.global.locale.value = 'zh' })
   async function render() {

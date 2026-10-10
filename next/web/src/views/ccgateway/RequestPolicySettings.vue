@@ -4,13 +4,11 @@
 // attachments (environment, model, date...) the model sees and from where, and
 // how unsupported client requests are handled. Features the official API
 // supports need no setting.
-import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FeatureSupport from './FeatureSupport.vue'
 import { attachmentTypes, type AttachmentType, type AttachmentSource, type RequestPolicy } from './requestPolicy'
 const policy = defineModel<RequestPolicy>({ required: true })
 const { t } = useI18n()
-const catalogOpen = ref(false)
 function setAttachmentSource(type: AttachmentType, event: Event) {
   const value = (event.target as HTMLSelectElement).value
   const sources = { ...policy.value.attachment_sources }
@@ -35,11 +33,8 @@ function setEnvironmentField(field: 'workingDirectory' | 'platform', event: Even
 <template>
   <section class="space-y-4" data-testid="request-policy">
     <div><h4 class="font-semibold">{{ t('ccgateway.features.ccTitle') }}</h4><p class="mt-1 text-xs text-gray-500">{{ t('ccgateway.features.ccHint') }}</p></div>
-    <!-- The CC feature catalog (--add-dir, safeguards, ...) is read when opened. -->
-    <details class="rounded-lg border border-gray-200 p-3 dark:border-dark-700" data-testid="cc-feature-catalog" @toggle="catalogOpen = catalogOpen || ($event.target as HTMLDetailsElement).open">
-      <summary class="cursor-pointer text-sm font-medium">{{ t('ccgateway.features.implementation') }}</summary>
-      <FeatureSupport v-if="catalogOpen" scope="cc" class="mt-3" />
-    </details>
+    <!-- The CC feature catalog (--add-dir, safeguards, ...) is shown in full. -->
+    <FeatureSupport scope="cc" class="rounded-lg border border-gray-200 p-3 dark:border-dark-700" data-testid="cc-feature-catalog" />
     <section class="space-y-3 rounded-lg border border-gray-200 p-3 dark:border-dark-700" data-testid="cc-runtime-settings">
       <h5 class="text-sm font-medium">{{ t('ccgateway.features.ccRuntime') }}</h5>
       <div class="grid gap-3 md:grid-cols-2">
