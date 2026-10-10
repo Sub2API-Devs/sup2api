@@ -179,9 +179,8 @@ func (x *exchange) admit() bool {
 	}
 	if r.URL.Path == "/v1/messages/count_tokens" {
 		// CCGateway offers no token counting (user decision, 2026-10-11). The
-		// endpoint stays declared so a client gets this 400 at once; with no
-		// route it would get a 529, which SDKs retry. Claude Code then
-		// estimates locally.
+		// plugin does not declare the endpoint and the core's transport refuses
+		// it, so this answer is only a backstop.
 		if policy, err := requestPolicy(r.Header); err == nil && policy.RelayMode == "passthrough" {
 			x.fail(400, "invalid_request_error", "count_tokens is not supported by this gateway")
 			return false
