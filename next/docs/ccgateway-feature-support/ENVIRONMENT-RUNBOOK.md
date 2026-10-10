@@ -1,21 +1,27 @@
 # CCGateway 环境与操作指南
 
-> **2026-10-10 23:40（北京时间）线上版本，优先于下文：**
-> - 核心 **v0.1.103**（源码 `d978800c2`，manifest `6513806d92e7…`），ccgateway **0.1.31**。#21/#22/#23 worker 原地更新，容器 ID 不变；#20 已停用，没有容器。
+> **2026-10-10 23:50（北京时间）线上版本，优先于下文：**
+> - 核心 **v0.1.104**（源码 `f785d15c3`，manifest `d99810501197…`），ccgateway **0.1.32**。#21/#22/#23 worker 原地更新，容器 ID 不变；#20 已停用，没有容器。
 > - **出站中继已全量切到透传**（23:02，`relay_mode=passthrough`，`relay_passthrough_accounts` 为空）。请求由内层 CLI 构造，中继不改请求和响应。设计与实测见 `PASSTHROUGH-DESIGN.md` 第 15 节。
 >   - 切换后验证：#21（API Key 账号，用账号测试）、#22、#23 都走透传并返回 200。
 >   - 回退：控制台 CC 特性把"出站中继模式"改回"适配"即可，worker 不用重启。旧代码保留到透传稳定后再删。
 > - 同日先后发布、已被取代的版本：
 >   - .100：透传 0.1.29；
 >   - .101：0.1.30，解码 br/zstd 响应；
->   - .102：0.1.31，附件只用客户端、`caller: direct`、非流式 `max_tokens: 0`。
-> - **.103 新增日志**：上游返回 5xx 时，核心写一条 WARN `gateway: upstream server error`（状态、`Server`、上游 `request-id`、响应体前 300 字节），用 `docker logs sup2api-N` 查看。原因是 key 14 的 502 没有任何一层留下记录，见下一条。
+>   - .102：0.1.31，附件只用客户端、`caller: direct`、非流式 `max_tokens: 0`；
+>   - .103：5xx 诊断日志（见下）。
+> - **.104 / 0.1.32：worker 满载不再冷却账号一分钟**。
+>   - 问题：worker 同时最多跑 4 个 CLI，账号的 `max_concurrency` 是 10。第 5 个并发请求收到 429 `Gateway concurrency limit reached`，核心按没有 `Retry-After` 的限流处理，冷却账号 60 秒。冷却期间请求没有可用账号，返回 529。
+>   - 修复：现在带 `Retry-After: 1`，账号只暂停 1 秒，请求改派到其他账号。
+>   - 线上没能直接复现：用户 1 自身的并发上限是 5，会先拦下请求。改为单元测试覆盖（`TestWorkerFullRetryAfter`、`TestFullWorkerPausesTheAccountBriefly`）。
+> - **.103 起的诊断日志**：上游返回 5xx 时，核心写一条 WARN `gateway: upstream server error`（状态、`Server`、上游 `request-id`、响应体前 300 字节），用 `docker logs sup2api-N` 查看。原因是 key 14 的 502 没有任何一层留下记录，见下一条。
 > - **待查：key 14 的 502**。
 >   - key 14 的流量来自本机 127.0.0.1，很可能是同机 viptokens.net 转发的用户请求，上下文 10–23 万 token，并发高。
 >   - 这批流量有约一半 502（`upstream server error (502)`，token 为 0）；旧模式下就有，10-09 18 点和 10-10 4 点更多，不是透传引入的。
 >   - 已排除的来源：worker 请求日志里没有这些请求，caddy 没有 ccmax 站点的错误，controller 只会返回 503，核心隧道失败是连接错误而不是 502。
->   - 下一步：等 .103 的 WARN 日志确认是谁返回的 502。
-> - 测试用的临时配置已全部还原（分组 5、账号 23 的分组、用户 1 的分组、临时 key 24–26）。
+>   - 本机复现没有出现 502：同会话并发、3 路并行子代理、8.5 MB 和 11.3 MB 的图片请求都正常。
+>   - 下一步：key 14 再出现 502 时，看 WARN 日志确认是谁返回的。
+> - 测试用的临时配置已全部还原（分组 5、账号 23 的分组、用户 1 的分组），临时 key 24–26 和 OVH 上的 `/tmp/ccg_api.py` 已删除。
 
 > **2026-10-10 16:00（北京时间）线上版本（已被上面替代）：**
 > - 核心 **v0.1.99**（源码 `7fa0cb9df`，manifest `ac827a88a667…`），ccgateway **0.1.28**。#21/#22/#23 worker 原地更新，容器 ID 不变。
