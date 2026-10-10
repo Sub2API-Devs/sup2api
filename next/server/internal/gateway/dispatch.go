@@ -544,6 +544,13 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		raw, _ := readPrefix(resp.Body, maxErrorBody)
 		ct := resp.Header.Get("Content-Type")
+		if resp.StatusCode >= 500 {
+			// A server error names no cause in the usage log; who answered
+			// (a proxy on the way or the upstream itself) is in these.
+			slog.WarnContext(ctx, "gateway: upstream server error", "request_id", c.rid, "plugin", rt.binding.Plugin.Key,
+				"account", acc.ID, "status", resp.StatusCode, "content_type", ct, "server", resp.Header.Get("Server"),
+				"upstream_request_id", resp.Header.Get("Request-Id"), "body", truncateUTF8(string(raw), 300))
+		}
 		var res attemptResult
 		if execution != nil {
 			res = execution.classify(ctx, resp.StatusCode, resp.Header, raw, "")
