@@ -157,8 +157,9 @@ func (s *Service) fetchAccountModels(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	res, err := s.fetchModels(ctx, bt, &pluginv1.Account{Id: a.ID, Name: a.Name, Type: a.Type,
-		CredentialsJson: string(secret), SettingsJson: string(settings)}, hc, a.ProxyID != nil)
+	account := a.pluginAccount(secret)
+	account.SettingsJson = string(settings)
+	res, err := s.fetchModels(ctx, bt, account, hc, a.ProxyID != nil)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return

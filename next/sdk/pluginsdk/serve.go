@@ -169,6 +169,9 @@ func buildOptions(opts []Option) options {
 // Capabilities lists the capability ids p implements.
 func Capabilities(p any) []string {
 	var caps []string
+	if _, ok := p.(AccountLifecycle); ok {
+		caps = append(caps, manifest.CapAccountLifecycle)
+	}
 	if _, ok := p.(Executor); ok {
 		caps = append(caps, manifest.CapPlatformExecute)
 	}
@@ -418,6 +421,13 @@ type platformServer struct {
 	pluginv1.UnimplementedPlatformServiceServer
 	impl    Platform
 	runtime *runtime
+}
+
+func (s platformServer) OnAccountLifecycle(ctx context.Context, in *pluginv1.AccountLifecycleRequest) (*pluginv1.AccountLifecycleResponse, error) {
+	if lifecycle, ok := s.impl.(AccountLifecycle); ok {
+		return lifecycle.OnAccountLifecycle(ctx, in)
+	}
+	return nil, status.Error(codes.Unimplemented, "account lifecycle is not implemented")
 }
 
 func (s platformServer) ValidateCredentials(ctx context.Context, in *pluginv1.ValidateCredentialsRequest) (*pluginv1.ValidateCredentialsResponse, error) {

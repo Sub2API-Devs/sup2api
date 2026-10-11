@@ -4,6 +4,7 @@ import { i18n } from '@/i18n'
 import type { Account, AccountType } from '@/api/types'
 import AccountEditor from './AccountEditor.vue'
 import ProxyPicker from '@/components/ProxyPicker.vue'
+import CCGatewayAccountAuth from '@/views/ccgateway/CCGatewayAccountAuth.vue'
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), list: vi.fn().mockResolvedValue({ items: [] }) }))
 vi.mock('@sub2api/host', () => ({ api: mocks }))
@@ -46,6 +47,28 @@ describe('account container environment', () => {
     mocks.get.mockImplementation((path: string) => Promise.resolve(path === '/accounts/auto-disable' ? { enabled: true } : path.endsWith('/form') ? { schema: { type: 'object' } } : location))
     mocks.patch.mockResolvedValue(savedAccount())
     mocks.post.mockResolvedValue(savedAccount())
+  })
+
+  it('uses the declared preparation endpoint and locks the prepared environment', async () => {
+    const w = render()
+    await w.setProps({ accountType: { ...accountType, type: 'managed', lifecycle: { preparation: true, required: true } } })
+    await chooseProxy(w, 10)
+    const preparation = w.getComponent(CCGatewayAccountAuth)
+    expect(preparation.props('preparationUrl')).toBe('/account-types/ccgateway/managed/preparations')
+    expect(preparation.props('settings')).toEqual({ locale: 'en-US', timezone: location.timezone })
+    expect(preparation.props('configurationReady')).toBe(true)
+    preparation.vm.$emit('state', { key: 'd0123456789abcdef', authorized: false })
+    await flushPromises()
+    expect(w.get('[data-testid="container-locale"]').attributes('disabled')).toBeDefined()
+    await chooseProxy(w, 11)
+    expect(value(w, 'locale')).toBe('en-US')
+    expect(mocks.get.mock.calls.filter(([path]) => path.endsWith('/location'))).toHaveLength(1)
+  })
+
+  it('shows deferred runtime configuration without claiming it has applied', async () => {
+    const w = render({ ...savedAccount(), lifecycle_sync: { status: 'pending', code: 'environment_requires_new_runtime' } })
+    await flushPromises()
+    expect(w.get('[data-testid="account-lifecycle-status"]').text()).toContain('现有容器保持不变')
   })
 
   it('prefills from the selected proxy, then allows manual overrides and submits them', async () => {

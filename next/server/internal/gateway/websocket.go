@@ -505,8 +505,7 @@ func (s *wsSession) dial(ctx context.Context, cl *call, ref *core.AccountRef) at
 		return unavailable("account type not enabled", errors.New(ref.PluginKey+"/"+ref.Type))
 	}
 	s.recordAccount(cl, acc.ID, rt)
-	pacct := &pluginv1.Account{Id: acc.ID, Name: acc.Name, Platform: cl.platform, Type: rt.binding.Type.ID,
-		CredentialsJson: string(acc.Credentials), SettingsJson: string(acc.Settings)}
+	pacct := acc.PluginAccount(cl.platform)
 	body := cl.body
 	upModel := ref.MapModel(cl.model)
 	if upModel != cl.model && rt.modelPath != "" {

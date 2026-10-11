@@ -35,6 +35,7 @@ var passwordAAD = []byte("proxy")
 
 // Options tunes the service; zero values select defaults.
 type Options struct {
+	Events core.EventPublisher
 	// Registry (optional) hides accounts of disabled plugins from
 	// account_count; nil counts every account.
 	Registry     core.PluginRegistry
@@ -622,6 +623,9 @@ func (s *Service) update(c *gin.Context) {
 		if tag.RowsAffected() == 0 {
 			return notFound(ctx)
 		}
+		if err := s.notifyAccountProxyChange(ctx, tx, id, "proxy"); err != nil {
+			return err
+		}
 		return audit.Audit(ctx, tx, uid, "proxy.update", "proxy", strconv.FormatInt(id, 10),
 			map[string]any{"fields": in.changedFields()})
 	})
@@ -719,10 +723,68 @@ func (s *Service) test(c *gin.Context) {
 
 	// Save the real IP to database if probe succeeded
 	if result.OK && result.IP != "" {
-		_, _ = s.db.Pool.Exec(ctx, `UPDATE proxies SET real_ip = $1, real_ip_updated_at = now() WHERE id = $2`, result.IP, id)
+		if err := s.recordObservedIP(ctx, id, result.IP); err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
 	}
 
 	httpapi.OK(c, result)
+}
+
+func (s *Service) recordObservedIP(ctx context.Context, id int64, ip string) error {
+	return s.db.Tx(ctx, func(tx pgx.Tx) error {
+		var previous string
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(real_ip,'') FROM proxies WHERE id=$1 FOR UPDATE`, id).Scan(&previous); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE proxies SET real_ip=$2,real_ip_updated_at=now() WHERE id=$1`, id, ip); err != nil {
+			return err
+		}
+		if previous == ip {
+			return nil
+		}
+		return s.notifyAccountProxyChange(ctx, tx, id, "proxy.real_ip")
+	})
+}
+
+func (s *Service) notifyAccountProxyChange(ctx context.Context, tx pgx.Tx, id int64, field string) error {
+	if s.opts.Events == nil {
+		return nil
+	}
+	rows, err := tx.Query(ctx, `SELECT id,plugin_key,type,name FROM accounts WHERE proxy_id=$1 AND deleted_at IS NULL ORDER BY id`, id)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	var events []core.Event
+	var syncIDs []int64
+	for rows.Next() {
+		var accountID int64
+		var plugin, kind, name string
+		if err := rows.Scan(&accountID, &plugin, &kind, &name); err != nil {
+			return err
+		}
+		events = append(events, core.Event{Type: core.EventAccountUpdated, Payload: map[string]any{"account_id": accountID, "plugin_key": plugin, "type": kind, "name": name, "changed_fields": []string{field}}})
+		if s.opts.Registry != nil && s.opts.Registry.Current() != nil {
+			if binding, ok := s.opts.Registry.Current().AccountType(plugin, kind); ok && binding.Type.Lifecycle != nil {
+				syncIDs = append(syncIDs, accountID)
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	rows.Close()
+	if len(syncIDs) > 0 {
+		if _, err := tx.Exec(ctx, `INSERT INTO account_lifecycle_sync(account_id,status) SELECT unnest($1::bigint[]),'pending' ON CONFLICT (account_id) DO UPDATE SET status='pending',code='',generation=account_lifecycle_sync.generation+1,updated_at=now()`, syncIDs); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO plugin_event_cursors(plugin_key,last_event_id) SELECT DISTINCT plugin_key,(SELECT COALESCE(max(id),0) FROM events) FROM accounts WHERE id=ANY($1) ON CONFLICT (plugin_key) DO NOTHING`, syncIDs); err != nil {
+			return err
+		}
+	}
+	return s.opts.Events.Emit(ctx, tx, events...)
 }
 
 func (s *Service) probe(ctx context.Context, client *http.Client) TestResult {

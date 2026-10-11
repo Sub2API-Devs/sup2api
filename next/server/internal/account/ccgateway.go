@@ -82,6 +82,9 @@ func mergeContainerSettings(ctx context.Context, plugin string, base, patch []by
 // draft key or id) and ignores the kick unless per-account runtimes are
 // enabled.
 func (s *Service) kickCCGateway(id int64, pluginKey, typ string) {
+	if binding, ok := s.accountType(pluginKey, typ); ok && binding.Type.Lifecycle != nil {
+		return
+	}
 	if s.d.CCGateway != nil && pluginKey == "ccgateway" && (typ == "managed" || typ == "apikey") {
 		s.d.CCGateway.Kick(itoa(id))
 	}

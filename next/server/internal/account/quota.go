@@ -270,7 +270,7 @@ func (s *Service) runQuotaQuery(ctx context.Context, bt core.AccountTypeBinding,
 	if err != nil {
 		return "credentials: " + err.Error()
 	}
-	acct := &pluginv1.Account{Id: a.ID, Name: a.Name, Type: a.Type, CredentialsJson: string(plain), SettingsJson: string(a.Settings)}
+	acct := a.pluginAccount(plain)
 	built, err := bt.Client.BuildQuotaRequest(ctx, &pluginv1.BuildQuotaRequestRequest{Account: acct})
 	if status.Code(err) == codes.Unimplemented {
 		slog.DebugContext(ctx, "account: plugin declares quota.query but does not implement it", "plugin", bt.Plugin.Key, "type", a.Type)

@@ -36,6 +36,36 @@ message Account {
   string credentials_json = 5;
   // Non-sensitive settings (base_url, model_mapping ...).
   string settings_json = 6;
+  AccountProperties properties = 7;
+}
+
+message AccountProperties {
+  string status = 1;
+  bool schedulable = 2;
+  bool auto_disable = 3;
+  int32 priority = 4;
+  int32 weight = 5;
+  int32 max_concurrency = 6;
+  int32 rpm_limit = 7;
+  int64 tpm_limit = 8;
+  optional int64 proxy_id = 9;
+  repeated string models = 10;
+  map<string, string> model_mapping = 11;
+}
+
+message AccountLifecycleRequest {
+  string phase = 1;
+  Account account = 2;
+  Caller caller = 3;
+  string preparation_key = 4;
+  string action = 5;
+  repeated string changed_fields = 6;
+}
+
+message AccountLifecycleResponse {
+  repeated FieldError errors = 1;
+  string settings_json = 2;
+  bool run_resource = 3;
 }
 
 // Caller identifies the console user on whose behalf the host calls a plugin.

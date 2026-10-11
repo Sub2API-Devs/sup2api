@@ -274,6 +274,10 @@ func (a platformAdapter) ParseRefreshResponse(ctx context.Context, in *pluginv1.
 	return invoke(a.i, ctx, classBackground, TimeoutPlatformConsole, platformOf, pluginv1.PlatformServiceClient.ParseRefreshResponse, in)
 }
 
+func (a platformAdapter) OnAccountLifecycle(ctx context.Context, in *pluginv1.AccountLifecycleRequest) (*pluginv1.AccountLifecycleResponse, error) {
+	return invoke(a.i, ctx, classConsole, TimeoutPlatformConsole, platformOf, pluginv1.PlatformServiceClient.OnAccountLifecycle, in)
+}
+
 type hookAdapter struct{ i *Instance }
 
 func (a hookAdapter) OnGatewayRequest(ctx context.Context, in *pluginv1.GatewayRequestHookRequest) (*pluginv1.GatewayRequestHookResponse, error) {

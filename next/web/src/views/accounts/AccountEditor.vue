@@ -85,7 +85,8 @@ function changeAuth(value: unknown) {
 const mode = computed(() => props.accountType?.form.mode || 'schema')
 // Claude Code (CCGateway) OAuth keeps its credentials in the account's own
 // container: the editor shows the authorization flow instead of fields.
-const ccgOAuth = computed(() => props.accountType?.plugin_key === 'ccgateway' && props.accountType?.type === 'managed')
+const ccgOAuth = computed(() => props.accountType?.lifecycle?.preparation ?? (props.accountType?.plugin_key === 'ccgateway' && props.accountType?.type === 'managed'))
+const preparationUrl = computed(() => props.accountType?.lifecycle?.preparation ? `/account-types/${encodeURIComponent(props.accountType.plugin_key)}/${encodeURIComponent(props.accountType.type)}/preparations` : undefined)
 /** New Claude Code account: authorized in a draft container before it is saved. */
 const ccgDraft = computed(() => ccgOAuth.value && !editing.value)
 /** Draft state reported by the authorization panel: saving waits for `authorized`. */
@@ -166,7 +167,7 @@ const proxyUrlHint = computed(() => {
 })
 function setProxy(value: number | null) {
   basic.proxy_id = value
-  if (needsProxy.value) void prefillEnvironment(value)
+  if (needsProxy.value && !(preparationUrl.value && ccgState.value.key)) void prefillEnvironment(value)
 }
 function setProxyMode(m: string) {
   if (proxyMode.value !== m && needsProxy.value) void prefillEnvironment(m === 'existing' ? basic.proxy_id : null)
@@ -725,9 +726,9 @@ async function save(event: Event) {
       body.plugin_key = props.accountType!.plugin_key
       body.type = props.accountType!.type
       // A new Claude Code account adopts its authorized draft container.
-      if (ccgDraft.value && ccgState.value.key) body.ccgateway_runtime = ccgState.value.key
+      if (ccgDraft.value && ccgState.value.key) body[preparationUrl.value ? 'preparation_key' : 'ccgateway_runtime'] = ccgState.value.key
       saved = await api.post<Account>('/accounts', body)
-      if (body.ccgateway_runtime) ccgAuth.value?.adopt()
+      if (body.preparation_key || body.ccgateway_runtime) ccgAuth.value?.adopt()
     }
     toast(editing.value ? t('common.updated') : t('common.created'), 'success')
     if (withProxyUrl) {
@@ -863,16 +864,21 @@ async function save(event: Event) {
                 <p v-if="needsProxy" class="mt-1 text-xs text-gray-500 dark:text-dark-400" data-testid="proxy-required-hint">{{ t('ccgateway.accountAuth.proxyRequiredHint') }}</p>
                 <p v-if="ccgDraft" class="mt-1 text-xs text-gray-500 dark:text-dark-400" data-testid="proxy-draft-hint">{{ t('ccgateway.accountAuth.draftProxyHint') }}</p>
               </div>
+              <p v-if="account?.lifecycle_sync" class="input-hint md:col-span-2" role="status" data-testid="account-lifecycle-status">
+                {{ t(`accounts.lifecycle.${account.lifecycle_sync.status}`) }}
+                <span v-if="account.lifecycle_sync.code === 'environment_requires_new_runtime'">{{ t('accounts.lifecycle.environmentDeferred') }}</span>
+              </p>
               <!-- CCGateway locale and timezone settings -->
               <template v-if="needsProxy">
                 <SField :label="t('ccgateway.locale')" :hint="t('ccgateway.localeHint')" :error="errors['settings.locale'] || errors.settings">
-                  <SSelect :model-value="ccgSettings.locale || null" :options="localeOptions" searchable :aria-label="t('ccgateway.locale')" :placeholder="t('ccgateway.environmentDefault')" :no-results="t('ccgateway.environmentNoResults')" :disabled="locationLoading" data-testid="container-locale" @update:model-value="ccgSettings.locale = String($event ?? '')" />
+                  <SSelect :model-value="ccgSettings.locale || null" :options="localeOptions" searchable :aria-label="t('ccgateway.locale')" :placeholder="t('ccgateway.environmentDefault')" :no-results="t('ccgateway.environmentNoResults')" :disabled="locationLoading || !!(preparationUrl && ccgState.key)" data-testid="container-locale" @update:model-value="ccgSettings.locale = String($event ?? '')" />
                 </SField>
                 <SField :label="t('ccgateway.timezone')" :hint="t('ccgateway.timezoneHint')" :error="errors['settings.timezone']">
-                  <SSelect :model-value="ccgSettings.timezone || null" :options="timezoneOptions" searchable :aria-label="t('ccgateway.timezone')" :placeholder="t('ccgateway.environmentDefault')" :no-results="t('ccgateway.environmentNoResults')" :disabled="locationLoading" data-testid="container-timezone" @update:model-value="ccgSettings.timezone = String($event ?? '')" />
+                  <SSelect :model-value="ccgSettings.timezone || null" :options="timezoneOptions" searchable :aria-label="t('ccgateway.timezone')" :placeholder="t('ccgateway.environmentDefault')" :no-results="t('ccgateway.environmentNoResults')" :disabled="locationLoading || !!(preparationUrl && ccgState.key)" data-testid="container-timezone" @update:model-value="ccgSettings.timezone = String($event ?? '')" />
                 </SField>
                 <p class="input-hint md:col-span-2" role="status" data-testid="container-location-status">
-                  <template v-if="locationLoading">{{ t('ccgateway.environmentLoading') }}</template>
+                  <template v-if="preparationUrl && ccgState.key">{{ t('accounts.lifecycle.preparationFrozen') }}</template>
+                  <template v-else-if="locationLoading">{{ t('ccgateway.environmentLoading') }}</template>
                   <template v-else-if="locationStatus === 'filled'">{{ t('ccgateway.environmentFilled', { ip: locationIP }) }}</template>
                   <template v-else-if="locationStatus === 'failed'">{{ t('ccgateway.environmentFailed') }}</template>
                   <template v-else-if="proxyMode === 'url'">{{ t('ccgateway.environmentProxyURL') }}</template>
@@ -923,6 +929,9 @@ async function save(event: Event) {
                     ref="ccgAuth"
                     draft
                     :proxy-id="basic.proxy_id"
+                    :preparation-url="preparationUrl"
+                    :settings="ccgSettings"
+                    :configuration-ready="!locationLoading"
                     @state="ccgState = $event"
                     @fix-proxy="focusProxy"
                   />

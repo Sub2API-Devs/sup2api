@@ -245,7 +245,7 @@ func (s *Service) prepare(ctx context.Context, bt core.AccountTypeBinding, raw j
 	if old != nil {
 		b = unmask(b, old, bt.Type.SensitiveFields)
 	}
-	environmentKeys := containerSettingKeys(bt.Plugin.Key)
+	environmentKeys := extensionKeys(bt)
 	if len(environmentKeys) > 0 {
 		all, _ := parseObject(b)
 		for _, key := range environmentKeys {

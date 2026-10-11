@@ -79,6 +79,10 @@ type PollPlugin interface {
 	Poll(context.Context, *pluginv1.PollRequest, ExecutionHTTP) (*pluginv1.ReconcileResult, error)
 }
 
+type AccountLifecyclePlugin interface {
+	OnAccountLifecycle(context.Context, *pluginv1.AccountLifecycleRequest) (*pluginv1.AccountLifecycleResponse, error)
+}
+
 type HookPlugin interface {
 	OnGatewayRequest(ctx context.Context, in *pluginv1.GatewayRequestHookRequest) (*pluginv1.GatewayRequestHookResponse, error)
 }

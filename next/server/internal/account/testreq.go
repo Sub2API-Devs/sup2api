@@ -117,8 +117,7 @@ func (s *Service) test(c *gin.Context) {
 		ref := core.AccountRef{ModelMapping: a.mapping()}
 		model = ref.MapModel(model)
 	}
-	acct := &pluginv1.Account{Id: a.ID, Name: a.Name, Type: a.Type,
-		CredentialsJson: string(plain), SettingsJson: string(a.Settings)}
+	acct := a.pluginAccount(plain)
 	// A test request is not served by a client endpoint, so Account.platform
 	// is empty; the declaring plugin builds a request for the account type.
 	req, err := bt.Client.BuildTestRequest(ctx, &pluginv1.BuildTestRequestRequest{

@@ -300,7 +300,7 @@ func (s *Service) refreshOutcome(ctx context.Context, id int64, out *RefreshOutc
 func (s *Service) callRefresh(ctx context.Context, bt core.AccountTypeBinding, a *row, plain []byte) (patch map[string]any, errType, msg string) {
 	ctx, cancel := context.WithTimeout(ctx, refreshTimeout)
 	defer cancel()
-	acct := &pluginv1.Account{Id: a.ID, Name: a.Name, Type: a.Type, CredentialsJson: string(plain), SettingsJson: string(a.Settings)}
+	acct := a.pluginAccount(plain)
 	built, err := bt.Client.BuildRefreshRequest(ctx, &pluginv1.BuildRefreshRequestRequest{Account: acct})
 	switch status.Code(err) {
 	case codes.Unimplemented:

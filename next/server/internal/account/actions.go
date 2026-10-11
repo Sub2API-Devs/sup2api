@@ -2,7 +2,11 @@ package account
 
 import (
 	"context"
+	"slices"
 
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/gin-gonic/gin"
@@ -55,6 +59,34 @@ func (s *Service) executeAccountAction(c *gin.Context) {
 		return
 	}
 
+	if binding, ok := s.accountType(pluginKey, a.Type); ok && binding.Type.Lifecycle != nil {
+		if !slices.ContainsFunc(binding.Type.Lifecycle.Actions, func(action manifest.AccountLifecycleAction) bool { return action.ID == actionID }) {
+			httpapi.Fail(c, core.ErrNotFound)
+			return
+		}
+		actorID, _ := core.UserID(ctx)
+		result, err := s.accountLifecycle(ctx, binding, &pluginv1.AccountLifecycleRequest{Phase: "action", Action: actionID, Caller: &pluginv1.Caller{UserId: actorID}, Account: a.lifecycleSnapshot()})
+		if err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+		resource, ok := s.d.LifecycleResources[pluginKey].(core.AccountActionResource)
+		if !ok || result == nil || !result.RunResource {
+			httpapi.Fail(c, core.ErrUnsupported)
+			return
+		}
+		if err := audit.Audit(audit.Context(c), s.d.DB.Pool, actorID, "account.action", "account", itoa(id), map[string]any{"plugin_key": pluginKey, "action": actionID}); err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+		output, err := resource.AccountAction(ctx, id, actionID)
+		if err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+		httpapi.OK(c, output)
+		return
+	}
 	// Special handling for ccgateway refresh_auth action.
 	if pluginKey == "ccgateway" && actionID == "refresh_auth" {
 		s.handleCCGatewayRefreshAuth(c, ctx, id, scope)
@@ -102,6 +134,12 @@ func (s *Service) handleCCGatewayRefreshAuth(c *gin.Context, ctx context.Context
 // listAccountActions returns the available actions for an account type.
 func (s *Service) listAccountActions(ctx context.Context, pluginKey, accountType string) []AccountAction {
 	var actions []AccountAction
+	if binding, ok := s.accountType(pluginKey, accountType); ok && binding.Type.Lifecycle != nil {
+		for _, action := range binding.Type.Lifecycle.Actions {
+			actions = append(actions, AccountAction{ID: action.ID, Label: action.Label, Icon: action.Icon, PluginKey: pluginKey, AccountType: accountType, Permission: "account:update"})
+		}
+		return actions
+	}
 
 	// CCGateway managed accounts support refresh_auth.
 	if pluginKey == "ccgateway" && accountType == "managed" {

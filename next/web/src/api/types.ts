@@ -250,6 +250,8 @@ export interface AccountType {
   default_models?: string[]
   default_model_mapping?: Record<string, string>
   common_controls?: Partial<Record<'auto_disable' | 'schedulable', { configurable?: boolean; default?: boolean }>>
+  extensions_schema?: { type: 'object'; properties: Record<string, unknown> }
+  lifecycle?: { preparation?: boolean; required?: boolean; actions?: Array<{ id: string; label: LText; icon?: string }> }
   /** Platforms the type supports (built-in or plugin platforms). */
   platforms: AccountTypePlatform[]
   /** Endpoints of available supported platforms (native) plus converted ones. */
@@ -257,6 +259,7 @@ export interface AccountType {
 }
 
 export interface Account {
+  lifecycle_sync?: { status: 'pending' | 'applied' | 'failed'; code?: string }
   id: number
   name: string
   /** Plugin that declares the account type. */

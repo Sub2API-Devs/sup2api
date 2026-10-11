@@ -9,7 +9,7 @@
     "en": "Managed Claude Code Messages accounts. SSH connections and credentials are managed by the core. Token counting and model discovery are not supported.",
     "zh": "托管 Claude Code Messages 账号，SSH 连接与凭证由核心管理；支持流式响应及用量计费；不支持 token 计数和模型发现。"
   },
-  "version": "0.1.37",
+  "version": "0.1.38",
   "publisher": "sub2api",
   "icon": "assets/claudecode-color.svg",
   "runtime": "grpc",
@@ -18,15 +18,19 @@
       "binaries": "runtimes/{os}-{arch}/plugin"
     }
   },
-  "hostCompat": ">=0.1.114 <0.2.0",
+  "hostCompat": ">=0.1.115 <0.2.0",
   "capabilities": [
     {
       "id": "platform.adapter.v1"
+    },
+    {
+      "id": "account.lifecycle.v1"
     }
   ],
   "accountTypes": [
     {
       "id": "managed",
+      "lifecycle": {"preparation": true, "required": true, "actions": [{"id": "refresh_auth", "label": {"en": "Refresh authorization", "zh": "重新授权"}, "icon": "refresh"}]},
       "label": {
         "en": "Claude Code",
         "zh": "Claude Code"
@@ -39,6 +43,14 @@
         "mode": "schema",
         "schema": "forms/managed.schema.json",
         "uiSchema": "forms/managed.ui.json"
+      },
+      "extensionsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "locale": {"type": "string", "maxLength": 32},
+          "timezone": {"type": "string", "maxLength": 128}
+        }
       },
       "commonControls": {
         "auto_disable": {"configurable": true, "default": true},
@@ -67,6 +79,7 @@
     },
     {
       "id": "apikey",
+      "lifecycle": {},
       "label": {
         "en": "Claude Code",
         "zh": "Claude Code"
@@ -79,6 +92,14 @@
         "mode": "schema",
         "schema": "forms/apikey.schema.json",
         "uiSchema": "forms/apikey.ui.json"
+      },
+      "extensionsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "locale": {"type": "string", "maxLength": 32},
+          "timezone": {"type": "string", "maxLength": 128}
+        }
       },
       "commonControls": {
         "auto_disable": {"configurable": true, "default": true},

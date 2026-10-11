@@ -1,0 +1,211 @@
+package account
+
+import (
+	"context"
+	"encoding/json"
+	"testing"
+
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
+	"github.com/jackc/pgx/v5"
+)
+
+type preparationPlugin struct {
+	*fakePlatform
+	phases []string
+}
+
+func (p *preparationPlugin) OnAccountLifecycle(_ context.Context, in *pluginv1.AccountLifecycleRequest) (*pluginv1.AccountLifecycleResponse, error) {
+	p.phases = append(p.phases, in.Phase)
+	return &pluginv1.AccountLifecycleResponse{SettingsJson: in.Account.SettingsJson, RunResource: true}, nil
+}
+
+type preparationResource struct {
+	prepared  map[string]bool
+	ready     bool
+	cancelled int
+	adopted   int64
+}
+
+func (r *preparationResource) PrepareAccount(_ context.Context, p core.AccountPreparation) error {
+	r.prepared[p.Key] = true
+	return nil
+}
+func (r *preparationResource) UpdateAccountPreparation(context.Context, pgx.Tx, core.AccountPreparation) error {
+	return nil
+}
+func (r *preparationResource) AccountPreparationAction(context.Context, core.AccountPreparation, string, string, json.RawMessage) (any, error) {
+	return map[string]string{"status": "ready"}, nil
+}
+func (r *preparationResource) CheckAccountPreparation(context.Context, core.AccountPreparation) error {
+	if !r.ready {
+		return core.ErrInvalidArgument.WithMessage("not ready")
+	}
+	return nil
+}
+func (r *preparationResource) AdoptAccountPreparation(_ context.Context, _ pgx.Tx, _ core.AccountPreparation, id int64) error {
+	r.adopted = id
+	return nil
+}
+func (r *preparationResource) CancelAccountPreparation(_ context.Context, p core.AccountPreparation) error {
+	delete(r.prepared, p.Key)
+	r.cancelled++
+	return nil
+}
+func (r *preparationResource) ReconcileAccount(context.Context, int64) error { return nil }
+
+func preparationFixture(t *testing.T) (*env, *preparationResource, int64) {
+	t.Helper()
+	e := setup(t)
+	if _, err := e.db.Pool.Exec(t.Context(), `INSERT INTO plugins(key,name,status) VALUES('fixture','{"en":"Fixture"}','enabled')`); err != nil {
+		t.Fatal(err)
+	}
+	e.svc.d.Locker = testutil.NewMemLocker()
+	resource := &preparationResource{prepared: map[string]bool{}}
+	info := core.PluginInfo{Key: "fixture", Manifest: &manifest.Manifest{Name: manifest.LocalizedText{"en": "Fixture"}}}
+	e.gen.plugins = append(e.gen.plugins, info)
+	e.gen.types = append(e.gen.types, core.AccountTypeBinding{Plugin: info, Client: &preparationPlugin{fakePlatform: e.plat},
+		Type:       manifest.AccountType{ID: "managed", Form: manifest.Form{Mode: "schema"}, Lifecycle: &manifest.AccountLifecycle{Preparation: true, Required: true}, ExtensionsSchema: json.RawMessage(`{"type":"object","additionalProperties":false,"properties":{"region":{"type":"string"}}}`)},
+		FormSchema: json.RawMessage(`{"type":"object","additionalProperties":false}`)})
+	e.svc.d.LifecycleResources = map[string]core.AccountLifecycleResource{"fixture": resource}
+	proxy := e.exec1(`INSERT INTO proxies(name,protocol,host,port) VALUES('preparation','http','proxy.invalid',3128) RETURNING id`)
+	return e, resource, proxy
+}
+
+func TestAccountPreparationOwnershipReadinessAndAdoption(t *testing.T) {
+	e, resource, proxy := preparationFixture(t)
+	request := map[string]any{"proxy_id": proxy, "settings": map[string]string{"region": "jp"}, "idempotency_key": "attempt-1"}
+	code, out := e.do("POST", "/account-types/fixture/managed/preparations", request)
+	if code != 201 {
+		t.Fatalf("prepare: %d %v", code, out)
+	}
+	key := data(out)["key"].(string)
+	code, again := e.do("POST", "/account-types/fixture/managed/preparations", request)
+	if code != 201 || data(again)["key"] != key || len(resource.prepared) != 1 {
+		t.Fatalf("preparation was not idempotent: %d %v", code, again)
+	}
+	other := e.addUser("other-preparation@example.test")
+	if code, _ := e.doAs(other, "GET", "/account-preparations/"+key+"/status", nil); code != 404 {
+		t.Fatalf("other owner read preparation: %d", code)
+	}
+	body := map[string]any{"name": "prepared", "plugin_key": "fixture", "type": "managed", "proxy_id": proxy, "credentials": map[string]any{}, "settings": map[string]string{"region": "jp"}, "preparation_key": key}
+	if code, _ := e.do("POST", "/accounts", body); code != 400 {
+		t.Fatalf("unready preparation accepted: %d", code)
+	}
+	resource.ready = true
+	code, out = e.do("POST", "/accounts", body)
+	if code != 201 || resource.adopted == 0 {
+		t.Fatalf("adopt: %d %v", code, out)
+	}
+	if code, _ := e.do("POST", "/accounts", body); code != 404 {
+		t.Fatalf("preparation was reused: %d", code)
+	}
+	if code, _ := e.do("DELETE", "/account-preparations/"+key, nil); code != 404 || resource.cancelled != 0 {
+		t.Fatalf("adopted resource was removed: %d %d", code, resource.cancelled)
+	}
+}
+
+func TestAccountPreparationCleanupHonorsRenewal(t *testing.T) {
+	e, resource, proxy := preparationFixture(t)
+	code, out := e.do("POST", "/account-types/fixture/managed/preparations", map[string]any{"proxy_id": proxy, "settings": map[string]string{"region": "jp"}})
+	if code != 201 {
+		t.Fatalf("prepare: %d %v", code, out)
+	}
+	key := data(out)["key"].(string)
+	ctx := core.WithUserID(t.Context(), e.uid)
+	preparation, err := e.svc.loadPreparation(ctx, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.svc.disposePreparation(ctx, preparation, true); err != nil || resource.cancelled != 0 {
+		t.Fatalf("active preparation was swept: %v", err)
+	}
+	if _, err := e.db.Pool.Exec(ctx, `UPDATE account_preparations SET expires_at=now()-interval '1 minute' WHERE key=$1`, key); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.svc.sweepPreparations(ctx); err != nil || resource.cancelled != 1 {
+		t.Fatalf("expired preparation was not swept: %v", err)
+	}
+	if err := e.svc.sweepPreparations(ctx); err != nil || resource.cancelled != 1 {
+		t.Fatalf("cleanup was not idempotent: %v", err)
+	}
+}
+
+func TestLifecycleEventsUseCurrentOwnedAccount(t *testing.T) {
+	e, _, _ := preparationFixture(t)
+	id := e.exec1(`INSERT INTO accounts(name,plugin_key,type,credentials_enc,settings,rpm_limit,tpm_limit,max_concurrency) VALUES('current','fixture','managed',''::bytea,'{"region":"jp"}',31,4100,7) RETURNING id`)
+	handler := &lifecycleEvents{service: e.svc, plugin: "fixture"}
+	payload, _ := json.Marshal(basicPayload(id, "fixture", "managed", "old name"))
+	request := &pluginv1.OnEventsRequest{Events: []*pluginv1.Event{{Id: 12, Type: core.EventAccountUpdated, PayloadJson: string(payload)}}}
+	for range 2 {
+		response, err := handler.OnEvents(t.Context(), request)
+		if err != nil || response.GetAckedThroughId() != 12 {
+			t.Fatalf("event delivery: %v %v", response, err)
+		}
+	}
+	row, err := e.svc.loadRow(t.Context(), e.db.Pool, id, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := row.pluginAccount(nil)
+	if snapshot.Name != "current" || snapshot.Properties.RpmLimit != 31 || snapshot.Properties.TpmLimit != 4100 || snapshot.Properties.MaxConcurrency != 7 || snapshot.CredentialsJson != "" {
+		t.Fatalf("incorrect lifecycle snapshot: %v", snapshot)
+	}
+	foreign, _ := json.Marshal(basicPayload(id, "another-plugin", "managed", "foreign"))
+	request.Events[0].PayloadJson = string(foreign)
+	if _, err := handler.OnEvents(t.Context(), request); err != nil {
+		t.Fatalf("foreign event was not skipped: %v", err)
+	}
+}
+
+func TestLifecycleSynchronizationCannotOverwriteNewerGeneration(t *testing.T) {
+	e, _, _ := preparationFixture(t)
+	ctx := t.Context()
+	id := e.exec1(`INSERT INTO accounts(name,plugin_key,type,credentials_enc) VALUES('sync','fixture','managed',''::bytea) RETURNING id`)
+	row, err := e.svc.loadRow(ctx, e.db.Pool, id, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := markLifecyclePending(ctx, e.db.Pool, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := e.svc.saveLifecycleStatus(ctx, id, row.UpdatedAt, 1, core.AccountSynchronization{Status: "applied"}); err != nil {
+		t.Fatal(err)
+	}
+	var state string
+	if err := e.db.Pool.QueryRow(ctx, `SELECT status FROM account_lifecycle_sync WHERE account_id=$1`, id).Scan(&state); err != nil || state != "pending" {
+		t.Fatalf("stale synchronization replaced the current state: %s %v", state, err)
+	}
+	if err := e.svc.saveLifecycleStatus(ctx, id, row.UpdatedAt, 2, core.AccountSynchronization{Status: "applied"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.db.Pool.QueryRow(ctx, `SELECT status FROM account_lifecycle_sync WHERE account_id=$1`, id).Scan(&state); err != nil || state != "applied" {
+		t.Fatalf("current synchronization did not apply: %s %v", state, err)
+	}
+}
+
+func TestAccountPreparationRejectsConfigurationMismatch(t *testing.T) {
+	e, resource, proxy := preparationFixture(t)
+	request := map[string]any{"proxy_id": proxy, "settings": map[string]string{"region": "jp"}, "idempotency_key": "attempt-1"}
+	code, out := e.do("POST", "/account-types/fixture/managed/preparations", request)
+	if code != 201 {
+		t.Fatalf("prepare: %d %v", code, out)
+	}
+	key := data(out)["key"].(string)
+	request["settings"] = map[string]string{"region": "us"}
+	if code, _ := e.do("POST", "/account-types/fixture/managed/preparations", request); code != 409 {
+		t.Fatalf("idempotency key rebound: %d", code)
+	}
+	resource.ready = true
+	body := map[string]any{"name": "prepared", "plugin_key": "fixture", "type": "managed", "proxy_id": proxy, "credentials": map[string]any{}, "settings": map[string]string{"region": "us"}, "preparation_key": key}
+	if code, _ := e.do("POST", "/accounts", body); code != 409 {
+		t.Fatalf("changed environment adopted: %d", code)
+	}
+	if code, _ := e.do("DELETE", "/account-preparations/"+key, nil); code != 204 || resource.cancelled != 1 {
+		t.Fatalf("cancel: %d %d", code, resource.cancelled)
+	}
+}

@@ -482,7 +482,9 @@ class Manager:
         # Hash with a private per-account salt; never persist upstream keys in
         # controller state or expose a credential fingerprint in status.
         salt = state['admin_key'] if state else secrets.token_urlsafe(32)
-        fingerprint = hmac.new(salt.encode(), json.dumps(auth, sort_keys=True).encode(), hashlib.sha256).hexdigest()
+        identity = {key: value for key, value in auth.items() if key not in ('locale', 'timezone')}
+        fingerprint = hmac.new(salt.encode(), json.dumps(identity, sort_keys=True).encode(), hashlib.sha256).hexdigest()
+        environment = {key: auth.get(key, '') for key in ('locale', 'timezone')}
         existing = None
         if state:
             with contextlib.suppress(docker.errors.NotFound):
@@ -490,6 +492,8 @@ class Manager:
             # Defaults apply to new containers only. A tag/digest change must
             # never replace a working account (including after controller restart).
             if existing and state.get('network') == policy and existing.labels.get(AUTH_LABEL) == fingerprint:
+                state['environment_pending'] = environment != state.get('environment', {'locale': '', 'timezone': ''})
+                self.save(aid, state)
                 return state
         # Credential/network changes must not incidentally upgrade the image.
         image_ref = image_of(existing) if existing else self.app_image
@@ -568,6 +572,8 @@ class Manager:
                      str(d / 'resolv.conf'): {'bind': '/etc/resolv.conf', 'mode': 'ro'}},
             mem_limit='2g', nano_cpus=2000000000, **options)
         state['auth_mode'] = auth['mode']
+        state['environment'] = environment
+        state['environment_pending'] = False
         self.save(aid, state)
         return state
 
@@ -606,6 +612,9 @@ class Manager:
             except (ValueError, KeyError, TypeError) as e:
                 raise BadRequest('invalid proxy') from e
             d = self.dir(aid)
+            if old is not None and not reuse_egress:
+                with contextlib.suppress(OSError, ValueError):
+                    reuse_egress = json.loads((d / 'sing-box.json').read_text()) == config
             write_private(d / 'sing-box.json', json.dumps(config))
             write_private(d / 'firewall.nft', rules)
             self.oneshot(egress_image,
@@ -801,6 +810,7 @@ class Manager:
                 'current_image': current_image, 'target_image': self.app_image,
                 'image_update_available': bool(current_image and target_id and current_image != target_id),
                 'target_image_available': bool(target_id),
+                'environment_pending': bool(state.get('environment_pending')),
                 'status': 'ready' if self.online.get(aid) == state.get('revision') and aid in self.online else 'pending',
                 'revision': self.online.get(aid, ''), 'auth_mode': state.get('auth_mode', 'oauth'),
                 'network': state.get('network'), 'app_ip': state.get('app_ip', ''),

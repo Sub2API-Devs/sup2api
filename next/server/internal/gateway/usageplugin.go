@@ -236,6 +236,7 @@ func (c *call) armUsageExtraction(rt *typeRoute, acct *pluginv1.Account, resp *h
 		Platform: acct.GetPlatform(), Type: acct.GetType()}
 	if pb, ok := c.gen.Platform(rt.platform); ok && pb.Plugin.Key != "" && pb.Plugin.Key == rt.binding.Plugin.Key {
 		small.SettingsJson = acct.GetSettingsJson()
+		small.Properties = acct.GetProperties()
 	}
 	fields, omitted := usageRequestFields(rt.usageRequestFields, upBody)
 	c.usage = &pendingExtract{rt: rt, cap: cap, meta: c.metaFor(rt), account: small,

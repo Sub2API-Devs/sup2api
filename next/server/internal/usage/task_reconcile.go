@@ -68,7 +68,7 @@ func (s *Service) acquireTaskAccount(ctx context.Context, e *settleEntry) (conte
 		return ctx, nil, nil, nil, errTaskDeferred
 	}
 	e.account = a.AccountRef
-	return ctx, &pluginv1.Account{Id: a.ID, Name: a.Name, Type: a.Type, CredentialsJson: string(a.Credentials), SettingsJson: string(a.Settings)}, a.ProxyID, release, nil
+	return ctx, a.PluginAccount(""), a.ProxyID, release, nil
 }
 
 func (s *Service) reconcileTask(ctx context.Context, e *settleEntry) bool {

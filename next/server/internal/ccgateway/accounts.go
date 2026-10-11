@@ -163,21 +163,29 @@ func (s *Service) draftDesired(ctx context.Context, key string, credentials bool
 	d := accountDesired{Kind: "managed", Key: key}
 	var version string
 	var spec core.ProxySpec
-	var password []byte
+	var password, settings []byte
 	err := s.DB.Pool.QueryRow(ctx, `SELECT
   COALESCE(p.status <> 'disabled',false),
   CASE WHEN p.id IS NULL THEN 'no_proxy' WHEN p.status = 'disabled' THEN 'proxy_disabled' ELSE '' END,
   concat_ws('|','draft',r.key,r.proxy_id,p.updated_at,p.status),
-  COALESCE(p.protocol,''),COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(p.username,''),p.password_enc
+  COALESCE(p.protocol,''),COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(p.username,''),p.password_enc,r.initial_settings
   FROM ccgateway_runtimes r LEFT JOIN proxies p ON p.id=r.proxy_id
   WHERE r.key=$1 AND r.account_id IS NULL AND r.retired_at IS NULL`, key).
-		Scan(&d.Enabled, &d.Blocked, &version, &spec.Protocol, &spec.Host, &spec.Port, &spec.Username, &password)
+		Scan(&d.Enabled, &d.Blocked, &version, &spec.Protocol, &spec.Host, &spec.Port, &spec.Username, &password, &settings)
 	if err != nil {
 		return d, err
 	}
 	d.Revision = revisionOf(version)
+	values, err := environment.Normalize(settings)
+	if err != nil {
+		return d, err
+	}
+	d.Locale, d.Timezone = values["locale"], values["timezone"]
 	if d.Enabled && credentials {
 		d.Auth = map[string]string{"mode": "oauth"}
+		if err := d.applyEnvironment(); err != nil {
+			return d, err
+		}
 		if d.Proxy, err = s.proxyDesired(spec, password); err != nil {
 			return d, err
 		}
@@ -637,26 +645,7 @@ func (s *Service) serveRuntime(c *gin.Context, ctx context.Context, d accountDes
 		cliVersion = make(chan string, 1)
 		go func() { cliVersion <- s.observedCLIVersion(ctx, d) }()
 	}
-	res, close, e := s.runtimeRequest(ctx, d.Key, c.Request.Method, path, raw, d.Revision)
-	if action == "start" {
-		// Right after the runtime turns ready the controller may still answer
-		// 409 (revision not recorded yet) or 503 (the app's HTTP server is not
-		// listening yet). Neither reached the CLI, so retrying cannot open a
-		// second login session; any other answer is final.
-		deadline := time.Now().Add(startRetryFor)
-		for e == nil && (res.StatusCode == http.StatusConflict || res.StatusCode == http.StatusServiceUnavailable) &&
-			time.Now().Add(startRetryEvery).Before(deadline) {
-			res.Body.Close()
-			close()
-			select {
-			case <-ctx.Done():
-				httpapi.Fail(c, reasonError(core.ErrUnavailable, "not_synchronized"))
-				return
-			case <-time.After(startRetryEvery):
-			}
-			res, close, e = s.runtimeRequest(ctx, d.Key, c.Request.Method, path, raw, d.Revision)
-		}
-	}
+	res, close, e := s.runtimeActionRequest(ctx, d.Key, c.Request.Method, path, raw, d.Revision)
 	if e != nil {
 		httpapi.Fail(c, transportError(e))
 		return
@@ -704,6 +693,29 @@ func (s *Service) serveRuntime(c *gin.Context, ctx context.Context, d accountDes
 		}
 	}
 	httpapi.OK(c, out)
+}
+
+func (s *Service) runtimeActionRequest(ctx context.Context, key, method, path string, body []byte, revision string) (*http.Response, func() error, error) {
+	res, close, err := s.runtimeRequest(ctx, key, method, path, body, revision)
+	if path != "admin/auth/start" {
+		return res, close, err
+	}
+	// Right after the runtime turns ready the controller may still answer
+	// 409 (revision not recorded yet) or 503 (the app's HTTP server is not
+	// listening yet). Neither reached the CLI, so retrying cannot open a
+	// second login session; any other answer is final.
+	deadline := time.Now().Add(startRetryFor)
+	for err == nil && (res.StatusCode == http.StatusConflict || res.StatusCode == http.StatusServiceUnavailable) && time.Now().Add(startRetryEvery).Before(deadline) {
+		res.Body.Close()
+		close()
+		select {
+		case <-ctx.Done():
+			return nil, nil, reasonError(core.ErrUnavailable, "not_synchronized")
+		case <-time.After(startRetryEvery):
+		}
+		res, close, err = s.runtimeRequest(ctx, key, method, path, body, revision)
+	}
+	return res, close, err
 }
 
 // serveStatus answers GET .../status. Accounts: {account_id, key, container,

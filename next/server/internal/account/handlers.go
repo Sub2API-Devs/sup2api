@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
 
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
@@ -193,8 +194,9 @@ type View struct {
 	LastTest *LastTest `json:"last_test"`
 	// Orphaned is true when the plugin declaring the account type is not
 	// enabled (disabled or uninstalled).
-	Orphaned bool            `json:"orphaned"`
-	Settings json.RawMessage `json:"settings"`
+	Orphaned      bool                         `json:"orphaned"`
+	Settings      json.RawMessage              `json:"settings"`
+	LifecycleSync *core.AccountSynchronization `json:"lifecycle_sync,omitempty"`
 	// Actions are the plugin-registered custom actions available for this account (CONTRACTS §52).
 	Actions []AccountAction `json:"actions,omitempty"`
 	// Credentials (settings + secret fields, sensitive ones masked) is only
@@ -305,6 +307,9 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 	s.fillBalance(ctx, rows, out)
 	s.fillRefresh(ctx, rows, out)
 	s.fillActions(ctx, rows, out)
+	if err := s.fillLifecycleStatus(ctx, out); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
@@ -501,6 +506,7 @@ type input struct {
 	TPMLimit       *int64             `json:"tpm_limit"`
 	Credentials    json.RawMessage    `json:"credentials"`
 	Settings       json.RawMessage    `json:"settings"`
+	PreparationKey *string            `json:"preparation_key"`
 	// CCGatewayRuntime is the draft runtime key a new ccgateway/managed
 	// account adopts (CONTRACTS §49.10); create only. Blank means absent.
 	CCGatewayRuntime *string `json:"ccgateway_runtime"`
@@ -640,6 +646,9 @@ func (in *input) validate(ctx context.Context, create bool) []core.FieldError {
 	}
 	if create && len(in.Credentials) == 0 {
 		add("credentials", "required", "credentials are required", "凭证必填")
+	}
+	if in.PreparationKey != nil && (!create || len(*in.PreparationKey) == 0 || len(*in.PreparationKey) > 64) {
+		add("preparation_key", "invalid", "preparation_key is only accepted when creating an account", "preparation_key 只能在创建账号时提供")
 	}
 	if in.CCGatewayRuntime != nil {
 		k := strings.TrimSpace(*in.CCGatewayRuntime)
@@ -895,12 +904,17 @@ func (s *Service) create(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	if p.settings, err = mergeContainerSettings(ctx, bt.Plugin.Key, p.settings, in.Settings); err != nil {
+	if p.settings, err = s.mergeExtensions(ctx, bt, p.settings, in.Settings); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
 	scope := core.OwnerScope(ctx, "account:create")
 	if err := s.checkOwnLevelRestrictions(ctx, scope, &in, len(bt.Type.GuardedSettings) == 0); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	preparation, err := s.checkPreparationForCreate(ctx, bt, &in, p.settings)
+	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -948,6 +962,15 @@ func (s *Service) create(c *gin.Context) {
 		tpm = *in.TPMLimit
 	}
 	uid, _ := core.UserID(ctx)
+	if _, err := s.accountLifecycle(ctx, bt, &pluginv1.AccountLifecycleRequest{Phase: "before_create", Caller: &pluginv1.Caller{UserId: uid}, Account: &pluginv1.Account{
+		Name: *in.Name, Type: bt.Type.ID, SettingsJson: string(p.settings), Properties: &pluginv1.AccountProperties{
+			Status: status, Schedulable: sched, AutoDisable: autoDisable, Priority: int32(prio), Weight: int32(weight), MaxConcurrency: int32(maxc),
+			RpmLimit: int32(rpm), TpmLimit: tpm, ProxyId: proxyID, Models: models, ModelMapping: mapping,
+		},
+	}}); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
 	var id int64
 	proxyCreated := false
 	err = s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
@@ -972,6 +995,11 @@ func (s *Service) create(c *gin.Context) {
 		if err := setGroups(ctx, tx, id, groupIDs); err != nil {
 			return err
 		}
+		if preparation != nil {
+			if err := s.adoptPreparation(ctx, tx, *preparation, id); err != nil {
+				return err
+			}
+		}
 		if in.CCGatewayRuntime != nil {
 			if err := ccgateway.AdoptDraft(ctx, tx, *in.CCGatewayRuntime, id, draftScope); err != nil {
 				return err
@@ -985,6 +1013,11 @@ func (s *Service) create(c *gin.Context) {
 		if err := audit.Audit(ctx, tx, uid, "account.create", "account", itoa(id),
 			map[string]any{"name": *in.Name, "plugin_key": bt.Plugin.Key, "type": bt.Type.ID}); err != nil {
 			return err
+		}
+		if bt.Type.Lifecycle != nil {
+			if err := markLifecyclePending(ctx, tx, id); err != nil {
+				return err
+			}
 		}
 		return s.d.Events.Emit(ctx, tx, core.Event{Type: core.EventAccountCreated,
 			Payload: basicPayload(id, bt.Plugin.Key, bt.Type.ID, *in.Name)})
@@ -1070,8 +1103,32 @@ func (s *Service) update(c *gin.Context) {
 		}
 	}
 	bt, _ := s.accountType(cur.PluginKey, cur.Type)
+	var extensionSettings *string
+	if len(in.Settings) > 0 {
+		base := cur.Settings
+		if p != nil {
+			base = p.settings
+		}
+		merged, err := s.mergeExtensions(ctx, bt, base, in.Settings)
+		if err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+		value := string(merged)
+		extensionSettings = &value
+	}
 	isUnguarded := bt.Plugin.Key == "" || len(bt.Type.GuardedSettings) == 0
 	if err := s.checkOwnLevelRestrictions(ctx, scope, &in, isUnguarded); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	lifecycleSettings := extensionSettings
+	if lifecycleSettings == nil && p != nil {
+		value := string(p.settings)
+		lifecycleSettings = &value
+	}
+	actorID, _ := core.UserID(ctx)
+	if _, err := s.accountLifecycle(ctx, bt, &pluginv1.AccountLifecycleRequest{Phase: "before_update", Caller: &pluginv1.Caller{UserId: actorID}, Account: in.lifecycleSnapshot(cur, lifecycleSettings), ChangedFields: in.changedFields()}); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -1086,7 +1143,7 @@ func (s *Service) update(c *gin.Context) {
 		if fields := in.applyCommonControls(ctx, bt.Type, locked); len(fields) > 0 {
 			return core.InvalidFields(fields...)
 		}
-		if p != nil && !locked.UpdatedAt.Equal(cur.UpdatedAt) {
+		if (p != nil || extensionSettings != nil || bt.Type.Lifecycle != nil) && !locked.UpdatedAt.Equal(cur.UpdatedAt) {
 			return core.ErrConflict.WithMessage(t(ctx, "the account was modified concurrently, please retry",
 				"账号已被其他操作修改，请重试"))
 		}
@@ -1104,17 +1161,8 @@ func (s *Service) update(c *gin.Context) {
 			st := string(p.settings)
 			settings = &st
 		}
-		if len(in.Settings) > 0 {
-			base := locked.Settings
-			if p != nil {
-				base = p.settings
-			}
-			merged, err := mergeContainerSettings(ctx, cur.PluginKey, base, in.Settings)
-			if err != nil {
-				return err
-			}
-			st := string(merged)
-			settings = &st
+		if extensionSettings != nil {
+			settings = extensionSettings
 		}
 		var reason *string
 		if statusChanged {
@@ -1170,8 +1218,14 @@ func (s *Service) update(c *gin.Context) {
 		if in.Name != nil {
 			name = *in.Name
 		}
-		evs := []core.Event{{Type: core.EventAccountUpdated,
-			Payload: basicPayload(id, locked.PluginKey, locked.Type, name)}}
+		if bt.Type.Lifecycle != nil {
+			if err := markLifecyclePending(ctx, tx, id); err != nil {
+				return err
+			}
+		}
+		payload := basicPayload(id, locked.PluginKey, locked.Type, name)
+		payload["changed_fields"] = in.changedFields()
+		evs := []core.Event{{Type: core.EventAccountUpdated, Payload: payload}}
 		if statusChanged {
 			evs = append(evs, core.Event{Type: core.EventAccountStatusChanged,
 				Payload: statusPayload(id, locked.PluginKey, locked.Type, name, *in.Status, *reason, nil)})

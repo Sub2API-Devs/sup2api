@@ -62,8 +62,11 @@ func TestManifestAndUsageContract(t *testing.T) {
 	if len(m.AccountTypes[0].SensitiveFields) != 0 || len(m.AccountTypes[0].SettingsFields) != 0 || len(m.HostPermissions) != 2 {
 		t.Fatal("managed adapter must not request connection credentials")
 	}
-	if len(m.Capabilities) != 1 || m.Capabilities[0].ID != manifest.CapPlatformAdapter {
-		t.Fatal("must use core forwarding")
+	if len(m.Capabilities) != 2 || m.Capabilities[0].ID != manifest.CapPlatformAdapter || m.Capabilities[1].ID != manifest.CapAccountLifecycle {
+		t.Fatal("must use core forwarding and account lifecycle callbacks")
+	}
+	if m.AccountTypes[0].Lifecycle == nil || !m.AccountTypes[0].Lifecycle.Preparation || !m.AccountTypes[0].Lifecycle.Required || len(m.AccountTypes[0].ExtensionsSchema) == 0 {
+		t.Fatal("managed accounts require preparation and declared extensions")
 	}
 	// Actual sidecar response shapes must match the inherited core billing rules.
 	for _, p := range platforms.Builtin() {

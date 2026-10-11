@@ -39,9 +39,10 @@ func (s *Service) ReauthDraft(ctx context.Context, accountID, uid int64, scope *
 	var kind string
 	var proxyID *int64
 	var proxyStatus *string
-	e := s.DB.Pool.QueryRow(ctx, `SELECT a.type, a.proxy_id, p.status FROM accounts a LEFT JOIN proxies p ON p.id=a.proxy_id
+	var settings []byte
+	e := s.DB.Pool.QueryRow(ctx, `SELECT a.type, a.proxy_id, p.status, a.settings FROM accounts a LEFT JOIN proxies p ON p.id=a.proxy_id
 		WHERE a.id=$1 AND a.plugin_key='ccgateway' AND a.type IN ('managed','apikey') AND a.deleted_at IS NULL`, accountID).
-		Scan(&kind, &proxyID, &proxyStatus)
+		Scan(&kind, &proxyID, &proxyStatus, &settings)
 	if store.IsNoRows(e) {
 		return "", false, core.ErrNotFound
 	}
@@ -71,8 +72,8 @@ func (s *Service) ReauthDraft(ctx context.Context, accountID, uid int64, scope *
 			return e
 		}
 		key, created = newDraftKey(), true
-		_, e = tx.Exec(ctx, `INSERT INTO ccgateway_runtimes(key, proxy_id, created_by, for_account)
-			VALUES($1, $2, NULLIF($3::bigint, 0), $4)`, key, *proxyID, uid, accountID)
+		_, e = tx.Exec(ctx, `INSERT INTO ccgateway_runtimes(key, proxy_id, created_by, for_account, initial_settings)
+			VALUES($1, $2, NULLIF($3::bigint, 0), $4, $5::jsonb)`, key, *proxyID, uid, accountID, settings)
 		return e
 	})
 	if e != nil {

@@ -42,6 +42,7 @@ var KnownCapabilities = map[string]bool{
 	manifest.CapGatewayHook:       true,
 	manifest.CapGatewayObserve:    true,
 	manifest.CapAppJobs:           true,
+	manifest.CapAccountLifecycle:  true,
 	manifest.CapAppEvents:         true,
 	manifest.CapHTTPRoutes:        true,
 	manifest.CapMigrationData:     true,
@@ -808,6 +809,60 @@ func (v *validator) stickyRules(f0 string, rules []manifest.StickyRule) {
 // the plugin reads credentials of its own account types (ARCHITECTURE 6.6).
 var credentialsScopeOwn = map[string]any{"types": "own"}
 
+func (v *validator) accountLifecycle(field string, at manifest.AccountType) {
+	if lifecycle := at.Lifecycle; lifecycle != nil {
+		v.needCap(field+".lifecycle", manifest.CapAccountLifecycle)
+		if lifecycle.Required && !lifecycle.Preparation {
+			v.add(field+".lifecycle.required", "invalid", "required needs preparation")
+		}
+		seen := map[string]bool{}
+		for _, action := range lifecycle.Actions {
+			if !accountTypeIDRe.MatchString(action.ID) || seen[action.ID] || strings.TrimSpace(action.Label["en"]) == "" {
+				v.add(field+".lifecycle.actions", "invalid", "actions need unique identifiers and English labels")
+			}
+			seen[action.ID] = true
+		}
+	}
+	if len(at.ExtensionsSchema) == 0 {
+		return
+	}
+	var schema map[string]any
+	if len(at.ExtensionsSchema) > 65536 || json.Unmarshal(at.ExtensionsSchema, &schema) != nil || schema["type"] != "object" || schema["additionalProperties"] != false {
+		v.add(field+".extensionsSchema", "invalid", "extensions schema must be a bounded, closed object schema")
+		return
+	}
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok || len(properties) > 64 {
+		v.add(field+".extensionsSchema.properties", "invalid", "at most 64 extension fields are allowed")
+		return
+	}
+	reserved := []string{"id", "name", "plugin_key", "type", "status", "schedulable", "auto_disable", "priority", "weight", "max_concurrency", "rpm_limit", "tpm_limit", "proxy_id", "proxy_url", "models", "model_mapping", "credentials", "created_by", "group_ids", "status_reason", "auto_disabled_until", "created_at", "updated_at", "preparation_key", "lifecycle_sync"}
+	for name := range properties {
+		if slices.Contains(reserved, name) || slices.Contains(at.SensitiveFields, name) || slices.Contains(at.SettingsFields, name) {
+			v.add(field+".extensionsSchema.properties."+name, "conflict", "extensions cannot duplicate core, credential or existing settings fields")
+		}
+	}
+	pending := []any{schema}
+	for len(pending) > 0 {
+		node := pending[len(pending)-1]
+		pending = pending[:len(pending)-1]
+		switch node := node.(type) {
+		case map[string]any:
+			for key, value := range node {
+				if key == "$ref" || key == "$dynamicRef" || key == "$recursiveRef" {
+					ref, ok := value.(string)
+					if !ok || !strings.HasPrefix(ref, "#") {
+						v.add(field+".extensionsSchema", "invalid", "external schema references are not allowed")
+					}
+				}
+				pending = append(pending, value)
+			}
+		case []any:
+			pending = append(pending, node...)
+		}
+	}
+}
+
 // accountTypes validates the top-level accountTypes (ARCHITECTURE 6.6).
 func (v *validator) accountTypes() {
 	ats := v.m.AccountTypes
@@ -838,6 +893,7 @@ func (v *validator) accountTypes() {
 		}
 		v.form(f+".form", at.Form, false)
 		v.guardedSettings(f, at)
+		v.accountLifecycle(f, at)
 		v.defaultModels(f, at)
 		for _, name := range sortedKeys(at.CommonControls) {
 			if name != "auto_disable" && name != "schedulable" {

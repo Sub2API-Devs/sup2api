@@ -3,6 +3,8 @@
 // registry, consent screen) and plugin tooling (pack, lint).
 package manifest
 
+import "encoding/json"
+
 // APIVersion is the only manifest apiVersion this SDK understands.
 const APIVersion = 1
 
@@ -71,6 +73,7 @@ const (
 	CapGatewayHook       = "gateway.hook.v1"
 	CapGatewayObserve    = "gateway.observe.v1"
 	CapAppJobs           = "app.jobs.v1"
+	CapAccountLifecycle  = "account.lifecycle.v1"
 	CapAppEvents         = "app.events.v1"
 	CapHTTPRoutes        = "http.routes.v1"
 	CapMigrationData     = "migration.data.v1"
@@ -297,6 +300,8 @@ type AccountType struct {
 	DefaultModels       []string                        `json:"defaultModels,omitempty"`
 	DefaultModelMapping map[string]string               `json:"defaultModelMapping,omitempty"`
 	CommonControls      map[string]AccountCommonControl `json:"commonControls,omitempty"`
+	ExtensionsSchema    json.RawMessage                 `json:"extensionsSchema,omitempty"`
+	Lifecycle           *AccountLifecycle               `json:"lifecycle,omitempty"`
 	// Quota declares that accounts of this type have subscription quota
 	// windows (5-hour / weekly limits and the like) the host can track
 	// (CONTRACTS §44). nil: the type has no quota (API keys); the console
@@ -310,6 +315,18 @@ type AccountType struct {
 	// plugin implements BuildRefreshRequest / ParseRefreshResponse to renew
 	// them (CONTRACTS §48). nil: the host never refreshes them.
 	Refresh *AccountRefresh `json:"refresh,omitempty"`
+}
+
+type AccountLifecycle struct {
+	Preparation bool                     `json:"preparation,omitempty"`
+	Required    bool                     `json:"required,omitempty"`
+	Actions     []AccountLifecycleAction `json:"actions,omitempty"`
+}
+
+type AccountLifecycleAction struct {
+	ID    string        `json:"id"`
+	Label LocalizedText `json:"label"`
+	Icon  string        `json:"icon,omitempty"`
 }
 
 type AccountCommonControl struct {

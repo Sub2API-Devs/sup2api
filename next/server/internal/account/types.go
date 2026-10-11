@@ -38,6 +38,8 @@ type AccountTypeView struct {
 	DefaultModels       []string                                 `json:"default_models"`
 	DefaultModelMapping map[string]string                        `json:"default_model_mapping"`
 	CommonControls      map[string]manifest.AccountCommonControl `json:"common_controls,omitempty"`
+	ExtensionsSchema    json.RawMessage                          `json:"extensions_schema,omitempty"`
+	Lifecycle           *manifest.AccountLifecycle               `json:"lifecycle,omitempty"`
 	// Platforms the account type declares, in declaration order.
 	Platforms []TypePlatformView `json:"platforms"`
 	// Endpoints lists the gateway endpoints this type can serve now.
@@ -90,6 +92,8 @@ func typeView(g core.Generation, b core.AccountTypeBinding, conv core.ProtocolCo
 		DefaultModels:       b.Type.DefaultModels,
 		DefaultModelMapping: b.Type.DefaultModelMapping,
 		CommonControls:      b.Type.CommonControls,
+		ExtensionsSchema:    b.Type.ExtensionsSchema,
+		Lifecycle:           b.Type.Lifecycle,
 		Platforms:           typePlatforms(g, b),
 		Endpoints:           servedEndpoints(g, b, conv),
 	}

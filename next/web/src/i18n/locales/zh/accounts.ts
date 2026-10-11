@@ -1,4 +1,9 @@
 export default {
+  lifecycle: {
+    pending: '运行配置待同步', applied: '运行配置已同步', failed: '运行配置同步失败，请检查运行环境',
+    environmentDeferred: '配置已保存，现有容器保持不变。语言和时区仅在新运行环境创建时生效。',
+    preparationFrozen: '授权容器已创建，语言和时区已锁定；如需修改，请取消本次准备后重新开始。'
+  },
   listUi: {
     loadFailedEmpty: '账号列表加载失败，请刷新重试',
     identity: '账号 / 接入类型', filters: '账号筛选', search: '搜索账号名称', advanced: '高级筛选', advancedApplied: '高级筛选条件已生效',

@@ -26,15 +26,16 @@ const ChannelEventsAppended = "events:appended"
 
 // Options tunes delivery; zero values take the defaults.
 type Options struct {
-	CanRun       func() bool   // node admission; nil permits ordinary standalone operation
-	BatchSize    int           // default batch when the manifest omits it (100)
-	PollInterval time.Duration // idle poll period (1s)
-	LockTTL      time.Duration // lease of lock events:{plugin} (30s; at least ~CallTimeout+10s, see defaults)
-	CallTimeout  time.Duration // OnEvents timeout (20s)
-	MaxFailures  int           // consecutive failures before dead-lettering (10)
-	BackoffMin   time.Duration // first retry delay (1s)
-	BackoffMax   time.Duration // retry delay cap (5min)
-	ScanLimit    int           // max outbox rows examined per step (1000)
+	Subscriptions func(core.Generation) []core.SubscriptionBinding
+	CanRun        func() bool   // node admission; nil permits ordinary standalone operation
+	BatchSize     int           // default batch when the manifest omits it (100)
+	PollInterval  time.Duration // idle poll period (1s)
+	LockTTL       time.Duration // lease of lock events:{plugin} (30s; at least ~CallTimeout+10s, see defaults)
+	CallTimeout   time.Duration // OnEvents timeout (20s)
+	MaxFailures   int           // consecutive failures before dead-lettering (10)
+	BackoffMin    time.Duration // first retry delay (1s)
+	BackoffMax    time.Duration // retry delay cap (5min)
+	ScanLimit     int           // max outbox rows examined per step (1000)
 	// GapMinWait/GapMaxWait bound how long a hole in the id sequence (an
 	// uncommitted or rolled-back insert) blocks the cursor: a hole is
 	// skipped once it is at least GapMinWait old and every transaction that
@@ -217,7 +218,11 @@ func (s *Service) watch() {
 func (s *Service) reconcileLocked(gen core.Generation) {
 	want := map[string]core.SubscriptionBinding{}
 	if gen != nil {
-		for _, b := range gen.Subscriptions() {
+		bindings := gen.Subscriptions()
+		if s.opts.Subscriptions != nil {
+			bindings = s.opts.Subscriptions(gen)
+		}
+		for _, b := range bindings {
 			if b.Client == nil || len(b.Events.Subscribe) == 0 {
 				continue
 			}

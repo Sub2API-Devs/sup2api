@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/environment"
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
@@ -45,8 +47,8 @@ func emptyObject(raw string) bool {
 }
 func normalize(kind, raw, settings string) (string, pluginsdk.FieldErrors) {
 	var fields pluginsdk.FieldErrors
-	if !emptyObject(settings) {
-		fields = fields.Add("", "unsupported", "Unexpected settings / 不支持额外设置")
+	if _, err := environment.Normalize([]byte(settings)); err != nil {
+		fields = fields.Add("settings", "invalid", "Invalid runtime environment / 运行环境配置无效")
 	}
 	switch kind {
 	case AccountTypeManaged:
@@ -93,7 +95,9 @@ func (p *Plugin) ValidateCredentials(_ context.Context, in *pluginv1.ValidateCre
 	if len(fields) > 0 {
 		return &pluginv1.ValidateCredentialsResponse{Errors: fields}, nil
 	}
-	return &pluginv1.ValidateCredentialsResponse{NormalizedCredentialsJson: raw, NormalizedSettingsJson: "{}"}, nil
+	settings, _ := environment.Normalize([]byte(in.GetSettingsJson()))
+	encoded, _ := json.Marshal(settings)
+	return &pluginv1.ValidateCredentialsResponse{NormalizedCredentialsJson: raw, NormalizedSettingsJson: string(encoded)}, nil
 }
 func validateAccount(acc *pluginv1.Account) error {
 	if acc == nil {

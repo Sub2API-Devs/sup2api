@@ -22,14 +22,15 @@ import (
 
 // Deps are the collaborators of the account service.
 type Deps struct {
-	CCGateway *ccgateway.Service
-	DB        *store.DB
-	Redis     redis.UniversalClient
-	Cipher    *secret.Cipher
-	Registry  core.PluginRegistry
-	Proxies   core.ProxyDirectory
-	Events    core.EventPublisher
-	Slots     core.Slots // optional: in_use column is 0 without it
+	CCGateway          *ccgateway.Service
+	LifecycleResources map[string]core.AccountLifecycleResource
+	DB                 *store.DB
+	Redis              redis.UniversalClient
+	Cipher             *secret.Cipher
+	Registry           core.PluginRegistry
+	Proxies            core.ProxyDirectory
+	Events             core.EventPublisher
+	Slots              core.Slots // optional: in_use column is 0 without it
 	// Limiter reports rpm/tpm usage (rate_usage column); optional.
 	Limiter core.AccountLimiter
 	Stats   *Stats
@@ -121,6 +122,7 @@ func New(d Deps) *Service {
 // accepts the "all" key or its "own" counterpart (CONTRACTS §21.2); handlers
 // narrow their SQL with core.OwnerScope.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
+	s.registerPreparationRoutes(r)
 	r.Perm("GET", "/settings/account-stats", "settings:read", s.getStatsSettings)
 	r.Perm("PUT", "/settings/account-stats", "settings:manage", s.putStatsSettings)
 	r.PermAny("GET", "/accounts/auto-disable", s.getAutoDisablePolicy, "account:create", "account:own:create", "account:update", "account:own:update")
@@ -163,6 +165,7 @@ func (s *Service) Run(ctx context.Context) {
 	go s.quota.run(ctx)
 	go s.runRefreshSweep(ctx)
 	go s.runAutomaticStateSweep(ctx)
+	go s.runPreparationSweep(ctx)
 	if s.d.Bus != nil {
 		cancel := s.d.Bus.Subscribe(core.ChannelAccountChanged, func([]byte) { s.invalidate() })
 		defer cancel()

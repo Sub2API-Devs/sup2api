@@ -1,4 +1,9 @@
 export default {
+  lifecycle: {
+    pending: 'Runtime configuration pending', applied: 'Runtime configuration synchronized', failed: 'Runtime synchronization failed; check the runtime',
+    environmentDeferred: 'Configuration saved. The existing container is unchanged. Language and timezone apply when a new runtime is created.',
+    preparationFrozen: 'The authorization container has been created. Language and timezone are locked; cancel this preparation to choose different values.'
+  },
   listUi: {
     loadFailedEmpty: 'Accounts could not be loaded. Refresh to retry.',
     identity: 'Account / integration', filters: 'Account filters', search: 'Search account names', advanced: 'More filters', advancedApplied: 'Advanced filters are applied',

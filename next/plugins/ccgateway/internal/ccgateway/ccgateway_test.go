@@ -46,6 +46,30 @@ func TestManagedRPCRequests(t *testing.T) {
 	}
 }
 
+func TestAccountExtensionsSurviveValidationAndRequests(t *testing.T) {
+	p := New()
+	ctx := context.Background()
+	for _, kind := range []string{AccountTypeManaged, AccountTypeAPIKey} {
+		credentials := "{}"
+		if kind == AccountTypeAPIKey {
+			credentials = `{"api_key":"fixture-only-key"}`
+		}
+		settings := `{"locale":"ja-JP","timezone":"Asia/Tokyo"}`
+		validated, err := p.ValidateCredentials(ctx, &pluginv1.ValidateCredentialsRequest{AccountType: kind, CredentialsJson: credentials, SettingsJson: settings})
+		if err != nil || len(validated.GetErrors()) != 0 {
+			t.Fatalf("%s extensions rejected: %v %v", kind, validated, err)
+		}
+		var normalized map[string]string
+		if json.Unmarshal([]byte(validated.GetNormalizedSettingsJson()), &normalized) != nil || normalized["locale"] != "ja-JP" || normalized["timezone"] != "Asia/Tokyo" {
+			t.Fatalf("%s extensions discarded: %v", kind, normalized)
+		}
+		acc := &pluginv1.Account{Type: kind, CredentialsJson: credentials, SettingsJson: settings}
+		if _, err := p.BuildUpstreamRequest(ctx, &pluginv1.BuildUpstreamRequestRequest{Account: acc, Meta: &pluginv1.RequestMeta{Protocol: ProtocolMessages}}); err != nil {
+			t.Fatalf("%s request rejected: %v", kind, err)
+		}
+	}
+}
+
 func TestNativeSessionScopeCannotBeSpoofed(t *testing.T) {
 	p := New()
 	in := &pluginv1.BuildUpstreamRequestRequest{

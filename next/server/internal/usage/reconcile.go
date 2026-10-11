@@ -498,8 +498,7 @@ func (s *Service) reconcileAccount(ctx context.Context, e *settleEntry) (*plugin
 	}
 	out := &pluginv1.Account{Id: acc.ID, Name: acc.Name, Type: acc.Type}
 	if acc.PluginKey == e.pluginKey {
-		out.CredentialsJson = string(acc.Credentials)
-		out.SettingsJson = string(acc.Settings)
+		out = acc.PluginAccount("")
 	}
 	return out, acc.ProxyID
 }

@@ -54,7 +54,7 @@ import {
   type CcgStep
 } from './ccgAuthFlow'
 
-const props = defineProps<{ draft?: boolean; reauthKey?: string | null; proxyId?: number | null; canEdit?: boolean }>()
+const props = defineProps<{ draft?: boolean; reauthKey?: string | null; proxyId?: number | null; canEdit?: boolean; preparationUrl?: string; settings?: Record<string, unknown>; configurationReady?: boolean }>()
 const emit = defineEmits<{
   (e: 'state', s: { key: string | null; authorized: boolean }): void
   (e: 'authorized'): void
@@ -65,7 +65,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const auth = useAuthStore()
 const { proxies } = useProxiesLookup()
-const DRAFTS = '/system/ccgateway/drafts'
+const DRAFTS = computed(() => props.preparationUrl ? '/account-preparations' : '/system/ccgateway/drafts')
 const POLL_MS = 2000
 /** Draft keep-alive: the core sweeps drafts untouched for 15 minutes. */
 const HEARTBEAT_MS = 60_000
@@ -88,7 +88,7 @@ const draftProxy = ref<number | null>(null)
 /** The draft shown: the new account's, or the re-authorization's. */
 const key = computed(() => (reauth.value ? props.reauthKey! : draftKey.value))
 /** Base path of the draft runtime, '' while there is none. */
-const target = computed(() => (key.value ? `${DRAFTS}/${key.value}` : ''))
+const target = computed(() => (key.value ? `${DRAFTS.value}/${key.value}` : ''))
 
 const status = ref<Status | null>(null)
 const health = ref<Health | null>(null)
@@ -117,6 +117,7 @@ let adopted = false
 let alive = true
 let serial = 0
 let lastCall = 0
+let preparationAttempt = ''
 let pollTimer: ReturnType<typeof setInterval> | undefined
 let clockTimer: ReturnType<typeof setInterval> | undefined
 const now = ref(Date.now())
@@ -272,21 +273,23 @@ function resetTarget() {
 }
 
 function discard(key: string) {
-  void api.del(`${DRAFTS}/${key}`).catch(() => {
+  void api.del(`${DRAFTS.value}/${key}`).catch(() => {
     // best effort: the core's sweep removes abandoned drafts
   })
 }
 
 /** ② of a new account: creates the draft runtime with the picked proxy. */
 async function createDraft() {
-  if (!props.draft || draftKey.value || props.proxyId == null || !canManage.value || acting.value) return
+  if (!props.draft || draftKey.value || props.proxyId == null || !canManage.value || acting.value || props.configurationReady === false) return
   const proxy = props.proxyId
   resetTarget()
   busy.value = 'create'
   const stamp = serial
   let key = ''
   try {
-    const r = await api.post<CcgDraft>(DRAFTS, { proxy_id: proxy }, longCall())
+    if (props.preparationUrl && !preparationAttempt) preparationAttempt = Array.from(crypto.getRandomValues(new Uint8Array(16)), value => value.toString(16).padStart(2, '0')).join('')
+    const body = props.preparationUrl ? { proxy_id: proxy, settings: { ...props.settings }, idempotency_key: preparationAttempt } : { proxy_id: proxy }
+    const r = await api.post<CcgDraft>(props.preparationUrl || DRAFTS.value, body, longCall())
     if (!isDraftKey(r?.key)) throw new Error(t('ccgateway.accountAuth.badDraft'))
     key = r.key
   } catch (e) {
@@ -315,7 +318,7 @@ async function updateProxy() {
   health.value = null
   const stamp = ++serial
   try {
-    await api.put(`${DRAFTS}/${key}`, { proxy_id: p }, longCall())
+    await api.put(`${DRAFTS.value}/${key}`, { proxy_id: p }, longCall())
   } catch (e) {
     busy.value = ''
     if (alive && stamp === serial && key === draftKey.value) await containerFailure('proxyFailed', e, stamp)
@@ -340,6 +343,7 @@ async function restartDraft() {
   resetTarget()
   draftKey.value = null
   draftProxy.value = null
+  preparationAttempt = ''
   if (key) discard(key)
   await createDraft()
 }
@@ -625,7 +629,7 @@ const settingsLink = '/plugins/ccgateway?tab=settings#ccgateway-runtime'
               <div v-if="busy === 'create'" class="mt-1 flex items-center gap-2 text-xs text-gray-600 dark:text-dark-300"><SSpinner size="sm" />{{ t('ccgateway.accountAuth.creating') }}</div>
               <div v-else-if="states.container === 'current'" class="mt-1 space-y-2">
                 <p class="text-xs text-gray-600 dark:text-dark-300">{{ t('ccgateway.accountAuth.startHint') }}</p>
-                <SButton variant="primary" :disabled="acting || !canManage" data-testid="ccgateway-auth-create" @click="createDraft"><SIcon name="play" class="h-4 w-4" />{{ t('ccgateway.accountAuth.startContainer') }}</SButton>
+                <SButton variant="primary" :disabled="acting || !canManage || configurationReady === false" data-testid="ccgateway-auth-create" @click="createDraft"><SIcon name="play" class="h-4 w-4" />{{ t('ccgateway.accountAuth.startContainer') }}</SButton>
               </div>
             </template>
             <div v-else-if="blocked" class="mt-1.5 space-y-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300" role="alert" data-testid="ccgateway-auth-blocked" :data-reason="blocked">

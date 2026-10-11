@@ -31,6 +31,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/billing"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/cluster"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/event"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/event/delivery"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/fallbackcredits"
@@ -188,7 +189,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	grp := group.New(db, rdb, cl.Bus, reg)
 	keys := apikey.New(db, rdb, az, reg)
 	keys.Cipher = cipher
-	prx := proxy.New(db, cipher, cl.Bus, proxy.Options{AllowPrivate: cfg.AllowPrivateUpstream, Registry: reg})
+	prx := proxy.New(db, cipher, cl.Bus, proxy.Options{AllowPrivate: cfg.AllowPrivateUpstream, Registry: reg, Events: events})
 	// One converter registry for the gateway (conversion) and the account
 	// module (endpoints an account type can serve), ARCHITECTURE 6.6.
 	converters := convert.Default()
@@ -212,8 +213,9 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 		return ccgateway.BundlePackage{Version: p.Version, File: p.File(), FS: p.FS()}, true
 	}
 	acc := account.New(account.Deps{
-		CCGateway: ccg,
-		DB:        db, Redis: rdb, Cipher: cipher, Registry: reg, Proxies: prx, Events: events,
+		CCGateway:          ccg,
+		LifecycleResources: map[string]core.AccountLifecycleResource{"ccgateway": ccg},
+		DB:                 db, Redis: rdb, Cipher: cipher, Registry: reg, Proxies: prx, Events: events,
 		Slots: cl.Slots, Limiter: limiter, Stats: accountStats, Bus: cl.Bus, AllowPrivateUpstream: cfg.AllowPrivateUpstream, Converters: converters,
 		// Ownership checks and proxy_url resolution (CONTRACTS §21).
 		Authorizer: az, Resolver: prx,
@@ -358,7 +360,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 
 	jobs := job.New(db, cl.Locker, reg, log, cfg.NodeID, job.Options{Executor: backgroundWork})
 	onClose(func(c context.Context) { _ = jobs.Stop(c) })
-	dlv := delivery.New(db, cl.Locker, cl.Bus, reg, log, cfg.NodeID, delivery.Options{CanRun: canWork})
+	dlv := delivery.New(db, cl.Locker, cl.Bus, reg, log, cfg.NodeID, delivery.Options{CanRun: canWork, Subscriptions: acc.LifecycleSubscriptions})
 	onClose(func(c context.Context) { _ = dlv.Stop(c) })
 	var startOnce sync.Once
 	var startErr error

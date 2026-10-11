@@ -13,6 +13,31 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
+func TestAccountLifecycleMigrationPreservesExistingRuntimes(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := t.Context()
+	_, err := db.Pool.Exec(ctx, `DROP TABLE account_lifecycle_sync,account_preparations;
+		ALTER TABLE ccgateway_runtimes DROP COLUMN initial_settings;
+		DELETE FROM schema_migrations WHERE id='0051_account_preparations.sql';
+		INSERT INTO accounts(name,plugin_key,type,credentials_enc,status,schedulable) VALUES('preserved','ccgateway','managed','','disabled',false);
+		INSERT INTO ccgateway_runtimes(key,account_id) SELECT 'd1234567890abcdef',id FROM accounts WHERE name='preserved'`)
+	require.NoError(t, err)
+	query := `SELECT jsonb_build_object('accounts',(SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM accounts a),'runtimes',(SELECT jsonb_agg(to_jsonb(r)-'initial_settings' ORDER BY key) FROM ccgateway_runtimes r))::text`
+	var before, after string
+	require.NoError(t, db.Pool.QueryRow(ctx, query).Scan(&before))
+	for i := range 2 {
+		done, err := store.Migrate(ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
+		require.NoError(t, err)
+		if i == 0 {
+			require.Equal(t, []string{"0051_account_preparations.sql"}, done)
+		} else {
+			require.Empty(t, done)
+		}
+		require.NoError(t, db.Pool.QueryRow(ctx, query).Scan(&after))
+		require.Equal(t, before, after)
+	}
+}
+
 func TestAutomaticStateMigrationPreservesLegacyAccounts(t *testing.T) {
 	db := testutil.DB(t)
 	ctx := t.Context()

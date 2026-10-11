@@ -349,8 +349,7 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	if c.rec.UsageSemantics == "" {
 		c.rec.UsageSemantics = "exclusive"
 	}
-	pacct := &pluginv1.Account{Id: acc.ID, Name: acc.Name, Platform: c.platform, Type: rt.binding.Type.ID,
-		CredentialsJson: string(acc.Credentials), SettingsJson: string(acc.Settings)}
+	pacct := acc.PluginAccount(c.platform)
 
 	// Convert the request body to the upstream protocol when needed.
 	upBody, err := rt.upstreamBody(c.body)

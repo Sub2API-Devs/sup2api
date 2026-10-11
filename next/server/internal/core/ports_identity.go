@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 )
 
@@ -167,8 +168,18 @@ type AccountLimiter interface {
 type Account struct {
 	AccountRef
 	Status      string
+	Schedulable bool
+	AutoDisable bool
 	Credentials json.RawMessage
 	Settings    json.RawMessage
+}
+
+func (a *Account) PluginAccount(platform string) *pluginv1.Account {
+	return &pluginv1.Account{Id: a.ID, Name: a.Name, Platform: platform, Type: a.Type, CredentialsJson: string(a.Credentials), SettingsJson: string(a.Settings), Properties: &pluginv1.AccountProperties{
+		Status: a.Status, Schedulable: a.Schedulable, AutoDisable: a.AutoDisable,
+		Priority: int32(a.Priority), Weight: int32(a.Weight), MaxConcurrency: int32(a.MaxConcurrency),
+		RpmLimit: int32(a.RPMLimit), TpmLimit: a.TPMLimit, ProxyId: a.ProxyID, Models: a.Models, ModelMapping: a.ModelMapping,
+	}}
 }
 
 // AccountDirectory is the gateway's view of accounts. Candidates are served

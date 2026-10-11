@@ -452,6 +452,18 @@ class ManagerTests(Base):
         self.assertEqual(self.app('9').attrs['Image'], 'sha256:id-c')
         self.assertIn(app2, images.pulls)
 
+    def test_environment_changes_preserve_existing_runtime(self):
+        self.apply('7')
+        app = self.app('7')
+        egress = self.fake.containers.get('ccg-7-egress')
+        volume = self.fake.volumes.items['ccg-7-data']
+        self.apply('7', revision='b' * 64, auth={'mode': 'oauth', 'locale': 'ja_JP.UTF-8', 'timezone': 'Asia/Tokyo'})
+        self.assertIs(self.app('7'), app)
+        self.assertIs(self.fake.containers.get('ccg-7-egress'), egress)
+        self.assertIs(self.fake.volumes.items['ccg-7-data'], volume)
+        self.assertFalse(app.removed or egress.removed or volume.removed)
+        self.assertTrue(self.m.public('7')['environment_pending'])
+
     def test_pull_failure(self):
         self.m.lockfile.close()
         self.m = self.make('ghcr.io/x/app@sha256:' + 'e' * 64, 'egress:test')
