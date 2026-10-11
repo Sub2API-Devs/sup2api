@@ -97,58 +97,100 @@ func (t modelTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 func (t modelTransport) forwardManaged(req *http.Request, path string, resource bool) (*http.Response, error) {
 	// Allow the runtime's one-hour execution deadline to report its result.
 	ctx, cancel := context.WithTimeout(req.Context(), time.Hour+time.Minute)
-	cfg, e := t.s.Load(ctx)
-	if e != nil {
+	res, stale, e := t.forwardAttempt(ctx, cancel, req, req.Body, path, resource)
+	if stale && (req.Body == nil || req.Body == http.NoBody || req.GetBody != nil) {
+		// The cached revision was not the controller's: once more with the
+		// account read again (it was dropped from the cache).
+		body := req.Body
+		if req.GetBody != nil {
+			if req.Body != nil {
+				_ = req.Body.Close()
+			}
+			if body, e = req.GetBody(); e != nil {
+				cancel()
+				return nil, e
+			}
+		}
+		res, stale, e = t.forwardAttempt(ctx, cancel, req, body, path, resource)
+	}
+	if stale {
 		cancel()
-		return nil, e
+		return notSynchronizedResponse(req), nil
+	}
+	return res, e
+}
+
+// forwardAttempt sends req once. stale reports a refusal of the runtime
+// revision that came from the request cache; the caller may retry, and the
+// answer is a 409 not_synchronized otherwise.
+func (t modelTransport) forwardAttempt(ctx context.Context, cancel context.CancelFunc, req *http.Request, body io.ReadCloser, path string, resource bool) (*http.Response, bool, error) {
+	fail := func(e error) (*http.Response, bool, error) {
+		cancel()
+		return nil, false, e
+	}
+	cfg, e := t.s.requestConfig(ctx)
+	if e != nil {
+		return fail(e)
 	}
 	if resource && (!cfg.AccountRuntimes || t.accountID <= 0) {
-		cancel()
-		return nil, errors.New("provider resources require per-account runtimes")
+		return fail(errors.New("provider resources require per-account runtimes"))
 	}
 	var revision, key string
+	var cached bool
 	if !cfg.AccountRuntimes && t.accountID > 0 {
 		var kind string
 		if err := t.s.DB.Pool.QueryRow(ctx, "SELECT type FROM accounts WHERE id=$1 AND plugin_key='ccgateway'", t.accountID).Scan(&kind); err != nil || kind == "apikey" {
-			cancel()
-			return nil, errors.New("API key accounts require per-account runtimes")
+			return fail(errors.New("API key accounts require per-account runtimes"))
 		}
 	}
 	if t.proxySelected && !cfg.AccountRuntimes {
-		cancel()
-		return nil, errors.New("account proxy requires per-account runtimes")
+		return fail(errors.New("account proxy requires per-account runtimes"))
 	}
 	if cfg.AccountRuntimes {
-		d, err := t.s.desired(ctx, t.accountID, false)
+		d, fromCache, err := t.s.requestDesired(ctx, t.accountID)
 		if err != nil || !d.Enabled {
-			cancel()
-			return nil, errors.New("account egress unavailable")
+			return fail(errors.New("account egress unavailable"))
 		}
-		revision, key = d.Revision, d.Key
+		revision, key, cached = d.Revision, d.Key, fromCache
 	}
 	if (!cfg.AccountRuntimes && cfg.APIKey == "") || (cfg.AccountRuntimes && cfg.AdminKey == "") {
+		return fail(errors.New("CCGateway key is not configured"))
+	}
+	// notSynchronized: the runtime is not at the revision the core wants.
+	// The account is read again next time and its runtime reconciled now.
+	notSynchronized := func() (*http.Response, bool, error) {
+		t.s.forgetAccount(t.accountID, key)
+		t.s.Kick(key)
+		if cached {
+			return nil, true, errAccountNotSynchronized
+		}
 		cancel()
-		return nil, errors.New("CCGateway key is not configured")
+		return notSynchronizedResponse(req), false, nil
 	}
 	var client *http.Client
 	var base, modelKey string
 	var close func() error
 	if cfg.AccountRuntimes {
-		client, base, modelKey, close, e = t.s.openAccountModel(ctx, cfg, key, revision)
+		r, err := t.s.route(ctx, cfg, key, revision)
+		if err == nil {
+			base, modelKey = r.base, r.modelKey
+			client, close, err = t.s.openRoute(ctx, cfg, r)
+		}
+		e = err
 	} else {
 		client, base, close, e = t.s.open(ctx, cfg)
 		modelKey = cfg.APIKey
 	}
 	if e != nil {
-		cancel()
 		if errors.Is(e, errAccountNotSynchronized) {
-			return &http.Response{StatusCode: 409, Status: "409 Conflict", Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"error":"not_synchronized"}`)), Request: req}, nil
+			return notSynchronized()
 		}
-		return nil, errors.New("CCGateway is unavailable")
+		return fail(errors.New("CCGateway is unavailable"))
 	}
 	var once sync.Once
 	finish := func() { once.Do(func() { _ = close(); cancel() }) }
 	clone := req.Clone(ctx)
+	clone.Body = body
 	clone.URL, _ = url.Parse(base + path)
 	clone.URL.RawQuery = req.URL.RawQuery
 	clone.Host = ""
@@ -157,7 +199,7 @@ func (t modelTransport) forwardManaged(req *http.Request, path string, resource 
 		policy := cfg.WorkerRequestPolicy(t.accountID)
 		if err := validateRequestPolicy(policy); err != nil {
 			finish()
-			return nil, err
+			return nil, false, err
 		}
 		policyJSON, _ := json.Marshal(policy)
 		clone.Header.Set("X-CCGateway-Request-Policy", string(policyJSON))
@@ -167,11 +209,28 @@ func (t modelTransport) forwardManaged(req *http.Request, path string, resource 
 	clone.Header.Del("X-CCG-Revision")
 	res, e := client.Do(clone)
 	if e != nil {
-		finish()
-		return nil, errors.New("CCGateway model request failed")
+		_ = close()
+		if cfg.AccountRuntimes {
+			if errors.Is(e, errAccountNotSynchronized) {
+				return notSynchronized()
+			}
+			// The runtime may have moved: ask the controller again next time.
+			t.s.forgetAccount(t.accountID, key)
+		}
+		cancel()
+		return nil, false, errors.New("CCGateway model request failed")
+	}
+	if cfg.AccountRuntimes && res.StatusCode == http.StatusUnauthorized {
+		// A recreated runtime has a new Worker key; an upstream 401 only
+		// costs one connection lookup.
+		t.s.forgetAccount(t.accountID, key)
 	}
 	res.Body = &modelBody{ReadCloser: res.Body, finish: finish}
-	return res, nil
+	return res, false, nil
+}
+
+func notSynchronizedResponse(req *http.Request) *http.Response {
+	return &http.Response{StatusCode: 409, Status: "409 Conflict", Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"error":"not_synchronized"}`)), Request: req}
 }
 
 type modelBody struct {

@@ -91,7 +91,8 @@ func TestResourceTransportDBReusesAccountDiscoveryWithoutControllerBody(t *testi
 		response.Body.Close()
 		t.Fatal("changed issuer response accepted")
 	}
-	if calls != 3 || controlCalls != 3 || closed != 3 {
+	// The runtime's connection is asked once and kept for its revision.
+	if calls != 3 || controlCalls != 1 || closed != 3 {
 		t.Fatalf("resource connection lifecycle: worker=%d controller=%d closed=%d", calls, controlCalls, closed)
 	}
 }

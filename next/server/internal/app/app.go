@@ -195,6 +195,9 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	ccg := ccgateway.New(db, cipher)
 	// Draft proxy visibility and the one-node draft sweep (CONTRACTS §49).
 	ccg.Authorizer, ccg.Locker, ccg.CanWork = az, cl.Locker, canWork
+	// Account, proxy and configuration changes reach the request cache and
+	// the reconciler of every node.
+	ccg.Bus = cl.Bus
 	// The runtime images ship inside the active ccgateway package (§53.10).
 	ccg.Bundle = func() (ccgateway.BundlePackage, bool) {
 		p := reg.Package("ccgateway")

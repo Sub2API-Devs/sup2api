@@ -149,3 +149,22 @@ func accountTunnelClient(ctx context.Context, cfg Config, runtimeKey, revision, 
 	}}
 	return client, closeAll, nil
 }
+
+// pooledTunnelClient is the client of one account endpoint at one revision
+// shared by the requests of the route: each connection is a tunnel opened
+// when needed (the controller checks the revision then) and kept idle for
+// the next request. The number of connections is not capped here: the
+// account's concurrency is the core's slots.
+func pooledTunnelClient(cfg Config, runtimeKey, revision, target string) (*http.Client, func() error) {
+	transport := &http.Transport{Proxy: nil, MaxResponseHeaderBytes: 64 << 10, MaxIdleConnsPerHost: 4, IdleConnTimeout: routeIdleTimeout}
+	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		if network != "tcp" || address != target {
+			return nil, errors.New("account tunnel destination rejected")
+		}
+		return dialTunnel(ctx, cfg, runtimeKey, revision)
+	}
+	client := &http.Client{Transport: fixedTarget{rt: transport, scheme: "http", host: target}, CheckRedirect: func(*http.Request, []*http.Request) error {
+		return errors.New("account tunnel redirects are disabled")
+	}}
+	return client, func() error { transport.CloseIdleConnections(); return nil }
+}

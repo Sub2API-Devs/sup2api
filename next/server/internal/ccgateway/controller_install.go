@@ -593,5 +593,8 @@ func (s *Service) updateConfigAt(ctx context.Context, uid int64, fields []string
 		}
 		return audit.Audit(ctx, tx, uid, "ccgateway.config.update", "system", "ccgateway", map[string]any{"fields": fields})
 	})
+	if e == nil {
+		s.configChanged(ctx)
+	}
 	return saved, e
 }

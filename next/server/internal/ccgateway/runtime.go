@@ -430,6 +430,9 @@ func (s *Service) ensureControllerKey(ctx context.Context, cfg Config, uid int64
 		}
 		return audit.Audit(ctx, tx, uid, "ccgateway.config.update", "system", "ccgateway", map[string]any{"fields": []string{"admin_key"}})
 	})
+	if e == nil {
+		s.configChanged(ctx)
+	}
 	return key, e
 }
 

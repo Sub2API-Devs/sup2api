@@ -2929,7 +2929,7 @@ claude-oauth 插件原来有个每 30 分钟跑一次的 `refresh_tokens` 任务
 授权在**账号管理 → 新建 / 编辑 CCGateway 账号**里完成；CCGateway 插件页只显示容器状态并跳转到账号页。
 
 1. 控制台保存 ccgateway `managed`（或 `apikey`）账号。**账号必须绑定可用代理**，否则不会起容器（status 为 `blocked`，`reason: "no_proxy"`）。
-2. 核心在账号创建、修改成功后调 `ccgateway.Service.Kick(key)`（`key` 为账号 id 或运行环境 key，账号 id 会解析成该账号的运行环境 key，§49.7）：非阻塞投递到本节点的 kick 队列（容量 64，满了直接丢，3 秒一轮的扫描仍会覆盖），由 `Run` 里单独的 goroutine 立即 `Reconcile`，不排在全量扫描后面。未开启 `account_runtimes` 时忽略。
+2. 核心在账号创建、修改成功后调 `ccgateway.Service.Kick(key)`（`key` 为账号 id 或运行环境 key，账号 id 会解析成该账号的运行环境 key，§49.7）：非阻塞投递到本节点的 kick 队列（容量 64，满了直接丢，每分钟一轮的扫描仍会覆盖），由 `Run` 里单独的 goroutine 立即 `Reconcile`，不排在全量扫描后面；失败时每 5 秒再 kick 一次，最多 12 次，之后交给扫描（§49.18）。未开启 `account_runtimes` 时忽略。
 3. 控制台同时可以调 `POST /system/ccgateway/accounts/:id/sync`（同步执行一次 `Reconcile`，最长 90 秒），然后轮询 `GET .../status` / `GET .../health`。
 4. `status = ready` 后调 `POST .../start` 取授权链接，用户登录 Claude 后把 `code#state` 粘贴回来调 `POST .../complete {session_id?, code}`，容器里的 Claude Code 完成授权。页面刷新后先调 `GET .../session` 恢复未完成的授权（49.4）。
 
@@ -2951,7 +2951,7 @@ claude-oauth 插件原来有个每 30 分钟跑一次的 `refresh_tokens` 任务
 ### 49.3 已知限制
 
 - 多节点：`sync` / kick 落到任意节点都能工作（每个节点用同一份 SSH 配置连控制器；`Reconcile` 用 PG advisory 锁 `ccg-account:<key>` 串行——数字 key 与旧版的 `ccg-account:<id>` 相同，控制器内部也按 key 加锁）。拿不到锁时 `sync` 立即返回 `synced: true`（另一处正在同步），所以控制台必须以轮询 `status` 为准。
-- `Reconcile` 在整个远程调用期间（最长 90 秒）占着一个数据库连接和事务；所有节点每 3 秒对每个运行环境（账号 + 未认领草稿）各发一次 `GET status`。账号多时需要关注。
+- `Reconcile` 在整个远程调用期间（最长 90 秒）占着一个数据库连接和事务；所有节点每 60 秒（2026-10-11 前为 3 秒）对每个运行环境（账号 + 未认领草稿）各发一次 `GET status`，代理变更时立即多扫一轮（§49.18）。
 - ~~49.4 依赖业务容器的报错文字~~：已取消。核心不再匹配任何报错文字，只认业务容器 / 控制器的英文错误代码（§49.12）。
 
 ### 49.4 授权会话（已改）
@@ -2997,7 +2997,7 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 );
 ```
 
-账号的运行环境 key = `ccgateway_runtimes.key`（`account_id` = 该账号），否则账号 id。核心内所有按运行环境的操作都以 key 为单位：`desired`、`Reconcile`（`Reconcile(ctx, key)`，传账号 id 时先解析成该账号的 key）、控制器请求路径 `/accounts/<key>/...`、模型请求 `/accounts/<key>/v1/messages`、`Run` 的 3 秒扫描（每个 ccgateway 账号一个 key + 每个未认领草稿）、`Kick(key)`。
+账号的运行环境 key = `ccgateway_runtimes.key`（`account_id` = 该账号），否则账号 id。核心内所有按运行环境的操作都以 key 为单位：`desired`、`Reconcile`（`Reconcile(ctx, key)`，传账号 id 时先解析成该账号的 key）、控制器请求路径 `/accounts/<key>/...`、模型请求 `/accounts/<key>/v1/messages`、`Run` 的定时扫描（每个 ccgateway 账号一个 key + 每个未认领草稿）、`Kick(key)`。
 
 草稿的期望状态：代理取草稿行的 `proxy_id`；`enabled` = 代理存在且未停用（否则 `blocked`，原因 `no_proxy` / `proxy_disabled`）；`auth = {"mode":"oauth"}`；修订号 = sha256(`draft|key|proxy_id|proxy.updated_at|proxy.status`)，任何节点都能算出同一个值。认领后改用账号的期望状态（账号的代理与草稿不同时以账号为准，下一次 reconcile 换出口）。
 
@@ -3171,7 +3171,7 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
   5. 在事务内读出账号的期望状态（此时已指向新 key），**提交前**对新 key `PUT config`：网关在提交那一刻改走新 key 时，新运行环境已按账号修订号就绪，不会有 409 窗口。控制器失败则整个事务回滚：503 `sync_failed`（连不上控制器为 `not_configured`）。账号已停用 / 代理停用时跳过这一步，由提交后的 Kick 阻断。
 - 提交后：Kick 账号、广播 `account:changed`，返回账号视图。网关新请求立即走新 key；已在旧运行环境上的请求可以继续跑完（旧运行环境 10 分钟后才删）。
 
-**核心对已退役运行环境：** 不在 `Run` 的 3 秒扫描里（`runtimeKeys` 排除 `retired_at`），`Reconcile`/`desired`/草稿期望状态都不会解析到它（账号 id → key 只取 `account_id` 匹配的行；草稿期望状态要求 `retired_at IS NULL`），草稿接口对它 404。
+**核心对已退役运行环境：** 不在 `Run` 的定时扫描里（`runtimeKeys` 排除 `retired_at`），`Reconcile`/`desired`/草稿期望状态都不会解析到它（账号 id → key 只取 `account_id` 匹配的行；草稿期望状态要求 `retired_at IS NULL`），草稿接口对它 404。
 
 **清理任务（§49.13 扩展）：**
 - `retired_at` 早于 10 分钟前的退役运行环境：advisory 锁下删行 → 控制器 `DELETE /accounts/<key>`（数字 key 带请求头 `X-CCG-Delete-Account: <key>`）→ 成功才提交；控制器失败则行保留下一轮重试（404 视为已删除）。
@@ -3185,6 +3185,29 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
 - 提交前预先 `PUT config`（原文只说提交后 Kick）：避免提交后几秒内网关拿到控制器 409。
 
 **部署：** 控制器须先升级到支持 `X-CCG-Delete-Account` 的版本，否则退役数字 key 的删除每分钟失败一次（行保留、记 WARN），升级后自动删掉。旧核心节点不读新列，会把退役行当成未认领草稿（reconcile 它、草稿 key 的退役行会被旧节点的草稿清理提前删掉）：全部节点升级后再使用重新授权。
+
+### 49.18 模型请求不再逐次读配置、问控制器（2026-10-11，用户要求）
+
+配置只在改动时同步；转发请求不再每次读库、问控制器。
+
+- **缓存的内容**（每个节点内存，`request_cache.go`）：
+  - CCGateway 配置；
+  - 账号的期望状态（不含凭据，只用于算修订号）；
+  - 每个运行环境 key 的"路由"：该修订号下的 `app_ip`、Worker key 和一个复用隧道连接的 HTTP 客户端。
+- **失效**：
+  - 保存配置（PUT 远程配置、安装/升级写配置、生成管理 key）后，本节点清空，并在 `config:changed` 发 `{"type":"ccgateway"}`，其他节点清空。
+  - `account:changed` 带 `account_id` 时只清该账号，不带时清所有账号；`config:changed` 的 `{"type":"proxy"}` 清所有账号并立即扫描一轮。
+  - 总线是尽力而为，所以配置和期望状态另有 30 秒过期。
+  - 清掉的路由会关闭空闲隧道；请求还在用的连接在请求结束时关闭。
+- **一致性**：
+  - 连接只按核心期望的修订号向控制器要；每条新隧道握手时控制器都会核对修订号，不一致回 409。
+  - 来自缓存的修订号被拒（409）时，清掉该账号后用新读的修订号重试一次；请求体能重放时重试，不能重放则回 409 `not_synchronized`。
+  - 新读的修订号仍被拒，就是运行环境确实没同步，照旧回 409，并立即 kick 该运行环境。
+  - Worker 回 401 或连接失败时清掉该账号的路由，下一个请求重新问控制器。
+- **空闲连接**保持 30 秒，比 Worker 的 60 秒空闲超时短。
+- **请求策略**（`X-CCGateway-Request-Policy`）仍随每个请求发送，Worker 保持无状态。
+- **定时扫描**：`Run` 改为每 60 秒一轮，只用来发现控制器那边的意外变化（容器重启、被删）和漏掉的总线消息。kick 失败每 5 秒重试，最多 12 次。
+- **停用账号不再反复写配置**：控制器对已阻断的运行环境 `GET status` 报 `pending`，所以以前每个节点每轮都对停用账号 `PUT config`（线上 4 节点 × 每 3 秒 = 每分钟 80 次）。现在节点阻断成功后记下修订号，10 分钟内同一修订号不再阻断；任何 kick、账号/代理/配置变更都会清掉这个记录。
 
 ## 50. 账号测试：记录最近一次结果、requested_model（2026-10-05，用户要求；参考 new-api 渠道测试）
 

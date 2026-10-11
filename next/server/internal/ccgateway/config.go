@@ -188,10 +188,20 @@ type Service struct {
 	// images/ carry the runtime images (CONTRACTS §53.10); nil: none.
 	Bundle  func() (BundlePackage, bool)
 	bundles bundleCache
+	// Bus carries configuration and account changes between nodes (the
+	// request cache and immediate reconciles); nil: this node only.
+	Bus core.Bus
+	// cache keeps what forwarding a model request needs (request_cache.go).
+	cache requestCache
+	// sweepNow asks Run for a reconcile pass of every runtime now.
+	sweepNow chan struct{}
+	// blocked: runtimes this node blocked, by key (Reconcile).
+	blockedMu sync.Mutex
+	blocked   map[string]blockedMark
 }
 
 func New(db *store.DB, cipher *secret.Cipher) *Service {
-	return &Service{DB: db, Cipher: cipher, kick: make(chan string, 64)}
+	return &Service{DB: db, Cipher: cipher, kick: make(chan string, 64), sweepNow: make(chan struct{}, 1)}
 }
 func (s *Service) decode(raw []byte) (Config, error) {
 	c, err := s.decodeStored(raw)
@@ -482,6 +492,7 @@ func (s *Service) save(c *gin.Context) {
 		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("The configuration could not be saved: check the request policy, beta mappings, private IPv4 CIDR, IP allocation mode, the connection mode (controller or disabled), or the control panel scheme, address, management key and root certificate."))
 		return
 	}
+	s.configChanged(ctx)
 	if saved.AccountRuntimes {
 		if keys, err := s.runtimeKeys(ctx); err == nil {
 			for _, key := range keys {

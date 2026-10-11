@@ -24,8 +24,8 @@ var ccgNotReady = core.ErrUnavailable.WithMessage("Configure and authorize CCGat
 	WithDetails(map[string]any{"reason": "not_configured"})
 
 // kickCCGateway prepares a CCGateway account's runtime (container + egress)
-// right after it is created or changed instead of waiting for the next 3 s
-// sweep. The ccgateway service resolves the account's runtime key (adopted
+// right after it is created or changed instead of waiting for the next
+// reconcile pass. The ccgateway service resolves the account's runtime key (adopted
 // draft key or id) and ignores the kick unless per-account runtimes are
 // enabled.
 func (s *Service) kickCCGateway(id int64, pluginKey, typ string) {

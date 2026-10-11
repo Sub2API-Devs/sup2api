@@ -60,7 +60,8 @@ func TestReviewHelperRequirementDBDirectTransportAndLegacy404(t *testing.T) {
 			t.Fatal("failed probe accepted")
 		}
 	}
-	if controlCalls != 4 || workerCalls != 4 || closed != 4 {
+	// The runtime's connection is asked once and kept for its revision.
+	if controlCalls != 1 || workerCalls != 4 || closed != 4 {
 		t.Fatal("connection lifecycle changed", controlCalls, workerCalls, closed)
 	}
 }

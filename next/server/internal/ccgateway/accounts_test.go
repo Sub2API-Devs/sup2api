@@ -113,6 +113,8 @@ func TestAccountProxyReconcileAndRequestIsolation(t *testing.T) {
 	if _, e := db.Pool.Exec(ctx, `UPDATE proxies SET port=3129,updated_at=clock_timestamp() WHERE id=$1`, pid); e != nil {
 		t.Fatal(e)
 	}
+	// The proxy service publishes the change; the account is read again.
+	s.onConfigChanged([]byte(`{"type":"proxy","id":1}`))
 	if call() != 409 {
 		t.Fatal("unsynchronized proxy accepted")
 	}

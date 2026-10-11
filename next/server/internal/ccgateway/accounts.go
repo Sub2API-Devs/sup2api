@@ -283,6 +283,9 @@ func (s *Service) Reconcile(ctx context.Context, key string) error {
 	if e != nil {
 		return e
 	}
+	if !d.Enabled && s.blockedRecently(key, d.Revision) {
+		return nil
+	}
 	// Check remote readiness without rewriting an unchanged configuration.
 	res, close, e := s.runtimeRequest(ctx, key, "GET", "status", nil, "")
 	if e == nil {
@@ -297,7 +300,47 @@ func (s *Service) Reconcile(ctx context.Context, key string) error {
 			return nil
 		}
 	}
-	return s.putConfig(ctx, key, d)
+	if e = s.putConfig(ctx, key, d); e == nil && !d.Enabled {
+		s.markBlocked(key, d.Revision)
+	}
+	return e
+}
+
+// blockedFor is how long a runtime this node blocked is not blocked again.
+// The controller reports a blocked runtime as "pending", so without it every
+// node rewrote the configuration of every disabled account at every pass
+// (2026-10-11). Blocking again now and then still stops containers someone
+// started by hand.
+var blockedFor = 10 * time.Minute
+
+type blockedMark struct {
+	revision string
+	at       time.Time
+}
+
+func (s *Service) blockedRecently(key, revision string) bool {
+	s.blockedMu.Lock()
+	defer s.blockedMu.Unlock()
+	m, ok := s.blocked[key]
+	return ok && m.revision == revision && time.Since(m.at) < blockedFor
+}
+
+// forgetBlocked follows an account, proxy or configuration change: a
+// runtime blocked again at the same revision (disabled, enabled, disabled) is
+// blocked again.
+func (s *Service) forgetBlocked() {
+	s.blockedMu.Lock()
+	s.blocked = nil
+	s.blockedMu.Unlock()
+}
+
+func (s *Service) markBlocked(key, revision string) {
+	s.blockedMu.Lock()
+	defer s.blockedMu.Unlock()
+	if s.blocked == nil {
+		s.blocked = map[string]blockedMark{}
+	}
+	s.blocked[key] = blockedMark{revision: revision, at: time.Now()}
 }
 
 // putConfig applies d to the runtime key on the controller (PUT config).
@@ -316,10 +359,12 @@ func (s *Service) putConfig(ctx context.Context, key string, d accountDesired) e
 }
 
 // Kick asks this node to reconcile one runtime now instead of waiting for
-// the next sweep (account create/update, draft create/update). key is a
+// the next reconcile pass (account create/update, draft create/update). key is a
 // runtime key or an account id. It never blocks; a full queue is dropped
-// because the sweep still covers the runtime within seconds.
+// because the reconcile pass still covers the runtime within a minute.
 func (s *Service) Kick(key string) {
+	// A kick follows a change: block again even at a revision blocked before.
+	s.forgetBlocked()
 	select {
 	case s.kick <- key:
 	default:
@@ -327,8 +372,11 @@ func (s *Service) Kick(key string) {
 }
 
 // reconcileKicked serves Kick on its own goroutine so a long sweep (each
-// runtime may take up to 90 s) does not delay a freshly created one.
+// runtime may take up to 90 s) does not delay a freshly created one. A
+// failed reconcile is kicked again every kickRetryEvery, kickRetries times,
+// before it is left to the reconcile pass.
 func (s *Service) reconcileKicked(ctx context.Context) {
+	failures := map[string]int{}
 	for {
 		select {
 		case <-ctx.Done():
@@ -338,13 +386,26 @@ func (s *Service) reconcileKicked(ctx context.Context) {
 				continue
 			}
 			c, cancel := context.WithTimeout(ctx, 90*time.Second)
-			if e := s.Reconcile(c, key); e != nil && ctx.Err() == nil {
-				slog.Warn("CCGateway runtime reconcile failed", "key", key, "err", e)
-			}
+			e := s.Reconcile(c, key)
 			cancel()
+			if e == nil || ctx.Err() != nil {
+				delete(failures, key)
+				continue
+			}
+			slog.Warn("CCGateway runtime reconcile failed", "key", key, "err", e)
+			if failures[key]++; failures[key] <= kickRetries {
+				time.AfterFunc(kickRetryEvery, func() { s.Kick(key) })
+			} else {
+				delete(failures, key)
+			}
 		}
 	}
 }
+
+var (
+	kickRetries    = 12
+	kickRetryEvery = 5 * time.Second
+)
 
 // runtimeKeys lists every runtime the core wants on the controller: one per
 // ccgateway account (deleted and disabled ones too, so they get blocked) and
@@ -370,33 +431,44 @@ func (s *Service) runtimeKeys(ctx context.Context) ([]string, error) {
 	return keys, rows.Err()
 }
 
+// reconcileEvery is the reconcile pass of every runtime. Changes are applied
+// at once (Kick, account:changed, config:changed), so the pass only catches
+// what changed on the controller side (a runtime restarted or removed) and
+// missed messages (2026-10-11; it was every 3 s).
+var reconcileEvery = 60 * time.Second
+
 func (s *Service) Run(ctx context.Context) {
 	if s.kick != nil {
 		go s.reconcileKicked(ctx)
 	}
+	if s.Bus != nil {
+		defer s.Bus.Subscribe(core.ChannelAccountChanged, s.onAccountChanged)()
+		defer s.Bus.Subscribe(core.ChannelConfigChanged, s.onConfigChanged)()
+	}
 	go s.runSweep(ctx)
-	ticker := time.NewTicker(3 * time.Second)
+	ticker := time.NewTicker(reconcileEvery)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			cfg, e := s.Load(ctx)
-			if e != nil || !cfg.AccountRuntimes {
-				continue
-			}
-			keys, e := s.runtimeKeys(ctx)
-			if e != nil {
-				continue
-			}
-			for _, key := range keys {
-				c, cancel := context.WithTimeout(ctx, 90*time.Second)
-				_ = s.Reconcile(c, key)
-				cancel()
-				if ctx.Err() != nil {
-					return
-				}
+		case <-s.sweepNow:
+		}
+		cfg, e := s.Load(ctx)
+		if e != nil || !cfg.AccountRuntimes {
+			continue
+		}
+		keys, e := s.runtimeKeys(ctx)
+		if e != nil {
+			continue
+		}
+		for _, key := range keys {
+			c, cancel := context.WithTimeout(ctx, 90*time.Second)
+			_ = s.Reconcile(c, key)
+			cancel()
+			if ctx.Err() != nil {
+				return
 			}
 		}
 	}
