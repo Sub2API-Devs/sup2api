@@ -1,6 +1,15 @@
 # CCGateway 环境与操作指南
 
-> **2026-10-11 18:01（北京时间）线上版本：** 核心 **v0.1.114**，发布源码 `db9b6c01c165e943ca2672a7875b49a95bd7bdca`（功能提交 `3b08da0fd`），manifest `3541ae6066225e32492b6df4a0394b44d5b53c887cf0fd9fbe90bdba0bfb0dbc`。先推送 Git，再由 OVH 的 clean detached worktree `~/sup2api/release-0.1.114-build2` 使用仓库现有 Dockerfile 构建。
+> **2026-10-11 20:08（北京时间）线上版本：** 核心 **v0.1.115**，CCGateway 插件与控制器 **0.1.38**，发布源码 `20f7e24c70c41f4dd0b862d36c8c8f773acd73ed`，manifest `7c8da683d5d012a6a147015c8f8282a91fd57ebbf129227b67e085a99bbc0b4a`。先推送 Git，再由 OVH 的 clean detached worktree `~/sup2api/release-0.1.115` 使用仓库现有 Dockerfile 构建，保持 2 CPU / 4 GiB / 512 tasks 构建限制。
+> - **通用账号生命周期上线**：核心管理准备会话的权限、幂等、过期清理和事务绑定；插件提供校验、准备、账号动作及创建／修改／删除回调。账号与代理变更复用事务事件，回调读取最新账号配置，同步结果有代次保护；代理配置变化与实测出口 IP 变化分别通知。
+> - **核心属性与扩展字段边界**：SDK `Account.properties` 提供并发、RPM、TPM、优先级、权重、代理、调度、自动禁用等核心属性，核心继续执行调度与限流；插件扩展 schema 不允许重复核心字段或凭证字段。CCGateway 的语言／时区通过扩展字段校验，准备容器前即可传入。
+> - **四节点托管升级完成**：计划 `092c178eabbbecd74f8eaf100126b2ce` 为 completed，四节点均 local/ready，均核验 v0.1.115、CCGateway 0.1.38 和生命周期声明。Host API 仍为 6，本次没有替换外壳容器。迁移 `0051_account_preparations.sql` 已应用，校验和 `5f3c5253abbcc1cac660e38d072a80f5151b7b7665e9df51291eca83c9af1e47` 与源码一致。
+> - **全部既有账号容器和 Worker 保持不变**：发布前后核验 12 个 app/egress 容器的 ID、启动时间、重启次数、镜像、环境变量摘要、挂载、安全设置，以及运行中 app 的 Worker／Claude 程序哈希；没有调用 Worker 更新接口，没有重建、重启账号容器。#23 仍为 disabled，app/egress 保持停止，没有重新授权或发模型请求。
+> - **新容器使用新默认镜像**：控制器已切换到 `ccgateway-controller:0.1.38`，新建 app/egress 默认镜像为 0.1.38，runtime 的 `up_to_date=true` 表示默认镜像已对齐，不表示旧 Worker 被升级。新 app 镜像离线验证 `ja-JP` / `Asia/Tokyo` 生效。旧容器语言／时区变更标记 `environment_requires_new_runtime`，不会伪报已应用或偷偷替换容器。
+> - **备份保留**：数据库备份 `~/sup2api-managed/backups/pg-before-0.1.115.dump`（0600，23,242,858 字节）；容器基线 `~/sup2api-managed/backups/v0115-preflight.json`。切换前确认没有活动 Claude 进程，旧控制器保留为停止的 `ccg-controller-pre-0.1.115`，没有删除；原环境文件、容器规格和 runtime 默认配置保存在 `/opt/ccgateway-runtime/controller-before-0.1.115/`。跨 schema 恢复仍需专门评估，备份不等同于支持直接自动回退。
+> - **验证**：隔离 PostgreSQL 16.14 上相关账号、CCGateway、事件、插件运行时、网关、用量和迁移 `-race` 通过，新增迁移覆盖旧结构升级、数据保留和重复执行；SDK、CCGateway 插件测试及 vet 通过；前端 318 项测试、类型检查与构建通过，ESLint 无错误但仍有模板格式等警告。发布镜像内离线运行控制器 103 项测试通过。代理包已有 `TestProxyCRUDTestAndDirectory` 失败项未计入本轮通过项，其余相关测试通过。隔离测试数据库和隧道已停止。
+
+> **2026-10-11 18:01（北京时间）线上版本（已被上面替代）：** 核心 **v0.1.114**，发布源码 `db9b6c01c165e943ca2672a7875b49a95bd7bdca`（功能提交 `3b08da0fd`），manifest `3541ae6066225e32492b6df4a0394b44d5b53c887cf0fd9fbe90bdba0bfb0dbc`。先推送 Git，再由 OVH 的 clean detached worktree `~/sup2api/release-0.1.114-build2` 使用仓库现有 Dockerfile 构建。
 > - **Host API 6 / 自动状态上线**：程序只写 `auto_disabled`，插件可指定时间点或时长、主动解除，到期由核心恢复；管理员停用和调度偏好保留。CCGateway 用最晚已耗尽配额窗口及 `Retry-After` 提供解除时间，授权撤销不按配额恢复。账号测试保存真实状态、代码和来源。
 > - **插件声明通用开关上线**：`accountTypes[].commonControls` 支持 `auto_disable`、`schedulable` 的 `configurable` / `default`；创建默认值及只读约束由核心执行，已有账号不改写。全局自动禁用关闭或读取失败时，账号级 UI 不可操作。四入口的全局状态投影及 CCGateway 声明均已核验，当前全局仍为开启，本轮未更改该配置。
 > - **四节点已完成托管升级**：外壳先按 2→3→4→1 更新，挂载、端口和安全设置一致；升级计划 `3550f81b884ad19a027b2519c966f632` 为 completed，四节点均 local/ready。核心 SHA-256 均为 `25102c8980ea28ec2864bf49d056381015be236a884225661c90294537f7ce11`；迁移 `0049` / `0050` 已应用，校验和与源码一致。
