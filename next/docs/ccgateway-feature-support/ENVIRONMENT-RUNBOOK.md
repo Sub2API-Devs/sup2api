@@ -1,5 +1,14 @@
 # CCGateway 环境与操作指南
 
+> **2026-10-11 18:01（北京时间）线上版本：** 核心 **v0.1.114**，发布源码 `db9b6c01c165e943ca2672a7875b49a95bd7bdca`（功能提交 `3b08da0fd`），manifest `3541ae6066225e32492b6df4a0394b44d5b53c887cf0fd9fbe90bdba0bfb0dbc`。先推送 Git，再由 OVH 的 clean detached worktree `~/sup2api/release-0.1.114-build2` 使用仓库现有 Dockerfile 构建。
+> - **Host API 6 / 自动状态上线**：程序只写 `auto_disabled`，插件可指定时间点或时长、主动解除，到期由核心恢复；管理员停用和调度偏好保留。CCGateway 用最晚已耗尽配额窗口及 `Retry-After` 提供解除时间，授权撤销不按配额恢复。账号测试保存真实状态、代码和来源。
+> - **插件声明通用开关上线**：`accountTypes[].commonControls` 支持 `auto_disable`、`schedulable` 的 `configurable` / `default`；创建默认值及只读约束由核心执行，已有账号不改写。全局自动禁用关闭或读取失败时，账号级 UI 不可操作。四入口的全局状态投影及 CCGateway 声明均已核验，当前全局仍为开启，本轮未更改该配置。
+> - **四节点已完成托管升级**：外壳先按 2→3→4→1 更新，挂载、端口和安全设置一致；升级计划 `3550f81b884ad19a027b2519c966f632` 为 completed，四节点均 local/ready。核心 SHA-256 均为 `25102c8980ea28ec2864bf49d056381015be236a884225661c90294537f7ce11`；迁移 `0049` / `0050` 已应用，校验和与源码一致。
+> - **CCGateway 0.1.37；仅原地更新已有 Worker**（用户要求）：通过 `POST /system/ccgateway/runtime/workers` 指定 `ccgateway-app:0.1.37`，没有使用全量 runtime/bundled 切换。#21/#22 更新前均无活动 Claude 调用，仅替换 Worker 程序并短暂重启原容器；新程序 SHA-256 均为 `3234fc868571567a7df9166d1e036dea6888a536ee9838092b05e3ae4ca4b5fb`，health 均 200。账号容器 ID、挂载、安全设置和 Claude 可执行文件哈希均保持一致，#21 的调度关闭保持不变。
+> - #23 返回 `not_running`，app/egress 保持停止、账号保持 disabled，没有启动或发模型请求；仍需用户重新授权后验收 Fable。#20 无容器，更新结果 `not_found` 为既有状态。控制器和出口容器未替换，故 runtime 的 `up_to_date=false` 仍可能表示内置镜像引用不同，不等于已更新的 Worker 程序未生效。
+> - #21/#22 的全部旧 Worker 程序备份先移动到各 runtime 的 `worker-backups-before-0.1.114` 目录保留，未删除旧备份；本次更新的自动备份留在新的 `worker-backups`。数据库备份 `~/sup2api-managed/backups/pg-before-0.1.114-db9b6c01.dump`（0600）；外壳旧镜像 `sup2api-gateway:pre-0.1.114-db9b6c01`；升级日志 `~/sup2api-managed/upgrade-20261011T100109.log`。跨 Host API / schema 的旧版本恢复不能直接自动回滚。
+> - 发布前：前端相关 233 项测试、类型检查和构建通过；SDK / gateway 测试及 vet、11 个插件构建通过；隔离 PostgreSQL 16.14 上账号、网关、插件运行时、迁移和 CCGateway 的 `-race` 通过。本轮没有收费模型实测。首次镜像构建触发进程上限，已限制 Worker / 外壳的 Go 编译并行度，不放宽 2 CPU / 4 GiB / 512 tasks 构建限制；失败构建现场保留在 `release-0.1.114` 和 `stage/0.1.114-failed-3b08`，正式制品和备份保留。
+
 > **2026-10-11 14:55（北京时间）线上版本：** 核心 **v0.1.113**（源码 `a12d68ead`，manifest `1d8c3623438ccb9f640549a5fe0e0c022817c3e40aa5584bd59808d614e36e1a`）。本次先推送 Git，OVH 主仓库拉取同一提交，再使用仓库现有 Dockerfile 完整构建；没有使用额外的 Dockerfile。
 > - **Host API 5 与公共异步观测上线**：核心成功 RPM/TPM 和获授权插件共用观测、窗口聚合与修订去重；当前并发继续复用核心槽位。账号统计后端与 SDK 已上线，账号页面尚未接入。
 > - **外壳先逐节点更新**（2→3→4→1）：`sup2api-gateway:local` 与 `sup2api-gateway:0.1.113-hostapi5` 均指向 `sha256:14b54136a87ad47d5cfea8592739e53613a04747d87c86d3d2ab91f8fe4487b3`。仍使用 `/home/debian/sup2api-managed/compose.yml`，数据卷、端口、`cap_drop: ALL` 和 `no-new-privileges` 不变。校验挂载时按目标路径排序，不能把 Docker 返回顺序变化误判为配置变化。
