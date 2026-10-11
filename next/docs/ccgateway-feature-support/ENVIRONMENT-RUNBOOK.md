@@ -1,6 +1,14 @@
 # CCGateway 环境与操作指南
 
-> **2026-10-11 20:08（北京时间）线上版本：** 核心 **v0.1.115**，CCGateway 插件与控制器 **0.1.38**，发布源码 `20f7e24c70c41f4dd0b862d36c8c8f773acd73ed`，manifest `7c8da683d5d012a6a147015c8f8282a91fd57ebbf129227b67e085a99bbc0b4a`。先推送 Git，再由 OVH 的 clean detached worktree `~/sup2api/release-0.1.115` 使用仓库现有 Dockerfile 构建，保持 2 CPU / 4 GiB / 512 tasks 构建限制。
+> **2026-10-11 20:58（北京时间）线上版本：** 核心 **v0.1.116**，CCGateway 插件、控制器及既有 Worker 均未更新；插件与控制器仍为 **0.1.38**。发布源码 `bde0ca4f2111b5ad5847a9eb692bfdf7aa4ab230`，manifest `9b76746577377cf8685d2f5493bf8c4b8d296cbfa3a394684d7e568b04ee7501`。先提交推送，再由 OVH 的 clean detached worktree `~/sup2api/release-0.1.116` 使用仓库现有 Dockerfile 构建，保持 2 CPU / 4 GiB / 512 tasks 限制，复用 0.1.38 的运行环境镜像缓存。
+> - **使用日志与 API Key 白名单上线**：共用筛选栏补充模型模糊搜索、API Key 名称／ID、调用 IP、协议、端点、状态码、错误类型及流式状态等条件；列表／详情展示调用 IP、API Key 身份和 User-Agent，管理员支持账号、用户、插件、节点及上游维度。列表与汇总使用相同筛选条件，普通用户仍隐藏上游账号信息，日志不展示完整 Key。
+> - **白名单语义**：支持 IPv4、IPv6、CIDR，最多 256 条；新建和已有 Key 均可设置。空数组不限制来源，旧 Key 迁移默认空数组，本轮未为任何生产 Key 设置限制。核心 API Key 鉴权统一校验可信调用 IP，不匹配返回 403 / `ip_not_allowed`；覆盖普通请求、WebSocket 握手、资源和价格接口。
+> - **托管升级完成**：计划 `7ae0cf8a97d37b01a1ae9d8e24f75413` 为 completed，四节点均 v0.1.116 / local / ready，Host API 仍为 6。迁移 `0052_apikey_ip_allowlist.sql` 已应用，校验和 `b3a1ee501feb52babeeefab4e6df463adec1de279d4a5f8c994e9ce9fc5d1906` 与发布源码一致。
+> - **既有容器保护**：12 个账号 app/egress 容器的 ID、启动时间、重启次数、镜像、挂载、安全设置、环境摘要及运行中程序哈希与升级前一致；控制器和四个外壳容器也保持原实例。没有调用 Worker 更新接口，没有重启或重建账号容器，#23 仍为 disabled。本轮没有发模型请求。
+> - **线上只读验收**：四入口均核验日志联合筛选与汇总一致、非法 IP 筛选返回 400、Key 列表包含 `allowed_ips`、个人详情隐藏账号／节点信息，以及前端白名单和新筛选资源。实际 IP 拒绝、伪造转发头及所有者隔离在隔离测试中验证；未用生产 Key 修改白名单做拦截试验。
+> - **验证与备份**：前端 326 项测试、类型检查和构建通过，相关 ESLint 无错误但仍有格式警告。OVH Docker 的 Go 1.27.1 / GCC 14.2 / PostgreSQL 16.14 上，apikey、usage、gateway、migrations、billing、core 及外壳 proxy 七包 `-race` 全部通过，临时测试容器已清理；此轮未单独等待 GitHub Actions 结果。数据库备份 `~/sup2api-managed/backups/pg-before-0.1.116.dump`（0600，23,736,975 字节）已检查可读取，保护基线为 `~/sup2api-managed/backups/v0116-preflight.json`。跨 schema 恢复仍需评估，不能把备份等同于支持自动回退。
+
+> **2026-10-11 20:08（北京时间）线上版本（已被上面替代）：** 核心 **v0.1.115**，CCGateway 插件与控制器 **0.1.38**，发布源码 `20f7e24c70c41f4dd0b862d36c8c8f773acd73ed`，manifest `7c8da683d5d012a6a147015c8f8282a91fd57ebbf129227b67e085a99bbc0b4a`。先推送 Git，再由 OVH 的 clean detached worktree `~/sup2api/release-0.1.115` 使用仓库现有 Dockerfile 构建，保持 2 CPU / 4 GiB / 512 tasks 构建限制。
 > - **通用账号生命周期上线**：核心管理准备会话的权限、幂等、过期清理和事务绑定；插件提供校验、准备、账号动作及创建／修改／删除回调。账号与代理变更复用事务事件，回调读取最新账号配置，同步结果有代次保护；代理配置变化与实测出口 IP 变化分别通知。
 > - **核心属性与扩展字段边界**：SDK `Account.properties` 提供并发、RPM、TPM、优先级、权重、代理、调度、自动禁用等核心属性，核心继续执行调度与限流；插件扩展 schema 不允许重复核心字段或凭证字段。CCGateway 的语言／时区通过扩展字段校验，准备容器前即可传入。
 > - **四节点托管升级完成**：计划 `092c178eabbbecd74f8eaf100126b2ce` 为 completed，四节点均 local/ready，均核验 v0.1.115、CCGateway 0.1.38 和生命周期声明。Host API 仍为 6，本次没有替换外壳容器。迁移 `0051_account_preparations.sql` 已应用，校验和 `5f3c5253abbcc1cac660e38d072a80f5151b7b7665e9df51291eca83c9af1e47` 与源码一致。
