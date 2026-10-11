@@ -43,6 +43,31 @@ func TestRuntimeCapabilitiesProjection(t *testing.T) {
 			t.Fatal("accepted missing", key)
 		}
 	}
+	if got.ExecutionModes != nil {
+		t.Fatal("legacy Worker document claimed execution modes")
+	}
+	for _, modes := range [][]string{{"legacy", "passthrough", "native"}, {"native"}} {
+		object["execution_modes"] = modes
+		body, err := json.Marshal(object)
+		if err != nil {
+			t.Fatal(err)
+		}
+		decoded, err := DecodeRuntimeCapabilities(body)
+		if err != nil || strings.Join(decoded.ExecutionModes, ",") != strings.Join(modes, ",") || decoded.ModelProviderVerification != "not_run" || decoded.Catalog.RuntimeVerified {
+			t.Fatalf("execution modes lost or promoted to verification: %+v, %v", decoded, err)
+		}
+	}
+	for _, modes := range []any{[]string{"unknown"}, []string{"native", "native"}, []string{"Native"}, []string{""}, "native", []int{1}} {
+		object["execution_modes"] = modes
+		body, err := json.Marshal(object)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := DecodeRuntimeCapabilities(body); err == nil {
+			t.Fatalf("invalid execution modes accepted: %v", modes)
+		}
+	}
+	delete(object, "execution_modes")
 	object["model_provider_verification"] = "verified"
 	raw, _ = json.Marshal(object)
 	if _, err := DecodeRuntimeCapabilities(raw); err == nil {

@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/hmac"
@@ -42,10 +43,12 @@ type webSearchPlan struct {
 // webSearchRecord is one search: the input the model gave WebSearch, its
 // output, the text the model read, or the error code the client receives.
 type webSearchRecord struct {
-	Input  Object
-	Result Object
-	Text   string
-	Error  string
+	Input        Object
+	Result       Object
+	Text         string
+	Error        string
+	NativeBlocks []Object
+	Usage        Object
 }
 
 const (
@@ -160,7 +163,11 @@ func (w *webSearchPlan) searches() int {
 	defer w.mu.Unlock()
 	n := 0
 	for _, record := range w.records {
-		if record.Error == "" {
+		if record.Usage != nil {
+			server, _ := record.Usage["server_tool_use"].(Object)
+			count, _ := usageInt(server["web_search_requests"])
+			n += int(count)
+		} else if record.Error == "" {
 			n++
 		}
 	}
@@ -260,6 +267,14 @@ func (w *webSearchPlan) convertBlocks(blocks []Object, stopReason string) (out [
 		id := serverToolUseID(str(block, "id"))
 		record := w.record(str(block, "id"))
 		searched, answered = true, answered && record != nil
+		if record != nil && record.NativeBlocks != nil {
+			for _, native := range record.NativeBlocks {
+				if str(native, "type") == "server_tool_use" || str(native, "type") == "web_search_tool_result" {
+					out = append(out, native)
+				}
+			}
+			continue
+		}
 		out = append(out, Object{"type": "server_tool_use", "id": id, "name": "web_search", "input": Object{"query": str(input, "query")}}, record.resultBlock(id))
 	}
 	return out, searched && answered && !client && stopReason == "tool_use"
@@ -366,6 +381,10 @@ func checkWebSearchHistory(block Object) error {
 // error of the API itself comes back as sent: the account's own state (a
 // rate limit, an expired login) is the gateway's to act on.
 func (r *Runner) runWebSearch(ctx context.Context, req *Request, dir string, input Object) (*webSearchRecord, *upstreamError, error) {
+	if req.NativeTransport {
+		record, err := r.runNativeWebSearch(ctx, req, dir, input)
+		return record, nil, err
+	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 	work, err := os.MkdirTemp(dir, "search-")
@@ -405,13 +424,31 @@ func (r *Runner) runWebSearch(ctx context.Context, req *Request, dir string, inp
 	cmd.Dir = work
 	cmd.Env = envWith(base, env, inheritedCLIEnv...)
 	cmd.Stdin = bytes.NewReader(nil)
-	cmd.Stdout = io.Discard
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, nil, err
+	}
 	cmd.Stderr = io.Discard
 	if r.Stderr != nil {
 		cmd.Stderr = r.Stderr
 	}
 	req.diagnostic.trace("web_search_started", Object{"query_bytes": len(str(input, "query"))})
-	_ = cmd.Run()
+	if err := cmd.Start(); err != nil {
+		return nil, nil, err
+	}
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 64*1024), 8<<20)
+	for scanner.Scan() {
+		frame, decodeErr := decodeObject(scanner.Bytes())
+		if decodeErr != nil {
+			continue
+		}
+		req.diagnostic.trace("web_search_output", frame)
+	}
+	if scanner.Err() != nil {
+		cancel()
+	}
+	_ = cmd.Wait()
 	answer := control.searchAnswer()
 	mu.Lock()
 	defer mu.Unlock()
@@ -544,6 +581,30 @@ func usageInt(value any) (int64, bool) {
 	return 0, false
 }
 
+func (w *webSearchPlan) nativeWebSearchUsage(priorRounds, finalUsage Object) (Object, error) {
+	if finalUsage == nil {
+		return nil, &requestRefusal{fmt.Errorf("native WebSearch accounting has no final usage")}
+	}
+	w.mu.Lock()
+	searches := copySearchUsage(w.usage)
+	w.mu.Unlock()
+	total := Object{}
+	for _, source := range []Object{priorRounds, searches} {
+		if len(source) != 0 {
+			if err := verifySearchCategories(source, source); err != nil {
+				return nil, &requestRefusal{err}
+			}
+			if err := addNativeWebSearchUsage(total, nativeWebSearchPublicUsage(source)); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if err := addNativeWebSearchUsage(total, finalUsage); err != nil {
+		return nil, err
+	}
+	return nativeWebSearchPublicUsage(total), nil
+}
+
 // webSearchUsage is the response usage: the CLI rounds' tokens, the one-shot
 // processes' tokens and the number of searches.
 func (w *webSearchPlan) webSearchUsage(rounds Object) Object {
@@ -564,7 +625,9 @@ func (w *webSearchPlan) webSearchUsage(rounds Object) Object {
 // side query rebuilt as the model's search calls, results and commentary.
 func webSearchAnswer(req *Request, record *webSearchRecord, query string) Object {
 	content := []Object{}
-	if record.Error != "" {
+	if record.NativeBlocks != nil {
+		content = record.NativeBlocks
+	} else if record.Error != "" {
 		id := "srvtoolu_" + strings.ReplaceAll(uuid(), "-", "")
 		content = append(content, Object{"type": "server_tool_use", "id": id, "name": "web_search", "input": Object{"query": query}}, record.resultBlock(id))
 	} else {
@@ -589,7 +652,12 @@ func webSearchAnswer(req *Request, record *webSearchRecord, query string) Object
 			content = append(content, Object{"type": "server_tool_use", "id": id, "name": "web_search", "input": Object{"query": query}}, part.resultBlock(id))
 		}
 	}
-	usage := req.webSearch.webSearchUsage(Object{"input_tokens": 0, "output_tokens": 0})
+	var usage Object
+	if record.Usage != nil {
+		usage = copySearchUsage(record.Usage)
+	} else {
+		usage = req.webSearch.webSearchUsage(Object{"input_tokens": 0, "output_tokens": 0})
+	}
 	return Object{"id": "msg_" + strings.ReplaceAll(uuid(), "-", ""), "type": "message", "role": "assistant", "model": req.Model, "content": content, "stop_reason": "end_turn", "stop_sequence": nil, "usage": usage}
 }
 

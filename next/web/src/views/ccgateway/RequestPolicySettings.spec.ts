@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
-import { i18n } from '@/i18n'
+import { i18n, LOCALES } from '@/i18n'
 import zh from '@/i18n/locales/zh/ccgateway'
 import en from '@/i18n/locales/en/ccgateway'
 import RemoteSettings from './RemoteSettings.vue'
@@ -22,7 +22,7 @@ function config(policy: Partial<RequestPolicy> | undefined) {
 }
 // A policy saved before pass_upstream_errors and thinking_disabled_compat existed, as an older core returns it.
 function legacyPolicy(): Partial<RequestPolicy> {
-  const { pass_upstream_errors: _omit, thinking_disabled_compat: _compat, relay_mode: _relay, relay_passthrough_accounts: _accounts, ...rest } = defaultRequestPolicy()
+  const { pass_upstream_errors: _omit, thinking_disabled_compat: _compat, relay_mode: _relay, relay_passthrough_accounts: _accounts, relay_native_accounts: _nativeAccounts, ...rest } = defaultRequestPolicy()
   return rest
 }
 
@@ -259,8 +259,8 @@ describe('CCGateway pass upstream errors switch', () => {
 
   it('relay mode defaults to legacy and saves passthrough accounts', async () => {
     expect(defaultRequestPolicy().relay_mode).toBe('legacy')
-    expect(zh.policy.relayModeHint).toContain('中继不修改请求和响应')
-    expect(en.policy.relayModeHint).toContain('changes neither requests nor responses')
+    expect(zh.policy.relayModeHint).toContain('无法获得原始 HTTP')
+    expect(en.policy.relayModeHint).toContain('raw HTTP headers and bodies are unavailable')
     mocks.get.mockResolvedValue(config(legacyPolicy()))
     mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), relay_passthrough_accounts: [23, 24] }))
     const w = await render()
@@ -271,6 +271,49 @@ describe('CCGateway pass upstream errors switch', () => {
     const payload = mocks.put.mock.calls[0]![1] as { request_policy: RequestPolicy }
     expect(payload.request_policy.relay_mode).toBe('legacy')
     expect(payload.request_policy.relay_passthrough_accounts).toEqual([23, 24])
+  })
+
+  it.each(LOCALES)('saves native rollout accounts without switching the global default in %s', async locale => {
+    i18n.global.locale.value = locale
+    mocks.get.mockResolvedValue(config(legacyPolicy()))
+    mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), relay_native_accounts: [24] }))
+    const w = await render()
+    await w.get('[data-testid="settings-tab-cc"]').trigger('click')
+    const copy = locale === 'zh' ? zh : en
+    expect(w.text()).toContain(copy.policy.relayMode_native)
+    expect(w.text()).toContain(copy.policy.relayNativeAccountsHint)
+    await w.get('[data-testid="relay-native-accounts"]').setValue('24')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.put.mock.lastCall?.[1].request_policy.relay_native_accounts).toEqual([24])
+    expect(mocks.put.mock.lastCall?.[1].request_policy.relay_mode).toBe('legacy')
+    expect(w.get<HTMLInputElement>('[data-testid="relay-native-accounts"]').element.value).toBe('24')
+    w.unmount()
+  })
+
+  it('rejects conflicting and invalid native rollout lists before saving', async () => {
+    mocks.get.mockResolvedValue(config({ ...defaultRequestPolicy(), relay_passthrough_accounts: [23] }))
+    const w = await render()
+    for (const value of ['23', '24, 24', '0', '-1', 'invalid']) {
+      await w.get('[data-testid="relay-native-accounts"]').setValue(value)
+      await w.get('form').trigger('submit')
+      await flushPromises()
+      expect(mocks.put).not.toHaveBeenCalled()
+    }
+    w.unmount()
+  })
+
+  it('saves explicit global native and hides inactive rollout fields', async () => {
+    mocks.get.mockResolvedValue(config(defaultRequestPolicy()))
+    mocks.put.mockResolvedValue(config({ ...defaultRequestPolicy(), relay_mode: 'native' }))
+    const w = await render()
+    await w.get('[data-testid="relay-mode"]').setValue('native')
+    expect(w.find('[data-testid="relay-native-accounts"]').exists()).toBe(false)
+    expect(w.find('[data-testid="relay-passthrough-accounts"]').exists()).toBe(false)
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.put.mock.lastCall?.[1].request_policy.relay_mode).toBe('native')
+    w.unmount()
   })
 
   it('saves full passthrough and hides the account list', async () => {

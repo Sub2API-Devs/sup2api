@@ -50,6 +50,7 @@ func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
 		probe.Value = status.CLIVersion
 	}
 	out := features.RuntimeCapabilities{ProtocolVersion: features.CapabilityProtocolVersion, Build: binaryBuildInfo(), Catalog: features.Catalog(), PolicySchemaVersions: []int{features.PolicySchemaVersion}, Probes: []features.RuntimeProbe{probe}, ModelProviderVerification: "not_run"}
+	out.ExecutionModes = []string{"legacy", "passthrough", "native"}
 	out.HelperHistorySchemaVersions = []int{helperhistory.Version}
 	out.HelperHistoryPayloadVersions = []int{helperhistory.PayloadVersion1, helperhistory.PayloadVersion2}
 	w.Header().Set("Content-Type", "application/json")

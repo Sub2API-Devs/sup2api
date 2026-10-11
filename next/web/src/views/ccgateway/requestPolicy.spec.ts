@@ -22,6 +22,20 @@ describe('CCGateway request policy', () => {
     p.betas = [{ name: 'custom-beta', mapping: 'tool_search' }]
     expect(validRequestPolicy(p)).toBe(true)
   })
+  it('validates native rollout IDs, limits and conflicts without changing the legacy default', () => {
+    const p = defaultRequestPolicy()
+    expect(p.relay_mode).toBe('legacy')
+    expect(p.relay_native_accounts).toEqual([])
+    expect(validRequestPolicy({ ...p, relay_mode: 'native' })).toBe(true)
+    expect(validRequestPolicy({ ...p, relay_native_accounts: [24], relay_passthrough_accounts: [23] })).toBe(true)
+    expect(validRequestPolicy({ ...p, relay_native_accounts: [24], relay_passthrough_accounts: [24] })).toBe(false)
+    for (const field of ['relay_native_accounts', 'relay_passthrough_accounts'] as const) {
+      for (const ids of [[0], [-1], [1.5], [24, 24], [NaN], [Number.MAX_SAFE_INTEGER + 1], Array.from({ length: 1001 }, (_, i) => i + 1)]) {
+        expect(validRequestPolicy({ ...p, [field]: ids })).toBe(false)
+      }
+      expect(validRequestPolicy({ ...p, [field]: Array.from({ length: 1000 }, (_, i) => i + 1) })).toBe(true)
+    }
+  })
   it('allows an explicitly empty beta whitelist', () => {
     const p = defaultRequestPolicy()
     p.betas = []

@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCustomToolPrefixSaveReload(t *testing.T) {
@@ -268,6 +270,65 @@ func TestThinkingDisabledCompatSave(t *testing.T) {
 
 // relay_mode defaults to legacy; relay_passthrough_accounts turns single
 // accounts to passthrough, and the Worker never sees the list.
+func TestNativeRelayPolicySaveAndWorkerProjection(t *testing.T) {
+	var in Config
+	require.NoError(t, json.Unmarshal([]byte(`{"mode":"disabled","request_policy":{"unknown_beta":"ignore","unknown_field":"reject","relay_native_accounts":[24],"relay_passthrough_accounts":[23]}}`), &in))
+	saved, err := mergeConfig(in, Config{Mode: "disabled"})
+	require.NoError(t, err)
+	raw, err := json.Marshal(saved)
+	require.NoError(t, err)
+	var reloaded Config
+	require.NoError(t, json.Unmarshal(raw, &reloaded))
+	assert.Equal(t, []int64{24}, reloaded.EffectiveRequestPolicy().RelayNativeAccounts)
+	assert.Equal(t, []int64{23}, reloaded.EffectiveRequestPolicy().RelayPassthroughAccounts)
+	for _, tc := range []struct {
+		mode string
+		id   int64
+		want string
+	}{
+		{"legacy", 24, "native"}, {"legacy", 23, "passthrough"}, {"legacy", 22, "legacy"},
+		{"passthrough", 24, "native"}, {"passthrough", 22, "passthrough"},
+		{"native", 23, "native"}, {"native", 22, "native"},
+		{"legacy", 0, "legacy"}, {"legacy", -1, "legacy"},
+	} {
+		p := *reloaded.RequestPolicy
+		p.RelayMode = tc.mode
+		stored, err := mergeConfig(Config{Mode: "disabled", RequestPolicy: &p}, reloaded)
+		require.NoError(t, err)
+		worker := stored.WorkerRequestPolicy(tc.id)
+		assert.Equal(t, tc.want, worker.RelayMode)
+		wire, err := json.Marshal(worker)
+		require.NoError(t, err)
+		assert.NotContains(t, string(wire), "relay_native_accounts")
+		assert.NotContains(t, string(wire), "relay_passthrough_accounts")
+	}
+	p := *reloaded.RequestPolicy
+	p.RelayNativeAccounts = []int64{23}
+	assert.Equal(t, "native", (Config{RequestPolicy: &p}).WorkerRequestPolicy(23).RelayMode)
+	for _, tc := range []struct {
+		name                string
+		native, passthrough []int64
+	}{
+		{"zero", []int64{0}, nil}, {"negative", []int64{-1}, nil},
+		{"duplicate", []int64{24, 24}, nil}, {"overlap", []int64{24}, []int64{24}},
+		{"native too long", make([]int64, 1001), nil}, {"passthrough too long", nil, make([]int64, 1001)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := defaultRequestPolicy()
+			p.RelayNativeAccounts, p.RelayPassthroughAccounts = tc.native, tc.passthrough
+			_, err := mergeConfig(Config{Mode: "disabled", RequestPolicy: &p}, reloaded)
+			require.Error(t, err)
+		})
+	}
+	p = defaultRequestPolicy()
+	p.RelayNativeAccounts = make([]int64, 1000)
+	for i := range p.RelayNativeAccounts {
+		p.RelayNativeAccounts[i] = int64(i + 1)
+	}
+	require.NoError(t, validateRequestPolicy(p))
+	assert.Equal(t, "legacy", (Config{}).WorkerRequestPolicy(24).RelayMode)
+}
+
 func TestRelayModeSaveAndWorkerPolicy(t *testing.T) {
 	var legacy Config
 	if err := json.Unmarshal([]byte(`{"mode":"disabled","request_policy":{"unknown_beta":"ignore","unknown_field":"reject","betas":[]}}`), &legacy); err != nil {

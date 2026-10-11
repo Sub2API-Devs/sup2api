@@ -181,7 +181,7 @@ func (x *exchange) admit() bool {
 		// CCGateway offers no token counting (user decision, 2026-10-11). The
 		// plugin does not declare the endpoint and the core's transport refuses
 		// it, so this answer is only a backstop.
-		if policy, err := requestPolicy(r.Header); err == nil && policy.RelayMode == "passthrough" {
+		if policy, err := requestPolicy(r.Header); err == nil && (policy.RelayMode == "passthrough" || policy.RelayMode == "native") {
 			x.fail(400, "invalid_request_error", "count_tokens is not supported by this gateway")
 			return false
 		}
@@ -311,6 +311,17 @@ func (x *exchange) execute(branch sessionBranch) {
 		x.serveWebSearchFast(ctx, dir, query)
 		return
 	}
+	primary := req
+	var fallbacks []passthroughAttempt
+	if req.NativeTransport && req.hasFallbacks() {
+		config, err := req.passthroughBodies()
+		if err != nil {
+			x.fail(400, "invalid_request_error", err.Error())
+			return
+		}
+		fallbacks = config.Fallbacks
+	}
+	fallbackIndex := 0
 	// A catalogued tool can be disabled by this CLI session's runtime gates.
 	// Rebuild with SDK MCP only before any model request reached the provider.
 	for attempt := 0; ; attempt++ {
@@ -336,6 +347,27 @@ func (x *exchange) execute(branch sessionBranch) {
 			e = ctx.Err()
 		}
 		if e != nil {
+			var failure *nativeError
+			var refusal *requestRefusal
+			if req.NativeTransport && !x.streaming && ctx.Err() == nil && fallbackIndex < len(fallbacks) && !errors.As(e, &refusal) && errors.As(e, &failure) && failure.ObservedStatus && !failure.OutputObserved {
+				switch failure.Status {
+				case 429, 500, 502, 503, 504, 529:
+					next, err := primary.nativeFallback(fallbacks[fallbackIndex])
+					if err != nil {
+						x.runFailed(ctx, err)
+						return
+					}
+					matchNativeTools(next, g.Runner.Version)
+					if err := validateToolNames(next); err != nil {
+						x.runFailed(ctx, &requestRefusal{err})
+						return
+					}
+					fallbackIndex++
+					req, x.req = next, next
+					x.diagnostic.trace("native_fallback", Object{"attempt": fallbackIndex, "model": req.Model, "status": failure.Status})
+					continue
+				}
+			}
 			var unavailable *nativeToolAvailabilityError
 			if attempt == 0 && !x.streaming && ctx.Err() == nil && errors.As(e, &unavailable) && unavailable.RetrySafe {
 				for _, name := range unavailable.Names {
@@ -453,6 +485,41 @@ func (x *exchange) runFailed(ctx context.Context, e error) {
 	if ctx.Err() != nil {
 		status = 504
 		message = "Claude Code request timed out"
+	}
+	var native *nativeError
+	if ctx.Err() == nil && errors.As(e, &native) {
+		status, message = native.Status, native.Message
+		if !x.streaming {
+			x.w.Header().Set("X-CCGateway-Error-Source", "cli")
+			x.w.Header().Set("X-CCGateway-CLI-Error", nativeErrorCategory(native.Category))
+			if status == http.StatusTooManyRequests && native.ObservedStatus && native.RetryAt > 0 {
+				delay := min(int64(7*24*60*60), max(int64(1), native.RetryAt-time.Now().Unix()))
+				x.w.Header().Set("Retry-After", fmt.Sprint(delay))
+			}
+			var refusal *requestRefusal
+			if !native.ObservedStatus || errors.As(e, &refusal) {
+				x.w.Header().Set(errorScopeHeader, "request")
+			}
+			if id := nativeRequestID(native.RequestID); id != "" {
+				x.w.Header().Set("Request-Id", id)
+			}
+		}
+		switch status {
+		case 400:
+			kind = "invalid_request_error"
+		case 401:
+			kind = "authentication_error"
+		case 403:
+			kind = "permission_error"
+		case 404:
+			kind = "not_found_error"
+		case 429:
+			kind = "rate_limit_error"
+		case 529:
+			kind = "overloaded_error"
+		}
+		x.fail(status, kind, message)
+		return
 	}
 	var upstream *upstreamError
 	if errors.As(e, &upstream) {

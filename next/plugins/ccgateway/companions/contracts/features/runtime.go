@@ -27,6 +27,7 @@ type RuntimeCapabilities struct {
 	Build                        BuildInfo      `json:"build"`
 	Catalog                      Document       `json:"code_catalog"`
 	PolicySchemaVersions         []int          `json:"policy_schema_versions"`
+	ExecutionModes               []string       `json:"execution_modes,omitempty"`
 	HelperHistorySchemaVersions  []int          `json:"helper_history_schema_versions,omitempty"`
 	HelperHistoryPayloadVersions []int          `json:"helper_history_payload_versions,omitempty"`
 	Probes                       []RuntimeProbe `json:"runtime_probes"`
@@ -61,6 +62,13 @@ func DecodeRuntimeCapabilities(raw []byte) (RuntimeCapabilities, error) {
 	}
 	if out.ProtocolVersion != CapabilityProtocolVersion || out.Catalog.RuntimeVerified || out.Catalog.CatalogVersion == "" || len(out.Catalog.CatalogVersion) > 128 || out.Catalog.PolicySchemaVersion < 1 || len(out.Catalog.Features) > 256 || len(out.Build.Version) > 128 || out.Build.Version == "" || len(out.Build.Revision) > 128 || len(out.PolicySchemaVersions) == 0 || len(out.PolicySchemaVersions) > 16 || len(out.Probes) > 16 || out.ModelProviderVerification != "not_run" {
 		return out, fmt.Errorf("invalid or unsupported Worker capability document")
+	}
+	modeSeen := map[string]bool{}
+	for _, mode := range out.ExecutionModes {
+		if (mode != "legacy" && mode != "passthrough" && mode != "native") || modeSeen[mode] {
+			return out, fmt.Errorf("invalid execution mode capability")
+		}
+		modeSeen[mode] = true
 	}
 	for _, v := range out.PolicySchemaVersions {
 		if v < 1 || v > 1024 {

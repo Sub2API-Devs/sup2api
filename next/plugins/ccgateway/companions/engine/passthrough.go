@@ -72,6 +72,9 @@ func parsePassthroughRequest(body []byte, h http.Header, p RequestPolicy, access
 	if err = p.filterFields(o); err != nil {
 		return nil, err
 	}
+	if speed, present := o["speed"]; p.RelayMode == "native" && present {
+		plan.fields["speed"], _ = json.Marshal(speed)
+	}
 	fast, err := p.speed(o)
 	if err != nil {
 		return nil, err
@@ -83,6 +86,11 @@ func parsePassthroughRequest(body []byte, h http.Header, p RequestPolicy, access
 	}
 	req.Plan = plan
 	req.Passthrough = true
+	req.NativeTransport = p.RelayMode == "native"
+	if req.NativeTransport {
+		policy := p
+		req.nativePolicy = &policy
+	}
 	// The one generation field the gateway may drop: disabled thinking for a
 	// model that rejects it, when the policy says omit (a client whose model
 	// alias a proxy rewrote sends it on its title and classifier requests).
@@ -173,7 +181,7 @@ func (r *Request) refusePassthroughUnsupported() error {
 		var entries []Object
 		_ = json.Unmarshal(r.Plan.fallbacks, &entries)
 		for _, entry := range entries {
-			if _, exists := entry["speed"]; exists {
+			if _, exists := entry["speed"]; exists && !r.NativeTransport {
 				return passthroughRefusal("fallbacks[].speed", "fast mode is fixed for the whole run")
 			}
 		}
@@ -277,6 +285,11 @@ func (r *Request) passthroughBodies() (*passthroughConfig, error) {
 			cfg.Rest[name] = cfg.First[name]
 		}
 	}
+	if r.NativeTransport {
+		if raw, exists := fields["speed"]; exists && string(compactRaw(raw)) != "null" {
+			cfg.First["speed"], cfg.Rest["speed"] = compactRaw(raw), compactRaw(raw)
+		}
+	}
 	if raw, exists := fields["tool_choice"]; exists {
 		choice, err := decodeObject(raw)
 		if err != nil {
@@ -298,7 +311,7 @@ func (r *Request) passthroughBodies() (*passthroughConfig, error) {
 			_ = json.Unmarshal(entry["model"], &model)
 			attempt := passthroughAttempt{Model: model, Body: map[string]json.RawMessage{}}
 			for name, raw := range entry {
-				if name != "model" && string(raw) != "null" {
+				if name != "model" && (r.NativeTransport || string(raw) != "null") {
 					attempt.Body[name] = compactRaw(raw)
 				}
 			}
@@ -306,6 +319,41 @@ func (r *Request) passthroughBodies() (*passthroughConfig, error) {
 		}
 	}
 	return cfg, nil
+}
+
+func (r *Request) nativeFallback(attempt passthroughAttempt) (*Request, error) {
+	if r.nativePolicy == nil {
+		return nil, fmt.Errorf("native request policy missing")
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(r.Plan.RawRequest(), &fields); err != nil {
+		return nil, err
+	}
+	delete(fields, "fallbacks")
+	fields["model"], _ = json.Marshal(attempt.Model)
+	for name, raw := range attempt.Body {
+		if string(compactRaw(raw)) == "null" {
+			if name != "max_tokens" {
+				delete(fields, name)
+			}
+		} else {
+			fields[name] = append(json.RawMessage(nil), raw...)
+		}
+	}
+	body, err := json.Marshal(fields)
+	if err != nil {
+		return nil, err
+	}
+	h := http.Header{}
+	h.Set("Anthropic-Beta", strings.Join(r.Betas, ","))
+	out, err := parsePassthroughRequest(body, h, *r.nativePolicy, r.resources)
+	if err != nil {
+		return nil, err
+	}
+	out.diagnostic = r.diagnostic
+	out.responseFacts = &providerResponseFacts{}
+	out.upstreamSession, out.upstreamAgent = r.upstreamSession, r.upstreamAgent
+	return out, nil
 }
 
 func compactRaw(raw json.RawMessage) json.RawMessage {

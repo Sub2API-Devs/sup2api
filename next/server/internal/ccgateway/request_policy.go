@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -39,6 +40,7 @@ type RequestPolicy struct {
 	// RelayMode is legacy (a staged rollout). Only the core reads it: the
 	// Worker receives the account's effective relay_mode.
 	RelayPassthroughAccounts []int64    `json:"relay_passthrough_accounts,omitempty"`
+	RelayNativeAccounts      []int64    `json:"relay_native_accounts,omitempty"`
 	Betas                    []BetaRule `json:"betas"`
 }
 type BetaRule = features.BetaRule
@@ -104,14 +106,16 @@ func (c Config) EffectiveRequestPolicy() RequestPolicy {
 // effective relay_mode, without the rollout list of other accounts.
 func (c Config) WorkerRequestPolicy(accountID int64) RequestPolicy {
 	p := c.EffectiveRequestPolicy()
-	if p.RelayMode != "passthrough" && accountID > 0 {
-		for _, id := range p.RelayPassthroughAccounts {
-			if id == accountID {
-				p.RelayMode = "passthrough"
-			}
+	if accountID > 0 {
+		switch {
+		case p.RelayMode == "native" || slices.Contains(p.RelayNativeAccounts, accountID):
+			p.RelayMode = "native"
+		case slices.Contains(p.RelayPassthroughAccounts, accountID):
+			p.RelayMode = "passthrough"
 		}
 	}
 	p.RelayPassthroughAccounts = nil
+	p.RelayNativeAccounts = nil
 	return p
 }
 
@@ -137,8 +141,8 @@ func validateRequestPolicy(p RequestPolicy) error {
 	if p.ThinkingDisabledCompat != "" && p.ThinkingDisabledCompat != "pass" && p.ThinkingDisabledCompat != "omit" {
 		return errors.New("invalid thinking_disabled_compat: must be pass or omit")
 	}
-	if p.RelayMode != "" && p.RelayMode != "legacy" && p.RelayMode != "passthrough" {
-		return errors.New("invalid relay_mode: must be legacy or passthrough")
+	if p.RelayMode != "" && p.RelayMode != "legacy" && p.RelayMode != "passthrough" && p.RelayMode != "native" {
+		return errors.New("invalid relay_mode: must be legacy, passthrough or native")
 	}
 	if len(p.RelayPassthroughAccounts) > 1000 {
 		return errors.New("relay_passthrough_accounts lists at most 1000 accounts")
@@ -149,6 +153,19 @@ func validateRequestPolicy(p RequestPolicy) error {
 			return errors.New("relay_passthrough_accounts must list distinct positive account IDs")
 		}
 		seen[id] = true
+	}
+	if len(p.RelayNativeAccounts) > 1000 {
+		return errors.New("relay_native_accounts lists at most 1000 accounts")
+	}
+	nativeSeen := map[int64]bool{}
+	for _, id := range p.RelayNativeAccounts {
+		if id <= 0 || nativeSeen[id] {
+			return errors.New("relay_native_accounts must list distinct positive account IDs")
+		}
+		if seen[id] {
+			return errors.New("relay_native_accounts and relay_passthrough_accounts must not overlap")
+		}
+		nativeSeen[id] = true
 	}
 	return nil
 }

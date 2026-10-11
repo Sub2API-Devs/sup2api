@@ -3823,6 +3823,22 @@ images/gateway.tar.gz      # Caddy 网关
 
 **测试**：`TestRealCLIRelayPassthrough`、`TestRealCLIPassthroughWebSearch`（需 `CCG_REAL_CLI`，开头先用 `claude plugin validate` 校验两个 Mod：CLI 对校验不通过的 hooks 模块不报错、直接不加载）；单元测试 `TestPassthrough*`、`TestWebSearch*`、`TestNativeWebSearchTurns`；核心 `TestRelayModeSaveAndWorkerPolicy`；控制台 `RequestPolicySettings.spec.ts`。
 
+### 53.14 原生 CLI 模型出站 `relay_mode=native`（ccgateway 0.1.39 起）
+
+用户选择原生 Claude Code 语义，不再要求 legacy 的 HTTP 字节还原、原始错误正文/全部响应头，以及首次错误后绝不兼容重发。删除的是 native 模式的模型 HTTP 转发链路，Worker、Mod 控制面、账号隔离、sing-box 和 `127.0.0.1:8787` 本地放行保留；不使用 uTLS、生产 CA 或 hosts 重定向。原始 `legacy` / `passthrough` 仍为显式兼容和回滚选项，不会在 native 失败后自动切回或补发。
+
+- 策略新增 `relay_mode: "native"` 与 `relay_native_accounts`。名单要求正整数、不重复、最多 1000 个，与 `relay_passthrough_accounts` 不得相交。全局 native 或命中 native 名单优先；默认仍为 legacy，既有保存的 passthrough 不会自行切换。下发 Worker 时剥离两个名单。上线前读取实际 Worker `execution_modes` 和 `cli_version`，旧能力文档缺字段不表示支持 native；能力声明仍不等于运行验证。
+- 主模型和一次性搜索进程都由 CLI 直接连接真实 provider。保留合法账号 Base URL，不覆盖成本地 relay；Mod 只交换配置和事件。initialize 成功且 Mod ready 后才提交用户输入，失败或取消不发送输入。Windows 环境变量查询与 CLI 环境标准化使用一致的大小写规则。
+- native 复用 §53.13 的 CLI 参数、每轮 EXTRA_BODY、U/A′、私有原生历史分支、工具交接和图片承载；system、beta、缓存断点、图片预处理遵循 CLI 原生构造，不保证逐字节恢复。客户端工具仍不得在 Worker 本地执行。§53.13 已明确拒绝的 prefill、服务端 MCP、PTC/container、图片 transformations、credit/helper 等未原生覆盖功能继续在准入层明确拒绝，不能视为已迁移；独立管理/资源接口不因此宣称已改为原生 CLI。
+- 原生错误采用 assistant.error、assistant.request_id、result.api_error_status；`subtype=success` 仍须检查 `is_error`。控制协议 request_id 不是上游请求 ID。缺少真实状态时保守返回请求级 502，不猜测认证失败或禁用账号。可观察到的真实状态沿用账号分类；规范化 `billing_error` 通过 Worker 私有来源/类别头交给插件识别。订阅限额头仍不外传；rate_limit_event 的有效重置时间可生成有界 Retry-After，这是规范化提示，不是原响应头副本。
+- SSE 增量通常早于带上游 request_id 的完整 assistant 帧；已经提交的流响应头保留网关请求 ID，不承诺回填上游 ID。已观察到的上游 ID用于后续事件事实和诊断，非流式/提交前错误可返回它。原始 HTTP 请求/响应报文在 native 中不可见，配置与 CLI 事件日志不能冒充原始线上报文。
+- CLI 2.1.292 的离线探针证明：`CLAUDE_CODE_MAX_RETRIES=0` 与 `CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK=1` 不禁止全部能力恢复。通用 400 可按特性移除 thinking display / beta 重发，effort rejection 可删除 effort 重发；这些重发可能没有 api_retry，且在同一个 turn.step 内完成。按原生行为验收，不用 Mod 事后 abort 假装做到网络闸门。
+- `fallbacks` 由 Worker 在当前进程终止后协调，只对真实 429/500/502/503/504/529、没有观察到任何主模型输出、没有请求级失败且未取消时尝试。每次从最初请求重新准入并建立私有历史副本，不继承失败尝试的运行态；显式 null 删除对应覆盖字段（max_tokens:null 保留主限制），speed 可逐尝试重新配置。禁止在已输出、内部搜索已执行或计量失败后重放整轮。
+- native 搜索使用正常单轮 CLI 模型流，EXTRA_BODY 声明唯一 server web_search 并强制选择；主 Mod 限制轮次、禁本地工具，模型使用该请求明确选择的模型。保留 domain filters、max_uses、结果/引用、多组错误块和 ccgws1 历史。用实际 SSE usage 计量，包括输入/输出、缓存读取、缓存写入总数及 5m/1h 分项、实际搜索次数；不从美元或累计 modelUsage 反推。搜索失败或账务事实缺失终止整个请求，不吞成 unavailable 后继续模型生成。
+- 主流使用原始 stream_event 的 usage 与现有内部轮合并；不将重复 assistant 块及累计 result.modelUsage 再加一次。普通输出、工具交接、原生历史恢复及图片续接通过同一组 native/relay 差分场景验收。
+
+离线门禁使用 `CCG_REAL_CLI` 指向精确 CLI，独立 HOME/config、假 key、回环 Mock 和禁止外部代理连接。用 `TestRealCLINativeProbe` 检查真实协议/恢复次数；`TestRealCLINativeGateway` 检查直接 TLS；`TestRealCLINativePassthroughCompatibility` 覆盖参数、工具、身份、fallback 和图片历史；`TestRealCLINativeWebSearch*` 覆盖完整搜索计量、域名限制、失败不续跑。单元、平台 CLI 探针与真实账号测试分别记录，不能互相替代。生产更新仍按 §53.7 原地更换 Worker；真实请求须按 Core usage 的实际账号归属验收。
+
 ## 54. 插件隔离加固 P0（2026-10-10，审查 `docs/audits/2026-10-09-plugin-resources.md` 的 P0）
 
 插件与核心、外壳仍是同一 UID（独立 UID 另行排期），以下措施让同 UID 的插件拿不到核心/外壳的秘密，也连不上别人的接口：

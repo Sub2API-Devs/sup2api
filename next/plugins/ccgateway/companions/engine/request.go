@@ -74,6 +74,8 @@ type Request struct {
 	// Relay passthrough (passthrough.go): the outbound relay forwards the
 	// inner CLI's requests unchanged.
 	Passthrough              bool
+	NativeTransport          bool
+	nativePolicy             *RequestPolicy
 	webSearch                *webSearchPlan // passthrough web_search (web_search_passthrough.go)
 	AttachmentSources        map[string]string
 	AttachmentDecisions      []Object

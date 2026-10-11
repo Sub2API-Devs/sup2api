@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -333,8 +334,9 @@ func (r *outboundRelay) Restored() int {
 
 func environmentValue(env []string, key string) string {
 	for i := len(env) - 1; i >= 0; i-- {
-		if strings.HasPrefix(env[i], key+"=") {
-			return strings.TrimPrefix(env[i], key+"=")
+		name, value, ok := strings.Cut(env[i], "=")
+		if ok && (name == key || runtime.GOOS == "windows" && strings.EqualFold(name, key)) {
+			return value
 		}
 	}
 	return ""

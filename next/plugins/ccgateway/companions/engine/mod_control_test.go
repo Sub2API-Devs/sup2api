@@ -1,12 +1,40 @@
 package engine
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
+
+func TestNativeModGateNeverSubmitsAfterCancellation(t *testing.T) {
+	for _, ready := range []bool{false, true} {
+		c, err := startModControl(&runConfig{}, "http://127.0.0.1:8787")
+		require.NoError(t, err)
+		t.Cleanup(c.Close)
+		if ready {
+			close(c.readySignal)
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		reader, writer, err := os.Pipe()
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = reader.Close(); _ = writer.Close() })
+		s := &cliSession{ctx: ctx, initID: "init", cfg: &runConfig{native: &nativeRunState{}, control: c}, proc: &cliProcess{stdin: writer}}
+		err = s.onControlResponse(Object{"response": Object{"request_id": "init", "subtype": "success"}})
+		require.ErrorIs(t, err, context.Canceled)
+		require.False(t, s.initialized)
+		require.NoError(t, writer.Close())
+		data, err := io.ReadAll(reader)
+		require.NoError(t, err)
+		require.Empty(t, data)
+	}
+}
 
 func TestModControlAcknowledgementsAndIsolation(t *testing.T) {
 	c, err := startModControl(&runConfig{env: map[string]string{}, systems: []string{"one", "two"}}, "http://127.0.0.1:8787")

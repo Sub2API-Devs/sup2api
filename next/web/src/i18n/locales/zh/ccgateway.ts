@@ -44,14 +44,17 @@ export default {
     thinkingDisabledCompatHint:
       '仅在模型被改写、客户端仍发送 disabled 时使用：例如 cc-switch 把 claude-opus-5 改写成 claude-opus-5-5，Claude Code 的 auto 模式分类器等请求仍带 thinking.type: disabled，而已验证的 claude-opus-5-5、claude-fable-5-1 不接受。开启后对这些模型不传 thinking（与官方 CLI 对它们的请求一致，不改成 adaptive），完全透传和适配两种中继模式下都生效。默认关闭：与官方 API 一致返回 400。更彻底的办法是在本机把模型别名改成实际模型。',
     relayMode: '出站中继模式',
-    relayMode_legacy: '适配（原有方式）',
-    relayMode_passthrough: '完全透传',
+    relayMode_legacy: '适配（默认 / 兼容）',
+    relayMode_native: 'CLI 原生 HTTPS',
+    relayMode_passthrough: '透传中继（兼容）',
     relayModeHint:
-      '完全透传：每个上游请求都由 Worker 内的 Claude Code 自己构造并发出，中继不修改请求和响应；客户端字段由 Claude Code 参数和 CLAUDE_CODE_EXTRA_BODY 表达，表达不了的功能返回 400。内层 Claude Code 不重试，上游错误原样返回给客户端，由网关冷却账号和故障转移。适配（默认）：沿用中继改写请求的原有方式。',
+      '原生：Claude Code 直接发送 HTTPS，主请求不经过 HTTP 中继。可观测 CLI 规范化错误与其报告的用量，无法获得原始 HTTP 头和响应体；特性恢复（包括 400 后恢复重发）可能发起多次请求，不支持的功能仍会拒绝。默认仍为适配；确认 Worker 声明支持 native 后，再显式选择原生或填写灰度账号。适配和透传仅用于显式兼容回滚，不作为自动重试回退。',
+    relayNativeAccounts: '原生模式灰度账号',
+    relayNativeAccountsHint: '填写逗号分隔的账号 ID，最多 1000 个不重复的正整数。全局为适配或透传时，这些账号仍使用原生模式。原生优先，两个灰度名单不得重叠。旧 Worker 缺少 execution_modes 声明时不代表支持原生模式。',
     relayPassthroughAccounts: '先切到完全透传的账号',
     relayPassthroughAccountsHint: '出站中继模式为"适配"时，这里列出的账号 ID（逗号分隔）已按完全透传运行，用于逐个账号验证。',
     passUpstreamErrorsHint:
-      '开启后，官方返回错误（包括 401、429、529 及流式中途的错误）时，立即把官方的状态码和错误内容原样返回给客户端，Claude Code 不再自动重试、退避或刷新授权。关闭（默认）时由 Claude Code 自行处理，最终失败才返回错误。开启后需要由调用方或网关负责重试和换号。',
+      '原生模式账号不受此开关的原始 HTTP 透传承诺约束：错误仍由 CLI 规范化，特性恢复可能重发请求（包括 400 后恢复）。兼容中继模式开启后，官方返回错误（包括 401、429、529 及流式中途的错误）时，立即把官方的状态码和错误内容原样返回给客户端，Claude Code 不再自动重试、退避或刷新授权。关闭（默认）时由 Claude Code 自行处理，最终失败才返回错误。开启后需要由调用方或网关负责重试和换号。',
     unknownBeta: '不支持的 Beta 请求头如何处理',
     unknownField: '遇到不支持的参数',
     reject: '返回错误（400）',

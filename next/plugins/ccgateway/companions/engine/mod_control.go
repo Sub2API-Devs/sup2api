@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
@@ -33,6 +34,7 @@ type modControl struct {
 	systems          int
 	mu               sync.Mutex
 	ready, attached  bool
+	readySignal      chan struct{}
 	server           *http.Server
 }
 
@@ -58,7 +60,7 @@ func startModControl(cfg *runConfig, internalBase string) (*modControl, error) {
 	if len(data) > 4<<20 {
 		return nil, fmt.Errorf("Mod configuration exceeds the CLI HTTP limit")
 	}
-	c := &modControl{path: "/ccg-mod/" + uuid(), token: uuid() + uuid(), config: data, systems: len(cfg.systems)}
+	c := &modControl{path: "/ccg-mod/" + uuid(), token: uuid() + uuid(), config: data, systems: len(cfg.systems), readySignal: make(chan struct{})}
 	c.reminderMarker = cfg.reminderMarker
 	c.nativeReminders = cfg.nativeReminders
 	c.diagnostic = cfg.diagnostic
@@ -146,6 +148,9 @@ func (c *modControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case ack.Event == "ready" && ack.Version == "ccgateway-v2":
+		if !c.ready && c.readySignal != nil {
+			close(c.readySignal)
+		}
 		c.ready = true
 	case ack.Event == "system" && c.ready && ack.Systems == c.systems:
 		c.attached = true
@@ -227,6 +232,22 @@ func (c *modControl) searchAnswer() Object {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.searchResult
+}
+
+func (c *modControl) waitReady(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	timer := time.NewTimer(20 * time.Second)
+	defer timer.Stop()
+	select {
+	case <-c.readySignal:
+		return ctx.Err()
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return &requestRefusal{fmt.Errorf("ccgateway Mod did not acknowledge loading before input")}
+	}
 }
 
 func (c *modControl) verify() error {

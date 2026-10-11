@@ -68,9 +68,11 @@ func (o *apiTerminalObserver) observe(event []byte) {
 // repair/refine the answer. A completed stop (including truncation/refusal)
 // must end this API call before CC can make an implicit second model request.
 func (s *cliSession) completeAPIOutput() (Object, error) {
-	s.relay.mu.Lock()
-	s.relay.stopped = true
-	s.relay.mu.Unlock()
+	if s.relay != nil {
+		s.relay.mu.Lock()
+		s.relay.stopped = true
+		s.relay.mu.Unlock()
+	}
 	if s.req.APIOutputFormat && str(s.acc.Message, "stop_reason") == "end_turn" && !s.acc.HasClientTool {
 		if err := validateStructuredText(s.req.JSONSchema, s.acc.Blocks); err != nil {
 			s.req.diagnostic.trace("output_schema_diagnostic", Object{"message": err.Error(), "upstream_status": 200})

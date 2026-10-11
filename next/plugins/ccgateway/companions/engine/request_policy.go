@@ -99,8 +99,8 @@ func requestPolicy(h http.Header) (RequestPolicy, error) {
 	if p.RelayMode == "" {
 		p.RelayMode = "legacy"
 	}
-	if p.RelayMode != "legacy" && p.RelayMode != "passthrough" {
-		return p, fmt.Errorf("invalid relay_mode: must be legacy or passthrough")
+	if p.RelayMode != "legacy" && p.RelayMode != "passthrough" && p.RelayMode != "native" {
+		return p, fmt.Errorf("invalid relay_mode: must be legacy, passthrough or native")
 	}
 	// Ignore legacy editable rules; Beta handling is fixed in code.
 	p.Betas = defaultRequestPolicy().Betas
@@ -121,7 +121,7 @@ func parsePolicyRequestWithHelper(body []byte, h http.Header, access *resourceAd
 	if err != nil {
 		return nil, err
 	}
-	if p.RelayMode == "passthrough" {
+	if p.RelayMode == "passthrough" || p.RelayMode == "native" {
 		if helper != nil {
 			return nil, passthroughRefusal("helper history", "every upstream request is Claude Code's own")
 		}

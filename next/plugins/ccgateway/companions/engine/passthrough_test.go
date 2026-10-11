@@ -10,13 +10,91 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
+	"github.com/stretchr/testify/require"
 )
+
+func TestNativeRequestPolicyAndEnvironment(t *testing.T) {
+	h := http.Header{}
+	h.Set(policyHeader, `{"relay_mode":"native"}`)
+	req, err := parsePolicyRequest([]byte(`{"model":"claude-sonnet-4-6","max_tokens":64,"messages":[{"role":"user","content":"hi"}]}`), h)
+	require.NoError(t, err)
+	require.True(t, req.Passthrough)
+	cfg := newRunConfig(req, &Prepared{SessionID: "00000000-0000-4000-8000-000000000000"}, "mod", t.TempDir())
+	base := []string{"ANTHROPIC_BASE_URL=https://provider.invalid", "_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1", "CLAUDE_CODE_RETRY_WATCHDOG=1"}
+	env := cfg.processEnv(base, nil)
+	require.Equal(t, "https://provider.invalid", environmentValue(env, "ANTHROPIC_BASE_URL"))
+	require.Empty(t, environmentValue(env, "_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL"))
+	require.Empty(t, environmentValue(env, "CLAUDE_CODE_RETRY_WATCHDOG"))
+	require.Equal(t, "0", environmentValue(env, "CLAUDE_CODE_MAX_RETRIES"))
+	require.Equal(t, "1", environmentValue(env, "CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK"))
+	require.Contains(t, environmentValue(env, "NO_PROXY"), "127.0.0.1")
+}
+
+func TestNativeEnvironmentValidationUsesChildCasing(t *testing.T) {
+	base := []string{"ANTHROPIC_BASE_URL=https://primary.invalid", "anthropic_base_url=https://override.invalid"}
+	want := "https://primary.invalid"
+	if runtime.GOOS == "windows" {
+		want = "https://override.invalid"
+	}
+	require.Equal(t, want, environmentValue(base, "ANTHROPIC_BASE_URL"))
+	require.Equal(t, want, environmentValue(envWith(base, nil), "ANTHROPIC_BASE_URL"))
+}
+
+func TestNativeFallbackFreshAdmission(t *testing.T) {
+	h := http.Header{}
+	h.Set(policyHeader, `{"relay_mode":"native","allow_fast":true}`)
+	h.Set("Anthropic-Beta", "server-side-fallback-2026-06-01")
+	primary, err := parsePolicyRequest([]byte(`{"model":"claude-sonnet-4-6","max_tokens":4096,"thinking":{"type":"enabled","budget_tokens":1024},"output_config":{"effort":"low"},"messages":[{"role":"user","content":"hi"}],"fallbacks":[{"model":"claude-opus-4-6","thinking":null,"output_config":null,"max_tokens":null},{"model":"claude-haiku-4-5","thinking":{"type":"disabled"}}]}`), h)
+	require.NoError(t, err)
+	before := append([]byte(nil), primary.Plan.RawRequest()...)
+	cfg, err := primary.passthroughBodies()
+	require.NoError(t, err)
+	first, err := primary.nativeFallback(cfg.Fallbacks[0])
+	require.NoError(t, err)
+	require.Empty(t, first.Thinking)
+	require.Empty(t, first.Effort)
+	require.Equal(t, 4096, first.MaxTokens)
+	firstWire, err := decodeObject(first.Plan.RawRequest())
+	require.NoError(t, err)
+	require.NotContains(t, firstWire, "thinking")
+	require.NotContains(t, firstWire, "output_config")
+	second, err := primary.nativeFallback(cfg.Fallbacks[1])
+	require.NoError(t, err)
+	require.Equal(t, "disabled", str(second.Thinking, "type"))
+	require.NotContains(t, second.Thinking, "budget_tokens")
+	require.Equal(t, "enabled", str(primary.Thinking, "type"))
+	require.Equal(t, "low", primary.Effort)
+	require.Equal(t, before, primary.Plan.RawRequest())
+}
+
+func TestNativeFallbackSpeedAdmission(t *testing.T) {
+	h := http.Header{}
+	h.Set(policyHeader, `{"relay_mode":"native","allow_fast":true}`)
+	h.Set("Anthropic-Beta", "server-side-fallback-2026-06-01")
+	raw := []byte(`{"model":"claude-sonnet-4-6","max_tokens":256,"speed":"fast","messages":[{"role":"user","content":"hi"}],"fallbacks":[{"model":"claude-opus-4-6","speed":"standard"}]}`)
+	primary, err := parsePolicyRequest(raw, h)
+	require.NoError(t, err)
+	cfg, err := primary.passthroughBodies()
+	require.NoError(t, err)
+	next, err := primary.nativeFallback(cfg.Fallbacks[0])
+	require.NoError(t, err)
+	require.True(t, *primary.Fast)
+	require.Equal(t, `"fast"`, string(cfg.First["speed"]))
+	require.False(t, *next.Fast)
+	nextCfg, err := next.passthroughBodies()
+	require.NoError(t, err)
+	require.Equal(t, `"standard"`, string(nextCfg.First["speed"]))
+	h.Set(policyHeader, `{"relay_mode":"passthrough","allow_fast":true}`)
+	_, err = parsePolicyRequest(raw, h)
+	require.ErrorContains(t, err, "fast mode is fixed for the whole run")
+}
 
 func passthroughHeader(betas ...string) http.Header {
 	h := http.Header{}

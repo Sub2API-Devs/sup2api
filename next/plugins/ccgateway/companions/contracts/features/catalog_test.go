@@ -27,7 +27,7 @@ func TestCatalogSchemaAndUniqueIDs(t *testing.T) {
 		}
 	}
 	// These stable IDs connect existing policy controls to feature descriptions.
-	for _, id := range []string{"F-FAST", "F-OUTPUT", "F-TOOL-SEARCH"} {
+	for _, id := range []string{"F-FAST", "F-OUTPUT", "F-TOOL-SEARCH", "F-RELAY-NATIVE"} {
 		if !seen[id] {
 			t.Errorf("missing policy feature %s", id)
 		}

@@ -98,7 +98,7 @@ func (r *Request) responseView() *Request {
 
 // Inherited variables that would change the request the CLI sends; the gateway
 // sets the ones it needs from the request itself.
-var inheritedCLIEnv = []string{"CLAUDE_CODE_MAX_RETRIES", "ANTHROPIC_CUSTOM_HEADERS", "CLAUDE_CODE_RESUME_INTERRUPTED_TURN", "CLAUDE_CODE_RESUME_FROM_SESSION", "CLAUDE_CODE_PLUGIN_DIRS", "ANTHROPIC_BETAS", "CLAUDE_CODE_EXTRA_BODY", "CLAUDE_CODE_EFFORT_LEVEL", "CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING", "CLAUDE_CODE_PROMPT_CACHE_TTL", "CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL", "FORCE_PROMPT_CACHING_5M", "ENABLE_PROMPT_CACHING_1H", "MAX_THINKING_TOKENS", "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING", "CLAUDE_CODE_DISABLE_THINKING", "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS", "MAX_STRUCTURED_OUTPUT_RETRIES", "CLAUDE_CODE_DISABLE_1M_CONTEXT", "CLAUDE_CODE_MAX_CONTEXT_TOKENS", "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", "CLAUDE_CODE_USE_POWERSHELL_TOOL", "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS", "BASH_DEFAULT_TIMEOUT_MS", "BASH_MAX_TIMEOUT_MS", "CCGATEWAY_TOOL_DEFERRAL_FILE", "CCGATEWAY_SYSTEM_FILE", "CCGATEWAY_SYSTEM_ACK_FILE", "CCGATEWAY_READY_FILE", "CCGATEWAY_DEBUG_FILE", "CCGATEWAY_ATTACHMENT_TRACE", "CCGATEWAY_MOD_URL", "CCGATEWAY_MOD_TOKEN"}
+var inheritedCLIEnv = []string{"_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL", "CLAUDE_CODE_RETRY_WATCHDOG", "CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK", "CLAUDE_CODE_MAX_RETRIES", "ANTHROPIC_CUSTOM_HEADERS", "CLAUDE_CODE_RESUME_INTERRUPTED_TURN", "CLAUDE_CODE_RESUME_FROM_SESSION", "CLAUDE_CODE_PLUGIN_DIRS", "ANTHROPIC_BETAS", "CLAUDE_CODE_EXTRA_BODY", "CLAUDE_CODE_EFFORT_LEVEL", "CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING", "CLAUDE_CODE_PROMPT_CACHE_TTL", "CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL", "FORCE_PROMPT_CACHING_5M", "ENABLE_PROMPT_CACHING_1H", "MAX_THINKING_TOKENS", "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING", "CLAUDE_CODE_DISABLE_THINKING", "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS", "MAX_STRUCTURED_OUTPUT_RETRIES", "CLAUDE_CODE_DISABLE_1M_CONTEXT", "CLAUDE_CODE_MAX_CONTEXT_TOKENS", "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", "CLAUDE_CODE_USE_POWERSHELL_TOOL", "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS", "BASH_DEFAULT_TIMEOUT_MS", "BASH_MAX_TIMEOUT_MS", "CCGATEWAY_TOOL_DEFERRAL_FILE", "CCGATEWAY_SYSTEM_FILE", "CCGATEWAY_SYSTEM_ACK_FILE", "CCGATEWAY_READY_FILE", "CCGATEWAY_DEBUG_FILE", "CCGATEWAY_ATTACHMENT_TRACE", "CCGATEWAY_MOD_URL", "CCGATEWAY_MOD_TOKEN"}
 
 // runConfig is the per-request CLI and Mod configuration, kept in memory.
 type runConfig struct {
@@ -111,6 +111,7 @@ type runConfig struct {
 	groups          []systemGroup
 	deferral        []byte
 	control         *modControl
+	native          *nativeRunState
 	attachments     Object
 	reminderMarker  string
 	nativeReminders map[string]int
@@ -250,6 +251,10 @@ func cliEnv(req *Request, systemTurns bool) map[string]string {
 		// No retries: the client decides (PASSTHROUGH-DESIGN.md section 2).
 		// The client's output format goes upstream as sent, never the CLI's.
 		env["CLAUDE_CODE_MAX_RETRIES"] = "0"
+		if req.NativeTransport {
+			env["CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK"] = "1"
+			env["CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL"] = "1"
+		}
 		env["CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS"] = "1"
 		if req.upstreamAgent != "" {
 			// A client subagent: upstream sees A' from the CLI itself.
@@ -337,7 +342,17 @@ func relayEnv(base []string, relay *outboundRelay) map[string]string {
 // processEnv is the CLI's complete environment: the inherited one without
 // request-shaping variables, then the relay and the request's own settings.
 func (c *runConfig) processEnv(base []string, relay *outboundRelay) []string {
-	values := relayEnv(base, relay)
+	values := map[string]string{}
+	if relay != nil {
+		values = relayEnv(base, relay)
+	} else {
+		noProxy := environmentValue(base, "NO_PROXY")
+		if noProxy == "" {
+			noProxy = environmentValue(base, "no_proxy")
+		}
+		values["NO_PROXY"] = noProxy + ",127.0.0.1,localhost"
+		values["no_proxy"] = values["NO_PROXY"]
+	}
 	for k, v := range c.env {
 		values[k] = v
 	}

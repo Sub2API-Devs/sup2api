@@ -3,9 +3,11 @@ package engine
 import (
 	"ccgateway/mod"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -153,7 +155,19 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 		req.diagnostic.setField("thinking_compat", "omit_disabled")
 		req.diagnostic.trace("thinking_disabled_omitted", Object{"model": req.Plan.thinkingCompat})
 	}
-	req.diagnostic.artifact("feature-decisions.json", req.Plan.FeatureDecisions())
+	decisions := req.Plan.FeatureDecisions()
+	if req.NativeTransport {
+		req.diagnostic.setField("execution_mode", "native")
+		for _, decision := range decisions {
+			if str(decision, "stage") == "outbound_relay" {
+				decision["stage"], decision["action"] = "cli_mod", "configure_native_request"
+				if field := str(decision, "field"); field == "context_management" || field == "compaction" || field == "cache_control" {
+					decision["action"] = "cli_owned_not_forwarded"
+				}
+			}
+		}
+	}
+	req.diagnostic.artifact("feature-decisions.json", decisions)
 	req.diagnostic.artifact("client-attachment-decisions.json", req.AttachmentDecisions)
 	// Only gateway-generated options: never dump inherited credentials or the
 	// private relay/Mod URL and token added later.
@@ -162,41 +176,74 @@ func (r *Runner) run(ctx context.Context, req *Request, p *Prepared, dir string,
 	runctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	base := r.baseEnv()
-	// Every model request passes the outbound relay: it restores client system
-	// messages, adds thinking.display, and with pass_upstream_errors ends the
-	// run on any upstream error, which the gateway returns as the API sent it.
-	relay, err := startOutboundRelay(req, base, r.InternalBaseURL)
-	if err != nil {
-		return nil, err
+	var relay *outboundRelay
+	if req.NativeTransport {
+		if err := req.validateRoutingProvider(base); err != nil {
+			return nil, err
+		}
+		if raw := environmentValue(base, "ANTHROPIC_BASE_URL"); raw != "" {
+			target, err := url.Parse(raw)
+			if err != nil || (target.Scheme != "http" && target.Scheme != "https") || target.Host == "" || target.User != nil || target.RawQuery != "" || target.Fragment != "" {
+				return nil, fmt.Errorf("invalid Anthropic base URL")
+			}
+		}
+		cfg.native = &nativeRunState{}
+		cfg.passthrough.Fallbacks = nil
+		defer func() {
+			if ctx.Err() == nil {
+				failure := cfg.native.externalFailure()
+				var refusal *requestRefusal
+				if failure == nil && err != nil && !errors.As(err, &refusal) {
+					failure = cfg.native.failure()
+				}
+				if failure != nil {
+					result, err = nil, failure
+				}
+			}
+		}()
+	} else {
+		// Every model request passes the outbound relay: it restores client system
+		// messages, adds thinking.display, and with pass_upstream_errors ends the
+		// run on any upstream error, which the gateway returns as the API sent it.
+		relay, err = startOutboundRelay(req, base, r.InternalBaseURL)
+		if err != nil {
+			return nil, err
+		}
+		// A refusal, or an upstream error passed to the client, ends the run before
+		// the CLI can back off, refresh, or reshape the request and retry.
+		relay.setAbort(cancel)
+		relay.scope = cfg.scope
+		relay.bootstrap = r.bootstrap
+		defer relay.Close()
+		// Assign the named results: runs after the process has been waited for.
+		defer func() {
+			result, err = relayOutcome(ctx, relay, result, err)
+			if req.resource != nil && ctx.Err() == nil && relay.Failure() == nil && req.resource.completed() {
+				result, err = Object{}, nil
+			}
+			if (req.CountTokens || req.resource != nil) && err == nil {
+				err = (&cliSession{cfg: cfg, relay: relay}).checkMod()
+			}
+		}()
 	}
-	// A refusal, or an upstream error passed to the client, ends the run before
-	// the CLI can back off, refresh, or reshape the request and retry.
-	relay.setAbort(cancel)
-	relay.scope = cfg.scope
-	relay.bootstrap = r.bootstrap
-	defer relay.Close()
-	// Assign the named results: runs after the process has been waited for.
-	defer func() {
-		result, err = relayOutcome(ctx, relay, result, err)
-		if req.resource != nil && ctx.Err() == nil && relay.Failure() == nil && req.resource.completed() {
-			result, err = Object{}, nil
-		}
-		if (req.CountTokens || req.resource != nil) && err == nil {
-			err = (&cliSession{cfg: cfg, relay: relay}).checkMod()
-		}
-	}()
 	control, err := startModControl(cfg, r.InternalBaseURL)
 	if err != nil {
 		return nil, err
 	}
 	defer control.Close()
 	cfg.control = control
-	relay.control = control
-	control.relay = relay
+	if relay != nil {
+		relay.control = control
+		control.relay = relay
+	}
 	if req.webSearch != nil {
 		control.webSearch = func(id string, input Object) Object {
 			return req.webSearch.search(runctx, func(ctx context.Context, input Object) (*webSearchRecord, error) {
 				record, _, err := r.runWebSearch(ctx, req, dir, input)
+				if err != nil && cfg.native != nil {
+					cfg.native.fail(&requestRefusal{err})
+					cancel()
+				}
 				return record, err
 			}, id, input)
 		}

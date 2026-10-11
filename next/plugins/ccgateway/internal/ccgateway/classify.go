@@ -103,7 +103,8 @@ func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequ
 		if resp.ClientMessage == "" {
 			resp.ClientMessage = "upstream connection failed"
 		}
-	case code == http.StatusBadRequest && isAccountBillingError(msg):
+	case code == http.StatusBadRequest && (isAccountBillingError(msg) ||
+		(in.GetHeaders()["x-ccgateway-error-source"] == "cli" && in.GetHeaders()["x-ccgateway-cli-error"] == "billing_error")):
 		resp.Action = pluginv1.ClassifyErrorResponse_ACTION_FAILOVER
 		resp.AccountEffect = pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE
 		resp.Reason = "upstream credit balance too low"

@@ -98,6 +98,14 @@ func (s *cliSession) run() (Object, error) {
 			return nil, fmt.Errorf("invalid CLI protocol frame")
 		}
 		s.req.diagnostic.trace("cli_output", f)
+		if s.cfg.native != nil {
+			s.cfg.native.observe(f)
+			if s.req.responseFacts != nil {
+				s.req.responseFacts.mu.Lock()
+				s.req.responseFacts.header = s.cfg.native.headers()
+				s.req.responseFacts.mu.Unlock()
+			}
+		}
 		switch str(f, "type") {
 		case "control_request":
 			e = s.onControlRequest(f)
@@ -168,6 +176,11 @@ func (s *cliSession) onControlResponse(f Object) error {
 	}
 	if str(resp, "subtype") != "success" {
 		return fmt.Errorf("CLI rejected initialize")
+	}
+	if s.cfg.native != nil {
+		if err := s.cfg.control.waitReady(s.ctx); err != nil {
+			return err
+		}
 	}
 	s.initialized = true
 	if e := s.proc.write(Object{"type": "user", "session_id": s.p.runSession(), "uuid": s.p.InputUUID, "parent_tool_use_id": nil, "message": s.req.pendingWireMessage()}); e != nil {
@@ -256,7 +269,7 @@ func (s *cliSession) checkMod() error {
 	}
 	// Any model response must come from a request that went through the
 	// relay with the client's system messages restored.
-	if len(s.cfg.groups) > 0 && s.relay.Restored() == 0 && !s.req.Passthrough {
+	if len(s.cfg.groups) > 0 && !s.req.Passthrough && (s.relay == nil || s.relay.Restored() == 0) {
 		return fmt.Errorf("model request bypassed the system message relay")
 	}
 	return nil
@@ -285,7 +298,13 @@ func (s *cliSession) endWebSearchRound(event Object) error {
 			return fmt.Errorf("web search response exceeds the block limit")
 		}
 		usage, _ := s.acc.Message["usage"].(Object)
-		addUsageTotals(s.webUsage, usage)
+		if s.req.NativeTransport {
+			if err := addNativeWebSearchUsage(s.webUsage, usage); err != nil {
+				return err
+			}
+		} else {
+			addUsageTotals(s.webUsage, usage)
+		}
 		s.webBlocks = append(s.webBlocks, s.acc.Blocks...)
 		s.acc = &Accumulator{}
 		s.buffered = nil
@@ -297,18 +316,29 @@ func (s *cliSession) endWebSearchRound(event Object) error {
 
 // assembleWebSearch makes the last round's message the client's: every
 // round's blocks, WebSearch calls as search blocks, and all the usage.
-func (s *cliSession) assembleWebSearch() {
+func (s *cliSession) assembleWebSearch() error {
 	if s.webAssembled || !s.acc.Done {
-		return
+		return nil
 	}
-	s.webAssembled = true
-	blocks, _ := s.req.webSearch.convertBlocks(append(append([]Object(nil), s.webBlocks...), s.acc.Blocks...), "")
 	usage, _ := s.acc.Message["usage"].(Object)
-	total := copySearchUsage(usage)
-	addUsageTotals(total, s.webUsage)
+	var total Object
+	if s.req.NativeTransport {
+		var err error
+		total, err = s.req.webSearch.nativeWebSearchUsage(s.webUsage, usage)
+		if err != nil {
+			return err
+		}
+	} else {
+		total = copySearchUsage(usage)
+		addUsageTotals(total, s.webUsage)
+		total = s.req.webSearch.webSearchUsage(total)
+	}
+	blocks, _ := s.req.webSearch.convertBlocks(append(append([]Object(nil), s.webBlocks...), s.acc.Blocks...), "")
+	s.webAssembled = true
 	s.acc.Blocks = blocks
 	s.acc.Message["content"] = blocks
-	s.acc.Message["usage"] = s.req.webSearch.webSearchUsage(total)
+	s.acc.Message["usage"] = total
+	return nil
 }
 
 // endSearchRound discards a completed tool discovery message, keeping its
@@ -341,6 +371,14 @@ func (s *cliSession) endSearchRound() error {
 
 func (s *cliSession) onResult(f Object) (Object, error) {
 	modErr := s.checkMod()
+	if s.cfg.native != nil {
+		if failure := s.cfg.native.failure(); failure != nil {
+			var native *nativeError
+			if !s.acc.Done || !errors.As(failure, &native) || native.ObservedStatus || native.Category != "error_max_turns" {
+				return nil, errors.Join(failure, modErr)
+			}
+		}
+	}
 	if failed, _ := f["is_error"].(bool); failed && !s.acc.Done {
 		if detail := str(f, "result"); detail != "" {
 			return nil, errors.Join(fmt.Errorf("Claude Code: %s", detail), modErr)
@@ -380,7 +418,9 @@ func (s *cliSession) flush() error {
 		if !s.acc.Done {
 			return nil
 		}
-		s.assembleWebSearch()
+		if err := s.assembleWebSearch(); err != nil {
+			return err
+		}
 		for _, event := range messageEvents(s.acc.Message) {
 			if e := s.emit(event); e != nil {
 				return e
