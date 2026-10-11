@@ -160,7 +160,7 @@ func (c *call) run(ctx context.Context) {
 		c.fail(fromCore(core.ErrUnauthenticated.WithMessage("missing api key"), ""))
 		return
 	}
-	p, err := c.g.d.Auth.Authenticate(ctx, key)
+	p, err := c.g.d.Auth.Authenticate(core.WithClientIP(ctx, c.c.ClientIP()), key)
 	if err != nil {
 		c.fail(fromCore(core.AsError(err), ""))
 		return

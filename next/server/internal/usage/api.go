@@ -3,6 +3,7 @@ package usage
 import (
 	"encoding/json"
 	"fmt"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +27,7 @@ type Record struct {
 	UserEmail             string          `json:"user_email,omitempty"`
 	APIKeyID              int64           `json:"api_key_id"`
 	APIKeyName            string          `json:"api_key_name,omitempty"`
+	ClientIP              string          `json:"client_ip"`
 	GroupID               int64           `json:"group_id"`
 	GroupName             string          `json:"group_name,omitempty"`
 	AccountID             *int64          `json:"account_id"`
@@ -95,7 +97,6 @@ type Detail struct {
 	// self-service views like the rest of the upstream side.
 	Settlement *Settlement `json:"settlement,omitempty"`
 	LedgerID   *int64      `json:"ledger_id"`
-	ClientIP   string      `json:"client_ip"`
 	UserAgent  string      `json:"user_agent"`
 	NodeID     string      `json:"node_id"`
 }
@@ -122,7 +123,7 @@ const recordColumns = `u.id, u.request_id, u.client_request_id, u.created_at, u.
 	u.status_code, u.success,
 	u.error_type, u.error_message, u.attempts, u.input_tokens, u.output_tokens, u.cache_read_tokens,
 	u.cache_creation_tokens, u.cache_creation_1h_tokens, u.total_cost, u.rate_multiplier, u.billing_status,
-	u.billing_mode, u.matched_tier, u.latency_ms, u.first_token_ms, u.sticky_hit`
+	u.billing_mode, u.matched_tier, u.latency_ms, u.first_token_ms, u.sticky_hit, u.client_ip`
 
 const recordJoins = ` FROM usage_logs u
 	LEFT JOIN users us ON us.id = u.user_id
@@ -137,7 +138,7 @@ func (r *Record) scanTargets() []any {
 		&r.Endpoint, &r.Model, &r.UpstreamModel, &r.Stream, &r.StatusCode, &r.Success, &r.ErrorType,
 		&r.ErrorMessage, &r.Attempts, &r.InputTokens, &r.OutputTokens, &r.CacheReadTokens,
 		&r.CacheCreationTokens, &r.CacheCreation1hTokens, &r.TotalCost, &r.RateMultiplier, &r.BillingStatus,
-		&r.BillingMode, &r.MatchedTier, &r.LatencyMs, &r.FirstTokenMs, &r.StickyHit}
+		&r.BillingMode, &r.MatchedTier, &r.LatencyMs, &r.FirstTokenMs, &r.StickyHit, &r.ClientIP}
 }
 
 // hideUpstream removes upstream account details (account, account type and
@@ -182,14 +183,14 @@ func parseFilter(c *gin.Context, self *int64) (*filter, error) {
 	for _, x := range ids {
 		if v := c.Query(x.q); v != "" {
 			id, err := strconv.ParseInt(v, 10, 64)
-			if err != nil {
+			if err != nil || id <= 0 {
 				return nil, core.ErrInvalidArgument.WithMessage("invalid " + x.q)
 			}
 			f.add(x.col+" = ?", id)
 		}
 	}
 	for _, x := range []struct{ q, col string }{{"model", "u.model"}, {"platform", "u.platform"}, {"billing_status", "u.billing_status"}, {"request_id", "u.request_id"},
-		{"client_request_id", "u.client_request_id"}} {
+		{"client_request_id", "u.client_request_id"}, {"protocol", "u.protocol"}, {"endpoint", "u.endpoint"}, {"error_type", "u.error_type"}} {
 		if v := c.Query(x.q); v != "" {
 			f.add(x.col+" = ?", v)
 		}
@@ -209,18 +210,63 @@ func parseFilter(c *gin.Context, self *int64) (*filter, error) {
 			f.add("u.account_type = ?", at)
 		}
 	}
-	if v := c.Query("success"); v != "" {
-		b, err := strconv.ParseBool(v)
-		if err != nil {
-			return nil, core.ErrInvalidArgument.WithMessage("invalid success")
+	for _, name := range []string{"success", "stream"} {
+		if v := c.Query(name); v != "" {
+			b, err := strconv.ParseBool(v)
+			if err != nil {
+				return nil, core.ErrInvalidArgument.WithMessage("invalid " + name)
+			}
+			f.add("u."+name+" = ?", b)
 		}
-		f.add("u.success = ?", b)
 	}
+	if v := c.Query("status_code"); v != "" {
+		status, err := strconv.Atoi(v)
+		if err != nil || (status != 0 && (status < 100 || status > 599)) {
+			return nil, core.ErrInvalidArgument.WithMessage("invalid status_code")
+		}
+		f.add("u.status_code = ?", status)
+	}
+	if v := c.Query("client_ip"); v != "" {
+		ip, err := netip.ParseAddr(v)
+		if err != nil || ip.Zone() != "" {
+			return nil, core.ErrInvalidArgument.WithMessage("invalid client_ip")
+		}
+		f.add("u.client_ip = ?", ip.Unmap().String())
+	}
+	contains := []struct{ q, cond string }{
+		{"model_contains", "u.model ILIKE ? ESCAPE E'\\\\'"},
+		{"api_key_name", "EXISTS (SELECT 1 FROM api_keys fk WHERE fk.id=u.api_key_id AND fk.name ILIKE ? ESCAPE E'\\\\')"},
+		{"group_name", "EXISTS (SELECT 1 FROM groups fg WHERE fg.id=u.group_id AND fg.name ILIKE ? ESCAPE E'\\\\')"},
+	}
+	if self == nil {
+		contains = append(contains, struct{ q, cond string }{"user_email", "EXISTS (SELECT 1 FROM users fu WHERE fu.id=u.user_id AND fu.email ILIKE ? ESCAPE E'\\\\')"},
+			struct{ q, cond string }{"account_name", "EXISTS (SELECT 1 FROM accounts fa WHERE fa.id=u.account_id AND fa.name ILIKE ? ESCAPE E'\\\\')"})
+		for _, name := range []string{"node_id", "upstream_model", "upstream_protocol"} {
+			if v := c.Query(name); v != "" {
+				f.add("u."+name+" = ?", v)
+			}
+		}
+	}
+	for _, x := range contains {
+		if v := strings.TrimSpace(c.Query(x.q)); v != "" {
+			if len(v) > 256 {
+				return nil, core.ErrInvalidArgument.WithMessage("invalid " + x.q)
+			}
+			v = strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(v)
+			f.add(x.cond, "%"+v+"%")
+		}
+	}
+	var from time.Time
 	for _, x := range []struct{ q, cond string }{{"from", "u.created_at >= ?"}, {"to", "u.created_at < ?"}} {
 		if v := c.Query(x.q); v != "" {
 			t, err := time.Parse(time.RFC3339, v)
 			if err != nil {
 				return nil, core.ErrInvalidArgument.WithMessage("invalid " + x.q + " (RFC 3339)")
+			}
+			if x.q == "from" {
+				from = t
+			} else if !from.IsZero() && !t.After(from) {
+				return nil, core.ErrInvalidArgument.WithMessage("to must be after from")
 			}
 			f.add(x.cond, t)
 		}
@@ -335,9 +381,9 @@ func (s *Service) detail(c *gin.Context, self *int64) {
 	}
 	var d Detail
 	targets := append(d.Record.scanTargets(), &d.PluginVersion, &d.Metrics, &d.StickyRule, &d.HookDecisions,
-		&d.PriceID, &d.ExprHash, &d.BillingDetail, &d.ClientIP, &d.UserAgent, &d.NodeID, &d.PluginDetail, &d.Anomalies)
+		&d.PriceID, &d.ExprHash, &d.BillingDetail, &d.UserAgent, &d.NodeID, &d.PluginDetail, &d.Anomalies)
 	err := s.db.Pool.QueryRow(ctx, `SELECT `+recordColumns+`, u.plugin_version, u.metrics, u.sticky_rule,
-		u.hook_decisions, u.price_id, u.expr_hash, u.billing_detail, u.client_ip, u.user_agent, u.node_id,
+		u.hook_decisions, u.price_id, u.expr_hash, u.billing_detail, u.user_agent, u.node_id,
 		u.plugin_detail, u.anomalies`+
 		recordJoins+` WHERE u.id = $1`, id).Scan(targets...)
 	if store.IsNoRows(err) || (err == nil && self != nil && d.UserID != *self) {

@@ -16,6 +16,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/require"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -206,6 +207,119 @@ func codeOf(err error) string {
 		return ce.Code
 	}
 	return fmt.Sprint(err)
+}
+
+func TestAPIKeyIPAllowlistValidation(t *testing.T) {
+	e := setup(t)
+	group := e.exec1(`INSERT INTO groups (name) VALUES ('ip-policy') RETURNING id`)
+	for _, entries := range [][]string{{"hostname.example"}, {"192.0.2.1/33"}, {"fe80::1%eth0"}, {""}, {"::ffff:192.0.2.1/64"}} {
+		status, _ := e.do(e.user, "POST", "/me/api-keys", map[string]any{"name": "restricted", "group_id": group, "allowed_ips": entries})
+		require.Equal(t, 400, status, "invalid allowlist must not create an unrestricted key")
+	}
+}
+
+func TestIPAllowlistMatching(t *testing.T) {
+	for _, test := range []struct {
+		ip      string
+		entries []string
+		allowed bool
+	}{
+		{"", nil, true},
+		{"", []string{"0.0.0.0/0"}, false},
+		{"192.0.2.9", []string{"192.0.2.0/24"}, true},
+		{"192.0.3.1", []string{"192.0.2.0/24"}, false},
+		{"2001:db8::7", []string{"2001:db8::/32"}, true},
+		{"2001:db9::7", []string{"2001:db8::/32"}, false},
+		{"::ffff:192.0.2.9", []string{"192.0.2.9"}, true},
+		{"192.0.2.9", []string{"::ffff:192.0.2.0/120"}, true},
+		{"192.0.2.9", []string{"bad"}, false},
+		{"fe80::1%eth0", []string{"fe80::/10"}, false},
+	} {
+		require.Equal(t, test.allowed, ipAllowed(test.ip, test.entries), "%s %v", test.ip, test.entries)
+	}
+	entries, err := normalizeAllowedIPs(t.Context(), []string{" 192.0.2.7/24 ", "192.0.2.0/24", "::ffff:192.0.2.1", "2001:0db8::1"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"192.0.2.0/24", "192.0.2.1", "2001:db8::1"}, entries)
+	_, err = normalizeAllowedIPs(t.Context(), make([]string, 257))
+	require.Error(t, err)
+}
+
+func TestAPIKeyIPAllowlistOwnershipAndAuthentication(t *testing.T) {
+	e := setup(t)
+	group := e.exec1(`INSERT INTO groups (name) VALUES ('ip-policy') RETURNING id`)
+	status, out := e.do(e.user, "POST", "/me/api-keys", map[string]any{"name": "restricted", "group_id": group, "allowed_ips": []string{"192.0.2.7/24"}})
+	require.Equal(t, 201, status)
+	key := out["data"].(map[string]any)
+	require.Equal(t, []any{"192.0.2.0/24"}, key["allowed_ips"])
+	raw := key["key"].(string)
+	id := int64(key["id"].(float64))
+	path := fmt.Sprintf("/me/api-keys/%d/ip-allowlist", id)
+	for _, ip := range []string{"", "198.51.100.1", "invalid"} {
+		_, err := e.svc.Authenticate(core.WithClientIP(t.Context(), ip), raw)
+		require.Equal(t, "ip_not_allowed", codeOf(err))
+	}
+	_, err := e.svc.Authenticate(core.WithClientIP(t.Context(), "192.0.2.1"), raw)
+	require.NoError(t, err)
+	status, _ = e.do(e.admin, "PUT", path, map[string]any{"allowed_ips": []string{}})
+	require.Equal(t, 404, status)
+	for _, body := range []any{map[string]any{}, map[string]any{"allowed_ips": nil}, map[string]any{"allowed_ips": []string{"bad"}}} {
+		status, _ = e.do(e.user, "PUT", path, body)
+		require.Equal(t, 400, status)
+	}
+	status, _ = e.do(e.user, "PUT", path, map[string]any{"allowed_ips": []string{"2001:db8::/32"}})
+	require.Equal(t, 200, status)
+	_, err = e.svc.Authenticate(core.WithClientIP(t.Context(), "192.0.2.1"), raw)
+	require.Equal(t, "ip_not_allowed", codeOf(err))
+	_, err = e.svc.Authenticate(core.WithClientIP(t.Context(), "2001:db8::1"), raw)
+	require.NoError(t, err)
+	status, out = e.do(e.user, "GET", "/me/api-keys", nil)
+	require.Equal(t, 200, status)
+	listed := out["data"].([]any)[0].(map[string]any)
+	require.Equal(t, []any{"2001:db8::/32"}, listed["allowed_ips"])
+	require.NotContains(t, listed, "key")
+	status, _ = e.do(e.user, "PUT", path, map[string]any{"allowed_ips": []string{}})
+	require.Equal(t, 200, status)
+	_, err = e.svc.Authenticate(t.Context(), raw)
+	require.NoError(t, err)
+	var audits int
+	require.NoError(t, e.db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM audit_logs WHERE action='apikey.ip_allowlist' AND user_id=$1`, e.user).Scan(&audits))
+	require.Equal(t, 2, audits)
+}
+
+func TestAPIKeyAllowlistUsesTrustedClientIP(t *testing.T) {
+	e := setup(t)
+	group := e.exec1(`INSERT INTO groups (name) VALUES ('trusted-proxy') RETURNING id`)
+	status, out := e.do(e.user, "POST", "/me/api-keys", map[string]any{"name": "restricted", "group_id": group, "allowed_ips": []string{"192.0.2.7"}})
+	require.Equal(t, 201, status)
+	raw := out["data"].(map[string]any)["key"].(string)
+	for _, test := range []struct {
+		peer      string
+		forwarded string
+		status    int
+	}{
+		{"198.51.100.1:1234", "192.0.2.7", 403},
+		{"192.0.2.7:1234", "198.51.100.1", 200},
+		{"10.0.0.1:1234", "192.0.2.7", 200},
+		{"10.0.0.1:1234", "192.0.2.7, 198.51.100.1", 403},
+		{"10.0.0.1:1234", "malformed", 403},
+	} {
+		engine := gin.New()
+		require.NoError(t, engine.SetTrustedProxies([]string{"10.0.0.1"}))
+		engine.GET("/", func(c *gin.Context) {
+			_, err := e.svc.Authenticate(core.WithClientIP(c.Request.Context(), c.ClientIP()), raw)
+			if err != nil {
+				c.Status(core.AsError(err).Status)
+				return
+			}
+			c.Status(200)
+		})
+		request := httptest.NewRequest("GET", "/", nil)
+		request.RemoteAddr = test.peer
+		request.Header.Set("X-Forwarded-For", test.forwarded)
+		response := httptest.NewRecorder()
+		engine.ServeHTTP(response, request)
+		require.Equal(t, test.status, response.Code)
+	}
 }
 
 func TestGenerateKey(t *testing.T) {

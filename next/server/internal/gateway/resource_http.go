@@ -67,7 +67,7 @@ func (g *Gateway) serveResourceHTTP(c *gin.Context) bool {
 		x.fail(core.ErrUnauthenticated)
 		return true
 	}
-	p, err := g.d.Auth.Authenticate(c.Request.Context(), key)
+	p, err := g.d.Auth.Authenticate(core.WithClientIP(c.Request.Context(), c.ClientIP()), key)
 	if err != nil {
 		x.fail(err)
 		return true

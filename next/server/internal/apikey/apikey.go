@@ -60,6 +60,7 @@ func New(db *store.DB, rdb redis.UniversalClient, authz core.Authorizer, reg cor
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("GET", "/me/api-keys", "apikey:self:manage", s.listMine)
 	r.Perm("POST", "/me/api-keys", "apikey:self:manage", s.createMine)
+	r.Perm("PUT", "/me/api-keys/:id/ip-allowlist", "apikey:self:manage", s.updateIPAllowlist)
 	r.Perm("POST", "/me/api-keys/:id/reveal", "apikey:self:manage", s.revealMine)
 	r.Perm("POST", "/me/api-keys/:id/rotate", "apikey:self:manage", s.rotateMine)
 	r.Perm("DELETE", "/me/api-keys/:id", "apikey:self:manage", s.deleteMine)
@@ -169,6 +170,7 @@ type cached struct {
 	ModelAllowlist     []string   `json:"model_allowlist,omitempty"`
 	ModelFilterMode    string     `json:"model_filter_mode,omitempty"`
 	GroupAvailable     bool       `json:"group_available,omitempty"`
+	AllowedIPs         []string   `json:"allowed_ips"`
 }
 
 // Authenticate resolves a raw client key into a principal.
@@ -190,6 +192,9 @@ func (s *Service) Authenticate(ctx context.Context, rawKey string) (*core.APIKey
 	}
 	if !e.UserActive {
 		return nil, core.ErrUnauthenticated.WithMessage("user disabled")
+	}
+	if !ipAllowed(core.ClientIP(ctx), e.AllowedIPs) {
+		return nil, core.NewError(403, "ip_not_allowed", t(ctx, "client IP is not allowed for this API key", "调用 IP 不在此 API Key 的白名单内"))
 	}
 	if e.GroupStatus != "active" || !e.GroupAvailable {
 		return nil, core.ErrPermissionDenied.WithMessage("group not available")
@@ -231,13 +236,13 @@ func (s *Service) lookup(ctx context.Context, hash string) (*cached, error) {
 	err := s.db.Pool.QueryRow(ctx, `SELECT k.id, k.user_id, k.status, k.expires_at,
 			(u.status = 'active' AND u.deleted_at IS NULL), u.max_concurrency,
 			g.id, g.name, g.status, g.rate_multiplier::text, g.model_allowlist, g.model_filter_mode,
-			(g.visibility = 'public' OR EXISTS (SELECT 1 FROM user_groups ug WHERE ug.user_id = k.user_id AND ug.group_id = g.id))
+			(g.visibility = 'public' OR EXISTS (SELECT 1 FROM user_groups ug WHERE ug.user_id = k.user_id AND ug.group_id = g.id)), k.allowed_ips
 		FROM api_keys k
 		JOIN users u ON u.id = k.user_id
 		JOIN groups g ON g.id = k.group_id
 		WHERE k.key_hash = $1 AND k.deleted_at IS NULL`, hash).Scan(
 		&e.KeyID, &e.UserID, &e.KeyStatus, &e.ExpiresAt, &e.UserActive, &e.UserMaxConcurrency,
-		&e.GroupID, &e.GroupName, &e.GroupStatus, &rate, &e.ModelAllowlist, &e.ModelFilterMode, &e.GroupAvailable)
+		&e.GroupID, &e.GroupName, &e.GroupStatus, &rate, &e.ModelAllowlist, &e.ModelFilterMode, &e.GroupAvailable, &e.AllowedIPs)
 	switch {
 	case store.IsNoRows(err):
 		e = &cached{Found: false}
@@ -263,14 +268,15 @@ func (s *Service) dropCache(ctx context.Context, hash string) {
 
 // APIKey is the API view of an api_keys row.
 type APIKey struct {
-	ID        int64  `json:"id"`
-	UserID    int64  `json:"user_id"`
-	UserEmail string `json:"user_email,omitempty"`
-	Name      string `json:"name"`
-	KeyPrefix string `json:"key_prefix"`
-	Copyable  bool   `json:"copyable"`
-	GroupID   int64  `json:"group_id"`
-	GroupName string `json:"group_name"`
+	ID         int64    `json:"id"`
+	UserID     int64    `json:"user_id"`
+	UserEmail  string   `json:"user_email,omitempty"`
+	Name       string   `json:"name"`
+	KeyPrefix  string   `json:"key_prefix"`
+	Copyable   bool     `json:"copyable"`
+	GroupID    int64    `json:"group_id"`
+	GroupName  string   `json:"group_name"`
+	AllowedIPs []string `json:"allowed_ips"`
 	// Platforms the key can reach: those of its group (CONTRACTS §13).
 	Platforms  []string   `json:"platforms"`
 	Status     string     `json:"status"`
@@ -282,13 +288,13 @@ type APIKey struct {
 }
 
 const selectKey = `SELECT k.id, k.user_id, u.email, k.name, k.key_prefix, k.group_id, g.name, k.status,
-		k.expires_at, k.last_used_at, k.created_at, k.key_cipher IS NOT NULL
+		k.expires_at, k.last_used_at, k.created_at, k.key_cipher IS NOT NULL, k.allowed_ips
 	FROM api_keys k JOIN users u ON u.id = k.user_id JOIN groups g ON g.id = k.group_id`
 
 func scanKey(row pgx.Row) (*APIKey, error) {
 	var k APIKey
 	err := row.Scan(&k.ID, &k.UserID, &k.UserEmail, &k.Name, &k.KeyPrefix, &k.GroupID, &k.GroupName,
-		&k.Status, &k.ExpiresAt, &k.LastUsedAt, &k.CreatedAt, &k.Copyable)
+		&k.Status, &k.ExpiresAt, &k.LastUsedAt, &k.CreatedAt, &k.Copyable, &k.AllowedIPs)
 	return &k, err
 }
 
@@ -400,12 +406,14 @@ func futureExpiry(ctx context.Context, at *time.Time) error {
 }
 
 func (s *Service) createMine(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
 	ctx := c.Request.Context()
 	uid, _ := core.UserID(ctx)
 	var in struct {
-		Name      string     `json:"name"`
-		GroupID   int64      `json:"group_id"`
-		ExpiresAt *time.Time `json:"expires_at"`
+		Name       string     `json:"name"`
+		GroupID    int64      `json:"group_id"`
+		ExpiresAt  *time.Time `json:"expires_at"`
+		AllowedIPs []string   `json:"allowed_ips"`
 	}
 	if !httpapi.BindJSON(c, &in) {
 		return
@@ -416,6 +424,11 @@ func (s *Service) createMine(c *gin.Context) {
 		return
 	}
 	if err := futureExpiry(ctx, in.ExpiresAt); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	allowedIPs, err := normalizeAllowedIPs(ctx, in.AllowedIPs)
+	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -434,9 +447,9 @@ func (s *Service) createMine(c *gin.Context) {
 		if !ok {
 			return groupUnavailable(ctx)
 		}
-		if err := tx.QueryRow(ctx, `INSERT INTO api_keys (user_id, group_id, name, key_prefix, key_hash, expires_at)
-			VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-			uid, in.GroupID, name, raw[:displayPrefix], hash, in.ExpiresAt).Scan(&id); err != nil {
+		if err := tx.QueryRow(ctx, `INSERT INTO api_keys (user_id, group_id, name, key_prefix, key_hash, expires_at, allowed_ips)
+			VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+			uid, in.GroupID, name, raw[:displayPrefix], hash, in.ExpiresAt, allowedIPs).Scan(&id); err != nil {
 			return err
 		}
 		if s.Cipher == nil {

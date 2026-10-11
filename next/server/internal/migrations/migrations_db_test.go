@@ -13,6 +13,30 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
+func TestAPIKeyIPAllowlistMigrationPreservesKeys(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := t.Context()
+	_, err := db.Pool.Exec(ctx, `ALTER TABLE api_keys DROP COLUMN allowed_ips;
+		DROP INDEX usage_logs_client_ip_created_idx, usage_logs_api_key_created_idx;
+		DELETE FROM schema_migrations WHERE id='0052_apikey_ip_allowlist.sql';
+		INSERT INTO users(email,password_hash) VALUES ('legacy-ip@example.com','test');
+		INSERT INTO groups(name) VALUES ('legacy-ip');
+		INSERT INTO api_keys(user_id,group_id,name,key_prefix,key_hash,status)
+		SELECT u.id,g.id,'legacy','masked','test-hash','active' FROM users u,groups g WHERE u.email='legacy-ip@example.com' AND g.name='legacy-ip'`)
+	require.NoError(t, err)
+	var before, after string
+	require.NoError(t, db.Pool.QueryRow(ctx, `SELECT jsonb_agg(to_jsonb(k) ORDER BY id)::text FROM api_keys k`).Scan(&before))
+	for range 2 {
+		_, err := store.Migrate(ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
+		require.NoError(t, err)
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT jsonb_agg(to_jsonb(k)-'allowed_ips' ORDER BY id)::text FROM api_keys k`).Scan(&after))
+		require.Equal(t, before, after)
+		var ips []string
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT allowed_ips FROM api_keys WHERE name='legacy'`).Scan(&ips))
+		require.Empty(t, ips)
+	}
+}
+
 func TestAccountLifecycleMigrationPreservesExistingRuntimes(t *testing.T) {
 	db := testutil.DB(t)
 	ctx := t.Context()

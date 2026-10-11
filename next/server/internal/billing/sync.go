@@ -1031,7 +1031,7 @@ func (s *Service) keyPrices(c *gin.Context) {
 		httpapi.Fail(c, core.ErrUnauthenticated.WithMessage("missing API key"))
 		return
 	}
-	pr, err := s.sync.Keys.Authenticate(ctx, raw)
+	pr, err := s.sync.Keys.Authenticate(core.WithClientIP(ctx, c.ClientIP()), raw)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return

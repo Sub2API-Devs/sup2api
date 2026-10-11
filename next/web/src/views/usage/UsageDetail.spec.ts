@@ -28,6 +28,15 @@ function render(value = row, path?: string) {
 }
 
 describe('known partial usage in failed request details', () => {
+  it('shows client IP, client agent and upstream attempts from detail', async () => {
+    get.mockResolvedValueOnce({ ...row, client_ip: '192.0.2.9', user_agent: 'fixture-client', attempts: 2, api_key_name: 'my-laptop', node_id: '' })
+    const wrapper = render(row, '/me/usage/1')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="detail-client-ip"]').text()).toBe('192.0.2.9')
+    expect(wrapper.text()).toContain('fixture-client')
+    expect(wrapper.text()).toContain('my-laptop')
+    expect(wrapper.text()).toContain('上游尝试次数')
+  })
   it('separates reported TTL facts from compatible billing for successful partial usage', () => {
     const value = { ...row, success: true, status_code: 200, cache_creation_tokens: 1219, cache_creation_1h_tokens: 1376,
       metrics: { cache_write_evidence: { version: 1, total: { state: 'value', value: 2595 }, explicit_5m: { state: 'value', value: 0 }, explicit_1h: { state: 'value', value: 1376 }, unclassified_tokens: 1219, completeness: 'partial', source: 'sse', pricing_policy: 'platform_default_cache_write_compat' } }

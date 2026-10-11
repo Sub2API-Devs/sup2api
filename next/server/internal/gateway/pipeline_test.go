@@ -5,6 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +18,51 @@ import (
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
+
+type clientIPAuth struct {
+	ip string
+}
+
+func (a *clientIPAuth) Authenticate(ctx context.Context, _ string) (*core.APIKeyPrincipal, error) {
+	a.ip = core.ClientIP(ctx)
+	return nil, core.NewError(403, "ip_not_allowed", "client IP not allowed")
+}
+
+func TestGatewayAuthenticationReceivesTrustedClientIP(t *testing.T) {
+	for _, path := range []string{"/v1/messages", "/v1/responses", "/v1/files"} {
+		t.Run(path, func(t *testing.T) {
+			var e *env
+			if path == "/v1/responses" {
+				e = newWSEnv(t).env
+			} else {
+				e, _, _ = resourceTestEnv(t)
+			}
+			auth := &clientIPAuth{}
+			e.gw.d.Auth = auth
+			engine := gin.New()
+			require.NoError(t, engine.SetTrustedProxies([]string{"10.0.0.1"}))
+			engine.Use(e.gw.Middleware())
+			for _, test := range []struct{ peer, want string }{{"198.51.100.1:1234", "198.51.100.1"}, {"10.0.0.1:1234", "192.0.2.7"}} {
+				method := "POST"
+				if path != "/v1/messages" {
+					method = "GET"
+				}
+				req := httptest.NewRequest(method, path, nil)
+				req.RemoteAddr = test.peer
+				req.Header.Set("Authorization", "Bearer "+testKey)
+				req.Header.Set("X-Forwarded-For", "192.0.2.7")
+				if path == "/v1/responses" {
+					req.Header.Set("Upgrade", "websocket")
+				}
+				response := httptest.NewRecorder()
+				engine.ServeHTTP(response, req)
+				require.Equal(t, test.want, auth.ip)
+				require.Equal(t, 403, response.Code)
+				require.Contains(t, response.Body.String(), "ip_not_allowed")
+			}
+		})
+	}
+}
 
 func TestNonStreamSuccessAndUsage(t *testing.T) {
 	e := newEnv(t)

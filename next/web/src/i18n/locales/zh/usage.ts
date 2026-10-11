@@ -17,6 +17,33 @@ export default {
   range: {
     custom: '自定义'
   },
+  nonStream: '非流式',
+  search: {
+    advanced: '更多筛选',
+    model_contains: '模型包含',
+    api_key_name: 'API Key 名称包含',
+    client_ip: '调用 IP（精确）',
+    api_key_id: 'API Key ID',
+    group_id: '分组 ID',
+    group_name: '分组名称包含',
+    request_id: '请求 ID',
+    client_request_id: '客户端请求 ID',
+    platform: '平台',
+    protocol: '协议',
+    endpoint: '端点',
+    status_code: 'HTTP 状态码',
+    error_type: '错误类型',
+    user_id: '用户 ID',
+    user_email: '用户邮箱包含',
+    account_id: '账号 ID',
+    account_name: '账号名称包含',
+    plugin_key: '插件标识',
+    account_type: '账号类型（需指定插件）',
+    node_id: '节点 ID',
+    upstream_model: '上游模型',
+    upstream_protocol: '上游协议',
+    stream: '响应方式'
+  },
   filters: {
     userId: '用户 ID',
     accountId: '账号 ID',
@@ -44,6 +71,7 @@ export default {
     rate_limit_exceeded: '超过速率限制'
   },
   cols: {
+    client: 'API Key / 调用 IP',
     route: '分组 / 账号',
     input: '输入',
     output: '输出',
@@ -105,6 +133,10 @@ export default {
     endpoint: '端点',
     upstreamModel: '上游模型',
     apiKey: 'API Key',
+    clientIP: '调用 IP',
+    userAgent: '客户端 User-Agent',
+    node: '节点',
+    attempts: '上游尝试次数',
     statusCode: 'HTTP 状态',
     latency: '耗时',
     firstToken: '首 token',

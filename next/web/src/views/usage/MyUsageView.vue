@@ -2,7 +2,8 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { SButton, SField, SInput, SPageHeader, SPagination, SSelect, STabs, STimeRange, type TabItem } from '@sub2api/ui'
+import { SButton, SPageHeader, SPagination, STabs, STimeRange, type TabItem } from '@sub2api/ui'
+import UsageFilters from './UsageFilters.vue'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
 import MyLedgerTab from '@/views/ledger/MyLedgerTab.vue'
@@ -32,15 +33,10 @@ watch(tab, (v) => {
 const range = ref<RangeKey>('7d')
 const { items, loading, page, pageSize, total, filters, reload } = useList<UsageRow>('/me/usage', {
   ...rangeBounds('7d'),
-  model: '',
-  success: ''
+  model_contains: '',
+  success: '',
+  client_request_id: ''
 })
-
-const successOptions = computed(() => [
-  { value: '', label: t('common.all') },
-  { value: 'true', label: t('usage.success.ok') },
-  { value: 'false', label: t('usage.success.failed') }
-])
 
 const ledgerRef = ref<InstanceType<typeof MyLedgerTab> | null>(null)
 
@@ -58,12 +54,7 @@ function refresh() {
       </template>
       <template v-if="tab === 'requests'" #filters>
         <STimeRange v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" />
-        <SField class="w-48" :label="t('common.model')">
-          <SInput v-model.trim="filters.model" placeholder="claude-sonnet-*" />
-        </SField>
-        <SField class="w-32" :label="t('common.status')">
-          <SSelect v-model="filters.success" :options="successOptions" />
-        </SField>
+        <UsageFilters :model-value="filters" @update:model-value="Object.assign(filters, $event)" />
       </template>
     </SPageHeader>
 
@@ -71,7 +62,7 @@ function refresh() {
 
     <template v-if="tab === 'requests'">
       <div class="card overflow-hidden">
-        <UsageTable :rows="items" :loading="loading" :show-user="false" :show-account="false" :detail-path="(id: number) => `/me/usage/${id}`" />
+        <UsageTable :rows="items" :loading="loading" :show-user="false" :show-account="false" show-client-request-id :detail-path="(id: number) => `/me/usage/${id}`" @filter-client-request-id="(id: string) => (filters.client_request_id = id)" />
       </div>
       <SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" />
     </template>

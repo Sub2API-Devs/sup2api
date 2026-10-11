@@ -2,7 +2,7 @@
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCode, SField, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSelect, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCode, SField, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSelect, STable, STextarea, confirm, toast, type TableColumn } from '@sub2api/ui'
 import type { ApiKey, Group } from '@/api/types'
 import { fromLocalInput, statusTone } from '@/api/admin'
 import { useList } from '@/composables/useList'
@@ -69,7 +69,36 @@ function statusLabel(s: string) {
 const createOpen = ref(false)
 const creating = ref(false)
 const errors = ref<Record<string, string>>({})
-const form = reactive({ name: '', group_id: null as number | null, expires_at: '' })
+const form = reactive({ name: '', group_id: null as number | null, expires_at: '', allowed_ips: '' })
+const ipKey = ref<ApiKey | null>(null)
+const ipText = ref('')
+const ipSaving = ref(false)
+const ipError = ref('')
+
+function ipEntries(value: string) {
+  return value.split(/[\s,]+/).filter(Boolean)
+}
+function editIPs(key: ApiKey) {
+  ipKey.value = key
+  ipText.value = (key.allowed_ips || []).join('\n')
+  ipError.value = ''
+}
+async function saveIPs() {
+  if (!ipKey.value || ipSaving.value) return
+  ipSaving.value = true
+  ipError.value = ''
+  try {
+    await api.put(`/me/api-keys/${ipKey.value.id}/ip-allowlist`, { allowed_ips: ipEntries(ipText.value) })
+    ipKey.value = null
+    toast(t('apikeys.ipAllowlistSaved'), 'success')
+    list.reload()
+  } catch (e) {
+    ipError.value = fieldErrors(e).allowed_ips || ''
+    notifyError(e)
+  } finally {
+    ipSaving.value = false
+  }
+}
 const groupOptions = computed(() =>
   groups.value.map((g) => ({
     value: g.id,
@@ -80,7 +109,7 @@ const selectedGroup = computed(() => groups.value.find((g) => g.id === form.grou
 
 function openCreate() {
   loadGroups()
-  Object.assign(form, { name: '', group_id: groups.value[0]?.id ?? null, expires_at: '' })
+  Object.assign(form, { name: '', group_id: groups.value[0]?.id ?? null, expires_at: '', allowed_ips: '' })
   errors.value = {}
   createOpen.value = true
 }
@@ -97,7 +126,7 @@ async function submitCreate() {
   if (Object.keys(errors.value).length) return
   creating.value = true
   try {
-    const body: Record<string, unknown> = { name: form.name.trim(), group_id: form.group_id }
+    const body: Record<string, unknown> = { name: form.name.trim(), group_id: form.group_id, allowed_ips: ipEntries(form.allowed_ips) }
     if (exp) body.expires_at = exp
     const created = await api.post<ApiKey>('/me/api-keys', body)
     createOpen.value = false
@@ -152,6 +181,7 @@ async function remove(k: ApiKey) {
     <STable dense class="api-key-table" :columns="columns" :rows="list.items.value" :loading="list.loading.value">
       <template #cell-name="{ row }">
         <span class="font-medium text-gray-900 dark:text-white">{{ row.name }}</span>
+        <SHint v-if="row.allowed_ips?.length" size="xs">{{ t('apikeys.ipAllowlistCount', { n: row.allowed_ips.length }) }}</SHint>
       </template>
       <template #cell-key_prefix="{ row }">
         <ApiKeyCell :api-key="row" @rotated="list.reload()" />
@@ -172,6 +202,7 @@ async function remove(k: ApiKey) {
         <SHint inline>{{ formatDateTime(row.created_at) }}</SHint>
       </template>
       <template #cell-actions="{ row }">
+        <SButton variant="ghost" size="sm" data-testid="edit-key-ips" @click="editIPs(row)">{{ t('apikeys.ipAllowlist') }}</SButton>
         <SButton variant="ghost" size="sm" class="!text-red-600" @click="remove(row)">
           <SIcon name="trash" class="h-4 w-4" />{{ t('common.delete') }}
         </SButton>
@@ -206,6 +237,9 @@ async function remove(k: ApiKey) {
             </div>
           </template>
         </div>
+        <SField :label="t('apikeys.ipAllowlist')" :hint="t('apikeys.ipAllowlistHint')" :error="errors.allowed_ips">
+          <STextarea v-model="form.allowed_ips" :aria-label="t('apikeys.ipAllowlist')" mono :rows="3" :maxlength="16384" data-testid="create-key-ips" />
+        </SField>
         <SField :label="t('apikeys.expiresAt')" :hint="t('apikeys.expiresHint')" :error="errors.expires_at">
           <SInput v-model="form.expires_at" type="datetime-local" />
         </SField>
@@ -213,6 +247,16 @@ async function remove(k: ApiKey) {
       <template #footer>
         <SButton @click="createOpen = false">{{ t('common.cancel') }}</SButton>
         <SButton variant="primary" :loading="creating" @click="submitCreate">{{ t('common.create') }}</SButton>
+      </template>
+    </SModal>
+
+    <SModal :open="!!ipKey" :title="t('apikeys.ipAllowlistEdit')" :persistent="ipSaving" :closable="!ipSaving" @update:open="!$event && (ipKey = null)">
+      <SField :label="t('apikeys.ipAllowlist')" :hint="t('apikeys.ipAllowlistHint')" :error="ipError">
+        <STextarea v-model="ipText" :aria-label="t('apikeys.ipAllowlist')" mono :rows="6" :maxlength="16384" :disabled="ipSaving" data-testid="edit-key-ip-list" />
+      </SField>
+      <template #footer>
+        <SButton :disabled="ipSaving" @click="ipKey = null">{{ t('common.cancel') }}</SButton>
+        <SButton variant="primary" :loading="ipSaving" data-testid="save-key-ips" @click="saveIPs">{{ t('common.save') }}</SButton>
       </template>
     </SModal>
 

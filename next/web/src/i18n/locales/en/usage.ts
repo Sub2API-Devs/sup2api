@@ -17,6 +17,33 @@ export default {
   range: {
     custom: 'Custom'
   },
+  nonStream: 'Non-streaming',
+  search: {
+    advanced: 'More filters',
+    model_contains: 'Model contains',
+    api_key_name: 'API key name contains',
+    client_ip: 'Client IP (exact)',
+    api_key_id: 'API key ID',
+    group_id: 'Group ID',
+    group_name: 'Group name contains',
+    request_id: 'Request ID',
+    client_request_id: 'Client request ID',
+    platform: 'Platform',
+    protocol: 'Protocol',
+    endpoint: 'Endpoint',
+    status_code: 'HTTP status',
+    error_type: 'Error type',
+    user_id: 'User ID',
+    user_email: 'User email contains',
+    account_id: 'Account ID',
+    account_name: 'Account name contains',
+    plugin_key: 'Plugin key',
+    account_type: 'Account type (requires plugin)',
+    node_id: 'Node ID',
+    upstream_model: 'Upstream model',
+    upstream_protocol: 'Upstream protocol',
+    stream: 'Response mode'
+  },
   filters: {
     userId: 'User ID',
     accountId: 'Account ID',
@@ -44,6 +71,7 @@ export default {
     rate_limit_exceeded: 'Rate limit exceeded'
   },
   cols: {
+    client: 'API key / client IP',
     route: 'Group / account',
     input: 'Input',
     output: 'Output',
@@ -105,6 +133,10 @@ export default {
     endpoint: 'Endpoint',
     upstreamModel: 'Upstream model',
     apiKey: 'API key',
+    clientIP: 'Client IP',
+    userAgent: 'User-Agent',
+    node: 'Node',
+    attempts: 'Upstream attempts',
     statusCode: 'HTTP status',
     latency: 'Latency',
     firstToken: 'first token',

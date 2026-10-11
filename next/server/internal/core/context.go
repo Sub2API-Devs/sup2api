@@ -13,7 +13,17 @@ const (
 	ctxRequestID
 	ctxLocale
 	ctxGranted
+	ctxClientIP
 )
+
+func WithClientIP(ctx context.Context, ip string) context.Context {
+	return context.WithValue(ctx, ctxClientIP, ip)
+}
+
+func ClientIP(ctx context.Context) string {
+	ip, _ := ctx.Value(ctxClientIP).(string)
+	return ip
+}
 
 // WithUserID stores the authenticated console user id.
 func WithUserID(ctx context.Context, id int64) context.Context {

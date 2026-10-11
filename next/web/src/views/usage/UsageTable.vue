@@ -26,6 +26,7 @@ const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [{ key: 'created_at', label: t('common.time'), width: '110px' }]
   if (props.showUser) cols.push({ key: 'user', label: t('common.user'), width: '180px' })
   cols.push(
+    { key: 'client', label: t('usage.cols.client'), width: '190px' },
     { key: 'model', label: t('common.model'), width: '220px' },
     { key: 'group', label: props.showAccount ? t('usage.cols.route') : t('common.group'), width: '190px' },
     { key: 'tokens', label: t('usage.tokens.title'), width: '125px' },
@@ -69,6 +70,12 @@ function toggleMobile(id: number) {
           row.user_email || row.user_name || '#' + row.user_id
         }}</span></template
       >
+      <template #cell-client="{ row }">
+        <div class="space-y-1.5" data-testid="usage-client">
+          <span class="block truncate text-sm" :title="row.api_key_name">{{ row.api_key_name || (row.api_key_id ? '#' + row.api_key_id : '—') }}</span>
+          <span class="block break-all font-mono text-xs text-gray-400">{{ row.client_ip || '—' }}</span>
+        </div>
+      </template>
       <template #cell-model="{ row }">
         <div class="space-y-1.5">
           <span class="block max-w-[15rem] truncate font-mono text-xs font-medium" :title="row.model">{{ row.model || '—' }}</span>
@@ -124,6 +131,8 @@ function toggleMobile(id: number) {
           <UsageStatus :row="row" />
         </div>
         <p v-if="showUser" class="mb-1 truncate text-sm">{{ row.user_email || row.user_name || '#' + row.user_id }}</p>
+        <p class="mb-1 truncate text-xs">{{ t('usage.request.apiKey') }}: {{ row.api_key_name || (row.api_key_id ? '#' + row.api_key_id : '—') }}</p>
+        <p class="mb-2 break-all font-mono text-xs text-gray-400">{{ t('usage.request.clientIP') }}: {{ row.client_ip || '—' }}</p>
         <p class="truncate text-sm" :title="groupLabel(row)">{{ groupLabel(row) }}</p>
         <p v-if="showAccount" class="mt-1 truncate text-xs text-gray-400">
           {{ row.account_name || (row.account_id ? '#' + row.account_id : '—') }}

@@ -92,6 +92,7 @@ export interface ApiKey {
   group_name?: string // assumed
   name: string
   key_prefix: string
+  allowed_ips?: string[]
   copyable?: boolean
   status: string
   expires_at?: string | null
@@ -715,6 +716,11 @@ export interface UsageLog {
   user_id: number
   user_email?: string // assumed
   api_key_id: number
+  api_key_name?: string
+  client_ip?: string
+  user_agent?: string
+  node_id?: string
+  attempts?: number
   group_id: number
   group_name?: string // assumed
   account_id: number | null

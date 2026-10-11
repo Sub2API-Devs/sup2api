@@ -71,7 +71,7 @@ func (g *Gateway) serveWebSocket(ctx context.Context, cl *call) {
 		writeError(cl.c, cl.format, fromCore(core.ErrUnauthenticated.WithMessage("missing api key"), ""))
 		return
 	}
-	p, err := g.d.Auth.Authenticate(ctx, key)
+	p, err := g.d.Auth.Authenticate(core.WithClientIP(ctx, cl.c.ClientIP()), key)
 	if err != nil {
 		writeError(cl.c, cl.format, fromCore(core.AsError(err), ""))
 		return

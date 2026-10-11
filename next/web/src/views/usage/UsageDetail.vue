@@ -230,6 +230,18 @@ async function copy(v: string) {
               <dt>{{ t('usage.request.apiKey') }}</dt>
               <dd>{{ u.api_key_name || '#' + u.api_key_id }}</dd>
             </template>
+            <dt>{{ t('usage.request.clientIP') }}</dt>
+            <dd class="break-all font-mono text-xs" data-testid="detail-client-ip">{{ u.client_ip || '—' }}</dd>
+            <dt>{{ t('usage.request.userAgent') }}</dt>
+            <dd class="break-all text-xs">{{ u.user_agent || '—' }}</dd>
+            <template v-if="u.node_id">
+              <dt>{{ t('usage.request.node') }}</dt>
+              <dd class="font-mono text-xs">{{ u.node_id }}</dd>
+            </template>
+            <template v-if="u.attempts !== undefined">
+              <dt>{{ t('usage.request.attempts') }}</dt>
+              <dd>{{ u.attempts }}</dd>
+            </template>
             <dt>{{ t('usage.request.statusCode') }}</dt>
             <dd>{{ u.status_code || '—' }}</dd>
             <dt>{{ t('usage.request.latency') }}</dt>

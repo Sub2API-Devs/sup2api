@@ -2,7 +2,8 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, SChart, SField, SGrid, SInput, SPageHeader, SPagination, SSelect, SStatCard, STimeRange } from '@sub2api/ui'
+import { SButton, SCard, SChart, SGrid, SPageHeader, SPagination, SStatCard, STimeRange } from '@sub2api/ui'
+import UsageFilters from './UsageFilters.vue'
 import type { Group, UsageSummaryRow } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
@@ -21,7 +22,7 @@ const { items, loading, page, pageSize, total, filters, reload } = useList<Usage
   user_id: '',
   group_id: '',
   account_id: '',
-  model: '',
+  model_contains: '',
   success: '',
   // exact match on the client's X-Request-Id (CONTRACTS §14.4)
   client_request_id: ''
@@ -30,11 +31,6 @@ const { items, loading, page, pageSize, total, filters, reload } = useList<Usage
 const canGroups = auth.has('group:read')
 const groups = canGroups ? useGroupsLookup().groups : ref<Group[]>([])
 const groupOptions = computed(() => [{ value: '', label: t('common.all') }, ...groups.value.map((g) => ({ value: g.id, label: g.name }))])
-const successOptions = computed(() => [
-  { value: '', label: t('common.all') },
-  { value: 'true', label: t('usage.success.ok') },
-  { value: 'false', label: t('usage.success.failed') }
-])
 
 // ------------------------------------------------------------------ summary strip
 
@@ -47,7 +43,7 @@ async function loadSummary() {
   const my = ++sSeq
   summaryLoading.value = true
   try {
-    const r = await api.get<UsageSummaryRow[] | { items?: UsageSummaryRow[] }>('/usage/summary', { from: filters.from, to: filters.to, group_by: 'day' })
+    const r = await api.get<UsageSummaryRow[] | { items?: UsageSummaryRow[] }>('/usage/summary', { ...filters, group_by: 'day' })
     if (my !== sSeq) return
     summary.value = Array.isArray(r) ? r : r?.items || []
   } catch {
@@ -57,7 +53,7 @@ async function loadSummary() {
   }
 }
 
-watch(() => [filters.from, filters.to], loadSummary, { immediate: true })
+watch(filters, loadSummary, { deep: true, immediate: true })
 
 const totals = computed(() => {
   let requests = 0
@@ -108,31 +104,7 @@ function refresh() {
       </template>
       <template #filters>
         <STimeRange v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" />
-        <SField class="w-28" :label="t('usage.filters.userId')">
-          <SInput v-model.trim="filters.user_id" inputmode="numeric" placeholder="ID" />
-        </SField>
-        <SField class="w-40" :label="t('common.group')">
-          <SSelect v-if="canGroups" v-model="filters.group_id" :options="groupOptions" />
-          <SInput v-else v-model.trim="filters.group_id" inputmode="numeric" placeholder="ID" />
-        </SField>
-        <SField class="w-28" :label="t('usage.filters.accountId')">
-          <SInput v-model.trim="filters.account_id" inputmode="numeric" placeholder="ID" />
-        </SField>
-        <SField class="w-48" :label="t('common.model')">
-          <SInput v-model.trim="filters.model" placeholder="claude-sonnet-*" />
-        </SField>
-        <SField class="w-32" :label="t('common.status')">
-          <SSelect v-model="filters.success" :options="successOptions" />
-        </SField>
-        <SField class="w-56" :label="t('usage.filters.clientRequestId')">
-          <SInput
-            v-model.trim="filters.client_request_id"
-            mono
-            :placeholder="t('usage.filters.clientRequestIdPlaceholder')"
-            :maxlength="128"
-            data-testid="filter-client-request-id"
-          />
-        </SField>
+        <UsageFilters :model-value="filters" admin :group-options="canGroups ? groupOptions : undefined" @update:model-value="Object.assign(filters, $event)" />
       </template>
     </SPageHeader>
 

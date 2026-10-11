@@ -18,6 +18,8 @@ const row = {
   account_name: 'Account nine',
   protocol: 'anthropic.messages',
   client_request_id: 'client-request-one',
+  api_key_name: 'my-laptop',
+  client_ip: '2001:db8::7',
   success: false,
   status_code: 403,
   error_type: 'model_not_allowed',
@@ -39,9 +41,12 @@ const global = {
 describe('usage records layout', () => {
   it('keeps model, routing and error readable while preserving request-id filtering', async () => {
     const w = mount(UsageTable, { props: { rows: [row], showClientRequestId: true }, global })
-    expect(w.findAll('th').length).toBe(9)
+    expect(w.findAll('th').length).toBe(10)
     expect(w.text()).toContain(row.model)
     expect(w.text()).toContain(row.group_name)
+    expect(w.get('[data-testid="usage-client"]').text()).toContain('my-laptop')
+    expect(w.get('[data-testid="usage-client"]').text()).toContain('2001:db8::7')
+    expect(w.get('[data-testid="mobile-usage-record"]').text()).toContain('2001:db8::7')
     expect(w.text()).toContain('403')
     expect(w.text()).not.toContain('usage.errors.model_not_allowed')
     await w.get('[data-testid="client-request-id"]').trigger('click')
