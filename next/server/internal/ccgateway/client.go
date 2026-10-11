@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/remotedocker"
 	"io"
 	"net"
@@ -148,8 +149,11 @@ func (t modelTransport) forwardAttempt(ctx context.Context, cancel context.Cance
 	}
 	if cfg.AccountRuntimes {
 		d, fromCache, err := t.s.requestDesired(ctx, t.accountID)
-		if err != nil || !d.Enabled {
-			return fail(errors.New("account egress unavailable"))
+		if err != nil {
+			return fail(transportError(err))
+		}
+		if !d.Enabled {
+			return fail(reasonError(core.ErrUnavailable, d.Blocked))
 		}
 		revision, key, cached = d.Revision, d.Key, fromCache
 	}
@@ -185,7 +189,7 @@ func (t modelTransport) forwardAttempt(ctx context.Context, cancel context.Cance
 		if errors.Is(e, errAccountNotSynchronized) {
 			return notSynchronized()
 		}
-		return fail(errors.New("CCGateway is unavailable"))
+		return fail(transportError(e))
 	}
 	var once sync.Once
 	finish := func() { once.Do(func() { _ = close(); cancel() }) }

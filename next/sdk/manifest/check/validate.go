@@ -386,8 +386,8 @@ func (v *validator) hostPermissions() {
 			continue
 		}
 		v.perms[hp.ID] = hp
-		if hp.ID == "accounts.credentials" && !reflect.DeepEqual(NormalizeScope(hp.Scope), credentialsScopeOwn) {
-			v.add(f+".scope", "invalid", `accounts.credentials scope must be {"types": "own"}`)
+		if (hp.ID == "accounts.credentials" || hp.ID == "accounts.auto_state") && !reflect.DeepEqual(NormalizeScope(hp.Scope), credentialsScopeOwn) {
+			v.add(f+".scope", "invalid", `%s scope must be {"types": "own"}`, hp.ID)
 		}
 		if hp.ID == "net" {
 			if d, ok := StringList(hp.Scope, "domains"); ok {
@@ -839,6 +839,11 @@ func (v *validator) accountTypes() {
 		v.form(f+".form", at.Form, false)
 		v.guardedSettings(f, at)
 		v.defaultModels(f, at)
+		for _, name := range sortedKeys(at.CommonControls) {
+			if name != "auto_disable" && name != "schedulable" {
+				v.add(f+".commonControls."+name, "unsupported", "unknown common account control %q", name)
+			}
+		}
 		v.quota(f, at.Quota)
 		v.balance(f, at.Balance)
 		v.refresh(f, at)

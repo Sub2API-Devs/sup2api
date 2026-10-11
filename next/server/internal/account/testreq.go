@@ -9,11 +9,13 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tidwall/gjson"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
@@ -26,10 +28,12 @@ import (
 
 // TestResult is returned by POST /accounts/:id/test.
 type TestResult struct {
-	OK        bool   `json:"ok"`
-	Status    int    `json:"status"`
-	LatencyMs int64  `json:"latency_ms"`
-	Message   string `json:"message"`
+	OK          bool   `json:"ok"`
+	Status      int    `json:"status"`
+	LatencyMs   int64  `json:"latency_ms"`
+	Message     string `json:"message"`
+	ErrorCode   string `json:"error_code,omitempty"`
+	ErrorSource string `json:"error_source,omitempty"`
 	// Model actually requested: the model the plugin reported, else the
 	// requested model after the account's mapping.
 	Model string `json:"model,omitempty"`
@@ -122,7 +126,7 @@ func (s *Service) test(c *gin.Context) {
 		Model:   model,
 	})
 	if err != nil {
-		s.recordTest(ctx, a.ID, TestResult{Model: model, Message: core.AsError(err).Message})
+		s.recordTest(ctx, a.ID, TestResult{Model: model, Message: core.AsError(err).Message, ErrorCode: core.AsError(err).Code, ErrorSource: "plugin"})
 		httpapi.Fail(c, err)
 		return
 	}
@@ -142,7 +146,10 @@ type LastTest struct {
 	Model string `json:"model"`
 	// Message is empty on success; on failure the plugin's reason, else the
 	// upstream message, at most maxLastTestMessage bytes.
-	Message string `json:"message"`
+	Message     string `json:"message"`
+	Status      *int   `json:"status,omitempty"`
+	ErrorCode   string `json:"error_code,omitempty"`
+	ErrorSource string `json:"error_source,omitempty"`
 }
 
 const (
@@ -162,7 +169,7 @@ func (s *Service) recordTest(ctx context.Context, id int64, res TestResult) {
 		switch {
 		case reason == "":
 			msg = upstream
-		case upstream == "" || upstream == reason:
+		case upstream == "" || strings.HasSuffix(reason, upstream):
 			msg = reason
 		default:
 			msg = reason + ": " + upstream
@@ -172,8 +179,9 @@ func (s *Service) recordTest(ctx context.Context, id int64, res TestResult) {
 	wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordTestTimeout)
 	defer cancel()
 	if _, err := s.d.DB.Pool.Exec(wctx, `UPDATE accounts SET last_test_at = now(), last_test_ok = $2,
-		last_test_latency_ms = $3, last_test_model = $4, last_test_message = $5 WHERE id = $1`,
-		id, res.OK, min(res.LatencyMs, math.MaxInt32), res.Model, msg); err != nil {
+		last_test_latency_ms = $3, last_test_model = $4, last_test_message = $5,
+		last_test_status = $6, last_test_error_code = $7, last_test_error_source = $8 WHERE id = $1`,
+		id, res.OK, min(res.LatencyMs, math.MaxInt32), res.Model, msg, res.Status, cutBytes(res.ErrorCode, 128), res.ErrorSource); err != nil {
 		slog.WarnContext(ctx, "account: record last test", "account_id", id, "err", err)
 	}
 }
@@ -196,7 +204,7 @@ func cutBytes(s string, n int) string {
 // it and, for a failure, the plugin's classification.
 func (s *Service) runTest(ctx context.Context, bt core.AccountTypeBinding, acct *pluginv1.Account,
 	proxyID *int64, model string, tr *pluginv1.BuildTestRequestResponse) TestResult {
-	res := TestResult{Model: model}
+	res := TestResult{Model: model, ErrorCode: "invalid_test_request", ErrorSource: "gateway"}
 	if m := strings.TrimSpace(tr.GetModel()); m != "" {
 		res.Model = m
 	}
@@ -209,7 +217,7 @@ func (s *Service) runTest(ctx context.Context, bt core.AccountTypeBinding, acct 
 	managedCCG := ccgateway.IsManaged(bt.Plugin.Key, bt.Type.ID, tr.GetUrl()) && s.d.CCGateway != nil
 	if !managedCCG {
 		if err := s.guardUpstream(ctx, u, proxyID != nil); err != nil {
-			res.Message = err.Error()
+			res.Message, res.ErrorCode = err.Error(), "upstream_validation_failed"
 			return res
 		}
 	}
@@ -239,7 +247,7 @@ func (s *Service) runTest(ctx context.Context, bt core.AccountTypeBinding, acct 
 		hc, err = s.d.Proxies.HTTPClient(ctx, proxyID)
 	}
 	if err != nil {
-		res.Message = core.AsError(err).Message
+		res.Message, res.ErrorCode = core.AsError(err).Message, core.AsError(err).Code
 		return res
 	}
 	start := time.Now()
@@ -247,7 +255,19 @@ func (s *Service) runTest(ctx context.Context, bt core.AccountTypeBinding, acct 
 	res.LatencyMs = time.Since(start).Milliseconds()
 	if err != nil {
 		res.Message = transportError(res.Upstream, err)
-		res.Reason, res.Effect = s.classifyTest(ctx, bt, acct, res.Model, 0, nil, nil, res.Message)
+		res.ErrorCode, res.ErrorSource = "transport_error", "transport"
+		var known *core.Error
+		if errors.As(err, &known) {
+			res.Message, res.ErrorCode, res.ErrorSource = known.Message, known.Code, "gateway"
+			if reason, ok := known.Details["reason"].(string); ok && reason != "" {
+				res.ErrorCode = reason
+			}
+		} else if errors.Is(err, context.DeadlineExceeded) {
+			res.ErrorCode = "request_timeout"
+		} else if errors.Is(err, context.Canceled) {
+			res.ErrorCode = "request_canceled"
+		}
+		res.Reason, res.Effect, _ = s.classifyTest(ctx, bt, acct, res.Model, 0, nil, nil, res.Message)
 		return res
 	}
 	defer resp.Body.Close()
@@ -256,6 +276,7 @@ func (s *Service) runTest(ctx context.Context, bt core.AccountTypeBinding, acct 
 	res.Status = resp.StatusCode
 	res.Body = truncate(strings.TrimSpace(string(snippet)), maxTestBodyOut)
 	if res.OK {
+		res.ErrorCode, res.ErrorSource = "", ""
 		res.Usage = s.testUsage(bt, tr.GetUsageProtocol(), snippet)
 		return res
 	}
@@ -263,7 +284,19 @@ func (s *Service) runTest(ctx context.Context, bt core.AccountTypeBinding, acct 
 	if res.Message == "" {
 		res.Message = resp.Status
 	}
-	res.Reason, res.Effect = s.classifyTest(ctx, bt, acct, res.Model, resp.StatusCode, resp.Header, snippet, "")
+	res.ErrorCode, res.ErrorSource = "http_"+strconv.Itoa(resp.StatusCode), "response"
+	for _, path := range []string{"error.code", "error.type", "code"} {
+		code := gjson.GetBytes(snippet, path)
+		if (code.Type == gjson.String || code.Type == gjson.Number) && code.String() != "" {
+			res.ErrorCode = cutBytes(code.String(), 128)
+			break
+		}
+	}
+	var local bool
+	res.Reason, res.Effect, local = s.classifyTest(ctx, bt, acct, res.Model, resp.StatusCode, resp.Header, snippet, "")
+	if local {
+		res.ErrorSource = "gateway"
+	}
 	return res
 }
 
@@ -333,7 +366,7 @@ func (s *Service) testUsage(bt core.AccountTypeBinding, protocol string, body []
 
 // classifyTest asks the plugin what a failed test means and returns the
 // reason and the account effect it would have in the gateway ("cooldown",
-// "disable" or empty).
+// "disable" or empty), and whether the failure is local.
 //
 // It deliberately applies NO side effect: a console test never puts the
 // account into cooldown and never disables it (that is the gateway's
@@ -341,7 +374,7 @@ func (s *Service) testUsage(bt core.AccountTypeBinding, protocol string, body []
 // display only. Plugins that do not implement ClassifyError, or fail, leave
 // both values empty.
 func (s *Service) classifyTest(ctx context.Context, bt core.AccountTypeBinding, acct *pluginv1.Account,
-	model string, status int, header http.Header, body []byte, transportErr string) (reason, effect string) {
+	model string, status int, header http.Header, body []byte, transportErr string) (reason, effect string, local bool) {
 	headers := map[string]string{}
 	for k, v := range header {
 		if len(v) > 0 {
@@ -361,7 +394,7 @@ func (s *Service) classifyTest(ctx context.Context, bt core.AccountTypeBinding, 
 	})
 	if err != nil || cls == nil {
 		slog.DebugContext(ctx, "account: test classification unavailable", "plugin", bt.Plugin.Key, "err", err)
-		return "", ""
+		return "", "", false
 	}
 	switch cls.GetAccountEffect() {
 	case pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN:
@@ -369,7 +402,7 @@ func (s *Service) classifyTest(ctx context.Context, bt core.AccountTypeBinding, 
 	case pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE:
 		effect = "disable"
 	}
-	return truncate(cls.GetReason(), 512), effect
+	return truncate(cls.GetReason(), 512), effect, cls.GetLocalFailure()
 }
 
 // classifyPrefix is the body prefix given to ClassifyError, as in the

@@ -170,6 +170,30 @@ func TestPassthroughImageSplit(t *testing.T) {
 
 // The client sees the request ID and retry hints, never the subscription's
 // own limits.
+func TestPassthroughQuotaResetBecomesRetryHintWithoutQuotaDetails(t *testing.T) {
+	reset := time.Now().Add(3 * time.Hour).Truncate(time.Second).UTC()
+	h := http.Header{"Retry-After": {"60"}, "Anthropic-Ratelimit-Unified-5h-Utilization": {"1"},
+		"Anthropic-Ratelimit-Unified-5h-Reset":       {reset.Format(time.RFC3339)},
+		"Anthropic-Ratelimit-Unified-7d-Utilization": {"0.4"}, "Anthropic-Ratelimit-Unified-7d-Reset": {reset.Add(24 * time.Hour).Format(time.RFC3339)},
+		"Authorization": {"must-not-leak"}, "Set-Cookie": {"must-not-leak"}}
+	got := clientFacts(h)
+	if got.Get("Retry-After") != reset.Format(http.TimeFormat) || len(got) != 1 {
+		t.Fatalf("quota recovery hint: %v", got)
+	}
+	if h.Get("Retry-After") != "60" {
+		t.Fatal("changed the original provider headers")
+	}
+	h.Set("Retry-After", "86400")
+	if got := clientFacts(h); got.Get("Retry-After") != "86400" {
+		t.Fatalf("shortened provider retry delay: %v", got)
+	}
+	h.Set("Retry-After", "60")
+	h.Set("Anthropic-Ratelimit-Unified-5h-Utilization", "0.9")
+	if got := clientFacts(h); got.Get("Retry-After") != "60" {
+		t.Fatalf("healthy quota triggered a long disable: %v", got)
+	}
+}
+
 func TestPassthroughClientFacts(t *testing.T) {
 	h := http.Header{"Request-Id": {"req_1"}, "Retry-After": {"3"}, "Anthropic-Ratelimit-Unified-5h-Utilization": {"0.4"}, "Anthropic-Ratelimit-Unified-Status": {"allowed"}, "Anthropic-Ratelimit-Tokens-Remaining": {"9"}}
 	got := clientFacts(h)

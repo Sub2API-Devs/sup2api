@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
 
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
@@ -200,43 +201,18 @@ func (s *Service) SetCooldown(ctx context.Context, id int64, until time.Time, re
 	})
 }
 
-// AutoDisable disables an account the gateway judged unusable (CONTRACTS §42):
-// status=disabled with the reason, account.status_changed and account:changed.
-// It reports false, changing nothing, when the account opted out
-// (auto_disable = false) or is gone; an already disabled account reports true.
+// AutoDisable automatically blocks an account judged unusable (CONTRACTS §42):
+// status=auto_disabled, with a reason and the shared status events.
+// It never changes an administrator-disabled account or the scheduling switch.
+// An opted-out account is unchanged; an existing disable still reports true.
 func (s *Service) AutoDisable(ctx context.Context, id int64, reason string) (bool, error) {
-	changed := false
-	disabled := false
-	err := s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
-		var pluginKey, typ, name, status string
-		var allowed bool
-		err := tx.QueryRow(ctx, `SELECT plugin_key, type, name, status, auto_disable FROM accounts
-			WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, id).Scan(&pluginKey, &typ, &name, &status, &allowed)
-		if store.IsNoRows(err) || (err == nil && !allowed) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		disabled = true
-		if status == "disabled" {
-			return nil
-		}
-		if _, err := tx.Exec(ctx, `UPDATE accounts SET status = 'disabled', status_reason = $2, updated_at = clock_timestamp()
-			WHERE id = $1`, id, reason); err != nil {
-			return err
-		}
-		changed = true
-		return s.d.Events.Emit(ctx, tx, core.Event{Type: core.EventAccountStatusChanged,
-			Payload: statusPayload(id, pluginKey, typ, name, "disabled", reason, nil)})
+	out, err := s.ApplyAccountAutomaticState(ctx, id, &pluginv1.AccountAutomaticState{
+		Action: pluginv1.AccountAutomaticState_ACTION_DISABLE, Reason: reason,
 	})
 	if err != nil {
 		return false, err
 	}
-	if changed {
-		s.changed(ctx, id)
-	}
-	return disabled, nil
+	return out.GetStatus() == "auto_disabled" || out.GetStatus() == "disabled", nil
 }
 
 // TouchLastUsed records usage; last_used_at is written in batches by Run.

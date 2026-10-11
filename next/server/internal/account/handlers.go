@@ -24,35 +24,39 @@ import (
 
 // row is one accounts row.
 type row struct {
-	ID             int64
-	Name           string
-	PluginKey      string
-	Type           string
-	CredEnc        []byte
-	Settings       []byte
-	ProxyID        *int64
-	Status         string
-	StatusReason   string
-	Schedulable    bool
-	AutoDisable    bool
-	Priority       int
-	Weight         int
-	MaxConcurrency int
-	Models         []string
-	ModelMapping   []byte
-	RPMLimit       int
-	TPMLimit       int64
-	LastUsedAt     *time.Time
-	CreatedBy      *int64
-	CreatedByEmail *string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID                int64
+	Name              string
+	PluginKey         string
+	Type              string
+	CredEnc           []byte
+	Settings          []byte
+	ProxyID           *int64
+	Status            string
+	StatusReason      string
+	AutoDisabledUntil *time.Time
+	Schedulable       bool
+	AutoDisable       bool
+	Priority          int
+	Weight            int
+	MaxConcurrency    int
+	Models            []string
+	ModelMapping      []byte
+	RPMLimit          int
+	TPMLimit          int64
+	LastUsedAt        *time.Time
+	CreatedBy         *int64
+	CreatedByEmail    *string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 	// Last console test (CONTRACTS §50); all NULL until the first test.
-	LastTestAt        *time.Time
-	LastTestOK        *bool
-	LastTestLatencyMs *int64
-	LastTestModel     *string
-	LastTestMessage   *string
+	LastTestAt          *time.Time
+	LastTestOK          *bool
+	LastTestLatencyMs   *int64
+	LastTestModel       *string
+	LastTestMessage     *string
+	LastTestStatus      *int
+	LastTestErrorCode   *string
+	LastTestErrorSource *string
 }
 
 // selectRow joins the creator's email (also for soft-deleted users); every
@@ -61,7 +65,8 @@ const selectRow = `SELECT a.id, a.name, a.plugin_key, a.type, a.credentials_enc,
 	a.status, a.status_reason, a.schedulable, a.auto_disable, a.priority, a.weight, a.max_concurrency,
 	a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.last_used_at,
 	a.created_by, u.email, a.created_at, a.updated_at,
-	a.last_test_at, a.last_test_ok, a.last_test_latency_ms::bigint, a.last_test_model, a.last_test_message
+	a.last_test_at, a.last_test_ok, a.last_test_latency_ms::bigint, a.last_test_model, a.last_test_message, a.auto_disabled_until,
+	a.last_test_status,a.last_test_error_code,a.last_test_error_source
 	FROM accounts a LEFT JOIN users u ON u.id = a.created_by`
 
 func scanRow(r pgx.Row) (*row, error) {
@@ -70,7 +75,8 @@ func scanRow(r pgx.Row) (*row, error) {
 		&a.Status, &a.StatusReason, &a.Schedulable, &a.AutoDisable, &a.Priority, &a.Weight, &a.MaxConcurrency,
 		&a.Models, &a.ModelMapping, &a.RPMLimit, &a.TPMLimit, &a.LastUsedAt,
 		&a.CreatedBy, &a.CreatedByEmail, &a.CreatedAt, &a.UpdatedAt,
-		&a.LastTestAt, &a.LastTestOK, &a.LastTestLatencyMs, &a.LastTestModel, &a.LastTestMessage)
+		&a.LastTestAt, &a.LastTestOK, &a.LastTestLatencyMs, &a.LastTestModel, &a.LastTestMessage, &a.AutoDisabledUntil,
+		&a.LastTestStatus, &a.LastTestErrorCode, &a.LastTestErrorSource)
 	return &a, err
 }
 
@@ -79,7 +85,13 @@ func (a *row) lastTest() *LastTest {
 	if a.LastTestAt == nil {
 		return nil
 	}
-	lt := &LastTest{At: *a.LastTestAt}
+	lt := &LastTest{At: *a.LastTestAt, Status: a.LastTestStatus}
+	if a.LastTestErrorCode != nil {
+		lt.ErrorCode = *a.LastTestErrorCode
+	}
+	if a.LastTestErrorSource != nil {
+		lt.ErrorSource = *a.LastTestErrorSource
+	}
 	if a.LastTestOK != nil {
 		lt.OK = *a.LastTestOK
 	}
@@ -144,13 +156,14 @@ type View struct {
 	Type      string `json:"type"`
 	// TypeLabel is the account type label; null when the type is no longer
 	// registered (plugin disabled or uninstalled).
-	TypeLabel    manifest.LocalizedText `json:"type_label"`
-	GroupIDs     []int64                `json:"group_ids"`
-	Groups       []GroupRef             `json:"groups"`
-	ProxyID      *int64                 `json:"proxy_id"`
-	Status       string                 `json:"status"`
-	StatusReason string                 `json:"status_reason"`
-	Schedulable  bool                   `json:"schedulable"`
+	TypeLabel         manifest.LocalizedText `json:"type_label"`
+	GroupIDs          []int64                `json:"group_ids"`
+	Groups            []GroupRef             `json:"groups"`
+	ProxyID           *int64                 `json:"proxy_id"`
+	Status            string                 `json:"status"`
+	StatusReason      string                 `json:"status_reason"`
+	AutoDisabledUntil *time.Time             `json:"auto_disabled_until"`
+	Schedulable       bool                   `json:"schedulable"`
 	// AutoDisable lets the gateway disable the account on credential or quota
 	// failures; false only cools it down (CONTRACTS §42).
 	AutoDisable    bool `json:"auto_disable"`
@@ -216,7 +229,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 		v := &View{
 			ID: a.ID, Name: a.Name, PluginKey: a.PluginKey, Type: a.Type, TypeLabel: s.typeLabel(a.PluginKey, a.Type),
 			GroupIDs: []int64{}, Groups: []GroupRef{}, ProxyID: a.ProxyID, Status: a.Status,
-			StatusReason: a.StatusReason, Schedulable: a.Schedulable, AutoDisable: a.AutoDisable, Priority: a.Priority, Weight: a.Weight,
+			StatusReason: a.StatusReason, AutoDisabledUntil: a.AutoDisabledUntil, Schedulable: a.Schedulable, AutoDisable: a.AutoDisable, Priority: a.Priority, Weight: a.Weight,
 			MaxConcurrency: a.MaxConcurrency, Models: models, ModelMapping: a.mapping(),
 			RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit,
 			Orphaned: !s.pluginActive(a.PluginKey), Settings: st,
@@ -526,6 +539,34 @@ func (in *input) changedFields() []string {
 	return out
 }
 
+func (in *input) applyCommonControls(ctx context.Context, at manifest.AccountType, current *row) []core.FieldError {
+	var fields []core.FieldError
+	for _, field := range []struct {
+		name  string
+		value **bool
+	}{
+		{"auto_disable", &in.AutoDisable}, {"schedulable", &in.Schedulable},
+	} {
+		control := at.CommonControls[field.name]
+		expected := control.DefaultValue()
+		if current != nil {
+			if field.name == "auto_disable" {
+				expected = current.AutoDisable
+			} else {
+				expected = current.Schedulable
+			}
+		}
+		if *field.value != nil && !control.IsConfigurable() && **field.value != expected {
+			fields = append(fields, core.FieldError{Field: field.name, Code: "read_only",
+				Message: t(ctx, "this account control is not configurable for this account type", "该账号类型不允许修改此通用开关")})
+		}
+		if current == nil && *field.value == nil {
+			*field.value = &expected
+		}
+	}
+	return fields
+}
+
 const (
 	maxModels      = 500
 	maxRPMLimit    = 10_000_000
@@ -822,6 +863,10 @@ func (s *Service) create(c *gin.Context) {
 			Message: t(ctx, "unknown account type (is its plugin enabled?)", "未知的账号类型（插件是否已启用？）")}))
 		return
 	}
+	if fields := in.applyCommonControls(ctx, bt.Type, nil); len(fields) > 0 {
+		httpapi.Fail(c, core.InvalidFields(fields...))
+		return
+	}
 	var groupIDs []int64
 	if in.GroupIDs != nil {
 		groupIDs = uniqueIDs(*in.GroupIDs)
@@ -1032,6 +1077,9 @@ func (s *Service) update(c *gin.Context) {
 		if err != nil {
 			return err
 		}
+		if fields := in.applyCommonControls(ctx, bt.Type, locked); len(fields) > 0 {
+			return core.InvalidFields(fields...)
+		}
 		if p != nil && !locked.UpdatedAt.Equal(cur.UpdatedAt) {
 			return core.ErrConflict.WithMessage(t(ctx, "the account was modified concurrently, please retry",
 				"账号已被其他操作修改，请重试"))
@@ -1070,6 +1118,7 @@ func (s *Service) update(c *gin.Context) {
 			max_concurrency = COALESCE($6, max_concurrency),
 			schedulable = COALESCE($7, schedulable),
 			status = COALESCE($8, status),
+			auto_disabled_until = CASE WHEN $8::text IS NOT NULL THEN NULL ELSE auto_disabled_until END,
 			status_reason = COALESCE($9, status_reason),
 			credentials_enc = COALESCE($10, credentials_enc),
 			settings = COALESCE($11::jsonb, settings),

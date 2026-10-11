@@ -54,6 +54,47 @@ func (f *fakeAccounts) ReadPluginAccountCredentials(_ context.Context, key strin
 	return nil, core.ErrNotFound.WithMessage("account not found")
 }
 
+func (f *fakeAccounts) ApplyAccountAutomaticState(context.Context, int64, *pluginv1.AccountAutomaticState) (*pluginv1.SetAccountAutomaticStateResponse, error) {
+	return nil, core.ErrPermissionDenied
+}
+
+func (f *fakeAccounts) ApplyPluginAccountAutomaticState(_ context.Context, key string, id int64, state *pluginv1.AccountAutomaticState) (*pluginv1.SetAccountAutomaticStateResponse, error) {
+	f.calls = append(f.calls, "state:"+key)
+	for _, a := range f.rows[key] {
+		if a.ID == id {
+			return &pluginv1.SetAccountAutomaticStateResponse{Changed: true, Status: "auto_disabled", Reason: state.GetReason()}, nil
+		}
+	}
+	return nil, core.ErrNotFound
+}
+
+func TestHostAutomaticStatePermissionAndScope(t *testing.T) {
+	in := &pluginv1.SetAccountAutomaticStateRequest{AccountId: 1, State: &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_DISABLE}}
+	for _, grants := range []registry.Grants{
+		{}, {"accounts.auto_state": json.RawMessage(`{}`)},
+		{"accounts.auto_state": json.RawMessage(`{"types":"all"}`)},
+		{"accounts.auto_state": json.RawMessage(`{"types":"own","extra":true}`)},
+	} {
+		h, accounts := accountsEnv(t, grants)
+		if _, err := h.SetAccountAutomaticState(t.Context(), in); status.Code(err) != codes.PermissionDenied || len(accounts.calls) != 0 {
+			t.Fatalf("invalid grant reached accounts: %v %v", err, accounts.calls)
+		}
+	}
+	h, accounts := accountsEnv(t, registry.Grants{"accounts.auto_state": json.RawMessage(`{"types":"own"}`)})
+	if out, err := h.SetAccountAutomaticState(t.Context(), in); err != nil || !out.GetChanged() || len(accounts.calls) != 1 || accounts.calls[0] != "state:volc" {
+		t.Fatalf("authorized call: %v %v", out, err)
+	}
+	for _, id := range []int64{9, 999999} {
+		in.AccountId = id
+		if _, err := h.SetAccountAutomaticState(t.Context(), in); status.Code(err) != codes.NotFound {
+			t.Fatalf("foreign/missing account: %v", err)
+		}
+	}
+	if _, err := h.SetAccountAutomaticState(t.Context(), nil); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("invalid request: %v", err)
+	}
+}
+
 func accountsEnv(t *testing.T, grants registry.Grants) (*hostServer, *fakeAccounts) {
 	t.Helper()
 	m := registrytest.Manifest("volc", "1.0.0")

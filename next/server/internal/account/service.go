@@ -123,6 +123,7 @@ func New(d Deps) *Service {
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("GET", "/settings/account-stats", "settings:read", s.getStatsSettings)
 	r.Perm("PUT", "/settings/account-stats", "settings:manage", s.putStatsSettings)
+	r.PermAny("GET", "/accounts/auto-disable", s.getAutoDisablePolicy, "account:create", "account:own:create", "account:update", "account:own:update")
 	r.PermAny("GET", "/accounts/stats", s.getAccountStats, "account:read", "account:own:read")
 	r.PermAny("GET", "/accounts/:id/stats", s.getAccountStats, "account:read", "account:own:read")
 	r.Perm("POST", "/system/ccgateway/connect", "settings:manage", s.connectCCGateway)
@@ -161,6 +162,7 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 func (s *Service) Run(ctx context.Context) {
 	go s.quota.run(ctx)
 	go s.runRefreshSweep(ctx)
+	go s.runAutomaticStateSweep(ctx)
 	if s.d.Bus != nil {
 		cancel := s.d.Bus.Subscribe(core.ChannelAccountChanged, func([]byte) { s.invalidate() })
 		defer cancel()

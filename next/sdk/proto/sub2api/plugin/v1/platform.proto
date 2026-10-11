@@ -259,6 +259,20 @@ message ClassifyErrorRequest {
   string transport_error = 6;
 }
 
+message AccountAutomaticState {
+  enum Action {
+    ACTION_UNSPECIFIED = 0;
+    ACTION_DISABLE = 1;
+    ACTION_CLEAR = 2;
+  }
+  Action action = 1;
+  string reason = 2;
+  oneof release {
+    int64 until_unix = 3;
+    int64 duration_seconds = 4;
+  }
+}
+
 message ClassifyErrorResponse {
   enum Action {
     ACTION_UNSPECIFIED = 0;        // treated as FAILOVER
@@ -292,6 +306,8 @@ message ClassifyErrorResponse {
   // a different code, and silently inventing one is worse than falling back to
   // "upstream_error" - and the host logs a warning.
   string client_error_code = 8;
+  AccountAutomaticState automatic_state = 9;
+  bool local_failure = 10;
 }
 
 message BuildTestRequestRequest {

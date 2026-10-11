@@ -188,6 +188,83 @@ func TestCreateAdoptsAnAuthorizedDraft(t *testing.T) {
 	}
 }
 
+func TestAutomaticDisableKeepsCCGatewayRuntimeAvailable(t *testing.T) {
+	e := setup(t)
+	enabled := make(chan bool, 1)
+	ccg := e.withCCGateway(true, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/config") {
+			var cfg struct {
+				Enabled bool `json:"enabled"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+				t.Error(err)
+			}
+			enabled <- cfg.Enabled
+		}
+		_, _ = w.Write([]byte(`{"status":"pending"}`))
+	})
+	id := e.mkRawAccount("ccgateway", "managed", "recoverable-worker", "unused", true)
+	pid := e.exec1(`INSERT INTO proxies(name,protocol,host,port) VALUES('recovery','http','proxy.example',3128) RETURNING id`)
+	if _, err := e.db.Pool.Exec(t.Context(), `UPDATE accounts SET proxy_id=$2 WHERE id=$1`, id, pid); err != nil {
+		t.Fatal(err)
+	}
+	if disabled, err := e.svc.AutoDisable(t.Context(), id, "quota exhausted"); err != nil || !disabled {
+		t.Fatalf("disable: %t %v", disabled, err)
+	}
+	if err := ccg.Reconcile(t.Context(), itoa(id)); err != nil {
+		t.Fatal(err)
+	}
+	if !<-enabled {
+		t.Fatal("automatic disable made quota/authorization checks unavailable")
+	}
+}
+
+func TestResetCCGatewayStatusRestartsRuntime(t *testing.T) {
+	e := setup(t)
+	enabled := make(chan bool, 4)
+	ccg := e.withCCGateway(true, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/config") {
+			var cfg struct {
+				Enabled bool `json:"enabled"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+				t.Error(err)
+			}
+			enabled <- cfg.Enabled
+		}
+		_, _ = w.Write([]byte(`{"status":"pending"}`))
+	})
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	id := e.mkRawAccount("ccgateway", "managed", "reset-worker", "unused", true)
+	pid := e.exec1(`INSERT INTO proxies(name,protocol,host,port) VALUES('ccg','http','proxy.example',3128) RETURNING id`)
+	if _, err := e.db.Pool.Exec(ctx, `UPDATE accounts SET proxy_id=$2 WHERE id=$1`, id, pid); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.db.Pool.Exec(ctx, `UPDATE accounts SET status='disabled',status_reason='disabled by administrator' WHERE id=$1`, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := ccg.Reconcile(ctx, itoa(id)); err != nil {
+		t.Fatal(err)
+	}
+	if <-enabled {
+		t.Fatal("disabled account runtime was enabled")
+	}
+	go ccg.Run(ctx)
+	code, out := e.do("POST", "/accounts/"+itoa(id)+"/reset-status", nil)
+	if code != http.StatusOK || data(out)["status"] != "active" {
+		t.Fatalf("reset: %d %v", code, out)
+	}
+	select {
+	case active := <-enabled:
+		if !active {
+			t.Fatal("reset kept the runtime blocked")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("reset did not immediately reconcile the runtime")
+	}
+}
+
 // TestConnectCCGatewaySharedNeedsAuthorization keeps the shared-container
 // behaviour: an unauthorized shared CCGateway refuses to connect.
 func TestConnectCCGatewaySharedNeedsAuthorization(t *testing.T) {

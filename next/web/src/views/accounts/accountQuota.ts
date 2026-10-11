@@ -4,7 +4,7 @@
 // per row — only the "refresh" action asks the upstream (force=true).
 import { onBeforeUnmount, reactive, ref, type Ref } from 'vue'
 import { api } from '@sub2api/host'
-import type { AccountBalance, CredentialRefreshOutcome, QuotaSnapshot, QuotaWindow } from '@/api/types'
+import type { Account, AccountBalance, CredentialRefreshOutcome, QuotaSnapshot, QuotaWindow } from '@/api/types'
 
 /** The server answers force refreshes at most this often per account; the console does not ask sooner. */
 export const QUOTA_REFRESH_MIN_MS = 30_000
@@ -17,9 +17,9 @@ export function fetchAccountQuota(id: number, force = true): Promise<QuotaSnapsh
   return api.get<QuotaSnapshot>(`/accounts/${id}/quota`, force ? { force: true } : undefined)
 }
 
-/** POST /accounts/:id/reset-status — clears the cooldown / rate-limit state of the account. */
-export function resetAccountStatus(id: number): Promise<unknown> {
-  return api.post(`/accounts/${id}/reset-status`)
+/** POST /accounts/:id/reset-status — restores active status and clears the reason and cooldown. */
+export function resetAccountStatus(id: number): Promise<Account> {
+  return api.post<Account>(`/accounts/${id}/reset-status`)
 }
 
 /** Whether a snapshot is worth a cell: null (API keys) and unsupported types show nothing. */

@@ -80,6 +80,10 @@ func reasonError(base *core.Error, reason string) *core.Error {
 
 // transportError maps a failed controller call.
 func transportError(e error) *core.Error {
+	var known *core.Error
+	if errors.As(e, &known) {
+		return known
+	}
 	if errors.Is(e, errNotConfigured) || errors.Is(e, errUnreachable) {
 		return reasonError(core.ErrUnavailable, "not_configured")
 	}

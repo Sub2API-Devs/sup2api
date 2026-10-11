@@ -13,6 +13,37 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
+func TestAutomaticStateMigrationPreservesLegacyAccounts(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := t.Context()
+	_, err := db.Pool.Exec(ctx, `ALTER TABLE accounts DROP COLUMN auto_disabled_until,
+		DROP COLUMN last_test_status,DROP COLUMN last_test_error_code,DROP COLUMN last_test_error_source;
+		DELETE FROM schema_migrations WHERE id IN ('0049_account_automatic_state.sql','0050_account_test_diagnostics.sql');
+		INSERT INTO accounts(name,plugin_key,type,credentials_enc,status,status_reason,schedulable) VALUES
+		('manual','fixture','key','','disabled','disabled by administrator',false),
+		('legacy','fixture','key','','disabled','upstream rejected credentials (401)',true),
+		('ready','fixture','key','','active','',true)`)
+	require.NoError(t, err)
+	var before, after string
+	require.NoError(t, db.Pool.QueryRow(ctx, `SELECT jsonb_agg(to_jsonb(a) ORDER BY id)::text FROM accounts a`).Scan(&before))
+	for i := range 2 {
+		done, err := store.Migrate(ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
+		require.NoError(t, err)
+		if i == 0 {
+			require.Equal(t, []string{"0049_account_automatic_state.sql", "0050_account_test_diagnostics.sql"}, done)
+		} else {
+			require.Empty(t, done)
+		}
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT jsonb_agg(to_jsonb(a)-'auto_disabled_until'-'last_test_status'-'last_test_error_code'-'last_test_error_source' ORDER BY id)::text FROM accounts a`).Scan(&after))
+		require.Equal(t, before, after)
+		var indexExists, noDeadlines bool
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_indexes WHERE tablename='accounts' AND indexname='accounts_auto_disabled_due_idx'),
+			NOT EXISTS(SELECT 1 FROM accounts WHERE auto_disabled_until IS NOT NULL OR last_test_status IS NOT NULL OR last_test_error_code IS NOT NULL OR last_test_error_source IS NOT NULL)`).Scan(&indexExists, &noDeadlines))
+		require.True(t, indexExists)
+		require.True(t, noDeadlines)
+	}
+}
+
 func TestLegacyProxyRealIPReplayPreservesDataAndChecksum(t *testing.T) {
 	const id = "0046_proxy_real_ip.sql"
 	const checksum = "1b0719bb3a07caa74ca6ad5d92e8c605e9c4f0ebea3097b96a1226ef99c4897f"

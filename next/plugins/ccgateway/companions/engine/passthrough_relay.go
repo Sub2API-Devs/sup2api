@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
@@ -159,12 +161,46 @@ func (relay *outboundRelay) observePassthrough(resp *http.Response, exchange *pa
 // retry hints, never the subscription's own limits (anthropic-ratelimit-
 // unified-*), which describe the gateway's account, not the client's.
 func clientFacts(h http.Header) http.Header {
-	out := httpfacts.Select(h)
+	h = httpfacts.Select(h)
+	out := h.Clone()
+	now := time.Now()
+	var until time.Time
 	for name := range out {
-		if strings.HasPrefix(strings.ToLower(name), "anthropic-ratelimit-unified-") {
-			delete(out, name)
+		lower := strings.ToLower(name)
+		if !strings.HasPrefix(lower, "anthropic-ratelimit-unified-") {
+			continue
+		}
+		delete(out, name)
+		if !strings.HasSuffix(lower, "-reset") {
+			continue
+		}
+		base := strings.TrimSuffix(lower, "-reset")
+		used, _ := strconv.ParseFloat(h.Get(base+"-utilization"), 64)
+		if h.Get(base+"-remaining") != "0" && !strings.EqualFold(h.Get(base+"-status"), "rejected") && !(used >= 1) {
+			continue
+		}
+		reset, err := time.Parse(time.RFC3339, h.Get(name))
+		if err != nil {
+			seconds, err := strconv.ParseInt(h.Get(name), 10, 64)
+			if err != nil || seconds <= 0 {
+				continue
+			}
+			reset = time.Unix(seconds, 0)
+		}
+		if reset.After(now) && reset.After(until) {
+			until = reset
 		}
 	}
+	if until.IsZero() {
+		return out
+	}
+	if seconds, err := strconv.ParseFloat(out.Get("Retry-After"), 64); err == nil && seconds >= until.Sub(now).Seconds() {
+		return out
+	}
+	if retry, err := http.ParseTime(out.Get("Retry-After")); err == nil && !until.After(retry) {
+		return out
+	}
+	out.Set("Retry-After", until.UTC().Format(http.TimeFormat))
 	return out
 }
 

@@ -1,12 +1,73 @@
 package gateway
 
 import (
+	"context"
 	"strings"
 	"testing"
+	"time"
+
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 )
 
 // CONTRACTS §42: plugin verdicts and administrator rules ask to disable an
 // account; the global switch and the account's auto_disable decide.
+
+type automaticStateAccounts struct {
+	*fakeAccounts
+	received *pluginv1.AccountAutomaticState
+}
+
+func (a *automaticStateAccounts) ApplyAccountAutomaticState(ctx context.Context, id int64, state *pluginv1.AccountAutomaticState) (*pluginv1.SetAccountAutomaticStateResponse, error) {
+	a.received = state
+	blocked, err := a.AutoDisable(ctx, id, state.GetReason())
+	out := &pluginv1.SetAccountAutomaticStateResponse{Status: "active"}
+	if blocked {
+		out.Status = "auto_disabled"
+	}
+	return out, err
+}
+
+func (a *automaticStateAccounts) ApplyPluginAccountAutomaticState(ctx context.Context, _ string, id int64, state *pluginv1.AccountAutomaticState) (*pluginv1.SetAccountAutomaticStateResponse, error) {
+	return a.ApplyAccountAutomaticState(ctx, id, state)
+}
+
+func TestClassificationPassesAutomaticReleaseTimeToAccountService(t *testing.T) {
+	e := newEnv(t)
+	accounts := &automaticStateAccounts{fakeAccounts: e.accounts}
+	e.gw.d.Accounts = accounts
+	c := &call{g: e.gw, autoDisable: defaultAutoDisableSettings()}
+	state := &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_DISABLE, Reason: "quota exhausted", Release: &pluginv1.AccountAutomaticState_UntilUnix{UntilUnix: time.Now().Add(time.Hour).Unix()}}
+	c.applyAccountEffect(t.Context(), &pluginv1.Account{Id: 1}, 429, nil, "", &pluginv1.ClassifyErrorResponse{AutomaticState: state})
+	if accounts.received != state || e.accounts.disabled[1] != "quota exhausted" || len(e.accounts.cooldowns) != 0 {
+		t.Fatalf("automatic state not applied: %v %v", accounts.received, e.accounts.cooldowns)
+	}
+}
+
+func TestAutoDisableRulesExcludeLocalFailuresAndKeepQuotaDeadline(t *testing.T) {
+	for _, tc := range []struct {
+		status int
+		local  bool
+		timed  bool
+	}{
+		{0, false, false}, {429, true, false}, {429, false, true},
+	} {
+		e := newEnv(t)
+		accounts := &automaticStateAccounts{fakeAccounts: e.accounts}
+		e.gw.d.Accounts = accounts
+		c := &call{g: e.gw, autoDisable: AutoDisableSettings{Enabled: true, StatusCodes: "429", Keywords: []string{"rate limit"}}.compiled()}
+		cls := &pluginv1.ClassifyErrorResponse{AccountEffect: pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN,
+			CooldownUntilUnix: time.Now().Add(time.Second).Unix(), LocalFailure: tc.local}
+		if tc.timed {
+			cls.AutomaticState = &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_DISABLE, Reason: "rate limit",
+				Release: &pluginv1.AccountAutomaticState_DurationSeconds{DurationSeconds: 3600}}
+		}
+		c.applyAccountEffect(t.Context(), &pluginv1.Account{Id: 1}, tc.status, []byte("rate limit"), "rate limit", cls)
+		_, disabled := e.accounts.disabled[1]
+		if disabled != tc.timed || accounts.received != cls.AutomaticState {
+			t.Fatalf("case %+v: disabled=%t state=%v", tc, disabled, accounts.received)
+		}
+	}
+}
 
 func TestAutoDisableGlobalSwitchOffCoolsDownInstead(t *testing.T) {
 	e := newEnv(t)

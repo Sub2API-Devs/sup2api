@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SBadge, SButton, SCheckbox, SchemaForm, SField, SHint, SIcon, SInput, SLink, SModal, SSpinner, SSwitch, STextarea, toast } from '@sub2api/ui'
@@ -12,7 +12,7 @@ import ProxyPicker from '@/components/ProxyPicker.vue'
 import PluginAvatar from '@/views/plugins/parts/PluginAvatar.vue'
 import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
 import { lt } from '@/i18n'
-import { sameCreationGroup } from './accountTypeChoices'
+import { accountControl, sameCreationGroup } from './accountTypeChoices'
 import { shouldPrefillOnEdit } from './modelDefaults'
 import EditorCard from './EditorCard.vue'
 import ModelMappingEditor from './ModelMappingEditor.vue'
@@ -43,6 +43,36 @@ const { t } = useI18n()
 const plugins = usePluginStore()
 const auth = useAuthStore()
 const own = useOwnership()
+const autoDisableEnabled = ref<boolean | null>(null)
+const autoDisablePolicyFailed = ref(false)
+let autoDisablePolicyRequest = 0
+const autoDisableControl = computed(() => accountControl(props.accountType, 'auto_disable'))
+const schedulingControl = computed(() => accountControl(props.accountType, 'schedulable'))
+const autoDisableHint = computed(() => {
+  if (autoDisableEnabled.value === false) return t('accounts.editorUi.autoDisableGlobalOff')
+  if (!autoDisableControl.value.configurable) return t('accounts.editorUi.commonControlFixed')
+  if (autoDisableEnabled.value === true) return t('accounts.editorUi.autoDisableHint')
+  return autoDisablePolicyFailed.value ? t('accounts.editorUi.autoDisableUnavailable') : t('common.loading')
+})
+
+async function loadAutoDisablePolicy() {
+  const request = ++autoDisablePolicyRequest
+  autoDisableEnabled.value = null
+  autoDisablePolicyFailed.value = false
+  try {
+    const policy = await api.get<{ enabled: boolean }>('/accounts/auto-disable')
+    if (request === autoDisablePolicyRequest) autoDisableEnabled.value = policy.enabled
+  } catch {
+    if (request === autoDisablePolicyRequest) autoDisablePolicyFailed.value = true
+  }
+}
+
+watch(() => [props.account, props.accountType], loadAutoDisablePolicy, { immediate: true })
+onMounted(() => window.addEventListener('focus', loadAutoDisablePolicy))
+onBeforeUnmount(() => {
+  autoDisablePolicyRequest++
+  window.removeEventListener('focus', loadAutoDisablePolicy)
+})
 
 const editing = computed(() => !!props.account?.id)
 const authOptions = computed(() => (props.accountTypeOptions || []).map(at => ({ value: at.type, label: lt(at.auth_method_label) || at.type })))
@@ -531,8 +561,8 @@ watch(
       basic.priority = a?.priority ?? 10
       basic.weight = a?.weight ?? 1
       basic.max_concurrency = a?.max_concurrency ?? 10
-      basic.schedulable = a?.schedulable ?? true
-      basic.auto_disable = a?.auto_disable ?? true
+      basic.schedulable = a?.schedulable ?? schedulingControl.value.default
+      basic.auto_disable = a?.auto_disable ?? autoDisableControl.value.default
       basic.rpm_limit = a?.rpm_limit ?? 0
       basic.tpm_limit = a?.tpm_limit ?? 0
       // Load CCGateway-specific settings
@@ -552,6 +582,12 @@ watch(
     } else if (sameDefaults(previous?.[1])) {
       // Switching the auth method of a new account: untouched defaults follow the type.
       applyDefaults(at)
+    }
+    if (switchingAuth) {
+      for (const field of ['auto_disable', 'schedulable'] as const) {
+        const control = accountControl(at, field)
+        if (!control.configurable || basic[field] === accountControl(previous?.[1], field).default) basic[field] = control.default
+      }
     }
     credentials.value = { ...(a?.credentials || {}) }
     schema.value = null
@@ -654,19 +690,20 @@ async function save(event: Event) {
   const creds = await collectCredentials()
   if (!creds) { activeSection.value = 'connection'; return }
   saving.value = true
+  await loadAutoDisablePolicy()
   const body: Record<string, any> = {
     name: basic.name.trim(),
     group_ids: basic.group_ids,
     priority: Number(basic.priority),
     weight: Number(basic.weight),
     max_concurrency: Number(basic.max_concurrency),
-    schedulable: basic.schedulable,
-    auto_disable: basic.auto_disable,
     models: models.value,
     model_mapping: mapping.value,
     rpm_limit: Number(basic.rpm_limit) || 0,
     tpm_limit: Number(basic.tpm_limit) || 0,
   }
+  if (schedulingControl.value.configurable) body.schedulable = basic.schedulable
+  if (autoDisableEnabled.value === true && autoDisableControl.value.configurable) body.auto_disable = basic.auto_disable
   // Add CCGateway-specific settings (locale and timezone)
   if (needsProxy.value) {
     const settings: Record<string, any> = {}
@@ -1033,16 +1070,16 @@ async function save(event: Event) {
             <div class="mt-4 flex items-center justify-between gap-4 rounded-xl border border-gray-100 bg-gray-50/60 px-4 py-3 dark:border-dark-700 dark:bg-dark-900/30">
               <div class="min-w-0">
                 <div class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ t('accounts.schedulable') }}</div>
-                <div class="text-xs text-gray-500 dark:text-dark-400">{{ t('accounts.editorUi.schedulableHint') }}</div>
+                <div class="text-xs text-gray-500 dark:text-dark-400">{{ t(schedulingControl.configurable ? 'accounts.editorUi.schedulableHint' : 'accounts.editorUi.commonControlFixed') }}</div>
               </div>
-              <SSwitch v-model="basic.schedulable" :aria-label="t('accounts.schedulable')" />
+              <SSwitch v-model="basic.schedulable" :disabled="!schedulingControl.configurable || saving" :aria-label="t('accounts.schedulable')" data-testid="account-scheduling-control" />
             </div>
             <div class="mt-3 flex items-center justify-between gap-4 rounded-xl border border-gray-100 bg-gray-50/60 px-4 py-3 dark:border-dark-700 dark:bg-dark-900/30">
               <div class="min-w-0">
                 <div class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ t('accounts.autoDisable') }}</div>
-                <div class="text-xs text-gray-500 dark:text-dark-400">{{ t('accounts.editorUi.autoDisableHint') }}</div>
+                <div id="account-auto-disable-hint" class="text-xs text-gray-500 dark:text-dark-400">{{ autoDisableHint }}</div>
               </div>
-              <SSwitch v-model="basic.auto_disable" :aria-label="t('accounts.autoDisable')" />
+              <SSwitch v-model="basic.auto_disable" :disabled="autoDisableEnabled !== true || !autoDisableControl.configurable || saving" describedby="account-auto-disable-hint" :aria-label="t('accounts.autoDisable')" data-testid="account-auto-disable" />
             </div>
           </EditorCard>
 

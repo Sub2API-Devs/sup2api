@@ -294,11 +294,22 @@ func TestControllerTunnel(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer closeFn()
-	res, err = client.Get(base + "/v1/models")
+	bufferedConn, err := dialTunnel(ctx, cfg, "21", revision)
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, _ := io.ReadAll(res.Body)
+	defer bufferedConn.Close()
+	if err := bufferedConn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	res, err = http.ReadResponse(bufio.NewReader(bufferedConn), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
 	res.Body.Close()
 	if string(body) != "ok" {
 		t.Fatalf("canned answer: %q", body)

@@ -145,7 +145,7 @@ type AccountSummary struct {
 	ID   int64
 	Name string
 	Type string
-	// Status is active, disabled or error.
+	// Status is active, auto_disabled, disabled or error.
 	Status string
 	// Enabled reports whether the account takes gateway traffic.
 	Enabled bool

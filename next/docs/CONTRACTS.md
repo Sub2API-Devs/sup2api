@@ -2364,8 +2364,8 @@ volcengine 0.12.2 的两个表单同时用 `ui:section` 把素材库字段归入
 
 一次上游失败经 `ClassifyError` 分类后：
 
-1. **是否要求禁用**：插件返回 `ACCOUNT_EFFECT_DISABLE`；或命中管理员规则——上游状态码落在 `status_codes` 内（传输错误 status=0 不参与），或上游响应体前 4 KiB / 传输错误文本（转小写）包含 `keywords` 中任一项。命中管理员规则时原因为 `matched auto-disable rule: status 401` / `matched auto-disable rule: keyword "<kw>"`（插件已要求禁用时沿用插件原因），且本次尝试按 **failover** 处理（即使插件判为返回客户端：账号已不可用，换号重试）。
-2. **是否执行**：全局 `enabled = true` **且**账号 `auto_disable = true` 时禁用：`status = 'disabled'`、`status_reason = 原因`、发 `account.status_changed`、广播 `account:changed`，并解除指向它的粘性绑定（同此前）。已禁用的账号不重复处理。
+1. **是否要求禁用**：插件返回 `ACCOUNT_EFFECT_DISABLE`；或真实 HTTP 失败（非传输失败、且插件未标记 `local_failure`）命中管理员规则——上游状态码落在 `status_codes` 内（传输错误 status=0 不参与），或上游响应体前 4 KiB（转小写）包含 `keywords` 中任一项。命中管理员规则时原因为 `matched auto-disable rule: status 401` / `matched auto-disable rule: keyword "<kw>"`（插件已要求禁用时沿用插件原因），且本次尝试按 **failover** 处理（即使插件判为返回客户端：账号已不可用，换号重试）。
+2. **是否执行**：全局 `enabled = true` **且**账号 `auto_disable = true` 时自动禁用：`status = 'auto_disabled'`、`status_reason = 原因`，发 `account.status_changed`、广播 `account:changed`，并解除指向它的粘性绑定。程序不得写管理员停用状态 `disabled`，也不得修改 `schedulable`；相同的自动状态不重复处理。定时解除及插件主动恢复见 §42.5。
 3. **不执行时**：改为冷却 60 秒（`gateway.defaultCooldown`），冷却原因 `auto-disable off, cooling down: <原因>`，避免每个请求都打到同一个坏账号；本次尝试仍 failover。
 
 控制台"测试账号"（`POST /accounts/:id/test`）仍只**报告**插件的处置建议（`effect`），不应用任何处置，也不套用管理员规则（同此前，§19）。
@@ -2390,6 +2390,24 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 
 - 设置 → 网关页签新增"自动禁用"卡片：全局开关、状态码（文本，示例 `401,403`）、关键词（多行文本，每行一个，显示默认值可一键恢复）。
 - 账号编辑器"调度与限流"块新增开关"允许自动禁用"（默认开），说明关闭后上游报凭证或额度错误时只冷却 60 秒、不禁用。账号列表中关闭了自动禁用的账号在状态旁显示"不自动禁用"标记。
+
+账号编辑器通过 `GET /accounts/auto-disable` 读取全局开关投影，仅返回 `{enabled}`；需 `account:create` / `account:own:create` / `account:update` / `account:own:update` 任一权限，不开放管理员的状态码和关键词规则。全局关闭、读取中或读取失败时，账号级开关不可操作并提示原因，原有偏好不清除；重新打开、窗口获得焦点及保存前重新读取。保存时仅在全局已确认开启时提交 `auto_disable`，否则省略该字段，保留创建默认值或已保存的账号设置。
+
+插件可在 `accountTypes[].commonControls` 按核心字段名声明 `auto_disable`、`schedulable`，每项接受可选布尔值 `configurable` 和 `default`；省略条目或属性均按 `true` 处理，兼容旧插件。其他字段名安装时拒绝。账号类型接口以 `common_controls` 返回声明；编辑器与列表开关统一按声明禁用编辑并提示原因。新账号省略字段时由核心应用默认值；不可配置字段只接受其创建默认值，更新已有账号时只接受原值，校验在锁定账号行后执行，不能绕过 UI 修改。插件升级不会重写已有账号的偏好，也不影响管理员手动停用状态。自动禁用仍受全局总开关约束。声明新能力的插件应将 `hostCompat` 下限设为 `0.1.114`，CCGateway 已显式声明这两个开关均可配置、默认开启。
+
+### 42.5 插件自动状态与定时恢复（2026-10-11，用户要求）
+
+核心与插件共用 `AccountAutomaticState`：`ACTION_DISABLE` 自动禁用，`ACTION_CLEAR` 仅解除自动禁用。`release` 是 protobuf oneof：省略表示不自动到期；`until_unix` 指定 Unix 秒时间点；`duration_seconds` 指定从数据库当前时间开始的持续时长。时间点必须在未来，时长至少 1 秒，上限均为 366 天；解除操作不得携带时间。原因最长 1000 字节。
+
+- `HostService.SetAccountAutomaticState` / `pluginsdk.SetAccountAutomaticState`：需要新增高风险权限 `accounts.auto_state`，scope 严格为 `{"types":"own"}`；核心在 SQL 中限定调用插件的账号，其他插件账号与不存在账号均返回 NOT_FOUND。响应提供 `changed/status/reason/until_unix`。自动禁用仍受全局和账号级开关控制，插件不能绕过。
+- `ClassifyErrorResponse.automatic_state`：账号所属插件可随错误分类给出定时自动禁用建议；此处只接受 `ACTION_DISABLE`，主动解除走 HostService。`local_failure` 标识本地/Worker 容量或请求本身错误，不参与管理员状态码、关键词禁用规则（仍可按插件建议短冷却）；有明确配额解除时间时保留插件期限，不被通用规则改成无限期禁用。旧 `ACCOUNT_EFFECT_DISABLE` 同样写入 `auto_disabled`，不再与管理员停用混用。
+- 迁移 `0049_account_automatic_state.sql` 只新增 `accounts.auto_disabled_until` 与到期扫描索引，不修改任何已发布迁移。历史 `disabled` 记录不靠错误文本猜测来源，保守保留，管理员可显式重置；新程序只产生 `auto_disabled`。
+- 核心每 5 秒按数据库时间处理最多 200 条到期记录，托管节点只有获准工作后才扫描。事务内 `FOR UPDATE SKIP LOCKED` 保证多节点只恢复一次；只处理当前仍是 `auto_disabled` 且当前解除时间已到的记录，不排队保存旧定时任务。重启或插件退出不会遗失期限。
+- 管理员 `disabled` 状态永远不被插件或到期扫描解除；`schedulable=false` 永远保留。未指定期限的自动禁用不会被随后到来的定时建议降级，需先显式解除。插件状态变更和到期恢复分别审计 `account.automatic_state` / `account.automatic_recovery`，状态事件与数据库更新同事务提交。
+- 手工“重置状态”同时清除自动解除时间；管理员显式修改 `status` 时取消旧期限。成功重新授权会恢复 `error/auto_disabled`，但不恢复管理员 `disabled`，也不改变调度开关。
+- CCGateway 0.1.37：托管 OAuth 账号收到上游 429 后，插件声明到期自动禁用。取所有已耗尽窗口中最晚的 reset，与 Retry-After 同时存在时取较晚值；没有这两类信息时用未标明耗尽窗口的最近 reset，再无时间信息时使用 60 秒。Worker 透传模式仍隐藏订阅额度明细，但把已耗尽的订阅窗口 reset 转为 Retry-After，避免核心只能看到默认短冷却。Worker 满载的 `Gateway concurrency limit reached` 保留短冷却，不标记配额耗尽；401/403 不附解除时间。自动禁用不关闭 Worker，额度查询、重新授权仍可用，模型调度继续被核心阻断。
+- 到期解除表示恢复调度资格，不等于已向上游验证额度；不发送收费模型探活。上游仍限流时，插件可再次指定新期限；插件观察到额度提前恢复时可主动 `ACTION_CLEAR`。
+- 新接口要求 Host API 6；CCGateway 在初始化时拒绝旧 Host API，避免旧核心忽略新字段而造成永久禁用。发布必须同步 SDK、核心与外壳 Host API 声明。账号列表区分自动禁用并展示解除时间。
 
 ## 43. 第一轮审计合并：插件调用分级并发、令牌失效与越权加固（2026-10-04 合并，2026-10-05 补记）
 
@@ -2555,14 +2573,15 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 
 **`GET /api/v1/accounts`**（以及 `GET /accounts/:id` 等返回账号视图的接口）每项新增 `quota: QuotaSnapshot | null`：一次批量读 PG，**从不**触发上游请求；不支持额度的类型为 null；支持但尚无数据时为 `{supported: true, source: "", updated_at: null, error: "", windows: []}`。
 
-**`POST /api/v1/accounts/:id/reset-status`**（`account:update` / `account:own:update`，`OwnerScope`）→ 200，返回账号视图（同 PATCH 响应）。语义对应 sub2api `RateLimitService.ClearRateLimit`（清 `rate_limited_at` / `rate_limit_reset_at` / `overload_until`、模型级限流、临时不可调度、403 计数，**不改账号状态**）：next 中这些运行时阻断都落在同一个 Redis 冷却键 `cooldown:account:<id>`，因此：
+**`POST /api/v1/accounts/:id/reset-status`**（`account:update` / `account:own:update`，`OwnerScope`）→ 200，返回账号视图（同 PATCH 响应）。2026-10-11 按用户要求改为显式恢复账号，而不再只是清冷却：
 
-1. 删除冷却键；
-2. 写审计 `account.reset_status`（`detail.cooldown_cleared`）；
-3. 确实清掉了冷却时发 `account.status_changed`（`status` 为账号当前状态，`reason = "status reset by administrator"`），没有冷却时不发；
-4. 广播 `account:changed`。
+1. 在事务内按所属权限锁定账号，删除 Redis 冷却键 `cooldown:account:<id>`；
+2. 将账号 `status` 恢复为 `active`，清空 `status_reason`，包括 §42 自动禁用、管理员禁用及错误状态；**保留 `schedulable` 开关**，不会把手动关闭调度的账号重新放入请求池；
+3. 写审计 `account.reset_status`（`detail.cooldown_cleared`、`status_reset`、`previous_status`）；
+4. 状态、原因或冷却有变化时发 `account.status_changed`（`status = active`、`reason = "status reset by administrator"`），已正常且无冷却时重复重置仅审计、不重复发状态事件；
+5. 提交后失效额度／余额缓存，广播 `account:changed`，立即触发 CCGateway runtime reconcile，让此前因账号禁用而阻断的运行环境重新同步。
 
-**不**恢复 §42 自动禁用或管理员禁用的账号（`status = disabled` 不变，需 `PATCH status=active`）——sub2api 的 `ClearRateLimit` 同样不动 `Status`，清错误状态是另一个操作（`ClearError`）。额度快照也不清：它是上游事实，下一次采样自然更新。
+不修改凭证、额度快照、计费用量、限流配置或正在执行的并发租约。重置只恢复核心状态，不代表上游授权或额度已恢复；上游仍拒绝请求时，账号可再次按现有规则自动禁用／冷却。账号列表在禁用、错误或冷却状态下直接展示重置入口，并立即应用接口返回的新状态。
 
 旧路由 `GET /accounts/:id/subscription/limits`、`POST /accounts/:id/subscription/limits/reset` 删除（从未发布）。
 
@@ -3168,7 +3187,7 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
 - 在草稿运行环境的 advisory 锁下、**一个事务**里：
   1. 账号当前运行环境退役：其行 `account_id = NULL, retired_at = now()`；账号还在用数字 key（没有行）时插入 `key = <id>, retired_at = now()`。
   2. 草稿行 `account_id = id, adopted_at = now()`。
-  3. 清空账号核心状态：`status` 为 `error` 时改回 `active` 并清空 `status_reason`；`disabled`（包括自动禁用）保持不变，由管理员手动启用（2026-10-05 用户决定）；此时新运行环境处于 blocked，登录保存在数据卷里，启用后即用新登录；`last_test_*` 全部置 NULL；删除 `account_quota_snapshots`、`account_credential_refresh` 的行；删除 Redis 冷却键（与 `POST /accounts/:id/reset-status` 同一段代码 `clearCooldown`）。本节点未写入的被动配额样本丢弃。
+  3. 清空账号核心状态：`status` 为 `error` 或 `auto_disabled` 时改回 `active` 并清空 `status_reason`，清除 `auto_disabled_until`；`disabled` 保持不变，由管理员显式启用或重置（2026-10-11 自动状态与管理员停用分离）；此时新运行环境处于 blocked，登录保存在数据卷里，启用后即用新登录；`last_test_*` 全部置 NULL；删除 `account_quota_snapshots`、`account_credential_refresh` 的行；删除 Redis 冷却键（与 `POST /accounts/:id/reset-status` 同一段代码 `clearCooldown`）。本节点未写入的被动配额样本丢弃。
   4. 审计 `account.ccgateway_reauthorize`（`detail: {runtime, retired, status_reset, cooldown_cleared}`）；事件 `account.updated`，状态或冷却有变化时另发 `account.status_changed`（`reason: "re-authorized"`）。
   5. 在事务内读出账号的期望状态（此时已指向新 key），**提交前**对新 key `PUT config`：网关在提交那一刻改走新 key 时，新运行环境已按账号修订号就绪，不会有 409 窗口。控制器失败则整个事务回滚：503 `sync_failed`（连不上控制器为 `not_configured`）。账号已停用 / 代理停用时跳过这一步，由提交后的 Kick 阻断。
 - 提交后：Kick 账号、广播 `account:changed`，返回账号视图。网关新请求立即走新 key；已在旧运行环境上的请求可以继续跑完（旧运行环境 10 分钟后才删）。
@@ -3181,7 +3200,7 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
 - 重新授权草稿按草稿规则清理（闲置 15 分钟、最长 2 小时），草稿清理不碰退役行。
 
 **与原契约文件的偏差：**
-- 原文写 "`error_message` empty"：`accounts` 没有 `error_message` 列，实现清的是 `status_reason`（只在 `status = 'error'` 时）。另外核心目前不会把账号置为 `error`（自动禁用写的是 `disabled`，§42），所以"error → active"实际很少生效；被自动禁用或管理员停用的账号重新授权后**仍是 `disabled`**，需要 `PATCH status=active` 启用。
+- 原文写 "`error_message` empty"：`accounts` 没有 `error_message` 列，实现清的是 `status_reason`。2026-10-11 起成功重新授权恢复 `error/auto_disabled`，管理员停用与来源不明的旧 `disabled` 记录仍需显式启用或重置，见 §42.5。
 - 原文没处理"已有草稿属于别人"的情况：实现为接管（见上）。
 - 原文让账号只有 `account:update` 的人用草稿接口，但草稿接口原权限只有 `settings:manage` / `account:create` / `account:own:create`：实现为按 key 的草稿接口加上两个 update 权限。
 - 提交前预先 `PUT config`（原文只说提交后 Kick）：避免提交后几秒内网关拿到控制器 409。
@@ -3222,6 +3241,8 @@ new-api 的渠道测试（`controller/channel-test.go`）每次测试后写渠�
   - 写入不改 `updated_at`、不发 `account:changed` / 事件、不影响调度；写入失败只记日志，不影响测试响应。
 - 账号 JSON（`GET /accounts` 列表与 `GET /accounts/:id`、创建/修改的响应）新增 `last_test`：从未测试时为 `null`，否则 `{at, ok, latency_ms, model, message}`（`at` 为 RFC 3339）。
 - TestResult 新增 `requested_model`（映射前用户选的模型；未给时为空串，字段总在），`model` 仍为实际请求的模型。
+- 2026-10-11 错误诊断：TestResult 返回 `error_code` 与 `error_source`（`gateway` 网关/运行环境、`transport` 传输失败、`response` 实际 HTTP 响应、`plugin` 插件构建失败）。`status` 始终保留实际收到的 HTTP 状态，未收到响应为 0，不把本地拒绝伪造为上游 401。响应体的 `error.code` 优先，其次 `error.type` / `code`，没有机器码时用 `http_<status>`；CCGateway 账号禁用、无代理、代理停用等保留 `account_disabled/no_proxy/proxy_disabled`，不再合并成 `account egress unavailable`。
+- 迁移 `0050_account_test_diagnostics.sql` 新增可空的 `last_test_status/last_test_error_code/last_test_error_source`，新测试保存上述诊断并通过 `last_test` 返回。旧记录不猜测 HTTP 状态；完整原因已包含返回消息时不重复拼接。界面直接显示错误代码与来源，HTTP 0 显示无响应提示，重新授权清空整组最近测试字段。
 - "测试全部模型""批量测试账号"由控制台并发调用单模型测试实现，后端不提供批量接口；同一账号并发测试时 `last_test` 为最后写入的那次。
 - 控制台（前端实现）：账号的"测试"打开模型测试弹窗，可选一个模型测试，也可"测试全部 / 所选"模型（逐个模型并发调用本接口，显示每个模型的结果、延迟与失败原因）；账号列表可勾选多个账号"批量测试"（每个账号测默认模型）。列表显示 `last_test`（上次测试时间、结果、延迟）。测试不改变账号状态。
 - 流式测试本轮不做：`BuildTestRequest` 没有 stream 参数，加参数要改 proto 并动所有插件。

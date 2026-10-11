@@ -35,8 +35,9 @@ type AccountTypeView struct {
 	GuardedSettings []manifest.GuardedSetting `json:"guarded_settings"`
 	// DefaultModels / DefaultModelMapping are the plugin's suggestions the
 	// console prefills into a new account (CONTRACTS §41); never null.
-	DefaultModels       []string          `json:"default_models"`
-	DefaultModelMapping map[string]string `json:"default_model_mapping"`
+	DefaultModels       []string                                 `json:"default_models"`
+	DefaultModelMapping map[string]string                        `json:"default_model_mapping"`
+	CommonControls      map[string]manifest.AccountCommonControl `json:"common_controls,omitempty"`
 	// Platforms the account type declares, in declaration order.
 	Platforms []TypePlatformView `json:"platforms"`
 	// Endpoints lists the gateway endpoints this type can serve now.
@@ -88,6 +89,7 @@ func typeView(g core.Generation, b core.AccountTypeBinding, conv core.ProtocolCo
 		GuardedSettings:     b.Type.GuardedSettings,
 		DefaultModels:       b.Type.DefaultModels,
 		DefaultModelMapping: b.Type.DefaultModelMapping,
+		CommonControls:      b.Type.CommonControls,
 		Platforms:           typePlatforms(g, b),
 		Endpoints:           servedEndpoints(g, b, conv),
 	}

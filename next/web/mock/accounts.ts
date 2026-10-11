@@ -293,12 +293,25 @@ function pluginDefaults(pluginKey: string, type: string) {
     try {
       const m = JSON.parse(readFileSync(fileURLToPath(new URL(`../../plugins/${dir}/manifest.json`, import.meta.url)), 'utf8'))
       const at = (m.accountTypes || []).find((x: any) => x.id === type)
-      return { default_models: at?.defaultModels || [], default_model_mapping: at?.defaultModelMapping || {} }
+      return { default_models: at?.defaultModels || [], default_model_mapping: at?.defaultModelMapping || {}, common_controls: at?.commonControls || {} }
     } catch {
       // try the next directory name
     }
   }
-  return { default_models: [], default_model_mapping: {} }
+  return { default_models: [], default_model_mapping: {}, common_controls: {} }
+}
+
+function applyCommonControls(pluginKey: string, type: string, body: Record<string, any>, current?: Record<string, any>) {
+  const controls = pluginDefaults(pluginKey, type).common_controls
+  for (const field of ['auto_disable', 'schedulable']) {
+    const control = controls[field]
+    const expected = current ? current[field] ?? true : control?.default ?? true
+    if (control?.configurable === false && body[field] != null && body[field] !== expected) return fail(400, 'invalid_argument', 'Read-only account control', { fields: [{ field, code: 'read_only', message: 'This account type does not allow changing this control' }] })
+    if (body[field] == null) {
+      if (current) delete body[field]
+      else body[field] = expected
+    }
+  }
 }
 
 const typeLabel = (pluginKey: string, type: string) => accountTypeDecls.find((x) => x.plugin_key === pluginKey && x.type === type)?.label || type
@@ -537,6 +550,25 @@ on('GET', '/platforms', () =>
 )
 // Any signed-in user: available platforms and endpoints, no account types (CONTRACTS §14.1).
 on('GET', '/me/platforms', () => activePlatforms().map((p) => ({ id: p.id, label: p.label, builtin: p.builtin, endpoints: p.endpoints })))
+const autoDisableSettings = {
+  enabled: true,
+  status_codes: '401',
+  keywords: ['your credit balance is too low', 'this organization has been disabled.', 'you exceeded your current quota', 'permission denied', 'the security token included in the request is invalid', 'operation not allowed', 'your account is not authorized']
+}
+on('GET', '/accounts/auto-disable', (req) => {
+  const who = caller(req)
+  if (!['account:create', 'account:own:create', 'account:update', 'account:own:update'].some(key => hasPerm(who, key))) return fail(403, 'permission_denied', 'Permission denied')
+  return { enabled: autoDisableSettings.enabled }
+})
+on('GET', '/settings/auto-disable', (req) => hasPerm(caller(req), 'settings:read') ? autoDisableSettings : fail(403, 'permission_denied', 'Permission denied'))
+on('PUT', '/settings/auto-disable', (req) => {
+  if (!hasPerm(caller(req), 'settings:manage')) return fail(403, 'permission_denied', 'Permission denied')
+  const b = req.body || {}
+  if (typeof b.enabled !== 'boolean' || typeof b.status_codes !== 'string' || !Array.isArray(b.keywords) || !b.keywords.every((value: unknown) => typeof value === 'string')) return fail(400, 'invalid_argument', 'Invalid automatic disabling settings')
+  Object.assign(autoDisableSettings, { enabled: b.enabled, status_codes: b.status_codes, keywords: b.keywords })
+  return autoDisableSettings
+})
+
 on('GET', '/account-types', () => accountTypeDecls.map(accountTypeOut))
 on('GET', '/account-types/:plugin_key/:type/form', (req) => {
   const who = caller(req)
@@ -647,7 +679,7 @@ on('POST', '/accounts', (req) => {
   if ('platform' in b) return fail(400, 'invalid_argument', 'unknown field "platform"')
   const at = accountTypeDecls.find((x) => x.plugin_key === b.plugin_key && x.type === b.type)
   if (!at) return fail(400, 'invalid_argument', 'unknown account type', { fields: [{ field: 'type', code: 'not_found', message: 'Unknown account type' }] })
-  const bad = validateScheduling(b)
+  const bad = validateScheduling(b) || applyCommonControls(at.plugin_key, at.type, b)
   if (bad) return bad
   if (b.plugin_key === 'anthropic' && !String(creds.api_key || '').startsWith('sk-')) {
     return fail(400, 'invalid_argument', 'invalid credentials', { fields: [{ field: 'credentials.api_key', code: 'invalid', message: 'API key must start with sk-' }] })
@@ -698,7 +730,7 @@ on('PATCH', '/accounts/:id', (req) => {
   const r = scopedAccount(req, 'update')
   if (!('a' in r)) return r
   const a = r.a
-  const bad = validateScheduling(req.body || {})
+  const bad = validateScheduling(req.body || {}) || applyCommonControls(a.plugin_key, a.type, req.body || {}, a)
   if (bad) return bad
   const { credentials, platform: _p, plugin_key: _k, type: _t, proxy_id: _pid, proxy_url: _purl, ...rest } = req.body || {}
   const guarded = checkGuarded(caller(req), a.plugin_key, credentials, a.credentials)
@@ -824,13 +856,16 @@ on('POST', '/accounts/:id/refresh-credentials', (req) => {
   a.refresh_state = { expires_at: now(8 * 3600), last_attempt_at: now(0), last_success_at: now(0), error_type: '', error: '' }
   return { refreshed: true, refresh: refreshOf(a) }
 })
-// Clears the cooldown / rate-limit state of the account (needs update on it).
+// Restores active status and clears the reason and cooldown (needs update on it).
 on('POST', '/accounts/:id/reset-status', (req) => {
   const r = scopedAccount(req, 'update')
   if (!('a' in r)) return r
+  r.a.status = 'active'
+  r.a.status_reason = ''
+  r.a.auto_disabled_until = null
   r.a.cooldown_until = null
   r.a.cooldown_reason = ''
-  return { ok: true }
+  return withGroups(r.a)
 })
 on('POST', '/accounts/:id/credentials/reveal', (req) => {
   const r = scopedAccount(req, 'credential:view')

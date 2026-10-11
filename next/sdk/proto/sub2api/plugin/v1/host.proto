@@ -13,6 +13,7 @@ import "sub2api/plugin/v1/observation.proto";
 // requires the invocation-local authority issued by the host for Poll.
 // Calls without the required authority fail with PERMISSION_DENIED.
 service HostService {
+  rpc SetAccountAutomaticState(SetAccountAutomaticStateRequest) returns (SetAccountAutomaticStateResponse);
   rpc ReadObservationMetrics(ReadObservationMetricsRequest) returns (ReadObservationMetricsResponse);
   // Pure local tokenization. No upstream traffic and no billing side effects.
   rpc CountTokens(CountTokensRequest) returns (CountTokensResponse);
@@ -140,6 +141,18 @@ service HostService {
   // The host enforces cancellation, the account proxy, limits and SSRF checks.
   // A token permits at most one HTTP request; redirects are not followed.
   rpc ExecuteHTTP(ExecutionHTTPRequest) returns (ExecutionHTTPResponse);
+}
+
+message SetAccountAutomaticStateRequest {
+  int64 account_id = 1;
+  AccountAutomaticState state = 2;
+}
+
+message SetAccountAutomaticStateResponse {
+  bool changed = 1;
+  string status = 2;
+  string reason = 3;
+  int64 until_unix = 4;
 }
 
 message CountTokensRequest {

@@ -22,6 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type HostServiceClient interface {
+	SetAccountAutomaticState(ctx context.Context, in *SetAccountAutomaticStateRequest, opts ...grpc.CallOption) (*SetAccountAutomaticStateResponse, error)
 	ReadObservationMetrics(ctx context.Context, in *ReadObservationMetricsRequest, opts ...grpc.CallOption) (*ReadObservationMetricsResponse, error)
 	// Pure local tokenization. No upstream traffic and no billing side effects.
 	CountTokens(ctx context.Context, in *CountTokensRequest, opts ...grpc.CallOption) (*CountTokensResponse, error)
@@ -126,6 +127,15 @@ type hostServiceClient struct {
 
 func NewHostServiceClient(cc grpc.ClientConnInterface) HostServiceClient {
 	return &hostServiceClient{cc}
+}
+
+func (c *hostServiceClient) SetAccountAutomaticState(ctx context.Context, in *SetAccountAutomaticStateRequest, opts ...grpc.CallOption) (*SetAccountAutomaticStateResponse, error) {
+	out := new(SetAccountAutomaticStateResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/SetAccountAutomaticState", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *hostServiceClient) ReadObservationMetrics(ctx context.Context, in *ReadObservationMetricsRequest, opts ...grpc.CallOption) (*ReadObservationMetricsResponse, error) {
@@ -330,6 +340,7 @@ func (c *hostServiceClient) ExecuteHTTP(ctx context.Context, in *ExecutionHTTPRe
 // All implementations must embed UnimplementedHostServiceServer
 // for forward compatibility
 type HostServiceServer interface {
+	SetAccountAutomaticState(context.Context, *SetAccountAutomaticStateRequest) (*SetAccountAutomaticStateResponse, error)
 	ReadObservationMetrics(context.Context, *ReadObservationMetricsRequest) (*ReadObservationMetricsResponse, error)
 	// Pure local tokenization. No upstream traffic and no billing side effects.
 	CountTokens(context.Context, *CountTokensRequest) (*CountTokensResponse, error)
@@ -433,6 +444,9 @@ type HostServiceServer interface {
 type UnimplementedHostServiceServer struct {
 }
 
+func (UnimplementedHostServiceServer) SetAccountAutomaticState(context.Context, *SetAccountAutomaticStateRequest) (*SetAccountAutomaticStateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetAccountAutomaticState not implemented")
+}
 func (UnimplementedHostServiceServer) ReadObservationMetrics(context.Context, *ReadObservationMetricsRequest) (*ReadObservationMetricsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReadObservationMetrics not implemented")
 }
@@ -510,6 +524,24 @@ type UnsafeHostServiceServer interface {
 
 func RegisterHostServiceServer(s grpc.ServiceRegistrar, srv HostServiceServer) {
 	s.RegisterService(&HostService_ServiceDesc, srv)
+}
+
+func _HostService_SetAccountAutomaticState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetAccountAutomaticStateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).SetAccountAutomaticState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.HostService/SetAccountAutomaticState",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).SetAccountAutomaticState(ctx, req.(*SetAccountAutomaticStateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _HostService_ReadObservationMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -915,6 +947,10 @@ var HostService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "sub2api.plugin.v1.HostService",
 	HandlerType: (*HostServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "SetAccountAutomaticState",
+			Handler:    _HostService_SetAccountAutomaticState_Handler,
+		},
 		{
 			MethodName: "ReadObservationMetrics",
 			Handler:    _HostService_ReadObservationMetrics_Handler,

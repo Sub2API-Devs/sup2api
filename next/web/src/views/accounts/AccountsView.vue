@@ -19,7 +19,7 @@ import AccountTypeEndpoints from './AccountTypeEndpoints.vue'
 import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
 import AccountEditor from './AccountEditor.vue'
 import AccountSchedulingCell from './AccountSchedulingCell.vue'
-import { sameCreationGroup } from './accountTypeChoices'
+import { accountControl, sameCreationGroup } from './accountTypeChoices'
 import AccountQuotaCell from './AccountQuotaCell.vue'
 import AccountBalanceCell from './AccountBalanceCell.vue'
 import AccountModelTest from './AccountModelTest.vue'
@@ -132,6 +132,7 @@ function coolingDown(a: Account) {
 type StatusView = { tone: 'success' | 'warning' | 'danger' | 'gray'; label: string; detail?: string }
 function statusOf(a: Account): StatusView {
   if (a.orphaned) return { tone: 'gray', label: t('accounts.status.orphaned'), detail: t('accounts.orphanedHint', { plugin: a.plugin_key }) }
+  if (a.status === 'auto_disabled') return { tone: 'danger', label: t('accounts.status.auto_disabled'), detail: a.status_reason }
   if (a.status === 'disabled') return { tone: 'danger', label: t('accounts.status.disabled'), detail: a.status_reason }
   if (a.status === 'error') return { tone: 'danger', label: t('accounts.status.error'), detail: a.status_reason }
   if (coolingDown(a)) {
@@ -389,9 +390,10 @@ async function resetStatus(a: Account) {
   const ok = await confirm({ title: t('accounts.resetStatusTitle'), message: t('accounts.resetStatusConfirm', { name: a.name }), confirmText: t('accounts.resetStatus') })
   if (!ok) return
   try {
-    await resetAccountStatus(a.id)
+    const updated = await resetAccountStatus(a.id)
+    Object.assign(a, updated)
+    if (detail.value?.id === a.id) Object.assign(detail.value, updated)
     toast(t('accounts.resetStatusDone'), 'success')
-    if (detail.value?.id === a.id) openDetail(a)
     list.reload()
   } catch (e) {
     notifyError(e)
@@ -437,6 +439,7 @@ async function refreshCreds(a: Account) {
 }
 // ---------------------------------------------------------------- row actions
 async function toggleSchedulable(a: Account, v: boolean) {
+  if (!canUpdate(a) || !accountControl(accountTypes.find(a.plugin_key, a.type), 'schedulable').configurable) return
   try {
     await api.patch(`/accounts/${a.id}`, { schedulable: v })
     a.schedulable = v
@@ -474,7 +477,7 @@ function onAction(a: Account, key: string) {
   else if (key === 'delete') remove(a)
 }
 
-const statusOptions = ['active', 'disabled', 'error']
+const statusOptions = ['active', 'auto_disabled', 'disabled', 'error']
 const statusSelectOptions = computed<SelectOption[]>(() => [
   { value: '', label: t('accounts.allStatus') },
   ...statusOptions.map((s) => ({ value: s, label: t(`accounts.status.${s}`) }))
@@ -571,7 +574,8 @@ function groupTags(a: Account) {
         <SHint v-if="statusOf(row).detail" size="xs" class="mt-0.5 block max-w-48 truncate" :title="statusOf(row).detail">
           {{ statusOf(row).detail }}
         </SHint>
-        <SLink v-if="coolingDown(row) && canResetStatus(row)" as="button" class="mt-1 inline-flex items-center gap-1 text-xs" :title="t('accounts.resetStatusHint')" data-testid="account-reset-status" @click="resetStatus(row)">
+        <SHint v-if="row.status === 'auto_disabled' && row.auto_disabled_until" size="xs" class="mt-0.5 block" data-testid="account-auto-release">{{ t('accounts.autoReleaseAt', { time: formatDateTime(row.auto_disabled_until) }) }}</SHint>
+        <SLink v-if="(row.status !== 'active' || row.status_reason || coolingDown(row)) && canResetStatus(row)" as="button" class="mt-1 inline-flex items-center gap-1 text-xs" :title="t('accounts.resetStatusHint')" data-testid="account-reset-status" @click="resetStatus(row)">
           <SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('accounts.resetStatus') }}
         </SLink>
       </template>
@@ -599,7 +603,10 @@ function groupTags(a: Account) {
           <SSwitch
             v-if="canUpdate(row) && !row.orphaned"
             :model-value="row.schedulable"
-            :title="t('accounts.schedulable')"
+            :disabled="!accountControl(accountTypes.find(row.plugin_key, row.type), 'schedulable').configurable"
+            :aria-label="t('accounts.schedulable')"
+            :title="t('accounts.schedulingSwitchHint')"
+            data-testid="account-schedulable-switch"
             @update:model-value="toggleSchedulable(row, $event)"
           />
           <SButton v-if="canTest(row) && !row.orphaned" size="sm" variant="ghost" @click="openTest(row)">{{ t('common.test') }}</SButton>

@@ -249,6 +249,7 @@ export interface AccountType {
   /** Plugin suggestions prefilled into a new account's models / model_mapping (CONTRACTS §41). */
   default_models?: string[]
   default_model_mapping?: Record<string, string>
+  common_controls?: Partial<Record<'auto_disable' | 'schedulable', { configurable?: boolean; default?: boolean }>>
   /** Platforms the type supports (built-in or plugin platforms). */
   platforms: AccountTypePlatform[]
   /** Endpoints of available supported platforms (native) plus converted ones. */
@@ -285,6 +286,7 @@ export interface Account {
   rate_usage?: { rpm: number; tpm: number }
   status: string
   status_reason?: string
+  auto_disabled_until?: string | null
   credentials?: Record<string, unknown>
   in_use?: number
   cooldown_until?: string | null
@@ -480,6 +482,9 @@ export interface CcgRemoteConfig {
 
 /** Latest test of an account, kept on the account (POST /accounts/:id/test). */
 export interface AccountLastTest {
+  status?: number
+  error_code?: string
+  error_source?: string
   at: string
   ok: boolean
   latency_ms: number
@@ -558,6 +563,8 @@ export interface AccountTestUsage {
 }
 
 export interface AccountTestResult {
+  error_code?: string
+  error_source?: string
   ok: boolean
   status: number
   latency_ms: number

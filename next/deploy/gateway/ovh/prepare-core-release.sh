@@ -68,7 +68,7 @@ ccg_cache=$managed/ccgateway-images/$ccg_version
 if [ ! -s "$ccg_cache/images.json" ]; then
   CCG_CGROUP_PARENT="$slice" sh "$src/deploy/docker/build-ccgateway-images.sh" "$ccg_version" "$ccg_cache"
 fi
-rm -rf "$src/plugins/ccgateway/images"
+[ ! -e "$src/plugins/ccgateway/images" ] || { echo 'bundled image directory already exists; use a fresh release worktree' >&2; exit 1; }
 mkdir "$src/plugins/ccgateway/images"
 for f in images.json app.tar.gz egress.tar.gz controller.tar.gz gateway.tar.gz; do
   cp "$ccg_cache/$f" "$src/plugins/ccgateway/images/$f"
@@ -89,7 +89,9 @@ cid=
 payload=$stage/payload
 mkdir "$payload"
 mv "$stage/bin" "$stage/builtin" "$payload/"
-gateway_image=$(docker inspect sup2api-1 --format '{{.Image}}')
+gateway_image=sup2api-gateway:$version
+docker buildx build --builder default --cgroup-parent "$slice" --load \
+  -f "$src/deploy/gateway/Dockerfile" -t "$gateway_image" "$src"
 docker run --rm --network none --user "$(id -u):$(id -g)" \
   -v "$payload:/stage:ro" -v "$publish:/publish" \
   -v "$managed/keys/release.key:/release.key:ro" \

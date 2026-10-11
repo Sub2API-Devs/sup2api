@@ -7,6 +7,7 @@ import (
 	"fmt"
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"net/url"
@@ -27,6 +28,14 @@ const (
 type Plugin struct{ now func() time.Time }
 
 func New() *Plugin { return &Plugin{now: time.Now} }
+
+func (p *Plugin) Init(_ context.Context, host pluginsdk.Host) error {
+	if host.Info().HostAPIVersion < protocol.AccountAutomaticStateHostAPIVersion {
+		return status.Errorf(codes.FailedPrecondition, "CCGateway requires host API %d for automatic account recovery", protocol.AccountAutomaticStateHostAPIVersion)
+	}
+	return nil
+}
+
 func emptyObject(raw string) bool {
 	if strings.TrimSpace(raw) == "" {
 		return true

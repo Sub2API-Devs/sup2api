@@ -381,13 +381,137 @@ func TestAccountResetStatus(t *testing.T) {
 	if code, _ = e.do("POST", fmt.Sprintf("/accounts/%d/reset-status", id), nil); code != 200 || len(e.eventTypes()) != n {
 		t.Fatalf("second reset: %d events %v", code, e.eventTypes())
 	}
-	// A disabled account stays disabled (sub2api ClearRateLimit semantics).
+	// Resetting a disabled account preserves its manual scheduling switch.
 	off := e.mkRawAccount("anthropic", "apikey", "off", "sk-good-key-123", false)
 	code, out = e.do("POST", fmt.Sprintf("/accounts/%d/reset-status", off), nil)
-	if code != 200 || out["data"].(map[string]any)["status"] != "disabled" {
+	if code != 200 || data(out)["status"] != "active" || data(out)["schedulable"] != false {
 		t.Fatalf("disabled: %d %v", code, out)
 	}
 	if code, _ = e.do("POST", "/accounts/999999/reset-status", nil); code != 404 {
 		t.Fatalf("missing: %d", code)
+	}
+}
+
+func TestAccountResetStatusRestoresScheduling(t *testing.T) {
+	for _, state := range []string{"disabled", "auto_disabled", "error", "active"} {
+		for _, cooldown := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/cooldown=%t", state, cooldown), func(t *testing.T) {
+				e := setup(t)
+				ctx := t.Context()
+				id := e.mkRawAccount("anthropic", "apikey", "recover", "sk-good-key-123", true)
+				group := e.exec1(`INSERT INTO groups(name) VALUES('reset') RETURNING id`)
+				if _, err := e.db.Pool.Exec(ctx, `INSERT INTO account_groups(account_id,group_id) VALUES($1,$2)`, id, group); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := e.svc.AutoDisable(ctx, id, "upstream rejected credentials (401)"); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := e.db.Pool.Exec(ctx, `UPDATE accounts SET status=$2 WHERE id=$1`, id, state); err != nil {
+					t.Fatal(err)
+				}
+				if cooldown {
+					if err := e.svc.SetCooldown(ctx, id, time.Now().Add(time.Hour), "429"); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if _, err := e.svc.Candidates(ctx, group, nil); err != nil {
+					t.Fatal(err)
+				}
+				var beforeAccount, afterAccount string
+				const preserved = `SELECT (to_jsonb(a) - ARRAY['status','status_reason','updated_at'])::text FROM accounts a WHERE id=$1`
+				if err := e.db.Pool.QueryRow(ctx, preserved, id).Scan(&beforeAccount); err != nil {
+					t.Fatal(err)
+				}
+				before := len(e.eventTypes())
+				path := fmt.Sprintf("/accounts/%d/reset-status", id)
+				code, out := e.do("POST", path, nil)
+				if code != 200 || data(out)["status"] != "active" || data(out)["status_reason"] != "" ||
+					data(out)["schedulable"] != true || data(out)["cooldown_until"] != nil || data(out)["auto_disable"] != true {
+					t.Fatalf("reset: %d %v", code, out)
+				}
+				if err := e.db.Pool.QueryRow(ctx, preserved, id).Scan(&afterAccount); err != nil || beforeAccount != afterAccount {
+					t.Fatalf("reset changed unrelated account fields: %v", err)
+				}
+				candidates, err := e.svc.Candidates(ctx, group, nil)
+				if err != nil || len(candidates) != 1 || candidates[0].ID != id {
+					t.Fatalf("candidates after reset: %v %v", candidates, err)
+				}
+				var payload string
+				if err := e.db.Pool.QueryRow(ctx, `SELECT payload::text FROM events WHERE type='account.status_changed' ORDER BY id DESC LIMIT 1`).Scan(&payload); err != nil {
+					t.Fatal(err)
+				}
+				var event map[string]any
+				if err := json.Unmarshal([]byte(payload), &event); err != nil || event["status"] != "active" || len(e.eventTypes()) != before+1 {
+					t.Fatalf("status event: %s %v", payload, err)
+				}
+				audits := e.auditRows("account.reset_status")
+				if len(audits) != 1 {
+					t.Fatalf("audits: %v", audits)
+				}
+				detail := audits[0]["detail"].(map[string]any)
+				if detail["previous_status"] != state || detail["status_reset"] != true || detail["cooldown_cleared"] != cooldown {
+					t.Fatalf("audit detail: %v", detail)
+				}
+				before = len(e.eventTypes())
+				if code, _ := e.do("POST", path, nil); code != 200 || len(e.eventTypes()) != before {
+					t.Fatalf("repeated reset: %d events %v", code, e.eventTypes())
+				}
+			})
+		}
+	}
+}
+
+func TestAccountResetStatusRedisFailure(t *testing.T) {
+	e := setup(t)
+	id := e.mkRawAccount("anthropic", "apikey", "blocked", "sk-good-key-123", true)
+	if _, err := e.svc.AutoDisable(t.Context(), id, "upstream rejected credentials (401)"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.svc.SetCooldown(t.Context(), id, time.Now().Add(time.Hour), "429"); err != nil {
+		t.Fatal(err)
+	}
+	beforeEvents, beforeBus := len(e.eventTypes()), e.bus.count()
+	e.mr.SetError("ERR unavailable")
+	code, _ := e.do("POST", fmt.Sprintf("/accounts/%d/reset-status", id), nil)
+	e.mr.SetError("")
+	var status, reason string
+	if err := e.db.Pool.QueryRow(t.Context(), `SELECT status,status_reason FROM accounts WHERE id=$1`, id).Scan(&status, &reason); err != nil {
+		t.Fatal(err)
+	}
+	if code != http.StatusServiceUnavailable || status != "auto_disabled" || reason != "upstream rejected credentials (401)" || !e.mr.Exists(cooldownKey(id)) {
+		t.Fatalf("failed reset changed state: %d %s %s", code, status, reason)
+	}
+	if len(e.auditRows("account.reset_status")) != 0 || len(e.eventTypes()) != beforeEvents || e.bus.count() != beforeBus {
+		t.Fatal("failed reset reported a successful transition")
+	}
+}
+
+func TestAccountResetStatusOwnership(t *testing.T) {
+	authz := fakeAuthz{keys: map[int64][]string{}}
+	e := setupWith(t, authz)
+	owner, stranger, reader := e.addUser("owner@x.com"), e.addUser("stranger@x.com"), e.addUser("reader@x.com")
+	authz.keys[owner] = []string{"account:own:update"}
+	authz.keys[stranger] = []string{"account:own:update"}
+	authz.keys[reader] = []string{"account:read"}
+	id := e.mkRawAccount("anthropic", "apikey", "private", "sk-good-key-123", false)
+	if _, err := e.db.Pool.Exec(t.Context(), `UPDATE accounts SET created_by=$2,status_reason='rejected' WHERE id=$1`, id, owner); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.svc.SetCooldown(t.Context(), id, time.Now().Add(time.Hour), "429"); err != nil {
+		t.Fatal(err)
+	}
+	path := fmt.Sprintf("/accounts/%d/reset-status", id)
+	for _, tc := range []struct {
+		uid  int64
+		code int
+	}{{stranger, 404}, {reader, 403}} {
+		code, out := e.doAs(tc.uid, "POST", path, nil)
+		if code != tc.code || !e.mr.Exists(cooldownKey(id)) || len(e.auditRows("account.reset_status")) != 0 {
+			t.Fatalf("unauthorized reset: %d %v", code, out)
+		}
+	}
+	code, out := e.doAs(owner, "POST", path, nil)
+	if code != 200 || data(out)["status"] != "active" || data(out)["status_reason"] != "" || data(out)["schedulable"] != false {
+		t.Fatalf("owner reset: %d %v", code, out)
 	}
 }

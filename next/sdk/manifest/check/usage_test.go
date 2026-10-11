@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/platforms"
 )
@@ -346,6 +348,17 @@ func TestAccountTypeDefaultModels(t *testing.T) {
 	if err := Validate(m, files, ValidateOptions{Tooling: true}); err != nil {
 		t.Fatalf("valid defaults rejected: %v", codes(err))
 	}
+	off := false
+	control := manifest.AccountCommonControl{Configurable: &off, Default: &off}
+	require.False(t, control.IsConfigurable())
+	require.False(t, control.DefaultValue())
+	require.True(t, (manifest.AccountCommonControl{}).IsConfigurable())
+	require.True(t, (manifest.AccountCommonControl{}).DefaultValue())
+	m.AccountTypes[0].CommonControls = map[string]manifest.AccountCommonControl{"auto_disable": control, "schedulable": {}}
+	require.NoError(t, Validate(m, files, ValidateOptions{Tooling: true}))
+	m.AccountTypes[0].CommonControls["status"] = control
+	require.Equal(t, "unsupported", codes(Validate(m, files, ValidateOptions{Tooling: true}))["accountTypes[0].commonControls.status"])
+	delete(m.AccountTypes[0].CommonControls, "status")
 	// A mapping without a model list is fine: an empty list serves every model.
 	m.AccountTypes[0].DefaultModels = nil
 	if err := Validate(m, files, ValidateOptions{Tooling: true}); err != nil {

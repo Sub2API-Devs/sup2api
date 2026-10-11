@@ -161,6 +161,11 @@ type PluginAccountCredentials struct {
 	Credentials json.RawMessage
 }
 
+type AccountAutomaticStateController interface {
+	ApplyAccountAutomaticState(ctx context.Context, id int64, state *pluginv1.AccountAutomaticState) (*pluginv1.SetAccountAutomaticStateResponse, error)
+	ApplyPluginAccountAutomaticState(ctx context.Context, pluginKey string, id int64, state *pluginv1.AccountAutomaticState) (*pluginv1.SetAccountAutomaticStateResponse, error)
+}
+
 // PluginAccountReader (owner: account) serves HostService.ListAccounts and
 // HostService.GetAccountCredentials: it lets a plugin read the accounts of its
 // OWN account types outside a gateway request.

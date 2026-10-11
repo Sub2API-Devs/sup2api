@@ -95,8 +95,10 @@ func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequ
 		// could not be carried exactly): another account would refuse it the
 		// same way, and the account is not at fault.
 		resp.Action = pluginv1.ClassifyErrorResponse_ACTION_RETURN_TO_CLIENT
+		resp.LocalFailure = true
 	case code == 0:
 		cooldown(serverErrorCooldown, "transport error: "+truncate(in.GetTransportError(), 200))
+		resp.LocalFailure = true
 		resp.ClientStatus = http.StatusBadGateway
 		if resp.ClientMessage == "" {
 			resp.ClientMessage = "upstream connection failed"
@@ -115,6 +117,12 @@ func (p *Plugin) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequ
 	case code == http.StatusTooManyRequests:
 		until, src := rateLimitReset(in.GetHeaders(), now)
 		cooldown(until.Sub(now), "rate limited until "+until.UTC().Format(time.RFC3339)+" ("+src+")")
+		resp.LocalFailure = msg == "Gateway concurrency limit reached"
+		if in.GetAccount().GetType() == AccountTypeManaged && !resp.LocalFailure {
+			resp.AccountEffect = pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE
+			resp.AutomaticState = &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_DISABLE,
+				Reason: resp.Reason, Release: &pluginv1.AccountAutomaticState_UntilUnix{UntilUnix: until.Unix()}}
+		}
 	case code == StatusOverloaded:
 		cooldown(overloadedCooldown, "upstream overloaded (529)")
 	case code == http.StatusRequestTimeout || code >= 500:
@@ -134,9 +142,9 @@ func truncate(s string, n int) string {
 }
 
 // rateLimitReset works out when a 429'd account can be used again:
-//  1. retry-after (seconds or HTTP date);
-//  2. anthropic-ratelimit-*-reset of the exhausted limits (remaining == 0 or
-//     status == rejected), the latest one;
+//  1. anthropic-ratelimit-*-reset of exhausted limits (remaining == 0,
+//     status == rejected, or unified utilization >= 1), the latest one;
+//  2. retry-after (seconds or HTTP date), taking the later of it and 1;
 //  3. otherwise the earliest future anthropic-ratelimit-*-reset;
 //  4. otherwise 60 s.
 //
@@ -156,14 +164,6 @@ func rateLimitReset(headers map[string]string, now time.Time) (time.Time, string
 	for k, v := range headers {
 		h[strings.ToLower(k)] = strings.TrimSpace(v)
 	}
-	if v := h["retry-after"]; v != "" {
-		if secs, err := strconv.ParseFloat(v, 64); err == nil && secs >= 0 {
-			return clamp(now.Add(time.Duration(secs * float64(time.Second)))), "retry-after"
-		}
-		if t, err := http.ParseTime(v); err == nil {
-			return clamp(t), "retry-after"
-		}
-	}
 	var exhausted, earliest time.Time
 	for k, v := range h {
 		if !strings.HasPrefix(k, "anthropic-ratelimit-") || !strings.HasSuffix(k, "-reset") {
@@ -174,7 +174,8 @@ func rateLimitReset(headers map[string]string, now time.Time) (time.Time, string
 			continue
 		}
 		base := strings.TrimSuffix(k, "-reset")
-		if h[base+"-remaining"] == "0" || strings.EqualFold(h[base+"-status"], "rejected") {
+		used, _ := strconv.ParseFloat(h[base+"-utilization"], 64)
+		if h[base+"-remaining"] == "0" || strings.EqualFold(h[base+"-status"], "rejected") || (strings.HasPrefix(base, "anthropic-ratelimit-unified") && used >= 1) {
 			if t.After(exhausted) {
 				exhausted = t
 			}
@@ -183,14 +184,24 @@ func rateLimitReset(headers map[string]string, now time.Time) (time.Time, string
 			earliest = t
 		}
 	}
-	switch {
-	case !exhausted.IsZero():
-		return clamp(exhausted), "anthropic-ratelimit reset"
-	case !earliest.IsZero():
-		return clamp(earliest), "anthropic-ratelimit reset"
-	default:
-		return now.Add(defaultRateLimitCooldown), "default"
+	var retry time.Time
+	if v := h["retry-after"]; v != "" {
+		if secs, err := strconv.ParseFloat(v, 64); err == nil && secs >= 0 {
+			retry = now.Add(time.Duration(min(secs, maxCooldown.Seconds()) * float64(time.Second)))
+		} else if t, err := http.ParseTime(v); err == nil {
+			retry = t
+		}
 	}
+	if !retry.IsZero() && retry.After(exhausted) {
+		return clamp(retry), "retry-after"
+	}
+	if !exhausted.IsZero() {
+		return clamp(exhausted), "anthropic-ratelimit reset"
+	}
+	if !earliest.IsZero() {
+		return clamp(earliest), "anthropic-ratelimit reset"
+	}
+	return now.Add(defaultRateLimitCooldown), "default"
 }
 
 func parseReset(v string) (time.Time, bool) {

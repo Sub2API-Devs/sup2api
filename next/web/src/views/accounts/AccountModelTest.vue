@@ -322,15 +322,17 @@ async function copyBody(r: TestRow) {
         </template>
         <template #cell-http="{ row }">
           <span v-if="row.result?.status" class="font-mono text-xs tabular-nums" :class="row.result.status >= 400 ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-dark-300'">{{ row.result.status }}</span>
-          <span v-else class="text-xs text-gray-300">—</span>
+          <span v-else class="text-xs text-gray-300" :title="row.result ? t('accounts.testNoHTTPResponse') : undefined">—</span>
         </template>
         <template #cell-detail="{ row }">
           <div class="max-w-[22rem] space-y-0.5 text-xs">
             <div v-if="row.error" class="line-clamp-2 break-all text-red-600 dark:text-red-400" :title="row.error">{{ row.error }}</div>
             <template v-else-if="row.result && !row.result.ok && (row.result.reason || row.result.message)">
+              <div v-if="row.result.error_code" class="break-all font-mono text-red-600 dark:text-red-400" data-testid="model-test-error-code">{{ t('accounts.testErrorCode') }}: {{ row.result.error_code }}</div>
+              <SHint v-if="row.result.error_source" size="xs">{{ t('accounts.testErrorSource') }}: {{ t(`accounts.testErrorSources.${row.result.error_source}`) }}</SHint>
               <div v-if="row.result.reason" class="line-clamp-2 break-all font-medium text-red-600 dark:text-red-400" :title="row.result.reason">{{ row.result.reason }}</div>
               <!-- What the upstream answered: the plugin's reason alone hides it. -->
-              <div v-if="row.result.message && row.result.message !== row.result.reason" class="line-clamp-3 break-all font-mono text-[11px] text-red-500/90 dark:text-red-300/90" :title="row.result.message" data-testid="model-test-error-body">
+              <div v-if="row.result.message && !row.result.reason?.includes(row.result.message)" class="line-clamp-3 break-all font-mono text-[11px] text-red-500/90 dark:text-red-300/90" :title="row.result.message" data-testid="model-test-error-body">
                 {{ row.result.message }}
               </div>
             </template>
@@ -360,6 +362,14 @@ async function copyBody(r: TestRow) {
               <template v-if="usageText(row.result)">
                 <dt>{{ t('accounts.testUsage') }}</dt>
                 <dd class="tabular-nums">{{ usageText(row.result) }}</dd>
+              </template>
+              <template v-if="row.result.error_code">
+                <dt>{{ t('accounts.testErrorCode') }}</dt>
+                <dd class="font-mono">{{ row.result.error_code }}</dd>
+              </template>
+              <template v-if="row.result.error_source">
+                <dt>{{ t('accounts.testErrorSource') }}</dt>
+                <dd>{{ t(`accounts.testErrorSources.${row.result.error_source}`) }}</dd>
               </template>
               <template v-if="row.result.message">
                 <dt>{{ t('accounts.message') }}</dt>

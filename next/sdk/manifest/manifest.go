@@ -294,8 +294,9 @@ type AccountType struct {
 	// (ValidModelID), at most MaxDefaultModels each; every mapping key must
 	// be in DefaultModels when that list is not empty, or the mapped model
 	// could never be scheduled.
-	DefaultModels       []string          `json:"defaultModels,omitempty"`
-	DefaultModelMapping map[string]string `json:"defaultModelMapping,omitempty"`
+	DefaultModels       []string                        `json:"defaultModels,omitempty"`
+	DefaultModelMapping map[string]string               `json:"defaultModelMapping,omitempty"`
+	CommonControls      map[string]AccountCommonControl `json:"commonControls,omitempty"`
 	// Quota declares that accounts of this type have subscription quota
 	// windows (5-hour / weekly limits and the like) the host can track
 	// (CONTRACTS §44). nil: the type has no quota (API keys); the console
@@ -309,6 +310,19 @@ type AccountType struct {
 	// plugin implements BuildRefreshRequest / ParseRefreshResponse to renew
 	// them (CONTRACTS §48). nil: the host never refreshes them.
 	Refresh *AccountRefresh `json:"refresh,omitempty"`
+}
+
+type AccountCommonControl struct {
+	Configurable *bool `json:"configurable,omitempty"`
+	Default      *bool `json:"default,omitempty"`
+}
+
+func (c AccountCommonControl) IsConfigurable() bool {
+	return c.Configurable == nil || *c.Configurable
+}
+
+func (c AccountCommonControl) DefaultValue() bool {
+	return c.Default == nil || *c.Default
 }
 
 // AccountRefresh tells the host when to renew the credentials of an
@@ -734,6 +748,7 @@ var HostPermissionRisk = map[string]string{
 	"ui.iframe":            RiskMedium,
 	"lock":                 RiskMedium, // not low: low is granted without the administrator (install/consent.go)
 	"accounts.read":        RiskMedium,
+	"accounts.auto_state":  RiskHigh,
 	"db.schema":            RiskHigh,
 	"net":                  RiskHigh,
 	"routes.public":        RiskHigh,

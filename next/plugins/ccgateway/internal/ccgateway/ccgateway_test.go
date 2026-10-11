@@ -8,6 +8,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/pluginsdktest"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"net/http"
 	"testing"
 	"time"
 )
@@ -96,6 +97,45 @@ func TestManagedRejectsCredentialOrTargetOverrides(t *testing.T) {
 		t.Fatal("runtime override accepted")
 	}
 }
+func TestQuotaLimitDeclaresTimedAutomaticDisable(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0)
+	p := &Plugin{now: func() time.Time { return now }}
+	reset := now.Add(3 * time.Hour)
+	headers := map[string]string{"retry-after": "60", "anthropic-ratelimit-unified-5h-status": "rejected", "anthropic-ratelimit-unified-5h-reset": reset.Format(time.RFC3339)}
+	in := &pluginv1.ClassifyErrorRequest{Account: &pluginv1.Account{Type: AccountTypeManaged}, Status: 429,
+		Headers: headers, BodyPrefix: []byte(`{"error":{"type":"rate_limit_error","message":"quota exhausted"}}`)}
+	out, err := p.ClassifyError(context.Background(), in)
+	if err != nil || out.GetAccountEffect() != pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE ||
+		out.GetAutomaticState().GetAction() != pluginv1.AccountAutomaticState_ACTION_DISABLE || out.GetAutomaticState().GetUntilUnix() != reset.Unix() {
+		t.Fatalf("quota reset: %v %v", out, err)
+	}
+	in.Headers = map[string]string{"anthropic-ratelimit-unified-7d-utilization": "1",
+		"anthropic-ratelimit-unified-7d-reset":       reset.Format(time.RFC3339),
+		"anthropic-ratelimit-unified-5h-utilization": "0.5",
+		"anthropic-ratelimit-unified-5h-reset":       now.Add(time.Minute).Format(time.RFC3339)}
+	out, err = p.ClassifyError(context.Background(), in)
+	if err != nil || out.GetAutomaticState().GetUntilUnix() != reset.Unix() {
+		t.Fatalf("healthy short window hid the exhausted weekly window: %v %v", out, err)
+	}
+	in.Headers = map[string]string{"retry-after": reset.UTC().Format(http.TimeFormat),
+		"anthropic-ratelimit-tokens-remaining": "0", "anthropic-ratelimit-tokens-reset": now.Add(time.Minute).Format(time.RFC3339)}
+	out, err = p.ClassifyError(context.Background(), in)
+	if err != nil || out.GetAutomaticState().GetUntilUnix() != reset.Unix() {
+		t.Fatalf("worker retry hint was shortened by the token window: %v %v", out, err)
+	}
+	in.Headers = map[string]string{"retry-after": "1"}
+	in.BodyPrefix = []byte(`{"error":{"type":"rate_limit_error","message":"Gateway concurrency limit reached"}}`)
+	out, err = p.ClassifyError(context.Background(), in)
+	if err != nil || out.GetAutomaticState() != nil || out.GetAccountEffect() != pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN || out.GetCooldownUntilUnix() != now.Add(time.Second).Unix() {
+		t.Fatalf("worker capacity: %v %v", out, err)
+	}
+	in.Status = 401
+	out, err = p.ClassifyError(context.Background(), in)
+	if err != nil || out.GetAutomaticState() != nil || out.GetAccountEffect() != pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE {
+		t.Fatalf("authentication rejection must not have timed recovery: %v %v", out, err)
+	}
+}
+
 func TestErrorsPreserveCoreFailover(t *testing.T) {
 	for _, code := range []int32{401, 403, 429, 500, 529} {
 		r, e := New().ClassifyError(context.Background(), &pluginv1.ClassifyErrorRequest{Status: code})

@@ -45,9 +45,10 @@ describe('account test helpers', () => {
   it('derives last_test from a result', () => {
     const at = new Date('2026-10-05T00:00:00Z')
     const r = (o: Partial<AccountTestResult>): AccountTestResult => ({ ok: true, status: 200, latency_ms: 10, ...o })
-    expect(lastTestOf(r({ model: 'up', message: 'hi' }), 'req', at)).toEqual({ at: at.toISOString(), ok: true, latency_ms: 10, model: 'up', message: 'hi' })
+    expect(lastTestOf(r({ model: 'up', message: 'hi' }), 'req', at)).toEqual({ at: at.toISOString(), ok: true, status: 200, latency_ms: 10, model: 'up', message: 'hi' })
     expect(lastTestOf(r({ ok: false, reason: 'rate_limited' }), 'req', at)).toMatchObject({ ok: false, model: 'req', message: 'rate_limited' })
     expect(lastTestOf(r({ requested_model: 'rq' }), '', at).model).toBe('rq')
+    expect(lastTestOf(r({ ok: false, status: 0, error_code: 'account_disabled', error_source: 'gateway' }), 'req', at)).toMatchObject({ status: 0, error_code: 'account_disabled', error_source: 'gateway' })
   })
 
   it('pretty prints JSON bodies and keeps truncated ones verbatim', () => {

@@ -1168,7 +1168,7 @@ func TestDirectory(t *testing.T) {
 	}
 
 	// AutoDisable removes it from candidates and emits one event.
-	for _, reason := range []string{"401 invalid credentials", "again"} {
+	for _, reason := range []string{"401 invalid credentials", "401 invalid credentials"} {
 		if ok, err := e.svc.AutoDisable(ctx, a2, reason); err != nil || !ok {
 			t.Fatalf("auto disable: %v %v", ok, err)
 		}
@@ -1177,7 +1177,7 @@ func TestDirectory(t *testing.T) {
 		t.Fatalf("disabled still candidate: %s", ids(refs))
 	}
 	acc, _ = e.svc.Load(ctx, a2)
-	if acc.Status != "disabled" {
+	if acc.Status != "auto_disabled" {
 		t.Fatalf("load after disable: %s", acc.Status)
 	}
 	var n int

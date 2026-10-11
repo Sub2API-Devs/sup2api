@@ -433,6 +433,28 @@ func (h *hostServer) GetAccountCredentials(ctx context.Context, in *pluginv1.Get
 	}, nil
 }
 
+func (h *hostServer) SetAccountAutomaticState(ctx context.Context, in *pluginv1.SetAccountAutomaticStateRequest) (*pluginv1.SetAccountAutomaticStateResponse, error) {
+	if err := h.require(ctx, "accounts.auto_state"); err != nil {
+		return nil, err
+	}
+	scope := h.i.Grants().Scope("accounts.auto_state")
+	if scope["types"] != "own" || len(scope) != 1 {
+		return nil, status.Error(codes.PermissionDenied, `accounts.auto_state scope must be {"types":"own"}`)
+	}
+	if in.GetAccountId() <= 0 || in.GetState() == nil {
+		return nil, status.Error(codes.InvalidArgument, "account_id and state are required")
+	}
+	controller, ok := h.i.rt.o.Accounts.(core.AccountAutomaticStateController)
+	if !ok {
+		return nil, status.Error(codes.Unavailable, "account automatic state unavailable")
+	}
+	out, err := controller.ApplyPluginAccountAutomaticState(ctx, h.key(), in.GetAccountId(), in.GetState())
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return out, nil
+}
+
 func accountSummary(a core.PluginAccountSummary) *pluginv1.AccountSummary {
 	settings := string(a.Settings)
 	if settings == "" {

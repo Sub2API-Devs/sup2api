@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -16,6 +17,7 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 )
 
 // anthropicUsage mirrors the JSON usage rules of the built-in anthropic
@@ -170,6 +172,47 @@ func TestAccountTestResultDetails(t *testing.T) {
 		len(body) < maxTestBodyOut-8 {
 		t.Fatalf("truncation: %d bytes, valid=%v", len(body), utf8.ValidString(body))
 	}
+}
+
+func TestAccountTestPreservesErrorOriginAndCode(t *testing.T) {
+	t.Run("core blocks before upstream", func(t *testing.T) {
+		e := setup(t)
+		var calls atomic.Int32
+		e.withCCGateway(true, func(w http.ResponseWriter, _ *http.Request) { calls.Add(1); w.WriteHeader(500) })
+		e.plat.testURL = ccgateway.VirtualURL
+		e.plat.classify = &pluginv1.ClassifyErrorResponse{Reason: "transport error: The account is disabled or deleted."}
+		id := e.mkRawAccount("ccgateway", "managed", "disabled", "unused", false)
+		_, raw := e.doRaw(e.uid, "POST", "/accounts/"+itoa(id)+"/test", nil)
+		d := gjson.GetBytes(raw, "data")
+		if d.Get("ok").Bool() || d.Get("status").Int() != 0 || d.Get("error_code").String() != "account_disabled" || d.Get("error_source").String() != "gateway" || calls.Load() != 0 {
+			t.Fatalf("blocked diagnostic: %s calls=%d", raw, calls.Load())
+		}
+		_, raw = e.doRaw(e.uid, "GET", "/accounts/"+itoa(id), nil)
+		last := gjson.GetBytes(raw, "data.last_test")
+		if !last.Get("status").Exists() || last.Get("status").Int() != 0 || last.Get("error_code").String() != "account_disabled" || last.Get("error_source").String() != "gateway" || strings.Count(last.Get("message").String(), "The account is disabled or deleted.") != 1 {
+			t.Fatalf("persisted diagnostic: %s", raw)
+		}
+	})
+	t.Run("actual upstream 401", func(t *testing.T) {
+		e := setup(t)
+		up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(401)
+			_, _ = w.Write([]byte(`{"error":{"type":"authentication_error","code":"token_revoked","message":"token revoked"}}`))
+		}))
+		defer up.Close()
+		e.plat.testURL = up.URL + "/v1/messages"
+		id := e.mkAccount("sk-good-key-123")
+		_, raw := e.doRaw(e.uid, "POST", "/accounts/"+itoa(id)+"/test", nil)
+		d := gjson.GetBytes(raw, "data")
+		if d.Get("ok").Bool() || d.Get("status").Int() != 401 || d.Get("error_code").String() != "token_revoked" || d.Get("error_source").String() != "response" {
+			t.Fatalf("upstream diagnostic: %s", raw)
+		}
+		_, raw = e.doRaw(e.uid, "GET", "/accounts/"+itoa(id), nil)
+		if gjson.GetBytes(raw, "data.last_test.status").Int() != 401 || gjson.GetBytes(raw, "data.last_test.error_code").String() != "token_revoked" {
+			t.Fatalf("persisted upstream diagnostic: %s", raw)
+		}
+	})
 }
 
 // TestAccountTestFailureIsClassifiedButHarmless checks that a failing test
