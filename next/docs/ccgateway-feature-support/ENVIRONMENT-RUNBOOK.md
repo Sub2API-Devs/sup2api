@@ -1,5 +1,15 @@
 # CCGateway 环境与操作指南
 
+> **2026-10-11 14:55（北京时间）线上版本：** 核心 **v0.1.113**（源码 `a12d68ead`，manifest `1d8c3623438ccb9f640549a5fe0e0c022817c3e40aa5584bd59808d614e36e1a`）。本次先推送 Git，OVH 主仓库拉取同一提交，再使用仓库现有 Dockerfile 完整构建；没有使用额外的 Dockerfile。
+> - **Host API 5 与公共异步观测上线**：核心成功 RPM/TPM 和获授权插件共用观测、窗口聚合与修订去重；当前并发继续复用核心槽位。账号统计后端与 SDK 已上线，账号页面尚未接入。
+> - **外壳先逐节点更新**（2→3→4→1）：`sup2api-gateway:local` 与 `sup2api-gateway:0.1.113-hostapi5` 均指向 `sha256:14b54136a87ad47d5cfea8592739e53613a04747d87c86d3d2ab91f8fe4487b3`。仍使用 `/home/debian/sup2api-managed/compose.yml`，数据卷、端口、`cap_drop: ALL` 和 `no-new-privileges` 不变。校验挂载时按目标路径排序，不能把 Docker 返回顺序变化误判为配置变化。
+> - **托管核心升级完成**：计划 `7d1583367c0f3ecf9a91c98926e2bd87` 为 `completed`；四节点均为 local/ready，核心二进制 SHA-256 都是 `25208ad23586696d1b890d12527d2f80ab417095451221488f7fe8fac54aae57`。
+> - **0046 历史兼容修复**：不改原 SQL、已应用校验和或 schema contract，仅核心执行器对精确历史文件增加幂等执行兼容。共享库中该记录的校验和和应用时间未变。迁移、store、app 在隔离 PostgreSQL 16.14 上的普通及 `-race` 测试通过。
+> - **只读上线验收**：四入口统计设置和账号统计接口均 200，默认窗口 60 秒，从 warming 转为 ok；各节点读取相同的共享起始时间。验收窗口所查账号无成功请求，未主动发起收费模型请求，不能将此当作真实模型采集验收。
+> - 内置插件按现有构建流程重新打包；已有同版本插件仍由核心保留，不强行覆盖。ccgateway 仍为 0.1.36，本次未推送或替换账号 worker、控制器镜像。
+> - 恢复材料：外壳旧镜像保留为 `sup2api-gateway:pre-0.1.113-a12d68ead`；数据库备份 `~/sup2api-managed/backups/pg-before-0.1.113-a12d68ead.dump`；升级日志 `~/sup2api-managed/upgrade-20261011T065459.log`。Host API 4→5 不支持自动跨协议 baseline recovery，不能把保留旧制品等同于可直接自动回退。
+> - 本轮弃用的临时 Dockerfile、源码压缩包、远端测试源码副本和临时构建目录已清理；发布包、正式 stage 和备份按恢复用途保留。
+
 > **2026-10-11 11:50（北京时间）线上版本：** 核心 **v0.1.112**（源码 `2fbe15cfc`，manifest `7c9f590b86aa…`），ccgateway 仍是 **0.1.36**，worker 和控制器都没有变化。CONTRACTS §49.18。
 > - **模型请求不再逐次读配置、问控制器**：配置、账号修订号、运行环境的地址和 Worker key 都缓存在每个节点内存里，隧道连接复用。改配置、账号、代理时本节点清空，并通过 Redis 总线通知其他节点；另有 30 秒过期兜底。
 > - **定时核对改为每 60 秒一次**（原来 3 秒），变更时已立即同步。
