@@ -3,7 +3,8 @@
 ARG GO_IMAGE=golang:1.27-trixie
 ARG RUNTIME_IMAGE=debian:trixie-slim
 FROM ${GO_IMAGE} AS build
-ENV CGO_ENABLED=0 GOWORK=off
+ARG BUILD_MAX_PROCS=2
+ENV CGO_ENABLED=0 GOWORK=off GOMAXPROCS=${BUILD_MAX_PROCS} GOFLAGS=-p=${BUILD_MAX_PROCS}
 WORKDIR /src
 COPY runtime-contract ./runtime-contract
 COPY gateway ./gateway

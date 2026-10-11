@@ -15,7 +15,8 @@ COPY . ..
 # 构建二进制文件
 ARG WORKER_VERSION=dev
 ARG SOURCE_REVISION=unknown
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
+ARG BUILD_MAX_PROCS=2
+RUN CGO_ENABLED=0 GOOS=linux GOMAXPROCS=${BUILD_MAX_PROCS} go build -p ${BUILD_MAX_PROCS} -a -installsuffix cgo \
     -ldflags="-w -s -X ccgateway/worker/internal/server.Version=${WORKER_VERSION} -X ccgateway/worker/internal/server.Revision=${SOURCE_REVISION}" \
     -o /tmp/worker ./cmd/worker
 
