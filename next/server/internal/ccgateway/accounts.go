@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/environment"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -54,6 +55,20 @@ type accountDesired struct {
 	Key string `json:"-"`
 	// AccountID is 0 for a draft that is not adopted yet.
 	AccountID int64 `json:"-"`
+}
+
+func (d *accountDesired) applyEnvironment() error {
+	if d.Locale != "" {
+		_, posix, ok := environment.Locale(d.Locale)
+		if !ok {
+			return errors.New("unsupported container locale")
+		}
+		d.Auth["locale"] = posix
+	}
+	if d.Timezone != "" {
+		d.Auth["timezone"] = d.Timezone
+	}
+	return nil
 }
 
 // proxyDesired decrypts the proxy password and builds the controller's
@@ -128,6 +143,9 @@ func (s *Service) desiredIn(ctx context.Context, q store.Querier, id int64, cred
 				return d, errors.New("invalid account credentials")
 			}
 			d.Auth = map[string]string{"mode": "api_key", "api_key": auth["api_key"], "base_url": auth["base_url"]}
+		}
+		if err := d.applyEnvironment(); err != nil {
+			return d, err
 		}
 		if d.Proxy, err = s.proxyDesired(spec, password); err != nil {
 			return d, err

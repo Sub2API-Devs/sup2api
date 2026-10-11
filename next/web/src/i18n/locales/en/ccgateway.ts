@@ -386,7 +386,13 @@ export default {
       connectFirst: 'No controller is connected: enter the controller connection or install a controller below, then save.'
     },
   locale: 'Container locale',
-  localeHint: 'Language and region (e.g., en-US, zh-CN). Leave blank to use the proxy location or container default.',
+  localeHint: 'Sorted A–Z by locale code. Search by code or language name. You can change the proxy-based suggestion manually.',
   timezone: 'Container timezone',
-  timezoneHint: 'IANA timezone name (e.g., America/New_York, Asia/Shanghai). Leave blank to use the proxy location or container default.',
+  timezoneHint: 'Sorted A–Z by timezone identifier. Search by region or city. Prefilled from the proxy exit IP timezone.',
+  environmentDefault: 'Use container default',
+  environmentNoResults: 'No matching options',
+  environmentLoading: 'Looking up the proxy exit IP location. Manual changes will be available when this finishes…',
+  environmentFilled: 'Prefilled from proxy exit IP ({ip}). You can change these values; selecting another proxy fills them again.',
+  environmentFailed: 'Could not fully resolve the proxy location. Select the locale and timezone manually or keep container defaults.',
+  environmentProxyURL: 'This pasted proxy has not been saved. Select values manually, or save it in proxy management and select it to look up its location.',
 }

@@ -180,6 +180,28 @@ func TestAPIKeyDesiredRotation(t *testing.T) {
 	}
 }
 
+func TestRuntimeEnvironment(t *testing.T) {
+	for _, mode := range []string{"oauth", "api_key"} {
+		t.Run(mode, func(t *testing.T) {
+			d := accountDesired{Locale: "ja-JP", Timezone: "Asia/Tokyo", Auth: map[string]string{"mode": mode}}
+			if err := d.applyEnvironment(); err != nil {
+				t.Fatal(err)
+			}
+			if d.Auth["locale"] != "ja_JP.UTF-8" || d.Auth["timezone"] != "Asia/Tokyo" || d.Auth["mode"] != mode {
+				t.Fatalf("runtime environment = %v", d.Auth)
+			}
+			defaults := accountDesired{Auth: map[string]string{"mode": mode}}
+			if err := defaults.applyEnvironment(); err != nil || len(defaults.Auth) != 1 {
+				t.Fatalf("container defaults overridden: %v", defaults.Auth)
+			}
+		})
+	}
+	invalid := accountDesired{Locale: "en-AQ", Auth: map[string]string{"mode": "oauth"}}
+	if err := invalid.applyEnvironment(); err == nil {
+		t.Fatal("unsupported runtime locale accepted")
+	}
+}
+
 func TestAccountLocaleAndTimezone(t *testing.T) {
 	db := testutil.DB(t)
 	ctx := context.Background()
@@ -202,6 +224,9 @@ func TestAccountLocaleAndTimezone(t *testing.T) {
 	}
 	if d.Timezone != "Asia/Shanghai" {
 		t.Fatalf("expected timezone Asia/Shanghai, got %s", d.Timezone)
+	}
+	if d.Auth["locale"] != "zh_CN.UTF-8" || d.Auth["timezone"] != d.Timezone {
+		t.Fatalf("container authentication is missing environment settings: %v", d.Auth)
 	}
 	// Test empty settings
 	if _, err := db.Pool.Exec(ctx, `UPDATE accounts SET settings='{}'::jsonb WHERE id=$1`, id); err != nil {

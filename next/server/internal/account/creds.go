@@ -245,6 +245,14 @@ func (s *Service) prepare(ctx context.Context, bt core.AccountTypeBinding, raw j
 	if old != nil {
 		b = unmask(b, old, bt.Type.SensitiveFields)
 	}
+	environmentKeys := containerSettingKeys(bt.Plugin.Key)
+	if len(environmentKeys) > 0 {
+		all, _ := parseObject(b)
+		for _, key := range environmentKeys {
+			delete(all, key)
+		}
+		b = mustJSON(all)
+	}
 	if err := s.validateSchema(ctx, bt, b); err != nil {
 		return nil, err
 	}
@@ -298,6 +306,18 @@ func (s *Service) prepare(ctx context.Context, bt core.AccountTypeBinding, raw j
 	enc, err := s.d.Cipher.Encrypt(secJSON, aad(bt.Plugin.Key))
 	if err != nil {
 		return nil, err
+	}
+	if len(environmentKeys) > 0 {
+		previous, err := parseObject(old)
+		if err != nil {
+			return nil, err
+		}
+		for _, key := range environmentKeys {
+			if value, ok := previous[key]; ok {
+				st[key] = value
+			}
+		}
+		stJSON = mustJSON(st)
 	}
 	return &prepared{enc: enc, settings: stJSON, secret: secJSON}, nil
 }

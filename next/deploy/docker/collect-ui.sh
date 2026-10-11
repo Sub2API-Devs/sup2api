@@ -8,6 +8,9 @@ DST=$2
 mkdir -p "$DST/server/web" "$DST/deploy/docker"
 cp -a "$CTX/deploy/docker/build-ui.sh" "$DST/deploy/docker/"
 cp -a "$CTX/server/web/dist" "$DST/server/web/dist"
+locales=plugins/ccgateway/companions/contracts/environment/locales.json
+mkdir -p "$DST/$(dirname "$locales")"
+cp -a "$CTX/$locales" "$DST/$locales"
 if [ -d "$CTX/web" ]; then
   cp -a "$CTX/web" "$DST/web"
 fi

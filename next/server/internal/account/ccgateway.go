@@ -6,7 +6,11 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"slices"
+	"strings"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/environment"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -22,6 +26,55 @@ const connectMaxBody = 512 << 10
 // ccgNotReady: the shared CCGateway is not configured or not authorized.
 var ccgNotReady = core.ErrUnavailable.WithMessage("Configure and authorize CCGateway first.").
 	WithDetails(map[string]any{"reason": "not_configured"})
+
+func containerSettingKeys(plugin string) []string {
+	if plugin == "ccgateway" {
+		return []string{"locale", "timezone"}
+	}
+	return nil
+}
+
+func mergeContainerSettings(ctx context.Context, plugin string, base, patch []byte) ([]byte, error) {
+	if len(patch) == 0 {
+		return base, nil
+	}
+	invalid := func(field string) error {
+		return core.InvalidFields(core.FieldError{Field: field, Code: "invalid", Message: t(ctx, "Invalid container environment setting", "容器环境设置无效")})
+	}
+	keys := containerSettingKeys(plugin)
+	var changes map[string]string
+	if len(keys) == 0 || json.Unmarshal(patch, &changes) != nil || changes == nil {
+		return nil, invalid("settings")
+	}
+	settings, err := parseObject(base)
+	if err != nil {
+		return nil, err
+	}
+	for key, value := range changes {
+		if !slices.Contains(keys, key) {
+			return nil, invalid("settings")
+		}
+		value = strings.TrimSpace(value)
+		if value == "" {
+			delete(settings, key)
+			continue
+		}
+		switch key {
+		case "locale":
+			canonical, _, ok := environment.Locale(value)
+			if !ok {
+				return nil, invalid("settings.locale")
+			}
+			value = canonical
+		case "timezone":
+			if _, err := time.LoadLocation(value); err != nil || value == "Local" || len(value) > 128 {
+				return nil, invalid("settings.timezone")
+			}
+		}
+		settings[key], _ = json.Marshal(value)
+	}
+	return mustJSON(settings), nil
+}
 
 // kickCCGateway prepares a CCGateway account's runtime (container + egress)
 // right after it is created or changed instead of waiting for the next

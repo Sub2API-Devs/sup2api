@@ -500,6 +500,7 @@ type input struct {
 	RPMLimit       *int               `json:"rpm_limit"`
 	TPMLimit       *int64             `json:"tpm_limit"`
 	Credentials    json.RawMessage    `json:"credentials"`
+	Settings       json.RawMessage    `json:"settings"`
 	// CCGatewayRuntime is the draft runtime key a new ccgateway/managed
 	// account adopts (CONTRACTS §49.10); create only. Blank means absent.
 	CCGatewayRuntime *string `json:"ccgateway_runtime"`
@@ -536,6 +537,7 @@ func (in *input) changedFields() []string {
 	set("rpm_limit", in.RPMLimit != nil)
 	set("tpm_limit", in.TPMLimit != nil)
 	set("credentials", in.hasCredentials())
+	set("settings", len(in.Settings) > 0)
 	return out
 }
 
@@ -893,6 +895,10 @@ func (s *Service) create(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
+	if p.settings, err = mergeContainerSettings(ctx, bt.Plugin.Key, p.settings, in.Settings); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
 	scope := core.OwnerScope(ctx, "account:create")
 	if err := s.checkOwnLevelRestrictions(ctx, scope, &in, len(bt.Type.GuardedSettings) == 0); err != nil {
 		httpapi.Fail(c, err)
@@ -1096,6 +1102,18 @@ func (s *Service) update(c *gin.Context) {
 		if p != nil {
 			enc = p.enc
 			st := string(p.settings)
+			settings = &st
+		}
+		if len(in.Settings) > 0 {
+			base := locked.Settings
+			if p != nil {
+				base = p.settings
+			}
+			merged, err := mergeContainerSettings(ctx, cur.PluginKey, base, in.Settings)
+			if err != nil {
+				return err
+			}
+			st := string(merged)
 			settings = &st
 		}
 		var reason *string

@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCheckbox, SchemaForm, SField, SHint, SIcon, SInput, SLink, SModal, SSpinner, SSwitch, STextarea, toast } from '@sub2api/ui'
+import { SBadge, SButton, SCheckbox, SchemaForm, SField, SHint, SIcon, SInput, SLink, SModal, SSelect, SSpinner, SSwitch, STextarea, toast } from '@sub2api/ui'
 import type { Account, AccountType, Price } from '@/api/types'
 import { schemaWidgets } from '@/components/schema/widgets'
 import PluginIframe from '@/components/plugin/PluginIframe.vue'
@@ -14,6 +14,8 @@ import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
 import { lt } from '@/i18n'
 import { accountControl, sameCreationGroup } from './accountTypeChoices'
 import { shouldPrefillOnEdit } from './modelDefaults'
+import { containerLocales, containerTimezones, environmentOptions } from './containerEnvironment'
+import { useContainerEnvironment } from './useContainerEnvironment'
 import EditorCard from './EditorCard.vue'
 import ModelMappingEditor from './ModelMappingEditor.vue'
 import ModelListEditor from './ModelListEditor.vue'
@@ -39,7 +41,7 @@ import { looksLikeProxyURL, parseProxyURL } from '@/utils/proxyUrl'
 // the swap is committed by itself and reported with `reauthorized`.
 const props = defineProps<{ accountType: AccountType | null; accountTypeOptions?: AccountType[]; account?: Account | null }>()
 const emit = defineEmits<{ (e: 'change-type', at: AccountType): void; (e: 'saved', a: Account): void; (e: 'cancel'): void; (e: 'back'): void; (e: 'test', a: Account): void; (e: 'reauthorized', a: Account): void }>()
-const { t } = useI18n()
+const { t, locale: displayLocale } = useI18n()
 const plugins = usePluginStore()
 const auth = useAuthStore()
 const own = useOwnership()
@@ -107,7 +109,7 @@ const proxyFieldEl = ref<HTMLElement>()
 /** The authorization panel asks for a proxy: show and focus the proxy field. */
 async function focusProxy() {
   activeSection.value = 'connection'
-  proxyMode.value = 'existing'
+  setProxyMode('existing')
   await nextTick()
   proxyFieldEl.value?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   proxyFieldEl.value?.querySelector<HTMLElement>('select, input')?.focus()
@@ -134,10 +136,9 @@ const basic = reactive({
 })
 
 // CCGateway-specific settings (locale and timezone)
-const ccgSettings = reactive({
-  locale: '',
-  timezone: '',
-})
+const { settings: ccgSettings, locationLoading, locationStatus, locationIP, resetEnvironment, prefillEnvironment } = useContainerEnvironment()
+const localeOptions = computed(() => environmentOptions(containerLocales, ccgSettings.locale, displayLocale.value))
+const timezoneOptions = computed(() => environmentOptions(containerTimezones, ccgSettings.timezone))
 
 // ---------------------------------------------------------------- proxy: pick an existing one | paste a URL (CONTRACTS §21.4)
 // "url" sends proxy_url instead of proxy_id; the server parses it, reuses a
@@ -163,7 +164,12 @@ const proxyUrlHint = computed(() => {
   if (r.error === 'extra') return t('accounts.proxyUrlExtraHint')
   return t('accounts.proxyUrlShapeHint')
 })
+function setProxy(value: number | null) {
+  basic.proxy_id = value
+  if (needsProxy.value) void prefillEnvironment(value)
+}
 function setProxyMode(m: string) {
+  if (proxyMode.value !== m && needsProxy.value) void prefillEnvironment(m === 'existing' ? basic.proxy_id : null)
   proxyMode.value = m as ProxyMode
   if (errors.value.proxy_url || errors.value.proxy_id) {
     const { proxy_url: _u, proxy_id: _i, ...rest } = errors.value
@@ -171,7 +177,7 @@ function setProxyMode(m: string) {
   }
 }
 watch(ccgDraft, (v) => {
-  if (v) proxyMode.value = 'existing'
+  if (v) setProxyMode('existing')
 })
 const models = ref<string[]>([])
 const mapping = ref<Record<string, string>>({})
@@ -224,7 +230,7 @@ const limitFields = computed<Array<{ key: LimitKey; label: string; hint: string;
 ])
 /** Sections holding an error, marked in the navigation. */
 const sectionErrors = computed<Record<EditorSection, boolean>>(() => ({
-  connection: ['name', 'group_ids', 'proxy_id', 'proxy_url'].some((k) => errors.value[k]) || Object.keys(credErrors.value).length > 0,
+  connection: ['name', 'group_ids', 'proxy_id', 'proxy_url', 'settings', 'settings.locale', 'settings.timezone'].some((k) => errors.value[k]) || Object.keys(credErrors.value).length > 0,
   models: !!(modelsError.value || serverModelsError.value || mappingError.value || serverMappingError.value),
   scheduling: SCHEDULING_FIELDS.some((k) => errors.value[k])
 }))
@@ -566,11 +572,7 @@ watch(
       basic.rpm_limit = a?.rpm_limit ?? 0
       basic.tpm_limit = a?.tpm_limit ?? 0
       // Load CCGateway-specific settings
-      if (needsProxy.value) {
-        const settings = (a as any)?.settings || {}
-        ccgSettings.locale = settings.locale || ''
-        ccgSettings.timezone = settings.timezone || ''
-      }
+      resetEnvironment(a?.settings)
       if (a) {
         models.value = [...(a.models || [])]
         mapping.value = { ...(a.model_mapping || {}) }
@@ -646,6 +648,7 @@ async function collectCredentials(): Promise<Record<string, any> | null> {
 }
 
 async function save(event: Event) {
+  if (locationLoading.value) return
   // Check native constraints explicitly so the first invalid field can be
   // revealed before the browser tries to focus it in a hidden pane.
   const form = event.currentTarget as HTMLFormElement
@@ -706,10 +709,7 @@ async function save(event: Event) {
   if (autoDisableEnabled.value === true && autoDisableControl.value.configurable) body.auto_disable = basic.auto_disable
   // Add CCGateway-specific settings (locale and timezone)
   if (needsProxy.value) {
-    const settings: Record<string, any> = {}
-    if (ccgSettings.locale.trim()) settings.locale = ccgSettings.locale.trim()
-    if (ccgSettings.timezone.trim()) settings.timezone = ccgSettings.timezone.trim()
-    if (Object.keys(settings).length > 0) body.settings = settings
+    body.settings = { locale: ccgSettings.locale, timezone: ccgSettings.timezone }
   }
   // Exactly one of proxy_id / proxy_url (CONTRACTS §21.4: both is a conflict).
   const withProxyUrl = !!proxyUrlToSend.value
@@ -755,7 +755,7 @@ async function save(event: Event) {
     }
     errors.value = base
     credErrors.value = cred
-    if (Object.keys(cred).length || ['name', 'group_ids', 'proxy_id', 'proxy_url'].some(k => k in base)) activeSection.value = 'connection'
+    if (Object.keys(cred).length || ['name', 'group_ids', 'proxy_id', 'proxy_url', 'settings', 'settings.locale', 'settings.timezone'].some(k => k in base)) activeSection.value = 'connection'
     else if (Object.keys(base).some(k => k === 'models' || k.startsWith('models.') || k.startsWith('models[') || k.startsWith('model_mapping'))) activeSection.value = 'models'
     else if (Object.keys(base).length) activeSection.value = 'scheduling'
     if (mode.value === 'iframe' && Object.keys(cred).length) iframe.value?.setErrors(cred)
@@ -846,7 +846,7 @@ async function save(event: Event) {
                     </button>
                   </div>
                 </div>
-                <ProxyPicker v-if="proxyMode === 'existing'" v-model="basic.proxy_id" />
+                <ProxyPicker v-if="proxyMode === 'existing'" :model-value="basic.proxy_id" @update:model-value="setProxy" />
                 <SInput
                   v-else
                   v-model="proxyUrl"
@@ -865,12 +865,18 @@ async function save(event: Event) {
               </div>
               <!-- CCGateway locale and timezone settings -->
               <template v-if="needsProxy">
-                <SField :label="t('ccgateway.locale')" :hint="t('ccgateway.localeHint')">
-                  <SInput v-model="ccgSettings.locale" placeholder="en-US" :maxlength="10" />
+                <SField :label="t('ccgateway.locale')" :hint="t('ccgateway.localeHint')" :error="errors['settings.locale'] || errors.settings">
+                  <SSelect :model-value="ccgSettings.locale || null" :options="localeOptions" searchable :aria-label="t('ccgateway.locale')" :placeholder="t('ccgateway.environmentDefault')" :no-results="t('ccgateway.environmentNoResults')" :disabled="locationLoading" data-testid="container-locale" @update:model-value="ccgSettings.locale = String($event ?? '')" />
                 </SField>
-                <SField :label="t('ccgateway.timezone')" :hint="t('ccgateway.timezoneHint')">
-                  <SInput v-model="ccgSettings.timezone" placeholder="America/New_York" :maxlength="50" />
+                <SField :label="t('ccgateway.timezone')" :hint="t('ccgateway.timezoneHint')" :error="errors['settings.timezone']">
+                  <SSelect :model-value="ccgSettings.timezone || null" :options="timezoneOptions" searchable :aria-label="t('ccgateway.timezone')" :placeholder="t('ccgateway.environmentDefault')" :no-results="t('ccgateway.environmentNoResults')" :disabled="locationLoading" data-testid="container-timezone" @update:model-value="ccgSettings.timezone = String($event ?? '')" />
                 </SField>
+                <p class="input-hint md:col-span-2" role="status" data-testid="container-location-status">
+                  <template v-if="locationLoading">{{ t('ccgateway.environmentLoading') }}</template>
+                  <template v-else-if="locationStatus === 'filled'">{{ t('ccgateway.environmentFilled', { ip: locationIP }) }}</template>
+                  <template v-else-if="locationStatus === 'failed'">{{ t('ccgateway.environmentFailed') }}</template>
+                  <template v-else-if="proxyMode === 'url'">{{ t('ccgateway.environmentProxyURL') }}</template>
+                </p>
               </template>
             </div>
           </EditorCard>
@@ -1136,7 +1142,7 @@ async function save(event: Event) {
         <SLink as="button" class="text-xs" @click="showCcgAuth">{{ t('ccgateway.accountAuth.saveBlockedFix') }}</SLink>
       </span>
       <SButton @click="emit('cancel')">{{ t('common.cancel') }}</SButton>
-      <SButton type="submit" variant="primary" :loading="saving" :disabled="formLoading || !!formError || ccgSaveBlocked" data-testid="account-save">{{ editing ? t('common.save') : t('accounts.editorUi.create') }}</SButton>
+      <SButton type="submit" variant="primary" :loading="saving" :disabled="formLoading || !!formError || ccgSaveBlocked || locationLoading" data-testid="account-save">{{ editing ? t('common.save') : t('accounts.editorUi.create') }}</SButton>
     </div>
   </form>
 </template>

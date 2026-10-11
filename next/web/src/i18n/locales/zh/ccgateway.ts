@@ -386,7 +386,13 @@ export default {
       connectFirst: '尚未连接控制器：请先填写控制器连接信息，或在下方安装控制器，再保存配置。'
     },
   locale: '容器语言环境',
-  localeHint: '语言和地区(例如 en-US、zh-CN)。留空则使用代理位置或容器默认值。',
+  localeHint: '按语言代码 A–Z 排序，可输入代码或语言名称搜索。根据代理地区预填后可手动修改。',
   timezone: '容器时区',
-  timezoneHint: '时区标识(例如 America/New_York、Asia/Shanghai)。留空则使用代理位置或容器默认值。',
+  timezoneHint: '按时区标识 A–Z 排序，可输入地区或城市搜索。优先使用代理出口 IP 对应的时区。',
+  environmentDefault: '使用容器默认值',
+  environmentNoResults: '没有匹配的选项',
+  environmentLoading: '正在查询代理出口 IP 地区，完成后可手动修改语言和时区…',
+  environmentFilled: '已根据代理出口 IP（{ip}）预填，可手动修改；更换代理将重新预填。',
+  environmentFailed: '未能完整获取代理地区信息，请手动选择语言和时区，或保留容器默认值。',
+  environmentProxyURL: '粘贴的代理尚未保存，暂不自动查询地区。请手动选择，或先在代理管理中保存后选择该代理。',
 }

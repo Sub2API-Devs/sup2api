@@ -25,9 +25,11 @@ FROM node:22-bookworm-slim
 
 # 安装 Claude Code CLI
 ARG CLAUDE_VERSION=2.1.292
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl locales tzdata \
     && rm -rf /var/lib/apt/lists/* \
     && npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION}
+COPY contracts/environment/locales.json contracts/environment/install-locales.cjs /tmp/container-locales/
+RUN node /tmp/container-locales/install-locales.cjs
 
 # 创建非 root 用户和工作目录
 RUN mkdir -p /work/config /work/data /work/history && \

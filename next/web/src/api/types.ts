@@ -288,6 +288,7 @@ export interface Account {
   status_reason?: string
   auto_disabled_until?: string | null
   credentials?: Record<string, unknown>
+  settings?: { locale?: string; timezone?: string; [key: string]: unknown }
   in_use?: number
   cooldown_until?: string | null
   cooldown_reason?: string // assumed

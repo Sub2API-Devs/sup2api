@@ -107,6 +107,7 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.PermAny("GET", "/proxies", s.list, "proxy:read", "proxy:own:read")
 	r.PermAny("POST", "/proxies", s.create, "proxy:manage", "proxy:own:manage")
 	r.PermAny("GET", "/proxies/:id", s.get, "proxy:read", "proxy:own:read")
+	r.PermAny("GET", "/proxies/:id/location", s.location, "proxy:read", "proxy:own:read")
 	r.PermAny("PATCH", "/proxies/:id", s.update, "proxy:manage", "proxy:own:manage")
 	r.PermAny("DELETE", "/proxies/:id", s.delete, "proxy:manage", "proxy:own:manage")
 	r.PermAny("POST", "/proxies/:id/test", s.test, "proxy:manage", "proxy:own:manage")
