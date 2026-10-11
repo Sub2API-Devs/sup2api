@@ -2209,7 +2209,7 @@ SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` �
 
 ## 34. 主节点优先升级与 Redis 节点密钥（2026-10-02）
 
-依据 [多节点同步规约](MULTINODE-SYNC-PROTOCOL.md)；验收与未覆盖范围见 [验证记录](audits/2026-10-02/MULTINODE-VALIDATION.md)。四个协议号互相独立：gateway/core 控制协议 2（`runtime-contract.Protocol`）、业务集群协议 1、任务协议 1、Host API 4；SDK `protocol.HostAPIVersion` 必须等于 `runtime-contract.HostAPIVersion`，有测试约束。
+依据 [多节点同步规约](MULTINODE-SYNC-PROTOCOL.md)；验收与未覆盖范围见 [验证记录](audits/2026-10-02/MULTINODE-VALIDATION.md)。四个协议号互相独立：gateway/core 控制协议 2（`runtime-contract.Protocol`）、业务集群协议 1、任务协议 1、Host API 5；SDK `protocol.HostAPIVersion` 必须等于 `runtime-contract.HostAPIVersion`，有测试约束。
 
 **节点身份。** 每节点一份可复用密钥：配置 `peer_auth_key`，或非空的 `SUB2API_PEER_AUTH_KEY` 覆盖它（空值视为未设置）；都没有时用 32 字节随机值。Redis 键 `s2a:peer:{cluster}:node:<node>` 保存 cluster/node/gateway boot/peer 协议/密钥/启用状态，TTL 30 秒、每 10 秒用 Lua 比较后续期，续期不换密钥、不能创建缺失键。登记缺失时所属网关在登记锁内复核 PG（启用、当前 boot、无其他活实例）后重建：配置模式复用原值，自动模式生成新值；不重启核心、不清除 PG 就绪。网关启动时登记失败不退出，保持维护态并重试。密钥不进入核心及插件环境，也不发往发布源。
 
@@ -2463,6 +2463,8 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 - 带数据回填的用 `DO $$ … IF NOT EXISTS … $$` 守卫，回填只发生一次。
 
 迁移按文件在一个事务里执行，所以不能用 `CREATE INDEX CONCURRENTLY`、`VACUUM` 这类不能放进事务的语句。`migrations_test.go` 检查这两条规则：不需要数据库；文件编号也不能重复。`migrations_db_test.go` 在真实 PG 上把 0026 起的迁移各跑两遍。
+
+已部署的 `0046_proxy_real_ip.sql` 遗漏了 `ADD COLUMN IF NOT EXISTS`，不能通过修改历史文件或数据库校验和来修复，否则会破坏托管升级的 schema contract。核心 `CoreTracker` 仅在文件名和原始 SHA-256 `1b0719bb3a07caa74ca6ad5d92e8c605e9c4f0ebea3097b96a1226ef99c4897f` 同时匹配时，把执行语句中的两个 `ADD COLUMN` 转为 `ADD COLUMN IF NOT EXISTS`。校验、迁移记录和 schema contract 仍使用原文件字节；该兼容不作用于插件、其他文件或其他校验和。直接手工执行旧 SQL 不受此兼容保护；新迁移仍必须原生幂等。
 
 ### 43.8 Landlock 文件系统限制（默认关闭）
 
@@ -3829,3 +3831,32 @@ images/gateway.tar.gz      # Caddy 网关
 - `manifest.CoreGatewayPrefixes`：`/v1/files`、`/v1/skills`（核心资源 API，`gateway/resource_http.go` 在插件端点之前处理并改用同一份定义）。插件端点可能匹配它们时 `invalid_path`（含 `/v1/:x` 这类参数段）。
 - `manifest.ConsoleSegments`：控制台静态文件与页面根（`assets`、`index.html`、`favicon.svg`、`login`、`dashboard`、`plugins`、`p`、`system` 等）。GET/HEAD 端点的首段可能匹配它们时 `invalid_path`（其他方法不经过控制台，不限制）。`webui` 测试 `TestConsoleSegmentsCoverConsole` 从 `web/src/router` 与 `web/public` 推出首段，新页面没登记就失败。
 - P1-7（DB 角色隔离不降级）已随 P0 完成，见 §54。
+
+## 56. 公共请求观测与账号窗口统计
+
+### 56.1 同一条采集与聚合链路
+
+- 网关只发布 `RequestObservation`；核心的 `account.StatsConsumer` 与插件 `pluginsdk.Observer` 都消费 `OnObservations(ObservationBatch)`，返回 `ObservationContribution`，经同一校验、异步队列与 Redis 窗口存储聚合。内置消费者不另走账号专用写入入口。
+- `gateway.observe.v1` 是可选能力；插件在 `observations.events` 声明事件，在 `observations.metrics` 声明最多 16 个指标名。指标名匹配 `[a-z][a-z0-9_]{0,47}`。
+- 必须获得高风险权限 `gateway.observe`，scope 明确为 `{"types":"own"}` 或 `{"types":"all"}`。`own` 指插件声明的账号类型，不是账号的创建者。注册时过滤权限，实际 RPC 前再次核验当前授权；撤销或数据库授权校验失败均停止投递。
+- 观测字段只含核心确定的请求、尝试、账号身份和模型/协议/时间/结果/已接受 Token 数，不含请求正文、响应正文、凭证、请求头、用户身份或 IP。
+- 每个消费者有独立有界队列；请求线程不等待插件或统计 Redis。RPC 每批至多 64 条、超时 2 秒。慢插件不阻塞内置消费者。此通道是尽力交付，不使用持久 outbox、不保证崩溃后的重放；已知丢样会标记对应命名空间不完整，后续批次的 `dropped` 告知消费者。
+
+### 56.2 事件、贡献与身份约束
+
+- 事件阶段：`attempt_started`、`response_started`、`first_stream_event`、`attempt_finished`、`completed`、`usage_finalized`。重试使用不同 `attempt_id`；WebSocket 每轮使用不同 `request_id`。
+- `first_stream_event` 表示首个流事件，并不承诺它含生成 Token，不能直接当作精确 TTFT。没有逐个流事件的插件 RPC，也不传输流正文。最终观测保留响应开始、首流事件时间，以及按相同组合规则汇总的归一化 Token 分类；`tokens.cache_creation` 不含单列的 `cache_creation_1h`。插件可据这些事实计算自己的指标，核心不预先计算 TTFT/TPS。
+- `ObservationContribution` 仅接受当前批次的 `observation_id` 和已声明指标的非负整数绝对贡献；每个值最大 `2^53-1`。账号、时间、修订版本及命名空间均由宿主绑定，插件不能指定或改写。相同批次同一 ID 只能返回一次贡献。
+- 聚合提供 `sum`、`count` 和 `per_minute = sum * 60 / window_seconds`；需要平均值的插件使用 `sum/count`。没有贡献的指标不算样本，值为零的贡献仍算一个样本。
+- 新修订替换同一事件的整组贡献，遗漏的旧指标会撤回；同版本重复及旧版本不再累计。补差仍回到第一次接受的时间桶，不能将旧请求移动到当前窗口。宿主发布修订时推进版本，插件不能自增事件修订号。
+- 核心命名空间为 `core.account`，插件命名空间由宿主生成 `plugin.<key>`，插件自定义指标不会覆盖核心指标。
+
+### 56.3 内置指标与查询
+
+- 内置消费者只处理 `usage_finalized`，成功且未取消时贡献 `success_requests=1`；`success_tokens` 使用核心接受的最终组合用量（Replacement 替代主用量，再加 Additional）。RPM/TPM 都是窗口合计折算成每分钟，不是限流计数。
+- 尚待确认的预估用量只增加 `pending_usage`，不当成实际 Token；普通插件异步 ExtractUsage 完成后才发出最终用量观测。后台 reconciliation 修订及异步任务暂未接入本通道。
+- 实时并发直接读取共享 Slots；准入与释放仍由核心负责，观测器及插件不能修改槽位。
+- 窗口为 5～3600 秒，默认 60 秒，按秒桶近似滑动，时间基于 Redis；窗口配置不改变限流。快照状态为 `ok`、`warming`、`incomplete` 或 `unavailable`；存储失败不伪装为正常零值。它仍是尽力观测，不能视为计费账本或无损历史。
+- 控制台：`GET/PUT /api/v1/settings/account-stats`（`settings:read/manage`）；`GET /api/v1/accounts/stats?ids=...`、`GET /api/v1/accounts/:id/stats`（账号读取权限及创建者范围）。每批至多 200 个账号，可选 `window_seconds`；账号页面尚未接入。
+- 插件：`pluginsdk.ReadObservationMetrics(ctx, host, request)` / `HostService.ReadObservationMetrics`。`namespace` 必须为 `core` 或 `plugin`，分别读取内置指标或调用插件已声明的自定义指标；不能选择其他插件命名空间。账号范围仍按获批 `types` 过滤，返回中含实时 `in_use`。查询至多 200 个账号、16 个指标，账号数乘指标数不能超过 600。
+- 新观测能力需要 Host API 5；SDK 和 `runtime-contract` 的版本及发布工具默认值同步。原有插件的能力协议不变，观测插件拒绝 Host API 4 及更早版本；升级仍遵守既有发布兼容性检查。

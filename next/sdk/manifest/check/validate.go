@@ -40,6 +40,7 @@ var KnownCapabilities = map[string]bool{
 	manifest.CapPlatformMonitor:   true,
 	manifest.CapPlatformWebSocket: true,
 	manifest.CapGatewayHook:       true,
+	manifest.CapGatewayObserve:    true,
 	manifest.CapAppJobs:           true,
 	manifest.CapAppEvents:         true,
 	manifest.CapHTTPRoutes:        true,
@@ -216,6 +217,7 @@ func Validate(m *manifest.Manifest, files map[string][]byte, opt ValidateOptions
 	v.pricing()
 	v.hooks()
 	v.scheduler()
+	v.observations()
 	v.events()
 	v.jobs()
 	v.database()

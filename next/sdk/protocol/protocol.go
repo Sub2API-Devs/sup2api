@@ -15,7 +15,9 @@ const ProtocolVersion = 1
 
 // HostAPIVersion is sent in InitHostRequest.host_api_version. Version 4 adds
 // plugin-driven execution and transactional reporting; the wire protocol stays at 1.
-const HostAPIVersion = 4
+const HostAPIVersion = 5
+
+const ObservationHostAPIVersion = 5
 
 // ExecutionHostAPIVersion is the first host with Execute/Monitor callbacks.
 const ExecutionHostAPIVersion = 4

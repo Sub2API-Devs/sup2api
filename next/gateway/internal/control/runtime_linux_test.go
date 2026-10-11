@@ -181,7 +181,7 @@ func TestRuntimeStartKeepsMigrationSeparateFromBootstrap(t *testing.T) {
 				case <-time.After(10 * time.Millisecond):
 				}
 			}
-			manifest := rc.Manifest{CoreVersion: "test", SchemaAfter: "after", ClusterProtocol: rc.Range{Min: 1, Max: 1}, TaskProtocol: rc.Range{Min: 1, Max: 1}, HostAPIVersion: 4}
+			manifest := rc.Manifest{CoreVersion: "test", SchemaAfter: "after", ClusterProtocol: rc.Range{Min: 1, Max: 1}, TaskProtocol: rc.Range{Min: 1, Max: 1}, HostAPIVersion: rc.HostAPIVersion}
 			if tc.badCapabilities {
 				manifest.TaskProtocol = rc.Range{Min: 2, Max: 2}
 			}
@@ -247,7 +247,7 @@ func TestRuntimeControlHelper(t *testing.T) {
 			if prepared {
 				mode = "prepared"
 			}
-			json.NewEncoder(w).Encode(rc.Status{Hello: rc.Hello{BootID: "boot", ReleaseDigest: "release", Protocol: rc.Protocol, CoreVersion: "test", ClusterProtocol: rc.Range{Min: 1, Max: 1}, TaskProtocol: rc.Range{Min: 1, Max: 1}, HostAPIVersion: 4}, Mode: mode, SchemaContract: "after"})
+			json.NewEncoder(w).Encode(rc.Status{Hello: rc.Hello{BootID: "boot", ReleaseDigest: "release", Protocol: rc.Protocol, CoreVersion: "test", ClusterProtocol: rc.Range{Min: 1, Max: 1}, TaskProtocol: rc.Range{Min: 1, Max: 1}, HostAPIVersion: rc.HostAPIVersion}, Mode: mode, SchemaContract: "after"})
 		case rc.PreparePath:
 			var p rc.PrepareRequest
 			if err := json.NewDecoder(q.Body).Decode(&p); err != nil {

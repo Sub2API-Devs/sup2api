@@ -91,7 +91,13 @@ func Migrate(ctx context.Context, db *DB, fsys fs.FS, tr Tracker, opt MigrateOpt
 				return done, err
 			}
 		}
-		if _, err := tx.Exec(ctx, string(body)); err != nil {
+		sqlBody := string(body)
+		if core, ok := tr.(interface {
+			migrationSQL(string, string, string) string
+		}); ok {
+			sqlBody = core.migrationSQL(name, checksum, sqlBody)
+		}
+		if _, err := tx.Exec(ctx, sqlBody); err != nil {
 			_ = tx.Rollback(ctx)
 			return done, fmt.Errorf("migration %s: %w", name, err)
 		}
@@ -138,6 +144,13 @@ func (CoreTracker) Applied(ctx context.Context, q Querier) (map[string]string, e
 func (CoreTracker) Record(ctx context.Context, tx pgx.Tx, id, checksum string) error {
 	_, err := tx.Exec(ctx, `INSERT INTO schema_migrations (id, checksum) VALUES ($1, $2)`, id, checksum)
 	return err
+}
+
+func (CoreTracker) migrationSQL(id, checksum, body string) string {
+	if id == "0046_proxy_real_ip.sql" && checksum == "1b0719bb3a07caa74ca6ad5d92e8c605e9c4f0ebea3097b96a1226ef99c4897f" {
+		return strings.ReplaceAll(body, "ALTER TABLE proxies ADD COLUMN ", "ALTER TABLE proxies ADD COLUMN IF NOT EXISTS ")
+	}
+	return body
 }
 
 // CoreMigrationLockKey serializes core migrations across nodes.

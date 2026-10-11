@@ -11,7 +11,7 @@ const Protocol = 2
 // These describe the persisted business formats this release actually supports.
 const ClusterProtocolVersion = 1
 const TaskProtocolVersion = 1
-const HostAPIVersion = 4
+const HostAPIVersion = 5
 
 // ClusterChangeLock serializes core plans and plugin mutation submissions.
 const ClusterChangeLock = "system:cluster-change"

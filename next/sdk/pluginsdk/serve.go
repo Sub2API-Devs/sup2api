@@ -137,6 +137,9 @@ func Register(s grpc.ServiceRegistrar, p any, dial HostDialer, opts ...Option) e
 	if v, ok := p.(Hook); ok {
 		pluginv1.RegisterHookServiceServer(s, hookServer{impl: v})
 	}
+	if v, ok := p.(Observer); ok {
+		pluginv1.RegisterObservationServiceServer(s, observationServer{impl: v})
+	}
 	jr, hasJobs := p.(JobRunner)
 	eh, hasEvents := p.(EventHandler)
 	bh, hasBroadcast := p.(BroadcastHandler)
@@ -183,6 +186,9 @@ func Capabilities(p any) []string {
 	}
 	if _, ok := p.(Hook); ok {
 		caps = append(caps, manifest.CapGatewayHook)
+	}
+	if _, ok := p.(Observer); ok {
+		caps = append(caps, manifest.CapGatewayObserve)
 	}
 	if _, ok := p.(JobRunner); ok {
 		caps = append(caps, manifest.CapAppJobs)
@@ -315,6 +321,9 @@ func (rt *runtime) InitHost(ctx context.Context, in *pluginv1.InitHostRequest) (
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 	for _, capability := range rt.capabilities {
+		if capability == manifest.CapGatewayObserve && in.GetHostApiVersion() < protocol.ObservationHostAPIVersion {
+			return nil, status.Errorf(codes.FailedPrecondition, "observations require host API version %d or newer", protocol.ObservationHostAPIVersion)
+		}
 		if (capability == manifest.CapPlatformExecute || capability == manifest.CapPlatformMonitor) && in.GetHostApiVersion() < protocol.ExecutionHostAPIVersion {
 			return nil, status.Errorf(codes.FailedPrecondition, "execution callbacks require host API version %d or newer", protocol.ExecutionHostAPIVersion)
 		}

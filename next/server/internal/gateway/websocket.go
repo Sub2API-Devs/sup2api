@@ -16,6 +16,7 @@ import (
 	"github.com/tidwall/sjson"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/observation"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 )
@@ -152,6 +153,11 @@ func (s *wsSession) run(ctx context.Context) {
 	}()
 
 	var turn *wsTurn
+	defer func() {
+		if turn != nil {
+			turn.release()
+		}
+	}()
 	asked := false // a response.create arrived
 	idle := time.NewTimer(s.g.ws.firstMessage)
 	defer idle.Stop()
@@ -352,6 +358,15 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 		return reject(cl, fromCore(core.ErrRateLimited.WithMessage("too many concurrent requests for this user"), errTypeRateLimited))
 	}
 	var releaseAccount func()
+	handedOff := false
+	defer func() {
+		if !handedOff {
+			if releaseAccount != nil {
+				releaseAccount()
+			}
+			releaseUser()
+		}
+	}()
 	var e *gwError
 	if s.up == nil {
 		releaseAccount, e = s.connect(ctx, cl)
@@ -385,6 +400,7 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 		s.sendError(ctx, &gwError{Status: http.StatusBadGateway, Code: codeUpstreamError, Message: "upstream connection failed"})
 		return nil, true
 	}
+	handedOff = true
 	return t, false
 }
 
@@ -413,6 +429,12 @@ func (s *wsSession) connect(ctx context.Context, cl *call) (func(), *gwError) {
 	}
 	excluded := map[int64]bool{}
 	var last *gwError
+	var pendingRelease func()
+	defer func() {
+		if pendingRelease != nil {
+			pendingRelease()
+		}
+	}()
 	for cl.rec.Attempts < cl.gw.MaxAttempts {
 		ref, release, busy := cl.pick(ctx, cands, excluded)
 		if ref == nil {
@@ -424,6 +446,7 @@ func (s *wsSession) connect(ctx context.Context, cl *call) (func(), *gwError) {
 			}
 			break
 		}
+		pendingRelease = release
 		if lim := s.g.d.Limiter; lim != nil {
 			admitted, err := lim.TryHit(cl.slotCtx, *ref, cl.session)
 			if err != nil || !admitted {
@@ -434,15 +457,18 @@ func (s *wsSession) connect(ctx context.Context, cl *call) (func(), *gwError) {
 			}
 		}
 		cl.rec.Attempts++
+		cl.startObservationAttempt(ref)
 		res := s.dial(ctx, cl, ref)
 		if res.kind == attemptDone {
 			s.ref = ref
 			s.routes = cl.routes
 			s.session = cl.session
 			cl.finishSticky(ctx, ref.ID, true)
+			pendingRelease = nil
 			return release, nil
 		}
 		release()
+		cl.observeAttemptResult(ref, res)
 		switch res.kind {
 		case attemptFailover:
 			excluded[ref.ID] = true
@@ -598,9 +624,16 @@ func (s *wsSession) reuse(ctx context.Context, cl *call) (func(), *gwError) {
 			Message: "the account of this connection does not serve model " + strconvQuote(cl.model) + "; open a new connection for it"}
 	}
 	deadline := time.Now().Add(s.g.ws.slotWait)
+	var pendingRelease func()
+	defer func() {
+		if pendingRelease != nil {
+			pendingRelease()
+		}
+	}()
 	for {
 		release, ok := cl.acquireAccount(ctx, s.ref)
 		if ok {
+			pendingRelease = release
 			if lim := s.g.d.Limiter; lim != nil {
 				admitted, err := lim.TryHit(cl.slotCtx, *s.ref, cl.session)
 				if err != nil || !admitted {
@@ -610,6 +643,8 @@ func (s *wsSession) reuse(ctx context.Context, cl *call) (func(), *gwError) {
 			}
 		}
 		if ok {
+			cl.startObservationAttempt(s.ref)
+			pendingRelease = nil
 			return release, nil
 		}
 		if time.Now().After(deadline) {
@@ -640,6 +675,8 @@ func (s *wsSession) observe(ctx context.Context, t *wsTurn, data []byte) (bool, 
 	cl := t.cl
 	if cl.rec.FirstTokenMs == 0 {
 		cl.rec.FirstTokenMs = max(1, int(s.g.now().Sub(cl.start)/time.Millisecond))
+		cl.observeRequest(observation.ResponseStarted, cl.rec)
+		cl.observeRequest(observation.FirstStreamEvent, cl.rec)
 	}
 	t.usage.ApplySSE("", data)
 	name := gjson.GetBytes(data, "type").String()
@@ -680,6 +717,7 @@ type wsOutcome struct {
 
 // finish records and bills a turn and releases its slots.
 func (s *wsSession) finish(ctx context.Context, t *wsTurn, out wsOutcome) {
+	defer t.release()
 	cl := t.cl
 	rec := cl.rec
 	rec.Tokens = t.usage.Tokens()
@@ -698,6 +736,7 @@ func (s *wsSession) finish(ctx context.Context, t *wsTurn, out wsOutcome) {
 		}
 	}
 	t.release()
+	cl.observeRequest(observation.AttemptFinished, rec)
 	if id := s.ref; id != nil {
 		cl.countTokens(ctx, id.ID)
 		if rec.Success {

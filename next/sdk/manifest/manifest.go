@@ -30,10 +30,11 @@ type Manifest struct {
 	AccountTypes []AccountType `json:"accountTypes,omitempty"`
 	Hooks        []Hook        `json:"hooks,omitempty"`
 	// Scheduler declares how the plugin takes part in gateway scheduling.
-	Scheduler *Scheduler `json:"scheduler,omitempty"`
-	Events    *Events    `json:"events,omitempty"`
-	Jobs      []Job      `json:"jobs,omitempty"`
-	Database  *Database  `json:"database,omitempty"`
+	Scheduler    *Scheduler    `json:"scheduler,omitempty"`
+	Observations *Observations `json:"observations,omitempty"`
+	Events       *Events       `json:"events,omitempty"`
+	Jobs         []Job         `json:"jobs,omitempty"`
+	Database     *Database     `json:"database,omitempty"`
 
 	UserPermissions []UserPermission `json:"userPermissions,omitempty"`
 	Routes          []Route          `json:"routes,omitempty"`
@@ -68,6 +69,7 @@ const (
 	CapPlatformMonitor   = "platform.monitor.v1"
 	CapPlatformWebSocket = "platform.websocket.v1" // upstream requests for websocket endpoints
 	CapGatewayHook       = "gateway.hook.v1"
+	CapGatewayObserve    = "gateway.observe.v1"
 	CapAppJobs           = "app.jobs.v1"
 	CapAppEvents         = "app.events.v1"
 	CapHTTPRoutes        = "http.routes.v1"
@@ -78,6 +80,11 @@ const (
 
 type Capability struct {
 	ID string `json:"id"`
+}
+
+type Observations struct {
+	Events  []string `json:"events"`
+	Metrics []string `json:"metrics,omitempty"`
 }
 
 // ---------------------------------------------------------------- platforms and endpoints
@@ -735,6 +742,7 @@ var HostPermissionRisk = map[string]string{
 	"gateway.endpoint":     RiskHigh,
 	"platform.register":    RiskHigh,
 	"scheduler.rank":       RiskHigh,
+	"gateway.observe":      RiskHigh,
 	"users.read":           RiskHigh,
 	"accounts.credentials": RiskCritical,
 	"ledger.credit":        RiskCritical,

@@ -22,6 +22,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/observation"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/account"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/apikey"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
@@ -42,6 +43,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/job"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/messagediagnostics"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/migrations"
+	observer "github.com/Sub2API-Devs/sup2api/next/server/internal/observation"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/api"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/blobs"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/dbschema"
@@ -192,6 +194,9 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	converters := convert.Default()
 	// Per-account rpm/tpm limits (CONTRACTS §18).
 	limiter := account.NewLimiter(rdb)
+	accountStats := account.NewStats(rdb, db, cl.Slots, cl.Bus)
+	accountStats.Start()
+	onClose(accountStats.Close)
 	ccg := ccgateway.New(db, cipher)
 	// Draft proxy visibility and the one-node draft sweep (CONTRACTS §49).
 	ccg.Authorizer, ccg.Locker, ccg.CanWork = az, cl.Locker, canWork
@@ -209,7 +214,7 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	acc := account.New(account.Deps{
 		CCGateway: ccg,
 		DB:        db, Redis: rdb, Cipher: cipher, Registry: reg, Proxies: prx, Events: events,
-		Slots: cl.Slots, Limiter: limiter, Bus: cl.Bus, AllowPrivateUpstream: cfg.AllowPrivateUpstream, Converters: converters,
+		Slots: cl.Slots, Limiter: limiter, Stats: accountStats, Bus: cl.Bus, AllowPrivateUpstream: cfg.AllowPrivateUpstream, Converters: converters,
 		// Ownership checks and proxy_url resolution (CONTRACTS §21).
 		Authorizer: az, Resolver: prx,
 		// Credential refresh: one renewal per account cluster-wide, one
@@ -281,13 +286,16 @@ func run(ctx context.Context, cfg *config.Config, version string, log *slog.Logg
 	helperStore := helperhistory.New(db, cipher, helperhistory.Options{})
 	stopHelperHistory := startHelperHistoryMaintenance(ctx, settler, helperStore, canWork)
 	onClose(stopHelperHistory)
+	observations := observer.New(reg, accountStats, observer.Consumer{Namespace: observation.CoreNamespace, AllAccounts: true,
+		Phases: []string{observation.UsageFinalized}, Metrics: []string{observation.SuccessRequests, observation.SuccessTokens, observation.PendingUsage}, Client: account.StatsConsumer{}})
+	onClose(observations.Close)
 	gw := gateway.New(gateway.Deps{
 		CCGateway:     ccg,
 		HelperHistory: helperStore, EnableHelperHistory: true,
 		Resources: resourceStore, Skills: resourceStore, Credits: fallbackcredits.New(db, 4096), Diagnostics: messagediagnostics.New(db, 4096, 0), ResourceTransport: ccg.ResourceTransport(),
 		DB: db, Redis: rdb, Bus: cl.Bus, Node: cl.Registry, Registry: reg,
 		Auth: keys, Pricer: bill, Balance: bill, Slots: cl.Slots,
-		Accounts: acc, Proxies: prx, Settler: settler, Tasks: settler, Limiter: limiter, Quota: acc, Config: cfg, Converters: converters,
+		Accounts: acc, Proxies: prx, Settler: settler, Observations: observations, Tasks: settler, Limiter: limiter, Quota: acc, Config: cfg, Converters: converters,
 		Draining: gate.isDraining,
 	})
 

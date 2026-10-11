@@ -18,6 +18,7 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/observation"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert"
 )
@@ -98,6 +99,7 @@ func (c *call) dispatch(ctx context.Context) {
 			}
 			break
 		}
+		defer release()
 		if lim := c.g.d.Limiter; lim != nil {
 			admitted, err := lim.TryHit(c.slotCtx, *ref, c.session)
 			if err != nil {
@@ -115,7 +117,9 @@ func (c *call) dispatch(ctx context.Context) {
 		attempts++
 		c.rec.Attempts = attempts
 		stickyAttempt := c.sticky != nil && c.sticky.hit && c.sticky.bound == ref.ID
+		c.startObservationAttempt(ref)
 		res := func() attemptResult { defer release(); return c.attempt(c.slotCtx, ref, attempts-1) }()
+		c.observeAttemptResult(ref, res)
 		lastAccount = ref.ID
 		switch res.kind {
 		case attemptDone:
@@ -544,6 +548,11 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		return c.classify(ctx, rt, pacct, 0, nil, nil, msg)
 	}
 	defer resp.Body.Close()
+	if c.g.d.Observations != nil {
+		rec := *c.rec
+		rec.StatusCode = resp.StatusCode
+		c.observeRequest(observation.ResponseStarted, &rec)
+	}
 	if err := c.unwrapHelperHistoryResponse(resp, rt); err != nil {
 		return attemptResult{kind: attemptReturn, err: fromCore(core.ErrUnavailable.WithMessage("helper history response could not be verified").WithCause(err), errTypeInternal)}
 	}

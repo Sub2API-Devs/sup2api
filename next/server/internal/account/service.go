@@ -32,6 +32,7 @@ type Deps struct {
 	Slots     core.Slots // optional: in_use column is 0 without it
 	// Limiter reports rpm/tpm usage (rate_usage column); optional.
 	Limiter core.AccountLimiter
+	Stats   *Stats
 	Bus     core.Bus // optional: single node without it
 	// Converters reports the protocol pairs the gateway can convert; optional
 	// (nil: account types only list the endpoints they serve natively).
@@ -120,6 +121,10 @@ func New(d Deps) *Service {
 // accepts the "all" key or its "own" counterpart (CONTRACTS §21.2); handlers
 // narrow their SQL with core.OwnerScope.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
+	r.Perm("GET", "/settings/account-stats", "settings:read", s.getStatsSettings)
+	r.Perm("PUT", "/settings/account-stats", "settings:manage", s.putStatsSettings)
+	r.PermAny("GET", "/accounts/stats", s.getAccountStats, "account:read", "account:own:read")
+	r.PermAny("GET", "/accounts/:id/stats", s.getAccountStats, "account:read", "account:own:read")
 	r.Perm("POST", "/system/ccgateway/connect", "settings:manage", s.connectCCGateway)
 	// Re-authorizing a Claude Code account (CONTRACTS §49.17), next to the
 	// ccgateway module's /system/ccgateway/accounts/:id/:action.

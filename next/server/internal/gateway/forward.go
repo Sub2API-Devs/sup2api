@@ -16,6 +16,7 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/observation"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/usagerules"
@@ -340,6 +341,9 @@ func (c *call) forwardSSE(ctx context.Context, resp *http.Response, u *usageAcc,
 		}
 		if c.rec.FirstTokenMs == 0 && len(data) > 0 {
 			c.rec.FirstTokenMs = max(1, int(c.g.now().Sub(c.start)/time.Millisecond))
+		}
+		if c.g.d.Observations != nil && c.observationFirstStreamAt.IsZero() && len(data) > 0 {
+			c.observeRequest(observation.FirstStreamEvent, c.rec)
 		}
 		u.ApplySSE(event, data)
 		// Only the events the endpoint named are kept, and only while the

@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package sub2api.plugin.v1;
+
+option go_package = "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1";
+
+service ObservationService {
+  rpc OnObservations(ObservationBatch) returns (ObservationResult);
+}
+
+message RequestObservation {
+  string id = 1;
+  string request_id = 2;
+  string attempt_id = 3;
+  string phase = 4;
+  int64 account_id = 5;
+  string account_plugin_key = 6;
+  string model = 7;
+  string upstream_model = 8;
+  string protocol = 9;
+  bool stream = 10;
+  int64 occurred_at_unix_ms = 11;
+  int64 started_at_unix_ms = 12;
+  int64 completed_at_unix_ms = 13;
+  uint64 revision = 14;
+  bool success = 15;
+  bool canceled = 16;
+  int32 status_code = 17;
+  string error_type = 18;
+  int64 total_tokens = 19;
+  bool usage_pending = 20;
+  string node_id = 21;
+  int64 attempt_started_at_unix_ms = 22;
+  ObservationTokens tokens = 23;
+  int64 response_started_at_unix_ms = 24;
+  int64 first_stream_event_at_unix_ms = 25;
+}
+
+message ObservationTokens {
+  int64 input = 1;
+  int64 output = 2;
+  int64 cache_read = 3;
+  int64 cache_creation = 4;
+  int64 cache_creation_1h = 5;
+}
+
+message ObservationBatch {
+  repeated RequestObservation observations = 1;
+  uint64 dropped = 2;
+}
+
+message ObservationContribution {
+  string observation_id = 1;
+  map<string, int64> metrics = 2;
+}
+
+message ObservationResult {
+  repeated ObservationContribution contributions = 1;
+}
+
+message ReadObservationMetricsRequest {
+  string namespace = 1;
+  repeated int64 account_ids = 2;
+  repeated string metrics = 3;
+  int32 window_seconds = 4;
+}
+
+message ObservationMetric {
+  string name = 1;
+  int64 sum = 2;
+  int64 count = 3;
+  double per_minute = 4;
+}
+
+message AccountObservationMetrics {
+  int64 account_id = 1;
+  repeated ObservationMetric metrics = 2;
+  optional int64 in_use = 3;
+}
+
+message ReadObservationMetricsResponse {
+  int32 window_seconds = 1;
+  int64 as_of_unix_ms = 2;
+  int64 observed_since_unix_ms = 3;
+  string status = 4;
+  repeated AccountObservationMetrics accounts = 5;
+}

@@ -58,6 +58,22 @@ func TestChangedMigrationIsRefusedForCoreAndRerunForPlugins(t *testing.T) {
 	}
 }
 
+func TestLegacyProxyRealIPCompatibilityIsCoreOnly(t *testing.T) {
+	db := testutil.DB(t)
+	body, err := migrations.FS.ReadFile("0046_proxy_real_ip.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tracker := memTracker{}
+	_, err = store.Migrate(context.Background(), db, fstest.MapFS{"0046_proxy_real_ip.sql": {Data: body}}, tracker, store.MigrateOptions{LockKey: 42, RerunChanged: true})
+	if err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("core compatibility applied to a plugin migration: %v", err)
+	}
+	if len(tracker) != 0 {
+		t.Fatal("failed migration was recorded")
+	}
+}
+
 // memTracker keeps the applied set in memory.
 type memTracker map[string]string
 

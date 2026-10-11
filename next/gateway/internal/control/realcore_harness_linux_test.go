@@ -299,7 +299,7 @@ func newRealCluster(t *testing.T, ctx context.Context, options realOptions) *rea
 		if id == "broken-candidate" {
 			before = c.s2
 		}
-		m := rc.Manifest{CoreVersion: version, ManifestVersion: 1, ReleaseID: id, BuildID: release.Digest(core), SourceCommit: id, CreatedAt: time.Now(), Platforms: []rc.Platform{{OS: "linux", Arch: runtime.GOARCH, RuntimeABI: "test", BundleDigest: digest, BundleBytes: int64(len(bundle)), Files: files}}, ShellProtocol: rc.Range{Min: rc.Protocol, Max: rc.Protocol}, CoreControlProtocol: rc.Range{Min: rc.Protocol, Max: rc.Protocol}, ClusterProtocol: rc.Range{Min: 1, Max: 1}, TaskProtocol: rc.Range{Min: 1, Max: 1}, SchemaBefore: before, SchemaAfter: after, Strategy: "maintenance", HostAPIVersion: 4}
+		m := rc.Manifest{CoreVersion: version, ManifestVersion: 1, ReleaseID: id, BuildID: release.Digest(core), SourceCommit: id, CreatedAt: time.Now(), Platforms: []rc.Platform{{OS: "linux", Arch: runtime.GOARCH, RuntimeABI: "test", BundleDigest: digest, BundleBytes: int64(len(bundle)), Files: files}}, ShellProtocol: rc.Range{Min: rc.Protocol, Max: rc.Protocol}, CoreControlProtocol: rc.Range{Min: rc.Protocol, Max: rc.Protocol}, ClusterProtocol: rc.Range{Min: 1, Max: 1}, TaskProtocol: rc.Range{Min: 1, Max: 1}, SchemaBefore: before, SchemaAfter: after, Strategy: "maintenance", HostAPIVersion: rc.HostAPIVersion}
 		payload, e := json.Marshal(m)
 		if e != nil {
 			t.Fatal(e)

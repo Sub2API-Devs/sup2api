@@ -80,7 +80,7 @@ func run(args []string, out io.Writer) error {
 	osName := f.String("os", runtime.GOOS, "target OS")
 	arch := f.String("arch", runtime.GOARCH, "target architecture")
 	abi := f.String("runtime-abi", "linux-static-v1", "runtime ABI")
-	hostAPI := f.Int("host-api", 4, "plugin Host API version")
+	hostAPI := f.Int("host-api", rc.HostAPIVersion, "plugin Host API version")
 	if err := f.Parse(args[1:]); err != nil {
 		return err
 	}

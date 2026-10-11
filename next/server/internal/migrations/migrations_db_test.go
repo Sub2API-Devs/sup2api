@@ -3,11 +3,97 @@ package migrations_test
 import (
 	"context"
 	"testing"
+	"testing/fstest"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/migrations"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
+
+func TestLegacyProxyRealIPReplayPreservesDataAndChecksum(t *testing.T) {
+	const id = "0046_proxy_real_ip.sql"
+	const checksum = "1b0719bb3a07caa74ca6ad5d92e8c605e9c4f0ebea3097b96a1226ef99c4897f"
+	for _, missing := range []string{"none", "real_ip", "real_ip_updated_at", "both"} {
+		t.Run(missing, func(t *testing.T) {
+			db := testutil.DB(t)
+			ctx := context.Background()
+			ip := "198.51.100.46"
+			stamp := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+			var proxyID int64
+			err := db.Pool.QueryRow(ctx, `INSERT INTO proxies (name, protocol, host, port, real_ip, real_ip_updated_at)
+				VALUES ('replay-probe','http','proxy.example',8080,$1,$2) RETURNING id`, ip, stamp).Scan(&proxyID)
+			require.NoError(t, err)
+			if missing == "real_ip" || missing == "both" {
+				_, err = db.Pool.Exec(ctx, `ALTER TABLE proxies DROP COLUMN real_ip`)
+				require.NoError(t, err)
+			}
+			if missing == "real_ip_updated_at" || missing == "both" {
+				_, err = db.Pool.Exec(ctx, `ALTER TABLE proxies DROP COLUMN real_ip_updated_at`)
+				require.NoError(t, err)
+			}
+			_, err = db.Pool.Exec(ctx, `DELETE FROM schema_migrations WHERE id >= $1`, id)
+			require.NoError(t, err)
+			done, err := store.Migrate(ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
+			require.NoError(t, err)
+			require.Contains(t, done, id)
+			var gotIP *string
+			var gotTime *time.Time
+			require.NoError(t, db.Pool.QueryRow(ctx, `SELECT real_ip, real_ip_updated_at FROM proxies WHERE id=$1`, proxyID).Scan(&gotIP, &gotTime))
+			if missing == "real_ip" || missing == "both" {
+				require.Nil(t, gotIP)
+			} else {
+				require.NotNil(t, gotIP)
+				require.Equal(t, ip, *gotIP)
+			}
+			if missing == "real_ip_updated_at" || missing == "both" {
+				require.Nil(t, gotTime)
+			} else {
+				require.NotNil(t, gotTime)
+				require.True(t, stamp.Equal(*gotTime))
+			}
+			var recorded string
+			require.NoError(t, db.Pool.QueryRow(ctx, `SELECT checksum FROM schema_migrations WHERE id=$1`, id).Scan(&recorded))
+			require.Equal(t, checksum, recorded)
+			done, err = store.Migrate(ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
+			require.NoError(t, err)
+			require.Empty(t, done)
+		})
+	}
+}
+
+func TestLegacyProxyRealIPCompatibilityRequiresExactIdentity(t *testing.T) {
+	const original = "0046_proxy_real_ip.sql"
+	for _, changed := range []string{"name", "body", "applied_body"} {
+		t.Run(changed, func(t *testing.T) {
+			db := testutil.DB(t)
+			ctx := context.Background()
+			body, err := migrations.FS.ReadFile(original)
+			require.NoError(t, err)
+			name := original
+			if changed == "name" {
+				name = "9999_proxy_real_ip.sql"
+			} else {
+				body = append(body, '\n')
+				if changed == "body" {
+					_, err = db.Pool.Exec(ctx, `DELETE FROM schema_migrations WHERE id=$1`, original)
+					require.NoError(t, err)
+				}
+			}
+			_, err = store.Migrate(ctx, db, fstest.MapFS{name: {Data: body}}, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
+			if changed == "applied_body" {
+				require.ErrorContains(t, err, "modified after being applied")
+			} else {
+				require.ErrorContains(t, err, "already exists")
+			}
+			var recorded bool
+			require.NoError(t, db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE id=$1)`, name).Scan(&recorded))
+			require.Equal(t, changed == "applied_body", recorded)
+		})
+	}
+}
 
 // Every migration from FirstIdempotentMigration on must survive a second
 // run on a database that already has it: forget them and migrate again.

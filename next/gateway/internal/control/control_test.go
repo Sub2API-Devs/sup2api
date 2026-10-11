@@ -47,7 +47,7 @@ func TestCompatibilityRejectsUnsafeTransitions(t *testing.T) {
 	}
 }
 func testRelease(id string) Release {
-	return Release{Digest: fmt.Sprintf("%064s", id), Manifest: rc.Manifest{CoreVersion: "0.1.0-dev", ShellProtocol: rc.Range{Min: rc.Protocol, Max: rc.Protocol}, CoreControlProtocol: rc.Range{Min: rc.Protocol, Max: rc.Protocol}, ManifestVersion: 1, ReleaseID: id, BuildID: id, SchemaBefore: "contract-1", SchemaAfter: "contract-1", Strategy: "rolling", HostAPIVersion: 4, TaskProtocol: rc.Range{Min: 1, Max: 1}, ClusterProtocol: rc.Range{Min: 1, Max: 1}, Platforms: []rc.Platform{{OS: "linux", Arch: "amd64", RuntimeABI: "test"}}}}
+	return Release{Digest: fmt.Sprintf("%064s", id), Manifest: rc.Manifest{CoreVersion: "0.1.0-dev", ShellProtocol: rc.Range{Min: rc.Protocol, Max: rc.Protocol}, CoreControlProtocol: rc.Range{Min: rc.Protocol, Max: rc.Protocol}, ManifestVersion: 1, ReleaseID: id, BuildID: id, SchemaBefore: "contract-1", SchemaAfter: "contract-1", Strategy: "rolling", HostAPIVersion: rc.HostAPIVersion, TaskProtocol: rc.Range{Min: 1, Max: 1}, ClusterProtocol: rc.Range{Min: 1, Max: 1}, Platforms: []rc.Platform{{OS: "linux", Arch: "amd64", RuntimeABI: "test"}}}}
 }
 
 type fakeRuntime struct {
@@ -100,7 +100,7 @@ func (r *fakeRuntime) Start(ctx context.Context, digest string, opts rc.PrepareR
 	}
 	r.stopped = false
 	r.options = append(r.options, opts)
-	r.status = rc.Status{Hello: rc.Hello{Protocol: rc.Protocol, ClusterProtocol: rc.Range{Min: 1, Max: 1}, TaskProtocol: rc.Range{Min: 1, Max: 1}, HostAPIVersion: 4, CoreVersion: "0.1.0-dev", BootID: "new-boot", ReleaseDigest: digest}, Mode: "prepared", SchemaContract: opts.ExpectedSchemaAfter}
+	r.status = rc.Status{Hello: rc.Hello{Protocol: rc.Protocol, ClusterProtocol: rc.Range{Min: 1, Max: 1}, TaskProtocol: rc.Range{Min: 1, Max: 1}, HostAPIVersion: rc.HostAPIVersion, CoreVersion: "0.1.0-dev", BootID: "new-boot", ReleaseDigest: digest}, Mode: "prepared", SchemaContract: opts.ExpectedSchemaAfter}
 	return r.status, nil
 }
 func (r *fakeRuntime) Admit(ctx context.Context, a rc.Admission) (rc.Status, error) {
@@ -858,7 +858,7 @@ func TestPostgresPlanCreatedBeforeBaselineAdmissionCommitWins(t *testing.T) {
 		t.Fatal(err)
 	}
 	ar := a.Runtime.(*fakeRuntime)
-	ar.status = rc.Status{Hello: rc.Hello{Protocol: rc.Protocol, ClusterProtocol: rc.Range{Min: 1, Max: 1}, TaskProtocol: rc.Range{Min: 1, Max: 1}, HostAPIVersion: 4, CoreVersion: "0.1.0-dev", BootID: "restarted", ReleaseDigest: baseline}, SchemaContract: "contract-1"}
+	ar.status = rc.Status{Hello: rc.Hello{Protocol: rc.Protocol, ClusterProtocol: rc.Range{Min: 1, Max: 1}, TaskProtocol: rc.Range{Min: 1, Max: 1}, HostAPIVersion: rc.HostAPIVersion, CoreVersion: "0.1.0-dev", BootID: "restarted", ReleaseDigest: baseline}, SchemaContract: "contract-1"}
 	a.Runtime = &statusHookRuntime{fakeRuntime: ar, hook: func() {
 		pf, err := s.Preflight(ctx, target.Digest)
 		if err == nil {

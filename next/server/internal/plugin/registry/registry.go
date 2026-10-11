@@ -154,8 +154,11 @@ type generation struct {
 	routes    map[string][]core.RouteBinding
 	jobs      []core.JobBinding
 	subs      []core.SubscriptionBinding
+	observers []core.ObservationBinding
 	assets    sync.Map // key + "\x00" + path -> asset
 }
+
+func (g *generation) Observers() []core.ObservationBinding { return g.observers }
 
 type asset struct {
 	data []byte
@@ -371,6 +374,12 @@ func build(number uint64, exts []Extension) *generation {
 					continue
 				}
 				g.routes[pkg.Key] = append(g.routes[pkg.Key], core.RouteBinding{Plugin: info, Route: rt, Client: hx})
+			}
+		}
+		if source, ok := ext.(interface{ Observer() core.ObservationPlugin }); ok && m.Observations != nil && hasCapability(m, manifest.CapGatewayObserve) && grants.Has("gateway.observe") {
+			types, _ := grants.Scope("gateway.observe")["types"].(string)
+			if client := source.Observer(); client != nil && (types == "own" || types == "all") {
+				g.observers = append(g.observers, core.ObservationBinding{Plugin: info, Declaration: *m.Observations, AllAccounts: types == "all", Client: client})
 			}
 		}
 		if app := ext.App(); app != nil {

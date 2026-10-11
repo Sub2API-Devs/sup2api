@@ -42,6 +42,7 @@ type Deps struct {
 	Accounts      core.AccountDirectory
 	Proxies       core.ProxyDirectory
 	Settler       core.Settler
+	Observations  core.ObservationPublisher
 	Tasks         core.AsyncTasks
 	Resources     core.ProviderResources
 	Skills        core.SkillResources

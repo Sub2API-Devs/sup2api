@@ -18,6 +18,7 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/observation"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 )
@@ -104,10 +105,15 @@ type call struct {
 	// after the handler returned.
 	usage *pendingExtract
 	// Context of the currently selected account's concurrency lease.
-	slotCtx       context.Context
-	task          *core.TaskSnapshot
-	taskPublicID  string
-	taskPersisted bool
+	slotCtx                  context.Context
+	task                     *core.TaskSnapshot
+	taskPublicID             string
+	taskPersisted            bool
+	statsCompletedAt         time.Time
+	statsCanceled            bool
+	observationAttemptAt     time.Time
+	observationResponseAt    time.Time
+	observationFirstStreamAt time.Time
 }
 
 // serve runs the proxy pipeline (ARCHITECTURE 6.1) for one request.
@@ -662,7 +668,14 @@ func (c *call) fail(e *gwError) {
 // settler either way.
 func (c *call) submit() {
 	rec := c.rec
-	if rec == nil || c.g.d.Settler == nil || c.taskPersisted || c.helperWasDispatched() {
+	if rec == nil || c.g.d.Settler == nil {
+		return
+	}
+	c.statsCompletedAt = c.g.now()
+	c.statsCanceled = c.c.Request.Context().Err() != nil
+	c.observeRequest(observation.Completed, rec)
+	if c.taskPersisted || c.helperWasDispatched() {
+		c.observeRequest(observation.UsageFinalized, rec)
 		return
 	}
 	rec.LatencyMs = int(c.g.now().Sub(c.start) / time.Millisecond)
@@ -712,6 +725,7 @@ func (c *call) releaseBodies() {
 
 func (c *call) finishSubmit(ctx context.Context, rec *core.UsageRecord, billing string) {
 	c.finalizeBillability(ctx, rec, billing)
+	c.observeRequest(observation.UsageFinalized, rec)
 	c.g.d.Settler.Submit(rec)
 }
 

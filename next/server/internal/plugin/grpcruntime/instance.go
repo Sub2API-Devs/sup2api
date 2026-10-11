@@ -69,6 +69,7 @@ type proc struct {
 	platform   pluginv1.PlatformServiceClient
 	hook       pluginv1.HookServiceClient
 	app        pluginv1.AppServiceClient
+	observer   pluginv1.ObservationServiceClient
 	http       pluginv1.HTTPServiceClient
 	sched      pluginv1.SchedulerServiceClient
 	migration  pluginv1.MigrationServiceClient
@@ -324,6 +325,7 @@ func (i *Instance) startProc(ctx context.Context) (_ *proc, err error) {
 	p.platform = pluginv1.NewPlatformServiceClient(conn)
 	p.hook = pluginv1.NewHookServiceClient(conn)
 	p.app = pluginv1.NewAppServiceClient(conn)
+	p.observer = pluginv1.NewObservationServiceClient(conn)
 	p.http = pluginv1.NewHTTPServiceClient(conn)
 	p.sched = pluginv1.NewSchedulerServiceClient(conn)
 	p.migration = pluginv1.NewMigrationServiceClient(conn)
