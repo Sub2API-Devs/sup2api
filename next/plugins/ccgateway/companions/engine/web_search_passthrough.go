@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -393,6 +394,10 @@ func checkWebSearchHistory(block Object) error {
 func (r *Runner) runWebSearch(ctx context.Context, req *Request, dir string, input Object) (*webSearchRecord, *upstreamError, error) {
 	if req.NativeTransport {
 		record, err := r.runNativeWebSearch(ctx, req, dir, input)
+		var native *nativeError
+		if err != nil && !errors.As(err, &native) {
+			err = &requestRefusal{err}
+		}
 		return record, nil, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)

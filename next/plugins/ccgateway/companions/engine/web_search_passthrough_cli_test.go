@@ -656,6 +656,7 @@ func TestRealCLINativeWebSearchUsage(t *testing.T) {
 			return
 		}
 		assert.Equal(t, "claude-opus-5-5", wire["model"])
+		assert.False(t, hasRequestCacheControl(wire), "one-shot search must not request prompt caching")
 		choice, _ := wire["tool_choice"].(Object)
 		mu.Lock()
 		parallelChoices = append(parallelChoices, choice["disable_parallel_tool_use"])
@@ -769,6 +770,9 @@ func TestRealCLINativeWebSearchGateway(t *testing.T) {
 			assert.Equal(t, "dummy-native-probe", r.Header.Get("X-Api-Key"))
 			assert.Equal(t, "claude-sonnet-4-6", body["model"])
 			assert.Contains(t, []Object{{"type": "auto"}, {"type": "tool", "name": "web_search"}}, body["tool_choice"])
+			if str(body["tool_choice"].(Object), "type") == "auto" {
+				assert.False(t, hasRequestCacheControl(body))
+			}
 			query := ""
 			for _, message := range body["messages"].([]any) {
 				for _, value := range message.(Object)["content"].([]any) {
@@ -800,6 +804,7 @@ func TestRealCLINativeWebSearchGateway(t *testing.T) {
 			writeNativeWebSearchFixture(t, w, str(body, "model"), blocks, Object{"input_tokens": 20, "output_tokens": 8, "cache_read_input_tokens": 31, "cache_creation_input_tokens": 17, "cache_creation": Object{"ephemeral_5m_input_tokens": 11, "ephemeral_1h_input_tokens": 6}, "server_tool_use": Object{"web_search_requests": groups}})
 			return
 		}
+		assert.True(t, hasRequestCacheControl(body), "main conversation caching must survive the search subprocess")
 		limit := 1
 		if bytes.Contains(history, []byte("SEARCH_TWICE")) {
 			limit = 2
@@ -938,7 +943,7 @@ func TestRealCLINativeWebSearchFailures(t *testing.T) {
 	if cli == "" {
 		t.Skip("set CCG_REAL_CLI for native search failure acceptance")
 	}
-	for _, kind := range []string{"ready denied", "rate limit", "missing usage", "missing final output", "client tool"} {
+	for _, kind := range []string{"ready denied", "rate limit", "missing usage", "missing final output", "stale TTL", "client tool"} {
 		t.Run(kind, func(t *testing.T) {
 			root := t.TempDir()
 			plugin, err := extractMod(root)
@@ -994,6 +999,13 @@ func TestRealCLINativeWebSearchFailures(t *testing.T) {
 					writeSurfaceFixture(w, "claude-sonnet-4-6", []Object{{"type": "tool_use", "id": "toolu_client", "name": "Write", "input": Object{"file_path": filepath.Join(root, "must-not-exist"), "content": "forbidden"}}})
 					return
 				}
+				if kind == "stale TTL" {
+					fixture := httptest.NewRecorder()
+					writeNativeWebSearchFixture(t, fixture, "claude-sonnet-4-6", []Object{{"type": "text", "text": "unmetered"}}, Object{"input_tokens": 4, "output_tokens": 8, "cache_creation_input_tokens": 2793, "cache_creation": Object{"ephemeral_1h_input_tokens": 2793, "ephemeral_5m_input_tokens": 0}})
+					w.Header().Set("Content-Type", "text/event-stream")
+					fmt.Fprint(w, strings.Replace(fixture.Body.String(), `"usage":{"output_tokens":8}`, `"usage":{"input_tokens":6,"output_tokens":877,"cache_creation_input_tokens":18380,"cache_read_input_tokens":2793,"server_tool_use":{"web_search_requests":1}}`, 1))
+					return
+				}
 				if kind == "missing final output" {
 					fixture := httptest.NewRecorder()
 					writeNativeWebSearchFixture(t, fixture, "claude-sonnet-4-6", []Object{{"type": "text", "text": "unmetered"}}, Object{"input_tokens": 20, "output_tokens": 8, "server_tool_use": Object{"web_search_requests": 0}})
@@ -1025,8 +1037,27 @@ func TestRealCLINativeWebSearchFailures(t *testing.T) {
 				assert.Equal(t, 429, native.Status)
 				assert.True(t, native.ObservedStatus)
 			}
-			if kind == "missing usage" || kind == "missing final output" {
+			if kind == "missing usage" || kind == "missing final output" || kind == "stale TTL" {
 				assert.ErrorContains(t, err, "accounting")
+				var refusal *requestRefusal
+				require.ErrorAs(t, err, &refusal)
+			}
+			if kind == "stale TTL" {
+				assert.ErrorContains(t, err, "5m/1h")
+				cache, cacheErr := newCache(filepath.Join(root, "cache"), 32<<20)
+				require.NoError(t, cacheErr)
+				g := &Gateway{Runner: runner, Cache: cache, Timeout: 30 * time.Second, Slots: make(chan struct{}, 1)}
+				body, encodeErr := marshalPlain(Object{"model": req.Model, "max_tokens": 1024, "messages": []any{Object{"role": "user", "content": webSearchFastPrompt + "native"}}, "tools": []any{Object{"type": "web_search_20250305", "name": "web_search"}}})
+				require.NoError(t, encodeErr)
+				request := httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(body))
+				request.Header.Set(policyHeader, `{"relay_mode":"native"}`)
+				response := httptest.NewRecorder()
+				g.ServeHTTP(response, request)
+				assert.Equal(t, http.StatusBadGateway, response.Code)
+				assert.Equal(t, "request", response.Header().Get(errorScopeHeader))
+				mu.Lock()
+				assert.Equal(t, 2, requests)
+				mu.Unlock()
 			}
 			if kind == "client tool" {
 				assert.ErrorContains(t, err, "undeclared tool")
@@ -1147,7 +1178,7 @@ func replaySSE(t *testing.T, stream string) Object {
 	var message Object
 	var blocks []map[string]any
 	inputs := map[int]string{}
-	for _, line := range strings.Split(stream, "\n") {
+	for line := range strings.SplitSeq(stream, "\n") {
 		data, ok := strings.CutPrefix(line, "data: ")
 		if !ok {
 			continue

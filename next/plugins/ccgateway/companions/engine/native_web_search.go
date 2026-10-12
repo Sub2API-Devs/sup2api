@@ -67,7 +67,8 @@ func (r *Runner) runNativeWebSearch(ctx context.Context, req *Request, dir strin
 		return nil, err
 	}
 	cfg := &runConfig{diagnostic: req.diagnostic, attachments: Object{}, tools: Object{}, env: map[string]string{
-		"DISABLE_AUTOUPDATER": "1", "DISABLE_AUTO_COMPACT": "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "CLAUDE_CODE_MAX_RETRIES": "0", "ENABLE_TOOL_SEARCH": "false", "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS": "1", "CLAUDE_CODE_EXTRA_BODY": string(extra),
+		"DISABLE_PROMPT_CACHING": "1",
+		"DISABLE_AUTOUPDATER":    "1", "DISABLE_AUTO_COMPACT": "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "CLAUDE_CODE_MAX_RETRIES": "0", "ENABLE_TOOL_SEARCH": "false", "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS": "1", "CLAUDE_CODE_EXTRA_BODY": string(extra),
 		"CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK": "1", "CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL": "1", "ANTHROPIC_BETAS": strings.Join(req.Betas, ","),
 	}}
 	control, err := startModControl(cfg, r.InternalBaseURL)
