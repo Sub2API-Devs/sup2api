@@ -21,8 +21,12 @@ func TestNativeToolsRequireExactVerifiedDefinition(t *testing.T) {
 		{"automatic", "2.1.288", false, nil, true},
 		{"deferred", "2.1.288", false, func(tool *Tool) { value := true; tool.DeferLoading = &value }, true},
 		{"unknown-version", "2.1.289", true, nil, false},
-		{"description", "2.1.288", true, func(tool *Tool) { tool.Description += " Client override" }, true},
-		{"empty-description", "2.1.288", false, func(tool *Tool) { tool.Description = "" }, true},
+		{"description", "2.1.288", true, func(tool *Tool) { tool.Description += " Client override" }, false},
+		{"empty-description", "2.1.288", false, func(tool *Tool) { tool.Description = "" }, false},
+		{"description-whitespace", "2.1.288", true, func(tool *Tool) { tool.Description += " " }, false},
+		{"parameter-description", "2.1.288", true, func(tool *Tool) {
+			tool.Schema["properties"].(map[string]any)["file_path"].(map[string]any)["description"] = "different"
+		}, false},
 		{"schema", "2.1.288", true, func(tool *Tool) { tool.Schema["additionalProperties"] = true }, false},
 		{"unknown-name", "2.1.288", true, func(tool *Tool) { tool.Name = "ClientRead" }, false},
 	} {
@@ -69,7 +73,7 @@ func TestNativeDefinitionsCheckedAtWireBoundary(t *testing.T) {
 		{"missing", func(v Object) { v["tools"] = []any{} }, true},
 		{"duplicate", func(v Object) { v["tools"] = append(v["tools"].([]any), v["tools"].([]any)[0]) }, true},
 		{"schema-drift", func(v Object) { v["tools"].([]any)[0].(Object)["input_schema"].(Object)["required"] = []any{} }, true},
-		{"description-independent", func(v Object) { v["tools"].([]any)[0].(Object)["description"] = "different" }, false},
+		{"description-drift", func(v Object) { v["tools"].([]any)[0].(Object)["description"] = "different" }, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			data, _ := json.Marshal(Object{"tools": []Tool{read}})
@@ -100,12 +104,18 @@ func TestNative21292CatalogVariantsAndMixedNames(t *testing.T) {
 			if err := json.Unmarshal(data, &client); err != nil {
 				t.Fatal(err)
 			}
-			client.Description = "Client owns execution and description."
 			r := &Request{Tools: []Tool{client, {Name: "mcp__files__lookup", Schema: Object{"type": "object"}}, {Name: "custom", Schema: Object{"type": "object"}}}}
 			matchNativeTools(r, "2.1.292")
 			if !r.Native[name] || r.wireName(name) != name || r.wireName("mcp__files__lookup") != "mcp__files__lookup" || r.wireName("custom") != "mcp__ccgateway__custom" {
 				t.Fatal("incorrect mixed native mapping", name, r.Native)
 			}
+			client.Description += " Client override"
+			r.Tools[0] = client
+			matchNativeTools(r, "2.1.292")
+			if r.Native[name] || r.wireName(name) != "mcp__ccgateway__"+name {
+				t.Fatalf("changed %s description retained native identity", name)
+			}
+			client.Description = known.Description
 			client.Schema["x-client-different-definition"] = true
 			r.Tools[0] = client
 			matchNativeTools(r, "2.1.292")

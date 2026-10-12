@@ -75,7 +75,7 @@ WORKER_HEALTH_SCRIPT = ("fetch('http://127.0.0.1:8787/health',{signal:AbortSigna
 SHA256_HEX = re.compile(r'[0-9a-f]{64}')
 
 ROUTE = re.compile(r'/accounts(?:/(' + KEY_PATTERN + r')(?:/(config|status|v1/messages(?:/count_tokens)?|'
-                   r'connection|tunnel|worker|migrate-auth|admin/(?:status|usage|features|request-logs|auth/(?:session|start|complete|cancel|logout))))?)?')
+                   r'connection|tunnel|worker|migrate-auth|admin/(?:status|usage|features|request-logs|cli|auth/(?:session|start|complete|cancel|logout))))?)?')
 UPLOAD_ROUTE = re.compile(r'/images/uploads(?:/([A-Za-z0-9_-]{22})(/load)?)?')
 RUNTIME_ROUTE = re.compile(r'/runtime/(images|controller)')
 DECIMAL = re.compile(r'[0-9]{1,12}')
@@ -319,6 +319,8 @@ class Manager:
             else:
                 runtime.unlink()  # stale, old format or damaged: the environment applies
         self.uploads = Uploads(docker.from_env(timeout=LOAD_TIMEOUT), self.root / 'uploads')
+        from cli_updates import CLIUpdates
+        self.cli_updates = CLIUpdates(self)
 
     def health(self):
         return {'version': self.version, 'app_image': self.app_image, 'egress_image': self.egress_image,
@@ -869,7 +871,7 @@ class Manager:
         """Put data next to target as <target>.next-<random> (root, 0755) and verify it."""
         tmp = f'{target}.next-{secrets.token_hex(6)}'
         try:
-            if not container.put_archive(WORKER_DIR, tar_file(posixpath.basename(tmp), data)):
+            if not container.put_archive(posixpath.dirname(target), tar_file(posixpath.basename(tmp), data)):
                 raise RuntimeError('copy into container failed')
             code, _ = container.exec_run(['chmod', '0755', tmp], user='0')
             if code != 0:
@@ -1286,7 +1288,22 @@ class Handler(BaseHTTPRequestHandler):
                 if connection is None:
                     return self.fail(409, 'not_synchronized')
                 return self.reply(200, connection)
-            methods = ('GET', 'PUT') if path == 'admin/request-logs' else ('GET', 'POST')
+            if path == 'admin/cli' and self.command == 'POST':
+                try:
+                    action = json.loads(body)
+                except ValueError as e:
+                    raise BadRequest('invalid CLI request') from e
+                if action == {'action': 'update'}:
+                    try:
+                        return self.reply(202, manager.cli_updates.start(aid, self.headers.get('X-CCG-Revision', '')))
+                    except RuntimeError:
+                        return self.fail(409, 'cli_update_unavailable')
+            if path == 'admin/cli' and self.command == 'GET' and manager.cli_updates.active(aid):
+                state = manager.state(aid)
+                if not state or state.get('revision') != self.headers.get('X-CCG-Revision', ''):
+                    return self.fail(409, 'not_synchronized')
+                return self.reply(200, manager.cli_updates.request(state))
+            methods = {'admin/request-logs': ('GET', 'PUT'), 'admin/cli': ('GET', 'POST', 'PUT')}.get(path, ('GET', 'POST'))
             if path in ('config', 'status') or self.command not in methods:
                 return self.fail(405, 'method_not_allowed')
             if path in ('admin/usage', 'admin/features') and self.command != 'GET':
@@ -1352,4 +1369,5 @@ if __name__ == '__main__':
     server.key = key
     server.manager = Manager(os.environ['CCG_RUNTIME_ROOT'], os.environ['CCG_APP_IMAGE'],
                              os.environ['CCG_EGRESS_IMAGE'], os.getenv('CCG_RUNTIME_PREFIX', 'ccg'))
+    threading.Thread(target=server.manager.cli_updates.run, daemon=True).start()
     server.serve_forever()

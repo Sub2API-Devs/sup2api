@@ -27,6 +27,8 @@ type Tool struct {
 	Metadata     Object `json:"-"`
 }
 type Request struct {
+	cliSnapshot              *cliSnapshot
+	catalogueEnv             map[string]string
 	completedClientHistory   map[string]string
 	internalCache            *internalCacheRounds
 	helperHistory            *helperHistoryExecution

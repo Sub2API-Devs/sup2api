@@ -134,6 +134,9 @@ func newRunConfig(req *Request, p *Prepared, plugin, dir string) *runConfig {
 	c.diagnostic.artifact("tool-routing.json", c.tools)
 
 	c.env = cliEnv(req, len(c.groups) > 0)
+	for key, value := range req.catalogueEnv {
+		c.env[key] = value
+	}
 	if req.toolSearchEnabled() {
 		c.deferral = toolDeferral(req)
 		c.env["ENABLE_TOOL_SEARCH"] = req.ToolSearch

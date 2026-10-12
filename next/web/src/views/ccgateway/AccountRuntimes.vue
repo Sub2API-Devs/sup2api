@@ -12,6 +12,7 @@ import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { runPool } from '@/views/accounts/pool'
 import { containerPhase, knownReason, type CcgContainer } from './ccgAuthFlow'
 import CredentialStatusNotice from './CredentialStatusNotice.vue'
+import CLISettings from './CLISettings.vue'
 import type { CcgRuntimeHealth } from '@/api/types'
 
 interface RequestLogState {
@@ -228,6 +229,7 @@ async function refreshAuth(r: Row) {
         </template>
         <template #cell-actions="{ row }">
           <div class="flex items-center justify-end gap-2">
+            <CLISettings v-if="auth.has('settings:read')" :account-id="row.id" :disabled="row.phase !== 'ready'" @changed="inspect(row)" />
             <SButton v-if="row.type === 'managed' && canAccounts" size="sm" variant="ghost" :title="t('ccgateway.runtimes.refreshAuth')" @click="refreshAuth(row)">
               <SIcon name="refresh" class="h-3.5 w-3.5" />
             </SButton>

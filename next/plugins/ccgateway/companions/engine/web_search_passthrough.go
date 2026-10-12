@@ -397,7 +397,7 @@ func (x *exchange) serveWebSearchFast(ctx context.Context, dir, query string) {
 	req := x.req
 	x.diagnostic.setStage("web_search")
 	input := req.webSearch.searchInput(Object{"query": query})
-	record, err := x.g.Runner.runWebSearch(ctx, req, dir, input)
+	record, err := x.g.runner(ctx).runWebSearch(ctx, req, dir, input)
 	if err == nil && ctx.Err() != nil {
 		err = ctx.Err()
 	}

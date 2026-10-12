@@ -49,21 +49,36 @@ var verifiedNativeTools = func() map[string]Tool {
 // Match automatically, without requiring the legacy native opt-in header.
 func matchNativeTools(r *Request, version string) {
 	matched := map[string]bool{}
+	r.catalogueEnv = map[string]string{}
 	for _, tool := range r.Tools {
-		for _, known := range verifiedNativeToolCatalogues[version][tool.Name] {
-			if catalogueMatch(known, tool) {
-				matched[tool.Name] = true
-				break
+		for _, known := range r.nativeCatalogue(version)[tool.Name] {
+			if !catalogueMatch(known, tool) {
+				continue
 			}
+			env, _ := known.Metadata["catalog_env"].(map[string]string)
+			compatible := true
+			for key, value := range env {
+				if previous, set := r.catalogueEnv[key]; set && previous != value {
+					compatible = false
+				}
+			}
+			if !compatible {
+				continue
+			}
+			for key, value := range env {
+				r.catalogueEnv[key] = value
+			}
+			matched[tool.Name] = true
+			break
 		}
 	}
 	r.Native = matched
 }
 
-// Identity is the name plus the full input schema. Client descriptions and
-// deferral are applied independently through tool.describe, not used to match.
+// Identity requires the exact name, description and full input schema.
+// Deferral is applied independently through tool.describe, not used to match.
 func sameToolDefinition(a, b Tool) bool {
-	return a.Name == b.Name && digest(a.Schema) == digest(b.Schema)
+	return a.Name == b.Name && a.Description == b.Description && digest(a.Schema) == digest(b.Schema)
 }
 
 // Check what this CLI actually offered, not only the bundled catalogue. Runtime
@@ -85,7 +100,7 @@ func verifyNativeWireTools(req *Request, message Object) error {
 			found++
 			schema, _ := obj["input_schema"].(map[string]any)
 			actual := Tool{Name: want.Name, Description: str(obj, "description"), Schema: schema}
-			if !sameToolDefinition(want, actual) && !restoreShellTool(want, obj) {
+			if !sameToolDefinition(want, actual) {
 				compatible = false
 			}
 		}

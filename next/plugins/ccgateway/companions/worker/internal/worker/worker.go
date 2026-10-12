@@ -69,5 +69,9 @@ func (w *impl) Health(ctx context.Context) (*types.HealthStatus, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	return &types.HealthStatus{Status: "healthy", WorkerID: w.id, CLIVersion: w.Version, Uptime: int64(time.Since(w.startTime).Seconds())}, nil
+	status := "healthy"
+	if !w.CLIReady() {
+		status = "starting"
+	}
+	return &types.HealthStatus{Status: status, WorkerID: w.id, CLIVersion: w.CLIVersion(), Uptime: int64(time.Since(w.startTime).Seconds())}, nil
 }

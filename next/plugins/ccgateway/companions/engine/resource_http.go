@@ -133,7 +133,7 @@ func (b *resourceBroker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	op := &resourceExchange{route: route, input: input, dir: b.dir, limit: b.limit, budget: b.budget}
 	d.trace("resource_dispatch", Object{"method": route.method, "path": route.path, "query": route.query})
-	resp, err := b.g.Runner.runResource(ctx, op)
+	resp, err := b.g.runner(ctx).runResource(ctx, op)
 	if err != nil {
 		d.trace("resource_dispatch_failed", Object{"error": err.Error()})
 		apiError(w, 502, "api_error", err.Error())

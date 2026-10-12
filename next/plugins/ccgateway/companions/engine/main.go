@@ -176,6 +176,7 @@ func (x *exchange) admit() bool {
 		x.fail(400, "invalid_request_error", e.Error())
 		return false
 	}
+	req.cliSnapshot, _ = r.Context().Value(cliSnapshotKey{}).(*cliSnapshot)
 	req.diagnostic = x.diagnostic
 	req.responseFacts = &providerResponseFacts{}
 	x.req = req
@@ -186,10 +187,10 @@ func (x *exchange) admit() bool {
 	}
 	x.diagnostic.setStage("admission")
 	if e = x.g.admitNativeTools(req, r.Header.Get("X-CCGateway-Native-Tools")); e == nil {
-		matchNativeTools(req, x.g.Runner.Version)
+		matchNativeTools(req, x.g.runner(r.Context()).Version)
 		e = validateToolNames(req)
 		if e == nil {
-			e = req.validateInlineNativeMapping(x.g.Runner.Version)
+			e = req.validateInlineNativeMapping(x.g.runner(r.Context()).Version)
 		}
 	}
 	if e != nil {
@@ -282,10 +283,11 @@ func (g *Gateway) vacate(key string) { g.mu.Lock(); delete(g.busy, key); g.mu.Un
 // execute prepares history, runs the CLI, keeps the new history and answers.
 func (x *exchange) execute(branch sessionBranch) {
 	g, req := x.g, x.req
+	runner := g.runner(x.r.Context())
 	started := time.Now()
 	ctx, cancel := context.WithTimeout(x.r.Context(), g.Timeout)
 	defer cancel()
-	dir, e := os.MkdirTemp(g.Runner.Work, "request-")
+	dir, e := os.MkdirTemp(runner.Work, "request-")
 	if e != nil {
 		x.fail(500, "api_error", "Cannot create request workspace")
 		return
@@ -311,7 +313,7 @@ func (x *exchange) execute(branch sessionBranch) {
 	for attempt := 0; ; attempt++ {
 		x.diagnostic.setStage("prepare_history")
 		x.diagnostic.trace("history_prepare_started", nil)
-		p, e := prepareHistory(req, g.Cache, branch, dir, g.Runner.Version)
+		p, e := prepareHistory(req, g.Cache, branch, dir, runner.Version)
 		if e != nil {
 			x.fail(500, "api_error", "Cannot prepare history")
 			return
@@ -326,7 +328,7 @@ func (x *exchange) execute(branch sessionBranch) {
 		x.w.Header().Set("X-CCGateway-Cache-TTL", fmt.Sprint(int((24 * time.Hour).Seconds())))
 		x.w.Header().Set("X-CCGateway-Cache-Scope", "local-only")
 		x.diagnostic.setStage("claude_code")
-		answer, e := g.Runner.run(ctx, req, p, dir, x.send)
+		answer, e := runner.run(ctx, req, p, dir, x.send)
 		if e == nil && ctx.Err() != nil {
 			e = ctx.Err()
 		}
@@ -341,7 +343,8 @@ func (x *exchange) execute(branch sessionBranch) {
 						x.runFailed(ctx, err)
 						return
 					}
-					matchNativeTools(next, g.Runner.Version)
+					next.cliSnapshot = req.cliSnapshot
+					matchNativeTools(next, runner.Version)
 					if err := validateToolNames(next); err != nil {
 						x.runFailed(ctx, &requestRefusal{err})
 						return
@@ -394,7 +397,7 @@ func (x *exchange) execute(branch sessionBranch) {
 			x.diagnostic.trace("history_commit_skipped", Object{"reason": "upstream_refusal"})
 		} else if len(p.NativeRows) == 0 {
 			x.diagnostic.trace("history_commit_skipped", Object{"reason": "no_native_checkpoint"})
-		} else if err := p.commit(req, answer, g.Cache, branch.Logical, dir, g.Runner.Version, started); err != nil {
+		} else if err := p.commit(req, answer, g.Cache, branch.Logical, dir, runner.Version, started); err != nil {
 			x.diagnostic.trace("history_commit_failed", Object{"error": err.Error()})
 			log.Print("history cache write failed; future requests will rebuild")
 		} else {

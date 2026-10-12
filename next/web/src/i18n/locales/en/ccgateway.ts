@@ -1,4 +1,14 @@
 export default {
+  cli: {
+    title: 'CC updates', hint: 'The installed CLI version is checked every 10 minutes. Changes trigger serialized in-memory tool catalog synchronization without modifying session JSONL.',
+    installed: 'Installed version', catalog: 'Catalog version', available: 'Latest channel version', status: 'Catalog state · tools / variants', operation: 'Operation',
+    checkedAt: 'Installed version checked', syncedAt: 'Catalog synchronized',
+    channel: 'Update channel', stable: 'Stable', latest: 'Latest', auto: 'Allow managed CC auto-updates',
+    autoHint: 'Checks the release channel every 6 hours. The controller installs verified official artifacts while idle and keeps a binary backup. Inference subprocesses do not self-update; telemetry remains disabled.',
+    check: 'Check for updates', sync: 'Sync tool catalog', update: 'Update CC', failed: 'CLI management request failed',
+    confirm: 'The controller verifies the official artifact, backs up and replaces this account’s actual CLI executable, then synchronizes its tool catalog. The account container and authorization are preserved. Active requests prevent updating; retry while idle.',
+    states: { starting: 'Starting', syncing: 'Synchronizing', ready: 'Ready', failed: 'Failed', idle: 'Idle', running: 'Running', complete: 'Complete', stopped: 'Stopped', rollback_pending: 'Verification failed; awaiting rollback' },
+  },
   credentialStatus: { saved: 'Local credentials are saved. Online validity is determined by actual requests.', absent: 'No confirmed local credentials found. Online validity was not checked.', unresolved: 'Credential selection is unresolved; external credential programs are not run for status checks.', expired: 'The stored access token has expired. The native CLI will attempt refresh during an actual request.' },
   settingsTabs: { label: 'Settings categories', connection: 'Connection', network: 'Network', cc: 'CC features', deployment: 'Deployment', save: 'Save all settings' },
   features: {

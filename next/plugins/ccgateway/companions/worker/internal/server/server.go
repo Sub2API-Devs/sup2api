@@ -47,6 +47,9 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "unhealthy"})
 		return
 	}
+	if status.Status != "healthy" {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}
 	_ = json.NewEncoder(w).Encode(status)
 }
 

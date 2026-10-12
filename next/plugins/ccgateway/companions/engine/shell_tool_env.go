@@ -12,10 +12,10 @@ import (
 // otherwise. A client with these settings (the user's desktop settings,
 // 2026-10-10) or a -p client offers a definition the inner CLI does not, so
 // its Bash fell back to the gateway's MCP name, which client safeguards
-// refuse. The catalogue matches these tools with the numbers as parameters
-// and the outbound request carries the client's own definition when the
-// inner CLI's differs only in them; no tool runs in the worker, so the
-// numbers do not change what it does. PowerShell
+// refuse. Native matching requires the complete name, description and
+// schema to match exactly, including timeout numbers and whitespace.
+// A changed definition remains an MCP client tool; it is never relaxed
+// to fit the native catalogue. PowerShell
 // (CLAUDE_CODE_USE_POWERSHELL_TOOL) is offered by the Linux CLI as well.
 
 var timeoutDigits = regexp.MustCompile(`[0-9]+`)
@@ -43,10 +43,7 @@ func timeoutNeutral(schema Object) string {
 
 // catalogueMatch reports whether a client definition is a verified variant.
 func catalogueMatch(known, tool Tool) bool {
-	if sameToolDefinition(known, tool) {
-		return true
-	}
-	return shellTool(tool.Name) && known.Name == tool.Name && timeoutNeutral(known.Schema) == timeoutNeutral(tool.Schema)
+	return sameToolDefinition(known, tool)
 }
 
 // shellToolEnv makes the inner CLI offer the client's native PowerShell.
@@ -58,19 +55,9 @@ func (r *Request) shellToolEnv() map[string]string {
 	return env
 }
 
-// restoreShellTool puts the client's Bash or PowerShell definition into an
-// outbound tool whose definition differs only in the timeout numbers.
+// restoreShellTool accepts only an already identical shell definition;
+// it cannot restore a changed description or timeout schema.
 func restoreShellTool(want Tool, obj Object) bool {
 	schema, _ := obj["input_schema"].(map[string]any)
-	if !shellTool(want.Name) || timeoutNeutral(schema) != timeoutNeutral(want.Schema) {
-		return false
-	}
-	raw, _ := json.Marshal(want.Schema)
-	var restored map[string]any
-	if json.Unmarshal(raw, &restored) != nil {
-		return false
-	}
-	obj["input_schema"] = restored
-	obj["description"] = want.Description
-	return true
+	return shellTool(want.Name) && sameToolDefinition(want, Tool{Name: str(obj, "name"), Description: str(obj, "description"), Schema: schema})
 }

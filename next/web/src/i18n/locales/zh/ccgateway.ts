@@ -1,4 +1,14 @@
 export default {
+  cli: {
+    title: 'CC 更新', hint: '本机版本每 10 分钟检查一次；版本变化后加锁同步内存工具目录，不修改会话 JSONL。',
+    installed: '已安装版本', catalog: '工具目录版本', available: '渠道最新版本', status: '目录状态 · 工具 / 变体数', operation: '操作状态',
+    checkedAt: '本机版本检查时间', syncedAt: '工具同步时间',
+    channel: '更新渠道', stable: '稳定版', latest: '最新版', auto: '允许受控自动更新 CC',
+    autoHint: '启用后每 6 小时检查渠道版本，由控制器在空闲时安装并校验官方制品、保留程序备份。推理子进程不自行更新；遥测禁用策略保持不变。',
+    check: '检查更新', sync: '同步工具目录', update: '手动更新 CC', failed: 'CC 版本管理请求失败',
+    confirm: '控制器校验官方制品后替换该账号实际使用的 CC 程序，保留旧程序并同步工具目录。不重建账号容器、不清除授权。有活动请求时更新会失败，请空闲后重试。',
+    states: { starting: '初始化中', syncing: '同步中', ready: '就绪', failed: '失败', idle: '空闲', running: '执行中', complete: '已完成', stopped: '已停止', rollback_pending: '验证失败，等待回退' },
+  },
   credentialStatus: { saved: '本地凭据已保存，在线有效性以实际请求为准。', absent: '未发现可确认的本地凭据，未进行在线验证。', unresolved: '凭据来源尚未确定；不会执行外部凭据程序来检查状态。', expired: '已保存的访问令牌已过期，等待原生 CLI 在实际请求时刷新。' },
   settingsTabs: { label: '设置分类', connection: '连接与授权', network: '网络配置', cc: 'CC 特性', deployment: '部署与运行', save: '保存全部配置' },
   features: {

@@ -103,8 +103,8 @@ func TestSafeguardsSubagentHandback(t *testing.T) {
 	assert.Equal(t, `[{"type":"dangerous_tool_use"}]`, string(cfg.First["safeguards"]))
 }
 
-// Bash and PowerShell match the catalogue with their timeout numbers as
-// parameters; any other difference keeps them off the native path.
+// Bash and PowerShell require exact definitions, including timeout numbers
+// and descriptions; differences keep them off the native path.
 func TestShellToolTimeoutParameters(t *testing.T) {
 	for _, name := range []string{"Bash", "PowerShell"} {
 		known := verifiedNativeToolCatalogues["2.1.292"][name][0]
@@ -113,18 +113,18 @@ func TestShellToolTimeoutParameters(t *testing.T) {
 			raw = bytes.ReplaceAll(raw, []byte(from), []byte(to))
 			var schema Object
 			_ = json.Unmarshal(raw, &schema)
-			return Tool{Name: name, Schema: schema, Description: "client"}
+			return Tool{Name: name, Schema: schema, Description: known.Description}
 		}
 		timeout := variant("max 600000 for a foreground command", "max 1800000 for a foreground command")
-		if !catalogueMatch(known, timeout) || sameToolDefinition(known, timeout) {
+		if catalogueMatch(known, timeout) || sameToolDefinition(known, timeout) {
 			t.Fatalf("%s timeout variant", name)
 		}
 		if other := variant("Set to true to run this command in the background", "Set to true to run this command elsewhere"); catalogueMatch(known, other) {
 			t.Fatalf("%s other text change matched", name)
 		}
 		wire := Object{"name": name, "input_schema": known.Schema, "description": "inner", "cache_control": Object{"type": "ephemeral"}}
-		if !restoreShellTool(timeout, wire) || str(wire, "description") != "client" || digest(wire["input_schema"]) != digest(timeout.Schema) || wire["cache_control"] == nil {
-			t.Fatalf("%s not restored: %v", name, wire)
+		if restoreShellTool(timeout, wire) || str(wire, "description") != "inner" || digest(wire["input_schema"]) != digest(known.Schema) || wire["cache_control"] == nil {
+			t.Fatalf("%s incompatible definition was rewritten: %v", name, wire)
 		}
 		if restoreShellTool(Tool{Name: "Read", Schema: known.Schema}, Object{"input_schema": known.Schema}) {
 			t.Fatal("non-shell tool restored")

@@ -73,7 +73,11 @@ func resolveCLI(path string) (string, error) {
 	return p, nil
 }
 func checkVersion(cli string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	return checkCLIVersion(context.Background(), cli)
+}
+
+func checkCLIVersion(parent context.Context, cli string) (string, error) {
+	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	defer cancel()
 	b, e := exec.CommandContext(ctx, cli, "--version").Output()
 	if e != nil {

@@ -9,6 +9,17 @@ async function setup(policy) {
  await hooks['session.start']($,{},async e=>e);
  return e=>hooks['prompt.attachment']($,e,async e=>e);
 }
+test('native tool descriptions are not overwritten to hide mismatches', async () => {
+ const hooks = {};
+ register((name, fn) => { hooks[name] = fn; return { catch() {} }; });
+ const config = { tools: { Read: { native: true, description: 'catalog description' }, mcp__ccgateway__Read: { native: false, description: 'client description' } } };
+ const $ = { env: { get: async () => 'fixture' }, http: { fetch: async (_url, options) => ({ ok: true, text: options?.method ? '{}' : JSON.stringify(config) }) } };
+ await hooks['session.start']($, {}, async e => e);
+ const next = async () => ({ description: 'actual CLI description', isDeferred: false });
+ assert.equal((await hooks['tool.describe']($, { tool: 'Read' }, next)).description, 'actual CLI description');
+ assert.equal((await hooks['tool.describe']($, { tool: 'mcp__ccgateway__Read' }, next)).description, 'client description');
+});
+
 test('per-type sources and both unknown origins',async()=>{
  for(const kind of ['environment','model','date','session_context','total_tokens_reminder']) {
   for(const selected of ['client','gateway','both']) {

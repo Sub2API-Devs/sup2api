@@ -125,7 +125,7 @@ func TestCaptureRealCLINativeCatalog(t *testing.T) {
 			if bytes.Contains(raw, []byte(strings.ReplaceAll(root, `\`, `\\`))) {
 				t.Fatal("catalog contains machine-specific workspace data")
 			}
-			key := name + ":" + digest(schema)
+			key := name + ":" + digest([]any{str(definition, "description"), schema})
 			schemas[name] = digest(schema)
 			if _, exists := definitions[key]; !exists {
 				definitions[key] = definition

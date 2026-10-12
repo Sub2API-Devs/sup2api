@@ -92,7 +92,7 @@ func (g *Gateway) serveHelperHistory(w http.ResponseWriter, r *http.Request) boo
 		apiError(w, 400, "invalid_request_error", "Helper history requires one trusted policy")
 		return true
 	}
-	namespace, err := helperhistory.Namespace(request.Model, g.Runner.Version, json.RawMessage(policies[0]))
+	namespace, err := helperhistory.Namespace(request.Model, g.runner(r.Context()).Version, json.RawMessage(policies[0]))
 	if err != nil || namespace != envelope.Namespace {
 		apiError(w, 409, "invalid_request_error", "Helper history interpretation namespace changed")
 		return true

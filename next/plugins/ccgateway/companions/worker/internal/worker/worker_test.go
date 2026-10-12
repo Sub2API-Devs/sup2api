@@ -30,6 +30,13 @@ func TestInternalControlUsesExplicitListenerHost(t *testing.T) {
 // Run an actual subprocess over OS pipes. Reject plaintext input, early user
 // submission or truncated content while exercising the native CLI protocol.
 func TestMain(m *testing.M) {
+	if strings.Contains(os.Getenv("ANTHROPIC_BASE_URL"), "/ccg-tool-catalog/") {
+		if err := catalogPeer(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		os.Exit(0)
+	}
 	if os.Getenv("WORKER_TEST_PEER") == "1" {
 		if len(os.Args) > 1 && os.Args[1] == "--version" {
 			fmt.Println("2.1.288")
@@ -42,6 +49,26 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 	os.Exit(m.Run())
+}
+
+func catalogPeer() error {
+	request, err := http.NewRequest("POST", os.Getenv("ANTHROPIC_BASE_URL")+"/v1/messages", strings.NewReader(`{"model":"fixture","tools":[{"name":"Read","description":"fixture","input_schema":{"type":"object"}}]}`))
+	if err != nil {
+		return err
+	}
+	request.Header.Set("X-Api-Key", os.Getenv("ANTHROPIC_API_KEY"))
+	client := &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{}}
+	defer client.CloseIdleConnections()
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("catalog status %d", response.StatusCode)
+	}
+	_, err = io.Copy(io.Discard, response.Body)
+	return err
 }
 
 func peer() error {
@@ -241,6 +268,10 @@ func fixture(t *testing.T, wantRequests int64) Worker {
 	w, err := New(&config.Config{WorkerID: "test", CLIPath: cli, ConfigDir: filepath.Join(root, "config"), HistoryDir: filepath.Join(root, "history"), APIKey: "worker-test-key", AdminKey: "worker-admin-key", RequestTimeout: 5 * time.Second})
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, w.Close()) })
+	require.Eventually(t, func() bool {
+		status, err := w.Health(context.Background())
+		return err == nil && status.Status == "healthy"
+	}, 10*time.Second, 20*time.Millisecond)
 	return w
 }
 
