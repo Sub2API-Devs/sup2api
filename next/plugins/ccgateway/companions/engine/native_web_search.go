@@ -37,8 +37,15 @@ func (r *Runner) runNativeWebSearch(ctx context.Context, req *Request, dir strin
 			tool[key] = value
 		}
 	}
-	fields := Object{"tools": []Object{tool}, "tool_choice": Object{"type": "tool", "name": "web_search"}}
+	fields := Object{"tools": []Object{tool}, "tool_choice": Object{"type": "auto"}}
 	if req.Plan != nil {
+		if _, fast := req.webSearchFastQuery(); fast && len(req.Plan.fields["tool_choice"]) != 0 {
+			choice, err := decodePlannedValue(req.Plan.fields["tool_choice"])
+			if err != nil {
+				return nil, err
+			}
+			fields["tool_choice"] = choice
+		}
 		for _, name := range []string{"service_tier", "speed"} {
 			raw, present := req.Plan.fields[name]
 			if !present || name == "speed" && string(compactRaw(raw)) == "null" {
@@ -77,7 +84,10 @@ func (r *Runner) runNativeWebSearch(ctx context.Context, req *Request, dir strin
 	if err != nil {
 		return nil, err
 	}
-	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--include-partial-messages", "--verbose", "--permission-prompt-tool", "stdio", "--tools", "", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--setting-sources", "", "--settings", string(settingsJSON), "--no-chrome", "--disable-slash-commands", "--no-session-persistence", "--max-turns", "1", "--model=" + req.Model, "--plugin-dir", r.Plugin, "--thinking", "disabled", "--system-prompt-snapshot", "off"}
+	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--include-partial-messages", "--verbose", "--permission-prompt-tool", "stdio", "--tools", "", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--setting-sources", "", "--settings", string(settingsJSON), "--no-chrome", "--disable-slash-commands", "--no-session-persistence", "--max-turns", "1", "--model=" + req.Model, "--plugin-dir", r.Plugin, "--system-prompt-snapshot", "off"}
+	if req.Effort != "" {
+		args = append(args, "--effort", req.Effort)
+	}
 	proc, err := startCLI(ctx, r.CLI, args, work, cfg.processEnv(base, nil), r.Stderr)
 	if err != nil {
 		return nil, err
@@ -322,25 +332,26 @@ func nativeWebSearchPublicUsage(total Object) Object {
 
 func nativeWebSearchRecord(input Object, blocks []Object, usage Object, duration float64) (*webSearchRecord, error) {
 	server, _ := usage["server_tool_use"].(Object)
-	if tokenCount(server["web_search_requests"]) == 0 {
-		for _, block := range blocks {
-			if str(block, "type") == "web_search_tool_result" {
-				return nil, fmt.Errorf("native WebSearch accounting reports zero requests despite a search result")
-			}
-		}
-	}
 	results := []any{}
 	var parts []string
+	searched, succeeded := false, false
+	failureCode := ""
 	for _, block := range blocks {
 		switch str(block, "type") {
-		case "server_tool_use":
+		case "server_tool_use", "thinking", "redacted_thinking":
 		case "web_search_tool_result":
+			searched = true
 			if failure, ok := block["content"].(Object); ok {
-				text := "Web search error: " + str(failure, "error_code")
+				failureCode = str(failure, "error_code")
+				text := "Web search error: " + failureCode
 				results = append(results, text)
 				parts = append(parts, text)
 				continue
 			}
+			if tokenCount(server["web_search_requests"]) == 0 {
+				return nil, fmt.Errorf("native WebSearch accounting reports zero requests despite a search result")
+			}
+			succeeded = true
 			links := []any{}
 			for _, item := range block["content"].([]any) {
 				entry := item.(Object)
@@ -359,6 +370,12 @@ func nativeWebSearchRecord(input Object, blocks []Object, usage Object, duration
 			return nil, fmt.Errorf("native WebSearch returned an unexpected %s block", str(block, "type"))
 		}
 	}
+	if !searched {
+		return &webSearchRecord{Input: input, Error: "unavailable", Text: "Web search was not performed.", Usage: usage}, nil
+	}
+	if succeeded {
+		failureCode = ""
+	}
 	text := "Web search results for query: \"" + str(input, "query") + "\"\n\n" + strings.Join(parts, "\n\n") + "\n\n\nREMINDER: You MUST include the sources above in your response to the user using markdown hyperlinks."
 	first := true
 	for _, block := range blocks {
@@ -376,5 +393,5 @@ func nativeWebSearchRecord(input Object, blocks []Object, usage Object, duration
 			entry["encrypted_content"] = signWebSearchContent(payload)
 		}
 	}
-	return &webSearchRecord{Input: input, Text: text, Usage: usage, NativeBlocks: blocks, Result: Object{"query": str(input, "query"), "results": results, "durationSeconds": duration, "searchCount": server["web_search_requests"]}}, nil
+	return &webSearchRecord{Input: input, Error: failureCode, Text: text, Usage: usage, NativeBlocks: blocks, Result: Object{"query": str(input, "query"), "results": results, "durationSeconds": duration, "searchCount": server["web_search_requests"]}}, nil
 }

@@ -239,6 +239,86 @@ func TestRealCLIPassthroughWebSearch(t *testing.T) {
 	})
 }
 
+func TestNativeWebSearchOutcomes(t *testing.T) {
+	for _, tc := range []struct {
+		name, failure string
+		content       any
+		count         int
+		performed     bool
+	}{
+		{"not performed", "unavailable", nil, 0, false},
+		{"empty results", "", []any{}, 1, true},
+		{"tool error", "unavailable", Object{"type": "web_search_tool_result_error", "error_code": "unavailable"}, 0, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			usage := nativeWebSearchUsageFixture()
+			usage["server_tool_use"] = Object{"web_search_requests": tc.count}
+			blocks := []Object{{"type": "thinking", "thinking": "private search reasoning", "signature": "signature-fixture"}, {"type": "redacted_thinking", "data": "opaque-fixture"}}
+			if tc.performed {
+				blocks = append(blocks, Object{"type": "server_tool_use", "id": "srvtoolu_outcome", "name": "web_search", "input": Object{"query": "q"}}, Object{"type": "web_search_tool_result", "tool_use_id": "srvtoolu_outcome", "content": tc.content})
+			}
+			blocks = append(blocks, Object{"type": "text", "text": "A URL from memory is not a search result: https://example.com"})
+			record, err := nativeWebSearchRecord(Object{"query": "q"}, blocks, usage, 0)
+			require.NoError(t, err)
+			assert.Equal(t, tc.failure, record.Error)
+			assert.Equal(t, usage, record.Usage)
+			assert.NotContains(t, record.Text, "private search reasoning")
+			assert.NotContains(t, record.Text, "opaque-fixture")
+			if tc.performed {
+				assert.Equal(t, blocks, record.NativeBlocks)
+			} else {
+				assert.Nil(t, record.NativeBlocks)
+				assert.NotContains(t, record.Text, "https://example.com")
+			}
+			req := &Request{Model: "claude-opus-5-5", webSearch: &webSearchPlan{usage: Object{}, records: map[string]*webSearchRecord{}}}
+			require.NoError(t, addNativeWebSearchUsage(req.webSearch.usage, record.Usage))
+			req.webSearch.records["outcome"] = record
+			assert.Equal(t, tc.count, req.webSearch.searches())
+			answer := webSearchAnswer(req, record, "q")
+			assert.Equal(t, usage, answer["usage"])
+			if tc.failure != "" {
+				content, err := marshalPlain(answer["content"])
+				require.NoError(t, err)
+				assert.Contains(t, string(content), "web_search_tool_result_error")
+			}
+		})
+	}
+}
+
+func TestNativeWebSearchFastChoice(t *testing.T) {
+	for _, kind := range []string{"", "auto", "none", "tool", "any"} {
+		t.Run("choice="+kind, func(t *testing.T) {
+			body := Object{"model": "claude-opus-5-5", "max_tokens": 1024, "messages": []any{Object{"role": "user", "content": webSearchFastPrompt + "q"}}, "tools": []any{Object{"type": "web_search_20250305", "name": "web_search"}}}
+			if kind != "" {
+				choice := Object{"type": kind}
+				if kind == "tool" {
+					choice["name"] = "web_search"
+				}
+				body["tool_choice"] = choice
+			}
+			raw, err := marshalPlain(body)
+			require.NoError(t, err)
+			req, err := parsePassthroughRequest(raw, nil, RequestPolicy{RelayMode: "native"}, nil)
+			require.NoError(t, err)
+			_, fast := req.webSearchFastQuery()
+			assert.Equal(t, kind == "" || kind == "auto", fast)
+			if kind != "" {
+				choice, err := decodePlannedValue(req.Plan.fields["tool_choice"])
+				require.NoError(t, err)
+				assert.Equal(t, body["tool_choice"], choice)
+				cfg, err := req.passthroughBodies()
+				require.NoError(t, err)
+				wire, err := decodeObject(cfg.First["tool_choice"])
+				require.NoError(t, err)
+				assert.Equal(t, kind, wire["type"])
+				if kind == "tool" {
+					assert.Equal(t, "WebSearch", wire["name"])
+				}
+			}
+		})
+	}
+}
+
 func TestNativeWebSearchUsage(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
@@ -557,6 +637,7 @@ func TestRealCLINativeWebSearchUsage(t *testing.T) {
 	require.NoError(t, err)
 	var mu sync.Mutex
 	requests := 0
+	var parallelChoices []any
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !assert.True(t, strings.HasSuffix(r.URL.Path, "/messages"), r.URL.Path) {
 			http.Error(w, "unexpected endpoint", http.StatusForbidden)
@@ -574,10 +655,22 @@ func TestRealCLINativeWebSearchUsage(t *testing.T) {
 		if !assert.NoError(t, err) {
 			return
 		}
-		assert.Equal(t, "claude-sonnet-4-6", wire["model"])
-		assert.Equal(t, Object{"type": "tool", "name": "web_search"}, wire["tool_choice"])
+		assert.Equal(t, "claude-opus-5-5", wire["model"])
+		choice, _ := wire["tool_choice"].(Object)
+		mu.Lock()
+		parallelChoices = append(parallelChoices, choice["disable_parallel_tool_use"])
+		mu.Unlock()
+		thinking, _ := wire["thinking"].(Object)
+		if str(choice, "type") != "auto" || str(thinking, "type") == "disabled" || str(thinking, "type") == "enabled" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, `{"type":"error","error":{"type":"invalid_request_error","message":"Opus 5.5 requires automatic tool choice and adaptive thinking"}}`)
+			return
+		}
+		assert.Equal(t, "low", wire["output_config"].(Object)["effort"])
 		assert.Equal(t, []any{Object{"type": "web_search_20250305", "name": "web_search", "max_uses": json.Number("8"), "allowed_domains": []any{"example.com"}}}, wire["tools"])
 		writeNativeWebSearchFixture(t, w, str(wire, "model"), []Object{
+			{"type": "thinking", "thinking": "private search reasoning", "signature": "signature-fixture"},
 			{"type": "server_tool_use", "id": "srvtoolu_native", "name": "web_search", "input": Object{"query": "native"}},
 			{"type": "web_search_tool_result", "tool_use_id": "srvtoolu_native", "content": []any{Object{"type": "web_search_result", "title": "Native fixture", "url": "https://example.com/native", "encrypted_content": "provider-opaque"}}},
 			{"type": "text", "text": "Native search commentary"},
@@ -588,7 +681,7 @@ func TestRealCLINativeWebSearchUsage(t *testing.T) {
 	defer cancel()
 	var stderr bytes.Buffer
 	runner := &Runner{CLI: cli, Plugin: plugin, Work: root, Env: nativeProbeEnv(root, upstream.URL), Stderr: &stderr}
-	req := &Request{NativeTransport: true, Passthrough: true, Model: "claude-sonnet-4-6", webSearch: &webSearchPlan{usage: Object{}, records: map[string]*webSearchRecord{}}}
+	req := &Request{NativeTransport: true, Passthrough: true, Model: "claude-opus-5-5", Effort: "low", webSearch: &webSearchPlan{usage: Object{}, records: map[string]*webSearchRecord{}}}
 	record, upstreamErr, err := runner.runWebSearch(ctx, req, root, Object{"query": "native", "allowed_domains": []any{"example.com"}})
 	assert.Nil(t, upstreamErr)
 	require.NoError(t, err, "stderr=%s", stderr.String())
@@ -610,6 +703,36 @@ func TestRealCLINativeWebSearchUsage(t *testing.T) {
 	}
 	req.webSearch.records["native"] = record
 	assert.Equal(t, 1, req.webSearch.searches())
+	assert.NotContains(t, record.Text, "private search reasoning")
+	assert.Equal(t, "thinking", record.NativeBlocks[0]["type"])
+	assert.Equal(t, "signature-fixture", record.NativeBlocks[0]["signature"])
+	cache, err := newCache(filepath.Join(root, "cache"), 32<<20)
+	require.NoError(t, err)
+	g := &Gateway{Runner: runner, Cache: cache, Timeout: 30 * time.Second, Slots: make(chan struct{}, 1)}
+	for _, stream := range []bool{false, true} {
+		body, err := marshalPlain(Object{"model": req.Model, "max_tokens": 1024, "stream": stream, "tool_choice": Object{"type": "auto", "disable_parallel_tool_use": true}, "output_config": Object{"effort": "low"}, "tools": []any{Object{"type": "web_search_20250305", "name": "web_search", "allowed_domains": []any{"example.com"}}}, "messages": []any{Object{"role": "user", "content": webSearchFastPrompt + "native"}}})
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(body))
+		request.Header.Set(policyHeader, `{"relay_mode":"native"}`)
+		response := httptest.NewRecorder()
+		g.ServeHTTP(response, request)
+		require.Equal(t, http.StatusOK, response.Code, "%s", response.Body.String())
+		var answer Object
+		if stream {
+			answer = replaySSE(t, response.Body.String())
+		} else {
+			require.NoError(t, json.Unmarshal(response.Body.Bytes(), &answer))
+		}
+		content := answer["content"].([]any)
+		assert.Equal(t, "thinking", content[0].(Object)["type"])
+		assert.Equal(t, "signature-fixture", content[0].(Object)["signature"])
+		assert.EqualValues(t, 20, answer["usage"].(Object)["input_tokens"])
+		assert.EqualValues(t, 8, answer["usage"].(Object)["output_tokens"])
+		assert.EqualValues(t, 1, answer["usage"].(Object)["server_tool_use"].(Object)["web_search_requests"])
+	}
+	mu.Lock()
+	assert.Equal(t, []any{nil, true, true}, parallelChoices)
+	mu.Unlock()
 }
 
 func TestRealCLINativeWebSearchGateway(t *testing.T) {
@@ -645,7 +768,7 @@ func TestRealCLINativeWebSearchGateway(t *testing.T) {
 		if bytes.Contains(tools, []byte("web_search_20250305")) {
 			assert.Equal(t, "dummy-native-probe", r.Header.Get("X-Api-Key"))
 			assert.Equal(t, "claude-sonnet-4-6", body["model"])
-			assert.Equal(t, Object{"type": "tool", "name": "web_search"}, body["tool_choice"])
+			assert.Contains(t, []Object{{"type": "auto"}, {"type": "tool", "name": "web_search"}}, body["tool_choice"])
 			query := ""
 			for _, message := range body["messages"].([]any) {
 				for _, value := range message.(Object)["content"].([]any) {
@@ -1044,6 +1167,10 @@ func replaySSE(t *testing.T, stream string) Object {
 			switch str(delta, "type") {
 			case "text_delta":
 				blocks[i]["text"] = str(blocks[i], "text") + str(delta, "text")
+			case "thinking_delta":
+				blocks[i]["thinking"] = str(blocks[i], "thinking") + str(delta, "thinking")
+			case "signature_delta":
+				blocks[i]["signature"] = str(blocks[i], "signature") + str(delta, "signature")
 			case "input_json_delta":
 				inputs[i] += str(delta, "partial_json")
 			case "citations_delta":

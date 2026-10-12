@@ -104,6 +104,16 @@ func (r *Request) webSearchFastQuery() (string, bool) {
 	if r.webSearch == nil || len(r.Tools) > 0 || len(r.Messages) != 1 || r.Messages[0].Role != "user" || len(r.Messages[0].Content) != 1 {
 		return "", false
 	}
+	if r.Plan != nil && len(r.Plan.fields["tool_choice"]) != 0 {
+		choice, err := decodePlannedValue(r.Plan.fields["tool_choice"])
+		if err != nil {
+			return "", false
+		}
+		value, ok := choice.(Object)
+		if !ok || str(value, "type") != "auto" {
+			return "", false
+		}
+	}
 	block := r.Messages[0].Content[0]
 	query, ok := strings.CutPrefix(str(block, "text"), webSearchFastPrompt)
 	return query, ok && str(block, "type") == "text" && query != ""

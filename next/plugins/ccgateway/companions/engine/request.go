@@ -764,6 +764,9 @@ func (r *Request) configKey() string {
 	return digest(parts)
 }
 func (r *Request) wireName(name string) string {
+	if r.webSearch != nil && name == "web_search" {
+		return "WebSearch"
+	}
 	if r.acceptsAPIClientIdentity(ToolIdentity{Name: name}) {
 		return name
 	}
