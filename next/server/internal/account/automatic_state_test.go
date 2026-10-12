@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
@@ -124,10 +125,18 @@ func TestAutomaticStateActionsAndTimeForms(t *testing.T) {
 	disable := &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_DISABLE, Reason: "quota exhausted"}
 	clear := &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_CLEAR}
 	out, err := e.svc.ApplyPluginAccountAutomaticState(ctx, "anthropic", id, disable)
-	if err != nil || !out.GetChanged() || out.GetStatus() != "auto_disabled" || out.GetUntilUnix() != 0 {
-		t.Fatalf("disable: %v %v", out, err)
-	}
-	if again, err := e.svc.ApplyPluginAccountAutomaticState(ctx, "anthropic", id, disable); err != nil || again.GetChanged() {
+	require.NoError(t, err)
+	assert.False(t, out.GetChanged())
+	assert.Equal(t, "active", out.GetStatus())
+	assert.Zero(t, out.GetUntilUnix())
+	assert.Empty(t, e.eventTypes())
+	assert.Empty(t, e.auditRows("account.automatic_state"))
+	out, err = e.svc.ApplyAccountAutomaticState(ctx, id, disable)
+	require.NoError(t, err)
+	assert.True(t, out.GetChanged())
+	assert.Equal(t, "auto_disabled", out.GetStatus())
+	assert.Zero(t, out.GetUntilUnix())
+	if again, err := e.svc.ApplyAccountAutomaticState(ctx, id, disable); err != nil || again.GetChanged() {
 		t.Fatalf("duplicate: %v %v", again, err)
 	}
 	timed := &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_DISABLE, Reason: "temporary quota",

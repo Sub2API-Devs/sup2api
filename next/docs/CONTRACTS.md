@@ -2358,13 +2358,13 @@ volcengine 0.12.2 的两个表单同时用 `ui:section` 把素材库字段归入
 
 ## 42. 账号自动禁用：全局开关、管理员规则、账号级开关（2026-10-04，用户要求）
 
-参考 new-api 的渠道自动禁用（`common.AutomaticDisableChannelEnabled`、`operation_setting.AutomaticDisableStatusCodeRanges`、`AutomaticDisableKeywords`，渠道字段 `auto_ban`）。此前插件 `ClassifyError` 返回 `ACCOUNT_EFFECT_DISABLE` 时核心一律禁用账号（如 anthropic 遇 401/403），管理员无法关闭。改为：**插件给默认判定，管理员规则可追加，全局与账号两级开关决定是否真的禁用**。判定只在核心一处执行（`gateway.call.applyClassification`），HTTP、WebSocket、插件驱动执行（§31）三条路径共用。
+参考 new-api 的渠道自动禁用（`common.AutomaticDisableChannelEnabled`、`operation_setting.AutomaticDisableStatusCodeRanges`、`AutomaticDisableKeywords`，渠道字段 `auto_ban`）。此前插件 `ClassifyError` 返回 `ACCOUNT_EFFECT_DISABLE` 时核心一律禁用账号（如 anthropic 遇 401/403），管理员无法关闭。2026-10-12 按用户要求改为：**插件不能自行停用账号；仅命中管理员状态码或关键词规则时，才由全局与账号两级开关决定是否真的禁用**。判定只在核心一处执行（`gateway.call.applyClassification`），HTTP、WebSocket、插件驱动执行（§31）三条路径共用。
 
 ### 42.1 判定
 
 一次上游失败经 `ClassifyError` 分类后：
 
-1. **是否要求禁用**：插件返回 `ACCOUNT_EFFECT_DISABLE`；或真实 HTTP 失败（非传输失败、且插件未标记 `local_failure`）命中管理员规则——上游状态码落在 `status_codes` 内（传输错误 status=0 不参与），或上游响应体前 4 KiB（转小写）包含 `keywords` 中任一项。命中管理员规则时原因为 `matched auto-disable rule: status 401` / `matched auto-disable rule: keyword "<kw>"`（插件已要求禁用时沿用插件原因），且本次尝试按 **failover** 处理（即使插件判为返回客户端：账号已不可用，换号重试）。
+1. **是否要求禁用**：仅真实 HTTP 失败（非传输失败、且插件未标记 `local_failure`）命中管理员规则——上游状态码落在 `status_codes` 内（传输错误 status=0 不参与），或上游响应体前 4 KiB（转小写）包含 `keywords` 中任一项。插件单独返回 `ACCOUNT_EFFECT_DISABLE` 或 `automatic_state.ACTION_DISABLE` 只触发冷却，不改变账号状态。命中管理员规则时原因为 `matched auto-disable rule: status 401` / `matched auto-disable rule: keyword "<kw>"`，且本次尝试按 **failover** 处理（即使插件判为返回客户端：账号已不可用，换号重试）。
 2. **是否执行**：全局 `enabled = true` **且**账号 `auto_disable = true` 时自动禁用：`status = 'auto_disabled'`、`status_reason = 原因`，发 `account.status_changed`、广播 `account:changed`，并解除指向它的粘性绑定。程序不得写管理员停用状态 `disabled`，也不得修改 `schedulable`；相同的自动状态不重复处理。定时解除及插件主动恢复见 §42.5。
 3. **不执行时**：改为冷却 60 秒（`gateway.defaultCooldown`），冷却原因 `auto-disable off, cooling down: <原因>`，避免每个请求都打到同一个坏账号；本次尝试仍 failover。
 
@@ -2399,13 +2399,13 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 
 核心与插件共用 `AccountAutomaticState`：`ACTION_DISABLE` 自动禁用，`ACTION_CLEAR` 仅解除自动禁用。`release` 是 protobuf oneof：省略表示不自动到期；`until_unix` 指定 Unix 秒时间点；`duration_seconds` 指定从数据库当前时间开始的持续时长。时间点必须在未来，时长至少 1 秒，上限均为 366 天；解除操作不得携带时间。原因最长 1000 字节。
 
-- `HostService.SetAccountAutomaticState` / `pluginsdk.SetAccountAutomaticState`：需要新增高风险权限 `accounts.auto_state`，scope 严格为 `{"types":"own"}`；核心在 SQL 中限定调用插件的账号，其他插件账号与不存在账号均返回 NOT_FOUND。响应提供 `changed/status/reason/until_unix`。自动禁用仍受全局和账号级开关控制，插件不能绕过。
-- `ClassifyErrorResponse.automatic_state`：账号所属插件可随错误分类给出定时自动禁用建议；此处只接受 `ACTION_DISABLE`，主动解除走 HostService。`local_failure` 标识本地/Worker 容量或请求本身错误，不参与管理员状态码、关键词禁用规则（仍可按插件建议短冷却）；有明确配额解除时间时保留插件期限，不被通用规则改成无限期禁用。旧 `ACCOUNT_EFFECT_DISABLE` 同样写入 `auto_disabled`，不再与管理员停用混用。
+- `HostService.SetAccountAutomaticState` / `pluginsdk.SetAccountAutomaticState`：需要新增高风险权限 `accounts.auto_state`，scope 严格为 `{"types":"own"}`；核心在 SQL 中限定调用插件的账号，其他插件账号与不存在账号均返回 NOT_FOUND。响应提供 `changed/status/reason/until_unix`。2026-10-12 起插件直接发起的 `ACTION_DISABLE` 在完成参数及所属账号校验后返回当前状态、`changed=false`，不写数据库、不发状态事件；`ACTION_CLEAR` 保留既有恢复语义，不得解除管理员手动停用。
+- `ClassifyErrorResponse.automatic_state`：不再用于停用账号或指定禁用期限，避免插件用过短或非法期限削弱管理员规则。主动解除仍走 HostService。只有命中管理员禁用规则且两级开关允许时才停用，原因记录命中的管理员规则；未命中时与旧 `ACCOUNT_EFFECT_DISABLE` 一样只冷却，不写 `auto_disabled`。`local_failure` 标识本地/Worker 容量或请求本身错误，不参与管理员状态码、关键词禁用规则。
 - 迁移 `0049_account_automatic_state.sql` 只新增 `accounts.auto_disabled_until` 与到期扫描索引，不修改任何已发布迁移。历史 `disabled` 记录不靠错误文本猜测来源，保守保留，管理员可显式重置；新程序只产生 `auto_disabled`。
 - 核心每 5 秒按数据库时间处理最多 200 条到期记录，托管节点只有获准工作后才扫描。事务内 `FOR UPDATE SKIP LOCKED` 保证多节点只恢复一次；只处理当前仍是 `auto_disabled` 且当前解除时间已到的记录，不排队保存旧定时任务。重启或插件退出不会遗失期限。
 - 管理员 `disabled` 状态永远不被插件或到期扫描解除；`schedulable=false` 永远保留。未指定期限的自动禁用不会被随后到来的定时建议降级，需先显式解除。插件状态变更和到期恢复分别审计 `account.automatic_state` / `account.automatic_recovery`，状态事件与数据库更新同事务提交。
 - 手工“重置状态”同时清除自动解除时间；管理员显式修改 `status` 时取消旧期限。成功重新授权会恢复 `error/auto_disabled`，但不恢复管理员 `disabled`，也不改变调度开关。
-- CCGateway 0.1.37：托管 OAuth 账号收到上游 429 后，插件声明到期自动禁用。取所有已耗尽窗口中最晚的 reset，与 Retry-After 同时存在时取较晚值；没有这两类信息时用未标明耗尽窗口的最近 reset，再无时间信息时使用 60 秒。Worker 透传模式仍隐藏订阅额度明细，但把已耗尽的订阅窗口 reset 转为 Retry-After，避免核心只能看到默认短冷却。Worker 满载的 `Gateway concurrency limit reached` 保留短冷却，不标记配额耗尽；401/403 不附解除时间。自动禁用不关闭 Worker，额度查询、重新授权仍可用，模型调度继续被核心阻断。
+- CCGateway 0.1.37：托管 OAuth 账号收到上游 429 后，插件声明到期自动禁用建议；2026-10-12 起核心仅在命中管理员禁用规则时执行，未配置 429 且关键词未命中时只冷却。取所有已耗尽窗口中最晚的 reset，与 Retry-After 同时存在时取较晚值；没有这两类信息时用未标明耗尽窗口的最近 reset，再无时间信息时使用 60 秒。Worker 透传模式仍隐藏订阅额度明细，但把已耗尽的订阅窗口 reset 转为 Retry-After，避免核心只能看到默认短冷却。Worker 满载的 `Gateway concurrency limit reached` 保留短冷却，不标记配额耗尽；401/403 不附解除时间。自动禁用不关闭 Worker，额度查询、重新授权仍可用，模型调度继续被核心阻断。
 - 到期解除表示恢复调度资格，不等于已向上游验证额度；不发送收费模型探活。上游仍限流时，插件可再次指定新期限；插件观察到额度提前恢复时可主动 `ACTION_CLEAR`。
 - 新接口要求 Host API 6；CCGateway 在初始化时拒绝旧 Host API，避免旧核心忽略新字段而造成永久禁用。发布必须同步 SDK、核心与外壳 Host API 声明。账号列表区分自动禁用并展示解除时间。
 

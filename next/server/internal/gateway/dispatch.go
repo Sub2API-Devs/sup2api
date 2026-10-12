@@ -698,9 +698,12 @@ func (c *call) applyAccountEffect(ctx context.Context, acct *pluginv1.Account, s
 		automatic = nil
 	}
 	if automatic != nil {
-		effect, reason = pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE, automatic.GetReason()
+		effect, reason = pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN, automatic.GetReason()
 	}
-	if effect != pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE && status > 0 && !cls.GetLocalFailure() {
+	if effect == pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE {
+		effect = pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN
+	}
+	if status > 0 && !cls.GetLocalFailure() {
 		if rule := c.autoDisable.rule(status, body, transportErr); rule != "" {
 			effect, reason, failover = pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE, rule, true
 		}
@@ -709,7 +712,7 @@ func (c *call) applyAccountEffect(ctx context.Context, acct *pluginv1.Account, s
 	case pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_COOLDOWN:
 		c.cooldown(ctx, acct.Id, time.Unix(cls.GetCooldownUntilUnix(), 0), reason)
 	case pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE:
-		if !c.autoDisableAccount(ctx, acct.Id, reason, automatic) {
+		if !c.autoDisableAccount(ctx, acct.Id, reason) {
 			c.cooldown(ctx, acct.Id, time.Time{}, "auto-disable off, cooling down: "+reason)
 		}
 	}
@@ -719,23 +722,11 @@ func (c *call) applyAccountEffect(ctx context.Context, acct *pluginv1.Account, s
 // autoDisableAccount disables the account when both the global switch and
 // the account allow it, dropping a sticky binding to it. It reports whether
 // the account is disabled.
-func (c *call) autoDisableAccount(ctx context.Context, id int64, reason string, automatic *pluginv1.AccountAutomaticState) bool {
+func (c *call) autoDisableAccount(ctx context.Context, id int64, reason string) bool {
 	if !c.autoDisable.Enabled {
 		return false
 	}
-	var disabled bool
-	var err error
-	if automatic != nil {
-		controller, ok := c.g.d.Accounts.(core.AccountAutomaticStateController)
-		if !ok || automatic.GetAction() != pluginv1.AccountAutomaticState_ACTION_DISABLE {
-			return false
-		}
-		var out *pluginv1.SetAccountAutomaticStateResponse
-		out, err = controller.ApplyAccountAutomaticState(ctx, id, automatic)
-		disabled = out.GetStatus() == "auto_disabled" || out.GetStatus() == "disabled"
-	} else {
-		disabled, err = c.g.d.Accounts.AutoDisable(ctx, id, reason)
-	}
+	disabled, err := c.g.d.Accounts.AutoDisable(ctx, id, reason)
 	if err != nil {
 		slog.WarnContext(ctx, "gateway: disable account", "account", id, "err", err)
 		return false

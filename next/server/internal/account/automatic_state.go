@@ -90,7 +90,7 @@ func (s *Service) applyAutomaticState(ctx context.Context, owner string, id int6
 		if until != nil {
 			out.UntilUnix = until.Unix()
 		}
-		if out.Status == "disabled" {
+		if out.Status == "disabled" || (owner != "" && state.GetAction() == pluginv1.AccountAutomaticState_ACTION_DISABLE) {
 			return nil
 		}
 		previous := out.Status

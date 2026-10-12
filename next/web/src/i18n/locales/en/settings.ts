@@ -49,9 +49,9 @@ export default {
   },
   autoDisable: {
     title: 'Automatic disabling',
-    subtitle: 'Disable an account when the upstream error shows the account itself is unusable (invalid credentials, exhausted quota, banned organization), as in new-api. Rules by status code and error keyword add to the plugin\'s own judgement.',
+    subtitle: 'Automatically disable accounts only when an upstream error matches the status codes or keywords below, as in new-api. Plugins cannot independently disable accounts; cooldown and failover still apply.',
     enabled: 'Enable automatic disabling',
-    enabledHint: 'When off no account is ever disabled automatically; it is cooled down for 60 seconds instead. Single accounts can opt out in the account editor.',
+    enabledHint: 'When off no account is disabled automatically. Upstream errors may still trigger cooldown and failover. Individual accounts can opt out in the account editor.',
     statusCodes: 'Disabling status codes',
     statusCodesHint: 'Disable the account when the upstream returns one of these codes. Comma separated, ranges allowed, e.g. 401,403,500-503; empty means none.',
     keywords: 'Disabling keywords',

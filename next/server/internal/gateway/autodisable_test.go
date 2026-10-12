@@ -6,11 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 )
 
-// CONTRACTS §42: plugin verdicts and administrator rules ask to disable an
-// account; the global switch and the account's auto_disable decide.
+// CONTRACTS §42: only administrator rules can disable an account;
+// the global switch and the account's auto_disable still decide.
 
 type automaticStateAccounts struct {
 	*fakeAccounts
@@ -31,25 +34,43 @@ func (a *automaticStateAccounts) ApplyPluginAccountAutomaticState(ctx context.Co
 	return a.ApplyAccountAutomaticState(ctx, id, state)
 }
 
-func TestClassificationPassesAutomaticReleaseTimeToAccountService(t *testing.T) {
-	e := newEnv(t)
-	accounts := &automaticStateAccounts{fakeAccounts: e.accounts}
-	e.gw.d.Accounts = accounts
-	c := &call{g: e.gw, autoDisable: defaultAutoDisableSettings()}
-	state := &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_DISABLE, Reason: "quota exhausted", Release: &pluginv1.AccountAutomaticState_UntilUnix{UntilUnix: time.Now().Add(time.Hour).Unix()}}
-	c.applyAccountEffect(t.Context(), &pluginv1.Account{Id: 1}, 429, nil, "", &pluginv1.ClassifyErrorResponse{AutomaticState: state})
-	if accounts.received != state || e.accounts.disabled[1] != "quota exhausted" || len(e.accounts.cooldowns) != 0 {
-		t.Fatalf("automatic state not applied: %v %v", accounts.received, e.accounts.cooldowns)
+func TestPluginDisableRequiresAdministratorRule(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status int
+		effect pluginv1.ClassifyErrorResponse_AccountEffect
+		timed  bool
+	}{
+		{"legacy rate limit", 429, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE, false},
+		{"legacy permission error", 403, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE, false},
+		{"automatic state", 429, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_UNSPECIFIED, true},
+		{"managed rate limit", 429, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newEnv(t)
+			accounts := &automaticStateAccounts{fakeAccounts: e.accounts}
+			e.gw.d.Accounts = accounts
+			c := &call{g: e.gw, autoDisable: defaultAutoDisableSettings()}
+			cls := &pluginv1.ClassifyErrorResponse{AccountEffect: tc.effect, Reason: "plugin refusal", CooldownUntilUnix: time.Now().Add(time.Minute).Unix()}
+			if tc.timed {
+				cls.AutomaticState = &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_DISABLE, Reason: "quota exhausted", Release: &pluginv1.AccountAutomaticState_UntilUnix{UntilUnix: time.Now().Add(time.Hour).Unix()}}
+			}
+			c.applyAccountEffect(t.Context(), &pluginv1.Account{Id: 1}, tc.status, nil, "", cls)
+			assert.Empty(t, e.accounts.disabled)
+			assert.Nil(t, accounts.received)
+			assert.Equal(t, []int64{1}, e.accounts.cooldowns)
+		})
 	}
 }
 
-func TestAutoDisableRulesExcludeLocalFailuresAndKeepQuotaDeadline(t *testing.T) {
+func TestAutoDisableRulesExcludeLocalFailuresAndIgnorePluginDeadline(t *testing.T) {
 	for _, tc := range []struct {
-		status int
-		local  bool
-		timed  bool
+		status  int
+		local   bool
+		timed   bool
+		expired bool
 	}{
-		{0, false, false}, {429, true, false}, {429, false, true},
+		{0, false, false, false}, {429, true, false, false}, {429, false, true, false}, {429, false, true, true},
 	} {
 		e := newEnv(t)
 		accounts := &automaticStateAccounts{fakeAccounts: e.accounts}
@@ -61,10 +82,16 @@ func TestAutoDisableRulesExcludeLocalFailuresAndKeepQuotaDeadline(t *testing.T) 
 			cls.AutomaticState = &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_DISABLE, Reason: "rate limit",
 				Release: &pluginv1.AccountAutomaticState_DurationSeconds{DurationSeconds: 3600}}
 		}
+		if tc.expired {
+			require.NotNil(t, cls.AutomaticState)
+			cls.AutomaticState.Release = &pluginv1.AccountAutomaticState_UntilUnix{UntilUnix: 1}
+		}
 		c.applyAccountEffect(t.Context(), &pluginv1.Account{Id: 1}, tc.status, []byte("rate limit"), "rate limit", cls)
 		_, disabled := e.accounts.disabled[1]
-		if disabled != tc.timed || accounts.received != cls.AutomaticState {
-			t.Fatalf("case %+v: disabled=%t state=%v", tc, disabled, accounts.received)
+		assert.Equal(t, tc.timed, disabled)
+		assert.Nil(t, accounts.received)
+		if tc.timed {
+			assert.Equal(t, "matched auto-disable rule: status 429", e.accounts.disabled[1])
 		}
 	}
 }
