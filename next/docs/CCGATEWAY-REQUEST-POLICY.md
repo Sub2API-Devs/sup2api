@@ -2,7 +2,10 @@
 
 本文描述当前代码契约，不是发布或部署验收记录。旧模型 relay 仅保留在
 `archive/ccgateway-relay-0.1.41@4b0e0967c`；当前工作树的旧主体与
-`mod/search` 已物理删除，测试与资源授权（resourceauth）仍在验收中。
+`mod/search` 已物理删除。native-only 构建已随 Core 0.1.121 / CCGateway 0.1.42
+发布，本地 CC 经 #22 的文本、Read、图片和 WebSearch 验收通过，详见
+`ccgateway-feature-support/ENVIRONMENT-RUNBOOK.md`。资源授权已通过两版 CLI 的
+隔离验证，不等于所有真实账号具备 Files/Skills 上游资格；#26 的 OAuth 刷新失败仍待处理。
 
 ## 策略来源与固定执行契约
 

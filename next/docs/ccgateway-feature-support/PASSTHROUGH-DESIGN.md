@@ -6,10 +6,11 @@ Worker 不建立模型 HTTP 中继，也不改写 CLI 已发出的 HTTP 请求/�
 旧 relay 主体与 `mod/search` 已物理删除，旧实现及原讨论、分阶段上线计划、旧验证结果
 请查 `archive/ccgateway-relay-0.1.41@4b0e0967c`。归档不是当前可选回滚路径。
 
-**状态边界**：这是工作树代码合同，不是已发布或全部验收通过的声明。
-测试及资源授权（resourceauth）仍在验收中；历史 CLI/假上游/账号证据不能替代
-native-only 当前构建与部署版 CLI 的验证。本文不安排提交、部署、账号切换或生产操作，
-不改写 `ENVIRONMENT-RUNBOOK` 的历史部署证据。
+**状态边界**：这是代码合同，发布与验收证据另见 `ENVIRONMENT-RUNBOOK`。
+native-only 已随 Core 0.1.121 / CCGateway 0.1.42 发布；Windows 2.1.296、隔离 Linux
+2.1.292 回归和 #22 的本地 CC 文本/Read/图片/WebSearch 验收已通过。资源授权通过
+隔离验证，不推定所有真实账号具备 Files/Skills 上游资格。#26 的 OAuth 刷新失败仍待处理；
+不能用旧 relay 或其他账号的成功结果替代它的验证，也不改写历史部署证据。
 
 ## 1. 固定执行路径与保留组件
 

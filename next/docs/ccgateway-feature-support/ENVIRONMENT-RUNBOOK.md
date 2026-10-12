@@ -1,5 +1,15 @@
 # CCGateway 环境与操作指南
 
+> **2026-10-12 native-only 线上版本：** Core 四节点 **v0.1.121**，CCGateway / #26、#22、#24 Worker **0.1.42**。发布源码 `c9e54f6792fe785a61ba91fc8ed88833aa28ce41`；manifest `db6d286b8aa300518bfa6d0375c5b4660d16391ad061fe2689ae4f140e89e90e`；Core SHA-256 `1f66cf31c4cf9677097b9b5cfe868dfd60046c7a5d006973751d77b88497bf3f`。正常 primary-first 计划 `256977cc97d80da632ea1f5bc20138eb` completed，五个未升版 builtin、trust 与 schema 保持不变。
+> - **当前分支已移除旧执行模式**：删除模型 HTTP relay、旧搜索插件及相关旧设置/专用测试；旧代码保存在 `archive/ccgateway-relay-0.1.41@4b0e0967c`。当前只声明 native，不在错误后自动切回旧实现。有效策略固定 native、去掉旧灰度与无效字段，其余管理员策略不变。
+> - **原地更新与保留性**：三个目标程序 SHA-256 均为 `289797eed4b21a8b1a40730a44b526899e5ca35efe5c0a0f00655fc1499dba38`；CLI 仍为 **2.1.292** / `a967e7b1d8b4e47ee421d5433027880347952b0c0857abf880e2c942a4ec93b3`。14 个账号/控制器容器的 ID、镜像、挂载、安全设置和环境摘要均保留，只重启三个目标 app。#24 更新后的单条 Docker 复核命令曾失败；随后状态为 running、无 restart-loop，版本/哈希及全量保留性复核通过，没有重跑更新。未重建容器、未重新授权、未使用或更新 #23/#25。
+> - **本地 CC 实测通过**：11:49:33–11:50:14 UTC，Windows CC **2.1.296** 使用 **claude-opus-5-5**，经用户批准的子进程临时配置与 SSH 回环通道完成文本、Read、图片和一次 WebSearch。测试脚本未写全局 CC 配置（末次只读复核时，全局入口已为 CCGateway）；两个本轮临时 Key（37/38）均已撤销。7 笔记录 **3078–3084** 全部由 **#22** 处理，均 200、一次尝试、正常结算；#24 通过运行版本/哈希门禁，本轮没有被调度到真实请求，不能声称其模型复验完成。
+> - **搜索计量**：记录 **3083** 输入 **21,198**、输出 **1,068**，实际 `web_search_requests=1`，缓存读写均为真实 **0**；SSE cache evidence 为 complete，未分类 Token 为 0，anomalies 为空。CLI 返回真实搜索结果，无工具/API/协议错误。主会话记录 3082/3084 的缓存写入合计 **3,642**、读取 **2,178**，与本地 CLI 主会话一致；CLI 汇总不含隐藏搜索子请求，独立搜索用量不重复相加。
+> - **#26 授权边界**：首个文本请求记录 **3074** 为 502、零用量、零费用。Mod v3 握手已成功；CLI 明确返回 `OAuth session expired and could not be refreshed`，`api_error_status=null`、`duration_api_ms=0`，没有伪造成上游 401 或触发插件停用。用户选择先用 #22/#24；复核时 #26 已经 schedulable=false，故没有再次 PATCH，保持 active 且无自动停用期限。#26 须恢复授权后另行验证，不宣称迁移修复了其授权问题。
+> - **恢复材料与范围**：`backups/pg-before-0.1.121.dump` 为 0600、22,484,919 字节，恢复列表通过；Core/三个 Worker 的私有基线、更新报告、旧程序备份与 `upgrade-20261012T113123.log` 保留。旧制品和分支不是自动跨版本回滚证明。新增镜像在断网、无账号挂载的非 root 门禁中确认版本/CLI 哈希与仅 native 能力；本轮套接字采样未捕获活动连接，不将其作为新的生产 TLS 抓取证据。资源授权/OAuth 的隔离验收见下文，未进行生产 Files/Skills 上传或推定所有账号的资源资格。
+
+## 0.1.120 历史部署记录
+
 > **2026-10-12 14:24（北京时间）线上版本：** 核心 **v0.1.120**，CCGateway **0.1.41**，发布源码 `469f038ea63d87a7044627cf6f8f7257a4e0c687`。manifest `8ec1184b3aca7b721dbb07da718b79912446658c2bfe14509e025acf793444ac`；四节点程序 SHA-256 均为 `65f64c0c5b59ce183f9f7fa7901850a75af1693db74ac0f556af783ec252ce72`。primary-first 计划 `7cb118ca3a02bf63cc911d2c293396e1` completed；五个未升版 builtin 包、trust 和 schema 均保持不变。
 > - **WebSearch 400 根因与修复**：本地 CC 的搜索子请求已使用 `tool_choice:auto`，旧 Worker 却改成强制 `tool`，被 Opus 5.5 拒绝。0.1.40 改用 auto，保留并行控制，移除强制关闭 thinking，处理 thinking／签名及未搜索、空结果、工具错误。显式 none／force 不再走快捷搜索，force 的 web_search 正确映射为 CLI WebSearch，不变成不存在的 MCP 工具。
 > - **搜索专用缓存策略经用户确认**：0.1.119 的真实搜索暴露 CLI 事件缺口：起始缓存写入 2,793（全 1h），最终总数 18,380，却无最终 TTL 分项；assistant／result／modelUsage 也无法补齐，故严格拒绝而非推算。#26 临时原生无缓存探针成功后，用户确认采用；0.1.41 仅给一次性 native 搜索子进程设置官方 `DISABLE_PROMPT_CACHING=1`。主会话缓存保留，不清零上游实际用量、不按美元或请求 TTL 反推。若实际缓存数据仍不完整则请求级失败，不误冷却账号或换号重放。
@@ -10,15 +20,15 @@
 > - **策略及回滚材料**：最终 #22/#24/#26 均 active 且无自动停用期限，#23 disabled、#25 不可调度；管理员 401／关键词禁用规则及 native 策略与发布前一致。备份 `backups/pg-before-0.1.120.dump` 为 0600、24,794,795 字节，恢复列表检查通过；`backups/core-0.1.120-runtime-baseline.json`、各账号 `native-0.1.120*baseline.json`／`*worker-update.json` 及控制器旧程序备份保留。升级日志 `upgrade-20261012T061016.log`。这些是保留的回滚材料，不是跨版本自动回滚演练证明。
 > - **验证**：engine、worker、ccgateway 包测试及 engine vet 通过；Windows CLI 2.1.296 与断网隔离 Linux CLI 2.1.292 的 `TestNativeWebSearch|TestRealCLINativeWebSearch` 通过，覆盖实际出站 auto、并行控制、无缓存搜索／主会话仍缓存、thinking／签名、错误与计量；完整缓存事实即使非零也保留，不伪造 0。复现真实 stale TTL 事件并验证请求级错误作用域。0.1.41 镜像断网 health/features 门禁通过。未改数据库代码，不声称本轮执行全套 race 或三数据库矩阵。
 
-## native-only 清理验收（2026-10-12，尚未发布）
+## native-only 发布前离线验收（2026-10-12）
 
-- 当前源码准备 CCGateway 0.1.42；线上版本仍以上述 0.1.120/0.1.41 记录为准。旧实现保存在 `archive/ccgateway-relay-0.1.41@4b0e0967c`。工作树删除模型 HTTP relay、旧搜索插件、旧模式开关与已确认的专用测试，不以设置为关闭来保留旧执行模式；资源管理 HTTP、代理和 Mod 回调保留。
+- 以下为 0.1.42 发布前完成的离线验收；当前线上版本与真实验证结果见本文开头。旧实现保存在 `archive/ccgateway-relay-0.1.41@4b0e0967c`。工作树删除模型 HTTP relay、旧搜索插件、旧模式开关与已确认的专用测试，不以设置为关闭来保留旧执行模式；资源管理 HTTP、代理和 Mod 回调保留。
 - `clear_at:next_user_message` 的内部 ToolSearch/WebSearch 续轮已改为：模型调用前暂停，核验自有附件 UUID 与原生结果，清除临时指令后同模型 resume 一次。只提交真实工具结果后缀；不重放搜索、首轮 tool_choice、同名正文或累计用量。Mod `ccgateway-v3` 在输入前确认，旧协议拒绝。Windows CLI 2.1.296 与 Linux CLI 2.1.292 均通过 15 场景/81 次生命周期请求和 5 个取消/失败场景。
 - 最新 Linux 隔离门禁 56 个顶层测试通过、零跳过，覆盖 native 主路径/恢复、搜索/严格计量、clear_at 生命周期、文件引用、Files/Skills 管理 HTTP、身份/取消/字节保真、Mod 协议及 credit+搜索前置拒绝。镜像 `ccgateway-app:0.1.41`、CLI SHA-256 `a967e7b1d8b4e47ee421d5433027880347952b0c0857abf880e2c942a4ec93b3`；测试程序 SHA-256 `f29f076422e282d96f0d191817994142a71c0ae0f4363b592e270ad3d880bee8`。临时容器禁网、无账号挂载、uid 1000、cap-drop ALL/no-new-privileges、2 CPU/4 GiB/512 tasks，结束后确认已删除。使用真实 CLI 与本地假上游，不是生产模型验证。
 - 存储 OAuth 的 37 场景此前在上述两版 CLI 各连续两轮通过；只由 CLI 刷新并核验落盘/指纹/30 秒有效期，未知版本拒绝。独立审查未发现高严重度问题；credit 跟踪与搜索原本拒绝过晚，已加生成前门禁；无调用者的旧 credit wire 改写函数已删除。NO_PROXY 不绕过管理 HTTP 的 HTTPS_PROXY、版本为启动快照、外部并发轮换及损坏身份文件仍是明确边界，不宣称通用 ASVS 合规。
 - CCGateway/engine/Worker/contracts 全包普通回归、构建与相关 Go vet 通过；Core CCGateway 全包在真实 PostgreSQL **16.9** 上通过（最后一轮 78.160s）。Windows 原有测试库缺 `pg_control`，未删除或修复；以一次性 `LOCALAPPDATA` 创建隔离测试库，保持原 GOCACHE。工具的 `testpg stop` 未能停止该进程，最终用该临时目录自己的 `pg_ctl -D ... stop -m fast -w` 正常关闭；未触及生产库，不声称 SQLite/MySQL 或 race 矩阵通过。
 - 原生 Mod 的 Node 测试 7 项通过；前端策略/控制器/语言包 86 项通过，Vue typecheck 和独立临时目录生产构建通过。定向 ESLint 0 errors、495 个既有样式/未使用变量 warnings；Bun 不可用，使用已安装 Node 工具，未安装依赖或修改安全限制。
-- 尚须提交推送、签名发布、验证允许账号的原地更新，并使用本地 CC 做真实模型验收；上述离线结果不替代生产验收。不得使用或更新 #23/#25。
+- 后续提交推送、签名发布、三个允许 Worker 原地更新及本地 CC 经 #22 的模型验收已完成，证据见本文开头。离线结果仍不替代 #26 授权恢复或真实账号 Files/Skills 资格验证；#23/#25 未使用、未更新。
 
 以下为历史部署记录。
 

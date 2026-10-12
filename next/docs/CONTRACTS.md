@@ -3822,7 +3822,7 @@ images/gateway.tar.gz      # Caddy 网关
 
 旧 legacy 默认、两名单灰度、首次 HTTP 错误原样直返、非流 warmup 桥接、出站还原与 helper history 的旧测试/上线记录均属于归档历史，不是当前功能或回滚选项。原生错误、搜索、fallback 及独立资源边界以 §53.14 为准。
 
-### 53.14 原生 CLI 模型出站（native-only 工作树，尚在验收）
+### 53.14 原生 CLI 模型出站（native-only，0.1.121 / 0.1.42 已发布）
 
 用户选择原生 Claude Code 语义，不再要求 legacy 的 HTTP 字节还原、原始错误正文/全部响应头，以及首次错误后绝不兼容重发。模型 HTTP relay 主体已从当前工作树删除；Worker、主 Mod 控制面、账号隔离、sing-box 和 `127.0.0.1:8787` 本地放行保留，`NO_PROXY` 仍包含 `127.0.0.1,localhost`。不使用 uTLS、生产 CA 或 hosts 重定向。旧 `legacy` / `passthrough` 仅在归档，不是当前兼容回滚或失败重试路径。
 
@@ -3836,9 +3836,9 @@ images/gateway.tar.gz      # Caddy 网关
 - `fallbacks` 由 Worker 在当前进程终止后协调，只对真实 429/500/502/503/504/529、没有观察到任何主模型输出、没有请求级失败且未取消时尝试。每次从最初请求重新准入并建立私有历史副本，不继承失败尝试的运行态；显式 null 删除对应覆盖字段（max_tokens:null 保留主限制），speed 可逐尝试重新配置。禁止在已输出、内部搜索已执行或计量失败后重放整轮。
 - native 搜索使用正常单轮 CLI 模型流，EXTRA_BODY 声明唯一 server web_search，使用 auto 而非强制 tool/any；快捷入口仅接收省略/auto 的 tool_choice，保留 auto 的并行控制选项，none/显式强制选择走普通执行路径，不改变用户原意。经确认，仅一次性 native 搜索子进程设置官方 DISABLE_PROMPT_CACHING=1，避免服务端搜索循环增加写入总数却不更新 TTL 分项的原生事件缺口；主会话缓存不变，不在事后把缓存用量清零。若上游仍报告缓存写入，仍须具备一致的真实 5m/1h 分项，否则请求级失败，不因此冷却账号或换号重放。搜索进程不强制关闭 thinking，保留已有 effort，由 CLI 处理模型原生思考语义；thinking/redacted_thinking 保留在原生响应中，不拼入搜索结果文本或引用载荷。主 Mod 限制轮次、禁本地工具，模型使用该请求明确选择的模型。保留 domain filters、max_uses、结果/引用、多组错误块和 ccgws1 历史。用实际 SSE usage 计量，包括输入/输出、缓存读取、缓存写入总数及 5m/1h 分项、实际搜索次数；不从美元或累计 modelUsage 反推。HTTP/进程失败或账务事实缺失仍终止整个请求；未执行搜索返回明确工具错误并保留已发生用量，不把普通文本或网址当搜索结果。实际搜索的空结果与工具错误分开处理，错误可以带零次搜索计数，不能凭空增加费用或丢弃已有模型用量。
 - 主流使用原始 stream_event 的 usage 与现有内部轮合并；不将重复 assistant 块及累计 result.modelUsage 再加一次。普通输出、工具交接、原生历史恢复及图片续接须按当前 native 路径分别验收；旧 native/relay 差分证据只作历史参考。
-- Files/Skills 使用独立的非模型管理 HTTP，只放行资源操作白名单与必要身份查询，不恢复模型 relay。授权结合唯一受支持凭据来源、provider/配置目录及前后指纹绑定，profile 返回后再次检查；后续 IO 使用同一核验身份。API key/env OAuth 使用 `auth status --json`；stored OAuth 只运行无用户输入的原生初始化，不追加可能再次触发刷新竞态的短命 status 进程。stored OAuth 私有刷新协议仅允许已验证的 CLI 2.1.292/2.1.296，未知版本在认证前拒绝。OAuth 刷新只允许 CLI 自身执行，Go 管理 HTTP 不自行刷新、不发模型探针、不清锁；必要时等待旋转落盘，并在进程退出后重读凭据。接受门限为超过 30 秒有效期，来源不明、刷新未完成或身份变化时失败关闭。37 场景在 Windows 2.1.296 和断网隔离 Linux 2.1.292 各连续两轮通过，真实账号验收和部署仍未完成；Files/Skills 资源操作不代表 container skills/code execution 模型能力已支持。
+- Files/Skills 使用独立的非模型管理 HTTP，只放行资源操作白名单与必要身份查询，不恢复模型 relay。授权结合唯一受支持凭据来源、provider/配置目录及前后指纹绑定，profile 返回后再次检查；后续 IO 使用同一核验身份。API key/env OAuth 使用 `auth status --json`；stored OAuth 只运行无用户输入的原生初始化，不追加可能再次触发刷新竞态的短命 status 进程。stored OAuth 私有刷新协议仅允许已验证的 CLI 2.1.292/2.1.296，未知版本在认证前拒绝。OAuth 刷新只允许 CLI 自身执行，Go 管理 HTTP 不自行刷新、不发模型探针、不清锁；必要时等待旋转落盘，并在进程退出后重读凭据。接受门限为超过 30 秒有效期，来源不明、刷新未完成或身份变化时失败关闭。37 场景在 Windows 2.1.296 和断网隔离 Linux 2.1.292 各连续两轮通过，实现已随 0.1.42 发布，但真实账号的 Files/Skills 资源资格没有因此被验证；Files/Skills 资源操作不代表 container skills/code execution 模型能力已支持。
 
-离线门禁使用 `CCG_REAL_CLI` 指向精确 CLI，独立 HOME/config、假 key、回环 Mock 和禁止外部代理连接。`TestRealCLINativeProbe`、`TestRealCLINativeGateway`、`TestRealCLINativePassthroughCompatibility`、`TestRealCLINativeWebSearch*` 分别覆盖协议恢复、TLS、参数/历史与搜索计量等检查，但列出用例不代表当前全部通过。contracts tests、engine 测试、平台 CLI 探针、资源授权与真实账号验收须分别记录，不能互相替代。本次文档修订不提交、部署或操作生产账号；历史部署证据保留在原记录中。
+离线门禁使用 `CCG_REAL_CLI` 指向精确 CLI，独立 HOME/config、假 key、回环 Mock 和禁止外部代理连接。`TestRealCLINativeProbe`、`TestRealCLINativeGateway`、`TestRealCLINativePassthroughCompatibility`、`TestRealCLINativeWebSearch*` 分别覆盖协议恢复、TLS、参数/历史与搜索计量等检查，但列出用例不代表当前全部通过。contracts tests、engine 测试、平台 CLI 探针、资源授权与真实账号验收须分别记录，不能互相替代。当前构建的独立验证、Core 0.1.121 / Worker 0.1.42 原地发布和本地 CC 实测见 `ccgateway-feature-support/ENVIRONMENT-RUNBOOK.md`：#22 的文本、Read、图片和 WebSearch 通过，#24 仅通过运行版本/哈希门禁，#26 因 OAuth 过期且刷新失败未通过模型验收，按用户选择保持停调。原生错误缺少真实 HTTP 状态时仍返回 502，不借此猜测 401 或由插件自动停用；旧历史证据不改写。
 
 ## 54. 插件隔离加固 P0（2026-10-10，审查 `docs/audits/2026-10-09-plugin-resources.md` 的 P0）
 
